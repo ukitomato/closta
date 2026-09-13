@@ -110,6 +110,8 @@ related_specs: []
 - [AD-009](../../decisions/0009-unpack-native-binaries-from-asar.md) — ネイティブバイナリは asar から展開する
 - [AD-012](../../decisions/0012-docker-control-via-cli.md) — docker endpoint（`isolation` と共有）
 - [AD-013](../../decisions/0013-node-and-electron-versioning.md) — Node と Electron のバージョン方針
+- [AD-023](../../decisions/0023-application-architecture.md) — レイヤ構成。`AgentRuntime` は
+  「検出（infra）」「起動（agents）」「パス変換（domain）」に分かれる
 
 ## Related Specs
 

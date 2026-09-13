@@ -30,6 +30,13 @@ M1 に入る前に必要。いずれも feature ではない。
 | P-5 | `/cl-add-reviewer platform-boundary-reviewer` | **完了** | 作成・両レジストリ登録済み。観点は lint / tsc が見られない領域のみ（PB-1〜PB-7） |
 | P-6 | `docs/discovery.md` を人間レビューし `status: active` へ | **完了** | revision 2 (2026-09-13)。scan 以降に変わった事実を更新したうえで active に昇格 |
 
+### P-7 の補足: アーキテクチャは着手前に確定済み
+
+[AD-023](decisions/0023-application-architecture.md) で `app` / `ui` / `agents` / `infra` / `domain` の
+5 レイヤ構成を確定した。R-1 の最初のコミットで固定されるため、着手前に決める必要があった。
+UseCase レイヤは作らず、状態の有無で純粋関数と Service を使い分ける。
+依存規則は ESLint（編集時）と dependency-cruiser（CI・推移的依存）の両方で強制する。
+
 ### P-5 の補足: reviewer に何を持たせるか
 
 Constitution Principle I / II / VII は **ESLint** で、VI は **CI の grep** で、

@@ -62,7 +62,7 @@ reviewer の追加も以下のとおり決着している。
 ### R-1 — フォルダ登録とランタイム検出
 
 ```
-/cl-design "[runtime] 作業フォルダを登録し、それを Win32Runtime と WslRuntime のどちらで開くかを選べるようにする。HostPath と RuntimePath を branded type で分離し、C:\ と /mnt/c および /home のパス変換を両方向で通す。WSL ディストロの一覧検出と、ランタイムごとの capabilities 表明を含む。Electron + TypeScript + React + Vite のプロジェクト初期化と ESLint の no-restricted-imports 設定も本 feature に含める。" --targets both
+/cl-design "[runtime] 作業フォルダを登録し、それを Win32Runtime と WslRuntime のどちらで開くかを選べるようにする。HostPath と RuntimePath を branded type で分離し、C:\ と /mnt/c および /home のパス変換を両方向で通す。WSL ディストロの一覧検出と、ランタイムごとの capabilities 表明を含む。Electron + TypeScript + React + Vite のプロジェクト初期化、app / ui / agents / infra / domain の 5 レイヤ構成、ESLint と dependency-cruiser による依存規則の強制も本 feature に含める。" --targets both
 ```
 
 **前提**: SPIKE-8 **完了済み** → [AD-015](decisions/0015-wsl-access-strategy.md)。
@@ -77,8 +77,13 @@ reviewer の追加も以下のとおり決着している。
 - `claude` はログインシェルの PATH にしかない
 
 **注**: 本 feature が**プロジェクトの初期化を兼ねる**。`package.json` / `tsconfig` / Vite /
-Electron の main・renderer 骨格 / ESLint がここで生まれる。scaffolding だけを独立 feature に
+Electron の骨格 / ESLint / dependency-cruiser がここで生まれる。scaffolding だけを独立 feature に
 しないのは、観測可能な振る舞いを持たないため（Principle XI）。
+
+**レイヤ構成は [AD-023](decisions/0023-application-architecture.md) で確定済み。**
+`app` / `ui` / `agents` / `infra` / `domain` の 5 レイヤ、UseCase レイヤなし、
+インタフェースは `domain` 側、`agents` はセッションごとに 1 プロセス。
+**最初のコミットで構成が固定される**ので、実装前に必ず読むこと。
 `pnpm-workspace.yaml` の `nodeLinker: hoisted` は配置済みなので、最初の `pnpm install` から
 hoisted で入る。
 
