@@ -95,7 +95,7 @@ revision: 2
 
 ### Planned (PLAN.md 宣言、未セットアップ)
 
-- Build: `vite` / `tsc` / `electron-builder`、ネイティブ再ビルドに `electron-rebuild` (PLAN.md:84, 260-262)
+- Build: `vite` / `tsc` / `electron-builder`、ネイティブ再ビルドに `electron-builder install-app-deps` (PLAN.md:84, 260-262)
 - Test: Vitest (unit) / Playwright (E2E)。加えて P-13 (L623-626) が「日本語スクリーンショット比較を CI に持つ」ことを検証条件に指定
 - Lint: ESLint + `no-restricted-imports` (P-1 が `node:path` 直 import を、P-9 が `supervisor/` での `electron` import を error 化する前提)
 - 機械検証として grep ベースの Principle 検証も宣言済み: P-2 は `grep -rn "process.platform" src/ --exclude-dir=runtime` が空であること (L576)、P-8 は `sudo` / `wsl --import` / `docker build` / `apt` 実行箇所が存在しないこと (L603)

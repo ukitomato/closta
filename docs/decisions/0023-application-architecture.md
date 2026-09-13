@@ -29,6 +29,92 @@ Electron + React のアーキテクチャ論では「UI は差し替え可能、
 Constitution Principle I / II / VII は、いずれも依存の向きを固定する規則である。
 本 ADR はそれらを一般化して全体に適用する。
 
+## 公式 scaffold を先に確認する（本 ADR の前提訂正）
+
+**初版はレイヤ構成を机上で先に決めており、公式 CLI が生成する構成を確認していなかった。**
+これは手順として誤りである。フレームワーク・ライブラリを使うときは、
+**公式の導入手順と CLI を先に参照し、独自要件はそこからの差分として適用する。**
+
+確認した結果は以下のとおり。
+
+### 採用する公式手順
+
+```bash
+# 1. Electron + Vite + React + TypeScript の骨格（electron-vite 公式 CLI）
+npm create @quick-start/electron@latest closta -- --template react-ts
+
+# 2. assistant-ui を既存プロジェクトに導入（公式 CLI）
+npx assistant-ui@latest init
+```
+
+### 生成される構成（これを土台とする）
+
+```
+src/main/            main プロセス
+src/preload/         preload
+src/renderer/src/    renderer（React）
+electron.vite.config.ts
+electron-builder.yml
+tsconfig.json / tsconfig.node.json（main+preload）/ tsconfig.web.json（renderer）
+eslint.config.mjs
+build/ resources/
+```
+
+バージョンは Electron 39.2.6 / React 19.2.1 / Vite 7.2.6 / TypeScript 5.9.3 / ESLint 9。
+
+### 確認できた整合と訂正
+
+- **`electron-builder` が既定である。** `electron-builder.yml` と `build:win` スクリプトが
+  生成される。[AD-009](0009-unpack-native-binaries-from-asar.md) と矛盾せず、
+  Electron Forge（独自 maker を使うため electron-builder と併用できない）を採る必要はない
+- **ネイティブ再ビルドは `electron-builder install-app-deps` である**（`postinstall` に設定済み）。
+  PLAN.md と AD-009 / AD-013 が挙げていた `electron-rebuild` ではない
+- **`utilityProcess` は electron-vite の第一級機能ではない。** 公式には
+  `?modulePath` サフィックスで子プロセスをバンドルする形が示されており、これを使う
+- **`setWindowOpenHandler` は scaffold に既に入っている**（assistant-ui の Electron
+  セキュリティチェックリストの 1 項目）
+
+### 公式 scaffold と本プロジェクトの規約が食い違う 2 点
+
+| 箇所 | scaffold | 本プロジェクト | 決定 |
+|---|---|---|---|
+| `webPreferences.sandbox` | `false` | assistant-ui の Electron ガイドは `true` を要求 | **`true` にする** |
+| `process.platform`（Linux のときだけ `icon` を渡す） | `src/main/index.ts` に存在 | Principle II の grep に抵触 | **条件を外して `icon` を常に渡す** |
+
+**どちらも Constitution を緩めずに解消する。**
+
+`sandbox: true` にすると **preload を ESM で出力できなくなる**。electron-vite の
+ドキュメントは「ESM の preload は unsandboxed かつ `.mjs` である必要がある」と述べている。
+したがって **preload だけ CommonJS で出力する**ようビルド設定を変える。これは
+[AD-006](0006-supervisor-in-utility-process.md) の MessagePort 方針と矛盾しない。
+
+`process.platform` の行は **Principle II の検証条件を緩める理由にならない**。
+`icon` は Linux 以外では無視されるか窓アイコンになるだけで、条件分岐に意味がない。
+**1 行を消すほうが、NON-NEGOTIABLE の grep に例外ディレクトリを増やすより安い。**
+
+### assistant-ui の runtime 選択
+
+公式の決定木は「**メッセージ状態が既に redux / zustand / tanstack-query にあるなら
+`useExternalStoreRuntime`**」である。Closta は Zustand を持ち、過去ログは
+`getSessionMessages()` から、実行中は stream から流し込む。**`useExternalStoreRuntime` が正しい。**
+
+assistant-ui の Electron ガイドは `useLocalRuntime` を薦めているが、それは
+「1 会話のチャットクライアント」を想定した記述である。**R-3（過去ログの表示）には
+モデル呼び出しが存在せず `run()` ジェネレータが成立しない**ため、当てはまらない。
+
+ただし同ガイドのセキュリティ要件は全面的に採用する。
+
+- `contextIsolation: true` / `sandbox: true` / `nodeIntegration: false`
+- ストリームは **MessagePort** で運ぶ（SDK クライアント・コールバック・`AbortSignal`・`File` を
+  IPC に通さない。Electron IPC は structured-clone セマンティクス）
+- **データのみのプロトコル**を定義する
+- preload は `contextBridge.exposeInMainWorld` で**単一の capability** を公開する。
+  生の `ipcRenderer` を渡さない
+- main 側で送信元とペイロードを**すべて未信頼として検証**する
+- `file://` ではなくカスタムプロトコルで配信し、CSP を絞る
+
+MessagePort でストリームを運ぶ点は [AD-006](0006-supervisor-in-utility-process.md) と一致する。
+
 ## Decision
 
 ### 1. 5 レイヤに分ける
@@ -66,6 +152,30 @@ Constitution Principle I / II / VII は、いずれも依存の向きを固定�
 
 **`app` と `infra` は同じ main プロセスに同居する。レイヤが違うだけである。**
 **`agents` だけが別プロセスで、しかもセッションと寿命を共にする。**
+
+### レイヤを公式 scaffold のディレクトリに載せる
+
+**scaffold が生成する `src/main` / `src/preload` / `src/renderer` を土台とし、
+レイヤはその中と、追加する 2 ディレクトリで表現する。**
+
+```
+src/
+├── main/          app（Electron 組み立て）+ infra（OS 資源）
+│   ├── app/
+│   └── infra/
+├── preload/       app の一部。単一 capability を公開
+├── renderer/src/  ui
+├── agents/        utilityProcess。main から ?modulePath で参照
+└── domain/        全プロセスで共有。I/O なし
+```
+
+tsconfig への追加:
+
+- `tsconfig.node.json` の `include` に `src/agents/**/*` と `src/domain/**/*` を足す
+- `tsconfig.web.json` の `include` に `src/domain/**/*` を足す（`ui` が型を参照するため）
+
+**ディレクトリ名を勝手に作り替えない。** `src/main` を `src/app` に改名するようなことはしない。
+公式構成から外れると、以後のアップデート手順とコミュニティの知見が当てにならなくなる。
 
 ### 2. 外部データソースが 2 つあるため `agents` と `infra` を分ける
 

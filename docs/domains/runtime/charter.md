@@ -33,7 +33,7 @@ related_specs: []
 - `capabilities` の決定 — `sandbox` の種別と `autoModeSafe` の可否を**表明する**こと
 - `HostPath` / `RuntimePath` の branded type と、多段を含むパス変換
 - 作業フォルダの登録と、ランタイムからの到達可能性判定
-- アプリのパッケージングと配布（`asarUnpack`、`electron-rebuild`、インストーラ生成）
+- アプリのパッケージングと配布（`asarUnpack`、`electron-builder install-app-deps`、インストーラ生成）
 
 ### Out of scope
 

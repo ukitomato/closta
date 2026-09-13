@@ -41,7 +41,7 @@ UI 完成度を製品の採否条件に据える以上、2 エンジン分の UI
 
 - 同梱 Node が実行時の言語機能を決める制約を負う（[AD-013](0013-node-and-electron-versioning.md)）
 - ネイティブバイナリの asar 展開が必要になる（[AD-009](0009-unpack-native-binaries-from-asar.md)）
-- `node-pty` に `electron-rebuild` が必要になる
+- `node-pty` に Electron ABI 向けの再ビルドが必要になる（`electron-builder install-app-deps`）
 - Tauri を採る場合でも Agent SDK は失われない（`externalBin` に `bun build --compile` した
   Node sidecar を同梱、`extractFromBunfs()` 使用）。ただし Node/Bun ランタイムが同居するため
   軽量性の優位はさらに縮む

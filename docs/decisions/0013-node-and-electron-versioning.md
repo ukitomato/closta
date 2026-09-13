@@ -18,14 +18,15 @@ superseded-by: []
 | 用途 | どの Node が使われるか |
 |---|---|
 | main / utilityProcess の実行 | **Electron 同梱 Node** |
-| ネイティブモジュールのコンパイル対象 | **Electron の ABI**（`electron-rebuild` が解決） |
+| ネイティブモジュールのコンパイル対象 | **Electron の ABI**（`electron-builder install-app-deps` が解決） |
 | ビルドツール（vite / tsc / electron-builder） | ホスト Node |
 | supervisor の単独起動（テスト時） | ホスト Node |
 
 ## Decision
 
 - **Electron は最新安定版を追随する。** `tsconfig` の `target` / `lib` は Electron 同梱 Node の
-  バージョンに合わせる。Electron を上げたら `electron-rebuild` を再実行する
+  バージョンに合わせる。Electron を上げたら `electron-builder install-app-deps` を再実行する
+  （electron-vite の公式テンプレートが `postinstall` に設定する。[AD-023](0023-application-architecture.md)）
 - **ホスト Node は Active LTS を使う。** 2026 年 9 月時点では **24**。22 は Maintenance LTS、
   26 は Current で 2026 年 10 月に LTS 昇格予定
 - **Node 26 への移行は LTS 昇格後に検討する。** 実行時制約は Electron 側にあるため、
