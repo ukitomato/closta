@@ -1,0 +1,34 @@
+{
+  "status": {
+    "drafting": "drafting",
+    "planning": "planning",
+    "tasking": "tasking",
+    "implementing": "implementing",
+    "reviewing": "reviewing",
+    "completed": "completed"
+  },
+  "gate": {
+    "design_gate_passed": "Design Gate PASS — proceed to implementation",
+    "design_gate_failed": "Design Gate FIX_REQUIRED — resolve Critical findings and re-run",
+    "code_gate_passed": "Code Gate PASS — proceed to PR review",
+    "code_gate_failed": "Code Gate MUST_FIX — auto-fix loop will run up to 3 times",
+    "pr_gate_passed": "PR Gate Critical=0 — you can now run /spec-gate.done",
+    "pr_gate_failed": "PR Gate Critical findings remain — fix and re-review"
+  },
+  "review": {
+    "critical": "Critical",
+    "high": "High",
+    "medium": "Medium",
+    "low": "Low",
+    "must_fix": "MUST_FIX",
+    "should_fix": "SHOULD_FIX",
+    "consider": "CONSIDER"
+  },
+  "migrate": {
+    "phase1_scan": "Phase 1: scanning tech stack and directory structure",
+    "phase2_charter": "Phase 2: reverse-engineering domain charters (each domain requires approval)",
+    "phase3_spec": "Phase 3: reverse-engineering specs/plans/tasks per feature",
+    "phase4_constitution": "Phase 4: drafting Constitution Principles",
+    "phase5_glossary": "Phase 5: extracting Ubiquitous Language"
+  }
+}

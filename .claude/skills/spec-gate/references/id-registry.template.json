@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "_doc": "Spec-Driven Gating Workflow — bf_ids / sf_ids global namespace registry. spec-reverser が migrate Phase 3 で atomic increment + writeback で使用。resolves review C-5-b (bf_ids / sf_ids uniqueness).",
+  "bf_next": 1,
+  "sf_fe_next": 1,
+  "sf_be_next": 1,
+  "sf_db_next": 1,
+  "allocated": {}
+}

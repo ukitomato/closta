@@ -1,0 +1,34 @@
+{
+  "status": {
+    "drafting": "起草中",
+    "planning": "設計中",
+    "tasking": "タスク化中",
+    "implementing": "実装中",
+    "reviewing": "レビュー中",
+    "completed": "完了"
+  },
+  "gate": {
+    "design_gate_passed": "Design Gate PASS — 実装フェーズに進めます",
+    "design_gate_failed": "Design Gate FIX_REQUIRED — Critical 指摘を解消してから再実行",
+    "code_gate_passed": "Code Gate PASS — PR レビュー段階に進めます",
+    "code_gate_failed": "Code Gate MUST_FIX — auto-fix loop を最大 3 回試行",
+    "pr_gate_passed": "PR Gate Critical=0 — /spec-gate.done を実行できます",
+    "pr_gate_failed": "PR Gate Critical 残あり — 修正後に再 review"
+  },
+  "review": {
+    "critical": "Critical",
+    "high": "High",
+    "medium": "Medium",
+    "low": "Low",
+    "must_fix": "MUST_FIX",
+    "should_fix": "SHOULD_FIX",
+    "consider": "CONSIDER"
+  },
+  "migrate": {
+    "phase1_scan": "Phase 1: tech stack とディレクトリ構造をスキャン中",
+    "phase2_charter": "Phase 2: domain charter を逆生成中 (各 domain 承認必須)",
+    "phase3_spec": "Phase 3: feature ごとの spec/plan/tasks を逆生成中",
+    "phase4_constitution": "Phase 4: Constitution Principle を起草中",
+    "phase5_glossary": "Phase 5: Ubiquitous Language を抽出中"
+  }
+}

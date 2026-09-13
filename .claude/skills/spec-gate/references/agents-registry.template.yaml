@@ -1,0 +1,182 @@
+# Spec-Driven Gating Workflow — Agents Registry (template)
+#
+# 配置:
+#   bootstrap が `.specify/.agents-registry.yaml` として target project に install。
+#
+# 用途:
+#   全 subagent (`reviewer-base` + 4 generic reviewer + 5 brownfield specialist
+#   + 5 optional reviewer + 3 actor) を列挙。skill が agent invoke 前に
+#   `gate_common::registry_assert_agent <name>` で validate するための SSoT。
+#
+# Status 値:
+#   bootstrap-required       — `/spec-gate bootstrap` 実行時に必ず install
+#   migrate-required         — `/spec-gate migrate` 実行時に必ず install
+#   optional                 — `/spec-gate.add-reviewer` で選択時のみ install
+#   implementation-required  — code-gate / pr-gate 等の wrapper が起動時に存在前提
+#
+# 編集ポリシー:
+#   - bootstrap / migrate が自動 install するエントリは `managed_by: workflow` を維持
+#   - ユーザ追加の custom reviewer は `managed_by: user` で末尾に追記
+#   - 削除はユーザの明示意図によってのみ
+#
+# 検証:
+#   bash .specify/scripts/gate-common.sh registry-load   # 全エントリ列挙
+#   bash .specify/scripts/gate-common.sh registry-assert <name>   # 個別検証
+
+version: 1
+schema_url: https://github.com/yukiyamato/spec-driven-gating-workflow/blob/main/docs/agents-registry-schema.md
+
+agents:
+  # ─── Shared base ────────────────────────────────────────────────────
+  - name: reviewer-base
+    status: bootstrap-required
+    role: shared
+    placement: .claude/agents/reviewer-base.md
+    purpose: "全 reviewer / brownfield specialist の共通基盤"
+    managed_by: workflow
+    invoked_by: []  # 直接 invoke しない (Read のみ)
+
+  # ─── Generic reviewers (bootstrap) ──────────────────────────────────
+  - name: security-reviewer
+    status: bootstrap-required
+    role: generic
+    placement: .claude/agents/security-reviewer.md
+    purpose: "認証 / 認可 / secrets / injection / RLS"
+    managed_by: workflow
+    invoked_by: [design-gate, pr-gate]
+
+  - name: architecture-reviewer
+    status: bootstrap-required
+    role: generic
+    placement: .claude/agents/architecture-reviewer.md
+    purpose: "Constitution Principle drift / Charter / accepted ADR drift / layering"
+    managed_by: workflow
+    invoked_by: [design-gate, pr-gate]
+
+  - name: po-reviewer
+    status: bootstrap-required
+    role: generic
+    placement: .claude/agents/po-reviewer.md
+    purpose: "User Story 価値 / SC 計測可能性 / Acceptance Criteria testability"
+    managed_by: workflow
+    invoked_by: [design-gate, pr-gate]
+
+  - name: convention-reviewer
+    status: bootstrap-required
+    role: generic
+    placement: .claude/agents/convention-reviewer.md
+    purpose: "命名 / module 配置 / lint hookup"
+    managed_by: workflow
+    invoked_by: [code-gate]
+
+  # ─── Brownfield specialists (migrate) ───────────────────────────────
+  - name: discovery-scanner
+    status: migrate-required
+    role: brownfield
+    placement: .claude/agents/discovery-scanner.md
+    purpose: "Phase 1 tech stack / 構造 / category-tagged findings"
+    managed_by: workflow
+    invoked_by: [migrate]
+
+  - name: charter-drafter
+    status: migrate-required
+    role: brownfield
+    placement: .claude/agents/charter-drafter.md
+    purpose: "Phase 2 domain charter draft (precedence: dir > URL > DB)"
+    managed_by: workflow
+    invoked_by: [migrate]
+
+  - name: spec-reverser
+    status: migrate-required
+    role: brownfield
+    placement: .claude/agents/spec-reverser.md
+    purpose: "Phase 3 reverse spec (observed/aspiration/NOT-observed + confidence)"
+    managed_by: workflow
+    invoked_by: [migrate]
+
+  - name: constitution-drafter
+    status: migrate-required
+    role: brownfield
+    placement: .claude/agents/constitution-drafter.md
+    purpose: "Phase 4 Constitution principle draft (high-confidence inputs only)"
+    managed_by: workflow
+    invoked_by: [migrate]
+
+  - name: glossary-extractor
+    status: migrate-required
+    role: brownfield
+    placement: .claude/agents/glossary-extractor.md
+    purpose: "Phase 5 Ubiquitous Language (canonical / candidate split)"
+    managed_by: workflow
+    invoked_by: [migrate]
+
+  # ─── Actors (code-gate auto-fix loop) ───────────────────────────────
+  - name: implementer
+    status: implementation-required
+    role: actor
+    placement: .claude/agents/implementer.md
+    purpose: "code-gate auto-fix loop の中核 actor (MUST_FIX 適用)"
+    managed_by: workflow
+    invoked_by: [code-gate]
+
+  - name: lint-agent
+    status: implementation-required
+    role: actor
+    placement: .claude/agents/lint-agent.md
+    purpose: "project lint 実行 + JSON violations 出力"
+    managed_by: workflow
+    invoked_by: [code-gate]
+
+  - name: test-agent
+    status: implementation-required
+    role: actor
+    placement: .claude/agents/test-agent.md
+    purpose: "project test 実行 + JSON pass/fail 出力"
+    managed_by: workflow
+    invoked_by: [code-gate]
+
+  # ─── Optional reviewers (add-reviewer) ──────────────────────────────
+  - name: database-reviewer
+    status: optional
+    role: generic
+    placement: .claude/agents/database-reviewer.md
+    purpose: "DB schema / migration / RLS / index / query plan"
+    managed_by: workflow
+    invoked_by: [code-gate, pr-gate]
+    install_hint: "PostgreSQL/MySQL/SQLite/Supabase/Prisma 検出時に推奨"
+
+  - name: a11y-reviewer
+    status: optional
+    role: generic
+    placement: .claude/agents/a11y-reviewer.md
+    purpose: "WCAG 2.1 AA / Aria / keyboard accessibility"
+    managed_by: workflow
+    invoked_by: [code-gate, pr-gate]
+    install_hint: "Vue/React/Svelte/Flutter/Astro 等の UI framework 検出時に推奨"
+
+  - name: api-performance-reviewer
+    status: optional
+    role: generic
+    placement: .claude/agents/api-performance-reviewer.md
+    purpose: "latency / caching / N+1 / pagination / payload size / rate limit"
+    managed_by: workflow
+    invoked_by: [pr-gate]
+    install_hint: "FastAPI/Express/Spring/Django/Rails/Echo/Gin 検出時に推奨"
+
+  - name: openapi-contract-reviewer
+    status: optional
+    role: generic
+    placement: .claude/agents/openapi-contract-reviewer.md
+    purpose: "OpenAPI/Swagger 契約 drift / breaking change"
+    managed_by: workflow
+    invoked_by: [pr-gate]
+    install_hint: "openapi.yaml/swagger.yaml 存在時に推奨"
+
+  - name: ux-reviewer
+    status: optional
+    role: generic
+    placement: .claude/agents/ux-reviewer.md
+    purpose: "empty/error/loading states / i18n / IA / user feedback path"
+    managed_by: workflow
+    invoked_by: [code-gate, pr-gate]
+    install_hint: "UI framework 検出時 (a11y と並行) で推奨"

@@ -1,0 +1,10 @@
+{
+  "env": {
+    "PYTHONUTF8": "1"
+  },
+  "permissions": {
+    "allow": [
+      "Edit(/.claude/skills/cl-spec/**)"
+    ]
+  }
+}

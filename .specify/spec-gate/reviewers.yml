@@ -1,0 +1,49 @@
+reviewers:
+  - name: a11y-reviewer
+    enabled: true
+    scope: feature
+    auto_invoke_patterns:
+      - "**/*.tsx"
+      - "**/*.jsx"
+      - "**/*.vue"
+      - "**/*.dart"
+      - "**/*.html"
+    gates: [code-gate, pr-gate]
+    source: bootstrap-recommended
+
+  - name: ux-reviewer
+    enabled: true
+    scope: feature
+    auto_invoke_patterns:
+      - "**/*.tsx"
+      - "**/*.jsx"
+      - "**/*.vue"
+      - "**/*.dart"
+      - "**/*.html"
+    gates: [code-gate, pr-gate]
+    source: bootstrap-recommended
+
+  - name: database-reviewer
+    enabled: true
+    scope: both
+    auto_invoke_patterns:
+      - "**/migrations/**"
+      - "*.sql"
+      - "**/schema.prisma"
+    gates: [code-gate, pr-gate]
+    source: bootstrap-recommended
+
+  - name: platform-boundary-reviewer
+    enabled: true
+    scope: both
+    auto_invoke_patterns:
+      - "src/runtime/**"
+      - "src/supervisor/**"
+      - "src/isolation/**"
+      - "**/eslint.config.*"
+      - "**/.eslintrc*"
+    gates: [design-gate, code-gate, pr-gate]
+    source: project-specific
+    # ui-coverage-reviewer は O-2 (docs/ui-coverage.md を作る feature) と同時に追加する。
+    # それ以前は検査対象が存在せず、指摘がノイズにしかならないため。
+
