@@ -1,6 +1,6 @@
 ---
 status: active
-version: 1.0.0
+version: 1.1.0
 ratified: 2026-09-13
 last_amended: 2026-09-13
 generated_by: /speckit.constitution (素材: /spec-gate bootstrap Phase 6 の draft)
@@ -103,7 +103,7 @@ ADR は [docs/decisions/](../../docs/decisions/)、用語は [docs/glossary.md](
 **Adoption metadata**:
 - `existing_violations`: 0
 - `violation_threshold`: 0
-- `bad_pattern_grep`: `grep -rn "process.platform" src/ --exclude-dir=runtime`
+- `bad_pattern_grep`: `grep -rn "process.platform" src/ --exclude-dir=runtime | grep -v "platform-ok"`
 - `adoption_date`: 2026-09-13
 
 <!-- BOOTSTRAP_SECTION_START principle=II -->
@@ -116,8 +116,19 @@ ADR は [docs/decisions/](../../docs/decisions/)、用語は [docs/glossary.md](
 - ✗ Bad: `if (process.platform === 'win32') { /* sandbox なし扱い */ }` — Docker 経由なら成立しない
 
 **Verification**:
-- Automated: `grep -rn "process.platform" src/ --exclude-dir=runtime` が空であること
+- Automated: `grep -rn "process.platform" src/ --exclude-dir=runtime | grep -v "platform-ok"` が空であること
 - Manual: `platform-boundary-reviewer`
+
+**例外の書き方**: Electron 自身のホスト OS 規約（macOS の `window-all-closed` で
+`app.quit()` しない、Linux でのみ `BrowserWindow` に `icon` を渡す）は、
+**ランタイム選択ではなくホスト OS のアプリ規約**であり、本 Principle の対象外である。
+これらは除去できないため、**`process.platform` と同じ行の末尾**に
+`// platform-ok: <理由>` を書く。前の行に書くと grep が拾えず例外にならない。
+注記のない `process.platform` は違反として扱う。
+
+**注記が正直かどうかは `platform-boundary-reviewer` が判定する。**
+「ホスト OS 規約」と書いてランタイム分岐を隠す行為は、grep では検出できないため
+人間とレビュアーの責任範囲に残る。
 <!-- BOOTSTRAP_SECTION_END principle=II -->
 
 <!-- MIGRATE_SECTION_START principle=II -->
@@ -515,6 +526,7 @@ Amendment trail への追記 → 既存違反の enumeration、の 5 段階で�
 | version | date | 変更 |
 |---|---|---|
 | 1.0.0 | 2026-09-13 | 初回批准。PLAN.md §8 の P-1〜P-13 を素材に 15 Principle を確立 |
+| 1.1.0 | 2026-09-13 | Principle II の検証条件に `platform-ok:` 注記による例外を追加。Electron 公式テンプレートの `window-all-closed` / `icon` 分岐は除去不能であり、元の grep はどの Electron アプリでも達成できなかった (AD-023) |
 
 ## References
 
@@ -526,4 +538,4 @@ Amendment trail への追記 → 既存違反の enumeration、の 5 段階で�
 
 ---
 
-**Version**: 1.0.0 | **Ratified**: 2026-09-13 | **Last Amended**: 2026-09-13
+**Version**: 1.1.0 | **Ratified**: 2026-09-13 | **Last Amended**: 2026-09-13

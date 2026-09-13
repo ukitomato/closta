@@ -79,7 +79,7 @@ build/ resources/
 | 箇所 | scaffold | 本プロジェクト | 決定 |
 |---|---|---|---|
 | `webPreferences.sandbox` | `false` | assistant-ui の Electron ガイドは `true` を要求 | **`true` にする** |
-| `process.platform`（Linux のときだけ `icon` を渡す） | `src/main/index.ts` に存在 | Principle II の grep に抵触 | **条件を外して `icon` を常に渡す** |
+| `process.platform` | `src/main/index.ts` に **2 箇所** | Principle II の grep に抵触 | **`platform-ok:` 注記で例外化し、Principle II の検証条件を改める** |
 
 **どちらも Constitution を緩めずに解消する。**
 
@@ -88,9 +88,43 @@ build/ resources/
 したがって **preload だけ CommonJS で出力する**ようビルド設定を変える。これは
 [AD-006](0006-supervisor-in-utility-process.md) の MessagePort 方針と矛盾しない。
 
-`process.platform` の行は **Principle II の検証条件を緩める理由にならない**。
-`icon` は Linux 以外では無視されるか窓アイコンになるだけで、条件分岐に意味がない。
-**1 行を消すほうが、NON-NEGOTIABLE の grep に例外ディレクトリを増やすより安い。**
+`process.platform` は scaffold の `src/main/index.ts` に **2 箇所**ある。
+
+1. Linux のときだけ `BrowserWindow` に `icon` を渡す
+2. `window-all-closed` で **macOS 以外なら `app.quit()`**
+
+**2 は Electron 公式の定型であり、除去できない。** つまり
+`grep -rn "process.platform" src/ --exclude-dir=runtime` が空、という元の検証条件は
+**どの Electron アプリでも達成できない**。条件そのものが誤っていた。
+
+Principle II が禁じたいのは**ランタイム（トランスポート）選択をプラットフォームで
+分岐すること**であって、ホスト OS のアプリ規約ではない。そこで検証条件を
+
+```
+grep -rn "process.platform" src/ --exclude-dir=runtime | grep -v "platform-ok"
+```
+
+に改め、**例外には `platform-ok:` と理由を書いたコメントを必須とする**。
+ディレクトリ単位の除外を増やさないため、例外は 1 行ずつ目に見える。
+注記が正直かどうかは `platform-boundary-reviewer` が判定する。
+Constitution v1.1.0 として改定した。
+
+### 実際に scaffold して検証した事実（R-1 で使う）
+
+**2026-09-13 に一度 scaffold を実行し、ビルドと起動まで確認してから捨てた。**
+R-1 はこれらを再調査しなくてよい。
+
+| 項目 | 事実 |
+|---|---|
+| 非対話実行 | `pnpm create @quick-start/electron@latest <dir> --template react-ts --skip`。`--skip` は updater / mirror などのプロンプトを既定値（すべて No）で飛ばす |
+| `--skip` の副作用 | **pnpm 用の `.npmrc` 生成も飛ばす**（CLI は pnpm 検出時に `shamefully-hoist=true` を書く）。本プロジェクトは `pnpm-workspace.yaml` の `nodeLinker: hoisted` を使うため影響しない |
+| ビルドスクリプト許可 | pnpm 12 は `package.json` の `pnpm.onlyBuiltDependencies` ではなく **`pnpm-workspace.yaml` の `allowBuilds`** を見る。`electron: true` / `esbuild: true` が要る。`electron-winstaller` は Squirrel 用で不要なので `false` を明示しないと `ERR_PNPM_IGNORED_BUILDS` で install が失敗する |
+| preload の出力形式 | 既定で **CommonJS**（`out/preload/index.js`、`"use strict"; require(...)`）。`package.json` に `"type": "module"` は入らない。**`sandbox: true` と両立する**。ESM preload にしたときだけ `.mjs` + unsandboxed が必要になる |
+| `sandbox: true` の実地確認 | `sandbox: true` / `contextIsolation: true` / `nodeIntegration: false` にして `electron .` を起動し、8 秒間 stderr 無しで生存することを確認した。`@electron-toolkit/preload` は sandbox 下でも動く |
+| `.vscode/` | scaffold が `launch.json`（デバッグ構成）を生成する。**`.gitignore` の `.vscode/` を外して追跡する** |
+| 既定メタデータ | `appId: com.electron.app` / `productName: closta-app` / `setAppUserModelId('com.electron')` / `publish.url: https://example.com/auto-updates`。**すべて要修正**。publish は updater を入れていないので削除でよい |
+| `src/main/index.ts` の `process.platform` | 2 箇所（`icon` と `window-all-closed`）。後者は除去不能 |
+| ビルド確認 | `pnpm build`（typecheck:node + typecheck:web + electron-vite build）が無改変で通る |
 
 ### assistant-ui の runtime 選択
 
