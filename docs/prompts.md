@@ -62,7 +62,7 @@ reviewer の追加も以下のとおり決着している。
 ### R-1 — フォルダ登録とランタイム検出
 
 ```
-/cl-design "[runtime] 作業フォルダを登録し、それを Win32Runtime と WslRuntime のどちらで開くかを選べるようにする。HostPath と RuntimePath を branded type で分離し、C:\ と /mnt/c および /home のパス変換を両方向で通す。WSL ディストロの一覧検出と、ランタイムごとの capabilities 表明を含む。Electron + TypeScript + React + Vite のプロジェクト初期化、app / ui / agents / infra / domain の 5 レイヤ構成、ESLint と dependency-cruiser による依存規則の強制も本 feature に含める。" --targets both
+/cl-design "[runtime] 作業フォルダを登録し、それを Win32Runtime と WslRuntime のどちらで開くかを選べるようにする。HostPath と RuntimePath を branded type で分離し、C:\ と /mnt/c および /home のパス変換を両方向で通す。WSL ディストロの一覧検出と、ランタイムごとの capabilities 表明を含む。electron-vite の公式 CLI によるプロジェクト初期化、app / ui / agents / infra / domain の 5 レイヤ構成、ESLint と dependency-cruiser による依存規則の強制も本 feature に含める。" --targets both
 ```
 
 **前提**: SPIKE-8 **完了済み** → [AD-015](decisions/0015-wsl-access-strategy.md)。
@@ -86,6 +86,17 @@ Electron の骨格 / ESLint / dependency-cruiser がここで生まれる。scaf
 **最初のコミットで構成が固定される**ので、実装前に必ず読むこと。
 `pnpm-workspace.yaml` の `nodeLinker: hoisted` は配置済みなので、最初の `pnpm install` から
 hoisted で入る。
+
+**ディレクトリ構成を手で作ってはならない。** 公式 CLI
+
+```
+pnpm create @quick-start/electron@latest <dir> --template react-ts --skip
+```
+
+が生成する `src/main` / `src/preload` / `src/renderer` を土台とし、5 レイヤはそこからの
+**差分**として載せる。AD-023 に「実際に scaffold して検証した事実」の表があり、
+`allowBuilds` / preload の出力形式 / `sandbox: true` の可否 / 既定メタデータの修正箇所は
+**調査済み**なので再調査しない。
 
 **Constitution の機械検証もここで整備する。** Principle I / II / VII は ESLint ルール
 （`no-restricted-imports` による `node:path` 禁止、`process.platform` の `runtime/` 外禁止、
