@@ -1,0 +1,10 @@
+# Electron のパッケージングツールチェーンは node_modules が npm と同じ形で
+# 物理的にディスク上に存在することを要求する。pnpm の既定のシンボリックリンク
+# 方式とは非互換なため hoisted を指定する。
+# https://www.electronjs.org/docs/latest/tutorial/tutorial-first-app
+#
+# 注: pnpm 10 以降、本ファイルは workspace 定義だけでなく設定ファイルも兼ねる。
+# `packages:` キーを持たないため monorepo ではない。
+# discovery-scanner は本ファイルの存在を monorepo marker として扱うので、
+# 次回 /spec-gate scan の結果を読むときは注意すること。
+nodeLinker: hoisted

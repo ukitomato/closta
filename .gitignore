@@ -1,0 +1,59 @@
+# ---- Dependencies ----
+node_modules/
+.pnpm-store/
+
+# ---- Build output ----
+dist/
+dist-electron/
+out/
+release/
+*.tsbuildinfo
+
+# ---- Test / coverage ----
+coverage/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
+# ---- Tooling caches ----
+.vite/
+.cache/
+.turbo/
+.eslintcache
+
+# ---- Secrets / local environment (P-5: 長期資格情報を永続化しない) ----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# ---- Logs ----
+logs/
+*.log
+
+# ---- Local runtime data (sessionStore ミラー等) ----
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# ---- Editor / OS ----
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+
+# ---- Claude Code / Spec Kit ----
+# .claude/ と .specify/ は SSoT (Constitution / subagent / gate スクリプト) を含むため追跡する。
+# 個人環境依存の上書きのみ除外する。
+.claude/settings.local.json
+
+# spec-gate の --force 退避ファイル
+*.bak.*
