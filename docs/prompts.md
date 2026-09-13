@@ -4,31 +4,56 @@ last_updated: 2026-09-12
 generated_by: human (docs/domains/_overview.md の feature 定義から作成)
 ---
 
-# `/cl-spec` プロンプト集
+# `/cl-design` プロンプト集
 
-各 feature を `/cl-spec` にかけるときの実際の入力文。
+各 feature を `/cl-design` にかけるときの実際の入力文。
 順序は [docs/roadmap.md](roadmap.md) を正とする。
 
 ## 使い方
 
 ```
-/cl-spec "[<domain>] <feature description>"
+/cl-design "[<domain>] <feature description>" --targets <frontend|backend|both>
 ```
 
-- `[<domain>]` プレフィックスから domain が抽出される。指定しない場合は
-  `docs/domains/*/charter.md` の一覧から選択を求められる
-- `--targets frontend|backend|both` で targets の確認を省略できる
+`/cl-design` は **spec → plan → tasks → design-gate を 1 コマンドで完走**する。
+design-gate が PASS すれば status が `implementing` まで進み、`/cl-implement` に渡せる状態になる。
+
+- `[<domain>]` プレフィックスから domain が抽出される。省略時は charter の Mission / Scope と
+  description の意味的一致度でスコアリングされ、**明確な最高スコアがあれば自動選択**される
+  （僅差のときだけ AskUserQuestion で聞かれる）
+- `--targets` は省略しても**自動推論して自動採用**されるが、本書では**明示する**。
+  各 feature の targets は `docs/domains/_overview.md` の帰属設計で決めてあり、
+  推論に委ねる理由がないため
 - description は 1〜3 文。**詳細仕様は書かない。** 受け入れ条件と設計は
-  `/cl-spec` → `/cl-plan` の過程で詰める
+  spec → plan の過程で詰める
 
-## Pre-flight
+### design-gate が FIX_REQUIRED で止まったとき
 
-feature ではないが、M1 の前に実行する。
+Critical 指摘を修正したうえで、gate から再開する。
 
 ```
-/cl-add-reviewer ui-coverage-reviewer
-/cl-add-reviewer platform-boundary-reviewer
+/cl-design --spec-dir <spec_dir> --from gate
 ```
+
+`--from plan|tasks|gate` で中断地点から再開できる。`--from plan` は tasks.md を
+stale にするため、status が `tasking` 以降だと確認を求められる。
+
+### 個別に叩きたいとき
+
+`/cl-spec` / `/cl-plan` / `/cl-tasks` / `/cl-design-gate` は個別にも起動できる。
+`/cl-design` はそれらへの委譲とチェーン管理だけを担っており、挙動は同じ。
+
+## Pre-flight — 完了済み
+
+`docs/roadmap.md` の pre-flight P-1〜P-6 はすべて解決済み。
+reviewer の追加も以下のとおり決着している。
+
+| reviewer | 状態 |
+|---|---|
+| `platform-boundary-reviewer` | **作成・登録済み**。観点は lint / tsc が見られない領域のみ（PB-1〜PB-7） |
+| `ui-coverage-reviewer` | **O-2 へ延期**。検査対象の `docs/ui-coverage.md` が O-2 まで存在しないため |
+
+**M1 に着手できる状態である。**
 
 ---
 
@@ -37,7 +62,7 @@ feature ではないが、M1 の前に実行する。
 ### R-1 — フォルダ登録とランタイム検出
 
 ```
-/cl-spec "[runtime] 作業フォルダを登録し、それを Win32Runtime と WslRuntime のどちらで開くかを選べるようにする。HostPath と RuntimePath を branded type で分離し、C:\ と /mnt/c および /home のパス変換を両方向で通す。WSL ディストロの一覧検出と、ランタイムごとの capabilities 表明を含む。Electron + TypeScript + React + Vite のプロジェクト初期化と ESLint の no-restricted-imports 設定も本 feature に含める。" --targets both
+/cl-design "[runtime] 作業フォルダを登録し、それを Win32Runtime と WslRuntime のどちらで開くかを選べるようにする。HostPath と RuntimePath を branded type で分離し、C:\ と /mnt/c および /home のパス変換を両方向で通す。WSL ディストロの一覧検出と、ランタイムごとの capabilities 表明を含む。Electron + TypeScript + React + Vite のプロジェクト初期化と ESLint の no-restricted-imports 設定も本 feature に含める。" --targets both
 ```
 
 **前提**: SPIKE-8 **完了済み** → [AD-015](decisions/0015-wsl-access-strategy.md)。
@@ -67,7 +92,7 @@ hoisted で入る。
 ### R-2 — セッション列挙（読み取り専用）
 
 ```
-/cl-spec "[session] 登録フォルダを横断して Claude Code のセッション一覧を取得する。WSL ディストロ内の config ディレクトリを Windows 側から列挙できること。読み取り専用で、起動は行わない。" --targets both
+/cl-design "[session] 登録フォルダを横断して Claude Code のセッション一覧を取得する。WSL ディストロ内の config ディレクトリを Windows 側から列挙できること。読み取り専用で、起動は行わない。" --targets both
 ```
 
 **前提**: SPIKE-1 **完了済み** → [AD-021](decisions/0021-session-store-and-enumeration.md)。
@@ -82,7 +107,7 @@ hoisted で入る。
 ### R-3 — transcript の基本表示
 
 ```
-/cl-spec "[ui] 選んだセッションの transcript を assistant-ui で表示する。markdown 本文、streaming text、scroll anchor、未定義ツールの fallback 表示を実装し、数千メッセージでも仮想化でスクロールが破綻しないこと。この時点で UI の見栄えを判断できることを受け入れ条件に含める。" --targets frontend
+/cl-design "[ui] 選んだセッションの transcript を assistant-ui で表示する。markdown 本文、streaming text、scroll anchor、未定義ツールの fallback 表示を実装し、数千メッセージでも仮想化でスクロールが破綻しないこと。この時点で UI の見栄えを判断できることを受け入れ条件に含める。" --targets frontend
 ```
 
 **前提**: SPIKE-2 完了。**本 feature の完了時点で軸 1 の方針を確定する。**
@@ -90,7 +115,7 @@ hoisted で入る。
 ### R-4 — Tier A tool 表示
 
 ```
-/cl-spec "[ui] 過去ログから再現可能な Tier A の tool 表示を実装する。Bash の Terminal block、Edit/Write の Code diff、TodoWrite の Todo list、Task の Subagent list、ExitPlanMode の Agent plan、thinking の Reasoning、連続 tool の Tool group。" --targets frontend
+/cl-design "[ui] 過去ログから再現可能な Tier A の tool 表示を実装する。Bash の Terminal block、Edit/Write の Code diff、TodoWrite の Todo list、Task の Subagent list、ExitPlanMode の Agent plan、thinking の Reasoning、連続 tool の Tool group。" --targets frontend
 ```
 
 ---
@@ -100,7 +125,7 @@ hoisted で入る。
 ### X-1 — 単一セッション起動とストリーミング
 
 ```
-/cl-spec "[session] WSL ディストロ内で Claude Code のセッションを起動し、応答をストリーミング表示する。canUseTool の permission 要求に承認カードで応答でき、実行中の中断と途中出力の保持ができること。Provider は既定のものを使い、起動条件の選択 UI は含めない。" --targets both
+/cl-design "[session] WSL ディストロ内で Claude Code のセッションを起動し、応答をストリーミング表示する。canUseTool の permission 要求に承認カードで応答でき、実行中の中断と途中出力の保持ができること。Provider は既定のものを使い、起動条件の選択 UI は含めない。" --targets both
 ```
 
 **前提**: SPIKE-5 **完了済み** → [AD-018](decisions/0018-wsl-process-control.md)。SPIKE-3 は未。
@@ -118,7 +143,7 @@ AD-018 が本 feature の設計を直接縛る。
 ### X-2 — 日本語 composer
 
 ```
-/cl-spec "[ui] composer が日本語 IME で正しく動作するようにする。変換確定の Enter が送信にならないこと、全角混在でレイアウトが崩れないこと、実行中に次の入力を積めること、下書きが復元されること。IME の E2E テストと日本語を含むスクリーンショット比較を CI に載せる。" --targets frontend
+/cl-design "[ui] composer が日本語 IME で正しく動作するようにする。変換確定の Enter が送信にならないこと、全角混在でレイアウトが崩れないこと、実行中に次の入力を積めること、下書きが復元されること。IME の E2E テストと日本語を含むスクリーンショット比較を CI に載せる。" --targets frontend
 ```
 
 **前提**: SPIKE-4 完了。assistant-ui 側が `isComposing` を扱っていない場合、
@@ -127,7 +152,7 @@ AD-018 が本 feature の設計を直接縛る。
 ### X-3 — Provider 登録と到達可能性判定
 
 ```
-/cl-spec "[provider] Provider を認証方式つきで登録できるようにする。config ディレクトリ候補と AWS プロファイルを検出して提示し、利用者の明示操作で登録する。秘密はキーチェーン参照のみを保持し、Provider とランタイムの到達可能性を判定する。" --targets both
+/cl-design "[provider] Provider を認証方式つきで登録できるようにする。config ディレクトリ候補と AWS プロファイルを検出して提示し、利用者の明示操作で登録する。秘密はキーチェーン参照のみを保持し、Provider とランタイムの到達可能性を判定する。" --targets both
 ```
 
 **前提**: SPIKE-7 完了。
@@ -135,7 +160,7 @@ AD-018 が本 feature の設計を直接縛る。
 ### X-4 — 起動設定ダイアログとプリセット
 
 ```
-/cl-spec "[session] SessionLaunchConfig の各軸を選んでセッションを起動するダイアログを実装する。ランタイム、Provider、モデル、権限モードの依存関係を解決し、上流を変えたら無効になった下流の値を既定に戻して通知する。Win32Runtime 選択時に Auto と bypass が選択不可であること。設定を名前付きプリセットとして保存・適用できること。" --targets both
+/cl-design "[session] SessionLaunchConfig の各軸を選んでセッションを起動するダイアログを実装する。ランタイム、Provider、モデル、権限モードの依存関係を解決し、上流を変えたら無効になった下流の値を既定に戻して通知する。Win32Runtime 選択時に Auto と bypass が選択不可であること。設定を名前付きプリセットとして保存・適用できること。" --targets both
 ```
 
 **前提**: SPIKE-6 完了。`PermissionMode` と `effort` の正確な列挙値が確定していること。
@@ -143,7 +168,7 @@ AD-018 が本 feature の設計を直接縛る。
 ### X-5 — supervisor 分離とマルチセッション
 
 ```
-/cl-spec "[session] セッション supervisor を utilityProcess に分離し、10 セッションを並列実行しても UI が滑らかに保たれるようにする。supervisor は Electron API にもネイティブモジュールにも依存せず、node 単体で起動できること。semaphore 制御と IPC のバッチ化を含む。" --targets both
+/cl-design "[session] セッション supervisor を utilityProcess に分離し、10 セッションを並列実行しても UI が滑らかに保たれるようにする。supervisor は Electron API にもネイティブモジュールにも依存せず、node 単体で起動できること。semaphore 制御と IPC のバッチ化を含む。" --targets both
 ```
 
 ---
@@ -153,13 +178,13 @@ AD-018 が本 feature の設計を直接縛る。
 ### O-1 — セッション監視ビュー
 
 ```
-/cl-spec "[session] 実行中セッションを俯瞰する監視ビューを実装する。idle / running / awaiting_permission / error の状態を一覧で示し、承認待ちを目立たせる。compact と comfortable の情報密度を切り替えられ、一覧と没入ビューを行き来できること。" --targets frontend
+/cl-design "[session] 実行中セッションを俯瞰する監視ビューを実装する。idle / running / awaiting_permission / error の状態を一覧で示し、承認待ちを目立たせる。compact と comfortable の情報密度を切り替えられ、一覧と没入ビューを行き来できること。" --targets frontend
 ```
 
 ### O-2 — ui-coverage 対応表の確立と Tier A 完全化
 
 ```
-/cl-spec "[ui] SDK のメッセージ型・tool 名・システムイベントと表示実装の対応表を docs/ui-coverage.md として確立し、未割当をゼロにする。Permission grant、Elicitation form、Server panel、Checkpoints、Web search、Cost meter、Quota banner、Context display を実装する。対応表の未割当行を検出する CI スクリプトも用意する。" --targets frontend
+/cl-design "[ui] SDK のメッセージ型・tool 名・システムイベントと表示実装の対応表を docs/ui-coverage.md として確立し、未割当をゼロにする。Permission grant、Elicitation form、Server panel、Checkpoints、Web search、Cost meter、Quota banner、Context display を実装する。対応表の未割当行を検出する CI スクリプトも用意する。" --targets frontend
 ```
 
 **注**: 本 feature の完了をもって Principle XII が検証可能になる。
@@ -178,7 +203,7 @@ CI スクリプトの担当とし、reviewer に複製しない。
 ### O-3 — Thread 検索と observability
 
 ```
-/cl-spec "[ui] セッションを横断して探せるようにする。Thread search、会話内検索、conversation map、message timing、活動の heat graph、command palette、empty state を実装する。" --targets frontend
+/cl-design "[ui] セッションを横断して探せるようにする。Thread search、会話内検索、conversation map、message timing、活動の heat graph、command palette、empty state を実装する。" --targets frontend
 ```
 
 ---
@@ -188,19 +213,19 @@ CI スクリプトの担当とし、reviewer に複製しない。
 ### I-1 — DockerRuntime と endpoint 抽象
 
 ```
-/cl-spec "[isolation] コンテナ内で Claude Code のセッションを起動できるようにする。docker CLI への到達経路を endpoint として抽象化し、host と wsl:<distro> の両方を扱えること。主開発ホストは WSL 内 Docker Engine であり Docker Desktop ではない。コンテナ内の transcript を SDK の SessionStore 実装でホスト側 SQLite にミラーする。作業領域戦略として bind / clone-ephemeral / clone-volume を選べるようにし、WSL 側フォルダは bind、Windows 側フォルダは clone-ephemeral を推奨として提示する。強制終了は docker kill でコンテナごと行う。" --targets both
+/cl-design "[isolation] コンテナ内で Claude Code のセッションを起動できるようにする。docker CLI への到達経路を endpoint として抽象化し、host と wsl:<distro> の両方を扱えること。主開発ホストは WSL 内 Docker Engine であり Docker Desktop ではない。コンテナ内の transcript を SDK の SessionStore 実装でホスト側 SQLite にミラーする。作業領域戦略として bind / clone-ephemeral / clone-volume を選べるようにし、WSL 側フォルダは bind、Windows 側フォルダは clone-ephemeral を推奨として提示する。強制終了は docker kill でコンテナごと行う。" --targets both
 ```
 
 ### I-2 — コンテナライフサイクルと隔離可視化
 
 ```
-/cl-spec "[isolation] 使い捨てコンテナのライフサイクルを管理する。イメージの存在確認（ビルドはしない）、セッション開始時の起動、終了時の破棄または保持、起動時の孤児コンテナ**および未使用 volume** の検出と破棄提案。作業フォルダのみのマウントと非 root 起動を検証し、隔離状態をバッジで一目に分かるようにする。" --targets both
+/cl-design "[isolation] 使い捨てコンテナのライフサイクルを管理する。イメージの存在確認（ビルドはしない）、セッション開始時の起動、終了時の破棄または保持、起動時の孤児コンテナ**および未使用 volume** の検出と破棄提案。作業フォルダのみのマウントと非 root 起動を検証し、隔離状態をバッジで一目に分かるようにする。" --targets both
 ```
 
 ### I-3 — sandbox capability 判定と権限モードのゲート
 
 ```
-/cl-spec "[isolation] ランタイムごとの sandbox 利用可否を判定し、権限モードの選択肢をゲートする。autoModeSafe が false のランタイムで Auto と bypassPermissions を選択不可にし、bypass の選択には明示確認を要求する。許可ドメイン等の sandbox 設定を --settings で渡せること。" --targets both
+/cl-design "[isolation] ランタイムごとの sandbox 利用可否を判定し、権限モードの選択肢をゲートする。autoModeSafe が false のランタイムで Auto と bypassPermissions を選択不可にし、bypass の選択には明示確認を要求する。許可ドメイン等の sandbox 設定を --settings で渡せること。" --targets both
 ```
 
 ---
@@ -210,7 +235,7 @@ CI スクリプトの担当とし、reviewer に複製しない。
 ### D-1 — パッケージングと Windows インストーラ
 
 ```
-/cl-spec "[runtime] electron-builder で Windows インストーラを生成する。Agent SDK のネイティブバイナリと node-pty が asarUnpack により実行可能な状態で同梱されること。インストールした状態からセッションを起動できることを受け入れ条件に含める。" --targets both
+/cl-design "[runtime] electron-builder で Windows インストーラを生成する。Agent SDK のネイティブバイナリと node-pty が asarUnpack により実行可能な状態で同梱されること。インストールした状態からセッションを起動できることを受け入れ条件に含める。" --targets both
 ```
 
 ---
@@ -220,11 +245,11 @@ CI スクリプトの担当とし、reviewer に複製しない。
 ### OPT-mac — macOS 対応
 
 ```
-/cl-spec "[runtime] macOS でビルド・起動できるようにし、DirectRuntime でセッションを起動できるようにする。Seatbelt sandbox の capability を反映し、IME とレンダリングを macOS 上で検証する。" --targets both
+/cl-design "[runtime] macOS でビルド・起動できるようにし、DirectRuntime でセッションを起動できるようにする。Seatbelt sandbox の capability を反映し、IME とレンダリングを macOS 上で検証する。" --targets both
 ```
 
 ### OPT-pty — PTY フォールバックタブ
 
 ```
-/cl-spec "[ui] xterm.js と node-pty による端末タブを追加し、SDK 経路では扱えない対話 TUI に切り替えられるようにする。" --targets both
+/cl-design "[ui] xterm.js と node-pty による端末タブを追加し、SDK 経路では扱えない対話 TUI に切り替えられるようにする。" --targets both
 ```

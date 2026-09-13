@@ -11,11 +11,13 @@ shell commands, and other important information, read the current plan
 ### Workflow 1サイクル
 
 ```
-/cl-spec <description>      ─→ specs/<NNN>-<domain>-<slug>/spec.md   (drafting)
-/cl-plan                    ─→ plan.md                                (drafting → planning)
-/cl-tasks                   ─→ tasks.md                               (planning → tasking)
-/cl-design-gate             ─[bundle review: 3並列 reviewer]
+/cl-design <description>    ─ Design フェーズを 1 コマンドで完走（下の 4 つを連鎖）
+  ├─ /cl-spec               ─→ specs/<NNN>-<domain>-<slug>/spec.md   (drafting)
+  ├─ /cl-plan               ─→ plan.md                                (drafting → planning)
+  ├─ /cl-tasks              ─→ tasks.md                               (planning → tasking)
+  └─ /cl-design-gate        ─[bundle review: 3並列 reviewer]
                               Critical=0 で                           (tasking → implementing)
+                              FIX_REQUIRED なら implementing → tasking に降格
 /cl-implement               ─→ コード + auto-chain code-gate          (→ implementing)
 /cl-code-gate               ─[self review: 3-5並列 + auto-fix loop]
                               PASS で                                 (implementing → reviewing)
@@ -28,6 +30,9 @@ shell commands, and other important information, read the current plan
 
 - **gate 失敗時は status を進めない**。Critical 指摘を解消してから再実行する
 - **AskUserQuestion gated 確定**: domain decomposition / reverse spec の domain 帰属 / Constitution Principle 採否は必ず人間承認
+- **自動推論の範囲**: `/cl-spec` は domain / targets を自動推論して自動採用する。
+  domain が僅差のときだけ聞く。採用根拠は `domain_selected_by` / `targets_selected_by` として
+  spec.md frontmatter に残る
 - **`rev-` prefix で物理分離**: brownfield 由来の spec は `specs/rev-<NNN>-<DOM>-<slug>/` に集約し、新規 spec と区別
 - **`status: migrated, needs-human-review`**: reverse 由来は frontmatter で明示
 - **bf_ids / sf_ids トレーサビリティ**: code ↔ spec を相互参照

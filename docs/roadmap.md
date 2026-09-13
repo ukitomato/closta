@@ -6,7 +6,7 @@ generated_by: human (PLAN.md を素案として再導出)
 
 # Roadmap
 
-`/cl-spec` を実行していく順序と、各 feature の依存・前提 SPIKE を定義する。
+`/cl-design` を実行していく順序と、各 feature の依存・前提 SPIKE を定義する。
 feature の定義と domain 帰属は [docs/domains/_overview.md](domains/_overview.md) を正とする。
 各 feature に投げる実際のプロンプトは [docs/prompts.md](prompts.md) にある。
 
@@ -179,14 +179,19 @@ Agent SDK を 1 つ入れて `electron-builder` を 1 回通すだけでも、�
 ## 1 feature のワークフロー
 
 ```
-/cl-spec "<docs/prompts.md の該当プロンプト>"
-/cl-plan
-/cl-tasks
-/cl-design-gate      ← Critical=0 で implementing へ
+/cl-design "<docs/prompts.md の該当プロンプト>"
+      ├─ /cl-spec        spec.md        (drafting)
+      ├─ /cl-plan        plan.md        (→ planning)
+      ├─ /cl-tasks       tasks.md       (→ tasking)
+      └─ /cl-design-gate Critical=0 で   (→ implementing)
 /cl-implement        ← auto-chain で code-gate
 /cl-code-gate        ← PASS で reviewing へ
 /cl-pr-gate          ← Critical=0 で done を許可
 /cl-done             ← PR 提出、completed へ
 ```
 
+**`/cl-design` が Design フェーズ 4 ステップを 1 コマンドで完走する。** 個別起動も可能。
+
 gate が fail したら status を進めない。Critical を解消してから再実行する。
+design-gate が FIX_REQUIRED のときは status が `tasking` に留まり（`implementing` からは降格）、
+`/cl-design --spec-dir <dir> --from gate` で再開する。

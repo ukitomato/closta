@@ -3,14 +3,16 @@
 
 このプロジェクトは Spec-Driven Gating Workflow を採用しています。すべての feature 開発は以下の順序で行います:
 
-1. `/cl-spec <description>` — spec.md 起草 (status: drafting)
-2. `/cl-plan` — plan.md 起草 (drafting → planning)
-3. `/cl-tasks` — tasks.md 起草 (planning → tasking)
-4. `/cl-design-gate` — spec/plan/tasks の bundle review (tasking → implementing)
-5. `/cl-implement` — 実装 + code-gate auto-chain
-6. `/cl-code-gate` — 実装の self-review (implementing → reviewing)
-7. `/cl-pr-gate` — PR diff の adversarial review
-8. `/cl-done` — PR 提出 (reviewing → completed)
+1. **`/cl-design <description>`** — Design フェーズを 1 コマンドで完走
+   （`/cl-spec` → `/cl-plan` → `/cl-tasks` → `/cl-design-gate` を連鎖、drafting → implementing）
+2. `/cl-implement` — 実装 + code-gate auto-chain
+3. `/cl-code-gate` — 実装の self-review (implementing → reviewing)
+4. `/cl-pr-gate` — PR diff の adversarial review
+5. `/cl-done` — PR 提出 (reviewing → completed)
+
+design-gate が FIX_REQUIRED なら status は `tasking` に留まる。
+修正後 `/cl-design --spec-dir <dir> --from gate` で再開する。
+個別に `/cl-spec` / `/cl-plan` / `/cl-tasks` / `/cl-design-gate` を叩くこともできる。
 
 各 gate で Critical 指摘が残っている間は次の status に進めません。
 
