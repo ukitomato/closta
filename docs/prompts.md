@@ -98,6 +98,15 @@ pnpm create @quick-start/electron@latest <dir> --template react-ts --skip
 `allowBuilds` / preload の出力形式 / `sandbox: true` の可否 / 既定メタデータの修正箇所は
 **調査済み**なので再調査しない。
 
+**README.md も本 feature で書く。** 外部 OSS と同じ体裁とし、**全文英語**で書く。
+文体・構成は [ukitomato/loupe](https://github.com/ukitomato/loupe) の README を参考にする
+（タイトル → 太字の 1 行要約 → バッジ → 位置づけの段落 → 絵文字付き箇条書き → 絵文字見出しの各節）。
+**まだ動くものが無い段階なので、実装済みのように書いてはならない。** status を明示する。
+scaffold が生成する README は破棄し、置き換える。
+
+公開 ID は [AD-023](decisions/0023-application-architecture.md) の「公開 ID と配布メタデータ」に従う
+（`appId` = `setAppUserModelId()` = `dev.closta.app`）。
+
 **Constitution の機械検証もここで整備する。** Principle I / II / VII は ESLint ルール
 （`no-restricted-imports` による `node:path` 禁止、`process.platform` の `runtime/` 外禁止、
 `supervisor/` での `electron` とネイティブモジュール禁止）、Principle VI は CI の grep

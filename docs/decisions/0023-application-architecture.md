@@ -122,9 +122,22 @@ R-1 はこれらを再調査しなくてよい。
 | preload の出力形式 | 既定で **CommonJS**（`out/preload/index.js`、`"use strict"; require(...)`）。`package.json` に `"type": "module"` は入らない。**`sandbox: true` と両立する**。ESM preload にしたときだけ `.mjs` + unsandboxed が必要になる |
 | `sandbox: true` の実地確認 | `sandbox: true` / `contextIsolation: true` / `nodeIntegration: false` にして `electron .` を起動し、8 秒間 stderr 無しで生存することを確認した。`@electron-toolkit/preload` は sandbox 下でも動く |
 | `.vscode/` | scaffold が `launch.json`（デバッグ構成）を生成する。**`.gitignore` の `.vscode/` を外して追跡する** |
-| 既定メタデータ | `appId: com.electron.app` / `productName: closta-app` / `setAppUserModelId('com.electron')` / `publish.url: https://example.com/auto-updates`。**すべて要修正**。publish は updater を入れていないので削除でよい |
+| 既定メタデータ | scaffold は `appId: com.electron.app` / `productName: closta-app` / `setAppUserModelId('com.electron')` / `publish.url: https://example.com/auto-updates` を置く。**すべて要修正**。正しい値は下表 |
 | `src/main/index.ts` の `process.platform` | 2 箇所（`icon` と `window-all-closed`）。後者は除去不能 |
 | ビルド確認 | `pnpm build`（typecheck:node + typecheck:web + electron-vite build）が無改変で通る |
+
+### 公開 ID と配布メタデータ
+
+| 項目 | 値 |
+|---|---|
+| `electron-builder.yml` の `appId` | **`dev.closta.app`** |
+| `electronApp.setAppUserModelId()` | **`dev.closta.app`**（`appId` と一致させる。Windows のタスクバー集約と通知が appId を鍵にするため） |
+| `productName` | `Closta` |
+| `win.executableName` | `closta` |
+| `package.json` の `name` | `closta`、`private: true` |
+| `publish` | **削除する。** updater プラグインを入れていないため、ダミー URL を残す意味がない |
+
+`dev.closta.app` は逆 DNS 表記であり、ドメイン `closta.dev` を前提とする。
 
 ### assistant-ui の runtime 選択
 
