@@ -1,0 +1,85 @@
+# R-1 の機械検証を CI で常時回す (SH-022 / SC-008 / SC-009)。
+#
+# **ランナーは Windows を基準**とする。R-1 の検証対象の大半は Windows 固有である —
+# `wsl.exe` の呼び出し面、UNC 経路、ドライブレター、パス正規化。
+# Linux ランナーで回すと「通ったが実機の条件を見ていない」状態になる。
+# WSL 自体はランナーに無いので、実機でしか確かめられない分 (SC-004 / SC-005) は
+# quickstart V-1 〜 V-7 が担う。CI はここを肩代わりしない。
+#
+# Node は AD-013 のとおり **Active LTS (24) を基準**とし、Current (26) は
+# 許容失敗ジョブで回す。実行時の言語機能を決めるのは Electron 同梱 Node であり
+# ホスト Node ではないため、Current の失敗で CI 全体を止めない。
+
+name: verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# 同じ ref の古い実行は打ち切る。main は打ち切らない。
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: verify (node ${{ matrix.node }})
+    runs-on: windows-latest
+
+    strategy:
+      # Current が落ちても LTS 側の結果は最後まで見たい。
+      fail-fast: false
+      matrix:
+        include:
+          - node: 24
+            allow-failure: false
+          - node: 26
+            allow-failure: true
+
+    continue-on-error: ${{ matrix.allow-failure }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          # `packageManager` フィールドを置いていないので明示する。
+          version: 12
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+
+      - name: install
+        run: pnpm install --frozen-lockfile
+
+      # 以降は **1 検証 1 ステップ**にする。まとめると、どの検証が落ちたかが
+      # ログを読まないと分からない。
+      - name: lint
+        run: pnpm lint
+
+      - name: typecheck
+        run: pnpm typecheck
+
+      - name: depcruise
+        run: pnpm depcruise
+
+      - name: check:constitution
+        run: pnpm check:constitution
+
+      - name: test
+        run: pnpm test
+
+      # **違反サンプルを展開して各検証が発火することを確かめる** (SC-008 / SC-017)。
+      # 上の lint / depcruise / check:constitution が「違反 0 件」を示すだけでは、
+      # ルールが効いているのか 1 件も一致していないのかを区別できない (AD-025)。
+      - name: test:rules
+        run: pnpm test:rules
+
+      - name: build
+        run: pnpm build
