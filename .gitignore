@@ -65,3 +65,15 @@ tests/.tmp/
 
 # ルール検証ランナーが一時展開する違反サンプル
 src/**/__rulecheck__/
+
+# ---- gate が生成する世代とバックアップ ----
+# gate は iteration ごとの生 output と、上書き前のバックアップをディスクに残す。
+# リポジトリに要るのは**最終版だけ**である (`analyze.md` / `design-gate.md` /
+# `<reviewer>.md` / `.gate-verdict-<gate>.json`)。
+# 世代を追跡すると、1 feature あたり数十ファイルが恒久的に積む。
+specs/**/*.bak
+specs/**/*.round[0-9]*
+specs/**/*-round[0-9]*
+specs/**/*.iter[0-9]*
+specs/**/*-gate.md.[0-9]*
+specs/**/.*-scope.txt
