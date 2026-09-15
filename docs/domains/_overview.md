@@ -1,6 +1,6 @@
 ---
 status: needs-human-review
-last_updated: 2026-09-12
+last_updated: 2026-09-15
 generated_by: human (PLAN.md を素案として再導出)
 ---
 
@@ -46,7 +46,7 @@ spec_id（`001-runtime-...`）とは独立させる。差し込み作業で番�
 
 | ID | feature | domain | milestone |
 |---|---|---|---|
-| R-1 | フォルダ登録とランタイム検出（`Win32Runtime` + `WslRuntime`、パス型、ESLint 強制） | `runtime` | M1 |
+| R-1 | フォルダ登録とランタイム検出。**プロジェクト初期化・5 レイヤと依存規則の機械強制・CI・操作 UI（ランタイム一覧 / フォルダ登録 / 組み合わせ選択）を含む**。`Win32Runtime` + `WslRuntime` の検出、3 名前空間のパス型、到達可能性と越境の解決。**プロセス起動は含まない** | `runtime` | M1 |
 | R-2 | セッション列挙（読み取り専用、WSL 内 config を Windows から横断） | `session` | M1 |
 | R-3 | transcript の基本表示（markdown / streaming text / scroll anchor / tool fallback） | `ui` | M1 |
 | R-4 | Tier A tool 表示（Terminal / Code diff / Todo / Subagent / Agent plan / Reasoning） | `ui` | M1 |
@@ -119,8 +119,8 @@ domain をまたいで守られるべき不変条件。いずれも Constitution
 
 | 不変条件 | Principle | 関係する domain |
 |---|---|---|
-| パス操作は `runtime.path` を経由する | I | すべて |
-| プラットフォーム分岐は `runtime` の内側に閉じる | II | すべて |
+| パス操作は `domain` のパス API を経由する（ランタイム名前空間は `AgentRuntime.path`、ホスト名前空間と接頭辞照合は同モジュール群の別の公開面） | I | すべて |
+| プラットフォーム分岐は `src/main/infra/runtime/` の内側に閉じる | II | すべて |
 | 権限モードはランタイムの capability に従う | III | `runtime` / `session` / `isolation` / `ui` |
 | Claude Code との通信は Agent SDK 経由 | IV | `session` / `isolation` |
 | 長期資格情報を永続化しない | V | `provider` / `session` |

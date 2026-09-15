@@ -44,13 +44,13 @@
 
 **NON-NEGOTIABLE (違反は Critical。1 件でも残れば design-gate を通さない)**
 
-- [ ] **I. パス操作は `runtime.path` 経由** — `node:path` / `path` を `runtime/` 外で import しない
-- [ ] **II. プラットフォーム分岐は `runtime/` の内側** — `process.platform` が外に漏れない
-- [ ] **III. 権限モードは capability に従う** — `autoModeSafe === false` で Auto / bypass を選ばせない
+- [ ] **I. パス操作は `domain` のパス API 経由** — 標準モジュール (`node:path` / `path`) を直接 import してよいのは実装ファイル 1 つ (`src/domain/runtime/path-api.ts`) だけ
+- [ ] **II. プラットフォーム分岐は `src/main/infra/runtime/` の内側** — 外に漏れる場合は**同じ行**に `platform-ok:` 注記
+- [ ] **III. 権限モードは capability に従う** — `autoModeSafe !== true` で Auto / bypass を選ばせない (3 値。`=== false` では `unknown` が素通りする)
 - [ ] **IV. 通信は Agent SDK 経由** — stream-json / JSONL の自前パースをしない
 - [ ] **V. 長期資格情報を永続化しない** — 秘密は `safeStorage`、保持するのは参照キーのみ。ログに `env` を出さない
 - [ ] **VI. 永続環境を構築・変更しない** — 使い捨てコンテナの起動・破棄のみ例外
-- [ ] **VII. supervisor は Electron / ネイティブモジュールに非依存**
+- [ ] **VII. supervisor (`src/agents/`) は Electron / ネイティブモジュールに非依存** — 推移的到達も禁止
 - [ ] **VIII. 日本語環境で破綻しない** — IME 変換確定の Enter で送信しない
 
 **Standard (違反は High / Medium。`Exceptions` 該当時は理由を Complexity Tracking に記載)**
