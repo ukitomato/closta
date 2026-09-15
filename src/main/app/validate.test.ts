@@ -1,0 +1,347 @@
+import { describe, expect, it, vi } from 'vitest'
+
+/*
+ * **`electron` をモックする。**
+ *
+ * 送信元の検証は許可 origin の集合を参照する必要があり、その集合は
+ * `app.isPackaged` に依存する (開発ビルドでは dev サーバの origin を含む)。
+ * 集合を引数で注入する形にすると**定義が 2 つになり**、
+ * SH-014 の検証項目 11「送信元 origin 定数が 1 つであること」を破る。
+ * したがってここは Electron 側を差し替える。
+ */
+vi.mock('electron', () => ({ app: { isPackaged: true } }))
+
+import { fixedCapabilities } from '@domain/runtime/capabilities'
+import type { RuntimeDescriptor } from '@domain/runtime/descriptor'
+import { wslNamespace } from '@domain/runtime/namespace'
+
+import {
+  MAX_DISPLAY_NAME_LENGTH,
+  MAX_PATH_VALUE_LENGTH,
+  checkBeginBrowseLocation,
+  checkFolderDraft,
+  findRuntime,
+  isKnownFolderId,
+  isTrustedSender,
+  isValidBrowseTarget,
+  isValidDisplayName,
+  isValidLocationDTO,
+  isValidPathDTO
+} from './validate'
+
+/**
+ * IPC ハンドラの検証テスト (BE-048 / SC-018)。
+ *
+ * SC-018 は「**検証表の各行**について不正入力が拒否されること」を要求する。
+ * 3 つだけ列挙する形にしない — 列挙すると同じ構造の残りが拘束を外れる。
+ *
+ * **preload をスタブせず検証関数を直接呼ぶ。** 検証は main 側の責務であり、
+ * renderer を経由しない攻撃経路 (IPC 直叩き) がここで塞がれていることを見る。
+ */
+
+const NOW = 1_700_000_000_000
+const UBUNTU = wslNamespace('Ubuntu-26.04')
+
+const runtimes: readonly RuntimeDescriptor[] = [
+  {
+    id: 'host',
+    kind: 'win32',
+    state: 'running',
+    isDefault: false,
+    capabilities: fixedCapabilities(NOW),
+    detectedAt: NOW
+  },
+  {
+    id: UBUNTU,
+    kind: 'wsl',
+    distroName: 'Ubuntu-26.04',
+    wslVersion: 2,
+    state: 'running',
+    isDefault: true,
+    capabilities: fixedCapabilities(NOW),
+    pathMapping: null,
+    detectedAt: NOW
+  }
+]
+
+/* ── 送信元 (全メソッド共通) ────────────────────────────────────────── */
+
+/** `WebFrameMain` の必要な面だけを持つ代役。Electron を起動せずに検証を呼ぶ。 */
+function frame(origin: string, parent: unknown = null): never {
+  return { origin, parent } as never
+}
+
+describe('送信元の検証', () => {
+  it('frame が無ければ拒否する', () => {
+    expect(isTrustedSender(null)).toBe(false)
+  })
+
+  it('別 origin からの呼び出しを拒否する', () => {
+    expect(isTrustedSender(frame('https://evil.example'))).toBe(false)
+  })
+
+  it('配信元 origin の main frame を受け入れる', () => {
+    // `isPackaged: true` のモックなので許可集合はパッケージ済み origin 1 つだけ。
+    expect(isTrustedSender(frame('closta://app'))).toBe(true)
+  })
+
+  it('**開発ビルドの origin は出荷物では許可されない**', () => {
+    expect(isTrustedSender(frame('http://localhost:5173'))).toBe(false)
+  })
+
+  it('親を持つ frame (iframe) を拒否する', () => {
+    // **単一 capability は main frame だけに公開する。**
+    expect(isTrustedSender(frame('closta://app', {}))).toBe(false)
+  })
+})
+
+/* ── パス値 ─────────────────────────────────────────────────────────── */
+
+describe('PathDTO の検証', () => {
+  it('ホスト名前空間の値を受け入れる', () => {
+    expect(isValidPathDTO({ namespace: 'host', value: 'C:\\dev\\x' })).toBe(true)
+  })
+
+  it('ランタイム名前空間の値を受け入れる', () => {
+    expect(isValidPathDTO({ namespace: 'wsl:Ubuntu-26.04', value: '/home/u/x' })).toBe(true)
+  })
+
+  it('**バックスラッシュを含む POSIX 値を拒否する**', () => {
+    // POSIX では `\` は通常の文字であり `..` の解決規則が発火しない。
+    // 含んだまま UNC へ変換すると字面と別の位置に解決される。
+    expect(isValidPathDTO({ namespace: 'wsl:Ubuntu-26.04', value: '/home/u/a\\b' })).toBe(false)
+  })
+
+  it('相対の POSIX 値を拒否する', () => {
+    expect(isValidPathDTO({ namespace: 'wsl:Ubuntu-26.04', value: 'home/u' })).toBe(false)
+  })
+
+  it('**`unc:` を境界で拒否する**', () => {
+    // `unc:<D>` は `infra/fs` の内側に閉じる。
+    expect(
+      isValidPathDTO({ namespace: 'unc:Ubuntu-26.04', value: '\\\\wsl.localhost\\Ubuntu-26.04' })
+    ).toBe(false)
+  })
+
+  it('制御文字と NUL を拒否する', () => {
+    expect(isValidPathDTO({ namespace: 'host', value: 'C:\\dev\\a\u0000b' })).toBe(false)
+    expect(isValidPathDTO({ namespace: 'host', value: 'C:\\dev\\a\u0007b' })).toBe(false)
+  })
+
+  it('長さ上限を超える値を拒否する', () => {
+    const long = `C:\\${'a'.repeat(MAX_PATH_VALUE_LENGTH)}`
+    expect(isValidPathDTO({ namespace: 'host', value: long })).toBe(false)
+  })
+
+  it('空文字と非オブジェクトを拒否する', () => {
+    expect(isValidPathDTO({ namespace: 'host', value: '' })).toBe(false)
+    expect(isValidPathDTO(null)).toBe(false)
+    expect(isValidPathDTO('C:\\dev')).toBe(false)
+  })
+
+  it('文字種制約を満たさないディストロ名の名前空間を拒否する', () => {
+    expect(isValidPathDTO({ namespace: 'wsl:bad:name', value: '/home' })).toBe(false)
+    expect(isValidPathDTO({ namespace: 'wsl:-evil', value: '/home' })).toBe(false)
+  })
+})
+
+/* ── 所在 ───────────────────────────────────────────────────────────── */
+
+describe('LocationDTO の検証', () => {
+  it('既知の形式を受け入れる', () => {
+    expect(isValidLocationDTO({ kind: 'windows' })).toBe(true)
+    expect(isValidLocationDTO({ kind: 'wsl', distroName: 'Ubuntu-26.04' })).toBe(true)
+  })
+
+  it('文字種制約を満たさない distroName を拒否する', () => {
+    for (const name of ['bad:name', 'back\\slash', 'fwd/slash', '-evil', 'nul\u0000']) {
+      expect(isValidLocationDTO({ kind: 'wsl', distroName: name })).toBe(false)
+    }
+  })
+
+  it('未知の kind を拒否する', () => {
+    expect(isValidLocationDTO({ kind: 'docker', id: 'x' })).toBe(false)
+    expect(isValidLocationDTO(null)).toBe(false)
+  })
+})
+
+/* ── runtimeId ──────────────────────────────────────────────────────── */
+
+describe('runtimeId の検証', () => {
+  it('既知の識別子に完全一致するものだけを返す', () => {
+    expect(findRuntime(runtimes, 'host')?.id).toBe('host')
+    expect(findRuntime(runtimes, UBUNTU)?.id).toBe(UBUNTU)
+  })
+
+  it('未検出の識別子を拒否する', () => {
+    expect(findRuntime(runtimes, 'wsl:NoSuchDistro')).toBeNull()
+    // **前方一致で通らない** (`Ubuntu` が `Ubuntu-26.04` に当たらない)。
+    expect(findRuntime(runtimes, 'wsl:Ubuntu')).toBeNull()
+    expect(findRuntime(runtimes, 42)).toBeNull()
+  })
+})
+
+/* ── beginBrowse の所在 ─────────────────────────────────────────────── */
+
+describe('beginBrowse の所在の検証', () => {
+  it('**所在 `windows` を常に拒否する** (host の入口はピッカーのみ)', () => {
+    expect(checkBeginBrowseLocation(runtimes, { kind: 'windows' })).toEqual({
+      ok: false,
+      reason: 'unsupported-location'
+    })
+  })
+
+  it('検出済みディストロを受け入れる', () => {
+    expect(checkBeginBrowseLocation(runtimes, { kind: 'wsl', distroName: 'Ubuntu-26.04' })).toEqual(
+      { ok: true, namespace: UBUNTU }
+    )
+  })
+
+  it('**未検出 descriptor の所在を拒否する**', () => {
+    expect(checkBeginBrowseLocation(runtimes, { kind: 'wsl', distroName: 'NoSuchDistro' })).toEqual(
+      { ok: false, reason: 'unknown-location' }
+    )
+  })
+
+  it('形式不正の所在を拒否する', () => {
+    expect(checkBeginBrowseLocation(runtimes, { kind: 'wsl' })).toEqual({
+      ok: false,
+      reason: 'unknown-location'
+    })
+  })
+})
+
+/* ── browseDirectory の移動先 ───────────────────────────────────────── */
+
+describe('browseDirectory の移動先の検証', () => {
+  const session = UBUNTU
+
+  it('root を受け入れる', () => {
+    expect(isValidBrowseTarget({ kind: 'root' }, session)).toBe(true)
+  })
+
+  it('セッションと同じ名前空間の current / parent を受け入れる', () => {
+    const of = { namespace: session, value: '/home/u' }
+    expect(isValidBrowseTarget({ kind: 'current', of }, session)).toBe(true)
+    expect(isValidBrowseTarget({ kind: 'parent', of }, session)).toBe(true)
+  })
+
+  it('**`unc:<D>` を `wsl:<D>` として渡す経路を拒否する** (種別まで完全一致)', () => {
+    const of = { namespace: 'unc:Ubuntu-26.04', value: '\\\\wsl.localhost\\Ubuntu-26.04\\home' }
+    expect(isValidBrowseTarget({ kind: 'current', of }, session)).toBe(false)
+  })
+
+  it('**別ディストロの名前空間を拒否する**', () => {
+    const of = { namespace: 'wsl:Debian', value: '/home/u' }
+    expect(isValidBrowseTarget({ kind: 'current', of }, session)).toBe(false)
+  })
+
+  it('child の name はセパレータと `.` / `..` を拒否する', () => {
+    const of = { namespace: session, value: '/home/u' }
+    expect(isValidBrowseTarget({ kind: 'child', of, name: 'repo' }, session)).toBe(true)
+    // 先頭ドットは許す (`.git` が読めないと困る)。
+    expect(isValidBrowseTarget({ kind: 'child', of, name: '.git' }, session)).toBe(true)
+
+    for (const name of ['.', '..', 'a/b', 'a\\b', 'a\u0000b', '']) {
+      expect(isValidBrowseTarget({ kind: 'child', of, name }, session)).toBe(false)
+    }
+  })
+
+  it('未知の kind を拒否する', () => {
+    expect(isValidBrowseTarget({ kind: 'absolute', value: '/etc' }, session)).toBe(false)
+    expect(isValidBrowseTarget(null, session)).toBe(false)
+  })
+})
+
+/* ── displayName / folderId ─────────────────────────────────────────── */
+
+describe('displayName の検証', () => {
+  it('通常の名前を受け入れる', () => {
+    expect(isValidDisplayName('私のリポジトリ')).toBe(true)
+  })
+
+  it('空文字・制御文字・長さ超過を拒否する', () => {
+    expect(isValidDisplayName('')).toBe(false)
+    expect(isValidDisplayName('bad\u0007name')).toBe(false)
+    expect(isValidDisplayName('x'.repeat(MAX_DISPLAY_NAME_LENGTH + 1))).toBe(false)
+    expect(isValidDisplayName(42)).toBe(false)
+  })
+})
+
+describe('folderId の検証', () => {
+  it('既知の登録エントリに一致するものだけを受け入れる', () => {
+    const ids = ['wf_0123456789ab']
+    expect(isKnownFolderId(ids, 'wf_0123456789ab')).toBe(true)
+    expect(isKnownFolderId(ids, 'wf_ffffffffffff')).toBe(false)
+    expect(isKnownFolderId(ids, 42)).toBe(false)
+  })
+})
+
+/* ── registerFolder の draft ────────────────────────────────────────── */
+
+describe('registerFolder の draft の検証', () => {
+  it('所在 windows の draft を受け入れる', () => {
+    expect(
+      checkFolderDraft(runtimes, {
+        location: { kind: 'windows' },
+        path: { namespace: 'host', value: 'C:\\dev\\x' },
+        displayName: 'x'
+      })
+    ).toEqual({ ok: true })
+  })
+
+  it('所在 wsl の draft を受け入れる', () => {
+    expect(
+      checkFolderDraft(runtimes, {
+        location: { kind: 'wsl', distroName: 'Ubuntu-26.04' },
+        path: { namespace: UBUNTU, value: '/home/u/x' },
+        displayName: 'x'
+      })
+    ).toEqual({ ok: true })
+  })
+
+  it('**所在の種別は一致するがディストロ名が異なる draft を拒否する**', () => {
+    expect(
+      checkFolderDraft(runtimes, {
+        location: { kind: 'wsl', distroName: 'Ubuntu-26.04' },
+        path: { namespace: 'wsl:Debian', value: '/home/u/x' },
+        displayName: 'x'
+      })
+    ).toEqual({ ok: false, reason: 'namespace-mismatch' })
+  })
+
+  it('**未検出 descriptor の所在を拒否する**', () => {
+    expect(
+      checkFolderDraft(runtimes, {
+        location: { kind: 'wsl', distroName: 'NoSuchDistro' },
+        path: { namespace: 'wsl:NoSuchDistro', value: '/home/u/x' },
+        displayName: 'x'
+      })
+    ).toEqual({ ok: false, reason: 'unknown-location' })
+  })
+
+  it('バックスラッシュを含む POSIX 値の draft を拒否する', () => {
+    expect(
+      checkFolderDraft(runtimes, {
+        location: { kind: 'wsl', distroName: 'Ubuntu-26.04' },
+        path: { namespace: UBUNTU, value: '/home/u/a\\b' },
+        displayName: 'x'
+      })
+    ).toEqual({ ok: false, reason: 'invalid-path' })
+  })
+
+  it('`unc:` の draft を拒否する', () => {
+    expect(
+      checkFolderDraft(runtimes, {
+        location: { kind: 'wsl', distroName: 'Ubuntu-26.04' },
+        path: { namespace: 'unc:Ubuntu-26.04', value: '\\\\wsl.localhost\\Ubuntu-26.04\\home' },
+        displayName: 'x'
+      })
+    ).toEqual({ ok: false, reason: 'invalid-path' })
+  })
+
+  it('非オブジェクトを拒否する', () => {
+    expect(checkFolderDraft(runtimes, null).ok).toBe(false)
+    expect(checkFolderDraft(runtimes, 'C:\\dev').ok).toBe(false)
+  })
+})
