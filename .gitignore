@@ -48,7 +48,9 @@ logs/
 Thumbs.db
 desktop.ini
 .idea/
-.vscode/
+# .vscode/ は追跡する。公式 scaffold が生成する launch.json (デバッグ構成) を
+# 共有するため (AD-023 の検証済み事実)。個人設定は settings.json に寄せず、
+# 必要になった時点で個別に除外する。
 
 # ---- Claude Code / Spec Kit ----
 # .claude/ と .specify/ は SSoT (Constitution / subagent / gate スクリプト) を含むため追跡する。
@@ -57,3 +59,9 @@ desktop.ini
 
 # spec-gate の --force 退避ファイル
 *.bak.*
+
+# テストが作る一時ディレクトリ
+tests/.tmp/
+
+# ルール検証ランナーが一時展開する違反サンプル
+src/**/__rulecheck__/

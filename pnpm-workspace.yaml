@@ -8,3 +8,18 @@
 # discovery-scanner は本ファイルの存在を monorepo marker として扱うので、
 # 次回 /spec-gate scan の結果を読むときは注意すること。
 nodeLinker: hoisted
+
+# pnpm 12 はビルドスクリプトの許可を本ファイルの `allowBuilds` で見る。
+# `package.json` の `pnpm.onlyBuiltDependencies` は参照されない (AD-023 の検証済み事実)。
+# 許可を 2 箇所に置くと SSoT が割れるため、scaffold 由来の
+# `pnpm.onlyBuiltDependencies` は削除し、本ファイルを正本とする。
+#
+# `electron-winstaller` は Squirrel 用で本プロジェクトは使わない。
+# `false` を明示しないと install が `ERR_PNPM_IGNORED_BUILDS` で失敗する。
+allowBuilds:
+  electron: true
+  esbuild: true
+  electron-winstaller: false
+  # `eslint-import-resolver-typescript` の解決エンジン。postinstall で
+  # プラットフォーム固有のネイティブバインディングを配置する。
+  unrs-resolver: true
