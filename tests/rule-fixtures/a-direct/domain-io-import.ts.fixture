@@ -1,0 +1,4 @@
+// 違反サンプル: domain から I/O モジュールを直接 import する。
+import { readFile } from 'node:fs/promises'
+
+export const read = readFile

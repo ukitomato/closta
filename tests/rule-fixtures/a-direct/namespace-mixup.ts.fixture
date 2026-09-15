@@ -1,0 +1,7 @@
+// 違反サンプル: ホスト名前空間のパスをランタイム名前空間の関数へ渡す。
+// **型検査で止まる** — branded type が名前空間を分離している。
+import { runtimePathOps } from '@domain/runtime/path-api'
+import { makeHostPath } from '@domain/runtime/path-types'
+
+const host = makeHostPath('C:\\dev\\x')
+export const bad = host.ok ? runtimePathOps.basename(host.path) : ''

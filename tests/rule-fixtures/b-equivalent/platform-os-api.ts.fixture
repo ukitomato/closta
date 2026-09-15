@@ -1,0 +1,7 @@
+// 違反サンプル: 等価なプラットフォーム判定 API。
+// `process.platform` を見るだけの検証では通り抜ける。
+import os from 'node:os'
+
+export function isWindows(): boolean {
+  return os.platform() === 'win32'
+}

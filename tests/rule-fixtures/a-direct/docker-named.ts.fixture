@@ -1,0 +1,4 @@
+// 違反サンプル: 許可外モジュール (docker の許可リストは空) が docker を名指す。
+import { spawn } from 'node:child_process'
+
+export const run = (): unknown => spawn('docker.exe', ['ps'])

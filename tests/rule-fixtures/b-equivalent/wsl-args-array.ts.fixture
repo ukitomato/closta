@@ -1,0 +1,6 @@
+// 違反サンプル: 環境を変えるサブコマンドを引数配列で構成する。
+// リテラル `wsl --import` は現れない。
+import { spawn } from 'node:child_process'
+
+export const importDistro = (): unknown =>
+  spawn('wsl.exe', ['--import', 'NewDistro', 'D:/wsl', 'D:/rootfs.tar'])

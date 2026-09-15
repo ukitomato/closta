@@ -1,0 +1,4 @@
+// 違反サンプル: パス操作の標準モジュールを許可ファイル以外で import する。
+import { join } from 'node:path'
+
+export const j = join

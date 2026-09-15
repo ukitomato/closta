@@ -1,0 +1,6 @@
+// 違反サンプル: `require()` でパス操作モジュールを取る。
+// **import 文が現れないので `no-restricted-imports` は見えない。**
+// 依存グラフ検証だけが塞げる (AD-023 §7 が両方を要求する理由)。
+const path = require('node:path')
+
+export const j = path.join

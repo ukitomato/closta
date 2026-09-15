@@ -1,0 +1,6 @@
+// 違反サンプル: ui から domain 経由で node builtin に推移的に到達する。
+// `domain/__rulecheck__/domain-io-import.ts` が `node:fs/promises` を import しており、
+// それを ui から辿る形。**直接 import ではないので lint では見えない。**
+import { read } from '@domain/__rulecheck__/domain-io-import'
+
+export const r = read

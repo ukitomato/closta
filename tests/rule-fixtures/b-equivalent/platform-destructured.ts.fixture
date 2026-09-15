@@ -1,0 +1,11 @@
+// 違反サンプル: 構文変形によるプラットフォーム判定。
+// 分割代入とブラケット記法。識別子の直接参照を見るだけでは通り抜ける。
+const { platform } = process
+
+export function isWindows(): boolean {
+  return platform === 'win32'
+}
+
+export function isWindowsBracket(): boolean {
+  return process['platform'] === 'win32'
+}

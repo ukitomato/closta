@@ -1,0 +1,4 @@
+// 違反サンプル: 循環依存の片側。
+import { b } from './cycle-b'
+
+export const a = (): number => b() + 1

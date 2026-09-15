@@ -1,0 +1,5 @@
+// 違反サンプル: 動的 import で I/O モジュールを取る。
+export async function read(target: string): Promise<string> {
+  const fs = await import('node:fs/promises')
+  return fs.readFile(target, 'utf8')
+}
