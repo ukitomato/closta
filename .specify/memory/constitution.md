@@ -1,13 +1,78 @@
 ---
 status: active
-version: 1.1.0
+version: 1.2.1
 ratified: 2026-09-13
-last_amended: 2026-09-13
+last_amended: 2026-09-15
 generated_by: /speckit.constitution (素材: /spec-gate bootstrap Phase 6 の draft)
 ---
 
 <!--
-Sync Impact Report
+Sync Impact Report (v1.2.1)
+- Version change: 1.2.0 → 1.2.1
+- Last amended: 2026-09-15
+- Bump rationale: PATCH。Principle VIII の Verification の「現状の制約」の表現修正のみ。
+  指針そのものは変えていない (AD-024 #18)
+
+Modified principles:
+- Principle VIII (日本語環境で破綻しない) — 「CI が未構築のため Automated 側は実行不能」を
+  実体に改めた。CI は SH-022 で構築済みであり、この理由はもう成り立たない。
+  内訳は (A) composer が無いため**対象が無い**、
+  (B) スクリーンショット比較は R-2 の E2E 基盤に相乗りする、の 2 つである
+
+Templates requiring updates:
+- ✅ docs/decisions/0024-constitution-verification-paths.md — #18 と
+     「Principle VIII の Automated 検証を R-1 でどこまで載せるか」を追記し、
+     同名の Open Question を閉じた
+- ✅ .github/workflows/verify.yml — CI 本体 (SH-022)
+-->
+
+<!--
+Sync Impact Report (v1.2.0)
+- Version change: 1.1.0 → 1.2.0
+- Last amended: 2026-09-15
+- Bump rationale: MINOR。Principle の追加・削除ではなく、検証条件と本文の実体合わせ。
+  ただし #13 (III) / #14 (I) は NON-NEGOTIABLE の改定にあたるため既存違反 enumeration を伴う
+- 根拠: docs/decisions/0024-constitution-verification-paths.md (AD-024。17 項目)
+
+Modified principles (v1.1.0 からの変更):
+- I   — Statement を「domain が公開するパス API を経由」に改め、Automated の正本を
+        lint + グラフ検証へ移し、ディレクトリ除外を許可ファイル方式に変えた (#7 / #14)
+- II  — 許可ディレクトリを実名で限定し、Automated の正本を検証スクリプトへ移した。
+        例外注記に「整形器が動かさない位置に置く」を補った (#8)
+- III — `autoModeSafe === false` を `!== true` に改め、判定を単一関数に定めた (#13)
+- V   — 設定ファイル (JSON / YAML) の永続化スキーマを検証対象に加えた (#9)
+- VI  — 許可リストの正本を検証スクリプト内の定数に移し、検証スコープに
+        `scripts/` とビルド構成を加え、報告を 3 状態にした (#3 / #4 / #5)
+- VII — 対象ディレクトリを `src/supervisor/` から `src/agents/` に直し、
+        import / require 両形式と推移的到達をグラフ検証で見る形にした (#1 / #2)
+- IX  — `--exclude-dir=supervisor` を `src/agents/` に読み替えた (#6)
+- XI  — Exceptions の「基盤 feature は UI を持たない」を「観測可能な振る舞いが
+        1 つ以上あれば足りる」に改めた (#15)
+- XIII — `bad_pattern_grep` が `--` 始まりで実行不能だった点を修正し、標準テーマの写しを
+        ファイル単位の除外リストにした。Exceptions を「候補を実名で照合したうえで不適合」に改めた (#10 / #11)
+- XIV — 「glossary は未作成」を削り現行 glossary を正本にした (#16)
+- XV  — 表層文書 (README / LICENSE / NOTICE 等) を英語 SSoT とする Exceptions を追加した (#12)
+
+Modified sections:
+- Domain-specific Principles — 「docs/domains/ は未作成」を事実に合わせた
+- 未解決の Principle 候補 #2 — 自プロジェクトの LICENSE を解消済みとし、
+  残余 (第三者依存の NOTICE) を D-1 の着手条件に限定した (#17)
+- Existing violations summary — R-1 Phase 2 完了時点の実測値に置き換えた
+
+Templates requiring updates:
+- ✅ .specify/templates/plan-template.md — Constitution Check の表記を追随させた (#14)
+- ✅ PLAN.md — P-1 に追随メモを入れ、正本が Constitution であることを明記した (#14)
+- ✅ .claude/agents/platform-boundary-reviewer.md — PB-4 の条件式と
+     Principle VII のディレクトリ名、lint の穴の見方を追随させた (#13 / #1 / #2)
+- ✅ .specify/spec-gate/reviewers.yml — database-reviewer に設定層を追加し、
+     platform-boundary-reviewer の発火パスを実在するものに直した (#9 / #1 / #6)
+- ✅ docs/domains/isolation/charter.md — 権限ゲートの条件式を `!== true` に直した (#13)
+- ✅ CI — `.github/workflows/verify.yml` を SH-022 で構築した。
+     Principle VIII の Automated をどこまで載せるかは **v1.2.1 (AD-024 #18)** で決着
+-->
+
+<!--
+Sync Impact Report (v1.0.0)
 - Version change: (draft 0.1.0) → 1.0.0
 - Ratified: 2026-09-13  /  Last amended: 2026-09-13
 - Bump rationale: MAJOR。初回批准。draft から active への昇格であり、
@@ -78,11 +143,13 @@ ADR は [docs/decisions/](../../docs/decisions/)、用語は [docs/glossary.md](
 **Adoption metadata**:
 - `existing_violations`: 0
 - `violation_threshold`: 0
-- `bad_pattern_grep`: `grep -rnE "from ['\"](node:)?path['\"]" src/ --exclude-dir=runtime`
+- `bad_pattern_grep`: (補助。正本は lint + グラフ検証。
+  `grep -rnE "from ['\"](node:)?path['\"]" src/ | grep -v "src/domain/runtime/path-api.ts"`)
 - `adoption_date`: 2026-09-13
+- `amended`: 2026-09-15 (AD-024 #7 / #14)
 
 <!-- BOOTSTRAP_SECTION_START principle=I -->
-**Statement**: アプリケーションコードは `node:path` / `path` を直接 import してはならない。パス操作はすべて `runtime.path` を経由する。
+**Statement**: アプリケーションコードは `node:path` / `path` を直接 import してはならない。パス操作は `domain` が公開するパス API を経由する。ランタイム名前空間の操作は `AgentRuntime.path` として公開し、**ホスト名前空間の操作と接頭辞照合は同モジュール群の別の公開面**とする。標準モジュールを直接 import してよいのは実装ファイル 1 つに限る (AD-024 #14)。
 
 **Why**: AD-004 により `HostPath` と `RuntimePath` は branded type で名前空間が分離されている。`WslRuntime` では `C:\Users\y\p` と `/home/y/p` が同時に存在し、どちらの名前空間のパスかを型で追跡できなければ transcript ディレクトリ (`<config-dir>/projects/<encoded-cwd>/`) の解決が壊れる。開発ホストが Windows 11 + WSL2 であるため、この状況は R-2 の時点で日常的に発生する (PLAN.md §10.1)。
 
@@ -91,8 +158,11 @@ ADR は [docs/decisions/](../../docs/decisions/)、用語は [docs/glossary.md](
 - ✗ Bad: `import path from 'node:path'; path.join(hostPath, runtimePath)` — 2 つの名前空間を混在させる
 
 **Verification**:
-- Automated: ESLint `no-restricted-imports` が `runtime/` 配下以外での `node:path` / `path` の import を error にする
+- Automated (正本): `eslint.config.mjs` の `no-restricted-imports` と `boundaries/dependencies` が
+  **許可ファイル 1 つ** (`src/domain/runtime/path-api.ts`) 以外での import を error にする。
+  `.dependency-cruiser.js` の `path-module-only-from-path-api` が `require()` 形式も塞ぐ
 - Manual: `architecture-reviewer` / `platform-boundary-reviewer` がパス生成箇所を確認する
+- **ディレクトリ単位の除外は使わない** (AD-024 #7)。`src/domain/runtime/` 配下すべてが免除されてしまう
 <!-- BOOTSTRAP_SECTION_END principle=I -->
 
 <!-- MIGRATE_SECTION_START principle=I -->
@@ -103,8 +173,9 @@ ADR は [docs/decisions/](../../docs/decisions/)、用語は [docs/glossary.md](
 **Adoption metadata**:
 - `existing_violations`: 0
 - `violation_threshold`: 0
-- `bad_pattern_grep`: `grep -rn "process.platform" src/ --exclude-dir=runtime | grep -v "platform-ok"`
+- `bad_pattern_grep`: (補助。正本は `scripts/constitution/check.mjs` 項目 8。`grep -rn "process.platform" src/ | grep -v "src/main/infra/runtime/" | grep -v "platform-ok"`)
 - `adoption_date`: 2026-09-13
+- `amended`: 2026-09-15 (AD-024 #8)
 
 <!-- BOOTSTRAP_SECTION_START principle=II -->
 **Statement**: `process.platform` などによるプラットフォーム分岐を `runtime/` の外に書いてはならない。posix / win32 の差は各 `AgentRuntime` 実装が内部で吸収する。
@@ -116,7 +187,10 @@ ADR は [docs/decisions/](../../docs/decisions/)、用語は [docs/glossary.md](
 - ✗ Bad: `if (process.platform === 'win32') { /* sandbox なし扱い */ }` — Docker 経由なら成立しない
 
 **Verification**:
-- Automated: `grep -rn "process.platform" src/ --exclude-dir=runtime | grep -v "platform-ok"` が空であること
+- Automated (正本): `scripts/constitution/check.mjs` 項目 8。**許可ディレクトリを実名で限定**する
+  (`scripts/constitution/allowlists.mjs` の `PLATFORM_BRANCH_DIRS`)。
+  検査対象は識別子の直接参照だけでなく、**等価な API** (`os.platform()` / `os.type()`) と
+  **構文変形** (分割代入・ブラケット記法) を含む
 - Manual: `platform-boundary-reviewer`
 
 **例外の書き方**: Electron 自身のホスト OS 規約（macOS の `window-all-closed` で
@@ -125,6 +199,15 @@ ADR は [docs/decisions/](../../docs/decisions/)、用語は [docs/glossary.md](
 これらは除去できないため、**`process.platform` と同じ行の末尾**に
 `// platform-ok: <理由>` を書く。前の行に書くと grep が拾えず例外にならない。
 注記のない `process.platform` は違反として扱う。
+
+**判定をいったん変数に受け、その行に注記を置く。** `if` の条件式に直接書くと
+prettier が注記を次の行へ送り、「同じ行」という条件を満たさなくなる
+(R-1 実装時に実測。AD-024)。
+
+```ts
+const isMac = process.platform === 'darwin' // platform-ok: <理由>
+if (!isMac) { ... }
+```
 
 **注記が正直かどうかは `platform-boundary-reviewer` が判定する。**
 「ホスト OS 規約」と書いてランタイム分岐を隠す行為は、grep では検出できないため
@@ -141,9 +224,10 @@ ADR は [docs/decisions/](../../docs/decisions/)、用語は [docs/glossary.md](
 - `violation_threshold`: 0
 - `bad_pattern_grep`: (grep での機械判定が困難。E2E で検証する。補助 grep: `grep -rn "permissionMode" src/ | grep -v "capabilities"`)
 - `adoption_date`: 2026-09-13
+- `amended`: 2026-09-15 (AD-024 #13)
 
 <!-- BOOTSTRAP_SECTION_START principle=III -->
-**Statement**: `capabilities.autoModeSafe === false` のランタイムで Auto / `bypassPermissions` を選択可能にしてはならない。`bypassPermissions` の選択には `allowDangerouslySkipPermissions: true` と明示確認を要求する。
+**Statement**: `capabilities.autoModeSafe !== true` のランタイムで Auto / `bypassPermissions` を選択可能にしてはならない。**`autoModeSafe` は 3 値 (`true` / `false` / `unknown`) であり、判定は単一の関数に集約する** (`isAutoModeAllowed`)。`=== false` と書くと判定中 (`unknown`) が素通りする (AD-024 #13)。`bypassPermissions` の選択には `allowDangerouslySkipPermissions: true` と明示確認を要求する。
 
 **Why**: 隔離境界のない環境で無人実行を許すと、ファイルツール・MCP サーバ・hook がホストに対して無制限に動作する。`Win32Runtime` は sandbox を持たないため (PLAN.md §2.1)、UI 上で選べてしまうこと自体が事故経路になる。軸 3 (Docker サンドボックス) が存在する理由でもある。
 
@@ -191,6 +275,7 @@ ADR は [docs/decisions/](../../docs/decisions/)、用語は [docs/glossary.md](
 - `violation_threshold`: 0
 - `bad_pattern_grep`: `grep -rniE "(api_?key|oauth_?token|secret|password|aws_secret_access_key)\s*(TEXT|BLOB|VARCHAR)" src/` および `grep -rnE "console\.(log|error|warn)\([^)]*\benv\b" src/`
 - `adoption_date`: 2026-09-13
+- `amended`: 2026-09-15 (AD-024 #9)
 
 <!-- BOOTSTRAP_SECTION_START principle=V -->
 **Statement**: API キー・OAuth トークン・AWS 長期キーを SQLite / 設定ファイル / プリセットに書いてはならない。永続化が必要なものは Electron `safeStorage` 経由で OS キーチェーンに預け、参照キーのみを保持する。一時資格情報はメモリ上のみで扱い、有効期限を監視する。ログへの混入も禁止する。
@@ -203,8 +288,10 @@ ADR は [docs/decisions/](../../docs/decisions/)、用語は [docs/glossary.md](
 - ✗ Bad: セッション起動時に `logger.debug('env', options.env)` を呼ぶ
 
 **Verification**:
-- Automated: SQLite スキーマに秘密値カラムが存在しないこと。ログ出力に `env` をそのまま渡す箇所がないこと
-- Manual: `security-reviewer` (資格情報の取り扱い)、`database-reviewer` (スキーマ)
+- Automated: SQLite スキーマに秘密値カラムが存在しないこと。ログ出力に `env` をそのまま渡す箇所がないこと。
+  **SQL のカラム型だけに依存しない** — 設定ファイル (JSON / YAML) の永続化スキーマも対象に含める
+  (AD-024 #9)。R-1 の永続化は JSON であり、SQL を見る検証では届かない
+- Manual: `security-reviewer` (資格情報の取り扱い)、`database-reviewer` (スキーマ**と設定層**)
 <!-- BOOTSTRAP_SECTION_END principle=V -->
 
 <!-- MIGRATE_SECTION_START principle=V -->
@@ -215,7 +302,10 @@ ADR は [docs/decisions/](../../docs/decisions/)、用語は [docs/glossary.md](
 **Adoption metadata**:
 - `existing_violations`: 0
 - `violation_threshold`: 0
-- `bad_pattern_grep`: 文字列リテラル一致では不十分なため、**モジュール境界**で縛る。
+- `bad_pattern_grep`: (補助。**正本は `scripts/constitution/check.mjs` 項目 1 〜 7 / 9**。AD-024 #3 / #4 / #5)
+- `allowlist_source`: `scripts/constitution/allowlists.mjs` — **正本。追加には ADR を要する**
+- `amended`: 2026-09-15 (AD-024 #3 / #4 / #5)
+- 旧条件 (参考。文字列リテラル一致では不十分なため、**モジュール境界**で縛る):
   1. `grep -rnE "['\"](sudo|apt|apt-get)['\"]" src/` — 引数配列での構成も捕捉する
   2. `grep -rn -- "--import" src/` — `wsl --import` の検出
   3. `grep -rnE "['\"]docker(\.exe)?['\"]" src/ --exclude-dir=isolation` — docker CLI を
@@ -234,7 +324,28 @@ ADR は [docs/decisions/](../../docs/decisions/)、用語は [docs/glossary.md](
 - ✗ Bad: `docker build` を呼ぶ / `/etc/wsl.conf` を編集する / bubblewrap を導入する
 
 **Verification**:
-- Automated: 上記 4 つの grep がいずれも空であること
+- Automated (正本): `scripts/constitution/check.mjs`。許可リストは
+  `scripts/constitution/allowlists.mjs` に置き、**追加には ADR を要する** (FR-041)。
+  検証項目は research R-08 の 11 項目で、Principle VI に対応するのは次の 8 つ。
+
+  | # | 内容 |
+  |---|---|
+  | 1 | 特権コマンド文字列の不在 (**Linux / Windows 両方**。引数配列も捕捉) |
+  | 2 | `wsl.exe` に渡す引数が**許可リスト**内であること |
+  | 3 | `wsl.exe` を名指せるモジュールの許可リスト |
+  | 4 | docker CLI を名指せるモジュールの許可リスト |
+  | 5 | 許可モジュール内にイメージ構築サブコマンドが無いこと |
+  | 6 | ディストロ内で実行するスクリプトが定義済みの内容と一致すること (3 点検査) |
+  | 7 | プロセス起動 API を使えるモジュールの許可リスト |
+  | 9 | **OS へのプロトコル関連付け API の呼び出しの不在** |
+
+- **検証スコープは `src/` に限らない** (AD-024 #5)。`scripts/` とビルド構成
+  (`package.json` の scripts / CI 定義 / パッケージング設定) を含める。
+  **除外はファイル単位の明示リスト**とし、ディレクトリ単位で除外してはならない —
+  そこに後から実行可能コードが増えたときに検証が構造的に届かなくなる
+- **結果は 3 状態で報告する** — `ok` / `violation` / **`pending` (検査対象がまだ存在しない)**。
+  `pending` を `ok` に混ぜると「まだ書いていないから通った」と「検証したから通った」が
+  区別できなくなる
 - **注意**: 単純な `grep "docker build"` / `grep "docker run"` では不十分である。
   AD-012 の `wsl:<distro>` endpoint ではコマンドが
   `['wsl.exe', '-d', distro, '--', 'docker', 'run', ...]` のような**引数配列**で構成され、
@@ -252,8 +363,11 @@ ADR は [docs/decisions/](../../docs/decisions/)、用語は [docs/glossary.md](
 **Adoption metadata**:
 - `existing_violations`: 0
 - `violation_threshold`: 0
-- `bad_pattern_grep`: `grep -rnE "from ['\"]electron['\"]" src/supervisor/` および `grep -rnE "require\(['\"](better-sqlite3|node-pty)['\"]\)" src/supervisor/`
+- `bad_pattern_grep`: (補助。正本は lint + グラフ検証。**対象ディレクトリは `src/agents/`**。
+  `grep -rnE "from ['\"]electron['\"]" src/agents/` および
+  `grep -rnE "(require|import)\(?['\"](better-sqlite3|node-pty|keytar)['\"]" src/agents/`)
 - `adoption_date`: 2026-09-13
+- `amended`: 2026-09-15 (AD-024 #1 / #2)
 
 <!-- BOOTSTRAP_SECTION_START principle=VII -->
 **Statement**: supervisor は Electron API に依存してはならず、**ネイティブモジュールにも依存してはならない**。`node dist/supervisor.js` として単独起動でき、標準入出力経由でプロトコルを話せる形を保つ。SQLite アクセスは main process 側に置く。
@@ -266,7 +380,14 @@ ADR は [docs/decisions/](../../docs/decisions/)、用語は [docs/glossary.md](
 - ✗ Bad: supervisor が `better-sqlite3` で sessionStore を直接書く
 
 **Verification**:
-- Automated: ESLint が `supervisor/` 配下での `electron` import を error にする。ネイティブモジュールの import も同様に禁止する
+- Automated (正本): `eslint.config.mjs` の許可行列が `src/agents/` から `electron` と
+  ネイティブモジュールへの**直接** import を error にする。
+  `.dependency-cruiser.js` の `agents-not-to-electron` / `agents-not-to-native` が
+  **推移的な到達**と `require()` 形式を塞ぐ (AD-024 #1 / #2)
+- **ディレクトリ名は `src/agents/` である** — AD-023 が supervisor をこのパスに置いた。
+  `src/supervisor/` を検査する条件は**常に空を返して常に合格する**ため意味を持たない
+- **`require()` 形式と等価 API も対象**。`process.getBuiltinModule()` は import として現れないため
+  グラフ検証側で捕捉する
 - Manual: `architecture-reviewer`、`platform-boundary-reviewer`
 <!-- BOOTSTRAP_SECTION_END principle=VII -->
 
@@ -280,6 +401,7 @@ ADR は [docs/decisions/](../../docs/decisions/)、用語は [docs/glossary.md](
 - `violation_threshold`: 0
 - `bad_pattern_grep`: `grep -rnE "onKeyDown|key === 'Enter'" src/ | grep -v "isComposing"` (composer の IME ガード漏れ検出)
 - `adoption_date`: 2026-09-13
+- `amended`: 2026-09-15 (AD-024 #18)
 
 <!-- BOOTSTRAP_SECTION_START principle=VIII -->
 **Statement**: IME 変換確定時の誤送信、フォント崩れ、全角混在時のレイアウト崩れを許容しない。composer は変換確定の Enter を送信として扱ってはならない。
@@ -294,7 +416,10 @@ ADR は [docs/decisions/](../../docs/decisions/)、用語は [docs/glossary.md](
 **Verification**:
 - Automated: composer の IME テストケースが E2E に存在すること。日本語を含むスクリーンショット比較が CI に存在すること
 - Manual: `ux-reviewer`、`a11y-reviewer`
-- **現状の制約**: CI が未構築のため Automated 側は実行不能。SPIKE-4 (X-2 の前) の結果と CI 構築時期を合わせて再確認すること
+- **現状の制約 (2026-09-15 / AD-024 #18)**: CI は `.github/workflows/verify.yml` として構築済みだが、**Automated の 2 項目はどちらも載っていない**。CI が緑であることは本 Principle について何も示さない
+  - (A) composer の IME テストケース — **対象が無い**。R-1 に composer が無い
+  - (B) 日本語を含むスクリーンショット比較 — **延期**。目標レイアウトの ADR が accepted になり、かつ Electron を CI で起動する E2E 基盤が揃った時点で載せる。片方だけで撮ると基準画像が撮り直しになる
+  - どちらも R-2 の E2E 基盤に相乗りする。それまで本 Principle を守るのは Manual の 2 者だけである。SPIKE-4 (X-2 の前) の結果と合わせて再確認すること
 <!-- BOOTSTRAP_SECTION_END principle=VIII -->
 
 <!-- MIGRATE_SECTION_START principle=VIII -->
@@ -309,11 +434,12 @@ ADR は [docs/decisions/](../../docs/decisions/)、用語は [docs/glossary.md](
 **Adoption metadata**:
 - `existing_violations`: 0
 - `violation_threshold`: 0
-- `bad_pattern_grep`: `grep -rn "JSON.parse" src/ --exclude-dir=supervisor | grep -iE "chunk|stdout|stream|line"`
+- `bad_pattern_grep`: `grep -rn "JSON.parse" src/ | grep -v "src/agents/" | grep -iE "chunk|stdout|stream|line"`
 - `adoption_date`: 2026-09-13
+- `amended`: 2026-09-15 (AD-024 #6)
 
 <!-- BOOTSTRAP_SECTION_START principle=IX -->
-**Statement**: stream の逐次パースは supervisor (`utilityProcess`) 側で行うべきであり、main process で行うべきではない。
+**Statement**: stream の逐次パースは supervisor (`utilityProcess`。**実体は `src/agents/`**) 側で行うべきであり、main process で行うべきではない。
 
 **Why**: AD-006 のとおり tool_result が数 MB になることがあり、main process で `JSON.parse` するとウィンドウが固まる。10 セッション並列を想定する以上 (X-5)、1 セッションの巨大な tool_result が全体を止める構造は許容できない。
 
@@ -324,7 +450,8 @@ ADR は [docs/decisions/](../../docs/decisions/)、用語は [docs/glossary.md](
 **Exceptions**: 設定ファイルのような小さく境界の明確な JSON の同期読み込みは対象外。
 
 **Verification**:
-- Automated: supervisor 外に stream の `JSON.parse` 処理が存在しないこと
+- Automated: `src/agents/` の外に stream の `JSON.parse` 処理が存在しないこと (AD-024 #6)。
+  `agents → infra` の到達禁止は `.dependency-cruiser.js` の `agents-not-to-infra` が見る
 - Manual: `architecture-reviewer`
 <!-- BOOTSTRAP_SECTION_END principle=IX -->
 
@@ -365,6 +492,7 @@ ADR は [docs/decisions/](../../docs/decisions/)、用語は [docs/glossary.md](
 - `violation_threshold`: 0
 - `bad_pattern_grep`: (spec の受け入れ条件を読む必要があるため grep 不可)
 - `adoption_date`: 2026-09-13
+- `amended`: 2026-09-15 (AD-024 #15)
 
 <!-- BOOTSTRAP_SECTION_START principle=XI -->
 **Statement**: 各 feature は単体で動作確認できる垂直スライスであるべきで、層だけを横に作る feature を切ってはならない。
@@ -375,7 +503,9 @@ ADR は [docs/decisions/](../../docs/decisions/)、用語は [docs/glossary.md](
 - ✓ Good: R-3「transcript の基本表示」— 過去ログを実際に画面で読める
 - ✗ Bad: 「SQLite スキーマ定義のみ」— 観測可能な振る舞いがない
 
-**Exceptions**: R-1 のような基盤 feature は UI を持たないが、パス変換のユニットテストという観測可能な振る舞いを持つ。
+**Exceptions**: 基盤 feature が UI を持つ場合を含め、**観測可能な振る舞いが 1 つ以上あれば足りる** (AD-024 #15)。
+ユニットテストだけでもよい。R-1 は基盤 feature でありながら renderer の 3 画面を持つため、
+改定前の「基盤 feature は UI を持たない」という記述の反例になっていた。
 
 **Verification**:
 - Automated: なし
@@ -417,8 +547,13 @@ ADR は [docs/decisions/](../../docs/decisions/)、用語は [docs/glossary.md](
 **Adoption metadata**:
 - `existing_violations`: 0
 - `violation_threshold`: 0
-- `bad_pattern_grep`: `grep -rnE "--color-|colors:\s*\{|spacing:\s*\{" src/ tailwind.config.*` (独自トークン追加の検出)
+- `bad_pattern_grep`: `grep -rnE -e "--color-" -e "colors:\s*\{" -e "spacing:\s*\{" src/ --include=*.css`
+  (独自トークン追加の検出。**`-e` が必要** — パターンが `--` で始まるため、無いと
+  `grep: unknown option` で失敗する。`tailwind.config.*` は Tailwind v4 では存在しない)
+- `theme_baseline_exclusions`: `src/renderer/src/assets/main.css` — CLI 生成の標準テーマの写し。
+  **除外はファイル単位の明示リストとする**
 - `adoption_date`: 2026-09-13
+- `amended`: 2026-09-15 (AD-024 #10 / #11)
 
 <!-- BOOTSTRAP_SECTION_START principle=XIII -->
 **Statement**: 同等の element が存在する UI を自作すべきではない。独自のカラートークン・スペーシングスケールを追加すべきではない。
@@ -429,11 +564,16 @@ ADR は [docs/decisions/](../../docs/decisions/)、用語は [docs/glossary.md](
 - ✓ Good: Tool fallback AUI をカスタマイズして Bash 用の Terminal block に寄せる
 - ✗ Bad: 既存の Code diff element を無視して自前の diff ビューを書く
 
-**Exceptions**: 対応する element が存在しない場合は自作してよい。その場合 PR 説明に「対応する element が存在しないこと」を記載する。
+**Exceptions**: 対応する element が存在しない**か、候補を実名で照合したうえで不適合である**場合は
+自作してよい (AD-024 #11)。その場合 PR 説明に**照合した候補名と不適合理由**を記載する。
+「存在しない」とだけ書く形は採らない — AD-019 は 59 要素が未分類と明記しており、
+**不在の確認は構造的に未完了**であるため、断定が根拠を持たない。
 
 **Verification**:
-- Automated: なし
-- Manual: 自作コンポーネント追加時、対応する element が存在しないことを PR 説明に記載すること (`convention-reviewer` / `ux-reviewer`)
+- Automated: 上記 `bad_pattern_grep` が、**標準テーマの写しを除いた追加分**について空であること。
+  除外は `theme_baseline_exclusions` のファイル単位リストに限る
+- Manual: 自作コンポーネント追加時、**照合した候補名と不適合理由**を PR 説明に記載すること
+  (`convention-reviewer` / `ux-reviewer`)
 <!-- BOOTSTRAP_SECTION_END principle=XIII -->
 
 <!-- MIGRATE_SECTION_START principle=XIII -->
@@ -446,7 +586,10 @@ ADR は [docs/decisions/](../../docs/decisions/)、用語は [docs/glossary.md](
 <!-- BOOTSTRAP_SECTION_START principle=XIV -->
 `docs/glossary.md` の **Canonical Terms** section に記載の用語を code / spec / UI で一貫使用する。同義異語は禁止 (Candidate Terms section の用語は使用前に canonical 昇格レビュー必須)。新規用語は glossary 追記 + reviewer 確認後に code 投入。
 
-初期の canonical 候補は `PLAN.md` 付録A の 11 語: Closta / セッション / Provider / ランタイム / capabilities / SessionLaunchConfig / Element / Tier A-C / HostPath / RuntimePath。`docs/glossary.md` は未作成のため、glossary 作成時に付録A を一次素材とする。
+canonical terms の正本は [docs/glossary.md](../../docs/glossary.md) である (AD-024 #16)。
+`PLAN.md` 付録 A の 11 語 (Closta / セッション / Provider / ランタイム / capabilities /
+SessionLaunchConfig / Element / Tier A-C / HostPath / RuntimePath) はその一次素材であり、
+現行 glossary に取り込まれている。**付録 A を参照先として扱わない。**
 <!-- BOOTSTRAP_SECTION_END principle=XIV -->
 
 <!-- MIGRATE_SECTION_START principle=XIV -->
@@ -461,6 +604,12 @@ ADR は [docs/decisions/](../../docs/decisions/)、用語は [docs/glossary.md](
 - **UI labels**: 日本語を第一言語とする。i18n リソース化の要否は M3 (O-1〜O-3) までに判断する
 - **Documentation / spec**: 日本語を SSoT とする (PLAN.md / Constitution / spec がすべて日本語であるため)
 - **Commit message**: 英語。件名 1 行の最小限の表現とし、attribution 行を付けない
+
+**Exceptions** (AD-024 #12): **リポジトリ表層文書は英語を SSoT とする。**
+`README.md` / `LICENSE` / `NOTICE` / `CONTRIBUTING.md` / GitHub のテンプレートが該当する。
+外部 OSS としての体裁を最初のコミットから持たせるためであり (`docs/prompts.md`)、
+「Documentation は日本語を SSoT」の逸脱ではなく**表層と内部を分けた規約**である。
+内部文書 (`PLAN.md` / Constitution / `docs/` / `specs/`) は日本語を SSoT とする。
 <!-- BOOTSTRAP_SECTION_END principle=XV -->
 
 <!-- MIGRATE_SECTION_START principle=XV -->
@@ -470,18 +619,69 @@ ADR は [docs/decisions/](../../docs/decisions/)、用語は [docs/glossary.md](
 
 各 domain (`docs/domains/<name>/charter.md`) で固有の Principle がある場合、charter 側で記述し、本ファイルからリンクする。
 
-現時点で `docs/domains/` は未作成。PLAN.md §10 の feature バックログから想定される domain 候補は `runtime` / `session` / `provider` / `ui` / `container`。
+`docs/domains/` は作成済みで、`runtime` / `session` / `provider` / `isolation` / `ui` の 5 domain がある
+([docs/domains/_overview.md](../../docs/domains/_overview.md))。
 
 ## 未解決の Principle 候補 (人間レビュー対象)
 
 `/spec-gate scan` が blocking と判定した requirement_gap 由来。PLAN.md §8 には存在しないため、採否を人間が決める必要がある。
 
 1. **セッション transcript ミラーの保持期限と削除経路** — AD-007 / §6.3 が会話全文をホスト側 SQLite にミラーすると宣言しているが、保持期限・削除 UI・エクスポート・第三者送信の有無がいずれも未記述。Principle V (資格情報) の隣に置く候補。
-2. **配布物のライセンス表記** — D-1 (M5) で Windows インストーラを配布する計画に対し、`LICENSE` / `NOTICE` が不在。Electron / node-pty / better-sqlite3 / xterm.js 等の再配布は帰属表示義務を伴う。
+2. **配布物のライセンス表記** — **自プロジェクトの `LICENSE` は R-1 で追加済みであり解消した** (AD-024 #17)。
+   残余は**第三者依存の `NOTICE`** に限る。Electron / node-pty / better-sqlite3 / xterm.js 等の
+   再配布は帰属表示義務を伴うため、**D-1 (M5。Windows インストーラの配布) の着手条件**として扱う。
+   R-1 〜 R-4 の時点では配布物が無いため候補のまま保持する。
 
 ## Existing violations summary
 
-本プロジェクトはソースコード 0 行の greenfield であるため、全 Principle の `existing_violations` は 0 である。実測による enumeration は最初の実装 feature (R-1) の完了後に行う。
+<!-- BOOTSTRAP_SECTION_START existing-violations-summary -->
+
+**v1.2.1 時点の enumeration (2026-09-15)。** R-1 の US-1 〜 US-4 完了時に、
+**AD-024 で改定した後の条件で**全検証を実行した (SH-023)。
+AD-024 #13 / #14 は NON-NEGOTIABLE (III / I) の改定にあたるため enumeration を伴う。
+
+| 検証 | 結果 |
+|---|---|
+| `pnpm lint` (ESLint + `boundaries` + `no-restricted-imports`) | 違反 **0** |
+| `pnpm typecheck` (node / web の 2 project) | エラー **0** |
+| `pnpm depcruise` (推移的 / 循環 / `require()`) | 違反 **0** (114 modules / 395 dependencies) |
+| `pnpm check:constitution` (R-08 の 11 項目) | 違反 **0** (ok **10** / 検査対象なし **1**) |
+| `pnpm test` | 11 files / **213 passed** |
+| `pnpm test:rules` (違反サンプル 20 件の発火確認) | 期待表と**全件一致** |
+
+**「違反 0」だけでは足りない。** ルールが 1 件も一致していない状態と区別がつかないためである
+(AD-025 で「書いてあるのに効いていないルール」を実測で 5 件見つけた)。
+`pnpm test:rules` が、20 件の違反サンプルを検査対象へ展開して
+**期待した検出器が実際に発火すること**を毎回確かめる。
+
+### 検査対象なし (1 項目)
+
+**「検査対象なし」は合格ではない。** 対象が実装された時点で再実行する。
+
+| 項目 | 待ち |
+|---|---|
+| 5 (イメージ構築サブコマンド) | docker を名指せるモジュールが 0 件 (R-1 の設計どおり。X-4 で対象が生じる) |
+
+v1.2.0 時点で `pending` だった項目 2 (`wsl.exe` の引数) と項目 6 (ディストロ内スクリプト) は、
+`wsl-cli.ts` / `probe-script.ts` の実装により **`ok` に変わった**。
+
+### 機械検証で捕まらない残余 (2 件)
+
+SC-017 の追跡対象。**列挙せずに「全数検出」と言わない。**
+理由と代替手段は `tests/rule-fixtures/expected.mjs` の `UNDETECTED_NOTES` を正本とする。
+
+| 経路 | 何が代わりに守るか |
+|---|---|
+| `ui` でのパス文字列の連結 | IPC が返す型を `PathDTO` に固定。連結文字列は名前空間を持たず `isValidPathDTO` で落ちる |
+| 実行中確認済みの値を別ディストロへ流用 | 値が対象ディストロ識別子を持ち、`infra` の入口が `checkVerified` で一致を検証する |
+
+### Principle VIII
+
+**Automated は 2 項目とも載っていない。CI が緑であることは本 Principle について何も示さない。**
+(A) は composer が無く**対象が無い**、(B) のスクリーンショット比較は R-2 の E2E 基盤に相乗りする
+(AD-024 #18)。それまで守るのは Manual の 2 者 (`ux-reviewer` / `a11y-reviewer`) だけである。
+
+<!-- BOOTSTRAP_SECTION_END existing-violations-summary -->
 
 <!-- MIGRATE_SECTION_START existing-violations-summary -->
 | Principle | existing_violations | bad_pattern_grep | paths |
@@ -527,6 +727,8 @@ Amendment trail への追記 → 既存違反の enumeration、の 5 段階で�
 |---|---|---|
 | 1.0.0 | 2026-09-13 | 初回批准。PLAN.md §8 の P-1〜P-13 を素材に 15 Principle を確立 |
 | 1.1.0 | 2026-09-13 | Principle II の検証条件に `platform-ok:` 注記による例外を追加。Electron 公式テンプレートの `window-all-closed` / `icon` 分岐は除去不能であり、元の grep はどの Electron アプリでも達成できなかった (AD-023) |
+| 1.2.0 | 2026-09-15 | [AD-024](../../docs/decisions/0024-constitution-verification-paths.md) の 17 項目。検証条件が実在しないディレクトリを指していた箇所 (#1 / #6 の `src/supervisor/` ほか) を AD-023 のレイヤ構成に合わせ、**Automated の正本を grep から lint + グラフ検証 + 検証スクリプトに移した** (#2 / #7 / #8)。許可リストの正本を `scripts/constitution/allowlists.mjs` に置き追加に ADR を要する形にした (#3 / #4)。検証スコープにビルド構成を追加 (#5)。設定層を Principle V の対象に追加 (#9)。Principle XIII の `bad_pattern_grep` が `--` 始まりで実行不能だった点を修正し標準テーマの写しを除外リスト化 (#10 / #11)。表層文書の英語 Exceptions を追加 (#12)。**NON-NEGOTIABLE の改定 2 件** — III を `autoModeSafe !== true` に (#13)、I の Statement を `domain` のパス API 経由に (#14)。XI の Exceptions / XIV の本文 / 未解決候補 #2 を R-1 完了後の事実に追随 (#15 / #16 / #17) |
+| 1.2.1 | 2026-09-15 | [AD-024](../../docs/decisions/0024-constitution-verification-paths.md) #18。Principle VIII の Verification の「現状の制約」を実体に改めた。CI は SH-022 で構築したので「CI が未構築のため実行不能」はもう成り立たない。Automated の 2 項目は **(A) composer が無いため対象が無い / (B) スクリーンショット比較は R-2 の E2E 基盤に相乗りする** であり、**CI が緑であることは本 Principle について何も示さない**ことを明記した |
 
 ## References
 
@@ -538,4 +740,4 @@ Amendment trail への追記 → 既存違反の enumeration、の 5 段階で�
 
 ---
 
-**Version**: 1.1.0 | **Ratified**: 2026-09-13 | **Last Amended**: 2026-09-13
+**Version**: 1.2.1 | **Ratified**: 2026-09-13 | **Last Amended**: 2026-09-15
