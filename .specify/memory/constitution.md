@@ -7,6 +7,26 @@ generated_by: /speckit.constitution (素材: /spec-gate bootstrap Phase 6 の dr
 ---
 
 <!--
+Sync Impact Report (v1.2.2)
+- Version change: 1.2.1 → 1.2.2
+- Last amended: 2026-09-16
+- Bump rationale: PATCH。Principle VIII の Verification の「現状の制約」に書いた
+  事実誤認の訂正のみ。指針そのものは変えていない (AD-024 #18 の訂正)
+
+Modified principles:
+- Principle VIII (日本語環境で破綻しない) — Automated (A) を載せない根拠を
+  「composer が無いため対象が無い」から「composer は描画されるが
+  `isDisabled: true` で送信経路を閉じている」に改めた。
+  `bad_pattern_grep` が送信経路 (`@assistant-ui/react` の内側) を構造的に
+  見られないため `existing_violations: 0` が遵守を意味しないことを明記した
+
+Templates requiring updates:
+- ✅ docs/decisions/0024-constitution-verification-paths.md — #18 と
+     「Principle VIII の Automated 検証を R-1 でどこまで載せるか」を訂正
+- ✅ src/renderer/src/features/chat/ChatScreen.test.tsx — 前提を固定する回帰テスト
+-->
+
+<!--
 Sync Impact Report (v1.2.1)
 - Version change: 1.2.0 → 1.2.1
 - Last amended: 2026-09-15
@@ -401,7 +421,7 @@ if (!isMac) { ... }
 - `violation_threshold`: 0
 - `bad_pattern_grep`: `grep -rnE "onKeyDown|key === 'Enter'" src/ | grep -v "isComposing"` (composer の IME ガード漏れ検出)
 - `adoption_date`: 2026-09-13
-- `amended`: 2026-09-15 (AD-024 #18)
+- `amended`: 2026-09-15 (AD-024 #18) / 2026-09-16 (同 #18 の訂正)
 
 <!-- BOOTSTRAP_SECTION_START principle=VIII -->
 **Statement**: IME 変換確定時の誤送信、フォント崩れ、全角混在時のレイアウト崩れを許容しない。composer は変換確定の Enter を送信として扱ってはならない。
@@ -416,10 +436,11 @@ if (!isMac) { ... }
 **Verification**:
 - Automated: composer の IME テストケースが E2E に存在すること。日本語を含むスクリーンショット比較が CI に存在すること
 - Manual: `ux-reviewer`、`a11y-reviewer`
-- **現状の制約 (2026-09-15 / AD-024 #18)**: CI は `.github/workflows/verify.yml` として構築済みだが、**Automated の 2 項目はどちらも載っていない**。CI が緑であることは本 Principle について何も示さない
-  - (A) composer の IME テストケース — **対象が無い**。R-1 に composer が無い
+- **現状の制約 (2026-09-16 / AD-024 #18)**: CI は `.github/workflows/verify.yml` として構築済みだが、**Automated の 2 項目はどちらも載っていない**。CI が緑であることは本 Principle について何も示さない
+  - (A) composer の IME テストケース — **送信経路を閉じている**。R-1 の `ChatScreen` は `Thread` を mount するので **composer は描画される**。「対象が無い」のではなく、送信経路を `isDisabled: true` で閉じることで検証していない送信経路を残さない形にした。この前提は `src/renderer/src/features/chat/ChatScreen.test.tsx` が守る。composer を開けるときに IME テストを同時に載せる
   - (B) 日本語を含むスクリーンショット比較 — **延期**。目標レイアウトの ADR が accepted になり、かつ Electron を CI で起動する E2E 基盤が揃った時点で載せる。片方だけで撮ると基準画像が撮り直しになる
-  - どちらも R-2 の E2E 基盤に相乗りする。それまで本 Principle を守るのは Manual の 2 者だけである。SPIKE-4 (X-2 の前) の結果と合わせて再確認すること
+  - **`bad_pattern_grep` は本 Principle の番人ではない。** 送信は `@assistant-ui/react` の内側で起きるため、`isComposing` ガードがリポジトリに 1 件も無くても 0 件を返す。`existing_violations: 0` は「守られている」ことを意味しない
+  - どちらも R-2 の E2E 基盤に相乗りする。それまで本 Principle を守るのは Manual の 2 者と上記のテスト 1 本だけである。SPIKE-4 (X-2 の前) の結果と合わせて再確認すること
 <!-- BOOTSTRAP_SECTION_END principle=VIII -->
 
 <!-- MIGRATE_SECTION_START principle=VIII -->
@@ -678,8 +699,11 @@ SC-017 の追跡対象。**列挙せずに「全数検出」と言わない。**
 ### Principle VIII
 
 **Automated は 2 項目とも載っていない。CI が緑であることは本 Principle について何も示さない。**
-(A) は composer が無く**対象が無い**、(B) のスクリーンショット比較は R-2 の E2E 基盤に相乗りする
-(AD-024 #18)。それまで守るのは Manual の 2 者 (`ux-reviewer` / `a11y-reviewer`) だけである。
+(A) は composer が**描画されたうえで送信経路を `isDisabled: true` で閉じて**おり、
+(B) のスクリーンショット比較は R-2 の E2E 基盤に相乗りする (AD-024 #18)。
+`existing_violations: 0` は `bad_pattern_grep` が送信経路 (`@assistant-ui/react` の内側) を
+見られないことの結果であって、遵守の証拠ではない。守るのは Manual の 2 者
+(`ux-reviewer` / `a11y-reviewer`) と `ChatScreen.test.tsx` の 2 ケースである。
 
 <!-- BOOTSTRAP_SECTION_END existing-violations-summary -->
 
@@ -729,6 +753,7 @@ Amendment trail への追記 → 既存違反の enumeration、の 5 段階で�
 | 1.1.0 | 2026-09-13 | Principle II の検証条件に `platform-ok:` 注記による例外を追加。Electron 公式テンプレートの `window-all-closed` / `icon` 分岐は除去不能であり、元の grep はどの Electron アプリでも達成できなかった (AD-023) |
 | 1.2.0 | 2026-09-15 | [AD-024](../../docs/decisions/0024-constitution-verification-paths.md) の 17 項目。検証条件が実在しないディレクトリを指していた箇所 (#1 / #6 の `src/supervisor/` ほか) を AD-023 のレイヤ構成に合わせ、**Automated の正本を grep から lint + グラフ検証 + 検証スクリプトに移した** (#2 / #7 / #8)。許可リストの正本を `scripts/constitution/allowlists.mjs` に置き追加に ADR を要する形にした (#3 / #4)。検証スコープにビルド構成を追加 (#5)。設定層を Principle V の対象に追加 (#9)。Principle XIII の `bad_pattern_grep` が `--` 始まりで実行不能だった点を修正し標準テーマの写しを除外リスト化 (#10 / #11)。表層文書の英語 Exceptions を追加 (#12)。**NON-NEGOTIABLE の改定 2 件** — III を `autoModeSafe !== true` に (#13)、I の Statement を `domain` のパス API 経由に (#14)。XI の Exceptions / XIV の本文 / 未解決候補 #2 を R-1 完了後の事実に追随 (#15 / #16 / #17) |
 | 1.2.1 | 2026-09-15 | [AD-024](../../docs/decisions/0024-constitution-verification-paths.md) #18。Principle VIII の Verification の「現状の制約」を実体に改めた。CI は SH-022 で構築したので「CI が未構築のため実行不能」はもう成り立たない。Automated の 2 項目は **(A) composer が無いため対象が無い / (B) スクリーンショット比較は R-2 の E2E 基盤に相乗りする** であり、**CI が緑であることは本 Principle について何も示さない**ことを明記した |
+| 1.2.2 | 2026-09-16 | [AD-024](../../docs/decisions/0024-constitution-verification-paths.md) #18 の**訂正**。v1.2.1 が (A) の根拠に書いた「R-1 に composer が無い」は事実ではない。`ChatScreen` は `Thread` を mount しており composer は描画される。根拠を「送信経路を `isDisabled: true` で閉じている」に改め、その前提を `ChatScreen.test.tsx` で固定した。あわせて **`bad_pattern_grep` が送信経路を見られない**こと (`existing_violations: 0` は遵守の証拠ではない) を明記した |
 
 ## References
 
@@ -740,4 +765,4 @@ Amendment trail への追記 → 既存違反の enumeration、の 5 段階で�
 
 ---
 
-**Version**: 1.2.1 | **Ratified**: 2026-09-13 | **Last Amended**: 2026-09-15
+**Version**: 1.2.2 | **Ratified**: 2026-09-13 | **Last Amended**: 2026-09-16

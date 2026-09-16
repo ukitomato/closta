@@ -71,7 +71,7 @@ Constitution を **v1.2.0** に改める。MINOR である理由は「Principle 
 | 15 | XI (Exceptions) | 「R-1 のような基盤 feature は UI を持たないが、パス変換のユニットテストという観測可能な振る舞いを持つ」 | 「基盤 feature が UI を持つ場合を含め、**観測可能な振る舞いが 1 つ以上あれば足りる**」に改める |
 | 16 | XIV (本文) | 「`docs/glossary.md` は**未作成のため**、glossary 作成時に付録 A を一次素材とする」 | 「未作成」を削り、現行 glossary を参照する形に改める |
 | 17 | 未解決 Principle 候補 #2 | 「配布物のライセンス表記 — `LICENSE` / `NOTICE` が不在」 | 自プロジェクトの `LICENSE` を解消済みとし、**残余 (第三者依存の `NOTICE`) を D-1 に限定**する |
-| 18 | VIII (Verification) | 「**CI が未構築のため** Automated 側は実行不能」 | CI は SH-022 で構築した。実行不能の理由を実体に改める — (A) composer が無く**対象が無い**、(B) スクリーンショット比較は R-2 の E2E 基盤に相乗りする。下の「Principle VIII の Automated 検証を R-1 でどこまで載せるか」が内訳と延期条件を定める |
+| 18 | VIII (Verification) | 「**CI が未構築のため** Automated 側は実行不能」 | CI は SH-022 で構築した。実行不能の理由を実体に改める — (A) composer は描画されるが**送信経路を閉じている** (下の「訂正」節)、(B) スクリーンショット比較は R-2 の E2E 基盤に相乗りする。下の「Principle VIII の Automated 検証を R-1 でどこまで載せるか」が内訳と延期条件を定める |
 
 ### #14 〜 #17 を同時に扱う理由
 
@@ -178,11 +178,12 @@ Principle VIII の Automated は 2 つある。
 
 | 内訳 | R-1 に載せるか | 理由 |
 |---|---|---|
-| (A) composer の IME テストケースが E2E に存在すること | **載せない (対象が無い)** | R-1 に composer が無い。チャットの runtime / backend は繋いでいない ([AD-025](0025-workspace-folder-carries-location.md) #6 (b)) |
+| (A) composer の IME テストケースが E2E に存在すること | **載せない (送信経路を閉じた)** | composer は描画されるが `isDisabled: true` で送信経路が閉じている。チャットの runtime / backend は繋いでいない ([AD-025](0025-workspace-folder-carries-location.md) #6 (b))。下の「訂正」節を参照 |
 | (B) 日本語を含むスクリーンショット比較が CI に存在すること | **載せない (延期)** | 基準画像を撮る対象のシェルが暫定である。目標レイアウトの ADR が未採択のまま撮ると、採択時に全数撮り直しになる |
 
-**(A) は「未実装」ではなく「対象が無い」である。** AD-025 #9 と同じ扱いにする —
-対象が無いものにルールを書いて「強制した」と数えない。
+**(A) は「未実装」ではなく「送信経路を閉じた」である。** 対象そのものは存在するので、
+AD-025 #9 の「対象が無い」扱いは当たらない。閉じてあることを回帰テストで固定したうえで、
+E2E が無い段階の IME テストを「載せた」と数えない (下の「訂正」節)。
 
 **R-1 の CI が日本語について実際に見ているものは無い。**
 renderer 単体テストは jsdom で日本語ラベルを描画するが、jsdom は
@@ -191,8 +192,8 @@ renderer 単体テストは jsdom で日本語ラベルを描画するが、jsdo
 
 #### 延期条件
 
-- **(A)**: composer を持つ最初の feature (R-2) で、E2E 基盤と同時に載せる。
-  R-2 の spec が composer を含む時点で本項は必須になる
+- **(A)**: composer の**送信経路を開ける**最初の feature (R-2) で、E2E 基盤と同時に載せる。
+  `ChatScreen` から `isDisabled: true` を外す変更が入った時点で本項は必須になる
 - **(B)**: 次の 2 つが**両方**揃った時点で載せる。片方だけでは撮り直しが確定する
   1. 目標レイアウト (AD-025 「目標レイアウト」節) が ADR として accepted になっていること
   2. Electron を CI で起動する E2E 基盤が存在すること (= (A) の基盤)
@@ -202,10 +203,37 @@ R-1 で先行して基盤だけ作らないのは、比較対象の画面が入�
 
 #### この間 Principle VIII を何が守るか
 
-Manual の 2 者 (`ux-reviewer` / `a11y-reviewer`) だけが残る。
+Manual の 2 者 (`ux-reviewer` / `a11y-reviewer`) と、送信経路が閉じたままであることを
+固定する `ChatScreen.test.tsx` の 2 ケースである (下の「訂正」節)。
+後者は Principle VIII そのものの検証ではなく、**検証対象が発生していないことの保証**である。
 **Automated が 0 であることを Constitution の Verification に明記する** —
 「CI 未構築のため実行不能」という書き方は CI がある今では誤りであり、
 放置すると「CI が緑なら Principle VIII も見ている」と読める。
+
+## 訂正: R-1 に composer は存在する。根拠は「対象が無い」ではなく「送信経路を閉じた」
+
+本 ADR の初版と Constitution v1.2.1 は、Principle VIII の Automated (A) を R-1 で
+載せない根拠を「**R-1 に composer が無い**」と書いた。これは事実ではない。
+
+`src/renderer/src/features/chat/ChatScreen.tsx` は `Thread` を mount し、
+`components/assistant-ui/elements/thread.aui.tsx` が `ComposerPrimitive.Input` を描画する。
+**composer は最初から画面に出ている。**
+
+誤認が実害を持つのは、Principle VIII が NON-NEGOTIABLE だからである。
+検証免除が成立しない前提に乗ったまま X-1 でモデルに繋ぐと、
+**一度も検証していない送信経路**が本番の経路になる。
+`bad_pattern_grep` は送信が `@assistant-ui/react` の内側で起きるため 0 件を返し続け、
+`isComposing` ガードがリポジトリに 1 件も無いことを示さない。
+
+**正しい根拠はこうである。** R-1 の composer は `useExternalStoreRuntime` に
+`isDisabled: true` を渡して**送信経路を閉じてある**。到達しないはずの `onNew` は
+黙って握り潰さず `throw` する。したがって R-1 に「検証していない送信経路」は無い。
+
+この前提は文章ではなく `src/renderer/src/features/chat/ChatScreen.test.tsx` が守る。
+入力が無効であること、変換確定直後の Enter が送信経路に届かないことの 2 ケースである。
+`isDisabled` が外れた瞬間にここが落ちる。
+
+Constitution は v1.2.2 でこの訂正を反映した。
 
 ## Alternatives considered
 
