@@ -15,6 +15,31 @@ import { cleanup } from '@testing-library/react'
  */
 export { installCapability, stubCapability } from '../../src/renderer/src/test-support/capability'
 
+/**
+ * **jsdom に無い `ResizeObserver` を補う。**
+ *
+ * `@assistant-ui/react` の `ThreadPrimitive.Viewport` は自動スクロール位置の保持に
+ * `ResizeObserver` を使う (`mountTopAnchorReserve`)。jsdom は実装を持たないため、
+ * `Thread` を mount するテストが `ReferenceError` で落ちる。
+ *
+ * **観測はしない。** ここで要るのは「呼べること」だけで、レイアウト計測そのものは
+ * jsdom が値を持たない以上テストの対象にならない。`vi.stubGlobal` ではなく直接代入するのは、
+ * `afterEach` の `unstubAllGlobals` で毎テスト消えると mount のたびに落ちるためである。
+ */
+if (!('ResizeObserver' in globalThis)) {
+  globalThis.ResizeObserver = class {
+    observe(): void {
+      // 観測しない
+    }
+    unobserve(): void {
+      // 観測していないので解除するものが無い
+    }
+    disconnect(): void {
+      // 同上
+    }
+  }
+}
+
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
