@@ -1,3 +1,8 @@
+import {
+  hasControlCharacter,
+  MAX_DISPLAY_NAME_LENGTH,
+  MAX_PATH_VALUE_LENGTH
+} from '@domain/validation'
 import { isValidDistroName } from '@domain/runtime/namespace'
 import { makeHostPath, makeRuntimePath } from '@domain/runtime/path-types'
 import {
@@ -25,19 +30,11 @@ const RECORD_KEYS = ['id', 'location', 'path', 'displayName', 'registeredAt'] as
 /** R-1 のスキーマ版。 */
 export const SCHEMA_VERSION = 1
 
-/** `displayName` の長さ上限。巨大な値は一覧描画を止めて SC-004 を破る。 */
-export const MAX_DISPLAY_NAME_LENGTH = 255
-
-/** パス値の長さ上限。 */
-export const MAX_PATH_VALUE_LENGTH = 4096
-
-function hasControlCharacter(value: string): boolean {
-  for (const ch of value) {
-    const code = ch.codePointAt(0)!
-    if (code < 0x20 || code === 0x7f || (code >= 0x80 && code <= 0x9f)) return true
-  }
-  return false
-}
+/*
+ * **述語と上限は `domain` の 1 箇所から取る。**
+ * IPC 境界 (`app/validate.ts`) と**同じ値**であることが要件である
+ * (粒度がずれると片方だけ通過する。`isNamespaceConsistent()` と同じ理屈)。
+ */
 
 export type RecordResult =
   | { readonly ok: true; readonly folder: WorkspaceFolder }

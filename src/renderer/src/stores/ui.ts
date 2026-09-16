@@ -16,7 +16,8 @@ export const SCREEN_LABELS: Record<ScreenId, string> = {
   runtimes: 'ランタイム',
   folders: '作業フォルダ',
   resolution: '組み合わせ',
-  chat: '会話 (R-3)'
+  // **内部 feature ID ("R-3") を出さない** (FR-047)。利用者に意味を持たない記号である。
+  chat: '会話 (準備中)'
 }
 
 interface UiState {

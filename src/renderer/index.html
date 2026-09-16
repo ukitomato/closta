@@ -1,13 +1,25 @@
 <!doctype html>
-<html>
+<!--
+  lang は必須である。UI 文言は日本語を第一言語とする (FR-047) が、
+  lang が無いとスクリーンリーダは既定音声で日本語を読もうとし読み上げが破綻する。
+  日本語を選んだことを支援技術へ伝える手段はこの属性だけである (WCAG 3.1.1)。
+-->
+<html lang="ja">
   <head>
     <meta charset="UTF-8" />
-    <title>Electron</title>
-    <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
-    <meta
-      http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
-    />
+    <title>Closta</title>
+    <!--
+      Content-Security-Policy は**ここに書かない**。
+      配信元が返すヘッダ (src/main/app/protocol.ts の contentSecurityPolicy) が唯一の宣言である。
+
+      scaffold はここに meta タグを置くが、それは
+      **開発ビルドと出荷ビルドの両方で static に unsafe-inline を許す**形になる。
+      AD-025 §7 は「緩和は CSP を組み立てる 1 関数の dev 分岐にのみ現れる」
+      「ゲートは app.isPackaged とする」と定めており、2 つ目の宣言はこれを崩す。
+
+      検証項目 10 の (e) が「許可ファイル以外に CSP 宣言が無いこと」を見るので、
+      ここに書き戻すと検証が落ちる。
+    -->
   </head>
 
   <body>

@@ -78,8 +78,19 @@ export function createRuntimeDetector(deps: DetectorDeps): RuntimeDetector {
       /*
        * **名前の列挙が失敗したら `Win32Runtime` のみを返す。例外を投げない**
        * (FR-012 / SC-015)。WSL 未搭載のホストがこの経路を通る。
+       *
+       * **失敗した事実を捨てない。** `WslResult` は既に理由を分離して持っている
+       * (`not-installed` / `nonzero-exit` / `timeout` / `io-error`)。
+       * ここで落とすと、利用者は「WSL が無い」と「列挙に失敗した」を区別できない。
+       * **stderr の中身は運ばない** — ランタイム由来の文字列を UI へ直達させない。
        */
-      if (!names.ok) return { runtimes: [win32], enumerationIssues: [] }
+      if (!names.ok) {
+        return {
+          runtimes: [win32],
+          enumerationIssues: [],
+          wslAvailability: names.reason === 'not-installed' ? 'not-installed' : 'enumeration-failed'
+        }
+      }
 
       const rawNames = parseNames(names.stdout)
 
@@ -124,7 +135,12 @@ export function createRuntimeDetector(deps: DetectorDeps): RuntimeDetector {
         })
       }
 
-      return { runtimes, enumerationIssues }
+      /*
+       * ここまで来たら列挙自体は成功している。
+       * **ディストロが 0 台でも `available` である** — 「WSL が無い」とは別の状態で、
+       * 利用者に示すこと (導入するのか、作るのか) が違う。
+       */
+      return { runtimes, enumerationIssues, wslAvailability: 'available' }
     },
 
     async verifyRunning(ids): Promise<ReadonlyMap<WslNamespaceId, VerifiedRunning>> {

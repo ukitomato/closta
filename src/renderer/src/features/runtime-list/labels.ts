@@ -5,7 +5,7 @@ import type {
   SandboxKind,
   SeccompFilterState
 } from '@domain/runtime/capabilities'
-import type { EnumerationIssueReason, RunState } from '@domain/runtime/descriptor'
+import type { EnumerationIssueReason, RunState, WslAvailability } from '@domain/runtime/descriptor'
 
 /**
  * 参照キーの訳出 (FR-047)。
@@ -54,6 +54,20 @@ export const RUN_STATE_LABELS: Record<RunState, string> = {
 export const ENUMERATION_ISSUE_LABELS: Record<EnumerationIssueReason, string> = {
   'invalid-name-charset':
     'ディストロ名に使えない文字が含まれています (バックスラッシュ・スラッシュ・コロン・制御文字、先頭のハイフン)'
+}
+
+/**
+ * WSL の利用可否の訳出 (SC-015)。
+ *
+ * **`available` にも文言を与える** — `Record` で網羅するため。
+ * 画面側は `available` のとき描画しない。
+ */
+export const WSL_AVAILABILITY_LABELS: Record<WslAvailability, string> = {
+  available: '',
+  'not-installed':
+    'このホストでは WSL が見つかりませんでした。Windows のランタイムだけを使えます。',
+  'enumeration-failed':
+    'WSL のディストロを列挙できませんでした。WSL の状態を確認してから再検出してください。'
 }
 
 /** 必須依存の表示名。パッケージ名として案内できる形にする。 */

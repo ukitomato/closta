@@ -80,9 +80,37 @@ export interface EnumerationIssue {
   readonly reasonKey: EnumerationIssueReason
 }
 
+/**
+ * WSL そのものの利用可否。**参照キーであり、訳出は `ui` が行う。**
+ *
+ * `enumerationIssues` に相乗りさせない。あちらは
+ * 「`wsl -l -v` との 1 対 1 が破れた**ディストロ**」を表し `rawName` を必須にしている。
+ * ホスト全体の状態はその意味論に属さず、該当する `rawName` も無い。
+ *
+ * | 値 | 意味 |
+ * |---|---|
+ * | `available` | 列挙できた (ディストロが 0 台でも `available`) |
+ * | `not-installed` | `wsl.exe` が無い |
+ * | `enumeration-failed` | `wsl.exe` はあるが列挙に失敗した (非 0 終了 / 期限切れ / I/O) |
+ *
+ * **`not-installed` と `enumeration-failed` を混ぜない。**
+ * 前者は「この環境では WSL を使えない」、後者は「一時的な失敗かもしれない」であり、
+ * 利用者に示すべきことが違う (SC-015 / FR-012)。
+ */
+export type WslAvailability = 'available' | 'not-installed' | 'enumeration-failed'
+
 export interface RuntimeEnumeration {
   readonly runtimes: readonly RuntimeDescriptor[]
   readonly enumerationIssues: readonly EnumerationIssue[]
+  /**
+   * **WSL の利用可否。**
+   *
+   * 以前は列挙に失敗すると `Win32Runtime` だけを返し、
+   * **失敗したという事実を捨てていた**。その結果、利用者は
+   * 「WSL が無いホスト」「列挙に失敗した」「ディストロが 0 台」を区別できなかった。
+   * `runtimes.length === 0` の空状態にも到達しない (`win32` が必ず 1 件返るため)。
+   */
+  readonly wslAvailability: WslAvailability
 }
 
 /** 名前空間識別子が descriptor 集合のいずれかに一致するか (未信頼入力の検証に使う)。 */

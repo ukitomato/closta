@@ -20,6 +20,8 @@ import {
   ALLOWED_ORIGINS_FILE,
   ALLOWED_ORIGINS_FUNCTION,
   CSP_DEV_GATE_EXPRESSION,
+  CSP_DECLARATION_MARKERS,
+  CSP_DECLARATION_EXEMPT_SUFFIXES,
   CSP_FILES,
   CSP_FORBIDDEN_ALWAYS,
   CSP_REQUIRED_DIRECTIVES,
@@ -450,6 +452,32 @@ const literalSources = sources.filter((src) => !isSelfDefinition(src))
         }
       }
     }
+    /*
+     * (e) **`CSP_FILES` 以外に CSP 宣言が無いこと。**
+     *
+     * (a)〜(d) は「あるべき場所」しか見ない。それだけでは
+     * **別の場所に 2 つ目の CSP があっても気付けない。**
+     * scaffold の `index.html` が meta タグで `style-src 'self' 'unsafe-inline'` を
+     * 宣言しており、出荷ビルドでも緩和が効いたまま項目 10 は ok を返し続けていた (実測)。
+     *
+     * AD-025 §7 は「緩和は CSP を組み立てる 1 関数の dev 分岐にのみ現れる」と定めた。
+     * その決定は**宣言箇所が 1 つであること**を前提にしている。
+     */
+    for (const src of sources) {
+      if (CSP_FILES.includes(src.file)) continue
+      // 定数と検査本体はこの標識を定義上含む。含めると定義した瞬間に違反になる。
+      if (SELF_DEFINITION_FILES.includes(src.file)) continue
+      if (CSP_DECLARATION_EXEMPT_SUFFIXES.some((suffix) => src.file.endsWith(suffix))) continue
+      for (const marker of CSP_DECLARATION_MARKERS) {
+        if (!src.code.includes(marker)) continue
+        const line = src.code.slice(0, src.code.indexOf(marker)).split('\n').length
+        found.push(
+          `${src.file}:${line}  CSP の宣言が許可ファイル以外に現れている ("${marker}")。` +
+            `宣言は ${CSP_FILES.join(' / ')} に 1 つだけ置く`
+        )
+      }
+    }
+
     violations(10, 'CSP が FR-040 の directive を満たし禁止形を含まない', 'FR-040', found)
   }
 }

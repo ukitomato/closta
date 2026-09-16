@@ -24,7 +24,11 @@ import {
 import { findDuplicate, makeFolderId } from '@domain/workspace/registry'
 import { folderReachability, type ExistenceCheck } from '@domain/workspace/reachability'
 import { resolveFolderRuntime, toFolderReachability } from '@domain/workspace/resolution'
-import { BROWSE_SESSION_TTL_MS, type VerifiedRunning } from '@domain/runtime/verified-running'
+import {
+  BROWSE_SESSION_TTL_MS,
+  checkNotExpired,
+  type VerifiedRunning
+} from '@domain/runtime/verified-running'
 
 import type { HostFileSystem } from '../infra/fs/host-fs'
 import type { FolderStore, RestoreIssues } from '../infra/settings/folder-store'
@@ -45,12 +49,22 @@ export interface BrowseSession {
   readonly token: string
   readonly namespace: WslNamespaceId
   readonly verified: VerifiedRunning
+  /**
+   * 発行した送信元 (`WebContents` の id)。
+   *
+   * **トークンだけでは足りない** (contracts/ipc-capability.md の `token` の行)。
+   * 現在は単一ウィンドウなので `isTrustedSender` の origin 検査で実質守られているが、
+   * AD-025 の目標レイアウトは **Browser / PR Webview を別 WebContents で持つ**と決めている。
+   * その時点で「別の送信元が他人のトークンを使える」状態が生きるため、
+   * 発行元を値として持たせて照合する。
+   */
+  readonly senderId: number
 }
 
 export interface FolderService {
   list(): Promise<FolderListDTO>
-  beginBrowse(location: Location): Promise<BeginBrowseResult>
-  browseDirectory(token: unknown, target: unknown): Promise<BrowseDirectoryResult>
+  beginBrowse(location: Location, senderId: number): Promise<BeginBrowseResult>
+  browseDirectory(token: unknown, target: unknown, senderId: number): Promise<BrowseDirectoryResult>
   register(draft: WorkspaceFolderDraftDTO): Promise<RegisterFolderResult>
   unregister(id: string): Promise<{ readonly ok: boolean }>
   resolve(
@@ -216,7 +230,7 @@ export function createFolderService(deps: FolderServiceDeps): FolderService {
       return measure('list-folders', buildList)
     },
 
-    async beginBrowse(location) {
+    async beginBrowse(location, senderId) {
       /*
        * **開く操作で実行状態を 1 回確認する。** 所在 `windows` は呼び出し側 (検証) が
        * 既に拒否しているので、ここへは所在 `wsl` しか来ない。
@@ -229,7 +243,7 @@ export function createFolderService(deps: FolderServiceDeps): FolderService {
       if (token_ === undefined) return { ok: false, error: 'distro-not-running' }
 
       const token = randomUUID()
-      sessions.set(token, { token, namespace, verified: token_ })
+      sessions.set(token, { token, namespace, verified: token_, senderId })
 
       /*
        * **ルートのパスは返さない。** renderer は `{ kind: 'root' }` を送って
@@ -239,10 +253,11 @@ export function createFolderService(deps: FolderServiceDeps): FolderService {
       return { ok: true, token }
     },
 
-    async browseDirectory(token, target) {
+    async browseDirectory(token, target, senderId) {
       return measure('browse-step', async () => {
         /*
-         * トークンが無効・期限切れ・未知のいずれも `browse-session-expired` を返す。
+         * トークンが無効・未知・**他の送信元のもの**・期限切れのいずれも
+         * `browse-session-expired` を返す。
          * **どれなのかを教えない** — トークンの存在有無が分かると総当たりの手掛かりになる。
          */
         if (typeof token !== 'string') {
@@ -250,6 +265,26 @@ export function createFolderService(deps: FolderServiceDeps): FolderService {
         }
         const session = sessions.get(token)
         if (session === undefined) {
+          return { ok: false as const, error: 'browse-session-expired' as const }
+        }
+
+        // **発行した送信元と一致すること。** 正規のトークンの他送信元への流用を止める。
+        if (session.senderId !== senderId) {
+          return { ok: false as const, error: 'browse-session-expired' as const }
+        }
+
+        /*
+         * **期限の検査はファイルアクセスの前に、ここで行う。**
+         *
+         * `WslFileSystem` 側にも同じ検査があるが、そちらは期限切れを
+         * `distro-unreachable` に落とすため、利用者には
+         * 「ディストロに接続できません」と出てしまう。契約は
+         * **「期限切れは `browse-session-expired` を返して破棄する」**と定めている
+         * (contracts/ipc-capability.md)。理由が違えば示す次の操作も違う —
+         * 前者は「起動しろ」、後者は「開き直せ」である。
+         */
+        if (!checkNotExpired(session.verified, now(), BROWSE_SESSION_TTL_MS).ok) {
+          sessions.delete(token)
           return { ok: false as const, error: 'browse-session-expired' as const }
         }
 

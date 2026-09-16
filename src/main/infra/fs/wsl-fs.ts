@@ -1,3 +1,4 @@
+import { MAX_DIR_ENTRIES } from '@domain/validation'
 import { readdir, stat } from 'node:fs/promises'
 
 import { isSameDistro } from '@domain/runtime/namespace'
@@ -25,8 +26,8 @@ import { checkNotExpired, type VerifiedRunning } from '@domain/runtime/verified-
  * | **期限の検査はファイルアクセスの前に行う** | 期限内に実体が停止した窓での UNC アクセスは停止中ディストロを起動して成功しうる |
  */
 
-/** 列挙の上限。巨大ディレクトリは応答サイズと SC-004 を壊す。 */
-export const MAX_DIR_ENTRIES = 2000
+/** 列挙の上限。**定義は `domain` に 1 つだけ置く。** 互換のため再 export する。 */
+export { MAX_DIR_ENTRIES }
 
 function failure(reason: ListDirErrorReason): ListDirResult {
   return { ok: false, reason }

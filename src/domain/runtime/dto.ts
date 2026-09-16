@@ -5,7 +5,13 @@ import type {
   SandboxKind,
   SeccompFilterState
 } from './capabilities'
-import type { EnumerationIssueReason, RuntimeKind, RunState, WslVersion } from './descriptor'
+import type {
+  WslAvailability,
+  EnumerationIssueReason,
+  RuntimeKind,
+  RunState,
+  WslVersion
+} from './descriptor'
 import type { NamespaceId } from './namespace'
 
 /**
@@ -77,6 +83,8 @@ export interface EnumerationIssueDTO {
 }
 
 export interface RuntimeListDTO {
+  /** WSL そのものの利用可否 (SC-015)。**訳出は renderer が `Record` で行う。** */
+  readonly wslAvailability: WslAvailability
   readonly runtimes: readonly RuntimeDescriptorDTO[]
   readonly enumerationIssues: readonly EnumerationIssueDTO[]
 }

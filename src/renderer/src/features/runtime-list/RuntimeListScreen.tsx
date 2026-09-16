@@ -12,6 +12,7 @@ import {
   DEPENDENCY_DOC_PATH,
   DEPENDENCY_LABELS,
   ENUMERATION_ISSUE_LABELS,
+  WSL_AVAILABILITY_LABELS,
   PROBE_STATE_LABELS,
   RUN_STATE_LABELS,
   SANDBOX_LABELS,
@@ -63,11 +64,22 @@ function MissingDependencies({
           <li key={dependency.name}>
             {DEPENDENCY_LABELS[dependency.name]}
             {/*
-              **コマンド文字列を出さない** (FR-009)。
-              案内するのは導入手順文書の位置とアンカーだけである。
+              **コマンド文字列を出さない** (FR-009)。アプリ自身が導入を行わないため、
+              案内するのは導入手順文書の位置だけである。
+
+              以前は `docs/runtime/...md#bubblewrap` をそのまま出していた。
+              `docAnchor` は内部の参照キーであり (FR-047)、
+              リポジトリ相対パスはパッケージ済みアプリの利用者が辿れる形でもない。
+              **開く手段は capability に持たせていない** — IPC 面を広げないという判断で、
+              送出形態での到達性は D-1 (配布) の課題として残している。
+
+              節名に `docAnchor` を使うのは、その値が文書に実在することを
+              `tests/docs/dependency-anchors.test.ts` が保証しているためである。
+              別の文字列を書くと、見出しを改名したときに黙って食い違う。
             */}
-            <span className={cn(mono, 'text-muted-foreground ml-2')}>
-              {DEPENDENCY_DOC_PATH}#{dependency.docAnchor}
+            <span className="text-muted-foreground ml-2 text-xs">
+              導入手順: プロジェクトの <span className={cn(mono)}>{DEPENDENCY_DOC_PATH}</span>{' '}
+              にある 「{dependency.docAnchor}」の節
             </span>
           </li>
         ))}
@@ -100,7 +112,14 @@ function RuntimeCard({
               <span className="text-muted-foreground ml-2 text-xs">(既定)</span>
             ) : null}
           </p>
-          <p className={cn(mono, 'text-muted-foreground')}>{runtime.id}</p>
+          {/*
+            **内部識別子 (`host` / `wsl:<distro>`) を出さない** (FR-047)。
+            表示名 (`WSL: Ubuntu-26.04`) と表記が競合し、利用者に 2 つの名前を覚えさせる。
+            デバッグで要るときのために `title` に退避する。
+          */}
+          <p className={cn(mono, 'text-muted-foreground')} title={runtime.id}>
+            {runtime.distroName ?? 'Windows'}
+          </p>
         </div>
         {isProbing ? (
           <GenerationLoader variant="dots" label="判定中" tick={0} />
@@ -146,6 +165,8 @@ export function RuntimeListScreen(): React.JSX.Element {
       <ErrorState
         title="ランタイムを取得できませんでした"
         detail="アプリの再起動を試してください。"
+        retryLabel="再試行"
+        retryingLabel="再試行中"
         retrying={refreshing}
         onRetry={refresh}
       />
@@ -164,10 +185,27 @@ export function RuntimeListScreen(): React.JSX.Element {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-medium">ランタイム</h2>
-        <Button variant="outline" size="sm" onClick={refresh} disabled={refreshing}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void refresh().catch(() => undefined)}
+          disabled={refreshing}
+        >
           {refreshing ? '再検出中…' : '再検出'}
         </Button>
       </div>
+
+      {/*
+        **WSL の利用可否を示す** (SC-015)。
+        `win32` が必ず 1 件返るので下の空状態には到達しない。
+        告知が無いと、利用者は「WSL が無いホスト」「列挙に失敗した」
+        「ディストロが 0 台」を区別できない。
+      */}
+      {list.wslAvailability !== 'available' ? (
+        <div className={cn(paper, 'rounded-xl px-4 py-3 text-sm')} role="status">
+          <p>{WSL_AVAILABILITY_LABELS[list.wslAvailability]}</p>
+        </div>
+      ) : null}
 
       {list.runtimes.length === 0 ? (
         <EmptyState>

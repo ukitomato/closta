@@ -47,6 +47,12 @@ export function createRuntimeStore(detector: RuntimeDetector, measure: Measure):
   /** キャッシュ本体。**`id` を鍵にする** (FR-011)。 */
   let byId = new Map<NamespaceId, RuntimeDescriptor>()
   let issues: RuntimeListDTO['enumerationIssues'] = []
+  /**
+   * WSL の利用可否。**`detect()` でしか書き換えない。**
+   * 判定 (`probeAll` / `probeOne`) は descriptor だけを差し替えるので、
+   * 判定の進行でこの値が消えない。
+   */
+  let wslAvailability: RuntimeListDTO['wslAvailability'] = 'available'
   let detected = false
 
   const listeners = new Set<(list: RuntimeListDTO) => void>()
@@ -54,7 +60,8 @@ export function createRuntimeStore(detector: RuntimeDetector, measure: Measure):
   function toDTO(): RuntimeListDTO {
     return {
       runtimes: [...byId.values()].map(toRuntimeDescriptorDTO),
-      enumerationIssues: [...issues]
+      enumerationIssues: [...issues],
+      wslAvailability
     }
   }
 
@@ -81,6 +88,7 @@ export function createRuntimeStore(detector: RuntimeDetector, measure: Measure):
       rawName: issue.rawName,
       reasonKey: issue.reasonKey
     }))
+    wslAvailability = enumeration.wslAvailability
     detected = true
   }
 

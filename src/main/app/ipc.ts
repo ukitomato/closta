@@ -48,8 +48,8 @@ export interface IpcDependencies {
   snapshotRuntimes(): readonly RuntimeDescriptor[]
 
   listFolders(): Promise<FolderListDTO>
-  beginBrowse(location: Location): Promise<BeginBrowseResult>
-  browseDirectory(token: unknown, target: unknown): Promise<BrowseDirectoryResult>
+  beginBrowse(location: Location, senderId: number): Promise<BeginBrowseResult>
+  browseDirectory(token: unknown, target: unknown, senderId: number): Promise<BrowseDirectoryResult>
   registerFolder(draft: WorkspaceFolderDraftDTO): Promise<RegisterFolderResult>
   unregisterFolder(id: string): Promise<{ readonly ok: boolean }>
   /** 未信頼入力の照合に使う登録済み `id` の集合。 */
@@ -104,7 +104,7 @@ export function registerIpcHandlers(deps: IpcDependencies): void {
 
   handle(IPC_CHANNELS.listFolders, async (): Promise<FolderListDTO> => deps.listFolders())
 
-  handle(IPC_CHANNELS.beginBrowse, async (_event, ...args): Promise<BeginBrowseResult> => {
+  handle(IPC_CHANNELS.beginBrowse, async (event, ...args): Promise<BeginBrowseResult> => {
     // **所在 `windows` は常に拒否する** (host の入口はネイティブダイアログのみ)。
     const check = checkBeginBrowseLocation(deps.snapshotRuntimes(), args[0])
     if (!check.ok) {
@@ -115,12 +115,16 @@ export function registerIpcHandlers(deps: IpcDependencies): void {
       }
     }
     // 検証を通った値だけを渡す。`location` の型復元も検証側の関数で行う。
-    return deps.beginBrowse(toLocation(args[0] as never))
+    // **送信元 id を渡す。** トークンを発行元に束縛するため (contracts の `token` の行)。
+    return deps.beginBrowse(toLocation(args[0] as never), event.sender.id)
   })
 
-  handle(IPC_CHANNELS.browseDirectory, async (_event, ...args): Promise<BrowseDirectoryResult> =>
-    // トークンと移動先の検証はセッションの名前空間を要するため service 側で行う。
-    deps.browseDirectory(args[0], args[1])
+  handle(IPC_CHANNELS.browseDirectory, async (event, ...args): Promise<BrowseDirectoryResult> =>
+    /*
+     * トークンと移動先の検証はセッションの名前空間を要するため service 側で行う。
+     * **`event` を捨てない。** 送信元 id が要る — トークンは発行元に束縛されている。
+     */
+    deps.browseDirectory(args[0], args[1], event.sender.id)
   )
 
   handle(IPC_CHANNELS.pickHostFolder, async (): Promise<WorkspaceFolderDraftDTO | null> =>

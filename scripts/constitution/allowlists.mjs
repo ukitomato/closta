@@ -34,7 +34,14 @@ export const SCAN_EXTENSIONS = [
   '.cjs',
   '.json',
   '.yml',
-  '.yaml'
+  '.yaml',
+  /*
+   * **`.html` を含める。** renderer の入口 HTML は meta タグで CSP を宣言できる。
+   * 拡張子を落としていたため、scaffold 由来の 2 つ目の CSP 定義を検証項目 10 が
+   * **一度も見ていなかった** (実測)。AD-025 §7 は「開発用の CSP 定義も走査対象に含め、
+   * 除外リストへ移さない」と定めている。
+   */
+  '.html'
 ]
 
 /**
@@ -295,6 +302,29 @@ export const PROTOCOL_ASSOCIATION_APIS = [
 
 /** CSP を組み立てる関数を持つファイル。**開発用の定義も走査対象に含める** (FR-040)。 */
 export const CSP_FILES = ['src/main/app/protocol.ts']
+
+/**
+ * CSP を宣言しているとみなす標識。
+ *
+ * **`CSP_FILES` 以外のどこにも現れてはならない** (項目 10 の (e))。
+ * 列挙した場所だけを検査する形では、**別の場所に 2 つ目の CSP があっても気付けない** —
+ * scaffold 由来の `index.html` の meta タグが実際にそうなっており、
+ * 出荷ビルドでも `unsafe-inline` を許したまま項目 10 は ok を返し続けていた。
+ */
+export const CSP_DECLARATION_MARKERS = ['default-src']
+
+/**
+ * 項目 10 の (e) の対象外。
+ *
+ * **ヘッダ名 (`Content-Security-Policy`) は標識にしない。** ヘッダを **設定する** 側
+ * (`window.ts` / `protocol.ts`) は正当な消費者であり、宣言者ではない。
+ * 標識を `default-src` (ポリシー本体の先頭 directive) に絞れば、
+ * 「ポリシーそのものを書いている場所」だけが残る。
+ *
+ * テストはポリシーを **assert する** ために本体を持つので除く。
+ * 出荷物に入らず、かつ `protocol.test.ts` は項目 10 が守る内容を検証する側である。
+ */
+export const CSP_DECLARATION_EXEMPT_SUFFIXES = ['.test.ts', '.test.tsx']
 
 /** FR-040 が要求する directive 集合。**すべて現れること**。 */
 export const CSP_REQUIRED_DIRECTIVES = [

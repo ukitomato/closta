@@ -1,10 +1,19 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { EmptyState } from '@/components/assistant-ui/elements/empty-state'
 import { ErrorState } from '@/components/assistant-ui/elements/error-state'
 import { GenerationLoader } from '@/components/assistant-ui/elements/loading-state'
 import { mono, paper } from '@/components/assistant-ui/elements/surfaces'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 
 import { shouldSuggestUnregister } from '@domain/workspace/folder'
@@ -49,12 +58,26 @@ function errorText(key: string | null): string | null {
 }
 
 function ReachabilityBadge({ folder }: { folder: WorkspaceFolderDTO }): React.JSX.Element {
+  /*
+   * **light 既定で WCAG 1.4.3 (AA) を満たす段を使う。**
+   *
+   * 12px の文字には 4.5:1 が要る。白背景に対して
+   * `amber-600` は約 2.9:1、`emerald-600` は約 3.7:1 で不足していた。
+   * 既定テーマは light なので、**起動直後に見える状態が不適合**だった。
+   *
+   * しかも最悪値だったのが `blocked` (= 利用者が取るべき操作がある状態) で、
+   * FR-017 が分けたがっている「解除を勧める / 勧めない」の区別が視覚的に潰れていた。
+   *
+   * **色だけに依っているわけではない** — `REACHABILITY_LABELS` が 3 値すべてに
+   * 日本語テキストを与えており 1.4.1 は満たす。問題は「その色が読めない」ことだった。
+   * 独自トークンは足さず、既存パレットの段を選び直すだけにしてある (Principle XIII)。
+   */
   const tone =
     folder.reachability === 'reachable'
-      ? 'text-emerald-600 dark:text-emerald-400'
+      ? 'text-emerald-700 dark:text-emerald-400'
       : folder.reachability === 'blocked'
-        ? 'text-amber-600 dark:text-amber-400'
-        : 'text-red-600 dark:text-red-400'
+        ? 'text-amber-800 dark:text-amber-400'
+        : 'text-red-700 dark:text-red-400'
 
   return (
     <span className={cn('text-xs font-medium', tone)}>
@@ -65,10 +88,13 @@ function ReachabilityBadge({ folder }: { folder: WorkspaceFolderDTO }): React.JS
 
 function FolderCard({
   folder,
-  onUnregister
+  onUnregister,
+  highlighted
 }: {
   folder: WorkspaceFolderDTO
   onUnregister: (id: string) => void
+  /** 重複登録で拒否されたときの既存エントリか (AC US-2-5)。 */
+  highlighted: boolean
 }): React.JSX.Element {
   /*
    * **解除を「勧める」かどうかだけを `reachability` で分ける** (FR-017 の 2 層)。
@@ -77,8 +103,38 @@ function FolderCard({
    */
   const suggestUnregister = shouldSuggestUnregister(folder.reachability)
 
+  /*
+   * **解除の前に確認する。**
+   *
+   * FR-017 が全エントリに解除操作を出すよう求めている以上、誤操作面も全エントリに開く。
+   * しかも復元コストは到達可能性で非対称である —
+   * `blocked` (所在ディストロが停止中) と `unreachable` のエントリは
+   * 所在選択ボタン自体が押せないため、**誤って解除するとアプリ内で作り直せない**。
+   * undo が無い以上、緩衝は確認以外に置き場が無い。
+   */
+  const [confirming, setConfirming] = useState(false)
+
+  const cardRef = useRef<HTMLLIElement>(null)
+  useEffect(() => {
+    // 既存エントリとして示されたら、見える位置へ運ぶ。
+    if (highlighted) cardRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [highlighted])
+
   return (
-    <li className={cn(paper, 'rounded-xl px-4 py-3')}>
+    <li
+      ref={cardRef}
+      className={cn(
+        paper,
+        'rounded-xl px-4 py-3',
+        // **色だけに依らない。** 下に文言でも示す。
+        highlighted && 'ring-primary/60 ring-2'
+      )}
+    >
+      {highlighted ? (
+        <p className="text-primary mb-2 text-xs font-medium">
+          このフォルダは既に登録されています。こちらを使ってください。
+        </p>
+      ) : null}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-medium">{folder.displayName}</p>
@@ -90,10 +146,50 @@ function FolderCard({
           <Button
             variant={suggestUnregister ? 'destructive' : 'outline'}
             size="sm"
-            onClick={() => onUnregister(folder.id)}
+            onClick={() => setConfirming(true)}
           >
             登録を解除
           </Button>
+
+          <Dialog open={confirming} onOpenChange={setConfirming}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>登録を解除しますか</DialogTitle>
+                {/*
+                  **対象を名指す。** 「よろしいですか?」だけにしない —
+                  一覧に複数あるとき、どれを消そうとしているのか分からない。
+                */}
+                <DialogDescription>
+                  「{folder.displayName}」({folder.path.value}) の登録を解除します。
+                  <br />
+                  フォルダ自体は削除されません。
+                  {suggestUnregister ? null : (
+                    <>
+                      <br />
+                      このフォルダは今も使えます。解除すると登録し直しが必要になります。
+                    </>
+                  )}
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button variant="outline" size="sm">
+                    キャンセル
+                  </Button>
+                </DialogClose>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => {
+                    setConfirming(false)
+                    onUnregister(folder.id)
+                  }}
+                >
+                  解除する
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
@@ -132,6 +228,8 @@ export function WorkspaceFoldersScreen(): React.JSX.Element {
       <ErrorState
         title="登録フォルダを読み込めませんでした"
         detail="アプリの再起動を試してください。"
+        retryLabel="再試行"
+        retryingLabel="再試行中"
         retrying={false}
         onRetry={folders.refresh}
       />
@@ -139,10 +237,18 @@ export function WorkspaceFoldersScreen(): React.JSX.Element {
   }
 
   const wslRuntimes = (runtimes.list?.runtimes ?? []).filter((runtime) => runtime.kind === 'wsl')
-  const browseResult = folders.browse?.result
-  const entries = browseResult?.ok === true ? browseResult.entries : []
-  const cwd = browseResult?.ok === true ? browseResult.cwd : null
-  const parent = browseResult?.ok === true ? browseResult.parent : null
+  /*
+   * **直前に成功した結果から導く。**
+   *
+   * 失敗形 (`{ ok: false, error }`) は現在地を持たないので、
+   * `result` から導くと期限切れの瞬間に現在地・親・項目がすべて消え、
+   * 「閉じて開き直す」= ルートからやり直ししか残らなかった。
+   * quickstart V-2 #9 は「同じ位置から続行できる」ことを条件にしている。
+   */
+  const lastOk = folders.browse?.lastOk ?? null
+  const entries = lastOk?.entries ?? []
+  const cwd = lastOk?.cwd ?? null
+  const parent = lastOk?.parent ?? null
 
   return (
     <div className="flex flex-col gap-5">
@@ -185,7 +291,15 @@ export function WorkspaceFoldersScreen(): React.JSX.Element {
                   // **停止中でも黙って起動しない** (FR-018)。導線だけを出す。
                   if (!stopped) void folders.beginBrowse(location)
                 }}
-                disabled={stopped}
+                /*
+                 * **`disabled` にしない。** `disabled` は要素をタブ順から外すので、
+                 * キーボード利用者はボタンに一度も到達せず、
+                 * 押せないことにも理由にも気付けない。
+                 * 起動しない性質は下の `if (!stopped)` ガードが保つ (FR-018)。
+                 */
+                aria-disabled={stopped}
+                aria-describedby={stopped ? 'wsl-stopped-help' : undefined}
+                className={cn(stopped && 'opacity-50')}
               >
                 {locationLabel(location)}
                 {stopped ? ' (停止中)' : ''}
@@ -195,7 +309,7 @@ export function WorkspaceFoldersScreen(): React.JSX.Element {
         </div>
 
         {wslRuntimes.some((runtime) => runtime.state === 'stopped') ? (
-          <div className="border-border/60 border-t pt-3 text-sm">
+          <div id="wsl-stopped-help" className="border-border/60 border-t pt-3 text-sm">
             <p>停止中のディストロは辿れません。次の手順で使えるようになります。</p>
             <ol className="text-muted-foreground mt-1 list-decimal pl-5 text-xs">
               <li>{RESOLUTION_STEP_LABELS['start-distro']}</li>
@@ -205,7 +319,7 @@ export function WorkspaceFoldersScreen(): React.JSX.Element {
               className="mt-2"
               variant="outline"
               size="sm"
-              onClick={runtimes.refresh}
+              onClick={() => void runtimes.refresh().catch(() => undefined)}
               disabled={runtimes.refreshing}
             >
               {runtimes.refreshing ? '再検出中…' : 'ランタイムを再検出'}
@@ -226,9 +340,25 @@ export function WorkspaceFoldersScreen(): React.JSX.Element {
 
           <p className={cn(mono, 'text-muted-foreground break-all')}>{cwd?.value ?? '—'}</p>
 
-          {folders.browse.loading ? (
-            <GenerationLoader variant="dots" label="読み込み中" tick={0} />
-          ) : (
+          {/*
+            **読み込み中も骨格を残す。**
+            以前は `loading` 中にこのブロック全体を unmount していたため、
+            押したボタン自身が DOM から消え、**フォーカスが body に落ちていた**。
+            キーボード利用者は 1 階層下りるたびにヘッダから Tab で辿り直すことになる。
+          */}
+          <div
+            aria-busy={folders.browse.loading}
+            className={cn(folders.browse.loading && 'opacity-50')}
+          >
+            {folders.browse.loading ? (
+              <GenerationLoader
+                variant="dots"
+                label="読み込み中"
+                tick={0}
+                role="status"
+                aria-live="polite"
+              />
+            ) : null}
             <>
               <div className="flex flex-wrap gap-2">
                 <Button
@@ -287,13 +417,29 @@ export function WorkspaceFoldersScreen(): React.JSX.Element {
                 ))}
               </ul>
 
-              <div className="border-border/60 flex flex-wrap items-center gap-2 border-t pt-3">
-                <input
-                  className="bg-background border-border/60 min-w-0 flex-1 rounded-md border px-2 py-1 text-sm"
-                  placeholder="表示名 (未入力ならフォルダ名)"
-                  value={displayName}
-                  onChange={(event) => setDisplayName(event.target.value)}
-                />
+              <div className="border-border/60 flex flex-wrap items-end gap-2 border-t pt-3">
+                {/*
+                  **可視ラベルを置く。** 以前は `placeholder` だけで、
+                  入力を始めた瞬間に手がかりが消えていた。
+                  既定値の説明も placeholder に埋まっていたため、入力開始後は取得できなかった。
+                  日本語入力で変換を挟むと視線が戻る前に消える点でも問題になる。
+                */}
+                <div className="flex min-w-0 flex-1 flex-col gap-1">
+                  <label htmlFor="folder-display-name" className="text-xs font-medium">
+                    表示名
+                  </label>
+                  <input
+                    className="bg-input border-border focus-visible:ring-ring/50 min-w-0 rounded-md border px-2 py-1 text-sm focus-visible:ring-[3px] focus-visible:outline-none"
+                    id="folder-display-name"
+                    aria-describedby="folder-display-name-hint"
+                    placeholder="表示名"
+                    value={displayName}
+                    onChange={(event) => setDisplayName(event.target.value)}
+                  />
+                  <p id="folder-display-name-hint" className="text-muted-foreground text-xs">
+                    未入力ならフォルダ名を使います
+                  </p>
+                </div>
                 <Button
                   size="sm"
                   disabled={cwd === null}
@@ -312,17 +458,32 @@ export function WorkspaceFoldersScreen(): React.JSX.Element {
                 </Button>
               </div>
             </>
-          )}
+          </div>
         </div>
       ) : null}
 
-      {errorText(folders.lastError) !== null ? (
-        <p className={cn(paper, 'rounded-xl px-4 py-3 text-sm')}>{errorText(folders.lastError)}</p>
-      ) : null}
+      {/*
+        **常時マウントして中身だけ差し替える。**
+        エラー時に要素ごと新規 mount する形だと live region として機能せず、
+        操作の失敗 (権限なし・重複・解除失敗) が支援技術に一切通知されなかった。
+      */}
+      <div role="status" aria-live="polite" className="empty:hidden">
+        {errorText(folders.lastError) !== null ? (
+          <p className={cn(paper, 'rounded-xl px-4 py-3 text-sm')}>
+            {errorText(folders.lastError)}
+          </p>
+        ) : null}
+      </div>
 
       {/* ── 一覧 (FE-022) ───────────────────────────────────────────── */}
       {folders.list === null ? (
-        <GenerationLoader variant="dots" label="登録フォルダを読み込み中" tick={0} />
+        <GenerationLoader
+          variant="dots"
+          label="登録フォルダを読み込み中"
+          tick={0}
+          role="status"
+          aria-live="polite"
+        />
       ) : folders.list.folders.length === 0 ? (
         <EmptyState>
           <p className="text-sm">
@@ -332,7 +493,12 @@ export function WorkspaceFoldersScreen(): React.JSX.Element {
       ) : (
         <ul className="flex flex-col gap-3">
           {folders.list.folders.map((folder) => (
-            <FolderCard key={folder.id} folder={folder} onUnregister={folders.unregister} />
+            <FolderCard
+              key={folder.id}
+              folder={folder}
+              onUnregister={folders.unregister}
+              highlighted={folder.id === folders.duplicateOfId}
+            />
           ))}
         </ul>
       )}

@@ -88,8 +88,8 @@ export function createComposition(): Composition {
     measure,
 
     listFolders: () => folders.list(),
-    beginBrowse: (location) => folders.beginBrowse(location),
-    browseDirectory: (token, target) => folders.browseDirectory(token, target),
+    beginBrowse: (location, senderId) => folders.beginBrowse(location, senderId),
+    browseDirectory: (token, target, senderId) => folders.browseDirectory(token, target, senderId),
     registerFolder: (draft) => folders.register(draft),
     unregisterFolder: (id) => folders.unregister(id),
     folderIds: () => folders.folderIds(),

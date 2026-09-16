@@ -17,7 +17,14 @@ export interface RuntimesView {
   readonly loadState: LoadState
   /** 再検出中か。二重押しを防ぐために使う。 */
   readonly refreshing: boolean
-  refresh(): void
+  /**
+   * 再検出。**完了を待てる形にする。**
+   *
+   * 組み合わせ画面の解消手順は「ディストロを起動する → ランタイムを再検出する」であり、
+   * 再検出の**後に**解決を取り直す必要がある。fire-and-forget にすると、
+   * 手順どおり押しても古い検出結果で解決してしまう (SF-009)。
+   */
+  refresh(): Promise<void>
   reprobe(runtimeId: string): void
 }
 
@@ -64,16 +71,19 @@ export function useRuntimes(): RuntimesView {
     }
   }, [])
 
-  const refresh = useCallback(() => {
+  const refresh = useCallback(async (): Promise<void> => {
     setRefreshing(true)
-    capability()
-      .refreshRuntimes()
-      .then((next) => {
-        setList(next)
-        setLoadState('ready')
-      })
-      .catch(() => setLoadState('failed'))
-      .finally(() => setRefreshing(false))
+    try {
+      const next = await capability().refreshRuntimes()
+      setList(next)
+      setLoadState('ready')
+    } catch {
+      setLoadState('failed')
+      // **呼び出し側へ伝える。** 握り潰すと、待っている側が成功と区別できない。
+      throw new Error('refreshRuntimes に失敗した')
+    } finally {
+      setRefreshing(false)
+    }
   }, [])
 
   const reprobe = useCallback((runtimeId: string) => {

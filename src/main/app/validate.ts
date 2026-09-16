@@ -1,6 +1,11 @@
 import type { WebFrameMain } from 'electron'
 
 import { isValidDistroName, wslNamespace, type NamespaceId } from '@domain/runtime/namespace'
+import {
+  hasControlCharacter,
+  MAX_DISPLAY_NAME_LENGTH,
+  MAX_PATH_VALUE_LENGTH
+} from '@domain/validation'
 import type { RuntimeDescriptor } from '@domain/runtime/descriptor'
 import type { PathDTO } from '@domain/runtime/dto'
 import { isValidSegment } from '@domain/runtime/path-api'
@@ -18,18 +23,15 @@ import { allowedOrigins } from './origins'
  * 要求する対象である。3 つだけ列挙する形にしない — 列挙すると同じ構造の残りが拘束を外れる。
  */
 
-export const MAX_DISPLAY_NAME_LENGTH = 255
-export const MAX_PATH_VALUE_LENGTH = 4096
-/** `browseDirectory` が返す entries の上限。巨大ディレクトリは応答サイズと SC-004 を壊す。 */
-export const MAX_DIR_ENTRIES = 2000
-
-function hasControlCharacter(value: string): boolean {
-  for (const ch of value) {
-    const code = ch.codePointAt(0)!
-    if (code < 0x20 || code === 0x7f || (code >= 0x80 && code <= 0x9f)) return true
-  }
-  return false
-}
+/*
+ * **述語と上限は `domain` の 1 箇所から取る。**
+ *
+ * 以前はここと `infra/settings/folder-record.ts` に同一実装があり、
+ * 上限も各 2 箇所に散っていた。片方だけ変えると
+ * **登録はできるが復元されないフォルダ**が生まれ、SC-013 が静かに崩れる。
+ * (この形の `MAX_DIR_ENTRIES` は参照 0 件で死んでもいた。)
+ */
+export { MAX_DISPLAY_NAME_LENGTH, MAX_PATH_VALUE_LENGTH } from '@domain/validation'
 
 /**
  * **送信元 (全メソッド共通)。**

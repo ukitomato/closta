@@ -48,7 +48,11 @@ function enumeration(): RuntimeEnumeration {
     { ...base, id: UBUNTU, distroName: 'Ubuntu', state: 'running' },
     { ...base, id: DEBIAN, distroName: 'Debian', state: 'stopped' }
   ]
-  return { runtimes, enumerationIssues: [{ rawName: '-bad', reasonKey: 'invalid-name-charset' }] }
+  return {
+    runtimes,
+    enumerationIssues: [{ rawName: '-bad', reasonKey: 'invalid-name-charset' }],
+    wslAvailability: 'available'
+  }
 }
 
 interface Recorder {

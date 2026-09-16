@@ -76,8 +76,11 @@ const FOLDER: WorkspaceFolderDTO = {
   registeredAt: NOW
 }
 
-function runtimeList(runtimes: readonly RuntimeDescriptorDTO[]): RuntimeListDTO {
-  return { runtimes, enumerationIssues: [] }
+function runtimeList(
+  runtimes: readonly RuntimeDescriptorDTO[],
+  wslAvailability: RuntimeListDTO['wslAvailability'] = 'available'
+): RuntimeListDTO {
+  return { runtimes, enumerationIssues: [], wslAvailability }
 }
 
 function folderList(
@@ -190,7 +193,7 @@ describe('(b) 解決不能が現れて手順が描かれる (SC-007)', () => {
 })
 
 describe('(c) 越境案内の 3 要素が描かれる (FR-031 / SC-006)', () => {
-  it('影響・推奨配置先・手順が出て、選択も可能である', async () => {
+  it('影響・推奨配置先・手順が出て、選択肢から外れない', async () => {
     install({ host: REACHABLE_NATIVE, 'wsl:Ubuntu': CROSS })
     render(<ResolutionScreen />)
 
@@ -202,10 +205,18 @@ describe('(c) 越境案内の 3 要素が描かれる (FR-031 / SC-006)', () => 
     expect(screen.getByText('複製先を新しく登録する')).toBeInTheDocument()
     expect(screen.getByText('元の登録を解除する')).toBeInTheDocument()
 
-    // **越境でも選択不可にしない** (FR-030)。
+    /*
+     * **越境でも選択肢から外さない** (FR-030)。
+     *
+     * 「選ぶ」ボタンは R-1 では置かない (選択の永続化を求める FR が無く、
+     *  `onClick` の無い対話要素は押しても無反応になる)。
+     * したがって FR-030 の確認は**選択肢として現れ、
+     * 「今は使えません」が付いていないこと**で行う。
+     */
     const options = screen.getAllByTestId('resolution-option')
     const cross = options.find((node) => node.textContent?.includes('境界を越える'))
-    expect(cross?.querySelector('button')?.hasAttribute('disabled')).toBe(false)
+    expect(cross).toBeDefined()
+    expect(cross?.textContent).not.toContain('今は使えません')
   })
 })
 
@@ -268,6 +279,48 @@ describe('(e) WSL 非搭載時に一覧が壊れない (FR-012 / SC-015)', () =>
     // **無人実行は「不可」であり「未判定」ではない** (判定したうえでの表明。FR-003)。
     expect(screen.getByText('不可')).toBeInTheDocument()
     expect(screen.queryByText(/WSL:/)).not.toBeInTheDocument()
+  })
+
+  it('**WSL が見つからない旨が提示される** (SC-015 の後段)', async () => {
+    installCapability({
+      listRuntimes: async () => runtimeList([HOST], 'not-installed')
+    })
+    render(<RuntimeListScreen />)
+
+    await waitFor(() => {
+      expect(screen.getByText(/WSL が見つかりませんでした/)).toBeInTheDocument()
+    })
+    /*
+     * **「壊れない」だけでは SC-015 を満たさない。**
+     * 告知が無いと、利用者は WSL が無いホストなのか、検出に失敗したのか、
+     * ディストロが 0 台なのかを区別できない。
+     */
+  })
+
+  it('**列挙失敗と未搭載を別の文言で示す** (示すべき次の操作が違う)', async () => {
+    installCapability({
+      listRuntimes: async () => runtimeList([HOST], 'enumeration-failed')
+    })
+    render(<RuntimeListScreen />)
+
+    await waitFor(() => {
+      expect(screen.getByText(/列挙できませんでした/)).toBeInTheDocument()
+    })
+    // 未搭載の文言と取り違えていないこと。
+    expect(screen.queryByText(/WSL が見つかりませんでした/)).not.toBeInTheDocument()
+  })
+
+  it('利用できるときは告知を出さない', async () => {
+    installCapability({
+      listRuntimes: async () => runtimeList([HOST], 'available')
+    })
+    render(<RuntimeListScreen />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Windows (ホスト)')).toBeInTheDocument()
+    })
+    expect(screen.queryByText(/WSL が見つかりませんでした/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/列挙できませんでした/)).not.toBeInTheDocument()
   })
 
   it('フォルダ一覧も壊れない (空状態の導線が出る)', async () => {

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import { EmptyState } from '@/components/assistant-ui/elements/empty-state'
+import { ErrorState } from '@/components/assistant-ui/elements/error-state'
 import { GenerationLoader } from '@/components/assistant-ui/elements/loading-state'
 import { mono, paper } from '@/components/assistant-ui/elements/surfaces'
 import { Button } from '@/components/ui/button'
@@ -49,7 +50,7 @@ function BoundaryBadge({ pair }: { pair: Pair }): React.JSX.Element {
       className={cn(
         'rounded-full px-2 py-0.5 text-xs font-medium',
         cross
-          ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+          ? 'bg-amber-500/15 text-amber-800 dark:text-amber-300'
           : 'bg-foreground/[0.06] text-muted-foreground'
       )}
     >
@@ -60,8 +61,24 @@ function BoundaryBadge({ pair }: { pair: Pair }): React.JSX.Element {
 
 /** 越境の案内 (FE-031)。**3 要素をすべて出す** (FR-031)。 */
 function CrossRecommendation({ pair }: { pair: Pair }): React.JSX.Element | null {
+  /*
+   * **判定は `boundary` で行う。** `recommendation !== null` を条件にすると、
+   * `boundary: 'cross'` かつ `recommendation: null` の値が来たときに
+   * **バッジだけ出て案内が 1 つも出ない**。
+   * SC-006 は「越境と判定された組み合わせについて、**例外なく**」と要求している。
+   */
+  if (pair.resolution.boundary !== 'cross') return null
+
   const recommendation = pair.resolution.recommendation
-  if (recommendation === null) return null
+  if (recommendation === null) {
+    // 黙って落とさない。案内が取れないこと自体を示す。
+    return (
+      <div className="border-border/60 mt-3 border-t pt-3 text-sm" role="alert">
+        <p>ファイルシステムをまたぐ組み合わせですが、案内を取得できませんでした。</p>
+        <p className="text-muted-foreground mt-1 text-xs">再判定を試してください。</p>
+      </div>
+    )
+  }
 
   return (
     <div className="border-border/60 mt-3 border-t pt-3 text-sm">
@@ -105,9 +122,13 @@ function OptionCard({ pair }: { pair: Pair }): React.JSX.Element {
         </div>
         <div className="flex shrink-0 flex-col items-end gap-2">
           <BoundaryBadge pair={pair} />
-          <Button size="sm" variant="outline" disabled={blocked}>
-            {blocked ? '今は選べない' : '選ぶ'}
-          </Button>
+          {/*
+            **ここにボタンを置かない。** R-1 のスコープは組み合わせの**解決**までで、
+            選択の永続化を要求する FR は無い (US-3 の AC 1〜6 はすべて
+            「解決結果が示される / 選択肢に現れる」で閉じている)。
+            `onClick` の無い `<Button>` を置くと、押しても無反応な対話要素になる。
+          */}
+          {blocked ? <span className="text-muted-foreground text-xs">今は使えません</span> : null}
         </div>
       </div>
 
@@ -131,6 +152,13 @@ export function ResolutionScreen(): React.JSX.Element {
   const runtimes = useRuntimes()
   const folders = useFolders()
   const [pairs, setPairs] = useState<readonly Pair[] | null>(null)
+  /**
+   * 解決が失敗したこと。
+   *
+   * **`pairs` の `null` と区別する。** 区別しないと「調べている最中」と
+   * 「調べられなかった」が同じ表示になり、`GenerationLoader` が永久に出続ける (MF-002)。
+   */
+  const [failed, setFailed] = useState(false)
 
   /*
    * **依存は `list` そのものにする。**
@@ -173,13 +201,42 @@ export function ResolutionScreen(): React.JSX.Element {
     if (!hasPairs) return
     let active = true
     // **`setState` はコールバックの中だけ。**
-    void resolveAll().then((results) => {
-      if (active) setPairs(results)
-    })
+    void resolveAll()
+      .then((results) => {
+        if (active) {
+          setPairs(results)
+          setFailed(false)
+        }
+      })
+      /*
+       * **`catch` を省かない。** IPC が reject すると `pairs` が `null` のままになり、
+       * 「組み合わせを調べています」が**永久に出続ける** (MF-002)。
+       * 他 2 画面は `ErrorState` を持つので、同じ失敗が画面ごとに別体験になっていた。
+       */
+      .catch(() => {
+        if (active) setFailed(true)
+      })
     return () => {
       active = false
     }
   }, [hasPairs, resolveAll])
+
+  /**
+   * 再判定。**ランタイムの再検出から行う。**
+   *
+   * `blocked` の解消手順は「ディストロを起動する → ランタイムを再検出する」である。
+   * 解決の再計算だけでは main 側の検出キャッシュが更新されないので、
+   * **手順どおり押しても同じ `blocked` が返り続けていた** (SF-009)。
+   */
+  const reevaluate = useCallback(() => {
+    setFailed(false)
+    setPairs(null)
+    void runtimes
+      .refresh()
+      .then(() => resolveAll())
+      .then(setPairs)
+      .catch(() => setFailed(true))
+  }, [runtimes, resolveAll])
 
   /*
    * **選択肢が 0 件のときは理由と次の操作を示す** (FR-028)。
@@ -210,6 +267,22 @@ export function ResolutionScreen(): React.JSX.Element {
     )
   }
 
+  if (failed) {
+    return (
+      <div className="flex flex-col gap-4">
+        <h2 className="text-lg font-medium">フォルダとランタイムの組み合わせ</h2>
+        <ErrorState
+          title="組み合わせを判定できませんでした"
+          detail="再判定を試してください。続く場合はアプリを再起動してください。"
+          retrying={false}
+          onRetry={reevaluate}
+          retryLabel="再判定"
+          retryingLabel="再判定中"
+        />
+      </div>
+    )
+  }
+
   if (pairs === null) {
     return <GenerationLoader variant="dots" label="組み合わせを調べています" tick={0} />
   }
@@ -225,8 +298,8 @@ export function ResolutionScreen(): React.JSX.Element {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-medium">フォルダとランタイムの組み合わせ</h2>
-        <Button variant="outline" size="sm" onClick={() => void resolveAll().then(setPairs)}>
-          再判定
+        <Button variant="outline" size="sm" onClick={reevaluate}>
+          ランタイムを再検出して再判定
         </Button>
       </div>
 
