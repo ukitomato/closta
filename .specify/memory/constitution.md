@@ -1,8 +1,8 @@
 ---
 status: active
-version: 1.2.1
+version: 1.2.2
 ratified: 2026-09-13
-last_amended: 2026-09-15
+last_amended: 2026-09-16
 generated_by: /speckit.constitution (素材: /spec-gate bootstrap Phase 6 の draft)
 ---
 
