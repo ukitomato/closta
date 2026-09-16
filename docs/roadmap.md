@@ -1,6 +1,6 @@
 ---
 status: needs-human-review
-last_updated: 2026-09-12
+last_updated: 2026-09-15
 generated_by: human (PLAN.md を素案として再導出)
 ---
 
@@ -66,15 +66,34 @@ pnpm 10 以降は設定の置き場が `.npmrc` から `pnpm-workspace.yaml` に
 **達成状態**: WSL 内の過去セッションを Windows の assistant-ui で読める。
 **ここで軸 1 の方針を確定する。** 結果次第では `ui` charter と本ロードマップを見直す。
 
+**進捗 (2026-09-15)**: R-1 の実装が完了した（`/cl-code-gate` 以降は未通過）。
+検出・登録・解決と、5 レイヤの依存規則の機械強制、CI、SPIKE-13 の第 1 段階までが入っている。
+**プロセス起動はまだどこにも無い** — R-1 は Agent SDK を依存として入れただけで呼び出していない。
+
 | 順 | ID | feature | domain | 依存 | 前提 SPIKE |
 |---|---|---|---|---|---|
-| 1 | R-1 | フォルダ登録とランタイム検出 | `runtime` | — | SPIKE-8 / SPIKE-9 **完了** |
-| 2 | R-2 | セッション列挙（読み取り専用） | `session` | R-1 | SPIKE-1 **完了** |
+| 1 | R-1 | フォルダ登録とランタイム検出 **(実装完了 / gate 未通過)** | `runtime` | — | SPIKE-8 / SPIKE-9 **完了** |
+| 2 | R-2 | セッション列挙（読み取り専用） | `session` | **R-1 の US-1〜US-3** | SPIKE-1 **完了** |
 | 3 | R-3 | transcript の基本表示 | `ui` | R-2 | **SPIKE-2** / SPIKE-14 **完了** |
 | 4 | R-4 | Tier A tool 表示 | `ui` | R-3 | — |
 | — | — | *(SPIKE-9 / SPIKE-13 は R-1 までに実施)* | — | — | — |
 
 **R-3 の完了時点で見栄えの一次判断ができる。** R-4 まで待たない。
+
+#### R-2 の依存は R-1 の全体ではない
+
+R-2 が要るのは **US-1（ランタイム検出）/ US-2（フォルダ登録）/ US-3（組み合わせの解決）**である。
+これらが揃った時点で「どのディストロのどのフォルダを見るか」が決まり、
+セッションの列挙先（`<config-dir>/projects/<encoded-cwd>/`）を組み立てられる。
+
+R-1 の残り 2 つは R-2 をブロックしない。
+
+| R-1 の US | R-2 への関係 |
+|---|---|
+| US-4（依存規則違反がその場で止まる） | Foundational だが R-2 の入力ではない。**先に入れておく価値は「R-2 以降のコードが最初から規則下に置かれる」こと**にある |
+| US-5（リポジトリを訪れた人が現状を把握できる） | R-2 の入力ではない。Polish |
+
+**R-1 の US-3 完了時点で R-2 に着手してよい。**
 
 ### M2 の前提は先に潰してある
 
@@ -157,7 +176,7 @@ I-1 では **`wsl:<distro>` endpoint（WSL 内 Docker Engine）を第一に検�
 | SPIKE-11 | **再定義**: `SessionStoreEntry` の型と SQLite スキーマ設計（ミラー手段自体は AD-021 で解決） | I-1 の前 | 1〜2時間 |
 | **SPIKE-14** | **assistant-ui の element 実在確認** | R-3 の前 | **完了 (2026-09-13)** → [AD-019](decisions/0019-assistant-ui-element-inventory.md) |
 | SPIKE-12 | SDK が emit する型・tool 名・システムイベントの全列挙 | O-2 の前 | **完了 (2026-09-13)** → [AD-020](decisions/0020-sdk-emitted-message-inventory.md)。`SDKMessage` は 39 型 |
-| SPIKE-13 | `asarUnpack` とネイティブバイナリの同梱可否 | **R-1 で薄く試す** / D-1 の前に本格確認 | 1時間 + 半日 |
+| SPIKE-13 | `asarUnpack` とネイティブバイナリの同梱可否 | **R-1 で薄く試す** / D-1 の前に本格確認 | **第 1 段階 完了 (2026-09-15)** → [AD-026](decisions/0026-packaging-first-pass.md)。`claude.exe` (227 MB) が asar 外に実行ビット付きで展開され、インストーラ (約 176 MB) が生成できた。**第 2 段階（署名・公証・自動更新）は D-1** / 半日 |
 
 各 SPIKE の結果は `docs/decisions/` に ADR として起票する（PLAN.md §3 ではない）。
 
@@ -182,6 +201,14 @@ SPIKE-6 は `SessionLaunchConfig` の**選択肢の値**（`PermissionMode` の�
 `asarUnpack` でネイティブバイナリが動く形で同梱できるかは「やってみないと分からない」典型で、
 **D-1（M5）で初めて詰まると配布経路ごと失われる**。R-1 でプロジェクトを初期化する時点で
 Agent SDK を 1 つ入れて `electron-builder` を 1 回通すだけでも、致命的な非互換は早期に見つかる。
+
+**第 1 段階で実際に 2 つ見つかった。** いずれもホストのセキュリティ製品との相互作用で、
+素の `electron-builder` ではインストーラが生成できなかった
+（[AD-026](decisions/0026-packaging-first-pass.md) §3）。D-1 で初めて踏んだ場合、
+配布経路の問題とビルド環境の問題の切り分けから始めることになっていた。
+
+あわせて **インストーラの大半が SDK 同梱バイナリである**ことが分かった。
+D-1 で配布サイズを議論する際、削減余地はアプリ側のバンドルではなくそこにある。
 
 ## 1 feature のワークフロー
 

@@ -1,0 +1,50 @@
+appId: dev.closta.app
+productName: Closta
+directories:
+  buildResources: build
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
+  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+# asar 内の実行ファイルは直接起動できない (AD-009)。
+# Agent SDK は `claude.exe` をプラットフォーム別の optional dependency として持つので、
+# **そのパッケージごと展開する。**
+#
+# パッケージ名で指定するのは、実行ファイル名を決め打ちにしないためである。
+# SDK 側で名前や同梱物が変わっても追随が要らない。
+#
+# 現時点で R-1 は SDK を**呼び出さない**。依存として入れ、配布経路だけ先に通しておく
+# (SPIKE-13 の第 1 段階。詰まりが D-1 まで見つからないと配布経路ごと失われる)。
+asarUnpack:
+  - resources/**
+  - node_modules/@anthropic-ai/claude-agent-sdk-*/**
+win:
+  executableName: closta
+nsis:
+  artifactName: ${name}-${version}-setup.${ext}
+  shortcutName: ${productName}
+  uninstallDisplayName: ${productName}
+  createDesktopShortcut: always
+mac:
+  entitlementsInherit: build/entitlements.mac.plist
+  extendInfo:
+    - NSCameraUsageDescription: Application requests access to the device's camera.
+    - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
+    - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
+    - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
+  notarize: false
+dmg:
+  artifactName: ${name}-${version}.${ext}
+linux:
+  target:
+    - AppImage
+    - snap
+    - deb
+  maintainer: electronjs.org
+  category: Utility
+appImage:
+  artifactName: ${name}-${version}.${ext}
+npmRebuild: false

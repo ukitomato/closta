@@ -3,7 +3,7 @@ domain: isolation
 status: needs-human-review
 owner: ukitomato
 generated_by: human (PLAN.md を素案として再導出。素案の container domain を改名・拡張)
-last_reviewed: 2026-09-12
+last_reviewed: 2026-09-15
 related_adrs:
   - docs/decisions/0008-no-persistent-environment-provisioning.md
   - docs/decisions/0012-docker-control-via-cli.md
@@ -26,8 +26,10 @@ sandbox capability の判定（Seatbelt / bubblewrap を含む）、権限モー
 
 ### In scope
 
-- **権限モードのゲート** — `capabilities.autoModeSafe === false` のランタイムで
-  Auto / `bypassPermissions` を選択不可にする（Principle III の実行主体）
+- **権限モードのゲート** — `capabilities.autoModeSafe !== true` のランタイムで
+  Auto / `bypassPermissions` を選択不可にする（Principle III の実行主体）。
+  **`autoModeSafe` は 3 値である** — `=== false` で書くと `unknown`（判定中 / 判定不能）が
+  素通りする（Constitution v1.2.0 / [AD-024](../../decisions/0024-constitution-verification-paths.md) #13）
 - **sandbox 設定** — ランタイムごとの sandbox 可否判定、許可ドメイン等を `--settings` で渡す
 - **使い捨てコンテナのライフサイクル** — イメージ存在確認、起動、終了時の破棄 / 保持、孤児回収
 - **作業領域戦略の決定と実施** — `bind` / `clone-ephemeral` / `clone-volume` の選択と、
@@ -36,6 +38,8 @@ sandbox capability の判定（Seatbelt / bubblewrap を含む）、権限モー
 - **隔離設計の実施** — 作業フォルダのみマウント、非 root、ネットワーク制限、リソース上限
 - **`sessionStore` ミラー** — コンテナ内 JSONL をホスト側 SQLite に写す
 - **隔離状態の可視化ポリシー** — 何をもって「隔離されている」と表示するかの定義
+- **安全とみなす sandbox 種別の定義** — `SAFE_SANDBOX_KINDS` の所有。
+  **I-3 で `runtime` から移す**（AD-025 §5）。移すまでは `runtime` が暫定的に持つ
 
 ### Out of scope
 
@@ -79,7 +83,13 @@ sandbox capability の判定（Seatbelt / bubblewrap を含む）、権限モー
 - **使い捨てコンテナ**: セッションに紐づき、終了時に破棄されるコンテナ。
   **永続環境の構築をしないという原則の唯一の例外**
 - **endpoint**: `DockerRuntime` が docker CLI に到達する経路（`host` / `wsl:<distro>`）
-- **autoModeSafe**: そのランタイムで無人実行を許してよいか
+- **autoModeSafe**: そのランタイムで無人実行を許してよいか。**3 値**（`true` / `false` / `unknown`）。
+  判定の唯一の経路は `isAutoModeAllowed()` であり、条件は `!== true` である
+- **SAFE_SANDBOX_KINDS**: 安全とみなす sandbox 種別の**allowlist**。
+  denylist にすると未知の種別が安全側に倒れる。
+  **R-1 の時点では `runtime` が持ち、I-3 で本 domain に移す**（[AD-025](../../decisions/0025-workspace-folder-carries-location.md) §5）
+- **seccompFilter**: seccomp フィルタの有無（`capabilities` の一項目。3 値）。
+  **これを `autoModeSafe` に織り込むかは本 domain が I-3 で決める**
 - **sessionStore**: コンテナ内 JSONL のホスト側ミラー
 - **隔離バッジ**: セッションが境界の内側で動いていることを示す表示
 
@@ -87,7 +97,10 @@ sandbox capability の判定（Seatbelt / bubblewrap を含む）、権限モー
 
 ## 業務ルール / 不変条件
 
-- `autoModeSafe === false` のランタイムで `auto` / `bypassPermissions` を選択可能にしてはならない（Principle III）。
+- `autoModeSafe !== true` のランタイムで `auto` / `bypassPermissions` を選択可能にしてはならない（Principle III）。
+  判定は**単一の関数**（`isAutoModeAllowed`）に集約する。
+  `=== false` と書くと `unknown` が素通りし、ゲートが機能しない
+  （[AD-024](../../decisions/0024-constitution-verification-paths.md) #13 / [AD-025](../../decisions/0025-workspace-folder-carries-location.md) §5）。
   **`dontAsk` は制限対象に含めない** — 「聞かずに拒否」であり隔離されていない環境でこそ有用
   （[AD-020](../../decisions/0020-sdk-emitted-message-inventory.md)）
 - `bypassPermissions` の選択には `allowDangerouslySkipPermissions: true` と明示確認を要する

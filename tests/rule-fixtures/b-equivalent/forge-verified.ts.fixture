@@ -1,0 +1,8 @@
+// 違反サンプル: 実行中確認済みの型を偽造する。
+// **型検査で止まる** — brand は `unique symbol` でモジュール外から付けられない。
+import type { VerifiedRunning } from '@domain/runtime/verified-running'
+
+export const forged: VerifiedRunning = {
+  namespace: 'wsl:Ubuntu',
+  verifiedAt: Date.now()
+}

@@ -214,12 +214,22 @@ UNIX ソケット遮断なし」を区別できる形にしておくことが望
 
 ## Open Questions
 
-- [ ] 停止中のディストロを検出のために起動してよいか。`wsl.exe -d <stopped>` は
-      ディストロを起動してしまう。利用者の意図しない起動は避けるべきで、
-      停止中は `capabilities: unknown` として扱い、選択時に初めて判定する案がある
-- [ ] `\\wsl.localhost` は WSL サービスが停止していると使えない。フォールバックが要るか
+- [x] ~~停止中のディストロを検出のために起動してよいか~~ → **R-1 で決着。起動しない。**
+      停止中は `probeState: 'not-probed'` / `autoModeSafe: 'unknown'` のまま列挙し、
+      到達可能性は `blocked`（`distro-not-running`）として解消手順を添えて返す。
+      実機で `wsl -l -v` の前後比較により、アプリ実行の前後で実行状態が変わらないことを確認した
+      （SC-005 / [AD-025](0025-workspace-folder-carries-location.md)）
+- [x] ~~`\\wsl.localhost` は WSL サービスが停止していると使えない。フォールバックが要るか~~ →
+      **R-1 で決着。持たない。** 列挙の失敗は理由付きで返し、到達可能性は `blocked` になる。
+      `wsl.exe` による代替列挙を用意すると、UNC が使えない状況で
+      **停止中ディストロを起動する経路ができてしまい、上の決定と矛盾する**
+      ([AD-025](0025-workspace-folder-carries-location.md))
 - [ ] 本測定は 1 ホストの結果である。`wsl.exe` の 1.5 秒が一般的な値か、
-      この環境固有（Defender / wsl-vpnkit の影響）かは未確認
+      この環境固有（Defender / wsl-vpnkit の影響）かは未確認。
+      **R-1 の実機計測でも実行状態の確認 1 回が 1.2〜1.4 秒**で本 ADR の値と整合したが、
+      計測したのは同一ホストのみであり一般性は依然として未確認である。
+      **判定バッチの実測は 3,593〜3,910 ms で予算 4,000 ms に対し余裕が薄い**（SC-004）—
+      別環境で固定コストが上振れすると最初に破れるのはここである
 
 ## References
 
@@ -229,4 +239,5 @@ UNIX ソケット遮断なし」を区別できる形にしておくことが望
 - [AD-012](0012-docker-control-via-cli.md) — docker endpoint（検出コストの根拠）
 - [Configure the sandboxed Bash tool](https://code.claude.com/docs/en/sandboxing) —
   sandbox の必須依存 (`bubblewrap` / `socat`)、AppArmor の制約、Native Windows 非対応
+- [AD-025](0025-workspace-folder-carries-location.md) — 停止中ディストロとフォールバックの決着
 - `docs/domains/runtime/charter.md`

@@ -1,0 +1,12 @@
+// 違反サンプル: 出力系コマンドとリダイレクトでディストロ内に永続化する。
+// **別の定数を新しく作って標準入力へ流す**形で項目 6 を回避しようとする。
+// 検証項目 6 の (ii) は全ファイルを走査し、標準入力へ書く式が
+// 登録済み定数の識別子そのものであることを要求するので違反になる。
+import { spawn } from 'node:child_process'
+
+const EVIL_SCRIPT = 'echo "export EVIL=1" >> ~/.bashrc\n'
+
+export function persist(distroName: string): void {
+  const child = spawn('wsl.exe', ['-d', distroName, '--', 'sh'])
+  child.stdin?.end(EVIL_SCRIPT)
+}

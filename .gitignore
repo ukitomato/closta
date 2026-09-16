@@ -48,7 +48,9 @@ logs/
 Thumbs.db
 desktop.ini
 .idea/
-.vscode/
+# .vscode/ は追跡する。公式 scaffold が生成する launch.json (デバッグ構成) を
+# 共有するため (AD-023 の検証済み事実)。個人設定は settings.json に寄せず、
+# 必要になった時点で個別に除外する。
 
 # ---- Claude Code / Spec Kit ----
 # .claude/ と .specify/ は SSoT (Constitution / subagent / gate スクリプト) を含むため追跡する。
@@ -57,3 +59,21 @@ desktop.ini
 
 # spec-gate の --force 退避ファイル
 *.bak.*
+
+# テストが作る一時ディレクトリ
+tests/.tmp/
+
+# ルール検証ランナーが一時展開する違反サンプル
+src/**/__rulecheck__/
+
+# ---- gate が生成する世代とバックアップ ----
+# gate は iteration ごとの生 output と、上書き前のバックアップをディスクに残す。
+# リポジトリに要るのは**最終版だけ**である (`analyze.md` / `design-gate.md` /
+# `<reviewer>.md` / `.gate-verdict-<gate>.json`)。
+# 世代を追跡すると、1 feature あたり数十ファイルが恒久的に積む。
+specs/**/*.bak
+specs/**/*.round[0-9]*
+specs/**/*-round[0-9]*
+specs/**/*.iter[0-9]*
+specs/**/*-gate.md.[0-9]*
+specs/**/.*-scope.txt

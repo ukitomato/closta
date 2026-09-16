@@ -1,0 +1,5 @@
+// 違反サンプル (機械検証では捕まらない): ui でパス文字列を連結する。
+// import が発生しないので lint も依存グラフも掛からない。
+export function childPath(parent: string, name: string): string {
+  return `${parent}/${name}`
+}

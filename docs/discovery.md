@@ -2,23 +2,36 @@
 status: active
 generated_by: /spec-gate scan
 generated_at: 2026-09-12T11:27:40Z
-reviewed_at: 2026-09-13
-revision: 2
+reviewed_at: 2026-09-15
+revision: 3
 ---
 
 # Project Discovery
 
-> **revision 2 (2026-09-13)**: 初版は 2026-09-12 の `/spec-gate scan` によるスナップショット。
-> その後の作業で事実が変わった箇所を更新したうえで `status: active` に昇格した。
+> **revision 3 (2026-09-15)**: R-1 (フォルダ登録とランタイム検出) の実装が完了し、
+> **「detected: none」はすべて成立しなくなった。** Tech Stack と Build / Test / Lint を実測値に置き換えた。
 > `convention-reviewer` と `lint-agent` は本ファイルの Tech Stack section を SSoT として
 > 読むため、記述の鮮度が直接それらの判断に効く。
+> **旧記述を残したままにすると、lint コマンドを「存在しない」と判断して検査が丸ごと飛ぶ。**
 >
-> **初版から変わっていない最重要事項**: アプリケーションのソースコードは依然として **0 行**である。
-> Tech Stack の「detected: none」は現在も正しい。
+> revision 2 (2026-09-13) までの記述は履歴として下の表に残す。
+> 初版は 2026-09-12 の `/spec-gate scan` によるスナップショットである。
+
+## revision 3 での主な更新
+
+| 項目 | revision 2 (2026-09-13) | 現在 (2026-09-15) |
+|---|---|---|
+| Project type | unknown (greenfield / 未着手) | **Electron デスクトップアプリ** |
+| アプリケーションコード | **0 行** | `src/` に **89 ファイル / 約 14,000 行** (TypeScript / TSX) |
+| Primary language | detected: none | **TypeScript 5.9.3** |
+| Frameworks | detected: none | **Electron 39 / electron-vite 5 / Vite 7 / React 19 / Tailwind CSS 4 / assistant-ui 0.15** |
+| Package manager | lockfile 不在 | **pnpm 12** (`pnpm-lock.yaml`。`nodeLinker: hoisted`) |
+| Build / Test / Lint | detected: none | **すべて存在する**（下の Build / Test / Lint section を参照） |
+| git | コミット 17 本、追跡 149 ファイル | **`main` は 10 本**、追跡 374 ファイル、branch `001-runtime-folder-registration-runtime-detection`。**R-1 の変更はまだ未コミット** |
 
 ## revision 2 での主な更新
 
-| 項目 | 初版 (2026-09-12) | 現在 (2026-09-13) |
+| 項目 | 初版 (2026-09-12) | revision 2 (2026-09-13) |
 |---|---|---|
 | git | コミット 1 本、追跡 1 ファイル、remote 未設定 | コミット 17 本、追跡 149 ファイル、remote `ukitomato/closta` |
 | `.gitignore` | 不在 | 配置済み |
@@ -35,40 +48,59 @@ revision: 2
 
 ### Top-level
 
-- **Project type**: **unknown (greenfield / 未着手)** — アプリケーションのソースツリーが存在しない。リポジトリの実体はドキュメント (PLAN.md / docs/) と Spec Kit / spec-gate の足場のみ。**revision 2 時点でも本項は変わらない。**
-- **Primary language**: **detected: none.** 実行可能なアプリケーションコード (`.ts` / `.js` / `.py` / `.dart` 等) は 0 件。存在するコードは vendored tooling のみ:
+- **Project type**: **Electron デスクトップアプリ** (revision 3 で確定)。`electron-vite` の公式 scaffold を出発点に、`app` / `ui` / `agents` / `infra` / `domain` の 5 レイヤで構成する ([AD-023](decisions/0023-application-architecture.md))。
+- **Primary language**: **TypeScript 5.9.3**。`src/` に 89 ファイル / 約 14,000 行 (`.ts` / `.tsx`)、`scripts/` に検証スクリプト 5 ファイル (`.mjs`)。
+  `tsconfig.json` は solution-style で、`tsconfig.node.json` (main / preload / domain / agents) と `tsconfig.web.json` (renderer) の 2 project を参照する。
+  **root は `files: []` なので lint の解決器を向けてはならない** — 向けるとどのファイルも project に属さず `paths` が引かれない ([AD-025](decisions/0025-workspace-folder-carries-location.md))。
+  以下は**プロダクト外**の vendored tooling である:
   - Bash: `C:\dev\closta\.claude\skills\spec-gate\scripts\` (3 ファイル, 1213 行) + `scripts\tests\` (5 ファイル, 440 行)
   - PowerShell: `C:\dev\closta\.specify\scripts\powershell\` (5 ファイル)
-- **Frameworks**: **detected: none.** 観点 A の manifest glob (package.json / pyproject.toml / pubspec.yaml / Cargo.toml / go.mod / pom.xml / *.csproj / Gemfile / composer.json / Dockerfile / docker-compose / Makefile) は **全て 0 件ヒット**。
-- **Package manager lockfile**: absent (pnpm-lock.yaml / package-lock.json / yarn.lock いずれも不在)。
+- **Frameworks**: **Electron 39 / electron-vite 5 / Vite 7.3 / React 19 / Tailwind CSS 4 / `@assistant-ui/react` 0.15 / zustand 5**。
+  assistant-ui は **design system と element を入れただけで、チャットの runtime / backend は繋いでいない** (AD-025 §6 (b))。
+- **Package manager**: **pnpm 12** (`pnpm-lock.yaml` present)。`pnpm-workspace.yaml` に `nodeLinker: hoisted` を置く。
+  **Electron のパッケージングツールチェーンが `node_modules` の物理配置を要求するため必須**であり、`packages:` キーは持たない (monorepo ではない)。
 - **`.gitignore`**: 配置済み。pnpm / Electron / Vite / electron-builder / better-sqlite3 の生成物、`.env` 系と鍵ファイル (Principle V の誤コミット経路)、SQLite ファイル、エディタ / OS 由来ファイルを除外。
-- **Git**: `main` ブランチ、コミット 17 本、追跡ファイル 149 件、remote `https://github.com/ukitomato/closta.git` (未 push)。
+- **Git**: branch `001-runtime-folder-registration-runtime-detection` (base `main`)、`main` のコミット 10 本、追跡ファイル 374 件、remote `https://github.com/ukitomato/closta.git` (未 push)。
+  **R-1 の変更はまだ未コミットである。**
 
-### Declared (PLAN.md §2「技術スタック（確定）」— documented only, NOT installed)
+### Declared (PLAN.md §2「技術スタック（確定）」— 宣言値と on-disk の対照)
 
-以下は `C:\dev\closta\PLAN.md:65-101` が「確定」と宣言する意図スタック。**ディスク上に対応する artifact は 1 つも存在しない**。検出結果ではなく charter の宣言として扱うこと。
+以下は `C:\dev\closta\PLAN.md:65-101` が「確定」と宣言する意図スタック。
+
+**revision 3 での訂正**: 初版と revision 2 は `on-disk` を全行 `absent` としていたが、
+R-1 の実装で成立しなくなった。**`on-disk` 列を実測値に置き換えた。**
+present の行にも「入っているが使っていない」ものがあるので、括弧内の限定まで読むこと。
 
 | レイヤ | 宣言値 | 根拠 | on-disk |
 |---|---|---|---|
-| デスクトップシェル | Electron (最新安定版追随) | PLAN.md:71, AD-001 (L106) | absent |
-| ホスト Node.js | 24 (Active LTS) | PLAN.md:72, AD-013 (L252) | absent |
-| 言語 | TypeScript (strict) | PLAN.md:73 | absent |
-| UI | React + assistant-ui (Elements) | PLAN.md:74, §4 | absent |
-| スタイル | Tailwind + assistant-ui design system | PLAN.md:75 | absent |
-| 状態管理 | Zustand (renderer のみ) | PLAN.md:76 | absent |
-| 仮想化 | `@tanstack/react-virtual` | PLAN.md:77 | absent |
-| エージェント連携 | `@anthropic-ai/claude-agent-sdk` (TS, V1 `query()`) | PLAN.md:78, AD-002 (L134) | absent |
-| supervisor | Electron `utilityProcess` (単独起動可能) | PLAN.md:79, AD-006/AD-010 | absent |
-| ターミナル | xterm.js + node-pty | PLAN.md:80 | absent |
-| 秘密保管 | Electron `safeStorage` (OS キーチェーン) | PLAN.md:81, AD-011 (L229) | absent |
-| 永続化 | SQLite (better-sqlite3) | PLAN.md:82 | absent |
-| コンテナ制御 | Docker CLI 呼び出し | PLAN.md:83, AD-012 (L243) | absent |
-| パッケージング | electron-builder (`asarUnpack` 必須) | PLAN.md:84, AD-009 (L210) | absent |
-| Lint | ESLint + `no-restricted-imports` | PLAN.md:85 | absent |
-| テスト | Vitest (unit) / Playwright (E2E) | PLAN.md:86 | absent |
-| パッケージマネージャ | pnpm | PLAN.md:795 | absent |
+| デスクトップシェル | Electron (最新安定版追随) | PLAN.md:71, AD-001 (L106) | **present** (39.8.10) |
+| ホスト Node.js | 24 (Active LTS) | PLAN.md:72, AD-013 (L252) | **present** (24.15.0。CI は 24 / 26) |
+| 言語 | TypeScript (strict) | PLAN.md:73 | **present** (5.9.3) |
+| UI | React + assistant-ui (Elements) | PLAN.md:74, §4 | **present** (React 19 / `@assistant-ui/react` 0.15)。**runtime / backend は未接続** |
+| スタイル | Tailwind + assistant-ui design system | PLAN.md:75 | **present** (Tailwind 4)。design system は element に付随する形で導入 (AD-025 §6 (b)) |
+| 状態管理 | Zustand (renderer のみ) | PLAN.md:76 | **present** (5) |
+| 仮想化 | `@tanstack/react-virtual` | PLAN.md:77 | absent (R-3 で入る) |
+| エージェント連携 | `@anthropic-ai/claude-agent-sdk` (TS, V1 `query()`) | PLAN.md:78, AD-002 (L134) | **present** (0.3.270)。**依存として入れただけで呼び出していない** (AD-026) |
+| supervisor | Electron `utilityProcess` (単独起動可能) | PLAN.md:79, AD-006/AD-010 | absent (X-5 で入る)。**実体のディレクトリは `src/agents/`** |
+| ターミナル | xterm.js + node-pty | PLAN.md:80 | absent (optional scope) |
+| 秘密保管 | Electron `safeStorage` (OS キーチェーン) | PLAN.md:81, AD-011 (L229) | absent (X-3 で入る) |
+| 永続化 | SQLite (better-sqlite3) | PLAN.md:82 | absent (I-1 で入る)。R-1 の設定は JSON ファイル |
+| コンテナ制御 | Docker CLI 呼び出し | PLAN.md:83, AD-012 (L243) | absent (I-1 で入る)。**docker を名指せるモジュールは 0 件** (検証項目 4) |
+| パッケージング | electron-builder (`asarUnpack` 必須) | PLAN.md:84, AD-009 (L210) | **present** (26.15.3)。`asarUnpack` 動作確認済み (AD-026) |
+| Lint | ESLint + `no-restricted-imports` | PLAN.md:85 | **present** (ESLint 9 + `eslint-plugin-boundaries` + dependency-cruiser 18) |
+| テスト | Vitest (unit) / Playwright (E2E) | PLAN.md:86 | **Vitest present** (5)。**Playwright absent** |
+| パッケージマネージャ | pnpm | PLAN.md:795 | **present** (12.4.1) |
 
-宣言されたランタイム抽象 (AD-003, PLAN.md:147-160): `DirectRuntime` / `WslRuntime` / `Win32Runtime` / `DockerRuntime`。宣言された branded type (AD-004): `HostPath` / `RuntimePath`。
+宣言されたランタイム抽象 (AD-003, PLAN.md:147-160): `DirectRuntime` / `WslRuntime` / `Win32Runtime` / `DockerRuntime`。
+
+**revision 3**: R-1 で実装したのは `Win32Runtime` と `WslRuntime` の**検出**である
+(`AgentRuntime.launch` は未実装)。`DockerRuntime` は I-1、`DirectRuntime` は OPT-mac。
+
+branded type は AD-004 の 2 つ (`HostPath` / `RuntimePath`) から
+**3 名前空間** (`HostPath` / `RuntimePath` / `WslUncPath`) に一般化した。
+WSL 側の識別子は**ディストロ粒度**で持つ — `\\wsl.localhost\Ubuntu\` と
+`\\wsl.localhost\Debian\` は別のファイルシステムであり、1 つの brand にすると
+一方のパスを他方のランタイムに渡せてしまう ([AD-025](decisions/0025-workspace-folder-carries-location.md))。
 
 ### Per workspace (monorepo only)
 
@@ -79,26 +111,87 @@ revision: 2
 `nodeLinker: hoisted` のみ。`package.json.workspaces` / `turbo.json` / `nx.json` / Cargo workspace /
 `go.work` はいずれも 0 件。PLAN.md も monorepo を宣言しておらず、P-1 / P-9 (L571, L606) は単一パッケージ内の `runtime/` / `supervisor/` ディレクトリ層に対する ESLint 制約として記述されている。
 
+**revision 3 注記**: PLAN.md が名指す `runtime/` / `supervisor/` は**実ディレクトリとして存在しない**。
+[AD-023](decisions/0023-application-architecture.md) のレイヤ構成では
+`supervisor` の実体が `src/agents/`、プラットフォーム分岐の許可先が `src/main/infra/runtime/` である。
+正本は Constitution であり、検証条件は
+[AD-024](decisions/0024-constitution-verification-paths.md) #1 / #6 / #8 で追随済み。
+**PLAN.md の記述を根拠に `supervisor/` を探すと 0 件ヒットになり、「検証対象が無い」と誤って結論する。**
+
 ---
 
 ## Build / Test / Lint
 
-**detected: none.** 実行可能な build / test / lint コマンドはリポジトリ上に存在しない (`package.json.scripts` / `Makefile` / `pyproject.toml [tool.*]` いずれも不在)。
+**すべて存在する** (revision 3)。`convention-reviewer` / `lint-agent` はこの表を正とする。
+**コマンドは `pnpm` で呼ぶ。** 以下はいずれも CI (`.github/workflows/verify.yml`) の 1 ステップでもある。
 
-現在ディスク上で実行可能な唯一の自動化:
+| 種別 | コマンド | 何を見るか |
+|---|---|---|
+| **lint** | `pnpm lint` | ESLint 9 (`eslint.config.mjs`)。`eslint-plugin-boundaries` によるレイヤ間の許可行列と、`no-restricted-imports` による標準モジュールの直接 import 禁止 |
+| **型検査** | `pnpm typecheck` | `tsconfig.node.json` と `tsconfig.web.json` の 2 project を順に `tsc --noEmit` |
+| **依存グラフ** | `pnpm depcruise` | dependency-cruiser 18 (`.dependency-cruiser.js`)。**推移的な到達**と循環、`require()` 形式 |
+| **Constitution 検証** | `pnpm check:constitution` | `scripts/constitution/check.mjs`。11 項目。許可リストの正本は `scripts/constitution/allowlists.mjs` |
+| **ユニットテスト** | `pnpm test` | Vitest 5。2 project (node / renderer)。renderer は jsdom + `pool: 'threads'` |
+| **ルール検証** | `pnpm test:rules` | `scripts/rules/run.mjs`。**違反サンプルを検査対象へ展開し、期待した検出器が発火することを確かめる** |
+| **ビルド** | `pnpm build` | 型検査 → `electron-vite build` |
+| **パッケージング** | `pnpm build:win` | `scripts/build/package.mjs` 経由で `electron-builder` ([AD-026](decisions/0026-packaging-first-pass.md)) |
+| **整形** | `pnpm format` | Prettier。**markdown は対象外** (`.prettierignore`。全角の表が崩れ、コードフェンスからセミコロンが消える) |
+
+### lint / 検証が「違反 0」でも足りない理由
+
+**ルールは「書いた」ことではなく「違反サンプルで発火した」ことで確認する。**
+R-1 の実装中に、書いてあるのに 1 件も一致しないルール・評価されない設定・
+「未知」に落ちて判定を免れる依存が**実測で 5 件**見つかった (AD-025)。
+どれも「違反 0 件」と区別がつかない。
+
+`pnpm test:rules` が 21 件の違反サンプルを**1 件ずつ展開して**期待表と突き合わせる (AD-027)。
+**機械検証で捕まらない経路が 2 件あり、それも期待表に `none` として明記してある** —
+捕まらない経路を列挙せずに「全数検出」と言うと、検証の主張そのものが嘘になる。
+
+**「全件一致」の範囲を正確に読むこと。** 照合されるのは期待表が**宣言した**検出器と規則だけである。
+`check.mjs` の 11 項目のうち発火確認があるのは 5 項目、`pending` 1 項目、**確認なし 5 項目**である
+(pr-gate Round 2 の platform-boundary H-005)。「21 件一致」は**宣言した期待が満たされた**ことを
+示すのであって、検証項目の全数が確かめられたことを示さない。
+
+### R-1 時点の実測値 (2026-09-16 / AD-027 後)
+
+| 検証 | 結果 |
+|---|---|
+| `pnpm lint` | 違反 **0** |
+| `pnpm typecheck` | エラー **0** |
+| `pnpm depcruise` | 違反 **0** (118 modules / 416 dependencies) |
+| `pnpm check:constitution` | 違反 **0** (ok 10 / 検査対象なし 1) |
+| `pnpm test` | 15 files / **264 passed** |
+| `pnpm test:rules` | 期待表と**全件一致** (21 件) |
+
+> **訂正 (2026-09-16 / AD-027 / pr-gate Round 2)**
+>
+> 本表は当初 2026-09-15 時点の値 (114 modules / 395 dependencies、11 files / 213 passed、
+> 違反サンプル 20 件) を記録していた。**そのうち「20 件すべて一致」は 1 行が偽だった** —
+> `wsl-args-array` が期待していた項目 `#1` は、`check.mjs` が全項目の見出しを状態に関わらず
+> 印字するため**構造的に常に満たされていた**。AD-027 で 1 件ずつ展開する形に改め、
+> `#N` を `[VIOLATE] #N` で照合するようにし、期待を訂正した。
+>
+> 数値の変化 (modules / dependencies / test 件数) は R-1 の実装とゲート対応でコードが増えたためである。
+
+正本は [`.specify/memory/constitution.md`](../.specify/memory/constitution.md) の
+`## Existing violations summary` である。
+
+### vendored tooling の self-test (プロダクト外)
 
 | 種別 | コマンド | 場所 |
 |---|---|---|
-| tooling test | `bash .claude/skills/spec-gate/scripts/tests/run-all.bash` | `C:\dev\closta\.claude\skills\spec-gate\scripts\tests\run-all.bash` (5 test 本体: cascade-enforce / spec-id-allocate / truncate-subject / verdict-validate / viewpoint-coverage) |
+| tooling test | `bash .claude/skills/spec-gate/scripts/tests/run-all.bash` | spec-gate v0.2.0 自身の self-test (cascade-enforce / spec-id-allocate / truncate-subject / verdict-validate / viewpoint-coverage) |
 
-これは vendored skill (spec-gate v0.2.0) 自身の self-test であり、**プロダクトのテストではない**。
+**プロダクトのテストではない。** `pnpm test` とは別物として扱う。
 
-### Planned (PLAN.md 宣言、未セットアップ)
+### まだ宣言だけのもの
 
-- Build: `vite` / `tsc` / `electron-builder`、ネイティブ再ビルドに `electron-builder install-app-deps` (PLAN.md:84, 260-262)
-- Test: Vitest (unit) / Playwright (E2E)。加えて P-13 (L623-626) が「日本語スクリーンショット比較を CI に持つ」ことを検証条件に指定
-- Lint: ESLint + `no-restricted-imports` (P-1 が `node:path` 直 import を、P-9 が `supervisor/` での `electron` import を error 化する前提)
-- 機械検証として grep ベースの Principle 検証も宣言済み: P-2 は `grep -rn "process.platform" src/ --exclude-dir=runtime` が空であること (L576)、P-8 は `sudo` / `wsl --import` / `docker build` / `apt` 実行箇所が存在しないこと (L603)
+- **E2E**: Playwright。未導入。Principle VIII の Automated 2 項目
+  (composer の IME テスト / 日本語スクリーンショット比較) はここに乗る予定であり、
+  **R-1 の CI には載っていない** ([AD-024](decisions/0024-constitution-verification-paths.md) #18)
+- **SQLite**: better-sqlite3。未導入 (I-1 の `sessionStore` で入る)
+- **PTY**: 未導入 (optional scope)
 
 ---
 
@@ -116,11 +209,26 @@ flavor artifact (`firebase.json` / `app.yaml` / `serverless.yml` / `wrangler.tom
 
 ## CI/CD
 
-- **Provider: none detected.**
-- `.github/` ディレクトリ **不在**。`.gitlab-ci.yml` / `Jenkinsfile` / `azure-pipelines.yml` / `bitbucket-pipelines.yml` いずれも不在。
-- Pipelines: **0 件**。
+**revision 3: 構築済み。** 初版と revision 2 の「none detected」は成立しない。
 
-PLAN.md は CI の存在を複数箇所で前提にしている (AD-013 L276: 「CI のマトリクスは Active LTS を基準にし、Current / Alpha は allow-failure ジョブで回す」、P-13 L626: 「日本語を含むスクリーンショット比較が CI に存在すること」)。宣言と実体の乖離は下記 `gap` として記録。
+- **Provider: GitHub Actions.**
+- ワークフロー: [`.github/workflows/verify.yml`](../.github/workflows/verify.yml) の 1 本 (`verify`)。
+  `push` (main) と `pull_request` で走る
+- **ランナーは `windows-latest`。** R-1 の検証対象の大半が Windows 固有である
+  (`wsl.exe` の呼び出し面、UNC 経路、ドライブレター、パス正規化) ため、
+  Linux ランナーで回すと「通ったが実機の条件を見ていない」状態になる
+- Node マトリクス: **24 (Active LTS。必須)** と **26 (Current。`continue-on-error`)**
+  ([AD-013](decisions/0013-node-and-electron-versioning.md))
+- ステップ: install → lint → typecheck → depcruise → check:constitution → test → **test:rules** → build。
+  **1 検証 1 ステップ**にしてある (まとめるとどれが落ちたかログを読まないと分からない)
+
+### CI に載っていないもの
+
+| 対象 | 理由 |
+|---|---|
+| Principle VIII の Automated (composer の IME テスト / 日本語スクリーンショット比較) | (A) は composer が無く**対象が無い**、(B) は R-2 の E2E 基盤に相乗りする ([AD-024](decisions/0024-constitution-verification-paths.md) #18)。**CI が緑であることは本 Principle について何も示さない** |
+| インストーラ生成 | FR-043 は「1 回通す」ことを求めており毎回は求めていない。R-1 では手元で 1 回通し、結果を [AD-026](decisions/0026-packaging-first-pass.md) に記録した |
+| 実機依存の計測 (SC-004) / 停止中ディストロの不起動 (SC-005) | ランナーに WSL が無い。quickstart V-1〜V-7 が担う |
 
 ---
 
@@ -151,6 +259,38 @@ PLAN.md は CI の存在を複数箇所で前提にしている (AD-013 L276: �
 ```
 
 存在しない主要ディレクトリ: `src/`, `specs/`, `test/`, `.github/`, `node_modules/`, `.claude/commands/`。
+
+### revision 3 で加わったディレクトリ
+
+上の Map は初版 (2026-09-12) のスナップショットである。R-1 の実装で以下が加わった。
+
+```
+.
+├── .github/workflows/verify.yml   # CI (SH-022)
+├── src/
+│   ├── domain/                    # 型・パス API・純粋関数。**I/O を持たない**
+│   │   ├── runtime/               #   名前空間 / パス型 / パス API / capabilities / DTO
+│   │   └── workspace/             #   フォルダ / 登録簿 / 到達可能性 / 解決 / 接頭辞照合
+│   ├── agents/                    # supervisor の実体。**Electron 非依存** (R-1 では空に近い)
+│   ├── main/
+│   │   ├── app/                   #   Electron の組み立て。IPC / 検証 / 合成ルート / store
+│   │   └── infra/                 #   OS 資源の境界。runtime/ fs/ settings/
+│   ├── preload/                   # 単一 capability。require は `electron` のみ
+│   └── renderer/src/              # UI。features/ 配下に画面ごとのフォルダ
+├── scripts/
+│   ├── constitution/              # 検証スクリプトと許可リストの正本
+│   ├── rules/                     # ルール検証ランナー (test:rules)
+│   └── build/                     # パッケージングのラッパ (AD-026)
+├── tests/
+│   ├── setup/                     # 単体テスト基盤の検証
+│   └── rule-fixtures/             # 違反サンプルと期待表。**通常検証のスコープ外**
+└── specs/001-runtime-folder-registration-runtime-detection/
+```
+
+**`runtime/` と `supervisor/` はトップレベルには存在しない。**
+PLAN.md の旧表記を根拠に探すと 0 件ヒットになる (上の revision 3 注記を参照)。
+
+テストは `src/` 内の実装と同じ場所に置く。`tests/` にあるのは基盤の検証と違反サンプルだけである。
 
 ---
 
@@ -214,6 +354,11 @@ PLAN.md は CI の存在を複数箇所で前提にしている (AD-013 L276: �
   - evidence: repo root 全走査で `LICENSE` / `LICENSE.md` / `NOTICE` **0 件**。一方 `C:\dev\closta\PLAN.md:673` (F-016) が「Windows インストーラを生成」、`PLAN.md:684` (M6) が「自分以外が使える」配布を計画。`PLAN.md:71-86` の宣言スタック (Electron / node-pty / better-sqlite3 / assistant-ui / xterm.js 他) の再配布は各 OSS ライセンスの帰属表示義務を伴う。なお vendored skill `C:\dev\closta\.claude\skills\spec-gate\SKILL.md` は frontmatter で `license: MIT` を宣言しており、本体リポジトリのライセンス未定との非対称がある。
   - **revision 2 時点でも未解消。** 現行定義では配布は **D-1 (M5)** にあたる。Constitution の
     `## 未解決の Principle 候補` に `TODO(license)` として記載済み。
+  - **revision 3: 自プロジェクト分は解消した。** R-1 (SH-031) で `LICENSE` (MIT 全文) を
+    repo root に置き、`package.json` の `license` フィールドと一致させた。
+    **残余は第三者依存の `NOTICE`** であり、D-1 に限定される
+    ([AD-024](decisions/0024-constitution-verification-paths.md) #17)。
+    vendored skill との非対称も解消した
   - priority: `blocking`
   - downstream: charter-drafter (distribution)、constitution-drafter (配布 Principle 候補)
 
@@ -233,10 +378,19 @@ PLAN.md は CI の存在を複数箇所で前提にしている (AD-013 L276: �
   - category: `gap`
   - evidence: `src/` / `app/` / `packages/` いずれも不在。`git ls-files` = `PLAN.md` 1 件のみ。PLAN.md が検証条件で参照する `src/`, `runtime/`, `supervisor/` (L573, L576, L584, L594, L607) は全て未作成。
   - downstream: spec-reverser は全 FR を `[NOT-observed]` とせざるを得ない → **brownfield migrate は成立しない** (下記 quality score 参照)
+  - **revision 3: 解消した。** `src/` に 89 ファイル / 約 14,000 行。
+    ただし `runtime/` / `supervisor/` は**実ディレクトリとしては依然として存在しない** —
+    AD-023 のレイヤ構成では `src/main/infra/runtime/` と `src/agents/` である。
+    **本プロジェクトは greenfield であり、brownfield migrate は今後も使わない**
 
 - **テストディレクトリ / テストランナーが不在**
   - category: `gap`
   - evidence: プロダクトの `test/` / `tests/` / `__tests__/` / `*.spec.ts` **0 件**。Vitest / Playwright は `PLAN.md:86` の宣言のみで devDependency も設定ファイルも不在。唯一存在する `C:\dev\closta\.claude\skills\spec-gate\scripts\tests\` (5 ファイル / 440 行 bash) は **vendored skill 自身の self-test** であり、プロダクトのカバレッジには算入できない。
+  - **revision 3: Vitest は解消した。** `vitest.config.ts` に 2 project (node / renderer)、
+    テスト 11 ファイル / 213 件。テストは `src/` 内の実装と同じ場所に置く
+    (`tests/` には基盤の検証と違反サンプルのみ)。
+    **Playwright (E2E) は未導入のまま** — Principle VIII の Automated 2 項目がここに乗る予定であり、
+    R-1 の CI には載っていない (AD-024 #18)。
   - downstream: test-agent、po-reviewer (H カテゴリ)
 
 - **CI が不在だが PLAN.md は CI の存在を前提にしている**

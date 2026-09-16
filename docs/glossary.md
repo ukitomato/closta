@@ -1,8 +1,8 @@
 ---
 status: needs-human-review
-last_updated: 2026-09-12
+last_updated: 2026-09-15
 generated_by: human (PLAN.md 付録A + §3〜§7 を素材に起草)
-total_terms: 23
+total_terms: 31
 ---
 
 # Glossary (Ubiquitous Language)
@@ -24,8 +24,11 @@ total_terms: 23
 
 #### **AgentRuntime**
 
-- **Definition**: Claude Code プロセスを起動する場所と方法を表す抽象。シングルトンではなく、
-  検出結果から生成される**値**である。`DirectRuntime` / `WslRuntime` / `Win32Runtime` / `DockerRuntime` の 4 実装を持つ
+- **Definition**: Claude Code プロセスを起動する場所と方法を表す**インタフェース**。
+  `descriptor` (検出された事実) と `path` (ランタイム名前空間のパス操作) を持つ。
+  シングルトンではない。`DirectRuntime` / `WslRuntime` / `Win32Runtime` / `DockerRuntime` の 4 実装を持つ
+- **Counterexamples (型)**: 検出結果そのものは `RuntimeDescriptor` である。
+  「検出結果から生成される値」と書くと両者が同じものに読める
 - **日本語表記**: ランタイム
 - **Domain**: `runtime`
 - **Counterexamples**: 「プラットフォーム」（posix / win32）は軸として持たない。
@@ -41,15 +44,32 @@ total_terms: 23
 #### **autoModeSafe**
 
 - **Definition**: そのランタイムで無人実行（Auto / `bypassPermissions`）を許してよいかを示す
-  `capabilities` の一項目。`false` のランタイムでは危険な権限モードを選択可能にしてはならない
+  `capabilities` の一項目。**3 値** (`true` / `false` / `unknown`) を取る
+- **判定の唯一の経路**: `isAutoModeAllowed()`。条件は `=== false` ではなく **`!== true`** である。
+  `unknown` は JavaScript で truthy なので、生の値で真偽判定すると未確認のランタイムが安全側に倒れない
 - **Domain**: `runtime`（表明）/ `isolation`（ゲート）
-- **Ref**: Constitution Principle III
+- **Ref**: Constitution Principle III / [AD-024](decisions/0024-constitution-verification-paths.md) #13
+
+### B
+
+#### **Browse session**
+
+- **Definition**: WSL 側のフォルダを列挙するために、実行状態の確認 (`VerifiedRunning`) を
+  再利用する期間。**上限 30 秒**。1 回のブラウズ操作ごとに `wsl.exe` を呼び直さないためにある
+- **日本語表記**: ブラウズセッション
+- **Domain**: `runtime`
+- **Counterexamples**: `Session` (Claude Code の 1 会話) とは**別概念**である。
+  UI 文言では「フォルダを参照している間」であることが分かる表現を使い、単に「セッション」と書かない
 
 ### C
 
 #### **capabilities**
 
-- **Definition**: `AgentRuntime` が提供する能力。`sandbox` の種別と `autoModeSafe` の可否を持つ
+- **Definition**: `AgentRuntime` が提供する能力。`sandbox` の種別と `autoModeSafe` の可否に加え、
+  `probeState` (未実施 / 実施中 / 実施済み / 失敗) / `seccompFilter` /
+  `missingDependencies` / `probedAt` を持つ
+- **Counterexamples**: 項目の欠落を「問題なし」と読まない。実地判定を経ていない状態は
+  `probeState` が表し、`autoModeSafe` は `unknown` になる
 - **Domain**: `runtime`
 
 #### **Closta**
@@ -59,6 +79,15 @@ total_terms: 23
   隔離・俯瞰・差配の 3 要素を 1 語に含む
 - **Domain**: Cross-domain
 - **Ref**: [AD-014](decisions/0014-product-name-closta.md)
+
+#### **Cross-boundary**
+
+- **Definition**: 作業フォルダの所在とランタイムが別のファイルシステムにまたがる状態。
+  `C:\dev\x` を WSL から `/mnt/c/dev/x` として使う形が典型である。
+  変換自体は成立するが I/O が桁で遅くなるため、選択時に明示する
+- **日本語表記**: 越境
+- **Domain**: `runtime` (判定) / `ui` (表示)
+- **Ref**: [AD-016](decisions/0016-cross-filesystem-performance-cliff.md)
 
 #### **CredentialSource**
 
@@ -112,6 +141,19 @@ total_terms: 23
 - **日本語表記**: 隔離バッジ
 - **Domain**: `isolation`（判定）/ `ui`（表示）
 
+### L
+
+#### **Location**
+
+- **Definition**: 作業フォルダが**どのファイルシステムにあるか**。
+  `{ kind: 'windows' }` または `{ kind: 'wsl', distroName }` を取る
+- **日本語表記**: 所在
+- **Domain**: `runtime`
+- **Counterexamples**: ランタイムではない。同じ所在のフォルダを複数のランタイムから使いうる。
+  パスでもない — 同じ `/home/y/p` が `Ubuntu` と `Debian` の両方に存在しうるため、
+  パスだけでは所在が決まらない
+- **Ref**: [AD-025](decisions/0025-workspace-folder-carries-location.md)
+
 ### M
 
 #### **Model catalog**
@@ -121,6 +163,14 @@ total_terms: 23
 - **Domain**: `provider`
 
 ### P
+
+#### **PathMapping**
+
+- **Definition**: 2 つの名前空間の間の**接頭辞の対応**。`C:\` ↔ `/mnt/c` の形を取る。
+  実地判定の成否とは独立しており、**変換できるかどうかの鍵はこれの有無**である
+- **日本語表記**: パスマッピング
+- **Domain**: `runtime`
+- **Ref**: [AD-015](decisions/0015-wsl-access-strategy.md) / [AD-025](decisions/0025-workspace-folder-carries-location.md)
 
 #### **Preset**
 
@@ -143,6 +193,25 @@ total_terms: 23
 - **Domain**: `provider`
 
 ### R
+
+#### **Reachability**
+
+- **Definition**: あるランタイムからある作業フォルダに**到達できるか**を表す 3 値 —
+  `reachable` / `unreachable` / `blocked`
+- **日本語表記**: 到達可能性
+- **Domain**: `runtime`
+- **Counterexamples**: `blocked` を `unreachable` と混ぜない。前者は
+  「今は届かないが解消手順がある」(停止中のディストロなど) であり、
+  利用者に示すべき次の操作が違う
+- **Ref**: [AD-025](decisions/0025-workspace-folder-carries-location.md)
+
+#### **RuntimeDescriptor**
+
+- **Definition**: 検出で得られた**ランタイムの事実**を表す値。識別子 / 表示名 /
+  種別 / 実行状態 / `capabilities` / `PathMapping` / 検出時刻を持つ
+- **日本語表記**: ランタイム記述子
+- **Domain**: `runtime`
+- **Counterexamples**: `AgentRuntime` はインタフェースであり、これはその `descriptor` にあたる値である
 
 #### **RuntimePath**
 
@@ -180,6 +249,7 @@ total_terms: 23
 #### **supervisor**
 
 - **Definition**: セッションのプロセスとストリームを持つ `utilityProcess`。
+  **実体のディレクトリは `src/agents/`** である (AD-023 のレイヤ構成)。
   **Electron API にもネイティブモジュールにも依存しない**。`node dist/supervisor.js` で単独起動できる
 - **Domain**: `session`
 - **Ref**: [AD-006](decisions/0006-supervisor-in-utility-process.md) / [AD-010](decisions/0010-supervisor-runs-standalone.md)
@@ -207,6 +277,28 @@ total_terms: 23
 - **Domain**: `ui`
 - **Ref**: Constitution Principle XII
 
+### W
+
+#### **WorkspaceFolder**
+
+- **Definition**: 登録された作業フォルダ。**所在 (`Location`) を必ず伴う**。
+  重複判定の鍵は (所在, 正規化済みパス) の組である
+- **日本語表記**: 作業フォルダ
+- **Domain**: `runtime`
+- **Counterexamples**: 「パス」ではない。パスだけで登録すると所在が失われ、
+  越境判定も到達可能性も決められなくなる
+- **Ref**: [AD-025](decisions/0025-workspace-folder-carries-location.md)
+
+#### **WslUncPath**
+
+- **Definition**: Windows 側から WSL のファイルシステムを指す UNC 形式のパス
+  (`\\wsl.localhost\<distro>\...`)。`HostPath` / `RuntimePath` に次ぐ**第 3 の名前空間**であり、
+  識別子はディストロ粒度で持つ (`unc:<distro>`)
+- **Domain**: `runtime`
+- **Counterexamples**: 登録・永続化・IPC が渡すパスの形ではない。
+  **UNC 形式は `infra` の内側に閉じる**
+- **Ref**: [AD-025](decisions/0025-workspace-folder-carries-location.md)
+
 ## Detected synonyms (要統一)
 
 | Concept | 使われている表記 | Proposed canonical | 備考 |
@@ -214,6 +306,8 @@ total_terms: 23
 | AgentRuntime | 「ランタイム」「Runtime」「実行環境」 | `AgentRuntime`（コード）/ ランタイム（日本語文） | 「実行環境」は Provider の意味でも使われうるため避ける |
 | Disposable container | 「使い捨てコンテナ」「コンテナ」 | `Disposable container` / 使い捨てコンテナ | 単に「コンテナ」と書くとイメージと紛れる |
 | Isolation | 「隔離」「サンドボックス」 | 隔離（境界全般）/ sandbox（OS 組み込み機構に限定） | Seatbelt / bubblewrap を指すときのみ sandbox |
+| Location | 「所在」「ロケーション」「置き場所」 | `Location`（コード）/ 所在（日本語文） | 「置き場所」はパスの意味にも読めるため避ける |
+| supervisor | 「supervisor」「agents」 | `supervisor`（役割）/ `src/agents/`（実体のディレクトリ） | 役割名とディレクトリ名が一致しない。どちらを指しているかを明示する |
 
 ## Generic words excluded
 

@@ -1,0 +1,9 @@
+// 違反サンプル: 状態を持つ調停クラスが I/O モジュールを直接 import する。
+// **調停は I/O をインタフェース経由で注入され、自分で取りに行かない** (AD-023 §5 / §7)。
+// R-1 では `folder-service.ts` が `node:crypto` を直接 import しており、
+// この規則が 1 行も無いまま違反形が入っていた (pr-gate Round 1 の C-002)。
+import { randomUUID } from 'node:crypto'
+
+export function createThing(deps: { readonly now: () => number }): { readonly id: string } {
+  return { id: `${randomUUID()}-${deps.now()}` }
+}

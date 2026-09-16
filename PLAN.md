@@ -575,7 +575,13 @@ AD-008 の区分に従い、**イメージは利用者が用意し、コンテ�
 
 `status: active` に昇格させてから design-gate を回すこと。
 
-### P-1: パス操作は必ず `runtime.path` を経由する
+### P-1: パス操作は必ず `domain` のパス API を経由する
+
+> **追随メモ (2026-09-15)**: Constitution v1.2.0 / AD-024 #14 により、Principle I の Statement は
+> 「`domain` が公開するパス API を経由する。ランタイム名前空間の操作は `AgentRuntime.path` として
+> 公開し、ホスト名前空間の操作と接頭辞照合は同モジュール群の別の公開面とする」に改まった。
+> 以下の本文は素材として残すが、**正本は Constitution である**。
+
 アプリケーションコードは `node:path` / `path` を直接 import してはならない。
 - **検証**: ESLint `no-restricted-imports` が `runtime/` 配下以外での import を error にする
 
@@ -599,6 +605,10 @@ API キー・OAuth トークン・AWS 長期キーを SQLite / 設定ファイ�
 
 ### P-6: main process をブロックしない
 - **検証**: supervisor 外に stream の `JSON.parse` 処理が存在しないこと
+- **追随 (2026-09-15)**: supervisor の**実ディレクトリは `src/agents/`** である
+  （[AD-023](docs/decisions/0023-application-architecture.md) のレイヤ構成）。
+  正本は Constitution Principle IX であり、検証条件は
+  [AD-024](docs/decisions/0024-constitution-verification-paths.md) #6 で追随済み
 
 ### P-7: セッションの正本はアプリ外にある
 アプリのストアはキャッシュまたはインデックス。矛盾時は Claude Code 側を正とする。
@@ -612,6 +622,10 @@ OS 設定の書き換え、パッケージのインストール、ディスト�
 
 ### P-9: supervisor は Electron に依存しない
 - **検証**: ESLint が `supervisor/` 配下での `electron` import を error にする
+- **追随 (2026-09-15)**: 実ディレクトリは `src/agents/` である。
+  また **import / require の両形式**を対象とし、**推移的な到達も禁止する** —
+  ESLint は直接 import を、dependency-cruiser は推移的到達を見る。
+  正本は Constitution Principle VII であり、検証条件は AD-024 #1 / #2 で追随済み
 
 ### P-10: 各 feature は単体で動作確認可能な垂直スライスとする
 - **検証**: 各 spec の受け入れ条件に観測可能な振る舞いが 1 つ以上含まれること

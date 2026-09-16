@@ -108,11 +108,21 @@ scaffold が生成する README は破棄し、置き換える。
 （`appId` = `setAppUserModelId()` = `dev.closta.app`）。
 
 **Constitution の機械検証もここで整備する。** Principle I / II / VII は ESLint ルール
-（`no-restricted-imports` による `node:path` 禁止、`process.platform` の `runtime/` 外禁止、
-`supervisor/` での `electron` とネイティブモジュール禁止）、Principle VI は CI の grep
-スクリプトとして実装する。`platform-boundary-reviewer` はこれらを**複製せず**、
+（`no-restricted-imports` による標準パスモジュールの禁止、`process.platform` の
+`src/main/infra/runtime/` 外禁止、**`src/agents/`** での `electron` とネイティブモジュール禁止）と
+**dependency-cruiser による推移的到達の禁止**、Principle VI は検証スクリプト
+（`scripts/constitution/check.mjs`）として実装する。
+`platform-boundary-reviewer` はこれらを**複製せず**、
 ルールが見られない領域だけを担当する設計になっているため、ここでルールが整備されないと
 検査に穴が空く。
+
+**実装後の追記 (2026-09-15)**: 「Automated の正本を grep から lint + グラフ検証 + 検証スクリプトへ」
+移した（[AD-024](decisions/0024-constitution-verification-paths.md) #2 / #7 / #8）。
+grep は補助であって正本ではない。
+さらに、**ルールは「書いた」ことではなく「違反サンプルで発火した」ことで確認する** —
+書いてあるのに 1 件も一致しないルールが実測で 5 件見つかったためである
+（[AD-025](decisions/0025-workspace-folder-carries-location.md)）。
+違反サンプルと期待表は `tests/rule-fixtures/`、検証は `pnpm test:rules` にある。
 
 ### R-2 — セッション列挙（読み取り専用）
 

@@ -69,7 +69,10 @@ AD-003 は `WslRuntime` と `DockerRuntime` が**複数インスタンスを持�
 
 ### PB-4. 権限ゲートの迂回
 
-Principle III は「`autoModeSafe === false` のランタイムで Auto / bypass を選択可能にしてはならない」。
+Principle III は「`autoModeSafe !== true` のランタイムで Auto / bypass を選択可能にしてはならない」
+(Constitution v1.2.0 / AD-024 #13)。**`autoModeSafe` は 3 値である** —
+`=== false` で書かれた判定は `unknown` (判定中 / 判定不能) を素通りさせる。
+判定が単一の関数に集約されているか、その関数が `!== true` で書かれているかを見る。
 UI のセレクトボックスを disabled にするだけでは不十分で、**UI 以外の入口**が残る。
 
 - プリセット適用時に、保存時と異なるランタイムでも権限モードがそのまま通らないか
@@ -105,15 +108,33 @@ Principle VI の grep は `sudo` / `apt` / `wsl --import` / docker の `build` �
 - Principle I の `no-restricted-imports` が、新設ディレクトリや別名 import
   (`import * as p from 'path'`, `require('node:path')`, 動的 import) を取りこぼしていないか
 - Principle II の `process.platform` 検査が、`os.platform()` / `navigator.userAgent` /
-  `process.env.OS` のような等価な経路を見ていないか
-- Principle VII の `supervisor/` 制限が、間接 import（supervisor が import する共通モジュールが
-  electron に依存）を通り抜けていないか
+  `process.env.OS` のような等価な経路と、分割代入・ブラケット記法を見ていないか。
+  **注記 (`platform-ok:`) が整形器で次の行へ送られて例外が無効化されていないか** (AD-024)
+- Principle VII の `src/agents/` 制限が、間接 import（agents が import する共通モジュールが
+  electron に依存）を通り抜けていないか。**ディレクトリ名は `src/agents/` である** —
+  `src/supervisor/` は存在せず、その条件は常に空を返して常に合格する (AD-024 #1)
 - Principle VI の grep が、引数配列での構成を捕捉できる形になっているか
 - ESLint の設定変更が、既存ルールを意図せず緩めていないか
 
 Bash で実際に Constitution の `bad_pattern_grep` を実行し、**ルールが主張どおりに効いているか**を
 確認してよい。ただし結果が 0 件であること自体は本 reviewer の findings にしない
 （それは CI の仕事である）。見るのは「その grep で本当に十分か」である。
+
+**v1.2.0 以降、Automated の正本は grep ではない** (AD-024 #2 / #7 / #8)。
+Principle I / II / V / VI / VII / IX の正本は `eslint.config.mjs` /
+`.dependency-cruiser.js` / `scripts/constitution/` である。`bad_pattern_grep` は補助である。
+したがって本 reviewer が見るべき穴は次の 3 つに移る。
+
+- **ルールが 1 件も一致しない形で書かれていないか。** 実測例: dependency-cruiser のグラフでは
+  npm パッケージが `node_modules/<name>/...` として現れるため、`^electron($|/)` のルールは
+  1 件も一致せず黙って死んでいた
+- **ルールが評価されない設定になっていないか。** 実測例: `boundaries/dependencies` の
+  `checkAllOrigins` は既定 `false` で、外部と標準モジュールの policy を一切評価しない
+- **依存が「未知」に落ちて判定を免れていないか。** 実測例: 解決器を solution-style の
+  root `tsconfig.json` に向けると `paths` が引かれず、62 件が未知に落ちて許可行列を免れていた
+
+**検証スクリプトの報告が `pending` (検査対象が未実装) の項目を `ok` と読み違えないこと。**
+`pending` は「まだ検証していない」であって合格ではない。
 
 ## Owner matrix
 

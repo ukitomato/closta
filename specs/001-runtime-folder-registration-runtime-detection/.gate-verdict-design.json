@@ -1,0 +1,319 @@
+{
+  "gate": "design",
+  "run": "2026-09-14T05:00:00+09:00",
+  "round": 5,
+  "spec_dir": "specs/001-runtime-folder-registration-runtime-detection",
+  "spec_id": "001-runtime-folder-registration-runtime-detection",
+  "tracks": {
+    "analyze": {
+      "status": "ok",
+      "raw_out": "analyze.md",
+      "viewpoint_missing": [],
+      "cascade_demotions": 0,
+      "severity_counts": {
+        "critical": 0,
+        "high": 2,
+        "medium": 3,
+        "low": 3
+      }
+    },
+    "po-reviewer": {
+      "status": "ok",
+      "raw_out": "po-reviewer.md",
+      "viewpoint_missing": [],
+      "cascade_demotions": 0,
+      "severity_counts": {
+        "critical": 0,
+        "high": 1,
+        "medium": 3,
+        "low": 0
+      }
+    },
+    "architecture-reviewer": {
+      "status": "ok",
+      "raw_out": "architecture-reviewer.md",
+      "viewpoint_missing": [],
+      "cascade_demotions": 0,
+      "severity_counts": {
+        "critical": 0,
+        "high": 1,
+        "medium": 1,
+        "low": 1
+      }
+    },
+    "platform-boundary-reviewer": {
+      "status": "ok",
+      "raw_out": "platform-boundary-reviewer.md",
+      "viewpoint_missing": [],
+      "cascade_demotions": 0,
+      "severity_counts": {
+        "critical": 2,
+        "high": 2,
+        "medium": 1,
+        "low": 0
+      }
+    },
+    "security-reviewer": {
+      "status": "ok",
+      "raw_out": "security-reviewer.md",
+      "viewpoint_missing": [],
+      "cascade_demotions": 0,
+      "severity_counts": {
+        "critical": 0,
+        "high": 4,
+        "medium": 4,
+        "low": 1
+      }
+    }
+  },
+  "severity_counts_raw": {
+    "critical": 2,
+    "high": 10,
+    "medium": 12,
+    "low": 5
+  },
+  "severity_counts": {
+    "critical": 2,
+    "high": 7,
+    "medium": 10,
+    "low": 6
+  },
+  "previous_round": {
+    "file": "design-gate.md.20260914-round4",
+    "resolved": 23,
+    "unresolved": 0,
+    "new": 25,
+    "round4_residue": 14,
+    "convergence_note": "Critical は 7→5→3→3→2 と収束。合計は round 3 以降横ばいで今回は増加。25 件中 14 件が round-4 の追加分 (送信元検証 / CSP / ブラウズ入口制約 / 30 秒上限 / distroName 文字種 / 列挙不能 / FR-017 の 2 層 / 名前空間の境界規則) に起因する。指摘の性質が『設計に穴がある』から『規則はあるが測られていない / 値はあるが器が無い / 正当化が事実と違う』へ移った"
+  },
+  "track_delta_vs_round4": {
+    "analyze": [5, 8],
+    "po-reviewer": [4, 4],
+    "architecture-reviewer": [3, 3],
+    "platform-boundary-reviewer": [2, 5],
+    "security-reviewer": [10, 9]
+  },
+  "self_errors_found": [
+    {
+      "id": "L-003",
+      "what": "round 4 で ui charter の引用を切り詰め、その前提で SH-050 の前半を起票した。reviewer 側は正しく全文を引いていた",
+      "action": "SH-050 の前半を撤回。In scope は触らない"
+    },
+    {
+      "id": "H-007",
+      "what": "round 4 で security C-002 の推奨 (a)-(d) のうち (d) 計測経路を落とし、追加した防御が『書いてあるだけ』の状態で 1 round 通過した",
+      "action": "SC-018 と BE-048 を新設"
+    }
+  ],
+  "security_confirmation": "round 4 で gate が行った severity 降格 (UNC の .. は share ルートで止まる) について security-reviewer から異議なし。長パス接頭辞つきの UNC 形式による正規化の迂回も、round 4 で入れた「合成後に再正規化して封じ込め検証」が形式を問わず閉じていると確認",
+  "fr_coverage": [
+    {
+      "fr": "FR-001..FR-048",
+      "covered": true,
+      "by": ["tasks.md"],
+      "note": "48/48 (Track A 照合)"
+    }
+  ],
+  "sc_coverage": [
+    {
+      "sc": "SC-001..SC-018",
+      "covered": true,
+      "note": "SC-018 を新設 (IPC 検証表の各行)。SC-016 の CSP directive 節に計測経路を追加"
+    }
+  ],
+  "viewpoint_coverage": {
+    "A": "Critical:0 High:2 Medium:2 Low:0",
+    "B": "Critical:0 High:1 Medium:2 Low:1",
+    "C": "Critical:1 High:2 Medium:2 Low:1",
+    "D": "Critical:2 High:2 Medium:2 Low:2",
+    "E": "Critical:0 High:1 Medium:3 Low:0",
+    "F": "Critical:0 High:0 Medium:0 Low:0",
+    "G": "該当なし",
+    "H": "Critical:0 High:2 Medium:1 Low:1"
+  },
+  "dedup_log": [
+    {
+      "merged": ["pb-C-001"],
+      "key": "境界の名前空間規則が全称で runtimePath と矛盾",
+      "result": "C-001",
+      "severity": "critical"
+    },
+    {
+      "merged": ["pb-C-002"],
+      "key": "固定値経路の probedAt 欠落",
+      "result": "C-002",
+      "severity": "critical"
+    },
+    {
+      "merged": ["analyze-F-001", "pb-H-002"],
+      "key": "一覧側の到達可能性の導出規則と実在確認の I/O",
+      "result": "H-001",
+      "severity": "high"
+    },
+    {
+      "merged": ["analyze-F-002"],
+      "key": "30 秒窓と SC-005 の両立",
+      "result": "H-002",
+      "severity": "high"
+    },
+    {
+      "merged": ["po-H-001"],
+      "key": "data-model §6 の解除規則が 1 層版",
+      "result": "H-003",
+      "severity": "high"
+    },
+    {
+      "merged": ["pb-H-001"],
+      "key": "型跨ぎの一致検査 (isSameDistro)",
+      "result": "H-004",
+      "severity": "high"
+    },
+    {
+      "merged": ["arch-H-001", "sec-H-004"],
+      "key": "開発時の配信オリジン / CSP / 送信元検証",
+      "result": "H-005",
+      "severity": "high"
+    },
+    {
+      "merged": ["sec-H-001", "sec-H-002"],
+      "key": "ホスト入口の正当化が証明しすぎ / registerFolder",
+      "result": "H-006",
+      "severity": "high"
+    },
+    {
+      "merged": ["sec-H-003"],
+      "key": "IPC 検証表の計測経路",
+      "result": "H-007",
+      "severity": "high"
+    },
+    {
+      "merged": ["po-M-001", "analyze-F-004"],
+      "key": "列挙不能の 4 点セット",
+      "result": "M-001",
+      "severity": "medium"
+    },
+    {
+      "merged": ["po-M-002"],
+      "key": "30 秒上限が spec に無い / 期限切れ後の位置",
+      "result": "M-002",
+      "severity": "medium"
+    },
+    {
+      "merged": ["po-M-003"],
+      "key": "登録フォルダ 0 件 × 組み合わせ画面",
+      "result": "M-003",
+      "severity": "medium"
+    },
+    {
+      "merged": ["analyze-F-003"],
+      "key": "SC-016 の CSP directive の計測",
+      "result": "M-004",
+      "severity": "medium"
+    },
+    {
+      "merged": ["arch-M-001"],
+      "key": "CSP 基線の ui domain への申し送り",
+      "result": "M-005",
+      "severity": "medium"
+    },
+    {
+      "merged": ["sec-M-001"],
+      "key": "distroName の文字種が永続化に適用されない",
+      "result": "M-006",
+      "severity": "medium"
+    },
+    {
+      "merged": ["sec-M-002"],
+      "key": "呼び出し頻度と応答件数の境界側制約",
+      "result": "M-007",
+      "severity": "medium"
+    },
+    {
+      "merged": ["sec-M-003"],
+      "key": "setWindowOpenHandler / 外部ナビゲーション",
+      "result": "M-008",
+      "severity": "medium"
+    },
+    {
+      "merged": ["sec-M-004"],
+      "key": "PathMapping.entries の形式検証",
+      "result": "M-009",
+      "severity": "medium"
+    },
+    {
+      "merged": ["pb-M-001"],
+      "key": "probing からの応答が返らない辺",
+      "result": "M-010",
+      "severity": "medium"
+    },
+    {
+      "merged": ["analyze-F-005"],
+      "key": "US-3 AC-14 の参照ずれ",
+      "result": "L-001",
+      "severity": "low"
+    },
+    {
+      "merged": ["analyze-F-006"],
+      "key": "R-08 の項目数",
+      "result": "L-002",
+      "severity": "low"
+    },
+    {
+      "merged": ["analyze-F-007"],
+      "key": "ui charter の引用切り詰めと SH-050 の前提",
+      "result": "L-003",
+      "severity": "low"
+    },
+    {
+      "merged": ["analyze-F-008"],
+      "key": "ui から resolve() の根拠",
+      "result": "L-004",
+      "severity": "low"
+    },
+    {
+      "merged": ["arch-L-001"],
+      "key": "ブラウズセッションと canonical term の衝突",
+      "result": "L-005",
+      "severity": "low"
+    },
+    {
+      "merged": ["sec-L-001"],
+      "key": "missingDependencies[].name の値域",
+      "result": "L-006",
+      "severity": "low"
+    }
+  ],
+  "findings_accepted": 25,
+  "findings_rejected": 0,
+  "fixes_applied": {
+    "spec.md": true,
+    "plan.md": true,
+    "tasks.md": true,
+    "data-model.md": true,
+    "research.md": true,
+    "quickstart.md": true,
+    "contracts/ipc-capability.md": true,
+    "contracts/runtime-detection.md": true,
+    "contracts/workspace-store.md": true,
+    "checklists/requirements.md": true
+  },
+  "verdict": "FIX_REQUIRED",
+  "verdict_note": "Critical 2 件は修正済み。status は tasking のまま。次 round を回すか実装へ進むかは、Critical の収束と合計の横ばいを踏まえた人間の判断事項として提示した。",
+  "human_override": {
+    "decision": "tasking -> implementing",
+    "decided_by": "human",
+    "decided_at": "2026-09-14",
+    "gate_verdict_at_override": "FIX_REQUIRED",
+    "critical_at_override": 0,
+    "rationale": "round 5 の Critical 2 件は修正済みだが、修正後の再レビュー (round 6) を行わずに implementing へ進める判断。Critical は 7->5->3->3->2 と収束する一方、合計は round 3 以降横ばいで、指摘の母体が前 round の追加テキストへ移っていた。残る指摘の性質は『規則はあるが測られていない / 値はあるが器が無い』であり、実装と code-gate で詰めるほうが速いという判断。",
+    "note": "これは gate の PASS ではない。status 遷移は --legacy 経路で行った。round 5 で修正した 25 件は再レビューを経ていない。",
+    "carry_to_code_gate": [
+      "C-001 境界の名前空間規則のスコープと runtimePath の例外が実装で守られるか",
+      "C-002 固定値経路 (Win32Runtime / 実行中 WSL1) で probedAt が設定されるか",
+      "H-001 一覧側の実在確認が確認済みの値なしで発行されないか (SC-005)",
+      "H-004 isSameDistro が NamespaceId 成分を取り出す唯一の場所になっているか",
+      "H-005 送信元の許可 origin が 1 定数に集約され環境分岐で無効化されていないか",
+      "H-007 / SC-018 IPC 検証表の各行にテストがあるか"
+    ]
+  }
+}

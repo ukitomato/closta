@@ -1,0 +1,4 @@
+// 違反サンプル: 循環依存の相手側。
+import { a } from './cycle-a'
+
+export const b = (): number => a() + 1

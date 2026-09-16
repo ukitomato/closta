@@ -1,0 +1,25 @@
+out
+dist
+pnpm-lock.yaml
+LICENSE.md
+tsconfig.json
+tsconfig.*.json
+
+# CLI 生成物 (shadcn / assistant-ui add)。
+# 上流の更新と差分を取れる状態に保つため整形しない。
+# 対応する ESLint の緩和は eslint.config.mjs の GENERATED_FILES を見ること。
+src/renderer/src/components
+src/renderer/src/hooks
+src/renderer/src/lib
+
+# Markdown の設計文書は整形しない。
+# prettier は表を「文字数」で揃えるため、日本語 (全角) の表が
+# 等幅表示で崩れる。文書の正本は人が書いた形である。
+*.md
+**/*.md
+
+# ワークフローが管理するファイル。整形しない。
+# `.specify/.agents-registry.yaml` のように `managed_by: workflow` と書かれたものを
+# 整形すると、再生成のたびに差分が出て衝突する。
+.specify
+.claude

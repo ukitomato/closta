@@ -1,0 +1,2 @@
+# agents レイヤ (utilityProcess)。R-1 では空。
+# tsconfig / ESLint / dependency-cruiser の対象としてのみ存在する (AD-023)。

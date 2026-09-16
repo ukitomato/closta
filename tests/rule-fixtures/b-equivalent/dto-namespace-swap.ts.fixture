@@ -1,0 +1,13 @@
+// 違反サンプル: IPC 境界で `PathDTO.namespace` を付け替える。
+// **型検査で止まる** — `unc:` の識別子を `makeRuntimePath` に渡せない。
+import { makeRuntimePath } from '@domain/runtime/path-types'
+import type { PathDTO } from '@domain/runtime/dto'
+
+const unc: PathDTO = {
+  namespace: 'unc:Ubuntu',
+  value: '\\\\wsl.localhost\\Ubuntu\\home\\u'
+}
+
+// 接頭辞を文字列で剥がして `wsl:` に付け替えようとする。
+const stripped = unc.value.replace('\\\\wsl.localhost\\Ubuntu', '').split('\\').join('/')
+export const swapped = makeRuntimePath(unc.namespace, stripped)

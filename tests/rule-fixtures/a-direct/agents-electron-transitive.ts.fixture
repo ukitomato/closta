@@ -1,0 +1,5 @@
+// 違反サンプル: agents から `app` レイヤ経由で electron に推移的に到達する。
+// `app/window.ts` は electron を import してよいが、agents が経由してはならない。
+import { createMainWindow } from '../../main/app/window'
+
+export const make = createMainWindow

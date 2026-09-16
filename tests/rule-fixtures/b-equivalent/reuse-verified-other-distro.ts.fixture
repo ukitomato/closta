@@ -1,0 +1,14 @@
+// 違反サンプル (機械検証では捕まらない):
+// 正規の確認済みの値を別ディストロに流用する。
+// **型は通る。** 実行時に `checkVerified` が識別子の一致で止める。
+import type { WslFileSystem } from '@domain/runtime/interfaces'
+import type { VerifiedRunning } from '@domain/runtime/verified-running'
+import type { RuntimePath } from '@domain/runtime/path-types'
+
+export async function reuse(
+  fs: WslFileSystem,
+  verifiedForUbuntu: VerifiedRunning,
+  debianPath: RuntimePath
+): Promise<boolean> {
+  return fs.exists(debianPath, verifiedForUbuntu, Date.now())
+}

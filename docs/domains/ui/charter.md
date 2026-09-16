@@ -3,7 +3,7 @@ domain: ui
 status: needs-human-review
 owner: ukitomato
 generated_by: human (PLAN.md を素案として再導出)
-last_reviewed: 2026-09-12
+last_reviewed: 2026-09-15
 related_adrs:
   - docs/decisions/0001-adopt-electron-over-tauri.md
   - docs/decisions/0006-supervisor-in-utility-process.md
@@ -39,6 +39,13 @@ UI は本来 delivery mechanism であり domain ではない。それでも独�
 - 情報密度の切替（compact / comfortable）
 - Thread 検索、conversation map、observability 系の表示
 - Electron 特有の配線（preload / IPC 越しのストリーミングブリッジ）
+  — **基盤そのものではない。** renderer の配信プロトコル・CSP 基線・
+  Constitution 検証項目 10 は **R-1 が `app` レイヤで固定した**。
+  本 domain の feature がこれを超える指定を要する場合は、
+  **nonce / hash で `unsafe-inline` を用いずに満たすか、緩和を ADR で記録する**
+  （[AD-025](../../decisions/0025-workspace-folder-carries-location.md) §7。
+  `unsafe-inline` は開発ビルドの `script-src` / `style-src` に限り許され、
+  `unsafe-eval` は両環境で禁止。ゲートは `app.isPackaged` である）
 - PTY フォールバックタブ（optional scope）
 
 ### Out of scope
@@ -49,6 +56,14 @@ UI は本来 delivery mechanism であり domain ではない。それでも独�
 - 隔離状態の**判定** → `isolation` domain（本 domain はそれを**表示する**）
 - Voice 系 element（Voice conversation / Read aloud / Orb）→ **非目標**
 - Generative 22 要素、Image generation、Map answer、Mobile composer → **Tier C、対象外**
+- **他 domain の操作 UI（一覧・登録・選択画面）** → 各 domain が持つ。
+  本 domain は **transcript / tool 表示の element 選定と見た目**を持つ。
+  こう分けるのは [Principle XII](../../../.specify/memory/constitution.md)（`docs/ui-coverage.md` の
+  未割当行がある間 UI 系 feature を完了にしない）の**持ち主を明確にする**ためである。
+  対応表が対象とするのは SDK のメッセージ型・tool 名・システムイベントであり、
+  ランタイム一覧やフォルダ登録画面はそこに現れない。
+  これらを本 domain の担当にすると、**対応表に載らない画面が Principle XII の判定対象に
+  なってしまい、判定が不能になる**（R-1 の画面は `runtime` domain が持つ）
 
 ## Actors / Personas
 

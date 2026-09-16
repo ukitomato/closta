@@ -26,21 +26,31 @@ reviewers:
   - name: database-reviewer
     enabled: true
     scope: both
+    # Principle V の検証対象は SQL のカラム型に限らない (AD-024 #9)。
+    # R-1 の永続化は JSON であり、SQL パターンだけでは発火しない。
+    # 永続化スキーマを持つ設定層のモジュールも発火条件に含める。
     auto_invoke_patterns:
       - "**/migrations/**"
       - "*.sql"
       - "**/schema.prisma"
+      - "src/main/infra/settings/**"
+      - "src/main/infra/secrets/**"
     gates: [code-gate, pr-gate]
     source: bootstrap-recommended
 
   - name: platform-boundary-reviewer
     enabled: true
     scope: both
+    # ディレクトリは AD-023 のレイヤ構成に合わせる (AD-024 #1 / #6)。
+    # `src/runtime/**` / `src/supervisor/**` は存在せず、旧条件では 1 件も発火しなかった。
     auto_invoke_patterns:
-      - "src/runtime/**"
-      - "src/supervisor/**"
-      - "src/isolation/**"
+      - "src/main/infra/runtime/**"
+      - "src/agents/**"
+      - "src/domain/runtime/**"
+      - "src/main/app/**"
+      - "scripts/constitution/**"
       - "**/eslint.config.*"
+      - "**/.dependency-cruiser.*"
       - "**/.eslintrc*"
     gates: [design-gate, code-gate, pr-gate]
     source: project-specific
