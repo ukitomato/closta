@@ -1,209 +1,220 @@
-# Code Gate Iteration 1: フォルダ登録とランタイム検出 (R-1)
+# Code Gate Iteration 2: フォルダ登録とランタイム検出 (R-1)
 
 **Run**: 2026-09-16
 **Spec**: `specs/001-runtime-folder-registration-runtime-detection/`
-**Diff scope**: 194 files, +35,236 / -183 (`main...HEAD`)
+**Diff scope**: 199 files, +37,337 / -183 (`main...HEAD`)
 **Tracks**: lint-agent, test-agent, convention-reviewer, a11y-reviewer, ux-reviewer
 
-`database-reviewer` は migration / `.sql` が 0 件のため起動していない。
+`database-reviewer` は migration / `.sql` が 0 件のため起動していない (scope 内 0 件を実測)。
+`flutter-perf-reviewer` は registry 不在のため silent skip。
 `security-reviewer` / `architecture-reviewer` / `po-reviewer` は **pr-gate 専任**のため起動していない。
 
-## 仕様との差異 2 点 (Phase 0 / Phase 1)
+## 仕様との差異 1 点 (Phase 0)
 
-1. **`git diff HEAD` が空である。** 実装はすべてコミット済みで、skill の Phase 0 step 4 を
-   字義どおり適用すると halt する。gate の目的は実装のレビューなので **scope を `main...HEAD`** に取った
-2. **`touched-files.txt` に 88 件の記載漏れがあった。** skill は scope を
-   `diff_files ∩ touched_files` と定めるため、そのまま交差すると
-   **88 ファイルが黙ってレビュー対象から外れる**。実測から生成し直してから scope を決めた
+**`git diff HEAD` が空である。** iteration 1 の MUST_FIX 対応を 4 コミット
+(`6c3f4aa` / `379f6a8` / `093c2c1` / `548b339`) として確定させたため、working tree はクリーンである。
+skill の Phase 0 step 4 を字義どおり適用すると halt するが、gate の目的は実装のレビューなので
+**scope を `main...HEAD`** に取った。iteration 1 と同じ扱いである。
+
+なお iteration 1 で問題になった `touched-files.txt` の記載漏れは解消している —
+`git diff --name-only main...HEAD` と**完全一致**する 199 件まで再生成した (`548b339`)。
+したがって `diff_files ∩ touched_files` は 199 件であり、黙って外れるファイルは無い。
+
+## severity 写像
+
+skill が定めるのは `convention-reviewer の Critical/High → MUST_FIX / SHOULD_FIX` までで、
+Medium / Low と stack 別 reviewer については定義が無い。本 iteration は次を適用した。
+
+| reviewer severity | gate severity |
+|---|---|
+| Critical | MUST_FIX |
+| High | SHOULD_FIX |
+| Medium | SHOULD_FIX |
+| Low | CONSIDER |
+| lint `error` / test failure | MUST_FIX |
+| lint `warning` | SHOULD_FIX |
+| lint `info` | CONSIDER |
 
 ## Verdict
 
-| Severity | Count |
-|---|---|
-| MUST_FIX | **7** |
-| SHOULD_FIX | 13 |
-| CONSIDER | 10 |
-
-**Status**: **FIX_REQUIRED**
-
-機械検証 (lint / typecheck / depcruise / check:constitution / test / test:rules) は**すべて 0 件**である。
-MUST_FIX はすべて**機械検証が構造的に見られない領域**から出ている。
-
----
-
-## MUST_FIX findings
-
-### MF-001 — AD-024 #18 の「R-1 に composer が無い」は事実誤認 [origin: a11y]
-
-- **Where**: `.specify/memory/constitution.md` (Principle VIII の現状の制約) /
-  `docs/decisions/0024-constitution-verification-paths.md` #18
-- **Issue**: Principle VIII の Automated 検証を載せない根拠として
-  「(A) composer の IME テストケース — **対象が無い**。R-1 に composer が無い」と書いた。
-  **R-1 には composer がある。** `src/renderer/src/features/chat/ChatScreen.tsx:46-52` が
-  `Thread` を mount し、`components/assistant-ui/elements/thread.aui.tsx` が
-  `ComposerPrimitive.Input` を描画する。`ChatScreen.tsx:29-43` の `onNew` は
-  user メッセージと assistant ロールの応答を実際に積むので、**誤送信は観測可能な結果を持つ**
-- **Why must-fix**: Constitution の NON-NEGOTIABLE Principle の検証免除が、
-  成立しない前提に乗っている。`bad_pattern_grep` が 0 件を返すのは
-  「守られている」からではなく**送信経路が `@assistant-ui/react` の内側にある**ためで、
-  `isComposing` ガードはリポジトリに 1 件も無い。
-  **X-1 でモデルに繋いだ瞬間に実害化する**
-- **Suggested fix**: (a) 事実を Constitution と AD-024 に反映する (改定手続きを踏む)。
-  (b) `compositionend` 直後の Enter が `onNew` を呼ばないことを 1 本のテストで確認する
-  (`tests/setup/harness.test.tsx` の基盤が既にある)
-
-### MF-002 — `ResolutionScreen` が IPC 失敗で永久にローディングのまま固まる [origin: ux]
-
-- **Where**: `src/renderer/src/features/folder-runtime-resolution/ResolutionScreen.tsx:176` / `:228`
-- **Issue**: `void resolveAll().then(...)` が 2 箇所とも `.catch` を持たない。
-  `resolveFolderRuntime` が reject すると `pairs` は `null` のままで、
-  `:213-215` の `GenerationLoader label="組み合わせを調べています"` が**永続する**。
-  再試行も失敗表示も無い。「再判定」も同じ形なので押しても何も起きない
-- **Why must-fix**: US-3 の価値を運ぶ**唯一の画面**が、理由も次の操作も無い停止画面になる。
-  他 2 画面は `ErrorState` を持つので、同じ失敗が画面ごとに別体験になる。
-  FR-028 は「選択肢が 0 件になる場合は理由と次に取るべき操作を提示」と定めている
-- **Suggested fix**: 2 箇所に `.catch` を付け、他画面と同じ `ErrorState(title/detail/onRetry)` を出す。
-  `App.tsx` に error boundary を 1 枚置き、`main.tsx` で `unhandledrejection` を拾う
-  (renderer に受け皿が 0 件のため、白画面からの復帰手段がアプリ再起動しかない)
-
-### MF-003 — `browseDirectory` のトークンに送信元の束縛が無い [origin: test]
-
-- **Where**: `src/main/app/folder-service.ts:44-48` (`BrowseSession`) / `src/main/app/ipc.ts:121-124`
-- **Issue**: `contracts/ipc-capability.md:221` は `token` の検証条件として
-  **「発行した送信元と一致すること」**を明記している。しかし
-  `BrowseSession` は `{ token, namespace, verified }` のみで送信元を保持せず、
-  `ipc.ts:121` のハンドラは `async (_event, ...args) =>` と **`event` を捨てている**。
-  検証が実装されていない
-- **Why must-fix**: 契約が要求する検証の欠落である。
-  今は `isTrustedSender` が origin で全チャンネルを守っており**単一 WebContents では悪用経路が無い**が、
-  AD-025 の目標レイアウトは **Browser / PR Webview を別 WebContents で持つ**と決めている。
-  その時点で「別の送信元が他人のトークンを使える」状態が生きる。
-  SC-018 が最低要件に挙げる「**他送信元のトークン**」「**期限切れトークン**」は
-  どちらも**テストにも 1 件も無い** (`browse-session-expired` が試験コードに現れない)
-- **Suggested fix**: `BrowseSession` に発行元の `WebContents` id を持たせ、
-  `browseDirectory` ハンドラで `event.sender.id` と照合する。
-  併せて期限切れ・他送信元・流用の 3 経路をテストにする
-
-### MF-004 — `index.html` に静的な CSP があり、両環境で `unsafe-inline` を許し、検証の走査外にある [origin: self]
-
-- **Where**: `src/renderer/index.html:7-10` / `scripts/constitution/allowlists.mjs:27-38`
-- **Issue**: scaffold 由来の `<meta http-equiv="Content-Security-Policy">` が残っており、
-  `style-src 'self' 'unsafe-inline'` を**開発・出荷の両方で**静的に許している。
-  AD-025 §7 は「緩和は **CSP を組み立てる 1 関数の dev 分岐にのみ**現れる」「ゲートは `app.isPackaged`」と定めた。
-  さらに `SCAN_EXTENSIONS` に **`.html` が無い**ため、
-  検証項目 10 はこの 2 つ目の CSP 定義を**一度も見ていない**
-- **Why must-fix**: 「緩和が 1 箇所に現れる」という AD-025 の決定が成立していない。
-  加えて AD-025 §7 は「開発用の CSP 定義も検証スクリプトの走査対象に含め、除外リストへ移さない」と
-  書いているのに、**拡張子で構造的に外れている**。
-  検証項目 10 が ok を返し続けるので、この形は気付かれない
-- **Suggested fix**: meta タグを削除し (CSP は `protocol.ts` のヘッダが与える)、
-  `SCAN_EXTENSIONS` に `.html` を足す。**先に `.html` を足して meta タグで発火することを確かめる**
-  — ルールは違反サンプルで発火してから信用する (AD-025)
-
-### MF-005 — 内部識別子 `host` / `wsl:<distro>` が全ランタイムカードに生で出ている [origin: ux]
-
-- **Where**: `src/renderer/src/features/runtime-list/RuntimeListScreen.tsx:103`
-- **Issue**: `<p className={cn(mono, ...)}>{runtime.id}</p>`。
-  `Windows (ホスト)` の直下に `host`、`WSL: Ubuntu-26.04` の直下に `wsl:Ubuntu-26.04` が出る
-- **Why must-fix**: FR-047「内部識別子をそのまま提示してはならない」への直接の違反。
-  参照キーの訳出は `labels.ts` の `Record` で徹底されているのに、
-  **ここだけが例外**になっている。表示名 (`WSL: Ubuntu-26.04`) と表記が競合し、
-  利用者に 2 つの名前を覚えさせる
-- **Suggested fix**: 行を削除するか、`title` / `data-*` 属性へ退避する
-
-### MF-006 — `<html lang>` が無く、`<title>` が scaffold のまま [origin: a11y]
-
-- **Where**: `src/renderer/index.html:2` / `:5`
-- **Issue**: `<html>` に `lang` 属性が無い。`<title>Electron</title>` のまま。
-  UI 文言は FR-047 に従い全面日本語である
-- **Why must-fix**: WCAG 2.1 **3.1.1 Language of Page (Level A)**。
-  スクリーンリーダが既定音声で日本語を読もうとし、読み上げが破綻する。
-  **日本語を第一言語として選んだ以上、`lang="ja"` はそれを支援技術に伝える唯一の手段**である。
-  `<title>Electron</title>` は 2.4.2 の「トピック・目的を説明する」を満たさず、
-  かつ製品名 (AD-014) でもない
-- **Suggested fix**: `<html lang="ja">` / `<title>Closta</title>`
-
-### MF-007 — 「選ぶ」ボタンに `onClick` が無く、押しても何も起きない [origin: a11y / ux]
-
-- **Where**: `src/renderer/src/features/folder-runtime-resolution/ResolutionScreen.tsx:108-110`
-- **Issue**: `<Button size="sm" variant="outline" disabled={blocked}>` に
-  `onClick` / `type` / `form` のいずれも無い。有効状態で押して**無反応**。
-  features 配下の `<Button>` 12 件のうち `onClick` を持たないのはこの 1 件だけ
-- **Why must-fix**: 対話要素として公開されているのに振る舞いが無い (WCAG 4.1.2)。
-  US-3 の主たる操作に見える位置にあるため、故障と区別できない
-- **Suggested fix**: R-1 で「選ぶ」の意味が決まらないなら**ボタンにしない**。
-  R-1 は組み合わせの**解決**までがスコープで、選択の永続化は含まない。
-  ボタンを残すなら押下後の結果を示すこと
-
----
-
-## SHOULD_FIX (13 件の要点)
-
-機械検証の穴と、仕様が要求する体験の欠落。
-
-| ID | 内容 | origin |
+| Severity | Count | Where |
 |---|---|---|
-| SF-001 | 到達可能性バッジの文字色が light 既定で AA 未満 (`amber-600` 約 2.9:1 / `emerald-600` 約 3.7:1)。**色以外の手がかり (日本語ラベル) はあるので 1.4.1 は満たす。問題はその色が読めないこと** | a11y |
-| SF-002 | `disabled` にした操作の理由が `aria-describedby` で結ばれておらず、`disabled` によりフォーカスも当たらない (features 配下に `aria-describedby` 0 件) | a11y |
-| SF-003 | 読み込み中・エラー・操作結果に live region が無い (features 配下に `aria-live` / `role="status"` が **0 件**。生成物側は 5 件ある) | a11y |
-| SF-004 | フォルダ階層を移動するとコンテナが unmount されフォーカスが `<body>` に落ちる。移動先も通知されない | a11y |
-| SF-005 | 表示名 input にラベルが無く `placeholder` のみ (入力開始で手がかりが消える) | a11y |
-| SF-006 | `登録を解除` が 1 クリックで確認も undo も無い。**`blocked` / `unreachable` のエントリは所在選択が塞がるためアプリ内で作り直せない** | ux |
-| SF-007 | SC-015 の「WSL が見つからない旨」が UI に存在しない。`wsl-detector.ts:82` が必ず `Win32Runtime` を返すため空状態にも到達しない | ux |
-| SF-008 | 重複登録時に main が返す `existing` を renderer が捨てている (`grep existing src/renderer` → 0 件)。AC US-2-5 の「既存エントリが選択状態になる」が未実装 | ux |
-| SF-009 | `ResolutionScreen` の `blocked` 手順が「ランタイムを再検出する」を指示するが、この画面の「再判定」は解決の再計算だけで `refreshRuntimes()` を呼ばない。**手順どおり押しても同じ `blocked` が返り続ける** | ux |
-| SF-010 | ブラウズセッション期限切れで `result` を失敗形に差し替えるため現在地が失われる。quickstart V-2 #9 の「同じ位置から続行できる」を満たさない | ux |
-| SF-011 | 「会話 (R-3)」タブが動作するチャットに見え、未接続の予告は**送信後にしか出ない**。偽の assistant 応答が返るためモデルが答えたように見える。予告が内部 feature ID「R-3」 | ux |
-| SF-012 | 不足依存の「導入手順への導線」がリポジトリ相対パスの**文字列**で、開く手段が capability に無い。`docAnchor` も生で出ている | ux |
-| SF-013 | `eslint-plugin-jsx-a11y` / axe が未導入。MF-006 / SF-005 は既定ルールが検出する類であり、**a11y 回帰を止める自動経路が 0** | a11y |
+| MUST_FIX | **0** | — |
+| SHOULD_FIX | 30 | a11y H-001/H-002 + M-001〜M-009 (11) / ux H-001〜H-003 + M-001〜M-005 (8) / convention H-001・M-001 + M-002〜M-007・C-001〜C-005 (11) |
+| CONSIDER | 22 | a11y L-001〜L-006 (6) / ux L-001〜L-004 (4) / convention L-001〜L-007・C-004・C-006〜C-009 (12) |
 
-## CONSIDER (10 件の要点)
+**Status**: **PASS**
 
-`h1` 不在と見出し階層 / 入力欄の非テキスト対比 / フォルダとファイルの区別が絵文字と色のみ /
-操作できない項目を `<button disabled>` で公開 / ローダが `tick={0}` 固定で静止 /
-エラー表示が発生源から遠い / `ErrorState` の `Retry` だけ英語 /
-タブ切替で画面状態が全破棄 / 「再判定」が画面ごとに別の意味 /
-`unregisterFolder` の `{ ok: false }` が無通知。
+全 5 track の Critical は 0 件、lint error 0 件、test failure 0 件である。
+したがって MUST_FIX は 0 件で、**Phase 5 の auto-fix loop は起動条件を満たさない**。
 
-## 機械検証トラックの結果 (すべて 0 件)
+機械検証 (lint / typecheck / depcruise / check:constitution / test / test:rules) は
+**6 track すべて exit 0 / violations 0 件**である。convention-reviewer が
+`.eslintcache` を削除して独立に再実行した結果も同一だった。
 
-| 検証 | 結果 |
-|---|---|
-| `pnpm lint` | 違反 **0** (`--no-cache` 再実行で 103 ファイルが実際に検査されたことを確認) |
-| `pnpm typecheck` | エラー **0** (2 project) |
-| `pnpm depcruise` | 違反 **0** (115 modules / 398 dependencies) |
-| `pnpm check:constitution` | 違反 **0** (ok 10 / **検査対象なし 1**) |
-| `pnpm test` | 13 files / **245 passed** |
-| `pnpm test:rules` | 期待表と **20 件一致**、捕まらない経路 2 件 (記録済み) |
+**PASS は「指摘が無い」ことを意味しない。** SHOULD_FIX 30 件が残っており、
+下記の 4 件は pr-gate の adversarial 検証で Critical に昇格しうる。
+skill の判定規則 (`MUST_FIX == 0` ⇒ PASS) に従って昇格させたものである。
 
-**「検査対象なし」は合格に数えない。** 項目 5 (イメージ構築サブコマンド) は
-docker を名指せるモジュールが 0 件のため対象が無い (R-1 の設計どおり。X-4 で対象が生じる)。
+### gate 内で閉じた 1 件
 
-**この 0 件は「ルールが発火した結果の 0 件」である。** `test:rules` が
-20 件の違反サンプルで各検出器の発火を確認している。
+**convention C-001** — `.specify/memory/constitution.md` の frontmatter が
+`version: 1.2.1` / `last_amended: 2026-09-15` のままで、本文 `:768` の 1.2.2 / 2026-09-16 と
+食い違っていた。**`093c2c1` の改定漏れ**であり、v1.2.2 の改定手続きが frontmatter に
+届いていなかった。本 gate 内で frontmatter を 1.2.2 / 2026-09-16 に修正した。
 
-## 検証ツール自身に見つかった問題
+同 iteration の a11y-reviewer が `:768` だけを見て MF-001 を解消認定していたため、
+**2 人の reviewer が同じファイルを見て別の結論に達していた**。
+convention-reviewer 側が正しい (改定手順は frontmatter を正本とする)。
 
-**`pnpm test:rules` は違反サンプルを実際の作業ツリー (`src/**/__rulecheck__/`) に展開する。**
-そのため **`lint` / `depcruise` / `check:constitution` と並列に走らせると偽の違反が出る。**
-本 gate で実測した — 別トラックが `test:rules` を走らせている最中の
-`check:constitution` が 5 項目 12 件の違反を報告し、**全件が `__rulecheck__` 配下を指していた**
-(検査対象が 100 → 120 ファイルに増えていた)。
+## iteration 1 MUST_FIX 7 件の再検証
 
-CI (`verify.yml`) は 1 ステップ 1 検証の直列なので安全だが、
-**手元で並列に回す運用は安全でない。** 展開先を検査対象ツリーの外に出すか、
-`test:rules` を他の検証と排他にする必要がある。
+a11y-reviewer と ux-reviewer が独立に再検証した結果。
 
-## テストが仕様と乖離している箇所
+| ID | origin | 判定 | 根拠 |
+|---|---|---|---|
+| MF-001 | a11y | **解消** | Constitution v1.2.2 で根拠を「対象が無い」→「`isDisabled: true` で送信経路を閉じている」に訂正。AD-024 に `## 訂正:` 節。`ChatScreen.test.tsx` 2 ケースで固定。**事実訂正・根拠差し替え・回帰テストの 3 点が揃っている** |
+| MF-002 | ux | **部分解消** | `ResolutionScreen.tsx:216-218` / `:238` の `.catch` は入った。ただし推奨アクション後半 (error boundary / `unhandledrejection`) が未実施で、**同型の欠落が `useFolders.ts` に 5 箇所残る** → ux H-001 / H-002 |
+| MF-003 | test | **解消** | `ipc.ts:122-127` が `event.sender.id` を渡し、`browseDirectory(token, target, senderId)` で送信元を束縛 |
+| MF-004 | self | **解消** | `index.html` から静的 CSP を撤去し、`protocol.ts:173` / `window.ts:76` の main 側応答ヘッダへ移設。`check:constitution` #10 が CSP を検査対象に持つ (ok) |
+| MF-005 | ux | **解消 (副作用あり)** | `RuntimeListScreen.tsx:120-122` が `{runtime.id}` → `{runtime.distroName ?? 'Windows'}`。`host` / `wsl:<distro>` は画面から消えた。表示名の二重表示が残る → ux M-001 |
+| MF-006 | a11y | **解消** | `index.html:7` `<html lang="ja">` / `:10` `<title>Closta</title>` |
+| MF-007 | a11y / ux | **解消** | `ResolutionScreen.tsx:125-131` でボタンごと削除 (`onClick` 後付けではなく対話要素をやめる側を採用)。`ResolutionScreen.test.tsx:208-219` が AC の検証を置き換えており空洞化していない。`features/` 配下に `onClick` 無しの `<Button>` は 0 件 |
 
-SC-018 と BE-048 は計測経路を「**main 側ハンドラを直接呼ぶ**ユニットテスト」と定めているが、
-`src/main/app/validate.test.ts` は `isTrustedSender` / `isValidPathDTO` などの
-**検証述語を直接呼んでいるだけ**で、`registerIpcHandlers` も `FolderService` も
-一度もインスタンス化しない。テスト自身のヘッダが「検証関数を直接呼ぶ」と書き換えており、
-**仕様の要求を無言で緩めている**。このため
-「ハンドラが実際にその検証を呼んでいるか」「期限検査がファイルアクセスより前か」は
-誰も見ていない (MF-003 の温床)。
+**MUST_FIX 由来の新規発生は 0 件。** ただし下の 2 件は「解消済み」とされた箇所の再検証で出たもので、
+どちらも前 iteration の cascade 探索漏れにあたる。
 
-## Status 遷移
+## 特に注意すべき SHOULD_FIX 2 件
 
-verdict が FIX_REQUIRED のため **`implementing` に据置**。`reviewing` へは昇格しない。
+### ux H-001 — MF-002 と同型の永久ローディングが `useFolders.ts` に 5 箇所残る
+
+`useFolders.ts` で `catch` を持つのは `load()` の `:82` だけである。`move` (`:128`) は
+`loading: true` を立てた後に `await` しており、IPC が reject すると
+`WorkspaceFoldersScreen.tsx:349-361` の `GenerationLoader` が**永久に出続ける** —
+MF-002 で must-fix とされた形そのものである。`beginBrowse` (`:95`) の reject は
+「押しても無反応」(MF-007 と同型)、`register` (`:151`) / `unregister` (`:174`) /
+`pickHostFolder` (`:197`) は無通知。対して `useRuntimes.ts` は 3 経路すべてに catch を持つ。
+
+### a11y H-002 — SF-004 は「解消」とコメントが宣言しているが解消していない
+
+`WorkspaceFoldersScreen.tsx:349-351` の `aria-busy` 化が守るのは**ローディング中のフォーカスだけ**で、
+移動完了時に `key={entry.path.value}` の全 `<li>` が差し替わるため `activeElement` は `<body>` に戻る。
+移動先 (`:341`) も live region ではないため到達先が通知されない。
+**コード内コメントが実態より強い解決を主張している**点が、次の iteration で見落とされる危険を持つ。
+
+## 完了した track の内訳
+
+### lint-agent (exit 0 / violations 0)
+
+`docs/discovery.md` の `## Build / Test / Lint` を SSoT として pnpm 経由で実行。
+
+| track | exit | violations | 実測 |
+|---|---|---|---|
+| lint | 0 | 0 | 106 files linted / errors 0 / warnings 0 |
+| typecheck | 0 | 0 | `tsconfig.node.json` / `tsconfig.web.json` 両 project 出力なし |
+| depcruise | 0 | 0 | no violations (118 modules, 416 dependencies) |
+| check:constitution | 0 | 0 | 11 項目: ok 10 / 違反 0 / **検査対象なし 1** |
+| test:rules | 0 | 0 | 違反サンプル 20 件、**期待表と全件一致 (20/20)** |
+
+**violation ではないが verdict に残す事実**:
+
+1. `check:constitution` #5「許可モジュール内にイメージ構築サブコマンドが無い」は
+   **検査対象なし**。docker を名指せるモジュールが 0 件のため (R-1 の設計どおり)。
+   スクリプト自身が「『検査対象なし』は合格ではない」と出力している
+2. `test:rules` の期待表に `none` (機械検証で捕まらない経路) が 2 件あり、期待どおり一致した —
+   `ui-path-concat` (塞ぐ feature: R-2) / `reuse-verified-other-distro` (塞ぐ feature: I-1)。
+   **「全数検出」と読み替えてはならない**
+3. `tests/rule-fixtures/**` は `eslint.config.mjs:137` で意図的に除外されている。
+   違反サンプル置き場なので lint すれば必ず落ちる設計であり、この穴を埋めるのが `test:rules` である
+4. `depcruise` の module 数は iteration 1 の 114 → **118**、dependency 数は 395 → **416** に増えた。
+   `docs/discovery.md` の「R-1 時点の実測値 (2026-09-15)」表の更新を要するか要判断
+
+### test-agent (exit 0 / failed 0)
+
+- Test Files: **15 passed (15)**
+- Tests: **264 passed (264)** — failed 0 / skipped 0 / todo 0
+- `|node|` 12 files / 243 tests、`|renderer|` 3 files / 21 tests (うち `ChatScreen.test.tsx` 2)
+- flaky の兆候なし
+- **coverage: 取得不可**。`vitest.config.ts` に `coverage` block が無く、
+  `@vitest/coverage-v8` / `-istanbul` が devDependencies にも `node_modules` にも無い。
+  convention-reviewer の L-007 (coverage 未設定) は iteration 2 時点でも未解消
+
+### a11y-reviewer (Critical 0 / High 2 / Medium 9 / Low 6)
+
+全文は `a11y-reviewer.md`。iteration 1 の MUST_FIX 3 件 (MF-001 / MF-006 / MF-007) はすべて解消。
+
+- High: H-001 フォーカスリングが約 1.5:1 (WCAG 1.4.11 / 2.4.7。`features/` の `<Button>` 15 件が
+  単一の `cva` 経由) / H-002 ブラウズ移動時のフォーカス喪失 (SF-004 未解消)
+- 新規違反の持ち込みは M-001 のみ — `lang="ja"` を宣言したことで `thread.aui.tsx` の
+  英語文字列が WCAG 3.1.2 (Language of Parts) の対象として顕在化した。
+  **MF-006 の修正を撤回すべき理由にはならない** (正味では改善)
+- Round inheritance: resolved 5 / partially resolved 3 / unresolved 6 / new 5
+
+### ux-reviewer (Critical 0 / High 3 / Medium 5 / Low 4)
+
+全文は `ux-reviewer.md`。iteration 1 の MUST_FIX 3 件 (MF-002 / MF-005 / MF-007) は
+指摘行そのものは解消 (MF-002 のみ部分解消)。
+
+- High: H-001 `useFolders` の reject 受け皿 0 件 / H-002 error boundary・`unhandledrejection` が
+  0 件のまま意図的な `throw` だけ増えた / H-003 未接続を日本語で告知した直後に
+  `<h1>How can I help you today?</h1>` が主見出しとして出る
+- `ChatScreen` の composer 封鎖は**方向として妥当**と判定 (偽の assistant 応答の除去、
+  送信前の告知、`role="note"` の選択はいずれも適切)。ただし封鎖した画面に
+  英語の chat UI が露出しており告知文と矛盾する (H-003)
+- Round inheritance: resolved 7 / partially resolved 4 / unresolved 4 / new 7
+
+### convention-reviewer (Critical 0 / High 2 / Medium 9 / Low 12)
+
+全文は `convention-reviewer.md` (857 行)。lint 6 コマンドを `.eslintcache` 削除後に独立実行し、
+すべて exit 0 / 指摘 0 件。lint 由来の finding は 0 件。
+
+**iteration 1 の 15 件の消化**: 解消 **1 件** (M-003 — `src/domain/validation.ts` に
+`hasControlCharacter` + 3 定数を集約し重複 0 件)。未解消 14 件、**うち悪化 4 件**
+(M-001 / L-001 / L-004 / L-005) — いずれも iteration 1 が「次にこうなると効いてくる」と
+書いた形が実際に起きたもの。
+
+High 2 件:
+
+1. **H-001 (継続)** — `agents-not-to-native` にネイティブモジュールの違反サンプルが
+   依然 0 件。US-4 AC-2 の半分が未実証のまま
+2. **M-001 を Medium → High に格上げ** — `6c3f4aa` が `GENERATED_FILES` / `.prettierignore`
+   に載っている `error-state.tsx` を手で編集して `retryLabel` / `retryingLabel` prop を足した
+   (iteration 1 の「`Retry` だけ英語」への対応)。`npx eslint --print-config` で当該ファイルの
+   緩和 7 規則すべてが `0` (off) と確認済み。**再生成すると FR-047 対応の prop が消える**のに、
+   再生成される前提で検査を外している。手書き混入は 1 → **2 件**。
+   Constitution Principle VI の「除外はファイル単位の明示リストとし、ディレクトリ単位で
+   除外してはならない」に真正面から当たる
+
+新規 9 件のうち直近 4 コミット由来は 8 件。主なもの:
+
+- **C-002** (`6c3f4aa`) — 新設の CSP 検査 (項目 10 (e)) の除外が
+  `CSP_DECLARATION_EXEMPT_SUFFIXES = ['.test.ts','.test.tsx']` という**接尾辞パターン**。
+  以後どこに置かれた `*.test.ts` も無条件に免除される。`allowlists.mjs` の他の許可リストは
+  すべて実名である。※ `.html` の走査対象追加と (e) 自体は良い変更と評価されている
+- **C-003** (`6c3f4aa`) — M-003 修正の残渣。`wsl-fs.ts:30` の `export { MAX_DIR_ENTRIES }`
+  「互換のため」は参照 0 件。`validate.ts:34` が同じ定数に 2 つの import 経路を作っている
+- **C-005** (`6c3f4aa`) — 新規 domain 型 `WslAvailability` が glossary に 0 件。
+  canonical `Reachability` と語彙が競合 (Principle XIV)
+- **C-007** — `tests/setup/renderer.ts` が「前後処理だけを持つ」docstring に反して
+  3 つ目の責務 (`ResizeObserver` スタブ) を獲得した。実装とコメント自体は妥当と評価
+- **C-008** — `ChatScreen.test.tsx:27,34` が上流の英語 accessible name `'Message input'` を
+  唯一のセレクタに固定している (ux H-003 / a11y M-001 と同じ根を持つ)
+
+**指定された新規ファイルの確認結果**: `ChatScreen.test.tsx` は命名 / 置き場所 / lint 分類
+すべて既存と整合 (問題なしと明記、セレクタのみ C-008)。`src/domain/validation.ts` は
+M-003 を正しく解消。`folder-service.test.ts` は命名 / 置き場所に問題なし。
+`tests/setup/renderer.ts` の `ResizeObserver` スタブは実装もコメントも妥当
+(`vi.stubGlobal` を避けた理由の明記を評価)、docstring との不一致のみ (C-007)。
+
+## 次 iteration に向けた最小セット (convention-reviewer 推奨順)
+
+1. **convention M-001**: `GENERATED_FILES` / `.prettierignore` をファイル単位リストに変える
+   (または `error-state.tsx` の改変を自前ラッパへ切り出す)
+2. ~~**convention C-001**: constitution frontmatter を 1.2.2 に直す~~ — **本 gate 内で完了**
+3. **convention C-002**: `CSP_DECLARATION_EXEMPT_SUFFIXES` →
+   `CSP_DECLARATION_EXEMPT_FILES = ['src/main/app/protocol.test.ts']`
+4. **convention C-003 / C-004**: 参照 0 件の再 export 削除 + `wsl-fs.ts` の import 2 行入れ替え
+5. **convention H-001 / M-007**: fixture を 4〜6 件足して `test:rules` を 20 → 25 件に
+6. **ux H-001**: `useFolders` の 5 経路に catch を入れる (MF-002 と同型の残存)
+7. **ux H-002**: error boundary 1 枚 + `unhandledrejection` 1 本
+8. **a11y H-002**: ブラウズ移動後のフォーカス移送 + 到達先の live region 化 (SF-004 の実解消)
