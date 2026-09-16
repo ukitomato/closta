@@ -144,20 +144,35 @@ R-1 の実装中に、書いてあるのに 1 件も一致しないルール・�
 「未知」に落ちて判定を免れる依存が**実測で 5 件**見つかった (AD-025)。
 どれも「違反 0 件」と区別がつかない。
 
-`pnpm test:rules` が 20 件の違反サンプルを展開して期待表と突き合わせる。
+`pnpm test:rules` が 21 件の違反サンプルを**1 件ずつ展開して**期待表と突き合わせる (AD-027)。
 **機械検証で捕まらない経路が 2 件あり、それも期待表に `none` として明記してある** —
 捕まらない経路を列挙せずに「全数検出」と言うと、検証の主張そのものが嘘になる。
 
-### R-1 時点の実測値 (2026-09-15)
+**「全件一致」の範囲を正確に読むこと。** 照合されるのは期待表が**宣言した**検出器と規則だけである。
+`check.mjs` の 11 項目のうち発火確認があるのは 5 項目、`pending` 1 項目、**確認なし 5 項目**である
+(pr-gate Round 2 の platform-boundary H-005)。「21 件一致」は**宣言した期待が満たされた**ことを
+示すのであって、検証項目の全数が確かめられたことを示さない。
+
+### R-1 時点の実測値 (2026-09-16 / AD-027 後)
 
 | 検証 | 結果 |
 |---|---|
 | `pnpm lint` | 違反 **0** |
 | `pnpm typecheck` | エラー **0** |
-| `pnpm depcruise` | 違反 **0** (114 modules / 395 dependencies) |
+| `pnpm depcruise` | 違反 **0** (118 modules / 416 dependencies) |
 | `pnpm check:constitution` | 違反 **0** (ok 10 / 検査対象なし 1) |
-| `pnpm test` | 11 files / **213 passed** |
-| `pnpm test:rules` | 期待表と**全件一致** (20 件) |
+| `pnpm test` | 15 files / **264 passed** |
+| `pnpm test:rules` | 期待表と**全件一致** (21 件) |
+
+> **訂正 (2026-09-16 / AD-027 / pr-gate Round 2)**
+>
+> 本表は当初 2026-09-15 時点の値 (114 modules / 395 dependencies、11 files / 213 passed、
+> 違反サンプル 20 件) を記録していた。**そのうち「20 件すべて一致」は 1 行が偽だった** —
+> `wsl-args-array` が期待していた項目 `#1` は、`check.mjs` が全項目の見出しを状態に関わらず
+> 印字するため**構造的に常に満たされていた**。AD-027 で 1 件ずつ展開する形に改め、
+> `#N` を `[VIOLATE] #N` で照合するようにし、期待を訂正した。
+>
+> 数値の変化 (modules / dependencies / test 件数) は R-1 の実装とゲート対応でコードが増えたためである。
 
 正本は [`.specify/memory/constitution.md`](../.specify/memory/constitution.md) の
 `## Existing violations summary` である。

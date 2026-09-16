@@ -668,12 +668,49 @@ AD-024 #13 / #14 は NON-NEGOTIABLE (III / I) の改定にあたるため enumer
 | `pnpm depcruise` (推移的 / 循環 / `require()`) | 違反 **0** (114 modules / 395 dependencies) |
 | `pnpm check:constitution` (R-08 の 11 項目) | 違反 **0** (ok **10** / 検査対象なし **1**) |
 | `pnpm test` | 11 files / **213 passed** |
-| `pnpm test:rules` (違反サンプル 20 件の発火確認) | 期待表と**全件一致** |
+| `pnpm test:rules` (違反サンプル 20 件の発火確認) | 期待表と**全件一致** ⚠ **この行は偽だった (下記訂正)** |
 
 **「違反 0」だけでは足りない。** ルールが 1 件も一致していない状態と区別がつかないためである
 (AD-025 で「書いてあるのに効いていないルール」を実測で 5 件見つけた)。
-`pnpm test:rules` が、20 件の違反サンプルを検査対象へ展開して
+`pnpm test:rules` が、違反サンプルを検査対象へ展開して
 **期待した検出器が実際に発火すること**を毎回確かめる。
+
+**ただし「全件一致」の範囲を正確に読むこと。** 照合されるのは期待表が**宣言した**検出器と規則だけである。
+`check.mjs` の 11 項目のうち発火確認があるのは **5 項目**、`pending` **1 項目**、**確認なし 5 項目**である
+(pr-gate Round 2 / platform-boundary H-005)。**「全件一致」は宣言した期待が満たされたことを示すのであって、
+検証項目の全数が確かめられたことを示さない。** Principle VIII の Verification が持つ
+「CI が緑であることは本 Principle について何も示さない」と同じ形の留保が、ここにも要る。
+
+#### 訂正: 上表の `pnpm test:rules` 行は当時から偽だった (2026-09-16 / AD-027)
+
+上表は「期待表と**全件一致**」と記録しているが、**その一致には偽の 1 行が含まれていた**。
+`wsl-args-array` が期待していた項目 `#1` は、`check.mjs` が全 11 項目の見出しを
+**状態に関わらず必ず印字する**ため構造的に常に満たされていた — 項目 1 は特権コマンド
+**文字列**の検査であり、当該サンプルの `--import` を実際には見ていない
+(pr-gate Round 1 の Critical C-001)。
+
+[AD-027](../../docs/decisions/0027-rule-firing-verification-and-service-io-rule.md) で
+(a) 違反サンプルを **1 件ずつ展開**して検証する形に改め、(b) `#N` を `[VIOLATE] #N` の形で照合し、
+(c) `wsl-args-array` の期待を `['#3']` に訂正した。
+
+**上表の数値そのものは 2026-09-15 時点の実測として正しい**ので書き換えない (監査の跡を残す)。
+AD-027 後の実測は下表である。
+
+#### AD-027 後の enumeration (2026-09-16)
+
+| 検証 | 結果 |
+|---|---|
+| `pnpm lint` | 違反 **0** |
+| `pnpm typecheck` (node / web の 2 project) | エラー **0** |
+| `pnpm depcruise` | 違反 **0** (118 modules / 416 dependencies) |
+| `pnpm check:constitution` (11 項目) | 違反 **0** (ok **10** / 検査対象なし **1**) |
+| `pnpm test` | 15 files / **264 passed** |
+| `pnpm test:rules` (違反サンプル **21 件**) | 期待表と**全件一致**。ただし被覆範囲は上記の留保どおり |
+
+**本節の改定は Principle と Verification のいずれにも触れていない**ため版を上げていない。
+Principle VIII の adoption metadata (`existing_violations: 0` が実測と合わない点。
+pr-gate Round 2 / architecture H-001 + a11y N-003) は**別の改定として扱う** — そちらは
+metadata の変更を伴うため PATCH 改定 (v1.2.3) が要る。
 
 ### 検査対象なし (1 項目)
 
