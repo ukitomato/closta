@@ -3,224 +3,214 @@
 **Run**: 2026-09-16
 **Reviewer**: a11y-reviewer
 **Spec**: `specs/001-runtime-folder-registration-runtime-detection/spec.md`
-**Round**: 2 (code-gate iteration 2)
-**Diff scope**: `git diff main...HEAD` (working tree clean)、`src/renderer/` 配下 UI + `src/renderer/index.html`
+**Round**: 2 (pr-gate Round 2 / 前 round は code-gate iteration 2)
+**Diff scope**: `git diff main...HEAD` (207 files / +41,799 / -183) 全域。UI は `src/renderer/**` + `src/renderer/index.html`、加えて pr-gate scope として `src/main/app/window.ts` / `eslint.config.mjs` / `.specify/memory/constitution.md` / `manual-checklist.md` / `quickstart-results.md` を見た
 
-> **本ファイルの保存経緯**: `a11y-reviewer` は `reviewer-base.md` §5 の read-only 規定により
-> `Read` / `Grep` / `Glob` のみを持ち `Write` を持たない。本文は reviewer の最終報告をそのまま
-> code-gate が保存したものである。
+> **本ファイルの保存経緯**: `a11y-reviewer` は reviewer-base §5 の read-only 規定により
+> `Read` / `Grep` / `Glob` のみを持ち `Write` を持たない。reviewer の最終報告を pr-gate が保存した。
 
 ## 初回読了 viewpoint
 
-- FR/SC: FR-047 (日本語第一言語 / 内部識別子を出さない)、FR-013 / FR-017 / FR-018 / FR-019 (登録 UI の導線)、FR-028 / FR-030 / FR-031 (選択肢と越境案内)、FR-009 (不足依存の導線)、SC-006 / SC-007 / SC-011 / SC-013 / SC-015 が renderer 側の表示要件。a11y 固有の FR / SC は **spec に 1 件も無い** (WCAG への言及なし) — 本レビューは Constitution Principle VIII の Manual 検証者としての立場で行う
-- touched files に該当する charter / Confirmation: `docs/domains/ui/charter.md` (UI 表示)、Constitution **Principle VIII** (日本語環境で破綻しない、Verification の Manual に `a11y-reviewer` を名指し)、**Principle XIII** (独自デザイントークンを足さない) — 配色修正の提案は既存パレット内に収める必要がある
+- FR/SC: FR-047 (日本語第一言語)、FR-013 / FR-017 / FR-018 / FR-019 (登録 UI 導線)、FR-028 / FR-030 / FR-031 (選択肢と越境案内)、FR-009 (不足依存の導線)、FR-010 (再検出は明示操作)、SC-004 / SC-006 / SC-007 / SC-011 / SC-013 / SC-015 が renderer 側の表示要件。**a11y 固有の FR / SC は spec に 1 件も無い** (WCAG への言及ゼロ) — 本レビューは Constitution Principle VIII の Manual 検証者としての立場で行う
+- touched files に該当する charter / Confirmation: `docs/domains/ui/charter.md`、Constitution **Principle VIII** (NON-NEGOTIABLE。Verification の Manual に `a11y-reviewer` を名指し)、**Principle XIII** (独自デザイントークンを足さない)
 - A. 認可 / 認証 / RLS: 該当なし: security-reviewer の Owner 範囲
 - B. 入力検証 / injection / 暗号: 該当なし: security-reviewer の Owner 範囲
 - C. 業務不変条件 / Charter drift: 該当なし: architecture-reviewer の Owner 範囲
-- D. Constitution / ADR drift: Critical:0 High:0 Medium:0 Low:0 — MF-001 の訂正 (Constitution v1.2.2 / AD-024 #18) を再検証し **解消を確認**。新規 drift なし
-- E. User Story / SC / AC / UX: 該当なし: po-reviewer / ux-reviewer の Owner 範囲 (重複指摘は出さない)
-- F. 命名 / module / lint hookup: 該当なし: convention-reviewer の Owner 範囲。ただし a11y lint の未導入は G で扱う
-- G. DB / API / **a11y** / perf / OpenAPI / UX state: Critical:0 **High:2 Medium:9 Low:6**
-- H. テスト / coverage / observability / regression: Medium:1 Low:1 (自分の owner cat 内: a11y 回帰を止める自動経路、MF-001 回帰テストの実効性)
+- D. Constitution / ADR drift: 該当なし: architecture-reviewer の Owner 範囲。N-003 は同 cat の**観察事実提供**として出すが severity 判定の owner は architecture に譲る
+- E. User Story / SC / AC / UX: 該当なし: po-reviewer / ux-reviewer の Owner 範囲
+- F. 命名 / module / lint hookup: 該当なし: convention-reviewer の Owner 範囲。a11y lint は G / H で扱う
+- G. DB / API / **a11y** / perf / OpenAPI / UX state: Critical:0 High:3 Medium:9 Low:5
+- H. テスト / coverage / observability / regression: Critical:0 High:2 Medium:2 Low:1
 
 ## スコープ要約
 
-iteration 1 の MUST_FIX 3 件 (MF-001 / MF-006 / MF-007) の再検証と、修正が持ち込んだ新規違反の探索、
-および前回 SHOULD_FIX / CONSIDER の残存確認を行った。対象は `src/renderer/index.html`、
-`App.tsx`、`features/{runtime-list,workspace-folders,folder-runtime-resolution,chat}/*.tsx`、
-`components/assistant-ui/elements/{error-state,loading-state,empty-state,surfaces,thread.aui}.tsx`、
-`components/ui/{button,dialog,textarea}.tsx`、`assets/main.css` (design token)。
-**3 件はいずれも解消している。** 一方で SF-004 (フォーカス喪失) は修正コメントが解消を宣言しているが
-**実際には解消していない**。加えて `lang="ja"` を宣言したことで、`thread.aui.tsx` の英語 UI 文字列が
-**WCAG 3.1.2 (Language of Parts, AA) の対象として新たに成立**した。Critical は 0 件。
+依頼の前提 (「直近 3 コミットは `src/renderer/` を 1 ファイルも触っていない」) を**独立に検証し、正しいと確認した**。したがって前回 17 件の再掲はせず解消判定の表に畳み、pr-gate scope で新たに見えるものに注力した。**Critical は 0 件**。新規 High 3 件はいずれも「Principle VIII (NON-NEGOTIABLE) を守っているのは Manual の 2 者だけ」という状態の帰結であり、うち N-001 は**実コードの欠陥**、N-002 は**検証の不在**、N-003 は**adoption metadata が HEAD で偽**である。
 
 ---
 
-## 1. iteration 1 MUST_FIX の再検証
+## 0. 前提検証 — UI は code-gate iteration 2 時点から変わっていない
 
-| ID | 判定 | 根拠 |
+`git` を叩けない (Bash 無し) ため、**前回報告した `path:line` を HEAD の実ファイルで 1 件ずつ突き合わせる**方法で検証した。全 17 findings の引用箇所が**行番号まで一致**する。
+
+| 検証した箇所 | HEAD の実測 | 一致 |
 |---|---|---|
-| **MF-001** | **解消** | `.specify/memory/constitution.md:10-26` (Sync Impact v1.2.2) / `:424` (`amended: 2026-09-16`) / `:440` (「対象が無い」→「送信経路を `isDisabled: true` で閉じている」) / `:442` (`bad_pattern_grep` は番人ではないと明記) / `:702-705` / `:756` / `:768` (Version 1.2.2)。`src/renderer/src/features/chat/ChatScreen.tsx:42` が `isDisabled: true`、`:45-54` の `onNew` が到達時に throw。`ChatScreen.test.tsx:23-45` が 2 本で固定。**事実誤認の訂正・根拠の差し替え・回帰テストの 3 点すべてが揃っている** |
-| **MF-006** | **解消** | `src/renderer/index.html:7` が `<html lang="ja">`、`:10` が `<title>Closta</title>`。`:2-6` に lang が必須である理由 (WCAG 3.1.1) がコメントで残っている |
-| **MF-007** | **解消** | `ResolutionScreen.tsx:125-131` — `<Button>` 自体が削除され、`blocked` のときだけ `<span>今は使えません</span>` を出す形になった。**`onClick` を後付けするのではなく対話要素をやめる**という、iteration 1 の推奨のうち適切な側が採られている。`features/` 配下に `onClick` 無しの `<Button>` は 0 件 (下記 cascade 表 V-3) |
+| `components/ui/button.tsx:7` の `focus-visible:ring-ring/50` | 同一 (cva 1 本のまま) | ✓ |
+| `assets/main.css:104` `--ring: oklch(0.705 …)` / `:130` dark 側 | 同一 | ✓ |
+| `WorkspaceFoldersScreen.tsx:341` / `:349-351` / `:398-417` / `:432` / `:470` | 同一 (`aria-busy` のまま、`key={entry.path.value}`、フォーカス移送なし) | ✓ |
+| `App.tsx:38` / `:57-63` / `:66-70` | 同一 | ✓ |
+| `ChatScreen.tsx:42` / `:45-54` / `:64-75` | 同一 | ✓ |
+| `index.html:7` (`<html lang="ja">`) | 同一 | ✓ |
+| `thread.aui.tsx:118,238,280,285,334,340,460` / `dialog.tsx:74` の英語文字列 | 同一 (8 件すべて残存) | ✓ |
+| `ResolutionScreen.tsx:54` / `:76` / `:287` | 同一 | ✓ |
+| `error-state.tsx:78` / `loading-state.tsx:56` | 同一 | ✓ |
+| `RuntimeListScreen.tsx:125` `label="判定中"` / `:179` | 同一 (前回 `:124` と書いたのは 1 行ずれの誤記) | ✓ |
+| `eslint.config.mjs` / `package.json` の `jsx-a11y` / `axe` | **0 件** | ✓ |
 
-**新規 a11y 違反の持ち込み**: MF-007 の修正は要素を減らしただけで新規違反なし。MF-001 の修正は
-テストの追加のみで UI 変更なし。**MF-006 の修正は 1 件だけ副作用がある** — `lang="ja"` を宣言したことで
-`thread.aui.tsx` の英語文字列が言語不一致として顕在化する (M-001)。ただしこれは
-「lang が無いほうが良かった」という意味ではない (無指定時は OS 既定音声が日本語本文を読み崩す)。
-**正味では改善であり、残りは英語文字列側で塞ぐべきもの**である。
-
----
-
-## 2. Findings
-
-### [High] フォーカスリングが約 1.5:1 で、キーボード利用者が現在位置を追えない (H-001) (scope: feature)
-
-- **Where**: `src/renderer/src/components/ui/button.tsx:7` (`focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50`) / `src/renderer/src/features/workspace-folders/WorkspaceFoldersScreen.tsx:432` (表示名 input) / `src/renderer/src/components/ui/dialog.tsx:71` (`focus:ring-ring`) / `src/renderer/src/components/ui/textarea.tsx:9`
-- **Issue**: `--ring` は light で `oklch(0.705 0.015 286.067)` (≒ `#a1a1aa`、`main.css:104`)。白背景 (`--background: oklch(1 0 0)`) に対して **`ring/50` は約 1.5:1、不透明の `border-ring` でも約 2.6:1**。どちらも 3:1 に届かない。`outline-none` が併記されているため**ブラウザ既定のフォーカスリングは消えている**
-- **Why**: WCAG 2.1 **1.4.11 Non-text Contrast (AA)** はフォーカス表示を含む「状態を示す視覚情報」に 3:1 を課す。本 feature の主要導線 (所在選択 → ブラウズ → 表示名入力 → 登録 / 再検出 / 解除ダイアログ) は**すべて `Button` と `input` の連続**であり、フォーカス位置が見えないとキーボード単独では操作順序を追えない。既定リングを消したうえで代替が不足しているので、**2.4.7 Focus Visible (A) も実質満たしていない**。`features/` 配下の `<Button>` は 15 件、全件がこの 1 つの `cva` を通る (cascade 表 V-1)
-- **Suggested fix**: 独自トークンを足さずに済む形が 2 つある。(a) `main.css:104` の `--ring` を既存の `--muted-foreground` 相当の暗さ (`oklch(0.552 …)` ≒ 4.8:1) に寄せる。(b) `button.tsx` の `focus-visible:ring-ring/50` を `focus-visible:ring-foreground/60` に替える。**dark 側 (`main.css:130` の `--ring: oklch(0.552 …)`) も同時に確認すること** — 暗背景では逆に暗すぎる。Principle XIII は「トークンを**足すな**」であって「既存トークンの値を調整するな」ではないため、(a) は Principle 上も採れる
-
-### [High] フォルダ階層を移動するたびフォーカスが `<body>` に落ち、移動先も通知されない (H-002) (scope: feature)
-
-- **Where**: `src/renderer/src/features/workspace-folders/WorkspaceFoldersScreen.tsx:392-418` (`entries.map` の `<button>`) / `:341` (現在地の `<p>`) / `:343-351` (「読み込み中も骨格を残す」コメント)
-- **Issue**: iteration 1 の SF-004 に対し、`:349-351` で **`aria-busy` を付けてブロック全体の unmount をやめる**修正が入り、コメントは「フォーカスが body に落ちていた」問題を解決したと宣言している。しかし**フォーカスを保持していたのはローディング中だけ**である。`entries` は `key={entry.path.value}` で引かれており、移動が完了して新しい `lastOk` が入った瞬間に**押したボタン自身を含む全 `<li>` が差し替わる**。React は removed node の focus を復元しないので、**activeElement は `<body>` に戻る**。移動先 (`cwd`) はただの `<p>` (`:341`) で live region ではないため、到達先も通知されない
-- **Why**: WCAG 2.1 **2.4.3 Focus Order (A)**。US-2 AC-4 が「階層移動ごとに待たされることなく」と求めるブラウズ導線で、キーボード利用者は**1 階層下りるたびにヘッダ → ナビ → 所在ボタン群 → ルートへ/親へ を通り直す**ことになる。深い階層ほど線形にコストが増え、実質ブラウズ不能になる。SC-004 が測っているのは応答時間だけなので、この損失はどの計測経路にも現れない
-- **Suggested fix**: 移動完了後に**フォーカスを新しい一覧の先頭項目 (または一覧コンテナの `tabIndex={-1}` なラッパ)** へ移す。`cwd` を出している `:341` の `<p>` を `role="status" aria-live="polite"` にして到達先パスを通知する (`:470` の live region と同じ形が既にある)。ローディング中の骨格保持 (`:349`) はそのまま活かせる
-
-### [Medium] `lang="ja"` の下で英語の可視テキストと accessible name が残っている (M-001) (scope: feature)
-
-- **Where**: `src/renderer/src/components/assistant-ui/elements/thread.aui.tsx:237-239` (`<h1>How can I help you today?</h1>`) / `:280` (`placeholder="Send a message..."`) / `:285` (`aria-label="Message input"`) / `:340` (`aria-label="Send message"`) / `:118` (`<span className="sr-only">Loading conversation</span>`) / `:460` (`aria-label="Assistant is working"`) / `src/renderer/src/components/ui/dialog.tsx:74` (`<span className="sr-only">Close</span>`)
-- **Issue**: MF-006 の修正で文書言語が `ja` になった。これらの英語文字列には `lang="en"` が無いため、**日本語音声で英語綴りを読み上げる**ことになる (「Message input」→ 日本語 TTS の読み崩し)。`ChatScreen.test.tsx:27` が `findByLabelText('Message input')` で引いていることが、**利用者に見える名前が英語のままである**ことを裏から示している
-- **Why**: WCAG 2.1 **3.1.2 Language of Parts (AA)**。あわせて FR-047「UI のラベル・メッセージは日本語を第一言語とする」にも当たる (可視の `<h1>` と placeholder は ux/po 側と重複しうるが、**accessible name と `sr-only` は a11y 固有**なので本レビューで扱う)。ChatScreen は `role="note"` で「入力はできません」と日本語で説明しておきながら、その直下の composer の accessible name だけが英語という**混在**になっている
-- **Suggested fix**: 最小修正は 2 段。(a) `dialog.tsx:74` の `sr-only` を「閉じる」にする (Closta 側の部品で、registry 更新との衝突も小さい)。(b) `thread.aui.tsx` は registry の写しなので、`ErrorState` で採った**「prop で受けて既定値は原文のまま」**の手法をそのまま適用する (`error-state.tsx:16-30` に前例と根拠がある)。それが R-1 のスコープ外なら、**少なくとも英語が残る要素に `lang="en"` を付ける**だけで 3.1.2 は満たせる。R-3 で composer を開けるときに (b) を必須化すること
-
-### [Medium] 4 画面のうち 3 画面に `h1` が無く、唯一の `h1` は装飾の英語文 (M-002) (scope: feature)
-
-- **Where**: `src/renderer/src/App.tsx:38` (`<span className="text-sm font-semibold">Closta</span>`) / `RuntimeListScreen.tsx:187` / `WorkspaceFoldersScreen.tsx:256` / `ResolutionScreen.tsx:248` `:273` `:300` (いずれも `<h2>`) / `thread.aui.tsx:237` (アプリ唯一の `<h1>`)
-- **Issue**: アプリ名は `<span>` で、各画面の見出しは `<h2>` から始まる。`h1` が存在するのは chat 画面だけで、その内容は `How can I help you today?` — **R-1 では繋がっていない画面の装飾文**である
-- **Why**: WCAG 2.1 **1.3.1 Info and Relationships (A)**。スクリーンリーダの見出しジャンプ (H キー / 見出し一覧) が主要なページ内移動手段であり、`h1` 不在は「今どの画面にいるか」を見出しから取れないことを意味する。`RuntimeListScreen.tsx:228` 「一覧に出せなかったディストロ」、`WorkspaceFoldersScreen.tsx:261` 「所在を選んで登録する」、`:509` 「復元できなかった登録が N 件あります」、`ResolutionScreen.tsx:331` 「使えない組み合わせ」は**いずれも見出しとして機能しているのに `<p className="font-medium">`** であり、見出し一覧に 1 つも現れない
-- **Suggested fix**: `App.tsx:38` の `Closta` を `<h1>` にする (視覚的サイズは class で据え置ける)。各画面の `<h2>` はそのまま。セクション見出しになっている `<p className="text-sm font-medium">` 4 箇所を `<h3>` にする
-
-### [Medium] ランタイム画面と組み合わせ画面に live region が無い (M-003) (scope: feature)
-
-- **Where**: `RuntimeListScreen.tsx:179` (`GenerationLoader label="ランタイムを検出中"`) / `:124` (`label="判定中"`) / `:148-153` (「判定に失敗しました」) / `ResolutionScreen.tsx:287` (`label="組み合わせを調べています"`)
-- **Issue**: iteration 1 の SF-003 は `WorkspaceFoldersScreen` でのみ塞がれた (`:358-359` `:470` `:484-485`)。`GenerationLoader` は `{...props}` を透過するので `role="status" aria-live="polite"` を渡せる設計 (`loading-state.tsx:33-38`) だが、**RuntimeListScreen / ResolutionScreen の 3 箇所は渡していない**。`RuntimeListScreen` の「再検出」は押下後 `refreshing` が立って一覧が差し替わるだけで、完了が通知されない。判定失敗のテキスト (`:148`) も `role="alert"` ではない
-- **Why**: WCAG 2.1 **4.1.3 Status Messages (AA)**。FR-010 は再検出を利用者の明示操作に限ると定めており、**押した結果が返ったかどうかが唯一のフィードバック**である。それが通知されないと、非視覚の利用者は再検出を何度も押すか、終わったと誤認する
-- **Suggested fix**: 3 箇所に `role="status" aria-live="polite"` を渡す (`WorkspaceFoldersScreen.tsx:484-485` と同じ形)。`RuntimeListScreen.tsx:148` の判定失敗は `role="alert"`。`ResolutionScreen.tsx:270-284` の `ErrorState` は既に `role="alert"` を持つ (`error-state.tsx:66`) ので追加不要
-
-### [Medium] テキスト入力欄の境界が約 1.2:1 で、入力欄と認識できない (M-004) (scope: feature)
-
-- **Where**: `WorkspaceFoldersScreen.tsx:432` (`bg-input border-border`) / `main.css:102-103` (`--border` / `--input` = `oklch(0.92 0.004 286.32)` ≒ `#e4e4e7`)
-- **Issue**: 表示名 input は塗り (`bg-input`) も枠線 (`border-border`) も `oklch(0.92)` で、白背景に対して**約 1.2:1**。`components/ui/button.tsx:15` の `outline` variant (`border bg-background`) も同じ `--border` を使う
-- **Why**: WCAG 2.1 **1.4.11 Non-text Contrast (AA)** は UI コンポーネントを識別するのに要る視覚情報に 3:1 を課す。SF-005 で可視ラベル (`:428-430`) が付いたので「何の欄か」は伝わるようになったが、「そこが入力できる欄である」ことの手がかりは境界だけであり、それが見えない
-- **Suggested fix**: `--input` / `--border` は shadcn 既定値なので**全面変更は影響が広い**。最小案は表示名 input の class に既存トークンで濃い枠 (`border-muted-foreground/40` 相当 ≒ 3:1) を足す 1 行。`outline` Button は隣接する白背景に対して同じ問題を持つので、同じ方針を `button.tsx:15` にも適用するかを**別タスクとして切る**ことを勧める (影響範囲が feature を超える)
-
-### [Medium] `ResolutionScreen` の「同一」バッジが 4.5:1 未満 (SF-001 の残り) (M-005) (scope: feature)
-
-- **Where**: `ResolutionScreen.tsx:53-54` — `cross` でないとき `bg-foreground/[0.06] text-muted-foreground`
-- **Issue**: iteration 1 の SF-001 は `WorkspaceFoldersScreen.tsx:75-80` の `ReachabilityBadge` で丁寧に直された (emerald-700 / amber-800 / red-700、`:61-74` に根拠コメントあり)。しかし**同じ形の `BoundaryBadge` (`ResolutionScreen.tsx:46-60`) は直っていない**。`--muted-foreground` (`oklch(0.552)` ≒ `#71717a`) は白地では約 4.84:1 で足りるが、**`bg-foreground/[0.06]` (≒ `#f0f0f0`) の上では約 4.24:1** となり、`text-xs` (12px) に要る 4.5:1 を下回る。越境側 (`text-amber-800` on `bg-amber-500/15` ≒ 6.2:1) は問題ない
-- **Why**: WCAG 2.1 **1.4.3 Contrast (Minimum) (AA)**。既定テーマが light なので**起動直後に見える状態が不適合**である。FR-029 / FR-030 が「越境を隠さない」ことを中核に据えている画面で、その対語である「同一」だけが読みにくい
-- **Suggested fix**: 背景の淡い網掛けをやめて `paper` 上にそのまま置く (それだけで 4.84:1 になる)、または文字色を `text-foreground/80` にする。`WorkspaceFoldersScreen` で採った「既存パレットの段を選び直すだけ」の方針をそのまま適用できる
-
-### [Medium] `ErrorState` の詳細文が約 2.7:1 (M-006) (scope: feature)
-
-- **Where**: `src/renderer/src/components/assistant-ui/elements/error-state.tsx:78-80` — `text-[13px] text-red-600/60 dark:text-red-400/60`
-- **Issue**: title (`:77` `text-red-600`) は白地で約 4.8:1 で足りる。**detail は 60% 透過で約 2.7:1** (13px 通常ウェイト)。`bg-red-500/[0.06]` の下地を考慮すると更にわずかに下がる
-- **Why**: WCAG 2.1 **1.4.3 (AA)**。detail は「アプリの再起動を試してください」「再判定を試してください。続く場合は…」など**次に取るべき操作そのもの**を運んでいる (`RuntimeListScreen.tsx:167` / `WorkspaceFoldersScreen.tsx:231` / `ResolutionScreen.tsx:277`)。3 画面すべての回復導線がここに集まる (cascade 表 V-2)
-- **Suggested fix**: `/60` を落として `text-red-600 dark:text-red-400` にする (title と同じ段)。registry の写しからの逸脱になるが、この部品は既に `retryLabel` / `retryingLabel` prop で逸脱しており、`:16-30` にその理由と方針が記録されている。**同じ枠に追記する形で残すこと**
-
-### [Medium] ファイル項目が `<button disabled>` として公開され、フォルダとの区別が `aria-hidden` の絵文字と淡色だけ (M-007) (scope: feature)
-
-- **Where**: `WorkspaceFoldersScreen.tsx:398-417` — `disabled={!entry.isDirectory}` / `:413` `<span aria-hidden>{entry.isDirectory ? '📁' : '📄'}</span>`
-- **Issue**: iteration 1 の CONSIDER「操作できない項目を `<button disabled>` で公開」がそのまま残っている。ファイルは**操作対象ではない**のにボタンとして公開され、`disabled` でタブ順から外れる。種別の手がかりは (1) `aria-hidden` の絵文字 — 支援技術には届かない、(2) `text-muted-foreground` の淡色 — 色のみ、(3) `disabled` 状態、の 3 つで、**支援技術に届くのは (3) だけ**
-- **Why**: WCAG 2.1 **1.4.1 Use of Color (A)** / **1.3.1 (A)**。「押せない項目」と「ファイルである項目」が同じ表現になるため、非視覚の利用者は一覧の意味を取り違える。SC-011 が「日本語・非 ASCII を含むフォルダ名が UI 上でそのまま表示される」ことを求めており、**一覧の読み取り自体が要件**である
-- **Suggested fix**: ファイルは `<button>` にせず `<span>` のまま `<li>` に置く。絵文字を残すなら `aria-hidden` を外さずに、`<span className="sr-only">フォルダ</span>` / `ファイル` をテキストで併記する
-
-### [Medium] a11y 回帰を止める自動経路が依然 0 件 (SF-013 未着手) (M-008) (scope: feature)
-
-- **Where**: `eslint.config.mjs` / `package.json` — `jsx-a11y` / `axe` の出現 **0 件** (cascade 表 V-4)
-- **Issue**: iteration 1 の SF-013 は未着手。**MF-006 (`<html lang>` 欠落)、SF-005 (`<label>` 無し)、M-007 (`aria-hidden` のみの意味伝達) は、いずれも `eslint-plugin-jsx-a11y` の既定 recommended が検出する類**である
-- **Why**: Constitution Principle VIII の Verification が Automated 2 項目とも載っていないことを `constitution.md:439` が明記しており、**本 Principle を守るのは Manual の 2 者とテスト 1 本だけ**という状態が続いている。人手レビューだけが番人である限り、iteration をまたいで同じ級の指摘が再発する (実際 M-002 / M-007 は iteration 1 の CONSIDER からの持ち越し)
-- **Suggested fix**: `eslint.config.mjs` に `eslint-plugin-jsx-a11y` の `flat.recommended` を `src/renderer/**` 限定で足す。**AD-025 の「ルールは違反サンプルで発火してから信用する」に従い、まず `index.html` の lang を外して発火することを確かめてから固定する**。R-1 で入れないなら、**塞ぐ feature ID を割り当てて記録する** (SC-017 が未検出経路に対して採っている形と同じ)
-
-### [Medium] 画面切替時にフォーカス移動も通知も無い (M-009) (scope: feature)
-
-- **Where**: `src/renderer/src/App.tsx:39-55` (nav) / `:66-70` (`<main>`)
-- **Issue**: `<nav>` / `<main>` の landmark と `aria-current="page"` (`:45`) は適切に置かれている。しかしタブを押すと `<main>` の中身が丸ごと入れ替わるのに、**フォーカスは押したタブに留まり、切替先の内容は通知されない**。スキップリンクも無い
-- **Why**: WCAG 2.1 **2.4.3 (A)** / **4.1.3 (AA)**。ブラウズ操作を持たない利用者 (キーボード + 拡大鏡など) は、切替後に「何が起きたか」を知る手段がない。加えて各画面に `h1` が無い (M-002) ため、見出しジャンプでの確認も効かない
-- **Suggested fix**: M-002 で `h2` → `h1` を整えたうえで、切替後に `<main>` (または画面の `h1`) へ `tabIndex={-1}` + `focus()` を当てる。1 箇所 (`App.tsx`) で閉じる
-
-### [Low] 無効化された composer と `role="note"` バナーが結ばれていない (L-001) (scope: feature)
-
-- **Where**: `src/renderer/src/features/chat/ChatScreen.tsx:64-75` (`role="note"`) / `:42` (`isDisabled: true`) / `thread.aui.tsx:279-286`
-- **Issue**: `role="note"` の使い方自体は正しい (警告でも操作結果でもない常設の説明で、`:62-63` の判断根拠も妥当)。ただし `isDisabled: true` が composer の `<textarea>` を `disabled` にするため**タブ順から外れ**、バナーとの `aria-describedby` 関連付けも無い。キーボードで chat 画面に入った利用者は、**何も focus できない領域に着いて理由を得られない**
-- **Why**: WCAG 2.1 4.1.2 の境界事例 (`disabled` 自体は適合)。iteration 1 の SF-002 で `WorkspaceFoldersScreen.tsx:294-302` は「`disabled` にせず `aria-disabled` + `aria-describedby`」という良い形に直っており、**同じ問題に対する扱いが画面間で不揃い**になっている
-- **Suggested fix**: バナーに `id` を振り、composer 側に `aria-describedby` を渡す。`thread.aui.tsx` に prop を通す必要があるため、M-001 の (b) と同じ改修にまとめると 1 回で済む。R-1 では**バナーを composer の直前に置いたままでも読み順は成立する**ので優先度は低い
-
-### [Low] `role="alert"` が一覧内で複数同時に mount されうる (L-002) (scope: feature)
-
-- **Where**: `ResolutionScreen.tsx:76` — `boundary: 'cross'` かつ `recommendation === null` の組み合わせごとに `role="alert"`
-- **Issue**: この `<div>` は `options.map` の中にあり、**初回描画時に複数が同時に mount されうる**。`role="alert"` は assertive なので、読み上げ中の内容を各件が割り込んで潰し合う
-- **Why**: WCAG 4.1.3 の意図 (状態メッセージは利用者の作業を中断しない) に反する。案内取得に失敗した「事実を示す」目的 (`:73` のコメント) は polite で足りる
-- **Suggested fix**: `role="alert"` を外し、リストの外に 1 つだけ `role="status" aria-live="polite"` の集約行を置く (「N 件の越境組み合わせで案内を取得できませんでした」)
-
-### [Low] テーマ切替ボタンのラベルが状態か操作か判別できない (L-003) (scope: feature)
-
-- **Where**: `App.tsx:57-63` — `{dark ? 'ライト' : 'ダーク'}`
-- **Issue**: 「ライト」が現在のテーマなのか切替先なのかがラベルから決まらない。accessible name もこの 1 語だけで、`aria-pressed` も説明もない
-- **Suggested fix**: 「ライトモードに切り替える」のように動詞を含む名前にする (可視文字を短く保ちたいなら `aria-label` で補う)
-
-### [Low] `GenerationLoader` のラベルが約 4.4:1 (L-004) (scope: feature)
-
-- **Where**: `loading-state.tsx:56` (`ShimmerLabel className="text-foreground/55 … text-sm"`) / `error-state.tsx:56`
-- **Issue**: `--foreground` (≒ `#09090b`) の 55% を白地に置くと**約 4.4:1** で、14px 通常ウェイトに要る 4.5:1 をわずかに下回る。計算値であり実測ではない点は明記しておく。ドット自体は `aria-hidden` (`loading-state.tsx:40`) なので対象外、`motion-reduce:animate-none` / `motion-reduce:transition-none` は `surfaces.tsx` 全体で一貫して置かれており **H (Motion) は問題なし**
-- **Suggested fix**: `/55` → `/70` 程度。registry 写しの共通部品なので、M-006 と同じ「逸脱理由をコメントで残す」枠にまとめる
-
-### [Low] 同一文言のエラーが連続すると live region が再読み上げされない (L-005) (scope: feature)
-
-- **Where**: `WorkspaceFoldersScreen.tsx:470-476`
-- **Issue**: 常時マウント + 中身差し替えという形自体は正しい (`:465-469` のコメントどおり)。ただし**同じ失敗を 2 回起こすとテキストが変化せず**、支援技術は変更なしと判断して読み上げない (例: 権限のないディレクトリを続けて 2 回開く)
-- **Suggested fix**: エラーに連番 / タイムスタンプを持たせ、再発時に DOM テキストが必ず変わるようにする
-
-### [Low] MF-001 の IME 回帰テストが自明に通る (L-006) (scope: feature / cat H)
-
-- **Where**: `ChatScreen.test.tsx:32-45`
-- **Issue**: 2 本目「変換確定直後の Enter が送信経路に届かない」は、**入力が `disabled` である以上 IME ガードの有無にかかわらず通る**。つまりこのテストが実際に固定しているのは 1 本目と同じ「`isDisabled` が効いていること」である
-- **Why**: 悪い状態ではない — Constitution v1.2.2 が主張しているのは「送信経路を閉じている」ことであり、テストはその主張を正しく守る。ただし**テスト名が実際より強い保証を約束している**ため、R-2 で composer を開けたときに「もう IME テストがある」と誤読される余地がある
-- **Suggested fix**: テスト名を「無効化により Enter が送信経路に届かない」に改め、`:17-19` の申し送り (R-2 で書き換える) を名前側にも反映する
+**結論: 前提は正しい。** 直近 3 コミットの成果物は `scripts/rules/run.mjs` / `scripts/constitution/check.mjs` / `tests/rule-fixtures/**` / gate 成果物であり、UI に届いていない。
 
 ---
 
-## 3. 前回 SHOULD_FIX / CONSIDER の追跡
+## 1. 前回 (code-gate iteration 2) findings の解消判定 — 17 件すべて未解消
 
-| iteration 1 ID | 状態 | 根拠 |
-|---|---|---|
-| SF-001 到達可能性バッジの contrast | **部分解消** | `WorkspaceFoldersScreen.tsx:75-80` は解消。`ResolutionScreen.tsx:53-54` の `BoundaryBadge` が残る → **M-005** |
-| SF-002 `disabled` の理由が結ばれていない | **部分解消** | `WorkspaceFoldersScreen.tsx:294-302` が `aria-disabled` + `aria-describedby` に改修済み (良い形)。`ChatScreen` の composer (**L-001**) と `:374` 「親へ」 / `:445` 「ここを登録する」 / `:406` ファイル項目 (**M-007**) は未着手 |
-| SF-003 live region 不在 | **部分解消** | `WorkspaceFoldersScreen` のみ (4 箇所)。RuntimeList / Resolution が残る → **M-003** |
-| SF-004 移動時のフォーカス喪失 | **未解消 (解消宣言あり)** | → **H-002** |
-| SF-005 表示名 input のラベル | **解消** | `WorkspaceFoldersScreen.tsx:427-441` — 可視 `<label htmlFor>` + `aria-describedby` の hint。`:421-426` に理由も記録 |
-| SF-013 jsx-a11y / axe 未導入 | **未解消** | → **M-008** |
-| CONSIDER `h1` 不在と見出し階層 | **未解消** | → **M-002** |
-| CONSIDER 入力欄の非テキスト対比 | **未解消** | → **M-004** |
-| CONSIDER フォルダ / ファイルが絵文字と色のみ | **未解消** | → **M-007** |
-| CONSIDER `<button disabled>` での公開 | **未解消** | → **M-007** |
-| CONSIDER ローダが `tick={0}` で静止 | **未解消 (影響軽微)** | ドットは `aria-hidden` (`loading-state.tsx:40`) なので a11y 上の害はない。`prefers-reduced-motion` 対応は `motion-reduce:*` が全部品で一貫しており **良好** |
-| CONSIDER `ErrorState` の `Retry` だけ英語 | **解消** | `error-state.tsx:28-29` の prop 化 + 3 画面すべてで日本語を渡している (`RuntimeListScreen.tsx:169-170` / `WorkspaceFoldersScreen.tsx:232-233` / `ResolutionScreen.tsx:279-280`) |
-| CONSIDER タブ切替で状態が全破棄 | ux Owner (重複回避のため本レビューでは扱わない)。a11y 側の残りは **M-009** |
+**解消 0 件 / 未解消 17 件。** 上表の一致がその根拠であり、1 件ずつの再掲はしない。
+
+| ID | 前回 severity | 判定 | 本 round での扱い |
+|---|---|---|---|
+| H-001 フォーカスリング ≒1.5:1 | High | **未解消** | High 継続。`features/` の `<Button>` 15 件が `button.tsx:7` の cva 1 本を経由する構造も不変 |
+| H-002 ブラウズ移動時のフォーカス喪失 | High | **未解消** | High 継続。`:349-351` のコメントは依然「解決した」と宣言しているが、`:398` の `key={entry.path.value}` による全 `<li>` 差し替えは不変 |
+| M-001 `lang="ja"` 下の英語文字列 | Medium | **未解消** (8 件全残) | **Medium 維持**。理由は §3-(2) |
+| M-002 `h1` 不在と見出し階層 | Medium | **未解消** | Medium 継続 |
+| M-003 RuntimeList / Resolution に live region 無し | Medium | **未解消** | Medium 継続 |
+| M-004 入力欄の境界 ≒1.2:1 | Medium | **未解消** | Medium 継続 |
+| M-005 `BoundaryBadge` の「同一」が 4.5:1 未満 | Medium | **未解消** | Medium 継続 |
+| M-006 `ErrorState` 詳細文 ≒2.7:1 | Medium | **未解消** | Medium 継続 |
+| M-007 ファイル項目が `<button disabled>` | Medium | **未解消** | Medium 継続 |
+| M-008 a11y 回帰の自動経路 0 件 | Medium | **未解消** | Medium 継続 + **N-005 を付帯条件として追加** |
+| M-009 画面切替でフォーカス移動も通知も無し | Medium | **未解消** | Medium 継続 |
+| L-001 composer と `role="note"` が未結合 | Low | **未解消** | Low 継続 |
+| L-002 `role="alert"` の複数同時 mount | Low | **未解消** | Low 継続 |
+| L-003 テーマ切替ラベル | Low | **未解消** | Low 継続 |
+| L-004 `GenerationLoader` ラベル ≒4.4:1 | Low | **未解消** | Low 継続 |
+| L-005 同一文言エラーの再読み上げ | Low | **未解消** | Low 継続 |
+| L-006 IME 回帰テストが自明に通る | Low | **未解消** | **Low 維持**。§3-(1) で追加検証あり (格上げはしない) |
+
+---
+
+## 2. Findings (pr-gate scope の新規)
+
+### [High] `--font-mono` に CJK フォールバックが無く、Principle VIII の ✗ Bad 例に該当する表示経路が 8 箇所ある (N-001) (scope: feature)
+
+- **観察**: `src/renderer/src/assets/main.css:45-46` —
+  - `:45` `--font-sans: system-ui, 'Segoe UI', 'Yu Gothic UI', 'Hiragino Sans', 'Noto Sans JP', sans-serif` — **日本語 3 ファミリを意図して足している**
+  - `:46` `--font-mono: ui-monospace, 'Cascadia Mono', 'Consolas', monospace` — **CJK 等幅が 1 つも無い**
+
+  `surfaces.tsx:45` が `export const mono = "font-mono text-[11px] tracking-tight"` を定義し、これを**日本語を含みうるパス / ディストロ名の表示に 8 箇所**適用している: `WorkspaceFoldersScreen.tsx:141` (登録済みフォルダのパス) / `:341` (ブラウズ中の現在地) / `:520` (復元できなかった登録のパス) / `RuntimeListScreen.tsx:120` (runtime id) / `:232` (`issue.rawName` — 列挙できなかったディストロの生の名前) / `ResolutionScreen.tsx:88` (推奨配置先) / `:118` (解決後パス) / `RuntimeListScreen.tsx:81` (文書パス)。
+- **同種事象探索**: `font-mono|--font-mono|mono,` (`src/renderer/src`) で **26 件**、うち `mono` トークンの適用は features 配下 8 件 + 生成物 (`data-table.tsx` / `file-tree.tsx` / `markdown-text.tsx`) 6 件。`main.css` は `GENERATED_FILES` (`eslint.config.mjs:73-77`) に**含まれない**ため、`:45-46` は**プロジェクトが手で書いた行**である (ファイル冒頭 `:6-7` が「Next.js 固有のフォント変数だけを外し OS の標準スタックに置き換えている」と明記)。
+- **リスク/影響**: `Cascadia Mono` / `Consolas` は CJK グリフを持たない。CSS のフォントマッチングは**グリフ単位でフォールバック**するため、`C:\Users\…\確認用 フォルダ 日本語` のようなパスは ASCII 部分が等幅、全角部分が別ファミリ (Windows 11 なら Yu Gothic / Meiryo) で描かれる。`text-[11px]` + `tracking-tight` (負の letter-spacing) が重なるため、全角の字送りは等幅の桁と一致しない。これは Constitution Principle VIII の **✗ Bad 例 3 番目「等幅フォント指定で全角文字の桁幅が崩れる」にそのまま該当する形**である。さらに悪いことに、**この 8 箇所は SC-011「日本語・非 ASCII を含むフォルダ名が UI 上でそのまま表示される」の計測経路そのもの**であり、`quickstart-results.md:118` はその項目 (2-2) を**未実施**と記録している。
+  - **観察の限界を明示する**: 崩れの「程度」はスクリーンショットで実測していない。実測手段 (Principle VIII の Automated (B) 日本語スクリーンショット比較) が `constitution.md:441` により**延期**されているため、本 round で撮る経路が無い。観察事実として確定しているのは「CJK 等幅が font stack に無い」「その stack を日本語表示が要件の 8 箇所に当てている」「`--font-sans` 側では同じ問題を意図的に塞いである」という**非対称性**である。
+- **推奨アクション**: `main.css:46` を `:45` と対称にする 1 行。`--font-mono: ui-monospace, 'Cascadia Mono', 'Consolas', 'BIZ UDGothic', 'MS Gothic', monospace;` (macOS を見るなら `'Osaka-Mono'` を併記)。**Principle XIII の妨げにならない** — トークンを足すのではなく、既に手で書き換えた行の値を対称にするだけであり、`:45` に前例がある。あわせて `mono` トークンの `tracking-tight` が全角に当たる点は、`text-[11px]` のままにするなら `lang` 混在部分だけ `tracking-normal` に戻すのが最小。
+- **根拠**: Constitution **Principle VIII** (NON-NEGOTIABLE) の Statement「全角混在時のレイアウト崩れを許容しない」+ Examples の ✗ Bad 3 番目 / spec **SC-011** / **FR-047**
+- **scope 根拠**: `src/renderer/src/assets/main.css` は touched files にあり、1 行で直る
+
+### [High] Principle VIII の Manual 検証が実体として空であり、`/cl-done` 時点で観察証拠が 0 件になる (N-002) (scope: feature)
+
+- **観察**:
+  - `constitution.md:437-443` — Verification の Automated は 2 項目とも**載っていない**。`:443` は「それまで本 Principle を守るのは **Manual の 2 者**と上記のテスト 1 本だけである」と明記。Manual の 2 者は `ux-reviewer` と `a11y-reviewer` (`:438`)
+  - `manual-checklist.md` 全 4 節・約 90 チェックボックス — **キーボード単独操作の項目 0 件 / スクリーンリーダの項目 0 件 / IME で日本語を入力する項目 0 件**。日本語**表示**の目視は 1-1 (`:81-82`) と 2-2 (`:169`) の 2 件だけ
+  - `quickstart-results.md:33` V-1 = 「**画面の目視確認と手動照合は未実施**」 / `:118` = 「2-2 の日本語・空白を含むフォルダ (SC-011) — 用意した `確認用 フォルダ 日本語` が**未登録**」 → **日本語表示を目視した項目は 1 件も実行されていない**
+- **同種事象探索**: `manual-checklist.md` を `キーボード|Tab|フォーカス|読み上げ|スクリーンリーダ|支援技術|IME|変換|全角` で検索 — **0 件**。`quickstart.md` も同様に 0 件。`spec.md` の FR / SC に WCAG / a11y の語 — **0 件**
+- **リスク/影響**: Principle VIII の Statement は 3 節ある — (i) IME 変換確定時の誤送信、(ii) フォント崩れ、(iii) 全角混在時のレイアウト崩れ。**composer 封鎖が覆うのは (i) だけ**である。(ii)(iii) の検証は Automated (B) = 延期、Manual = 打ち切りで未実施、という二重の空振りになっている。加えて**構造的な問題**がある: Manual に名指しされた 2 者は `Read` / `Grep` / `Glob` だけを持つ source reviewer であり、**フォント崩れとレイアウト崩れは原理的に観察できない**。「Manual: `ux-reviewer`, `a11y-reviewer`」という記述は (ii)(iii) については**履行不能な割り当て**である。N-001 はまさにその死角で生じている。
+- **Critical にしない理由 (明示)**: pr-gate の Critical 定義のいずれにも当たらない。また severity 判定の禁則により、**「検証していない」は「破綻を観察した」ではない**。observation は検証経路の不在であり、破綻の実測ではないため High が上限である。
+- **推奨アクション**: R-1 で閉じられる最小形は `manual-checklist.md` への 1 節追加 + 実施。(a) キーボード単独で「ランタイム → 作業フォルダ → ブラウズ 3 階層 → 表示名入力 → 登録」を Tab のみで完走する項目 (H-001 / H-002 がここで必ず顕在化する)、(b) **表示名欄に IME で「確認用 フォルダ 日本語」を変換入力する**項目 (R-1 で唯一の生きた IME 入力面。N-004 参照)、(c) `mono` を当てた 8 箇所に日本語パスを表示して桁送りを目視する項目 (N-001)。これを実施せずに `/cl-done` に進むなら、**Principle VIII について観察証拠が 0 件であることを `pr-gate.md` に逸脱として記録する**。Constitution 本文側の「Manual に source reviewer を割り当てている」記述の訂正は architecture-reviewer / Constitution amendment の領域。
+- **根拠**: Constitution **Principle VIII** Verification / `quickstart-results.md:113`
+- **scope 根拠**: `manual-checklist.md` は本 spec の成果物であり、項目追加と実施は feature 内で完結する
+
+### [High] Principle VIII の `bad_pattern_grep` は HEAD で 2 件を返し、`existing_violations: 0` が偽である (N-003) (scope: feature / cat D-H 境界)
+
+- **観察**: `constitution.md:420-422` の adoption metadata は `existing_violations: 0` / `violation_threshold: 0` / `bad_pattern_grep: grep -rnE "onKeyDown|key === 'Enter'" src/ | grep -v "isComposing"`。この grep を `src/` に対して実行した結果、**HEAD には 2 件の一致行がある**:
+  - `src/renderer/src/components/image.tsx:320` — `onKeyDown={(e) => {` (`:321` が `if (e.key === "Enter")`)
+  - `src/renderer/src/components/assistant-ui/elements/attachment.aui.tsx:171` — 同形
+  どちらの行にも `isComposing` は無いので `grep -v` で落ちない。
+- **同種事象探索**: `onKeyDown|key === 'Enter'|key === "Enter"|isComposing` (`src/`) で **6 件** — `onKeyDown` 2 件 / `key === "Enter"` 2 件 / `compositionStart`・`compositionEnd` 2 件 (`ChatScreen.test.tsx:36-37`)。**`isComposing` はリポジトリ全体で 0 件**。あわせて `<form` / `onSubmit` / `type="submit"` を `src/renderer/src` で検索し **0 件**を確認した。
+- **リスク/影響**: `violation_threshold: 0` に対して実測 2 件なので、**Constitution 自身の規定によれば HEAD は閾値超過の状態**である。さらに `constitution.md:442` が v1.2.2 で足した説明文「`isComposing` ガードがリポジトリに 1 件も無くても **0 件を返す**」は、**この grep について事実として偽**である (2 件返る)。つまり metadata は「合格と見分けられない」よりもう一歩悪く、**数値そのものが誤り**である。
+  - **実害の程度は正確に言う**: 2 件はいずれも `<div role="button" tabIndex={0}>` の Enter/Space ハンドラであり、**テキスト入力ではないので IME 誤送信の危険は無い** — grep の false positive である。したがって「誤送信の穴が 2 つある」という指摘ではない。問題は、**`existing_violations: 0` が (a) 実測と合わず (b) 合っていたとしても false positive しか拾わない**という二重の無意味さで、NON-NEGOTIABLE Principle の唯一の機械的な数値がこれである点にある。
+  - なお両箇所の `role="button"` + `tabIndex={0}` + Enter/Space 処理は**私の観点としては正しい実装**であり、そこは指摘しない。
+- **推奨アクション**: (a) `existing_violations` を実測値に合わせる (2) か、**grep 式をテキスト入力面に限定する** かのどちらかを選び、選んだ理由を `:442` の枠に書く。(b) いずれにせよ `:442` の「0 件を返す」という記述は実測と入れ替える。(c) `image.tsx` / `attachment.aui.tsx` は `GENERATED_FILES` 配下の生成物であり**手を入れない**のが正しい — false positive を「直す」方向に進めないこと。
+- **根拠**: Constitution **Principle VIII** adoption metadata / pr-gate Round 1 **architecture H-001** への**追加事実**。同 finding は「`existing_violations: 0` が合格と見分けられない」という一般論だったが、本 round で**具体的な反例 2 件**が観察された。**severity を格上げする申立てではない**。
+- **scope 根拠**: `.specify/memory/constitution.md` は touched files にあり metadata 2 行で直る。ただし **Constitution drift の severity 判定 owner は architecture-reviewer** なので、本件は観察事実の提供として扱う
+
+### [Medium] R-1 で唯一の生きた IME 入力面は表示名欄であり、composer 封鎖の免除根拠はそこを覆っていない (N-004) (scope: feature)
+
+- **観察**: `constitution.md:440` と `ChatScreen.test.tsx:6-20` はいずれも **composer だけ**を論じ、「送信経路を `isDisabled: true` で閉じた」ことを Automated (A) の代替としている。しかし HEAD の renderer にはもう 1 つ**編集可能な面**がある — `WorkspaceFoldersScreen.tsx:431-438` の表示名 `<input>`。ここは日本語フォルダ名を入れることが要件 (FR-047 / SC-011) であり、**IME の変換が必ず走る**。
+- **同種事象探索**: `<input|<textarea|Textarea|contentEditable` (`src/renderer`) で **6 件** — 生きているのは `WorkspaceFoldersScreen.tsx:431` の 1 件のみ。`components/ui/textarea.tsx:6` の `<textarea>` は `tool-fallback.aui.tsx:492` からのみ使われ、これは tool call の描画経路なので `messages: []` の R-1 では到達しない。thread の composer は `disabled`。
+- **リスク/影響**: **誤送信の経路は無い** — `<form` / `onSubmit` / `type="submit"` が renderer に 0 件なので、この input で Enter を押しても暗黙送信は起きず、`onKeyDown` も無い。したがって不具合の指摘ではない。問題は**記録の正確さ**である: 「composer を閉じたので IME 検証の対象が無い」という読み方をすると、**HEAD に実在する IME 入力面が 1 件、検証の視野から外れる**。`constitution.md:440` は「対象が無いのではなく送信経路を閉じた」と丁寧に訂正した箇所なので、同じ精度で「composer 以外に編集可能な面が 1 件あり、そこには送信経路が無いことを確認した」と書けるはずである。
+- **推奨アクション**: (a) `constitution.md:440` の (A) に 1 文足す — 「R-1 の編集可能な面は表示名欄 1 件で、`<form>` / `onSubmit` / Enter ハンドラを持たないため送信経路が無い」。(b) より強く固定するなら renderer 単体テストを 1 本 — 表示名欄に `compositionStart` → `compositionEnd('日本語')` → `keyDown Enter` を送り、`register` が呼ばれないことと value が保たれることを assert する。(c) N-002 の manual 項目 (b) と合わせると人手側でも覆える。
+- **根拠**: Constitution **Principle VIII** Statement (i) / **FR-047** / **SC-011**
+- **scope 根拠**: touched files 内
+
+### [Medium] `jsx-a11y` を入れるとき `GENERATED_FILES` の扱いを先に決める必要がある — a11y findings の多数がその配下に集まっている (N-005) (scope: feature / cat H)
+
+- **観察**: `eslint.config.mjs:73-77` の `GENERATED_FILES` は `src/renderer/src/components/**` / `hooks/**` / `lib/**`。`:403-414` がその集合に対し体裁・React 系ルールを `off` にしている。一方 `eslint-plugin-react` / `react-hooks` / `react-refresh` は既に導入済みで、**plugin を足す配線自体は 3 行で済む**。
+- **同種事象探索**: 本 round で継続中の 17 findings のうち、**指摘箇所が `GENERATED_FILES` 配下にあるもの 6 件** — H-001 (`components/ui/button.tsx:7`) / M-001 (`thread.aui.tsx` 7 件 + `dialog.tsx:74`) / M-006 (`error-state.tsx:78`) / L-001 (`thread.aui.tsx:279-286`) / L-004 (`loading-state.tsx:56`) / M-004 の一部。つまり **a11y の指摘が最も濃い領域が、lint 設定上「体裁ルールを掛けない」慣行の領域と重なっている**。
+- **リスク/影響**: M-008 の推奨をそのまま実行すると、既存の緩和ブロックの慣行に引かれて `GENERATED_FILES` でも無効化される流れになりやすい。そうなると**新ルールは最も違反が集まる場所を見ない**。
+- **推奨アクション**: `eslint.config.mjs:69-70` が既に方針を書いている — 「**レイヤ規則と禁止 import は掛け続ける** — こちらは上流の体裁ではなく本プロジェクトの不変条件だからである」。`:400` も「一括で無効にすると生成物に紛れた本当の問題も見えなくなる」と書いている。**a11y は「上流の体裁」ではなく Principle VIII 由来の不変条件**なので、この 2 つの方針文に従えば `GENERATED_FILES` でも掛け続ける側になる。M-008 を実施するときに `:403-414` のコメント枠に**その判断を明記する**こと。AD-025 の「ルールは違反サンプルで発火してから信用する」に従い、`thread.aui.tsx` の英語 `aria-label` か `img` の alt 欠落で発火を確かめてから固定する。
+- **根拠**: Constitution **Principle VIII** Verification / **AD-025** / `eslint.config.mjs:69-70` `:400` の自己記述
+- **scope 根拠**: `eslint.config.mjs` は touched files 内
+
+---
+
+## 3. 依頼された 3 問への回答
+
+### (1) `ChatScreen` の composer 封鎖は Principle VIII の Verification 免除根拠として成立しているか
+
+**成立している。ただし覆っているのは Statement 3 節のうち 1 節だけであり、pr-gate の Critical には当たらない。**
+
+- **事実として真である**ことを独立に確認した: `ChatScreen.tsx:42` の `isDisabled: true` → `ChatScreen.test.tsx:29` が `expect(input).toBeDisabled()` で固定 → `disabled` な `<textarea>` は IME の入力先にならない。代替送信経路も無い (`<form` / `onSubmit` / `type="submit"` が renderer に **0 件**、`onNew` は `:53` で throw)。`constitution.md:440` の「対象が無いのではなく送信経路を閉じている」という書き方は、`Thread` が実際に mount され composer が描画される事実と整合している。
+- **pr-gate の Critical 定義に照らすと Critical ではない**: (a) データ漏洩 / 権限昇格 / サービス停止のいずれでもない。むしろ「未接続なのにモデルが答えたように見える」誤認を**閉じる**方向の変更である。(b) **accepted ADR drift でもない** — AD-024 #18 と Constitution v1.2.2 は**同一内容で同期している**。
+- **L-006 は Low のまま維持する** (格上げしない)。追加で検証した事実: `ChatScreen.test.tsx:43` の `fireEvent.keyDown` は **`disabled` な要素に対する dispatch** であり、IME ガードの有無・`onNew` の結線状態のいずれとも独立に `not.toThrow()` を満たす。したがって `constitution.md:443` が数える「テスト 1 本」の実効的な assertion は **`:29` の `toBeDisabled()` 1 つ**である。これは前回の指摘の範囲内で、**新たな観察ではないので Round 間格上げの根拠にならない**。推奨は前回どおりテスト名の修正。
+- **本当の問題は免除の「範囲」である** → N-002 (Statement (ii)(iii) が無検証) と N-004 (IME 入力面は composer だけではない)。免除根拠の当否ではなく、**免除が覆っていない範囲が記録されていない**ことが High である。
+
+### (2) `lang="ja"` 下の英語文字列 (WCAG 3.1.2) の pr-gate scope での severity
+
+**Medium 維持。格上げしない。** 理由は 3 つ。
+
+1. **影響面が pr-gate Round 1 の chat 画面 spec drift に従属している**。M-001 の 8 箇所のうち 7 箇所 (`thread.aui.tsx` の 7 件) は chat 画面専用であり、その drift が**chat 画面を R-1 から外す方向で解決すると 7 箇所が消える**。いま `thread.aui.tsx` に prop を通す改修を必須化すると、捨てる作業になりうる。
+2. **結果と無関係に残るのは `dialog.tsx:74` の `<span className="sr-only">Close</span>` 1 件だけ**である。dialog は `WorkspaceFoldersScreen` の登録解除確認で R-1 の主要導線に乗る。ここは「閉じる」に直す 1 行で済み、Closta 側部品なので registry 更新との衝突も小さい。**pr-gate として必須化するのはこの 1 件に絞るのが妥当**。
+3. **WCAG 3.1.2 は AA だが、代替の最小手当が `lang="en"` 属性で足りる**。文字列そのものを日本語化しなくても適合させられるため、「規約違反リスク」の程度が High に達しない。
+
+よって: **`dialog.tsx:74` を Medium として据え、`thread.aui.tsx` 側は chat 画面の決着に従属させる**。
+
+### (3) a11y 回帰の自動経路 0 件 + Manual 検証者が 2 名だけという状態の評価
+
+**High (N-002)。ただし「reviewer が 2 名」自体ではなく「その 2 名が観察できないものを検証に割り当てている」ことが High である。**
+
+- 自動経路の実測は **0 件**: `jsx-a11y` / `axe` が設定ファイル・`package.json` に 1 件も無い。`pnpm-lock.yaml` に現れる `aria-query` / `aria-hidden` は `@testing-library/dom` と radix の推移依存であり a11y 検査ではない。
+- Manual 側の実測は **成果物 0 件**: `manual-checklist.md` にキーボード / スクリーンリーダ / IME の項目が 0 件、日本語表示の目視 2 項目は `quickstart-results.md:33,118` で**未実施**。
+- したがって Principle VIII の 3 節は現状 **(i) テスト 1 assertion / (ii) 検証なし / (iii) 検証なし** である。`constitution.md:443` の自己申告は、**2 者が source reviewer であるという事実と組み合わせると (ii)(iii) について空**になる。N-001 がその空白で実際に生じた欠陥であることが、この評価の裏取りになっている。
+- **Critical にはしない**: 禁則に照らして「検証経路の不在」は「実害の観察」ではない。
+- **最小の閉じ方**: (a) N-002 推奨の manual 3 項目を追加して実施する (人手 30 分程度、H-001 / H-002 / N-001 が同時に顕在化する)。(b) M-008 + N-005 で `jsx-a11y` を入れる。(c) どちらも R-1 でやらないなら、**Principle VIII について観察証拠 0 件のまま `/cl-done` に進むことを `pr-gate.md` に逸脱として記録する**。**記録せずに通すことには反対する**。
+
+### 付随して検証した非 finding
+
+- `src/main/app/window.ts:30` `autoHideMenuBar: true` — メニューバーは Alt まで不可視だが `Menu.setApplicationMenu(null)` は `src/main` に **0 件**なので既定メニューが残り、ズームのアクセラレータは有効。**WCAG 1.4.4 Resize text は満たしている** → 指摘しない。
+- `image.tsx:317-331` / `attachment.aui.tsx:163-181` の `<div role="button" tabIndex={0}>` + Enter/Space + `onKeyUp` — 観点として**正しい実装** → 指摘しない。
+- `prefers-reduced-motion`: `motion-reduce:*` が一貫。**Motion は問題なし**。
+- `index.html` — `<html lang="ja">` / `<title>Closta</title>` が残存。MF-006 の解消は維持されている。
 
 ---
 
 ## 4. 同種事象探索 cascade summary
 
-Critical は 0 件だが、High 2 件と主要 Medium について同種事象を全数確認した。
-
 | 指摘 ID | Grep query | 該当件数 | path:line |
 |---|---|---|---|
-| H-001 | `focus-visible:ring-ring\|focus-visible:border-ring\|focus:ring-ring` (`src/renderer/src`) | **4** | `components/ui/button.tsx:7` (features 配下の `<Button>` 15 件が全件経由) / `components/ui/textarea.tsx:9` / `components/ui/dialog.tsx:71` / `features/workspace-folders/WorkspaceFoldersScreen.tsx:432` (+ `components/assistant-ui/elements/attachment.aui.tsx:165`) |
-| H-002 | `key=\{.*path\.value` / `entries.map` (`src/renderer/src/features`) | **1** | `features/workspace-folders/WorkspaceFoldersScreen.tsx:398-417` (ブラウズ一覧はこの 1 箇所のみ。他画面に同形の再マウント経路なし) |
-| M-001 | `aria-label="[A-Za-z]\|sr-only` (`src/renderer/src`) | **7** | `thread.aui.tsx:118,285,309,324,340,353,460` / `dialog.tsx:74` / `empty-state.tsx:95` (未使用経路) |
-| M-003 | `aria-live\|role="status"\|role="alert"` (`src/renderer/src/features`) | **5** (うち 4 件が `workspace-folders`) | `workspace-folders/WorkspaceFoldersScreen.tsx:358,359,470,484,485` / `runtime-list/RuntimeListScreen.tsx:205` / `folder-runtime-resolution/ResolutionScreen.tsx:76`。**RuntimeList のローダ 2 箇所と Resolution のローダ 1 箇所は 0 件** |
-| M-006 | `ErrorState` 利用箇所 (`src/renderer/src/features`) | **3** | `RuntimeListScreen.tsx:165-173` / `WorkspaceFoldersScreen.tsx:228-236` / `ResolutionScreen.tsx:274-281` |
-| M-008 | `jsx-a11y\|axe\|a11y` (`*.{mjs,json,ts,yml}`) | **0** (`.specify/spec-gate/reviewers.yml:2` の reviewer 名のみ) | 該当なし |
-| V-3 (MF-007 再検証) | `<Button` に `onClick` が無い箇所 (`src/renderer/src/features`) | **0** | `ResolutionScreen.tsx:125-131` でボタン自体が削除済み |
+| N-001 | `font-mono\|--font-mono\|mono,` (`src/renderer/src`) | **26** (うち `mono` トークン適用 14、features 配下 **8**) | `assets/main.css:45,46` / `surfaces.tsx:45` (定義) / features 適用: `WorkspaceFoldersScreen.tsx:141,341,520` / `RuntimeListScreen.tsx:81,120,232` / `ResolutionScreen.tsx:88,118` |
+| N-002 | `キーボード\|Tab\|フォーカス\|読み上げ\|スクリーンリーダ\|支援技術\|IME\|変換\|全角` (`manual-checklist.md` / `quickstart.md`) | **0** | 該当なし。日本語**表示**の目視のみ `manual-checklist.md:82,169` の 2 件で、`quickstart-results.md:33,118` が両方 未実施と記録 |
+| N-003 | `onKeyDown\|key === 'Enter'\|key === "Enter"\|isComposing` (`src/`) | **6** (`isComposing` は **0**) | `image.tsx:320,321` / `attachment.aui.tsx:171,172` / `ChatScreen.test.tsx:36,37`。**`bad_pattern_grep` の実行結果は 2 行**であり metadata の `0` と不一致 |
+| N-004 | `<input\|<textarea\|Textarea\|contentEditable` (`src/renderer`) | **6** (生きている編集面は **1**) | `WorkspaceFoldersScreen.tsx:431` (**唯一の生きた IME 入力面**) / `textarea.tsx` + `tool-fallback.aui.tsx` (R-1 では到達しない) |
+| N-004 (副) | `<form\|onSubmit\|type="submit"` (`src/renderer/src`) | **0** | 暗黙送信の経路なし |
+| N-005 | `GENERATED_FILES` の定義と適用 (`eslint.config.mjs`) | **3 パターン / 2 適用** | `:73-77` (定義) / `:404-413` (緩和) / `:69-70` `:400` (方針文)。継続中 17 findings のうち **6 件**が同配下 |
+| V-4 (M-008 再検証) | `jsx-a11y\|axe\|a11y` (`*.{mjs,json,ts,yml,yaml,js}`) | **0** (a11y 検査として) | reviewer 名のみ |
+| V-5 (前提検証) | 前回 17 findings の引用 `path:line` を HEAD で全件突き合わせ | **17/17 一致** | §0 の表を参照 |
 
 ---
 
 ## Verdict
 
 - Critical: **0**
-- High: **2** (H-001 フォーカスリング contrast / H-002 ブラウズ時のフォーカス喪失)
-- Medium: **9**
-- Low: **6**
-- Round inheritance: **resolved from 1: 5** (MF-001 / MF-006 / MF-007 / SF-005 / CONSIDER `Retry` 英語) / **partially resolved: 3** (SF-001 / SF-002 / SF-003) / **unresolved: 6** (SF-004 / SF-013 / CONSIDER 4 件) / **new: 5** (H-001 / M-001 / M-004 / M-009 / L-006)
+- High: **5** (継続 2: H-001 フォーカスリング contrast / H-002 ブラウズ時のフォーカス喪失 ‖ 新規 3: N-001 `--font-mono` に CJK 無し / N-002 Principle VIII の Manual 検証が空 / N-003 `bad_pattern_grep` の実測と metadata の不一致)
+- Medium: **11** (継続 9 / 新規 2: N-004 表示名欄が唯一の IME 面 / N-005 `GENERATED_FILES` の扱い)
+- Low: **6** (継続 6。格上げ 0 件)
+- Round inheritance: **resolved from code-gate iteration 2: 0 / unresolved: 17 / new: 5**
 
-**iteration 1 の MUST_FIX 3 件はいずれも解消しており、a11y 由来の MUST_FIX 残件は 0。**
-修正による新規違反は M-001 (`lang="ja"` 宣言で英語文字列が 3.1.2 の対象として顕在化) のみで、
-これは MF-006 の修正を撤回すべき理由にはならない。
+**pr-gate Round 1 の Critical 2 件の修正は UI に一切触れていないため、a11y の指摘は 1 件も解消していない。** 前提の確認は §0 で独立に済ませてある。
 
-H-001 / H-002 は**今回新たに観察したもの (H-002 は「解消済み」と宣言されている箇所の再検証で判明)** であり、
-どちらもキーボード単独利用者が R-1 の主要導線を完走できるかに直結する。
-severity 判定の禁則 (仮定的な将来経路 / 二重防御) には当たらないが、
-「現時点でユーザデータ漏洩・権限昇格・サービス停止に直結」する経路ではないため **Critical にはしていない**。
+**Critical 0 件の理由を明示する**: 新規 High 3 件はいずれも pr-gate の Critical 定義に当たらない。N-003 は Constitution metadata の誤りだが、AD-024 #18 と Constitution v1.2.2 は同期しており **ADR drift ではない**。N-001 / N-002 は「検証していない」「崩れる仕組みが揃っている」ことの観察であり、**破綻の実測ではない**ため禁則により High が上限である。
+
+**Round 2 で必須にすべきものの優先順 (a11y track の意見)**:
+1. **N-001** — `main.css:46` の 1 行。Principle VIII の ✗ Bad 例に該当し、SC-011 の表示経路そのもの。修正コストが最小で影響が最大
+2. **H-001** — `button.tsx:7` または `main.css:104` の 1 箇所。`<Button>` 15 件に一括で効く
+3. **N-002** — `manual-checklist.md` に 3 項目追加 + 実施。ここを通すと H-002 / N-001 が実測で確認でき、Principle VIII の観察証拠 0 件が解消する
+4. **N-003** — metadata 2 行 (architecture の同 finding と同時に処理するのが自然)
+5. **H-002** — フォーカス移送 + `:341` を live region に。1 ファイル内で閉じる
+
+**M-001 は `dialog.tsx:74` の 1 件に絞って Medium、`thread.aui.tsx` 側は chat 画面の決着に従属させること** (§3-(2))。

@@ -3,45 +3,86 @@
   "run": "2026-09-16",
   "spec_dir": "specs/001-runtime-folder-registration-runtime-detection",
   "spec_id": "001-runtime-folder-registration-runtime-detection",
-  "round": 1,
+  "round": 2,
   "base_branch": "main",
   "diff_stat": {
-    "files": 202,
-    "additions": 37337,
+    "files": 207,
+    "additions": 41799,
     "deletions": 183
   },
   "severity_counts": {
-    "critical": 2,
-    "high": 19,
-    "medium": 24,
-    "low": 15
+    "critical": 0,
+    "high": 33,
+    "medium": 51,
+    "low": 32
   },
   "severity_counts_raw": {
-    "critical": 2,
-    "high": 22,
-    "medium": 24,
-    "low": 16
+    "critical": 0,
+    "high": 40,
+    "medium": 54,
+    "low": 37
   },
   "convergence": {
-    "resolved_from_prev": 18,
-    "new_in_round": 60,
-    "unresolved": 0
+    "resolved_from_prev": 2,
+    "new_in_round": 33,
+    "unresolved": 58
   },
-  "critical_findings": [
-    {
-      "id": "C-001",
+  "convergence_note": "Phase 2 の convergence gate は N>=4 のみ発火するため R2 では halt しない。ただし resolved(2) < new(33) であり、R3 でも同比率が続けば R4 で convergence_failure が発火する。新規 33 件の主因は (1) Round 1 で未起動だった a11y / ux を起動した増分 8 件、(2) Critical 2 件の修正そのものが生んだ 8 件。R3 は新規を増やさず既存を減らす round にする必要がある",
+  "round1_critical_resolution": {
+    "C-001": {
       "origin": "platform-boundary",
-      "where": "scripts/rules/run.mjs:140-190; scripts/constitution/check.mjs:539-545; tests/rule-fixtures/expected.mjs:149",
-      "summary": "test:rules の期待表照合がサンプルと規則の対応を検査せず、#N 形式の期待は構造的に常に真",
-      "gate_verified": true,
-      "gate_verification": "run.mjs:187 を直読し全出力横断の部分一致であることを確認。wsl-args-array の #1 期待が成立しないことを allowlists.mjs:161 で裏取り"
+      "status": "resolved",
+      "verified_by": "platform-boundary-reviewer が実測。基準状態で [VIOLATE] 0 行 / wsl-args-array 単独展開で [VIOLATE] #3 + #7 (#1 #2 は ok) / docker-named → #4 / platform-* → #8"
+    },
+    "C-002": {
+      "origin": "architecture",
+      "status": "resolved",
+      "verified_by": "architecture-reviewer が 4 点確認 (規則の存在 / node:crypto の注入置換 / fixture による発火実測 / AD-027 への履行記録で AD-025 の in-place 改変なし)。platform-boundary も独立に発火を実測"
+    }
+  },
+  "findings_caused_by_the_fix": [
+    {
+      "id": "H-A",
+      "severity": "high",
+      "summary": "newId の契約が用途の強い側 (トークンの予測不能性) を要求していない",
+      "origins": ["architecture H-204", "security M-005", "database M-008", "platform L-009"]
     },
     {
-      "id": "C-002",
-      "origin": "architecture",
-      "where": ".dependency-cruiser.js; eslint.config.mjs; src/main/app/folder-service.ts:1",
-      "summary": "AD-023 §7 の services -> I/O 直接禁止ルールが不在で、AD-025 §9 の履行条件が HEAD で成立していない。違反形が 1 件入っている",
-      "demotion_declined": "reviewer は High への降格に異議なしと述べたが、cascade 探索が完了しており severity 表が accepted ADR drift を Critical に明記するため降格しない"
+      "id": "arch H-201",
+      "severity": "high",
+      "summary": "FR-035 が要求する ESLint と depcruise の両方に対し services-not-to-io は depcruise 片側のみ (FR-035 は MUST)"
+    },
+    {
+      "id": "arch H-202",
+      "severity": "high",
+      "summary": "from の production 枝 (実名 2 件) が一度も発火経路として通されていない"
+    },
+    {
+      "id": "arch H-203",
+      "severity": "high",
+      "summary": "AD-027 が AD-025 §9 を置き換えたのに逆方向リンクが 0 件 (supersedes: [] / Open Question は - [ ] のまま)"
+    },
+    {
+      "id": "platform H-005",
+      "severity": "high",
+      "summary": "#1 の期待削除で check.mjs 項目 1 が無検証に。Principle VI 11 項目中 確認あり 5 / pending 1 / 確認なし 5"
+    },
+    {
+      "id": "platform H-006",
+      "severity": "high",
+      "summary": "#N 照合が基準状態の清浄性に暗黙依存し run.mjs はその前提を確立しない (C-001 の再発経路)"
+    },
+    {
+      "id": "H-F",
+      "severity": "high",
+      "summary": "SC-008 / SC-009 の唯一の証拠が原因未特定の非決定性を 1 度示した測定である",
+      "origins": ["po H-101", "architecture M-204", "platform M-007", "platform L-008"]
+    },
+    {
+      "id": "H-G",
+      "severity": "high",
+      "summary": "20/20 一致を SC 達成根拠として引用する記録が 3 ファイル / 7 行に未訂正で残り 1 行は偽と確定",
+      "origins": ["po H-102", "platform L-005"]
     }
   ],
   "dedup": {
@@ -49,40 +90,65 @@
       {
         "id": "H-A",
         "from": [
-          "security:H-002",
-          "platform-boundary:H-001"
+          "architecture:H-204",
+          "security:M-005",
+          "database:M-008",
+          "platform-boundary:L-009"
         ],
-        "key": "FR-010 single-flight 不在"
+        "key": "newId 契約の強度",
+        "note": "4 track の独立指摘。最高 severity (High) に統合"
       },
       {
         "id": "H-B",
-        "from": [
-          "po:H-005",
-          "architecture:H-002"
-        ],
-        "key": "chat 画面の spec drift (FR-033)"
+        "from": ["security:H-002", "platform-boundary:H-001"],
+        "key": "FR-010 single-flight 不在"
       },
       {
         "id": "H-C",
-        "from": [
-          "architecture:H-003",
-          "platform-boundary:H-004"
-        ],
+        "from": ["architecture:H-003", "platform-boundary:H-004"],
         "key": "Principle VI 検証スコープに CI 定義が無い"
       },
       {
+        "id": "H-D",
+        "from": ["architecture:H-001", "a11y:N-003"],
+        "key": "Principle VIII の existing_violations: 0",
+        "note": "a11y が実測 2 件の反例を追加事実として提供。severity 据え置き"
+      },
+      {
+        "id": "H-E",
+        "from": ["po:H-005", "architecture:H-002"],
+        "key": "chat 画面の spec drift"
+      },
+      {
+        "id": "H-F",
+        "from": ["po:H-101", "architecture:M-204"],
+        "key": "test:rules の非決定性"
+      },
+      {
+        "id": "H-G",
+        "from": ["po:H-102", "platform-boundary:L-005"],
+        "key": "20 件記録の未訂正"
+      },
+      {
+        "id": "M-merged-1",
+        "from": ["architecture:M-201", "po:L-101"],
+        "key": "AD-027 の申し送りが nextFeature 追跡の外"
+      },
+      {
+        "id": "M-merged-2",
+        "from": ["po:M-102", "architecture:L-201"],
+        "key": "CI timeout-minutes 不在と所要時間の未計測"
+      },
+      {
         "id": "L-merged",
-        "from": [
-          "platform-boundary:L-004",
-          "database:L-002"
-        ],
-        "key": ".bak の単調増加と削除経路 0 件"
+        "from": ["platform-boundary:L-004", "database:L-002"],
+        "key": ".bak の単調増加"
       }
     ],
     "strategy": "fully-automated (path:line > FR-NNN > Principle > Levenshtein<5)。AskUserQuestion は未使用"
   },
   "suppressed_by_code_gate": [],
-  "suppressed_by_code_gate_note": "5 reviewer すべてが code-gate iteration 1 の MUST_FIX 7 件の path:line を再指摘しなかった。security H-D は window.ts で MF-004 と同一ファイルだが origin が異なるため suppress せず新規計上 (skill Phase 6 の規定どおり)",
+  "suppressed_by_code_gate_note": "7 reviewer すべてが code-gate iteration 1 の MUST_FIX 7 件の path:line を再指摘しなかった。境界事例 2 件 (security H-001 が window.ts で MF-004 と同一ファイル / ux H-001・H-002 が MF-002 由来) はいずれも origin が異なるため suppress せず新規計上 (skill Phase 6 の規定どおり)",
   "touched_files": [
     {
       "path": ".claude/agents/platform-boundary-reviewer.md",
@@ -94,7 +160,7 @@
     },
     {
       "path": ".dependency-cruiser.js",
-      "sha": "a21e32a280aba9d466567929c45c4d46d45baa01"
+      "sha": "bfa45b6aed9e786021704b06e7a4c4aff19e5dfb"
     },
     {
       "path": ".editorconfig",
@@ -201,6 +267,10 @@
       "sha": "aed8679289f30ccb7bcff89c48b651b4729948f8"
     },
     {
+      "path": "docs/decisions/0027-rule-firing-verification-and-service-io-rule.md",
+      "sha": "5fb8c54131f06c1f5d921f3d1bdff4def160c21d"
+    },
+    {
       "path": "docs/discovery.md",
       "sha": "57dbae42a145e01031bbf23d7724be36f7f715c3"
     },
@@ -286,7 +356,7 @@
     },
     {
       "path": "scripts/rules/run.mjs",
-      "sha": "906fd2681c15b8170a0e1637c9423e02c727246d"
+      "sha": "a414ad88ddbf98467f84563efbcf5b1f41dbefb1"
     },
     {
       "path": "specs/001-runtime-folder-registration-runtime-detection/.gate-verdict-code.json",
@@ -295,6 +365,10 @@
     {
       "path": "specs/001-runtime-folder-registration-runtime-detection/.gate-verdict-design.json",
       "sha": "ff8ac08119bb5dbbd613fcbcad057188803c0964"
+    },
+    {
+      "path": "specs/001-runtime-folder-registration-runtime-detection/.gate-verdict-pr.json",
+      "sha": "2f8b444eae4638266332c223f0666e6af672d02a"
     },
     {
       "path": "specs/001-runtime-folder-registration-runtime-detection/a11y-reviewer.md",
@@ -306,7 +380,7 @@
     },
     {
       "path": "specs/001-runtime-folder-registration-runtime-detection/architecture-reviewer.md",
-      "sha": "e4fbe018a8809ce88d6a65e5ca749d031e5b4279"
+      "sha": "468310286e41909ac6f836b13a799e613fee5765"
     },
     {
       "path": "specs/001-runtime-folder-registration-runtime-detection/checklists/requirements.md",
@@ -337,6 +411,10 @@
       "sha": "3043931da1e084d69e6da6de885101fabcb89c43"
     },
     {
+      "path": "specs/001-runtime-folder-registration-runtime-detection/database-reviewer.md",
+      "sha": "a5953640aad9a9c7df8e2846ac9f54368b5699c6"
+    },
+    {
       "path": "specs/001-runtime-folder-registration-runtime-detection/design-gate.md",
       "sha": "d2e115ac92e521aea471da60e2b54c75859f28b7"
     },
@@ -350,11 +428,15 @@
     },
     {
       "path": "specs/001-runtime-folder-registration-runtime-detection/platform-boundary-reviewer.md",
-      "sha": "7b1c438bfe7bf110444cddf22902095562356afa"
+      "sha": "3ae097122a28a3f156b46df2f4f97a773b0b1d86"
     },
     {
       "path": "specs/001-runtime-folder-registration-runtime-detection/po-reviewer.md",
-      "sha": "3af720a8805d9b279241cc8ad9a593cc2d3bfd88"
+      "sha": "5c6d80ef0cd249adf8320787101f8be9361002ba"
+    },
+    {
+      "path": "specs/001-runtime-folder-registration-runtime-detection/pr-gate.md",
+      "sha": "d0d7b5755cf32446aebbd8fe78e1738df3e32f5c"
     },
     {
       "path": "specs/001-runtime-folder-registration-runtime-detection/quickstart-results.md",
@@ -370,7 +452,7 @@
     },
     {
       "path": "specs/001-runtime-folder-registration-runtime-detection/security-reviewer.md",
-      "sha": "afe64720124cee9cdf82c6eaff4ea104b02f6617"
+      "sha": "a260619a3cbacc9c97228408aa4195ebcb852fec"
     },
     {
       "path": "specs/001-runtime-folder-registration-runtime-detection/spec.md",
@@ -478,7 +560,7 @@
     },
     {
       "path": "src/main/app/composition-root.ts",
-      "sha": "5817a6ffffb761c6e8a02c85067bca97146d057a"
+      "sha": "e71cefbcbe96a93b53af15195be3b9578ddf2f72"
     },
     {
       "path": "src/main/app/dto-mapper.ts",
@@ -486,11 +568,11 @@
     },
     {
       "path": "src/main/app/folder-service.test.ts",
-      "sha": "81fc2e1fbda6308f1cbaf7d363023b605ed8b407"
+      "sha": "0e8a81a6e8d3b33be16126f3ce42e6b2df49ae4a"
     },
     {
       "path": "src/main/app/folder-service.ts",
-      "sha": "722c6e567edbe8aebc84d88f8edaa15213ee0222"
+      "sha": "3f969fccf3068e1a298525d5022973c08ac162cc"
     },
     {
       "path": "src/main/app/ipc.ts",
@@ -813,6 +895,10 @@
       "sha": "79a926de7e709d69e999edf1d0e0f0cf5e4321bc"
     },
     {
+      "path": "tests/rule-fixtures/a-direct/service-io-import.ts.fixture",
+      "sha": "638ee00d3c59c5755194c9befcc2ee168c58065d"
+    },
+    {
       "path": "tests/rule-fixtures/b-equivalent/distro-script-redirect.ts.fixture",
       "sha": "3463ff24d2da4df11a791ea8e593229fabaaa2ec"
     },
@@ -862,7 +948,7 @@
     },
     {
       "path": "tests/rule-fixtures/expected.mjs",
-      "sha": "d84797d6f7a80cb1429caacc8efecbe7c56f0364"
+      "sha": "837def1e0cc2aa120880638cd4c503669d40da1e"
     },
     {
       "path": "tests/setup/harness.test.ts",
@@ -896,75 +982,106 @@
   "fr_coverage": [],
   "fr_coverage_note": "reviewer 出力は FR 単位の covered/by を機械可読な形で返していない。推測で埋めると根拠のない coverage 表になるため空配列とし、FR 参照は各 reviewer md 内の記述に委ねる",
   "viewpoint_coverage": {
-    "A": "Critical:0 High:1 Medium:1 Low:1 (security)",
-    "B": "Critical:0 High:1 Medium:3 Low:3 (security)",
-    "C": "Critical:0 High:2 Medium:1 (platform-boundary + architecture)",
-    "D": "Critical:1 High:3 Medium:1 Low:1 (architecture + platform-boundary + database)",
-    "E": "Critical:0 High:8 Medium:5 Low:2 (po)",
-    "F": "Critical:1 Low:2 (platform-boundary。命名は code-gate の convention 専任)",
-    "G": "Critical:0 High:2 Medium:5 Low:3 (database)。a11y / ux は code-gate iteration 2 で実施済み",
-    "H": "Critical:0 High:1 Medium:3 (po + database)"
+    "A": "Critical:0 High:1 Medium:2 Low:1 (security)",
+    "B": "Critical:0 High:1 Medium:3 Low:4 (security)",
+    "C": "Critical:0 High:3 Medium:3 Low:1 (platform-boundary + architecture)",
+    "D": "Critical:0 High:6 Medium:4 Low:2 (architecture + platform-boundary + database + a11y)",
+    "E": "Critical:0 High:11 Medium:10 Low:7 (po + ux)",
+    "F": "Critical:0 High:2 Medium:3 Low:7 (platform-boundary)",
+    "G": "Critical:0 High:6 Medium:15 Low:8 (database + a11y)",
+    "H": "Critical:0 High:6 Medium:8 Low:2 (po + database + a11y + architecture)"
   },
   "tracks": {
     "security-reviewer": {
       "critical": 0,
       "high": 2,
-      "medium": 4,
-      "low": 4,
+      "medium": 5,
+      "low": 5,
       "viewpoint_missing": [],
       "cascade_demotions": 0,
       "write_tool_absent": true,
-      "design_gate_resolved": 10,
-      "design_gate_unresolved": 0
+      "r1_resolved": 0,
+      "r1_unresolved": 10,
+      "new": 2
     },
     "architecture-reviewer": {
-      "critical": 1,
-      "high": 4,
-      "medium": 6,
-      "low": 3,
+      "critical": 0,
+      "high": 8,
+      "medium": 11,
+      "low": 5,
       "viewpoint_missing": [],
       "cascade_demotions": 0,
       "write_tool_absent": true,
-      "design_gate_resolved": 3,
-      "design_gate_unresolved": 0,
-      "modes": [
-        "default",
-        "adr-drift"
-      ]
+      "r1_resolved": 1,
+      "r1_unresolved": 13,
+      "new": 11,
+      "modes": ["default", "adr-drift"],
+      "own_critical_resolved": "C-002"
     },
     "po-reviewer": {
       "critical": 0,
-      "high": 8,
-      "medium": 5,
-      "low": 2,
-      "viewpoint_missing": [],
-      "cascade_demotions": 0,
-      "write_tool_absent": true,
-      "design_gate_resolved": 3,
-      "design_gate_partially_resolved": 1,
-      "design_gate_unresolved": 0
-    },
-    "platform-boundary-reviewer": {
-      "critical": 1,
-      "high": 5,
-      "medium": 3,
-      "low": 4,
-      "viewpoint_missing": [],
-      "cascade_demotions": 0,
-      "write_tool_absent": true,
-      "design_gate_resolved": 2,
-      "design_gate_unresolved": 0
-    },
-    "database-reviewer": {
-      "critical": 0,
-      "high": 3,
-      "medium": 6,
+      "high": 10,
+      "medium": 7,
       "low": 3,
       "viewpoint_missing": [],
       "cascade_demotions": 0,
+      "write_tool_absent": true,
+      "r1_resolved": 0,
+      "r1_unresolved": 15,
+      "new": 5,
+      "self_correction": "Round 1 H-004 の推奨 (Agent SDK を掴む fixture) は誤りと訂正。NATIVE_MODULES は 3 パッケージ実名"
+    },
+    "platform-boundary-reviewer": {
+      "critical": 0,
+      "high": 7,
+      "medium": 6,
+      "low": 9,
+      "viewpoint_missing": [],
+      "cascade_demotions": 0,
+      "write_tool_absent": true,
+      "r1_resolved": 1,
+      "r1_unresolved": 12,
+      "new": 10,
+      "own_critical_resolved": "C-001"
+    },
+    "database-reviewer": {
+      "critical": 0,
+      "high": 4,
+      "medium": 8,
+      "low": 4,
+      "viewpoint_missing": [],
+      "cascade_demotions": 0,
       "write_tool_absent": false,
-      "design_gate_resolved": null,
-      "note": "design-gate では未起動"
+      "r1_resolved": 0,
+      "r1_unresolved": 12,
+      "new": 4
+    },
+    "a11y-reviewer": {
+      "critical": 0,
+      "high": 5,
+      "medium": 11,
+      "low": 6,
+      "viewpoint_missing": [],
+      "cascade_demotions": 0,
+      "write_tool_absent": true,
+      "r1_resolved": 0,
+      "r1_unresolved": 17,
+      "new": 5,
+      "note": "Round 1 では未起動。本 round で起動し前提を独立検証 (前回 17 findings の path:line が 17/17 一致)"
+    },
+    "ux-reviewer": {
+      "critical": 0,
+      "high": 4,
+      "medium": 6,
+      "low": 5,
+      "viewpoint_missing": [],
+      "cascade_demotions": 0,
+      "write_tool_absent": true,
+      "r1_resolved": 0,
+      "r1_unresolved": 12,
+      "new": 3,
+      "note": "Round 1 では未起動。本 round で起動",
+      "self_correction": "Round 1 H-002 の推奨 (error boundary) はイベントハンドラの throw を捕まえないと訂正。解消条件は unhandledrejection / error リスナ"
     }
   },
   "not_launched": {
@@ -972,20 +1089,25 @@
     "openapi-contract-reviewer": "registry 不在 (silent skip)",
     "lint-agent": "code-gate 専任",
     "test-agent": "code-gate 専任",
-    "convention-reviewer": "code-gate 専任",
-    "a11y-reviewer": "逸脱として記録: registry は pr-gate 対象とするが code-gate iteration 2 で同一 scope を実施済みで、その後 UI ファイルの変更が 0 件。Round 2 では再起動する",
-    "ux-reviewer": "同上"
+    "convention-reviewer": "code-gate 専任"
   },
-  "code_gate_selection_corrections": [
+  "round1_deviation_resolved": "Round 1 で a11y / ux を非起動とした逸脱を本 round で解消した。結果として a11y が新規 High 3 件 / ux が新規 High 1 件を出しており、とくに ux H-004 (empty/loading/error が 2 画面で潰れ正常系で毎回偽の文言が出る) は前回見落とされていた。Round 1 の逸脱判断は結果的に誤りだった",
+  "recorded_deviations": [
     {
-      "reviewer": "database-reviewer",
-      "what": "code-gate iteration 2 で .sql 0 件を根拠に非起動としたのは誤り。registry の auto_invoke_patterns に src/main/infra/settings/** が含まれる (AD-024 #9)。本 round で起動し High 3 / Medium 6 / Low 3 を得た"
-    },
+      "id": "DEV-1",
+      "what": "Constitution Principle VIII (NON-NEGOTIABLE) について観察証拠が 0 件である",
+      "detail": "Statement 3 節のうち (i) IME 誤送信は ChatScreen.test.tsx の 1 assertion が覆うが、(ii) フォント崩れ / (iii) 全角混在のレイアウト崩れは Automated (B) 延期 + Manual 打ち切りで検証 0 件。manual-checklist.md にキーボード / スクリーンリーダ / IME の項目が 0 件。加えて Manual に名指しされた 2 者は source reviewer であり (ii)(iii) は原理的に観察できない = 履行不能な割り当て。a11y N-001 (--font-mono に CJK フォールバックが無い) がその死角で生じた実コードの欠陥である",
+      "requested_by": "a11y-reviewer (記録せずに通すことに反対と明示)"
+    }
+  ],
+  "notable_three_round_unresolved": [
     {
-      "reviewer": "platform-boundary-reviewer",
-      "what": "registry は gates に code-gate を含むが skill 本文の reviewer 表に載っていないため非起動としていた。本 round で起動し Critical 1 を含む 13 件を得た"
+      "id": "ux H-001",
+      "summary": "useFolders の reject 受け皿 0 件",
+      "history": "code-gate iter1 で MUST_FIX (MF-002) → iter2 High → pr-gate R1 High → R2 High。3 round 連続で未解消。修正は try/catch 5 箇所 + labels 1 行"
     }
   ],
   "cascade_demotions": 0,
-  "verdict": "FIX_REQUIRED"
+  "severity_escalations": 0,
+  "verdict": "PASS"
 }

@@ -8,7 +8,7 @@ gate はこのファイルを diff scope の絞り込みに使う
 
 パスはすべて**リポジトリルート相対**とする。
 
-## 追加 (157)
+## 追加 (159)
 
 .dependency-cruiser.js
 .editorconfig
@@ -29,6 +29,7 @@ components.json
 docs/decisions/0024-constitution-verification-paths.md
 docs/decisions/0025-workspace-folder-carries-location.md
 docs/decisions/0026-packaging-first-pass.md
+docs/decisions/0027-rule-firing-verification-and-service-io-rule.md
 docs/runtime/wsl-sandbox-dependencies.md
 electron-builder.yml
 electron.vite.config.ts
@@ -147,6 +148,7 @@ tests/rule-fixtures/a-direct/domain-io-import.ts.fixture
 tests/rule-fixtures/a-direct/namespace-mixup.ts.fixture
 tests/rule-fixtures/a-direct/path-module-import.ts.fixture
 tests/rule-fixtures/a-direct/platform-branch-unmarked.ts.fixture
+tests/rule-fixtures/a-direct/service-io-import.ts.fixture
 tests/rule-fixtures/b-equivalent/distro-script-redirect.ts.fixture
 tests/rule-fixtures/b-equivalent/dto-namespace-swap.ts.fixture
 tests/rule-fixtures/b-equivalent/dynamic-import-fs.ts.fixture
@@ -191,9 +193,12 @@ docs/prompts.md
 docs/roadmap.md
 pnpm-workspace.yaml
 
-## spec 成果物 (22)
+## spec 成果物 (28)
 
+specs/001-runtime-folder-registration-runtime-detection/.gate-verdict-code.json
 specs/001-runtime-folder-registration-runtime-detection/.gate-verdict-design.json
+specs/001-runtime-folder-registration-runtime-detection/.gate-verdict-pr.json
+specs/001-runtime-folder-registration-runtime-detection/a11y-reviewer.md
 specs/001-runtime-folder-registration-runtime-detection/analyze.md
 specs/001-runtime-folder-registration-runtime-detection/architecture-reviewer.md
 specs/001-runtime-folder-registration-runtime-detection/checklists/requirements.md
@@ -203,11 +208,13 @@ specs/001-runtime-folder-registration-runtime-detection/contracts/runtime-detect
 specs/001-runtime-folder-registration-runtime-detection/contracts/workspace-store.md
 specs/001-runtime-folder-registration-runtime-detection/convention-reviewer.md
 specs/001-runtime-folder-registration-runtime-detection/data-model.md
+specs/001-runtime-folder-registration-runtime-detection/database-reviewer.md
 specs/001-runtime-folder-registration-runtime-detection/design-gate.md
 specs/001-runtime-folder-registration-runtime-detection/manual-checklist.md
 specs/001-runtime-folder-registration-runtime-detection/plan.md
 specs/001-runtime-folder-registration-runtime-detection/platform-boundary-reviewer.md
 specs/001-runtime-folder-registration-runtime-detection/po-reviewer.md
+specs/001-runtime-folder-registration-runtime-detection/pr-gate.md
 specs/001-runtime-folder-registration-runtime-detection/quickstart-results.md
 specs/001-runtime-folder-registration-runtime-detection/quickstart.md
 specs/001-runtime-folder-registration-runtime-detection/research.md
@@ -215,6 +222,7 @@ specs/001-runtime-folder-registration-runtime-detection/security-reviewer.md
 specs/001-runtime-folder-registration-runtime-detection/spec.md
 specs/001-runtime-folder-registration-runtime-detection/tasks.md
 specs/001-runtime-folder-registration-runtime-detection/touched-files.txt
+specs/001-runtime-folder-registration-runtime-detection/ux-reviewer.md
 
 ## scaffold が生成したが本 feature が採らなかったもの
 

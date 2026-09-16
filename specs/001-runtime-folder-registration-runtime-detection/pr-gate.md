@@ -1,125 +1,186 @@
-# PR Gate Round 1: フォルダ登録とランタイム検出 (R-1)
+# PR Gate Round 2: フォルダ登録とランタイム検出 (R-1)
 
 **Run**: 2026-09-16
 **Base**: `main` (HEAD の祖先。diverge なし)
-**Diff stat**: +37,337 / -183 over 199 files
-**Reviewers**: security, architecture (default + adr-drift), po, platform-boundary, database
-**Round inheritance**: Round 1 (初回)。design-gate の各 reviewer 出力を前 round として継承
+**Diff stat**: +41,799 / -183 over 207 files
+**Reviewers**: security, architecture (default + adr-drift), po, platform-boundary, database, a11y, ux (**7 並列**)
+**Round inheritance**: Round 1 findings (Critical: 2, High: 19) を引継ぎ
 
 ## Verdict
 
-| Severity | This round | Resolved from design-gate | New in R1 | Net (dedup 後) | Suppressed by code-gate |
+| Severity | This round | Resolved from R1 | New in R2 | Net (dedup 後) | Suppressed by code-gate |
 |---|---|---|---|---|---|
-| Critical | **2** | 2 | 2 | **2** | 0 |
-| High | 22 | 13 | 22 | **19** | 0 |
-| Medium | 24 | 3 | 24 | **24** | 0 |
-| Low | 16 | 0 | 16 | **15** | 0 |
+| Critical | **0** | **2** | 0 | **0** | 0 |
+| High | 40 (raw) | 0 | 40 | **33** | 0 |
+| Medium | 54 (raw) | 0 | — | **51** | 0 |
+| Low | 37 (raw) | 0 | — | **32** | 0 |
 
-**Status**: **FIX_REQUIRED**
+**Status**: **PASS (Critical = 0)**
 
-**Next**: Critical を 2 件とも解消してから `/cl-pr-gate` を再実行 (Round 2)。
-`--defer-remaining` 経路は撤廃済みのため、**Critical 残存では `/cl-done` に進めない**。
-妥協が必要なら ADR 起票 + Constitution / spec 範囲調整で Critical を解消する。
+**Next**: `/cl-done specs/001-runtime-folder-registration-runtime-detection`
+
+**Round 1 の Critical 2 件はいずれも解消した。** 判定は**指摘した本人**が行っている。
+
+| Round 1 Critical | origin | 判定 | 判定根拠 |
+|---|---|---|---|
+| C-001 `test:rules` の照合が構造的に常に真 | platform-boundary | **resolved** | 同 reviewer が実測で確認 — 基準状態で `[VIOLATE]` が **0 行**、`wsl-args-array` 単独展開で `[VIOLATE] #3` + `#7` が出て `#1` / `#2` は `ok` のまま (訂正が実態と一致)、`docker-named` → `#4`、`platform-*` → `#8`。**7 件 / 8 トークンの `#N` 恒真と 8 トークンの規則名相互充足はどちらも解消** |
+| C-002 `services ✗→ I/O` 規則の不在 | architecture | **resolved** | 同 reviewer が 4 点を確認 — 規則が `.dependency-cruiser.js:214-247` に存在 / `folder-service.ts` の `node:crypto` が `deps.newId` 注入に置換 / fixture で発火を実測 / 履行記録が AD-027 に残り **AD-025 の in-place 改変が無い**。platform-boundary も独立に発火を実測 (`error services-not-to-io: ... → crypto`) |
+
+**PASS は「指摘が無い」ことを意味しない。** Round 1 の 60 件は **1 件も解消しておらず**、新規 33 件が加わった。
+下記「convergence の予兆」を必ず読むこと。
 
 ### track 別の内訳
 
-| Reviewer | Critical | High | Medium | Low | design-gate からの継承 |
+| Reviewer | Critical | High | Medium | Low | Round 1 からの継承 |
 |---|---|---|---|---|---|
-| security | 0 | 2 | 4 | 4 | resolved 10 / unresolved 0 |
-| architecture | **1** | 4 | 6 | 3 | resolved 3 / unresolved 0 |
-| po | 0 | 8 | 5 | 2 | resolved 3 / partially 1 / unresolved 0 |
-| platform-boundary | **1** | 5 | 3 | 4 | resolved 2 / unresolved 0 |
-| database | 0 | 3 | 6 | 3 | (design-gate では未起動) |
-| **合計 (raw)** | **2** | **22** | **24** | **16** | resolved 18 / partially 1 / unresolved 0 |
-
-**design-gate の指摘は 5 reviewer 合計で 18 件が解消、未解消 0 件**である。
-Critical 2 件はいずれも **Round 1 で新規に観察されたもの**で、design-gate からの持ち越しではない。
-
----
-
-## Critical (Round 1)
-
-2 件は独立した指摘だが**同じ穴の裏表**である。R-1 の機械強制の主張は
-「lint / depcruise / check.mjs が違反 0」→「違反 0 はルールが死んでいる状態と区別できない (AD-025 の実測 5 件)」
-→「だから `test:rules` が発火を確かめる」という 3 段構えで立っている。
-**C-001 は 3 段目が機能していないことを示し、C-002 は要求された規則が 1 本存在しないことを示す。**
-どちらも「`existing_violations: 0` が合格と見分けられない」という AD-024 が名指した反パターンの実例である。
-
-### C-001 — `test:rules` の期待表照合が「意図した検出器が発火したか」を判定できず、`#N` 形式の期待は構造的に常に真 [origin: platform-boundary]
-
-- **Where**: `scripts/rules/run.mjs:140-190` / `scripts/constitution/check.mjs:539-545` / `tests/rule-fixtures/expected.mjs:73,81,133,141,149,157,209`
-- **Issue**: `verify()` は検出器の発火を **出力テキストにサンプルのファイル名が現れるか**だけで決め (`:142`)、期待規則名は **どの検出器の出力でもよい全体一致**で照合する (`:187` `Object.values(outputs).some((output) => output.includes(rule))`)。**どの規則がどのサンプルに対して発火したかという対応を一切検査していない。**
-  そのうえ `check.mjs` は全 11 項目の見出しを状態に関わらず必ず印字するため、`rules: ['#1']` は **check.mjs が起動しさえすれば必ず満たされる**。
-- **Why critical**: accepted ADR (AD-025) の結論「ルールは『書いた』ことではなく『違反サンプルで発火した』ことで確認する」に対する drift であり、Constitution `## Existing violations summary` の「`pnpm test:rules` が期待した検出器が実際に発火することを毎回確かめる」という主張の唯一の根拠がこれである。**項目 1 が完全に壊れても、`no-restricted-imports` が `src/main/app/**` に適用されなくなっても `test:rules` は緑のまま**である。
-- **gate による独立確認 (実測)**: `run.mjs:187` を直読して照合が全出力横断の部分一致であることを確認した。具体例も裏取り済み — `expected.mjs:144-150` の `wsl-args-array` は `--import` を捕まえる意図で `rules: ['#1','#3']` を期待するが、`allowlists.mjs:161` が明記するとおり `--import` は `PRIVILEGED_COMMANDS_ALWAYS` / `_IN_SPAWN_CONTEXT` に無く (項目 2 の `WSL_ALLOWED_ARGS` 側の関心事)、**項目 1 はこのサンプルに 1 件も発火しない**。それでも 20/20 一致が報告される。
-- **Suggested fix**: (1) `check.mjs` に `--json` を足し `{id, state, findings:[{file,line}]}` を出す。`run.mjs` は「項目 N の findings に当該サンプルの target が含まれるか」で照合する。(2) eslint / depcruise も `--format json` / `--output-type json` でサンプル単位に規則名と file:line を対応させる。(3) `wsl-args-array` の期待を実態に合わせる (`rules: ['#3']`)。**期待表を直すだけで済ませず (1)(2) で構造を塞ぐ。** (4) `no-orphans` の個別除外 (`run.mjs:110-116`) は (1)(2) 後に不要になる。除外を増やす方向に進めない。
-- **Status in this round**: new
-
-### C-002 — AD-023 §7 の `services ✗→ I/O モジュール直接` が不在のまま、AD-025 §9 の履行条件が HEAD で成立していない [origin: architecture]
-
-- **Where**: `.dependency-cruiser.js` (forbidden 22 ルールに services 系 0 件) / `eslint.config.mjs` (`boundaries/dependencies` 10 policies に 0 件) / `src/main/app/folder-service.ts:1` / `src/main/app/runtime-store.ts:46`
-- **Issue**: AD-025 §9 (accepted) は「対象が無いルールを書いて『強制した』とは言えない」として、**「最初の調停クラス (状態を持ち I/O をインタフェース経由で扱うクラス) を作る feature で `from` セレクタを実名で定義する」**と定めた。その feature は R-1 である。HEAD には調停クラスが 2 つある (`runtime-store.ts:46` は自身の docstring で「状態を持つ調停は結線層が担う」と宣言し AD-023 §5 の `RuntimeRegistry` そのもの、`folder-service.ts:90` は `folders`/`sessions`/`verifiedCache`/`listeners` を保持し I/O を注入されている)。**それでもルールは 1 行も無く、違反形が既に 1 件入っている** — `folder-service.ts:1` の `import { randomUUID } from 'node:crypto'`。同ファイルは `:81` で「`app` が `node:fs` を直接触らないために注入する」と書いており、同一ファイル内で方針が割れている。`node:crypto` を I/O と見なすのはこのリポジトリ自身の語彙である (`registry.ts:62`「`domain` は I/O を持たないため `crypto` を import できない」)。
-- **Why critical**: severity 表が「accepted ADR drift」を Critical に列挙している。AD-025 が accepted になった時点で両調停クラスは既に存在していたため、これは実装の遅れではなく **ADR 本文の前提が accepted 時点で既に偽だった**ことになる。AD-023 §5 はこのルールを「**God Service への唯一の歯止め**」と位置づけており、歯止め 0 件のまま `folder-service.ts` は 400 行を超えた。X-1 / X-3 / I-2 で Service が 3 つ増える。
-- **Suggested fix**: (1) `.dependency-cruiser.js` に `services-not-to-io` を 1 ルール追加 (`from: '^src/main/app/(folder-service|runtime-store)[.]ts$'`)。`randomUUID` は `deps.newId: () => string` として注入する (`registry.ts` が既に `makeFolderId(gen)` の形を持つので `composition-root.ts` で 1 行)。(2) `tests/rule-fixtures/a-direct/service-io-import.ts.fixture` を 1 件足す (C-001 の修正後でないと発火確認にならない点に注意)。(3) **AD-025 は accepted なので本文を in-place 改変しない** — 履行した事実を新規 ADR か plan の Post-design re-check に記録する。
-- **Status in this round**: new
-- **降格の判断**: reviewer 自身が「enforcement gap は High 上限と判定するなら降格に異議はない」と述べたが、**gate は降格しない**。cascade 探索は完了しており (`create[A-Z]` 14 件 → 調停クラス 2 件 / ルール 0 件 / 違反 1 件 / fixture 0 件)、severity 表は「accepted ADR drift」を Critical に明記している。gate を通すために実証済みの指摘を下げるのは hard gate の趣旨に反する。
+| security | 0 | 2 | 5 | 5 | resolved 0 / unresolved 10 / new 2 |
+| architecture | **0 (C-002 解消)** | 8 | 11 | 5 | resolved 1 / unresolved 13 / new 11 |
+| po | 0 | 10 | 7 | 3 | resolved 0 / unresolved 15 / new 5 |
+| platform-boundary | **0 (C-001 解消)** | 7 | 6 | 9 | resolved 1 / unresolved 12 / new 10 |
+| database | 0 | 4 | 8 | 4 | resolved 0 / unresolved 12 / new 4 |
+| a11y | 0 | 5 | 11 | 6 | resolved 0 / unresolved 17 / new 5 |
+| ux | 0 | 4 | 6 | 5 | resolved 0 / unresolved 12 / new 3 |
+| **合計 (raw)** | **0** | **40** | **54** | **37** | resolved **2** / unresolved **91** / new **40** |
 
 ---
 
-## High (Round 1) — dedup 後 19 件
+## convergence の予兆 (Phase 2 は N>=4 のみ発火だが、記録する)
+
+`convergence: { resolved_from_prev: 2, new_in_round: 33, unresolved: 58 }`
+
+**R2 は `resolved (2) < new (33)` である。** skill の定義では
+
+```
+convergence_failure := (R[N].resolved < R[N].new) AND (R[N-1].resolved < R[N-1].new)
+```
+
+で、最小発火は **Round 4** である。R2 単独では halt しない。
+ただし **R3 でも同じ比率が続けば R4 で halt する**。R2 で新規が 33 件出た主因は次の 2 つで、
+どちらも「Critical を潰した修正が新しい観察面を開いた」形である。
+
+1. **Round 1 で未起動だった `a11y` / `ux` を本 round で起動した** — 2 track で新規 8 件 (逸脱の解消による増分)
+2. **Critical 2 件の修正そのものが新しい指摘を生んだ** — 下記「本 round の修正が生んだ指摘」8 件
+
+**したがって R3 は「新規を増やさず既存を減らす」round にする必要がある。**
+Round 1 の 60 件のうち **「測っていないだけ」が 6 件、文書 1〜3 行で閉じるものが 20 件以上**ある
+(各 reviewer の最小修正セットを参照)。
+
+---
+
+## Critical (Round 2)
+
+**0 件。**
+
+全 7 track が独立に Critical 0 と判定した。cascade_enforce による降格は **0 件**
+(降格候補となる Critical がそもそも無い)。severity 格上げも **0 件** — 全 reviewer が
+「前 Round で High だったものを Critical にしていない」ことを明記している。
+
+Critical としなかった判断が特に注目に値するもの 3 件:
+
+- **ux H-001** (`useFolders` の reject 受け皿 0 件) — 「操作を完了できない = サービス停止か」を実装で検証し、
+  **`aria-busy` は `disabled` を付けないため主要操作が完了できる / `閉じる` が常時押せる / データを壊さない**
+  の 3 点で Critical を否定。`reviewer-base.md` の「defensive coding 提案は High 上限」に従った
+- **po H-004** (SC-008 の AC-2 ネイティブ半分に fixture 0 件) — AD-027 が「ルールはあるが発火を確かめていない」に
+  病名を与えた点は追加事実だが、**`src/agents/` が `.gitkeep` 1 ファイルのみ**で実害経路が成立しない
+- **a11y N-003** (`bad_pattern_grep` が実測 2 件で `existing_violations: 0` が偽) — metadata の誤りだが
+  **AD-024 #18 と Constitution v1.2.2 は同期しており ADR drift ではない**
+
+---
+
+## 本 round の修正が生んだ指摘 (8 件) — **最も重要な節**
+
+Critical 2 件の修正 (`ca6f2ce` / `cfec16b` / AD-027) が、**それ自身で新しい指摘を 8 件生んだ**。
+複数の reviewer が独立に同じ面を指摘しており、**dedup 後も 5 件が残る**。
+
+| # | 指摘 | severity | origin (独立に指摘した track) |
+|---|---|---|---|
+| 1 | **`newId` の契約が用途の強い側 (トークンの予測不能性) を要求していない** — `folder-service.ts:86-97` の docstring は「8 文字以上の英数字」のみ。フォルダ識別子 (予測可能でよい) とブラウズトークン (秘密) を 1 ポートに畳んでおり、`makeFolderId` の最低限の検査すら**トークン経路には掛かっていない**。`services-not-to-io` が `node:crypto` を恒久的に禁じたため担保をサービス内に戻す道も閉じた | High | **architecture H-204 + security M-005 + database M-008 + platform L-009 (4 track)** |
+| 2 | **FR-035 が要求する「ESLint と dependency-cruiser の両方」に対し `services-not-to-io` は depcruise 片側のみ** — 規則自身が「**直接**依存」と宣言しており、FR-035 が ESLint 側に割り当てた区分である。表現手段 (per-file `no-restricted-imports` override) は既に 4 箇所で使われている。**FR-035 は MUST** | High | architecture H-201 |
+| 3 | **`from` の production 枝 (実名 2 件) が一度も発火経路として通されていない** — fixture は `__rulecheck__` 枝だけを通る。11 規則のうち「fixture 枝 ≠ production 枝」はこの 1 件のみ。`folder-service.ts` を分割・改名すると**第 1 枝が黙って死ぬ**のに `test:rules` は 21/21 を報告し続ける | High | architecture H-202 |
+| 4 | **AD-027 が AD-025 §9 の結論と Open Question を置き換えたのに逆方向リンクが 1 本も無い** — `supersedes: []` のまま / AD-025 §9 の見出しは今も「R-1 に対象が無い」/ Open Question は `- [ ]`。**AD-027 への参照は repo 全体で `touched-files.txt` の 1 件のみ**。AD-025 だけを読んだ後続者は覆された結論を accepted として受け取る | High | architecture H-203 |
+| 5 | **`#1` の期待削除で `check.mjs` 項目 1 が無検証になった** — 訂正自体は正しいが、`#1` はこの 1 件しか期待していなかった。Principle VI の 11 項目中**確認あり 5 / pending 1 / 確認なし 5**。項目 2 / 5 / 6 は許可リスト方式のため**原理的にサンプルが届かない** (AD-027 §5 が `services-not-to-io` について自覚した構図を、これらには適用していない) | High | platform H-005 |
+| 6 | **`#N` 照合が「基準状態でその項目が `VIOLATE` でない」ことに暗黙依存し、`run.mjs` はその前提を確立しない** — 基準に実違反が 1 件入った瞬間、その項目を期待する全サンプル (`#8` は 3 件) が恒真に戻る。**C-001 の再発経路** | High | platform H-006 |
+| 7 | **SC-008 / SC-009 の唯一の証拠が、原因未特定の非決定性を 1 度示した測定である** — 「21 件一致」の記録は AD-027 の Consequences 1 行のみで、`quickstart-results.md` / `discovery.md` / `constitution.md` のいずれにも無い。`detectors: ['none']` の 2 件だけは**フレークが緑に倒れる** (hits が空 = 期待そのもの) | High | **po H-101 + architecture M-204 + platform M-007 / L-008** |
+| 8 | **「20/20 一致」を SC 達成根拠として引用している記録が 3 ファイル / 7 行に未訂正で残り、うち 1 行は偽と確定** — `quickstart-results.md:158` / `discovery.md:147,159,160` / `constitution.md:671,675`。gate / reviewer の履歴 21 行は**訂正しない** (ある時点の観察記録) | High | **po H-102 + platform L-005** |
+
+**1 と 7 / 8 の性質が違う点を明記する。** 1 は「修正がセキュリティ資産の担保を構造から契約文面へ降格させた」もので、
+現状の結線は正しい CSPRNG なので実害 0。7 / 8 は「Critical を潰した修正が、Critical の根拠だった記録をそのまま残した」もので、
+**`/cl-done` 後に「SC-008 / SC-009 を満たした」という記録が偽の行と再現しない測定の上に立つ**。
+
+---
+
+## High (Round 2) — dedup 後 33 件
 
 ### 重複統合 (Phase 6 / multi-reviewer dedup)
 
 | 統合後 | 元の指摘 | 統合の根拠 |
 |---|---|---|
-| **H-A** FR-010 の single-flight が実装に 1 箇所も無い | security H-002 + platform-boundary H-001 | 同一の観察 (`inflight\|coalesc` が `src/` に 0 件)。security は資源枯渇 (CWE-770) の面、platform は起動時二重検出と `ensureVerified` の負キャッシュ穴の面から記述。**FR-010 が「境界で強制する制約であり UI の作り方に委ねてはならない」と名指した仕組みが存在しない**という 1 つの事実 |
-| **H-B** chat 画面が FR-033「chat 用 Element を採用しない」に反して出荷されている | po H-005 + architecture H-002 | 同一事実。po は spec / tasks / SC の追随漏れ、architecture は「NON-NEGOTIABLE の Verification を 2 度書き換えるより chat 画面を R-3 に送るほうが小さい修正だった。その選択肢の検討記録がどの SSoT にも無い」という判断経緯の面 |
-| **H-C** Principle VI の検証スコープに CI 定義が入っておらず `tests/` が事実上のディレクトリ除外 | architecture H-003 + platform-boundary H-004 | 同一の `SCAN_ROOTS` / `SCAN_FILES` 問題。走査外の実行可能ファイル 7 件 (`.github/workflows/verify.yml` / `vitest.config.ts` / `tests/**` 5 件) |
+| **H-A** `newId` 契約の強度 | architecture H-204 + security M-005 + database M-008 + platform L-009 | 同一の注入点に対する 4 track の独立指摘。architecture は ADR 決定として、security は CWE-330/340 として、database は `id` 一意性として、platform は境界契約の記述として。**最高 severity (High) に統合** |
+| **H-B** FR-010 single-flight 不在 | security H-002 + platform H-001 | Round 1 と同じ統合 |
+| **H-C** Principle VI 検証スコープに CI 定義が無い | architecture H-003(継承) + platform H-004(継承) | Round 1 と同じ統合 |
+| **H-D** Principle VIII の `existing_violations: 0` | architecture H-001(継承) + a11y N-003 | a11y が**具体的な反例 2 件**を実測して追加事実を提供。severity は据え置き (High) |
+| **H-E** chat 画面の spec drift | po H-005 + architecture H-002(継承) | Round 1 と同じ統合 |
+| **H-F** test:rules の非決定性 | po H-101 + architecture M-204 (+ platform M-007 / L-008 は別facet として維持) | 「SC-008 の唯一の証拠が非決定性を示した」が本体 |
+| **H-G** 「20 件」記録の未訂正 | po H-102 + platform L-005 | 同一事実 |
+| **M-merged** AD-027 の申し送りが追跡機構の外 | architecture M-201 + po L-101 | 同一事実 (Medium に統合) |
+| **M-merged** CI `timeout-minutes` 不在 | po M-102 + architecture L-201 | po 側が所要時間の未計測を含めて広い |
+| **L-merged** `.bak` の単調増加 | platform L-004(継承) + database L-002 | 同一事実 |
 
-### High 一覧
+### High 一覧 (33 件)
+
+**本 round の修正が生んだもの (5)**: H-A `newId` 契約 / architecture H-201 FR-035 片側 / H-202 production 枝未発火 / H-203 AD-027 逆リンク / platform H-005 項目 1 無検証 / H-006 基準状態依存 / H-F 非決定性 / H-G 記録未訂正 — *上表のとおり dedup 後 8 → 一部 Medium 吸収で実質 8*
+
+**Round 1 から未解消 (25)**:
 
 | ID | 指摘 | origin |
 |---|---|---|
-| H-A | FR-010 の single-flight 不在 (起動時に `wsl.exe` 3→6 回 / `ensureVerified` が空結果を非キャッシュ / `sessions` に上限・掃除なし) | security + platform |
-| H-B | chat 画面の spec drift (FR-033 / Assumptions「UI は 3 画面」/ tasks SH-007 が `[x]` のまま) | po + architecture |
-| H-C | Principle VI の検証スコープに CI 定義が無い | architecture + platform |
-| H-D | `shell.openExternal` に scheme 許可リストが無く FR-040 の「拒否」が「OS への転送」になっている | security |
-| H-E | 判定結果の書き戻しが再検出後の descriptor を上書きし、消えた/停止したディストロが `autoModeSafe: true` で復活しうる | platform |
-| H-F | 停止を観測した後も `verifiedCache` が無効化されず SC-005 の「発行行為 0 件」が破れる | platform |
-| H-G | `NamespaceId` の内部構造に触れる実装が宣言された単一箇所の外に 2 件 (`validate.ts:70,74` の `slice(4)` / `folder-record.ts:130` のテンプレートリテラル) | platform |
-| H-H | Principle VIII の `existing_violations: 0` が「合格」と見分けられない (Principle VI は `ok`/`violation`/`pending` の 3 状態で同じ問題を解いている) | architecture |
-| H-I | AD-024 `:251` の 1 行訂正 + 項目数の不統一 | architecture |
-| H-J | SC-003「手動実行した AD-015 §8 の判定結果と一致する」が一度も照合されていない | po |
-| H-K | SC-011「UI 上でそのまま表示される」に証拠 0 件 (日本語フォルダ名を描く renderer テストが無い) | po |
-| H-L | SC-014 (単一インスタンス / 更新時刻不変) に証拠が 1 件も無い | po |
-| H-M | SC-008 が「全数検出」と宣言する US-4 AC-2 の「ネイティブモジュール」半分に fixture 0 件 | po |
-| H-N | US-2 の UI 側 AC 14 本のうち自動テストが 3 本のみ。残りを逃がした quickstart が打ち切られている | po |
-| H-O | FR-009 / US-5 AS-5 の「導入手順文書への導線」が実装に存在せず、繰り延べ先が spec のどこにも無い | po |
-| H-P | SC-002「`wsl -l -v` と 1 対 1 で一致」「列挙不能を理由つきで提示」のどちらにも証拠が無い | po |
-| H-Q | 同一の一時ファイル名へ無直列化で書き込むため同時 save がファイルを壊す (`folder-store.ts:29,156-169`) | database |
-| H-R | ファイル全体の失敗を常に `skipped: 1` と報告し、UI が事実に反する件数を出す | database |
-| H-S | Principle V の Automated 検証が実体として存在せず AD-024 の「正本」表と repo 状態が食い違う (check.mjs の principle タグに V が 0 件) | database |
-
-**H-A / H-Q は同じ「直列化が無い」根に由来する別の面である** — H-A は in-flight 合流の不在 (プロセス起動回数と `sessions` 増加)、H-Q は同一一時ファイル名への競合書き込み (ファイル破損と `rename` の ENOENT)。あわせて `register` / `unregister` の lost update (platform H-001 の (c)) も同根。**修正は 1 つの直列化機構で 3 面ともに効く。**
+| H-B | FR-010 の single-flight 不在 | security + platform |
+| H-C | Principle VI 検証スコープに CI 定義が無い | architecture + platform |
+| H-D | Principle VIII の `existing_violations: 0` (実測 2 件で偽) | architecture + a11y |
+| H-E | chat 画面の spec drift (FR-033 / Assumptions / SH-007) | po + architecture |
+| — | `shell.openExternal` に scheme 許可リストが無い | security H-001 |
+| — | 判定結果の書き戻しが消えた/停止したディストロを復活させる | platform H-002 |
+| — | 停止観測後も `verifiedCache` が無効化されない | platform H-003 |
+| — | `NamespaceId` の内部構造に触れる実装が 2 件 | platform M-002(High) |
+| — | AD-024 `:251` の 1 行訂正 + 項目数の不統一 | architecture H-004 |
+| — | SC-003 / SC-011 / SC-014 / SC-002 に証拠 0 件 (4 件) | po H-001/002/003/008 |
+| — | SC-008 の AC-2 ネイティブ半分に fixture 0 件 | po H-004 |
+| — | US-2 の UI 側 AC 14 本中 自動テスト 3 本 | po H-006 |
+| — | FR-009 / US-5 AS-5 の導線が実装に無い | po H-007 |
+| — | `useFolders` の reject 受け皿 0 件 (**3 round 連続**) | ux H-001 |
+| — | error boundary / `unhandledrejection` 0 件 | ux H-002 |
+| — | 英語の chat UI が主見出し | ux H-003 |
+| — | empty / loading / error が 2 画面で潰れ**正常系で毎回偽の文言** | ux H-004 (新規) |
+| — | フォーカスリング約 1.5:1 | a11y H-001 |
+| — | ブラウズ移動時のフォーカス喪失 | a11y H-002 |
+| — | `--font-mono` に CJK フォールバックが無い | a11y N-001 (新規) |
+| — | Principle VIII の Manual 検証が実体として空 | a11y N-002 (新規) |
+| — | 同時 save がファイルを壊す / `skipped: 1` 誤報 / Principle V の Automated 検証不在 / `newId` の `id` 一意性 | database H-001/002/003/004 |
 
 ---
 
-## Medium 24 件 / Low 15 件
+## 特に注意すべき 3 件 (severity 以外の理由で)
 
-全文は各 reviewer の成果物を参照。
+### 1. ux H-001 は **3 round 連続で未解消**
 
-- `security-reviewer.round1.md` (M 4 / L 4)
-- `architecture-reviewer.round1.md` (M 6 / L 3)
-- `po-reviewer.round1.md` (M 5 / L 2)
-- `platform-boundary-reviewer.round1.md` (M 3 / L 4)
-- `database-reviewer.round1.md` (M 6 / L 3)
+code-gate iteration 1 で MUST_FIX (MF-002)、iteration 2 で High、pr-gate Round 1 で High、Round 2 でも High。
+修正は `useFolders.ts` の 5 経路に `try/catch` + `labels.ts` に 1 行で、**実装の作り変えを伴わない**。
+ux reviewer は「gate は 3 iteration 連続で同一指摘が SHOULD_FIX のまま残っている事実を記録すべき」と述べている。**記録した。**
 
-**Low の重複統合 1 件**: `.bak` の単調増加と削除経路 0 件 — platform-boundary L-004 + database L-002 を統合 (16 → 15)。
+### 2. ux が自らの Round 1 推奨を**技術的に誤っていた**と訂正した
 
-**cross-gate の相互参照 2 件** (code-gate iteration 2 の指摘に対する独立判定):
+Round 1 の H-002 推奨「`App.tsx` を error boundary で包む」は **`ChatScreen.tsx:53` の `throw` を捕まえない** —
+React の error boundary は render / lifecycle / constructor の例外のみを捕まえ、**イベントハンドラ内の例外は捕まえない**。
+`ChatScreen.test.tsx:43` が `expect(() => fireEvent.keyDown(...)).not.toThrow()` と同期的に観測している形が
+その証拠である。**解消条件は「error boundary を置いた」ではなく `unhandledrejection` / `error` リスナを置いたこと。**
+この訂正なしに Round 1 の推奨を実装すると「対処した」記録だけが残って白画面は残る。
 
-- `error-state.tsx` の手編集 (code-gate convention M-001 / High) — platform-boundary が独立判定し「**レイヤ規則と禁止 import は `GENERATED_FILES` ブロックで解除されていないため Principle I / VII の穴ではない**」と結論 (L-002)。「再生成で FR-047 対応の prop が消える」という懸念自体は妥当で convention の owner に残る
-- `CSP_DECLARATION_EXEMPT_SUFFIXES` (code-gate convention C-002) — platform-boundary が「出荷物に漏れる経路が無いため境界侵食ではない」として Low に判定 (L-001)。実名化の推奨には同意
+### 3. po が自らの Round 1 推奨を**事実誤認**として訂正した
+
+Round 1 H-004 の「`@anthropic-ai/claude-agent-sdk-win32-x64` を推移的に掴む fixture を書ける」は**誤り**。
+`NATIVE_MODULES` は `better-sqlite3` / `node-pty` / `keytar` の **3 名実名**に限定されており Agent SDK は対象外。
+正しい手順は `import 'better-sqlite3'` 等を経由させ、`expected.mjs` に
+`agents-not-to-native` / `not-to-unresolvable` / `no-non-package-json` の**3 規則を書く**形である。
 
 ---
 
@@ -127,67 +188,84 @@ Critical 2 件はいずれも **Round 1 で新規に観察されたもの**で�
 
 **`suppressed_by_code_gate` は 0 件である。**
 
-5 reviewer すべてが `.gate-verdict-code.json` と `code-gate.md` を読み、code-gate iteration 1 の
+7 reviewer すべてが `.gate-verdict-code.json` と `code-gate.md` を読み、code-gate iteration 1 の
 MUST_FIX 7 件で resolved になった `path:line` を再指摘しなかった。
 
-唯一の境界事例は security H-D (`window.ts:47-50` / `:64`) で、MF-004 (`index.html` の静的 CSP 撤去 →
-`protocol.ts:173` / `window.ts:76`) と**同一ファイル**だが **origin が異なる** (MF-004 は CSP 宣言箇所の移設、
-H-D は `openExternal` の scheme 検証欠落)。skill の Phase 6 が「同一行に異種 origin の finding が
-存在する場合は suppress しない」と定めるため、新規指摘として計上した。
+境界事例 2 件はいずれも **origin が異なる**ため suppress せず新規計上した (skill Phase 6 の規定どおり)。
+
+- security H-001 (`window.ts:47-50` / `:64`) — MF-004 (CSP 宣言箇所の移設) と同一ファイルだが、
+  指摘は `openExternal` の scheme 検証欠落
+- ux H-001 / H-002 — MF-002 由来だが「解消済みと判定された箇所」ではなく
+  **推奨アクションの未実施部分と cascade 漏れ**
 
 ## viewpoint coverage
 
 | cat | 内容 | 結果 |
 |---|---|---|
-| A | 認可 / 認証 / RLS / secret | Critical:0 High:1 Medium:1 Low:1 (security) |
-| B | 入力検証 / injection / XSS / 暗号 | Critical:0 High:1 Medium:3 Low:3 (security) |
-| C | 業務不変条件 / Charter drift | Critical:0 High:2 Medium:1 (platform) + architecture |
-| D | Constitution / ADR drift | **Critical:1** High:3 Medium:1 Low:1 (architecture + platform + database) |
-| E | User Story / SC / AC / UX | Critical:0 High:8 Medium:5 Low:2 (po) |
-| F | 命名 / module / lint hookup | **Critical:1** Low:2 (platform。命名は code-gate の convention 専任) |
-| G | DB / 永続化 / index 相当 / a11y / perf | Critical:0 High:2 Medium:5 Low:3 (database)。a11y / ux は code-gate iteration 2 で実施済み |
-| H | テスト / coverage / observability / regression | Critical:0 High:1 Medium:3 (po + database) |
+| A | 認可 / 認証 / RLS / secret | Critical:0 High:1 Medium:2 Low:1 (security) |
+| B | 入力検証 / injection / XSS / 暗号 | Critical:0 High:1 Medium:3 Low:4 (security) |
+| C | 業務不変条件 / Charter drift | Critical:0 High:3 Medium:3 Low:1 (platform + architecture) |
+| D | Constitution / ADR drift | Critical:0 High:6 Medium:4 Low:2 (architecture + platform + database + a11y) |
+| E | User Story / SC / AC / UX | Critical:0 High:11 Medium:10 Low:7 (po + ux) |
+| F | 命名 / module / lint hookup | Critical:0 High:2 Medium:3 Low:7 (platform。命名は code-gate の convention 専任) |
+| G | DB / 永続化 / a11y / perf | Critical:0 High:6 Medium:15 Low:8 (database + a11y) |
+| H | テスト / coverage / observability | Critical:0 High:6 Medium:8 Low:2 (po + database + a11y + architecture) |
 
-**欠落カテゴリなし** (`viewpoint_coverage_check` の A-H を全件記入)。
-`cascade_enforce` による降格は **0 件** — Critical 2 件はいずれも 0 件確認付きの同種事象探索を伴っている。
+**欠落カテゴリなし。** 全 7 track が A-H を全件記入した。
 
-## 記録した仕様逸脱 1 点
+## Round 1 の逸脱を解消した
 
-**`a11y-reviewer` / `ux-reviewer` を Round 1 で再起動していない。**
-`.specify/spec-gate/reviewers.yml` は両者を `gates: [code-gate, pr-gate]` で登録しているが、
-code-gate iteration 2 で同じ `main...HEAD` 全域 (199 files) を敵対的にレビュー済みで、
-その後 UI ファイルは 1 件も変わっていない (`03b9654` は Constitution frontmatter、
-`17be49f` は gate 成果物のみ)。両者の findings は code-gate iteration 2 の成果物
-(a11y: High 2 / Medium 9 / Low 6、ux: High 3 / Medium 5 / Low 4) を参照する。
-**Round 2 では UI に修正が入る見込みなので再起動すること。**
+Round 1 では `a11y-reviewer` / `ux-reviewer` を「UI 無変更」を根拠に非起動とし、逸脱として記録した。
+**本 round で両者を起動した。** 両 reviewer は前提 (直近 3 コミットが `src/renderer/` を触っていない) を
+**独立に検証して正しいと確認**したうえで、前回 findings の再掲を避けて pr-gate scope の新規に注力した
+(a11y は前回 17 findings の `path:line` を HEAD で全件突き合わせて 17/17 一致を確認、
+ux は前回参照した 6 + 4 箇所の行番号一致を確認)。
 
-## reviewer 選定の訂正 (code-gate iteration 2 の誤り)
-
-Round 1 の起動時に、code-gate iteration 2 での **reviewer 選定漏れ 2 件**が判明した。
-`.specify/spec-gate/reviewers.yml` (プロジェクト固有の registry) が正であり、
-skill 本文の汎用パターン表ではない。
-
-- **`database-reviewer`**: registry の `auto_invoke_patterns` に `src/main/infra/settings/**` /
-  `src/main/infra/secrets/**` が含まれる (AD-024 #9 —「Principle V の検証対象は SQL のカラム型に限らない。
-  R-1 の永続化は JSON であり、SQL パターンだけでは発火しない」)。diff に該当 4 ファイル。
-  code-gate iteration 2 で `.sql` 0 件を根拠に非起動としたのは誤りだった。
-  **本 round で起動し High 3 / Medium 6 / Low 3 を得た** — iteration 2 で落としていた指摘である
-- **`platform-boundary-reviewer`**: registry は `gates: [design-gate, code-gate, pr-gate]` かつ
-  patterns が多数一致する。skill 本文の reviewer 表に載っていないが registry 上は code-gate でも対象だった。
-  **本 round で起動し Critical 1 を含む 13 件を得た**
-
-`api-performance-reviewer` / `openapi-contract-reviewer` は registry 不在で silent skip。
-`lint-agent` / `test-agent` / `convention-reviewer` は code-gate 専任のため非起動。
+結果として **a11y が新規 High 3 件 / ux が新規 High 1 件**を出した。
+とくに **ux H-004 (empty / loading / error が 2 画面で潰れ、正常系で毎回偽の文言が出る)** は
+前回見落とされていたもので、**異常系の H-001〜H-003 より発生頻度が高い**。
+Round 1 の逸脱判断 (「UI が変わっていないから省略してよい」) は**結果的に誤りだった**。
 
 ## 次のアクション
 
-Critical 2 件は**いずれも実装の作り変えを伴わない**。
+**`/cl-done` に進める (Critical = 0)。** ただし各 reviewer が `/cl-done` の前提条件として挙げたものがある。
 
-1. **C-001**: `check.mjs --json` + `run.mjs` のサンプル単位照合 + `wsl-args-array` の期待訂正
-2. **C-002**: depcruise 1 ルール + `randomUUID` の注入 (1 行) + fixture 1 件 + 履行記録の ADR
+**po / a11y が「記録せずに通すことに反対する」と明示した 2 件**:
 
-**C-001 を先に直すこと。** C-002 の fixture 追加は C-001 の修正後でなければ発火確認にならない
-(現状の照合では新しい fixture も構造的に常に真になる)。
+1. **po**: H-102 の記録訂正 3 箇所 + H-101 の連続 3 回実行記録 (合わせて 20 分程度)。
+   閉じないと「SC-008 / SC-009 を満たした」という記録が**偽と確定した行と再現しない測定の上に立つ**
+2. **a11y**: Principle VIII について**観察証拠 0 件**のまま進むなら、その事実を `pr-gate.md` に
+   逸脱として記録すること — **記録した** (下記)
 
-Critical 解消後に `/cl-pr-gate` を再実行 (Round 2)。High 19 件のうち H-A / H-Q は
-1 つの直列化機構で 3 面に効くため、Round 2 の前に併せて畳むと効率がよい。
+### 逸脱として記録: Principle VIII の観察証拠が 0 件である
+
+Constitution Principle VIII (NON-NEGOTIABLE) の Statement は 3 節ある —
+(i) IME 変換確定時の誤送信 / (ii) フォント崩れ / (iii) 全角混在時のレイアウト崩れ。
+
+- **(i)** は `ChatScreen.test.tsx` の 1 assertion (`toBeDisabled()`) が覆う。
+  ただし a11y の指摘どおり**表示名欄が R-1 で唯一の生きた IME 入力面**であり、そこは覆っていない
+  (暗黙送信の経路が無いことは実測で確認済み)
+- **(ii) (iii)** は Automated (B) が延期、Manual が打ち切りで**検証 0 件**。
+  `manual-checklist.md` にキーボード / スクリーンリーダ / IME の項目が **0 件**、
+  日本語表示の目視 2 項目は `quickstart-results.md:33,118` が未実施と記録
+- 加えて **Manual に名指しされた 2 者は source reviewer** であり、
+  フォント崩れとレイアウト崩れは**原理的に観察できない** — (ii)(iii) については履行不能な割り当てである
+- a11y N-001 (`--font-mono` に CJK フォールバックが無い) が**まさにその死角で生じた実コードの欠陥**である
+
+**この状態で `/cl-done` に進むなら、Principle VIII は「守られている」ではなく「確かめていない」と読むこと。**
+
+### R3 に向けた優先順 (各 reviewer の最小修正セットの統合)
+
+1. **a11y N-001** — `main.css:46` の 1 行。Principle VIII の ✗ Bad 例に該当し SC-011 の表示経路そのもの
+2. **ux H-004** — `ResolutionScreen` に loading / failed の 2 段 (既存部品のみ、~15 行)。**正常系で毎回出る偽の文言**
+3. **ux H-001** — `useFolders` の 5 経路に `try/catch` (**3 round 連続**)
+4. **architecture H-203** — AD-027 `supersedes` + AD-025 Open Question を `- [x]` + References 1 行 (**4 箇所すべて 1 行以下**)
+5. **po H-102 / H-101** — 記録訂正 3 箇所 + 連続 3 回実行の記録
+6. **platform H-005 / H-006** — 項目 1 の fixture 1 件 + 基準状態の assert
+7. **architecture H-201** — `eslint.config.mjs` に override 1 ブロック (FR-035 の MUST)
+8. **H-A** — `newId` の docstring 2 行、または `newToken` への分離 3 行
+9. **a11y H-001 / H-002**、**database H-001** (直列化。ux H-001 / platform H-001 と同じ根)
+
+**構造変更を伴うのは FR-010 の single-flight (H-B) と database H-001 の直列化のみ**で、
+これは 1 つの機構で **3 面 (H-B / database H-001 / register の lost update)** に効く。
+残りはいずれも数行〜数十行の文書・設定・テスト修正である。
