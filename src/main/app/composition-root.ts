@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto'
+
 import { app, dialog } from 'electron'
 
 import { makeHostPath } from '@domain/runtime/path-types'
@@ -68,7 +70,14 @@ export function createComposition(): Composition {
     detector,
     runtimes: () => runtimes.snapshot(),
     now,
-    measure
+    measure,
+    /*
+     * **乱数源をここで解決する。**
+     * `folder-service` は状態を持つ調停であり、I/O をインタフェース経由で受け取る
+     * (AD-023 §5 / §7 の `services ✗→ I/O モジュール直接`)。
+     * `domain` の `makeFolderId(random)` が同じ理由で乱数源を引数に取っているのと同型である。
+     */
+    newId: () => randomUUID().replace(/-/g, '')
   })
 
   const ipc: IpcDependencies = {

@@ -212,6 +212,40 @@ module.exports = {
       }
     },
     {
+      name: 'services-not-to-io',
+      comment:
+        '状態を持つ調停クラスから I/O モジュールへの**直接**依存 (AD-023 §5 / §7)。' +
+        'これが `God Service` への唯一の歯止めである — 調停は I/O を' +
+        'インタフェース経由で注入され、自分で取りに行かない。' +
+        '**`from` は実名で列挙する** (AD-025 §9)。対象になるのは「状態を持ち I/O を' +
+        'インタフェース経由で扱うクラス」であり、結線層 (`composition-root.ts`) や' +
+        'Electron 境界 (`window.ts` / `protocol.ts` / `index.ts`) は含まない — ' +
+        'そちらは I/O を解決して渡すのが役割である。' +
+        'X-1 の `SessionService` / X-3 の `ProviderService` / I-2 の `ContainerService` を' +
+        '作るときは、ここに実名を足すこと。',
+      severity: 'error',
+      /*
+       * **違反サンプルの置き場を明示的に含める。**
+       * 他の規則は `from` がディレクトリ指定なので `__rulecheck__/` 配下の
+       * サンプルを自然に拾うが、この規則は実名固定 (AD-025 §9) のため拾えない。
+       * 列挙しないと「ルールはあるが発火を確かめていない」状態になり、
+       * pr-gate Round 1 の C-001 と同じ病になる。
+       */
+      from: {
+        path:
+          '^src/main/app/(folder-service|runtime-store)[.]ts$' +
+          '|^src/main/app/__rulecheck__/service-io-import[.]ts$'
+      },
+      to: {
+        dependencyTypes: ['core'],
+        /*
+         * `assert` / `util` / `events` は純粋な補助であり I/O を持たない。
+         * `domain-not-to-io` が `DOMAIN_PURE_CORE` を除いているのと同じ考え方である。
+         */
+        path: coreRe(ALL_CORE.filter((name) => !['assert', 'util', 'events'].includes(name)))
+      }
+    },
+    {
       name: 'domain-not-to-electron',
       comment: '`domain` から `electron` への到達 (AD-023 §8)。',
       severity: 'error',

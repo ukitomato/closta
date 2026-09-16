@@ -1,5 +1,3 @@
-import { randomUUID } from 'node:crypto'
-
 import type { RuntimeDescriptor } from '@domain/runtime/descriptor'
 import type { RuntimeDetector, WslFileSystem } from '@domain/runtime/interfaces'
 import { type NamespaceId, type WslNamespaceId, wslNamespace } from '@domain/runtime/namespace'
@@ -85,10 +83,22 @@ export interface FolderServiceDeps {
   readonly runtimes: () => readonly RuntimeDescriptor[]
   readonly now: () => number
   readonly measure: Measure
+  /**
+   * 識別子の生成源。**`app` が `node:crypto` を直接触らないために注入する。**
+   *
+   * `hostFs` を注入しているのと同じ理由である — 本モジュールは状態を持つ調停
+   * (`folders` / `sessions` / `verifiedCache` / `listeners`) であり、
+   * I/O はインタフェース経由で受け取る (AD-023 §5 / §7 の `services` 行)。
+   * `domain` 側も同じ論法で乱数源を引数に取っている
+   * (`registry.ts` の `makeFolderId(random)`)。
+   *
+   * 8 文字以上の英数字を返すこと。`makeFolderId` が短すぎる値を拒否する。
+   */
+  readonly newId: () => string
 }
 
 export function createFolderService(deps: FolderServiceDeps): FolderService {
-  const { store, fs, hostFs, detector, runtimes, now, measure } = deps
+  const { store, fs, hostFs, detector, runtimes, now, measure, newId } = deps
 
   let folders: readonly WorkspaceFolder[] = []
   let issues: RestoreIssues = { skipped: 0, reasonKeys: [], backupPath: null }
@@ -199,7 +209,7 @@ export function createFolderService(deps: FolderServiceDeps): FolderService {
 
   /** draft を `WorkspaceFolder` に組み立てる。**名前空間の照合は検証側が済ませている。** */
   function toFolder(draft: WorkspaceFolderDraftDTO): WorkspaceFolder | null {
-    const id = makeFolderId(() => randomUUID().replace(/-/g, ''))
+    const id = makeFolderId(newId)
 
     if (draft.location.kind === 'windows') {
       const path = makeHostPath(draft.path.value)
@@ -242,7 +252,7 @@ export function createFolderService(deps: FolderServiceDeps): FolderService {
       const token_ = verified.get(namespace)
       if (token_ === undefined) return { ok: false, error: 'distro-not-running' }
 
-      const token = randomUUID()
+      const token = newId()
       sessions.set(token, { token, namespace, verified: token_, senderId })
 
       /*

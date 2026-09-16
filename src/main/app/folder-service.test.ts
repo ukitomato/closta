@@ -117,6 +117,13 @@ function harness(): Harness {
     }
   }
 
+  /*
+   * **識別子を決定的にする。** 注入するようになったので (AD-023 §5 / §7) テストから
+   * 固定できる。`makeFolderId` は 8 文字以上の英数字を要求する。
+   */
+  let idSeq = 0
+  const newId = (): string => `testid${String(++idSeq).padStart(8, '0')}`
+
   const service = createFolderService({
     store,
     fs,
@@ -124,7 +131,8 @@ function harness(): Harness {
     detector,
     runtimes: () => [wslDescriptor()],
     now: () => current,
-    measure: noMeasure
+    measure: noMeasure,
+    newId
   })
 
   return {
