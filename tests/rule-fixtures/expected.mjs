@@ -32,7 +32,10 @@
  * @property {'a'|'b'} group
  * @property {string} what      何を試しているか (日本語)
  * @property {readonly ('eslint'|'depcruise'|'constitution'|'typecheck'|'none')[]} detectors
- * @property {readonly string[]} [rules] 期待する規則名 / 項目 (部分一致で照合)
+ * @property {readonly string[]} [rules] 期待する規則名 / 項目 (`#N` は `[VIOLATE] #N` で照合)
+ * @property {readonly string[]} [requires] **同伴サンプル。** 単独では違反が成立しない
+ *   サンプルのために、同時に展開しなければならない他サンプルの `file` を挙げる。
+ *   1 件ずつ検証する形 (run.mjs) で、循環や推移的到達を作るのに要る。
  */
 
 /** @type {readonly Fixture[]} */
@@ -88,10 +91,27 @@ export const FIXTURES = [
     detectors: ['typecheck']
   },
   {
+    file: 'a-direct/service-io-import.ts.fixture',
+    target: 'src/main/app/__rulecheck__/service-io-import.ts',
+    group: 'a',
+    what: '状態を持つ調停クラスが I/O モジュールを直接 import する (AD-023 §5 / §7)',
+    /*
+     * **eslint は捕まえない** (実測)。`app` からの `node:crypto` 直接 import は
+     * eslint 側では許可されている — `boundaries/dependencies` が絞っているのは
+     * パス操作モジュールなどの一部であり、`crypto` は含まれない
+     * (`composition-root.ts` が `node:crypto` を import して lint 0 件で通る)。
+     * **この規則を見ているのは depcruise だけである。**
+     */
+    detectors: ['depcruise'],
+    rules: ['services-not-to-io']
+  },
+  {
     file: 'a-direct/cycle-a.ts.fixture',
     target: 'src/domain/__rulecheck__/cycle-a.ts',
     group: 'a',
     what: '循環依存 (2 ファイル)',
+    // 相手側が無いと循環にならない。
+    requires: ['a-direct/cycle-b.ts.fixture'],
     detectors: ['depcruise'],
     rules: ['no-circular']
   },
@@ -100,6 +120,7 @@ export const FIXTURES = [
     target: 'src/domain/__rulecheck__/cycle-b.ts',
     group: 'a',
     what: '循環依存の相手側',
+    requires: ['a-direct/cycle-a.ts.fixture'],
     detectors: ['depcruise'],
     rules: ['no-circular']
   },
@@ -145,8 +166,15 @@ export const FIXTURES = [
     target: 'src/main/infra/runtime/__rulecheck__/wsl-args-array.ts',
     group: 'b',
     what: '環境を変えるサブコマンドを引数配列で構成する (`--import`)',
+    /*
+     * **`#1` を期待から外した。** 項目 1 は特権コマンド**文字列**の検査であり、
+     * `--import` は `PRIVILEGED_COMMANDS_ALWAYS` / `_IN_SPAWN_CONTEXT` のどちらにも無い
+     * (`allowlists.mjs` が「`--import` のような環境を変える引数は含めない」と書いているのは
+     * 項目 2 の `WSL_ALLOWED_ARGS` の話である)。
+     * 素の `#N` 照合では check.mjs の見出しが常に出るため誤って満たされていた (pr-gate Round 1 C-001)。
+     */
     detectors: ['constitution'],
-    rules: ['#1', '#3']
+    rules: ['#3']
   },
   {
     file: 'b-equivalent/spawn-outside-allowlist.ts.fixture',
@@ -168,6 +196,8 @@ export const FIXTURES = [
     target: 'src/renderer/src/__rulecheck__/ui-builtin-via-domain.ts',
     group: 'b',
     what: 'ui から domain 経由で node builtin に推移的に到達する',
+    // 経由する domain 側のサンプルが無いと推移的到達が成立しない。
+    requires: ['a-direct/domain-io-import.ts.fixture'],
     detectors: ['depcruise'],
     rules: ['ui-not-to-core']
   },
