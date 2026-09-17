@@ -77,3 +77,4 @@ components.json
 eslint.config.mjs
 tests/rule-fixtures/a-direct/ui-dto-namespace-literal.ts.fixture
 src/renderer/src/features/workspace-folders/WorkspaceFoldersScreen.tsx
+src/renderer/src/features/session-list/useFolderLabels.ts

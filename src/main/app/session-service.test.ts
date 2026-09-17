@@ -4,7 +4,11 @@ import { fixedCapabilities } from '@domain/runtime/capabilities'
 import type { RuntimeDescriptor } from '@domain/runtime/descriptor'
 import { wslNamespace, type WslNamespaceId } from '@domain/runtime/namespace'
 import { makeHostPath, makeRuntimePath, type HostPath } from '@domain/runtime/path-types'
-import { createVerifiedRunning, type VerifiedRunning } from '@domain/runtime/verified-running'
+import {
+  BROWSE_SESSION_TTL_MS,
+  createVerifiedRunning,
+  type VerifiedRunning
+} from '@domain/runtime/verified-running'
 import type {
   EnumerationRequest,
   EnumerationResult,
@@ -143,6 +147,17 @@ function deps(
   }
 }
 
+/**
+ * 背景で走る全件取得を待つ。
+ *
+ * **実時間を待たない。** `list()` は全件を待たずに返るため、
+ * マイクロタスクを流して背景の 1 本が終わるのを待つだけで足りる
+ * (列挙器の代役は同期的に応答する)。
+ */
+async function settle(): Promise<void> {
+  for (let i = 0; i < 20; i += 1) await Promise.resolve()
+}
+
 describe('createSessionService — list / refresh', () => {
   it('先頭ページ取得では complete を立てない (FR-037)', async () => {
     const target = hostTarget()
@@ -179,6 +194,32 @@ describe('createSessionService — list / refresh', () => {
     })
   })
 
+  it('先頭ページを返したあと全件を取りに行く (BE-070 / FR-031 / R-06)', async () => {
+    const target = hostTarget()
+    const enumerator = fakeEnumerator({
+      [target.key]: { ok: true, sessions: [record('a')], truncated: false }
+    })
+    const service = createSessionService(
+      deps({ finder: fakeFinder(discovery([target])), enumerator })
+    )
+
+    const first = await service.list()
+
+    // **先頭ページは全件を待たずに返る。**
+    expect(first.complete).toBe(false)
+    expect(enumerator.requests[0].scope).toEqual({
+      kind: 'page',
+      limit: SESSION_PAGE_SIZE,
+      offset: 0
+    })
+
+    await settle()
+
+    // 続けて全件が走り、通知で `complete` が立つ。
+    expect(enumerator.requests).toHaveLength(2)
+    expect(enumerator.requests[1].scope).toEqual({ kind: 'all' })
+  })
+
   it('2 度目の `list()` は列挙しない (キャッシュはプロセスの寿命。R-10)', async () => {
     const target = hostTarget()
     const enumerator = fakeEnumerator({
@@ -189,9 +230,33 @@ describe('createSessionService — list / refresh', () => {
     )
 
     await service.list()
-    await service.list()
+    await settle()
+    const before = enumerator.requests.length
 
-    expect(enumerator.requests).toHaveLength(1)
+    await service.list()
+    await settle()
+
+    expect(enumerator.requests).toHaveLength(before)
+  })
+
+  it('全件の完了を購読者へ通知する (BE-070)', async () => {
+    const target = hostTarget()
+    const seen: boolean[] = []
+    const service = createSessionService(
+      deps({
+        finder: fakeFinder(discovery([target])),
+        enumerator: fakeEnumerator({
+          [target.key]: { ok: true, sessions: [record('a')], truncated: false }
+        })
+      })
+    )
+    service.onChanged((value) => seen.push(value.complete))
+
+    await service.list()
+    await settle()
+
+    // 先頭ページ (false) → 全件 (true) の 2 回。
+    expect(seen).toEqual([false, true])
   })
 
   it('`refresh()` で全件取得へ移り complete が立つ', async () => {
@@ -400,6 +465,63 @@ describe('createSessionService — 再対応づけ', () => {
   })
 })
 
+describe('createSessionService — 実行中確認の持ち回し', () => {
+  it('有効期間内は実行状態を取り直さない (SC-008)', async () => {
+    const target = hostTarget()
+    let calls = 0
+    const service = createSessionService(
+      deps({
+        finder: fakeFinder(discovery([target])),
+        enumerator: fakeEnumerator({
+          [target.key]: { ok: true, sessions: [record('a')], truncated: false }
+        }),
+        runtimes: () => [ubuntu()],
+        verifyRunning: async () => {
+          calls += 1
+          return new Map([[UBUNTU, createVerifiedRunning(UBUNTU, NOW)]])
+        }
+      })
+    )
+
+    await service.list()
+    await settle()
+    await service.refresh()
+
+    /*
+     * **`wsl.exe` の固定費は約 1.5 秒** (AD-015)。一覧を開くたびに払うと
+     * SC-008 の 2 秒予算を超える。値の側が期限を持つので持ち回してよい。
+     */
+    expect(calls).toBe(1)
+  })
+
+  it('有効期間を過ぎたら取り直す', async () => {
+    const target = hostTarget()
+    let calls = 0
+    let clock = NOW
+    const service = createSessionService(
+      deps({
+        finder: fakeFinder(discovery([target])),
+        enumerator: fakeEnumerator({
+          [target.key]: { ok: true, sessions: [record('a')], truncated: false }
+        }),
+        runtimes: () => [ubuntu()],
+        now: () => clock,
+        verifyRunning: async () => {
+          calls += 1
+          return new Map([[UBUNTU, createVerifiedRunning(UBUNTU, clock)]])
+        }
+      })
+    )
+
+    await service.list()
+    await settle()
+    clock = NOW + BROWSE_SESSION_TTL_MS + 1
+    await service.refresh()
+
+    expect(calls).toBe(2)
+  })
+})
+
 describe('createSessionService — fetchMore', () => {
   it('未知の `targetKey` はキャッシュをそのまま返す', async () => {
     const target = hostTarget()
@@ -452,6 +574,55 @@ describe('createSessionService — fetchMore', () => {
     const index = await service.fetchMore(target.key, SESSION_PAGE_SIZE)
 
     expect(index.groups.flatMap((g) => g.sessions).map((s) => s.sessionId)).toEqual(['a'])
+  })
+
+  it('途中まで取れていれば部分結果と理由の双方を返す (BE-062 / US-3 AC-6)', async () => {
+    const target = hostTarget()
+    let fail = false
+    const enumerator: SessionEnumerator = {
+      async enumerate() {
+        if (fail) return { ok: false, reasonKey: 'distro-not-running' }
+        return { ok: true, sessions: [record('a')], truncated: true }
+      }
+    }
+    const service = createSessionService(
+      deps({ finder: fakeFinder(discovery([target])), enumerator })
+    )
+
+    await service.list()
+    await settle()
+    fail = true
+    const after = await service.fetchMore(target.key, SESSION_PAGE_SIZE)
+
+    // **取得済みの行は残る。**
+    expect(after.groups.flatMap((g) => g.sessions).map((session) => session.sessionId)).toEqual([
+      'a'
+    ])
+    // **理由は「途中で止まった」に差し替わる** — 「今読めない」とは示すべきことが違う。
+    const row = after.outcomes.find((o) => o.targetKey === target.key)
+    expect(row).toMatchObject({ status: 'failed', reasonKey: 'stopped-midway', count: 1 })
+  })
+
+  it('1 件も取れていなければ列挙器の理由をそのまま返す', async () => {
+    const target = hostTarget()
+    let fail = false
+    const enumerator: SessionEnumerator = {
+      async enumerate() {
+        if (fail) return { ok: false, reasonKey: 'permission-denied' }
+        return { ok: true, sessions: [], truncated: false }
+      }
+    }
+    const service = createSessionService(
+      deps({ finder: fakeFinder(discovery([target])), enumerator })
+    )
+
+    await service.list()
+    await settle()
+    fail = true
+    const after = await service.fetchMore(target.key, SESSION_PAGE_SIZE)
+
+    const row = after.outcomes.find((o) => o.targetKey === target.key)
+    expect(row).toMatchObject({ status: 'failed', reasonKey: 'permission-denied', count: 0 })
   })
 
   it('停止中の所在の `targetKey` でも行は引けるが列挙は拒否される (SC-002 / SC-010)', async () => {

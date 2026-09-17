@@ -35,6 +35,13 @@ export interface SessionsView {
   refresh(): Promise<void>
   /** 続きを取る (FR-038)。 */
   fetchMore(targetKey: string, offset: number): Promise<void>
+  /**
+   * ランタイムを再検出してから取り直す (FE-063)。
+   *
+   * **アプリはディストロを起動しない** (SC-005 / FR-007)。
+   * 利用者が起動したあと、実行状態を取り直す手段を提供するだけである。
+   */
+  rediscover(): Promise<void>
 }
 
 export function useSessions(): SessionsView {
@@ -92,5 +99,19 @@ export function useSessions(): SessionsView {
     [setIndex, setLoading, setFailed]
   )
 
-  return { index, loading, failed, selectedRowKey, select, refresh, fetchMore }
+  const rediscover = useCallback(async () => {
+    setLoading(true)
+    try {
+      /*
+       * **順序に意味がある。** 実行状態の取り直しを先に済ませないと、
+       * 停止中として畳まれたままの所在が再列挙の対象にならない。
+       */
+      await capability().refreshRuntimes()
+      setIndex(await capability().refreshSessions())
+    } catch {
+      setFailed(true)
+    }
+  }, [setIndex, setLoading, setFailed])
+
+  return { index, loading, failed, selectedRowKey, select, refresh, fetchMore, rediscover }
 }

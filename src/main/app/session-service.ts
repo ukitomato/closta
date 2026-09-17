@@ -1,6 +1,6 @@
 import type { RuntimeDescriptor, WslRuntimeDescriptor } from '@domain/runtime/descriptor'
 import { isHostNamespace, type WslNamespaceId } from '@domain/runtime/namespace'
-import type { VerifiedRunning } from '@domain/runtime/verified-running'
+import { BROWSE_SESSION_TTL_MS, type VerifiedRunning } from '@domain/runtime/verified-running'
 import { buildSessionSummary } from '@domain/session/build'
 import type { SessionIndexDTO } from '@domain/session/dto'
 import { groupSessions, type MatchedSession, type SessionGroup } from '@domain/session/group'
@@ -47,7 +47,13 @@ import type { Measure } from './measure'
 export const ENUMERATION_TIMEOUT_MS = 15_000
 
 export interface SessionService {
-  /** キャッシュがあれば返し、無ければ先頭ページを取る。 */
+  /**
+   * キャッシュがあれば返し、無ければ**先頭ページ**を取る。
+   *
+   * **先頭ページを返したあと、同じ操作の続きとして全件を取る** (FR-031 / R-06)。
+   * 完了は `onChanged` で届く。**ポーリングではない** — 利用者の 1 操作に対する
+   * 2 段の応答である (data-model §7 の `partial → complete`)。
+   */
   list(): Promise<SessionIndexDTO>
   /** 利用者の明示操作。**置き換える** (FR-035)。 */
   refresh(): Promise<SessionIndexDTO>
@@ -95,6 +101,30 @@ interface TargetResult {
 
 export function createSessionService(deps: SessionServiceDeps): SessionService {
   const listeners = new Set<(index: SessionIndexDTO) => void>()
+
+  /*
+   * 実行中確認の結果。**R-1 のブラウズと同じ有効期間で持ち回す** (`BROWSE_SESSION_TTL_MS`)。
+   *
+   * **毎回取り直さない理由は費用である。** `wsl.exe` の呼び出しは固定で約 1.5 秒かかる
+   * (AD-015)。一覧を開くたびに払うと、先頭 50 件の列挙 (実測 1.8 秒) と合わせて
+   * SC-008 の 2 秒予算を確実に超える。
+   *
+   * **持ち回してよい根拠は値の側にある。** `VerifiedRunning` は確認時刻を保持し、
+   * `checkVerified` がアクセス直前に期限を検査する。
+   * 有効期間内に実体が停止する窓は残るが、これは **R-1 が §5 で明示的に受け入れた残余**
+   * と同じものである (窓を消すには操作ごとに確認を発行するほかなく、予算と両立しない)。
+   */
+  let verifiedCache: ReadonlyMap<WslNamespaceId, VerifiedRunning> = new Map()
+  let verifiedAt = 0
+
+  async function verified(): Promise<ReadonlyMap<WslNamespaceId, VerifiedRunning>> {
+    if (deps.now() - verifiedAt <= BROWSE_SESSION_TTL_MS && verifiedCache.size > 0) {
+      return verifiedCache
+    }
+    verifiedCache = await deps.verifyRunning()
+    verifiedAt = deps.now()
+    return verifiedCache
+  }
 
   /** 列挙対象の現在値。`fetchMore` が `targetKey` から引くために保持する。 */
   let targets: readonly EnumerationTarget[] = []
@@ -157,6 +187,26 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
     groups = groupSessions({ folders, matched })
   }
 
+  /**
+   * 先頭ページのあとに全件を取る (BE-070)。
+   *
+   * **同時に 1 本だけ走らせる。** 画面を開き直すたびに走らせると、
+   * 同じ対象へ子プロセスが重なる (列挙器の束ねが効くのは同じ対象への並行要求だけで、
+   * ここは所在をまたぐ)。
+   */
+  let completing = false
+
+  async function completeInBackground(): Promise<void> {
+    if (completing || complete) return
+    completing = true
+    try {
+      await deps.measure('list-sessions-all', () => fetchAll({ kind: 'all' }))
+      publish()
+    } finally {
+      completing = false
+    }
+  }
+
   function snapshot(): SessionIndexDTO {
     return {
       groups: groups.map(toSessionGroupDTO),
@@ -208,7 +258,7 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
 
   /** 所在ごとに探索して列挙する。**1 所在の失敗が他を消さない** (SC-007)。 */
   async function fetchAll(scope: EnumerationScope): Promise<void> {
-    const verifiedMap = await deps.verifyRunning()
+    const verifiedMap = await verified()
     const nextTargets: EnumerationTarget[] = []
     const nextOutcomes: EnumerationOutcome[] = []
     const nextSessions = new Map<string, readonly SessionSummary[]>()
@@ -319,11 +369,26 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
 
   return {
     async list(): Promise<SessionIndexDTO> {
-      if (loaded) return snapshot()
+      /*
+       * **キャッシュヒットも計測する** (SC-008 の 100 ミリ秒)。
+       * 計測点を置かないと「速いはず」を確かめる手段が無い。
+       */
+      if (loaded) return deps.measure('list-sessions-cached', async () => snapshot())
+
       await deps.measure('list-sessions-first-page', () =>
         fetchAll({ kind: 'page', limit: SESSION_PAGE_SIZE, offset: 0 })
       )
-      return publish()
+      const first = publish()
+
+      /*
+       * **全件は待たない。** 先頭ページを返してから続けて取り、`onChanged` で通知する
+       * (FR-031 / FR-037)。待つと先頭描画が全件の所要時間 (実測 3.3 秒) に縛られる。
+       *
+       * **失敗しても先頭ページを壊さない。** 例外は握らずに理由を行へ落とすのは
+       * `fetchAll` の側であり、ここに来るのは想定外の例外だけである。
+       */
+      void completeInBackground()
+      return first
     },
 
     async refresh(): Promise<SessionIndexDTO> {
@@ -360,7 +425,7 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
       outcomes = outcomes.map((outcome) => ({
         ...outcome,
         outcomes: outcome.outcomes.map((row) =>
-          row.key === targetKey ? { ...result.outcome, count: countFor(targetKey) } : row
+          row.key === targetKey ? rowAfterFetchMore(row, result) : row
         )
       }))
       regroup()
@@ -398,10 +463,32 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
     return sessionsByTarget.get(targetKey)?.length ?? 0
   }
 
+  /**
+   * 続きの取得のあとの行 (BE-062 / US-3 AC-6)。
+   *
+   * **取得済みの部分結果と失敗理由の双方を返す。**
+   * 途中まで取れているのに行を `failed` / 0 件へ差し替えると、
+   * 画面に残っているセッションと行の件数が食い違う。
+   *
+   * **理由キーを `stopped-midway` に差し替える。** 列挙器が返すのは
+   * 「今この対象が読めない」理由 (`distro-not-running` 等) だが、
+   * **すでに一部が取れている**状況はそれとは別の意味を持つ —
+   * 利用者に示すべきは「途中までは見えている」ことであり、
+   * 再取得で残りが取れるという行動である。
+   */
+  function rowAfterFetchMore(row: TargetOutcome, result: TargetResult): TargetOutcome {
+    const retained = countFor(row.key)
+    if (result.outcome.status === 'ok') {
+      return { ...result.outcome, count: retained }
+    }
+    if (retained === 0) return result.outcome
+    return { ...result.outcome, reasonKey: 'stopped-midway', count: retained }
+  }
+
   /** 対象の所在に対応する確認済みの値。**所在 `windows` では `null`** である。 */
   async function verifiedFor(target: EnumerationTarget): Promise<VerifiedRunning | null> {
     if (isHostNamespace(target.configDir.namespace)) return null
-    const map = await deps.verifyRunning()
+    const map = await verified()
     return map.get(target.configDir.namespace) ?? null
   }
 }

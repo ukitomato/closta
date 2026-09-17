@@ -31,6 +31,7 @@ import {
   UNKNOWN_REASON_LABELS
 } from './labels'
 import { buildSessionRows, rowTitleText, type SessionSection } from './rows'
+import { useFolderLabels } from './useFolderLabels'
 import { useSessions } from './useSessions'
 
 /**
@@ -84,17 +85,23 @@ function SourceLabel({ label }: { label: string }): React.JSX.Element | null {
 }
 
 /** グループの見出し。**種別ごとに出す情報が違う。** */
-function SectionHeading({ group }: { group: SessionGroupDTO }): React.JSX.Element {
+function SectionHeading({
+  group,
+  folderName
+}: {
+  group: SessionGroupDTO
+  folderName: string | null
+}): React.JSX.Element {
   switch (group.kind) {
     case 'folder':
       return (
         <div className="flex items-baseline gap-2">
           {/*
-            **フォルダの表示名は登録側が持つ。** ここでは `folderId` しか来ないので、
-            表示名の解決は FE-051 で登録一覧と突き合わせる。
-            現時点は識別子を出す — 空欄にしない (FR-047)。
+            **`folderId` をそのまま出さない** (FR-047)。識別子は乱数由来の 32 桁であり、
+            利用者に意味を持たない。登録一覧と突き合わせて表示名を引く。
+            引けない窓 (登録解除と取得の交差) では種別名だけを出す — 空欄にしない。
           */}
-          <span className="text-sm font-medium">{group.folderId}</span>
+          <span className="text-sm font-medium">{folderName ?? '登録フォルダ'}</span>
           <span className="text-muted-foreground text-xs">{BOUNDARY_LABELS[group.boundary]}</span>
         </div>
       )
@@ -156,7 +163,13 @@ function registerSeedOf(group: SessionGroupDTO): FolderDraftSeed | null {
  * **未登録グループは既定で畳む** (FR-025)。他人のフォルダや一度きりの作業ディレクトリが
  * 大量に並ぶと、登録済みフォルダが画面から押し出される。
  */
-function Section({ section }: { section: SessionSection }): React.JSX.Element {
+function Section({
+  section,
+  folderName
+}: {
+  section: SessionSection
+  folderName: string | null
+}): React.JSX.Element {
   const collapsible = section.group.kind === 'unregistered'
   const [open, setOpen] = useState(!collapsible)
   const count = section.rowKeys.length
@@ -178,7 +191,7 @@ function Section({ section }: { section: SessionSection }): React.JSX.Element {
     <section className={cn(paper, 'rounded-xl p-3')}>
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <SectionHeading group={section.group} />
+          <SectionHeading group={section.group} folderName={folderName} />
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <span className="text-muted-foreground text-xs">{count} 件</span>
@@ -235,11 +248,34 @@ function Section({ section }: { section: SessionSection }): React.JSX.Element {
   )
 }
 
-/** 所在ごとの成否 (FR-030 / FR-032)。**失敗を黙って隠さない。** */
-function Outcomes({ outcomes }: { outcomes: readonly EnumerationOutcomeDTO[] }): React.JSX.Element {
+/**
+ * 所在ごとの成否 (FR-030 / FR-032 / FE-063)。**失敗を黙って隠さない。**
+ *
+ * **停止中には再検出の導線を添える** — 理由だけでは次の操作が分からない。
+ * **アプリがディストロを起動することはしない** (SC-005 / FR-007)。
+ * 起動は利用者が行い、アプリは「取り直す」手段だけを提供する。
+ */
+function Outcomes({
+  outcomes,
+  onRediscover,
+  busy
+}: {
+  outcomes: readonly EnumerationOutcomeDTO[]
+  onRediscover: () => void
+  busy: boolean
+}): React.JSX.Element {
+  const hasStopped = outcomes.some((outcome) => outcome.reasonKey === 'distro-not-running')
+
   return (
     <section className={cn(paper, 'rounded-xl p-3')}>
-      <h2 className="text-sm font-medium">列挙の結果</h2>
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-sm font-medium">列挙の結果</h2>
+        {hasStopped && (
+          <Button variant="outline" size="sm" disabled={busy} onClick={onRediscover}>
+            ランタイムを再検出して取り直す
+          </Button>
+        )}
+      </div>
       <ul className="mt-2 space-y-1 text-sm">
         {outcomes.map((outcome) => (
           <li key={outcome.targetKey} className="flex flex-wrap items-baseline gap-2">
@@ -274,8 +310,28 @@ function Outcomes({ outcomes }: { outcomes: readonly EnumerationOutcomeDTO[] }):
   )
 }
 
+/** 所在の絞り込みの選択肢。**参照キーではなく表示名を鍵にしない** — 同名の所在はない。 */
+type LocationFilter = { readonly kind: 'all' } | { readonly kind: 'one'; readonly label: string }
+
+/** グループが所在の絞り込みに一致するか。所在を持たないグループは「すべて」にだけ現れる。 */
+function matchesLocation(group: SessionGroupDTO, filter: LocationFilter): boolean {
+  if (filter.kind === 'all') return true
+  const location = group.kind === 'pending' || group.kind === 'unregistered' ? group.location : null
+  if (location === null) return false
+  return (location.kind === 'wsl' ? location.distroName : 'Windows') === filter.label
+}
+
 export function SessionListScreen(): React.JSX.Element {
   const sessions = useSessions()
+  const folderLabels = useFolderLabels()
+
+  /*
+   * **絞り込みで IPC を往復させない** (FR-040 / contracts ipc)。
+   * 取得済みの索引を絞るだけであり、列挙は起こさない。
+   */
+  const [locationFilter, setLocationFilter] = useState<LocationFilter>({ kind: 'all' })
+  const [folderFilter, setFolderFilter] = useState<string | null>(null)
+  const setScreen = useUiStore((state) => state.setScreen)
 
   /*
    * **selector の外で変換する。** `useAuiState` の selector が配列リテラルを返すと
@@ -309,6 +365,40 @@ export function SessionListScreen(): React.JSX.Element {
     },
     adapters: { threadList }
   })
+
+  /*
+   * **所在の選択肢は取得結果から作る。** 固定の一覧を持つと、
+   * 検出されていない所在が選べてしまい、常に 0 件の絞り込みができる。
+   */
+  const locationLabels = useMemo(() => {
+    const labels = new Set<string>()
+    for (const outcome of sessions.index?.outcomes ?? []) {
+      labels.add(outcome.location.kind === 'wsl' ? outcome.location.distroName : 'Windows')
+    }
+    return [...labels]
+  }, [sessions.index])
+
+  const visible = useMemo(
+    () =>
+      view.sections.filter((section) => {
+        if (!matchesLocation(section.group, locationFilter)) return false
+        if (folderFilter === null) return true
+        return section.group.kind === 'folder' && section.group.folderId === folderFilter
+      }),
+    [view.sections, locationFilter, folderFilter]
+  )
+
+  const filtering = locationFilter.kind !== 'all' || folderFilter !== null
+
+  /**
+   * 全所在が未列挙か (FR-032 の 4 つ目の条件)。
+   *
+   * **行が 1 つも `ok` でないこと**で判定する。`no-history` を未列挙に数えない —
+   * 「Claude Code を使っていない」と「読めなかった」は示すべきことが違う (FR-012)。
+   */
+  const allUnlisted =
+    (sessions.index?.outcomes.length ?? 0) > 0 &&
+    (sessions.index?.outcomes ?? []).every((outcome) => outcome.status === 'failed')
 
   const total = view.rows.length
 
@@ -361,20 +451,139 @@ export function SessionListScreen(): React.JSX.Element {
           </div>
         )}
 
-        {sessions.index !== null && <Outcomes outcomes={sessions.index.outcomes} />}
+        {sessions.index !== null && (
+          <Outcomes
+            outcomes={sessions.index.outcomes}
+            busy={sessions.loading}
+            onRediscover={() => void sessions.rediscover()}
+          />
+        )}
+
+        {/* ── 絞り込み (FE-072)。**IPC を往復させない。** ────────────── */}
+        {sessions.index !== null &&
+          (locationLabels.length > 1 || folderLabels.entries.length > 0) && (
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="text-muted-foreground">絞り込み</span>
+              <Button
+                variant={locationFilter.kind === 'all' ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setLocationFilter({ kind: 'all' })}
+              >
+                すべての所在
+              </Button>
+              {locationLabels.map((label) => (
+                <Button
+                  key={label}
+                  variant={
+                    locationFilter.kind === 'one' && locationFilter.label === label
+                      ? 'secondary'
+                      : 'ghost'
+                  }
+                  size="sm"
+                  onClick={() => setLocationFilter({ kind: 'one', label })}
+                >
+                  {label}
+                </Button>
+              ))}
+              {folderLabels.entries.length > 0 && (
+                <>
+                  <span className="text-muted-foreground">/</span>
+                  <Button
+                    variant={folderFilter === null ? 'secondary' : 'ghost'}
+                    size="sm"
+                    onClick={() => setFolderFilter(null)}
+                  >
+                    すべてのフォルダ
+                  </Button>
+                  {folderLabels.entries.map((entry) => (
+                    <Button
+                      key={entry.id}
+                      variant={folderFilter === entry.id ? 'secondary' : 'ghost'}
+                      size="sm"
+                      onClick={() => setFolderFilter(entry.id)}
+                    >
+                      {entry.name}
+                    </Button>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
 
         <ThreadListRoot className="gap-3">
-          {view.sections.map((section) => (
-            <Section key={section.key} section={section} />
+          {visible.map((section) => (
+            <Section
+              key={section.key}
+              section={section}
+              folderName={
+                section.group.kind === 'folder' ? folderLabels.nameOf(section.group.folderId) : null
+              }
+            />
           ))}
         </ThreadListRoot>
 
-        {sessions.index !== null && view.sections.length === 0 && (
+        {sessions.index !== null && visible.length === 0 && (
+          /*
+           * **空白の画面を作らない** (FR-032 / SC-013 の 5 条件)。
+           * どの条件も**文言ではなく操作**を出す — 文言だけでは次に何をすればよいか
+           * 分かっても、その場でできない。
+           */
           <EmptyState>
-            <p className="text-sm">表示できるセッションがありません。</p>
-            <p className="text-muted-foreground text-xs">
-              作業フォルダを登録し、Claude Code でセッションを開始すると表示されます。
-            </p>
+            {filtering ? (
+              <>
+                <p className="text-sm">絞り込みに一致するセッションがありません。</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setLocationFilter({ kind: 'all' })
+                    setFolderFilter(null)
+                  }}
+                >
+                  絞り込みを解除する
+                </Button>
+              </>
+            ) : folderLabels.entries.length === 0 ? (
+              <>
+                <p className="text-sm">作業フォルダがまだ登録されていません。</p>
+                <p className="text-muted-foreground text-xs">
+                  登録すると、そのフォルダのセッションがここに並びます。
+                </p>
+                <Button variant="outline" size="sm" onClick={() => setScreen('folders')}>
+                  作業フォルダを登録する
+                </Button>
+              </>
+            ) : allUnlisted ? (
+              <>
+                <p className="text-sm">どの所在も列挙できていません。</p>
+                <p className="text-muted-foreground text-xs">
+                  ディストロを起動してから取り直してください。
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={sessions.loading}
+                  onClick={() => void sessions.rediscover()}
+                >
+                  ランタイムを再検出して取り直す
+                </Button>
+              </>
+            ) : (
+              <>
+                <p className="text-sm">セッションがまだありません。</p>
+                <p className="text-muted-foreground text-xs">
+                  登録したフォルダで Claude Code を使うと、ここに並びます。
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={sessions.loading}
+                  onClick={() => void sessions.refresh()}
+                >
+                  取り直す
+                </Button>
+              </>
+            )}
           </EmptyState>
         )}
       </div>

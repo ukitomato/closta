@@ -418,3 +418,257 @@ describe('SessionListScreen — 未登録フォルダからの登録 (FE-051 / F
     expect(sum).toBe(2)
   })
 })
+
+/* ── US-3 / US-4: 失敗の封じ込めと空状態と絞り込み (FE-064 / FE-073) ── */
+
+describe('SessionListScreen — 失敗の封じ込めと空状態 (FE-064)', () => {
+  it('1 所在が失敗しても他の所在の一覧が欠落 0 件で描画される (SC-007)', async () => {
+    installCapability({
+      listSessions: () =>
+        Promise.resolve(
+          index([folderGroup([session({ sessionId: 'a' }), session({ sessionId: 'b' })])], {
+            outcomes: [
+              outcome({ count: 2 }),
+              outcome({
+                location: { kind: 'wsl', distroName: 'Ubuntu' },
+                targetKey: 'wsl:Ubuntu#0',
+                targetLabel: '',
+                status: 'failed',
+                reasonKey: 'permission-denied',
+                count: 0
+              })
+            ]
+          })
+        ),
+      listFolders: () =>
+        Promise.resolve({
+          folders: [
+            {
+              id: 'folder-1',
+              location: { kind: 'windows' },
+              path: { namespace: 'host', value: 'C:\\work' },
+              displayName: 'work',
+              reachability: 'unknown',
+              boundary: 'unknown',
+              unreachableReason: null,
+              blockedReason: null,
+              resolutionSteps: [],
+              existence: 'unknown'
+            }
+          ],
+          restoreIssues: { skipped: 0, reasonKeys: [], backupPath: null }
+        } as never),
+      onFoldersChanged: () => () => {},
+      onSessionsChanged: () => () => {}
+    })
+
+    render(<SessionListScreen />)
+
+    await waitFor(() => expect(screen.getByText('読み取り権限がありません')).toBeInTheDocument())
+    // **成功した所在の行は残る。**
+    expect(screen.getByText(/全 2 件/)).toBeInTheDocument()
+    // 見出しと絞り込みボタンの双方に出る。**識別子ではなく表示名である**ことが要点 (FR-047)。
+    expect(screen.getAllByText('work').length).toBeGreaterThan(0)
+  })
+
+  it('全所在が未列挙なら再検出の導線を出す (FR-032 の 4 つ目)', async () => {
+    const refreshRuntimes = vi.fn(() => Promise.resolve({ runtimes: [] } as never))
+    installCapability({
+      listSessions: () =>
+        Promise.resolve(
+          index([], {
+            outcomes: [outcome({ status: 'failed', reasonKey: 'distro-not-running', count: 0 })]
+          })
+        ),
+      refreshRuntimes,
+      refreshSessions: () => Promise.resolve(index([])),
+      listFolders: () =>
+        Promise.resolve({
+          folders: [
+            {
+              id: 'folder-1',
+              location: { kind: 'windows' },
+              path: { namespace: 'host', value: 'C:\\work' },
+              displayName: 'work',
+              reachability: 'unknown',
+              boundary: 'unknown',
+              unreachableReason: null,
+              blockedReason: null,
+              resolutionSteps: [],
+              existence: 'unknown'
+            }
+          ],
+          restoreIssues: { skipped: 0, reasonKeys: [], backupPath: null }
+        } as never),
+      onFoldersChanged: () => () => {},
+      onSessionsChanged: () => () => {}
+    })
+
+    render(<SessionListScreen />)
+
+    await waitFor(() =>
+      expect(screen.getByText('どの所在も列挙できていません。')).toBeInTheDocument()
+    )
+    screen.getAllByRole('button', { name: 'ランタイムを再検出して取り直す' })[0].click()
+    await waitFor(() => expect(refreshRuntimes).toHaveBeenCalled())
+  })
+
+  it('登録フォルダ 0 件なら登録への導線を出す (FR-032 の 3 つ目)', async () => {
+    installCapability({
+      listSessions: () => Promise.resolve(index([])),
+      listFolders: () =>
+        Promise.resolve({
+          folders: [],
+          restoreIssues: { skipped: 0, reasonKeys: [], backupPath: null }
+        } as never),
+      onFoldersChanged: () => () => {},
+      onSessionsChanged: () => () => {}
+    })
+
+    render(<SessionListScreen />)
+
+    await waitFor(() =>
+      expect(screen.getByText('作業フォルダがまだ登録されていません。')).toBeInTheDocument()
+    )
+    screen.getByRole('button', { name: '作業フォルダを登録する' }).click()
+    await waitFor(() => expect(useUiStore.getState().screen).toBe('folders'))
+  })
+
+  it('登録フォルダ 3 件 / セッション 0 件で folder グループが 3 件現れる (FR-051 / SC-013)', async () => {
+    installCapability({
+      listSessions: () =>
+        Promise.resolve(
+          index([
+            { kind: 'folder', folderId: 'f1', boundary: 'native', sessions: [] },
+            { kind: 'folder', folderId: 'f2', boundary: 'native', sessions: [] },
+            { kind: 'folder', folderId: 'f3', boundary: 'native', sessions: [] }
+          ])
+        ),
+      onSessionsChanged: () => () => {}
+    })
+
+    render(<SessionListScreen />)
+
+    await waitFor(() =>
+      expect(screen.getAllByText('このフォルダのセッションはありません。')).toHaveLength(3)
+    )
+  })
+})
+
+describe('SessionListScreen — 件数が多い場合 (FE-073)', () => {
+  function manySessions(count: number): SessionSummaryDTO[] {
+    return Array.from({ length: count }, (_, i) =>
+      session({ sessionId: String(i).padStart(8, '0'), summary: `要約 ${i}` })
+    )
+  }
+
+  it('700 件規模でも先頭ページを描ける', async () => {
+    const page = manySessions(50)
+    installCapability({
+      listSessions: () =>
+        Promise.resolve(
+          index([folderGroup(page)], { complete: false, outcomes: [outcome({ count: 50 })] })
+        ),
+      onSessionsChanged: () => () => {}
+    })
+
+    render(<SessionListScreen />)
+
+    await waitFor(() => expect(screen.getByText('要約 0')).toBeInTheDocument())
+    // **先頭ページ段階では件数を確定値として見せない** (FR-037)。
+    expect(screen.getByText(/件数は確定していません/)).toBeInTheDocument()
+  })
+
+  it('全件の通知で件数が確定する (BE-070 / FR-037)', async () => {
+    const all = manySessions(700)
+    // **入れ物で持つ。** 変数に直接持つと、クロージャ内の代入が
+    // 制御フロー解析に見えず、呼び出し位置で `null` に絞られる。
+    const sink: { notify: ((value: SessionIndexDTO) => void) | null } = { notify: null }
+    installCapability({
+      listSessions: () =>
+        Promise.resolve(
+          index([folderGroup(manySessions(50))], {
+            complete: false,
+            outcomes: [outcome({ count: 50 })]
+          })
+        ),
+      onSessionsChanged: (listener) => {
+        sink.notify = listener
+        return () => {}
+      }
+    })
+
+    render(<SessionListScreen />)
+    await waitFor(() => expect(screen.getByText(/件数は確定していません/)).toBeInTheDocument())
+
+    sink.notify?.(
+      index([folderGroup(all)], { complete: true, outcomes: [outcome({ count: 700 })] })
+    )
+
+    await waitFor(() => expect(screen.getByText(/全 700 件/)).toBeInTheDocument())
+  })
+
+  it('絞り込み結果 0 件で解除の導線を出す (FR-032 の 5 つ目)', async () => {
+    installCapability({
+      listSessions: () =>
+        Promise.resolve(
+          index([folderGroup([session()])], {
+            outcomes: [
+              outcome(),
+              outcome({
+                location: { kind: 'wsl', distroName: 'Ubuntu' },
+                targetKey: 'wsl:Ubuntu#0',
+                targetLabel: '',
+                status: 'no-history',
+                count: 0
+              })
+            ]
+          })
+        ),
+      onSessionsChanged: () => () => {}
+    })
+
+    render(<SessionListScreen />)
+    await waitFor(() => expect(screen.getByText('要約')).toBeInTheDocument())
+
+    // 所在 Ubuntu で絞ると、folder グループ (所在を持たない) は外れて 0 件になる。
+    screen.getByRole('button', { name: 'Ubuntu' }).click()
+
+    await waitFor(() =>
+      expect(screen.getByText('絞り込みに一致するセッションがありません。')).toBeInTheDocument()
+    )
+    screen.getByRole('button', { name: '絞り込みを解除する' }).click()
+    await waitFor(() => expect(screen.getByText('要約')).toBeInTheDocument())
+  })
+
+  it('絞り込みで IPC を往復させない (FR-040)', async () => {
+    const listSessions = vi.fn(() =>
+      Promise.resolve(
+        index([folderGroup([session()])], {
+          outcomes: [
+            outcome(),
+            outcome({
+              location: { kind: 'wsl', distroName: 'Ubuntu' },
+              targetKey: 'wsl:Ubuntu#0',
+              targetLabel: '',
+              status: 'no-history',
+              count: 0
+            })
+          ]
+        })
+      )
+    )
+    installCapability({ listSessions, onSessionsChanged: () => () => {} })
+
+    render(<SessionListScreen />)
+    await waitFor(() => expect(screen.getByText('要約')).toBeInTheDocument())
+    const before = listSessions.mock.calls.length
+
+    screen.getByRole('button', { name: 'Ubuntu' }).click()
+    await waitFor(() =>
+      expect(screen.getByText('絞り込みに一致するセッションがありません。')).toBeInTheDocument()
+    )
+
+    expect(listSessions.mock.calls.length).toBe(before)
+  })
+})
