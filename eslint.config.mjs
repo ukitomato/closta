@@ -105,6 +105,9 @@ const MSG_ELECTRON = 'electron の import は app レイヤと infra/secrets/ �
 const MSG_SPAWN = 'プロセス起動は src/main/infra/runtime/ のみ (FR-036)'
 const MSG_PLATFORM = 'プラットフォーム判定は src/main/infra/runtime/ のみ (Principle II / FR-036)'
 const MSG_NATIVE = 'ネイティブモジュールは agents / domain で禁止 (AD-010 / FR-041)'
+const MSG_UI_NAMESPACE_LITERAL =
+  'renderer は名前空間つきパス値を組み立てない。main が返した PathDTO を' +
+  'そのまま渡すこと (Principle I / FR-025 / SH-054)'
 const MSG_CORE =
   'Node.js 標準モジュールの直接 import は許可されたファイルだけ (FR-035 / FR-036 / FR-025)'
 
@@ -369,6 +372,43 @@ export default defineConfig(
     files: RUNTIME_INFRA_FILES,
     rules: {
       'no-restricted-imports': ['error', without([...SPAWN_SPELLINGS, ...PLATFORM_SPELLINGS])]
+    }
+  },
+
+  /*
+   * ── renderer は名前空間つきパス値を組み立てない (SH-054 / Principle I / FR-025) ──
+   *
+   * **import を見る検証では塞げない領域である。** パスの合成は文字列操作であり
+   * import を伴わないため、`no-restricted-imports` も依存グラフも掛からない
+   * (R-1 が `ui-path-concat` として `UNDETECTED_NOTES` に記録した残余)。
+   *
+   * R-2 は **renderer が受け取ったパスを IPC へ返す最初の feature** である
+   * (未登録フォルダからの登録。FE-051)。対象が現れたのでルールを置く —
+   * **対象が無いルールを書いて「強制した」とは数えない** (AD-025 §9 / AD-027)。
+   *
+   * 塞ぐのは `{ namespace: ..., value: ... }` という**オブジェクトリテラルの組み立て**である。
+   * 読み出し (`path.namespace`) は `MemberExpression` なので掛からない。
+   * main が返した `PathDTO` をそのまま渡す形は影響を受けない。
+   *
+   * **テストは除く。** スタブした IPC に DTO を食わせるのが試験の方法であり、
+   * ここを塞ぐと「renderer 単体で試す」という前提そのものが成立しない。
+   * 残余の扱いは `tests/rule-fixtures/expected.mjs` の `UNDETECTED_NOTES` を見ること。
+   */
+  {
+    files: ['src/renderer/**/*.{ts,tsx}'],
+    ignores: ['src/renderer/**/*.test.{ts,tsx}', 'src/renderer/src/test-support/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'ObjectExpression > Property[key.name="namespace"]',
+          message: MSG_UI_NAMESPACE_LITERAL
+        },
+        {
+          selector: 'ObjectExpression > Property[key.value="namespace"]',
+          message: MSG_UI_NAMESPACE_LITERAL
+        }
+      ]
     }
   },
 

@@ -1,5 +1,8 @@
 import { create } from 'zustand'
 
+import type { PathDTO } from '@domain/runtime/dto'
+import type { LocationDTO } from '@domain/workspace/dto'
+
 /**
  * 画面遷移とテーマだけを持つ UI ストア。
  *
@@ -22,17 +25,42 @@ export const SCREEN_LABELS: Record<ScreenId, string> = {
   chat: '会話 (準備中)'
 }
 
+/**
+ * 登録操作へ渡す初期値 (FE-051)。
+ *
+ * **アプリが自動で登録しない** (FR-026)。所在とパスを**初期値として運ぶだけ**で、
+ * 確定は利用者が登録画面で行う。**実在確認も行わない** (FR-027) —
+ * 任意パスの存在を問い合わせる経路を作らないためである。
+ *
+ * ここに置くのは、画面をまたぐ受け渡しであるため。
+ * 各 feature のストアに置くと、渡す側と受ける側のどちらが持ち主か決まらない。
+ */
+export interface FolderDraftSeed {
+  readonly location: LocationDTO
+  /** **main が返した完成した値をそのまま運ぶ。** renderer で組み立てない (FR-025)。 */
+  readonly path: PathDTO
+  readonly suggestedDisplayName: string
+}
+
 interface UiState {
   screen: ScreenId
   dark: boolean
+  /** 登録画面が受け取る初期値。受け取ったら消す (使い切り)。 */
+  folderDraftSeed: FolderDraftSeed | null
   setScreen: (screen: ScreenId) => void
   toggleTheme: () => void
+  /** 初期値を積んで登録画面へ移る。 */
+  seedFolderDraft: (seed: FolderDraftSeed) => void
+  clearFolderDraftSeed: () => void
 }
 
 export const useUiStore = create<UiState>((set) => ({
   screen: 'runtimes',
   dark: false,
+  folderDraftSeed: null,
   setScreen: (screen) => set({ screen }),
+  seedFolderDraft: (folderDraftSeed) => set({ folderDraftSeed, screen: 'folders' }),
+  clearFolderDraftSeed: () => set({ folderDraftSeed: null }),
   toggleTheme: () =>
     set((state) => {
       const dark = !state.dark

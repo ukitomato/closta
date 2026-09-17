@@ -74,3 +74,6 @@ src/domain/session/keys.ts
 src/domain/session/origin.ts
 tsconfig.depcruise.json
 components.json
+eslint.config.mjs
+tests/rule-fixtures/a-direct/ui-dto-namespace-literal.ts.fixture
+src/renderer/src/features/workspace-folders/WorkspaceFoldersScreen.tsx

@@ -1,7 +1,8 @@
 import { autoModeStatus, isAutoModeAllowed } from '@domain/runtime/capabilities'
 import type { RuntimeDescriptor } from '@domain/runtime/descriptor'
 import type { CapabilitiesDTO, RuntimeDescriptorDTO } from '@domain/runtime/dto'
-import { pathParts } from '@domain/runtime/path-types'
+import { hostPathOps, runtimePathOps } from '@domain/runtime/path-api'
+import { pathParts, type HostPath, type RuntimePath } from '@domain/runtime/path-types'
 import { originDisplay, originPath } from '@domain/session/cwd-origin'
 import type { EnumerationOutcomeDTO, SessionGroupDTO, SessionSummaryDTO } from '@domain/session/dto'
 import type { SessionGroup } from '@domain/session/group'
@@ -86,6 +87,20 @@ export function toSessionSummaryDTO(session: SessionSummary): SessionSummaryDTO 
   }
 }
 
+/**
+ * 登録するときの表示名の既定値 (FE-051)。
+ *
+ * **組み立てはパス API に委ねる。** 名前空間ごとに意味論が違うため、
+ * 素の文字列操作で末尾を取ると片方で誤る (`C:\` と `/` の扱い)。
+ * 末尾が取れない値 (ドライブルート等) では**パス値そのもの**を既定値にする —
+ * 空文字を返すと登録側の検証で弾かれ、利用者は理由を得られない。
+ */
+function suggestedDisplayName(path: HostPath | RuntimePath): string {
+  const base =
+    path.namespace === 'host' ? hostPathOps.basename(path) : runtimePathOps.basename(path)
+  return base.length > 0 ? base : path.value
+}
+
 /** グループを DTO へ写す。**4 種を 2 種に潰さない** (FR-022 / FR-025 / FR-028)。 */
 export function toSessionGroupDTO(group: SessionGroup): SessionGroupDTO {
   const sessions = group.sessions.map(toSessionSummaryDTO)
@@ -105,6 +120,7 @@ export function toSessionGroupDTO(group: SessionGroup): SessionGroupDTO {
         cwdKey: group.cwdKey,
         cwd: group.cwd === null ? null : pathParts(group.cwd),
         cwdDisplay: group.cwdDisplay,
+        suggestedDisplayName: group.cwd === null ? null : suggestedDisplayName(group.cwd),
         location: group.location,
         sessions
       }

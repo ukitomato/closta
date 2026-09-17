@@ -17,6 +17,7 @@ import {
 } from '@/components/assistant-ui/elements/thread-list.aui'
 import { Button } from '@/components/ui/button'
 import { useSessionThreadListAdapter } from '@/runtime/thread-list-adapter'
+import { useUiStore, type FolderDraftSeed } from '@/stores/ui'
 
 import type { EnumerationOutcomeDTO, SessionGroupDTO } from '@domain/session/dto'
 
@@ -134,6 +135,22 @@ function SectionHeading({ group }: { group: SessionGroupDTO }): React.JSX.Elemen
 }
 
 /**
+ * 登録の初期値を取り出す (FE-051 / FR-026)。
+ *
+ * **3 つが揃わないグループには導線を出さない。** 所在が決まらないものは登録できない
+ * (登録には所在が要る。AD-025)。
+ * 揃っているかを**値で確かめる** — 非 null アサーションで押し通すと、
+ * DTO 側の `null` の意味 (所在不明) が画面で消える。
+ */
+function registerSeedOf(group: SessionGroupDTO): FolderDraftSeed | null {
+  if (group.kind !== 'unregistered') return null
+  const { location, cwd, suggestedDisplayName } = group
+  if (location === null || cwd === null || suggestedDisplayName === null) return null
+  // **main が返した値をそのまま運ぶ。** renderer で組み立てない (FR-025)。
+  return { location, path: cwd, suggestedDisplayName }
+}
+
+/**
  * 1 区画。
  *
  * **未登録グループは既定で畳む** (FR-025)。他人のフォルダや一度きりの作業ディレクトリが
@@ -143,6 +160,19 @@ function Section({ section }: { section: SessionSection }): React.JSX.Element {
   const collapsible = section.group.kind === 'unregistered'
   const [open, setOpen] = useState(!collapsible)
   const count = section.rowKeys.length
+  const seedFolderDraft = useUiStore((s) => s.seedFolderDraft)
+  const group = section.group
+
+  /*
+   * **登録の導線 (FE-051 / FR-026)。**
+   *
+   * **アプリが自動で登録しない。** 所在とパスを初期値として登録画面へ渡すだけで、
+   * 確定は利用者が行う。**実在確認もしない** (FR-027) —
+   * 任意パスの存在を問い合わせる経路を作らないためである。
+   *
+   * 所在が決まらないグループには出さない — 登録には所在が要る (AD-025)。
+   */
+  const registerSeed = registerSeedOf(group)
 
   return (
     <section className={cn(paper, 'rounded-xl p-3')}>
@@ -152,6 +182,11 @@ function Section({ section }: { section: SessionSection }): React.JSX.Element {
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <span className="text-muted-foreground text-xs">{count} 件</span>
+          {registerSeed !== null && (
+            <Button variant="outline" size="sm" onClick={() => seedFolderDraft(registerSeed)}>
+              作業フォルダとして登録
+            </Button>
+          )}
           {collapsible && (
             <Button variant="ghost" size="sm" onClick={() => setOpen(!open)}>
               {open ? '畳む' : '開く'}

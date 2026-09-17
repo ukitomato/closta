@@ -75,6 +75,17 @@ export type SessionGroupDTO =
       readonly cwd: PathDTO | null
       /** 表示専用。**UNC 接頭辞を含まない** (FR-042。`SessionSummaryDTO` と同じ規則)。 */
       readonly cwdDisplay: string | null
+      /**
+       * 登録するときの表示名の既定値 (FR-026 / FE-051)。
+       *
+       * **main が組み立てる。** パス値から末尾の名前を取り出す操作であり、
+       * renderer に置くと `ui` がパス文字列を分解することになる (Principle I / FR-025)。
+       * 所在が決まらないグループでは `null` — 登録の導線そのものが出ない。
+       *
+       * **既定値であって確定値ではない。** 利用者が上書きでき、
+       * **アプリが自動で登録することはない** (FR-026)。
+       */
+      readonly suggestedDisplayName: string | null
       readonly location: LocationDTO | null
       readonly sessions: readonly SessionSummaryDTO[]
     }

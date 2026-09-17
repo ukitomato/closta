@@ -15,9 +15,15 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
+import { useUiStore } from '@/stores/ui'
 
 import { shouldSuggestUnregister } from '@domain/workspace/folder'
-import type { LocationDTO, WorkspaceFolderDTO } from '@domain/workspace/dto'
+import type {
+  LocationDTO,
+  RegisterFolderResult,
+  WorkspaceFolderDTO,
+  WorkspaceFolderDraftDTO
+} from '@domain/workspace/dto'
 
 import { useRuntimes } from '../runtime-list/useRuntimes'
 import {
@@ -218,6 +224,81 @@ function FolderCard({
   )
 }
 
+/**
+ * セッション一覧から渡された登録の初期値 (FE-051 / FR-026 / FR-027)。
+ *
+ * **アプリが自動で登録しない。** 初期値を出して利用者の確定を待つ。
+ * **実在確認もしない** — 任意パスの存在を問い合わせる経路を作らないためである。
+ *
+ * **パスは main が返した値をそのまま渡す** (FR-025)。
+ * 表示名の既定値も main が組み立てたものを使う — renderer でパスを分解しない。
+ */
+function SeededDraft({
+  onRegister
+}: {
+  onRegister: (draft: WorkspaceFolderDraftDTO) => Promise<RegisterFolderResult>
+}): React.JSX.Element | null {
+  const seed = useUiStore((s) => s.folderDraftSeed)
+  const clearSeed = useUiStore((s) => s.clearFolderDraftSeed)
+  const [name, setName] = useState('')
+
+  if (seed === null) return null
+
+  const displayName = name.length > 0 ? name : seed.suggestedDisplayName
+
+  return (
+    <div className={cn(paper, 'flex flex-col gap-3 rounded-xl px-4 py-3')}>
+      <p className="text-sm font-medium">セッション一覧から渡された作業ディレクトリ</p>
+      <p className="text-muted-foreground text-xs">
+        {seed.location.kind === 'wsl' ? seed.location.distroName : 'Windows'} — {seed.path.value}
+      </p>
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <label htmlFor="seeded-display-name" className="text-xs font-medium">
+            表示名
+          </label>
+          <input
+            className="bg-input border-border focus-visible:ring-ring/50 min-w-0 rounded-md border px-2 py-1 text-sm focus-visible:ring-[3px] focus-visible:outline-none"
+            id="seeded-display-name"
+            aria-describedby="seeded-display-name-hint"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
+          <p id="seeded-display-name-hint" className="text-muted-foreground text-xs">
+            未入力なら「{seed.suggestedDisplayName}」を使います
+          </p>
+        </div>
+        <Button
+          size="sm"
+          onClick={async () => {
+            const result = await onRegister({
+              location: seed.location,
+              path: seed.path,
+              displayName
+            })
+            if (result.ok) {
+              setName('')
+              clearSeed()
+            }
+          }}
+        >
+          この所在で登録する
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            setName('')
+            clearSeed()
+          }}
+        >
+          やめる
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 export function WorkspaceFoldersScreen(): React.JSX.Element {
   const folders = useFolders()
   const runtimes = useRuntimes()
@@ -255,6 +336,9 @@ export function WorkspaceFoldersScreen(): React.JSX.Element {
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-medium">作業フォルダ</h2>
       </div>
+
+      {/* ── セッション一覧から渡された初期値 (FE-051 / R-2) ────────── */}
+      <SeededDraft onRegister={folders.register} />
 
       {/* ── 所在の選択 (FE-020) ─────────────────────────────────────── */}
       <div className={cn(paper, 'flex flex-col gap-3 rounded-xl px-4 py-3')}>

@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import type { RegisterFolderResult } from '@domain/workspace/dto'
 import type {
   EnumerationOutcomeDTO,
   SessionGroupDTO,
@@ -12,6 +13,7 @@ import { installCapability } from '@/test-support/capability'
 
 import { SessionListScreen } from './SessionListScreen'
 import { useSessionsStore } from '@/stores/sessions'
+import { useUiStore } from '@/stores/ui'
 
 /**
  * FE-046 — 一覧の表示 (SC-006 / SC-009 / SC-012 / FR-029 / FR-034 / FR-037 / FR-047 / FR-052)。
@@ -87,6 +89,7 @@ function install(value: SessionIndexDTO): void {
 beforeEach(() => {
   // ストアはモジュール寿命なので、テストごとに初期状態へ戻す。
   useSessionsStore.setState({ index: null, loading: false, failed: false, selectedRowKey: null })
+  useUiStore.setState({ screen: 'sessions', folderDraftSeed: null })
 })
 
 describe('SessionListScreen', () => {
@@ -205,6 +208,7 @@ describe('SessionListScreen', () => {
           cwdKey: 'k',
           cwd: { namespace: 'host', value: 'C:\\other' },
           cwdDisplay: null,
+          suggestedDisplayName: 'other',
           location: { kind: 'windows' },
           sessions: [session({ sessionId: 'c' })]
         },
@@ -228,6 +232,7 @@ describe('SessionListScreen', () => {
           cwdKey: 'k',
           cwd: { namespace: 'host', value: 'C:\\other' },
           cwdDisplay: null,
+          suggestedDisplayName: 'other',
           location: { kind: 'windows' },
           sessions: [session({ summary: '畳まれている要約' })]
         }
@@ -309,5 +314,107 @@ describe('SessionListScreen', () => {
     expect(refreshSessions).not.toHaveBeenCalled()
     screen.getByRole('button', { name: '全件を取り直す' }).click()
     await waitFor(() => expect(refreshSessions).toHaveBeenCalledTimes(1))
+  })
+})
+
+/* ── US-2: 未登録フォルダから登録へ (FE-053) ──────────────────── */
+
+describe('SessionListScreen — 未登録フォルダからの登録 (FE-051 / FE-053)', () => {
+  function unregisteredIndex(): SessionIndexDTO {
+    return index([
+      {
+        kind: 'unregistered',
+        cwdKey: 'k',
+        cwd: { namespace: 'host', value: 'C:\\work\\other' },
+        cwdDisplay: null,
+        suggestedDisplayName: 'other',
+        location: { kind: 'windows' },
+        sessions: [session({ sessionId: 'x' })]
+      }
+    ])
+  }
+
+  it('所在とパスを初期値として渡すだけで、アプリが登録しない (FR-026)', async () => {
+    // 呼ばれないことを確かめる代役。**呼ばれたら型で分かる形にしておく。**
+    const registerFolder = vi.fn((): Promise<RegisterFolderResult> =>
+      Promise.reject(new Error('登録はアプリが行わない (FR-026)'))
+    )
+    installCapability({
+      listSessions: () => Promise.resolve(unregisteredIndex()),
+      onSessionsChanged: () => () => {},
+      registerFolder
+    })
+
+    render(<SessionListScreen />)
+    await waitFor(() => expect(screen.getByText('未登録フォルダ')).toBeInTheDocument())
+
+    screen.getByRole('button', { name: '作業フォルダとして登録' }).click()
+
+    // **登録は呼ばれない。** 初期値が積まれ、画面が登録側へ移るだけである。
+    expect(registerFolder).not.toHaveBeenCalled()
+    await waitFor(() => expect(useUiStore.getState().screen).toBe('folders'))
+    expect(useUiStore.getState().folderDraftSeed).toEqual({
+      location: { kind: 'windows' },
+      path: { namespace: 'host', value: 'C:\\work\\other' },
+      suggestedDisplayName: 'other'
+    })
+  })
+
+  it('実在確認を行わない (FR-027)', async () => {
+    const beginBrowse = vi.fn()
+    installCapability({
+      listSessions: () => Promise.resolve(unregisteredIndex()),
+      onSessionsChanged: () => () => {},
+      beginBrowse
+    })
+
+    render(<SessionListScreen />)
+    await waitFor(() => expect(screen.getByText('未登録フォルダ')).toBeInTheDocument())
+    screen.getByRole('button', { name: '作業フォルダとして登録' }).click()
+
+    // 任意パスの存在を問い合わせる経路を通らない。
+    expect(beginBrowse).not.toHaveBeenCalled()
+  })
+
+  it('所在が決まらないグループには登録の導線を出さない', async () => {
+    installCapability({
+      listSessions: () =>
+        Promise.resolve(
+          index([
+            {
+              kind: 'unregistered',
+              cwdKey: 'k',
+              cwd: null,
+              cwdDisplay: '/somewhere',
+              suggestedDisplayName: null,
+              location: null,
+              sessions: [session({ sessionId: 'y' })]
+            }
+          ])
+        ),
+      onSessionsChanged: () => () => {}
+    })
+
+    render(<SessionListScreen />)
+    await waitFor(() => expect(screen.getByText('未登録フォルダ')).toBeInTheDocument())
+
+    expect(screen.queryByRole('button', { name: '作業フォルダとして登録' })).not.toBeInTheDocument()
+  })
+
+  it('総数が保たれる — グループの件数の和が行数と一致する (SC-006)', async () => {
+    const value = index([
+      folderGroup([session({ sessionId: 'a' })]),
+      { kind: 'unknown', reasonKey: 'cwd-absent', sessions: [session({ sessionId: 'b' })] }
+    ])
+    installCapability({
+      listSessions: () => Promise.resolve(value),
+      onSessionsChanged: () => () => {}
+    })
+
+    render(<SessionListScreen />)
+    await waitFor(() => expect(screen.getByText(/全 2 件/)).toBeInTheDocument())
+
+    const sum = value.groups.reduce((total, group) => total + group.sessions.length, 0)
+    expect(sum).toBe(2)
   })
 })
