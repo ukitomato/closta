@@ -1,4 +1,4 @@
-import type { CwdOrigin } from './cwd-origin'
+import type { CwdOrigin } from './origin'
 import type { NormalizationMarks } from './normalize'
 
 /**
@@ -47,8 +47,15 @@ export interface SessionSummary {
  * **`(targetKey, sessionId)` の組で定義する。** 同一 UUID が 2 つの config ディレクトリに
  * 現れうる (履歴のコピー)。`sessionId` だけを鍵にすると一覧に見分けのつかない 2 行が並び、
  * 選択が一意に決まらず R-3 で別の会話が開く。
+ *
+ * 引数を構造的にする理由は `sessionTitle` と同じである —
+ * **`SessionSummaryDTO` からも同じ規則で鍵を作れるようにする。**
+ * renderer が独自に組み立てると、行の同一性の規則が 2 箇所に分かれる。
  */
-export function sessionRowKey(session: SessionSummary): string {
+export function sessionRowKey(session: {
+  readonly targetKey: string
+  readonly sessionId: string
+}): string {
   return `${session.targetKey}\u0000${session.sessionId}`
 }
 

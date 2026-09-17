@@ -20,12 +20,20 @@ description: 'Task list for R-2 セッション列挙'
 
 ## Phase 1: Setup
 
-- [ ] SH-001 [P] `thread-list` 系 element を registry から追加する。
+- [x] SH-001 [P] `thread-list` 系 element を registry から追加する。
+      - **済**: `npx assistant-ui@latest add thread-list` で追加 (周辺は `ui/input.tsx` の 1 件)。
+        生成物は `components/` 直下に出るので、既存の
+        `components/assistant-ui/elements/` へ移した
+      - **除外集合は追記が要らなかった**: `GENERATED_FILES` は
+        `src/renderer/src/components/**/*.{ts,tsx}`、`.prettierignore` は
+        `src/renderer/src/components` を既に丸ごと覆っている。
+        **レイヤ規則と禁止 import は掛かり続けることを確認済み**
+        (`boundaries/elements` の `ui` に含まれ、緩和は体裁と返り値型だけ)
       生成物が要求する周辺 element (shadcn の sidebar 等) を確認し、
       `eslint.config.mjs` の `GENERATED_FILES` と `.prettierignore` の除外集合に
       **同じ内容で**追記する (AD-025 の「CLI 生成物に体裁と厳格さのルールを掛けない」)。
       **レイヤ規則と禁止 import は掛け続ける**
-- [ ] SH-002 `electron.vite.config.ts` に `agents` のエントリを追加し、
+- [x] SH-002 `electron.vite.config.ts` に `agents` のエントリを追加し、
       `?modulePath` でバンドルされることを空実装で確認する (AD-023 の公式手順)
       - **済**: `@agents` 別名 (main の `resolve.alias` / `tsconfig.node.json` の `paths`) /
         `src/agents/enumerate-sessions.ts` の骨組み /
@@ -34,9 +42,10 @@ description: 'Task list for R-2 セッション列挙'
         `customSourcePatterns` の追加は不要だった) /
         `electron-vite` 5.0.0 が `modulePathPlugin` を main 設定に組み込み済みであること /
         `electron-vite/node` が `*?modulePath` の型を宣言しており tsconfig が既に取り込んでいること
-      - **未**: **バンドル出力の確認**。`session-enumerator.ts` が main のエントリから
-        参照されるまで vite のグラフに入らないため、`out/` に成果物が出ない。
-        **BE-031 の結線時に `out/` の成果物を確認して本 task を閉じる**
+      - **済 (BE-031 の結線後に確認)**: `out/main/enumerate-sessions-<hash>.js` が
+        **3.61 kB で出力される**。`require` は `@anthropic-ai/claude-agent-sdk` の 1 件だけで、
+        **`electron` は 0 件**。SDK は main バンドルの既定どおり外部化されるため、
+        配布時に `node_modules` へ残す必要がある (D-1 の `files` 設定の対象)
 - [x] SH-003 [P] `tsconfig.node.json` の `include` が `src/agents/**` を含むことを確認し、
       `pnpm build` が無改変で通ることを確認する
 
@@ -184,32 +193,40 @@ description: 'Task list for R-2 セッション列挙'
 
 ### 一覧の表示 (FE)
 
-- [ ] FE-040 `src/renderer/src/stores/sessions.ts` — external store (Zustand)。
+- [x] FE-040 `src/renderer/src/stores/sessions.ts` — external store (Zustand)。
       **選択 ID を store に一元化する** (component local state に持たない)
-- [ ] FE-041 `src/renderer/src/runtime/thread-list-adapter.ts` —
+- [x] FE-041 `src/renderer/src/runtime/thread-list-adapter.ts` —
       `ExternalStoreThreadListAdapter`。`threadId` / `threads` を store から供給し、
       **`onRename` / `onArchive` / `onUnarchive` / `onDelete` / `onSwitchToNewThread` を
       配線しない** (読み取り専用。FR-003)。`onSwitchToThread` のみ配線する
-- [ ] FE-042 `features/session-list/useSessions.ts` — IPC 呼び出しと `onSessionsChanged` の購読。
+- [x] FE-042 `features/session-list/useSessions.ts` — IPC 呼び出しと `onSessionsChanged` の購読。
       **`onFoldersChanged` では再列挙しない** (contracts ipc)
-- [ ] FE-043 `features/session-list/SessionListScreen.tsx` —
+- [x] FE-043 `features/session-list/SessionListScreen.tsx` —
+      **行の指定は位置ではなく鍵で行う。** `ThreadListPrimitive.ItemByIndex` は位置で
+      行を指すが、外部ストアの `threads` を差し替えても runtime への反映は同じ描画では
+      終わらないため、呼び出し側が持つ位置を渡すと範囲外を指して
+      `useClientLookup: key "undefined" not found` で**画面全体が落ちる** (実測)。
+      位置への変換は element が runtime の現在値に対して行う。
       グループごとのセクション + `ThreadListPrimitive` による行。
       **element 内蔵の日付グルーピングと検索を使わない**。
       グループ分けは `s.threads.threadItems` を selector の外で変換する (Principle XIII / plan の UI 構成)
-- [ ] FE-043b **由来候補 (ユーザ) を一覧上で常時識別できるようにする** (FR-052) —
+- [x] FE-043b **由来候補 (ユーザ) を一覧上で常時識別できるようにする** (FR-052) —
       1 ディストロ内の全ユーザ分を集約するため、
       **どのユーザの履歴を見ているかが分からない状態を作らない**。
       `targetLabel` を行またはグループ見出しに出す
-- [ ] FE-044 [P] `features/session-list/labels.ts` — 参照キーの訳出。
+- [x] FE-044 [P] `features/session-list/labels.ts` — 参照キーの訳出。
       `FailureReason` / `PendingReason` / `UnknownReason` / `CwdOriginKind` / `Boundary` の
       **全値**を網羅する (FR-046)
-- [ ] FE-045 コピーした `thread-list.aui.tsx` から **rename / archive / delete /
+- [x] FE-045 コピーした `thread-list.aui.tsx` から **rename / archive / delete /
       New conversation の操作を外す**。外した理由をコメントに残す (FR-003 / Principle XIII)
-- [ ] FE-046 `SessionListScreen.test.tsx` — 日本語・絵文字・制御文字を含む要約 (SC-009) /
+- [x] FE-046 `SessionListScreen.test.tsx` — 日本語・絵文字・制御文字を含む要約 (SC-009) /
       要約が空の行の代替表示 (FR-047) / 取得時刻の表示 (FR-034) /
       worktree と programmatic の区別 (FR-029)
-- [ ] FE-047 [P] ナビゲーションに「セッション一覧」を追加する (R-1 の 3 画面に 1 画面加える)
-- [ ] FE-048 `SDKSessionInfo` の 10 項目すべてに表示先を割り当て、
+- [x] FE-047 [P] ナビゲーションに「セッション一覧」を追加する (R-1 の 3 画面に 1 画面加える)
+- [x] FE-048 `SDKSessionInfo` の 10 項目すべてに表示先を割り当て、
+      **実装時に 4 項目 (`createdAt` / `gitBranch` / `tag` / `fileSize`) が
+      未割当だった。** 行の詳細に出し、[data-model.md](data-model.md) §3 に
+      「表示先の割り当て」表として記録した。
       **[data-model.md](data-model.md) §3 の `SessionSummary` 表に「表示先」列として記録する**
       (Principle XII。割り当てない項目を残さない)。
       **確認だけで記録を残さないと O-2 が `docs/ui-coverage.md` を作るときにやり直しになる**
@@ -223,10 +240,10 @@ SH-084 を前倒しした理由 (「調停より先にコードにしない」) 
 
 ## US-2: 未登録フォルダのセッションを見つける (P1)
 
-- [ ] FE-050 未登録グループの表示 — 作業ディレクトリごとにまとめ、**既定で畳む** (FR-025)
+- [x] FE-050 未登録グループの表示 — 作業ディレクトリごとにまとめ、**既定で畳む** (FR-025)
 - [ ] FE-051 登録の導線 — 所在とパスを初期値として R-1 の登録操作に渡す。
       **アプリが自動で登録しない**。**実在確認を行わない** (FR-026 / FR-027)
-- [ ] FE-052 「作業フォルダ不明」グループ — `cwd-absent` / `location-unknown` /
+- [x] FE-052 「作業フォルダ不明」グループ — `cwd-absent` / `location-unknown` /
       `distro-undetected` の理由を区別して示す (FR-028)
 - [ ] FE-053 テスト — 総数保存の UI 側確認 / 登録導線が値を渡すだけであること /
       未登録グループが畳まれていること (SC-006 / FR-026)
@@ -355,9 +372,13 @@ accepted ADR に反する設計を、調停 ADR より先に実装しないた�
       - `src/agents/` 内に UNC 接頭辞リテラルと `toUnc` 呼び出しが **0 件**であること
       **両リストの初期値を SH-084 の ADR に載せる** (Principle VI: 許可リスト追加には ADR)。
       違反サンプルを 1 件ずつ添える (AD-027 §1: ルールは発火で確認する)
-- [ ] SH-094 **列挙プロセスが Electron 抜きの `node` で単独起動でき、
+- [x] SH-094 **列挙プロセスが Electron 抜きの `node` で単独起動でき、
       標準入出力で 1 件の列挙が成立することを確認する** (Principle VII Statement 後半 / AD-010)。
       `process.parentPort` を使う場合は薄い adapter に分離し、本体は stdio を話す
+      - **結果**: [quickstart-results.md](quickstart-results.md) V-0。
+        ホストと **WSL (UNC 経路)** の双方で成立。バンドルは `electron` を 0 件 require し、
+        環境変数は許可リストの 3 つだけで動く。`parentPort` は使っていない。
+        併せて H-021 (SC-008 の予算の再測定) を同ファイルに記録した
 
 **Checkpoint**: 全 SC の計測経路が実行済みで、上流文書と spec の食い違いが 0
 

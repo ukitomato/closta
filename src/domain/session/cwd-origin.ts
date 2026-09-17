@@ -1,4 +1,4 @@
-import { namespaceDistroName, type WslNamespaceId } from '@domain/runtime/namespace'
+import { namespaceDistroName } from '@domain/runtime/namespace'
 import { parseWslUncPath, runtimePathOps } from '@domain/runtime/path-api'
 import {
   makeHostPath,
@@ -7,6 +7,8 @@ import {
   type RuntimePath
 } from '@domain/runtime/path-types'
 import { locationNamespace, type Location } from '@domain/workspace/folder'
+
+import type { CwdOrigin } from './origin'
 
 /**
  * セッションの作業ディレクトリの出自判定 (data-model §2 / FR-016 〜 FR-018)。
@@ -26,30 +28,12 @@ import { locationNamespace, type Location } from '@domain/workspace/folder'
  * 成立してしまう (dependency-cruiser は型だけの import も辿る)。
  */
 
-/** 種別の定義は `keys.ts` にある。**`dto.ts` を軽いモジュールだけに依存させるため** (下記)。 */
-export type { CwdOriginKind } from './keys'
-
-export type CwdOrigin =
-  | { readonly kind: 'host'; readonly path: HostPath }
-  | {
-      readonly kind: 'wsl-from-unc'
-      readonly path: RuntimePath
-      readonly namespace: WslNamespaceId
-    }
-  | {
-      readonly kind: 'wsl-inherited'
-      readonly path: RuntimePath
-      readonly namespace: WslNamespaceId
-    }
-  /** どのディストロか分からない。**推測で埋めない** (AD-025)。 */
-  | { readonly kind: 'unknown-location'; readonly display: string }
-  /** ディストロは特定できたが検出済みの集合に無い。**所在不明とは別**である。 */
-  | {
-      readonly kind: 'undetected-distro'
-      readonly distroName: string
-      readonly display: string
-    }
-  | { readonly kind: 'absent' }
+/**
+ * 型の定義は `origin.ts` にある。**判定の実装から分けてある** —
+ * ここはパス API (= `node:path`) に依存するため、型を同じファイルに置くと
+ * `SessionSummary` を型 import した `ui` から推移的に到達してしまう。
+ */
+export type { CwdOrigin, CwdOriginKind } from './origin'
 
 export interface ClassifyInput {
   /** セッションに記録されていた生の作業ディレクトリ。 */

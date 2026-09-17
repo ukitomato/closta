@@ -2,6 +2,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { RuntimeListScreen } from '@/features/runtime-list/RuntimeListScreen'
 import { WorkspaceFoldersScreen } from '@/features/workspace-folders/WorkspaceFoldersScreen'
 import { ResolutionScreen } from '@/features/folder-runtime-resolution/ResolutionScreen'
+import { SessionListScreen } from '@/features/session-list/SessionListScreen'
 import { ChatScreen } from '@/features/chat/ChatScreen'
 import { SCREEN_LABELS, SCREENS, useUiStore, type ScreenId } from '@/stores/ui'
 import { cn } from '@/lib/utils'
@@ -18,6 +19,7 @@ import { cn } from '@/lib/utils'
 const SCREEN_COMPONENTS: Record<ScreenId, () => React.JSX.Element> = {
   runtimes: RuntimeListScreen,
   folders: WorkspaceFoldersScreen,
+  sessions: SessionListScreen,
   resolution: ResolutionScreen,
   chat: ChatScreen
 }

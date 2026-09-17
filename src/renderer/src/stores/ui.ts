@@ -8,13 +8,15 @@ import { create } from 'zustand'
  * それぞれの feature が自分のストアを持つ (FE-010 / FE-020 / FE-030)。
  */
 
-export const SCREENS = ['runtimes', 'folders', 'resolution', 'chat'] as const
+export const SCREENS = ['runtimes', 'folders', 'sessions', 'resolution', 'chat'] as const
 
 export type ScreenId = (typeof SCREENS)[number]
 
 export const SCREEN_LABELS: Record<ScreenId, string> = {
   runtimes: 'ランタイム',
   folders: '作業フォルダ',
+  // R-2。**読み取り専用**であることは画面側の文言で示す (FR-002 / FR-003)。
+  sessions: 'セッション',
   resolution: '組み合わせ',
   // **内部 feature ID ("R-3") を出さない** (FR-047)。利用者に意味を持たない記号である。
   chat: '会話 (準備中)'

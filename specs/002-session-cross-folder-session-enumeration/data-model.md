@@ -117,12 +117,12 @@ CwdOrigin =
 未割当を残さないことを、この表そのもので示す (O-2 の `docs/ui-coverage.md` の先行素材)。
 
 ```text
-SessionSummary                         表示先
+SessionSummary
   sessionId     : string                 UUID
-  summary       : string                 SDK の要約 (空でありうる)
-  firstPrompt   : string | null          代替表示の第 1 候補 (FR-047)
-  customTitle   : string | null
-  lastModified  : number                 epoch ms
+  summary       : string | null          SDK の要約 (空でありうる)
+  firstPrompt   : string | null          代替表示の第 2 候補 (FR-047)
+  customTitle   : string | null          代替表示の第 1 候補 (FR-047)
+  lastModified  : number | null          epoch ms
   createdAt     : number | null
   fileSize      : number | null
   gitBranch     : string | null
@@ -133,6 +133,32 @@ SessionSummary                         表示先
                                          行の同一性と R-3 の本文取得がこれを使う
   targetLabel   : string                 由来 EnumerationTarget の label (FR-011)
 ```
+
+### 表示先の割り当て (FE-048 / Principle XII)
+
+**`SDKSessionInfo` の 10 項目に未割当を残さない。** 実装時に確認した結果である
+(`src/renderer/src/features/session-list/SessionListScreen.tsx`)。
+
+| `SDKSessionInfo` の項目 | 表示先 | 備考 |
+| --- | --- | --- |
+| `customTitle` | 行の表題 | 代替表示の**第 1 候補** (FR-047) |
+| `summary` | 行の表題 | 第 2 候補 |
+| `firstPrompt` | 行の表題 | 第 3 候補 |
+| `sessionId` | 行の表題 (先頭 8 文字) | **最後の手段**。上の 3 つがすべて空のときだけ |
+| `lastModified` | 行の表題 (識別子と併記) / **並び順** | 既定の並びは最終更新の新しい順 (FR-039) |
+| `createdAt` | 行の詳細「開始 &lt;時刻&gt;」 | |
+| `gitBranch` | 行の詳細「ブランチ &lt;名前&gt;」 | |
+| `tag` | 行の詳細「タグ &lt;値&gt;」 | |
+| `fileSize` | 行の詳細 (1024 進で丸めた大きさ) | バイト数をそのまま出さない |
+| `cwd` | グループ見出し (未登録) / 行の詳細 (出自の種別) | **変換済みの値か表示用文字列だけ** (FR-042) |
+
+**`SDKSessionInfo` に無いが表示するもの**: `programmatic` / `worktree` (FR-029。
+取得手段は design-gate L-002 の解決を参照)、`targetLabel` (FR-052)、
+正規化の痕跡 (FR-049。切り詰めと制御文字の除去を別々に示す)。
+
+**実装時に 4 項目 (`createdAt` / `gitBranch` / `tag` / `fileSize`) が未割当だった。**
+FE-048 はこれを見つけるための task であり、確認だけで記録を残さないと
+O-2 が `docs/ui-coverage.md` を作るときにやり直しになる。
 
 ### 不変条件
 

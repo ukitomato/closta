@@ -23,12 +23,7 @@ import type { BlockedReason } from '@domain/workspace/folder'
  * `unknown-location` (どのディストロか分からない) は、利用者に示すべきことが違う。
  */
 export type CwdOriginKind =
-  | 'host'
-  | 'wsl-from-unc'
-  | 'wsl-inherited'
-  | 'unknown-location'
-  | 'undetected-distro'
-  | 'absent'
+  'host' | 'wsl-from-unc' | 'wsl-inherited' | 'unknown-location' | 'undetected-distro' | 'absent'
 
 /**
  * 保留の理由。**R-1 の `BlockedReason` をそのまま使う。**

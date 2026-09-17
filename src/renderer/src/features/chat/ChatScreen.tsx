@@ -28,7 +28,10 @@ import { Thread } from '@/components/assistant-ui/elements/thread.aui'
  * R-1 には無い (E2E 基盤が無い) ため、**送信経路そのものを閉じる**ことで
  * 「検証していない送信経路」を残さない形にした ([AD-024](docs/decisions/0024-constitution-verification-paths.md) #18)。
  *
- * R-2 で E2E 基盤が入り、composer を開けるときに IME テストを同時に載せる。
+ * **延期先は R-2 ではない** ([AD-028](../../../../docs/decisions/0028-session-enumeration-process-and-unc-handoff.md) §5)。
+ * R-2 は読み取り専用であり、E2E 基盤を作らない。
+ * composer を開けるときに IME テストを同時に載せる方針は変わらないが、
+ * その持ち主は M4 完了後に決める (Constitution v1.2.3 の Principle VIII)。
  */
 export function ChatScreen(): React.JSX.Element {
   const messages: readonly ThreadMessageLike[] = []
