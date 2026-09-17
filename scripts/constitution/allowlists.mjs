@@ -269,6 +269,52 @@ export const UNC_LITERAL_EXEMPT_SUFFIXES = ['.test.ts', '.test.tsx']
 export const UNC_FORBIDDEN_IN = ['src/agents/']
 
 /** UNC 値を作る API の名前。項目 13 が `UNC_FORBIDDEN_IN` 配下での呼び出しを禁じる。 */
+/**
+ * Agent SDK のパッケージ名 (R-2 / SH-081)。
+ *
+ * **Claude Code との通信は Agent SDK 経由に限る** (Principle IV / AD-002)。
+ * ここを書き換えるだけで検査対象が変わる形にしておく。
+ */
+export const AGENT_SDK_PACKAGE = '@anthropic-ai/claude-agent-sdk'
+
+/**
+ * SDK を import してよい場所。
+ *
+ * **AD-023 §2 は「Agent SDK を呼ぶコードは `agents` に置く」とディレクトリ単位で
+ * 定めている。** ファイル単位にすると ADR より厳しい規則になり、
+ * R-3 (本文取得) / X-1 (起動) がファイルを増やすたびに許可リストの更新が要る —
+ * それは ADR が求めていない手間である。
+ *
+ * **どの API を呼べるかは別の許可リストが縛る** (`AGENT_SDK_ALLOWED_CALLS`)。
+ * 置き場と呼べるものを 1 つのリストで兼ねさせない。
+ */
+export const AGENT_SDK_IMPORT_DIRECTORIES = ['src/agents/']
+
+/**
+ * R-2 で呼んでよい SDK の API (SH-081 / contracts C-4)。
+ *
+ * **許可 1 件以外を禁じる形で検査する。** 禁止側を列挙すると必ず漏れる —
+ * `getSessionMessages` のような**読み取り API** が抜けると FR-044 が守られない
+ * (前後のファイル比較は読み取りを検出できない)。
+ *
+ * **判定は呼び出し形で行う。** import しただけの名前や型注釈を違反にすると、
+ * これらを正当に使う後続 feature (X-1 / O-1 / I-1) で検証が破綻する (research R-07)。
+ */
+export const AGENT_SDK_ALLOWED_CALLS = ['listSessions']
+
+/**
+ * `wsl.exe` を新たに呼ばないことの検査対象 (SH-082 / SC-003)。
+ *
+ * **R-2 が追加したレイヤ**を名指しする。R-2 は実行状態の確認に
+ * R-1 の `verifyRunning()` を使うだけであり、自分では `wsl.exe` を起動しない
+ * (contracts C-7。この 1 行が SC-003 の「0 件」を成り立たせている)。
+ */
+export const WSL_FREE_DIRECTORIES = [
+  'src/agents/',
+  'src/main/infra/session/',
+  'src/domain/session/'
+]
+
 export const UNC_API_NAMES = ['toUnc', 'fromUnc', 'makeWslUncPath', 'parseWslUncPath']
 
 /** docker のイメージ構築サブコマンド。許可モジュール内に現れてはならない (項目 5)。 */

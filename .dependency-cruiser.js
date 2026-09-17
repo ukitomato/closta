@@ -179,7 +179,15 @@ module.exports = {
       name: 'agents-not-to-electron',
       comment:
         '`agents` から `electron` への**推移的**到達 (AD-010 / AD-023 §7)。' +
-        'supervisor は Electron 無しで動く必要がある。共通モジュール経由の間接依存も禁止。',
+        'supervisor は Electron 無しで動く必要がある。共通モジュール経由の間接依存も禁止。' +
+        '**限界を明記する (R-2 / SH-083 / design-gate H-023)**: ' +
+        '`doNotFollow: node_modules` により **npm パッケージの内部は辿らない**。' +
+        'したがって `agents → 外部パッケージ → electron` の経路はこの規則では見えない。' +
+        'R-2 で `agents` が Agent SDK を import したため、この限界は実在する。' +
+        '**代わりの証拠はビルド出力である**: `out/main/enumerate-sessions-*.js` の `require` が ' +
+        'SDK の 1 件だけで `electron` が 0 件であることを確認し、' +
+        'Electron 抜きの `node` で実際に列挙が成立することを確かめた ' +
+        '(specs/002-.../quickstart-results.md V-0)。**グラフより出力のほうが直接的な証拠である。**',
       severity: 'error',
       from: { path: '^src/agents/' },
       to: { path: ELECTRON, reachable: true }

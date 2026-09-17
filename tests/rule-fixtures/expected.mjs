@@ -236,6 +236,22 @@ export const FIXTURES = [
    * 下の `UNDETECTED_NOTES` に理由と代替手段を必ず書く。
    */
   {
+    file: 'a-direct/sdk-forbidden-call.ts.fixture',
+    target: 'src/agents/__rulecheck__/sdk-forbidden-call.ts',
+    group: 'a',
+    what: '許可されていない Agent SDK の API を呼ぶ (`getSessionMessages`。SH-081)',
+    detectors: ['constitution'],
+    rules: ['#14']
+  },
+  {
+    file: 'a-direct/wsl-cli-in-session-layer.ts.fixture',
+    target: 'src/main/infra/session/__rulecheck__/wsl-cli-in-session-layer.ts',
+    group: 'a',
+    what: 'R-2 のレイヤが WSL CLI レイヤを参照する (SC-003 / SH-082)',
+    detectors: ['constitution'],
+    rules: ['#15']
+  },
+  {
     file: 'a-direct/ui-dto-namespace-literal.ts.fixture',
     target: 'src/renderer/src/__rulecheck__/ui-dto-namespace-literal.ts',
     group: 'a',

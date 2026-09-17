@@ -522,6 +522,51 @@ describe('createSessionService — 実行中確認の持ち回し', () => {
   })
 })
 
+/*
+ * **見出しに実行ファイル名を書かない。** 検証項目 3 は許可リスト外のモジュールに
+ * 現れた文字列リテラルを拾うため、テスト名に書くと**それ自体が違反になる** (実測)。
+ * 迂回を防ぐために名前で見る作りなので、こちらが書き方を譲る。
+ */
+describe('createSessionService — 外部プロセスの呼び出し (SC-003 / SH-082)', () => {
+  it('R-2 の経路が起こす外部プロセスは R-1 の実行状態確認だけである', async () => {
+    const host = hostTarget()
+    const wsl = wslTarget()
+    let verifyCalls = 0
+    const enumerator = fakeEnumerator({
+      [host.key]: { ok: true, sessions: [record('a')], truncated: false },
+      [wsl.key]: { ok: true, sessions: [record('b', '/home/y/x')], truncated: false }
+    })
+
+    /*
+     * **依存を全部差し替えている。** CLI レイヤは注入されていないので、
+     * R-2 の経路から `wsl.exe` へ到達する手段が**そもそも無い**。
+     * 唯一の外部プロセスは R-1 の `verifyRunning()` であり、その回数を数える
+     * (contracts C-7。R-2 は新たに呼ばない)。
+     */
+    const service = createSessionService(
+      deps({
+        finder: fakeFinder(discovery([host]), discovery([wsl])),
+        enumerator,
+        runtimes: () => [ubuntu()],
+        verifyRunning: async () => {
+          verifyCalls += 1
+          return new Map([[UBUNTU, createVerifiedRunning(UBUNTU, NOW)]])
+        }
+      })
+    )
+
+    await service.list()
+    await settle()
+    await service.fetchMore(host.key, SESSION_PAGE_SIZE)
+    await service.fetchMore(wsl.key, SESSION_PAGE_SIZE)
+
+    // **1 回だけ。** 有効期間内は持ち回す (BE-061)。
+    expect(verifyCalls).toBe(1)
+    // 列挙はすべて差し替えた列挙器を通っている。
+    expect(enumerator.requests.length).toBeGreaterThan(0)
+  })
+})
+
 describe('createSessionService — fetchMore', () => {
   it('未知の `targetKey` はキャッシュをそのまま返す', async () => {
     const target = hostTarget()

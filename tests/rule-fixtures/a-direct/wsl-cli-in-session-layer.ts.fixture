@@ -1,0 +1,9 @@
+// 違反サンプル: R-2 が追加したレイヤが WSL CLI レイヤを参照する。
+// R-2 は実行状態の確認に **R-1 の `verifyRunning()` の戻り値を受け取るだけ**であり、
+// 自分では `wsl.exe` を起動しない (contracts C-7 / SC-003 / SH-082)。
+// この 1 行が「`wsl.exe` の呼び出しが 0 件」を成り立たせている。
+import type { WslCli } from '../../runtime/wsl-cli'
+
+export function listNames(cli: WslCli): Promise<unknown> {
+  return cli.listNames()
+}

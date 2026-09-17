@@ -313,18 +313,31 @@ accepted ADR に反する設計を、調停 ADR より先に実装しないた�
 - [x] SH-080 `scripts/constitution/allowlists.mjs` の `PROCESS_SPAWN_MODULES` に
       列挙プロセスの起動モジュールを追加する。**ADR (SH-084) の起票と同時に行う**
       (AD-025 の申し送り / plan #3)
-- [ ] SH-081 検証スクリプトに項目を追加する — **許可リスト方式で検査する**。
+- [x] SH-081 検証スクリプトに項目を追加する — **許可リスト方式で検査する**。
       `@anthropic-ai/claude-agent-sdk` からの import と呼び出しが
       **`listSessions` の 1 件だけ**であることを確認する。
       **禁止側の API 名を task に列挙しない** — 列挙すると
       [contracts/session-enumeration.md](contracts/session-enumeration.md) C-4 の表に
       行を足したときに task 側が古くなる (SC-004 が「SC 側で部分列挙しない」と定めたのと同じ理由)。
       **名前の出現ではなく呼び出し形で判定する** (SC-004 / SC-011 / research R-07)
-- [ ] SH-082 `wsl.exe` 起動 0 件の検証 — プロセス起動レイヤを差し替えた Vitest と
+      - **済**: 検証項目 14 として実装。**import 可はディレクトリ単位** (AD-023 §2 の字義に合わせた)、
+        **呼べる API は許可 1 件** (`listSessions`)。判定は**呼び出し形**で行い、型注釈は違反にしない。
+        違反サンプル `sdk-forbidden-call` (`getSessionMessages` を呼ぶ) で発火を確認済み
+- [x] SH-082 `wsl.exe` 起動 0 件の検証 — プロセス起動レイヤを差し替えた Vitest と
       検証スクリプトの走査 (SC-003)
-- [ ] SH-083 dependency-cruiser が `src/agents/` の**実コード**に対して発火することを確認する。
+      - **済**: 検証項目 15 として実装。**裸の `wsl` は対象にしない** —
+        R-2 のレイヤには `kind: 'wsl'` / `wsl:<D>` / `wsl-from-unc` が正当に現れ、
+        文字列として禁じると 17 件が誤検出になる (実測)。
+        見るのは `wsl.exe` の綴りと **WSL CLI レイヤへの参照**の 2 つ。
+        違反サンプル `wsl-cli-in-session-layer` で発火を確認済み
+- [x] SH-083 dependency-cruiser が `src/agents/` の**実コード**に対して発火することを確認する。
       `electron` / `better-sqlite3` / `node-pty` への推移的到達が 0 であること
       (Principle VII / AD-010 / plan #2)
+      - **済**: [quickstart-results.md](quickstart-results.md) SH-083 に記録。
+        **限界も明記した** (design-gate H-023) — `doNotFollow: node_modules` により
+        npm 内部は辿らないので、`agents → SDK → 何か` はグラフでは見えない。
+        **代わりの証拠はビルド出力**であり、`require` が SDK の 1 件だけで
+        `electron` が 0 件であることと、Electron 抜きの `node` で列挙が成立することを確認した
 - [x] SH-084 ADR 起票 — **列挙の実行単位と UNC の受け渡し**。
       (a) `agents` に「要求 1 回」の寿命を追加する。
       **AD-023 §1 の寿命表と §6 を「読み替える」根拠として本 ADR を置く**
@@ -360,8 +373,12 @@ accepted ADR に反する設計を、調停 ADR より先に実装しないた�
       本 feature は R-1 の `runtime` domain を拡張するため
 - [ ] SH-089 quickstart を実施し、結果を `quickstart-results.md` に記録する。
       **V-3 の出自 6 パターンのうち実機で踏めなかった行を明記する** (SC-001 〜 **SC-016**)
-- [ ] SH-090 `lint` / `typecheck` / `depcruise` / `check:constitution` / `test` /
+- [x] SH-090 `lint` / `typecheck` / `depcruise` / `check:constitution` / `test` /
       `test:rules` を全通過させる (違反サンプルを保持したまま)
+      - **済 (2026-09-18)**: lint 0 / typecheck 0 / テスト 535 件 / depcruise 0 違反 /
+        検証 15 項目 (ok 14 / 違反 0 / 検査対象なし 1) / ルール検証 26 件一致。
+        **「検査対象なし」の 1 件は項目 5** (docker のイメージ構築) であり、
+        docker を名指せるモジュールが 0 件のため検査対象が存在しない (R-1 の設計どおり)
 - [x] SH-091 **`.dependency-cruiser.js` の `services-not-to-io` の `from` に
       `^src/main/app/session-service[.]ts$` を追加する** (AD-027 Consequences / AD-025 §9)。
       `session-enumerator.ts` を含めるか否かを**明示的に判断しコメントに理由を残す**。

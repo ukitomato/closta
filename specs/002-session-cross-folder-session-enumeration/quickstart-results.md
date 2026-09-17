@@ -85,6 +85,32 @@ research R-01 は「冷えた子プロセスで import + 1 回の列挙 = 2,171 
 
 ---
 
+## SH-083: 依存グラフが `src/agents/` の実コードに対して発火するか
+
+**日付**: 2026-09-18
+
+| 確認 | 結果 |
+| --- | --- |
+| `depcruise src` (実コードあり) | **違反 0 件** (159 modules / 634 dependencies) |
+| `agents-electron-transitive` の違反サンプル | **発火する** (`test:rules` 26 件一致に含まれる) |
+| `agents → electron` の直接・`src` 内推移 | **0 件** |
+
+**限界を明記する (design-gate H-023)。**
+`.dependency-cruiser.js` は `doNotFollow: node_modules` を設定しており、
+**npm パッケージの内部は辿らない**。R-2 で `agents` が Agent SDK を import したため、
+`agents → SDK → (何か)` の経路はこの規則では見えない。
+**「ルールが実コードに効いた」と言えるのは `src` 内の到達についてだけである。**
+
+**代わりの証拠はビルド出力**であり、こちらのほうが直接的である。
+
+| 証拠 | 結果 |
+| --- | --- |
+| `out/main/enumerate-sessions-*.js` の `require` 一覧 | `@anthropic-ai/claude-agent-sdk` の **1 件だけ** |
+| 同バンドル内の `electron` 参照 | **0 件** |
+| Electron 抜きの `node` での列挙 | **成立** (上記 V-0) |
+
+---
+
 ## 未実施
 
 | 項目 | 待っているもの |

@@ -1,0 +1,9 @@
+// 違反サンプル: 許可されていない Agent SDK の API を呼ぶ。
+// R-2 で呼んでよいのは `listSessions()` の 1 件だけである (contracts C-4 / SH-081)。
+// `getSessionMessages` は **transcript の本文を読む** — FR-044 の実効性はここで決まり、
+// 前後のファイル比較 (SC-004) は読み取りなので検出できない。
+import { getSessionMessages } from '@anthropic-ai/claude-agent-sdk'
+
+export async function readBody(sessionId: string): Promise<unknown> {
+  return getSessionMessages(sessionId)
+}
