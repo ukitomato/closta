@@ -89,6 +89,19 @@ total_terms: 31
 - **Domain**: `runtime` (判定) / `ui` (表示)
 - **Ref**: [AD-016](decisions/0016-cross-filesystem-performance-cliff.md)
 
+#### **CwdOrigin（作業ディレクトリの出自）**
+
+- **Definition**: セッションに記録された作業ディレクトリの**値の形**から判定した名前空間と所在。
+  `host` / `wsl-from-unc` / `wsl-inherited` / `unknown-location` / `undetected-distro` / `absent`
+  の 6 値
+- **日本語表記**: 作業ディレクトリの出自
+- **Domain**: `session`
+- **Counterexamples**: **由来 config ディレクトリの所在と混同しない。** 前者は
+  「履歴がどこに保存されているか」（アプリが選ぶ）、後者は「セッションがどこで動いたか」
+  （記録された値から判定する）であり、**一致しない**。実測でホスト側の 1 つの config
+  ディレクトリに 3 形式（Windows / POSIX / UNC）が混在した
+- **Ref**: [AD-029](decisions/0029-session-cwd-origin-classification.md)
+
 #### **CredentialSource**
 
 - **Definition**: Provider の認証方式。9 種類あり、それぞれ「アプリが秘密を持つか」が定義されている。
@@ -114,6 +127,17 @@ total_terms: 31
 - **Definition**: assistant-ui が提供する UI 部品。202 種（2026-09-13 確認）
 - **Domain**: `ui`
 - **Counterexamples**: 自作コンポーネント。同等の element が存在する場合は自作しない（Principle XIII）
+
+#### **EnumerationTarget（列挙対象）**
+
+- **Definition**: セッション列挙の対象となる**所在と config ディレクトリの組**。
+  不透明な `key` / 所在 / config ディレクトリ（所在の名前空間）/ 由来 / 表示用ラベルを持つ
+- **日本語表記**: 列挙対象
+- **Domain**: `session`
+- **Counterexamples**: 1 つの所在に**複数**ありうる（ディストロ内の複数ユーザ分）。
+  「所在ごとに 1 つ」ではない。R-2 は所在ごとの既定のみを対象にし、
+  複数 Provider 分は X-3 で集合を差し替える
+- **Ref**: [AD-028](decisions/0028-session-enumeration-process-and-unc-handoff.md)
 
 #### **endpoint**
 
@@ -171,6 +195,17 @@ total_terms: 31
 - **日本語表記**: パスマッピング
 - **Domain**: `runtime`
 - **Ref**: [AD-015](decisions/0015-wsl-access-strategy.md) / [AD-025](decisions/0025-workspace-folder-carries-location.md)
+
+#### **Pending match（対応づけ保留）**
+
+- **Definition**: 変換材料（`PathMapping`）が無いため、セッションと登録フォルダの対応を
+  決められない状態。理由は R-1 の `BlockedReason` と同じ 3 値
+  （`distro-not-running` / `capabilities-not-probed` / `probe-failed`）
+- **日本語表記**: 対応づけ保留
+- **Domain**: `session`
+- **Counterexamples**: R-1 が `unreachable` に分類する `path-not-mapped` を**含めない** —
+  含めると「解消手順がある」と「対応が無い」が同居する。
+  「未登録」「所在不明」とも別である
 
 #### **Preset**
 
@@ -231,6 +266,20 @@ total_terms: 31
 - **日本語表記**: セッション
 - **Domain**: `session`
 - **Ref**: [AD-007](decisions/0007-session-source-of-truth-is-claude-code.md)
+- **Note**: **一覧（R-2）が扱うのは要約とメタデータのみ**であり、本文の取得は R-3 で追加する
+
+#### **SessionSummary（セッション要約行）**
+
+- **Definition**: セッション一覧の 1 行。識別子 / 要約 / 最終更新 / 作成時刻 / 作業ディレクトリ /
+  git ブランチ / タグ / 由来（対話・programmatic・worktree）/ 由来列挙対象を持つ。
+  **transcript の本文を含まない**
+- **日本語表記**: セッション要約行
+- **Domain**: `session`
+- **Counterexamples**: **`summary` / `firstPrompt` / `customTitle` を「要約だから安全」と扱わない。**
+  SDK の定義上これらは会話由来の**逐語文字列**を含みうる（`firstPrompt` は
+  "First meaningful user prompt in the session."）。IPC 境界を越える前に
+  切り詰めと制御文字の除去を通す
+- **Ref**: [AD-007](decisions/0007-session-source-of-truth-is-claude-code.md) / [AD-029](decisions/0029-session-cwd-origin-classification.md)
 
 #### **SessionLaunchConfig**
 
@@ -266,9 +315,36 @@ total_terms: 31
 
 - **Definition**: セッションの会話ログ。`<config-dir>/projects/<encoded-cwd>/` 配下の JSONL に永続化される。
   `encoded-cwd` は作業ディレクトリの非英数字を `-` に置換したもの
+- **Note**: **`encoded-cwd` をアプリ側で再現しない**（R-2 の `[ASSUMED]`）。
+  作業ディレクトリはセッションのメタデータから読む。
+  **一覧（R-2）は本文を取得も転送もしない** — 取得は R-3 で追加する
 - **Domain**: `session`
 
 ### U
+
+#### **Unregistered folder（未登録フォルダ）**
+
+- **Definition**: セッション一覧のうち、**登録フォルダに対応しない**作業ディレクトリごとの
+  まとまり。その場で作業フォルダとして登録する導線を持つ
+- **日本語表記**: 未登録フォルダ
+- **Domain**: `session`
+- **Counterexamples**: **「対応づけ保留」と混ぜない。** 未登録は「決めた結果として対応が無い」、
+  保留は「今は決められない」である。保留を未登録として見せると、
+  **登録済みのフォルダに対して再登録を促す**ことになる。
+  また未登録の作業ディレクトリに対して**実在確認は行わない**
+  （任意パスの存在を問い合わせる経路を作らない）
+
+#### **Unknown location（所在不明）**
+
+- **Definition**: 作業ディレクトリの記録から**どのディストロか特定できない**状態。
+  ホスト側の config ディレクトリに POSIX 形式の値が現れた場合がこれにあたる
+- **日本語表記**: 所在不明
+- **Domain**: `session`
+- **Counterexamples**: **「未検出の所在」と混ぜない。** 前者は「どのディストロか分からない」、
+  後者は「どのディストロかは分かるが、そのディストロが今ない」（UNC 形式にディストロ名が
+  埋め込まれている場合）である。利用者に示すべき次の操作が違う。
+  **所在不明を推測で埋めない** — 同じ `/home/y/p` は複数のディストロに存在しうる
+- **Ref**: [AD-029](decisions/0029-session-cwd-origin-classification.md)
 
 #### **ui-coverage 対応表**
 

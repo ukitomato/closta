@@ -1,0 +1,9 @@
+// 違反サンプル: `agents` が UNC を作る API を呼ぶ (項目 13 / AD-028 §3 の規則 2)。
+// 列挙プロセスは受け取った値を SDK に渡すだけであり、UNC を扱わない。
+import { runtimePathOps } from '@domain/runtime/path-api'
+import type { RuntimePath } from '@domain/runtime/path-types'
+
+export function uncOf(target: RuntimePath): string {
+  const result = runtimePathOps.toUnc(target)
+  return result.ok ? result.path.value : ''
+}

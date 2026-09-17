@@ -40,6 +40,17 @@
  * 同伴サンプルを増やすときはここを確認すること。
  * 構造的に閉じるには検出器の機械可読出力 (JSON) が要る。
  *
+ * ## 同時に 2 つ走らせない (排他)
+ *
+ * `main()` は開始時に**全サンプルの展開先を消す** (下記「後始末を保証する」)。
+ * そのため 2 つの実行が重なると、一方の `cleanup()` が
+ * **他方が展開した直後のサンプルを消す**。消された側の検出器は何も見つけず、
+ * 「ルールが発火しなかった」と報告する — **実際には発火する余地が無かった**。
+ *
+ * この形で 2 度誤診した (いずれも `domain-io-import` と
+ * `agents-electron-transitive` が「死んでいる」と報告された)。
+ * 症状がルールの退行と見分けられないため、**重なった時点で止める。**
+ *
  * ## 後始末を保証する
  *
  * 展開したファイルは `finally` で必ず消す。
@@ -47,7 +58,7 @@
  * 「通常の検証は違反 0 件のまま」(SC-009) が破れる。
  */
 
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, open, readFile, rm, unlink, writeFile } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 
 import { FIXTURES, UNDETECTED_NOTES } from '../../tests/rule-fixtures/expected.mjs'
@@ -300,9 +311,59 @@ function verifyOne(fixture, outputs) {
   }
 }
 
+/**
+ * 排他ロック。**重なった実行を検出したら走らせない。**
+ *
+ * 置き場は `node_modules/.cache/` — 既に git の管理外であり、
+ * `.gitignore` に行を足さずに済む。
+ *
+ * **持ち主が生きているかを確かめる。** 強制終了でロックが残ったままになると、
+ * 以降の実行が永久に拒否される。`process.kill(pid, 0)` は
+ * シグナルを送らずに存在だけを見る (Windows でも使える)。
+ */
+const LOCK_PATH = 'node_modules/.cache/rules-run.lock'
+
+async function acquireLock() {
+  await mkdir('node_modules/.cache', { recursive: true })
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const handle = await open(LOCK_PATH, 'wx')
+      await handle.writeFile(String(process.pid), 'utf8')
+      await handle.close()
+      return
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error
+    }
+
+    const owner = Number(await readFile(LOCK_PATH, 'utf8').catch(() => ''))
+    if (Number.isInteger(owner) && owner > 0 && isAlive(owner)) {
+      console.error(`別の実行 (pid ${owner}) が進行中である。`)
+      console.error('重ねて走らせると、一方の後始末が他方の違反サンプルを消し、')
+      console.error('**ルールが発火しなかった**と誤って報告される。終わるまで待つこと。')
+      process.exit(1)
+    }
+
+    // 持ち主が居ない = 前回が強制終了された。奪って続ける。
+    console.log(`前回の実行 (pid ${owner}) のロックが残っていたので引き継ぐ`)
+    await unlink(LOCK_PATH).catch(() => {})
+  }
+  throw new Error('ロックを取得できなかった')
+}
+
+function isAlive(pid) {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    return error.code === 'EPERM'
+  }
+}
+
 async function main() {
   console.log('ルール検証 — 違反サンプルを 1 件ずつ展開して各検証を実行する')
   console.log('')
+
+  await acquireLock()
 
   /*
    * **先に後始末する。** `finally` の後始末はプロセスが kill されたときには走らない
@@ -395,4 +456,8 @@ async function main() {
   }
 }
 
-await main()
+try {
+  await main()
+} finally {
+  await unlink(LOCK_PATH).catch(() => {})
+}

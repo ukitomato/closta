@@ -70,6 +70,15 @@ export interface FolderService {
     runtimeId: NamespaceId
   ): Promise<ReturnType<typeof resolveFolderRuntime> | null>
   folderIds(): readonly string[]
+  /**
+   * 登録フォルダの**domain 値**。
+   *
+   * `list()` は DTO を返すが、セッションの対応づけ (R-2) は
+   * `WorkspaceFolder` を要る。DTO から復元させると branding を境界の外で
+   * 作り直すことになり、R-1 の gate が繰り返し塞いだ形と同じになる。
+   * `folderIds()` と同じ「現在値を覗く窓」である。
+   */
+  folders(): readonly WorkspaceFolder[]
   onChanged(listener: (list: FolderListDTO) => void): () => void
 }
 
@@ -401,6 +410,10 @@ export function createFolderService(deps: FolderServiceDeps): FolderService {
       const runtime = runtimes().find((r) => r.id === runtimeId)
       if (runtime === undefined) return null
       return resolveFolderRuntime({ folder, runtime })
+    },
+
+    folders() {
+      return folders
     },
 
     folderIds() {

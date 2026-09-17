@@ -49,8 +49,12 @@ export function stubCapability(overrides: Partial<ClostaCapability> = {}): Clost
     registerFolder: notStubbed('registerFolder'),
     unregisterFolder: notStubbed('unregisterFolder'),
     resolveFolderRuntime: notStubbed('resolveFolderRuntime'),
+    listSessions: notStubbed('listSessions'),
+    refreshSessions: notStubbed('refreshSessions'),
+    fetchMoreSessions: notStubbed('fetchMoreSessions'),
     onRuntimesChanged: noSubscription,
-    onFoldersChanged: noSubscription
+    onFoldersChanged: noSubscription,
+    onSessionsChanged: noSubscription
   }
 
   return { ...base, ...overrides }

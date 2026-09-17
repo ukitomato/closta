@@ -4,7 +4,8 @@ import { isValidDistroName, wslNamespace, type NamespaceId } from '@domain/runti
 import {
   hasControlCharacter,
   MAX_DISPLAY_NAME_LENGTH,
-  MAX_PATH_VALUE_LENGTH
+  MAX_PATH_VALUE_LENGTH,
+  MAX_SESSION_OFFSET
 } from '@domain/validation'
 import type { RuntimeDescriptor } from '@domain/runtime/descriptor'
 import type { PathDTO } from '@domain/runtime/dto'
@@ -31,7 +32,11 @@ import { allowedOrigins } from './origins'
  * **登録はできるが復元されないフォルダ**が生まれ、SC-013 が静かに崩れる。
  * (この形の `MAX_DIR_ENTRIES` は参照 0 件で死んでもいた。)
  */
-export { MAX_DISPLAY_NAME_LENGTH, MAX_PATH_VALUE_LENGTH } from '@domain/validation'
+export {
+  MAX_DISPLAY_NAME_LENGTH,
+  MAX_PATH_VALUE_LENGTH,
+  MAX_SESSION_OFFSET
+} from '@domain/validation'
 
 /**
  * **送信元 (全メソッド共通)。**
@@ -216,4 +221,30 @@ export function checkFolderDraft(
   }
 
   return { ok: true }
+}
+
+/* ── セッション一覧 (R-2 / BE-028) ─────────────────────────────── */
+
+/**
+ * **`fetchMoreSessions(targetKey, offset)`。**
+ *
+ * `targetKey` は main が発行した**不透明な値**である。
+ * **既知の集合との完全一致でのみ照合し、パスとして解釈しない** (data-model §1)。
+ * R-1 の `isKnownFolderId` と同じ扱いにしてある — 判定を 2 通り持たない。
+ */
+export function isKnownTargetKey(keys: readonly string[], targetKey: unknown): targetKey is string {
+  return typeof targetKey === 'string' && keys.includes(targetKey)
+}
+
+/**
+ * `offset` の検査。**非負の安全な整数であり、実名で定めた上限内**であること
+ * (contracts/ipc-session-list.md の検証表)。
+ *
+ * **SDK に渡す前に検査する。** 上限が無いと、renderer から巨大な値を渡して
+ * SDK 側の走査を無駄に走らせられる。
+ */
+export function isValidSessionOffset(offset: unknown): offset is number {
+  return typeof offset === 'number' && Number.isSafeInteger(offset) && offset >= 0
+    ? offset <= MAX_SESSION_OFFSET
+    : false
 }

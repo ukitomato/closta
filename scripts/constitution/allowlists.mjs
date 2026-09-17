@@ -208,8 +208,68 @@ export const DOCKER_CALLER_MODULES = []
 export const PROCESS_SPAWN_MODULES = [
   'src/main/infra/runtime/wsl-cli.ts',
   'scripts/rules/run.mjs',
-  'scripts/build/package.mjs'
+  'scripts/build/package.mjs',
+  /*
+   * セッション列挙の短命 `utilityProcess` を起こす (AD-028 §4)。
+   *
+   * **追加によって項目 1 / 3 / 4 / 5 が同ファイルに掛かる。**
+   * 特に項目 3 (裸の `wsl`) の発火条件は「プロセス起動 API を持つファイル」であり、
+   * `SPAWN_CALL_PATTERNS` は `utilityProcess` を含む。
+   * したがって**トリガは本リストへの追加ではなく `utilityProcess` と書いた瞬間**である。
+   * 回避策は設計で決めてある — このファイルに `'wsl'` の文字列リテラルを書かない。
+   * 所在の判別は `Location` の値で行う。
+   */
+  'src/main/app/enumerator-spawner.ts'
 ]
+
+/* ── 項目 12 / 13: UNC 形式の封じ込め (AD-028 §3) ─────────────────── */
+
+/**
+ * UNC 接頭辞の**文字列リテラル**を持ってよいモジュール (項目 12)。
+ *
+ * AD-025 は「UNC 形式は `infra` の内側に閉じる」と定めたが、
+ * 実体は `domain` のパス API が UNC を組み立てている。AD-028 §3 はこれを
+ * **「UNC のリテラルを持てる場所で線を引く」**形に読み替えた。
+ *
+ * | モジュール | 理由 |
+ * |---|---|
+ * | `src/domain/runtime/path-types.ts` | `UNC_PREFIX` の定義と `makeWslUncPath` の検証 |
+ * | `src/domain/runtime/path-api.ts` | `toUnc` / `fromUnc` / `parseWslUncPath` の実装 |
+ *
+ * **「`toUnc()` を呼んでよいモジュール」の許可リストは作らない。**
+ * `toUnc()` を呼ぶのは正規の経路であり (`infra/fs/wsl-fs.ts` が既にそうしている)、
+ * 縛っても塞がる脅威が無い。塞ぐべきは **API を迂回した手組み** である (AD-028 §3)。
+ */
+export const UNC_LITERAL_MODULES = [
+  'src/domain/runtime/path-types.ts',
+  'src/domain/runtime/path-api.ts'
+]
+
+/**
+ * UNC 接頭辞と見なす綴り。**3 綴りすべてを対象にする** —
+ * 1 つだけ塞いでも別の綴りで手組みできる (research R-01 で 3 綴りの成立を実測)。
+ */
+export const UNC_LITERAL_PATTERNS = ['\\\\wsl.localhost\\', '\\\\wsl$\\', '//wsl.localhost/']
+
+/**
+ * テストは UNC リテラルを書いてよい (項目 12 の除外)。
+ *
+ * **解析器が 3 綴りを受理することを証明する場所がテストである。**
+ * ここを禁じると規則そのものがテスト不能になる。テストは出荷物に入らない。
+ * `CSP_DECLARATION_EXEMPT_SUFFIXES` と同じ考え方である。
+ */
+export const UNC_LITERAL_EXEMPT_SUFFIXES = ['.test.ts', '.test.tsx']
+
+/**
+ * UNC のリテラルと UNC API 呼び出しの**両方**を禁じる場所 (項目 13)。
+ *
+ * 列挙プロセスは受け取った値を SDK に渡すだけであり、UNC を扱わない
+ * (AD-028 §3 の規則 2 の機械強制)。
+ */
+export const UNC_FORBIDDEN_IN = ['src/agents/']
+
+/** UNC 値を作る API の名前。項目 13 が `UNC_FORBIDDEN_IN` 配下での呼び出しを禁じる。 */
+export const UNC_API_NAMES = ['toUnc', 'fromUnc', 'makeWslUncPath', 'parseWslUncPath']
 
 /** docker のイメージ構築サブコマンド。許可モジュール内に現れてはならない (項目 5)。 */
 export const DOCKER_BUILD_SUBCOMMANDS = ['build', 'buildx', 'commit', 'import', 'load', 'push']

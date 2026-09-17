@@ -12,10 +12,16 @@ const domain = resolve('src/domain')
 // 分類できず、依存グラフの穴になる。別名にすると「外部」と判定される。
 const resources = resolve('resources')
 
+// `agents` は utilityProcess として別に起動される。main からは `?modulePath` で
+// **バンドル後のファイルパス**として参照する (AD-023 の公式手順 / electron-vite の
+// `modulePathPlugin`)。**相対パスで書かない** — `@resources` と同じ理由で、
+// 別名にしないとレイヤ検証が仮想モジュールを分類できない。
+const agents = resolve('src/agents')
+
 export default defineConfig({
   main: {
     resolve: {
-      alias: { '@domain': domain, '@resources': resources }
+      alias: { '@domain': domain, '@resources': resources, '@agents': agents }
     }
   },
   preload: {

@@ -44,8 +44,25 @@ spec.md から plan.md を起草する。`/speckit.plan` を内部委譲しつ�
 2. **関連 ADR**: `docs/decisions/` 配下を Glob し、frontmatter `affected_domains:` または `tags:` に当該 domain が含まれるものを Grep で抽出
    - Title, status (accepted/proposed/superseded), 1 文サマリを収集
 3. **Glossary**: `docs/glossary.md` を Read し、spec.md 本文中に出現する用語に絞って抜粋
+4. **上流からの申し送りの棚卸し (必須)**: 本 feature を名指している上流の記述を
+   **grep で機械的に洗い出す**。人手の棚卸しは漏れる。
 
-すべて missing でも続行可能 (warning 表示)。
+   ```bash
+   feature_id=$(awk '/^feature_id:/{print $2}' "<spec_dir>/spec.md")
+   grep -rn "$feature_id" docs/ .specify/ tests/ specs/ --include='*.md' --include='*.mjs' --include='*.js' --include='*.yaml' --include='*.yml'
+   ```
+
+   加えて、本 feature が**新設する主要モジュール名**
+   (`<Name>Service` / `<name>-store` 等、plan の Project Structure で決めたもの) でも grep する。
+   `.dependency-cruiser.js` / `eslint.config.mjs` / `scripts/constitution/allowlists.mjs` は
+   **実名リスト方式のルールを持ち、新しいモジュールを作る feature に追加義務を課している**
+   ことがあるため、必ず対象に含める。
+
+   **ヒット全件に処理を割り当て、plan の「上流からの申し送り」節に列挙する。**
+   「該当なし」と判断したものも理由つきで残す — 列挙しないと、次の feature が同じ棚卸しをやり直す。
+
+すべて missing でも続行可能 (warning 表示)。ただし **step 4 は skip しない** —
+design-gate の `architecture-reviewer` が最も高い severity を付けるのがこの取りこぼしである。
 
 ### Phase 2: `/speckit.plan` delegation
 
@@ -112,3 +129,5 @@ placeholder section が存在しない場合は、生成 plan.md の冒頭 (`# P
 2. plan.md に "Domain Context" section が存在し、Charter reference が記載されている
 3. spec.md frontmatter の `status` が `planning` に更新されている
 4. `[NEEDS CLARIFICATION]` placeholder が plan.md に残っていない (LLM が assumption で埋めることは禁止)
+5. **Phase 1 step 4 の grep を実行し、ヒット全件に処理を割り当てた節が plan.md にある。**
+   実行したコマンドと総ヒット件数を節の冒頭に記す (後から再現できる形にする)

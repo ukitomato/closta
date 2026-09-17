@@ -68,6 +68,27 @@ export const FIXTURES = [
     rules: ['no-restricted-imports', 'path-module-only-from-path-api']
   },
   {
+    file: 'a-direct/unc-literal-outside-allowlist.ts.fixture',
+    target: 'src/main/app/__rulecheck__/unc-literal-outside-allowlist.ts',
+    group: 'a',
+    what: '許可外モジュールが UNC 接頭辞リテラルを持つ (パス API を迂回した手組み)',
+    detectors: ['constitution'],
+    rules: ['#12']
+  },
+  {
+    file: 'a-direct/agents-unc-api-call.ts.fixture',
+    target: 'src/agents/__rulecheck__/agents-unc-api-call.ts',
+    group: 'a',
+    /*
+     * 項目 13 には (a) リテラル / (b) API 呼び出し の 2 つの枝がある。
+     * (a) は項目 12 が `agents` も対象に含むので既に覆われている。
+     * **本サンプルは (b) を単独で発火させる** — リテラルを書かない。
+     */
+    what: 'agents が UNC を作る API を呼ぶ',
+    detectors: ['constitution'],
+    rules: ['#13']
+  },
+  {
     file: 'a-direct/platform-branch-unmarked.ts.fixture',
     target: 'src/main/app/__rulecheck__/platform-branch-unmarked.ts',
     group: 'a',

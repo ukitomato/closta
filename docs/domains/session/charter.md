@@ -9,7 +9,8 @@ related_adrs:
   - docs/decisions/0006-supervisor-in-utility-process.md
   - docs/decisions/0007-session-source-of-truth-is-claude-code.md
   - docs/decisions/0010-supervisor-runs-standalone.md
-related_specs: []
+related_specs:
+  - specs/002-session-cross-folder-session-enumeration/spec.md
 ---
 
 # Domain Charter: session
@@ -26,7 +27,11 @@ Closta の出発点にある課題「並行して走らせたセッションの�
 
 ### In scope
 
-- 登録フォルダを横断したセッションの列挙（複数 Provider / 複数ランタイム分）
+- 登録フォルダを横断したセッションの列挙（複数 Provider / 複数ランタイム分）。
+  **登録の有無によらず config ディレクトリ配下の全件**を対象とし、
+  登録フォルダに紐づかないものは「未登録フォルダ」として示す（R-2）。
+  登録済みだけを出すと、探す手段がないから登録できず、登録していないから見つからない、
+  という循環に落ちる
 - セッションの起動、応答のストリーミング、中断、再開、分岐（`forkSession`）
 - `SessionLaunchConfig` の解決と、軸どうしの依存関係の解決
   （ランタイム → Provider → モデル → 権限モード）
@@ -56,10 +61,13 @@ Closta の出発点にある課題「並行して走らせたセッションの�
 
 ### Journey 1: 過去セッションを横断して探す
 
-1. ユーザは登録済みフォルダの一覧を開く
-2. システムは各フォルダ・各 Provider の config ディレクトリからセッションを列挙する
+1. ユーザはセッション一覧を開く
+2. システムは各 Provider の config ディレクトリからセッションを列挙する
    （**所在ディストロが実行中のものに限る**。停止中は「停止中のため未列挙」として示す）
-3. ユーザは一覧から目的のセッションを選び、内容を読む
+3. 登録済みフォルダに紐づくものはフォルダごとに、**紐づかないものは
+   「未登録フォルダ」として作業ディレクトリごとに**示される。
+   後者にはその場で作業フォルダとして登録する導線が付く（R-2）
+4. ユーザは一覧から目的のセッションを選び、内容を読む
 
 ### Journey 2: 起動条件を決めてセッションを開始する
 
@@ -108,7 +116,11 @@ Closta の出発点にある課題「並行して走らせたセッションの�
 
 - **並列時の滑らかさ**: 10 セッション同時実行で UI の入力応答が保たれる — 計測経路: 手動検証 + フレーム計測
 - **列挙の網羅**: **実行中のディストロについて**、その中の config ディレクトリを
-  Windows 側から取りこぼさず列挙できる — 計測経路: E2E。
+  Windows 側から取りこぼさず列挙できる — 計測経路: **当面は Vitest + quickstart**。
+  **本来は E2E だが、E2E 基盤の構築は M4 完了後に再検討する**（R-2 の `[USER]` 判断 /
+  [AD-028](../decisions/0028-session-enumeration-process-and-unc-handoff.md) §5）。
+  **再開条件**: E2E 基盤が入った時点で計測経路を E2E に戻す。
+  持ち主 feature は M4 完了後に `docs/roadmap.md` へ登録する。
   **停止中ディストロ内のセッションは R-2 では原理的に列挙できない** —
   R-1 が検出のためにディストロを起動しないと決めたためである（SC-005 / `runtime` charter）。
   停止中を含めた列挙を KPI に掲げると、達成する唯一の道が SC-005 違反になる
@@ -130,7 +142,10 @@ Closta の出発点にある課題「並行して走らせたセッションの�
 
 ## Related Specs
 
-（未着手。R-2 / X-1 / X-4 / X-5 / O-1 が本 domain に属する）
+- **R-2** — [セッション列挙](../../../specs/002-session-cross-folder-session-enumeration/spec.md)
+  （読み取り専用。全件列挙 + 未登録フォルダ。実装中）
+
+X-1 / X-4 / X-5 / O-1 は未着手。
 
 ## Open Questions
 

@@ -1,0 +1,27 @@
+{
+  "//": [
+    "**依存グラフ検証の別名解決専用** (SH-013 / R-2 BE-025)。型検査には使わない。",
+    "",
+    "dependency-cruiser は tsconfig の `paths` で別名を解決する。",
+    "`tsconfig.web.json` には `@agents/*` が無く (renderer が `agents` に到達しては",
+    "ならないため、web 側の `paths` に足すのは誤りである)、`tsconfig.node.json` には",
+    "`@renderer/*` / `@/*` が無い。`depcruise src` は両方を同時に辿るため、",
+    "**解決用にだけ全部を知っている設定**を 1 つ用意する。",
+    "",
+    "**到達の可否はここでは決まらない。** 解決できることと到達してよいことは別であり、",
+    "許される向きは `.dependency-cruiser.js` の規則が判定する —",
+    "解決に失敗すると `not-to-unresolvable` に落ちて、",
+    "**本来検査したい規則が評価されないまま緑と赤が入れ替わる。**"
+  ],
+  "extends": "./tsconfig.web.json",
+  "compilerOptions": {
+    "composite": false,
+    "baseUrl": ".",
+    "paths": {
+      "@renderer/*": ["src/renderer/src/*"],
+      "@/*": ["src/renderer/src/*"],
+      "@domain/*": ["src/domain/*"],
+      "@agents/*": ["src/agents/*"]
+    }
+  }
+}

@@ -3,7 +3,14 @@ import path from 'node:path'
 import { applyEntry, findLongestMatch } from '@domain/workspace/prefix-match'
 
 import type { HostPathOps, RuntimePathOps } from './interfaces'
-import { namespaceDistroName, toUncNamespace, toWslNamespace, type NamespaceId } from './namespace'
+import {
+  isValidDistroName,
+  namespaceDistroName,
+  toUncNamespace,
+  toWslNamespace,
+  uncNamespace,
+  type NamespaceId
+} from './namespace'
 import type { PathMapping } from './path-mapping'
 import {
   UNC_PREFIX,
@@ -78,6 +85,71 @@ const WIN32_FORBIDDEN_IN_NAME = [':', '<', '>', '"', '|', '?', '*']
 export function isValidHostSegment(name: string): boolean {
   if (!isValidSegment(name)) return false
   return !WIN32_FORBIDDEN_IN_NAME.some((ch) => name.includes(ch))
+}
+
+/**
+ * legacy の共有名。新しい `\\wsl.localhost\` と同じ経路を指す (AD-015 §1)。
+ *
+ * **受理はするが、正規形は常に `UNC_PREFIX` に寄せる。**
+ * 2 つの綴りを値として持ち回ると、同じディレクトリを指す 2 つの値が
+ * 等価判定で不一致になる。
+ */
+const UNC_LEGACY_PREFIX = '\\\\wsl$\\'
+
+/** `parseWslUncPath` の結果。ディストロ名は**検証済み**である。 */
+export interface ParsedWslUnc {
+  readonly distroName: string
+  readonly unc: WslUncPath
+}
+
+/**
+ * **生の UNC 文字列**を解析し、ディストロ名と正規化した `WslUncPath` を返す (BE-010b)。
+ *
+ * `makeWslUncPath` は名前空間識別子を必須引数として要求するため、
+ * **ディストロ名を先に知らなければ呼べない。** アプリ外のプロセスが記録した
+ * 作業ディレクトリ (セッションの `cwd`) は生文字列で与えられるので、
+ * 「名前空間を先に決める」形が成立しない。その 1 点を埋めるのが本関数である。
+ *
+ * **この関数が UNC の綴りに関する知識を持つ唯一の場所である。**
+ * 呼び出し側 (`domain/session` の出自判定) は文字列操作で接頭辞を剥がさない —
+ * 剥がす実装は R-1 の gate が繰り返し塞いだ「境界での再 branding」と同じ形になる。
+ *
+ * 受理する綴り (いずれも実機で成立することを確認済み。research R-01):
+ *
+ * | 綴り | 例 |
+ * |---|---|
+ * | 新しい共有名 | `\\wsl.localhost\Ubuntu\home\y` |
+ * | legacy 共有名 | `\\wsl$\Ubuntu\home\y` |
+ * | フォワードスラッシュ | `//wsl.localhost/Ubuntu/home/y` |
+ *
+ * **接頭辞の大小は問わない** (UNC のホスト名は大小を区別しない)。
+ * **ディストロ名の大小は区別する** — 検出結果の表記と完全一致で照合するため (AD-025 §2)。
+ */
+export function parseWslUncPath(raw: string): PathResult<ParsedWslUnc> {
+  if (raw.length === 0) return fail('invalid-format')
+
+  // 区切りをバックスラッシュに寄せる。POSIX パスはこの時点で接頭辞に一致しなくなる。
+  const backslashed = raw.replace(/\//g, '\\')
+  const lower = backslashed.toLowerCase()
+
+  const prefix = lower.startsWith(UNC_PREFIX.toLowerCase())
+    ? UNC_PREFIX
+    : lower.startsWith(UNC_LEGACY_PREFIX.toLowerCase())
+      ? UNC_LEGACY_PREFIX
+      : null
+  if (prefix === null) return fail('invalid-format')
+
+  const afterPrefix = backslashed.slice(prefix.length)
+  const sep = afterPrefix.indexOf('\\')
+  const distroName = sep < 0 ? afterPrefix : afterPrefix.slice(0, sep)
+  if (!isValidDistroName(distroName)) return fail('invalid-format')
+
+  const rest = sep < 0 ? '' : afterPrefix.slice(sep)
+  const canonical = `${UNC_PREFIX}${distroName}${rest}`
+
+  const result = makeWslUncPath(uncNamespace(distroName), canonical)
+  if (!result.ok) return fail(result.reason)
+  return { ok: true, path: { distroName, unc: result.path } }
 }
 
 /** ランタイム名前空間 (POSIX 意味論) の操作。 */

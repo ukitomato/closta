@@ -61,3 +61,30 @@ export const MAX_PATH_VALUE_LENGTH = 4096
  * 上限が無いと、巨大なディレクトリ 1 つで IPC のペイロードと描画が破綻する。
  */
 export const MAX_DIR_ENTRIES = 2000
+
+/**
+ * セッション一覧の先頭ページの件数 (research R-06)。
+ *
+ * 実測で先頭 50 件が 384 ms、全件 (269 件) が 915 ms だった。
+ * **先頭ページを持つ理由は「最初の描画までの時間」であり、通信量ではない。**
+ */
+export const SESSION_PAGE_SIZE = 50
+
+/**
+ * 1 つの列挙対象から取り込むセッション件数の上限。
+ *
+ * 超えた分は列挙せず `truncated: true` を返す。**黙って切らない** (FR-038)。
+ * `MAX_DIR_ENTRIES` と同じ値にしていない — あちらは 1 ディレクトリの項目数、
+ * こちらは 1 config ディレクトリのセッション総数であり、増え方が違う。
+ * 実測では 1 config ディレクトリに 269 件あった (research R-01)。
+ */
+export const MAX_SESSIONS_PER_TARGET = 5000
+
+/**
+ * `fetchMoreSessions` の `offset` の上限。
+ *
+ * **未信頼入力の検査に使う実名の上限である** (contracts/ipc-session-list.md の検証表)。
+ * 総数の上限と同じ値にする — それを超える `offset` は、どんな列挙対象に対しても
+ * 意味を持たないためである。
+ */
+export const MAX_SESSION_OFFSET = MAX_SESSIONS_PER_TARGET

@@ -40,6 +40,11 @@ import {
   PROCESS_SPAWN_MODULES,
   PROTOCOL_ASSOCIATION_APIS,
   SELF_DEFINITION_FILES,
+  UNC_API_NAMES,
+  UNC_FORBIDDEN_IN,
+  UNC_LITERAL_EXEMPT_SUFFIXES,
+  UNC_LITERAL_MODULES,
+  UNC_LITERAL_PATTERNS,
   WINDOW_OPEN_HANDLER,
   WSL_ALLOWED_ARGS,
   WSL_CALLER_MODULES
@@ -528,6 +533,72 @@ function hasPackagedGate() {
   }
 
   violations(11, 'window.open / 遷移の拒否と origin 定数の単一性', 'FR-039 / FR-040', found)
+}
+
+/* ── 項目 12: UNC 接頭辞リテラルを持てるモジュールの許可リスト ────── */
+{
+  /*
+   * AD-028 §3。**API を迂回した手組みを塞ぐ。**
+   *
+   * 「`toUnc()` を呼んでよいモジュール」は縛らない — 呼ぶのは正規の経路であり、
+   * 縛っても塞がる脅威が無い。塞ぐのは**リテラルを書いて自前で組み立てる**形である。
+   *
+   * テストは除外する。3 綴りを受理することを証明する場所がテストであり、
+   * ここを禁じると規則そのものがテスト不能になる。
+   */
+  const found = []
+  for (const src of literalSources) {
+    if (UNC_LITERAL_MODULES.includes(src.file)) continue
+    if (UNC_LITERAL_EXEMPT_SUFFIXES.some((suffix) => src.file.endsWith(suffix))) continue
+    for (const literal of stringLiterals(src.code)) {
+      for (const pattern of UNC_LITERAL_PATTERNS) {
+        if (!literal.value.includes(pattern)) continue
+        found.push(
+          `${src.file}:${literal.line}  許可外モジュールが UNC 接頭辞を持っている "${pattern}"`
+        )
+      }
+    }
+  }
+  violations(
+    12,
+    'UNC 接頭辞リテラルを持てるモジュールの許可リスト',
+    'AD-028 / FR-042',
+    found,
+    `許可: ${UNC_LITERAL_MODULES.join(', ')} (テストは除外)`
+  )
+}
+
+/* ── 項目 13: `agents` は UNC を扱わない ──────────────────────────── */
+{
+  /*
+   * AD-028 §3 の規則 2 の機械強制。
+   * 列挙プロセスは受け取った値を SDK に渡すだけであり、
+   * **リテラルも UNC API 呼び出しも持たない。**
+   *
+   * 規則を散文でしか書かないと、R-3 / X-3 が同じプロセス方式に乗るときに破れる。
+   */
+  const found = []
+  const apiCallRe = new RegExp(String.raw`\b(?:${UNC_API_NAMES.join('|')})\s*\(`)
+  for (const src of sources) {
+    if (!UNC_FORBIDDEN_IN.some((dir) => src.file.startsWith(dir))) continue
+
+    for (const literal of stringLiterals(src.code)) {
+      for (const pattern of UNC_LITERAL_PATTERNS) {
+        if (!literal.value.includes(pattern)) continue
+        found.push(`${src.file}:${literal.line}  agents が UNC 接頭辞を持っている "${pattern}"`)
+      }
+    }
+    if (apiCallRe.test(src.code)) {
+      found.push(`${src.file}  agents が UNC を作る API を呼んでいる (${UNC_API_NAMES.join(' / ')})`)
+    }
+  }
+  violations(
+    13,
+    '`agents` が UNC のリテラルと API を持たない',
+    'AD-028 / Principle VII',
+    found,
+    `対象: ${UNC_FORBIDDEN_IN.join(', ')}`
+  )
 }
 
 /* ── 報告 ─────────────────────────────────────────────────────────── */

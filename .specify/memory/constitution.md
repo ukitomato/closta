@@ -1,10 +1,32 @@
 ---
 status: active
-version: 1.2.2
+version: 1.2.3
 ratified: 2026-09-13
-last_amended: 2026-09-16
+last_amended: 2026-09-17
 generated_by: /speckit.constitution (素材: /spec-gate bootstrap Phase 6 の draft)
 ---
+
+<!--
+Sync Impact Report (v1.2.3)
+- Version change: 1.2.2 → 1.2.3
+- Last amended: 2026-09-17
+- Bump rationale: PATCH。Principle VIII の Automated 検証の**延期先**を事実に改めるのみ。
+  指針そのものは変えていない (AD-028 §5)
+
+Modified principles:
+- Principle VIII (日本語環境で破綻しない) — Automated の延期先から **R-2 を外した**。
+  R-2 (セッション列挙) は読み取り専用であり composer の送信経路を開けないため
+  (A) の発動条件を満たさず、目標レイアウト ADR が未採択のため (B) の基準画像は
+  撮り直しが確定する。**延期先を空にしない** — 「M4 完了後に再検討する」とし、
+  E2E 基盤の持ち主 feature を `docs/roadmap.md` に登録する
+
+Templates requiring updates:
+- ✅ docs/decisions/0028-session-enumeration-process-and-unc-handoff.md §5 —
+     AD-024 #18 の読み替えの根拠 (AD-024 は immutable なので本文は変更しない)
+- ✅ docs/domains/session/charter.md — KPI「列挙の網羅」の計測経路に同じ留保を付ける
+- ⚠ docs/roadmap.md — E2E 基盤の持ち主 feature は **M4 完了後に決める** (未登録)
+-->
+
 
 <!--
 Sync Impact Report (v1.2.2)
@@ -440,7 +462,7 @@ if (!isMac) { ... }
   - (A) composer の IME テストケース — **送信経路を閉じている**。R-1 の `ChatScreen` は `Thread` を mount するので **composer は描画される**。「対象が無い」のではなく、送信経路を `isDisabled: true` で閉じることで検証していない送信経路を残さない形にした。この前提は `src/renderer/src/features/chat/ChatScreen.test.tsx` が守る。composer を開けるときに IME テストを同時に載せる
   - (B) 日本語を含むスクリーンショット比較 — **延期**。目標レイアウトの ADR が accepted になり、かつ Electron を CI で起動する E2E 基盤が揃った時点で載せる。片方だけで撮ると基準画像が撮り直しになる
   - **`bad_pattern_grep` は本 Principle の番人ではない。** 送信は `@assistant-ui/react` の内側で起きるため、`isComposing` ガードがリポジトリに 1 件も無くても 0 件を返す。`existing_violations: 0` は「守られている」ことを意味しない
-  - どちらも R-2 の E2E 基盤に相乗りする。それまで本 Principle を守るのは Manual の 2 者と上記のテスト 1 本だけである。SPIKE-4 (X-2 の前) の結果と合わせて再確認すること
+  - **延期先は R-2 ではない** (v1.2.3 / [AD-028](../../docs/decisions/0028-session-enumeration-process-and-unc-handoff.md) §5)。R-2 は読み取り専用で composer の送信経路を開けないため (A) の発動条件 (`isDisabled: true` を外す変更) を満たさず、目標レイアウトの ADR が未採択のため (B) は撮り直しが確定する。**M4 完了後に再検討し、E2E 基盤の持ち主 feature を `docs/roadmap.md` に登録する。** それまで本 Principle を守るのは Manual の 2 者と上記のテスト 1 本だけである。SPIKE-4 (X-2 の前) の結果と合わせて再確認すること
 <!-- BOOTSTRAP_SECTION_END principle=VIII -->
 
 <!-- MIGRATE_SECTION_START principle=VIII -->
@@ -737,7 +759,9 @@ SC-017 の追跡対象。**列挙せずに「全数検出」と言わない。**
 
 **Automated は 2 項目とも載っていない。CI が緑であることは本 Principle について何も示さない。**
 (A) は composer が**描画されたうえで送信経路を `isDisabled: true` で閉じて**おり、
-(B) のスクリーンショット比較は R-2 の E2E 基盤に相乗りする (AD-024 #18)。
+(B) のスクリーンショット比較は **M4 完了後に再検討する** (AD-024 #18 を
+[AD-028](../../docs/decisions/0028-session-enumeration-process-and-unc-handoff.md) §5 が読み替えた。
+延期先だった R-2 は読み取り専用であり E2E 基盤を作らない)。
 `existing_violations: 0` は `bad_pattern_grep` が送信経路 (`@assistant-ui/react` の内側) を
 見られないことの結果であって、遵守の証拠ではない。守るのは Manual の 2 者
 (`ux-reviewer` / `a11y-reviewer`) と `ChatScreen.test.tsx` の 2 ケースである。
@@ -790,6 +814,7 @@ Amendment trail への追記 → 既存違反の enumeration、の 5 段階で�
 | 1.1.0 | 2026-09-13 | Principle II の検証条件に `platform-ok:` 注記による例外を追加。Electron 公式テンプレートの `window-all-closed` / `icon` 分岐は除去不能であり、元の grep はどの Electron アプリでも達成できなかった (AD-023) |
 | 1.2.0 | 2026-09-15 | [AD-024](../../docs/decisions/0024-constitution-verification-paths.md) の 17 項目。検証条件が実在しないディレクトリを指していた箇所 (#1 / #6 の `src/supervisor/` ほか) を AD-023 のレイヤ構成に合わせ、**Automated の正本を grep から lint + グラフ検証 + 検証スクリプトに移した** (#2 / #7 / #8)。許可リストの正本を `scripts/constitution/allowlists.mjs` に置き追加に ADR を要する形にした (#3 / #4)。検証スコープにビルド構成を追加 (#5)。設定層を Principle V の対象に追加 (#9)。Principle XIII の `bad_pattern_grep` が `--` 始まりで実行不能だった点を修正し標準テーマの写しを除外リスト化 (#10 / #11)。表層文書の英語 Exceptions を追加 (#12)。**NON-NEGOTIABLE の改定 2 件** — III を `autoModeSafe !== true` に (#13)、I の Statement を `domain` のパス API 経由に (#14)。XI の Exceptions / XIV の本文 / 未解決候補 #2 を R-1 完了後の事実に追随 (#15 / #16 / #17) |
 | 1.2.1 | 2026-09-15 | [AD-024](../../docs/decisions/0024-constitution-verification-paths.md) #18。Principle VIII の Verification の「現状の制約」を実体に改めた。CI は SH-022 で構築したので「CI が未構築のため実行不能」はもう成り立たない。Automated の 2 項目は **(A) composer が無いため対象が無い / (B) スクリーンショット比較は R-2 の E2E 基盤に相乗りする** であり、**CI が緑であることは本 Principle について何も示さない**ことを明記した |
+| 1.2.3 | 2026-09-17 | [AD-028](../../docs/decisions/0028-session-enumeration-process-and-unc-handoff.md) §5。Principle VIII の Automated 検証の**延期先から R-2 を外した**。R-2 (セッション列挙) は読み取り専用で composer の送信経路を開けないため (A) の発動条件を満たさず、目標レイアウト ADR が未採択のため (B) は撮り直しが確定する。**延期先を空にせず「M4 完了後に再検討し、持ち主 feature を roadmap に登録する」とした** — 持ち主のいない延期は、次に本 Principle を見る人が「R-2 で載ったはず」と誤読する形で残る |
 | 1.2.2 | 2026-09-16 | [AD-024](../../docs/decisions/0024-constitution-verification-paths.md) #18 の**訂正**。v1.2.1 が (A) の根拠に書いた「R-1 に composer が無い」は事実ではない。`ChatScreen` は `Thread` を mount しており composer は描画される。根拠を「送信経路を `isDisabled: true` で閉じている」に改め、その前提を `ChatScreen.test.tsx` で固定した。あわせて **`bad_pattern_grep` が送信経路を見られない**こと (`existing_violations: 0` は遵守の証拠ではない) を明記した |
 
 ## References

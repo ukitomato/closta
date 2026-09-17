@@ -15,13 +15,14 @@ import { defineConfig } from 'vitest/config'
  */
 
 const domain = resolve('src/domain')
+const agents = resolve('src/agents')
 const rendererSrc = resolve('src/renderer/src')
 
 export default defineConfig({
   test: {
     projects: [
       {
-        resolve: { alias: { '@domain': domain } },
+        resolve: { alias: { '@domain': domain, '@agents': agents } },
         test: {
           name: 'node',
           environment: 'node',

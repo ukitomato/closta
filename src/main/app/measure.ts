@@ -22,6 +22,11 @@ export type MeasurePoint =
   | 'list-folders'
   | 'browse-step'
   | 'browse-step-revalidate'
+  // R-2 (セッション列挙)。予算は SC-008。
+  | 'list-sessions-first-page'
+  | 'list-sessions-all'
+  | 'list-sessions-cached'
+  | 'fetch-more-sessions'
 
 /**
  * **SC-004 が定める予算だけを書く。書かれていない計測点には予算を置かない。**
@@ -54,7 +59,19 @@ const BUDGET_MS: Partial<Record<MeasurePoint, number>> = {
   // フォルダブラウザの階層移動は 300 ミリ秒以内。
   'browse-step': 300,
   // ただし**有効期間をまたぐ 1 手**は実行状態の再確認を伴うため 2 秒以内。
-  'browse-step-revalidate': 2000
+  'browse-step-revalidate': 2000,
+  // セッション一覧の先頭 50 件の描画は 2 秒以内 (SC-008)。
+  'list-sessions-first-page': 2000,
+  // 1 所在あたり 700 件規模の全件取得完了は 10 秒以内 (SC-008)。
+  'list-sessions-all': 10_000,
+  // キャッシュヒット時の再表示は 100 ミリ秒以内 (SC-008)。
+  'list-sessions-cached': 100
+  /*
+   * **`fetch-more-sessions` に予算を置かない。**
+   * SC-008 は先頭ページ / 全件 / キャッシュヒットの 3 つだけを定めており、
+   * 続きの取得には予算が無い。別の計測点の予算を流用すると、
+   * SC-008 を満たしているのに「超過」と記録される (上記 (2) の規則)。
+   */
 }
 
 export type Measure = <T>(point: MeasurePoint, run: () => Promise<T>) => Promise<T>
