@@ -376,8 +376,14 @@ accepted ADR に反する設計を、調停 ADR より先に実装しないた�
       あわせて **`docs/domains/runtime/charter.md` の `related_specs` に本 spec を追加**し、
       **`_overview.md` の R-1 行**にパス API の拡張 (BE-010b) を 1 行添える —
       本 feature は R-1 の `runtime` domain を拡張するため
-- [ ] SH-089 quickstart を実施し、結果を `quickstart-results.md` に記録する。
-      **V-3 の出自 6 パターンのうち実機で踏めなかった行を明記する** (SC-001 〜 **SC-016**)
+- [x] SH-089 quickstart を実施し、結果を `quickstart-results.md` に記録する。
+      **V-3 の出自 6 パターンのうち実機で踏めなかった行を明記する** (SC-001 〜 **SC-016**)。
+      実行結果は `quickstart-results.md` の「SH-089」節。
+      **実機で踏めなかったのは 3 件**で、いずれも Vitest が代替を担う —
+      V-3 #3 `undetected-distro` (ディストロの改名 / 削除が要る)、
+      越境 `/mnt/c/...` (該当する `cwd` が 0 件)、
+      V-8 の「全所在が未列挙」(`wsl --shutdown` が稼働中の Claude Code を落とす)。
+      **V-4 はディストロを止めずに踏めた** — `podman-machine-default` が既に停止中だった
 - [x] SH-090 `lint` / `typecheck` / `depcruise` / `check:constitution` / `test` /
       `test:rules` を全通過させる (違反サンプルを保持したまま)
       - **済 (2026-09-18)**: lint 0 / typecheck 0 / テスト 535 件 / depcruise 0 違反 /

@@ -81,6 +81,17 @@ export interface SessionService {
   /** ランタイムが変わった。対応づけのメモ化を破棄してやり直す。 */
   onRuntimesChanged(): SessionIndexDTO
   onChanged(listener: (index: SessionIndexDTO) => void): () => void
+  /**
+   * 実行中確認を先に済ませる (SC-008)。
+   *
+   * **列挙しない。** 取るのは `wsl.exe` の結果だけであり、
+   * config ディレクトリには触らない。
+   * 起動時に一覧を取らない理由 (ランタイム検出より先に走ると停止中の所在が
+   * 「未検出」として並ぶ) はここに当たらない。
+   *
+   * **呼ばなくても動く。** 一覧を開いた時点で取る (遅いが動く)。
+   */
+  warmUp(): void
 }
 
 export interface SessionServiceDeps {
@@ -107,6 +118,18 @@ interface LocationResult {
     readonly target: EnumerationTarget
     readonly sessions: readonly SessionSummary[]
   }[]
+}
+
+/**
+ * 探索を終えた所在 1 件。
+ *
+ * **`discovery` が `null` なのは停止中の所在である** — 探索も起動も発行していない。
+ * 行は作る (FR-007 / FR-008)。
+ */
+interface DiscoveredLocation {
+  readonly location: EnumerationOutcome['location']
+  readonly discovery: Awaited<ReturnType<EnumerationTargetFinder['wslTargets']>> | null
+  readonly running: VerifiedRunning | null
 }
 
 /** 1 つの列挙対象から取れたセッションと、その行。 */
@@ -305,14 +328,16 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
      * どこが重いのか分からない (R-1 が `probe-batch-verify` / `probe-batch-run` を
      * 分けたのと同じ理由)。
      *
-     * **所在 `windows` の探索は実行中確認を待たない。**
-     * ホストに確認は要らないので、`wsl.exe` の固定費 (約 1.2 秒) と重ねられる。
+     * **所在 `windows` は探索も列挙も実行中確認を待たない。**
+     * ホストに確認は要らない。待たせると `wsl.exe` の固定費 (実測 1,185〜1,373 ms) が
+     * **そのまま先頭 50 件の予算から引かれる** — 実測で余裕が 21 ms まで詰まった。
+     * 固定費は構造的に要る (FR-008 の門を通す) ので、**払う場所を変える**。
      */
-    const discovered = await deps.measure('list-sessions-discover', async () => {
-      const hostWork = deps.finder
-        .hostTarget(deps.hostHome())
-        .then((discovery) => ({ location: { kind: 'windows' } as const, discovery, running: null }))
+    const hostWork = deps.finder
+      .hostTarget(deps.hostHome())
+      .then((discovery) => ({ location: { kind: 'windows' } as const, discovery, running: null }))
 
+    const discovered = deps.measure('list-sessions-discover', async () => {
       const verifiedMap = await deps.measure('list-sessions-verify', () => verified())
 
       const wslWork = deps
@@ -340,6 +365,12 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
     })
 
     /*
+     * **例外を拾い手のいないまま浮かせない。** 第 2 相まで `await` しないので、
+     * ここで失敗すると未処理の拒否になる。理由は第 2 相で受ける。
+     */
+    discovered.catch(() => {})
+
+    /*
      * ── 第 2 相: 列挙 ──────────────────────────────────────────
      *
      * **所在の順に直列で回す** (contracts C-6 / AD-030 §1)。
@@ -358,40 +389,54 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
     const nextOutcomes: EnumerationOutcome[] = []
     let shown = 0
 
-    await deps.measure('list-sessions-enumerate', async () => {
-      for (const entry of discovered) {
-        const result =
-          entry.discovery === null
-            ? {
-                outcome: unreachableOutcome(entry.location, 'distro-not-running', at),
-                collected: []
-              }
-            : await measuredLocation(entry.location, entry.discovery, entry.running, scope, at)
+    /** 所在 1 件を列挙して積み、段階描画なら画面へ流す。 */
+    async function step(entry: DiscoveredLocation): Promise<void> {
+      const result =
+        entry.discovery === null
+          ? {
+              outcome: unreachableOutcome(entry.location, 'distro-not-running', at),
+              collected: []
+            }
+          : await measuredLocation(entry.location, entry.discovery, entry.running, scope, at)
 
-        for (const { target, sessions } of result.collected) {
-          nextTargets.push(target)
-          nextSessions.set(target.key, sessions)
-          shown += sessions.length
-        }
-        nextOutcomes.push(result.outcome)
-
-        if (!progressive) continue
-
-        /*
-         * **所在 1 件ぶんを画面へ流す。** 残りの所在はまだ行を持たないが、
-         * `complete: false` が「出そろっていない」ことを運ぶ (FR-037)。
-         * 停止中の所在の行を落とさない保証 (FR-007 / FR-008) は**出そろった時点**の
-         * 話であり、途中の状態はそれを壊さない。
-         */
-        commit(nextTargets, nextSessions, nextOutcomes, at, scope, false)
-        publish()
-
-        /*
-         * **先頭 50 件が出そろった時点が SC-008 の言う描画である。**
-         * 何度呼んでも構わない — 受け側は解決済みの約束を無視する。
-         */
-        if (shown >= SESSION_PAGE_SIZE) onFirstRows?.()
+      for (const { target, sessions } of result.collected) {
+        nextTargets.push(target)
+        nextSessions.set(target.key, sessions)
+        shown += sessions.length
       }
+      nextOutcomes.push(result.outcome)
+
+      if (!progressive) return
+
+      /*
+       * **所在 1 件ぶんを画面へ流す。** 残りの所在はまだ行を持たないが、
+       * `complete: false` が「出そろっていない」ことを運ぶ (FR-037)。
+       * 停止中の所在の行を落とさない保証 (FR-007 / FR-008) は**出そろった時点**の
+       * 話であり、途中の状態はそれを壊さない。
+       */
+      commit(nextTargets, nextSessions, nextOutcomes, at, scope, false)
+      publish()
+
+      /*
+       * **先頭 50 件が出そろった時点が SC-008 の言う描画である。**
+       * 何度呼んでも構わない — 受け側は解決済みの約束を無視する。
+       */
+      if (shown >= SESSION_PAGE_SIZE) onFirstRows?.()
+    }
+
+    await deps.measure('list-sessions-enumerate', async () => {
+      /*
+       * **ホストを先に流す。実行中確認を待たない。**
+       * `await discovered` を先に書くと `wsl.exe` の固定費を待ってしまう —
+       * それが実測で先頭 50 件の余裕を 21 ms まで詰めた原因である。
+       *
+       * ホストの履歴が 50 件に届かない機体では次の所在へ落ちるだけで、
+       * そのときは固定費を払うほかない (確認を経ずに UNC を触れない。FR-008)。
+       */
+      await step(await hostWork)
+
+      /* **ホストは `discovered` の先頭でもある。** 二重に数えない。 */
+      for (const entry of (await discovered).slice(1)) await step(entry)
     })
 
     commit(nextTargets, nextSessions, nextOutcomes, at, scope, true)
@@ -629,6 +674,14 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
       resolutionCache = new Map()
       regroup()
       return publish()
+    },
+
+    warmUp(): void {
+      /*
+       * **待たない。** 起動経路を止めてよい理由が無い。
+       * 失敗しても一覧側で取り直す (`verified()` は空の地図をキャッシュしない)。
+       */
+      void verified().catch(() => {})
     },
 
     onChanged(listener): () => void {

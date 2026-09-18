@@ -296,6 +296,82 @@ describe('createSessionService — list / refresh', () => {
     expect(seen.length).toBeGreaterThanOrEqual(2)
   })
 
+  it('所在 `windows` は実行中確認を待たずに描く (SC-008)', async () => {
+    const host = hostTarget()
+    const wsl = wslTarget()
+    let releaseVerify = (): void => {}
+    const verifyGate = new Promise<void>((resolve) => {
+      releaseVerify = resolve
+    })
+    const rowCounts: number[] = []
+
+    const service = createSessionService(
+      deps({
+        runtimes: () => [ubuntu()],
+        verifyRunning: async () => {
+          await verifyGate
+          return new Map([[UBUNTU, createVerifiedRunning(UBUNTU, NOW)]])
+        },
+        finder: fakeFinder(discovery([host]), discovery([wsl])),
+        enumerator: fakeEnumerator({
+          [host.key]: { ok: true, sessions: [record('a')], truncated: false },
+          [wsl.key]: { ok: true, sessions: [record('b')], truncated: false }
+        })
+      })
+    )
+    service.onChanged((index) => rowCounts.push(index.outcomes.length))
+
+    const listing = service.list()
+    await settle()
+
+    /*
+     * **確認が返る前にホストの行が届いている。**
+     * `wsl.exe` の固定費は実測 1,185〜1,373 ms あり、待つと
+     * 先頭 50 件の予算 2 秒から丸ごと引かれる (実測で余裕が 21 ms まで詰まった)。
+     */
+    expect(rowCounts[0]).toBe(1)
+
+    releaseVerify()
+    await listing
+    await settle()
+
+    expect(rowCounts.at(-1)).toBe(2)
+  })
+
+  it('`warmUp()` が実行中確認を先に済ませ、一覧で払い直さない (SC-008)', async () => {
+    const host = hostTarget()
+    const wsl = wslTarget()
+    let calls = 0
+    const service = createSessionService(
+      deps({
+        runtimes: () => [ubuntu()],
+        verifyRunning: async () => {
+          calls += 1
+          return new Map([[UBUNTU, createVerifiedRunning(UBUNTU, NOW)]])
+        },
+        finder: fakeFinder(discovery([host]), discovery([wsl])),
+        enumerator: fakeEnumerator({
+          [host.key]: { ok: true, sessions: [record('a')], truncated: false },
+          [wsl.key]: { ok: true, sessions: [record('b')], truncated: false }
+        })
+      })
+    )
+
+    service.warmUp()
+    await settle()
+    expect(calls).toBe(1)
+
+    /*
+     * **一覧を開いても払い直さない。** 暖機の値は有効期間内なのでそのまま使う。
+     * 払い直すと `wsl.exe` の固定費 (実測 1,185〜1,373 ms) が
+     * 先頭 50 件の予算に戻ってくる。
+     */
+    await service.list()
+    await settle()
+
+    expect(calls).toBe(1)
+  })
+
   it('所在ごとに段階的に通知する (SC-008)', async () => {
     const host = hostTarget()
     const wsl = wslTarget()
