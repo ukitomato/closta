@@ -25,6 +25,7 @@ import { resolveFolderRuntime } from '@domain/workspace/resolution'
 
 import { toEnumerationOutcomeDTOs, toSessionGroupDTO } from './dto-mapper'
 import type { Measure } from './measure'
+import { ENUMERATION_TIMEOUT_MS } from './session-enumerator'
 
 /**
  * セッション一覧の調停 (BE-026 / data-model §7 / FR-030 〜 FR-038)。
@@ -43,8 +44,15 @@ import type { Measure } from './measure'
  * 行を落とすと利用者に「未列挙である」ことを示せない。
  */
 
-/** 列挙 1 件あたりの上限時間。**列挙対象ごとに持つ** (C-5)。 */
-export const ENUMERATION_TIMEOUT_MS = 15_000
+/*
+ * 列挙 1 件あたりの上限時間は `session-enumerator.ts` が持つ (C-5)。
+ *
+ * **ここで別の値を宣言していた。** 同じ名前の定数が 2 箇所にあり、
+ * 実際に効くのは呼び出し側であるこちらだった —
+ * AD-030 で待ち時間を 10 秒に詰めたつもりが、実機では 15 秒で待っていた。
+ * 上限時間を決めるのは待ち行列と作り直しを持つ側であるべきなので、
+ * 宣言をそちらに一本化して import する。
+ */
 
 export interface SessionService {
   /**
@@ -271,19 +279,23 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
   /**
    * 所在ごとに探索して列挙する。**1 所在の失敗が他を消さない** (SC-007)。
    *
-   * **所在も対象も並行に走らせる** (contracts C-6: 「異なる列挙対象は並行して
-   * 実行してよい。プロセスが分かれているためレースが起きない」)。
-   * 直列にすると所在と候補の数だけ子プロセスの起動費用が積み上がる —
-   * 実測で先頭ページが 7.7 秒かかり、SC-008 の 2 秒予算を超えた
-   * (所在 2 件 + 候補複数 × 冷えた子プロセス 1 件あたり約 1.3〜1.8 秒)。
+   * **所在も対象も直列に処理する** (contracts C-6 / AD-030 §1)。
+   * 初版は並行に走らせていたが取り消した — 列挙は**常駐 1 プロセス**が
+   * 要求を直列に処理するため、呼び出し側で重ねても待ち行列に並ぶだけである。
+   * 並行に子プロセスを起こしていた頃は**並行のほうが遅かった**
+   * (WSL 単独 4,193 ms がホストと同時だと 10,470 ms)。
    *
-   * **同時数の上限は列挙器が持つ** (`MAX_CONCURRENT_ENUMERATIONS`)。
-   * ここで無制限に `Promise.all` しても、実際に走る子プロセスは枠の数に絞られる。
+   * **届いた所在から画面へ流す** (SC-008 / 2026-09-18 の人間判断)。
+   * 全所在ぶんが揃うのを待つと、WSL 1 所在あたり 1.3〜1.6 秒の UNC I/O が積み上がり、
+   * **所在が増えるだけで 2 秒予算を超える** (実測: 3 所在で 4,537 ms)。
+   * 並行化では解決しない (上記のとおり遅くなる) ので、**描画の開始点を前に出す**。
    *
    * **結果の順序は所在の順に固定する。** 完了順に並べると、
    * 取得のたびに行の順番が変わって利用者が同じ行を同じ位置で探せない。
+   *
+   * @param onFirstRows 先頭 50 件が画面に届いた時点で呼ぶ。SC-008 の計測点の終端である。
    */
-  async function fetchAll(scope: EnumerationScope): Promise<void> {
+  async function fetchAll(scope: EnumerationScope, onFirstRows?: () => void): Promise<void> {
     const at = deps.now()
 
     /*
@@ -330,38 +342,107 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
     /*
      * ── 第 2 相: 列挙 ──────────────────────────────────────────
      *
-     * **全対象を並行に走らせる** (contracts C-6)。同時数の上限は列挙器が持つので、
-     * ここで無制限に `Promise.all` しても実際に走る子プロセスは枠の数に絞られる。
+     * **所在の順に直列で回す** (contracts C-6 / AD-030 §1)。
+     * 列挙は常駐 1 プロセスが直列に処理するため、ここで重ねても待ち行列に並ぶだけである。
      */
-    const results = await deps.measure('list-sessions-enumerate', () =>
-      Promise.all(
-        discovered.map(async (entry) =>
+
+    /*
+     * **まだ何も出ていないときだけ段階的に出す。**
+     * 一覧が既に出ている状態で段階反映すると、行がいったん減ってから増える —
+     * 全件取得と `refresh` は**置き換え**でなければならない (FR-035)。
+     */
+    const progressive = !loaded
+
+    const nextTargets: EnumerationTarget[] = []
+    const nextSessions = new Map<string, readonly SessionSummary[]>()
+    const nextOutcomes: EnumerationOutcome[] = []
+    let shown = 0
+
+    await deps.measure('list-sessions-enumerate', async () => {
+      for (const entry of discovered) {
+        const result =
           entry.discovery === null
             ? {
                 outcome: unreachableOutcome(entry.location, 'distro-not-running', at),
                 collected: []
               }
-            : collectLocation(entry.location, entry.discovery, entry.running, scope, at)
-        )
-      )
-    )
+            : await measuredLocation(entry.location, entry.discovery, entry.running, scope, at)
 
-    /* **結果の順序は所在の順に固定する。** 完了順に並べると行の順番が毎回変わる。 */
-    const nextTargets: EnumerationTarget[] = []
-    const nextSessions = new Map<string, readonly SessionSummary[]>()
-    for (const result of results) {
-      for (const { target, sessions } of result.collected) {
-        nextTargets.push(target)
-        nextSessions.set(target.key, sessions)
+        for (const { target, sessions } of result.collected) {
+          nextTargets.push(target)
+          nextSessions.set(target.key, sessions)
+          shown += sessions.length
+        }
+        nextOutcomes.push(result.outcome)
+
+        if (!progressive) continue
+
+        /*
+         * **所在 1 件ぶんを画面へ流す。** 残りの所在はまだ行を持たないが、
+         * `complete: false` が「出そろっていない」ことを運ぶ (FR-037)。
+         * 停止中の所在の行を落とさない保証 (FR-007 / FR-008) は**出そろった時点**の
+         * 話であり、途中の状態はそれを壊さない。
+         */
+        commit(nextTargets, nextSessions, nextOutcomes, at, scope, false)
+        publish()
+
+        /*
+         * **先頭 50 件が出そろった時点が SC-008 の言う描画である。**
+         * 何度呼んでも構わない — 受け側は解決済みの約束を無視する。
+         */
+        if (shown >= SESSION_PAGE_SIZE) onFirstRows?.()
       }
-    }
+    })
 
-    targets = nextTargets
-    sessionsByTarget = nextSessions
-    outcomes = results.map((result) => result.outcome)
-    fetchedAt = at
-    complete = scope.kind === 'all'
+    commit(nextTargets, nextSessions, nextOutcomes, at, scope, true)
     loaded = true
+
+    /* **50 件に届かなくても終端は打つ。** 打たないと計測が永久に開いたままになる。 */
+    onFirstRows?.()
+  }
+
+  /**
+   * 1 所在の全件取得を**所在ごとに**計測する (SC-008)。
+   *
+   * **合計では測らない。** SC-008 が定めているのは 1 所在あたりであり、
+   * 合計に予算を与えると所在が増えるだけで超過を報告する
+   * (実測: 3 所在合計 11,023 ms に対し、最大の 1 所在は 277 件で約 7 秒)。
+   *
+   * 先頭ページの取得には SC-008 の全件予算が当たらないので計測点を置かない
+   * — 置くと別の計測点の予算を流用したことになる (`measure.ts` の規則 (2))。
+   */
+  async function measuredLocation(
+    location: EnumerationOutcome['location'],
+    discovery: Awaited<ReturnType<EnumerationTargetFinder['wslTargets']>>,
+    running: VerifiedRunning | null,
+    scope: EnumerationScope,
+    at: number
+  ): Promise<LocationResult> {
+    const run = (): Promise<LocationResult> =>
+      collectLocation(location, discovery, running, scope, at)
+
+    return scope.kind === 'all' ? deps.measure('list-sessions-all-location', run) : run()
+  }
+
+  /**
+   * 積み上げた結果を現在値にする。**所在の順のまま写す。**
+   *
+   * @param done 全所在を回し終えたか。**途中の反映で `complete` を立ててはならない** —
+   *   件数を確定値として見せることになる (FR-037)。
+   */
+  function commit(
+    nextTargets: readonly EnumerationTarget[],
+    nextSessions: ReadonlyMap<string, readonly SessionSummary[]>,
+    nextOutcomes: readonly EnumerationOutcome[],
+    at: number,
+    scope: EnumerationScope,
+    done: boolean
+  ): void {
+    targets = [...nextTargets]
+    sessionsByTarget = new Map(nextSessions)
+    outcomes = [...nextOutcomes]
+    fetchedAt = at
+    complete = done && scope.kind === 'all'
     regroup()
   }
 
@@ -379,13 +460,15 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
     at: number
   ): Promise<LocationResult> {
     /*
-     * **候補を並行に列挙する** (C-6)。**呼び出し側の配列を書かない** —
-     * 並行に走る手続きが共有の配列を書くと、順序が完了順になって毎回変わる。
-     * 結果を返し、組み立ては呼び出し側が所在の順で行う。
+     * **候補も直列に列挙する** (C-6 / AD-030 §1)。
+     * 列挙は常駐 1 プロセスが直列に処理するため、ここで重ねても待ち行列に並ぶだけである。
+     *
+     * **呼び出し側の配列を書かない。** 結果を返し、組み立ては呼び出し側が所在の順で行う。
      */
-    const collected = await Promise.all(
-      discovery.targets.map(async (target) => enumerateTarget(target, running, scope))
-    )
+    const collected: TargetResult[] = []
+    for (const target of discovery.targets) {
+      collected.push(await enumerateTarget(target, running, scope))
+    }
 
     const rows: TargetOutcome[] = collected.map((result) => result.outcome)
 
@@ -444,12 +527,32 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
        */
       if (firstPage !== null) return firstPage
 
+      /*
+       * **SC-008 の「描画」は先頭 50 件が画面に届いた時点で測る**
+       * (2026-09-18 の人間判断)。所在ごとの段階描画にしたため、
+       * 全所在ぶんが揃うまでを測ると所在が増えるだけで予算を超える。
+       *
+       * `deps.measure` は呼んだ時点で計り始めるので、**探索を含む**。
+       * 終端は `fetchAll` が呼び返す。待たないのは、この計測が
+       * 先頭ページの取得そのものを遅らせてはならないためである。
+       */
+      let reachedFirstRows = (): void => {}
+      void deps.measure(
+        'list-sessions-first-rows',
+        () =>
+          new Promise<void>((resolve) => {
+            reachedFirstRows = resolve
+          })
+      )
+
       firstPage = deps
         .measure('list-sessions-first-page', () =>
-          fetchAll({ kind: 'page', limit: SESSION_PAGE_SIZE, offset: 0 })
+          fetchAll({ kind: 'page', limit: SESSION_PAGE_SIZE, offset: 0 }, () => reachedFirstRows())
         )
         .then(() => publish())
         .finally(() => {
+          /* **例外で抜けても終端を打つ。** 打たないと計測が開いたままになる。 */
+          reachedFirstRows()
           firstPage = null
         })
 

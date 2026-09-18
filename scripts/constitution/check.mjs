@@ -601,7 +601,9 @@ function hasPackagedGate() {
       }
     }
     if (apiCallRe.test(src.code)) {
-      found.push(`${src.file}  agents が UNC を作る API を呼んでいる (${UNC_API_NAMES.join(' / ')})`)
+      found.push(
+        `${src.file}  agents が UNC を作る API を呼んでいる (${UNC_API_NAMES.join(' / ')})`
+      )
     }
   }
   violations(
@@ -662,9 +664,16 @@ function hasPackagedGate() {
     const named = new RegExp(
       String.raw`import\s*\{([^}]*)\}\s*from\s*['"]` + AGENT_SDK_PACKAGE + String.raw`['"]`
     ).exec(src.code)
-    const bindings = (named?.[1] ?? "")
-      .split(",")
-      .map((part) => part.replace(/^\s*type\s+/, "").split(/\s+as\s+/).pop()?.trim() ?? "")
+    const bindings = (named?.[1] ?? '')
+      .split(',')
+      .map(
+        (part) =>
+          part
+            .replace(/^\s*type\s+/, '')
+            .split(/\s+as\s+/)
+            .pop()
+            ?.trim() ?? ''
+      )
       .filter((name) => name.length > 0)
 
     for (const name of bindings) {
@@ -678,10 +687,10 @@ function hasPackagedGate() {
   }
   violations(
     14,
-    "Agent SDK の呼び出しが許可リスト内 (許可 1 件以外を禁じる)",
-    "IV / contracts C-4",
+    'Agent SDK の呼び出しが許可リスト内 (許可 1 件以外を禁じる)',
+    'IV / contracts C-4',
     found,
-    `許可: ${AGENT_SDK_ALLOWED_CALLS.join(", ")} / import 可: ${AGENT_SDK_IMPORT_DIRECTORIES.join(", ")}`
+    `許可: ${AGENT_SDK_ALLOWED_CALLS.join(', ')} / import 可: ${AGENT_SDK_IMPORT_DIRECTORIES.join(', ')}`
   )
 }
 
@@ -719,7 +728,7 @@ function hasPackagedGate() {
   const cliRe = /wsl-cli|WslCli/
   for (const src of sources) {
     if (!WSL_FREE_DIRECTORIES.some((dir) => src.file.startsWith(dir))) continue
-    if (src.file.endsWith(".test.ts") || src.file.endsWith(".test.tsx")) continue
+    if (src.file.endsWith('.test.ts') || src.file.endsWith('.test.tsx')) continue
 
     if (cliRe.test(src.code)) {
       found.push(`${src.file}  R-2 のレイヤが WSL CLI レイヤを参照している`)
@@ -731,10 +740,10 @@ function hasPackagedGate() {
   }
   violations(
     15,
-    "R-2 が追加したレイヤが `wsl.exe` と WSL CLI を参照しない",
-    "SC-003 / contracts C-7",
+    'R-2 が追加したレイヤが `wsl.exe` と WSL CLI を参照しない',
+    'SC-003 / contracts C-7',
     found,
-    `対象: ${WSL_FREE_DIRECTORIES.join(", ")}`
+    `対象: ${WSL_FREE_DIRECTORIES.join(', ')}`
   )
 }
 

@@ -286,8 +286,42 @@ describe('createSessionService — list / refresh', () => {
     await service.list()
     await settle()
 
-    // 先頭ページ (false) → 全件 (true) の 2 回。
-    expect(seen).toEqual([false, true])
+    /*
+     * **回数で縛らない。** 先頭ページは**所在ごとに段階的に**通知するため、
+     * 通知の本数は所在の数で変わる (2026-09-18 の人間判断)。
+     * 見たいのは「最後が全件である」ことと「その前に未完了が届く」ことである。
+     */
+    expect(seen.at(-1)).toBe(true)
+    expect(seen.slice(0, -1).every((value) => value === false)).toBe(true)
+    expect(seen.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('所在ごとに段階的に通知する (SC-008)', async () => {
+    const host = hostTarget()
+    const wsl = wslTarget()
+    const rowCounts: number[] = []
+    const service = createSessionService(
+      deps({
+        runtimes: () => [ubuntu()],
+        verifyRunning: async () => new Map([[UBUNTU, createVerifiedRunning(UBUNTU, NOW)]]),
+        finder: fakeFinder(discovery([host]), discovery([wsl])),
+        enumerator: fakeEnumerator({
+          [host.key]: { ok: true, sessions: [record('a')], truncated: false },
+          [wsl.key]: { ok: true, sessions: [record('b')], truncated: false }
+        })
+      })
+    )
+    service.onChanged((index) => rowCounts.push(index.outcomes.length))
+
+    await service.list()
+
+    /*
+     * **2 所在ぶんが揃うのを待たずに 1 所在ぶんが届く。**
+     * WSL は 1 所在あたり 1.3〜1.6 秒の UNC I/O を要し、
+     * 揃うのを待つと所在が増えるだけで SC-008 の 2 秒予算を超える。
+     */
+    expect(rowCounts[0]).toBe(1)
+    expect(rowCounts.at(-1)).toBe(2)
   })
 
   it('`refresh()` で全件取得へ移り complete が立つ', async () => {
@@ -499,10 +533,18 @@ describe('createSessionService — 再対応づけ', () => {
     const off = service.onChanged((index) => seen.push(index.fetchedAt))
 
     await service.list()
+    const during = seen.length
     off()
     await service.refresh()
 
-    expect(seen).toEqual([NOW])
+    /*
+     * **本数で縛らない。** 先頭ページは所在ごとに段階的に通知する。
+     * 見たいのは (a) 通知が届くこと、(b) 取得時刻は DTO が運ぶ値であること、
+     * (c) **解除したあとは届かないこと**である。
+     */
+    expect(during).toBeGreaterThan(0)
+    expect(seen.every((value) => value === NOW)).toBe(true)
+    expect(seen).toHaveLength(during)
   })
 })
 

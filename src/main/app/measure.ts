@@ -23,13 +23,15 @@ export type MeasurePoint =
   | 'browse-step'
   | 'browse-step-revalidate'
   // R-2 (セッション列挙)。予算は SC-008。
-  | 'list-sessions-first-page'
+  | 'list-sessions-first-rows'
+  | 'list-sessions-all-location'
+  | 'list-sessions-cached'
   // 先頭ページの**内訳**。SC-008 が予算を定めていないので予算は置かない。
   | 'list-sessions-verify'
   | 'list-sessions-discover'
   | 'list-sessions-enumerate'
+  | 'list-sessions-first-page'
   | 'list-sessions-all'
-  | 'list-sessions-cached'
   | 'fetch-more-sessions'
 
 /**
@@ -64,13 +66,34 @@ const BUDGET_MS: Partial<Record<MeasurePoint, number>> = {
   'browse-step': 300,
   // ただし**有効期間をまたぐ 1 手**は実行状態の再確認を伴うため 2 秒以内。
   'browse-step-revalidate': 2000,
-  // セッション一覧の先頭 50 件の描画は 2 秒以内 (SC-008)。
-  'list-sessions-first-page': 2000,
-  // 1 所在あたり 700 件規模の全件取得完了は 10 秒以内 (SC-008)。
-  'list-sessions-all': 10_000,
+  /*
+   * セッション一覧の**先頭 50 件の描画**は 2 秒以内 (SC-008)。
+   *
+   * **所在ごとの段階描画の下で測る** (2026-09-18 の人間判断)。
+   * 所在 1 件の先頭ページが届くたびに画面へ流すため、
+   * 「先頭 50 件が出そろった時点」が SC-008 の言う描画である。
+   * **全所在ぶんが揃うまでを測ってはならない** — WSL は 1 所在あたり 1.3〜1.6 秒の
+   * UNC I/O を要し、所在が増えるだけで予算を超える。
+   * 所在を全部出しても 50 件に届かない場合は、出し終えた時点で測る。
+   */
+  'list-sessions-first-rows': 2000,
+  /*
+   * **1 所在あたり** 700 件規模の全件取得完了は 10 秒以内 (SC-008)。
+   *
+   * **合計に与えてはならない** (2026-09-18 の人間判断)。
+   * 以前は `list-sessions-all` (全所在の合計) に置いていたが、
+   * SC-008 が定めているのは 1 所在あたりである。
+   * 合計に置くと、所在が増えるだけで SC-008 が求めていない超過を報告する
+   * (実測: 3 所在合計 11,023 ms / 最大の 1 所在は 277 件で約 7 秒)。
+   */
+  'list-sessions-all-location': 10_000,
   // キャッシュヒット時の再表示は 100 ミリ秒以内 (SC-008)。
   'list-sessions-cached': 100
   /*
+   * **`list-sessions-first-page` と `list-sessions-all` に予算を置かない。**
+   * どちらも**全所在の合計**であり、SC-008 が定めた単位ではない。
+   * 内訳として経過時間だけを出す。
+   *
    * **`fetch-more-sessions` に予算を置かない。**
    * SC-008 は先頭ページ / 全件 / キャッシュヒットの 3 つだけを定めており、
    * 続きの取得には予算が無い。別の計測点の予算を流用すると、

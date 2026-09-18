@@ -35,8 +35,13 @@ export const ENUMERATE_SESSIONS_MODULE_PATH: string = enumerateSessionsModulePat
  * **子の本体は経路を知らない。** 選択は `src/agents/transport.ts` に閉じてあり、
  * 標準入出力の経路が単独起動の形を保っている (Principle VII / AD-010 / SH-094)。
  *
- * **応答は標準出力で受ける。** `postMessage` の往復にしてもよいが、
- * 標準出力なら**単独起動のときと同じ経路**になり、親側の読み取りを 1 通りで済ませられる。
+ * **応答は 2 つの経路の両方で受ける。**
+ * 子は**要求を受け取った経路で返す** (`transport.ts` が経路を 1 つ選ぶ)。
+ * Electron 下では `parentPort` に載るので、**標準出力だけを見ていると応答が届かない** —
+ * 実測でこの形にはまり、要求が毎回 timeout に当たった (先頭ページ 31 秒)。
+ *
+ * 標準出力側も購読し続ける。単独起動のときと同じ経路であり、
+ * どちらで返ってきても同じ 1 行として扱えるほうが、経路の選択に親が引きずられない。
  */
 export function createUtilityProcessLauncher(): EnumerationWorkerLauncher {
   return {
@@ -56,6 +61,15 @@ export function createUtilityProcessLauncher(): EnumerationWorkerLauncher {
 
       return {
         onLine(listener) {
+          /*
+           * **`parentPort` 側を先に繋ぐ。** 子が Electron 下で選ぶのはこちらであり、
+           * 見落とすと応答が 1 件も届かない (実測でそうなった)。
+           * 1 メッセージ = 1 行である (`transport.ts` と同じ単位)。
+           */
+          child.on('message', (message: unknown) => {
+            if (typeof message === 'string') listener(message)
+          })
+
           const stdout = child.stdout
           if (stdout === null) {
             /*
