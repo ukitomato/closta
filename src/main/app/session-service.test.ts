@@ -148,6 +148,17 @@ function deps(
 }
 
 /**
+ * 先頭ページの要求だけを数える。
+ *
+ * **全体の件数を数えない。** `list()` は先頭ページを返したあと同じ操作の続きとして
+ * 全件を取る (BE-070) ため、全体の件数はマイクロタスクの進み方で変わる。
+ * 「先頭ページだけを取ったか」を見たいなら scope で絞るのが正しい。
+ */
+function pageRequests(enumerator: FakeEnumerator): EnumerationRequest[] {
+  return enumerator.requests.filter((request) => request.scope.kind === 'page')
+}
+
+/**
  * 背景で走る全件取得を待つ。
  *
  * **実時間を待たない。** `list()` は全件を待たずに返るため、
@@ -218,6 +229,26 @@ describe('createSessionService — list / refresh', () => {
     // 続けて全件が走り、通知で `complete` が立つ。
     expect(enumerator.requests).toHaveLength(2)
     expect(enumerator.requests[1].scope).toEqual({ kind: 'all' })
+  })
+
+  it('完了前に重なった `list()` を束ねる (開発ビルドの二重 effect)', async () => {
+    const target = hostTarget()
+    const enumerator = fakeEnumerator({
+      [target.key]: { ok: true, sessions: [record('a')], truncated: false }
+    })
+    const service = createSessionService(
+      deps({ finder: fakeFinder(discovery([target])), enumerator })
+    )
+
+    /*
+     * `loaded` は取得の**完了後**に立つので、完了前の 2 本目はキャッシュに当たらない。
+     * 実測で先頭ページの取得が 2 回起きた (7,743 ms と 7,390 ms が並んだ)。
+     */
+    const [a, b] = await Promise.all([service.list(), service.list()])
+    await settle()
+
+    expect(pageRequests(enumerator)).toHaveLength(1)
+    expect(a).toEqual(b)
   })
 
   it('2 度目の `list()` は列挙しない (キャッシュはプロセスの寿命。R-10)', async () => {
@@ -355,8 +386,9 @@ describe('createSessionService — 失敗の封じ込め', () => {
 
     const wslRow = index.outcomes.find((o) => o.location.kind === 'wsl')
     expect(wslRow).toMatchObject({ status: 'failed', reasonKey: 'distro-not-running' })
-    // 列挙対象は windows の 1 件だけ。
-    expect(enumerator.requests).toHaveLength(1)
+    // 列挙対象は windows の 1 件だけ。**停止中の所在には 1 件も発行しない。**
+    expect(pageRequests(enumerator)).toHaveLength(1)
+    expect(enumerator.requests.every((r) => r.target.location.kind === 'windows')).toBe(true)
   })
 
   it('`.claude` が無い所在を失敗にせず「履歴なし」にする (FR-012)', async () => {
@@ -403,9 +435,14 @@ describe('createSessionService — 再対応づけ', () => {
     )
 
     await service.list()
-    const index = service.onFoldersChanged()
+    await settle()
+    const before = enumerator.requests.length
 
-    expect(enumerator.requests).toHaveLength(1)
+    const index = service.onFoldersChanged()
+    await settle()
+
+    // **1 件も増えない。** 対応づけだけをやり直す (data-model §7)。
+    expect(enumerator.requests).toHaveLength(before)
     expect(index.groups.flatMap((g) => g.sessions).map((s) => s.sessionId)).toEqual(['a'])
   })
 
@@ -419,9 +456,13 @@ describe('createSessionService — 再対応づけ', () => {
     )
 
     await service.list()
-    service.onRuntimesChanged()
+    await settle()
+    const before = enumerator.requests.length
 
-    expect(enumerator.requests).toHaveLength(1)
+    service.onRuntimesChanged()
+    await settle()
+
+    expect(enumerator.requests).toHaveLength(before)
   })
 
   it('総数が保たれる (SC-006)', async () => {
@@ -578,9 +619,13 @@ describe('createSessionService — fetchMore', () => {
     )
 
     await service.list()
+    await settle()
+    const before = enumerator.requests.length
+
     const index = await service.fetchMore('wsl:Nope#0', 50)
 
-    expect(enumerator.requests).toHaveLength(1)
+    // **列挙を発行しない。** キャッシュをそのまま返す。
+    expect(enumerator.requests).toHaveLength(before)
     expect(index.groups.flatMap((g) => g.sessions).map((s) => s.sessionId)).toEqual(['a'])
   })
 

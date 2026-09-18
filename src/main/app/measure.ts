@@ -24,6 +24,10 @@ export type MeasurePoint =
   | 'browse-step-revalidate'
   // R-2 (セッション列挙)。予算は SC-008。
   | 'list-sessions-first-page'
+  // 先頭ページの**内訳**。SC-008 が予算を定めていないので予算は置かない。
+  | 'list-sessions-verify'
+  | 'list-sessions-discover'
+  | 'list-sessions-enumerate'
   | 'list-sessions-all'
   | 'list-sessions-cached'
   | 'fetch-more-sessions'

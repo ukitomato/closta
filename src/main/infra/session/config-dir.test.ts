@@ -9,10 +9,9 @@ import {
 } from '@domain/runtime/path-types'
 
 import {
-  CLAUDE_CONFIG_DIR_ENV,
   CONFIG_DIR_NAME,
   ENUMERATION_ENV_ALLOWLIST,
-  buildEnumerationEnv,
+  buildWorkerEnv,
   configDirEnvValue,
   hostConfigDir,
   runtimeConfigDir
@@ -76,9 +75,9 @@ describe('configDirEnvValue', () => {
   })
 })
 
-describe('buildEnumerationEnv', () => {
+describe('buildWorkerEnv', () => {
   it('許可リスト外のキーを 0 件にする (SC-016)', () => {
-    const env = buildEnumerationEnv('C:\\x\\.claude', {
+    const env = buildWorkerEnv({
       SystemRoot: 'C:\\Windows',
       ANTHROPIC_API_KEY: 'secret',
       AWS_SECRET_ACCESS_KEY: 'secret',
@@ -86,31 +85,22 @@ describe('buildEnumerationEnv', () => {
       HOME: 'C:\\Users\\y'
     })
 
-    const unexpected = Object.keys(env).filter(
-      (key) => key !== CLAUDE_CONFIG_DIR_ENV && !ENUMERATION_ENV_ALLOWLIST.includes(key)
-    )
+    const unexpected = Object.keys(env).filter((key) => !ENUMERATION_ENV_ALLOWLIST.includes(key))
 
     expect(unexpected).toEqual([])
     expect(env).not.toHaveProperty('ANTHROPIC_API_KEY')
     expect(env).not.toHaveProperty('PATH')
   })
 
-  it('config ディレクトリを必ず載せる', () => {
-    const env = buildEnumerationEnv('C:\\x\\.claude', {})
+  it('**config ディレクトリを載せない** (AD-030 §2)', () => {
+    // 要求ごとに渡すため、環境変数からは外れた。
+    const env = buildWorkerEnv({ SystemRoot: 'C:\\Windows' })
 
-    expect(env[CLAUDE_CONFIG_DIR_ENV]).toBe('C:\\x\\.claude')
-  })
-
-  it('親環境が同名のキーを持っていても上書きされない', () => {
-    const env = buildEnumerationEnv('C:\\correct\\.claude', {
-      CLAUDE_CONFIG_DIR: 'C:\\wrong\\.claude'
-    })
-
-    expect(env[CLAUDE_CONFIG_DIR_ENV]).toBe('C:\\correct\\.claude')
+    expect(env).not.toHaveProperty('CLAUDE_CONFIG_DIR')
   })
 
   it('親環境のキーの大小を無視して拾い、許可リストの綴りに正規化する', () => {
-    const env = buildEnumerationEnv('C:\\x\\.claude', { Temp: 'C:\\Temp', SYSTEMROOT: 'C:\\W' })
+    const env = buildWorkerEnv({ Temp: 'C:\\Temp', SYSTEMROOT: 'C:\\W' })
 
     expect(env.TEMP).toBe('C:\\Temp')
     expect(env.SystemRoot).toBe('C:\\W')
@@ -119,12 +109,10 @@ describe('buildEnumerationEnv', () => {
   })
 
   it('値が未定義のキーを載せない', () => {
-    const env = buildEnumerationEnv('C:\\x\\.claude', { TEMP: undefined })
-
-    expect(env).not.toHaveProperty('TEMP')
+    expect(buildWorkerEnv({ TEMP: undefined })).not.toHaveProperty('TEMP')
   })
 
-  it('親環境が空でも config ディレクトリだけで成立する', () => {
-    expect(Object.keys(buildEnumerationEnv('C:\\x\\.claude', {}))).toEqual([CLAUDE_CONFIG_DIR_ENV])
+  it('親環境が空なら空を返す', () => {
+    expect(buildWorkerEnv({})).toEqual({})
   })
 })

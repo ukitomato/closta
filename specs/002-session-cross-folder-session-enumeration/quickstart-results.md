@@ -2,23 +2,25 @@
 
 **Spec**: [spec.md](spec.md) | **Quickstart**: [quickstart.md](quickstart.md) | **Tasks**: SH-089
 
-**status**: 進行中 (US-1 の BE 経路まで)
+**status**: 進行中 (AD-030 の実装まで。実機での再計測を待つ)
 
 ---
 
 ## V-0: 列挙プロセスの単独起動 (SH-094 / Principle VII / AD-010)
 
-**日付**: 2026-09-17
+**日付**: 2026-09-17 (初版) / **2026-09-18 に再実施** (AD-030 でプロトコルが変わったため)
 **手段**: `electron-vite build` の出力 `out/main/enumerate-sessions-*.js` を
-**Electron を介さず `node` で直接起動**し、標準出力の 1 行を読む。
+**Electron を介さず `node` で直接起動**し、**標準入力に要求の行を流して**
+標準出力の 1 行を読む。
 
 ```
-node out/main/enumerate-sessions-<hash>.js \
-  --target-key=<key> --scope=page --limit=50 --offset=0
+echo '{"kind":"enumerate","version":2,"id":99,"targetKey":"host#0",
+       "configDir":"...","scope":{"kind":"page","limit":3,"offset":0}}' |
+  node out/main/enumerate-sessions-<hash>.js
 ```
 
-環境変数は **`CLAUDE_CONFIG_DIR` / `SystemRoot` / `TEMP` の 3 つだけ**を与えた
-(`ENUMERATION_ENV_ALLOWLIST` + config ディレクトリ。FR-050 / SC-016)。
+環境変数は **`SystemRoot` / `TEMP` の 2 つだけ**を与えた
+(`ENUMERATION_ENV_ALLOWLIST`。**config ディレクトリは要求の行に載る**。AD-030 §2)。
 
 | 確認項目 | 結果 |
 | --- | --- |
@@ -28,12 +30,17 @@ node out/main/enumerate-sessions-<hash>.js \
 | 標準エラー | **空** |
 | ホストの config ディレクトリ | 成立 |
 | **WSL の config ディレクトリ (UNC 経路)** | **成立** |
+| **新プロトコルでの再確認 (2026-09-18)** | **成立**。1,076 ms で応答し、要求の `id` が echo された |
 
-**`process.parentPort` を使わずに成立している。** Principle VII Statement 後半
+**標準入出力の経路だけで成立している。** Principle VII Statement 後半
 (「単独起動でき、標準入出力経由でプロトコルを話せる形を保つ」) を、
 機械検証ではなく**実際の起動**で確認した — `parentPort` は import を伴わないため
 ESLint にも依存グラフにも現れず、**機械検証が緑でも守れていない形になりうる**
 ([AD-028](../../docs/decisions/0028-session-enumeration-process-and-unc-handoff.md) Consequences)。
+
+**AD-030 §5 で `parentPort` の経路が加わった**が、選択は `src/agents/transport.ts` の
+1 モジュールに閉じてあり、**本体は経路を知らない**。
+この確認は標準入出力側の経路が生きていることを測っている。
 
 ---
 
@@ -108,6 +115,92 @@ research R-01 は「冷えた子プロセスで import + 1 回の列挙 = 2,171 
 | `out/main/enumerate-sessions-*.js` の `require` 一覧 | `@anthropic-ai/claude-agent-sdk` の **1 件だけ** |
 | 同バンドル内の `electron` 参照 | **0 件** |
 | Electron 抜きの `node` での列挙 | **成立** (上記 V-0) |
+
+---
+
+## SH-074: SC-008 の計測 (実機 / 開発ビルドの計測ログ)
+
+**日付**: 2026-09-18
+**手段**: `npm run dev` で起動し、画面から「セッション」を開く。
+main が出力する計測ログの値で判定する (SC-008 の計測経路)。
+
+### 実機の値
+
+| 計測点 | 実測 | 予算 | 判定 |
+| --- | --- | --- | --- |
+| `list-sessions-verify` (内訳) | 1,631 ms | — | 実行状態の確認 (`wsl.exe` の固定費) |
+| `list-sessions-discover` (内訳) | 1,673 ms | — | うち探索そのものは**約 40 ms** (verify を含む値) |
+| **`list-sessions-enumerate`** (内訳) | **10,653 ms** | — | **ここが支配的** |
+| `list-sessions-first-page` | **12,331 ms** | 2,000 ms | **OVER** |
+| `list-sessions-all` | 12,695 ms | 10,000 ms | **OVER** |
+| `list-sessions-cached` | **0 ms** | 100 ms | **ok** |
+
+**キャッシュヒットの条件だけは満たしている。**
+
+### 到達までに直した 2 件のバグ (どちらも実機でしか出ない)
+
+| 症状 | 原因 | 修正 |
+| --- | --- | --- |
+| 先頭ページが毎回 **32 秒** | 子プロセスが応答を書いても**終了しない**。`utilityProcess` は親との接続がイベントループを保持する。素の `node` では終了するため **SH-094 の単独起動確認では成立していた** | 応答の 1 行で確定して子を終了させる。標準エラーも読み捨てる (読み手のいないパイプが埋まると子が書き終えられない) |
+| 先頭ページの取得が **2 回**走る | `loaded` は取得の**完了後**に立つため、開発ビルドの二重 effect で 2 本目がキャッシュに当たらない (実測 7,743 ms と 7,390 ms が並んだ) | 実行中の先頭ページ取得に合流させる |
+
+### 子プロセス 1 件あたりの費用 (Electron の `utilityProcess`)
+
+捨てのスクリプトで `utilityProcess.fork` から**最初の応答が届くまで**を測った。
+
+| 条件 | 実測 |
+| --- | --- |
+| ホストの config ディレクトリ 1 件だけ (取得 2 件) | **2,506 ms** |
+| ホストの config ディレクトリ 1 件だけ (取得 50 件) | **2,710 ms** |
+| WSL の config ディレクトリ 1 件だけ (UNC。取得 50 件) | **4,193 ms** / 2 回目 4,104 ms |
+| ホスト + WSL を**同時**に 2 件 | ホスト 2,880 ms / WSL **10,470 ms** |
+| 3 件を**同時** | 2,952 ms / 10,022 ms / **11,419 ms** |
+
+### 読み取れること
+
+**1. 予算 2 秒は、子プロセス 1 件だけでも届かない。**
+ホストの config ディレクトリから 2 件取るだけで **2,506 ms** かかる。
+内訳のほとんどは **Electron の utility process の起動と SDK の import** であり、
+列挙そのものではない (同じバンドルを素の `node` で走らせると合計 1,262 ms)。
+**「所在が 1 つでも 2 秒に収まらない」**ので、対象を減らしても並べ替えても解決しない。
+
+**2. 並行に起こすと遅くなる。**
+WSL 単独 4,193 ms が、ホストと同時に起こすと **10,470 ms** になった (2.5 倍)。
+contracts C-6 は「異なる列挙対象は並行して実行してよい」と許しているが、
+**実測では許すだけで得にならない** — utility process の起動が資源を食い合う。
+直列 (2,710 + 4,193 = 約 6.9 秒) のほうが速く、ばらつきも小さい。
+
+**3. research R-01 の前提は素の `node` の値だった。**
+「冷えた子プロセスで import + 1 回の列挙 = 2,171 ms」は plain node の測定であり、
+`utilityProcess` では同じ作業が 2,506〜4,193 ms になる。
+[AD-028](../../docs/decisions/0028-session-enumeration-process-and-unc-handoff.md) §1 が
+「要求 1 回の短命プロセス」を選んだ判断の前提に、この差は入っていなかった。
+
+### 人間判断 (2026-09-18)
+
+**予算は変えない。実装を予算に合わせる。**
+選択されたのは「**常駐 1 プロセスで直列**」であり、
+[AD-030](../../docs/decisions/0030-enumeration-runs-in-one-resident-process.md) として起票した。
+
+判断の材料になった追加の実測:
+
+| 測定 | 結果 |
+| --- | --- |
+| `utilityProcess` の**起動だけ** (SDK を読まない) | 2,704〜2,839 ms |
+| `ELECTRON_RUN_AS_NODE` での**起動だけ** | 2,784〜2,938 ms |
+| 素の `node` での**起動だけ** | 909〜959 ms |
+| 親の env を全部渡した場合の起動 | 2,618 ms (**許可リストは原因ではない**) |
+| **1 プロセスで直列に 2 所在 × 2 巡** | **合計 1,083 ms** (import 165 / ホスト 82・40 / WSL 512・280) |
+
+**1 プロセスで env を書き換えながら直列に読める**ことを確かめた —
+ホストの 2 回が一致し、WSL の 2 回が一致し、2 つの識別子集合は交わらなかった。
+SDK は config ディレクトリの**値をキーに**メモ化するため、
+env を書き換えれば正しく別の結果が返る。
+
+**AD-021 §3 の却下は撤回していない。** 「並行に列挙する限り危険」という前提を
+明示したうえで、**直列という条件つき**で読み替えた (AD-030 §3)。
+
+**実機での再計測は未実施** — AD-030 の実装後の値をここに追記する。
 
 ---
 

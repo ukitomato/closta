@@ -33,18 +33,17 @@ import type { HostPath, PathResult, RuntimePath } from '@domain/runtime/path-typ
  */
 export const CONFIG_DIR_NAME = '.claude'
 
-/**
- * SDK が config ディレクトリを読む唯一の経路 (research R-01)。
+/*
+ * **`CLAUDE_CONFIG_DIR` の綴りはここに無い。**
  *
- * **この文字列リテラルが現れてよいのは本モジュールだけである**
- * (contracts/ipc-session-list.md の「境界に出さない値」の表)。
- * renderer から config ディレクトリを指定できる API を作らないことと合わせて、
- * 「どのディレクトリを列挙するか」を決められる場所を main 側の 1 箇所に閉じる。
+ * [AD-030](../../../../docs/decisions/0030-enumeration-runs-in-one-resident-process.md) §2 で
+ * **config ディレクトリを要求ごとに渡す**形に変えたため、起動時の環境変数から外れた。
+ * 綴りを持つのは `src/agents/enumerate-sessions.ts` の 1 箇所だけである
+ * (許可リストが 2 箇所から 1 箇所に減った)。
  */
-export const CLAUDE_CONFIG_DIR_ENV = 'CLAUDE_CONFIG_DIR'
 
 /**
- * 列挙プロセスに渡してよい親環境のキー。
+ * 常駐する列挙プロセスに渡してよい親環境のキー。
  *
  * **親環境を継承させない** ([AD-028](../../../../docs/decisions/0028-session-enumeration-process-and-unc-handoff.md) Consequences)。
  * X-3 で Provider の資格情報が main の環境に入ったとき、
@@ -53,6 +52,8 @@ export const CLAUDE_CONFIG_DIR_ENV = 'CLAUDE_CONFIG_DIR'
  * `PATH` を入れていない — 子プロセスは絶対パスで起動され、
  * 列挙は SDK 呼び出しだけで外部コマンドを起こさないため不要である。
  * 不足が判明した場合は**このリストに追記する**形でしか増やせない (SC-016)。
+ *
+ * **config ディレクトリはここに含まれない** (AD-030 §2)。要求ごとに渡す。
  */
 export const ENUMERATION_ENV_ALLOWLIST: readonly string[] = ['SystemRoot', 'windir', 'TEMP', 'TMP']
 
@@ -86,7 +87,7 @@ export function configDirEnvValue(configDir: HostPath | RuntimePath): PathResult
 }
 
 /**
- * 列挙プロセスの環境変数を組み立てる (FR-050 / SC-016)。
+ * 常駐する列挙プロセスの環境変数を組み立てる (FR-050 / SC-016)。
  *
  * **純粋関数として切り出してある** — プロセスを起こさずに
  * 「許可リスト外のキーが 0 件」を assert できる形にするためである。
@@ -94,9 +95,11 @@ export function configDirEnvValue(configDir: HostPath | RuntimePath): PathResult
  * Windows の環境変数名は**大小を区別しない**ため、親環境の走査は
  * 大小を無視した照合で行い、**出力は許可リストの綴りに正規化する**。
  * 完全一致で引くと `Temp` しか持たない親環境から `TEMP` を取り落とす。
+ *
+ * **config ディレクトリを載せない** (AD-030 §2)。要求ごとに渡すため、
+ * 1 つのプロセスが複数の config ディレクトリを扱える。
  */
-export function buildEnumerationEnv(
-  configDirValue: string,
+export function buildWorkerEnv(
   parentEnv: Readonly<Record<string, string | undefined>>
 ): Record<string, string> {
   const env: Record<string, string> = {}
@@ -110,7 +113,5 @@ export function buildEnumerationEnv(
     }
   }
 
-  // **最後に置く。** 親環境が同名のキーを持っていても上書きされない順序にする。
-  env[CLAUDE_CONFIG_DIR_ENV] = configDirValue
   return env
 }

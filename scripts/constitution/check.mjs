@@ -585,6 +585,14 @@ function hasPackagedGate() {
   const apiCallRe = new RegExp(String.raw`\b(?:${UNC_API_NAMES.join('|')})\s*\(`)
   for (const src of sources) {
     if (!UNC_FORBIDDEN_IN.some((dir) => src.file.startsWith(dir))) continue
+    /*
+     * **テストは除外する** (項目 12 と揃える)。
+     * 規則が禁じているのは「agents の実装が UNC を知っていること」である。
+     * 「受け取った UNC 値をそのまま素通しする」ことを確かめるテストは、
+     * **規則が守られていることの証拠**であって違反ではない。
+     * 除外しないと素通しを検証できなくなる (実測でこのテストが引っかかった)。
+     */
+    if (UNC_LITERAL_EXEMPT_SUFFIXES.some((suffix) => src.file.endsWith(suffix))) continue
 
     for (const literal of stringLiterals(src.code)) {
       for (const pattern of UNC_LITERAL_PATTERNS) {

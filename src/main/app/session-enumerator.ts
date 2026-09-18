@@ -1,10 +1,9 @@
 import {
-  ARG_LIMIT,
-  ARG_OFFSET,
-  ARG_SCOPE,
-  ARG_TARGET_KEY,
+  PROTOCOL_VERSION,
   decodeResponse,
-  type EnumerationResponse
+  encodeRequest,
+  type EnumerationRequestLine,
+  type EnumerationResponseLine
 } from '@agents/protocol'
 import { checkVerified } from '@domain/runtime/verified-running'
 import type {
@@ -14,84 +13,90 @@ import type {
 } from '@domain/session/interfaces'
 import type { FailureReason } from '@domain/session/target'
 
-import { buildEnumerationEnv, configDirEnvValue } from '../infra/session/config-dir'
+import { buildWorkerEnv, configDirEnvValue } from '../infra/session/config-dir'
 
 /**
- * 列挙プロセスの起動と結線 (BE-025 / BE-025b / contracts C-1 / C-5 / C-6)。
+ * 常駐した列挙プロセスの結線 (BE-025 / BE-025b / AD-030)。
  *
  * | 規則 | 根拠 |
  * |---|---|
- * | 列挙対象 1 件につき 1 プロセス。結果を返して終了する | AD-028 §1 (「要求 1 回」の寿命) |
- * | **確認済みの値が無ければ `wsl:<D>` の起動を発行しない** | FR-008 / SC-002 / C-1 |
+ * | **プロセスは 1 つ。要求を直列に処理する** | AD-030 §1 |
+ * | **確認済みの値が無ければ `wsl:<D>` の要求を出さない** | FR-008 / SC-002 / C-1 |
  * | 環境変数は**許可リストのみ**。親環境を継承させない | FR-050 / SC-016 |
- * | timeout は**列挙対象ごと**に持つ | C-5 |
- * | 終了は `kill()` のみ。**シグナルを選べる API は無い** | C-5 |
+ * | timeout は**要求ごと**に持つ | C-5 |
  * | 同じ対象への並行要求は**束ねる**。逐次の連打には最小間隔 | C-6 |
- * | 同時プロセス数に上限 | C-6 |
+ * | **落ちたら作り直す。** ただし無限には作り直さない | AD-030 §7 |
+ *
+ * **直列であることが環境変数のレースを消している** (AD-030 §3)。
+ * 子は要求ごとに config ディレクトリを環境変数へ設定するため、
+ * **2 件を重ねて送ってはならない。** ここで 1 件ずつ送ることが唯一の担保である。
  *
  * **`electron` を import しない。** 子プロセスを実際に起こす層は
- * `enumerator-spawner.ts` に分けてあり、本ファイルは `EnumerationLauncher` を注入で受け取る。
- * そうしないと方針 (timeout / 上限 / 束ね / クールダウン / ゲート) を
- * **Electron を立てずに検証できない** (BE-025c / AD-028 §4 の訂正)。
+ * `enumerator-spawner.ts` に分けてあり、本ファイルは `EnumerationWorkerLauncher` を
+ * 注入で受け取る。そうしないと方針 (待ち行列 / timeout / 作り直し / ゲート) を
+ * **Electron を立てずに検証できない** (BE-025c)。
  *
- * **所在の判別は `Location` の値で行う。** 文字列リテラルを条件に書かない —
- * 判別が 2 つの表現を持つと、名前空間の追加時に片方だけが残る。
+ * **所在の判別は `Location` の値で行う。** 文字列リテラルを条件に書かない。
  *
- * **`before-quit` の登録はここで行わない。** `killAll()` を公開し、
- * 登録は `composition-root.ts` が行う (BE-031)。ここで `app` の event を掴むと
- * `electron` への依存が戻る。
+ * **`before-quit` の登録はここで行わない。** `dispose()` を公開し、
+ * 登録は `composition-root.ts` が行う (BE-031)。
  */
 
 /**
- * 終了を要求したあと、終了の通知を待つ猶予 (C-5)。
+ * 要求 1 件の上限時間 (C-5)。
  *
- * **戻り値と終了通知の両方を確認する。** 猶予内に来なければ記録して
- * 監視対象から外す — 掴んだままにすると同時数の枠が永久に埋まる。
+ * **短命プロセスだった頃より短くてよい。** 起動費用を含まないため、
+ * 実測では 2 所在で 600 ms 程度である (AD-030 の実測)。
  */
-export const KILL_GRACE_MS = 2_000
-
-/** 同時に起こす列挙プロセスの上限 (C-6)。所在が多いホストで数十プロセスを同時に起こさない。 */
-export const MAX_CONCURRENT_ENUMERATIONS = 3
+export const ENUMERATION_TIMEOUT_MS = 10_000
 
 /**
  * 同一列挙対象への連続要求の最小間隔 (C-6)。
  *
  * **束ねは並行要求にしか効かない。** 1 本ずつ待ってから連打されると、
- * 束ねを通り抜けて UNC I/O を伴う子プロセスが無制限に起きる。
+ * 束ねを通り抜けて UNC I/O が無制限に走る。
  * renderer は未信頼であり (AD-023)、UI のバグでも侵害でも同じ経路になる。
  */
 export const ENUMERATION_COOLDOWN_MS = 1_000
 
 /**
- * 子プロセス 1 つ分の窓。**テストで差し替える**ため型で切る。
+ * 連続して落ちたときに作り直すのをやめる回数 (AD-030 §7)。
+ *
+ * **落ち続けるプロセスを起こし続けない。** 1 回でもうまく動いたら数え直す。
+ */
+export const MAX_CONSECUTIVE_CRASHES = 3
+
+/**
+ * 常駐プロセス 1 つ分の窓。**テストで差し替える**ため型で切る。
  *
  * **メソッド名に `spawn` を使わない。** 検証項目 7 (Principle VI) は
  * プロセス起動 API の名前を**文字列として**探すため、同名のメソッドを置くと
  * 許可リスト外のモジュールでの起動として発火する。実測で発火した。
- * 迂回を防ぐために名前で見る作りになっており、こちらが名前を譲るのが正しい。
  */
-export interface EnumerationChild {
-  /** 標準出力の 1 行ごと。 */
+export interface EnumerationWorker {
+  /** 応答の 1 行ごと。 */
   onLine(listener: (line: string) => void): void
   /** 終了。`code` が `null` なら異常終了。 */
   onExit(listener: (code: number | null) => void): void
+  /** 要求の 1 行を送る。**書けたかどうかを返す。** */
+  send(line: string): boolean
   /** 終了させる。**戻り値を捨てない** (C-5)。 */
   kill(): boolean
 }
 
-export interface EnumerationLauncher {
-  launch(args: readonly string[], env: Record<string, string>): EnumerationChild
+export interface EnumerationWorkerLauncher {
+  launch(env: Record<string, string>): EnumerationWorker
 }
 
 export interface SessionEnumeratorDeps {
-  readonly launcher: EnumerationLauncher
+  readonly launcher: EnumerationWorkerLauncher
   /** 待機。**注入する** — 実時間を待つテストを書かないため。 */
   readonly wait: (ms: number) => Promise<void>
   readonly now: () => number
   /** 親環境。**注入する** — グローバル参照は lint も検証スクリプトも素通りする。 */
   readonly parentEnv: Readonly<Record<string, string | undefined>>
-  readonly maxConcurrent?: number
   readonly cooldownMs?: number
+  readonly maxCrashes?: number
 }
 
 function failure(reasonKey: FailureReason): EnumerationResult {
@@ -99,40 +104,13 @@ function failure(reasonKey: FailureReason): EnumerationResult {
 }
 
 /**
- * 応答を結果に写す。
- *
- * **`targetKey` の一致を確かめる。** 子プロセスの取り違え (古いバンドルや
- * 枠の使い回し) を、値の検査で気付ける形にする。
- */
-function toResult(response: EnumerationResponse, targetKey: string): EnumerationResult {
-  if (response.targetKey !== targetKey) return failure('enumeration-failed')
-  if (response.kind === 'error') return failure(response.reasonKey)
-  return { ok: true, sessions: response.sessions, truncated: response.truncated }
-}
-
-/**
- * 起動引数を組み立てる (C-2)。**純粋関数**であり、プロセスを起こさずに検証できる。
- *
- * **config ディレクトリを引数に載せない。** 環境変数で渡す唯一の経路を保つ
- * (FR-042 / ipc-session-list.md の「境界に出さない値」)。
- */
-export function buildEnumerationArgs(request: EnumerationRequest): readonly string[] {
-  const args = [`${ARG_TARGET_KEY}=${request.target.key}`]
-  if (request.scope.kind === 'all') {
-    args.push(`${ARG_SCOPE}=all`)
-    return args
-  }
-  args.push(`${ARG_SCOPE}=page`)
-  args.push(`${ARG_LIMIT}=${request.scope.limit}`)
-  args.push(`${ARG_OFFSET}=${request.scope.offset}`)
-  return args
-}
-
-/**
- * 起動してよいかを判定する (BE-025b / FR-008)。**純粋関数**である。
+ * 要求を出してよいかを判定する (BE-025b / FR-008)。**純粋関数**である。
  *
  * 所在が `windows` なら確認済みの値は要らない。それ以外なら
  * **期限内であり、かつ同じディストロについての確認である**ことを要求する。
+ *
+ * **常駐プロセスでも要求ごとに掛ける。** ゲートの対象はプロセスの起動ではなく
+ * **UNC へのアクセスを起こす行為**であり、それは要求ごとに起きる。
  */
 export function checkLaunchAllowed(request: EnumerationRequest): FailureReason | null {
   if (request.target.location.kind === 'windows') return null
@@ -143,111 +121,152 @@ export function checkLaunchAllowed(request: EnumerationRequest): FailureReason |
 }
 
 /**
- * チャンクを行に切る。
+ * 要求の行を組み立てる (C-2)。**純粋関数**であり、プロセスを起こさずに検証できる。
  *
- * **改行で完結した分だけを渡す。** 応答は 1 行の JSON なので、
- * 途中のチャンクで解釈を試すと必ず失敗する。
+ * **config ディレクトリは要求に載る** (AD-030 §2)。起動時の環境変数から外れたので、
+ * 1 つのプロセスが複数の config ディレクトリを扱える。
  */
-export function createLineAssembler(onLine: (line: string) => void): (chunk: string) => void {
-  let buffer = ''
-  return (chunk) => {
-    buffer += chunk
-    let index = buffer.indexOf('\n')
-    while (index >= 0) {
-      const line = buffer.slice(0, index).trim()
-      buffer = buffer.slice(index + 1)
-      if (line.length > 0) onLine(line)
-      index = buffer.indexOf('\n')
-    }
+export function buildRequestLine(
+  id: number,
+  request: EnumerationRequest,
+  configDir: string
+): EnumerationRequestLine {
+  return {
+    kind: 'enumerate',
+    version: PROTOCOL_VERSION,
+    id,
+    targetKey: request.target.key,
+    configDir,
+    scope: request.scope
   }
 }
 
 export interface SessionEnumeratorHandle extends SessionEnumerator {
-  /** 生存中のプロセスをすべて終了させる。`before-quit` から呼ぶ (C-5)。 */
-  killAll(): void
+  /**
+   * 常駐プロセスを先に起こす (AD-030 §6)。
+   *
+   * **起動費用をアプリ起動時に払う。** 一覧を開く操作の費用を列挙だけにする。
+   * 呼ばなくても動く — 最初の要求の時点で起こす (遅いが動く)。
+   */
+  warmUp(): void
+  /** 常駐プロセスを終了させる。`before-quit` から呼ぶ (C-5)。 */
+  dispose(): void
 }
 
 export function createSessionEnumerator(deps: SessionEnumeratorDeps): SessionEnumeratorHandle {
-  const maxConcurrent = deps.maxConcurrent ?? MAX_CONCURRENT_ENUMERATIONS
   const cooldownMs = deps.cooldownMs ?? ENUMERATION_COOLDOWN_MS
+  const maxCrashes = deps.maxCrashes ?? MAX_CONSECUTIVE_CRASHES
 
   /** 実行中の要求。**同じ対象への並行要求はここに合流する** (C-6)。 */
   const inflight = new Map<string, Promise<EnumerationResult>>()
-  /** 対象ごとの最終起動時刻。逐次の連打の間隔を測る。 */
+  /** 対象ごとの最終要求時刻。逐次の連打の間隔を測る。 */
   const lastStartedAt = new Map<string, number>()
-  /** 生存中のプロセス。`killAll()` の対象。 */
-  const alive = new Set<EnumerationChild>()
 
-  let running = 0
-  const waiters: (() => void)[] = []
+  let worker: EnumerationWorker | null = null
+  let crashes = 0
+  let nextId = 1
 
-  async function acquireSlot(): Promise<void> {
-    if (running < maxConcurrent) {
-      running += 1
+  /** 応答待ちの要求。**同時に 1 件だけ**である (AD-030 §3)。 */
+  let pending: {
+    readonly id: number
+    readonly settle: (result: EnumerationResult) => void
+  } | null = null
+
+  /** 直列化の鎖。**次の要求は前の応答を待つ。** */
+  let chain: Promise<unknown> = Promise.resolve()
+
+  function handleLine(line: string): void {
+    const response: EnumerationResponseLine | null = decodeResponse(line)
+    const current = pending
+    if (current === null || response === null) return
+    /*
+     * **識別子で突き合わせる。** `targetKey` では足りない —
+     * 同じ対象への要求が続けて 2 回来ることがある (先頭ページ → 続き)。
+     */
+    if (response.id !== current.id) return
+
+    crashes = 0
+    if (response.kind === 'error') {
+      current.settle(failure(response.reasonKey))
       return
     }
-    await new Promise<void>((resolve) => waiters.push(resolve))
-    running += 1
+    current.settle({ ok: true, sessions: response.sessions, truncated: response.truncated })
   }
 
-  function releaseSlot(): void {
-    running -= 1
-    const next = waiters.shift()
-    if (next !== undefined) next()
+  function handleExit(): void {
+    worker = null
+    crashes += 1
+    /*
+     * **実行中だった要求はその要求の失敗にする** (AD-030 §7)。
+     * 待ち行列に残っているものは、作り直した後のプロセスで処理される。
+     */
+    pending?.settle(failure('enumeration-failed'))
   }
 
-  async function runOnce(request: EnumerationRequest): Promise<EnumerationResult> {
+  function ensureWorker(): EnumerationWorker | null {
+    if (worker !== null) return worker
+    /*
+     * **落ち続けるプロセスを起こし続けない** (AD-030 §7)。
+     * 1 回でも応答が返れば数え直す (`handleLine`)。
+     */
+    if (crashes >= maxCrashes) return null
+
+    /*
+     * **親環境を渡す部分をここに閉じる。** 許可リストの適用は
+     * `config-dir.ts` の純粋関数が行い、この 1 行だけが親環境に触れる。
+     */
+    const next = deps.launcher.launch(buildWorkerEnv(deps.parentEnv))
+    next.onLine(handleLine)
+    next.onExit(handleExit)
+    worker = next
+    return next
+  }
+
+  /** 1 件を送って応答を待つ。**呼び出しは鎖の中に限る** (直列化の担保)。 */
+  async function exchange(request: EnumerationRequest): Promise<EnumerationResult> {
     const envValue = configDirEnvValue(request.target.configDir)
     if (!envValue.ok) return failure('enumeration-failed')
 
-    const env = buildEnumerationEnv(envValue.path, deps.parentEnv)
+    const active = ensureWorker()
+    if (active === null) return failure('enumeration-failed')
 
-    await acquireSlot()
-    try {
-      return await new Promise<EnumerationResult>((resolve) => {
-        const child = deps.launcher.launch(buildEnumerationArgs(request), env)
-        alive.add(child)
+    const id = nextId
+    nextId += 1
 
-        let settled = false
-        let response: EnumerationResponse | null = null
-        let timer: ReturnType<typeof setTimeout> | null = null
-        let graceTimer: ReturnType<typeof setTimeout> | null = null
+    return new Promise<EnumerationResult>((resolve) => {
+      let settled = false
+      let timer: ReturnType<typeof setTimeout> | null = null
 
-        const settle = (result: EnumerationResult): void => {
-          if (settled) return
-          settled = true
-          if (timer !== null) clearTimeout(timer)
-          if (graceTimer !== null) clearTimeout(graceTimer)
-          alive.delete(child)
-          resolve(result)
-        }
+      const settle = (result: EnumerationResult): void => {
+        if (settled) return
+        settled = true
+        if (timer !== null) clearTimeout(timer)
+        pending = null
+        resolve(result)
+      }
 
-        // **最初の妥当な 1 行だけを採る。** 以降は無視する。
-        child.onLine((line) => {
-          if (response === null) response = decodeResponse(line)
-        })
+      pending = { id, settle }
 
-        child.onExit(() => {
-          if (response === null) {
-            settle(failure('enumeration-failed'))
-            return
-          }
-          settle(toResult(response, request.target.key))
-        })
+      timer = setTimeout(() => {
+        /*
+         * **応答が来ない常駐プロセスは作り直す。**
+         * 掴んだままにすると以降の要求が全部この 1 件に引っかかる。
+         */
+        active.kill()
+        worker = null
+        settle(failure('enumeration-failed'))
+      }, request.timeoutMs)
 
-        timer = setTimeout(() => {
-          /*
-           * **終了要求の戻り値と終了通知の両方を見る** (C-5)。
-           * 猶予内に通知が来なければ、掴んだままにせず枠を返す —
-           * 返さないと 1 つの固まったプロセスが以降の列挙を全部止める。
-           */
-          child.kill()
-          graceTimer = setTimeout(() => settle(failure('enumeration-failed')), KILL_GRACE_MS)
-        }, request.timeoutMs)
-      })
-    } finally {
-      releaseSlot()
-    }
+      if (!active.send(encodeRequest(buildRequestLine(id, request, envValue.path)))) {
+        /*
+         * **書けなかったことを無視しない。** 相手のパイプが詰まっているか閉じている。
+         * 黙って待つと timeout まで気付けない。
+         */
+        active.kill()
+        worker = null
+        settle(failure('enumeration-failed'))
+      }
+    })
   }
 
   async function start(request: EnumerationRequest): Promise<EnumerationResult> {
@@ -255,7 +274,7 @@ export function createSessionEnumerator(deps: SessionEnumeratorDeps): SessionEnu
 
     /*
      * 逐次の連打に最小間隔を掛ける (C-6)。**拒否ではなく待たせる** —
-     * 理由キーの語彙を増やさずに、起動の頻度だけを縛る。
+     * 理由キーの語彙を増やさずに、要求の頻度だけを縛る。
      */
     const last = lastStartedAt.get(key)
     if (last !== undefined) {
@@ -264,14 +283,20 @@ export function createSessionEnumerator(deps: SessionEnumeratorDeps): SessionEnu
     }
     lastStartedAt.set(key, deps.now())
 
-    return runOnce(request)
+    /*
+     * **鎖に繋いで直列化する。** 前の要求の応答を待ってから次を送る。
+     * これが config ディレクトリのレースを消している唯一の仕掛けである (AD-030 §3)。
+     */
+    const result = chain.then(() => exchange(request))
+    chain = result.catch(() => undefined)
+    return result
   }
 
   return {
     async enumerate(request: EnumerationRequest): Promise<EnumerationResult> {
       /*
-       * **ゲートを最初に通す** (BE-025b)。探索 / 起動 / 追加取得の 3 つの入口のうち、
-       * 起動と追加取得はどちらもこの関数を通る。
+       * **ゲートを最初に通す** (BE-025b)。探索 / 要求 / 追加取得の 3 つの入口のうち、
+       * 要求と追加取得はどちらもこの関数を通る。
        */
       const denied = checkLaunchAllowed(request)
       if (denied !== null) return failure(denied)
@@ -286,9 +311,13 @@ export function createSessionEnumerator(deps: SessionEnumeratorDeps): SessionEnu
       return promise
     },
 
-    killAll(): void {
-      for (const child of alive) child.kill()
-      alive.clear()
+    warmUp(): void {
+      ensureWorker()
+    },
+
+    dispose(): void {
+      worker?.kill()
+      worker = null
     }
   }
 }

@@ -80,3 +80,6 @@ src/renderer/src/features/workspace-folders/WorkspaceFoldersScreen.tsx
 src/renderer/src/features/session-list/useFolderLabels.ts
 tests/rule-fixtures/a-direct/sdk-forbidden-call.ts.fixture
 tests/rule-fixtures/a-direct/wsl-cli-in-session-layer.ts.fixture
+docs/decisions/0030-enumeration-runs-in-one-resident-process.md
+src/agents/transport.ts
+specs/002-session-cross-folder-session-enumeration/contracts/session-enumeration.md

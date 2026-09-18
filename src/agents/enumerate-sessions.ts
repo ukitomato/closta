@@ -3,35 +3,50 @@ import { MAX_SESSIONS_PER_TARGET } from '@domain/validation'
 
 import type { RawSessionRecord } from '@domain/session/interfaces'
 import {
+  decodeRequest,
   encodeResponse,
   errorResponse,
   okResponse,
-  parseEnumerationArgs,
-  type EnumerationArgs,
-  type EnumerationResponse
+  type EnumerationRequestLine,
+  type EnumerationResponseLine
 } from './protocol'
+import { createTransport, type Transport } from './transport'
 
 /**
- * セッション列挙プロセスの本体 (BE-023 / contracts C-1 〜 C-4)。
+ * セッション列挙プロセスの本体 (BE-023 / AD-030 / contracts C-1 〜 C-4)。
  *
  * **Agent SDK を呼ぶ唯一の場所である** (Principle IV / AD-023 §2)。
  * 呼んでよいのは **`listSessions()` だけ**であり、判定は
- * 「許可 1 件以外を禁じる」形で機械検証する (C-4 / SH-081)。
+ * 「許可 1 件以外を禁じる」形で機械検証する (C-4 / 検証項目 14)。
  *
  * | 規則 | 根拠 |
  * |---|---|
  * | `electron` とネイティブモジュールに依存しない (推移的にも) | Principle VII / AD-010 / FR-045 |
  * | **Node 標準モジュールを import しない** | `eslint.config.mjs` policy 3。stdio はグローバルの `process` |
- * | **`process.parentPort` を触らない。** `node <entry>` で単独起動できる | Principle VII Statement 後半 / SH-094 |
- * | **`process.env` を書き換えない。** config ディレクトリは生成時に与えられる | FR-014 |
+ * | **本体は経路を知らない。** 選択は `transport.ts` に閉じ、単独起動は標準入出力で保つ | Principle VII Statement 後半 / AD-030 §5 / SH-094 |
  * | **パス値に一切触らない。** 受け取った値をそのまま SDK に渡す | AD-028 §3 規則 2 / 3 |
  * | **transcript の本文を読まない** | FR-044 / SC-011 |
  * | ディスクに書かない | FR-036 / SC-014 |
  *
- * **`CLAUDE_CONFIG_DIR` をこのファイルが読まない。** SDK が自分で
- * `process.env` から解決する (research R-01)。ここで読むと、値を加工する誘惑が生まれ、
- * 規則 2 (そのまま渡す) を守っていることが読み取れなくなる。
+ * **常駐し、要求を直列に処理する** ([AD-030](../../docs/decisions/0030-enumeration-runs-in-one-resident-process.md))。
+ * 1 要求ごとにプロセスを起こしていた頃は、**費用のほぼ全部が起動だった**
+ * (実測: 起動 2,704 ms に対して列挙 36〜83 ms)。
+ *
+ * **直列であることが環境変数のレースを消している** (AD-030 §3)。
+ * AD-021 §3 は「同一プロセス内で環境変数を書き換える」案を並行列挙のレースを理由に
+ * 却下したが、**同時に 1 要求しか扱わなければ、env を設定してから応答を返すまでの
+ * あいだにその値を変える主体が存在しない。**
  */
+
+/**
+ * SDK が config ディレクトリを読む唯一の経路 (research R-01)。
+ *
+ * **この文字列リテラルが現れてよいのは本モジュールだけである。**
+ * renderer から config ディレクトリを指定できる API を作らないことと合わせて、
+ * 「どのディレクトリを列挙するか」を決められる場所を絞る
+ * (contracts/ipc-session-list.md の「境界に出さない値」の表)。
+ */
+const CLAUDE_CONFIG_DIR = 'CLAUDE_CONFIG_DIR'
 
 /**
  * `programmatic` の取得手段 (design-gate L-002 / research R-09)。
@@ -45,7 +60,7 @@ import {
  * 既定側の先頭 `offset + limit` 件の所属は除外側の先頭 `offset + limit` 件で決まる。
  * 除外側にも同じ `offset` を渡すと、落ちた件数だけ窓がずれて**別の範囲を見る**。
  *
- * 実測の代償: 全件で 915 ms + 892 ms、先頭 50 件で 384 ms + 384 ms 程度 (research R-01)。
+ * 実測の追加費用は 26〜53 ms であり、起動費用に比べて無視できる。
  */
 async function nonProgrammaticIds(limit: number): Promise<ReadonlySet<string>> {
   const excluded = await listSessions({ includeProgrammatic: false, limit, offset: 0 })
@@ -81,7 +96,16 @@ function toRecord(
   }
 }
 
-async function enumerate(args: EnumerationArgs): Promise<EnumerationResponse> {
+async function enumerate(request: EnumerationRequestLine): Promise<EnumerationResponseLine> {
+  /*
+   * **受け取った値をそのまま置く** (AD-028 §3 規則 2)。
+   * 結合・分解・正規化をしない。
+   *
+   * **直列だから安全である** (AD-030 §3)。この設定から応答を返すまでのあいだ、
+   * 値を変える主体が存在しない。
+   */
+  process.env[CLAUDE_CONFIG_DIR] = request.configDir
+
   /*
    * **全件でも上限を渡す。** 上限を渡さないと打ち切りの判定ができず、
    * 巨大な config ディレクトリで IPC のペイロードが破綻する (FR-038)。
@@ -89,9 +113,9 @@ async function enumerate(args: EnumerationArgs): Promise<EnumerationResponse> {
    * 「打ち切った」と誤って報告しないためである。
    */
   const requested =
-    args.scope.kind === 'all'
+    request.scope.kind === 'all'
       ? { limit: MAX_SESSIONS_PER_TARGET + 1, offset: 0 }
-      : { limit: args.scope.limit, offset: args.scope.offset }
+      : { limit: request.scope.limit, offset: request.scope.offset }
 
   const sessions = await listSessions(requested)
   const truncated = sessions.length > MAX_SESSIONS_PER_TARGET
@@ -100,40 +124,73 @@ async function enumerate(args: EnumerationArgs): Promise<EnumerationResponse> {
   const plainIds = await nonProgrammaticIds(requested.offset + requested.limit)
 
   return okResponse(
-    args.targetKey,
+    request.id,
+    request.targetKey,
     kept.map((session) => toRecord(session, !plainIds.has(session.sessionId))),
     truncated
   )
 }
 
-/** 1 行を標準出力へ書く。**これが親への唯一の出力経路である。** */
-function write(response: EnumerationResponse): void {
-  // platform-ok: stdio は OS 分岐ではなくプロセス間の規約である。
-  process.stdout.write(`${encodeResponse(response)}\n`)
+/**
+ * 経路。**本体は経路を知らない** (AD-030 §5)。
+ *
+ * `utilityProcess` は標準入力を支えないため、Electron 下では `parentPort` に載る。
+ * 選択は `transport.ts` の 1 モジュールに閉じてある。
+ */
+let transport: Transport | null = null
+
+function write(response: EnumerationResponseLine): void {
+  transport?.write(encodeResponse(response))
 }
 
 /**
- * 入口。**1 回の要求を処理して終了する** (AD-028 §1 の「要求 1 回」の寿命)。
+ * 要求を**直列に**処理する待ち行列。
  *
- * **例外をそのまま流さない** (C-5)。SDK の例外メッセージは UNC の完全パス
- * (= ディストロ名 + Linux ユーザ名) を含みうるため、**理由キーに落としてから**出す。
- * `targetKey` は不透明であり、出しても経路を復元できない。
+ * **並行に処理してはならない** (AD-030 §3)。`process.env` を要求ごとに設定するため、
+ * 2 件が重なると一方が他方の値で列挙する。
+ * **「並行にしない」を約束ではなく構造で保つ** — 直前の処理の完了を待ってから次を始める。
  */
-async function main(): Promise<void> {
-  const parsed = parseEnumerationArgs(process.argv.slice(2))
-  if (!parsed.ok) {
-    // 引数が読めない時点では `targetKey` が無いため、不透明な固定値を使う。
-    write(errorResponse('unknown', 'enumeration-failed'))
-    process.exitCode = 1
+let chain: Promise<void> = Promise.resolve()
+
+function handle(line: string): void {
+  const request = decodeRequest(line)
+  if (request === null) {
+    /*
+     * **黙って捨てない。** 形が合わない要求は親のバグかバンドルの取り違えである。
+     * 識別子が読めないので `id` は 0、`targetKey` は不透明な固定値にする。
+     */
+    write(errorResponse(0, 'unknown', 'enumeration-failed'))
     return
   }
 
-  try {
-    write(await enumerate(parsed.args))
-  } catch {
-    write(errorResponse(parsed.args.targetKey, 'enumeration-failed'))
-    process.exitCode = 1
-  }
+  chain = chain.then(async () => {
+    try {
+      write(await enumerate(request))
+    } catch {
+      /*
+       * **例外をそのまま流さない** (C-5)。SDK の例外メッセージは UNC の完全パス
+       * (= ディストロ名 + Linux ユーザ名) を含みうるため、**理由キーに落としてから**出す。
+       */
+      write(errorResponse(request.id, request.targetKey, 'enumeration-failed'))
+    }
+  })
 }
 
-void main()
+/**
+ * 入口。**要求を読み続ける。**
+ *
+ * **経路が閉じたら終わる。** 標準入出力の経路では親の消失をこれで知る
+ * (`parentPort` の経路では Electron が孤児を回収する)。
+ */
+function main(): void {
+  transport = createTransport()
+  transport.onLine(handle)
+  transport.onClosed(() => {
+    // 処理中の要求を書き終えてから終わる。
+    void chain.then(() => {
+      process.exitCode = 0
+    })
+  })
+}
+
+main()

@@ -92,6 +92,15 @@ export interface SessionServiceDeps {
   readonly measure: Measure
 }
 
+/** 1 つの所在の結果。**行と、対象ごとのセッションを分けて返す。** */
+interface LocationResult {
+  readonly outcome: EnumerationOutcome
+  readonly collected: readonly {
+    readonly target: EnumerationTarget
+    readonly sessions: readonly SessionSummary[]
+  }[]
+}
+
 /** 1 つの列挙対象から取れたセッションと、その行。 */
 interface TargetResult {
   readonly target: EnumerationTarget | null
@@ -196,6 +205,9 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
    */
   let completing = false
 
+  /** 実行中の先頭ページ取得。**完了前の 2 本目はここに合流する。** */
+  let firstPage: Promise<SessionIndexDTO> | null = null
+
   async function completeInBackground(): Promise<void> {
     if (completing || complete) return
     completing = true
@@ -256,52 +268,97 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
     }
   }
 
-  /** 所在ごとに探索して列挙する。**1 所在の失敗が他を消さない** (SC-007)。 */
+  /**
+   * 所在ごとに探索して列挙する。**1 所在の失敗が他を消さない** (SC-007)。
+   *
+   * **所在も対象も並行に走らせる** (contracts C-6: 「異なる列挙対象は並行して
+   * 実行してよい。プロセスが分かれているためレースが起きない」)。
+   * 直列にすると所在と候補の数だけ子プロセスの起動費用が積み上がる —
+   * 実測で先頭ページが 7.7 秒かかり、SC-008 の 2 秒予算を超えた
+   * (所在 2 件 + 候補複数 × 冷えた子プロセス 1 件あたり約 1.3〜1.8 秒)。
+   *
+   * **同時数の上限は列挙器が持つ** (`MAX_CONCURRENT_ENUMERATIONS`)。
+   * ここで無制限に `Promise.all` しても、実際に走る子プロセスは枠の数に絞られる。
+   *
+   * **結果の順序は所在の順に固定する。** 完了順に並べると、
+   * 取得のたびに行の順番が変わって利用者が同じ行を同じ位置で探せない。
+   */
   async function fetchAll(scope: EnumerationScope): Promise<void> {
-    const verifiedMap = await verified()
-    const nextTargets: EnumerationTarget[] = []
-    const nextOutcomes: EnumerationOutcome[] = []
-    const nextSessions = new Map<string, readonly SessionSummary[]>()
     const at = deps.now()
 
-    /* ── 所在 windows ────────────────────────────────────────── */
-    const hostDiscovery = await deps.finder.hostTarget(deps.hostHome())
-    nextOutcomes.push(
-      await collectLocation({ kind: 'windows' }, hostDiscovery, null, scope, at, {
-        nextTargets,
-        nextSessions
-      })
+    /*
+     * ── 第 1 相: 探索 ──────────────────────────────────────────
+     *
+     * **列挙と分ける。** 分けないと内訳が計れず、予算を超えたときに
+     * どこが重いのか分からない (R-1 が `probe-batch-verify` / `probe-batch-run` を
+     * 分けたのと同じ理由)。
+     *
+     * **所在 `windows` の探索は実行中確認を待たない。**
+     * ホストに確認は要らないので、`wsl.exe` の固定費 (約 1.2 秒) と重ねられる。
+     */
+    const discovered = await deps.measure('list-sessions-discover', async () => {
+      const hostWork = deps.finder
+        .hostTarget(deps.hostHome())
+        .then((discovery) => ({ location: { kind: 'windows' } as const, discovery, running: null }))
+
+      const verifiedMap = await deps.measure('list-sessions-verify', () => verified())
+
+      const wslWork = deps
+        .runtimes()
+        .filter((runtime): runtime is WslRuntimeDescriptor => runtime.kind === 'wsl')
+        .map(async (wsl) => {
+          const location = { kind: 'wsl', distroName: wsl.distroName } as const
+          const running = verifiedMap.get(wsl.id) ?? null
+
+          /*
+           * **停止中なら探索も起動も発行しないが、行は作る** (FR-007 / FR-008)。
+           * 行を落とすと (a) 「未列挙である」ことを示せず、
+           * (b) 「既知の `key` + 停止中」という SC-002 / SC-010 の経路が踏めない。
+           */
+          if (running === null) return { location, discovery: null, running: null }
+
+          return {
+            location,
+            discovery: await deps.finder.wslTargets(wsl, running, deps.now()),
+            running
+          }
+        })
+
+      return [await hostWork, ...(await Promise.all(wslWork))]
+    })
+
+    /*
+     * ── 第 2 相: 列挙 ──────────────────────────────────────────
+     *
+     * **全対象を並行に走らせる** (contracts C-6)。同時数の上限は列挙器が持つので、
+     * ここで無制限に `Promise.all` しても実際に走る子プロセスは枠の数に絞られる。
+     */
+    const results = await deps.measure('list-sessions-enumerate', () =>
+      Promise.all(
+        discovered.map(async (entry) =>
+          entry.discovery === null
+            ? {
+                outcome: unreachableOutcome(entry.location, 'distro-not-running', at),
+                collected: []
+              }
+            : collectLocation(entry.location, entry.discovery, entry.running, scope, at)
+        )
+      )
     )
 
-    /* ── 所在 wsl:<D> ────────────────────────────────────────── */
-    for (const runtime of deps.runtimes()) {
-      if (runtime.kind !== 'wsl') continue
-      const wsl: WslRuntimeDescriptor = runtime
-      const location = { kind: 'wsl', distroName: wsl.distroName } as const
-      const verified = verifiedMap.get(wsl.id)
-
-      /*
-       * **停止中なら探索も起動も発行しないが、行は作る** (FR-007 / FR-008)。
-       * 行を落とすと (a) 「未列挙である」ことを示せず、
-       * (b) 「既知の `key` + 停止中」という SC-002 / SC-010 の経路が踏めない。
-       */
-      if (verified === undefined) {
-        nextOutcomes.push(unreachableOutcome(location, 'distro-not-running', at))
-        continue
+    /* **結果の順序は所在の順に固定する。** 完了順に並べると行の順番が毎回変わる。 */
+    const nextTargets: EnumerationTarget[] = []
+    const nextSessions = new Map<string, readonly SessionSummary[]>()
+    for (const result of results) {
+      for (const { target, sessions } of result.collected) {
+        nextTargets.push(target)
+        nextSessions.set(target.key, sessions)
       }
-
-      const discovery = await deps.finder.wslTargets(wsl, verified, deps.now())
-      nextOutcomes.push(
-        await collectLocation(location, discovery, verified, scope, at, {
-          nextTargets,
-          nextSessions
-        })
-      )
     }
 
     targets = nextTargets
     sessionsByTarget = nextSessions
-    outcomes = nextOutcomes
+    outcomes = results.map((result) => result.outcome)
     fetchedAt = at
     complete = scope.kind === 'all'
     loaded = true
@@ -317,22 +374,20 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
   async function collectLocation(
     location: EnumerationOutcome['location'],
     discovery: Awaited<ReturnType<EnumerationTargetFinder['wslTargets']>>,
-    verified: VerifiedRunning | null,
+    running: VerifiedRunning | null,
     scope: EnumerationScope,
-    at: number,
-    sink: {
-      nextTargets: EnumerationTarget[]
-      nextSessions: Map<string, readonly SessionSummary[]>
-    }
-  ): Promise<EnumerationOutcome> {
-    const rows: TargetOutcome[] = []
+    at: number
+  ): Promise<LocationResult> {
+    /*
+     * **候補を並行に列挙する** (C-6)。**呼び出し側の配列を書かない** —
+     * 並行に走る手続きが共有の配列を書くと、順序が完了順になって毎回変わる。
+     * 結果を返し、組み立ては呼び出し側が所在の順で行う。
+     */
+    const collected = await Promise.all(
+      discovery.targets.map(async (target) => enumerateTarget(target, running, scope))
+    )
 
-    for (const target of discovery.targets) {
-      const result = await enumerateTarget(target, verified, scope)
-      sink.nextTargets.push(target)
-      sink.nextSessions.set(target.key, result.sessions)
-      rows.push(result.outcome)
-    }
+    const rows: TargetOutcome[] = collected.map((result) => result.outcome)
 
     /*
      * 候補ごとの失敗。**対象を作れなかったので `configDir` は `null`** である
@@ -364,7 +419,12 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
       })
     }
 
-    return { location, outcomes: rows, fetchedAt: at }
+    return {
+      outcome: { location, outcomes: rows, fetchedAt: at },
+      collected: collected.flatMap((result) =>
+        result.target === null ? [] : [{ target: result.target, sessions: result.sessions }]
+      )
+    }
   }
 
   return {
@@ -375,10 +435,25 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
        */
       if (loaded) return deps.measure('list-sessions-cached', async () => snapshot())
 
-      await deps.measure('list-sessions-first-page', () =>
-        fetchAll({ kind: 'page', limit: SESSION_PAGE_SIZE, offset: 0 })
-      )
-      const first = publish()
+      /*
+       * **同時に走る要求を束ねる。**
+       * `loaded` は取得の**完了後**に立つので、完了前の 2 本目はキャッシュに当たらない。
+       * 開発ビルドの二重 effect で実際に 2 本走り、**先頭ページの取得が 2 回**起きた
+       * (実測: 7,743 ms と 7,390 ms が並んだ)。
+       * 列挙器の束ねは同じ対象への並行要求にしか効かず、ここは所在をまたぐ。
+       */
+      if (firstPage !== null) return firstPage
+
+      firstPage = deps
+        .measure('list-sessions-first-page', () =>
+          fetchAll({ kind: 'page', limit: SESSION_PAGE_SIZE, offset: 0 })
+        )
+        .then(() => publish())
+        .finally(() => {
+          firstPage = null
+        })
+
+      const first = await firstPage
 
       /*
        * **全件は待たない。** 先頭ページを返してから続けて取り、`onChanged` で通知する

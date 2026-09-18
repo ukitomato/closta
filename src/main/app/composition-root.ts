@@ -49,7 +49,7 @@ export interface Composition {
   /**
    * アプリ終了時に呼ぶ後始末。
    *
-   * **生存中の列挙プロセスをすべて終了させる** (contracts C-5) —
+   * **常駐している列挙プロセスを終了させる** (contracts C-5) —
    * UNC ハンドルを掴んだ孤児を残さない。
    * 登録は `src/main/index.ts` が `before-quit` で行う。
    */
@@ -119,6 +119,17 @@ export function createComposition(): Composition {
     // platform-ok: 親環境の読み取りであり OS 分岐ではない。許可リストの適用は `config-dir.ts`。
     parentEnv: process.env
   })
+
+  /*
+   * **列挙プロセスを先に起こす** (AD-030 §6)。
+   *
+   * 起動費用は実測で約 2.7 秒あり、一覧を開いたときに払うと
+   * SC-008 の先頭ページ 2 秒を単独で超える。
+   * R-1 のランタイム検出が既に約 4 秒かかっているため、その裏に隠れる。
+   *
+   * **呼ばなくても動く。** 最初の要求の時点で起こす (遅いが動く)。
+   */
+  enumerator.warmUp()
 
   const sessions = createSessionService({
     finder: createEnumerationTargetFinder({
@@ -202,5 +213,5 @@ export function createComposition(): Composition {
     }
   }
 
-  return { runtimes, folders, sessions, ipc, dispose: () => enumerator.killAll() }
+  return { runtimes, folders, sessions, ipc, dispose: () => enumerator.dispose() }
 }
