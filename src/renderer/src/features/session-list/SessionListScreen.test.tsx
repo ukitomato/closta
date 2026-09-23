@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { RegisterFolderResult } from '@domain/workspace/dto'
+import type { FolderListDTO, RegisterFolderResult } from '@domain/workspace/dto'
 import type {
   EnumerationOutcomeDTO,
   SessionGroupDTO,
@@ -916,6 +916,45 @@ describe('SessionListScreen — 件数が多い場合 (FE-073)', () => {
     await waitFor(() => expect(fetchMoreSessions).toHaveBeenCalledWith('host#0', 50))
   })
 
+  it('取得中でもボタンのラベルを減光しない (a11y H-201)', async () => {
+    /*
+     * `opacity-50` は子孫すべてに掛かるため、「取得中…」が 3.74:1 に落ちていた。
+     * `disabled` をやめた狙いは「到達して理由を読める」ことなので、
+     * 到達した先で文字が読めないのでは対策が半分で止まる。
+     */
+    install(index([folderGroup([session()])]))
+
+    render(<SessionListScreen />)
+    const button = await waitFor(() => screen.getByRole('button', { name: '全件を取り直す' }))
+
+    /* 減光はアイコンだけに掛ける。ラベルには掛けない。 */
+    expect(button.className).not.toMatch(/(^|s)opacity-50(s|$)/)
+  })
+
+  it('選択した行を hover と別の見えで示す (a11y H-202)', async () => {
+    /*
+     * 選択とフォーカスは分離したが、**選択が `hover` と同色の 1.04:1 のまま**だった。
+     * R-2 は本文を持たないので、この表示が「行を選べた」ことの唯一の視覚的手がかりである。
+     */
+    const { container } = render(<div />)
+    container.remove()
+
+    install(index([folderGroup([session()])]))
+    render(<SessionListScreen />)
+    await waitFor(() => expect(screen.getByText('要約')).toBeInTheDocument())
+
+    const row = document.querySelector('[data-slot="aui_thread-list-item"]')
+    expect(row).not.toBeNull()
+    const className = row?.className ?? ''
+
+    /* 選択は面積と形で示す (左端のインジケータ + 太字)。 */
+    expect(className).toContain('data-active:before:bg-foreground')
+    expect(className).toContain('data-active:font-medium')
+    /* **hover と同じ背景を選択に使わない。** */
+    expect(className).toContain('hover:bg-muted')
+    expect(className).not.toContain('data-active:bg-muted')
+  })
+
   it('越境を行ごとに示す (US-1 AC-4 / po H-001)', async () => {
     /*
      * **越境はセッション単位で判定されるのにフォルダ単位の OR で畳まれていた。**
@@ -990,5 +1029,150 @@ describe('SessionListScreen — 件数が多い場合 (FE-073)', () => {
     )
 
     expect(listSessions.mock.calls.length).toBe(before)
+  })
+})
+
+/**
+ * 空状態の断言 (pr-gate Round 1 / ux H-201 〜 H-204)。
+ *
+ * **「無い」「読めなかった」「まだ分からない」を混ぜない** (FR-012 / FR-037)。
+ * この 3 つはそれぞれ別の操作につながるため、取り違えると
+ * 利用者は**状況が変わらない操作**を繰り返すことになる。
+ */
+
+function folderList(): FolderListDTO {
+  return {
+    folders: [
+      {
+        id: 'folder-1',
+        location: { kind: 'windows' },
+        path: { namespace: 'host', value: 'C:\\work\\project' },
+        displayName: 'project',
+        reachability: 'reachable',
+        unreachableReason: null,
+        blockedReason: null,
+        resolutionSteps: [],
+        registeredAt: FETCHED_AT
+      }
+    ],
+    restoreIssues: { skipped: 0, reasonKeys: [], backupPath: null }
+  }
+}
+
+function installWithFolders(value: SessionIndexDTO): void {
+  installCapability({
+    listSessions: () => Promise.resolve(value),
+    refreshSessions: () => Promise.resolve(value),
+    fetchMoreSessions: () => Promise.resolve(value),
+    onSessionsChanged: () => () => {},
+    listFolders: () => Promise.resolve(folderList()),
+    onFoldersChanged: () => () => {}
+  })
+}
+
+const UBUNTU_FAILED = outcome({
+  location: { kind: 'wsl', distroName: 'Ubuntu' },
+  targetKey: 'wsl:Ubuntu#0',
+  targetLabel: 'y',
+  status: 'failed',
+  reasonKey: 'distro-not-running',
+  count: 0
+})
+
+describe('SessionListScreen — 空状態の断言', () => {
+  it('取得中は「どの所在も列挙できていません」と言わない (FR-037)', async () => {
+    /*
+     * main は**所在 1 件ぶんずつ**公開する。先頭に置かれるホストが失敗すると、
+     * その時点の `outcomes` は「全件 failed」になる。
+     */
+    installWithFolders(
+      index([folderGroup([])], {
+        complete: false,
+        outcomes: [outcome({ status: 'failed', reasonKey: 'permission-denied', count: 0 })]
+      })
+    )
+
+    render(<SessionListScreen />)
+
+    await waitFor(() => expect(screen.getByText('取得中です。')).toBeInTheDocument())
+    expect(screen.queryByText('どの所在も列挙できていません。')).not.toBeInTheDocument()
+  })
+
+  it('出そろってから「どの所在も列挙できていません」を出す (FR-032)', async () => {
+    installWithFolders(
+      index([folderGroup([])], {
+        outcomes: [outcome({ status: 'failed', reasonKey: 'permission-denied', count: 0 })]
+      })
+    )
+
+    render(<SessionListScreen />)
+
+    await waitFor(() =>
+      expect(screen.getByText('どの所在も列挙できていません。')).toBeInTheDocument()
+    )
+  })
+
+  it('一部の所在が読めないとき「セッションがまだありません」と言わない (FR-012)', async () => {
+    installWithFolders(
+      index([folderGroup([])], {
+        outcomes: [outcome({ count: 0, status: 'no-history' }), UBUNTU_FAILED]
+      })
+    )
+
+    render(<SessionListScreen />)
+
+    await waitFor(() =>
+      expect(screen.getByText('列挙できた所在にセッションがありません。')).toBeInTheDocument()
+    )
+    expect(screen.queryByText('セッションがまだありません。')).not.toBeInTheDocument()
+  })
+
+  it('一部の所在が読めないとき区画でも 0 件を断言しない (FR-012 / FR-051)', async () => {
+    installWithFolders(
+      index([folderGroup([])], {
+        outcomes: [outcome({ count: 0, status: 'no-history' }), UBUNTU_FAILED]
+      })
+    )
+
+    render(<SessionListScreen />)
+
+    await waitFor(() =>
+      expect(
+        screen.getByText('列挙できていない所在があるため、ここに出ていない行があるかもしれません。')
+      ).toBeInTheDocument()
+    )
+    expect(screen.queryByText('このフォルダのセッションはありません。')).not.toBeInTheDocument()
+  })
+
+  it('読めなかった所在を代表 1 件に潰さない (FR-012)', async () => {
+    /* 理由が所在ごとに違う。**片方だけ出すと、もう片方は直しようがない。** */
+    installWithFolders(
+      index([folderGroup([])], {
+        outcomes: [
+          outcome({ status: 'failed', reasonKey: 'permission-denied', count: 0 }),
+          UBUNTU_FAILED
+        ]
+      })
+    )
+
+    render(<SessionListScreen />)
+
+    const section = await screen.findByRole('region', { name: /project/ })
+    expect(section.textContent).toContain('そのユーザのホームは Windows 側から読めません。')
+    expect(section.textContent).toContain('ディストロを起動してから再取得してください。')
+    expect(section.textContent).toContain('Ubuntu')
+  })
+
+  it('打ち切った所在の件数を確定形で出さない (FR-038)', async () => {
+    installWithFolders(
+      index([folderGroup([session()])], {
+        outcomes: [outcome({ count: 5000, truncated: true })]
+      })
+    )
+
+    render(<SessionListScreen />)
+
+    await waitFor(() => expect(screen.getByText('5000 件以上')).toBeInTheDocument())
+    expect(screen.queryByText('5000 件')).not.toBeInTheDocument()
   })
 })

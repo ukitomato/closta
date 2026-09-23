@@ -177,19 +177,21 @@ function Section({
   section,
   folderName,
   complete,
-  outcome
+  outcomes
 }: {
   section: SessionSection
   folderName: string | null
   /** 全所在ぶんが出そろったか。**件数の見せ方を決める** (FR-037)。 */
   complete: boolean
   /**
-   * この区画に関わる所在の結果。**0 件の意味を決める** (ux H-004)。
+   * この区画に関わりうる所在の結果。**0 件の意味を決める** (ux H-004)。
    *
    * 「読めなかった」を「無い」と読ませてはならない (FR-012)。
-   * 区画が複数所在にまたがる場合は `null` を渡す (どれを代表にもできない)。
+   *
+   * **代表 1 件に潰さない** (pr-gate Round 1 / ux H-203)。
+   * 複数所在にまたがる区画で 1 件を選ぶと、必ず**当て推量**になる。
    */
-  outcome: EnumerationOutcomeDTO | null
+  outcomes: readonly EnumerationOutcomeDTO[]
 }): React.JSX.Element {
   const collapsible = section.group.kind === 'unregistered'
   const [open, setOpen] = useState(!collapsible)
@@ -229,7 +231,13 @@ function Section({
           </h3>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <span className="text-muted-foreground text-xs">{countText(count, complete)}</span>
+          <span className="text-muted-foreground text-xs">
+            {countText(
+              count,
+              complete,
+              outcomes.some((outcome) => outcome.truncated)
+            )}
+          </span>
           {registerSeed !== null && (
             <Button
               variant="outline"
@@ -268,7 +276,7 @@ function Section({
         状態は `aria-expanded` が運ぶので、これで 4.1.2 は満たす。
       */}
       <div id={panelId}>
-        {open && count === 0 && <SectionEmpty complete={complete} outcome={outcome} />}
+        {open && count === 0 && <SectionEmpty complete={complete} outcomes={outcomes} />}
 
         {open && count > 0 && (
           <div className="mt-2">
@@ -302,24 +310,51 @@ function Section({
  */
 function SectionEmpty({
   complete,
-  outcome
+  outcomes
 }: {
   complete: boolean
-  outcome: EnumerationOutcomeDTO | null
+  outcomes: readonly EnumerationOutcomeDTO[]
 }): React.JSX.Element {
   if (!complete) {
     return <p className="text-muted-foreground mt-2 text-sm">取得中です。</p>
   }
 
-  if (outcome !== null && outcome.status === 'failed') {
+  const failed = outcomes.filter((outcome) => outcome.status === 'failed')
+
+  /*
+   * **1 件でも読めていなければ 0 件と断言しない**
+   * (pr-gate Round 1 / ux H-201 / FR-012)。
+   *
+   * 以前は「関係する所在を **1 つに絞れたとき**だけ」読めなかったと言い、
+   * 絞れなければ「このフォルダのセッションはありません。」へ落ちていた。
+   * **判定が逆だった** — 絞れないのは複数の所在が関わるときであり、
+   * それはむしろ隠れている行がある可能性が高い状況である。
+   *
+   * **どの所在が読めなかったかを列挙する。** 代表 1 件を選ぶと
+   * 関係しない所在の解消手順を出しうる (ux H-203)。
+   */
+  if (failed.length > 0) {
     return (
       <div className="mt-2 space-y-0.5">
-        <p className="text-sm">この所在は列挙できていません。</p>
-        {outcome.reasonKey !== null && (
-          <p className="text-muted-foreground text-xs">
-            {FAILURE_REASON_LABELS[outcome.reasonKey]} — {FAILURE_REASON_HINTS[outcome.reasonKey]}
-          </p>
-        )}
+        <p className="text-sm">
+          {failed.length === outcomes.length
+            ? 'この区画に関わる所在を列挙できていません。'
+            : '列挙できていない所在があるため、ここに出ていない行があるかもしれません。'}
+        </p>
+        <ul className="text-muted-foreground space-y-0.5 text-xs">
+          {failed.map((outcome) => (
+            <li key={outcome.targetKey}>
+              {locationLabelOf(outcome.location)}
+              {outcome.reasonKey !== null && (
+                <>
+                  {' — '}
+                  {FAILURE_REASON_LABELS[outcome.reasonKey]}{' '}
+                  {FAILURE_REASON_HINTS[outcome.reasonKey]}
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
       </div>
     )
   }
@@ -418,8 +453,17 @@ function unlistedHint(outcomes: readonly EnumerationOutcomeDTO[]): string {
   return '所在ごとの理由は「列挙の結果」を確認してください。'
 }
 
-function countText(count: number, complete: boolean): string {
-  return complete ? `${count} 件` : `${count} 件以上 (取得中)`
+/**
+ * 件数の文 (FR-037 / FR-038)。
+ *
+ * **確定と言えるのは「出そろっていて、かつ打ち切っていない」ときだけである**
+ * (pr-gate Round 1 / ux H-204)。以前は `complete` だけを見ていたため、
+ * 上限で打ち切った対象の隣に「5000 件」と**確定形**で出ていた。
+ * 同じ行に「上限で打ち切りました」が並んでおり、文が互いに矛盾していた。
+ */
+function countText(count: number, complete: boolean, truncated = false): string {
+  if (!complete) return `${count} 件以上 (取得中)`
+  return truncated ? `${count} 件以上` : `${count} 件`
 }
 
 /*
@@ -440,9 +484,21 @@ function busyGuard(busy: boolean, run: () => void): () => void {
   }
 }
 
-/** 取得中のボタンに共通で渡す属性。**`disabled` を使わない** (a11y H-007)。 */
+/**
+ * 取得中のボタンに共通で渡す属性。**`disabled` を使わない** (a11y H-007)。
+ *
+ * **`opacity` をラベルに掛けない** (pr-gate Round 1 / a11y H-201)。
+ * `opacity-50` は子孫すべてに掛かるため、busy のラベル (「取得中…」) が
+ * `text-foreground` 50% = **3.74:1** に落ちていた (AA は 4.5:1)。
+ *
+ * **`disabled` をやめた目的を打ち消していた。** 到達させる狙いは
+ * 「押せないことにも理由にも気付ける」ことなのに、到達した先で文字が読めない。
+ * しかも実測 1.2〜2.0 秒のあいだ、このラベルが進行中を示す数少ない手がかりである。
+ *
+ * **減光するのはアイコンだけにする。** 押せない見えは枠線と `aria-disabled` が担う。
+ */
 function busyProps(busy: boolean): { 'aria-disabled': boolean; className?: string } {
-  return { 'aria-disabled': busy, className: busy ? 'opacity-50' : undefined }
+  return { 'aria-disabled': busy, className: busy ? '[&_svg]:opacity-50' : undefined }
 }
 
 function Outcomes({
@@ -499,7 +555,7 @@ function Outcomes({
             )}
             {outcome.status === 'ok' && (
               <span className="text-muted-foreground text-xs">
-                {countText(outcome.count, complete)}
+                {countText(outcome.count, complete, outcome.truncated)}
               </span>
             )}
             {outcome.truncated && (
@@ -530,15 +586,24 @@ function Outcomes({
 }
 
 /**
- * 区画に対応する所在の結果を決める (ux H-004)。
+ * 区画の内容を左右しうる所在の結果 (ux H-004 / pr-gate Round 1 / ux H-203)。
  *
- * **推測で埋めない。** 決められないときは `null` を返し、
- * 呼び出し側は「0 件」を断言しない形に落とす。
+ * **1 件に絞らない。** 以前は 1 件を返す形で、決められないときに
+ * `outcomes[0]` を**当て推量で**返していた。所在の並びは探索順で決まるため、
+ * 「Ubuntu-22.04 の権限不足を解消してください」という手順が
+ * **Windows の登録フォルダの区画の下**に出ていた。
+ * 解消手順は間違った所在に向けると、正しいときより悪い —
+ * 利用者はそちらを操作して、状況が変わらない理由を得られない。
+ *
+ * **登録フォルダの区画は所在で絞れない。** Windows の登録フォルダを
+ * WSL から `/mnt/c/...` 経由で使う形を本 feature は越境として一級で扱っており
+ * (`group.ts` / FR-023)、**どの所在の失敗でもその登録フォルダの行を隠しうる**。
+ * 所在が定義に含まれるグループ (`pending` / `unregistered`) だけが絞れる。
  */
-function outcomeForSection(
+function outcomesForSection(
   section: SessionSection,
   outcomes: readonly EnumerationOutcomeDTO[]
-): EnumerationOutcomeDTO | null {
+): readonly EnumerationOutcomeDTO[] {
   const groupLocation =
     section.group.kind === 'pending' || section.group.kind === 'unregistered'
       ? section.group.location
@@ -546,29 +611,16 @@ function outcomeForSection(
 
   if (groupLocation !== null) {
     const label = locationLabelOf(groupLocation)
-    return outcomes.find((outcome) => locationLabelOf(outcome.location) === label) ?? null
+    return outcomes.filter((outcome) => locationLabelOf(outcome.location) === label)
   }
 
-  /* セッションがあるなら、**全部が同じ対象から来たときだけ**決められる。 */
+  /* 行があるなら、**その行が来た対象**だけが件数に関わる。 */
   const targetKeys = new Set(section.sessions.map((session) => session.targetKey))
-  if (targetKeys.size === 1) {
-    const [only] = [...targetKeys]
-    return outcomes.find((outcome) => outcome.targetKey === only) ?? null
+  if (targetKeys.size > 0) {
+    return outcomes.filter((outcome) => targetKeys.has(outcome.targetKey))
   }
 
-  /*
-   * 0 件のときは、**全所在が失敗していれば**「読めなかった」と言える。
-   * 一部だけ失敗している状態では、このフォルダが該当するかを決められない。
-   */
-  if (
-    section.sessions.length === 0 &&
-    outcomes.length > 0 &&
-    outcomes.every((outcome) => outcome.status === 'failed')
-  ) {
-    return outcomes[0]
-  }
-
-  return null
+  return outcomes
 }
 
 /**
@@ -754,12 +806,39 @@ export function SessionListScreen(): React.JSX.Element {
    *
    * **取得中は出さない。** 段階描画の途中で「まだありません」と断言しない (FR-037)。
    */
-  const indexLevelNotice: 'all-unlisted' | 'no-sessions' | null = (() => {
+  /** 1 件でも読めていない所在があるか (pr-gate Round 1 / ux H-201)。 */
+  const hasFailure = (sessions.index?.outcomes ?? []).some((o) => o.status === 'failed')
+
+  const indexLevelNotice: 'all-unlisted' | 'some-unlisted' | 'no-sessions' | null = (() => {
     if (sessions.index === null || filtering) return null
+
+    /*
+     * **取得中は断言しない** (pr-gate Round 1 / ux H-202 / FR-037)。
+     * main は所在 1 件ぶんずつ公開するので、**最初に公開された所在が失敗していれば
+     * その時点の `outcomes` は「全件 failed」になる** —
+     * ホストが先頭なので、ホストの権限不足で「どの所在も列挙できていません」が
+     * 8 秒級のあいだ出て、次の所在が成功すると黙って消えた。
+     * しかも CTA (`rediscover`) は進行中の段階描画を捨ててやり直す。
+     *
+     * 同じ規則を `no-sessions` は既に持っていた。**片方だけ漏れていた。**
+     */
+    if (!sessions.index.complete) return null
+
     if (allUnlisted) return 'all-unlisted'
-    if (total === 0 && sessions.index.complete && folderLabels.entries.length > 0) {
-      return 'no-sessions'
-    }
+
+    /*
+     * **一部だけ失敗している状態を「無い」と言わない**
+     * (pr-gate Round 1 / ux H-201 / FR-012)。
+     *
+     * `outcomes` に failed が混ざっていても `allUnlisted` は偽なので、
+     * 総数 0 のとき「セッションがまだありません」に落ちていた。
+     * 同じ索引で区画も 0 件を断言するため、**画面の 2 箇所が「無い」と言い、
+     * 「読めなかった」は所在の行 1 つだけに残っていた**。
+     * 「履歴なし」と「列挙できませんでした」を訳し分けた意味が消える。
+     */
+    if (total === 0 && hasFailure) return 'some-unlisted'
+
+    if (total === 0 && folderLabels.entries.length > 0) return 'no-sessions'
     return null
   })()
 
@@ -946,6 +1025,32 @@ export function SessionListScreen(): React.JSX.Element {
                   {sessions.loading ? '再検出しています…' : 'ランタイムを再検出して取り直す'}
                 </Button>
               </>
+            ) : indexLevelNotice === 'some-unlisted' ? (
+              /*
+               * **「一部は読めなかった」を持つ** (pr-gate Round 1 / ux H-201)。
+               *
+               * この状態は以前「セッションがまだありません。」に落ちていた。
+               * 読めた所在が 0 件で、読めなかった所在がある —
+               * **画面に出ている 0 件は「無い」ではなく「分からない」である**。
+               * 導線も違う: 使い始めを促すのではなく、読めなかった所在を直す。
+               */
+              <>
+                <p className="text-sm">列挙できた所在にセッションがありません。</p>
+                <p className="text-muted-foreground text-xs">
+                  列挙できていない所在があります —{' '}
+                  {unlistedHint(
+                    sessions.index.outcomes.filter((outcome) => outcome.status === 'failed')
+                  )}
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  {...busyProps(sessions.loading)}
+                  onClick={busyGuard(sessions.loading, () => void sessions.rediscover())}
+                >
+                  {sessions.loading ? '再検出しています…' : 'ランタイムを再検出して取り直す'}
+                </Button>
+              </>
             ) : (
               <>
                 <p className="text-sm">セッションがまだありません。</p>
@@ -971,7 +1076,7 @@ export function SessionListScreen(): React.JSX.Element {
               key={section.key}
               section={section}
               complete={sessions.index?.complete === true}
-              outcome={outcomeForSection(section, sessions.index?.outcomes ?? [])}
+              outcomes={outcomesForSection(section, sessions.index?.outcomes ?? [])}
               folderName={
                 section.group.kind === 'folder' ? folderLabels.nameOf(section.group.folderId) : null
               }

@@ -192,9 +192,21 @@ export const ThreadListItem: FC = () => {
        * **選択とフォーカスを同じ色で表さない** (a11y H-008)。
        * 以前は `data-active` (選択) と `has-focus-visible` (フォーカス) の
        * どちらも `bg-muted` で、白に対し 1.04:1 の差しかなかった。
-       * 選択は背景、フォーカスは Trigger の ring が担う。
+       * フォーカスは Trigger の ring (4.83:1) が担う。
+       *
+       * **選択は面積と形で示す** (pr-gate Round 1 / a11y H-202)。
+       * 分離しただけでは足りなかった — 選択は `bg-muted` のままで
+       * **`hover` と同色** (どちらも 1.04:1) だったため、
+       * 「いま指しているだけの行」と「選択済みの行」を区別できなかった。
+       * R-2 は本文を持たないので (`isDisabled: true`)、
+       * **この表示が「行を選べた」ことの唯一の視覚的フィードバックである**。
+       *
+       * 左端に 2px のインジケータを出す。`bg-foreground` は白に対し 19:1 で、
+       * WCAG 1.4.11 の 3:1 を満たす。**独自トークンは足していない** (Principle XIII)。
+       * `hover` の `bg-muted` は据え置く — hover は状態の識別ではなく
+       * ポインタ位置の示唆なので 3:1 は掛からない。
        */
-      className="group hover:bg-muted data-active:bg-muted relative flex min-h-8 items-center rounded-md transition-colors"
+      className="group hover:bg-muted data-active:bg-accent data-active:before:bg-foreground relative flex min-h-8 items-center rounded-md transition-colors data-active:font-medium data-active:before:absolute data-active:before:inset-y-1 data-active:before:start-0 data-active:before:w-0.5 data-active:before:rounded-full"
     >
       <ThreadListItemPrimitive.Trigger
         data-slot="aui_thread-list-item-trigger"

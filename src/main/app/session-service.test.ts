@@ -869,6 +869,84 @@ describe('createSessionService — fetchMore', () => {
     expect(row).toMatchObject({ status: 'failed', reasonKey: 'stopped-midway', count: 1 })
   })
 
+  /*
+   * 続きの取得と「上限で打ち切りました」の整合 (pr-gate Round 1 / ux H-204 / FR-038)。
+   *
+   * 列挙器が返す `truncated` は「**1 回の応答**が `MAX_SESSIONS_PER_TARGET` を超えたか」
+   * であり、`SESSION_PAGE_SIZE` のページでは決して真にならない。
+   * そのまま行へ写すと**続きの取得を 1 度行った時点で「続きを取る」が消える**。
+   */
+  it('ページが満杯で返れば打ち切りの旗を保つ (FR-038)', async () => {
+    const target = hostTarget()
+    const full = Array.from({ length: SESSION_PAGE_SIZE }, (_, i) => record(`p${i}`))
+    let page: readonly RawSessionRecord[] = [record('a')]
+    const enumerator: SessionEnumerator = {
+      /* **列挙器はページでは打ち切りを立てない** — 上限は 1 応答あたり 5000 件である。 */
+      async enumerate() {
+        return { ok: true, sessions: page, truncated: false }
+      }
+    }
+    const service = createSessionService(
+      deps({ finder: fakeFinder(discovery([target])), enumerator })
+    )
+
+    await service.list()
+    await settle()
+    page = full
+    const after = await service.fetchMore(target.key, SESSION_PAGE_SIZE)
+
+    const row = after.outcomes.find((o) => o.targetKey === target.key)
+    // **満杯 = まだ続きがありうる。** 押した直後に手段が消えてはならない。
+    expect(row?.truncated).toBe(true)
+  })
+
+  it('ページが満たずに返れば打ち切りを解く (FR-038)', async () => {
+    const target = hostTarget()
+    let page: readonly RawSessionRecord[] = Array.from({ length: SESSION_PAGE_SIZE }, (_, i) =>
+      record(`p${i}`)
+    )
+    const enumerator: SessionEnumerator = {
+      async enumerate() {
+        return { ok: true, sessions: page, truncated: true }
+      }
+    }
+    const service = createSessionService(
+      deps({ finder: fakeFinder(discovery([target])), enumerator })
+    )
+
+    await service.list()
+    await settle()
+    page = [record('tail')]
+    const after = await service.fetchMore(target.key, SESSION_PAGE_SIZE)
+
+    const row = after.outcomes.find((o) => o.targetKey === target.key)
+    // **末尾に達した。** ここで初めて件数が確定する。
+    expect(row?.truncated).toBe(false)
+  })
+
+  it('続きの取得が失敗しても打ち切りの旗を落とさない (FR-038 / US-3 AC-6)', async () => {
+    const target = hostTarget()
+    let fail = false
+    const enumerator: SessionEnumerator = {
+      async enumerate() {
+        if (fail) return { ok: false, reasonKey: 'distro-not-running' }
+        return { ok: true, sessions: [record('a')], truncated: true }
+      }
+    }
+    const service = createSessionService(
+      deps({ finder: fakeFinder(discovery([target])), enumerator })
+    )
+
+    await service.list()
+    await settle()
+    fail = true
+    const after = await service.fetchMore(target.key, SESSION_PAGE_SIZE)
+
+    const row = after.outcomes.find((o) => o.targetKey === target.key)
+    // 一時的な失敗から復帰する手段を残す。
+    expect(row?.truncated).toBe(true)
+  })
+
   it('1 件も取れていなければ列挙器の理由をそのまま返す', async () => {
     const target = hostTarget()
     let fail = false

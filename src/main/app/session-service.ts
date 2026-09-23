@@ -712,14 +712,34 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
    * **すでに一部が取れている**状況はそれとは別の意味を持つ —
    * 利用者に示すべきは「途中までは見えている」ことであり、
    * 再取得で残りが取れるという行動である。
+   *
+   * **`truncated` を取り直す** (pr-gate Round 1 / ux H-204)。
+   * 列挙器の `truncated` は「**1 回の応答**が上限 `MAX_SESSIONS_PER_TARGET` を
+   * 超えたか」であり、`SESSION_PAGE_SIZE` (50) のページでは決して真にならない。
+   * そのまま写していたため、**「続きを取る」を 1 度押すと行から消え**、
+   * 同時に件数が「5050 件以上」から「5050 件」へと**確定形に変わっていた**。
+   * 5000 件を超える対象で FR-038 が求める「続きを取る手段」が 1 ページで尽きる。
+   *
+   * 続きの有無は**ページが満杯で返ってきたか**で決まる。
+   * 満たなければ末尾に達しており、そこで初めて件数が確定する。
    */
   function rowAfterFetchMore(row: TargetOutcome, result: TargetResult): TargetOutcome {
     const retained = countFor(row.key)
     if (result.outcome.status === 'ok') {
-      return { ...result.outcome, count: retained }
+      const mayHaveMore = result.sessions.length >= SESSION_PAGE_SIZE
+      return { ...result.outcome, count: retained, truncated: mayHaveMore }
     }
+    /*
+     * **失敗しても打ち切りの旗を落とさない。** 落とすと「続きを取る」が消え、
+     * 一時的な失敗 (停止中の所在を起こした直後など) から復帰する手段が無くなる。
+     */
     if (retained === 0) return result.outcome
-    return { ...result.outcome, reasonKey: 'stopped-midway', count: retained }
+    return {
+      ...result.outcome,
+      reasonKey: 'stopped-midway',
+      count: retained,
+      truncated: row.truncated
+    }
   }
 
   /** 対象の所在に対応する確認済みの値。**所在 `windows` では `null`** である。 */

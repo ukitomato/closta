@@ -419,7 +419,13 @@ export function WorkspaceFoldersScreen(): React.JSX.Element {
           })}
         </div>
 
-        {wslRuntimes.some((runtime) => runtime.state === 'stopped') ? (
+        {/*
+          **再検出中は区画を保つ** (pr-gate Round 1 / a11y H-203)。
+          `stopped` が無くなった瞬間に区画ごと unmount すると、
+          押したボタン自身が DOM から消えてフォーカスが body に落ちる —
+          同ファイル上部のコメントが記録した不具合と同じ形である。
+        */}
+        {wslRuntimes.some((runtime) => runtime.state === 'stopped') || runtimes.refreshing ? (
           <div id="wsl-stopped-help" className="border-border/60 border-t pt-3 text-sm">
             <p>停止中のディストロは辿れません。次の手順で使えるようになります。</p>
             <ol className="text-muted-foreground mt-1 list-decimal pl-5 text-xs">
@@ -427,11 +433,20 @@ export function WorkspaceFoldersScreen(): React.JSX.Element {
               <li>{RESOLUTION_STEP_LABELS['rescan-runtimes']}</li>
             </ol>
             <Button
-              className="mt-2"
+              className={cn('mt-2', runtimes.refreshing && '[&_svg]:opacity-50')}
               variant="outline"
               size="sm"
-              onClick={() => void runtimes.refresh().catch(() => undefined)}
-              disabled={runtimes.refreshing}
+              /*
+               * **`disabled` にしない** (pr-gate Round 1 / a11y H-203)。
+               * 同ファイルの停止中ボタンは既に `aria-disabled` を採っており、
+               * **同じ画面で方針を 2 つ持たない**。
+               * 押した瞬間に自分が disabled になるとフォーカスが body に落ちる。
+               */
+              aria-disabled={runtimes.refreshing}
+              onClick={() => {
+                if (runtimes.refreshing) return
+                void runtimes.refresh().catch(() => undefined)
+              }}
             >
               {runtimes.refreshing ? '再検出中…' : 'ランタイムを再検出'}
             </Button>
