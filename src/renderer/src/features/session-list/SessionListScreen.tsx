@@ -32,7 +32,10 @@ import {
   PENDING_REASON_LABELS,
   TARGET_STATUS_LABELS,
   UNKNOWN_REASON_LABELS,
-  remedyFor
+  countText,
+  coverageOf,
+  remedyFor,
+  type Coverage
 } from './labels'
 import { buildSessionRows, rowTitleText, type SessionSection } from './rows'
 import { useFolderLabels } from './useFolderLabels'
@@ -177,22 +180,25 @@ function registerSeedOf(group: SessionGroupDTO): FolderDraftSeed | null {
 function Section({
   section,
   folderName,
-  complete,
-  outcomes
+  coverage,
+  onRetry
 }: {
   section: SessionSection
   folderName: string | null
-  /** 全所在ぶんが出そろったか。**件数の見せ方を決める** (FR-037)。 */
-  complete: boolean
   /**
-   * この区画に関わりうる所在の結果。**0 件の意味を決める** (ux H-004)。
+   * 索引をどこまで信じてよいか (不変条件 5)。**件数と 0 件の意味を両方決める。**
    *
-   * 「読めなかった」を「無い」と読ませてはならない (FR-012)。
+   * **区画ごとの `outcomes` を持たない。** 以前は区画に関わりうる所在の一覧を渡していたが、
+   * 登録フォルダの行は越境でどの所在からも来るため**所在で絞れず**、
+   * 0 行の区画には全所在が渡っていた。その結果
+   * 失敗理由が (登録フォルダ数 × 失敗所在数) 回反復し、
+   * 逆に**行がある区画には警告が 1 文字も出なかった** (pr-gate Round 3 / UX3-003)。
    *
-   * **代表 1 件に潰さない** (pr-gate Round 1 / ux H-203)。
-   * 複数所在にまたがる区画で 1 件を選ぶと、必ず**当て推量**になる。
+   * 理由の一覧は `Outcomes` 区画に 1 回だけ置く。ここは「断言してよいか」だけを見る。
    */
-  outcomes: readonly EnumerationOutcomeDTO[]
+  coverage: Coverage
+  /** 0 件の区画から取り直す (FR-032 / SC-013 の「導線」)。 */
+  onRetry: () => void
 }): React.JSX.Element {
   const collapsible = section.group.kind === 'unregistered'
   const [open, setOpen] = useState(!collapsible)
@@ -232,13 +238,7 @@ function Section({
           </h3>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <span className="text-muted-foreground text-xs">
-            {countText(
-              count,
-              complete,
-              outcomes.some((outcome) => outcome.truncated)
-            )}
-          </span>
+          <span className="text-muted-foreground text-xs">{countText(count, coverage)}</span>
           {registerSeed !== null && (
             <Button
               variant="outline"
@@ -277,7 +277,7 @@ function Section({
         状態は `aria-expanded` が運ぶので、これで 4.1.2 は満たす。
       */}
       <div id={panelId}>
-        {open && count === 0 && <SectionEmpty complete={complete} outcomes={outcomes} />}
+        {open && count === 0 && <SectionEmpty coverage={coverage} onRetry={onRetry} />}
 
         {open && count > 0 && (
           <div className="mt-2">
@@ -310,63 +310,55 @@ function Section({
  * **「読めなかった」を「無い」と読ませてはならない** (FR-012)。
  */
 function SectionEmpty({
-  complete,
-  outcomes
+  coverage,
+  onRetry
 }: {
-  complete: boolean
-  outcomes: readonly EnumerationOutcomeDTO[]
+  coverage: Coverage
+  onRetry: () => void
 }): React.JSX.Element {
-  if (!complete) {
+  if (coverage === 'pending') {
     return <p className="text-muted-foreground mt-2 text-sm">取得中です。</p>
   }
 
-  const failed = outcomes.filter((outcome) => outcome.status === 'failed')
-
   /*
-   * **1 件でも読めていなければ 0 件と断言しない**
-   * (pr-gate Round 1 / ux H-201 / FR-012)。
+   * **早期 return をやめた** (pr-gate Round 4 / 不変条件 5 / UX3-004)。
    *
-   * 以前は「関係する所在を **1 つに絞れたとき**だけ」読めなかったと言い、
-   * 絞れなければ「このフォルダのセッションはありません。」へ落ちていた。
-   * **判定が逆だった** — 絞れないのは複数の所在が関わるときであり、
-   * それはむしろ隠れている行がある可能性が高い状況である。
+   * 以前は失敗が 1 件でもあると注記だけを返していた。その結果、停止中のディストロが
+   * 1 つあるだけで **US-1 AC-9 の「このフォルダで Claude Code を使うと、ここに並びます」が
+   * 0 件の登録フォルダ全部から消えた**。これは頻出の状態である。
    *
-   * **どの所在が読めなかったかを列挙する。** 代表 1 件を選ぶと
-   * 関係しない所在の解消手順を出しうる (ux H-203)。
+   * 2 つは両立する — 「このフォルダには履歴が無い」と
+   * 「ただし読めていない所在があるので、隠れている行があるかもしれない」。
+   * 片方を消す理由が無い。
+   *
+   * **理由の一覧はここに出さない。** 区画の数だけ反復するので `Outcomes` に 1 回だけ置く
+   * (UX3-003)。ここは「断言してよいか」だけを見る。
    */
-  if (failed.length > 0) {
-    return (
-      <div className="mt-2 space-y-0.5">
-        <p className="text-sm">
-          {failed.length === outcomes.length
-            ? 'この区画に関わる所在を列挙できていません。'
-            : '列挙できていない所在があるため、ここに出ていない行があるかもしれません。'}
-        </p>
-        <ul className="text-muted-foreground space-y-0.5 text-xs">
-          {failed.map((outcome) => (
-            <li key={outcome.targetKey}>
-              {locationLabelOf(outcome.location)}
-              {outcome.reasonKey !== null && (
-                <>
-                  {' — '}
-                  {FAILURE_REASON_LABELS[outcome.reasonKey]}{' '}
-                  {FAILURE_REASON_HINTS[outcome.reasonKey]}
-                </>
-              )}
-            </li>
-          ))}
-        </ul>
-      </div>
-    )
-  }
-
-  /* **履歴 0 件の登録フォルダを画面から消さない** (FR-051)。 */
   return (
     <div className="mt-2 space-y-0.5">
-      <p className="text-muted-foreground text-sm">このフォルダのセッションはありません。</p>
+      <p className="text-muted-foreground text-sm">
+        {coverage === 'complete'
+          ? 'このフォルダのセッションはありません。'
+          : 'このフォルダで見つかったセッションはありません。'}
+      </p>
       <p className="text-muted-foreground text-xs">
         このフォルダで Claude Code を使うと、ここに並びます。
       </p>
+      {coverage === 'partial' ? (
+        /*
+         * **ここに操作を置かない** (不変条件 2)。読めていない所在の直し方は理由で変わり、
+         * 再取得では直らないものもある。判定は `Outcomes` の `RemedyButton` が 1 箇所で持つので、
+         * ここはそこへ案内する。区画ごとに操作を置くと基準が 2 つに戻る。
+         */
+        <p className="text-xs">
+          ただし列挙できていない所在があります。下の「列挙の結果」を確認してください。
+        </p>
+      ) : (
+        /* **文言だけで終わらせない** (FR-032 / SC-013)。この区画だけ操作が 0 件だった。 */
+        <Button variant="outline" size="sm" className="mt-1" onClick={onRetry}>
+          取り直す
+        </Button>
+      )}
     </div>
   )
 }
@@ -504,19 +496,6 @@ function unlistedHint(outcomes: readonly EnumerationOutcomeDTO[]): string {
   return '所在ごとの理由は「列挙の結果」を確認してください。'
 }
 
-/**
- * 件数の文 (FR-037 / FR-038)。
- *
- * **確定と言えるのは「出そろっていて、かつ打ち切っていない」ときだけである**
- * (pr-gate Round 1 / ux H-204)。以前は `complete` だけを見ていたため、
- * 上限で打ち切った対象の隣に「5000 件」と**確定形**で出ていた。
- * 同じ行に「上限で打ち切りました」が並んでおり、文が互いに矛盾していた。
- */
-function countText(count: number, complete: boolean, truncated = false): string {
-  if (!complete) return `${count} 件以上 (取得中)`
-  return truncated ? `${count} 件以上` : `${count} 件`
-}
-
 /*
  * **取得中のボタンを `disabled` にしない** (code-gate iteration 1 / a11y H-007)。
  *
@@ -558,7 +537,7 @@ function Outcomes({
   onRetry,
   onFetchMore,
   busy,
-  complete
+  coverage
 }: {
   outcomes: readonly EnumerationOutcomeDTO[]
   onRediscover: () => void
@@ -567,8 +546,8 @@ function Outcomes({
   /** 上限で打ち切られた対象の続きを取る (FR-038 / ux H-007)。 */
   onFetchMore: (targetKey: string, offset: number) => void
   busy: boolean
-  /** 全所在ぶんが出そろったか。**件数の見せ方を決める** (FR-037)。 */
-  complete: boolean
+  /** 索引をどこまで信じてよいか (不変条件 5)。**件数の見せ方を決める** (FR-037)。 */
+  coverage: Coverage
 }): React.JSX.Element {
   return (
     <section className={cn(paper, 'rounded-xl p-3')}>
@@ -604,7 +583,11 @@ function Outcomes({
             )}
             {outcome.status === 'ok' && (
               <span className="text-muted-foreground text-xs">
-                {countText(outcome.count, complete, outcome.truncated)}
+                {/*
+                  **この行の件数は、この行が打ち切られたかで決まる。**
+                  索引全体の coverage は他の所在の失敗も含むので、行の断言には使わない。
+                */}
+                {countText(outcome.count, outcome.truncated ? 'partial' : coverage)}
               </span>
             )}
             {outcome.truncated && (
@@ -635,42 +618,14 @@ function Outcomes({
 }
 
 /**
- * 区画の内容を左右しうる所在の結果 (ux H-004 / pr-gate Round 1 / ux H-203)。
+ * 画面が出す空状態 (FR-032 / SC-013)。**同時に出るのは高々 1 つである。**
  *
- * **1 件に絞らない。** 以前は 1 件を返す形で、決められないときに
- * `outcomes[0]` を**当て推量で**返していた。所在の並びは探索順で決まるため、
- * 「Ubuntu-22.04 の権限不足を解消してください」という手順が
- * **Windows の登録フォルダの区画の下**に出ていた。
- * 解消手順は間違った所在に向けると、正しいときより悪い —
- * 利用者はそちらを操作して、状況が変わらない理由を得られない。
- *
- * **登録フォルダの区画は所在で絞れない。** Windows の登録フォルダを
- * WSL から `/mnt/c/...` 経由で使う形を本 feature は越境として一級で扱っており
- * (`group.ts` / FR-023)、**どの所在の失敗でもその登録フォルダの行を隠しうる**。
- * 所在が定義に含まれるグループ (`pending` / `unregistered`) だけが絞れる。
+ * FR-032 は 5 条件を挙げているが、実装はさらに「読めた所在にセッションが無い」を持つ
+ * (pr-gate Round 1 / ux H-201)。**どれも「区画が 0 件か」ではなく索引の性質で決まる** —
+ * `folder` グループは登録フォルダから必ず seed されるので、区画数では判定できない。
  */
-function outcomesForSection(
-  section: SessionSection,
-  outcomes: readonly EnumerationOutcomeDTO[]
-): readonly EnumerationOutcomeDTO[] {
-  const groupLocation =
-    section.group.kind === 'pending' || section.group.kind === 'unregistered'
-      ? section.group.location
-      : null
-
-  if (groupLocation !== null) {
-    const label = locationLabelOf(groupLocation)
-    return outcomes.filter((outcome) => locationLabelOf(outcome.location) === label)
-  }
-
-  /* 行があるなら、**その行が来た対象**だけが件数に関わる。 */
-  const targetKeys = new Set(section.sessions.map((session) => session.targetKey))
-  if (targetKeys.size > 0) {
-    return outcomes.filter((outcome) => targetKeys.has(outcome.targetKey))
-  }
-
-  return outcomes
-}
+type EmptyNotice =
+  'no-folders' | 'filtered-out' | 'all-unlisted' | 'some-unlisted' | 'no-sessions' | null
 
 /**
  * 絞り込みの選択肢 1 つ (code-gate iteration 1 / a11y H-003)。
@@ -855,38 +810,38 @@ export function SessionListScreen(): React.JSX.Element {
    *
    * **取得中は出さない。** 段階描画の途中で「まだありません」と断言しない (FR-037)。
    */
-  /** 1 件でも読めていない所在があるか (pr-gate Round 1 / ux H-201)。 */
-  const hasFailure = (sessions.index?.outcomes ?? []).some((o) => o.status === 'failed')
+  /**
+   * 索引をどこまで信じてよいか (pr-gate Round 4 / 不変条件 5)。
+   *
+   * **画面の断言はすべてここから来る。** 以前は `complete` / `hasFailure` /
+   * `outcomes.some(truncated)` / `outcome.truncated` / `outcomesForSection` の
+   * **5 通りの判定**が散っており、ずれたところが欠陥になっていた。
+   */
+  const coverage = coverageOf(sessions.index)
 
-  const indexLevelNotice: 'all-unlisted' | 'some-unlisted' | 'no-sessions' | null = (() => {
-    if (sessions.index === null || filtering) return null
-
-    /*
-     * **取得中は断言しない** (pr-gate Round 1 / ux H-202 / FR-037)。
-     * main は所在 1 件ぶんずつ公開するので、**最初に公開された所在が失敗していれば
-     * その時点の `outcomes` は「全件 failed」になる** —
-     * ホストが先頭なので、ホストの権限不足で「どの所在も列挙できていません」が
-     * 8 秒級のあいだ出て、次の所在が成功すると黙って消えた。
-     * しかも CTA (`rediscover`) は進行中の段階描画を捨ててやり直す。
-     *
-     * 同じ規則を `no-sessions` は既に持っていた。**片方だけ漏れていた。**
-     */
-    if (!sessions.index.complete) return null
-
+  /**
+   * 空状態を 1 つの優先順位で決める (pr-gate Round 4 / 不変条件 5 / UX3-006)。
+   *
+   * **以前は 2 つの条件が排他でなかった。** 索引レベルの通知 (`indexLevelNotice !== null`) と
+   * 区画 0 件の通知 (`visible.length === 0`) が別々に描かれ、初回起動
+   * (登録 0 件 + ディストロ停止中) で `EmptyState` が 2 枚積まれた。
+   * しかも**新規利用者が最初に押すべき「作業フォルダを登録する」が下に来た**。
+   *
+   * 優先順位を 1 箇所で決める。**上から順に、最初に当たったものだけを出す。**
+   */
+  const emptyNotice: EmptyNotice = (() => {
+    if (sessions.index === null) return null
+    /* 1. 登録が無い。**初回利用者の最優先はこれである。** */
+    if (folderLabels.entries.length === 0 && view.sections.length === 0) return 'no-folders'
+    /* 2. 絞り込みの結果 0 件。解除すれば直るので、索引の性質と混ぜない。 */
+    if (filtering && visible.length === 0) return 'filtered-out'
+    /* 3. 取得中は断言しない (FR-037)。 */
+    if (coverage === 'pending') return null
+    /* 4. どの所在も読めていない。 */
     if (allUnlisted) return 'all-unlisted'
-
-    /*
-     * **一部だけ失敗している状態を「無い」と言わない**
-     * (pr-gate Round 1 / ux H-201 / FR-012)。
-     *
-     * `outcomes` に failed が混ざっていても `allUnlisted` は偽なので、
-     * 総数 0 のとき「セッションがまだありません」に落ちていた。
-     * 同じ索引で区画も 0 件を断言するため、**画面の 2 箇所が「無い」と言い、
-     * 「読めなかった」は所在の行 1 つだけに残っていた**。
-     * 「履歴なし」と「列挙できませんでした」を訳し分けた意味が消える。
-     */
-    if (total === 0 && hasFailure) return 'some-unlisted'
-
+    /* 5. 読めた所在にセッションが無い。**「無い」ではなく「分からない」である。** */
+    if (total === 0 && coverage === 'partial') return 'some-unlisted'
+    /* 6. 全部読めて 0 件。**ここでだけ「まだありません」と言える。** */
     if (total === 0 && folderLabels.entries.length > 0) return 'no-sessions'
     return null
   })()
@@ -935,11 +890,18 @@ export function SessionListScreen(): React.JSX.Element {
               {sessions.index === null
                 ? '未取得'
                 : `取得時刻 ${formatTime(sessions.index.fetchedAt)}`}
-              {sessions.index !== null && !sessions.index.complete && (
-                /* **先頭ページ段階では件数を確定値として見せない** (FR-037)。 */
+              {/*
+                **「試した」で断言しない** (pr-gate Round 4 / 不変条件 5 / UX3-005)。
+                `complete` は全所在を*試した*ことしか意味しない。失敗があっても真になるので、
+                読めなかった所在があるときに「全 N 件」と断言していた。
+              */}
+              {sessions.index !== null && coverage === 'pending' && (
                 <span> — 先頭ページのみ表示しています（件数は確定していません）</span>
               )}
-              {sessions.index?.complete === true && <span> — 全 {total} 件</span>}
+              {coverage === 'partial' && (
+                <span> — {total} 件以上（読めていない所在があります）</span>
+              )}
+              {coverage === 'complete' && <span> — 全 {total} 件</span>}
             </p>
           </div>
           <Button
@@ -974,7 +936,7 @@ export function SessionListScreen(): React.JSX.Element {
           <Outcomes
             outcomes={sessions.index.outcomes}
             busy={sessions.loading}
-            complete={sessions.index.complete}
+            coverage={coverage}
             onRediscover={() => void sessions.rediscover()}
             onRetry={() => void sessions.refresh()}
             onFetchMore={(targetKey, offset) => void sessions.fetchMore(targetKey, offset)}
@@ -1048,19 +1010,48 @@ export function SessionListScreen(): React.JSX.Element {
             </div>
           )}
 
-        {sessions.index !== null && indexLevelNotice !== null && (
-          /*
-           * **索引の性質で判定する空状態** (FR-032 / SC-013 / code-gate iteration 1 / ux H-003)。
-           *
-           * **区画が 0 件かどうかでは判定できない。** `folder` グループは登録フォルダから
-           * 必ず seed されるため (FR-051 / `group.ts`)、登録フォルダが 1 件でもあれば
-           * 区画は必ず 1 件以上になる。その結果「セッション 0 件」と「全所在が未列挙」の
-           * 2 分岐は**実機で到達不能**で、復旧の導線が一度も出なかった。
-           *
-           * **区画は消さない** (FR-051)。説明と導線を区画一覧の上に出す。
-           */
+        {/*
+         * **空状態は 1 枚だけ出す** (pr-gate Round 4 / 不変条件 5 / FR-032 / SC-013)。
+         *
+         * 以前は索引レベルの通知と「区画が 1 つも無いとき」の通知が**別々の条件**で
+         * 描かれ、排他でなかった。初回起動 (登録 0 件 + ディストロ停止中) で
+         * `EmptyState` が 2 枚積まれ、最優先の「作業フォルダを登録する」が下に来ていた。
+         *
+         * **区画は消さない** (FR-051)。説明と導線を区画一覧の上に出す。
+         * どの分岐も**文言ではなく操作**を出す — 文言だけでは、次に何をすればよいか
+         * 分かってもその場でできない。
+         */}
+        {emptyNotice !== null && (
           <EmptyState>
-            {indexLevelNotice === 'all-unlisted' ? (
+            {emptyNotice === 'no-folders' && (
+              <>
+                <p className="text-sm">作業フォルダがまだ登録されていません。</p>
+                <p className="text-muted-foreground text-xs">
+                  登録すると、そのフォルダのセッションがここに並びます。
+                </p>
+                <Button variant="outline" size="sm" onClick={() => setScreen('folders')}>
+                  作業フォルダを登録する
+                </Button>
+              </>
+            )}
+
+            {emptyNotice === 'filtered-out' && (
+              <>
+                <p className="text-sm">絞り込みに一致するセッションがありません。</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setLocationFilter({ kind: 'all' })
+                    setFolderFilter(null)
+                  }}
+                >
+                  絞り込みを解除する
+                </Button>
+              </>
+            )}
+
+            {emptyNotice === 'all-unlisted' && sessions.index !== null && (
               <>
                 <p className="text-sm">どの所在も列挙できていません。</p>
                 <p className="text-muted-foreground text-xs">
@@ -1074,22 +1065,18 @@ export function SessionListScreen(): React.JSX.Element {
                   onRediscover={() => void sessions.rediscover()}
                 />
               </>
-            ) : indexLevelNotice === 'some-unlisted' ? (
+            )}
+
+            {emptyNotice === 'some-unlisted' && sessions.index !== null && (
               /*
-               * **「一部は読めなかった」を持つ** (pr-gate Round 1 / ux H-201)。
-               *
-               * この状態は以前「セッションがまだありません。」に落ちていた。
-               * 読めた所在が 0 件で、読めなかった所在がある —
-               * **画面に出ている 0 件は「無い」ではなく「分からない」である**。
-               * 導線も違う: 使い始めを促すのではなく、読めなかった所在を直す。
+               * 読めた所在が 0 件で、読めなかった所在がある。
+               * **画面に出ている 0 件は「無い」ではなく「分からない」である。**
+               * 導線も違う — 使い始めを促すのではなく、読めなかった所在を直す。
                */
               <>
                 <p className="text-sm">列挙できた所在にセッションがありません。</p>
                 <p className="text-muted-foreground text-xs">
-                  列挙できていない所在があります —{' '}
-                  {unlistedHint(
-                    sessions.index.outcomes.filter((outcome) => outcome.status === 'failed')
-                  )}
+                  列挙できていない所在があります — {unlistedHint(sessions.index.outcomes)}
                 </p>
                 <RemedyButton
                   reasons={failureReasonsOf(sessions.index.outcomes)}
@@ -1098,7 +1085,9 @@ export function SessionListScreen(): React.JSX.Element {
                   onRediscover={() => void sessions.rediscover()}
                 />
               </>
-            ) : (
+            )}
+
+            {emptyNotice === 'no-sessions' && (
               <>
                 <p className="text-sm">セッションがまだありません。</p>
                 <p className="text-muted-foreground text-xs">
@@ -1122,56 +1111,14 @@ export function SessionListScreen(): React.JSX.Element {
             <Section
               key={section.key}
               section={section}
-              complete={sessions.index?.complete === true}
-              outcomes={outcomesForSection(section, sessions.index?.outcomes ?? [])}
+              coverage={coverage}
+              onRetry={() => void sessions.refresh()}
               folderName={
                 section.group.kind === 'folder' ? folderLabels.nameOf(section.group.folderId) : null
               }
             />
           ))}
         </ThreadListRoot>
-
-        {sessions.index !== null && visible.length === 0 && (
-          /*
-           * **区画が 1 つも無いときの空状態** (FR-032 / SC-013)。
-           * どの条件も**文言ではなく操作**を出す — 文言だけでは次に何をすればよいか
-           * 分かっても、その場でできない。
-           *
-           * **「セッション 0 件」と「全所在が未列挙」はここに無い。**
-           * どちらも登録フォルダがあれば区画が生まれて到達できないため、
-           * 索引の性質で判定して上のバナーに出している (ux H-003)。
-           */
-          <EmptyState>
-            {filtering ? (
-              <>
-                <p className="text-sm">絞り込みに一致するセッションがありません。</p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setLocationFilter({ kind: 'all' })
-                    setFolderFilter(null)
-                  }}
-                >
-                  絞り込みを解除する
-                </Button>
-              </>
-            ) : folderLabels.entries.length === 0 ? (
-              <>
-                <p className="text-sm">作業フォルダがまだ登録されていません。</p>
-                <p className="text-muted-foreground text-xs">
-                  登録すると、そのフォルダのセッションがここに並びます。
-                </p>
-                <Button variant="outline" size="sm" onClick={() => setScreen('folders')}>
-                  作業フォルダを登録する
-                </Button>
-              </>
-            ) : (
-              /* 索引の性質による分岐は上のバナーが担う (ux H-003)。 */
-              <p className="text-sm">表示できる区画がありません。</p>
-            )}
-          </EmptyState>
-        )}
       </div>
     </AssistantRuntimeProvider>
   )

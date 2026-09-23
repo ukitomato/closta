@@ -272,11 +272,14 @@ describe('SessionListScreen', () => {
 
     await waitFor(() => expect(screen.getByText('停止中のため未列挙')).toBeInTheDocument())
     /*
-     * **2 箇所に出る。** 所在ごとの行 (理由の帰属) と、索引の性質による
-     * バナー (復旧の導線つき。ux H-003 で到達可能にした) の両方である。
-     * バナーは全所在が同じ理由のときその理由のヒントを出すので、ここでは重なる。
+     * **解消手順は 1 箇所にだけ出す** (pr-gate Round 4 / 不変条件 5 / UX3-003)。
+     *
+     * 以前はこの assert が `.toBe(2)` で、所在の行と索引バナーの**重複を期待値にしていた**。
+     * 区画にも同じ理由を出していたため、実際には
+     * (登録フォルダ数 × 失敗所在数) 回まで反復しうる状態だった。
+     * 理由の正本は「列挙の結果」の行であり、バナーは要約に徹する。
      */
-    expect(screen.getAllByText('ディストロを起動してから再取得してください。').length).toBe(2)
+    expect(screen.getAllByText('ディストロを起動してから再取得してください。').length).toBe(1)
   })
 
   it('打ち切りを黙って隠さない (FR-038)', async () => {
@@ -475,8 +478,17 @@ describe('SessionListScreen — 失敗の封じ込めと空状態 (FE-064)', () 
     render(<SessionListScreen />)
 
     await waitFor(() => expect(screen.getByText('読み取り権限がありません')).toBeInTheDocument())
-    // **成功した所在の行は残る。**
-    expect(screen.getByText(/全 2 件/)).toBeInTheDocument()
+    // **成功した所在の行は残る。** これが SC-007 の要点である。
+    expect(screen.getAllByText('要約').length).toBe(2)
+    /*
+     * **ただし件数は確定形にしない** (pr-gate Round 4 / 不変条件 5 / UX3-005)。
+     *
+     * 以前はここが `getByText(/全 2 件/)` で、**失敗があるのに確定形で断言する状態を
+     * 期待値にしていた**。`complete` は「全所在を試した」であって
+     * 「全所在を読めた」ではない。読めなかった所在があれば総数は下限でしかない。
+     */
+    expect(screen.queryByText(/全 2 件/)).not.toBeInTheDocument()
+    expect(screen.getByText(/2 件以上（読めていない所在があります）/)).toBeInTheDocument()
     // 見出しと絞り込みボタンの双方に出る。**識別子ではなく表示名である**ことが要点 (FR-047)。
     expect(screen.getAllByText('work').length).toBeGreaterThan(0)
   })
@@ -1160,16 +1172,22 @@ describe('SessionListScreen — 空状態の断言', () => {
 
     render(<SessionListScreen />)
 
-    await waitFor(() =>
-      expect(
-        screen.getByText('列挙できていない所在があるため、ここに出ていない行があるかもしれません。')
-      ).toBeInTheDocument()
-    )
-    expect(screen.queryByText('このフォルダのセッションはありません。')).not.toBeInTheDocument()
+    const section = await screen.findByRole('region', { name: /project/ })
+    /* **0 件を断言しない。** 「無い」ではなく「見つからなかった」に留める。 */
+    expect(section.textContent).not.toContain('このフォルダのセッションはありません。')
+    expect(section.textContent).toContain('列挙できていない所在があります')
+    /* **US-1 AC-9 の案内を消さない。** 以前は失敗があると早期 return で消えていた。 */
+    expect(section.textContent).toContain('このフォルダで Claude Code を使うと、ここに並びます。')
   })
 
-  it('読めなかった所在を代表 1 件に潰さない (FR-012)', async () => {
-    /* 理由が所在ごとに違う。**片方だけ出すと、もう片方は直しようがない。** */
+  it('区画に失敗理由を反復させない (FR-012 / 不変条件 5)', async () => {
+    /*
+     * **理由の正本は「列挙の結果」の 1 箇所である** (pr-gate Round 4 / UX3-003)。
+     *
+     * 以前は区画ごとに失敗理由を全部並べていた。登録フォルダの行は越境で
+     * どの所在からも来るため所在で絞れず、0 行の区画には**全所在**が渡っていた。
+     * その結果 (登録フォルダ数 × 失敗所在数) 回まで同じ文が反復した。
+     */
     installWithFolders(
       index([folderGroup([])], {
         outcomes: [
@@ -1181,10 +1199,16 @@ describe('SessionListScreen — 空状態の断言', () => {
 
     render(<SessionListScreen />)
 
-    const section = await screen.findByRole('region', { name: /project/ })
-    expect(section.textContent).toContain('そのユーザのホームは Windows 側から読めません。')
-    expect(section.textContent).toContain('ディストロを起動してから再取得してください。')
-    expect(section.textContent).toContain('Ubuntu')
+    await waitFor(() => expect(screen.getByText('列挙の結果')).toBeInTheDocument())
+
+    /* 理由と解消手順はそれぞれ 1 箇所にだけ出る。 */
+    expect(screen.getAllByText('そのユーザのホームは Windows 側から読めません。').length).toBe(1)
+    expect(screen.getAllByText('ディストロを起動してから再取得してください。').length).toBe(1)
+
+    /* 区画は参照だけを持つ。 */
+    const section = screen.getByRole('region', { name: /project/ })
+    expect(section.textContent).not.toContain('そのユーザのホームは Windows 側から読めません。')
+    expect(section.textContent).toContain('「列挙の結果」を確認してください')
   })
 
   it('打ち切った所在の件数を確定形で出さない (FR-038)', async () => {
@@ -1293,5 +1317,127 @@ describe('SessionListScreen — 失敗の理由と操作の対応', () => {
       screen.queryByRole('button', { name: 'ランタイムを再検出して取り直す' })
     ).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '取り直す' })).not.toBeInTheDocument()
+  })
+})
+
+/**
+ * 「試した」と「読めた」を分ける (pr-gate Round 4 / 不変条件 5 / FR-037 / FR-012)。
+ *
+ * 根は `session-service.ts` の `complete = done && scope.kind === 'all'` で、
+ * これは**全所在を試したことしか意味しない**。失敗があっても真になる。
+ * そこから派生した「断言してよいか」の判定が画面に 5 通り散っていた。
+ *
+ * ここでは**組み合わせを生成して**、断言が漏れないことを 1 本で守る。
+ * 文言を 1 つずつ数えるやり方は、Round 1〜3 で 3 度すり抜けた。
+ */
+describe('SessionListScreen — 断言してよいかの一貫性', () => {
+  function indexWith(options: {
+    complete?: boolean
+    failed?: boolean
+    truncated?: boolean
+  }): SessionIndexDTO {
+    const outcomes: EnumerationOutcomeDTO[] = [outcome({ count: 2, truncated: options.truncated })]
+    if (options.failed === true) {
+      outcomes.push(
+        outcome({
+          targetKey: 'wsl:Ubuntu#0',
+          location: { kind: 'wsl', distroName: 'Ubuntu' },
+          status: 'failed',
+          reasonKey: 'permission-denied',
+          count: 0
+        })
+      )
+    }
+    return index([folderGroup([session({ sessionId: 'a' }), session({ sessionId: 'b' })])], {
+      complete: options.complete ?? true,
+      outcomes
+    })
+  }
+
+  it.each([
+    ['取得中', { complete: false }],
+    ['読めなかった所在がある', { failed: true }],
+    ['打ち切った所在がある', { truncated: true }],
+    ['両方', { failed: true, truncated: true }],
+    ['取得中かつ失敗', { complete: false, failed: true }]
+  ])('%s とき、画面のどこにも確定形の件数が出ない', async (_label, options) => {
+    installWithFolders(indexWith(options))
+
+    render(<SessionListScreen />)
+    await waitFor(() => expect(screen.getAllByText('要約').length).toBe(2))
+
+    /* **総数を確定形で出さない。** */
+    expect(screen.queryByText(/全 \d+ 件/)).not.toBeInTheDocument()
+
+    /*
+     * **件数を出す場所はすべて下限表記になる。** 黙って隠すのではない (FR-037)。
+     * ヘッダ・区画の 2 箇所が対象で、所在の行は `status === 'ok'` のときだけ出る。
+     */
+    const counts = screen.getAllByText(/\d+ 件/)
+    expect(counts.length).toBeGreaterThanOrEqual(2)
+    for (const node of counts) expect(node.textContent).toContain('件以上')
+  })
+
+  it('全所在を読めたときだけ確定形を出す', async () => {
+    installWithFolders(indexWith({}))
+
+    render(<SessionListScreen />)
+    await waitFor(() => expect(screen.getByText(/全 2 件/)).toBeInTheDocument())
+
+    expect(document.body.textContent ?? '').not.toContain('件以上')
+  })
+
+  /*
+   * **空状態は同時に 1 枚だけ** (UX3-006)。
+   *
+   * 以前は索引レベルの通知と「区画が 1 つも無いとき」の通知が別々の条件で描かれ、
+   * 排他でなかった。初回起動 (登録 0 件 + ディストロ停止中) で 2 枚積まれ、
+   * **最優先の「作業フォルダを登録する」が下に来ていた**。
+   */
+  it.each([
+    ['初回起動 (登録 0 件 + 全所在失敗)', [] as SessionGroupDTO[], true],
+    ['登録あり + 全所在失敗', [folderGroup([])], true],
+    ['登録あり + 成功 0 件', [folderGroup([])], false]
+  ])('空状態は同時に 1 枚しか出ない (%s)', async (_label, groups, failed) => {
+    installWithFolders(
+      index(groups, {
+        outcomes: [
+          failed
+            ? outcome({ status: 'failed', reasonKey: 'distro-not-running', count: 0 })
+            : outcome({ status: 'no-history', count: 0 })
+        ]
+      })
+    )
+
+    render(<SessionListScreen />)
+    await waitFor(() => expect(screen.getByText('列挙の結果')).toBeInTheDocument())
+
+    expect(document.querySelectorAll('[data-slot="empty-state"]')).toHaveLength(1)
+  })
+
+  it('登録 0 件のときは登録の導線を最優先で出す (US-2)', async () => {
+    installCapability({
+      listSessions: () =>
+        Promise.resolve(
+          index([], {
+            outcomes: [outcome({ status: 'failed', reasonKey: 'distro-not-running', count: 0 })]
+          })
+        ),
+      listFolders: () =>
+        Promise.resolve({
+          folders: [],
+          restoreIssues: { skipped: 0, reasonKeys: [], backupPath: null }
+        }),
+      onFoldersChanged: () => () => {},
+      onSessionsChanged: () => () => {}
+    })
+
+    render(<SessionListScreen />)
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '作業フォルダを登録する' })).toBeInTheDocument()
+    )
+    /* 失敗のバナーに押し下げられない。 */
+    expect(screen.queryByText('どの所在も列挙できていません。')).not.toBeInTheDocument()
   })
 })

@@ -1,3 +1,4 @@
+import type { SessionIndexDTO } from '@domain/session/dto'
 import type { CwdOriginKind, PendingReason, UnknownReason } from '@domain/session/keys'
 import type { FailureReason, TargetStatus } from '@domain/session/target'
 import type { Boundary } from '@domain/workspace/dto'
@@ -33,6 +34,53 @@ export const FAILURE_REASON_HINTS: Record<FailureReason, string> = {
   'path-too-long': 'ホームディレクトリの位置を見直す必要があります。',
   'stopped-midway': '再取得すると残りを取得できます。',
   'enumeration-failed': '再取得してください。続く場合はログを確認してください。'
+}
+
+/**
+ * 索引をどこまで信じてよいか (pr-gate Round 4 / 不変条件 5 / FR-037 / FR-012)。
+ *
+ * ## なぜ 1 つに畳むか
+ *
+ * 根は `session-service.ts` の 1 行にある。
+ *
+ * ```
+ * complete = done && scope.kind === 'all'
+ * ```
+ *
+ * これは「**全所在を試した**」であって「**全所在を読めた**」ではない。失敗があっても真になる。
+ * そこから派生した「断言してよいか」の判定が画面に 5 通り散っていた —
+ * `complete` の prop、`hasFailure`、区画の `outcomes.some(truncated)`、
+ * 所在行の `outcome.truncated`、`outcomesForSection`。
+ * **同じ問いに 5 通りの答え方があり、ずれたところが欠陥になっていた**
+ * (pr-gate Round 3 / UX3-003 〜 UX3-006)。
+ *
+ * ## 打ち切りも同じ軸である
+ *
+ * 「上限で切った」も「断言できない」の一種なので、別の引数にせずここへ畳む。
+ * 表示は元から 3 通り (`取得中` / `以上` / 確定) あり、**判定だけが散っていた**。
+ */
+export type Coverage =
+  /** まだ出そろっていない。 */
+  | 'pending'
+  /** 出そろったが、読めなかった所在か打ち切った所在がある。**断言しない。** */
+  | 'partial'
+  /** 全部読めた。**ここでだけ件数と空状態を断言してよい。** */
+  | 'complete'
+
+export function coverageOf(index: SessionIndexDTO | null): Coverage {
+  if (index === null || !index.complete) return 'pending'
+  const shaky = index.outcomes.some((outcome) => outcome.status === 'failed' || outcome.truncated)
+  return shaky ? 'partial' : 'complete'
+}
+
+/**
+ * 件数の文 (FR-037 / FR-038)。
+ *
+ * **確定と言えるのは `complete` のときだけである。**
+ */
+export function countText(count: number, coverage: Coverage): string {
+  if (coverage === 'pending') return `${count} 件以上 (取得中)`
+  return coverage === 'partial' ? `${count} 件以上` : `${count} 件`
 }
 
 /**
