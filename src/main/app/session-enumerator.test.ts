@@ -488,14 +488,107 @@ describe('createSessionEnumerator', () => {
     await Promise.resolve()
     await Promise.resolve()
 
-    launcher.workers[0].respond('ready.')
+    /* **観測を先に繋ぎ、マイクロタスクを排出してから見る** (A4-008 と同じ理由)。 */
     let settled = false
     void promise.then(() => {
       settled = true
     })
-    await Promise.resolve()
+
+    launcher.workers[0].respond('ready.')
+    await vi.advanceTimersByTimeAsync(0)
 
     /* 雑音では決着しない。timeout まで待つ。 */
+    expect(settled).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(101)
+    await expect(promise).resolves.toEqual({ ok: false, reasonKey: 'enumeration-failed' })
+    vi.useRealTimers()
+  })
+
+  it.each([
+    ['空のオブジェクト', '{}'],
+    ['構造化ログ', JSON.stringify({ level: 'info', msg: 'sdk ready' })],
+    ['識別子が数値でない', JSON.stringify({ kind: 'ok', version: PROTOCOL_VERSION, id: 'x' })]
+  ])(
+    'JSON オブジェクトでも識別子が読めない行では落とさない (%s / A4-008)',
+    async (_label, noise) => {
+      /*
+       * **雑音が JSON でないという前提を置かない** (pr-gate Round 4 / A4-008 / PB4-007)。
+       *
+       * `enumerator-spawner` は `parentPort` と `stdout` の**両方**を購読し続ける。
+       * Electron 下で応答が載るのは `parentPort` なので、`stdout` は
+       * **雑音専用チャネルとして生きている** — 子は Agent SDK を第三者コードとして
+       * 実行しており、その依存が構造化ログを 1 行吐けば `{...}` である。
+       *
+       * 以前はこの 1 行で当該所在が `failed` になった。
+       * 決着させてよいのは**我々が送った識別子を持つ行**だけである。
+       */
+      vi.useFakeTimers()
+      const launcher = fakeLauncher(false)
+      const enumerator = createSessionEnumerator(deps(launcher))
+
+      const promise = enumerator.enumerate(request(hostTarget(0), null, { timeoutMs: 100 }))
+      await Promise.resolve()
+      await Promise.resolve()
+
+      /*
+       * **観測を先に繋ぐ。** `respond` の後で `.then` を付けると、
+       * 同期的に決着した場合でも 1 tick では `settled` が立たず、
+       * **決着していても緑になる** (変異 M / N が発火しなかった)。
+       */
+      let settled = false
+      void promise.then(() => {
+        settled = true
+      })
+
+      launcher.workers[0].respond(noise)
+      /*
+       * **マイクロタスクを確実に排出する。** `await Promise.resolve()` を
+       * 数回並べる形では、決着までの chain が 1 つ伸びただけで観測が外れる
+       * (実際にそれで変異が発火しなかった)。
+       */
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(settled).toBe(false)
+
+      await vi.advanceTimersByTimeAsync(101)
+      await expect(promise).resolves.toEqual({ ok: false, reasonKey: 'enumeration-failed' })
+      vi.useRealTimers()
+    }
+  )
+
+  it('別の要求の識別子を持つ不正な応答では落とさない (A4-008)', async () => {
+    /*
+     * 識別子が読めても**我々の要求のものでなければ**決着させない。
+     * 直列化しているので普通は起きないが、遅れて届いた前の要求の応答が
+     * 次の要求を巻き添えにしてはならない。
+     */
+    vi.useFakeTimers()
+    const launcher = fakeLauncher(false)
+    const enumerator = createSessionEnumerator(deps(launcher))
+
+    const promise = enumerator.enumerate(request(hostTarget(0), null, { timeoutMs: 100 }))
+    await Promise.resolve()
+    await Promise.resolve()
+
+    /* **観測を先に繋ぐ** (同期決着を見落とさないため)。 */
+    let settled = false
+    void promise.then(() => {
+      settled = true
+    })
+
+    launcher.workers[0].respond(
+      JSON.stringify({
+        kind: 'ok',
+        version: PROTOCOL_VERSION,
+        id: 999,
+        targetKey: hostTarget(0).key,
+        sessions: [],
+        truncated: 'no'
+      })
+    )
+    await vi.advanceTimersByTimeAsync(0)
+
     expect(settled).toBe(false)
 
     await vi.advanceTimersByTimeAsync(101)

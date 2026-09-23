@@ -326,11 +326,26 @@ export function createSessionEnumerator(deps: SessionEnumeratorDeps): SessionEnu
      * \`pending\` が決着せず **\`ENUMERATION_TIMEOUT_MS\` (10 秒) まで宙づり**になり、
      * 直列化されているぶん後続の所在もまるごと待たされた。
      *
-     * **雑音では落とさない。** \`not-a-response\` (JSON オブジェクトですらない行) は
-     * 従来どおり無視する — stdout に紛れた何かで実行中の要求を巻き添えにしない。
+     * **決着させるのは識別子が読めた行だけである**
+     * (pr-gate Round 4 / A4-008 / PB4-007)。
+     *
+     * 初版は「JSON オブジェクトとして読めたか」で雑音と不正応答を分け、
+     * 識別子が読めない行でも決着させていた。根拠は
+     * 「雑音が JSON オブジェクトである見込みは薄い」だったが、**これは実測していない前提**である。
+     *
+     * 実際には `enumerator-spawner` が \`parentPort\` と \`stdout\` の**両方**を購読し続ける。
+     * Electron 下で応答が載るのは \`parentPort\` なので、
+     * **\`stdout\` は雑音専用チャネルとして生きている** — 子は Agent SDK を
+     * 第三者コードとして実行しており、その依存が構造化ログを 1 行吐けば \`{...}\` である。
+     * 実測で \`{}\` も \`{"level":"info"}\` も \`malformed(id: null)\` になり、
+     * **ログ 1 行で当該所在が \`failed\` になっていた**。
+     *
+     * H3-003 (10 秒宙づり) が実害としていたのは「**我々が送った \`id\` を echo する
+     * 壊れた応答**」であり、識別子の照合だけで覆える。
+     * 識別子が読めない行は雑音と同じく無視する。
      */
     if (decoded.kind === 'malformed') {
-      if (decoded.id !== null && decoded.id !== waiting.id) return
+      if (decoded.id !== waiting.id) return
       waiting.settle(failure('enumeration-failed'))
       return
     }
