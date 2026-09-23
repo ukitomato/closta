@@ -1,6 +1,8 @@
 {
   "env": {
-    "PYTHONUTF8": "1"
+    "PYTHONUTF8": "1",
+    "LANG": "ja_JP.UTF-8",
+    "WINELOADERNOEXEC": "1"
   },
   "permissions": {
     "allow": [

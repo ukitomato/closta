@@ -26,6 +26,18 @@ export default defineConfig({
         test: {
           name: 'node',
           environment: 'node',
+          /*
+           * **`threads` を使う。**
+           * 既定の `forks` は 1 ファイルごとに子プロセスを起こす。
+           * このマシンは常駐 security スタックがプロセス生成を hook しており
+           * 1 spawn あたり 400〜2,400ms かかるため、29 ファイル分の起動が
+           * 実行時間を支配していた (実測 `forks` 28.81s / transform 93% →
+           * `threads` 2.05s)。
+           * この project のテストは `process.chdir` / `process.env` の書き換え /
+           * `process.exit` / `child_process` / `worker_threads` を使わないため、
+           * プロセス分離を落としても影響しない (661 テスト全 pass を確認済)。
+           */
+          pool: 'threads',
           // `tests/` 側は `.test.ts` を node、`.test.tsx` を renderer に振り分ける。
           include: ['src/{domain,main,preload,agents}/**/*.test.ts', 'tests/**/*.test.ts']
         }

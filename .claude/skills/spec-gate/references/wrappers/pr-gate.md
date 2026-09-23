@@ -58,6 +58,17 @@ gate_common::registry_assert_agent po-reviewer
 3. `<spec_dir>/.gate-verdict-code.json` の verdict=PASS + critical=0 を `verdict_validate` で確認
 4. base branch (`develop` / `main`) と現在 branch の関係を確認 (`git merge-base --is-ancestor` で diverge 確認)
 5. 必須 reviewer (security / architecture / po) の registry validation
+6. **ルール発火検証 (違反サンプルを展開して検出器を発火させる検証) を 1 回通す**。
+   `docs/discovery.md` の該当行の agent 用コマンドを使う。
+   **code-gate では実行しない**ので、機械検証としてここが最後の砦になる
+   - **Round 1 で 1 回**。Round 2 以降は、直前 round 以降に規則定義 / fixture が
+     変わったときだけ再実行する。規則を変えていなければ答えは変わらない
+   - **他の検出器と並行させない。** サンプルを検査対象へ一時展開するため、
+     同時に走った lint / 依存グラフ検査が展開物を実コードの違反として拾う。
+     同種の実行を 2 つ重ねると一方の後始末が他方の展開物を消し、
+     **「ルールが死んでいる」と誤診する**
+   - 期待表と一致しなければ **Critical** として round に載せる。
+     実行しなかった round はその旨と理由を verdict に記録する
 
 ### Phase 1: Round 番号の決定 + 前 round 引継ぎ
 
@@ -103,20 +114,24 @@ IF convergence_failure:
 
 **system scope reviewer (file pattern 連動、最大 +3)**:
 
-`git diff --name-only <base>...HEAD` から file pattern を判定し動的に追加:
-
-| Pattern | 追加 reviewer |
-|---|---|
-| `**/migrations/**` or `*.sql` | `database-reviewer` |
-| `openapi.yaml` or `**/contracts/*.yaml` | `openapi-contract-reviewer` |
-| `**/*.tsx`, `**/*.vue`, `**/*.dart` (UI files) | `ux-reviewer` / `a11y-reviewer` |
+**pattern をここに書かない。正本は `.specify/spec-gate/reviewers.yml` である。**
+`gate_common::reviewers_filter` が `enabled` / `gates` / `auto_invoke_patterns` /
+`exclude_patterns` を適用して候補を絞る。
 
 ```bash
-active=$(gate_common::registry_filter_agents \
+git diff --name-only "$base"...HEAD > "$spec_dir/.pr-gate-scope.txt"
+
+active=$(gate_common::reviewers_filter pr-gate "$spec_dir/.pr-gate-scope.txt" \
   security-reviewer architecture-reviewer po-reviewer \
   api-performance-reviewer database-reviewer openapi-contract-reviewer \
   ux-reviewer a11y-reviewer)
 ```
+
+**`registry_filter_agents` を直接呼んではならない。** あちらは agent ファイルの存在
+しか見ないため、対象ファイルを 1 件も含まない diff でも reviewer が全部起動する。
+
+絞った理由は stderr に 1 行ずつ出る。**Phase 5 の集約に「起動しなかった reviewer と
+その理由」を必ず転記する。**
 
 `lint-agent`, `test-agent`, `convention-reviewer` は **起動しない** (code-gate 専任)。
 

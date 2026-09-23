@@ -122,20 +122,53 @@ WSL 側の識別子は**ディストロ粒度**で持つ — `\\wsl.localhost\Ub
 
 ## Build / Test / Lint
 
-**すべて存在する** (revision 3)。`convention-reviewer` / `lint-agent` はこの表を正とする。
-**コマンドは `pnpm` で呼ぶ。** 以下はいずれも CI (`.github/workflows/verify.yml`) の 1 ステップでもある。
+**すべて存在する** (revision 3)。`convention-reviewer` / `lint-agent` / `test-agent` はこの表を正とする。
+以下はいずれも CI (`.github/workflows/verify.yml`) の 1 ステップでもある。
 
-| 種別 | コマンド | 何を見るか |
-|---|---|---|
-| **lint** | `pnpm lint` | ESLint 9 (`eslint.config.mjs`)。`eslint-plugin-boundaries` によるレイヤ間の許可行列と、`no-restricted-imports` による標準モジュールの直接 import 禁止 |
-| **型検査** | `pnpm typecheck` | `tsconfig.node.json` と `tsconfig.web.json` の 2 project を順に `tsc --noEmit` |
-| **依存グラフ** | `pnpm depcruise` | dependency-cruiser 18 (`.dependency-cruiser.js`)。**推移的な到達**と循環、`require()` 形式 |
-| **Constitution 検証** | `pnpm check:constitution` | `scripts/constitution/check.mjs`。11 項目。許可リストの正本は `scripts/constitution/allowlists.mjs` |
-| **ユニットテスト** | `pnpm test` | Vitest 5。2 project (node / renderer)。renderer は jsdom + `pool: 'threads'` |
-| **ルール検証** | `pnpm test:rules` | `scripts/rules/run.mjs`。**違反サンプルを検査対象へ展開し、期待した検出器が発火することを確かめる** |
-| **ビルド** | `pnpm build` | 型検査 → `electron-vite build` |
-| **パッケージング** | `pnpm build:win` | `scripts/build/package.mjs` 経由で `electron-builder` ([AD-026](decisions/0026-packaging-first-pass.md)) |
-| **整形** | `pnpm format` | Prettier。**markdown は対象外** (`.prettierignore`。全角の表が崩れ、コードフェンスからセミコロンが消える) |
+**CI / 人間は `pnpm` 列、agent は「agent 用」列を使う。**
+`pnpm X` / `npx X` は **pnpm + シェル + 実体の 3 プロセス**を起こす。
+このマシンは常駐 security スタックがプロセス生成を hook しており
+**1 spawn あたり 400〜2,400ms** かかる (`npm -v` 2,273ms / `npx -v` 2,398ms)。
+実測で lint 13.2s → 7.4s、typecheck 7.5s → 4.1s。
+`package.json` の `scripts` は SSoT なので**変更しない** — agent が読む側だけ直接形にする。
+
+| 種別 | コマンド (CI / 人間) | agent 用 (`node` 直接) | 何を見るか |
+|---|---|---|---|
+| **lint** | `pnpm lint` | `node node_modules/eslint/bin/eslint.js --cache .` | ESLint 9 (`eslint.config.mjs`)。`eslint-plugin-boundaries` によるレイヤ間の許可行列と、`no-restricted-imports` による標準モジュールの直接 import 禁止 |
+| **型検査** | `pnpm typecheck` | `node node_modules/typescript/bin/tsc --noEmit -p tsconfig.node.json --composite false` と `… -p tsconfig.web.json …` の 2 本 | `tsconfig.node.json` と `tsconfig.web.json` の 2 project を順に `tsc --noEmit` |
+| **依存グラフ** | `pnpm depcruise` | `node node_modules/dependency-cruiser/bin/dependency-cruise.mjs src` | dependency-cruiser 18 (`.dependency-cruiser.js`)。**推移的な到達**と循環、`require()` 形式 |
+| **Constitution 検証** | `pnpm check:constitution` | `node scripts/constitution/check.mjs` (同一) | `scripts/constitution/check.mjs`。11 項目。許可リストの正本は `scripts/constitution/allowlists.mjs` |
+| **ユニットテスト** | `pnpm test` | 全件 `node node_modules/vitest/vitest.mjs run` / 絞り込み `node node_modules/vitest/vitest.mjs related --run <files…>` | Vitest 5。2 project (node / renderer)。いずれも `pool: 'threads'` |
+| **ルール検証** | `pnpm test:rules` | `node scripts/rules/run.mjs` (同一)。**code-gate では実行しない** — 下記参照 | `scripts/rules/run.mjs`。**違反サンプルを検査対象へ展開し、期待した検出器が発火することを確かめる** |
+| **ビルド** | `pnpm build` | — (agent は実行しない) | 型検査 → `electron-vite build` |
+| **パッケージング** | `pnpm build:win` | — (agent は実行しない) | `scripts/build/package.mjs` 経由で `electron-builder` ([AD-026](decisions/0026-packaging-first-pass.md)) |
+| **整形** | `pnpm format` | — (agent は実行しない) | Prettier。**markdown は対象外** (`.prettierignore`。全角の表が崩れ、コードフェンスからセミコロンが消える) |
+
+### `test:rules` を code-gate で実行しない理由
+
+**`pnpm test:rules` は code-gate の auto-fix loop から呼ばない。pr-gate で 1 回と CI に任せる。**
+
+- 1 回 **263 秒**かかる。code-gate Phase 3 は auto-fix loop の TAIL なので
+  **毎 iteration 再実行される** (`--max-iter` 既定 3 → 最大 4 回)
+- 検証内容は「ルール定義が生きているか」であり、**ルール定義を変えない限り結果は変わらない**。
+  iteration ごとに実装コードが変わっても答えは同じなので、繰り返す価値がない
+- **CI が毎 PR で実行している** (下記 CI/CD の verify ステップ)。カバレッジは落ちない
+- **pr-gate Phase 0 が Round 1 で 1 回通す** (`cl-pr-gate/SKILL.md`)。
+  Round 2 以降は `eslint.config.mjs` / `.dependency-cruiser.js` /
+  `scripts/constitution/**` / `tests/rule-fixtures/**` / `scripts/rules/**` が
+  直前 round 以降に変わったときだけ再実行する
+- **他の検出器と並行させない。** 違反サンプルを `src/` 配下へ一時展開するため、
+  同時に走った lint / depcruise が展開物を実コードの違反として拾う。
+  同種の実行を 2 つ重ねると一方の後始末が他方の展開物を消し、
+  **「ルールが死んでいる」と誤診する** (実測で 2 度)
+
+### ユニットテストの実行 scope (code-gate)
+
+- **iteration 途中** (`must_fix > 0` のまま次の iter に進む回): `vitest related --run <touched files>`
+- **最終 iteration** (`must_fix == 0` になった回): **全件** `vitest run`。
+  subset だけで PASS にしてはならない — touched files の外側に回帰が出る
+- `.gate-verdict-code.json` の `tracks["test-agent"].scope` に
+  `touched-files` / `full` のどちらで走ったかを必ず記録する
 
 ### lint / 検証が「違反 0」でも足りない理由
 

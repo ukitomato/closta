@@ -70,6 +70,7 @@ Source して使う関数 (代表):
   gate_common::registry_load
   gate_common::registry_assert_agent <name>
   gate_common::registry_filter_agents <name1> <name2> ...
+  gate_common::reviewers_filter <gate> <changed_files_path> <name1> <name2> ...
   gate_common::run_with_timeout <sec> <out_file> -- <cmd...>
   gate_common::truncate_subject <text> [byte_cap=50]
 
@@ -78,6 +79,7 @@ Subcommand (exec):
   bash gate-common.sh verdict-validate <path>
   bash gate-common.sh truncate-subject <text> [cap]
   bash gate-common.sh registry-assert <name>
+  bash gate-common.sh reviewers-filter <gate> <changed_files_path> <name...>
 EOF
 }
 
@@ -616,6 +618,9 @@ gate_common::registry_load() {
   if _gc::has_cmd python3; then
     python3 - "$_GC_REGISTRY_PATH" <<'PYEOF'
 import sys, re
+# Windows: text mode translates LF to CRLF on write. registry_assert_agent reads
+# line by line with `read -r`, so a trailing CR makes every comparison fail.
+sys.stdout.reconfigure(newline="")
 path = sys.argv[1]
 with open(path, "r", encoding="utf-8") as fh:
     text = fh.read()
@@ -666,6 +671,240 @@ gate_common::registry_filter_agents() {
       echo "$name"
     fi
   done
+}
+
+# ═════════════════════════════════════════════════════════════════════
+# § 6b. reviewers.yml gating (enabled / gates / auto_invoke_patterns)
+# ═════════════════════════════════════════════════════════════════════
+#
+# **`registry_filter_agents` は agent ファイルの存在しか見ない。**
+# `.specify/spec-gate/reviewers.yml` には `enabled` / `gates` /
+# `auto_invoke_patterns` の仕組みが最初からあるのに、どのコードも読んでいなかった。
+# そのため a11y / ux は UI を 1 行も触らない diff でも毎 iteration 起動していた。
+#
+# 本関数が reviewers.yml を正として候補を絞る。判断は 4 段:
+#   1. registry + agent ファイルの存在 (registry_filter_agents に委譲)
+#   2. `enabled: false` なら起動しない
+#   3. `gates` に対象 gate が無ければ起動しない
+#   4. `auto_invoke_patterns` があるとき、変更ファイルに 1 件も一致しなければ起動しない
+#      (`exclude_patterns` に一致したファイルは 4 の判定材料から除く)
+#
+# **reviewers.yml に載っていない候補は素通しする。** lint-agent / test-agent /
+# convention-reviewer / security-reviewer 等の常駐は yml の管理対象外であり、
+# ここで落とすと gate が空振りする。
+#
+# 判断理由は **1 行ずつ stderr に出す**。黙って絞ると「起動しなかった」と
+# 「起動して 0 件だった」を区別できない。
+
+_GC_REVIEWERS_PATH=".specify/spec-gate/reviewers.yml"
+
+# 引数: <gate-name> <changed-files-path> <candidate…>
+#   gate-name         : design-gate | code-gate | pr-gate
+#   changed-files-path: 変更ファイルを 1 行 1 パスで列挙したファイル
+#                       (code-gate は `<spec_dir>/.code-gate-scope.txt`、
+#                        pr-gate は `git diff --name-only <base>...HEAD` の出力)
+# 出力 (stdout): 起動すべき agent 名を 1 行ずつ
+gate_common::reviewers_filter() {
+  local gate="${1:?gate name required}"; shift
+  local files_path="${1:?changed files list required}"; shift
+
+  local survivors
+  survivors=$(gate_common::registry_filter_agents "$@")
+  [ -z "$survivors" ] && return 0
+
+  # **落とせない条件が揃わないときは絞らない。**
+  # 起動しすぎは遅いだけだが、起動しなさすぎは検査漏れになる。
+  if [ ! -f "$_GC_REVIEWERS_PATH" ]; then
+    _gc::log "reviewers.yml not found at $_GC_REVIEWERS_PATH; registry filter only"
+    echo "$survivors"; return 0
+  fi
+  if ! _gc::has_cmd python3; then
+    _gc::err "python3 not available; reviewers.yml gating skipped (全候補を起動する)"
+    echo "$survivors"; return 0
+  fi
+  if [ ! -f "$files_path" ]; then
+    _gc::err "changed files list not found: $files_path; reviewers.yml gating skipped"
+    echo "$survivors"; return 0
+  fi
+
+  # agent 名は [A-Za-z0-9_-]+ に限られる (registry_load の正規表現) ため
+  # 意図した word-splitting で argv に渡す。
+  # shellcheck disable=SC2086
+  python3 - "$_GC_REVIEWERS_PATH" "$gate" "$files_path" $survivors <<'PYEOF'
+import re
+import sys
+
+# Windows: text mode が LF を CRLF に変換する。呼び出し側は `read -r` で
+# 1 行ずつ読むため、末尾 CR が付くと比較が必ず外れる (registry_load と同じ理由)。
+sys.stdout.reconfigure(newline="")
+
+yml_path, gate, files_path = sys.argv[1], sys.argv[2], sys.argv[3]
+candidates = sys.argv[4:]
+
+
+def log(msg):
+    print(f"gate-common: reviewers_filter: {msg}", file=sys.stderr)
+
+
+def strip_comment(line):
+    """引用符の外にある `#` 以降を落とす。glob の中の `#` は残す。"""
+    out = []
+    quote = None
+    for ch in line:
+        if quote:
+            out.append(ch)
+            if ch == quote:
+                quote = None
+        elif ch in "\"'":
+            quote = ch
+            out.append(ch)
+        elif ch == "#":
+            break
+        else:
+            out.append(ch)
+    return "".join(out).rstrip()
+
+
+def unquote(s):
+    s = s.strip()
+    if len(s) >= 2 and s[0] == s[-1] and s[0] in "\"'":
+        return s[1:-1]
+    return s
+
+
+def split_flow(v):
+    """`[a, b]` 形式のインライン list を分解する。"""
+    return [unquote(x) for x in v.strip().strip("[]").split(",") if x.strip()]
+
+
+LIST_KEYS = ("auto_invoke_patterns", "exclude_patterns")
+
+
+def parse(path):
+    """reviewers.yml の既知の形だけを読む最小 parser (PyYAML に依存しない)。"""
+    reviewers = []
+    cur = None
+    list_key = None
+    with open(path, "r", encoding="utf-8") as fh:
+        for raw in fh:
+            line = strip_comment(raw)
+            body = line.strip()
+            if not body:
+                continue
+            m = re.match(r"^-\s+name:\s*(.+)$", body)
+            if m:
+                cur = {
+                    "name": unquote(m.group(1)),
+                    "enabled": True,
+                    "gates": None,
+                    "auto_invoke_patterns": [],
+                    "exclude_patterns": [],
+                }
+                reviewers.append(cur)
+                list_key = None
+                continue
+            if cur is None:
+                continue
+            if body.startswith("- "):
+                if list_key:
+                    cur[list_key].append(unquote(body[2:]))
+                continue
+            m = re.match(r"^([A-Za-z0-9_]+):\s*(.*)$", body)
+            if not m:
+                continue
+            key, value = m.group(1), m.group(2).strip()
+            if key in LIST_KEYS:
+                if value:
+                    cur[key] = split_flow(value)
+                    list_key = None
+                else:
+                    list_key = key
+                continue
+            list_key = None
+            if key == "enabled":
+                cur["enabled"] = value.lower() in ("true", "yes", "on", "1")
+            elif key == "gates":
+                cur["gates"] = split_flow(value)
+    return reviewers
+
+
+def glob_to_re(pat):
+    """glob → 正規表現。`**` は階層を跨ぎ、`*` は跨がない。
+
+    `fnmatch` は使えない — `*` が `/` を跨ぐため
+    `features/x/**/*.tsx` が `features/x/A.tsx` に一致しなくなる。
+    """
+    out = []
+    i, n = 0, len(pat)
+    while i < n:
+        if pat.startswith("**/", i):
+            out.append("(?:.*/)?")
+            i += 3
+        elif pat.startswith("**", i):
+            out.append(".*")
+            i += 2
+        elif pat[i] == "*":
+            out.append("[^/]*")
+            i += 1
+        elif pat[i] == "?":
+            out.append("[^/]")
+            i += 1
+        else:
+            out.append(re.escape(pat[i]))
+            i += 1
+    return re.compile("^" + "".join(out) + "$")
+
+
+def matches(patterns, path):
+    """一致した pattern を返す。無ければ None。"""
+    for pat in patterns:
+        rx = glob_to_re(pat)
+        if rx.match(path):
+            return pat
+        # `*.sql` のように `/` を含まない pattern は basename にも当てる
+        # (`**/migrations/**` と並記されており階層を問わない意図のため)。
+        if "/" not in pat and rx.match(path.rsplit("/", 1)[-1]):
+            return pat
+    return None
+
+
+with open(files_path, "r", encoding="utf-8") as fh:
+    changed = [ln.strip().replace("\\", "/") for ln in fh if ln.strip()]
+
+by_name = {r["name"]: r for r in parse(yml_path)}
+
+for name in candidates:
+    spec = by_name.get(name)
+    if spec is None:
+        # yml の管理対象外 = 常駐。ここで落とすと gate が空振りする。
+        print(name)
+        continue
+    if not spec["enabled"]:
+        log(f"{name}: skip — enabled: false")
+        continue
+    if spec["gates"] is not None and gate not in spec["gates"]:
+        log(f"{name}: skip — gates={spec['gates']} に {gate} が無い")
+        continue
+    patterns = spec["auto_invoke_patterns"]
+    if not patterns:
+        print(name)
+        continue
+    hit = None
+    for path in changed:
+        excluded = matches(spec["exclude_patterns"], path)
+        if excluded:
+            continue
+        matched = matches(patterns, path)
+        if matched:
+            hit = (path, matched)
+            break
+    if hit is None:
+        log(f"{name}: skip — auto_invoke_patterns に一致する変更ファイルが無い "
+            f"(変更 {len(changed)} 件 / pattern {len(patterns)} 件)")
+        continue
+    log(f"{name}: start — {hit[0]} が {hit[1]} に一致")
+    print(name)
+PYEOF
 }
 
 # ═════════════════════════════════════════════════════════════════════
@@ -828,6 +1067,7 @@ if [ "${BASH_SOURCE[0]:-}" = "${0}" ]; then
     viewpoint-coverage)    gate_common::viewpoint_coverage_check "$@" ;;
     registry-assert)       gate_common::registry_assert_agent "$@" ;;
     registry-load)         gate_common::registry_load ;;
+    reviewers-filter)      gate_common::reviewers_filter "$@" ;;
     spec-id-allocate-seq)  gate_common::spec_id_allocate_seq "$@" ;;
     spec-id-allocate-ts)   gate_common::spec_id_allocate_ts "$@" ;;
     run-with-timeout)      gate_common::run_with_timeout "$@" ;;

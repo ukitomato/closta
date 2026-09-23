@@ -72,6 +72,24 @@ const SANDBOX_DIR = '__rulecheck__'
 const ALL_DETECTORS = ['eslint', 'depcruise', 'constitution', 'typecheck']
 
 /**
+ * 検出器の実体を **`node` で直接起動する**ための entrypoint。
+ *
+ * **`npx` を経由しない。** `npx` は自身 + シェル + 実体の 3 プロセスを起こし、
+ * このマシンでは `npx -v` だけで 2,398ms かかる (常駐 security スタックが
+ * プロセス生成を hook しているため。1 spawn 400〜2,400ms)。
+ * ここは 20 件のサンプルを 1 件ずつ回すので検出器の起動が 50〜80 回に達し、
+ * 全体 263 秒のうち大半が `npx` の起動コストだった。
+ *
+ * パスは `package.json` の依存から解決される実体であり、`pnpm` の bin shim を
+ * 経由しない。`package.json` の `scripts` 側は CI と人間が使うため変更しない。
+ */
+const BIN = {
+  eslint: 'node_modules/eslint/bin/eslint.js',
+  depcruise: 'node_modules/dependency-cruiser/bin/dependency-cruise.mjs',
+  tsc: 'node_modules/typescript/bin/tsc'
+}
+
+/**
  * コマンドを実行して stdout + stderr を返す。
  * **終了コードで判定しない** — 検証は「期待する指摘が出たか」で見る。
  */
@@ -167,10 +185,10 @@ async function collect(detectors) {
 
   if (wanted.has('eslint')) {
     // **`-f unix` は使えない** (core から外れた)。既定の整形で十分である。
-    tasks.push(['eslint', run('npx', ['eslint', '.', '--no-cache'])])
+    tasks.push(['eslint', run('node', [BIN.eslint, '.', '--no-cache'])])
   }
   if (wanted.has('depcruise')) {
-    tasks.push(['depcruise', run('npx', ['depcruise', 'src', '--output-type', 'err'])])
+    tasks.push(['depcruise', run('node', [BIN.depcruise, 'src', '--output-type', 'err'])])
   }
   if (wanted.has('constitution')) {
     tasks.push(['constitution', run('node', ['scripts/constitution/check.mjs'])])
@@ -179,8 +197,8 @@ async function collect(detectors) {
     tasks.push([
       'typecheck',
       Promise.all([
-        run('npx', ['tsc', '--noEmit', '-p', 'tsconfig.node.json', '--composite', 'false']),
-        run('npx', ['tsc', '--noEmit', '-p', 'tsconfig.web.json', '--composite', 'false'])
+        run('node', [BIN.tsc, '--noEmit', '-p', 'tsconfig.node.json', '--composite', 'false']),
+        run('node', [BIN.tsc, '--noEmit', '-p', 'tsconfig.web.json', '--composite', 'false'])
       ]).then(([node, web]) => ({
         output: `${node.output}\n${web.output}`,
         // 2 project のどちらかが落ちていれば落ちた側を採る。
