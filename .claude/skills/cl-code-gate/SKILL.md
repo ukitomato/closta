@@ -63,14 +63,34 @@ gate_common::registry_assert_agent convention-reviewer || halt "convention-revie
 ### Phase 1: Diff scope の決定
 
 ```bash
-diff_files=$(git diff --name-only HEAD | sort -u)
-touched_files=$(cat "$spec_dir/touched-files.txt" 2>/dev/null | sort -u || true)
+# **改行と空行を正規化してから comm に渡す。**
+# comm は入力が同じ規則で整列していることを前提とし、**一致しない行を黙って落とす**。
+# touched-files.txt が CRLF と LF の混在になっていて、CR 付きの 31 行が
+# 無言で scope から外れた実績がある (scope が 84 ではなく 54 になった)。
+normalize() { tr -d '' | sed '/^[[:space:]]*$/d' | sort -u; }
+
+# **実装がコミット済みなら base との差分を使う。**
+# git diff --name-only HEAD は未コミット変更しか見ない。
+# さらに **base ブランチが前 feature のマージ前を指していることがある** —
+# その場合 base...HEAD は前 feature の squash コミットを丸ごと含む
+# (実績: 本来 102 ファイルの feature が 276 ファイルに膨らんだ)。
+# 前 feature の最後のコミットを起点にすること。
+if [ -n "$(git status --porcelain)" ]; then
+  diff_files=$(git diff --name-only HEAD | normalize)
+else
+  diff_files=$(git diff --name-only "$base_commit..HEAD" | normalize)
+fi
+touched_files=$(cat "$spec_dir/touched-files.txt" 2>/dev/null | normalize || true)
 if [ -n "$touched_files" ]; then
   scope=$(comm -12 <(echo "$diff_files") <(echo "$touched_files"))
 else
   scope="$diff_files"
 fi
 echo "$scope" > "$spec_dir/.code-gate-scope.txt"
+
+# **落ちた行を報告する。** 黙って絞ると検査が 0 件になっていることに気付けない。
+comm -23 <(echo "$diff_files") <(echo "$touched_files")  # diff にあり touched に無い
+comm -13 <(echo "$diff_files") <(echo "$touched_files")  # touched にあり diff に無い
 ```
 
 reviewer に渡す scope は `diff_files ∩ touched_files` (touched-files.txt があれば intersect、なければ diff_files 全部)。
@@ -97,6 +117,23 @@ active=$(gate_common::registry_filter_agents \
 ### Phase 3: 並列 reviewer 起動 (1 iteration)
 
 **1 message 内で全 active reviewer を並列 Agent 起動**:
+
+> **⚠ lint track と test track を並列にしてはならない (実測で誤検知が出た)。**
+>
+> `npm run test:rules` 系の「違反サンプルを実際に発火させる」検証は、
+> **サンプルを `src/` 配下へ一時展開して検出器を回す**実装になっていることがある。
+> 並列に走った depcruise がその展開物を拾い、**実コードの違反として exit 1 を返した**
+> (161 modules / 639 deps。clean run は 160 / 638 で、差はちょうど fixture 1 件)。
+> サンプル側のロックは**同種の実行同士の排他しか持たず**、外部の検出器を守らない。
+>
+> **さらに CPU を取り合うとテストが起動に失敗する。**
+> jsdom project の worker 起動が 60 秒の待ちを超え、**4 ファイルが 0 件実行**になった。
+> このとき exit code は 1 だが **JSON reporter は `success: true` / `numFailedTests: 0` を返す**。
+>
+> したがって:
+> 1. **lint track と test track は直列に走らせる** (reviewer 系は並列でよい)
+> 2. **判定は exit code を正とする。** JSON の `success` だけを見てはならない
+> 3. `Errors` / `Unhandled Errors` が 0 件でないなら失敗として扱う
 
 | Track | Agent type | 観点 |
 |---|---|---|

@@ -74,7 +74,29 @@ export const MAX_CONSECUTIVE_CRASHES = 3
  * 許可リスト外のモジュールでの起動として発火する。実測で発火した。
  */
 export interface EnumerationWorker {
-  /** 応答の 1 行ごと。 */
+  /**
+   * 応答の 1 行ごと。
+   *
+   * **実装は 2 つの経路の両方を購読しなければならない**
+   * (AD-030 §5 の訂正 / code-gate iteration 1 / test track)。
+   *
+   * 子は**要求を受け取った経路で返す** (`src/agents/transport.ts` が経路を 1 つ選ぶ)。
+   * Electron 下では要求が `parentPort` に載るので応答も `parentPort` に載る。
+   * 標準出力だけを購読していたため**要求は届いて応答だけが捨てられ**、
+   * 実機で全要求が上限時間に当たった (先頭ページ 31,420 ms)。
+   *
+   * **この義務がここに書かれていなかった。** 「応答の 1 行ごと」だけでは、
+   * 次に実装する人がインタフェースから経路が 2 本あることを知れない。
+   * 経路を決めるのは子であり、親が先読みして片方だけを見ると
+   * **選択が変わった瞬間に無言で壊れる**。
+   *
+   * **この義務はテストの外にある。** ここを差し替えて書くテスト
+   * (`session-enumerator.test.ts`) では代役の `onLine` が 1 本しかなく、
+   * 経路が 2 本あること自体が現れない。`enumerator-spawner.ts` は
+   * `electron` と仮想モジュールを import するため Vitest で読めない。
+   * 代わりに `tests/docs/spawner-channels.test.ts` が
+   * **ソースのテキストを突き合わせて**この 2 経路を固定している。
+   */
   onLine(listener: (line: string) => void): void
   /** 終了。`code` が `null` なら異常終了。 */
   onExit(listener: (code: number | null) => void): void

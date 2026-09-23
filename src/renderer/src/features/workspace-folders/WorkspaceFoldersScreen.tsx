@@ -241,6 +241,26 @@ function SeededDraft({
   const seed = useUiStore((s) => s.folderDraftSeed)
   const clearSeed = useUiStore((s) => s.clearFolderDraftSeed)
   const [name, setName] = useState('')
+  const nameRef = useRef<HTMLInputElement>(null)
+
+  /*
+   * **受け取ったらフォーカスを移す** (code-gate iteration 1 / a11y H-006)。
+   *
+   * セッション一覧の「作業フォルダとして登録」は `seedFolderDraft` を呼ぶが、
+   * その実装は `screen` も差し替える。押したボタンを含む画面全体が
+   * アンマウントされるため、**フォーカスが `document.body` に落ちていた**。
+   * 遷移先のこのブロックにも移らず、live region も無いので
+   * **画面が変わったこと自体が通知されなかった**。
+   *
+   * FR-026 の登録導線は US-2 の中核であり、それを使った瞬間に
+   * キーボード利用者が入力欄の位置を失うのは実用性の欠陥である。
+   *
+   * 次に操作すべき要素 (表示名) に直接移す。
+   */
+  useEffect(() => {
+    if (seed === null) return
+    nameRef.current?.focus()
+  }, [seed])
 
   if (seed === null) return null
 
@@ -258,7 +278,8 @@ function SeededDraft({
             表示名
           </label>
           <input
-            className="bg-input border-border focus-visible:ring-ring/50 min-w-0 rounded-md border px-2 py-1 text-sm focus-visible:ring-[3px] focus-visible:outline-none"
+            ref={nameRef}
+            className="bg-input border-border focus-visible:ring-ring min-w-0 rounded-md border px-2 py-1 text-sm focus-visible:ring-[3px] focus-visible:outline-none"
             id="seeded-display-name"
             aria-describedby="seeded-display-name-hint"
             value={name}
@@ -334,7 +355,13 @@ export function WorkspaceFoldersScreen(): React.JSX.Element {
   return (
     <div className="flex flex-col gap-5">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-medium">作業フォルダ</h2>
+        {/*
+          **画面ごとに h1 を 1 つ置く** (code-gate iteration 1 / a11y M-005)。
+          画面遷移は main の中身だけを差し替えるので、heading が画面の同一性を示す
+          唯一の手がかりになる。起点レベルが画面ごとに違うと、
+          遷移後にどこに居るか把握できない。見た目は変えない。
+        */}
+        <h1 className="text-lg font-medium">作業フォルダ</h1>
       </div>
 
       {/* ── セッション一覧から渡された初期値 (FE-051 / R-2) ────────── */}
@@ -513,7 +540,7 @@ export function WorkspaceFoldersScreen(): React.JSX.Element {
                     表示名
                   </label>
                   <input
-                    className="bg-input border-border focus-visible:ring-ring/50 min-w-0 rounded-md border px-2 py-1 text-sm focus-visible:ring-[3px] focus-visible:outline-none"
+                    className="bg-input border-border focus-visible:ring-ring min-w-0 rounded-md border px-2 py-1 text-sm focus-visible:ring-[3px] focus-visible:outline-none"
                     id="folder-display-name"
                     aria-describedby="folder-display-name-hint"
                     placeholder="表示名"

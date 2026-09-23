@@ -29,6 +29,23 @@ export interface ErrorStateProps extends Omit<
   retryingLabel?: string;
 }
 
+/*
+ * registry の写しからの逸脱 2 件目 (Closta 側の色の差し替え。code-gate iteration 1 / a11y C-001)。
+ *
+ * **原本の赤は alpha 付きで、light 既定テーマで WCAG AA に届かない。**
+ * 実測 (計算で確認): 本文 `text-red-600/60` を `bg-red-500/[0.06]` over white に合成すると
+ * 相対輝度 0.281 / 背景 0.914 → **コントラスト比 2.91:1**。AA は通常サイズ本文に 4.5:1 を要求する。
+ * `text-[13px]` なので large text の例外も効かない。
+ * 見出し (`text-red-600` / 14px) と再試行ボタン (`text-xs`) も 4.4:1 で届かない。
+ *
+ * **不足しているのは「何をすれば復帰できるか」を書いている行である。** この部品は
+ * 4 画面の最後の出口に使われており (session-list / workspace-folders / runtime-list /
+ * folder-runtime-resolution)、色以外の手がかりが無いため回避手段が無い。
+ *
+ * **独自トークンを足さず、既存パレットの段を選び直すだけにした** (Principle XIII)。
+ * `WorkspaceFoldersScreen.tsx` の `ReachabilityBadge` が同じ判断を先例として記録している。
+ */
+
 export function ErrorState({
   title,
   detail,
@@ -53,7 +70,7 @@ export function ErrorState({
         {...props}
       >
         <RefreshCwIcon className="text-foreground/45 size-3.5 shrink-0 animate-spin motion-reduce:animate-none" />
-        <ShimmerLabel className="text-foreground/55 relative inline-block">
+        <ShimmerLabel className="text-foreground/70 relative inline-block">
           {retryingLabel}
         </ShimmerLabel>
       </div>
@@ -74,15 +91,15 @@ export function ErrorState({
     >
       <CircleAlertIcon className="mt-0.5 size-4 shrink-0 text-red-500/80" />
       <div>
-        <p className="font-medium text-red-600 dark:text-red-400">{title}</p>
-        <p className="mt-0.5 text-[13px] leading-snug text-red-600/60 dark:text-red-400/60">
+        <p className="font-medium text-red-700 dark:text-red-300">{title}</p>
+        <p className="mt-0.5 text-[13px] leading-snug text-red-700 dark:text-red-300">
           {detail}
         </p>
       </div>
       <button
         type="button"
         onClick={onRetry}
-        className="ms-auto flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400"
+        className="ms-auto flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium text-red-700 transition-colors hover:bg-red-500/10 dark:text-red-300"
       >
         <RefreshCwIcon className="size-3" />
         {retryLabel}

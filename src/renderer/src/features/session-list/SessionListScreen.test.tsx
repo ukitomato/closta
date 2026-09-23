@@ -266,7 +266,12 @@ describe('SessionListScreen', () => {
     render(<SessionListScreen />)
 
     await waitFor(() => expect(screen.getByText('停止中のため未列挙')).toBeInTheDocument())
-    expect(screen.getByText('ディストロを起動してから再取得してください。')).toBeInTheDocument()
+    /*
+     * **2 箇所に出る。** 所在ごとの行 (理由の帰属) と、索引の性質による
+     * バナー (復旧の導線つき。ux H-003 で到達可能にした) の両方である。
+     * バナーは全所在が同じ理由のときその理由のヒントを出すので、ここでは重なる。
+     */
+    expect(screen.getAllByText('ディストロを起動してから再取得してください。').length).toBe(2)
   })
 
   it('打ち切りを黙って隠さない (FR-038)', async () => {
@@ -513,6 +518,67 @@ describe('SessionListScreen — 失敗の封じ込めと空状態 (FE-064)', () 
     await waitFor(() => expect(refreshRuntimes).toHaveBeenCalled())
   })
 
+  it('登録フォルダの区画があっても未列挙の案内が出る (FR-032 / FR-051 / ux H-003)', async () => {
+    /*
+     * **区画の数で空状態を判定できない。**
+     * `folder` グループは登録フォルダから必ず seed されるため (FR-051 / `group.ts`)、
+     * 登録フォルダが 1 件でもあれば区画は必ず 1 件以上になる。
+     * 以前は `visible.length === 0` を条件にしていたので、
+     * 「全所在が未列挙」の分岐が**実機で到達不能**だった。
+     *
+     * production が実際に作る形 (履歴 0 件の folder グループ + 全所在 failed) で固定する。
+     */
+    const refreshRuntimes = vi.fn(() => Promise.resolve({ runtimes: [] } as never))
+    installCapability({
+      listSessions: () =>
+        Promise.resolve(
+          index([folderGroup([])], {
+            outcomes: [outcome({ status: 'failed', reasonKey: 'permission-denied', count: 0 })]
+          })
+        ),
+      refreshRuntimes,
+      refreshSessions: () => Promise.resolve(index([folderGroup([])])),
+      listFolders: () =>
+        Promise.resolve({
+          folders: [
+            {
+              id: 'folder-1',
+              location: { kind: 'windows' },
+              path: { namespace: 'host', value: 'C:\\work' },
+              displayName: 'work',
+              reachability: 'unknown',
+              boundary: 'unknown',
+              unreachableReason: null,
+              blockedReason: null,
+              resolutionSteps: [],
+              existence: 'unknown'
+            }
+          ],
+          restoreIssues: { skipped: 0, reasonKeys: [], backupPath: null }
+        } as never),
+      onFoldersChanged: () => () => {},
+      onSessionsChanged: () => () => {}
+    })
+
+    render(<SessionListScreen />)
+
+    /* 案内が出る。 */
+    await waitFor(() =>
+      expect(screen.getByText('どの所在も列挙できていません。')).toBeInTheDocument()
+    )
+
+    /* **理由に合った案内である** (ux M-003)。起動しても直らない理由に「起動して」と言わない。 */
+    expect(
+      screen.getAllByText('そのユーザのホームは Windows 側から読めません。').length
+    ).toBeGreaterThan(0)
+    expect(
+      screen.queryByText('ディストロを起動してから再取得してください。')
+    ).not.toBeInTheDocument()
+
+    /* **区画は消えない** (FR-051)。 */
+    expect(screen.getAllByText('work').length).toBeGreaterThan(0)
+  })
+
   it('登録フォルダ 0 件なら登録への導線を出す (FR-032 の 3 つ目)', async () => {
     installCapability({
       listSessions: () => Promise.resolve(index([])),
@@ -631,7 +697,11 @@ describe('SessionListScreen — 件数が多い場合 (FE-073)', () => {
     render(<SessionListScreen />)
     await waitFor(() => expect(screen.getByText('要約')).toBeInTheDocument())
 
-    // 所在 Ubuntu で絞ると、folder グループ (所在を持たない) は外れて 0 件になる。
+    /*
+     * 所在 Ubuntu で絞ると 0 件になる。**理由は「folder グループが所在を持たないから」ではない**
+     * (それは code-gate iteration 1 の ux H-005 で直した不具合の挙動である)。
+     * ここでは folder のセッションが `host#0` 由来であり、Ubuntu 側が 0 件だからである。
+     */
     screen.getByRole('button', { name: 'Ubuntu' }).click()
 
     await waitFor(() =>
@@ -639,6 +709,210 @@ describe('SessionListScreen — 件数が多い場合 (FE-073)', () => {
     )
     screen.getByRole('button', { name: '絞り込みを解除する' }).click()
     await waitFor(() => expect(screen.getByText('要約')).toBeInTheDocument())
+  })
+
+  it('所在で絞っても登録フォルダのセッションが残る (FR-040 / ux H-005)', async () => {
+    /*
+     * **区画単位ではなくセッション単位で絞る。**
+     * 以前は `folder` / `unknown` グループが `location` を持たないことを理由に
+     * 一律で除外され、**所在を選ぶと登録フォルダが全滅**していた。
+     * この feature の中心価値は所在をまたぐ一覧であり、その絞り込みが主役を隠していた。
+     */
+    const onHost = session({
+      sessionId: 'aaaaaaaa-0000-0000-0000-000000000001',
+      summary: 'ホスト側'
+    })
+    const onWsl = session({
+      sessionId: 'bbbbbbbb-0000-0000-0000-000000000002',
+      targetKey: 'wsl:Ubuntu#0',
+      summary: 'ディストロ側'
+    })
+
+    install(
+      index([folderGroup([onHost, onWsl])], {
+        outcomes: [
+          outcome({ count: 1 }),
+          outcome({
+            location: { kind: 'wsl', distroName: 'Ubuntu' },
+            targetKey: 'wsl:Ubuntu#0',
+            count: 1
+          })
+        ]
+      })
+    )
+
+    render(<SessionListScreen />)
+    await waitFor(() => expect(screen.getByText('ホスト側')).toBeInTheDocument())
+
+    screen.getByRole('button', { name: 'Ubuntu' }).click()
+
+    /* **登録フォルダの区画は残り、中身だけが Ubuntu 側に絞られる。** */
+    await waitFor(() => expect(screen.queryByText('ホスト側')).not.toBeInTheDocument())
+    expect(screen.getByText('ディストロ側')).toBeInTheDocument()
+    expect(screen.queryByText('絞り込みに一致するセッションがありません。')).not.toBeInTheDocument()
+  })
+
+  it('取得中は区画の件数を確定値として見せない (FR-037 / ux H-002)', async () => {
+    /*
+     * data-model §7 は「`partial` の間はグループ件数を確定値として見せない」と定めている。
+     * **ヘッダだけが保護されていて、区画見出しと所在行が無条件に数を描いていた。**
+     */
+    install(index([folderGroup([session()])], { complete: false }))
+
+    render(<SessionListScreen />)
+    await waitFor(() => expect(screen.getByText('要約')).toBeInTheDocument())
+
+    expect(screen.queryByText('1 件')).not.toBeInTheDocument()
+    expect(screen.getAllByText('1 件以上 (取得中)').length).toBeGreaterThan(0)
+  })
+
+  it('取得中のボタンを `disabled` にせず `aria-disabled` で示す (a11y H-007)', async () => {
+    /*
+     * `disabled` は要素をタブ順から外すため、押した瞬間にフォーカスが body へ落ちる。
+     * `WorkspaceFoldersScreen` が既に明文化している方針に揃える。
+     */
+    install(index([folderGroup([session()])]))
+
+    render(<SessionListScreen />)
+    const button = await waitFor(() => screen.getByRole('button', { name: '全件を取り直す' }))
+
+    expect(button).not.toBeDisabled()
+    expect(button).toHaveAttribute('aria-disabled', 'false')
+  })
+
+  it('畳める区画が `aria-expanded` を持ち押下で反転する (a11y H-002)', async () => {
+    /*
+     * ラベルの「畳む / 開く」だけでは、**畳まれているのか / 本当に 0 件なのか /
+     * 取得途中なのか**が支援技術で区別できない。
+     * この 3 者の区別は FR-051 / FR-025 / FR-037 がわざわざ分けた軸である。
+     */
+    install(
+      index([
+        {
+          kind: 'unregistered',
+          location: { kind: 'windows' },
+          cwd: { namespace: 'host', value: 'C:\\tmp\\x' },
+          cwdDisplay: null,
+          cwdKey: 'host|C:\\tmp\\x',
+          suggestedDisplayName: 'x',
+          sessions: [session()]
+        }
+      ])
+    )
+
+    render(<SessionListScreen />)
+    const toggle = await waitFor(() => screen.getByRole('button', { name: '開く' }))
+
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(toggle).toHaveAttribute('aria-controls')
+
+    toggle.click()
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '畳む' })).toHaveAttribute('aria-expanded', 'true')
+    )
+  })
+
+  it('絞り込みの選択が `aria-pressed` と群のラベルで示される (a11y H-003)', async () => {
+    /*
+     * 以前は `variant` の背景差 (白に対し 1.04:1) だけで選択を示しており、
+     * `aria-pressed` も群のアクセシブル名も無かった。
+     */
+    install(
+      index([folderGroup([session()])], {
+        outcomes: [
+          outcome(),
+          outcome({
+            location: { kind: 'wsl', distroName: 'Ubuntu' },
+            targetKey: 'wsl:Ubuntu#0',
+            count: 0,
+            status: 'no-history'
+          })
+        ]
+      })
+    )
+
+    render(<SessionListScreen />)
+    await waitFor(() => expect(screen.getByText('要約')).toBeInTheDocument())
+
+    expect(screen.getByRole('group', { name: '所在で絞り込む' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /すべての所在/ })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    )
+    expect(screen.getByRole('button', { name: 'Ubuntu' })).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('鮮度の 1 行が `role="status"` の中にある (a11y H-001)', async () => {
+    /*
+     * 段階描画・取得完了・失敗を**この 1 行に集約して**通知する。
+     * 行ごとに live region を置くと 700 件規模で読み上げが実用にならない。
+     */
+    install(index([folderGroup([session()])]))
+
+    render(<SessionListScreen />)
+    await waitFor(() => expect(screen.getByText('要約')).toBeInTheDocument())
+
+    const status = screen.getByRole('status')
+    expect(status).toHaveAttribute('aria-live', 'polite')
+    expect(status.textContent).toContain('取得時刻')
+  })
+
+  it('行がリストの項目として露出する (a11y H-004)', async () => {
+    /*
+     * `ThreadListPrimitive` の実体は素の div で role を持たない。
+     * element の写しから書き込み操作を外したときに semantics も落ちていた。
+     */
+    install(index([folderGroup([session()])]))
+
+    render(<SessionListScreen />)
+    await waitFor(() => expect(screen.getByText('要約')).toBeInTheDocument())
+
+    /* **所在の結果も ul で list なので、スレッド一覧に絞る。** */
+    const rows = document.querySelector('[data-slot="aui_thread-list-items"]')
+    expect(rows).not.toBeNull()
+    expect(rows).toHaveAttribute('role', 'list')
+    expect(rows?.querySelectorAll('[role="listitem"]').length).toBe(1)
+  })
+
+  it('付帯情報が行の中にある (a11y H-005 / ux H-001)', async () => {
+    /*
+     * 以前は「表題の列」と「メタデータの列」が**兄弟として縦に分離**しており、
+     * 対応づけが配列の順序だけに依っていた。
+     * 行にフォーカスしたとき、その行を識別する情報 (FR-052 の由来ユーザなど) が
+     * 別の場所にあった。
+     */
+    install(index([folderGroup([session({ targetLabel: 'alice' })])]))
+
+    render(<SessionListScreen />)
+    await waitFor(() => expect(screen.getByText('要約')).toBeInTheDocument())
+
+    const rows = document.querySelector('[data-slot="aui_thread-list-items"]')
+    const row = rows?.querySelector('[role="listitem"]')
+    expect(row).not.toBeNull()
+    expect(row?.textContent).toContain('要約')
+    expect(row?.textContent).toContain('alice')
+  })
+
+  it('上限で打ち切られた対象に続きを取る導線がある (FR-038 / ux H-007)', async () => {
+    const fetchMoreSessions = vi.fn(() => Promise.resolve(index([folderGroup([session()])])))
+    installCapability({
+      listSessions: () =>
+        Promise.resolve(
+          index([folderGroup([session()])], {
+            outcomes: [outcome({ truncated: true, count: 50 })]
+          })
+        ),
+      fetchMoreSessions,
+      onSessionsChanged: () => () => {}
+    })
+
+    render(<SessionListScreen />)
+    await waitFor(() => expect(screen.getByText('上限で打ち切りました')).toBeInTheDocument())
+
+    screen.getByRole('button', { name: '続きを取る' }).click()
+
+    await waitFor(() => expect(fetchMoreSessions).toHaveBeenCalledWith('host#0', 50))
   })
 
   it('絞り込みで IPC を往復させない (FR-040)', async () => {

@@ -37,7 +37,7 @@ export interface Transport {
  * **`electron` を import しない** (`agents` は禁止。AD-023 §8 / FR-045)。
  * 構造だけを書き、グローバルの `process` から取り出す。
  */
-interface ParentPortLike {
+export interface ParentPortLike {
   on(event: 'message', listener: (message: { data: unknown }) => void): void
   postMessage(message: unknown): void
   start?: () => void
@@ -60,7 +60,24 @@ export function createTransport(): Transport {
   return parentPort === null ? stdioTransport() : parentPortTransport(parentPort)
 }
 
-function stdioTransport(): Transport {
+/*
+ * ── 以下 2 つを export している理由 ──────────────────────────
+ *
+ * **このファイルは `electron` を import していない。** import は `./protocol` だけであり、
+ * `parentPort` は `process` から構造だけで取り出している。
+ * つまり **Vitest の node 環境でそのまま読める** — 設定変更は要らない。
+ *
+ * **この点を取り違えていた。** AD-030 と `enumerator-spawner.ts` のコメントは
+ * 「この形は単体テストの外にある」と書いたが、それが当てはまるのは
+ * `enumerator-spawner.ts` (`electron` と仮想モジュールを import する) だけである。
+ * **経路の選択と「受け取った経路で返す」という、実際に壊れた不変条件は、
+ * テストできる状態で未検証のまま放置されていた** (code-gate iteration 1 / test track)。
+ *
+ * 経路ごとの振る舞いを直接確かめられるように公開する。
+ * **本体は使わない** — 本体が呼ぶのは `createTransport()` だけである。
+ */
+
+export function stdioTransport(): Transport {
   const closed: (() => void)[] = []
   return {
     onLine(listener) {
@@ -81,7 +98,7 @@ function stdioTransport(): Transport {
   }
 }
 
-function parentPortTransport(port: ParentPortLike): Transport {
+export function parentPortTransport(port: ParentPortLike): Transport {
   return {
     onLine(listener) {
       port.on('message', (message) => {

@@ -9,7 +9,13 @@ import {
   useAuiState,
 } from "@assistant-ui/react";
 import { Loader2Icon } from "lucide-react";
-import { type ComponentPropsWithoutRef, type FC } from "react";
+import {
+  createContext,
+  useContext,
+  type ComponentPropsWithoutRef,
+  type FC,
+  type ReactNode,
+} from "react";
 
 /*
  * `npx assistant-ui@latest add thread-list` の生成物を**削いだもの** (SH-001 / FE-045)。
@@ -33,6 +39,28 @@ import { type ComponentPropsWithoutRef, type FC } from "react";
  * 表示に使う値の**選択**は `domain` の `sessionTitle()` が決める (FR-047)。
  * ここは体裁だけを持つ。
  */
+
+/**
+ * 行ごとの付帯情報を返す関数 (code-gate iteration 1 / a11y H-005 / ux H-001)。
+ *
+ * **表題とメタデータを別ブロックに分けない。**
+ * 以前は呼び出し側が「表題の列」と「メタデータの列」を**兄弟として縦に並べて**いた。
+ * 対応づけは配列の順序だけに依っており、
+ * (a) 行にフォーカスしたとき読まれるのは表題だけで、その行を他と識別する情報
+ *     (由来ユーザ = FR-052 / worktree = FR-029 / 切り詰めの注記 = FR-049) の
+ *     すべてが別の場所にあった。
+ * (b) `ThreadListItemsByKey` は runtime が知らない鍵を落とすため、
+ *     表題 N-1 行・メタデータ N 行という**行数ずれ**が段階描画の 1 tick ごとに起きた。
+ *
+ * **props ではなく context で渡す理由**: `ItemByIndex` は行の component を
+ * `components` 経由で受け取り、props を通さない。行ごとに component を作ると
+ * **毎回の描画で再マウントしてフォーカスが飛ぶ**。
+ * 行は自分の鍵を `s.threadListItem.id` から引けるので、
+ * 解決関数を 1 つ渡して行側で引く形にする。
+ */
+const RowMetaContext = createContext<((rowKey: string) => ReactNode) | null>(
+  null,
+);
 
 export const ThreadListRoot: FC<
   ComponentPropsWithoutRef<typeof ThreadListPrimitive.Root>
@@ -59,27 +87,39 @@ export const ThreadListRoot: FC<
  * 次の描画で必ず現れるためである (外部ストアの反映は 1 tick 遅れるだけ)。
  */
 export const ThreadListItemsByKey: FC<
-  ComponentPropsWithoutRef<"div"> & { rowKeys: readonly string[] }
-> = ({ className, rowKeys, ...props }) => {
+  ComponentPropsWithoutRef<"div"> & {
+    rowKeys: readonly string[];
+    /** 行ごとの付帯情報。**行の内側に描かれる** (a11y H-005)。 */
+    renderMeta?: (rowKey: string) => ReactNode;
+  }
+> = ({ className, rowKeys, renderMeta, ...props }) => {
   const threadIds = useAuiState((s) => s.threads.threadIds);
 
   return (
     <div
       data-slot="aui_thread-list-items"
+      /*
+       * **リストであることを支援技術に伝える** (a11y H-004)。
+       * `ThreadListPrimitive` の実体は素の div であり role を持たない。
+       * element の写しから書き込み操作を外したときに semantics も一緒に落ちていた。
+       */
+      role="list"
       className={cn("flex flex-col gap-0.5", className)}
       {...props}
     >
-      {rowKeys.map((rowKey) => {
-        const index = threadIds.indexOf(rowKey);
-        if (index < 0) return null;
-        return (
-          <ThreadListPrimitive.ItemByIndex
-            key={rowKey}
-            index={index}
-            components={{ ThreadListItem }}
-          />
-        );
-      })}
+      <RowMetaContext.Provider value={renderMeta ?? null}>
+        {rowKeys.map((rowKey) => {
+          const index = threadIds.indexOf(rowKey);
+          if (index < 0) return null;
+          return (
+            <ThreadListPrimitive.ItemByIndex
+              key={rowKey}
+              index={index}
+              components={{ ThreadListItem }}
+            />
+          );
+        })}
+      </RowMetaContext.Provider>
     </div>
   );
 };
@@ -87,13 +127,25 @@ export const ThreadListItemsByKey: FC<
 /** 取得中の骨組み。**取得の完了を待たずに枠を描く**ための部品 (SC-008)。 */
 export const ThreadListSkeleton: FC<{ rows?: number }> = ({ rows = 5 }) => {
   return (
-    <div className="flex flex-col gap-0.5">
+    /*
+     * **`role="status"` は最外殻に 1 つだけ置く** (code-gate iteration 1 / a11y H-001)。
+     *
+     * 以前は骨組みの**行ごと**に付いていたため status region が 5 個同時にマウントされ、
+     * しかも `Skeleton` はテキストを持たないので**通知の内容が空**だった。
+     * live region はアクセシブル名ではなく**内容の変化**を読むため、
+     * `aria-label` では「取得中」が伝わらない。文字を中に入れる。
+     */
+    <div
+      role="status"
+      data-slot="aui_thread-list-skeleton-wrapper"
+      className="flex flex-col gap-0.5"
+    >
+      <span className="sr-only">セッションを取得しています</span>
       {Array.from({ length: rows }, (_, i) => (
         <div
           key={i}
-          role="status"
-          aria-label="セッションを取得しています"
-          data-slot="aui_thread-list-skeleton-wrapper"
+          /* 骨組みそのものは読ませない。内容は上の 1 行が持つ。 */
+          aria-hidden
           className="flex h-8 items-center px-2.5"
         >
           <Skeleton
@@ -124,35 +176,71 @@ export const ThreadListLoading: FC = () => {
  */
 export const ThreadListItem: FC = () => {
   const isRunning = useAuiState((s) => s.threadListItem.isRunning);
+  const rowKey = useAuiState((s) => s.threadListItem.id);
+  const isActive = useAuiState(
+    (s) => s.threads.mainThreadId === s.threadListItem.id,
+  );
+  const renderMeta = useContext(RowMetaContext);
+  const meta = renderMeta === null ? null : renderMeta(rowKey);
 
   return (
     <ThreadListItemPrimitive.Root
       data-slot="aui_thread-list-item"
-      className="group hover:bg-muted focus-visible:bg-muted data-active:bg-muted has-focus-visible:bg-muted relative flex h-8 items-center rounded-md transition-colors focus-visible:outline-none"
+      /* **リストの項目であることを伝える** (a11y H-004)。実体は素の div である。 */
+      role="listitem"
+      /*
+       * **選択とフォーカスを同じ色で表さない** (a11y H-008)。
+       * 以前は `data-active` (選択) と `has-focus-visible` (フォーカス) の
+       * どちらも `bg-muted` で、白に対し 1.04:1 の差しかなかった。
+       * 選択は背景、フォーカスは Trigger の ring が担う。
+       */
+      className="group hover:bg-muted data-active:bg-muted relative flex min-h-8 items-center rounded-md transition-colors"
     >
       <ThreadListItemPrimitive.Trigger
         data-slot="aui_thread-list-item-trigger"
-        className="focus-visible:ring-ring/50 flex h-full min-w-0 flex-1 items-center rounded-md px-2.5 text-start text-sm outline-none focus-visible:ring-1"
+        /*
+         * **選択中であることをフォーカス対象の側に付ける** (a11y M-001)。
+         * primitive は `aria-current` を Root (div) に付けるが、
+         * フォーカスが当たるのはこの Trigger であり、祖先の `aria-current` は読まれない。
+         */
+        aria-current={isActive ? "true" : undefined}
+        className="focus-visible:ring-ring flex h-full min-w-0 flex-1 flex-col items-start justify-center rounded-md px-2.5 py-1 text-start text-sm outline-none focus-visible:ring-2"
       >
-        {isRunning && (
-          <Loader2Icon
-            aria-hidden
-            data-slot="aui_thread-list-item-running"
-            className="text-muted-foreground me-1.5 size-3.5 shrink-0 animate-spin"
-          />
-        )}
-        <span
-          data-slot="aui_thread-list-item-title"
-          className="min-w-0 flex-1 truncate"
-        >
-          {/*
-            **`fallback` に "New Chat" を使わない。** R-2 は会話を作らないので
-            「新しい会話」は誤りである。要約が空の行の代替表示は
-            `domain` の `sessionTitle()` が決め、呼び出し側が `title` に詰める (FR-047)。
-          */}
-          <ThreadListItemPrimitive.Title fallback="（表題なし）" />
+        <span className="flex w-full min-w-0 items-center">
+          {isRunning && (
+            <Loader2Icon
+              aria-hidden
+              data-slot="aui_thread-list-item-running"
+              /* `motion-reduce` を付ける (a11y M-003)。他のトークンと揃える。 */
+              className="text-muted-foreground me-1.5 size-3.5 shrink-0 animate-spin motion-reduce:animate-none"
+            />
+          )}
+          <span
+            data-slot="aui_thread-list-item-title"
+            className="min-w-0 flex-1 truncate"
+          >
+            {/*
+              **`fallback` に "New Chat" を使わない。** R-2 は会話を作らないので
+              「新しい会話」は誤りである。要約が空の行の代替表示は
+              `domain` の `sessionTitle()` が決め、呼び出し側が `title` に詰める (FR-047)。
+            */}
+            <ThreadListItemPrimitive.Title fallback="（表題なし）" />
+          </span>
+          {isRunning && <span className="sr-only">実行中</span>}
         </span>
-        {isRunning && <span className="sr-only">実行中</span>}
+
+        {/*
+          **付帯情報を行の中に置く** (a11y H-005 / ux H-001)。
+          行にフォーカスしたときに、その行を識別する情報が同じ要素の中にある。
+        */}
+        {meta !== null && (
+          <span
+            data-slot="aui_thread-list-item-meta"
+            className="text-muted-foreground w-full min-w-0 text-xs"
+          >
+            {meta}
+          </span>
+        )}
       </ThreadListItemPrimitive.Trigger>
     </ThreadListItemPrimitive.Root>
   );

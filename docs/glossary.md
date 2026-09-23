@@ -96,10 +96,18 @@ total_terms: 31
   の 6 値
 - **日本語表記**: 作業ディレクトリの出自
 - **Domain**: `session`
-- **Counterexamples**: **由来 config ディレクトリの所在と混同しない。** 前者は
-  「履歴がどこに保存されているか」（アプリが選ぶ）、後者は「セッションがどこで動いたか」
-  （記録された値から判定する）であり、**一致しない**。実測でホスト側の 1 つの config
-  ディレクトリに 3 形式（Windows / POSIX / UNC）が混在した
+- **Counterexamples**: **由来 config ディレクトリの所在と混同しない。**
+  **指示代名詞で書かない** — 「前者 / 後者」はどちらを指すか決まらず、
+  この区別は本 feature で**最も誤りやすい**ものとして Principle XIV の対象に挙げられている
+  (plan.md)。実名で書く。
+  - **由来 config ディレクトリの所在** (`EnumerationTarget.location`) =
+    「履歴が**どこに保存されているか**」。**アプリが選ぶ** (FR-009)
+  - **`CwdOrigin` の所在** = 「セッションが**どこで動いたか**」。
+    **記録された値から判定する** (FR-016)
+
+  **この 2 つは一致しない。** 実測でホスト側の 1 つの config ディレクトリに
+  3 形式（Windows / POSIX / UNC）が混在した。
+  正本は [data-model.md](../specs/002-session-cross-folder-session-enumeration/data-model.md) §4 の表である
 - **Ref**: [AD-029](decisions/0029-session-cwd-origin-classification.md)
 
 #### **CredentialSource**

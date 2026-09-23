@@ -309,10 +309,30 @@ export const AGENT_SDK_ALLOWED_CALLS = ['listSessions']
  * R-1 の `verifyRunning()` を使うだけであり、自分では `wsl.exe` を起動しない
  * (contracts C-7。この 1 行が SC-003 の「0 件」を成り立たせている)。
  */
+/**
+ * `wsl.exe` と WSL CLI を参照してはならないディレクトリとファイル (項目 15)。
+ *
+ * **R-2 の `app` レイヤを実名で足してある** (code-gate iteration 1 / convention H-001)。
+ * 初版はディレクトリ 3 件だけで `src/main/app/` を一度も見ていなかった。
+ * ところが contracts C-7 の「R-2 は `wsl.exe` を新たに呼ばない」を実際に守る責任があるのは
+ * **`session-service.ts`** である (R-1 の `verifyRunning` を注入で受け取る側)。
+ * **違反が 0 件だったのではなく、検査が 0 件だった** —
+ * plan.md が SH-091 について書いた形と同じである。
+ *
+ * **`src/main/app/` をディレクトリごと足さない。**
+ * `composition-root.ts` は R-1 の検出器を結線するため `wsl.exe` 系の語を正当に持つ。
+ * `services-not-to-io` と同じ**実名列挙**にして、新しいファイルが黙って対象外に
+ * ならないようにする (新規ファイルは列挙されていないので、追加時に判断を強制される)。
+ */
 export const WSL_FREE_DIRECTORIES = [
   'src/agents/',
   'src/main/infra/session/',
-  'src/domain/session/'
+  'src/domain/session/',
+  'src/main/app/session-service.ts',
+  'src/main/app/session-ipc.ts',
+  'src/main/app/session-enumerator.ts',
+  'src/main/app/enumerator-spawner.ts',
+  'src/main/app/dto-mapper.ts'
 ]
 
 export const UNC_API_NAMES = ['toUnc', 'fromUnc', 'makeWslUncPath', 'parseWslUncPath']

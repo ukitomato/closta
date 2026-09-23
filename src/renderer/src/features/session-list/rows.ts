@@ -34,6 +34,17 @@ export interface SessionSection {
   readonly key: string
   readonly group: SessionGroupDTO
   readonly rowKeys: readonly string[]
+  /**
+   * この区画に属するセッション。
+   *
+   * **`group.sessions` を直接使わない** (code-gate iteration 1 / ux H-005)。
+   * 所在で絞り込むときに区画の中身だけを減らす必要があり、
+   * グループは判別可能な合併型なので中身を差し替えると型が崩れる。
+   *
+   * **`rowKeys` と同じ順序・同じ長さである。** 絞り込みは両方を同じ添字で削る。
+   * この不変条件が崩れると、表題とメタデータの対応がずれる。
+   */
+  readonly sessions: readonly SessionSummaryDTO[]
 }
 
 export interface SessionRowsView {
@@ -84,7 +95,7 @@ export function buildSessionRows(index: SessionIndexDTO | null): SessionRowsView
       rowKeys.push(rowKey)
       rows.push({ rowKey, title: sessionTitle(session), session })
     }
-    return { key: sectionKey(group), group, rowKeys }
+    return { key: sectionKey(group), group, rowKeys, sessions: group.sessions }
   })
 
   return { rows, sections }
