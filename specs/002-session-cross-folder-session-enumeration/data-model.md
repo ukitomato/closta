@@ -63,37 +63,49 @@ EnumerationTarget
 
 ```text
 CwdOrigin =
-  | { kind: 'host';             path: HostPath }
-  | { kind: 'wsl-from-unc';     path: RuntimePath; namespace: WslNamespaceId }
-  | { kind: 'wsl-inherited';    path: RuntimePath; namespace: WslNamespaceId }
-  | { kind: 'unknown-location'; raw: string }
-  | { kind: 'undetected-distro'; raw: string; distroName: string }
+  | { kind: 'host';              path: HostPath }
+  | { kind: 'wsl-from-unc';      path: RuntimePath; namespace: WslNamespaceId }
+  | { kind: 'wsl-inherited';     path: RuntimePath; namespace: WslNamespaceId }
+  | { kind: 'unknown-location';  display: string }
+  | { kind: 'undetected-distro'; display: string; distroName: string }
   | { kind: 'absent' }
 ```
 
+`display` は**そのまま境界に出してよい表示値**である。`raw` (生値) ではない —
+判定が見た値と表示する値がずれると、そこが穴になる ([AD-032](../../docs/decisions/0032-unc-shape-classification-by-separator-count.md))。
+
 ### 判定規則
 
-| # | 条件 | 結果 |
-| --- | --- | --- |
-| 1 | 値が無い / 空 | `absent` |
-| 2 | `\\wsl.localhost\<D>\...` 形式 かつ `<D>` が検出済み | `wsl-from-unc` (UNC → `RuntimePath` に変換) |
-| 3 | `\\wsl.localhost\<D>\...` 形式 かつ `<D>` が未検出 | `undetected-distro` |
-| 4 | ドライブレター始まり | `host` |
-| 5 | `/` 始まり かつ 由来 config の所在が `wsl:<D>` | `wsl-inherited` (`<D>` を継承) |
-| 6 | `/` 始まり かつ 由来 config の所在が `windows` | `unknown-location` |
-| 7 | 上記以外 (相対パス等) | `unknown-location` |
+**正本は [`src/domain/session/cwd-origin.ts`](../../src/domain/session/cwd-origin.ts) の
+`classifyCwd` の docstring にある 8 行の表である。**
+
+ここに写しを置かない。Round 1〜4 のあいだ同じ表が `cwd-origin.ts` / 本ファイル /
+テストの `describe` 名の 3 箇所にあり、**実装が変わるたびに 3 つが別々にずれた**。
+pr-gate Round 4 の時点で行数が 8 / 7 / 7 と食い違い、
+**同じ「#4」が 3 つの別のものを指していた** (PO4-005)。
+規則の正本は 1 箇所、他は参照形とする。
+
+判定の骨格だけを述べる。値の形は `classifyRawPath` が
+**先頭の区切り (`/` と `\`) の本数**で決め (0 本 / 1 本 / 2 本以上)、
+`classifyCwd` はその形に応じて出自を割り当てる。
+綴りの一覧照合は行わない — 理由と経緯は AD-032 を参照。
 
 ### 不変条件
 
-- **#2 の変換に必要な「生の UNC 文字列を解析する関数」は R-1 に存在しない。**
-  `makeWslUncPath(namespace, raw)` は名前空間識別子を**引数に要求する**ため、
-  生文字列からディストロ名を得る手段が無ければ呼べない。
-  したがって本 feature は **R-1 のパス API 側に解析関数を 1 つ追加する** —
-  `parseWslUncPath(raw): PathResult<{ distroName, path: WslUncPath }>` を
-  パス操作の標準モジュールを import してよい**唯一の実装ファイル**に置く。
-  **`domain/session` は文字列操作で `\\wsl.localhost\` を剥がさない**
+- **`domain/session` は文字列操作で UNC 接頭辞を剥がさない**
   (R-1 が「境界での再 branding」として繰り返し塞いだ形)。
-  解析関数は接頭辞の**大小差**と legacy 形式 (`\\wsl$\`) の扱いもここで一元的に決める (M-005 / M-002)
+  `classifyCwd` に `startsWith` も `replace` も無く、`classifyRawPath` を呼んだ後は
+  **生値を参照しない**
+- **パス API 側の公開面は 2 つである** — `classifyRawPath(raw): RawPathShape` (形の判定) と
+  `parseWslUncPath(raw): PathResult<ParsedWslUnc>` (実測された 2 綴りの解析)。
+  どちらもパス操作の標準モジュールを import してよい**唯一の実装ファイル**に置く。
+  接頭辞の**大小差**と legacy 形式 (`\\wsl$\`) の扱いもそこで一元的に決める (M-005 / M-002)。
+  設計当初は「解析関数を 1 つ追加する」としていたが、綴りの列挙をやめた結果
+  形の判定と綴りの解析が別の関心になった (AD-032)
+- **ディストロ名の照合は大小を無視する。** Windows は共有名を大小無視で解決するため、
+  完全一致で照合すると実行中のディストロが「未検出」に落ちる。
+  照合を緩めるのは `canonicalDistroName()` の中だけで、
+  **名前空間識別子には検出済みの綴りを使う** (綴りが割れると同じディストロが 2 つになる)
 - **出自判定の純粋関数は `RuntimePath` を生成しない。** 生成 (branding) はパス API の側にあり、
   `domain/session` は解析結果を受け取るだけとする。
   この分離により、`ui` が判定関数を呼んでも**名前空間つきパス値を合成できない**

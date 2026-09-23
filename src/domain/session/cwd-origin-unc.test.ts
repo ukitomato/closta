@@ -170,6 +170,113 @@ describe('性質: 区切り 2 本以上で始まる値は接頭辞も共有名�
   })
 })
 
+/**
+ * 先頭に区切り以外の 1 文字が付いた UNC (pr-gate Round 4 / S4-001)。
+ *
+ * ## 何が破れていたか
+ *
+ * `classifyCwd` は空判定にだけ `trim()` を使い、**判定には生値を渡していた**。
+ * 先頭に空白が 1 つあるだけで `leadingSeparatorCount` が 0 を返し、
+ * `makeHostPath` が失敗して `other` に落ち、`display: raw` が
+ * **生の UNC をそのまま境界に出した**。
+ *
+ * 「先頭区切りの本数」という形の性質に置き換えたのに、
+ * **その性質を評価する位置が 1 文字ずれていた**。
+ *
+ * ## なぜ文字の一覧で直さないか
+ *
+ * 空白は `trim()` で落ちるが、書式文字 (`U+200B` / `U+2066` など) は
+ * `trim()` にも `hasControlCharacter` にも掛からない。
+ * 落とす文字を数え上げる形にすると、また表に無い文字で破れる。
+ * `classifyRawPath` は**「形が分からないのに区切りの連続を含む値には表示値を持たせない」**
+ * に変えた。前に何が付いていても同じ結論になる。
+ */
+describe('性質: 先頭に何が付いていても UNC の綴りは境界に出ない (S4-001)', () => {
+  /** 区切りではない先頭 1 文字。**空白・書式文字・普通の文字を混ぜる。** */
+  const PREFIXES = [
+    ' ',
+    '  ',
+    '\t',
+    String.fromCharCode(0x00a0), // NBSP — trim() は落とすが normalizeText は残す
+    String.fromCharCode(0x200b), // ZWSP — trim() も hasControlCharacter も掛からない
+    String.fromCharCode(0x2066), // LRI  — 同上
+    'x',
+    '.',
+    '..'
+  ] as const
+
+  const cases = combinations()
+
+  it.each([FROM_WSL, FROM_HOST])('由来 %o のとき、どの接頭でも禁止断片が現れない', (from) => {
+    const leaked: string[] = []
+
+    for (const prefix of PREFIXES) {
+      for (const { raw } of cases) {
+        const prefixed = prefix + raw
+        const display = originDisplay(classify(prefixed, from)) ?? ''
+
+        for (const fragment of FORBIDDEN) {
+          if (display.includes(fragment)) {
+            leaked.push(`${JSON.stringify(prefixed)} → ${JSON.stringify(display)}`)
+          }
+        }
+      }
+    }
+
+    /* 落ちたときに最初の 3 件だけ見せる (全件出すと読めない)。 */
+    expect(leaked.slice(0, 3)).toEqual([])
+  })
+
+  it('空白だけの接頭は正しい判定を取り戻す (安全側に倒して終わらない)', () => {
+    /*
+     * **落とすだけでは不十分である。** 空白は `trim()` で落ちるので、
+     * 値は本来の `wsl-from-unc` として解決されなければならない。
+     * `opaque-unc` に倒して「漏れないから良い」とすると FR-017 を落とす。
+     */
+    const origin = classify(
+      ' ' + B + B + 'wsl.localhost' + B + 'Ubuntu' + B + 'home' + B + 'y',
+      FROM_HOST
+    )
+
+    expect(origin.kind).toBe('wsl-from-unc')
+    expect(originPath(origin)?.value).toBe('/home/y')
+  })
+
+  it('落とせない書式文字が付いた UNC は表示値を持たない', () => {
+    /* `U+200B` は `trim()` で落ちない。ここは安全側 (`opaque-unc`) が正しい。 */
+    const zwsp = String.fromCharCode(0x200b)
+    const origin = classify(
+      zwsp + B + B + 'wsl.localhost' + B + 'Ubuntu' + B + 'home' + B + 'y',
+      FROM_HOST
+    )
+
+    expect(origin.kind).toBe('unknown-location')
+    expect(originDisplay(origin)).toBe('')
+  })
+
+  it('区切りの連続を含まない相対パスは値を出す (塞ぎすぎていない)', () => {
+    const origin = classify('projects/app', FROM_HOST)
+
+    expect(origin.kind).toBe('unknown-location')
+    expect(originDisplay(origin)).toBe('projects/app')
+  })
+
+  it('**表示値は判定が見た値と同じである** (`raw` を参照していない)', () => {
+    /*
+     * 判定は `trim()` 済みの値に対して行われる。表示だけ生値に戻すと
+     * 「判定が見た値」と「表示する値」がずれ、そのずれが S4-001 だった。
+     *
+     * ここは UNC ではない値で**ずれ自体**を縛る —
+     * 禁止断片の検査は「漏れたとき」しか落ちないが、この断言は
+     * `display: raw` に戻した瞬間に落ちる (変異 E で発火を確認した)。
+     */
+    const origin = classify('  projects/app', FROM_HOST)
+
+    expect(origin.kind).toBe('unknown-location')
+    expect(originDisplay(origin)).toBe('projects/app')
+  })
+})
+
 describe('実測された綴りは所在を特定する (FR-017 / US-1 AC-5)', () => {
   const UNC = B + B + 'wsl.localhost' + B
   const LEGACY = B + B + 'wsl$' + B
@@ -187,11 +294,12 @@ describe('実測された綴りは所在を特定する (FR-017 / US-1 AC-5)', (
     expect(originPath(origin)?.namespace).toBe('wsl:Ubuntu')
   })
 
-  it('未検出ディストロは `undetected-distro` になり、表示は変換後の POSIX パスである', () => {
+  it('未検出ディストロは `undetected-distro` になり、表示はディストロ名 + POSIX パスである', () => {
     const origin = classify(UNC + 'Fedora' + B + 'home' + B + 'y', FROM_HOST)
 
     expect(origin.kind).toBe('undetected-distro')
-    expect(originDisplay(origin)).toBe('/home/y')
+    /* **どのディストロかは分かる、が今ない** — それが `unknown-location` との差である。 */
+    expect(originDisplay(origin)).toBe('Fedora: /home/y')
   })
 
   it('解析できない UNC は所在を持たず、表示値も持たない', () => {

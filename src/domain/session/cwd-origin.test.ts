@@ -74,10 +74,17 @@ describe('判定表 #3: UNC 形式 かつ 未検出 → undetected-distro', () =
     expect(origin.distroName).toBe('Debian')
   })
 
-  it('**表示用の値に UNC 接頭辞を含めない** (FR-042)', () => {
+  it('**UNC 接頭辞は含めず、ディストロ名は含める** (FR-042 / FR-017)', () => {
+    /*
+     * **FR-042 が禁じているのは UNC の綴りであってディストロ名ではない**
+     * (pr-gate Round 4 / PO4-002)。`EnumerationOutcomeDTO.location` は
+     * 既にディストロ名を平文で運んでいる。
+     * 名前が出ないと `unknown-location` との差が訳語だけになり、
+     * 「改名前に戻す」「再導入する」を利用者が決められない。
+     */
     const origin = classify('\\\\wsl.localhost\\Debian\\home\\y\\p')
     const display = originDisplay(origin)
-    expect(display).toBe('/home/y/p')
+    expect(display).toBe('Debian: /home/y/p')
     expect(display).not.toContain('wsl.localhost')
     expect(display).not.toContain('\\\\')
   })
@@ -88,10 +95,28 @@ describe('判定表 #3: UNC 形式 かつ 未検出 → undetected-distro', () =
     expect(originPath(origin)).toBeNull()
   })
 
-  it('ディストロ名の大小は区別する (検出時の表記と完全一致)', () => {
-    // `ubuntu` は検出済み集合 (`Ubuntu`) に無いので未検出として扱う。
+  it('**大小だけが違う綴りは未検出にしない** (pr-gate Round 4 / PB4-001)', () => {
+    /*
+     * Windows は共有名を大小無視で解決する (実機で確認)。
+     * `\\wsl.localhost\ubuntu\home` は検出済みの `Ubuntu` を指しているので、
+     * 実行中のディストロを「未検出」に落としてはならない。
+     *
+     * **このテストは以前、逆を期待値にしていた** —
+     * 「ディストロ名の大小は区別する」として PB4-001 のバグを固定していた。
+     */
     const origin = classify('\\\\wsl.localhost\\ubuntu\\home\\y')
-    expect(origin.kind).toBe('undetected-distro')
+    expect(origin.kind).toBe('wsl-from-unc')
+
+    /* **名前空間は検出済みの綴りで組む。** 割れると同じディストロが 2 つになる。 */
+    expect(originLocation(origin)).toEqual({ kind: 'wsl', distroName: 'Ubuntu' })
+  })
+
+  it('検出済み集合に無い名前は大小を問わず未検出になる', () => {
+    /* 大小無視にしたことで「何でも通る」ようになっていないことを固定する。 */
+    for (const raw of ['Debian', 'debian', 'DEBIAN']) {
+      const origin = classify(`\\\\wsl.localhost\\${raw}\\home\\y`)
+      expect(origin.kind).toBe('undetected-distro')
+    }
   })
 })
 

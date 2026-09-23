@@ -6,9 +6,25 @@ deciders: ukitomato
 tags: [session, domain-model, path]
 supersedes: []
 superseded-by: []
+amended-by: [AD-032]
 ---
 
 # AD-029: セッションの作業ディレクトリの所在は値の形から判定し、特定できないものは推測しない
+
+> **読み替え (2026-09-23 / [AD-032](0032-unc-shape-classification-by-separator-count.md))**
+>
+> 本 ADR の §1 の判定表と §3 の「解析関数を 1 つ追加する」は、
+> **AD-032 で決定が変更された**。R-2 の実装が pr-gate 4 round のあいだに
+> 同じ判定を 4 回書き換え、毎 round 表に無い綴りが見つかったためである。
+>
+> - UNC の識別は**綴りの一覧照合ではなく先頭の区切りの本数**で行う
+> - 解析するのは実測された 2 綴りだけで、残りは `opaque-unc` (表示値なし) に落とす
+> - **ディストロ名の照合は大小を無視する** — 下記 §3 の
+>   「ディストロ名の大小は区別する」は Windows が共有名を大小無視で解決する事実と
+>   食い違っており、検出済みのディストロが「未検出」に落ちていた
+> - パス API の公開面は 1 つではなく 2 つ (`classifyRawPath` / `parseWslUncPath`)
+>
+> 判定表の正本は `src/domain/session/cwd-origin.ts` の `classifyCwd` docstring に移した。
 
 ## Context
 

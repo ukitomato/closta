@@ -118,11 +118,19 @@ export interface ParsedWslUnc {
  *
  * **先頭の区切りの本数**で決める。これは綴りの一覧ではなく値の形の性質である。
  *
+ * 数えるのは `trim()` した後の先頭である。
+ *
  * | 先頭区切り | 意味 |
  * |---|---|
  * | 0 本 | ドライブレターか相対。POSIX でも UNC でもない |
  * | 1 本 | POSIX 絶対パス。**UNC ではないので生値を出してよい** |
- * | 2 本以上 | **UNC 形**。POSIX でもホストでもない |
+ * | 2 本以上 | **区切り 2 本以上の形**。POSIX でもホストでもない |
+ *
+ * **2 本以上を「UNC」と呼ばない** (pr-gate Round 4 / PB4-009)。
+ * `\\?\C:\dev` と `\\.\C:\dev` は Win32 の**デバイス名前空間接頭辞**であって UNC ではなく、
+ * サーバ名も共有名も含まない (実機で解決することを確認済み)。
+ * この形は FR-042 の対象外だが、**解析できない以上は同じく表示値を持たせない** —
+ * 対象外であることと、構造が読めることは別である。
  *
  * ## 実測されていない綴りに分岐を作らない
  *
@@ -148,7 +156,7 @@ export type RawPathShape =
   | { readonly kind: 'opaque-unc' }
   | { readonly kind: 'host'; readonly path: HostPath }
   | { readonly kind: 'posix'; readonly value: string }
-  | { readonly kind: 'other' }
+  | { readonly kind: 'other'; readonly value: string }
 
 /** 先頭に連続する区切り (`/` と `\` の両方) の本数。 */
 function leadingSeparatorCount(raw: string): number {
@@ -157,13 +165,25 @@ function leadingSeparatorCount(raw: string): number {
   return n
 }
 
+/** 区切りが 2 本以上連続する箇所。**位置を問わない。** */
+const SEPARATOR_RUN = /[\\/]{2,}/
+
 /**
  * 生値の形を判定する。**UNC の綴りを知ってよいのはこの関数の内側だけである**
  * (AD-029 §3 / 検証項目 12)。
  *
  * 呼び出し側は `switch (shape.kind)` を書く。`startsWith` も `replace` も持たない。
  */
-export function classifyRawPath(raw: string): RawPathShape {
+export function classifyRawPath(input: string): RawPathShape {
+  /*
+   * **先頭の空白を落としてから数える** (pr-gate Round 4 / S4-001)。
+   *
+   * 落とさないと、空白 1 つで先頭区切りの本数が 0 になり `other` に落ち、
+   * **生の UNC がそのまま表示値として境界に出た**。
+   * 制御文字は `build.ts` が `classifyCwd` の**前**に `normalizeText` で
+   * 落としているので、ここに届く先頭ジャンクは空白だけである。
+   */
+  const raw = input.trim()
   const separators = leadingSeparatorCount(raw)
 
   if (separators >= 2) {
@@ -174,9 +194,20 @@ export function classifyRawPath(raw: string): RawPathShape {
 
   if (separators === 1) return { kind: 'posix', value: raw }
 
-  /* 0 本。ドライブレターならホスト、そうでなければ相対等。 */
+  /* 0 本。ドライブレターならホスト。 */
   const host = makeHostPath(raw)
-  return host.ok ? { kind: 'host', path: host.path } : { kind: 'other' }
+  if (host.ok) return { kind: 'host', path: host.path }
+
+  /*
+   * **形が分からないのに区切りの連続を含む値は、表示値を持たせない。**
+   *
+   * `trim()` は空白しか落とさない。書式文字 (`U+200B` など) は
+   * `hasControlCharacter` にも `trim()` にも掛からないので、
+   * それを先頭に付けた UNC がここへ落ちうる。
+   * **どの文字が前に付いたかを数えるのをやめ、「区切りの連続を含むか」で決める** —
+   * 文字種の一覧を持たないので、知らない文字が増えても破れない。
+   */
+  return SEPARATOR_RUN.test(raw) ? { kind: 'opaque-unc' } : { kind: 'other', value: raw }
 }
 
 export function parseWslUncPath(raw: string): PathResult<ParsedWslUnc> {

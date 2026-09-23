@@ -1,4 +1,4 @@
-import { namespaceDistroName } from '@domain/runtime/namespace'
+import { canonicalDistroName, namespaceDistroName, wslNamespace } from '@domain/runtime/namespace'
 import { classifyRawPath, runtimePathOps } from '@domain/runtime/path-api'
 import { makeRuntimePath, type HostPath, type RuntimePath } from '@domain/runtime/path-types'
 import { locationNamespace, type Location } from '@domain/workspace/folder'
@@ -45,22 +45,34 @@ export interface ClassifyInput {
  * | # | 値の形 (`classifyRawPath`) | 追加条件 | 結果 |
  * |---|---|---|---|
  * | 1 | — | 値が無い / 空 | `absent` |
- * | 2 | `wsl-unc` | ディストロが検出済み | `wsl-from-unc` |
- * | 3 | `wsl-unc` | ディストロが未検出 | `undetected-distro` |
+ * | 2 | `wsl-unc` | ディストロが検出済み (**大小無視**) | `wsl-from-unc` |
+ * | 3 | `wsl-unc` | ディストロが未検出 | `undetected-distro` (`<名前>: <POSIX>`) |
  * | 4 | `opaque-unc` | — | `unknown-location` (**表示値なし**) |
  * | 5 | `host` | — | `host` |
- * | 6 | `posix` | 由来 config の所在が `wsl:<D>` | `wsl-inherited` |
- * | 7 | `posix` | 由来 config の所在が `windows` | `unknown-location` (生値を表示) |
- * | 8 | `other` | — | `unknown-location` (生値を表示) |
+ * | 6 | `posix` | 由来 config の所在が `wsl:<D>` かつ変換に成功 | `wsl-inherited` |
+ * | 7 | `posix` | 上記以外 | `unknown-location` (値を表示) |
+ * | 8 | `other` | — | `unknown-location` (値を表示) |
+ *
+ * **この表が正本である。** `data-model.md §2` は本表を参照する形にしてある
+ * (pr-gate Round 4 / PO4-005 — 同じ「#4」が 3 つの別のものを指す状態を解消した)。
  *
  * **#3 と #7 を混ぜない。** 前者は「どのディストロかは分かるが、そのディストロが今ない」、
  * 後者は「どのディストロか分からない」であり、利用者に示すべきことが違う。
+ * だから #3 は**ディストロ名を表示値に含める** (PO4-002)。
  *
- * **#7 / #8 で生値を出してよい理由**: どちらも先頭の区切りが 1 本以下であり、
+ * **#6 の条件に「変換に成功」が要る** (pr-gate Round 4 / PB4-012)。
+ * `\home\y` は先頭区切り 1 本なので `posix` と判定されるが、
+ * `makeRuntimePath` が禁止文字で落とすため #7 に流れる。以前の表はこの経路を持たなかった。
+ *
+ * **#7 / #8 で値を出してよい理由**: どちらも先頭の区切りが 1 本以下であり、
  * 定義上 UNC ではない。共有名もサーバ名も含まない (FR-042 の対象外)。
+ * #8 はさらに「区切りの連続を含まない」ことを `classifyRawPath` が保証する。
  *
  * **#4 で表示値を持たない理由**: `classifyRawPath` の doc を参照。
  * 解析できない値から安全な残余を切り出すのは推測になる。
+ *
+ * **判定後に `raw` を参照しない。** 表示値は必ず `classifyRawPath` が返した値を使う。
+ * 判定が見た値と表示する値がずれると、そこが穴になる (S4-001)。
  */
 export function classifyCwd(input: ClassifyInput): CwdOrigin {
   const raw = input.cwd
@@ -95,11 +107,45 @@ export function classifyCwd(input: ClassifyInput): CwdOrigin {
        */
       if (!converted.ok) return { kind: 'unknown-location', display: '' }
 
+      /*
+       * **綴りは検出済み集合のものに寄せる** (pr-gate Round 4 / PB4-001)。
+       * Windows は共有名を大小無視で解決するので、`ubuntu-26.04` と書かれた
+       * 作業ディレクトリは実在する `Ubuntu-26.04` を指す。完全一致で照合すると
+       * **実行中のディストロが「未検出」に落ちる**。判定は `runtime` 側が持つ。
+       */
+      const canonical = canonicalDistroName(distroName, input.detectedDistros)
+
       // **表示用の値は変換後の POSIX パスを使う** — UNC 接頭辞を境界に出さない (FR-042)。
-      if (!input.detectedDistros.has(distroName)) {
-        return { kind: 'undetected-distro', distroName, display: converted.path.value }
+      if (canonical === null) {
+        /*
+         * **ディストロ名を表示値に載せる** (pr-gate Round 4 / PO4-002)。
+         * `undetected-distro` を `unknown-location` から分けた唯一の意味は
+         * 「**どのディストロかは分かるが、そのディストロが今ない**」である (FR-017 / US-1 AC-8)。
+         * 名前が出ないと利用者は「改名前に戻す」「再導入する」を決められず、
+         * `unknown-location` との差が訳語だけになる。
+         * **FR-042 はディストロ名の露出を禁じていない** —
+         * `EnumerationOutcomeDTO.location` は既に平文で運んでいる。禁じているのは UNC の綴りである。
+         * 合成をここで行うのは契約 `ipc-session-list.md:141-143` の指示による
+         * (分解は `infra` / `domain` 側、renderer は再合成しない)。
+         */
+        return {
+          kind: 'undetected-distro',
+          distroName,
+          display: `${distroName}: ${converted.path.value}`
+        }
       }
-      return { kind: 'wsl-from-unc', path: converted.path, namespace: converted.path.namespace }
+      /*
+       * **名前空間は検出済みの綴りで組む。**
+       * `fromUnc` は書かれていた綴りをそのまま `wsl:<D>` にするので、
+       * `ubuntu-26.04` と `Ubuntu-26.04` が別の名前空間に割れる。
+       * 変換済みの POSIX 値は綴りに依存しないため、差し替えるのは名前空間だけでよい。
+       */
+      const runtime = makeRuntimePath(wslNamespace(canonical), converted.path.value)
+      if (!runtime.ok) {
+        /* 構造上ここには来ない (同じ値が `fromUnc` を通っている)。安全側に倒す。 */
+        return { kind: 'unknown-location', display: '' }
+      }
+      return { kind: 'wsl-from-unc', path: runtime.path, namespace: runtime.path.namespace }
     }
 
     case 'opaque-unc':
@@ -128,8 +174,15 @@ export function classifyCwd(input: ClassifyInput): CwdOrigin {
     }
 
     case 'other':
-      // #8 — 相対パス等。UNC ではないので生値を出してよい。
-      return { kind: 'unknown-location', display: raw }
+      /*
+       * #8 — 相対パス等。UNC ではないので値を出してよい。
+       *
+       * **`raw` ではなく `shape.value` を使う** (pr-gate Round 4 / S4-001)。
+       * この関数は `classifyRawPath` を呼んだ後に `raw` を参照しない。
+       * 参照すると、判定が見た値と表示する値がずれる —
+       * 実際に先頭の空白 1 つでその差ができ、生の UNC が境界に出た。
+       */
+      return { kind: 'unknown-location', display: shape.value }
   }
 }
 
