@@ -180,8 +180,7 @@ function registerSeedOf(group: SessionGroupDTO): FolderDraftSeed | null {
 function Section({
   section,
   folderName,
-  coverage,
-  onRetry
+  coverage
 }: {
   section: SessionSection
   folderName: string | null
@@ -197,8 +196,6 @@ function Section({
    * 理由の一覧は `Outcomes` 区画に 1 回だけ置く。ここは「断言してよいか」だけを見る。
    */
   coverage: Coverage
-  /** 0 件の区画から取り直す (FR-032 / SC-013 の「導線」)。 */
-  onRetry: () => void
 }): React.JSX.Element {
   const collapsible = section.group.kind === 'unregistered'
   const [open, setOpen] = useState(!collapsible)
@@ -277,7 +274,7 @@ function Section({
         状態は `aria-expanded` が運ぶので、これで 4.1.2 は満たす。
       */}
       <div id={panelId}>
-        {open && count === 0 && <SectionEmpty coverage={coverage} onRetry={onRetry} />}
+        {open && count === 0 && <SectionEmpty coverage={coverage} />}
 
         {open && count > 0 && (
           <div className="mt-2">
@@ -309,13 +306,24 @@ function Section({
  * `labels.ts` が `no-history` と `failed` をわざわざ訳し分けている意味が区画では消えていた。
  * **「読めなかった」を「無い」と読ませてはならない** (FR-012)。
  */
-function SectionEmpty({
-  coverage,
-  onRetry
-}: {
-  coverage: Coverage
-  onRetry: () => void
-}): React.JSX.Element {
+/**
+ * **ここに操作を置かない** (pr-gate Round 4 / 不変条件 6 / PO-219)。
+ *
+ * SC-013 は 5 条件すべてに「次の操作への導線」を求めており、
+ * この条件 (登録フォルダ単位のセッション 0 件) だけ操作要素が 0 件だった (UX3-004)。
+ * 一度は区画に「取り直す」を置いたが、**それは誤りだった** —
+ * 区画は登録フォルダの数だけ存在するので、**同名のボタンがフォルダ数だけ並ぶ**
+ * (a11y の A11Y-210 が指摘した形を自分で作ることになる)。
+ *
+ * po track が答えを持っていた (PO-219):
+ * **R-2 はセッションの起動を持たない** (Out of Scope: X-1) ため、
+ * この条件で提供できる操作は原理的に無い。
+ * 「このフォルダで Claude Code を使うと、ここに並びます」が導線であり、
+ * 再取得は索引レベルのバナーが 1 箇所で提供する。
+ *
+ * **5 条件のうちこの 1 つだけ性質が違う**ことを、ここに記録として残す。
+ */
+function SectionEmpty({ coverage }: { coverage: Coverage }): React.JSX.Element {
   if (coverage === 'pending') {
     return <p className="text-muted-foreground mt-2 text-sm">取得中です。</p>
   }
@@ -344,20 +352,10 @@ function SectionEmpty({
       <p className="text-muted-foreground text-xs">
         このフォルダで Claude Code を使うと、ここに並びます。
       </p>
-      {coverage === 'partial' ? (
-        /*
-         * **ここに操作を置かない** (不変条件 2)。読めていない所在の直し方は理由で変わり、
-         * 再取得では直らないものもある。判定は `Outcomes` の `RemedyButton` が 1 箇所で持つので、
-         * ここはそこへ案内する。区画ごとに操作を置くと基準が 2 つに戻る。
-         */
+      {coverage === 'partial' && (
         <p className="text-xs">
           ただし列挙できていない所在があります。下の「列挙の結果」を確認してください。
         </p>
-      ) : (
-        /* **文言だけで終わらせない** (FR-032 / SC-013)。この区画だけ操作が 0 件だった。 */
-        <Button variant="outline" size="sm" className="mt-1" onClick={onRetry}>
-          取り直す
-        </Button>
       )}
     </div>
   )
@@ -1112,7 +1110,6 @@ export function SessionListScreen(): React.JSX.Element {
               key={section.key}
               section={section}
               coverage={coverage}
-              onRetry={() => void sessions.refresh()}
               folderName={
                 section.group.kind === 'folder' ? folderLabels.nameOf(section.group.folderId) : null
               }

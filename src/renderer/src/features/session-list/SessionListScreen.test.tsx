@@ -303,15 +303,24 @@ describe('SessionListScreen', () => {
     )
   })
 
-  it('config ディレクトリのパスを画面に出さない (FR-042)', async () => {
-    install(index([folderGroup([session()])]))
-
-    const { container } = render(<SessionListScreen />)
-
-    await waitFor(() => expect(screen.getByText(/取得時刻/)).toBeInTheDocument())
-    expect(container.textContent ?? '').not.toContain('.claude')
-    expect(container.textContent ?? '').not.toContain('wsl.localhost')
-  })
+  /*
+   * FR-042 (config ディレクトリのパスと UNC を境界に出さない) は**ここでは検証できない**
+   * (pr-gate Round 4 / 不変条件 6)。
+   *
+   * かつてここに「画面に `.claude` / `wsl.localhost` が出ない」というテストがあったが、
+   * **fixture の入力にその文字列が 1 つも無かった**。画面が何を描いても通る形で、
+   * 実装をどう壊しても落ちない。
+   *
+   * この規則を実際に守っているのは 2 箇所である。テストもそこにある。
+   *
+   * | 守るもの | 場所 |
+   * |---|---|
+   * | DTO に `configDir` を載せない (フィールド許可リスト) | `domain/session/dto-schema.test.ts` |
+   * | 境界を渡る全文字列に UNC も制御文字も残らない | `main/app/dto-boundary.test.ts` |
+   *
+   * renderer は DTO を受け取るだけで、DTO に無いものを描きようがない。
+   * **守られている場所を指すほうが、守っているふりをするより良い。**
+   */
 
   it('再取得は利用者の明示操作で呼ばれる (FR-033)', async () => {
     const refreshSessions = vi.fn(() => Promise.resolve(index([folderGroup([session()])])))
@@ -787,14 +796,29 @@ describe('SessionListScreen — 件数が多い場合 (FE-073)', () => {
     /*
      * `disabled` は要素をタブ順から外すため、押した瞬間にフォーカスが body へ落ちる。
      * `WorkspaceFoldersScreen` が既に明文化している方針に揃える。
+     *
+     * **取得中の状態で見る** (pr-gate Round 4 / 不変条件 6)。
+     * 以前は idle のボタンに `not.toBeDisabled()` を当てていた。
+     * `disabled={busy}` は busy=false のとき React が属性を出さないので、
+     * **実装を `disabled={busy}` に書き換えても必ず通る恒真式**だった。
+     * 守りたいのは「取得中でもタブ順に残る」ことであり、idle の状態は対象ではない。
      */
-    install(index([folderGroup([session()])]))
+    const value = index([folderGroup([session()])])
+    installCapability({
+      listSessions: () => Promise.resolve(value),
+      /* **解決しない。** これで取得中の状態に留まる。 */
+      refreshSessions: () => new Promise(() => {}),
+      onSessionsChanged: () => () => {}
+    })
 
     render(<SessionListScreen />)
-    const button = await waitFor(() => screen.getByRole('button', { name: '全件を取り直す' }))
+    const idle = await waitFor(() => screen.getByRole('button', { name: '全件を取り直す' }))
+    idle.click()
 
-    expect(button).not.toBeDisabled()
-    expect(button).toHaveAttribute('aria-disabled', 'false')
+    const busy = await waitFor(() => screen.getByRole('button', { name: '取得中…' }))
+
+    expect(busy).not.toBeDisabled()
+    expect(busy).toHaveAttribute('aria-disabled', 'true')
   })
 
   it('畳める区画が `aria-expanded` を持ち押下で反転する (a11y H-002)', async () => {
@@ -961,7 +985,7 @@ describe('SessionListScreen — 件数が多い場合 (FE-073)', () => {
 
     /* 減光はアイコンだけに掛ける。ラベルには掛けない。 */
     expect(busy.className).toContain('[&_svg]:opacity-50')
-    expect(busy.className.split(/s+/)).not.toContain('opacity-50')
+    expect(busy.className.split(/\s+/)).not.toContain('opacity-50')
     /* `disabled` でタブ順から外さない — 押した要素にフォーカスが残る。 */
     expect(busy).not.toHaveAttribute('disabled')
     expect(busy).toHaveAttribute('aria-disabled', 'true')
@@ -983,12 +1007,21 @@ describe('SessionListScreen — 件数が多い場合 (FE-073)', () => {
     expect(row).not.toBeNull()
     const className = row?.className ?? ''
 
-    /* 選択は面積と形で示す (左端のインジケータ + 太字)。 */
+    /*
+     * **選択を示すのは面積と形である** (左端のインジケータ + 太字)。
+     *
+     * 以前はここに `not.toContain('data-active:bg-muted')` があり、
+     * 「hover と同じ背景を使っていない」ことを**トークン名の文字列**で見ていた。
+     * これは検査として成立していない (pr-gate Round 3 / A11Y3-007) —
+     * `main.css` で `--muted` と `--accent` は light / dark とも**同じ値**であり、
+     * `hover:bg-muted` と `data-active:bg-accent` は**画面上まったく同じ色**である。
+     * 別のトークン名を使っていることは、別の見えを意味しない。
+     *
+     * 区別を実際に担っているのは下の 2 つなので、**それだけを見る**。
+     * 背景の同一性は 1.4.1 の観点では問題にならない (色に依らない手がかりがある)。
+     */
     expect(className).toContain('data-active:before:bg-foreground')
     expect(className).toContain('data-active:font-medium')
-    /* **hover と同じ背景を選択に使わない。** */
-    expect(className).toContain('hover:bg-muted')
-    expect(className).not.toContain('data-active:bg-muted')
   })
 
   it('越境を行ごとに示す (US-1 AC-4 / po H-001)', async () => {
@@ -1146,6 +1179,29 @@ describe('SessionListScreen — 空状態の断言', () => {
     await waitFor(() =>
       expect(screen.getByText('どの所在も列挙できていません。')).toBeInTheDocument()
     )
+  })
+
+  it('全所在を読めて 0 件のとき「セッションがまだありません」を導線つきで出す (SC-013)', async () => {
+    /*
+     * **SC-013 の 5 条件のうち、この 1 つだけ肯定テストが 0 件だった**
+     * (pr-gate Round 3 / PO-204 / H3-020)。
+     *
+     * 否定 assert (`「…と言わない」`) は下のテストにあったが、
+     * **出るべき条件で出ることを確かめた行が無かった**。
+     * 対象は「R-1 でフォルダを登録した直後の新規利用者」— この製品を最初に開く人が
+     * 最初に見る画面である。
+     */
+    installWithFolders(
+      index([folderGroup([])], { outcomes: [outcome({ status: 'no-history', count: 0 })] })
+    )
+
+    render(<SessionListScreen />)
+
+    await waitFor(() =>
+      expect(screen.getByText('セッションがまだありません。')).toBeInTheDocument()
+    )
+    /* **文言だけで終わらせない** (FR-032 / SC-013 は「導線」を求めている)。 */
+    expect(screen.getAllByRole('button', { name: '取り直す' }).length).toBeGreaterThan(0)
   })
 
   it('一部の所在が読めないとき「セッションがまだありません」と言わない (FR-012)', async () => {
