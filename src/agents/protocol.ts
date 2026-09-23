@@ -113,6 +113,48 @@ function boundedInteger(value: unknown, max: number): number | null {
   return value
 }
 
+/** `string | null` であること。**`undefined` も弾く** — 欠落と空は別である。 */
+function nullableString(value: unknown): boolean {
+  return value === null || typeof value === 'string'
+}
+
+/**
+ * 応答の要素 1 件が期待する形か (pr-gate Round 2 / H2-003)。
+ *
+ * **要素を無検査でキャストしていた。** 配列であることだけを確かめ、
+ * 中身は `as readonly RawSessionRecord[]` で通していた。
+ * 同じ関数の数行下では `reasonKey` について「未知の値を通すと `ui` が訳出できない」
+ * として `isFailureReason` を呼んでいるのに、**要素側に同じ理由が適用されていなかった**。
+ *
+ * 通してしまうと何が起きるか: `app` 側の `normalizeText` は `for (const ch of raw)` を
+ * 回すため、`"cwd": 123` のような 1 レコードで **TypeError を投げる**。
+ * `enumerateTarget` 〜 `fetchAll` の経路に catch が無かったので、
+ * **1 セッションの 1 フィールドで一覧全体が落ちていた** —
+ * FR-030 / SC-007 の「1 所在の失敗が他を消さない」を所在単位どころか全体で破る。
+ *
+ * config ディレクトリの中身は FR-049 自身が「アプリ外のプロセスが書いた未信頼入力」と
+ * 定義しており、JSONL に型の違う値が入りうることは前提である。
+ *
+ * **数値 3 項目は `unknown` のままにする。** `normalizeEpochMs` /
+ * `normalizeByteCount` が `typeof` を見て `null` に畳むので、
+ * ここで弾くと「取得できたが日時が壊れている行」を落としてしまう (FR-038)。
+ */
+function isRawSessionRecord(value: unknown): value is RawSessionRecord {
+  if (typeof value !== 'object' || value === null) return false
+  const record = value as Record<string, unknown>
+  return (
+    typeof record.sessionId === 'string' &&
+    record.sessionId.length > 0 &&
+    nullableString(record.summary) &&
+    nullableString(record.firstPrompt) &&
+    nullableString(record.customTitle) &&
+    nullableString(record.gitBranch) &&
+    nullableString(record.tag) &&
+    nullableString(record.cwd) &&
+    typeof record.programmatic === 'boolean'
+  )
+}
+
 function decodeScope(value: unknown): EnumerationScope | null {
   if (typeof value !== 'object' || value === null) return null
   const scope = value as Record<string, unknown>
@@ -189,12 +231,25 @@ export function decodeResponse(line: string): EnumerationResponseLine | null {
   if (value.kind === 'ok') {
     if (!Array.isArray(value.sessions)) return null
     if (typeof value.truncated !== 'boolean') return null
+    /*
+     * **上限を親でも見る** (pr-gate Round 2 / H2-003)。
+     * 子が上限を守る前提にしない — 応答は 1 行の JSON であり、
+     * 壊れた子からの巨大な配列をそのまま `app` に渡す理由が無い。
+     */
+    if (value.sessions.length > MAX_SESSIONS_PER_TARGET) return null
+    /*
+     * **1 件でも形が合わなければ応答ごと落とす。**
+     * 合わない要素だけを間引くと「黙って行が減る」ことになり、
+     * 利用者には 0 件と区別がつかない (FR-012 / FR-038)。
+     * 応答を落とせば呼び出し側が理由キーを持つ**行**にできる (FR-030)。
+     */
+    if (!value.sessions.every(isRawSessionRecord)) return null
     return {
       kind: 'ok',
       version: PROTOCOL_VERSION,
       id,
       targetKey: value.targetKey,
-      sessions: value.sessions as readonly RawSessionRecord[],
+      sessions: value.sessions,
       truncated: value.truncated
     }
   }

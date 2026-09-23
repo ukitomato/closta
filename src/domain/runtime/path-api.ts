@@ -96,6 +96,41 @@ export function isValidHostSegment(name: string): boolean {
  */
 const UNC_LEGACY_PREFIX = '\\\\wsl$\\'
 
+/**
+ * Win32 のデバイス名前空間を経由した UNC の綴り (pr-gate Round 2 / H2-001)。
+ *
+ * `\\\\?\\UNC\\<server>\\<share>\\...` は
+ * `\\\\<server>\\<share>\\...` と**同じ場所を指す**。
+ * 長パス (260 文字超) を扱うときに Windows API や一部のツールがこの形を吐くため、
+ * セッションの `cwd` に現れうる。
+ *
+ * **接頭辞を 2 つしか見ていなかったため、この綴りが判定を素通りしていた。**
+ * 素通りした値は `/` 綴りだと `raw.startsWith('/')` に当たり、
+ * **由来 config の所在を継承した `wsl-inherited` として確定していた** (FR-016 違反)。
+ * `\\\\` 綴りだと表示用の生値として UNC 全文が境界を越えていた (FR-042 違反)。
+ * どちらも Round 1 で塞いだつもりの経路であり、**綴りを 1 つ変えるだけで復活していた**。
+ */
+const UNC_DEVICE_PREFIXES = ['\\\\?\\UNC\\', '\\\\.\\UNC\\'] as const
+
+/**
+ * 区切りをバックスラッシュへ寄せ、デバイス名前空間の接頭辞を剥がす。
+ *
+ * **綴りの正規化をこの 1 関数に集める。** 以前は `looksLikeWslUnc` /
+ * `uncRelativeDisplay` / `parseWslUncPath` がそれぞれ区切りの寄せを書いており、
+ * **接頭辞を 1 つ足すと 3 箇所を直す必要があった**。
+ */
+function toUncSpelling(raw: string): string {
+  const backslashed = raw.replace(/\//g, '\\')
+  const lower = backslashed.toLowerCase()
+  for (const device of UNC_DEVICE_PREFIXES) {
+    if (lower.startsWith(device.toLowerCase())) {
+      /* 剥がしたぶんだけ `\\\\` を戻す。指す場所は変わらない。 */
+      return '\\\\' + backslashed.slice(device.length)
+    }
+  }
+  return backslashed
+}
+
 /** `parseWslUncPath` の結果。ディストロ名は**検証済み**である。 */
 export interface ParsedWslUnc {
   readonly distroName: string
@@ -142,7 +177,7 @@ export interface ParsedWslUnc {
  * UNC リテラルを持てるモジュールを `path-types.ts` と `path-api.ts` に限っている)。
  */
 export function looksLikeWslUnc(raw: string): boolean {
-  const lower = raw.replace(/\//g, '\\').toLowerCase()
+  const lower = toUncSpelling(raw).toLowerCase()
   return (
     lower.startsWith(UNC_PREFIX.toLowerCase()) || lower.startsWith(UNC_LEGACY_PREFIX.toLowerCase())
   )
@@ -166,11 +201,22 @@ export function looksLikeWslUnc(raw: string): boolean {
 export function uncRelativeDisplay(raw: string): string | null {
   if (!looksLikeWslUnc(raw)) return null
 
-  const backslashed = raw.replace(/\//g, '\\')
+  const backslashed = toUncSpelling(raw)
   const lower = backslashed.toLowerCase()
   const prefix = lower.startsWith(UNC_PREFIX.toLowerCase()) ? UNC_PREFIX : UNC_LEGACY_PREFIX
 
-  const afterPrefix = backslashed.slice(prefix.length)
+  /*
+   * **先頭の区切りの重なりを落としてから共有名の境界を取る**
+   * (pr-gate Round 2 / H2-001)。
+   *
+   * `\\\\wsl.localhost\\\\-bad\\home\\y` (区切りが 2 つ) では
+   * `afterPrefix` が `\\-bad\\home\\y` になり `indexOf` が **0** を返していた。
+   * ディストロ名の境界が「先頭」と判定され、
+   * **検証を通っていないディストロ名 `-bad` がそのまま残余として出ていた**。
+   * Round 1 で書いた `expect(display).not.toContain('-bad')` は、
+   * 区切りを 1 つ増やすだけで破れていた。
+   */
+  const afterPrefix = backslashed.slice(prefix.length).replace(/^\\+/, '')
   const sep = afterPrefix.indexOf('\\')
   /* ディストロ名しか無い (残余が無い) 値は、出せるものが無い。 */
   if (sep < 0) return null

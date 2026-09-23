@@ -85,6 +85,15 @@ interface FakeWorker extends EnumerationWorker {
   readonly holdExit: (hold: boolean) => void
   /** 保留していた `exit` を届ける。 */
   readonly flushExit: () => void
+  /**
+   * `kill()` が `false` を返すようにする (pr-gate Round 2 / H2-004)。
+   *
+   * 実 API の `UtilityProcess.kill()` は真偽を返す。`false` のとき `exit` は届かない —
+   * **代役が常に `true` を返していたため、その経路が 1 度も通っていなかった。**
+   */
+  readonly killFails: (fail: boolean) => void
+  /** `onLine` の配線で throw する (stdio の指定が効いていない状況)。 */
+  readonly onLineThrows: (fail: boolean) => void
 }
 
 function fakeWorker(): FakeWorker {
@@ -94,11 +103,14 @@ function fakeWorker(): FakeWorker {
   let fail = false
   let hold = false
   let held = 0
+  let killFail = false
+  let wireFail = false
   const received: string[] = []
 
   return {
     received,
     onLine(listener) {
+      if (wireFail) throw new Error('列挙プロセスの標準出力を購読できない')
       onLine = listener
     },
     onExit(listener) {
@@ -111,6 +123,8 @@ function fakeWorker(): FakeWorker {
     },
     kill() {
       kills += 1
+      /* **殺せなかったら `exit` は来ない。** 実 API と同じ形にする。 */
+      if (killFail) return false
       /*
        * **実 API に合わせて `exit` を発火する** (pr-gate Round 1 / platform-boundary H-003)。
        *
@@ -141,6 +155,12 @@ function fakeWorker(): FakeWorker {
     sendFails: (value) => {
       fail = value
     },
+    killFails: (value) => {
+      killFail = value
+    },
+    onLineThrows: (value) => {
+      wireFail = value
+    },
     holdExit: (value) => {
       hold = value
     },
@@ -156,6 +176,13 @@ function fakeWorker(): FakeWorker {
 interface FakeLauncher extends EnumerationWorkerLauncher {
   readonly workers: FakeWorker[]
   readonly envs: Record<string, string>[]
+  /**
+   * 次に起こす 1 台だけに細工する (pr-gate Round 2 / H2-004)。
+   *
+   * **起こす前に仕込む必要がある。** 配線の失敗は `launch()` の直後に起きるので、
+   * `workers[0]` を掴んでからでは間に合わない。
+   */
+  readonly onNextWorker: (setup: (worker: FakeWorker) => void) => void
 }
 
 /**
@@ -166,13 +193,21 @@ interface FakeLauncher extends EnumerationWorkerLauncher {
 function fakeLauncher(auto: boolean = true): FakeLauncher {
   const workers: FakeWorker[] = []
   const envs: Record<string, string>[] = []
+  let next: ((worker: FakeWorker) => void) | null = null
   return {
     workers,
     envs,
+    onNextWorker(setup) {
+      next = setup
+    },
     launch(env) {
       const worker = fakeWorker()
       workers.push(worker)
       envs.push(env)
+      if (next !== null) {
+        next(worker)
+        next = null
+      }
       if (!auto) return worker
 
       const send = worker.send.bind(worker)
@@ -512,6 +547,61 @@ describe('createSessionEnumerator', () => {
     expect(old.killCount()).toBeGreaterThan(beforeOld)
   })
 
+  it('`dispose()` の後は新しいプロセスを起こさない (pr-gate Round 2 / H2-004)', async () => {
+    /*
+     * `dispose()` は `spawned` を空にして `worker = null` にするだけで、
+     * **「以後起こさない」印を持っていなかった**。`before-quit` の時点で
+     * 鎖に要求が残っていると `ensureWorker()` に進み、`crashes < maxCrashes` なので
+     * **新しいプロセスを起こす**。起こしたものを殺す主体はもういない。
+     */
+    const launcher = fakeLauncher(false)
+    const enumerator = createSessionEnumerator(deps(launcher))
+
+    enumerator.warmUp()
+    const before = launcher.workers.length
+    expect(before).toBeGreaterThan(0)
+
+    enumerator.dispose()
+    const result = await enumerator.enumerate(request(hostTarget(1)))
+
+    expect(launcher.workers).toHaveLength(before)
+    /* **例外にしない。** 理由キーを持つ行に落とす (FR-030)。 */
+    expect(result).toEqual({ ok: false, reasonKey: 'enumeration-failed' })
+  })
+
+  it('殺せなかったワーカの数を `dispose()` が返す (contracts C-5 / H2-004)', () => {
+    /*
+     * `kill()` の戻り値を捨てていた。`false` なら `exit` は届かないので、
+     * 監視しているつもりのまま**孤児を抱え込む**。
+     * 記録の経路をこの層は持たないので、数を返して呼び出し側に委ねる。
+     */
+    const launcher = fakeLauncher(false)
+    const enumerator = createSessionEnumerator(deps(launcher))
+
+    enumerator.warmUp()
+    launcher.workers[0].killFails(true)
+
+    expect(enumerator.dispose()).toBe(1)
+  })
+
+  it('配線に失敗した子を残さない (contracts C-5 / H2-004)', async () => {
+    /*
+     * `onLine` は stdio の指定が効いていないとき throw するが、
+     * その時点で `fork` は既に成功している。配線の**後ろ**で `spawned.add` していたため、
+     * どこからも参照されない子プロセスが残っていた。
+     */
+    const launcher = fakeLauncher(false)
+    const enumerator = createSessionEnumerator(deps(launcher))
+
+    launcher.onNextWorker((w) => w.onLineThrows(true))
+    const result = await enumerator.enumerate(request(hostTarget(0)))
+
+    /* **配線できなかった子は自分で殺す。** */
+    expect(launcher.workers[0].killCount()).toBe(1)
+    /* **例外で抜けない。** 理由キーを持つ行に落とす (FR-030)。 */
+    expect(result).toEqual({ ok: false, reasonKey: 'enumeration-failed' })
+  })
+
   it('落ちたら実行中の要求を失敗にする (AD-030 §7)', async () => {
     const launcher = fakeLauncher(false)
     const enumerator = createSessionEnumerator(deps(launcher))
@@ -528,6 +618,8 @@ describe('createSessionEnumerator', () => {
     const launcher: FakeLauncher = {
       workers: [],
       envs: [],
+      /* この代役は細工を要しない。口を満たすためだけに置く。 */
+      onNextWorker: () => {},
       launch(env) {
         const worker = fakeWorker()
         launcher.workers.push(worker)

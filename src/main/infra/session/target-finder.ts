@@ -5,6 +5,7 @@ import { makeRuntimePath, type HostPath, type RuntimePath } from '@domain/runtim
 import { checkVerified, type VerifiedRunning } from '@domain/runtime/verified-running'
 /* **値の import は型と分ける。** 序数の予約値は定数である。 */
 import { DISCOVERY_ISSUE_ORDINAL } from '@domain/session/interfaces'
+import { normalizeText, TEXT_MAX_BYTES } from '@domain/session/normalize'
 import type {
   EnumerationTargetFinder,
   TargetDiscovery,
@@ -19,6 +20,25 @@ import type { Location } from '@domain/workspace/folder'
 
 import type { HostFileSystem } from '../fs/host-fs'
 import { hostConfigDir, runtimeConfigDir } from './config-dir'
+
+/**
+ * 由来候補の表示名 (pr-gate Round 2 / H2-002 / FR-049 / FR-052)。
+ *
+ * **ここが未信頼入力の入口である。** 値の出どころはディストロ内の `/home` を
+ * UNC 経由で読んだディレクトリ名であり、**アプリ外が作った名前**である。
+ *
+ * **`makeRuntimePath` の検査では足りない。** `hasForbiddenCharacter` が落とすのは
+ * C0 / C1 / DEL だけで、**双方向制御文字 (U+202E 等) を通す**。
+ * pr-gate Round 1 の C-001 は「弱い側の検査がパスに当たっている」ことを Critical とし、
+ * 会話由来の 5 項目と作業ディレクトリには強い側 (`hasControlCharacter`) を通したが、
+ * **`label` だけが配線から漏れていた** — 同じ穴が隣のフィールドに残っていた。
+ *
+ * FR-052 はこの値の**常時表示**を要求するので、偽装の的としては `cwdDisplay` と同格である。
+ * 長さ上限も要る — 1 つのディレクトリ名が全セッション行の付帯情報に繰り返し載る。
+ */
+function targetLabel(raw: string): string {
+  return normalizeText(raw, TEXT_MAX_BYTES).value
+}
 
 /**
  * 列挙対象の探索 (BE-021 / data-model §1 の探索手順 / FR-008 〜 FR-012)。
@@ -108,7 +128,7 @@ export function createEnumerationTargetFinder(deps: TargetFinderDeps): Enumerati
      */
     | { readonly kind: 'issue'; readonly issue: Omit<TargetIssue, 'ordinal'> }
   > {
-    const label = runtimePathOps.basename(home)
+    const label = targetLabel(runtimePathOps.basename(home))
 
     const configDir = runtimeConfigDir(home)
     if (!configDir.ok) {
@@ -130,7 +150,7 @@ export function createEnumerationTargetFinder(deps: TargetFinderDeps): Enumerati
   return {
     async hostTarget(hostHome: HostPath): Promise<TargetDiscovery> {
       const location: Location = { kind: 'windows' }
-      const label = hostPathOps.basename(hostHome)
+      const label = targetLabel(hostPathOps.basename(hostHome))
 
       const configDir = hostConfigDir(hostHome)
       if (!configDir.ok) {
@@ -182,7 +202,7 @@ export function createEnumerationTargetFinder(deps: TargetFinderDeps): Enumerati
           [],
           [
             {
-              label: descriptor.distroName,
+              label: targetLabel(descriptor.distroName),
               reasonKey: 'distro-not-running',
               /* 所在ごと列挙していない。予約した序数を使う (security H-003)。 */
               ordinal: DISCOVERY_ISSUE_ORDINAL
@@ -209,7 +229,7 @@ export function createEnumerationTargetFinder(deps: TargetFinderDeps): Enumerati
            * `/root` の探索は続ける** — 所在全体を失敗にしない (FR-030 / SC-007)。
            */
           issues.push({
-            label: runtimePathOps.basename(homeRoot.path),
+            label: targetLabel(runtimePathOps.basename(homeRoot.path)),
             reasonKey: toFailureReason(listed.reason),
             /* **候補を 1 件も特定できていない。** 予約した序数を使う (security H-003)。 */
             ordinal: DISCOVERY_ISSUE_ORDINAL

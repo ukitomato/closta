@@ -1,8 +1,8 @@
 ---
 status: active
-version: 1.2.3
+version: 1.2.4
 ratified: 2026-09-13
-last_amended: 2026-09-17
+last_amended: 2026-09-23
 generated_by: /speckit.constitution (素材: /spec-gate bootstrap Phase 6 の draft)
 ---
 
@@ -170,7 +170,11 @@ ADR は [docs/decisions/](../../docs/decisions/)、用語は [docs/glossary.md](
 
 新規 Principle 追加 / 既存 Principle の変更 / 削除には以下が必要:
 
-1. ADR (`docs/decisions/<NNNN>-...md`) で議論を記録
+1. ADR (`docs/decisions/<NNNN>-...md`) で議論を記録。
+   **accepted な ADR の扱いは
+   [AD-031](../../docs/decisions/0031-adr-in-place-corrections-and-principle-ix-scope.md)
+   に従う** — 採択当日 / 実装時に判明した**事実誤認の訂正**は日付つきの「訂正」節として
+   in-place で書いてよい。**決定そのものの変更は後続 ADR に置く**
 2. `architecture-reviewer` の owner を交えた人間レビュー
 3. version を SemVer で上げる (Principle 追加 = MINOR、削除 / 後方非互換 = MAJOR、表現修正 = PATCH)
 4. Amendment trail に entry を追記
@@ -479,7 +483,7 @@ if (!isMac) { ... }
 - `violation_threshold`: 0
 - `bad_pattern_grep`: `grep -rn "JSON.parse" src/ | grep -v "src/agents/" | grep -iE "chunk|stdout|stream|line"`
 - `adoption_date`: 2026-09-13
-- `amended`: 2026-09-15 (AD-024 #6)
+- `amended`: 2026-09-15 (AD-024 #6), 2026-09-23 (AD-031)
 
 <!-- BOOTSTRAP_SECTION_START principle=IX -->
 **Statement**: stream の逐次パースは supervisor (`utilityProcess`。**実体は `src/agents/`**) 側で行うべきであり、main process で行うべきではない。
@@ -496,6 +500,19 @@ if (!isMac) { ... }
 - Automated: `src/agents/` の外に stream の `JSON.parse` 処理が存在しないこと (AD-024 #6)。
   `agents → infra` の到達禁止は `.dependency-cruiser.js` の `agents-not-to-infra` が見る
 - Manual: `architecture-reviewer`
+
+**現状の制約** ([AD-031](../../docs/decisions/0031-adr-in-place-corrections-and-principle-ix-scope.md)):
+`bad_pattern_grep` が見るのは**パースするコードの置き場**であり、
+**そのコードがどのプロセスで評価されるかは見ていない**。
+`src/agents/protocol.ts` に置いた `decodeResponse` は
+main process の `session-enumerator.ts` からも呼ばれるが、除外パターン
+(`grep -v "src/agents/"`) に当たるため検出されない。
+したがって **`existing_violations: 0` は本 Principle の遵守を示さない。**
+
+R-2 (セッション列挙) はこの経路で応答 1 行を main でパースする。
+本文を運ばない列挙結果のメタデータに限られるため許容したが、
+**R-3 が transcript 本文を運ぶ時点で再評価する** (AD-031 Decision 2)。
+塞ぐには `composition-root` からの到達集合を依存グラフから導く検査が要る。
 <!-- BOOTSTRAP_SECTION_END principle=IX -->
 
 <!-- MIGRATE_SECTION_START principle=IX -->
@@ -814,8 +831,9 @@ Amendment trail への追記 → 既存違反の enumeration、の 5 段階で�
 | 1.1.0 | 2026-09-13 | Principle II の検証条件に `platform-ok:` 注記による例外を追加。Electron 公式テンプレートの `window-all-closed` / `icon` 分岐は除去不能であり、元の grep はどの Electron アプリでも達成できなかった (AD-023) |
 | 1.2.0 | 2026-09-15 | [AD-024](../../docs/decisions/0024-constitution-verification-paths.md) の 17 項目。検証条件が実在しないディレクトリを指していた箇所 (#1 / #6 の `src/supervisor/` ほか) を AD-023 のレイヤ構成に合わせ、**Automated の正本を grep から lint + グラフ検証 + 検証スクリプトに移した** (#2 / #7 / #8)。許可リストの正本を `scripts/constitution/allowlists.mjs` に置き追加に ADR を要する形にした (#3 / #4)。検証スコープにビルド構成を追加 (#5)。設定層を Principle V の対象に追加 (#9)。Principle XIII の `bad_pattern_grep` が `--` 始まりで実行不能だった点を修正し標準テーマの写しを除外リスト化 (#10 / #11)。表層文書の英語 Exceptions を追加 (#12)。**NON-NEGOTIABLE の改定 2 件** — III を `autoModeSafe !== true` に (#13)、I の Statement を `domain` のパス API 経由に (#14)。XI の Exceptions / XIV の本文 / 未解決候補 #2 を R-1 完了後の事実に追随 (#15 / #16 / #17) |
 | 1.2.1 | 2026-09-15 | [AD-024](../../docs/decisions/0024-constitution-verification-paths.md) #18。Principle VIII の Verification の「現状の制約」を実体に改めた。CI は SH-022 で構築したので「CI が未構築のため実行不能」はもう成り立たない。Automated の 2 項目は **(A) composer が無いため対象が無い / (B) スクリーンショット比較は R-2 の E2E 基盤に相乗りする** であり、**CI が緑であることは本 Principle について何も示さない**ことを明記した |
-| 1.2.3 | 2026-09-17 | [AD-028](../../docs/decisions/0028-session-enumeration-process-and-unc-handoff.md) §5。Principle VIII の Automated 検証の**延期先から R-2 を外した**。R-2 (セッション列挙) は読み取り専用で composer の送信経路を開けないため (A) の発動条件を満たさず、目標レイアウト ADR が未採択のため (B) は撮り直しが確定する。**延期先を空にせず「M4 完了後に再検討し、持ち主 feature を roadmap に登録する」とした** — 持ち主のいない延期は、次に本 Principle を見る人が「R-2 で載ったはず」と誤読する形で残る |
 | 1.2.2 | 2026-09-16 | [AD-024](../../docs/decisions/0024-constitution-verification-paths.md) #18 の**訂正**。v1.2.1 が (A) の根拠に書いた「R-1 に composer が無い」は事実ではない。`ChatScreen` は `Thread` を mount しており composer は描画される。根拠を「送信経路を `isDisabled: true` で閉じている」に改め、その前提を `ChatScreen.test.tsx` で固定した。あわせて **`bad_pattern_grep` が送信経路を見られない**こと (`existing_violations: 0` は遵守の証拠ではない) を明記した |
+| 1.2.3 | 2026-09-17 | [AD-028](../../docs/decisions/0028-session-enumeration-process-and-unc-handoff.md) §5。Principle VIII の Automated 検証の**延期先から R-2 を外した**。R-2 (セッション列挙) は読み取り専用で composer の送信経路を開けないため (A) の発動条件を満たさず、目標レイアウト ADR が未採択のため (B) は撮り直しが確定する。**延期先を空にせず「M4 完了後に再検討し、持ち主 feature を roadmap に登録する」とした** — 持ち主のいない延期は、次に本 Principle を見る人が「R-2 で載ったはず」と誤読する形で残る |
+| 1.2.4 | 2026-09-23 | [AD-031](../../docs/decisions/0031-adr-in-place-corrections-and-principle-ix-scope.md)。**改定手順に ADR の in-place 訂正の規則を置いた** — 事実誤認の訂正は日付つきの「訂正」節として in-place、決定の変更は後続 ADR。AD-028 §2 の immutability 宣言を読み替える (先例 5 件がすべて訂正であり決定の変更ではなかった)。あわせて **Principle IX の Verification に「`bad_pattern_grep` はパースコードの置き場を見るだけで、どのプロセスで走るかは見ていない」を明記した** — R-2 の列挙応答は main でパースされるが検査は 0 件を返す。`existing_violations: 0` は遵守の証拠ではない |
 
 ## References
 
@@ -827,4 +845,4 @@ Amendment trail への追記 → 既存違反の enumeration、の 5 段階で�
 
 ---
 
-**Version**: 1.2.2 | **Ratified**: 2026-09-13 | **Last Amended**: 2026-09-16
+**Version**: 1.2.4 | **Ratified**: 2026-09-13 | **Last Amended**: 2026-09-23

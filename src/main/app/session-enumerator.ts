@@ -171,8 +171,14 @@ export interface SessionEnumeratorHandle extends SessionEnumerator {
    * 呼ばなくても動く — 最初の要求の時点で起こす (遅いが動く)。
    */
   warmUp(): void
-  /** 常駐プロセスを終了させる。`before-quit` から呼ぶ (C-5)。 */
-  dispose(): void
+  /**
+   * 常駐プロセスを終了させる。`before-quit` から呼ぶ (C-5)。
+   *
+   * @returns **殺せなかったワーカの数** (pr-gate Round 2 / H2-004)。
+   * 通常は 0。0 でなければ UNC ハンドルを掴んだままのプロセスが残っている。
+   * 呼び出し側が記録できるようにするために返す — この層は記録の経路を持たない。
+   */
+  dispose(): number
 }
 
 export function createSessionEnumerator(deps: SessionEnumeratorDeps): SessionEnumeratorHandle {
@@ -210,6 +216,17 @@ export function createSessionEnumerator(deps: SessionEnumeratorDeps): SessionEnu
    * 「1 つしか無いはず」を前提にしない。
    */
   const spawned = new Set<EnumerationWorker>()
+
+  /**
+   * 破棄済みか (pr-gate Round 2 / H2-004 / contracts C-5)。
+   *
+   * `dispose()` は `spawned` を空にして `worker = null` にするだけで、
+   * **「以後起こさない」という印を持っていなかった**。
+   * `before-quit` の時点で鎖に要求が残っていると、その要求は `ensureWorker()` に進み
+   * `crashes < maxCrashes` なので**新しいプロセスを起こす**。
+   * 起こしたものを殺す主体はもういない — H-003 で閉じたはずの孤児が別経路で戻る。
+   */
+  let disposed = false
 
   /** 応答待ちの要求。**同時に 1 件だけ**である (AD-030 §3)。 */
   let pending: {
@@ -256,15 +273,27 @@ export function createSessionEnumerator(deps: SessionEnumeratorDeps): SessionEnu
     spawned.delete(who)
     const wasIntentional = intentionallyKilled.delete(who)
 
-    /* **現行でないワーカの終了は、現在の状態に触れない。** */
-    if (worker !== who) return
-
-    worker = null
     /*
      * **こちらから殺したものは crash に数えない** (platform-boundary H-004)。
      * timeout / 送信失敗 / `dispose` は異常終了ではない。
+     *
+     * **現行かどうかより先に数える** (pr-gate Round 2 / H2-004)。
+     * 以前は `worker !== who` の早期 return の**後ろ**にあったが、
+     * `killIntentionally` の 3 呼び出しはいずれも直後に `worker = null` を置くため、
+     * 遅れて届く `exit` は必ず早期 return に当たっていた。
+     * つまり `intentionallyKilled` は**一度も crash の増加を止めていなかった** —
+     * 守りが二重化していて片方が死んでいる状態である
+     * (`if (!wasIntentional)` を外しても全テストが緑のままだった)。
+     *
+     * 数える対象は「予期せず落ちたプロセス」であって「現行のプロセス」ではない。
+     * AD-030 §7 の「落ち続けるプロセスを起こし続けない」は頻度の話である。
      */
     if (!wasIntentional) crashes += 1
+
+    /* **現行でないワーカの終了は、ここから先の状態に触れない。** */
+    if (worker !== who) return
+
+    worker = null
     /*
      * **実行中だった要求はその要求の失敗にする** (AD-030 §7)。
      * 待ち行列に残っているものは、作り直した後のプロセスで処理される。
@@ -272,13 +301,31 @@ export function createSessionEnumerator(deps: SessionEnumeratorDeps): SessionEnu
     pending?.settle(failure('enumeration-failed'))
   }
 
-  /** **意図して殺す。** crash と区別するための唯一の入口である。 */
-  function killIntentionally(victim: EnumerationWorker): void {
+  /**
+   * **意図して殺す。** crash と区別するための唯一の入口である。
+   *
+   * **戻り値を捨てない** (contracts C-5 / pr-gate Round 2 / H2-004)。
+   * `kill()` が `false` を返すと `exit` は届かない。
+   * 届かなければ `spawned` / `intentionallyKilled` の項目が残り続け、
+   * **UNC ハンドルを掴んだ孤児**を監視しているつもりのまま抱え込む。
+   * 殺せなかったものは監視対象から外す — 再試行しても結果は変わらないし、
+   * 残すと `dispose()` が「片付けた」と報告できなくなる。
+   *
+   * @returns 殺せたか。
+   */
+  function killIntentionally(victim: EnumerationWorker): boolean {
     intentionallyKilled.add(victim)
-    victim.kill()
+    if (victim.kill()) return true
+
+    /* `exit` が来ない以上、この 2 つの集合から消す主体が他にいない。 */
+    intentionallyKilled.delete(victim)
+    spawned.delete(victim)
+    return false
   }
 
   function ensureWorker(): EnumerationWorker | null {
+    /* **破棄後は起こさない** (H2-004)。殺す主体がもういない。 */
+    if (disposed) return null
     if (worker !== null) return worker
     /*
      * **落ち続けるプロセスを起こし続けない** (AD-030 §7)。
@@ -291,9 +338,29 @@ export function createSessionEnumerator(deps: SessionEnumeratorDeps): SessionEnu
      * `config-dir.ts` の純粋関数が行い、この 1 行だけが親環境に触れる。
      */
     const next = deps.launcher.launch(buildWorkerEnv(deps.parentEnv))
-    next.onLine(handleLine)
-    next.onExit(() => handleExit(next))
+    /*
+     * **起こした直後に登録する** (pr-gate Round 2 / H2-004 / contracts C-5)。
+     *
+     * 以前は `onLine` / `onExit` の配線の**後ろ**だった。
+     * `onLine` は `stdio` の指定が効いていないときに throw する
+     * (`enumerator-spawner.ts`) が、その時点で `fork` は既に成功している。
+     * つまり `spawned` にも `worker` にも入らない子プロセスが残り、
+     * **`dispose()` が殺せない孤児**になっていた — H-003 が閉じた欠陥と同じ形が
+     * 配線の順序として残っていた。
+     */
     spawned.add(next)
+    try {
+      next.onLine(handleLine)
+      next.onExit(() => handleExit(next))
+    } catch {
+      /*
+       * **配線できない子は自分で片付ける。** 例外を上へ投げると
+       * `enumerate()` から rejection として抜け、FR-030 の
+       * 「失敗は理由キーで行に落とす」を破る。呼び出し側は `null` を失敗として扱う。
+       */
+      killIntentionally(next)
+      return null
+    }
     worker = next
     return next
   }
@@ -391,14 +458,19 @@ export function createSessionEnumerator(deps: SessionEnumeratorDeps): SessionEnu
       ensureWorker()
     },
 
-    dispose(): void {
+    dispose(): number {
       /*
        * **起こしたワーカ全部を殺す** (contracts C-5 / platform-boundary H-003)。
        * `worker` だけを見ると、参照から外れたものが
        * UNC ハンドルを掴んだ孤児として残る。
        */
-      for (const victim of [...spawned]) killIntentionally(victim)
+      disposed = true
+      let unkillable = 0
+      for (const victim of [...spawned]) {
+        if (!killIntentionally(victim)) unkillable += 1
+      }
       worker = null
+      return unkillable
     }
   }
 }

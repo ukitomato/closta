@@ -131,8 +131,21 @@ export function classifyCwd(input: ClassifyInput): CwdOrigin {
   const host = makeHostPath(raw)
   if (host.ok) return { kind: 'host', path: host.path }
 
-  // #5 — POSIX 形式は**由来 config の所在でしか所在を決められない**。
-  if (raw.startsWith('/') && input.targetLocation.kind === 'wsl') {
+  /*
+   * #5 — POSIX 形式は**由来 config の所在でしか所在を決められない**。
+   *
+   * **`//` で始まる値は POSIX 絶対パスではない** (pr-gate Round 2 / H2-001)。
+   * UNC をフォワードスラッシュで綴った値がここへ落ちると、
+   * **由来 config の所在を継承して確定してしまう** (FR-016 違反)。
+   * 直前の `looksLikeWslUnc` は WSL の共有名を持つ綴りだけを捕まえるので、
+   * `//localhost/c$/Users/y` のような非 WSL の UNC はここまで来る。
+   *
+   * **綴りの網羅で守らない。** 接頭辞をいくつ並べても次の綴りで破れることを
+   * Round 1 で 2 度観測した。「2 文字目が区切りなら POSIX ではない」という
+   * **形の性質**で落とす — POSIX の `//` は実装定義であり、
+   * セッションの作業ディレクトリとして現れる値ではない。
+   */
+  if (raw.startsWith('/') && !raw.startsWith('//') && input.targetLocation.kind === 'wsl') {
     const namespace = locationNamespace(input.targetLocation)
     if (namespace !== 'host') {
       const runtime = makeRuntimePath(namespace, raw)

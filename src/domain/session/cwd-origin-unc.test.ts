@@ -89,6 +89,81 @@ describe('解析できない UNC — 所在を推測しない', () => {
   })
 })
 
+/**
+ * デバイス名前空間の綴りと区切りの重なり (pr-gate Round 2 / H2-001)。
+ *
+ * **Round 1 の修正は綴りを 2 つしか見ていなかった。**
+ * `looksLikeWslUnc` が照合するのは `\\wsl.localhost\` と `\\wsl$\` の 2 つだけで、
+ * Win32 のデバイス名前空間を経由した綴りは素通りしていた。実測での到達先:
+ *
+ * | 入力 | 修正前の結果 |
+ * |---|---|
+ * | `//?/UNC/wsl.localhost/Ubuntu/home/alice` | `wsl-inherited` (namespace: `wsl:Ubuntu`) |
+ * | `\\?\UNC\wsl.localhost\Ubuntu\home\alice` | `unknown-location` (display に UNC 全文) |
+ * | `\\wsl.localhost\\-bad\home\alice` | display `/-bad/home/alice` |
+ *
+ * 1 行目が最も重い — **値が Ubuntu を名指しているのに、判定したのは由来 config の所在**
+ * であり、別ディストロの config から来ていれば別ディストロに帰属していた (FR-016)。
+ * 3 行目は Round 1 が書いた `not.toContain('-bad')` が、
+ * **区切りを 1 つ増やすだけで破れる**ことを示す。
+ */
+describe('デバイス名前空間の綴りと区切りの重なり (H2-001)', () => {
+  const DEVICE = B + B + '?' + B + 'UNC' + B
+  const DEVICE_DOT = B + B + '.' + B + 'UNC' + B
+
+  it.each([
+    [
+      'デバイス綴り (バックスラッシュ)',
+      DEVICE + 'wsl.localhost' + B + 'Ubuntu' + B + 'home' + B + 'alice'
+    ],
+    [
+      'デバイス綴り (ドット)',
+      DEVICE_DOT + 'wsl.localhost' + B + 'Ubuntu' + B + 'home' + B + 'alice'
+    ],
+    ['デバイス綴り (フォワードスラッシュ)', '//?/UNC/wsl.localhost/Ubuntu/home/alice']
+  ])('UNC の綴りとして扱う (%s)', (_label, raw) => {
+    const origin = classify(raw, FROM_WSL)
+
+    /*
+     * **由来 config の所在を継承しない。** `FROM_WSL` は Ubuntu なので、
+     * 継承すると「たまたま正しい」結果になって欠陥が見えない。
+     * 見るべきは `wsl-inherited` に落ちていないことである。
+     */
+    expect(origin.kind).not.toBe('wsl-inherited')
+    expect(originPath(origin)).toBeNull()
+
+    const display = originDisplay(origin) ?? ''
+    expect(display).not.toContain('wsl.localhost')
+    expect(display).not.toContain('UNC')
+    expect(display).not.toContain(B + B)
+    /* 残余は出す。 */
+    expect(display).toContain('alice')
+  })
+
+  it('区切りが重なっても検証を通っていないディストロ名を出さない', () => {
+    const raw = B + B + 'wsl.localhost' + B + B + '-bad' + B + 'home' + B + 'alice'
+
+    const display = originDisplay(classify(raw, FROM_WSL)) ?? ''
+
+    expect(display).not.toContain('-bad')
+    expect(display).toContain('alice')
+  })
+
+  it.each([
+    ['非 WSL の UNC (フォワードスラッシュ)', '//localhost/c$/Users/y'],
+    ['サーバ共有 (フォワードスラッシュ)', '//fileserver/share/project']
+  ])('WSL 以外の UNC も POSIX 絶対パスとして扱わない (%s)', (_label, raw) => {
+    /*
+     * `looksLikeWslUnc` は WSL の共有名を持つ綴りだけを捕まえる。
+     * **綴りの網羅では守れない**ので、`//` 始まりという形の性質で落とす。
+     */
+    const origin = classify(raw, FROM_WSL)
+
+    expect(origin.kind).not.toBe('wsl-inherited')
+    expect(originPath(origin)).toBeNull()
+  })
+})
+
 describe('解析できる UNC は従来どおり', () => {
   it('検出済みディストロは `wsl-from-unc` になる', () => {
     const origin = classify(UNC + 'Ubuntu' + B + 'home' + B + 'y', FROM_HOST)

@@ -144,6 +144,53 @@ describe('encodeResponse / decodeResponse', () => {
     expect(decodeResponse(line)).toBeNull()
   })
 
+  /*
+   * 要素の形を親でも確かめる (pr-gate Round 2 / H2-003 / FR-030 / SC-007)。
+   *
+   * 以前は配列であることだけを見て `as readonly RawSessionRecord[]` で通していた。
+   * config ディレクトリの JSONL はアプリ外が書く未信頼入力 (FR-049) なので、
+   * `"cwd": 123` のような値が来うる。`app` 側の `normalizeText` は
+   * 文字列を反復するため TypeError を投げ、**一覧全体が落ちていた**。
+   */
+  function okLine(sessions: readonly unknown[]): string {
+    return JSON.stringify({
+      kind: 'ok',
+      version: PROTOCOL_VERSION,
+      id: 1,
+      targetKey: 'host#0',
+      sessions,
+      truncated: false
+    })
+  }
+
+  it.each([
+    ['cwd が数値', { ...record, cwd: 123 }],
+    ['summary が数値', { ...record, summary: 99 }],
+    ['sessionId が数値', { ...record, sessionId: 12345 }],
+    ['sessionId が空文字', { ...record, sessionId: '' }],
+    ['programmatic が文字列', { ...record, programmatic: 'yes' }],
+    ['要素が null', null],
+    ['要素が配列', []]
+  ])('形が合わない要素を含む応答を拒否する (%s)', (_label, bad) => {
+    expect(decodeResponse(okLine([record, bad]))).toBeNull()
+  })
+
+  it('日時と大きさは unknown のまま通す (壊れた日時で行ごと落とさない)', () => {
+    /* `normalizeEpochMs` / `normalizeByteCount` が `null` に畳む。 */
+    const decoded = decodeResponse(okLine([{ ...record, lastModified: 'いつか', fileSize: null }]))
+
+    expect(decoded?.kind).toBe('ok')
+  })
+
+  it('上限を超える件数の応答を拒否する', () => {
+    const many = Array.from({ length: MAX_SESSIONS_PER_TARGET + 1 }, (_, i) => ({
+      ...record,
+      sessionId: String(i)
+    }))
+
+    expect(decodeResponse(okLine(many))).toBeNull()
+  })
+
   it('既知でない理由キーを拒否する', () => {
     const line = JSON.stringify({
       kind: 'error',

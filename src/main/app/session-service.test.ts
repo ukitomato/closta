@@ -491,6 +491,66 @@ describe('createSessionService — 失敗の封じ込め', () => {
     expect(index.outcomes[1].reasonKey).toBe('permission-denied')
   })
 
+  /*
+   * 例外は行に落とす (pr-gate Round 2 / H2-003 / FR-030 / SC-007)。
+   *
+   * 「失敗は行に落とし、例外にしない」は**コメントだけの約束**で、
+   * `enumerateTarget` 〜 `fetchAll` の経路に catch が 1 つも無かった。
+   * 列挙器は `{ ok: false }` を返す設計なので普段は例外が出ないが、
+   * **未信頼入力が起点の例外は出る** — config ディレクトリの JSONL に
+   * 型の違う値が 1 つあれば `normalizeText` が TypeError を投げ、
+   * 1 所在どころか**一覧全体**が落ちていた。
+   */
+  it('列挙中の例外は所在の行に落ちる (FR-030 / SC-007)', async () => {
+    const host = hostTarget()
+    const wsl = wslTarget()
+    const enumerator: SessionEnumerator = {
+      async enumerate(request) {
+        if (request.target.key === wsl.key) throw new TypeError('raw is not iterable')
+        return { ok: true, sessions: [record('a')], truncated: false }
+      }
+    }
+    const service = createSessionService(
+      deps({
+        finder: fakeFinder(discovery([host]), discovery([wsl])),
+        enumerator,
+        runtimes: () => [ubuntu()],
+        verifyRunning: async () => new Map([[UBUNTU, createVerifiedRunning(UBUNTU, NOW)]])
+      })
+    )
+
+    const index = await service.list()
+    await settle()
+
+    /* **他の所在は消えない。** */
+    expect(index.groups.flatMap((g) => g.sessions).map((s) => s.sessionId)).toEqual(['a'])
+    const row = index.outcomes.find((o) => o.targetKey === wsl.key)
+    expect(row).toMatchObject({ status: 'failed', reasonKey: 'enumeration-failed' })
+  })
+
+  it('背景の全件取得が例外で終わっても main に rejection を投げない (H2-003)', async () => {
+    const target = hostTarget()
+    let calls = 0
+    const enumerator: SessionEnumerator = {
+      async enumerate() {
+        calls += 1
+        /* 先頭ページは成功、背景の全件取得で壊れる。 */
+        if (calls > 1) throw new TypeError('壊れた応答')
+        return { ok: true, sessions: [record('a')], truncated: false }
+      }
+    }
+    const service = createSessionService(
+      deps({ finder: fakeFinder(discovery([target])), enumerator })
+    )
+
+    const first = await service.list()
+    await settle()
+
+    expect(first.groups.flatMap((g) => g.sessions).map((s) => s.sessionId)).toEqual(['a'])
+    /* 例外が抜けていれば unhandled rejection になり、vitest がこのテストを落とす。 */
+    expect(calls).toBeGreaterThan(1)
+  })
+
   it('停止中の所在は探索も列挙も発行せず、行だけを残す (FR-007 / SC-002)', async () => {
     const host = hostTarget()
     const enumerator = fakeEnumerator({

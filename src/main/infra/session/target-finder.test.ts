@@ -151,6 +151,37 @@ describe('createEnumerationTargetFinder — wslTargets', () => {
     expect(result.targets.every((t) => t.location.kind === 'wsl')).toBe(true)
   })
 
+  /*
+   * 由来候補の表示名は未信頼入力である (pr-gate Round 2 / H2-002 / FR-049 / FR-052)。
+   *
+   * 値の出どころはディストロ内の `/home` を UNC 経由で読んだディレクトリ名であり、
+   * **アプリ外が作った名前**である。`makeRuntimePath` の `hasForbiddenCharacter` は
+   * C0 / C1 / DEL しか落とさず、**双方向制御文字を通す**。
+   * FR-052 によりこの値は一覧の全行に出るので、偽装の的としては `cwdDisplay` と同格である。   *
+   * **長さは見ていない。** パス API が 1 セグメントの上限を既に縛っており
+   * (`runtimePathOps.join` が長すぎる名前を拒む)、この入口から長い `label` は作れない。
+   * 到達しない状態のテストは書かない。
+   */
+  it('候補の表示名から双方向制御文字を落とす (FR-049 / FR-052)', async () => {
+    const RLO = String.fromCharCode(0x202e)
+    const name = 'al' + RLO + 'ice'
+    const finder = createEnumerationTargetFinder({
+      hostFs: fakeHostFs([]),
+      wslFs: fakeWslFs({ '/home': [name], ['/home/' + name + '/.claude']: [] })
+    })
+
+    const result = await finder.wslTargets(ubuntu, verified(UBUNTU), NOW)
+
+    expect(result.targets).toHaveLength(1)
+    expect(result.targets[0].label).toBe('alice')
+    /*
+     * **境界を渡る 2 項目で見る。** `configDir` は実在するパスそのものなので
+     * 制御文字を含んでよい — `dto-mapper` が意図的に捨てており境界を渡らない。
+     */
+    expect(result.targets[0].key).not.toContain(RLO)
+    expect(JSON.stringify(result.issues)).not.toContain(RLO)
+  })
+
   it('`.claude` が 1 件も無い場合は失敗ではなく「履歴なし」とする (FR-012)', async () => {
     const finder = createEnumerationTargetFinder({
       hostFs: fakeHostFs([]),

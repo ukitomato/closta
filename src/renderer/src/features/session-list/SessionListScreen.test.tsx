@@ -921,14 +921,34 @@ describe('SessionListScreen — 件数が多い場合 (FE-073)', () => {
      * `opacity-50` は子孫すべてに掛かるため、「取得中…」が 3.74:1 に落ちていた。
      * `disabled` をやめた狙いは「到達して理由を読める」ことなので、
      * 到達した先で文字が読めないのでは対策が半分で止まる。
+     *
+     * **取得中の状態で見る** (pr-gate Round 2 / A11Y-204)。
+     * 以前は非 busy のボタンに対して断言しており、`busyProps(false)` は
+     * `className: undefined` を返すので **busy 時の class を一度も見ていなかった**。
+     * さらに正規表現が `s` ではなく**リテラルの `s`** だったため
+     * (`/(^|s)opacity-50(s|$)/`)、`"… opacity-50"` に一致せず
+     * **修正前のコードでも緑になっていた**。守りが 2 重に効いていなかった。
      */
-    install(index([folderGroup([session()])]))
+    const value = index([folderGroup([session()])])
+    installCapability({
+      listSessions: () => Promise.resolve(value),
+      /* **解決しない。** これで取得中の状態に留まる。 */
+      refreshSessions: () => new Promise(() => {}),
+      onSessionsChanged: () => () => {}
+    })
 
     render(<SessionListScreen />)
-    const button = await waitFor(() => screen.getByRole('button', { name: '全件を取り直す' }))
+    const idle = await waitFor(() => screen.getByRole('button', { name: '全件を取り直す' }))
+    idle.click()
+
+    const busy = await waitFor(() => screen.getByRole('button', { name: '取得中…' }))
 
     /* 減光はアイコンだけに掛ける。ラベルには掛けない。 */
-    expect(button.className).not.toMatch(/(^|s)opacity-50(s|$)/)
+    expect(busy.className).toContain('[&_svg]:opacity-50')
+    expect(busy.className.split(/s+/)).not.toContain('opacity-50')
+    /* `disabled` でタブ順から外さない — 押した要素にフォーカスが残る。 */
+    expect(busy).not.toHaveAttribute('disabled')
+    expect(busy).toHaveAttribute('aria-disabled', 'true')
   })
 
   it('選択した行を hover と別の見えで示す (a11y H-202)', async () => {

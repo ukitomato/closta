@@ -265,8 +265,41 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
     return index
   }
 
-  /** 1 つの列挙対象を列挙する。**失敗は行に落とし、例外にしない** (FR-030)。 */
+  /**
+   * 1 つの列挙対象を列挙する。**失敗は行に落とし、例外にしない** (FR-030)。
+   *
+   * **「例外にしない」を実装で保証する** (pr-gate Round 2 / H2-003)。
+   * 以前はこの約束がコメントだけで、`enumerateTarget` 〜 `fetchAll` の経路に
+   * catch が 1 つも無かった。列挙器が `{ ok: false }` を返す設計なので
+   * 普段は例外が出ないが、**未信頼入力が起点の例外は出る** —
+   * `normalizeText` は `for (const ch of raw)` を回すため、
+   * config ディレクトリの JSONL に型の違う値が 1 つあれば TypeError になり、
+   * **1 所在どころか一覧全体が落ちていた** (SC-007 違反)。
+   *
+   * 値の検査は `protocol.ts` の `isRawSessionRecord` が前段で行う。
+   * ここは**最後の受け皿**であり、想定外の例外も行に落とす。
+   */
   async function enumerateTarget(
+    target: EnumerationTarget,
+    verified: VerifiedRunning | null,
+    scope: EnumerationScope
+  ): Promise<TargetResult> {
+    try {
+      return await enumerateTargetUnsafe(target, verified, scope)
+    } catch {
+      /*
+       * **理由を作り話にしない。** 何が起きたかはここでは分からないので、
+       * 汎用の `enumeration-failed` にする (`ui` が「再取得してください」を出す)。
+       */
+      return {
+        target,
+        outcome: targetOutcome(target, 'failed', 'enumeration-failed', 0, false),
+        sessions: []
+      }
+    }
+  }
+
+  async function enumerateTargetUnsafe(
     target: EnumerationTarget,
     verified: VerifiedRunning | null,
     scope: EnumerationScope
@@ -616,7 +649,13 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
        * **失敗しても先頭ページを壊さない。** 例外は握らずに理由を行へ落とすのは
        * `fetchAll` の側であり、ここに来るのは想定外の例外だけである。
        */
-      void completeInBackground()
+      /*
+       * **unhandled rejection を作らない** (pr-gate Round 2 / H2-003)。
+       * `completeInBackground` は try/finally しか持たないので、
+       * 想定外の例外は main プロセスまで抜けていた。
+       * 失敗しても先頭ページは残っており、利用者は「取り直す」で再試行できる。
+       */
+      void completeInBackground().catch(() => {})
       return first
     },
 

@@ -136,9 +136,21 @@ quickstart の手動検証 + `scripts/constitution/check.mjs` の呼び出し形
 
 **Standard**
 
-- [x] **IX. main process をブロックしない** — 列挙の I/O とパースを `utilityProcess` に出す
+- [x] **IX. main process をブロックしない** — 列挙の I/O を `utilityProcess` に出す
       (FR-005 / research R-04)。Principle IX の Statement は stream の逐次パースを名指すが、
-      **数百ファイルの読み取りとパースは同じ性質**であるため同じ扱いにする
+      **数百ファイルの読み取りは同じ性質**であるため同じ扱いにする。
+
+      **ただし「パースも出す」は事実ではない**
+      (pr-gate Round 2 / architecture A-202 →
+      [AD-031](../../docs/decisions/0031-adr-in-place-corrections-and-principle-ix-scope.md))。
+      子は応答を `JSON.stringify` した 1 行として返し、
+      **親 (main) が `decodeResponse` = `JSON.parse` する**。
+      1 応答に載る上限は `MAX_SESSIONS_PER_TARGET` (5,000) 件である。
+      これは Principle IX の ✗ Bad の形に一致するが、
+      **transcript 本文を載せない** (FR-044 / SC-011) メタデータに限られるため許容した。
+      `bad_pattern_grep` はパースコードの置き場 (`src/agents/`) を見るので
+      **この経路を検出しない** — この `[x]` は検査が緑であることを根拠にしていない。
+      **R-3 が本文を運ぶ時点で再評価する** (AD-031 Decision 2)
 - [x] **X. セッションの正本はアプリ外** — 本 feature の中核。キャッシュは置き換え (FR-035)、
       取得時刻を提示し (FR-034)、ディスクに書かない (FR-036)
 - [x] **XI. 垂直スライス** — 観測可能な振る舞いは US-1 〜 US-4 の一覧画面
