@@ -34,7 +34,7 @@ export interface EnumerationTargetFinder {
   ): Promise<TargetDiscovery>
 }
 
-/** 1 つの列挙対象に対する 1 回の列挙。実装は短命プロセスを起動する (research R-04)。 */
+/** 1 つの列挙対象に対する 1 回の列挙。実装は常駐プロセスへ要求を直列に投げる (AD-030 §1)。 */
 export interface SessionEnumerator {
   enumerate(request: EnumerationRequest): Promise<EnumerationResult>
 }
@@ -54,7 +54,7 @@ export type EnumerationResult =
 
 ---
 
-## C-1: 実行単位 — 列挙対象ごとに 1 つの短命プロセス
+## C-1: 実行単位 — 1 プロセスを常駐させ、要求を直列に処理する
 
 | 規則 | 理由 |
 | --- | --- |

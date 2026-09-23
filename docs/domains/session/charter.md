@@ -151,7 +151,12 @@ X-1 / X-4 / X-5 / O-1 は未着手。
 
 - [x] ~~SPIKE-1: `listSessions()` と `CLAUDE_CONFIG_DIR`~~ →
       [AD-021](../../decisions/0021-session-store-and-enumeration.md)。config dir は引数で取れず、
-      **Provider ごとの短命 child process 方式が本線**に決まった
+      **子プロセスに環境変数で渡す**方式に決まった。
+      当初の「Provider ごとの短命プロセス」は
+      [AD-030](../../decisions/0030-enumeration-runs-in-one-resident-process.md) §1 で
+      **1 プロセス常駐 + 要求の直列処理**に差し替わっている —
+      実測で費用のほぼ全部がプロセス起動だった (起動 2,704 ms に対して列挙 36〜83 ms)。
+      config ディレクトリは起動時の環境変数ではなく**要求 1 件ごとに行に載せる** (AD-030 §2)
 - [x] ~~`sessionStore` の実現手段~~ → **SDK の公式インタフェース**だった。自作しない。
       `append` は「ローカル書き込み成功後」に呼ばれ、Principle X と構造的に整合する
 - [x] ~~SPIKE-5: `wsl.exe` 越しの stdin/stdout 往復、中断、大きな tool_result~~ →

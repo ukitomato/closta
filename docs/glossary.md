@@ -145,7 +145,36 @@ total_terms: 31
 - **Counterexamples**: 1 つの所在に**複数**ありうる（ディストロ内の複数ユーザ分）。
   「所在ごとに 1 つ」ではない。R-2 は所在ごとの既定のみを対象にし、
   複数 Provider 分は X-3 で集合を差し替える
+- **表示用ラベルの規則**: 候補集合の中で**一意かつ非空**にする（FR-052）。
+  正規化で空になった候補は `候補 #n`、同じ表示になる候補は `名前 (#n)` とし、
+  **序数は `targetKey` の序数と同じ**。一意化は生成後の集合に対して閉じている
+  （生成名が実在の候補名と一致する場合はさらに序数を足す）
 - **Ref**: [AD-028](decisions/0028-session-enumeration-process-and-unc-handoff.md)
+
+#### **Coverage（索引をどこまで信じてよいか）**
+
+- **Definition**: セッション索引について**件数と空状態を断言してよいか**を表す 3 値。
+  `pending`（まだ出そろっていない）/ `partial`（出そろったが読めない所在か
+  打ち切った所在がある）/ `complete`（全部読めた）
+- **日本語表記**: 索引の網羅度
+- **Domain**: `session`（判定は `ui` の純粋関数。境界は渡らない）
+- **Counterexamples**: `SessionIndexDTO.complete` と**同じではない**。
+  あちらは「**全所在を試した**」であり、失敗があっても真になる。
+  `complete` を「全部読めた」と読むのが Round 1〜3 の欠陥の根だった
+- **Ref**: `src/renderer/src/features/session-list/labels.ts`
+
+#### **opaque-unc（解析できない UNC 形）**
+
+- **Definition**: 区切り 2 本以上で始まるが、実測された 2 綴り
+  （`\\wsl.localhost\` / `\\wsl$\`）として解析できない値の形。
+  **所在も表示値も持たない**（`unknown-location` に落ちる）
+- **日本語表記**: 解析できない UNC 形
+- **Domain**: `runtime`（`RawPathShape` の 1 値）
+- **Counterexamples**: 「UNC ではない」ことを意味しない。
+  `\\?\C:\dev` のようなデバイス名前空間接頭辞もここに入るが、
+  これはサーバ名も共有名も持たないので FR-042 の対象ではない。
+  **表示値を落とすのは「構造が読めない」からであって「UNC だから」ではない**
+- **Ref**: [AD-032](decisions/0032-unc-shape-classification-by-separator-count.md)
 
 #### **endpoint**
 

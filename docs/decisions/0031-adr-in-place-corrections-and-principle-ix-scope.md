@@ -6,9 +6,42 @@ deciders: ukitomato
 tags: [governance, architecture, process]
 supersedes: []
 superseded-by: []
+amends: [AD-028]
+related: [AD-019, AD-024, AD-030, AD-032]
 ---
 
 # AD-031: accepted な ADR の in-place 訂正を認め、Principle IX の検証の限界を明記する
+
+> **訂正 (2026-09-23 / pr-gate Round 4)**
+>
+> 本 ADR 自身の記述に 2 つの誤りがあった。いずれも決定は変えない。
+>
+> **1. Decision 2 の許容根拠が事実でない。**
+> 「1 件あたりの上限は正規化後の `TEXT_MAX_BYTES` (512) 系のフィールドで縛られており」と
+> 書いたが、**`src/agents/` に `TEXT_MAX_BYTES` も `normalizeText` も出現しない** (0 件)。
+> 正規化が走るのは `JSON.parse` の**後**、`domain`/`app` の層である。
+> `createLineAssembler` は `\n` を探すだけで**行長の上限を持たない**。
+> `MAX_SESSIONS_PER_TARGET` (5,000) の検査も `JSON.parse` の後で効く。
+>
+> pr-gate Round 4 の不変条件 2 で `RawSessionRecord` の文字列 6 項目が
+> `string | null` から `unknown` になり、**「パース前に何も縛っていない」ことが
+> 型宣言としても明示された**。
+>
+> **許容の根拠は「本文を運ばない」(FR-044 / SC-011) の 1 本である。**
+> 件数の上限だけがパース後に効く。パース対象のバイト列に上限は無い。
+>
+> **2. 先例 5 件の分類が、本 ADR 自身の基準で誤っている。**
+> 「5 件すべてが事実誤認の訂正である」と断じたが、AD-028 の訂正節は
+> 「規則 3 の初版は実装不能だった」として**規則そのものを差し替えて**おり、
+> C-2 の「所在の識別子を起動引数で渡す」行も差し替えている。
+> 本 ADR の基準 (「読み手が同じ決定に至るか」) では、これは**決定の変更**である。
+>
+> したがって規則を次の形に言い換える —
+> **「訂正節に決定の変更を書いてはならない。書く必要が生じたら後続 ADR を起こす」**。
+> 判断の対象を「なぜ書くか」ではなく「**何を書いたか**」に移すことで、
+> 起票時に機械的に判定できる。
+> 最初の適用例が [AD-032](0032-unc-shape-classification-by-separator-count.md) である
+> (UNC 判定モデルの変更を AD-029 の in-place 訂正にせず、後続 ADR に置いた)。
 
 ## Context
 
@@ -115,6 +148,16 @@ immutability が守ろうとしているのは「決定の履歴が後から書�
 **将来の再評価の条件を置く**: R-3 (transcript 表示) が本文を運ぶ経路を作る時点で、
 Principle IX の Why が名指す「数 MB の tool_result」が実際に現れる。
 そのとき構造体 `postMessage` への移行を再評価する。
+
+**持ち主** (2026-09-23 追記 / pr-gate Round 4): `docs/roadmap.md` の R-3 行。
+
+- [ ] Principle IX の再評価 — 構造体 `postMessage` への移行判断。R-3 が本文を運ぶ時点
+- [ ] `createLineAssembler` に行長上限を置くか判断する。
+      上記の訂正 1 のとおり、現状パース対象のバイト列に上限は無い
+
+v1.2.3 が AD-028 §5 について「**持ち主のいない延期は、次に本 Principle を見る人が
+『R-2 で載ったはず』と誤読する形で残る**」と明文化した規範を、
+本 ADR は 3 round のあいだ自分に適用していなかった (pr-gate Round 4 / A4-004)。
 
 ## Consequences
 
