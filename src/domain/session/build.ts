@@ -65,13 +65,15 @@ export function buildSessionSummary(input: BuildSummaryInput): SessionSummary {
    * FR-026 の登録導線で利用者に誤った判断をさせられる。
    * その値は登録されると `folder-store` の JSON へ**永続化される**。
    */
-  const cwdText =
-    input.record.cwd === null || input.record.cwd === undefined
-      ? null
-      : normalizeText(input.record.cwd, PATH_DISPLAY_MAX_BYTES)
+  /*
+   * **`null` 判定を持たない** (pr-gate Round 4 / 不変条件 2)。
+   * `normalizeText` が `unknown` を受けて「値なし」を空文字に倒すので、
+   * 呼び出し側で型と欠損を場合分けしない。空文字は `classifyCwd` が `absent` に落とす。
+   */
+  const cwdText = normalizeText(input.record.cwd, PATH_DISPLAY_MAX_BYTES)
 
   const origin = classifyCwd({
-    cwd: cwdText?.value ?? null,
+    cwd: cwdText.value,
     targetLocation: input.target.location,
     detectedDistros: input.detectedDistros
   })
@@ -98,13 +100,6 @@ export function buildSessionSummary(input: BuildSummaryInput): SessionSummary {
      * 「切り詰め・除去が起きたことを payload 上で示さなければならない」の対象は
      * 会話由来の 5 項目だけではない。
      */
-    normalized: foldMarks([
-      summary,
-      firstPrompt,
-      customTitle,
-      gitBranch,
-      tag,
-      ...(cwdText === null ? [] : [cwdText])
-    ])
+    normalized: foldMarks([summary, firstPrompt, customTitle, gitBranch, tag, cwdText])
   }
 }

@@ -31,7 +31,8 @@ import {
   FAILURE_REASON_LABELS,
   PENDING_REASON_LABELS,
   TARGET_STATUS_LABELS,
-  UNKNOWN_REASON_LABELS
+  UNKNOWN_REASON_LABELS,
+  remedyFor
 } from './labels'
 import { buildSessionRows, rowTitleText, type SessionSection } from './rows'
 import { useFolderLabels } from './useFolderLabels'
@@ -444,6 +445,56 @@ function SessionMeta({ session }: { session: SessionSummaryDTO }): React.JSX.Ele
  * `permission-denied` や `wsl-unavailable` は起動しても直らず、
  * 所在ごとの行では理由別のヒントが出るため、同一画面に矛盾した指示が並んでいた。
  */
+/**
+ * 失敗の理由に見合う操作だけを出す (pr-gate Round 4 / 不変条件 2)。
+ *
+ * **判定を 1 箇所にする。** 以前は `Outcomes` が `hasStopped` を見て出し分け、
+ * 索引レベルのバナーは**理由に関わらず**再検出を出していた。
+ * 同じ画面に基準が 2 つあり、`permission-denied` のように
+ * **再検出では直らない理由の隣に再検出ボタン**が置かれていた (UX3-007 / A11Y3-009)。
+ *
+ * `fix-environment` ではボタンを出さない。**アプリの中に取れる操作が無い**ためで、
+ * 次にすべきことは `FAILURE_REASON_HINTS` が文として運ぶ。
+ * 押しても変わらないボタンを置くのは、置かないより悪い。
+ */
+function RemedyButton({
+  reasons,
+  busy,
+  onRetry,
+  onRediscover
+}: {
+  reasons: readonly FailureReason[]
+  busy: boolean
+  onRetry: () => void
+  onRediscover: () => void
+}): React.JSX.Element | null {
+  const remedy = remedyFor(reasons)
+  if (remedy === null || remedy === 'fix-environment') return null
+
+  const rediscovering = remedy === 'rediscover'
+  const label = rediscovering ? 'ランタイムを再検出して取り直す' : '取り直す'
+  const busyLabel = rediscovering ? '再検出しています…' : '取得中…'
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      {...busyProps(busy)}
+      onClick={busyGuard(busy, rediscovering ? onRediscover : onRetry)}
+    >
+      {busy ? busyLabel : label}
+    </Button>
+  )
+}
+
+/** 失敗している所在の理由キー。`RemedyButton` と `unlistedHint` の入力。 */
+function failureReasonsOf(outcomes: readonly EnumerationOutcomeDTO[]): FailureReason[] {
+  return outcomes
+    .filter((outcome) => outcome.status === 'failed')
+    .map((outcome) => outcome.reasonKey)
+    .filter((key): key is FailureReason => key !== null)
+}
+
 function unlistedHint(outcomes: readonly EnumerationOutcomeDTO[]): string {
   const reasons = new Set(
     outcomes.map((outcome) => outcome.reasonKey).filter((key): key is FailureReason => key !== null)
@@ -504,34 +555,32 @@ function busyProps(busy: boolean): { 'aria-disabled': boolean; className?: strin
 function Outcomes({
   outcomes,
   onRediscover,
+  onRetry,
   onFetchMore,
   busy,
   complete
 }: {
   outcomes: readonly EnumerationOutcomeDTO[]
   onRediscover: () => void
+  /** 再取得で直りうる理由のときに使う (`RemedyButton`)。 */
+  onRetry: () => void
   /** 上限で打ち切られた対象の続きを取る (FR-038 / ux H-007)。 */
   onFetchMore: (targetKey: string, offset: number) => void
   busy: boolean
   /** 全所在ぶんが出そろったか。**件数の見せ方を決める** (FR-037)。 */
   complete: boolean
 }): React.JSX.Element {
-  const hasStopped = outcomes.some((outcome) => outcome.reasonKey === 'distro-not-running')
-
   return (
     <section className={cn(paper, 'rounded-xl p-3')}>
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-sm font-medium">列挙の結果</h2>
-        {hasStopped && (
-          <Button
-            variant="outline"
-            size="sm"
-            {...busyProps(busy)}
-            onClick={busyGuard(busy, onRediscover)}
-          >
-            ランタイムを再検出して取り直す
-          </Button>
-        )}
+        {/* **理由に見合う操作だけを出す。** 判定は `RemedyButton` が 1 箇所で持つ。 */}
+        <RemedyButton
+          reasons={failureReasonsOf(outcomes)}
+          busy={busy}
+          onRetry={onRetry}
+          onRediscover={onRediscover}
+        />
       </div>
       <ul className="mt-2 space-y-1 text-sm">
         {outcomes.map((outcome) => (
@@ -927,6 +976,7 @@ export function SessionListScreen(): React.JSX.Element {
             busy={sessions.loading}
             complete={sessions.index.complete}
             onRediscover={() => void sessions.rediscover()}
+            onRetry={() => void sessions.refresh()}
             onFetchMore={(targetKey, offset) => void sessions.fetchMore(targetKey, offset)}
           />
         )}
@@ -1016,14 +1066,13 @@ export function SessionListScreen(): React.JSX.Element {
                 <p className="text-muted-foreground text-xs">
                   {unlistedHint(sessions.index.outcomes)}
                 </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  {...busyProps(sessions.loading)}
-                  onClick={busyGuard(sessions.loading, () => void sessions.rediscover())}
-                >
-                  {sessions.loading ? '再検出しています…' : 'ランタイムを再検出して取り直す'}
-                </Button>
+                {/* **理由に見合う操作だけを出す** (不変条件 2)。判定は 1 箇所。 */}
+                <RemedyButton
+                  reasons={failureReasonsOf(sessions.index.outcomes)}
+                  busy={sessions.loading}
+                  onRetry={() => void sessions.refresh()}
+                  onRediscover={() => void sessions.rediscover()}
+                />
               </>
             ) : indexLevelNotice === 'some-unlisted' ? (
               /*
@@ -1042,14 +1091,12 @@ export function SessionListScreen(): React.JSX.Element {
                     sessions.index.outcomes.filter((outcome) => outcome.status === 'failed')
                   )}
                 </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  {...busyProps(sessions.loading)}
-                  onClick={busyGuard(sessions.loading, () => void sessions.rediscover())}
-                >
-                  {sessions.loading ? '再検出しています…' : 'ランタイムを再検出して取り直す'}
-                </Button>
+                <RemedyButton
+                  reasons={failureReasonsOf(sessions.index.outcomes)}
+                  busy={sessions.loading}
+                  onRetry={() => void sessions.refresh()}
+                  onRediscover={() => void sessions.rediscover()}
+                />
               </>
             ) : (
               <>

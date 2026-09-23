@@ -113,46 +113,38 @@ function boundedInteger(value: unknown, max: number): number | null {
   return value
 }
 
-/** `string | null` であること。**`undefined` も弾く** — 欠落と空は別である。 */
-function nullableString(value: unknown): boolean {
-  return value === null || typeof value === 'string'
-}
-
 /**
- * 応答の要素 1 件が期待する形か (pr-gate Round 2 / H2-003)。
+ * 応答の要素 1 件が**行として成立するか** (pr-gate Round 4 / 不変条件 2)。
  *
- * **要素を無検査でキャストしていた。** 配列であることだけを確かめ、
- * 中身は `as readonly RawSessionRecord[]` で通していた。
- * 同じ関数の数行下では `reasonKey` について「未知の値を通すと `ui` が訳出できない」
- * として `isFailureReason` を呼んでいるのに、**要素側に同じ理由が適用されていなかった**。
+ * ## 何を確かめ、何を確かめないか
  *
- * 通してしまうと何が起きるか: `app` 側の `normalizeText` は `for (const ch of raw)` を
- * 回すため、`"cwd": 123` のような 1 レコードで **TypeError を投げる**。
- * `enumerateTarget` 〜 `fetchAll` の経路に catch が無かったので、
- * **1 セッションの 1 フィールドで一覧全体が落ちていた** —
- * FR-030 / SC-007 の「1 所在の失敗が他を消さない」を所在単位どころか全体で破る。
+ * 確かめるのは `sessionId` が非空文字列であることだけである。
+ * **他の項目の型は確かめない** — `RawSessionRecord` の宣言どおり `unknown` で通し、
+ * `normalize.ts` が「不明」に倒す。
  *
- * config ディレクトリの中身は FR-049 自身が「アプリ外のプロセスが書いた未信頼入力」と
- * 定義しており、JSONL に型の違う値が入りうることは前提である。
+ * ## なぜ全項目を検査しないか
  *
- * **数値 3 項目は `unknown` のままにする。** `normalizeEpochMs` /
- * `normalizeByteCount` が `typeof` を見て `null` に畳むので、
- * ここで弾くと「取得できたが日時が壊れている行」を落としてしまう (FR-038)。
+ * pr-gate Round 2 の実装は全項目を検査し、**1 件でも合わなければ応答ごと落として**
+ * その所在を `failed` にしていた。これは 3 つの点で誤っていた。
+ *
+ * 1. **FR-049 が答えを決めていた。** 「満たさない値は『不明』として扱う
+ *    (**行は落とさない**)」。数値 3 項目には既にこの規則が適用されており、
+ *    文字列項目だけ別にする理由が無い
+ * 2. **FR-004 / SC-006 を所在単位で破る。** 1 レコードのために N 件が消え、
+ *    「総数 = 各グループの件数の合計」が成立しなくなる
+ * 3. **利用者に示す手段が無かった。** 落ちた先は `enumeration-failed` =
+ *    「再取得してください」で、壊れた記録は再取得しても同じである
+ *
+ * ## 例外が `sessionId` だけである理由
+ *
+ * 識別子が無い行は**鍵も表示も作れない**。`sessionRowKey` の材料であり、
+ * FR-047 の表示順で最後に残る手段でもある。ここだけは倒す先が無いので、
+ * 応答を拒む (呼び出し側が理由キーを持つ行にする)。
  */
 function isRawSessionRecord(value: unknown): value is RawSessionRecord {
   if (typeof value !== 'object' || value === null) return false
   const record = value as Record<string, unknown>
-  return (
-    typeof record.sessionId === 'string' &&
-    record.sessionId.length > 0 &&
-    nullableString(record.summary) &&
-    nullableString(record.firstPrompt) &&
-    nullableString(record.customTitle) &&
-    nullableString(record.gitBranch) &&
-    nullableString(record.tag) &&
-    nullableString(record.cwd) &&
-    typeof record.programmatic === 'boolean'
-  )
+  return typeof record.sessionId === 'string' && record.sessionId.length > 0
 }
 
 function decodeScope(value: unknown): EnumerationScope | null {
@@ -207,67 +199,99 @@ export function decodeRequest(line: string): EnumerationRequestLine | null {
 }
 
 /**
+ * `decodeResponse` の結果 (pr-gate Round 4 / 不変条件 2)。
+ *
+ * **「雑音」と「我々の応答だが形が不正」を分ける。**
+ *
+ * 以前はどちらも `null` で、`handleLine` が黙って捨てていた。その結果、
+ * 形の合わない応答が届いても \`pending\` が決着せず、
+ * **`ENUMERATION_TIMEOUT_MS` (10 秒) まで宙づりになっていた** (pr-gate Round 3 / H3-003)。
+ * 列挙は直列なので、その 10 秒は後続の所在もまるごと待たせる。
+ *
+ * 一方で、雑音 (stdout に紛れた非 JSON など) で実行中の要求を落とすのも誤りである。
+ * **JSON オブジェクトとして読めたかどうか**で 2 つを分ける —
+ * プロトコル行は必ず JSON オブジェクトであり、雑音がそうである見込みは薄い。
+ */
+export type DecodedResponse =
+  | { readonly kind: 'response'; readonly value: EnumerationResponseLine }
+  /** 封筒は読めたが形が合わない。`id` が読めていれば要求を即座に決着させられる。 */
+  | { readonly kind: 'malformed'; readonly id: number | null }
+  /** プロトコル行ですらない。**無視する** — 実行中の要求を巻き添えにしない。 */
+  | { readonly kind: 'not-a-response' }
+
+/**
  * 応答の 1 行を解釈する。**親側で使う。**
  *
- * **形が合わない応答を `null` にする。** 子は外部パッケージ (SDK) の結果を
- * そのまま詰めるため、親は「期待する形か」を自分で確かめる。
+ * 子は外部パッケージ (SDK) の結果をそのまま詰めるため、親は「期待する形か」を自分で確かめる。
  * 中身の値の検証 (正規化・長さ上限) は `app` の層で行う (FR-049)。
  */
-export function decodeResponse(line: string): EnumerationResponseLine | null {
+export function decodeResponse(line: string): DecodedResponse {
   let parsed: unknown
   try {
     parsed = JSON.parse(line)
   } catch {
-    return null
+    return { kind: 'not-a-response' }
   }
 
-  if (typeof parsed !== 'object' || parsed === null) return null
+  /* **配列も雑音である。** プロトコル行は必ずオブジェクトである。 */
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    return { kind: 'not-a-response' }
+  }
   const value = parsed as Record<string, unknown>
-  if (value.version !== PROTOCOL_VERSION) return null
+
+  /* ここから先は「プロトコル行のつもりの何か」である。`id` が読めれば決着に使える。 */
   const id = boundedInteger(value.id, Number.MAX_SAFE_INTEGER)
-  if (id === null) return null
-  if (typeof value.targetKey !== 'string' || value.targetKey.length === 0) return null
+  const malformed = { kind: 'malformed', id } as const
+
+  if (value.version !== PROTOCOL_VERSION) return malformed
+  if (id === null) return malformed
+  if (typeof value.targetKey !== 'string' || value.targetKey.length === 0) return malformed
 
   if (value.kind === 'ok') {
-    if (!Array.isArray(value.sessions)) return null
-    if (typeof value.truncated !== 'boolean') return null
+    if (!Array.isArray(value.sessions)) return malformed
+    if (typeof value.truncated !== 'boolean') return malformed
     /*
      * **上限を親でも見る** (pr-gate Round 2 / H2-003)。
      * 子が上限を守る前提にしない — 応答は 1 行の JSON であり、
      * 壊れた子からの巨大な配列をそのまま `app` に渡す理由が無い。
      */
-    if (value.sessions.length > MAX_SESSIONS_PER_TARGET) return null
+    if (value.sessions.length > MAX_SESSIONS_PER_TARGET) return malformed
     /*
-     * **1 件でも形が合わなければ応答ごと落とす。**
-     * 合わない要素だけを間引くと「黙って行が減る」ことになり、
-     * 利用者には 0 件と区別がつかない (FR-012 / FR-038)。
-     * 応答を落とせば呼び出し側が理由キーを持つ**行**にできる (FR-030)。
+     * **形の合わない要素は間引き、応答は通す** (不変条件 2 / FR-049 / FR-004)。
+     *
+     * 間引く条件は `sessionId` が無いことだけである (`isRawSessionRecord` を参照)。
+     * 他の項目の型違いは `normalize.ts` が「不明」に倒すので**行は残る**。
      */
-    if (!value.sessions.every(isRawSessionRecord)) return null
     return {
-      kind: 'ok',
-      version: PROTOCOL_VERSION,
-      id,
-      targetKey: value.targetKey,
-      sessions: value.sessions,
-      truncated: value.truncated
+      kind: 'response',
+      value: {
+        kind: 'ok',
+        version: PROTOCOL_VERSION,
+        id,
+        targetKey: value.targetKey,
+        sessions: value.sessions.filter(isRawSessionRecord),
+        truncated: value.truncated
+      }
     }
   }
 
   if (value.kind === 'error') {
     // **既知の語彙に属することを確かめる。** 未知の理由キーを通すと
     // `ui` が訳出できない値を受け取り、表示が空欄になる。
-    if (!isFailureReason(value.reasonKey)) return null
+    if (!isFailureReason(value.reasonKey)) return malformed
     return {
-      kind: 'error',
-      version: PROTOCOL_VERSION,
-      id,
-      targetKey: value.targetKey,
-      reasonKey: value.reasonKey
+      kind: 'response',
+      value: {
+        kind: 'error',
+        version: PROTOCOL_VERSION,
+        id,
+        targetKey: value.targetKey,
+        reasonKey: value.reasonKey
+      }
     }
   }
 
-  return null
+  return malformed
 }
 
 /**

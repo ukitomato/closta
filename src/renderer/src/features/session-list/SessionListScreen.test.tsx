@@ -9,7 +9,11 @@ import type {
   SessionSummaryDTO
 } from '@domain/session/dto'
 
+import type { FailureReason } from '@domain/session/target'
+
 import { installCapability } from '@/test-support/capability'
+
+import { FAILURE_REASON_LABELS } from './labels'
 
 import { SessionListScreen } from './SessionListScreen'
 import { useSessionsStore } from '@/stores/sessions'
@@ -1194,5 +1198,100 @@ describe('SessionListScreen — 空状態の断言', () => {
 
     await waitFor(() => expect(screen.getByText('5000 件以上')).toBeInTheDocument())
     expect(screen.queryByText('5000 件')).not.toBeInTheDocument()
+  })
+})
+
+/**
+ * 失敗の理由に見合う操作だけを出す (pr-gate Round 4 / 不変条件 2)。
+ *
+ * ## 何が壊れていたか
+ *
+ * 同じ画面に判定基準が 2 つあった。`Outcomes` は `distro-not-running` を見て
+ * 再検出ボタンを出し分けるのに、索引レベルのバナーは**理由に関わらず**
+ * 「ランタイムを再検出して取り直す」を出していた (pr-gate Round 3 / UX3-007 / A11Y3-009)。
+ *
+ * その結果、「そのユーザのホームは Windows 側から読めません」の隣に
+ * **それでは直らない操作が唯一の操作として**置かれていた。
+ * 誤った復旧導線は、導線が無いより悪い。
+ *
+ * ## 何を固定するか
+ *
+ * 「理由キー → 操作」の対応は `labels.ts` の `FAILURE_REASON_REMEDY` が持つ。
+ * ここでは**全理由キーについて、画面に出る操作が対応表と一致する**ことを見る。
+ * 理由キーが増えたら `Record` の網羅性検査で型が落ちるので、表の側は型が守る。
+ */
+describe('SessionListScreen — 失敗の理由と操作の対応', () => {
+  function failedIndex(reasons: readonly FailureReason[]): SessionIndexDTO {
+    return index([folderGroup([])], {
+      outcomes: reasons.map((reasonKey, i) =>
+        outcome({
+          targetKey: `t#${i}`,
+          location: { kind: 'wsl', distroName: `D${i}` },
+          status: 'failed',
+          reasonKey,
+          count: 0
+        })
+      )
+    })
+  }
+
+  it.each([
+    ['distro-not-running', 'ランタイムを再検出して取り直す'],
+    ['stopped-midway', '取り直す'],
+    ['enumeration-failed', '取り直す']
+  ] as const)('%s には「%s」を出す', async (reasonKey, label) => {
+    installWithFolders(failedIndex([reasonKey]))
+
+    render(<SessionListScreen />)
+
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: label }).length).toBeGreaterThan(0)
+    )
+  })
+
+  it.each(['wsl-unavailable', 'permission-denied', 'path-too-long'] as const)(
+    '%s には再取得系の操作を出さない (押しても直らない)',
+    async (reasonKey) => {
+      installWithFolders(failedIndex([reasonKey]))
+
+      render(<SessionListScreen />)
+
+      /* 理由の文言は出る。**操作だけを出さない。** */
+      await waitFor(() =>
+        expect(screen.getAllByText(FAILURE_REASON_LABELS[reasonKey]).length).toBeGreaterThan(0)
+      )
+      expect(
+        screen.queryByRole('button', { name: 'ランタイムを再検出して取り直す' })
+      ).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: '取り直す' })).not.toBeInTheDocument()
+    }
+  )
+
+  it('停止中が 1 件でもあれば再検出を出す (強い順に選ぶ)', async () => {
+    /*
+     * **`retry` と `rediscover` を両方含む組で試す。** 片方しか無い組だと
+     * 優先順位を入れ替えても結果が変わらず、順序を固定できない (変異で確認した)。
+     */
+    installWithFolders(failedIndex(['stopped-midway', 'distro-not-running']))
+
+    render(<SessionListScreen />)
+
+    await waitFor(() =>
+      expect(
+        screen.getAllByRole('button', { name: 'ランタイムを再検出して取り直す' }).length
+      ).toBeGreaterThan(0)
+    )
+  })
+
+  it('環境側の理由だけなら、どの操作も出さない', async () => {
+    installWithFolders(failedIndex(['permission-denied', 'wsl-unavailable']))
+
+    render(<SessionListScreen />)
+
+    await waitFor(() => expect(screen.getByText('列挙の結果')).toBeInTheDocument())
+    expect(
+      screen.queryByRole('button', { name: 'ランタイムを再検出して取り直す' })
+    ).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '取り直す' })).not.toBeInTheDocument()
   })
 })

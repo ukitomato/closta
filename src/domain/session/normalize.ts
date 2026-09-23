@@ -60,8 +60,25 @@ export interface NormalizedText {
  *
  * **コードポイント境界で切る** — バイト位置で切るとサロゲートペアや
  * マルチバイト文字を割り、壊れた文字が境界を越える。
+ *
+ * **入力は `unknown` である** (pr-gate Round 4 / 不変条件 2)。
+ * 値の出どころは config ディレクトリ = アプリ外のプロセスが書いた未信頼入力であり、
+ * `"cwd": 123` のように型が違う値が来る。以前は `string` を宣言して
+ * `for (const ch of raw)` を回していたため、**非文字列 1 件で TypeError を投げ、
+ * 一覧全体が落ちていた** (pr-gate Round 2 / H2-003)。
+ *
+ * **型が違う値は「値が無い」として扱い、行は落とさない。**
+ * これは FR-049 が数値 3 項目について既に決めている扱い
+ * (「満たさない値は『不明』として扱う (**行は落とさない**)」) と同じであり、
+ * 文字列項目だけ別の規則を持つ理由が無い。
+ *
+ * **印は立てない。** 切り詰めでも制御文字の除去でもないためである。
+ * 値が無いことは呼び出し側で `null` として現れ、UI には既存の
+ * 「記録なし」系の文言で出る (新しい状態を作らない)。
  */
-export function normalizeText(raw: string, maxBytes: number = TEXT_MAX_BYTES): NormalizedText {
+export function normalizeText(raw: unknown, maxBytes: number = TEXT_MAX_BYTES): NormalizedText {
+  if (typeof raw !== 'string') return { value: '', truncated: false, controlCharsRemoved: false }
+
   let controlCharsRemoved = false
   let truncated = false
   let used = 0
@@ -100,10 +117,11 @@ export interface NormalizedOptionalText {
  * 表示に何も寄与しないので、**「値がある」と見せない**。
  */
 export function normalizeOptionalText(
-  raw: string | null | undefined,
+  raw: unknown,
   maxBytes: number = TEXT_MAX_BYTES
 ): NormalizedOptionalText {
-  if (raw === null || raw === undefined) {
+  /* 型が違う値も「無い」に寄せる。**行は落とさない** (FR-049)。 */
+  if (typeof raw !== 'string') {
     return { value: null, truncated: false, controlCharsRemoved: false }
   }
   const result = normalizeText(raw, maxBytes)

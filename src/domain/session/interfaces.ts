@@ -100,19 +100,36 @@ export interface EnumerationTargetFinder {
  * **出自の判定前**である — 作業ディレクトリは生文字列のまま返し、
  * 判定は `domain` の純粋関数が行う (contracts C-3)。
  * **正規化もまだ掛かっていない** (FR-049 は main 側で掛ける)。
+ *
+ * ## `sessionId` 以外がすべて `unknown` である理由
+ *
+ * この値は config ディレクトリ由来 = **アプリ外のプロセスが書いた未信頼入力**である
+ * (FR-049 が明示している)。型宣言は「そう書かれているはず」であって保証ではない。
+ *
+ * 以前は数値 3 項目だけが `unknown` で、文字列 6 項目は `string | null` と
+ * 宣言されていた。**同じ未信頼入力に 2 つの扱いがあった**わけで、
+ * `"cwd": 123` のような値が `normalizeText` の `for...of` に届いて
+ * TypeError を投げ、**一覧全体が落ちた** (pr-gate Round 2 / H2-003)。
+ *
+ * 型を揃えると、正規化の入口が `normalize.ts` の 1 箇所になる。
+ * 型が違う値は「不明」に倒れ、**行は落ちない** (FR-049)。
+ *
+ * **`sessionId` だけは `string` を要求する。** 識別子が無い行は
+ * 鍵も表示も作れない (FR-047 の最後の手段が識別子である)。
+ * これが唯一「行を作れない」条件であり、`protocol.ts` が応答ごと拒む。
  */
 export interface RawSessionRecord {
   readonly sessionId: string
-  readonly summary: string | null
-  readonly firstPrompt: string | null
-  readonly customTitle: string | null
+  readonly summary: unknown
+  readonly firstPrompt: unknown
+  readonly customTitle: unknown
   readonly lastModified: unknown
   readonly createdAt: unknown
   readonly fileSize: unknown
-  readonly gitBranch: string | null
-  readonly tag: string | null
+  readonly gitBranch: unknown
+  readonly tag: unknown
   /** 記録されていた生の作業ディレクトリ。**UNC 形式でありうる。** */
-  readonly cwd: string | null
+  readonly cwd: unknown
   /**
    * SDK / daemon 由来か (実測で 269 件中 40 件。research R-09)。
    *
@@ -120,6 +137,8 @@ export interface RawSessionRecord {
    * `includeProgrammatic` は**フィルタであって区別子ではない**ため、
    * 列挙プロセスが 2 回列挙して差集合で決める。
    * 取得手段の詳細は `src/agents/enumerate-sessions.ts` にある。
+   *
+   * **これは列挙プロセスが算出する値**であり SDK 由来ではないので、`boolean` を保証できる。
    */
   readonly programmatic: boolean
 }

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { okResponse } from '@agents/protocol'
+import { PROTOCOL_VERSION, okResponse } from '@agents/protocol'
 import { wslNamespace, type WslNamespaceId } from '@domain/runtime/namespace'
 import { makeHostPath, makeRuntimePath } from '@domain/runtime/path-types'
 import {
@@ -443,6 +443,64 @@ describe('createSessionEnumerator', () => {
     void enumerator.enumerate(request(hostTarget(1)))
     await Promise.resolve()
     expect(launcher.workers).toHaveLength(2)
+  })
+
+  it('形の合わない応答は timeout を待たずに決着する (不変条件 2 / H3-003)', async () => {
+    /*
+     * **10 秒の宙づりを消す。** 以前は解釈できない行を黙って捨てていたため、
+     * 子が壊れた応答を返すと `ENUMERATION_TIMEOUT_MS` まで `pending` が決着せず、
+     * 直列化されているぶん**後続の所在もまるごと待たされた** (pr-gate Round 3 / H3-003)。
+     *
+     * fake timer を進めずに解決することが「待っていない」ことの証拠になる。
+     */
+    const launcher = fakeLauncher(false)
+    const enumerator = createSessionEnumerator(deps(launcher))
+
+    const promise = enumerator.enumerate(request(hostTarget(0), null, { timeoutMs: 10_000 }))
+    await Promise.resolve()
+    await Promise.resolve()
+
+    /* 封筒は読めるが `truncated` が真偽でない = 我々の応答だが形が不正。 */
+    launcher.workers[0].respond(
+      JSON.stringify({
+        kind: 'ok',
+        version: PROTOCOL_VERSION,
+        id: 1,
+        targetKey: hostTarget(0).key,
+        sessions: [],
+        truncated: 'no'
+      })
+    )
+
+    await expect(promise).resolves.toEqual({ ok: false, reasonKey: 'enumeration-failed' })
+  })
+
+  it('プロトコル行でない雑音では実行中の要求を落とさない (不変条件 2)', async () => {
+    /*
+     * **雑音で巻き添えにしない。** stdout に紛れた非 JSON で要求を失敗させると、
+     * 「形が不正な応答」と「無関係な出力」を区別できなくなる。
+     */
+    vi.useFakeTimers()
+    const launcher = fakeLauncher(false)
+    const enumerator = createSessionEnumerator(deps(launcher))
+
+    const promise = enumerator.enumerate(request(hostTarget(0), null, { timeoutMs: 100 }))
+    await Promise.resolve()
+    await Promise.resolve()
+
+    launcher.workers[0].respond('ready.')
+    let settled = false
+    void promise.then(() => {
+      settled = true
+    })
+    await Promise.resolve()
+
+    /* 雑音では決着しない。timeout まで待つ。 */
+    expect(settled).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(101)
+    await expect(promise).resolves.toEqual({ ok: false, reasonKey: 'enumeration-failed' })
+    vi.useRealTimers()
   })
 
   it('timeout を crash に数えない (pr-gate Round 1 / platform-boundary H-004)', async () => {

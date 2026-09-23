@@ -35,6 +35,57 @@ export const FAILURE_REASON_HINTS: Record<FailureReason, string> = {
   'enumeration-failed': '再取得してください。続く場合はログを確認してください。'
 }
 
+/**
+ * その失敗に対して**どの操作が意味を持つか** (pr-gate Round 4 / 不変条件 2)。
+ *
+ * ## なぜ表にするか
+ *
+ * 画面に**判定基準が 2 つ同居していた**。`Outcomes` は
+ * `reasonKey === 'distro-not-running'` を見て再検出ボタンを出し分けるのに、
+ * 索引レベルのバナーは**理由に関わらず**「ランタイムを再検出して取り直す」を出していた
+ * (pr-gate Round 3 / UX3-007 / A11Y3-009)。
+ *
+ * その結果、`permission-denied` (「そのユーザのホームは Windows 側から読めません」) の
+ * 隣に、**それでは直らない操作が唯一の操作として**置かれていた。
+ * 誤った復旧導線は、導線が無いより悪い — 利用者は操作して、変わらない理由を得られない。
+ *
+ * ## なぜ DTO ではなくここか
+ *
+ * これは `reasonKey` の**純粋関数**であって独立した状態ではない。
+ * DTO に載せると境界を渡る状態が 1 つ増え、contract と SC-011 の許可リストにも波及する。
+ * 訳出と同じ層に、訳出と同じ鍵の表として置けば足りる。
+ */
+export type FailureRemedy =
+  /** 再取得で直りうる (一時的な失敗)。 */
+  | 'retry'
+  /** ランタイムを検出し直せば直りうる。 */
+  | 'rediscover'
+  /** **再取得では直らない。** 環境側の操作が要る。 */
+  | 'fix-environment'
+
+export const FAILURE_REASON_REMEDY: Record<FailureReason, FailureRemedy> = {
+  'distro-not-running': 'rediscover',
+  'wsl-unavailable': 'fix-environment',
+  'permission-denied': 'fix-environment',
+  'path-too-long': 'fix-environment',
+  'stopped-midway': 'retry',
+  'enumeration-failed': 'retry'
+}
+
+/**
+ * 理由の集合に対して出すべき操作を 1 つ決める。
+ *
+ * **強い順に選ぶ** — 1 つでも再検出で直るものがあれば再検出を出す。
+ * どれも環境側の問題なら、再取得を勧めない。
+ */
+export function remedyFor(reasons: readonly FailureReason[]): FailureRemedy | null {
+  if (reasons.length === 0) return null
+  const remedies = reasons.map((r) => FAILURE_REASON_REMEDY[r])
+  if (remedies.includes('rediscover')) return 'rediscover'
+  if (remedies.includes('retry')) return 'retry'
+  return 'fix-environment'
+}
+
 /** 所在の状態。**`no-history` は失敗ではない** (FR-012)。 */
 export const TARGET_STATUS_LABELS: Record<TargetStatus, string> = {
   ok: '列挙済み',

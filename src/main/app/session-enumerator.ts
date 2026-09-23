@@ -2,8 +2,7 @@ import {
   PROTOCOL_VERSION,
   decodeResponse,
   encodeRequest,
-  type EnumerationRequestLine,
-  type EnumerationResponseLine
+  type EnumerationRequestLine
 } from '@agents/protocol'
 import { checkVerified } from '@domain/runtime/verified-running'
 import type {
@@ -316,21 +315,40 @@ export function createSessionEnumerator(deps: SessionEnumeratorDeps): SessionEnu
   let chain: Promise<unknown> = Promise.resolve()
 
   function handleLine(line: string): void {
-    const response: EnumerationResponseLine | null = decodeResponse(line)
-    const current = pending
-    if (current === null || response === null) return
+    const decoded = decodeResponse(line)
+    const waiting = pending
+    if (waiting === null) return
+
+    /*
+     * **形が不正な応答はその場で決着させる** (pr-gate Round 4 / 不変条件 2 / H3-003)。
+     *
+     * 以前は解釈できない行を黙って捨てていた。その結果、子が壊れた応答を返すと
+     * \`pending\` が決着せず **\`ENUMERATION_TIMEOUT_MS\` (10 秒) まで宙づり**になり、
+     * 直列化されているぶん後続の所在もまるごと待たされた。
+     *
+     * **雑音では落とさない。** \`not-a-response\` (JSON オブジェクトですらない行) は
+     * 従来どおり無視する — stdout に紛れた何かで実行中の要求を巻き添えにしない。
+     */
+    if (decoded.kind === 'malformed') {
+      if (decoded.id !== null && decoded.id !== waiting.id) return
+      waiting.settle(failure('enumeration-failed'))
+      return
+    }
+    if (decoded.kind === 'not-a-response') return
+
+    const response = decoded.value
     /*
      * **識別子で突き合わせる。** `targetKey` では足りない —
      * 同じ対象への要求が続けて 2 回来ることがある (先頭ページ → 続き)。
      */
-    if (response.id !== current.id) return
+    if (response.id !== waiting.id) return
 
     crashes = 0
     if (response.kind === 'error') {
-      current.settle(failure(response.reasonKey))
+      waiting.settle(failure(response.reasonKey))
       return
     }
-    current.settle({ ok: true, sessions: response.sessions, truncated: response.truncated })
+    waiting.settle({ ok: true, sessions: response.sessions, truncated: response.truncated })
   }
 
   /** `EnumerationWorker` から追跡項目を引いて殺す。呼び出し側は `Tracked` を知らない。 */
