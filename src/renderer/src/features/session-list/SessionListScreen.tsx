@@ -105,7 +105,14 @@ function SectionHeading({
             引けない窓 (登録解除と取得の交差) では種別名だけを出す — 空欄にしない。
           */}
           <span className="text-sm font-medium">{folderName ?? '登録フォルダ'}</span>
-          <span className="text-muted-foreground text-xs">{BOUNDARY_LABELS[group.boundary]}</span>
+          {/*
+            **フォルダ単位の値は「含む」と読める形にする** (po H-001)。
+            この値は行ごとの越境を OR に畳んだものであり、
+            どの行が越境かはここから決まらない。行単位は `SessionMeta` が出す。
+          */}
+          <span className="text-muted-foreground text-xs">
+            {group.boundary === 'cross' ? '越境を含む' : BOUNDARY_LABELS[group.boundary]}
+          </span>
         </div>
       )
     case 'pending':
@@ -355,6 +362,18 @@ function SessionMeta({ session }: { session: SessionSummaryDTO }): React.JSX.Ele
         <span>
           <span className="sr-only">記録の大きさ </span>
           {formatBytes(session.fileSize)}
+        </span>
+      )}
+      {/*
+        **越境は行ごとに出す** (pr-gate Round 1 / po H-001 / US-1 AC-4)。
+        以前は区画見出しのフォルダ単位の OR だけだったため、
+        1 件でも越境があるとフォルダ内の全行が越境と読めた。
+        AD-016 の性能崖は行ごとの性質であり、R-1 は行ごとに提示している。
+      */}
+      {session.boundary === 'cross' && (
+        <span className="font-medium">
+          <span className="sr-only">この行は </span>
+          {BOUNDARY_LABELS.cross}
         </span>
       )}
       {session.worktree && <span>worktree</span>}

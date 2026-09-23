@@ -521,9 +521,15 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
      * 候補ごとの失敗。**対象を作れなかったので `configDir` は `null`** である
      * (推測で埋めると「探索した」と読める値ができる)。
      */
-    for (const [index, issue] of discovery.issues.entries()) {
+    /*
+     * **序数を計算しない** (pr-gate Round 1 / security H-003)。
+     * `targets.length + index` で作っていたため、候補の一部が権限拒否に転じると
+     * **失敗行の key が別候補の対象 key と一致した**。
+     * 払い出しは `target-finder` の 1 箇所に寄せ、ここは載ってきた値を使う。
+     */
+    for (const issue of discovery.issues) {
       rows.push({
-        key: enumerationTargetKey(location, discovery.targets.length + index),
+        key: enumerationTargetKey(location, issue.ordinal),
         location,
         label: issue.label,
         configDir: null,

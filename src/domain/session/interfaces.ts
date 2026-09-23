@@ -15,7 +15,35 @@ export interface TargetIssue {
   /** 表示用の候補名 (ユーザ名など)。識別子として使わない。 */
   readonly label: string
   readonly reasonKey: FailureReason
+  /**
+   * 候補一覧の位置 (pr-gate Round 1 / security H-003)。
+   *
+   * **序数の払い出しを 1 箇所に寄せるために持たせた。**
+   * 以前は失敗行の `key` を呼び出し側が `targets.length + index` で作っており、
+   * **候補の一部が権限拒否に転じると失敗行の key が別候補の対象 key と一致した**。
+   *
+   * 例: 候補が `/home/alice`(0) / `/home/bob`(1) / `/root`(2) で bob が権限拒否のとき、
+   * 対象は `#0`(alice) と `#2`(root)、失敗行は `2 + 0 = #2` → **root と衝突する**。
+   * `targetKey` は未信頼入力の照合に使う唯一の鍵なので (FR-043 / SC-010)、
+   * 一意でないと **renderer が指した行とは別の対象が列挙される**。
+   * `/root` が UNC 経由で Access denied になることは実測済で、実機で最も起きやすい配置である。
+   *
+   * **候補一覧の位置であり、対象一覧の位置ではない** — 対象の位置にすると、
+   * ある候補が権限拒否に転じた回で以降の `key` が全部ずれる。
+   */
+  readonly ordinal: number
 }
+
+/**
+ * 候補探索そのものが失敗したときの序数 (pr-gate Round 1 / security H-003)。
+ *
+ * `/home` が読めない失敗は**候補を 1 件も特定できていない**ため、候補一覧の位置を持たない。
+ * 候補の序数 (0 以上) と衝突しない値を予約する。
+ *
+ * **0 を使わない。** `/home` が読めないとき `/root` が候補 0 になるため、
+ * 0 を割り当てると衝突する。
+ */
+export const DISCOVERY_ISSUE_ORDINAL = -1
 
 export interface TargetDiscovery {
   readonly targets: readonly EnumerationTarget[]

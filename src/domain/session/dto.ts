@@ -53,6 +53,17 @@ export interface SessionSummaryDTO {
   readonly originKind: CwdOriginKind
   readonly programmatic: boolean
   readonly worktree: boolean
+  /**
+   * この行の対応づけの越境 (pr-gate Round 1 / po H-001)。
+   *
+   * **行単位である。** 対応づけは `match.ts` がセッションごとに決めるのに、
+   * 境界にはフォルダ単位の OR しか出していなかった。
+   * 1 件でも越境があるとフォルダ内の全行が越境と読めた。
+   *
+   * 登録フォルダに対応づかない行 (未登録 / 保留 / 不明) では `null`。
+   * **推測で埋めない** — 越境は「登録フォルダとセッションの組み合わせ」の性質である。
+   */
+  readonly boundary: Boundary | null
   readonly normalized: NormalizationMarksDTO
 }
 
@@ -152,6 +163,7 @@ export const SESSION_SUMMARY_DTO_FIELDS = [
   'originKind',
   'programmatic',
   'worktree',
+  'boundary',
   'normalized'
 ] as const satisfies readonly (keyof SessionSummaryDTO)[]
 

@@ -6,7 +6,8 @@ import { pathParts, type HostPath, type RuntimePath } from '@domain/runtime/path
 import { originDisplay, originPath } from '@domain/session/cwd-origin'
 import type { EnumerationOutcomeDTO, SessionGroupDTO, SessionSummaryDTO } from '@domain/session/dto'
 import type { SessionGroup } from '@domain/session/group'
-import type { SessionSummary } from '@domain/session/summary'
+import type { Boundary } from '@domain/workspace/dto'
+import { sessionRowKey, type SessionSummary } from '@domain/session/summary'
 import type { EnumerationOutcome } from '@domain/session/target'
 
 /**
@@ -61,7 +62,16 @@ export function toRuntimeDescriptorDTO(descriptor: RuntimeDescriptor): RuntimeDe
  * `cwd` は所在が決まる出自のときだけ値を持ち、**名前空間を明示して運ぶ**
  * (brand は境界で退化するため)。
  */
-export function toSessionSummaryDTO(session: SessionSummary): SessionSummaryDTO {
+export function toSessionSummaryDTO(
+  session: SessionSummary,
+  /**
+   * この行の対応づけの越境 (pr-gate Round 1 / po H-001)。
+   *
+   * **既定を `null` にする。** 登録フォルダに対応づかない行 (未登録 / 保留 / 不明) は
+   * 越境という概念を持たない。**推測で埋めない。**
+   */
+  boundary: Boundary | null = null
+): SessionSummaryDTO {
   const path = originPath(session.origin)
   return {
     sessionId: session.sessionId,
@@ -80,6 +90,7 @@ export function toSessionSummaryDTO(session: SessionSummary): SessionSummaryDTO 
     originKind: session.origin.kind,
     programmatic: session.source.programmatic,
     worktree: session.source.worktree,
+    boundary,
     normalized: {
       truncated: session.normalized.truncated,
       controlCharsRemoved: session.normalized.controlCharsRemoved
@@ -103,13 +114,31 @@ function suggestedDisplayName(path: HostPath | RuntimePath): string {
 
 /** グループを DTO へ写す。**4 種を 2 種に潰さない** (FR-022 / FR-025 / FR-028)。 */
 export function toSessionGroupDTO(group: SessionGroup): SessionGroupDTO {
-  const sessions = group.sessions.map(toSessionSummaryDTO)
+  /*
+   * **登録フォルダ以外は越境を持たない** (pr-gate Round 1 / po H-001)。
+   * 越境は「登録フォルダとセッションの組み合わせ」の性質であり、
+   * 対応づかない行に付ける値が無い。**推測で埋めない。**
+   */
+  const sessions = group.sessions.map((session) => toSessionSummaryDTO(session))
+
   switch (group.kind) {
     case 'folder':
-      return { kind: 'folder', folderId: group.folderId, boundary: group.boundary, sessions }
+      return {
+        kind: 'folder',
+        folderId: group.folderId,
+        boundary: group.boundary,
+        /*
+         * **行ごとの越境を載せる** (pr-gate Round 1 / po H-001)。
+         * グループ単位の OR は見出し用に残すが、行の判断はこちらを使う。
+         */
+        sessions: group.sessions.map((session) =>
+          toSessionSummaryDTO(session, group.boundaryOf.get(sessionRowKey(session)) ?? null)
+        )
+      }
     case 'pending':
       return {
         kind: 'pending',
+        /* 登録フォルダに対応づかない行は越境を持たない。 */
         location: group.location,
         reasonKey: group.reasonKey,
         sessions

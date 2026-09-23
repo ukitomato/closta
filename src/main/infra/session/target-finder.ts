@@ -3,6 +3,8 @@ import type { ListDirErrorReason, WslFileSystem } from '@domain/runtime/interfac
 import { hostPathOps, runtimePathOps } from '@domain/runtime/path-api'
 import { makeRuntimePath, type HostPath, type RuntimePath } from '@domain/runtime/path-types'
 import { checkVerified, type VerifiedRunning } from '@domain/runtime/verified-running'
+/* **値の import は型と分ける。** 序数の予約値は定数である。 */
+import { DISCOVERY_ISSUE_ORDINAL } from '@domain/session/interfaces'
 import type {
   EnumerationTargetFinder,
   TargetDiscovery,
@@ -100,7 +102,11 @@ export function createEnumerationTargetFinder(deps: TargetFinderDeps): Enumerati
   ): Promise<
     | { readonly kind: 'target'; readonly configDir: RuntimePath; readonly label: string }
     | { readonly kind: 'no-history' }
-    | { readonly kind: 'issue'; readonly issue: TargetIssue }
+    /**
+     * **序数を持たない。** 候補一覧の位置を知っているのは呼び出し側である
+     * (pr-gate Round 1 / security H-003)。
+     */
+    | { readonly kind: 'issue'; readonly issue: Omit<TargetIssue, 'ordinal'> }
   > {
     const label = runtimePathOps.basename(home)
 
@@ -128,7 +134,11 @@ export function createEnumerationTargetFinder(deps: TargetFinderDeps): Enumerati
 
       const configDir = hostConfigDir(hostHome)
       if (!configDir.ok) {
-        return discovery([], [{ label, reasonKey: 'enumeration-failed' }])
+        /* 候補を 1 件も特定できていない失敗。予約した序数を使う (security H-003)。 */
+        return discovery(
+          [],
+          [{ label, reasonKey: 'enumeration-failed', ordinal: DISCOVERY_ISSUE_ORDINAL }]
+        )
       }
 
       /*
@@ -168,7 +178,17 @@ export function createEnumerationTargetFinder(deps: TargetFinderDeps): Enumerati
        * 浅い列挙を発行する呼び出し自体が成立してしまう。
        */
       if (!checkVerified(verified, descriptor.id, now).ok) {
-        return discovery([], [{ label: descriptor.distroName, reasonKey: 'distro-not-running' }])
+        return discovery(
+          [],
+          [
+            {
+              label: descriptor.distroName,
+              reasonKey: 'distro-not-running',
+              /* 所在ごと列挙していない。予約した序数を使う (security H-003)。 */
+              ordinal: DISCOVERY_ISSUE_ORDINAL
+            }
+          ]
+        )
       }
 
       const homeRoot = makeRuntimePath(descriptor.id, WSL_HOME_ROOT)
@@ -190,7 +210,9 @@ export function createEnumerationTargetFinder(deps: TargetFinderDeps): Enumerati
            */
           issues.push({
             label: runtimePathOps.basename(homeRoot.path),
-            reasonKey: toFailureReason(listed.reason)
+            reasonKey: toFailureReason(listed.reason),
+            /* **候補を 1 件も特定できていない。** 予約した序数を使う (security H-003)。 */
+            ordinal: DISCOVERY_ISSUE_ORDINAL
           })
         }
       }
@@ -207,7 +229,8 @@ export function createEnumerationTargetFinder(deps: TargetFinderDeps): Enumerati
       const targets: EnumerationTarget[] = []
       for (const [ordinal, home] of candidates.entries()) {
         const result = await probeCandidate(home, verified, now)
-        if (result.kind === 'issue') issues.push(result.issue)
+        /* **候補の序数をそのまま載せる** (security H-003)。呼び出し側に計算させない。 */
+        if (result.kind === 'issue') issues.push({ ...result.issue, ordinal })
         if (result.kind !== 'target') continue
         /*
          * **序数は候補一覧の位置であり、対象一覧の位置ではない。**

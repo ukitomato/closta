@@ -4,7 +4,7 @@ import type { Location, WorkspaceFolder } from '@domain/workspace/folder'
 
 import { originDisplay, originLocation, originPath } from './cwd-origin'
 import type { FolderMatch, PendingReason, UnknownReason } from './match'
-import { byLastModifiedDesc, type SessionSummary } from './summary'
+import { byLastModifiedDesc, sessionRowKey, type SessionSummary } from './summary'
 
 /**
  * 一覧のまとまり (data-model §5)。
@@ -18,8 +18,30 @@ export type SessionGroup =
   | {
       readonly kind: 'folder'
       readonly folderId: string
+      /**
+       * このフォルダの対応づけ全体の越境。**1 件でも `cross` があれば `cross`** である。
+       *
+       * **行の越境はこれではない** (pr-gate Round 1 / po H-001)。
+       * 見出しに出す「このフォルダには越境が含まれる」であり、
+       * どの行が越境かはここから決まらない。行単位は `boundaryOf` を使う。
+       */
       readonly boundary: Boundary
       readonly sessions: readonly SessionSummary[]
+      /**
+       * セッションごとの越境 (pr-gate Round 1 / po H-001)。鍵は `sessionRowKey`。
+       *
+       * **対応づけは行単位で決まる** (`match.ts` が `FolderMatch.boundary` を
+       * セッションごとに返す) のに、フォルダ単位の OR だけを境界に出していた。
+       * その結果 (1) Windows 側の登録フォルダをホストと WSL (`/mnt/c/...`) の
+       * 両方から使う典型ケースで**ネイティブな行まで越境と読め**、
+       * (2) 1 件だけ越境している行を特定できなかった。
+       *
+       * US-1 AC-4 は「**そのセッション**は当該登録フォルダの配下に現れ、
+       * 越境である旨が示される」と行単位を求めている。
+       * AD-016 の性能崖は行ごとの性質であり、R-1 は行ごとに提示している —
+       * 同じ概念の粒度を R-2 で落とさない。
+       */
+      readonly boundaryOf: ReadonlyMap<string, Boundary>
     }
   | {
       readonly kind: 'pending'
@@ -67,9 +89,17 @@ export interface GroupInput {
  */
 export function groupSessions(input: GroupInput): readonly SessionGroup[] {
   // ── folder: 登録フォルダから seed する (FR-051) ───────────────────
-  const folderGroups = new Map<string, { boundary: Boundary; sessions: SessionSummary[] }>()
+  const folderGroups = new Map<
+    string,
+    {
+      boundary: Boundary
+      sessions: SessionSummary[]
+      /** セッションごとの越境。鍵は `sessionRowKey` (pr-gate Round 1 / po H-001)。 */
+      boundaryOf: Map<string, Boundary>
+    }
+  >()
   for (const folder of input.folders) {
-    folderGroups.set(folder.id, { boundary: 'unknown', sessions: [] })
+    folderGroups.set(folder.id, { boundary: 'unknown', sessions: [], boundaryOf: new Map() })
   }
 
   const pendingGroups = new Map<
@@ -92,12 +122,18 @@ export function groupSessions(input: GroupInput): readonly SessionGroup[] {
       case 'folder': {
         // seed に無い `folderId` は、登録解除と再取得が交差した場合に起こりうる。
         // **落とさない** — 総数保存 (SC-006) を破るため、その場で枠を作る。
-        const existing = folderGroups.get(match.folderId) ?? { boundary: 'unknown', sessions: [] }
+        const existing = folderGroups.get(match.folderId) ?? {
+          boundary: 'unknown' as Boundary,
+          sessions: [],
+          boundaryOf: new Map<string, Boundary>()
+        }
         folderGroups.set(match.folderId, {
           // 越境は組み合わせで決まる。同じフォルダ内で混在しうるので
           // **1 件でも `cross` があれば `cross` を表に出す** (FR-023)。
           boundary: mergeBoundary(existing.boundary, match.boundary),
-          sessions: [...existing.sessions, session]
+          sessions: [...existing.sessions, session],
+          /* **行単位も残す** (po H-001)。OR に畳むのは見出し用の値だけにする。 */
+          boundaryOf: new Map(existing.boundaryOf).set(sessionRowKey(session), match.boundary)
         })
         break
       }
@@ -146,7 +182,8 @@ export function groupSessions(input: GroupInput): readonly SessionGroup[] {
       kind: 'folder',
       folderId,
       boundary: value.boundary,
-      sessions: sort(value.sessions)
+      sessions: sort(value.sessions),
+      boundaryOf: value.boundaryOf
     })
   }
   for (const value of pendingGroups.values()) {

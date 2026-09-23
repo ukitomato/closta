@@ -35,6 +35,8 @@ const sessionSample: SessionSummaryDTO = {
   originKind: 'wsl-inherited',
   programmatic: false,
   worktree: false,
+  /* 行単位の越境 (pr-gate Round 1 / po H-001)。対応づかない行では null。 */
+  boundary: 'cross',
   normalized: { truncated: false, controlCharsRemoved: false }
 }
 

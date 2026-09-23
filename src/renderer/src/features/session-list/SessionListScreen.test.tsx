@@ -41,6 +41,7 @@ function session(overrides: Partial<SessionSummaryDTO> = {}): SessionSummaryDTO 
     originKind: 'host',
     programmatic: false,
     worktree: false,
+    boundary: null,
     normalized: { truncated: false, controlCharsRemoved: false },
     ...overrides
   }
@@ -913,6 +914,51 @@ describe('SessionListScreen — 件数が多い場合 (FE-073)', () => {
     screen.getByRole('button', { name: '続きを取る' }).click()
 
     await waitFor(() => expect(fetchMoreSessions).toHaveBeenCalledWith('host#0', 50))
+  })
+
+  it('越境を行ごとに示す (US-1 AC-4 / po H-001)', async () => {
+    /*
+     * **越境はセッション単位で判定されるのにフォルダ単位の OR で畳まれていた。**
+     * Windows 側の登録フォルダをホストと WSL (`/mnt/c/...`) の両方から使う典型ケースで、
+     * **1 件でも越境があるとフォルダ内の全行が越境と読めた**。
+     * US-1 AC-4 は「**そのセッション**は…越境である旨が示される」と行単位を求めている。
+     */
+    const native = session({
+      sessionId: 'aaaaaaaa-0000-0000-0000-000000000001',
+      summary: '同じ所在の行',
+      boundary: 'native'
+    })
+    const crossing = session({
+      sessionId: 'bbbbbbbb-0000-0000-0000-000000000002',
+      summary: 'マウント経由の行',
+      boundary: 'cross'
+    })
+
+    /* **フォルダ単位は OR なので cross。** 行単位は各セッションが持つ。 */
+    const group: SessionGroupDTO = {
+      kind: 'folder',
+      folderId: 'folder-1',
+      boundary: 'cross',
+      sessions: [native, crossing]
+    }
+    install(index([group]))
+
+    render(<SessionListScreen />)
+    await waitFor(() => expect(screen.getByText('同じ所在の行')).toBeInTheDocument())
+
+    const rows = document.querySelectorAll('[data-slot="aui_thread-list-items"] [role="listitem"]')
+    expect(rows).toHaveLength(2)
+
+    /* **越境の行だけに越境が出る。** */
+    const texts = [...rows].map((row) => row.textContent ?? '')
+    const crossRow = texts.find((t) => t.includes('マウント経由の行')) ?? ''
+    const nativeRow = texts.find((t) => t.includes('同じ所在の行')) ?? ''
+
+    expect(crossRow).toContain('越境')
+    expect(nativeRow).not.toContain('越境')
+
+    /* 見出しは「含む」と読める形にする (どの行かはここから決まらない)。 */
+    expect(screen.getByText('越境を含む')).toBeInTheDocument()
   })
 
   it('絞り込みで IPC を往復させない (FR-040)', async () => {

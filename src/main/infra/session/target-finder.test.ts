@@ -9,6 +9,8 @@ import { makeHostPath, type HostPath } from '@domain/runtime/path-types'
 import { createVerifiedRunning, type VerifiedRunning } from '@domain/runtime/verified-running'
 
 import type { HostFileSystem } from '../fs/host-fs'
+import { DISCOVERY_ISSUE_ORDINAL } from '@domain/session/interfaces'
+
 import { createEnumerationTargetFinder } from './target-finder'
 
 /**
@@ -187,7 +189,8 @@ describe('createEnumerationTargetFinder — wslTargets', () => {
     const result = await finder.wslTargets(ubuntu, verified(UBUNTU), NOW)
 
     expect(result.targets.map((t) => t.label)).toEqual(['alice'])
-    expect(result.issues).toEqual([{ label: 'bob', reasonKey: 'permission-denied' }])
+    /* **候補由来の失敗は候補一覧の位置を持つ** (security H-003)。bob は alice の次。 */
+    expect(result.issues).toEqual([{ label: 'bob', reasonKey: 'permission-denied', ordinal: 1 }])
     expect(result.noHistory).toBe(false)
   })
 
@@ -203,7 +206,10 @@ describe('createEnumerationTargetFinder — wslTargets', () => {
     const result = await finder.wslTargets(ubuntu, verified(UBUNTU), NOW)
 
     expect(result.targets.map((t) => t.label)).toEqual(['root'])
-    expect(result.issues).toEqual([{ label: 'home', reasonKey: 'permission-denied' }])
+    /* `/home` 自体が読めない失敗は候補を特定できていない → 予約した序数。 */
+    expect(result.issues).toEqual([
+      { label: 'home', reasonKey: 'permission-denied', ordinal: DISCOVERY_ISSUE_ORDINAL }
+    ])
   })
 
   it('`/root` を候補に含める (FR-011)', async () => {
@@ -225,7 +231,7 @@ describe('createEnumerationTargetFinder — wslTargets', () => {
 
     const result = await finder.wslTargets(ubuntu, verified(UBUNTU), NOW)
 
-    expect(result.issues).toEqual([{ label: 'root', reasonKey: 'permission-denied' }])
+    expect(result.issues).toEqual([{ label: 'root', reasonKey: 'permission-denied', ordinal: 0 }])
   })
 
   it('項目数の上限超過は「在る」として対象にする', async () => {
@@ -248,7 +254,9 @@ describe('createEnumerationTargetFinder — wslTargets', () => {
 
     const result = await finder.wslTargets(ubuntu, verified(UBUNTU), NOW)
 
-    expect(result.issues).toEqual([{ label: 'home', reasonKey: 'distro-not-running' }])
+    expect(result.issues).toEqual([
+      { label: 'home', reasonKey: 'distro-not-running', ordinal: DISCOVERY_ISSUE_ORDINAL }
+    ])
   })
 
   it('別ディストロの確認済みの値を流用できない (FR-008)', async () => {
@@ -260,7 +268,9 @@ describe('createEnumerationTargetFinder — wslTargets', () => {
     const result = await finder.wslTargets(ubuntu, verified(DEBIAN), NOW)
 
     expect(result.targets).toHaveLength(0)
-    expect(result.issues).toEqual([{ label: 'Ubuntu', reasonKey: 'distro-not-running' }])
+    expect(result.issues).toEqual([
+      { label: 'Ubuntu', reasonKey: 'distro-not-running', ordinal: DISCOVERY_ISSUE_ORDINAL }
+    ])
   })
 
   it('期限切れの確認済みの値では探索を発行しない (FR-008 / SC-002)', async () => {
@@ -278,7 +288,9 @@ describe('createEnumerationTargetFinder — wslTargets', () => {
     const result = await finder.wslTargets(ubuntu, verified(UBUNTU, NOW - 60_000), NOW)
 
     expect(calls).toBe(0)
-    expect(result.issues).toEqual([{ label: 'Ubuntu', reasonKey: 'distro-not-running' }])
+    expect(result.issues).toEqual([
+      { label: 'Ubuntu', reasonKey: 'distro-not-running', ordinal: DISCOVERY_ISSUE_ORDINAL }
+    ])
   })
 
   it('`key` は候補一覧の位置で決まり、対象の増減で前の対象がずれない', async () => {

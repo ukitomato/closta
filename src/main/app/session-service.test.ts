@@ -66,6 +66,20 @@ function wslTarget(): EnumerationTarget {
   }
 }
 
+/** 序数を指定した WSL の列挙対象。**衝突の検証に序数を明示する必要がある。** */
+function wslTargetAt(ordinal: number, posixPath: string): EnumerationTarget {
+  const configDir = makeRuntimePath(UBUNTU, posixPath)
+  if (!configDir.ok) throw new Error('テストの前提が壊れている')
+  const location = { kind: 'wsl', distroName: 'Ubuntu' } as const
+  return {
+    key: enumerationTargetKey(location, ordinal),
+    location,
+    configDir: configDir.path,
+    origin: 'default',
+    label: posixPath
+  }
+}
+
 function ubuntu(): RuntimeDescriptor {
   return {
     id: UBUNTU,
@@ -511,13 +525,57 @@ describe('createSessionService — 失敗の封じ込め', () => {
     expect(index.outcomes[0]).toMatchObject({ status: 'no-history', reasonKey: null })
   })
 
+  it('候補の一部が失敗しても行の `targetKey` が重複しない (security H-003 / SC-010)', async () => {
+    /*
+     * **序数の払い出しが 2 通りあった。**
+     * 対象は `target-finder` が候補一覧の位置で作り、失敗行は呼び出し側が
+     * `targets.length + index` で作っていた。
+     *
+     * 候補が alice(0) / bob(1) / root(2) で bob が権限拒否のとき、
+     * 対象は `#0`(alice) と `#2`(root)、失敗行は `2 + 0 = #2` で **root と一致した**。
+     *
+     * `targetKey` は未信頼入力の照合に使う唯一の鍵である (FR-043 / SC-010)。
+     * 一意でないと `fetchMoreSessions` が**利用者が指した行とは別の対象**を列挙し、
+     * 行の帰属も書き換わる — FR-052 が全ユーザ集約の代償として置いた
+     * 「どのユーザの履歴を見ているか」が行単位で崩れる。
+     * `/root` が UNC 経由で Access denied になることは実測済である。
+     */
+    const alice = wslTargetAt(0, '/home/alice/.claude')
+    const root = wslTargetAt(2, '/root/.claude')
+
+    const service = createSessionService(
+      deps({
+        finder: fakeFinder(
+          discovery([]),
+          /* bob は候補 1 で権限拒否。対象は 0 と 2 だけが残る。 */
+          discovery([alice, root], [{ label: 'bob', reasonKey: 'permission-denied', ordinal: 1 }])
+        ),
+        enumerator: fakeEnumerator({
+          [alice.key]: { ok: true, sessions: [], truncated: false },
+          [root.key]: { ok: true, sessions: [], truncated: false }
+        }),
+        runtimes: () => [ubuntu()],
+        verifyRunning: async () => new Map([[UBUNTU, createVerifiedRunning(UBUNTU, NOW)]])
+      })
+    )
+
+    await service.list()
+
+    const keys = service.targetKeys()
+    expect(new Set(keys).size).toBe(keys.length)
+
+    /* 失敗行は候補 1 の位置を持つ。root (候補 2) と別物である。 */
+    expect(keys).toContain('wsl:Ubuntu#1')
+    expect(keys).toContain('wsl:Ubuntu#2')
+  })
+
   it('候補ごとの失敗を所在の行として残す (FR-011 / FR-030)', async () => {
     const host = hostTarget()
     const service = createSessionService(
       deps({
         finder: fakeFinder(
           discovery([host]),
-          discovery([], [{ label: 'root', reasonKey: 'permission-denied' }])
+          discovery([], [{ label: 'root', reasonKey: 'permission-denied', ordinal: 2 }])
         ),
         enumerator: fakeEnumerator({
           [host.key]: { ok: true, sessions: [], truncated: false }
