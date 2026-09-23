@@ -86,16 +86,18 @@ SessionGroupDTO =
   | { kind: 'folder';       folderId: string; boundary: Boundary; sessions: SessionSummaryDTO[] }
   | { kind: 'pending';      location: LocationDTO; reasonKey: PendingReason; sessions: [...] }
   | { kind: 'unregistered'; cwdKey: string; cwd: PathDTO | null; cwdDisplay: string | null;
+                            suggestedDisplayName: string | null;
                             location: LocationDTO | null; sessions: [...] }
   | { kind: 'unknown';      reasonKey: UnknownReason; sessions: [...] }
 
 SessionSummaryDTO = {
   sessionId: string; targetKey: string          // 由来列挙対象への不透明な参照 (R-3 が使う)
-  summary: string; firstPrompt: string | null; customTitle: string | null
+  summary: string | null; firstPrompt: string | null; customTitle: string | null
   lastModified: number | null; createdAt: number | null; fileSize: number | null
   gitBranch: string | null; tag: string | null
   cwd: PathDTO | null; cwdDisplay: string | null; originKind: CwdOriginKind
   programmatic: boolean; worktree: boolean; targetLabel: string
+  boundary: Boundary | null                     // **行ごと**の越境 (pr-gate Round 1 / po H-001)
   normalized: { truncated: boolean; controlCharsRemoved: boolean }   // FR-049
 }
 
@@ -135,8 +137,23 @@ FailureReason  = distro-not-running | wsl-unavailable | permission-denied
 | --- | --- | --- |
 | `host` / `wsl-from-unc` / `wsl-inherited` | 変換済み `PathDTO` | `null` (`cwd` で足りる) |
 | `undetected-distro` | `null` | **ディストロ名 + 変換後の POSIX パス**。UNC 接頭辞は載せない |
-| `unknown-location` | `null` | 記録されていた POSIX パス (所在を伴わない) |
+| `unknown-location` | `null` | 記録されていた値 (所在を伴わない)。**形が読めない値では空文字** |
 | `absent` | `null` | `null` |
+
+`unknown-location` の表示値が空文字になるのは、値が
+**区切り 2 本以上で始まるのに実測された綴りとして解析できない**場合である
+([AD-032](../../../docs/decisions/0032-unc-shape-classification-by-separator-count.md))。
+構造が読めない値から「安全な残余」を切り出すのは推測になるため、何も出さない。
+参照キー `unknown-location` が意味を運ぶ (訳出は `ui` / FR-047)。
+
+**表示値は `dto-mapper` の関門を通る。** `cwdDisplay` と `suggestedDisplayName` は
+どちらも `app` 層で正規化される。`domain` の型は「正規化済みである」ことを
+保証できないため、境界側に関門を置く (pr-gate Round 4 / A4-007)。
+パスの予算は `PATH_DISPLAY_MAX_BYTES` で、表示名の `TEXT_MAX_BYTES` より大きい —
+切ると末尾が落ち、末尾が一意性を担う場合に境界の向こうで衝突する。
+
+**`cwdKey` は不透明な鍵であり制御文字を含まない。** 以前は区切りが U+0000 で、
+FR-049 / SC-015 を構造上必ず破っていた。現在は `JSON.stringify([namespace, value])` である。
 
 `undetected-distro` の分解 (ディストロ名と配下パス) は `infra` のパス API が行い、
 **renderer は再合成しない**。これにより、`ui` が `cwdDisplay` から名前空間つきの値を

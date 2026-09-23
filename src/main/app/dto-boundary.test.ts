@@ -4,11 +4,14 @@ import { PROTOCOL_VERSION, decodeResponse } from '@agents/protocol'
 import { makeHostPath, makeRuntimePath } from '@domain/runtime/path-types'
 import { wslNamespace } from '@domain/runtime/namespace'
 import { buildSessionSummary } from '@domain/session/build'
+import { SESSION_GROUP_DTO_FIELDS } from '@domain/session/dto'
+import type { SessionGroup } from '@domain/session/group'
 import type { RawSessionRecord } from '@domain/session/interfaces'
+import { cwdKeyOf } from '@domain/session/match'
 import { enumerationTargetKey, type EnumerationTarget } from '@domain/session/target'
 import { hasControlCharacter } from '@domain/validation'
 
-import { toEnumerationOutcomeDTOs, toSessionSummaryDTO } from './dto-mapper'
+import { toEnumerationOutcomeDTOs, toSessionGroupDTO, toSessionSummaryDTO } from './dto-mapper'
 
 /**
  * 境界を渡る文字列の性質 (pr-gate Round 4 / 不変条件 4 / FR-049 / SC-015)。
@@ -29,6 +32,26 @@ import { toEnumerationOutcomeDTOs, toSessionSummaryDTO } from './dto-mapper'
  *
  * **DTO を再帰的に走査して全文字列を見る。** あとから誰かがフィールドを足しても、
  * その値が関門を通っていなければここが落ちる。
+ *
+ * ## 覆っている写像を実名で書く (pr-gate Round 4 / A4-007)
+ *
+ * このファイルは初版で「フィールド名を知らないので漏れない」と主張していたが、
+ * **`dto-mapper` の 3 つの写像のうち `toSessionGroupDTO` を呼んでいなかった**。
+ * そしてその未走査の経路が `cwdKey` を素通しで載せ、`cwdKeyOf` は
+ * **構造上必ず U+0000 を含む値**を返していた。
+ * つまり「もう漏れない」という主張そのものが偽だった。
+ *
+ * **走査は自分が何を呼んでいるかを知らない。** だから覆っている範囲は
+ * 人間が書くしかない。現在覆っているのは次の 3 つで、これが `dto-mapper` の
+ * R-2 用 export の全部である。
+ *
+ * | 写像 | 走査 |
+ * |---|---|
+ * | `toSessionSummaryDTO` | ○ |
+ * | `toSessionGroupDTO` (4 variant すべて) | ○ |
+ * | `toEnumerationOutcomeDTOs` | ○ |
+ *
+ * **4 つ目を足したらここに行を足す。** 足し忘れを機械で捕まえる手段は無い。
  */
 
 const NOW = 1_700_000_000_000
@@ -201,6 +224,150 @@ describe('境界を渡る DTO の全文字列に制御文字が残らない (FR-
       )
     )
     expect(collectStrings(dtos).filter((s) => hasControlCharacter(s.value))).toEqual([])
+  })
+
+  /*
+   * **グループの 4 variant** (pr-gate Round 4 / A4-007)。
+   *
+   * `unregistered` が `cwdKey` を運ぶ。以前はこの経路が無走査で、
+   * `cwdKeyOf` が返す U+0000 入りの値が境界を渡っていた。
+   */
+  it.each(['folder', 'pending', 'unregistered', 'unknown'] as const)(
+    'グループ (%s) の全文字列に制御文字が残らない',
+    (kind) => {
+      const session = buildSessionSummary({
+        record: recordWith(`pre${RLO}post`),
+        target: wslTarget(`lbl${NUL}x`),
+        detectedDistros: new Set(['Ubuntu'])
+      })
+      const cwd = makeRuntimePath(wslNamespace('Ubuntu'), '/home/alice/p')
+      if (!cwd.ok) throw new Error('テストの前提が壊れている')
+
+      const group: SessionGroup =
+        kind === 'folder'
+          ? {
+              kind: 'folder',
+              folderId: 'f1',
+              boundary: 'cross',
+              sessions: [session],
+              boundaryOf: new Map()
+            }
+          : kind === 'pending'
+            ? {
+                kind: 'pending',
+                location: { kind: 'wsl', distroName: 'Ubuntu' },
+                reasonKey: 'distro-not-running',
+                sessions: [session]
+              }
+            : kind === 'unregistered'
+              ? {
+                  kind: 'unregistered',
+                  /* **実際の生成関数を通す。** 手書きの鍵だと欠陥を再現しない。 */
+                  cwdKey: cwdKeyOf(wslNamespace('Ubuntu'), '/home/alice/p'),
+                  cwd: cwd.path,
+                  cwdDisplay: `disp${BEL}lay`,
+                  location: { kind: 'wsl', distroName: 'Ubuntu' },
+                  sessions: [session]
+                }
+              : { kind: 'unknown', reasonKey: 'cwd-absent', sessions: [session] }
+
+      const dto = toSessionGroupDTO(group)
+
+      const offenders = collectStrings(dto).filter((s) => hasControlCharacter(s.value))
+      expect(offenders).toEqual([])
+    }
+  )
+
+  it('グループの各 variant のフィールドが許可リストと一致する (SC-011)', () => {
+    /*
+     * **項目が増えたら落ちる形にする。** 表示用の生値を運ぶフィールドが
+     * 増えたことに誰も気づかない、という経路をここで塞ぐ。
+     */
+    const session = buildSessionSummary({
+      record: recordWith('ok'),
+      target: wslTarget('alice'),
+      detectedDistros: new Set(['Ubuntu'])
+    })
+    const cwd = makeRuntimePath(wslNamespace('Ubuntu'), '/home/alice/p')
+    if (!cwd.ok) throw new Error('テストの前提が壊れている')
+
+    const groups: readonly SessionGroup[] = [
+      {
+        kind: 'folder',
+        folderId: 'f1',
+        boundary: 'native',
+        sessions: [session],
+        boundaryOf: new Map()
+      },
+      {
+        kind: 'pending',
+        location: { kind: 'windows' },
+        reasonKey: 'probe-failed',
+        sessions: [session]
+      },
+      {
+        kind: 'unregistered',
+        cwdKey: cwdKeyOf(wslNamespace('Ubuntu'), '/home/alice/p'),
+        cwd: cwd.path,
+        cwdDisplay: '/home/alice/p',
+        location: { kind: 'wsl', distroName: 'Ubuntu' },
+        sessions: [session]
+      },
+      { kind: 'unknown', reasonKey: 'location-unknown', sessions: [session] }
+    ]
+
+    /* 4 variant すべてを見ている (1 つ書き忘れたら落ちる)。 */
+    expect(groups.map((g) => g.kind).sort()).toEqual(Object.keys(SESSION_GROUP_DTO_FIELDS).sort())
+
+    for (const group of groups) {
+      const dto = toSessionGroupDTO(group)
+      expect(Object.keys(dto).sort()).toEqual([...SESSION_GROUP_DTO_FIELDS[dto.kind]].sort())
+    }
+  })
+
+  it('セッション行の作業ディレクトリ表示値も関門を通る', () => {
+    /*
+     * `build.ts` は `classifyCwd` の**前**に正規化するので、通常の経路では
+     * ここに制御文字は来ない。だが `SessionSummary` は `domain` の型であり
+     * **「正規化済みである」という保証を型が持たない** —
+     * `targetLabel` でまったく同じ前提が崩れたのが不変条件 4 の出発点だった。
+     *
+     * 出自を直接差し替えて、関門が実在することを確かめる (変異 I で発火を確認した)。
+     */
+    const built = buildSessionSummary({
+      record: recordWith('ok'),
+      target: wslTarget('alice'),
+      detectedDistros: new Set(['Ubuntu'])
+    })
+    const dto = toSessionSummaryDTO({
+      ...built,
+      origin: { kind: 'unknown-location', display: `d${NUL}i${RLO}r` }
+    })
+
+    expect(collectStrings(dto).filter((s) => hasControlCharacter(s.value))).toEqual([])
+  })
+
+  it('作業ディレクトリの予算は表示名の予算より大きい (末尾を落とさない)', () => {
+    /*
+     * **パスに `TEXT_MAX_BYTES` (512) を当てない** (pr-gate Round 4 / PB4-013)。
+     * 切ると表示値として意味を失うだけでなく、末尾が一意性を担っている場合
+     * (`disambiguate` の序数接尾辞など) に**境界の向こうで再び衝突する**。
+     *
+     * 512 と 1024 のあいだの長さで、切られていないことを固定する
+     * (変異 L で発火を確認した)。
+     */
+    const long = `/home/alice/${'p'.repeat(600)}`
+    const built = buildSessionSummary({
+      record: recordWith('ok'),
+      target: wslTarget('alice'),
+      detectedDistros: new Set(['Ubuntu'])
+    })
+    const dto = toSessionSummaryDTO({
+      ...built,
+      origin: { kind: 'unknown-location', display: long }
+    })
+
+    expect(dto.cwdDisplay).toBe(long)
   })
 
   it('走査がフィールドを実際に見ている (テスト自身の健全性)', () => {

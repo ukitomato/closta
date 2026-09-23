@@ -4,7 +4,7 @@ import type { CapabilitiesDTO, RuntimeDescriptorDTO } from '@domain/runtime/dto'
 import { hostPathOps, runtimePathOps } from '@domain/runtime/path-api'
 import { pathParts, type HostPath, type RuntimePath } from '@domain/runtime/path-types'
 import { originDisplay, originPath } from '@domain/session/cwd-origin'
-import { TEXT_MAX_BYTES, normalizeText } from '@domain/session/normalize'
+import { PATH_DISPLAY_MAX_BYTES, TEXT_MAX_BYTES, normalizeText } from '@domain/session/normalize'
 import type { EnumerationOutcomeDTO, SessionGroupDTO, SessionSummaryDTO } from '@domain/session/dto'
 import type { SessionGroup } from '@domain/session/group'
 import type { Boundary } from '@domain/workspace/dto'
@@ -75,6 +75,31 @@ function displayName(raw: string): string {
 }
 
 /**
+ * 作業ディレクトリの表示値を境界で整える (pr-gate Round 4 / A4-007)。
+ *
+ * **予算が `displayName` と違う。** こちらはパスなので `PATH_DISPLAY_MAX_BYTES`
+ * を使う。`TEXT_MAX_BYTES` (512) で切ると長いパスの末尾が落ちる
+ * — 表示値として意味を失うだけでなく、`disambiguate` の序数接尾辞のように
+ * **一意性を担う末尾を落とす**形の欠陥に繋がる (PB4-013)。
+ *
+ * ## なぜ関門が要るのか
+ *
+ * この値は `build.ts` が `classifyCwd` の前に正規化した `cwdText` から
+ * 導かれるので、通常の経路では制御文字を含まない。
+ * だが `SessionGroup` / `SessionSummary` は `domain` の型であり、
+ * **「正規化済みである」という保証を型が持たない** — `targetLabel` で
+ * まったく同じ前提が崩れていた (不変条件 4)。
+ *
+ * 実際、グループ 4 variant を走査に加えた最初の実行で
+ * `unregistered.cwdDisplay` がここを通っていないことが出た。
+ * **2 本の経路 (セッション行とグループ) の両方が本モジュールを通る**ので、
+ * ここを関門にすれば経路が増えても漏れない。
+ */
+function pathDisplay(raw: string | null): string | null {
+  return raw === null ? null : normalizeText(raw, PATH_DISPLAY_MAX_BYTES).value
+}
+
+/**
  * `SessionSummary` を DTO へ写す。
  *
  * **表示用の生値を運ぶのは `cwdDisplay` の 1 種類だけである** (FR-042 / SC-011)。
@@ -106,7 +131,7 @@ export function toSessionSummaryDTO(
     gitBranch: session.gitBranch,
     tag: session.tag,
     cwd: path === null ? null : pathParts(path),
-    cwdDisplay: originDisplay(session.origin),
+    cwdDisplay: pathDisplay(originDisplay(session.origin)),
     originKind: session.origin.kind,
     programmatic: session.source.programmatic,
     worktree: session.source.worktree,
@@ -168,8 +193,22 @@ export function toSessionGroupDTO(group: SessionGroup): SessionGroupDTO {
         kind: 'unregistered',
         cwdKey: group.cwdKey,
         cwd: group.cwd === null ? null : pathParts(group.cwd),
-        cwdDisplay: group.cwdDisplay,
-        suggestedDisplayName: group.cwd === null ? null : suggestedDisplayName(group.cwd),
+        cwdDisplay: pathDisplay(group.cwdDisplay),
+        /*
+         * **到達しないと分かったうえで安全側を書いている** (pr-gate Round 4 / PO4-003)。
+         *
+         * `suggestedDisplayName` は branded なパス値の末尾成分であり、
+         * `makeHostPath` / `makeRuntimePath` が制御文字を `forbidden-character` で
+         * 拒むので、ここに制御文字が来る入力は**作れない**。
+         * 変異 (この関門を外す) が発火しないのはテストが弱いからではなく、
+         * この分岐に入る入力が存在しないためである。
+         *
+         * それでも通すのは、**これが `cwdDisplay` に次ぐ 2 つ目の表示値**であり
+         * (SC-011 の許可リストが固定している)、パス検証が緩んだときに
+         * 素通しにしないためである。正規化は冪等なので費用は無い。
+         */
+        suggestedDisplayName:
+          group.cwd === null ? null : displayName(suggestedDisplayName(group.cwd)),
         location: group.location,
         sessions
       }

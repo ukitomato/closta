@@ -68,11 +68,21 @@ function strongerPending(a: PendingReason | null, b: PendingReason): PendingReas
 /**
  * 未登録の作業ディレクトリをまとめる鍵。
  *
- * **`(所在, 正規化済みパス)` の組**とする。R-1 の `folderKey()` と同じ作りであり、
- * 重複判定の規則を 2 つ持たない。
+ * **`(所在, 正規化済みパス)` の組**とする。重複判定の規則を 2 つ持たない。
+ *
+ * ## 区切りに制御文字を使わない (pr-gate Round 4 / A4-007)
+ *
+ * 以前は `` `${namespace}\u0000${value}` `` だった。R-1 の `folderKey()` に
+ * 合わせた形だが、**`folderKey()` は境界を渡らないのにこちらは渡る** —
+ * `SessionGroupDTO.unregistered.cwdKey` として IPC を越え、renderer の
+ * React key になる。FR-049 / SC-015 が「境界を渡る文字列に制御文字を残さない」と
+ * 定めているのに、**構造上必ず U+0000 を含む値**を出していた。
+ *
+ * `JSON.stringify` の配列形にすると、区切りが単射なまま制御文字を持たない。
+ * 値は不透明な鍵としてしか使われないので (グループ化と React key)、形式は自由である。
  */
 export function cwdKeyOf(namespace: NamespaceId, value: string): string {
-  return `${namespace}\u0000${value}`
+  return JSON.stringify([namespace, value])
 }
 
 /**

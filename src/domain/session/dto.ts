@@ -167,6 +167,36 @@ export const SESSION_SUMMARY_DTO_FIELDS = [
   'normalized'
 ] as const satisfies readonly (keyof SessionSummaryDTO)[]
 
+/**
+ * `SessionGroupDTO` の許可フィールド — **variant ごとに 1 本** (SC-011)。
+ *
+ * SC-011 は「`SessionSummaryDTO` と `SessionGroupDTO` の**各 variant**の
+ * フィールド集合が許可リストと完全一致」を要求するが、Round 1〜4 のあいだ
+ * **group 側の許可リストは存在しなかった** (pr-gate Round 4 / PO4-003)。
+ * その結果、SC-011 が測っていたのは要求の半分だけだった。
+ *
+ * **表示用の生値を運ぶフィールドを固定するのがこの集合の目的である。**
+ * `unregistered` だけが `cwdDisplay` と `suggestedDisplayName` の 2 つを持つ。
+ * 後者は登録ダイアログの既定値であり、`cwd` から `infra` が組み立てる
+ * (renderer にパス分解をさせないため)。**3 つ目を増やすときはここが落ちる。**
+ */
+export const SESSION_GROUP_DTO_FIELDS = {
+  folder: ['kind', 'folderId', 'boundary', 'sessions'],
+  pending: ['kind', 'location', 'reasonKey', 'sessions'],
+  unregistered: [
+    'kind',
+    'cwdKey',
+    'cwd',
+    'cwdDisplay',
+    'suggestedDisplayName',
+    'location',
+    'sessions'
+  ],
+  unknown: ['kind', 'reasonKey', 'sessions']
+} as const satisfies {
+  [K in SessionGroupDTO['kind']]: readonly (keyof Extract<SessionGroupDTO, { kind: K }>)[]
+}
+
 /** `EnumerationOutcomeDTO` の許可フィールド (SC-011)。 */
 export const ENUMERATION_OUTCOME_DTO_FIELDS = [
   'location',

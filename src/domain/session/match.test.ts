@@ -5,13 +5,14 @@ import type { RuntimeDescriptor, WslRuntimeDescriptor } from '@domain/runtime/de
 import { wslNamespace } from '@domain/runtime/namespace'
 import { makePathMapping } from '@domain/runtime/path-mapping'
 import { makeHostPath, makeRuntimePath } from '@domain/runtime/path-types'
+import { hasControlCharacter } from '@domain/validation'
 import type { FolderRuntimeResolutionDTO } from '@domain/workspace/dto'
 import { createWin32 } from '@domain/workspace/__fixtures__/runtime'
 import type { Location, WorkspaceFolder } from '@domain/workspace/folder'
 import type { ResolveInput } from '@domain/workspace/resolution'
 
 import { classifyCwd } from './cwd-origin'
-import { matchFolder, type FolderMatch, type ResolveFolderRuntime } from './match'
+import { cwdKeyOf, matchFolder, type FolderMatch, type ResolveFolderRuntime } from './match'
 
 /**
  * 対応づけ 4 段の**全セル**を網羅する (BE-014 / SC-005)。
@@ -285,7 +286,31 @@ describe('未登録', () => {
     const result = match('/home/y/p', UBUNTU, [], [wslRuntime('Ubuntu')], {})
     expect(result.kind).toBe('unregistered')
     if (result.kind !== 'unregistered') return
-    expect(result.cwdKey).toBe(`${wslNamespace('Ubuntu')}\u0000/home/y/p`)
+    expect(result.cwdKey).toBe(cwdKeyOf(wslNamespace('Ubuntu'), '/home/y/p'))
+
+    /*
+     * **鍵に制御文字を入れない** (pr-gate Round 4 / A4-007)。
+     * この値は `SessionGroupDTO.unregistered.cwdKey` として IPC を渡るので、
+     * FR-049 / SC-015 の「境界を渡る文字列に制御文字を残さない」が掛かる。
+     * 以前は区切りが U+0000 で、**構造上必ず違反していた**。
+     */
+    expect(hasControlCharacter(result.cwdKey)).toBe(false)
+  })
+
+  it('鍵は (所在, パス) について単射である', () => {
+    /*
+     * 区切りを変えるなら、変えた先が曖昧でないことを縛る。
+     * 素朴な連結だと `('wsl:a', 'b')` と `('wsl:a"b', '')` のような衝突が作れる。
+     */
+    const keys = [
+      cwdKeyOf(wslNamespace('a'), '/b'),
+      cwdKeyOf(wslNamespace('a/b'), ''),
+      cwdKeyOf(wslNamespace('a'), ''),
+      cwdKeyOf(wslNamespace(''), '/a'),
+      cwdKeyOf(wslNamespace('a"'), '/b')
+    ]
+
+    expect(new Set(keys).size).toBe(keys.length)
   })
 
   it('到達不可のフォルダしか無ければ未登録 (保留にしない)', () => {
