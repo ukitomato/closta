@@ -3,96 +3,90 @@
   "run": "2026-09-23",
   "spec_dir": "specs/002-session-cross-folder-session-enumeration",
   "spec_id": "002-session-cross-folder-session-enumeration",
-  "round": 2,
+  "round": 3,
   "base_branch": "main",
   "diff_stat": {
-    "files": 125,
-    "additions": 22320,
-    "deletions": 98
+    "files": 126,
+    "additions": 22677,
+    "deletions": 101
   },
   "severity_counts": {
     "critical": 0,
-    "high": 23,
-    "medium": 41,
-    "low": 21
+    "high": 24,
+    "medium": 32,
+    "low": 13
   },
   "severity_counts_raw": {
     "critical": 0,
-    "high": 29,
-    "medium": 41,
-    "low": 21
+    "high": 30,
+    "medium": 32,
+    "low": 13
   },
   "convergence": {
-    "resolved_from_prev": 13,
-    "new_in_round": 14,
-    "unresolved": 9,
-    "partial": 6
+    "resolved_from_prev": 1,
+    "new_in_round": 15,
+    "unresolved": 19,
+    "partial": 3
   },
+  "convergence_warning": "R[3] は resolved(1) < new(15)。R[2] も resolved(13) < new(14)。convergence gate は N>=4 で発火するため、Round 4 が resolved >= new を達成しなければ CONVERGENCE_FAILURE で halt する。--defer-remaining は撤廃済。",
   "suppressed_by_code_gate": [],
   "verdict": "PASS",
-  "verdict_note": "Critical=0 のため規則上 PASS。ただし High 23 クラスタのうち 4 件は Round 1 の修正自身が作った穴であり、うち 2 件 (UNC 綴りの穴 / intentionallyKilled の到達不能) は orchestrator が実行して再現した。/cl-done へ進むかは人間の確定を要する。",
+  "verdict_note": "Critical=0 のため規則上 PASS。ただし Round 2 の修正が 3 件の退行を持ち込み、うち H3-002 (crash 計上順序による恒久停止) は置き換える前より悪い。orchestrator が A/B 実行で再現済み。/cl-done は推奨しない。",
   "orchestrator_verified": [
     {
-      "id": "H2-001",
-      "claim": "looksLikeWslUnc が //?/UNC/ 綴りを見ず wsl-inherited として誤帰属する",
-      "method": "classifyCwd を一時テストで実行",
-      "result": "kind=wsl-inherited, namespace=wsl:Ubuntu, value=/?/UNC/wsl.localhost/Ubuntu/home/alice",
+      "id": "H3-002",
+      "claim": "crash 計上を早期 return の前へ移したことで列挙が恒久停止する",
+      "method": "kill() が false を返し後から自然終了するワーカで送信失敗を 3 回。HEAD と順序を戻した版で A/B",
+      "result": "HEAD: FINAL ok=false workers=3 (復旧せず) / 順序を戻す: FINAL ok=false workers=4 (復旧する)",
+      "status": "CONFIRMED_REGRESSION"
+    },
+    {
+      "id": "H3-001",
+      "claim": "parseWslUncPath が toUncSpelling を通っていない",
+      "method": "grep + ソース読解",
+      "result": "toUncSpelling の呼び出しは path-api.ts:180 / :204 の 2 件。:232 は自前の raw.replace のまま。docstring は 3 関数を名指している",
       "status": "CONFIRMED"
     },
     {
-      "id": "H2-001b",
-      "claim": "区切り重複で未検証ディストロ名が display に出る",
-      "method": "uncRelativeDisplay を一時テストで実行",
-      "result": "display=/-bad/home/alice",
+      "id": "H3-010",
+      "claim": "split(/s+/) がリテラルの s で恒真",
+      "method": "grep + 正規表現の読解",
+      "result": "SessionListScreen.test.tsx:948。Round 2 で直した同じ誤りの再導入",
       "status": "CONFIRMED"
     },
     {
-      "id": "PB-209",
-      "claim": "intentionallyKilled の守りが到達不能で同名テストが検査していない",
-      "method": "if (!wasIntentional) crashes += 1 を crashes += 1 に書き換えて vitest 実行",
-      "result": "25 passed (発火せず)",
+      "id": "H3-005",
+      "claim": "AD-031 の許容根拠 (TEXT_MAX_BYTES で縛られている) が事実と違う",
+      "method": "grep -rn \"TEXT_MAX_BYTES|normalizeText\" src/agents/ + toRecord の docstring",
+      "result": "src/agents/ に正規化の実装 0 件。toRecord は「正規化しない (FR-049 は main 側で掛ける)」と明言",
       "status": "CONFIRMED"
     },
     {
-      "id": "A11Y-204",
-      "claim": "opacity-50 の回帰テストが正規表現の誤りで発火しない",
-      "method": "SessionListScreen.test.tsx:931 の正規表現を読解",
-      "result": "/(^|s)opacity-50(s|$)/ — バックスラッシュが落ちてリテラルの s になっている",
+      "id": "H3-006",
+      "claim": "ADR immutability の規則変更が執行系に届いていない",
+      "method": "grep -rn immutable",
+      "result": "reviewer-base.md:22 と architecture-reviewer.md:40 が旧規則のまま (skill 側の写しを含め 4 箇所)",
       "status": "CONFIRMED"
     },
     {
-      "id": "H2-010",
-      "claim": "boundary が契約に無く SESSION_GROUP_DTO_FIELDS が存在しない",
-      "method": "grep",
-      "result": "contracts/ipc-session-list.md:86 は group variant のみ / SESSION_GROUP_DTO_FIELDS は src/ に 0 件",
-      "status": "CONFIRMED"
-    },
-    {
-      "id": "H2-015",
-      "claim": "セッションがまだありません の肯定テストが 0 件",
-      "method": "grep",
-      "result": "SessionListScreen.test.tsx に否定 assert 1 件のみ (:1127)",
-      "status": "CONFIRMED"
-    },
-    {
-      "id": "H2-020",
-      "claim": "索引バナーと 2 枚目の空状態が排他でない",
-      "method": "SessionListScreen.tsx:1001 と :1087 の条件を読解",
-      "result": "indexLevelNotice !== null と visible.length === 0 は同時に真になりうる",
+      "id": "H3-003",
+      "claim": "decodeResponse === null で settle せず 10 秒宙づり",
+      "method": "session-enumerator.ts:243 の読解",
+      "result": "if (current === null || response === null) return。pending は決着しない",
       "status": "CONFIRMED"
     }
   ],
   "tracks": {
     "security-reviewer": {
       "critical": 0,
-      "high": 4,
+      "high": 3,
       "medium": 6,
       "low": 3,
       "inheritance": {
         "resolved": 1,
-        "partial": 2,
+        "partial": 3,
         "unresolved": 3,
-        "new": 4
+        "new": 6
       },
       "viewpoint_missing": [],
       "cascade_demotions": 0,
@@ -100,28 +94,28 @@
     },
     "architecture-reviewer": {
       "critical": 0,
-      "high": 5,
-      "medium": 10,
-      "low": 3,
+      "high": 4,
+      "medium": 6,
+      "low": 2,
       "inheritance": {
         "resolved": 1,
         "partial": 1,
-        "unresolved": 9,
-        "new": 5
+        "unresolved": 14,
+        "new": 4
       },
       "viewpoint_missing": [],
-      "cascade_demotions": 0,
+      "cascade_demotions": 1,
       "status": "ok"
     },
     "po-reviewer": {
       "critical": 0,
-      "high": 5,
-      "medium": 10,
-      "low": 3,
+      "high": 4,
+      "medium": 5,
+      "low": 2,
       "inheritance": {
-        "resolved": 1,
+        "resolved": 0,
         "partial": 0,
-        "unresolved": 14,
+        "unresolved": 13,
         "new": 4
       },
       "viewpoint_missing": [],
@@ -130,14 +124,14 @@
     },
     "platform-boundary-reviewer": {
       "critical": 0,
-      "high": 7,
-      "medium": 5,
-      "low": 2,
+      "high": 8,
+      "medium": 4,
+      "low": 0,
       "inheritance": {
-        "resolved": 2,
+        "resolved": 1,
         "partial": 3,
-        "unresolved": 3,
-        "new": 8
+        "unresolved": 6,
+        "new": 6
       },
       "viewpoint_missing": [],
       "cascade_demotions": 0,
@@ -145,13 +139,13 @@
     },
     "a11y-reviewer": {
       "critical": 0,
-      "high": 3,
-      "medium": 10,
-      "low": 4,
+      "high": 4,
+      "medium": 5,
+      "low": 3,
       "inheritance": {
-        "resolved": 5,
-        "partial": 0,
-        "unresolved": 0,
+        "resolved": 0,
+        "partial": 1,
+        "unresolved": 13,
         "new": 3
       },
       "viewpoint_missing": [],
@@ -160,14 +154,14 @@
     },
     "ux-reviewer": {
       "critical": 0,
-      "high": 5,
-      "medium": 9,
-      "low": 6,
+      "high": 7,
+      "medium": 6,
+      "low": 3,
       "inheritance": {
-        "resolved": 3,
-        "partial": 1,
-        "unresolved": 9,
-        "new": 5
+        "resolved": 0,
+        "partial": 0,
+        "unresolved": 20,
+        "new": 2
       },
       "viewpoint_missing": [],
       "cascade_demotions": 0,
@@ -176,9 +170,11 @@
   },
   "machine_checks": {
     "lint": "ok",
-    "depcruise": "ok (165 modules / 660 dependencies)",
+    "depcruise": "ok (165 modules / 661 dependencies)",
     "constitution": "15 項目 / ok 14 / violation 0 / pending 1",
-    "rules": "26 件全件一致 (発火確認 9 項目 / 確認なし 5 項目)",
-    "tests": "33 files / 640 passed"
+    "rules": "26 件全件一致",
+    "tests": "33 files / 661 passed",
+    "mutation_wasIntentional": "1 failed (検査されている)",
+    "mutation_crash_order": "28 passed (順序変更は検査されていない)"
   }
 }

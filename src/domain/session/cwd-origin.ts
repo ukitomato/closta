@@ -1,16 +1,6 @@
 import { namespaceDistroName } from '@domain/runtime/namespace'
-import {
-  looksLikeWslUnc,
-  parseWslUncPath,
-  runtimePathOps,
-  uncRelativeDisplay
-} from '@domain/runtime/path-api'
-import {
-  makeHostPath,
-  makeRuntimePath,
-  type HostPath,
-  type RuntimePath
-} from '@domain/runtime/path-types'
+import { classifyRawPath, runtimePathOps } from '@domain/runtime/path-api'
+import { makeRuntimePath, type HostPath, type RuntimePath } from '@domain/runtime/path-types'
 import { locationNamespace, type Location } from '@domain/workspace/folder'
 
 import type { CwdOrigin } from './origin'
@@ -50,111 +40,97 @@ export interface ClassifyInput {
 }
 
 /**
- * 解析できなかった UNC 値の出自 (pr-gate Round 1 / C-001)。
- *
- * **参照キーは `unknown-location` のままにする。** 7 種目を増やさない —
- * 利用者に示すべきことは「どのディストロか分からない」で変わらないし、
- * 6 種を潰さないという規則 (`keys.ts`) は**増やさない**ことも含む。
- *
- * **表示は所在を伴わない残余だけにする。** FR-042 が定める
- * 「形の分類 (参照キー) と、所在を伴わない安全な表示用文字列」の後半である。
- * 残余が取れなければ空文字にする — 呼び出し側 (`ui`) が
- * 参照キーから文言を出す (訳出は `ui` の責務)。
- */
-function unparseableUnc(raw: string): CwdOrigin {
-  return { kind: 'unknown-location', display: uncRelativeDisplay(raw) ?? '' }
-}
-
-/**
  * 判定表 (data-model §2)。**順序に意味がある。**
  *
- * | # | 条件 | 結果 |
- * |---|---|---|
- * | 1 | 値が無い / 空 | `absent` |
- * | 2 | UNC 形式 かつ ディストロが検出済み | `wsl-from-unc` |
- * | 3 | UNC 形式 かつ ディストロが未検出 | `undetected-distro` |
- * | 4 | ドライブレター始まり | `host` |
- * | 5 | `/` 始まり かつ 由来 config の所在が `wsl:<D>` | `wsl-inherited` |
- * | 6 | `/` 始まり かつ 由来 config の所在が `windows` | `unknown-location` |
- * | 7 | 上記以外 (相対パス等) | `unknown-location` |
+ * | # | 値の形 (`classifyRawPath`) | 追加条件 | 結果 |
+ * |---|---|---|---|
+ * | 1 | — | 値が無い / 空 | `absent` |
+ * | 2 | `wsl-unc` | ディストロが検出済み | `wsl-from-unc` |
+ * | 3 | `wsl-unc` | ディストロが未検出 | `undetected-distro` |
+ * | 4 | `opaque-unc` | — | `unknown-location` (**表示値なし**) |
+ * | 5 | `host` | — | `host` |
+ * | 6 | `posix` | 由来 config の所在が `wsl:<D>` | `wsl-inherited` |
+ * | 7 | `posix` | 由来 config の所在が `windows` | `unknown-location` (生値を表示) |
+ * | 8 | `other` | — | `unknown-location` (生値を表示) |
  *
- * **#3 と #6 を混ぜない。** 前者は「どのディストロかは分かるが、そのディストロが今ない」、
+ * **#3 と #7 を混ぜない。** 前者は「どのディストロかは分かるが、そのディストロが今ない」、
  * 後者は「どのディストロか分からない」であり、利用者に示すべきことが違う。
+ *
+ * **#7 / #8 で生値を出してよい理由**: どちらも先頭の区切りが 1 本以下であり、
+ * 定義上 UNC ではない。共有名もサーバ名も含まない (FR-042 の対象外)。
+ *
+ * **#4 で表示値を持たない理由**: `classifyRawPath` の doc を参照。
+ * 解析できない値から安全な残余を切り出すのは推測になる。
  */
 export function classifyCwd(input: ClassifyInput): CwdOrigin {
   const raw = input.cwd
   if (raw === null || raw === undefined || raw.trim().length === 0) return { kind: 'absent' }
 
-  // #2 / #3 — UNC 形式。**ディストロ名は値に埋め込まれているので推測が要らない。**
-  const parsed = parseWslUncPath(raw)
-  if (parsed.ok) {
-    const { distroName, unc } = parsed.path
-    // 変換はパス API の `fromUnc` に委ねる (名前空間の対応づけもそこが持つ)。
-    const converted = runtimePathOps.fromUnc(unc)
-    /*
-     * **生値を display にしない** (pr-gate Round 1 / C-001)。
-     * ここに来る `raw` は `parseWslUncPath` が成功した値、すなわち**定義上 UNC 形式**である。
-     * 2 行下のコメントが言う「UNC 接頭辞を境界に出さない」の逆を行っていた。
-     */
-    if (!converted.ok) return unparseableUnc(raw)
-
-    // **表示用の値は変換後の POSIX パスを使う** — UNC 接頭辞を境界に出さない (FR-042)。
-    if (!input.detectedDistros.has(distroName)) {
-      return { kind: 'undetected-distro', distroName, display: converted.path.value }
-    }
-    return {
-      kind: 'wsl-from-unc',
-      path: converted.path,
-      namespace: converted.path.namespace
-    }
-  }
-
   /*
-   * **解析に失敗した UNC を「その他」に落とさない**
-   * (pr-gate Round 1 / C-001 / platform-boundary H-001)。
+   * **綴りの判定をここに書かない** (pr-gate Round 4 / 不変条件 1)。
    *
-   * `parseWslUncPath` はディストロ名が不正 (先頭 `-` / 255 文字超 / `\ / :` を含む)、
-   * 4096 文字超、制御文字を含むといった理由で失敗する。
-   * **失敗した値が UNC でなくなるわけではない。**
-   *
-   * 分けずに #5 へ進めると、**フォワードスラッシュ綴り** (`//wsl.localhost/-bad/home/y`) が
-   * `raw.startsWith('/')` に当たり、`makeRuntimePath` も通るため
-   * **由来 config の所在を継承した `wsl-inherited` として確定してしまう** —
-   * FR-016「由来 config ディレクトリの所在から推定してはならない」の違反であり、
-   * 判定表で `undetected-distro` に落ちるべき値が別ディストロに帰属する。
-   * 逆方向 (`\\` 始まり) は `makeRuntimePath` が拒否するので、
-   * **フォワードスラッシュ綴りだけが抜ける**非対称だった。
+   * Round 1〜3 は接頭辞の一覧照合を `cwd-origin` と `path-api` に分けて持ち、
+   * **毎ラウンド綴りの穴が出た**。判定を 1 つに畳み、ここは形に応じた
+   * 出自の割り当てだけを行う。`startsWith` も `replace` もこの関数には無い。
    */
-  if (looksLikeWslUnc(raw)) return unparseableUnc(raw)
+  const shape = classifyRawPath(raw)
 
-  // #4 — ホスト名前空間。ドライブレターの大小は `makeHostPath` が正規化する。
-  const host = makeHostPath(raw)
-  if (host.ok) return { kind: 'host', path: host.path }
+  switch (shape.kind) {
+    case 'wsl-unc': {
+      // #2 / #3 — **ディストロ名は値に埋め込まれているので推測が要らない。**
+      const { distroName, unc } = shape.parsed
+      // 変換はパス API の `fromUnc` に委ねる (名前空間の対応づけもそこが持つ)。
+      const converted = runtimePathOps.fromUnc(unc)
+      /*
+       * **構造上ここには来ない** (pr-gate Round 4 / 変異 D で確認)。
+       *
+       * `parseWslUncPath` が成功した時点で `makeWslUncPath` の検証
+       * (長さ `MAX_PATH_LENGTH` / 禁止文字 / ディストロ名) を通っている。
+       * POSIX への変換は値を短くするだけなので `fromUnc` は失敗しない。
+       *
+       * **到達しないと分かったうえで安全側を書いている。**
+       * 性質テストの変異 D (ここを `display: raw` にする) が発火しないのは
+       * テストが弱いからではなく、この分岐に入る入力が作れないためである。
+       * 検証が緩んだときに生値が漏れないよう、値は `''` のままにする。
+       */
+      if (!converted.ok) return { kind: 'unknown-location', display: '' }
 
-  /*
-   * #5 — POSIX 形式は**由来 config の所在でしか所在を決められない**。
-   *
-   * **`//` で始まる値は POSIX 絶対パスではない** (pr-gate Round 2 / H2-001)。
-   * UNC をフォワードスラッシュで綴った値がここへ落ちると、
-   * **由来 config の所在を継承して確定してしまう** (FR-016 違反)。
-   * 直前の `looksLikeWslUnc` は WSL の共有名を持つ綴りだけを捕まえるので、
-   * `//localhost/c$/Users/y` のような非 WSL の UNC はここまで来る。
-   *
-   * **綴りの網羅で守らない。** 接頭辞をいくつ並べても次の綴りで破れることを
-   * Round 1 で 2 度観測した。「2 文字目が区切りなら POSIX ではない」という
-   * **形の性質**で落とす — POSIX の `//` は実装定義であり、
-   * セッションの作業ディレクトリとして現れる値ではない。
-   */
-  if (raw.startsWith('/') && !raw.startsWith('//') && input.targetLocation.kind === 'wsl') {
-    const namespace = locationNamespace(input.targetLocation)
-    if (namespace !== 'host') {
-      const runtime = makeRuntimePath(namespace, raw)
-      if (runtime.ok) return { kind: 'wsl-inherited', path: runtime.path, namespace }
+      // **表示用の値は変換後の POSIX パスを使う** — UNC 接頭辞を境界に出さない (FR-042)。
+      if (!input.detectedDistros.has(distroName)) {
+        return { kind: 'undetected-distro', distroName, display: converted.path.value }
+      }
+      return { kind: 'wsl-from-unc', path: converted.path, namespace: converted.path.namespace }
     }
-  }
 
-  // #6 / #7 — 所在を推測しない。
-  return { kind: 'unknown-location', display: raw }
+    case 'opaque-unc':
+      // #4 — UNC 形だが解析できない。**参照キーだけで語る** (FR-042 / FR-047)。
+      return { kind: 'unknown-location', display: '' }
+
+    case 'host':
+      // #5 — ドライブレターの大小は `makeHostPath` が正規化済み。
+      return { kind: 'host', path: shape.path }
+
+    case 'posix': {
+      // #6 / #7 — POSIX 形式は**由来 config の所在でしか所在を決められない**。
+      if (input.targetLocation.kind === 'wsl') {
+        const namespace = locationNamespace(input.targetLocation)
+        if (namespace !== 'host') {
+          const runtime = makeRuntimePath(namespace, shape.value)
+          if (runtime.ok) return { kind: 'wsl-inherited', path: runtime.path, namespace }
+        }
+      }
+      /*
+       * 由来がホストの POSIX パスは所在を決められない。
+       * **同じ `/home/y/p` が複数のディストロに存在しうる** (AD-025 と同じ理由)。
+       * 1 つに帰属させると別のディストロの登録フォルダに紛れ込む。
+       */
+      return { kind: 'unknown-location', display: shape.value }
+    }
+
+    case 'other':
+      // #8 — 相対パス等。UNC ではないので生値を出してよい。
+      return { kind: 'unknown-location', display: raw }
+  }
 }
 
 /**

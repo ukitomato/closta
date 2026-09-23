@@ -96,41 +96,6 @@ export function isValidHostSegment(name: string): boolean {
  */
 const UNC_LEGACY_PREFIX = '\\\\wsl$\\'
 
-/**
- * Win32 のデバイス名前空間を経由した UNC の綴り (pr-gate Round 2 / H2-001)。
- *
- * `\\\\?\\UNC\\<server>\\<share>\\...` は
- * `\\\\<server>\\<share>\\...` と**同じ場所を指す**。
- * 長パス (260 文字超) を扱うときに Windows API や一部のツールがこの形を吐くため、
- * セッションの `cwd` に現れうる。
- *
- * **接頭辞を 2 つしか見ていなかったため、この綴りが判定を素通りしていた。**
- * 素通りした値は `/` 綴りだと `raw.startsWith('/')` に当たり、
- * **由来 config の所在を継承した `wsl-inherited` として確定していた** (FR-016 違反)。
- * `\\\\` 綴りだと表示用の生値として UNC 全文が境界を越えていた (FR-042 違反)。
- * どちらも Round 1 で塞いだつもりの経路であり、**綴りを 1 つ変えるだけで復活していた**。
- */
-const UNC_DEVICE_PREFIXES = ['\\\\?\\UNC\\', '\\\\.\\UNC\\'] as const
-
-/**
- * 区切りをバックスラッシュへ寄せ、デバイス名前空間の接頭辞を剥がす。
- *
- * **綴りの正規化をこの 1 関数に集める。** 以前は `looksLikeWslUnc` /
- * `uncRelativeDisplay` / `parseWslUncPath` がそれぞれ区切りの寄せを書いており、
- * **接頭辞を 1 つ足すと 3 箇所を直す必要があった**。
- */
-function toUncSpelling(raw: string): string {
-  const backslashed = raw.replace(/\//g, '\\')
-  const lower = backslashed.toLowerCase()
-  for (const device of UNC_DEVICE_PREFIXES) {
-    if (lower.startsWith(device.toLowerCase())) {
-      /* 剥がしたぶんだけ `\\\\` を戻す。指す場所は変わらない。 */
-      return '\\\\' + backslashed.slice(device.length)
-    }
-  }
-  return backslashed
-}
-
 /** `parseWslUncPath` の結果。ディストロ名は**検証済み**である。 */
 export interface ParsedWslUnc {
   readonly distroName: string
@@ -138,97 +103,94 @@ export interface ParsedWslUnc {
 }
 
 /**
- * **生の UNC 文字列**を解析し、ディストロ名と正規化した `WslUncPath` を返す (BE-010b)。
+ * 生の作業ディレクトリの**形**。名前空間の候補はこれで決まる
+ * (pr-gate Round 4 / 不変条件 1)。
  *
- * `makeWslUncPath` は名前空間識別子を必須引数として要求するため、
- * **ディストロ名を先に知らなければ呼べない。** アプリ外のプロセスが記録した
- * 作業ディレクトリ (セッションの `cwd`) は生文字列で与えられるので、
- * 「名前空間を先に決める」形が成立しない。その 1 点を埋めるのが本関数である。
+ * ## なぜ接頭辞の一覧照合をやめたか
  *
- * **この関数が UNC の綴りに関する知識を持つ唯一の場所である。**
- * 呼び出し側 (`domain/session` の出自判定) は文字列操作で接頭辞を剥がさない —
- * 剥がす実装は R-1 の gate が繰り返し塞いだ「境界での再 branding」と同じ形になる。
+ * Round 1 から 3 まで、UNC の綴りの穴が**毎ラウンド出た**。
+ * 接頭辞を並べる設計である限り「まだ並べていない綴り」が必ず残るためである。
+ * しかも穴を塞ぐたびに隣が壊れた —
+ * Round 2 はデバイス綴りを足して `parseWslUncPath` への接続を忘れ FR-017 を落とし、
+ * Round 3 は `raw.startsWith('/')` の一括ガードで**正当な POSIX 表示**を壊した。
  *
- * 受理する綴り (いずれも実機で成立することを確認済み。research R-01):
+ * ## 何で決めるか
  *
- * | 綴り | 例 |
+ * **先頭の区切りの本数**で決める。これは綴りの一覧ではなく値の形の性質である。
+ *
+ * | 先頭区切り | 意味 |
  * |---|---|
- * | 新しい共有名 | `\\wsl.localhost\Ubuntu\home\y` |
- * | legacy 共有名 | `\\wsl$\Ubuntu\home\y` |
- * | フォワードスラッシュ | `//wsl.localhost/Ubuntu/home/y` |
+ * | 0 本 | ドライブレターか相対。POSIX でも UNC でもない |
+ * | 1 本 | POSIX 絶対パス。**UNC ではないので生値を出してよい** |
+ * | 2 本以上 | **UNC 形**。POSIX でもホストでもない |
  *
- * **接頭辞の大小は問わない** (UNC のホスト名は大小を区別しない)。
- * **ディストロ名の大小は区別する** — 検出結果の表記と完全一致で照合するため (AD-025 §2)。
+ * ## 実測されていない綴りに分岐を作らない
+ *
+ * 実測 ([research R-02](../../../specs/002-session-cross-folder-session-enumeration/research.md))
+ * で現れた UNC の綴りは `\\wsl.localhost\<distro>\...` の **1 種類だけ**である
+ * (ホスト既定 43 件中 7 件)。デバイス名前空間 (`\\?\UNC\`) や `GLOBALROOT` 経由の綴りは
+ * **誰も観測していない**。
+ *
+ * したがって 2 本以上の中で解析するのは `UNC_PREFIX` と `UNC_LEGACY_PREFIX` だけにし、
+ * **それ以外は一律 `opaque-unc`** とする。綴りが増えても安全側に落ちる。
+ *
+ * ## `opaque-unc` が表示値を持たない理由
+ *
+ * 構造が分からない値から「安全な残余」を切り出すのは、結局また推測である。
+ * 例えば `\\?\UNC\wsl.localhost\Ubuntu\home\alice` から
+ * 「server と share の 2 セグメントを落とす」規則を当てると `?` と `UNC` が落ち、
+ * **共有名 `wsl.localhost` が残る**。
+ * 解析できない以上どこまでが所在かを決められないので、**何も出さない**。
+ * 参照キー `unknown-location` が意味を運ぶ (訳出は `ui` の責務 / FR-047)。
  */
-/**
- * UNC の綴りに見えるか (pr-gate Round 1 / C-001 / platform H-001)。
- *
- * **解析の成否と接頭辞の一致を分ける。** `parseWslUncPath` は
- * ディストロ名が不正・4096 文字超・制御文字を含むといった理由で失敗するが、
- * **失敗した値が UNC でなくなるわけではない**。
- * 分けずに扱うと 2 つの欠陥が出る。
- *
- * 1. 失敗した UNC 文字列が「その他」に落ちて**表示用の生値として境界を越える** (FR-042)
- * 2. フォワードスラッシュ綴り (`//wsl.localhost/...`) が `/` 始まりの判定に当たり、
- *    **POSIX 形式として由来 config の所在を継承する** (FR-016 / FR-018)
- *
- * **綴りの知識をここに置く。** 呼び出し側が文字列比較で接頭辞を判定すると、
- * UNC の綴りが 2 箇所に分かれる (AD-029 §3 / 検証項目 12 は
- * UNC リテラルを持てるモジュールを `path-types.ts` と `path-api.ts` に限っている)。
- */
-export function looksLikeWslUnc(raw: string): boolean {
-  const lower = toUncSpelling(raw).toLowerCase()
-  return (
-    lower.startsWith(UNC_PREFIX.toLowerCase()) || lower.startsWith(UNC_LEGACY_PREFIX.toLowerCase())
-  )
+export type RawPathShape =
+  | { readonly kind: 'wsl-unc'; readonly parsed: ParsedWslUnc }
+  | { readonly kind: 'opaque-unc' }
+  | { readonly kind: 'host'; readonly path: HostPath }
+  | { readonly kind: 'posix'; readonly value: string }
+  | { readonly kind: 'other' }
+
+/** 先頭に連続する区切り (`/` と `\` の両方) の本数。 */
+function leadingSeparatorCount(raw: string): number {
+  let n = 0
+  while (n < raw.length && (raw[n] === '/' || raw[n] === '\\')) n += 1
+  return n
 }
 
 /**
- * UNC の綴りから**所在を伴わない表示用文字列**を取り出す (pr-gate Round 1 / C-001)。
+ * 生値の形を判定する。**UNC の綴りを知ってよいのはこの関数の内側だけである**
+ * (AD-029 §3 / 検証項目 12)。
  *
- * FR-042 は「変換できない値は形の分類 (参照キー) と、
- * **所在を伴わない安全な表示用文字列**で表す」と定めている。この関数が後半を担う。
- *
- * **接頭辞とディストロ名を落とす。** 落とすのは 2 つの理由からである。
- * 1. UNC 接頭辞を境界に出さない (FR-042 / AD-025「UNC は `infra` の内側」)
- * 2. 解析に失敗したディストロ名は検証を通っていない値であり、そのまま出せない
- *
- * **文字列操作を呼び出し側に書かせない。** 接頭辞の綴りを知ってよいのは
- * `path-types.ts` と本モジュールだけである (AD-029 §3 / 検証項目 12)。
- *
- * @returns 共有名以降の残余。取り出せなければ `null`。
+ * 呼び出し側は `switch (shape.kind)` を書く。`startsWith` も `replace` も持たない。
  */
-export function uncRelativeDisplay(raw: string): string | null {
-  if (!looksLikeWslUnc(raw)) return null
+export function classifyRawPath(raw: string): RawPathShape {
+  const separators = leadingSeparatorCount(raw)
 
-  const backslashed = toUncSpelling(raw)
-  const lower = backslashed.toLowerCase()
-  const prefix = lower.startsWith(UNC_PREFIX.toLowerCase()) ? UNC_PREFIX : UNC_LEGACY_PREFIX
+  if (separators >= 2) {
+    /* **UNC 形。** 解析できるのは実測された 2 綴りだけで、残りは不透明にする。 */
+    const parsed = parseWslUncPath(raw)
+    return parsed.ok ? { kind: 'wsl-unc', parsed: parsed.path } : { kind: 'opaque-unc' }
+  }
 
-  /*
-   * **先頭の区切りの重なりを落としてから共有名の境界を取る**
-   * (pr-gate Round 2 / H2-001)。
-   *
-   * `\\\\wsl.localhost\\\\-bad\\home\\y` (区切りが 2 つ) では
-   * `afterPrefix` が `\\-bad\\home\\y` になり `indexOf` が **0** を返していた。
-   * ディストロ名の境界が「先頭」と判定され、
-   * **検証を通っていないディストロ名 `-bad` がそのまま残余として出ていた**。
-   * Round 1 で書いた `expect(display).not.toContain('-bad')` は、
-   * 区切りを 1 つ増やすだけで破れていた。
-   */
-  const afterPrefix = backslashed.slice(prefix.length).replace(/^\\+/, '')
-  const sep = afterPrefix.indexOf('\\')
-  /* ディストロ名しか無い (残余が無い) 値は、出せるものが無い。 */
-  if (sep < 0) return null
+  if (separators === 1) return { kind: 'posix', value: raw }
 
-  const rest = afterPrefix.slice(sep).replace(/\\/g, '/')
-  return rest.length === 0 ? null : rest
+  /* 0 本。ドライブレターならホスト、そうでなければ相対等。 */
+  const host = makeHostPath(raw)
+  return host.ok ? { kind: 'host', path: host.path } : { kind: 'other' }
 }
 
 export function parseWslUncPath(raw: string): PathResult<ParsedWslUnc> {
   if (raw.length === 0) return fail('invalid-format')
 
-  // 区切りをバックスラッシュに寄せる。POSIX パスはこの時点で接頭辞に一致しなくなる。
+  /*
+   * 区切りをバックスラッシュに寄せる。POSIX パスはこの時点で接頭辞に一致しなくなる。
+   *
+   * **述語をここに増やさない** (pr-gate Round 4 / 不変条件 1)。
+   * 以前は `looksLikeWslUnc` / `uncRelativeDisplay` が同じ寄せを別に持ち、
+   * **同じ入力に別の答えを返していた**。今は `classifyRawPath` が
+   * 「UNC 形かどうか」を先頭区切りの本数で決め、この関数は
+   * **「実測された 2 綴りを解析できるか」だけ**に責任を持つ。
+   */
   const backslashed = raw.replace(/\//g, '\\')
   const lower = backslashed.toLowerCase()
 

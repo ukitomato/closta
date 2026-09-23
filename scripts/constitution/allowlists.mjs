@@ -335,7 +335,14 @@ export const WSL_FREE_DIRECTORIES = [
   'src/main/app/dto-mapper.ts'
 ]
 
-export const UNC_API_NAMES = ['toUnc', 'fromUnc', 'makeWslUncPath', 'parseWslUncPath']
+export const UNC_API_NAMES = [
+  'toUnc',
+  'fromUnc',
+  'makeWslUncPath',
+  'parseWslUncPath',
+  /* pr-gate Round 4 / 不変条件 1。綴りの判定を 1 関数に畳んだので、これが唯一の入口である。 */
+  'classifyRawPath'
+]
 
 /** docker のイメージ構築サブコマンド。許可モジュール内に現れてはならない (項目 5)。 */
 export const DOCKER_BUILD_SUBCOMMANDS = ['build', 'buildx', 'commit', 'import', 'load', 'push']
