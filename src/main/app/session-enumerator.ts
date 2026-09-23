@@ -188,6 +188,29 @@ export function createSessionEnumerator(deps: SessionEnumeratorDeps): SessionEnu
   let crashes = 0
   let nextId = 1
 
+  /**
+   * **こちらから殺したワーカ** (pr-gate Round 1 / platform-boundary H-004)。
+   *
+   * timeout と送信失敗と `dispose` は `kill()` を呼ぶが、その `exit` は**後の tick で届く**。
+   * 区別しないと `crashes` が増え、**3 回で列挙がアプリ寿命のあいだ恒久停止する** —
+   * `crashes` が 0 に戻るのは応答が届いたときだけで、
+   * ワーカを起こせなければ応答は永久に来ないためである。
+   *
+   * `ENUMERATION_TIMEOUT_MS` は SC-008 の全件予算と同値なので、
+   * **予算ちょうどの所在は必ず timeout に当たる**。「遅い要求 3 件で機能停止」は
+   * AD-030 §7 の「落ち続けるプロセスを起こし続けない」の意図ではない。
+   */
+  const intentionallyKilled = new Set<EnumerationWorker>()
+
+  /**
+   * **起こしたワーカ全部** (pr-gate Round 1 / platform-boundary H-003)。
+   *
+   * `dispose()` が `worker` 1 つしか見ないと、参照から外れたワーカが
+   * **UNC ハンドルを掴んだ孤児として残る** (contracts C-5 違反)。
+   * 「1 つしか無いはず」を前提にしない。
+   */
+  const spawned = new Set<EnumerationWorker>()
+
   /** 応答待ちの要求。**同時に 1 件だけ**である (AD-030 §3)。 */
   let pending: {
     readonly id: number
@@ -215,14 +238,44 @@ export function createSessionEnumerator(deps: SessionEnumeratorDeps): SessionEnu
     current.settle({ ok: true, sessions: response.sessions, truncated: response.truncated })
   }
 
-  function handleExit(): void {
+  /**
+   * ワーカが終了した。
+   *
+   * **どのワーカが終わったかを見る** (pr-gate Round 1 / platform-boundary H-003)。
+   * 見ないと次の順序で壊れる。
+   *
+   * 1. 要求 A が timeout → worker#1 を `kill()` → `worker = null` → A は失敗
+   * 2. 鎖の次の要求 B → `ensureWorker()` が **worker#2 を起こす** → `pending = {B}`
+   * 3. worker#1 の `exit` が届く → **worker#2 の参照を捨て**、
+   *    **B を巻き添えで失敗**させ、worker#2 が孤児になる
+   *
+   * `UtilityProcess.kill()` の `exit` は後の tick で届くので、この順序は必ず起きうる。
+   * 実機では「先頭ページが 2 回失敗する」形で現れる。
+   */
+  function handleExit(who: EnumerationWorker): void {
+    spawned.delete(who)
+    const wasIntentional = intentionallyKilled.delete(who)
+
+    /* **現行でないワーカの終了は、現在の状態に触れない。** */
+    if (worker !== who) return
+
     worker = null
-    crashes += 1
+    /*
+     * **こちらから殺したものは crash に数えない** (platform-boundary H-004)。
+     * timeout / 送信失敗 / `dispose` は異常終了ではない。
+     */
+    if (!wasIntentional) crashes += 1
     /*
      * **実行中だった要求はその要求の失敗にする** (AD-030 §7)。
      * 待ち行列に残っているものは、作り直した後のプロセスで処理される。
      */
     pending?.settle(failure('enumeration-failed'))
+  }
+
+  /** **意図して殺す。** crash と区別するための唯一の入口である。 */
+  function killIntentionally(victim: EnumerationWorker): void {
+    intentionallyKilled.add(victim)
+    victim.kill()
   }
 
   function ensureWorker(): EnumerationWorker | null {
@@ -239,7 +292,8 @@ export function createSessionEnumerator(deps: SessionEnumeratorDeps): SessionEnu
      */
     const next = deps.launcher.launch(buildWorkerEnv(deps.parentEnv))
     next.onLine(handleLine)
-    next.onExit(handleExit)
+    next.onExit(() => handleExit(next))
+    spawned.add(next)
     worker = next
     return next
   }
@@ -274,7 +328,7 @@ export function createSessionEnumerator(deps: SessionEnumeratorDeps): SessionEnu
          * **応答が来ない常駐プロセスは作り直す。**
          * 掴んだままにすると以降の要求が全部この 1 件に引っかかる。
          */
-        active.kill()
+        killIntentionally(active)
         worker = null
         settle(failure('enumeration-failed'))
       }, request.timeoutMs)
@@ -284,7 +338,7 @@ export function createSessionEnumerator(deps: SessionEnumeratorDeps): SessionEnu
          * **書けなかったことを無視しない。** 相手のパイプが詰まっているか閉じている。
          * 黙って待つと timeout まで気付けない。
          */
-        active.kill()
+        killIntentionally(active)
         worker = null
         settle(failure('enumeration-failed'))
       }
@@ -338,7 +392,12 @@ export function createSessionEnumerator(deps: SessionEnumeratorDeps): SessionEnu
     },
 
     dispose(): void {
-      worker?.kill()
+      /*
+       * **起こしたワーカ全部を殺す** (contracts C-5 / platform-boundary H-003)。
+       * `worker` だけを見ると、参照から外れたものが
+       * UNC ハンドルを掴んだ孤児として残る。
+       */
+      for (const victim of [...spawned]) killIntentionally(victim)
       worker = null
     }
   }

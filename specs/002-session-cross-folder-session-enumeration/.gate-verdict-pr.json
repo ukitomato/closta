@@ -1,0 +1,614 @@
+{
+  "gate": "pr",
+  "run": "2026-09-23T01:57:37.317Z",
+  "spec_dir": "specs/002-session-cross-folder-session-enumeration",
+  "spec_id": "002-session-cross-folder-session-enumeration",
+  "round": 1,
+  "base_branch": "main",
+  "base_note": "origin/HEAD が指す 001-... は R-1 の feature ブランチでマージ前を指し HEAD の祖先でもない (merge-base 1198a95d)。R-1 の squash 3f60a41 を含むのは main",
+  "diff_stat": {
+    "files": 120,
+    "additions": 20012,
+    "deletions": 65
+  },
+  "severity_counts": {
+    "critical": 2,
+    "high": 29,
+    "medium": 36,
+    "low": 21
+  },
+  "critical_dedup": {
+    "clusters": 1,
+    "note": "security C-001 と platform-boundary C-001 は同一欠陥 (cwd-origin.ts の display: raw と正規化の未配線)。architecture H-001/H-002 も同クラスタ。3 reviewer が独立に到達した"
+  },
+  "convergence": {
+    "resolved_from_prev": 0,
+    "new_in_round": 88,
+    "unresolved": 0
+  },
+  "suppressed_by_code_gate": [],
+  "suppressed_note": "0 件。3 reviewer が .gate-verdict-code.json の must_fix_findings[].where を除外リストとして使ったと明示的に宣言している",
+  "touched_files": [
+    {
+      "path": ".claude/skills/cl-code-gate/SKILL.md",
+      "sha": "e6ecc1e2bdfc1d7628861415ee22d2b32364e0a4"
+    },
+    {
+      "path": ".claude/skills/cl-plan/SKILL.md",
+      "sha": "c364873d6161fdb07c2cfdcb0ecb85c0afa4eef6"
+    },
+    {
+      "path": ".claude/skills/cl-spec/SKILL.md",
+      "sha": "86a6dd83746c51809a30aad9df1550a917fd2a32"
+    },
+    {
+      "path": ".dependency-cruiser.js",
+      "sha": "6c8716de32b7fc8e7070de8d9e67bca95737392e"
+    },
+    {
+      "path": ".specify/feature.json",
+      "sha": "53140bfdc97a8e0d046d98e2931b31fab2628c33"
+    },
+    {
+      "path": ".specify/memory/constitution.md",
+      "sha": "3b98b33ea19e681b38b529c9abfa869dd2d8b30a"
+    },
+    {
+      "path": "docs/decisions/0028-session-enumeration-process-and-unc-handoff.md",
+      "sha": "b9f04360ab62b747df37c1ec24933d561764ab86"
+    },
+    {
+      "path": "docs/decisions/0029-session-cwd-origin-classification.md",
+      "sha": "e6cee8b05434a06dc9c2fe73bb5c1f87f8bffb4d"
+    },
+    {
+      "path": "docs/decisions/0030-enumeration-runs-in-one-resident-process.md",
+      "sha": "f056e7f9bb412937d021c9a71d195f58ab6fce7a"
+    },
+    {
+      "path": "docs/domains/_overview.md",
+      "sha": "a35ba3778b960b1b314c0b6dd18114640ed69b81"
+    },
+    {
+      "path": "docs/domains/runtime/charter.md",
+      "sha": "89fa2faf4f500befb4bdbbbdc1a08acd6f6223cc"
+    },
+    {
+      "path": "docs/domains/session/charter.md",
+      "sha": "b6fd8d1bbf4943b2d5204f01e706b04c888a7cce"
+    },
+    {
+      "path": "docs/glossary.md",
+      "sha": "987759353a37e755a98be92df0ffd6c2bb5bb409"
+    },
+    {
+      "path": "electron.vite.config.ts",
+      "sha": "af908245b3b47fa47aa4ce91e645ade998bbced9"
+    },
+    {
+      "path": "eslint.config.mjs",
+      "sha": "a7d692eb8bc1f73f0a06cb12a23720d6164da759"
+    },
+    {
+      "path": "scripts/constitution/allowlists.mjs",
+      "sha": "7a5234d87b0214478fcafd704a694906a7c4a1f4"
+    },
+    {
+      "path": "scripts/constitution/check.mjs",
+      "sha": "7d948465351afa3b6692430d0c167f1266ac24f4"
+    },
+    {
+      "path": "scripts/rules/run.mjs",
+      "sha": "2a9238944298e377368c0faf5bf71449cf2861a2"
+    },
+    {
+      "path": "specs/002-session-cross-folder-session-enumeration/.gate-verdict-code.json",
+      "sha": "dd167174c9009b32335ed9d7af3d26d0d7be0dfb"
+    },
+    {
+      "path": "specs/002-session-cross-folder-session-enumeration/.gate-verdict-design.json",
+      "sha": "2da1c34b1fe74234340d4d2e1ea41c844ea9974a"
+    },
+    {
+      "path": "specs/002-session-cross-folder-session-enumeration/a11y-reviewer.md",
+      "sha": "5c037de178a6a149988c8205b26b6dbac4a00eda"
+    },
+    {
+      "path": "specs/002-session-cross-folder-session-enumeration/architecture-reviewer.md",
+      "sha": "da01061256c2db7e5741824f826f7e016ba30ec7"
+    },
+    {
+      "path": "specs/002-session-cross-folder-session-enumeration/checklists/requirements.md",
+      "sha": "1bd5b38422981484e8e81cc90b76fca964dd02e0"
+    },
+    {
+      "path": "specs/002-session-cross-folder-session-enumeration/code-gate.md",
+      "sha": "1885598eceec2014ccdeb2f8c4b6f7b676c2d36e"
+    },
+    {
+      "path": "specs/002-session-cross-folder-session-enumeration/contracts/ipc-session-list.md",
+      "sha": "d2a94203db5957864d1d5950fdbe1c294846dc13"
+    },
+    {
+      "path": "specs/002-session-cross-folder-session-enumeration/contracts/session-enumeration.md",
+      "sha": "82b5e943d391b272b6a84cd26e49992d2d8e8100"
+    },
+    {
+      "path": "specs/002-session-cross-folder-session-enumeration/convention-reviewer.md",
+      "sha": "0883ab6e1345c6fe7ca0aa074516fbc84aa1917e"
+    },
+    {
+      "path": "specs/002-session-cross-folder-session-enumeration/data-model.md",
+      "sha": "50f75eaf27cd9e05d7b8879c8c67bd38b9c539d6"
+    },
+    {
+      "path": "specs/002-session-cross-folder-session-enumeration/design-gate.md",
+      "sha": "9346ac28b41f33e491cc21420436212a1cc8b9e4"
+    },
+    {
+      "path": "specs/002-session-cross-folder-session-enumeration/plan.md",
+      "sha": "420b554d08ce099bb10f25f31dab37dada30af9c"
+    },
+    {
+      "path": "specs/002-session-cross-folder-session-enumeration/platform-boundary-reviewer.md",
+      "sha": "5b48d0a3e0af3f03bb31c2a5ec3808b82bbb6121"
+    },
+    {
+      "path": "specs/002-session-cross-folder-session-enumeration/po-reviewer.md",
+      "sha": "524bc30e175a4d33398aad1c810ec861f91e3fa4"
+    },
+    {
+      "path": "specs/002-session-cross-folder-session-enumeration/quickstart-results.md",
+      "sha": "992ec5bb59aa4a91a6a3c0de729b2a7db535626d"
+    },
+    {
+      "path": "specs/002-session-cross-folder-session-enumeration/quickstart.md",
+      "sha": "d6a9bc2f63db92bbf9e264f2e45a460779723614"
+    },
+    {
+      "path": "specs/002-session-cross-folder-session-enumeration/research.md",
+      "sha": "2b8c0bc3861671ed84fca8b38c628e2576f8c019"
+    },
+    {
+      "path": "specs/002-session-cross-folder-session-enumeration/security-reviewer.md",
+      "sha": "ada5b14a775a58f3cecc927a5fe0296f162222a8"
+    },
+    {
+      "path": "specs/002-session-cross-folder-session-enumeration/spec.md",
+      "sha": "a3ee6635bb3b8f8d0cc3b0c3c1d22100ff524843"
+    },
+    {
+      "path": "specs/002-session-cross-folder-session-enumeration/tasks.md",
+      "sha": "94d4240d545a9d9249a48240e4decea203dbdb0d"
+    },
+    {
+      "path": "specs/002-session-cross-folder-session-enumeration/touched-files.txt",
+      "sha": "3aa95bdbe921faea61d90c577ba6c698b091f54b"
+    },
+    {
+      "path": "specs/002-session-cross-folder-session-enumeration/ux-reviewer.md",
+      "sha": "6a5613469f2237c7ef953f3afcee35ce8d4ed887"
+    },
+    {
+      "path": "src/agents/enumerate-sessions.ts",
+      "sha": "acde47eb55cdd576990722339bdb0ab0df60fbc3"
+    },
+    {
+      "path": "src/agents/enumerate.test.ts",
+      "sha": "84c0cd515f3c68edd2c78bf203698ea9056bfbdb"
+    },
+    {
+      "path": "src/agents/enumerate.ts",
+      "sha": "185c5c636f64483980a1f0af830666d487b5cb71"
+    },
+    {
+      "path": "src/agents/protocol.test.ts",
+      "sha": "ab2223b75063f438ff972c378ddfd0227a45ace5"
+    },
+    {
+      "path": "src/agents/protocol.ts",
+      "sha": "2f67ea26cd15628c6fa15a07332c3617b3036242"
+    },
+    {
+      "path": "src/agents/transport.test.ts",
+      "sha": "30f442c30b1fb43c5c4378d92597dc22803128cf"
+    },
+    {
+      "path": "src/agents/transport.ts",
+      "sha": "c756ee5ea78d6686317e8f338899387c39caea3a"
+    },
+    {
+      "path": "src/domain/capability.ts",
+      "sha": "3407ae7e0d5fb52c74b38184798e9641d29bc74a"
+    },
+    {
+      "path": "src/domain/runtime/path-api.ts",
+      "sha": "0d3d4014e51369e7658eb19fc058a31e95da8b78"
+    },
+    {
+      "path": "src/domain/session/build.ts",
+      "sha": "fdea3292f25dda9b0529e110bcdce68e7f8a3057"
+    },
+    {
+      "path": "src/domain/session/cwd-origin.test.ts",
+      "sha": "bef23c74bec8df402cfeaa029ade6ff6349c16f1"
+    },
+    {
+      "path": "src/domain/session/cwd-origin.ts",
+      "sha": "6640a70d3ceea9f5db53b3ecb17983e36d3cd461"
+    },
+    {
+      "path": "src/domain/session/dto-schema.test.ts",
+      "sha": "2d85bc4358059468add622014ea4c3c53474d926"
+    },
+    {
+      "path": "src/domain/session/dto.ts",
+      "sha": "1bd9456cad3cd00dc7d52c8bc55bbf4caa90f950"
+    },
+    {
+      "path": "src/domain/session/group.test.ts",
+      "sha": "f4d3b1714dbbf7292b7b3fdeb0fd2876bfcf8dff"
+    },
+    {
+      "path": "src/domain/session/group.ts",
+      "sha": "9968b73446ef7d16350e6751cd9557f185e8258a"
+    },
+    {
+      "path": "src/domain/session/interfaces.ts",
+      "sha": "27a1148ce43c2aaa07731417c28d593cd0a2ccfc"
+    },
+    {
+      "path": "src/domain/session/keys.ts",
+      "sha": "046d43cce99828af3ef9c5bf4fdf02f4130e5b05"
+    },
+    {
+      "path": "src/domain/session/match.test.ts",
+      "sha": "c2d45d6ff977d269b6d5b160a9da402558b642d3"
+    },
+    {
+      "path": "src/domain/session/match.ts",
+      "sha": "7ccd2284ec2754670e63417c84f658af17c05dbd"
+    },
+    {
+      "path": "src/domain/session/normalize.test.ts",
+      "sha": "1442fac8a49a048b529d7ea182de9341e84de954"
+    },
+    {
+      "path": "src/domain/session/normalize.ts",
+      "sha": "44b43e2a46cc486764ae11cc92060881b17e6d56"
+    },
+    {
+      "path": "src/domain/session/origin.ts",
+      "sha": "04227da7d1c3fc0ce71a46f606e3fb2acfae8e7c"
+    },
+    {
+      "path": "src/domain/session/summary.ts",
+      "sha": "b531d6659cdd761fc69888aa0413a49dbea1e4c6"
+    },
+    {
+      "path": "src/domain/session/target.ts",
+      "sha": "411bb1ccbd1d40e2e42b66def67ed623a3213ec6"
+    },
+    {
+      "path": "src/domain/validation.ts",
+      "sha": "c72124a5490050f0239968800497222e4806f9fd"
+    },
+    {
+      "path": "src/main/app/composition-root.ts",
+      "sha": "4085d2838a4349f36d9ff364dd50a95c6aca9795"
+    },
+    {
+      "path": "src/main/app/dto-mapper.ts",
+      "sha": "83827ad8987064f975cf076ab4d42e74d6dfad78"
+    },
+    {
+      "path": "src/main/app/enumerator-spawner.ts",
+      "sha": "28a4e0bfbb0349a153e38ef94b4a40bc0c01a281"
+    },
+    {
+      "path": "src/main/app/folder-service.ts",
+      "sha": "5863b17648f35580b501d72df27bc8d759e6e6fc"
+    },
+    {
+      "path": "src/main/app/ipc.ts",
+      "sha": "c0c7dd50f476c58e1f9d41021cd61d1caa548ee6"
+    },
+    {
+      "path": "src/main/app/measure.ts",
+      "sha": "8dbcdf62688fc2337f5c28a566b5931c4d836edc"
+    },
+    {
+      "path": "src/main/app/session-enumerator.test.ts",
+      "sha": "639ad584b7fb6a8b4c10eee2d848a63499245ddc"
+    },
+    {
+      "path": "src/main/app/session-enumerator.ts",
+      "sha": "b4556e97609db16c7377fd22c6c92122198e79a3"
+    },
+    {
+      "path": "src/main/app/session-ipc.test.ts",
+      "sha": "0d2b6c1dc276fcb2320e95f7e190925cb84fe00c"
+    },
+    {
+      "path": "src/main/app/session-ipc.ts",
+      "sha": "d4ede8e984b926ca2f62b2b0832c962aa023ace9"
+    },
+    {
+      "path": "src/main/app/session-service.test.ts",
+      "sha": "5f4f295b45f66fbbe8b7d5b8f4531751225aac65"
+    },
+    {
+      "path": "src/main/app/session-service.ts",
+      "sha": "9aa30119c6c2904d7dd192b5ce35d7352e234f4d"
+    },
+    {
+      "path": "src/main/app/validate.test.ts",
+      "sha": "e09aa85c8b60eeaea981ae30972a64bfff57e252"
+    },
+    {
+      "path": "src/main/app/validate.ts",
+      "sha": "a0ca97328900f144b279be67c85098f84b9daa3f"
+    },
+    {
+      "path": "src/main/index.ts",
+      "sha": "ae16923d8d175adddf41439ec40ef99310494a2f"
+    },
+    {
+      "path": "src/main/infra/fs/host-fs.ts",
+      "sha": "8a5528d5d7c9b3a16793ed86b7d7aac67e7d5b9e"
+    },
+    {
+      "path": "src/main/infra/session/config-dir.test.ts",
+      "sha": "b0e19ea1cd4af39bd25e848e5c5a8497a6b37746"
+    },
+    {
+      "path": "src/main/infra/session/config-dir.ts",
+      "sha": "02321e1a1ceb5fdb82ce9776e2bb4cdee331f342"
+    },
+    {
+      "path": "src/main/infra/session/target-finder.test.ts",
+      "sha": "e44dd67c4f3a523d857eefe3d419dc4d3f10b093"
+    },
+    {
+      "path": "src/main/infra/session/target-finder.ts",
+      "sha": "027e24dbcb5c10f911134b495126d22c9c4b0c21"
+    },
+    {
+      "path": "src/preload/index.ts",
+      "sha": "debbf899307d2e0448aebccd3448ce4fd2ca4861"
+    },
+    {
+      "path": "src/renderer/src/App.tsx",
+      "sha": "e7a5f398cd8b4f13305f22a38189fc1dca1831d6"
+    },
+    {
+      "path": "src/renderer/src/assets/main.css",
+      "sha": "16a1d8f201207c0891ec66f46b2af3a21bde4a27"
+    },
+    {
+      "path": "src/renderer/src/components/assistant-ui/elements/attachment.aui.tsx",
+      "sha": "eb139f82e36e325ff00ef7760c1c12e7db208eea"
+    },
+    {
+      "path": "src/renderer/src/components/assistant-ui/elements/empty-state.tsx",
+      "sha": "5cbf27e82fa17b241fdf4be5a7280f15427126ad"
+    },
+    {
+      "path": "src/renderer/src/components/assistant-ui/elements/error-state.tsx",
+      "sha": "c7a4021c31b4f765483c41fcaf69d2e539a62ac4"
+    },
+    {
+      "path": "src/renderer/src/components/assistant-ui/elements/surfaces.tsx",
+      "sha": "7f7d50b25fe1be0eb937c6fdba6a4d1fe909111a"
+    },
+    {
+      "path": "src/renderer/src/components/assistant-ui/elements/thread-list.aui.tsx",
+      "sha": "4162b1554ea7bdae0dded1744017110a19784a0f"
+    },
+    {
+      "path": "src/renderer/src/components/ui/button.tsx",
+      "sha": "94074b5c3cc6483229fa76b6c4e7dc12e8daa906"
+    },
+    {
+      "path": "src/renderer/src/components/ui/input.tsx",
+      "sha": "8c3598dc4c4c84b2ca6967f5f701c2ed77897eef"
+    },
+    {
+      "path": "src/renderer/src/components/ui/textarea.tsx",
+      "sha": "7cc6e0ffd1b83258f24d67ca7fb020d4d171ff9a"
+    },
+    {
+      "path": "src/renderer/src/features/chat/ChatScreen.tsx",
+      "sha": "76966d99cc0a86b46c7d19f93036cd7b2744f76f"
+    },
+    {
+      "path": "src/renderer/src/features/session-list/SessionListScreen.test.tsx",
+      "sha": "1a5c94692dd893c7ab8f3b69b8ba0fdf44aae7e9"
+    },
+    {
+      "path": "src/renderer/src/features/session-list/SessionListScreen.tsx",
+      "sha": "dc93e8a885da3b93d20c92480efd6302f0691ee0"
+    },
+    {
+      "path": "src/renderer/src/features/session-list/labels.ts",
+      "sha": "645dcab21b3176d8f24708966671c3ddf45a200e"
+    },
+    {
+      "path": "src/renderer/src/features/session-list/rows.ts",
+      "sha": "5ab310dbfe884cc2948abc30bfad0c834b3c9fb8"
+    },
+    {
+      "path": "src/renderer/src/features/session-list/useFolderLabels.ts",
+      "sha": "4ca226a7f31620de7fd8c824b1f21fa48e31c5f4"
+    },
+    {
+      "path": "src/renderer/src/features/session-list/useSessions.ts",
+      "sha": "1f8f7496ca61c201577988c0ec5b51294f38fd6e"
+    },
+    {
+      "path": "src/renderer/src/features/workspace-folders/WorkspaceFoldersScreen.tsx",
+      "sha": "3da4564232dec4603169d28a299400d2a02f1006"
+    },
+    {
+      "path": "src/renderer/src/runtime/thread-list-adapter.ts",
+      "sha": "df1ba688fdb9921c670973a2d1d3ee40d4658226"
+    },
+    {
+      "path": "src/renderer/src/stores/sessions.ts",
+      "sha": "c4af1f19fac7fb2126f4afcfadb2b32da50f311f"
+    },
+    {
+      "path": "src/renderer/src/stores/ui.ts",
+      "sha": "459cb7f00083ce73a32565bfc6e91dab21510846"
+    },
+    {
+      "path": "src/renderer/src/test-support/capability.ts",
+      "sha": "f750dd57e8faf322c76b6f8b913f5b375733d026"
+    },
+    {
+      "path": "tests/docs/spawner-channels.test.ts",
+      "sha": "f62a63576a6c41c42e65dddacffe3294d366fe00"
+    },
+    {
+      "path": "tests/docs/wsl-free-coverage.test.ts",
+      "sha": "edde02c1415d7d955587e9dbac578ca9efc1fff5"
+    },
+    {
+      "path": "tests/rule-fixtures/a-direct/agents-unc-api-call.ts.fixture",
+      "sha": "0ba85f48d3b8155cd5c05ae00c3f828a44ad7f01"
+    },
+    {
+      "path": "tests/rule-fixtures/a-direct/sdk-forbidden-call.ts.fixture",
+      "sha": "c0aa351727047e50f9c49e3a241aa8354a9d4f42"
+    },
+    {
+      "path": "tests/rule-fixtures/a-direct/ui-dto-namespace-literal.ts.fixture",
+      "sha": "0fbda0f2be972bfd1728ba1709238716869853f4"
+    },
+    {
+      "path": "tests/rule-fixtures/a-direct/unc-literal-outside-allowlist.ts.fixture",
+      "sha": "59eda6412a0742f8427d3cfaa4c62edc6e17c040"
+    },
+    {
+      "path": "tests/rule-fixtures/a-direct/wsl-cli-in-session-layer.ts.fixture",
+      "sha": "88a476711a0b15e7af136ae9bed9401b00ae2721"
+    },
+    {
+      "path": "tests/rule-fixtures/expected.mjs",
+      "sha": "72af70390a7cbd347bae37ff18256ac948e70000"
+    },
+    {
+      "path": "tsconfig.depcruise.json",
+      "sha": "43d2862bd385c2d5ec1d1d98b5c93effe86c3673"
+    },
+    {
+      "path": "tsconfig.node.json",
+      "sha": "b1340842e95a91876a76f75587bc5c1313049409"
+    },
+    {
+      "path": "vitest.config.ts",
+      "sha": "5e2886cd01f4f1af92dbb646a350d243abe63f02"
+    }
+  ],
+  "viewpoint_coverage": {
+    "A": "Critical:0 High:2 Medium:1 Low:2 (security)",
+    "B": "Critical:1 High:1 Medium:1 Low:0 (security)",
+    "C": "Critical:0 High:1 Medium:2 Low:3 (architecture + po)",
+    "D": "Critical:1 High:8 Medium:6 Low:2 (architecture + platform-boundary)",
+    "E": "Critical:0 High:6 Medium:5 Low:1 (po)",
+    "F": "Critical:0 High:2 Medium:2 Low:2 (platform-boundary。命名と module 配置は code-gate の convention が担当)",
+    "G": "Critical:0 High:9 Medium:17 Low:10 (a11y + ux)",
+    "H": "Critical:0 High:2 Medium:3 Low:1 (po + a11y)"
+  },
+  "tracks": {
+    "security-reviewer": {
+      "critical": 1,
+      "high": 3,
+      "medium": 3,
+      "low": 3,
+      "viewpoint_missing": [],
+      "cascade_demotions": 0
+    },
+    "architecture-reviewer": {
+      "critical": 0,
+      "high": 4,
+      "medium": 5,
+      "low": 3,
+      "viewpoint_missing": [],
+      "cascade_demotions": 0
+    },
+    "po-reviewer": {
+      "critical": 0,
+      "high": 6,
+      "medium": 6,
+      "low": 3,
+      "viewpoint_missing": [],
+      "cascade_demotions": 0
+    },
+    "platform-boundary-reviewer": {
+      "critical": 1,
+      "high": 7,
+      "medium": 5,
+      "low": 2,
+      "viewpoint_missing": [],
+      "cascade_demotions": 0
+    },
+    "a11y-reviewer": {
+      "critical": 0,
+      "high": 5,
+      "medium": 9,
+      "low": 5,
+      "round": 2,
+      "inheritance": {
+        "resolved": 11,
+        "partial": 6,
+        "unresolved": 2,
+        "new": 9
+      }
+    },
+    "ux-reviewer": {
+      "critical": 0,
+      "high": 4,
+      "medium": 8,
+      "low": 5,
+      "round": 2,
+      "inheritance": {
+        "resolved": 4,
+        "partial": 5,
+        "unresolved": 9,
+        "new": 17
+      }
+    }
+  },
+  "tracks_not_launched": {
+    "lint-agent": "code-gate 専任",
+    "test-agent": "code-gate 専任",
+    "convention-reviewer": "code-gate 専任",
+    "database-reviewer": "該当ファイル 0 件",
+    "openapi-contract-reviewer": "該当ファイル 0 件",
+    "api-performance-reviewer": "registry に不在"
+  },
+  "in_scope_this_round": {
+    "decided_by": "human (2026-09-23)",
+    "decision": "Critical + 機能欠陥 + orchestrator の回帰を Round 1 で直す。文書と検査体制は Round 2 へ",
+    "ids": [
+      "C-001 クラスタ (security C-001 / H-001, architecture H-001 / H-002, platform C-001 / H-001 / H-002)",
+      "security H-003 (targetKey 衝突)",
+      "platform H-003 / H-004 (常駐プロセスの寿命)",
+      "po H-001 (越境の粒度)",
+      "ux H-201 / H-202 / H-203 / H-204",
+      "a11y H-201 / H-202 / H-203 / H-204 / H-205"
+    ]
+  },
+  "orchestrator_regressions": {
+    "note": "a11y H-201 / H-203 / H-204 / H-205 は code-gate の修正が作った、または cascade を完走しなかったものである",
+    "verified": [
+      "opacity-50 で busy ラベルが 3.74:1",
+      "WorkspaceFoldersScreen.tsx:434 に disabled= が残存",
+      "button.tsx:13 の ring-destructive/20 が base を上書き",
+      "error-state.tsx の key 差し替えでフォーカス喪失"
+    ]
+  },
+  "cascade_demotions": 0,
+  "verdict": "FIX_REQUIRED"
+}

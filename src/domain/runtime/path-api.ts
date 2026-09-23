@@ -125,6 +125,60 @@ export interface ParsedWslUnc {
  * **接頭辞の大小は問わない** (UNC のホスト名は大小を区別しない)。
  * **ディストロ名の大小は区別する** — 検出結果の表記と完全一致で照合するため (AD-025 §2)。
  */
+/**
+ * UNC の綴りに見えるか (pr-gate Round 1 / C-001 / platform H-001)。
+ *
+ * **解析の成否と接頭辞の一致を分ける。** `parseWslUncPath` は
+ * ディストロ名が不正・4096 文字超・制御文字を含むといった理由で失敗するが、
+ * **失敗した値が UNC でなくなるわけではない**。
+ * 分けずに扱うと 2 つの欠陥が出る。
+ *
+ * 1. 失敗した UNC 文字列が「その他」に落ちて**表示用の生値として境界を越える** (FR-042)
+ * 2. フォワードスラッシュ綴り (`//wsl.localhost/...`) が `/` 始まりの判定に当たり、
+ *    **POSIX 形式として由来 config の所在を継承する** (FR-016 / FR-018)
+ *
+ * **綴りの知識をここに置く。** 呼び出し側が文字列比較で接頭辞を判定すると、
+ * UNC の綴りが 2 箇所に分かれる (AD-029 §3 / 検証項目 12 は
+ * UNC リテラルを持てるモジュールを `path-types.ts` と `path-api.ts` に限っている)。
+ */
+export function looksLikeWslUnc(raw: string): boolean {
+  const lower = raw.replace(/\//g, '\\').toLowerCase()
+  return (
+    lower.startsWith(UNC_PREFIX.toLowerCase()) || lower.startsWith(UNC_LEGACY_PREFIX.toLowerCase())
+  )
+}
+
+/**
+ * UNC の綴りから**所在を伴わない表示用文字列**を取り出す (pr-gate Round 1 / C-001)。
+ *
+ * FR-042 は「変換できない値は形の分類 (参照キー) と、
+ * **所在を伴わない安全な表示用文字列**で表す」と定めている。この関数が後半を担う。
+ *
+ * **接頭辞とディストロ名を落とす。** 落とすのは 2 つの理由からである。
+ * 1. UNC 接頭辞を境界に出さない (FR-042 / AD-025「UNC は `infra` の内側」)
+ * 2. 解析に失敗したディストロ名は検証を通っていない値であり、そのまま出せない
+ *
+ * **文字列操作を呼び出し側に書かせない。** 接頭辞の綴りを知ってよいのは
+ * `path-types.ts` と本モジュールだけである (AD-029 §3 / 検証項目 12)。
+ *
+ * @returns 共有名以降の残余。取り出せなければ `null`。
+ */
+export function uncRelativeDisplay(raw: string): string | null {
+  if (!looksLikeWslUnc(raw)) return null
+
+  const backslashed = raw.replace(/\//g, '\\')
+  const lower = backslashed.toLowerCase()
+  const prefix = lower.startsWith(UNC_PREFIX.toLowerCase()) ? UNC_PREFIX : UNC_LEGACY_PREFIX
+
+  const afterPrefix = backslashed.slice(prefix.length)
+  const sep = afterPrefix.indexOf('\\')
+  /* ディストロ名しか無い (残余が無い) 値は、出せるものが無い。 */
+  if (sep < 0) return null
+
+  const rest = afterPrefix.slice(sep).replace(/\\/g, '/')
+  return rest.length === 0 ? null : rest
+}
+
 export function parseWslUncPath(raw: string): PathResult<ParsedWslUnc> {
   if (raw.length === 0) return fail('invalid-format')
 

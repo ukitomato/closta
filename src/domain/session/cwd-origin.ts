@@ -1,5 +1,10 @@
 import { namespaceDistroName } from '@domain/runtime/namespace'
-import { parseWslUncPath, runtimePathOps } from '@domain/runtime/path-api'
+import {
+  looksLikeWslUnc,
+  parseWslUncPath,
+  runtimePathOps,
+  uncRelativeDisplay
+} from '@domain/runtime/path-api'
 import {
   makeHostPath,
   makeRuntimePath,
@@ -45,6 +50,22 @@ export interface ClassifyInput {
 }
 
 /**
+ * 解析できなかった UNC 値の出自 (pr-gate Round 1 / C-001)。
+ *
+ * **参照キーは `unknown-location` のままにする。** 7 種目を増やさない —
+ * 利用者に示すべきことは「どのディストロか分からない」で変わらないし、
+ * 6 種を潰さないという規則 (`keys.ts`) は**増やさない**ことも含む。
+ *
+ * **表示は所在を伴わない残余だけにする。** FR-042 が定める
+ * 「形の分類 (参照キー) と、所在を伴わない安全な表示用文字列」の後半である。
+ * 残余が取れなければ空文字にする — 呼び出し側 (`ui`) が
+ * 参照キーから文言を出す (訳出は `ui` の責務)。
+ */
+function unparseableUnc(raw: string): CwdOrigin {
+  return { kind: 'unknown-location', display: uncRelativeDisplay(raw) ?? '' }
+}
+
+/**
  * 判定表 (data-model §2)。**順序に意味がある。**
  *
  * | # | 条件 | 結果 |
@@ -70,7 +91,12 @@ export function classifyCwd(input: ClassifyInput): CwdOrigin {
     const { distroName, unc } = parsed.path
     // 変換はパス API の `fromUnc` に委ねる (名前空間の対応づけもそこが持つ)。
     const converted = runtimePathOps.fromUnc(unc)
-    if (!converted.ok) return { kind: 'unknown-location', display: raw }
+    /*
+     * **生値を display にしない** (pr-gate Round 1 / C-001)。
+     * ここに来る `raw` は `parseWslUncPath` が成功した値、すなわち**定義上 UNC 形式**である。
+     * 2 行下のコメントが言う「UNC 接頭辞を境界に出さない」の逆を行っていた。
+     */
+    if (!converted.ok) return unparseableUnc(raw)
 
     // **表示用の値は変換後の POSIX パスを使う** — UNC 接頭辞を境界に出さない (FR-042)。
     if (!input.detectedDistros.has(distroName)) {
@@ -82,6 +108,24 @@ export function classifyCwd(input: ClassifyInput): CwdOrigin {
       namespace: converted.path.namespace
     }
   }
+
+  /*
+   * **解析に失敗した UNC を「その他」に落とさない**
+   * (pr-gate Round 1 / C-001 / platform-boundary H-001)。
+   *
+   * `parseWslUncPath` はディストロ名が不正 (先頭 `-` / 255 文字超 / `\ / :` を含む)、
+   * 4096 文字超、制御文字を含むといった理由で失敗する。
+   * **失敗した値が UNC でなくなるわけではない。**
+   *
+   * 分けずに #5 へ進めると、**フォワードスラッシュ綴り** (`//wsl.localhost/-bad/home/y`) が
+   * `raw.startsWith('/')` に当たり、`makeRuntimePath` も通るため
+   * **由来 config の所在を継承した `wsl-inherited` として確定してしまう** —
+   * FR-016「由来 config ディレクトリの所在から推定してはならない」の違反であり、
+   * 判定表で `undetected-distro` に落ちるべき値が別ディストロに帰属する。
+   * 逆方向 (`\\` 始まり) は `makeRuntimePath` が拒否するので、
+   * **フォワードスラッシュ綴りだけが抜ける**非対称だった。
+   */
+  if (looksLikeWslUnc(raw)) return unparseableUnc(raw)
 
   // #4 — ホスト名前空間。ドライブレターの大小は `makeHostPath` が正規化する。
   const host = makeHostPath(raw)

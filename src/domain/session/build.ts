@@ -1,6 +1,13 @@
 import { classifyCwd, isWorktreeOrigin } from './cwd-origin'
 import type { RawSessionRecord } from './interfaces'
-import { foldMarks, normalizeByteCount, normalizeEpochMs, normalizeOptionalText } from './normalize'
+import {
+  PATH_DISPLAY_MAX_BYTES,
+  foldMarks,
+  normalizeByteCount,
+  normalizeEpochMs,
+  normalizeOptionalText,
+  normalizeText
+} from './normalize'
 import type { SessionSummary } from './summary'
 import type { EnumerationTarget } from './target'
 
@@ -41,8 +48,30 @@ export function buildSessionSummary(input: BuildSummaryInput): SessionSummary {
   const gitBranch = normalizeOptionalText(input.record.gitBranch)
   const tag = normalizeOptionalText(input.record.tag)
 
+  /*
+   * **作業ディレクトリの生値も正規化の関門に通す**
+   * (pr-gate Round 1 / C-001。security / architecture / platform-boundary が収束した指摘)。
+   *
+   * FR-049 は正規化対象に**作業ディレクトリの生値**を明記しているが、
+   * 会話由来の 5 項目にしか配線されていなかった。そのために用意された
+   * `PATH_DISPLAY_MAX_BYTES` は**参照 0 件で死んでいた**。
+   *
+   * **判定の前に通す。** あとで `display` だけを正規化すると、
+   * `cwd.value` と `cwdDisplay` で同じ規則を 2 度書くことになり、
+   * `makeHostPath` / `makeRuntimePath` を通ったパス値の側が素のまま残る。
+   *
+   * **脅威は `normalize.ts` 自身が書いている** — `cwdDisplay` に `U+202E` を仕込むと
+   * 「未登録フォルダ」の行が登録済みフォルダのパスに見える形に偽装でき、
+   * FR-026 の登録導線で利用者に誤った判断をさせられる。
+   * その値は登録されると `folder-store` の JSON へ**永続化される**。
+   */
+  const cwdText =
+    input.record.cwd === null || input.record.cwd === undefined
+      ? null
+      : normalizeText(input.record.cwd, PATH_DISPLAY_MAX_BYTES)
+
   const origin = classifyCwd({
-    cwd: input.record.cwd,
+    cwd: cwdText?.value ?? null,
     targetLocation: input.target.location,
     detectedDistros: input.detectedDistros
   })
@@ -64,6 +93,18 @@ export function buildSessionSummary(input: BuildSummaryInput): SessionSummary {
       programmatic: input.record.programmatic,
       worktree: isWorktreeOrigin(origin)
     },
-    normalized: foldMarks([summary, firstPrompt, customTitle, gitBranch, tag])
+    /*
+     * **作業ディレクトリの印も畳む** (FR-049)。
+     * 「切り詰め・除去が起きたことを payload 上で示さなければならない」の対象は
+     * 会話由来の 5 項目だけではない。
+     */
+    normalized: foldMarks([
+      summary,
+      firstPrompt,
+      customTitle,
+      gitBranch,
+      tag,
+      ...(cwdText === null ? [] : [cwdText])
+    ])
   }
 }

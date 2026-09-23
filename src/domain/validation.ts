@@ -33,8 +33,34 @@ export function hasControlCharacter(value: string): boolean {
   for (const ch of value) {
     const code = ch.codePointAt(0)!
     if (code < 0x20 || code === 0x7f || (code >= 0x80 && code <= 0x9f)) return true
+    if (isBidiControl(code)) return true
   }
   return false
+}
+
+/**
+ * 双方向制御文字か (pr-gate Round 1 / C-001)。
+ *
+ * **フィルタが 2 系統に分かれていた。**
+ * `src/domain/session/normalize.ts` の `isRemovable` は C0 / C1 / DEL に加えて
+ * 双方向制御文字を落とすが、**登録と永続化の入口を守っている `hasControlCharacter` は
+ * 落としていなかった** — つまり弱い側がパスに当たっていた。
+ *
+ * **なぜ入口にも要るか。** セッション一覧の `cwdDisplay` を正規化しても、
+ * FR-026 の登録導線から渡る値は `PathDTO` であり、その `value` は
+ * `makeHostPath` / `makeRuntimePath` を通っただけの値である。
+ * 入口を揃えないと、**塞いだ穴の隣に同じ穴が開いたまま残る**。
+ *
+ * `U+202E` (RLO) を仕込むと表示上のパスを逆順に見せられる。
+ * それが `folder-store` の JSON に永続化されると、以後フォルダ一覧に残り続ける。
+ */
+function isBidiControl(code: number): boolean {
+  // ALM / LRM / RLM
+  if (code === 0x061c || code === 0x200e || code === 0x200f) return true
+  // LRE / RLE / PDF / LRO / RLO
+  if (code >= 0x202a && code <= 0x202e) return true
+  // LRI / RLI / FSI / PDI
+  return code >= 0x2066 && code <= 0x2069
 }
 
 /**
