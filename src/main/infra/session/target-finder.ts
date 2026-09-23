@@ -62,15 +62,44 @@ function normalizedLabel(raw: string): string {
  * 序数は `enumerationTargetKey` が既に使っている値であり、**新しい状態ではない**。
  */
 function disambiguate(labels: readonly string[]): string[] {
-  const seen = new Map<string, number>()
-  for (const label of labels) seen.set(label, (seen.get(label) ?? 0) + 1)
+  const counts = new Map<string, number>()
+  for (const label of labels) counts.set(label, (counts.get(label) ?? 0) + 1)
+
+  const isPlain = (label: string): boolean => label.length > 0 && counts.get(label) === 1
+
+  /*
+   * **平明な名前を先に予約する** (pr-gate Round 4 / PO4-001)。
+   *
+   * 初版は生ラベルの重複だけを数え、**生成した名前が既存の名前と衝突しないかを見ていなかった**。
+   * `/home` に `alice` / `al<U+202E>ice` / `alice (#0)` の 3 つがあると
+   * 正規化後は `alice` / `alice` / `alice (#0)` になり、
+   * 出力は `alice (#0)` / `alice (#1)` / `alice (#0)` — **1 番目と 3 番目が同じ**になった。
+   *
+   * 一意化は集合に対する操作なので、**生成後の集合で閉じている**必要がある。
+   */
+  const used = new Set<string>()
+  for (const label of labels) {
+    if (isPlain(label)) used.add(label)
+  }
 
   return labels.map((label, ordinal) => {
-    /* 正規化で空になった名前。**消さずに序数で示す。** */
-    if (label.length === 0) return `候補 #${ordinal}`
-    /* 同じ表示になる候補が他にある。**どちらがどれか分かる形にする。** */
-    if ((seen.get(label) ?? 0) > 1) return `${label} (#${ordinal})`
-    return label
+    if (isPlain(label)) return label
+
+    /*
+     * 正規化で空になった名前は消さずに序数で示す。衝突した名前も序数で分ける。
+     * **序数は候補ごとに一意**なので、生成した名前どうしは必ず異なる。
+     */
+    let name = label.length === 0 ? `候補 #${ordinal}` : `${label} (#${ordinal})`
+
+    /*
+     * 残る衝突は「生成した名前と**実在する**候補名が一致する」場合だけである
+     * (`/home/候補 #0` が実在しうる)。**一致しなくなるまで伸ばす。**
+     * 1 周ごとに必ず長くなり、候補は有限なので停止する。
+     */
+    while (used.has(name)) name = `${name} (#${ordinal})`
+
+    used.add(name)
+    return name
   })
 }
 

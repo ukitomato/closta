@@ -10,6 +10,7 @@ import { createVerifiedRunning, type VerifiedRunning } from '@domain/runtime/ver
 
 import type { HostFileSystem } from '../fs/host-fs'
 import { DISCOVERY_ISSUE_ORDINAL } from '@domain/session/interfaces'
+import { TEXT_MAX_BYTES } from '@domain/session/normalize'
 
 import { createEnumerationTargetFinder } from './target-finder'
 
@@ -206,6 +207,88 @@ describe('createEnumerationTargetFinder — wslTargets', () => {
     expect(result.targets).toHaveLength(1)
     /* **空にしない。** 空だと `SourceLabel` が `null` を返し、由来が痕跡なく消える。 */
     expect(result.targets[0].label.length).toBeGreaterThan(0)
+  })
+
+  it('生成した表示名が実在の候補名と衝突しない (pr-gate Round 4 / PO4-001)', async () => {
+    /*
+     * **一意化は生成後の集合で閉じていなければならない。**
+     *
+     * 初版は生ラベルの重複だけを数えており、生成した `alice (#0)` が
+     * **実在する `alice (#0)` と同じになる**ことを見ていなかった。
+     * 出力は `alice (#0)` / `alice (#1)` / `alice (#0)` で 1 番目と 3 番目が同一。
+     *
+     * FR-052 の一意性は `[USER]` が「1 ディストロ内の全ユーザを集約する」判断を
+     * 受け入れた唯一の代償であり、値の出どころは**アプリ外が作ったディレクトリ名**である。
+     */
+    const RLO = String.fromCharCode(0x202e)
+    const names = ['alice', 'al' + RLO + 'ice', 'alice (#0)']
+    const finder = createEnumerationTargetFinder({
+      hostFs: fakeHostFs([]),
+      wslFs: fakeWslFs({
+        '/home': names,
+        ...Object.fromEntries(names.map((n) => ['/home/' + n + '/.claude', []]))
+      })
+    })
+
+    const result = await finder.wslTargets(ubuntu, verified(UBUNTU), NOW)
+
+    expect(result.targets).toHaveLength(3)
+    const labels = result.targets.map((t) => t.label)
+    expect(new Set(labels).size).toBe(3)
+    for (const label of labels) expect(label.length).toBeGreaterThan(0)
+  })
+
+  it('生成した既定名が実在の候補名と衝突しない (`候補 #N` の側)', async () => {
+    /* `/home/候補 #0` が実在しても、空になった候補と同じ表示にならない。 */
+    const RLO = String.fromCharCode(0x202e)
+    const names = [RLO + RLO, '候補 #0']
+    const finder = createEnumerationTargetFinder({
+      hostFs: fakeHostFs([]),
+      wslFs: fakeWslFs({
+        '/home': names,
+        ...Object.fromEntries(names.map((n) => ['/home/' + n + '/.claude', []]))
+      })
+    })
+
+    const result = await finder.wslTargets(ubuntu, verified(UBUNTU), NOW)
+
+    expect(result.targets).toHaveLength(2)
+    const labels = result.targets.map((t) => t.label)
+    expect(new Set(labels).size).toBe(2)
+  })
+
+  it('生成した表示名は境界の予算に収まる (序数接尾辞が切られない)', async () => {
+    /*
+     * **切り詰めで序数接尾辞を落とさない** (pr-gate Round 4 / PB4-013)。
+     *
+     * `target-finder` は正規化の**後**に接尾辞を足すので、境界側の関門
+     * (`dto-mapper.displayName`、予算は同じ `TEXT_MAX_BYTES`) が切ると
+     * **一意性を担っている末尾が落ち、境界の向こうで再び衝突する**。
+     *
+     * ここでは「生成後も予算に収まる」ことだけを縛る。
+     * 予算を超えうるのは名前が 512 バイト近い場合だが、
+     * **パス成分の上限 (255 バイト) を `runtimePathOps.join` が実際に弾く**ので
+     * `normalizedLabel` はそもそも切り詰めに入らない。
+     * 到達しないと分かったうえで、上限内で最も長い衝突
+     * (正規化後 254 バイト + 序数接尾辞) を通し、予算の側が変わったときに気づけるようにする。
+     */
+    const RLO = String.fromCharCode(0x202e)
+    const names = ['a'.repeat(254), 'a'.repeat(127) + RLO + 'a'.repeat(127)]
+    const finder = createEnumerationTargetFinder({
+      hostFs: fakeHostFs([]),
+      wslFs: fakeWslFs({
+        '/home': names,
+        ...Object.fromEntries(names.map((n) => ['/home/' + n + '/.claude', []]))
+      })
+    })
+
+    const result = await finder.wslTargets(ubuntu, verified(UBUNTU), NOW)
+
+    expect(result.targets).toHaveLength(2)
+    for (const target of result.targets) {
+      expect(new TextEncoder().encode(target.label).length).toBeLessThanOrEqual(TEXT_MAX_BYTES)
+    }
+    expect(new Set(result.targets.map((t) => t.label)).size).toBe(2)
   })
 
   it('候補の表示名から双方向制御文字を落とす (FR-049 / FR-052)', async () => {
