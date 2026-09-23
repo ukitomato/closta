@@ -104,7 +104,7 @@ quickstart の手動検証 + `scripts/constitution/check.mjs` の呼び出し形
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-`.specify/memory/constitution.md` v1.2.2 に基づくゲート。
+`.specify/memory/constitution.md` v1.2.5 に基づくゲート。
 
 **NON-NEGOTIABLE**
 
@@ -202,7 +202,8 @@ specs/002-session-cross-folder-session-enumeration/
 
 ```text
 src/domain/runtime/
-├── path-api.ts                        (追記) `parseWslUncPath()` — 生の UNC 文字列の解析。
+├── path-api.ts                        (追記) `classifyRawPath()` — 生値の形の判定 (唯一の入口)。
+│                                       `parseWslUncPath()` — 実測 2 綴りの解析。AD-032。
 │                                      **標準モジュールを import してよい唯一のファイル**のまま
 └── path-api.test.ts                   (追記) 解析の境界値 (大小差 / legacy `\\wsl$\`)
 

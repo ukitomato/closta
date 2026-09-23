@@ -1,12 +1,48 @@
 ---
 status: active
-version: 1.2.4
+version: 1.2.5
 ratified: 2026-09-13
 last_amended: 2026-09-23
 generated_by: /speckit.constitution (素材: /spec-gate bootstrap Phase 6 の draft)
 ---
 
 <!--
+Sync Impact Report (v1.2.5)
+- Version change: 1.2.4 → 1.2.5
+- Last amended: 2026-09-23
+- Bump rationale: PATCH。バージョニング方針表に Governance 行と Verification 行を足し、
+  v1.2.4 の判定根拠を表から導ける形にした。Principle の増減も指針の変更も無い
+  (pr-gate Round 4 / M4-12 / A3-007)
+
+Modified sections:
+- バージョニング方針 — **Governance への規則追加は MINOR**、
+  **Verification の「現状の制約」の事実追随は PATCH** の 2 行を追加。
+  v1.2.4 は改定手順に新規則を足しながら表に該当行が無く、PATCH の妥当性を導けなかった。
+  版番号は遡って振り直さない (既に参照されており trail が壊れる)
+
+Sync Impact Report (v1.2.4)
+- Version change: 1.2.3 → 1.2.4
+- Last amended: 2026-09-23
+- Bump rationale: PATCH として発行した。**本表の現在の行に照らすと MINOR 相当である**
+  (Governance への規則追加)。判定基準が当時の表に無かったことが原因で、
+  v1.2.5 で表の側を直した。版番号は振り直さない
+
+Modified sections:
+- Governance / 改定手順 — **ADR の in-place 訂正の規則**を追加 (AD-031)。
+  事実誤認の訂正は日付つき「訂正」節として in-place、決定の変更は後続 ADR。
+  AD-028 §2 の immutability 宣言を読み替える
+- Principle IX (Verification) — **「`bad_pattern_grep` はパースコードの置き場を見るだけで、
+  どのプロセスで走るかは見ていない」**を明記。R-2 の列挙応答は main でパースされるが
+  検査は 0 件を返す。`existing_violations: 0` は遵守の証拠ではない
+
+Follow-up (pr-gate Round 4 で判明 / AD-031 に訂正節を追加済み):
+- AD-031 が許容根拠に挙げた「`TEXT_MAX_BYTES` で縛られている」は**事実でない**
+  (`src/agents/` に 0 件)。許容根拠は「本文を運ばない」の 1 本
+- AD-031 が「先例 5 件すべてが事実誤認の訂正」とした分類は誤り。
+  AD-028 の訂正節は規則そのものを差し替えている。
+  規則を「**訂正節に決定の変更を書いてはならない**」に言い換えた
+- Principle IX 再評価の持ち主を `docs/roadmap.md` の R-3 行に登録した
+
 Sync Impact Report (v1.2.3)
 - Version change: 1.2.2 → 1.2.3
 - Last amended: 2026-09-17
@@ -821,7 +857,16 @@ Amendment trail への追記 → 既存違反の enumeration、の 5 段階で�
 |---|---|
 | Principle の削除、後方非互換な再定義 | MAJOR |
 | Principle の追加、指針の実質的な拡張 | MINOR |
+| **Governance (改定手順・検証の運用規則) への規則の追加** | **MINOR** |
 | 表現の修正、誤記の訂正、非意味的な refinement | PATCH |
+| **Verification の「現状の制約」を事実に追随させる** | **PATCH** |
+
+**Governance の行を v1.2.4 の後に追加した** (pr-gate Round 4 / M4-12)。
+v1.2.4 は改定手順に新しい規則 (ADR の in-place 訂正) を足したが、
+当時の表は Principle の増減しか行を持たず、**PATCH の妥当性を表から導けなかった**。
+本表の行に照らすと v1.2.4 は MINOR 相当である。
+**版番号は遡って振り直さない** — 既に参照されており、
+振り直すと Amendment trail の参照が壊れる。判定基準の側を明示する。
 
 ### Amendment trail
 
@@ -834,6 +879,7 @@ Amendment trail への追記 → 既存違反の enumeration、の 5 段階で�
 | 1.2.2 | 2026-09-16 | [AD-024](../../docs/decisions/0024-constitution-verification-paths.md) #18 の**訂正**。v1.2.1 が (A) の根拠に書いた「R-1 に composer が無い」は事実ではない。`ChatScreen` は `Thread` を mount しており composer は描画される。根拠を「送信経路を `isDisabled: true` で閉じている」に改め、その前提を `ChatScreen.test.tsx` で固定した。あわせて **`bad_pattern_grep` が送信経路を見られない**こと (`existing_violations: 0` は遵守の証拠ではない) を明記した |
 | 1.2.3 | 2026-09-17 | [AD-028](../../docs/decisions/0028-session-enumeration-process-and-unc-handoff.md) §5。Principle VIII の Automated 検証の**延期先から R-2 を外した**。R-2 (セッション列挙) は読み取り専用で composer の送信経路を開けないため (A) の発動条件を満たさず、目標レイアウト ADR が未採択のため (B) は撮り直しが確定する。**延期先を空にせず「M4 完了後に再検討し、持ち主 feature を roadmap に登録する」とした** — 持ち主のいない延期は、次に本 Principle を見る人が「R-2 で載ったはず」と誤読する形で残る |
 | 1.2.4 | 2026-09-23 | [AD-031](../../docs/decisions/0031-adr-in-place-corrections-and-principle-ix-scope.md)。**改定手順に ADR の in-place 訂正の規則を置いた** — 事実誤認の訂正は日付つきの「訂正」節として in-place、決定の変更は後続 ADR。AD-028 §2 の immutability 宣言を読み替える (先例 5 件がすべて訂正であり決定の変更ではなかった)。あわせて **Principle IX の Verification に「`bad_pattern_grep` はパースコードの置き場を見るだけで、どのプロセスで走るかは見ていない」を明記した** — R-2 の列挙応答は main でパースされるが検査は 0 件を返す。`existing_violations: 0` は遵守の証拠ではない |
+| 1.2.5 | 2026-09-23 | バージョニング方針表に **Governance への規則追加 = MINOR** と **Verification の事実追随 = PATCH** の 2 行を追加した (pr-gate Round 4 / M4-12)。v1.2.4 は改定手順に新規則を足しながら表に該当行が無く、**PATCH の妥当性を表から導けなかった**。本表に照らすと v1.2.4 は MINOR 相当だが、**版番号は遡って振り直さない** — 既に参照されており Amendment trail の参照が壊れる |
 
 ## References
 
@@ -845,4 +891,4 @@ Amendment trail への追記 → 既存違反の enumeration、の 5 段階で�
 
 ---
 
-**Version**: 1.2.4 | **Ratified**: 2026-09-13 | **Last Amended**: 2026-09-23
+**Version**: 1.2.5 | **Ratified**: 2026-09-13 | **Last Amended**: 2026-09-23
