@@ -190,43 +190,121 @@ export function createSessionEnumerator(deps: SessionEnumeratorDeps): SessionEnu
   /** 対象ごとの最終要求時刻。逐次の連打の間隔を測る。 */
   const lastStartedAt = new Map<string, number>()
 
-  let worker: EnumerationWorker | null = null
+  /**
+   * ワーカ 1 台の状態 (pr-gate Round 4 / 不変条件 3)。
+   *
+   * ## なぜ 1 つに畳んだか
+   *
+   * Round 1〜3 のあいだ、ワーカの生死は `worker` / `crashes` /
+   * `intentionallyKilled` / `spawned` / `disposed` の 5 変数に散っていた。
+   * crash の計上が**そのうち 2 つを読む条件式**で決まっており、
+   * Round 2 で「現行かどうかに関わらず数える」と
+   * 「殺せなかったら監視をやめる」を同時に入れた結果、
+   * **送信失敗 3 回で列挙がアプリ寿命のあいだ止まる**退行が入った
+   * (pr-gate Round 3 / H3-002。A/B 実行で再現)。
+   *
+   * 2 つの変更はそれぞれ正しく、**組み合わせだけが誤っていた**。
+   * 状態を 1 つにして、crash を**単一の遷移の上で**定義する。
+   *
+   * ## 遷移表
+   *
+   * | from | 事象 | to | crash |
+   * |---|---|---|---|
+   * | — | spawn | `live` | 0 |
+   * | `live` | `kill()` が true | `ending` | 0 |
+   * | `live` | `kill()` が false | `ended` (追跡をやめる) | 0 |
+   * | **`live`** | **exit 到着** | **`ended`** | **+1** |
+   * | `ending` | exit 到着 | `ended` | 0 |
+   * | `ending` | kill | `ending` (no-op) | 0 |
+   * | `ended` / 未追跡 | exit 到着 | 無視 | 0 |
+   *
+   * **crash が増える遷移は 1 つだけである。** これを `session-enumerator.test.ts` の
+   * 遷移表テストが固定している。
+   *
+   * ## 「現行かどうか」を条件から外せる理由
+   *
+   * `ensureWorker` が新しく起こすのは `current` が `live` でないときだけなので、
+   * **`live` なワーカは常に高々 1 台**である。したがって `live → exit` は
+   * 定義上つねに現行の異常終了であり、Round 2 が悩んだ
+   * 「現行でないワーカの crash を数えるべきか」という問いは生じない。
+   */
+  type WorkerState = 'live' | 'ending' | 'ended'
+
+  interface Tracked {
+    readonly worker: EnumerationWorker
+    state: WorkerState
+  }
+
+  /** 追跡中のワーカ。`ended` になった時点で外す。 */
+  const tracked = new Map<EnumerationWorker, Tracked>()
+  /** 要求を送ってよいワーカ。`live` のものだけがここに入る。 */
+  let current: Tracked | null = null
   let crashes = 0
   let nextId = 1
 
   /**
-   * **こちらから殺したワーカ** (pr-gate Round 1 / platform-boundary H-004)。
-   *
-   * timeout と送信失敗と `dispose` は `kill()` を呼ぶが、その `exit` は**後の tick で届く**。
-   * 区別しないと `crashes` が増え、**3 回で列挙がアプリ寿命のあいだ恒久停止する** —
-   * `crashes` が 0 に戻るのは応答が届いたときだけで、
-   * ワーカを起こせなければ応答は永久に来ないためである。
-   *
-   * `ENUMERATION_TIMEOUT_MS` は SC-008 の全件予算と同値なので、
-   * **予算ちょうどの所在は必ず timeout に当たる**。「遅い要求 3 件で機能停止」は
-   * AD-030 §7 の「落ち続けるプロセスを起こし続けない」の意図ではない。
-   */
-  const intentionallyKilled = new Set<EnumerationWorker>()
-
-  /**
-   * **起こしたワーカ全部** (pr-gate Round 1 / platform-boundary H-003)。
-   *
-   * `dispose()` が `worker` 1 つしか見ないと、参照から外れたワーカが
-   * **UNC ハンドルを掴んだ孤児として残る** (contracts C-5 違反)。
-   * 「1 つしか無いはず」を前提にしない。
-   */
-  const spawned = new Set<EnumerationWorker>()
-
-  /**
    * 破棄済みか (pr-gate Round 2 / H2-004 / contracts C-5)。
    *
-   * `dispose()` は `spawned` を空にして `worker = null` にするだけで、
-   * **「以後起こさない」という印を持っていなかった**。
-   * `before-quit` の時点で鎖に要求が残っていると、その要求は `ensureWorker()` に進み
-   * `crashes < maxCrashes` なので**新しいプロセスを起こす**。
-   * 起こしたものを殺す主体はもういない — H-003 で閉じたはずの孤児が別経路で戻る。
+   * **ワーカの状態ではなく列挙器の状態**なので `Tracked` に畳まない。
+   * `before-quit` の時点で鎖に要求が残っていると `ensureWorker()` に進み、
+   * 殺す主体がいないのに新しいプロセスを起こしてしまう。
    */
   let disposed = false
+
+  /** `exit` を受けた。**crash を数える唯一の場所である。** */
+  function handleExit(who: EnumerationWorker): void {
+    const entry = tracked.get(who)
+    /* 未追跡 = 既に `ended`。何もしない。 */
+    if (entry === undefined) return
+
+    const wasLive = entry.state === 'live'
+    entry.state = 'ended'
+    tracked.delete(who)
+
+    /*
+     * **予期せず落ちたときだけ数える。**
+     * `ending` はこちらから殺したものであり、timeout / 送信失敗 / `dispose` が該当する。
+     */
+    if (wasLive) crashes += 1
+
+    if (current === entry) {
+      current = null
+      /*
+       * **実行中だった要求はその要求の失敗にする** (AD-030 §7)。
+       * 待ち行列に残っているものは、作り直した後のプロセスで処理される。
+       */
+      pending?.settle(failure('enumeration-failed'))
+    }
+  }
+
+  /**
+   * **意図して殺す。** crash と区別するための唯一の入口である。
+   *
+   * `kill()` の戻り値を捨てない (contracts C-5)。`false` なら `exit` は届かないので、
+   * 待ち続けずに追跡から外す — 残すと「監視しているつもりの孤児」を抱える。
+   *
+   * @returns `exit` の到着を待てる状態にできたか。`false` なら終了を確認できない。
+   */
+  function killIntentionally(entry: Tracked): boolean {
+    /* `ending` / `ended` への二重 kill は何もしない。 */
+    if (entry.state !== 'live') return entry.state === 'ending'
+
+    entry.state = 'ending'
+    if (entry.worker.kill()) return true
+
+    /*
+     * `exit` が来ない以上、`ended` へ進める主体が他にいない。
+     *
+     * **追跡から外すのは地図を伸ばし続けないためである。** 状態が 1 つになったので、
+     * 残しても crash の計上は狂わない (`ending` からの遷移は数えない)。
+     * つまりこの `delete` は公開 API から観測できない — 変異させてもテストは緑のままである。
+     * **観測できないと分かったうえで残している。**
+     */
+    entry.state = 'ended'
+    tracked.delete(entry.worker)
+    if (current === entry) current = null
+    return false
+  }
 
   /** 応答待ちの要求。**同時に 1 件だけ**である (AD-030 §3)。 */
   let pending: {
@@ -255,78 +333,16 @@ export function createSessionEnumerator(deps: SessionEnumeratorDeps): SessionEnu
     current.settle({ ok: true, sessions: response.sessions, truncated: response.truncated })
   }
 
-  /**
-   * ワーカが終了した。
-   *
-   * **どのワーカが終わったかを見る** (pr-gate Round 1 / platform-boundary H-003)。
-   * 見ないと次の順序で壊れる。
-   *
-   * 1. 要求 A が timeout → worker#1 を `kill()` → `worker = null` → A は失敗
-   * 2. 鎖の次の要求 B → `ensureWorker()` が **worker#2 を起こす** → `pending = {B}`
-   * 3. worker#1 の `exit` が届く → **worker#2 の参照を捨て**、
-   *    **B を巻き添えで失敗**させ、worker#2 が孤児になる
-   *
-   * `UtilityProcess.kill()` の `exit` は後の tick で届くので、この順序は必ず起きうる。
-   * 実機では「先頭ページが 2 回失敗する」形で現れる。
-   */
-  function handleExit(who: EnumerationWorker): void {
-    spawned.delete(who)
-    const wasIntentional = intentionallyKilled.delete(who)
-
-    /*
-     * **こちらから殺したものは crash に数えない** (platform-boundary H-004)。
-     * timeout / 送信失敗 / `dispose` は異常終了ではない。
-     *
-     * **現行かどうかより先に数える** (pr-gate Round 2 / H2-004)。
-     * 以前は `worker !== who` の早期 return の**後ろ**にあったが、
-     * `killIntentionally` の 3 呼び出しはいずれも直後に `worker = null` を置くため、
-     * 遅れて届く `exit` は必ず早期 return に当たっていた。
-     * つまり `intentionallyKilled` は**一度も crash の増加を止めていなかった** —
-     * 守りが二重化していて片方が死んでいる状態である
-     * (`if (!wasIntentional)` を外しても全テストが緑のままだった)。
-     *
-     * 数える対象は「予期せず落ちたプロセス」であって「現行のプロセス」ではない。
-     * AD-030 §7 の「落ち続けるプロセスを起こし続けない」は頻度の話である。
-     */
-    if (!wasIntentional) crashes += 1
-
-    /* **現行でないワーカの終了は、ここから先の状態に触れない。** */
-    if (worker !== who) return
-
-    worker = null
-    /*
-     * **実行中だった要求はその要求の失敗にする** (AD-030 §7)。
-     * 待ち行列に残っているものは、作り直した後のプロセスで処理される。
-     */
-    pending?.settle(failure('enumeration-failed'))
-  }
-
-  /**
-   * **意図して殺す。** crash と区別するための唯一の入口である。
-   *
-   * **戻り値を捨てない** (contracts C-5 / pr-gate Round 2 / H2-004)。
-   * `kill()` が `false` を返すと `exit` は届かない。
-   * 届かなければ `spawned` / `intentionallyKilled` の項目が残り続け、
-   * **UNC ハンドルを掴んだ孤児**を監視しているつもりのまま抱え込む。
-   * 殺せなかったものは監視対象から外す — 再試行しても結果は変わらないし、
-   * 残すと `dispose()` が「片付けた」と報告できなくなる。
-   *
-   * @returns 殺せたか。
-   */
-  function killIntentionally(victim: EnumerationWorker): boolean {
-    intentionallyKilled.add(victim)
-    if (victim.kill()) return true
-
-    /* `exit` が来ない以上、この 2 つの集合から消す主体が他にいない。 */
-    intentionallyKilled.delete(victim)
-    spawned.delete(victim)
-    return false
+  /** `EnumerationWorker` から追跡項目を引いて殺す。呼び出し側は `Tracked` を知らない。 */
+  function killEntry(victim: EnumerationWorker): void {
+    const entry = tracked.get(victim)
+    if (entry !== undefined) killIntentionally(entry)
   }
 
   function ensureWorker(): EnumerationWorker | null {
     /* **破棄後は起こさない** (H2-004)。殺す主体がもういない。 */
     if (disposed) return null
-    if (worker !== null) return worker
+    if (current !== null && current.state === 'live') return current.worker
     /*
      * **落ち続けるプロセスを起こし続けない** (AD-030 §7)。
      * 1 回でも応答が返れば数え直す (`handleLine`)。
@@ -337,32 +353,29 @@ export function createSessionEnumerator(deps: SessionEnumeratorDeps): SessionEnu
      * **親環境を渡す部分をここに閉じる。** 許可リストの適用は
      * `config-dir.ts` の純粋関数が行い、この 1 行だけが親環境に触れる。
      */
-    const next = deps.launcher.launch(buildWorkerEnv(deps.parentEnv))
+    const worker = deps.launcher.launch(buildWorkerEnv(deps.parentEnv))
     /*
-     * **起こした直後に登録する** (pr-gate Round 2 / H2-004 / contracts C-5)。
-     *
-     * 以前は `onLine` / `onExit` の配線の**後ろ**だった。
-     * `onLine` は `stdio` の指定が効いていないときに throw する
-     * (`enumerator-spawner.ts`) が、その時点で `fork` は既に成功している。
-     * つまり `spawned` にも `worker` にも入らない子プロセスが残り、
-     * **`dispose()` が殺せない孤児**になっていた — H-003 が閉じた欠陥と同じ形が
-     * 配線の順序として残っていた。
+     * **起こした直後に追跡へ入れる** (pr-gate Round 2 / H2-004 / contracts C-5)。
+     * `onLine` は `stdio` の指定が効いていないとき throw するが、
+     * その時点で `fork` は既に成功している。配線の後で登録すると、
+     * どこからも参照されない子プロセスが `dispose()` の対象から漏れる。
      */
-    spawned.add(next)
+    const entry: Tracked = { worker, state: 'live' }
+    tracked.set(worker, entry)
     try {
-      next.onLine(handleLine)
-      next.onExit(() => handleExit(next))
+      worker.onLine(handleLine)
+      worker.onExit(() => handleExit(worker))
     } catch {
       /*
        * **配線できない子は自分で片付ける。** 例外を上へ投げると
        * `enumerate()` から rejection として抜け、FR-030 の
        * 「失敗は理由キーで行に落とす」を破る。呼び出し側は `null` を失敗として扱う。
        */
-      killIntentionally(next)
+      killIntentionally(entry)
       return null
     }
-    worker = next
-    return next
+    current = entry
+    return worker
   }
 
   /** 1 件を送って応答を待つ。**呼び出しは鎖の中に限る** (直列化の担保)。 */
@@ -395,8 +408,12 @@ export function createSessionEnumerator(deps: SessionEnumeratorDeps): SessionEnu
          * **応答が来ない常駐プロセスは作り直す。**
          * 掴んだままにすると以降の要求が全部この 1 件に引っかかる。
          */
-        killIntentionally(active)
-        worker = null
+        /*
+         * **`current` は `killIntentionally` が状態遷移の中で片付ける**
+         * (pr-gate Round 4 / 不変条件 3)。ここで `worker = null` を書いていたのが
+         * crash 計上の条件と噛み合って恒久停止の退行になった (H3-002)。
+         */
+        killEntry(active)
         settle(failure('enumeration-failed'))
       }, request.timeoutMs)
 
@@ -405,8 +422,7 @@ export function createSessionEnumerator(deps: SessionEnumeratorDeps): SessionEnu
          * **書けなかったことを無視しない。** 相手のパイプが詰まっているか閉じている。
          * 黙って待つと timeout まで気付けない。
          */
-        killIntentionally(active)
-        worker = null
+        killEntry(active)
         settle(failure('enumeration-failed'))
       }
     })
@@ -460,17 +476,21 @@ export function createSessionEnumerator(deps: SessionEnumeratorDeps): SessionEnu
 
     dispose(): number {
       /*
-       * **起こしたワーカ全部を殺す** (contracts C-5 / platform-boundary H-003)。
-       * `worker` だけを見ると、参照から外れたものが
+       * **追跡中のワーカ全部を殺す** (contracts C-5 / platform-boundary H-003)。
+       * `current` だけを見ると、参照から外れたものが
        * UNC ハンドルを掴んだ孤児として残る。
+       *
+       * @returns **終了を確認できない台数**。`kill()` が `false` を返したものが該当する
+       * (`exit` が届かないので `ended` を確認する手段が無い)。
+       * 0 でなければ UNC ハンドルを掴んだままのプロセスが残っている。
        */
       disposed = true
-      let unkillable = 0
-      for (const victim of [...spawned]) {
-        if (!killIntentionally(victim)) unkillable += 1
+      let unconfirmed = 0
+      for (const entry of [...tracked.values()]) {
+        if (!killIntentionally(entry)) unconfirmed += 1
       }
-      worker = null
-      return unkillable
+      current = null
+      return unconfirmed
     }
   }
 }

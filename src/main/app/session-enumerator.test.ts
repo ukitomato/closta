@@ -10,6 +10,7 @@ import {
 } from '@domain/runtime/verified-running'
 import type { EnumerationRequest } from '@domain/session/interfaces'
 import { enumerationTargetKey, type EnumerationTarget } from '@domain/session/target'
+import type { SessionEnumeratorHandle } from './session-enumerator'
 
 import {
   buildRequestLine,
@@ -228,9 +229,16 @@ function fakeLauncher(auto: boolean = true): FakeLauncher {
 
 function deps(
   launcher: EnumerationWorkerLauncher,
+  overrides: Partial<SessionEnumeratorDeps> = {},
   wait: (ms: number) => Promise<void> = async () => {}
 ): SessionEnumeratorDeps {
-  return { launcher, wait, now: () => NOW, parentEnv: { SystemRoot: 'C:\\Windows' } }
+  return {
+    launcher,
+    wait,
+    now: () => NOW,
+    parentEnv: { SystemRoot: 'C:\\Windows' },
+    ...overrides
+  }
 }
 
 afterEach(() => {
@@ -392,7 +400,7 @@ describe('createSessionEnumerator', () => {
     const waited: number[] = []
     const launcher = fakeLauncher()
     const enumerator = createSessionEnumerator(
-      deps(launcher, async (ms) => {
+      deps(launcher, {}, async (ms) => {
         waited.push(ms)
       })
     )
@@ -523,8 +531,8 @@ describe('createSessionEnumerator', () => {
     await Promise.resolve()
     const old = launcher.workers[0]
     /*
-     * **exit を保留して 2 つ同時に生かす。** これが孤児の生まれる窓である。
-     * 保留しないと worker#1 は `spawned` から外れ、差が出ない。
+     * **exit を保留して 2 つ同時に追跡させる。** これが孤児の生まれる窓である。
+     * 保留しないと worker#1 は `ended` になって追跡から外れ、差が出ない。
      */
     old.holdExit(true)
 
@@ -536,15 +544,147 @@ describe('createSessionEnumerator', () => {
     await Promise.resolve()
     const current = launcher.workers[launcher.workers.length - 1]
 
-    /* **kill の増分で見る。** worker#1 は timeout で既に 1 回殺されている。 */
-    const beforeOld = old.killCount()
     const beforeCurrent = current.killCount()
 
     enumerator.dispose()
 
+    /* 現行のワーカは dispose で初めて殺される。 */
     expect(current.killCount()).toBeGreaterThan(beforeCurrent)
-    /* `worker` 1 つしか見ない実装では、この行が落ちる (孤児が残る)。 */
-    expect(old.killCount()).toBeGreaterThan(beforeOld)
+    /*
+     * **不変条件は「孤児を残さない」であって「二重に kill する」ではない**
+     * (pr-gate Round 4 / 不変条件 3)。
+     *
+     * 以前はここで `old.killCount()` の**増分**を見ていた。
+     * つまり `dispose()` が既に `ending` のワーカをもう一度殺すことを期待していた。
+     * 状態を 1 つにした結果、`ending` への二重 kill は no-op になる —
+     * 既に殺したものを殺し直す意味が無いからである。
+     *
+     * 見るべきは「起こした全ワーカが少なくとも 1 度殺されている」ことで、
+     * `current` だけを見る実装ではこれが破れる (worker#1 が 0 回のまま残る)。
+     */
+    for (const w of launcher.workers) {
+      expect(w.killCount()).toBeGreaterThan(0)
+    }
+  })
+
+  /*
+   * ワーカの状態遷移と crash の計上 (pr-gate Round 4 / 不変条件 3)。
+   *
+   * ## なぜ遷移表を直接試すか
+   *
+   * Round 2 は「crash を現行かどうかに関わらず数える」と
+   * 「`kill()` が失敗したら監視をやめる」を同時に入れた。**どちらも正しく、
+   * 組み合わせだけが誤っていた** — 送信失敗 3 回で列挙が恒久停止した (H3-002)。
+   *
+   * このとき既存テストは 28/28 緑だった。個々の分岐は見ていたが、
+   * **「crash が増えるのはどの遷移か」を 1 箇所で固定していなかった**ためである。
+   *
+   * 以下は事象を外から起こして、crash の増分を遷移ごとに測る。
+   * `crashes` は private なので、**上限に達したかどうか (= 新しいワーカを起こせるか)**
+   * を観測量に使う。`maxCrashes: 1` にすれば 1 回の計上で観測できる。
+   */
+  describe('状態遷移と crash の計上', () => {
+    /** crash が計上されたか。**計上されるとワーカを起こせなくなる** (maxCrashes: 1)。 */
+    async function crashCounted(
+      arrange: (launcher: FakeLauncher, enumerator: SessionEnumeratorHandle) => Promise<void>
+    ): Promise<boolean> {
+      const launcher = fakeLauncher(false)
+      const enumerator = createSessionEnumerator(deps(launcher, { maxCrashes: 1 }))
+      await arrange(launcher, enumerator)
+
+      /*
+       * **await しない。** 代役は応答しないので待つと要求の timeout まで固まる。
+       * 見たいのは「ワーカを起こせたか」だけである (既存テストと同じ観測量)。
+       */
+      const before = launcher.workers.length
+      void enumerator.enumerate(request(hostTarget(99)))
+      await Promise.resolve()
+      return launcher.workers.length === before
+    }
+
+    it('live → exit (予期せぬ終了) は crash に数える', async () => {
+      const counted = await crashCounted(async (launcher, enumerator) => {
+        enumerator.warmUp()
+        launcher.workers[0].crash(1)
+        await Promise.resolve()
+      })
+
+      expect(counted).toBe(true)
+    })
+
+    it('ending → exit (timeout で殺した) は crash に数えない', async () => {
+      const counted = await crashCounted(async (_launcher, enumerator) => {
+        vi.useFakeTimers()
+        const promise = enumerator.enumerate(request(hostTarget(0), null, { timeoutMs: 100 }))
+        await vi.advanceTimersByTimeAsync(101)
+        await promise
+        vi.useRealTimers()
+        /* `kill()` が `exit` を後の tick で出すので、ここで届く。 */
+        await Promise.resolve()
+      })
+
+      expect(counted).toBe(false)
+    })
+
+    it('ending → exit (送信失敗で殺した) は crash に数えない', async () => {
+      const counted = await crashCounted(async (launcher, enumerator) => {
+        launcher.onNextWorker((w) => w.sendFails(true))
+        await enumerator.enumerate(request(hostTarget(0)))
+        await Promise.resolve()
+      })
+
+      expect(counted).toBe(false)
+    })
+
+    it('kill() 失敗の後に届く自然終了は crash に数えない (H3-002 の退行)', async () => {
+      /*
+       * **これが Round 2 で入った恒久停止の退行である。**
+       * `kill()` が `false` を返したワーカを追跡から外したうえで、
+       * crash の計上を「現行かどうか」の手前に置いたため、
+       * 後から届く `exit` が異常終了として数えられていた。
+       */
+      const counted = await crashCounted(async (launcher, enumerator) => {
+        launcher.onNextWorker((w) => {
+          w.sendFails(true)
+          w.killFails(true)
+        })
+        await enumerator.enumerate(request(hostTarget(0)))
+        /* 殺せなかったワーカが後から自然終了する。 */
+        launcher.workers[0].crash(0)
+        await Promise.resolve()
+      })
+
+      expect(counted).toBe(false)
+    })
+
+    it('送信失敗を繰り返しても列挙は恒久停止しない (H3-002 の A/B 再現)', async () => {
+      /*
+       * **orchestrator が pr-gate Round 3 で A/B 実行した再現をテストにする。**
+       * 修正前は 3 回で `crashes` が上限に達し、4 回目にワーカを起こせなかった
+       * (`FINAL ok=false workers=3`)。
+       */
+      const launcher = fakeLauncher(false)
+      const enumerator = createSessionEnumerator(deps(launcher))
+
+      for (let i = 0; i < 4; i += 1) {
+        launcher.onNextWorker((w) => {
+          w.sendFails(true)
+          w.killFails(true)
+        })
+        const result = await enumerator.enumerate(request(hostTarget(i)))
+        expect(result.ok).toBe(false)
+        /* 殺せなかったワーカが後から自然終了する。 */
+        launcher.workers[launcher.workers.length - 1].crash(0)
+        await Promise.resolve()
+      }
+
+      const before = launcher.workers.length
+      void enumerator.enumerate(request(hostTarget(9)))
+      await Promise.resolve()
+
+      /* **5 回目もワーカを起こせる。** 恒久停止していない。 */
+      expect(launcher.workers.length).toBeGreaterThan(before)
+    })
   })
 
   it('`dispose()` の後は新しいプロセスを起こさない (pr-gate Round 2 / H2-004)', async () => {
@@ -567,6 +707,37 @@ describe('createSessionEnumerator', () => {
     expect(launcher.workers).toHaveLength(before)
     /* **例外にしない。** 理由キーを持つ行に落とす (FR-030)。 */
     expect(result).toEqual({ ok: false, reasonKey: 'enumeration-failed' })
+  })
+
+  it('既に殺したワーカを dispose が「確認できない」に数えない (不変条件 3)', async () => {
+    /*
+     * `ending` (kill 済みで `exit` 待ち) のワーカに `dispose()` が
+     * もう一度 `kill()` を掛けると、死んだプロセスなので `false` が返り、
+     * **「終了を確認できない」に誤って数えられる**。
+     * 状態が 1 つなので二重 kill は no-op になり、報告が狂わない。
+     */
+    vi.useFakeTimers()
+    const launcher = fakeLauncher(false)
+    const enumerator = createSessionEnumerator(deps(launcher))
+
+    const promise = enumerator.enumerate(request(hostTarget(0), null, { timeoutMs: 100 }))
+    await Promise.resolve()
+    await Promise.resolve()
+    /* `exit` を保留して `ending` のまま残す。timeout の kill 自体は成功させる。 */
+    launcher.workers[0].holdExit(true)
+
+    await vi.advanceTimersByTimeAsync(101)
+    await promise
+    vi.useRealTimers()
+
+    /*
+     * **ここから先の kill は失敗する。** 実プロセスも、既に死んでいれば
+     * `kill()` は `false` を返す。二重 kill すると
+     * 「終了を確認できない」に誤って数えられる。
+     */
+    launcher.workers[0].killFails(true)
+
+    expect(enumerator.dispose()).toBe(0)
   })
 
   it('殺せなかったワーカの数を `dispose()` が返す (contracts C-5 / H2-004)', () => {

@@ -87,7 +87,20 @@ if (!gotTheLock) {
      * `before-quit` を選ぶのは、`window-all-closed` では macOS が終了しないためである。
      */
     app.on('before-quit', () => {
-      composition.dispose()
+      /*
+       * **戻り値を捨てない** (pr-gate Round 3 / 4 track が収束した指摘)。
+       *
+       * `dispose()` は「終了を確認できなかった台数」を返す形にしたのに、
+       * ここで捨てていたため**記録する主体が存在しなかった**。
+       * 孤児が残ったことを誰も知れない設計は、contracts C-5 の
+       * 「記録して監視対象から外す」の後半を満たさない。
+       */
+      const unconfirmed = composition.dispose()
+      if (unconfirmed > 0) {
+        console.warn(
+          `[dispose] 終了を確認できない列挙プロセスが ${unconfirmed} 件あります (contracts C-5)`
+        )
+      }
     })
 
     /*

@@ -53,7 +53,13 @@ export interface Composition {
    * UNC ハンドルを掴んだ孤児を残さない。
    * 登録は `src/main/index.ts` が `before-quit` で行う。
    */
-  readonly dispose: () => void
+  /**
+   * 終了処理。**終了を確認できなかったワーカの台数**を返す (contracts C-5)。
+   *
+   * 0 でなければ UNC ハンドルを掴んだままのプロセスが残っている。
+   * この層は記録の経路を持たないので、呼び出し側 (`index.ts`) が記録する。
+   */
+  readonly dispose: () => number
 }
 
 export function createComposition(): Composition {
