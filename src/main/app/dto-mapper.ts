@@ -4,6 +4,7 @@ import type { CapabilitiesDTO, RuntimeDescriptorDTO } from '@domain/runtime/dto'
 import { hostPathOps, runtimePathOps } from '@domain/runtime/path-api'
 import { pathParts, type HostPath, type RuntimePath } from '@domain/runtime/path-types'
 import { originDisplay, originPath } from '@domain/session/cwd-origin'
+import { TEXT_MAX_BYTES, normalizeText } from '@domain/session/normalize'
 import type { EnumerationOutcomeDTO, SessionGroupDTO, SessionSummaryDTO } from '@domain/session/dto'
 import type { SessionGroup } from '@domain/session/group'
 import type { Boundary } from '@domain/workspace/dto'
@@ -55,6 +56,25 @@ export function toRuntimeDescriptorDTO(descriptor: RuntimeDescriptor): RuntimeDe
 /* ── セッション列挙 (R-2 / BE-026) ─────────────────────────────── */
 
 /**
+ * 由来候補の表示名を境界で整える (pr-gate Round 4 / 不変条件 4 / FR-049)。
+ *
+ * **関門を境界側に置く。** `EnumerationTarget.label` は `domain` の型であり、
+ * 「正規化済みである」という保証を型が持てない。`target-finder` は関門を通すが、
+ * **そこを通らずに `EnumerationTarget` を組み立てる経路が作れてしまう**
+ * (実際、境界の性質テストを書いた最初の実行でこの穴が出た)。
+ *
+ * この値は 2 本の経路で境界を渡る — セッション行 (`targetLabel`) と
+ * 所在の行 (`EnumerationOutcomeDTO.targetLabel`)。**どちらも本モジュールを通る**ので、
+ * ここを関門にすれば経路が増えても漏れない。
+ *
+ * 正規化は冪等なので、`target-finder` が既に通した値に二度掛けても変わらない。
+ * あちらは**一意性の判定に正規化後の値が要る**ため独自に呼んでいる (責務が違う)。
+ */
+function displayName(raw: string): string {
+  return normalizeText(raw, TEXT_MAX_BYTES).value
+}
+
+/**
  * `SessionSummary` を DTO へ写す。
  *
  * **表示用の生値を運ぶのは `cwdDisplay` の 1 種類だけである** (FR-042 / SC-011)。
@@ -76,7 +96,7 @@ export function toSessionSummaryDTO(
   return {
     sessionId: session.sessionId,
     targetKey: session.targetKey,
-    targetLabel: session.targetLabel,
+    targetLabel: displayName(session.targetLabel),
     summary: session.summary,
     firstPrompt: session.firstPrompt,
     customTitle: session.customTitle,
@@ -171,7 +191,7 @@ export function toEnumerationOutcomeDTOs(
   return outcome.outcomes.map((target) => ({
     location: target.location,
     targetKey: target.key,
-    targetLabel: target.label,
+    targetLabel: displayName(target.label),
     status: target.status,
     reasonKey: target.reasonKey,
     count: target.count,

@@ -114,3 +114,16 @@ export const MAX_SESSIONS_PER_TARGET = 5000
  * 意味を持たないためである。
  */
 export const MAX_SESSION_OFFSET = MAX_SESSIONS_PER_TARGET
+
+/**
+ * セッション識別子の長さの上限 (pr-gate Round 4 / 不変条件 4)。
+ *
+ * **識別子だけは「不明」に倒せない。** 他の項目は型や内容が期待と違えば
+ * `null` にして行を残せるが (FR-049)、識別子を倒すと行の同一性が消える。
+ * したがって**使えない識別子は行ごと間引く**しかなく、その判定にこの上限を使う。
+ *
+ * 実データは UUID (36 文字) である。余裕を見て `MAX_DISPLAY_NAME_LENGTH` と
+ * 同じ値にする — 鍵として持ち回り、切り詰めて画面にも出る値であり、
+ * 表示名と同じ枠に収まらないものは識別子として扱えない。
+ */
+export const MAX_SESSION_ID_LENGTH = MAX_DISPLAY_NAME_LENGTH

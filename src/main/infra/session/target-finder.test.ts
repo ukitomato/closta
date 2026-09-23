@@ -162,6 +162,52 @@ describe('createEnumerationTargetFinder — wslTargets', () => {
    * (`runtimePathOps.join` が長すぎる名前を拒む)、この入口から長い `label` は作れない。
    * 到達しない状態のテストは書かない。
    */
+  /*
+   * 表示名は**一意かつ非空**でなければならない (pr-gate Round 4 / 不変条件 4 / FR-052)。
+   *
+   * FR-052 は「どのユーザの履歴を見ているかが分からない状態を作ってはならない」で、
+   * これは `[USER]` が「1 ディストロ内の全ユーザを集約する」判断を受け入れた
+   * **唯一の代償**である。正規化はその代償を 2 通りに壊しうる。
+   *
+   * - `alice` と `al<U+202E>ice` がどちらも `alice` になる (潰れる)
+   * - 制御文字だけの名前が `''` になり、`SourceLabel` が `null` を返して消える
+   */
+  it('正規化で同じになる候補を区別する (FR-052)', async () => {
+    const RLO = String.fromCharCode(0x202e)
+    const fake = 'al' + RLO + 'ice'
+    const finder = createEnumerationTargetFinder({
+      hostFs: fakeHostFs([]),
+      wslFs: fakeWslFs({
+        '/home': ['alice', fake],
+        '/home/alice/.claude': [],
+        ['/home/' + fake + '/.claude']: []
+      })
+    })
+
+    const result = await finder.wslTargets(ubuntu, verified(UBUNTU), NOW)
+
+    expect(result.targets).toHaveLength(2)
+    const labels = result.targets.map((t) => t.label)
+    /* **2 つが同じ表示にならない。** どちらがどれか分かる形にする。 */
+    expect(new Set(labels).size).toBe(2)
+    for (const label of labels) expect(label).not.toContain(RLO)
+  })
+
+  it('正規化で空になる候補も消さない (FR-052)', async () => {
+    const RLO = String.fromCharCode(0x202e)
+    const blank = RLO + RLO
+    const finder = createEnumerationTargetFinder({
+      hostFs: fakeHostFs([]),
+      wslFs: fakeWslFs({ '/home': [blank], ['/home/' + blank + '/.claude']: [] })
+    })
+
+    const result = await finder.wslTargets(ubuntu, verified(UBUNTU), NOW)
+
+    expect(result.targets).toHaveLength(1)
+    /* **空にしない。** 空だと `SourceLabel` が `null` を返し、由来が痕跡なく消える。 */
+    expect(result.targets[0].label.length).toBeGreaterThan(0)
+  })
+
   it('候補の表示名から双方向制御文字を落とす (FR-049 / FR-052)', async () => {
     const RLO = String.fromCharCode(0x202e)
     const name = 'al' + RLO + 'ice'

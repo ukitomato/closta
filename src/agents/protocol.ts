@@ -1,4 +1,9 @@
-import { MAX_SESSION_OFFSET, MAX_SESSIONS_PER_TARGET } from '@domain/validation'
+import {
+  MAX_SESSION_ID_LENGTH,
+  MAX_SESSION_OFFSET,
+  MAX_SESSIONS_PER_TARGET,
+  hasControlCharacter
+} from '@domain/validation'
 
 import type { EnumerationScope, RawSessionRecord } from '@domain/session/interfaces'
 import { isFailureReason, type FailureReason } from '@domain/session/target'
@@ -144,7 +149,20 @@ function boundedInteger(value: unknown, max: number): number | null {
 function isRawSessionRecord(value: unknown): value is RawSessionRecord {
   if (typeof value !== 'object' || value === null) return false
   const record = value as Record<string, unknown>
-  return typeof record.sessionId === 'string' && record.sessionId.length > 0
+  const id = record.sessionId
+  if (typeof id !== 'string' || id.length === 0) return false
+  /*
+   * **識別子は正規化で倒せない** (pr-gate Round 4 / 不変条件 4 / S3-005)。
+   *
+   * 他の項目は型が違えば「不明」に倒せるが、識別子を倒すと行の同一性が消える
+   * (`sessionRowKey` の材料であり、FR-047 の表示順で最後に残る手段でもある)。
+   * したがって**使えない識別子は行ごと間引く** — 倒す先が無いためである。
+   *
+   * 制御文字を含む識別子は表示に出ると偽装の的になり (FR-049)、
+   * 長すぎる値は鍵として持ち回るには重い。どちらも識別子としては使えない。
+   */
+  if (id.length > MAX_SESSION_ID_LENGTH) return false
+  return !hasControlCharacter(id)
 }
 
 function decodeScope(value: unknown): EnumerationScope | null {
