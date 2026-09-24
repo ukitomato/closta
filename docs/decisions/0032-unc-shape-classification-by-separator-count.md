@@ -7,7 +7,7 @@ deciders: [ukitomato]
 consulted: [security-reviewer, architecture-reviewer, po-reviewer, platform-boundary-reviewer]
 supersedes: []
 superseded-by: []
-amends: [AD-029, AD-028]
+amends: [AD-029]
 related: [AD-025, AD-031]
 ---
 
@@ -134,8 +134,8 @@ Round 4 の時点で行数が 8 / 7 / 7 と食い違い、**同じ「#4」が 3 
 - [ ] デバイス名前空間の綴り (`\\?\UNC\` / `\\.\UNC\` / `\\?\C:\`) を解析するかを再評価する。
       実機で解決することは確認済みで、判断を保留しているのは**実測で 0 件**だからである。
       持ち主: `docs/roadmap.md` の R-3 行
-- [ ] `opaque-unc` の行が「値はあるが読めない」という第 3 の状態であることを
-      spec の Edge Cases に記録する (PO4-006)。持ち主: R-2 Round 5
+- [x] `opaque-unc` の行が「値はあるが読めない」という第 3 の状態であることを
+      spec の Edge Cases に記録する (PO4-006)。**pr-gate Round 5 で実施** (spec.md Edge Cases / Key Entities)
 
 ## Confirmation
 

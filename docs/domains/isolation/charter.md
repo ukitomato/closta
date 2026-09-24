@@ -130,7 +130,8 @@ sandbox capability の判定（Seatbelt / bubblewrap を含む）、権限モー
 
 - 依存する domain: `runtime`（`capabilities` の表明、endpoint 判別、パス変換）
 - 依存される domain: `session`（起動時の権限ゲート）、`ui`（隔離表示）
-- 共有 invariant: Principle III / V / VI / X。詳細は [docs/domains/_overview.md](../_overview.md)
+- 共有 invariant: Principle III / V / VI / VII / IX / X。詳細は [docs/domains/_overview.md](../_overview.md)
+  (VII = supervisor は Electron 非依存 / IX = 重いパースを main で行わない。`_overview.md` の割り当てに合わせた)
 
 ## Related ADRs
 

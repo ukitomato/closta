@@ -6,6 +6,7 @@ deciders: ukitomato
 tags: [session, architecture, enforcement, governance]
 supersedes: []
 superseded-by: []
+amended-by: [AD-030, AD-031]
 ---
 
 # AD-028: セッション列挙の実行単位を「要求 1 回の短命プロセス」とし、UNC の受け渡しを実名リストで縛る

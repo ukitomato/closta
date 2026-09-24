@@ -131,7 +131,8 @@ Closta の出発点にある課題「並行して走らせたセッションの�
 
 - 依存する domain: `runtime`（起動とパス解決）、`provider`（環境変数とモデルカタログの導出）
 - 依存される domain: `ui`, `isolation`
-- 共有 invariant: Principle III / IV / V / IX / X。詳細は [docs/domains/_overview.md](../_overview.md)
+- 共有 invariant: Principle III / IV / V / VII / IX / X。詳細は [docs/domains/_overview.md](../_overview.md)
+  (VII = supervisor は Electron 非依存で単独起動できる。R-2 で `agents` を持つ feature が実装され実体を持った)
 
 ## Related ADRs
 

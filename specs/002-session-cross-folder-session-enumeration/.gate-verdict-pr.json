@@ -1,41 +1,36 @@
 {
   "gate": "pr",
-  "run": "2026-09-23",
+  "run": "2026-09-24",
   "spec_dir": "specs/002-session-cross-folder-session-enumeration",
   "spec_id": "002-session-cross-folder-session-enumeration",
-  "round": 4,
+  "round": 5,
   "base_branch": "main",
   "diff_stat": {
-    "files": 142,
-    "additions": 24848,
-    "deletions": 246
+    "files": 149,
+    "additions": 25946,
+    "deletions": 251
   },
   "severity_counts": {
     "critical": 0,
-    "high": 26,
-    "medium": 31,
-    "low": 18
-  },
-  "severity_counts_raw": {
-    "critical": 0,
-    "high": 32,
-    "medium": 36,
-    "low": 21
+    "high": 10,
+    "medium": 14,
+    "low": 7
   },
   "convergence": {
-    "resolved_from_prev": 19,
-    "new_in_round": 28,
-    "unresolved": 28,
-    "partial": 3,
-    "resolved_from_prev_raw": 27,
-    "new_in_round_raw": 36
+    "resolved_from_prev": 14,
+    "new_in_round": 12,
+    "unresolved": 12,
+    "partial": 4,
+    "resolved_from_prev_by_track": 16,
+    "new_in_round_by_track": 13,
+    "dedup_note": "track 自己申告 resolved 16 / new 13。cross-track dedup で resolved -2 (C4-001=A4-007+PO4-003 / C4-010=PB4-007+A4-008)、new -2 (opaque-unc spec=archL-002+PO5-002 / 候補#N=uxC-003+a11yG-L4) → resolved 14 / new 12。"
   },
   "convergence_failure": {
-    "fired": true,
-    "rule": "(R[4].resolved < R[4].new) AND (R[3].resolved < R[3].new)",
+    "fired": false,
+    "rule": "(R[5].resolved < R[5].new) AND (R[4].resolved < R[4].new)",
+    "R5": { "resolved": 14, "new": 12, "holds": false },
     "R4": { "resolved": 19, "new": 28, "holds": true },
-    "R3": { "resolved": 1, "new": 15, "holds": true },
-    "dedup_sensitivity": "判定は dedup の精度に依存しない。raw (27 < 36) でも dedup 後 (19 < 28) でも不等号の向きは同じで、resolved が new を超えるには raw resolved 27 を上回る必要があり raw の上限を超える。"
+    "note": "R[5] は resolved(14) >= new(12) なので R[5] 側の条件が偽。R2 以降で初めて収束条件を満たした。halt しない。Round 5 の new はすべて『壊した』でなく『直した層の鏡面を取りこぼした』incomplete-fix 型で、Round 2 の隣を壊す型退行は 0 件。"
   },
   "suppressed_by_code_gate": [],
   "reviewers_started": [
@@ -47,65 +42,38 @@
     "ux-reviewer"
   ],
   "reviewers_skipped": [
-    {
-      "name": "database-reviewer",
-      "reason": "gate_common::reviewers_filter — auto_invoke_patterns に一致する変更ファイルが無い (migration 0 件 / *.sql 0 件)"
-    },
-    {
-      "name": "api-performance-reviewer",
-      "reason": "reviewers.yml で未採用"
-    },
-    {
-      "name": "openapi-contract-reviewer",
-      "reason": "reviewers.yml で未採用"
-    }
+    { "name": "database-reviewer", "reason": "auto_invoke_patterns に一致する変更なし (migrations 0 / *.sql 0)" },
+    { "name": "api-performance-reviewer", "reason": "reviewers.yml で未採用" },
+    { "name": "openapi-contract-reviewer", "reason": "reviewers.yml で未採用" }
   ],
   "rule_firing_verification": {
     "run": true,
     "command": "node scripts/rules/run.mjs",
     "result": "26 件一致",
-    "reason": "Round 3 以降に allowlists.mjs と run.mjs が変わったため再実行。他の検出器とは並行させず単独で実行。"
+    "reason": "Round 4 以降に規則定義・fixture (eslint.config.mjs / .dependency-cruiser.js / scripts/constitution/** / scripts/rules/** / tests/rule-fixtures/**) が未変更のため Phase 0 step 6 の再実行は本来不要。Round 5 作業末尾で単独実行し確認済み。"
   },
   "tracks": {
-    "security-reviewer": { "critical": 0, "high": 4, "medium": 5, "low": 2, "resolved": 4, "new": 6, "viewpoint_missing": [], "cascade_demotions": 0, "body_retained_by_orchestrator": false },
-    "architecture-reviewer": { "critical": 0, "high": 8, "medium": 7, "low": 3, "resolved": 1, "new": 7, "viewpoint_missing": [], "cascade_demotions": 0, "body_retained_by_orchestrator": true },
-    "po-reviewer": { "critical": 0, "high": 4, "medium": 6, "low": 3, "resolved": 5, "new": 6, "viewpoint_missing": [], "cascade_demotions": 0, "body_retained_by_orchestrator": true },
-    "platform-boundary-reviewer": { "critical": 0, "high": 5, "medium": 6, "low": 4, "resolved": 5, "new": 4, "viewpoint_missing": [], "cascade_demotions": 0, "body_retained_by_orchestrator": true },
-    "a11y-reviewer": { "critical": 0, "high": 6, "medium": 4, "low": 4, "resolved": 4, "new": 8, "viewpoint_missing": [], "cascade_demotions": 0, "body_retained_by_orchestrator": false },
-    "ux-reviewer": { "critical": 0, "high": 5, "medium": 8, "low": 5, "resolved": 8, "new": 5, "viewpoint_missing": [], "cascade_demotions": 0, "body_retained_by_orchestrator": false }
+    "security-reviewer":  { "critical": 0, "high": 1, "medium": 1, "low": 1, "resolved": 1, "new": 2, "unevaluable": 1, "viewpoint_missing": [], "cascade_demotions": 0 },
+    "architecture-reviewer": { "critical": 0, "high": 1, "medium": 5, "low": 2, "resolved": 7, "partial": 4, "new": 3, "viewpoint_missing": [], "cascade_demotions": 0 },
+    "po-reviewer": { "critical": 0, "high": 1, "medium": 2, "low": 1, "resolved": 5, "new": 0, "viewpoint_missing": [], "cascade_demotions": 0 },
+    "platform-boundary-reviewer": { "critical": 0, "high": 5, "medium": 2, "low": 0, "resolved": 2, "new": 2, "unresolved": 5, "viewpoint_missing": [], "cascade_demotions": 0 },
+    "a11y-reviewer": { "critical": 0, "high": 1, "medium": 2, "low": 2, "resolved": 0, "new": 4, "unresolved": 1, "viewpoint_missing": [], "cascade_demotions": 0 },
+    "ux-reviewer": { "critical": 0, "high": 1, "medium": 3, "low": 1, "resolved": 1, "new": 2, "unresolved": 2, "viewpoint_missing": [], "cascade_demotions": 0 }
   },
-  "tracks_converging_alone": ["ux-reviewer", "platform-boundary-reviewer"],
   "orchestrator_verified": [
-    {
-      "id": "C4-001",
-      "claim": "dto-boundary.test.ts が toSessionGroupDTO を呼ばず、その経路が U+0000 を含む cwdKey を境界に出している",
-      "method": "dto-boundary.test.ts の import 節 / dto-mapper.ts:169 / match.ts:75 の読解",
-      "result": "import は toSessionSummaryDTO と toEnumerationOutcomeDTOs の 2 つのみ。cwdKeyOf は `${namespace}\\u0000${value}` を返し dto-mapper.ts:169 が素通しする",
-      "status": "CONFIRMED"
-    },
-    {
-      "id": "C4-002",
-      "claim": "先頭が区切り以外の 1 文字なら classifyRawPath の UNC 判定を抜け、display: raw で生 UNC が出る",
-      "method": "cwd-origin.ts:67,130-132 と path-api.ts:154-158,177-179 の読解 (分岐なしの直線経路)",
-      "result": "classifyCwd は trim 済みの値ではなく raw を渡す。leadingSeparatorCount が 0 → makeHostPath 失敗 → other → display: raw",
-      "status": "CONFIRMED"
-    },
-    {
-      "id": "C4-003",
-      "claim": "undetected-distro の display からディストロ名が消え、契約 ipc-session-list.md:137 と乖離した",
-      "method": "cwd-origin.ts:100 / dto-mapper.ts:109 / dto.ts の distroName 探索",
-      "result": "display は converted.path.value のみ。SessionSummaryDTO に distroName を運ぶ経路は 0 件",
-      "status": "CONFIRMED"
-    }
+    { "id": "H-A1 (ux C-001)", "claim": "undetected-distro の distroName が renderer で描画されず画面に出ない", "method": "grep cwdDisplay src/renderer + SessionMeta(376-411) 読解", "result": "session.cwdDisplay の read は 0 件。SessionMeta は CWD_ORIGIN_LABELS のみ描画。確認", "status": "CONFIRMED" },
+    { "id": "H-A2 (platform PB5-001)", "claim": "posix 分岐 #7 が SEPARATOR_RUN ガードを持たず UNC 部分文字列を露出", "method": "path-api.ts:195,210 / cwd-origin.ts:67 読解", "result": "SEPARATOR_RUN は :210 (#8) のみ。#7 は :195 で無条件 return。cwd-origin.ts:67 の不変条件コメントは偽", "status": "CONFIRMED" }
   ],
-  "verdict": "CONVERGENCE_FAILURE",
-  "verdict_note": "Critical は 6 track 全一致で 0。Round 3 の 3 件の退行 (H3-001 / H3-002 / H3-003) は platform-boundary の A/B 実測で解消を確認。実装の方向は正しい。halt するのは resolved(19) < new(28) が R[3] に続いて 2 round 連続したためで、3 track が独立に同じ根 — 実装が 4 回変わり spec / 契約 / ADR / 実機証跡が 0 回追随した — を指している。次に畳むべき不変条件は『記録と実装の対応を、実装を変えた同じコミットで閉じる』。",
+  "verdict": "PASS",
+  "verdict_note": "Critical 0 かつ収束条件を満たす (R[5] resolved 14 >= new 12) ため機械判定は PASS。ただし PASS は Critical=0 hard-gate 上の判定にすぎず、open High 10 件が残る。特に (1) Round 5 の incomplete-fix 3 件 (H-A1 C4-003 が renderer に届かない / H-A2 C4-002 の #7 穴 / H-A3 C4-012 の test 番号) と (2) 持ち主のいない High 2 件 (H-B1 PB4-002 inflight scope / H-B2 PB4-003 refresh) は /cl-done 前に閉じるべき。人間に Round 6 scope を確認する。",
   "known_gaps": [
-    "security / a11y / ux の track 本文を orchestrator が保持していない (po track の指摘 PO4-012)。Round 5 以降は <track>-reviewer.round<N>.md で保存すること。",
-    "検証項目 13 と 14 は回避形を検出しないため、check.mjs が緑であることは遵守の証拠にならない (C4-007 / C4-008)。"
+    "S4-002 が評価不能 — Round 4 の security track 本文が未保存 (PO4-012 の実例)。Round 6 以降は <track>-reviewer.round<N>.md で保存すること。",
+    "H-B1 / H-B2 (PB4-002 / PB4-003) は High のまま roadmap R-3 に持ち主が無い。AD-028 §5 の『持ち主のいない延期を残さない』違反が 3 round 継続。",
+    "dto-boundary.test は無 gate フィールドを汚染入力で行使していない (M5-01)。緑は遵守の証拠にならない。"
   ],
   "out_of_scope": [
-    "SC-008 の予算値は人間承認済み。指摘は『未検証であることの行き先が台帳に無い』点のみ (継続 PO3-021)。",
-    "E2E / CI 基盤は M4 まで対象外 (人間の指示)。Round 5 の作業 1〜7 はいずれも CI に依存しない。"
+    "SC-008 の予算値は人間承認済み。",
+    "E2E / CI 基盤は M4 まで対象外。Round 6 の推奨作業はいずれも CI に依存しない。",
+    "検出器 13/14 (H-C1/C2) と a11y EmptyState (H-C3) は R-3 / 据え置きで持ち主あり。"
   ]
 }

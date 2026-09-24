@@ -63,9 +63,11 @@ WSL ディストロ内の config ディレクトリは **Windows 側のプロセ
 
 技術的な核は 4 点である。
 
-1. **列挙対象ごとに 1 つの短命 `utilityProcess`** を起こし、`CLAUDE_CONFIG_DIR` を
-   プロセス生成時に与えて SDK の `listSessions()` を呼ぶ。
-   これで「main をブロックしない」「環境変数を書き換えない」「Electron に依存しない」が同時に立つ
+1. **1 つの `utilityProcess` を常駐させ、要求を直列に処理する** ([AD-030](../../docs/decisions/0030-enumeration-runs-in-one-resident-process.md) §1)。
+   `CLAUDE_CONFIG_DIR` は**要求 1 件ごとに行に載せて**渡し、SDK の `listSessions()` を呼ぶ。
+   これで「main をブロックしない」「環境変数を書き換えない」「Electron に依存しない」が同時に立つ。
+   当初の「列挙対象ごとの短命プロセス」は実測で費用のほぼ全部が起動だったため差し替えた
+   (起動 2,704 ms に対して列挙 36〜83 ms)
    ([research.md](research.md) R-01 / R-04)
 2. **作業ディレクトリの名前空間を値の形から判定する。** 1 つの config ディレクトリに
    Windows / POSIX / UNC の 3 形式が混在することを実測した。所在を推測しない (R-02)

@@ -2,7 +2,9 @@
 
 **Spec**: [spec.md](spec.md) | **Quickstart**: [quickstart.md](quickstart.md) | **Tasks**: SH-089
 
-**status**: SH-074 / SH-089 ともに決着。未実施は下部の表 3 件 (いずれも Vitest が代替を担う)
+**status**: SH-074 は決着。**SH-089 は 2026-09-18 時点の証跡であり、pr-gate Round 4 / 5 の実装変更後は未再実行** (pr-gate Round 5 / PO4-004 / C4-016)。
+Round 4/5 で振る舞いが変わった行 (**V-1 件数表記 / V-3 出自 (opaque-unc 追加・大小無視・ディストロ名表示) / V-4 導線の出し分け / V-6 先頭ページ / V-8 空状態の優先順位**) は
+現行コードについて未確認。**実機再実行の持ち主は `docs/roadmap.md` の R-3 申し送り** (実機操作のため人間 deferred)。未実施は下部の表 3 件 (いずれも Vitest が代替を担う)。
 
 ---
 

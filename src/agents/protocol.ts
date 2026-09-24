@@ -226,9 +226,16 @@ export function decodeRequest(line: string): EnumerationRequestLine | null {
  * **`ENUMERATION_TIMEOUT_MS` (10 秒) まで宙づりになっていた** (pr-gate Round 3 / H3-003)。
  * 列挙は直列なので、その 10 秒は後続の所在もまるごと待たせる。
  *
- * 一方で、雑音 (stdout に紛れた非 JSON など) で実行中の要求を落とすのも誤りである。
- * **JSON オブジェクトとして読めたかどうか**で 2 つを分ける —
- * プロトコル行は必ず JSON オブジェクトであり、雑音がそうである見込みは薄い。
+ * 一方で、雑音で実行中の要求を落とすのも誤りである。
+ * **雑音と「我々の応答だが形が不正」の分離は、`id` の echo で `handleLine` が行う**
+ * (pr-gate Round 5 / PB5-002 / A4-008)。`decodeResponse` は封筒 (`id`) が読めたかだけを返し、
+ * 決着させてよいのは**我々が送った `id` を echo している行**に限る。
+ *
+ * 初版は「雑音が JSON オブジェクトである見込みは薄い」を根拠に JSON object か否かで分けたが、
+ * これは**実測していない前提**だった。子は Agent SDK を第三者コードとして実行し、
+ * その依存が構造化ログを 1 行吐けば `{...}` である。実測で `{}` も `{"level":"info"}` も
+ * `malformed(id: null)` になり、`handleLine` が `id` で照合しなければ雑音 1 行で所在が
+ * `failed` になる。詳細は `session-enumerator.ts` の `handleLine` を参照。
  */
 export type DecodedResponse =
   | { readonly kind: 'response'; readonly value: EnumerationResponseLine }
