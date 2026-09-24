@@ -16,6 +16,9 @@ related_adrs:
   - docs/decisions/0026-packaging-first-pass.md
 related_specs:
   - specs/001-runtime-folder-registration-runtime-detection/spec.md
+  # R-2 がパス API に `classifyRawPath()` と `parseWslUncPath()` を追加した (AD-029 §3 / AD-032)。
+  # 本 domain の成果物を拡張するため、feature の所属が `session` でも関連 spec に挙げる。
+  - specs/002-session-cross-folder-session-enumeration/spec.md
 ---
 
 # Domain Charter: runtime

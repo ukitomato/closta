@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 
 import { CAPABILITY_KEY, IPC_CHANNELS, type ClostaCapability } from '@domain/capability'
 import type { RuntimeListDTO } from '@domain/runtime/dto'
+import type { SessionIndexDTO } from '@domain/session/dto'
 import type { FolderListDTO } from '@domain/workspace/dto'
 
 /**
@@ -39,9 +40,16 @@ const capability: ClostaCapability = {
   resolveFolderRuntime: (folderId, runtimeId) =>
     ipcRenderer.invoke(IPC_CHANNELS.resolveFolderRuntime, folderId, runtimeId),
 
+  listSessions: () => ipcRenderer.invoke(IPC_CHANNELS.listSessions),
+  refreshSessions: () => ipcRenderer.invoke(IPC_CHANNELS.refreshSessions),
+  fetchMoreSessions: (targetKey, offset) =>
+    ipcRenderer.invoke(IPC_CHANNELS.fetchMoreSessions, targetKey, offset),
+
   onRuntimesChanged: (listener) =>
     subscribe<RuntimeListDTO>(IPC_CHANNELS.runtimesChanged, listener),
-  onFoldersChanged: (listener) => subscribe<FolderListDTO>(IPC_CHANNELS.foldersChanged, listener)
+  onFoldersChanged: (listener) => subscribe<FolderListDTO>(IPC_CHANNELS.foldersChanged, listener),
+  onSessionsChanged: (listener) =>
+    subscribe<SessionIndexDTO>(IPC_CHANNELS.sessionsChanged, listener)
 }
 
 if (process.contextIsolated) {

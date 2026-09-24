@@ -37,7 +37,9 @@ invoke 直後に以下を Read:
 ### C. Accepted ADR drift
 - `status: accepted` ADR の Decision Outcome / Confirmation 違反を機械的に検出
 - ADR-NNNN で「禁止」とされたパターンを spec/plan が提案していないか
-- accepted 後 immutable な ADR を修正する spec があれば High 以上
+- accepted 後の ADR の**決定**を in-place で書き換える spec / 実装があれば High 以上。
+  事実誤認の訂正を日付つき「訂正」節で in-place に書くのは AD-031 が認めている。
+  **決定の変更が訂正節に書かれていたら指摘する** (置き場は後続 ADR)
 
 ### D. Layer / Module boundary 違反
 - レイヤ間 import 規則 (Constitution Principle 由来):

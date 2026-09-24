@@ -208,7 +208,140 @@ export const DOCKER_CALLER_MODULES = []
 export const PROCESS_SPAWN_MODULES = [
   'src/main/infra/runtime/wsl-cli.ts',
   'scripts/rules/run.mjs',
-  'scripts/build/package.mjs'
+  'scripts/build/package.mjs',
+  /*
+   * セッション列挙の短命 `utilityProcess` を起こす (AD-028 §4)。
+   *
+   * **追加によって項目 1 / 3 / 4 / 5 が同ファイルに掛かる。**
+   * 特に項目 3 (裸の `wsl`) の発火条件は「プロセス起動 API を持つファイル」であり、
+   * `SPAWN_CALL_PATTERNS` は `utilityProcess` を含む。
+   * したがって**トリガは本リストへの追加ではなく `utilityProcess` と書いた瞬間**である。
+   * 回避策は設計で決めてある — このファイルに `'wsl'` の文字列リテラルを書かない。
+   * 所在の判別は `Location` の値で行う。
+   */
+  'src/main/app/enumerator-spawner.ts'
+]
+
+/* ── 項目 12 / 13: UNC 形式の封じ込め (AD-028 §3) ─────────────────── */
+
+/**
+ * UNC 接頭辞の**文字列リテラル**を持ってよいモジュール (項目 12)。
+ *
+ * AD-025 は「UNC 形式は `infra` の内側に閉じる」と定めたが、
+ * 実体は `domain` のパス API が UNC を組み立てている。AD-028 §3 はこれを
+ * **「UNC のリテラルを持てる場所で線を引く」**形に読み替えた。
+ *
+ * | モジュール | 理由 |
+ * |---|---|
+ * | `src/domain/runtime/path-types.ts` | `UNC_PREFIX` の定義と `makeWslUncPath` の検証 |
+ * | `src/domain/runtime/path-api.ts` | `toUnc` / `fromUnc` / `parseWslUncPath` の実装 |
+ *
+ * **「`toUnc()` を呼んでよいモジュール」の許可リストは作らない。**
+ * `toUnc()` を呼ぶのは正規の経路であり (`infra/fs/wsl-fs.ts` が既にそうしている)、
+ * 縛っても塞がる脅威が無い。塞ぐべきは **API を迂回した手組み** である (AD-028 §3)。
+ */
+export const UNC_LITERAL_MODULES = [
+  'src/domain/runtime/path-types.ts',
+  'src/domain/runtime/path-api.ts'
+]
+
+/**
+ * UNC 接頭辞と見なす綴り。**3 綴りすべてを対象にする** —
+ * 1 つだけ塞いでも別の綴りで手組みできる (research R-01 で 3 綴りの成立を実測)。
+ */
+export const UNC_LITERAL_PATTERNS = ['\\\\wsl.localhost\\', '\\\\wsl$\\', '//wsl.localhost/']
+
+/**
+ * テストは UNC リテラルを書いてよい (項目 12 の除外)。
+ *
+ * **解析器が 3 綴りを受理することを証明する場所がテストである。**
+ * ここを禁じると規則そのものがテスト不能になる。テストは出荷物に入らない。
+ * `CSP_DECLARATION_EXEMPT_SUFFIXES` と同じ考え方である。
+ */
+export const UNC_LITERAL_EXEMPT_SUFFIXES = ['.test.ts', '.test.tsx']
+
+/**
+ * UNC のリテラルと UNC API 呼び出しの**両方**を禁じる場所 (項目 13)。
+ *
+ * 列挙プロセスは受け取った値を SDK に渡すだけであり、UNC を扱わない
+ * (AD-028 §3 の規則 2 の機械強制)。
+ */
+export const UNC_FORBIDDEN_IN = ['src/agents/']
+
+/** UNC 値を作る API の名前。項目 13 が `UNC_FORBIDDEN_IN` 配下での呼び出しを禁じる。 */
+/**
+ * Agent SDK のパッケージ名 (R-2 / SH-081)。
+ *
+ * **Claude Code との通信は Agent SDK 経由に限る** (Principle IV / AD-002)。
+ * ここを書き換えるだけで検査対象が変わる形にしておく。
+ */
+export const AGENT_SDK_PACKAGE = '@anthropic-ai/claude-agent-sdk'
+
+/**
+ * SDK を import してよい場所。
+ *
+ * **AD-023 §2 は「Agent SDK を呼ぶコードは `agents` に置く」とディレクトリ単位で
+ * 定めている。** ファイル単位にすると ADR より厳しい規則になり、
+ * R-3 (本文取得) / X-1 (起動) がファイルを増やすたびに許可リストの更新が要る —
+ * それは ADR が求めていない手間である。
+ *
+ * **どの API を呼べるかは別の許可リストが縛る** (`AGENT_SDK_ALLOWED_CALLS`)。
+ * 置き場と呼べるものを 1 つのリストで兼ねさせない。
+ */
+export const AGENT_SDK_IMPORT_DIRECTORIES = ['src/agents/']
+
+/**
+ * R-2 で呼んでよい SDK の API (SH-081 / contracts C-4)。
+ *
+ * **許可 1 件以外を禁じる形で検査する。** 禁止側を列挙すると必ず漏れる —
+ * `getSessionMessages` のような**読み取り API** が抜けると FR-044 が守られない
+ * (前後のファイル比較は読み取りを検出できない)。
+ *
+ * **判定は呼び出し形で行う。** import しただけの名前や型注釈を違反にすると、
+ * これらを正当に使う後続 feature (X-1 / O-1 / I-1) で検証が破綻する (research R-07)。
+ */
+export const AGENT_SDK_ALLOWED_CALLS = ['listSessions']
+
+/**
+ * `wsl.exe` を新たに呼ばないことの検査対象 (SH-082 / SC-003)。
+ *
+ * **R-2 が追加したレイヤ**を名指しする。R-2 は実行状態の確認に
+ * R-1 の `verifyRunning()` を使うだけであり、自分では `wsl.exe` を起動しない
+ * (contracts C-7。この 1 行が SC-003 の「0 件」を成り立たせている)。
+ */
+/**
+ * `wsl.exe` と WSL CLI を参照してはならないディレクトリとファイル (項目 15)。
+ *
+ * **R-2 の `app` レイヤを実名で足してある** (code-gate iteration 1 / convention H-001)。
+ * 初版はディレクトリ 3 件だけで `src/main/app/` を一度も見ていなかった。
+ * ところが contracts C-7 の「R-2 は `wsl.exe` を新たに呼ばない」を実際に守る責任があるのは
+ * **`session-service.ts`** である (R-1 の `verifyRunning` を注入で受け取る側)。
+ * **違反が 0 件だったのではなく、検査が 0 件だった** —
+ * plan.md が SH-091 について書いた形と同じである。
+ *
+ * **`src/main/app/` をディレクトリごと足さない。**
+ * `composition-root.ts` は R-1 の検出器を結線するため `wsl.exe` 系の語を正当に持つ。
+ * `services-not-to-io` と同じ**実名列挙**にして、新しいファイルが黙って対象外に
+ * ならないようにする (新規ファイルは列挙されていないので、追加時に判断を強制される)。
+ */
+export const WSL_FREE_DIRECTORIES = [
+  'src/agents/',
+  'src/main/infra/session/',
+  'src/domain/session/',
+  'src/main/app/session-service.ts',
+  'src/main/app/session-ipc.ts',
+  'src/main/app/session-enumerator.ts',
+  'src/main/app/enumerator-spawner.ts',
+  'src/main/app/dto-mapper.ts'
+]
+
+export const UNC_API_NAMES = [
+  'toUnc',
+  'fromUnc',
+  'makeWslUncPath',
+  'parseWslUncPath',
+  /* pr-gate Round 4 / 不変条件 1。綴りの判定を 1 関数に畳んだので、これが唯一の入口である。 */
+  'classifyRawPath'
 ]
 
 /** docker のイメージ構築サブコマンド。許可モジュール内に現れてはならない (項目 5)。 */

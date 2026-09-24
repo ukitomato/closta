@@ -1,0 +1,5 @@
+// 違反サンプル: 許可外モジュールが UNC 接頭辞リテラルを持つ (項目 12 / AD-028 §3)。
+// パス API を迂回して UNC を手組みする形である。
+export function configDirOf(distro: string, user: string): string {
+  return `\\\\wsl.localhost\\${distro}\\home\\${user}\\.claude`
+}

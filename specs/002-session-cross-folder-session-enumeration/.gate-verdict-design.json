@@ -1,0 +1,93 @@
+{
+  "gate": "design",
+  "run": "2026-09-17T00:00:00+09:00",
+  "round": 2,
+  "spec_dir": "specs/002-session-cross-folder-session-enumeration",
+  "spec_id": "002-session-cross-folder-session-enumeration",
+  "rounds": [
+    {
+      "round": 1,
+      "tracks": ["analyze (aborted)", "po-reviewer", "architecture-reviewer", "security-reviewer", "platform-boundary-reviewer"],
+      "severity_counts": { "critical": 7, "high": 23, "medium": 21, "low": 7 },
+      "verdict": "FIX_REQUIRED"
+    },
+    {
+      "round": 2,
+      "tracks": ["analyze", "architecture-reviewer"],
+      "scope": "diff-only closure check (reduced set by human instruction: review cost too high)",
+      "severity_counts": { "critical": 3, "high": 9, "medium": 13, "low": 0 },
+      "verdict": "PASS"
+    }
+  ],
+  "tracks": {
+    "analyze": {
+      "status": "ok",
+      "raw_out": "analyze.round2.md",
+      "note": "round 1 aborted (bundle changed mid-review); round 2 is its replacement",
+      "viewpoint_missing": [],
+      "cascade_demotions": 0
+    },
+    "architecture-reviewer": {
+      "status": "ok",
+      "raw_out": "architecture-reviewer.round2.md",
+      "viewpoint_missing": [],
+      "cascade_demotions": 0
+    },
+    "po-reviewer": {
+      "status": "ok",
+      "raw_out": "po-reviewer.md",
+      "note": "round 1 only. Not re-run in round 2 (reduced set).",
+      "viewpoint_missing": [],
+      "cascade_demotions": 0
+    },
+    "security-reviewer": {
+      "status": "ok",
+      "raw_out": "security-reviewer.md",
+      "note": "round 1 only. Not re-run in round 2 (reduced set).",
+      "viewpoint_missing": [],
+      "cascade_demotions": 0
+    },
+    "platform-boundary-reviewer": {
+      "status": "ok",
+      "raw_out": "platform-boundary-reviewer.md",
+      "note": "round 1 only. Not re-run in round 2 (reduced set).",
+      "viewpoint_missing": [],
+      "cascade_demotions": 0
+    }
+  },
+  "severity_counts": {
+    "critical": 0,
+    "high": 8,
+    "medium": 21,
+    "low": 7
+  },
+  "closure_evidence": {
+    "method": "grep-based mechanical verification",
+    "note": "round 2 の Critical 3 件はいずれも「この名前 / この値が残っていないか」で判定できる伝播漏れであり、fresh reviewer pass ではなく grep で closure を確認した。round 1 の Critical (設計の穴) とは判定の性質が違う。",
+    "checks": [
+      "rawCwd の残存は禁止を述べる 2 行のみ",
+      "PendingReason が contracts と data-model で一致",
+      "FR-049 / FR-050 / FR-051 / SC-011 / SC-015 / SC-016 がすべて tasks から参照されている",
+      "『唯一のモジュール』表現の残存 0 件"
+    ]
+  },
+  "open_high": [
+    "H-016 WSL 全ユーザのホームを列挙対象にするかの露出面判断 (人間承認 #6)",
+    "H-017 charter KPI の計測経路 (人間承認 #4)",
+    "H-018 区別可能の観測条件と対応 SC",
+    "H-019 US-2 の登録導線に対応する SC",
+    "H-020 US-4 の優先度と SC-008 の依存",
+    "H-021 SC-008 の性能予算の再実測",
+    "H-022 再取得で失敗した所在の前回結果の保持",
+    "H-023 agents-not-to-* が npm 内部を辿らない"
+  ],
+  "human_approval_required": [
+    "charter additions (Journey 1 / In scope / KPI reservation + resume condition / roadmap owner)",
+    "two new ADRs (enumeration unit + UNC handoff / cwd origin classification)",
+    "Constitution v1.2.3 PATCH (remove R-2 as the deferral target of Principle VIII)",
+    "loosening charter KPI measurement from E2E, and the owning feature for the E2E harness",
+    "the two UNC module lists (UNC_BRANDING_MODULES / UNC_MATERIALIZE_MODULES) before the ADR is accepted — irreversible once accepted",
+    "BLOCKING: whether to enumerate every user home inside a WSL distro (changes FR-011 and BE-021)"
+  ],
+  "verdict": "PASS"
+}

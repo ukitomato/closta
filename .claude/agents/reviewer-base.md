@@ -19,7 +19,9 @@ tools: Read, Grep, Glob
 - **状態管理 / アーキパターン**: 同上
 - **DB / インフラ / CI**: 同上
 - **Constitution**: `.specify/memory/constitution.md` (SSoT、Principle I-N)
-- **ADR**: `docs/decisions/` (MADR 4.0.0、accepted 後 immutable)
+- **ADR**: `docs/decisions/` (MADR 4.0.0)。**accepted 後は「決定」が immutable。**
+  事実誤認の訂正は日付つきの「訂正」節として in-place で書いてよい (AD-031)。
+  **訂正節に決定の変更を書いてはならない** — 書く必要が生じたら後続 ADR を起こす
 - **Domain Charter**: `docs/domains/<name>/charter.md`
 - **Glossary**: `docs/glossary.md` (Ubiquitous Language)
 

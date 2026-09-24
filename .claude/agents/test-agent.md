@@ -12,12 +12,30 @@ project test suite の実行と結果の構造化を専任する actor。
 
 1. **test コマンドの解決** (priority order):
    1. invoker から渡された `--test-cmd <cmd>` 引数
-   2. `docs/discovery.md` の "Build / Test / Lint" section の "Test:" 行
+   2. `docs/discovery.md` の "Build / Test / Lint" section の**表**。
+      「ユニットテスト」行の**「agent 用 (`node` 直接)」列**を使う。
+      同列には**全件**と**絞り込み**の 2 形が書かれているので両方を読む
+      > **`"Test:" 行` を探してはならない。** 実際の discovery.md は
+      > `| **ユニットテスト** | \`pnpm test\` | … |` という**表**であり、
+      > `Test:` という行は存在しない。これを探した結果 priority 3 の heuristic に
+      > 毎回フォールバックし、subset 実行の仕組みがあるのに全件を走らせていた
    3. file 拡張子 / project 構造の heuristic (下表)
-2. **実行 scope**:
-   - `<spec_dir>/touched-files.txt` が存在し、project test runner が "test by file" を許す → touched files の test のみ
-   - 許さない or "test by file" 機構なし → 全 test suite 実行
-3. **結果の JSON 構造化** (下記 output 仕様)
+2. **実行 scope — iteration 途中は subset、最終 iteration は全件**:
+   - invoker (code-gate) から渡される iteration 情報で分岐する:
+     - **iteration 途中** (前回 iter の `must_fix > 0`、まだ収束していない):
+       `<spec_dir>/touched-files.txt` の file だけを対象にする。
+       Vitest なら `node node_modules/vitest/vitest.mjs related --run <touched files…>`
+       (`related` は指定 file を **import している test** も辿るので、
+       単に test file 名を並べるより漏れが少ない)
+     - **最終 iteration** (`must_fix == 0` になった回) → **全件** `node node_modules/vitest/vitest.mjs run`
+   - **subset だけで PASS にしてはならない。** touched files の外側に出た回帰を
+     見逃す。収束した回に必ず 1 度は全件を通す
+   - iteration 情報が渡されない / 判断できないときは**全件**に倒す。
+     速さより見落としの無さを採る
+   - "test by file" 機構が無い runner → 常に全件
+3. **結果の JSON 構造化** (下記 output 仕様)。
+   **`scope` に `touched-files` / `full` のどちらで走ったかを必ず入れる** —
+   `.gate-verdict-code.json` でここを見て subset/全件の切り替わりを検証する
 4. **coverage 取得** (可能なら): touched files の line coverage を report
 5. **stdout に JSON 1 個を出力** (file には書かない)
 
@@ -26,7 +44,7 @@ project test suite の実行と結果の構造化を専任する actor。
 | project | 想定コマンド |
 |---|---|
 | Node.js (jest) | `pnpm test --json` or `npx jest --json` |
-| Node.js (vitest) | `pnpm test --reporter=json` or `npx vitest --reporter=json` |
+| Node.js (vitest) | 全件 `node node_modules/vitest/vitest.mjs run --reporter=json` / 絞り込み `node node_modules/vitest/vitest.mjs related --run --reporter=json <files…>`。**entrypoint が無いときだけ** `pnpm test --reporter=json` に落ちる |
 | Python (pytest) | `pytest --json-report --json-report-file=-` |
 | Dart / Flutter | `flutter test --machine` (1 line 1 event JSON stream) |
 | Go | `go test -json ./...` |

@@ -26,7 +26,10 @@ import {
   isValidBrowseTarget,
   isValidDisplayName,
   isValidLocationDTO,
-  isValidPathDTO
+  isValidPathDTO,
+  isKnownTargetKey,
+  isValidSessionOffset,
+  MAX_SESSION_OFFSET
 } from './validate'
 
 /**
@@ -343,5 +346,65 @@ describe('registerFolder の draft の検証', () => {
   it('非オブジェクトを拒否する', () => {
     expect(checkFolderDraft(runtimes, null).ok).toBe(false)
     expect(checkFolderDraft(runtimes, 'C:\\dev').ok).toBe(false)
+  })
+})
+
+/* ── セッション一覧 (BE-029 / contracts/ipc-session-list.md 節 A) ── */
+
+describe('isKnownTargetKey — 節 A 「targetKey」の行', () => {
+  const keys = ['host#0', 'wsl:Ubuntu#0', 'wsl:Ubuntu#1']
+
+  it('既知のキーに完全一致すれば通す', () => {
+    expect(isKnownTargetKey(keys, 'wsl:Ubuntu#1')).toBe(true)
+  })
+
+  it('未知のキーを拒否する', () => {
+    expect(isKnownTargetKey(keys, 'wsl:Debian#0')).toBe(false)
+  })
+
+  it('部分一致を通さない', () => {
+    expect(isKnownTargetKey(keys, 'wsl:Ubuntu')).toBe(false)
+    expect(isKnownTargetKey(keys, 'host')).toBe(false)
+  })
+
+  it('config ディレクトリのパスとして解釈しない', () => {
+    // **キーはパスではない。** パスらしい値を渡しても通らない。
+    expect(isKnownTargetKey(keys, 'C:\\Users\\y\\.claude')).toBe(false)
+    expect(isKnownTargetKey(keys, '/home/y/.claude')).toBe(false)
+    expect(isKnownTargetKey(keys, '\\\\wsl.localhost\\Ubuntu\\home\\y\\.claude')).toBe(false)
+  })
+
+  it('文字列でない値を拒否する', () => {
+    for (const value of [null, undefined, 0, {}, [], true]) {
+      expect(isKnownTargetKey(keys, value)).toBe(false)
+    }
+  })
+
+  it('既知の集合が空なら何も通さない', () => {
+    expect(isKnownTargetKey([], 'host#0')).toBe(false)
+  })
+})
+
+describe('isValidSessionOffset — 節 A 「offset」の行', () => {
+  it('0 と上限を通す', () => {
+    expect(isValidSessionOffset(0)).toBe(true)
+    expect(isValidSessionOffset(MAX_SESSION_OFFSET)).toBe(true)
+  })
+
+  it('上限を超える値を拒否する (SDK に渡す前に検査する)', () => {
+    expect(isValidSessionOffset(MAX_SESSION_OFFSET + 1)).toBe(false)
+    expect(isValidSessionOffset(Number.MAX_SAFE_INTEGER)).toBe(false)
+  })
+
+  it('負数・小数・非有限を拒否する', () => {
+    for (const value of [-1, 0.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(isValidSessionOffset(value)).toBe(false)
+    }
+  })
+
+  it('数値でない値を拒否する', () => {
+    for (const value of ['0', null, undefined, {}, []]) {
+      expect(isValidSessionOffset(value)).toBe(false)
+    }
   })
 })

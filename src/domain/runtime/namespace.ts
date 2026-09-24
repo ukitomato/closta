@@ -44,6 +44,44 @@ export function isValidDistroName(name: string): boolean {
   return true
 }
 
+/**
+ * 未信頼の綴りを、検出済み集合が持つ綴りに寄せる (pr-gate Round 4 / PB4-001)。
+ *
+ * ## なぜ大小を無視するか
+ *
+ * **Windows は共有名を大小無視で解決する。** 実機で確認した:
+ *
+ * ```
+ * \\wsl.localhost\ubuntu-26.04\home  => OK
+ * \\wsl.localhost\UBUNTU-26.04\home  => OK
+ * \\wsl$\ubuntu-26.04\home           => OK
+ * ```
+ *
+ * 一方この値は**アプリ外のプロセスが書いた作業ディレクトリ**から取り出したものであり、
+ * 綴りは書き手の任意である。完全一致で照合すると、**実行中で検出済みのディストロが
+ * 「未検出の所在」に落ちる** — 所在が決まらないので登録導線も成立しない (FR-017 / US-1 AC-5)。
+ *
+ * ## なぜ「寄せる」のであって「通す」のではないか
+ *
+ * 戻すのは**検出済み集合が持っていた綴り**である。入力の綴りをそのまま名前空間識別子に
+ * すると `unc:ubuntu-26.04` と `unc:Ubuntu-26.04` が別の名前空間になり、
+ * 同じディストロが 2 つに割れる。照合の緩さを識別子に持ち込まない。
+ *
+ * ## なぜ `isSameDistro` を変えないか
+ *
+ * あちらが比較するのは**どちらも検出由来**の名前空間識別子 2 つであり、
+ * 本関数を通せば綴りは検出済みのものに揃う。`infra/fs` の入口の判定を
+ * 緩めずに済むので、**照合を緩めるのはこの 1 関数の中だけ**に閉じる。
+ */
+export function canonicalDistroName(raw: string, detected: ReadonlySet<string>): string | null {
+  if (detected.has(raw)) return raw
+  const lower = raw.toLowerCase()
+  for (const name of detected) {
+    if (name.toLowerCase() === lower) return name
+  }
+  return null
+}
+
 export function wslNamespace(distroName: string): WslNamespaceId {
   return `wsl:${distroName}`
 }

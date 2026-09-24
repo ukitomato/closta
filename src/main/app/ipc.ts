@@ -1,6 +1,7 @@
 import { ipcMain, type IpcMainInvokeEvent } from 'electron'
 
 import { IPC_CHANNELS } from '@domain/capability'
+import type { SessionIndexDTO } from '@domain/session/dto'
 import type { RuntimeDescriptor } from '@domain/runtime/descriptor'
 import type { RuntimeDescriptorDTO, RuntimeListDTO } from '@domain/runtime/dto'
 import type { NamespaceId } from '@domain/runtime/namespace'
@@ -15,6 +16,7 @@ import type {
 import type { Location } from '@domain/workspace/folder'
 
 import type { Measure } from './measure'
+import { handleFetchMoreSessions, handleListSessions, handleRefreshSessions } from './session-ipc'
 import {
   checkBeginBrowseLocation,
   checkFolderDraft,
@@ -61,6 +63,19 @@ export interface IpcDependencies {
 
   /** 所在 `windows` のネイティブフォルダピッカー。 */
   pickHostFolder(): Promise<WorkspaceFolderDraftDTO | null>
+
+  /* ── セッション一覧 (R-2。**読み取り専用**) ── */
+
+  listSessions(): Promise<SessionIndexDTO>
+  refreshSessions(): Promise<SessionIndexDTO>
+  fetchMoreSessions(targetKey: string, offset: number): Promise<SessionIndexDTO>
+  /**
+   * 未信頼入力の照合に使う `targetKey` の集合。
+   *
+   * **停止中の所在の `key` も含む** — 「既知の `key` + 停止中」という
+   * SC-002 / SC-010 が検証したい経路を踏めるようにするためである。
+   */
+  sessionTargetKeys(): readonly string[]
   /** 計測関数。composition root が開発ビルド判定を解決して渡す (BE-030 / FR-038)。 */
   readonly measure: Measure
 }
@@ -142,6 +157,23 @@ export function registerIpcHandlers(deps: IpcDependencies): void {
     if (!isKnownFolderId(deps.folderIds(), args[0])) return { ok: false }
     return deps.unregisterFolder(args[0])
   })
+
+  /* ── セッション一覧 (R-2) ───────────────────────────────────────── */
+
+  handle(IPC_CHANNELS.listSessions, async (): Promise<SessionIndexDTO> => handleListSessions(deps))
+
+  handle(IPC_CHANNELS.refreshSessions, async (): Promise<SessionIndexDTO> =>
+    handleRefreshSessions(deps)
+  )
+
+  /*
+   * **本体は `session-ipc.ts` に置く** (BE-029)。
+   * SC-010 は「main 側ハンドラを直接呼ぶ」ことを計測経路にしており、
+   * `ipcMain` を import した本ファイルは Vitest の node 環境で読み込めない。
+   */
+  handle(IPC_CHANNELS.fetchMoreSessions, async (_event, ...args): Promise<SessionIndexDTO> =>
+    handleFetchMoreSessions(deps, args)
+  )
 
   /* ── 解決 ───────────────────────────────────────────────────────── */
 

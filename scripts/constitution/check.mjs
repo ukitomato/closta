@@ -40,6 +40,15 @@ import {
   PROCESS_SPAWN_MODULES,
   PROTOCOL_ASSOCIATION_APIS,
   SELF_DEFINITION_FILES,
+  AGENT_SDK_ALLOWED_CALLS,
+  AGENT_SDK_IMPORT_DIRECTORIES,
+  AGENT_SDK_PACKAGE,
+  WSL_FREE_DIRECTORIES,
+  UNC_API_NAMES,
+  UNC_FORBIDDEN_IN,
+  UNC_LITERAL_EXEMPT_SUFFIXES,
+  UNC_LITERAL_MODULES,
+  UNC_LITERAL_PATTERNS,
   WINDOW_OPEN_HANDLER,
   WSL_ALLOWED_ARGS,
   WSL_CALLER_MODULES
@@ -528,6 +537,214 @@ function hasPackagedGate() {
   }
 
   violations(11, 'window.open / 遷移の拒否と origin 定数の単一性', 'FR-039 / FR-040', found)
+}
+
+/* ── 項目 12: UNC 接頭辞リテラルを持てるモジュールの許可リスト ────── */
+{
+  /*
+   * AD-028 §3。**API を迂回した手組みを塞ぐ。**
+   *
+   * 「`toUnc()` を呼んでよいモジュール」は縛らない — 呼ぶのは正規の経路であり、
+   * 縛っても塞がる脅威が無い。塞ぐのは**リテラルを書いて自前で組み立てる**形である。
+   *
+   * テストは除外する。3 綴りを受理することを証明する場所がテストであり、
+   * ここを禁じると規則そのものがテスト不能になる。
+   */
+  const found = []
+  for (const src of literalSources) {
+    if (UNC_LITERAL_MODULES.includes(src.file)) continue
+    if (UNC_LITERAL_EXEMPT_SUFFIXES.some((suffix) => src.file.endsWith(suffix))) continue
+    for (const literal of stringLiterals(src.code)) {
+      for (const pattern of UNC_LITERAL_PATTERNS) {
+        if (!literal.value.includes(pattern)) continue
+        found.push(
+          `${src.file}:${literal.line}  許可外モジュールが UNC 接頭辞を持っている "${pattern}"`
+        )
+      }
+    }
+  }
+  violations(
+    12,
+    'UNC 接頭辞リテラルを持てるモジュールの許可リスト',
+    'AD-028 / FR-042',
+    found,
+    `許可: ${UNC_LITERAL_MODULES.join(', ')} (テストは除外)`
+  )
+}
+
+/* ── 項目 13: `agents` は UNC を扱わない ──────────────────────────── */
+{
+  /*
+   * AD-028 §3 の規則 2 の機械強制。
+   * 列挙プロセスは受け取った値を SDK に渡すだけであり、
+   * **リテラルも UNC API 呼び出しも持たない。**
+   *
+   * 規則を散文でしか書かないと、R-3 / X-3 が同じプロセス方式に乗るときに破れる。
+   */
+  const found = []
+  const apiCallRe = new RegExp(String.raw`\b(?:${UNC_API_NAMES.join('|')})\s*\(`)
+  for (const src of sources) {
+    if (!UNC_FORBIDDEN_IN.some((dir) => src.file.startsWith(dir))) continue
+    /*
+     * **テストは除外する** (項目 12 と揃える)。
+     * 規則が禁じているのは「agents の実装が UNC を知っていること」である。
+     * 「受け取った UNC 値をそのまま素通しする」ことを確かめるテストは、
+     * **規則が守られていることの証拠**であって違反ではない。
+     * 除外しないと素通しを検証できなくなる (実測でこのテストが引っかかった)。
+     */
+    if (UNC_LITERAL_EXEMPT_SUFFIXES.some((suffix) => src.file.endsWith(suffix))) continue
+
+    for (const literal of stringLiterals(src.code)) {
+      for (const pattern of UNC_LITERAL_PATTERNS) {
+        if (!literal.value.includes(pattern)) continue
+        found.push(`${src.file}:${literal.line}  agents が UNC 接頭辞を持っている "${pattern}"`)
+      }
+    }
+    if (apiCallRe.test(src.code)) {
+      found.push(
+        `${src.file}  agents が UNC を作る API を呼んでいる (${UNC_API_NAMES.join(' / ')})`
+      )
+    }
+  }
+  violations(
+    13,
+    '`agents` が UNC のリテラルと API を持たない',
+    'AD-028 / Principle VII',
+    found,
+    `対象: ${UNC_FORBIDDEN_IN.join(', ')}`
+  )
+}
+
+/* ── 項目 14: Agent SDK の API は許可 1 件だけ ────────────────────── */
+{
+  /*
+   * contracts C-4 の機械強制 (SH-081)。
+   *
+   * **許可 1 件以外を禁じる。** 禁止側を列挙する形にすると、
+   * C-4 の表に行を足したときに検査側が古くなる。
+   *
+   * **呼び出し形で判定する。** `import` しただけの名前や型注釈は違反にしない —
+   * 正当に使う後続 feature (X-1 / O-1 / I-1) で検証が破綻するため (research R-07)。
+   *
+   * **表 1 (副作用) だけを見ても FR-044 は守られない。** 列挙プロセスが本文を読んで
+   * `summary` に詰め直す実装は、前後のファイル比較 (SC-004) では**読み取りなので検出できない**。
+   */
+  const found = []
+  /*
+   * **package.json と検査スクリプト自身は対象外。**
+   * 依存の宣言と「許可リストの定義そのもの」を違反に数えると、
+   * 検査を成立させるために検査を緩めることになる。
+   * **対象は `src/` の実装だけ**である。
+   */
+  const sdkScope = (file) =>
+    file.startsWith('src/') && !file.endsWith('.test.ts') && !file.endsWith('.test.tsx')
+
+  for (const src of sources) {
+    if (!sdkScope(src.file)) continue
+    if (!src.code.includes(AGENT_SDK_PACKAGE)) continue
+
+    if (!AGENT_SDK_IMPORT_DIRECTORIES.some((dir) => src.file.startsWith(dir))) {
+      found.push(`${src.file}  許可外モジュールが Agent SDK を import している`)
+      continue
+    }
+
+    /*
+     * import した名前を集める。**名前付き import だけを見る** —
+     * 名前空間 import (`import * as sdk`) は呼び出し形が `sdk.foo(` になるので
+     * 下の走査で拾えない。名前空間 import 自体を違反にする。
+     */
+    const namespaceImport = new RegExp(
+      String.raw`import\s+\*\s+as\s+\w+\s+from\s*['"]` + AGENT_SDK_PACKAGE
+    )
+    if (namespaceImport.test(src.code)) {
+      found.push(`${src.file}  SDK を名前空間 import している (呼び出し形で検査できない)`)
+      continue
+    }
+
+    const named = new RegExp(
+      String.raw`import\s*\{([^}]*)\}\s*from\s*['"]` + AGENT_SDK_PACKAGE + String.raw`['"]`
+    ).exec(src.code)
+    const bindings = (named?.[1] ?? '')
+      .split(',')
+      .map(
+        (part) =>
+          part
+            .replace(/^\s*type\s+/, '')
+            .split(/\s+as\s+/)
+            .pop()
+            ?.trim() ?? ''
+      )
+      .filter((name) => name.length > 0)
+
+    for (const name of bindings) {
+      if (AGENT_SDK_ALLOWED_CALLS.includes(name)) continue
+      // **呼び出し形だけを違反にする。** 型としての利用は許す。
+      const call = new RegExp(String.raw`(?<![.\w])` + name + String.raw`\s*\(`)
+      if (call.test(src.code)) {
+        found.push(`${src.file}  許可外の SDK API を呼んでいる "${name}"`)
+      }
+    }
+  }
+  violations(
+    14,
+    'Agent SDK の呼び出しが許可リスト内 (許可 1 件以外を禁じる)',
+    'IV / contracts C-4',
+    found,
+    `許可: ${AGENT_SDK_ALLOWED_CALLS.join(', ')} / import 可: ${AGENT_SDK_IMPORT_DIRECTORIES.join(', ')}`
+  )
+}
+
+/* ── 項目 15: R-2 が追加したレイヤは `wsl.exe` を呼ばない ────────── */
+{
+  /*
+   * SC-003 の機械強制 (SH-082)。
+   *
+   * **R-2 は実行状態の確認に R-1 の `verifyRunning()` を使うだけ**であり、
+   * 自分では `wsl.exe` を起動しない (contracts C-7)。
+   * 項目 3 は「プロセス起動 API を持つファイルに裸の `wsl` があること」を見るが、
+   * **プロセス起動 API を持たないファイルに `wsl.exe` の文字列があっても掛からない** —
+   * 動的な組み立てや別レイヤ経由の起動はそこを抜ける。
+   *
+   * ここでは **R-2 が追加したディレクトリに `wsl` の実行ファイル名が現れないこと**を見る。
+   * 名前空間識別子 (`wsl:<D>`) は別物なので、**実行ファイルの綴りだけ**を対象にする。
+   */
+  const found = []
+
+  /*
+   * **裸の `wsl` は検査対象にしない。**
+   * R-2 のレイヤには `Location` の判別子 (`kind: 'wsl'`) と
+   * 名前空間識別子 (`wsl:<D>`) と出自の種別 (`wsl-from-unc` 等) が正当に現れる。
+   * 文字列として `wsl` を禁じると、これらが全部引っかかる (実測で 17 件)。
+   *
+   * **見るのは 2 つに絞る。**
+   *   1. 実行ファイルの綴り `wsl.exe` — これは実行以外の意味を持たない
+   *   2. WSL CLI レイヤ (`infra/runtime/wsl-cli`) への import
+   *
+   * 2 が本質である。R-2 は実行状態の確認に **R-1 の `verifyRunning()` の戻り値を
+   * 受け取るだけ**であり (contracts C-7)、CLI レイヤを知らない。
+   * プロセス起動 API そのものの許可リストは項目 7 が見ている。
+   */
+  const exeRe = /wsl\.exe/i
+  const cliRe = /wsl-cli|WslCli/
+  for (const src of sources) {
+    if (!WSL_FREE_DIRECTORIES.some((dir) => src.file.startsWith(dir))) continue
+    if (src.file.endsWith('.test.ts') || src.file.endsWith('.test.tsx')) continue
+
+    if (cliRe.test(src.code)) {
+      found.push(`${src.file}  R-2 のレイヤが WSL CLI レイヤを参照している`)
+    }
+    for (const literal of stringLiterals(src.code)) {
+      if (!exeRe.test(literal.value)) continue
+      found.push(`${src.file}:${literal.line}  R-2 のレイヤに wsl.exe がある "${literal.value}"`)
+    }
+  }
+  violations(
+    15,
+    'R-2 が追加したレイヤが `wsl.exe` と WSL CLI を参照しない',
+    'SC-003 / contracts C-7',
+    found,
+    `対象: ${WSL_FREE_DIRECTORIES.join(', ')}`
+  )
 }
 
 /* ── 報告 ─────────────────────────────────────────────────────────── */

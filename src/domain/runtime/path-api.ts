@@ -3,7 +3,14 @@ import path from 'node:path'
 import { applyEntry, findLongestMatch } from '@domain/workspace/prefix-match'
 
 import type { HostPathOps, RuntimePathOps } from './interfaces'
-import { namespaceDistroName, toUncNamespace, toWslNamespace, type NamespaceId } from './namespace'
+import {
+  isValidDistroName,
+  namespaceDistroName,
+  toUncNamespace,
+  toWslNamespace,
+  uncNamespace,
+  type NamespaceId
+} from './namespace'
 import type { PathMapping } from './path-mapping'
 import {
   UNC_PREFIX,
@@ -78,6 +85,178 @@ const WIN32_FORBIDDEN_IN_NAME = [':', '<', '>', '"', '|', '?', '*']
 export function isValidHostSegment(name: string): boolean {
   if (!isValidSegment(name)) return false
   return !WIN32_FORBIDDEN_IN_NAME.some((ch) => name.includes(ch))
+}
+
+/**
+ * legacy の共有名。新しい `\\wsl.localhost\` と同じ経路を指す (AD-015 §1)。
+ *
+ * **受理はするが、正規形は常に `UNC_PREFIX` に寄せる。**
+ * 2 つの綴りを値として持ち回ると、同じディレクトリを指す 2 つの値が
+ * 等価判定で不一致になる。
+ */
+const UNC_LEGACY_PREFIX = '\\\\wsl$\\'
+
+/** `parseWslUncPath` の結果。ディストロ名は**検証済み**である。 */
+export interface ParsedWslUnc {
+  readonly distroName: string
+  readonly unc: WslUncPath
+}
+
+/**
+ * 生の作業ディレクトリの**形**。名前空間の候補はこれで決まる
+ * (pr-gate Round 4 / 不変条件 1)。
+ *
+ * ## なぜ接頭辞の一覧照合をやめたか
+ *
+ * Round 1 から 3 まで、UNC の綴りの穴が**毎ラウンド出た**。
+ * 接頭辞を並べる設計である限り「まだ並べていない綴り」が必ず残るためである。
+ * しかも穴を塞ぐたびに隣が壊れた —
+ * Round 2 はデバイス綴りを足して `parseWslUncPath` への接続を忘れ FR-017 を落とし、
+ * Round 3 は `raw.startsWith('/')` の一括ガードで**正当な POSIX 表示**を壊した。
+ *
+ * ## 何で決めるか
+ *
+ * **先頭の区切りの本数**で決める。これは綴りの一覧ではなく値の形の性質である。
+ *
+ * 数えるのは `trim()` した後の先頭である。
+ *
+ * | 先頭区切り | 意味 |
+ * |---|---|
+ * | 0 本 | ドライブレターか相対。POSIX でも UNC でもない |
+ * | 1 本 | POSIX 絶対パス。**UNC ではないので生値を出してよい** |
+ * | 2 本以上 | **区切り 2 本以上の形**。POSIX でもホストでもない |
+ *
+ * **2 本以上を「UNC」と呼ばない** (pr-gate Round 4 / PB4-009)。
+ * `\\?\C:\dev` と `\\.\C:\dev` は Win32 の**デバイス名前空間接頭辞**であって UNC ではなく、
+ * サーバ名も共有名も含まない (実機で解決することを確認済み)。
+ * この形は FR-042 の対象外だが、**解析できない以上は同じく表示値を持たせない** —
+ * 対象外であることと、構造が読めることは別である。
+ *
+ * ## 実測されていない綴りに分岐を作らない
+ *
+ * 実測 ([research R-02](../../../specs/002-session-cross-folder-session-enumeration/research.md))
+ * で現れた UNC の綴りは `\\wsl.localhost\<distro>\...` の **1 種類だけ**である
+ * (ホスト既定 43 件中 7 件)。デバイス名前空間 (`\\?\UNC\`) や `GLOBALROOT` 経由の綴りは
+ * **誰も観測していない**。
+ *
+ * したがって 2 本以上の中で解析するのは `UNC_PREFIX` と `UNC_LEGACY_PREFIX` だけにし、
+ * **それ以外は一律 `opaque-unc`** とする。綴りが増えても安全側に落ちる。
+ *
+ * ## `opaque-unc` が表示値を持たない理由
+ *
+ * 構造が分からない値から「安全な残余」を切り出すのは、結局また推測である。
+ * 例えば `\\?\UNC\wsl.localhost\Ubuntu\home\alice` から
+ * 「server と share の 2 セグメントを落とす」規則を当てると `?` と `UNC` が落ち、
+ * **共有名 `wsl.localhost` が残る**。
+ * 解析できない以上どこまでが所在かを決められないので、**何も出さない**。
+ * 参照キー `unknown-location` が意味を運ぶ (訳出は `ui` の責務 / FR-047)。
+ */
+export type RawPathShape =
+  | { readonly kind: 'wsl-unc'; readonly parsed: ParsedWslUnc }
+  | { readonly kind: 'opaque-unc' }
+  | { readonly kind: 'host'; readonly path: HostPath }
+  | { readonly kind: 'posix'; readonly value: string }
+  | { readonly kind: 'other'; readonly value: string }
+
+/** 先頭に連続する区切り (`/` と `\` の両方) の本数。 */
+function leadingSeparatorCount(raw: string): number {
+  let n = 0
+  while (n < raw.length && (raw[n] === '/' || raw[n] === '\\')) n += 1
+  return n
+}
+
+/** 区切りが 2 本以上連続する箇所。**位置を問わない。** */
+const SEPARATOR_RUN = /[\\/]{2,}/
+
+/**
+ * 生値の形を判定する。**UNC の綴りを知ってよいのはこの関数の内側だけである**
+ * (AD-029 §3 / 検証項目 12)。
+ *
+ * 呼び出し側は `switch (shape.kind)` を書く。`startsWith` も `replace` も持たない。
+ */
+export function classifyRawPath(input: string): RawPathShape {
+  /*
+   * **先頭の空白を落としてから数える** (pr-gate Round 4 / S4-001)。
+   *
+   * 落とさないと、空白 1 つで先頭区切りの本数が 0 になり `other` に落ち、
+   * **生の UNC がそのまま表示値として境界に出た**。
+   * 制御文字は `build.ts` が `classifyCwd` の**前**に `normalizeText` で
+   * 落としているので、ここに届く先頭ジャンクは空白だけである。
+   */
+  const raw = input.trim()
+  const separators = leadingSeparatorCount(raw)
+
+  if (separators >= 2) {
+    /* **UNC 形。** 解析できるのは実測された 2 綴りだけで、残りは不透明にする。 */
+    const parsed = parseWslUncPath(raw)
+    return parsed.ok ? { kind: 'wsl-unc', parsed: parsed.path } : { kind: 'opaque-unc' }
+  }
+
+  if (separators === 1) {
+    /*
+     * **先頭区切り 1 本 = POSIX の見込み。だがバックスラッシュを含めば opaque にする**
+     * (pr-gate Round 5 / PB5-001)。
+     *
+     * 初版は #8 (`other`) にしか区切りガードを掛けず、
+     * `/x\wsl.localhost\Ubuntu\home` (先頭 `/` 1 本、内部にバックスラッシュ) が
+     * #7 (`posix`) に落ちて `\wsl.localhost\` を含む生値が境界に出た。
+     *
+     * **pure POSIX は forward slash だけを使う。** 先頭が `/` の値に
+     * バックスラッシュがあれば、それは Windows / UNC の綴りが混入したということである。
+     * `\\` を要する UNC 接頭辞を部分文字列として持つ可能性があるので `opaque-unc` に落とす。
+     * 区切りの連続 (`[\\/]{2,}`) だけを見ると**単一バックスラッシュの綴りを取りこぼす**
+     * (実測: `SEPARATOR_RUN.test('/x\\wsl.localhost\\...')` = false)。
+     * 一方で `/home//y` のような forward slash の重複は UNC ではないので posix のまま通す。
+     */
+    return raw.includes('\\') ? { kind: 'opaque-unc' } : { kind: 'posix', value: raw }
+  }
+
+  /* 0 本。ドライブレターならホスト (`C:\...` はバックスラッシュを含むが正当)。 */
+  const host = makeHostPath(raw)
+  if (host.ok) return { kind: 'host', path: host.path }
+
+  /*
+   * 相対パス等。**ホストでないのにバックスラッシュか区切りの連続を含む値は表示しない** —
+   * `x\wsl.localhost\Ubuntu` のような UNC 綴りの混入を #7 と同じ基準で塞ぐ。
+   */
+  return raw.includes('\\') || SEPARATOR_RUN.test(raw)
+    ? { kind: 'opaque-unc' }
+    : { kind: 'other', value: raw }
+}
+
+export function parseWslUncPath(raw: string): PathResult<ParsedWslUnc> {
+  if (raw.length === 0) return fail('invalid-format')
+
+  /*
+   * 区切りをバックスラッシュに寄せる。POSIX パスはこの時点で接頭辞に一致しなくなる。
+   *
+   * **述語をここに増やさない** (pr-gate Round 4 / 不変条件 1)。
+   * 以前は `looksLikeWslUnc` / `uncRelativeDisplay` が同じ寄せを別に持ち、
+   * **同じ入力に別の答えを返していた**。今は `classifyRawPath` が
+   * 「UNC 形かどうか」を先頭区切りの本数で決め、この関数は
+   * **「実測された 2 綴りを解析できるか」だけ**に責任を持つ。
+   */
+  const backslashed = raw.replace(/\//g, '\\')
+  const lower = backslashed.toLowerCase()
+
+  const prefix = lower.startsWith(UNC_PREFIX.toLowerCase())
+    ? UNC_PREFIX
+    : lower.startsWith(UNC_LEGACY_PREFIX.toLowerCase())
+      ? UNC_LEGACY_PREFIX
+      : null
+  if (prefix === null) return fail('invalid-format')
+
+  const afterPrefix = backslashed.slice(prefix.length)
+  const sep = afterPrefix.indexOf('\\')
+  const distroName = sep < 0 ? afterPrefix : afterPrefix.slice(0, sep)
+  if (!isValidDistroName(distroName)) return fail('invalid-format')
+
+  const rest = sep < 0 ? '' : afterPrefix.slice(sep)
+  const canonical = `${UNC_PREFIX}${distroName}${rest}`
+
+  const result = makeWslUncPath(uncNamespace(distroName), canonical)
+  if (!result.ok) return fail(result.reason)
+  return { ok: true, path: { distroName, unc: result.path } }
 }
 
 /** ランタイム名前空間 (POSIX 意味論) の操作。 */

@@ -46,8 +46,8 @@ spec_id（`001-runtime-...`）とは独立させる。差し込み作業で番�
 
 | ID | feature | domain | milestone |
 |---|---|---|---|
-| R-1 | フォルダ登録とランタイム検出。**プロジェクト初期化・5 レイヤと依存規則の機械強制・CI・操作 UI（ランタイム一覧 / フォルダ登録 / 組み合わせ選択）を含む**。`Win32Runtime` + `WslRuntime` の検出、3 名前空間のパス型、到達可能性と越境の解決。**プロセス起動は含まない** | `runtime` | M1 |
-| R-2 | セッション列挙（読み取り専用、WSL 内 config を Windows から横断） | `session` | M1 |
+| R-1 | フォルダ登録とランタイム検出。**プロジェクト初期化・5 レイヤと依存規則の機械強制・CI・操作 UI（ランタイム一覧 / フォルダ登録 / 組み合わせ選択）を含む**。`Win32Runtime` + `WslRuntime` の検出、3 名前空間のパス型、到達可能性と越境の解決。**プロセス起動は含まない**。**R-2 がパス API に `classifyRawPath()` と `parseWslUncPath()` を追加した**（前者が生値の形を先頭区切りの本数で判定する唯一の入口、後者が実測された 2 綴りの解析。UNC の綴りに関する知識を 1 箇所に集めるため。[AD-032](../decisions/0032-unc-shape-classification-by-separator-count.md)） | `runtime` | M1 |
+| R-2 | セッション列挙。**読み取り専用**（起動・改名・削除をしない）。WSL 内 config を Windows から UNC 経路で横断し、**登録の有無によらず全件列挙**して未登録フォルダも示す。作業ディレクトリの出自を値の形から判定し、所在が特定できないものは推測しない | `session` | M1 |
 | R-3 | transcript の基本表示（markdown / streaming text / scroll anchor / tool fallback） | `ui` | M1 |
 | R-4 | Tier A tool 表示（Terminal / Code diff / Todo / Subagent / Agent plan / Reasoning） | `ui` | M1 |
 | X-1 | 単一セッション起動とストリーミング（Approval card、中断） | `session` | M2 |
@@ -125,7 +125,17 @@ domain をまたいで守られるべき不変条件。いずれも Constitution
 | Claude Code との通信は Agent SDK 経由 | IV | `session` / `isolation` |
 | 長期資格情報を永続化しない | V | `provider` / `session` |
 | 永続環境を構築・変更しない | VI | `runtime` / `isolation` |
+| supervisor は Electron に依存せず単独起動できる | VII | `session` / `isolation` |
+| 重いパースを main process で行わない | IX | `session` / `isolation` / `ui` |
 | セッションの正本はアプリ外にある | X | `session` / `isolation` |
+
+**VII / IX を R-2 で追加した** (pr-gate Round 4 / M4-13)。`agents` を持つ feature が
+初めて実装されたことで、この 2 つが cross-domain invariant として実体を持った。
+`session/charter.md` は以前から「共有 invariant: III / IV / V / IX / X」と宣言しており、
+表の側が追随していなかった。
+**IX には検証の限界がある** — `bad_pattern_grep` はパースコードの置き場を見るだけで、
+どのプロセスで走るかは見ていない
+([AD-031](../decisions/0031-adr-in-place-corrections-and-principle-ix-scope.md))。
 
 ## Open Questions
 

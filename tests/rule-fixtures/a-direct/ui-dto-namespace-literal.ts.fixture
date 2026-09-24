@@ -1,0 +1,5 @@
+// 違反サンプル: renderer が名前空間つきパス値 (`PathDTO`) を組み立てる。
+// main が返した値をそのまま渡すのが正しい形である (Principle I / FR-025 / SH-054)。
+export function fakePath(value: string): { namespace: string; value: string } {
+  return { namespace: 'host', value }
+}

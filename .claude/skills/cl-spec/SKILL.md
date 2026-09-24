@@ -154,6 +154,28 @@ linear: <"<PRJID>-NNN" or null>
 
 仮定内容は `[ASSUMED: <内容>]` としてその場に記録し、完了通知に列挙する。LLM が `[NEEDS CLARIFICATION]` を **無根拠に空白のまま埋める**ことは禁止。
 
+### Phase 8.5: 粒度の抑制 (レビューコストの制御)
+
+**spec の量が design-gate のコストをほぼ決める。** reviewer は文書量に比例して指摘を出し、
+同じ規則が複数の成果物に重複して書かれているほど「1 箇所だけ古い」系の drift 指摘が増える。
+
+生成した spec.md に対して次を確認し、超過していれば**削ってから** Phase 9 に進む。
+
+| 目安 | 上限 | 超過時の削り方 |
+|---|---|---|
+| Functional Requirements | **20 件** | 「先行 feature の規則をそのまま継ぐ」ものを FR にしない。`## Dependencies` に「R-N の FR-xxx を継承する」と 1 行書く |
+| Success Criteria | **10 件** | 1 つの SC に複数の計測対象をまとめる。**計測経路を持たない SC は作らない** |
+| Acceptance Scenarios (1 User Story あたり) | **8 件** | Edge Cases 節に移す。AC は「この Story が成立したと言える最小の観測」に絞る |
+| User Story | **4 本** | 超えるなら feature の分割を検討し、`docs/domains/_overview.md` の Feature 帰属表に諮る |
+
+**例外**: プロジェクトの初期化を兼ねる feature (最初の 1 本) と、
+Constitution / ADR の改定を主目的とする feature はこの限りでない。
+超過する場合は `## 本 feature の位置づけ` に**理由を 1 行**書く。
+
+**「書けば安全」ではない。** 1 つの規則を spec / data-model / contracts / tasks の
+4 箇所に書くと、4 箇所が同期している保証が無いまま「詳しく書いた」状態になる。
+**規則の正本を 1 箇所に決め、他は参照する** (例: SC は「contracts C-4 の表の各行」と参照形で書く)。
+
 ### Phase 9: 完了通知
 
 ```

@@ -89,6 +89,27 @@ total_terms: 31
 - **Domain**: `runtime` (判定) / `ui` (表示)
 - **Ref**: [AD-016](decisions/0016-cross-filesystem-performance-cliff.md)
 
+#### **CwdOrigin（作業ディレクトリの出自）**
+
+- **Definition**: セッションに記録された作業ディレクトリの**値の形**から判定した名前空間と所在。
+  `host` / `wsl-from-unc` / `wsl-inherited` / `unknown-location` / `undetected-distro` / `absent`
+  の 6 値
+- **日本語表記**: 作業ディレクトリの出自
+- **Domain**: `session`
+- **Counterexamples**: **由来 config ディレクトリの所在と混同しない。**
+  **指示代名詞で書かない** — 「前者 / 後者」はどちらを指すか決まらず、
+  この区別は本 feature で**最も誤りやすい**ものとして Principle XIV の対象に挙げられている
+  (plan.md)。実名で書く。
+  - **由来 config ディレクトリの所在** (`EnumerationTarget.location`) =
+    「履歴が**どこに保存されているか**」。**アプリが選ぶ** (FR-009)
+  - **`CwdOrigin` の所在** = 「セッションが**どこで動いたか**」。
+    **記録された値から判定する** (FR-016)
+
+  **この 2 つは一致しない。** 実測でホスト側の 1 つの config ディレクトリに
+  3 形式（Windows / POSIX / UNC）が混在した。
+  正本は [data-model.md](../specs/002-session-cross-folder-session-enumeration/data-model.md) §4 の表である
+- **Ref**: [AD-029](decisions/0029-session-cwd-origin-classification.md)
+
 #### **CredentialSource**
 
 - **Definition**: Provider の認証方式。9 種類あり、それぞれ「アプリが秘密を持つか」が定義されている。
@@ -114,6 +135,46 @@ total_terms: 31
 - **Definition**: assistant-ui が提供する UI 部品。202 種（2026-09-13 確認）
 - **Domain**: `ui`
 - **Counterexamples**: 自作コンポーネント。同等の element が存在する場合は自作しない（Principle XIII）
+
+#### **EnumerationTarget（列挙対象）**
+
+- **Definition**: セッション列挙の対象となる**所在と config ディレクトリの組**。
+  不透明な `key` / 所在 / config ディレクトリ（所在の名前空間）/ 由来 / 表示用ラベルを持つ
+- **日本語表記**: 列挙対象
+- **Domain**: `session`
+- **Counterexamples**: 1 つの所在に**複数**ありうる（ディストロ内の複数ユーザ分）。
+  「所在ごとに 1 つ」ではない。R-2 は所在ごとの既定のみを対象にし、
+  複数 Provider 分は X-3 で集合を差し替える
+- **表示用ラベルの規則**: 候補集合の中で**一意かつ非空**にする（FR-052）。
+  正規化で空になった候補は `候補 #n`、同じ表示になる候補は `名前 (#n)` とし、
+  **序数は `targetKey` の序数と同じ**。一意化は生成後の集合に対して閉じている
+  （生成名が実在の候補名と一致する場合はさらに序数を足す）
+- **Ref**: [AD-028](decisions/0028-session-enumeration-process-and-unc-handoff.md)
+
+#### **Coverage（索引をどこまで信じてよいか）**
+
+- **Definition**: セッション索引について**件数と空状態を断言してよいか**を表す 3 値。
+  `pending`（まだ出そろっていない）/ `partial`（出そろったが読めない所在か
+  打ち切った所在がある）/ `complete`（全部読めた）
+- **日本語表記**: 索引の網羅度
+- **Domain**: `session`（判定は `ui` の純粋関数。境界は渡らない）
+- **Counterexamples**: `SessionIndexDTO.complete` と**同じではない**。
+  あちらは「**全所在を試した**」であり、失敗があっても真になる。
+  `complete` を「全部読めた」と読むのが Round 1〜3 の欠陥の根だった
+- **Ref**: `src/renderer/src/features/session-list/labels.ts`
+
+#### **opaque-unc（解析できない UNC 形）**
+
+- **Definition**: 区切り 2 本以上で始まるが、実測された 2 綴り
+  （`\\wsl.localhost\` / `\\wsl$\`）として解析できない値の形。
+  **所在も表示値も持たない**（`unknown-location` に落ちる）
+- **日本語表記**: 解析できない UNC 形
+- **Domain**: `runtime`（`RawPathShape` の 1 値）
+- **Counterexamples**: 「UNC ではない」ことを意味しない。
+  `\\?\C:\dev` のようなデバイス名前空間接頭辞もここに入るが、
+  これはサーバ名も共有名も持たないので FR-042 の対象ではない。
+  **表示値を落とすのは「構造が読めない」からであって「UNC だから」ではない**
+- **Ref**: [AD-032](decisions/0032-unc-shape-classification-by-separator-count.md)
 
 #### **endpoint**
 
@@ -171,6 +232,17 @@ total_terms: 31
 - **日本語表記**: パスマッピング
 - **Domain**: `runtime`
 - **Ref**: [AD-015](decisions/0015-wsl-access-strategy.md) / [AD-025](decisions/0025-workspace-folder-carries-location.md)
+
+#### **Pending match（対応づけ保留）**
+
+- **Definition**: 変換材料（`PathMapping`）が無いため、セッションと登録フォルダの対応を
+  決められない状態。理由は R-1 の `BlockedReason` と同じ 3 値
+  （`distro-not-running` / `capabilities-not-probed` / `probe-failed`）
+- **日本語表記**: 対応づけ保留
+- **Domain**: `session`
+- **Counterexamples**: R-1 が `unreachable` に分類する `path-not-mapped` を**含めない** —
+  含めると「解消手順がある」と「対応が無い」が同居する。
+  「未登録」「所在不明」とも別である
 
 #### **Preset**
 
@@ -231,6 +303,20 @@ total_terms: 31
 - **日本語表記**: セッション
 - **Domain**: `session`
 - **Ref**: [AD-007](decisions/0007-session-source-of-truth-is-claude-code.md)
+- **Note**: **一覧（R-2）が扱うのは要約とメタデータのみ**であり、本文の取得は R-3 で追加する
+
+#### **SessionSummary（セッション要約行）**
+
+- **Definition**: セッション一覧の 1 行。識別子 / 要約 / 最終更新 / 作成時刻 / 作業ディレクトリ /
+  git ブランチ / タグ / 由来（対話・programmatic・worktree）/ 由来列挙対象を持つ。
+  **transcript の本文を含まない**
+- **日本語表記**: セッション要約行
+- **Domain**: `session`
+- **Counterexamples**: **`summary` / `firstPrompt` / `customTitle` を「要約だから安全」と扱わない。**
+  SDK の定義上これらは会話由来の**逐語文字列**を含みうる（`firstPrompt` は
+  "First meaningful user prompt in the session."）。IPC 境界を越える前に
+  切り詰めと制御文字の除去を通す
+- **Ref**: [AD-007](decisions/0007-session-source-of-truth-is-claude-code.md) / [AD-029](decisions/0029-session-cwd-origin-classification.md)
 
 #### **SessionLaunchConfig**
 
@@ -266,9 +352,36 @@ total_terms: 31
 
 - **Definition**: セッションの会話ログ。`<config-dir>/projects/<encoded-cwd>/` 配下の JSONL に永続化される。
   `encoded-cwd` は作業ディレクトリの非英数字を `-` に置換したもの
+- **Note**: **`encoded-cwd` をアプリ側で再現しない**（R-2 の `[ASSUMED]`）。
+  作業ディレクトリはセッションのメタデータから読む。
+  **一覧（R-2）は本文を取得も転送もしない** — 取得は R-3 で追加する
 - **Domain**: `session`
 
 ### U
+
+#### **Unregistered folder（未登録フォルダ）**
+
+- **Definition**: セッション一覧のうち、**登録フォルダに対応しない**作業ディレクトリごとの
+  まとまり。その場で作業フォルダとして登録する導線を持つ
+- **日本語表記**: 未登録フォルダ
+- **Domain**: `session`
+- **Counterexamples**: **「対応づけ保留」と混ぜない。** 未登録は「決めた結果として対応が無い」、
+  保留は「今は決められない」である。保留を未登録として見せると、
+  **登録済みのフォルダに対して再登録を促す**ことになる。
+  また未登録の作業ディレクトリに対して**実在確認は行わない**
+  （任意パスの存在を問い合わせる経路を作らない）
+
+#### **Unknown location（所在不明）**
+
+- **Definition**: 作業ディレクトリの記録から**どのディストロか特定できない**状態。
+  ホスト側の config ディレクトリに POSIX 形式の値が現れた場合がこれにあたる
+- **日本語表記**: 所在不明
+- **Domain**: `session`
+- **Counterexamples**: **「未検出の所在」と混ぜない。** 前者は「どのディストロか分からない」、
+  後者は「どのディストロかは分かるが、そのディストロが今ない」（UNC 形式にディストロ名が
+  埋め込まれている場合）である。利用者に示すべき次の操作が違う。
+  **所在不明を推測で埋めない** — 同じ `/home/y/p` は複数のディストロに存在しうる
+- **Ref**: [AD-029](decisions/0029-session-cwd-origin-classification.md)
 
 #### **ui-coverage 対応表**
 

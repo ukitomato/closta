@@ -10,11 +10,15 @@ import { createWslFileSystem } from '../infra/fs/wsl-fs'
 import { createRuntimeDetector } from '../infra/runtime/wsl-detector'
 import { createWslCli } from '../infra/runtime/wsl-cli'
 import { createFolderStore } from '../infra/settings/folder-store'
+import { createEnumerationTargetFinder } from '../infra/session/target-finder'
+import { createUtilityProcessLauncher } from './enumerator-spawner'
 import { createFolderService, type FolderService } from './folder-service'
 import type { IpcDependencies } from './ipc'
 import { createMeasure } from './measure'
 import { isDevBuild } from './origins'
 import { createRuntimeStore, type RuntimeStore } from './runtime-store'
+import { createSessionEnumerator } from './session-enumerator'
+import { createSessionService, type SessionService } from './session-service'
 
 /**
  * composition root (BE-010 / BE-045 / AD-023 §1)。
@@ -22,10 +26,17 @@ import { createRuntimeStore, type RuntimeStore } from './runtime-store'
  * **Electron 由来の値をここで解決し `infra` / `domain` に注入する** (FR-038)。
  * `infra` は `electron` を import しない (例外は `infra/secrets/` のみ。AD-023 §8)。
  *
- * ここで解決している Electron 由来の値は 3 つある。
+ * ここで解決している Electron 由来の値は 5 つある。
  * - ユーザデータディレクトリ (`app.getPath('userData')`) → 永続化層へ
  * - 開発ビルド判定 (`app.isPackaged`) → 計測へ
  * - ネイティブフォルダピッカー (`dialog.showOpenDialog`) → 所在 `windows` の入口
+ * - **ホームディレクトリ (`app.getPath('home')`) → 列挙対象の探索へ** (R-2 / BE-031)
+ * - **子プロセスの生成 (`enumerator-spawner`) → 列挙プロセスへ** (R-2)
+ *
+ * **親環境 (`process.env`) もここで解決する。** 列挙プロセスに渡す環境変数は
+ * 許可リストで絞るが、親環境そのものを読むのは結線層の役割である —
+ * `session-enumerator` がグローバルの `process` を参照すると、
+ * import を伴わないので lint も検証スクリプトも素通りする (FR-050)。
  *
  * DI コンテナは使わず関数引数で渡す (AD-023 Open Questions の方針)。
  */
@@ -33,7 +44,22 @@ import { createRuntimeStore, type RuntimeStore } from './runtime-store'
 export interface Composition {
   readonly runtimes: RuntimeStore
   readonly folders: FolderService
+  readonly sessions: SessionService
   readonly ipc: IpcDependencies
+  /**
+   * アプリ終了時に呼ぶ後始末。
+   *
+   * **常駐している列挙プロセスを終了させる** (contracts C-5) —
+   * UNC ハンドルを掴んだ孤児を残さない。
+   * 登録は `src/main/index.ts` が `before-quit` で行う。
+   */
+  /**
+   * 終了処理。**終了を確認できなかったワーカの台数**を返す (contracts C-5)。
+   *
+   * 0 でなければ UNC ハンドルを掴んだままのプロセスが残っている。
+   * この層は記録の経路を持たないので、呼び出し側 (`index.ts`) が記録する。
+   */
+  readonly dispose: () => number
 }
 
 export function createComposition(): Composition {
@@ -80,6 +106,76 @@ export function createComposition(): Composition {
     newId: () => randomUUID().replace(/-/g, '')
   })
 
+  /*
+   * **ホームディレクトリを解決して渡す** (BE-031 / BE-021)。
+   * `infra/session` は `os` / `process` / `electron` のいずれも import できない。
+   * 注入しないと `process.env.USERPROFILE` へ倒れ、**import が無いので
+   * lint も検証スクリプトも素通りしたまま** Windows 前提の分岐が生える。
+   */
+  const homeResult = makeHostPath(app.getPath('home'))
+  if (!homeResult.ok) {
+    throw new Error('ホームディレクトリのパスを解釈できない')
+  }
+  const hostHome = homeResult.path
+
+  const enumerator = createSessionEnumerator({
+    launcher: createUtilityProcessLauncher(),
+    wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    now,
+    // platform-ok: 親環境の読み取りであり OS 分岐ではない。許可リストの適用は `config-dir.ts`。
+    parentEnv: process.env
+  })
+
+  /*
+   * **列挙プロセスを先に起こす** (AD-030 §6)。
+   *
+   * 起動費用は実測で約 2.7 秒あり、一覧を開いたときに払うと
+   * SC-008 の先頭ページ 2 秒を単独で超える。
+   * R-1 のランタイム検出が既に約 4 秒かかっているため、その裏に隠れる。
+   *
+   * **呼ばなくても動く。** 最初の要求の時点で起こす (遅いが動く)。
+   */
+  enumerator.warmUp()
+
+  const sessions = createSessionService({
+    finder: createEnumerationTargetFinder({
+      hostFs: createHostFileSystem(),
+      wslFs: createWslFileSystem()
+    }),
+    enumerator,
+    runtimes: () => runtimes.snapshot(),
+    folders: () => folders.folders(),
+    /*
+     * **R-1 の実行状態確認をそのまま使う** (contracts C-7)。
+     * R-2 は `wsl.exe` を新たに 1 度も呼ばない — この 1 行が SC-003 の「0 件」を
+     * 成り立たせている。
+     */
+    verifyRunning: () => detector.verifyRunning(),
+    hostHome: () => hostHome,
+    now,
+    measure
+  })
+
+  /*
+   * **実行中確認も先に済ませる** (SC-008)。
+   *
+   * `wsl.exe` の固定費は実測 1,185〜1,373 ms あり、一覧を開いたときに払うと
+   * **先頭 50 件の予算 2 秒から丸ごと引かれる** (実測で余裕が 21 ms まで詰まった)。
+   * R-1 の判定バッチが同じ確認を既に走らせている裏に隠れる。
+   *
+   * **これだけでは足りない。** 有効期間は 30 秒であり、利用者が後で開けば払い直す。
+   * 構造側の手当ては `session-service.ts` にある —
+   * **所在 `windows` は実行中確認を待たずに列挙して先に描く**。
+   */
+  sessions.warmUp()
+
+  /*
+   * **登録フォルダの変更で再列挙しない** (data-model §7)。
+   * 対応づけだけをやり直す — 列挙は利用者の明示操作に限る (FR-033)。
+   */
+  folders.onChanged(() => sessions.onFoldersChanged())
+  runtimes.onChanged(() => sessions.onRuntimesChanged())
+
   const ipc: IpcDependencies = {
     listRuntimes: () => runtimes.list(),
     refreshRuntimes: async () => {
@@ -103,6 +199,11 @@ export function createComposition(): Composition {
     unregisterFolder: (id) => folders.unregister(id),
     folderIds: () => folders.folderIds(),
     resolveFolderRuntime: (folderId, runtimeId) => folders.resolve(folderId, runtimeId),
+
+    listSessions: () => sessions.list(),
+    refreshSessions: () => sessions.refresh(),
+    fetchMoreSessions: (targetKey, offset) => sessions.fetchMore(targetKey, offset),
+    sessionTargetKeys: () => sessions.targetKeys(),
 
     async pickHostFolder() {
       /*
@@ -131,5 +232,5 @@ export function createComposition(): Composition {
     }
   }
 
-  return { runtimes, folders, ipc }
+  return { runtimes, folders, sessions, ipc, dispose: () => enumerator.dispose() }
 }

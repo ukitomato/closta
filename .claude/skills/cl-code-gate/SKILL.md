@@ -13,12 +13,16 @@ Implementation Phase の **self-review gate**。`/cl-implement` 完了後に aut
 
 | Gate | Scope | Reviewer 構成 |
 |---|---|---|
-| **code-gate (本 skill)** | touched files に対する **静的検査 + テスト + 命名 / module 配置** | `lint-agent`, `test-agent`, `convention-reviewer` (+ stack 別 lint-like: a11y / database-migration / flutter-perf) |
+| **code-gate (本 skill)** | touched files に対する **静的検査 + テスト + 命名 / module 配置** | `lint-agent`, `test-agent`, `convention-reviewer` (+ stack 別 lint-like: database-migration / flutter-perf。**a11y / ux は pr-gate 専任**) |
 | **pr-gate (別 skill)** | diff `<base>...HEAD` 全体への **adversarial Critical 検証** | `security-reviewer`, `architecture-reviewer`, `po-reviewer` (+ system scope: api-performance / openapi-contract) |
 
-**Overlap 排除原則**: code-gate は security / architecture / po 系 reviewer を **起動しない** (pr-gate の責務、resolves C-4-a)。stack 別追加 reviewer は lint-like (a11y, flutter-perf, database-migration) に限定。
+**Overlap 排除原則**: code-gate は security / architecture / po 系 reviewer を **起動しない** (pr-gate の責務、resolves C-4-a)。stack 別追加 reviewer は lint-like (flutter-perf, database-migration) に限定。
 
-`gate_common::registry_filter_agents` で実在する reviewer のみに絞り込み (registry に無い optional reviewer は silent skip)。
+**`gate_common::reviewers_filter code-gate <changed-files> <候補…>` で絞り込む。**
+`registry_filter_agents` (agent ファイルの存在だけ) では**絞れない** —
+`.specify/spec-gate/reviewers.yml` の `enabled` / `gates` / `auto_invoke_patterns` /
+`exclude_patterns` を適用するのは `reviewers_filter` 側である。
+registry に無い optional reviewer は silent skip、yml で落ちた分は理由が stderr に出る。
 
 ## When to invoke
 
@@ -63,14 +67,34 @@ gate_common::registry_assert_agent convention-reviewer || halt "convention-revie
 ### Phase 1: Diff scope の決定
 
 ```bash
-diff_files=$(git diff --name-only HEAD | sort -u)
-touched_files=$(cat "$spec_dir/touched-files.txt" 2>/dev/null | sort -u || true)
+# **改行と空行を正規化してから comm に渡す。**
+# comm は入力が同じ規則で整列していることを前提とし、**一致しない行を黙って落とす**。
+# touched-files.txt が CRLF と LF の混在になっていて、CR 付きの 31 行が
+# 無言で scope から外れた実績がある (scope が 84 ではなく 54 になった)。
+normalize() { tr -d '' | sed '/^[[:space:]]*$/d' | sort -u; }
+
+# **実装がコミット済みなら base との差分を使う。**
+# git diff --name-only HEAD は未コミット変更しか見ない。
+# さらに **base ブランチが前 feature のマージ前を指していることがある** —
+# その場合 base...HEAD は前 feature の squash コミットを丸ごと含む
+# (実績: 本来 102 ファイルの feature が 276 ファイルに膨らんだ)。
+# 前 feature の最後のコミットを起点にすること。
+if [ -n "$(git status --porcelain)" ]; then
+  diff_files=$(git diff --name-only HEAD | normalize)
+else
+  diff_files=$(git diff --name-only "$base_commit..HEAD" | normalize)
+fi
+touched_files=$(cat "$spec_dir/touched-files.txt" 2>/dev/null | normalize || true)
 if [ -n "$touched_files" ]; then
   scope=$(comm -12 <(echo "$diff_files") <(echo "$touched_files"))
 else
   scope="$diff_files"
 fi
 echo "$scope" > "$spec_dir/.code-gate-scope.txt"
+
+# **落ちた行を報告する。** 黙って絞ると検査が 0 件になっていることに気付けない。
+comm -23 <(echo "$diff_files") <(echo "$touched_files")  # diff にあり touched に無い
+comm -13 <(echo "$diff_files") <(echo "$touched_files")  # touched にあり diff に無い
 ```
 
 reviewer に渡す scope は `diff_files ∩ touched_files` (touched-files.txt があれば intersect、なければ diff_files 全部)。
@@ -80,30 +104,70 @@ reviewer に渡す scope は `diff_files ∩ touched_files` (touched-files.txt �
 `docs/discovery.md` から tech stack を検出し、追加 reviewer を決定:
 
 - **常駐 (4 actor/reviewer)**: `lint-agent`, `test-agent`, `convention-reviewer` + `implementer` (auto-fix 用、Phase 5 で起動)
-- **stack 別追加 (最大 +2)**: lint-like のみ
-  - Flutter → `flutter-perf-reviewer` (registry にあれば)
-  - WCAG 対応プロジェクト → `a11y-reviewer`
-  - データベース migration を含む diff → `database-reviewer`
-  - UI framework → `ux-reviewer`
+- **stack 別追加 (最大 +2)**: lint-like のみ。**採否は `.specify/spec-gate/reviewers.yml` が決める**
+
+**候補を全部渡してはならない。`gate_common::reviewers_filter` に絞らせる。**
 
 ```bash
-active=$(gate_common::registry_filter_agents \
+active=$(gate_common::reviewers_filter code-gate "$spec_dir/.code-gate-scope.txt" \
   lint-agent test-agent convention-reviewer \
   flutter-perf-reviewer a11y-reviewer database-reviewer ux-reviewer)
 ```
 
-`security-reviewer`, `architecture-reviewer`, `po-reviewer`, `api-performance-reviewer`, `openapi-contract-reviewer` は **起動しない** (pr-gate 専任)。
+`reviewers_filter` は `registry_filter_agents` (agent ファイルの存在) に加えて
+`.specify/spec-gate/reviewers.yml` の `enabled` / `gates` / `auto_invoke_patterns` /
+`exclude_patterns` を適用する。**`registry_filter_agents` を直接呼ぶと存在するだけの
+reviewer が全部起動する** — これが a11y / ux を UI 無変更の diff でも毎 iteration
+起動させていた原因である。yml に載っていない常駐 (lint-agent 等) は素通しされる。
+
+絞った理由は stderr に 1 行ずつ出る。**Phase 4 の集約に「起動しなかった reviewer と
+その理由」を必ず転記する** — 黙って絞ると「起動しなかった」と「起動して 0 件だった」を
+区別できない。
+
+`security-reviewer`, `architecture-reviewer`, `po-reviewer`, `api-performance-reviewer`,
+`openapi-contract-reviewer` は **起動しない** (pr-gate 専任)。
+**`a11y-reviewer` / `ux-reviewer` も現在は pr-gate 専任** (reviewers.yml の
+`gates: [pr-gate]`)。これらの指摘は `must_fix` に翻訳されず auto-fix loop を
+進めないため、毎 iteration 起動しても生成コストしか掛からない。
 
 ### Phase 3: 並列 reviewer 起動 (1 iteration)
 
 **1 message 内で全 active reviewer を並列 Agent 起動**:
 
-| Track | Agent type | 観点 |
-|---|---|---|
-| `lint-agent`         | Agent ツール (`subagent_type: lint-agent`) — stdout に JSON で violations 返却 | 静的解析、style 違反 |
-| `test-agent`         | Agent ツール (`subagent_type: test-agent`) — stdout に JSON で pass/fail + failed test names | テスト red 検出 + coverage |
-| `convention-reviewer`| Agent ツール (`subagent_type: convention-reviewer`) | 命名 / module 配置 / lint hookup |
-| (stack 別 +α)        | Agent ツール | 該当時 |
+> **⚠ lint track と test track を並列にしてはならない (実測で誤検知が出た)。**
+>
+> `npm run test:rules` 系の「違反サンプルを実際に発火させる」検証は、
+> **サンプルを `src/` 配下へ一時展開して検出器を回す**実装になっていることがある。
+> 並列に走った depcruise がその展開物を拾い、**実コードの違反として exit 1 を返した**
+> (161 modules / 639 deps。clean run は 160 / 638 で、差はちょうど fixture 1 件)。
+> サンプル側のロックは**同種の実行同士の排他しか持たず**、外部の検出器を守らない。
+>
+> **さらに CPU を取り合うとテストが起動に失敗する。**
+> jsdom project の worker 起動が 60 秒の待ちを超え、**4 ファイルが 0 件実行**になった。
+> このとき exit code は 1 だが **JSON reporter は `success: true` / `numFailedTests: 0` を返す**。
+>
+> したがって:
+> 1. **lint track と test track は直列に走らせる** (reviewer 系は並列でよい)
+> 2. **判定は exit code を正とする。** JSON の `success` だけを見てはならない
+> 3. `Errors` / `Unhandled Errors` が 0 件でないなら失敗として扱う
+
+| Track | Agent type | 観点 | 起動順 |
+|---|---|---|---|
+| `lint-agent`         | Agent ツール (`subagent_type: lint-agent`) — stdout に JSON で violations 返却 | 静的解析、style 違反 | **1 番目** |
+| `test-agent`         | Agent ツール (`subagent_type: test-agent`) — stdout に JSON で pass/fail + failed test names | テスト red 検出 + coverage | lint track の後 (上の直列要件) |
+| `convention-reviewer`| Agent ツール (`subagent_type: convention-reviewer`) | 命名 / module 配置 / lint hookup | **`lint-agent` の後** |
+| (stack 別 +α)        | Agent ツール | 該当時 | 並列可 |
+
+> **`convention-reviewer` は `lint-agent` より後に起動する。**
+> `convention-reviewer` は**自分で lint を実行しない** — 同じ iteration の同じ diff に
+> 対して `lint-agent` が既に走っており、両方が実行すると
+> **auto-fix loop の毎 iteration で lint が 2 回**走る。
+> `lint-agent` の stdout JSON をそのまま context で渡すこと。
+>
+> **`exit_code` を落とさずに渡す。** `convention-reviewer` は
+> 「lint が非ゼロ exit で終わったこと自体を Critical とする」判定をこの値で行い、
+> それが `gate-common.sh` の機械 gate (`PASS` かつ `critical>0` は exit 5) に直結する。
+> ここを削ると lint が壊れたまま gate が通る。
 
 各 reviewer に context として渡す:
 
@@ -112,6 +176,10 @@ active=$(gate_common::registry_filter_agents \
 - `git diff HEAD` の full diff (大きすぎる場合は `git diff --stat` + 個別 file の diff)
 - `.specify/memory/constitution.md`
 - `docs/domains/<domain>/charter.md`
+- **`convention-reviewer` のみ**: `lint-agent` の stdout JSON 全体
+- **`test-agent` のみ**: 現 iteration が**最終 iteration になりうるか**
+  (前回 iter の `must_fix` 値)。iteration 途中は touched files の subset、
+  `must_fix == 0` になった回は**全件**を走らせるための判断材料である
 
 clean-context isolation (`tools: Read, Grep, Glob` + lint/test-agent は `Bash` のみ追加許可)。
 
@@ -186,15 +254,34 @@ clean-context isolation (`tools: Read, Grep, Glob` + lint/test-agent は `Bash` 
     "G": "該当なし: optional reviewer なし", "H": "High:1 Medium:1"
   },
   "tracks": {
-    "lint-agent": {"violations": 5, "exit_code": 1},
-    "test-agent": {"passed": 142, "failed": 3, "exit_code": 1},
-    "convention-reviewer": {"viewpoint_missing": [], "cascade_demotions": 0}
+    "lint-agent": {"violations": 5, "exit_code": 1,
+                   "detectors": ["lint", "typecheck", "depcruise", "check:constitution"]},
+    "test-agent": {"passed": 142, "failed": 3, "exit_code": 1,
+                   "scope": "touched-files"},
+    "convention-reviewer": {"viewpoint_missing": [], "cascade_demotions": 0,
+                            "lint_input": "lint-agent"}
   },
+  "skipped_reviewers": [
+    {"name": "a11y-reviewer", "reason": "gates=['pr-gate'] に code-gate が無い"}
+  ],
   "cascade_demotions": 0,
   "iter_history": [{"iter": 1, "must_fix": 5}, {"iter": 2, "must_fix": 2}],
   "verdict": "PASS|FIX_REQUIRED"
 }
 ```
+
+**`tracks` に必ず入れるもの (後から検証するため):**
+
+- `lint-agent.detectors` — 実際に走らせた検出器の名前。
+  **`test:rules` (ルール検証) を含めてはならない** — code-gate では実行しない
+  (`docs/discovery.md` の該当節)。含まれていたら実行してしまっている。
+  逆に `detectors` が空 / 欠落しているときは**黙って落ちている**
+  (002 で実際に起きた。誰も気づかなかった)
+- `test-agent.scope` — `touched-files` または `full`。
+  **`verdict: PASS` の iteration は必ず `full` でなければならない。**
+  `PASS` かつ `touched-files` は subset だけで通したことを意味し、無効である
+- `skipped_reviewers[]` — 起動しなかった reviewer と `reviewers_filter` が出した理由。
+  空配列と「記録し忘れ」を区別できるよう、**0 件なら `[]` を明示する**
 
 ### Phase 5: Auto-fix loop (MUST_FIX > 0 かつ `--no-auto-fix` でないとき)
 

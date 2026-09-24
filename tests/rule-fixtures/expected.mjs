@@ -68,6 +68,27 @@ export const FIXTURES = [
     rules: ['no-restricted-imports', 'path-module-only-from-path-api']
   },
   {
+    file: 'a-direct/unc-literal-outside-allowlist.ts.fixture',
+    target: 'src/main/app/__rulecheck__/unc-literal-outside-allowlist.ts',
+    group: 'a',
+    what: '許可外モジュールが UNC 接頭辞リテラルを持つ (パス API を迂回した手組み)',
+    detectors: ['constitution'],
+    rules: ['#12']
+  },
+  {
+    file: 'a-direct/agents-unc-api-call.ts.fixture',
+    target: 'src/agents/__rulecheck__/agents-unc-api-call.ts',
+    group: 'a',
+    /*
+     * 項目 13 には (a) リテラル / (b) API 呼び出し の 2 つの枝がある。
+     * (a) は項目 12 が `agents` も対象に含むので既に覆われている。
+     * **本サンプルは (b) を単独で発火させる** — リテラルを書かない。
+     */
+    what: 'agents が UNC を作る API を呼ぶ',
+    detectors: ['constitution'],
+    rules: ['#13']
+  },
+  {
     file: 'a-direct/platform-branch-unmarked.ts.fixture',
     target: 'src/main/app/__rulecheck__/platform-branch-unmarked.ts',
     group: 'a',
@@ -215,6 +236,30 @@ export const FIXTURES = [
    * 下の `UNDETECTED_NOTES` に理由と代替手段を必ず書く。
    */
   {
+    file: 'a-direct/sdk-forbidden-call.ts.fixture',
+    target: 'src/agents/__rulecheck__/sdk-forbidden-call.ts',
+    group: 'a',
+    what: '許可されていない Agent SDK の API を呼ぶ (`getSessionMessages`。SH-081)',
+    detectors: ['constitution'],
+    rules: ['#14']
+  },
+  {
+    file: 'a-direct/wsl-cli-in-session-layer.ts.fixture',
+    target: 'src/main/infra/session/__rulecheck__/wsl-cli-in-session-layer.ts',
+    group: 'a',
+    what: 'R-2 のレイヤが WSL CLI レイヤを参照する (SC-003 / SH-082)',
+    detectors: ['constitution'],
+    rules: ['#15']
+  },
+  {
+    file: 'a-direct/ui-dto-namespace-literal.ts.fixture',
+    target: 'src/renderer/src/__rulecheck__/ui-dto-namespace-literal.ts',
+    group: 'a',
+    what: 'renderer が名前空間つきパス値 (`PathDTO`) を組み立てる (SH-054)',
+    detectors: ['eslint'],
+    rules: ['no-restricted-syntax']
+  },
+  {
     file: 'b-equivalent/ui-path-concat.ts.fixture',
     target: 'src/renderer/src/__rulecheck__/ui-path-concat.ts',
     group: 'b',
@@ -261,15 +306,22 @@ export const UNDETECTED_NOTES = {
       'renderer は main が返した完成パスだけを使う設計にし (FR-025)、' +
       'IPC が返す型を `PathDTO` に固定している。連結した文字列は名前空間を持たないため、' +
       '境界を渡ろうとすると main 側の検証 (`isValidPathDTO`) で落ちる。' +
+      '**R-2 (SH-054) で `namespace` プロパティを持つオブジェクトリテラルの組み立てを ' +
+      '`src/renderer/` 内で禁じた** (`no-restricted-syntax`。発火は ' +
+      '`ui-dto-namespace-literal` サンプルで確認済み)。' +
+      '**残る連結経路は依然として機械検証されない** — 既存の `PathDTO` を spread して ' +
+      '`value` だけを差し替える形は `namespace` のリテラルを持たないため新ルールに掛からない。' +
+      '**この fixture はテンプレート文字列の連結であり、新ルールでは発火しない** (実体を確認済み)。' +
       '構造で塞げていない残余は renderer 単体テストとレビューが担う。',
-    nextFeature: 'R-2',
+    nextFeature: 'X-1',
     howToClose:
-      'R-2 は renderer が受け取ったパスを IPC へ**返す**最初の feature である ' +
-      '(セッション列挙の対象を指定する)。そこで「`ui` は `PathDTO` を組み立てられない」を' +
-      '構造で強制する — `namespace` プロパティを持つオブジェクトリテラルを ' +
-      '`src/renderer/` 内で禁じる ESLint ルールは書ける。' +
-      '**R-1 で書かないのは、対象となる往復がまだ 1 つも無いためである** ' +
-      '(対象の無いルールを書いて「強制した」とは数えない。AD-025 §9 と同じ扱い)。'
+      'R-2 (SH-054) で `namespace` リテラルの組み立ては塞いだ。**残るのは既存の DTO を ' +
+      'spread して `value` を差し替える経路**であり、これは `namespace` のリテラルを ' +
+      '持たないため構文では見分けられない。' +
+      'X-1 でセッション起動時に `cwd` を渡す往復が増えるので、その時点で ' +
+      '「IPC へ渡す `PathDTO` は capability の戻り値から来た参照でなければならない」を ' +
+      '型で強制する形 (branded な不透明型を preload 側で付ける) を検討する。' +
+      '**構文検査では届かないと分かったので、次は型で塞ぐ。**'
   },
   'reuse-verified-other-distro': {
     why:

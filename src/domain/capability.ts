@@ -1,4 +1,5 @@
 import type { RuntimeDescriptorDTO, RuntimeListDTO } from './runtime/dto'
+import type { SessionIndexDTO } from './session/dto'
 import type {
   BeginBrowseResult,
   BrowseDirectoryResult,
@@ -49,11 +50,31 @@ export interface ClostaCapability {
 
   resolveFolderRuntime(folderId: string, runtimeId: string): Promise<FolderRuntimeResolutionDTO>
 
+  // --- セッション一覧 (R-2。**読み取り専用**) ---
+
+  /**
+   * キャッシュを返す。未取得なら**先頭ページ**を取る (FR-031 / R-06)。
+   *
+   * **起動・改名・削除の経路は無い** (FR-002)。R-2 は読み取り専用である。
+   */
+  listSessions(): Promise<SessionIndexDTO>
+  /** 再取得は**利用者の明示操作に限る** (FR-033)。**置き換える** (FR-035)。 */
+  refreshSessions(): Promise<SessionIndexDTO>
+  /**
+   * 続きを取る (FR-038)。
+   *
+   * `targetKey` は main が発行した**不透明な値**であり、
+   * main 側は**既知の集合との完全一致**でのみ照合する。パスとして解釈しない。
+   * 未知の値ではキャッシュをそのまま返す。
+   */
+  fetchMoreSessions(targetKey: string, offset: number): Promise<SessionIndexDTO>
+
   // --- 通知 (main → renderer) ---
 
   /** 購読解除は返る**トークン**で行う。renderer からコールバックを main に渡さない。 */
   onRuntimesChanged(listener: (list: RuntimeListDTO) => void): () => void
   onFoldersChanged(listener: (list: FolderListDTO) => void): () => void
+  onSessionsChanged(listener: (index: SessionIndexDTO) => void): () => void
 }
 
 /** `contextBridge.exposeInMainWorld` で公開する名前。 */
@@ -71,6 +92,10 @@ export const IPC_CHANNELS = {
   registerFolder: 'closta:registerFolder',
   unregisterFolder: 'closta:unregisterFolder',
   resolveFolderRuntime: 'closta:resolveFolderRuntime',
+  listSessions: 'closta:listSessions',
+  refreshSessions: 'closta:refreshSessions',
+  fetchMoreSessions: 'closta:fetchMoreSessions',
   runtimesChanged: 'closta:runtimesChanged',
-  foldersChanged: 'closta:foldersChanged'
+  foldersChanged: 'closta:foldersChanged',
+  sessionsChanged: 'closta:sessionsChanged'
 } as const

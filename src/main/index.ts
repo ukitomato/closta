@@ -75,12 +75,47 @@ if (!gotTheLock) {
       target.webContents.send(IPC_CHANNELS.foldersChanged, list)
     })
 
+    composition.sessions.onChanged((index) => {
+      const target = mainWindow
+      if (target === null || target.isDestroyed()) return
+      target.webContents.send(IPC_CHANNELS.sessionsChanged, index)
+    })
+
+    /*
+     * **生存中の列挙プロセスをアプリ終了時に終了させる** (contracts C-5 / BE-025)。
+     * UNC ハンドルを掴んだ孤児を残さない。
+     * `before-quit` を選ぶのは、`window-all-closed` では macOS が終了しないためである。
+     */
+    app.on('before-quit', () => {
+      /*
+       * **戻り値を捨てない** (pr-gate Round 3 / 4 track が収束した指摘)。
+       *
+       * `dispose()` は「終了を確認できなかった台数」を返す形にしたのに、
+       * ここで捨てていたため**記録する主体が存在しなかった**。
+       * 孤児が残ったことを誰も知れない設計は、contracts C-5 の
+       * 「記録して監視対象から外す」の後半を満たさない。
+       */
+      const unconfirmed = composition.dispose()
+      if (unconfirmed > 0) {
+        console.warn(
+          `[dispose] 終了を確認できない列挙プロセスが ${unconfirmed} 件あります (contracts C-5)`
+        )
+      }
+    })
+
     /*
      * 起動直後に一覧と判定を走らせる。**一覧を待たずに判定を始めない** —
      * 判定は `verifyRunning` の結果に依存する (C-1)。
      * どちらも通知で renderer に届く。
      */
     void composition.runtimes.list().then(() => composition.runtimes.probeAll())
+
+    /*
+     * **セッション一覧は起動直後に取らない。** 一覧を開いたときに取る (FR-031)。
+     * 起動時に取ると、ランタイム検出より先に実行中確認が走って
+     * 停止中の所在が「停止中」ではなく「未検出」として並ぶ。
+     * 加えて起動経路に UNC I/O を伴う子プロセスが乗る。
+     */
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {

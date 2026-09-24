@@ -15,9 +15,15 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
+import { useUiStore } from '@/stores/ui'
 
 import { shouldSuggestUnregister } from '@domain/workspace/folder'
-import type { LocationDTO, WorkspaceFolderDTO } from '@domain/workspace/dto'
+import type {
+  LocationDTO,
+  RegisterFolderResult,
+  WorkspaceFolderDTO,
+  WorkspaceFolderDraftDTO
+} from '@domain/workspace/dto'
 
 import { useRuntimes } from '../runtime-list/useRuntimes'
 import {
@@ -218,6 +224,102 @@ function FolderCard({
   )
 }
 
+/**
+ * セッション一覧から渡された登録の初期値 (FE-051 / FR-026 / FR-027)。
+ *
+ * **アプリが自動で登録しない。** 初期値を出して利用者の確定を待つ。
+ * **実在確認もしない** — 任意パスの存在を問い合わせる経路を作らないためである。
+ *
+ * **パスは main が返した値をそのまま渡す** (FR-025)。
+ * 表示名の既定値も main が組み立てたものを使う — renderer でパスを分解しない。
+ */
+function SeededDraft({
+  onRegister
+}: {
+  onRegister: (draft: WorkspaceFolderDraftDTO) => Promise<RegisterFolderResult>
+}): React.JSX.Element | null {
+  const seed = useUiStore((s) => s.folderDraftSeed)
+  const clearSeed = useUiStore((s) => s.clearFolderDraftSeed)
+  const [name, setName] = useState('')
+  const nameRef = useRef<HTMLInputElement>(null)
+
+  /*
+   * **受け取ったらフォーカスを移す** (code-gate iteration 1 / a11y H-006)。
+   *
+   * セッション一覧の「作業フォルダとして登録」は `seedFolderDraft` を呼ぶが、
+   * その実装は `screen` も差し替える。押したボタンを含む画面全体が
+   * アンマウントされるため、**フォーカスが `document.body` に落ちていた**。
+   * 遷移先のこのブロックにも移らず、live region も無いので
+   * **画面が変わったこと自体が通知されなかった**。
+   *
+   * FR-026 の登録導線は US-2 の中核であり、それを使った瞬間に
+   * キーボード利用者が入力欄の位置を失うのは実用性の欠陥である。
+   *
+   * 次に操作すべき要素 (表示名) に直接移す。
+   */
+  useEffect(() => {
+    if (seed === null) return
+    nameRef.current?.focus()
+  }, [seed])
+
+  if (seed === null) return null
+
+  const displayName = name.length > 0 ? name : seed.suggestedDisplayName
+
+  return (
+    <div className={cn(paper, 'flex flex-col gap-3 rounded-xl px-4 py-3')}>
+      <p className="text-sm font-medium">セッション一覧から渡された作業ディレクトリ</p>
+      <p className="text-muted-foreground text-xs">
+        {seed.location.kind === 'wsl' ? seed.location.distroName : 'Windows'} — {seed.path.value}
+      </p>
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <label htmlFor="seeded-display-name" className="text-xs font-medium">
+            表示名
+          </label>
+          <input
+            ref={nameRef}
+            className="bg-input border-border focus-visible:ring-ring min-w-0 rounded-md border px-2 py-1 text-sm focus-visible:ring-[3px] focus-visible:outline-none"
+            id="seeded-display-name"
+            aria-describedby="seeded-display-name-hint"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
+          <p id="seeded-display-name-hint" className="text-muted-foreground text-xs">
+            未入力なら「{seed.suggestedDisplayName}」を使います
+          </p>
+        </div>
+        <Button
+          size="sm"
+          onClick={async () => {
+            const result = await onRegister({
+              location: seed.location,
+              path: seed.path,
+              displayName
+            })
+            if (result.ok) {
+              setName('')
+              clearSeed()
+            }
+          }}
+        >
+          この所在で登録する
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            setName('')
+            clearSeed()
+          }}
+        >
+          やめる
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 export function WorkspaceFoldersScreen(): React.JSX.Element {
   const folders = useFolders()
   const runtimes = useRuntimes()
@@ -253,8 +355,17 @@ export function WorkspaceFoldersScreen(): React.JSX.Element {
   return (
     <div className="flex flex-col gap-5">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-medium">作業フォルダ</h2>
+        {/*
+          **画面ごとに h1 を 1 つ置く** (code-gate iteration 1 / a11y M-005)。
+          画面遷移は main の中身だけを差し替えるので、heading が画面の同一性を示す
+          唯一の手がかりになる。起点レベルが画面ごとに違うと、
+          遷移後にどこに居るか把握できない。見た目は変えない。
+        */}
+        <h1 className="text-lg font-medium">作業フォルダ</h1>
       </div>
+
+      {/* ── セッション一覧から渡された初期値 (FE-051 / R-2) ────────── */}
+      <SeededDraft onRegister={folders.register} />
 
       {/* ── 所在の選択 (FE-020) ─────────────────────────────────────── */}
       <div className={cn(paper, 'flex flex-col gap-3 rounded-xl px-4 py-3')}>
@@ -308,7 +419,13 @@ export function WorkspaceFoldersScreen(): React.JSX.Element {
           })}
         </div>
 
-        {wslRuntimes.some((runtime) => runtime.state === 'stopped') ? (
+        {/*
+          **再検出中は区画を保つ** (pr-gate Round 1 / a11y H-203)。
+          `stopped` が無くなった瞬間に区画ごと unmount すると、
+          押したボタン自身が DOM から消えてフォーカスが body に落ちる —
+          同ファイル上部のコメントが記録した不具合と同じ形である。
+        */}
+        {wslRuntimes.some((runtime) => runtime.state === 'stopped') || runtimes.refreshing ? (
           <div id="wsl-stopped-help" className="border-border/60 border-t pt-3 text-sm">
             <p>停止中のディストロは辿れません。次の手順で使えるようになります。</p>
             <ol className="text-muted-foreground mt-1 list-decimal pl-5 text-xs">
@@ -316,11 +433,20 @@ export function WorkspaceFoldersScreen(): React.JSX.Element {
               <li>{RESOLUTION_STEP_LABELS['rescan-runtimes']}</li>
             </ol>
             <Button
-              className="mt-2"
+              className={cn('mt-2', runtimes.refreshing && '[&_svg]:opacity-50')}
               variant="outline"
               size="sm"
-              onClick={() => void runtimes.refresh().catch(() => undefined)}
-              disabled={runtimes.refreshing}
+              /*
+               * **`disabled` にしない** (pr-gate Round 1 / a11y H-203)。
+               * 同ファイルの停止中ボタンは既に `aria-disabled` を採っており、
+               * **同じ画面で方針を 2 つ持たない**。
+               * 押した瞬間に自分が disabled になるとフォーカスが body に落ちる。
+               */
+              aria-disabled={runtimes.refreshing}
+              onClick={() => {
+                if (runtimes.refreshing) return
+                void runtimes.refresh().catch(() => undefined)
+              }}
             >
               {runtimes.refreshing ? '再検出中…' : 'ランタイムを再検出'}
             </Button>
@@ -429,7 +555,7 @@ export function WorkspaceFoldersScreen(): React.JSX.Element {
                     表示名
                   </label>
                   <input
-                    className="bg-input border-border focus-visible:ring-ring/50 min-w-0 rounded-md border px-2 py-1 text-sm focus-visible:ring-[3px] focus-visible:outline-none"
+                    className="bg-input border-border focus-visible:ring-ring min-w-0 rounded-md border px-2 py-1 text-sm focus-visible:ring-[3px] focus-visible:outline-none"
                     id="folder-display-name"
                     aria-describedby="folder-display-name-hint"
                     placeholder="表示名"

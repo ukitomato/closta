@@ -1,26 +1,59 @@
+# この registry は `gate_common::reviewers_filter` が読む (gate-common.sh § 6b)。
+# `enabled` / `gates` / `auto_invoke_patterns` / `exclude_patterns` の 4 つが効く。
+#
+# **`registry_filter_agents` だけでは効かない。** あちらは agent ファイルの存在しか
+# 見ないため、skill の Phase から `reviewers_filter` を呼ぶこと。
+
 reviewers:
+  # ─────────────────────────────────────────────────────────────────────
+  # a11y / ux は **pr-gate のみ**。code-gate では起動しない。
+  #
+  # code-gate Phase 3 は auto-fix loop の TAIL なので毎 iteration 再起動される
+  # (`--max-iter` 既定 3 → 最大 4 回)。a11y / ux の指摘は `must_fix` に
+  # 翻訳されないためループを 1 歩も進めないのに、生成コストだけを毎回払っていた
+  # (002 の reviewer 出力は合計 398KB)。判断材料としては pr-gate で 1 回あれば足る。
+  #
+  # **対象は「著者が書いた本番画面」だけに絞る。**
+  # `**/*.tsx` だと 36 ファイルが対象になるが、うち 22 は vendored (下の
+  # `exclude_patterns`) であり、残りにも仮実装の画面が混ざる。
+  # renderer は 1 画面 1 ディレクトリ (`features/<name>/<Name>Screen.tsx`) なので
+  # **画面単位の glob で列挙する** — 新しい概念は要らない。
+  # 本番 UI として確定した画面をここに足し、仮実装のうちはコメントアウトしておく。
+  # ─────────────────────────────────────────────────────────────────────
   - name: a11y-reviewer
     enabled: true
-    scope: feature
+    scope: system
     auto_invoke_patterns:
-      - "**/*.tsx"
-      - "**/*.jsx"
-      - "**/*.vue"
-      - "**/*.dart"
-      - "**/*.html"
-    gates: [code-gate, pr-gate]
+      - "src/renderer/src/features/session-list/**/*.tsx"
+      # - "src/renderer/src/features/chat/**/*.tsx"                      # 仮実装
+      # - "src/renderer/src/features/runtime-list/**/*.tsx"              # 仮実装
+      # - "src/renderer/src/features/workspace-folders/**/*.tsx"         # 仮実装
+      # - "src/renderer/src/features/folder-runtime-resolution/**/*.tsx" # 仮実装
+    exclude_patterns:
+      # **規模に関わらず常に除外する。** どちらも registry から生成した
+      # vendored primitive であり、a11y 指摘は upstream の管轄である。
+      # 直すと registry から乖離し、次の `add` で戻る。
+      - "src/renderer/src/components/ui/**"                     # shadcn 生成 (8 files)
+      - "src/renderer/src/components/assistant-ui/elements/**"  # assistant-ui registry の複製 (14 files)
+      - "**/*.test.tsx"                                         # テストは a11y の対象ではない
+    gates: [pr-gate]
     source: bootstrap-recommended
 
   - name: ux-reviewer
     enabled: true
-    scope: feature
+    scope: system
+    # a11y-reviewer と同一の対象。片方だけ広げると指摘の出所が追えなくなる。
     auto_invoke_patterns:
-      - "**/*.tsx"
-      - "**/*.jsx"
-      - "**/*.vue"
-      - "**/*.dart"
-      - "**/*.html"
-    gates: [code-gate, pr-gate]
+      - "src/renderer/src/features/session-list/**/*.tsx"
+      # - "src/renderer/src/features/chat/**/*.tsx"                      # 仮実装
+      # - "src/renderer/src/features/runtime-list/**/*.tsx"              # 仮実装
+      # - "src/renderer/src/features/workspace-folders/**/*.tsx"         # 仮実装
+      # - "src/renderer/src/features/folder-runtime-resolution/**/*.tsx" # 仮実装
+    exclude_patterns:
+      - "src/renderer/src/components/ui/**"
+      - "src/renderer/src/components/assistant-ui/elements/**"
+      - "**/*.test.tsx"
+    gates: [pr-gate]
     source: bootstrap-recommended
 
   - name: database-reviewer

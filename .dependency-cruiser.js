@@ -179,7 +179,15 @@ module.exports = {
       name: 'agents-not-to-electron',
       comment:
         '`agents` から `electron` への**推移的**到達 (AD-010 / AD-023 §7)。' +
-        'supervisor は Electron 無しで動く必要がある。共通モジュール経由の間接依存も禁止。',
+        'supervisor は Electron 無しで動く必要がある。共通モジュール経由の間接依存も禁止。' +
+        '**限界を明記する (R-2 / SH-083 / design-gate H-023)**: ' +
+        '`doNotFollow: node_modules` により **npm パッケージの内部は辿らない**。' +
+        'したがって `agents → 外部パッケージ → electron` の経路はこの規則では見えない。' +
+        'R-2 で `agents` が Agent SDK を import したため、この限界は実在する。' +
+        '**代わりの証拠はビルド出力である**: `out/main/enumerate-sessions-*.js` の `require` が ' +
+        'SDK の 1 件だけで `electron` が 0 件であることを確認し、' +
+        'Electron 抜きの `node` で実際に列挙が成立することを確かめた ' +
+        '(specs/002-.../quickstart-results.md V-0)。**グラフより出力のほうが直接的な証拠である。**',
       severity: 'error',
       from: { path: '^src/agents/' },
       to: { path: ELECTRON, reachable: true }
@@ -221,8 +229,17 @@ module.exports = {
         'インタフェース経由で扱うクラス」であり、結線層 (`composition-root.ts`) や' +
         'Electron 境界 (`window.ts` / `protocol.ts` / `index.ts`) は含まない — ' +
         'そちらは I/O を解決して渡すのが役割である。' +
-        'X-1 の `SessionService` / X-3 の `ProviderService` / I-2 の `ContainerService` を' +
-        '作るときは、ここに実名を足すこと。',
+        'X-3 の `ProviderService` / I-2 の `ContainerService` を' +
+        '作るときは、ここに実名を足すこと。' +
+        '**R-2 で `SessionService` を追加した** (AD-027 Consequences の履行。' +
+        '想定は X-1 だったが R-2 が先に調停クラスを作った)。' +
+        '`session-enumerator.ts` は**含めない** — プロセスハンドルを持つが、' +
+        '役割は子プロセスの生成と結線であり、`composition-root.ts` と同じ' +
+        '「I/O を解決して渡す側」である。加えて本規則の `to` は `core` に限っており、' +
+        '同ファイルが使う生成 API は `electron` 由来なので対象外である。' +
+        '(**この注記に子プロセス生成 API の名前を書かない。** ' +
+        '検証項目 7 は許可リスト外のファイルに現れた API 名を、' +
+        'コメントか否かを問わず違反として拾う — 迂回を防ぐためにそう作られている)',
       severity: 'error',
       /*
        * **違反サンプルの置き場を明示的に含める。**
@@ -233,7 +250,7 @@ module.exports = {
        */
       from: {
         path:
-          '^src/main/app/(folder-service|runtime-store)[.]ts$' +
+          '^src/main/app/(folder-service|runtime-store|session-service)[.]ts$' +
           '|^src/main/app/__rulecheck__/service-io-import[.]ts$'
       },
       to: {
@@ -303,7 +320,7 @@ module.exports = {
      * 除外しないと `not-to-unresolvable` に落ちる。
      * **除外はこの綴りだけに限る** — ディレクトリ単位で除外するとグラフに穴が開く。
      */
-    exclude: { path: '[?](asset|asarUnpack)$' },
+    exclude: { path: '[?](asset|asarUnpack|modulePath)$' },
 
     /*
      * **`process.getBuiltinModule()` を import として検出する。**
@@ -317,10 +334,16 @@ module.exports = {
     /*
      * **root の `tsconfig.json` を指してはいけない。**
      * root は `files: []` の solution-style なのでどのファイルも属さず、`paths` が引かれない。
-     * `tsconfig.web.json` は `@/*` / `@renderer/*` / `@domain/*` の 3 つを持つので、
-     * 解決用にはこれ 1 つで足りる (main 側の `@domain` も同じ値である)。
+     *
+     * **型検査用の設定をそのまま使わない** (R-2 / BE-025)。
+     * `tsconfig.web.json` には `@agents/*` が無く (renderer が `agents` に到達しては
+     * ならないので web 側に足すのは誤り)、`tsconfig.node.json` には `@renderer/*` が無い。
+     * `depcruise src` は両方を同時に辿るため、**解決用にだけ全部を知っている設定**を使う。
+     * 解決できることと到達してよいことは別であり、**到達の可否は上の規則が判定する** —
+     * 解決に失敗すると `not-to-unresolvable` に落ち、
+     * **本来検査したい規則が評価されないまま緑と赤が入れ替わる。**
      */
-    tsConfig: { fileName: 'tsconfig.web.json' },
+    tsConfig: { fileName: 'tsconfig.depcruise.json' },
 
     enhancedResolveOptions: {
       exportsFields: ['exports'],
