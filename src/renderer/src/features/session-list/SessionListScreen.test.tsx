@@ -423,6 +423,60 @@ describe('SessionListScreen — 未登録フォルダからの登録 (FE-051 / F
     expect(screen.queryByRole('button', { name: '作業フォルダとして登録' })).not.toBeInTheDocument()
   })
 
+  it('未検出ディストロの行にディストロ名が表示される (pr-gate Round 5 / ux C-001 / C4-003)', async () => {
+    /*
+     * **DTO に載せるだけでは足りない。** Round 4 は distroName を `cwdDisplay` に載せたが、
+     * renderer が `session.cwdDisplay` を読まず、画面には「未検出のディストロ」ラベルしか出ず、
+     * 「名前が出ないと訳語だけの差になる」退行がそのまま残っていた (FR-017 / US-1 AC-8)。
+     */
+    install(
+      index([
+        {
+          kind: 'unknown',
+          reasonKey: 'distro-undetected',
+          sessions: [
+            session({
+              sessionId: 'u',
+              summary: null,
+              originKind: 'undetected-distro',
+              cwd: null,
+              cwdDisplay: 'Debian: /home/y'
+            })
+          ]
+        }
+      ])
+    )
+
+    render(<SessionListScreen />)
+
+    expect(await screen.findByText('Debian: /home/y')).toBeInTheDocument()
+  })
+
+  it('所在不明の行に記録されていた作業ディレクトリが表示される (ux C-002)', async () => {
+    /* `unknown-location` は所在は決まらないが、記録されていた値を出して行を同定できる。 */
+    install(
+      index([
+        {
+          kind: 'unknown',
+          reasonKey: 'location-unknown',
+          sessions: [
+            session({
+              sessionId: 'w',
+              summary: null,
+              originKind: 'unknown-location',
+              cwd: null,
+              cwdDisplay: '/home/y/proj'
+            })
+          ]
+        }
+      ])
+    )
+
+    render(<SessionListScreen />)
+
+    expect(await screen.findByText('/home/y/proj')).toBeInTheDocument()
+  })
+
   it('総数が保たれる — グループの件数の和が行数と一致する (SC-006)', async () => {
     const value = index([
       folderGroup([session({ sessionId: 'a' })]),

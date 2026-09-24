@@ -381,6 +381,20 @@ function SessionMeta({ session }: { session: SessionSummaryDTO }): React.JSX.Ele
         <span className="sr-only">作業ディレクトリの所在 </span>
         {CWD_ORIGIN_LABELS[session.originKind]}
       </span>
+      {/*
+        **所在が決まらない行の表示値を描く** (pr-gate Round 5 / ux C-001 / C4-003)。
+        `cwdDisplay` が非 null になるのは `undetected-distro` (「<ディストロ名>: <POSIX>」) と
+        `unknown-location` (記録されていた値) だけである。所在が決まる出自では null で、
+        パスは区画見出しが持つのでここには出さない。
+        Round 4 で distroName を DTO に載せたが renderer が読まず、
+        「名前が出ないと訳語だけの差になる」退行がそのまま残っていた。
+      */}
+      {session.cwdDisplay !== null && session.cwdDisplay.length > 0 && (
+        <span className="min-w-0 truncate">
+          <span className="sr-only">作業ディレクトリ </span>
+          {session.cwdDisplay}
+        </span>
+      )}
       {session.createdAt !== null && <span>開始 {formatTime(session.createdAt)}</span>}
       {session.gitBranch !== null && <span>ブランチ {session.gitBranch}</span>}
       {session.tag !== null && <span>タグ {session.tag}</span>}
