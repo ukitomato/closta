@@ -12,7 +12,13 @@ import {
 } from './cwd-origin'
 
 /**
- * 出自判定の**判定表 7 行を全数**網羅する (BE-012 / SC-005)。
+ * 出自判定の**判定表 8 行を全数**網羅する (BE-012 / SC-005)。
+ *
+ * **正本は `cwd-origin.ts` の `classifyCwd` docstring の 8 行**である (AD-032 §6)。
+ * ここの describe 番号はその正本と 1 対 1 に対応させる —
+ * 以前は旧 7 行番号の写しで、正本 #4 (`opaque-unc`) と test #4 (`host`) が食い違っていた
+ * (pr-gate Round 5 / architecture H-001)。
+ * #4 (`opaque-unc`) の綴り × 接頭の全数は `cwd-origin-unc.test.ts` の性質テストが持つ。
  *
  * 判定表が守ろうとしているのは 1 点である —
  * **由来 config ディレクトリの所在から、セッションの所在を推定しないこと。**
@@ -120,7 +126,28 @@ describe('判定表 #3: UNC 形式 かつ 未検出 → undetected-distro', () =
   })
 })
 
-describe('判定表 #4: ドライブレター始まり → host', () => {
+describe('判定表 #4: 解析できない UNC 形 (opaque-unc) → unknown-location (表示値なし)', () => {
+  /*
+   * **正本 #4。** 綴り × 接頭の全数は `cwd-origin-unc.test.ts` の性質テストが持つ。
+   * ここでは代表例で「所在も表示値も持たない」ことだけ固定する。
+   */
+  it('解析できない UNC は所在も表示値も持たない', () => {
+    const origin = classify('\\\\?\\UNC\\wsl.localhost\\Ubuntu\\home\\y')
+    expect(origin.kind).toBe('unknown-location')
+    expect(originLocation(origin)).toBeNull()
+    expect(originDisplay(origin)).toBe('')
+  })
+
+  it('先頭 1 本 + 内部バックスラッシュの綴りも #4 に落ちる (PB5-001)', () => {
+    /* `/x\wsl.localhost\...` は先頭区切り 1 本だが、バックスラッシュ混入で opaque。 */
+    const origin = classify('/x\\wsl.localhost\\Ubuntu\\home')
+    expect(origin.kind).toBe('unknown-location')
+    expect(originDisplay(origin)).toBe('')
+    expect(originDisplay(origin)).not.toContain('wsl.localhost')
+  })
+})
+
+describe('判定表 #5: ドライブレター始まり → host', () => {
   it('小文字のドライブレターは正規化される (実測で混在)', () => {
     const origin = classify('c:\\dev\\x')
     expect(origin.kind).toBe('host')
@@ -140,7 +167,7 @@ describe('判定表 #4: ドライブレター始まり → host', () => {
   })
 })
 
-describe('判定表 #5: POSIX 形式 かつ 由来 config が wsl:<D> → wsl-inherited', () => {
+describe('判定表 #6: POSIX 形式 かつ 由来 config が wsl:<D> → wsl-inherited', () => {
   it('由来の所在を継承する', () => {
     const origin = classify('/home/y/p', WSL_UBUNTU)
     expect(origin.kind).toBe('wsl-inherited')
@@ -157,7 +184,7 @@ describe('判定表 #5: POSIX 形式 かつ 由来 config が wsl:<D> → wsl-in
   })
 })
 
-describe('判定表 #6: POSIX 形式 かつ 由来 config が windows → unknown-location', () => {
+describe('判定表 #7: POSIX 形式 かつ 由来 config が windows → unknown-location', () => {
   /**
    * **これが本 feature で最も重要な 1 行である。**
    * 同じ `/home/y/p` は複数のディストロに存在しうる。いずれかに帰属させると、
@@ -184,7 +211,7 @@ describe('判定表 #6: POSIX 形式 かつ 由来 config が windows → unknow
   })
 })
 
-describe('判定表 #7: それ以外 → unknown-location', () => {
+describe('判定表 #8: other (相対等) → unknown-location', () => {
   it.each(['foo/bar', 'relative', '.', '..', 'C:', '\\\\server\\share\\x'])(
     '%p は unknown-location',
     (cwd) => {

@@ -192,22 +192,36 @@ export function classifyRawPath(input: string): RawPathShape {
     return parsed.ok ? { kind: 'wsl-unc', parsed: parsed.path } : { kind: 'opaque-unc' }
   }
 
-  if (separators === 1) return { kind: 'posix', value: raw }
+  if (separators === 1) {
+    /*
+     * **先頭区切り 1 本 = POSIX の見込み。だがバックスラッシュを含めば opaque にする**
+     * (pr-gate Round 5 / PB5-001)。
+     *
+     * 初版は #8 (`other`) にしか区切りガードを掛けず、
+     * `/x\wsl.localhost\Ubuntu\home` (先頭 `/` 1 本、内部にバックスラッシュ) が
+     * #7 (`posix`) に落ちて `\wsl.localhost\` を含む生値が境界に出た。
+     *
+     * **pure POSIX は forward slash だけを使う。** 先頭が `/` の値に
+     * バックスラッシュがあれば、それは Windows / UNC の綴りが混入したということである。
+     * `\\` を要する UNC 接頭辞を部分文字列として持つ可能性があるので `opaque-unc` に落とす。
+     * 区切りの連続 (`[\\/]{2,}`) だけを見ると**単一バックスラッシュの綴りを取りこぼす**
+     * (実測: `SEPARATOR_RUN.test('/x\\wsl.localhost\\...')` = false)。
+     * 一方で `/home//y` のような forward slash の重複は UNC ではないので posix のまま通す。
+     */
+    return raw.includes('\\') ? { kind: 'opaque-unc' } : { kind: 'posix', value: raw }
+  }
 
-  /* 0 本。ドライブレターならホスト。 */
+  /* 0 本。ドライブレターならホスト (`C:\...` はバックスラッシュを含むが正当)。 */
   const host = makeHostPath(raw)
   if (host.ok) return { kind: 'host', path: host.path }
 
   /*
-   * **形が分からないのに区切りの連続を含む値は、表示値を持たせない。**
-   *
-   * `trim()` は空白しか落とさない。書式文字 (`U+200B` など) は
-   * `hasControlCharacter` にも `trim()` にも掛からないので、
-   * それを先頭に付けた UNC がここへ落ちうる。
-   * **どの文字が前に付いたかを数えるのをやめ、「区切りの連続を含むか」で決める** —
-   * 文字種の一覧を持たないので、知らない文字が増えても破れない。
+   * 相対パス等。**ホストでないのにバックスラッシュか区切りの連続を含む値は表示しない** —
+   * `x\wsl.localhost\Ubuntu` のような UNC 綴りの混入を #7 と同じ基準で塞ぐ。
    */
-  return SEPARATOR_RUN.test(raw) ? { kind: 'opaque-unc' } : { kind: 'other', value: raw }
+  return raw.includes('\\') || SEPARATOR_RUN.test(raw)
+    ? { kind: 'opaque-unc' }
+    : { kind: 'other', value: raw }
 }
 
 export function parseWslUncPath(raw: string): PathResult<ParsedWslUnc> {
