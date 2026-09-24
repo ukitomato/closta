@@ -3,77 +3,59 @@
   "run": "2026-09-24",
   "spec_dir": "specs/002-session-cross-folder-session-enumeration",
   "spec_id": "002-session-cross-folder-session-enumeration",
-  "round": 5,
+  "round": 6,
   "base_branch": "main",
-  "diff_stat": {
-    "files": 149,
-    "additions": 25946,
-    "deletions": 251
-  },
-  "severity_counts": {
-    "critical": 0,
-    "high": 10,
-    "medium": 14,
-    "low": 7
-  },
+  "diff_stat": { "files": 150, "additions": 26069, "deletions": 253 },
+  "severity_counts": { "critical": 0, "high": 5, "medium": 8, "low": 10 },
   "convergence": {
-    "resolved_from_prev": 14,
-    "new_in_round": 12,
+    "resolved_from_prev": 13,
+    "new_in_round": 9,
     "unresolved": 12,
-    "partial": 4,
-    "resolved_from_prev_by_track": 16,
-    "new_in_round_by_track": 13,
-    "dedup_note": "track 自己申告 resolved 16 / new 13。cross-track dedup で resolved -2 (C4-001=A4-007+PO4-003 / C4-010=PB4-007+A4-008)、new -2 (opaque-unc spec=archL-002+PO5-002 / 候補#N=uxC-003+a11yG-L4) → resolved 14 / new 12。"
+    "partial": 2,
+    "resolved_from_prev_by_track": 15,
+    "new_in_round_by_track": 11,
+    "dedup_note": "track 自己申告 resolved 15 / new 11。dedup で resolved -2 (H-A1=uxC-001+po / H-A2 系)、new -2 (N-001=a11yL6-02 他) → resolved 13 / new 9。"
   },
   "convergence_failure": {
     "fired": false,
-    "rule": "(R[5].resolved < R[5].new) AND (R[4].resolved < R[4].new)",
+    "rule": "(R[6].resolved < R[6].new) AND (R[5].resolved < R[5].new)",
+    "R6": { "resolved": 13, "new": 9, "holds": false },
     "R5": { "resolved": 14, "new": 12, "holds": false },
-    "R4": { "resolved": 19, "new": 28, "holds": true },
-    "note": "R[5] は resolved(14) >= new(12) なので R[5] 側の条件が偽。R2 以降で初めて収束条件を満たした。halt しない。Round 5 の new はすべて『壊した』でなく『直した層の鏡面を取りこぼした』incomplete-fix 型で、Round 2 の隣を壊す型退行は 0 件。"
+    "note": "R[5] が既に収束していた (14 >= 12) ため、隣接 2 round の AND により R[6] の結果によらず convergence_failure は偽。R[6] 単体でも resolved(13) >= new(9)。Round 6 の new はすべて doc 鏡面か defense-in-depth で、実装の正しさに関わる new High は 0。"
   },
   "suppressed_by_code_gate": [],
-  "reviewers_started": [
-    "security-reviewer",
-    "architecture-reviewer",
-    "po-reviewer",
-    "platform-boundary-reviewer",
-    "a11y-reviewer",
-    "ux-reviewer"
-  ],
+  "reviewers_started": ["security-reviewer", "architecture-reviewer", "po-reviewer", "platform-boundary-reviewer", "a11y-reviewer", "ux-reviewer"],
   "reviewers_skipped": [
-    { "name": "database-reviewer", "reason": "auto_invoke_patterns に一致する変更なし (migrations 0 / *.sql 0)" },
-    { "name": "api-performance-reviewer", "reason": "reviewers.yml で未採用" },
-    { "name": "openapi-contract-reviewer", "reason": "reviewers.yml で未採用" }
+    { "name": "database-reviewer", "reason": "auto_invoke_patterns 不一致 (migrations 0 / *.sql 0)" },
+    { "name": "api-performance-reviewer", "reason": "reviewers.yml 未採用" },
+    { "name": "openapi-contract-reviewer", "reason": "reviewers.yml 未採用" }
   ],
   "rule_firing_verification": {
-    "run": true,
-    "command": "node scripts/rules/run.mjs",
-    "result": "26 件一致",
-    "reason": "Round 4 以降に規則定義・fixture (eslint.config.mjs / .dependency-cruiser.js / scripts/constitution/** / scripts/rules/** / tests/rule-fixtures/**) が未変更のため Phase 0 step 6 の再実行は本来不要。Round 5 作業末尾で単独実行し確認済み。"
+    "run": false,
+    "reason": "Round 5 以降に規則定義・fixture (eslint.config.mjs / .dependency-cruiser.js / scripts/constitution/** / scripts/rules/** / tests/rule-fixtures/**) が未変更。Phase 0 step 6 は不要。直近の確認は 26 件一致 (Round 5)。"
   },
   "tracks": {
-    "security-reviewer":  { "critical": 0, "high": 1, "medium": 1, "low": 1, "resolved": 1, "new": 2, "unevaluable": 1, "viewpoint_missing": [], "cascade_demotions": 0 },
-    "architecture-reviewer": { "critical": 0, "high": 1, "medium": 5, "low": 2, "resolved": 7, "partial": 4, "new": 3, "viewpoint_missing": [], "cascade_demotions": 0 },
-    "po-reviewer": { "critical": 0, "high": 1, "medium": 2, "low": 1, "resolved": 5, "new": 0, "viewpoint_missing": [], "cascade_demotions": 0 },
-    "platform-boundary-reviewer": { "critical": 0, "high": 5, "medium": 2, "low": 0, "resolved": 2, "new": 2, "unresolved": 5, "viewpoint_missing": [], "cascade_demotions": 0 },
-    "a11y-reviewer": { "critical": 0, "high": 1, "medium": 2, "low": 2, "resolved": 0, "new": 4, "unresolved": 1, "viewpoint_missing": [], "cascade_demotions": 0 },
-    "ux-reviewer": { "critical": 0, "high": 1, "medium": 3, "low": 1, "resolved": 1, "new": 2, "unresolved": 2, "viewpoint_missing": [], "cascade_demotions": 0 }
+    "security-reviewer": { "critical": 0, "high": 1, "medium": 1, "low": 2, "resolved": 0, "new": 1, "unresolved": 3, "body_retained": "reviews/round6-tracks.md" },
+    "architecture-reviewer": { "critical": 0, "high": 1, "medium": 2, "low": 2, "resolved": 5, "partial": 2, "unresolved": 1, "new": 4, "body_retained": "reviews/round6-tracks.md" },
+    "po-reviewer": { "critical": 0, "high": 0, "medium": 1, "low": 2, "resolved": 4, "unresolved": 1, "new": 3, "body_retained": "reviews/round6-tracks.md" },
+    "platform-boundary-reviewer": { "critical": 0, "high": 0, "medium": 1, "low": 1, "resolved": 4, "new": 0, "unresolved": 3, "body_retained": "reviews/round6-tracks.md" },
+    "a11y-reviewer": { "critical": 0, "high": 0, "medium": 0, "low": 2, "resolved": 0, "new": 2, "unresolved": 5, "body_retained": "reviews/round6-tracks.md" },
+    "ux-reviewer": { "critical": 0, "high": 0, "medium": 1, "low": 0, "resolved": 2, "new": 1, "unresolved": 3, "body_retained": "reviews/round6-tracks.md" }
   },
   "orchestrator_verified": [
-    { "id": "H-A1 (ux C-001)", "claim": "undetected-distro の distroName が renderer で描画されず画面に出ない", "method": "grep cwdDisplay src/renderer + SessionMeta(376-411) 読解", "result": "session.cwdDisplay の read は 0 件。SessionMeta は CWD_ORIGIN_LABELS のみ描画。確認", "status": "CONFIRMED" },
-    { "id": "H-A2 (platform PB5-001)", "claim": "posix 分岐 #7 が SEPARATOR_RUN ガードを持たず UNC 部分文字列を露出", "method": "path-api.ts:195,210 / cwd-origin.ts:67 読解", "result": "SEPARATOR_RUN は :210 (#8) のみ。#7 は :195 で無条件 return。cwd-origin.ts:67 の不変条件コメントは偽", "status": "CONFIRMED" }
+    { "id": "H-A1", "claim": "SessionMeta が session.cwdDisplay を描画", "method": "grep cwdDisplay src/renderer + SessionMeta 読解 + 描画削除で 2 テスト落ちる A/B", "result": "描画到達を確認", "status": "CONFIRMED" },
+    { "id": "H-A2", "claim": "posix #7 のバックスラッシュ判定。SEPARATOR_RUN は単一 backslash を取りこぼす", "method": "Write 経由 probe: SEPARATOR_RUN.test('/x\\wsl...')=false / includes('\\')=true。変異 A/B 発火", "result": "includes('\\') が正しい。posix/other 両分岐に対称ガード", "status": "CONFIRMED" }
   ],
   "verdict": "PASS",
-  "verdict_note": "Critical 0 かつ収束条件を満たす (R[5] resolved 14 >= new 12) ため機械判定は PASS。ただし PASS は Critical=0 hard-gate 上の判定にすぎず、open High 10 件が残る。特に (1) Round 5 の incomplete-fix 3 件 (H-A1 C4-003 が renderer に届かない / H-A2 C4-002 の #7 穴 / H-A3 C4-012 の test 番号) と (2) 持ち主のいない High 2 件 (H-B1 PB4-002 inflight scope / H-B2 PB4-003 refresh) は /cl-done 前に閉じるべき。人間に Round 6 scope を確認する。",
+  "verdict_note": "Critical 0 かつ収束成立 (R[5] が収束済みのため R[6] は構造的に convergence_failure 不能。R[6] 単体でも resolved 13 >= new 9)。承認スコープの実装修正 5 件 + 偽完了 + 鏡面文書はすべて resolved 確認。open High 5 件のうち新規は A6-001 (AD-032 の記録 drift、code は正しく doc 1 節で閉じる) のみ。残り 4 件は持ち主あり (H-D2 = Q1 未選択 / 検出器 13・14 = R-3 owned / a11y EmptyState = 据え置き)。/cl-done は許可されるが、A6-001 + 鏡面 doc 3 件 (M6-01/02/03) を閉じてからを推奨。",
+  "meta_observation": "「両側を直す」不変条件が Round 5・6 と 2 連続で、それを閉じる修正自身で片側再発している (Round 6: A6-001 / A6-002 / A6-003 / M6-01)。根は『正本を移したら旧写しを全数消す/参照形にする』を機械で保証する手段が無いこと。検出の仕組み化は R-2 の範囲を超え roadmap / 後続 feature。",
   "known_gaps": [
-    "S4-002 が評価不能 — Round 4 の security track 本文が未保存 (PO4-012 の実例)。Round 6 以降は <track>-reviewer.round<N>.md で保存すること。",
-    "H-B1 / H-B2 (PB4-002 / PB4-003) は High のまま roadmap R-3 に持ち主が無い。AD-028 §5 の『持ち主のいない延期を残さない』違反が 3 round 継続。",
-    "dto-boundary.test は無 gate フィールドを汚染入力で行使していない (M5-01)。緑は遵守の証拠にならない。"
+    "PB5-007 (programmatic 無検査) は Medium だが roadmap に持ち主未登録。",
+    "PB5-005/006 (検出器 13/14) は R-3 owned だが、緑は遵守の証拠にならない (別名/動的 import 回避形を素通し)。"
   ],
   "out_of_scope": [
     "SC-008 の予算値は人間承認済み。",
-    "E2E / CI 基盤は M4 まで対象外。Round 6 の推奨作業はいずれも CI に依存しない。",
-    "検出器 13/14 (H-C1/C2) と a11y EmptyState (H-C3) は R-3 / 据え置きで持ち主あり。"
+    "E2E / CI 基盤は M4 まで対象外。推奨作業はいずれも CI 非依存。",
+    "「片側修正の検出の仕組み化」は R-2 の範囲外 (roadmap / 後続 feature)。"
   ]
 }

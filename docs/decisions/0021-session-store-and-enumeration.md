@@ -6,6 +6,7 @@ deciders: ukitomato
 tags: [session, isolation, sdk, storage]
 supersedes: []
 superseded-by: []
+amended-by: [AD-030]
 ---
 
 # AD-021: セッション列挙と `SessionStore` は SDK の公式拡張点を使う

@@ -90,9 +90,11 @@ pnpm 10 以降は設定の置き場が `.npmrc` から `pnpm-workspace.yaml` に
 | 2 | **`createLineAssembler` の行長上限** — 現状パース対象のバイト列に上限が無い。#1 と同時に判断する | AD-031 訂正 (2026-09-23) |
 | 3 | **検証項目 13 / 14 の構造化** — 項目 13 は別名 1 つ (`const f = ops.toUnc`) で無効化され、項目 14 は default / 動的 import など **5 形を素通し**する (どちらも A/B 実測済み)。項目 13 は「`agents → path-api` の import 0 件」を depcruise で、項目 14 は `matchAll` + 動的 import 検出で置き換える | pr-gate Round 4 / C4-007 / C4-008 |
 | 4 | **デバイス名前空間の綴りの再評価** — `\\?\UNC\` / `\\.\UNC\` / `\\?\C:\` は**実機で解決する**が、実測 0 件のため解析していない。R-3 までに実測が増えたら判断し直す | [AD-032](decisions/0032-unc-shape-classification-by-separator-count.md) |
-| 5 | ~~`opaque-unc` を spec の Edge Cases に記録~~ **→ pr-gate Round 5 で実施済み** (spec.md Edge Cases / Key Entities)。持ち主の二重記録 (AD-032 申し送りと本表) を解消 | pr-gate Round 4 / PO4-006 |
+| 5 | ~~`opaque-unc` を spec の Edge Cases に記録~~ **→ Round 5 の指摘に応じ Round 6 で実施済み** (spec.md Edge Cases / Key Entities)。持ち主の二重記録 (AD-032 申し送りと本表) を解消 | pr-gate Round 4 / PO4-006 |
 | 6 | **`src/agents/` の 2 役の線引き** — 「列挙プロセス」と「親子共有プロトコル」が同一ディレクトリに同居し、検証項目 13 / `UNC_FORBIDDEN_IN` が両者を区別しない。後続 ADR で規則の対象を「ディレクトリ」でなく「子で評価されるモジュール」に定義し直すか `protocol.ts` を共有層へ出す | pr-gate Round 4 / M4-14・M-005 |
 | 7 | **quickstart (SH-089) の実機再実行** — 2026-09-18 の証跡は pr-gate Round 4/5 の実装変更前。V-1 件数表記 / V-3 出自 / V-4 導線 / V-6 先頭ページ / V-8 空状態が変わった。実機操作のため人間 deferred | pr-gate Round 5 / PO4-004 / C4-016 |
+| 8 | **`isValidDistroName` の bidi 対応 + `dto-mapper` 関門の被覆** — 制御文字判定器が 4 定義あり bidi を見るのは 2 つだけ。`isValidDistroName` を `hasControlCharacter` と揃え、`dto-boundary.test` に無 gate フィールド (cwd / cwdKey / location) の汚染ケースを足す。**到達可能な実害経路は upstream (`build.ts`) で封止済みの defense-in-depth**。R-2 Round 6 で人間が対象外と決定 | pr-gate Round 5 / S4-003 (H-D2) / M5-01 |
+| 9 | **`programmatic` の値域検査** — `boolean` 型宣言のまま無検査で境界を渡り実測で `"yes"` が素通り。`decodeResponse` / normalize 層で値域検査するか parse 側で boolean 化する | pr-gate Round 5 / PB4-006 (PB5-007) |
 
 **Principle XV (i18n) の棚卸しへの申し送り**: `src/main/infra/session/target-finder.ts` の
 `候補 #N` / `名前 (#N)` は **`infra` が生成する日本語**であり、「訳出は `ui`」(FR-031 / FR-047) の例外である。

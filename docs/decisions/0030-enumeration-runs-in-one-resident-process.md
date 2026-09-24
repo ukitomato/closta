@@ -6,6 +6,7 @@ deciders: ukitomato
 tags: [session, architecture, performance]
 supersedes: []
 superseded-by: []
+amends: [AD-028, AD-021]
 ---
 
 # AD-030: セッション列挙を「常駐 1 プロセス + 直列処理」に変える

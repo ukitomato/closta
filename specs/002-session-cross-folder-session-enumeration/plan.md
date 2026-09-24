@@ -40,7 +40,7 @@
 | [AD-010](../../docs/decisions/0010-supervisor-runs-standalone.md) | 列挙プロセスは `electron` とネイティブモジュールに非依存 (推移的到達も禁止) |
 | [AD-015](../../docs/decisions/0015-wsl-access-strategy.md) | ファイル読みは UNC 直読み。`wsl.exe` は 1 回約 1.5 秒でループ内禁止。検出結果はキャッシュし再取得は明示操作 |
 | [AD-016](../../docs/decisions/0016-cross-filesystem-performance-cliff.md) | 越境の性能崖。対応づけ結果に越境を保持する |
-| [AD-021](../../docs/decisions/0021-session-store-and-enumeration.md) | `listSessions()` は config dir を引数で取らない。**短命プロセス方式が本線**。環境変数の書き換えは並行列挙でレース。`includeWorktrees` / `includeProgrammatic` の既定は「含む」。`sessionStore` は `@alpha` (I-1) |
+| [AD-021](../../docs/decisions/0021-session-store-and-enumeration.md) | `listSessions()` は config dir を引数で取らない (子プロセスへ環境変数で渡す)。**実行単位は [AD-030](../../docs/decisions/0030-enumeration-runs-in-one-resident-process.md) §1 で常駐 1 プロセス + 直列に差し替え済み** (当初の短命プロセス方式は起動費用で棄却)。環境変数の書き換えは直列化でレースを消す。`includeWorktrees` / `includeProgrammatic` の既定は「含む」。`sessionStore` は `@alpha` (I-1) |
 | [AD-023](../../docs/decisions/0023-application-architecture.md) | 5 レイヤ。Agent SDK の境界は `agents`。IPC はデータのみ。preload は単一 capability。`useExternalStoreRuntime` を採る |
 | [AD-025](../../docs/decisions/0025-workspace-folder-carries-location.md) | 所在を伴う値。3 名前空間。**UNC は `infra` の内側**。`ui → domain` は型と純粋関数まで。**セッション一覧は thread-list element** (申し送り)。**列挙用のプロセス起動モジュールは許可リストに ADR で追加**(申し送り) |
 | [AD-024](../../docs/decisions/0024-constitution-verification-paths.md) | Constitution の検証経路。#18 が R-2 の E2E 基盤を前提にしている (下記 #4) |
