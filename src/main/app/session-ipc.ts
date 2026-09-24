@@ -1,6 +1,6 @@
 import type { SessionIndexDTO } from '@domain/session/dto'
 import type { FailureReason } from '@domain/session/target'
-import { isValidSessionId } from '@domain/validation'
+import { isValidRequestToken, isValidSessionId } from '@domain/validation'
 
 import type { TranscriptResult } from './transcript-service'
 import { isKnownTargetKey, isValidSessionOffset } from './validate'
@@ -55,12 +55,12 @@ export async function handleGetTranscript(
   args: readonly unknown[]
 ): Promise<TranscriptResult> {
   const requestToken = args[2]
-  if (typeof requestToken !== 'string' || requestToken.length === 0) {
-    return failedTranscript('', 'enumeration-failed')
+  if (!isValidRequestToken(requestToken)) {
+    return failedTranscript('', 'transcript-read-failed')
   }
-  if (!isValidSessionId(args[0])) return failedTranscript(requestToken, 'enumeration-failed')
+  if (!isValidSessionId(args[0])) return failedTranscript(requestToken, 'transcript-read-failed')
   if (!isKnownTargetKey(deps.sessionTargetKeys(), args[1])) {
-    return failedTranscript(requestToken, 'enumeration-failed')
+    return failedTranscript(requestToken, 'transcript-read-failed')
   }
   return deps.getTranscript(args[0], args[1], requestToken)
 }

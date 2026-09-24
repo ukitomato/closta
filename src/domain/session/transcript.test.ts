@@ -134,6 +134,20 @@ describe('toTranscriptMessages', () => {
     expect(out[0].parts).toEqual([{ type: 'image', url: 'data:image/png;base64,AAAA' }])
   })
 
+  it('image/svg+xml は除外する (script 面が残るため。pr-gate security M-001)', () => {
+    const out = toTranscriptMessages([
+      msg('user', 'u1', [
+        {
+          type: 'image',
+          source: { type: 'base64', media_type: 'image/svg+xml', data: 'PHN2Zz4=' }
+        },
+        // 安全な MIME は通す (対照)。
+        { type: 'image', source: { type: 'base64', media_type: 'image/webp', data: 'BBBB' } }
+      ])
+    ])
+    expect(out[0].parts).toEqual([{ type: 'image', url: 'data:image/webp;base64,BBBB' }])
+  })
+
   it('コンパクション境界を最小の divider で示す (FR-018)', () => {
     const out = toTranscriptMessages([
       {

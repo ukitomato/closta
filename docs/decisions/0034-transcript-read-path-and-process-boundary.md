@@ -92,6 +92,13 @@ sdk.d.ts 0.3.270 で確認)。親環境を丸ごと継承させず、渡す env 
 port transfer と前提が違うため、**新設 spawner を置く**か `enumerator-spawner.ts` を一般化するかを実装で決め、
 決定を本 ADR に追記する。
 
+> **決定 (実装。2026-09-25。AD-031 の in-place 追記)**: **新設 `src/main/app/transcript-spawner.ts` を置いた。**
+> `enumerator-spawner.ts` は AD-030 の常駐 (postMessage + stdout 行区切り) 前提で、MessageChannelMain の
+> `new MessageChannelMain()` + port transfer + 1 要求 1 プロセス (短命) とは前提が両立しないため、一般化ではなく新設とした。
+> `scripts/constitution/allowlists.mjs` の `PROCESS_SPAWN_MODULES` に `src/main/app/transcript-spawner.ts` を実名追加済み
+> (check.mjs 項目 7 が緑)。あわせて `WSL_FREE_DIRECTORIES` にも `transcript-service.ts` / `transcript-spawner.ts` を追加した
+> (pr-gate R-3 / platform-boundary M-001)。
+
 ### 5. Principle IX の検証は「構造」で担保し、自動証明の未構築を隠さない
 
 「main で本文が評価されない」を依存グラフで自動証明する検査は**現状存在しない**
@@ -122,8 +129,10 @@ port transfer と前提が違うため、**新設 spawner を置く**か `enumer
 
 ### 申し送り (R-3 が持ち主)
 
-- [ ] composition-root からの到達集合検査 (Principle IX の自動証明) の持ち主 feature を roadmap に登録する
-- [ ] spawn 主体モジュール (新設 spawner か enumerator-spawner 一般化か) の決定を本 ADR に追記する
+- [x] composition-root からの到達集合検査 (Principle IX の自動証明) の持ち主 feature を roadmap に登録する
+      (`docs/roadmap.md` の「E2E / 検証基盤 feature」に登録済み)
+- [x] spawn 主体モジュール (新設 spawner か enumerator-spawner 一般化か) の決定を本 ADR に追記する
+      (上記 §4 の「決定」を参照。新設 `transcript-spawner.ts`)
 
 ## Confirmation
 

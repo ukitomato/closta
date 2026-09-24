@@ -84,8 +84,13 @@ export interface TranscriptService {
 
 export function createTranscriptService(deps: TranscriptServiceDeps): TranscriptService {
   const maxConcurrent = deps.maxConcurrent ?? 4
-  /** requestToken → 実行中の取得プロセス。 */
-  const active = new Map<string, TranscriptSpawn>()
+  /**
+   * **main 採番の内部 id → 実行中の取得プロセス。**
+   * requestToken は renderer 供給値であり、同一 token 連打で上書きされると同時数上限が不発になる
+   * (CWE-400。pr-gate S-M-002)。上限は未信頼入力に依存させず、launch ごとに一意な内部 id で数える。
+   */
+  const active = new Map<number, TranscriptSpawn>()
+  let launchSeq = 0
 
   function failed(requestToken: string, reasonKey: FailureReason): TranscriptResult {
     return { handshake: { status: 'failed', requestToken, reasonKey }, port: null }
@@ -94,7 +99,7 @@ export function createTranscriptService(deps: TranscriptServiceDeps): Transcript
   return {
     async getTranscript(sessionId, targetKey, requestToken): Promise<TranscriptResult> {
       const resolution = await deps.resolveTarget(targetKey)
-      if (resolution === null) return failed(requestToken, 'enumeration-failed')
+      if (resolution === null) return failed(requestToken, 'transcript-read-failed')
       if (!resolution.ok) return failed(requestToken, resolution.reasonKey)
 
       /*
@@ -113,10 +118,11 @@ export function createTranscriptService(deps: TranscriptServiceDeps): Transcript
         sessionId,
         requestToken
       })
-      active.set(requestToken, worker)
+      const launchId = ++launchSeq
+      active.set(launchId, worker)
       worker.onExit(() => {
         /* 自然終了・kill のどちらでも追跡から外す (地図を伸ばし続けない)。 */
-        if (active.get(requestToken) === worker) active.delete(requestToken)
+        if (active.get(launchId) === worker) active.delete(launchId)
       })
 
       return { handshake: { status: 'streaming', requestToken }, port: worker.port }

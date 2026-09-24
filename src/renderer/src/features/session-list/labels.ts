@@ -23,7 +23,10 @@ export const FAILURE_REASON_LABELS: Record<FailureReason, string> = {
   'permission-denied': '読み取り権限がありません',
   'path-too-long': 'パスが長すぎて読めません',
   'stopped-midway': '列挙中に停止しました（途中までの結果です）',
-  'enumeration-failed': '列挙に失敗しました'
+  'enumeration-failed': '列挙に失敗しました',
+  // transcript 取得の失敗。**session-list では発生しない** (transcript 経路専用) が Record 網羅のため置く。
+  // transcript 画面の文言は `features/chat/ChatScreen.tsx` の `transcriptFailureDetail` が持つ。
+  'transcript-read-failed': '履歴を読み込めませんでした'
 }
 
 /** 失敗に対して利用者が取れる行動。**空文字を許さない** (行動が無いなら理由に含める)。 */
@@ -33,7 +36,8 @@ export const FAILURE_REASON_HINTS: Record<FailureReason, string> = {
   'permission-denied': 'そのユーザのホームは Windows 側から読めません。',
   'path-too-long': 'ホームディレクトリの位置を見直す必要があります。',
   'stopped-midway': '再取得すると残りを取得できます。',
-  'enumeration-failed': '再取得してください。続く場合はログを確認してください。'
+  'enumeration-failed': '再取得してください。続く場合はログを確認してください。',
+  'transcript-read-failed': '再取得してください。'
 }
 
 /**
@@ -117,7 +121,8 @@ export const FAILURE_REASON_REMEDY: Record<FailureReason, FailureRemedy> = {
   'permission-denied': 'fix-environment',
   'path-too-long': 'fix-environment',
   'stopped-midway': 'retry',
-  'enumeration-failed': 'retry'
+  'enumeration-failed': 'retry',
+  'transcript-read-failed': 'retry'
 }
 
 /**

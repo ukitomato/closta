@@ -52,11 +52,19 @@ function fakePort(): FakePort {
   return port
 }
 
-/** window メッセージで port を hook に渡す (preload の橋渡しを模す)。 */
+/** window メッセージで port を hook に渡す (preload の橋渡しを模す。自 origin・自 window から送る)。 */
 function deliverPort(requestToken: string, port: FakePort): void {
-  const event = new Event('message') as Event & { data: unknown; ports: unknown[] }
+  const event = new Event('message') as Event & {
+    data: unknown
+    ports: unknown[]
+    origin: string
+    source: unknown
+  }
   event.data = { marker: TRANSCRIPT_PORT_MESSAGE, requestToken }
   event.ports = [port]
+  // hook は origin/source を検証する (security S-L-001)。preload と同じく自 origin・自 window にする。
+  Object.defineProperty(event, 'origin', { value: window.location.origin })
+  Object.defineProperty(event, 'source', { value: window })
   window.dispatchEvent(event)
 }
 
@@ -156,11 +164,13 @@ describe('useTranscript', () => {
 
     const port = fakePort()
     act(() => deliverPort(token, port))
-    act(() => port.deliver({ kind: 'error', requestToken: token, reasonKey: 'enumeration-failed' }))
+    act(() =>
+      port.deliver({ kind: 'error', requestToken: token, reasonKey: 'transcript-read-failed' })
+    )
 
     await waitFor(() => expect(result.current.status).toBe('failed'))
     // reasonKey が表示層まで届く (AC-4。dead data にしない)。
-    expect(result.current.reasonKey).toBe('enumeration-failed')
+    expect(result.current.reasonKey).toBe('transcript-read-failed')
   })
 
   it('handshake が failed なら port を待たず failed', async () => {
@@ -168,7 +178,7 @@ describe('useTranscript', () => {
       getTranscript: vi.fn(async (_s: string, _t: string, t: string) => ({
         status: 'failed' as const,
         requestToken: t,
-        reasonKey: 'enumeration-failed' as const
+        reasonKey: 'transcript-read-failed' as const
       }))
     })
     sel.selectedRowKey = 'host#0::s1'
@@ -176,7 +186,7 @@ describe('useTranscript', () => {
     const { result } = renderHook(() => useTranscript())
 
     await waitFor(() => expect(result.current.status).toBe('failed'))
-    expect(result.current.reasonKey).toBe('enumeration-failed')
+    expect(result.current.reasonKey).toBe('transcript-read-failed')
   })
 
   it('getTranscript が reject でも failed に落ちる (throw を漏らさない)', async () => {
@@ -196,7 +206,7 @@ describe('useTranscript', () => {
     const getTranscript = vi.fn(async (_s: string, _t: string, t: string) => ({
       status: 'failed' as const,
       requestToken: t,
-      reasonKey: 'enumeration-failed' as const
+      reasonKey: 'transcript-read-failed' as const
     }))
     installCapability({ getTranscript })
     sel.selectedRowKey = 'host#0::s1'

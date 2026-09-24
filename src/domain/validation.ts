@@ -145,3 +145,16 @@ const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-
 export function isValidSessionId(value: unknown): value is string {
   return typeof value === 'string' && SESSION_ID_PATTERN.test(value)
 }
+
+/**
+ * `getTranscript` の `requestToken` の上限 (R-3 / pr-gate S-L-002)。
+ *
+ * renderer が採番する不透明トークン (stale 応答の突合キー)。他の未信頼入力
+ * (`MAX_SESSION_ID_LENGTH` など) と同じく境界で長さ上限を掛け、無制限文字列を
+ * `active` Map のキー・handshake・port message として保持しない。
+ */
+export const MAX_REQUEST_TOKEN_LENGTH = 128
+
+export function isValidRequestToken(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= MAX_REQUEST_TOKEN_LENGTH
+}

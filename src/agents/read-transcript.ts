@@ -74,7 +74,11 @@ async function run(request: TranscriptRequest, port: TranscriptPortLike): Promis
       messages: toTranscriptMessages(messages as readonly SessionMessageLike[])
     }
   } catch {
-    frame = { kind: 'error', requestToken: request.requestToken, reasonKey: 'enumeration-failed' }
+    frame = {
+      kind: 'error',
+      requestToken: request.requestToken,
+      reasonKey: 'transcript-read-failed'
+    }
   }
   port.postMessage(frame)
   port.close?.()

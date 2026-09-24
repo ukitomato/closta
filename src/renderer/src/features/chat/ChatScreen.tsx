@@ -30,9 +30,9 @@ import { useTranscript } from './useTranscript'
 /**
  * 失敗理由を transcript 文脈の日本語にする (US-1 AC-4 / FR-013)。
  *
- * **R-2 の列挙語彙 (`FailureReason`) を再利用しているが、transcript 向けの文言に写す** —
- * とくに `enumeration-failed` を「列挙に失敗」と出さない (transcript は列挙ではない。code-gate L-001)。
- * 理由専用の `FailureReason` 値を切るかは architecture と調整する follow-up。
+ * transcript の汎用失敗は専用値 `transcript-read-failed` (pr-gate A-M-001。列挙 `enumeration-failed` とは別概念)。
+ * 到達可能性系 (`distro-not-running` 等) は `FailureReason` を R-2 と共有するが、**文言は transcript 向けに写す** —
+ * とくに列挙語彙を「列挙」と出さない (transcript は列挙ではない)。
  */
 function transcriptFailureDetail(reasonKey: FailureReason | null): string {
   const detail: Partial<Record<FailureReason, string>> = {
@@ -42,6 +42,9 @@ function transcriptFailureDetail(reasonKey: FailureReason | null): string {
     'permission-denied': '履歴ファイルへのアクセスが拒否されました。',
     'path-too-long': 'パスが長すぎて履歴を読めませんでした。',
     'stopped-midway': '読み取りが途中で打ち切られました。再取得してください。',
+    // transcript 取得の汎用失敗 (専用値)。
+    'transcript-read-failed': '履歴を読み込めませんでした。',
+    // 保険: 万一列挙語彙が来ても「列挙」文言を出さない。
     'enumeration-failed': '履歴を読み込めませんでした。'
   }
   return reasonKey === null
@@ -86,13 +89,14 @@ export function ChatScreen(): React.JSX.Element {
         </Centered>
       ) : status === 'failed' ? (
         <Centered>
+          {/* retry は即 loading (全画面ローダ) に遷移するため ErrorState の retrying は常に false。
+              retryingLabel は描画されないので渡さない (pr-gate P-L-002)。 */}
           <ErrorState
             title="transcript を取得できませんでした"
             detail={transcriptFailureDetail(reasonKey)}
             retrying={false}
             onRetry={retry}
             retryLabel="再取得"
-            retryingLabel="再取得中"
           />
         </Centered>
       ) : status === 'loading' ? (

@@ -7,11 +7,14 @@
   実機操作の実施自体は人間 deferred。**機械確認**は `tests/spec-artifacts/r3-quickstart-rubric.test.ts` が
   rubric-a〜rubric-d の行と判定の存在を検査する (SH-067b)。
 
-## 自動検証で満たした SC (実機不要)
+## SC の自動検証状況 (実機不要な範囲)
+
+**「PASS」は自動検証で満たした範囲を指す。核心が実機のみで測れる SC は実機 pending を明示する** (pr-gate H-003)。
 
 | SC | 内容 | 経路 | 状態 |
 |---|---|---|---|
-| SC-001 | 記録順・役割・件数の一致 | `ChatScreen.test.tsx` (実データ描画/記録順) / `transcript.test.ts` | **PASS** |
+| SC-001 | 変換・記録順・役割 (unit) | `transcript.test.ts` (対応表) / `ChatScreen.test.tsx` (合成 fixture の順序描画) | **unit PASS** |
+| SC-001 (SDK 等価性) | 同一 sessionId の SDK 直呼びとの件数・順序・役割一致 (**核心**) | quickstart **V-1 (実機)** | **pending (実機。人間 deferred)** |
 | SC-003 | 同時マウント DOM ノード数が総件数に依存しない | `virtualization.test.tsx` (200 vs 3,000 でマウント数一致) | **PASS** |
 | SC-005 | 未完 markdown で描画が破綻しない / 未定義 tool の fallback | `ChatScreen.test.tsx` (未完フェンス / fallback) | **PASS** |
 | SC-007 | 本文が invoke 応答 (handshake) に含まれない (port transfer) | `session-ipc.test.ts` / `transcript-service.test.ts` | **PASS** |

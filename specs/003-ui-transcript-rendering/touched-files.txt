@@ -9,6 +9,9 @@ src/domain/session/transcript.test.ts
 src/domain/session/transcript-schema.test.ts
 src/domain/validation.ts
 src/domain/capability.ts
+src/domain/session/target.ts
+src/renderer/src/features/session-list/labels.ts
+src/main/app/window.ts
 src/agents/read-transcript.ts
 src/main/infra/session/config-dir.ts
 src/main/app/transcript-service.ts

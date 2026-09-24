@@ -99,6 +99,9 @@ export function useTranscript(): TranscriptView {
 
     /** port は window メッセージで届く。**自分の token の port だけを受け取る** (stale 破棄)。 */
     const onWindowMessage = (event: MessageEvent): void => {
+      // 自 origin・自 window 由来のみ受ける (pr-gate security S-L-001。preload は自 origin へ transfer)。
+      if (event.origin !== window.location.origin) return
+      if (event.source !== window) return
       const data = event.data as PortMessageData
       if (data.marker !== TRANSCRIPT_PORT_MESSAGE || data.requestToken !== token) return
       const port = event.ports[0]

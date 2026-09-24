@@ -344,7 +344,11 @@ export const WSL_FREE_DIRECTORIES = [
   'src/main/app/session-ipc.ts',
   'src/main/app/session-enumerator.ts',
   'src/main/app/enumerator-spawner.ts',
-  'src/main/app/dto-mapper.ts'
+  'src/main/app/dto-mapper.ts',
+  // R-3: transcript 取得は read-only で wsl.exe を起こさない。起動点も含めて検査対象に入れる
+  // (現状 wsl-free。pr-gate platform-boundary M-001)。
+  'src/main/app/transcript-service.ts',
+  'src/main/app/transcript-spawner.ts'
 ]
 
 export const UNC_API_NAMES = [

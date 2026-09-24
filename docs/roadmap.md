@@ -75,10 +75,16 @@ workspace として扱われていたら `packages:` の有無を先に確認す
 | 1 | R-1 | フォルダ登録とランタイム検出 **(実装完了 / gate 未通過)** | `runtime` | — | SPIKE-8 / SPIKE-9 **完了** |
 | 2 | R-2 | セッション列挙（読み取り専用） | `session` | **R-1 の US-1〜US-3** | SPIKE-1 **完了** |
 | 3 | R-3 | transcript の基本表示 | `ui` | R-2 | SPIKE-2 / SPIKE-14 **完了** |
-| 4 | R-4 | Tier A tool 表示 | `ui` | R-3 | — |
+| 4 | R-4 | Tier A tool 表示 | `ui` | R-3 + **R-3 の実機一次判断 (下記)** | — |
 | — | — | *(SPIKE-9 / SPIKE-13 は R-1 までに実施)* | — | — | — |
 
 **R-3 の完了時点で見栄えの一次判断ができる。** R-4 まで待たない。
+
+> **R-4 着手の前提 (pr-gate R-3 Round 1 / H-002)**: R-3 の done は SC-010 rubric 判定表の**記録**までを必須とし、
+> 実機の視覚的一次判断 (とくに rubric-a=markdown ハイライト / rubric-b=日本語行送り) は人間 deferred。
+> **R-4 (Tier A tool 表示) の spec 着手前に、`quickstart-results.md` の rubric-a/b を実機で埋め「一次判断」結論を記す。**
+> いずれかが NG なら charter「見た目の判断を先送りしない」に従い charter / PLAN.md §4 の見直しを別 task で起票する
+> (R-4 は R-3 の土台の上に積むため、視覚的方向性の確定を R-4 前に置く)。持ち主は R-3 (下記申し送り #7)。
 
 #### R-3 への申し送り (pr-gate Round 4 / 2026-09-23)
 

@@ -213,13 +213,23 @@ describe('handleGetTranscript — 検証表 (R-3 / BE-027 / SC-008)', () => {
   it.each([
     ['空', ''],
     ['非文字列', 123],
-    ['欠落', undefined]
-  ])('requestToken が非空文字列でなければ発行しない (%s)', async (_label, requestToken) => {
+    ['欠落', undefined],
+    ['上限超過 (>128)', 'x'.repeat(129)]
+  ])('requestToken が妥当でなければ発行しない (%s)', async (_label, requestToken) => {
     const { deps: d, calls } = deps()
 
     const result = await handleGetTranscript(d, [VALID_UUID, 'host#0', requestToken])
 
     expect(result.handshake.status).toBe('failed')
     expect(calls.transcript).toEqual([])
+  })
+
+  it('妥当な requestToken (非空・上限内) は発行する', async () => {
+    const { deps: d, calls } = deps()
+
+    const result = await handleGetTranscript(d, [VALID_UUID, 'host#0', 'x'.repeat(128)])
+
+    expect(result.handshake.status).toBe('streaming')
+    expect(calls.transcript).toHaveLength(1)
   })
 })

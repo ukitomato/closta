@@ -109,7 +109,8 @@ describe('ChatScreen の状態別描画', () => {
   })
 })
 
-describe('ChatScreen の実データ描画', () => {
+// **合成 fixture による描画・順序の検証** (SC-001 の SDK 等価性・実データ突合は quickstart V-1 実機。pr-gate H-003)。
+describe('ChatScreen の変換済みメッセージ描画 (順序・fallback)', () => {
   it('メッセージを記録順に並べる', () => {
     ready([textDto('m1', '最初のメッセージ'), textDto('m2', '次のメッセージ')])
 

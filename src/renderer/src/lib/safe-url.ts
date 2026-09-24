@@ -44,6 +44,6 @@ export function safeUrlTransform(url: string, key: string): string {
   // http(s): link は許可。画像 (`src`) は CSP に合わせて除外する。
   if (scheme === 'http' || scheme === 'https') return key === 'src' ? '' : url
 
-  // javascript: / vbscript: / file: / mailto: 以外の未知スキームはすべて除去。
+  // http(s) / 相対 / data:画像 以外はすべて除去 (javascript: / vbscript: / file: / mailto: を含む。deny-by-default)。
   return ''
 }

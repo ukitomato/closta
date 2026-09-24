@@ -78,13 +78,19 @@ function toolResultText(content: unknown): string {
  * **http(s) リモート画像は含めない** (S-002。tracking pixel を作らない)。
  * base64 image source のみを data: URL に組み立てる。
  */
+/**
+ * `<img>` 経由でも安全な data 画像 MIME。**`ui` の `safe-url.ts` の `SAFE_DATA_IMAGE` と揃える** —
+ * `image/svg+xml` は script 面が残るため除外する (pr-gate security M-001。CSP `img-src 'self' data:` と同方針)。
+ */
+const SAFE_IMAGE_MEDIA_TYPES = new Set(['image/gif', 'image/jpeg', 'image/png', 'image/webp'])
+
 function imageUrl(block: Record<string, unknown>): string | null {
   const src = asRecord(block.source)
   if (!src) return null
   if (
     src.type === 'base64' &&
     typeof src.media_type === 'string' &&
-    src.media_type.startsWith('image/') &&
+    SAFE_IMAGE_MEDIA_TYPES.has(src.media_type.toLowerCase()) &&
     typeof src.data === 'string'
   ) {
     return `data:${src.media_type};base64,${src.data}`

@@ -70,9 +70,10 @@ const capability: ClostaCapability = {
  * **要求の発行は必ず `getTranscript` invoke を通る** (main の検証を経る)。この port は受信専用である。
  */
 ipcRenderer.on(IPC_CHANNELS.transcriptPort, (event, payload: { requestToken: string }) => {
+  // **targetOrigin を自 origin に絞る** — `'*'` にしない (pr-gate security S-L-001。MDN postMessage 指針)。
   window.postMessage(
     { marker: TRANSCRIPT_PORT_MESSAGE, requestToken: payload.requestToken },
-    '*',
+    window.location.origin,
     event.ports
   )
 })

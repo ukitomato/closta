@@ -73,7 +73,7 @@ describe('createTranscriptService', () => {
     expect(result.handshake).toEqual({
       status: 'failed',
       requestToken: 'tok',
-      reasonKey: 'enumeration-failed'
+      reasonKey: 'transcript-read-failed'
     })
     expect(launches).toHaveLength(0)
   })
@@ -158,6 +158,25 @@ describe('createTranscriptService', () => {
 
     expect(launches).toHaveLength(2)
     expect(launches[0].killed).toBe(true) // 上限超過で最古を kill
+    expect(launches[1].killed).toBe(false)
+  })
+
+  it('同一 requestToken を連打しても上限を迂回できない (S-M-002 / CWE-400)', async () => {
+    const { spawner, launches } = fakeSpawner()
+    const service = createTranscriptService({
+      spawner,
+      resolveTarget: resolverOf({ 'host#0': { ok: true, configDirEnv: 'C:\\a\\.claude' } }),
+      buildEnv,
+      maxConcurrent: 1
+    })
+
+    // renderer 供給の requestToken を再利用しても、上限は main 採番の内部 id で数えるので効く
+    // (token キーだと 2 回目が同一エントリを上書きして size が増えず、上限ガードが不発になっていた)。
+    await service.getTranscript('11111111-1111-4111-8111-111111111111', 'host#0', 'same')
+    await service.getTranscript('22222222-2222-4222-8222-222222222222', 'host#0', 'same')
+
+    expect(launches).toHaveLength(2)
+    expect(launches[0].killed).toBe(true) // token 再利用でも最古が kill される
     expect(launches[1].killed).toBe(false)
   })
 
