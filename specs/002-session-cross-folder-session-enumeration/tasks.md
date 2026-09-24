@@ -376,11 +376,10 @@ accepted ADR に反する設計を、調停 ADR より先に実装しないた�
       あわせて **`docs/domains/runtime/charter.md` の `related_specs` に本 spec を追加**し、
       **`_overview.md` の R-1 行**にパス API の拡張 (BE-010b) を 1 行添える —
       本 feature は R-1 の `runtime` domain を拡張するため
-- [ ] SH-089 quickstart を実施し、結果を `quickstart-results.md` に記録する。
-      **V-3 の出自 6 パターンのうち実機で踏めなかった行を明記する** (SC-001 〜 **SC-016**)。
-      実行結果は `quickstart-results.md` の「SH-089」節。
-      **再実行待ち (実機/人間)** — 2026-09-18 の証跡は pr-gate Round 4/5 の実装変更前のもので、
-      V-1/V-3/V-4/V-6/V-8 が変わった (pr-gate Round 5 / PO4-004 / C4-016)。持ち主は `docs/roadmap.md` R-3 申し送り。
+- [→] SH-089 quickstart の**実機再実行は R-3 へ送る** (pr-gate Round 6 で re-scope。R-2 のコード成果物ではなく実機操作を伴う人間タスクのため)。
+      **持ち主: `docs/roadmap.md` R-3 申し送り #7。** 2026-09-18 の初回証跡は `quickstart-results.md` の「SH-089」節に残る。
+      pr-gate Round 4/5 の実装変更 (V-1 件数表記 / V-3 出自 / V-4 導線 / V-6 先頭ページ / V-8 空状態) 後は未再実行であり、
+      これらの AC は Vitest が代替検証を担う (SC-001 〜 **SC-016**)。**done の必須完了項目ではない** (PO4-004 / C4-016)。
       **実機で踏めなかったのは 3 件**で、いずれも Vitest が代替を担う —
       V-3 #3 `undetected-distro` (ディストロの改名 / 削除が要る)、
       越境 `/mnt/c/...` (該当する `cwd` が 0 件)、
