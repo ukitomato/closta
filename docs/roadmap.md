@@ -74,7 +74,7 @@ workspace として扱われていたら `packages:` の有無を先に確認す
 |---|---|---|---|---|---|
 | 1 | R-1 | フォルダ登録とランタイム検出 **(実装完了 / gate 未通過)** | `runtime` | — | SPIKE-8 / SPIKE-9 **完了** |
 | 2 | R-2 | セッション列挙（読み取り専用） | `session` | **R-1 の US-1〜US-3** | SPIKE-1 **完了** |
-| 3 | R-3 | transcript の基本表示 | `ui` | R-2 | **SPIKE-2** / SPIKE-14 **完了** |
+| 3 | R-3 | transcript の基本表示 | `ui` | R-2 | SPIKE-2 / SPIKE-14 **完了** |
 | 4 | R-4 | Tier A tool 表示 | `ui` | R-3 | — |
 | — | — | *(SPIKE-9 / SPIKE-13 は R-1 までに実施)* | — | — | — |
 
@@ -187,7 +187,7 @@ I-1 では **`wsl:<distro>` endpoint（WSL 内 Docker Engine）を第一に検�
 |---|---|---|---|
 | SPIKE-8 | ランタイム検出とパス変換の確定。**docker endpoint の検出手段を含む** | R-1 の前 | **完了 (2026-09-13)** → [AD-015](decisions/0015-wsl-access-strategy.md) |
 | SPIKE-1 | `listSessions()` と `CLAUDE_CONFIG_DIR` の関係 | R-2 の前 | **完了 (2026-09-13)** → [AD-021](decisions/0021-session-store-and-enumeration.md)。config dir は引数で取れない。子プロセス方式が本線 |
-| SPIKE-2 | assistant-ui Elements の導入コスト実測 | R-3 の前 | 半日 |
+| SPIKE-2 | assistant-ui Elements の導入コスト実測 | R-3 の前 | **完了 (2026-09-24)** → [AD-033](decisions/0033-assistant-ui-elements-introduction-cost.md)。導入は R-1 で払い済み、残りは仮想化とデータ配線 |
 | SPIKE-5 | `spawnClaudeCodeProcess` による WSL 起動 | X-1 の前 | **完了 (2026-09-13)** → [AD-018](decisions/0018-wsl-process-control.md) |
 | SPIKE-3 | `claude` プロセスの実メモリ測定 | X-1 の前 | **完了 (2026-09-13)** → [AD-001](decisions/0001-adopt-electron-over-tauri.md) に追記。idle 225MB / 並列でも変わらず |
 | SPIKE-4 | 日本語 IME の composer 挙動 | X-2 の前 | 1〜2時間 |
