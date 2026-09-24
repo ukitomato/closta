@@ -1,0 +1,12 @@
+// 違反サンプル (等価経路): 許可されていない Agent SDK の書き込み系 API を **alias 経由**で呼ぶ。
+// 項目14 の判定は許可外 binding の**呼び出し形正規表現** (`renameSession(`) のみを見るため、
+// `const r = renameSession; r(...)` の再束縛は素通しする (AD-034 §3 が明記した限界そのもの)。
+// **この経路はどの機械検証も捕まえない** — `detectors: ['none']`。理由と代替は expected.mjs の
+// UNDETECTED_NOTES['sdk-write-alias'] に記録する (SC-017 / AD-027「捕まらない経路は列挙する」規範)。
+import { renameSession } from '@anthropic-ai/claude-agent-sdk'
+
+const rename = renameSession
+
+export async function forbiddenWriteViaAlias(sessionId: string): Promise<unknown> {
+  return rename(sessionId, 'renamed')
+}

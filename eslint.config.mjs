@@ -451,5 +451,27 @@ export default defineConfig(
       'react-refresh/only-export-components': 'off',
       'no-empty': 'off'
     }
+  },
+  /*
+   * ── 緩和ゾーン内の手書きコードへ strictness を戻す (R-3 code-gate M-001 / M-002) ──
+   * `GENERATED_FILES` は CLI 生成物を緩和するが、生成物ディレクトリに置いた**手書きコード**は
+   * 緩和対象にしない。除外はファイル単位の明示リストで狭める (Principle XIII の
+   * `theme_baseline_exclusions` と同方針)。緩和より後に置いて上書きする。
+   */
+  {
+    // XSS 境界 (FR-020) の手書きコード。`lib/` に置くが full strictness を掛ける。
+    files: ['src/renderer/src/lib/safe-url.ts', 'src/renderer/src/lib/safe-url.test.ts'],
+    rules: {
+      'prettier/prettier': 'error',
+      '@typescript-eslint/explicit-function-return-type': 'error',
+      'no-empty': 'error'
+    }
+  },
+  {
+    // scaffold だが R-3 の仮想化 (回帰核) を足したので、依存配列の番人だけ戻す。
+    files: ['src/renderer/src/components/assistant-ui/elements/thread.aui.tsx'],
+    rules: {
+      'react-hooks/exhaustive-deps': 'error'
+    }
   }
 )

@@ -10,6 +10,7 @@ import { createWslFileSystem } from '../infra/fs/wsl-fs'
 import { createRuntimeDetector } from '../infra/runtime/wsl-detector'
 import { createWslCli } from '../infra/runtime/wsl-cli'
 import { createFolderStore } from '../infra/settings/folder-store'
+import { buildTranscriptEnv } from '../infra/session/config-dir'
 import { createEnumerationTargetFinder } from '../infra/session/target-finder'
 import { createUtilityProcessLauncher } from './enumerator-spawner'
 import { createFolderService, type FolderService } from './folder-service'
@@ -19,6 +20,8 @@ import { isDevBuild } from './origins'
 import { createRuntimeStore, type RuntimeStore } from './runtime-store'
 import { createSessionEnumerator } from './session-enumerator'
 import { createSessionService, type SessionService } from './session-service'
+import { createTranscriptService } from './transcript-service'
+import { createTranscriptSpawner } from './transcript-spawner'
 
 /**
  * composition root (BE-010 / BE-045 / AD-023 §1)。
@@ -176,6 +179,20 @@ export function createComposition(): Composition {
   folders.onChanged(() => sessions.onFoldersChanged())
   runtimes.onChanged(() => sessions.onRuntimesChanged())
 
+  /*
+   * **transcript 取得サービス** (R-3 / [AD-034](../../../docs/decisions/0034-transcript-read-path-and-process-boundary.md))。
+   *
+   * 取得は target ごとに env 固定の**専用短命プロセス**で行い、本文は `MessageChannelMain` の
+   * port で取得プロセス↔renderer 直通に流す (main を本文のデータ経路から外す。Principle IX)。
+   * `targetKey` の解決と起動ゲートは session-service に委ねる (実行中確認の状態を再利用)。
+   */
+  const transcripts = createTranscriptService({
+    spawner: createTranscriptSpawner(),
+    resolveTarget: (targetKey) => sessions.transcriptTarget(targetKey),
+    // 親環境の許可リスト + CLAUDE_CONFIG_DIR (spawn 時固定)。綴りは config-dir が持つ。
+    buildEnv: (configDirEnv) => buildTranscriptEnv(process.env, configDirEnv)
+  })
+
   const ipc: IpcDependencies = {
     listRuntimes: () => runtimes.list(),
     refreshRuntimes: async () => {
@@ -204,6 +221,8 @@ export function createComposition(): Composition {
     refreshSessions: () => sessions.refresh(),
     fetchMoreSessions: (targetKey, offset) => sessions.fetchMore(targetKey, offset),
     sessionTargetKeys: () => sessions.targetKeys(),
+    getTranscript: (sessionId, targetKey, requestToken) =>
+      transcripts.getTranscript(sessionId, targetKey, requestToken),
 
     async pickHostFolder() {
       /*
@@ -232,5 +251,15 @@ export function createComposition(): Composition {
     }
   }
 
-  return { runtimes, folders, sessions, ipc, dispose: () => enumerator.dispose() }
+  /*
+   * **列挙プロセスと transcript の in-flight プロセスの双方を片付ける** (contracts C-5)。
+   * 終了を確認できなかった台数を合算して返す (0 でなければ UNC ハンドルを掴んだ孤児が残る)。
+   */
+  return {
+    runtimes,
+    folders,
+    sessions,
+    ipc,
+    dispose: () => enumerator.dispose() + transcripts.dispose()
+  }
 }

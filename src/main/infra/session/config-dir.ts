@@ -34,13 +34,21 @@ import type { HostPath, PathResult, RuntimePath } from '@domain/runtime/path-typ
 export const CONFIG_DIR_NAME = '.claude'
 
 /*
- * **`CLAUDE_CONFIG_DIR` の綴りはここに無い。**
+ * **`CLAUDE_CONFIG_DIR` の綴りと R-2 / R-3 の置き場の違い。**
  *
- * [AD-030](../../../../docs/decisions/0030-enumeration-runs-in-one-resident-process.md) §2 で
- * **config ディレクトリを要求ごとに渡す**形に変えたため、起動時の環境変数から外れた。
- * 綴りを持つのは `src/agents/enumerate-sessions.ts` の 1 箇所だけである
- * (許可リストが 2 箇所から 1 箇所に減った)。
+ * R-2 の列挙は [AD-030](../../../../docs/decisions/0030-enumeration-runs-in-one-resident-process.md) §2 で
+ * **config ディレクトリを要求ごとに渡す**常駐プロセス方式であり、綴りは
+ * `src/agents/enumerate-sessions.ts` が持つ (起動時 env に載せない)。
+ *
+ * R-3 の transcript 取得は [AD-034](../../../../docs/decisions/0034-transcript-read-path-and-process-boundary.md)
+ * 決定 2 で **target ごとに env 固定の専用短命プロセス**にしたため、`CLAUDE_CONFIG_DIR` を
+ * **spawn 時に env で渡す**。その綴りと env 組み立てを下の `CLAUDE_CONFIG_DIR_ENV` /
+ * `buildTranscriptEnv` に持つ (config ディレクトリの SSoT である本モジュールに置く)。
+ * **モデルが違うので置き場が分かれる** — read-transcript は env を読むだけで綴りを持たない。
  */
+
+/** transcript 取得プロセスに渡す config ディレクトリの環境変数名 (R-3 / AD-034)。 */
+export const CLAUDE_CONFIG_DIR_ENV = 'CLAUDE_CONFIG_DIR'
 
 /**
  * 常駐する列挙プロセスに渡してよい親環境のキー。
@@ -114,4 +122,18 @@ export function buildWorkerEnv(
   }
 
   return env
+}
+
+/**
+ * transcript 取得プロセスの環境変数を組み立てる (R-3 / AD-034 / FR-050 / SC-016)。
+ *
+ * **列挙と同じ許可リスト** (`buildWorkerEnv`) に加え、**`CLAUDE_CONFIG_DIR` を spawn 時に固定**する。
+ * これにより取得プロセスは env を読むだけで済み、共有可変 env の並行レースが構造的に無くなる
+ * (AD-034 決定 2)。親環境を丸ごと継承させない。
+ */
+export function buildTranscriptEnv(
+  parentEnv: Readonly<Record<string, string | undefined>>,
+  configDirEnv: string
+): Record<string, string> {
+  return { ...buildWorkerEnv(parentEnv), [CLAUDE_CONFIG_DIR_ENV]: configDirEnv }
 }

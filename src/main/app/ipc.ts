@@ -15,8 +15,16 @@ import type {
 } from '@domain/workspace/dto'
 import type { Location } from '@domain/workspace/folder'
 
+import type { TranscriptHandshakeDTO } from '@domain/session/transcript-dto'
+
 import type { Measure } from './measure'
-import { handleFetchMoreSessions, handleListSessions, handleRefreshSessions } from './session-ipc'
+import {
+  handleFetchMoreSessions,
+  handleGetTranscript,
+  handleListSessions,
+  handleRefreshSessions
+} from './session-ipc'
+import type { TranscriptResult } from './transcript-service'
 import {
   checkBeginBrowseLocation,
   checkFolderDraft,
@@ -76,6 +84,16 @@ export interface IpcDependencies {
    * SC-002 / SC-010 が検証したい経路を踏めるようにするためである。
    */
   sessionTargetKeys(): readonly string[]
+
+  /* ── transcript (R-3。**読み取り専用**) ── */
+
+  /** transcript 取得。**本文は port**、戻り値は本文を含まない handshake + transfer 用 port (AD-034)。 */
+  getTranscript(
+    sessionId: string,
+    targetKey: string,
+    requestToken: string
+  ): Promise<TranscriptResult>
+
   /** 計測関数。composition root が開発ビルド判定を解決して渡す (BE-030 / FR-038)。 */
   readonly measure: Measure
 }
@@ -174,6 +192,28 @@ export function registerIpcHandlers(deps: IpcDependencies): void {
   handle(IPC_CHANNELS.fetchMoreSessions, async (_event, ...args): Promise<SessionIndexDTO> =>
     handleFetchMoreSessions(deps, args)
   )
+
+  /* ── transcript (R-3。**読み取り専用**) ─────────────────────────── */
+
+  /*
+   * **検証と service 呼び出しは `session-ipc.ts` (electron 非依存) が行う** (SC-010 と同型)。
+   * ここに残すのは port の transfer だけである — `event.sender.postMessage` は electron を要する。
+   *
+   * **port2 を renderer へ transfer した後、main はその port に触れない** (AD-034 決定 1 /
+   * Principle IX)。本文は取得プロセス↔renderer 直通で流れ、main は `JSON.parse` も
+   * structured clone deserialize もしない。handshake (本文を含まない) だけを invoke の戻り値で返す。
+   */
+  handle(IPC_CHANNELS.getTranscript, async (event, ...args): Promise<TranscriptHandshakeDTO> => {
+    const result = await handleGetTranscript(deps, args)
+    if (result.port !== null) {
+      event.sender.postMessage(
+        IPC_CHANNELS.transcriptPort,
+        { requestToken: result.handshake.requestToken },
+        [result.port]
+      )
+    }
+    return result.handshake
+  })
 
   /* ── 解決 ───────────────────────────────────────────────────────── */
 

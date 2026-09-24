@@ -1,6 +1,10 @@
 import type { RuntimeDescriptor, WslRuntimeDescriptor } from '@domain/runtime/descriptor'
 import { isHostNamespace, type WslNamespaceId } from '@domain/runtime/namespace'
-import { BROWSE_SESSION_TTL_MS, type VerifiedRunning } from '@domain/runtime/verified-running'
+import {
+  BROWSE_SESSION_TTL_MS,
+  checkVerified,
+  type VerifiedRunning
+} from '@domain/runtime/verified-running'
 import { buildSessionSummary } from '@domain/session/build'
 import type { SessionIndexDTO } from '@domain/session/dto'
 import { groupSessions, type MatchedSession, type SessionGroup } from '@domain/session/group'
@@ -23,9 +27,11 @@ import { SESSION_PAGE_SIZE } from '@domain/validation'
 import type { WorkspaceFolder } from '@domain/workspace/folder'
 import { resolveFolderRuntime } from '@domain/workspace/resolution'
 
+import { configDirEnvValue } from '../infra/session/config-dir'
 import { toEnumerationOutcomeDTOs, toSessionGroupDTO } from './dto-mapper'
 import type { Measure } from './measure'
 import { ENUMERATION_TIMEOUT_MS } from './session-enumerator'
+import type { TranscriptTargetResolution } from './transcript-service'
 
 /**
  * セッション一覧の調停 (BE-026 / data-model §7 / FR-030 〜 FR-038)。
@@ -76,6 +82,14 @@ export interface SessionService {
    * 「未知の `key`」として処理され、測りたいものが測れない。
    */
   targetKeys(): readonly string[]
+  /**
+   * `targetKey` → transcript 取得プロセスに渡す config ディレクトリ env と起動ゲート (R-3 / AD-034)。
+   *
+   * 既知の `key` の `configDir` を materialize し、`wsl:<D>` は**実行中確認のゲート**を掛ける
+   * (UNC アクセスを起こす前に確かめる。FR-008 と同型)。未知の `key` は `null` を返す
+   * (renderer は未信頼。AD-023)。**列挙も起動もしない** — 値の解決とゲートだけを行う。
+   */
+  transcriptTarget(targetKey: string): Promise<TranscriptTargetResolution>
   /** 登録フォルダが変わった。**再列挙せず対応づけだけをやり直す。** */
   onFoldersChanged(): SessionIndexDTO
   /** ランタイムが変わった。対応づけのメモ化を破棄してやり直す。 */
@@ -722,6 +736,32 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
 
     targetKeys(): readonly string[] {
       return outcomes.flatMap((outcome) => outcome.outcomes.map((row) => row.key))
+    },
+
+    async transcriptTarget(targetKey: string): Promise<TranscriptTargetResolution> {
+      const target = targets.find((candidate) => candidate.key === targetKey)
+      /* **未知の `targetKey` は `null`。** 例外にしない (renderer は未信頼)。 */
+      if (target === undefined) return null
+
+      const envValue = configDirEnvValue(target.configDir)
+      if (!envValue.ok) return { ok: false, reasonKey: 'enumeration-failed' }
+
+      /*
+       * **起動ゲート** (FR-008 / session-enumerator の `checkLaunchAllowed` と同型)。
+       * `wsl:<D>` は実行中確認済みの値が期限内であることを要求する —
+       * **プロセスの起動自体が UNC アクセスを起こす**ため、停止中の所在へ子を飛ばさない。
+       */
+      if (!isHostNamespace(target.configDir.namespace)) {
+        const running = await verifiedFor(target)
+        if (
+          running === null ||
+          !checkVerified(running, target.configDir.namespace, deps.now()).ok
+        ) {
+          return { ok: false, reasonKey: 'distro-not-running' }
+        }
+      }
+
+      return { ok: true, configDirEnv: envValue.path }
     },
 
     onFoldersChanged(): SessionIndexDTO {

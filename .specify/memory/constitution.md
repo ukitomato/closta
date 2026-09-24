@@ -1,10 +1,27 @@
 ---
 status: active
-version: 1.2.5
+version: 1.2.6
 ratified: 2026-09-13
-last_amended: 2026-09-23
+last_amended: 2026-09-24
 generated_by: /speckit.constitution (素材: /spec-gate bootstrap Phase 6 の draft)
 ---
+
+<!--
+Sync Impact Report (v1.2.6)
+- Version change: 1.2.5 → 1.2.6
+- Last amended: 2026-09-24
+- Bump rationale: PATCH。Principle IX の「現状の制約」に R-3 (AD-034) の事実追記のみ。
+  statement も指針も変えていない (バージョニング方針表「Verification の現状の制約の事実追随は PATCH」)
+
+Modified sections:
+- Principle IX (Verification 現状の制約) — R-3 が transcript 本文を `MessageChannelMain` の
+  port transfer で取得プロセス↔renderer 直通で運び main を本文経路から外したことを追記。
+  **到達集合検査は依然未構築**であることを明記し「解決済み」とは書かない (AD-034 / R-3 SH-062)。
+  到達集合検査の持ち主 feature を docs/roadmap.md に登録した (R-3 SH-062b)
+
+Templates requiring updates:
+- ✅ docs/decisions/0034-transcript-read-path-and-process-boundary.md — 本 PATCH の根拠 ADR (accepted)
+-->
 
 <!--
 Sync Impact Report (v1.2.5)
@@ -519,7 +536,7 @@ if (!isMac) { ... }
 - `violation_threshold`: 0
 - `bad_pattern_grep`: `grep -rn "JSON.parse" src/ | grep -v "src/agents/" | grep -iE "chunk|stdout|stream|line"`
 - `adoption_date`: 2026-09-13
-- `amended`: 2026-09-15 (AD-024 #6), 2026-09-23 (AD-031)
+- `amended`: 2026-09-15 (AD-024 #6), 2026-09-23 (AD-031), 2026-09-24 (AD-034)
 
 <!-- BOOTSTRAP_SECTION_START principle=IX -->
 **Statement**: stream の逐次パースは supervisor (`utilityProcess`。**実体は `src/agents/`**) 側で行うべきであり、main process で行うべきではない。
@@ -549,6 +566,15 @@ R-2 (セッション列挙) はこの経路で応答 1 行を main でパース�
 本文を運ばない列挙結果のメタデータに限られるため許容したが、
 **R-3 が transcript 本文を運ぶ時点で再評価する** (AD-031 Decision 2)。
 塞ぐには `composition-root` からの到達集合を依存グラフから導く検査が要る。
+
+**2026-09-24 (R-3 / [AD-034](../../docs/decisions/0034-transcript-read-path-and-process-boundary.md))**:
+R-3 は transcript 本文を `MessageChannelMain` の port transfer で取得プロセス↔renderer 直通で運び、
+**main を本文のデータ経路から外した** (`JSON.parse` も structured clone deserialize も main で起こさない)。
+R-2 が残した「本文を運ぶ時点で再評価する」宿題に構造的な解を与えた。
+**ただし到達集合検査 (composition-root から main で評価されるモジュールを導く自動検査) は依然として
+未構築である** — SC-007 は port transfer の構造検査 + 手動レビューで担保しており、
+`existing_violations: 0` は本 Principle の自動証明を意味しない。
+到達集合検査の持ち主 feature を `docs/roadmap.md` に登録した (R-3 SH-062b)。
 <!-- BOOTSTRAP_SECTION_END principle=IX -->
 
 <!-- MIGRATE_SECTION_START principle=IX -->

@@ -40,6 +40,7 @@ import {
   ThreadPrimitive,
   type FileMessagePartComponent,
   type ImageMessagePartComponent,
+  type TextMessagePartComponent,
   type ToolCallMessagePartComponent,
   useAuiState,
 } from "@assistant-ui/react";
@@ -57,9 +58,16 @@ import {
   RefreshCwIcon,
   SquareIcon,
 } from "lucide-react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   createContext,
+  useCallback,
   useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
   type ComponentType,
   type FC,
   type PropsWithChildren,
@@ -130,15 +138,34 @@ const ThreadHistorySkeleton: FC = () => (
   </div>
 );
 
+/**
+ * 仮想化の閾値 (FE-042 / AD-033 但し書き / research R-01)。
+ *
+ * **これ以下は非仮想パス**（`ThreadPrimitive.Viewport` の既存挙動をそのまま使う）、
+ * これを超えたら `@tanstack/react-virtual` で仮想化する。この線引きの理由:
+ * - react-virtual は `measureElement` による行の実測と padding spacer の再計算を要し、
+ *   **小規模ではその複雑性が得るものより回帰面を増やす**（skill reference messages.md §Virtualization:
+ *   「マウント/更新がボトルネックのときだけ使う」）。数十件では素の DOM でマウントコストは問題にならない。
+ * - 非仮想パスは assistant-ui の `Viewport` が auto-follow / measurement guard / turnAnchor="top" を
+ *   すでに実装しており、**既存のスクロール挙動の回帰テストがそのまま番人になる** (design-gate H narrative)。
+ * 40 は「1 画面には収まらないが数百 ms のマウントにはならない」目安。**実測で見直す** (SC-002/SC-003)。
+ */
+const VIRTUALIZE_THRESHOLD = 40;
+
 export const Thread: FC<ThreadProps> = ({
   components = EMPTY_COMPONENTS,
   autoFocus = true,
 }) => {
   const isEmpty = useAuiState(isNewChatView);
+  const messageCount = useAuiState((s) => s.thread.messages.length);
 
   return (
     <ThreadComponentsContext.Provider value={components}>
-      <ThreadRoot isEmpty={isEmpty} autoFocus={autoFocus} />
+      {messageCount > VIRTUALIZE_THRESHOLD ? (
+        <VirtualThreadRoot autoFocus={autoFocus} />
+      ) : (
+        <ThreadRoot isEmpty={isEmpty} autoFocus={autoFocus} />
+      )}
     </ThreadComponentsContext.Provider>
   );
 };
@@ -206,6 +233,217 @@ const ThreadRoot: FC<{ isEmpty: boolean; autoFocus: boolean }> = ({
   );
 };
 
+/** 仮想行の高さ見積もり (実測 `measureElement` で上書きされる。初期スパン用)。 */
+const ESTIMATED_MESSAGE_HEIGHT = 160;
+/** 「最下部にいる」とみなす許容差 (px)。 */
+const AT_BOTTOM_THRESHOLD = 4;
+
+/**
+ * 数千メッセージ用の仮想化パス (FE-040/FE-041 / research R-01 / AD-033)。
+ *
+ * **公式サンプル `examples/with-virtualized-thread` の構造を採る** (ユーザ指示「公式ドキュメントを確認し
+ * もっともあるべき形で導入」)。要点と、spec 初稿 (ローカル skill reference 由来) からの調整:
+ * - **`ThreadPrimitive.Viewport` / `ViewportProvider` は使わず、自前 `<div>` スクローラが scroll を所有する。**
+ *   仮想スクローラは scrollHeight を padding spacer で動的に変えるため、`Viewport` の auto-scroll
+ *   (`useThreadViewportAutoScroll`) は流用できない。`ViewportProvider` を置いても `isAtBottom` は
+ *   scroll を購読しないため更新されず、`ThreadPrimitive.ScrollToBottom` も機能しない。よって
+ *   **auto-follow / jump-to-bottom / measurement guard を自前で持つ**のが公式イディオムである。
+ * - 行は padding spacer 間の通常フローに置き `measureElement` で実測 → 測定済み高さが保たれジャンプしない
+ *   (SC-002/SC-004)。同時マウント DOM ノード数は可視 + overscan に比例し**総件数に依存しない** (SC-003)。
+ * - **`MessageByIndex` を使う** (spec 選択)。R-3 は過去ログ = 静的列で index が安定なため index ベースで足りる。
+ *   **末尾が伸びる X-1 では turn グルーピング + `Unstable_MessageById` (id ベース) に上げる** (research R-01 / 公式は
+ *   挿入・並べ替えに強い id ベースを推奨)。
+ * - turnAnchor="top" の top-anchor 機構は `Viewport` 前提のため仮想化では使えない。R-3 は過去ログなので
+ *   **初期位置は最下部** (最新メッセージ。chat 慣習) とし、追従は stickyRef で持つ。
+ */
+const VirtualThreadRoot: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
+  const { AssistantMessage: AssistantOverride } = useContext(
+    ThreadComponentsContext,
+  );
+  const messageCount = useAuiState((s) => s.thread.messages.length);
+  const isRunning = useAuiState((s) => s.thread.isRunning);
+
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  /** 末尾追従中か。読者が上にスクロールしたら false にして追従を止める。 */
+  const stickyRef = useRef(true);
+  const [isAtBottom, setIsAtBottom] = useState(true);
+
+  const messageComponents = useMemo(
+    () => ({
+      UserMessage,
+      AssistantMessage: AssistantOverride ?? AssistantMessage,
+      SystemMessage,
+    }),
+    [AssistantOverride],
+  );
+
+  // react-virtual は memo 化できない関数を返すため React Compiler はこのコンポーネントの
+  // 自動 memo 化をスキップする (公式サンプル `examples/with-virtualized-thread` と同じ既知の制約)。
+  // eslint-disable-next-line react-hooks/incompatible-library
+  const virtualizer = useVirtualizer({
+    count: messageCount,
+    estimateSize: () => ESTIMATED_MESSAGE_HEIGHT,
+    getScrollElement: () => scrollerRef.current,
+    initialRect: { height: 800, width: 800 },
+    overscan: 6,
+    scrollToFn: (offset, _options, instance) => {
+      const el = instance.scrollElement;
+      if (!el) return;
+      // 追従中に「ほぼ最下部」なら微調整で位置を奪わない (measurement guard)。
+      if (stickyRef.current) {
+        const maxScroll = el.scrollHeight - el.clientHeight;
+        if (maxScroll - el.scrollTop <= AT_BOTTOM_THRESHOLD && offset < maxScroll) return;
+      }
+      el.scrollTo(0, offset);
+    },
+  });
+
+  const jumpToBottom = useCallback(() => {
+    stickyRef.current = true;
+    if (messageCount > 0) virtualizer.scrollToIndex(messageCount - 1, { align: "end" });
+    requestAnimationFrame(() => {
+      const el = scrollerRef.current;
+      if (el && stickyRef.current) el.scrollTop = el.scrollHeight;
+    });
+  }, [messageCount, virtualizer]);
+
+  // ユーザの上スクロールで追従解除、最下部復帰で再武装 (公式サンプルの disarm ガード)。
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    let lastScrollTop = el.scrollTop;
+    let lastScrollHeight = el.scrollHeight;
+    let lastClientHeight = el.clientHeight;
+    const onScroll = (): void => {
+      const atBottom =
+        el.scrollHeight - el.scrollTop - el.clientHeight <= AT_BOTTOM_THRESHOLD;
+      if (atBottom) {
+        stickyRef.current = true;
+      } else if (
+        el.scrollTop < lastScrollTop &&
+        el.scrollHeight === lastScrollHeight &&
+        Math.abs(el.clientHeight - lastClientHeight) <= 1
+      ) {
+        // コンテンツ伸長ではなくユーザ操作による上スクロールのときだけ追従を切る。
+        stickyRef.current = false;
+      }
+      lastScrollTop = el.scrollTop;
+      lastScrollHeight = el.scrollHeight;
+      lastClientHeight = el.clientHeight;
+      setIsAtBottom(atBottom);
+    };
+    const onWheel = (e: WheelEvent): void => {
+      if (e.deltaY < 0) stickyRef.current = false;
+    };
+    const disarm = (): void => {
+      stickyRef.current = false;
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    el.addEventListener("wheel", onWheel, { passive: true });
+    el.addEventListener("touchmove", disarm, { passive: true });
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+      el.removeEventListener("wheel", onWheel);
+      el.removeEventListener("touchmove", disarm);
+    };
+  }, []);
+
+  // コンテンツの高さが変わったら (measureElement 反映・伸長)、追従中は最下部を保つ。
+  useEffect(() => {
+    const el = scrollerRef.current;
+    const content = contentRef.current;
+    if (!el || !content) return;
+    const observer = new ResizeObserver(() => {
+      if (stickyRef.current) el.scrollTop = el.scrollHeight;
+    });
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, []);
+
+  // run 開始で最下部へ (R-3 は composer 無効で run が無いため実質不発。X-1 の伸長に備える)。
+  const prevIsRunningRef = useRef(false);
+  useLayoutEffect(() => {
+    if (isRunning && !prevIsRunningRef.current) jumpToBottom();
+    prevIsRunningRef.current = isRunning;
+  }, [isRunning, jumpToBottom]);
+
+  // 初期表示は最下部 (最新メッセージ。過去ログを chat 慣習で開く)。
+  const didInitialJumpRef = useRef(false);
+  useLayoutEffect(() => {
+    if (didInitialJumpRef.current || messageCount === 0) return;
+    didInitialJumpRef.current = true;
+    jumpToBottom();
+  }, [messageCount, jumpToBottom]);
+
+  const items = virtualizer.getVirtualItems();
+  const paddingTop = items[0]?.start ?? 0;
+  const paddingBottom = Math.max(
+    0,
+    virtualizer.getTotalSize() - (items.at(-1)?.end ?? 0),
+  );
+
+  return (
+    <ThreadPrimitive.Root
+      className="aui-root aui-thread-root bg-background @container flex h-full flex-col"
+      style={{
+        ["--thread-max-width" as string]: "44rem",
+        ["--composer-bg" as string]: "var(--color-card)",
+        ["--composer-radius" as string]: "1.5rem",
+        ["--composer-padding" as string]: "8px",
+      }}
+    >
+      <div
+        ref={scrollerRef}
+        data-slot="aui_thread-viewport"
+        data-virtualized="true"
+        className="relative flex-1 overflow-x-auto overflow-y-scroll overscroll-contain scroll-smooth"
+      >
+        <div
+          ref={contentRef}
+          className="mx-auto w-full max-w-(--thread-max-width) px-4 pt-4"
+        >
+          <div data-slot="aui_message-group" style={{ paddingTop, paddingBottom }}>
+            {items.map((item) => (
+              <div
+                key={item.key}
+                data-index={item.index}
+                ref={virtualizer.measureElement}
+                className="pb-6"
+              >
+                <ThreadPrimitive.MessageByIndex
+                  index={item.index}
+                  components={messageComponents}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="aui-thread-viewport-footer bg-background sticky bottom-0 overflow-visible px-4 pb-4 md:pb-6">
+        <div className="relative mx-auto flex w-full max-w-(--thread-max-width) flex-col gap-4">
+          {!isAtBottom && <VirtualScrollToBottom onClick={jumpToBottom} />}
+          <Composer autoFocus={autoFocus} />
+        </div>
+      </div>
+    </ThreadPrimitive.Root>
+  );
+};
+
+const VirtualScrollToBottom: FC<{ onClick: () => void }> = ({ onClick }) => (
+  <TooltipIconButton
+    tooltip="Scroll to bottom"
+    variant="outline"
+    type="button"
+    onClick={onClick}
+    aria-label="Scroll to bottom"
+    className="aui-thread-scroll-to-bottom dark:border-border dark:bg-background dark:hover:bg-accent absolute -top-12 left-1/2 z-10 -translate-x-1/2 rounded-full p-4"
+  >
+    <ArrowDownIcon />
+  </TooltipIconButton>
+);
+
 const ThreadMessage: FC = () => {
   const { AssistantMessage: AssistantMessageComponent = AssistantMessage } =
     useContext(ThreadComponentsContext);
@@ -214,6 +452,7 @@ const ThreadMessage: FC = () => {
 
   if (isEditing) return <EditComposer />;
   if (role === "user") return <UserMessage />;
+  if (role === "system") return <SystemMessage />;
   return <AssistantMessageComponent />;
 };
 
@@ -541,6 +780,30 @@ const UserImagePart: ImageMessagePartComponent = (part) => (
     <Image {...part} />
   </div>
 );
+
+/**
+ * system メッセージの最小表示 (R-3。コンパクション境界などの区切り)。
+ *
+ * 会話の主役ではないので action bar を付けず、中央寄せの控えめな体裁にする。
+ * 専用 element は O-2 (data-model §3 の暫定台帳)。
+ */
+const SystemText: TextMessagePartComponent = ({ text }) => (
+  <span className="aui-system-text">{text}</span>
+);
+
+const SystemMessage: FC = () => {
+  return (
+    <MessagePrimitive.Root
+      data-slot="aui_system-message-root"
+      data-role="system"
+      className="fade-in animate-in my-1 flex justify-center px-2 duration-150 [contain-intrinsic-size:auto_48px] [content-visibility:auto]"
+    >
+      <div className="text-muted-foreground text-center text-xs">
+        <MessagePrimitive.Parts components={{ Text: SystemText }} />
+      </div>
+    </MessagePrimitive.Root>
+  );
+};
 
 const UserMessage: FC = () => {
   return (
