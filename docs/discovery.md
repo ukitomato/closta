@@ -132,6 +132,12 @@ WSL 側の識別子は**ディストロ粒度**で持つ — `\\wsl.localhost\Ub
 実測で lint 13.2s → 7.4s、typecheck 7.5s → 4.1s。
 `package.json` の `scripts` は SSoT なので**変更しない** — agent が読む側だけ直接形にする。
 
+同じ理由で `.claude/settings.json` の `env` に `LANG` と `WINELOADERNOEXEC` を置いている。
+Git Bash の profile が内部で起こす subprocess (`locale -uU` / `git --exec-path`) を短絡させる
+ためのもので、**挙動は短絡前と同一**。消すと bash の起動が 3.5s から 6.7s に戻る。
+`PYTHONUTF8` は `gate_common::truncate_subject` が呼ぶ python3 の出力が cp932 になり
+commit subject が壊れるのを防ぐためである。
+
 | 種別 | コマンド (CI / 人間) | agent 用 (`node` 直接) | 何を見るか |
 |---|---|---|---|
 | **lint** | `pnpm lint` | `node node_modules/eslint/bin/eslint.js --cache .` | ESLint 9 (`eslint.config.mjs`)。`eslint-plugin-boundaries` によるレイヤ間の許可行列と、`no-restricted-imports` による標準モジュールの直接 import 禁止 |
@@ -214,7 +220,7 @@ R-1 の実装中に、書いてあるのに 1 件も一致しないルール・�
 
 | 種別 | コマンド | 場所 |
 |---|---|---|
-| tooling test | `bash .claude/skills/spec-gate/scripts/tests/run-all.bash` | spec-gate v0.2.0 自身の self-test (cascade-enforce / spec-id-allocate / truncate-subject / verdict-validate / viewpoint-coverage) |
+| tooling test | `bash .specify/scripts/tests/run-all.bash` | `gate-common.sh` の self-test (cascade-enforce / spec-id-allocate / truncate-subject / verdict-validate / viewpoint-coverage) |
 
 **プロダクトのテストではない。** `pnpm test` とは別物として扱う。
 

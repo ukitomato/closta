@@ -1,6 +1,6 @@
 ---
 name: test-agent
-description: code-gate phase で project test コマンドを実行する dedicated subagent。JSON で pass/fail counts + failed test names を返す。reviewer ではないため reviewer-base.md は読まない (resolves C-1-a)。
+description: code-gate phase で project test コマンドを実行する dedicated subagent。JSON で pass/fail counts + failed test names を返す。reviewer ではないため reviewer-base.md は読まない。
 tools: Read, Bash, Glob
 ---
 
@@ -14,23 +14,21 @@ project test suite の実行と結果の構造化を専任する actor。
    1. invoker から渡された `--test-cmd <cmd>` 引数
    2. `docs/discovery.md` の "Build / Test / Lint" section の**表**。
       「ユニットテスト」行の**「agent 用 (`node` 直接)」列**を使う。
-      同列には**全件**と**絞り込み**の 2 形が書かれているので両方を読む
-      > **`"Test:" 行` を探してはならない。** 実際の discovery.md は
-      > `| **ユニットテスト** | \`pnpm test\` | … |` という**表**であり、
-      > `Test:` という行は存在しない。これを探した結果 priority 3 の heuristic に
-      > 毎回フォールバックし、subset 実行の仕組みがあるのに全件を走らせていた
+      同列には**全件**と**絞り込み**の 2 形が書かれているので両方を読む。
+      **`Test:` という行を探してはならない** — discovery.md は表であり、その行は存在しない
    3. file 拡張子 / project 構造の heuristic (下表)
 2. **実行 scope — iteration 途中は subset、最終 iteration は全件**:
-   - invoker (code-gate) から渡される iteration 情報で分岐する:
-     - **iteration 途中** (前回 iter の `must_fix > 0`、まだ収束していない):
+   - invoker (code-gate) から渡される指示で分岐する。**判断材料は「前回 iter の must_fix」ではなく、invoker が明示する `scope` 指示である** — 「must_fix == 0 になった回」は自分では観測できない (その回の test は結果が出る前に走る):
+     - **`scope: touched-files` 指示** (収束していない iteration):
        `<spec_dir>/touched-files.txt` の file だけを対象にする。
        Vitest なら `node node_modules/vitest/vitest.mjs related --run <touched files…>`
        (`related` は指定 file を **import している test** も辿るので、
        単に test file 名を並べるより漏れが少ない)
-     - **最終 iteration** (`must_fix == 0` になった回) → **全件** `node node_modules/vitest/vitest.mjs run`
+     - **`scope: full` 指示** (収束見込み / 最終 iteration / PASS 確定前) → **全件** `node node_modules/vitest/vitest.mjs run`
    - **subset だけで PASS にしてはならない。** touched files の外側に出た回帰を
-     見逃す。収束した回に必ず 1 度は全件を通す
-   - iteration 情報が渡されない / 判断できないときは**全件**に倒す。
+     見逃す。`verdict: PASS` になる iteration は必ず `scope: full` である
+     (それを保証するのは invoker 側。本 agent は渡された scope を正確に報告する)
+   - scope 指示が渡されない / 判断できないときは**全件**に倒す。
      速さより見落としの無さを採る
    - "test by file" 機構が無い runner → 常に全件
 3. **結果の JSON 構造化** (下記 output 仕様)。
@@ -90,7 +88,9 @@ project test suite の実行と結果の構造化を専任する actor。
 ## 失敗モード
 
 - **test runner が見つからない** → exit code 2、stdout `{"error":"test runner not detected","tried":[...]}`
-- **test runner が無限ループ / hang** → invoker (code-gate) の `gate_common::run_with_timeout` で wrap される前提なので、本 agent 単体では timeout 機構なし
+- **test runner が無限ループ / hang** → **自分で時間を区切る。** invoker は Agent ツール経由で本 agent を起動するのでシェルを挟まず、外から wrap できない。長時間かかる runner は
+  `bash .specify/scripts/gate-common.sh run-with-timeout <sec> <out_file> -- <cmd...>`
+  で実行し、timeout したら `{"error":"test timeout","timeout_sec":<n>}` を返す
 - **machine format 非対応の runner** → parse-best-effort、`note: "regex-parsed"` を JSON に含める
 - **flaky test 検出** (option): 同 test が pass/fail を交互に出す場合は failed 側にカウントし、`flaky: true` フラグを当該 test entry に追加
 

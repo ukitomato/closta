@@ -116,59 +116,39 @@ Principle VI の grep は `sudo` / `apt` / `wsl --import` / docker の `build` �
 - Principle VI の grep が、引数配列での構成を捕捉できる形になっているか
 - ESLint の設定変更が、既存ルールを意図せず緩めていないか
 
-Bash で実際に Constitution の `bad_pattern_grep` を実行し、**ルールが主張どおりに効いているか**を
-確認してよい。ただし結果が 0 件であること自体は本 reviewer の findings にしない
-（それは CI の仕事である）。見るのは「その grep で本当に十分か」である。
+Bash で実際にルールを走らせて**主張どおりに効いているか**を確認してよい。ただし結果が 0 件で
+あること自体は findings にしない（それは CI の仕事である）。見るのは「その検査で本当に十分か」。
 
-**v1.2.0 以降、Automated の正本は grep ではない** (AD-024 #2 / #7 / #8)。
-Principle I / II / V / VI / VII / IX の正本は `eslint.config.mjs` /
-`.dependency-cruiser.js` / `scripts/constitution/` である。`bad_pattern_grep` は補助である。
-したがって本 reviewer が見るべき穴は次の 3 つに移る。
+**Principle I / II / V / VI / VII / IX の Automated 検証の正本は `eslint.config.mjs` /
+`.dependency-cruiser.js` / `scripts/constitution/` である** (AD-024 #2 / #7 / #8)。
+`bad_pattern_grep` は補助にすぎない。したがって見るべき穴は次の 3 つ。
 
-- **ルールが 1 件も一致しない形で書かれていないか。** 実測例: dependency-cruiser のグラフでは
-  npm パッケージが `node_modules/<name>/...` として現れるため、`^electron($|/)` のルールは
-  1 件も一致せず黙って死んでいた
-- **ルールが評価されない設定になっていないか。** 実測例: `boundaries/dependencies` の
+- **ルールが 1 件も一致しない形で書かれていないか** — 例: dependency-cruiser のグラフでは
+  npm パッケージが `node_modules/<name>/...` として現れるため `^electron($|/)` は 0 件しか拾わない
+- **ルールが評価されない設定になっていないか** — 例: `boundaries/dependencies` の
   `checkAllOrigins` は既定 `false` で、外部と標準モジュールの policy を一切評価しない
-- **依存が「未知」に落ちて判定を免れていないか。** 実測例: 解決器を solution-style の
-  root `tsconfig.json` に向けると `paths` が引かれず、62 件が未知に落ちて許可行列を免れていた
+- **依存が「未知」に落ちて判定を免れていないか** — 例: 解決器を solution-style の root
+  `tsconfig.json` に向けると `paths` が引かれず、依存が未知に落ちて許可行列を通り抜ける
 
-**検証スクリプトの報告が `pending` (検査対象が未実装) の項目を `ok` と読み違えないこと。**
-`pending` は「まだ検証していない」であって合格ではない。
+**検証スクリプトの `pending` (検査対象が未実装) を `ok` と読み違えないこと。** `pending` は
+「まだ検証していない」であって合格ではない。
 
 ## Owner matrix
 
-reviewer-base の A-H カテゴリに対する本 reviewer の担当範囲。**他 reviewer と重複させない。**
+本 reviewer が owner なのは **C / D / F の一部だけ**である。**A / B / E / G / H は該当なしとし、各 owner に委ねる。**
 
-| Cat | 本 reviewer の担当 |
+| Cat | 本 reviewer の担当スライス |
 |---|---|
-| A 認可 / 認証 / secret | **該当なし** — `security-reviewer` に委ねる |
-| B 入力検証 / injection / 暗号 | **該当なし** — `security-reviewer` に委ねる |
-| C 業務不変条件 / Charter drift | **`runtime` / `isolation` charter の Out of scope 侵犯のみ**。他 domain の charter drift は `architecture-reviewer` |
-| D Constitution / ADR drift | **Principle I / II / III / VI / VII と AD-003 / AD-004 / AD-012 のみ**。他の Principle と ADR は `architecture-reviewer` |
-| E User Story / SC / AC / UX | **該当なし** — `po-reviewer` / `ux-reviewer` に委ねる |
-| F 命名 / module / lint hookup | **lint ルール自体の網羅性 (PB-7) のみ**。命名規約と module 配置は `convention-reviewer` |
-| G DB / API / a11y / perf | **該当なし** — 各 optional reviewer に委ねる |
-| H テスト / coverage / observability | **該当なし** — `test-agent` / `po-reviewer` に委ねる |
+| C | **`runtime` / `isolation` charter の Out of scope 侵犯のみ**。他 domain の charter drift は `architecture-reviewer` |
+| D | **Principle I / II / III / VI / VII と AD-003 / AD-004 / AD-012 のみ**。他の Principle と ADR は `architecture-reviewer` |
+| F | **lint ルール自体の網羅性 (PB-7) のみ** — ルールの書き方が取りこぼしを生むか。**rule の on/off** と命名規約・module 配置は `convention-reviewer` (CONV-5) |
 
 `architecture-reviewer` との関係: 本 reviewer は D の**プラットフォーム境界スライスの専門家**である。
 Principle の文言解釈そのものや ADR の妥当性判断は `architecture-reviewer` の責務であり、
 本 reviewer は「その Principle が実装で守られているか」だけを見る。
 
-## Severity 禁則
+**「まだ実装されていないから守られていない」は findings にしない。** 未実装は `po-reviewer` の受け入れ条件の問題である。
 
-reviewer-base の規定を適用する。
+## 出力
 
-- **将来的な攻撃経路 / 二重防御の提案は Critical にしない。** 上限は High
-- **現時点で実害のある経路**のみ Critical とする
-- 「まだ実装されていないから守られていない」は findings にしない。
-  未実装は `po-reviewer` の受け入れ条件の問題である
-
-## 出力フォーマット
-
-`reviewer-base.md` の「最終出力フォーマット」に従う。
-`## 初回読了 viewpoint` セクションに A-H 全カテゴリの severity 集計を必ず記載し、
-担当外は `該当なし: <理由>` とすること（`gate_common::viewpoint_coverage_check` が機械検証する）。
-
-各 Critical 申告には `**同種事象探索**` を必ず添える。cascade 証跡のない Critical は
-`gate_common::cascade_enforce` により機械的に High へ降格される。
+`reviewer-base.md` の最終出力フォーマットに従う。`## 初回読了 viewpoint` には A-H 全カテゴリを記入し、C / D / F / H 以外は `該当なし: <理由>` とする (H は自分の担当範囲のテスト/regression について必ず実質的に埋める)。

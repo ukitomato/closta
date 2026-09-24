@@ -1,6 +1,7 @@
 ---
 name: cl-plan
-description: spec.md から plan.md を起草する wrapper。`/speckit.plan` を内部委譲しつつ、Domain Context (charter + 関連 ADR + glossary 抜粋) の auto-fill を本 wrapper が担当する。status は drafting → planning に遷移。
+description: spec.md から plan.md を起草する。Domain Context (charter + 関連 ADR + glossary 抜粋) を auto-fill し、status を drafting → planning に遷移させる。
+argument-hint: [spec_dir]
 disable-model-invocation: true
 allowed-tools: Read Write Edit Bash Glob Grep AskUserQuestion
 ---
@@ -48,21 +49,22 @@ spec.md から plan.md を起草する。`/speckit.plan` を内部委譲しつ�
    **grep で機械的に洗い出す**。人手の棚卸しは漏れる。
 
    ```bash
-   feature_id=$(awk '/^feature_id:/{print $2}' "<spec_dir>/spec.md")
-   grep -rn "$feature_id" docs/ .specify/ tests/ specs/ --include='*.md' --include='*.mjs' --include='*.js' --include='*.yaml' --include='*.yml'
+   # **`spec_id` である。`feature_id` という frontmatter key は存在しない。**
+   # 空文字のまま grep すると全行がヒットし、棚卸しをしたつもりで何も見ていない状態になる。
+   spec_id=$(awk '/^spec_id:/{print $2}' "<spec_dir>/spec.md")
+   [ -n "$spec_id" ] || { echo "spec_id を frontmatter から取得できません"; exit 2; }
+   grep -rn "$spec_id" docs/ .specify/ tests/ specs/ --include='*.md' --include='*.mjs' --include='*.js' --include='*.yaml' --include='*.yml'
    ```
 
-   加えて、本 feature が**新設する主要モジュール名**
-   (`<Name>Service` / `<name>-store` 等、plan の Project Structure で決めたもの) でも grep する。
+   加えて、本 feature が**新設する主要モジュール名**でも grep する。
    `.dependency-cruiser.js` / `eslint.config.mjs` / `scripts/constitution/allowlists.mjs` は
    **実名リスト方式のルールを持ち、新しいモジュールを作る feature に追加義務を課している**
    ことがあるため、必ず対象に含める。
 
-   **ヒット全件に処理を割り当て、plan の「上流からの申し送り」節に列挙する。**
-   「該当なし」と判断したものも理由つきで残す — 列挙しないと、次の feature が同じ棚卸しをやり直す。
+   ヒット全件を plan の「上流からの申し送り」節に列挙する。「該当なし」と判断したものも
+   理由つきで残す (記録形式は Acceptance criteria #5)。
 
-すべて missing でも続行可能 (warning 表示)。ただし **step 4 は skip しない** —
-design-gate の `architecture-reviewer` が最も高い severity を付けるのがこの取りこぼしである。
+step 1-3 はすべて missing でも続行可能 (warning 表示)。**step 4 は skip しない。**
 
 ### Phase 2: `/speckit.plan` delegation
 

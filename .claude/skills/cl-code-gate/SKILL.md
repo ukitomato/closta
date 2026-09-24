@@ -1,6 +1,7 @@
 ---
 name: cl-code-gate
-description: Implementation Phase 末尾の self-review gate。touched files への lint/test/convention 検証に専念 (security/architecture/po は pr-gate 専任、resolves C-4-a)。MUST_FIX があれば `implementer` subagent で auto-fix loop (max 3 iter、3 連続単調非減少で cascade exhaustion halt)。PASS で implementing → reviewing 昇格。verdict JSON emit (resolves C-4-c)。
+description: 実装の self-review gate。touched files を lint / test / convention で検証し、MUST_FIX があれば implementer で auto-fix loop を回す。PASS で implementing → reviewing に昇格する。
+argument-hint: [spec_dir]
 disable-model-invocation: true
 allowed-tools: Read Write Edit Bash Glob Grep Agent AskUserQuestion
 ---
@@ -13,16 +14,12 @@ Implementation Phase の **self-review gate**。`/cl-implement` 完了後に aut
 
 | Gate | Scope | Reviewer 構成 |
 |---|---|---|
-| **code-gate (本 skill)** | touched files に対する **静的検査 + テスト + 命名 / module 配置** | `lint-agent`, `test-agent`, `convention-reviewer` (+ stack 別 lint-like: database-migration / flutter-perf。**a11y / ux は pr-gate 専任**) |
-| **pr-gate (別 skill)** | diff `<base>...HEAD` 全体への **adversarial Critical 検証** | `security-reviewer`, `architecture-reviewer`, `po-reviewer` (+ system scope: api-performance / openapi-contract) |
+| **code-gate (本 skill)** | touched files に対する **静的検査 + テスト + 命名 / module 配置** | `lint-agent`, `test-agent`, `convention-reviewer` (+ stack 別 lint-like) |
+| **pr-gate (別 skill)** | diff `<base>...HEAD` 全体への **adversarial Critical 検証** | `security-reviewer`, `architecture-reviewer`, `po-reviewer` (+ system scope reviewer) |
 
-**Overlap 排除原則**: code-gate は security / architecture / po 系 reviewer を **起動しない** (pr-gate の責務、resolves C-4-a)。stack 別追加 reviewer は lint-like (flutter-perf, database-migration) に限定。
+**Overlap 排除原則**: code-gate は security / architecture / po 系 reviewer を **起動しない** (pr-gate の責務)。stack 別追加 reviewer は lint-like に限定する。
 
-**`gate_common::reviewers_filter code-gate <changed-files> <候補…>` で絞り込む。**
-`registry_filter_agents` (agent ファイルの存在だけ) では**絞れない** —
-`.specify/spec-gate/reviewers.yml` の `enabled` / `gates` / `auto_invoke_patterns` /
-`exclude_patterns` を適用するのは `reviewers_filter` 側である。
-registry に無い optional reviewer は silent skip、yml で落ちた分は理由が stderr に出る。
+**reviewer の選定は `gate_common::reviewers_filter` に任せる。`registry_filter_agents` を直接呼んではならない** — あちらは agent ファイルの存在しか見ないため、存在する reviewer が全部起動する。`.specify/spec-gate/reviewers.yml` の `enabled` / `gates` / `auto_invoke_patterns` / `exclude_patterns` を適用するのは `reviewers_filter` 側である。
 
 ## When to invoke
 
@@ -34,8 +31,9 @@ registry に無い optional reviewer は silent skip、yml で落ちた分は理
 - `<spec_dir>` (optional): 省略時 branch 名から推定
 - `--max-iter N` (default: 3): auto-fix loop の最大回数
 - `--no-auto-fix`: MUST_FIX を検出しても auto-fix を実行せず、findings を表示して halt
-- `--lint-cmd <cmd>` (optional): lint-agent に渡す override
-- `--test-cmd <cmd>` (optional): test-agent に渡す override
+- `--allow-partial-tasks`: tasks.md に未完了項目が残っていても続行する
+- `--base <commit>` (optional): Phase 1 の diff 起点。省略時は下の手順で解決する
+- `--lint-cmd <cmd>` / `--test-cmd <cmd>` (optional): lint-agent / test-agent に渡す override
 
 ## Steps
 
@@ -45,40 +43,49 @@ registry に無い optional reviewer は silent skip、yml で落ちた分は理
 source .specify/scripts/gate-common.sh
 gate_common::phase0_check_repo || exit 1
 spec_dir=$(gate_common::phase0_resolve_spec_dir "${1:-}") || exit 2
-gate_common::phase0_check_status "$spec_dir" "implementing" || exit 1
+# **reviewing も受理する。** pr-gate の指摘を直したあと lint / test を通し直す経路が
+# 必要であり、implementing 固定にすると一度 PASS した spec は二度と通せない。
+# reviewing から入ったときは status を動かさない (Phase 6 参照)。
+entry_status=$(gate_common::phase0_check_status "$spec_dir" "implementing,reviewing") || exit 1
 gate_common::phase0_check_charter "$spec_dir" || exit 1
-# agent registry validate (resolves C-1-a / C-1-b)
-gate_common::registry_assert_agent implementer || halt "implementer agent missing; run /spec-gate bootstrap"
-gate_common::registry_assert_agent lint-agent  || halt "lint-agent missing"
-gate_common::registry_assert_agent test-agent  || halt "test-agent missing"
-gate_common::registry_assert_agent convention-reviewer || halt "convention-reviewer missing"
+for a in implementer lint-agent test-agent convention-reviewer; do
+  gate_common::registry_assert_agent "$a" \
+    || halt "$a が見つかりません。.claude/agents/$a.md の存在と .specify/.agents-registry.yaml の entry を確認してください"
+done
 ```
 
-1. spec_dir 解決 (phase0_resolve_spec_dir)
-2. `<spec_dir>/spec.md` の frontmatter `status` が `implementing` であることを確認
+1. spec_dir 解決
+2. `<spec_dir>/spec.md` の frontmatter `status` が `implementing` か `reviewing` であることを確認 (`reviewing` は再実行)
 3. `tasks.md` の全タスクが `[x]` であることを確認:
    ```bash
    gate_common::tasks_complete_check "$spec_dir" \
      || halt "未完了タスクがあります。すべての [ ] を [x] にしてから再実行してください。--allow-partial-tasks で強制実行可"
    ```
+   未チェック行は stderr に列挙され、件数が stdout に返る。`--allow-partial-tasks` 指定時は warning に落として続行する。
 4. `git status` で working tree に diff があることを確認 (なければ "実装すべき変更がありません" で halt)
-5. 必須 actor (implementer / lint-agent / test-agent) と convention-reviewer の registry validation
+5. 必須 actor と convention-reviewer の registry validation
 
 ### Phase 1: Diff scope の決定
 
 ```bash
-# **改行と空行を正規化してから comm に渡す。**
-# comm は入力が同じ規則で整列していることを前提とし、**一致しない行を黙って落とす**。
-# touched-files.txt が CRLF と LF の混在になっていて、CR 付きの 31 行が
-# 無言で scope から外れた実績がある (scope が 84 ではなく 54 になった)。
-normalize() { tr -d '' | sed '/^[[:space:]]*$/d' | sort -u; }
+# **CR と空行を除いて sort -u してから comm に渡す。**
+# comm は入力が同じ規則で整列していることを前提とし、一致しない行を黙って落とす。
+normalize() { tr -d '\r' | sed '/^[[:space:]]*$/d' | sort -u; }
 
-# **実装がコミット済みなら base との差分を使う。**
-# git diff --name-only HEAD は未コミット変更しか見ない。
-# さらに **base ブランチが前 feature のマージ前を指していることがある** —
-# その場合 base...HEAD は前 feature の squash コミットを丸ごと含む
-# (実績: 本来 102 ファイルの feature が 276 ファイルに膨らんだ)。
-# 前 feature の最後のコミットを起点にすること。
+# **base_commit を必ず解決する。** 未定義のまま `"$base_commit..HEAD"` を使うと
+# git が全履歴を差分とみなすか無効な revision で落ちる。
+# 起点は **前 feature の最後のコミット** — base ブランチが前 feature のマージ前を
+# 指していると `base...HEAD` が前 feature の squash コミットを丸ごと含む。
+base_commit="${ARG_BASE:-}"
+if [ -z "$base_commit" ]; then
+  base_branch=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null \
+                | sed 's|^origin/||')
+  base_branch="${base_branch:-$(git rev-parse --verify --quiet develop >/dev/null && echo develop || echo main)}"
+  base_commit=$(git merge-base "$base_branch" HEAD 2>/dev/null || true)
+fi
+[ -n "$base_commit" ] || halt "diff の起点を解決できません。--base <commit> を指定してください"
+
+# **実装がコミット済みなら base との差分を使う** — `git diff HEAD` は未コミット変更しか見ない。
 if [ -n "$(git status --porcelain)" ]; then
   diff_files=$(git diff --name-only HEAD | normalize)
 else
@@ -95,79 +102,54 @@ echo "$scope" > "$spec_dir/.code-gate-scope.txt"
 # **落ちた行を報告する。** 黙って絞ると検査が 0 件になっていることに気付けない。
 comm -23 <(echo "$diff_files") <(echo "$touched_files")  # diff にあり touched に無い
 comm -13 <(echo "$diff_files") <(echo "$touched_files")  # touched にあり diff に無い
+
+# **scope が空なら halt。** 0 件の入力で reviewer を走らせると、
+# 全員が「指摘なし」を返し verdict が PASS になる — 検査していないのに通る。
+[ -s "$spec_dir/.code-gate-scope.txt" ] \
+  || halt "diff scope が 0 件です。base ($base_commit) と touched-files.txt を確認してください"
 ```
+
+> `halt "<message>"` は本 SKILL の**擬似コード**であり、シェル関数ではない。
+> メッセージを出して gate を中止する、という意味に読むこと。そのまま貼ると
+> `command not found` になる。
 
 reviewer に渡す scope は `diff_files ∩ touched_files` (touched-files.txt があれば intersect、なければ diff_files 全部)。
 
-### Phase 2: tech-stack 別 reviewer の選定
+### Phase 2: reviewer の選定
 
-`docs/discovery.md` から tech stack を検出し、追加 reviewer を決定:
+- **常駐**: `lint-agent`, `test-agent`, `convention-reviewer` + `implementer` (Phase 5 で起動)
+- **stack 別追加**: lint-like のみ。**採否は `.specify/spec-gate/reviewers.yml` が決める**
 
-- **常駐 (4 actor/reviewer)**: `lint-agent`, `test-agent`, `convention-reviewer` + `implementer` (auto-fix 用、Phase 5 で起動)
-- **stack 別追加 (最大 +2)**: lint-like のみ。**採否は `.specify/spec-gate/reviewers.yml` が決める**
-
-**候補を全部渡してはならない。`gate_common::reviewers_filter` に絞らせる。**
+**候補を全部渡してはならない。`reviewers_filter` に絞らせる。**
 
 ```bash
 active=$(gate_common::reviewers_filter code-gate "$spec_dir/.code-gate-scope.txt" \
   lint-agent test-agent convention-reviewer \
-  flutter-perf-reviewer a11y-reviewer database-reviewer ux-reviewer)
+  a11y-reviewer database-reviewer ux-reviewer platform-boundary-reviewer)
 ```
 
-`reviewers_filter` は `registry_filter_agents` (agent ファイルの存在) に加えて
-`.specify/spec-gate/reviewers.yml` の `enabled` / `gates` / `auto_invoke_patterns` /
-`exclude_patterns` を適用する。**`registry_filter_agents` を直接呼ぶと存在するだけの
-reviewer が全部起動する** — これが a11y / ux を UI 無変更の diff でも毎 iteration
-起動させていた原因である。yml に載っていない常駐 (lint-agent 等) は素通しされる。
+**上の候補リストは `reviewers.yml` で `gates` に `code-gate` を含む全 reviewer を網羅していなければならない。** `reviewers_filter` は渡された候補しか絞らないため、ここに名前が無い reviewer は yml に載っていても永久に起動せず、`skipped_reviewers[]` にも現れない。reviewer を増やしたら `/cl-add-reviewer` の Phase 3 のとおりここも直す。
 
-絞った理由は stderr に 1 行ずつ出る。**Phase 4 の集約に「起動しなかった reviewer と
-その理由」を必ず転記する** — 黙って絞ると「起動しなかった」と「起動して 0 件だった」を
-区別できない。
+絞った理由は stderr に 1 行ずつ出る。**Phase 4 の集約に「起動しなかった reviewer とその理由」を必ず転記する** — 黙って絞ると「起動しなかった」と「起動して 0 件だった」を区別できない。
 
-`security-reviewer`, `architecture-reviewer`, `po-reviewer`, `api-performance-reviewer`,
-`openapi-contract-reviewer` は **起動しない** (pr-gate 専任)。
-**`a11y-reviewer` / `ux-reviewer` も現在は pr-gate 専任** (reviewers.yml の
-`gates: [pr-gate]`)。これらの指摘は `must_fix` に翻訳されず auto-fix loop を
-進めないため、毎 iteration 起動しても生成コストしか掛からない。
+`security-reviewer` / `architecture-reviewer` / `po-reviewer` は **起動しない** (pr-gate 専任)。`a11y-reviewer` / `ux-reviewer` も `reviewers.yml` で `gates: [pr-gate]` である。
 
-### Phase 3: 並列 reviewer 起動 (1 iteration)
+### Phase 3: reviewer 起動 (1 iteration)
 
-**1 message 内で全 active reviewer を並列 Agent 起動**:
+**lint track と test track は直列に走らせる。reviewer 系は並列でよい。**
 
-> **⚠ lint track と test track を並列にしてはならない (実測で誤検知が出た)。**
->
-> `npm run test:rules` 系の「違反サンプルを実際に発火させる」検証は、
-> **サンプルを `src/` 配下へ一時展開して検出器を回す**実装になっていることがある。
-> 並列に走った depcruise がその展開物を拾い、**実コードの違反として exit 1 を返した**
-> (161 modules / 639 deps。clean run は 160 / 638 で、差はちょうど fixture 1 件)。
-> サンプル側のロックは**同種の実行同士の排他しか持たず**、外部の検出器を守らない。
->
-> **さらに CPU を取り合うとテストが起動に失敗する。**
-> jsdom project の worker 起動が 60 秒の待ちを超え、**4 ファイルが 0 件実行**になった。
-> このとき exit code は 1 だが **JSON reporter は `success: true` / `numFailedTests: 0` を返す**。
->
-> したがって:
-> 1. **lint track と test track は直列に走らせる** (reviewer 系は並列でよい)
-> 2. **判定は exit code を正とする。** JSON の `success` だけを見てはならない
-> 3. `Errors` / `Unhandled Errors` が 0 件でないなら失敗として扱う
+- **判定は exit code を正とする。JSON の `success` を見てはならない** — worker の起動が待ちを超えてテストが 0 件実行になったとき、exit code は 1 でも JSON reporter は `success: true` / `numFailedTests: 0` を返す
+- `Errors` / `Unhandled Errors` が 0 件でないなら失敗として扱う
+- 直列にする理由: ルール検証系が違反サンプルを `src/` 配下へ一時展開するため、並列に走った検出器がそれを実コードの違反として拾う
 
 | Track | Agent type | 観点 | 起動順 |
 |---|---|---|---|
-| `lint-agent`         | Agent ツール (`subagent_type: lint-agent`) — stdout に JSON で violations 返却 | 静的解析、style 違反 | **1 番目** |
-| `test-agent`         | Agent ツール (`subagent_type: test-agent`) — stdout に JSON で pass/fail + failed test names | テスト red 検出 + coverage | lint track の後 (上の直列要件) |
-| `convention-reviewer`| Agent ツール (`subagent_type: convention-reviewer`) | 命名 / module 配置 / lint hookup | **`lint-agent` の後** |
-| (stack 別 +α)        | Agent ツール | 該当時 | 並列可 |
+| `lint-agent` | `subagent_type: lint-agent` — stdout に JSON で violations | 静的解析 / style 違反 | **1 番目** |
+| `test-agent` | `subagent_type: test-agent` — stdout に JSON で pass/fail + failed test names | テスト red 検出 + coverage | lint track の後 |
+| `convention-reviewer` | `subagent_type: convention-reviewer` | 命名 / module 配置 / lint hookup | **`lint-agent` の後** |
+| (stack 別 +α) | Agent ツール | 該当時 | 並列可 |
 
-> **`convention-reviewer` は `lint-agent` より後に起動する。**
-> `convention-reviewer` は**自分で lint を実行しない** — 同じ iteration の同じ diff に
-> 対して `lint-agent` が既に走っており、両方が実行すると
-> **auto-fix loop の毎 iteration で lint が 2 回**走る。
-> `lint-agent` の stdout JSON をそのまま context で渡すこと。
->
-> **`exit_code` を落とさずに渡す。** `convention-reviewer` は
-> 「lint が非ゼロ exit で終わったこと自体を Critical とする」判定をこの値で行い、
-> それが `gate-common.sh` の機械 gate (`PASS` かつ `critical>0` は exit 5) に直結する。
-> ここを削ると lint が壊れたまま gate が通る。
+**`convention-reviewer` は `lint-agent` の後に起動し、その stdout JSON を context でそのまま渡す。** `convention-reviewer` は自分で lint を実行しないため、渡さないと lint 観点が空になる。**`exit_code` を落とさずに渡すこと** — `convention-reviewer` は「lint が非ゼロ exit で終わったこと自体を Critical とする」判定をこの値で行い、それが `gate-common.sh` の機械 gate (`PASS` かつ `critical>0` は exit 5) に直結する。
 
 各 reviewer に context として渡す:
 
@@ -177,21 +159,28 @@ reviewer が全部起動する** — これが a11y / ux を UI 無変更の dif
 - `.specify/memory/constitution.md`
 - `docs/domains/<domain>/charter.md`
 - **`convention-reviewer` のみ**: `lint-agent` の stdout JSON 全体
-- **`test-agent` のみ**: 現 iteration が**最終 iteration になりうるか**
-  (前回 iter の `must_fix` 値)。iteration 途中は touched files の subset、
-  `must_fix == 0` になった回は**全件**を走らせるための判断材料である
-
-clean-context isolation (`tools: Read, Grep, Glob` + lint/test-agent は `Bash` のみ追加許可)。
+- **`test-agent` のみ**: `scope: touched-files` か `scope: full` を**明示的に指示する**。
+  test-agent は「自分が最終 iteration か」を観測できない (その回の結果が出る前に走る) ため、
+  **判断は invoker が行う**。収束見込みの回、`--max-iter` 最終回、および PASS を出す前は `full`
 
 ### Phase 4: 集約 — findings の集計
 
 各 reviewer 出力を集約し markdown table 化。**lint-agent / test-agent は JSON 直結**で severity 翻訳:
 
-- lint severity `error` → MUST_FIX
-- lint severity `warning` → SHOULD_FIX
-- lint severity `info` → CONSIDER
-- test failure → MUST_FIX (test agent JSON の `failed_tests[]` から)
-- convention-reviewer の Critical/High → MUST_FIX / SHOULD_FIX
+- lint `error` → MUST_FIX / `warning` → SHOULD_FIX / `info` → CONSIDER
+- test failure → MUST_FIX (`failed_tests[]` から)
+- convention-reviewer の Critical / High → MUST_FIX / SHOULD_FIX
+
+**MUST_FIX と `severity_counts` の対応を必ずこの規則で埋める** (ここを決めないと verdict が「critical 0 なのに MUST_FIX 5 件」という読めない状態になる):
+
+| 出所 | `severity_counts` への計上 |
+|---|---|
+| lint `exit_code != 0` それ自体 | `critical` +1 (convention-reviewer が Critical にする経路) |
+| lint `error` / test failure | `must_fix` に計上。`high` にも計上する |
+| lint `warning` / reviewer High | `high` |
+| lint `info` / reviewer Medium・Low | `medium` / `low` |
+
+`severity_counts.must_fix` は **MUST_FIX の総数** であり、auto-fix loop の break 条件そのものである。`critical` とは別に必ず出す。
 
 ```markdown
 # Code Gate Iteration <N>: <spec.md title>
@@ -220,10 +209,14 @@ clean-context isolation (`tools: Read, Grep, Glob` + lint/test-agent は `Bash` 
 - **Suggested fix**: ...
 ```
 
-各 reviewer 出力 (`<spec_dir>/convention-reviewer.md` 等) に対して:
+**reviewer 出力は本 skill が Write する。** reviewer は `tools: Read, Grep, Glob` なので自分では保存できない。各 reviewer の返り値を `<spec_dir>/<reviewer>.code-gate.md` に Write してから、そのパスに対して次を実行する:
 
 1. `gate_common::viewpoint_coverage_check <md>` — A-H 欠落 warning
 2. `gate_common::cascade_enforce <md>` — 0 件確認なし Critical を High に降格 + marker
+
+**書く前に実行してはならない。** 両関数はファイル不在で return 3 を返し、cascade 降格と viewpoint 検証が黙って空振りする (降格されない Critical がそのまま verdict に載る)。
+
+パスに `.code-gate` を挟むのは、同じ reviewer が design-gate / pr-gate でも走るため。修飾しないと後の gate が前の gate の raw output を上書きする。
 
 ### Phase 4b: JSON verdict emit
 
@@ -235,29 +228,24 @@ clean-context isolation (`tools: Read, Grep, Glob` + lint/test-agent は `Bash` 
   "run": "<ISO>",
   "spec_dir": "specs/<spec_id>",
   "spec_id": "<spec_id>",
-  "iter": <N>,
-  "severity_counts": {"critical": 0, "high": 3, "medium": 2, "low": 5},
+  "iter": 1,
+  "severity_counts": {"critical": 0, "high": 3, "medium": 2, "low": 5, "must_fix": 0},
   "must_fix_findings": [
-    {"mf_id": "MF-001", "where": "lib/a.ts:42", "origin": "lint",
+    {"mf_id": "MF-001", "where": "src/a.ts:42", "origin": "lint",
      "rule": "no-unused-vars", "message": "...", "severity": "error"}
   ],
-  "touched_files": [
-    {"path": "lib/a.ts", "sha": "<git blob sha>"}
-  ],
-  "fr_coverage": [
-    {"fr": "FR-007", "covered": true, "by": ["lib/a.ts:42"]}
-  ],
+  "touched_files": [{"path": "src/a.ts", "sha": "<git blob sha>"}],
+  "fr_coverage": [{"fr": "FR-007", "covered": true, "by": ["src/a.ts:42"]}],
   "viewpoint_coverage": {
     "A": "該当なし: pr-gate 専任", "B": "該当なし: pr-gate 専任",
     "C": "該当なし: pr-gate 専任", "D": "該当なし: pr-gate 専任",
     "E": "該当なし: pr-gate 専任", "F": "High:2 Medium:1",
-    "G": "該当なし: optional reviewer なし", "H": "High:1 Medium:1"
+    "G": "該当なし: optional reviewer なし", "H": "Medium:1 Low:0"
   },
   "tracks": {
     "lint-agent": {"violations": 5, "exit_code": 1,
                    "detectors": ["lint", "typecheck", "depcruise", "check:constitution"]},
-    "test-agent": {"passed": 142, "failed": 3, "exit_code": 1,
-                   "scope": "touched-files"},
+    "test-agent": {"passed": 142, "failed": 3, "exit_code": 1, "scope": "touched-files"},
     "convention-reviewer": {"viewpoint_missing": [], "cascade_demotions": 0,
                             "lint_input": "lint-agent"}
   },
@@ -265,103 +253,120 @@ clean-context isolation (`tools: Read, Grep, Glob` + lint/test-agent は `Bash` 
     {"name": "a11y-reviewer", "reason": "gates=['pr-gate'] に code-gate が無い"}
   ],
   "cascade_demotions": 0,
-  "iter_history": [{"iter": 1, "must_fix": 5}, {"iter": 2, "must_fix": 2}],
+  "iter_history": [
+    {"iter": 1, "must_fix": 5, "skipped": 0, "error": 0},
+    {"iter": 2, "must_fix": 2, "skipped": 1, "error": 0}
+  ],
   "verdict": "PASS|FIX_REQUIRED"
 }
 ```
 
-**`tracks` に必ず入れるもの (後から検証するため):**
+**`iter_history[]` の各要素は `{iter: int, must_fix: int}` を必ず持つ** (`skipped` / `error` は任意)。ここに `must_fix_after_promotion` のような場当たりキーを足してはならない — cascade exhaustion 判定が `must_fix` を読めなくなり、収束判定が黙って壊れる。`gate_common::verdict_validate` がこの形を検査して warning を出す。
 
-- `lint-agent.detectors` — 実際に走らせた検出器の名前。
-  **`test:rules` (ルール検証) を含めてはならない** — code-gate では実行しない
-  (`docs/discovery.md` の該当節)。含まれていたら実行してしまっている。
-  逆に `detectors` が空 / 欠落しているときは**黙って落ちている**
-  (002 で実際に起きた。誰も気づかなかった)
-- `test-agent.scope` — `touched-files` または `full`。
-  **`verdict: PASS` の iteration は必ず `full` でなければならない。**
-  `PASS` かつ `touched-files` は subset だけで通したことを意味し、無効である
-- `skipped_reviewers[]` — 起動しなかった reviewer と `reviewers_filter` が出した理由。
-  空配列と「記録し忘れ」を区別できるよう、**0 件なら `[]` を明示する**
+**`tracks` の 3 フィールドは後から検証するために必ず埋める:**
+
+- `lint-agent.detectors` — 実際に走らせた検出器の名前。**`test:rules` (ルール検証) を含めてはならない** (code-gate では実行しない)。**空 / 欠落は「黙って落ちた」を意味する** ので、そのまま PASS にしない
+- `test-agent.scope` — `touched-files` または `full`。**`verdict: PASS` の iteration は必ず `full` でなければならない。** `PASS` かつ `touched-files` は subset だけで通したことを意味し、無効である
+- `skipped_reviewers[]` — 起動しなかった reviewer と `reviewers_filter` が出した理由。**0 件なら `[]` を明示する** (記録し忘れと区別するため)
 
 ### Phase 5: Auto-fix loop (MUST_FIX > 0 かつ `--no-auto-fix` でないとき)
 
-各 iteration は以下を **1 単位**として定義 (resolves C-3-a):
+各 iteration は以下を **1 単位**として定義:
 
-- **START**: iter N 開始時の `<spec_dir>/.gate-verdict-code.json` (Phase 4b で emit 済) を input
-- **BODY**: `implementer` subagent (`subagent_type: implementer`) を Agent ツールで 1 回起動
-  - context: verdict JSON 全体 + `<spec_dir>/touched-files.txt` + spec.md/plan.md/tasks.md
-  - 任務: `must_fix_findings[]` を順に処理、touched files を更新、`<spec_dir>/code-gate.md.iter<N>.implementer.json` を Write
-- **TAIL**: Phase 3 (並列 reviewer 再起動) → Phase 4 (集約) → Phase 4b (verdict emit + iter_history append) を再実行
-- **END**: iter N の `severity_counts.must_fix == 0` ⇒ break PASS、それ以外 ⇒ iter N+1
+- **START**: iter N 開始時の `.gate-verdict-code.json` (Phase 4b で emit 済) を input
+- **BODY**: `implementer` subagent を Agent ツールで 1 回起動
+  - context: verdict JSON 全体 + `touched-files.txt` + spec.md / plan.md / tasks.md
+  - 任務: `must_fix_findings[]` を順に処理、touched files を更新、`code-gate.md.iter<N>.implementer.json` を Write
+  - **戻ってきた action log を読む。** `resolutions[]` の `status: skipped` / `error` を
+    数え、`iter_history[N]` に `skipped` / `error` として記録し、Phase 7 の完了通知にも出す。
+    **読まずに次の iteration へ進んではならない** — implementer が「ambiguous なので
+    人間に上げる」と言っているのに、それが誰にも届かないまま max_iter まで回る
+- **TAIL**: Phase 3 → Phase 4 → Phase 4b を再実行
+- **END**: `severity_counts.must_fix == 0` ⇒ break PASS、それ以外 ⇒ iter N+1
 
 ```
 for iter in 1..max_iter:
   invoke_implementer(verdict.json)
-  rerun_reviewers()
-  if verdict.must_fix == 0:
-    break PASS
-  if cascade_exhausted(iter_history):
-    break HALT
+  rerun_reviewers()                     # ← test-agent には「収束見込み」を渡す
+  if verdict.severity_counts.must_fix == 0: break PASS
+  if cascade_exhausted(iter_history): break HALT
 ```
 
-**Cascade exhaustion 数学的定義** (resolves C-3-a / item 2 / spec C-6):
+**収束した回は test を全件で走らせる。** `must_fix == 0` を見てから break すると、その回の test は subset で走り終わっている。したがって TAIL の Phase 3 では **直前の iter の `must_fix` が 0 に近いか、`--max-iter` 最終回か**を `test-agent` に渡し、`test-agent` 側が全件に切り替える。break 時点で `tracks.test-agent.scope != "full"` なら、**全件で 1 回だけ再実行してから PASS にする**。
+
+これを守らないと Phase 4b の「`verdict: PASS` の iteration は必ず `full`」という自らの規則を満たせない。
+
+**Cascade exhaustion の定義**:
 
 - 条件: `iter_history[N].must_fix >= iter_history[N-1].must_fix AND iter_history[N-1].must_fix >= iter_history[N-2].must_fix`
 - すなわち **N, N-1, N-2 の 3 連続で MUST_FIX が単調非減少**
-- 最小発火 iter = 3 (N=3 のとき N-1=2, N-2=1 を比較)
-- iter ∈ {1, 2} では発火しない (data 不足)
-- `iter_history` は `.gate-verdict-code.json` の配列で永続化、再実行時に復元
+- 最小発火 iter = 3。iter ∈ {1, 2} では data 不足で発火しない
+- `iter_history` は verdict JSON の配列で永続化、再実行時に復元
 
 Cascade exhaustion 時は halt with "Manual intervention required" + 直前 verdict をそのまま最終扱い。
 
 ### Phase 6: Status 遷移判定
 
+**verdict が PASS のときだけ遷移コマンドを実行する。** 無条件に実行してはならない。
+
 ```bash
-bash .specify/scripts/status-transition.sh \
-  --gate-transition "$spec_dir" code implementing reviewing
+if [ "$entry_status" = "reviewing" ]; then
+  echo "reviewing から再実行したため status は動かしません"
+elif [ "$verdict" = "PASS" ]; then
+  bash .specify/scripts/status-transition.sh \
+    --gate-transition "$spec_dir" code implementing reviewing
+else
+  echo "verdict=$verdict のため status を進めません (implementing 据置)"
+fi
 ```
 
-- verdict=PASS かつ critical=0 (auto-fix で must_fix=0 まで到達) → implementing → reviewing
+- entry_status=reviewing (再実行) → 据置
+- verdict=PASS → implementing → reviewing
 - verdict=FIX_REQUIRED → 状態据置、code-gate.md に "MUST_FIX (max_iter reached)" を記録
+
+`--gate-transition` は内部で `gate_common::verdict_require_pass` を通すので、万一 FIX_REQUIRED のまま呼んでも exit 5 で止まる。上の `if` は**二重の保険**であって、これがあるから遷移コマンドを無条件に書いてよいわけではない。
 
 ### Phase 7: 完了通知
 
 ```
 ✓ /cl-code-gate 完了
   - spec dir: <spec_dir>
+  - diff scope: <K files> (base: <base_commit>)
   - iterations: <N> (auto-fix loop)
+  - implementer: applied <A> / skipped <S> / error <E>   ← S>0 なら人間の判断が必要
+  - test scope (最終 iter): <full | touched-files>
+  - 起動しなかった reviewer: <name: 理由, ...> (0 件なら "なし")
   - verdict: <PASS | FIX_REQUIRED>
-  - status: <implementing → reviewing | implementing 据置>
+  - status: <implementing → reviewing | 据置>
   - verdict JSON: <spec_dir>/.gate-verdict-code.json
-  - 次のアクション: /cl-pr-gate (PASS時)
+  - 次のアクション: /cl-pr-gate (PASS 時)
 ```
 
 ## Idempotency
 
-- 再実行可能 (各 iteration を `code-gate.md.iter1`, `code-gate.md.iter2`, ..., 最終を `code-gate.md` に保存)
+- 再実行可能 (各 iteration を `code-gate.md.iter<N>`、最終を `code-gate.md` に保存)
 - 既存 `code-gate.md` は `code-gate.md.<TS>` にバックアップしてから新規生成
-- `iter_history` は verdict JSON に蓄積されているため、再実行で再 iter 番号は最後の +1 から
+- `iter_history` は verdict JSON に蓄積されているため、再実行時の iter 番号は最後の +1 から
 
 ## Failure modes
 
-- lint/test コマンド検出失敗 (lint-agent / test-agent が exit 2) → 以下の順で自動探索してから AskUserQuestion (全失敗時のみ):
-  1. `package.json` の `scripts.lint` / `scripts.test`
-  2. `Makefile` の `lint:` / `test:` ターゲット
-  3. `pyproject.toml` の `[tool.ruff]` / `[tool.pytest.ini_options]`
-  4. `.specify/config.yaml` の `lint_cmd` / `test_cmd`
-  すべて見つからなければ AskUserQuestion でコマンド指定を求め、結果を `.specify/config.yaml` に保存
-- implementer subagent registry 不在 (`gate_common::registry_assert_agent implementer` 失敗) → halt with "/spec-gate bootstrap を再実行してください"
-- implementer の auto-fix が partial (一部 MUST_FIX しか修正しない) → 次 iter で残りに再挑戦
+- lint / test コマンド検出失敗 (lint-agent / test-agent が exit 2) → 以下の順で自動探索し、全滅したときだけ AskUserQuestion でコマンド指定を求める。**得られたコマンドは `docs/discovery.md` の "Build / Test / Lint" 表に追記する** — そこが agent 用コマンドの正本であり、次回の探索が step 1 で当たるようになる:
+  1. `docs/discovery.md` の "Build / Test / Lint" 表の「agent 用」列
+  2. `package.json` の `scripts.lint` / `scripts.test`
+  3. `Makefile` の `lint:` / `test:` ターゲット
+- 必須 agent が registry に無い → halt with "`.claude/agents/<name>.md` の存在と `.specify/.agents-registry.yaml` の entry を確認してください"
+- implementer の auto-fix が partial → 次 iter で残りに再挑戦
 - cascade exhaustion (3 連続単調非減少) → halt + 直前 iter の verdict / code-gate.md を最終とみなして表示
 - git diff が空 → halt
-- agent registry check failure → halt with bootstrap 再実行案内
 
 ## Acceptance criteria
 
-1. `<spec_dir>/code-gate.md` が存在し、最終 iteration の verdict が記録
-2. `<spec_dir>/.gate-verdict-code.json` が schema validation を通過 (gate_common::verdict_validate)
-3. iter_history が verdict JSON に保存されている (再実行時の累積)
-4. PASS の場合のみ spec.md frontmatter `status:` が `reviewing` に遷移
-5. 各 iteration の生 output (`code-gate.md.iter<N>`, `.iter<N>.implementer.json`) が保存
-6. cascade exhaustion 時は halt 理由と数学的根拠が明示 (iter_history の 3 値表示)
-7. security/architecture/po reviewer が起動されていない (origin field に存在しない)
+1. `<spec_dir>/code-gate.md` が存在し、最終 iteration の verdict が記録されている
+2. `<spec_dir>/.gate-verdict-code.json` が `gate_common::verdict_validate` を warning なしで通過する
+3. `severity_counts.must_fix` が存在し、`iter_history[]` の各要素が `{iter, must_fix}` を持つ
+4. **PASS の場合のみ** `status:` が `reviewing` に遷移する (`reviewing` から再実行したときは据置)
+5. 各 reviewer の raw output が `<spec_dir>/<reviewer>.code-gate.md` に保存され、それに対して `cascade_enforce` と `viewpoint_coverage_check` が実行されている
+6. `verdict: PASS` の iteration の `tracks.test-agent.scope` が `full` である
+7. cascade exhaustion 時は halt 理由と iter_history の 3 値が明示されている
+8. security / architecture / po reviewer が起動されていない (`origin` field に存在しない)
+9. implementer の `skipped` / `error` 件数が完了通知に出ている

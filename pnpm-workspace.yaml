@@ -4,9 +4,9 @@
 # https://www.electronjs.org/docs/latest/tutorial/tutorial-first-app
 #
 # 注: pnpm 10 以降、本ファイルは workspace 定義だけでなく設定ファイルも兼ねる。
-# `packages:` キーを持たないため monorepo ではない。
-# discovery-scanner は本ファイルの存在を monorepo marker として扱うので、
-# 次回 /spec-gate scan の結果を読むときは注意すること。
+# **`packages:` キーを持たないため本リポジトリは monorepo ではない。**
+# 本ファイルの存在だけを monorepo の目印として扱うツールがあるので、
+# workspace として扱われていたら `packages:` の有無を先に確認すること。
 nodeLinker: hoisted
 
 # pnpm 12 はビルドスクリプトの許可を本ファイルの `allowBuilds` で見る。

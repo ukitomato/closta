@@ -1,7 +1,7 @@
 ---
 status: <draft | active>
 last_updated: <ISO 8601>
-generated_by: <human | /spec-gate.migrate Phase 5>
+generated_by: <human>
 total_terms: <N>
 ---
 

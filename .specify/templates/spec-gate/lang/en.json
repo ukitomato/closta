@@ -12,7 +12,7 @@
     "design_gate_failed": "Design Gate FIX_REQUIRED — resolve Critical findings and re-run",
     "code_gate_passed": "Code Gate PASS — proceed to PR review",
     "code_gate_failed": "Code Gate MUST_FIX — auto-fix loop will run up to 3 times",
-    "pr_gate_passed": "PR Gate Critical=0 — you can now run /spec-gate.done",
+    "pr_gate_passed": "PR Gate Critical=0 — you can now run /cl-done",
     "pr_gate_failed": "PR Gate Critical findings remain — fix and re-review"
   },
   "review": {

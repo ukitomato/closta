@@ -1,6 +1,7 @@
 ---
 name: cl-design-gate
-description: Design Phase 末尾の hard gate。spec.md + plan.md + tasks.md (+ data-model.md / research.md / contracts/) を bundle で検証する。analyze (machine consistency) + `po-reviewer` (User Story 価値) + `architecture-reviewer` (Constitution / Charter / ADR drift) + registry で design-gate に登録された optional reviewer を **並列 clean-context subagent** で起動 → 集約 `design-gate.md`。Critical=0 で tasking → implementing 昇格。
+description: Design Phase 末尾の hard gate。spec.md + plan.md + tasks.md を bundle で並列レビューし、Critical=0 で tasking → implementing に昇格する。
+argument-hint: [spec_dir]
 disable-model-invocation: true
 allowed-tools: Read Write Edit Bash Glob Grep Agent AskUserQuestion
 ---
@@ -40,8 +41,20 @@ gate_common::phase0_check_charter "$spec_dir" || exit 1
    - `implementing` / `reviewing` → **自動で再レビューを実行** (status は据置)、完了通知に `[warn: re-run on status=<status>]` を記録
    - `drafting` / `planning` → halt with "/cl-plan, /cl-tasks を先に完了してください"
 4. `domain` 値を frontmatter から取得 → `docs/domains/<domain>/charter.md` の存在を確認 (phase0_check_charter)
-5. agent registry validate: `gate_common::registry_assert_agent po-reviewer && gate_common::registry_assert_agent architecture-reviewer` (resolves C-1-b)
-6. **optional reviewer の解決**: `.specify/.agents-registry.yaml` で `invoked_by` に `design-gate` を含むエントリを列挙し、`gate_common::registry_filter_agents` で実在するものだけを追加トラックとする。registry が SSoT であり、本 SKILL にトラック数を焼き込まない
+5. agent registry validate: `gate_common::registry_assert_agent po-reviewer && gate_common::registry_assert_agent architecture-reviewer`
+6. **追加 reviewer の解決**: `.specify/.agents-registry.yaml` で `invoked_by` に `design-gate` を含むエントリを列挙し、`gate_common::registry_filter_agents` で実在するものだけを追加トラックとする。registry が SSoT であり、本 SKILL にトラック数を焼き込まない。
+
+   **Track B / C で既に固定している reviewer を二重に数えないこと。** `invoked_by` に `design-gate` を含むのは現状 `po-reviewer` / `architecture-reviewer` / `security-reviewer` / `platform-boundary-reviewer` であり、前 2 つは Track B / C そのものである。**列挙結果から Track B / C の分を差し引いた残り**を追加トラックとする:
+
+   ```bash
+   fixed="po-reviewer architecture-reviewer"
+   extra=$(gate_common::registry_filter_agents \
+             security-reviewer platform-boundary-reviewer)
+   ```
+
+   差し引かずに起動すると po / architecture が 2 トラック走り、生成コストが倍になるうえ dedup 前の Critical が二重計上される。
+
+   **本 gate は `reviewers.yml` を読まない。** design-gate の時点では diff が存在せず、`auto_invoke_patterns` (変更ファイルへの glob) が判定材料にならないため。したがって design-gate の reviewer 集合を変えるには **registry の `invoked_by`** を直す — `reviewers.yml` の `gates` に `design-gate` を書いても効かない。
 
 ### Phase 1: 並列 clean-context 起動
 
@@ -53,12 +66,8 @@ gate_common::phase0_check_charter "$spec_dir" || exit 1
 | **A. analyze** | Agent ツール (`subagent_type: general-purpose`)。`.claude/skills/speckit-analyze/SKILL.md` を Read させ、その解析手順に従わせる | **機械的 consistency**: spec / plan / tasks / contracts の identifier 整合、FR/SC カバレッジ、EARS 完全性、Constitution Article 参照、ADR 引用の正しさ |
 | **B. `po-reviewer`** | Agent ツール (`subagent_type: po-reviewer`) | **ビジネス価値**: User Story の "why" / Success Criteria の計測可能性 / Acceptance Criteria testability / UX negative cases / 優先度妥当性 |
 | **C. `architecture-reviewer`** | Agent ツール (`subagent_type: architecture-reviewer`) | **アーキ整合**: Constitution Principle drift / Domain Charter drift / 関連 ADR drift / レイヤ違反 / cross-domain invariant 違反 |
-| **D+. registry 由来の optional reviewer** | Agent ツール (`subagent_type: <name>`) | 各 reviewer の Owner Matrix に従う。Phase 0 step 6 で解決した分だけトラックを増やす |
-
-**Track A を subprocess にしない理由**: `claude --slash <name>` は CLI のフラグとして存在しない。
-また analyze の要件は「メインスレッドの会話履歴を見ない独立した読解」であり、
-これは Agent ツールの clean-context isolation で満たされる。別プロセスを立てる必要はなく、
-立てると timeout / crash / 文字コードの failure mode を余分に抱え込む。
+| **D. `security-reviewer`** | Agent ツール (`subagent_type: security-reviewer`) | **secrets / 認可 / プロセス境界 hardening**: spec / plan が秘密の扱いや権限境界をどう定めているか |
+| **E+. registry 由来の追加 reviewer** | Agent ツール (`subagent_type: <name>`) | 各 reviewer の担当スライスに従う。Phase 0 step 6 で解決した分だけトラックを増やす (Track B-D と重複させない) |
 
 各 subagent に context として渡す素材:
 
@@ -68,13 +77,15 @@ gate_common::phase0_check_charter "$spec_dir" || exit 1
 - `docs/domains/_overview.md` (存在すれば)
 - `docs/glossary.md`
 - `.specify/memory/constitution.md`
-- `docs/decisions/*.md` で `status: accepted` のもの: **header (frontmatter + `# Title`) + `## Decision Outcome` + `## Confirmation` section のみ** を context として提供 (Context / Considered options / Pros&Cons は除外、resolves C-2-b shift-left)
+- `docs/decisions/*.md` で `status: accepted` のもの: **header (frontmatter + `# Title`) + `## Decision Outcome` + `## Confirmation` section のみ** を context として提供 (Context / Considered options / Pros&Cons は除外)
 - **前回 design-gate.md が存在する場合** (`<spec_dir>/design-gate.md`): Critical / High findings の一覧を "Previous gate findings" として context に追加。reviewers はこれを参照し "resolved from prev / unresolved from prev / new" を finding ごとに付記する
 
 **clean-context isolation の意味**: subagent は本 skill のメインスレッドの会話履歴を一切見ない。reviewer は frontmatter `tools: Read, Grep, Glob` で Edit/Write も禁止 (read-only)。
 
 全トラックの完了を待機する。**reviewer は read-only なので自分で出力を保存できない。**
-本 skill が各トラックの返り値を `<spec_dir>/<track-name>.md` (Track A は `<spec_dir>/analyze.md`) に Write する。
+本 skill が各トラックの返り値を `<spec_dir>/<reviewer>.design-gate.md` (Track A は `<spec_dir>/analyze.md`) に Write する。
+
+`.design-gate` で修飾するのは、同じ reviewer が pr-gate でも走るため。修飾しないと pr-gate Round 1 が design-gate の raw output を上書きし、Round 間の resolved/unresolved 検証の一次資料が消える。
 
 いずれかのトラックが結果を返さなかった場合は当該トラックを 1 回だけ retry し、再失敗なら
 verdict の `tracks.<name>.status: error` を記録する。**他トラックが PASS でも全体 verdict は `error`**
@@ -140,7 +151,7 @@ _(前回 gate が存在する場合のみ表示)_
 </details>
 ```
 
-### Phase 3: 重複排除 (dedup) — fully-automated by default (resolves C-3-b)
+### Phase 3: 重複排除 (dedup) — 既定で完全自動
 
 各トラックが同一根本原因を別 finding として上げる可能性がある。**AskUserQuestion を使わず**機械的 dedup を完全自動で実行する:
 
@@ -157,10 +168,14 @@ _(前回 gate が存在する場合のみ表示)_
 
 ### Phase 4: 集計と enforcement
 
-各トラック出力 (`<spec_dir>/analyze.md`, `po-reviewer.md`, `architecture-reviewer.md`, optional reviewer 分) に対して:
+**reviewer トラックの出力** (`<spec_dir>/<reviewer>.design-gate.md`) に対して:
 
 1. `gate_common::viewpoint_coverage_check <md>` を実行、A-H 欠落があれば warning (gate fail にはしない、reviewer 品質可視化)
 2. `gate_common::cascade_enforce <md>` を実行、0 件確認なし Critical を High に機械的降格。降格 count を verdict に記録
+
+**Track A (`analyze.md`) に `viewpoint_coverage_check` をかけない。** `speckit-analyze` の出力は `## Specification Analysis Report` + ID/Category/Severity の表であり、`## 初回読了 viewpoint` を持たない。かけると毎回 A-H 全件欠落の warning が出て、本物の欠落と区別できなくなる。verdict には `tracks.analyze.viewpoint_missing: null` (適用外) と記録する。
+
+`cascade_enforce` も同様に適用外である (`### [Critical]` 形式の findings を出さない)。Track A の Critical は本 skill が Phase 2 の集約時に `### C-NNN` 形式へ変換したうえで扱う。
 
 ### Phase 4b: JSON verdict emit
 
@@ -173,9 +188,12 @@ _(前回 gate が存在する場合のみ表示)_
   "spec_dir": "specs/<spec_id>",
   "spec_id": "<spec_id>",
   "tracks": {
-    "analyze": {"status": "ok|error", "raw_out": "analyze.md", "viewpoint_missing": [], "cascade_demotions": 0},
-    "po-reviewer": {"status": "ok", "raw_out": "po-reviewer.md", "viewpoint_missing": [], "cascade_demotions": 0},
-    "architecture-reviewer": {"status": "ok", "raw_out": "architecture-reviewer.md", "viewpoint_missing": ["G"], "cascade_demotions": 1}
+    "analyze": {"status": "ok|error", "raw_out": "analyze.md",
+                "viewpoint_missing": null, "cascade_demotions": null},
+    "po-reviewer": {"status": "ok", "raw_out": "po-reviewer.design-gate.md",
+                    "viewpoint_missing": [], "cascade_demotions": 0},
+    "architecture-reviewer": {"status": "ok", "raw_out": "architecture-reviewer.design-gate.md",
+                              "viewpoint_missing": ["G"], "cascade_demotions": 1}
   },
   "severity_counts": {"critical": 0, "high": 3, "medium": 2, "low": 5},
   "fr_coverage": [{"fr": "FR-007", "covered": true, "by": ["spec.md:42", "plan.md:90"]}],
@@ -187,16 +205,31 @@ _(前回 gate が存在する場合のみ表示)_
 
 ### Phase 5: Status 遷移判定
 
+**入口 status と verdict で分岐する。遷移コマンドを無条件に実行してはならない。**
+
 ```bash
-bash .specify/scripts/status-transition.sh \
-  --gate-transition "$spec_dir" design tasking implementing
+if [ "$verdict" = "PASS" ]; then
+  if [ "$current_status" = "tasking" ]; then
+    bash .specify/scripts/status-transition.sh \
+      --gate-transition "$spec_dir" design tasking implementing
+  else
+    echo "$current_status から再レビューしたため status は動かしません"
+  fi
+elif [ "$current_status" = "implementing" ]; then
+  # gate 失敗を受けた後戻り。verdict は PASS でないので --gate-transition は使えない。
+  bash .specify/scripts/status-transition.sh \
+    --downgrade "$spec_dir" implementing tasking
+  echo "[warn: status downgraded implementing → tasking]"
+else
+  echo "verdict=$verdict のため $current_status に据置"
+fi
 ```
 
-- verdict=PASS かつ critical=0 → tasking → implementing に遷移、design-gate.md Status "PASS"
-- verdict=FIX_REQUIRED:
-  - 元 status が `tasking` → 据置
-  - 元 status が `implementing` → **`tasking` に降格** (`status-transition.sh --downgrade`) し、完了通知に `[warn: status downgraded implementing → tasking]` を記録
-  - design-gate.md Status "FIX_REQUIRED"
+- verdict=PASS かつ 元 status が `tasking` → tasking → implementing、design-gate.md Status "PASS"
+- verdict=PASS かつ 元 status が `implementing` / `reviewing` → **据置** (`from=tasking` 固定の `--gate-transition` を呼ぶと現状値不一致で exit 1 になる)
+- verdict=FIX_REQUIRED かつ 元 status が `implementing` → `--downgrade` で `tasking` へ降格
+- verdict=FIX_REQUIRED かつ 元 status が `tasking` → 据置
+- verdict=ERROR → 据置
 - verdict=ERROR (いずれかの track が retry 後も結果を返さない) → 状態据置、design-gate.md Status "ERROR"
 
 ### Phase 6: 完了通知
@@ -220,7 +253,7 @@ bash .specify/scripts/status-transition.sh \
 - subagent エラー (context overflow / 結果が返らない) → 当該 track 単独で retry 1 回、再失敗時は
   `tracks.<name>.status: error` を記録し、**全体 verdict を `error` にする** (silent PASS にしない)
 - Track A `error` + 他 track が FIX_REQUIRED → 全体 FIX_REQUIRED (or ERROR)
-- agent registry に po-reviewer / architecture-reviewer が登録されていない (gate_common::registry_assert_agent fail) → halt with "/spec-gate bootstrap を再実行してください"
+- po-reviewer / architecture-reviewer が registry に無い (`gate_common::registry_assert_agent` fail) → halt with "`.claude/agents/<name>.md` の存在と `.specify/.agents-registry.yaml` の entry を確認してください"
 - 全 track 失敗 → halt (status 変更なし)
 - domain charter missing → halt
 
@@ -234,5 +267,6 @@ bash .specify/scripts/status-transition.sh \
 6. PASS の場合のみ spec.md frontmatter `status:` が `implementing` に遷移
 7. design-gate.md に subagent の raw output が `<details>` 内に保存されている
 8. いずれかの track が error のとき verdict が ERROR (not silently PASS)
-9. viewpoint coverage の missing カテゴリが verdict JSON に記録される
+9. viewpoint coverage の missing カテゴリが verdict JSON に記録される (Track A は適用外の `null`)
 10. cascade_demotions count が verdict JSON に記録される
+11. **PASS かつ 元 status が `tasking` のときだけ** `implementing` に遷移し、FIX_REQUIRED かつ元 `implementing` のときは `--downgrade` で `tasking` に戻る

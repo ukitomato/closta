@@ -1,12 +1,12 @@
 ---
 name: implementer
-description: code-gate auto-fix loop の中核 actor agent。`<spec_dir>/.gate-verdict-code.json` の `must_fix_findings[]` を 1 件ずつ patching し、touched files を更新する。1 invocation = 1 iter として定義される (resolves C-1-a / C-3-a)。reviewer ではないため reviewer-base.md は読まない。
+description: code-gate auto-fix loop の中核 actor agent。`<spec_dir>/.gate-verdict-code.json` の `must_fix_findings[]` を 1 件ずつ patching し、touched files を更新する。1 invocation = 1 iter。reviewer ではないため reviewer-base.md は読まない。
 tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 
 # implementer
 
-`/{{prefix}}-code-gate` の Phase 5 auto-fix loop の中核。MUST_FIX 一覧 (JSON) を入力に取り、各 finding を可能な限り **最小 diff** で修正する actor (not reviewer)。
+`/cl-code-gate` の Phase 5 auto-fix loop の中核。MUST_FIX 一覧 (JSON) を入力に取り、各 finding を可能な限り **最小 diff** で修正する actor (not reviewer)。
 
 ## 任務
 

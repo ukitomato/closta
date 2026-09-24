@@ -1,6 +1,7 @@
 ---
 name: cl-spec
-description: feature spec.md を起案する wrapper。`/speckit.specify` + `/speckit.clarify` を内部委譲しつつ、spec_id 採番 (連番 or タイムスタンプ)・domain 確定・frontmatter 注入 (spec_id / domain / status: drafting / targets) を一連で実施する。手動起動のみ。
+description: feature spec.md を起案する。spec_id の採番・domain 確定・frontmatter 注入を行い、`/speckit.specify` と `/speckit.clarify` を内部委譲する。
+argument-hint: <description>
 disable-model-invocation: true
 allowed-tools: Read Write Edit Bash Glob Grep AskUserQuestion
 ---
@@ -17,7 +18,6 @@ feature spec.md を起案する。`/speckit.specify` (spec 起草) と `/speckit
 ## When to invoke
 
 - 新規 feature の spec.md 起案時 (毎 feature 1 回)
-- Brownfield の reverse spec 用途には使わない (それは `/spec-gate migrate` の責務)
 
 ## Inputs
 
@@ -40,11 +40,11 @@ feature spec.md を起案する。`/speckit.specify` (spec 起草) と `/speckit
 
 ```bash
 source .specify/scripts/gate-common.sh
-gate_common::phase0_check_repo || { echo "Run /spec-gate bootstrap first"; exit 1; }
+gate_common::phase0_check_repo || { echo ".specify/ が見つかりません。repository root で実行してください"; exit 1; }
 ```
 
 1. `.specify/` ディレクトリ + git repo 確認 (phase0_check_repo)
-2. `docs/domains/*/charter.md` が 1 件以上存在を確認。なければ "先に `/spec-gate migrate` で domain を確立してください (Brownfield) or `docs/domains/<name>/charter.md` を手動作成してください (Greenfield)" と案内
+2. `docs/domains/*/charter.md` が 1 件以上存在を確認。なければ "`docs/domains/<name>/charter.md` を作成してから再実行してください" と案内
 3. `specs/` がなければ `mkdir -p specs`
 
 ### Phase 1: Parse arguments
@@ -82,7 +82,7 @@ gate_common::phase0_check_repo || { echo "Run /spec-gate bootstrap first"; exit 
 
 ### Phase 5: Allocate `spec_id` (atomic via gate-common.sh)
 
-`.specify/memory/constitution.md` または `.specify/config.yaml` で spec-id-format を確認 (デフォルト: `seq`)。**atomic 採番** は `gate_common::spec_id_allocate_*` に委譲する (flock or mkdir-lock fallback、並列起動時の衝突回避、resolves C-3-d):
+spec-id-format は `.specify/init-options.json` の `feature_numbering` で決まる (`sequential` → `seq` / `timestamp` → `ts`。既定は `seq`)。**採番は必ず `gate_common::spec_id_allocate_*` に委譲する** — 自前で `ls specs/` を数えると並列起動時に衝突する:
 
 ```bash
 source .specify/scripts/gate-common.sh
@@ -105,12 +105,12 @@ rc=$?
 # 衝突時は +1 分繰り上げ (自動)、60 分超で AskUserQuestion で手動 slot 指定
 ```
 
-**注意**: 旧 inline NEXT_NUM 計算 (`ls specs/ | grep -E '^[0-9]{3}-' | wc -l`) は **撤廃**。並列起動時の race condition を回避するため、必ず gate-common 経由で採番する。
+**採番は `specs/<SPEC_ID>/` を作成して番号を予約する。** 以降の Phase が失敗しても空ディレクトリが残るので、中断したときは手で消すこと (残っていると次の採番がその番号を使用済みとして飛ばす)。
 
 ### Phase 6: `/speckit.specify` delegation
 
 1. `/speckit.specify` を bash 経由で起動し、description を input として渡す
-2. SpecKit が `specs/<SPEC_ID>/spec.md` を自動生成する
+2. SpecKit が `specs/<SPEC_ID>/spec.md` を自動生成する (ディレクトリは Phase 5 で予約済み)
 3. 生成完了を待機
 
 ### Phase 7: Frontmatter injection
@@ -196,7 +196,7 @@ Constitution / ADR の改定を主目的とする feature はこの限りでな�
 
 ## Failure modes
 
-- domain charter が存在しない → "/spec-gate migrate で domain を確立してから再実行" を案内
+- domain charter が存在しない → "`docs/domains/<name>/charter.md` を作成してから再実行" を案内
 - SPEC_ID atomic 採番の lock 取得 timeout (gate_common::spec_id_allocate_* が exit 75) → 自動リトライ 3 回 → 3 回失敗で AskUserQuestion
 - SPEC_ID 衝突 (ts モード、60 分超 +N 失敗) → AskUserQuestion で手動 slot 指定
 - `/speckit.specify` の delegation 失敗 → エラーメッセージを表示、frontmatter 注入は skip して halt
@@ -209,4 +209,4 @@ Constitution / ADR の改定を主目的とする feature はこの限りでな�
 3. `domain` 値が `docs/domains/<domain>/charter.md` で実在する
 4. `/speckit.clarify` が起動された (ユーザ対話の有無は問わない)
 5. body 部分に `[NEEDS CLARIFICATION]` が残っていれば warning として表示
-6. seq モード並列起動時に SPEC_ID 衝突が発生しない (gate_common::spec_id_allocate_seq の flock 保護による)
+6. seq モード並列起動時に SPEC_ID 衝突が発生しない。**保証の実体は lock ではなく「critical section 内で `specs/<SPEC_ID>/` を作って番号を予約する」こと** — 番号を返すだけなら lock があっても全員が同じ番号を得る

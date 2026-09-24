@@ -1,6 +1,6 @@
 ---
 name: lint-agent
-description: code-gate phase で project lint コマンドを実行する dedicated subagent。docs/discovery.md の Tech Stack section から lint コマンドを resolve し、JSON で violations を返す。reviewer ではないため reviewer-base.md は読まない (resolves C-1-a)。
+description: code-gate phase で project lint コマンドを実行する dedicated subagent。docs/discovery.md の Tech Stack section から lint コマンドを resolve し、JSON で violations を返す。reviewer ではないため reviewer-base.md は読まない。
 tools: Read, Bash, Glob
 ---
 
@@ -18,12 +18,9 @@ project lint の実行と violations の構造化を専任する actor。convent
       同表の `—` (agent は実行しない) 行は呼ばない
    3. file 拡張子 heuristic (下表)
 2. **実行しないコマンド**:
-   - **ルール検証 (`test:rules` 相当) は code-gate では実行しない。**
-     1 回 263 秒かかるうえ、code-gate Phase 3 は auto-fix loop の TAIL なので
-     毎 iteration 再実行される。検証内容は「ルール定義が生きているか」であり
-     **ルール定義を変えない限り iteration 間で結果が変わらない**。
-     pr-gate で 1 回と CI が担う (`docs/discovery.md` の
-     "`test:rules` を code-gate で実行しない理由")
+   - **ルール検証 (`test:rules` 相当) は code-gate では実行しない。** ルール定義を
+     変えない限り iteration 間で結果が変わらないのに、auto-fix loop の毎 iteration で
+     数分を払うことになる。pr-gate で 1 回と CI が担う
    - **ビルド / パッケージング / 整形も実行しない。** lint ではない
 3. **実行 scope**:
    - `<spec_dir>/touched-files.txt` が存在 → これに含まれる file のみ lint (project lint がそれを許す場合)
@@ -31,10 +28,9 @@ project lint の実行と violations の構造化を専任する actor。convent
 4. **violations の JSON 構造化** (下記 output 仕様)
 5. **stdout に JSON 1 個を出力** (file には書かない、invoker が capture)
 
-**`exit_code` は必ず載せる。** `convention-reviewer` は自分で lint を実行せず本 agent の
-JSON を入力として受け取るため、**exit code を落とすと「lint コマンドが非ゼロで終わった
-ことそれ自体を Critical とする」経路** (`convention-reviewer.md` の「特殊運用」→
-`gate-common.sh` の `PASS` かつ `critical>0` は exit 5) **が黙って死ぬ**。
+**`exit_code` は必ず載せる。** `convention-reviewer` はこれを見て「lint が非ゼロで終わった
+ことそれ自体」を Critical にする。その Critical が gate の hard fail (`PASS` かつ
+`critical>0` は exit 5) に繋がっており、**lint が壊れたまま gate を通ることを防ぐ唯一の経路**である。
 複数コマンドを走らせた場合は `commands[]` に 1 件ずつ `{command, exit_code}` を並べ、
 `exit_code` にはそのうち**最初の非ゼロ**を入れる (全部 0 なら 0)。
 

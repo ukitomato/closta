@@ -2,9 +2,8 @@
 # spec-resolve.sh — Spec-Driven Gating Workflow 共通の spec ディレクトリ推論 helper
 #
 # 用途:
-#   全 wrapper (/spec-gate.spec, /spec-gate.plan, /spec-gate.tasks,
-#   /spec-gate.design-gate, /spec-gate.implement, /spec-gate.code-gate,
-#   /spec-gate.pr-gate, /spec-gate.done) が <spec_dir> 引数を省略可能とするため、
+#   全 wrapper (/cl-spec, /cl-plan, /cl-tasks, /cl-design-gate, /cl-implement,
+#   /cl-code-gate, /cl-pr-gate, /cl-done) が <spec_dir> 引数を省略可能とするため、
 #   git branch から specs/<spec_id>/ を一意に解決する。
 #
 # サポート形式:
@@ -147,6 +146,5 @@ echo "  Expected:" >&2
 echo "    - '001' (3-digit NNN)" >&2
 echo "    - '2026-05-17-1030' (timestamp)" >&2
 echo "    - '001-auth-login' (full dir name)" >&2
-echo "    - 'rev-001-AUT-login' (reverse spec from /spec-gate.migrate)" >&2
 echo "    - omit to infer from branch / .specify/feature.json" >&2
 exit 2

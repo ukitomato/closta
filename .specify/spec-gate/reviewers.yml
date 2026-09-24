@@ -3,6 +3,20 @@
 #
 # **`registry_filter_agents` だけでは効かない。** あちらは agent ファイルの存在しか
 # 見ないため、skill の Phase から `reviewers_filter` を呼ぶこと。
+#
+# **効くのは code-gate と pr-gate だけである。** design-gate はまだ diff が無く
+# `auto_invoke_patterns` が判定材料にならないため本ファイルを読まず、
+# `.specify/.agents-registry.yaml` の `invoked_by` で reviewer を決める。
+# したがって下の `gates:` に `design-gate` を書いても効果はない。
+#
+# **`reviewers_filter` は引数で渡された候補しか絞らない。** ここに entry を足したら
+# 対象 gate skill (cl-code-gate Phase 2 / cl-pr-gate Phase 3) の候補リストにも
+# 名前を足すこと。忘れると 1 度も起動せず `skipped_reviewers[]` にも出ない。
+#
+# **`scope:` は書かない。** parser は読まないので効果がなく、
+# 「system scope だから絞られているはず」という誤解を生む。
+# 絞り込みを決めるのは `auto_invoke_patterns` / `exclude_patterns` だけである。
+# `source:` は由来のメモであり、これも判定には使われない。
 
 reviewers:
   # ─────────────────────────────────────────────────────────────────────
@@ -22,7 +36,6 @@ reviewers:
   # ─────────────────────────────────────────────────────────────────────
   - name: a11y-reviewer
     enabled: true
-    scope: system
     auto_invoke_patterns:
       - "src/renderer/src/features/session-list/**/*.tsx"
       # - "src/renderer/src/features/chat/**/*.tsx"                      # 仮実装
@@ -41,7 +54,6 @@ reviewers:
 
   - name: ux-reviewer
     enabled: true
-    scope: system
     # a11y-reviewer と同一の対象。片方だけ広げると指摘の出所が追えなくなる。
     auto_invoke_patterns:
       - "src/renderer/src/features/session-list/**/*.tsx"
@@ -58,7 +70,6 @@ reviewers:
 
   - name: database-reviewer
     enabled: true
-    scope: both
     # Principle V の検証対象は SQL のカラム型に限らない (AD-024 #9)。
     # R-1 の永続化は JSON であり、SQL パターンだけでは発火しない。
     # 永続化スキーマを持つ設定層のモジュールも発火条件に含める。
@@ -73,7 +84,6 @@ reviewers:
 
   - name: platform-boundary-reviewer
     enabled: true
-    scope: both
     # ディレクトリは AD-023 のレイヤ構成に合わせる (AD-024 #1 / #6)。
     # `src/runtime/**` / `src/supervisor/**` は存在せず、旧条件では 1 件も発火しなかった。
     auto_invoke_patterns:
@@ -85,7 +95,8 @@ reviewers:
       - "**/eslint.config.*"
       - "**/.dependency-cruiser.*"
       - "**/.eslintrc*"
-    gates: [design-gate, code-gate, pr-gate]
+    # design-gate での起動は registry の `invoked_by` が決める (上の注記参照)。
+    gates: [code-gate, pr-gate]
     source: project-specific
     # ui-coverage-reviewer は O-2 (docs/ui-coverage.md を作る feature) と同時に追加する。
     # それ以前は検査対象が存在せず、指摘がノイズにしかならないため。

@@ -6,24 +6,33 @@
 #   (spec / plan / tasks / implement) が status lifecycle を進めるために使う。
 #   遷移の正当性 (from が現状値と一致するか) を検証してから書き換える。
 #
-#   Wave 1 拡張 (resolves C-4-c / item 11):
+#   Mode:
 #     - --validate-verdict <path>           : JSON verdict 単体 validation
-#     - --gate-transition <spec_dir> <gate> <from> <to>  : verdict 必須遷移
-#     - --legacy <spec_dir> <from> <to>     : verdict なしで遷移 (旧経路)
+#     - --gate-transition <spec_dir> <gate> <from> <to>  : verdict PASS 必須の前進
+#     - --downgrade <spec_dir> <from> <to>  : gate 失敗時の後戻り (verdict 不要)
+#     - --legacy <spec_dir> <from> <to>     : verdict なしで遷移
 #
 # Status lifecycle:
 #   drafting → planning → tasking → implementing → reviewing → completed
+#
+#   `migrated` も VALID_STATUSES に含むが、どの cl-* skill も生成・受理しない。
+#   外部から持ち込まれた spec を手で lifecycle に載せ直すときの入口としてのみ残す。
 #
 # 使い方:
 #   # 旧形式 (互換性のため残置、内部で --legacy にリダイレクト)
 #   bash .specify/scripts/status-transition.sh <spec_dir> <from> <to>
 #
-#   # JSON verdict 検証付き遷移 (NEW)
+#   # JSON verdict 検証付き遷移
 #   bash .specify/scripts/status-transition.sh --gate-transition <spec_dir> <gate> <from> <to>
 #     - <gate> ∈ {design, code, pr}
-#     - <spec_dir>/.gate-verdict-<gate>.json が必須、verdict=PASS かつ critical=0 でない遷移を reject
+#     - <spec_dir>/.gate-verdict-<gate>.json が必須。
+#       `gate_common::verdict_require_pass` を通すので verdict != PASS / critical > 0 /
+#       (gate=code で) must_fix > 0 はいずれも exit 5 で reject される
 #
-#   # JSON verdict 単体検証 (NEW)
+#   # gate 失敗時の後戻り (verdict を見ない)
+#   bash .specify/scripts/status-transition.sh --downgrade <spec_dir> <from> <to>
+#
+#   # JSON verdict 単体検証
 #   bash .specify/scripts/status-transition.sh --validate-verdict <verdict_path>
 #
 # Exit:
@@ -31,7 +40,7 @@
 #   1 → 現状値が <from> と不一致 (遷移を中止)
 #   2 → 引数不足 / spec.md 不存在 / parse 失敗
 #   3 → verdict file 不存在
-#   5 → verdict gate violation (critical > 0 / verdict != PASS)
+#   5 → verdict gate violation (verdict != PASS / critical > 0 / must_fix > 0)
 
 set -uo pipefail
 
@@ -122,7 +131,7 @@ do_legacy_transition() {
   return 0
 }
 
-# NEW: validate verdict JSON
+# --validate-verdict: schema 検査のみ (gate 判定ではない)
 do_validate_verdict() {
   local verdict_path="$1"
   if [ ! -f "$GATE_COMMON" ]; then
@@ -132,7 +141,7 @@ do_validate_verdict() {
   bash "$GATE_COMMON" verdict-validate "$verdict_path"
 }
 
-# NEW: gate-transition (verdict required)
+# --gate-transition: verdict が PASS のときだけ前進させる
 do_gate_transition() {
   local spec_dir="$1" gate="$2" expected_from="$3" new_to="$4"
 
@@ -151,15 +160,19 @@ do_gate_transition() {
   local verdict_path="${spec_dir}/.gate-verdict-${gate}.json"
   if [ ! -f "$verdict_path" ]; then
     echo "status-transition: verdict not found at $verdict_path" >&2
-    echo "  /{{prefix}}-${gate}-gate を先に実行して verdict JSON を生成してください" >&2
+    echo "  /cl-${gate}-gate を先に実行して verdict JSON を生成してください" >&2
     exit 3
   fi
 
-  # verdict validate (exit 0 = OK, 5 = hard gate violation)
-  bash "$GATE_COMMON" verdict-validate "$verdict_path"
+  # **verdict-validate ではなく verdict-require-pass を使う。**
+  # 前者は FIX_REQUIRED を正当な verdict として exit 0 で通すため、
+  # gate を通っていない spec が前進してしまう。
+  bash "$GATE_COMMON" verdict-require-pass "$verdict_path"
   local rc=$?
   if [ "$rc" -ne 0 ]; then
-    echo "status-transition: verdict validation failed (exit=$rc) for $verdict_path" >&2
+    echo "status-transition: gate を通っていないため遷移しません (exit=$rc) — $verdict_path" >&2
+    echo "  Critical / MUST_FIX を解消して /cl-${gate}-gate を再実行してください。" >&2
+    echo "  gate 失敗を受けて後戻りさせたい場合は --downgrade を使います。" >&2
     exit "$rc"
   fi
 
@@ -177,6 +190,12 @@ case "${1:-}" in
     [ -n "${5:-}" ] || { echo "usage: --gate-transition <spec_dir> <gate> <from> <to>" >&2; exit 2; }
     do_gate_transition "$2" "$3" "$4" "$5"
     ;;
+  --downgrade)
+    # gate 失敗時の後戻り。verdict は見ない (FIX_REQUIRED だから降格するので、
+    # verdict PASS を要求したら降格そのものが不可能になる)。
+    [ -n "${4:-}" ] || { echo "usage: --downgrade <spec_dir> <from> <to>" >&2; exit 2; }
+    do_legacy_transition "$2" "$3" "$4"
+    ;;
   --legacy)
     [ -n "${4:-}" ] || { echo "usage: --legacy <spec_dir> <from> <to>" >&2; exit 2; }
     do_legacy_transition "$2" "$3" "$4"
@@ -188,14 +207,17 @@ status-transition.sh — spec.md frontmatter status 遷移
 Modes:
   (default)            Legacy: bash status-transition.sh <spec_dir> <from> <to>
   --legacy             Explicit legacy: bash ... --legacy <spec_dir> <from> <to>
-  --gate-transition    Verdict-gated: bash ... --gate-transition <spec_dir> <gate> <from> <to>
+  --gate-transition    Verdict-gated 前進: bash ... --gate-transition <spec_dir> <gate> <from> <to>
                        <gate> ∈ {design, code, pr}
-                       <spec_dir>/.gate-verdict-<gate>.json 必須
+                       <spec_dir>/.gate-verdict-<gate>.json 必須。
+                       verdict_require_pass を通るまで遷移しない
+  --downgrade          gate 失敗時の後戻り: bash ... --downgrade <spec_dir> <from> <to>
+                       verdict は見ない (降格は FIX_REQUIRED のときに行うため)
   --validate-verdict   Validate JSON only: bash ... --validate-verdict <path>
 
 Exit codes:
   0 = success, 1 = transition refused, 2 = bad args, 3 = verdict missing,
-  5 = verdict hard-gate violation (critical>0 / verdict!=PASS)
+  5 = verdict hard-gate violation (verdict!=PASS / critical>0 / must_fix>0)
 EOF
     ;;
   "")

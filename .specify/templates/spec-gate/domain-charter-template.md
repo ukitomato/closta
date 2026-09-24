@@ -2,7 +2,7 @@
 domain: <kebab-case-name>
 status: <draft | needs-human-review | active>
 owner: <team or person>
-generated_by: <human | /spec-gate.migrate Phase 2>
+generated_by: <human>
 last_reviewed: <ISO 8601>
 related_adrs: []
 related_specs: []

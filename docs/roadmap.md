@@ -57,9 +57,9 @@ Electron のパッケージングツールチェーンは `node_modules` が npm
 `nodeLinker: hoisted` の指定が要る（[Electron 公式チュートリアル](https://www.electronjs.org/docs/latest/tutorial/tutorial-first-app)）。
 
 pnpm 10 以降は設定の置き場が `.npmrc` から `pnpm-workspace.yaml` に移っている。
-本リポジトリでは後者に配置済み。`packages:` キーを持たないため monorepo ではないが、
-**`discovery-scanner` は `pnpm-workspace.yaml` の存在を monorepo marker として扱う**ので、
-次回 `/spec-gate scan` の結果を読むときは注意すること。
+本リポジトリでは後者に配置済み。**`packages:` キーを持たないため monorepo ではない** —
+`pnpm-workspace.yaml` の存在だけを monorepo の目印にするツールがあるので、
+workspace として扱われていたら `packages:` の有無を先に確認すること。
 
 ## M1: 読める
 

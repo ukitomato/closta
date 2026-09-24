@@ -1,6 +1,7 @@
 ---
 name: cl-tasks
-description: plan.md から tasks.md を起草する wrapper。`/speckit.tasks` を内部委譲しつつ、User Story 単位の section 構造・`[P]` 並列マーカー検証・targets=both の FE/BE/shared 分割を本 wrapper が担当する。status は planning → tasking に遷移。
+description: plan.md から tasks.md を起草する。User Story 単位の section 構造と `[P]` 並列マーカーを検証し、status を planning → tasking に遷移させる。
+argument-hint: [spec_dir]
 disable-model-invocation: true
 allowed-tools: Read Write Edit Bash Glob Grep AskUserQuestion
 ---

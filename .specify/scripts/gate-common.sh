@@ -30,7 +30,8 @@
 #   1   = generic failure / precondition not met
 #   2   = invalid input (schema fail / unknown command)
 #   3   = file not found
-#   5   = gate hard-stop (e.g., Critical > 0 on verdict_validate)
+#   5   = gate hard-stop (verdict_require_pass。verdict_validate は「PASS と
+#         自称しつつ critical>0」の矛盾に限り 5 を返す)
 #   75  = EX_TEMPFAIL (lock contention, retry recommended)
 #
 # Compatibility:
@@ -56,17 +57,20 @@ gate_common::usage() {
   cat <<'EOF'
 gate-common.sh — Spec-Driven Gating Workflow 共通 helper
 
-Source して使う関数 (代表):
+Source して使う関数 (全件。exec 用 subcommand と 1:1 で対応する):
   gate_common::phase0_check_repo
   gate_common::phase0_resolve_spec_dir <arg>
   gate_common::phase0_check_status <spec_dir> <expected_csv>
   gate_common::phase0_check_charter <spec_dir>
+  gate_common::tasks_complete_check <spec_dir>
+  gate_common::slugify <text>
   gate_common::spec_id_allocate_seq <domain> <slug>
   gate_common::spec_id_allocate_ts <domain> <slug>
   gate_common::cascade_enforce <reviewer_md>
   gate_common::viewpoint_coverage_check <reviewer_md>
   gate_common::verdict_emit <spec_dir> <gate_name> <json_text>
-  gate_common::verdict_validate <verdict_path>
+  gate_common::verdict_validate <verdict_path>       # schema 検査のみ
+  gate_common::verdict_require_pass <verdict_path>   # PASS を要求する hard gate
   gate_common::registry_load
   gate_common::registry_assert_agent <name>
   gate_common::registry_filter_agents <name1> <name2> ...
@@ -74,12 +78,34 @@ Source して使う関数 (代表):
   gate_common::run_with_timeout <sec> <out_file> -- <cmd...>
   gate_common::truncate_subject <text> [byte_cap=50]
 
+**verdict_validate と verdict_require_pass は別物である。**
+  verdict_validate     — schema + 「PASS と自称しつつ critical>0」の矛盾のみを弾く。
+                         FIX_REQUIRED / ERROR は正当な verdict として exit 0 を返す
+  verdict_require_pass — 次の段に進んでよいかを判定する。verdict != PASS、
+                         critical > 0、gate=code で must_fix > 0 のいずれかで exit 5
+gate を通す/通さないの判定には **必ず verdict_require_pass を使う**。
+
 Subcommand (exec):
+  bash gate-common.sh help
   bash gate-common.sh version
   bash gate-common.sh verdict-validate <path>
+  bash gate-common.sh verdict-require-pass <path>
+  bash gate-common.sh verdict-emit <spec_dir> <gate_name> <json_text>
   bash gate-common.sh truncate-subject <text> [cap]
+  bash gate-common.sh cascade-enforce <reviewer_md>
+  bash gate-common.sh viewpoint-coverage <reviewer_md>
   bash gate-common.sh registry-assert <name>
+  bash gate-common.sh registry-load
   bash gate-common.sh reviewers-filter <gate> <changed_files_path> <name...>
+  bash gate-common.sh spec-id-allocate-seq <domain> <slug>
+  bash gate-common.sh spec-id-allocate-ts <domain> <slug>
+  bash gate-common.sh run-with-timeout <sec> <out_file> -- <cmd...>
+  bash gate-common.sh slugify <text>
+  bash gate-common.sh tasks-complete-check <spec_dir>
+  bash gate-common.sh phase0-check-repo
+  bash gate-common.sh phase0-resolve-spec-dir <arg>
+  bash gate-common.sh phase0-check-status <spec_dir> <expected_csv>
+  bash gate-common.sh phase0-check-charter <spec_dir>
 EOF
 }
 
@@ -124,12 +150,12 @@ _gc::repo_root() {
 }
 
 # ═════════════════════════════════════════════════════════════════════
-# § 1. Phase 0 共通 checks (resolves C-3-c: 9 wrapper の Phase 0 複写)
+# § 1. Phase 0 共通 checks
 # ═════════════════════════════════════════════════════════════════════
 
 gate_common::phase0_check_repo() {
   if [ ! -d ".specify" ]; then
-    _gc::err ".specify/ not found. Run \`/spec-gate bootstrap\` first."
+    _gc::err ".specify/ not found. Run from the repository root."
     return 1
   fi
   if ! _gc::has_cmd git || ! git rev-parse --show-toplevel >/dev/null 2>&1; then
@@ -190,6 +216,30 @@ gate_common::phase0_check_status() {
   return 0
 }
 
+# <spec_dir> → tasks.md の未チェック項目が 0 件なら 0、残っていれば 1
+# 未チェック行は stderr に列挙する (どれが残っているかを呼び出し側が出せるように)
+gate_common::tasks_complete_check() {
+  local spec_dir="${1:?spec_dir required}"
+  local tasks_file="${spec_dir}/tasks.md"
+
+  if [ ! -f "$tasks_file" ]; then
+    _gc::err "tasks.md not found at $tasks_file"
+    return 3
+  fi
+
+  local unchecked
+  unchecked=$(grep -nE '^[[:space:]]*-[[:space:]]*\[[[:space:]]\]' "$tasks_file" || true)
+
+  if [ -n "$unchecked" ]; then
+    _gc::err "unchecked tasks remain in $tasks_file:"
+    echo "$unchecked" >&2
+    echo "$unchecked" | wc -l | tr -d ' '
+    return 1
+  fi
+  echo "0"
+  return 0
+}
+
 gate_common::phase0_check_charter() {
   local spec_dir="${1:?spec_dir required}"
   local spec_file="${spec_dir}/spec.md"
@@ -220,7 +270,7 @@ gate_common::phase0_check_charter() {
 }
 
 # ═════════════════════════════════════════════════════════════════════
-# § 2. atomic spec-id allocation (resolves C-3-d: NEXT_NUM race)
+# § 2. atomic spec-id allocation
 # ═════════════════════════════════════════════════════════════════════
 
 # slug 生成: 任意の自然文 → kebab-case
@@ -243,18 +293,29 @@ print(s[:50])
 }
 
 # 内部: lock 取得 (flock or mkdir fallback)
+#
+# **結果を stdout に echo してはならない。** 呼び出し側が `$(...)` で受けると
+# コマンド置換のサブシェル内で `exec {fd}>` が走り、サブシェル終了時に fd が
+# 閉じて **lock がクリティカルセクションに入る前に解放される**。親側の
+# `_GC_LOCK_FD` も未設定のまま残り、release の flock 分岐が no-op になる。
+# したがって種別はグローバル `_GC_LOCK_KIND` で返し、呼び出し側は
+# `_gc::lock_acquire "$lockfile" 3 || return $?` の形で使う。
 _gc::lock_acquire() {
   local lockfile="${1:?lockfile}"
   local timeout_sec="${2:-3}"
   local lockdir="${lockfile}.d"
 
+  _GC_LOCK_KIND=""
+
   if _gc::has_cmd flock; then
     exec {_GC_LOCK_FD}>"$lockfile"
     if ! flock -w "$timeout_sec" "$_GC_LOCK_FD"; then
       _gc::err "lock timeout ($timeout_sec s) on $lockfile"
+      eval "exec ${_GC_LOCK_FD}>&-" 2>/dev/null || true
+      unset _GC_LOCK_FD
       return 75
     fi
-    echo "flock"
+    _GC_LOCK_KIND="flock"
     return 0
   fi
 
@@ -268,7 +329,7 @@ _gc::lock_acquire() {
     fi
   done
   echo "$lockdir" > "${lockfile}.lockmeta"
-  echo "mkdir"
+  _GC_LOCK_KIND="mkdir"
   return 0
 }
 
@@ -295,7 +356,7 @@ gate_common::spec_id_allocate_seq() {
   mkdir -p "$specs_dir"
 
   local lock_kind
-  lock_kind=$(_gc::lock_acquire "$lockfile" 3) || return $?
+  _gc::lock_acquire "$lockfile" 3 || return $?; lock_kind="$_GC_LOCK_KIND"
 
   local next
   next=$(ls "$specs_dir" 2>/dev/null | { grep -E '^[0-9]{3}-' || true; } | sort -u | tail -n 1 | sed -E 's/^([0-9]{3}).*/\1/' || true)
@@ -312,6 +373,17 @@ gate_common::spec_id_allocate_seq() {
     nnn=$(printf '%03d' "$next")
   done
 
+  # **critical section 内で ID を予約する。**
+  # `next` は `ls "$specs_dir"` から導出されるので、ディレクトリを作らずに
+  # 番号を返すだけでは lock が何も守らない — 並列 allocator が全員同じ空の
+  # specs/ を見て全員 001 を返す (lock は「同じ答えを順番に出す」だけになる)。
+  # ここで作っておけば後続の allocator がこの番号を使用済みとして見る。
+  if ! mkdir "${specs_dir}/${nnn}-${domain}-${slug}" 2>/dev/null; then
+    _gc::err "spec_id_allocate_seq: 予約に失敗しました: ${specs_dir}/${nnn}-${domain}-${slug}"
+    _gc::lock_release "$lockfile" "$lock_kind"
+    return 1
+  fi
+
   echo "${nnn}-${domain}-${slug}"
   _gc::lock_release "$lockfile" "$lock_kind"
   return 0
@@ -327,7 +399,7 @@ gate_common::spec_id_allocate_ts() {
   mkdir -p "$specs_dir"
 
   local lock_kind
-  lock_kind=$(_gc::lock_acquire "$lockfile" 3) || return $?
+  _gc::lock_acquire "$lockfile" 3 || return $?; lock_kind="$_GC_LOCK_KIND"
 
   local ts
   ts=$(date +%Y-%m-%d-%H%M)
@@ -355,13 +427,21 @@ print(dt.strftime('%Y-%m-%d-%H%M'))
     candidate="${ts}-${domshort}-${slug}"
   done
 
+  # seq と同じ理由で critical section 内で予約する (上の while が
+  # `compgen -G "${specs_dir}/${candidate}"` を見ているので、作れば衝突検知が効く)。
+  if ! mkdir "${specs_dir}/${candidate}" 2>/dev/null; then
+    _gc::err "spec_id_allocate_ts: 予約に失敗しました: ${specs_dir}/${candidate}"
+    _gc::lock_release "$lockfile" "$lock_kind"
+    return 1
+  fi
+
   echo "$candidate"
   _gc::lock_release "$lockfile" "$lock_kind"
   return 0
 }
 
 # ═════════════════════════════════════════════════════════════════════
-# § 3. cascade enforcement (resolves C-2-d: 機械的降格未実装)
+# § 3. cascade enforcement
 # ═════════════════════════════════════════════════════════════════════
 #
 # Critical 申告に "## 同種事象探索" の row + 件数 > 0 確認 or "0 件" 明記
@@ -445,7 +525,7 @@ PYEOF
 }
 
 # ═════════════════════════════════════════════════════════════════════
-# § 4. viewpoint 網羅性チェック (resolves C-2-a: quota 撤廃の代替)
+# § 4. viewpoint 網羅性チェック
 # ═════════════════════════════════════════════════════════════════════
 #
 # reviewer-base.md の A-H 8 カテゴリ (Owner Matrix viewpoint group) で
@@ -498,7 +578,7 @@ PYEOF
 }
 
 # ═════════════════════════════════════════════════════════════════════
-# § 5. JSON verdict emit / validate (resolves C-4-c: machine-checkable)
+# § 5. JSON verdict emit / validate
 # ═════════════════════════════════════════════════════════════════════
 
 # <spec_dir> <gate_name (design|code|pr)> <json_text>
@@ -594,13 +674,64 @@ if v["verdict"] == "PASS" and sc["critical"] > 0:
     print(f"verdict_validate: PASS verdict with critical={sc['critical']} (hard gate violation)", file=sys.stderr)
     sys.exit(5)
 
+# gate=code 固有の形の警告 (exit code は変えない)。
+# code-gate の auto-fix loop は must_fix を break 条件に使うため、
+# これが無い / iter_history の形が崩れていると収束判定が沈黙して壊れる。
+if v["gate"] == "code":
+    if "must_fix" not in sc:
+        print("verdict_validate: warn: gate=code だが severity_counts.must_fix が無い "
+              "(auto-fix loop の break 条件が評価できない)", file=sys.stderr)
+    ih = v.get("iter_history")
+    if not isinstance(ih, list) or not ih:
+        print("verdict_validate: warn: gate=code だが iter_history が空 / 配列でない", file=sys.stderr)
+    else:
+        bad = [i for i, e in enumerate(ih)
+               if not isinstance(e, dict)
+               or not isinstance(e.get("iter"), int)
+               or not isinstance(e.get("must_fix"), int)]
+        if bad:
+            print(f"verdict_validate: warn: iter_history[{bad}] が {{iter:int, must_fix:int}} の形でない",
+                  file=sys.stderr)
+
 print(f"verdict_validate: OK (gate={v['gate']}, verdict={v['verdict']}, critical={sc['critical']})")
 sys.exit(0)
 PYEOF
 }
 
+# <verdict_path> → 次の段に進んでよいかの判定 (hard gate)
+#
+# **verdict_validate とは役割が違う。** あちらは schema 検査であり、
+# FIX_REQUIRED を正当な verdict として exit 0 で通す。
+# 「gate を通ったか」を判定するのは常に本関数である。
+#
+# exit: 0 = 進んでよい / 5 = gate hard-stop / 2,3 = schema・file の問題
+gate_common::verdict_require_pass() {
+  local verdict_path="${1:?verdict_path required}"
+
+  gate_common::verdict_validate "$verdict_path" >/dev/null || return $?
+
+  python3 - "$verdict_path" <<'PYEOF'
+import json, sys
+with open(sys.argv[1], "r", encoding="utf-8") as fh:
+    v = json.load(fh)
+sc = v["severity_counts"]
+problems = []
+if v["verdict"] != "PASS":
+    problems.append(f"verdict={v['verdict']} (PASS ではない)")
+if sc["critical"] > 0:
+    problems.append(f"critical={sc['critical']}")
+if v["gate"] == "code" and isinstance(sc.get("must_fix"), int) and sc["must_fix"] > 0:
+    problems.append(f"must_fix={sc['must_fix']}")
+if problems:
+    print("verdict_require_pass: gate hard-stop — " + " / ".join(problems), file=sys.stderr)
+    sys.exit(5)
+print(f"verdict_require_pass: OK (gate={v['gate']}, verdict=PASS, critical=0)")
+sys.exit(0)
+PYEOF
+}
+
 # ═════════════════════════════════════════════════════════════════════
-# § 6. agents registry validation (resolves C-1-b)
+# § 6. agents registry validation
 # ═════════════════════════════════════════════════════════════════════
 
 _GC_REGISTRY_PATH=".specify/.agents-registry.yaml"
@@ -908,7 +1039,7 @@ PYEOF
 }
 
 # ═════════════════════════════════════════════════════════════════════
-# § 7. timeout-bounded subprocess (resolves D-11)
+# § 7. timeout-bounded subprocess
 # ═════════════════════════════════════════════════════════════════════
 #
 # 使い方:
@@ -967,14 +1098,20 @@ gate_common::run_with_timeout() {
 }
 
 # ═════════════════════════════════════════════════════════════════════
-# § 8. UTF-8 grapheme-aware truncation (resolves C-3-f)
+# § 8. UTF-8 grapheme-aware truncation
 # ═════════════════════════════════════════════════════════════════════
 #
 # Conventional Commits subject の 50 byte 上限 (NOT char)、grapheme cluster 境界尊重、
 # 末尾に "…" を付加 (truncate されたとき)。
 
 gate_common::truncate_subject() {
-  local text="${1:?text required}"
+  # **`${1:?}` を使ってはならない。** あれは空文字も "unset" として扱い、
+  # 呼び出し元の非対話シェルを落とす。空 title は正当な入力として空を返す。
+  if [ "$#" -lt 1 ]; then
+    _gc::err "truncate_subject: text argument required"
+    return 2
+  fi
+  local text="$1"
   local cap="${2:-50}"
 
   if [ -z "$text" ]; then
@@ -1058,10 +1195,12 @@ if [ "${BASH_SOURCE[0]:-}" = "${0}" ]; then
   cmd="${1:-help}"
   shift || true
   case "$cmd" in
-    help|-h|--help)        gate_common::usage ;;
+    help|-h|--help|usage)  gate_common::usage ;;
     version)               gate_common::version ;;
     verdict-validate)      gate_common::verdict_validate "$@" ;;
+    verdict-require-pass)  gate_common::verdict_require_pass "$@" ;;
     verdict-emit)          gate_common::verdict_emit "$@" ;;
+    tasks-complete-check)  gate_common::tasks_complete_check "$@" ;;
     truncate-subject)      gate_common::truncate_subject "$@" ;;
     cascade-enforce)       gate_common::cascade_enforce "$@" ;;
     viewpoint-coverage)    gate_common::viewpoint_coverage_check "$@" ;;

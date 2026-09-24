@@ -1,13 +1,14 @@
 ---
 name: cl-done
-description: PR 提出の最終 wrapper。6-stage gate (tasks 100% / code-gate PASS / pr-gate Critical=0 / format / commit / push / PR create) を順に検証・実行する。外部チケット (Linear / GitHub Issue) との連携も担当。status は reviewing → completed に遷移。
+description: PR を提出する。tasks 100% / code-gate PASS / pr-gate Critical=0 を検証し、format → commit → push → PR create を実行して status を reviewing → completed に遷移させる。
+argument-hint: [spec_dir]
 disable-model-invocation: true
 allowed-tools: Read Write Edit Bash Glob Grep AskUserQuestion
 ---
 
 # cl-done
 
-PR 提出の最終 wrapper。`/cl-pr-gate` PASS 後に手動起動。**6-stage gate** を順に検証・実行し、すべて成功で `status: reviewing → completed` に遷移。
+PR 提出の最終 wrapper。`/cl-pr-gate` PASS 後に手動起動。以下の stage を順に検証・実行し、すべて成功で `status: reviewing → completed` に遷移する。
 
 ## When to invoke
 
@@ -28,7 +29,14 @@ PR 提出の最終 wrapper。`/cl-pr-gate` PASS 後に手動起動。**6-stage g
 source .specify/scripts/gate-common.sh
 gate_common::phase0_check_repo || exit 1
 spec_dir=$(gate_common::phase0_resolve_spec_dir "${1:-}") || exit 2
-gate_common::phase0_check_status "$spec_dir" "reviewing" || exit 1
+
+# **completed を先に判定する。** `phase0_check_status "reviewing"` だけを掛けると、
+# 二重実行時にユーザが受け取るのは冪等性の案内ではなく status mismatch エラーになる。
+current=$(gate_common::phase0_check_status "$spec_dir" "reviewing,completed") || exit 1
+if [ "$current" = "completed" ]; then
+  echo "既に完了済です ($spec_dir)。PR の再作成は 'gh pr edit' で手動に行ってください。"
+  exit 0
+fi
 ```
 
 ### Stage 1: tasks.md 100% 検証
@@ -41,22 +49,22 @@ unchecked=$(grep -cE '^\s*- \[ \]' "$spec_dir/tasks.md")
 ### Stage 2: code-gate verdict 確認 (machine-checkable)
 
 ```bash
-gate_common::verdict_validate "$spec_dir/.gate-verdict-code.json"
-rc=$?  # 0 = PASS, 5 = hard-gate violation, 3 = missing
-[ "$rc" -eq 0 ] || halt
+gate_common::verdict_require_pass "$spec_dir/.gate-verdict-code.json"
+rc=$?  # 0 = PASS / 5 = gate hard-stop / 3 = missing / 2 = schema NG
+[ "$rc" -eq 0 ] || halt "code-gate が PASS していません"
 ```
 
-### Stage 3: pr-gate verdict 確認 (hard gate、resolves C-4-b)
+**`verdict_validate` を使ってはならない。** あれは schema 検査であり、`FIX_REQUIRED` を正当な verdict として exit 0 で通す。「gate を通ったか」の判定は `verdict_require_pass` だけが行う。
+
+### Stage 3: pr-gate verdict 確認 (hard gate)
 
 ```bash
-gate_common::verdict_validate "$spec_dir/.gate-verdict-pr.json"
+gate_common::verdict_require_pass "$spec_dir/.gate-verdict-pr.json"
 rc=$?
 [ "$rc" -eq 0 ] || halt "/cl-pr-gate を再実行して verdict=PASS かつ critical=0 にしてください"
 ```
 
-verdict 検証で `severity_counts.critical > 0` または `verdict != "PASS"` は exit 5 で halt。
-
-**`--defer-remaining` 経路は撤廃済** (decision #2)。Critical が残っている場合は別 spec / ADR + spec 範囲調整 を経て再度 pr-gate を通す。本 stage で defer による done 通過は不可能。
+`verdict_require_pass` は `verdict != "PASS"` / `critical > 0` のいずれでも exit 5 を返す。**Critical を残したまま done を通す経路は存在しない。** Critical が残っている場合は ADR 起票 + spec 範囲調整を経て再度 pr-gate を通す。
 
 ### Stage 4: Format
 
@@ -84,20 +92,8 @@ format 後に diff が出ていれば AskUserQuestion で「format 結果を含�
    ```
    - `<type>`: feat / fix / refactor / chore (spec.md frontmatter or AskUserQuestion で決定)
    - `<scope>`: spec.md frontmatter `domain` 値
-   - `<subject>`: spec.md title から **50 byte (NOT char) cap、UTF-8 grapheme cluster aware** で切断 (resolves C-3-f / item 6)
-
-**Truncation アルゴリズム** (gate-common.sh 委譲):
-
-```bash
-subject=$(gate_common::truncate_subject "$title" 50)
-```
-
-実装詳細:
-  1. byte 長 = `printf '%s' "$title" | wc -c`
-  2. <= 50 ならそのまま
-  3. > 50 → grapheme cluster boundary を尊重した上で 50-3 byte (= 47 byte) まで切詰し末尾に `…` (U+2026、3 byte) を付加
-  4. truncate 後の末尾空白 / 句読点 (` ,.;:、。 `) は trim
-  5. python3 `regex` パッケージ > perl `\X` > iconv fallback の順で grapheme 境界を判定
+   - `<subject>`: spec.md title を **`gate_common::truncate_subject "$title" 50`** に通す。
+     **cap は 50 byte であって 50 文字ではない。** 自前で切らずに必ずこの関数を使う
 
 4. `git commit` 実行 (pre-commit hook が動く)
 
@@ -174,10 +170,10 @@ bash .specify/scripts/status-transition.sh \
 
 ## Acceptance criteria
 
-1. すべての 6 stage が PASS している
+1. すべての stage が PASS している
 2. Stage 3 で `.gate-verdict-pr.json` が schema validation 通過 + critical=0 + verdict=PASS (hard gate)
 3. PR が作成された URL が表示
 4. spec.md frontmatter `status` が `completed` に遷移 (status-transition.sh --gate-transition 経由)
 5. (Linear/Issue 連携指定時) コメントが投稿されたか warning で明示
-6. commit subject が 50 byte 以内、UTF-8 grapheme boundary 尊重で切断、末尾 `…` (truncate 発生時)
-7. `--defer-remaining` ルート不在 — Critical 残存で done を通す経路がない
+6. commit subject が `gate_common::truncate_subject` 経由で 50 byte 以内に収まっている
+7. Critical 残存で done を通す経路がない

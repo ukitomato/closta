@@ -12,7 +12,7 @@
     "design_gate_failed": "Design Gate FIX_REQUIRED — Critical 指摘を解消してから再実行",
     "code_gate_passed": "Code Gate PASS — PR レビュー段階に進めます",
     "code_gate_failed": "Code Gate MUST_FIX — auto-fix loop を最大 3 回試行",
-    "pr_gate_passed": "PR Gate Critical=0 — /spec-gate.done を実行できます",
+    "pr_gate_passed": "PR Gate Critical=0 — /cl-done を実行できます",
     "pr_gate_failed": "PR Gate Critical 残あり — 修正後に再 review"
   },
   "review": {

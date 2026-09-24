@@ -60,6 +60,10 @@ desktop.ini
 # spec-gate の --force 退避ファイル
 *.bak.*
 
+# skills インストーラが .claude/skills/ と同じ内容を書き出すミラー。
+# 読み手がいないので追跡しない (再生成されても差分に出ない)。
+.agents/
+
 # テストが作る一時ディレクトリ
 tests/.tmp/
 
@@ -69,8 +73,14 @@ src/**/__rulecheck__/
 # ---- gate が生成する世代とバックアップ ----
 # gate は iteration ごとの生 output と、上書き前のバックアップをディスクに残す。
 # リポジトリに要るのは**最終版だけ**である (`analyze.md` / `design-gate.md` /
-# `<reviewer>.md` / `.gate-verdict-<gate>.json`)。
+# `<reviewer>.<gate>.md` / `.gate-verdict-<gate>.json`)。
 # 世代を追跡すると、1 feature あたり数十ファイルが恒久的に積む。
+#
+# **round / iter を跨いで必要な情報は、追跡される最終版の中に持たせる。**
+# pr-gate の Round N-1 引継ぎと convergence 判定は `.gate-verdict-pr.json` の
+# `round_history[]` から引く (下の `*.round[0-9]*` で snapshot は追跡されないため、
+# snapshot を一次情報にすると clone 直後に round が 1 に戻る)。
+# code-gate の収束判定は `.gate-verdict-code.json` の `iter_history[]` から引く。
 specs/**/*.bak
 specs/**/*.round[0-9]*
 specs/**/*-round[0-9]*

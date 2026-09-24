@@ -1,6 +1,7 @@
 ---
 name: cl-implement
-description: tasks.md に従い実装を実行する wrapper。`/speckit.implement` を内部委譲しつつ、targets=both の BE→FE order・touched-files tracking・tasks.md 100% checkbox 検証・完了後 `/cl-code-gate` の auto-chain を本 wrapper が担当する。
+description: tasks.md に従い実装を実行する。touched-files を記録し、tasks.md の checkbox 100% を検証して `/cl-code-gate` へ auto-chain する。
+argument-hint: [spec_dir]
 disable-model-invocation: true
 allowed-tools: Read Write Edit Bash Glob Grep Agent AskUserQuestion
 ---
@@ -34,14 +35,17 @@ spec_dir=$(gate_common::phase0_resolve_spec_dir "${1:-}") || exit 2
 gate_common::phase0_check_status "$spec_dir" "implementing" || exit 1
 gate_common::phase0_check_charter "$spec_dir" || exit 1
 # design-gate verdict が PASS であること
-gate_common::verdict_validate "$spec_dir/.gate-verdict-design.json" || halt "/cl-design-gate PASS が必要"
+# **verdict_validate ではなく verdict_require_pass。** 前者は FIX_REQUIRED を
+# 正当な verdict として exit 0 で通すので、gate を通っていない spec で実装が始まる。
+gate_common::verdict_require_pass "$spec_dir/.gate-verdict-design.json" \
+  || halt "/cl-design-gate が PASS していません"
 ```
 
 1. spec_dir 解決
 2. `<spec_dir>/spec.md` の frontmatter:
    - `status: implementing` であること (異なれば halt with "/cl-design-gate で gate 通過してから")
    - `targets` 値を取得 (frontend / backend / both)
-3. `<spec_dir>/.gate-verdict-design.json` の verdict=PASS + critical=0 を `verdict_validate` で確認
+3. `<spec_dir>/.gate-verdict-design.json` の verdict=PASS + critical=0 を `verdict_require_pass` で確認
 4. `<spec_dir>/tasks.md` の checkbox がすべて `[ ]` (未着手) であることを確認 (再開なら `[x]` 混在 OK)
 
 ### Phase 1: Implementation order の決定
@@ -72,32 +76,40 @@ gate_common::verdict_validate "$spec_dir/.gate-verdict-design.json" || halt "/cl
 echo "$file_path" >> "$spec_dir/touched-files.txt"
 ```
 
-実装完了後 `sort -u` で重複排除。`<spec_dir>/touched-files.txt` は次の `code-gate` で diff scope の参考に使う。
+重複排除 (`sort -u`) と非空検証は **Phase 4 で行う**。`<spec_dir>/touched-files.txt` は次の `code-gate` が diff と intersect して scope を決めるのに使う。
 
-### Phase 4: tasks.md 100% 検証
+### Phase 4: tasks.md 100% 検証 + touched-files.txt 非空検証
 
 ```bash
-unchecked=$(grep -cE '^\s*- \[ \]' "$spec_dir/tasks.md" || echo 0)
-total=$(grep -cE '^\s*- \[[ x]\]' "$spec_dir/tasks.md")
+gate_common::tasks_complete_check "$spec_dir" \
+  || halt "未完了タスクが残っています (上の一覧を参照)。手動で対処してから再実行"
+
+# **touched-files.txt が非空であることをここで検証する。**
+# 空のまま code-gate に渡すと Phase 1 の scope が空集合になり、
+# 検査 0 件のまま PASS する経路が開く。
+sort -u -o "$spec_dir/touched-files.txt" "$spec_dir/touched-files.txt"
+[ -s "$spec_dir/touched-files.txt" ] \
+  || halt "touched-files.txt が空です。Phase 3 の記録が漏れています"
 ```
 
-- `unchecked > 0` → halt with "未完了タスクが残っています: <list>。手動で対処してから再実行"
-- `unchecked == 0` → 次へ
+- 未完了タスクあり → halt
+- `touched-files.txt` が空 → halt
+- 両方 OK → 次へ
 
 ### Phase 5: `/cl-code-gate` auto-chain
 
-実装完了後、本 wrapper が自動的に `/cl-code-gate <spec_dir>` を起動する (auto-chain は default ON、**`--no-auto-chain` で skip 可能** — flag 名統一、resolves item 7)。
+実装完了後、本 wrapper が自動的に `/cl-code-gate <spec_dir>` を起動する (auto-chain は default ON、**`--no-auto-chain` で skip 可能**)。
 
 auto-chain 中の status 遷移は code-gate 側が担当。本 skill の責務は implement までで完了。
 
-### code-gate との結合点 (resolves item 7)
+### code-gate との結合点
 
 - **受け渡し artifact**:
   - `<spec_dir>/touched-files.txt` (sort -u 済) — code-gate Phase 1 で diff_files ∩ touched_files として使用
   - spec.md frontmatter status=implementing — code-gate が validates
   - tasks.md 全 `[x]` — code-gate が validates
 - **受け渡し guarantee**:
-  - `touched-files.txt` は **必ず非空** (本 Phase 4 で検証)
+  - `touched-files.txt` は **必ず非空、かつ `sort -u` 済** (Phase 4 で検証)
   - implementer が code-gate の auto-fix で追加修正したファイルは code-gate 内 implementer subagent が `touched-files.txt` に再追加 (重複は排除)
 - **結合の責務境界**:
   - implement: 「機能を成立させる」までを保証
@@ -133,4 +145,4 @@ auto-chain 中の status 遷移は code-gate 側が担当。本 skill の責務�
 3. spec.md frontmatter `status` が `implementing` (code-gate auto-chain 前) のまま
 4. ビルド / lint / test に明らかな breaking がない (code-gate でより詳細にチェックされる)
 5. auto-chain ON ならば `/cl-code-gate` が起動された
-6. `--no-auto-chain` 指定時は code-gate を起動せず status: implementing で完了する (旧 `--no-auto-gate` は deprecation warning 付き acceptance、次 release で削除)
+6. `--no-auto-chain` 指定時は code-gate を起動せず status: implementing で完了する
