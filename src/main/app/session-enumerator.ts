@@ -162,6 +162,19 @@ export function buildRequestLine(
   }
 }
 
+/**
+ * 実行中要求の合流鍵 (pr-gate Round 5 / PB4-002)。
+ *
+ * **対象と scope の組**で合流させる。scope が違えば返す件数が違うので、
+ * `page` の結果を `all` の呼び出し元に渡してはならない。
+ * 内部 Map 専用で境界を渡らないため区切りは自由。
+ */
+function inflightKey(request: EnumerationRequest): string {
+  const scope = request.scope
+  const scopePart = scope.kind === 'all' ? 'all' : `page:${scope.limit}:${scope.offset}`
+  return `${request.target.key}\u0000${scopePart}`
+}
+
 export interface SessionEnumeratorHandle extends SessionEnumerator {
   /**
    * 常駐プロセスを先に起こす (AD-030 §6)。
@@ -184,7 +197,14 @@ export function createSessionEnumerator(deps: SessionEnumeratorDeps): SessionEnu
   const cooldownMs = deps.cooldownMs ?? ENUMERATION_COOLDOWN_MS
   const maxCrashes = deps.maxCrashes ?? MAX_CONSECUTIVE_CRASHES
 
-  /** 実行中の要求。**同じ対象への並行要求はここに合流する** (C-6)。 */
+  /**
+   * 実行中の要求。**同じ対象への同じ scope の並行要求だけがここに合流する**
+   * (C-6 / pr-gate Round 5 / PB4-002)。
+   *
+   * 鍵に scope を含めないと、飛行中の `page` 要求に `all` 要求が合流し、
+   * **先頭ページだけの結果が `all` として `complete: true` で確定**した
+   * (FR-037 / FR-004 / SC-006 を破る)。鍵は内部 Map 専用で境界を渡らない。
+   */
   const inflight = new Map<string, Promise<EnumerationResult>>()
   /** 対象ごとの最終要求時刻。逐次の連打の間隔を測る。 */
   const lastStartedAt = new Map<string, number>()
@@ -493,13 +513,14 @@ export function createSessionEnumerator(deps: SessionEnumeratorDeps): SessionEnu
       const denied = checkLaunchAllowed(request)
       if (denied !== null) return failure(denied)
 
-      const existing = inflight.get(request.target.key)
+      const key = inflightKey(request)
+      const existing = inflight.get(key)
       if (existing !== undefined) return existing
 
       const promise = start(request).finally(() => {
-        inflight.delete(request.target.key)
+        inflight.delete(key)
       })
-      inflight.set(request.target.key, promise)
+      inflight.set(key, promise)
       return promise
     },
 

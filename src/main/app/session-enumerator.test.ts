@@ -396,6 +396,30 @@ describe('createSessionEnumerator', () => {
     expect(a).toEqual(b)
   })
 
+  it('scope が違う並行要求は束ねない (pr-gate Round 5 / PB4-002)', async () => {
+    /*
+     * **`page` と `all` を合流させない。** 鍵が `target.key` だけだと、飛行中の
+     * `page` 要求に `all` 要求が乗り、先頭ページだけの結果が `all` として返る。
+     * 呼び出し側は `complete = done && scope.kind === 'all'` を立てるので、
+     * 先頭 50 件のまま `complete: true` になる (FR-037 / FR-004 / SC-006 を破る)。
+     */
+    const launcher = fakeLauncher()
+    const enumerator = createSessionEnumerator(deps(launcher))
+
+    await Promise.all([
+      enumerator.enumerate(
+        request(hostTarget(), null, { scope: { kind: 'page', limit: 50, offset: 0 } })
+      ),
+      enumerator.enumerate(request(hostTarget(), null, { scope: { kind: 'all' } }))
+    ])
+
+    /* **2 本送られる。** 同じ対象でも scope が違えば別要求。 */
+    const sent = launcher.workers.flatMap((w) => w.received)
+    expect(sent).toHaveLength(2)
+    const scopes = sent.map((line) => JSON.parse(line).scope.kind).sort()
+    expect(scopes).toEqual(['all', 'page'])
+  })
+
   it('逐次の連打に最小間隔を掛ける (C-6)', async () => {
     const waited: number[] = []
     const launcher = fakeLauncher()

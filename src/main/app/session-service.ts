@@ -234,20 +234,35 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
    * 同じ対象へ子プロセスが重なる (列挙器の束ねが効くのは同じ対象への並行要求だけで、
    * ここは所在をまたぐ)。
    */
-  let completing = false
-
   /** 実行中の先頭ページ取得。**完了前の 2 本目はここに合流する。** */
   let firstPage: Promise<SessionIndexDTO> | null = null
 
+  /**
+   * 実行中の全件取得 (`{ kind: 'all' }`)。**背景補完と再取得の両方がここに合流する**
+   * (pr-gate Round 5 / PB4-003)。
+   *
+   * `refresh()` が `list()` 進行中に並走したり連打されたりすると、探索相
+   * (`finder.hostTarget()` / `wslTargets()` の UNC `readdir`) は列挙器の cooldown を
+   * 通らないため押した回数だけ走り、後から終わった古い取得が現在値を上書きしうる。
+   * 全件取得を 1 本に絞ることで、並行する探索 I/O と commit の競合を消す。
+   */
+  let allInFlight: Promise<void> | null = null
+
+  function fetchAllOnce(): Promise<void> {
+    if (allInFlight !== null) return allInFlight
+    allInFlight = deps
+      .measure('list-sessions-all', () => fetchAll({ kind: 'all' }))
+      .then(() => {})
+      .finally(() => {
+        allInFlight = null
+      })
+    return allInFlight
+  }
+
   async function completeInBackground(): Promise<void> {
-    if (completing || complete) return
-    completing = true
-    try {
-      await deps.measure('list-sessions-all', () => fetchAll({ kind: 'all' }))
-      publish()
-    } finally {
-      completing = false
-    }
+    if (complete) return
+    await fetchAllOnce()
+    publish()
   }
 
   function snapshot(): SessionIndexDTO {
@@ -660,8 +675,13 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
     },
 
     async refresh(): Promise<SessionIndexDTO> {
-      // **置き換えである** (FR-035)。前回の結果とマージしない。
-      await deps.measure('list-sessions-all', () => fetchAll({ kind: 'all' }))
+      /*
+       * **置き換えである** (FR-035)。前回の結果とマージしない。
+       * **全件取得を 1 本に合流させる** (pr-gate Round 5 / PB4-003) —
+       * 連打や `list()` との並走で探索相の UNC I/O が重ならないようにする。
+       * 飛行中の取得があればそれに乗り、無ければ新しく起こす。
+       */
+      await fetchAllOnce()
       return publish()
     },
 

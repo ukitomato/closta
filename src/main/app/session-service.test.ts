@@ -450,6 +450,43 @@ describe('createSessionService — list / refresh', () => {
     expect(ids).toEqual(['a'])
   })
 
+  it('並行 refresh は探索相を 1 本に合流させる (pr-gate Round 5 / PB4-003)', async () => {
+    /*
+     * **押すたびに探索 (UNC readdir) が重ならない。** 鍵は探索相 (`finder.hostTarget`)
+     * が列挙器の cooldown を通らないこと。並行 refresh が別々に fetchAll を走らせると
+     * 押した回数だけ UNC I/O が飛ぶ。全件取得を 1 本に合流させて防ぐ。
+     */
+    const target = hostTarget()
+    let hostCalls = 0
+    let release = (): void => {}
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const finder: EnumerationTargetFinder = {
+      async hostTarget() {
+        hostCalls += 1
+        await gate
+        return discovery([target])
+      },
+      async wslTargets() {
+        return discovery([])
+      }
+    }
+    const enumerator = fakeEnumerator({
+      [target.key]: { ok: true, sessions: [record('a')], truncated: false }
+    })
+    const service = createSessionService(deps({ finder, enumerator }))
+
+    const a = service.refresh()
+    const b = service.refresh()
+    await Promise.resolve()
+    release()
+    await Promise.all([a, b])
+
+    /* **探索は 1 回だけ。** 2 本目は飛行中の取得に合流した。 */
+    expect(hostCalls).toBe(1)
+  })
+
   it('打ち切りを黙って隠さない (FR-038)', async () => {
     const target = hostTarget()
     const service = createSessionService(
