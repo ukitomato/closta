@@ -16,7 +16,7 @@ import {
   ReasoningText,
   ReasoningTrigger,
 } from "@/components/assistant-ui/elements/reasoning.aui";
-import { ToolFallback } from "@/components/assistant-ui/elements/tool-fallback.aui";
+import { ToolDisplay } from "@/components/assistant-ui/elements/tool-registry.aui";
 import {
   ToolGroupContent,
   ToolGroupRoot,
@@ -612,7 +612,10 @@ const MessageError: FC = () => {
 
 const AssistantMessage: FC = () => {
   const {
-    ToolFallback: ToolFallbackComponent = ToolFallback,
+    // R-4: 既定を toolName dispatcher (ToolDisplay) にする。未対応 tool は内部で ToolFallback に落ちる
+    // (FE-023 / tool-registry.aui.tsx)。**この slot を override すると 7 種の専用表示が dispatcher ごと
+    // 置換される** (R-4 の ChatScreen は override しない。design-gate PR-L-3)。
+    ToolFallback: ToolFallbackComponent = ToolDisplay,
     ToolGroup,
     ReasoningGroup,
   } = useContext(ThreadComponentsContext);

@@ -19,11 +19,24 @@ export type TranscriptPartDTO =
       readonly type: 'tool-call'
       readonly toolCallId: string
       readonly toolName: string
-      /** 入力を JSON 文字列で運ぶ (fallback 表示がそのまま出す)。パース失敗時は生文字列。 */
+      /**
+       * 入力を JSON 文字列で運ぶ (fallback 表示がそのまま出す)。パース失敗時は生文字列。
+       * **R-4: `sanitizeBody` (bidi/C1 除去 + byte 上限) 済み** — 5 専用表示の主コンテンツ (command / old-new /
+       * content / plan / prompt) が argsText 由来のため、bidi 表示偽装と巨大 args の DoS を取得プロセス側で塞ぐ
+       * (R-4 / FR-012 / design-gate H-1)。
+       */
       readonly argsText: string
       /** tool_result 本文 (サニタイズ済み)。未応答の tool_use は `null`。 */
       readonly result: string | null
       readonly isError: boolean
+      /** argsText または result が本文上限で切り詰められたか (R-4 / FR-017 / design-gate H-2)。 */
+      readonly truncated: boolean
+      /**
+       * subagent (Task) 配下メッセージの入れ子 (R-4 / FR-005 / US-2)。`parent_tool_use_id` == 当該 Task の
+       * `tool_use.id` で対応づく (research R-02)。Task 以外・非 subagent の tool は空配列。
+       * 深さ打ち切りと循環検出は `transcript.ts` の純粋関数が行う (data-model §4)。
+       */
+      readonly children: readonly TranscriptMessageDTO[]
     }
   | { readonly type: 'image'; readonly url: string }
   | { readonly type: 'file'; readonly filename: string; readonly text: string }
@@ -68,7 +81,16 @@ export type TranscriptFrameDTO =
 export const TRANSCRIPT_PART_FIELDS = {
   text: ['type', 'text'],
   reasoning: ['type', 'text'],
-  'tool-call': ['type', 'toolCallId', 'toolName', 'argsText', 'result', 'isError'],
+  'tool-call': [
+    'type',
+    'toolCallId',
+    'toolName',
+    'argsText',
+    'result',
+    'isError',
+    'truncated',
+    'children'
+  ],
   image: ['type', 'url'],
   file: ['type', 'filename', 'text'],
   divider: ['type', 'label']

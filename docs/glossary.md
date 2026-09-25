@@ -135,6 +135,10 @@ total_terms: 31
 - **Definition**: assistant-ui が提供する UI 部品。202 種（2026-09-13 確認）
 - **Domain**: `ui`
 - **Counterexamples**: 自作コンポーネント。同等の element が存在する場合は自作しない（Principle XIII）
+- **Note (R-4)**: Tier A の tool 専用表示名 **Terminal block / Code diff / Todo list / Agent plan** は
+  PLAN.md §4.2 由来の Element 名 (canonical) であり、R-4 で `.aui.tsx` として実装した (登録名は
+  registry の `elements-terminal-block` / `-code-diff` / `-todo-list` / `-agent-plan`。[AD-035](decisions/0035-tier-a-tool-display-and-subagent-nesting.md))。
+  Subagent の入れ子は **Subagent group** を参照
 
 #### **EnumerationTarget（列挙対象）**
 
@@ -326,8 +330,11 @@ total_terms: 31
 - **日本語表記**: セッションメッセージ（型名は原語のまま）
 - **Domain**: `session`（**外部型**。`@anthropic-ai/claude-agent-sdk` の `sdk.d.ts` が正本）
 - **Counterexamples**: **`message` フィールドを検証せずに描画しない。** 会話由来の逐語であり、
-  本文サニタイズと URL allowlist を通す（[AD-034](decisions/0034-transcript-read-path-and-process-boundary.md)）
-- **Ref**: [AD-034](decisions/0034-transcript-read-path-and-process-boundary.md)
+  本文サニタイズと URL allowlist を通す（[AD-034](decisions/0034-transcript-read-path-and-process-boundary.md)）。
+  **`tool_use.input`（argsText）も同様にサニタイズを通す** — R-4 の tool 専用表示の主コンテンツが argsText 由来
+  （[AD-035](decisions/0035-tier-a-tool-display-and-subagent-nesting.md)）
+- **Note**: `parent_tool_use_id` は **Subagent** の一次リンク鍵（R-4 が入れ子表示に使う）
+- **Ref**: [AD-034](decisions/0034-transcript-read-path-and-process-boundary.md) / [AD-035](decisions/0035-tier-a-tool-display-and-subagent-nesting.md)
 
 #### **SessionSummary（セッション要約行）**
 
@@ -341,6 +348,26 @@ total_terms: 31
   "First meaningful user prompt in the session."）。IPC 境界を越える前に
   切り詰めと制御文字の除去を通す
 - **Ref**: [AD-007](decisions/0007-session-source-of-truth-is-claude-code.md) / [AD-029](decisions/0029-session-cwd-origin-classification.md)
+
+#### **Subagent（サブエージェント）**
+
+- **Definition**: Task tool で起動される副エージェント。過去ログでは配下メッセージが **`parent_tool_use_id`**
+  （起動した Task の `tool_use.id`。一次リンク鍵）で親 Task に対応づく。多段時は `parent_agent_id`（親 subagent の
+  agentId）が連鎖鍵。R-4 は親 Task の下に**入れ子**表示する
+- **日本語表記**: サブエージェント
+- **Domain**: `session`（外部概念。`SessionMessage` の親参照フィールド由来）/ 表示は `ui`
+- **Counterexamples**: `parent_agent_id` を一次リンク鍵にしない（それは多段連鎖用で depth-1 では null）。
+  一次鍵は `parent_tool_use_id`（[AD-035](decisions/0035-tier-a-tool-display-and-subagent-nesting.md) / research R-02）
+- **Ref**: [AD-020](decisions/0020-sdk-emitted-message-inventory.md) / [AD-035](decisions/0035-tier-a-tool-display-and-subagent-nesting.md)
+
+#### **Subagent group（サブエージェント入れ子）**
+
+- **Definition**: Task の tool-call part と、その配下 subagent メッセージの**入れ子構造**。`domain` の純粋関数
+  （`toTranscriptMessages`）が id で対応づけ、DTO の `tool-call.children` に積む。canonical はこの語に統一する
+  （spec Key Entities / DTO フィールド名を揃える）
+- **日本語表記**: サブエージェント入れ子
+- **Domain**: `ui`（表示構造）
+- **Ref**: [AD-035](decisions/0035-tier-a-tool-display-and-subagent-nesting.md)
 
 #### **SessionLaunchConfig**
 

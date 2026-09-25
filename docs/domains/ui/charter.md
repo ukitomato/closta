@@ -9,6 +9,7 @@ related_adrs:
   - docs/decisions/0006-supervisor-in-utility-process.md
 related_specs:
   - specs/003-ui-transcript-rendering/spec.md
+  - specs/004-ui-tier-a-tool-display/spec.md
 ---
 
 # Domain Charter: ui
@@ -148,11 +149,16 @@ UI は本来 delivery mechanism であり domain ではない。それでも独�
 
 ## Related Specs
 
-- [R-3: transcript の基本表示](../../../specs/003-ui-transcript-rendering/spec.md) — **着手中**。
+- [R-3: transcript の基本表示](../../../specs/003-ui-transcript-rendering/spec.md) — **完了** (#3)。
   本 domain 初の feature。markdown 本文 / streaming text / scroll anchor / 未定義 tool の fallback /
   数千メッセージの仮想化を実装し、**この時点で見栄えの一次判断を行う** (下記 Principle「見た目の判断を先送りしない」)。
   取得経路とプロセス境界は [AD-034](../../decisions/0034-transcript-read-path-and-process-boundary.md)
-- （残り。R-4 / X-2 / O-2 / O-3 / OPT-pty が本 domain に属する）
+- [R-4: Tier A tool 表示](../../../specs/004-ui-tier-a-tool-display/spec.md) — **着手中**。
+  R-3 の fallback を 7 種の専用表示に置き換える (Bash→Terminal / Edit・Write→Code diff / TodoWrite→Todo /
+  Task→Subagent 入れ子 / ExitPlanMode→Agent plan、Reasoning・Tool group は R-3 済)。element 選定と subagent 入れ子の
+  DTO 表現は [AD-035](../../decisions/0035-tier-a-tool-display-and-subagent-nesting.md)。**M1 最終 feature**。
+  **見栄えの正式な方針確定は SC-010 rubric の実機記入 + R-3 一次判断とあわせた別ステップ** (roadmap の tracked debt)
+- （残り。X-2 / O-2 / O-3 / OPT-pty が本 domain に属する）
 
 ## Open Questions
 
