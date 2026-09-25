@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { toTranscriptMessages, type SessionMessageLike } from './transcript'
+import { MAX_SUBAGENT_DEPTH, toTranscriptMessages, type SessionMessageLike } from './transcript'
 
 /** テスト用の SessionMessage を組む簡易ヘルパ。 */
 function msg(
@@ -174,5 +174,206 @@ describe('toTranscriptMessages', () => {
       { type: 'system', uuid: 's1', message: { subtype: 'something_else' } }
     ])
     expect(out).toHaveLength(0)
+  })
+
+  // ---- R-4: argsText サニタイズ (design-gate H-1/H-2) ----
+
+  it('argsText の双方向制御文字を除去する (R-4 / design-gate H-1)', () => {
+    const out = toTranscriptMessages([
+      msg('assistant', 'a1', [
+        { type: 'tool_use', id: 'tc1', name: 'Bash', input: { command: 'ls‮evil' } }
+      ])
+    ])
+    const toolPart = out[0].parts[0] as { argsText: string }
+    expect(toolPart.argsText).not.toContain('‮')
+    expect(toolPart.argsText).toContain('lsevil')
+  })
+
+  it('巨大な argsText を切り詰め truncated: true を立てる (R-4 / design-gate H-2)', () => {
+    const huge = 'y'.repeat(500_000)
+    const out = toTranscriptMessages([
+      msg('assistant', 'a1', [
+        { type: 'tool_use', id: 'tc1', name: 'Write', input: { content: huge } }
+      ])
+    ])
+    const toolPart = out[0].parts[0] as { argsText: string; truncated: boolean }
+    expect(toolPart.argsText.length).toBeLessThan(huge.length)
+    expect(toolPart.truncated).toBe(true)
+  })
+
+  it('通常サイズの tool-call は truncated: false / children: [] を持つ', () => {
+    const out = toTranscriptMessages([
+      msg('assistant', 'a1', [
+        { type: 'tool_use', id: 'tc1', name: 'Bash', input: { command: 'ls' } }
+      ])
+    ])
+    expect(out[0].parts[0]).toMatchObject({ truncated: false, children: [] })
+  })
+
+  // ---- R-4: subagent 入れ子 (US-2 / SC-004 / SC-009 / contracts C-2) ----
+
+  it('Task 配下の subagent メッセージを親 Task の children に記録順で入れ子にする (SC-004)', () => {
+    const out = toTranscriptMessages([
+      msg('assistant', 'a1', [
+        {
+          type: 'tool_use',
+          id: 'task1',
+          name: 'Task',
+          input: { subagent_type: 'search', prompt: 'find x' }
+        }
+      ]),
+      {
+        type: 'assistant',
+        uuid: 'sa1',
+        parent_tool_use_id: 'task1',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'step 1' }] }
+      },
+      {
+        type: 'assistant',
+        uuid: 'sa2',
+        parent_tool_use_id: 'task1',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'step 2' }] }
+      },
+      msg('user', 'u1', [{ type: 'tool_result', tool_use_id: 'task1', content: 'found 3' }])
+    ])
+    // top-level は Task を持つ a1 のみ。subagent は children に入り、tool_result だけの u1 は出さない。
+    expect(out).toHaveLength(1)
+    const taskPart = out[0].parts[0]
+    expect(taskPart.type).toBe('tool-call')
+    if (taskPart.type !== 'tool-call') return
+    expect(taskPart.toolName).toBe('Task')
+    expect(taskPart.result).toBe('found 3')
+    expect(taskPart.children.map((c) => c.id)).toEqual(['sa1', 'sa2'])
+    expect(taskPart.children[0].parts[0]).toEqual({ type: 'text', text: 'step 1' })
+  })
+
+  it('親 Task を持たない (親不明の) subagent メッセージは欠落させず top-level に置く (孤児)', () => {
+    const out = toTranscriptMessages([
+      {
+        type: 'assistant',
+        uuid: 'sa1',
+        parent_tool_use_id: 'unknown-task',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'orphan subagent' }] }
+      }
+    ])
+    expect(out).toHaveLength(1)
+    expect(out[0].id).toBe('sa1')
+    expect(out[0].parts[0]).toEqual({ type: 'text', text: 'orphan subagent' })
+  })
+
+  it('自己参照 (parent_tool_use_id が自分の tool_use id) は入れ子にせず top-level に置く (循環防止)', () => {
+    const out = toTranscriptMessages([
+      {
+        type: 'assistant',
+        uuid: 'a1',
+        parent_tool_use_id: 'self',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'tool_use', id: 'self', name: 'Bash', input: {} }]
+        }
+      }
+    ])
+    expect(out).toHaveLength(1)
+    expect(out[0].id).toBe('a1')
+    const toolPart = out[0].parts[0]
+    expect(toolPart.type).toBe('tool-call')
+    if (toolPart.type !== 'tool-call') return
+    expect(toolPart.children).toHaveLength(0)
+  })
+
+  it('同一 toolCallId が複数あっても最初の一致に attach する (二重 attach しない。design-gate L-4)', () => {
+    const out = toTranscriptMessages([
+      msg('assistant', 'a1', [{ type: 'tool_use', id: 'dup', name: 'Task', input: {} }]),
+      msg('assistant', 'a2', [{ type: 'tool_use', id: 'dup', name: 'Task', input: {} }]),
+      {
+        type: 'assistant',
+        uuid: 'sa1',
+        parent_tool_use_id: 'dup',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'child' }] }
+      }
+    ])
+    // 最初の Task (a1) の children にのみ入る。a2 の children は空。二重 attach しない。
+    expect(out.map((m) => m.id)).toEqual(['a1', 'a2'])
+    const first = out[0].parts[0]
+    const second = out[1].parts[0]
+    if (first.type !== 'tool-call' || second.type !== 'tool-call') return
+    expect(first.children.map((c) => c.id)).toEqual(['sa1'])
+    expect(second.children).toHaveLength(0)
+  })
+
+  it('多段 subagent (subagent がさらに Task を起動) を parent_tool_use_id で 2 段に組む', () => {
+    const out = toTranscriptMessages([
+      msg('assistant', 'a1', [{ type: 'tool_use', id: 'task1', name: 'Task', input: {} }]),
+      {
+        type: 'assistant',
+        uuid: 'sa1',
+        parent_tool_use_id: 'task1',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'tool_use', id: 'task2', name: 'Task', input: {} }]
+        }
+      },
+      {
+        type: 'assistant',
+        uuid: 'sa2',
+        parent_tool_use_id: 'task2',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'deep' }] }
+      }
+    ])
+    expect(out).toHaveLength(1)
+    const l1 = out[0].parts[0]
+    if (l1.type !== 'tool-call') return
+    expect(l1.children.map((c) => c.id)).toEqual(['sa1'])
+    const l2 = l1.children[0].parts[0]
+    if (l2.type !== 'tool-call') return
+    expect(l2.children.map((c) => c.id)).toEqual(['sa2'])
+    expect(l2.children[0].parts[0]).toEqual({ type: 'text', text: 'deep' })
+  })
+
+  it('subagent が親 Task と隣接していなくても id で入れ子にする (SC-009 隣接非依存。design-gate PR-H-2)', () => {
+    const out = toTranscriptMessages([
+      msg('assistant', 'a1', [
+        { type: 'tool_use', id: 'task1', name: 'Task', input: { subagent_type: 's' } }
+      ]),
+      // 親 Task と subagent の間に無関係な top-level メッセージが挟まる (非隣接)。
+      msg('assistant', 'mid', [{ type: 'text', text: '間に挟まる別メッセージ' }]),
+      {
+        type: 'assistant',
+        uuid: 'sa1',
+        parent_tool_use_id: 'task1',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'child' }] }
+      }
+    ])
+    // top-level は a1 (Task) と mid。sa1 は隣接していなくても task1 の children に入る。
+    expect(out.map((m) => m.id)).toEqual(['a1', 'mid'])
+    const taskPart = out[0].parts[0]
+    if (taskPart.type !== 'tool-call') return
+    expect(taskPart.children.map((c) => c.id)).toEqual(['sa1'])
+  })
+
+  it('MAX_SUBAGENT_DEPTH を超えるネストは欠落させず top-level に平坦化する (深さ有界化。design-gate PR-M-2/PB-L-001)', () => {
+    const records: SessionMessageLike[] = [
+      msg('assistant', 't0', [{ type: 'tool_use', id: 'task0', name: 'Task', input: {} }])
+    ]
+    // task0 の下に MAX_SUBAGENT_DEPTH+2 段の Task チェーンを作る (深さ超過を確実に踏む)。
+    const CHAIN = MAX_SUBAGENT_DEPTH + 2
+    for (let i = 1; i <= CHAIN; i++) {
+      records.push({
+        type: 'assistant',
+        uuid: `sa${i}`,
+        parent_tool_use_id: `task${i - 1}`,
+        message: {
+          role: 'assistant',
+          content: [{ type: 'tool_use', id: `task${i}`, name: 'Task', input: {} }]
+        }
+      })
+    }
+    const out = toTranscriptMessages(records)
+    // 全メッセージが欠落せず現れる (入れ子 + 平坦化のどちらでも tree のどこかに存在する)。
+    const dump = JSON.stringify(out)
+    expect(dump).toContain('"t0"')
+    for (let i = 1; i <= CHAIN; i++) expect(dump).toContain(`"sa${i}"`)
+    // 深さ超過分は top-level に平坦化されるため top-level が 1 件より増える。
+    expect(out.length).toBeGreaterThan(1)
   })
 })

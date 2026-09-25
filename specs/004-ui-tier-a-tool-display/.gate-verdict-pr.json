@@ -1,0 +1,127 @@
+{
+    "gate": "pr",
+    "run": "2026-09-25T16:40:00Z",
+    "spec_dir": "specs/004-ui-tier-a-tool-display",
+    "spec_id": "004-ui-tier-a-tool-display",
+    "round": 2,
+    "base_branch": "main",
+    "diff_stat": {
+        "files": 12,
+        "additions": 890,
+        "deletions": 68
+    },
+    "severity_counts": {
+        "critical": 0,
+        "high": 0,
+        "medium": 0,
+        "low": 0
+    },
+    "surfaced_this_round": {
+        "critical": 0,
+        "high": 0,
+        "medium": 1,
+        "low": 4,
+        "note": "all fixed in-round by invoker + mechanically verified (grep 0 / 34 tests pass / lint 0 / tsc 0)"
+    },
+    "convergence": {
+        "resolved_from_prev": 9,
+        "new_in_round": 5,
+        "unresolved": 0
+    },
+    "inheritance": "full",
+    "round_history": [
+        {
+            "round": 1,
+            "critical": 0,
+            "high": 3,
+            "medium": 3,
+            "low": 3,
+            "convergence": {
+                "resolved_from_prev": 0,
+                "new_in_round": 9,
+                "unresolved": 9
+            },
+            "note": "PASS(Critical=0). 3 High to be fixed before done and re-verified in Round 2. verdict JSON not emitted in Round 1 (context interruption)."
+        },
+        {
+            "round": 2,
+            "critical": 0,
+            "high": 0,
+            "medium": 0,
+            "low": 0,
+            "convergence": {
+                "resolved_from_prev": 9,
+                "new_in_round": 5,
+                "unresolved": 0
+            },
+            "note": "R1 3H/3M/3L all resolved. R2 surfaced 1M+4L fixed in-round + verified."
+        }
+    ],
+    "suppressed_by_code_gate": [],
+    "viewpoint_coverage": {
+        "security-reviewer": "A-H all present",
+        "architecture-reviewer": "A-H all present",
+        "po-reviewer": "A-H all present"
+    },
+    "rule_verification": {
+        "ran": false,
+        "round": 2,
+        "reason": "No rule-definition changes since Round 1 (eslint.config.mjs / .dependency-cruiser.js / scripts/constitution / rule-fixtures unchanged). Round 1 exit 0 confirmed."
+    },
+    "skipped_reviewers": [
+        {
+            "name": "platform-boundary-reviewer",
+            "reason": "R1 was 0C/0H/0M/1L; sole Low (depth-overflow test) resolved. Trigger eslint.config.mjs unchanged since R1; R2 changes (1-line subagent guard / docs / tests) do not touch runtime/IPC/persistence boundaries. R1 verdict inherited."
+        },
+        {
+            "name": "a11y-reviewer",
+            "reason": "reviewers.yml auto_invoke_patterns not matched (elements/** and *.test.tsx excluded)"
+        },
+        {
+            "name": "ux-reviewer",
+            "reason": "same as a11y"
+        },
+        {
+            "name": "database-reviewer",
+            "reason": "migrations/sql/settings/secrets not matched"
+        }
+    ],
+    "tracks": {
+        "security-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 0,
+            "low": 1,
+            "fixed_in_round": 1
+        },
+        "architecture-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 0,
+            "low": 1,
+            "fixed_in_round": 1
+        },
+        "po-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 1,
+            "low": 2,
+            "fixed_in_round": 3
+        },
+        "platform-boundary-reviewer": {
+            "status": "inherited-from-round1",
+            "critical": 0,
+            "high": 0,
+            "medium": 0,
+            "low": 0,
+            "note": "R1 sole Low resolved"
+        }
+    },
+    "verdict": "PASS"
+}

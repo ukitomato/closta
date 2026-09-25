@@ -5,6 +5,7 @@ import type { ThreadMessageLike } from '@assistant-ui/react'
 
 import type { TranscriptMessageDTO } from '@domain/session/transcript-dto'
 import type { FailureReason } from '@domain/session/target'
+import { toTranscriptMessages, type SessionMessageLike } from '@domain/session/transcript'
 
 import { toThreadMessage } from './convert'
 
@@ -41,6 +42,49 @@ function ready(messages: readonly TranscriptMessageDTO[]): void {
   view.messages = messages.map(toThreadMessage)
   view.status = 'ready'
   view.hasSelection = true
+}
+
+/** SessionMessage 相当から domain 変換 (sanitize 含む) を通して ready にする (end-to-end 用)。 */
+function readyFromRecords(records: readonly SessionMessageLike[]): void {
+  view.messages = toTranscriptMessages(records).map(toThreadMessage)
+  view.status = 'ready'
+  view.hasSelection = true
+}
+
+/** 1 つの tool-call を持つ assistant メッセージ DTO を作る (R-4 専用表示テスト用)。 */
+function toolDto(
+  id: string,
+  toolName: string,
+  argsText: string,
+  opts: {
+    result?: string | null
+    isError?: boolean
+    truncated?: boolean
+    children?: readonly TranscriptMessageDTO[]
+  } = {}
+): TranscriptMessageDTO {
+  return {
+    id,
+    role: 'assistant',
+    parts: [
+      {
+        type: 'tool-call',
+        toolCallId: `${id}-c`,
+        toolName,
+        argsText,
+        result: opts.result ?? null,
+        isError: opts.isError ?? false,
+        truncated: opts.truncated ?? false,
+        children: opts.children ?? []
+      }
+    ],
+    createdAt: null
+  }
+}
+
+/** R-3 は tool-call を Tool group に畳む (既定は閉)。専用表示を見るため trigger を展開する (FR-007)。 */
+function expandToolGroups(): void {
+  for (const el of screen.queryAllByText(/\d+ tool calls?/)) fireEvent.click(el)
 }
 
 beforeEach(() => {
@@ -136,7 +180,9 @@ describe('ChatScreen の変換済みメッセージ描画 (順序・fallback)', 
             toolName: 'mystery_tool',
             argsText: '{"q":1}',
             result: 'ok',
-            isError: false
+            isError: false,
+            truncated: false,
+            children: []
           }
         ],
         createdAt: null
@@ -226,5 +272,367 @@ describe('ChatScreen の composer (Principle VIII 回帰)', () => {
      */
     expect(() => fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' })).not.toThrow()
     expect(screen.queryByText('にほんご')).not.toBeInTheDocument()
+  })
+})
+
+describe('R-4 Tier A 専用表示 (FE-029 / SC-001)', () => {
+  it('Bash を Terminal block で表示する (FR-001)', async () => {
+    ready([toolDto('m', 'Bash', '{"command":"ls -la"}', { result: 'out.txt' })])
+    const { container } = render(<ChatScreen />)
+    expandToolGroups()
+    expect(await screen.findByText(/ls -la/)).toBeInTheDocument()
+    expect(container.querySelector('[data-slot="aui_terminal-block"]')).not.toBeNull()
+    expect(container.textContent).toContain('out.txt')
+  })
+
+  it('Edit を Code diff (hunk) で表示する (FR-002)', async () => {
+    ready([
+      toolDto(
+        'm',
+        'Edit',
+        JSON.stringify({
+          file_path: 'src/x.ts',
+          old_string: 'const a = 1',
+          new_string: 'const a = 2'
+        })
+      )
+    ])
+    const { container } = render(<ChatScreen />)
+    expandToolGroups()
+    expect(await screen.findByText(/const a = 1/)).toBeInTheDocument()
+    expect(container.querySelector('[data-slot="aui_code-diff"]')).not.toBeNull()
+    expect(container.textContent).toContain('src/x.ts')
+    expect(container.textContent).toContain('const a = 2')
+  })
+
+  it('Write を Code diff (全行追加) で表示する', async () => {
+    ready([toolDto('m', 'Write', JSON.stringify({ file_path: 'new.ts', content: 'line1\nline2' }))])
+    const { container } = render(<ChatScreen />)
+    expandToolGroups()
+    expect(await screen.findByText(/line1/)).toBeInTheDocument()
+    expect(container.querySelector('[data-slot="aui_code-diff"]')).not.toBeNull()
+    expect(container.textContent).toContain('new.ts')
+  })
+
+  it('TodoWrite を Todo list で status 別マーカー付きで表示する (FR-003 / SC-003)', async () => {
+    ready([
+      toolDto(
+        'm',
+        'TodoWrite',
+        JSON.stringify({
+          todos: [
+            { content: 'A を読む', status: 'completed' },
+            { content: 'B を書く', status: 'in_progress' },
+            { content: 'C を確認', status: 'pending' }
+          ]
+        })
+      )
+    ])
+    const { container } = render(<ChatScreen />)
+    expandToolGroups()
+    expect(await screen.findByText('A を読む')).toBeInTheDocument()
+    expect(container.querySelector('[data-slot="aui_todo-list"]')).not.toBeNull()
+    expect(container.querySelector('[data-status="completed"]')).not.toBeNull()
+    expect(container.querySelector('[data-status="in_progress"]')).not.toBeNull()
+    expect(container.querySelector('[data-status="pending"]')).not.toBeNull()
+  })
+
+  it('TodoWrite の未知 status も生値で欠落なく示す (SC-003)', async () => {
+    ready([
+      toolDto('m', 'TodoWrite', JSON.stringify({ todos: [{ content: 'X', status: 'blocked' }] }))
+    ])
+    const { container } = render(<ChatScreen />)
+    expandToolGroups()
+    expect(await screen.findByText('X')).toBeInTheDocument()
+    expect(container.querySelector('[data-status="blocked"]')).not.toBeNull()
+    expect(container.textContent).toContain('blocked')
+  })
+
+  it('ExitPlanMode を Agent plan で表示する (FR-006)', async () => {
+    ready([toolDto('m', 'ExitPlanMode', JSON.stringify({ plan: '計画本文\n- 手順1\n- 手順2' }))])
+    const { container } = render(<ChatScreen />)
+    expandToolGroups()
+    expect(await screen.findByText(/手順1/)).toBeInTheDocument()
+    expect(container.querySelector('[data-slot="aui_agent-plan"]')).not.toBeNull()
+  })
+
+  it('Task を Subagent で表示する (FR-004)', async () => {
+    ready([
+      toolDto('m', 'Task', JSON.stringify({ subagent_type: 'search', prompt: 'find x' }), {
+        result: '見つかった'
+      })
+    ])
+    const { container } = render(<ChatScreen />)
+    expandToolGroups()
+    expect(await screen.findByText('search')).toBeInTheDocument()
+    expect(container.querySelector('[data-slot="aui_subagent"]')).not.toBeNull()
+    expect(container.textContent).toContain('見つかった')
+  })
+
+  it('未対応 tool は fallback のまま (専用表示に落ちない)', async () => {
+    ready([toolDto('m', 'Grep', JSON.stringify({ pattern: 'foo' }), { result: 'hit' })])
+    const { container } = render(<ChatScreen />)
+    expandToolGroups()
+    expect(await screen.findByText('Grep')).toBeInTheDocument()
+    expect(container.querySelector('[data-slot="aui_terminal-block"]')).toBeNull()
+    expect(container.querySelector('[data-slot="aui_code-diff"]')).toBeNull()
+  })
+})
+
+describe('R-4 subagent 入れ子 (FE-032 / US-2 / SC-004)', () => {
+  it('Task 配下の subagent メッセージを入れ子で示す', async () => {
+    const child: TranscriptMessageDTO = {
+      id: 'sa1',
+      role: 'assistant',
+      parts: [{ type: 'text', text: '子エージェントの作業' }],
+      createdAt: null
+    }
+    ready([
+      toolDto('m', 'Task', JSON.stringify({ subagent_type: 'worker' }), { children: [child] })
+    ])
+    const { container } = render(<ChatScreen />)
+    expandToolGroups()
+    expect(await screen.findByText('子エージェントの作業')).toBeInTheDocument()
+    expect(container.querySelector('[data-slot="aui_subagent"]')).not.toBeNull()
+  })
+})
+
+describe('R-4 堅牢性と XSS 境界 (FE-040/042 / SC-005 / SC-002)', () => {
+  it('壊れた args の Bash は fallback に安全退避する (クラッシュしない)', async () => {
+    ready([toolDto('m', 'Bash', '{bad json', { result: 'x' })])
+    const { container } = render(<ChatScreen />)
+    expandToolGroups()
+    expect(await screen.findByText('Bash')).toBeInTheDocument()
+    expect(container.querySelector('[data-slot="aui_terminal-block"]')).toBeNull()
+  })
+
+  it('Edit の old/new に生 HTML が含まれても要素化されず plain text になる (SC-002)', async () => {
+    ready([
+      toolDto(
+        'm',
+        'Edit',
+        JSON.stringify({
+          file_path: 'x.ts',
+          old_string: 'safe',
+          new_string: '<script>window.__pwned=1</script>'
+        })
+      )
+    ])
+    const { container } = render(<ChatScreen />)
+    expandToolGroups()
+    expect(await screen.findByText(/window\.__pwned/)).toBeInTheDocument()
+    expect(container.querySelector('script')).toBeNull()
+    expect(container.textContent).toContain('<script>')
+  })
+
+  it('domain 変換を通した Bash command の双方向制御文字は DOM に現れない (H-1 end-to-end)', async () => {
+    readyFromRecords([
+      {
+        type: 'assistant',
+        uuid: 'a1',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'tool_use', id: 'tc1', name: 'Bash', input: { command: 'ls‮evil' } }]
+        }
+      }
+    ])
+    const { container } = render(<ChatScreen />)
+    expandToolGroups()
+    expect(await screen.findByText(/lsevil/)).toBeInTheDocument()
+    expect(container.textContent).not.toContain('‮')
+  })
+
+  it('ExitPlanMode の plan 内 javascript: はリンク化されず inert text になる', async () => {
+    ready([toolDto('m', 'ExitPlanMode', JSON.stringify({ plan: 'javascript:alert(1) を実行' }))])
+    const { container } = render(<ChatScreen />)
+    expandToolGroups()
+    await screen.findByText(/javascript:alert/)
+    expect(container.querySelector('[data-slot="aui_agent-plan"] a')).toBeNull()
+  })
+})
+
+describe('R-4 Tool group と専用表示の共存 (FR-007 / US-1 AC-6 / M-4)', () => {
+  it('連続する Bash 専用表示が 1 つの Tool group に畳まれ、展開すると各 Terminal block が出る', async () => {
+    ready([
+      {
+        id: 'm',
+        role: 'assistant',
+        createdAt: null,
+        parts: [
+          {
+            type: 'tool-call',
+            toolCallId: 'c1',
+            toolName: 'Bash',
+            argsText: '{"command":"echo 1"}',
+            result: '1',
+            isError: false,
+            truncated: false,
+            children: []
+          },
+          {
+            type: 'tool-call',
+            toolCallId: 'c2',
+            toolName: 'Bash',
+            argsText: '{"command":"echo 2"}',
+            result: '2',
+            isError: false,
+            truncated: false,
+            children: []
+          }
+        ]
+      }
+    ])
+    const { container } = render(<ChatScreen />)
+    // 連続 tool は 1 グループに畳まれる (R-3 の Tool group)。
+    expect(screen.getByText('2 tool calls')).toBeInTheDocument()
+    expandToolGroups()
+    expect(await screen.findByText(/echo 1/)).toBeInTheDocument()
+    expect(container.querySelectorAll('[data-slot="aui_terminal-block"]').length).toBe(2)
+    expect(container.textContent).toContain('echo 2')
+  })
+})
+
+describe('R-4 内部マーカー注入への耐性 (PR-H-1)', () => {
+  it('Task の argsText に __subagentChildren を仕込んでも偽の入れ子を描画しない', async () => {
+    ready([
+      toolDto(
+        'm',
+        'Task',
+        JSON.stringify({
+          subagent_type: 'search',
+          __subagentChildren: [
+            {
+              id: 'fake',
+              role: 'assistant',
+              parts: [{ type: 'text', text: '捏造された子作業' }],
+              createdAt: null
+            }
+          ]
+        })
+      )
+    ])
+    const { container } = render(<ChatScreen />)
+    expandToolGroups()
+    expect(await screen.findByText('search')).toBeInTheDocument()
+    // convert.ts が __ prefix を strip し信頼 children ([]) を設定するため偽の子は出ない。
+    expect(container.textContent).not.toContain('捏造された子作業')
+  })
+
+  it('Task の argsText に malformed __subagentChildren を仕込んでもクラッシュしない', () => {
+    ready([
+      toolDto(
+        'm',
+        'Task',
+        JSON.stringify({ subagent_type: 's', __subagentChildren: [{}, null, 42] })
+      )
+    ])
+    expect(() => render(<ChatScreen />)).not.toThrow()
+  })
+
+  it('Edit の argsText に __truncated を仕込んでも偽の切り詰めバッジを出さない', async () => {
+    ready([
+      toolDto(
+        'm',
+        'Edit',
+        JSON.stringify({ file_path: 'x.ts', old_string: 'a', new_string: 'b', __truncated: true })
+      )
+    ])
+    const { container } = render(<ChatScreen />)
+    expandToolGroups()
+    expect(await screen.findByText(/x\.ts/)).toBeInTheDocument()
+    expect(container.textContent).not.toContain('切り詰め')
+  })
+})
+
+describe('R-4 巨大入力と edge case (PR-M-3 / PR-M-2 / PR-L-1)', () => {
+  it('巨大な Write args は byte 上限で切り詰められ fallback に退避しクラッシュしない (PR-M-3)', async () => {
+    const huge = 'x'.repeat(300_000)
+    readyFromRecords([
+      {
+        type: 'assistant',
+        uuid: 'a1',
+        message: {
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool_use',
+              id: 'tc1',
+              name: 'Write',
+              input: { file_path: 'big.txt', content: huge }
+            }
+          ]
+        }
+      }
+    ])
+    const { container } = render(<ChatScreen />)
+    expandToolGroups()
+    // argsText が切り詰められ JSON 破損 → parse null → code-diff にならず fallback に退避 (クラッシュしない)。
+    expect(await screen.findByText('Write')).toBeInTheDocument()
+    expect(container.querySelector('[data-slot="aui_code-diff"]')).toBeNull()
+  })
+
+  it('renderer は VISUAL_MAX_DEPTH を超える subagent 入れ子を「省略」で打ち切る (PR-M-2)', async () => {
+    const records: SessionMessageLike[] = [
+      {
+        type: 'assistant',
+        uuid: 't0',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'tool_use', id: 'task0', name: 'Task', input: { subagent_type: 's' } }]
+        }
+      }
+    ]
+    for (let i = 1; i <= 5; i++) {
+      records.push({
+        type: 'assistant',
+        uuid: `sa${i}`,
+        parent_tool_use_id: `task${i - 1}`,
+        message: {
+          role: 'assistant',
+          content: [{ type: 'tool_use', id: `task${i}`, name: 'Task', input: {} }]
+        }
+      })
+    }
+    readyFromRecords(records)
+    const { container } = render(<ChatScreen />)
+    expandToolGroups()
+    expect(await screen.findByText(/省略/)).toBeInTheDocument()
+    expect(container.textContent).toMatch(/省略/)
+  })
+
+  it('TodoWrite の空配列は「項目はありません」を出す (PR-L-1)', async () => {
+    ready([toolDto('m', 'TodoWrite', JSON.stringify({ todos: [] }))])
+    const { container } = render(<ChatScreen />)
+    expandToolGroups()
+    expect(await screen.findByText('項目はありません')).toBeInTheDocument()
+    expect(container.querySelector('[data-slot="aui_todo-list"]')).not.toBeNull()
+  })
+
+  it('toolName は完全一致 — 小文字 bash は専用表示にならず fallback に落ちる (PR-L-1)', async () => {
+    ready([toolDto('m', 'bash', JSON.stringify({ command: 'ls' }), { result: 'x' })])
+    const { container } = render(<ChatScreen />)
+    expandToolGroups()
+    expect(await screen.findByText('bash')).toBeInTheDocument()
+    expect(container.querySelector('[data-slot="aui_terminal-block"]')).toBeNull()
+  })
+
+  it('code-diff は MAX_DIFF_ROWS を超える行を「残り N 行を省略」で折りたたむ (PR-L1 / FR-017)', async () => {
+    const content = Array.from({ length: 250 }, (_, i) => `line ${i}`).join('\n')
+    ready([toolDto('m', 'Write', JSON.stringify({ file_path: 'big.txt', content }))])
+    const { container } = render(<ChatScreen />)
+    expandToolGroups()
+    // 250 行 add → Hunk が 200 行で折りたたみ、残り 50 行を件数表示 (バッジは result 切り詰め用で別経路)。
+    expect(await screen.findByText(/残り 50 行を省略/)).toBeInTheDocument()
+    expect(container.querySelector('[data-slot="aui_code-diff"]')).not.toBeNull()
+  })
+
+  it('subagent の子は VISUAL_MAX_CHILDREN を超えると「以降 N 件を省略」で折りたたむ (PR-L2 / FR-017)', async () => {
+    const children = Array.from({ length: 51 }, (_, i) => textDto(`c${i}`, `child ${i}`))
+    ready([toolDto('m', 'Task', JSON.stringify({ subagent_type: 's' }), { children })])
+    const { container } = render(<ChatScreen />)
+    expandToolGroups()
+    // 1 階層 50 件で打ち切り、51 件目を「以降 1 件を省略」で示す (巨大 inline subagent ログの renderer 保護)。
+    expect(await screen.findByText(/以降 1 件を省略/)).toBeInTheDocument()
+    expect(container.querySelector('[data-slot="aui_subagent"]')).not.toBeNull()
   })
 })

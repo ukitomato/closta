@@ -473,5 +473,27 @@ export default defineConfig(
     rules: {
       'react-hooks/exhaustive-deps': 'error'
     }
+  },
+  {
+    // R-4 の手書き Tier A 表示 (AD-035)。elements/ 配下だが CLI 生成物ではない (code-gate M-001)。
+    // assistant-ui 準拠の整形 (double-quote / semicolon) は保つため `prettier/prettier` は戻さず、
+    // 意味論の番人だけ戻す (thread.aui.tsx と同方針)。
+    files: [
+      'src/renderer/src/components/assistant-ui/elements/terminal-block.aui.tsx',
+      'src/renderer/src/components/assistant-ui/elements/code-diff.aui.tsx',
+      'src/renderer/src/components/assistant-ui/elements/todo-list.aui.tsx',
+      'src/renderer/src/components/assistant-ui/elements/subagent.aui.tsx',
+      'src/renderer/src/components/assistant-ui/elements/agent-plan.aui.tsx',
+      'src/renderer/src/components/assistant-ui/elements/tool-registry.aui.tsx'
+    ],
+    rules: {
+      // `react/prop-types` は戻さない — TS が props を検証済みで、型別名 FC に false-positive を出す
+      // (GENERATED_FILES がこれを off にしている理由そのもの)。意味論の番人だけ戻す。
+      '@typescript-eslint/explicit-function-return-type': 'error',
+      'react-hooks/refs': 'error',
+      'react-hooks/exhaustive-deps': 'error',
+      'react-refresh/only-export-components': 'error',
+      'no-empty': 'error'
+    }
   }
 )

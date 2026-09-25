@@ -23,22 +23,49 @@ function parseArgs(argsText: string): ToolCallArgs {
   }
 }
 
+/**
+ * 会話由来 (untrusted) の args から内部マーカー (`__` prefix) を除去する (design-gate PR-H-1)。
+ *
+ * `__subagentChildren` / `__truncated` は domain が付す**信頼**信号だが、`args` は argsText の parse 結果と
+ * 同じ namespace を共有する。攻撃者が argsText に `__subagentChildren` を仕込むと偽の入れ子を描画できるため、
+ * parse 結果からは常に `__` prefix を剥がし、信頼値だけを後段で明示設定する。
+ */
+function stripInternalKeys(args: ToolCallArgs): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(args ?? {})) {
+    if (!key.startsWith('__')) out[key] = value
+  }
+  return out
+}
+
 function convertPart(part: TranscriptPartDTO): MessagePart {
   switch (part.type) {
     case 'text':
       return { type: 'text', text: part.text }
     case 'reasoning':
       return { type: 'reasoning', text: part.text }
-    case 'tool-call':
+    case 'tool-call': {
+      // subagent 入れ子 (children) と切り詰めフラグは assistant-ui の tool-call part に専用フィールドが無いため
+      // args に載せて Subagent / Code diff 表示へ渡す (R-4 / data-model §5 / design-gate M-N01)。argsText には現れない。
+      // **untrusted の argsText 由来キーから `__` prefix を剥がし、信頼値を必ず明示設定する** — 攻撃者が
+      // argsText に `__subagentChildren` / `__truncated` を仕込んで偽装するのを防ぐ (design-gate PR-H-1)。
+      // DTO の children は JSON-safe だが TS の `ReadonlyJSONValue` に構造的に一致しない (index signature 無し) ため
+      // `unknown` 経由で cast する。runtime は JSON で port2 を渡ってきた値であり安全。
+      const args = {
+        ...stripInternalKeys(parseArgs(part.argsText)),
+        __subagentChildren: part.children,
+        __truncated: part.truncated
+      } as unknown as ToolCallArgs
       return {
         type: 'tool-call',
         toolCallId: part.toolCallId,
         toolName: part.toolName,
-        args: parseArgs(part.argsText),
+        args,
         argsText: part.argsText,
         result: part.result ?? undefined,
         isError: part.isError
       }
+    }
     case 'image':
       return { type: 'image', image: part.url }
     case 'file':

@@ -75,7 +75,7 @@ workspace として扱われていたら `packages:` の有無を先に確認す
 | 1 | R-1 | フォルダ登録とランタイム検出 **(実装完了 / gate 未通過)** | `runtime` | — | SPIKE-8 / SPIKE-9 **完了** |
 | 2 | R-2 | セッション列挙（読み取り専用） | `session` | **R-1 の US-1〜US-3** | SPIKE-1 **完了** |
 | 3 | R-3 | transcript の基本表示 | `ui` | R-2 | SPIKE-2 / SPIKE-14 **完了** |
-| 4 | R-4 | Tier A tool 表示 | `ui` | R-3 + **R-3 の実機一次判断 (下記)** | — |
+| 4 | R-4 | Tier A tool 表示 **(design 完了 / 実装中。spec `004-ui-tier-a-tool-display`)** | `ui` | R-3 + **R-3 の実機一次判断 (下記。tracked debt 化)** | — |
 | — | — | *(SPIKE-9 / SPIKE-13 は R-1 までに実施)* | — | — | — |
 
 **R-3 の完了時点で見栄えの一次判断ができる。** R-4 まで待たない。
@@ -85,6 +85,16 @@ workspace として扱われていたら `packages:` の有無を先に確認す
 > **R-4 (Tier A tool 表示) の spec 着手前に、`quickstart-results.md` の rubric-a/b を実機で埋め「一次判断」結論を記す。**
 > いずれかが NG なら charter「見た目の判断を先送りしない」に従い charter / PLAN.md §4 の見直しを別 task で起票する
 > (R-4 は R-3 の土台の上に積むため、視覚的方向性の確定を R-4 前に置く)。持ち主は R-3 (下記申し送り #7)。
+>
+> **更新 (2026-09-25 / R-4 design-gate C-001)**: R-4 の positioning を緩和し、「M1 完了 / 軸 1 の正式な方針確定」を
+> R-4 done の合否条件にしないと確定した (人間承認 (a))。したがって **R-3 実機一次判断 (rubric-a/b) の記入と
+> 軸 1 の正式確定は R-4 done をブロックしない tracked debt (別ステップ)** である。R-4 の spec/plan/実装は R-3 の
+> 描画基盤 (実在) の上で進めた。R-4 自身の SC-010 rubric (Terminal / Code diff / Todo / Subagent / Agent plan) も
+> 同じ扱い。NG 判定時の charter / PLAN.md §4 見直しは引き続き別 task。
+>
+> **tracked debt (R-4 / design-gate PR-H-3)**: **Agent plan の markdown 整形**。R-4 は plan を plain text で描画する
+> (`MarkdownText` が text-part context 依存で任意文字列を安全に受けられないため。AD-035 D6)。見出し/箇条書きの整形は
+> plan を text part 化する将来課題 (X-1 の live streaming か O-2 の ui-coverage で判断)。security posture (生 HTML 非描画・inert link) は plain text で維持。
 
 #### R-3 への申し送り (pr-gate Round 4 / 2026-09-23)
 
@@ -111,7 +121,9 @@ workspace として扱われていたら `packages:` の有無を先に確認す
   (AD-024 #18。R-3 も composer 送信経路を開けないため未発火)
 - **charter KPI「スクロールの安定」の E2E 計測** — R-3 は Vitest (マウント数 / 位置飛び) + quickstart 実機で暫定代替
 - **Principle IX の到達集合検査** — composition-root から main で評価されるモジュールを導く自動検査
-  (R-3 / [AD-034](decisions/0034-transcript-read-path-and-process-boundary.md) は port transfer の構造検査 + 手動レビューで暫定担保。Constitution v1.2.6)
+  (R-3 / [AD-034](decisions/0034-transcript-read-path-and-process-boundary.md) は port transfer の構造検査 + 手動レビューで暫定担保。Constitution v1.2.6)。
+  **R-4 ([AD-035](decisions/0035-tier-a-tool-display-and-subagent-nesting.md)) は `toTranscriptMessages` に subagent グルーピングを足し変換を重くした** —
+  到達集合検査の優先度判断の材料。取得プロセス側で走る点は不変 (main 非経路)
 
 **Principle XV (i18n) の棚卸しへの申し送り**: `src/main/infra/session/target-finder.ts` の
 `候補 #N` / `名前 (#N)` は **`infra` が生成する日本語**であり、「訳出は `ui`」(FR-031 / FR-047) の例外である。

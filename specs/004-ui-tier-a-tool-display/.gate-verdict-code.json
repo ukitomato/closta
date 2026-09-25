@@ -1,0 +1,30 @@
+{
+  "gate": "code",
+  "run": "2026-09-25",
+  "spec_dir": "specs/004-ui-tier-a-tool-display",
+  "spec_id": "004-ui-tier-a-tool-display",
+  "iter": 1,
+  "severity_counts": { "critical": 0, "high": 0, "medium": 1, "low": 2, "must_fix": 0 },
+  "must_fix_findings": [],
+  "should_fix_findings": [
+    { "id": "M-001", "where": "eslint.config.mjs", "origin": "convention", "message": "手書き .aui.tsx 6 ファイルが GENERATED_FILES 緩和に落ちていた", "resolution": "復元ブロックに追加 + TOOL_DISPLAY 非 export。lint 0 error 確認" },
+    { "id": "L-001", "where": "src/renderer/src/components/assistant-ui/elements/subagent.aui.tsx", "origin": "convention", "message": "可視ラベル Subagent が Principle XV と不整合", "resolution": "ヘッダを サブエージェント に変更" },
+    { "id": "L-002", "where": "elements/*.aui.tsx", "origin": "convention", "message": "サブ要素に data-slot 無し", "resolution": "accepted (非対処。任意・実害なし)" }
+  ],
+  "tracks": {
+    "lint-agent": { "violations": 0, "exit_code": 0, "detectors": ["lint", "typecheck", "depcruise", "check:constitution"] },
+    "test-agent": { "passed": 902, "failed": 0, "exit_code": 0, "scope": "full" },
+    "convention-reviewer": { "viewpoint_missing": [], "cascade_demotions": 0, "lint_input": "lint-agent", "counts": { "critical": 0, "high": 0, "medium": 1, "low": 2 } }
+  },
+  "skipped_reviewers": [
+    { "name": "security-reviewer", "reason": "pr-gate 専任 (code-gate 起動対象外)" },
+    { "name": "architecture-reviewer", "reason": "pr-gate 専任" },
+    { "name": "po-reviewer", "reason": "pr-gate 専任" },
+    { "name": "a11y-reviewer", "reason": "reviewers.yml gates=[pr-gate]" },
+    { "name": "ux-reviewer", "reason": "reviewers.yml gates=[pr-gate]" },
+    { "name": "platform-boundary-reviewer", "reason": "本 code-gate では convention に集約 (design-gate/pr-gate で起動済/起動予定)" }
+  ],
+  "cascade_demotions": 0,
+  "iter_history": [{ "iter": 1, "must_fix": 0, "skipped": 0, "error": 0 }],
+  "verdict": "PASS"
+}

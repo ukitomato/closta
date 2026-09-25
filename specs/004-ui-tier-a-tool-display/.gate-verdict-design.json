@@ -1,0 +1,26 @@
+{
+  "gate": "design",
+  "run": "2026-09-25",
+  "round": 2,
+  "spec_dir": "specs/004-ui-tier-a-tool-display",
+  "spec_id": "004-ui-tier-a-tool-display",
+  "tracks": {
+    "analyze": {"status": "ok", "raw_out": "analyze.round2.md", "viewpoint_missing": null, "cascade_demotions": null, "counts": {"critical": 0, "high": 0, "medium": 2, "low": 2}},
+    "po-reviewer": {"status": "ok", "raw_out": "po-reviewer.design-gate.round2.md", "viewpoint_missing": [], "cascade_demotions": 0, "counts": {"critical": 0, "high": 0, "medium": 1, "low": 1}},
+    "architecture-reviewer": {"status": "ok", "raw_out": "architecture-reviewer.design-gate.round2.md", "viewpoint_missing": [], "cascade_demotions": 0, "counts": {"critical": 0, "high": 0, "medium": 1, "low": 0}},
+    "security-reviewer": {"status": "ok", "raw_out": "security-reviewer.design-gate.round2.md", "viewpoint_missing": [], "cascade_demotions": 0, "counts": {"critical": 0, "high": 0, "medium": 1, "low": 0}},
+    "platform-boundary-reviewer": {"status": "ok", "raw_out": "platform-boundary-reviewer.design-gate.round2.md", "viewpoint_missing": [], "cascade_demotions": 0, "counts": {"critical": 0, "high": 0, "medium": 0, "low": 1}}
+  },
+  "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 1},
+  "note_severity": "Round 2 の Medium/Low は Round 1 fix の partial-apply 残り。design-gate.md の解消表のとおり全て本 Round で解消済み。accepted: A-L-3 (Principle XII vacuous 逐語重複、非 drift の既知 gate item)。",
+  "resolved_from_prev": {"critical": 1, "high": 3},
+  "unresolved_from_prev": {"critical": 0, "high": 0},
+  "new_in_this_run": {"critical": 0, "high": 0},
+  "human_approval_items": {
+    "c001_resolution": "soften positioning (a) — approved by user",
+    "principle_xii_scope": "continue R-3 approved interim ledger — approved",
+    "adr_to_file": "element selection + subagent nesting DTO + tool-UI registration + depth cutoff — adopt (SH-002)",
+    "charter_overview_followup": "apply in implement phase (SH-061)"
+  },
+  "verdict": "PASS"
+}
