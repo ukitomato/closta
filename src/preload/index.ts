@@ -1,6 +1,11 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
-import { CAPABILITY_KEY, IPC_CHANNELS, type ClostaCapability } from '@domain/capability'
+import {
+  CAPABILITY_KEY,
+  IPC_CHANNELS,
+  TRANSCRIPT_PORT_MESSAGE,
+  type ClostaCapability
+} from '@domain/capability'
 import type { RuntimeListDTO } from '@domain/runtime/dto'
 import type { SessionIndexDTO } from '@domain/session/dto'
 import type { FolderListDTO } from '@domain/workspace/dto'
@@ -45,12 +50,33 @@ const capability: ClostaCapability = {
   fetchMoreSessions: (targetKey, offset) =>
     ipcRenderer.invoke(IPC_CHANNELS.fetchMoreSessions, targetKey, offset),
 
+  getTranscript: (sessionId, targetKey, requestToken) =>
+    ipcRenderer.invoke(IPC_CHANNELS.getTranscript, sessionId, targetKey, requestToken),
+
   onRuntimesChanged: (listener) =>
     subscribe<RuntimeListDTO>(IPC_CHANNELS.runtimesChanged, listener),
   onFoldersChanged: (listener) => subscribe<FolderListDTO>(IPC_CHANNELS.foldersChanged, listener),
   onSessionsChanged: (listener) =>
     subscribe<SessionIndexDTO>(IPC_CHANNELS.sessionsChanged, listener)
 }
+
+/*
+ * **transcript の port を main world へ橋渡しする** (R-3 / AD-034)。
+ *
+ * `MessagePort` は contextBridge を越えられないため capability には載せられない。
+ * main が `webContents.postMessage(transcriptPort, { requestToken }, [port2])` で送ってきた port を、
+ * preload が `window.postMessage` で main world へ **transfer** する。renderer は `window` の message を
+ * 購読し、`data.marker` がこの標識で `data.requestToken` が自分の要求と一致する port を受け取る。
+ * **要求の発行は必ず `getTranscript` invoke を通る** (main の検証を経る)。この port は受信専用である。
+ */
+ipcRenderer.on(IPC_CHANNELS.transcriptPort, (event, payload: { requestToken: string }) => {
+  // **targetOrigin を自 origin に絞る** — `'*'` にしない (pr-gate security S-L-001。MDN postMessage 指針)。
+  window.postMessage(
+    { marker: TRANSCRIPT_PORT_MESSAGE, requestToken: payload.requestToken },
+    window.location.origin,
+    event.ports
+  )
+})
 
 if (process.contextIsolated) {
   contextBridge.exposeInMainWorld(CAPABILITY_KEY, capability)

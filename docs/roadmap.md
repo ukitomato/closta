@@ -75,10 +75,16 @@ workspace として扱われていたら `packages:` の有無を先に確認す
 | 1 | R-1 | フォルダ登録とランタイム検出 **(実装完了 / gate 未通過)** | `runtime` | — | SPIKE-8 / SPIKE-9 **完了** |
 | 2 | R-2 | セッション列挙（読み取り専用） | `session` | **R-1 の US-1〜US-3** | SPIKE-1 **完了** |
 | 3 | R-3 | transcript の基本表示 | `ui` | R-2 | SPIKE-2 / SPIKE-14 **完了** |
-| 4 | R-4 | Tier A tool 表示 | `ui` | R-3 | — |
+| 4 | R-4 | Tier A tool 表示 | `ui` | R-3 + **R-3 の実機一次判断 (下記)** | — |
 | — | — | *(SPIKE-9 / SPIKE-13 は R-1 までに実施)* | — | — | — |
 
 **R-3 の完了時点で見栄えの一次判断ができる。** R-4 まで待たない。
+
+> **R-4 着手の前提 (pr-gate R-3 Round 1 / H-002)**: R-3 の done は SC-010 rubric 判定表の**記録**までを必須とし、
+> 実機の視覚的一次判断 (とくに rubric-a=markdown ハイライト / rubric-b=日本語行送り) は人間 deferred。
+> **R-4 (Tier A tool 表示) の spec 着手前に、`quickstart-results.md` の rubric-a/b を実機で埋め「一次判断」結論を記す。**
+> いずれかが NG なら charter「見た目の判断を先送りしない」に従い charter / PLAN.md §4 の見直しを別 task で起票する
+> (R-4 は R-3 の土台の上に積むため、視覚的方向性の確定を R-4 前に置く)。持ち主は R-3 (下記申し送り #7)。
 
 #### R-3 への申し送り (pr-gate Round 4 / 2026-09-23)
 
@@ -86,15 +92,26 @@ workspace として扱われていたら `packages:` の有無を先に確認す
 
 | # | 申し送り | 根拠 |
 |---|---|---|
-| 1 | **Principle IX の再評価** — 列挙応答のパースを main に残す判断。R-3 が transcript 本文を運ぶ時点で「数 MB の `tool_result`」が実際に現れるので、構造体 `postMessage` への移行を判断する | [AD-031](decisions/0031-adr-in-place-corrections-and-principle-ix-scope.md) Decision 2 |
-| 2 | **`createLineAssembler` の行長上限** — 現状パース対象のバイト列に上限が無い。#1 と同時に判断する | AD-031 訂正 (2026-09-23) |
+| 1 | **Principle IX の再評価** — 列挙応答のパースを main に残す判断。R-3 が transcript 本文を運ぶ時点で「数 MB の `tool_result`」が実際に現れるので、構造体 `postMessage` への移行を判断する。**→ R-3 で構造的に解決 ([AD-034](decisions/0034-transcript-read-path-and-process-boundary.md)): `MessageChannelMain` の port transfer で取得プロセス↔renderer 直通にし、main を本文経路から外した。ただし到達集合検査 (composition-root からの自動証明) は未構築であり、その持ち主は下記「E2E / 検証基盤 feature」に登録する** (Constitution v1.2.6) | [AD-031](decisions/0031-adr-in-place-corrections-and-principle-ix-scope.md) Decision 2 / [AD-034](decisions/0034-transcript-read-path-and-process-boundary.md) |
+| 2 | **`createLineAssembler` の行長上限** — 現状パース対象のバイト列に上限が無い。#1 と同時に判断する。**→ R-3 で構造的に解消 (AD-034): 本文は行区切りではなく `MessageChannelMain` の別チャネルで運ぶため、行アセンブラを本文に使わない。列挙メタデータの行経路 (R-2) は据え置き** | AD-031 訂正 (2026-09-23) / AD-034 |
 | 3 | **検証項目 13 / 14 の構造化** — 項目 13 は別名 1 つ (`const f = ops.toUnc`) で無効化され、項目 14 は default / 動的 import など **5 形を素通し**する (どちらも A/B 実測済み)。項目 13 は「`agents → path-api` の import 0 件」を depcruise で、項目 14 は `matchAll` + 動的 import 検出で置き換える | pr-gate Round 4 / C4-007 / C4-008 |
 | 4 | **デバイス名前空間の綴りの再評価** — `\\?\UNC\` / `\\.\UNC\` / `\\?\C:\` は**実機で解決する**が、実測 0 件のため解析していない。R-3 までに実測が増えたら判断し直す | [AD-032](decisions/0032-unc-shape-classification-by-separator-count.md) |
 | 5 | ~~`opaque-unc` を spec の Edge Cases に記録~~ **→ Round 5 の指摘に応じ Round 6 で実施済み** (spec.md Edge Cases / Key Entities)。持ち主の二重記録 (AD-032 申し送りと本表) を解消 | pr-gate Round 4 / PO4-006 |
 | 6 | **`src/agents/` の 2 役の線引き** — 「列挙プロセス」と「親子共有プロトコル」が同一ディレクトリに同居し、検証項目 13 / `UNC_FORBIDDEN_IN` が両者を区別しない。後続 ADR で規則の対象を「ディレクトリ」でなく「子で評価されるモジュール」に定義し直すか `protocol.ts` を共有層へ出す | pr-gate Round 4 / M4-14・M-005 |
-| 7 | **quickstart (SH-089) の実機再実行** — 2026-09-18 の証跡は pr-gate Round 4/5 の実装変更前。V-1 件数表記 / V-3 出自 / V-4 導線 / V-6 先頭ページ / V-8 空状態が変わった。実機操作のため人間 deferred | pr-gate Round 5 / PO4-004 / C4-016 |
+| 7 | **quickstart (SH-089) の実機再実行** — 2026-09-18 の証跡は pr-gate Round 4/5 の実装変更前。V-1 件数表記 / V-3 出自 / V-4 導線 / V-6 先頭ページ / V-8 空状態が変わった。実機操作のため人間 deferred。**→ 持ち主は R-3 (本 spec の SH-068)。R-3 の quickstart V-1〜V-9 実機と SC-010 見栄え一次判断に合流させる。実機操作は人間 deferred のままだが、判定表 (`quickstart-results.md`) の記録は R-3 の done 必須** | pr-gate Round 5 / PO4-004 / C4-016 |
 | 8 | **`isValidDistroName` の bidi 対応 + `dto-mapper` 関門の被覆** — 制御文字判定器が 4 定義あり bidi を見るのは 2 つだけ。`isValidDistroName` を `hasControlCharacter` と揃え、`dto-boundary.test` に無 gate フィールド (cwd / cwdKey / location) の汚染ケースを足す。**到達可能な実害経路は upstream (`build.ts`) で封止済みの defense-in-depth**。R-2 Round 6 で人間が対象外と決定 | pr-gate Round 5 / S4-003 (H-D2) / M5-01 |
 | 9 | **`programmatic` の値域検査** — `boolean` 型宣言のまま無検査で境界を渡り実測で `"yes"` が素通り。`decodeResponse` / normalize 層で値域検査するか parse 側で boolean 化する | pr-gate Round 5 / PB4-006 (PB5-007) |
+
+#### E2E / 検証基盤 feature (持ち主 = 未定。**M4 完了後に切る**)
+
+以下の延期された自動検証はすべて**同一の E2E / 検証基盤 feature** が持ち主である
+(「持ち主のいない延期を残さない」。AD-028 §5)。M4 完了後にこの feature を立て、まとめて載せる。
+
+- **Principle VIII の Automated 2 項目** — composer の IME テスト / 日本語スクリーンショット比較
+  (AD-024 #18。R-3 も composer 送信経路を開けないため未発火)
+- **charter KPI「スクロールの安定」の E2E 計測** — R-3 は Vitest (マウント数 / 位置飛び) + quickstart 実機で暫定代替
+- **Principle IX の到達集合検査** — composition-root から main で評価されるモジュールを導く自動検査
+  (R-3 / [AD-034](decisions/0034-transcript-read-path-and-process-boundary.md) は port transfer の構造検査 + 手動レビューで暫定担保。Constitution v1.2.6)
 
 **Principle XV (i18n) の棚卸しへの申し送り**: `src/main/infra/session/target-finder.ts` の
 `候補 #N` / `名前 (#N)` は **`infra` が生成する日本語**であり、「訳出は `ui`」(FR-031 / FR-047) の例外である。
@@ -137,6 +154,13 @@ R-1 の残り 2 つは R-2 をブロックしない。
 
 X-2 を X-1 の直後に置いたのは、**日本語入力が壊れたままでは以降の feature を自分で使えない**ため。
 Principle VIII は製品の採否条件であり、後回しにすると検証が遅れる。
+
+**R-3 からの申し送り (SH-052 / live streaming)**: transcript 本文の markdown は R-3 では
+`@assistant-ui/react-markdown` の `MarkdownText` (`smooth` 付き) で描画する。**live streaming で真価を発揮する
+Streamdown (未完 markdown の構文修復 / CJK の分割耐性) の採否は X-1 (単一セッション起動とストリーミング) /
+X-2 (日本語 composer) で判断する** — R-3 は過去ログの表示であり逐次生成がないため導入コストに見合わない
+(research R-04)。**ただし XSS 境界 (生 HTML 非描画・URL allowlist) は R-3 で固めており、X-1 で描画ライブラリを
+差し替える場合もこの境界を回帰させないこと** ([AD-034](decisions/0034-transcript-read-path-and-process-boundary.md) / FR-020)。
 
 ## M3: 差配できる
 

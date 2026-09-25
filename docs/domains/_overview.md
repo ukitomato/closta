@@ -48,7 +48,7 @@ spec_id（`001-runtime-...`）とは独立させる。差し込み作業で番�
 |---|---|---|---|
 | R-1 | フォルダ登録とランタイム検出。**プロジェクト初期化・5 レイヤと依存規則の機械強制・CI・操作 UI（ランタイム一覧 / フォルダ登録 / 組み合わせ選択）を含む**。`Win32Runtime` + `WslRuntime` の検出、3 名前空間のパス型、到達可能性と越境の解決。**プロセス起動は含まない**。**R-2 がパス API に `classifyRawPath()` と `parseWslUncPath()` を追加した**（前者が生値の形を先頭区切りの本数で判定する唯一の入口、後者が実測された 2 綴りの解析。UNC の綴りに関する知識を 1 箇所に集めるため。[AD-032](../decisions/0032-unc-shape-classification-by-separator-count.md)） | `runtime` | M1 |
 | R-2 | セッション列挙。**読み取り専用**（起動・改名・削除をしない）。WSL 内 config を Windows から UNC 経路で横断し、**登録の有無によらず全件列挙**して未登録フォルダも示す。作業ディレクトリの出自を値の形から判定し、所在が特定できないものは推測しない | `session` | M1 |
-| R-3 | transcript の基本表示（markdown / streaming text / scroll anchor / tool fallback） | `ui` | M1 |
+| R-3 | transcript の基本表示（markdown / streaming text / scroll anchor / tool fallback）。**着手中**（`ui` domain 初の feature。この時点で見栄えの一次判断を行う）。取得は `getSessionMessages`、本文は `MessageChannelMain` の port で main を経路から外す（[AD-034](../decisions/0034-transcript-read-path-and-process-boundary.md)）。仮想化は `@tanstack/react-virtual`（[AD-033](../decisions/0033-assistant-ui-elements-introduction-cost.md)） | `ui` | M1 |
 | R-4 | Tier A tool 表示（Terminal / Code diff / Todo / Subagent / Agent plan / Reasoning） | `ui` | M1 |
 | X-1 | 単一セッション起動とストリーミング（Approval card、中断） | `session` | M2 |
 | X-2 | 日本語 composer（IME ガード、message queue、draft restore） | `ui` | M2 |

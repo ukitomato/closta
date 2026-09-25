@@ -219,7 +219,16 @@ export const PROCESS_SPAWN_MODULES = [
    * 回避策は設計で決めてある — このファイルに `'wsl'` の文字列リテラルを書かない。
    * 所在の判別は `Location` の値で行う。
    */
-  'src/main/app/enumerator-spawner.ts'
+  'src/main/app/enumerator-spawner.ts',
+  /*
+   * transcript 取得の専用短命プロセスを起こす (R-3 / AD-034 決定 2 / C-2)。
+   *
+   * **`enumerator-spawner.ts` と別モジュールにする。** あちらは AD-030 の常駐プロセスを
+   * postMessage+stdout で起こす前提であり、こちらは 1 要求ごとに env 固定で起こし、
+   * `MessageChannelMain` の port を子へ transfer する (main を本文経路から外す)。
+   * 常駐/短命の 2 つの寿命を 1 ファイルに混ぜない。
+   */
+  'src/main/app/transcript-spawner.ts'
 ]
 
 /* ── 項目 12 / 13: UNC 形式の封じ込め (AD-028 §3) ─────────────────── */
@@ -291,16 +300,19 @@ export const AGENT_SDK_PACKAGE = '@anthropic-ai/claude-agent-sdk'
 export const AGENT_SDK_IMPORT_DIRECTORIES = ['src/agents/']
 
 /**
- * R-2 で呼んでよい SDK の API (SH-081 / contracts C-4)。
+ * 呼んでよい SDK の API (SH-081 / contracts C-4 / R-3 AD-034 C-4)。
  *
- * **許可 1 件以外を禁じる形で検査する。** 禁止側を列挙すると必ず漏れる —
- * `getSessionMessages` のような**読み取り API** が抜けると FR-044 が守られない
- * (前後のファイル比較は読み取りを検出できない)。
+ * - `listSessions` — R-2 の列挙 (読み取り)
+ * - `getSessionMessages` — R-3 の transcript 取得 (読み取り。AD-034)。呼ぶのは `src/agents/read-transcript.ts`
+ *
+ * **許可以外を禁じる形で検査する。** 禁止側を列挙すると必ず漏れる。
+ * **書き込み系 API (`renameSession` / `tagSession` / `deleteSession` / `forkSession` /
+ * `importSessionToStore`) は許可しない** — transcript は読み取り専用である (FR-001)。
  *
  * **判定は呼び出し形で行う。** import しただけの名前や型注釈を違反にすると、
  * これらを正当に使う後続 feature (X-1 / O-1 / I-1) で検証が破綻する (research R-07)。
  */
-export const AGENT_SDK_ALLOWED_CALLS = ['listSessions']
+export const AGENT_SDK_ALLOWED_CALLS = ['listSessions', 'getSessionMessages']
 
 /**
  * `wsl.exe` を新たに呼ばないことの検査対象 (SH-082 / SC-003)。
@@ -332,7 +344,11 @@ export const WSL_FREE_DIRECTORIES = [
   'src/main/app/session-ipc.ts',
   'src/main/app/session-enumerator.ts',
   'src/main/app/enumerator-spawner.ts',
-  'src/main/app/dto-mapper.ts'
+  'src/main/app/dto-mapper.ts',
+  // R-3: transcript 取得は read-only で wsl.exe を起こさない。起動点も含めて検査対象に入れる
+  // (現状 wsl-free。pr-gate platform-boundary M-001)。
+  'src/main/app/transcript-service.ts',
+  'src/main/app/transcript-spawner.ts'
 ]
 
 export const UNC_API_NAMES = [

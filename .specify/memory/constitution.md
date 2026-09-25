@@ -1,10 +1,27 @@
 ---
 status: active
-version: 1.2.5
+version: 1.2.6
 ratified: 2026-09-13
-last_amended: 2026-09-23
+last_amended: 2026-09-24
 generated_by: /speckit.constitution (素材: /spec-gate bootstrap Phase 6 の draft)
 ---
+
+<!--
+Sync Impact Report (v1.2.6)
+- Version change: 1.2.5 → 1.2.6
+- Last amended: 2026-09-24
+- Bump rationale: PATCH。Principle IX の「現状の制約」に R-3 (AD-034) の事実追記のみ。
+  statement も指針も変えていない (バージョニング方針表「Verification の現状の制約の事実追随は PATCH」)
+
+Modified sections:
+- Principle IX (Verification 現状の制約) — R-3 が transcript 本文を `MessageChannelMain` の
+  port transfer で取得プロセス↔renderer 直通で運び main を本文経路から外したことを追記。
+  **到達集合検査は依然未構築**であることを明記し「解決済み」とは書かない (AD-034 / R-3 SH-062)。
+  到達集合検査の持ち主 feature を docs/roadmap.md に登録した (R-3 SH-062b)
+
+Templates requiring updates:
+- ✅ docs/decisions/0034-transcript-read-path-and-process-boundary.md — 本 PATCH の根拠 ADR (accepted)
+-->
 
 <!--
 Sync Impact Report (v1.2.5)
@@ -519,7 +536,7 @@ if (!isMac) { ... }
 - `violation_threshold`: 0
 - `bad_pattern_grep`: `grep -rn "JSON.parse" src/ | grep -v "src/agents/" | grep -iE "chunk|stdout|stream|line"`
 - `adoption_date`: 2026-09-13
-- `amended`: 2026-09-15 (AD-024 #6), 2026-09-23 (AD-031)
+- `amended`: 2026-09-15 (AD-024 #6), 2026-09-23 (AD-031), 2026-09-24 (AD-034)
 
 <!-- BOOTSTRAP_SECTION_START principle=IX -->
 **Statement**: stream の逐次パースは supervisor (`utilityProcess`。**実体は `src/agents/`**) 側で行うべきであり、main process で行うべきではない。
@@ -549,6 +566,15 @@ R-2 (セッション列挙) はこの経路で応答 1 行を main でパース�
 本文を運ばない列挙結果のメタデータに限られるため許容したが、
 **R-3 が transcript 本文を運ぶ時点で再評価する** (AD-031 Decision 2)。
 塞ぐには `composition-root` からの到達集合を依存グラフから導く検査が要る。
+
+**2026-09-24 (R-3 / [AD-034](../../docs/decisions/0034-transcript-read-path-and-process-boundary.md))**:
+R-3 は transcript 本文を `MessageChannelMain` の port transfer で取得プロセス↔renderer 直通で運び、
+**main を本文のデータ経路から外した** (`JSON.parse` も structured clone deserialize も main で起こさない)。
+R-2 が残した「本文を運ぶ時点で再評価する」宿題に構造的な解を与えた。
+**ただし到達集合検査 (composition-root から main で評価されるモジュールを導く自動検査) は依然として
+未構築である** — SC-007 は port transfer の構造検査 + 手動レビューで担保しており、
+`existing_violations: 0` は本 Principle の自動証明を意味しない。
+到達集合検査の持ち主 feature を `docs/roadmap.md` に登録した (R-3 SH-062b)。
 <!-- BOOTSTRAP_SECTION_END principle=IX -->
 
 <!-- MIGRATE_SECTION_START principle=IX -->
@@ -880,6 +906,7 @@ v1.2.4 は改定手順に新しい規則 (ADR の in-place 訂正) を足した�
 | 1.2.3 | 2026-09-17 | [AD-028](../../docs/decisions/0028-session-enumeration-process-and-unc-handoff.md) §5。Principle VIII の Automated 検証の**延期先から R-2 を外した**。R-2 (セッション列挙) は読み取り専用で composer の送信経路を開けないため (A) の発動条件を満たさず、目標レイアウト ADR が未採択のため (B) は撮り直しが確定する。**延期先を空にせず「M4 完了後に再検討し、持ち主 feature を roadmap に登録する」とした** — 持ち主のいない延期は、次に本 Principle を見る人が「R-2 で載ったはず」と誤読する形で残る |
 | 1.2.4 | 2026-09-23 | [AD-031](../../docs/decisions/0031-adr-in-place-corrections-and-principle-ix-scope.md)。**改定手順に ADR の in-place 訂正の規則を置いた** — 事実誤認の訂正は日付つきの「訂正」節として in-place、決定の変更は後続 ADR。AD-028 §2 の immutability 宣言を読み替える (先例 5 件がすべて訂正であり決定の変更ではなかった)。あわせて **Principle IX の Verification に「`bad_pattern_grep` はパースコードの置き場を見るだけで、どのプロセスで走るかは見ていない」を明記した** — R-2 の列挙応答は main でパースされるが検査は 0 件を返す。`existing_violations: 0` は遵守の証拠ではない |
 | 1.2.5 | 2026-09-23 | バージョニング方針表に **Governance への規則追加 = MINOR** と **Verification の事実追随 = PATCH** の 2 行を追加した (pr-gate Round 4 / M4-12)。v1.2.4 は改定手順に新規則を足しながら表に該当行が無く、**PATCH の妥当性を表から導けなかった**。本表に照らすと v1.2.4 は MINOR 相当だが、**版番号は遡って振り直さない** — 既に参照されており Amendment trail の参照が壊れる |
+| 1.2.6 | 2026-09-24 | [AD-034](../../docs/decisions/0034-transcript-read-path-and-process-boundary.md)。Principle IX の「現状の制約」を事実に追随 (Verification の事実追随 = PATCH)。R-3 が transcript 本文を `MessageChannelMain` の port transfer で取得プロセス↔renderer 直通にし、**main を本文のデータ経路から外した**。**ただし composition-root からの到達集合検査 (自動証明) は依然未構築**であり「解決済み」とは書かない — その持ち主 feature を roadmap の「E2E / 検証基盤 feature」に登録した |
 
 ## References
 
@@ -891,4 +918,4 @@ v1.2.4 は改定手順に新しい規則 (ADR の in-place 訂正) を足した�
 
 ---
 
-**Version**: 1.2.5 | **Ratified**: 2026-09-13 | **Last Amended**: 2026-09-23
+**Version**: 1.2.6 | **Ratified**: 2026-09-13 | **Last Amended**: 2026-09-24

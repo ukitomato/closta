@@ -1,0 +1,387 @@
+{
+    "gate": "pr",
+    "run": "2026-09-24T13:20:31.146Z",
+    "spec_dir": "specs/003-ui-transcript-rendering",
+    "spec_id": "003-ui-transcript-rendering",
+    "round": 1,
+    "base_branch": "6d64049",
+    "diff_stat": {
+        "files": 70,
+        "additions": 5791,
+        "deletions": 116
+    },
+    "severity_counts": {
+        "critical": 0,
+        "high": 4,
+        "medium": 6,
+        "low": 8
+    },
+    "convergence": {
+        "resolved_from_prev": 0,
+        "new_in_round": 18,
+        "unresolved": 0
+    },
+    "round_history": [
+        {
+            "round": 1,
+            "critical": 0,
+            "high": 4,
+            "medium": 6,
+            "low": 8,
+            "convergence": {
+                "resolved_from_prev": 0,
+                "new_in_round": 18,
+                "unresolved": 0
+            }
+        }
+    ],
+    "inheritance": "none (Round 1)",
+    "suppressed_by_code_gate": [],
+    "touched_files": [
+        {
+            "path": ".specify/feature.json",
+            "sha": "c1831836355bdf1b2dacceee7a1a4afb54a64aeb"
+        },
+        {
+            "path": ".specify/memory/constitution.md",
+            "sha": "9280793cdc950ed1048f5f3a9cae92c48f95dcd9"
+        },
+        {
+            "path": "docs/decisions/0033-assistant-ui-elements-introduction-cost.md",
+            "sha": "f270ebdd5162c74b89e24e12690b01aa9adea0a0"
+        },
+        {
+            "path": "docs/decisions/0034-transcript-read-path-and-process-boundary.md",
+            "sha": "5cefd683d89cf387c85b97b9785dea080848a93f"
+        },
+        {
+            "path": "docs/discovery.md",
+            "sha": "703842502271ee97b0fd040b23e4a06c53869b54"
+        },
+        {
+            "path": "docs/domains/_overview.md",
+            "sha": "abfe7b57e812c71f27f44d62bbfd814ba6434d65"
+        },
+        {
+            "path": "docs/domains/ui/charter.md",
+            "sha": "fe4b45ac675a21041db79285fe15415f102dc196"
+        },
+        {
+            "path": "docs/glossary.md",
+            "sha": "a821eaa2d3336afa7bd9eecb7742579cf7fc4b04"
+        },
+        {
+            "path": "docs/roadmap.md",
+            "sha": "976fb9de7eb429c819e1f964c77514bc9294e03f"
+        },
+        {
+            "path": "eslint.config.mjs",
+            "sha": "9d41c99bf5332890f3eb98d08dd9eac5b7472376"
+        },
+        {
+            "path": "package.json",
+            "sha": "7b4b2d5622e55ff11a5de50e38c46188d3316451"
+        },
+        {
+            "path": "pnpm-lock.yaml",
+            "sha": "13b9c9d5962794a27bfe2eb11d1be2915bdc9672"
+        },
+        {
+            "path": "scripts/constitution/allowlists.mjs",
+            "sha": "3b9c78781dce55f44f500595b0d31ab36360908c"
+        },
+        {
+            "path": "specs/003-ui-transcript-rendering/.gate-verdict-code.json",
+            "sha": "e78bd8489f2b9909f0f67722d5e98a55cacd8a10"
+        },
+        {
+            "path": "specs/003-ui-transcript-rendering/.gate-verdict-design.json",
+            "sha": "f1a1be9e38b33fc66617848b81ebb5cb601a2aab"
+        },
+        {
+            "path": "specs/003-ui-transcript-rendering/analyze.md",
+            "sha": "fe47afa7d4263fa2502595e74cdb6521db2017a9"
+        },
+        {
+            "path": "specs/003-ui-transcript-rendering/architecture-reviewer.design-gate.md",
+            "sha": "f1b9f7e97d1c1e7fcad7bc018c6300412db22a3f"
+        },
+        {
+            "path": "specs/003-ui-transcript-rendering/checklists/requirements.md",
+            "sha": "9a785e122b19806bae053897fc07807542f84051"
+        },
+        {
+            "path": "specs/003-ui-transcript-rendering/code-gate.md",
+            "sha": "a476790a906b82c6fcc15a4d1b83aa65c2ede1a0"
+        },
+        {
+            "path": "specs/003-ui-transcript-rendering/contracts/ipc-transcript.md",
+            "sha": "a5d428181574da8007b1e0e7f40e6fa537d28d88"
+        },
+        {
+            "path": "specs/003-ui-transcript-rendering/contracts/transcript-read.md",
+            "sha": "49c3e9ce72c788b241911b8e417aba71f98152be"
+        },
+        {
+            "path": "specs/003-ui-transcript-rendering/convention-reviewer.code-gate.md",
+            "sha": "9bf4db0aedca3cd02f3a2e9677b4bc08e5e30404"
+        },
+        {
+            "path": "specs/003-ui-transcript-rendering/data-model.md",
+            "sha": "fe767cc491c29c7f1082322da1afd48738bff796"
+        },
+        {
+            "path": "specs/003-ui-transcript-rendering/design-gate.md",
+            "sha": "440d5cf697adca695fb55ca742575cc94097442b"
+        },
+        {
+            "path": "specs/003-ui-transcript-rendering/plan.md",
+            "sha": "58e1e9504a4d0032e556842b838ab9b86c10c104"
+        },
+        {
+            "path": "specs/003-ui-transcript-rendering/platform-boundary-reviewer.code-gate.md",
+            "sha": "3b38cc95b473f1914a59de516348db0581c969ef"
+        },
+        {
+            "path": "specs/003-ui-transcript-rendering/platform-boundary-reviewer.design-gate.md",
+            "sha": "ec8a2da4a6a7bd2c5eeeabc9d49aa3a5714e3e0a"
+        },
+        {
+            "path": "specs/003-ui-transcript-rendering/po-reviewer.design-gate.md",
+            "sha": "cfa133b9966efd000d7dc2a5200d4ee6a42f3a80"
+        },
+        {
+            "path": "specs/003-ui-transcript-rendering/quickstart-results.md",
+            "sha": "36a770917b69955434ed421adcc7bc88654940df"
+        },
+        {
+            "path": "specs/003-ui-transcript-rendering/quickstart.md",
+            "sha": "8b85b29edc55b24005f1c6022d665177b1ee824b"
+        },
+        {
+            "path": "specs/003-ui-transcript-rendering/research.md",
+            "sha": "f5f655e39e703d57f1ac39b6e9755b680490e8ca"
+        },
+        {
+            "path": "specs/003-ui-transcript-rendering/security-reviewer.design-gate.md",
+            "sha": "28ef74f51e27b2e291ce7e935806a3a5486f8909"
+        },
+        {
+            "path": "specs/003-ui-transcript-rendering/spec.md",
+            "sha": "eae9a78a6566ac3338ebe61c3a2669b3de1037cf"
+        },
+        {
+            "path": "specs/003-ui-transcript-rendering/tasks.md",
+            "sha": "723d52241358ddd53211d3efde5adec34d6c25b1"
+        },
+        {
+            "path": "specs/003-ui-transcript-rendering/touched-files.txt",
+            "sha": "ef331fb98bd8e24c9408876b2e521e8532cd19df"
+        },
+        {
+            "path": "src/agents/read-transcript.ts",
+            "sha": "b124fea6094f0ce99d9cd03765c9c7590dc2f3e8"
+        },
+        {
+            "path": "src/domain/capability.ts",
+            "sha": "a5b3e9c9b48ef169ce0b06613b706aa57678bbb2"
+        },
+        {
+            "path": "src/domain/session/sanitize-body.test.ts",
+            "sha": "21b48b7204c146c0e5eebfb86a513f39a3815852"
+        },
+        {
+            "path": "src/domain/session/sanitize-body.ts",
+            "sha": "664b5985f9e2b07b04f2244419e48f91d414c29e"
+        },
+        {
+            "path": "src/domain/session/transcript-dto.ts",
+            "sha": "030774c9f0df720fa5a6c8f055fc228d9ea2aecd"
+        },
+        {
+            "path": "src/domain/session/transcript-schema.test.ts",
+            "sha": "34e961b451a4420602995cab437db0160bbd08f6"
+        },
+        {
+            "path": "src/domain/session/transcript.test.ts",
+            "sha": "c2646df02931e43371d91e3674a5d532b33ea4b6"
+        },
+        {
+            "path": "src/domain/session/transcript.ts",
+            "sha": "b1c252ca28d0d793b7022373a75b4f6f281877cb"
+        },
+        {
+            "path": "src/domain/validation.ts",
+            "sha": "d378a7914a3bca6bcdd6065698341560e33cfc2d"
+        },
+        {
+            "path": "src/main/app/composition-root.ts",
+            "sha": "68e3d4bd3dcb5db187226acba7eae7e15921bf26"
+        },
+        {
+            "path": "src/main/app/ipc.ts",
+            "sha": "58a7a459403427551ae923edd8f69c58dbb6b715"
+        },
+        {
+            "path": "src/main/app/session-ipc.test.ts",
+            "sha": "7db8e0d8cfaaf30dc368dcb7ff1b43ef0b4aeb50"
+        },
+        {
+            "path": "src/main/app/session-ipc.ts",
+            "sha": "2f1b125580bd9e2502e80b1adfbb52f235ca8438"
+        },
+        {
+            "path": "src/main/app/session-service.ts",
+            "sha": "d9cf154d9374c7b4961bb7428db9c09a3944dccb"
+        },
+        {
+            "path": "src/main/app/transcript-service.test.ts",
+            "sha": "fb877deb14066d79d0dbdf4da8080a3e74352d8a"
+        },
+        {
+            "path": "src/main/app/transcript-service.ts",
+            "sha": "12feea26e07f4c5fb388cbb801f25f81a7c1bce8"
+        },
+        {
+            "path": "src/main/app/transcript-spawner.ts",
+            "sha": "de51c20467ff71e0f6b4a231a9d8ed8880fa462b"
+        },
+        {
+            "path": "src/main/infra/session/config-dir.ts",
+            "sha": "248ad575523fa900239540badacafce12f3eabb5"
+        },
+        {
+            "path": "src/preload/index.ts",
+            "sha": "7c1aa732ee35ec3c0ddbbcaa786e8aefe3f0090f"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/thread.aui.tsx",
+            "sha": "3074e97a419fd96fd992a9310722515e2b7f5f0a"
+        },
+        {
+            "path": "src/renderer/src/components/markdown-text.tsx",
+            "sha": "da3863c2711abe41d8bbacf65534021de043daa8"
+        },
+        {
+            "path": "src/renderer/src/features/chat/ChatScreen.test.tsx",
+            "sha": "2efa3de506a2dfbfee05e5fe8fece32da51f94c3"
+        },
+        {
+            "path": "src/renderer/src/features/chat/ChatScreen.tsx",
+            "sha": "86eddd40b7c5bfede4cd96d5a6a4c3699f7da28c"
+        },
+        {
+            "path": "src/renderer/src/features/chat/convert.ts",
+            "sha": "9c462e173146b5e33f7b82477084e3bf5d5f6a1a"
+        },
+        {
+            "path": "src/renderer/src/features/chat/useTranscript.test.tsx",
+            "sha": "c34f74f730e72a9926a6d062a55a361ce96c05e5"
+        },
+        {
+            "path": "src/renderer/src/features/chat/useTranscript.ts",
+            "sha": "9e0c813b01a33fd075b076e29d736a4143cda9d0"
+        },
+        {
+            "path": "src/renderer/src/features/chat/virtualization.test.tsx",
+            "sha": "f523b1ae9e3eaf2d1907440d7bb48c5871516fcf"
+        },
+        {
+            "path": "src/renderer/src/lib/safe-url.test.ts",
+            "sha": "890b9647ec4215e8f10530c8693b65b3d538b5b0"
+        },
+        {
+            "path": "src/renderer/src/lib/safe-url.ts",
+            "sha": "b985c8d3faff0f30a9d288f3f6decaf495b74dee"
+        },
+        {
+            "path": "src/renderer/src/test-support/capability.ts",
+            "sha": "d14ea1c7200dbc4c2a5c6295c44161d361086178"
+        },
+        {
+            "path": "tests/rule-fixtures/a-direct/sdk-forbidden-call-alias.ts.fixture",
+            "sha": "0432334bafb4f07f537205ad5e3bf9bc3f084196"
+        },
+        {
+            "path": "tests/rule-fixtures/a-direct/sdk-forbidden-call.ts.fixture",
+            "sha": "b242791b55be3e4a114d41f45e57c41724f2aefe"
+        },
+        {
+            "path": "tests/rule-fixtures/expected.mjs",
+            "sha": "be1ad2c861fae356e08c54c18b02e1a4876eabef"
+        },
+        {
+            "path": "tests/setup/renderer.ts",
+            "sha": "76c16816c20561016cceba0a72a9d5a6f3c0353b"
+        },
+        {
+            "path": "tests/spec-artifacts/r3-quickstart-rubric.test.ts",
+            "sha": "013c143c1227c481ef981fff76a921000cc8eff5"
+        }
+    ],
+    "viewpoint_coverage": {
+        "A": "security: High:1(system) Medium:1 Low:2",
+        "B": "security: Medium:1 Low:1",
+        "C": "architecture: Medium:1",
+        "D": "architecture: High:1 Low:1 / platform-boundary: 0",
+        "E": "po: High:2 Medium:2 Low:2",
+        "F": "platform-boundary: Medium:1 Low:2 (convention \u306f code-gate \u5c02\u4efb)",
+        "G": "\u8a72\u5f53\u306a\u3057 (optional reviewer \u7bc4\u56f2\u5916)",
+        "H": "security/po/platform: coverage \u7a74\u3092\u5404 M/L \u306b\u8a08\u4e0a"
+    },
+    "rule_verification": {
+        "ran": true,
+        "round": 1,
+        "reason": "Round 1 + fixtures \u5909\u66f4\u3042\u308a\u3002\u671f\u5f85\u8868 27 \u4ef6\u4e00\u81f4 exit 0 (post-fix)",
+        "result": "PASS"
+    },
+    "skipped_reviewers": [
+        {
+            "name": "database-reviewer",
+            "reason": "auto_invoke_patterns \u4e0d\u4e00\u81f4"
+        },
+        {
+            "name": "ux-reviewer",
+            "reason": "auto_invoke_patterns \u4e0d\u4e00\u81f4"
+        },
+        {
+            "name": "a11y-reviewer",
+            "reason": "auto_invoke_patterns \u4e0d\u4e00\u81f4"
+        }
+    ],
+    "tracks": {
+        "security-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 1,
+            "medium": 2,
+            "low": 3
+        },
+        "architecture-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 1,
+            "medium": 1,
+            "low": 1
+        },
+        "po-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 2,
+            "medium": 2,
+            "low": 2
+        },
+        "platform-boundary-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 1,
+            "low": 2
+        }
+    },
+    "verdict": "PASS"
+}

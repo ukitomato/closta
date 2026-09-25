@@ -217,6 +217,17 @@ total_terms: 31
 
 ### M
 
+#### **message mapping（メッセージ変換）**
+
+- **Definition**: `SessionMessage[]` → `ThreadMessageLike[]` の**純粋変換**（tool_use ↔ tool_result の
+  id 対応づけ・孤児 fallback・system サブ種別の実名割り当てを含む）。**`src/domain/session/` の共有層**に置き、
+  I/O を持たない（`ui` からも取得プロセスからも呼べる）
+- **日本語表記**: メッセージ変換
+- **Domain**: `session`（共有 domain。**assistant-ui を import しない** — DTO 止まり）
+- **Counterexamples**: **表示状態（TranscriptView。`ui`）とは別。** 変換は規則、TranscriptView は画面状態。
+  DTO → assistant-ui の `ThreadMessageLike` への写しは `ui`（`convert.ts`）が行う
+- **Ref**: [AD-034](decisions/0034-transcript-read-path-and-process-boundary.md)
+
 #### **Model catalog**
 
 - **Definition**: Provider ごとに使えるモデルの集合。Bedrock は inference profile ID で pin する
@@ -303,7 +314,20 @@ total_terms: 31
 - **日本語表記**: セッション
 - **Domain**: `session`
 - **Ref**: [AD-007](decisions/0007-session-source-of-truth-is-claude-code.md)
-- **Note**: **一覧（R-2）が扱うのは要約とメタデータのみ**であり、本文の取得は R-3 で追加する
+- **Note**: **一覧（R-2）が扱うのは要約とメタデータのみ**。本文の取得は **R-3 で追加済み**
+  （`getSessionMessages` 経由。変換は **message mapping**、表示状態は **TranscriptView** を参照）
+
+#### **SessionMessage（セッションメッセージ）**
+
+- **Definition**: `getSessionMessages` が過去 transcript から返す **SDK 由来の外部型**。
+  `type`（`user` / `assistant` / `system`）/ `uuid` / `session_id` / `message`（本文。`unknown`）/
+  `parent_tool_use_id` / `parent_agent_id` を持つ。**アプリの内部型ではない** — 境界で
+  `ThreadMessageLike` へ変換する（**message mapping**）
+- **日本語表記**: セッションメッセージ（型名は原語のまま）
+- **Domain**: `session`（**外部型**。`@anthropic-ai/claude-agent-sdk` の `sdk.d.ts` が正本）
+- **Counterexamples**: **`message` フィールドを検証せずに描画しない。** 会話由来の逐語であり、
+  本文サニタイズと URL allowlist を通す（[AD-034](decisions/0034-transcript-read-path-and-process-boundary.md)）
+- **Ref**: [AD-034](decisions/0034-transcript-read-path-and-process-boundary.md)
 
 #### **SessionSummary（セッション要約行）**
 
@@ -354,8 +378,20 @@ total_terms: 31
   `encoded-cwd` は作業ディレクトリの非英数字を `-` に置換したもの
 - **Note**: **`encoded-cwd` をアプリ側で再現しない**（R-2 の `[ASSUMED]`）。
   作業ディレクトリはセッションのメタデータから読む。
-  **一覧（R-2）は本文を取得も転送もしない** — 取得は R-3 で追加する
+  **一覧（R-2）は本文を取得も転送もしない** — 取得は **R-3 で追加済み**（`getSessionMessages`。本文は
+  `MessageChannelMain` の port で取得プロセス→renderer を直通し main を経路から外す。[AD-034](decisions/0034-transcript-read-path-and-process-boundary.md)）
 - **Domain**: `session`
+
+#### **TranscriptView（transcript 表示）**
+
+- **Definition**: 選んだセッションの過去メッセージを **assistant-ui で仮想化描画する画面状態**（R-3）。
+  取得（loading / ready / empty / failed）と再取得、選択切替時の stale 破棄を持つ。
+  **本文そのものは保持の主体ではない** — `useExternalStoreRuntime` の `messages` に流し込む表示状態である
+- **日本語表記**: transcript 表示
+- **Domain**: `ui`
+- **Counterexamples**: **transcript（本文の永続実体）とは別**。あちらは `session` domain の会話ログ、
+  こちらはそれを描画する `ui` の状態
+- **Ref**: [AD-034](decisions/0034-transcript-read-path-and-process-boundary.md) / [AD-033](decisions/0033-assistant-ui-elements-introduction-cost.md)
 
 ### U
 

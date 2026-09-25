@@ -7,7 +7,8 @@ last_reviewed: 2026-09-15
 related_adrs:
   - docs/decisions/0001-adopt-electron-over-tauri.md
   - docs/decisions/0006-supervisor-in-utility-process.md
-related_specs: []
+related_specs:
+  - specs/003-ui-transcript-rendering/spec.md
 ---
 
 # Domain Charter: ui
@@ -127,7 +128,10 @@ UI は本来 delivery mechanism であり domain ではない。それでも独�
 - **表示網羅**: `docs/ui-coverage.md` の未割当行が 0 — 計測経路: ui-coverage-reviewer による機械検証
 - **日本語の健全性**: composer の IME テストが E2E に存在し通過、
   日本語を含むスクリーンショット比較が CI に存在する — 計測経路: Playwright + CI
-- **スクロールの安定**: 数千メッセージの transcript でストリーミング中にスクロール位置が奪われない — 計測経路: E2E
+- **スクロールの安定**: 数千メッセージの transcript でストリーミング中にスクロール位置が奪われない —
+  計測経路: E2E。**E2E 自体は延期中 (AD-024 #18。持ち主は roadmap の「E2E / 検証基盤 feature」)。
+  R-3 は暫定代替として Vitest (同時マウント DOM ノード数が総件数に依存しない / スクロール位置飛び 0) +
+  quickstart 実機 (V-5) で担保する** (R-3 / [AD-033](../../decisions/0033-assistant-ui-elements-introduction-cost.md))
 - **自作率**: 自作コンポーネントのうち「対応する element が存在しない」と PR で説明されたものの割合が 100% — 計測経路: convention-reviewer / ux-reviewer
 
 ## Cross-domain dependencies
@@ -144,7 +148,11 @@ UI は本来 delivery mechanism であり domain ではない。それでも独�
 
 ## Related Specs
 
-（未着手。R-3 / R-4 / X-2 / O-2 / O-3 / OPT-pty が本 domain に属する）
+- [R-3: transcript の基本表示](../../../specs/003-ui-transcript-rendering/spec.md) — **着手中**。
+  本 domain 初の feature。markdown 本文 / streaming text / scroll anchor / 未定義 tool の fallback /
+  数千メッセージの仮想化を実装し、**この時点で見栄えの一次判断を行う** (下記 Principle「見た目の判断を先送りしない」)。
+  取得経路とプロセス境界は [AD-034](../../decisions/0034-transcript-read-path-and-process-boundary.md)
+- （残り。R-4 / X-2 / O-2 / O-3 / OPT-pty が本 domain に属する）
 
 ## Open Questions
 

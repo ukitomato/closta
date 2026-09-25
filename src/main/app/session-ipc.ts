@@ -1,5 +1,8 @@
 import type { SessionIndexDTO } from '@domain/session/dto'
+import type { FailureReason } from '@domain/session/target'
+import { isValidRequestToken, isValidSessionId } from '@domain/validation'
 
+import type { TranscriptResult } from './transcript-service'
 import { isKnownTargetKey, isValidSessionOffset } from './validate'
 
 /**
@@ -23,6 +26,43 @@ export interface SessionIpcDeps {
   fetchMoreSessions(targetKey: string, offset: number): Promise<SessionIndexDTO>
   /** 未信頼入力の照合に使う集合。**停止中の所在の `key` も含む。** */
   sessionTargetKeys(): readonly string[]
+  /** transcript 取得 (R-3 / AD-034)。**本文は port 経由**、戻り値の handshake は本文を含まない。 */
+  getTranscript(
+    sessionId: string,
+    targetKey: string,
+    requestToken: string
+  ): Promise<TranscriptResult>
+}
+
+function failedTranscript(requestToken: string, reasonKey: FailureReason): TranscriptResult {
+  return { handshake: { status: 'failed', requestToken, reasonKey }, port: null }
+}
+
+/**
+ * `getTranscript(sessionId, targetKey, requestToken)` (R-3 / BE-024 / [contracts/ipc-transcript.md](../../../specs/003-ui-transcript-rendering/contracts/ipc-transcript.md))。
+ *
+ * **検証を通らない入力では取得プロセスを起こさず失敗 handshake を返す** (port は `null`)。
+ * - `sessionId` は **UUID 形式に一致**すること (path traversal 防止。FR-017 / security H-002)
+ * - `targetKey` は既知集合との完全一致 (`isKnownTargetKey`。任意パスとして解釈しない)
+ * - `requestToken` は非空文字列 (stale 破棄の照合鍵)
+ *
+ * **本体を `ipc.ts` から分けてある** — `ipc.ts` は `ipcMain` を import するため Vitest で読めない。
+ * port の transfer (`event.sender.postMessage`) だけが `ipc.ts` に残り、検証と service 呼び出しはここで試せる。
+ * 返り値の `port` (`MessagePortMain`) は型のみで扱い、実際の transfer は `ipc.ts` が行う。
+ */
+export async function handleGetTranscript(
+  deps: SessionIpcDeps,
+  args: readonly unknown[]
+): Promise<TranscriptResult> {
+  const requestToken = args[2]
+  if (!isValidRequestToken(requestToken)) {
+    return failedTranscript('', 'transcript-read-failed')
+  }
+  if (!isValidSessionId(args[0])) return failedTranscript(requestToken, 'transcript-read-failed')
+  if (!isKnownTargetKey(deps.sessionTargetKeys(), args[1])) {
+    return failedTranscript(requestToken, 'transcript-read-failed')
+  }
+  return deps.getTranscript(args[0], args[1], requestToken)
 }
 
 /**

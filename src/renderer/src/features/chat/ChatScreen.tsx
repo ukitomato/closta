@@ -1,86 +1,125 @@
+import { useEffect, useState } from 'react'
+
 import {
   AssistantRuntimeProvider,
   useExternalStoreRuntime,
   type ThreadMessageLike
 } from '@assistant-ui/react'
+
+import type { FailureReason } from '@domain/session/target'
+
+import { EmptyState, EmptyStateGreeting } from '@/components/assistant-ui/elements/empty-state'
+import { ErrorState } from '@/components/assistant-ui/elements/error-state'
+import { GenerationLoader } from '@/components/assistant-ui/elements/loading-state'
 import { Thread } from '@/components/assistant-ui/elements/thread.aui'
 
+import { useTranscript } from './useTranscript'
+
 /**
- * assistant-ui の runtime-connected element (`Thread`) を実際に載せる画面。
+ * 選んだセッションの過去 transcript を assistant-ui で表示する画面 (R-3 / FE-032)。
  *
- * ランタイムは AD-023 の決定どおり `useExternalStoreRuntime` を使う
- * (「メッセージ状態が既に zustand にあるなら useExternalStoreRuntime」が公式の決定木。
- * Closta は Zustand を持つ)。
+ * ランタイムは AD-023 の決定どおり `useExternalStoreRuntime`。過去ログを
+ * `getSessionMessages()` から取り (R-3 / AD-034)、`ThreadMessageLike` に変換して流し込む。
  *
- * **Claude Code / Agent SDK には繋がない。** 本 feature (R-1) の範囲は
- * 「transcript の表示」でも「セッションの起動」でもないため、モデル呼び出しは行わない。
- * 実際の会話は R-3 (transcript 表示) と X-1 (起動) が担う。
- *
- * ## composer を無効にしている理由
- *
- * 以前は入力と送信ができ、送ると **assistant ロールで偽の応答**が返っていた。
- * 未接続であることは送信後にしか分からず、応答が吹き出しで返るため
- * **モデルが答えたように見えた**。README は SC-012 で「未実装機能を実装済みとして
- * 書かない」ことを課しているのに、UI 側で同じ誤認を作っていた。
- *
- * 加えて、生きた composer は **Constitution Principle VIII (日本語環境で破綻しない)** の
- * 検証対象になる。IME の変換確定 Enter を送信として扱わないことを確かめる経路が
- * R-1 には無い (E2E 基盤が無い) ため、**送信経路そのものを閉じる**ことで
- * 「検証していない送信経路」を残さない形にした ([AD-024](docs/decisions/0024-constitution-verification-paths.md) #18)。
- *
- * **延期先は R-2 ではない** ([AD-028](../../../../docs/decisions/0028-session-enumeration-process-and-unc-handoff.md) §5)。
- * R-2 は読み取り専用であり、E2E 基盤を作らない。
- * composer を開けるときに IME テストを同時に載せる方針は変わらないが、
- * その持ち主は M4 完了後に決める (Constitution v1.2.3 の Principle VIII)。
+ * **composer の送信経路は閉じたまま (`isDisabled: true`)** — 本 feature は過去ログの表示であり
+ * 送信しない。送信は X-1、IME ガードと E2E は X-2 が載せる
+ * (Principle VIII / [AD-024](../../../../docs/decisions/0024-constitution-verification-paths.md) #18)。
+ * この前提を `ChatScreen.test.tsx` が守る。
  */
+
+/**
+ * 失敗理由を transcript 文脈の日本語にする (US-1 AC-4 / FR-013)。
+ *
+ * transcript の汎用失敗は専用値 `transcript-read-failed` (pr-gate A-M-001。列挙 `enumeration-failed` とは別概念)。
+ * 到達可能性系 (`distro-not-running` 等) は `FailureReason` を R-2 と共有するが、**文言は transcript 向けに写す** —
+ * とくに列挙語彙を「列挙」と出さない (transcript は列挙ではない)。
+ */
+function transcriptFailureDetail(reasonKey: FailureReason | null): string {
+  const detail: Partial<Record<FailureReason, string>> = {
+    'distro-not-running':
+      'この所在 (WSL ディストロ) が停止しています。起動してから再取得してください。',
+    'wsl-unavailable': 'WSL を利用できないため履歴を読めませんでした。',
+    'permission-denied': '履歴ファイルへのアクセスが拒否されました。',
+    'path-too-long': 'パスが長すぎて履歴を読めませんでした。',
+    'stopped-midway': '読み取りが途中で打ち切られました。再取得してください。',
+    // transcript 取得の汎用失敗 (専用値)。
+    'transcript-read-failed': '履歴を読み込めませんでした。',
+    // 保険: 万一列挙語彙が来ても「列挙」文言を出さない。
+    'enumeration-failed': '履歴を読み込めませんでした。'
+  }
+  return reasonKey === null
+    ? '履歴を読み込めませんでした。再取得してください。'
+    : (detail[reasonKey] ?? '履歴を読み込めませんでした。再取得してください。')
+}
+
+/** ローダのアニメーション用の tick。取得中だけ回す。 */
+function useTick(active: boolean): number {
+  const [tick, setTick] = useState(0)
+  useEffect(() => {
+    if (!active) return
+    const timer = setInterval(() => setTick((value) => value + 1), 90)
+    return () => clearInterval(timer)
+  }, [active])
+  return tick
+}
+
 export function ChatScreen(): React.JSX.Element {
-  const messages: readonly ThreadMessageLike[] = []
+  const { messages, status, reasonKey, retry, hasSelection } = useTranscript()
+  const tick = useTick(status === 'loading')
 
   const runtime = useExternalStoreRuntime({
     messages: messages as ThreadMessageLike[],
     isRunning: false,
-    /**
-     * **スレッド全体を無効にする。** composer の入力・添付・送信がすべて閉じる。
-     */
+    /** **スレッド全体を無効にする。** composer の入力・添付・送信がすべて閉じる (FR-014)。 */
     isDisabled: true,
-    // messages が既に ThreadMessageLike なので恒等変換を渡す
     convertMessage: (message) => message,
     onNew: () => {
-      /*
-       * **到達しない。** `isDisabled: true` が送信を閉じている。
-       *
-       * 黙って何もしない形にはしない — ここへ来たということは
-       * 無効化が効いていないという意味であり、**未接続のまま送信できる状態**である。
-       * 静かに握り潰すと、その退行が誰にも気付かれない。
-       */
-      throw new Error('composer は R-1 では無効である (isDisabled が効いていない)')
+      /* **到達しない。** `isDisabled: true` が送信を閉じている。退行を黙らせないため throw する。 */
+      throw new Error('composer は R-3 では無効である (isDisabled が効いていない)')
     }
   })
 
   return (
-    <AssistantRuntimeProvider runtime={runtime}>
-      <div className="flex h-full min-h-0 flex-col">
-        {/*
-          **未接続であることを送信前に示す。** 以前は送信後にしか分からなかった。
-          `role="note"` にしているのは、警告でも操作結果でもない常設の説明だからである。
-        */}
-        <div
-          role="note"
-          className="border-border bg-muted/40 text-muted-foreground shrink-0 border-b px-4 py-2 text-sm"
-        >
-          <p className="text-foreground font-medium">
-            この画面はまだ Claude Code に繋がっていません。
-          </p>
-          <p className="mt-0.5 text-xs">
-            assistant-ui の表示部品を実際に載せて確かめるための画面です。入力はできません。
-            会話の表示は R-3、セッションの起動は X-1 で実装します。
-          </p>
-        </div>
-
-        <div className="min-h-0 flex-1">
-          <Thread />
-        </div>
-      </div>
-    </AssistantRuntimeProvider>
+    <div className="flex h-full min-h-0 flex-col">
+      {!hasSelection ? (
+        <Centered>
+          <EmptyState>
+            <EmptyStateGreeting>セッションを選ぶと会話が表示されます</EmptyStateGreeting>
+          </EmptyState>
+        </Centered>
+      ) : status === 'failed' ? (
+        <Centered>
+          {/* retry は即 loading (全画面ローダ) に遷移するため ErrorState の retrying は常に false。
+              retryingLabel は描画されないので渡さない (pr-gate P-L-002)。 */}
+          <ErrorState
+            title="transcript を取得できませんでした"
+            detail={transcriptFailureDetail(reasonKey)}
+            retrying={false}
+            onRetry={retry}
+            retryLabel="再取得"
+          />
+        </Centered>
+      ) : status === 'loading' ? (
+        <Centered>
+          <GenerationLoader label="transcript を読み込み中…" tick={tick} />
+        </Centered>
+      ) : status === 'empty' ? (
+        <Centered>
+          <EmptyState>
+            <EmptyStateGreeting>このセッションにはメッセージがありません</EmptyStateGreeting>
+          </EmptyState>
+        </Centered>
+      ) : (
+        <AssistantRuntimeProvider runtime={runtime}>
+          <div className="min-h-0 flex-1">
+            <Thread />
+          </div>
+        </AssistantRuntimeProvider>
+      )}
+    </div>
   )
+}
+
+function Centered({ children }: { children: React.ReactNode }): React.JSX.Element {
+  return <div className="flex min-h-0 flex-1 items-center justify-center p-6">{children}</div>
 }

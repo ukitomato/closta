@@ -20,6 +20,23 @@ function preloadPath(baseDir: string): string | null {
   return resolved.ok ? resolved.path.value : null
 }
 
+/**
+ * OS の既定ハンドラへ渡すのは **http(s) のみ**にする (pr-gate security H-004 / CWE-749)。
+ *
+ * R-3 以降は会話由来 (攻撃者制御可能) の markdown リンクを描画する。renderer 側の URL allowlist
+ * (`safe-url.ts`) が第一防御だが、main の `shell.openExternal` は OS ハンドラを起動する信頼境界であり、
+ * renderer フィルタと**独立した最終防御**を持つ (`file:` / `smb:` / カスタム scheme を OS へ渡さない)。
+ */
+function openExternalIfHttp(url: string): void {
+  let protocol: string
+  try {
+    protocol = new URL(url).protocol
+  } catch {
+    return
+  }
+  if (protocol === 'http:' || protocol === 'https:') void shell.openExternal(url)
+}
+
 export function createMainWindow(baseDir: string): BrowserWindow {
   const preload = preloadPath(baseDir)
 
@@ -45,7 +62,7 @@ export function createMainWindow(baseDir: string): BrowserWindow {
   // **外部 URL への遷移と新規ウィンドウ生成を拒否する** (AD-023 のチェックリスト項目)。
   // 外部リンクは OS の既定ブラウザへ委譲する。
   window.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url)
+    openExternalIfHttp(url)
     return { action: 'deny' }
   })
 
@@ -61,7 +78,7 @@ export function createMainWindow(baseDir: string): BrowserWindow {
     }
     if (!origins.includes(origin)) {
       event.preventDefault()
-      void shell.openExternal(url)
+      openExternalIfHttp(url)
     }
   })
 

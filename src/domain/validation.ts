@@ -127,3 +127,34 @@ export const MAX_SESSION_OFFSET = MAX_SESSIONS_PER_TARGET
  * 表示名と同じ枠に収まらないものは識別子として扱えない。
  */
 export const MAX_SESSION_ID_LENGTH = MAX_DISPLAY_NAME_LENGTH
+
+/**
+ * セッション識別子が **UUID 形式** か (R-3 / FR-017 / contracts/ipc-transcript.md 検証表)。
+ *
+ * **`getTranscript` の `sessionId` に必須**。この値は SDK の `getSessionMessages(sessionId)` に渡り、
+ * SDK は `<config-dir>/projects/<cwd>/<uuid>.jsonl` のファイル解決に使う。renderer は未信頼であり
+ * (AD-023)、`../../other/session` のような値は「非空・非制御文字」を満たして通過しうる。
+ * **UUID 形式への完全一致を要求**することで、セパレータ・ドット・上位ディレクトリ参照を含む値を
+ * 構造的に弾く (CWE-22 path traversal)。
+ *
+ * `targetKey` が既知集合との完全一致で守られる (`isKnownTargetKey`) のと対をなす防御であり、
+ * 片方だけ緩いと非対称が抜け道になる (design-gate security H-002)。
+ */
+const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+export function isValidSessionId(value: unknown): value is string {
+  return typeof value === 'string' && SESSION_ID_PATTERN.test(value)
+}
+
+/**
+ * `getTranscript` の `requestToken` の上限 (R-3 / pr-gate S-L-002)。
+ *
+ * renderer が採番する不透明トークン (stale 応答の突合キー)。他の未信頼入力
+ * (`MAX_SESSION_ID_LENGTH` など) と同じく境界で長さ上限を掛け、無制限文字列を
+ * `active` Map のキー・handshake・port message として保持しない。
+ */
+export const MAX_REQUEST_TOKEN_LENGTH = 128
+
+export function isValidRequestToken(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= MAX_REQUEST_TOKEN_LENGTH
+}

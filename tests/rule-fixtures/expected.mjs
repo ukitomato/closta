@@ -239,9 +239,22 @@ export const FIXTURES = [
     file: 'a-direct/sdk-forbidden-call.ts.fixture',
     target: 'src/agents/__rulecheck__/sdk-forbidden-call.ts',
     group: 'a',
-    what: '許可されていない Agent SDK の API を呼ぶ (`getSessionMessages`。SH-081)',
+    what: '許可されていない Agent SDK の書き込み系 API を呼ぶ (`renameSession`。R-3 で getSessionMessages を許可に追加したため差し替え。AD-034 / SH-061)',
     detectors: ['constitution'],
     rules: ['#14']
+  },
+  {
+    file: 'a-direct/sdk-forbidden-call-alias.ts.fixture',
+    target: 'src/agents/__rulecheck__/sdk-forbidden-call-alias.ts',
+    group: 'b',
+    /*
+     * **defense-in-depth (AD-034 §3 / contracts C-4 M-008 / SH-061)。**
+     * 項目14 は許可外 binding の呼び出し形正規表現 (`renameSession(`) のみを見るため、
+     * `const r = renameSession; r()` の再束縛は**捕まえない**。これは AD-034 §3 が明記した
+     * 既知の限界であり、`detectors: ['none']` として列挙し UNDETECTED_NOTES に代替と塞ぐ feature を書く。
+     */
+    what: '許可外の Agent SDK 書き込み系 API を alias 経由で呼ぶ (`const r = renameSession; r()`。項目14 の呼び出し形検査を迂回)',
+    detectors: ['none']
   },
   {
     file: 'a-direct/wsl-cli-in-session-layer.ts.fixture',
@@ -300,6 +313,23 @@ export const FIXTURES = [
  * AC-1 〜 AC-11 が名指す経路は SC-008 の全数検出対象であり、ここには入らない。
  */
 export const UNDETECTED_NOTES = {
+  'sdk-forbidden-call-alias': {
+    why:
+      '項目14 (check.mjs) は `AGENT_SDK_ALLOWED_CALLS` に無い binding の**呼び出し形正規表現** ' +
+      '(`(?<![.\\w])renameSession\\s*\\(`) だけを見る。`const r = renameSession; r()` の再束縛や ' +
+      '`(await import(...)).renameSession()` の動的 import は、`renameSession(` の形にならないため素通しする ' +
+      '(AD-034 §3 が明記した限界)。',
+    mitigatedBy:
+      '第一防御は**書き込みを起こす IPC が存在しないこと** (FR-001。renderer から到達できる SDK 書き込み経路が無い)。' +
+      '第二防御 (allowlist) の直接呼び出し形は `sdk-forbidden-call` サンプルで発火を維持している。' +
+      'alias/dynamic-import の迂回はこの第二防御では捕まらないが、第一防御で実害経路は塞がれている。',
+    nextFeature: 'X-1',
+    howToClose:
+      'X-1 でセッション起動が入り SDK の呼び出し面が広がる時点で、項目14 に**書き込み系 API 名の ' +
+      'binding レベル denylist** を足し (`const alias = renameSession` の再束縛と `import()` 経由を検出)、' +
+      '本 alias サンプルが `constitution` で発火するよう `detectors` を更新する。' +
+      '**呼び出し形の正規表現では届かないと分かったので、次は binding 追跡で塞ぐ。**'
+  },
   'ui-path-concat': {
     why: 'パス文字列の連結は import を伴わないので、import を見る lint も依存グラフも掛からない。',
     mitigatedBy:

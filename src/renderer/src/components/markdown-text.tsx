@@ -15,6 +15,7 @@ import { CheckIcon, CopyIcon } from "lucide-react";
 
 import { TooltipIconButton } from "@/components/tooltip-icon-button";
 import { useCopyToClipboard } from "@/hooks/use-copy-to-clipboard";
+import { safeUrlTransform } from "@/lib/safe-url";
 import { cn } from "@/lib/utils";
 
 type MarkdownTextProps = Partial<TextMessagePartProps> & {
@@ -50,6 +51,8 @@ const MarkdownTextImpl: FC<MarkdownTextProps> = ({ components }) => {
   return (
     <MarkdownTextPrimitive
       remarkPlugins={[remarkGfm]}
+      // 会話由来 URL の allowlist (FR-020 / contracts C-7)。rehype-raw は足さない (生 HTML 非描画)。
+      urlTransform={safeUrlTransform}
       className="aui-md"
       components={markdownComponents}
       defer

@@ -79,7 +79,7 @@ present の行にも「入っているが使っていない」ものがあるの
 | UI | React + assistant-ui (Elements) | PLAN.md:74, §4 | **present** (React 19 / `@assistant-ui/react` 0.15)。**runtime / backend は未接続** |
 | スタイル | Tailwind + assistant-ui design system | PLAN.md:75 | **present** (Tailwind 4)。design system は element に付随する形で導入 (AD-025 §6 (b)) |
 | 状態管理 | Zustand (renderer のみ) | PLAN.md:76 | **present** (5) |
-| 仮想化 | `@tanstack/react-virtual` | PLAN.md:77 | absent (R-3 で入る) |
+| 仮想化 | `@tanstack/react-virtual` | PLAN.md:77 | **present** (3.14.13)。R-3 で導入。`thread.aui.tsx` の仮想化パス (件数 > 40) で使用 ([AD-033](decisions/0033-assistant-ui-elements-introduction-cost.md)) |
 | エージェント連携 | `@anthropic-ai/claude-agent-sdk` (TS, V1 `query()`) | PLAN.md:78, AD-002 (L134) | **present** (0.3.270)。**依存として入れただけで呼び出していない** (AD-026) |
 | supervisor | Electron `utilityProcess` (単独起動可能) | PLAN.md:79, AD-006/AD-010 | absent (X-5 で入る)。**実体のディレクトリは `src/agents/`** |
 | ターミナル | xterm.js + node-pty | PLAN.md:80 | absent (optional scope) |

@@ -66,6 +66,8 @@ export type FailureReason =
   | 'path-too-long'
   | 'stopped-midway'
   | 'enumeration-failed'
+  /** transcript 取得の汎用失敗 (R-3)。**列挙 (`enumeration-failed`) とは別概念** — 同一値に 2 意味を持たせない (AD-034 / pr-gate A-M-001)。 */
+  | 'transcript-read-failed'
 
 /**
  * 実行時に照合できる一覧。**型と同じ集合であることを `satisfies` で縛る。**
@@ -80,7 +82,8 @@ export const FAILURE_REASONS = [
   'permission-denied',
   'path-too-long',
   'stopped-midway',
-  'enumeration-failed'
+  'enumeration-failed',
+  'transcript-read-failed'
 ] as const satisfies readonly FailureReason[]
 
 export function isFailureReason(value: unknown): value is FailureReason {

@@ -5,6 +5,7 @@ import { MAX_SESSION_OFFSET } from '@domain/validation'
 
 import {
   handleFetchMoreSessions,
+  handleGetTranscript,
   handleListSessions,
   handleRefreshSessions,
   type SessionIpcDeps
@@ -25,13 +26,14 @@ interface Calls {
   readonly list: number[]
   readonly refresh: number[]
   readonly fetch: { targetKey: string; offset: number }[]
+  readonly transcript: { sessionId: string; targetKey: string; requestToken: string }[]
 }
 
 function deps(keys: readonly string[] = ['host#0', 'wsl:Ubuntu#0']): {
   deps: SessionIpcDeps
   calls: Calls
 } {
-  const calls: Calls = { list: [], refresh: [], fetch: [] }
+  const calls: Calls = { list: [], refresh: [], fetch: [], transcript: [] }
   return {
     calls,
     deps: {
@@ -47,7 +49,14 @@ function deps(keys: readonly string[] = ['host#0', 'wsl:Ubuntu#0']): {
         calls.fetch.push({ targetKey, offset })
         return FETCHED
       },
-      sessionTargetKeys: () => keys
+      sessionTargetKeys: () => keys,
+      async getTranscript(sessionId, targetKey, requestToken) {
+        calls.transcript.push({ sessionId, targetKey, requestToken })
+        return {
+          handshake: { status: 'streaming' as const, requestToken },
+          port: null
+        }
+      }
     }
   }
 }
@@ -147,5 +156,80 @@ describe('handleListSessions / handleRefreshSessions', () => {
 
     expect(calls.list).toHaveLength(1)
     expect(calls.refresh).toHaveLength(1)
+  })
+})
+
+describe('handleGetTranscript — 検証表 (R-3 / BE-027 / SC-008)', () => {
+  const VALID_UUID = '11111111-1111-4111-8111-111111111111'
+
+  it('妥当な UUID + 既知 targetKey + 非空 token なら取得へ委譲する', async () => {
+    const { deps: d, calls } = deps()
+
+    const result = await handleGetTranscript(d, [VALID_UUID, 'host#0', 'tok'])
+
+    expect(result.handshake).toEqual({ status: 'streaming', requestToken: 'tok' })
+    expect(calls.transcript).toEqual([
+      { sessionId: VALID_UUID, targetKey: 'host#0', requestToken: 'tok' }
+    ])
+  })
+
+  it.each([
+    ['非 UUID', 'not-a-uuid'],
+    ['path traversal', '../../other/session'],
+    ['セパレータ混入', '1111/2222'],
+    ['空', ''],
+    ['非文字列', 123],
+    ['欠落', undefined]
+  ])('sessionId が UUID でなければ取得を発行しない (%s)', async (_label, sessionId) => {
+    const { deps: d, calls } = deps()
+
+    const result = await handleGetTranscript(d, [sessionId, 'host#0', 'tok'])
+
+    expect(result.handshake.status).toBe('failed')
+    expect(result.port).toBeNull()
+    expect(calls.transcript).toEqual([])
+  })
+
+  it('未知の targetKey では取得を発行しない', async () => {
+    const { deps: d, calls } = deps()
+
+    const result = await handleGetTranscript(d, [VALID_UUID, 'wsl:Unknown#0', 'tok'])
+
+    expect(result.handshake.status).toBe('failed')
+    expect(calls.transcript).toEqual([])
+  })
+
+  it('targetKey を config ディレクトリのパスとして解釈しない', async () => {
+    const { deps: d, calls } = deps()
+
+    for (const value of ['C:\\Users\\y\\.claude', '/home/y/.claude']) {
+      expect((await handleGetTranscript(d, [VALID_UUID, value, 'tok'])).handshake.status).toBe(
+        'failed'
+      )
+    }
+    expect(calls.transcript).toEqual([])
+  })
+
+  it.each([
+    ['空', ''],
+    ['非文字列', 123],
+    ['欠落', undefined],
+    ['上限超過 (>128)', 'x'.repeat(129)]
+  ])('requestToken が妥当でなければ発行しない (%s)', async (_label, requestToken) => {
+    const { deps: d, calls } = deps()
+
+    const result = await handleGetTranscript(d, [VALID_UUID, 'host#0', requestToken])
+
+    expect(result.handshake.status).toBe('failed')
+    expect(calls.transcript).toEqual([])
+  })
+
+  it('妥当な requestToken (非空・上限内) は発行する', async () => {
+    const { deps: d, calls } = deps()
+
+    const result = await handleGetTranscript(d, [VALID_UUID, 'host#0', 'x'.repeat(128)])
+
+    expect(result.handshake.status).toBe('streaming')
+    expect(calls.transcript).toHaveLength(1)
   })
 })

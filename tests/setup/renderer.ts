@@ -40,6 +40,28 @@ if (!('ResizeObserver' in globalThis)) {
   }
 }
 
+/**
+ * **jsdom に無い `Element.scrollTo` / `scrollIntoView` を補う。**
+ *
+ * `@assistant-ui/react` の `ThreadPrimitive.Viewport` は `turnAnchor` の位置合わせに
+ * `viewport.scrollTo(...)` を `requestAnimationFrame` の中で呼ぶ。jsdom は実装を持たず、
+ * これが rAF コールバック内の unhandled error になり、実データを持つ `Thread` を mount する
+ * テストを false positive にしうる (仮想化の FE-040 でも同経路を踏む)。
+ *
+ * **スクロールは no-op。** jsdom はレイアウトを持たないので、位置の副作用そのものは
+ * テストの対象にならない。ここで要るのは「呼べること」だけである。
+ */
+if (typeof Element.prototype.scrollTo !== 'function') {
+  Element.prototype.scrollTo = function scrollTo(): void {
+    // レイアウトを持たないので何もしない
+  }
+}
+if (typeof Element.prototype.scrollIntoView !== 'function') {
+  Element.prototype.scrollIntoView = function scrollIntoView(): void {
+    // 同上
+  }
+}
+
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()

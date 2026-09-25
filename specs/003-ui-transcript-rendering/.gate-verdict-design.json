@@ -1,0 +1,97 @@
+{
+    "gate": "design",
+    "run": "2026-09-24",
+    "spec_dir": "specs/003-ui-transcript-rendering",
+    "spec_id": "003-ui-transcript-rendering",
+    "tracks": {
+        "analyze": {
+            "status": "ok",
+            "raw_out": "analyze.md",
+            "viewpoint_missing": null,
+            "cascade_demotions": null
+        },
+        "po-reviewer": {
+            "status": "ok",
+            "raw_out": "po-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "architecture-reviewer": {
+            "status": "ok",
+            "raw_out": "architecture-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "security-reviewer": {
+            "status": "ok",
+            "raw_out": "security-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "platform-boundary-reviewer": {
+            "status": "ok",
+            "raw_out": "platform-boundary-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        }
+    },
+    "severity_counts": {
+        "critical": 0,
+        "high": 6,
+        "medium": 7,
+        "low": 4
+    },
+    "round": 2,
+    "prev_round": {
+        "critical": 4,
+        "verdict": "FIX_REQUIRED",
+        "resolved_critical": 4,
+        "resolved_high": 7
+    },
+    "dedup_log": [
+        {
+            "merged": [
+                "arch-H-001",
+                "pb-H-101"
+            ],
+            "key": "plan-VII-wording"
+        },
+        {
+            "merged": [
+                "arch-H-002",
+                "pb-M-101"
+            ],
+            "key": "spawn-allowlist"
+        },
+        {
+            "merged": [
+                "pb-H-102",
+                "analyze-N7"
+            ],
+            "key": "env-race-regression-test"
+        },
+        {
+            "merged": [
+                "po-H-001",
+                "arch-M-002",
+                "analyze-N2"
+            ],
+            "key": "SC-009-010-propagation"
+        },
+        {
+            "merged": [
+                "sec-S-001",
+                "analyze-N4"
+            ],
+            "key": "port-inbound"
+        },
+        {
+            "merged": [
+                "sec-S-004",
+                "analyze-N6"
+            ],
+            "key": "url-enforcement"
+        }
+    ],
+    "verdict": "PASS"
+}

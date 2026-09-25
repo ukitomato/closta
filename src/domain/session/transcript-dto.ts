@@ -1,0 +1,85 @@
+import type { FailureReason } from './target'
+
+/**
+ * transcript 表示の JSON-safe な DTO (R-3 / [AD-034](../../../docs/decisions/0034-transcript-read-path-and-process-boundary.md))。
+ *
+ * **`domain` は assistant-ui を import しない** — レイヤ境界であり、かつ変換は取得プロセス
+ * (`src/agents/`。electron/native 非依存) で走るため。renderer が本 DTO を assistant-ui の
+ * `ThreadMessageLike` へ変換する (`src/renderer/src/features/chat/convert.ts` の `toThreadMessage`)。
+ *
+ * **本文は `MessageChannelMain` の port で取得プロセス↔renderer を直通**する (AD-034 決定 1)。
+ * main はこの DTO を保持・`JSON.parse`・deserialize しない。
+ */
+
+/** transcript の 1 メッセージ内の表示パート ([data-model.md](../../../specs/003-ui-transcript-rendering/data-model.md) §2 / §3)。 */
+export type TranscriptPartDTO =
+  | { readonly type: 'text'; readonly text: string }
+  | { readonly type: 'reasoning'; readonly text: string }
+  | {
+      readonly type: 'tool-call'
+      readonly toolCallId: string
+      readonly toolName: string
+      /** 入力を JSON 文字列で運ぶ (fallback 表示がそのまま出す)。パース失敗時は生文字列。 */
+      readonly argsText: string
+      /** tool_result 本文 (サニタイズ済み)。未応答の tool_use は `null`。 */
+      readonly result: string | null
+      readonly isError: boolean
+    }
+  | { readonly type: 'image'; readonly url: string }
+  | { readonly type: 'file'; readonly filename: string; readonly text: string }
+  /** コンパクション境界などの最小の区切り (FR-018)。専用 element は O-2。 */
+  | { readonly type: 'divider'; readonly label: string }
+
+export type TranscriptMessageRole = 'user' | 'assistant' | 'system'
+
+/** transcript の 1 メッセージ。`ThreadMessageLike` へ 1:1 で写せる形。 */
+export interface TranscriptMessageDTO {
+  /** SDK の `uuid`。行の同一性と仮想化の key に使う。 */
+  readonly id: string
+  readonly role: TranscriptMessageRole
+  readonly parts: readonly TranscriptPartDTO[]
+  /** epoch ms。取得できないときは `null`。 */
+  readonly createdAt: number | null
+}
+
+/**
+ * transcript 取得の handshake (IPC invoke の戻り。**本文を含まない**。AD-034 決定 1)。
+ *
+ * 本文 (`TranscriptMessageDTO[]`) は port2 経由で届く。invoke はこの軽量メタのみを返す。
+ */
+export type TranscriptHandshakeDTO =
+  | { readonly status: 'streaming'; readonly requestToken: string }
+  | { readonly status: 'empty'; readonly requestToken: string }
+  | { readonly status: 'failed'; readonly requestToken: string; readonly reasonKey: FailureReason }
+
+/** port2 で取得プロセスから renderer へ届く本文フレーム。 */
+export type TranscriptFrameDTO =
+  | {
+      readonly kind: 'messages'
+      readonly requestToken: string
+      readonly messages: readonly TranscriptMessageDTO[]
+    }
+  | { readonly kind: 'error'; readonly requestToken: string; readonly reasonKey: FailureReason }
+
+/**
+ * `TranscriptPartDTO` の各 variant の許可フィールド (SC-009 の割り当て台帳の機械検証)。
+ * **表示する生の逐語を運ぶフィールドを固定する** — 増えたらスキーマ検査が落ちる。
+ */
+export const TRANSCRIPT_PART_FIELDS = {
+  text: ['type', 'text'],
+  reasoning: ['type', 'text'],
+  'tool-call': ['type', 'toolCallId', 'toolName', 'argsText', 'result', 'isError'],
+  image: ['type', 'url'],
+  file: ['type', 'filename', 'text'],
+  divider: ['type', 'label']
+} as const satisfies {
+  [K in TranscriptPartDTO['type']]: readonly (keyof Extract<TranscriptPartDTO, { type: K }>)[]
+}
+
+/** `TranscriptMessageDTO` の許可フィールド (SC-009)。 */
+export const TRANSCRIPT_MESSAGE_FIELDS = [
+  'id',
+  'role',
+  'parts',
+  'createdAt'
+] as const satisfies readonly (keyof TranscriptMessageDTO)[]
