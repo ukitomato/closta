@@ -1,6 +1,7 @@
 import { ipcMain, type IpcMainInvokeEvent } from 'electron'
 
 import { IPC_CHANNELS } from '@domain/capability'
+import type { SessionControl, SessionLaunchHandshakeDTO } from '@domain/session/agent-session'
 import type { SessionIndexDTO } from '@domain/session/dto'
 import type { RuntimeDescriptor } from '@domain/runtime/descriptor'
 import type { RuntimeDescriptorDTO, RuntimeListDTO } from '@domain/runtime/dto'
@@ -18,11 +19,17 @@ import type { Location } from '@domain/workspace/folder'
 import type { TranscriptHandshakeDTO } from '@domain/session/transcript-dto'
 
 import type { Measure } from './measure'
+import type { LaunchOutcome } from './session-launch-service'
 import {
   handleFetchMoreSessions,
   handleGetTranscript,
+  handleInterruptSession,
+  handleKillSession,
+  handleLaunchSession,
   handleListSessions,
-  handleRefreshSessions
+  handleRefreshSessions,
+  handleRespondPermission,
+  handleSendPrompt
 } from './session-ipc'
 import type { TranscriptResult } from './transcript-service'
 import {
@@ -93,6 +100,13 @@ export interface IpcDependencies {
     targetKey: string,
     requestToken: string
   ): Promise<TranscriptResult>
+
+  /* ── セッション起動 + 制御 (X-1) ── */
+
+  /** 起動を調停する。**本文は port**、戻り値は handshake + transfer 用 port (AD-036 §2)。 */
+  launchSession(folderId: string, runtimeId: string): Promise<LaunchOutcome>
+  /** 制御を該当セッションへ送る。未知 / 終了済み sessionId なら `false`。 */
+  controlSession(sessionId: string, control: SessionControl): boolean
 
   /** 計測関数。composition root が開発ビルド判定を解決して渡す (BE-030 / FR-038)。 */
   readonly measure: Measure
@@ -214,6 +228,40 @@ export function registerIpcHandlers(deps: IpcDependencies): void {
     }
     return result.handshake
   })
+
+  /* ── セッション起動 + ストリーミング (X-1) ─────────────────────── */
+
+  /*
+   * **port2 を renderer へ transfer した後、main はその port に触れない** (AD-036 §2 / Principle IX)。
+   * 本文 (`SessionEvent`) は agents↔renderer 直通で流れ、main は `JSON.parse` も deserialize もしない。
+   * handshake (本文を含まない) だけを invoke の戻り値で返す。検証と service 呼び出しは `session-ipc.ts`。
+   */
+  handle(IPC_CHANNELS.launchSession, async (event, ...args): Promise<SessionLaunchHandshakeDTO> => {
+    const outcome = await handleLaunchSession(deps, args)
+    if (outcome.status === 'launching') {
+      event.sender.postMessage(IPC_CHANNELS.sessionPort, { sessionId: outcome.sessionId }, [
+        outcome.port
+      ])
+      return { status: 'launching', sessionId: outcome.sessionId }
+    }
+    return { status: 'rejected', reasonKey: outcome.reason }
+  })
+
+  handle(IPC_CHANNELS.sendPrompt, async (_event, ...args): Promise<void> =>
+    handleSendPrompt(deps, args)
+  )
+
+  handle(IPC_CHANNELS.respondPermission, async (_event, ...args): Promise<void> =>
+    handleRespondPermission(deps, args)
+  )
+
+  handle(IPC_CHANNELS.interruptSession, async (_event, ...args): Promise<void> =>
+    handleInterruptSession(deps, args)
+  )
+
+  handle(IPC_CHANNELS.killSession, async (_event, ...args): Promise<void> =>
+    handleKillSession(deps, args)
+  )
 
   /* ── 解決 ───────────────────────────────────────────────────────── */
 

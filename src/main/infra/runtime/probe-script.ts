@@ -24,6 +24,14 @@
  * 「リダイレクトが 1 つでもある」形を許すと検証の意味が薄れる (R-08)。
  * 失敗時の既定値は `||` で与える。`command -v` は不在時に stderr へ何も書かない。
  *
+ * ### `claude` 実行パスの解決 (X-1 / AD-036 / AD-018 §4)
+ *
+ * 起動 (X-1) は WSL 内 `claude` を**絶対パス**で起動する (`PATH` を渡さない。裸名依存を避ける。
+ * data-model §8 L-102 / CWE-426)。実行パスは検出時に `command -v claude` で 1 回解決し
+ * descriptor (`claudePath`) に載せる — 既存の probe 経路に相乗りし、`wsl.exe` の呼び出しを増やさない
+ * (新規引数を要する launch-time 解決を避ける。allowlist 項目 2 / 7 を触らない)。不在時は空文字列を返し、
+ * ホスト側は `claude-not-found` に倒す。**`command -v` は既存の許可形**であり項目 6 の形の制約に収まる。
+ *
  * ### 出力の形
  *
  * `key=value` 行と、`mounts_begin` / `mounts_end` で囲んだマウント情報の生ブロック。
@@ -37,6 +45,7 @@
  */
 export const PROBE_SCRIPT = `printf 'bwrap=%s\\n' "$(command -v bwrap || printf '')"
 printf 'socat=%s\\n' "$(command -v socat || printf '')"
+printf 'claude=%s\\n' "$(command -v claude || printf '')"
 printf 'userns_restrict_readable=%s\\n' "$(test -r /proc/sys/kernel/apparmor_restrict_unprivileged_userns && printf 'yes' || printf 'no')"
 printf 'userns_restrict=%s\\n' "$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns || printf '')"
 printf 'userns_create=%s\\n' "$(unshare --user --map-root-user true && printf 'ok' || printf 'fail')"

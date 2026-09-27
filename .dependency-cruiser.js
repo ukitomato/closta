@@ -250,7 +250,7 @@ module.exports = {
        */
       from: {
         path:
-          '^src/main/app/(folder-service|runtime-store|session-service)[.]ts$' +
+          '^src/main/app/(folder-service|runtime-store|session-service|session-launch-service)[.]ts$' +
           '|^src/main/app/__rulecheck__/service-io-import[.]ts$'
       },
       to: {

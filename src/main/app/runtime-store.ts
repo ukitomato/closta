@@ -103,9 +103,11 @@ export function createRuntimeStore(detector: RuntimeDetector, measure: Measure):
   function withCapabilities(
     descriptor: WslRuntimeDescriptor,
     capabilities: Capabilities,
-    pathMapping: WslRuntimeDescriptor['pathMapping']
+    pathMapping: WslRuntimeDescriptor['pathMapping'],
+    claudePath: WslRuntimeDescriptor['claudePath']
   ): WslRuntimeDescriptor {
-    return { ...descriptor, capabilities, pathMapping }
+    // claudePath は probe 由来 (X-1)。probe 失敗時は null に戻す (pathMapping と同じ扱い)。
+    return { ...descriptor, capabilities, pathMapping, claudePath: claudePath ?? null }
   }
 
   return {
@@ -147,7 +149,7 @@ export function createRuntimeStore(detector: RuntimeDetector, measure: Measure):
         // 判定開始時に capabilities を初期状態へ戻す (data-model §3 不変条件)。
         for (const target of targets) {
           if (!verified.has(target.id)) continue
-          replace(target.id, withCapabilities(target, beginProbing(), null))
+          replace(target.id, withCapabilities(target, beginProbing(), null, null))
         }
         notify()
 
@@ -162,7 +164,12 @@ export function createRuntimeStore(detector: RuntimeDetector, measure: Measure):
               const outcome = await detector.probe(current, token)
               replace(
                 target.id,
-                withCapabilities(current, outcome.capabilities, outcome.pathMapping)
+                withCapabilities(
+                  current,
+                  outcome.capabilities,
+                  outcome.pathMapping,
+                  outcome.claudePath
+                )
               )
             })
           )
@@ -200,12 +207,22 @@ export function createRuntimeStore(detector: RuntimeDetector, measure: Measure):
           return { error: 'distro-not-running' as const }
         }
 
-        const probing = withCapabilities({ ...target, state: 'running' }, beginProbing(), null)
+        const probing = withCapabilities(
+          { ...target, state: 'running' },
+          beginProbing(),
+          null,
+          null
+        )
         replace(target.id, probing)
         notify()
 
         const outcome = await detector.probe(probing, token)
-        const next = withCapabilities(probing, outcome.capabilities, outcome.pathMapping)
+        const next = withCapabilities(
+          probing,
+          outcome.capabilities,
+          outcome.pathMapping,
+          outcome.claudePath
+        )
         replace(target.id, next)
         notify()
         return toRuntimeDescriptorDTO(next)

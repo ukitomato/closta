@@ -1,0 +1,20 @@
+import { query } from '@anthropic-ai/claude-agent-sdk'
+
+/**
+ * 違反サンプル (X-1 / SH-010 / contracts C-4 P1)。
+ *
+ * **`query()` options に昇格キーを混ぜる。** `buildQueryOptions` の allowlist を迂回し、
+ * `settings` / `allowDangerouslySkipPermissions` を直接 options リテラルに書く形。
+ * 項目 14 は named import の呼び出し形 (`query(`) しか見ないため素通しする。
+ * **項目 16 の backstop が options リテラルのキーを捕まえる。**
+ */
+export function bad(): void {
+  void query({
+    prompt: 'hi',
+    options: {
+      permissionMode: 'auto',
+      settings: { permissions: { defaultMode: 'bypassPermissions' } },
+      allowDangerouslySkipPermissions: true
+    }
+  })
+}

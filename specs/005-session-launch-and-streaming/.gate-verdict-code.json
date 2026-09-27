@@ -1,0 +1,346 @@
+{
+    "gate": "code",
+    "run": "2026-09-27T09:27:50Z",
+    "spec_dir": "specs/005-session-launch-and-streaming",
+    "spec_id": "005-session-launch-and-streaming",
+    "iter": 5,
+    "severity_counts": {
+        "critical": 0,
+        "high": 0,
+        "medium": 4,
+        "low": 3,
+        "must_fix": 0
+    },
+    "must_fix_findings": [],
+    "touched_files": [
+        {
+            "path": ".dependency-cruiser.js",
+            "sha": "7a26b422a646b0d1604c5fec34747ee906b977e0"
+        },
+        {
+            "path": "docs/decisions/0036-single-session-launch-process-and-live-stream.md",
+            "sha": "0cd090be106e9f8398b09f1c87aea2367549419b"
+        },
+        {
+            "path": "docs/discovery.md",
+            "sha": "f5f629048dd9a738b6a306f8751a391443656c05"
+        },
+        {
+            "path": "docs/domains/session/charter.md",
+            "sha": "2455202284947b39f3f3be30d2963e2541e4ad5c"
+        },
+        {
+            "path": "docs/glossary.md",
+            "sha": "5490bf94889b14e55d90c4b75b76957a1af05e22"
+        },
+        {
+            "path": "docs/roadmap.md",
+            "sha": "9fe0b3c9d3745c47c88ad8e08ae5e83933f63105"
+        },
+        {
+            "path": "eslint.config.mjs",
+            "sha": "5935908231461d0ebee324ec8b7e101cecd234e0"
+        },
+        {
+            "path": "scripts/constitution/allowlists.mjs",
+            "sha": "843a359068d4148549b83034722b37bc2aea7c09"
+        },
+        {
+            "path": "scripts/constitution/check.mjs",
+            "sha": "55c7b3e19802237858806fdd9864996dc5e6c50c"
+        },
+        {
+            "path": "src/agents/sdk-agent-session.ts",
+            "sha": "299523fdfef38ae4e39a95a2725d35050fd83ccb"
+        },
+        {
+            "path": "src/agents/session-core.test.ts",
+            "sha": "daf091fc589019dee5537f523f986b39b39d4a15"
+        },
+        {
+            "path": "src/agents/session-core.ts",
+            "sha": "24725c7841e775842fadcde3b5f339939742c59d"
+        },
+        {
+            "path": "src/domain/capability.ts",
+            "sha": "67d56b6132e95fac94fd5ed248be9c05ba4cd193"
+        },
+        {
+            "path": "src/domain/runtime/descriptor.ts",
+            "sha": "25bee8335f31ed7ac6317deda5e98145ce56c447"
+        },
+        {
+            "path": "src/domain/runtime/interfaces.ts",
+            "sha": "f7c9dce071ff93bb6e893df1f0c4d1d3d540b0b9"
+        },
+        {
+            "path": "src/domain/session/agent-session.test.ts",
+            "sha": "a7b058d3e4da90d265b6b5376d6240aec5b1c75e"
+        },
+        {
+            "path": "src/domain/session/agent-session.ts",
+            "sha": "2cb2cad4c395d962fdb02373e96725b203a60739"
+        },
+        {
+            "path": "src/domain/session/launch-gate.test.ts",
+            "sha": "fd67d57e68d00df32548ccaab233661dd64c97ce"
+        },
+        {
+            "path": "src/domain/session/launch-gate.ts",
+            "sha": "7401b1770ed05f00ae4e12b7f5056fbbd3abad65"
+        },
+        {
+            "path": "src/domain/session/live-message.test.ts",
+            "sha": "c624ecb23fc4c193f90b95aa31f567b5127f3a82"
+        },
+        {
+            "path": "src/domain/session/live-message.ts",
+            "sha": "a18404518452a631f14214f5d039f5136aecbc47"
+        },
+        {
+            "path": "src/domain/session/run-state.test.ts",
+            "sha": "b98e91e5e8ed689a6668803dd0e1db3fee654a49"
+        },
+        {
+            "path": "src/domain/session/run-state.ts",
+            "sha": "163ad68fc9da976f4f35557cafb29989b9f6be4a"
+        },
+        {
+            "path": "src/domain/validation.ts",
+            "sha": "1f8b93b61e90cf0243376b83715c15fb44178caf"
+        },
+        {
+            "path": "src/main/app/composition-root.ts",
+            "sha": "20f41eec635cb4069cb658eebc216381d7963bae"
+        },
+        {
+            "path": "src/main/app/ipc.ts",
+            "sha": "5116dbac7e0213ef92e2e03752fefab87c8448dd"
+        },
+        {
+            "path": "src/main/app/runtime-store.ts",
+            "sha": "e41b6051c888c9a583c5e8cd800951b9cc5ebfe1"
+        },
+        {
+            "path": "src/main/app/session-ipc.test.ts",
+            "sha": "b78567b999c0da8ea1d3dffa521d53e2c3005ff1"
+        },
+        {
+            "path": "src/main/app/session-ipc.ts",
+            "sha": "de91e86c06d89244fc1cb7a417b7f6685ec1295a"
+        },
+        {
+            "path": "src/main/app/session-launch-service.test.ts",
+            "sha": "a240d053db3d3551310bc027db8d378ee36b3a54"
+        },
+        {
+            "path": "src/main/app/session-launch-service.ts",
+            "sha": "d3a0e119cb0258ab29e2e3a7a381c66f5732bd2c"
+        },
+        {
+            "path": "src/main/app/session-spawner.ts",
+            "sha": "cc3b623c1f537a64a170d5ecf07121aedc7743dc"
+        },
+        {
+            "path": "src/main/app/validate.test.ts",
+            "sha": "1115f2f042fec0a528676bac17c92e4bebf15ab8"
+        },
+        {
+            "path": "src/main/app/validate.ts",
+            "sha": "9d45190746f3c1f464cc94a641aa99f9e018e296"
+        },
+        {
+            "path": "src/main/infra/runtime/launch-spec.test.ts",
+            "sha": "f35a7aaa7f89201819544086d337e57eb145d1e2"
+        },
+        {
+            "path": "src/main/infra/runtime/launch-spec.ts",
+            "sha": "8c3633001d8dd4e53c6bb29dec5eb10f3e6a8822"
+        },
+        {
+            "path": "src/main/infra/runtime/probe-script.ts",
+            "sha": "769cf38881ad55a89da7e815f127538a49c30d3a"
+        },
+        {
+            "path": "src/main/infra/runtime/wsl-cli.test.ts",
+            "sha": "8bc819c790e2bff628bdf5e1361e6dc689425adb"
+        },
+        {
+            "path": "src/main/infra/runtime/wsl-cli.ts",
+            "sha": "8e0cb20df3a1dcccaed16af8a4b3b5faa750b477"
+        },
+        {
+            "path": "src/main/infra/runtime/wsl-detector.ts",
+            "sha": "c9d3f5250a1041ee5af62f88ccba9181dab172fa"
+        },
+        {
+            "path": "src/preload/index.ts",
+            "sha": "1cdaa8fc84107971733e7e66c24039e92c338022"
+        },
+        {
+            "path": "src/renderer/src/App.tsx",
+            "sha": "0e18cc2774e0b9775ed8f48d85066762bc02325d"
+        },
+        {
+            "path": "src/renderer/src/features/session/ApprovalCard.test.tsx",
+            "sha": "389b6696e48fdc938da493b4d8b80f2e10b89eff"
+        },
+        {
+            "path": "src/renderer/src/features/session/ApprovalCard.tsx",
+            "sha": "71706444277f297dff1285cb3227171e342365f4"
+        },
+        {
+            "path": "src/renderer/src/features/session/SessionScreen.tsx",
+            "sha": "d3cd89347adb6f030599d51f8061bbdc5774986a"
+        },
+        {
+            "path": "src/renderer/src/features/session/labels.test.ts",
+            "sha": "3a73e7d8287fecd354286cfb828ed20e1c50f17d"
+        },
+        {
+            "path": "src/renderer/src/features/session/labels.ts",
+            "sha": "9916b3f72a4962ca3688ea8538798efa9eb76b96"
+        },
+        {
+            "path": "src/renderer/src/features/session/useLiveSession.test.tsx",
+            "sha": "11f9472736d480da8d80865e637ab0bb3872ef1f"
+        },
+        {
+            "path": "src/renderer/src/features/session/useLiveSession.ts",
+            "sha": "b2a2d668f2ddf9b30403008e5575f993f7234b4b"
+        },
+        {
+            "path": "src/renderer/src/stores/ui.ts",
+            "sha": "04973ddfd50832c178d16b122fc172fd222dae1c"
+        },
+        {
+            "path": "src/renderer/src/test-support/capability.ts",
+            "sha": "38fbdc60df1beb649c1f8479b1bf9da46dc75b9f"
+        },
+        {
+            "path": "tests/rule-fixtures/a-direct/sdk-query-escalation-options.ts.fixture",
+            "sha": "863ee8aacce17a02a11ce971f00e9125c62f381d"
+        },
+        {
+            "path": "tests/rule-fixtures/b-equivalent/sdk-query-mutation-method.ts.fixture",
+            "sha": "a4fdb894a077ae77f13843259c4de4d95a73120d"
+        },
+        {
+            "path": "tests/rule-fixtures/expected.mjs",
+            "sha": "e2d66e64eeaf384333fe3bb1e9b9ed4dacfe3c84"
+        }
+    ],
+    "fr_coverage": [
+        {
+            "fr": "FR-006",
+            "covered": true,
+            "by": [
+                "wsl-cli.ts:buildDetectionEnv",
+                "wsl-cli.test.ts",
+                "launch-spec.ts:buildLaunchEnv"
+            ]
+        },
+        {
+            "fr": "FR-016",
+            "covered": true,
+            "by": [
+                "SessionScreen.tsx (kill 後 killed 終端表示)",
+                "useLiveSession.ts:kill"
+            ]
+        },
+        {
+            "fr": "FR-030",
+            "covered": true,
+            "by": [
+                "session-core.ts:classifyResult",
+                "labels.test.ts"
+            ]
+        }
+    ],
+    "viewpoint_coverage": {
+        "A": "該当なし: pr-gate 専任",
+        "B": "該当なし: pr-gate 専任",
+        "C": "該当なし: pr-gate 専任",
+        "D": "該当なし: pr-gate 専任 (platform Med:1 Low:1)",
+        "E": "該当なし: pr-gate 専任",
+        "F": "Medium:1 Low:1 (convention)",
+        "G": "該当なし",
+        "H": "Medium:2 (SessionScreen/useLiveSession test) + platform Low"
+    },
+    "tracks": {
+        "lint-agent": {
+            "violations": 0,
+            "exit_code": 0,
+            "detectors": [
+                "lint",
+                "typecheck",
+                "depcruise",
+                "check:constitution"
+            ]
+        },
+        "test-agent": {
+            "passed": 1015,
+            "failed": 0,
+            "exit_code": 0,
+            "scope": "full"
+        },
+        "convention-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "lint_input": "lint-agent"
+        },
+        "platform-boundary-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        }
+    },
+    "skipped_reviewers": [
+        {
+            "name": "a11y-reviewer",
+            "reason": "gates=['pr-gate'] に code-gate が無い"
+        },
+        {
+            "name": "ux-reviewer",
+            "reason": "gates=['pr-gate'] に code-gate が無い"
+        },
+        {
+            "name": "database-reviewer",
+            "reason": "auto_invoke_patterns に一致する変更ファイルが無い"
+        }
+    ],
+    "cascade_demotions": 0,
+    "iter_history": [
+        {
+            "iter": 1,
+            "must_fix": 5,
+            "skipped": 0,
+            "error": 0
+        },
+        {
+            "iter": 2,
+            "must_fix": 0,
+            "skipped": 0,
+            "error": 0
+        },
+        {
+            "iter": 3,
+            "must_fix": 0,
+            "skipped": 0,
+            "error": 0
+        },
+        {
+            "iter": 4,
+            "must_fix": 0,
+            "skipped": 0,
+            "error": 0
+        },
+        {
+            "iter": 5,
+            "must_fix": 0,
+            "skipped": 0,
+            "error": 0
+        }
+    ],
+    "resolved_beyond_must_fix": "iter5 は pr-gate Round 4 の High 1 (po H-401 kill UI hang) と Medium (sec M-101 PATH / arch M-001・M-002 doc / po M-401 pending) の修正を再ゲート。convention/platform とも Round 4 指摘の解消を確認し High 1→0・Critical 0 を維持 (完全収束)。新規は Medium 4 (env allowlist DRY / SessionScreen・useLiveSession test 網羅) + Low 3 (コメント/重複行) の polish のみで gate を止めない。全ゲート再検証 green (lint 0 / test 1015 full / depcruise 0 / constitution 15 ok)。",
+    "verdict": "PASS"
+}

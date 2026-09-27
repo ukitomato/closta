@@ -4,6 +4,7 @@ import { WorkspaceFoldersScreen } from '@/features/workspace-folders/WorkspaceFo
 import { ResolutionScreen } from '@/features/folder-runtime-resolution/ResolutionScreen'
 import { SessionListScreen } from '@/features/session-list/SessionListScreen'
 import { ChatScreen } from '@/features/chat/ChatScreen'
+import { SessionScreen } from '@/features/session/SessionScreen'
 import { SCREEN_LABELS, SCREENS, useUiStore, type ScreenId } from '@/stores/ui'
 import { cn } from '@/lib/utils'
 
@@ -21,6 +22,7 @@ const SCREEN_COMPONENTS: Record<ScreenId, () => React.JSX.Element> = {
   folders: WorkspaceFoldersScreen,
   sessions: SessionListScreen,
   resolution: ResolutionScreen,
+  launch: SessionScreen,
   chat: ChatScreen
 }
 
@@ -31,7 +33,8 @@ function App(): React.JSX.Element {
   const toggleTheme = useUiStore((s) => s.toggleTheme)
 
   const Screen = SCREEN_COMPONENTS[screen]
-  const isChat = screen === 'chat'
+  // chat (R-3 過去ログ) と launch (X-1 ライブ) は Thread が全高を占める。
+  const isChat = screen === 'chat' || screen === 'launch'
 
   return (
     <TooltipProvider>

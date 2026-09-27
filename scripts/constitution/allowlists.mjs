@@ -228,7 +228,19 @@ export const PROCESS_SPAWN_MODULES = [
    * `MessageChannelMain` の port を子へ transfer する (main を本文経路から外す)。
    * 常駐/短命の 2 つの寿命を 1 ファイルに混ぜない。
    */
-  'src/main/app/transcript-spawner.ts'
+  'src/main/app/transcript-spawner.ts',
+  /*
+   * X-1: セッション起動の per-session `utilityProcess` を起こす (AD-036 §3)。
+   * transcript-spawner (per-request 短命) / enumerator-spawner (常駐) と別寿命なので新モジュール。
+   */
+  'src/main/app/session-spawner.ts',
+  /*
+   * X-1: agents の session worker。SDK の `spawnClaudeCodeProcess` コールバックで WSL 起動 spawn を行う
+   * (AD-036 §3。`pathToClaudeCodeExecutable` だけでは wsl.exe 前置を注入できないため child spawn が要る)。
+   * **`wsl.exe` のリテラルは持たない** (WSL_FREE_DIRECTORIES / 値で受ける)。ESLint 側の spawn 例外も
+   * この 1 ファイルに限定して開ける (eslint.config.mjs の `agent-session-spawn` category)。
+   */
+  'src/agents/sdk-agent-session.ts'
 ]
 
 /* ── 項目 12 / 13: UNC 形式の封じ込め (AD-028 §3) ─────────────────── */
@@ -304,6 +316,7 @@ export const AGENT_SDK_IMPORT_DIRECTORIES = ['src/agents/']
  *
  * - `listSessions` — R-2 の列挙 (読み取り)
  * - `getSessionMessages` — R-3 の transcript 取得 (読み取り。AD-034)。呼ぶのは `src/agents/read-transcript.ts`
+ * - `query` — X-1 のセッション起動 + stream + interrupt (AD-002 V1 / AD-036)。呼ぶのは `src/agents/sdk-agent-session.ts`
  *
  * **許可以外を禁じる形で検査する。** 禁止側を列挙すると必ず漏れる。
  * **書き込み系 API (`renameSession` / `tagSession` / `deleteSession` / `forkSession` /
@@ -312,7 +325,45 @@ export const AGENT_SDK_IMPORT_DIRECTORIES = ['src/agents/']
  * **判定は呼び出し形で行う。** import しただけの名前や型注釈を違反にすると、
  * これらを正当に使う後続 feature (X-1 / O-1 / I-1) で検証が破綻する (research R-07)。
  */
-export const AGENT_SDK_ALLOWED_CALLS = ['listSessions', 'getSessionMessages']
+export const AGENT_SDK_ALLOWED_CALLS = ['listSessions', 'getSessionMessages', 'query']
+
+/**
+ * 権限ゲートの正の構成 (P1-P3) の **backstop** 検査対象 (contracts C-4 / SH-010 / AD-036 §4)。
+ *
+ * 正の構成そのものは `agents/session-core.ts` の `buildQueryOptions` (allowlist キーのみ) と
+ * `toPermissionResult` ({behavior, message} のみ) が構造的に保証し unit test が守る。
+ * 項目 16 は **SDK を保持するファイル (`AGENT_SDK_IMPORT_DIRECTORIES`) に昇格レバーが直に現れないこと**を見る。
+ * 項目 14 が見ない「options リテラルのキー」と「`Query` の `.method()` 呼び出し」を捕まえる歯止めであり、
+ * ここに挙げるのは「現れてはならない綴り」であって正の構成の代替ではない (正本は contracts C-4)。
+ */
+
+/** `query()` options に現れてはならない昇格キー (P1)。承認カード/権限モードを迂回するレバー。 */
+export const QUERY_ESCALATION_OPTION_KEYS = [
+  'settings',
+  'extraArgs',
+  'allowedTools',
+  'disallowedTools',
+  'permissionPromptToolName',
+  'allowDangerouslySkipPermissions',
+  'mcpServers'
+]
+
+/** `Query` の mutation メソッド。呼んでよいのは `interrupt` のみ (P3)。 */
+export const QUERY_MUTATION_METHODS = [
+  'setPermissionMode',
+  'setMcpPermissionModeOverride',
+  'applyFlagSettings',
+  'updateSettings',
+  'setModel',
+  'setMaxThinkingTokens'
+]
+
+/**
+ * `permissionMode` に現れてよいのは `'default'` のみ。**danger mode の昇格値を締め出す** (FR-013 / SC-006(a))。
+ * `bypassPermissions` / `acceptEdits` / `auto` (無人実行) を含める。`dontAsk` は「聞かずに拒否で安全」であり
+ * 昇格ではないため含めない (AD-020 / isolation charter)。
+ */
+export const PERMISSION_MODE_ESCALATION_VALUES = ['bypassPermissions', 'acceptEdits', 'auto']
 
 /**
  * `wsl.exe` を新たに呼ばないことの検査対象 (SH-082 / SC-003)。
@@ -348,7 +399,11 @@ export const WSL_FREE_DIRECTORIES = [
   // R-3: transcript 取得は read-only で wsl.exe を起こさない。起動点も含めて検査対象に入れる
   // (現状 wsl-free。pr-gate platform-boundary M-001)。
   'src/main/app/transcript-service.ts',
-  'src/main/app/transcript-spawner.ts'
+  'src/main/app/transcript-spawner.ts',
+  // X-1: 起動系の app モジュール。wsl.exe を名指さない (argv は infra/runtime の RuntimeLaunchSpec を値で受ける)。
+  'src/main/app/session-launch-service.ts',
+  'src/main/app/session-spawner.ts',
+  'src/main/app/session-ipc.ts'
 ]
 
 export const UNC_API_NAMES = [

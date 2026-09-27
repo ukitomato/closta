@@ -310,9 +310,10 @@ flavor artifact (`firebase.json` / `app.yaml` / `serverless.yml` / `wrangler.tom
 │   ├── domain/                    # 型・パス API・純粋関数。**I/O を持たない**
 │   │   ├── runtime/               #   名前空間 / パス型 / パス API / capabilities / DTO
 │   │   └── workspace/             #   フォルダ / 登録簿 / 到達可能性 / 解決 / 接頭辞照合
-│   ├── agents/                    # supervisor の実体。**Electron 非依存** (R-1 では空に近い)
+│   ├── agents/                    # supervisor の実体。**Electron 非依存**。SDK 呼び出しと spawn 主体
+│   │                              #   (R-2 enumerate / R-3 read-transcript / X-1 session-core・sdk-agent-session)
 │   ├── main/
-│   │   ├── app/                   #   Electron の組み立て。IPC / 検証 / 合成ルート / store
+│   │   ├── app/                   #   Electron の組み立て。IPC / 検証 / 合成ルート / store / spawner
 │   │   └── infra/                 #   OS 資源の境界。runtime/ fs/ settings/
 │   ├── preload/                   # 単一 capability。require は `electron` のみ
 │   └── renderer/src/              # UI。features/ 配下に画面ごとのフォルダ
@@ -328,6 +329,15 @@ flavor artifact (`firebase.json` / `app.yaml` / `serverless.yml` / `wrangler.tom
 
 **`runtime/` と `supervisor/` はトップレベルには存在しない。**
 PLAN.md の旧表記を根拠に探すと 0 件ヒットになる (上の revision 3 注記を参照)。
+
+**X-1 (単一セッション起動) が加えたモジュール** (spec 005):
+`src/agents/` に `session-core.ts` (権限ゲートの正の構成 P1-P3。SDK 非 import・注入式) と
+`sdk-agent-session.ts` (SDK `query()` 入口・`child_process.spawn` の spawn 主体・`parentPort`/port 配線)。
+`src/main/app/` に `session-launch-service.ts` (単一セッション不変・制御ルーティング) /
+`session-spawner.ts` (per-session `utilityProcess` + `MessageChannelMain`) と `session-ipc.ts` への起動/制御ハンドラ追加。
+`src/main/infra/runtime/` に `launch-spec.ts` (env allowlist + WSL argv builder)。
+`src/renderer/src/features/session/` に起動 entry + live thread + 承認カード (`useLiveSession` / `SessionScreen` / `ApprovalCard`)。
+claude 実行パスは `probe-script.ts` の `command -v claude` で検出時解決し `descriptor.claudePath` に載せる (AD-036)。
 
 テストは `src/` 内の実装と同じ場所に置く。`tests/` にあるのは基盤の検証と違反サンプルだけである。
 

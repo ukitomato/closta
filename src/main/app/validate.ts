@@ -248,3 +248,26 @@ export function isValidSessionOffset(offset: unknown): offset is number {
     ? offset <= MAX_SESSION_OFFSET
     : false
 }
+
+/* ── セッション起動 + 制御 (X-1 / contracts C-1) ─────────────────── */
+
+/**
+ * **`respondPermission` の `outcome`。** `allow` / `deny` に完全一致すること。
+ *
+ * **`as` キャストで受けない** — 明示述語で enum を検証する (H-04 / SC-004 / SC-007)。
+ * データ経路 (port) からは発行できず、この control-plane invoke だけが決定を運ぶ。
+ */
+export function isPermissionOutcome(value: unknown): value is 'allow' | 'deny' {
+  return value === 'allow' || value === 'deny'
+}
+
+/**
+ * **`respondPermission` の `scope`。** `once` / `capability` に完全一致すること。
+ *
+ * enum 形状の検証は境界のここで済ませる (`as` を使わせない)。**`once` 要求に `capability` 決定を
+ * 受理しない** (H-04) の scope 上限強制は、要求 scope を保持する agents が `boundDecisionScope`
+ * (`@domain/session/agent-session`) で行う — main は本文経路 (port) を持たず要求 scope を知らないため。
+ */
+export function isPermissionScope(value: unknown): value is 'once' | 'capability' {
+  return value === 'once' || value === 'capability'
+}

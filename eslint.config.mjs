@@ -100,6 +100,13 @@ const SECRETS_FILES = ['src/main/infra/secrets/**/*.ts']
 const RUNTIME_INFRA_PATTERN = 'src/main/infra/runtime/**'
 const RUNTIME_INFRA_FILES = ['src/main/infra/runtime/**/*.ts']
 
+/**
+ * `spawnClaudeCodeProcess` コールバックで WSL 起動を行う agents の session worker (X-1 / AD-036 §3)。
+ * **spawn 主体は infra/runtime だけでなく、本 ADR がゲートするこの 1 ファイルも許す** (プロセス起動 API を
+ * 実名で数える FR-036 の趣旨は保つ)。`wsl.exe` のリテラルは持たず (WSL_FREE_DIRECTORIES / 値で受ける) spawn のみ。
+ */
+const AGENT_SESSION_SPAWN_FILE = 'src/agents/sdk-agent-session.ts'
+
 const MSG_PATH = `パス操作は ${PATH_API_FILE} のパス API 経由で行う (Principle I / FR-025)`
 const MSG_ELECTRON = 'electron の import は app レイヤと infra/secrets/ のみ (AD-023 §8)'
 const MSG_SPAWN = 'プロセス起動は src/main/infra/runtime/ のみ (FR-036)'
@@ -193,6 +200,7 @@ export default defineConfig(
       'boundaries/files': [
         { category: 'path-api', pattern: PATH_API_FILE },
         { category: 'runtime-infra', pattern: RUNTIME_INFRA_PATTERN },
+        { category: 'agent-session-spawn', pattern: AGENT_SESSION_SPAWN_FILE },
         { category: 'secrets', pattern: SECRETS_PATTERN }
       ],
       /*
@@ -325,6 +333,15 @@ export default defineConfig(
                 }
               }
             },
+            /*
+             * X-1: agents の session worker は `spawnClaudeCodeProcess` で WSL 起動 spawn を行う
+             * (AD-036 §3 の訂正。この 1 ファイルに限る)。プロセス起動 (`child_process`) のみ許し、
+             * プラットフォーム判定は許さない (platform 分岐は `infra/runtime/` に閉じる)。
+             */
+            {
+              from: { file: { categories: 'agent-session-spawn' } },
+              allow: { to: { module: { origin: 'core', source: SPAWN_SOURCES } } }
+            },
 
             // (4) `electron` は app レイヤと infra/secrets/ のみ (AD-023 §8)。
             {
@@ -373,6 +390,12 @@ export default defineConfig(
     rules: {
       'no-restricted-imports': ['error', without([...SPAWN_SPELLINGS, ...PLATFORM_SPELLINGS])]
     }
+  },
+  {
+    // X-1: agents の session worker だけ `child_process` を import できる (AD-036 §3 の訂正)。
+    // プラットフォーム判定 (`os`/`process`) は緩めない — spawn のみ。
+    files: [AGENT_SESSION_SPAWN_FILE],
+    rules: { 'no-restricted-imports': ['error', without(SPAWN_SPELLINGS)] }
   },
 
   /*

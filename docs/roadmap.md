@@ -186,6 +186,11 @@ X-2 (日本語 composer) で判断する** — R-3 は過去ログの表示で�
 
 **O-2 で対応表そのものを成果物にする。** これが揃うまで Principle XII は検証不能である。
 
+**X-1 からの申し送り (ui-coverage / 2026-09-26)**: X-1 が新設した 2 経路を **O-2 の `docs/ui-coverage.md` 対象に繰り越す** —
+(1) **承認カード** (`SessionEvent` の `permission-request` → Approval card)、(2) **聞かれずに拒否された操作**
+(`SDKPermissionDeniedMessage` → `permission-denied` 表示)。X-1 は最小表示 (承認 allow/deny・拒否リスト) で成立させたが、
+SDK メッセージ型と表示の対応表は O-2 が正本にする。持ち主は O-2 (持ち主不在の延期を残さない。AD-028 §5 / AD-031)。
+
 ## M4: 任せられる
 
 **達成状態**: Auto / `bypassPermissions` を隔離内で安全に回せる。

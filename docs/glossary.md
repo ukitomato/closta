@@ -1,8 +1,8 @@
 ---
 status: needs-human-review
-last_updated: 2026-09-15
-generated_by: human (PLAN.md 付録A + §3〜§7 を素材に起草)
-total_terms: 31
+last_updated: 2026-09-26
+generated_by: human (PLAN.md 付録A + §3〜§7 を素材に起草。X-1 で AgentSession 系 8 語を追記)
+total_terms: 39
 ---
 
 # Glossary (Ubiquitous Language)
@@ -34,6 +34,18 @@ total_terms: 31
 - **Counterexamples**: 「プラットフォーム」（posix / win32）は軸として持たない。
   ホストが Windows でもコンテナ内は Linux でありうるため
 - **Ref**: [AD-003](decisions/0003-runtime-abstraction-by-transport.md)
+
+#### **AgentSession**
+
+- **Definition**: 稼働中の 1 セッションの**操作面の概念 interface** (X-1)。`start(input)` で起動 + stream し、
+  `sendPrompt` / `respondPermission` / `interrupt` / `stop` を持つ。**宣言は `domain`**。**実装はクラスでなく
+  `agents` の module worker (`sdk-agent-session.ts`)** が parentPort 制御 + port `SessionEvent` のメッセージ
+  プロトコルで実現する (`query()` を呼ぶ唯一の場所。`read-transcript` / `enumerate-sessions` と同じ構え)
+- **日本語表記**: セッション (型名は原語のまま)
+- **Domain**: `session` (宣言) / `agents` (実装 = module worker)
+- **Counterexamples**: `Session` (Claude Code の 1 会話・永続実体) とは別。あちらは会話ログ、
+  こちらは稼働中プロセスの操作面。プロセス実体は **supervisor** を参照
+- **Ref**: [AD-036](decisions/0036-single-session-launch-process-and-live-stream.md) / [AD-023](decisions/0023-application-architecture.md) §3
 
 #### **Approval card**
 
@@ -188,6 +200,20 @@ total_terms: 31
 - **Domain**: `runtime` / `isolation`
 - **Ref**: [AD-012](decisions/0012-docker-control-via-cli.md)
 
+### F
+
+#### **FailureReason (起動系)**
+
+- **Definition**: セッション起動 + 実行時失敗の**理由キー** (X-1)。9 種
+  (`distro-not-running` / `not-verified-running` / `distro-mismatch` / `claude-not-found` /
+  `launch-failed` / `process-crashed` / `stream-protocol-error` / `provider-error` /
+  `interrupt-unavailable`)。参照キーであり**訳出は `ui`** (Principle XV)
+- **日本語表記**: 失敗理由 (起動系)
+- **Domain**: `session`/`infra` (保持) / `ui` (訳出)
+- **Counterexamples**: 列挙/transcript 読み取りの `FailureReason` (`@domain/session/target`) とは**別概念**。
+  型名の衝突を避け `LaunchFailureReason` として分ける (`@domain/session/agent-session`)
+- **Ref**: [AD-036](decisions/0036-single-session-launch-process-and-live-stream.md)
+
 ### H
 
 #### **HostPath**
@@ -207,6 +233,17 @@ total_terms: 31
 - **Domain**: `isolation`（判定）/ `ui`（表示）
 
 ### L
+
+#### **LaunchInput**
+
+- **Definition**: セッション起動の最小入力 (X-1)。作業フォルダ / 実行中確認済み `WslRuntime` /
+  `VerifiedRunning` / `permissionMode: 'default'` (リテラル固定) を持つ。`SessionLaunchConfig` の部分集合で、
+  軸選択・プリセット・モデル・effort は含まない (X-4)
+- **日本語表記**: 起動入力 (型名は原語のまま)
+- **Domain**: `session`
+- **Counterexamples**: `SessionLaunchConfig` (起動設定の全体) とは別。`permissionMode` を 6 値ユニオンにしない —
+  `auto`/`bypass` を型で渡せなくする (正の構成。FR-013)
+- **Ref**: [AD-036](decisions/0036-single-session-launch-process-and-live-stream.md)
 
 #### **Location**
 
@@ -259,6 +296,18 @@ total_terms: 31
   含めると「解消手順がある」と「対応が無い」が同居する。
   「未登録」「所在不明」とも別である
 
+#### **PermissionRequest / PermissionDecision**
+
+- **Definition**: `canUseTool` の権限往復 (X-1)。`PermissionRequest` は `requestId` / サニタイズ済み `toolName` /
+  サニタイズ済み `input` / `scope` (`once` | `capability`)。`PermissionDecision` は `requestId` / `outcome`
+  (`allow` | `deny`) / `scope` / 任意 `message`。main が明示述語で enum 検証する (`as` 禁止)
+- **日本語表記**: 権限要求 / 権限決定
+- **Domain**: `session`
+- **Counterexamples**: **`PermissionResult` (SDK 型) と混ぜない。** `PermissionDecision → PermissionResult` の写像は
+  純関数 `toPermissionResult` に切り出し、出力を `{behavior, message}` に固定する — `updatedPermissions` /
+  `updatedInput` を出さない (正の構成 P2。承認カードが唯一の承認経路)
+- **Ref**: [AD-036](decisions/0036-single-session-launch-process-and-live-stream.md) §4 / [AD-020](decisions/0020-sdk-emitted-message-inventory.md)
+
 #### **Preset**
 
 - **Definition**: 名前付きで保存された `SessionLaunchConfig`。**資格情報の値は含まない**
@@ -300,6 +349,17 @@ total_terms: 31
 - **Domain**: `runtime`
 - **Counterexamples**: `AgentRuntime` はインタフェースであり、これはその `descriptor` にあたる値である
 
+#### **RuntimeLaunchSpec**
+
+- **Definition**: agents を WSL-free に保つための**起動指示の値** (X-1)。WSL 内 claude の実行パス /
+  起動コマンド (`WSL_BINARY`) / 接頭引数 (`['--cd', cwd, '-d', distro, '--']`) / 最小 env を持つ。
+  `wsl.exe` の argv/リテラルは `infra/runtime` に閉じ、agents は**値**として受け取る
+- **日本語表記**: 起動指示 (型名は原語のまま)
+- **Domain**: `session` (型宣言) / `infra/runtime` (構築)
+- **Counterexamples**: agents はこの `command` の文字列リテラルを持たない (`WSL_FREE_DIRECTORIES`)。
+  cwd はホスト `spawn` の `cwd` に渡さず `--cd` 引数で運ぶ (多段変換を潰さない。H-03)
+- **Ref**: [AD-036](decisions/0036-single-session-launch-process-and-live-stream.md) §3・§8 / [AD-018](decisions/0018-wsl-process-control.md)
+
 #### **RuntimePath**
 
 - **Definition**: ランタイム内部から見たパス。現状は常に POSIX 形式。
@@ -320,6 +380,35 @@ total_terms: 31
 - **Ref**: [AD-007](decisions/0007-session-source-of-truth-is-claude-code.md)
 - **Note**: **一覧（R-2）が扱うのは要約とメタデータのみ**。本文の取得は **R-3 で追加済み**
   （`getSessionMessages` 経由。変換は **message mapping**、表示状態は **TranscriptView** を参照）
+
+#### **SessionEvent**
+
+- **Definition**: `agents → renderer` の**一方向データ** (data plane。X-1)。`message` (逐次/完了メッセージ) /
+  `state` / `permission-request` / `permission-denied` / `interrupt-receipt` / `failure` の判別 union。
+  `MessageChannelMain` の port で直通し、**main は本文を保持・deserialize しない** (Principle IX)
+- **日本語表記**: セッションイベント (型名は原語のまま)
+- **Domain**: `session`
+- **Counterexamples**: **制御はここに載せない** — 制御 (`SessionControl`) は control plane の検証済み IPC を通す。
+  状態機械の入力 `SessionAction` とも別型 (描画データと遷移入力を混同しない)
+- **Ref**: [AD-036](decisions/0036-single-session-launch-process-and-live-stream.md) / [AD-034](decisions/0034-transcript-read-path-and-process-boundary.md)
+
+#### **SessionControl**
+
+- **Definition**: `renderer → main` の**制御要求** (control plane。X-1)。`send-prompt` / `respond-permission` /
+  `interrupt` / `kill` の判別 union。**renderer → main の検証済み IPC のみが発行できる** (data plane から発行しない)
+- **日本語表記**: セッション制御
+- **Domain**: `session`
+- **Ref**: [AD-036](decisions/0036-single-session-launch-process-and-live-stream.md) / contracts C-1
+
+#### **SessionRunState**
+
+- **Definition**: 単一セッションの**状態機械** (X-1)。7 状態
+  (`idle` / `launching` / `running` / `awaiting_permission` / `interrupted` / `error` / `done`)。
+  遷移は純関数 `nextState(state, action)`。`launching` は launch invoke〜初 stream の窓で、単一セッション不変の判定に使う
+- **日本語表記**: セッション実行状態
+- **Domain**: `session`
+- **Counterexamples**: 描画用 `SessionEvent` とは別型。単一セッション不変 (`isActive`) は registry 側で判定する
+- **Ref**: [AD-036](decisions/0036-single-session-launch-process-and-live-stream.md)
 
 #### **SessionMessage（セッションメッセージ）**
 

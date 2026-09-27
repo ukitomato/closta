@@ -43,6 +43,9 @@ import {
   AGENT_SDK_ALLOWED_CALLS,
   AGENT_SDK_IMPORT_DIRECTORIES,
   AGENT_SDK_PACKAGE,
+  QUERY_ESCALATION_OPTION_KEYS,
+  QUERY_MUTATION_METHODS,
+  PERMISSION_MODE_ESCALATION_VALUES,
   WSL_FREE_DIRECTORIES,
   UNC_API_NAMES,
   UNC_FORBIDDEN_IN,
@@ -744,6 +747,62 @@ function hasPackagedGate() {
     'SC-003 / contracts C-7',
     found,
     `対象: ${WSL_FREE_DIRECTORIES.join(', ')}`
+  )
+}
+
+/* ── 項目 16: 権限ゲートの正の構成 (options / Query メソッドの backstop) ── */
+{
+  /*
+   * contracts C-4 P1-P3 の backstop (SH-010 / AD-036 §4)。
+   *
+   * **正の構成そのものは `session-core.ts` の `buildQueryOptions` (allowlist キーのみ) と
+   * `toPermissionResult` ({behavior, message} のみ) が保証し unit test が守る。**
+   * ここは SDK を保持するファイル (`AGENT_SDK_IMPORT_DIRECTORIES`) に昇格レバーが**直に現れないこと**を見る。
+   * 項目 14 は named import の呼び出し形だけを見るため、**options リテラルのキー**と
+   * **`Query` の `.method()` 呼び出し**を捕まえられない (contracts C-4 SC-006(a) が名指す穴)。
+   * これは「現れてはならない綴り」の検査であって正の構成の代替ではない — 迂回 (別変数経由の options 合成等) は
+   * `buildQueryOptions` の allowlist と SH-010 fixture が担う。
+   */
+  const found = []
+  const sdkScope = (file) =>
+    AGENT_SDK_IMPORT_DIRECTORIES.some((dir) => file.startsWith(dir)) &&
+    !file.endsWith('.test.ts') &&
+    !file.endsWith('.test.tsx')
+
+  for (const src of sources) {
+    if (!sdkScope(src.file)) continue
+
+    // (P1) query() options に昇格キーを混ぜない (`key:` の形。コメントの `/` 区切り列挙は拾わない)。
+    for (const key of QUERY_ESCALATION_OPTION_KEYS) {
+      if (new RegExp(String.raw`(?<![.\w])` + key + String.raw`\s*:`).test(src.code)) {
+        found.push(
+          `${src.file}  query options の昇格キー "${key}:" が現れている (正の構成 P1 を破る)`
+        )
+      }
+    }
+    // (P1) permissionMode は 'default' 固定。昇格値のリテラルを締め出す。
+    for (const value of PERMISSION_MODE_ESCALATION_VALUES) {
+      if (src.code.includes(`'${value}'`) || src.code.includes(`"${value}"`)) {
+        found.push(
+          `${src.file}  permissionMode の昇格値 "${value}" が現れている (P1。'default' 固定)`
+        )
+      }
+    }
+    // (P3) Query の mutation メソッド呼び出し (interrupt 以外)。
+    for (const method of QUERY_MUTATION_METHODS) {
+      if (new RegExp(String.raw`\.\s*` + method + String.raw`\s*\(`).test(src.code)) {
+        found.push(
+          `${src.file}  Query の mutation メソッド ".${method}()" を呼んでいる (P3。interrupt のみ許可)`
+        )
+      }
+    }
+  }
+  violations(
+    16,
+    '権限ゲートの正の構成 (query options のキー / Query メソッドの backstop)',
+    'III / contracts C-4',
+    found,
+    `対象: ${AGENT_SDK_IMPORT_DIRECTORIES.join(', ')} / 正本は buildQueryOptions + toPermissionResult`
   )
 }
 

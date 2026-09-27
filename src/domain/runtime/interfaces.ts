@@ -17,6 +17,11 @@ export interface ProbeOutcome {
   readonly capabilities: Capabilities
   /** `null` はマッピング取得失敗。呼び出し元は `probeState: failed` に倒す。 */
   readonly pathMapping: PathMapping | null
+  /**
+   * WSL 内 `claude` の実行パス (X-1 / AD-036)。probe 出力の `claude=` 由来。
+   * 未解決 / 不在は `null` (省略可)。呼び出し元 (runtime-store) が descriptor に載せる。
+   */
+  readonly claudePath?: string | null
 }
 
 export interface RuntimeDetector {

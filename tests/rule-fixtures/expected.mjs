@@ -244,6 +244,26 @@ export const FIXTURES = [
     rules: ['#14']
   },
   {
+    file: 'a-direct/sdk-query-escalation-options.ts.fixture',
+    target: 'src/agents/__rulecheck__/sdk-query-escalation-options.ts',
+    group: 'a',
+    what:
+      'query() options に昇格キー (settings / allowDangerouslySkipPermissions) を混ぜる ' +
+      '(正の構成 P1 を破る。項目14 は options リテラルのキーを見ない。X-1 / SH-010)',
+    detectors: ['constitution'],
+    rules: ['#16']
+  },
+  {
+    file: 'b-equivalent/sdk-query-mutation-method.ts.fixture',
+    target: 'src/agents/__rulecheck__/sdk-query-mutation-method.ts',
+    group: 'b',
+    what:
+      'Query の mutation メソッド (setPermissionMode) を呼ぶ ' +
+      '(正の構成 P3 を破る。項目14 は .method() を見ない。X-1 / SH-010)',
+    detectors: ['constitution'],
+    rules: ['#16']
+  },
+  {
     file: 'a-direct/sdk-forbidden-call-alias.ts.fixture',
     target: 'src/agents/__rulecheck__/sdk-forbidden-call-alias.ts',
     group: 'b',
@@ -323,12 +343,15 @@ export const UNDETECTED_NOTES = {
       '第一防御は**書き込みを起こす IPC が存在しないこと** (FR-001。renderer から到達できる SDK 書き込み経路が無い)。' +
       '第二防御 (allowlist) の直接呼び出し形は `sdk-forbidden-call` サンプルで発火を維持している。' +
       'alias/dynamic-import の迂回はこの第二防御では捕まらないが、第一防御で実害経路は塞がれている。',
-    nextFeature: 'X-1',
+    nextFeature: 'X-4',
     howToClose:
-      'X-1 でセッション起動が入り SDK の呼び出し面が広がる時点で、項目14 に**書き込み系 API 名の ' +
-      'binding レベル denylist** を足し (`const alias = renameSession` の再束縛と `import()` 経由を検出)、' +
-      '本 alias サンプルが `constitution` で発火するよう `detectors` を更新する。' +
-      '**呼び出し形の正規表現では届かないと分かったので、次は binding 追跡で塞ぐ。**'
+      '**X-1 で確認 (SH-010): 本 alias サンプルは X-1 では塞がない。** X-1 が広げたのは起動 (`query`) と ' +
+      '権限往復の呼び出し面であり、項目 16 (正の構成の backstop) で **query() options のキー**と ' +
+      '**`Query` の `.method()` 昇格**という別クラスを塞いだ。書き込み系 API (`renameSession` 等) は X-1 では ' +
+      '**一切 import も呼び出しもしない** (正の構成: 許可は `query`/`listSessions`/`getSessionMessages` の 3 件のみ) ため、' +
+      'binding 追跡の denylist は不要のまま残った。**書き込み系 API を実際に使う feature (改名/削除 = X-4 以降) の時点で、' +
+      '項目14 に binding レベル denylist を足し (`const alias = renameSession` の再束縛と `import()` 経由を検出)、' +
+      '本 alias サンプルが `constitution` で発火するよう `detectors` を更新する。**'
   },
   'ui-path-concat': {
     why: 'パス文字列の連結は import を伴わないので、import を見る lint も依存グラフも掛からない。',
@@ -343,15 +366,16 @@ export const UNDETECTED_NOTES = {
       '`value` だけを差し替える形は `namespace` のリテラルを持たないため新ルールに掛からない。' +
       '**この fixture はテンプレート文字列の連結であり、新ルールでは発火しない** (実体を確認済み)。' +
       '構造で塞げていない残余は renderer 単体テストとレビューが担う。',
-    nextFeature: 'X-1',
+    nextFeature: 'X-4',
     howToClose:
       'R-2 (SH-054) で `namespace` リテラルの組み立ては塞いだ。**残るのは既存の DTO を ' +
       'spread して `value` を差し替える経路**であり、これは `namespace` のリテラルを ' +
       '持たないため構文では見分けられない。' +
-      'X-1 でセッション起動時に `cwd` を渡す往復が増えるので、その時点で ' +
-      '「IPC へ渡す `PathDTO` は capability の戻り値から来た参照でなければならない」を ' +
-      '型で強制する形 (branded な不透明型を preload 側で付ける) を検討する。' +
-      '**構文検査では届かないと分かったので、次は型で塞ぐ。**'
+      '**X-1 で確認 (SH-011): 新たなパス連結経路は生じなかった** — 起動は `session.launch({folderId, runtimeId})` の ' +
+      '**不透明 id** を送るだけで、renderer はパス文字列を組み立てない。cwd の RuntimePath 変換は main 側 ' +
+      '(`composition-root` の `resolveCwd` / domain の `prefix-match`) が capability 戻り値の `PathDTO` から行う。' +
+      'したがって繰り越す。**X-4 (起動設定ダイアログ) で追加ディレクトリのパス入力が renderer に生じるため、' +
+      'その時点で「IPC へ渡す `PathDTO` は capability 戻り値由来の参照に限る」を型 (branded な不透明型) で強制する。**'
   },
   'reuse-verified-other-distro': {
     why:
