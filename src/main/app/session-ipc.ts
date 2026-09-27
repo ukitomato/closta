@@ -1,9 +1,16 @@
+import type { SessionControl } from '@domain/session/agent-session'
 import type { SessionIndexDTO } from '@domain/session/dto'
 import type { FailureReason } from '@domain/session/target'
-import { isValidRequestToken, isValidSessionId } from '@domain/validation'
+import { isValidPromptText, isValidRequestToken, isValidSessionId } from '@domain/validation'
 
+import type { LaunchOutcome } from './session-launch-service'
 import type { TranscriptResult } from './transcript-service'
-import { isKnownTargetKey, isValidSessionOffset } from './validate'
+import {
+  isKnownTargetKey,
+  isPermissionOutcome,
+  isPermissionScope,
+  isValidSessionOffset
+} from './validate'
 
 /**
  * セッション一覧の IPC ハンドラ本体 (BE-028 / BE-029)。
@@ -32,6 +39,13 @@ export interface SessionIpcDeps {
     targetKey: string,
     requestToken: string
   ): Promise<TranscriptResult>
+
+  /* ── セッション起動 + 制御 (X-1 / contracts C-1) ── */
+
+  /** 起動を調停する (VerifiedRunning + distro 一致 + 登録 + 単一セッション不変を検証)。本文は port。 */
+  launchSession(folderId: string, runtimeId: string): Promise<LaunchOutcome>
+  /** 制御を該当セッションへ送る。未知 / 終了済み sessionId なら `false`。 */
+  controlSession(sessionId: string, control: SessionControl): boolean
 }
 
 function failedTranscript(requestToken: string, reasonKey: FailureReason): TranscriptResult {
@@ -92,4 +106,78 @@ export async function handleListSessions(deps: SessionIpcDeps): Promise<SessionI
 /** `refreshSessions()`。連打の抑制は `session-enumerator` の責務である (C-6)。 */
 export async function handleRefreshSessions(deps: SessionIpcDeps): Promise<SessionIndexDTO> {
   return deps.refreshSessions()
+}
+
+/* ── セッション起動 + 制御 (X-1 / BE-006・BE-007・BE-011・BE-021) ─────── */
+
+/**
+ * `launchSession(folderId, runtimeId)` (BE-007 の入口。US-1 の安全ゲート)。
+ *
+ * **folderId / runtimeId は文字列であること**を確認し、登録済み集合との一致 (folderId) と
+ * 検出済み descriptor との一致 (runtimeId)・VerifiedRunning・所在 distro 一致・単一セッション不変は
+ * `launchSession` (→ prepareLaunch / service) が **登録の SSoT に対して**判定する (二重管理を避ける)。
+ * 型不正はプロセスを起こさず `unknown-target` で拒否する。**戻り値の `port` の transfer は `ipc.ts`。**
+ */
+export async function handleLaunchSession(
+  deps: SessionIpcDeps,
+  args: readonly unknown[]
+): Promise<LaunchOutcome> {
+  if (typeof args[0] !== 'string' || typeof args[1] !== 'string') {
+    return { status: 'rejected', reason: 'unknown-target' }
+  }
+  return deps.launchSession(args[0], args[1])
+}
+
+/**
+ * `sendPrompt(sessionId, text)` (BE-006)。
+ *
+ * **不正な入力ではプロセスへ送らない。** sessionId が UUID 形式・text が非空/非空白かつバイト長上限内。
+ * running / awaiting_permission 中の queue 積みは agents 側 (状態機械) が担う。
+ */
+export async function handleSendPrompt(
+  deps: SessionIpcDeps,
+  args: readonly unknown[]
+): Promise<void> {
+  if (!isValidSessionId(args[0])) return
+  if (!isValidPromptText(args[1])) return
+  deps.controlSession(args[0], { kind: 'send-prompt', text: args[1] })
+}
+
+/**
+ * `respondPermission(sessionId, requestId, outcome, scope)` (BE-011)。**唯一の承認経路。**
+ *
+ * **`outcome` / `scope` を明示述語で enum 検証** (`as` 禁止。H-04)。requestId は awaiting 中の要求との一致を
+ * agents (pending Map を保持) が最終判定する — main は本文経路 (port) を持たないため requestId の妥当性は
+ * 形状 (非空・上限内) のみ検証し、実在照合は agents の defense-in-depth に委ねる (Principle IX / contracts C-2)。
+ */
+export async function handleRespondPermission(
+  deps: SessionIpcDeps,
+  args: readonly unknown[]
+): Promise<void> {
+  if (!isValidSessionId(args[0])) return
+  if (!isValidRequestToken(args[1])) return
+  if (!isPermissionOutcome(args[2])) return
+  if (!isPermissionScope(args[3])) return
+  deps.controlSession(args[0], {
+    kind: 'respond-permission',
+    decision: { requestId: args[1], outcome: args[2], scope: args[3] }
+  })
+}
+
+/** `interruptSession(sessionId)` (BE-021)。中断は kill とは別経路 (FR-015/016)。 */
+export async function handleInterruptSession(
+  deps: SessionIpcDeps,
+  args: readonly unknown[]
+): Promise<void> {
+  if (!isValidSessionId(args[0])) return
+  deps.controlSession(args[0], { kind: 'interrupt' })
+}
+
+/** `killSession(sessionId)` (BE-021)。強制終了。agents が保持する `SpawnedProcess` (wsl) を直接 kill する。 */
+export async function handleKillSession(
+  deps: SessionIpcDeps,
+  args: readonly unknown[]
+): Promise<void> {
+  if (!isValidSessionId(args[0])) return
+  deps.controlSession(args[0], { kind: 'kill' })
 }

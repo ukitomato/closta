@@ -145,8 +145,10 @@ Closta の出発点にある課題「並行して走らせたセッションの�
 
 - **R-2** — [セッション列挙](../../../specs/002-session-cross-folder-session-enumeration/spec.md)
   （読み取り専用。全件列挙 + 未登録フォルダ。実装中）
+- **X-1** — [単一セッション起動とストリーミング](../../../specs/005-session-launch-and-streaming/spec.md)
+  （作業フォルダ + 実行中 WslRuntime で起動、live stream、承認カード、中断/強制終了。実装中）
 
-X-1 / X-4 / X-5 / O-1 は未着手。
+X-4 / X-5 / O-1 は未着手。
 
 ## Open Questions
 

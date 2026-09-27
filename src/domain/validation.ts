@@ -158,3 +158,24 @@ export const MAX_REQUEST_TOKEN_LENGTH = 128
 export function isValidRequestToken(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0 && value.length <= MAX_REQUEST_TOKEN_LENGTH
 }
+
+/**
+ * `sendPrompt` の本文のバイト長上限 (X-1 / contracts C-1)。
+ *
+ * 会話プロンプトは長くなりうるが、境界では**未信頼入力の長さを必ず縛る** — 無制限文字列を
+ * agents へ postMessage で運ぶと、queue 累積で renderer / agents のメモリが枯渇する (H-06/H-07 と同系)。
+ */
+export const MAX_PROMPT_BYTES = 100_000
+
+/**
+ * `sendPrompt` の本文が有効か (X-1 / contracts C-1)。
+ *
+ * **空/空白のみを拒否し、バイト長上限内であること。** 制御文字の除去 (正規化) は agents 側で
+ * 表示 DTO を組むときに行う (`sanitizeBody`) — プロンプト本文はモデルへ渡す値のため入口では削らない。
+ * バイト長は UTF-8 で測る (`TextEncoder` はグローバル。`domain` は依存を持たない)。
+ */
+export function isValidPromptText(value: unknown): value is string {
+  if (typeof value !== 'string') return false
+  if (value.trim().length === 0) return false
+  return new TextEncoder().encode(value).length <= MAX_PROMPT_BYTES
+}

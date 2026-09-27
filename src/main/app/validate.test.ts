@@ -29,6 +29,8 @@ import {
   isValidPathDTO,
   isKnownTargetKey,
   isValidSessionOffset,
+  isPermissionOutcome,
+  isPermissionScope,
   MAX_SESSION_OFFSET
 } from './validate'
 
@@ -405,6 +407,25 @@ describe('isValidSessionOffset — 節 A 「offset」の行', () => {
   it('数値でない値を拒否する', () => {
     for (const value of ['0', null, undefined, {}, []]) {
       expect(isValidSessionOffset(value)).toBe(false)
+    }
+  })
+})
+
+describe('isPermissionOutcome / isPermissionScope (X-1 承認決定の enum 検証。SC-004 / SC-007 / H-04)', () => {
+  it('outcome は allow / deny のみ受理', () => {
+    expect(isPermissionOutcome('allow')).toBe(true)
+    expect(isPermissionOutcome('deny')).toBe(true)
+    // 格上げ・別綴り・非文字列は拒否 (`as` に退行させない)。
+    for (const bad of ['grant', 'allow-all', 'maybe', '', 1, null, undefined, {}]) {
+      expect(isPermissionOutcome(bad)).toBe(false)
+    }
+  })
+
+  it('scope は once / capability のみ受理', () => {
+    expect(isPermissionScope('once')).toBe(true)
+    expect(isPermissionScope('capability')).toBe(true)
+    for (const bad of ['forever', 'always', '', 0, null, undefined]) {
+      expect(isPermissionScope(bad)).toBe(false)
     }
   })
 })

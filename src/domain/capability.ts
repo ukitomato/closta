@@ -1,4 +1,5 @@
 import type { RuntimeDescriptorDTO, RuntimeListDTO } from './runtime/dto'
+import type { SessionLaunchHandshakeDTO } from './session/agent-session'
 import type { SessionIndexDTO } from './session/dto'
 import type { TranscriptHandshakeDTO } from './session/transcript-dto'
 import type {
@@ -90,6 +91,37 @@ export interface ClostaCapability {
     requestToken: string
   ): Promise<TranscriptHandshakeDTO>
 
+  // --- セッション起動 + ストリーミング (X-1。**唯一の起動・制御経路**) ---
+
+  /**
+   * 選んだ作業フォルダ + 実行中 WslRuntime で単一セッションを起動する (X-1 / FR-001 / contracts C-1)。
+   *
+   * **戻り値は本文を含まない handshake (status / sessionId)。** 逐次応答 (`SessionEvent`) は
+   * `MessageChannelMain` の port で **agents↔renderer 直通**に届く (main を本文経路から外す。Principle IX)。
+   * port は `window` メッセージ (`SESSION_PORT_MESSAGE`) として renderer main world へ渡り、renderer は
+   * `sessionId` で自分の port を照合する (MessagePort は contextBridge を越えられないため)。
+   *
+   * main が **VerifiedRunning + 所在 distro 一致 + 登録済み + 単一セッション不変**を検証する。
+   * 停止中 / 未確認 / 不一致 / 既に稼働中は `rejected` を理由キーつきで返す (SC-002 / SC-011)。
+   */
+  launchSession(folderId: string, runtimeId: string): Promise<SessionLaunchHandshakeDTO>
+  /** 稼働セッションへプロンプトを送る (FR-011 / FR-018)。main が空/空白拒否 + 長さ上限を検証する。 */
+  sendPrompt(sessionId: string, text: string): Promise<void>
+  /**
+   * 承認カードの決定を返す (FR-012 / contracts C-1)。**唯一の承認経路。**
+   * main が `outcome ∈ {allow,deny}` / `scope ∈ {once,capability}` を明示述語で検証する (`as` 禁止。H-04)。
+   */
+  respondPermission(
+    sessionId: string,
+    requestId: string,
+    outcome: 'allow' | 'deny',
+    scope: 'once' | 'capability'
+  ): Promise<void>
+  /** 実行中の応答を中断する (FR-015)。途中出力は保持され同一セッションで継続できる。 */
+  interruptSession(sessionId: string): Promise<void>
+  /** 強制終了する (FR-016)。**中断とは別経路** — 途中出力保全・JSONL 非破損を保証しない。 */
+  killSession(sessionId: string): Promise<void>
+
   // --- 通知 (main → renderer) ---
 
   /** 購読解除は返る**トークン**で行う。renderer からコールバックを main に渡さない。 */
@@ -119,6 +151,13 @@ export const IPC_CHANNELS = {
   getTranscript: 'closta:getTranscript',
   /** main → preload: 取得プロセスに繋がった port2 を transfer する専用チャネル (R-3 / AD-034)。 */
   transcriptPort: 'closta:transcriptPort',
+  launchSession: 'closta:launchSession',
+  sendPrompt: 'closta:sendPrompt',
+  respondPermission: 'closta:respondPermission',
+  interruptSession: 'closta:interruptSession',
+  killSession: 'closta:killSession',
+  /** main → preload: agents に繋がった port2 を transfer する専用チャネル (X-1 / AD-036 §2)。 */
+  sessionPort: 'closta:sessionPort',
   runtimesChanged: 'closta:runtimesChanged',
   foldersChanged: 'closta:foldersChanged',
   sessionsChanged: 'closta:sessionsChanged'
@@ -132,3 +171,12 @@ export const IPC_CHANNELS = {
  * これに一致する message の `ports[0]` を、`data.requestToken` で自分の要求と照合して受け取る。
  */
 export const TRANSCRIPT_PORT_MESSAGE = 'closta:transcript-port' as const
+
+/**
+ * preload → renderer main world の `window` メッセージの標識 (X-1 / AD-036 §2)。
+ *
+ * `TRANSCRIPT_PORT_MESSAGE` と同じ理由 (MessagePort は contextBridge を越えられない)。
+ * renderer は `data.marker` がこれに一致する message の `ports[0]` を、`data.sessionId` で
+ * 自分の起動要求と照合して受け取る (一方向 data plane。inbound は受けない)。
+ */
+export const SESSION_PORT_MESSAGE = 'closta:session-port' as const

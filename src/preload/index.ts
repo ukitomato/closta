@@ -3,6 +3,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import {
   CAPABILITY_KEY,
   IPC_CHANNELS,
+  SESSION_PORT_MESSAGE,
   TRANSCRIPT_PORT_MESSAGE,
   type ClostaCapability
 } from '@domain/capability'
@@ -53,6 +54,14 @@ const capability: ClostaCapability = {
   getTranscript: (sessionId, targetKey, requestToken) =>
     ipcRenderer.invoke(IPC_CHANNELS.getTranscript, sessionId, targetKey, requestToken),
 
+  launchSession: (folderId, runtimeId) =>
+    ipcRenderer.invoke(IPC_CHANNELS.launchSession, folderId, runtimeId),
+  sendPrompt: (sessionId, text) => ipcRenderer.invoke(IPC_CHANNELS.sendPrompt, sessionId, text),
+  respondPermission: (sessionId, requestId, outcome, scope) =>
+    ipcRenderer.invoke(IPC_CHANNELS.respondPermission, sessionId, requestId, outcome, scope),
+  interruptSession: (sessionId) => ipcRenderer.invoke(IPC_CHANNELS.interruptSession, sessionId),
+  killSession: (sessionId) => ipcRenderer.invoke(IPC_CHANNELS.killSession, sessionId),
+
   onRuntimesChanged: (listener) =>
     subscribe<RuntimeListDTO>(IPC_CHANNELS.runtimesChanged, listener),
   onFoldersChanged: (listener) => subscribe<FolderListDTO>(IPC_CHANNELS.foldersChanged, listener),
@@ -73,6 +82,23 @@ ipcRenderer.on(IPC_CHANNELS.transcriptPort, (event, payload: { requestToken: str
   // **targetOrigin を自 origin に絞る** — `'*'` にしない (pr-gate security S-L-001。MDN postMessage 指針)。
   window.postMessage(
     { marker: TRANSCRIPT_PORT_MESSAGE, requestToken: payload.requestToken },
+    window.location.origin,
+    event.ports
+  )
+})
+
+/*
+ * **agents の data port を main world へ橋渡しする** (X-1 / AD-036 §2)。
+ *
+ * transcript と同じ理由 (MessagePort は contextBridge を越えられない)。main が
+ * `webContents.postMessage(sessionPort, { sessionId }, [port2])` で送ってきた port を、
+ * preload が `window.postMessage` で main world へ transfer する。renderer は `data.marker` が
+ * この標識で `data.sessionId` が自分の起動要求と一致する port を受け取る。**要求の発行は必ず
+ * `launchSession` invoke を通る** (main の検証を経る)。この port は受信専用 (一方向 data plane)。
+ */
+ipcRenderer.on(IPC_CHANNELS.sessionPort, (event, payload: { sessionId: string }) => {
+  window.postMessage(
+    { marker: SESSION_PORT_MESSAGE, sessionId: payload.sessionId },
     window.location.origin,
     event.ports
   )

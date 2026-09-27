@@ -4,9 +4,15 @@ import { app, dialog } from 'electron'
 
 import { makeHostPath } from '@domain/runtime/path-types'
 import { hostPathOps } from '@domain/runtime/path-api'
+import type { PathMapping } from '@domain/runtime/path-mapping'
+import type { LaunchInput } from '@domain/session/agent-session'
+import { evaluateLaunch } from '@domain/session/launch-gate'
+import { applyEntry, findLongestMatch } from '@domain/workspace/prefix-match'
+import { isWslFolder, type WorkspaceFolder } from '@domain/workspace/folder'
 
 import { createHostFileSystem } from '../infra/fs/host-fs'
 import { createWslFileSystem } from '../infra/fs/wsl-fs'
+import { buildLaunchEnv, buildRuntimeLaunchSpec } from '../infra/runtime/launch-spec'
 import { createRuntimeDetector } from '../infra/runtime/wsl-detector'
 import { createWslCli } from '../infra/runtime/wsl-cli'
 import { createFolderStore } from '../infra/settings/folder-store'
@@ -19,7 +25,9 @@ import { createMeasure } from './measure'
 import { isDevBuild } from './origins'
 import { createRuntimeStore, type RuntimeStore } from './runtime-store'
 import { createSessionEnumerator } from './session-enumerator'
+import { createSessionLaunchService, type LaunchPreparation } from './session-launch-service'
 import { createSessionService, type SessionService } from './session-service'
+import { createSessionSpawner } from './session-spawner'
 import { createTranscriptService } from './transcript-service'
 import { createTranscriptSpawner } from './transcript-spawner'
 
@@ -193,6 +201,56 @@ export function createComposition(): Composition {
     buildEnv: (configDirEnv) => buildTranscriptEnv(process.env, configDirEnv)
   })
 
+  /*
+   * **単一セッション起動 + ストリーミング** (X-1 / AD-036)。
+   *
+   * per-session の agents `utilityProcess` を起こし、`MessageChannelMain` の port を
+   * agents↔renderer 直通に流す (main を本文経路から外す)。単一セッション不変・制御ルーティング・
+   * dispose は service (`session-launch-service.ts`) が持ち、実プロセス生成は `session-spawner.ts` に閉じる。
+   */
+  const launchService = createSessionLaunchService({
+    spawner: createSessionSpawner(),
+    prepareLaunch: async (folderId, runtimeId): Promise<LaunchPreparation> => {
+      const folder = folders.folders().find((f) => f.id === folderId) ?? null
+      const runtime = runtimes.snapshot().find((r) => r.id === runtimeId) ?? null
+      // 未知の folderId / runtimeId、または WslRuntime でない対象は null (→ unknown-target)。
+      if (folder === null || runtime === null || runtime.kind !== 'wsl') return null
+
+      /*
+       * **実行中確認をここで取り直す** (SC-002)。R-1 の判定を再利用し `wsl.exe` を増やさない。
+       * evaluateLaunch (純粋) が VerifiedRunning + 期限 + 所在 distro 一致を型でゲートする。
+       */
+      const verified = (await detector.verifyRunning([runtime.id])).get(runtime.id) ?? null
+      const gate = evaluateLaunch({ folder, runtime, verified, now: now() })
+      if (!gate.ok) return { ok: false, reason: gate.reason }
+      // gate.ok は verified !== null を含意するが型では追えないため再表明する。
+      if (verified === null) return { ok: false, reason: 'not-verified-running' }
+
+      // cwd を runtime 名前空間の RuntimePath 文字列で得る (Principle I / H-03)。
+      const cwd = resolveCwd(folder, runtime.pathMapping)
+      if (cwd === null) return { ok: false, reason: 'launch-failed' }
+
+      /*
+       * **claude 実行パスは検出時に解決済み** (BE-002 / AD-036 / AD-018 §4)。
+       * `probe-script.ts` が `command -v claude` で 1 回解決し descriptor (`claudePath`) に載せる。
+       * 未解決 / 不在は `claude-not-found` に倒す (裸名 PATH 依存は data-model §8 L-102 が禁じる)。
+       */
+      const claudePath = runtime.claudePath ?? null
+      if (claudePath === null) return { ok: false, reason: 'claude-not-found' }
+
+      // env は fork / wsl spawn の両点とも共有純関数で組む (data-model §7 / M-202)。
+      const env = buildLaunchEnv(process.env)
+      const spec = buildRuntimeLaunchSpec({
+        distroName: runtime.distroName,
+        cwd,
+        claudePath,
+        env
+      })
+      const input: LaunchInput = { folder, runtime, verified, permissionMode: 'default' }
+      return { ok: true, input, spec, env }
+    }
+  })
+
   const ipc: IpcDependencies = {
     listRuntimes: () => runtimes.list(),
     refreshRuntimes: async () => {
@@ -223,6 +281,9 @@ export function createComposition(): Composition {
     sessionTargetKeys: () => sessions.targetKeys(),
     getTranscript: (sessionId, targetKey, requestToken) =>
       transcripts.getTranscript(sessionId, targetKey, requestToken),
+
+    launchSession: (folderId, runtimeId) => launchService.launch(folderId, runtimeId),
+    controlSession: (sessionId, control) => launchService.control(sessionId, control),
 
     async pickHostFolder() {
       /*
@@ -260,6 +321,23 @@ export function createComposition(): Composition {
     folders,
     sessions,
     ipc,
-    dispose: () => enumerator.dispose() + transcripts.dispose()
+    // 起動中セッションも片付ける (window close / before-quit)。孫 (wsl) の kill は agents が行う。
+    dispose: () => enumerator.dispose() + transcripts.dispose() + launchService.dispose()
   }
+}
+
+/**
+ * 作業フォルダを runtime 名前空間の cwd (RuntimePath 文字列) に変換する (Principle I / H-03)。
+ *
+ * WSL フォルダは所在ディストロがランタイムと一致済み (evaluateLaunch) なので値をそのまま使う。
+ * Windows フォルダは越境であり、runtime の `PathMapping` で host→runtime に変換する
+ * (照合・置換は domain の `prefix-match` が正本。ここで再実装しない)。マッピング未取得や
+ * 配下でないパスは変換不能として `null` を返す (推測で対応を作らない)。
+ */
+function resolveCwd(folder: WorkspaceFolder, pathMapping: PathMapping | null): string | null {
+  if (isWslFolder(folder)) return folder.path.value
+  if (pathMapping === null) return null
+  const entry = findLongestMatch(pathMapping, folder.path.value)
+  if (entry === null) return null
+  return applyEntry(pathMapping, entry, folder.path.value)
 }

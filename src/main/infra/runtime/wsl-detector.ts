@@ -188,6 +188,14 @@ export function createRuntimeDetector(deps: DetectorDeps): RuntimeDetector {
       const probedAt = now()
 
       /*
+       * **`claude` 実行パスを解決する** (X-1 / AD-036 / AD-018 §4)。probe 出力の `claude=` を採り、
+       * 絶対パス (POSIX) のときだけ採用する — 空/相対は不在扱い (裸名 PATH 依存を避ける。L-102)。
+       */
+      const claudeValue = parsed.output.values.get('claude')
+      const claudePath =
+        claudeValue !== undefined && claudeValue.startsWith('/') ? claudeValue : null
+
+      /*
        * **マッピングを先に確定させる** (順序制約。FR-005 / research R-02)。
        * 必須依存の解決パスが Windows マウント配下かどうかの判定に使うため、
        * 依存の判定より前に必要である。
@@ -204,7 +212,7 @@ export function createRuntimeDetector(deps: DetectorDeps): RuntimeDetector {
        * パス変換のマッピングではない。capabilities は固定値を採る。
        */
       if (descriptor.wslVersion === 1) {
-        return { capabilities: fixedCapabilities(probedAt), pathMapping: mapping }
+        return { capabilities: fixedCapabilities(probedAt), pathMapping: mapping, claudePath }
       }
 
       const capabilities = deriveWsl2Capabilities(parsed.output.values, mapping, probedAt)
@@ -212,7 +220,7 @@ export function createRuntimeDetector(deps: DetectorDeps): RuntimeDetector {
         // 未知の依存名が返った場合など。**出力由来の文字列を UI へ直達させない。**
         return { capabilities: probeFailed(), pathMapping: null }
       }
-      return { capabilities, pathMapping: mapping }
+      return { capabilities, pathMapping: mapping, claudePath }
     }
   }
 }

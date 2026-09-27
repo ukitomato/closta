@@ -1,0 +1,496 @@
+{
+  "gate": "pr",
+  "run": "2026-09-27T09:50:08Z",
+  "spec_dir": "specs/005-session-launch-and-streaming",
+  "spec_id": "005-session-launch-and-streaming",
+  "round": 5,
+  "base_branch": "001-runtime-folder-registration-runtime-detection",
+  "diff_stat": {
+    "files": 80,
+    "note": "X-1 未コミット working-tree + spec 成果物"
+  },
+  "severity_counts": {
+    "critical": 0,
+    "high": 0,
+    "medium": 3,
+    "low": 5
+  },
+  "convergence": {
+    "resolved_from_prev": 7,
+    "new_in_round": 4,
+    "unresolved": 0
+  },
+  "round_history": [
+    {
+      "round": 1,
+      "critical": 1,
+      "high": 4,
+      "convergence": {
+        "resolved_from_prev": 0,
+        "new_in_round": 1,
+        "unresolved": 0
+      }
+    },
+    {
+      "round": 2,
+      "critical": 0,
+      "high": 2,
+      "convergence": {
+        "resolved_from_prev": 7,
+        "new_in_round": 4,
+        "unresolved": 3
+      }
+    },
+    {
+      "round": 3,
+      "critical": 0,
+      "high": 2,
+      "convergence": {
+        "resolved_from_prev": 2,
+        "new_in_round": 2,
+        "unresolved": 0
+      }
+    },
+    {
+      "round": 4,
+      "critical": 0,
+      "high": 1,
+      "convergence": {
+        "resolved_from_prev": 5,
+        "new_in_round": 3,
+        "unresolved": 0
+      }
+    },
+    {
+      "round": 5,
+      "critical": 0,
+      "high": 0,
+      "convergence": {
+        "resolved_from_prev": 7,
+        "new_in_round": 4,
+        "unresolved": 0
+      }
+    }
+  ],
+  "suppressed_by_code_gate": [],
+  "touched_files": [
+    {
+      "path": ".dependency-cruiser.js",
+      "sha": "7a26b422a646b0d1604c5fec34747ee906b977e0"
+    },
+    {
+      "path": "docs/decisions/0036-single-session-launch-process-and-live-stream.md",
+      "sha": "0cd090be106e9f8398b09f1c87aea2367549419b"
+    },
+    {
+      "path": "docs/discovery.md",
+      "sha": "f5f629048dd9a738b6a306f8751a391443656c05"
+    },
+    {
+      "path": "docs/domains/session/charter.md",
+      "sha": "2455202284947b39f3f3be30d2963e2541e4ad5c"
+    },
+    {
+      "path": "docs/glossary.md",
+      "sha": "5490bf94889b14e55d90c4b75b76957a1af05e22"
+    },
+    {
+      "path": "docs/roadmap.md",
+      "sha": "9fe0b3c9d3745c47c88ad8e08ae5e83933f63105"
+    },
+    {
+      "path": "eslint.config.mjs",
+      "sha": "5935908231461d0ebee324ec8b7e101cecd234e0"
+    },
+    {
+      "path": "scripts/constitution/allowlists.mjs",
+      "sha": "843a359068d4148549b83034722b37bc2aea7c09"
+    },
+    {
+      "path": "scripts/constitution/check.mjs",
+      "sha": "55c7b3e19802237858806fdd9864996dc5e6c50c"
+    },
+    {
+      "path": "specs/005-session-launch-and-streaming/.gate-verdict-code.json",
+      "sha": "d3d637aca5d9786522adad5ed1935d97ebbb83a4"
+    },
+    {
+      "path": "specs/005-session-launch-and-streaming/.gate-verdict-design.json",
+      "sha": "8eefd9c145f7be3de521554368e5c9e30ee005d8"
+    },
+    {
+      "path": "specs/005-session-launch-and-streaming/.gate-verdict-pr.json",
+      "sha": "cb603cfe37bbb674c0e4f5ded2f320ef437f0d62"
+    },
+    {
+      "path": "specs/005-session-launch-and-streaming/analyze.md",
+      "sha": "f7d0e3dc02da2b41c85708ca30da55493f0d98fc"
+    },
+    {
+      "path": "specs/005-session-launch-and-streaming/architecture-reviewer.design-gate.md",
+      "sha": "077979222b6043ffba0f33971571d84c54767114"
+    },
+    {
+      "path": "specs/005-session-launch-and-streaming/architecture-reviewer.pr-gate.md",
+      "sha": "6d135f0e218e2a142836a3d6d653aeea6b090458"
+    },
+    {
+      "path": "specs/005-session-launch-and-streaming/code-gate.md",
+      "sha": "d6ed3f56640d79446b4152f542f088a7dd9aa929"
+    },
+    {
+      "path": "specs/005-session-launch-and-streaming/contracts/session-launch.md",
+      "sha": "6ef045c664875e55879f5f72e0fba0461989622d"
+    },
+    {
+      "path": "specs/005-session-launch-and-streaming/convention-reviewer.code-gate.md",
+      "sha": "e891eed23c480b647e3c7600ee30bc0c76c46d2e"
+    },
+    {
+      "path": "specs/005-session-launch-and-streaming/data-model.md",
+      "sha": "abaeb3b7426f2e43db1b5e95f8c373438be486ce"
+    },
+    {
+      "path": "specs/005-session-launch-and-streaming/design-gate.md",
+      "sha": "0ea7772e6721ded6f06f1664f2bcc49be1fb8960"
+    },
+    {
+      "path": "specs/005-session-launch-and-streaming/plan.md",
+      "sha": "6e7e1b6bccbc38bb0f790e6601bbb09a11ca8095"
+    },
+    {
+      "path": "specs/005-session-launch-and-streaming/platform-boundary-reviewer.code-gate.md",
+      "sha": "024b8aa63f219bac8dceb6e1455f4bc0557e3896"
+    },
+    {
+      "path": "specs/005-session-launch-and-streaming/platform-boundary-reviewer.design-gate.md",
+      "sha": "0262836b346448522f7516c17be147417c5f90e9"
+    },
+    {
+      "path": "specs/005-session-launch-and-streaming/platform-boundary-reviewer.pr-gate.md",
+      "sha": "55be474dc9921c02fe9e4dde3be4f2c1840c5bb6"
+    },
+    {
+      "path": "specs/005-session-launch-and-streaming/po-reviewer.design-gate.md",
+      "sha": "5a62bcd04ad07607e52fefae8c2d4187b6dca316"
+    },
+    {
+      "path": "specs/005-session-launch-and-streaming/po-reviewer.pr-gate.md",
+      "sha": "95d23b7c916a232fa092bbc7ededd15b0e3b40ce"
+    },
+    {
+      "path": "specs/005-session-launch-and-streaming/pr-gate.md",
+      "sha": "55824cf9f9ac8b0655a4a19c24f99aef652c6e04"
+    },
+    {
+      "path": "specs/005-session-launch-and-streaming/quickstart-results.md",
+      "sha": "690fdca46db817c98005600e0c2d8cbf9a748bb8"
+    },
+    {
+      "path": "specs/005-session-launch-and-streaming/quickstart.md",
+      "sha": "ce8ab2064ffe59e8be577317dbe49b2691682f97"
+    },
+    {
+      "path": "specs/005-session-launch-and-streaming/research.md",
+      "sha": "2e1558c1fc7d992fadaf761e62d870794633e0fd"
+    },
+    {
+      "path": "specs/005-session-launch-and-streaming/security-reviewer.design-gate.md",
+      "sha": "21f24ff3e6881dde176b1bc13b8a40e4de869ba8"
+    },
+    {
+      "path": "specs/005-session-launch-and-streaming/security-reviewer.pr-gate.md",
+      "sha": "92d931acf8c80277a988281bee800cbc8a204de6"
+    },
+    {
+      "path": "specs/005-session-launch-and-streaming/spec.md",
+      "sha": "6385253f632c0ab03307dcf2f116de18e4477f0d"
+    },
+    {
+      "path": "specs/005-session-launch-and-streaming/tasks.md",
+      "sha": "9f06765c40f11cef70d6edd9f200996f3a129ce1"
+    },
+    {
+      "path": "specs/005-session-launch-and-streaming/touched-files.txt",
+      "sha": "f8372110a8de5745ec4bc0463e61d5c047e86fcc"
+    },
+    {
+      "path": "src/agents/sdk-agent-session.ts",
+      "sha": "299523fdfef38ae4e39a95a2725d35050fd83ccb"
+    },
+    {
+      "path": "src/agents/session-core.test.ts",
+      "sha": "daf091fc589019dee5537f523f986b39b39d4a15"
+    },
+    {
+      "path": "src/agents/session-core.ts",
+      "sha": "24725c7841e775842fadcde3b5f339939742c59d"
+    },
+    {
+      "path": "src/domain/capability.ts",
+      "sha": "67d56b6132e95fac94fd5ed248be9c05ba4cd193"
+    },
+    {
+      "path": "src/domain/runtime/descriptor.ts",
+      "sha": "25bee8335f31ed7ac6317deda5e98145ce56c447"
+    },
+    {
+      "path": "src/domain/runtime/interfaces.ts",
+      "sha": "f7c9dce071ff93bb6e893df1f0c4d1d3d540b0b9"
+    },
+    {
+      "path": "src/domain/session/agent-session.test.ts",
+      "sha": "a7b058d3e4da90d265b6b5376d6240aec5b1c75e"
+    },
+    {
+      "path": "src/domain/session/agent-session.ts",
+      "sha": "2cb2cad4c395d962fdb02373e96725b203a60739"
+    },
+    {
+      "path": "src/domain/session/launch-gate.test.ts",
+      "sha": "fd67d57e68d00df32548ccaab233661dd64c97ce"
+    },
+    {
+      "path": "src/domain/session/launch-gate.ts",
+      "sha": "7401b1770ed05f00ae4e12b7f5056fbbd3abad65"
+    },
+    {
+      "path": "src/domain/session/live-message.test.ts",
+      "sha": "c624ecb23fc4c193f90b95aa31f567b5127f3a82"
+    },
+    {
+      "path": "src/domain/session/live-message.ts",
+      "sha": "a18404518452a631f14214f5d039f5136aecbc47"
+    },
+    {
+      "path": "src/domain/session/run-state.test.ts",
+      "sha": "b98e91e5e8ed689a6668803dd0e1db3fee654a49"
+    },
+    {
+      "path": "src/domain/session/run-state.ts",
+      "sha": "163ad68fc9da976f4f35557cafb29989b9f6be4a"
+    },
+    {
+      "path": "src/domain/validation.ts",
+      "sha": "1f8b93b61e90cf0243376b83715c15fb44178caf"
+    },
+    {
+      "path": "src/main/app/composition-root.ts",
+      "sha": "20f41eec635cb4069cb658eebc216381d7963bae"
+    },
+    {
+      "path": "src/main/app/ipc.ts",
+      "sha": "5116dbac7e0213ef92e2e03752fefab87c8448dd"
+    },
+    {
+      "path": "src/main/app/runtime-store.ts",
+      "sha": "e41b6051c888c9a583c5e8cd800951b9cc5ebfe1"
+    },
+    {
+      "path": "src/main/app/session-ipc.test.ts",
+      "sha": "b78567b999c0da8ea1d3dffa521d53e2c3005ff1"
+    },
+    {
+      "path": "src/main/app/session-ipc.ts",
+      "sha": "de91e86c06d89244fc1cb7a417b7f6685ec1295a"
+    },
+    {
+      "path": "src/main/app/session-launch-service.test.ts",
+      "sha": "a240d053db3d3551310bc027db8d378ee36b3a54"
+    },
+    {
+      "path": "src/main/app/session-launch-service.ts",
+      "sha": "d3a0e119cb0258ab29e2e3a7a381c66f5732bd2c"
+    },
+    {
+      "path": "src/main/app/session-spawner.ts",
+      "sha": "cc3b623c1f537a64a170d5ecf07121aedc7743dc"
+    },
+    {
+      "path": "src/main/app/validate.test.ts",
+      "sha": "1115f2f042fec0a528676bac17c92e4bebf15ab8"
+    },
+    {
+      "path": "src/main/app/validate.ts",
+      "sha": "9d45190746f3c1f464cc94a641aa99f9e018e296"
+    },
+    {
+      "path": "src/main/infra/runtime/launch-spec.test.ts",
+      "sha": "f35a7aaa7f89201819544086d337e57eb145d1e2"
+    },
+    {
+      "path": "src/main/infra/runtime/launch-spec.ts",
+      "sha": "8c3633001d8dd4e53c6bb29dec5eb10f3e6a8822"
+    },
+    {
+      "path": "src/main/infra/runtime/probe-script.ts",
+      "sha": "769cf38881ad55a89da7e815f127538a49c30d3a"
+    },
+    {
+      "path": "src/main/infra/runtime/wsl-cli.test.ts",
+      "sha": "8bc819c790e2bff628bdf5e1361e6dc689425adb"
+    },
+    {
+      "path": "src/main/infra/runtime/wsl-cli.ts",
+      "sha": "8e0cb20df3a1dcccaed16af8a4b3b5faa750b477"
+    },
+    {
+      "path": "src/main/infra/runtime/wsl-detector.ts",
+      "sha": "c9d3f5250a1041ee5af62f88ccba9181dab172fa"
+    },
+    {
+      "path": "src/preload/index.ts",
+      "sha": "1cdaa8fc84107971733e7e66c24039e92c338022"
+    },
+    {
+      "path": "src/renderer/src/App.tsx",
+      "sha": "0e18cc2774e0b9775ed8f48d85066762bc02325d"
+    },
+    {
+      "path": "src/renderer/src/features/session/ApprovalCard.test.tsx",
+      "sha": "389b6696e48fdc938da493b4d8b80f2e10b89eff"
+    },
+    {
+      "path": "src/renderer/src/features/session/ApprovalCard.tsx",
+      "sha": "71706444277f297dff1285cb3227171e342365f4"
+    },
+    {
+      "path": "src/renderer/src/features/session/SessionScreen.tsx",
+      "sha": "d3cd89347adb6f030599d51f8061bbdc5774986a"
+    },
+    {
+      "path": "src/renderer/src/features/session/labels.test.ts",
+      "sha": "3a73e7d8287fecd354286cfb828ed20e1c50f17d"
+    },
+    {
+      "path": "src/renderer/src/features/session/labels.ts",
+      "sha": "9916b3f72a4962ca3688ea8538798efa9eb76b96"
+    },
+    {
+      "path": "src/renderer/src/features/session/useLiveSession.test.tsx",
+      "sha": "11f9472736d480da8d80865e637ab0bb3872ef1f"
+    },
+    {
+      "path": "src/renderer/src/features/session/useLiveSession.ts",
+      "sha": "b2a2d668f2ddf9b30403008e5575f993f7234b4b"
+    },
+    {
+      "path": "src/renderer/src/stores/ui.ts",
+      "sha": "04973ddfd50832c178d16b122fc172fd222dae1c"
+    },
+    {
+      "path": "src/renderer/src/test-support/capability.ts",
+      "sha": "38fbdc60df1beb649c1f8479b1bf9da46dc75b9f"
+    },
+    {
+      "path": "tests/rule-fixtures/a-direct/sdk-query-escalation-options.ts.fixture",
+      "sha": "863ee8aacce17a02a11ce971f00e9125c62f381d"
+    },
+    {
+      "path": "tests/rule-fixtures/b-equivalent/sdk-query-mutation-method.ts.fixture",
+      "sha": "a4fdb894a077ae77f13843259c4de4d95a73120d"
+    },
+    {
+      "path": "tests/rule-fixtures/expected.mjs",
+      "sha": "e2d66e64eeaf384333fe3bb1e9b9ed4dacfe3c84"
+    }
+  ],
+  "viewpoint_coverage": {
+    "A": "security Low:2",
+    "B": "該当なし",
+    "C": "architecture Low:1 (data-model failure 名)",
+    "D": "architecture Low:1 + platform Med:1 Low:2 (env DRY carried)",
+    "E": "po Med:2 (M-501 kill pending / H-501 test)",
+    "F": "該当なし: convention は code-gate 専任",
+    "G": "該当なし: a11y/ux/database skip",
+    "H": "po/platform test carried"
+  },
+  "fr_coverage": [
+    {
+      "fr": "FR-006",
+      "covered": true,
+      "by": [
+        "buildDetectionEnv",
+        "wsl-cli.test.ts",
+        "buildLaunchEnv"
+      ]
+    },
+    {
+      "fr": "FR-016",
+      "covered": true,
+      "by": [
+        "SessionScreen kill 終端表示",
+        "useLiveSession.kill"
+      ]
+    },
+    {
+      "fr": "FR-030",
+      "covered": true,
+      "by": [
+        "classifyResult",
+        "labels.test.ts"
+      ]
+    }
+  ],
+  "rule_verification": {
+    "ran": false,
+    "round": 5,
+    "reason": "規則定義/fixture は Round 3 以降不変 (Round 3 で 29 件一致・exit 0 済)"
+  },
+  "skipped_reviewers": [
+    {
+      "name": "database-reviewer",
+      "reason": "auto_invoke_patterns 不一致"
+    },
+    {
+      "name": "ux-reviewer",
+      "reason": "auto_invoke_patterns 不一致"
+    },
+    {
+      "name": "a11y-reviewer",
+      "reason": "auto_invoke_patterns 不一致"
+    }
+  ],
+  "tracks": {
+    "security-reviewer": {
+      "viewpoint_missing": [],
+      "cascade_demotions": 0,
+      "critical": 0,
+      "high": 0
+    },
+    "architecture-reviewer": {
+      "viewpoint_missing": [],
+      "cascade_demotions": 0,
+      "critical": 0,
+      "high": 0
+    },
+    "po-reviewer": {
+      "viewpoint_missing": [],
+      "cascade_demotions": 0,
+      "critical": 0,
+      "high": 0
+    },
+    "platform-boundary-reviewer": {
+      "viewpoint_missing": [],
+      "cascade_demotions": 0,
+      "critical": 0,
+      "high": 0
+    }
+  },
+  "resolved_this_round": [
+    "po H-401 (kill UI hang)",
+    "po M-401 (failure pending)",
+    "sec M-101 (検出 env PATH)",
+    "platform M-201 (検出 env test)",
+    "platform L-002 (allowlist 非対称 core)",
+    "arch M-001 (registry doc)",
+    "arch M-002 (cwd locus doc)"
+  ],
+  "followups": [
+    "po M-501 (kill が setPending(null) を欠く。1 行で対称化)",
+    "po/convention H-501/M-003 (SessionScreen/useLiveSession の kill・failure test → X-2)",
+    "M-501 (env allowlist 3 定数統合 + case-insensitive → cross-feature refactor / 最小は deepEqual test)",
+    "Low: L-501 検出フォールバックコメント / L-502 WSL_FREE 重複行 / L-201 claudePath branded / L-001 data-model failure 名 / L-002 検出 process.env 直読 / requestId (X-4/X-5)"
+  ],
+  "verdict": "PASS"
+}

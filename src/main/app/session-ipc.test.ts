@@ -1,13 +1,19 @@
 import { describe, expect, it } from 'vitest'
 
+import type { SessionControl } from '@domain/session/agent-session'
 import type { SessionIndexDTO } from '@domain/session/dto'
-import { MAX_SESSION_OFFSET } from '@domain/validation'
+import { MAX_PROMPT_BYTES, MAX_SESSION_OFFSET } from '@domain/validation'
 
 import {
   handleFetchMoreSessions,
   handleGetTranscript,
+  handleInterruptSession,
+  handleKillSession,
+  handleLaunchSession,
   handleListSessions,
   handleRefreshSessions,
+  handleRespondPermission,
+  handleSendPrompt,
   type SessionIpcDeps
 } from './session-ipc'
 
@@ -27,13 +33,22 @@ interface Calls {
   readonly refresh: number[]
   readonly fetch: { targetKey: string; offset: number }[]
   readonly transcript: { sessionId: string; targetKey: string; requestToken: string }[]
+  readonly launches: { folderId: string; runtimeId: string }[]
+  readonly controls: { sessionId: string; control: SessionControl }[]
 }
 
 function deps(keys: readonly string[] = ['host#0', 'wsl:Ubuntu#0']): {
   deps: SessionIpcDeps
   calls: Calls
 } {
-  const calls: Calls = { list: [], refresh: [], fetch: [], transcript: [] }
+  const calls: Calls = {
+    list: [],
+    refresh: [],
+    fetch: [],
+    transcript: [],
+    launches: [],
+    controls: []
+  }
   return {
     calls,
     deps: {
@@ -56,6 +71,15 @@ function deps(keys: readonly string[] = ['host#0', 'wsl:Ubuntu#0']): {
           handshake: { status: 'streaming' as const, requestToken },
           port: null
         }
+      },
+      // X-1 で SessionIpcDeps に加わった起動/制御。呼び出しを記録する (負例で「発火しない」を検証)。
+      async launchSession(folderId, runtimeId) {
+        calls.launches.push({ folderId, runtimeId })
+        return { status: 'rejected' as const, reason: 'unknown-target' as const }
+      },
+      controlSession(sessionId, control) {
+        calls.controls.push({ sessionId, control })
+        return true
       }
     }
   }
@@ -231,5 +255,102 @@ describe('handleGetTranscript — 検証表 (R-3 / BE-027 / SC-008)', () => {
 
     expect(result.handshake.status).toBe('streaming')
     expect(calls.transcript).toHaveLength(1)
+  })
+})
+
+describe('X-1 起動 + 制御ハンドラ — main 直接呼び (SC-004 / SC-007 / FR-010 / FR-012)', () => {
+  const UUID = '11111111-1111-4111-8111-111111111111'
+
+  describe('handleLaunchSession', () => {
+    it('folderId/runtimeId が文字列なら launchSession へ委譲', async () => {
+      const { deps: d, calls } = deps()
+      await handleLaunchSession(d, ['f1', 'r1'])
+      expect(calls.launches).toEqual([{ folderId: 'f1', runtimeId: 'r1' }])
+    })
+
+    it.each([
+      ['folderId 非文字列', [123, 'r1']],
+      ['runtimeId 非文字列', ['f1', null]],
+      ['欠落', []]
+    ])('型不正はプロセスを起こさず unknown-target で拒否 (%s)', async (_l, args) => {
+      const { deps: d, calls } = deps()
+      const out = await handleLaunchSession(d, args as readonly unknown[])
+      expect(out).toEqual({ status: 'rejected', reason: 'unknown-target' })
+      expect(calls.launches).toEqual([])
+    })
+  })
+
+  describe('handleRespondPermission (承認の唯一経路。scope 格上げの負例)', () => {
+    it('妥当な決定は controlSession へ respond-permission を送る', async () => {
+      const { deps: d, calls } = deps()
+      await handleRespondPermission(d, [UUID, 'perm-1', 'allow', 'once'])
+      expect(calls.controls).toEqual([
+        {
+          sessionId: UUID,
+          control: {
+            kind: 'respond-permission',
+            decision: { requestId: 'perm-1', outcome: 'allow', scope: 'once' }
+          }
+        }
+      ])
+    })
+
+    it.each([
+      ['outcome が enum 外', [UUID, 'perm-1', 'maybe', 'once']],
+      ['outcome 格上げ (allow-all)', [UUID, 'perm-1', 'grant', 'once']],
+      ['scope が enum 外', [UUID, 'perm-1', 'allow', 'forever']],
+      ['sessionId 非 UUID', ['not-uuid', 'perm-1', 'allow', 'once']],
+      ['requestId 空', [UUID, '', 'allow', 'once']],
+      ['requestId 上限超', [UUID, 'x'.repeat(129), 'allow', 'once']],
+      ['非文字列 outcome', [UUID, 'perm-1', 1, 'once']]
+    ])('不正入力では制御を発火しない (%s)', async (_l, args) => {
+      const { deps: d, calls } = deps()
+      await handleRespondPermission(d, args as readonly unknown[])
+      expect(calls.controls).toEqual([])
+    })
+  })
+
+  describe('handleSendPrompt', () => {
+    it('妥当な text は send-prompt を送る', async () => {
+      const { deps: d, calls } = deps()
+      await handleSendPrompt(d, [UUID, 'こんにちは'])
+      expect(calls.controls).toEqual([
+        { sessionId: UUID, control: { kind: 'send-prompt', text: 'こんにちは' } }
+      ])
+    })
+
+    it.each([
+      ['空', [UUID, '']],
+      ['空白のみ', [UUID, '   \n\t']],
+      ['バイト長超過', [UUID, 'a'.repeat(MAX_PROMPT_BYTES + 1)]],
+      ['sessionId 非 UUID', ['not-uuid', 'hi']],
+      ['非文字列', [UUID, 42]]
+    ])('不正入力では送らない (%s)', async (_l, args) => {
+      const { deps: d, calls } = deps()
+      await handleSendPrompt(d, args as readonly unknown[])
+      expect(calls.controls).toEqual([])
+    })
+  })
+
+  describe('handleInterruptSession / handleKillSession', () => {
+    it('妥当な UUID なら interrupt / kill を送る', async () => {
+      const { deps: d, calls } = deps()
+      await handleInterruptSession(d, [UUID])
+      await handleKillSession(d, [UUID])
+      expect(calls.controls).toEqual([
+        { sessionId: UUID, control: { kind: 'interrupt' } },
+        { sessionId: UUID, control: { kind: 'kill' } }
+      ])
+    })
+
+    it.each([
+      ['非 UUID', ['not-uuid']],
+      ['欠落', []]
+    ])('非 UUID sessionId では発火しない (%s)', async (_l, args) => {
+      const { deps: d, calls } = deps()
+      await handleInterruptSession(d, args as readonly unknown[])
+      await handleKillSession(d, args as readonly unknown[])
+      expect(calls.controls).toEqual([])
+    })
   })
 })

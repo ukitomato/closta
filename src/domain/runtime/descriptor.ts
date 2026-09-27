@@ -43,6 +43,14 @@ export interface WslRuntimeDescriptor extends RuntimeDescriptorBase {
   readonly wslVersion: WslVersion
   /** **probe 完了まで未取得**。取得済みかどうかが第 2 段の分岐鍵である (§8)。 */
   readonly pathMapping: PathMapping | null
+  /**
+   * WSL 内 `claude` の実行パス (RuntimePath の文字列。X-1 / AD-036 / AD-018 §4)。
+   *
+   * 検出時に `command -v claude` で 1 回解決する (`probe-script.ts`)。**probe 前・不在時は
+   * `null`/未設定** (起動ゲートが `claude-not-found` に倒す)。起動は絶対パスで行い裸名 PATH に依存しない
+   * (L-102 / CWE-426)。**IPC/DTO には出さない** — main 側の起動詳細であり renderer は要らない。
+   */
+  readonly claudePath?: string | null
 }
 
 export type RuntimeDescriptor = Win32RuntimeDescriptor | WslRuntimeDescriptor

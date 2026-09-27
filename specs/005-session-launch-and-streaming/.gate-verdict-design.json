@@ -1,0 +1,35 @@
+{
+  "gate": "design",
+  "round": 4,
+  "run": "2026-09-26",
+  "spec_dir": "specs/005-session-launch-and-streaming",
+  "spec_id": "005-session-launch-and-streaming",
+  "entry_status": "tasking",
+  "rounds": [
+    { "round": 1, "critical": 3, "verdict": "FIX_REQUIRED" },
+    { "round": 2, "critical": 1, "verdict": "FIX_REQUIRED" },
+    { "round": 3, "critical": 1, "verdict": "FIX_REQUIRED" },
+    { "round": 4, "critical": 0, "verdict": "PASS", "scope": "focused (platform-boundary + security)。他3トラックはR3でCritical0" }
+  ],
+  "tracks": {
+    "analyze": { "status": "ok", "raw_out": "analyze.round3.md", "last_round": 3, "viewpoint_missing": null, "cascade_demotions": null, "counts": { "critical": 0, "high": 0, "medium": 1, "low": 4 } },
+    "po-reviewer": { "status": "ok", "raw_out": "po-reviewer.design-gate.round3.md", "last_round": 3, "viewpoint_missing": [], "cascade_demotions": 0, "counts": { "critical": 0, "high": 0, "medium": 2, "low": 5 } },
+    "architecture-reviewer": { "status": "ok", "raw_out": "architecture-reviewer.design-gate.round3.md", "last_round": 3, "viewpoint_missing": [], "cascade_demotions": 0, "counts": { "critical": 0, "high": 0, "medium": 3, "low": 2 } },
+    "security-reviewer": { "status": "ok", "raw_out": "security-reviewer.design-gate.round4.md", "last_round": 4, "viewpoint_missing": [], "cascade_demotions": 0, "counts": { "critical": 0, "high": 0, "medium": 1, "low": 4 } },
+    "platform-boundary-reviewer": { "status": "ok", "raw_out": "platform-boundary-reviewer.design-gate.round4.md", "last_round": 4, "viewpoint_missing": [], "cascade_demotions": 0, "counts": { "critical": 0, "high": 2, "medium": 2, "low": 0 } }
+  },
+  "severity_counts": { "critical": 0, "high": 2, "medium": 7, "low": 11 },
+  "resolved_from_prev": { "critical": 1 },
+  "critical_findings": [],
+  "high_findings_addressed": [
+    { "id": "H-401", "summary": "正の構成の機械検査を純関数出力でなく実 SDK 引数・canUseTool 全 return 経路に固定", "fix": "SH-010(d) + SH-020 負例追加" },
+    { "id": "H-402", "summary": "kill 記述の伝播漏れ (plan/tasks が旧記述)", "fix": "plan §Architecture / BE-021 を agents が SpawnedProcess を kill に統一" }
+  ],
+  "positive_construction": {
+    "P1": "query() options キー集合 ⊆ {permissionMode:'default', canUseTool, spawnClaudeCodeProcess, pathToClaudeCodeExecutable}",
+    "P2": "toPermissionResult 出力キー集合 ⊆ {behavior, message} (updatedPermissions 全 variant + updatedInput を締め出す)",
+    "P3": "Query メソッドは interrupt() のみ"
+  },
+  "verdict": "PASS",
+  "note": "R1-R3 の Critical は権限昇格面 denylist の同一クラス。R3 で正の構成 (allowlist) に反転し R4 (focused: platform+security) が SDK 実型で class 閉鎖を確認。他3トラックは R3 で Critical 0。verdict_require_pass は Critical=0 で PASS。"
+}
