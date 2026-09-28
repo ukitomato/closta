@@ -2,7 +2,6 @@
 name: cl-implement
 description: tasks.md に従い実装を実行する。touched-files を記録し、tasks.md の checkbox 100% を検証して `/cl-code-gate` へ auto-chain する。
 argument-hint: [spec_dir]
-disable-model-invocation: true
 allowed-tools: Read Write Edit Bash Glob Grep Agent AskUserQuestion
 ---
 

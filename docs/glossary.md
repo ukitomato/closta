@@ -2,7 +2,7 @@
 status: needs-human-review
 last_updated: 2026-09-26
 generated_by: human (PLAN.md 付録A + §3〜§7 を素材に起草。X-1 で AgentSession 系 8 語を追記)
-total_terms: 39
+total_terms: 42
 ---
 
 # Glossary (Ubiquitous Language)
@@ -122,6 +122,16 @@ total_terms: 39
   正本は [data-model.md](../specs/002-session-cross-folder-session-enumeration/data-model.md) §4 の表である
 - **Ref**: [AD-029](decisions/0029-session-cwd-origin-classification.md)
 
+#### **Composer**
+
+- **Definition**: メッセージ入力欄。assistant-ui の `ComposerPrimitive.Input` を用い、変換確定の Enter を送信に
+  しない (IME の二重ガードは assistant-ui 側。**自前ガードを新設しない**)。実行中の入力積み (Message queue) と
+  下書き (Draft) を持つ (X-2)
+- **日本語表記**: コンポーザ / 入力欄
+- **Domain**: `ui`
+- **Counterexamples**: `ComposerPrimitive.Input` を独自 `<textarea>` に差し替えない (既存 IME ガードを殺すため。AD-037 D1)
+- **Ref**: [AD-037](decisions/0037-japanese-ime-composer-behavior.md)
+
 #### **CredentialSource**
 
 - **Definition**: Provider の認証方式。9 種類あり、それぞれ「アプリが秘密を持つか」が定義されている。
@@ -139,6 +149,16 @@ total_terms: 39
 - **Domain**: `isolation`
 - **Counterexamples**: 永続コンテナ、Docker **イメージ**。いずれも管理対象外
 - **Ref**: [AD-008](decisions/0008-no-persistent-environment-provisioning.md)
+
+#### **Draft（下書き）**
+
+- **Definition**: composer の未送信の入力テキスト。**メモリ内限定**で保持し、Thread 再構成をまたいで復元する
+  (X-2 / FR-007)。送信・明示クリアで空になる
+- **日本語表記**: 下書き
+- **Domain**: `ui`
+- **Counterexamples**: 永続層・IPC 境界・ログに出さない (会話由来ペイロード。Principle V / FR-008)。
+  アプリ再起動をまたぐ永続復元は本 feature 外
+- **Ref**: [AD-037](decisions/0037-japanese-ime-composer-behavior.md) D2
 
 ### E
 
@@ -268,6 +288,17 @@ total_terms: 39
 - **Counterexamples**: **表示状態（TranscriptView。`ui`）とは別。** 変換は規則、TranscriptView は画面状態。
   DTO → assistant-ui の `ThreadMessageLike` への写しは `ui`（`convert.ts`）が行う
 - **Ref**: [AD-034](decisions/0034-transcript-read-path-and-process-boundary.md)
+
+#### **Message queue（実行中積み）**
+
+- **Definition**: `running` / `awaiting_permission` 中に積む未送信入力。assistant-ui の native queue
+  (`createMessageQueue` / `ExternalThreadQueueAdapter`) が renderer 側の**単一 locus**として保持し、現ターン完了後に
+  同一セッションの**次ターン**として送る (X-2 / FR-004・FR-005)。中断で still_queued 維持、error/killed 終端で cancelled
+- **日本語表記**: メッセージキュー / 実行中積み
+- **Domain**: `ui`
+- **Counterexamples**: **message mapping (メッセージ変換) とは別物** — こちらは入力欄の積み、あちらは表示への変換。
+  `interrupt`→steer はしない (次ターン送信に限る。FR-005)
+- **Ref**: [AD-037](decisions/0037-japanese-ime-composer-behavior.md) D2
 
 #### **Model catalog**
 

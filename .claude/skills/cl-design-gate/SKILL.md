@@ -2,7 +2,6 @@
 name: cl-design-gate
 description: Design Phase 末尾の hard gate。spec.md + plan.md + tasks.md を bundle で並列レビューし、Critical=0 で tasking → implementing に昇格する。
 argument-hint: [spec_dir]
-disable-model-invocation: true
 allowed-tools: Read Write Edit Bash Glob Grep Agent AskUserQuestion
 ---
 

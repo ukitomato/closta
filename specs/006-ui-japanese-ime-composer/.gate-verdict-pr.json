@@ -1,0 +1,100 @@
+{
+  "gate": "pr",
+  "run": "2026-09-29",
+  "spec_dir": "specs/006-ui-japanese-ime-composer",
+  "spec_id": "006-ui-japanese-ime-composer",
+  "round": 3,
+  "base_branch": "18e5ba8 (X-2 \u76f4\u524d)",
+  "diff_stat": {
+    "files": 71,
+    "additions": 4627,
+    "deletions": 54
+  },
+  "severity_counts": {
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "low": 0
+  },
+  "convergence": {
+    "resolved_from_prev": 4,
+    "new_in_round": 0,
+    "unresolved": 0
+  },
+  "round_history": [
+    {
+      "round": 1,
+      "critical": 0,
+      "high": 2,
+      "convergence": {
+        "resolved_from_prev": 0,
+        "new_in_round": 2,
+        "unresolved": 0
+      }
+    },
+    {
+      "round": 2,
+      "critical": 0,
+      "high": 1,
+      "convergence": {
+        "resolved_from_prev": 2,
+        "new_in_round": 1,
+        "unresolved": 0
+      }
+    },
+    {
+      "round": 3,
+      "critical": 0,
+      "high": 0,
+      "convergence": {
+        "resolved_from_prev": 4,
+        "new_in_round": 0,
+        "unresolved": 0
+      }
+    }
+  ],
+  "suppressed_by_code_gate": [],
+  "touched_files": [],
+  "rule_verification": {
+    "ran": false,
+    "round": 3,
+    "reason": "\u898f\u5247\u5b9a\u7fa9 (eslint.config.mjs/.dependency-cruiser.js) \u306f Round 1 \u4ee5\u964d\u672a\u5909\u66f4\u306e\u305f\u3081\u518d\u5b9f\u884c\u4e0d\u8981\u3002\u5b9f CI \u306b\u59d4\u8b72\u3002"
+  },
+  "skipped_reviewers": [
+    {
+      "name": "security-reviewer",
+      "reason": "Round 1 clean\u3002Round 2-3 \u306e\u5909\u66f4 (queue wrapper / \u4e2d\u65ad\u5358\u4e00 locus) \u306f\u65b0\u898f attack surface \u306a\u3057 \u2192 carry"
+    },
+    {
+      "name": "platform-boundary-reviewer",
+      "reason": "Round 1 clean\u3002runtime/platform \u5883\u754c\u5909\u66f4\u306a\u3057 \u2192 carry"
+    },
+    {
+      "name": "database-reviewer",
+      "reason": "\u975e\u8a72\u5f53"
+    },
+    {
+      "name": "ux-reviewer",
+      "reason": "\u975e\u8a72\u5f53"
+    },
+    {
+      "name": "a11y-reviewer",
+      "reason": "\u975e\u8a72\u5f53"
+    }
+  ],
+  "tracks": {
+    "architecture-reviewer": {
+      "viewpoint_missing": [],
+      "cascade_demotions": 0,
+      "critical": 0,
+      "high": 0
+    },
+    "po-reviewer": {
+      "viewpoint_missing": [],
+      "cascade_demotions": 0,
+      "critical": 0,
+      "high": 0
+    }
+  },
+  "verdict": "PASS"
+}

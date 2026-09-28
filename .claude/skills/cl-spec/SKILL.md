@@ -2,7 +2,6 @@
 name: cl-spec
 description: feature spec.md を起案する。spec_id の採番・domain 確定・frontmatter 注入を行い、`/speckit.specify` と `/speckit.clarify` を内部委譲する。
 argument-hint: <description>
-disable-model-invocation: true
 allowed-tools: Read Write Edit Bash Glob Grep AskUserQuestion
 ---
 

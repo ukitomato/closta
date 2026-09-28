@@ -144,7 +144,18 @@ function without(excluded) {
 }
 
 export default defineConfig(
-  { ignores: ['**/node_modules', '**/dist', '**/out', 'tests/rule-fixtures/**'] },
+  // e2e/ は Playwright 専用 (別 tsconfig / 別 runner)。src の lint/型グラフに混ぜない (X-2 / AD-038 D2)。
+  // Playwright 向けの lint は e2e/ 配下の設定で別途行う (`@playwright/test` 導入後)。
+  {
+    ignores: [
+      '**/node_modules',
+      '**/dist',
+      '**/out',
+      'tests/rule-fixtures/**',
+      'e2e/**',
+      'playwright.config.ts'
+    ]
+  },
   tseslint.configs.recommended,
   eslintPluginReact.configs.flat.recommended,
   eslintPluginReact.configs.flat['jsx-runtime'],

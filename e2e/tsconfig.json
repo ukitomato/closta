@@ -1,0 +1,10 @@
+{
+  "//": "E2E (Playwright) 専用 tsconfig。src の型グラフ (tsconfig.node/web) には混ぜない (X-2 / AD-038 D2)。",
+  "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
+  "include": ["**/*.ts"],
+  "compilerOptions": {
+    "composite": false,
+    "types": ["@playwright/test", "node"],
+    "skipLibCheck": true
+  }
+}

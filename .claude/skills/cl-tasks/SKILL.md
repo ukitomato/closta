@@ -2,7 +2,6 @@
 name: cl-tasks
 description: plan.md から tasks.md を起草する。User Story 単位の section 構造と `[P]` 並列マーカーを検証し、status を planning → tasking に遷移させる。
 argument-hint: [spec_dir]
-disable-model-invocation: true
 allowed-tools: Read Write Edit Bash Glob Grep AskUserQuestion
 ---
 

@@ -2,7 +2,6 @@
 name: cl-plan
 description: spec.md から plan.md を起草する。Domain Context (charter + 関連 ADR + glossary 抜粋) を auto-fill し、status を drafting → planning に遷移させる。
 argument-hint: [spec_dir]
-disable-model-invocation: true
 allowed-tools: Read Write Edit Bash Glob Grep AskUserQuestion
 ---
 

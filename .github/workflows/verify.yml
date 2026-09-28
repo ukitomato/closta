@@ -83,3 +83,46 @@ jobs:
 
       - name: build
         run: pnpm build
+
+  # **Principle VIII の Automated 2 項目** (IME E2E / 日本語スクリーンショット比較) を Electron 実起動で回す
+  # (X-2 / AD-038 / SC-006 / FR-009-012)。**Windows ランナーで GUI 起動**する。
+  #
+  # **credential-free** — CLOSTA_E2E stub (`src/main/app/e2e-capability.ts`。`!app.isPackaged && CLOSTA_E2E==='1'`
+  # で production-inert) が real な WSL・Claude 認証・秘密なしに有効 composer へ到達させる (H-3 / Principle V)。
+  # 独立ブラウザは取らない — `_electron.launch` がアプリ同梱 Chromium を使う (PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD)。
+  # env 単独ゲート禁止のため CLOSTA_E2E は job env でなく `e2e/support/launch.ts` が `_electron.launch` に渡す。
+  #
+  # **移設対象外は載せない** (FR-011): スクロール安定 E2E / Principle IX 到達集合検査は roadmap の deferred feature に残す。
+  e2e:
+    name: e2e (Japanese IME / screenshot)
+    runs-on: windows-latest
+    env:
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 12
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: install
+        run: pnpm install --frozen-lockfile
+
+      - name: build
+        run: pnpm build
+
+      # 以降も **1 検証 1 ステップ**。IME E2E は既存ガードを殺す差分で落ちる (FR-012 の回帰固定)。
+      - name: e2e (IME 変換確定 Enter が送信にならない)
+        run: pnpm exec playwright test e2e/ime.spec.ts -c playwright.config.ts
+
+      # 日本語スクリーンショット比較 (FR-010 / SC-002)。**同梱フォント (`e2e/fonts/*.ttf`) と承認済み基準画像
+      # (`e2e/**/*.png`) が commit 済みであることが前提** (H-101 / AD-038 D4・D5 / quickstart V-2 の人間承認)。
+      # フォント・基準画像を整備する前に本ステップを gating で有効化すると CI が赤になる — 整備後に commit すること。
+      - name: e2e (日本語スクリーンショット比較)
+        run: pnpm exec playwright test e2e/composer-screenshot.spec.ts -c playwright.config.ts

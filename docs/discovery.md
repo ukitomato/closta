@@ -88,7 +88,7 @@ present の行にも「入っているが使っていない」ものがあるの
 | コンテナ制御 | Docker CLI 呼び出し | PLAN.md:83, AD-012 (L243) | absent (I-1 で入る)。**docker を名指せるモジュールは 0 件** (検証項目 4) |
 | パッケージング | electron-builder (`asarUnpack` 必須) | PLAN.md:84, AD-009 (L210) | **present** (26.15.3)。`asarUnpack` 動作確認済み (AD-026) |
 | Lint | ESLint + `no-restricted-imports` | PLAN.md:85 | **present** (ESLint 9 + `eslint-plugin-boundaries` + dependency-cruiser 18) |
-| テスト | Vitest (unit) / Playwright (E2E) | PLAN.md:86 | **Vitest present** (5)。**Playwright absent** |
+| テスト | Vitest (unit) / Playwright (E2E) | PLAN.md:86 | **Vitest present** (5)。**Playwright present** (1.63。X-2 で導入。IME E2E 実走済) |
 | パッケージマネージャ | pnpm | PLAN.md:795 | **present** (12.4.1) |
 
 宣言されたランタイム抽象 (AD-003, PLAN.md:147-160): `DirectRuntime` / `WslRuntime` / `Win32Runtime` / `DockerRuntime`。
@@ -146,6 +146,7 @@ commit subject が壊れるのを防ぐためである。
 | **Constitution 検証** | `pnpm check:constitution` | `node scripts/constitution/check.mjs` (同一) | `scripts/constitution/check.mjs`。11 項目。許可リストの正本は `scripts/constitution/allowlists.mjs` |
 | **ユニットテスト** | `pnpm test` | 全件 `node node_modules/vitest/vitest.mjs run` / 絞り込み `node node_modules/vitest/vitest.mjs related --run <files…>` | Vitest 5。2 project (node / renderer)。いずれも `pool: 'threads'` |
 | **ルール検証** | `pnpm test:rules` | `node scripts/rules/run.mjs` (同一)。**code-gate では実行しない** — 下記参照 | `scripts/rules/run.mjs`。**違反サンプルを検査対象へ展開し、期待した検出器が発火することを確かめる** |
+| **E2E** | `pnpm exec playwright test -c playwright.config.ts` (全) / `… e2e/ime.spec.ts …` (IME のみ) | `node node_modules/@playwright/test/cli.js test -c playwright.config.ts` | Playwright + Electron (`_electron.launch`。X-2 / AD-038)。**要ビルド** (`out/main/index.js` を起動)。IME E2E は独立ブラウザ不要。スクショ比較は同梱フォント + 承認済み基準画像が前提。`e2e/` は src グラフ外 (AD-038 D2) なので lint/depcruise/typecheck の対象外 (専用 `e2e/tsconfig.json`) |
 | **ビルド** | `pnpm build` | — (agent は実行しない) | 型検査 → `electron-vite build` |
 | **パッケージング** | `pnpm build:win` | — (agent は実行しない) | `scripts/build/package.mjs` 経由で `electron-builder` ([AD-026](decisions/0026-packaging-first-pass.md)) |
 | **整形** | `pnpm format` | — (agent は実行しない) | Prettier。**markdown は対象外** (`.prettierignore`。全角の表が崩れ、コードフェンスからセミコロンが消える) |
@@ -226,9 +227,14 @@ R-1 の実装中に、書いてあるのに 1 件も一致しないルール・�
 
 ### まだ宣言だけのもの
 
-- **E2E**: Playwright。未導入。Principle VIII の Automated 2 項目
-  (composer の IME テスト / 日本語スクリーンショット比較) はここに乗る予定であり、
-  **R-1 の CI には載っていない** ([AD-024](decisions/0024-constitution-verification-paths.md) #18)
+- **E2E**: Playwright ([AD-038](decisions/0038-e2e-screenshot-harness.md))。**X-2 で導入・実走済** — `@playwright/test`
+  (1.63) を devDependency に追加、app 側 E2E stub フック (`src/main/app/e2e-capability.ts`。`!app.isPackaged && CLOSTA_E2E==='1'`
+  で production-inert / T030) を実装。**IME E2E (`e2e/ime.spec.ts`) は local で 3/3 緑** (idle / running+queue / 変換中マウス送信)。
+  `e2e/` は src の lint/型グラフから分離済 (AD-038 D2)。Principle VIII の Automated 2 項目はここに乗る (grep でなく E2E が正本。AD-024 #18)。
+  **日本語スクリーンショット比較も local 緑** — 同梱フォント Noto Sans JP (OFL。`e2e/fonts/NotoSansJP-Regular.ttf`) を
+  **FontFace API + CSSOM で CSP 非破壊注入** (アプリの `style-src 'self'` が addStyleTag を弾くため。実走で発覚し修正)、基準画像
+  `composer-fullwidth-win32.png` と比較。CI は `verify.yml` の `e2e` job に authored (IME 3 + screenshot 1)。**残るは人間の実機
+  IME 目視と基準画像の最終 aesthetic 承認 (quickstart V-1〜V-5) のみ**
 - **SQLite**: better-sqlite3。未導入 (I-1 の `sessionStore` で入る)
 - **PTY**: 未導入 (optional scope)
 

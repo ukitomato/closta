@@ -4,6 +4,7 @@ import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { IPC_CHANNELS } from '@domain/capability'
 
 import { createComposition } from './app/composition-root'
+import { createE2eCapability } from './app/e2e-capability'
 import { registerIpcHandlers } from './app/ipc'
 import { registerAppProtocol, registerAppScheme } from './app/protocol'
 import { createMainWindow } from './app/window'
@@ -47,6 +48,34 @@ if (!gotTheLock) {
     })
 
     registerAppProtocol(__dirname)
+
+    /*
+     * **E2E stub 経路 (X-2 / AD-038 D3 / T030。production-inert)。**
+     *
+     * `app.isPackaged` が本番で true になり到達しない。**env 単独では有効化しない** (origins.ts E-H004 と
+     * 同じ原則) — `!app.isPackaged && CLOSTA_E2E==='1'` の合成条件でのみ。real な WSL・Claude 認証・外部 API・
+     * 秘密を一切使わず fake capability を配線する。**単一 capability 境界 (FR-039) は不変** — preload も
+     * `window.closta` も本番と同一で、ここは `IpcDependencies` を差し替えるだけ。変更通知配線と WSL 検出は
+     * E2E では不要なので張らない (fake は変化しない)。
+     */
+    if (!app.isPackaged && process.env.CLOSTA_E2E === '1') {
+      const stub = createE2eCapability()
+      registerIpcHandlers(stub.ipc)
+
+      mainWindow = createMainWindow(__dirname)
+      mainWindow.on('closed', () => {
+        mainWindow = null
+      })
+      app.on('before-quit', () => {
+        stub.dispose()
+      })
+      app.on('activate', () => {
+        if (BrowserWindow.getAllWindows().length === 0) {
+          mainWindow = createMainWindow(__dirname)
+        }
+      })
+      return
+    }
 
     const composition = createComposition()
     registerIpcHandlers(composition.ipc)
