@@ -177,7 +177,7 @@ R-1 の残り 2 つは R-2 をブロックしない。
 |---|---|---|---|---|---|
 | 5 | X-1 | 単一セッション起動とストリーミング | `session` | R-4 | SPIKE-5 / SPIKE-3 **完了** |
 | 6 | X-2 | 日本語 composer | `ui` | X-1 | **SPIKE-4** |
-| 7 | X-3 | Provider 登録と到達可能性判定 | `provider` | X-1 | **SPIKE-7** |
+| 7 | X-3 | Provider 登録と到達可能性判定 | `provider` | X-1 | SPIKE-7 **完了** |
 | 8 | X-4 | 起動設定ダイアログとプリセット | `session` | X-3 | SPIKE-6 **完了** / 越境警告 AD-016 / 作業領域戦略 AD-017 / 権限モード 6 値 AD-020 |
 | 9 | X-5 | supervisor 分離とマルチセッション | `session` | X-4 | — |
 
@@ -249,7 +249,7 @@ I-1 では **`wsl:<distro>` endpoint（WSL 内 Docker Engine）を第一に検�
 | SPIKE-5 | `spawnClaudeCodeProcess` による WSL 起動 | X-1 の前 | **完了 (2026-09-13)** → [AD-018](decisions/0018-wsl-process-control.md) |
 | SPIKE-3 | `claude` プロセスの実メモリ測定 | X-1 の前 | **完了 (2026-09-13)** → [AD-001](decisions/0001-adopt-electron-over-tauri.md) に追記。idle 225MB / 並列でも変わらず |
 | SPIKE-4 | 日本語 IME の composer 挙動 | X-2 の前 | 1〜2時間 |
-| SPIKE-7 | 認証委譲機構の確認 | X-3 の前 | 半日 |
+| SPIKE-7 | 認証委譲機構の確認 | X-3 の前 | **完了 (2026-09-29)** → [AD-039](decisions/0039-credential-delegation-verified.md)。委譲は SDK 0.3.270 で成立。helper 設定は per-session `settings` で渡せる。`env` は置換。`aws-assume-role` のみアプリが一時資格を扱う |
 | SPIKE-6 | SDK 型定義からの選択肢確定 | X-4 の前 | **ほぼ完了 (2026-09-13)** → [AD-020](decisions/0020-sdk-emitted-message-inventory.md)。`SandboxSettings` の詳細のみ I-3 前に残す |
 | SPIKE-9 | **`/mnt/c` 越し bind mount の実効速度** | R-1 の前 | **完了 (2026-09-13)** → [AD-016](decisions/0016-cross-filesystem-performance-cliff.md) |
 | SPIKE-10 | `docker exec -i` 疎通 / 非 root × bypassPermissions | I-1 の前 | **完了 (2026-09-13)** → [AD-022](decisions/0022-docker-exec-process-control.md)。疎通 OK、**kill は孤児化**、非 root 必須を確認 |

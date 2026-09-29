@@ -7,6 +7,7 @@ last_reviewed: 2026-09-12
 related_adrs:
   - docs/decisions/0005-provider-as-registrable-value.md
   - docs/decisions/0011-delegate-credential-resolution.md
+  - docs/decisions/0039-credential-delegation-verified.md
 related_specs: []
 ---
 
@@ -105,6 +106,7 @@ Provider として一般化し、セッション起動時の実行環境を導�
 
 - [AD-005](../../decisions/0005-provider-as-registrable-value.md) — Provider は認証方式を含む値として抽象化する
 - [AD-011](../../decisions/0011-delegate-credential-resolution.md) — 資格情報の解決は Claude Code に委譲する
+- [AD-039](../../decisions/0039-credential-delegation-verified.md) — SPIKE-7: 委譲は SDK 0.3.270 で成立（AD-011 の成立を確認）
 
 ## Related Specs
 
@@ -112,7 +114,9 @@ Provider として一般化し、セッション起動時の実行環境を導�
 
 ## Open Questions
 
-- [ ] SPIKE-7: `apiKeyHelper` / `awsCredentialExport` / `awsAuthRefresh` の実際の挙動。
+- [x] SPIKE-7: `apiKeyHelper` / `awsCredentialExport` / `awsAuthRefresh` の実際の挙動。
       呼び出しタイミング、期限切れ時の再取得、セッション単位の `--settings` で渡せるか
+      → [AD-039](../../decisions/0039-credential-delegation-verified.md) で検証済み (2026-09-29)。
+      委譲は SDK 0.3.270 で成立。helper 設定は per-session `settings` で渡せる。Scope は変更不要
 - [ ] SPIKE-6: Provider ごとのモデル候補を動的取得する手段の有無
 - [ ] `vertex` / `foundry` は初期リリースでは登録のみで検証対象外。いつ検証対象に入れるか
