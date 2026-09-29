@@ -2,7 +2,6 @@
 name: cl-done
 description: PR を提出する。tasks 100% / code-gate PASS / pr-gate Critical=0 を検証し、format → commit → push → PR create を実行して status を reviewing → completed に遷移させる。
 argument-hint: [spec_dir]
-disable-model-invocation: true
 allowed-tools: Read Write Edit Bash Glob Grep AskUserQuestion
 ---
 

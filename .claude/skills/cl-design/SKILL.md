@@ -2,7 +2,6 @@
 name: cl-design
 description: Design フェーズ全体を 1 コマンドで完走する。`/cl-spec` → `/cl-plan` → `/cl-tasks` → `/cl-design-gate` を自動チェーンし、design-gate PASS で status を implementing に昇格する。
 argument-hint: <description>
-disable-model-invocation: true
 allowed-tools: Read Write Edit Bash Glob Grep Agent AskUserQuestion
 ---
 

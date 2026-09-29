@@ -2,7 +2,6 @@
 name: cl-add-reviewer
 description: 新規 reviewer subagent を後付け追加する。同梱の optional reviewer (api-performance / openapi-contract) の有効化、または project 固有 reviewer の新規起草を行い、reviewers.yml と agent registry に編入する。
 argument-hint: <reviewer-name>
-disable-model-invocation: true
 allowed-tools: Read Write Edit Bash Glob Grep Agent AskUserQuestion
 ---
 

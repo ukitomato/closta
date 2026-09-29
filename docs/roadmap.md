@@ -118,7 +118,24 @@ workspace として扱われていたら `packages:` の有無を先に確認す
 (「持ち主のいない延期を残さない」。AD-028 §5)。M4 完了後にこの feature を立て、まとめて載せる。
 
 - **Principle VIII の Automated 2 項目** — composer の IME テスト / 日本語スクリーンショット比較
-  (AD-024 #18。R-3 も composer 送信経路を開けないため未発火)
+  (AD-024 #18。R-3 も composer 送信経路を開けないため未発火)。
+  **→ X-2 ([AD-037](decisions/0037-japanese-ime-composer-behavior.md) D3) が引き取り済み。持ち主 = X-2。**
+  E2E ハーネス ([AD-038](decisions/0038-e2e-screenshot-harness.md)) を立て、**(A) IME E2E・(B) 日本語スクリーンショット比較とも
+  実装・搭載済み・local 緑** ((A) `e2e/ime.spec.ts` の idle / running+queue / 変換中マウス送信の 3/3。(B)
+  `e2e/composer-screenshot.spec.ts` が同梱 Noto Sans JP (OFL) を FontFace + CSSOM で CSP 非破壊注入し基準画像と比較。
+  verify.yml の e2e job)。**残るは人間の実機 IME 目視と基準画像の最終 aesthetic 承認 (quickstart V-1〜V-5) のみ**。
+  Constitution VIII は v1.2.7 で (A)(B) 搭載に追随済み (T024)
+- **Constitution VI 検証スコープの実装追随 (X-2 起点。design-gate M-101 / AD-038 D4。system-scope)** —
+  `scripts/constitution/allowlists.mjs` の `SCAN_FILES` に `.github/workflows/verify.yml` を追加し、
+  check.mjs 項目 1 が CI 定義 (E2E の font provisioning 等) を走査する。X-2 が初めて verify.yml に実行系ステップを
+  持ち込むため「Constitution VI Verification が CI 定義を含めると宣言しているのに実装が走査しない」乖離が実害面を持つ。
+  持ち主 = 本 E2E / 検証基盤 feature
+- **E2E stub の production-inert 性の自動 backstop (X-2 起点。pr-gate arch-M-002。system-scope)** —
+  `createE2eCapability` (`src/main/app/e2e-capability.ts`) の配線ゲート `!app.isPackaged && CLOSTA_E2E==='1'` が env 単独ゲートへ
+  退行しても CI が落ちる回帰検査が無い (Vitest は electron `app` を mock しにくく、index.ts の分岐を直接 assert できない)。
+  ADR-vs-コード整合 (AD-038 D3) と Constitution 版番号整合の自動検査も無く手動 review に依存。**当面は platform-boundary/architecture
+  reviewer の手検証 (pr-gate で clean) で守り**、静的検査 (`!app.isPackaged` を伴わない CLOSTA_E2E ゲートの禁止 lint 等) の追加を
+  検討する。持ち主 = 本 E2E / 検証基盤 feature
 - **charter KPI「スクロールの安定」の E2E 計測** — R-3 は Vitest (マウント数 / 位置飛び) + quickstart 実機で暫定代替
 - **Principle IX の到達集合検査** — composition-root から main で評価されるモジュールを導く自動検査
   (R-3 / [AD-034](decisions/0034-transcript-read-path-and-process-boundary.md) は port transfer の構造検査 + 手動レビューで暫定担保。Constitution v1.2.6)。

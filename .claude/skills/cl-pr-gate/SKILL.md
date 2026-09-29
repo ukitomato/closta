@@ -2,7 +2,6 @@
 name: cl-pr-gate
 description: PR 提出前の adversarial review gate。`git diff <base>...HEAD` 全体を security / architecture / po + system scope reviewer で多角的に検証し、Critical=0 になるまで /cl-done を許可しない。
 argument-hint: [spec_dir]
-disable-model-invocation: true
 allowed-tools: Read Write Edit Bash Glob Grep Agent AskUserQuestion
 ---
 

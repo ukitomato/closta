@@ -54,6 +54,10 @@ export interface LiveSession {
   readonly rejectReason: SessionLaunchRejectReason | null
   /** 強制終了済みか。true のとき composer を無効化し終端を明示する (H-401)。 */
   readonly killed: boolean
+  /** composer の下書き (未送信テキスト)。Thread 再構成をまたいで保持する (X-2 / FR-007。メモリ内限定)。 */
+  readonly draft: string
+  /** 下書きを更新する (composer の onChange から。メモリ内限定・境界/ログに出さない。FR-008)。 */
+  setDraft(text: string): void
   launch(folderId: string, runtimeId: string): Promise<void>
   /** 送信と同時にユーザ発話を楽観表示する (agents の user echo は取らないため。FE-002)。 */
   appendUser(text: string): void
@@ -98,6 +102,10 @@ export function useLiveSession(): LiveSession {
   // **強制終了したか。** kill() は worker を落とすが、その `done` state イベントは port を先に閉じるため
   // renderer に届かない。UI をローカルで終端に落とす標識にする (pr-gate po H-401)。
   const [killed, setKilled] = useState(false)
+  // **下書きは useLiveSession に持つ** (SessionScreen の親 hook。phase/isDisabled で LiveThread や
+  // useExternalStoreRuntime が再構成されても保持される。X-2 / FR-007)。会話由来テキストなので
+  // 境界・ログ・永続層に出さない (Principle V / FR-008)。
+  const [draft, setDraftValue] = useState('')
 
   const sessionIdRef = useRef<string | null>(null)
   const portRef = useRef<MessagePort | null>(null)
@@ -185,6 +193,7 @@ export function useLiveSession(): LiveSession {
       setFailureReason(null)
       setRejectReason(null)
       setKilled(false)
+      setDraftValue('') // 新規起動で下書きは持ち越さない (X-2 / R2-M-002 の discard 相当)
       setRunState('launching')
       setPhase('launching')
 
@@ -231,6 +240,8 @@ export function useLiveSession(): LiveSession {
     if (id !== null) void capability().sendPrompt(id, text)
   }, [])
 
+  const setDraft = useCallback((text: string): void => setDraftValue(text), [])
+
   const interrupt = useCallback((): void => {
     const id = sessionIdRef.current
     if (id !== null) void capability().interruptSession(id)
@@ -273,6 +284,7 @@ export function useLiveSession(): LiveSession {
     setFailureReason(null)
     setRejectReason(null)
     setKilled(false)
+    setDraftValue('') // reset で下書きも破棄 (次セッションへ持ち越さない。X-2 / R2-M-002)
   }, [])
 
   // 終了状態 (error/done) に達しても port は閉じない — done からの継続送信 (FR-015) を許すため。
@@ -287,6 +299,8 @@ export function useLiveSession(): LiveSession {
     failureReason,
     rejectReason,
     killed,
+    draft,
+    setDraft,
     launch,
     appendUser,
     send,

@@ -3,13 +3,14 @@ domain: ui
 status: needs-human-review
 owner: ukitomato
 generated_by: human (PLAN.md を素案として再導出)
-last_reviewed: 2026-09-15
+last_reviewed: 2026-09-29
 related_adrs:
   - docs/decisions/0001-adopt-electron-over-tauri.md
   - docs/decisions/0006-supervisor-in-utility-process.md
 related_specs:
   - specs/003-ui-transcript-rendering/spec.md
   - specs/004-ui-tier-a-tool-display/spec.md
+  - specs/006-ui-japanese-ime-composer/spec.md
 ---
 
 # Domain Charter: ui
@@ -146,6 +147,8 @@ UI は本来 delivery mechanism であり domain ではない。それでも独�
 
 - [AD-001](../../decisions/0001-adopt-electron-over-tauri.md) — Electron を採用する（本 domain の検証コストが決め手）
 - [AD-006](../../decisions/0006-supervisor-in-utility-process.md) — supervisor 分離（描画をブロックしないため）
+- [AD-037](../../decisions/0037-japanese-ime-composer-behavior.md) — 日本語 IME の composer 挙動（SPIKE-4）。二重ガードで自前ガード不要 / 実行中積み・下書きは runtime capability / Principle VIII Automated の持ち主は X-2
+- [AD-038](../../decisions/0038-e2e-screenshot-harness.md) — E2E / スクリーンショット検証ハーネス（Playwright + Electron。credential-free・フォント同梱・e2e を src グラフ外に分離）
 
 ## Related Specs
 
@@ -153,12 +156,17 @@ UI は本来 delivery mechanism であり domain ではない。それでも独�
   本 domain 初の feature。markdown 本文 / streaming text / scroll anchor / 未定義 tool の fallback /
   数千メッセージの仮想化を実装し、**この時点で見栄えの一次判断を行う** (下記 Principle「見た目の判断を先送りしない」)。
   取得経路とプロセス境界は [AD-034](../../decisions/0034-transcript-read-path-and-process-boundary.md)
-- [R-4: Tier A tool 表示](../../../specs/004-ui-tier-a-tool-display/spec.md) — **着手中**。
+- [R-4: Tier A tool 表示](../../../specs/004-ui-tier-a-tool-display/spec.md) — **完了** (#4)。
   R-3 の fallback を 7 種の専用表示に置き換える (Bash→Terminal / Edit・Write→Code diff / TodoWrite→Todo /
   Task→Subagent 入れ子 / ExitPlanMode→Agent plan、Reasoning・Tool group は R-3 済)。element 選定と subagent 入れ子の
   DTO 表現は [AD-035](../../decisions/0035-tier-a-tool-display-and-subagent-nesting.md)。**M1 最終 feature**。
   **見栄えの正式な方針確定は SC-010 rubric の実機記入 + R-3 一次判断とあわせた別ステップ** (roadmap の tracked debt)
-- （残り。X-2 / O-2 / O-3 / OPT-pty が本 domain に属する）
+- [X-2: 日本語 composer](../../../specs/006-ui-japanese-ime-composer/spec.md) — **実装中**。
+  Journey 3 (IME 確定 Enter 非送信 / 全角レイアウト) と Journey 2 step 3 (message queue) を実装し、
+  Principle VIII Automated 2 項目 (IME E2E / 日本語スクリーンショット比較) を CI に常設する。
+  自前 IME ガードは新設せず assistant-ui の二重ガードを殺さない ([AD-037](../../decisions/0037-japanese-ime-composer-behavior.md) D1)。
+  E2E / スクリーンショット検証ハーネスは [AD-038](../../decisions/0038-e2e-screenshot-harness.md)
+- （残り。O-2 / O-3 / OPT-pty が本 domain に属する）
 
 ## Open Questions
 
@@ -171,8 +179,10 @@ UI は本来 delivery mechanism であり domain ではない。それでも独�
 - [ ] SPIKE-2: assistant-ui Elements の導入コスト実測。element のインストール単位、
       カスタマイズ範囲、design system の拘束度、Claude Code の tool_result 形式との変換コスト。
       **結果次第では本 charter の Scope を見直す**
-- [ ] SPIKE-4: assistant-ui の composer が `isComposing` を正しく扱うか。
-      自前ガードが必要なら X-2 の実装量が変わる
+- [x] ~~SPIKE-4: assistant-ui の composer が `isComposing` を正しく扱うか~~ →
+      [AD-037](../../decisions/0037-japanese-ime-composer-behavior.md)。`ComposerPrimitive.Input` が変換確定 Enter を
+      二重ガード (keydown の `nativeEvent.isComposing` + `compositionRef`) で扱う。**自前ガードは不要**。
+      実行中積み・下書き復元は IME でなく runtime capability / composer state として X-2 が持つ (D2)
 - [ ] Tier C のうち Data table / Chart / Timeline / Diagram は、将来 MCP ツールの
       結果表示に転用しうる。いつ判断するか
 

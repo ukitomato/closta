@@ -71,6 +71,7 @@ import {
   type ComponentType,
   type FC,
   type PropsWithChildren,
+  type RefObject,
 } from "react";
 
 export type ThreadGroupPart = MessagePrimitive.GroupedParts.GroupPart;
@@ -507,6 +508,10 @@ const ThreadSuggestionItem: FC = () => {
 };
 
 const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
+  // **IME 変換中フラグ** (X-2 / FR-001(d) / AC-6)。変換中のマウス送信で未確定文字列を送らない
+  // 「確定優先」判定に使う。assistant-ui は keydown の isComposing で確定 Enter を守るが、mouse 送信経路は
+  // 守らない (E2E で検出) ため、AD-037 D1(d) が認める最小処理をここだけに足す (keydown ガードは新設しない)。
+  const composingRef = useRef(false);
   return (
     <ComposerPrimitive.Root className="aui-composer-root relative flex w-full flex-col">
       <ComposerPrimitive.AttachmentDropzone asChild>
@@ -522,15 +527,21 @@ const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
             autoFocus={autoFocus}
             enterKeyHint="send"
             aria-label="Message input"
+            onCompositionStart={() => {
+              composingRef.current = true;
+            }}
+            onCompositionEnd={() => {
+              composingRef.current = false;
+            }}
           />
-          <ComposerAction />
+          <ComposerAction composing={composingRef} />
         </div>
       </ComposerPrimitive.AttachmentDropzone>
     </ComposerPrimitive.Root>
   );
 };
 
-const ComposerAction: FC = () => {
+const ComposerAction: FC<{ composing: RefObject<boolean> }> = ({ composing }) => {
   return (
     <div className="aui-composer-action-wrapper relative flex items-center justify-between">
       <ComposerAddAttachment />
@@ -577,6 +588,17 @@ const ComposerAction: FC = () => {
               size="icon"
               className="aui-composer-send size-7 rounded-full"
               aria-label="Send message"
+              onMouseDownCapture={(e) => {
+                // 変換中は blur による確定を止める (未確定のまま保持し、下の click ガードで送信を塞ぐ)。
+                if (composing.current) e.preventDefault();
+              }}
+              onClickCapture={(e) => {
+                // 変換中のマウス送信は未確定文字列を送らない (AC-6 / FR-001(d))。確定は Enter に委ねる。
+                if (composing.current) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }
+              }}
             >
               <ArrowUpIcon className="aui-composer-send-icon size-4" />
             </TooltipIconButton>

@@ -1,0 +1,134 @@
+{
+  "gate": "code",
+  "run": "2026-09-29",
+  "spec_dir": "specs/006-ui-japanese-ime-composer",
+  "spec_id": "006-ui-japanese-ime-composer",
+  "iter": 1,
+  "severity_counts": {
+    "critical": 0,
+    "high": 0,
+    "medium": 4,
+    "low": 3,
+    "must_fix": 0
+  },
+  "must_fix_findings": [],
+  "should_fix_findings": [
+    {
+      "id": "conv-M-001",
+      "where": "src/renderer/src/features/session/composer-queue.ts",
+      "origin": "convention",
+      "severity": "medium",
+      "message": "classifyEnqueue/DEFAULT_MAX_QUEUE_ITEMS \u3068 draft \u30d8\u30eb\u30d1\u304c production \u672a\u914d\u7dda\u306e dead export\u3002R2-M-001(\u30ad\u30e5\u30fc\u4e0a\u9650\u62d2\u5426+\u7406\u7531\u63d0\u793a)\u304c live composer \u7d4c\u8def\u306b\u672a\u914d\u7dda\u306e\u53ef\u80fd\u6027 \u2014 \u6a5f\u80fd\u5224\u5b9a\u306f po-reviewer(pr-gate)\u3078\u59d4\u8b72"
+    },
+    {
+      "id": "conv-M-002",
+      "where": "eslint.config.mjs",
+      "origin": "convention",
+      "severity": "medium",
+      "message": "e2e \u304c lint/typecheck/depcruise \u306e\u5168\u9759\u7684\u691c\u67fb\u5916\u3002Playwright \u5c02\u7528 lint \u672a\u6574\u5099\u3002config \u30b3\u30e1\u30f3\u30c8/T002 \u306e\u300e\u5225\u9014 lint\u300f\u3068\u5b9f\u614b\u304c\u4e56\u96e2"
+    },
+    {
+      "id": "pb-M-001",
+      "where": "e2e/**",
+      "origin": "platform-boundary",
+      "severity": "medium",
+      "message": "e2e/ \u3068 playwright.config.ts \u304c Constitution SCAN_ROOTS \u5916\u3067 Principle VI/II \u304c\u5c4a\u304b\u306a\u3044(AD-024 #5 \u306e\u30c7\u30a3\u30ec\u30af\u30c8\u30ea\u9664\u5916\u7981\u6b62\u306b\u8a72\u5f53)\u3002roadmap M-101 \u7cfb follow-up"
+    },
+    {
+      "id": "conv-H-1",
+      "where": "eslint.config.mjs/.dependency-cruiser.js",
+      "origin": "convention",
+      "severity": "medium",
+      "message": "\u5909\u66f4\u3057\u305f rule \u306e in-gate \u691c\u8a3c\u304c\u7121\u3044(test:rules \u306f code-gate \u975e\u5b9f\u884c)\u3002pr-gate Round \u3067\u518d\u5b9f\u884c\u3055\u308c\u308b\u524d\u63d0"
+    }
+  ],
+  "touched_files": [],
+  "fr_coverage": [
+    {
+      "fr": "FR-001d",
+      "covered": true,
+      "by": ["e2e/ime.spec.ts", "src/renderer/src/components/assistant-ui/elements/thread.aui.tsx"]
+    },
+    {
+      "fr": "FR-004",
+      "covered": true,
+      "by": [
+        "src/renderer/src/features/session/SessionScreen.tsx",
+        "src/renderer/src/features/session/composer-queue.ts"
+      ]
+    },
+    {
+      "fr": "FR-003",
+      "covered": false,
+      "by": [
+        "src/renderer/src/features/session/composer-queue.ts(classifyEnqueue: pure only, live \u672a\u914d\u7dda)"
+      ]
+    },
+    {
+      "fr": "FR-007",
+      "covered": true,
+      "by": ["src/renderer/src/features/session/SessionScreen.tsx(DraftBridge)"]
+    },
+    {
+      "fr": "FR-009-012",
+      "covered": true,
+      "by": ["e2e/ime.spec.ts", "e2e/composer-screenshot.spec.ts", ".github/workflows/verify.yml"]
+    }
+  ],
+  "viewpoint_coverage": {
+    "A": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+    "B": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+    "C": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+    "D": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+    "E": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb (conv M-001 \u306e\u6a5f\u80fd\u542b\u610f\u3092 po \u3078\u59d4\u8b72)",
+    "F": "Medium:4 Low:3",
+    "G": "\u8a72\u5f53\u306a\u3057: optional reviewer \u306a\u3057",
+    "H": "Medium:2 (modified-rule in-gate \u691c\u8a3c\u6b20\u5982 / coverage \u6b6a\u307f)"
+  },
+  "tracks": {
+    "lint-agent": {
+      "violations": 0,
+      "exit_code": 0,
+      "detectors": ["lint", "typecheck", "depcruise", "check:constitution"]
+    },
+    "test-agent": {
+      "passed": 1035,
+      "failed": 0,
+      "exit_code": 0,
+      "scope": "full"
+    },
+    "convention-reviewer": {
+      "viewpoint_missing": [],
+      "cascade_demotions": 0,
+      "lint_input": "lint-agent"
+    },
+    "platform-boundary-reviewer": {
+      "viewpoint_missing": [],
+      "cascade_demotions": 0
+    }
+  },
+  "skipped_reviewers": [
+    {
+      "name": "a11y-reviewer",
+      "reason": "gates=['pr-gate'] \u306b code-gate \u304c\u7121\u3044"
+    },
+    {
+      "name": "database-reviewer",
+      "reason": "auto_invoke_patterns \u306b\u4e00\u81f4\u3059\u308b\u5909\u66f4\u30d5\u30a1\u30a4\u30eb\u304c\u7121\u3044"
+    },
+    {
+      "name": "ux-reviewer",
+      "reason": "gates=['pr-gate'] \u306b code-gate \u304c\u7121\u3044"
+    }
+  ],
+  "cascade_demotions": 0,
+  "iter_history": [
+    {
+      "iter": 1,
+      "must_fix": 0,
+      "skipped": 0,
+      "error": 0
+    }
+  ],
+  "verdict": "PASS"
+}

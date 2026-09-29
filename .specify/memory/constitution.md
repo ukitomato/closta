@@ -1,10 +1,34 @@
 ---
 status: active
-version: 1.2.6
+version: 1.2.7
 ratified: 2026-09-13
-last_amended: 2026-09-24
+last_amended: 2026-09-28
 generated_by: /speckit.constitution (素材: /spec-gate bootstrap Phase 6 の draft)
 ---
+
+<!--
+Sync Impact Report (v1.2.7)
+- Version change: 1.2.6 → 1.2.7
+- Last amended: 2026-09-28
+- Bump rationale: PATCH。Principle VIII の Verification の「現状の制約」を X-2 の事実に追随させるのみ
+  (バージョニング方針表「Verification の現状の制約の事実追随は PATCH」)。statement も指針も変えていない
+
+Modified sections:
+- Principle VIII (Verification 現状の制約) — X-2 (日本語 composer) が送信経路を開き、Playwright + Electron の
+  E2E ハーネス (AD-038) と IME E2E (`e2e/ime.spec.ts`) を載せた。Automated (A) IME E2E は **実装済み・持ち主 X-2**
+  (idle / running+queue / 変換中マウス送信 の 3 経路を local で 3/3 緑確認。CI は verify.yml の e2e job)。
+  (B) 日本語スクリーンショット比較も **搭載・local 緑・持ち主 X-2** (基準画像 `composer-fullwidth-win32.png` を commit。
+  同梱フォント Noto Sans JP を FontFace API + CSSOM で CSP を壊さず注入。水平あふれ/桁ずれ/要素崩れ 0 を客観判定。
+  残るは人間の aesthetic sign-off のみ)。「2 項目とも載っていない」→「(A)(B) とも搭載・持ち主 X-2」に改めた。
+  **CI が緑であることが本 Principle を保証しないという注記は残す** — (A)(B) とも stub 到達の E2E であり、
+  実機 IME 目視と基準画像の最終 aesthetic 承認は人間 (quickstart V-1〜V-5) が担うためである
+- existing-violations-summary の Principle VIII 節も同じ事実に追随
+
+Templates requiring updates:
+- ✅ docs/decisions/0037-japanese-ime-composer-behavior.md (D3。本 PATCH の決定を記録する accepted ADR)
+- ✅ docs/decisions/0038-e2e-screenshot-harness.md (E2E / スクリーンショット検証ハーネス)
+- ✅ docs/roadmap.md (Automated (A)(B) の持ち主を X-2 に更新)
+-->
 
 <!--
 Sync Impact Report (v1.2.6)
@@ -515,11 +539,10 @@ if (!isMac) { ... }
 **Verification**:
 - Automated: composer の IME テストケースが E2E に存在すること。日本語を含むスクリーンショット比較が CI に存在すること
 - Manual: `ux-reviewer`、`a11y-reviewer`
-- **現状の制約 (2026-09-16 / AD-024 #18)**: CI は `.github/workflows/verify.yml` として構築済みだが、**Automated の 2 項目はどちらも載っていない**。CI が緑であることは本 Principle について何も示さない
-  - (A) composer の IME テストケース — **送信経路を閉じている**。R-1 の `ChatScreen` は `Thread` を mount するので **composer は描画される**。「対象が無い」のではなく、送信経路を `isDisabled: true` で閉じることで検証していない送信経路を残さない形にした。この前提は `src/renderer/src/features/chat/ChatScreen.test.tsx` が守る。composer を開けるときに IME テストを同時に載せる
-  - (B) 日本語を含むスクリーンショット比較 — **延期**。目標レイアウトの ADR が accepted になり、かつ Electron を CI で起動する E2E 基盤が揃った時点で載せる。片方だけで撮ると基準画像が撮り直しになる
-  - **`bad_pattern_grep` は本 Principle の番人ではない。** 送信は `@assistant-ui/react` の内側で起きるため、`isComposing` ガードがリポジトリに 1 件も無くても 0 件を返す。`existing_violations: 0` は「守られている」ことを意味しない
-  - **延期先は R-2 ではない** (v1.2.3 / [AD-028](../../docs/decisions/0028-session-enumeration-process-and-unc-handoff.md) §5)。R-2 は読み取り専用で composer の送信経路を開けないため (A) の発動条件 (`isDisabled: true` を外す変更) を満たさず、目標レイアウトの ADR が未採択のため (B) は撮り直しが確定する。**M4 完了後に再検討し、E2E 基盤の持ち主 feature を `docs/roadmap.md` に登録する。** それまで本 Principle を守るのは Manual の 2 者と上記のテスト 1 本だけである。SPIKE-4 (X-2 の前) の結果と合わせて再確認すること
+- **現状の制約 (2026-09-28 / X-2 / [AD-037](../../docs/decisions/0037-japanese-ime-composer-behavior.md) D3 / [AD-038](../../docs/decisions/0038-e2e-screenshot-harness.md))**: X-2 (日本語 composer) が送信経路を開き (`SessionScreen` の `isDisabled` を外し)、**Playwright + Electron の E2E ハーネスと IME E2E を載せた**。**持ち主は X-2**。ただし **CI が緑であることは依然として本 Principle を保証しない** — (B) が未緑であり、(A) も stub 到達の E2E だからである
+  - (A) composer の IME テストケース — **実装済み**。`e2e/ime.spec.ts` が変換確定 Enter の非送信を **(i) idle / (ii) running + message queue 有効 / (iii) 変換中のマウス送信** の 3 経路で検証する (SC-001 / AC-6)。検証の正本は grep でなく E2E (AD-024 #18 / AD-037 D3)。credential-free stub (`src/main/app/e2e-capability.ts`。`!app.isPackaged && CLOSTA_E2E==='1'` で production-inert) で real 資格情報なしに有効 composer へ到達する。**local で 3/3 緑を確認済み**。CI は `verify.yml` の `e2e` job に載せた
+  - (B) 日本語を含むスクリーンショット比較 — **搭載済み・local 緑**。`e2e/composer-screenshot.spec.ts` が全角混在レイアウトを基準画像 (`composer-fullwidth-win32.png`) と比較する。同梱フォント Noto Sans JP (OFL。`e2e/fonts/NotoSansJP-Regular.ttf`) を **FontFace API + CSSOM で CSP を壊さず非永続注入** (アプリの `style-src 'self'` が addStyleTag を弾くため。実走で発覚し修正)。**水平あふれ/桁ずれ/要素崩れ 0 を客観判定済み。残るのは人間の最終 aesthetic 承認 (rubber-stamp) のみで、機能的ブロッカーではない** (quickstart V-2 に承認欄)。CI は `verify.yml` の `e2e` job に載せた
+  - **`bad_pattern_grep` は本 Principle の番人ではない。** 送信は `@assistant-ui/react` の内側で起きるため、`isComposing` ガードがリポジトリに 1 件も無くても 0 件を返す。`existing_violations: 0` は「守られている」ことを意味しない。**マウス送信経路の未確定文字列送信は E2E が実際に検出し (grep では捕まらない)、`thread.aui.tsx` の確定優先の最小処理で塞いだ** (AC-6。AD-037 D1(d))
 <!-- BOOTSTRAP_SECTION_END principle=VIII -->
 
 <!-- MIGRATE_SECTION_START principle=VIII -->
@@ -836,14 +859,16 @@ SC-017 の追跡対象。**列挙せずに「全数検出」と言わない。**
 
 ### Principle VIII
 
-**Automated は 2 項目とも載っていない。CI が緑であることは本 Principle について何も示さない。**
-(A) は composer が**描画されたうえで送信経路を `isDisabled: true` で閉じて**おり、
-(B) のスクリーンショット比較は **M4 完了後に再検討する** (AD-024 #18 を
-[AD-028](../../docs/decisions/0028-session-enumeration-process-and-unc-handoff.md) §5 が読み替えた。
-延期先だった R-2 は読み取り専用であり E2E 基盤を作らない)。
+**(A) IME E2E と (B) 日本語スクリーンショット比較は X-2 で搭載済み・local 緑・持ち主 X-2。
+CI が緑であることは依然として本 Principle を保証しない** ((A)(B) とも stub 到達の E2E であり、
+実機 IME 目視と基準画像の最終 aesthetic 承認は人間 quickstart が担う)。
+(A) は `e2e/ime.spec.ts` が変換確定 Enter の非送信を idle / running+queue / 変換中マウス送信の 3 経路で検証 (3/3 緑)、
+(B) は `e2e/composer-screenshot.spec.ts` が全角混在を基準画像と比較 (同梱フォント Noto Sans JP を FontFace + CSSOM で
+CSP 非破壊注入。水平あふれ/桁ずれ/要素崩れ 0 を客観判定) (2026-09-28 / X-2 / AD-037 D3 / AD-038)。
 `existing_violations: 0` は `bad_pattern_grep` が送信経路 (`@assistant-ui/react` の内側) を
-見られないことの結果であって、遵守の証拠ではない。守るのは Manual の 2 者
-(`ux-reviewer` / `a11y-reviewer`) と `ChatScreen.test.tsx` の 2 ケースである。
+見られないことの結果であって、遵守の証拠ではない — マウス送信経路の未確定送信は E2E が実際に検出し
+`thread.aui.tsx` の確定優先の最小処理で塞いだ。守りは E2E と Manual の 2 者
+(`ux-reviewer` / `a11y-reviewer`) が担う。
 
 <!-- BOOTSTRAP_SECTION_END existing-violations-summary -->
 
@@ -907,6 +932,7 @@ v1.2.4 は改定手順に新しい規則 (ADR の in-place 訂正) を足した�
 | 1.2.4 | 2026-09-23 | [AD-031](../../docs/decisions/0031-adr-in-place-corrections-and-principle-ix-scope.md)。**改定手順に ADR の in-place 訂正の規則を置いた** — 事実誤認の訂正は日付つきの「訂正」節として in-place、決定の変更は後続 ADR。AD-028 §2 の immutability 宣言を読み替える (先例 5 件がすべて訂正であり決定の変更ではなかった)。あわせて **Principle IX の Verification に「`bad_pattern_grep` はパースコードの置き場を見るだけで、どのプロセスで走るかは見ていない」を明記した** — R-2 の列挙応答は main でパースされるが検査は 0 件を返す。`existing_violations: 0` は遵守の証拠ではない |
 | 1.2.5 | 2026-09-23 | バージョニング方針表に **Governance への規則追加 = MINOR** と **Verification の事実追随 = PATCH** の 2 行を追加した (pr-gate Round 4 / M4-12)。v1.2.4 は改定手順に新規則を足しながら表に該当行が無く、**PATCH の妥当性を表から導けなかった**。本表に照らすと v1.2.4 は MINOR 相当だが、**版番号は遡って振り直さない** — 既に参照されており Amendment trail の参照が壊れる |
 | 1.2.6 | 2026-09-24 | [AD-034](../../docs/decisions/0034-transcript-read-path-and-process-boundary.md)。Principle IX の「現状の制約」を事実に追随 (Verification の事実追随 = PATCH)。R-3 が transcript 本文を `MessageChannelMain` の port transfer で取得プロセス↔renderer 直通にし、**main を本文のデータ経路から外した**。**ただし composition-root からの到達集合検査 (自動証明) は依然未構築**であり「解決済み」とは書かない — その持ち主 feature を roadmap の「E2E / 検証基盤 feature」に登録した |
+| 1.2.7 | 2026-09-28 | [AD-037](../../docs/decisions/0037-japanese-ime-composer-behavior.md) D3 / [AD-038](../../docs/decisions/0038-e2e-screenshot-harness.md)。Principle VIII の Verification の「現状の制約」を X-2 の事実に追随 (Verification の事実追随 = PATCH)。X-2 (日本語 composer) が送信経路を開き Playwright + Electron の E2E ハーネスを載せた。**Automated (A) IME E2E と (B) 日本語スクリーンショット比較は搭載済み・持ち主 X-2・local 緑** ((A) `e2e/ime.spec.ts` idle/running+queue/変換中マウス送信の 3/3 緑。(B) `e2e/composer-screenshot.spec.ts` が同梱フォント Noto Sans JP を FontFace + CSSOM で CSP 非破壊注入し基準画像 `composer-fullwidth-win32.png` と比較。水平あふれ/桁ずれ/要素崩れ 0)。「2 項目とも載っていない」→「(A)(B) とも搭載・持ち主 X-2」に改めた。**CI が緑であることが本 Principle を保証しないという注記は残す** ((A)(B) とも stub 到達の E2E で、実機 IME 目視と基準画像の最終 aesthetic 承認は人間 quickstart が担う)。マウス送信経路の未確定送信 (grep 不可視) と CSP × addStyleTag の衝突は E2E 実走が検出し、それぞれ `thread.aui.tsx` の確定優先の最小処理 (AC-6 / AD-037 D1(d)) と FontFace API への切替で塞いだ |
 
 ## References
 
@@ -918,4 +944,4 @@ v1.2.4 は改定手順に新しい規則 (ADR の in-place 訂正) を足した�
 
 ---
 
-**Version**: 1.2.6 | **Ratified**: 2026-09-13 | **Last Amended**: 2026-09-24
+**Version**: 1.2.7 | **Ratified**: 2026-09-13 | **Last Amended**: 2026-09-28

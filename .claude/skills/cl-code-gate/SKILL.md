@@ -2,7 +2,6 @@
 name: cl-code-gate
 description: 実装の self-review gate。touched files を lint / test / convention で検証し、MUST_FIX があれば implementer で auto-fix loop を回す。PASS で implementing → reviewing に昇格する。
 argument-hint: [spec_dir]
-disable-model-invocation: true
 allowed-tools: Read Write Edit Bash Glob Grep Agent AskUserQuestion
 ---
 

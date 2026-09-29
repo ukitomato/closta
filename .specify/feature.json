@@ -1,1 +1,3 @@
-{ "feature_directory": "specs/004-ui-tier-a-tool-display" }
+{
+  "feature_directory": "specs/006-ui-japanese-ime-composer"
+}
