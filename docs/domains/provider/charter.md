@@ -33,6 +33,7 @@ Provider として一般化し、セッション起動時の実行環境を導�
 - Provider からセッション起動時の環境変数を導出する
 - Provider とランタイムの到達可能性判定
 - 一時資格情報の有効期限監視と警告
+  （**R-02/AD-039: 直接 AssumeRole ブランチを採る場合のみ**。現行は `awsCredentialExport` 化で期限監視も Claude Code に委譲。[007](../../../specs/007-provider-registration-and-reachability/spec.md) 参照）
 
 ### Out of scope
 
@@ -64,6 +65,9 @@ Provider として一般化し、セッション起動時の実行環境を導�
 
 ### Journey 3: 一時資格情報の期限切れ
 
+> **R-02/AD-039 (007)**: `aws-assume-role` を `awsCredentialExport` 化したため、期限監視・再取得は
+> Claude Code に委譲した (他 8 方式と同じ委譲形)。以下は**直接 AssumeRole ブランチを採る場合のみ**の姿。
+
 1. `aws-assume-role` の Provider でセッションを実行中、有効期限が近づく
 2. システムが期限前に警告する
 3. 実行中セッションが期限切れになった場合、UI に明示される
@@ -87,6 +91,8 @@ Provider として一般化し、セッション起動時の実行環境を導�
 - 候補の検出結果を**自動登録しない**。登録は常に利用者の明示操作を要する
 - Bedrock のモデルは inference profile ID で pin する。alias 運用はしない
 - `aws-assume-role` では `RoleSessionName` にアプリ名とセッション ID を含め、CloudTrail で追跡可能にする
+  （**アプリによる helper スクリプト生成 (RoleSessionName 埋め込み) は X-4 の起動統合に帰属**。X-3 は helper パスを
+  ユーザ入力で受け取り `settings.awsCredentialExport` に載せるまで。007 FR-006 参照）
 - 推奨は `api-key-helper` と `aws-credential-export`。期限切れ時の再取得を Claude Code に任せられるため
 
 ## KPI / Success metrics
@@ -110,7 +116,12 @@ Provider として一般化し、セッション起動時の実行環境を導�
 
 ## Related Specs
 
-（未着手。X-3 が本 domain に属する）
+- [007-provider-registration-and-reachability](../../../specs/007-provider-registration-and-reachability/spec.md)
+  — X-3 (Provider 登録と到達可能性判定)。本 domain 初の feature。
+  `AD-005` の `ProviderProfile` を実体化し、9 種 `CredentialSource`・検出と提示・env 導出・到達可能性判定を実装。
+  `aws-assume-role` は R-02 で **awsCredentialExport 化**を採用し、アプリは一時資格の実体を持たない
+  (期限監視は Claude Code に委譲。charter Scope の「一時資格情報の有効期限監視」は委譲側へ寄った)。
+  C-001 (helper の `Options.settings` と AD-036 §4 P1 の権限ゲートの衝突) を [AD-040](../../decisions/0040-provider-settings-constrained-projection.md) で調停。
 
 ## Open Questions
 

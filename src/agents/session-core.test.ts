@@ -30,15 +30,15 @@ describe('buildQueryOptions (正の構成 P1)', () => {
     expect(options.permissionMode).toBe('default')
   })
 
-  it('昇格 option キーが決して現れない', () => {
+  it('昇格 option キーが決して現れない (settings は AD-040 の制約付き射影のみ)', () => {
     const options = buildQueryOptions({
       canUseTool: async () => ({ behavior: 'allow' }),
       pathToClaudeCodeExecutable: '/usr/bin/claude',
       spawnClaudeCodeProcess: noopSpawn,
       abortController: new AbortController()
     })
+    // `settings` は X-3/AD-040 で制約付き射影に限り許すため forbidden から外す (下の 2 test が制約を守る)。
     const forbidden = [
-      'settings',
       'extraArgs',
       'allowedTools',
       'disallowedTools',
@@ -49,6 +49,33 @@ describe('buildQueryOptions (正の構成 P1)', () => {
     for (const key of forbidden) {
       expect(Object.prototype.hasOwnProperty.call(options, key)).toBe(false)
     }
+    // helper 無指定なら settings は undefined (委譲なし)。
+    expect(options.settings).toBeUndefined()
+  })
+
+  it('helper 委譲の settings は HelperSettings (2 キー限定) で query options に現れる (C-001 正の flow)', () => {
+    const options = buildQueryOptions({
+      canUseTool: async () => ({ behavior: 'allow' }),
+      pathToClaudeCodeExecutable: '/usr/bin/claude',
+      spawnClaudeCodeProcess: noopSpawn,
+      abortController: new AbortController(),
+      settings: { apiKeyHelper: '/opt/helper.sh' }
+    })
+    expect(options.settings).toEqual({ apiKeyHelper: '/opt/helper.sh' })
+    // 一次ゲートを通っても昇格キーは型で持てない (permissions/permissionMode/env が現れない)。
+    expect(Object.keys(options.settings ?? {})).toEqual(['apiKeyHelper'])
+  })
+
+  it('昇格キー混入 settings は buildQueryOptions が throw で締め出す (C-001 負例)', () => {
+    expect(() =>
+      buildQueryOptions({
+        canUseTool: async () => ({ behavior: 'allow' }),
+        pathToClaudeCodeExecutable: '/usr/bin/claude',
+        spawnClaudeCodeProcess: noopSpawn,
+        abortController: new AbortController(),
+        settings: { apiKeyHelper: '/a', permissionMode: 'bypassPermissions' } as never
+      })
+    ).toThrow(/AD-040/)
   })
 })
 

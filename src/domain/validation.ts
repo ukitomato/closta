@@ -81,6 +81,25 @@ export const MAX_DISPLAY_NAME_LENGTH = 255
 export const MAX_PATH_VALUE_LENGTH = 4096
 
 /**
+ * 識別子・キー名の長さ上限 (Provider の id / モデル id / inference profile id / extraEnv KEY。X-3)。
+ *
+ * **IPC 形状検証と永続層検証が同じ上限を使うための SSoT。** 別々に持つと、片方だけ通る値が生まれ
+ * 「登録は成功するが reload で無言に消える」非対称が起きる (SEC-M-001)。
+ */
+export const MAX_ID_LENGTH = 128
+
+/**
+ * 平文秘密 (api-key / oauth-token) の入力上限。**UTF-8 バイト長で測る** (X-3 / SEC-M-201)。
+ *
+ * seal は平文を **UTF-8 バイトに変換して**暗号化 + base64 する (`safeStorage.encryptString`)。UTF-16 の
+ * `.length` で縛ると、multibyte 文字 (CJK / emoji) の秘密がバイト換算で膨らみ、seal 後の `secretRefKey` が
+ * `MAX_PATH_VALUE_LENGTH` を超えて **reload 時に弾かれ無言消失する** (SEC-L-101 の byte-vs-length 残余)。
+ * base64(暗号文) ≈ (UTF-8 バイト + overhead) × 4/3。この上限なら seal 後も 4096 を下回る。実 API キー/トークンは
+ * ASCII でこの上限に十分収まる。**必ず `new TextEncoder().encode(x).length` で測ること。**
+ */
+export const MAX_SECRET_PLAINTEXT_BYTES = 2048
+
+/**
  * 1 ディレクトリから返す項目数の上限。
  *
  * 超えたものは列挙せず `too-many-entries` として扱う。

@@ -1,3 +1,4 @@
+import { assertHelperSettings, type HelperSettings } from '@domain/provider/settings'
 import {
   boundDecisionScope,
   toPermissionResult,
@@ -24,17 +25,23 @@ import {
 /**
  * `query()` に渡してよい options のキー**許可リスト** (contracts C-4 P1)。
  *
- * **これ以外のキー (`settings` / `extraArgs` / `allowedTools` / `disallowedTools` /
+ * **これ以外のキー (`extraArgs` / `allowedTools` / `disallowedTools` /
  * `permissionPromptToolName` / `allowDangerouslySkipPermissions` / `mcpServers` の escalating 設定 等) を
  * 一切含めない** — denylist で個別 API を追わず、キー集合を allowlist に固定して未知の昇格 option も締め出す
  * (design-gate R1→R3 で denylist が 3 度漏れたことへの class-closing 対応)。
+ *
+ * **`settings` は X-3 の [AD-040](../../docs/decisions/0040-provider-settings-constrained-projection.md) で
+ * 追加された** — helper 委譲 (`api-key-helper` / `aws-credential-export`) のため。ただし値は `HelperSettings`
+ * (2 キー限定) に型で閉じ、`buildQueryOptions` が `assertHelperSettings` で `permissions`/`permissionMode`/`env` の
+ * 混入を実行時に締め出す (昇格面は維持)。`settings` を許すのはこの制約付き射影に限る。
  */
 export const QUERY_OPTION_KEYS = [
   'permissionMode',
   'canUseTool',
   'pathToClaudeCodeExecutable',
   'spawnClaudeCodeProcess',
-  'abortController'
+  'abortController',
+  'settings'
 ] as const
 
 /** SDK の `SpawnOptions` の構造だけ (SDK を import しない)。 */
@@ -75,6 +82,8 @@ export interface BuiltQueryOptions {
   readonly pathToClaudeCodeExecutable: string
   readonly spawnClaudeCodeProcess: SpawnClaudeCodeProcess
   readonly abortController: AbortController
+  /** helper 委譲の制約付き射影 (X-3。AD-040)。無指定なら helper 委譲なし。 */
+  readonly settings?: HelperSettings
 }
 
 export interface BuildQueryOptionsDeps {
@@ -82,6 +91,8 @@ export interface BuildQueryOptionsDeps {
   readonly pathToClaudeCodeExecutable: string
   readonly spawnClaudeCodeProcess: SpawnClaudeCodeProcess
   readonly abortController: AbortController
+  /** provider が導出した helper 委譲設定 (X-3。AD-040)。未検証で来るため下で assert する。 */
+  readonly settings?: HelperSettings
 }
 
 /**
@@ -89,6 +100,10 @@ export interface BuildQueryOptionsDeps {
  *
  * **spread / merge / 別変数からの追加キーを作らない** — オブジェクトリテラルで allowlist キーだけを書く。
  * これにより SH-010 の「options のキー集合 ⊆ allowlist」が構造的に満たされる。
+ *
+ * **`settings` は `assertHelperSettings` を通して載せる** (X-3。AD-040 Decision 3/4) — キー集合 ⊆
+ * `{apiKeyHelper, awsCredentialExport}` を実行時に検証し、`permissions`/`permissionMode`/`env` の混入を throw で締め出す
+ * (境界通過後に型保証が消えるため。load-bearing gate)。`settings` 無指定なら `undefined` を載せる (helper 委譲なし)。
  */
 export function buildQueryOptions(deps: BuildQueryOptionsDeps): BuiltQueryOptions {
   return {
@@ -96,7 +111,8 @@ export function buildQueryOptions(deps: BuildQueryOptionsDeps): BuiltQueryOption
     canUseTool: deps.canUseTool,
     pathToClaudeCodeExecutable: deps.pathToClaudeCodeExecutable,
     spawnClaudeCodeProcess: deps.spawnClaudeCodeProcess,
-    abortController: deps.abortController
+    abortController: deps.abortController,
+    settings: assertHelperSettings(deps.settings)
   }
 }
 

@@ -337,9 +337,13 @@ export const AGENT_SDK_ALLOWED_CALLS = ['listSessions', 'getSessionMessages', 'q
  * ここに挙げるのは「現れてはならない綴り」であって正の構成の代替ではない (正本は contracts C-4)。
  */
 
-/** `query()` options に現れてはならない昇格キー (P1)。承認カード/権限モードを迂回するレバー。 */
+/** `query()` options に現れてはならない昇格キー (P1)。承認カード/権限モードを迂回するレバー。
+ *
+ * **`settings` は X-3 の [AD-040](../../docs/decisions/0040-provider-settings-constrained-projection.md) で
+ * 本 denylist から外した** — helper 委譲 (`api-key-helper` / `aws-credential-export`) のため
+ * 「2 キー限定の制約付き射影」に限り許すため。全面解禁ではなく、SDK 保持ファイルの `settings:` は
+ * **必ず `assertHelperSettings(...)` を通す**ことを項目16 の専用検査が backstop で強制する (下記)。 */
 export const QUERY_ESCALATION_OPTION_KEYS = [
-  'settings',
   'extraArgs',
   'allowedTools',
   'disallowedTools',
@@ -347,6 +351,19 @@ export const QUERY_ESCALATION_OPTION_KEYS = [
   'allowDangerouslySkipPermissions',
   'mcpServers'
 ]
+
+/**
+ * `settings` の値に現れてよいキー (AD-040 Decision 4)。helper 委譲の 2 キー限定射影。
+ * 参照用の SSoT — 実際の positive 強制は型 (`HelperSettings`) と query 直前の実行時 assert
+ * (`assertHelperSettings`) が担い、項目16 は grep backstop (変数形 `settings: someVar` の中身は見られない)。
+ */
+export const QUERY_SETTINGS_ALLOWED_KEYS = ['apiKeyHelper', 'awsCredentialExport']
+
+/**
+ * SDK 保持ファイルで `settings:` を許す**唯一の形** = ドメインの検証済みラッパ (AD-040)。
+ * これ以外の `settings:` (リテラル/別変数) は昇格の疑いで項目16 が違反にする。
+ */
+export const SANCTIONED_SETTINGS_WRAPPER = 'assertHelperSettings'
 
 /** `Query` の mutation メソッド。呼んでよいのは `interrupt` のみ (P3)。 */
 export const QUERY_MUTATION_METHODS = [
@@ -364,6 +381,20 @@ export const QUERY_MUTATION_METHODS = [
  * 昇格ではないため含めない (AD-020 / isolation charter)。
  */
 export const PERMISSION_MODE_ESCALATION_VALUES = ['bypassPermissions', 'acceptEdits', 'auto']
+
+/**
+ * Principle V (資格情報を永続化しない) の**ソース側 backstop** (X-3 / SH-010 / security H-004)。
+ *
+ * 永続化層と秘密モジュールのソースに**平文の秘密リテラル**が現れないことを見る (開発者が誤ってキーを
+ * ハードコードするのを止める)。**利用者の runtime `providers.json` に永続された秘密値は静的検査できない** —
+ * その runtime ガードは `provider-record`/`provider-service` の extraEnv 値スキャン (BE-004) + SC-002 の
+ * 単体テスト + security-reviewer が担う (捕まらない経路の正直な列挙。AD-024 #9 / AD-027)。
+ */
+export const SECRET_LITERAL_SCAN_DIRS = ['src/main/infra/settings/', 'src/main/infra/secrets/']
+
+/** 平文秘密の綴り (既知プロバイダのキー接頭辞 + PEM)。domain/provider/secret-scan.ts の runtime 版と同種。 */
+export const SECRET_LITERAL_PATTERN =
+  /(sk-[A-Za-z0-9_-]{16}|AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{16}|glpat-[A-Za-z0-9_-]{16}|xox[baprs]-[A-Za-z0-9-]{10}|AIza[A-Za-z0-9_-]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----)/
 
 /**
  * `wsl.exe` を新たに呼ばないことの検査対象 (SH-082 / SC-003)。

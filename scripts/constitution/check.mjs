@@ -46,6 +46,10 @@ import {
   QUERY_ESCALATION_OPTION_KEYS,
   QUERY_MUTATION_METHODS,
   PERMISSION_MODE_ESCALATION_VALUES,
+  SANCTIONED_SETTINGS_WRAPPER,
+  QUERY_SETTINGS_ALLOWED_KEYS,
+  SECRET_LITERAL_SCAN_DIRS,
+  SECRET_LITERAL_PATTERN,
   WSL_FREE_DIRECTORIES,
   UNC_API_NAMES,
   UNC_FORBIDDEN_IN,
@@ -780,6 +784,24 @@ function hasPackagedGate() {
         )
       }
     }
+    // (P1) `settings` は AD-040 の制約付き射影に限る — `assertHelperSettings(...)` ラッパを通さない
+    //      `settings:` (リテラル/別変数) を違反にする。grep backstop であり値の中身は見ない (M-102。
+    //      load-bearing gate は buildQueryOptions の型 + query 直前の実行時 assert)。
+    {
+      const settingsRe = /(?<![.\w])settings\s*:/g
+      let m
+      while ((m = settingsRe.exec(src.code)) !== null) {
+        const sanctioned = new RegExp(
+          String.raw`^settings\s*:\s*` + SANCTIONED_SETTINGS_WRAPPER + String.raw`\s*\(`
+        ).test(src.code.slice(m.index))
+        if (!sanctioned) {
+          found.push(
+            `${src.file}  query options の "settings:" が ${SANCTIONED_SETTINGS_WRAPPER}() を通さず現れている ` +
+              `(AD-040。制約付き射影 {${QUERY_SETTINGS_ALLOWED_KEYS.join(', ')}} のみ許可)`
+          )
+        }
+      }
+    }
     // (P1) permissionMode は 'default' 固定。昇格値のリテラルを締め出す。
     for (const value of PERMISSION_MODE_ESCALATION_VALUES) {
       if (src.code.includes(`'${value}'`) || src.code.includes(`"${value}"`)) {
@@ -804,6 +826,54 @@ function hasPackagedGate() {
     found,
     `対象: ${AGENT_SDK_IMPORT_DIRECTORIES.join(', ')} / 正本は buildQueryOptions + toPermissionResult`
   )
+}
+
+/* ── 項目 17: 永続化層ソースに平文秘密リテラルが無い (Principle V backstop) ── */
+{
+  /*
+   * Principle V の**ソース側 backstop** (X-3 / SH-010 / security H-004)。
+   *
+   * 永続化 (`infra/settings`) と秘密モジュール (`infra/secrets`) の**本体ソース**の文字列リテラルに、
+   * 既知プロバイダの平文秘密 (sk-… / AKIA… / ghp_… / glpat-… / xox…-… / AIza… / PEM) が
+   * 直書きされていないことを見る。開発者が誤ってキーをハードコードするのを止める grep。
+   *
+   * **利用者 runtime の `providers.json` に永続された秘密値は静的検査できない** — その runtime ガードは
+   * `provider-record` の extraEnv 値スキャン (BE-004) + SC-002 unit test + security-reviewer が担う
+   * (捕まらない経路の正直な列挙。AD-024 #9 / AD-027)。
+   * test ファイルは対象外 — 秘密拒否のテストは意図的に fake secret を持つ (provider-store.test.ts:82)。
+   */
+  const inScope = (file) =>
+    SECRET_LITERAL_SCAN_DIRS.some((dir) => file.startsWith(dir)) &&
+    !file.endsWith('.test.ts') &&
+    !file.endsWith('.test.tsx')
+  const scoped = sources.filter((src) => inScope(src.file))
+  if (scoped.length === 0) {
+    pending(
+      17,
+      '永続化層ソースに平文秘密リテラルが無い',
+      'V',
+      `対象 ${SECRET_LITERAL_SCAN_DIRS.join(', ')} の本体ソースが未実装`
+    )
+  } else {
+    const found = []
+    for (const src of scoped) {
+      for (const literal of stringLiterals(src.code)) {
+        if (SECRET_LITERAL_PATTERN.test(literal.value)) {
+          found.push(
+            `${src.file}:${literal.line}  平文の秘密リテラルが永続化層に直書きされている ` +
+              `(Principle V。秘密は safeStorage 参照キーのみを持つ)`
+          )
+        }
+      }
+    }
+    violations(
+      17,
+      '永続化層ソースに平文秘密リテラルが無い',
+      'V',
+      found,
+      `対象: ${SECRET_LITERAL_SCAN_DIRS.join(', ')} (test 除く) / runtime ガードは provider-record + SC-002`
+    )
+  }
 }
 
 /* ── 報告 ─────────────────────────────────────────────────────────── */

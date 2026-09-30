@@ -1,6 +1,15 @@
 import { ipcMain, type IpcMainInvokeEvent } from 'electron'
 
 import { IPC_CHANNELS } from '@domain/capability'
+import type {
+  ProviderDraft,
+  ProviderPatch,
+  ProviderSummaryDTO,
+  ReachableProvidersDTO,
+  RegisterProviderResult,
+  UpdateProviderResult
+} from '@domain/provider/dto'
+import type { DetectedCandidate } from '@domain/provider/types'
 import type { SessionControl, SessionLaunchHandshakeDTO } from '@domain/session/agent-session'
 import type { SessionIndexDTO } from '@domain/session/dto'
 import type { RuntimeDescriptor } from '@domain/runtime/descriptor'
@@ -35,6 +44,8 @@ import type { TranscriptResult } from './transcript-service'
 import {
   checkBeginBrowseLocation,
   checkFolderDraft,
+  checkProviderDraft,
+  checkProviderPatch,
   findRuntime,
   isKnownFolderId,
   isTrustedSender,
@@ -107,6 +118,15 @@ export interface IpcDependencies {
   launchSession(folderId: string, runtimeId: string): Promise<LaunchOutcome>
   /** 制御を該当セッションへ送る。未知 / 終了済み sessionId なら `false`。 */
   controlSession(sessionId: string, control: SessionControl): boolean
+
+  /* ── Provider (X-3) ── */
+
+  listProviders(): Promise<readonly ProviderSummaryDTO[]>
+  detectProviders(): Promise<readonly DetectedCandidate[]>
+  registerProvider(draft: ProviderDraft): Promise<RegisterProviderResult>
+  updateProvider(id: string, patch: ProviderPatch): Promise<UpdateProviderResult>
+  removeProvider(id: string): Promise<{ readonly ok: boolean }>
+  listReachableProviders(runtimeId: string): Promise<ReachableProvidersDTO>
 
   /** 計測関数。composition root が開発ビルド判定を解決して渡す (BE-030 / FR-038)。 */
   readonly measure: Measure
@@ -261,6 +281,50 @@ export function registerIpcHandlers(deps: IpcDependencies): void {
 
   handle(IPC_CHANNELS.killSession, async (_event, ...args): Promise<void> =>
     handleKillSession(deps, args)
+  )
+
+  /* ── Provider (X-3) ─────────────────────────────────────────────── */
+
+  handle(IPC_CHANNELS.listProviders, async (): Promise<readonly ProviderSummaryDTO[]> =>
+    deps.listProviders()
+  )
+
+  handle(IPC_CHANNELS.detectProviders, async (): Promise<readonly DetectedCandidate[]> =>
+    deps.detectProviders()
+  )
+
+  handle(
+    IPC_CHANNELS.registerProvider,
+    async (_event, ...args): Promise<RegisterProviderResult> => {
+      // **未信頼な draft の形を検証してから service へ渡す** (contracts C-1)。意味的検証は service。
+      const check = checkProviderDraft(args[0])
+      if (!check.ok) return { ok: false, reason: check.reason }
+      return deps.registerProvider(args[0] as ProviderDraft)
+    }
+  )
+
+  handle(IPC_CHANNELS.updateProvider, async (_event, ...args): Promise<UpdateProviderResult> => {
+    if (typeof args[0] !== 'string') return { ok: false, reason: 'not-found' }
+    if (!checkProviderPatch(args[1])) return { ok: false, reason: 'invalid-record' }
+    return deps.updateProvider(args[0], args[1] as ProviderPatch)
+  })
+
+  handle(
+    IPC_CHANNELS.removeProvider,
+    async (_event, ...args): Promise<{ readonly ok: boolean }> => {
+      if (typeof args[0] !== 'string') return { ok: false }
+      return deps.removeProvider(args[0])
+    }
+  )
+
+  handle(
+    IPC_CHANNELS.listReachableProviders,
+    async (_event, ...args): Promise<ReachableProvidersDTO> => {
+      // **既知の descriptor の識別子に完全一致すること。** 未知なら空 (到達可能 0 件)。
+      const runtime = findRuntime(deps.snapshotRuntimes(), args[0])
+      if (runtime === null) return { reachable: [], excluded: [] }
+      return deps.listReachableProviders(runtime.id)
+    }
   )
 
   /* ── 解決 ───────────────────────────────────────────────────────── */

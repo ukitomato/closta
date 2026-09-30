@@ -177,7 +177,7 @@ R-1 の残り 2 つは R-2 をブロックしない。
 |---|---|---|---|---|---|
 | 5 | X-1 | 単一セッション起動とストリーミング | `session` | R-4 | SPIKE-5 / SPIKE-3 **完了** |
 | 6 | X-2 | 日本語 composer | `ui` | X-1 | **SPIKE-4** |
-| 7 | X-3 | Provider 登録と到達可能性判定 | `provider` | X-1 | SPIKE-7 **完了** |
+| 7 | X-3 | Provider 登録と到達可能性判定 | `provider` | X-1 | SPIKE-7 **完了** / design-gate PASS ([AD-040](decisions/0040-provider-settings-constrained-projection.md) で C-001 調停) / R-02 = **awsCredentialExport 化** (AWS SDK 依存なし・一時資格の実体を持たない) / **ADR follow-up (pr-gate R2 D-L-101/102)**: R-02 が [AD-039](decisions/0039-credential-delegation-verified.md) D4「アプリが一時資格を扱う唯一の例外」を失効させ、[AD-005](decisions/0005-provider-as-registrable-value.md) の型を `CredentialRef`/`configDir: HostPath\|WslUncPath` に精緻化した (007 data-model §2)。**両者の後続 ADR 起票を要する** (現状は spec/data-model/glossary に記録、accepted ADR 本文は immutable で未追記) |
 | 8 | X-4 | 起動設定ダイアログとプリセット | `session` | X-3 | SPIKE-6 **完了** / 越境警告 AD-016 / 作業領域戦略 AD-017 / 権限モード 6 値 AD-020 |
 | 9 | X-5 | supervisor 分離とマルチセッション | `session` | X-4 | — |
 

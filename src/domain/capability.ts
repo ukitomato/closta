@@ -1,3 +1,12 @@
+import type {
+  ProviderDraft,
+  ProviderPatch,
+  ProviderSummaryDTO,
+  ReachableProvidersDTO,
+  RegisterProviderResult,
+  UpdateProviderResult
+} from './provider/dto'
+import type { DetectedCandidate } from './provider/types'
 import type { RuntimeDescriptorDTO, RuntimeListDTO } from './runtime/dto'
 import type { SessionLaunchHandshakeDTO } from './session/agent-session'
 import type { SessionIndexDTO } from './session/dto'
@@ -122,6 +131,24 @@ export interface ClostaCapability {
   /** 強制終了する (FR-016)。**中断とは別経路** — 途中出力保全・JSONL 非破損を保証しない。 */
   killSession(sessionId: string): Promise<void>
 
+  // --- Provider (X-3) ---
+
+  /** 登録済み Provider の一覧 (**秘密参照を含まない** summary。FR-001)。 */
+  listProviders(): Promise<readonly ProviderSummaryDTO[]>
+  /** 認証の痕跡を検出候補として提示する (**自動登録しない**・env 値を運ばない。FR-002 / SC-001 / H-10)。 */
+  detectProviders(): Promise<readonly DetectedCandidate[]>
+  /**
+   * Provider を登録する (FR-001)。`api-key` / `oauth-token` の平文秘密は main が `safeStorage` に seal し
+   * 参照値のみ保持する。失敗は理由キーのみ (payload/秘密を返さない。contracts C-3)。
+   */
+  registerProvider(draft: ProviderDraft): Promise<RegisterProviderResult>
+  /** Provider を編集する (表示名/モデル/extraEnv のみ。認証方式は再登録の領分。US-4)。 */
+  updateProvider(id: string, patch: ProviderPatch): Promise<UpdateProviderResult>
+  /** Provider を削除する (紐づく秘密参照も解放。FR-001)。未知 id は `{ ok: false }`。 */
+  removeProvider(id: string): Promise<{ readonly ok: boolean }>
+  /** 選んだランタイムから**到達できる Provider だけ**を返す (除外は理由キー付き。FR-012 / SC-004)。 */
+  listReachableProviders(runtimeId: string): Promise<ReachableProvidersDTO>
+
   // --- 通知 (main → renderer) ---
 
   /** 購読解除は返る**トークン**で行う。renderer からコールバックを main に渡さない。 */
@@ -158,6 +185,12 @@ export const IPC_CHANNELS = {
   killSession: 'closta:killSession',
   /** main → preload: agents に繋がった port2 を transfer する専用チャネル (X-1 / AD-036 §2)。 */
   sessionPort: 'closta:sessionPort',
+  listProviders: 'closta:listProviders',
+  detectProviders: 'closta:detectProviders',
+  registerProvider: 'closta:registerProvider',
+  updateProvider: 'closta:updateProvider',
+  removeProvider: 'closta:removeProvider',
+  listReachableProviders: 'closta:listReachableProviders',
   runtimesChanged: 'closta:runtimesChanged',
   foldersChanged: 'closta:foldersChanged',
   sessionsChanged: 'closta:sessionsChanged'

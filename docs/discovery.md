@@ -83,7 +83,7 @@ present の行にも「入っているが使っていない」ものがあるの
 | エージェント連携 | `@anthropic-ai/claude-agent-sdk` (TS, V1 `query()`) | PLAN.md:78, AD-002 (L134) | **present** (0.3.270)。**依存として入れただけで呼び出していない** (AD-026) |
 | supervisor | Electron `utilityProcess` (単独起動可能) | PLAN.md:79, AD-006/AD-010 | absent (X-5 で入る)。**実体のディレクトリは `src/agents/`** |
 | ターミナル | xterm.js + node-pty | PLAN.md:80 | absent (optional scope) |
-| 秘密保管 | Electron `safeStorage` (OS キーチェーン) | PLAN.md:81, AD-011 (L229) | absent (X-3 で入る) |
+| 秘密保管 | Electron `safeStorage` (OS キーチェーン) | PLAN.md:81, AD-011 (L229) | **present** (X-3 で導入)。`src/main/infra/secrets/safe-storage.ts` が `api-key`/`oauth-token` の秘密を seal し参照値のみ保持 |
 | 永続化 | SQLite (better-sqlite3) | PLAN.md:82 | absent (I-1 で入る)。R-1 の設定は JSON ファイル |
 | コンテナ制御 | Docker CLI 呼び出し | PLAN.md:83, AD-012 (L243) | absent (I-1 で入る)。**docker を名指せるモジュールは 0 件** (検証項目 4) |
 | パッケージング | electron-builder (`asarUnpack` 必須) | PLAN.md:84, AD-009 (L210) | **present** (26.15.3)。`asarUnpack` 動作確認済み (AD-026) |
@@ -344,6 +344,15 @@ PLAN.md の旧表記を根拠に探すと 0 件ヒットになる (上の revisi
 `src/main/infra/runtime/` に `launch-spec.ts` (env allowlist + WSL argv builder)。
 `src/renderer/src/features/session/` に起動 entry + live thread + 承認カード (`useLiveSession` / `SessionScreen` / `ApprovalCard`)。
 claude 実行パスは `probe-script.ts` の `command -v claude` で検出時解決し `descriptor.claudePath` に載せる (AD-036)。
+
+**X-3 (Provider 登録と到達可能性判定) が加えたモジュール** (spec 007):
+`src/domain/provider/` に純粋関数群 (`types` / `settings`[HelperSettings] / `derive-env` / `reachability` / `detect` /
+`secret-scan` / `dto`)。`src/main/infra/secrets/safe-storage.ts` (**infra/secrets 初の .ts**。electron `safeStorage`) /
+`src/main/infra/settings/provider-{record,store}.ts` (JSON 永続化・秘密参照キーのみ) /
+`src/main/infra/provider/{detect,detector}.ts` (config dir / `~/.aws/config` / env 検出。os/process 非 import)。
+`src/main/app/provider-service.ts` (状態を持つ調停。`services-not-to-io` に実名追加) + `ipc.ts`/`validate.ts`/`composition-root.ts` へ配線。
+`src/renderer/src/features/provider/` に登録・検出・CRUD UI。C-001 の権限ゲート調停で `session-core.ts` の `buildQueryOptions` を
+`settings?: HelperSettings` 対応に拡張、`check.mjs` 項目 16 / `allowlists.mjs` を AD-040 で更新 (`QUERY_SETTINGS_ALLOWED_KEYS`)。
 
 テストは `src/` 内の実装と同じ場所に置く。`tests/` にあるのは基盤の検証と違反サンプルだけである。
 
