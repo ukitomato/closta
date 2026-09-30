@@ -179,8 +179,9 @@
   **check:constitution** (**項目 16 の AD-040 更新後、helper 2 キー限定 settings が緑・3 キー目 fixture が違反検出**。
   Principle V 項目 SH-010 が緑) / **test** (Vitest 全件) / **test:rules** (SH-001b の違反 fixture)。
   `infra/secrets/` 初回配置後に lint/depcruise が緑であること (A-2)。`services-not-to-io` の判断 (SH-011) を最終確認
-- **SH-022** [Shared] quickstart を実機で記録 (`quickstart-results.md`) — 検出→登録 / 到達で絞る / **helper live
+- **SH-022** ✅ [Shared] quickstart を実機で記録 (`quickstart-results.md`) — 検出→登録 / 到達で絞る / **helper live
   観測** (stub helper で 1 度発火。R-01/AD-039 Open Question) / `aws-assume-role` 期限監視。実機操作は人間 deferred、
+  **実機確認済 (2026-09-30)**: US-1 (検出・登録・編集・削除) は実機 OK。到達フィルタ UI / helper live / catalog は X-4、期限監視は N/A (R-02)。判定表は quickstart-results.md。
   判定表の記録は done 必須
 
 ---
