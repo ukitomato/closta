@@ -4,7 +4,9 @@ import { isValidDistroName, wslNamespace, type NamespaceId } from '@domain/runti
 import {
   hasControlCharacter,
   MAX_DISPLAY_NAME_LENGTH,
+  MAX_ID_LENGTH,
   MAX_PATH_VALUE_LENGTH,
+  MAX_SECRET_PLAINTEXT_BYTES,
   MAX_SESSION_OFFSET
 } from '@domain/validation'
 import type { RuntimeDescriptor } from '@domain/runtime/descriptor'
@@ -221,6 +223,149 @@ export function checkFolderDraft(
   }
 
   return { ok: true }
+}
+
+/* ── Provider (X-3 / contracts C-1) ─────────────────────────────── */
+
+const PROVIDER_BACKENDS = ['anthropic', 'bedrock', 'vertex', 'foundry']
+
+function isStr(v: unknown): v is string {
+  return typeof v === 'string' && v.length > 0 && v.length <= MAX_PATH_VALUE_LENGTH
+}
+
+/** 非空・長さ上限・制御文字なし。`provider-record` の `isNonEmptyString` と同一 (SEC-M-001)。 */
+function isValidName(v: unknown, max: number): v is string {
+  return typeof v === 'string' && v.length > 0 && v.length <= max && !hasControlCharacter(v)
+}
+
+/**
+ * `extraEnv` を検証する。**KEY も見る** — 値だけ見ると、`provider-record` が拒否する KEY
+ * (制御文字入り・長大) を IPC が通し、**登録は成功するが reload で無言に消える** (SEC-M-001)。
+ * KEY 上限は `MAX_ID_LENGTH`、値は空を許し `MAX_PATH_VALUE_LENGTH` まで (provider-record と同一)。
+ */
+function isValidExtraEnv(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null) return false
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    if (!isValidName(k, MAX_ID_LENGTH)) return false
+    if (typeof v !== 'string' || v.length > MAX_PATH_VALUE_LENGTH) return false
+  }
+  return true
+}
+
+/**
+ * configDir の namespace **種別**を検証する (`host` か `unc:<validDistro>`)。PB-P-L03。
+ * folder 側 `isValidPathDTO` と対称に、種別を見ずに通すと `WslUncPath` brand が `unc:` 以外の綴りを
+ * 持つ runtime 値を生みうる (AD-004 の名前空間分離が境界の再 branding で退化する)。
+ */
+function isValidConfigDirNamespace(ns: string): boolean {
+  if (ns === 'host') return true
+  if (ns.startsWith('unc:')) return isValidDistroName(ns.slice(4))
+  return false
+}
+
+/**
+ * モデルカタログの各エントリ形状を検証する。`provider-record.toModels` と同一 (SEC-M-001)。
+ * 配列であることだけを見ると、不正 entry を持つ Provider が登録成功→reload で skip される。
+ */
+function isValidModelCatalog(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null) return false
+  const m = value as Record<string, unknown>
+  if (!Array.isArray(m.models)) return false
+  for (const entry of m.models) {
+    if (typeof entry !== 'object' || entry === null) return false
+    const e = entry as Record<string, unknown>
+    if (!isValidName(e.id, MAX_ID_LENGTH)) return false
+    if (!isValidName(e.displayName, MAX_DISPLAY_NAME_LENGTH)) return false
+    if (e.inferenceProfileId !== undefined && !isValidName(e.inferenceProfileId, MAX_ID_LENGTH)) {
+      return false
+    }
+  }
+  return true
+}
+
+/** `credential` draft の source 別フィールドを検証する (秘密は seal 前の平文で来る=api-key/oauth-token のみ)。 */
+function isValidCredentialDraft(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null) return false
+  const c = value as Record<string, unknown>
+  switch (c.source) {
+    case 'config-dir':
+    case 'in-app-login':
+      return true
+    case 'api-key-helper':
+    case 'aws-credential-export':
+    case 'aws-assume-role':
+      return isStr(c.helperPath)
+    case 'api-key':
+    case 'oauth-token':
+      // 平文秘密は seal で UTF-8 バイトに変換され膨らむため、**UTF-8 バイト長**で上限に絞る (SEC-M-201)。
+      // `.length` (UTF-16) だと multibyte 秘密が seal 後 secretRefKey で上限超過し reload 消失する。
+      return (
+        typeof c.secret === 'string' &&
+        c.secret.length > 0 &&
+        new TextEncoder().encode(c.secret).length <= MAX_SECRET_PLAINTEXT_BYTES
+      )
+    case 'aws-profile':
+      return isStr(c.profileName) && (c.region === undefined || isStr(c.region))
+    case 'env-passthrough':
+      // varNames の KEY 上限・制御文字を read 側 (provider-record) と一致させる (SEC-M-101。
+      // isStr(<=4096・制御文字可) だと reload で varNames が弾かれ Provider が無言消失する)。
+      return Array.isArray(c.varNames) && c.varNames.every((n) => isValidName(n, MAX_ID_LENGTH))
+    default:
+      return false
+  }
+}
+
+/**
+ * **`registerProvider(draft)`。** 未信頼な draft の形を検証する (contracts C-1)。
+ * 意味的検証 (extraEnv 秘密スキャン・safeStorage 可否) は service が返す理由キーに委ねる (H-09 / M-03)。
+ */
+export type ProviderDraftCheck =
+  { readonly ok: true } | { readonly ok: false; readonly reason: 'invalid-record' | 'invalid-path' }
+
+export function checkProviderDraft(draft: unknown): ProviderDraftCheck {
+  if (typeof draft !== 'object' || draft === null) return { ok: false, reason: 'invalid-record' }
+  const d = draft as Record<string, unknown>
+
+  if (!isValidDisplayName(d.displayName)) return { ok: false, reason: 'invalid-record' }
+  if (typeof d.backend !== 'string' || !PROVIDER_BACKENDS.includes(d.backend)) {
+    return { ok: false, reason: 'invalid-record' }
+  }
+  if (!isValidCredentialDraft(d.credential)) return { ok: false, reason: 'invalid-record' }
+
+  if (!isValidModelCatalog(d.models)) return { ok: false, reason: 'invalid-record' }
+
+  if (d.configDir !== undefined) {
+    if (typeof d.configDir !== 'object' || d.configDir === null)
+      return { ok: false, reason: 'invalid-path' }
+    const cd = d.configDir as Record<string, unknown>
+    if (typeof cd.namespace !== 'string' || typeof cd.value !== 'string')
+      return { ok: false, reason: 'invalid-path' }
+    // namespace **種別**を検証する (host か unc:<validDistro>)。種別を見ないと brand が退化する (PB-P-L03)。
+    if (!isValidConfigDirNamespace(cd.namespace)) return { ok: false, reason: 'invalid-path' }
+    if (
+      cd.value.length === 0 ||
+      cd.value.length > MAX_PATH_VALUE_LENGTH ||
+      hasControlCharacter(cd.value)
+    ) {
+      return { ok: false, reason: 'invalid-path' }
+    }
+  }
+
+  if (d.extraEnv !== undefined && !isValidExtraEnv(d.extraEnv)) {
+    return { ok: false, reason: 'invalid-record' }
+  }
+
+  return { ok: true }
+}
+
+/** **`updateProvider(id, patch)`。** 未信頼 patch の形を検証する (表示名/モデル/extraEnv のみ)。 */
+export function checkProviderPatch(patch: unknown): boolean {
+  if (typeof patch !== 'object' || patch === null) return false
+  const p = patch as Record<string, unknown>
+  if (p.displayName !== undefined && !isValidDisplayName(p.displayName)) return false
+  if (p.models !== undefined && !isValidModelCatalog(p.models)) return false
+  if (p.extraEnv !== undefined && !isValidExtraEnv(p.extraEnv)) return false
+  return true
 }
 
 /* ── セッション一覧 (R-2 / BE-028) ─────────────────────────────── */

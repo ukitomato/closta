@@ -1,0 +1,19 @@
+import { query } from '@anthropic-ai/claude-agent-sdk'
+
+/**
+ * 違反サンプル (X-3 / AD-040 / SH-001c)。
+ *
+ * **`settings` を `assertHelperSettings(...)` ラッパを通さず直接リテラルで書く形。**
+ * 昇格キー (permissions 等) を含まず一見無害な 2 キーでも、ラッパを通さない `settings:` は
+ * 項目 16 が違反にする — AD-040 の「制約付き射影は必ず検証済みラッパを通す」を強制し、
+ * `settings` を denylist から外したことで穴を広げていない証跡 (M-102)。
+ */
+export function bad(): void {
+  void query({
+    prompt: 'hi',
+    options: {
+      permissionMode: 'default',
+      settings: { apiKeyHelper: '/opt/helper.sh' }
+    }
+  })
+}

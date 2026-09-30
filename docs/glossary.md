@@ -139,7 +139,37 @@ total_terms: 42
 - **Domain**: `provider`
 - **Ref**: [AD-011](decisions/0011-delegate-credential-resolution.md)
 
+#### **CredentialRef**
+
+- **Definition**: `CredentialSource` を**非秘密の参照**で精緻化した判別 union (X-3。data-model §2)。
+  `api-key`/`oauth-token` は `safeStorage` 参照キー (`secretRefKey` = 暗号化 ciphertext)、helper 系は helper パス、
+  `aws-profile` は profile 名のみを持つ。**秘密の実体はどのメンバにも現れない** (Principle V)。`CredentialSource`
+  が「どの方式か」の enum であるのに対し、`CredentialRef` は「その方式の非秘密メタ」を担う
+- **Domain**: `provider`
+- **Counterexamples**: `CredentialSource`（方式の enum）/ 平文秘密（`CredentialRef` は持たない。値は safeStorage へ）
+- **Ref**: [AD-005](decisions/0005-provider-as-registrable-value.md) / [007 spec](../specs/007-provider-registration-and-reachability/spec.md)
+
 ### D
+
+#### **DetectedCandidate（検出候補）**
+
+- **Definition**: 検出で得た**登録前の候補** (X-3)。`config dir` / `aws profile` / `env passthrough` の 3 由来を持つ。
+  **提示のみで自動登録しない**。**env の秘密「値」を持たず、変数名・存在・所在のメタのみを運ぶ**
+- **日本語表記**: 検出候補
+- **Domain**: `provider`（検出 I/O は `infra`、正規化は `domain` の純粋関数）
+- **Counterexamples**: `ProviderProfile`（登録後の実体）とは別。候補は登録の明示操作を経て初めて `ProviderProfile` になる
+- **Ref**: [007 spec](../specs/007-provider-registration-and-reachability/spec.md) / charter Journey 1
+
+#### **DerivedLaunchEnv（導出 env）**
+
+- **Definition**: `ProviderProfile` と `infra` が解決した値から導出する `{ env, settings? }` (X-3)。`env` は curated base を
+  spread し passthrough 許可リストに `WSLENV`・資格情報パターンを含めない。`settings` は **`HelperSettings`
+  (`{ apiKeyHelper?, awsCredentialExport? }` の 2 キー限定)** で `Settings` 全体を組めない
+- **日本語表記**: 導出 env（型名は原語のまま）
+- **Domain**: `provider`（`deriveLaunchEnv` は純粋関数。I/O は `infra` が解決し引数で渡す）
+- **Counterexamples**: `RuntimeLaunchSpec.env`（起動 spawn の最終 env）とは別。導出 env は X-4 が
+  `RuntimeLaunchSpec.env` に合流させる（`Options.env` は AD-036 §3 の custom spawn 下で無視される）
+- **Ref**: [AD-040](decisions/0040-provider-settings-constrained-projection.md) / [AD-039](decisions/0039-credential-delegation-verified.md) D3
 
 #### **Disposable container**
 
@@ -356,8 +386,10 @@ total_terms: 42
 
 #### **ProviderProfile**
 
-- **Definition**: `Provider` の実体を表す型。`backend` / `configDir` / `credential` / `models` / `extraEnv` を持つ
+- **Definition**: `Provider` の実体を表す型。`id` / `displayName` / `backend` / `configDir` / `credential` /
+  `models` / `extraEnv` を持つ (`id` / `displayName` が同一 backend 複数登録の識別鍵。型の正本は AD-005)
 - **Domain**: `provider`
+- **Ref**: [AD-005](decisions/0005-provider-as-registrable-value.md)
 
 ### R
 

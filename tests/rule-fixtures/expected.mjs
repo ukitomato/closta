@@ -254,6 +254,16 @@ export const FIXTURES = [
     rules: ['#16']
   },
   {
+    file: 'a-direct/sdk-settings-unwrapped.ts.fixture',
+    target: 'src/agents/__rulecheck__/sdk-settings-unwrapped.ts',
+    group: 'a',
+    what:
+      'settings を assertHelperSettings ラッパを通さず直接リテラルで書く ' +
+      '(AD-040。制約付き射影は検証済みラッパ経由のみ許可。settings を denylist から外しても穴を広げない証跡。X-3 / SH-001c)',
+    detectors: ['constitution'],
+    rules: ['#16']
+  },
+  {
     file: 'b-equivalent/sdk-query-mutation-method.ts.fixture',
     target: 'src/agents/__rulecheck__/sdk-query-mutation-method.ts',
     group: 'b',
@@ -262,6 +272,16 @@ export const FIXTURES = [
       '(正の構成 P3 を破る。項目14 は .method() を見ない。X-1 / SH-010)',
     detectors: ['constitution'],
     rules: ['#16']
+  },
+  {
+    file: 'a-direct/principle-v-hardcoded-secret.ts.fixture',
+    target: 'src/main/infra/settings/__rulecheck__/principle-v-hardcoded-secret.ts',
+    group: 'a',
+    what:
+      '永続化層のソース (infra/settings) に既知プレフィクスの平文 API キー (sk-ant-…) を直書きする ' +
+      '(Principle V。秘密は safeStorage 参照キーのみ。X-3 / SH-010)',
+    detectors: ['constitution'],
+    rules: ['#17']
   },
   {
     file: 'a-direct/sdk-forbidden-call-alias.ts.fixture',
@@ -304,6 +324,15 @@ export const FIXTURES = [
     target: 'src/main/app/__rulecheck__/reuse-verified-other-distro.ts',
     group: 'b',
     what: '正規の確認済みの値を別ディストロに流用する (**型は通る。実行時検査で止める**)',
+    detectors: ['none']
+  },
+  {
+    file: 'b-equivalent/principle-v-unknown-shape-secret.ts.fixture',
+    target: 'src/main/infra/settings/__rulecheck__/principle-v-unknown-shape-secret.ts',
+    group: 'b',
+    what:
+      '既知プレフィクスに合致しない形の秘密値を永続化層のソースに書く ' +
+      '(**item 17 は固定プレフィクスの grep。未知形式と runtime providers.json の値は静的に見えない**)',
     detectors: ['none']
   },
   {
@@ -376,6 +405,25 @@ export const UNDETECTED_NOTES = {
       '(`composition-root` の `resolveCwd` / domain の `prefix-match`) が capability 戻り値の `PathDTO` から行う。' +
       'したがって繰り越す。**X-4 (起動設定ダイアログ) で追加ディレクトリのパス入力が renderer に生じるため、' +
       'その時点で「IPC へ渡す `PathDTO` は capability 戻り値由来の参照に限る」を型 (branded な不透明型) で強制する。**'
+  },
+  'principle-v-unknown-shape-secret': {
+    why:
+      'item 17 (check.mjs) は `src/main/infra/settings/**` `src/main/infra/secrets/**` の**本体ソース**の ' +
+      '文字列リテラルを、既知プロバイダの**固定プレフィクス** (sk-/AKIA/ghp_/glpat-/xox…-/AIza/PEM) の grep で見る。' +
+      'したがって (a) プレフィクスに合致しない未知形式の秘密や、(b) **利用者が runtime に持ち込み ' +
+      '`providers.json` へ永続される値**は、ソース静的検査の射程外で捕まえられない。',
+    mitigatedBy:
+      'runtime の第一防御は **`scanExtraEnvForSecrets` (domain/provider/secret-scan)** で、既知プレフィクスに加え ' +
+      '**高エントロピー blob (40 文字級)** も見て、`provider-record` (BE-004) が永続前に該当 `extraEnv` を登録拒否する。' +
+      '第二防御は **SC-002 の単体テスト** (JSON・ログに秘密値が現れないことを表明) と **security-reviewer** の監査。' +
+      'item 17 が担うのは「開発者がソースにキーを直書きする事故」の一点で、runtime 値は上記が守る。',
+    nextFeature: 'X-4',
+    howToClose:
+      '**X-3 で確認 (SH-010): item 17 は固定プレフィクスのソース grep であり、これ以上は踏み込まない。** ' +
+      'runtime 値の秘密混入は `scanExtraEnvForSecrets` のエントロピー閾値 + 登録拒否 + SC-002 が load-bearing。' +
+      '**自由入力の秘密経路が増える X-4 (起動設定ダイアログで helper パス・extraEnv の手入力が renderer に生じる) の時点で、' +
+      'IPC 境界の入力検証 (`checkProviderDraft`) に秘密値スキャンを一段追加し、拒否理由を UI に返す形で射程を広げる。' +
+      'ソース側の固定プレフィクス grep はそのままでも十分 (直書き事故の一点しか担っていない)。**'
   },
   'reuse-verified-other-distro': {
     why:

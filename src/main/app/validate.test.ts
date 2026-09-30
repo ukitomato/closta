@@ -20,6 +20,8 @@ import {
   MAX_PATH_VALUE_LENGTH,
   checkBeginBrowseLocation,
   checkFolderDraft,
+  checkProviderDraft,
+  checkProviderPatch,
   findRuntime,
   isKnownFolderId,
   isTrustedSender,
@@ -427,5 +429,81 @@ describe('isPermissionOutcome / isPermissionScope (X-1 承認決定の enum 検�
     for (const bad of ['forever', 'always', '', 0, null, undefined]) {
       expect(isPermissionScope(bad)).toBe(false)
     }
+  })
+})
+
+describe('checkProviderDraft / checkProviderPatch — 永続層と同じ形を要求する (SEC-M-001)', () => {
+  const validDraft = {
+    displayName: 'Prod',
+    backend: 'anthropic',
+    credential: { source: 'config-dir' },
+    models: { models: [{ id: 'claude-opus-4-8', displayName: 'Opus' }] }
+  }
+
+  it('正常な draft を受理する', () => {
+    expect(checkProviderDraft(validDraft)).toEqual({ ok: true })
+  })
+
+  it('制御文字入りの extraEnv KEY を拒否する (値だけ見ると reload で無言消失する)', () => {
+    // 値は正常だが KEY に制御文字。provider-record が load 時に invalid-record で skip する形。
+    const draft = { ...validDraft, extraEnv: { 'BAD\u0007KEY': 'ok' } }
+    expect(checkProviderDraft(draft)).toEqual({ ok: false, reason: 'invalid-record' })
+  })
+
+  it('長すぎる extraEnv KEY (>128) を拒否する', () => {
+    const draft = { ...validDraft, extraEnv: { ['K'.repeat(129)]: 'ok' } }
+    expect(checkProviderDraft(draft)).toEqual({ ok: false, reason: 'invalid-record' })
+  })
+
+  it('形の壊れた model entry (id 欠落) を拒否する', () => {
+    const draft = { ...validDraft, models: { models: [{ displayName: 'x' }] } }
+    expect(checkProviderDraft(draft)).toEqual({ ok: false, reason: 'invalid-record' })
+  })
+
+  it('patch も同じ extraEnv KEY / model entry 検証を適用する', () => {
+    expect(checkProviderPatch({ extraEnv: { 'BAD\u0007KEY': 'ok' } })).toBe(false)
+    expect(checkProviderPatch({ models: { models: [{ id: '' }] } })).toBe(false)
+    expect(checkProviderPatch({ displayName: 'New' })).toBe(true)
+  })
+
+  it('env-passthrough の varNames に制御文字/長大があれば拒否する (SEC-M-101)', () => {
+    const ctrl = {
+      ...validDraft,
+      credential: { source: 'env-passthrough', varNames: ['OK', 'BAD\u0007'] }
+    }
+    expect(checkProviderDraft(ctrl)).toEqual({ ok: false, reason: 'invalid-record' })
+    const long = {
+      ...validDraft,
+      credential: { source: 'env-passthrough', varNames: ['V'.repeat(129)] }
+    }
+    expect(checkProviderDraft(long)).toEqual({ ok: false, reason: 'invalid-record' })
+    const ok = {
+      ...validDraft,
+      credential: { source: 'env-passthrough', varNames: ['ANTHROPIC_API_KEY'] }
+    }
+    expect(checkProviderDraft(ok)).toEqual({ ok: true })
+  })
+
+  it('api-key の平文秘密が長すぎる (UTF-8 バイト >2048) と拒否する (SEC-M-201。seal 膨張で reload 消失を防ぐ)', () => {
+    // ASCII: 2049 文字 = 2049 バイト > 2048 → 拒否。
+    const ascii = { ...validDraft, credential: { source: 'api-key', secret: 's'.repeat(2049) } }
+    expect(checkProviderDraft(ascii)).toEqual({ ok: false, reason: 'invalid-record' })
+    // multibyte: .length=1024 (≤2048) だが CJK 3 バイト × 1024 = 3072 バイト > 2048 → 拒否。
+    // UTF-16 .length で測ると通過してしまい reload で secretRefKey 上限超過→無言消失する経路を塞ぐ。
+    const cjk = { ...validDraft, credential: { source: 'api-key', secret: 'あ'.repeat(1024) } }
+    expect(checkProviderDraft(cjk)).toEqual({ ok: false, reason: 'invalid-record' })
+    // 正常 (ASCII 実 API キー相当) は受理。
+    const ok = { ...validDraft, credential: { source: 'api-key', secret: 'sk-ant-api03-xxxx' } }
+    expect(checkProviderDraft(ok)).toEqual({ ok: true })
+  })
+
+  it('configDir の namespace 種別が host / unc:<distro> 以外なら拒否する (PB-P-L03)', () => {
+    const badNs = {
+      ...validDraft,
+      configDir: { namespace: 'wsl:Ubuntu', value: '/home/y/.claude' }
+    }
+    expect(checkProviderDraft(badNs)).toEqual({ ok: false, reason: 'invalid-path' })
+    const host = { ...validDraft, configDir: { namespace: 'host', value: 'C:\\Users\\y\\.claude' } }
+    expect(checkProviderDraft(host)).toEqual({ ok: true })
   })
 })

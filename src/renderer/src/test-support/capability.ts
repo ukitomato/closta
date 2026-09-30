@@ -58,6 +58,12 @@ export function stubCapability(overrides: Partial<ClostaCapability> = {}): Clost
     respondPermission: notStubbed('respondPermission'),
     interruptSession: notStubbed('interruptSession'),
     killSession: notStubbed('killSession'),
+    listProviders: notStubbed('listProviders'),
+    detectProviders: notStubbed('detectProviders'),
+    registerProvider: notStubbed('registerProvider'),
+    updateProvider: notStubbed('updateProvider'),
+    removeProvider: notStubbed('removeProvider'),
+    listReachableProviders: notStubbed('listReachableProviders'),
     onRuntimesChanged: noSubscription,
     onFoldersChanged: noSubscription,
     onSessionsChanged: noSubscription

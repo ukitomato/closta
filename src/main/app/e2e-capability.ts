@@ -186,6 +186,13 @@ export function createE2eCapability(): E2eCapability {
       port: null
     }),
 
+    listProviders: async () => [],
+    detectProviders: async () => [],
+    registerProvider: async () => ({ ok: false, reason: 'invalid-record' }),
+    updateProvider: async () => ({ ok: false, reason: 'not-found' }),
+    removeProvider: async () => ({ ok: false }),
+    listReachableProviders: async () => ({ reachable: [], excluded: [] }),
+
     launchSession: async (): Promise<LaunchOutcome> => {
       // 単一セッション不変 (real の launch-service と同じ)。
       if (active.size > 0) return { status: 'rejected', reason: 'session-active' }

@@ -229,10 +229,9 @@ module.exports = {
         'インタフェース経由で扱うクラス」であり、結線層 (`composition-root.ts`) や' +
         'Electron 境界 (`window.ts` / `protocol.ts` / `index.ts`) は含まない — ' +
         'そちらは I/O を解決して渡すのが役割である。' +
-        'X-3 の `ProviderService` / I-2 の `ContainerService` を' +
-        '作るときは、ここに実名を足すこと。' +
-        '**R-2 で `SessionService` を追加した** (AD-027 Consequences の履行。' +
-        '想定は X-1 だったが R-2 が先に調停クラスを作った)。' +
+        'I-2 の `ContainerService` を作るときは、ここに実名を足すこと。' +
+        '**R-2 で `SessionService`、X-1 で `session-launch-service`、X-3 で `provider-service` を追加した** ' +
+        '(AD-027 Consequences の履行)。' +
         '`session-enumerator.ts` は**含めない** — プロセスハンドルを持つが、' +
         '役割は子プロセスの生成と結線であり、`composition-root.ts` と同じ' +
         '「I/O を解決して渡す側」である。加えて本規則の `to` は `core` に限っており、' +
@@ -250,7 +249,7 @@ module.exports = {
        */
       from: {
         path:
-          '^src/main/app/(folder-service|runtime-store|session-service|session-launch-service)[.]ts$' +
+          '^src/main/app/(folder-service|runtime-store|session-service|session-launch-service|provider-service)[.]ts$' +
           '|^src/main/app/__rulecheck__/service-io-import[.]ts$'
       },
       to: {

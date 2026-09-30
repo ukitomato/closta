@@ -12,10 +12,17 @@ import { isWslFolder, type WorkspaceFolder } from '@domain/workspace/folder'
 
 import { createHostFileSystem } from '../infra/fs/host-fs'
 import { createWslFileSystem } from '../infra/fs/wsl-fs'
-import { buildLaunchEnv, buildRuntimeLaunchSpec } from '../infra/runtime/launch-spec'
+import { createProviderDetector } from '../infra/provider/detector'
+import {
+  buildLaunchEnv,
+  buildRuntimeLaunchSpec,
+  LAUNCH_ENV_DENY_PATTERN
+} from '../infra/runtime/launch-spec'
 import { createRuntimeDetector } from '../infra/runtime/wsl-detector'
 import { createWslCli } from '../infra/runtime/wsl-cli'
+import { createSecretStore } from '../infra/secrets/safe-storage'
 import { createFolderStore } from '../infra/settings/folder-store'
+import { createProviderStore } from '../infra/settings/provider-store'
 import { buildTranscriptEnv } from '../infra/session/config-dir'
 import { createEnumerationTargetFinder } from '../infra/session/target-finder'
 import { createUtilityProcessLauncher } from './enumerator-spawner'
@@ -23,6 +30,7 @@ import { createFolderService, type FolderService } from './folder-service'
 import type { IpcDependencies } from './ipc'
 import { createMeasure } from './measure'
 import { isDevBuild } from './origins'
+import { createProviderService } from './provider-service'
 import { createRuntimeStore, type RuntimeStore } from './runtime-store'
 import { createSessionEnumerator } from './session-enumerator'
 import { createSessionLaunchService, type LaunchPreparation } from './session-launch-service'
@@ -251,6 +259,35 @@ export function createComposition(): Composition {
     }
   })
 
+  /*
+   * **Provider 登録と到達可能性判定** (X-3 / AD-005 / AD-039 / AD-040)。
+   *
+   * 秘密は `safeStorage` (infra/secrets) に seal し参照値のみ保持する (Principle V)。検出の I/O
+   * (`~/.aws/config` 読み取り・config dir 存在・env 走査) は infra が担い、composition が `home` / `process.env` /
+   * `exists` を値で渡す (H-04)。env 導出の denylist は X-1 `LAUNCH_ENV_DENY_PATTERN` の述語を注入 (SSoT。FR-009)。
+   */
+  const providers = createProviderService({
+    store: createProviderStore(userDataResult.path, now),
+    secrets: createSecretStore(),
+    detect: createProviderDetector({
+      home: hostHome,
+      // platform-ok: 親環境の**名前のみ**を走査する (値は運ばない。H-10)。OS 分岐ではない。
+      parentEnv: process.env,
+      exists: (p) => createHostFileSystem().exists(p)
+    }),
+    runtimes: () => runtimes.snapshot(),
+    /*
+     * config-dir 方式の `CLAUDE_CONFIG_DIR` を RuntimePath へ変換する配線は **X-4 の launch 統合**が供給する
+     * (H-02/H-101。起動時に選択ランタイムの PathMapping を要する)。X-3 の deriveEnv は他方式まで。
+     */
+    resolveConfigDirRuntimePath: () => null,
+    // 起動 env の curated base (X-1 と同じ許可リスト。両 spawn 点と同一の純関数)。
+    curatedBaseEnv: () => buildLaunchEnv(process.env),
+    // denylist の SSoT を注入する (パターンを provider へ複製しない。FR-009 / L-03)。
+    isDeniedEnvKey: (key) => LAUNCH_ENV_DENY_PATTERN.test(key),
+    newId: () => randomUUID().replace(/-/g, '')
+  })
+
   const ipc: IpcDependencies = {
     listRuntimes: () => runtimes.list(),
     refreshRuntimes: async () => {
@@ -284,6 +321,13 @@ export function createComposition(): Composition {
 
     launchSession: (folderId, runtimeId) => launchService.launch(folderId, runtimeId),
     controlSession: (sessionId, control) => launchService.control(sessionId, control),
+
+    listProviders: () => providers.list(),
+    detectProviders: () => providers.detect(),
+    registerProvider: (draft) => providers.register(draft),
+    updateProvider: (id, patch) => providers.update(id, patch),
+    removeProvider: (id) => providers.remove(id),
+    listReachableProviders: (runtimeId) => providers.listReachable(runtimeId),
 
     async pickHostFolder() {
       /*

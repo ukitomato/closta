@@ -62,6 +62,14 @@ const capability: ClostaCapability = {
   interruptSession: (sessionId) => ipcRenderer.invoke(IPC_CHANNELS.interruptSession, sessionId),
   killSession: (sessionId) => ipcRenderer.invoke(IPC_CHANNELS.killSession, sessionId),
 
+  listProviders: () => ipcRenderer.invoke(IPC_CHANNELS.listProviders),
+  detectProviders: () => ipcRenderer.invoke(IPC_CHANNELS.detectProviders),
+  registerProvider: (draft) => ipcRenderer.invoke(IPC_CHANNELS.registerProvider, draft),
+  updateProvider: (id, patch) => ipcRenderer.invoke(IPC_CHANNELS.updateProvider, id, patch),
+  removeProvider: (id) => ipcRenderer.invoke(IPC_CHANNELS.removeProvider, id),
+  listReachableProviders: (runtimeId) =>
+    ipcRenderer.invoke(IPC_CHANNELS.listReachableProviders, runtimeId),
+
   onRuntimesChanged: (listener) =>
     subscribe<RuntimeListDTO>(IPC_CHANNELS.runtimesChanged, listener),
   onFoldersChanged: (listener) => subscribe<FolderListDTO>(IPC_CHANNELS.foldersChanged, listener),

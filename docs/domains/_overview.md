@@ -110,6 +110,7 @@ spec_id（`001-runtime-...`）とは独立させる。差し込み作業で番�
 
 - `runtime` は最下層。他 domain に依存しない
 - `isolation` は `runtime` に依存する（`DockerRuntime` は `AgentRuntime` の実装）
+- `provider` は `runtime` に依存する（config ディレクトリへの到達可能性判定で `Reachability` を再利用。X-3 で load-bearing 化）
 - `session` は `runtime` と `provider` に依存する
 - `ui` は全 domain に依存する（表示対象がすべての domain にまたがる）
 
