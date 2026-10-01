@@ -71,6 +71,7 @@
 - **判断**: 本 feature は **WSL ディストロ内起動に限る** (spec Out of Scope)。Win32 直接起動と
   その `autoModeSafe` ゲートは軸選択が生じる **X-4**。したがって M-002 は本 feature では**発火しない**。
   申し送りは X-4 へ繰り越す (research にこの判断を残すことで持ち主不在にしない)。
+- **読み替え (X-4)**: [AD-041](../../docs/decisions/0041-x4-launch-config-on-x1-launch-gate.md) (h) により、Win32 直接起動は X-6、`autoModeSafe` ゲートは I-3 へ付け替えた。
 
 ## R-06 強制終了時の JSONL 破損 (B-3 / AD-018 Open Q)
 

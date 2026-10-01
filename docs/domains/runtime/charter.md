@@ -3,7 +3,7 @@ domain: runtime
 status: needs-human-review
 owner: ukitomato
 generated_by: human (PLAN.md を素案として再導出)
-last_reviewed: 2026-09-15
+last_reviewed: 2026-10-01
 related_adrs:
   - docs/decisions/0003-runtime-abstraction-by-transport.md
   - docs/decisions/0004-branded-path-types.md
@@ -164,6 +164,10 @@ related_specs:
 
 - [R-1 フォルダ登録とランタイム検出](../../../specs/001-runtime-folder-registration-runtime-detection/spec.md)
   — 検出・登録・解決を実装した。**起動（`AgentRuntime.launch`）は含まない**
+- [X-4 起動設定ダイアログとプリセット](../../../specs/008-session-launch-settings-dialog-and-presets/spec.md)
+  — 所属は `session`。起動契約（`buildRuntimeLaunchSpec`）を `wsl.exe --exec` 形にし、導出 env を `WSLENV` で配送する。
+  AD-015 §2 / §5 / §7 を [AD-041](../../decisions/0041-x4-launch-config-on-x1-launch-gate.md) (f) で読み替えた。
+  claudePath は native ELF であることを前提とする（AD-041 記録 2）
 
 D-1 / OPT-mac は未着手。
 

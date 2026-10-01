@@ -57,12 +57,32 @@ export type CredentialRef =
   /** env-passthrough は**変数名のみ** (値を持たない。H-10)。 */
   | { readonly source: 'env-passthrough'; readonly varNames: readonly string[] }
 
+/**
+ * SDK `EffortLevel` と同じ 5 値 (AD-020)。domain は SDK を import できないので手で持ち、
+ * agents 側で SDK 型との相互代入を assert する (SDK 更新で tsc が検出する。X-4 / AD-042)。
+ */
+export type EffortLevel = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+
+export const EFFORT_LEVELS = [
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max'
+] as const satisfies readonly EffortLevel[]
+
 /** Provider ごとのモデル集合。**Bedrock は inference profile ID で pin** (FR-010)。 */
 export interface ModelEntry {
   readonly id: string
   readonly displayName: string
   /** Bedrock は inference profile ID で pin (alias 運用しない)。 */
   readonly inferenceProfileId?: string
+  /**
+   * 起動前ダイアログで提示する対応 effort (X-4 FR-017。手入力の静的データ)。
+   * SDK の `supportedEffortLevels` は稼働中の Query からしか得られないため、起動前はここを正とする。
+   * 無ければ effort 軸は「既定」のみ。
+   */
+  readonly supportedEffortLevels?: readonly EffortLevel[]
 }
 
 export interface ModelCatalogRef {
@@ -117,8 +137,14 @@ export interface ResolvedCredential {
   readonly apiKeyValue?: string
   /** `oauth-token` の safeStorage 復号値。 */
   readonly oauthTokenValue?: string
-  /** `aws-assume-role` の awsCredentialExport helper パス (R-02)。 */
-  readonly awsCredentialExportPath?: string
+  /**
+   * helper 系 3 方式 (api-key-helper / aws-credential-export / aws-assume-role) の helper パスを
+   * 選択ランタイムの名前空間で分類した値 (X-4 FR-014 / AD-042。`classifyHelperPath`)。
+   * **branded の RuntimePath で持つ** — 素の helperPath (HostPath の可能性) へ fallback しない (fail-closed)。
+   */
+  readonly helperRuntimePath?: RuntimePath
+  /** env-passthrough の varNames の値 (infra がアプリの process.env から取る。X-4 / AD-041 (e))。 */
+  readonly passthroughValues?: Readonly<Record<string, string>>
   /**
    * `config-dir` の configDir を選択ランタイムの `RuntimePath` へ変換した値 (infra/runtime。H-02/H-101)。
    * **branded 型で持つ** — 素の `string` にすると HostPath.value (Windows 形式) の取り違えを tsc が検出できない
@@ -130,5 +156,10 @@ export interface ResolvedCredential {
 /** `deriveLaunchEnv` の戻り (data-model §4)。`settings` は 2 キー限定射影 (C-001 / AD-040)。 */
 export interface DerivedLaunchEnv {
   readonly env: Record<string, string>
+  /**
+   * WSL 内の claude へ `WSLENV` (`/u`) で転送するキー (X-4 / AD-041 (e))。
+   * 方式固有の実名キー + 採用した extraEnv + env-passthrough の varNames。**curated base のキーは含まない。**
+   */
+  readonly forwardKeys: readonly string[]
   readonly settings?: HelperSettings
 }

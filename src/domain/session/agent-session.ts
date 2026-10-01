@@ -1,7 +1,10 @@
+import type { HelperSettings } from '@domain/provider/settings'
+import type { EffortLevel } from '@domain/provider/types'
 import type { WslRuntimeDescriptor } from '@domain/runtime/descriptor'
 import type { VerifiedRunning } from '@domain/runtime/verified-running'
 import type { WorkspaceFolder } from '@domain/workspace/folder'
 
+import type { SafePermissionMode } from './launch-config'
 import type { SessionRunState } from './run-state'
 import type { TranscriptMessageDTO } from './transcript-dto'
 
@@ -47,8 +50,23 @@ export function isLaunchFailureReason(value: unknown): value is LaunchFailureRea
   return typeof value === 'string' && (LAUNCH_FAILURE_REASONS as readonly string[]).includes(value)
 }
 
-/** launch invoke の拒否理由 (起動失敗 9 種 + 調停由来の 2 種)。訳出は `ui`。 */
-export type SessionLaunchRejectReason = LaunchFailureReason | 'session-active' | 'unknown-target'
+/**
+ * 起動の前段 (設定の検証・依存解決・env 導出) で拒否する理由 (X-4 / spec US-1 AC7)。訳出は `ui`。
+ * - `invalid-config`: 起動設定の形が不正、または main の再評価で blocker が残った / 転送キーが規則に反した
+ * - `provider-unavailable`: Provider の env 導出が null (到達不可 / config-dir 変換不能 / 規則違反)
+ * - `needs-confirmation`: 確認が要る reset (Provider が既定に戻った) を未確認のまま起動しようとした
+ */
+export type LaunchPreflightReason = 'invalid-config' | 'provider-unavailable' | 'needs-confirmation'
+
+export const LAUNCH_PREFLIGHT_REASONS = [
+  'invalid-config',
+  'provider-unavailable',
+  'needs-confirmation'
+] as const satisfies readonly LaunchPreflightReason[]
+
+/** launch invoke の拒否理由 (起動失敗 9 種 + 起動前段 3 種 + 調停由来の 2 種)。訳出は `ui`。 */
+export type SessionLaunchRejectReason =
+  LaunchFailureReason | LaunchPreflightReason | 'session-active' | 'unknown-target'
 
 /**
  * `session.launch` invoke の戻り値 (本文を含まない handshake。contracts C-1・C-2)。
@@ -59,17 +77,29 @@ export type SessionLaunchHandshakeDTO =
   | { readonly status: 'rejected'; readonly reasonKey: SessionLaunchRejectReason }
 
 /**
- * 起動の最小入力 (`SessionLaunchConfig` の部分集合。data-model §2)。
+ * main → agents の launch メッセージで運ぶ **query() 時の選択** (X-4 FR-005 / AD-041 (a)(g))。
+ * agents の decoder が同じ述語で再検証し、未知キーを捨てる (境界通過後に型保証を再確立する。AD-040 Decision 2)。
+ */
+export interface LaunchQueryOptions {
+  readonly permissionMode: SafePermissionMode
+  readonly model?: string
+  readonly effort?: EffortLevel
+  /** helper 委譲の 2 キー射影 (AD-040)。 */
+  readonly settings?: HelperSettings
+}
+
+/**
+ * 起動の検証済み入力 (`SessionLaunchConfig` を依存解決 + main の再評価に通した結果。data-model §2 / X-4)。
  *
- * **`permissionMode` は `'default'` リテラル固定型** — 6 値ユニオンにしない。auto/bypass を
- * 型で渡せなくする (正の構成 P1。FR-013)。軸選択・プリセット・モデル・effort は X-4。
+ * **`permissionMode` は `SafePermissionMode`** — 6 値ユニオンにしない。昇格 3 値を型で渡せなくする
+ * (正の構成 P1。AD-041 (a))。
  */
 export interface LaunchInput {
   readonly folder: WorkspaceFolder
   /** 実行中確認済みの WslRuntime に限る (FR-003)。 */
   readonly runtime: WslRuntimeDescriptor
   readonly verified: VerifiedRunning
-  readonly permissionMode: 'default'
+  readonly options: LaunchQueryOptions
 }
 
 /**
@@ -81,9 +111,15 @@ export interface RuntimeLaunchSpec {
   readonly pathToClaudeCodeExecutable: string
   /** 起動コマンド (WSL ランチャの絶対パス。`WSL_BINARY`)。値。agents はこの文字列リテラルを持たない。 */
   readonly command: string
-  /** ['--cd', cwd, '-d', distro, '--'] 等。配列で構成 (シェル補間しない。H-05)。cwd は `--cd` 引数で渡す (H-03)。 */
+  /**
+   * `['--cd', cwd, '-d', distro, '--exec']` (X-4 / AD-041 (f))。配列で構成し、シェルを経由しない (H-05)。
+   * cwd は `--cd` 引数で渡す (H-03)。
+   */
   readonly prefixArgs: readonly string[]
-  /** §7 の許可リスト (PATH 除外・WSLENV/資格情報 denylist) で組み立てた最小 env。 */
+  /**
+   * wsl.exe の spawn env (`composeLaunchEnv` の結果。X-4 / AD-041 (b)(e))。curated base (§7 の許可リスト) +
+   * 導出 env と、転送キー (`forwardKeys`) から生成した `WSLENV`。agents はこれ以外の env を混ぜない。
+   */
   readonly env: Record<string, string>
 }
 
@@ -189,7 +225,7 @@ export function toPermissionResult(decision: PermissionDecision): PermissionResu
  * 決定 scope を**要求 scope の上限に丸める** (FR-012 / H-04 / SC-004)。
  *
  * **`once` 要求に `capability` 決定を受理しない** — capability を要求 scope (`once`) に下げる
- * (`allow`/`deny` の判断は保つ)。capability 付与は要求 scope が `capability` のときだけ通る (X-4 で実装)。
+ * (`allow`/`deny` の判断は保つ)。capability 付与は要求 scope が `capability` のときだけ通る (I-3 で実装。AD-041 (c))。
  * X-1 の要求は常に `once` (`createCanUseTool` が固定) なので、ここが capability 昇格の唯一の締め出し点である。
  * main は本文経路 (port) を持たず要求 scope を保持できないため、要求 scope を知る agents がこの写像を通す。
  */

@@ -19,6 +19,7 @@ IPC 契約。[AD-023](../../../docs/decisions/0023-application-architecture.md) 
 | `provider.list` | (なし) | `ProviderProfile[]` (**参照のみ・秘密なし**) | 送信元 |
 | `provider.listReachable` | `{ runtimeId }` | `{ reachable: ProviderSummary[], excluded: {id, reason}[] }` | 送信元 + runtimeId 実在 |
 | `provider.deriveEnv` | `{ providerId, runtimeId }` | `{ ok }` (導出は main 内で完結。**env/settings を renderer へ返さない**) | 送信元 + 実在 + 到達可能性 |
+| `providerLoadIssues` (**X-4 で追加**。[AD-042](../../../docs/decisions/0042-provider-type-refinement-and-d4-lapse.md) Decision 4) | (なし) | `{ skippedOnLoad: number, wholeFileUnreadable: boolean, storeNewerVersion: boolean }` (件数と種別のみ。名前・値・パスは返さない) | 送信元 |
 
 - **`credentialInput`**: `api-key`/`oauth-token` の秘密は renderer → main へ渡り、**main が `safeStorage` へ預けて
   参照キーに変える**。以後 renderer は参照キーも秘密値も保持しない (FR-004)。renderer 状態・ログに秘密を残さない。
@@ -55,3 +56,8 @@ IPC 契約。[AD-023](../../../docs/decisions/0023-application-architecture.md) 
 - **passthrough 許可リスト**の実名集合は X-1 contracts C-5 が正本 (再掲しない)。`WSLENV`・資格情報パターンを含まない。
 - **方式固有 curated 実名注入** (data-model §4(b)) は passthrough とは別勘定で型分離する。
 - `aws-assume-role` の 3 AWS 変数を **WSL ランタイムへ `WSLENV` 透過で届けない** (research R-02 で届け方を確定)。
+
+> **読み替え (後続 ADR)**: X-4 で [AD-041](../../../docs/decisions/0041-x4-launch-config-on-x1-launch-gate.md) (e) により、次のように変わる。
+> - 方式固有の実名注入と env-passthrough の varNames (実名 allowlist) は、導出が返す `forwardKeys` として、アプリが生成する `WSLENV` (`/u` のみ) で WSL へ届ける。
+> - 親 env の `WSLENV` の透過は引き続き行わない。
+> - curated base のキーと転送禁止キーは届けない。

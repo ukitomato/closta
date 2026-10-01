@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import {
   AssistantRuntimeProvider,
@@ -17,8 +17,6 @@ import { EmptyState, EmptyStateGreeting } from '@/components/assistant-ui/elemen
 import { GenerationLoader } from '@/components/assistant-ui/elements/loading-state'
 import { Thread } from '@/components/assistant-ui/elements/thread.aui'
 import { Button } from '@/components/ui/button'
-import { useFolders } from '@/features/workspace-folders/useFolders'
-import { useRuntimes } from '@/features/runtime-list/useRuntimes'
 
 import { ApprovalCard } from './ApprovalCard'
 import {
@@ -28,13 +26,14 @@ import {
   type EnqueueVerdict
 } from './composer-queue'
 import { createCappedAdapter } from './composer-queue-adapter'
-import { isReloginFailure, launchFailureLabel, launchRejectLabel, runStateLabel } from './labels'
+import { isReloginFailure, launchFailureLabel, runStateLabel } from './labels'
+import { LaunchDialog } from './LaunchDialog'
 import { useLiveSession, type LiveSession } from './useLiveSession'
 
 /**
  * 単一セッションの起動 + ストリーミング画面 (X-1 / FE-001・FE-002・FE-003・FE-010・FE-011・FE-020・FE-021・FE-030)。
  *
- * - **起動 entry** (FE-003): R-1 の登録フォルダ + 実行中 WslRuntime を選び `launchSession` を発火。
+ * - **起動設定ダイアログ** (X-4 `LaunchDialog`): 6 軸を選び、依存解決・プリセット・越境警告を通して `launchSession` を発火。
  * - **live stream** (FE-001): port2 の `SessionEvent` を `useExternalStoreRuntime` に流す。
  * - **composer** (FE-002): R-3 の `isDisabled: true` を外し送信経路を開く。IME/Enter は assistant-ui の
  *   `ComposerPrimitive.Input` が扱う (composition 中の確定 Enter は送信にしない。FE-040)。
@@ -44,89 +43,11 @@ import { useLiveSession, type LiveSession } from './useLiveSession'
 export function SessionScreen(): React.JSX.Element {
   const session = useLiveSession()
   if (session.phase === 'entry' || session.phase === 'rejected') {
-    return <LaunchEntry session={session} />
+    // X-4: 起動設定ダイアログ (軸選択・プリセット・依存解決・越境警告)。X-1 の LaunchEntry を置き換える。
+    return <LaunchDialog session={session} />
   }
   if (session.phase === 'launching') return <Launching />
   return <LiveThread session={session} />
-}
-
-/* ── 起動 entry (FE-003) ─────────────────────────────────────────── */
-
-function LaunchEntry({ session }: { readonly session: LiveSession }): React.JSX.Element {
-  const folders = useFolders()
-  const runtimes = useRuntimes()
-  const [folderId, setFolderId] = useState('')
-  const [runtimeId, setRuntimeId] = useState('')
-
-  const folderList = folders.list?.folders ?? []
-  // 起動できるのは WslRuntime に限る (FR-003)。停止中も選ばせるが、起動ゲートが理由つきで拒否する。
-  const wslRuntimes = useMemo(
-    () => (runtimes.list?.runtimes ?? []).filter((r) => r.kind === 'wsl'),
-    [runtimes.list]
-  )
-
-  const canLaunch = folderId !== '' && runtimeId !== ''
-
-  return (
-    <div className="mx-auto flex max-w-xl flex-col gap-4">
-      <div>
-        <h2 className="text-lg font-semibold">セッションを起動</h2>
-        <p className="text-muted-foreground mt-1 text-sm">
-          作業フォルダと実行中の WSL
-          ディストロを選んで起動します。停止中・未確認・所在不一致は起動できません。
-        </p>
-      </div>
-
-      <label className="flex flex-col gap-1 text-sm">
-        <span className="font-medium">作業フォルダ</span>
-        <select
-          value={folderId}
-          onChange={(e) => setFolderId(e.target.value)}
-          className="border-border bg-background rounded-md border px-2 py-1.5 text-sm"
-        >
-          <option value="">選択してください</option>
-          {folderList.map((f) => (
-            <option key={f.id} value={f.id}>
-              {f.displayName}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label className="flex flex-col gap-1 text-sm">
-        <span className="font-medium">ランタイム (WSL)</span>
-        <select
-          value={runtimeId}
-          onChange={(e) => setRuntimeId(e.target.value)}
-          className="border-border bg-background rounded-md border px-2 py-1.5 text-sm"
-        >
-          <option value="">選択してください</option>
-          {wslRuntimes.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.distroName ?? r.id}
-              {r.state === 'running' ? '' : '（停止中）'}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      {session.phase === 'rejected' && session.rejectReason !== null && (
-        <p role="alert" className="text-destructive text-sm">
-          {launchRejectLabel(session.rejectReason)}
-        </p>
-      )}
-
-      <div>
-        <Button
-          type="button"
-          disabled={!canLaunch}
-          onClick={() => void session.launch(folderId, runtimeId)}
-        >
-          起動
-        </Button>
-      </div>
-    </div>
-  )
 }
 
 function Launching(): React.JSX.Element {

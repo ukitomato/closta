@@ -3,12 +3,17 @@ domain: provider
 status: needs-human-review
 owner: ukitomato
 generated_by: human (PLAN.md を素案として再導出)
-last_reviewed: 2026-09-12
+last_reviewed: 2026-09-30
 related_adrs:
   - docs/decisions/0005-provider-as-registrable-value.md
   - docs/decisions/0011-delegate-credential-resolution.md
   - docs/decisions/0039-credential-delegation-verified.md
-related_specs: []
+  - docs/decisions/0040-provider-settings-constrained-projection.md
+  - docs/decisions/0041-x4-launch-config-on-x1-launch-gate.md
+  - docs/decisions/0042-provider-type-refinement-and-d4-lapse.md
+related_specs:
+  - specs/007-provider-registration-and-reachability/spec.md
+  - specs/008-session-launch-settings-dialog-and-presets/spec.md
 ---
 
 # Domain Charter: provider
@@ -91,8 +96,9 @@ Provider として一般化し、セッション起動時の実行環境を導�
 - 候補の検出結果を**自動登録しない**。登録は常に利用者の明示操作を要する
 - Bedrock のモデルは inference profile ID で pin する。alias 運用はしない
 - `aws-assume-role` では `RoleSessionName` にアプリ名とセッション ID を含め、CloudTrail で追跡可能にする
-  （**アプリによる helper スクリプト生成 (RoleSessionName 埋め込み) は X-4 の起動統合に帰属**。X-3 は helper パスを
-  ユーザ入力で受け取り `settings.awsCredentialExport` に載せるまで。007 FR-006 参照）
+  （**アプリによる helper スクリプト生成 (RoleSessionName 埋め込み) は X-7 に帰属**。X-4 の design-gate で繰り越した
+  ([AD-041](../../decisions/0041-x4-launch-config-on-x1-launch-gate.md) (h))。X-3 / X-4 は helper パスを
+  ユーザ入力で受け取り、選択ランタイムの名前空間で分類してから `settings.awsCredentialExport` に載せるまで。007 FR-006 / 008 FR-014 参照）
 - 推奨は `api-key-helper` と `aws-credential-export`。期限切れ時の再取得を Claude Code に任せられるため
 
 ## KPI / Success metrics
@@ -113,6 +119,9 @@ Provider として一般化し、セッション起動時の実行環境を導�
 - [AD-005](../../decisions/0005-provider-as-registrable-value.md) — Provider は認証方式を含む値として抽象化する
 - [AD-011](../../decisions/0011-delegate-credential-resolution.md) — 資格情報の解決は Claude Code に委譲する
 - [AD-039](../../decisions/0039-credential-delegation-verified.md) — SPIKE-7: 委譲は SDK 0.3.270 で成立（AD-011 の成立を確認）
+- [AD-040](../../decisions/0040-provider-settings-constrained-projection.md) — Provider の settings は制約付き射影で渡す
+- [AD-041](../../decisions/0041-x4-launch-config-on-x1-launch-gate.md) — 導出 env の WSL 配送と転送禁止キー（(e)）
+- [AD-042](../../decisions/0042-provider-type-refinement-and-d4-lapse.md) — AD-005 の型精緻化・AD-039 D4 の失効・既存レコードの互換方針
 
 ## Related Specs
 
@@ -122,6 +131,14 @@ Provider として一般化し、セッション起動時の実行環境を導�
   `aws-assume-role` は R-02 で **awsCredentialExport 化**を採用し、アプリは一時資格の実体を持たない
   (期限監視は Claude Code に委譲。charter Scope の「一時資格情報の有効期限監視」は委譲側へ寄った)。
   C-001 (helper の `Options.settings` と AD-036 §4 P1 の権限ゲートの衝突) を [AD-040](../../decisions/0040-provider-settings-constrained-projection.md) で調停。
+- [008-session-launch-settings-dialog-and-presets](../../../specs/008-session-launch-settings-dialog-and-presets/spec.md)
+  — X-4 (session domain)。本 domain に次を追加した。
+  - モデルカタログの手入力編集と `ModelEntry.supportedEffortLevels` (FR-017)
+  - 導出 env の転送キー (`forwardKeys`) と転送禁止キー (FR-013)
+  - env-passthrough の実名 allowlist
+  - helper パスの名前空間分類 (FR-014)
+
+  型の精緻化は [AD-042](../../decisions/0042-provider-type-refinement-and-d4-lapse.md)、読み替えは [AD-041](../../decisions/0041-x4-launch-config-on-x1-launch-gate.md) (e) に記録した
 
 ## Open Questions
 
@@ -129,5 +146,5 @@ Provider として一般化し、セッション起動時の実行環境を導�
       呼び出しタイミング、期限切れ時の再取得、セッション単位の `--settings` で渡せるか
       → [AD-039](../../decisions/0039-credential-delegation-verified.md) で検証済み (2026-09-29)。
       委譲は SDK 0.3.270 で成立。helper 設定は per-session `settings` で渡せる。Scope は変更不要
-- [ ] SPIKE-6: Provider ごとのモデル候補を動的取得する手段の有無
+- [ ] SPIKE-6: Provider ごとのモデル候補を動的取得する手段の有無（X-4 では手入力のモデルカタログ + `supportedEffortLevels` で扱った。AD-042 Decision 1）
 - [ ] `vertex` / `foundry` は初期リリースでは登録のみで検証対象外。いつ検証対象に入れるか

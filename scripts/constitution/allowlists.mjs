@@ -376,11 +376,19 @@ export const QUERY_MUTATION_METHODS = [
 ]
 
 /**
- * `permissionMode` に現れてよいのは `'default'` のみ。**danger mode の昇格値を締め出す** (FR-013 / SC-006(a))。
- * `bypassPermissions` / `acceptEdits` / `auto` (無人実行) を含める。`dontAsk` は「聞かずに拒否で安全」であり
- * 昇格ではないため含めない (AD-020 / isolation charter)。
+ * `permissionMode` に現れてよいのは**安全 3 値** (`default` / `plan` / `dontAsk`。AD-041 (a))。
+ * **danger mode の昇格値を締め出す** (FR-013 / SC-006(a) / X-4 SC-005)。
+ * `bypassPermissions` / `acceptEdits` / `auto` (無人実行) を含める。`plan` / `dontAsk` は AD-020 の危険度表で
+ * 「安全」であり昇格ではないため含めない。capability 連動の昇格モードは I-3。
  */
 export const PERMISSION_MODE_ESCALATION_VALUES = ['bypassPermissions', 'acceptEdits', 'auto']
+
+/**
+ * SDK 保持ファイルで値位置の `permissionMode:` を許す**唯一の形** = ドメインの実行時 assert (AD-041 (a))。
+ * これ以外 (リテラル / 別変数 / shorthand `{ permissionMode }`) は項目16 が違反にする。型位置
+ * (`readonly permissionMode:` / 型名が続く宣言) は対象外。
+ */
+export const SANCTIONED_PERMISSION_MODE_WRAPPER = 'assertSafePermissionMode'
 
 /**
  * Principle V (資格情報を永続化しない) の**ソース側 backstop** (X-3 / SH-010 / security H-004)。
@@ -434,7 +442,10 @@ export const WSL_FREE_DIRECTORIES = [
   // X-1: 起動系の app モジュール。wsl.exe を名指さない (argv は infra/runtime の RuntimeLaunchSpec を値で受ける)。
   'src/main/app/session-launch-service.ts',
   'src/main/app/session-spawner.ts',
-  'src/main/app/session-ipc.ts'
+  // X-4: プリセットの取り回しと起動前段。wsl.exe を名指さない (起動 argv は infra/runtime の
+  // buildRuntimeLaunchSpec を注入で受ける。tasks SH-011 / code-gate convention H-001)。
+  'src/main/app/preset-service.ts',
+  'src/main/app/launch-preparation.ts'
 ]
 
 export const UNC_API_NAMES = [

@@ -33,11 +33,7 @@ export const SDK_AGENT_SESSION_MODULE_PATH: string = sdkAgentSessionModulePath
 
 export function createSessionSpawner(): SessionSpawner {
   return {
-    launch(
-      _input: LaunchInput,
-      spec: RuntimeLaunchSpec,
-      env: Record<string, string>
-    ): SessionSpawn {
+    launch(input: LaunchInput, spec: RuntimeLaunchSpec, env: Record<string, string>): SessionSpawn {
       const sessionId = randomUUID()
       const channel = new MessageChannelMain()
       const child = utilityProcess.fork(SDK_AGENT_SESSION_MODULE_PATH, [], {
@@ -63,7 +59,9 @@ export function createSessionSpawner(): SessionSpawner {
        * (transcript-spawner と同じ理由)。port1 は transfer 後 main 側で neutralize される。
        */
       child.once('spawn', () => {
-        child.postMessage({ kind: 'launch', spec }, [channel.port1])
+        // **query() 時の選択 (permissionMode / model / effort / settings) を明示フィールドで運ぶ** (X-4 FR-005)。
+        // spec.env に紛れ込ませない。agents の decoder が同じ述語で再検証し、未知キーを捨てる。
+        child.postMessage({ kind: 'launch', spec, options: input.options }, [channel.port1])
       })
 
       return {

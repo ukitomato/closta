@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { CAPABILITY_KEY } from '@domain/capability'
 import type {
@@ -71,6 +71,8 @@ export function useFolders(): FoldersView {
   const [browse, setBrowse] = useState<BrowseState | null>(null)
   const [lastError, setLastError] = useState<string | null>(null)
   const [duplicateOfId, setDuplicateOfId] = useState<string | null>(null)
+  /** 現在のブラウズのトークン。`move` はここから読む (updater の同期実行に依存しない)。 */
+  const browseTokenRef = useRef<string | null>(null)
 
   const load = useCallback(() => {
     capability()
@@ -89,15 +91,23 @@ export function useFolders(): FoldersView {
     return unsubscribe
   }, [load])
 
+  /** 再試行。開始時に失敗表示を下ろし、読み込み中に戻す (押しても何も起きないように見せない。po L-203)。 */
+  const refresh = useCallback(() => {
+    setFailed(false)
+    load()
+  }, [load])
+
   const beginBrowse = useCallback(async (location: LocationDTO) => {
     setLastError(null)
     setDuplicateOfId(null)
     const started = await capability().beginBrowse(location)
     if (!started.ok) {
       setLastError(started.error)
+      browseTokenRef.current = null
       setBrowse(null)
       return
     }
+    browseTokenRef.current = started.token
     setBrowse({ token: started.token, location, result: null, lastOk: null, loading: true })
 
     // **最初の階層はルートを要求して取る。** renderer がパスを組み立てない。
@@ -114,18 +124,19 @@ export function useFolders(): FoldersView {
 
   const move = useCallback(async (target: BrowseTargetDTO) => {
     /*
-     * **関数型更新にする。** クロージャの `browse` をスプレッドすると、
-     * 連続した移動で古い state を書き戻しうる。
+     * **トークンは ref から読む。** 以前は `setBrowse` の updater の中で外側の変数に書き出していたが、
+     * React 19 は updater を同期実行する保証を持たない (更新がキューに在ると次の描画まで遅延する)。
+     * 遅延すると token が null のまま return し、後から updater が `loading: true` だけを反映して
+     * 「読み込み中」で固まっていた (X-4 quickstart で発覚)。
+     * state は引き続き**関数型更新**にする (連続した移動で古い state を書き戻さない)。
      */
-    let token: string | null = null
-    setBrowse((prev) => {
-      if (prev === null) return prev
-      token = prev.token
-      return { ...prev, loading: true }
-    })
+    const token = browseTokenRef.current
     if (token === null) return
+    setBrowse((prev) => (prev === null ? prev : { ...prev, loading: true }))
 
     const next = await capability().browseDirectory(token, target)
+    // 移動中に閉じた / 別のブラウズを始めた場合は結果を捨てる。
+    if (browseTokenRef.current !== token) return
     setBrowse((prev) =>
       prev === null
         ? prev
@@ -142,6 +153,7 @@ export function useFolders(): FoldersView {
   }, [])
 
   const closeBrowse = useCallback(() => {
+    browseTokenRef.current = null
     setBrowse(null)
     setLastError(null)
   }, [])
@@ -150,6 +162,7 @@ export function useFolders(): FoldersView {
     async (draft: WorkspaceFolderDraftDTO) => {
       const result = await capability().registerFolder(draft)
       if (result.ok) {
+        browseTokenRef.current = null
         setBrowse(null)
         setLastError(null)
         setDuplicateOfId(null)
@@ -193,7 +206,7 @@ export function useFolders(): FoldersView {
     browse,
     lastError,
     duplicateOfId,
-    refresh: load,
+    refresh,
     pickHostFolder: () => capability().pickHostFolder(),
     beginBrowse,
     move,

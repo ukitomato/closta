@@ -1,4 +1,11 @@
+import {
+  isDerivationForwardKey,
+  isValidForwardKeyName,
+  makeForbiddenForwardKey
+} from '@domain/provider/forward-env'
+import type { DerivedLaunchEnv } from '@domain/provider/types'
 import type { RuntimeLaunchSpec } from '@domain/session/agent-session'
+import { hasControlCharacter } from '@domain/validation'
 
 import { resolveWslBinary } from './wsl-cli'
 
@@ -49,6 +56,69 @@ export function buildLaunchEnv(source: Record<string, string | undefined>): Reco
 }
 
 /**
+ * **WSL へ決して転送しない transport 固有のキー** (X-4 / AD-041 (e))。curated base の実名 + `WSL_UTF8` / `WSLENV`。
+ * domain の転送禁止キー述語へ**注入**する (domain に transport の名前を複製しない。AD-003)。
+ */
+export const TRANSPORT_FORWARD_KEYS: readonly string[] = [
+  ...LAUNCH_ENV_ALLOWLIST,
+  'WSL_UTF8',
+  'WSLENV'
+]
+
+/**
+ * 転送禁止キーの述語 (WSL transport のキー集合で組んだ 1 つの実体)。composeLaunchEnv はここで直接使い、
+ * IPC / provider-record / 導出へは composition root が注入する (直接 import させない。pr-gate R1 platform-boundary M-302)。
+ */
+export const isForbiddenForwardKey = makeForbiddenForwardKey(TRANSPORT_FORWARD_KEYS)
+
+/** passthrough の資格情報 denylist 述語 (`LAUNCH_ENV_DENY_PATTERN` の SSoT)。 */
+export function isDeniedEnvKey(key: string): boolean {
+  return LAUNCH_ENV_DENY_PATTERN.test(key)
+}
+
+/**
+ * wsl.exe の spawn env を組む**純粋関数** (X-4 FR-013 / [AD-041](../../../../docs/decisions/0041-x4-launch-config-on-x1-launch-gate.md) (e))。
+ *
+ * - env = curated base + 導出 env の合流。
+ * - **`WSLENV` = `derived.forwardKeys` の各キーに `/u` を付けて `:` で連結したものだけ**。base 側の `WSLENV` は捨てる。
+ *   `/p` / `/l` のパス変換フラグは使わない (値は既に RuntimePath。二重変換を避ける。AD-004)。
+ * - forwardKeys に転送禁止キー・名前規則違反・env に実在しないキー・値の制御文字があれば **throw** する
+ *   (呼び出し側が `invalid-config` にする。黙って捨てない)。
+ *
+ * forwardKeys に無いキーは env にあっても WSL に届かない (WSL は WSLENV 列挙変数だけを透過する。SH-000 実測)。
+ */
+export function composeLaunchEnv(
+  baseEnv: Record<string, string>,
+  derived: Pick<DerivedLaunchEnv, 'env' | 'forwardKeys'>
+): Record<string, string> {
+  const env: Record<string, string> = { ...baseEnv, ...derived.env }
+  delete env.WSLENV
+  for (const key of derived.forwardKeys) {
+    if (!isValidForwardKeyName(key) || typeof derived.env[key] !== 'string') {
+      throw new Error('composeLaunchEnv: 転送キーが名前規則に反するか env に在りません')
+    }
+    // 方式固有の実名キーは導出だけが入れる。transport キーは転送しない (AD-041 (e) 1)。
+    if (TRANSPORT_FORWARD_KEYS.some((t) => t.toUpperCase() === key.toUpperCase())) {
+      throw new Error('composeLaunchEnv: transport 固有のキーは転送できません')
+    }
+    // 転送禁止キー (PATH / LD_* / BASH_ENV など) も最終層で拒否する (AD-041 (e) 2。導出側の締め出しに頼らない)。
+    // 導出が正当に出す方式固有キーと passthrough allowlist は prefix 禁止に掛かるので実名で外す。
+    if (isForbiddenForwardKey(key) && !isDerivationForwardKey(key)) {
+      throw new Error('composeLaunchEnv: 転送禁止キーは転送できません')
+    }
+    // 導出 env の値に制御文字を許さない (NUL は spawn で原因不明の失敗になる。FR-014 / pr-gate R1 security L-002)。
+    // 値はメッセージに入れない (秘密を含みうる。CWE-532)。
+    if (hasControlCharacter(derived.env[key])) {
+      throw new Error('composeLaunchEnv: 転送キーの値に制御文字があります')
+    }
+  }
+  if (derived.forwardKeys.length > 0) {
+    env.WSLENV = derived.forwardKeys.map((k) => `${k}/u`).join(':')
+  }
+  return env
+}
+
+/**
  * 起動用に `wsl.exe` を**絶対パスで解決する** (CWE-426 / data-model §8 L-102 / quickstart V-1 実機不具合)。
  *
  * 起動 worker (`utilityProcess`) は stripped env (**PATH なし**) で走るため、裸名 `wsl.exe` を spawn すると
@@ -73,7 +143,8 @@ function resolveWslCommand(env: Record<string, string>): string {
 function assertNoBackslash(values: readonly string[]): void {
   for (const value of values) {
     if (value.includes('\\')) {
-      throw new Error(`起動引数にバックスラッシュを含められない: ${value}`)
+      // 値はメッセージに入れない (パス・識別子が main のログに出る経路を作らない。CWE-532 / pr-gate R1 security L-001)。
+      throw new Error('起動引数にバックスラッシュを含められない')
     }
   }
 }
@@ -84,8 +155,13 @@ export interface RuntimeLaunchSpecParams {
   readonly cwd: string
   /** WSL 内の claude 実行パス (RuntimePath の文字列。起動時に 1 回解決済み。AD-018 §4)。 */
   readonly claudePath: string
-  /** `buildLaunchEnv` で組み立て済みの env。 */
-  readonly env: Record<string, string>
+  /**
+   * `buildLaunchEnv` で組んだ**合流前の** curated base。wsl.exe の絶対パス解決にはこれだけを使う
+   * (extraEnv で `SystemRoot` を差し替えても解決に効かせない。AD-041 (e) 5 / CWE-426)。
+   */
+  readonly baseEnv: Record<string, string>
+  /** wsl.exe に渡す env (`composeLaunchEnv` の結果。導出なしなら `baseEnv` と同じ)。 */
+  readonly launchEnv: Record<string, string>
 }
 
 /**
@@ -97,14 +173,17 @@ export interface RuntimeLaunchSpecParams {
  * - argv は配列。distro 名・cwd・claude パスをそれぞれ独立要素にする (シェル補間しない。H-05)。
  *   **`command` はバックスラッシュを含む (絶対パス)** ため `assertNoBackslash` の対象に入れない —
  *   CreateProcess は実行ファイルパスのバックスラッシュを解釈し、WSL 引数のような消去は起きない (AD-015 §5 は引数の話)。
+ * - **末尾は `--exec`** (X-4 / AD-041 (f))。`--` だと以降の argv がディストロの既定シェルに解釈され、
+ *   `$(...)` が展開された (design-gate R1 実測)。`--exec` は argv を原文のまま渡す。claude は検出時に解決済みの
+ *   絶対パスで起動するので login shell の PATH は要らない (SH-000 実測: native ELF)。
  */
 export function buildRuntimeLaunchSpec(params: RuntimeLaunchSpecParams): RuntimeLaunchSpec {
-  const prefixArgs = ['--cd', params.cwd, '-d', params.distroName, '--']
+  const prefixArgs = ['--cd', params.cwd, '-d', params.distroName, '--exec']
   assertNoBackslash([...prefixArgs, params.claudePath])
   return {
     pathToClaudeCodeExecutable: params.claudePath,
-    command: resolveWslCommand(params.env),
+    command: resolveWslCommand(params.baseEnv),
     prefixArgs,
-    env: params.env
+    env: params.launchEnv
   }
 }

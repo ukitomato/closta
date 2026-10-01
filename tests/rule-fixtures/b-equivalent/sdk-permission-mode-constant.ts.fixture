@@ -1,0 +1,17 @@
+import { query } from '@anthropic-ai/claude-agent-sdk'
+
+import { ELEVATED_MODE } from '@domain/session/launch-config'
+
+/**
+ * 違反サンプル (X-4 / AD-041 (a) / code-gate platform-boundary M-001)。
+ *
+ * **大文字の定数で値を渡す形。** 定数は src/agents の外 (domain) から import するので、
+ * 昇格値のリテラルはこのファイルに現れない。旧版の項目 16 は「右辺が大文字で始まる識別子」を
+ * 型位置とみなして素通ししていた。型位置の除外を `readonly` 付きの宣言に限ったので、値位置として違反になる。
+ */
+export function bad(): void {
+  void query({
+    prompt: 'hi',
+    options: { permissionMode: ELEVATED_MODE }
+  })
+}

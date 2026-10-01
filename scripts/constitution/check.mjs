@@ -46,6 +46,7 @@ import {
   QUERY_ESCALATION_OPTION_KEYS,
   QUERY_MUTATION_METHODS,
   PERMISSION_MODE_ESCALATION_VALUES,
+  SANCTIONED_PERMISSION_MODE_WRAPPER,
   SANCTIONED_SETTINGS_WRAPPER,
   QUERY_SETTINGS_ALLOWED_KEYS,
   SECRET_LITERAL_SCAN_DIRS,
@@ -768,6 +769,30 @@ function hasPackagedGate() {
    * `buildQueryOptions` の allowlist と SH-010 fixture が担う。
    */
   const found = []
+  /**
+   * ラッパ呼び出し `wrapper(...)` で値が完結しているか (code-gate X-4 platform-boundary L-101)。
+   * `openIndex` は `(` の位置。対応する `)` の直後 (空白を除く) が `,` / `}` / `;` / `)` / 改行 / 末尾のときだけ真。
+   * `wrapper(x) && ELEVATED` / `?? m` / `|| m` / `? a : b` のような連結は偽になる。
+   */
+  const wrapperCallCompletes = (code, openIndex) => {
+    let depth = 0
+    let quote = null
+    for (let i = openIndex; i < code.length; i += 1) {
+      const c = code[i]
+      if (quote !== null) {
+        if (c === '\\') i += 1
+        else if (c === quote) quote = null
+        continue
+      }
+      if (c === "'" || c === '"' || c === '`') quote = c
+      else if (c === '(') depth += 1
+      else if (c === ')') {
+        depth -= 1
+        if (depth === 0) return /^[ \t]*(?:[,};)\r\n]|$)/.test(code.slice(i + 1))
+      }
+    }
+    return false
+  }
   const sdkScope = (file) =>
     AGENT_SDK_IMPORT_DIRECTORIES.some((dir) => file.startsWith(dir)) &&
     !file.endsWith('.test.ts') &&
@@ -784,6 +809,33 @@ function hasPackagedGate() {
         )
       }
     }
+    // (P1) `settings` / `permissionMode` の迂回綴り (code-gate X-4 platform-boundary M-001 / L-101)。
+    //      計算キー `['key']:` / 引用符キー `'key':` / 代入 `.key =` / `['key'] =` / 複合代入 `??=` `||=` `&&=` /
+    //      class field・分割代入の既定値 `key =` は、ラッパの有無を問わず違反にする
+    //      (値位置は必ずオブジェクトリテラルの素のキーで書き、下の検査がラッパを確かめる形に寄せる)。
+    //      比較 `==` / `===` と arrow `=>` は拾わない。
+    //      計算キーの変数形・連結形 / Reflect.set / Object.defineProperty / Object.fromEntries は regex で塞がない
+    //      (expected.mjs の UNDETECTED_NOTES['sdk-permission-mode-reflective']。I-3 で再訪)。
+    const assignOp = String.raw`\s*(?:\?\?|\|\||&&)?=(?![=>])`
+    for (const key of ['settings', 'permissionMode']) {
+      const q = '[\'"`]'
+      const bypassForms = [
+        [
+          '計算キー',
+          new RegExp(String.raw`\[\s*` + q + key + q + String.raw`\s*\]\s*(?::|` + assignOp + ')')
+        ],
+        ['引用符キー', new RegExp(q + key + q + String.raw`\s*:`)],
+        ['代入', new RegExp(String.raw`\.\s*` + key + assignOp)],
+        ['既定値 / class field', new RegExp(String.raw`(?<![.\w])` + key + assignOp)]
+      ]
+      for (const [form, re] of bypassForms) {
+        if (re.test(src.code)) {
+          found.push(
+            `${src.file}  ${form}形の "${key}" が現れている (素のキーで書き、ラッパを通す形以外は許可しない。AD-040 / AD-041 (a))`
+          )
+        }
+      }
+    }
     // (P1) `settings` は AD-040 の制約付き射影に限る — `assertHelperSettings(...)` ラッパを通さない
     //      `settings:` (リテラル/別変数) を違反にする。grep backstop であり値の中身は見ない (M-102。
     //      load-bearing gate は buildQueryOptions の型 + query 直前の実行時 assert)。
@@ -791,9 +843,11 @@ function hasPackagedGate() {
       const settingsRe = /(?<![.\w])settings\s*:/g
       let m
       while ((m = settingsRe.exec(src.code)) !== null) {
-        const sanctioned = new RegExp(
+        const opening = new RegExp(
           String.raw`^settings\s*:\s*` + SANCTIONED_SETTINGS_WRAPPER + String.raw`\s*\(`
-        ).test(src.code.slice(m.index))
+        ).exec(src.code.slice(m.index))
+        const sanctioned =
+          opening !== null && wrapperCallCompletes(src.code, m.index + opening[0].length - 1)
         if (!sanctioned) {
           found.push(
             `${src.file}  query options の "settings:" が ${SANCTIONED_SETTINGS_WRAPPER}() を通さず現れている ` +
@@ -802,11 +856,46 @@ function hasPackagedGate() {
         }
       }
     }
-    // (P1) permissionMode は 'default' 固定。昇格値のリテラルを締め出す。
+    // (P1) permissionMode は安全 3 値 (AD-041 (a))。昇格値のリテラルを締め出す。
     for (const value of PERMISSION_MODE_ESCALATION_VALUES) {
       if (src.code.includes(`'${value}'`) || src.code.includes(`"${value}"`)) {
         found.push(
-          `${src.file}  permissionMode の昇格値 "${value}" が現れている (P1。'default' 固定)`
+          `${src.file}  permissionMode の昇格値 "${value}" が現れている (P1。安全 3 値 {default, plan, dontAsk} のみ。AD-041)`
+        )
+      }
+    }
+    // (P1) 値位置の `permissionMode:` は `assertSafePermissionMode(...)` を通す (X-4 / AD-041 (a))。
+    //      `settings:` と同型の grep backstop。型位置は **`readonly` 付きのフィールド宣言に限って**除外する
+    //      (src/agents の型はすべて readonly 付き)。右辺が大文字で始まる識別子でも除外しない —
+    //      `permissionMode: ELEVATED` (定数) / `permissionMode: Modes.X` は値位置として違反にする
+    //      (code-gate X-4 platform-boundary M-001)。
+    //      shorthand (`{ permissionMode }` / `, permissionMode,`) は値位置として違反にする。
+    //      readonly でも次の `;` / `,` / `}` / 改行までに初期化子 `=` があれば値位置として扱う (L-101)。
+    //      ラッパの後ろに `&&` / `||` / `??` / `?` を連結した値も、ラッパで値が完結しないので違反にする
+    //      (`wrapperCallCompletes`。settings も同じ)。
+    //      load-bearing gate は buildQueryOptions の assert (unit test) であり、ここは綴りの退行検出。
+    {
+      const modeRe = /(?<![.\w])permissionMode\s*:/g
+      let m
+      while ((m = modeRe.exec(src.code)) !== null) {
+        const before = src.code.slice(Math.max(0, m.index - 12), m.index)
+        const after = src.code.slice(m.index + m[0].length)
+        if (/readonly\s+$/.test(before) && !/^[^;,}\n]*=(?![=>])/.test(after)) continue
+        const opening = new RegExp(
+          String.raw`^\s*` + SANCTIONED_PERMISSION_MODE_WRAPPER + String.raw`\s*\(`
+        ).exec(after)
+        const sanctioned =
+          opening !== null &&
+          wrapperCallCompletes(src.code, m.index + m[0].length + opening[0].length - 1)
+        if (!sanctioned) {
+          found.push(
+            `${src.file}  値位置の "permissionMode:" が ${SANCTIONED_PERMISSION_MODE_WRAPPER}() を通さず現れている (AD-041 (a))`
+          )
+        }
+      }
+      if (/[{,]\s*permissionMode\s*[,}]/.test(src.code)) {
+        found.push(
+          `${src.file}  shorthand の "permissionMode" が ${SANCTIONED_PERMISSION_MODE_WRAPPER}() を通さず現れている (AD-041 (a))`
         )
       }
     }

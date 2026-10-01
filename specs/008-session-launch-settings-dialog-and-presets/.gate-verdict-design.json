@@ -1,0 +1,97 @@
+{
+    "gate": "design",
+    "run": "2026-09-30T15:00:00+09:00",
+    "spec_dir": "specs/008-session-launch-settings-dialog-and-presets",
+    "spec_id": "008-session-launch-settings-dialog-and-presets",
+    "tracks": {
+        "analyze": {
+            "status": "ok",
+            "raw_out": "analyze.md",
+            "viewpoint_missing": null,
+            "cascade_demotions": null
+        },
+        "po-reviewer": {
+            "status": "ok",
+            "raw_out": "po-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "architecture-reviewer": {
+            "status": "ok",
+            "raw_out": "architecture-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "security-reviewer": {
+            "status": "ok",
+            "raw_out": "security-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "platform-boundary-reviewer": {
+            "status": "ok",
+            "raw_out": "platform-boundary-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        }
+    },
+    "severity_counts": {
+        "critical": 0,
+        "high": 2,
+        "medium": 11,
+        "low": 18
+    },
+    "dedup_log": [
+        {
+            "merged": [
+                "sec-N-101",
+                "analyze-B12"
+            ],
+            "key": "forbidden forward keys"
+        },
+        {
+            "merged": [
+                "arch-H-201",
+                "analyze-B14"
+            ],
+            "key": "X-3 FR-009"
+        },
+        {
+            "merged": [
+                "sec-N-102",
+                "analyze-B9"
+            ],
+            "key": "varNames"
+        },
+        {
+            "merged": [
+                "analyze-B10",
+                "pb-L-201",
+                "sec-N-103"
+            ],
+            "key": "case-insensitive"
+        },
+        {
+            "merged": [
+                "analyze-B11",
+                "arch-M-203"
+            ],
+            "key": "denylist SSoT"
+        },
+        {
+            "merged": [
+                "pb-M-201",
+                "arch-L-202"
+            ],
+            "key": "item 6 fallback"
+        },
+        {
+            "merged": [
+                "arch-M-201",
+                "analyze-B20"
+            ],
+            "key": "005 pointers"
+        }
+    ],
+    "verdict": "PASS"
+}

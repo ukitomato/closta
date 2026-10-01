@@ -3,9 +3,12 @@ import type { MessagePortMain } from 'electron'
 import type {
   LaunchFailureReason,
   LaunchInput,
+  LaunchPreflightReason,
   RuntimeLaunchSpec,
-  SessionControl
+  SessionControl,
+  SessionLaunchRejectReason
 } from '@domain/session/agent-session'
+import type { SessionLaunchConfig } from '@domain/session/launch-config'
 
 /**
  * 単一セッション起動の調停 (X-1 / BE-007・BE-011・BE-021・BE-022。data-model §9 / contracts C-6)。
@@ -40,7 +43,10 @@ export interface SessionSpawner {
   launch(input: LaunchInput, spec: RuntimeLaunchSpec, env: Record<string, string>): SessionSpawn
 }
 
-/** `folderId` / `runtimeId` を解決し、起動ゲートと spec/env 構築まで済ませた結果。 */
+/**
+ * 起動設定を解決し、依存解決の再評価・起動ゲート・env 導出・spec/env 構築まで済ませた結果 (X-4)。
+ * `env` は **utilityProcess の fork env (curated base のまま)** であり、wsl.exe の env は `spec.env` に載る。
+ */
 export type LaunchPreparation =
   | {
       readonly ok: true
@@ -48,23 +54,21 @@ export type LaunchPreparation =
       readonly spec: RuntimeLaunchSpec
       readonly env: Record<string, string>
     }
-  | { readonly ok: false; readonly reason: LaunchFailureReason }
+  | { readonly ok: false; readonly reason: LaunchFailureReason | LaunchPreflightReason }
   | null // 未知の folderId / runtimeId
 
 export interface SessionLaunchServiceDeps {
   readonly spawner: SessionSpawner
-  readonly prepareLaunch: (folderId: string, runtimeId: string) => Promise<LaunchPreparation>
+  readonly prepareLaunch: (config: SessionLaunchConfig) => Promise<LaunchPreparation>
 }
 
 export type LaunchOutcome =
   | { readonly status: 'launching'; readonly sessionId: string; readonly port: MessagePortMain }
-  | {
-      readonly status: 'rejected'
-      readonly reason: LaunchFailureReason | 'session-active' | 'unknown-target'
-    }
+  | { readonly status: 'rejected'; readonly reason: SessionLaunchRejectReason }
 
 export interface SessionLaunchService {
-  launch(folderId: string, runtimeId: string): Promise<LaunchOutcome>
+  /** 検証済みの起動設定で起動する (X-4。X-1 の単一セッション起動を再利用)。 */
+  launch(config: SessionLaunchConfig): Promise<LaunchOutcome>
   /** 制御を該当セッションへ送る。未知 / 終了済み sessionId なら `false`。 */
   control(sessionId: string, control: SessionControl): boolean
   /** アプリ終了時に in-flight を片付ける。**終了を確認できなかった台数**を返す。 */
@@ -76,7 +80,7 @@ export function createSessionLaunchService(deps: SessionLaunchServiceDeps): Sess
   const active = new Map<string, SessionSpawn>()
 
   return {
-    async launch(folderId, runtimeId): Promise<LaunchOutcome> {
+    async launch(config): Promise<LaunchOutcome> {
       // 単一セッション不変: 生存中のプロセスが在れば拒否 (data-model §9 / SC-011)。
       // **registry は「プロセス生存」基準** (run-state ではない。pr-gate arch M-001)。kill 経路は worker が
       // process.exit(0) するため onExit で除去されるが、**terminal error / done では worker は exit しない**
@@ -86,7 +90,7 @@ export function createSessionLaunchService(deps: SessionLaunchServiceDeps): Sess
       // soft-lock は無い。run-state 基準の解放へ寄せる設計余地は follow-up。
       if (active.size > 0) return { status: 'rejected', reason: 'session-active' }
 
-      const prep = await deps.prepareLaunch(folderId, runtimeId)
+      const prep = await deps.prepareLaunch(config)
       if (prep === null) return { status: 'rejected', reason: 'unknown-target' }
       if (!prep.ok) return { status: 'rejected', reason: prep.reason }
 

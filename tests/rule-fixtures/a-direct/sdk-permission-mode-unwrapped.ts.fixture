@@ -1,0 +1,17 @@
+import { query } from '@anthropic-ai/claude-agent-sdk'
+
+/**
+ * 違反サンプル (X-4 / AD-041 (a) / SH-010)。
+ *
+ * **値位置の `permissionMode:` を `assertSafePermissionMode(...)` を通さず書く形。**
+ * 値は安全 3 値の `'plan'` で昇格値リテラルの検査には掛からない — それでも項目 16 が違反にすることで、
+ * 「権限モードは必ず実行時 assert を通す」(境界通過後に型保証を再確立する) を綴りの面で強制する。
+ */
+export function bad(): void {
+  void query({
+    prompt: 'hi',
+    options: {
+      permissionMode: 'plan'
+    }
+  })
+}

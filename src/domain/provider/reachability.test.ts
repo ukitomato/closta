@@ -125,4 +125,27 @@ describe('assessReachability', () => {
       assessReachability(p, wsl('Ubuntu', { state: 'stopped', mapping: mappingFor('Ubuntu') }))
     ).toBe('blocked')
   })
+
+  it('helper 系は classifyHelperPath と同じ判定で絞る (判定と実行の一致。X-4 FR-014)', () => {
+    const posix = profile({ source: 'api-key-helper', helperPath: '/opt/helper.sh' })
+    expect(assessReachability(posix, wsl('Ubuntu'))).toBe('reachable')
+    expect(assessReachability(posix, win32)).toBe('unreachable') // X-4 の起動は WSL 限定
+
+    const host = profile({ source: 'aws-credential-export', helperPath: 'C:\\tools\\h.sh' })
+    expect(assessReachability(host, wsl('Ubuntu', { mapping: mappingFor('Ubuntu') }))).toBe(
+      'reachable'
+    )
+    expect(assessReachability(host, wsl('Ubuntu', { mapping: null }))).toBe('blocked')
+
+    const spaced = profile({ source: 'aws-assume-role', helperPath: 'C:\\Program Files\\h.sh' })
+    expect(assessReachability(spaced, wsl('Ubuntu', { mapping: mappingFor('Ubuntu') }))).toBe(
+      'unreachable'
+    )
+
+    const unc = profile({
+      source: 'api-key-helper',
+      helperPath: '\\\\wsl.localhost\\Ubuntu\\opt\\h.sh'
+    })
+    expect(assessReachability(unc, wsl('Ubuntu'))).toBe('unreachable')
+  })
 })

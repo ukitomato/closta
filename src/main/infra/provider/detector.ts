@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises'
 
+import { CREDENTIAL_ENV_NAMES } from '@domain/provider/forward-env'
 import type { DetectedCandidate } from '@domain/provider/types'
 import { hostPathOps } from '@domain/runtime/path-api'
 import type { HostPath } from '@domain/runtime/path-types'
@@ -14,21 +15,6 @@ import { detectCandidates } from './detect'
  * **`os` / `process` / `electron` を import しない** (H-04)。ホームと親 env は composition が引数で渡す。
  * `~/.aws/config` の**読み取り失敗 (無い / 権限不足 / I/O) は `null` に落として例外にしない** (SC-009 / po L-102)。
  */
-
-/**
- * 検出対象の認証系 env 変数名 (**値は見ない・名前の存在のみ**。H-10)。
- * env-passthrough 候補として提示するかの判定にのみ使う。
- */
-export const CREDENTIAL_ENV_NAMES = [
-  'ANTHROPIC_API_KEY',
-  'ANTHROPIC_AUTH_TOKEN',
-  'ANTHROPIC_BASE_URL',
-  'CLAUDE_CODE_OAUTH_TOKEN',
-  'CLAUDE_CONFIG_DIR',
-  'AWS_PROFILE',
-  'AWS_REGION',
-  'CLAUDE_CODE_USE_BEDROCK'
-] as const
 
 export interface ProviderDetectorDeps {
   /** ホーム (HostPath)。composition が `app.getPath('home')` を解決して渡す。 */

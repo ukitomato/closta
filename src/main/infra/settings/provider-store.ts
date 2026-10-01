@@ -1,5 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 
+import type { ExtraEnvPredicates } from '@domain/provider/forward-env'
 import type { ProviderProfile } from '@domain/provider/types'
 import { hostPathOps } from '@domain/runtime/path-api'
 import type { HostPath } from '@domain/runtime/path-types'
@@ -28,6 +29,11 @@ export type ProviderLoadIssue = ProviderRecordIssue | 'parse-failed' | 'schema-v
 
 export interface ProviderLoadResult {
   readonly profiles: readonly ProviderProfile[]
+  /**
+   * 退避して読み込まなかった数。レコード単位の skip ではレコード数だが、**ファイル単位の失敗
+   * (`parse-failed` / `schema-version-unknown`) では中のレコード数に関わらず 1** になる
+   * (件数として表示しない。pr-gate R2 database M-401)。
+   */
   readonly skipped: number
   readonly reasonKeys: readonly ProviderLoadIssue[]
   /** 退避した場合の退避先 (`.bak`)。退避が無ければ null。 */
@@ -41,8 +47,13 @@ export interface ProviderStore {
 
 /**
  * @param now 退避ファイル名に使う時刻 (試験可能にするため注入。folder-store と同じ)。
+ * @param preds extraEnv の read 側述語 (composition root が注入。IPC と同じ実体。pr-gate R1 platform-boundary M-302)。
  */
-export function createProviderStore(userDataDir: HostPath, now: () => number): ProviderStore {
+export function createProviderStore(
+  userDataDir: HostPath,
+  now: () => number,
+  preds: ExtraEnvPredicates
+): ProviderStore {
   // 一意な temp 名に使う連番 (DB-P-M02)。固定名を共有すると並行 save が同じ temp を壊す。
   let saveSeq = 0
 
@@ -81,26 +92,38 @@ export function createProviderStore(userDataDir: HostPath, now: () => number): P
         const backupPath = await backup(raw)
         return { profiles: [], skipped: 1, reasonKeys: ['parse-failed'], backupPath }
       }
-      if (typeof parsed !== 'object' || parsed === null) {
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
         const backupPath = await backup(raw)
         return { profiles: [], skipped: 1, reasonKeys: ['parse-failed'], backupPath }
       }
 
       const root = parsed as Record<string, unknown>
-      if (root.schemaVersion !== SCHEMA_VERSION) {
-        // **未知の版は読まない。** 将来版ファイルを旧版で開いた場合、退避せず上書きすると全件を失う。
+      // **未知の版は読まない。** 将来版ファイルを旧版で開いた場合、退避せず上書きすると全件を失う。
+      // 「将来版」は数値で現行より大きいときだけ。欠落・非数値・0 以下などは壊れたファイルとして扱う
+      // (preset-store と同型。pr-gate R3 database M-501)。
+      if (typeof root.schemaVersion === 'number' && root.schemaVersion > SCHEMA_VERSION) {
         const backupPath = await backup(raw)
         return { profiles: [], skipped: 1, reasonKeys: ['schema-version-unknown'], backupPath }
       }
+      if (root.schemaVersion !== SCHEMA_VERSION) {
+        const backupPath = await backup(raw)
+        return { profiles: [], skipped: 1, reasonKeys: ['parse-failed'], backupPath }
+      }
 
-      const rawProfiles = Array.isArray(root.providers) ? root.providers : []
+      // `providers` が配列でない root (キー欠落を含む) は壊れたファイルとして退避する
+      // (空として読むと次の save が原文を消す。pr-gate R3 database M-502)。
+      if (!Array.isArray(root.providers)) {
+        const backupPath = await backup(raw)
+        return { profiles: [], skipped: 1, reasonKeys: ['parse-failed'], backupPath }
+      }
+      const rawProfiles: readonly unknown[] = root.providers
       const profiles: ProviderProfile[] = []
       const reasons = new Set<ProviderLoadIssue>()
       const seenIds = new Set<string>()
       let skipped = 0
 
       for (const record of rawProfiles) {
-        const result = toProviderRecord(record)
+        const result = toProviderRecord(record, preds)
         if (!result.ok) {
           skipped += 1
           reasons.add(result.reason)

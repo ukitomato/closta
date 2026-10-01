@@ -1,0 +1,13 @@
+import { query } from '@anthropic-ai/claude-agent-sdk'
+
+/**
+ * 違反サンプル (X-4 / AD-041 (a) / code-gate platform-boundary M-001)。
+ *
+ * **options を組んだ後で `.permissionMode =` を代入する形。** オブジェクトリテラルのキーが現れないので、
+ * キー + コロンだけを見る検査は素通しする。項目 16 は代入形を違反にする。
+ */
+export function bad(mode: string): void {
+  const options: Record<string, unknown> = {}
+  options.permissionMode = mode
+  void query({ prompt: 'hi', options })
+}

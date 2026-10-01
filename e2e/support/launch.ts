@@ -46,7 +46,8 @@ export async function reachActiveComposer(page: Page): Promise<import('@playwrig
   // 既定画面は 'runtimes'。X-1 のセッション起動画面 (SessionScreen) へ nav で遷移する (App.tsx / stores/ui.ts)。
   await page.getByRole('button', { name: 'セッション起動' }).click()
 
-  // LaunchEntry の select を stub seed の先頭で埋めて起動する。
+  // 起動設定ダイアログ (X-4) の先頭 2 つの select (フォルダ / ランタイム) を stub seed の先頭で埋めて起動する。
+  // Provider / モデル / effort / 権限モードは既定のまま (既定 Provider は X-1 と同じ curated base で起動する)。
   const folderSelect = page.locator('select').first()
   const runtimeSelect = page.locator('select').nth(1)
   await folderSelect.selectOption({ index: 1 }) // index 0 は「選択してください」

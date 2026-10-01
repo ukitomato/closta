@@ -1,4 +1,4 @@
-import type { CredentialSource, ModelCatalogRef } from './types'
+import type { CredentialSource, ModelCatalogRef, ModelEntry } from './types'
 
 /**
  * `ProviderProfile` の**表示用 DTO** (contracts C-1)。IPC 境界を越える値であり、**秘密の参照値
@@ -10,6 +10,26 @@ export interface ProviderSummaryDTO {
   readonly backend: 'anthropic' | 'bedrock' | 'vertex' | 'foundry'
   readonly source: CredentialSource
   readonly modelCount: number
+  /**
+   * モデルカタログ (X-4 FR-003 / FR-017)。秘密でないため DTO に含める。
+   * 起動ダイアログのモデル / effort の選択肢と、プロバイダ画面の手入力編集に使う。
+   */
+  readonly models: readonly ModelEntry[]
+}
+
+/**
+ * providers.json の読み込みで**退避して読み込まなかった**レコードの件数 (X-4 spec Assumptions / AD-042 Decision 4 /
+ * pr-gate R1 database M-301 + po M-006)。**件数だけ** — 名前・値・理由の詳細・退避先パスは渡さない。UI の詳細通知は X-6。
+ *
+ * **ファイル単位の失敗とレコード単位の skip を分ける** (pr-gate R2 database M-401 / po M-103)。ファイルごと読めなかったとき
+ * `skippedOnLoad` は中のレコード数に関わらず 1 なので、`wholeFileUnreadable` が true なら件数を表示に使わない。
+ */
+export interface ProviderLoadIssuesDTO {
+  readonly skippedOnLoad: number
+  /** providers.json をファイルごと読めなかった (`parse-failed` / `schema-version-unknown`)。 */
+  readonly wholeFileUnreadable: boolean
+  /** providers.json が将来版 (`schema-version-unknown`)。登録・編集・削除は `store-newer-version` で拒否される。 */
+  readonly storeNewerVersion: boolean
 }
 
 /** 起動選択用の Provider リスト (到達可能で絞り込み済み。除外は理由キー付き。FR-012 / L-05)。 */

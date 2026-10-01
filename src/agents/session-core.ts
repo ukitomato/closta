@@ -1,4 +1,7 @@
+import { isEffortLevel, isValidModelId } from '@domain/provider/model-catalog'
 import { assertHelperSettings, type HelperSettings } from '@domain/provider/settings'
+import type { EffortLevel } from '@domain/provider/types'
+import { assertSafePermissionMode, type SafePermissionMode } from '@domain/session/launch-config'
 import {
   boundDecisionScope,
   toPermissionResult,
@@ -34,6 +37,10 @@ import {
  * 追加された** — helper 委譲 (`api-key-helper` / `aws-credential-export`) のため。ただし値は `HelperSettings`
  * (2 キー限定) に型で閉じ、`buildQueryOptions` が `assertHelperSettings` で `permissions`/`permissionMode`/`env` の
  * 混入を実行時に締め出す (昇格面は維持)。`settings` を許すのはこの制約付き射影に限る。
+ *
+ * **`model` / `effort` は X-4 の [AD-041](../../docs/decisions/0041-x4-launch-config-on-x1-launch-gate.md) (g) で
+ * 追加された** — モデルの選択と思考量を変えるだけで、権限面・tool 集合・env を変えない (escalation-neutral)。
+ * **集合を変えるには ADR が要る** — `session-core.test.ts` の pin テストがリテラルで固定する。
  */
 export const QUERY_OPTION_KEYS = [
   'permissionMode',
@@ -41,7 +48,9 @@ export const QUERY_OPTION_KEYS = [
   'pathToClaudeCodeExecutable',
   'spawnClaudeCodeProcess',
   'abortController',
-  'settings'
+  'settings',
+  'model',
+  'effort'
 ] as const
 
 /** SDK の `SpawnOptions` の構造だけ (SDK を import しない)。 */
@@ -74,25 +83,33 @@ export type CanUseToolLike = (
 
 /**
  * 正の構成で組んだ query() options。**キーは `QUERY_OPTION_KEYS` の完全部分集合**である。
- * `permissionMode` は `'default'` リテラル固定 (FR-013)。
+ * `permissionMode` は安全 3 値 (`SafePermissionMode`。AD-041 (a))。
  */
 export interface BuiltQueryOptions {
-  readonly permissionMode: 'default'
+  readonly permissionMode: SafePermissionMode
   readonly canUseTool: CanUseToolLike
   readonly pathToClaudeCodeExecutable: string
   readonly spawnClaudeCodeProcess: SpawnClaudeCodeProcess
   readonly abortController: AbortController
   /** helper 委譲の制約付き射影 (X-3。AD-040)。無指定なら helper 委譲なし。 */
   readonly settings?: HelperSettings
+  /** モデル (X-4。AD-041 (g))。無指定なら Claude Code の既定。 */
+  readonly model?: string
+  /** effort (X-4。AD-041 (g))。無指定なら既定。 */
+  readonly effort?: EffortLevel
 }
 
 export interface BuildQueryOptionsDeps {
+  /** 起動設定の権限モード。境界を越えて来るため下で assert する (安全 3 値外は throw)。 */
+  readonly permissionMode: SafePermissionMode
   readonly canUseTool: CanUseToolLike
   readonly pathToClaudeCodeExecutable: string
   readonly spawnClaudeCodeProcess: SpawnClaudeCodeProcess
   readonly abortController: AbortController
   /** provider が導出した helper 委譲設定 (X-3。AD-040)。未検証で来るため下で assert する。 */
   readonly settings?: HelperSettings
+  readonly model?: string
+  readonly effort?: EffortLevel
 }
 
 /**
@@ -104,15 +121,26 @@ export interface BuildQueryOptionsDeps {
  * **`settings` は `assertHelperSettings` を通して載せる** (X-3。AD-040 Decision 3/4) — キー集合 ⊆
  * `{apiKeyHelper, awsCredentialExport}` を実行時に検証し、`permissions`/`permissionMode`/`env` の混入を throw で締め出す
  * (境界通過後に型保証が消えるため。load-bearing gate)。`settings` 無指定なら `undefined` を載せる (helper 委譲なし)。
+ *
+ * **`permissionMode` は `assertSafePermissionMode` を通す** (X-4 / AD-041 (a))。`model` / `effort` は文字種と enum を
+ * 再検証し、外れれば throw する (agents は renderer 由来の値を二重に確かめる。defense-in-depth)。
  */
 export function buildQueryOptions(deps: BuildQueryOptionsDeps): BuiltQueryOptions {
+  if (deps.model !== undefined && !isValidModelId(deps.model)) {
+    throw new Error('buildQueryOptions: model ID が文字種 allowlist の外です (AD-041 (g))')
+  }
+  if (deps.effort !== undefined && !isEffortLevel(deps.effort)) {
+    throw new Error('buildQueryOptions: effort が EffortLevel の外です (AD-041 (g))')
+  }
   return {
-    permissionMode: 'default',
+    permissionMode: assertSafePermissionMode(deps.permissionMode),
     canUseTool: deps.canUseTool,
     pathToClaudeCodeExecutable: deps.pathToClaudeCodeExecutable,
     spawnClaudeCodeProcess: deps.spawnClaudeCodeProcess,
     abortController: deps.abortController,
-    settings: assertHelperSettings(deps.settings)
+    settings: assertHelperSettings(deps.settings),
+    model: deps.model,
+    effort: deps.effort
   }
 }
 
@@ -140,7 +168,7 @@ export interface CanUseToolDeps {
 export function createCanUseTool(deps: CanUseToolDeps): CanUseToolLike {
   return async (toolName, input, options): Promise<PermissionResultLike> => {
     const requestId = deps.nextRequestId()
-    // X-1 の要求 scope は `once` 固定 (capability 付与は X-4)。
+    // 要求 scope は `once` 固定 (capability 付与は I-3。AD-041 (c))。
     const requestScope = 'once' as const
     deps.emitRequest({
       requestId,

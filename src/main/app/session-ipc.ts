@@ -1,11 +1,16 @@
 import type { SessionControl } from '@domain/session/agent-session'
 import type { SessionIndexDTO } from '@domain/session/dto'
+import type { SessionLaunchConfig } from '@domain/session/launch-config'
+import type { PresetDTO, SavePresetResult } from '@domain/session/preset'
 import type { FailureReason } from '@domain/session/target'
 import { isValidPromptText, isValidRequestToken, isValidSessionId } from '@domain/validation'
 
+import type { SavePresetInput } from './preset-service'
 import type { LaunchOutcome } from './session-launch-service'
 import type { TranscriptResult } from './transcript-service'
 import {
+  checkLaunchConfig,
+  checkPreset,
   isKnownTargetKey,
   isPermissionOutcome,
   isPermissionScope,
@@ -42,10 +47,21 @@ export interface SessionIpcDeps {
 
   /* ── セッション起動 + 制御 (X-1 / contracts C-1) ── */
 
-  /** 起動を調停する (VerifiedRunning + distro 一致 + 登録 + 単一セッション不変を検証)。本文は port。 */
-  launchSession(folderId: string, runtimeId: string): Promise<LaunchOutcome>
+  /**
+   * 起動を調停する (X-4: 依存解決の再評価 + env 導出 + VerifiedRunning + distro 一致 + 登録 + 単一セッション不変)。
+   * 本文は port。
+   */
+  launchSession(config: SessionLaunchConfig): Promise<LaunchOutcome>
   /** 制御を該当セッションへ送る。未知 / 終了済み sessionId なら `false`。 */
   controlSession(sessionId: string, control: SessionControl): boolean
+
+  /* ── プリセット (X-4 / FR-009) ── */
+
+  listPresets(): Promise<readonly PresetDTO[]>
+  savePreset(input: SavePresetInput): Promise<SavePresetResult>
+  removePreset(id: string): Promise<{ readonly ok: boolean }>
+  /** 未信頼入力の照合に使う既知のプリセット id。 */
+  presetIds(): Promise<readonly string[]>
 }
 
 function failedTranscript(requestToken: string, reasonKey: FailureReason): TranscriptResult {
@@ -111,21 +127,57 @@ export async function handleRefreshSessions(deps: SessionIpcDeps): Promise<Sessi
 /* ── セッション起動 + 制御 (X-1 / BE-006・BE-007・BE-011・BE-021) ─────── */
 
 /**
- * `launchSession(folderId, runtimeId)` (BE-007 の入口。US-1 の安全ゲート)。
+ * `launchSession(config)` (X-4 BE-005 / BE-007 の入口。US-1 の安全ゲート)。
  *
- * **folderId / runtimeId は文字列であること**を確認し、登録済み集合との一致 (folderId) と
- * 検出済み descriptor との一致 (runtimeId)・VerifiedRunning・所在 distro 一致・単一セッション不変は
+ * **起動設定の形を `checkLaunchConfig` で検証する** (6 軸・安全 3 値・モデル ID の文字種。inline の typeof を持たない)。
+ * 意味 (登録済み・到達可能・カタログ・VerifiedRunning・distro 一致・単一セッション不変) は
  * `launchSession` (→ prepareLaunch / service) が **登録の SSoT に対して**判定する (二重管理を避ける)。
- * 型不正はプロセスを起こさず `unknown-target` で拒否する。**戻り値の `port` の transfer は `ipc.ts`。**
+ * 形の不正はプロセスを起こさず `invalid-config` で拒否する。**戻り値の `port` の transfer は `ipc.ts`。**
  */
 export async function handleLaunchSession(
   deps: SessionIpcDeps,
   args: readonly unknown[]
 ): Promise<LaunchOutcome> {
-  if (typeof args[0] !== 'string' || typeof args[1] !== 'string') {
-    return { status: 'rejected', reason: 'unknown-target' }
+  const config = args[0]
+  if (!checkLaunchConfig(config)) return { status: 'rejected', reason: 'invalid-config' }
+  return deps.launchSession(config)
+}
+
+/* ── プリセット (X-4 BE-013 / FR-009) ─────────────────────────────── */
+
+/** `listPresets()`。**引数を取らない。** */
+export async function handleListPresets(deps: SessionIpcDeps): Promise<readonly PresetDTO[]> {
+  return deps.listPresets()
+}
+
+/**
+ * `savePreset(name, config, overwrite)`。名前は表示名と同じ規則 (正規化後)、config は起動設定と同じ述語
+ * (`checkPreset`。preset-record の read 側と同じ)。overwrite は真偽値に限る。
+ */
+export async function handleSavePreset(
+  deps: SessionIpcDeps,
+  args: readonly unknown[]
+): Promise<SavePresetResult> {
+  const [name, config, overwrite] = args
+  if (
+    typeof name !== 'string' ||
+    !checkLaunchConfig(config) ||
+    !checkPreset(name, config) ||
+    typeof overwrite !== 'boolean'
+  ) {
+    return { ok: false, reason: 'invalid-preset' }
   }
-  return deps.launchSession(args[0], args[1])
+  return deps.savePreset({ name, config, overwrite })
+}
+
+/** `removePreset(id)`。**既知の id との完全一致**で照合する (unregisterFolder と同じ)。 */
+export async function handleRemovePreset(
+  deps: SessionIpcDeps,
+  args: readonly unknown[]
+): Promise<{ readonly ok: boolean }> {
+  const id = args[0]
+  if (typeof id !== 'string' || !(await deps.presetIds()).includes(id)) return { ok: false }
+  return deps.removePreset(id)
 }
 
 /**

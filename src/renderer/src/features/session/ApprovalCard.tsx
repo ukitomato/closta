@@ -11,7 +11,7 @@ import type { PendingPermission } from './useLiveSession'
  * 既定エスケープでそのまま表示する — MCP 由来の表示偽装を防ぐ (H-05/H-06)。
  *
  * 単発 (`once`) と capability 付与を区別して表示する (glossary Approval card)。
- * X-1 の要求 scope は常に `once` (capability 付与は X-4)。
+ * 要求 scope は常に `once` (capability 付与は I-3。AD-041 (c))。
  */
 export function ApprovalCard({
   request,

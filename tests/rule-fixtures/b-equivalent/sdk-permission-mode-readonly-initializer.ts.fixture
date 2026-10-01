@@ -1,0 +1,16 @@
+import { query } from '@anthropic-ai/claude-agent-sdk'
+
+/**
+ * 違反サンプル (X-4 / AD-041 (a) / code-gate platform-boundary L-101)。
+ *
+ * **`readonly` 付きの class field に初期化子で値を入れる形。** 旧版の項目 16 は `readonly` の直後の
+ * `permissionMode:` を型位置とみなして除外していたので、初期化子 (値位置) があっても素通しした。
+ * 値は安全値 'plan' にして昇格値リテラル検査に掛からないようにし、readonly 除外の絞り込み単独で発火させる。
+ */
+class LaunchOptions {
+  readonly permissionMode: string = 'plan'
+}
+
+export function bad(): void {
+  void query({ prompt: 'hi', options: new LaunchOptions() })
+}

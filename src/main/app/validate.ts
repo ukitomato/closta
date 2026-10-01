@@ -3,13 +3,23 @@ import type { WebFrameMain } from 'electron'
 import { isValidDistroName, wslNamespace, type NamespaceId } from '@domain/runtime/namespace'
 import {
   hasControlCharacter,
-  MAX_DISPLAY_NAME_LENGTH,
-  MAX_ID_LENGTH,
+  isValidDisplayName,
   MAX_PATH_VALUE_LENGTH,
   MAX_SECRET_PLAINTEXT_BYTES,
   MAX_SESSION_OFFSET
 } from '@domain/validation'
+import {
+  isValidExtraEnv as isValidExtraEnvShared,
+  isValidPassthroughVarNames,
+  type ExtraEnvPredicates
+} from '@domain/provider/forward-env'
+import { isValidModelCatalog } from '@domain/provider/model-catalog'
 import type { RuntimeDescriptor } from '@domain/runtime/descriptor'
+import {
+  isValidLaunchConfig,
+  isValidPresetName,
+  type SessionLaunchConfig
+} from '@domain/session/launch-config'
 import type { PathDTO } from '@domain/runtime/dto'
 import { isValidSegment } from '@domain/runtime/path-api'
 import { isNamespaceConsistent, type Location } from '@domain/workspace/folder'
@@ -168,15 +178,8 @@ export function isValidBrowseTarget(
   return false
 }
 
-/** **`displayName`。** 長さ上限内であり制御文字を含まないこと。 */
-export function isValidDisplayName(name: unknown): name is string {
-  return (
-    typeof name === 'string' &&
-    name.length > 0 &&
-    name.length <= MAX_DISPLAY_NAME_LENGTH &&
-    !hasControlCharacter(name)
-  )
-}
+/** **`displayName`。** 長さ上限内であり制御文字を含まないこと (述語の正本は `@domain/validation`)。 */
+export { isValidDisplayName }
 
 /** **`folderId`。** 既知の登録エントリに一致すること。 */
 export function isKnownFolderId(ids: readonly string[], folderId: unknown): folderId is string {
@@ -229,27 +232,23 @@ export function checkFolderDraft(
 
 const PROVIDER_BACKENDS = ['anthropic', 'bedrock', 'vertex', 'foundry']
 
+/** 非空・長さ上限・**制御文字なし** (helper パス・profile 名。read 側 provider-record と同一。X-4 FR-014)。 */
 function isStr(v: unknown): v is string {
-  return typeof v === 'string' && v.length > 0 && v.length <= MAX_PATH_VALUE_LENGTH
-}
-
-/** 非空・長さ上限・制御文字なし。`provider-record` の `isNonEmptyString` と同一 (SEC-M-001)。 */
-function isValidName(v: unknown, max: number): v is string {
-  return typeof v === 'string' && v.length > 0 && v.length <= max && !hasControlCharacter(v)
+  return (
+    typeof v === 'string' &&
+    v.length > 0 &&
+    v.length <= MAX_PATH_VALUE_LENGTH &&
+    !hasControlCharacter(v)
+  )
 }
 
 /**
- * `extraEnv` を検証する。**KEY も見る** — 値だけ見ると、`provider-record` が拒否する KEY
- * (制御文字入り・長大) を IPC が通し、**登録は成功するが reload で無言に消える** (SEC-M-001)。
- * KEY 上限は `MAX_ID_LENGTH`、値は空を許し `MAX_PATH_VALUE_LENGTH` まで (provider-record と同一)。
+ * `extraEnv` を検証する。**IPC と `provider-record` が同じ domain 述語を呼ぶ** (SEC-M-001 の write/read 対称)。
+ * X-4 で名前規則・転送禁止キー・資格情報 denylist・値の Windows パス形を加えた (FR-013 / AD-041 (e))。
+ * 述語は composition root が注入する (infra/runtime を直接 import しない。pr-gate R1 platform-boundary M-302)。
  */
-function isValidExtraEnv(value: unknown): boolean {
-  if (typeof value !== 'object' || value === null) return false
-  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-    if (!isValidName(k, MAX_ID_LENGTH)) return false
-    if (typeof v !== 'string' || v.length > MAX_PATH_VALUE_LENGTH) return false
-  }
-  return true
+function isValidExtraEnv(value: unknown, preds: ExtraEnvPredicates): boolean {
+  return isValidExtraEnvShared(value, preds)
 }
 
 /**
@@ -261,26 +260,6 @@ function isValidConfigDirNamespace(ns: string): boolean {
   if (ns === 'host') return true
   if (ns.startsWith('unc:')) return isValidDistroName(ns.slice(4))
   return false
-}
-
-/**
- * モデルカタログの各エントリ形状を検証する。`provider-record.toModels` と同一 (SEC-M-001)。
- * 配列であることだけを見ると、不正 entry を持つ Provider が登録成功→reload で skip される。
- */
-function isValidModelCatalog(value: unknown): boolean {
-  if (typeof value !== 'object' || value === null) return false
-  const m = value as Record<string, unknown>
-  if (!Array.isArray(m.models)) return false
-  for (const entry of m.models) {
-    if (typeof entry !== 'object' || entry === null) return false
-    const e = entry as Record<string, unknown>
-    if (!isValidName(e.id, MAX_ID_LENGTH)) return false
-    if (!isValidName(e.displayName, MAX_DISPLAY_NAME_LENGTH)) return false
-    if (e.inferenceProfileId !== undefined && !isValidName(e.inferenceProfileId, MAX_ID_LENGTH)) {
-      return false
-    }
-  }
-  return true
 }
 
 /** `credential` draft の source 別フィールドを検証する (秘密は seal 前の平文で来る=api-key/oauth-token のみ)。 */
@@ -299,17 +278,18 @@ function isValidCredentialDraft(value: unknown): boolean {
     case 'oauth-token':
       // 平文秘密は seal で UTF-8 バイトに変換され膨らむため、**UTF-8 バイト長**で上限に絞る (SEC-M-201)。
       // `.length` (UTF-16) だと multibyte 秘密が seal 後 secretRefKey で上限超過し reload 消失する。
+      // 制御文字も拒否する (起動時 composeLaunchEnv と同じ述語。NUL は spawn で原因不明の失敗になる。FR-014 / L-002)。
       return (
         typeof c.secret === 'string' &&
         c.secret.length > 0 &&
+        !hasControlCharacter(c.secret) &&
         new TextEncoder().encode(c.secret).length <= MAX_SECRET_PLAINTEXT_BYTES
       )
     case 'aws-profile':
       return isStr(c.profileName) && (c.region === undefined || isStr(c.region))
     case 'env-passthrough':
-      // varNames の KEY 上限・制御文字を read 側 (provider-record) と一致させる (SEC-M-101。
-      // isStr(<=4096・制御文字可) だと reload で varNames が弾かれ Provider が無言消失する)。
-      return Array.isArray(c.varNames) && c.varNames.every((n) => isValidName(n, MAX_ID_LENGTH))
+      // varNames は実名 allowlist (read 側 provider-record と同じ述語。X-4 / AD-041 (e) 4 / SEC-M-101)。
+      return isValidPassthroughVarNames(c.varNames)
     default:
       return false
   }
@@ -322,7 +302,7 @@ function isValidCredentialDraft(value: unknown): boolean {
 export type ProviderDraftCheck =
   { readonly ok: true } | { readonly ok: false; readonly reason: 'invalid-record' | 'invalid-path' }
 
-export function checkProviderDraft(draft: unknown): ProviderDraftCheck {
+export function checkProviderDraft(draft: unknown, preds: ExtraEnvPredicates): ProviderDraftCheck {
   if (typeof draft !== 'object' || draft === null) return { ok: false, reason: 'invalid-record' }
   const d = draft as Record<string, unknown>
 
@@ -351,7 +331,7 @@ export function checkProviderDraft(draft: unknown): ProviderDraftCheck {
     }
   }
 
-  if (d.extraEnv !== undefined && !isValidExtraEnv(d.extraEnv)) {
+  if (d.extraEnv !== undefined && !isValidExtraEnv(d.extraEnv, preds)) {
     return { ok: false, reason: 'invalid-record' }
   }
 
@@ -359,12 +339,12 @@ export function checkProviderDraft(draft: unknown): ProviderDraftCheck {
 }
 
 /** **`updateProvider(id, patch)`。** 未信頼 patch の形を検証する (表示名/モデル/extraEnv のみ)。 */
-export function checkProviderPatch(patch: unknown): boolean {
+export function checkProviderPatch(patch: unknown, preds: ExtraEnvPredicates): boolean {
   if (typeof patch !== 'object' || patch === null) return false
   const p = patch as Record<string, unknown>
   if (p.displayName !== undefined && !isValidDisplayName(p.displayName)) return false
   if (p.models !== undefined && !isValidModelCatalog(p.models)) return false
-  if (p.extraEnv !== undefined && !isValidExtraEnv(p.extraEnv)) return false
+  if (p.extraEnv !== undefined && !isValidExtraEnv(p.extraEnv, preds)) return false
   return true
 }
 
@@ -415,4 +395,19 @@ export function isPermissionOutcome(value: unknown): value is 'allow' | 'deny' {
  */
 export function isPermissionScope(value: unknown): value is 'once' | 'capability' {
   return value === 'once' || value === 'capability'
+}
+
+/* ── 起動設定 / プリセット (X-4 / FR-005 / FR-009) ─────────────────── */
+
+/**
+ * **`launchSession(config)`。** 起動設定の形 (6 軸・安全 3 値・文字種) を検証する。
+ * 意味 (登録済み・到達可能・カタログ・対応 effort) は main の起動ゲートが facts で再評価する (FR-006)。
+ */
+export function checkLaunchConfig(value: unknown): value is SessionLaunchConfig {
+  return isValidLaunchConfig(value)
+}
+
+/** **`savePreset(name, config)`。** 名前は表示名と同じ規則 (正規化後)、config は起動設定と同じ述語。 */
+export function checkPreset(name: unknown, config: unknown): boolean {
+  return isValidPresetName(name) && isValidLaunchConfig(config)
 }

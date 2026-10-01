@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { CAPABILITY_KEY } from '@domain/capability'
 import type {
   ProviderDraft,
+  ProviderLoadIssuesDTO,
   ProviderPatch,
   ProviderSummaryDTO,
   ReachableProvidersDTO,
@@ -106,7 +107,18 @@ export function useProviders(): ProvidersView {
     async (id: string) => {
       const result = await capability().removeProvider(id)
       if (!result.ok) {
+        // remove は理由キーを返さない。将来版のファイルで mutation が止まっているなら、register / update と
+        // 同じ `store-newer-version` の文言にする (pr-gate R3 database L-502。IPC の型は変えない)。
+        const issues = await capability()
+          .providerLoadIssues()
+          .catch(() => null)
+        if (issues?.storeNewerVersion === true) {
+          setLastError('store-newer-version')
+          return
+        }
+        // 主に対象が既に無い。古い行を残さないよう一覧を読み込み直す (preset の削除と同じ。R4 po L-301)。
         setLastError('remove-failed')
+        load()
         return
       }
       setLastError(null)
@@ -133,4 +145,28 @@ export function useProviders(): ProvidersView {
     remove,
     listReachable
   }
+}
+
+/**
+ * providers.json の読み込みで退避したレコードの**件数**と、ファイルごと読めなかったか
+ * (X-4 pr-gate R1 M-03 / po M-006 / R2 database M-401)。
+ * プロバイダ画面の 1 行表示だけに使う (起動ダイアログは呼ばない)。取得失敗は null (表示しない)。
+ */
+export function useProviderLoadIssues(): ProviderLoadIssuesDTO | null {
+  const [issues, setIssues] = useState<ProviderLoadIssuesDTO | null>(null)
+
+  useEffect(() => {
+    let active = true
+    capability()
+      .providerLoadIssues()
+      .then((result) => {
+        if (active) setIssues(result)
+      })
+      .catch(() => undefined)
+    return () => {
+      active = false
+    }
+  }, [])
+
+  return issues
 }

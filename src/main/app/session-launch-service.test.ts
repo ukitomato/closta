@@ -2,6 +2,7 @@ import type { MessagePortMain } from 'electron'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { LaunchInput, RuntimeLaunchSpec, SessionControl } from '@domain/session/agent-session'
+import type { SessionLaunchConfig } from '@domain/session/launch-config'
 
 import {
   createSessionLaunchService,
@@ -13,6 +14,17 @@ import {
 const fakePort = {} as unknown as MessagePortMain
 const fakeInput = {} as unknown as LaunchInput
 const fakeSpec = {} as unknown as RuntimeLaunchSpec
+
+function cfg(folderId: string, runtimeId: string): SessionLaunchConfig {
+  return {
+    folderId,
+    runtimeId,
+    providerId: null,
+    modelId: null,
+    effort: null,
+    permissionMode: 'default'
+  }
+}
 
 /** 制御・kill・exit を記録する fake spawn。 */
 function makeSpawn(sessionId: string): SessionSpawn & {
@@ -55,15 +67,15 @@ describe('createSessionLaunchService', () => {
       spawner,
       prepareLaunch: async () => okPrep()
     })
-    const outcome = await service.launch('f1', 'r1')
+    const outcome = await service.launch(cfg('f1', 'r1'))
     expect(outcome).toEqual({ status: 'launching', sessionId: 's1', port: fakePort })
   })
 
   it('単一セッション不変: 生存中は 2 回目の launch を session-active で拒否 (SC-011)', async () => {
     const spawner: SessionSpawner = { launch: () => makeSpawn('s1') }
     const service = createSessionLaunchService({ spawner, prepareLaunch: async () => okPrep() })
-    await service.launch('f1', 'r1')
-    const second = await service.launch('f2', 'r2')
+    await service.launch(cfg('f1', 'r1'))
+    const second = await service.launch(cfg('f2', 'r2'))
     expect(second).toEqual({ status: 'rejected', reason: 'session-active' })
   })
 
@@ -75,9 +87,9 @@ describe('createSessionLaunchService', () => {
       launch: () => (count++ === 0 ? first : second)
     }
     const service = createSessionLaunchService({ spawner, prepareLaunch: async () => okPrep() })
-    await service.launch('f1', 'r1')
+    await service.launch(cfg('f1', 'r1'))
     first.emitExit() // プロセス終了
-    const again = await service.launch('f1', 'r1')
+    const again = await service.launch(cfg('f1', 'r1'))
     expect(again).toEqual({ status: 'launching', sessionId: 's2', port: fakePort })
   })
 
@@ -87,7 +99,7 @@ describe('createSessionLaunchService', () => {
       spawner,
       prepareLaunch: async () => ({ ok: false, reason: 'distro-not-running' })
     })
-    const outcome = await service.launch('f1', 'r1')
+    const outcome = await service.launch(cfg('f1', 'r1'))
     expect(outcome).toEqual({ status: 'rejected', reason: 'distro-not-running' })
   })
 
@@ -97,7 +109,7 @@ describe('createSessionLaunchService', () => {
       spawner: { launch },
       prepareLaunch: async () => null
     })
-    const outcome = await service.launch('f1', 'r1')
+    const outcome = await service.launch(cfg('f1', 'r1'))
     expect(outcome).toEqual({ status: 'rejected', reason: 'unknown-target' })
     expect(launch).not.toHaveBeenCalled()
   })
@@ -108,7 +120,7 @@ describe('createSessionLaunchService', () => {
       spawner: { launch: () => spawn },
       prepareLaunch: async () => okPrep()
     })
-    await service.launch('f1', 'r1')
+    await service.launch(cfg('f1', 'r1'))
 
     expect(service.control('s1', { kind: 'send-prompt', text: 'hi' })).toBe(true)
     expect(service.control('s1', { kind: 'interrupt' })).toBe(true)
@@ -132,10 +144,10 @@ describe('createSessionLaunchService', () => {
       spawner: { launch: () => (count++ === 0 ? first : second) },
       prepareLaunch: async () => okPrep()
     })
-    await service.launch('f1', 'r1')
+    await service.launch(cfg('f1', 'r1'))
     service.control('s1', { kind: 'kill' }) // agents へ kill 伝播
     first.emitExit() // agents が wsl.exe を kill して自 exit → onExit
-    const again = await service.launch('f1', 'r1')
+    const again = await service.launch(cfg('f1', 'r1'))
     expect(again).toEqual({ status: 'launching', sessionId: 's2', port: fakePort })
   })
 
@@ -145,7 +157,7 @@ describe('createSessionLaunchService', () => {
       spawner: { launch: () => spawn },
       prepareLaunch: async () => okPrep()
     })
-    await service.launch('f1', 'r1')
+    await service.launch(cfg('f1', 'r1'))
     const unconfirmed = service.dispose()
     expect(unconfirmed).toBe(0)
     expect(spawn.controls).toContainEqual({ kind: 'kill' }) // 孫 kill を agents へ

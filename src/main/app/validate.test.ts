@@ -20,8 +20,8 @@ import {
   MAX_PATH_VALUE_LENGTH,
   checkBeginBrowseLocation,
   checkFolderDraft,
-  checkProviderDraft,
-  checkProviderPatch,
+  checkProviderDraft as checkProviderDraftWith,
+  checkProviderPatch as checkProviderPatchWith,
   findRuntime,
   isKnownFolderId,
   isTrustedSender,
@@ -35,6 +35,14 @@ import {
   isPermissionScope,
   MAX_SESSION_OFFSET
 } from './validate'
+import { isDeniedEnvKey, isForbiddenForwardKey } from '../infra/runtime/launch-spec'
+
+/** composition root と同じ述語を注入する (validate は infra/runtime を直接 import しない。M-302)。 */
+const extraEnvPredicates = { isForbiddenForwardKey, isDeniedEnvKey }
+const checkProviderDraft = (draft: unknown): ReturnType<typeof checkProviderDraftWith> =>
+  checkProviderDraftWith(draft, extraEnvPredicates)
+const checkProviderPatch = (patch: unknown): boolean =>
+  checkProviderPatchWith(patch, extraEnvPredicates)
 
 /**
  * IPC ハンドラの検証テスト (BE-048 / SC-018)。
@@ -505,5 +513,28 @@ describe('checkProviderDraft / checkProviderPatch — 永続層と同じ形を�
     expect(checkProviderDraft(badNs)).toEqual({ ok: false, reason: 'invalid-path' })
     const host = { ...validDraft, configDir: { namespace: 'host', value: 'C:\\Users\\y\\.claude' } }
     expect(checkProviderDraft(host)).toEqual({ ok: true })
+  })
+
+  it('models の root に未知キーがあれば拒否する (write/read 対称。pr-gate R1 database M-302)', () => {
+    const draft = { ...validDraft, models: { ...validDraft.models, note: 'x' } }
+    expect(checkProviderDraft(draft)).toEqual({ ok: false, reason: 'invalid-record' })
+    expect(checkProviderPatch({ models: { models: [], note: 'x' } })).toBe(false)
+  })
+
+  it('api-key / oauth-token の平文秘密に制御文字があれば拒否する (FR-014 / pr-gate R1 security L-002)', () => {
+    for (const source of ['api-key', 'oauth-token']) {
+      const bad = { ...validDraft, credential: { source, secret: 'sk-ant\u0000x' } }
+      expect(checkProviderDraft(bad)).toEqual({ ok: false, reason: 'invalid-record' })
+    }
+  })
+
+  it('extraEnv の述語は注入されたものを使う (infra/runtime を直接 import しない。M-302)', () => {
+    const draft = { ...validDraft, extraEnv: { GIT_SSH_COMMAND: 'x' } }
+    expect(checkProviderDraft(draft)).toEqual({ ok: false, reason: 'invalid-record' })
+    const permissive = { isForbiddenForwardKey: () => false, isDeniedEnvKey: () => false }
+    expect(checkProviderDraftWith(draft, permissive)).toEqual({ ok: true })
+    expect(checkProviderPatchWith({ extraEnv: { MY_FLAG: 'x' } }, permissive)).toBe(true)
+    const denyAll = { isForbiddenForwardKey: () => true, isDeniedEnvKey: () => false }
+    expect(checkProviderPatchWith({ extraEnv: { MY_FLAG: 'x' } }, denyAll)).toBe(false)
   })
 })

@@ -62,6 +62,12 @@ SDK の permission/settings API 面は広大 (`setPermissionMode` / `canUseTool`
 変えない (中断・kill 時の abort 伝播に要る。escalation-neutral)。permission 系の 4 キーと役割を分けて数える。
 prompt は AsyncIterable。→ 未知の起動時昇格 option も構造的に締め出す。
 
+> **読み替え (後続 ADR)**: P1 の集合は 2 つの ADR で広がっている。
+> - [AD-040](../../../docs/decisions/0040-provider-settings-constrained-projection.md) が `settings` (helper の 2 キー射影) を足した。
+> - [AD-041](../../../docs/decisions/0041-x4-launch-config-on-x1-launch-gate.md) (a)(g) が `permissionMode` を安全 3 値 `{default, plan, dontAsk}` に広げ、`model` / `effort` を足した。
+>
+> 現行の集合の正本は AD-041 (g) である。
+
 **(P2) `canUseTool` の応答 (`PermissionResult`) は `{ behavior:'allow'|'deny', message? }` の完全部分集合に固定する。**
 `toPermissionResult` 純関数の出力キー集合を `{behavior, message}` に限り、**`updatedPermissions` (6 variant すべて:
 setMode / addRules / replaceRules / removeRules / addDirectories / removeDirectories) と `updatedInput` を
@@ -93,6 +99,11 @@ stream-json の自前 `JSON.parse` も禁止 (Principle IV/IX)。
 - `CLAUDE_CONFIG_DIR` は起動 env に含めない (既定 Provider に委ねる。含めるなら distro RuntimePath を検証)。
 - 資格情報を含めない。**env・プロンプト・argsText・stream 本文・permission 要求をログに出力しない**
   (会話由来ペイロード全般。M-01/M-05)。組み立ては純粋関数 (プロセスを起こさず測る)。
+
+> **読み替え (後続 ADR)**: [AD-041](../../../docs/decisions/0041-x4-launch-config-on-x1-launch-gate.md) (b)(e) で次のように変わる。
+> - 許可リストとの完全一致と denylist の対象は、passthrough (curated base と extraEnv) だけになる。
+> - X-4 以降は、導出が返す `forwardKeys` (方式固有の実名キー / `CLAUDE_CONFIG_DIR` の RuntimePath / 採用 extraEnv / env-passthrough の実名 allowlist) を、アプリが生成する `WSLENV` で wsl.exe の spawn env に載せる。
+> - fork env と argv に資格情報を載せない点は変わらない。
 
 ## C-6 プロセス寿命の契約 (FR-017 / SC-005 / SC-010 / H-02)
 

@@ -1,0 +1,86 @@
+{
+    "gate": "design",
+    "run": "2026-09-30T12:00:00+09:00",
+    "spec_dir": "specs/008-session-launch-settings-dialog-and-presets",
+    "spec_id": "008-session-launch-settings-dialog-and-presets",
+    "tracks": {
+        "analyze": {
+            "status": "ok",
+            "raw_out": "analyze.md",
+            "viewpoint_missing": null,
+            "cascade_demotions": null
+        },
+        "po-reviewer": {
+            "status": "ok",
+            "raw_out": "po-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "architecture-reviewer": {
+            "status": "ok",
+            "raw_out": "architecture-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "security-reviewer": {
+            "status": "ok",
+            "raw_out": "security-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "platform-boundary-reviewer": {
+            "status": "ok",
+            "raw_out": "platform-boundary-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        }
+    },
+    "severity_counts": {
+        "critical": 1,
+        "high": 3,
+        "medium": 12,
+        "low": 13
+    },
+    "dedup_log": [
+        {
+            "merged": [
+                "pb-C-101",
+                "sec-N-001",
+                "analyze-B1"
+            ],
+            "key": "FR-013 WSLENV key set"
+        },
+        {
+            "merged": [
+                "pb-H-101",
+                "sec-N-001"
+            ],
+            "key": "extraEnv override"
+        },
+        {
+            "merged": [
+                "sec-N-002",
+                "analyze-B4",
+                "arch-M-101"
+            ],
+            "key": "R-01 fallback"
+        },
+        {
+            "merged": [
+                "arch-M-103",
+                "pb-M-103"
+            ],
+            "key": "launch-env placement"
+        },
+        {
+            "merged": [
+                "arch-M-102",
+                "pb-M-102",
+                "analyze-B6",
+                "sec-N-005"
+            ],
+            "key": "item 2 --exec"
+        }
+    ],
+    "verdict": "FIX_REQUIRED"
+}
