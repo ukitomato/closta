@@ -54,8 +54,7 @@ const capability: ClostaCapability = {
   getTranscript: (sessionId, targetKey, requestToken) =>
     ipcRenderer.invoke(IPC_CHANNELS.getTranscript, sessionId, targetKey, requestToken),
 
-  launchSession: (folderId, runtimeId) =>
-    ipcRenderer.invoke(IPC_CHANNELS.launchSession, folderId, runtimeId),
+  launchSession: (config) => ipcRenderer.invoke(IPC_CHANNELS.launchSession, config),
   sendPrompt: (sessionId, text) => ipcRenderer.invoke(IPC_CHANNELS.sendPrompt, sessionId, text),
   respondPermission: (sessionId, requestId, outcome, scope) =>
     ipcRenderer.invoke(IPC_CHANNELS.respondPermission, sessionId, requestId, outcome, scope),
@@ -69,6 +68,12 @@ const capability: ClostaCapability = {
   removeProvider: (id) => ipcRenderer.invoke(IPC_CHANNELS.removeProvider, id),
   listReachableProviders: (runtimeId) =>
     ipcRenderer.invoke(IPC_CHANNELS.listReachableProviders, runtimeId),
+  providerLoadIssues: () => ipcRenderer.invoke(IPC_CHANNELS.providerLoadIssues),
+
+  listPresets: () => ipcRenderer.invoke(IPC_CHANNELS.listPresets),
+  savePreset: (name, config, overwrite) =>
+    ipcRenderer.invoke(IPC_CHANNELS.savePreset, name, config, overwrite),
+  removePreset: (id) => ipcRenderer.invoke(IPC_CHANNELS.removePreset, id),
 
   onRuntimesChanged: (listener) =>
     subscribe<RuntimeListDTO>(IPC_CHANNELS.runtimesChanged, listener),

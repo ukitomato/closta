@@ -3,15 +3,19 @@ import { ipcMain, type IpcMainInvokeEvent } from 'electron'
 import { IPC_CHANNELS } from '@domain/capability'
 import type {
   ProviderDraft,
+  ProviderLoadIssuesDTO,
   ProviderPatch,
   ProviderSummaryDTO,
   ReachableProvidersDTO,
   RegisterProviderResult,
   UpdateProviderResult
 } from '@domain/provider/dto'
+import type { ExtraEnvPredicates } from '@domain/provider/forward-env'
 import type { DetectedCandidate } from '@domain/provider/types'
 import type { SessionControl, SessionLaunchHandshakeDTO } from '@domain/session/agent-session'
 import type { SessionIndexDTO } from '@domain/session/dto'
+import type { SessionLaunchConfig } from '@domain/session/launch-config'
+import type { PresetDTO, SavePresetResult } from '@domain/session/preset'
 import type { RuntimeDescriptor } from '@domain/runtime/descriptor'
 import type { RuntimeDescriptorDTO, RuntimeListDTO } from '@domain/runtime/dto'
 import type { NamespaceId } from '@domain/runtime/namespace'
@@ -28,6 +32,7 @@ import type { Location } from '@domain/workspace/folder'
 import type { TranscriptHandshakeDTO } from '@domain/session/transcript-dto'
 
 import type { Measure } from './measure'
+import type { SavePresetInput } from './preset-service'
 import type { LaunchOutcome } from './session-launch-service'
 import {
   handleFetchMoreSessions,
@@ -35,9 +40,12 @@ import {
   handleInterruptSession,
   handleKillSession,
   handleLaunchSession,
+  handleListPresets,
   handleListSessions,
   handleRefreshSessions,
+  handleRemovePreset,
   handleRespondPermission,
+  handleSavePreset,
   handleSendPrompt
 } from './session-ipc'
 import type { TranscriptResult } from './transcript-service'
@@ -114,10 +122,17 @@ export interface IpcDependencies {
 
   /* ── セッション起動 + 制御 (X-1) ── */
 
-  /** 起動を調停する。**本文は port**、戻り値は handshake + transfer 用 port (AD-036 §2)。 */
-  launchSession(folderId: string, runtimeId: string): Promise<LaunchOutcome>
+  /** 起動を調停する (X-4: 検証済みの起動設定)。**本文は port**、戻り値は handshake + transfer 用 port (AD-036 §2)。 */
+  launchSession(config: SessionLaunchConfig): Promise<LaunchOutcome>
   /** 制御を該当セッションへ送る。未知 / 終了済み sessionId なら `false`。 */
   controlSession(sessionId: string, control: SessionControl): boolean
+
+  /* ── プリセット (X-4) ── */
+
+  listPresets(): Promise<readonly PresetDTO[]>
+  savePreset(input: SavePresetInput): Promise<SavePresetResult>
+  removePreset(id: string): Promise<{ readonly ok: boolean }>
+  presetIds(): Promise<readonly string[]>
 
   /* ── Provider (X-3) ── */
 
@@ -127,6 +142,13 @@ export interface IpcDependencies {
   updateProvider(id: string, patch: ProviderPatch): Promise<UpdateProviderResult>
   removeProvider(id: string): Promise<{ readonly ok: boolean }>
   listReachableProviders(runtimeId: string): Promise<ReachableProvidersDTO>
+  /** providers.json の読み込みで退避したレコードの件数 (X-4 pr-gate R1 M-03)。 */
+  providerLoadIssues(): Promise<ProviderLoadIssuesDTO>
+  /**
+   * extraEnv の登録境界の述語 (転送禁止キー / 資格情報 denylist)。composition root が transport のキー集合から
+   * 組んで注入する (validate が infra/runtime を直接 import しない。pr-gate R1 platform-boundary M-302)。
+   */
+  readonly extraEnvPredicates: ExtraEnvPredicates
 
   /** 計測関数。composition root が開発ビルド判定を解決して渡す (BE-030 / FR-038)。 */
   readonly measure: Measure
@@ -283,6 +305,21 @@ export function registerIpcHandlers(deps: IpcDependencies): void {
     handleKillSession(deps, args)
   )
 
+  /* ── プリセット (X-4) ─────────────────────────────────────────────── */
+
+  // 検証と service 呼び出しは `session-ipc.ts` (electron 非依存・Vitest で直接呼べる)。
+  handle(IPC_CHANNELS.listPresets, async (): Promise<readonly PresetDTO[]> =>
+    handleListPresets(deps)
+  )
+
+  handle(IPC_CHANNELS.savePreset, async (_event, ...args): Promise<SavePresetResult> =>
+    handleSavePreset(deps, args)
+  )
+
+  handle(IPC_CHANNELS.removePreset, async (_event, ...args): Promise<{ readonly ok: boolean }> =>
+    handleRemovePreset(deps, args)
+  )
+
   /* ── Provider (X-3) ─────────────────────────────────────────────── */
 
   handle(IPC_CHANNELS.listProviders, async (): Promise<readonly ProviderSummaryDTO[]> =>
@@ -297,7 +334,7 @@ export function registerIpcHandlers(deps: IpcDependencies): void {
     IPC_CHANNELS.registerProvider,
     async (_event, ...args): Promise<RegisterProviderResult> => {
       // **未信頼な draft の形を検証してから service へ渡す** (contracts C-1)。意味的検証は service。
-      const check = checkProviderDraft(args[0])
+      const check = checkProviderDraft(args[0], deps.extraEnvPredicates)
       if (!check.ok) return { ok: false, reason: check.reason }
       return deps.registerProvider(args[0] as ProviderDraft)
     }
@@ -305,7 +342,8 @@ export function registerIpcHandlers(deps: IpcDependencies): void {
 
   handle(IPC_CHANNELS.updateProvider, async (_event, ...args): Promise<UpdateProviderResult> => {
     if (typeof args[0] !== 'string') return { ok: false, reason: 'not-found' }
-    if (!checkProviderPatch(args[1])) return { ok: false, reason: 'invalid-record' }
+    if (!checkProviderPatch(args[1], deps.extraEnvPredicates))
+      return { ok: false, reason: 'invalid-record' }
     return deps.updateProvider(args[0], args[1] as ProviderPatch)
   })
 
@@ -325,6 +363,10 @@ export function registerIpcHandlers(deps: IpcDependencies): void {
       if (runtime === null) return { reachable: [], excluded: [] }
       return deps.listReachableProviders(runtime.id)
     }
+  )
+
+  handle(IPC_CHANNELS.providerLoadIssues, async (): Promise<ProviderLoadIssuesDTO> =>
+    deps.providerLoadIssues()
   )
 
   /* ── 解決 ───────────────────────────────────────────────────────── */

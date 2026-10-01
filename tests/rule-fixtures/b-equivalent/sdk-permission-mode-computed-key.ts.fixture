@@ -1,0 +1,14 @@
+import { query } from '@anthropic-ai/claude-agent-sdk'
+
+/**
+ * 違反サンプル (X-4 / AD-041 (a) / code-gate platform-boundary M-001)。
+ *
+ * **計算キー `['permissionMode']:` で渡す形。** `permissionMode:` の綴りが現れないので、
+ * 素のキー + コロンだけを見る検査は素通しする。項目 16 は計算キー形を違反にする。
+ */
+export function bad(mode: string): void {
+  void query({
+    prompt: 'hi',
+    options: { ['permissionMode']: mode }
+  })
+}

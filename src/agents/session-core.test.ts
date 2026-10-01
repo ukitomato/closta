@@ -17,6 +17,7 @@ const noopSpawn = (): SpawnedLike => ({ kill: () => true })
 describe('buildQueryOptions (正の構成 P1)', () => {
   it('options のキー集合が allowlist の完全部分集合 (余分なキーが無い)', () => {
     const options = buildQueryOptions({
+      permissionMode: 'default',
       canUseTool: async () => ({ behavior: 'deny', message: 'x' }),
       pathToClaudeCodeExecutable: '/usr/bin/claude',
       spawnClaudeCodeProcess: noopSpawn,
@@ -32,6 +33,7 @@ describe('buildQueryOptions (正の構成 P1)', () => {
 
   it('昇格 option キーが決して現れない (settings は AD-040 の制約付き射影のみ)', () => {
     const options = buildQueryOptions({
+      permissionMode: 'default',
       canUseTool: async () => ({ behavior: 'allow' }),
       pathToClaudeCodeExecutable: '/usr/bin/claude',
       spawnClaudeCodeProcess: noopSpawn,
@@ -55,6 +57,7 @@ describe('buildQueryOptions (正の構成 P1)', () => {
 
   it('helper 委譲の settings は HelperSettings (2 キー限定) で query options に現れる (C-001 正の flow)', () => {
     const options = buildQueryOptions({
+      permissionMode: 'default',
       canUseTool: async () => ({ behavior: 'allow' }),
       pathToClaudeCodeExecutable: '/usr/bin/claude',
       spawnClaudeCodeProcess: noopSpawn,
@@ -69,6 +72,7 @@ describe('buildQueryOptions (正の構成 P1)', () => {
   it('昇格キー混入 settings は buildQueryOptions が throw で締め出す (C-001 負例)', () => {
     expect(() =>
       buildQueryOptions({
+        permissionMode: 'default',
         canUseTool: async () => ({ behavior: 'allow' }),
         pathToClaudeCodeExecutable: '/usr/bin/claude',
         spawnClaudeCodeProcess: noopSpawn,
@@ -76,6 +80,63 @@ describe('buildQueryOptions (正の構成 P1)', () => {
         settings: { apiKeyHelper: '/a', permissionMode: 'bypassPermissions' } as never
       })
     ).toThrow(/AD-040/)
+  })
+})
+
+describe('buildQueryOptions (X-4 / AD-041)', () => {
+  const base = {
+    canUseTool: async () => ({ behavior: 'allow' as const }),
+    pathToClaudeCodeExecutable: '/usr/bin/claude',
+    spawnClaudeCodeProcess: noopSpawn,
+    abortController: new AbortController()
+  }
+
+  it('QUERY_OPTION_KEYS は AD-041 (g) の集合に固定される (集合を変えるには ADR が要る)', () => {
+    expect([...QUERY_OPTION_KEYS].sort()).toEqual(
+      [
+        'abortController',
+        'canUseTool',
+        'effort',
+        'model',
+        'pathToClaudeCodeExecutable',
+        'permissionMode',
+        'settings',
+        'spawnClaudeCodeProcess'
+      ].sort()
+    )
+  })
+
+  it.each(['default', 'plan', 'dontAsk'] as const)('安全 3 値 %s はそのまま載る', (mode) => {
+    expect(buildQueryOptions({ ...base, permissionMode: mode }).permissionMode).toBe(mode)
+  })
+
+  it('安全 3 値の外は throw する (X-1 の「default 固定」の assert を置き換えて残す)', () => {
+    for (const mode of ['acceptEdits', 'auto', 'bypass' + 'Permissions', '']) {
+      expect(() => buildQueryOptions({ ...base, permissionMode: mode as never })).toThrow(/AD-041/)
+    }
+  })
+
+  it('model / effort は検証済みの値だけが載る', () => {
+    const options = buildQueryOptions({
+      ...base,
+      permissionMode: 'plan',
+      model: 'claude-sonnet-4-5[1m]',
+      effort: 'high'
+    })
+    expect(options.model).toBe('claude-sonnet-4-5[1m]')
+    expect(options.effort).toBe('high')
+    for (const key of Object.keys(options)) {
+      expect(QUERY_OPTION_KEYS as readonly string[]).toContain(key)
+    }
+  })
+
+  it('model のメタ文字 / effort の enum 外は throw する', () => {
+    expect(() =>
+      buildQueryOptions({ ...base, permissionMode: 'default', model: 'x$(id)' })
+    ).toThrow(/model/)
+    expect(() =>
+      buildQueryOptions({ ...base, permissionMode: 'default', effort: 'ultra' as never })
+    ).toThrow(/effort/)
   })
 })
 
@@ -116,6 +177,32 @@ describe('createCanUseTool (正の構成 P2)', () => {
     expect(result).toEqual({ behavior: 'allow' })
   })
 
+  it.each(['once', 'capability'] as const)(
+    'ExitPlanMode の allow (決定 scope %s) は {behavior} 系のキーだけで updatedPermissions を含まない (AD-041 Confirmation / P2)',
+    async (scope) => {
+      const canUseTool = createCanUseTool({
+        nextRequestId: () => 'r-plan',
+        sanitizeInput: () => '{"plan":"..."}',
+        sanitizeToolName: (n) => n,
+        emitRequest: () => {},
+        awaitDecision: async () => ({ requestId: 'r-plan', outcome: 'allow', scope })
+      })
+      // SDK は ExitPlanMode にモード遷移の提案 (suggestions: setMode) を添えて呼ぶ。それを戻り値へ写さない
+      // (`updatedPermissions` を返すと plan → acceptEdits 等へ昇格する経路になる)。
+      const options = {
+        signal: new AbortController().signal,
+        suggestions: [{ type: 'setMode', mode: 'acceptEdits', destination: 'session' }]
+      }
+      const result = await canUseTool('ExitPlanMode', { plan: '...' }, options)
+      expect(result).toEqual({ behavior: 'allow' })
+      for (const key of Object.keys(result)) {
+        expect(['behavior', 'message']).toContain(key)
+      }
+      expect(Object.prototype.hasOwnProperty.call(result, 'updatedPermissions')).toBe(false)
+      expect(Object.prototype.hasOwnProperty.call(result, 'updatedInput')).toBe(false)
+    }
+  )
+
   it('toolName をサニタイズして emit する (H-05)', async () => {
     const emitRequest = vi.fn()
     const canUseTool = createCanUseTool({
@@ -138,7 +225,7 @@ describe('composeClaudeSpawn (env は spec のみ・argv は配列)', () => {
   const spec: RuntimeLaunchSpec = {
     pathToClaudeCodeExecutable: '/home/u/.local/bin/claude',
     command: launcher,
-    prefixArgs: ['--cd', '/home/u/proj', '-d', 'Ubuntu', '--'],
+    prefixArgs: ['--cd', '/home/u/proj', '-d', 'Ubuntu', '--exec'],
     env: { SystemRoot: 'C:\\Windows', WSL_UTF8: '1' }
   }
 
@@ -165,7 +252,7 @@ describe('composeClaudeSpawn (env は spec のみ・argv は配列)', () => {
       '/home/u/proj',
       '-d',
       'Ubuntu',
-      '--',
+      '--exec',
       '/home/u/.local/bin/claude',
       'claude.js',
       '--print'

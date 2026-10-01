@@ -1,5 +1,6 @@
 import type {
   ProviderDraft,
+  ProviderLoadIssuesDTO,
   ProviderPatch,
   ProviderSummaryDTO,
   ReachableProvidersDTO,
@@ -10,6 +11,8 @@ import type { DetectedCandidate } from './provider/types'
 import type { RuntimeDescriptorDTO, RuntimeListDTO } from './runtime/dto'
 import type { SessionLaunchHandshakeDTO } from './session/agent-session'
 import type { SessionIndexDTO } from './session/dto'
+import type { SessionLaunchConfig } from './session/launch-config'
+import type { PresetDTO, SavePresetResult } from './session/preset'
 import type { TranscriptHandshakeDTO } from './session/transcript-dto'
 import type {
   BeginBrowseResult,
@@ -103,7 +106,8 @@ export interface ClostaCapability {
   // --- セッション起動 + ストリーミング (X-1。**唯一の起動・制御経路**) ---
 
   /**
-   * 選んだ作業フォルダ + 実行中 WslRuntime で単一セッションを起動する (X-1 / FR-001 / contracts C-1)。
+   * 検証済みの起動設定 (X-4: フォルダ / WSL ランタイム / Provider / モデル / effort / 権限モード) で
+   * 単一セッションを起動する (X-1 / FR-001 / contracts C-1)。main が形を検証し、依存解決を再評価する。
    *
    * **戻り値は本文を含まない handshake (status / sessionId)。** 逐次応答 (`SessionEvent`) は
    * `MessageChannelMain` の port で **agents↔renderer 直通**に届く (main を本文経路から外す。Principle IX)。
@@ -113,7 +117,7 @@ export interface ClostaCapability {
    * main が **VerifiedRunning + 所在 distro 一致 + 登録済み + 単一セッション不変**を検証する。
    * 停止中 / 未確認 / 不一致 / 既に稼働中は `rejected` を理由キーつきで返す (SC-002 / SC-011)。
    */
-  launchSession(folderId: string, runtimeId: string): Promise<SessionLaunchHandshakeDTO>
+  launchSession(config: SessionLaunchConfig): Promise<SessionLaunchHandshakeDTO>
   /** 稼働セッションへプロンプトを送る (FR-011 / FR-018)。main が空/空白拒否 + 長さ上限を検証する。 */
   sendPrompt(sessionId: string, text: string): Promise<void>
   /**
@@ -148,6 +152,24 @@ export interface ClostaCapability {
   removeProvider(id: string): Promise<{ readonly ok: boolean }>
   /** 選んだランタイムから**到達できる Provider だけ**を返す (除外は理由キー付き。FR-012 / SC-004)。 */
   listReachableProviders(runtimeId: string): Promise<ReachableProvidersDTO>
+  /** providers.json の読み込みで退避したレコードの**件数だけ** (名前・値・パスを運ばない。X-4 pr-gate R1 M-03)。 */
+  providerLoadIssues(): Promise<ProviderLoadIssuesDTO>
+
+  // --- プリセット (X-4) ---
+
+  /** 保存済みプリセットの一覧 (更新日時の降順。資格情報を含まない。FR-009 / FR-010)。 */
+  listPresets(): Promise<readonly PresetDTO[]>
+  /**
+   * プリセットを保存する (FR-009)。同名があれば `overwrite: true` のときだけ上書きする
+   * (renderer が利用者の確認を取ったあと)。上限超過は `limit-reached`。
+   */
+  savePreset(
+    name: string,
+    config: SessionLaunchConfig,
+    overwrite: boolean
+  ): Promise<SavePresetResult>
+  /** プリセットを削除する。未知 id は `{ ok: false }`。 */
+  removePreset(id: string): Promise<{ readonly ok: boolean }>
 
   // --- 通知 (main → renderer) ---
 
@@ -191,6 +213,10 @@ export const IPC_CHANNELS = {
   updateProvider: 'closta:updateProvider',
   removeProvider: 'closta:removeProvider',
   listReachableProviders: 'closta:listReachableProviders',
+  providerLoadIssues: 'closta:providerLoadIssues',
+  listPresets: 'closta:listPresets',
+  savePreset: 'closta:savePreset',
+  removePreset: 'closta:removePreset',
   runtimesChanged: 'closta:runtimesChanged',
   foldersChanged: 'closta:foldersChanged',
   sessionsChanged: 'closta:sessionsChanged'

@@ -1,6 +1,6 @@
 ---
 status: needs-human-review
-last_updated: 2026-09-15
+last_updated: 2026-09-30
 generated_by: human (PLAN.md を素案として再導出)
 ---
 
@@ -55,6 +55,8 @@ spec_id（`001-runtime-...`）とは独立させる。差し込み作業で番�
 | X-3 | Provider 登録と到達可能性判定 | `provider` | M2 |
 | X-4 | 起動設定ダイアログとプリセット（軸の依存解決） | `session` | M2 |
 | X-5 | supervisor 分離とマルチセッション（10 並列） | `session` | M2 |
+| X-6 | 起動設定の拡張軸とセッション操作（追加ディレクトリ / 上限 / セッション名 / Win32 直接起動 / fork・resume 等） | `session` | M2 後続 |
+| X-7 | aws-assume-role helper の生成と CloudTrail 追跡 | `provider` | M2 後続 |
 | O-1 | セッション監視ビュー（状態一覧、密度切替、承認待ちの強調） | `session` | M3 |
 | O-2 | `docs/ui-coverage.md` の確立と Tier A 完全化 | `ui` | M3 |
 | O-3 | Thread 検索と observability | `ui` | M3 |

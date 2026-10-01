@@ -53,6 +53,7 @@ V-1 実施中に **起動〜初回ストリームを塞ぐ実機バグ 4 件**�
 
 ### B-4 「起動中」のまま入力できずデッドロック
 - **症状**: 起動後「起動中…」表示のまま入力欄が出ず、何も送れない。
+- **注記 (X-4, 2026-09-30)**: 下の (a) の「無出力」は、当時の claude での実測である。claude 2.1.285 は起動直後に `system/commands_changed` を出すため、この前提は成り立たなくなった。agents は、最初のプロンプトを送った後のメッセージでだけ `ready` に遷移するように修正した (spec 008 quickstart-results B-2)。
 - **真因**: (a) claude は**初回 user メッセージが届くまで無出力**(`system/init` すら出さない。実測) →
   runState は `launching` のまま。(b) `SessionScreen` が `messages` 空のとき **Thread (composer 内包) を
   描画せず** EmptyState だけ表示。(c) `isRunning` に `launching` を含め composer が**停止ボタン**化。

@@ -1,0 +1,117 @@
+{
+    "gate": "design",
+    "run": "2026-09-30T00:00:00+09:00",
+    "spec_dir": "specs/008-session-launch-settings-dialog-and-presets",
+    "spec_id": "008-session-launch-settings-dialog-and-presets",
+    "tracks": {
+        "analyze": {
+            "status": "ok",
+            "raw_out": "analyze.md",
+            "viewpoint_missing": null,
+            "cascade_demotions": null
+        },
+        "po-reviewer": {
+            "status": "ok",
+            "raw_out": "po-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "architecture-reviewer": {
+            "status": "ok",
+            "raw_out": "architecture-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "security-reviewer": {
+            "status": "ok",
+            "raw_out": "security-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "platform-boundary-reviewer": {
+            "status": "ok",
+            "raw_out": "platform-boundary-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 1
+        }
+    },
+    "severity_counts": {
+        "critical": 1,
+        "high": 11,
+        "medium": 26,
+        "low": 15
+    },
+    "dedup_log": [
+        {
+            "merged": [
+                "arch-C-001",
+                "analyze-A1"
+            ],
+            "key": "AD-036 P1"
+        },
+        {
+            "merged": [
+                "pb-C-001",
+                "arch-H-001",
+                "sec-H-001",
+                "analyze-A2"
+            ],
+            "key": "FR-005"
+        },
+        {
+            "merged": [
+                "arch-H-004",
+                "sec-M-002",
+                "analyze-A3"
+            ],
+            "key": "FR-006"
+        },
+        {
+            "merged": [
+                "arch-H-003",
+                "sec-H-003",
+                "pb-M-005"
+            ],
+            "key": "tasks.md:60"
+        },
+        {
+            "merged": [
+                "arch-H-002",
+                "pb-H-002"
+            ],
+            "key": "Principle VI item 6"
+        },
+        {
+            "merged": [
+                "sec-H-004",
+                "pb-M-004",
+                "arch-L-005"
+            ],
+            "key": "plan.md:156"
+        },
+        {
+            "merged": [
+                "po-H-001",
+                "arch-M-005"
+            ],
+            "key": "KPI"
+        },
+        {
+            "merged": [
+                "po-H-002",
+                "po-H-003",
+                "analyze-A9",
+                "sec-L-004"
+            ],
+            "key": "default axis"
+        },
+        {
+            "merged": [
+                "po-H-004",
+                "analyze-A12"
+            ],
+            "key": "R-01"
+        }
+    ],
+    "verdict": "FIX_REQUIRED"
+}

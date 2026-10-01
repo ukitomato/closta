@@ -1,0 +1,23 @@
+import { query, type Options } from '@anthropic-ai/claude-agent-sdk'
+
+/**
+ * 等価経路サンプル (X-4 / AD-041 (a) / code-gate platform-boundary L-101)。
+ *
+ * **キー名を綴りとして書かずに permissionMode を載せる形。** 計算キーの変数形・連結形、
+ * `Reflect.set`、`Object.defineProperty`、`Object.fromEntries` はキーが識別子として現れないので、
+ * 項目 16 の綴り検査 (regex) では捕まらない。**この経路はどの機械検証も捕まえない** — `detectors: ['none']`。
+ * 理由と代替は expected.mjs の UNDETECTED_NOTES['sdk-permission-mode-reflective'] に記録する (SC-017)。
+ */
+const KEY = 'permission' + 'Mode'
+
+export function bypass(mode: string): void {
+  const viaVariableKey: Record<string, unknown> = { [KEY]: mode }
+  const viaReflect: Record<string, unknown> = {}
+  Reflect.set(viaReflect, 'permissionMode', mode)
+  const viaDefine: Record<string, unknown> = {}
+  Object.defineProperty(viaDefine, 'permissionMode', { value: mode, enumerable: true })
+  const viaEntries: Record<string, unknown> = Object.fromEntries([['permissionMode', mode]])
+  for (const options of [viaVariableKey, viaReflect, viaDefine, viaEntries]) {
+    void query({ prompt: 'hi', options: options as unknown as Options })
+  }
+}

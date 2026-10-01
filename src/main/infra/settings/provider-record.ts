@@ -1,11 +1,9 @@
 import {
-  hasControlCharacter,
-  MAX_DISPLAY_NAME_LENGTH,
-  MAX_ID_LENGTH,
-  MAX_PATH_VALUE_LENGTH
-} from '@domain/validation'
-import { isValidDistroName, uncNamespace } from '@domain/runtime/namespace'
-import { makeHostPath, makeWslUncPath } from '@domain/runtime/path-types'
+  isValidExtraEnv,
+  isValidPassthroughVarNames,
+  type ExtraEnvPredicates
+} from '@domain/provider/forward-env'
+import { isValidModelCatalog } from '@domain/provider/model-catalog'
 import { scanExtraEnvForSecrets } from '@domain/provider/secret-scan'
 import {
   isCredentialSource,
@@ -13,6 +11,14 @@ import {
   type ModelCatalogRef,
   type ProviderProfile
 } from '@domain/provider/types'
+import { isValidDistroName, uncNamespace } from '@domain/runtime/namespace'
+import { makeHostPath, makeWslUncPath } from '@domain/runtime/path-types'
+import {
+  hasControlCharacter,
+  MAX_DISPLAY_NAME_LENGTH,
+  MAX_ID_LENGTH,
+  MAX_PATH_VALUE_LENGTH
+} from '@domain/validation'
 
 /**
  * `ProviderProfile` の永続化レコード検証 (BE-004 / contracts C-1)。folder-record.ts と同じ構え。
@@ -78,8 +84,8 @@ function toCredentialRef(value: unknown): CredentialRef | null {
   if (typeof value !== 'object' || value === null) return null
   const c = value as Record<string, unknown>
   if (!isCredentialSource(c.source)) return null
-  const str = (v: unknown): v is string =>
-    typeof v === 'string' && v.length > 0 && v.length <= MAX_PATH_VALUE_LENGTH
+  // 制御文字も拒否する (helper パス・参照キーに制御文字が正当に入ることはない。X-3 SEC-L-201 / X-4 FR-014)。
+  const str = (v: unknown): v is string => isNonEmptyString(v, MAX_PATH_VALUE_LENGTH)
   switch (c.source) {
     case 'config-dir':
     case 'in-app-login':
@@ -104,38 +110,23 @@ function toCredentialRef(value: unknown): CredentialRef | null {
         : { source: 'aws-profile', profileName: c.profileName, region: c.region as string }
     }
     case 'env-passthrough': {
-      if (
-        !Array.isArray(c.varNames) ||
-        !c.varNames.every((n) => isNonEmptyString(n, MAX_ID_LENGTH))
-      )
-        return null
-      return { source: 'env-passthrough', varNames: c.varNames as string[] }
+      // varNames は実名 allowlist に限る (IPC と同じ述語。X-4 / AD-041 (e) 4)。
+      if (!isValidPassthroughVarNames(c.varNames)) return null
+      return { source: 'env-passthrough', varNames: [...c.varNames] }
     }
   }
 }
 
+/** モデルカタログは IPC と同じ domain 述語で検証する (文字種 / 対応 effort / 重複 / 件数。SC-010)。 */
 function toModels(value: unknown): ModelCatalogRef | null {
-  if (typeof value !== 'object' || value === null) return null
-  const m = value as Record<string, unknown>
-  if (!Array.isArray(m.models)) return null
-  for (const entry of m.models) {
-    if (typeof entry !== 'object' || entry === null) return null
-    const e = entry as Record<string, unknown>
-    if (
-      !isNonEmptyString(e.id, MAX_ID_LENGTH) ||
-      !isNonEmptyString(e.displayName, MAX_DISPLAY_NAME_LENGTH)
-    )
-      return null
-    if (
-      e.inferenceProfileId !== undefined &&
-      !isNonEmptyString(e.inferenceProfileId, MAX_ID_LENGTH)
-    )
-      return null
-  }
-  return { models: m.models as ModelCatalogRef['models'] }
+  return isValidModelCatalog(value) ? { models: value.models } : null
 }
 
-export function toProviderRecord(value: unknown): ProviderRecordResult {
+/**
+ * @param preds extraEnv の登録境界の述語。composition root が transport のキー集合から組んで注入する
+ *   (infra/runtime を直接 import しない。IPC と同じ実体を受ける。pr-gate R1 platform-boundary M-302)。
+ */
+export function toProviderRecord(value: unknown, preds: ExtraEnvPredicates): ProviderRecordResult {
   if (typeof value !== 'object' || value === null) return invalid('invalid-record')
   const r = value as Record<string, unknown>
 
@@ -160,18 +151,12 @@ export function toProviderRecord(value: unknown): ProviderRecordResult {
 
   let extraEnv: Record<string, string> | undefined
   if (r.extraEnv !== undefined) {
-    if (typeof r.extraEnv !== 'object' || r.extraEnv === null) return invalid('invalid-record')
-    const e = r.extraEnv as Record<string, unknown>
-    for (const [k, v] of Object.entries(e)) {
-      if (
-        !isNonEmptyString(k, MAX_ID_LENGTH) ||
-        typeof v !== 'string' ||
-        v.length > MAX_PATH_VALUE_LENGTH
-      ) {
-        return invalid('invalid-record')
-      }
+    // IPC と同じ述語 (名前規則・転送禁止キー・資格情報 denylist・値の制御文字・Windows パス。X-4 FR-013)。
+    // X-4 以前のレコードでこれに反するものは退避して読み込まない (AD-042 Decision 4)。
+    if (!isValidExtraEnv(r.extraEnv, preds)) {
+      return invalid('invalid-record')
     }
-    extraEnv = e as Record<string, string>
+    extraEnv = r.extraEnv
     // **秘密らしい値を持つ extraEnv は拒否する** (無害キー名の下の平文秘密を弾く。H-09 / Principle V)。
     if (scanExtraEnvForSecrets(extraEnv).length > 0) return invalid('secret-in-extraenv')
   }
@@ -198,7 +183,8 @@ export function fromProviderRecord(profile: ProviderProfile): Record<string, unk
       ? { configDir: { namespace: profile.configDir.namespace, value: profile.configDir.value } }
       : {}),
     credential: profile.credential,
-    models: profile.models,
+    // root を allow-list で組み直す (root の未知キーを disk へ書かない。read 側 toModels と対称。M-302)。
+    models: { models: profile.models.models },
     ...(profile.extraEnv !== undefined ? { extraEnv: profile.extraEnv } : {})
   }
 }

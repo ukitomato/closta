@@ -1,0 +1,13 @@
+import { query } from '@anthropic-ai/claude-agent-sdk'
+
+/**
+ * 違反サンプル (X-4 / AD-041 (a) / code-gate platform-boundary L-101)。
+ *
+ * **複合代入 `.permissionMode ??=` で値を入れる形。** 旧版の代入形 `\.key\s*=` は `=` の直前に
+ * `??` / `||` / `&&` があると一致しなかった。項目 16 は複合代入も代入形として違反にする。
+ */
+export function bad(mode: string): void {
+  const options: Record<string, unknown> = {}
+  options.permissionMode ??= mode
+  void query({ prompt: 'hi', options })
+}

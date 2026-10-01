@@ -66,7 +66,7 @@ describe('boundDecisionScope (scope 上限。FR-012 / H-04 / SC-004)', () => {
     expect(bounded.outcome).toBe('deny')
   })
 
-  it('capability 要求なら capability 決定を保つ (X-4 の付与経路)', () => {
+  it('capability 要求なら capability 決定を保つ (I-3 の付与経路。AD-041 (c))', () => {
     const bounded = boundDecisionScope(
       { requestId: 'r', outcome: 'allow', scope: 'capability' },
       'capability'

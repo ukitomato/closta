@@ -72,6 +72,21 @@ function isBidiControl(code: number): boolean {
 export const MAX_DISPLAY_NAME_LENGTH = 255
 
 /**
+ * **表示名** (フォルダ / Provider / プリセット) — 非空・長さ上限内・制御文字なし。日本語は許す (Principle VIII)。
+ *
+ * X-4 で `app/validate.ts` から移した — プリセット名は IPC (`checkPreset`) と永続層 (`preset-record`) の
+ * 双方が同じ述語を要し、`infra` は `app` を import できないため (design-gate R2 analyze B5)。
+ */
+export function isValidDisplayName(name: unknown): name is string {
+  return (
+    typeof name === 'string' &&
+    name.length > 0 &&
+    name.length <= MAX_DISPLAY_NAME_LENGTH &&
+    !hasControlCharacter(name)
+  )
+}
+
+/**
  * パス値の長さ上限。
  *
  * Linux の `PATH_MAX` に合わせてある。

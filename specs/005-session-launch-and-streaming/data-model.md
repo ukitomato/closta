@@ -139,7 +139,7 @@ export interface PermissionDecision {
   承認済み入力の書換を行う経路であり、`setPermissionMode` を呼ばなくても Principle III / FR-012 を破る
   (C-101 / H-201 / L-201 を一括で閉じる。変数を列挙せず「behavior/message 以外を出さない」で締め出す)。
 - **`capability` 付与は当該セッション寿命の in-memory 状態**として実現する (同種要求の再問い合わせ抑止をアプリ側で行う)。
-  **SDK の `updatedPermissions` には載せない**。永続化・プリセット反映をしない (それは X-4。M-04 / SC-004)。
+  **SDK の `updatedPermissions` には載せない**。永続化・プリセット反映をしない (それは X-4。M-04 / SC-004。**読み替え**: [AD-041](../../docs/decisions/0041-x4-launch-config-on-x1-launch-gate.md) (c) により宛先は I-3)。
 - `PermissionDeniedInfo` は `SDKPermissionDeniedMessage` 由来 (聞かれずに拒否)。何が拒否されたかを保持 (FR-014)。
 
 ## §6 FailureReason (`domain`) — 理由キー (訳出は `ui`)
@@ -191,6 +191,11 @@ export type FailureReason =
   denylist (WSLENV / 資格情報系) を保証する (M-101/M-202。「1 モジュールに一本化」ではなく「denylist は共有純関数、
   builder は 2 点」が正確。tasks BE-002/BE-004 をこれに合わせる)。
 
+> **読み替え (後続 ADR)**: [AD-041](../../docs/decisions/0041-x4-launch-config-on-x1-launch-gate.md) (b)(e) により、X-4 以降は次のように変わる。
+> - 本 § の許可リストと denylist は、passthrough (curated base) の規則として存続する。
+> - wsl.exe の spawn env には、導出の `forwardKeys` (`CLAUDE_CONFIG_DIR` の RuntimePath を含む) と、アプリが生成する `WSLENV` を加える (`composeLaunchEnv`)。
+> - fork env は本 § の最小 env のままとする。
+
 ## §8 RuntimeLaunchSpec (`infra/runtime`) — agents を WSL-free に保つための値
 
 ```ts
@@ -203,6 +208,10 @@ export interface RuntimeLaunchSpec {
   env: Record<string, string>          // §7 の許可リストで組み立てた最小 env。agents はこれ以外の env を混ぜない
 }
 ```
+
+> **読み替え (後続 ADR)**: [AD-041](../../docs/decisions/0041-x4-launch-config-on-x1-launch-gate.md) により、X-4 以降は次のようになる。
+> - prefixArgs は `['--cd', cwd, '-d', distro, '--exec']` (§(f))。
+> - env は `composeLaunchEnv` の結果 (§(e))。
 
 - **cwd は `prefixArgs` の `--cd <RuntimePath>` として渡す** (ホスト `child_process.spawn` の `cwd` オプションには
   渡さない)。RuntimePath をホスト cwd に渡すと Windows CreateProcess が ENOENT / 誤解決になる (H-03 / AD-004 の多段変換)。

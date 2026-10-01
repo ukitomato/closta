@@ -17,7 +17,8 @@ const summary = {
   displayName: 'Prod',
   backend: 'anthropic' as const,
   source: 'api-key' as const,
-  modelCount: 1
+  modelCount: 1,
+  models: []
 }
 
 describe('ProviderScreen', () => {
@@ -125,5 +126,118 @@ describe('ProviderScreen', () => {
     await waitFor(() => expect(screen.getByText('削除')).toBeInTheDocument())
     fireEvent.click(screen.getByText('削除'))
     await waitFor(() => expect(removeProvider).toHaveBeenCalledWith('p1'))
+  })
+
+  it.each([
+    {
+      storeNewerVersion: true,
+      expected: 'providers.json が新しいバージョンで保存されています',
+      reloads: false
+    },
+    { storeNewerVersion: false, expected: '削除できませんでした', reloads: true }
+  ])(
+    '削除の失敗は理由に応じた文言を出す (storeNewerVersion=$storeNewerVersion。pr-gate R3 database L-502 / R4 po L-301)',
+    async ({ storeNewerVersion, expected, reloads }) => {
+      const listProviders = vi.fn(async () => [summary])
+      installCapability({
+        listProviders,
+        removeProvider: async () => ({ ok: false }),
+        providerLoadIssues: async () => ({
+          skippedOnLoad: storeNewerVersion ? 1 : 0,
+          wholeFileUnreadable: storeNewerVersion,
+          storeNewerVersion
+        })
+      })
+      render(<ProviderScreen />)
+      await waitFor(() => expect(screen.getByText('削除')).toBeInTheDocument())
+      const loadsBeforeRemove = listProviders.mock.calls.length
+      fireEvent.click(screen.getByText('削除'))
+      await waitFor(() =>
+        expect(screen.getByTestId('provider-error').textContent).toContain(expected)
+      )
+      expect(screen.getByTestId('provider-error').textContent).not.toContain('操作に失敗しました')
+      // remove-failed (主に対象が既に無い) は一覧を読み込み直す。文言もそう告げる (R4 po L-301)。
+      if (reloads) {
+        await waitFor(() => expect(listProviders).toHaveBeenCalledTimes(loadsBeforeRemove + 1))
+        expect(screen.getByTestId('provider-error').textContent).toContain(
+          '一覧を読み込み直しました'
+        )
+      } else {
+        expect(listProviders).toHaveBeenCalledTimes(loadsBeforeRemove)
+      }
+    }
+  )
+
+  it('読み込みで退避した件数を 1 行だけ表示する (件数のみ。pr-gate R1 M-03)', async () => {
+    installCapability({
+      listProviders: async () => [summary],
+      providerLoadIssues: async () => ({
+        skippedOnLoad: 2,
+        wholeFileUnreadable: false,
+        storeNewerVersion: false
+      })
+    })
+    render(<ProviderScreen />)
+    await waitFor(() =>
+      expect(screen.getByTestId('provider-skipped-on-load').textContent).toBe(
+        '2 件の登録を読み込めませんでした (退避済み)'
+      )
+    )
+  })
+
+  it('ファイルごと読めなかったときは件数を出さない (pr-gate R2 database M-401 / po M-103)', async () => {
+    installCapability({
+      listProviders: async () => [],
+      providerLoadIssues: async () => ({
+        skippedOnLoad: 1,
+        wholeFileUnreadable: true,
+        storeNewerVersion: false
+      })
+    })
+    render(<ProviderScreen />)
+    await waitFor(() =>
+      expect(screen.getByTestId('provider-skipped-on-load').textContent).toBe(
+        '保存ファイルを読み込めなかったため、以前の登録は表示されません (退避済み)。必要なら登録し直してください。'
+      )
+    )
+    expect(screen.getByTestId('provider-skipped-on-load').textContent).not.toContain('件')
+  })
+
+  it('将来版のファイルでは、変更もできないことを添える (schema-version-unknown)', async () => {
+    installCapability({
+      listProviders: async () => [],
+      providerLoadIssues: async () => ({
+        skippedOnLoad: 1,
+        wholeFileUnreadable: true,
+        storeNewerVersion: true
+      })
+    })
+    render(<ProviderScreen />)
+    await waitFor(() =>
+      expect(screen.getByTestId('provider-skipped-on-load').textContent).toBe(
+        '保存ファイルを読み込めなかったため、登録を表示できません (退避済み)。新しいバージョンのアプリで保存されたファイルのため、登録・編集・削除もできません。'
+      )
+    )
+  })
+
+  it('退避 0 件・取得失敗のときは件数表示を出さない', async () => {
+    installCapability({
+      listProviders: async () => [summary],
+      providerLoadIssues: async () => ({
+        skippedOnLoad: 0,
+        wholeFileUnreadable: false,
+        storeNewerVersion: false
+      })
+    })
+    const { unmount } = render(<ProviderScreen />)
+    await waitFor(() => expect(screen.getByTestId('provider-list')).toBeInTheDocument())
+    expect(screen.queryByTestId('provider-skipped-on-load')).toBeNull()
+    unmount()
+
+    // providerLoadIssues 未スタブ = reject。表示を出さず画面は通常どおり。
+    installCapability({ listProviders: async () => [summary] })
+    render(<ProviderScreen />)
+    await waitFor(() => expect(screen.getByTestId('provider-list')).toBeInTheDocument())
+    expect(screen.queryByTestId('provider-skipped-on-load')).toBeNull()
   })
 })

@@ -86,7 +86,7 @@
 | B-1 | roadmap L172 / R-3 `research.md:58` / `plan.md:255`: **Streamdown の採否を X-1 で評価** | research.md R-01 で評価。**XSS 境界を回帰させない**前提。既定は `MarkdownText` 継続、live での便益が実測で確認できれば採用 | research R-01 |
 | B-2 | R-3 `research.md:15`: 末尾が伸びるため **`Unstable_MessageById` を再評価** (R-3 は `MessageByIndex`) | research.md R-02 で評価。live streaming の末尾更新に耐える描画 primitive を選ぶ | research R-02 |
 | B-3 | R-2 `plan.md:31` / AD-018 Open Q: **`wsl.exe` 強制終了時の JSONL 破損**は起動を伴うため X-1 | FR-016 の警告文に反映。実機挙動を quickstart に記録 (合否外) | quickstart V-5 |
-| B-4 | AD-025「### X-1 へ」/ R-1 `architecture-reviewer.round1.md:314` M-002: 所在 WSL × `Win32Runtime` の未検証仮定 | **本 feature は WSL 内起動に限る** (spec Out of Scope)。Win32 直接起動は X-4。research.md に「本 feature では発火しない」と記録 | research R-05 |
+| B-4 | AD-025「### X-1 へ」/ R-1 `architecture-reviewer.round1.md:314` M-002: 所在 WSL × `Win32Runtime` の未検証仮定 | **本 feature は WSL 内起動に限る** (spec Out of Scope)。Win32 直接起動は X-4 (**読み替え**: AD-041 (h) により X-6)。research.md に「本 feature では発火しない」と記録 | research R-05 |
 | B-5 | `platform-boundary-reviewer.md:108` (R-2): **UNC を DTO / 境界に出す前例を踏襲しない** | 起動系 DTO に UNC / 生パスを載せない。パスは所在の名前空間で表す (AD-025)。contracts C-3 で明示 | contracts C-3 |
 | B-6 | convention-reviewer.md:404-405 (R-2): `src/agents/` の登録簿 (`Worker` 等の実体) が SSoT から読めない | 本 feature が `src/agents/` に足すモジュールを discovery / directory map に反映 (code-gate で convention-reviewer が見る) | tasks (Shared) |
 | B-7 | convention-reviewer.md:785 `ui-path-concat -> nextFeature: X-1` | `UNDETECTED_NOTES['ui-path-concat']` を確認し、本 feature で該当経路が生じるなら塞ぐ。生じなければ `nextFeature` を後続へ繰り越す理由を記録 | SH-上流6 |

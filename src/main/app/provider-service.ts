@@ -3,12 +3,14 @@ import { normalizeDetectedCandidates } from '@domain/provider/detect'
 import type {
   CredentialDraft,
   ProviderDraft,
+  ProviderLoadIssuesDTO,
   ProviderPatch,
   ProviderSummaryDTO,
   ReachableProvidersDTO,
   RegisterProviderResult,
   UpdateProviderResult
 } from '@domain/provider/dto'
+import { classifyHelperPath, resolveConfigDirPath } from '@domain/provider/helper-path'
 import { assessReachability, splitByReachability } from '@domain/provider/reachability'
 import { scanExtraEnvForSecrets } from '@domain/provider/secret-scan'
 import type {
@@ -20,6 +22,7 @@ import type {
 import type { RuntimeDescriptor } from '@domain/runtime/descriptor'
 import { isValidDistroName, uncNamespace } from '@domain/runtime/namespace'
 import { makeHostPath, makeWslUncPath, type RuntimePath } from '@domain/runtime/path-types'
+import type { ProviderFact } from '@domain/session/launch-resolution'
 
 import type { ProviderStore } from '../infra/settings/provider-store'
 import type { SecretStore } from '../infra/secrets/safe-storage'
@@ -39,15 +42,17 @@ export interface ProviderServiceDeps {
   /** 検出 I/O の結果 (composition が home/aws config/env を解決して渡す。H-04)。 */
   readonly detect: () => Promise<readonly DetectedCandidate[]>
   readonly runtimes: () => readonly RuntimeDescriptor[]
-  /** `config-dir` の configDir を選択ランタイムの `RuntimePath` へ変換 (composition。H-02/H-101/PB-M-001)。 */
-  readonly resolveConfigDirRuntimePath: (
-    configDir: ProviderProfile['configDir'],
-    runtime: RuntimeDescriptor
-  ) => RuntimePath | null
   /** infra `buildLaunchEnv` の curated base (composition が parentEnv から組む)。 */
   readonly curatedBaseEnv: () => Record<string, string>
   /** X-1 `LAUNCH_ENV_DENY_PATTERN` の述語 (SSoT を注入。複製しない。FR-009)。 */
   readonly isDeniedEnvKey: (key: string) => boolean
+  /** 転送禁止キーの述語 (infra の transport キーを注入済み。X-4 / AD-041 (e))。 */
+  readonly isForbiddenForwardKey: (key: string) => boolean
+  /**
+   * env-passthrough の値の出所 (アプリ自身の親 env。composition が `process.env` を渡す)。
+   * **varNames の実名 allowlist に載った名前だけを読む** (X-4 / AD-041 (e) 4)。
+   */
+  readonly parentEnv: () => Readonly<Record<string, string | undefined>>
   readonly newId: () => string
 }
 
@@ -57,7 +62,9 @@ function toSummary(p: ProviderProfile): ProviderSummaryDTO {
     displayName: p.displayName,
     backend: p.backend,
     source: p.credential.source,
-    modelCount: p.models.models.length
+    modelCount: p.models.models.length,
+    // モデルカタログは秘密でない。起動ダイアログの選択肢とプロバイダ画面の編集に使う (X-4 FR-003 / FR-017)。
+    models: p.models.models
   }
 }
 
@@ -78,13 +85,17 @@ function toConfigDir(
 
 export interface ProviderService {
   list(): Promise<readonly ProviderSummaryDTO[]>
+  /** providers.json の読み込みで退避したレコードの件数 (名前・値は含めない。pr-gate R1 M-03)。 */
+  loadIssues(): Promise<ProviderLoadIssuesDTO>
   detect(): Promise<readonly DetectedCandidate[]>
   register(draft: ProviderDraft): Promise<RegisterProviderResult>
   update(id: string, patch: ProviderPatch): Promise<UpdateProviderResult>
   remove(id: string): Promise<{ readonly ok: boolean }>
   listReachable(runtimeId: string): Promise<ReachableProvidersDTO>
-  /** 起動 env を導出する (X-4 が起動時に消費。FR-008)。到達不可/未知は null。 */
+  /** 起動 env を導出する (X-4 が起動時に消費。FR-008)。到達不可/未知/規則違反は null。 */
   deriveEnv(providerId: string, runtimeId: string): Promise<DerivedLaunchEnv | null>
+  /** 選択ランタイムから見た Provider の事実 (依存解決の facts。X-4 FR-006)。未知ランタイムは空。 */
+  providerFacts(runtimeId: string): Promise<readonly ProviderFact[]>
 }
 
 export function createProviderService(deps: ProviderServiceDeps): ProviderService {
@@ -93,9 +104,10 @@ export function createProviderService(deps: ProviderServiceDeps): ProviderServic
     secrets,
     detect,
     runtimes,
-    resolveConfigDirRuntimePath,
     curatedBaseEnv,
     isDeniedEnvKey,
+    isForbiddenForwardKey,
+    parentEnv,
     newId
   } = deps
 
@@ -103,6 +115,10 @@ export function createProviderService(deps: ProviderServiceDeps): ProviderServic
   let loaded = false
   /** load 時の退避メタ。**破棄しない** — version-skew では mutation を拒否して上書きを防ぐ (DB-P-M01)。 */
   let storeNewerVersion = false
+  /** load で退避して読み込まなかったレコード数 (UI の最小表示に件数だけ渡す。pr-gate R1 M-03)。 */
+  let skippedOnLoad = 0
+  /** ファイルごと読めなかった (store の `skipped` は 1 になり件数の意味を持たない。pr-gate R2 database M-401)。 */
+  let wholeFileUnreadable = false
 
   async function ensureLoaded(): Promise<void> {
     if (loaded) return
@@ -111,6 +127,17 @@ export function createProviderService(deps: ProviderServiceDeps): ProviderServic
     // providers.json が将来版だった場合、profiles は空になっている。ここで save すると新版データを
     // (退避済みとはいえ) アプリから復旧不能に上書きするため、以降の mutation を止める。
     storeNewerVersion = result.reasonKeys.includes('schema-version-unknown')
+    skippedOnLoad = result.skipped
+    wholeFileUnreadable = result.reasonKeys.some(
+      (k) => k === 'parse-failed' || k === 'schema-version-unknown'
+    )
+    // 退避したレコードの観測点 (spec Assumptions「invalid-record としてログに出す」/ pr-gate R1 database M-301)。
+    // **件数・理由キー・退避先だけ** — Provider 名・extraEnv の値は出さない (Principle V / CWE-532)。
+    if (result.skipped > 0 || result.backupPath !== null) {
+      console.warn(
+        `[provider-store] skipped=${result.skipped} reasons=${result.reasonKeys.join(',')} backup=${result.backupPath?.value ?? 'none'}`
+      )
+    }
     loaded = true
   }
 
@@ -143,6 +170,11 @@ export function createProviderService(deps: ProviderServiceDeps): ProviderServic
     async list() {
       await ensureLoaded()
       return profiles.map(toSummary)
+    },
+
+    async loadIssues() {
+      await ensureLoaded()
+      return { skippedOnLoad, wholeFileUnreadable, storeNewerVersion }
     },
 
     async detect() {
@@ -255,36 +287,69 @@ export function createProviderService(deps: ProviderServiceDeps): ProviderServic
 
       // infra が解決した値を組み立てて純粋関数へ渡す (seam。H-03)。
       const cred = profile.credential
-      const configDirRuntimePath =
-        profile.configDir !== undefined
-          ? resolveConfigDirRuntimePath(profile.configDir, runtime)
-          : undefined
-      // **config-dir 方式で configDir を持つのに RuntimePath へ変換できないなら fail-closed** (PB-P-M01)。
-      // reachable でも変換不能なら CLAUDE_CONFIG_DIR を欠いた env になり、WSL 内 claude がランタイム既定の
-      // config dir (別資格情報名前空間) を黙って掴む。到達可能性の一次ゲートとは別に、seam でも安全側へ倒す。
+
+      // **config-dir の RuntimePath は到達可能性判定と同じ domain 関数で解決する** (X-4 FR-012 / PB-M-101)。
+      // 変換できないなら fail-closed (CLAUDE_CONFIG_DIR を欠くと WSL 内 claude が既定 config dir を黙って掴む。PB-P-M01)。
+      let configDirRuntimePath: RuntimePath | undefined
       if (
         (cred.source === 'config-dir' || cred.source === 'in-app-login') &&
-        profile.configDir !== undefined &&
-        configDirRuntimePath === null
+        profile.configDir !== undefined
       ) {
-        return null
+        const r = resolveConfigDirPath(profile.configDir, runtime)
+        if (!r.ok) return null
+        configDirRuntimePath = r.path
       }
+
+      // helper 系は選択ランタイムの名前空間で分類した RuntimePath だけを渡す (X-4 FR-014)。
+      let helperRuntimePath: RuntimePath | undefined
+      if (
+        cred.source === 'api-key-helper' ||
+        cred.source === 'aws-credential-export' ||
+        cred.source === 'aws-assume-role'
+      ) {
+        const r = classifyHelperPath(cred.helperPath, runtime)
+        if (!r.ok) return null
+        helperRuntimePath = r.path
+      }
+
+      // env-passthrough は varNames (実名 allowlist) の値だけを親 env から読む (X-4 / AD-041 (e) 4)。
+      let passthroughValues: Record<string, string> | undefined
+      if (cred.source === 'env-passthrough') {
+        const env = parentEnv()
+        passthroughValues = {}
+        for (const name of cred.varNames) {
+          const value = env[name]
+          if (typeof value === 'string') passthroughValues[name] = value
+        }
+      }
+
       const resolved = {
         ...(cred.source === 'api-key' ? { apiKeyValue: secrets.open(cred.secretRefKey) } : {}),
         ...(cred.source === 'oauth-token'
           ? { oauthTokenValue: secrets.open(cred.secretRefKey) }
           : {}),
-        ...(cred.source === 'aws-assume-role' ? { awsCredentialExportPath: cred.helperPath } : {}),
-        ...(configDirRuntimePath !== null && configDirRuntimePath !== undefined
-          ? { configDirRuntimePath }
-          : {})
+        ...(helperRuntimePath !== undefined ? { helperRuntimePath } : {}),
+        ...(configDirRuntimePath !== undefined ? { configDirRuntimePath } : {}),
+        ...(passthroughValues !== undefined ? { passthroughValues } : {})
       }
       return deriveLaunchEnv({
         profile,
         resolved,
         curatedBase: curatedBaseEnv(),
-        isDeniedEnvKey
+        isDeniedEnvKey,
+        isForbiddenForwardKey
       })
+    },
+
+    async providerFacts(runtimeId) {
+      await ensureLoaded()
+      const runtime = runtimes().find((r) => r.id === runtimeId)
+      if (runtime === undefined) return []
+      return profiles.map((p) => ({
+        id: p.id,
+        reachable: assessReachability(p, runtime) === 'reachable',
+        models: p.models.models
+      }))
     }
   }
 }

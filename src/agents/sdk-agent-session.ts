@@ -1,13 +1,28 @@
 import { spawn } from 'node:child_process'
 
-import { query, type Options, type Query } from '@anthropic-ai/claude-agent-sdk'
+import {
+  query,
+  type EffortLevel as SdkEffortLevel,
+  type Options,
+  type PermissionMode as SdkPermissionMode,
+  type Query
+} from '@anthropic-ai/claude-agent-sdk'
 
+import { isEffortLevel, isValidModelId } from '@domain/provider/model-catalog'
+import { assertHelperSettings, isHelperSettings } from '@domain/provider/settings'
+import type { EffortLevel } from '@domain/provider/types'
 import type {
+  LaunchQueryOptions,
   PermissionDecision,
   RuntimeLaunchSpec,
   SessionControl,
   SessionEvent
 } from '@domain/session/agent-session'
+import {
+  assertSafePermissionMode,
+  isSafePermissionMode,
+  type SafePermissionMode
+} from '@domain/session/launch-config'
 import { toLiveAssistantMessage } from '@domain/session/live-message'
 import { nextState, type SessionRunState } from '@domain/session/run-state'
 import { sanitizeBody } from '@domain/session/sanitize-body'
@@ -38,6 +53,17 @@ import {
  * | **本文・toolName は取得プロセス側でサニタイズ**してから port に載せる | FR-009 / SC-008 / H-05 |
  * | **制御は `parentPort` (main 検証済み)・データは転送 port へ直送** (main は本文を持たない) | AD-034 / contracts C-2 |
  */
+
+/*
+ * ── domain が手で持つ型と SDK 型の一致 (X-4 / AD-042 / design-gate R1 arch L-003) ──
+ * domain は SDK を import できないため `EffortLevel` / `SafePermissionMode` を手書きしている。
+ * SDK を更新して値域が変わったら、ここが tsc で落ちる (AD-020 Consequences「版が上がれば型は増減する」)。
+ */
+type Equal<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false
+const effortLevelMatchesSdk: Equal<EffortLevel, SdkEffortLevel> = true
+const safeModeIsSdkMode: SafePermissionMode extends SdkPermissionMode ? true : false = true
+void effortLevelMatchesSdk
+void safeModeIsSdkMode
 
 /* ── parentPort / データ port の最小構造 (SDK 非依存・`electron` 非 import) ── */
 
@@ -160,10 +186,48 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : null
 }
 
-function decodeLaunchSpec(data: unknown): RuntimeLaunchSpec | null {
+/**
+ * launch メッセージの `options` を復元する (X-4 FR-005 / AD-040 Decision 2)。
+ *
+ * **main と同じ述語で再検証し、未知キーを捨てる。** 不正なら `null` (起動しない)。
+ * permissionMode は既定値を補わない — 欠けていれば拒否する (昇格の余地を作らない)。
+ * settings の値にバックスラッシュが無いこと (HostPath / UNC の漏出でない) も確かめる (AD-036 §3)。
+ */
+function decodeLaunchOptions(value: unknown): LaunchQueryOptions | null {
+  const o = asRecord(value)
+  if (o === null) return null
+  if (!isSafePermissionMode(o.permissionMode)) return null
+  if (o.model !== undefined && !isValidModelId(o.model)) return null
+  if (o.effort !== undefined && !isEffortLevel(o.effort)) return null
+  if (o.settings !== undefined) {
+    if (!isHelperSettings(o.settings)) return null
+    if (Object.values(o.settings).some((v) => typeof v === 'string' && v.includes('\\')))
+      return null
+  }
+  return {
+    permissionMode: assertSafePermissionMode(o.permissionMode),
+    ...(o.model !== undefined ? { model: o.model } : {}),
+    ...(o.effort !== undefined ? { effort: o.effort } : {}),
+    ...(o.settings !== undefined ? { settings: assertHelperSettings(o.settings) } : {})
+  }
+}
+
+interface DecodedLaunch {
+  readonly spec: RuntimeLaunchSpec
+  readonly options: LaunchQueryOptions
+}
+
+function decodeLaunch(data: unknown): DecodedLaunch | null {
   const record = asRecord(data)
   if (record === null || record.kind !== 'launch') return null
-  const spec = asRecord(record.spec)
+  const spec = decodeLaunchSpec(record.spec)
+  const options = decodeLaunchOptions(record.options)
+  if (spec === null || options === null) return null
+  return { spec, options }
+}
+
+function decodeLaunchSpec(value: unknown): RuntimeLaunchSpec | null {
+  const spec = asRecord(value)
   if (spec === null) return null
   const { pathToClaudeCodeExecutable, command, prefixArgs, env } = spec
   if (typeof pathToClaudeCodeExecutable !== 'string' || typeof command !== 'string') return null
@@ -223,7 +287,11 @@ function decodeDecision(value: unknown): PermissionDecision | null {
 /** 制御シンク。`main()` の parentPort ループが検証済み control をここへ流す。 */
 let controlSink: ((control: SessionControl) => void) | null = null
 
-async function run(spec: RuntimeLaunchSpec, port: DataPortLike): Promise<void> {
+async function run(
+  spec: RuntimeLaunchSpec,
+  launchOptions: LaunchQueryOptions,
+  port: DataPortLike
+): Promise<void> {
   const promptQueue = new PromptQueue()
   const abortController = new AbortController()
   const pending = new Map<string, (decision: PermissionDecision) => void>()
@@ -234,6 +302,11 @@ async function run(spec: RuntimeLaunchSpec, port: DataPortLike): Promise<void> {
   // 初 stream/ready を受けたか (launching → running を 1 回だけ発火する。TS が closure 変数 state を
   // 'idle' リテラルに固定するため、state の直接比較でなく専用フラグで判定する)。
   let sawFirstMessage = false
+  // 利用者が最初のプロンプトを送ったか。**送る前の通知では launching → running にしない** —
+  // claude 2.1.285 は起動直後 (初回 user メッセージの前) に `system/commands_changed` を出す (X-4 quickstart で実測)。
+  // それで running (turn in-flight) にすると renderer が busy と判断して初回プロンプトを積み、
+  // turn 完了まで dispatch しないためデッドロックする (X-1 は「初回まで無出力」の実測を前提にしていた)。
+  let promptSent = false
   // terminal error (provider-error / stream-protocol-error) に達したか。到達したら孫 (wsl.exe) を止める。
   let terminated = false
 
@@ -287,6 +360,7 @@ async function run(spec: RuntimeLaunchSpec, port: DataPortLike): Promise<void> {
   controlSink = (control) => {
     switch (control.kind) {
       case 'send-prompt':
+        promptSent = true
         promptQueue.push(control.text)
         transition({ kind: 'send-prompt' })
         break
@@ -333,11 +407,17 @@ async function run(spec: RuntimeLaunchSpec, port: DataPortLike): Promise<void> {
   }
 
   // 権限ゲートは正の構成 (allowlist) で組む。options のキー集合は buildQueryOptions が固定する (P1)。
+  // X-4: permissionMode / model / effort / settings を渡す (settings は X-3 で未配線だった。AD-040 / AD-041)。
+  // 各値は buildQueryOptions が assert し直す (安全 3 値・文字種・enum・2 キー射影)。
   const options = buildQueryOptions({
+    permissionMode: assertSafePermissionMode(launchOptions.permissionMode),
     canUseTool,
     pathToClaudeCodeExecutable: spec.pathToClaudeCodeExecutable,
     spawnClaudeCodeProcess,
-    abortController
+    abortController,
+    settings: assertHelperSettings(launchOptions.settings),
+    model: launchOptions.model,
+    effort: launchOptions.effort
   })
 
   transition({ kind: 'launch' })
@@ -351,7 +431,7 @@ async function run(spec: RuntimeLaunchSpec, port: DataPortLike): Promise<void> {
      */
     queryHandle = query({ prompt: promptQueue.iterate(), options: options as unknown as Options })
     for await (const message of queryHandle) {
-      if (!sawFirstMessage) {
+      if (!sawFirstMessage && promptSent) {
         sawFirstMessage = true
         transition({ kind: 'ready' }) // launching → running (他状態では no-op)
       }
@@ -419,15 +499,15 @@ function main(): void {
   let started = false
   parentPort.on('message', (message) => {
     if (!started) {
-      const spec = decodeLaunchSpec(message.data)
+      const launch = decodeLaunch(message.data)
       const port = message.ports[0] ?? null
-      if (spec === null || port === null) {
+      if (launch === null || port === null) {
         process.exitCode = 1
         return
       }
       started = true
       port.start?.()
-      void run(spec, port)
+      void run(launch.spec, launch.options, port)
       return
     }
     const control = decodeControl(message.data)

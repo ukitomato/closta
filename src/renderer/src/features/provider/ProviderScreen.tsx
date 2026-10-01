@@ -1,7 +1,7 @@
 import { useState } from 'react'
 
 import type { CredentialDraft, ProviderDraft, ProviderSummaryDTO } from '@domain/provider/dto'
-import type { CredentialSource } from '@domain/provider/types'
+import type { CredentialSource, ModelEntry } from '@domain/provider/types'
 
 import { EmptyState } from '@/components/assistant-ui/elements/empty-state'
 import { ErrorState } from '@/components/assistant-ui/elements/error-state'
@@ -10,8 +10,15 @@ import { paper } from '@/components/assistant-ui/elements/surfaces'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
-import { BACKEND_LABELS, CREDENTIAL_SOURCE_LABELS, REGISTER_FAILURE_LABELS } from './labels'
-import { useProviders } from './useProviders'
+import {
+  BACKEND_LABELS,
+  CREDENTIAL_SOURCE_LABELS,
+  REGISTER_FAILURE_LABELS,
+  skippedOnLoadLabel,
+  wholeFileUnreadableLabel
+} from './labels'
+import { ModelCatalogEditor } from './ModelCatalogEditor'
+import { useProviderLoadIssues, useProviders } from './useProviders'
 
 /**
  * Provider 登録・検出・管理の画面 (FE-001 / FE-010 / FE-030。X-3)。
@@ -188,13 +195,16 @@ function RegisterForm({
 function ProviderRow({
   provider,
   onRename,
+  onSaveModels,
   onRemove
 }: {
   provider: ProviderSummaryDTO
   onRename: (id: string, displayName: string) => Promise<unknown>
+  onSaveModels: (id: string, models: readonly ModelEntry[]) => Promise<unknown>
   onRemove: (id: string) => void
 }): React.JSX.Element {
   const [editing, setEditing] = useState(false)
+  const [catalogOpen, setCatalogOpen] = useState(false)
   const [name, setName] = useState(provider.displayName)
 
   const save = async (): Promise<void> => {
@@ -216,10 +226,20 @@ function ProviderRow({
           <p className="font-medium break-words">{provider.displayName}</p>
         )}
         <p className="text-muted-foreground text-sm">
-          {BACKEND_LABELS[provider.backend]} · {CREDENTIAL_SOURCE_LABELS[provider.source]}
+          {BACKEND_LABELS[provider.backend]} · {CREDENTIAL_SOURCE_LABELS[provider.source]} · モデル{' '}
+          {provider.modelCount} 件
         </p>
+        {catalogOpen && (
+          <ModelCatalogEditor
+            models={provider.models}
+            onSave={(models) => onSaveModels(provider.id, models)}
+          />
+        )}
       </div>
       <div className="flex shrink-0 gap-2">
+        <Button variant="outline" size="sm" onClick={() => setCatalogOpen((v) => !v)}>
+          {catalogOpen ? 'モデルを閉じる' : 'モデル'}
+        </Button>
         {editing ? (
           <Button size="sm" onClick={() => void save()} disabled={name.length === 0}>
             保存
@@ -249,6 +269,7 @@ export function ProviderScreen(): React.JSX.Element {
     update,
     remove
   } = useProviders()
+  const loadIssues = useProviderLoadIssues()
 
   if (loadState === 'failed') {
     return (
@@ -279,6 +300,15 @@ export function ProviderScreen(): React.JSX.Element {
           {detecting ? '検出中…' : '検出'}
         </Button>
       </div>
+
+      {/* ファイルごと読めなかったときは件数を出さない (件数は 1 で意味を持たない。pr-gate R2 database M-401)。 */}
+      {loadIssues !== null && (loadIssues.wholeFileUnreadable || loadIssues.skippedOnLoad > 0) ? (
+        <p className="text-muted-foreground text-sm" data-testid="provider-skipped-on-load">
+          {loadIssues.wholeFileUnreadable
+            ? wholeFileUnreadableLabel(loadIssues.storeNewerVersion)
+            : skippedOnLoadLabel(loadIssues.skippedOnLoad)}
+        </p>
+      ) : null}
 
       {lastError !== null ? (
         <div
@@ -328,6 +358,7 @@ export function ProviderScreen(): React.JSX.Element {
               key={p.id}
               provider={p}
               onRename={(id, displayName) => update(id, { displayName })}
+              onSaveModels={(id, models) => update(id, { models: { models } })}
               onRemove={(id) => void remove(id)}
             />
           ))}

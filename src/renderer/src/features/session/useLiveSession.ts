@@ -9,6 +9,7 @@ import type {
   SessionEvent,
   SessionLaunchRejectReason
 } from '@domain/session/agent-session'
+import type { SessionLaunchConfig } from '@domain/session/launch-config'
 import type { SessionRunState } from '@domain/session/run-state'
 
 import { toThreadMessage } from '@/features/chat/convert'
@@ -58,7 +59,17 @@ export interface LiveSession {
   readonly draft: string
   /** 下書きを更新する (composer の onChange から。メモリ内限定・境界/ログに出さない。FR-008)。 */
   setDraft(text: string): void
-  launch(folderId: string, runtimeId: string): Promise<void>
+  /**
+   * 最後に起動を試みた起動設定 (X-4 / US-1 AC7)。**reset しても保持する** — 確立 (`system/init`) 前の失敗・中断から
+   * 「再起動」/「閉じる」で起動設定ダイアログへ戻ったとき、入力を復元するため。資格情報を含まない (id 参照のみ)。
+   */
+  readonly lastConfig: SessionLaunchConfig | null
+  /**
+   * 失敗 (`failure` SessionEvent) の後に reset で起動設定ダイアログへ戻ったときの理由 (US-1 AC7 / pr-gate M-07)。
+   * reset は `failureReason` を消すため、ダイアログで理由を示せるようここに移す。次の launch で消す。
+   */
+  readonly previousFailure: LaunchFailureReason | null
+  launch(config: SessionLaunchConfig): Promise<void>
   /** 送信と同時にユーザ発話を楽観表示する (agents の user echo は取らないため。FE-002)。 */
   appendUser(text: string): void
   send(text: string): void
@@ -106,6 +117,10 @@ export function useLiveSession(): LiveSession {
   // useExternalStoreRuntime が再構成されても保持される。X-2 / FR-007)。会話由来テキストなので
   // 境界・ログ・永続層に出さない (Principle V / FR-008)。
   const [draft, setDraftValue] = useState('')
+  const [lastConfig, setLastConfig] = useState<SessionLaunchConfig | null>(null)
+  const [previousFailure, setPreviousFailure] = useState<LaunchFailureReason | null>(null)
+  /** reset 時点の失敗理由を読むための写し (reset は依存なしの callback のため state を直接読めない)。 */
+  const failureRef = useRef<LaunchFailureReason | null>(null)
 
   const sessionIdRef = useRef<string | null>(null)
   const portRef = useRef<MessagePort | null>(null)
@@ -132,6 +147,7 @@ export function useLiveSession(): LiveSession {
         setDenied((prev) => [...prev, event.denied])
         break
       case 'failure':
+        failureRef.current = event.reasonKey
         setFailureReason(event.reasonKey)
         // **承認待ちを畳む** (pr-gate po M-401)。awaiting 中に provider-error/stream 例外が来ると
         // FailureBanner と ApprovalCard が競合表示になる。terminal failure では承認カードを消す。
@@ -180,7 +196,8 @@ export function useLiveSession(): LiveSession {
   }, [])
 
   const launch = useCallback(
-    async (folderId: string, runtimeId: string): Promise<void> => {
+    async (config: SessionLaunchConfig): Promise<void> => {
+      setLastConfig(config)
       // 前回の残りを片付けてから起動する。
       // (bufferedRef はここで null 化しない — TS の control-flow が `.current` を `null` に固定し、
       //  後段の buffered 取り出しが never になるため。別 sessionId の残りは line の照合で弾かれ無害。)
@@ -190,7 +207,9 @@ export function useLiveSession(): LiveSession {
       setMessages([])
       setDenied([])
       setPending(null)
+      failureRef.current = null
       setFailureReason(null)
+      setPreviousFailure(null)
       setRejectReason(null)
       setKilled(false)
       setDraftValue('') // 新規起動で下書きは持ち越さない (X-2 / R2-M-002 の discard 相当)
@@ -199,7 +218,7 @@ export function useLiveSession(): LiveSession {
 
       let handshake
       try {
-        handshake = await capability().launchSession(folderId, runtimeId)
+        handshake = await capability().launchSession(config)
       } catch {
         setRejectReason('launch-failed')
         setPhase('rejected')
@@ -261,7 +280,7 @@ export function useLiveSession(): LiveSession {
 
   const respond = useCallback((requestId: string, outcome: 'allow' | 'deny'): void => {
     const id = sessionIdRef.current
-    // X-1 の要求 scope は常に `once` (capability 付与は X-4)。承認カードが唯一の承認経路。
+    // 要求 scope は常に `once` (capability 付与は I-3。AD-041 (c))。承認カードが唯一の承認経路。
     if (id !== null) void capability().respondPermission(id, requestId, outcome, 'once')
     setPending(null)
   }, [])
@@ -281,6 +300,9 @@ export function useLiveSession(): LiveSession {
     setMessages([])
     setDenied([])
     setPending(null)
+    // 失敗から戻る場合は理由をダイアログへ引き継ぐ (US-1 AC7 / pr-gate M-07)。失敗でなければ前回の理由も消す。
+    setPreviousFailure(failureRef.current)
+    failureRef.current = null
     setFailureReason(null)
     setRejectReason(null)
     setKilled(false)
@@ -301,6 +323,8 @@ export function useLiveSession(): LiveSession {
     killed,
     draft,
     setDraft,
+    lastConfig,
+    previousFailure,
     launch,
     appendUser,
     send,

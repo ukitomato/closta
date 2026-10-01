@@ -177,9 +177,16 @@ R-1 の残り 2 つは R-2 をブロックしない。
 |---|---|---|---|---|---|
 | 5 | X-1 | 単一セッション起動とストリーミング | `session` | R-4 | SPIKE-5 / SPIKE-3 **完了** |
 | 6 | X-2 | 日本語 composer | `ui` | X-1 | **SPIKE-4** |
-| 7 | X-3 | Provider 登録と到達可能性判定 | `provider` | X-1 | SPIKE-7 **完了** / design-gate PASS ([AD-040](decisions/0040-provider-settings-constrained-projection.md) で C-001 調停) / R-02 = **awsCredentialExport 化** (AWS SDK 依存なし・一時資格の実体を持たない) / **ADR follow-up (pr-gate R2 D-L-101/102)**: R-02 が [AD-039](decisions/0039-credential-delegation-verified.md) D4「アプリが一時資格を扱う唯一の例外」を失効させ、[AD-005](decisions/0005-provider-as-registrable-value.md) の型を `CredentialRef`/`configDir: HostPath\|WslUncPath` に精緻化した (007 data-model §2)。**両者の後続 ADR 起票を要する** (現状は spec/data-model/glossary に記録、accepted ADR 本文は immutable で未追記) |
-| 8 | X-4 | 起動設定ダイアログとプリセット | `session` | X-3 | SPIKE-6 **完了** / 越境警告 AD-016 / 作業領域戦略 AD-017 / 権限モード 6 値 AD-020 |
+| 7 | X-3 | Provider 登録と到達可能性判定 | `provider` | X-1 | SPIKE-7 **完了** / design-gate PASS ([AD-040](decisions/0040-provider-settings-constrained-projection.md) で C-001 調停) / R-02 = **awsCredentialExport 化** (AWS SDK 依存なし・一時資格の実体を持たない) / **ADR follow-up (pr-gate R2 D-L-101/102)**: R-02 が [AD-039](decisions/0039-credential-delegation-verified.md) D4「アプリが一時資格を扱う唯一の例外」を失効させ、[AD-005](decisions/0005-provider-as-registrable-value.md) の型を `CredentialRef`/`configDir: HostPath\|WslUncPath` に精緻化した (007 data-model §2)。→ **[AD-042](decisions/0042-provider-type-refinement-and-d4-lapse.md) で記録済み (X-4, 2026-09-30)** |
+| 8 | X-4 | 起動設定ダイアログとプリセット | `session` | X-3 | SPIKE-6 **完了** / 越境警告 AD-016 / 権限モードは**安全 3 値** (AD-020 の危険度表。[AD-041](decisions/0041-x4-launch-config-on-x1-launch-gate.md) (a)) / 作業領域戦略 AD-017 は I-1 へ付け替え (AD-041 (d)) / design-gate R3 PASS |
 | 9 | X-5 | supervisor 分離とマルチセッション | `session` | X-4 | — |
+
+**M2 の後続 (critical path 外)**: X-4 の design-gate (2026-09-30) で範囲から外した項目の持ち主。M2 の達成状態を待たせない。
+
+| ID | feature | domain | 依存 | 内容 |
+|---|---|---|---|---|
+| X-6 | 起動設定の拡張軸とセッション操作 | `session` | X-5 | `SessionLaunchConfig` の残りの軸 (追加ディレクトリ / 上限 / セッション名) / Win32Runtime 直接起動 / fork・resume・rename・tag・delete / providers.json・presets.json の退避ファイル一覧・復元・版不一致の UI (件数の 1 行表示は X-4 で実装済み。AD-042 Decision 4) / 同一内容の `.bak` の重複抑止 / claudePath の形の判定 (shebang 形の案内。AD-041 記録 2) / settings store 3 種の読み取り失敗・非配列 root・mutation 直列化の是正 (X-4 code-gate db H-001 / M-002 / M-003 の provider・folder 分) |
+| X-7 | aws-assume-role helper の生成と CloudTrail 追跡 | `provider` | X-4 | `RoleSessionName` 付き helper をアプリが生成する (roleArn / region / profile の登録スキーマ、`check.mjs` 項目 6 の file sink 拡張、helper の完全性)。X-4 までは X-3 のユーザ供給 helperPath 方式。POSIX helperPath に所属 distro を持たせる (AD-042 残存リスク)。api-key / oauth-token / aws-profile / env-passthrough に固有の `forwardKeys`、Bash tool からの秘密 env の可視性、helper のシェル実行方式を実機で観測する (X-4 から繰越。AD-041 記録 3)。extraEnv を名前の allowlist にするかを検討する (AD-041 (e) 3) |
 
 X-2 を X-1 の直後に置いたのは、**日本語入力が壊れたままでは以降の feature を自分で使えない**ため。
 Principle VIII は製品の採否条件であり、後回しにすると検証が遅れる。
@@ -199,7 +206,7 @@ X-2 (日本語 composer) で判断する** — R-3 は過去ログの表示で�
 |---|---|---|---|---|---|
 | 10 | O-1 | セッション監視ビュー | `session` | X-5 | — |
 | 11 | O-2 | `docs/ui-coverage.md` の確立（**SDK 39 型から導出**）+ Tier B/C 再棚卸し | `ui` | O-1 | SPIKE-12 **完了** |
-| 12 | O-3 | Thread 検索と observability | `ui` | O-2 | — |
+| 12 | O-3 | Thread 検索と observability | `ui` | O-2 | — / **義務 (X-4 から)**: session charter KPI「再利用率」の計測経路 (起動元 `preset` / `manual` のローカル利用ログ。AD-041 (h)) |
 
 **O-2 で対応表そのものを成果物にする。** これが揃うまで Principle XII は検証不能である。
 
@@ -214,9 +221,9 @@ SDK メッセージ型と表示の対応表は O-2 が正本にする。持ち�
 
 | 順 | ID | feature | domain | 依存 | 前提 SPIKE |
 |---|---|---|---|---|---|
-| 13 | I-1 | `DockerRuntime` と endpoint 抽象 + `sessionStore` | `isolation` | X-5 | SPIKE-10 **完了** / SPIKE-11（再定義） |
+| 13 | I-1 | `DockerRuntime` と endpoint 抽象 + `sessionStore` | `isolation` | X-5 | SPIKE-10 **完了** / SPIKE-11（再定義） / 作業領域戦略の軸 AD-017 (X-4 から付け替え。AD-041 (d)) / 転送禁止キーの登録時検証を transport の和集合として作り直す (AD-041 (e) 3・(h)) |
 | 14 | I-2 | コンテナライフサイクルと隔離可視化 **+ volume 孤児回収** | `isolation` | I-1 | — |
-| 15 | I-3 | sandbox capability 判定と権限モードのゲート | `isolation` | I-2 | — |
+| 15 | I-3 | sandbox capability 判定と権限モードのゲート | `isolation` | I-2 | — / **義務 (X-4 から)**: 昇格モードの capability 連動提示、承認の `scope: 'capability'` 永続化 (AD-041 (c)) |
 
 I-1 では **`wsl:<distro>` endpoint（WSL 内 Docker Engine）を第一に検証する。**
 主開発ホストに Docker Desktop は入っていない。`/mnt/c` 越し bind mount の実効速度もここで実測し、

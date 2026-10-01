@@ -264,6 +264,87 @@ export const FIXTURES = [
     rules: ['#16']
   },
   {
+    file: 'a-direct/sdk-permission-mode-unwrapped.ts.fixture',
+    target: 'src/agents/__rulecheck__/sdk-permission-mode-unwrapped.ts',
+    group: 'a',
+    what:
+      '値位置の permissionMode を assertSafePermissionMode ラッパを通さず書く ' +
+      "(AD-041 (a)。値は安全値 'plan' で昇格値リテラル検査には掛からない — 新 backstop 単独で発火する証跡。X-4 / SH-010)",
+    detectors: ['constitution'],
+    rules: ['#16']
+  },
+  {
+    file: 'b-equivalent/sdk-permission-mode-shorthand.ts.fixture',
+    target: 'src/agents/__rulecheck__/sdk-permission-mode-shorthand.ts',
+    group: 'b',
+    what: 'shorthand の { permissionMode } で渡す (`permissionMode:` の綴りが現れない等価形。X-4 / SH-010)',
+    detectors: ['constitution'],
+    rules: ['#16']
+  },
+  {
+    file: 'b-equivalent/sdk-permission-mode-constant.ts.fixture',
+    target: 'src/agents/__rulecheck__/sdk-permission-mode-constant.ts',
+    group: 'b',
+    what:
+      'domain から import した大文字の定数で permissionMode を渡す ' +
+      '(昇格値リテラルが現れない。旧版は大文字識別子を型位置とみなして素通しした。X-4 code-gate platform-boundary M-001)',
+    detectors: ['constitution'],
+    rules: ['#16']
+  },
+  {
+    file: 'b-equivalent/sdk-permission-mode-computed-key.ts.fixture',
+    target: 'src/agents/__rulecheck__/sdk-permission-mode-computed-key.ts',
+    group: 'b',
+    what: "計算キー { ['permissionMode']: m } で渡す (`permissionMode:` の綴りが現れない等価形。X-4 code-gate platform-boundary M-001)",
+    detectors: ['constitution'],
+    rules: ['#16']
+  },
+  {
+    file: 'b-equivalent/sdk-permission-mode-assignment.ts.fixture',
+    target: 'src/agents/__rulecheck__/sdk-permission-mode-assignment.ts',
+    group: 'b',
+    what: 'options を組んだ後で `.permissionMode =` を代入する (オブジェクトリテラルのキーが現れない等価形。X-4 code-gate platform-boundary M-001)',
+    detectors: ['constitution'],
+    rules: ['#16']
+  },
+  {
+    file: 'b-equivalent/sdk-permission-mode-readonly-initializer.ts.fixture',
+    target: 'src/agents/__rulecheck__/sdk-permission-mode-readonly-initializer.ts',
+    group: 'b',
+    what: '`readonly permissionMode: T = v` の初期化子で値を入れる (旧版は readonly を型位置とみなして除外した。X-4 code-gate platform-boundary L-101)',
+    detectors: ['constitution'],
+    rules: ['#16']
+  },
+  {
+    file: 'b-equivalent/sdk-permission-mode-nullish-assignment.ts.fixture',
+    target: 'src/agents/__rulecheck__/sdk-permission-mode-nullish-assignment.ts',
+    group: 'b',
+    what: '複合代入 `.permissionMode ??=` で値を入れる (旧版の代入形は `??` / `||` / `&&` の付く `=` に一致しなかった。X-4 code-gate platform-boundary L-101)',
+    detectors: ['constitution'],
+    rules: ['#16']
+  },
+  {
+    file: 'b-equivalent/sdk-permission-mode-wrapper-chained.ts.fixture',
+    target: 'src/agents/__rulecheck__/sdk-permission-mode-wrapper-chained.ts',
+    group: 'b',
+    what: 'ラッパの後ろに `&&` で別の値を連結する (`assertSafePermissionMode(x) && m`。旧版はラッパで始まるかしか見なかった。X-4 code-gate platform-boundary L-101)',
+    detectors: ['constitution'],
+    rules: ['#16']
+  },
+  {
+    file: 'b-equivalent/sdk-permission-mode-reflective.ts.fixture',
+    target: 'src/agents/__rulecheck__/sdk-permission-mode-reflective.ts',
+    group: 'b',
+    /*
+     * **項目 16 の綴り検査の限界。** キー名が識別子として現れない形は regex では塞がない
+     * (code-gate X-4 platform-boundary L-101)。UNDETECTED_NOTES に理由・代替・塞ぐ feature を書く。
+     */
+    what:
+      '計算キーの変数形・連結形 / `Reflect.set` / `Object.defineProperty` / `Object.fromEntries` で permissionMode を載せる ' +
+      '(キーの綴りが現れない。項目 16 の regex では塞がない)',
+    detectors: ['none']
+  },
+  {
     file: 'b-equivalent/sdk-query-mutation-method.ts.fixture',
     target: 'src/agents/__rulecheck__/sdk-query-mutation-method.ts',
     group: 'b',
@@ -372,15 +453,18 @@ export const UNDETECTED_NOTES = {
       '第一防御は**書き込みを起こす IPC が存在しないこと** (FR-001。renderer から到達できる SDK 書き込み経路が無い)。' +
       '第二防御 (allowlist) の直接呼び出し形は `sdk-forbidden-call` サンプルで発火を維持している。' +
       'alias/dynamic-import の迂回はこの第二防御では捕まらないが、第一防御で実害経路は塞がれている。',
-    nextFeature: 'X-4',
+    nextFeature: 'X-6',
     howToClose:
+      '**X-4 で確認 (SH-012): X-4 も書き込み系 API を使わない** (起動設定・プリセットは SDK の rename/delete を呼ばない) ため ' +
+      '発火しない。書き込み系 API を実際に使う X-6 (fork / resume / rename / tag / delete) へ付け替える (AD-041 (h))。' +
       '**X-1 で確認 (SH-010): 本 alias サンプルは X-1 では塞がない。** X-1 が広げたのは起動 (`query`) と ' +
       '権限往復の呼び出し面であり、項目 16 (正の構成の backstop) で **query() options のキー**と ' +
       '**`Query` の `.method()` 昇格**という別クラスを塞いだ。書き込み系 API (`renameSession` 等) は X-1 では ' +
       '**一切 import も呼び出しもしない** (正の構成: 許可は `query`/`listSessions`/`getSessionMessages` の 3 件のみ) ため、' +
-      'binding 追跡の denylist は不要のまま残った。**書き込み系 API を実際に使う feature (改名/削除 = X-4 以降) の時点で、' +
+      'binding 追跡の denylist は不要のまま残った。**X-1 時点では「書き込み系 API を実際に使う feature (改名/削除 = X-4 以降)」の時点で ' +
       '項目14 に binding レベル denylist を足し (`const alias = renameSession` の再束縛と `import()` 経由を検出)、' +
-      '本 alias サンプルが `constitution` で発火するよう `detectors` を更新する。**'
+      '本 alias サンプルが `constitution` で発火するよう `detectors` を更新すると見込んでいた。' +
+      'X-4 は書き込み系 API を使わなかったため、この作業は冒頭のとおり X-6 へ付け替えた。**'
   },
   'ui-path-concat': {
     why: 'パス文字列の連結は import を伴わないので、import を見る lint も依存グラフも掛からない。',
@@ -395,16 +479,19 @@ export const UNDETECTED_NOTES = {
       '`value` だけを差し替える形は `namespace` のリテラルを持たないため新ルールに掛からない。' +
       '**この fixture はテンプレート文字列の連結であり、新ルールでは発火しない** (実体を確認済み)。' +
       '構造で塞げていない残余は renderer 単体テストとレビューが担う。',
-    nextFeature: 'X-4',
+    nextFeature: 'X-6',
     howToClose:
+      '**X-4 で確認 (SH-012): 追加ディレクトリ軸は X-6 に繰り越した** (AD-041 (h)) ため、X-4 でも renderer にパス入力は生じない ' +
+      '(起動設定は不透明 id のみ)。追加ディレクトリのパス入力を足す X-6 へ付け替える。' +
       'R-2 (SH-054) で `namespace` リテラルの組み立ては塞いだ。**残るのは既存の DTO を ' +
       'spread して `value` を差し替える経路**であり、これは `namespace` のリテラルを ' +
       '持たないため構文では見分けられない。' +
       '**X-1 で確認 (SH-011): 新たなパス連結経路は生じなかった** — 起動は `session.launch({folderId, runtimeId})` の ' +
       '**不透明 id** を送るだけで、renderer はパス文字列を組み立てない。cwd の RuntimePath 変換は main 側 ' +
       '(`composition-root` の `resolveCwd` / domain の `prefix-match`) が capability 戻り値の `PathDTO` から行う。' +
-      'したがって繰り越す。**X-4 (起動設定ダイアログ) で追加ディレクトリのパス入力が renderer に生じるため、' +
-      'その時点で「IPC へ渡す `PathDTO` は capability 戻り値由来の参照に限る」を型 (branded な不透明型) で強制する。**'
+      'したがって繰り越す。**X-1 時点では X-4 (起動設定ダイアログ) で追加ディレクトリのパス入力が renderer に生じると見込み、' +
+      'その時点で「IPC へ渡す `PathDTO` は capability 戻り値由来の参照に限る」を型 (branded な不透明型) で強制するとしていた。' +
+      'X-4 は追加ディレクトリ軸を X-6 に繰り越したため、この強制も冒頭のとおり X-6 へ付け替えた。**'
   },
   'principle-v-unknown-shape-secret': {
     why:
@@ -417,12 +504,17 @@ export const UNDETECTED_NOTES = {
       '**高エントロピー blob (40 文字級)** も見て、`provider-record` (BE-004) が永続前に該当 `extraEnv` を登録拒否する。' +
       '第二防御は **SC-002 の単体テスト** (JSON・ログに秘密値が現れないことを表明) と **security-reviewer** の監査。' +
       'item 17 が担うのは「開発者がソースにキーを直書きする事故」の一点で、runtime 値は上記が守る。',
-    nextFeature: 'X-4',
+    nextFeature: 'X-7',
     howToClose:
+      '**X-4 で確認 (SH-012): 発火しない。** X-4 が足した自由入力はプリセット名 (表示用で起動に使わない)・' +
+      'モデル ID と inference profile ID (文字種 allowlist で拘束)・対応 effort (enum の allowlist で拘束) で、秘密を持つ欄ではない。helper の生成 (roleArn 等の登録欄) は X-7 に繰り越した ' +
+      '(AD-041 (h)) ため、資格情報まわりの登録欄を増やす X-7 へ付け替える。' +
       '**X-3 で確認 (SH-010): item 17 は固定プレフィクスのソース grep であり、これ以上は踏み込まない。** ' +
       'runtime 値の秘密混入は `scanExtraEnvForSecrets` のエントロピー閾値 + 登録拒否 + SC-002 が load-bearing。' +
-      '**自由入力の秘密経路が増える X-4 (起動設定ダイアログで helper パス・extraEnv の手入力が renderer に生じる) の時点で、' +
-      'IPC 境界の入力検証 (`checkProviderDraft`) に秘密値スキャンを一段追加し、拒否理由を UI に返す形で射程を広げる。' +
+      '**X-3 時点では、自由入力の秘密経路が増える X-4 (起動設定ダイアログで helper パス・extraEnv の手入力が renderer に生じる) の時点で、' +
+      'IPC 境界の入力検証 (`checkProviderDraft`) に秘密値スキャンを一段追加し、拒否理由を UI に返す形で射程を広げると見込んでいた。' +
+      'X-4 ではこれを足していない — service 層のスキャン (`provider-service` の register / update と `provider-record` の read 側が ' +
+      '`scanExtraEnvForSecrets` を呼び、`secret-in-extraenv` を理由キーで UI に返す) が X-3 (H-09) から既に在るため。' +
       'ソース側の固定プレフィクス grep はそのままでも十分 (直書き事故の一点しか担っていない)。**'
   },
   'reuse-verified-other-distro': {
@@ -441,5 +533,23 @@ export const UNDETECTED_NOTES = {
       '「`VerifiedRunning` を引数に取る `infra` の公開関数は `checkVerified` を呼ぶ」を' +
       '機械で検査する**。これは型では無理だが構文としては検査できる。' +
       '**R-1 で書かないのは入口が 1 つしかなく、ルールが目視と等価なためである。**'
+  },
+  'sdk-permission-mode-reflective': {
+    why:
+      '項目 16 (check.mjs) は SDK 保持ファイルに現れる `permissionMode` / `settings` の**綴り**を regex で見る。' +
+      "計算キーの変数形 (`{ [K]: m }`)・連結形 (`['permission' + 'Mode']`)、`Reflect.set(o, 'permissionMode', m)`、" +
+      "`Object.defineProperty(...)`、`Object.fromEntries([['permissionMode', m]])` はキーが識別子・キー位置として現れないため、" +
+      '綴りの検査では見分けられない (データフローを追わない grep backstop の限界。code-gate X-4 platform-boundary L-101)。',
+    mitigatedBy:
+      'load-bearing gate は **`buildQueryOptions` (session-core.ts) の allowlist キーだけで options を組む正の構成**と、' +
+      '**`SafePermissionMode` 型 + `assertSafePermissionMode` の実行時 assert** である (AD-041 (a))。' +
+      'query() に渡る permissionMode は必ずこの経路を通り、unit test (session-core.test.ts) が守る。' +
+      '起動 decoder 側も `isSafePermissionMode` で安全 3 値以外を拒否する。項目 16 は綴りの退行検出に過ぎない。',
+    nextFeature: 'I-3',
+    howToClose:
+      'capability 連動の昇格モードを足す I-3 の時点で、項目 16 を綴りの grep から **options を組む経路の構造検査** ' +
+      '(query() の options 引数が `buildQueryOptions(...)` の戻り値であることを見る) に置き換え、' +
+      '本サンプルが `constitution` で発火するよう `detectors` を更新する。**X-4 で regex を足さないのは、' +
+      '変数形・反射 API はデータフローを追わないと誤検出と見逃しの両方が残り、正の構成 (allowlist + 型 + assert) と等価にならないためである。**'
   }
 }

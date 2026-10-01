@@ -3,14 +3,18 @@ domain: session
 status: needs-human-review
 owner: ukitomato
 generated_by: human (PLAN.md を素案として再導出)
-last_reviewed: 2026-09-15
+last_reviewed: 2026-09-30
 related_adrs:
   - docs/decisions/0002-use-agent-sdk-not-cli.md
   - docs/decisions/0006-supervisor-in-utility-process.md
   - docs/decisions/0007-session-source-of-truth-is-claude-code.md
   - docs/decisions/0010-supervisor-runs-standalone.md
+  - docs/decisions/0036-single-session-launch-process-and-live-stream.md
+  - docs/decisions/0041-x4-launch-config-on-x1-launch-gate.md
 related_specs:
   - specs/002-session-cross-folder-session-enumeration/spec.md
+  - specs/005-session-launch-and-streaming/spec.md
+  - specs/008-session-launch-settings-dialog-and-presets/spec.md
 ---
 
 # Domain Charter: session
@@ -34,7 +38,7 @@ Closta の出発点にある課題「並行して走らせたセッションの�
   という循環に落ちる
 - セッションの起動、応答のストリーミング、中断、再開、分岐（`forkSession`）
 - `SessionLaunchConfig` の解決と、軸どうしの依存関係の解決
-  （ランタイム → Provider → モデル → 権限モード）
+  （作業フォルダ ↔ ランタイム → Provider → モデル → effort。権限モードは独立した軸。glossary の Axis resolution）
 - プリセットの保存・適用
 - `canUseTool` の permission 往復の配管
 - セッション supervisor（`utilityProcess` 分離、semaphore 制御、IPC バッチ化）
@@ -73,7 +77,7 @@ Closta の出発点にある課題「並行して走らせたセッションの�
 
 1. ユーザは作業フォルダを選ぶ
 2. ランタイムを選ぶ。以降の選択肢が capability に応じて絞られる
-3. Provider・モデル・effort・権限モード・上限を選ぶ
+3. Provider・モデル・effort・権限モード・上限を選ぶ（X-4 時点で上限は未対応。X-6 が扱う）
 4. 起動する。応答がストリーミングで表示され、permission 要求には承認で応じる
 5. 同じ組み合わせを名前付きプリセットとして保存する
 
@@ -107,7 +111,9 @@ Closta の出発点にある課題「並行して走らせたセッションの�
   矛盾したときは Claude Code 側を正とする（Principle X）
 - Claude Code との通信は Agent SDK 経由に限定する（Principle IV）
 - stream の逐次パースは supervisor で行い、main process をブロックしない（Principle IX）
-- 権限モードの選択肢はランタイムの capability に従う（Principle III。判定は `isolation`）
+- 権限モードの選択肢はランタイムの capability に従う（Principle III。判定は `isolation`）。
+  **X-4 時点では安全 3 値（`default` / `plan` / `dontAsk`）だけを提示する**。capability に連動する昇格モードは I-3
+  （[AD-041](../../decisions/0041-x4-launch-config-on-x1-launch-gate.md) (a)(c)）
 - プリセットに長期資格情報の値を含めない（Principle V）
 - 再開時、フォルダ / ランタイム / Provider は引き継ぐ。変更したい場合は分岐として扱う
 - 上流の軸を変更したとき、無効になった下流の値は既定に戻し、UI で通知する
@@ -125,7 +131,8 @@ Closta の出発点にある課題「並行して走らせたセッションの�
   R-1 が検出のためにディストロを起動しないと決めたためである（SC-005 / `runtime` charter）。
   停止中を含めた列挙を KPI に掲げると、達成する唯一の道が SC-005 違反になる
 - **依存解決の正しさ**: 上流の軸を変えたとき無効値が既定に戻り通知される — 計測経路: E2E
-- **再利用率**: プリセット経由の起動が、全軸を手で選ぶ起動を上回る — 計測経路: ローカル利用ログ
+- **再利用率**: プリセット経由の起動が、全軸を手で選ぶ起動を上回る — 計測経路: ローカル利用ログ。
+  **計測経路は O-3 (observability) が作る。X-4 では未計測**（本 domain に計測基盤が無いため。AD-041 (h)）
 
 ## Cross-domain dependencies
 
@@ -140,6 +147,8 @@ Closta の出発点にある課題「並行して走らせたセッションの�
 - [AD-006](../../decisions/0006-supervisor-in-utility-process.md) — supervisor は `utilityProcess` に置く
 - [AD-007](../../decisions/0007-session-source-of-truth-is-claude-code.md) — 正本は Claude Code 側
 - [AD-010](../../decisions/0010-supervisor-runs-standalone.md) — supervisor は単独起動可能
+- [AD-036](../../decisions/0036-single-session-launch-process-and-live-stream.md) — 単一セッション起動とライブストリーム (X-1)
+- [AD-041](../../decisions/0041-x4-launch-config-on-x1-launch-gate.md) — X-4 の起動設定を X-1 の起動ゲートに載せる（権限モード安全 3 値・env の WSL 配送・`--exec`）
 
 ## Related Specs
 
@@ -147,8 +156,11 @@ Closta の出発点にある課題「並行して走らせたセッションの�
   （読み取り専用。全件列挙 + 未登録フォルダ。実装中）
 - **X-1** — [単一セッション起動とストリーミング](../../../specs/005-session-launch-and-streaming/spec.md)
   （作業フォルダ + 実行中 WslRuntime で起動、live stream、承認カード、中断/強制終了。実装中）
+- **X-4** — [起動設定ダイアログとプリセット](../../../specs/008-session-launch-settings-dialog-and-presets/spec.md)
+  （6 軸の起動設定・依存解決・プリセット・越境警告・導出 env の WSL 配送。実装中。
+  [AD-041](../../decisions/0041-x4-launch-config-on-x1-launch-gate.md)）
 
-X-4 / X-5 / O-1 は未着手。
+X-5 / X-6 / O-1 は未着手。
 
 ## Open Questions
 
@@ -167,5 +179,7 @@ X-4 / X-5 / O-1 は未着手。
       往復 0〜9ms）。**SIGINT は伝播しないが、SDK の interrupt は stdin 越しの control_request** なので
       中断は成立する。stdin を閉じると制御経路が失われる点に注意
 - [ ] `wsl.exe` 強制終了時に書きかけの JSONL transcript が壊れないか（AD-018 の Open Question）
-- [ ] SPIKE-6: `PermissionMode` / `effort` の正確な列挙値と Auto モードの指定方法
+- [x] ~~SPIKE-6: `PermissionMode` / `effort` の正確な列挙値と Auto モードの指定方法~~ →
+      [AD-020](../../decisions/0020-sdk-emitted-message-inventory.md)。X-4 は安全 3 値と `EffortLevel` 5 値を使う
+      （[AD-041](../../decisions/0041-x4-launch-config-on-x1-launch-gate.md)）。Auto モードの指定は I-3
 - [ ] transcript ミラーの保持期限と削除経路（AD-007 の blocking gap）を本 domain が持つか

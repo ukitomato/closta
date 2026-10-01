@@ -26,7 +26,7 @@ export type ScreenId = (typeof SCREENS)[number]
 export const SCREEN_LABELS: Record<ScreenId, string> = {
   runtimes: 'ランタイム',
   folders: '作業フォルダ',
-  // X-3。Provider の検出・登録・編集・削除 (US-1)。到達可能性フィルタ UI は X-4。
+  // X-3。Provider の検出・登録・編集・削除 (US-1)。到達可能性フィルタ UI は起動設定ダイアログ (X-4)。
   providers: 'プロバイダ',
   // R-2。**読み取り専用**であることは画面側の文言で示す (FR-002 / FR-003)。
   sessions: 'セッション',

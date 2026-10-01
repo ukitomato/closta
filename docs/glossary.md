@@ -62,6 +62,16 @@ total_terms: 42
 - **Domain**: `runtime`（表明）/ `isolation`（ゲート）
 - **Ref**: Constitution Principle III / [AD-024](decisions/0024-constitution-verification-paths.md) #13
 
+#### **Axis resolution（依存解決）**
+
+- **Definition**: 起動軸の上流 (folder ↔ runtime → provider → model → effort) を変えたときに、無効になった下流を再計算する処理。
+  - 無効な provider / model / effort は既定に戻して通知する。provider の reset は起動前に確認する。
+  - folder / runtime の不備は blocker にする。
+  - 純粋関数 `resolveLaunchAxes` を renderer と main の起動ゲートの両方が呼ぶ。
+- **日本語表記**: 依存解決
+- **Domain**: `session`
+- **Ref**: [008 spec](../specs/008-session-launch-settings-dialog-and-presets/spec.md) FR-006 / FR-007
+
 ### B
 
 #### **Browse session**
@@ -96,8 +106,9 @@ total_terms: 42
 
 - **Definition**: 作業フォルダの所在とランタイムが別のファイルシステムにまたがる状態。
   `C:\dev\x` を WSL から `/mnt/c/dev/x` として使う形が典型である。
-  変換自体は成立するが I/O が桁で遅くなるため、選択時に明示する
-- **日本語表記**: 越境
+  変換自体は成立するが I/O が桁で遅くなるため、選択時に明示する。
+  起動設定ダイアログが越境の組み合わせで出す警告を**越境警告**と呼ぶ (閾値なし。起動はブロックしない。X-4)
+- **日本語表記**: 越境 / 越境警告
 - **Domain**: `runtime` (判定) / `ui` (表示)
 - **Ref**: [AD-016](decisions/0016-cross-filesystem-performance-cliff.md)
 
@@ -162,14 +173,17 @@ total_terms: 42
 
 #### **DerivedLaunchEnv（導出 env）**
 
-- **Definition**: `ProviderProfile` と `infra` が解決した値から導出する `{ env, settings? }` (X-3)。`env` は curated base を
-  spread し passthrough 許可リストに `WSLENV`・資格情報パターンを含めない。`settings` は **`HelperSettings`
-  (`{ apiKeyHelper?, awsCredentialExport? }` の 2 キー限定)** で `Settings` 全体を組めない
+- **Definition**: `ProviderProfile` と `infra` が解決した値から導出する `{ env, forwardKeys, settings? }` (X-3 / X-4)。
+  - `env` は curated base を spread したもの。passthrough (curated base と extraEnv) には資格情報 denylist を掛ける。
+  - `forwardKeys` は WSL へ転送するキー (X-4)。中身は方式固有の実名キー、採用した extraEnv、env-passthrough の実名 allowlist で、curated base のキーは含まない。
+  - `settings` は **`HelperSettings` (`{ apiKeyHelper?, awsCredentialExport? }` の 2 キー限定)** であり、`Settings` 全体は組めない。
 - **日本語表記**: 導出 env（型名は原語のまま）
 - **Domain**: `provider`（`deriveLaunchEnv` は純粋関数。I/O は `infra` が解決し引数で渡す）
-- **Counterexamples**: `RuntimeLaunchSpec.env`（起動 spawn の最終 env）とは別。導出 env は X-4 が
-  `RuntimeLaunchSpec.env` に合流させる（`Options.env` は AD-036 §3 の custom spawn 下で無視される）
-- **Ref**: [AD-040](decisions/0040-provider-settings-constrained-projection.md) / [AD-039](decisions/0039-credential-delegation-verified.md) D3
+- **Counterexamples**:
+  - `RuntimeLaunchSpec.env`（起動 spawn の最終 env）とは別物である。
+  - X-4 は導出 env を `composeLaunchEnv` で `RuntimeLaunchSpec.env` に合流させ、`forwardKeys` から `WSLENV` を生成する。
+  - `Options.env` は、AD-036 §3 の custom spawn の下では無視される。
+- **Ref**: [AD-040](decisions/0040-provider-settings-constrained-projection.md) / [AD-039](decisions/0039-credential-delegation-verified.md) D3 / [AD-041](decisions/0041-x4-launch-config-on-x1-launch-gate.md) (b)(e)
 
 #### **Disposable container**
 
@@ -264,6 +278,34 @@ total_terms: 42
   型名の衝突を避け `LaunchFailureReason` として分ける (`@domain/session/agent-session`)
 - **Ref**: [AD-036](decisions/0036-single-session-launch-process-and-live-stream.md)
 
+#### **Forward keys（転送キー）**
+
+- **Definition**: `DerivedLaunchEnv.forwardKeys`。WSL 内の claude へ `WSLENV` (`/u`) で転送する env キーの明示集合。
+  - 中身は方式固有の実名キー、採用した extraEnv、env-passthrough の実名 allowlist。
+  - curated base のキー (`SystemRoot`/`windir`/`TEMP`/`TMP`) と `WSL_UTF8` は含まない。
+- **日本語表記**: 転送キー
+- **Domain**: `provider` (導出) / `runtime` (`WSLENV` 生成は infra/runtime)
+- **Counterexamples**:
+  - 「env のキー全部」ではない。
+  - 列挙されないキーは wsl.exe の env にあっても WSL に届かない。
+- **Ref**: [AD-041](decisions/0041-x4-launch-config-on-x1-launch-gate.md) (e)
+
+#### **Forbidden forward key（転送禁止キー）**
+
+- **Definition**: extraEnv のキーとして登録・転送してはならない env キーの集合。
+  - 対象は次の 3 種類。
+    - 実行を乗っ取るもの: `PATH` / `NODE_OPTIONS` / `LD_*` / `TMPDIR` / `GIT_*` / `PAGER` / `EDITOR` / `PYTHON*` / `SSH_ASKPASS` / `NPM_CONFIG_*` など。既知の代表例を塞ぐ denylist であり、クラスを原理的に閉じるものではない
+    - transport の制御キー: `WSLENV` / `WSL_UTF8` / curated base
+    - 導出が制御するキー: `CLAUDE_CONFIG_DIR` / `CLAUDE_CODE_*` / `ANTHROPIC_*`。例外は `ANTHROPIC_BASE_URL`
+  - 照合は大文字小文字を区別しない。
+  - env-passthrough の varNames はこの集合では縛らず、別の実名 allowlist で縛る。
+  - 起動時の最終検査 (`composeLaunchEnv`) では、導出が正当に出す方式固有の実名キーと passthrough allowlist をこの集合から除く。
+- **日本語表記**: 転送禁止キー
+- **Domain**: `provider`
+- **Counterexamples**:
+  - `LAUNCH_ENV_DENY_PATTERN` (passthrough の資格情報 denylist) とは別物で、役割も分担している。
+- **Ref**: [AD-041](decisions/0041-x4-launch-config-on-x1-launch-gate.md) (e) 2・3
+
 ### H
 
 #### **HostPath**
@@ -284,16 +326,45 @@ total_terms: 42
 
 ### L
 
+#### **Launch axis（起動軸）**
+
+- **Definition**: 起動設定ダイアログで選ぶ軸。作業フォルダ / ランタイム / Provider / モデル / effort / 権限モードの 6 つ (X-4)
+- **日本語表記**: 起動軸
+- **Domain**: `session`
+- **Ref**: [008 spec](../specs/008-session-launch-settings-dialog-and-presets/spec.md) FR-001
+
+#### **Launch blocker（起動不可）**
+
+- **Definition**: 依存解決 (`resolveLaunchAxes`) が返す、起動を止める理由キー (`LaunchBlocker`)。
+  - 値は `folder-unselected` / `folder-missing` / `runtime-unselected` / `runtime-missing` / `runtime-stopped` / `distro-mismatch`。
+  - 自動では直さず、次の一手を示して起動ボタンを無効にする。
+- **日本語表記**: 起動不可
+- **Domain**: `session`
+- **Counterexamples**: 軸の reset (既定に戻して通知するもの) とは別物である。越境は警告であり、blocker ではない。
+- **Ref**: [008 spec](../specs/008-session-launch-settings-dialog-and-presets/spec.md) FR-006
+
+#### **Launch preflight reason（起動前段の拒否理由）**
+
+- **Definition**: main の起動前段が起動を拒否するときの理由キー (`LaunchPreflightReason`)。
+  - 値は `invalid-config` / `provider-unavailable` / `needs-confirmation`。
+  - X-1 の `LaunchFailureReason` と調停由来の理由とあわせて `SessionLaunchRejectReason` を成す。
+  - 参照キーであり、訳出は `ui` が行う (Principle XV)。
+- **日本語表記**: 起動前段の拒否理由
+- **Domain**: `session` (保持) / `ui` (訳出)
+- **Ref**: [008 spec](../specs/008-session-launch-settings-dialog-and-presets/spec.md) US-1 AC7
+
 #### **LaunchInput**
 
-- **Definition**: セッション起動の最小入力 (X-1)。作業フォルダ / 実行中確認済み `WslRuntime` /
-  `VerifiedRunning` / `permissionMode: 'default'` (リテラル固定) を持つ。`SessionLaunchConfig` の部分集合で、
-  軸選択・プリセット・モデル・effort は含まない (X-4)
+- **Definition**: セッション起動の検証済み入力 (X-1 / X-4)。次の要素を持つ。
+  - 作業フォルダ / 実行中確認済みの `WslRuntime` / `VerifiedRunning`
+  - `options: LaunchQueryOptions`。中身は `permissionMode: SafePermissionMode` と、任意の `model` / `effort` / `settings`
+  - 依存解決と main の再検証を通った `SessionLaunchConfig` から作る。
 - **日本語表記**: 起動入力 (型名は原語のまま)
 - **Domain**: `session`
-- **Counterexamples**: `SessionLaunchConfig` (起動設定の全体) とは別。`permissionMode` を 6 値ユニオンにしない —
-  `auto`/`bypass` を型で渡せなくする (正の構成。FR-013)
-- **Ref**: [AD-036](decisions/0036-single-session-launch-process-and-live-stream.md)
+- **Counterexamples**:
+  - `SessionLaunchConfig` (renderer が選ぶ起動設定) とは別物である。
+  - `permissionMode` を 6 値ユニオンにしない。昇格 3 値 (`acceptEdits`/`auto`/`bypassPermissions`) は型で持てない (正の構成)。
+- **Ref**: [AD-036](decisions/0036-single-session-launch-process-and-live-stream.md) / [AD-041](decisions/0041-x4-launch-config-on-x1-launch-gate.md) (a)(g)
 
 #### **Location**
 
@@ -333,8 +404,10 @@ total_terms: 42
 #### **Model catalog**
 
 - **Definition**: Provider ごとに使えるモデルの集合。Bedrock は inference profile ID で pin する
+  - 各モデルは任意の `supportedEffortLevels` を持つ (X-4。手入力の静的データで、起動前の effort 選択肢の正本)
 - **日本語表記**: モデルカタログ
 - **Domain**: `provider`
+- **Ref**: [AD-042](decisions/0042-provider-type-refinement-and-d4-lapse.md) Decision 1
 
 ### P
 
@@ -371,9 +444,11 @@ total_terms: 42
 
 #### **Preset**
 
-- **Definition**: 名前付きで保存された `SessionLaunchConfig`。**資格情報の値は含まない**
+- **Definition**: 名前付きで保存された `SessionLaunchConfig`。**資格情報の値は含まない** (Provider は id 参照)。
+  名前は trim + NFC で同名を判定する。上限は 100 件。適用後の無効な軸は依存解決で扱う
 - **日本語表記**: プリセット
 - **Domain**: `session`
+- **Ref**: [008 spec](../specs/008-session-launch-settings-dialog-and-presets/spec.md) FR-009〜011
 
 #### **Provider**
 
@@ -415,13 +490,14 @@ total_terms: 42
 #### **RuntimeLaunchSpec**
 
 - **Definition**: agents を WSL-free に保つための**起動指示の値** (X-1)。WSL 内 claude の実行パス /
-  起動コマンド (`WSL_BINARY`) / 接頭引数 (`['--cd', cwd, '-d', distro, '--']`) / 最小 env を持つ。
+  起動コマンド (`WSL_BINARY`) / 接頭引数 (X-4 以降は `['--cd', cwd, '-d', distro, '--exec']`。シェルを経由しない) /
+  env (`composeLaunchEnv` の結果。X-4) を持つ。
   `wsl.exe` の argv/リテラルは `infra/runtime` に閉じ、agents は**値**として受け取る
 - **日本語表記**: 起動指示 (型名は原語のまま)
 - **Domain**: `session` (型宣言) / `infra/runtime` (構築)
 - **Counterexamples**: agents はこの `command` の文字列リテラルを持たない (`WSL_FREE_DIRECTORIES`)。
   cwd はホスト `spawn` の `cwd` に渡さず `--cd` 引数で運ぶ (多段変換を潰さない。H-03)
-- **Ref**: [AD-036](decisions/0036-single-session-launch-process-and-live-stream.md) §3・§8 / [AD-018](decisions/0018-wsl-process-control.md)
+- **Ref**: [AD-036](decisions/0036-single-session-launch-process-and-live-stream.md) §3・§8 / [AD-018](decisions/0018-wsl-process-control.md) / [AD-041](decisions/0041-x4-launch-config-on-x1-launch-gate.md) (f)
 
 #### **RuntimePath**
 
@@ -432,6 +508,13 @@ total_terms: 42
 - **Ref**: [AD-004](decisions/0004-branded-path-types.md)
 
 ### S
+
+#### **SafePermissionMode**
+
+- **Definition**: 起動で選べる権限モード。`default` / `plan` / `dontAsk` の 3 値 (AD-020 の危険度表で「安全」のもの)。`assertSafePermissionMode` が実行時に閉じる
+- **Domain**: `session`
+- **Counterexamples**: 昇格 3 値 (`acceptEdits` / `auto` / `bypassPermissions`) は含まない。capability 連動は I-3
+- **Ref**: [AD-041](decisions/0041-x4-launch-config-on-x1-launch-gate.md) (a)
 
 #### **Session**
 
@@ -525,8 +608,11 @@ total_terms: 42
 
 - **Definition**: セッション起動時に選択される設定の組。作業フォルダ / ランタイム / Provider /
   モデル / effort / 権限モード / sandbox / 追加ディレクトリ / 上限 / セッション名。
-  三本の軸が交わる点であり日常操作の入口
+  三本の軸が交わる点であり日常操作の入口。
+  **X-4 は前 6 軸を実装する。** folder / runtime は必須で、provider / model / effort は `null` = 既定、権限モードは `SafePermissionMode`。
+  sandbox は I-3、追加ディレクトリ / 上限 / セッション名は X-6 が扱う
 - **Domain**: `session`
+- **Ref**: [008 spec](../specs/008-session-launch-settings-dialog-and-presets/spec.md) / [AD-041](decisions/0041-x4-launch-config-on-x1-launch-gate.md)
 
 #### **sessionStore**
 

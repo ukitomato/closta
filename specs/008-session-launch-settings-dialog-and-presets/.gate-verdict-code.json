@@ -1,0 +1,540 @@
+{
+    "gate": "code",
+    "run": "2026-09-30T12:49:46.241Z",
+    "spec_dir": "specs/008-session-launch-settings-dialog-and-presets",
+    "spec_id": "008-session-launch-settings-dialog-and-presets",
+    "iter": 3,
+    "severity_counts": {
+        "critical": 0,
+        "high": 0,
+        "medium": 0,
+        "low": 7,
+        "must_fix": 0
+    },
+    "must_fix_policy": "reviewer High \u306f\u672c run \u3067 MUST_FIX \u306b\u6607\u683c\u3057\u3066\u6271\u3046",
+    "must_fix_findings": [],
+    "touched_files": [
+        {
+            "path": ".dependency-cruiser.js",
+            "sha": "401b7777328432657c3bf473e2c571a25349cf6a"
+        },
+        {
+            "path": ".specify/memory/constitution.md",
+            "sha": "e2d700fa01d0d48c16c24f7ef0fe06aee1b6882a"
+        },
+        {
+            "path": "docs/decisions/0041-x4-launch-config-on-x1-launch-gate.md",
+            "sha": "f1e6ca84adbd109d0c8fe5de2b7410225d5cff47"
+        },
+        {
+            "path": "docs/decisions/0042-provider-type-refinement-and-d4-lapse.md",
+            "sha": "97f529a724c74c8d315aa2ffb8f29b640d6659e4"
+        },
+        {
+            "path": "docs/domains/_overview.md",
+            "sha": "00d87fb39622314edc8f22f024718e075cf6d7fa"
+        },
+        {
+            "path": "docs/domains/provider/charter.md",
+            "sha": "f0511d724c61c98bf70a20f72610f8c3956dc2c2"
+        },
+        {
+            "path": "docs/domains/session/charter.md",
+            "sha": "5b47fc48aea6b95b88f567ed2c59e466c44c9b58"
+        },
+        {
+            "path": "docs/glossary.md",
+            "sha": "f2afbb22288406ba05eed573ddf932e94403548f"
+        },
+        {
+            "path": "docs/roadmap.md",
+            "sha": "d2298799d917afbe313d721f7d032c9bdb9359b1"
+        },
+        {
+            "path": "e2e/launch-dialog.spec.ts",
+            "sha": "0fae464a27dd35d1bb0347e43325c7976d07cff7"
+        },
+        {
+            "path": "e2e/support/launch.ts",
+            "sha": "6cf04e542e518513f8bb2c5f4ffae8b868f30e6d"
+        },
+        {
+            "path": "scripts/constitution/allowlists.mjs",
+            "sha": "97a9f431eb37dcae2e8ad684242d00edc7550e48"
+        },
+        {
+            "path": "scripts/constitution/check.mjs",
+            "sha": "acf688a0396255f727b14711b1837d5632dee217"
+        },
+        {
+            "path": "specs/005-session-launch-and-streaming/contracts/session-launch.md",
+            "sha": "4753406f83ff1649d470d52ae6692e14a0809ef1"
+        },
+        {
+            "path": "specs/005-session-launch-and-streaming/data-model.md",
+            "sha": "2b9a3c337a2e2457dad0d303e658e8bf7a17b46b"
+        },
+        {
+            "path": "specs/007-provider-registration-and-reachability/contracts/provider-registration.md",
+            "sha": "27428b49b0ec2655a3b7f4dd99b7436368c5cc03"
+        },
+        {
+            "path": "specs/008-session-launch-settings-dialog-and-presets/.gate-verdict-design.json",
+            "sha": "c5525bf12ae8b419987a53ff6ce5279785dec770"
+        },
+        {
+            "path": "specs/008-session-launch-settings-dialog-and-presets/analyze.md",
+            "sha": "ad41919a6389695f811cb281f0a8373ea753ce4d"
+        },
+        {
+            "path": "specs/008-session-launch-settings-dialog-and-presets/architecture-reviewer.design-gate.md",
+            "sha": "75883337aefbd158662f19d2b504e9a5cf556188"
+        },
+        {
+            "path": "specs/008-session-launch-settings-dialog-and-presets/design-gate.md",
+            "sha": "52d70ebc7f186740b17581ad164e2ad91b497691"
+        },
+        {
+            "path": "specs/008-session-launch-settings-dialog-and-presets/plan.md",
+            "sha": "3f8b587709df313a9b123b6d8e5d821ff6d89e70"
+        },
+        {
+            "path": "specs/008-session-launch-settings-dialog-and-presets/platform-boundary-reviewer.design-gate.md",
+            "sha": "7feacb915ec5a16f40ad8b894e4f62a6fcec1397"
+        },
+        {
+            "path": "specs/008-session-launch-settings-dialog-and-presets/po-reviewer.design-gate.md",
+            "sha": "13d1a0da0a60ec9470ac548f46b4346ae3e50174"
+        },
+        {
+            "path": "specs/008-session-launch-settings-dialog-and-presets/quickstart-results.md",
+            "sha": "7e4d5f4a864f16eb1e92556ef68a6f59be3393ec"
+        },
+        {
+            "path": "specs/008-session-launch-settings-dialog-and-presets/security-reviewer.design-gate.md",
+            "sha": "0c5f27d33909867e873d37cf427e41b7498ddcf4"
+        },
+        {
+            "path": "specs/008-session-launch-settings-dialog-and-presets/spec.md",
+            "sha": "21fc76fe0835b0992f18a7656985139c05ef9232"
+        },
+        {
+            "path": "specs/008-session-launch-settings-dialog-and-presets/tasks.md",
+            "sha": "87aabbb23591c90ed49257774bb9023b4381d46d"
+        },
+        {
+            "path": "specs/008-session-launch-settings-dialog-and-presets/touched-files.txt",
+            "sha": "b80dc89b2b026bfff42a8801fa3865ad5c710740"
+        },
+        {
+            "path": "src/agents/sdk-agent-session.ts",
+            "sha": "594f322e8061530cc082a9a471924ac3f256d440"
+        },
+        {
+            "path": "src/agents/session-core.test.ts",
+            "sha": "84086121803bfd7ff874e24cf7df339b77fa73d0"
+        },
+        {
+            "path": "src/agents/session-core.ts",
+            "sha": "baa34fea71e3210f5a69cf621fcd5a50382d48d1"
+        },
+        {
+            "path": "src/domain/capability.ts",
+            "sha": "d57d1da253aab580f2e58f2c63d8292aaea92616"
+        },
+        {
+            "path": "src/domain/provider/derive-env.test.ts",
+            "sha": "dc266f8f1278fb510acdc24c5323eaf4d18c069a"
+        },
+        {
+            "path": "src/domain/provider/derive-env.ts",
+            "sha": "a744ff4b773c212aa520616096a6fba303777e16"
+        },
+        {
+            "path": "src/domain/provider/dto.ts",
+            "sha": "3f5816df21d27abef1796962b339e27358145775"
+        },
+        {
+            "path": "src/domain/provider/forward-env.test.ts",
+            "sha": "81f337af90e7a3a773db4a1934095f69d2e377b3"
+        },
+        {
+            "path": "src/domain/provider/forward-env.ts",
+            "sha": "0d0ebf730029f1120164a14d77cea3ca13f1870b"
+        },
+        {
+            "path": "src/domain/provider/helper-path.test.ts",
+            "sha": "0908f82ad765ce2fcad6700bb833abcbebdcba56"
+        },
+        {
+            "path": "src/domain/provider/helper-path.ts",
+            "sha": "b810267c7ffc0e9c19979b37cd5a1aca9249f262"
+        },
+        {
+            "path": "src/domain/provider/model-catalog.test.ts",
+            "sha": "71e89af748c3161a6b3f53b6ce2fa0ece2c6d586"
+        },
+        {
+            "path": "src/domain/provider/model-catalog.ts",
+            "sha": "223f2042333940d1548895b30261883387d511bc"
+        },
+        {
+            "path": "src/domain/provider/reachability.test.ts",
+            "sha": "763dde4d3066283b04c16da47aaa6bbb1d6b3492"
+        },
+        {
+            "path": "src/domain/provider/reachability.ts",
+            "sha": "5331510732bf4a54e405c9f5e054f72dbc7f208b"
+        },
+        {
+            "path": "src/domain/provider/types.ts",
+            "sha": "c9de9c11cd1e65fcb83093b86e3eb8cca5ffcb55"
+        },
+        {
+            "path": "src/domain/session/agent-session.ts",
+            "sha": "31c4fa3f3b63b1c2ef6eb98fbe1d5f1de6ad5db4"
+        },
+        {
+            "path": "src/domain/session/launch-config.test.ts",
+            "sha": "dff1cdeff52d9abc6ed1e42211f2cd31c7fd5191"
+        },
+        {
+            "path": "src/domain/session/launch-config.ts",
+            "sha": "e3a10b998e5fc0343c518cf904c03243f12e4f0e"
+        },
+        {
+            "path": "src/domain/session/launch-resolution.test.ts",
+            "sha": "cef656fbaea32a5dfe11dea524a692a2074d2561"
+        },
+        {
+            "path": "src/domain/session/launch-resolution.ts",
+            "sha": "81eee0996e675bc37f1e6e8a8d378fb913095768"
+        },
+        {
+            "path": "src/domain/session/preset.ts",
+            "sha": "2fff6c2b0b65cdc25e958127a2445675e691d895"
+        },
+        {
+            "path": "src/domain/validation.ts",
+            "sha": "7b2776a3c9bb5992942d009bc0ace4baaec83116"
+        },
+        {
+            "path": "src/main/app/composition-root.ts",
+            "sha": "f4a16b619730d6f56ec5447eafdfeb03a5bea25a"
+        },
+        {
+            "path": "src/main/app/e2e-capability.ts",
+            "sha": "fd2687db72dbcf942dfe41a631d52ffc9aa3c7f1"
+        },
+        {
+            "path": "src/main/app/ipc.ts",
+            "sha": "2b7f920cca4da1b19b3aa180691b1f6b66a5d715"
+        },
+        {
+            "path": "src/main/app/launch-preparation.test.ts",
+            "sha": "4c1111daa40f017bf1c75e152a67360858ad5b39"
+        },
+        {
+            "path": "src/main/app/launch-preparation.ts",
+            "sha": "8c68f8ad7b10e7fc09d42b39709c3cb8168ee0f9"
+        },
+        {
+            "path": "src/main/app/preset-service.test.ts",
+            "sha": "632792f76169dd1109f209733eddc63b661365ae"
+        },
+        {
+            "path": "src/main/app/preset-service.ts",
+            "sha": "6aa574f1c9bc944c6996f9e2e8747464a466016d"
+        },
+        {
+            "path": "src/main/app/provider-service.test.ts",
+            "sha": "48de004459f04f89e22228c74cad0c6ab2a33a5b"
+        },
+        {
+            "path": "src/main/app/provider-service.ts",
+            "sha": "713e52a0913761c910ada9a9fc196e4998b6d0f9"
+        },
+        {
+            "path": "src/main/app/session-ipc.test.ts",
+            "sha": "394c83f705263d67b79372ff1d7fcba7115c713c"
+        },
+        {
+            "path": "src/main/app/session-ipc.ts",
+            "sha": "bb446431d7e12fb6d5364d93ebde7d33cf96449e"
+        },
+        {
+            "path": "src/main/app/session-launch-service.test.ts",
+            "sha": "04042f3a3032abe1d4c5771d51569456f7306e60"
+        },
+        {
+            "path": "src/main/app/session-launch-service.ts",
+            "sha": "6e9c352caf3dd80de82fb5584e357af75fa79b34"
+        },
+        {
+            "path": "src/main/app/session-spawner.ts",
+            "sha": "65a18becdbf3018254580c03c829b18c2842c5f0"
+        },
+        {
+            "path": "src/main/app/validate.ts",
+            "sha": "d85242abab9427e22424a242e50a0a42b3581948"
+        },
+        {
+            "path": "src/main/infra/provider/detector.ts",
+            "sha": "062a94442f9f93907dc532c47cf67ca24494fd97"
+        },
+        {
+            "path": "src/main/infra/runtime/launch-spec.test.ts",
+            "sha": "98f2aa291f336b1108a29690ee8cc9320bbbc4ec"
+        },
+        {
+            "path": "src/main/infra/runtime/launch-spec.ts",
+            "sha": "c6211834aeec55662be956efa6216b927720bc26"
+        },
+        {
+            "path": "src/main/infra/settings/preset-record.test.ts",
+            "sha": "2b2233fc55e0150f15f66a7d39e650ee1214f05a"
+        },
+        {
+            "path": "src/main/infra/settings/preset-record.ts",
+            "sha": "614bd5bbad59e4a6ff24d671aa790d5e9f4b0f4c"
+        },
+        {
+            "path": "src/main/infra/settings/preset-store.test.ts",
+            "sha": "a0cd168bb8b727b1052ef47bd2254b9787965dcc"
+        },
+        {
+            "path": "src/main/infra/settings/preset-store.ts",
+            "sha": "6b8e62c8a4edc8330dc5ef6849b841df4e2148a0"
+        },
+        {
+            "path": "src/main/infra/settings/provider-record.ts",
+            "sha": "4b4ee2374299791e94ffa7671f09b6b148bfa63a"
+        },
+        {
+            "path": "src/main/infra/settings/provider-store.test.ts",
+            "sha": "065b803f36548be23e43954a8c5fa5fda995ead4"
+        },
+        {
+            "path": "src/preload/index.ts",
+            "sha": "3ddb141dab2246e97ee32c895626068416d8f29a"
+        },
+        {
+            "path": "src/renderer/src/features/provider/ModelCatalogEditor.test.tsx",
+            "sha": "492908e268325e5703ec39ff7f633c416f7eef54"
+        },
+        {
+            "path": "src/renderer/src/features/provider/ModelCatalogEditor.tsx",
+            "sha": "a53272e51a45ca38d1df6c2724173ad8f198b8df"
+        },
+        {
+            "path": "src/renderer/src/features/provider/ProviderScreen.test.tsx",
+            "sha": "bd9c034b673ad5128b3d74ce6688b8b9de9270bc"
+        },
+        {
+            "path": "src/renderer/src/features/provider/ProviderScreen.tsx",
+            "sha": "f797d4edb4851b708e562899f659377669f1abba"
+        },
+        {
+            "path": "src/renderer/src/features/provider/labels.ts",
+            "sha": "826050590d1caf1e0c818b7b9dda9b094a6837d0"
+        },
+        {
+            "path": "src/renderer/src/features/session/ApprovalCard.tsx",
+            "sha": "da02a1656359f5fdb7f04f478d750c91f1418ec6"
+        },
+        {
+            "path": "src/renderer/src/features/session/LaunchDialog.test.tsx",
+            "sha": "1d208baf15056e4fb673c90368a30edd882f6b11"
+        },
+        {
+            "path": "src/renderer/src/features/session/LaunchDialog.tsx",
+            "sha": "da2bc98626781d4e15192f2848bc641e5865b20d"
+        },
+        {
+            "path": "src/renderer/src/features/session/PresetPanel.test.tsx",
+            "sha": "809cdf08978b68a7e86d8d53ffa4e2527cb434f5"
+        },
+        {
+            "path": "src/renderer/src/features/session/PresetPanel.tsx",
+            "sha": "d85cb5076d7c551a9e6ba7bc47dc4f52a790dfad"
+        },
+        {
+            "path": "src/renderer/src/features/session/SessionScreen.tsx",
+            "sha": "1d188e0ccd0eeb37d7fdefd41cb3dbb3674c55e4"
+        },
+        {
+            "path": "src/renderer/src/features/session/labels.ts",
+            "sha": "303f811e987cdc881092611b937c78612e4dae33"
+        },
+        {
+            "path": "src/renderer/src/features/session/useLiveSession.test.tsx",
+            "sha": "ebe2ccd109b1b1b6d9768f570e691d0ed59d33e2"
+        },
+        {
+            "path": "src/renderer/src/features/session/useLiveSession.ts",
+            "sha": "c51c884bfe0100db2a8362d534ddb1b004fb6854"
+        },
+        {
+            "path": "src/renderer/src/features/session/usePresets.ts",
+            "sha": "e3e07c8824ad0a0d3862caf5df674c11fbedba7e"
+        },
+        {
+            "path": "src/renderer/src/features/workspace-folders/useFolders.ts",
+            "sha": "fba4969ada0be9ec3b8a265ad19444d85034a61c"
+        },
+        {
+            "path": "src/renderer/src/stores/ui.ts",
+            "sha": "e295dd358c134e37bc50abcada7b14db568a83a8"
+        },
+        {
+            "path": "src/renderer/src/test-support/capability.ts",
+            "sha": "90f04857e0fe6fa1f0f2618b99e90451e877d334"
+        },
+        {
+            "path": "tests/rule-fixtures/a-direct/sdk-permission-mode-unwrapped.ts.fixture",
+            "sha": "2a4dbcee67e8bde1c1df4eafd12b3fb94f26d01c"
+        },
+        {
+            "path": "tests/rule-fixtures/b-equivalent/sdk-permission-mode-assignment.ts.fixture",
+            "sha": "c90cee74599747e53db187367d424252a04f283f"
+        },
+        {
+            "path": "tests/rule-fixtures/b-equivalent/sdk-permission-mode-computed-key.ts.fixture",
+            "sha": "851eeaa4e569b7b1eb87599ad3955588e8fa309d"
+        },
+        {
+            "path": "tests/rule-fixtures/b-equivalent/sdk-permission-mode-constant.ts.fixture",
+            "sha": "40bd74ddb668842763d9db032888f4a908e2876f"
+        },
+        {
+            "path": "tests/rule-fixtures/b-equivalent/sdk-permission-mode-nullish-assignment.ts.fixture",
+            "sha": "4aa70d65b0a9a60a49ab67cba1e42f837e9db9a8"
+        },
+        {
+            "path": "tests/rule-fixtures/b-equivalent/sdk-permission-mode-readonly-initializer.ts.fixture",
+            "sha": "0d387c77314a042c9da760cc5ea10cef37558703"
+        },
+        {
+            "path": "tests/rule-fixtures/b-equivalent/sdk-permission-mode-reflective.ts.fixture",
+            "sha": "20ac46a41696be11148bf3a978a8e1076cd55a26"
+        },
+        {
+            "path": "tests/rule-fixtures/b-equivalent/sdk-permission-mode-shorthand.ts.fixture",
+            "sha": "c2fc5faeef2f260407adfbc87298efda7b6d3d3e"
+        },
+        {
+            "path": "tests/rule-fixtures/b-equivalent/sdk-permission-mode-wrapper-chained.ts.fixture",
+            "sha": "03103476528677e5e2b8672ae2ea28b000a86666"
+        },
+        {
+            "path": "tests/rule-fixtures/expected.mjs",
+            "sha": "60901586a752eb79ef81fa973c6656bcc010bd37"
+        }
+    ],
+    "fr_coverage": [
+        {
+            "fr": "FR-001",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/session/LaunchDialog.tsx",
+                "src/domain/session/launch-config.ts"
+            ]
+        },
+        {
+            "fr": "FR-009",
+            "covered": true,
+            "by": [
+                "src/main/infra/settings/preset-store.ts",
+                "src/main/app/preset-service.ts"
+            ]
+        },
+        {
+            "fr": "FR-012",
+            "covered": true,
+            "by": [
+                "src/main/infra/runtime/launch-spec.ts"
+            ]
+        },
+        {
+            "fr": "FR-014",
+            "covered": true,
+            "by": [
+                "src/domain/provider/helper-path.ts"
+            ]
+        }
+    ],
+    "viewpoint_coverage": {
+        "A": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+        "B": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+        "C": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+        "D": "platform-boundary Critical:0 High:0 Medium:0 Low:0",
+        "E": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+        "F": "convention Low:3 / platform-boundary Low:1",
+        "G": "database Low:2",
+        "H": "database Low:1"
+    },
+    "tracks": {
+        "lint-agent": {
+            "violations": 0,
+            "exit_code": 0,
+            "detectors": [
+                "lint",
+                "typecheck",
+                "depcruise",
+                "check:constitution"
+            ]
+        },
+        "test-agent": {
+            "passed": 1382,
+            "failed": 0,
+            "exit_code": 0,
+            "scope": "full"
+        },
+        "convention-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "lint_input": "lint-agent"
+        },
+        "database-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "platform-boundary-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        }
+    },
+    "skipped_reviewers": [
+        {
+            "name": "a11y-reviewer",
+            "reason": "gates=['pr-gate'] \u306b code-gate \u304c\u7121\u3044"
+        },
+        {
+            "name": "ux-reviewer",
+            "reason": "gates=['pr-gate'] \u306b code-gate \u304c\u7121\u3044"
+        }
+    ],
+    "cascade_demotions": 0,
+    "iter_history": [
+        {
+            "iter": 1,
+            "must_fix": 2,
+            "skipped": 0,
+            "error": 0
+        },
+        {
+            "iter": 2,
+            "must_fix": 0,
+            "skipped": 0,
+            "error": 0
+        },
+        {
+            "iter": 3,
+            "must_fix": 0,
+            "skipped": 0,
+            "error": 0
+        }
+    ],
+    "verdict": "PASS",
+    "entry_status": "reviewing"
+}

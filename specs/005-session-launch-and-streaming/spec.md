@@ -292,7 +292,7 @@ network / プロセスの世界に踏み込む最初の feature であるため�
   **決定 (`PermissionDecision`) の `outcome` / `scope` は main が明示述語で enum 検証し (`as` キャスト禁止)、
   決定の `scope` が要求 (`PermissionRequest.scope`) の範囲を超えてはならない** (`once` 要求に `capability`
   決定を受理しない)。**capability 付与は当該セッション寿命の in-memory 適用に限り**、SDK の allow ルール
-  (`addRules` の allow-all) へ広げず、永続化・プリセット反映を行わない (それは X-4)。
+  (`addRules` の allow-all) へ広げず、永続化・プリセット反映を行わない (それは X-4。**読み替え**: [AD-041](../../docs/decisions/0041-x4-launch-config-on-x1-launch-gate.md) (c) により宛先は I-3)。
   **承認カードに表示する `toolName` と tool 入力 (argsText) は境界を越える前にサニタイズ**する
   (双方向制御文字・C0/C1 除去 + 長さ上限 + plain text 表示。MCP サーバ由来の tool 名で表示偽装させない。
   FR-009 / [AD-035](../../docs/decisions/0035-tier-a-tool-display-and-subagent-nesting.md) §6)
@@ -393,7 +393,7 @@ network / プロセスの世界に踏み込む最初の feature であるため�
   差し替えた Vitest (kill ハンドルの呼び出しと spawn ハンドルの解放を assert) + quickstart。
   **実プロセスの孤児不在 (`wsl.exe` が agents の孫として残らない) は fake では踏めず quickstart V-8 が
   唯一の実測根拠である**旨を明示する (保証粒度を正直に記す)
-- **SC-006**: 起動オプションの組み立てが安全である。(a) permissionMode が `default` に固定され、
+- **SC-006**: (**読み替え**: X-4 で (a) は [AD-041](../../docs/decisions/0041-x4-launch-config-on-x1-launch-gate.md) (a)(b) により「安全 3 値 (`default` / `plan` / `dontAsk`) に閉じる」へ読み替えた。昇格モードは I-3) 起動オプションの組み立てが安全である。(a) permissionMode が `default` に固定され、
   **初期オプションと実行時 `setPermissionMode` の双方**で `auto` / `bypassPermissions` / `acceptEdits` /
   `dontAsk` への遷移経路が **0 件** (`sdk-agent-session.ts` が `setPermissionMode` /
   `canUseTool` 応答の `updatedPermissions` 全 union・allowedTools 等の起動 options への昇格経路 0 件の
@@ -485,7 +485,7 @@ network / プロセスの世界に踏み込む最初の feature であるため�
 - **forkSession / 軸を選び直す再開 / rename / tag / delete** → X-4 以降
 - **ui-coverage 対応表の完成と Tier A 完全化** → O-2。本 feature は R-3 / R-4 の既存表示を再利用する
 - **Docker / コンテナ内起動・sandbox capability ゲート** → I-*
-- **Win32Runtime での直接起動と `autoModeSafe` の E2E ゲート** → 軸選択が生じる X-4。
+- **Win32Runtime での直接起動と `autoModeSafe` の E2E ゲート** → 軸選択が生じる X-4 (**読み替え**: [AD-041](../../docs/decisions/0041-x4-launch-config-on-x1-launch-gate.md) (h) により Win32Runtime 直接起動は X-6、`autoModeSafe` は I-3)。
   本 feature は WSL 内・固定 `default` モードのため危険モードの選択面を持たない
 - **transcript ミラー・SQLite 永続化** (`sessionStore`) → I-1。本 feature は永続化しない
 - **E2E 基盤 (CI で Electron を起動する仕組み) と日本語スクリーンショット比較** → M4 完了後の

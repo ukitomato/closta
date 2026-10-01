@@ -5,8 +5,6 @@ import { app, dialog } from 'electron'
 import { makeHostPath } from '@domain/runtime/path-types'
 import { hostPathOps } from '@domain/runtime/path-api'
 import type { PathMapping } from '@domain/runtime/path-mapping'
-import type { LaunchInput } from '@domain/session/agent-session'
-import { evaluateLaunch } from '@domain/session/launch-gate'
 import { applyEntry, findLongestMatch } from '@domain/workspace/prefix-match'
 import { isWslFolder, type WorkspaceFolder } from '@domain/workspace/folder'
 
@@ -16,24 +14,29 @@ import { createProviderDetector } from '../infra/provider/detector'
 import {
   buildLaunchEnv,
   buildRuntimeLaunchSpec,
-  LAUNCH_ENV_DENY_PATTERN
+  composeLaunchEnv,
+  isDeniedEnvKey,
+  isForbiddenForwardKey
 } from '../infra/runtime/launch-spec'
 import { createRuntimeDetector } from '../infra/runtime/wsl-detector'
 import { createWslCli } from '../infra/runtime/wsl-cli'
 import { createSecretStore } from '../infra/secrets/safe-storage'
 import { createFolderStore } from '../infra/settings/folder-store'
+import { createPresetStore } from '../infra/settings/preset-store'
 import { createProviderStore } from '../infra/settings/provider-store'
 import { buildTranscriptEnv } from '../infra/session/config-dir'
 import { createEnumerationTargetFinder } from '../infra/session/target-finder'
 import { createUtilityProcessLauncher } from './enumerator-spawner'
 import { createFolderService, type FolderService } from './folder-service'
 import type { IpcDependencies } from './ipc'
+import { createPrepareLaunch } from './launch-preparation'
 import { createMeasure } from './measure'
 import { isDevBuild } from './origins'
+import { createPresetService } from './preset-service'
 import { createProviderService } from './provider-service'
 import { createRuntimeStore, type RuntimeStore } from './runtime-store'
 import { createSessionEnumerator } from './session-enumerator'
-import { createSessionLaunchService, type LaunchPreparation } from './session-launch-service'
+import { createSessionLaunchService } from './session-launch-service'
 import { createSessionService, type SessionService } from './session-service'
 import { createSessionSpawner } from './session-spawner'
 import { createTranscriptService } from './transcript-service'
@@ -216,58 +219,23 @@ export function createComposition(): Composition {
    * agents↔renderer 直通に流す (main を本文経路から外す)。単一セッション不変・制御ルーティング・
    * dispose は service (`session-launch-service.ts`) が持ち、実プロセス生成は `session-spawner.ts` に閉じる。
    */
-  const launchService = createSessionLaunchService({
-    spawner: createSessionSpawner(),
-    prepareLaunch: async (folderId, runtimeId): Promise<LaunchPreparation> => {
-      const folder = folders.folders().find((f) => f.id === folderId) ?? null
-      const runtime = runtimes.snapshot().find((r) => r.id === runtimeId) ?? null
-      // 未知の folderId / runtimeId、または WslRuntime でない対象は null (→ unknown-target)。
-      if (folder === null || runtime === null || runtime.kind !== 'wsl') return null
-
-      /*
-       * **実行中確認をここで取り直す** (SC-002)。R-1 の判定を再利用し `wsl.exe` を増やさない。
-       * evaluateLaunch (純粋) が VerifiedRunning + 期限 + 所在 distro 一致を型でゲートする。
-       */
-      const verified = (await detector.verifyRunning([runtime.id])).get(runtime.id) ?? null
-      const gate = evaluateLaunch({ folder, runtime, verified, now: now() })
-      if (!gate.ok) return { ok: false, reason: gate.reason }
-      // gate.ok は verified !== null を含意するが型では追えないため再表明する。
-      if (verified === null) return { ok: false, reason: 'not-verified-running' }
-
-      // cwd を runtime 名前空間の RuntimePath 文字列で得る (Principle I / H-03)。
-      const cwd = resolveCwd(folder, runtime.pathMapping)
-      if (cwd === null) return { ok: false, reason: 'launch-failed' }
-
-      /*
-       * **claude 実行パスは検出時に解決済み** (BE-002 / AD-036 / AD-018 §4)。
-       * `probe-script.ts` が `command -v claude` で 1 回解決し descriptor (`claudePath`) に載せる。
-       * 未解決 / 不在は `claude-not-found` に倒す (裸名 PATH 依存は data-model §8 L-102 が禁じる)。
-       */
-      const claudePath = runtime.claudePath ?? null
-      if (claudePath === null) return { ok: false, reason: 'claude-not-found' }
-
-      // env は fork / wsl spawn の両点とも共有純関数で組む (data-model §7 / M-202)。
-      const env = buildLaunchEnv(process.env)
-      const spec = buildRuntimeLaunchSpec({
-        distroName: runtime.distroName,
-        cwd,
-        claudePath,
-        env
-      })
-      const input: LaunchInput = { folder, runtime, verified, permissionMode: 'default' }
-      return { ok: true, input, spec, env }
-    }
-  })
-
   /*
    * **Provider 登録と到達可能性判定** (X-3 / AD-005 / AD-039 / AD-040)。
    *
    * 秘密は `safeStorage` (infra/secrets) に seal し参照値のみ保持する (Principle V)。検出の I/O
    * (`~/.aws/config` 読み取り・config dir 存在・env 走査) は infra が担い、composition が `home` / `process.env` /
    * `exists` を値で渡す (H-04)。env 導出の denylist は X-1 `LAUNCH_ENV_DENY_PATTERN` の述語を注入 (SSoT。FR-009)。
+   * config-dir の RuntimePath 変換と helper パスの分類は domain の関数 (`helper-path.ts`) が行う (X-4 FR-012 / FR-014)。
    */
+  /*
+   * **extraEnv の登録境界の述語** (IPC と providers.json の read 側で同じ実体。pr-gate R1 platform-boundary M-302)。
+   * transport のキー集合を持つのは infra/runtime で、注入点はここ 1 箇所 (validate / provider-record は直接 import しない)。
+   * 登録時は transport の和集合で検証する — 現状は WSL の 1 transport (forward-env.ts の注記)。
+   */
+  const extraEnvPredicates = { isForbiddenForwardKey, isDeniedEnvKey }
+
   const providers = createProviderService({
-    store: createProviderStore(userDataResult.path, now),
+    store: createProviderStore(userDataResult.path, now, extraEnvPredicates),
     secrets: createSecretStore(),
     detect: createProviderDetector({
       home: hostHome,
@@ -276,15 +244,54 @@ export function createComposition(): Composition {
       exists: (p) => createHostFileSystem().exists(p)
     }),
     runtimes: () => runtimes.snapshot(),
-    /*
-     * config-dir 方式の `CLAUDE_CONFIG_DIR` を RuntimePath へ変換する配線は **X-4 の launch 統合**が供給する
-     * (H-02/H-101。起動時に選択ランタイムの PathMapping を要する)。X-3 の deriveEnv は他方式まで。
-     */
-    resolveConfigDirRuntimePath: () => null,
     // 起動 env の curated base (X-1 と同じ許可リスト。両 spawn 点と同一の純関数)。
     curatedBaseEnv: () => buildLaunchEnv(process.env),
     // denylist の SSoT を注入する (パターンを provider へ複製しない。FR-009 / L-03)。
-    isDeniedEnvKey: (key) => LAUNCH_ENV_DENY_PATTERN.test(key),
+    isDeniedEnvKey,
+    // 転送禁止キー (transport キーは infra から注入済み。X-4 / AD-041 (e))。
+    isForbiddenForwardKey,
+    // platform-ok: env-passthrough の値の出所 (varNames の実名 allowlist だけを読む。AD-041 (e) 4)。OS 分岐ではない。
+    parentEnv: () => process.env,
+    newId: () => randomUUID().replace(/-/g, '')
+  })
+
+  /*
+   * **単一セッション起動 + ストリーミング** (X-1 / AD-036) を **X-4 の起動設定**で動かす (AD-041)。
+   *
+   * per-session の agents `utilityProcess` を起こし、`MessageChannelMain` の port を
+   * agents↔renderer 直通に流す (main を本文経路から外す)。単一セッション不変・制御ルーティング・
+   * dispose は service (`session-launch-service.ts`) が持ち、実プロセス生成は `session-spawner.ts` に閉じる。
+   * 起動前段 (依存解決の再評価・起動ゲート・env 導出・WSLENV 合成) は `launch-preparation.ts` が持つ。
+   */
+  const launchService = createSessionLaunchService({
+    spawner: createSessionSpawner(),
+    prepareLaunch: createPrepareLaunch({
+      folders: () => folders.folders(),
+      runtimes: () => runtimes.snapshot(),
+      /*
+       * **実行中確認をここで取り直す** (SC-002)。R-1 の判定を再利用し `wsl.exe` を増やさない。
+       * evaluateLaunch (純粋) が VerifiedRunning + 期限 + 所在 distro 一致を型でゲートする。
+       */
+      verifyRunning: async (runtimeId) =>
+        (await detector.verifyRunning([runtimeId])).get(runtimeId) ?? null,
+      providerFacts: (runtimeId) => providers.providerFacts(runtimeId),
+      deriveEnv: (providerId, runtimeId) => providers.deriveEnv(providerId, runtimeId),
+      // fork env と wsl.exe の絶対パス解決の両方に使う curated base (data-model §7 / M-202)。
+      baseEnv: () => buildLaunchEnv(process.env),
+      // cwd を runtime 名前空間の RuntimePath 文字列で得る (Principle I / H-03)。
+      resolveCwd: (folder, runtime) => resolveCwd(folder, runtime.pathMapping),
+      composeLaunchEnv,
+      buildRuntimeLaunchSpec,
+      now,
+      // 拒否理由キーだけを記録する (値・パス・モデル ID を出さない。Principle V / CWE-532)。
+      logRejection: (reasonKey) => console.warn(`[launch] rejected: ${reasonKey}`)
+    })
+  })
+
+  /** プリセット (X-4 / FR-009)。Provider は id 参照で持ち、資格情報を含めない (Principle V)。 */
+  const presets = createPresetService({
+    store: createPresetStore(userDataResult.path, now),
+    now,
     newId: () => randomUUID().replace(/-/g, '')
   })
 
@@ -319,8 +326,13 @@ export function createComposition(): Composition {
     getTranscript: (sessionId, targetKey, requestToken) =>
       transcripts.getTranscript(sessionId, targetKey, requestToken),
 
-    launchSession: (folderId, runtimeId) => launchService.launch(folderId, runtimeId),
+    launchSession: (config) => launchService.launch(config),
     controlSession: (sessionId, control) => launchService.control(sessionId, control),
+
+    listPresets: () => presets.list(),
+    savePreset: (input) => presets.save(input),
+    removePreset: (id) => presets.remove(id),
+    presetIds: async () => (await presets.list()).map((p) => p.id),
 
     listProviders: () => providers.list(),
     detectProviders: () => providers.detect(),
@@ -328,6 +340,8 @@ export function createComposition(): Composition {
     updateProvider: (id, patch) => providers.update(id, patch),
     removeProvider: (id) => providers.remove(id),
     listReachableProviders: (runtimeId) => providers.listReachable(runtimeId),
+    providerLoadIssues: () => providers.loadIssues(),
+    extraEnvPredicates,
 
     async pickHostFolder() {
       /*

@@ -10,9 +10,12 @@ import {
   handleInterruptSession,
   handleKillSession,
   handleLaunchSession,
+  handleListPresets,
   handleListSessions,
   handleRefreshSessions,
+  handleRemovePreset,
   handleRespondPermission,
+  handleSavePreset,
   handleSendPrompt,
   type SessionIpcDeps
 } from './session-ipc'
@@ -35,6 +38,8 @@ interface Calls {
   readonly transcript: { sessionId: string; targetKey: string; requestToken: string }[]
   readonly launches: { folderId: string; runtimeId: string }[]
   readonly controls: { sessionId: string; control: SessionControl }[]
+  readonly presetSaves: unknown[]
+  readonly presetRemoves: string[]
 }
 
 function deps(keys: readonly string[] = ['host#0', 'wsl:Ubuntu#0']): {
@@ -47,7 +52,9 @@ function deps(keys: readonly string[] = ['host#0', 'wsl:Ubuntu#0']): {
     fetch: [],
     transcript: [],
     launches: [],
-    controls: []
+    controls: [],
+    presetSaves: [],
+    presetRemoves: []
   }
   return {
     calls,
@@ -73,16 +80,43 @@ function deps(keys: readonly string[] = ['host#0', 'wsl:Ubuntu#0']): {
         }
       },
       // X-1 で SessionIpcDeps に加わった起動/制御。呼び出しを記録する (負例で「発火しない」を検証)。
-      async launchSession(folderId, runtimeId) {
-        calls.launches.push({ folderId, runtimeId })
+      async launchSession(config) {
+        calls.launches.push({ folderId: config.folderId, runtimeId: config.runtimeId })
         return { status: 'rejected' as const, reason: 'unknown-target' as const }
       },
       controlSession(sessionId, control) {
         calls.controls.push({ sessionId, control })
         return true
+      },
+      // X-4 のプリセット。
+      async listPresets() {
+        return []
+      },
+      async savePreset(input) {
+        calls.presetSaves.push(input)
+        return {
+          ok: true as const,
+          preset: { id: 'x', name: input.name, config: input.config, updatedAt: 1 }
+        }
+      },
+      async removePreset(id) {
+        calls.presetRemoves.push(id)
+        return { ok: true }
+      },
+      async presetIds() {
+        return ['preset-1']
       }
     }
   }
+}
+
+const CONFIG = {
+  folderId: 'f1',
+  runtimeId: 'wsl:Ubuntu',
+  providerId: null,
+  modelId: null,
+  effort: null,
+  permissionMode: 'default'
 }
 
 describe('handleFetchMoreSessions — 節 A の各行', () => {
@@ -261,22 +295,61 @@ describe('handleGetTranscript — 検証表 (R-3 / BE-027 / SC-008)', () => {
 describe('X-1 起動 + 制御ハンドラ — main 直接呼び (SC-004 / SC-007 / FR-010 / FR-012)', () => {
   const UUID = '11111111-1111-4111-8111-111111111111'
 
-  describe('handleLaunchSession', () => {
-    it('folderId/runtimeId が文字列なら launchSession へ委譲', async () => {
+  describe('handleLaunchSession (X-4: 起動設定オブジェクト)', () => {
+    it('形の正しい起動設定なら launchSession へ委譲', async () => {
       const { deps: d, calls } = deps()
-      await handleLaunchSession(d, ['f1', 'r1'])
-      expect(calls.launches).toEqual([{ folderId: 'f1', runtimeId: 'r1' }])
+      await handleLaunchSession(d, [CONFIG])
+      expect(calls.launches).toEqual([{ folderId: 'f1', runtimeId: 'wsl:Ubuntu' }])
     })
 
     it.each([
-      ['folderId 非文字列', [123, 'r1']],
-      ['runtimeId 非文字列', ['f1', null]],
-      ['欠落', []]
-    ])('型不正はプロセスを起こさず unknown-target で拒否 (%s)', async (_l, args) => {
+      ['X-1 形式 (folderId, runtimeId)', ['f1', 'r1']],
+      ['欠落', []],
+      ['昇格モード', [{ ...CONFIG, permissionMode: 'bypass' + 'Permissions' }]],
+      ['acceptEdits', [{ ...CONFIG, permissionMode: 'acceptEdits' }]],
+      ['未知キー', [{ ...CONFIG, settings: { env: {} } }]],
+      ['model のメタ文字', [{ ...CONFIG, providerId: 'p', modelId: 'x$(id)' }]],
+      ['effort の enum 外', [{ ...CONFIG, effort: 'ultra' }]],
+      ['folderId 空', [{ ...CONFIG, folderId: '' }]],
+      ['providerId の型不正 (既定は null で表す)', [{ ...CONFIG, providerId: 1 }]]
+    ])('形の不正はプロセスを起こさず invalid-config で拒否 (%s)', async (_l, args) => {
       const { deps: d, calls } = deps()
       const out = await handleLaunchSession(d, args as readonly unknown[])
-      expect(out).toEqual({ status: 'rejected', reason: 'unknown-target' })
+      expect(out).toEqual({ status: 'rejected', reason: 'invalid-config' })
       expect(calls.launches).toEqual([])
+    })
+  })
+
+  describe('プリセット IPC (X-4 BE-013)', () => {
+    it('savePreset は checkPreset を通った値だけを service へ渡す', async () => {
+      const { deps: d, calls } = deps()
+      const ok = await handleSavePreset(d, ['  日本語の名前  ', CONFIG, false])
+      expect(ok.ok).toBe(true)
+      expect(calls.presetSaves).toHaveLength(1)
+    })
+
+    it.each([
+      ['空名', ['   ', CONFIG, false]],
+      ['制御文字', ['a\u0001b', CONFIG, false]],
+      ['config 不正', ['n', { ...CONFIG, permissionMode: 'auto' }, false]],
+      ['overwrite 非真偽値', ['n', CONFIG, 'yes']]
+    ])('不正な入力は invalid-preset (%s)', async (_l, args) => {
+      const { deps: d, calls } = deps()
+      expect(await handleSavePreset(d, args)).toEqual({ ok: false, reason: 'invalid-preset' })
+      expect(calls.presetSaves).toEqual([])
+    })
+
+    it('removePreset は既知 id との完全一致だけを通す', async () => {
+      const { deps: d, calls } = deps()
+      expect(await handleRemovePreset(d, ['preset-1'])).toEqual({ ok: true })
+      expect(await handleRemovePreset(d, ['preset-1 '])).toEqual({ ok: false })
+      expect(await handleRemovePreset(d, [1])).toEqual({ ok: false })
+      expect(calls.presetRemoves).toEqual(['preset-1'])
+    })
+
+    it('listPresets は引数を取らない', async () => {
+      const { deps: d } = deps()
+      expect(await handleListPresets(d)).toEqual([])
     })
   })
 

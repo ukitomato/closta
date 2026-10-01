@@ -1,0 +1,17 @@
+import { query } from '@anthropic-ai/claude-agent-sdk'
+
+import { assertSafePermissionMode } from '@domain/session/launch-config'
+
+/**
+ * 違反サンプル (X-4 / AD-041 (a) / code-gate platform-boundary L-101)。
+ *
+ * **ラッパの呼び出しの後ろに `&&` で別の値を連結する形。** 旧版の項目 16 は値がラッパで**始まる**かしか
+ * 見なかったので、連結した値がそのまま通った。項目 16 はラッパの閉じ括弧の直後が
+ * `,` / `}` / `;` / `)` / 改行でない (値がラッパで完結しない) ものを違反にする。
+ */
+export function bad(raw: unknown, mode: string): void {
+  void query({
+    prompt: 'hi',
+    options: { permissionMode: assertSafePermissionMode(raw) && mode }
+  })
+}
