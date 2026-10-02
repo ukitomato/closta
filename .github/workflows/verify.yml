@@ -84,6 +84,23 @@ jobs:
       - name: build
         run: pnpm build
 
+      # supervisor の単独起動の煙試験 (Principle VII / AD-010 / AD-043 Decision 6 / SC-009。X-5 pr-gate R1 platform-boundary L-004)。
+      # ビルド成果物の supervisor と worker のチャンクが読み込むのは `node:` の標準モジュールと SDK だけで、空の標準入力で起こすと
+      # exit 0 で終わること。読み込み先は**許可リストで**見る — 素の node 下の `require("electron")` はパス文字列に解決して
+      # 例外にならず、共有チャンク (`require("./…")`) 経由の混入は名前の一致では捕まらないため (X-5 pr-gate R2
+      # platform-boundary L-101 / architecture L-107)。共有チャンクが切り出されたら、ここで失敗させてから検査対象を広げる。
+      - name: smoke (supervisor の単独起動)
+        shell: pwsh
+        run: |
+          $sup = (Get-ChildItem out/main -Filter 'supervisor-*.js').FullName
+          $wrk = (Get-ChildItem out/main -Filter 'sdk-agent-session-*.js').FullName
+          $specs = Select-String -Path $sup, $wrk -AllMatches -Pattern '(?:require\(|import\(|from\s*)"([^"]+)"' |
+            ForEach-Object { $_.Matches } | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique
+          $bad = $specs | Where-Object { $_ -notmatch '^node:' -and $_ -ne '@anthropic-ai/claude-agent-sdk' }
+          if ($bad) { throw "supervisor / worker のチャンクが許可外のモジュールを読み込んでいる: $($bad -join ', ')" }
+          '' | node $sup "--worker-entry=$wrk"
+          if ($LASTEXITCODE -ne 0) { throw "supervisor が exit $LASTEXITCODE で終わった" }
+
   # **Principle VIII の Automated 2 項目** (IME E2E / 日本語スクリーンショット比較) を Electron 実起動で回す
   # (X-2 / AD-038 / SC-006 / FR-009-012)。**Windows ランナーで GUI 起動**する。
   #
@@ -94,7 +111,7 @@ jobs:
   #
   # **移設対象外は載せない** (FR-011): スクロール安定 E2E / Principle IX 到達集合検査は roadmap の deferred feature に残す。
   e2e:
-    name: e2e (Japanese IME / screenshot)
+    name: e2e (Japanese IME / screenshot / launch dialog / multi-session)
     runs-on: windows-latest
     env:
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
@@ -126,3 +143,17 @@ jobs:
       # フォント・基準画像を整備する前に本ステップを gating で有効化すると CI が赤になる — 整備後に commit すること。
       - name: e2e (日本語スクリーンショット比較)
         run: pnpm exec playwright test e2e/composer-screenshot.spec.ts -c playwright.config.ts
+
+      # E2E の型検査 (`e2e/` は src のグラフ外で lint / typecheck の対象外。AD-038 D2)。Playwright は型検査せずに
+      # transpile するため、型の崩れはここでしか見えない (X-5 code-gate convention M-005)。
+      - name: typecheck (e2e)
+        run: pnpm exec tsc --noEmit -p e2e/tsconfig.json
+
+      # 起動設定ダイアログ (X-4 SC-001 / SC-002 / SC-004)。
+      - name: e2e (起動設定ダイアログ)
+        run: pnpm exec playwright test e2e/launch-dialog.spec.ts -c playwright.config.ts
+
+      # マルチセッション (X-5 SC-001 / SC-003 / SC-006)。SC-003 の負荷計測は「入力遅延 p95 ≤ 50ms かつ long task の
+      # 最大 < 100ms」で判定し、件数は annotation に記録するだけ (実行環境の揺れで件数が変わるため。spec SC-003)。
+      - name: e2e (マルチセッション)
+        run: pnpm exec playwright test e2e/multi-session.spec.ts -c playwright.config.ts

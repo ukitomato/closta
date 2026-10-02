@@ -1,85 +1,158 @@
-import { randomUUID } from 'node:crypto'
-
-import { MessageChannelMain, utilityProcess } from 'electron'
+import { MessageChannelMain, utilityProcess, type UtilityProcess } from 'electron'
 
 import sdkAgentSessionModulePath from '@agents/sdk-agent-session?modulePath'
+import { decodeSupervisorEventForMain, encodeSupervisorRequest } from '@agents/supervisor-protocol'
+import supervisorModulePath from '@agents/supervisor?modulePath'
 
-import type { LaunchInput, RuntimeLaunchSpec, SessionControl } from '@domain/session/agent-session'
+import type {
+  LaunchQueryOptions,
+  RuntimeLaunchSpec,
+  SessionControl
+} from '@domain/session/agent-session'
 
-import type { SessionSpawn, SessionSpawner } from './session-launch-service'
+import type { SupervisorConnection, SupervisorLaunchResult } from './session-launch-service'
 
 /**
- * per-session の agents `utilityProcess` を起こす層 (X-1 / BE-003。AD-036 §3 / contracts C-2・C-6)。
+ * **単一 supervisor への接続** (X-5 / AD-043 Decision 1・6)。X-1 の per-session fork を置き換える。
  *
  * **子プロセス生成 API を持つモジュール**であり `PROCESS_SPAWN_MODULES` に入る (check.mjs 項目 7)。
- * `transcript-spawner.ts` (R-3) と同型 — **1 セッションごとに env 固定で fork** し、
- * `new MessageChannelMain()` の **port1 を agents / port2 を renderer へ** transfer する
- * (main を本文のデータ経路から外す。Principle IX / AD-034)。
- *
- * **方針 (単一セッション不変 / 制御ルーティング / kill / dispose) は `session-launch-service.ts` に置き、
- * 注入で受け取る** — `electron` を import したモジュールは Vitest の node 環境で読めないため、
- * 検証できる形にする (transcript-service と同じ分離)。
+ * 方針 (上限・registry・制御の宛先・dispose) は `session-launch-service.ts` に置き、ここは注入で受け取られる
+ * 実プロセスの層だけを持つ (`electron` を import したモジュールは Vitest の node 環境で読めないため)。
  *
  * | 規則 | 根拠 |
  * |---|---|
- * | **launch spec は `port1` と共に子へ transfer** (RuntimeLaunchSpec の値。agents は WSL-free) | data-model §8 / C-7 |
- * | 制御 (send-prompt/respond-permission/interrupt/kill) は `postMessage` で子へ | contracts C-1 |
- * | **kill 対象は utilityProcess ハンドル。** 孫 (wsl) の kill は agents が `SpawnedProcess` に対して行う | contracts C-6 |
- * | stdout を読まない (`stdio: 'ignore'`)。応答は port 直通、制御は message 経由 | AD-034 決定 1 |
+ * | 最初の起動要求で supervisor を fork し、アプリ終了まで常駐させる。fork env は接続の構築時に注入された curated base | AD-043 Decision 1・7 / X-4 FR-013 |
+ * | fork は 1 本に直列化する (spawn 待ちの間の起動要求は同じ fork を待つ)。fork のたびに世代番号を進める | FR-013 / design-gate R1 M-004 |
+ * | worker entry のパスは `?modulePath` で得たバンドル済みのものだけを起動引数で渡す | AD-043 Decision 6 |
+ * | 起動ごとに `MessageChannelMain` を作り、port1 を launch の行と一緒に supervisor へ、port2 を renderer へ (main は本文に触れない) | AD-034 §1 / AD-036 §2 / FR-003 |
+ * | `stdio: 'ignore'`。parentPort だけを購読する — utilityProcess の下では parentPort が必ず使われ、stdout を開くと標準入出力経路の本文行が main に流れる経路を作るため (AD-030 §5 訂正の「両方を購読」は、両経路が使われうる列挙プロセスの規則) | Principle V / IX / AD-043 Decision 1 |
+ * | supervisor からの行は、パース前に長さの上限を掛ける。運ぶのは状態通知などのメタデータだけ | AD-031 §2 |
+ *
+ * モジュール名は X-1 の登録名 (`PROCESS_SPAWN_MODULES`) を維持している (中身は supervisor 接続。plan 申し送り #19)。
  */
 
-/** バンドル後の agents session worker のファイルパス。子プロセスの生成に渡す。 */
-export const SDK_AGENT_SESSION_MODULE_PATH: string = sdkAgentSessionModulePath
+/** バンドル後の supervisor entry / セッションスレッドのファイルパス。 */
+const SUPERVISOR_MODULE_PATH: string = supervisorModulePath
+const SESSION_THREAD_MODULE_PATH: string = sdkAgentSessionModulePath
 
-export function createSessionSpawner(): SessionSpawner {
-  return {
-    launch(input: LaunchInput, spec: RuntimeLaunchSpec, env: Record<string, string>): SessionSpawn {
-      const sessionId = randomUUID()
-      const channel = new MessageChannelMain()
-      const child = utilityProcess.fork(SDK_AGENT_SESSION_MODULE_PATH, [], {
-        env,
-        // 応答は port 直通、制御は message 経由。読み手のいないパイプを作らない (transcript-spawner と同じ)。
+/** supervisor からの 1 行の上限 (状態通知 10 件分の数十倍。spec Assumptions [ASSUMED] 64 KiB)。 */
+const MAX_SUPERVISOR_LINE_CHARS = 64 * 1024
+
+type Listener<T extends unknown[]> = (...args: T) => void
+
+/**
+ * @param forkEnv supervisor の fork env。**ランタイムに依存しない curated base** を返す (`buildLaunchEnv(process.env)`)。
+ *   supervisor は全ランタイムのセッションを抱えるので、起動ごとの値 (導出 env・distro) を fork env に入れない —
+ *   それらはセッションごとの `spec.env` に閉じる。起動ごとに受け取る形にすると、最初の起動の env が 2 本目以降の
+ *   別ランタイムにも黙って効く形になる (pr-gate R1 platform-boundary L-001 / AD-003 / AD-041 (e) 6)。
+ */
+export function createSupervisorConnection(
+  forkEnv: () => Record<string, string>
+): SupervisorConnection {
+  let child: UtilityProcess | null = null
+  let spawned = false
+  let generation = 0
+  /** spawn 前に届いた起動要求 (fork の直列化)。 */
+  let queued: (() => void)[] = []
+  const statusListeners: Listener<[number, readonly unknown[]]>[] = []
+  const threadEndedListeners: Listener<[number, string]>[] = []
+  const exitListeners: Listener<[number, number | null]>[] = []
+
+  const ensureSupervisor = (): { proc: UtilityProcess; gen: number } => {
+    if (child !== null) return { proc: child, gen: generation }
+    generation += 1
+    const gen = generation
+    const proc = utilityProcess.fork(
+      SUPERVISOR_MODULE_PATH,
+      [`--worker-entry=${SESSION_THREAD_MODULE_PATH}`],
+      {
+        env: forkEnv(),
         stdio: 'ignore'
-      })
-
-      const exitListeners: (() => void)[] = []
-      let ended = false
-      const end = (): void => {
-        if (ended) return
-        ended = true
-        for (const cb of exitListeners) cb()
       }
-      child.on('exit', end)
-      // spawn に失敗した子も片付ける (追跡から外れる)。
-      child.on('error', end)
-
-      /*
-       * **子が起きてから port1 と launch spec を transfer する。**
-       * `spawn` を待つのは fork 直後の postMessage が確実に届く保証が薄いため
-       * (transcript-spawner と同じ理由)。port1 は transfer 後 main 側で neutralize される。
-       */
-      child.once('spawn', () => {
-        // **query() 時の選択 (permissionMode / model / effort / settings) を明示フィールドで運ぶ** (X-4 FR-005)。
-        // spec.env に紛れ込ませない。agents の decoder が同じ述語で再検証し、未知キーを捨てる。
-        child.postMessage({ kind: 'launch', spec, options: input.options }, [channel.port1])
-      })
-
-      return {
-        sessionId,
-        port: channel.port2,
-        sendControl(control: SessionControl): void {
-          if (ended) return
-          child.postMessage({ kind: 'control', control })
-        },
-        kill(): boolean {
-          if (ended) return true
-          return child.kill()
-        },
-        onExit(listener: () => void): void {
-          if (ended) listener()
-          else exitListeners.push(listener)
-        }
+    )
+    child = proc
+    spawned = false
+    let gone = false
+    const end = (code: number | null): void => {
+      if (gone) return
+      gone = true
+      if (child === proc) {
+        child = null
+        spawned = false
+        queued = []
       }
+      for (const cb of exitListeners) cb(gen, code)
+    }
+    proc.on('exit', (code) => end(code))
+    // spawn に失敗した子も片付ける (起動要求は exit と同じ経路で失敗にする)。
+    proc.on('error', () => end(null))
+    proc.once('spawn', () => {
+      if (child !== proc) return
+      spawned = true
+      const pending = queued
+      queued = []
+      for (const send of pending) send()
+    })
+    proc.on('message', (message: unknown) => {
+      if (typeof message !== 'string' || message.length > MAX_SUPERVISOR_LINE_CHARS) return
+      const event = decodeSupervisorEventForMain(message)
+      if (event === null) return
+      if (event.kind === 'status-batch') for (const cb of statusListeners) cb(gen, event.updates)
+      else for (const cb of threadEndedListeners) cb(gen, event.sessionId)
+    })
+    return { proc, gen }
+  }
+
+  return {
+    launch(
+      sessionId: string,
+      spec: RuntimeLaunchSpec,
+      options: LaunchQueryOptions
+    ): SupervisorLaunchResult {
+      let target: { proc: UtilityProcess; gen: number }
+      try {
+        target = ensureSupervisor()
+      } catch {
+        return { ok: false }
+      }
+      const channel = new MessageChannelMain()
+      const send = (): void => {
+        // **起動指示は値として 1 行で渡す** (supervisor は検証せずセッションスレッドへ渡し、以後保持しない)。
+        target.proc.postMessage(
+          encodeSupervisorRequest({
+            kind: 'launch',
+            sessionId,
+            spec: spec as unknown as Readonly<Record<string, unknown>>,
+            options: options as unknown as Readonly<Record<string, unknown>>
+          }),
+          [channel.port1]
+        )
+      }
+      if (spawned) send()
+      else queued.push(send)
+      return { ok: true, port: channel.port2, generation: target.gen }
+    },
+    control(sessionId: string, control: SessionControl): void {
+      const proc = child
+      if (proc === null) return
+      const send = (): void =>
+        proc.postMessage(encodeSupervisorRequest({ kind: 'control', sessionId, control }))
+      // spawn 前なら起動要求の後ろに並べる (起動直後の強制終了を落とさない)。
+      if (spawned) send()
+      else queued.push(send)
+    },
+    kill(): boolean {
+      if (child === null) return true
+      return child.kill()
+    },
+    onStatusBatch(listener) {
+      statusListeners.push(listener)
+    },
+    onThreadEnded(listener) {
+      threadEndedListeners.push(listener)
+    },
+    onExit(listener) {
+      exitListeners.push(listener)
     }
   }
 }

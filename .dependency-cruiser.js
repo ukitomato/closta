@@ -288,6 +288,16 @@ module.exports = {
       to: { path: ELECTRON }
     },
     {
+      name: 'worker-threads-only-from-entry',
+      comment:
+        '`worker_threads` への依存を supervisor の entry とセッションスレッドの 2 ファイルに限る (X-5 / AD-043 Decision 1・7)。' +
+        'ESLint の 2 表記は import 文と `require()` / 動的 import までしか見ないため、' +
+        '**`process.getBuiltinModule()` の形を塞げるのはこの層だけである** (code-gate platform-boundary L-101)。',
+      severity: 'error',
+      from: { pathNot: '^src/agents/(supervisor|sdk-agent-session)[.]ts$' },
+      to: { dependencyTypes: ['core'], path: coreRe(['worker_threads']) }
+    },
+    {
       name: 'ui-not-to-core',
       comment:
         '`ui` から Node 標準モジュールへの**推移的**到達 (FR-035 が明示)。' +

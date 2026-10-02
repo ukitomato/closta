@@ -3,6 +3,7 @@ import icon from '@resources/icon.png?asset'
 
 import { resolveBuildPath } from '@domain/runtime/path-api'
 
+import { decideNavigation } from './navigation-policy'
 import { allowedOrigins, devServerOrigin, rendererEntryUrl } from './origins'
 import { contentSecurityPolicy } from './protocol'
 
@@ -66,20 +67,17 @@ export function createMainWindow(baseDir: string): BrowserWindow {
     return { action: 'deny' }
   })
 
-  // トップレベル遷移も配信元 origin の外へは行かせない。
+  /*
+   * **トップレベル遷移はすべて拒否する** (X-5 / design-gate R3-H-02)。renderer は SPA で、正当な文書遷移を持たない。
+   * 同一 origin の遷移 (会話由来 markdown の相対リンクなど) も拒否する — 許すと文書が入れ替わり、renderer の保持と
+   * 全セッションの port が失われる (index.ts は文書の入れ替わりで全セッションを止める)。
+   * 配信元 origin の外の http(s) だけを OS の既定ブラウザへ委譲する。再読み込みは `will-navigate` を発火しない。
+   */
   window.webContents.on('will-navigate', (event, url) => {
-    const origins = allowedOrigins()
-    let origin: string
-    try {
-      origin = new URL(url).origin
-    } catch {
-      event.preventDefault()
-      return
-    }
-    if (!origins.includes(origin)) {
-      event.preventDefault()
-      openExternalIfHttp(url)
-    }
+    // 判定は純関数 (navigation-policy.ts) が持ち、負例を単体で固定する (pr-gate R1 security M-001)。
+    const decision = decideNavigation(url, allowedOrigins())
+    if (decision.prevent) event.preventDefault()
+    if (decision.openExternal) openExternalIfHttp(url)
   })
 
   // dev サーバから配信する場合、CSP はレスポンスヘッダで付かないため

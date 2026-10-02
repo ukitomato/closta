@@ -1,0 +1,5 @@
+// 違反サンプル (項目 19 / X-5 SH-010): 許可外モジュールが process の kill を **`.call`** で呼ぶ。
+// `process.kill(` の呼び出し形にならない等価形。項目 19 は参照で数えるので発火する (AD-043 Decision 5)。
+export function reap(pid: number): void {
+  process.kill.call(process, pid, 'SIGKILL')
+}

@@ -3,16 +3,113 @@ import { describe, expect, it, vi } from 'vitest'
 import type { PermissionDecision, RuntimeLaunchSpec } from '@domain/session/agent-session'
 
 import {
+  acceptsWhileClosing,
   buildQueryOptions,
+  canEnd,
   classifyResult,
   composeClaudeSpawn,
   createCanUseTool,
+  createPermissionRegistry,
   QUERY_OPTION_KEYS,
+  resultAction,
   type AgentSpawnOptions,
   type SpawnedLike
 } from './session-core'
 
 const noopSpawn = (): SpawnedLike => ({ kill: () => true })
+
+describe('createPermissionRegistry (承認往復の照合。X-5 FR-007 / SC-005)', () => {
+  const decision = (requestId: string): PermissionDecision => ({
+    requestId,
+    outcome: 'allow',
+    scope: 'once'
+  })
+
+  it('requestId は注入した生成器から作られる (本番は globalThis.crypto.randomUUID)', () => {
+    const gen = vi.fn(() => 'req-1')
+    const registry = createPermissionRegistry(gen)
+    expect(registry.issue()).toBe('req-1')
+    expect(gen).toHaveBeenCalledTimes(1)
+  })
+
+  it('本番の生成器 globalThis.crypto.randomUUID は UUID を返す (予測可能な連番でない)', () => {
+    const registry = createPermissionRegistry(() => globalThis.crypto.randomUUID())
+    const a = registry.issue()
+    const b = registry.issue()
+    expect(a).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+    expect(a).not.toBe(b)
+  })
+
+  it('pending の requestId だけを解決する', () => {
+    const registry = createPermissionRegistry(() => 'req-1')
+    const resolve = vi.fn()
+    registry.register(registry.issue(), resolve)
+    expect(registry.settle(decision('req-1'))).toBe(true)
+    expect(resolve).toHaveBeenCalledWith(decision('req-1'))
+  })
+
+  it('未知・別セッション宛て・応答済みの requestId は何もしない (SDK のコールバックを解決しない)', () => {
+    const registry = createPermissionRegistry(() => 'req-1')
+    const resolve = vi.fn()
+    registry.register(registry.issue(), resolve)
+    expect(registry.settle(decision('other-session-req'))).toBe(false)
+    expect(registry.settle(decision('req-1'))).toBe(true)
+    // 応答済み
+    expect(registry.settle(decision('req-1'))).toBe(false)
+    expect(resolve).toHaveBeenCalledTimes(1)
+  })
+
+  it('denyAll は残りの受け口をすべて拒否で解決する', () => {
+    let n = 0
+    const registry = createPermissionRegistry(() => `req-${(n += 1)}`)
+    const r1 = vi.fn()
+    const r2 = vi.fn()
+    registry.register(registry.issue(), r1)
+    registry.register(registry.issue(), r2)
+    registry.denyAll()
+    expect(r1).toHaveBeenCalledWith({ requestId: 'req-1', outcome: 'deny', scope: 'once' })
+    expect(r2).toHaveBeenCalledWith({ requestId: 'req-2', outcome: 'deny', scope: 'once' })
+    expect(registry.settle(decision('req-1'))).toBe(false)
+  })
+})
+
+describe('canEnd / acceptsWhileClosing (終わらせ方。X-5 FR-011 / R3-H-04)', () => {
+  it('穏当な終了は応答待ち (done)・中断済み (interrupted)・最初のプロンプト待ちの launching だけ', () => {
+    expect(canEnd('done', true)).toBe(true)
+    expect(canEnd('interrupted', true)).toBe(true)
+    // 最初のプロンプトを待つ launching は終了できる (pr-gate R1 po H-001)。送信済みなら応答中と同じく受けない。
+    expect(canEnd('launching', false)).toBe(true)
+    expect(canEnd('launching', true)).toBe(false)
+    for (const s of ['idle', 'running', 'awaiting_permission', 'error'] as const) {
+      expect(canEnd(s, false)).toBe(false)
+    }
+  })
+
+  it('終了処理中は kill だけを受け付け、送信・承認・中断・終了は無視する', () => {
+    expect(acceptsWhileClosing({ kind: 'kill' })).toBe(true)
+    expect(acceptsWhileClosing({ kind: 'send-prompt', text: 'x' })).toBe(false)
+    expect(acceptsWhileClosing({ kind: 'interrupt' })).toBe(false)
+    expect(acceptsWhileClosing({ kind: 'end' })).toBe(false)
+    expect(
+      acceptsWhileClosing({
+        kind: 'respond-permission',
+        decision: { requestId: 'r', outcome: 'allow', scope: 'once' }
+      })
+    ).toBe(false)
+  })
+})
+
+describe('resultAction (終了処理中の result。pr-gate R1 architecture L-001 / R2 L-006)', () => {
+  it('正常完了は終了処理中でも complete', () => {
+    expect(resultAction({ kind: 'complete' }, false)).toBe('complete')
+    expect(resultAction({ kind: 'complete' }, true)).toBe('complete')
+  })
+
+  it('エラー結果は通常なら fail、終了・強制終了の処理中なら ignore (終了済みを「失敗」と出さない)', () => {
+    expect(resultAction({ kind: 'provider-error' }, false)).toBe('fail')
+    expect(resultAction({ kind: 'provider-error' }, true)).toBe('ignore')
+  })
+})
 
 describe('buildQueryOptions (正の構成 P1)', () => {
   it('options のキー集合が allowlist の完全部分集合 (余分なキーが無い)', () => {

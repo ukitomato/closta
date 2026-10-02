@@ -26,7 +26,7 @@ import {
  *
  * | 外したもの | 理由 |
  * |---|---|
- * | `ThreadListNew` (New Thread ボタン) | R-2 はセッションを**作らない** (FR-003)。起動は X-1 |
+ * | `ThreadListNew` (New Thread ボタン) | R-2 はセッションを**作らない** (FR-003)。起動は X-1。**X-5 の稼働中セッション一覧のために復元した** (下の `ThreadListNew`。R-2 は使わない) |
  * | rename (インライン入力 + `aui.threadListItem.rename`) | config ディレクトリへの**書き込み**になる (FR-013 / Principle X) |
  * | archive / delete (More メニュー) | 同上。**正本はアプリ外にある** (AD-007) |
  * | 検索 + 日付グルーピング (Today / Yesterday / Earlier) | R-2 のまとまりは**登録フォルダ**である (FR-022)。検索は O-3 |
@@ -62,6 +62,33 @@ const RowMetaContext = createContext<((rowKey: string) => ReactNode) | null>(
   null,
 );
 
+/**
+ * 行ごとの操作 (X-5 / FE-011)。**Trigger の外・Root の内側**に描く (ボタンの入れ子を作らない)。
+ * R-2 は渡さないので行は従来どおり選択だけになる。渡し方は `RowMetaContext` と同じ理由で context。
+ */
+const RowActionsContext = createContext<((rowKey: string) => ReactNode) | null>(
+  null,
+);
+
+/**
+ * 新しいスレッド = 新規起動 (X-5)。生成物の `ThreadListNew` を、R-2 が外した理由 (セッションを作らない) の外で
+ * 復元したもの。adapter の `onSwitchToNewThread` を渡したときだけ使う (R-2 は使わない)。
+ */
+export const ThreadListNew: FC<
+  ComponentPropsWithoutRef<typeof ThreadListPrimitive.New>
+> = ({ className, ...props }) => {
+  return (
+    <ThreadListPrimitive.New
+      data-slot="aui_thread-list-new"
+      className={cn(
+        "hover:bg-muted data-active:bg-accent focus-visible:ring-ring flex h-8 items-center rounded-md px-2.5 text-sm font-medium outline-none focus-visible:ring-2",
+        className,
+      )}
+      {...props}
+    />
+  );
+};
+
 export const ThreadListRoot: FC<
   ComponentPropsWithoutRef<typeof ThreadListPrimitive.Root>
 > = ({ className, ...props }) => {
@@ -91,8 +118,10 @@ export const ThreadListItemsByKey: FC<
     rowKeys: readonly string[];
     /** 行ごとの付帯情報。**行の内側に描かれる** (a11y H-005)。 */
     renderMeta?: (rowKey: string) => ReactNode;
+    /** 行ごとの操作 (X-5)。Trigger の外・行の内側に描かれる。 */
+    renderActions?: (rowKey: string) => ReactNode;
   }
-> = ({ className, rowKeys, renderMeta, ...props }) => {
+> = ({ className, rowKeys, renderMeta, renderActions, ...props }) => {
   const threadIds = useAuiState((s) => s.threads.threadIds);
 
   return (
@@ -108,17 +137,19 @@ export const ThreadListItemsByKey: FC<
       {...props}
     >
       <RowMetaContext.Provider value={renderMeta ?? null}>
-        {rowKeys.map((rowKey) => {
-          const index = threadIds.indexOf(rowKey);
-          if (index < 0) return null;
-          return (
-            <ThreadListPrimitive.ItemByIndex
-              key={rowKey}
-              index={index}
-              components={{ ThreadListItem }}
-            />
-          );
-        })}
+        <RowActionsContext.Provider value={renderActions ?? null}>
+          {rowKeys.map((rowKey) => {
+            const index = threadIds.indexOf(rowKey);
+            if (index < 0) return null;
+            return (
+              <ThreadListPrimitive.ItemByIndex
+                key={rowKey}
+                index={index}
+                components={{ ThreadListItem }}
+              />
+            );
+          })}
+        </RowActionsContext.Provider>
       </RowMetaContext.Provider>
     </div>
   );
@@ -182,6 +213,8 @@ export const ThreadListItem: FC = () => {
   );
   const renderMeta = useContext(RowMetaContext);
   const meta = renderMeta === null ? null : renderMeta(rowKey);
+  const renderActions = useContext(RowActionsContext);
+  const actions = renderActions === null ? null : renderActions(rowKey);
 
   return (
     <ThreadListItemPrimitive.Root
@@ -206,7 +239,14 @@ export const ThreadListItem: FC = () => {
        * `hover` の `bg-muted` は据え置く — hover は状態の識別ではなく
        * ポインタ位置の示唆なので 3:1 は掛からない。
        */
-      className="group hover:bg-muted data-active:bg-accent data-active:before:bg-foreground relative flex min-h-8 items-center rounded-md transition-colors data-active:font-medium data-active:before:absolute data-active:before:inset-y-1 data-active:before:start-0 data-active:before:w-0.5 data-active:before:rounded-full"
+      /*
+       * 操作がある行 (X-5) は縦に積む — 横並びの折り返しにすると Trigger の `h-full` が行の高さを取り、
+       * 操作の段が行の高さに入らず次の行に重なる (実機で確認)。R-2 の行 (操作なし) は従来の横並びのまま。
+       */
+      className={cn(
+        "group hover:bg-muted data-active:bg-accent data-active:before:bg-foreground relative flex min-h-8 rounded-md transition-colors data-active:font-medium data-active:before:absolute data-active:before:inset-y-1 data-active:before:start-0 data-active:before:w-0.5 data-active:before:rounded-full",
+        actions === null ? "items-center" : "flex-col items-stretch",
+      )}
     >
       <ThreadListItemPrimitive.Trigger
         data-slot="aui_thread-list-item-trigger"
@@ -254,6 +294,15 @@ export const ThreadListItem: FC = () => {
           </span>
         )}
       </ThreadListItemPrimitive.Trigger>
+      {/* 行の操作 (X-5)。Trigger の下に並べる (幅の狭い一覧でも表題を潰さない)。 */}
+      {actions !== null && (
+        <div
+          data-slot="aui_thread-list-item-actions"
+          className="flex w-full flex-wrap gap-1 px-2.5 pb-1.5"
+        >
+          {actions}
+        </div>
+      )}
     </ThreadListItemPrimitive.Root>
   );
 };

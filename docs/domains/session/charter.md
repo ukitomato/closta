@@ -3,18 +3,22 @@ domain: session
 status: needs-human-review
 owner: ukitomato
 generated_by: human (PLAN.md を素案として再導出)
-last_reviewed: 2026-09-30
+last_reviewed: 2026-10-01
 related_adrs:
   - docs/decisions/0002-use-agent-sdk-not-cli.md
   - docs/decisions/0006-supervisor-in-utility-process.md
   - docs/decisions/0007-session-source-of-truth-is-claude-code.md
   - docs/decisions/0010-supervisor-runs-standalone.md
+  - docs/decisions/0023-application-architecture.md
+  - docs/decisions/0034-transcript-read-path-and-process-boundary.md
   - docs/decisions/0036-single-session-launch-process-and-live-stream.md
   - docs/decisions/0041-x4-launch-config-on-x1-launch-gate.md
+  - docs/decisions/0043-single-supervisor-session-threads-and-session-limit.md
 related_specs:
   - specs/002-session-cross-folder-session-enumeration/spec.md
   - specs/005-session-launch-and-streaming/spec.md
   - specs/008-session-launch-settings-dialog-and-presets/spec.md
+  - specs/009-session-supervisor-and-multi-session/spec.md
 ---
 
 # Domain Charter: session
@@ -41,7 +45,7 @@ Closta の出発点にある課題「並行して走らせたセッションの�
   （作業フォルダ ↔ ランタイム → Provider → モデル → effort。権限モードは独立した軸。glossary の Axis resolution）
 - プリセットの保存・適用
 - `canUseTool` の permission 往復の配管
-- セッション supervisor（`utilityProcess` 分離、semaphore 制御、IPC バッチ化）
+- セッション supervisor（単一の `utilityProcess` + セッションスレッド、同時実行数の上限 (10・超過は拒否。待ち行列は持たない)、状態通知のバッチ化。AD-043）
 - セッション状態の管理（idle / running / awaiting_permission / error）と監視ビュー
 
 ### Out of scope
@@ -100,7 +104,10 @@ Closta の出発点にある課題「並行して走らせたセッションの�
   `<config-dir>/projects/<encoded-cwd>/<uuid>.jsonl` に永続化される
 - **SessionLaunchConfig**: セッション起動時に選択される設定の組
 - **プリセット**: 名前付きで保存された `SessionLaunchConfig`。資格情報の値は含まない
-- **supervisor**: セッションのプロセスとストリームを持つ `utilityProcess`。Electron 非依存
+- **supervisor**: 全セッションのプロセスとストリームを持つ**単一の** `utilityProcess`。調停役スレッドが
+  セッションスレッド (`worker_threads`。1 セッション 1 本) を束ね、本文は文字列のまま renderer へ中継する。
+  Electron 非依存で、worker のパスを引数で渡せば `node` で単独起動できる（X-5 / AD-043）
+- **同時実行数の上限**: 枠を占めるセッションは 10 本まで。11 本目は `session-limit` で拒否する（X-5）
 - **transcript**: セッションの会話ログ
 
 詳細は [docs/glossary.md](../../glossary.md) を参照。
@@ -149,6 +156,9 @@ Closta の出発点にある課題「並行して走らせたセッションの�
 - [AD-010](../../decisions/0010-supervisor-runs-standalone.md) — supervisor は単独起動可能
 - [AD-036](../../decisions/0036-single-session-launch-process-and-live-stream.md) — 単一セッション起動とライブストリーム (X-1)
 - [AD-041](../../decisions/0041-x4-launch-config-on-x1-launch-gate.md) — X-4 の起動設定を X-1 の起動ゲートに載せる（権限モード安全 3 値・env の WSL 配送・`--exec`）
+- [AD-023](../../decisions/0023-application-architecture.md) — アプリケーションアーキテクチャ（agents の寿命と単位は AD-043 が読み替える）
+- [AD-034](../../decisions/0034-transcript-read-path-and-process-boundary.md) — transcript の読み取り経路とプロセス境界
+- [AD-043](../../decisions/0043-single-supervisor-session-threads-and-session-limit.md) — 単一 supervisor・セッションスレッド・同時実行数の上限 (X-5)
 
 ## Related Specs
 
@@ -159,8 +169,11 @@ Closta の出発点にある課題「並行して走らせたセッションの�
 - **X-4** — [起動設定ダイアログとプリセット](../../../specs/008-session-launch-settings-dialog-and-presets/spec.md)
   （6 軸の起動設定・依存解決・プリセット・越境警告・導出 env の WSL 配送。実装中。
   [AD-041](../../decisions/0041-x4-launch-config-on-x1-launch-gate.md)）
+- **X-5** — [supervisor 分離とマルチセッション](../../../specs/009-session-supervisor-and-multi-session/spec.md)
+  （単一 supervisor + セッションスレッド、上限 10 の並行起動、状態通知のバッチ、稼働中セッションの一覧と切り替え・
+  終了・停止・閉じる。実装中。[AD-043](../../decisions/0043-single-supervisor-session-threads-and-session-limit.md)）
 
-X-5 / X-6 / O-1 は未着手。
+X-6 / O-1 は未着手。
 
 ## Open Questions
 

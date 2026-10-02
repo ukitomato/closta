@@ -1,0 +1,7 @@
+// 違反サンプル (項目 18 / X-5 SH-010): 調停役スレッドのモジュールが JSON の parse を**分割代入**で取る。
+// 以後は裸の `parse(...)` になり `JSON.parse` の綴りが現れない等価形。項目 18 は分割代入も参照として数える。
+const { parse } = JSON
+
+export function relay(body: string): unknown {
+  return parse(body) as unknown
+}

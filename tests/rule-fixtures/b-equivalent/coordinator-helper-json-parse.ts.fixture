@@ -1,0 +1,12 @@
+/**
+ * 等価経路サンプル (項目 18 / X-5 SH-010 / AD-043 Decision 2)。
+ *
+ * **調停役スレッドの本体が import する別名の helper で本文を `JSON.parse` する形。**
+ * 項目 18 は置き場 (`src/agents/` 配下の `supervisor*.ts`) を見るだけで、どのスレッドで評価されるかは見ない —
+ * `supervisor-core.ts` がこの関数を import して本文に適用すれば、調停役スレッドで評価されても掛からない。
+ * **この経路はどの機械検証も捕まえない** — `detectors: ['none']`。
+ * 理由と代替は expected.mjs の UNDETECTED_NOTES['coordinator-helper-json-parse'] に記録する (SC-017)。
+ */
+export function decodeBody(body: string): unknown {
+  return JSON.parse(body)
+}

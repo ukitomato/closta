@@ -425,6 +425,210 @@ export const FIXTURES = [
       '**別の定数を新しく作って標準入力へ流す**形で項目 6 を回避しようとする',
     detectors: ['constitution'],
     rules: ['#6']
+  },
+
+  /*
+   * ── X-5 (SH-010): 項目 18 / 19 / 20 ──────────────────────────────
+   * 項目 18・19 は**呼び出しでなく参照で数える**ので、参照渡し・ブラケット・分割代入・`.call` の 4 形を
+   * 1 件ずつ置き、それぞれ単独で発火することを確かめる (design-gate R2 platform-boundary)。
+   * 項目 18 のサンプルは調停役スレッドの置き場 (`src/agents/` 配下の `supervisor*.ts`) に展開する。
+   */
+  {
+    file: 'a-direct/supervisor-json-parse-reference.ts.fixture',
+    target: 'src/agents/__rulecheck__/supervisor-json-parse-reference.ts',
+    group: 'a',
+    what: '調停役スレッドのモジュールが JSON の parse を参照渡しする (`Reflect.apply(JSON.parse, …)` / 別名の関数値。SC-002 / AD-043 Decision 2。X-5 / SH-010)',
+    detectors: ['constitution'],
+    rules: ['#18']
+  },
+  {
+    file: 'b-equivalent/supervisor-json-parse-bracket.ts.fixture',
+    target: 'src/agents/__rulecheck__/supervisor-json-parse-bracket.ts',
+    group: 'b',
+    what: "調停役スレッドのモジュールが `JSON['parse']` で取る (`JSON.parse` の綴りが現れない等価形。X-5 / SH-010)",
+    detectors: ['constitution'],
+    rules: ['#18']
+  },
+  {
+    file: 'b-equivalent/supervisor-json-parse-destructure.ts.fixture',
+    target: 'src/agents/__rulecheck__/supervisor-json-parse-destructure.ts',
+    group: 'b',
+    what: '調停役スレッドのモジュールが `const { parse } = JSON` で取る (以後は裸の `parse()`。X-5 / SH-010)',
+    detectors: ['constitution'],
+    rules: ['#18']
+  },
+  {
+    file: 'b-equivalent/supervisor-json-parse-call.ts.fixture',
+    target: 'src/agents/__rulecheck__/supervisor-json-parse-call.ts',
+    group: 'b',
+    what: '調停役スレッドのモジュールが `JSON.parse.call(…)` で呼ぶ (`JSON.parse(` の呼び出し形にならない。X-5 / SH-010)',
+    detectors: ['constitution'],
+    rules: ['#18']
+  },
+  {
+    file: 'b-equivalent/coordinator-helper-json-parse.ts.fixture',
+    target: 'src/agents/__rulecheck__/coordinator-helper-json-parse.ts',
+    group: 'b',
+    /*
+     * **項目 18 は置き場を見るだけで、どのスレッドで評価されるかは見ない。** 調停役スレッドの本体が import する
+     * 別名の helper の `JSON.parse` は掛からない。UNDETECTED_NOTES に理由・代替・塞ぐ feature を書く。
+     */
+    what: '調停役スレッドの本体が import する別名の helper で本文を `JSON.parse` する (置き場が `supervisor*.ts` でないので項目 18 の対象外)',
+    detectors: ['none']
+  },
+  {
+    file: 'b-equivalent/supervisor-json-parse-multi-alias.ts.fixture',
+    target: 'src/agents/__rulecheck__/supervisor-json-parse-multi-alias.ts',
+    group: 'b',
+    what: '`JSON` を多段の別名に代入してから parse を呼ぶ (`const codec = builtin = JSON; codec.parse()`。項目 18 は別名を追わない)',
+    detectors: ['none']
+  },
+  {
+    file: 'a-direct/pid-kill-reference.ts.fixture',
+    target: 'src/main/app/__rulecheck__/pid-kill-reference.ts',
+    group: 'a',
+    what: '許可外モジュールが process の kill を参照渡しする (`Reflect.apply(process.kill, …)` / 別名の関数値。許可は 0 件。AD-043 Decision 5。X-5 / SH-010)',
+    detectors: ['constitution'],
+    rules: ['#19']
+  },
+  {
+    file: 'b-equivalent/pid-kill-bracket.ts.fixture',
+    target: 'src/main/app/__rulecheck__/pid-kill-bracket.ts',
+    group: 'b',
+    what: "許可外モジュールが `process['kill'](pid)` で呼ぶ (`process.kill` の綴りが現れない等価形。X-5 / SH-010)",
+    detectors: ['constitution'],
+    rules: ['#19']
+  },
+  {
+    file: 'b-equivalent/pid-kill-destructure.ts.fixture',
+    target: 'src/main/app/__rulecheck__/pid-kill-destructure.ts',
+    group: 'b',
+    what: '許可外モジュールが `const { kill } = process` で取る (以後は裸の `kill()`。X-5 / SH-010)',
+    detectors: ['constitution'],
+    rules: ['#19']
+  },
+  {
+    file: 'b-equivalent/pid-kill-call.ts.fixture',
+    target: 'src/main/app/__rulecheck__/pid-kill-call.ts',
+    group: 'b',
+    what: '許可外モジュールが `process.kill.call(process, pid)` で呼ぶ (`process.kill(` の呼び出し形にならない。X-5 / SH-010)',
+    detectors: ['constitution'],
+    rules: ['#19']
+  },
+  /*
+   * `node:process` からの import 形 (code-gate platform-boundary M-002)。置き場は `node:process` の import を
+   * ESLint に許されている `src/main/infra/runtime/` — グローバルの `process` を経ずに kill を取れる唯一の層である。
+   */
+  {
+    file: 'b-equivalent/pid-kill-named-import.ts.fixture',
+    target: 'src/main/infra/runtime/__rulecheck__/pid-kill-named-import.ts',
+    group: 'b',
+    what: "`import { kill } from 'node:process'` で取る (以後は裸の `kill()`。`process` の綴りが kill の前に現れない。X-5 code-gate platform-boundary M-002)",
+    detectors: ['constitution'],
+    rules: ['#19']
+  },
+  {
+    file: 'b-equivalent/pid-kill-namespace-import.ts.fixture',
+    target: 'src/main/infra/runtime/__rulecheck__/pid-kill-namespace-import.ts',
+    group: 'b',
+    what: "`import * as proc from 'node:process'` の別名からブラケットで取る (`proc['kill'](pid)`。X-5 code-gate platform-boundary M-002)",
+    detectors: ['constitution'],
+    rules: ['#19']
+  },
+  {
+    file: 'b-equivalent/pid-kill-default-import.ts.fixture',
+    target: 'src/main/infra/runtime/__rulecheck__/pid-kill-default-import.ts',
+    group: 'b',
+    what: "`import proc from 'process'` の別名から分割代入で取る (`const { kill } = proc`。X-5 code-gate platform-boundary M-002)",
+    detectors: ['constitution'],
+    rules: ['#19']
+  },
+  {
+    file: 'a-direct/worker-share-env.ts.fixture',
+    target: 'src/agents/__rulecheck__/worker-share-env.ts',
+    group: 'a',
+    what: 'Worker と env を `SHARE_ENV` で共有する (options は変数なので `SHARE_ENV` の出現だけで発火する。AD-043 Decision 7 / Principle V。X-5 / SH-010)',
+    detectors: ['constitution'],
+    rules: ['#20']
+  },
+  {
+    file: 'b-equivalent/worker-env-key.ts.fixture',
+    target: 'src/agents/__rulecheck__/worker-env-key.ts',
+    group: 'b',
+    what: '`new Worker(` の第 2 引数のオブジェクトリテラルに `env` キーで env を注入する (`SHARE_ENV` を使わない等価形。X-5 / SH-010)',
+    detectors: ['constitution'],
+    rules: ['#20']
+  },
+  /*
+   * 調停役スレッドでの `process.env` の書き換えと `workerData` (code-gate platform-boundary L-002)。
+   * 置き場は項目 18 と同じ調停役スレッドのモジュールの形 (`src/agents/` 配下の `supervisor*.ts`)。
+   */
+  {
+    file: 'a-direct/supervisor-env-assignment.ts.fixture',
+    target: 'src/agents/__rulecheck__/supervisor-env-assignment.ts',
+    group: 'a',
+    what: "調停役スレッドのモジュールが `process.env.X =` / `process.env['X'] ??=` で env を書き換える (env 未指定の Worker に複製される。AD-043 Decision 7。X-5 code-gate platform-boundary L-002)",
+    detectors: ['constitution'],
+    rules: ['#20']
+  },
+  {
+    file: 'b-equivalent/supervisor-env-object-assign.ts.fixture',
+    target: 'src/agents/__rulecheck__/supervisor-env-object-assign.ts',
+    group: 'b',
+    what: '調停役スレッドのモジュールが `Object.assign(process.env, …)` で env をまとめて書き換える (代入形にならない等価形。X-5 code-gate platform-boundary L-002)',
+    detectors: ['constitution'],
+    rules: ['#20']
+  },
+  {
+    file: 'b-equivalent/supervisor-worker-data.ts.fixture',
+    target: 'src/agents/__rulecheck__/supervisor-worker-data.ts',
+    group: 'b',
+    what: '調停役スレッドのモジュールが起動指示を `workerData` で Worker に渡す (options はリテラルだが `env` キーを持たない。X-5 code-gate platform-boundary L-002)',
+    detectors: ['constitution'],
+    rules: ['#20']
+  },
+  /*
+   * `worker_threads` の import の許可表 (code-gate convention M-001 / platform-boundary M-001 / M-003)。
+   * 項目 20 が見ない「式で組んだ options」の代替防御は「Worker を起こせる場所を ESLint が 2 ファイルに限る」ことなので、
+   * その前提が 2 表記 (`boundaries/dependencies` と `no-restricted-imports`) の両方で agents と app の両方に効くことを固定する。
+   */
+  {
+    file: 'a-direct/agents-worker-threads-outside-entry.ts.fixture',
+    target: 'src/agents/__rulecheck__/agents-worker-threads-outside-entry.ts',
+    group: 'a',
+    what: 'agents の許可外ファイルが `node:worker_threads` を import する (許可は supervisor.ts / sdk-agent-session.ts の 2 ファイル。AD-043 Decision 1 / 7)',
+    detectors: ['eslint'],
+    rules: ['boundaries/dependencies', 'no-restricted-imports']
+  },
+  {
+    file: 'a-direct/app-worker-threads-import.ts.fixture',
+    target: 'src/main/app/__rulecheck__/app-worker-threads-import.ts',
+    group: 'a',
+    what: 'app レイヤが `node:worker_threads` を import する (app / infra は標準モジュールを許されるが `worker_threads` は全レイヤで禁止。AD-043 Decision 7)',
+    detectors: ['eslint'],
+    rules: ['boundaries/dependencies', 'no-restricted-imports']
+  },
+  {
+    file: 'b-equivalent/app-worker-threads-via-get-builtin-module.ts.fixture',
+    target: 'src/main/app/__rulecheck__/app-worker-threads-via-get-builtin-module.ts',
+    group: 'b',
+    what: 'app レイヤが `process.getBuiltinModule()` で `node:worker_threads` を取る (ESLint は import 文の層だけを見る。code-gate platform-boundary L-101)',
+    detectors: ['depcruise'],
+    rules: ['worker-threads-only-from-entry']
+  },
+  {
+    file: 'b-equivalent/worker-env-via-expression.ts.fixture',
+    target: 'src/agents/__rulecheck__/worker-env-via-expression.ts',
+    group: 'b',
+    what: 'Worker の options を変数で組んで `env` を渡す (構築子は注入で受け `worker_threads` を import しない。項目 20 は第 2 引数のオブジェクトリテラルしか見ない)',
+    detectors: ['none']
+  },
+  {
+    file: 'b-equivalent/agents-builtin-via-get-builtin-module.ts.fixture',
+    target: 'src/agents/__rulecheck__/agents-builtin-via-get-builtin-module.ts',
+    group: 'b',
+    what: 'agents が `process.getBuiltinModule()` で Node 標準モジュールを取る (agents の標準モジュール禁止は import の層だけ。既存の穴)',
+    detectors: ['none']
   }
 ]
 
@@ -533,6 +737,86 @@ export const UNDETECTED_NOTES = {
       '「`VerifiedRunning` を引数に取る `infra` の公開関数は `checkVerified` を呼ぶ」を' +
       '機械で検査する**。これは型では無理だが構文としては検査できる。' +
       '**R-1 で書かないのは入口が 1 つしかなく、ルールが目視と等価なためである。**'
+  },
+  'coordinator-helper-json-parse': {
+    why:
+      '項目 18 (check.mjs) は**置き場を見るだけで、どのスレッドで評価されるかは見ない**。対象は `src/agents/` 配下の ' +
+      '`supervisor*.ts` (`supervisor-protocol.ts` を除く) であり、調停役スレッドの本体がそれ以外の名前の helper を import して ' +
+      '本文に `JSON.parse` を適用しても、helper の置き場が対象外なので掛からない。import グラフを辿ってスレッドごとの ' +
+      '到達集合を求めない grep の限界である (X-5 / SH-010 / AD-043 Decision 2)。',
+    mitigatedBy:
+      '第一防御は**型**: 調停役スレッドが扱う本文は `OpaqueBody` であり、中身を読む API を持たない (AD-043 Decision 2)。' +
+      '第二防御は BE の単体テスト (`supervisor-core.test.ts`。本文の payload を中継したときに文字列のまま出口へ渡ること) と、' +
+      'デコーダを `supervisor-protocol.ts` 1 ファイルに集めた構成 (その他の `supervisor*.ts` は項目 18 が 0 件を守る)。',
+    nextFeature: 'X-6',
+    howToClose:
+      'fork / resume 等の制御行を足して調停役スレッドの import が増える X-6 の時点で、項目 18 の対象を ' +
+      '「置き場の形」から「`supervisor.ts` から静的に到達するモジュール集合 (dependency-cruiser の到達判定) のうち ' +
+      '`supervisor-protocol.ts` 以外」に広げ、本サンプルが `constitution` で発火するよう `detectors` を更新する。' +
+      '**X-5 で到達判定にしないのは、調停役スレッドの import が少なく、置き場の検査と目視が等価なためである。**'
+  },
+  'supervisor-json-parse-multi-alias': {
+    why:
+      "項目 18 (check.mjs) は `JSON` の `parse` を**綴り**で数える (直接参照 `JSON.parse` / ブラケット `JSON['parse']` / " +
+      '分割代入 `const { parse } = JSON`)。`const codec = JSON; codec.parse(x)` のような**多段の別名代入は拾わない** — ' +
+      '別名の束縛を追うにはデータフロー解析が要り、grep backstop の射程外である (X-5 / SH-010)。',
+    mitigatedBy:
+      '`coordinator-helper-json-parse` と同じ — `OpaqueBody` 型 (中身を読む API が無い) と BE の単体テスト。' +
+      'さらに別名代入は `JSON` を値として持ち回す不自然な形であり、code-gate の platform-boundary-reviewer が ' +
+      '調停役スレッドの差分で `JSON` の出現を確認する。',
+    nextFeature: 'X-6',
+    howToClose:
+      'X-6 で調停役スレッドの import が増える時点で、項目 18 に「調停役スレッドのモジュールで `JSON` を値として ' +
+      '(メンバアクセス以外の位置で) 参照することを違反にする」規則を足し、本サンプルが `constitution` で発火するよう ' +
+      '`detectors` を更新する。**X-5 で足さないのは、別名を追う規則はデータフローを追わないと誤検出と見逃しの両方が残り、' +
+      '`OpaqueBody` 型 + 単体テストと等価にならないためである。**'
+  },
+  'worker-env-via-expression': {
+    why:
+      '項目 20 (check.mjs) は `src/` の `SHARE_ENV` の出現と、`new Worker(` の**第 2 引数のオブジェクトリテラル**の ' +
+      '深さ 0 の `env` キーを見る。**式で組んだ options** (`new Worker(entry, options)` の変数・関数の戻り値・' +
+      '`{ ...opts }` の spread) は中身がリテラルとして現れないので見えない (X-5 / SH-010 / AD-043 Decision 7)。',
+    mitigatedBy:
+      'Worker を起こすのは `src/agents/supervisor.ts` の 1 箇所だけで、ESLint が `worker_threads` の import を**全レイヤで**禁じ、' +
+      'supervisor の entry とセッションスレッドの 2 ファイル (`supervisor.ts` / `sdk-agent-session.ts`) だけを開けている — ' +
+      '`boundaries/dependencies` の全レイヤ禁止 policy (`supervisor-entry` / `agent-session-spawn` の category で開ける) と ' +
+      '`no-restricted-imports` (`RESTRICTED_DEFAULT` から 2 ファイルだけ `without`) の 2 表記で、発火は ' +
+      '`agents-worker-threads-outside-entry` / `app-worker-threads-import` サンプルが固定する。' +
+      'import 文を経ない `process.getBuiltinModule("node:worker_threads")` は dependency-cruiser の ' +
+      '`worker-threads-only-from-entry` が同じ 2 ファイル以外で塞ぐ (`app-worker-threads-via-get-builtin-module` サンプル)。' +
+      'したがって本サンプルの形が出荷物に現れ得るのは、(a) 許可された 2 ファイルの中で options を式で組む形と、' +
+      '(b) 本サンプルのように Worker の構築子を注入で受ける形 (import が無いので ESLint に掛からない) に限られる。' +
+      '(a) の唯一の箇所は options をリテラルで書いており (`resourceLimits` のみ)、項目 20 の検査がそのまま効く。' +
+      '(b) は調停役スレッドで起こす前に `process.env` を書き換える経路を項目 20 が別に塞いでいる (書き換えと `workerData` は 0 件)。' +
+      '資格情報は最初の message でだけ渡す構成 (AD-043 Decision 7) と security-reviewer の監査が代替する。',
+    nextFeature: 'X-6',
+    howToClose:
+      'Win32Runtime の直接起動を足す X-6 で Worker の起こし方が増える場合は、その時点で ' +
+      '「`new Worker(` の第 2 引数はオブジェクトリテラルに限る (式は違反)」を項目 20 に足し、本サンプルが ' +
+      '`constitution` で発火するよう `detectors` を更新する。**X-5 で足さないのは、起こす箇所が 1 つでリテラルで書かれており、' +
+      '式を禁じる規則が目視と等価なためである。**'
+  },
+  'agents-builtin-via-get-builtin-module': {
+    why:
+      'agents の Node 標準モジュール禁止は **ESLint にしか無い** — 全標準モジュールを禁じるのは `boundaries/dependencies` だけで、' +
+      '`no-restricted-imports` が見るのはパス操作・プロセス起動・プラットフォーム判定・`worker_threads` の綴りに限る (`fs` は含まない)。' +
+      'どちらも import 文 (と `require()`) を依存として見るだけである。`process.getBuiltinModule()` は依存として見えない。' +
+      'dependency-cruiser は `detectProcessBuiltinModuleCalls` で `getBuiltinModule` を依存として**検出する**が、' +
+      '`.dependency-cruiser.js` に agents → 標準モジュールの規則が無いので発火しない ' +
+      '(**X-5 以前からの既存の穴**。scope: system / design-gate R1 platform-boundary L-003)。' +
+      "項目 7 は `getBuiltinModule('child_process')` だけを見るので、プロセス起動以外の標準モジュールは素通しする。",
+    mitigatedBy:
+      'プロセス起動 (`child_process`) は項目 7 が `getBuiltinModule` / `require` の形も含めて許可リストで縛る。' +
+      'agents が electron に届かないことは `agents-not-to-electron` (推移的到達) とビルド出力の検査 (SH-022。supervisor と ' +
+      'worker のチャンクの `require` / `import` を数える) が守る。それ以外の標準モジュール (`fs` 等) の取得は ' +
+      'code-gate の platform-boundary-reviewer が agents の差分で確認する。',
+    nextFeature: 'X-6',
+    howToClose:
+      'agents にセッション操作 (fork / resume / rename 等) のモジュールが増える X-6 の時点で、`.dependency-cruiser.js` に ' +
+      '`agents-not-to-core` (`from: ^src/agents/`、`to: 標準モジュール`、`child_process` / `worker_threads` は実名の許可ファイルに限る) ' +
+      'を足し、本サンプルが `depcruise` で発火するよう `detectors` を更新する。' +
+      '**X-5 で足さないのは plan「機械強制の変更」が `.dependency-cruiser.js` を変更しないと決めたためである** ' +
+      '(X-5 の範囲では agents の標準モジュール利用は ESLint の許可表どおりで、`getBuiltinModule` の使用は 0 件)。'
   },
   'sdk-permission-mode-reflective': {
     why:

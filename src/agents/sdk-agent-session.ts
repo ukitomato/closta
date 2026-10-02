@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { parentPort } from 'node:worker_threads'
 
 import {
   query,
@@ -12,6 +13,7 @@ import { isEffortLevel, isValidModelId } from '@domain/provider/model-catalog'
 import { assertHelperSettings, isHelperSettings } from '@domain/provider/settings'
 import type { EffortLevel } from '@domain/provider/types'
 import type {
+  LaunchFailureReason,
   LaunchQueryOptions,
   PermissionDecision,
   RuntimeLaunchSpec,
@@ -28,30 +30,44 @@ import { nextState, type SessionRunState } from '@domain/session/run-state'
 import { sanitizeBody } from '@domain/session/sanitize-body'
 
 import {
+  acceptsWhileClosing,
   buildQueryOptions,
+  canEnd,
   classifyResult,
   composeClaudeSpawn,
   createCanUseTool,
+  createPermissionRegistry,
+  decodeSessionControl,
+  resultAction,
   type AgentSpawnOptions,
   type SpawnedLike
 } from './session-core'
 
 /**
- * X-1 単一セッションの **SDK 入口 + `parentPort` 配線** (AD-036 §3 / contracts C-2・C-4・C-6・C-7)。
+ * **セッションスレッド** — supervisor の中で 1 セッションを受け持つ `worker_threads` の Worker (X-5 / AD-043)。
+ * X-1 の per-session `utilityProcess` の SDK 入口を、Worker として動く形に作り替えた。
  *
  * `enumerate-sessions.ts` / `read-transcript.ts` と同じ構え — **SDK の実 import・`child_process.spawn`・
  * 末尾の `main()` を持つため Vitest から読むと副作用が走る**。固定したい不変条件は SDK 非 import の
- * `session-core.ts` (権限ゲートの正の構成 P1-P3 / spawn 合成) と `@domain/session/*` (状態機械・live 変換) に
- * 切り出して注入で繋ぐ。本ファイルは「配線」だけを持つ。
+ * `session-core.ts` (権限ゲートの正の構成 P1-P3 / spawn 合成 / 承認往復の照合 / 終わらせ方) と `@domain/session/*`
+ * に切り出して注入で繋ぐ。本ファイルは「配線」だけを持つ。
  *
  * | 規則 | 根拠 |
  * |---|---|
  * | **Agent SDK を呼ぶ場所。`query()` のみ** (戻り値 `Query` のメソッドは `interrupt()` だけ。P3) | Principle IV / contracts C-4 |
  * | **spawn 主体は本ファイル。** `spawnClaudeCodeProcess` コールバックで `child_process.spawn` する | AD-036 §3 / C-7 (`PROCESS_SPAWN_MODULES`) |
  * | **起動コマンド・接頭引数・claude パス・cwd・env は値 (`RuntimeLaunchSpec`) で受ける。リテラルを持たない** | `WSL_FREE_DIRECTORIES` / 検証項目 3 |
- * | **`electron` を import しない。** `parentPort` は構造的に取り出す | Principle VII / AD-010 |
- * | **本文・toolName は取得プロセス側でサニタイズ**してから port に載せる | FR-009 / SC-008 / H-05 |
- * | **制御は `parentPort` (main 検証済み)・データは転送 port へ直送** (main は本文を持たない) | AD-034 / contracts C-2 |
+ * | **`electron` を import しない** | Principle VII / AD-010 |
+ * | **本文・toolName はセッションスレッドでサニタイズ**し、**本文を文字列に直列化して**調停役スレッドへ送る (調停役は解釈しない) | FR-002 / FR-009 (X-1) / AD-043 Decision 2 |
+ * | 状態通知の `claudeAlive` は常に true を送る (false にするのは調停役スレッドと main だけ) | FR-004 |
+ * | 子の exit は即時に `child-exited` で知らせる。終わるときは必ず子の exit を待ってから `ended` を送る | FR-005 / FR-012 / R3-H-03 |
+ * | 終了処理中 (kill / `end` の後) は kill 以外の制御を無視する | FR-011 / R3-H-04 |
+ *
+ * ## 調停役スレッドとのメッセージ
+ *
+ * - 受信: `{ kind: 'launch', spec, options }` (最初の 1 回) / `{ kind: 'control', control }`
+ * - 送信: `{ kind: 'event', payload: string }` (本文) / `{ kind: 'status', state, reasonKey, claudeAlive: true }` /
+ *   `{ kind: 'child-exited' }` / `{ kind: 'ended' }`。sessionId は載せない — 調停役スレッドが Worker から付ける
  */
 
 /*
@@ -65,29 +81,14 @@ const safeModeIsSdkMode: SafePermissionMode extends SdkPermissionMode ? true : f
 void effortLevelMatchesSdk
 void safeModeIsSdkMode
 
-/* ── parentPort / データ port の最小構造 (SDK 非依存・`electron` 非 import) ── */
+/** 子 (`wsl.exe`) の exit を待つ期限 (kill / `end` / 終了時。spec Assumptions [ASSUMED])。 */
+const CHILD_EXIT_TIMEOUT_MS = 3000
 
-interface DataPortLike {
+/* ── 調停役スレッドとの経路 (worker_threads の parentPort。構造だけで受ける) ── */
+
+interface CoordinatorPort {
+  on(event: 'message', listener: (data: unknown) => void): void
   postMessage(message: unknown): void
-  start?(): void
-  close?(): void
-}
-
-interface ParentMessage {
-  readonly data: unknown
-  readonly ports: readonly DataPortLike[]
-}
-
-interface WorkerParentPort {
-  on(event: 'message', listener: (message: ParentMessage) => void): void
-  start?(): void
-}
-
-function parentPortOf(): WorkerParentPort | null {
-  // `parentPort` は utilityProcess にだけ在る。Electron の有無を見ているのであって OS 分岐ではないため、
-  // 項目8 (プラットフォーム分岐) の対象式ではない — platform-ok 注記は付けない (read-transcript.ts と同じ扱い。pr-gate platform L-102)。
-  const candidate = (process as unknown as { parentPort?: WorkerParentPort }).parentPort
-  return candidate ?? null
 }
 
 /* ── 開いたまま保つ prompt キュー (FR-011。stdin を閉じない) ───────────── */
@@ -101,13 +102,14 @@ interface PromptItem {
 /**
  * 未消費プロンプトの件数上限 (defense-in-depth。CWE-770)。1 件あたりのバイト長は main が
  * `MAX_PROMPT_BYTES` で縛るが、件数は縛らないため上限を設ける。超過時は最古を落とす
- * (背圧の本格設計は X-5)。running/awaiting 中の queue は最小前提 (data-model §4)。
+ * (X-5 でも据え置き。超過の通知は X-6)。
  */
 const MAX_QUEUED_PROMPTS = 1000
 
 /**
  * `query({ prompt })` に渡す AsyncIterable。**`close()` まで開いたまま**にして次の `sendPrompt` を待つ
- * (`sendPrompt` は同一セッションへの継続。FR-011 / data-model §4)。
+ * (`sendPrompt` は同一セッションへの継続。FR-011 / data-model §4)。`close()` すると SDK の入力が終わり、
+ * `claude` は正常終了する (穏当な終了 `end` の実体)。
  */
 class PromptQueue {
   private readonly buffered: PromptItem[] = []
@@ -180,7 +182,7 @@ function extractStillQueued(receipt: unknown): readonly string[] {
   return queued.filter((id): id is string => typeof id === 'string')
 }
 
-/* ── 入口メッセージのデコード (main は検証済みだが型を回復する) ─────────── */
+/* ── 入口メッセージのデコード (調停役スレッド経由で main 検証済みだが型を回復する) ─ */
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : null
@@ -249,86 +251,117 @@ function decodeLaunchSpec(value: unknown): RuntimeLaunchSpec | null {
 function decodeControl(data: unknown): SessionControl | null {
   const record = asRecord(data)
   if (record === null || record.kind !== 'control') return null
-  const control = asRecord(record.control)
-  if (control === null) return null
-  switch (control.kind) {
-    case 'send-prompt':
-      return typeof control.text === 'string' ? { kind: 'send-prompt', text: control.text } : null
-    case 'interrupt':
-      return { kind: 'interrupt' }
-    case 'kill':
-      return { kind: 'kill' }
-    case 'respond-permission': {
-      const decision = decodeDecision(control.decision)
-      return decision === null ? null : { kind: 'respond-permission', decision }
-    }
-    default:
-      return null
-  }
+  return decodeSessionControl(record.control)
 }
 
-function decodeDecision(value: unknown): PermissionDecision | null {
-  const record = asRecord(value)
-  if (record === null) return null
-  const { requestId, outcome, scope, message } = record
-  if (typeof requestId !== 'string') return null
-  if (outcome !== 'allow' && outcome !== 'deny') return null
-  if (scope !== 'once' && scope !== 'capability') return null
-  return {
-    requestId,
-    outcome,
-    scope,
-    ...(typeof message === 'string' ? { message } : {})
-  }
-}
+/* ── セッション本体 (1 Worker = 1 セッション) ───────────────────────── */
 
-/* ── セッション本体 (1 worker = 1 セッション。C-6) ───────────────────── */
-
-/** 制御シンク。`main()` の parentPort ループが検証済み control をここへ流す。 */
+/** 制御シンク。`main()` のループが検証済み control をここへ流す。 */
 let controlSink: ((control: SessionControl) => void) | null = null
 
+/** セッションスレッドの未捕捉の例外を受ける口 (`main()` が process に 1 回だけ登録する)。 */
+let fatalSink: (() => void) | null = null
+
 async function run(
+  coordinator: CoordinatorPort,
   spec: RuntimeLaunchSpec,
-  launchOptions: LaunchQueryOptions,
-  port: DataPortLike
+  launchOptions: LaunchQueryOptions
 ): Promise<void> {
   const promptQueue = new PromptQueue()
   const abortController = new AbortController()
-  const pending = new Map<string, (decision: PermissionDecision) => void>()
+  const permissions = createPermissionRegistry(() => globalThis.crypto.randomUUID())
   let state: SessionRunState = 'idle'
+  let reasonKey: LaunchFailureReason | null = null
   let queryHandle: Query | null = null
-  let spawnedChild: SpawnedLike | null = null
-  let requestSeq = 0
-  // 初 stream/ready を受けたか (launching → running を 1 回だけ発火する。TS が closure 変数 state を
-  // 'idle' リテラルに固定するため、state の直接比較でなく専用フラグで判定する)。
+  let spawnedChild: (SpawnedLike & { exitCode?: number | null }) | null = null
+  let childExited = false
+  const childExitWaiters: (() => void)[] = []
+  // 初 stream/ready を受けたか (launching → running を 1 回だけ発火する)。
   let sawFirstMessage = false
   // 利用者が最初のプロンプトを送ったか。**送る前の通知では launching → running にしない** —
   // claude 2.1.285 は起動直後 (初回 user メッセージの前) に `system/commands_changed` を出す (X-4 quickstart で実測)。
-  // それで running (turn in-flight) にすると renderer が busy と判断して初回プロンプトを積み、
-  // turn 完了まで dispatch しないためデッドロックする (X-1 は「初回まで無出力」の実測を前提にしていた)。
   let promptSent = false
-  // terminal error (provider-error / stream-protocol-error) に達したか。到達したら孫 (wsl.exe) を止める。
+  // 終了処理中 (kill / end を受けた後)。kill 以外の制御を無視し、stream の例外を失敗として扱わない (R3-H-04)。
+  let closing = false
+  // 穏当な終了 (end) の途中か / 強制終了に落としたか。
+  let ending = false
+  let endForced = false
+  // terminal error (provider-error / stream-protocol-error) に達したか。
   let terminated = false
+  let finished = false
 
-  const emit = (event: SessionEvent): void => port.postMessage(event)
-
-  // 孫 (wsl.exe) を kill する。**closure に閉じる** — 本体で直接 `spawnedChild?.kill` すると、
-  // spawnedChild が closure (spawnClaudeCodeProcess) でしか代入されないため TS の CFA が本体側の
-  // 読みを `null` に固定し `?.kill` が never になる。closure 越しなら宣言型 (SpawnedLike | null) で読める。
-  const killSpawnedChild = (): void => {
-    if (spawnedChild !== null) spawnedChild.kill('SIGTERM')
-  }
+  const post = (message: unknown): void => coordinator.postMessage(message)
+  const postStatus = (): void => post({ kind: 'status', state, reasonKey, claudeAlive: true })
+  // **本文はここで文字列に直列化する** — 調停役スレッドは解釈せずに中継する (AD-043 Decision 2)。
+  const emit = (event: SessionEvent): void =>
+    post({ kind: 'event', payload: JSON.stringify(event) })
 
   const transition = (action: Parameters<typeof nextState>[1]): void => {
     const next = nextState(state, action)
     if (next !== state) {
       state = next
       emit({ kind: 'state', state })
+      postStatus()
     }
   }
 
+  // closure で書き換わる state を読む (制御フローの絞り込みで古い型に固定されないよう関数で読む)。
+  const isErrored = (): boolean => state === 'error'
+
+  const fail = (reason: LaunchFailureReason): void => {
+    reasonKey = reason
+    transition({ kind: 'fail' })
+    emit({ kind: 'failure', reasonKey: reason })
+    postStatus()
+  }
+
+  // 孫 (wsl.exe) を kill する。**closure に閉じる** (spawnedChild は closure でしか代入されないため)。
+  const killSpawnedChild = (): void => {
+    if (spawnedChild !== null && !childExited) spawnedChild.kill('SIGTERM')
+  }
+
+  const waitChildExit = (timeoutMs: number): Promise<boolean> => {
+    if (spawnedChild === null || childExited) return Promise.resolve(true)
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(false), timeoutMs)
+      childExitWaiters.push(() => {
+        clearTimeout(timer)
+        resolve(true)
+      })
+    })
+  }
+
+  /**
+   * 終わり方を問わず 1 回だけ通る出口。子が生きていれば止めて exit を待ち、`ended` を送る (R3-H-03)。
+   * 調停役スレッドは `ended` を受けて Worker を terminate する。
+   */
+  const finish = async (): Promise<void> => {
+    if (finished) return
+    finished = true
+    permissions.denyAll()
+    promptQueue.close()
+    if (!childExited && ending) {
+      // 穏当な終了の途中: 期限まで正常終了を待ち、だめなら強制終了に落としてその旨を示す。
+      if (!(await waitChildExit(CHILD_EXIT_TIMEOUT_MS))) forceEnd()
+    }
+    if (!childExited) {
+      killSpawnedChild()
+      await waitChildExit(CHILD_EXIT_TIMEOUT_MS)
+    }
+    post({ kind: 'ended' })
+  }
+
+  /** 穏当な終了を強制終了に落とす。`end-forced` は 1 回だけ流す (X-1 FR-016 の趣旨を黙って外さない)。 */
+  const forceEnd = (): void => {
+    if (endForced || childExited) return
+    endForced = true
+    emit({ kind: 'end-forced' })
+    killSpawnedChild()
+    abortController.abort()
+  }
+
   const canUseTool = createCanUseTool({
-    nextRequestId: () => `perm-${(requestSeq += 1)}`,
+    nextRequestId: permissions.issue,
     sanitizeInput: sanitizeToolInput,
     sanitizeToolName,
     emitRequest: (request) => {
@@ -337,11 +370,11 @@ async function run(
     },
     awaitDecision: (requestId, signal) =>
       new Promise<PermissionDecision>((resolve) => {
-        pending.set(requestId, resolve)
+        permissions.register(requestId, resolve)
         signal.addEventListener(
           'abort',
           () => {
-            if (pending.delete(requestId)) resolve({ requestId, outcome: 'deny', scope: 'once' })
+            if (permissions.drop(requestId)) resolve({ requestId, outcome: 'deny', scope: 'once' })
           },
           { once: true }
         )
@@ -349,30 +382,49 @@ async function run(
   })
 
   const spawnClaudeCodeProcess = (options: AgentSpawnOptions): SpawnedLike => {
+    /*
+     * **終了処理に入った後は子を起こさない** (pr-gate R2 platform-boundary L-102)。abort の後に SDK が spawn を呼ぶと、
+     * `ended` を送った後に wsl.exe が起き、調停役スレッドがこのスレッドを止めたときに子だけが残る (AD-043 Decision 5 の残余と同じ形)。
+     * 例外は SDK の stream の例外として catch に届き、終了処理中なので失敗にはならない。
+     */
+    if (closing || finished) throw new Error('session is closing')
     // env は `spec.env` のみ・argv は配列 (composeClaudeSpawn が合成)。SDK 提供 env / process.env を混ぜない (H-01)。
     const plan = composeClaudeSpawn(spec, options)
     const child = spawn(plan.command, [...plan.args], { env: plan.env, shell: false })
     spawnedChild = child
+    child.once('exit', () => {
+      childExited = true
+      /*
+       * **終了処理の外で子が終わったら異常終了** (FR-012)。子が自分から終わるのは、こちらが入力を閉じたとき (end /
+       * finish) か kill したときだけである。応答待ち (`done`) の間に `wsl.exe` が落ちると SDK の stream は例外なく
+       * 終わるため、ここで拾わないと失敗ではなく「終了済み」に見える (SH-022 の実機で確認)。
+       */
+      if (!closing && !finished && !isErrored()) fail('process-crashed')
+      // **子の exit は即時に知らせる** — 枠の解放 (claudeAlive: false) は調停役スレッドが行う (FR-005)。
+      post({ kind: 'child-exited' })
+      for (const resolve of childExitWaiters.splice(0)) resolve()
+    })
     return child
   }
 
-  // 制御シンク: main 検証済みの control をセッション状態へ反映する。
+  // セッションスレッドの例外 (JS 例外) も、子を止めてから終わる (FR-012 / R3-H-03)。登録は main() で 1 回。
+  fatalSink = () => {
+    if (!finished && !closing) fail('process-crashed')
+    void finish()
+  }
+
+  // 制御シンク: 検証済みの control をセッション状態へ反映する。
   controlSink = (control) => {
+    if (closing && !acceptsWhileClosing(control)) return
     switch (control.kind) {
       case 'send-prompt':
         promptSent = true
         promptQueue.push(control.text)
         transition({ kind: 'send-prompt' })
         break
-      case 'respond-permission': {
-        const resolve = pending.get(control.decision.requestId)
-        if (resolve !== undefined) {
-          pending.delete(control.decision.requestId)
-          transition({ kind: 'permission-respond' })
-          resolve(control.decision)
-        }
+      case 'respond-permission':
+        if (permissions.settle(control.decision)) transition({ kind: 'permission-respond' })
         break
-      }
       case 'interrupt':
         transition({ kind: 'interrupt' })
         void queryHandle
@@ -388,46 +440,65 @@ async function run(
             emit({ kind: 'failure', reasonKey: 'interrupt-unavailable' })
           })
         break
+      case 'end':
+        // 穏当な終了: 応答待ち・中断済み・最初のプロンプト待ちのときだけ。プロンプトの入力を閉じて claude を正常終了させる。
+        if (!canEnd(state, promptSent)) break
+        closing = true
+        if (!promptSent) {
+          /*
+           * **最初のプロンプトの前は、入力を閉じても claude は自分から終わらない** (実 claude で確認: 期限切れで
+           * 強制終了に落ちた)。この時点の claude は会話の履歴 (JSONL) をまだ書いていないので、子を止めても壊れるものが無い。
+           * 期限を待たずに止め、破損の警告 (`end-forced`) は出さない (pr-gate R1 po H-001)。
+           */
+          transition({ kind: 'kill' })
+          killSpawnedChild()
+          permissions.denyAll()
+          abortController.abort()
+          promptQueue.close()
+          if (spawnedChild === null) void finish()
+          break
+        }
+        ending = true
+        transition({ kind: 'kill' })
+        promptQueue.close()
+        // 期限内に終わらなければ強制終了に落とす (SDK の stream が終わらないままの場合)。
+        void waitChildExit(CHILD_EXIT_TIMEOUT_MS).then((exited) => {
+          if (!exited) forceEnd()
+        })
+        break
       case 'kill':
+        closing = true
         transition({ kind: 'kill' })
         // Windows の親 kill は孫 (WSL) に伝播しないため、保持した子プロセスを直接 kill する (C-6)。
         killSpawnedChild()
-        for (const [, resolve] of pending)
-          resolve({ requestId: '', outcome: 'deny', scope: 'once' })
-        pending.clear()
+        permissions.denyAll()
         abortController.abort()
         promptQueue.close()
-        port.close?.()
-        // **自プロセスを終了する** — 孫 (wsl.exe) を kill しても parentPort の listener が
-        // event loop を生かし utilityProcess は自然 exit しない。exit しないと app 側 onExit が
-        // 発火せず registry entry が残り単一セッション不変が再 launch を拒否する (ソフトロック。C-001)。
-        process.exit(0)
+        // spawn 前 (launching) の kill は query の stream が終わらないことがあるので、ここからも出口を通す。
+        if (spawnedChild === null) void finish()
         break
     }
   }
 
-  // 権限ゲートは正の構成 (allowlist) で組む。options のキー集合は buildQueryOptions が固定する (P1)。
-  // X-4: permissionMode / model / effort / settings を渡す (settings は X-3 で未配線だった。AD-040 / AD-041)。
-  // 各値は buildQueryOptions が assert し直す (安全 3 値・文字種・enum・2 キー射影)。
-  const options = buildQueryOptions({
-    permissionMode: assertSafePermissionMode(launchOptions.permissionMode),
-    canUseTool,
-    pathToClaudeCodeExecutable: spec.pathToClaudeCodeExecutable,
-    spawnClaudeCodeProcess,
-    abortController,
-    settings: assertHelperSettings(launchOptions.settings),
-    model: launchOptions.model,
-    effort: launchOptions.effort
-  })
-
-  transition({ kind: 'launch' })
-
   try {
+    // 権限ゲートは正の構成 (allowlist) で組む。options のキー集合は buildQueryOptions が固定する (P1)。
+    // 各値は buildQueryOptions が assert し直す (安全 3 値・文字種・enum・2 キー射影)。
+    const options = buildQueryOptions({
+      permissionMode: assertSafePermissionMode(launchOptions.permissionMode),
+      canUseTool,
+      pathToClaudeCodeExecutable: spec.pathToClaudeCodeExecutable,
+      spawnClaudeCodeProcess,
+      abortController,
+      settings: assertHelperSettings(launchOptions.settings),
+      model: launchOptions.model,
+      effort: launchOptions.effort
+    })
+
+    transition({ kind: 'launch' })
+
     /*
      * **SDK 境界の変位のみを解消するキャスト。** options のキー集合 ⊆ allowlist は buildQueryOptions
      * (SDK 非 import・テスト済み) と SH-010 fixture が構造的に保証する。ここで鍵を足していない。
-     * `canUseTool` の戻り (`{behavior, message?}`) と `spawnClaudeCodeProcess` の戻り (kill ハンドル) が
-     * SDK の広い型と構造的にしか一致しないための変位吸収。
      */
     queryHandle = query({ prompt: promptQueue.iterate(), options: options as unknown as Options })
     for await (const message of queryHandle) {
@@ -442,13 +513,17 @@ async function run(
         case 'result':
           // streaming-input では turn ごとに result が来て generator は開いたまま (次の sendPrompt を待つ)。
           // 終端分類は純関数 (session-core) に委ねる — 認証失敗を黙って done にしない (V-11 / FR-030)。
-          if (classifyResult(message.subtype, message.is_error).kind === 'complete') {
-            transition({ kind: 'complete' })
-          } else {
-            // Provider/認証/API エラーは terminal (session は継続不能)。理由を出して停止する。
-            transition({ kind: 'fail' })
-            emit({ kind: 'failure', reasonKey: 'provider-error' })
-            terminated = true
+          // 終了・強制終了の後に届いたエラー結果では失敗にしない (`resultAction`。pr-gate R1 architecture L-001 / R2 L-006)。
+          switch (resultAction(classifyResult(message.subtype, message.is_error), closing)) {
+            case 'complete':
+              transition({ kind: 'complete' })
+              break
+            case 'fail':
+              fail('provider-error')
+              terminated = true
+              break
+            case 'ignore':
+              break
           }
           break
         case 'system':
@@ -469,51 +544,50 @@ async function run(
       if (terminated) break
     }
   } catch {
-    // 例外に本文断片を載せない。理由キーだけを流す (C-3 / CWE-532)。
-    transition({ kind: 'fail' })
-    emit({ kind: 'failure', reasonKey: 'stream-protocol-error' })
-    terminated = true
+    // 終了処理中の abort による例外は失敗ではない。それ以外は理由キーだけを流す (本文断片を載せない。C-3 / CWE-532)。
+    // 子の異常終了で先に `process-crashed` を付けていれば上書きしない (原因は stream ではなく子の終了)。
+    if (!closing && !isErrored()) fail('stream-protocol-error')
   } finally {
-    // **terminal error では孫 (wsl.exe) を止めて孤児化を防ぐ** (kill 経路と対称。security M-201 / platform M-001)。
-    // failure イベントは上で emit 済 (port.close で flush される)。ここでは process.exit しない —
-    // renderer への failure 配送を保ち、utilityProcess の回収は reset/kill/dispose の kill 経路に委ねる。
-    // **done (正常完了で継続待ち) では kill しない** — FR-015 の同一セッション継続を壊さないため。
-    if (terminated) {
-      killSpawnedChild()
-      abortController.abort()
-    }
-    promptQueue.close()
-    port.close?.()
-    process.exitCode = 0
+    // **終わり方を問わず出口を通す** — 子を止めて exit を待ち、`ended` を送る (R3-H-03 / design-gate R3 A2)。
+    abortController.abort()
+    await finish()
   }
 }
 
-function main(): void {
-  const parentPort = parentPortOf()
-  /*
-   * **本 feature は Electron 下でのみ動く。** `parentPort` が無い経路 (素の `node` 起動) では
-   * 転送 port を受け取れないため応答しない (単独診断の余地は残す。SH-094 と同じ構え)。
-   */
-  if (parentPort === null) return
+function main(port: CoordinatorPort | null): void {
+  // Worker として起こされていないとき (Vitest の import など) は何もしない。
+  if (port === null) return
+
+  // 未捕捉の例外で Worker が黙って落ちる前に、子を止めて ended を送る。
+  const onFatal = (): void => {
+    if (fatalSink !== null) fatalSink()
+    else port.postMessage({ kind: 'ended' })
+  }
+  process.on('uncaughtException', onFatal)
+  process.on('unhandledRejection', onFatal)
 
   let started = false
-  parentPort.on('message', (message) => {
+  port.on('message', (data) => {
     if (!started) {
-      const launch = decodeLaunch(message.data)
-      const port = message.ports[0] ?? null
-      if (launch === null || port === null) {
-        process.exitCode = 1
+      const launch = decodeLaunch(data)
+      started = true
+      if (launch === null) {
+        // デコード失敗でも Worker を残さない。子は起こしていないので、そのまま ended を送る (R3-H-03)。
+        port.postMessage({
+          kind: 'status',
+          state: 'error',
+          reasonKey: 'launch-failed',
+          claudeAlive: true
+        })
+        port.postMessage({ kind: 'ended' })
         return
       }
-      started = true
-      port.start?.()
-      void run(launch.spec, launch.options, port)
+      void run(port, launch.spec, launch.options)
       return
     }
-    const control = decodeControl(message.data)
+    const control = decodeControl(data)
     if (control !== null && controlSink !== null) controlSink(control)
   })
-  parentPort.start?.()
 }
 
-main()
+main(parentPort as CoordinatorPort | null)

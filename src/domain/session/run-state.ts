@@ -1,24 +1,39 @@
 /**
- * 単一セッションの状態機械 (X-1 / data-model §4)。**純粋関数。I/O を持たない。**
+ * 1 セッションの状態機械 (X-1 / data-model §4)。**純粋関数。I/O を持たない。**
  *
- * `SessionRunState` は 7 状態。`launching` は launch invoke〜初 stream/ready の窓を表し、
- * 単一セッション不変の判定に使う (FR-019 / design-gate R3 N1・R4)。
+ * `SessionRunState` は 7 状態。`launching` は launch invoke〜最初のプロンプト後の初 stream の窓を表す。
  *
  * `nextState(state, action)` の入力 `action` は **control action と agents 由来イベントの
  * 判別 union** であり、描画用の `SessionEvent` (agent-session.ts §SessionEvent) とは**別型**である
  * (design-gate R3 N7。混同しない)。遷移は純粋関数で定義しテストする。
+ *
+ * **`done` は「応答完了・次のプロンプト待ち」と「強制終了後」の両方を表す。** `claude` が終わったかどうかは
+ * run-state では判定しない — 状態通知の生存フラグ (`claudeAlive`。status-update.ts) で判定する (X-5 / FR-005)。
+ * X-1 の単一セッション不変 (`isActive`) は X-5 で廃止し、同時実行数の上限 (concurrency.ts) に置き換えた (AD-043)。
  */
 
 export type SessionRunState =
   'idle' | 'launching' | 'running' | 'awaiting_permission' | 'interrupted' | 'error' | 'done'
 
+export const SESSION_RUN_STATES = [
+  'idle',
+  'launching',
+  'running',
+  'awaiting_permission',
+  'interrupted',
+  'error',
+  'done'
+] as const satisfies readonly SessionRunState[]
+
+export function isSessionRunState(value: unknown): value is SessionRunState {
+  return typeof value === 'string' && (SESSION_RUN_STATES as readonly string[]).includes(value)
+}
+
 /**
- * 終端状態 (nextState の遷移閉包に使う。error/done から先へ進めない)。
+ * 終端状態 (nextState の遷移閉包に使う。error/done から先へは kill で進めない。fail は done からも error へ進む — X-5)。
  *
- * **registry (session-launch-service の `active`) の解放は run-state ではなく「worker プロセスの生存」基準である**
- * (pr-gate arch M-001)。kill 経路は worker が process.exit するため onExit→除去されるが、terminal error/done では
- * worker は exit せず、UI (reset/kill/dispose) の kill 経路が worker を落として初めて除去される。
- * したがって「この状態に達したら registry から自動除去される」わけではない (contracts C-6 / M-102 は kill 経由の回収)。
+ * **枠 (同時実行数の上限) の解放には使わない** — 枠は `claudeAlive` で数える (X-5 / FR-005)。
+ * 状態通知の畳み込み (`coalesceUpdates`) でも `done` を終端として扱わない (後続の `running` で上書きしてよい)。
  */
 export const TERMINAL_STATES = ['error', 'done'] as const satisfies readonly SessionRunState[]
 
@@ -41,25 +56,25 @@ export type SessionAction =
   | { readonly kind: 'complete' }
   /** 利用者が中断した (running → interrupted)。 */
   | { readonly kind: 'interrupt' }
-  /** 利用者が強制終了した (非終端 → done)。 */
+  /** 利用者が強制終了した、または穏当な終了 (`end`) を要求した (非終端 → done)。`end` に専用の action は持たない。 */
   | { readonly kind: 'kill' }
   /** agents: crash / stream・protocol 異常 / provider-error 等 (非終端 → error)。 */
   | { readonly kind: 'fail' }
 
-const NON_TERMINAL_ACTIVE: readonly SessionRunState[] = [
-  'launching',
-  'running',
-  'awaiting_permission',
-  'interrupted'
-]
-
-/** そのセッションが「稼働中」= 新規 launch を拒否すべき状態か (FR-019 単一セッション不変)。 */
-export function isActive(state: SessionRunState): boolean {
-  return NON_TERMINAL_ACTIVE.includes(state)
-}
-
 export function isTerminal(state: SessionRunState): boolean {
   return (TERMINAL_STATES as readonly SessionRunState[]).includes(state)
+}
+
+/**
+ * 穏当な終了 (`end`) を受け付ける状態 (X-5 / FR-011)。応答待ち (`done`)・中断済み (`interrupted`) と、
+ * **最初のプロンプトを待っている `launching`** (プロンプトを 1 度も送っていない) だけ (pr-gate R1 po H-001)。
+ * claude は最初のプロンプトまで会話の履歴を書かないので、止めても壊れるものが無い (入力を閉じても自分からは終わらないため、
+ * セッションスレッドは期限を待たずに子を止め、破損の警告は出さない)。送信済みの `launching` は応答中と同じく終了を受けない。
+ *
+ * セッションスレッド・renderer の操作の出し分け・E2E の fake が同じ規則を使う (pr-gate R2 architecture L-104)。
+ */
+export function canEnd(state: SessionRunState, promptSent: boolean): boolean {
+  return state === 'done' || state === 'interrupted' || (state === 'launching' && !promptSent)
 }
 
 /**
@@ -67,9 +82,14 @@ export function isTerminal(state: SessionRunState): boolean {
  * (不正遷移で例外を投げない。FR-020 の「例外で落とさない」と整合)。
  */
 export function nextState(state: SessionRunState, action: SessionAction): SessionRunState {
-  // 強制終了と失敗は非終端のどの状態からでも受ける。
+  // 強制終了は非終端のどの状態からでも受ける。
   if (action.kind === 'kill') return isTerminal(state) ? state : 'done'
-  if (action.kind === 'fail') return isTerminal(state) ? state : 'error'
+  /*
+   * 失敗は `error` 以外のどの状態からでも受ける (X-5 / FR-012)。`done` は「応答待ち (claude 生存)」も表すため、
+   * 応答待ちの間に子が異常終了したら `error` にする — `done` のままだと失敗が「終了済み」に見える (SH-022 の実機)。
+   * 強制終了・終了の後の `done` に `fail` が来る経路は、セッションスレッドが `closing` で塞いでいる。
+   */
+  if (action.kind === 'fail') return state === 'error' ? state : 'error'
 
   switch (state) {
     case 'idle':
@@ -107,7 +127,7 @@ export function nextState(state: SessionRunState, action: SessionAction): Sessio
       // 応答完了後に続けて送ると新しいターンとして running へ。
       return action.kind === 'send-prompt' ? 'running' : 'done'
     case 'error':
-      // 終端。再 launch は registry entry 除去後の新セッションで行う (contracts C-6)。
+      // 終端。続けたいときは新しいセッションを起動する。
       return 'error'
     default:
       return state

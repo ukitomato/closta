@@ -8,7 +8,8 @@ import {
   type PermissionDecision,
   type PermissionRequest,
   type PermissionResultLike,
-  type RuntimeLaunchSpec
+  type RuntimeLaunchSpec,
+  type SessionControl
 } from '@domain/session/agent-session'
 
 /**
@@ -183,6 +184,115 @@ export function createCanUseTool(deps: CanUseToolDeps): CanUseToolLike {
   }
 }
 
+/* ── 承認往復の照合 (X-5 / FR-007 / SC-005) ─────────────────────── */
+
+export interface PermissionRegistry {
+  /** 新しい requestId を採番する (`createCanUseTool` の `nextRequestId` に渡す)。 */
+  issue(): string
+  /** requestId に決定の受け口を登録する (`createCanUseTool` の `awaitDecision` から呼ぶ)。 */
+  register(requestId: string, resolve: (decision: PermissionDecision) => void): void
+  /**
+   * 決定を該当の受け口へ渡す。**pending に無い requestId (別セッション宛て・未知・応答済み) は何もせず `false`** —
+   * SDK のコールバックを解決しない (FR-007)。
+   */
+  settle(decision: PermissionDecision): boolean
+  /** requestId の受け口を外す (中断の signal など)。外したときだけ `true`。 */
+  drop(requestId: string): boolean
+  /** 残っている受け口をすべて拒否で解決する (kill / end の後始末)。 */
+  denyAll(): void
+}
+
+/**
+ * 承認要求の requestId と決定の受け口の対応を持つ (X-5)。requestId の生成器は注入する —
+ * 本番は `globalThis.crypto.randomUUID` (暗号論的乱数。X-1 pr-gate sec L-001 の繰越)。
+ */
+export function createPermissionRegistry(nextRequestId: () => string): PermissionRegistry {
+  const pending = new Map<string, (decision: PermissionDecision) => void>()
+  return {
+    issue: nextRequestId,
+    register(requestId, resolve) {
+      pending.set(requestId, resolve)
+    },
+    settle(decision) {
+      const resolve = pending.get(decision.requestId)
+      if (resolve === undefined) return false
+      pending.delete(decision.requestId)
+      resolve(decision)
+      return true
+    },
+    drop(requestId) {
+      return pending.delete(requestId)
+    },
+    denyAll() {
+      for (const [requestId, resolve] of pending)
+        resolve({ requestId, outcome: 'deny', scope: 'once' })
+      pending.clear()
+    }
+  }
+}
+
+/* ── 制御のデコード (調停役スレッドとセッションスレッドで共有。X-5) ─────── */
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+}
+
+/** 承認の決定を復元する。main が enum 検証済みだが、境界を越えた値として型を回復する。 */
+export function decodeDecision(value: unknown): PermissionDecision | null {
+  const record = asRecord(value)
+  if (record === null) return null
+  const { requestId, outcome, scope, message } = record
+  if (typeof requestId !== 'string') return null
+  if (outcome !== 'allow' && outcome !== 'deny') return null
+  if (scope !== 'once' && scope !== 'capability') return null
+  return {
+    requestId,
+    outcome,
+    scope,
+    ...(typeof message === 'string' ? { message } : {})
+  }
+}
+
+/** `SessionControl` を復元する。未知の kind・形の崩れは `null`。 */
+export function decodeSessionControl(value: unknown): SessionControl | null {
+  const control = asRecord(value)
+  if (control === null) return null
+  switch (control.kind) {
+    case 'send-prompt':
+      return typeof control.text === 'string' ? { kind: 'send-prompt', text: control.text } : null
+    case 'interrupt':
+      return { kind: 'interrupt' }
+    case 'end':
+      return { kind: 'end' }
+    case 'kill':
+      return { kind: 'kill' }
+    case 'respond-permission': {
+      const decision = decodeDecision(control.decision)
+      return decision === null ? null : { kind: 'respond-permission', decision }
+    }
+    default:
+      return null
+  }
+}
+
+/* ── 終わらせ方の制御 (X-5 / FR-011 / design-gate R3-H-04) ──────────── */
+
+/** 穏当な終了 (`end`) を受け付ける状態。規則の正本は domain (`run-state.ts`。pr-gate R2 architecture L-104)。 */
+export { canEnd } from '@domain/session/run-state'
+
+/**
+ * 終了処理中 (kill / `end` を受けた後、`ended` を送るまで) に受け付ける制御か。
+ *
+ * **終了処理中は `kill` だけを受け付ける** (穏当な終了の途中で強制終了へ切り替えられるようにする)。
+ * `send-prompt` / `respond-permission` / `interrupt` / `end` は無視する — `done` で受けた送信が `running` に
+ * 戻して run-state を巻き戻し、閉じたキューに入って消えるのを防ぐ (R3-H-04)。
+ */
+export function acceptsWhileClosing(control: SessionControl): boolean {
+  return control.kind === 'kill'
+}
+
 /* ── spawnClaudeCodeProcess の合成 (env は spec のみ・argv は配列) ── */
 
 export interface ClaudeSpawnPlan {
@@ -228,4 +338,17 @@ export function classifyResult(subtype: string, isError: boolean): ResultTermina
   return subtype === 'success' && isError === false
     ? { kind: 'complete' }
     : { kind: 'provider-error' }
+}
+
+/**
+ * 分類した `result` をセッションへどう反映するか (X-5 / pr-gate R1 architecture L-001・R2 L-006)。
+ * 正常完了は終了処理中でも `complete` (状態は終端の `done` のまま変わらない)。エラー結果は、終了・強制終了の
+ * 処理中なら `ignore` — 終わらせた結果として届いたエラーで、終了済みのセッションを「失敗」と出さない。
+ */
+export function resultAction(
+  result: ResultTermination,
+  closing: boolean
+): 'complete' | 'fail' | 'ignore' {
+  if (result.kind === 'complete') return 'complete'
+  return closing ? 'ignore' : 'fail'
 }

@@ -1,0 +1,8 @@
+// 違反サンプル (項目 20 / X-5 SH-010 / code-gate platform-boundary L-002): 調停役スレッドのモジュールが
+// 起動指示を `workerData` で Worker に渡す。起動指示 (資格情報を含む spec) は最初の message でだけ渡す
+// (AD-043 Decision 7)。options はリテラルだが `env` キーを持たないので、`env` キーの検査だけでは抜ける。
+import { Worker } from 'node:worker_threads'
+
+export function startSessionThread(entry: string, spec: unknown): Worker {
+  return new Worker(entry, { workerData: spec })
+}

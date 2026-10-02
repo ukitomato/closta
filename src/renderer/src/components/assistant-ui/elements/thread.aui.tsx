@@ -252,8 +252,8 @@ const AT_BOTTOM_THRESHOLD = 4;
  * - 行は padding spacer 間の通常フローに置き `measureElement` で実測 → 測定済み高さが保たれジャンプしない
  *   (SC-002/SC-004)。同時マウント DOM ノード数は可視 + overscan に比例し**総件数に依存しない** (SC-003)。
  * - **`MessageByIndex` を使う** (spec 選択)。R-3 は過去ログ = 静的列で index が安定なため index ベースで足りる。
- *   **末尾が伸びる X-1 では turn グルーピング + `Unstable_MessageById` (id ベース) に上げる** (research R-01 / 公式は
- *   挿入・並べ替えに強い id ベースを推奨)。
+ *   末尾が伸び窓がずれるライブセッション (X-5) のため、**行のキーと高さのキャッシュはメッセージ id** にした
+ *   (`getItemKey`)。turn グルーピング + `Unstable_MessageById` への移行は research R-01 のとおり残課題。
  * - turnAnchor="top" の top-anchor 機構は `Viewport` 前提のため仮想化では使えない。R-3 は過去ログなので
  *   **初期位置は最下部** (最新メッセージ。chat 慣習) とし、追従は stickyRef で持つ。
  */
@@ -263,6 +263,12 @@ const VirtualThreadRoot: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
   );
   const messageCount = useAuiState((s) => s.thread.messages.length);
   const isRunning = useAuiState((s) => s.thread.isRunning);
+  /*
+   * **行のキーと高さのキャッシュはメッセージ id で持つ** (X-5 / SC-003)。ライブセッションは末尾が伸び、assistant-ui に
+   * 渡す窓 (SessionScreen の MESSAGE_WINDOW) もずれるため、index をキーにすると窓がずれるたびに全行が別のメッセージに
+   * 入れ替わって再マウント・再測定になり long task が出る (実測)。描画は従来どおり MessageByIndex で行う。
+   */
+  const messages = useAuiState((s) => s.thread.messages);
 
   const scrollerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -284,6 +290,7 @@ const VirtualThreadRoot: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
   // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: messageCount,
+    getItemKey: (index) => messages[index]?.id ?? index,
     estimateSize: () => ESTIMATED_MESSAGE_HEIGHT,
     getScrollElement: () => scrollerRef.current,
     initialRect: { height: 800, width: 800 },
@@ -377,6 +384,14 @@ const VirtualThreadRoot: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
     jumpToBottom();
   }, [messageCount, jumpToBottom]);
 
+  /*
+   * **composer は本文の更新で再描画させない** (X-5 / SC-003)。本コンポーネントは react-virtual のため React Compiler の
+   * 自動 memo 化から外れ、本文が 1 件届くたびに子の Composer まで再描画される。Composer の textarea は再描画のたびに
+   * 自動リサイズ (getComputedStyle + scrollHeight の強制レイアウト) を走らせるため、表示中の本文の更新と打鍵が重なると
+   * long task になる (実測)。composer の状態は Composer 自身が assistant-ui から購読する。
+   */
+  const composer = useMemo(() => <Composer autoFocus={autoFocus} />, [autoFocus]);
+
   const items = virtualizer.getVirtualItems();
   const paddingTop = items[0]?.start ?? 0;
   const paddingBottom = Math.max(
@@ -425,7 +440,7 @@ const VirtualThreadRoot: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
       <div className="aui-thread-viewport-footer bg-background sticky bottom-0 overflow-visible px-4 pb-4 md:pb-6">
         <div className="relative mx-auto flex w-full max-w-(--thread-max-width) flex-col gap-4">
           {!isAtBottom && <VirtualScrollToBottom onClick={jumpToBottom} />}
-          <Composer autoFocus={autoFocus} />
+          {composer}
         </div>
       </div>
     </ThreadPrimitive.Root>

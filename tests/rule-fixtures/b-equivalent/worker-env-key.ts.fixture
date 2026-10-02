@@ -1,0 +1,11 @@
+// 違反サンプル (項目 20 / X-5 SH-010): `new Worker(` の第 2 引数のオブジェクトリテラルに **`env` キー**を書く。
+// `SHARE_ENV` を使わずに env を注入する等価形。Worker は env 未指定で起こし、資格情報は最初の message でだけ渡す
+// (AD-043 Decision 7 / Principle V)。入れ子の `resourceLimits` は検査を乱さない。
+import { Worker } from 'node:worker_threads'
+
+export function startSessionThread(entry: string, secret: string): Worker {
+  return new Worker(entry, {
+    resourceLimits: { maxOldGenerationSizeMb: 1024 },
+    env: { ...process.env, ANTHROPIC_API_KEY: secret }
+  })
+}

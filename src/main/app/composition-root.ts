@@ -38,7 +38,8 @@ import { createRuntimeStore, type RuntimeStore } from './runtime-store'
 import { createSessionEnumerator } from './session-enumerator'
 import { createSessionLaunchService } from './session-launch-service'
 import { createSessionService, type SessionService } from './session-service'
-import { createSessionSpawner } from './session-spawner'
+import { createSupervisorConnection } from './session-spawner'
+import { createSessionStatusRelay, type SessionStatusRelay } from './session-status-relay'
 import { createTranscriptService } from './transcript-service'
 import { createTranscriptSpawner } from './transcript-spawner'
 
@@ -67,21 +68,19 @@ export interface Composition {
   readonly runtimes: RuntimeStore
   readonly folders: FolderService
   readonly sessions: SessionService
+  /** 稼働中セッションの状態通知の中継 (X-5)。送り先 (主ウィンドウ) は `index.ts` が登録する。 */
+  readonly sessionStatus: SessionStatusRelay
   readonly ipc: IpcDependencies
+  /** renderer の再読み込み・クラッシュで全セッションを止める (X-5 FR-014)。送った数を返す。 */
+  readonly killAllSessions: () => number
   /**
-   * アプリ終了時に呼ぶ後始末。
+   * アプリ終了時に呼ぶ後始末。登録は `src/main/index.ts` が `before-quit` で行う。
    *
-   * **常駐している列挙プロセスを終了させる** (contracts C-5) —
-   * UNC ハンドルを掴んだ孤児を残さない。
-   * 登録は `src/main/index.ts` が `before-quit` で行う。
+   * **全セッションの `claude` の終了 (または期限) を待ってから supervisor を止め** (X-5 FR-014)、続けて
+   * 常駐している列挙プロセスを終了させる (contracts C-5)。UNC ハンドルを掴んだ孤児を残さない。
+   * **終了を確認できなかった台数**を返す。この層は記録の経路を持たないので、呼び出し側 (`index.ts`) が記録する。
    */
-  /**
-   * 終了処理。**終了を確認できなかったワーカの台数**を返す (contracts C-5)。
-   *
-   * 0 でなければ UNC ハンドルを掴んだままのプロセスが残っている。
-   * この層は記録の経路を持たないので、呼び出し側 (`index.ts`) が記録する。
-   */
-  readonly dispose: () => number
+  readonly dispose: () => Promise<number>
 }
 
 export function createComposition(): Composition {
@@ -213,13 +212,6 @@ export function createComposition(): Composition {
   })
 
   /*
-   * **単一セッション起動 + ストリーミング** (X-1 / AD-036)。
-   *
-   * per-session の agents `utilityProcess` を起こし、`MessageChannelMain` の port を
-   * agents↔renderer 直通に流す (main を本文経路から外す)。単一セッション不変・制御ルーティング・
-   * dispose は service (`session-launch-service.ts`) が持ち、実プロセス生成は `session-spawner.ts` に閉じる。
-   */
-  /*
    * **Provider 登録と到達可能性判定** (X-3 / AD-005 / AD-039 / AD-040)。
    *
    * 秘密は `safeStorage` (infra/secrets) に seal し参照値のみ保持する (Principle V)。検出の I/O
@@ -256,15 +248,26 @@ export function createComposition(): Composition {
   })
 
   /*
-   * **単一セッション起動 + ストリーミング** (X-1 / AD-036) を **X-4 の起動設定**で動かす (AD-041)。
+   * **複数セッションの起動 + ストリーミング** (X-1 / X-5 / AD-036 / AD-043) を **X-4 の起動設定**で動かす (AD-041)。
    *
-   * per-session の agents `utilityProcess` を起こし、`MessageChannelMain` の port を
-   * agents↔renderer 直通に流す (main を本文経路から外す)。単一セッション不変・制御ルーティング・
-   * dispose は service (`session-launch-service.ts`) が持ち、実プロセス生成は `session-spawner.ts` に閉じる。
+   * 単一の supervisor (`utilityProcess`) を最初の起動で起こし、セッションごとのスレッドで動かす。
+   * 本文は `MessageChannelMain` の port で supervisor↔renderer 直通に流す (main を本文経路から外す)。
+   * 上限・制御の宛先・状態通知の受信・dispose は service (`session-launch-service.ts`) が持ち、
+   * 実プロセス生成は `session-spawner.ts` に閉じる。状態通知は relay で renderer へ届ける。
    * 起動前段 (依存解決の再評価・起動ゲート・env 導出・WSLENV 合成) は `launch-preparation.ts` が持つ。
    */
+  const sessionStatus = createSessionStatusRelay()
   const launchService = createSessionLaunchService({
-    spawner: createSessionSpawner(),
+    // fork env はランタイムに依存しない curated base (pr-gate R1 platform-boundary L-001)。
+    connection: createSupervisorConnection(() => buildLaunchEnv(process.env)),
+    newSessionId: () => randomUUID(),
+    onStatus: (updates) => sessionStatus.forward(updates),
+    timer: {
+      setTimeout: (fn, ms) => setTimeout(fn, ms),
+      clearTimeout: (h) => clearTimeout(h as never)
+    },
+    // 理由キー・件数・終了コードだけを記録する (会話由来の文字列・env を出さない。Principle V)。
+    log: (line) => console.warn(line),
     prepareLaunch: createPrepareLaunch({
       folders: () => folders.folders(),
       runtimes: () => runtimes.snapshot(),
@@ -276,7 +279,8 @@ export function createComposition(): Composition {
         (await detector.verifyRunning([runtimeId])).get(runtimeId) ?? null,
       providerFacts: (runtimeId) => providers.providerFacts(runtimeId),
       deriveEnv: (providerId, runtimeId) => providers.deriveEnv(providerId, runtimeId),
-      // fork env と wsl.exe の絶対パス解決の両方に使う curated base (data-model §7 / M-202)。
+      // wsl.exe の絶対パス解決と launch env の合成に使う curated base (data-model §7 / M-202)。
+      // fork env は上の createSupervisorConnection に注入する (AD-043 Decision 7 / pr-gate R3 platform-boundary L-201)。
       baseEnv: () => buildLaunchEnv(process.env),
       // cwd を runtime 名前空間の RuntimePath 文字列で得る (Principle I / H-03)。
       resolveCwd: (folder, runtime) => resolveCwd(folder, runtime.pathMapping),
@@ -378,9 +382,18 @@ export function createComposition(): Composition {
     runtimes,
     folders,
     sessions,
+    sessionStatus,
     ipc,
-    // 起動中セッションも片付ける (window close / before-quit)。孫 (wsl) の kill は agents が行う。
-    dispose: () => enumerator.dispose() + transcripts.dispose() + launchService.dispose()
+    // renderer の再読み込み・クラッシュで全セッションを止める (supervisor は止めない。X-5 FR-014)。
+    killAllSessions: () => launchService.killAll(),
+    /*
+     * 起動中セッションも片付ける (window close / before-quit)。**supervisor を先に片付けてから**
+     * 列挙・transcript の同期 dispose を呼ぶ (X-5 FR-014)。孫 (wsl) の kill はセッションスレッドが行う。
+     */
+    dispose: async (): Promise<number> => {
+      const sessionsUnconfirmed = await launchService.dispose()
+      return sessionsUnconfirmed + enumerator.dispose() + transcripts.dispose()
+    }
   }
 }
 

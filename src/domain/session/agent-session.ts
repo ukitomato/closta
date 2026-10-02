@@ -33,6 +33,8 @@ export type LaunchFailureReason =
   | 'stream-protocol-error'
   | 'provider-error'
   | 'interrupt-unavailable'
+  /** supervisor プロセスの異常終了で、その supervisor の全セッションに付く (X-5 / FR-013)。 */
+  | 'supervisor-exited'
 
 export const LAUNCH_FAILURE_REASONS = [
   'distro-not-running',
@@ -43,7 +45,8 @@ export const LAUNCH_FAILURE_REASONS = [
   'process-crashed',
   'stream-protocol-error',
   'provider-error',
-  'interrupt-unavailable'
+  'interrupt-unavailable',
+  'supervisor-exited'
 ] as const satisfies readonly LaunchFailureReason[]
 
 export function isLaunchFailureReason(value: unknown): value is LaunchFailureReason {
@@ -64,9 +67,16 @@ export const LAUNCH_PREFLIGHT_REASONS = [
   'needs-confirmation'
 ] as const satisfies readonly LaunchPreflightReason[]
 
-/** launch invoke の拒否理由 (起動失敗 9 種 + 起動前段 3 種 + 調停由来の 2 種)。訳出は `ui`。 */
+/**
+ * launch invoke の拒否理由 (起動失敗 10 種 + 起動前段 3 種 + 調停由来の 3 種)。訳出は `ui`。
+ *
+ * 調停由来 (X-5 / FR-005):
+ * - `session-limit`: 同時実行数の上限 (10) に達している。X-1 の `session-active` (単一セッション不変) は廃止した (AD-043)
+ * - `shutting-down`: アプリの終了処理中
+ * - `unknown-target`: 未知の folderId / runtimeId
+ */
 export type SessionLaunchRejectReason =
-  LaunchFailureReason | LaunchPreflightReason | 'session-active' | 'unknown-target'
+  LaunchFailureReason | LaunchPreflightReason | 'session-limit' | 'shutting-down' | 'unknown-target'
 
 /**
  * `session.launch` invoke の戻り値 (本文を含まない handshake。contracts C-1・C-2)。
@@ -165,37 +175,55 @@ export type SessionEvent =
       readonly cancelled: readonly string[]
     }
   | { readonly kind: 'failure'; readonly reasonKey: LaunchFailureReason }
+  /** 穏当な終了 (`end`) が期限内に終わらず、強制終了に落ちた (X-5 / FR-011。X-1 FR-016 の警告の趣旨を黙って外さない)。 */
+  | { readonly kind: 'end-forced' }
+
+export const SESSION_EVENT_KINDS = [
+  'message',
+  'state',
+  'permission-request',
+  'permission-denied',
+  'interrupt-receipt',
+  'failure',
+  'end-forced'
+] as const satisfies readonly SessionEvent['kind'][]
 
 /**
  * `renderer → main` の制御要求 (control plane。data-model §5 / contracts C-1)。
- * renderer → main の検証済み IPC のみが発行できる。
+ * renderer → main の検証済み IPC のみが発行できる。起動 (launch) は含まない。
+ *
+ * - `end` (X-5 / FR-011): 応答待ち (`done`) か中断済み (`interrupted`) のセッションの `claude` を、プロンプトの入力を
+ *   閉じて正常終了させる穏当な「終了」。破損の警告は出さない。期限内に終わらなければ強制終了に落ち、`end-forced` を流す
  */
 export type SessionControl =
   | { readonly kind: 'send-prompt'; readonly text: string }
   | { readonly kind: 'respond-permission'; readonly decision: PermissionDecision }
   | { readonly kind: 'interrupt' }
+  | { readonly kind: 'end' }
   | { readonly kind: 'kill' }
 
 /**
- * 稼働セッションの**操作面の概念契約** (data-model §1)。AD-023 §3 の宣言 (start/interrupt/stop) を土台に拡張。
+ * 稼働セッションの**操作面の概念契約** (data-model §1)。操作語彙は `SessionControl` と一致させる
+ * (X-5 で `stop()` を削除した。AD-023 §3 の例示は古くなった — AD-043 Decision 1)。
  *
- * **実体はクラスでなく `agents` の module worker (`sdk-agent-session.ts`)** が実現する — parentPort の
- * 制御メッセージ (launch/control) と転送 port の `SessionEvent` で本 interface の各操作に対応づける
- * (`read-transcript` / `enumerate-sessions` と同じ module-worker の構え。クラス `SdkAgentSession` は持たない)。
- * したがって本 interface は「宣言 (domain) / 実装 (agents)」の分担 (AD-023 §3) を**操作の語彙**として担い、
- * worker のメッセージ契約の設計基準になる。
+ * **実体はクラスでなく `agents` のセッションスレッド (`sdk-agent-session.ts` を `worker_threads` の Worker として
+ * 起こしたもの)** が実現する — 調停役スレッド経由の制御メッセージ (launch/control) と、文字列化した `SessionEvent`
+ * で本 interface の各操作に対応づける (クラス `SdkAgentSession` は持たない)。したがって本 interface は
+ * 「宣言 (domain) / 実装 (agents)」の分担 (AD-023 §3) を**操作の語彙**として担い、メッセージ契約の設計基準になる。
  */
 export interface AgentSession {
   /** 起動 + stream。yield は逐次 `SessionEvent`。 */
   start(input: LaunchInput): AsyncIterable<SessionEvent>
-  /** canUseTool の応答を稼働中セッションへ反映する。 */
+  /** canUseTool の応答を稼働中セッションへ反映する (`respond-permission`)。 */
   respondPermission(decision: PermissionDecision): void
-  /** AsyncIterable prompt へ push (stdin を開いたまま保つ。FR-011)。 */
+  /** AsyncIterable prompt へ push (stdin を開いたまま保つ。FR-011。`send-prompt`)。 */
   sendPrompt(text: string): void
-  /** SDK interrupt (stdin 越し control_request。FR-015)。 */
+  /** SDK interrupt (stdin 越し control_request。FR-015。`interrupt`)。 */
   interrupt(): Promise<void>
-  /** graceful 停止。 */
-  stop(): Promise<void>
+  /** 穏当な終了 (`end`)。プロンプトの入力を閉じて `claude` を正常終了させる。 */
+  end(): Promise<void>
+  /** 強制終了 (`kill`)。保持している子 (`wsl.exe`) を kill する。 */
+  kill(): void
 }
 
 /**

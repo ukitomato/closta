@@ -4,62 +4,89 @@ import type {
   LaunchFailureReason,
   LaunchInput,
   LaunchPreflightReason,
+  LaunchQueryOptions,
   RuntimeLaunchSpec,
   SessionControl,
   SessionLaunchRejectReason
 } from '@domain/session/agent-session'
+import { canReserve, countOccupying } from '@domain/session/concurrency'
 import type { SessionLaunchConfig } from '@domain/session/launch-config'
+import {
+  acceptBatch,
+  applySynthesized,
+  synthesizeExit,
+  type RegistryStatus,
+  type SessionStatusUpdate
+} from '@domain/session/status-update'
 
 /**
- * 単一セッション起動の調停 (X-1 / BE-007・BE-011・BE-021・BE-022。data-model §9 / contracts C-6)。
+ * 複数セッションの起動調停 (X-5 / spec FR-005・FR-007・FR-013・FR-014 / AD-043)。X-1 の単一セッション不変を置き換えた。
  *
  * | 規則 | 根拠 |
  * |---|---|
- * | **本文を保持しない。** stream port を IPC ハンドラへ渡すだけ (main を本文経路から外す) | Principle IX / AD-034 決定 1 |
- * | **単一セッション不変**: 生存中の agents プロセスが在れば新規 launch を拒否 | FR-019 / SC-011 |
- * | 制御 (send-prompt/respond-permission/interrupt/kill) は sessionId 鍵で該当プロセスへ送る | contracts C-1 |
- * | `before-quit` / window close で in-flight を kill (孤児回収) | FR-017 / SC-005 / SC-010 |
+ * | **本文を保持しない。** port を IPC ハンドラへ渡すだけ (main を本文経路から外す) | Principle IX / AD-034 |
+ * | **同時実行数の上限は 10。** 枠の判定と予約は `await` の前に同期で行う。枠は registry の `claudeAlive` で数える (run-state では数えない) | FR-005 / concurrency.ts |
+ * | 状態通知の受信規則は domain の `acceptBatch` だけ (世代・registry・単調性)。受理した値だけを relay へ渡す | FR-004 / AD-023 §5 |
+ * | 制御は registry に在り、セッションスレッドが生きている sessionId にだけ送る | FR-007 |
+ * | supervisor の異常終了ではその世代の全セッションを `supervisor-exited` にし、原因を追える 1 行を記録する (会話由来の文字列・env を出さない) | FR-013 |
+ * | renderer の再読み込み・クラッシュでは全セッションを止める (`killAll`)。その間に起動途中だった要求は登録しない | FR-014 / design-gate R3 sec M-001 |
+ * | 終了処理は 1 回だけ走り、全セッションの `claude` の終了か期限を待ってから supervisor を止める | FR-014 |
  *
- * **`electron` を実行時 import しない** (`MessagePortMain` は型のみ)。実プロセスを起こす層は
- * `session-spawner.ts` に分けて注入で受け取る (transcript-service と同じ分離。テスト容易性)。
- * 起動ゲート (`evaluateLaunch`) + spec/env 構築は `prepareLaunch` に注入する (composition が実装)。
+ * **`electron` を実行時 import しない** (`MessagePortMain` は型のみ)。実プロセスの層は `session-spawner.ts` に
+ * 分けて注入で受け取る (Vitest で試せる形)。起動前段 (`prepareLaunch`) も注入で受け取る。
  */
 
-/** 起動プロセス 1 つ分の窓 (長寿命。**テストで差し替える**ため型で切る)。 */
-export interface SessionSpawn {
-  readonly sessionId: string
-  /** agents に繋がった port2。IPC ハンドラが renderer へ transfer する (一方向 data plane)。 */
-  readonly port: MessagePortMain
-  /** 制御要求を agents へ送る (control plane)。 */
-  sendControl(control: SessionControl): void
-  /** 強制終了。agents 経由で `SpawnedProcess` (wsl.exe) を kill する。**戻り値を捨てない。** */
-  kill(): boolean
-  /** プロセスが exit したときに呼ばれる (自然終了・crash・kill の全て)。registry から外すのに使う。 */
-  onExit(listener: () => void): void
-}
+export type SupervisorLaunchResult =
+  | { readonly ok: true; readonly port: MessagePortMain; readonly generation: number }
+  | { readonly ok: false }
 
-export interface SessionSpawner {
-  /** 起動プロセスを起こす。メソッド名に `spawn` を使わない (check.mjs 項目 7。transcript-service と同じ)。 */
-  launch(input: LaunchInput, spec: RuntimeLaunchSpec, env: Record<string, string>): SessionSpawn
+/** 単一 supervisor への接続 (実体は `session-spawner.ts`。**テストで差し替える**ため型で切る)。 */
+export interface SupervisorConnection {
+  /** セッションを 1 本起こす。必要なら supervisor を fork する (メソッド名に `spawn` を使わない。check.mjs 項目 7)。 */
+  launch(
+    sessionId: string,
+    spec: RuntimeLaunchSpec,
+    options: LaunchQueryOptions
+  ): SupervisorLaunchResult
+  control(sessionId: string, control: SessionControl): void
+  /** supervisor を止める。**戻り値を捨てない** (止められなかったら false)。 */
+  kill(): boolean
+  onStatusBatch(listener: (generation: number, updates: readonly unknown[]) => void): void
+  onThreadEnded(listener: (generation: number, sessionId: string) => void): void
+  onExit(listener: (generation: number, code: number | null) => void): void
 }
 
 /**
  * 起動設定を解決し、依存解決の再評価・起動ゲート・env 導出・spec/env 構築まで済ませた結果 (X-4)。
- * `env` は **utilityProcess の fork env (curated base のまま)** であり、wsl.exe の env は `spec.env` に載る。
+ * wsl.exe の env は `spec.env` に載る。supervisor の fork env はここに持たない — ランタイムに依存しない curated base を
+ * 接続の構築時に注入する (`createSupervisorConnection(forkEnv)`。pr-gate R1 platform-boundary L-001)。
  */
 export type LaunchPreparation =
   | {
       readonly ok: true
       readonly input: LaunchInput
       readonly spec: RuntimeLaunchSpec
-      readonly env: Record<string, string>
     }
   | { readonly ok: false; readonly reason: LaunchFailureReason | LaunchPreflightReason }
   | null // 未知の folderId / runtimeId
 
+export interface TimerLike {
+  setTimeout(fn: () => void, ms: number): unknown
+  clearTimeout(handle: unknown): void
+}
+
 export interface SessionLaunchServiceDeps {
-  readonly spawner: SessionSpawner
+  readonly connection: SupervisorConnection
   readonly prepareLaunch: (config: SessionLaunchConfig) => Promise<LaunchPreparation>
+  /** sessionId の生成源 (UUID。本番は `crypto.randomUUID`)。 */
+  readonly newSessionId: () => string
+  /** 受理した状態通知を renderer へ届ける (relay)。 */
+  readonly onStatus: (updates: readonly SessionStatusUpdate[]) => void
+  readonly timer: TimerLike
+  /** 理由キー・件数・終了コードだけを記録する (会話由来の文字列・env を出さない)。 */
+  readonly log: (line: string) => void
+  /** 終了処理で `claude` の終了を待つ期限 (spec Assumptions [ASSUMED] 3 秒)。 */
+  readonly disposeWaitMs?: number
 }
 
 export type LaunchOutcome =
@@ -67,63 +94,160 @@ export type LaunchOutcome =
   | { readonly status: 'rejected'; readonly reason: SessionLaunchRejectReason }
 
 export interface SessionLaunchService {
-  /** 検証済みの起動設定で起動する (X-4。X-1 の単一セッション起動を再利用)。 */
+  /** 検証済みの起動設定で起動する (X-4 の起動前段を通る)。 */
   launch(config: SessionLaunchConfig): Promise<LaunchOutcome>
-  /** 制御を該当セッションへ送る。未知 / 終了済み sessionId なら `false`。 */
+  /** 制御を該当セッションへ送る。未知 / セッションスレッドが終わった sessionId なら `false`。 */
   control(sessionId: string, control: SessionControl): boolean
-  /** アプリ終了時に in-flight を片付ける。**終了を確認できなかった台数**を返す。 */
-  dispose(): number
+  /** 全セッションに kill を送る (renderer の再読み込み・クラッシュ)。supervisor は止めない。送った数を返す。 */
+  killAll(): number
+  /** アプリ終了時の後始末。1 回だけ走る。**終了を確認できなかった台数**を返す。 */
+  dispose(): Promise<number>
 }
 
+interface Entry extends RegistryStatus {
+  readonly threadAlive: boolean
+}
+
+const DEFAULT_DISPOSE_WAIT_MS = 3000
+
 export function createSessionLaunchService(deps: SessionLaunchServiceDeps): SessionLaunchService {
-  /** sessionId → 生存中の起動プロセス。**空でない = 単一セッション占有** (FR-019 / SC-011)。 */
-  const active = new Map<string, SessionSpawn>()
+  /** sessionId → 状態。**枠を占める = claudeAlive: true** (FR-005)。 */
+  let registry = new Map<string, Entry>()
+  /** 予約済みで registry にまだ登録していない起動要求の数。 */
+  let reserved = 0
+  /** `killAll` のたびに進む。起動途中の要求が killAll をまたいだかを判定する。 */
+  let epoch = 0
+  let disposing: Promise<number> | null = null
+  /** dispose が `claude` の終了を待つときの通知口。 */
+  let onAllEnded: (() => void) | null = null
+
+  const occupying = (): number => countOccupying(registry.values())
+
+  /** domain の受信規則の結果を registry に書き戻す (threadAlive は保つ)。両方終わったエントリは消す。 */
+  const commit = (next: ReadonlyMap<string, RegistryStatus>): void => {
+    const updated = new Map<string, Entry>()
+    for (const [id, status] of next) {
+      const prev = registry.get(id)
+      const threadAlive = prev?.threadAlive ?? false
+      if (!status.claudeAlive && !threadAlive) continue
+      updated.set(id, { ...status, threadAlive })
+    }
+    registry = updated
+    if (onAllEnded !== null && occupying() === 0) onAllEnded()
+  }
+
+  const statusView = (): Map<string, RegistryStatus> => new Map(registry)
+
+  deps.connection.onStatusBatch((generation, updates) => {
+    const { accepted, next } = acceptBatch(statusView(), generation, updates)
+    commit(next)
+    if (accepted.length > 0) deps.onStatus(accepted)
+  })
+
+  deps.connection.onThreadEnded((generation, sessionId) => {
+    const entry = registry.get(sessionId)
+    if (entry === undefined || entry.generation !== generation) return
+    if (entry.claudeAlive) registry.set(sessionId, { ...entry, threadAlive: false })
+    else registry.delete(sessionId)
+    if (onAllEnded !== null && occupying() === 0) onAllEnded()
+  })
+
+  deps.connection.onExit((generation, code) => {
+    // その世代のエントリだけを対象にする (新しい世代で動いているセッションに付けない)。
+    const ids = [...registry].filter(([, e]) => e.generation === generation).map(([id]) => id)
+    deps.log(
+      `[supervisor] exited code=${String(code)} generation=${generation} sessions=${ids.length}`
+    )
+    if (ids.length === 0) return
+    const { accepted, next } = applySynthesized(
+      statusView(),
+      synthesizeExit(ids, 'supervisor-exited')
+    )
+    for (const id of ids) {
+      const entry = registry.get(id)
+      if (entry !== undefined) registry.set(id, { ...entry, threadAlive: false })
+    }
+    commit(next)
+    deps.onStatus(accepted)
+  })
+
+  const killAll = (): number => {
+    epoch += 1
+    let sent = 0
+    for (const [id, entry] of registry) {
+      if (!entry.threadAlive) continue
+      deps.connection.control(id, { kind: 'kill' })
+      sent += 1
+    }
+    return sent
+  }
 
   return {
     async launch(config): Promise<LaunchOutcome> {
-      // 単一セッション不変: 生存中のプロセスが在れば拒否 (data-model §9 / SC-011)。
-      // **registry は「プロセス生存」基準** (run-state ではない。pr-gate arch M-001)。kill 経路は worker が
-      // process.exit(0) するため onExit で除去されるが、**terminal error / done では worker は exit しない**
-      // (failure 配送優先。孫 wsl.exe は finally で killSpawnedChild 済)。reset/kill/dispose の kill 経路が
-      // worker を exit させて初めて onExit → 除去される。UI は error/done 後 entry へ戻る全経路で killSession を
-      // 発火する (FailureBanner「再起動」/「閉じる」/ 画面遷移 unmount) ため、reset せず再 launch で詰む恒久
-      // soft-lock は無い。run-state 基準の解放へ寄せる設計余地は follow-up。
-      if (active.size > 0) return { status: 'rejected', reason: 'session-active' }
+      if (disposing !== null) return { status: 'rejected', reason: 'shutting-down' }
+      // 上限の判定と枠の予約を await の前に同期で行う (同時に届いた要求でも超えない。FR-005)。
+      if (!canReserve(occupying(), reserved)) return { status: 'rejected', reason: 'session-limit' }
+      reserved += 1
+      const startedEpoch = epoch
+      try {
+        const prep = await deps.prepareLaunch(config)
+        if (prep === null) return { status: 'rejected', reason: 'unknown-target' }
+        if (!prep.ok) return { status: 'rejected', reason: prep.reason }
+        if (disposing !== null) return { status: 'rejected', reason: 'shutting-down' }
+        // 起動途中に renderer が再読み込みされたら登録しない (見えない枠を作らない。R3 sec M-001)。
+        if (epoch !== startedEpoch) return { status: 'rejected', reason: 'launch-failed' }
 
-      const prep = await deps.prepareLaunch(config)
-      if (prep === null) return { status: 'rejected', reason: 'unknown-target' }
-      if (!prep.ok) return { status: 'rejected', reason: prep.reason }
-
-      const spawn = deps.spawner.launch(prep.input, prep.spec, prep.env)
-      active.set(spawn.sessionId, spawn)
-      spawn.onExit(() => {
-        // 自然終了・crash・kill のどれでも除去し、再 launch を許す (contracts C-6 / M-102)。
-        if (active.get(spawn.sessionId) === spawn) active.delete(spawn.sessionId)
-      })
-
-      return { status: 'launching', sessionId: spawn.sessionId, port: spawn.port }
+        const sessionId = deps.newSessionId()
+        const result = deps.connection.launch(sessionId, prep.spec, prep.input.options)
+        if (!result.ok) return { status: 'rejected', reason: 'launch-failed' }
+        registry.set(sessionId, {
+          generation: result.generation,
+          state: 'launching',
+          reasonKey: null,
+          claudeAlive: true,
+          threadAlive: true
+        })
+        return { status: 'launching', sessionId, port: result.port }
+      } finally {
+        reserved -= 1
+      }
     },
 
     control(sessionId, control): boolean {
-      const spawn = active.get(sessionId)
-      if (spawn === undefined) return false
-      // **kill も agents へ送る** — Windows の親 kill は孫 (wsl.exe) に伝播しないため、
-      // agents が保持する `SpawnedProcess` を直接 kill させる必要がある (AD-036 §3 / security H-001)。
-      // agents は wsl.exe を kill してから自プロセスを exit し、onExit で registry から外れる。
-      // utilityProcess ハンドルの kill だけでは孫が孤児化する (kill only の旧実装が dead code 化していた)。
-      spawn.sendControl(control)
+      const entry = registry.get(sessionId)
+      if (entry === undefined || !entry.threadAlive) return false
+      deps.connection.control(sessionId, control)
       return true
     },
 
-    dispose(): number {
-      let unconfirmed = 0
-      for (const spawn of [...active.values()]) {
-        // 先に agents へ kill を送り孫 (wsl.exe) を殺させ、続けて utilityProcess を回収する (二段構成)。
-        spawn.sendControl({ kind: 'kill' })
-        if (!spawn.kill()) unconfirmed += 1
-      }
-      active.clear()
-      return unconfirmed
+    killAll(): number {
+      const sent = killAll()
+      if (sent > 0) deps.log(`[session] killAll sessions=${sent}`)
+      return sent
+    },
+
+    dispose(): Promise<number> {
+      if (disposing !== null) return disposing
+      disposing = (async (): Promise<number> => {
+        killAll()
+        if (occupying() > 0) {
+          await new Promise<void>((resolve) => {
+            const handle = deps.timer.setTimeout(() => {
+              onAllEnded = null
+              resolve()
+            }, deps.disposeWaitMs ?? DEFAULT_DISPOSE_WAIT_MS)
+            onAllEnded = () => {
+              onAllEnded = null
+              deps.timer.clearTimeout(handle)
+              resolve()
+            }
+          })
+        }
+        const remaining = occupying()
+        const killed = deps.connection.kill()
+        return remaining + (killed ? 0 : 1)
+      })()
+      return disposing
     }
   }
 }

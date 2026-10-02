@@ -1,0 +1,9 @@
+// 違反サンプル (項目 19 / X-5 SH-010): 許可外モジュールが process の kill を**参照渡し**する。
+// 呼び出し形 `process.kill(` を書かずに `Reflect.apply` / 別名の関数値として使う形。
+// 許可リスト (`PID_KILL_MODULES`) は SH-000 (3) の結果で 0 件なので、src/ のどこに書いても違反 (AD-043 Decision 5)。
+const terminate: (pid: number, signal?: string) => true = process.kill
+
+export function reap(pid: number): void {
+  Reflect.apply(process.kill, process, [pid, 'SIGKILL'])
+  terminate(pid)
+}

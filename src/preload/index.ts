@@ -9,6 +9,7 @@ import {
 } from '@domain/capability'
 import type { RuntimeListDTO } from '@domain/runtime/dto'
 import type { SessionIndexDTO } from '@domain/session/dto'
+import type { SessionStatusUpdate } from '@domain/session/status-update'
 import type { FolderListDTO } from '@domain/workspace/dto'
 
 /**
@@ -59,6 +60,7 @@ const capability: ClostaCapability = {
   respondPermission: (sessionId, requestId, outcome, scope) =>
     ipcRenderer.invoke(IPC_CHANNELS.respondPermission, sessionId, requestId, outcome, scope),
   interruptSession: (sessionId) => ipcRenderer.invoke(IPC_CHANNELS.interruptSession, sessionId),
+  endSession: (sessionId) => ipcRenderer.invoke(IPC_CHANNELS.endSession, sessionId),
   killSession: (sessionId) => ipcRenderer.invoke(IPC_CHANNELS.killSession, sessionId),
 
   listProviders: () => ipcRenderer.invoke(IPC_CHANNELS.listProviders),
@@ -79,7 +81,9 @@ const capability: ClostaCapability = {
     subscribe<RuntimeListDTO>(IPC_CHANNELS.runtimesChanged, listener),
   onFoldersChanged: (listener) => subscribe<FolderListDTO>(IPC_CHANNELS.foldersChanged, listener),
   onSessionsChanged: (listener) =>
-    subscribe<SessionIndexDTO>(IPC_CHANNELS.sessionsChanged, listener)
+    subscribe<SessionIndexDTO>(IPC_CHANNELS.sessionsChanged, listener),
+  onSessionStatus: (listener) =>
+    subscribe<readonly SessionStatusUpdate[]>(IPC_CHANNELS.sessionStatus, listener)
 }
 
 /*
@@ -101,7 +105,7 @@ ipcRenderer.on(IPC_CHANNELS.transcriptPort, (event, payload: { requestToken: str
 })
 
 /*
- * **agents の data port を main world へ橋渡しする** (X-1 / AD-036 §2)。
+ * **supervisor の data port を main world へ橋渡しする** (X-1 / X-5 / AD-036 §2)。
  *
  * transcript と同じ理由 (MessagePort は contextBridge を越えられない)。main が
  * `webContents.postMessage(sessionPort, { sessionId }, [port2])` で送ってきた port を、

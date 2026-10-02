@@ -1,0 +1,8 @@
+// 違反サンプル (項目 19 / X-5 SH-010 / code-gate platform-boundary M-002): `node:process` から kill を
+// **named import** で取る。以後は裸の `kill(...)` になり、`process` の綴りが kill の前に現れない等価形。
+// 置き場の `src/main/infra/runtime/` は `node:process` の import を ESLint に許されている。
+import { kill } from 'node:process'
+
+export function reap(pid: number): void {
+  kill(pid, 'SIGKILL')
+}

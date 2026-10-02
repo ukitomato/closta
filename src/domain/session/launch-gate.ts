@@ -11,9 +11,9 @@ import type { LaunchFailureReason } from './agent-session'
  * UNC アクセスを引き起こすため、「確認を経た値が無ければ起動できない」形にする。加えて **folder の所在ディストロと
  * 選択ランタイムのディストロの不一致を拒否**する (H-09。別 distro で走る / transcript が別 distro に書かれるのを防ぐ)。
  *
- * 単一セッション不変 (SC-011) は registry の状態に依存するため、判定は service 側が行う
- * (`session-launch-service` が **生存 worker プロセス数** `active.size > 0` で拒否する。run-state 連動ではない。
- * pr-gate arch M-001)。ここは folder / runtime / verified だけで決まる純粋部分に限る。
+ * 同時実行数の上限 (X-5 / AD-043 Decision 3) は registry の状態に依存するため、判定は service 側が行う
+ * (`session-launch-service` が `claude` の生存フラグと予約数で `canReserve` を判定する。run-state 連動ではない)。
+ * ここは folder / runtime / verified だけで決まる純粋部分に限る。
  */
 
 export type LaunchGateResult =

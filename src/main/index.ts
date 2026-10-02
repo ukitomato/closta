@@ -20,6 +20,45 @@ import { createMainWindow } from './app/window'
 // カスタムプロトコルの特権登録は `whenReady()` より前に行う必要がある。
 registerAppScheme()
 
+/** 終了処理全体の期限 (spec Assumptions [ASSUMED] 5 秒)。過ぎたら残りを待たずに終える (FR-014)。 */
+const QUIT_TIMEOUT_MS = 5000
+
+/**
+ * `before-quit` で非同期の後始末を **1 回だけ** 走らせる (X-5 / FR-014 / design-gate R1 M-02)。
+ *
+ * 1 回目は `preventDefault` して後始末を待ち (全体に期限)、終わったら `app.quit()` をやり直す。
+ * `app.quit()` は `before-quit` をもう一度発火させるので、2 回目は素通しする (再入しない)。
+ */
+function onBeforeQuitOnce(cleanup: () => Promise<void>): void {
+  let quitting = false
+  app.on('before-quit', (event) => {
+    if (quitting) return
+    quitting = true
+    event.preventDefault()
+    const timeout = new Promise<void>((resolve) => setTimeout(resolve, QUIT_TIMEOUT_MS))
+    void Promise.race([cleanup().catch(() => undefined), timeout]).finally(() => app.quit())
+  })
+}
+
+/**
+ * renderer の保持と port が失われたら全セッションを止める (X-5 / FR-014)。利用者から見えないまま枠を占める
+ * セッションを残さない。supervisor は止めない。
+ *
+ * **検知は確定した文書の入れ替わりで行う** (`did-navigate` = main frame の新しい文書への遷移の確定 /
+ * `render-process-gone`)。取り消されうる遷移の開始 (`did-start-navigation`) では止めない — 拒否された遷移で
+ * 全セッションを止める経路を作らない (design-gate R3-H-02)。トップレベル遷移は `window.ts` の `will-navigate` が
+ * すべて拒否するので、`did-navigate` に至るのは初回の読み込みと再読み込み (開発時のリロード) だけである。
+ * 本番ビルドの Ctrl+R / Ctrl+Shift+R は `@electron-toolkit/utils` の `watchWindowShortcuts` が握りつぶす (R3-H-01)。
+ */
+function watchRendererLifetime(window: BrowserWindow, killAll: () => number): void {
+  window.webContents.on('did-navigate', () => {
+    killAll()
+  })
+  window.webContents.on('render-process-gone', () => {
+    killAll()
+  })
+}
+
 /**
  * **単一インスタンス制限** (FR-020 / SC-014)。
  *
@@ -66,8 +105,14 @@ if (!gotTheLock) {
       mainWindow.on('closed', () => {
         mainWindow = null
       })
-      app.on('before-quit', () => {
-        stub.dispose()
+      stub.sessionStatus.onForward((updates) => {
+        const target = mainWindow
+        if (target === null || target.isDestroyed()) return
+        target.webContents.send(IPC_CHANNELS.sessionStatus, updates)
+      })
+      watchRendererLifetime(mainWindow, () => stub.killAllSessions())
+      onBeforeQuitOnce(async () => {
+        await stub.dispose()
       })
       app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {
@@ -110,24 +155,29 @@ if (!gotTheLock) {
       target.webContents.send(IPC_CHANNELS.sessionsChanged, index)
     })
 
+    // 稼働中セッションの状態通知 (X-5 / FR-004)。受理済みのバッチを 1 回で送る。
+    composition.sessionStatus.onForward((updates) => {
+      const target = mainWindow
+      if (target === null || target.isDestroyed()) return
+      target.webContents.send(IPC_CHANNELS.sessionStatus, updates)
+    })
+
+    watchRendererLifetime(mainWindow, () => composition.killAllSessions())
+
     /*
-     * **生存中の列挙プロセスをアプリ終了時に終了させる** (contracts C-5 / BE-025)。
+     * **生存中のセッション・列挙プロセスをアプリ終了時に終了させる** (X-5 FR-014 / contracts C-5 / BE-025)。
      * UNC ハンドルを掴んだ孤児を残さない。
      * `before-quit` を選ぶのは、`window-all-closed` では macOS が終了しないためである。
      */
-    app.on('before-quit', () => {
+    onBeforeQuitOnce(async () => {
       /*
        * **戻り値を捨てない** (pr-gate Round 3 / 4 track が収束した指摘)。
-       *
-       * `dispose()` は「終了を確認できなかった台数」を返す形にしたのに、
-       * ここで捨てていたため**記録する主体が存在しなかった**。
-       * 孤児が残ったことを誰も知れない設計は、contracts C-5 の
-       * 「記録して監視対象から外す」の後半を満たさない。
+       * 孤児が残ったことを誰も知れない設計は、contracts C-5 の「記録して監視対象から外す」の後半を満たさない。
        */
-      const unconfirmed = composition.dispose()
+      const unconfirmed = await composition.dispose()
       if (unconfirmed > 0) {
         console.warn(
-          `[dispose] 終了を確認できない列挙プロセスが ${unconfirmed} 件あります (contracts C-5)`
+          `[dispose] 終了を確認できないプロセスが ${unconfirmed} 件あります (contracts C-5)`
         )
       }
     })

@@ -31,7 +31,7 @@ import type { LaunchPreparation } from './session-launch-service'
  * | 2. 起動ゲート | X-1 の `evaluateLaunch` (VerifiedRunning / 期限 / 所在 distro 一致) |
  * | 3. env 導出 | Provider あり → `deriveEnv` (null / throw → `provider-unavailable`)。既定 → curated base のみ |
  * | 4. env 合成 | `composeLaunchEnv` (WSLENV = forwardKeys + `/u`)。規則違反 → `invalid-config`。`buildRuntimeLaunchSpec` の throw → `launch-failed` |
- * | 5. fork env | **curated base のまま** (導出 env を utilityProcess に入れない。AD-041 (e) 6) |
+ * | 5. fork env | **ここでは持たない** — supervisor の fork env はランタイムに依存しない curated base で、接続の構築時に注入する (`createSupervisorConnection(forkEnv)`。導出 env を utilityProcess に入れない。AD-041 (e) 6 / AD-043 Decision 7) |
  */
 
 export interface LaunchPreparationDeps {
@@ -43,7 +43,7 @@ export interface LaunchPreparationDeps {
   readonly providerFacts: (runtimeId: string) => Promise<readonly ProviderFact[]>
   /** Provider の env 導出。到達不可 / 規則違反は null。 */
   readonly deriveEnv: (providerId: string, runtimeId: string) => Promise<DerivedLaunchEnv | null>
-  /** curated base (`buildLaunchEnv(process.env)`)。fork env と wsl.exe 解決の両方に使う。 */
+  /** curated base (`buildLaunchEnv(process.env)`)。wsl.exe 解決と env 合成に使う (fork env は接続の構築時に注入する。AD-043 Decision 7)。 */
   readonly baseEnv: () => Record<string, string>
   /** 作業フォルダを runtime 名前空間の cwd にする (Principle I)。 */
   readonly resolveCwd: (folder: WorkspaceFolder, runtime: WslRuntimeDescriptor) => string | null
@@ -181,6 +181,6 @@ export function createPrepareLaunch(
     const input: LaunchInput = { folder, runtime: wsl, verified, options }
 
     // 5. fork env は curated base のまま (導出 env・WSLENV を utilityProcess に入れない)。
-    return { ok: true, input, spec, env: baseEnv }
+    return { ok: true, input, spec }
   }
 }

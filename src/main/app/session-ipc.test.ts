@@ -8,6 +8,7 @@ import {
   handleFetchMoreSessions,
   handleGetTranscript,
   handleInterruptSession,
+  handleEndSession,
   handleKillSession,
   handleLaunchSession,
   handleListPresets,
@@ -294,6 +295,8 @@ describe('handleGetTranscript — 検証表 (R-3 / BE-027 / SC-008)', () => {
 
 describe('X-1 起動 + 制御ハンドラ — main 直接呼び (SC-004 / SC-007 / FR-010 / FR-012)', () => {
   const UUID = '11111111-1111-4111-8111-111111111111'
+  /** 承認要求の相関鍵 (X-5: セッションスレッドが `crypto.randomUUID` で発行する)。 */
+  const REQUEST_ID = '33333333-3333-4333-8333-333333333333'
 
   describe('handleLaunchSession (X-4: 起動設定オブジェクト)', () => {
     it('形の正しい起動設定なら launchSession へ委譲', async () => {
@@ -356,26 +359,28 @@ describe('X-1 起動 + 制御ハンドラ — main 直接呼び (SC-004 / SC-007
   describe('handleRespondPermission (承認の唯一経路。scope 格上げの負例)', () => {
     it('妥当な決定は controlSession へ respond-permission を送る', async () => {
       const { deps: d, calls } = deps()
-      await handleRespondPermission(d, [UUID, 'perm-1', 'allow', 'once'])
+      await handleRespondPermission(d, [UUID, REQUEST_ID, 'allow', 'once'])
       expect(calls.controls).toEqual([
         {
           sessionId: UUID,
           control: {
             kind: 'respond-permission',
-            decision: { requestId: 'perm-1', outcome: 'allow', scope: 'once' }
+            decision: { requestId: REQUEST_ID, outcome: 'allow', scope: 'once' }
           }
         }
       ])
     })
 
     it.each([
-      ['outcome が enum 外', [UUID, 'perm-1', 'maybe', 'once']],
-      ['outcome 格上げ (allow-all)', [UUID, 'perm-1', 'grant', 'once']],
-      ['scope が enum 外', [UUID, 'perm-1', 'allow', 'forever']],
-      ['sessionId 非 UUID', ['not-uuid', 'perm-1', 'allow', 'once']],
+      ['outcome が enum 外', [UUID, REQUEST_ID, 'maybe', 'once']],
+      ['outcome 格上げ (allow-all)', [UUID, REQUEST_ID, 'grant', 'once']],
+      ['scope が enum 外', [UUID, REQUEST_ID, 'allow', 'forever']],
+      ['sessionId 非 UUID', ['not-uuid', REQUEST_ID, 'allow', 'once']],
       ['requestId 空', [UUID, '', 'allow', 'once']],
       ['requestId 上限超', [UUID, 'x'.repeat(129), 'allow', 'once']],
-      ['非文字列 outcome', [UUID, 'perm-1', 1, 'once']]
+      // X-5 (BE-010): requestId は暗号論的乱数の UUID に限る。推測しやすい連番・自由文字列は通さない。
+      ['requestId が UUID でない', [UUID, 'perm-1', 'allow', 'once']],
+      ['非文字列 outcome', [UUID, REQUEST_ID, 1, 'once']]
     ])('不正入力では制御を発火しない (%s)', async (_l, args) => {
       const { deps: d, calls } = deps()
       await handleRespondPermission(d, args as readonly unknown[])
@@ -405,23 +410,27 @@ describe('X-1 起動 + 制御ハンドラ — main 直接呼び (SC-004 / SC-007
     })
   })
 
-  describe('handleInterruptSession / handleKillSession', () => {
-    it('妥当な UUID なら interrupt / kill を送る', async () => {
+  describe('handleInterruptSession / handleEndSession / handleKillSession', () => {
+    it('妥当な UUID なら interrupt / end / kill を送る (X-5: end は FR-011 の穏当な終了)', async () => {
       const { deps: d, calls } = deps()
       await handleInterruptSession(d, [UUID])
+      await handleEndSession(d, [UUID])
       await handleKillSession(d, [UUID])
       expect(calls.controls).toEqual([
         { sessionId: UUID, control: { kind: 'interrupt' } },
+        { sessionId: UUID, control: { kind: 'end' } },
         { sessionId: UUID, control: { kind: 'kill' } }
       ])
     })
 
     it.each([
       ['非 UUID', ['not-uuid']],
-      ['欠落', []]
+      ['欠落', []],
+      ['非文字列', [42]]
     ])('非 UUID sessionId では発火しない (%s)', async (_l, args) => {
       const { deps: d, calls } = deps()
       await handleInterruptSession(d, args as readonly unknown[])
+      await handleEndSession(d, args as readonly unknown[])
       await handleKillSession(d, args as readonly unknown[])
       expect(calls.controls).toEqual([])
     })

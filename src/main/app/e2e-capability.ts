@@ -7,16 +7,25 @@ import { fixedCapabilities } from '@domain/runtime/capabilities'
 import type { WslRuntimeDescriptor } from '@domain/runtime/descriptor'
 import type { RuntimeDescriptorDTO, RuntimeListDTO } from '@domain/runtime/dto'
 import { wslNamespace } from '@domain/runtime/namespace'
-import type { SessionControl, SessionEvent } from '@domain/session/agent-session'
+import type { LaunchInput, SessionControl, SessionEvent } from '@domain/session/agent-session'
 import type { SessionIndexDTO } from '@domain/session/dto'
 import { normalizePresetName } from '@domain/session/launch-config'
 import type { PresetDTO } from '@domain/session/preset'
+import { canEnd, type SessionRunState } from '@domain/session/run-state'
+import { BODY_MAX_BYTES } from '@domain/session/sanitize-body'
+import { coalesceUpdates, type SessionStatusUpdate } from '@domain/session/status-update'
 import type { TranscriptMessageDTO } from '@domain/session/transcript-dto'
 import type { FolderListDTO, WorkspaceFolderDTO } from '@domain/workspace/dto'
 
 import type { IpcDependencies, ProbeRuntimeResult } from './ipc'
 import { noMeasure } from './measure'
-import type { LaunchOutcome } from './session-launch-service'
+import {
+  createSessionLaunchService,
+  type LaunchOutcome,
+  type LaunchPreparation,
+  type SupervisorConnection
+} from './session-launch-service'
+import { createSessionStatusRelay, type SessionStatusRelay } from './session-status-relay'
 
 /**
  * **E2E capability stub (X-2 / AD-038 D3 / T030。production-inert)。**
@@ -29,7 +38,8 @@ import type { LaunchOutcome } from './session-launch-service'
  * | **`!app.isPackaged && process.env.CLOSTA_E2E === '1'` のときだけ配線する。** 呼び出しは `src/main/index.ts` の 1 分岐のみ | AD-038 D3 / origins.ts E-H004 (env 単独ゲート禁止) |
  * | **単一 capability 境界を保つ** — preload も `window.closta` も本番と同一。ここは `IpcDependencies` を差し替えるだけで、第 2 の exposeInMainWorld を作らない | FR-039 |
  * | **プロセスを起こさない** — `utilityProcess` / `fork` / `spawn` を使わず `MessageChannelMain` の port1 を main に保持して合成 `SessionEvent` を流す。したがって `PROCESS_SPAWN_MODULES` (check.mjs #7) に載らない | Principle VI / AD-038 D3 |
- * | **会話本文・資格情報を運ばない** — 合成テキストのみを生成する (real の agents↔renderer 直通データ経路は不変。本番では本コードに到達しない) | Principle V / Principle IX |
+ * | **起動調停は本物を使う** (X-5) — 上限・制御の宛先・状態通知の受信規則を本番と共有し、fake は supervisor 接続だけ。単一セッション不変の複製は持たない | USER 決定 design-gate R1 / design-gate R1 arch H-007 |
+ * | **会話本文・資格情報を運ばない** — 合成テキストのみを生成する (real の supervisor↔renderer 直通データ経路は不変。本番では本コードに到達しない) | Principle V / Principle IX |
  * | **WSL を名指さない** — fake の distro 名は表示用の合成値であり `wsl.exe` を呼ばない | Principle VI |
  */
 
@@ -52,26 +62,65 @@ function emptySessionIndex(fetchedAt: number): SessionIndexDTO {
   return { groups: [], outcomes: [], fetchedAt, complete: true }
 }
 
-/** 合成の起動プロセス 1 つ分。real の `SessionSpawn` を模すが fork せず port を main に保持する。 */
-interface StubSpawn {
-  readonly sessionId: string
-  readonly port: MessagePortMain
-  /** control plane の要求を合成 stream に反映する。 */
-  handle(control: SessionControl): void
-  /** port を閉じ registry から外す。 */
-  close(): void
+/** E2E の負荷経路 (SC-003 / FE-020) を起こす合成プロンプト。本番では本コードに到達しない。 */
+export const E2E_LOAD_PROMPT = '__e2e_load__'
+/** 1 件 1KB の本文を何件/秒流すか (SC-003 の負荷)。 */
+const E2E_LOAD_RATE_PER_SEC = 20
+const E2E_LOAD_DURATION_MS = 30_000
+/** 上限いっぱいの part (`BODY_MAX_BYTES`) を 1 回流す合成プロンプト (SC-003)。 */
+export const E2E_BIG_PROMPT = '__e2e_big__'
+/**
+ * 巨大な part を流すまでの遅れ。**SC-003 の計測窓 (負荷の 30 秒) の中で届くように**、送信からしばらく置く
+ * (送信直後に流すと、残りのセッションへの送信を待つ間に計測の前に届き終わる。pr-gate R1 po H-002)。
+ */
+const E2E_BIG_DELAY_MS = 15_000
+
+interface StubSession {
+  readonly port1: MessagePortMain
+  state: SessionRunState
+  claudeAlive: boolean
+  closed: boolean
+  /** プロンプトを 1 度でも受けたか (最初のプロンプト待ちの終了を本物と同じ規則で受ける。pr-gate R1 po H-001)。 */
+  promptSent: boolean
+  timers: ReturnType<typeof setTimeout>[]
 }
 
-function createStubSpawn(onEnd: (sessionId: string) => void): StubSpawn {
-  const sessionId = randomUUID()
-  const channel = new MessageChannelMain()
-  const port1 = channel.port1
-  port1.start()
-
-  let ended = false
+/**
+ * **fake の supervisor 接続** (X-5 / USER 決定 design-gate R1: E2E は本物の起動調停 + fake の supervisor 接続)。
+ *
+ * 本物の `createSessionLaunchService` (上限・制御の宛先・状態通知の受信規則) に差し込む。プロセスもスレッドも
+ * 起こさず、`MessageChannelMain` の port1 を main に保持して合成の本文 (セッションスレッドと同じく**文字列化した**
+ * `SessionEvent`) を流し、状態通知を 100ms 窓でまとめて出す。supervisor 内部 (スレッド・中継) は通らない —
+ * それは supervisor の単体と quickstart が確かめる (spec SC-003)。
+ */
+function createE2eSupervisorConnection(): SupervisorConnection {
+  const sessions = new Map<string, StubSession>()
+  const statusL: ((g: number, u: readonly unknown[]) => void)[] = []
+  const threadL: ((g: number, id: string) => void)[] = []
+  let pending: SessionStatusUpdate[] = []
+  let flushTimer: ReturnType<typeof setTimeout> | null = null
   let seq = 0
-  const emit = (event: SessionEvent): void => {
-    if (!ended) port1.postMessage(event)
+
+  const flush = (): void => {
+    if (flushTimer !== null) clearTimeout(flushTimer)
+    flushTimer = null
+    if (pending.length === 0) return
+    const batch = coalesceUpdates(pending)
+    pending = []
+    for (const l of statusL) l(1, batch)
+  }
+  const status = (sessionId: string, s: StubSession, immediate = false): void => {
+    pending.push({ sessionId, state: s.state, reasonKey: null, claudeAlive: s.claudeAlive })
+    if (immediate) flush()
+    else if (flushTimer === null) flushTimer = setTimeout(flush, 100)
+  }
+  const emit = (s: StubSession, event: SessionEvent): void => {
+    if (!s.closed) s.port1.postMessage(JSON.stringify(event))
+  }
+  const setState = (sessionId: string, s: StubSession, state: SessionRunState): void => {
+    s.state = state
+    emit(s, { kind: 'state', state })
+    status(sessionId, s)
   }
   const assistantMessage = (text: string): TranscriptMessageDTO => ({
     id: `e2e-assistant-${(seq += 1)}`,
@@ -79,49 +128,107 @@ function createStubSpawn(onEnd: (sessionId: string) => void): StubSpawn {
     parts: [{ type: 'text', text }],
     createdAt: Date.now()
   })
-
-  const close = (): void => {
-    if (ended) return
-    ended = true
-    port1.close()
-    onEnd(sessionId)
+  const end = (sessionId: string, s: StubSession): void => {
+    if (s.closed) return
+    for (const t of s.timers) clearTimeout(t)
+    s.claudeAlive = false
+    status(sessionId, s, true)
+    s.closed = true
+    s.port1.close()
+    sessions.delete(sessionId)
+    for (const l of threadL) l(1, sessionId)
   }
 
   return {
-    sessionId,
-    port: channel.port2,
-    handle(control: SessionControl): void {
-      if (ended) return
+    launch(sessionId) {
+      const channel = new MessageChannelMain()
+      channel.port1.start()
+      const s: StubSession = {
+        port1: channel.port1,
+        state: 'idle',
+        claudeAlive: true,
+        closed: false,
+        promptSent: false,
+        timers: []
+      }
+      sessions.set(sessionId, s)
+      setState(sessionId, s, 'launching')
+      return { ok: true, port: channel.port2, generation: 1 }
+    },
+    control(sessionId, control: SessionControl) {
+      const s = sessions.get(sessionId)
+      if (s === undefined || s.closed) return
       switch (control.kind) {
-        case 'send-prompt':
+        case 'send-prompt': {
           // turn を in-flight にして (running) 暫く保ち、合成応答 1 通で完了する。
           // running を挟むことで IME E2E の「running + queue 有効」分岐 (AD-037 §4) を踏める。
-          emit({ kind: 'state', state: 'running' })
-          setTimeout(() => {
-            emit({ kind: 'message', message: assistantMessage('（E2E stub）受け取りました。') })
-            emit({ kind: 'state', state: 'done' })
-          }, 1200)
+          s.promptSent = true
+          setState(sessionId, s, 'running')
+          if (control.text === E2E_LOAD_PROMPT) {
+            const chunk = 'あ'.repeat(340) // 約 1KB (UTF-8)
+            const interval = 1000 / E2E_LOAD_RATE_PER_SEC
+            for (let t = 0; t < E2E_LOAD_DURATION_MS; t += interval) {
+              s.timers.push(
+                setTimeout(() => emit(s, { kind: 'message', message: assistantMessage(chunk) }), t)
+              )
+            }
+            s.timers.push(
+              setTimeout(() => setState(sessionId, s, 'done'), E2E_LOAD_DURATION_MS + 50)
+            )
+            break
+          }
+          const text =
+            control.text === E2E_BIG_PROMPT
+              ? 'x'.repeat(BODY_MAX_BYTES)
+              : '（E2E stub）受け取りました。'
+          s.timers.push(
+            setTimeout(
+              () => {
+                emit(s, { kind: 'message', message: assistantMessage(text) })
+                setState(sessionId, s, 'done')
+              },
+              control.text === E2E_BIG_PROMPT ? E2E_BIG_DELAY_MS : 1200
+            )
+          )
           break
+        }
         case 'respond-permission':
-          emit({ kind: 'state', state: 'running' })
+          setState(sessionId, s, 'running')
           break
         case 'interrupt':
-          emit({ kind: 'interrupt-receipt', stillQueued: [], cancelled: [] })
-          emit({ kind: 'state', state: 'interrupted' })
+          emit(s, { kind: 'interrupt-receipt', stillQueued: [], cancelled: [] })
+          setState(sessionId, s, 'interrupted')
+          break
+        case 'end':
+          // 本物のセッションスレッドと同じ規則 (`canEnd`): 応答待ち・中断済み・最初のプロンプト待ち。
+          if (!canEnd(s.state, s.promptSent)) break
+          setState(sessionId, s, 'done')
+          end(sessionId, s)
           break
         case 'kill':
-          close()
+          setState(sessionId, s, 'done')
+          end(sessionId, s)
           break
       }
     },
-    close
+    kill() {
+      for (const [id, s] of [...sessions]) end(id, s)
+      return true
+    },
+    onStatusBatch: (l) => statusL.push(l),
+    onThreadEnded: (l) => threadL.push(l),
+    onExit: () => undefined
   }
 }
 
 export interface E2eCapability {
   readonly ipc: IpcDependencies
-  /** アプリ終了時に in-flight を片付ける。real の `Composition.dispose` と同型で 0 を返す。 */
-  dispose(): number
+  /** 状態通知の中継 (real の `Composition.sessionStatus` と同型)。 */
+  readonly sessionStatus: SessionStatusRelay
+  /** renderer の再読み込みで全セッションを止める (real と同型)。 */
+  killAllSessions(): number
+  /** アプリ終了時に in-flight を片付ける。real の `Composition.dispose` と同型。 */
+  dispose(): Promise<number>
 }
 
 /**
@@ -237,11 +344,36 @@ export function createE2eCapability(): E2eCapability {
     restoreIssues: { skipped: 0, reasonKeys: [], backupPath: null }
   }
 
-  /** sessionId → 生存中の合成プロセス。**空でない = 単一セッション占有** (real の launch-service と同型)。 */
-  const active = new Map<string, StubSpawn>()
-  const remove = (sessionId: string): void => {
-    active.delete(sessionId)
-  }
+  /*
+   * **本物の起動調停** (上限・制御の宛先・状態通知の受信規則を本番と共有する) に fake の supervisor 接続を差す。
+   * 起動前段は既知のフォルダ / ランタイムだけを通す合成値 (WSL・env 導出を呼ばない)。
+   */
+  const sessionStatus = createSessionStatusRelay()
+  const knownRuntimes = new Map(snapshot.map((d) => [d.id as string, d]))
+  const launchService = createSessionLaunchService({
+    connection: createE2eSupervisorConnection(),
+    prepareLaunch: async (config): Promise<LaunchPreparation> => {
+      const runtime = knownRuntimes.get(config.runtimeId)
+      if (runtime === undefined || ![folderId, winFolderId].includes(config.folderId)) return null
+      return {
+        ok: true,
+        input: { options: { permissionMode: config.permissionMode } } as unknown as LaunchInput,
+        spec: {
+          pathToClaudeCodeExecutable: '/e2e/claude',
+          command: 'e2e',
+          prefixArgs: [],
+          env: {}
+        }
+      }
+    },
+    newSessionId: () => randomUUID(),
+    onStatus: (updates) => sessionStatus.forward(updates),
+    timer: {
+      setTimeout: (fn, ms) => setTimeout(fn, ms),
+      clearTimeout: (h) => clearTimeout(h as never)
+    },
+    log: () => undefined
+  })
 
   const ipc: IpcDependencies = {
     listRuntimes: async () => fakeRuntimes,
@@ -298,19 +430,8 @@ export function createE2eCapability(): E2eCapability {
     },
     presetIds: async () => presets.map((p) => p.id),
 
-    launchSession: async (): Promise<LaunchOutcome> => {
-      // 単一セッション不変 (real の launch-service と同じ)。
-      if (active.size > 0) return { status: 'rejected', reason: 'session-active' }
-      const spawn = createStubSpawn(remove)
-      active.set(spawn.sessionId, spawn)
-      return { status: 'launching', sessionId: spawn.sessionId, port: spawn.port }
-    },
-    controlSession: (sessionId, control) => {
-      const spawn = active.get(sessionId)
-      if (spawn === undefined) return false
-      spawn.handle(control)
-      return true
-    },
+    launchSession: (config): Promise<LaunchOutcome> => launchService.launch(config),
+    controlSession: (sessionId, control) => launchService.control(sessionId, control),
 
     // pr-gate R1 M-03 / M-302: 退避 0 件。registerProvider は常に拒否なので述語は fail-closed で足りる。
     providerLoadIssues: async () => ({
@@ -325,10 +446,8 @@ export function createE2eCapability(): E2eCapability {
 
   return {
     ipc,
-    dispose(): number {
-      for (const spawn of [...active.values()]) spawn.close()
-      active.clear()
-      return 0
-    }
+    sessionStatus,
+    killAllSessions: () => launchService.killAll(),
+    dispose: () => launchService.dispose()
   }
 }

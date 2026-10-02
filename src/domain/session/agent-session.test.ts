@@ -81,8 +81,8 @@ describe('boundDecisionScope (scope 上限。FR-012 / H-04 / SC-004)', () => {
 })
 
 describe('isLaunchFailureReason', () => {
-  it('9 種の起動失敗理由を受理し、それ以外を拒否', () => {
-    expect(LAUNCH_FAILURE_REASONS).toHaveLength(9)
+  it('10 種の起動失敗理由を受理し、それ以外を拒否 (X-5 で supervisor-exited)', () => {
+    expect(LAUNCH_FAILURE_REASONS).toHaveLength(10)
     for (const reason of LAUNCH_FAILURE_REASONS) {
       expect(isLaunchFailureReason(reason)).toBe(true)
     }

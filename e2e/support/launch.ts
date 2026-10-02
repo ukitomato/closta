@@ -13,8 +13,8 @@ import { resolve } from 'node:path'
  * - 起動時に `CLOSTA_E2E=1` を渡す。
  * - **app 側フック (実装済み。T030)**: `src/main/index.ts` は **`!app.isPackaged && process.env.CLOSTA_E2E === '1'`** のときだけ、
  *   `createComposition()` の代わりに `createE2eCapability()` (`src/main/app/e2e-capability.ts`) を配線し **`IpcDependencies` を
- *   差し替える** (fake の folder/runtime を seed / `launchSession` は `MessageChannelMain` で合成 stream / `sendPrompt` は
- *   合成イベントを流す)。**preload は本番と同一** — 第 2 の exposeInMainWorld を作らず単一 capability 境界 (FR-039) を保つ。
+ *   差し替える** (fake の folder/runtime を seed / X-5 以降は**本物の起動調停** (`createSessionLaunchService`) に
+ *   fake の supervisor 接続を差し、`MessageChannelMain` で合成 stream・状態通知を流す)。**preload は本番と同一** — 第 2 の exposeInMainWorld を作らず単一 capability 境界 (FR-039) を保つ。
  *   **packaged では `app.isPackaged` が true になり無効 = production-inert** (env 単独ゲートにしない。AD-038 D3)。
  *
  * ## フォント (AD-038 D4 / H-101)
@@ -46,10 +46,11 @@ export async function reachActiveComposer(page: Page): Promise<import('@playwrig
   // 既定画面は 'runtimes'。X-1 のセッション起動画面 (SessionScreen) へ nav で遷移する (App.tsx / stores/ui.ts)。
   await page.getByRole('button', { name: 'セッション起動' }).click()
 
-  // 起動設定ダイアログ (X-4) の先頭 2 つの select (フォルダ / ランタイム) を stub seed の先頭で埋めて起動する。
+  // 起動設定ダイアログ (X-4) のフォルダ / ランタイムを stub seed の先頭で埋めて起動する。
   // Provider / モデル / effort / 権限モードは既定のまま (既定 Provider は X-1 と同じ curated base で起動する)。
-  const folderSelect = page.locator('select').first()
-  const runtimeSelect = page.locator('select').nth(1)
+  // **select は位置でなく label で拾う** (X-5 SH-011。2 ペイン化で画面に並ぶ要素が増えても壊れない)。
+  const folderSelect = page.getByRole('combobox', { name: '作業フォルダ' })
+  const runtimeSelect = page.getByRole('combobox', { name: 'ランタイム (WSL)' })
   await folderSelect.selectOption({ index: 1 }) // index 0 は「選択してください」
   await runtimeSelect.selectOption({ index: 1 })
   // exact 一致にする — nav の「セッション起動」も「起動」を部分一致で拾うため (strict mode 回避)。

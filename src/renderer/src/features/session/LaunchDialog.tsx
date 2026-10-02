@@ -4,10 +4,12 @@ import { CAPABILITY_KEY } from '@domain/capability'
 import type { ReachableProvidersDTO } from '@domain/provider/dto'
 import { isEffortLevel } from '@domain/provider/model-catalog'
 import type { EffortLevel } from '@domain/provider/types'
+import type { LaunchFailureReason, SessionLaunchRejectReason } from '@domain/session/agent-session'
 import {
   isSafePermissionMode,
   SAFE_PERMISSION_MODES,
-  type SafePermissionMode
+  type SafePermissionMode,
+  type SessionLaunchConfig
 } from '@domain/session/launch-config'
 import {
   resolveLaunchAxes,
@@ -41,11 +43,22 @@ import {
   PROVIDER_RESET_UNVERIFIED_LABEL,
   REACHABILITY_EXCLUDED_LABELS,
   REACHABILITY_STATUS_LABELS,
-  REEVALUATE_LABELS
+  REEVALUATE_LABELS,
+  sameFolderWarning
 } from './labels'
 import { PresetPanel } from './PresetPanel'
 import { usePresets } from './usePresets'
-import type { LiveSession } from './useLiveSession'
+
+/** 起動設定ダイアログが読む起動の状態と、起動の発火口 (X-5: セッションストアの `launch` から組む)。 */
+export interface LaunchSource {
+  readonly phase: 'entry' | 'launching' | 'rejected'
+  readonly rejectReason: SessionLaunchRejectReason | null
+  readonly lastConfig: SessionLaunchConfig | null
+  readonly previousFailure: LaunchFailureReason | null
+  /** 終わっていないセッションの作業フォルダ (同一フォルダの警告。X-5 FE-003)。重複を数える。 */
+  readonly activeFolderIds?: readonly string[]
+  launch(config: SessionLaunchConfig): Promise<void>
+}
 
 /**
  * **起動設定ダイアログ** (X-4 FE-001 / FE-020 / US-1 / US-3)。X-1 の `LaunchEntry` を置き換える。
@@ -58,7 +71,8 @@ import type { LiveSession } from './useLiveSession'
  * | 越境は**解決結果 DTO の `boundary === 'cross'` だけ**で判定し、警告のみ (起動ボタンは有効のまま) | FR-008 / AD-016 |
  * | DTO の取得中と `blocked` (`capabilities-not-probed`) は起動を保留し (probe 完了または再評価で解ける)、`unreachable` と `blocked` (`probe-failed`) は起動を止める (取得失敗だけを「判定できない」と注記して起動を許す) | AD-025 / R2 architecture M-001 / R3 po M-201 |
  * | 到達可能性の取得中・失敗は Provider を「既定」だけにする (fail-open にしない)。取得中は reset を保留する | FR-002 / SC-001 |
- * | 起動設定は useLiveSession が保持し、失敗・中断で戻ったとき復元する | US-1 AC7 |
+ * | 起動設定はセッションストアが保持し、失敗・拒否で戻ったとき復元する | US-1 AC7 |
+ * | 終わっていないセッションと同じ登録フォルダを選ぶと**警告だけ**を出す (起動ボタンは有効のまま) | X-5 spec US-1 AC2 / FE-003 |
  */
 
 function capability(): typeof window.closta {
@@ -155,7 +169,7 @@ function useFolderRuntimeResolution(
 
 const selectClass = 'border-border bg-background rounded-md border px-2 py-1.5 text-sm'
 
-export function LaunchDialog({ session }: { readonly session: LiveSession }): React.JSX.Element {
+export function LaunchDialog({ session }: { readonly session: LaunchSource }): React.JSX.Element {
   const folders = useFolders()
   const runtimes = useRuntimes()
   const providers = useProviders()
@@ -356,6 +370,12 @@ export function LaunchDialog({ session }: { readonly session: LiveSession }): Re
       {runtimes.refreshing ? REEVALUATE_LABELS.running : REEVALUATE_LABELS.idle}
     </Button>
   )
+
+  // 同じ登録フォルダで動いているセッションの数 (警告のみ。起動はブロックしない。X-5 FE-003)。
+  const sameFolderCount =
+    effective.folderId === null
+      ? 0
+      : (session.activeFolderIds ?? []).filter((id) => id === effective.folderId).length
 
   const shownBlockers = resolution.blockers.filter(
     (b) => b !== 'folder-unselected' && b !== 'runtime-unselected'
@@ -592,6 +612,16 @@ export function LaunchDialog({ session }: { readonly session: LiveSession }): Re
             </li>
           ))}
         </ul>
+      )}
+
+      {sameFolderCount > 0 && (
+        <p
+          role="note"
+          className="text-sm text-amber-700 dark:text-amber-400"
+          data-testid="same-folder-warning"
+        >
+          {sameFolderWarning(sameFolderCount)}
+        </p>
       )}
 
       {crossBoundary !== null && (

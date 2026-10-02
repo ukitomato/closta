@@ -1,0 +1,282 @@
+{
+    "gate": "design",
+    "run": "2026-10-01T00:00:00+09:00",
+    "round": 2,
+    "spec_dir": "specs/009-session-supervisor-and-multi-session",
+    "spec_id": "009-session-supervisor-and-multi-session",
+    "tracks": {
+        "analyze": {
+            "status": "ok",
+            "raw_out": "analyze.md",
+            "viewpoint_missing": null,
+            "cascade_demotions": null
+        },
+        "po-reviewer": {
+            "status": "ok",
+            "raw_out": "po-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "architecture-reviewer": {
+            "status": "ok",
+            "raw_out": "architecture-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "security-reviewer": {
+            "status": "ok",
+            "raw_out": "security-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "platform-boundary-reviewer": {
+            "status": "ok",
+            "raw_out": "platform-boundary-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        }
+    },
+    "severity_counts": {
+        "critical": 0,
+        "high": 5,
+        "medium": 18,
+        "low": 14
+    },
+    "prev_comparison": {
+        "critical": {
+            "resolved": 0,
+            "unresolved": 0,
+            "new": 0
+        },
+        "high": {
+            "resolved": 15,
+            "unresolved": 0,
+            "new": 5
+        }
+    },
+    "fr_coverage": [
+        {
+            "fr": "FR-001",
+            "covered": true,
+            "by": [
+                "BE-003",
+                "BE-005",
+                "BE-006",
+                "BE-012"
+            ]
+        },
+        {
+            "fr": "FR-002",
+            "covered": true,
+            "by": [
+                "BE-002",
+                "BE-005",
+                "BE-014"
+            ]
+        },
+        {
+            "fr": "FR-003",
+            "covered": true,
+            "by": [
+                "BE-005",
+                "BE-007",
+                "BE-014",
+                "FE-001"
+            ]
+        },
+        {
+            "fr": "FR-004",
+            "covered": true,
+            "by": [
+                "SH-004",
+                "BE-005",
+                "BE-013"
+            ]
+        },
+        {
+            "fr": "FR-005",
+            "covered": true,
+            "by": [
+                "SH-003",
+                "BE-001",
+                "BE-008"
+            ]
+        },
+        {
+            "fr": "FR-006",
+            "covered": true,
+            "by": [
+                "FE-001",
+                "FE-003",
+                "FE-013"
+            ]
+        },
+        {
+            "fr": "FR-007",
+            "covered": true,
+            "by": [
+                "BE-002",
+                "BE-005",
+                "BE-009",
+                "BE-010"
+            ]
+        },
+        {
+            "fr": "FR-008",
+            "covered": true,
+            "by": [
+                "FE-001",
+                "FE-002",
+                "FE-012"
+            ]
+        },
+        {
+            "fr": "FR-009",
+            "covered": true,
+            "by": [
+                "FE-011",
+                "FE-012",
+                "FE-004"
+            ]
+        },
+        {
+            "fr": "FR-010",
+            "covered": true,
+            "by": [
+                "FE-010",
+                "FE-013"
+            ]
+        },
+        {
+            "fr": "FR-011",
+            "covered": true,
+            "by": [
+                "BE-002",
+                "BE-011",
+                "FE-011"
+            ]
+        },
+        {
+            "fr": "FR-012",
+            "covered": true,
+            "by": [
+                "BE-002",
+                "BE-022",
+                "FE-030"
+            ]
+        },
+        {
+            "fr": "FR-013",
+            "covered": true,
+            "by": [
+                "BE-020",
+                "BE-023",
+                "BE-007"
+            ]
+        },
+        {
+            "fr": "FR-014",
+            "covered": true,
+            "by": [
+                "BE-021",
+                "SH-022"
+            ]
+        },
+        {
+            "fr": "FR-015",
+            "covered": true,
+            "by": [
+                "SH-001"
+            ]
+        },
+        {
+            "fr": "FR-016",
+            "covered": true,
+            "by": [
+                "SH-002",
+                "SH-090",
+                "SH-091",
+                "SH-092"
+            ]
+        }
+    ],
+    "viewpoint_coverage": {
+        "A": "Critical:0 High:1",
+        "B": "Critical:0 High:0",
+        "C": "Critical:0 High:1",
+        "D": "Critical:0 High:2",
+        "E": "Critical:0 High:2",
+        "F": "Critical:0 High:0",
+        "G": "\u8a72\u5f53\u306a\u3057: optional reviewer \u306a\u3057",
+        "H": "Critical:0 High:0"
+    },
+    "dedup_log": [
+        {
+            "merged": [
+                "arch-H-101",
+                "analyze-N1"
+            ],
+            "key": "plan.md:157"
+        },
+        {
+            "merged": [
+                "po-H-001",
+                "arch-H-102",
+                "analyze-N8b"
+            ],
+            "key": "FR-011"
+        },
+        {
+            "merged": [
+                "pb-H-001",
+                "sec-M-001",
+                "sec-M-004",
+                "analyze-N6"
+            ],
+            "key": "plan.md:164"
+        },
+        {
+            "merged": [
+                "po-M-001",
+                "analyze-N7"
+            ],
+            "key": "SC-003"
+        },
+        {
+            "merged": [
+                "po-M-003",
+                "analyze-N8a"
+            ],
+            "key": "FR-011"
+        },
+        {
+            "merged": [
+                "arch-M-101",
+                "analyze-L5"
+            ],
+            "key": "Principle IX"
+        },
+        {
+            "merged": [
+                "arch-M-102",
+                "analyze-L9"
+            ],
+            "key": "plan ADR"
+        },
+        {
+            "merged": [
+                "analyze-N10",
+                "po-M-004"
+            ],
+            "key": "tests"
+        },
+        {
+            "merged": [
+                "analyze-N11",
+                "analyze-N12"
+            ],
+            "key": "FR-016"
+        }
+    ],
+    "verdict": "PASS"
+}

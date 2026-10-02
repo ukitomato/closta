@@ -1,0 +1,5 @@
+// 違反サンプル (項目 20 / X-5 SH-010 / code-gate platform-boundary L-002): 調停役スレッドのモジュールが
+// `Object.assign(process.env, …)` で env をまとめて書き換える (`process.env.X =` の代入形にならない等価形)。
+export function prepareThreadEnv(extra: Readonly<Record<string, string>>): void {
+  Object.assign(process.env, extra)
+}

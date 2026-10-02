@@ -107,11 +107,32 @@ const RUNTIME_INFRA_FILES = ['src/main/infra/runtime/**/*.ts']
  */
 const AGENT_SESSION_SPAWN_FILE = 'src/agents/sdk-agent-session.ts'
 
+/**
+ * X-5: supervisor の entry (調停役スレッドの結線。AD-043 Decision 1)。セッションスレッドを `worker_threads` の
+ * Worker として起こす。子プロセスは起こさない (`child_process` は許さない)。
+ */
+const SUPERVISOR_ENTRY_FILE = 'src/agents/supervisor.ts'
+
+/**
+ * `worker_threads` を import してよいのは supervisor の entry とセッションスレッドの 2 ファイルだけ (X-5 / AD-043)。
+ * **全レイヤで禁じ、2 ファイルだけを開ける** — `boundaries/dependencies` の全レイヤ禁止 policy と
+ * `RESTRICTED_DEFAULT` (`no-restricted-imports`) の両方に載せ、2 ファイルで `without` する
+ * (パス操作・プロセス起動と同じ形。code-gate convention M-001 / platform-boundary M-001)。
+ * agents の中だけで絞ると app / infra で Worker を起こせ、項目 20 が見ない「式で組んだ options」の
+ * env 注入が素通しになるためである。
+ * ESLint が見るのは import 文と `require()` / 動的 import まで。`process.getBuiltinModule()` の形は
+ * `.dependency-cruiser.js` の `worker-threads-only-from-entry` が塞ぐ (code-gate platform-boundary L-101)。
+ * 調停役スレッドの本体 (`supervisor-core.ts`) は fake の Worker で試すため import しない。
+ */
+const WORKER_THREADS_SOURCES = ['worker_threads', 'node:worker_threads']
+const WORKER_THREADS_SPELLINGS = WORKER_THREADS_SOURCES
+
 const MSG_PATH = `パス操作は ${PATH_API_FILE} のパス API 経由で行う (Principle I / FR-025)`
 const MSG_ELECTRON = 'electron の import は app レイヤと infra/secrets/ のみ (AD-023 §8)'
 const MSG_SPAWN = 'プロセス起動は src/main/infra/runtime/ のみ (FR-036)'
 const MSG_PLATFORM = 'プラットフォーム判定は src/main/infra/runtime/ のみ (Principle II / FR-036)'
 const MSG_NATIVE = 'ネイティブモジュールは agents / domain で禁止 (AD-010 / FR-041)'
+const MSG_WORKER_THREADS = `worker_threads は ${SUPERVISOR_ENTRY_FILE} と ${AGENT_SESSION_SPAWN_FILE} のみ (AD-043 Decision 1 / 7)`
 const MSG_UI_NAMESPACE_LITERAL =
   'renderer は名前空間つきパス値を組み立てない。main が返した PathDTO を' +
   'そのまま渡すこと (Principle I / FR-025 / SH-054)'
@@ -129,7 +150,8 @@ const RESTRICTED_DEFAULT = {
     ...restrict(['electron'], MSG_ELECTRON),
     ...restrict(SPAWN_SPELLINGS, MSG_SPAWN),
     ...restrict(PLATFORM_SPELLINGS, MSG_PLATFORM),
-    ...restrict(NATIVE_MODULES, MSG_NATIVE)
+    ...restrict(NATIVE_MODULES, MSG_NATIVE),
+    ...restrict(WORKER_THREADS_SPELLINGS, MSG_WORKER_THREADS)
   ],
   // `electron/main` のようなサブパス経由の迂回を塞ぐ。
   patterns: [{ group: ['electron/*'], message: MSG_ELECTRON }]
@@ -212,6 +234,7 @@ export default defineConfig(
         { category: 'path-api', pattern: PATH_API_FILE },
         { category: 'runtime-infra', pattern: RUNTIME_INFRA_PATTERN },
         { category: 'agent-session-spawn', pattern: AGENT_SESSION_SPAWN_FILE },
+        { category: 'supervisor-entry', pattern: SUPERVISOR_ENTRY_FILE },
         { category: 'secrets', pattern: SECRETS_PATTERN }
       ],
       /*
@@ -300,7 +323,7 @@ export default defineConfig(
              * `domain` は I/O を持たない。`agents` は別プロセスで I/O を持たない。
              * `ui` は preload 越しの capability しか使わない (FR-035 が明示)。
              * `app` / `infra` は OS と接する側なので個別規則 (パス操作・プロセス起動・
-             * プラットフォーム判定・`electron`) だけで縛る。
+             * プラットフォーム判定・`electron`・`worker_threads` (X-5)) だけで縛る。
              *
              * ここを全レイヤ禁止にすると規約より厳しくなり、`app` の
              * プロトコルハンドラのような正当な用途を例外で開ける羽目になる。
@@ -352,6 +375,24 @@ export default defineConfig(
             {
               from: { file: { categories: 'agent-session-spawn' } },
               allow: { to: { module: { origin: 'core', source: SPAWN_SOURCES } } }
+            },
+            /*
+             * X-5: `worker_threads` は**全レイヤ**で禁止し、セッションスレッドと supervisor の entry だけを
+             * 後続で開ける (AD-043 Decision 1 / 7)。agents だけでなく app / infra も塞ぐ —
+             * 上の (3) は app / infra に標準モジュールを許すので、ここで明示しないと素通しになる。
+             * セッションスレッドは `parentPort` を、entry は `Worker` を使う。
+             */
+            {
+              disallow: { to: { module: { origin: 'core', source: WORKER_THREADS_SOURCES } } },
+              message: MSG_WORKER_THREADS
+            },
+            {
+              from: { file: { categories: 'agent-session-spawn' } },
+              allow: { to: { module: { origin: 'core', source: WORKER_THREADS_SOURCES } } }
+            },
+            {
+              from: { file: { categories: 'supervisor-entry' } },
+              allow: { to: { module: { origin: 'core', source: WORKER_THREADS_SOURCES } } }
             },
 
             // (4) `electron` は app レイヤと infra/secrets/ のみ (AD-023 §8)。
@@ -405,8 +446,16 @@ export default defineConfig(
   {
     // X-1: agents の session worker だけ `child_process` を import できる (AD-036 §3 の訂正)。
     // プラットフォーム判定 (`os`/`process`) は緩めない — spawn のみ。
+    // X-5: セッションスレッドとして `worker_threads` (`parentPort`) も開ける (AD-043 Decision 1)。
     files: [AGENT_SESSION_SPAWN_FILE],
-    rules: { 'no-restricted-imports': ['error', without(SPAWN_SPELLINGS)] }
+    rules: {
+      'no-restricted-imports': ['error', without([...SPAWN_SPELLINGS, ...WORKER_THREADS_SPELLINGS])]
+    }
+  },
+  {
+    // X-5: supervisor の entry は `worker_threads` (`Worker`) だけを開ける。`child_process` は開けない。
+    files: [SUPERVISOR_ENTRY_FILE],
+    rules: { 'no-restricted-imports': ['error', without(WORKER_THREADS_SPELLINGS)] }
   },
 
   /*
@@ -505,6 +554,16 @@ export default defineConfig(
     // scaffold だが R-3 の仮想化 (回帰核) を足したので、依存配列の番人だけ戻す。
     files: ['src/renderer/src/components/assistant-ui/elements/thread.aui.tsx'],
     rules: {
+      'react-hooks/exhaustive-deps': 'error'
+    }
+  },
+  {
+    // scaffold だが X-5 が手書きの hooks (`RowActionsContext` / `renderActions` / `ThreadListNew`) を足した
+    // (R-2 のセッション一覧も使う)。thread.aui.tsx と同方針で意味論の番人を戻す (code-gate convention M-003)。
+    files: ['src/renderer/src/components/assistant-ui/elements/thread-list.aui.tsx'],
+    rules: {
+      '@typescript-eslint/explicit-function-return-type': 'error',
+      'react-hooks/refs': 'error',
       'react-hooks/exhaustive-deps': 'error'
     }
   },

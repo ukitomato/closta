@@ -1,0 +1,8 @@
+// 違反サンプル (X-5 / code-gate platform-boundary M-003): agents の許可外ファイルが `node:worker_threads` を import する。
+// `worker_threads` を import してよいのは `src/agents/supervisor.ts` と `src/agents/sdk-agent-session.ts` だけ。
+// ESLint の 2 表記 (`boundaries/dependencies` と `no-restricted-imports`) の両方が発火することを固定する。
+import { Worker } from 'node:worker_threads'
+
+export function startThread(entry: string): Worker {
+  return new Worker(entry)
+}

@@ -1,0 +1,14 @@
+/**
+ * 等価経路サンプル (X-5 SH-010 / 既存の穴 / design-gate R1 platform-boundary L-003)。
+ *
+ * **agents が import 文を経ずに Node 標準モジュール (`node:fs`) を取る形。**
+ * agents の標準モジュール禁止は ESLint にしか無く (全標準モジュールは `boundaries/dependencies`。
+ * `no-restricted-imports` はパス操作・プロセス起動・プラットフォーム判定・`worker_threads` の綴りだけ)、
+ * どちらも import (と require) の依存しか見ない。dependency-cruiser は `process.getBuiltinModule()` を依存として
+ * 検出するが、agents → 標準モジュールの規則を持たない。**この経路はどの機械検証も捕まえない** — `detectors: ['none']`。
+ * 理由と代替は expected.mjs の UNDETECTED_NOTES['agents-builtin-via-get-builtin-module'] に記録する (SC-017)。
+ */
+export function readText(file: string): string {
+  const fs = process.getBuiltinModule('node:fs')
+  return fs.readFileSync(file, 'utf8')
+}

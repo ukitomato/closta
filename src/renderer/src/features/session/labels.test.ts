@@ -33,15 +33,17 @@ describe('labels — V-11 provider-error の理由表示と再ログイン導線
       'process-crashed',
       'stream-protocol-error',
       'provider-error',
-      'interrupt-unavailable'
+      'interrupt-unavailable',
+      'supervisor-exited'
     ]
     for (const r of reasons) {
       expect(launchFailureLabel(r).length).toBeGreaterThan(0)
     }
   })
 
-  it('調停由来 (session-active / unknown-target) も訳文を持つ', () => {
-    expect(launchRejectLabel('session-active').length).toBeGreaterThan(0)
+  it('調停由来 (session-limit / shutting-down / unknown-target) も訳文を持つ (X-5 / FE-004)', () => {
+    expect(launchRejectLabel('session-limit')).toContain('10 件')
+    expect(launchRejectLabel('shutting-down').length).toBeGreaterThan(0)
     expect(launchRejectLabel('unknown-target').length).toBeGreaterThan(0)
   })
 

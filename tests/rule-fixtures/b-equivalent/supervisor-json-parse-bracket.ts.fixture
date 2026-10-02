@@ -1,0 +1,5 @@
+// 違反サンプル (項目 18 / X-5 SH-010): 調停役スレッドのモジュールが JSON の parse を**ブラケット記法**で取る。
+// `JSON.parse` の綴りが現れない等価形。項目 18 はブラケット形も参照として数える (AD-043 Decision 2 / SC-002)。
+export function relay(body: string): unknown {
+  return JSON['parse'](body) as unknown
+}

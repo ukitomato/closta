@@ -1,0 +1,5 @@
+// 違反サンプル (項目 18 / X-5 SH-010): 調停役スレッドのモジュールが JSON の parse を **`.call`** で呼ぶ。
+// `JSON.parse(` の呼び出し形にならない等価形。項目 18 は参照で数えるので発火する (AD-043 Decision 2 / SC-002)。
+export function relay(body: string): unknown {
+  return JSON.parse.call(JSON, body) as unknown
+}
