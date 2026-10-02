@@ -11,6 +11,7 @@ import type { SessionStatusUpdate } from '@domain/session/status-update'
 
 import type { EnqueueVerdict } from './composer-queue'
 import type { QueueAdapter } from './composer-queue-adapter'
+import type { SessionRowStatus } from './labels'
 
 /**
  * 稼働中セッションのストアの状態型 (X-5)。ストア (`running-session-store.ts`) と表示用の導出 (`session-view.ts`) の
@@ -47,6 +48,30 @@ export interface LiveSessionState {
   readonly promptSent: boolean
   /** 送信待ちキューへの積み込みを拒否した理由 (X-2 FR-003 / FR-004)。 */
   readonly queueRejection: Exclude<EnqueueVerdict, 'ok'> | null
+  /**
+   * 起動の受付時に写した作業フォルダの表示名 (O-1 / data-model §1)。App の寿命の live region が IPC を持たずに
+   * 文を組むために使う。引けなかったときは `null` (固定の代替語を使う)。
+   */
+  readonly folderLabel: string | null
+}
+
+/** 監視ビューの情報密度 (O-1 / FR-008)。renderer の表示状態であり永続化しない。 */
+export type Density = 'comfortable' | 'compact'
+
+/** 行の状態に入った時刻 (O-1 / FR-005。glossary Status since)。 */
+export interface StatusSince {
+  readonly status: SessionRowStatus
+  readonly at: number
+}
+
+/**
+ * 直近の活動 (O-1 / FR-006。glossary Recent activity)。`tool` / `detail` は会話由来の文字列を `toActivityLine` で
+ * 1 行の plain text にした値。
+ */
+export interface Activity {
+  readonly kind: 'approval' | 'tool' | 'prompt' | 'reply'
+  readonly tool: string | null
+  readonly detail: string
 }
 
 /** 起動ダイアログの状態 (直近の起動要求)。 */
@@ -68,6 +93,13 @@ export interface RunningSessionStoreState {
   /** 表示中のセッション。null は起動ダイアログを表示する。 */
   readonly selectedId: string | null
   readonly launch: LaunchState
+  /** 行の状態に入った時刻 (O-1)。1 回のストア更新の中の変化は 1 回の `setState` にまとめる (data-model §1)。 */
+  readonly statusSince: Readonly<Record<string, StatusSince>>
+  /** 直近の活動。購読の手前で間引いて書く (O-1 / research R-03)。 */
+  readonly activity: Readonly<Record<string, Activity | null>>
+  /** 全セッションの受信メッセージの累計 (実機計測の観測点。会話由来の値を持たない。O-1 / FR-012)。 */
+  readonly receivedMessages: number
+  readonly density: Density
 }
 
 /** セッション 1 本の送信待ちキュー (assistant-ui native queue + 積み込み検証)。 */

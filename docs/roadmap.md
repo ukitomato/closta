@@ -130,6 +130,20 @@ workspace として扱われていたら `packages:` の有無を先に確認す
   check.mjs 項目 1 が CI 定義 (E2E の font provisioning 等) を走査する。X-2 が初めて verify.yml に実行系ステップを
   持ち込むため「Constitution VI Verification が CI 定義を含めると宣言しているのに実装が走査しない」乖離が実害面を持つ。
   持ち主 = 本 E2E / 検証基盤 feature
+- **`e2e/` / `perf/` が check.mjs の走査範囲の外にある (O-1 起点。design-gate R2 platform-boundary M-001。system-scope)** —
+  `scripts/constitution/allowlists.mjs` の `SCAN_ROOTS` は `['src', 'scripts']` で、`e2e/` と O-1 が足した `perf/`
+  (実 `claude` を動かす実機計測。CI では実行しない) は Principle VI の項目 (プロセス起動・`wsl.exe` の引数・特権コマンド) の
+  走査対象にならない。**上の AD-038 D4 の項目 (verify.yml を `SCAN_FILES` に足す) とは別の死角である。**
+  `SCAN_ROOTS` に足すか、足さない理由を ADR で決める (`allowlists.mjs:4` は追加に ADR を要すると定める)。
+  当面は perf が子プロセスを自ら起こさないこと (Playwright 経由でアプリを起動するだけ) を O-1 の観点として守る。
+  **ESLint も `e2e/` と `perf/` を見ていない** (`eslint.config.mjs` の ignores。型検査だけ)。つなぎの案は `files: ['e2e/**/*.ts', 'perf/**/*.ts']`
+  の flat config ブロックで `child_process` / `node:child_process` の `no-restricted-imports` を掛けること (O-1 code-gate convention M-003 /
+  platform-boundary M-001)。あわせて、`.dependency-cruiser.js` の `not-to-test` (e2e / perf) には発火を確かめる違反サンプルが無い
+  (`scripts/rules` / `tests/rule-fixtures`。O-1 code-gate platform-boundary L-003)。
+  持ち主 = 本 E2E / 検証基盤 feature
+- **renderer の `dangerouslySetInnerHTML` を lint で禁じる (O-1 起点。design-gate R1 security L-005。system-scope)** —
+  O-1 で会話由来の文字列 (直近の活動) を表示する箇所が増えた。XSS 境界はテスト (要素 0 件) と注記で守っているが、
+  `react/no-danger` 相当の機械強制が無い。持ち主 = 本 E2E / 検証基盤 feature
 - **E2E stub の production-inert 性の自動 backstop (X-2 起点。pr-gate arch-M-002。system-scope)** —
   `createE2eCapability` (`src/main/app/e2e-capability.ts`) の配線ゲート `!app.isPackaged && CLOSTA_E2E==='1'` が env 単独ゲートへ
   退行しても CI が落ちる回帰検査が無い (Vitest は electron `app` を mock しにくく、index.ts の分岐を直接 assert できない)。
@@ -210,9 +224,9 @@ X-2 (日本語 composer) で判断する** — R-3 は過去ログの表示で�
 
 | 順 | ID | feature | domain | 依存 | 前提 SPIKE |
 |---|---|---|---|---|---|
-| 10 | O-1 | セッション監視ビュー | `session` | X-5 | — |
-| 11 | O-2 | `docs/ui-coverage.md` の確立（**SDK 39 型から導出**）+ Tier B/C 再棚卸し | `ui` | O-1 | SPIKE-12 **完了** |
-| 12 | O-3 | Thread 検索と observability | `ui` | O-2 | — / **義務 (X-4 から)**: session charter KPI「再利用率」の計測経路 (起動元 `preset` / `manual` のローカル利用ログ。AD-041 (h)) |
+| 10 | O-1 | セッション監視ビュー | `session` | X-5 | — / design-gate R2 PASS / **実装中** ([010 spec](../specs/010-session-monitoring-view/spec.md)。稼働中セッション一覧の拡張。実機計測 SC-005 は pr-gate 前の完了条件) |
+| 11 | O-2 | `docs/ui-coverage.md` の確立（**SDK 39 型から導出**）+ Tier B/C 再棚卸し | `ui` | O-1 | SPIKE-12 **完了** / **義務 (O-1 から)**: (1) Hook / Background task の表示の割当と、状態の保持が要る場合の持ち主 domain の判断 (session は含めないと決めた。AD-020 Consequences) (2) Tool group の既定 open 化 (AD-035 の「O-1 候補」) (3) transcript の情報密度の切替 (監視ビューの行の密度は O-1 が持つ) (4) 直近の活動の tool ごとの整形 (対象のファイル名やコマンドの先頭語だけを出す。tool 入力の先頭に秘密が出うる点も扱う) |
+| 12 | O-3 | Thread 検索と observability | `ui` | O-2 | — / **義務 (X-4 から)**: session charter KPI「再利用率」の計測経路 (起動元 `preset` / `manual` のローカル利用ログ。AD-041 (h)) / **義務 (O-1 から)**: UI ラベルの i18n リソース化の判断 (Constitution Principle XV の期限 M3。`target-finder.ts` の 2 本を含める) |
 
 **O-2 で対応表そのものを成果物にする。** これが揃うまで Principle XII は検証不能である。
 
@@ -228,7 +242,7 @@ SDK メッセージ型と表示の対応表は O-2 が正本にする。持ち�
 | 順 | ID | feature | domain | 依存 | 前提 SPIKE |
 |---|---|---|---|---|---|
 | 13 | I-1 | `DockerRuntime` と endpoint 抽象 + `sessionStore` | `isolation` | X-5 | SPIKE-10 **完了** / SPIKE-11（再定義） / 作業領域戦略の軸 AD-017 (X-4 から付け替え。AD-041 (d)) / 転送禁止キーの登録時検証を transport の和集合として作り直す (AD-041 (e) 3・(h)) |
-| 14 | I-2 | コンテナライフサイクルと隔離可視化 **+ volume 孤児回収** | `isolation` | I-1 | — |
+| 14 | I-2 | コンテナライフサイクルと隔離可視化 **+ volume 孤児回収** | `isolation` | I-1 | — / **義務 (O-1 から)**: 監視ビュー (稼働中セッション一覧) の compact の行にも隔離バッジを出す (O-1 FR-008 が置き場を残した) |
 | 15 | I-3 | sandbox capability 判定と権限モードのゲート | `isolation` | I-2 | — / **義務 (X-4 から)**: 昇格モードの capability 連動提示、承認の `scope: 'capability'` 永続化 (AD-041 (c)) |
 
 I-1 では **`wsl:<distro>` endpoint（WSL 内 Docker Engine）を第一に検証する。**

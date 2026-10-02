@@ -6,6 +6,8 @@ import { ResolutionScreen } from '@/features/folder-runtime-resolution/Resolutio
 import { SessionListScreen } from '@/features/session-list/SessionListScreen'
 import { ChatScreen } from '@/features/chat/ChatScreen'
 import { SessionScreen } from '@/features/session/SessionScreen'
+import { SessionAttentionAnnouncer } from '@/features/session/SessionAttentionAnnouncer'
+import { SessionNavBadge } from '@/features/session/SessionNavBadge'
 import { useRunningSessionStoreWiring } from '@/features/session/running-session-context'
 import { SCREEN_LABELS, SCREENS, useUiStore, type ScreenId } from '@/stores/ui'
 import { cn } from '@/lib/utils'
@@ -15,6 +17,8 @@ import { cn } from '@/lib/utils'
  *
  * 画面の切り替えとテーマだけを持ち、業務ロジック・IPC・永続化を持たない。
  * 各 feature の中身は FE-010 / FE-020 / FE-030 が実装する。
+ * ナビのバッジと支援技術への通知は、各 feature が export するコンポーネントを差し込むだけにする
+ * (O-1: `SessionNavBadge` / `SessionAttentionAnnouncer`)。
  *
  * UI 文言は日本語を第一言語とする (FR-047)。
  */
@@ -61,6 +65,7 @@ function App(): React.JSX.Element {
                 )}
               >
                 {SCREEN_LABELS[id]}
+                {id === 'launch' && <SessionNavBadge />}
               </button>
             ))}
           </nav>
@@ -72,6 +77,7 @@ function App(): React.JSX.Element {
             {dark ? 'ライト' : 'ダーク'}
           </button>
         </header>
+        <SessionAttentionAnnouncer />
 
         <main className={cn('min-h-0 flex-1', isChat ? 'overflow-hidden' : 'overflow-auto')}>
           <div className={cn(isChat ? 'h-full' : 'mx-auto max-w-3xl p-6')}>

@@ -1,0 +1,10 @@
+{
+  "//": "実機計測 (Playwright。CI では型検査だけ) 専用 tsconfig。src の型グラフには混ぜない (O-1 / AD-038 D2 の類推)。",
+  "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
+  "include": ["**/*.ts", "../e2e/support/**/*.ts", "../playwright.perf.config.ts"],
+  "compilerOptions": {
+    "composite": false,
+    "types": ["@playwright/test", "node"],
+    "skipLibCheck": true
+  }
+}

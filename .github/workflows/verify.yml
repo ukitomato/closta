@@ -149,6 +149,11 @@ jobs:
       - name: typecheck (e2e)
         run: pnpm exec tsc --noEmit -p e2e/tsconfig.json
 
+      # 実機計測 (`perf/`。O-1 FR-012) は**型検査だけ**を行い、実行しない (実 claude と実資格情報を要する。AD-038 D3)。
+      # 設定 (`playwright.perf.config.ts`) も CI で読み込むと例外で止まる。
+      - name: typecheck (perf)
+        run: pnpm exec tsc --noEmit -p perf/tsconfig.json
+
       # 起動設定ダイアログ (X-4 SC-001 / SC-002 / SC-004)。
       - name: e2e (起動設定ダイアログ)
         run: pnpm exec playwright test e2e/launch-dialog.spec.ts -c playwright.config.ts

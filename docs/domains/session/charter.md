@@ -3,7 +3,7 @@ domain: session
 status: needs-human-review
 owner: ukitomato
 generated_by: human (PLAN.md を素案として再導出)
-last_reviewed: 2026-10-01
+last_reviewed: 2026-10-02
 related_adrs:
   - docs/decisions/0002-use-agent-sdk-not-cli.md
   - docs/decisions/0006-supervisor-in-utility-process.md
@@ -19,6 +19,7 @@ related_specs:
   - specs/005-session-launch-and-streaming/spec.md
   - specs/008-session-launch-settings-dialog-and-presets/spec.md
   - specs/009-session-supervisor-and-multi-session/spec.md
+  - specs/010-session-monitoring-view/spec.md
 ---
 
 # Domain Charter: session
@@ -51,8 +52,10 @@ Closta の出発点にある課題「並行して走らせたセッションの�
 ### Out of scope
 
 - transcript や tool 出力の**描画** → `ui` domain（本 domain はデータを供給するところまで）
-- 承認カードや監視ビューの**見た目と element 選定** → `ui` domain
-  （本 domain は「何を承認待ちとするか」の状態を持つ）
+- 承認カードと transcript の**見た目と element 選定** → `ui` domain
+  （本 domain は「何を承認待ちとするか」の状態を持つ）。
+  **稼働中セッション一覧 (監視ビュー) は本 domain の操作 UI** であり、行の形と強調の出し方は本 domain が決める
+  （ui charter の「他 domain の一覧・操作 UI は各 domain」に揃えた。O-1 USER 決定 2026-10-02）
 - Provider の登録と認証方式の管理 → `provider` domain
 - コンテナの起動・破棄と権限モードのゲート → `isolation` domain
 - ランタイムの検出とパス変換 → `runtime` domain
@@ -91,6 +94,10 @@ Closta の出発点にある課題「並行して走らせたセッションの�
 2. 承認待ちのセッションが目立つ形で示される
 3. 1 つを選んで没入ビューに切り替え、対応後に一覧へ戻る
 
+O-1 では、監視ビュー = セッション画面のサイドバーの稼働中セッション一覧 (強調・件数・経過時間・直近の活動・密度を持つ)、
+没入ビュー = 表示中セッションのペイン (transcript と composer) と読み替えた。全面の監視画面は持たない (USER 決定 2026-10-02)。
+「一覧へ戻る」は別の行を選ぶことに当たる。承認待ちと失敗の件数はセッション画面以外でもナビに出る
+
 ### Journey 4: 中断と再開
 
 1. ユーザは実行中のセッションを中断する。途中出力は残る
@@ -127,7 +134,12 @@ Closta の出発点にある課題「並行して走らせたセッションの�
 
 ## KPI / Success metrics
 
-- **並列時の滑らかさ**: 10 セッション同時実行で UI の入力応答が保たれる — 計測経路: 手動検証 + フレーム計測
+- **並列時の滑らかさ**: 10 セッション同時実行で UI の入力応答が保たれる — 計測経路: E2E (偽の supervisor 接続で
+  10 本 × 20 件/秒の負荷。`e2e/multi-session.spec.ts`。X-5 SC-003 / O-1 SC-004) + **実機計測** (ビルドした実アプリと
+  実 `claude` 10 本。`perf/real-sessions.spec.ts`。CI では実行しない。O-1 SC-005)。指標は入力遅延 p95 と long task の最大。
+  **O-1 の実機計測 (2026-10-02)** は、実 `claude` が窓の途中で応答を終えるため有効な回を得られず、利用者判断で締めた
+  (手順を直した後の 4 回は p95 13.6〜14.9ms・long task 0 件)。10 本が窓の全期間で応答を流し続ける負荷の作り方は、
+  次にこの KPI を測る feature の宿題 ([quickstart-results](../../../specs/010-session-monitoring-view/quickstart-results.md) V-3)
 - **列挙の網羅**: **実行中のディストロについて**、その中の config ディレクトリを
   Windows 側から取りこぼさず列挙できる — 計測経路: **当面は Vitest + quickstart**。
   **本来は E2E だが、E2E 基盤の構築は M4 完了後に再検討する**（R-2 の `[USER]` 判断 /
@@ -173,7 +185,11 @@ Closta の出発点にある課題「並行して走らせたセッションの�
   （単一 supervisor + セッションスレッド、上限 10 の並行起動、状態通知のバッチ、稼働中セッションの一覧と切り替え・
   終了・停止・閉じる。実装中。[AD-043](../../decisions/0043-single-supervisor-session-threads-and-session-limit.md)）
 
-X-6 / O-1 は未着手。
+- **O-1** — [セッション監視ビュー](../../../specs/010-session-monitoring-view/spec.md)
+  （稼働中セッション一覧の拡張: 承認待ち・失敗の強調と件数、ナビの件数と読み上げ、枠の使用数、経過時間と直近の活動、
+  compact / comfortable、charter KPI「並列時の滑らかさ」の実機計測。実装中）
+
+X-6 は未着手。
 
 ## Open Questions
 
@@ -196,3 +212,8 @@ X-6 / O-1 は未着手。
       [AD-020](../../decisions/0020-sdk-emitted-message-inventory.md)。X-4 は安全 3 値と `EffortLevel` 5 値を使う
       （[AD-041](../../decisions/0041-x4-launch-config-on-x1-launch-gate.md)）。Auto モードの指定は I-3
 - [ ] transcript ミラーの保持期限と削除経路（AD-007 の blocking gap）を本 domain が持つか
+- [x] ~~Hook / Background task の状態管理を本 domain の責務に含めるか ([AD-020](../../decisions/0020-sdk-emitted-message-inventory.md) Consequences「O-1 着手時に判断する」)~~ →
+      **含めない** (O-1 USER 決定 2026-10-02)。表示の割当と、状態の保持が要る場合の持ち主 domain の判断は O-2 に送った
+      (ui charter の Open Questions / roadmap の O-2 行)
+- [x] ~~終了済みセッションの行の件数の上限・自動で閉じる (X-5 Out of Scope「O-1 で再検討」)~~ → **持たない** (O-1 で再検討した結論)。
+      枠を占めるのは最大 10 本で、終了済みの行は compact で 1 行に縮むので俯瞰を妨げない。利用者が「閉じる」で外す

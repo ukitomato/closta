@@ -1,6 +1,11 @@
 "use client";
 
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import {
   AuiIf,
@@ -12,6 +17,7 @@ import { Loader2Icon } from "lucide-react";
 import {
   createContext,
   useContext,
+  useMemo,
   type ComponentPropsWithoutRef,
   type FC,
   type ReactNode,
@@ -71,6 +77,29 @@ const RowActionsContext = createContext<((rowKey: string) => ReactNode) | null>(
 );
 
 /**
+ * 行の詰め方 (O-1)。`comfortable` は従来の形 (操作は表題の下の段)、`compact` は操作を同じ段に並べた 1 行。
+ * element の公開 API として export する (呼び出し側は `density` prop の型として使える。現状は session の Density と同じ 2 値)。
+ */
+export type ThreadListRowDensity = "comfortable" | "compact";
+
+/**
+ * 行の表示の口 (O-1 / research R-06)。**R-2 の一覧は渡さないので既定 (従来の形) のまま。**
+ * element は呼び出し側の語彙 (行の状態など) を知らない。状態の印は呼び出し側が meta の中に描く
+ * (行の Root は meta の更新で再描画されないため、Root に状態の属性を置かない)。
+ * 渡し方は `RowMetaContext` と同じ理由で context。
+ */
+interface RowOptions {
+  readonly density: ThreadListRowDensity;
+  /** 行にポインタ / フォーカスを当てたときの補足 (compact で行から外した情報)。 */
+  readonly renderTooltip: ((rowKey: string) => ReactNode) | null;
+}
+
+const RowOptionsContext = createContext<RowOptions>({
+  density: "comfortable",
+  renderTooltip: null,
+});
+
+/**
  * 新しいスレッド = 新規起動 (X-5)。生成物の `ThreadListNew` を、R-2 が外した理由 (セッションを作らない) の外で
  * 復元したもの。adapter の `onSwitchToNewThread` を渡したときだけ使う (R-2 は使わない)。
  */
@@ -120,9 +149,26 @@ export const ThreadListItemsByKey: FC<
     renderMeta?: (rowKey: string) => ReactNode;
     /** 行ごとの操作 (X-5)。Trigger の外・行の内側に描かれる。 */
     renderActions?: (rowKey: string) => ReactNode;
+    /** 行の詰め方 (O-1)。省略時は従来の形。 */
+    density?: ThreadListRowDensity;
+    /** 行の補足のツールチップ (O-1)。null を返した行には付けない。 */
+    renderTooltip?: (rowKey: string) => ReactNode;
   }
-> = ({ className, rowKeys, renderMeta, renderActions, ...props }) => {
+> = ({
+  className,
+  rowKeys,
+  renderMeta,
+  renderActions,
+  density = "comfortable",
+  renderTooltip,
+  ...props
+}) => {
   const threadIds = useAuiState((s) => s.threads.threadIds);
+  // 行は context を読むので、値が変わらない限り同じ参照を渡す (一覧の再描画で全行を描き直さない)。
+  const rowOptions = useMemo<RowOptions>(
+    () => ({ density, renderTooltip: renderTooltip ?? null }),
+    [density, renderTooltip],
+  );
 
   return (
     <div
@@ -138,17 +184,19 @@ export const ThreadListItemsByKey: FC<
     >
       <RowMetaContext.Provider value={renderMeta ?? null}>
         <RowActionsContext.Provider value={renderActions ?? null}>
-          {rowKeys.map((rowKey) => {
-            const index = threadIds.indexOf(rowKey);
-            if (index < 0) return null;
-            return (
-              <ThreadListPrimitive.ItemByIndex
-                key={rowKey}
-                index={index}
-                components={{ ThreadListItem }}
-              />
-            );
-          })}
+          <RowOptionsContext.Provider value={rowOptions}>
+            {rowKeys.map((rowKey) => {
+              const index = threadIds.indexOf(rowKey);
+              if (index < 0) return null;
+              return (
+                <ThreadListPrimitive.ItemByIndex
+                  key={rowKey}
+                  index={index}
+                  components={{ ThreadListItem }}
+                />
+              );
+            })}
+          </RowOptionsContext.Provider>
         </RowActionsContext.Provider>
       </RowMetaContext.Provider>
     </div>
@@ -215,10 +263,75 @@ export const ThreadListItem: FC = () => {
   const meta = renderMeta === null ? null : renderMeta(rowKey);
   const renderActions = useContext(RowActionsContext);
   const actions = renderActions === null ? null : renderActions(rowKey);
+  const options = useContext(RowOptionsContext);
+  const compact = options.density === "compact";
+  const tooltip = options.renderTooltip?.(rowKey) ?? null;
+
+  const trigger = (
+    <ThreadListItemPrimitive.Trigger
+      data-slot="aui_thread-list-item-trigger"
+      /*
+       * **選択中であることをフォーカス対象の側に付ける** (a11y M-001)。
+       * primitive は `aria-current` を Root (div) に付けるが、
+       * フォーカスが当たるのはこの Trigger であり、祖先の `aria-current` は読まれない。
+       */
+      aria-current={isActive ? "true" : undefined}
+      className={cn(
+        "focus-visible:ring-ring flex h-full min-w-0 flex-1 justify-center rounded-md px-2.5 text-start text-sm outline-none focus-visible:ring-2",
+        // compact は表題と付帯情報を 1 行に並べる (付帯情報は縮めず、表題を切り詰める)。
+        compact ? "flex-row items-center gap-2 py-0.5" : "flex-col items-start py-1",
+      )}
+    >
+      <span
+        className={cn(
+          "flex min-w-0 items-center",
+          compact ? "flex-1" : "w-full",
+        )}
+      >
+        {isRunning && (
+          <Loader2Icon
+            aria-hidden
+            data-slot="aui_thread-list-item-running"
+            /* `motion-reduce` を付ける (a11y M-003)。他のトークンと揃える。 */
+            className="text-muted-foreground me-1.5 size-3.5 shrink-0 animate-spin motion-reduce:animate-none"
+          />
+        )}
+        <span
+          data-slot="aui_thread-list-item-title"
+          className="min-w-0 flex-1 truncate"
+        >
+          {/*
+            **`fallback` に "New Chat" を使わない。** R-2 は会話を作らないので
+            「新しい会話」は誤りである。要約が空の行の代替表示は
+            `domain` の `sessionTitle()` が決め、呼び出し側が `title` に詰める (FR-047)。
+          */}
+          <ThreadListItemPrimitive.Title fallback="（表題なし）" />
+        </span>
+        {isRunning && <span className="sr-only">実行中</span>}
+      </span>
+
+      {/*
+        **付帯情報を行の中に置く** (a11y H-005 / ux H-001)。
+        行にフォーカスしたときに、その行を識別する情報が同じ要素の中にある。
+      */}
+      {meta !== null && (
+        <span
+          data-slot="aui_thread-list-item-meta"
+          className={cn(
+            "text-muted-foreground text-xs",
+            compact ? "shrink-0" : "w-full min-w-0",
+          )}
+        >
+          {meta}
+        </span>
+      )}
+    </ThreadListItemPrimitive.Trigger>
+  );
 
   return (
     <ThreadListItemPrimitive.Root
       data-slot="aui_thread-list-item"
+      data-density={options.density}
       /* **リストの項目であることを伝える** (a11y H-004)。実体は素の div である。 */
       role="listitem"
       /*
@@ -243,62 +356,33 @@ export const ThreadListItem: FC = () => {
        * 操作がある行 (X-5) は縦に積む — 横並びの折り返しにすると Trigger の `h-full` が行の高さを取り、
        * 操作の段が行の高さに入らず次の行に重なる (実機で確認)。R-2 の行 (操作なし) は従来の横並びのまま。
        */
+      /*
+       * compact (O-1) は操作を表題と同じ段に横並びにする (折り返さない。表題は切り詰め)。
+       * 1 行の高さを抑えて 10 行を 1 画面に収めるため (research R-06)。
+       */
       className={cn(
         "group hover:bg-muted data-active:bg-accent data-active:before:bg-foreground relative flex min-h-8 rounded-md transition-colors data-active:font-medium data-active:before:absolute data-active:before:inset-y-1 data-active:before:start-0 data-active:before:w-0.5 data-active:before:rounded-full",
-        actions === null ? "items-center" : "flex-col items-stretch",
+        actions === null || compact ? "items-center" : "flex-col items-stretch",
       )}
     >
-      <ThreadListItemPrimitive.Trigger
-        data-slot="aui_thread-list-item-trigger"
-        /*
-         * **選択中であることをフォーカス対象の側に付ける** (a11y M-001)。
-         * primitive は `aria-current` を Root (div) に付けるが、
-         * フォーカスが当たるのはこの Trigger であり、祖先の `aria-current` は読まれない。
-         */
-        aria-current={isActive ? "true" : undefined}
-        className="focus-visible:ring-ring flex h-full min-w-0 flex-1 flex-col items-start justify-center rounded-md px-2.5 py-1 text-start text-sm outline-none focus-visible:ring-2"
-      >
-        <span className="flex w-full min-w-0 items-center">
-          {isRunning && (
-            <Loader2Icon
-              aria-hidden
-              data-slot="aui_thread-list-item-running"
-              /* `motion-reduce` を付ける (a11y M-003)。他のトークンと揃える。 */
-              className="text-muted-foreground me-1.5 size-3.5 shrink-0 animate-spin motion-reduce:animate-none"
-            />
-          )}
-          <span
-            data-slot="aui_thread-list-item-title"
-            className="min-w-0 flex-1 truncate"
-          >
-            {/*
-              **`fallback` に "New Chat" を使わない。** R-2 は会話を作らないので
-              「新しい会話」は誤りである。要約が空の行の代替表示は
-              `domain` の `sessionTitle()` が決め、呼び出し側が `title` に詰める (FR-047)。
-            */}
-            <ThreadListItemPrimitive.Title fallback="（表題なし）" />
-          </span>
-          {isRunning && <span className="sr-only">実行中</span>}
-        </span>
-
-        {/*
-          **付帯情報を行の中に置く** (a11y H-005 / ux H-001)。
-          行にフォーカスしたときに、その行を識別する情報が同じ要素の中にある。
-        */}
-        {meta !== null && (
-          <span
-            data-slot="aui_thread-list-item-meta"
-            className="text-muted-foreground w-full min-w-0 text-xs"
-          >
-            {meta}
-          </span>
-        )}
-      </ThreadListItemPrimitive.Trigger>
-      {/* 行の操作 (X-5)。Trigger の下に並べる (幅の狭い一覧でも表題を潰さない)。 */}
+      {tooltip === null ? (
+        trigger
+      ) : (
+        <Tooltip>
+          <TooltipTrigger asChild>{trigger}</TooltipTrigger>
+          <TooltipContent side="right">{tooltip}</TooltipContent>
+        </Tooltip>
+      )}
+      {/* 行の操作 (X-5)。comfortable は Trigger の下に並べる (幅の狭い一覧でも表題を潰さない)。 */}
       {actions !== null && (
         <div
           data-slot="aui_thread-list-item-actions"
-          className="flex w-full flex-wrap gap-1 px-2.5 pb-1.5"
+          className={cn(
+            "flex gap-1",
+            compact
+              ? "shrink-0 flex-nowrap pe-1"
+              : "w-full flex-wrap px-2.5 pb-1.5",
+          )}
         >
           {actions}
         </div>
