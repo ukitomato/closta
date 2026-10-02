@@ -19,8 +19,9 @@ async function openDialog(page: Page): Promise<void> {
   await page.getByRole('heading', { name: 'セッションを起動' }).waitFor()
 }
 
-const folder = (page: Page) => page.locator('select').nth(0)
-const runtime = (page: Page) => page.locator('select').nth(1)
+// select は位置でなく label で拾う (X-5 SH-011)。
+const folder = (page: Page) => page.getByRole('combobox', { name: '作業フォルダ' })
+const runtime = (page: Page) => page.getByRole('combobox', { name: 'ランタイム (WSL)' })
 const provider = (page: Page) => page.getByRole('combobox', { name: 'Provider' })
 const model = (page: Page) => page.getByRole('combobox', { name: 'モデル' })
 

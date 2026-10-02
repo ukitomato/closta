@@ -141,6 +141,12 @@ workspace として扱われていたら `packages:` の有無を先に確認す
   (R-3 / [AD-034](decisions/0034-transcript-read-path-and-process-boundary.md) は port transfer の構造検査 + 手動レビューで暫定担保。Constitution v1.2.6)。
   **R-4 ([AD-035](decisions/0035-tier-a-tool-display-and-subagent-nesting.md)) は `toTranscriptMessages` に subagent グルーピングを足し変換を重くした** —
   到達集合検査の優先度判断の材料。取得プロセス側で走る点は不変 (main 非経路)
+- ~~**Principle IX の Automated の改定**~~ — **Constitution v1.2.9 (2026-10-02) で完了**。以下は経緯。字面「`src/agents/` の外に stream の `JSON.parse` 処理が存在しないこと」は、
+  X-5 ([AD-043](decisions/0043-single-supervisor-session-threads-and-session-limit.md) Decision 2) で renderer が中継された本文
+  (`BODY_MAX_BYTES` で有界) を復元する形 (`session-event-decoder.ts`) と食い違い、同じ節の X-5 の Good example とも食い違う。
+  禁じる対象は main process と調停役スレッドでの stream の解釈 (AD-006 の読み替え)。改定は人間の承認を要する (PATCH 相当)。
+  **持ち主 = 次の Constitution 改定 (人間の承認を得た時点)**。それまでは AD-043 Decision 2 と check.mjs 項目 18 (調停役スレッドの `JSON.parse` 0 件) で守る
+  (X-5 pr-gate R1 / R2 architecture H-001)
 
 **Principle XV (i18n) の棚卸しへの申し送り**: `src/main/infra/session/target-finder.ts` の
 `候補 #N` / `名前 (#N)` は **`infra` が生成する日本語**であり、「訳出は `ui`」(FR-031 / FR-047) の例外である。
@@ -179,13 +185,13 @@ R-1 の残り 2 つは R-2 をブロックしない。
 | 6 | X-2 | 日本語 composer | `ui` | X-1 | **SPIKE-4** |
 | 7 | X-3 | Provider 登録と到達可能性判定 | `provider` | X-1 | SPIKE-7 **完了** / design-gate PASS ([AD-040](decisions/0040-provider-settings-constrained-projection.md) で C-001 調停) / R-02 = **awsCredentialExport 化** (AWS SDK 依存なし・一時資格の実体を持たない) / **ADR follow-up (pr-gate R2 D-L-101/102)**: R-02 が [AD-039](decisions/0039-credential-delegation-verified.md) D4「アプリが一時資格を扱う唯一の例外」を失効させ、[AD-005](decisions/0005-provider-as-registrable-value.md) の型を `CredentialRef`/`configDir: HostPath\|WslUncPath` に精緻化した (007 data-model §2)。→ **[AD-042](decisions/0042-provider-type-refinement-and-d4-lapse.md) で記録済み (X-4, 2026-09-30)** |
 | 8 | X-4 | 起動設定ダイアログとプリセット | `session` | X-3 | SPIKE-6 **完了** / 越境警告 AD-016 / 権限モードは**安全 3 値** (AD-020 の危険度表。[AD-041](decisions/0041-x4-launch-config-on-x1-launch-gate.md) (a)) / 作業領域戦略 AD-017 は I-1 へ付け替え (AD-041 (d)) / design-gate R3 PASS |
-| 9 | X-5 | supervisor 分離とマルチセッション | `session` | X-4 | — |
+| 9 | X-5 | supervisor 分離とマルチセッション | `session` | X-4 | SH-000 の実機確認 **完了** (Worker 内で SDK と spawn が動く / port は Worker へ渡せないため本文は調停役が文字列で中継 / どの終わり方でも孤児なし) / 単一 supervisor + セッションスレッド・上限 10 ([AD-043](decisions/0043-single-supervisor-session-threads-and-session-limit.md)) / design-gate R3 PASS / **実装中** |
 
 **M2 の後続 (critical path 外)**: X-4 の design-gate (2026-09-30) で範囲から外した項目の持ち主。M2 の達成状態を待たせない。
 
 | ID | feature | domain | 依存 | 内容 |
 |---|---|---|---|---|
-| X-6 | 起動設定の拡張軸とセッション操作 | `session` | X-5 | `SessionLaunchConfig` の残りの軸 (追加ディレクトリ / 上限 / セッション名) / Win32Runtime 直接起動 / fork・resume・rename・tag・delete / providers.json・presets.json の退避ファイル一覧・復元・版不一致の UI (件数の 1 行表示は X-4 で実装済み。AD-042 Decision 4) / 同一内容の `.bak` の重複抑止 / claudePath の形の判定 (shebang 形の案内。AD-041 記録 2) / settings store 3 種の読み取り失敗・非配列 root・mutation 直列化の是正 (X-4 code-gate db H-001 / M-002 / M-003 の provider・folder 分) |
+| X-6 | 起動設定の拡張軸とセッション操作 | `session` | X-5 | `SessionLaunchConfig` の残りの軸 (追加ディレクトリ / 上限 / セッション名) / Win32Runtime 直接起動 / fork・resume・rename・tag・delete / providers.json・presets.json の退避ファイル一覧・復元・版不一致の UI (件数の 1 行表示は X-4 で実装済み。AD-042 Decision 4) / 同一内容の `.bak` の重複抑止 / claudePath の形の判定 (shebang 形の案内。AD-041 記録 2) / settings store 3 種の読み取り失敗・非配列 root・mutation 直列化の是正 (X-4 code-gate db H-001 / M-002 / M-003 の provider・folder 分) / セッションスレッド内のプロンプトキューが上限を超えたときの通知 (X-5 から繰越) / 失敗したセッションの再開 (X-5 FR-013 は自動で再開しない) / ツール実行中に Worker だけが異常終了したときの孤児の実機観測 (X-5 は claude がアイドルのときだけ観測。残るなら AD-043 Decision 5 の回収経路を作る。X-5 pr-gate R1 platform-boundary M-001) |
 | X-7 | aws-assume-role helper の生成と CloudTrail 追跡 | `provider` | X-4 | `RoleSessionName` 付き helper をアプリが生成する (roleArn / region / profile の登録スキーマ、`check.mjs` 項目 6 の file sink 拡張、helper の完全性)。X-4 までは X-3 のユーザ供給 helperPath 方式。POSIX helperPath に所属 distro を持たせる (AD-042 残存リスク)。api-key / oauth-token / aws-profile / env-passthrough に固有の `forwardKeys`、Bash tool からの秘密 env の可視性、helper のシェル実行方式を実機で観測する (X-4 から繰越。AD-041 記録 3)。extraEnv を名前の allowlist にするかを検討する (AD-041 (e) 3) |
 
 X-2 を X-1 の直後に置いたのは、**日本語入力が壊れたままでは以降の feature を自分で使えない**ため。

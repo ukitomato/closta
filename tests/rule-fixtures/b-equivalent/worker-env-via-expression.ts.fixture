@@ -1,0 +1,23 @@
+/**
+ * 等価経路サンプル (項目 20 / X-5 SH-010 / AD-043 Decision 7)。
+ *
+ * **Worker の options を式 (変数) で組んで `env` を渡す形。** 項目 20 は `new Worker(` の第 2 引数の
+ * オブジェクトリテラルに現れる `env` キーだけを見るので、変数に入れた options の中身は見えない。
+ * **この経路はどの機械検証も捕まえない** — `detectors: ['none']`。
+ *
+ * Worker の構築子は**注入で受ける** (`supervisor-core.ts` と同じ構え)。`worker_threads` を import すると、
+ * 許可された 2 ファイル (`supervisor.ts` / `sdk-agent-session.ts`) 以外では ESLint が全レイヤで先に捕まえ、
+ * 項目 20 の限界を示すサンプルにならない (code-gate convention M-001 / platform-boundary M-001 で
+ * `worker_threads` の禁止を全レイヤに広げた)。残る現実の経路は「許可された 2 ファイルの中で options を
+ * 式で組む」形と、この注入形である。
+ * 理由と代替は expected.mjs の UNDETECTED_NOTES['worker-env-via-expression'] に記録する (SC-017)。
+ */
+type WorkerConstructor = new (
+  entry: string,
+  options?: { readonly env?: NodeJS.ProcessEnv }
+) => unknown
+
+export function startSessionThread(Worker: WorkerConstructor, entry: string): unknown {
+  const options = { env: { ...process.env } }
+  return new Worker(entry, options)
+}

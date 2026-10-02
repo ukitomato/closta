@@ -1,0 +1,8 @@
+// 違反サンプル (項目 19 / X-5 SH-010 / code-gate platform-boundary M-002): `node:process` を
+// **namespace import** で別名に束縛し、ブラケットで kill を取る (`proc['kill'](pid)`)。
+// グローバルの `process` を経ないので、`process` の綴りに対する参照の検査だけでは抜ける等価形。
+import * as proc from 'node:process'
+
+export function reap(pid: number): void {
+  proc['kill'](pid, 'SIGKILL')
+}

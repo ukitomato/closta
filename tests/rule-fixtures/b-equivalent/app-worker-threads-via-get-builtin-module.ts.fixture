@@ -1,0 +1,11 @@
+/**
+ * 等価経路サンプル (X-5 code-gate platform-boundary L-101)。
+ *
+ * **app レイヤが import 文を経ずに `node:worker_threads` を取る形。** ESLint の `worker_threads` の全レイヤ禁止
+ * (`boundaries/dependencies` / `no-restricted-imports`) は import 文と `require()` / 動的 import を見るだけで、
+ * `process.getBuiltinModule()` は依存として見えない。dependency-cruiser は `detectProcessBuiltinModuleCalls` で
+ * これを依存として検出し、`worker-threads-only-from-entry` が発火する。
+ */
+export function workerModule(): unknown {
+  return process.getBuiltinModule('node:worker_threads')
+}

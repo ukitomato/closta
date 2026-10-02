@@ -37,6 +37,7 @@ import type { LaunchOutcome } from './session-launch-service'
 import {
   handleFetchMoreSessions,
   handleGetTranscript,
+  handleEndSession,
   handleInterruptSession,
   handleKillSession,
   handleLaunchSession,
@@ -275,7 +276,7 @@ export function registerIpcHandlers(deps: IpcDependencies): void {
 
   /*
    * **port2 を renderer へ transfer した後、main はその port に触れない** (AD-036 §2 / Principle IX)。
-   * 本文 (`SessionEvent`) は agents↔renderer 直通で流れ、main は `JSON.parse` も deserialize もしない。
+   * 本文 (`SessionEvent`) は supervisor↔renderer 直通で流れ、main は `JSON.parse` も deserialize もしない。
    * handshake (本文を含まない) だけを invoke の戻り値で返す。検証と service 呼び出しは `session-ipc.ts`。
    */
   handle(IPC_CHANNELS.launchSession, async (event, ...args): Promise<SessionLaunchHandshakeDTO> => {
@@ -299,6 +300,10 @@ export function registerIpcHandlers(deps: IpcDependencies): void {
 
   handle(IPC_CHANNELS.interruptSession, async (_event, ...args): Promise<void> =>
     handleInterruptSession(deps, args)
+  )
+
+  handle(IPC_CHANNELS.endSession, async (_event, ...args): Promise<void> =>
+    handleEndSession(deps, args)
   )
 
   handle(IPC_CHANNELS.killSession, async (_event, ...args): Promise<void> =>

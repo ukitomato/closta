@@ -230,18 +230,69 @@ export const PROCESS_SPAWN_MODULES = [
    */
   'src/main/app/transcript-spawner.ts',
   /*
-   * X-1: セッション起動の per-session `utilityProcess` を起こす (AD-036 §3)。
-   * transcript-spawner (per-request 短命) / enumerator-spawner (常駐) と別寿命なので新モジュール。
+   * **単一 supervisor** (Electron の `utilityProcess` 1 本) を最初の起動要求で fork し、アプリ終了まで常駐させる
+   * (X-5 / AD-043 Decision 1・6)。X-1 の per-session fork (AD-036 §3) を置き換えた。
+   * transcript-spawner (per-request 短命) / enumerator-spawner (常駐の列挙) と別寿命なので別モジュールのまま。
+   * **登録名は X-1 から変えていない** (plan「機械強制の変更」/ 申し送り #19)。
    */
   'src/main/app/session-spawner.ts',
   /*
-   * X-1: agents の session worker。SDK の `spawnClaudeCodeProcess` コールバックで WSL 起動 spawn を行う
-   * (AD-036 §3。`pathToClaudeCodeExecutable` だけでは wsl.exe 前置を注入できないため child spawn が要る)。
+   * **セッションスレッド** (supervisor 内の `worker_threads` の Worker 1 本 = セッション 1 件。X-5 / AD-043 Decision 1)。
+   * SDK の `spawnClaudeCodeProcess` コールバックで WSL 起動 spawn を行う唯一の場所であり、子 (`claude`) を
+   * 保持して kill するのもこのスレッドである (AD-036 §3 / AD-043 Decision 5 の主たる経路)。
+   * (`pathToClaudeCodeExecutable` だけでは wsl.exe 前置を注入できないため child spawn が要る)。
    * **`wsl.exe` のリテラルは持たない** (WSL_FREE_DIRECTORIES / 値で受ける)。ESLint 側の spawn 例外も
    * この 1 ファイルに限定して開ける (eslint.config.mjs の `agent-session-spawn` category)。
+   *
+   * **調停役スレッド (`src/agents/supervisor.ts` / `supervisor-core.ts`) は登録しない。** Worker を起こすだけで
+   * 子プロセスは起こさない。`worker_threads` の Worker は `SPAWN_CALL_PATTERNS` に含めない (プロセスではない) —
+   * その env の扱いは項目 20 が別に縛る。**X-5 で新しい登録はしていない** (Principle VI)。
    */
   'src/agents/sdk-agent-session.ts'
 ]
+
+/* ── 項目 18: 調停役スレッドの本文非解釈 (SC-002 / AD-031 §2 / AD-043 Decision 2) ── */
+
+/**
+ * **調停役スレッドのモジュール**とみなす置き場 (項目 18 / 20 の対象)。
+ *
+ * 実名 (`supervisor.ts` / `supervisor-core.ts`) ではなく **`src/agents/` 配下 (サブディレクトリを含む) の
+ * `supervisor` で始まるファイル名** という形で指す。照合するのは `supervisor` + 英数字・`_`・`-` の並び +
+ * 拡張子 `.ts` / `.mts` / `.cts` — ケバブケース (`supervisor-core.ts`) だけでなく `supervisorCore.ts` /
+ * `supervisor_core.ts` / `supervisor-core.mts` も対象に入る (code-gate platform-boundary L-001)。
+ * ファイル名に `.` を挟む `supervisor-core.test.ts` は形の上で一致しない (テストは対象外。下記)。
+ * 実名で列挙すると、調停役スレッドに `supervisor-xxx.ts` を足したときに**黙って対象外になる** —
+ * 形で指しておけば新しいファイルは既定で対象に入り、外すには下の `COORDINATOR_THREAD_DECODER_MODULES` に
+ * 実名を足す (= ADR の判断を経る) しかない。違反サンプル (`src/agents/__rulecheck__/supervisor-*.ts`) が
+ * 発火するのもこの形による。テスト (`*.test.ts`) は対象外 — 制御行を `JSON.parse` して表明するのが試験の方法である。
+ */
+export const COORDINATOR_THREAD_MODULE_PATTERN =
+  /^src\/agents\/(?:[^/]+\/)*supervisor[\w-]*\.(?:ts|mts|cts)$/
+
+/**
+ * 調停役スレッドのモジュールのうち、`JSON.parse` を持ってよい**唯一の実名**。
+ * 制御行 (main / 標準入出力 → 調停役スレッド) と Worker メッセージのデコードはここだけで行い、
+ * **本文 (`OpaqueBody`) の中身は読まない** (AD-043 Decision 2)。
+ */
+export const COORDINATOR_THREAD_DECODER_MODULES = ['src/agents/supervisor-protocol.ts']
+
+/* ── 項目 19: pid 指定 kill の置き場 (AD-043 Decision 5) ─────────────── */
+
+/**
+ * `process` の `kill` を**参照してよい**モジュール (項目 19)。対象は `src/` 全体。
+ *
+ * **0 件で登録する。** AD-043 Decision 5 は「異常終了時の回収経路 (調停役スレッドによる Worker 異常終了時の
+ * pid kill / main による supervisor 異常終了時の pid kill) は SH-000 (3) で孤児が残る場合に限って作る」と定めた。
+ * SH-000 (3) の実測では **Worker の terminate・メモリ上限超過・supervisor の kill / 強制終了のいずれでも孤児が
+ * 残らなかった** (specs/009-.../quickstart-results.md) ので、pid 指定 kill の置き場は作らない
+ * (`supervisor.ts` / `reap-wsl-launchers.ts` の実名登録は行わない)。子の kill はセッションスレッドが保持する
+ * `ChildProcess` に対する `child.kill()` (AD-036 §3 の主たる経路) であり、`process.kill(pid)` ではないので
+ * この許可リストには掛からない。
+ *
+ * 回収経路を後から作る場合は、AD-043 Decision 5 の条件 (`isAcceptablePid` / 即時の `child-exited` /
+ * 世代の照合) を満たす実名をここに足す — **追加には ADR を要する**。
+ */
+export const PID_KILL_MODULES = []
 
 /* ── 項目 12 / 13: UNC 形式の封じ込め (AD-028 §3) ─────────────────── */
 
@@ -445,7 +496,9 @@ export const WSL_FREE_DIRECTORIES = [
   // X-4: プリセットの取り回しと起動前段。wsl.exe を名指さない (起動 argv は infra/runtime の
   // buildRuntimeLaunchSpec を注入で受ける。tasks SH-011 / code-gate convention H-001)。
   'src/main/app/preset-service.ts',
-  'src/main/app/launch-preparation.ts'
+  'src/main/app/launch-preparation.ts',
+  // X-5: 稼働中セッションの状態通知の中継 (受理済みバッチを renderer へ送るだけ。wsl.exe を名指さない。SH-010)。
+  'src/main/app/session-status-relay.ts'
 ]
 
 export const UNC_API_NAMES = [

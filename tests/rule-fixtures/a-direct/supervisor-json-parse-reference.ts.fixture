@@ -1,0 +1,8 @@
+// 違反サンプル (項目 18 / X-5 SH-010): 調停役スレッドのモジュールが JSON の parse を**参照渡し**する。
+// 呼び出し形 `JSON.parse(` を書かずに `Reflect.apply` / 別名の関数値として使う形。
+// 項目 18 は呼び出しでなく参照で数えるので発火する (AD-043 Decision 2 / SC-002)。
+const decode: (text: string) => unknown = JSON.parse
+
+export function relay(body: string): unknown {
+  return [Reflect.apply(JSON.parse, JSON, [body]) as unknown, decode(body)]
+}

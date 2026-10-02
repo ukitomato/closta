@@ -26,6 +26,8 @@ import {
   CSP_FORBIDDEN_ALWAYS,
   CSP_REQUIRED_DIRECTIVES,
   CSP_UNSAFE_INLINE_ALLOWED_DIRECTIVES,
+  COORDINATOR_THREAD_DECODER_MODULES,
+  COORDINATOR_THREAD_MODULE_PATTERN,
   DISTRO_SCRIPT_ALLOWED_FORMS,
   DISTRO_SCRIPT_CONSTANTS,
   DISTRO_SCRIPT_FORBIDDEN_FORMS,
@@ -35,6 +37,7 @@ import {
   PLATFORM_BRANCH_DIRS,
   PLATFORM_BRANCH_PATTERNS,
   PLATFORM_OK_MARKER,
+  PID_KILL_MODULES,
   PRIVILEGED_COMMANDS_ALWAYS,
   PRIVILEGED_COMMANDS_IN_SPAWN_CONTEXT,
   PROCESS_SPAWN_MODULES,
@@ -963,6 +966,321 @@ function hasPackagedGate() {
       `対象: ${SECRET_LITERAL_SCAN_DIRS.join(', ')} (test 除く) / runtime ガードは provider-record + SC-002`
     )
   }
+}
+
+/**
+ * `owner` の `member` への**参照**の形 (項目 18 / 19)。
+ *
+ * **呼び出しでなく参照で数える** (design-gate R2 platform-boundary の推奨)。呼び出し形 (`owner.member(`) だけを
+ * 見ると、`.call` (`owner.member.call(…)`)・参照渡し (`Reflect.apply(owner.member, …)` / `const f = owner.member`)・
+ * ブラケット (`owner['member']`)・分割代入 (`const { member } = owner`) が全部抜ける。
+ * 直接参照の形は `.call` と参照渡しも含む — どちらも `owner.member` の綴りを経るためである。
+ *
+ * `owner` の前は `[\w$]` 以外に限る (`globalThis.process.kill` は拾い、`childProcess.kill` / `child.kill` は拾わない)。
+ * **拾わない形**: 多段の別名 (`const o = owner; o.member`)・計算キーの変数形 (`owner[k]`)・入れ子の分割代入。
+ * 項目 18 の分は `expected.mjs` の UNDETECTED_NOTES に記録する。
+ */
+function memberReferencePatterns(owner, member) {
+  const q = '[\'"`]'
+  return [
+    new RegExp(String.raw`(?<![\w$])${owner}\s*\??\.\s*${member}(?![\w$])`, 'g'),
+    new RegExp(String.raw`(?<![\w$])${owner}\s*(?:\?\.)?\[\s*${q}${member}${q}\s*\]`, 'g'),
+    new RegExp(String.raw`\{[^}]*(?<![\w$])${member}(?![\w$])[^}]*\}\s*=\s*${owner}(?![\w$])`, 'g')
+  ]
+}
+
+/** `patterns` の一致を `{ line, text }` で返す (分割代入は行をまたぐので行単位ではなく本体全体で探す)。 */
+function findReferences(src, patterns) {
+  const out = []
+  for (const pattern of patterns) {
+    for (const match of src.code.matchAll(pattern)) {
+      out.push({
+        line: src.code.slice(0, match.index).split('\n').length,
+        text: match[0].replace(/\s+/g, ' ').trim()
+      })
+    }
+  }
+  return out.sort((a, b) => a.line - b.line)
+}
+
+/* ── 項目 18: 調停役スレッドは本文を JSON として解釈しない (SC-002 / AD-031 §2) ── */
+{
+  /*
+   * X-5 / SH-010 / AD-043 Decision 2。
+   *
+   * 調停役スレッドは本文を `OpaqueBody` として中継するだけで、**JSON として解釈しない**。
+   * 制御行と Worker メッセージのデコードは `supervisor-protocol.ts` に限る (そこも本文の中身は読まない)。
+   * ここは**調停役スレッドの残りのモジュール** (`src/agents/` 配下の `supervisor*.ts`。置き場の定義は
+   * `COORDINATOR_THREAD_MODULE_PATTERN`) に `JSON` の `parse` への参照が 0 件であることを見る。
+   *
+   * **置き場を見るだけで、どのスレッドで評価されるかは見ない。** 調停役スレッドの本体が import した
+   * 別名のモジュール (例: `supervisor-protocol.ts` 以外の helper) で `JSON.parse` すれば、調停役スレッドで
+   * 評価されても掛からない。import グラフを辿らない grep の限界であり、UNDETECTED_NOTES に記録する。
+   * 本文の非解釈そのものは BE の単体テスト (本文の payload がデコーダに渡らない) が守る。
+   */
+  const inScope = (file) =>
+    COORDINATOR_THREAD_MODULE_PATTERN.test(file) &&
+    !COORDINATOR_THREAD_DECODER_MODULES.includes(file) &&
+    !file.endsWith('.test.ts')
+  const targets = sources.filter((src) => inScope(src.file))
+  if (targets.length === 0) {
+    pending(
+      18,
+      '調停役スレッドが本文を JSON として解釈しない (`JSON` の `parse` への参照 0 件)',
+      'IX / SC-002 / AD-031 §2',
+      '調停役スレッドのモジュール (src/agents/ 配下の supervisor*.{ts,mts,cts}) が未実装'
+    )
+  } else {
+    const found = []
+    const patterns = memberReferencePatterns('JSON', 'parse')
+    for (const src of targets) {
+      for (const ref of findReferences(src, patterns)) {
+        found.push(
+          `${src.file}:${ref.line}  調停役スレッドが JSON の parse を参照している "${ref.text}" ` +
+            `(デコードは ${COORDINATOR_THREAD_DECODER_MODULES.join(' / ')} に限る。AD-043 Decision 2)`
+        )
+      }
+    }
+    violations(
+      18,
+      '調停役スレッドが本文を JSON として解釈しない (`JSON` の `parse` への参照 0 件)',
+      'IX / SC-002 / AD-031 §2',
+      found,
+      /*
+       * 対象のファイル名は並べず件数だけ出す。並べると違反サンプルの展開先の名前が ok の行にも現れ、
+       * run.mjs が「検出した」と数えてしまう (捕まらない形の `none` サンプルが判定できなくなる)。
+       */
+      `対象: src/agents/ 配下の supervisor*.{ts,mts,cts} ${targets.length} 件 (test 除く) / デコード可: ${COORDINATOR_THREAD_DECODER_MODULES.join(', ')}`
+    )
+  }
+}
+
+/* ── 項目 19: pid 指定 kill の置き場 (AD-043 Decision 5) ─────────────── */
+{
+  /*
+   * X-5 / SH-010。`process` の `kill` を**参照してよい**モジュールの許可リスト。
+   *
+   * pid 指定 kill は「pid の再利用で無関係のプロセスを止める」残余を持つ (生成時刻による本人確認をしないため。
+   * AD-043 Decision 5)。書ける場所を実名で絞らないと、回収経路の条件 (pid の検証・即時の exit 通知・世代の照合) を
+   * 満たさない kill が黙って増える。**SH-000 (3) で孤児が残らなかったので許可は 0 件** (`PID_KILL_MODULES`)。
+   *
+   * 子の kill は `ChildProcess` の `child.kill()` であり、`process` の `kill` ではない — 受け手が `process` の
+   * 形だけを見るので掛からない。`process.on(…)` / `process.exit(…)` も掛からない。
+   *
+   * **対象は `src/` だけ**である。`scripts/rules/run.mjs` はロックの持ち主の生存確認に `process.kill(pid, 0)` を
+   * 使う (シグナルを送らない存在確認) が、出荷物ではなく AD-043 の回収経路とも無関係である。
+   *
+   * **`process` / `node:process` からの import 形も見る** (code-gate platform-boundary M-002)。
+   * `src/main/infra/runtime/` は `node:process` の import を ESLint に許されており、グローバルの `process` を
+   * 経ずに kill を取れる。見るのは 3 形 —
+   * (a) named の import / re-export (`import { kill } from 'node:process'` / `{ kill as k }` / `export { kill } from …`)。
+   *     以後は裸の `kill(` になるので**import 文そのもの**を違反にする
+   * (b) default / namespace の import (`import p from 'node:process'` / `import * as p from 'node:process'`) の
+   *     束縛名 `p` に対する `p.kill` / `p['kill']` / `const { kill } = p` (上の参照の 3 形を束縛名で適用する)
+   * (c) `require('node:process')` の分割代入 (`const { kill } = require('node:process')`) と束縛名への参照
+   * **拾わない形**: 動的 import (`(await import('node:process')).kill`)・束縛名の多段の別名。項目 18 と同じ grep の限界。
+   */
+  const found = []
+  const patterns = memberReferencePatterns('process', 'kill')
+  const processModule = String.raw`['"\`](?:node:)?process['"\`]`
+  const namedImportRe = new RegExp(
+    String.raw`(?<![\w$])(?:import|export)\s+(?:type\s+)?(?:[\w$]+\s*,\s*)?\{([^}]*)\}\s*from\s*${processModule}`,
+    'g'
+  )
+  const bindingImportRe = new RegExp(
+    String.raw`(?<![\w$])import\s+(?:\*\s*as\s+([\w$]+)|([\w$]+))\s*(?:,\s*(?:\{[^}]*\}|\*\s*as\s+([\w$]+)))?\s*from\s*${processModule}`,
+    'g'
+  )
+  const requireBindingRe = new RegExp(
+    String.raw`(?<![\w$])(?:const|let|var)\s+([\w$]+)\s*=\s*require\s*\(\s*${processModule}\s*\)`,
+    'g'
+  )
+  const requireDestructureRe = new RegExp(
+    String.raw`\{[^}]*(?<![\w$])kill(?![\w$])[^}]*\}\s*=\s*require\s*\(\s*${processModule}\s*\)`,
+    'g'
+  )
+  const lineAt = (src, index) => src.code.slice(0, index).split('\n').length
+  const importsKill = (specifiers) =>
+    specifiers.split(',').some((spec) => {
+      const imported = spec
+        .trim()
+        .replace(/^type\s+/, '')
+        .split(/\s+as\s+/)[0]
+        .replace(/^['"`]|['"`]$/g, '')
+      return imported === 'kill'
+    })
+  for (const src of sources) {
+    if (!src.file.startsWith('src/')) continue
+    if (PID_KILL_MODULES.includes(src.file)) continue
+    const refs = findReferences(src, [...patterns, requireDestructureRe])
+    for (const match of src.code.matchAll(namedImportRe)) {
+      if (importsKill(match[1])) {
+        refs.push({ line: lineAt(src, match.index), text: match[0].replace(/\s+/g, ' ').trim() })
+      }
+    }
+    // 束縛名 (default / namespace / require) ごとに参照の 3 形を当てる。`process` は上で見ているので除く。
+    const bindings = new Set()
+    for (const match of src.code.matchAll(bindingImportRe)) {
+      for (const name of [match[1], match[2], match[3]]) if (name !== undefined) bindings.add(name)
+    }
+    for (const match of src.code.matchAll(requireBindingRe)) bindings.add(match[1])
+    bindings.delete('process')
+    for (const name of bindings) {
+      refs.push(...findReferences(src, memberReferencePatterns(name.replace(/\$/g, '\\$'), 'kill')))
+    }
+    for (const ref of refs.sort((a, b) => a.line - b.line)) {
+      found.push(
+        `${src.file}:${ref.line}  許可外モジュールが process の kill を参照している "${ref.text}" (AD-043 Decision 5)`
+      )
+    }
+  }
+  violations(
+    19,
+    'pid 指定 kill (`process` の `kill` への参照) を書けるモジュールの許可リスト',
+    'AD-043 Decision 5',
+    found,
+    `許可: ${PID_KILL_MODULES.join(', ') || '(なし。SH-000 (3) で孤児が残らなかったので回収経路を作らない)'}`
+  )
+}
+
+/**
+ * `code[openIndex]` の括弧に対応する閉じ括弧の位置。見つからなければ -1。
+ * 文字列の中の括弧は数えない (正規表現リテラルは見分けない — 項目 16 の `wrapperCallCompletes` と同じ限界)。
+ */
+function closingIndex(code, openIndex) {
+  let depth = 0
+  let quote = null
+  for (let i = openIndex; i < code.length; i += 1) {
+    const c = code[i]
+    if (quote !== null) {
+      if (c === '\\') i += 1
+      else if (c === quote) quote = null
+      continue
+    }
+    if (c === "'" || c === '"' || c === '`') quote = c
+    else if (c === '(' || c === '[' || c === '{') depth += 1
+    else if (c === ')' || c === ']' || c === '}') {
+      depth -= 1
+      if (depth === 0) return i
+    }
+  }
+  return -1
+}
+
+/** 括弧の外側 (深さ 0) の `,` で分ける。 */
+function splitTopLevel(text) {
+  const parts = []
+  let depth = 0
+  let quote = null
+  let start = 0
+  for (let i = 0; i < text.length; i += 1) {
+    const c = text[i]
+    if (quote !== null) {
+      if (c === '\\') i += 1
+      else if (c === quote) quote = null
+      continue
+    }
+    if (c === "'" || c === '"' || c === '`') quote = c
+    else if (c === '(' || c === '[' || c === '{') depth += 1
+    else if (c === ')' || c === ']' || c === '}') depth -= 1
+    else if (c === ',' && depth === 0) {
+      parts.push(text.slice(start, i))
+      start = i + 1
+    }
+  }
+  parts.push(text.slice(start))
+  return parts
+}
+
+/* ── 項目 20: Worker に env を渡さない (AD-043 Decision 7 / Principle V) ── */
+{
+  /*
+   * X-5 / SH-010。セッションスレッド (Worker) は **env 未指定**で起こし (supervisor の curated base の複製)、
+   * `SHARE_ENV` を使わない。資格情報を含む起動指示は最初の message でだけ渡す (AD-043 Decision 7)。
+   * env を共有・注入すると、あるセッションの資格情報が別のセッションのスレッドから見える経路ができる (Principle V)。
+   *
+   * 見るのは 2 つ — `src/` に `SHARE_ENV` が 0 件、かつ `new Worker(` の**第 2 引数のオブジェクトリテラル**に
+   * `env` キー (素のキー / 引用符キー / 計算キーの文字列形 / shorthand) が無いこと。
+   * 入れ子のオブジェクト (`resourceLimits: { … }`) の中は見ない (深さ 0 のキーだけ)。
+   *
+   * **式で組んだ options は見えない** — `new Worker(entry, options)` の `options` 変数や spread (`{ ...opts }`) の
+   * 中身はデータフローを追わない grep では分からない。UNDETECTED_NOTES に記録する。
+   * その代わり `worker_threads` の import は ESLint が全レイヤで 2 ファイル (`supervisor.ts` /
+   * `sdk-agent-session.ts`) に限っており、Worker を起こせる場所そのものが狭い。
+   *
+   * **調停役スレッドのモジュール (`COORDINATOR_THREAD_MODULE_PATTERN`。test 除く) ではさらに 2 つを見る**
+   * (code-gate platform-boundary L-002)。Worker は env 未指定で起こすと**親スレッドの `process.env` の複製**を
+   * 受け取るので、調停役スレッドが Worker を起こす前に `process.env` を書き換えれば、`env` キーを書かずに
+   * 資格情報を全セッションへ配れる。`workerData` は起動指示を message 以外で渡す経路である (AD-043 Decision 7)。
+   * - `process.env` への代入 (`process.env.X =` / `process.env['X'] =` / 複合代入 / `process.env =` / `delete`) と
+   *   反射的な書き換え (`Object.assign(process.env, …)` / `Object.defineProperty(process.env, …)` /
+   *   `Reflect.set(process.env, …)` 等)
+   * - `workerData` の出現 (綴りがあれば違反。コメントは見ない)
+   */
+  const found = []
+  const envOwner = String.raw`(?<![\w$])process\s*(?:\??\.\s*env(?![\w$])|\[\s*['"\`]env['"\`]\s*\])`
+  const envWriteRes = [
+    // 代入 / 複合代入 (`==` / `===` / `<=` 等の比較は除く)。
+    new RegExp(
+      String.raw`${envOwner}\s*(?:\.\s*[\w$]+|\[[^\]]*\])?\s*(?:\*\*|<<|>>>?|\?\?|\|\||&&|[-+*/%&|^])?=(?!=)`,
+      'g'
+    ),
+    new RegExp(String.raw`(?<![\w$])delete\s+${envOwner}`, 'g'),
+    new RegExp(
+      String.raw`(?<![\w$])(?:Object\s*\.\s*(?:assign|defineProperty|defineProperties|setPrototypeOf)|Reflect\s*\.\s*(?:set|defineProperty|deleteProperty|setPrototypeOf))\s*\(\s*${envOwner}`,
+      'g'
+    )
+  ]
+  const workerDataRe = /(?<![\w$])workerData(?![\w$])/g
+  const shareEnvRe = /(?<![\w$])SHARE_ENV(?![\w$])/g
+  const workerRe = /(?<![\w$])new\s+(?:[\w$]+\s*\.\s*)*Worker\s*\(/g
+  const envKeyRe = /^(?:env|(['"`])env\1|\[\s*(['"`])env\2\s*\])\s*(?::|$)/
+  const lineOf = (src, index) => src.code.slice(0, index).split('\n').length
+  for (const src of sources) {
+    if (!src.file.startsWith('src/')) continue
+    for (const match of src.code.matchAll(shareEnvRe)) {
+      found.push(
+        `${src.file}:${lineOf(src, match.index)}  SHARE_ENV が現れている (Worker と env を共有しない。AD-043 Decision 7)`
+      )
+    }
+    for (const match of src.code.matchAll(workerRe)) {
+      const open = match.index + match[0].length - 1
+      const close = closingIndex(src.code, open)
+      if (close < 0) continue
+      const options = (splitTopLevel(src.code.slice(open + 1, close))[1] ?? '').trim()
+      // 式で組んだ options (変数・呼び出し・spread のみ) は見えない (UNDETECTED_NOTES)。
+      if (!options.startsWith('{')) continue
+      const objectClose = closingIndex(options, 0)
+      const entries = splitTopLevel(options.slice(1, objectClose < 0 ? undefined : objectClose))
+      if (entries.some((entry) => envKeyRe.test(entry.trim()))) {
+        found.push(
+          `${src.file}:${lineOf(src, match.index)}  new Worker の options に env キーがある ` +
+            `(Worker は env 未指定で起こす。AD-043 Decision 7 / Principle V)`
+        )
+      }
+    }
+    if (COORDINATOR_THREAD_MODULE_PATTERN.test(src.file) && !src.file.endsWith('.test.ts')) {
+      for (const ref of findReferences(src, envWriteRes)) {
+        found.push(
+          `${src.file}:${ref.line}  調停役スレッドが process.env を書き換えている "${ref.text}" ` +
+            `(env 未指定の Worker に複製される。AD-043 Decision 7 / Principle V)`
+        )
+      }
+      for (const match of src.code.matchAll(workerDataRe)) {
+        found.push(
+          `${src.file}:${lineOf(src, match.index)}  調停役スレッドに workerData が現れている ` +
+            `(起動指示は最初の message でだけ渡す。AD-043 Decision 7)`
+        )
+      }
+    }
+  }
+  violations(
+    20,
+    'Worker に env を渡さない (`SHARE_ENV` 0 件 / `new Worker` の options に `env` キーが無い / 調停役スレッドで `process.env` の書き換えと `workerData` が 0 件)',
+    'V / AD-043 Decision 7',
+    found,
+    '対象: src/ (書き換えと workerData は調停役スレッドのモジュール) / 式で組んだ options は見えない (UNDETECTED_NOTES)'
+  )
 }
 
 /* ── 報告 ─────────────────────────────────────────────────────────── */

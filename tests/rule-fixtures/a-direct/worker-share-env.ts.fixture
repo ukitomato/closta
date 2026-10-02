@@ -1,0 +1,10 @@
+// 違反サンプル (項目 20 / X-5 SH-010): Worker と env を **`SHARE_ENV`** で共有する。
+// options は変数で組むので `env` キーの検査には掛からない — `SHARE_ENV` の出現だけで発火することを示す
+// (AD-043 Decision 7 / Principle V。あるセッションの資格情報が別のセッションのスレッドから見える経路を作る)。
+import { SHARE_ENV, Worker, type WorkerOptions } from 'node:worker_threads'
+
+const options: WorkerOptions = { env: SHARE_ENV }
+
+export function startSessionThread(entry: string): Worker {
+  return new Worker(entry, options)
+}

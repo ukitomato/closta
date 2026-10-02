@@ -1,0 +1,5 @@
+// 違反サンプル (項目 19 / X-5 SH-010): 許可外モジュールが process の kill を**ブラケット記法**で呼ぶ。
+// `process.kill` の綴りが現れない等価形。項目 19 はブラケット形も参照として数える (AD-043 Decision 5)。
+export function reap(pid: number): void {
+  process['kill'](pid, 'SIGKILL')
+}

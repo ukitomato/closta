@@ -10,7 +10,6 @@ import {
 } from '@assistant-ui/react'
 
 import { DraftBridge } from './SessionScreen'
-import type { LiveSession } from './useLiveSession'
 
 /**
  * X-2 / FR-007 / SC-005 / T021 — DraftBridge が composer の下書きを feature state と同期する。
@@ -18,11 +17,16 @@ import type { LiveSession } from './useLiveSession'
  * - 捕捉: composer への入力を `session.setDraft` に写す (メモリ内。境界/ログに出さない)。
  */
 
-function fakeSession(over: Partial<LiveSession>): LiveSession {
-  return { draft: '', setDraft: vi.fn(), ...over } as unknown as LiveSession
+interface DraftSource {
+  readonly draft: string
+  setDraft(text: string): void
 }
 
-function Harness({ session }: { readonly session: LiveSession }): React.JSX.Element {
+function fakeSession(over: Partial<DraftSource>): DraftSource {
+  return { draft: '', setDraft: vi.fn(), ...over }
+}
+
+function Harness({ session }: { readonly session: DraftSource }): React.JSX.Element {
   const runtime = useExternalStoreRuntime({
     messages: [] as ThreadMessageLike[],
     convertMessage: (m) => m,

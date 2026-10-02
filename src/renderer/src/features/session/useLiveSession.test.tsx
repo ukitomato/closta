@@ -1,170 +1,112 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { SessionLaunchConfig } from '@domain/session/launch-config'
 import { act, renderHook } from '@testing-library/react'
 
-import { SESSION_PORT_MESSAGE } from '@domain/capability'
+import type { SessionLaunchConfig } from '@domain/session/launch-config'
 
-import { installCapability } from '@/test-support/capability'
+import { stubCapability } from '@/test-support/capability'
 
+import { createRunningSessionStore } from './running-session-store'
+import { RunningSessionStoreContext } from './running-session-context'
 import { useLiveSession } from './useLiveSession'
 
 /**
- * FE-001 / FE-020 — `useLiveSession` の起動ライフサイクルと制御ルーティング (SC-001 / SC-010 / SC-011)。
+ * X-5 FE-002 — `useLiveSession(sessionId)` は 1 セッション分を読み、制御を引数のセッションに向ける。
  *
- * **teardown が稼働 supervisor を kill することを固定する** (pr-gate C-001 の回帰ガード) —
- * 「閉じる」(reset) が `killSession` を発火しないと孤児 + ソフトロックになる。
- * port 経由の `SessionEvent` 逐次反映 (jsdom MessageChannel) は quickstart / component 実機に委ね、
- * ここでは capability 呼び出し面と phase 遷移を計測する。
+ * **unmount で kill しないことを固定する** (X-1 の「画面を離れたら kill」(pr-gate C-001) の撤去。spec FR-008)。
+ * セッションの寿命は store と main (`dispose` / `killAll`) に一本化した。
  */
 
-const UUID = '11111111-1111-4111-8111-111111111111'
+const A = '11111111-1111-4111-8111-111111111111'
+const B = '22222222-2222-4222-8222-222222222222'
 
-function launching(): () => Promise<{ status: 'launching'; sessionId: string }> {
-  return vi.fn(async () => ({ status: 'launching' as const, sessionId: UUID }))
+const config: SessionLaunchConfig = {
+  folderId: 'f1',
+  runtimeId: 'wsl:Ubuntu',
+  providerId: null,
+  modelId: null,
+  effort: null,
+  permissionMode: 'default'
 }
 
-function cfg(folderId: string, runtimeId: string): SessionLaunchConfig {
-  return {
-    folderId,
-    runtimeId,
-    providerId: null,
-    modelId: null,
-    effort: null,
-    permissionMode: 'default'
-  }
-}
-
-describe('useLiveSession', () => {
-  it('launch 拒否で phase=rejected + rejectReason を持つ', async () => {
-    installCapability({
-      launchSession: vi.fn(async () => ({
-        status: 'rejected' as const,
-        reasonKey: 'distro-not-running' as const
-      }))
-    })
-    const { result } = renderHook(() => useLiveSession())
-    await act(async () => {
-      await result.current.launch(cfg('f1', 'r1'))
-    })
-    expect(result.current.phase).toBe('rejected')
-    expect(result.current.rejectReason).toBe('distro-not-running')
+async function setup(): Promise<{
+  store: ReturnType<typeof createRunningSessionStore>
+  cap: ReturnType<typeof stubCapability>
+  wrapper: ({ children }: { children: React.ReactNode }) => React.JSX.Element
+}> {
+  const cap = stubCapability({
+    launchSession: vi
+      .fn()
+      .mockResolvedValueOnce({ status: 'launching', sessionId: A })
+      .mockResolvedValueOnce({ status: 'launching', sessionId: B }),
+    sendPrompt: vi.fn(async () => {}),
+    interruptSession: vi.fn(async () => {}),
+    respondPermission: vi.fn(async () => {}),
+    killSession: vi.fn(async () => {}),
+    endSession: vi.fn(async () => {})
   })
+  const store = createRunningSessionStore(() => cap)
+  await store.launch(config)
+  await store.launch(config)
+  const wrapper = ({ children }: { children: React.ReactNode }): React.JSX.Element => (
+    <RunningSessionStoreContext.Provider value={store}>
+      {children}
+    </RunningSessionStoreContext.Provider>
+  )
+  return { store, cap, wrapper }
+}
 
-  it('launch 成功で phase=active。**reset() は稼働セッションを kill する** (C-001)', async () => {
-    const killSession = vi.fn(async () => {})
-    installCapability({ launchSession: launching(), killSession })
-    const { result } = renderHook(() => useLiveSession())
-    await act(async () => {
-      await result.current.launch(cfg('f1', 'r1'))
-    })
-    expect(result.current.phase).toBe('active')
-
+describe('useLiveSession(sessionId)', () => {
+  it('送信・中断・承認・終了・強制終了は引数のセッションに向く', async () => {
+    const { cap, wrapper } = await setup()
+    const { result } = renderHook(() => useLiveSession(A), { wrapper })
     act(() => {
-      result.current.reset()
+      result.current?.send('hi')
+      result.current?.interrupt()
+      result.current?.respond('perm-1', 'deny')
     })
-    // 「閉じる」で supervisor を殺してから畳む — 孤児 + ソフトロックを防ぐ。
-    expect(killSession).toHaveBeenCalledWith(UUID)
-    expect(result.current.phase).toBe('entry')
+    expect(cap.sendPrompt).toHaveBeenCalledWith(A, 'hi')
+    expect(cap.interruptSession).toHaveBeenCalledWith(A)
+    expect(cap.respondPermission).toHaveBeenCalledWith(A, 'perm-1', 'deny', 'once')
+    act(() => {
+      result.current?.kill()
+    })
+    expect(cap.killSession).toHaveBeenCalledWith(A)
+    expect(cap.killSession).not.toHaveBeenCalledWith(B)
   })
 
-  it('unmount 時にも稼働セッションを kill する (画面遷移経路。C-001)', async () => {
-    const killSession = vi.fn(async () => {})
-    installCapability({ launchSession: launching(), killSession })
-    const { result, unmount } = renderHook(() => useLiveSession())
-    await act(async () => {
-      await result.current.launch(cfg('f1', 'r1'))
-    })
+  it('unmount しても kill しない (FR-008)', async () => {
+    const { cap, wrapper } = await setup()
+    const { unmount } = renderHook(() => useLiveSession(A), { wrapper })
     unmount()
-    expect(killSession).toHaveBeenCalledWith(UUID)
+    expect(cap.killSession).not.toHaveBeenCalled()
   })
 
-  it('send / interrupt / respond は sessionId つきで capability を呼ぶ', async () => {
-    const sendPrompt = vi.fn(async () => {})
-    const interruptSession = vi.fn(async () => {})
-    const respondPermission = vi.fn(async () => {})
-    installCapability({
-      launchSession: launching(),
-      sendPrompt,
-      interruptSession,
-      respondPermission,
-      // unmount 時の kill 発火 (C-001) が stub 未定義で reject しないよう与える。
-      killSession: vi.fn(async () => {})
-    })
-    const { result } = renderHook(() => useLiveSession())
-    await act(async () => {
-      await result.current.launch(cfg('f1', 'r1'))
-    })
+  it('appendUser は自分のセッションにだけユーザ発話を積む', async () => {
+    const { store, wrapper } = await setup()
+    const { result } = renderHook(() => useLiveSession(A), { wrapper })
     act(() => {
-      result.current.send('hi')
-      result.current.interrupt()
-      result.current.respond('perm-1', 'allow')
+      result.current?.appendUser('hello')
     })
-    expect(sendPrompt).toHaveBeenCalledWith(UUID, 'hi')
-    expect(interruptSession).toHaveBeenCalledWith(UUID)
-    // 承認応答は常に once scope (X-1。capability 付与は I-3。AD-041 (c))。
-    expect(respondPermission).toHaveBeenCalledWith(UUID, 'perm-1', 'allow', 'once')
+    expect(result.current?.state.messages.some((m) => m.role === 'user')).toBe(true)
+    expect(store.getState().sessions[B]?.messages).toHaveLength(0)
   })
 
-  it('appendUser は user 発話を messages に積む (楽観表示)', async () => {
-    installCapability({ launchSession: launching(), killSession: vi.fn(async () => {}) })
-    const { result } = renderHook(() => useLiveSession())
-    await act(async () => {
-      await result.current.launch(cfg('f1', 'r1'))
-    })
+  it('他のセッションの更新では同じ値を返す (表示中の Thread を再描画させない)', async () => {
+    const { store, wrapper } = await setup()
+    const { result } = renderHook(() => useLiveSession(A), { wrapper })
+    const before = result.current
     act(() => {
-      result.current.appendUser('hello')
+      store.appendUser(B, 'B への発話')
     })
-    expect(result.current.messages.some((m) => m.role === 'user')).toBe(true)
+    expect(result.current).toBe(before)
   })
 
-  it('失敗の後に reset で戻ると理由を previousFailure に保持し、次の launch で消す (US-1 AC7 / pr-gate M-07)', async () => {
-    installCapability({ launchSession: launching(), killSession: vi.fn(async () => {}) })
-    const { result } = renderHook(() => useLiveSession())
-    await act(async () => {
-      await result.current.launch(cfg('f1', 'r1'))
-    })
-    // preload の橋渡しを模す (自 origin・自 window)。jsdom の MessageChannel に依存しない fake port。
-    const port: {
-      onmessage: ((event: { data: unknown }) => void) | null
-      start: () => void
-      close: () => void
-    } = { onmessage: null, start: vi.fn(), close: vi.fn() }
-    const event = new Event('message') as Event & { data: unknown; ports: unknown[] }
-    event.data = { marker: SESSION_PORT_MESSAGE, sessionId: UUID }
-    event.ports = [port]
-    Object.defineProperty(event, 'origin', { value: window.location.origin })
-    Object.defineProperty(event, 'source', { value: window })
+  it('閉じたセッションは null', async () => {
+    const { store, wrapper } = await setup()
+    const { result } = renderHook(() => useLiveSession(A), { wrapper })
     act(() => {
-      window.dispatchEvent(event)
+      store.close(A)
     })
-    act(() => {
-      port.onmessage?.({ data: { kind: 'failure', reasonKey: 'launch-failed' } })
-    })
-    expect(result.current.failureReason).toBe('launch-failed')
-
-    act(() => {
-      result.current.reset()
-    })
-    expect(result.current.phase).toBe('entry')
-    expect(result.current.failureReason).toBeNull()
-    expect(result.current.previousFailure).toBe('launch-failed')
-    expect(result.current.lastConfig).toEqual(cfg('f1', 'r1'))
-
-    await act(async () => {
-      await result.current.launch(cfg('f1', 'r1'))
-    })
-    expect(result.current.previousFailure).toBeNull()
-  })
-
-  it('失敗なしの reset (閉じる) では previousFailure を持たない', async () => {
-    installCapability({ launchSession: launching(), killSession: vi.fn(async () => {}) })
-    const { result } = renderHook(() => useLiveSession())
-    await act(async () => {
-      await result.current.launch(cfg('f1', 'r1'))
-    })
-    act(() => {
-      result.current.reset()
-    })
-    expect(result.current.previousFailure).toBeNull()
+    expect(result.current).toBeNull()
   })
 })

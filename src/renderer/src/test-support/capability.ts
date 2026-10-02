@@ -58,6 +58,7 @@ export function stubCapability(overrides: Partial<ClostaCapability> = {}): Clost
     respondPermission: notStubbed('respondPermission'),
     interruptSession: notStubbed('interruptSession'),
     killSession: notStubbed('killSession'),
+    endSession: notStubbed('endSession'),
     listProviders: notStubbed('listProviders'),
     detectProviders: notStubbed('detectProviders'),
     registerProvider: notStubbed('registerProvider'),
@@ -70,7 +71,8 @@ export function stubCapability(overrides: Partial<ClostaCapability> = {}): Clost
     removePreset: notStubbed('removePreset'),
     onRuntimesChanged: noSubscription,
     onFoldersChanged: noSubscription,
-    onSessionsChanged: noSubscription
+    onSessionsChanged: noSubscription,
+    onSessionStatus: noSubscription
   }
 
   return { ...base, ...overrides }

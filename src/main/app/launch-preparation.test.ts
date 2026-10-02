@@ -125,12 +125,10 @@ describe('createPrepareLaunch', () => {
     })
   })
 
-  it('fork env は curated base のまま (導出キーと WSLENV が 0。AD-041 (e) 6 / SC-007)', async () => {
+  it('起動前段の結果は fork env を持たない (fork env は接続の構築時に curated base を注入する。AD-041 (e) 6 / X-5 pr-gate R1 platform-boundary L-001)', async () => {
     const prep = await createPrepareLaunch(deps())(config())
     if (prep === null || !prep.ok) throw new Error('expected ok')
-    expect(prep.env).toEqual(baseEnv)
-    expect(prep.env.ANTHROPIC_API_KEY).toBeUndefined()
-    expect(prep.env.WSLENV).toBeUndefined()
+    expect('env' in prep).toBe(false)
   })
 
   it('既定 Provider は deriveEnv を呼ばず curated base だけで起動する', async () => {

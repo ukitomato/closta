@@ -1,0 +1,7 @@
+// 違反サンプル (項目 20 / X-5 SH-010 / code-gate platform-boundary L-002): 調停役スレッドのモジュールが
+// Worker を起こす前に `process.env` へ代入する。env 未指定の Worker は親スレッドの `process.env` の複製を
+// 受け取るので、`env` キーを書かずに資格情報を全セッションのスレッドへ配れてしまう (AD-043 Decision 7)。
+export function prepareThreadEnv(token: string): void {
+  process.env.CLOSTA_SESSION_TOKEN = token
+  process.env['CLOSTA_SESSION_HOME'] ??= '/tmp'
+}

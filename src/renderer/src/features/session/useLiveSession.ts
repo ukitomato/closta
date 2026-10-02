@@ -1,336 +1,106 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useMemo } from 'react'
+import { useStore } from 'zustand'
 
-import type { ThreadMessageLike } from '@assistant-ui/react'
+import { useRunningSessionStoreApi } from './running-session-context'
+import type { LiveSessionState, SessionQueue } from './running-session-store'
+import { deriveSessionView, type SessionView } from './session-view'
 
-import { CAPABILITY_KEY, SESSION_PORT_MESSAGE } from '@domain/capability'
-import type {
-  LaunchFailureReason,
-  PermissionDeniedInfo,
-  SessionEvent,
-  SessionLaunchRejectReason
-} from '@domain/session/agent-session'
-import type { SessionLaunchConfig } from '@domain/session/launch-config'
-import type { SessionRunState } from '@domain/session/run-state'
-
-import { toThreadMessage } from '@/features/chat/convert'
+export type { PendingPermission } from './running-session-store'
 
 /**
- * 単一ライブセッションの起動 + ストリーミング配線 (X-1 / FE-001・FE-002・FE-010・FE-011・FE-020・FE-021・FE-030)。
+ * 表示中セッション 1 本分の読み出しと制御 (X-5 / FE-002)。ストアの寿命と注入は `running-session-context.ts`。
  *
  * | 規則 | 根拠 |
  * |---|---|
- * | 本文 (`SessionEvent`) は **`MessageChannelMain` の port** で agents↔renderer 直通に届く | AD-036 §2 / contracts C-2 |
- * | 制御 (send/interrupt/kill/respond) は必ず **preload capability の invoke** を通す (port から発行しない) | AD-034 §1 / contracts C-1 |
- * | port は `window` メッセージ (`SESSION_PORT_MESSAGE`) で main world に届く | contextBridge を越えられないため |
- * | **本文サニタイズは agents 側で完了済み** — ここは表示 DTO を assistant-ui 形に写すだけ | FR-009 / SC-008 |
- *
- * **単一セッション不変** (FR-019): 稼働中は 1 本のみ。main が二重起動を `session-active` で拒否する。
- * ここは 1 本のライフサイクルだけを持つ。
+ * | `useLiveSession(sessionId)` は 1 セッション分だけを selector で読む — 表示していないセッションの更新で表示中の Thread を再描画しない | FR-008 / plan renderer 節 |
+ * | 送信・承認・中断・終了・強制終了は**引数の sessionId に向ける** (送信した時点の表示中セッション) | FR-010 |
+ * | **unmount で kill しない。reset で kill しない** — セッションの寿命は store と main (`dispose` / `killAll`) に一本化する (X-1 の「画面を離れたら kill」を撤去) | FR-008 / FR-014 |
+ * | 制御は必ず preload capability の invoke を通す (port から発行しない) | AD-034 §1 / contracts C-1 |
  */
 
-function capability(): typeof window.closta {
-  return window[CAPABILITY_KEY]
-}
-
-/** 画面フェーズ。`entry` は起動前の選択、`launching` は ~2.7s の起動窓 (FR-019 の UI 反映)。 */
-export type SessionPhase = 'entry' | 'launching' | 'active' | 'rejected'
-
-/** 承認カード表示用 (サニタイズ済み plain text。H-05)。 */
-export interface PendingPermission {
-  readonly requestId: string
-  readonly toolName: string
-  readonly input: string
-  readonly scope: 'once' | 'capability'
-}
-
-export interface LiveSession {
-  readonly phase: SessionPhase
-  readonly runState: SessionRunState
-  readonly messages: readonly ThreadMessageLike[]
-  readonly pending: PendingPermission | null
-  readonly denied: readonly PermissionDeniedInfo[]
-  /** 実行時失敗の理由キー (`failure` SessionEvent 由来)。 */
-  readonly failureReason: LaunchFailureReason | null
-  /** 起動が拒否された理由 (launch handshake 由来。VerifiedRunning/distro 不一致など)。 */
-  readonly rejectReason: SessionLaunchRejectReason | null
-  /** 強制終了済みか。true のとき composer を無効化し終端を明示する (H-401)。 */
-  readonly killed: boolean
-  /** composer の下書き (未送信テキスト)。Thread 再構成をまたいで保持する (X-2 / FR-007。メモリ内限定)。 */
-  readonly draft: string
-  /** 下書きを更新する (composer の onChange から。メモリ内限定・境界/ログに出さない。FR-008)。 */
+/**
+ * 表示中セッション 1 本分の読み出しと制御。表示用の導出 (`runState` / `failureReason` / `ended` / `terminal` /
+ * 最初のプロンプト待ち) は `SessionView` (一覧の行と同じ判定)。
+ */
+export interface LiveSession extends SessionView {
+  readonly sessionId: string
+  readonly state: LiveSessionState
+  readonly queue: SessionQueue | null
+  /** 保持している下書き (再描画を起こさない保持から読む。切り替えで Thread を作り直したときの復元用)。 */
+  getDraft(): string
   setDraft(text: string): void
-  /**
-   * 最後に起動を試みた起動設定 (X-4 / US-1 AC7)。**reset しても保持する** — 確立 (`system/init`) 前の失敗・中断から
-   * 「再起動」/「閉じる」で起動設定ダイアログへ戻ったとき、入力を復元するため。資格情報を含まない (id 参照のみ)。
-   */
-  readonly lastConfig: SessionLaunchConfig | null
-  /**
-   * 失敗 (`failure` SessionEvent) の後に reset で起動設定ダイアログへ戻ったときの理由 (US-1 AC7 / pr-gate M-07)。
-   * reset は `failureReason` を消すため、ダイアログで理由を示せるようここに移す。次の launch で消す。
-   */
-  readonly previousFailure: LaunchFailureReason | null
-  launch(config: SessionLaunchConfig): Promise<void>
-  /** 送信と同時にユーザ発話を楽観表示する (agents の user echo は取らないため。FE-002)。 */
   appendUser(text: string): void
   send(text: string): void
   interrupt(): void
-  kill(): void
   respond(requestId: string, outcome: 'allow' | 'deny'): void
-  /** 起動前の選択画面へ戻す (終了/失敗後の再起動導線)。 */
-  reset(): void
+  end(): void
+  kill(): void
+  close(): void
+  clearQueueRejection(): void
 }
 
-/** 同 id は差し替え、新規は末尾へ (逐次生成のメッセージ単位更新。AD-020 / H-06)。 */
-function upsertMessage(
-  prev: readonly ThreadMessageLike[],
-  next: ThreadMessageLike
-): ThreadMessageLike[] {
-  const index = prev.findIndex((m) => m.id !== undefined && m.id === next.id)
-  if (index === -1) return [...prev, next]
-  const copy = [...prev]
-  copy[index] = next
-  return copy
-}
+export function useLiveSession(sessionId: string): LiveSession | null {
+  const store = useRunningSessionStoreApi()
+  // **セッション単位の selector** (他のセッションの更新では参照が変わらず再描画しない)。
+  const state = useStore(store, (s) => s.sessions[sessionId])
+  const status = useStore(store, (s) => s.statuses[sessionId])
 
-interface BufferedPort {
-  readonly sessionId: string
-  readonly port: MessagePort
-}
-
-interface SessionPortData {
-  readonly marker?: unknown
-  readonly sessionId?: unknown
-}
-
-export function useLiveSession(): LiveSession {
-  const [phase, setPhase] = useState<SessionPhase>('entry')
-  const [runState, setRunState] = useState<SessionRunState>('idle')
-  const [messages, setMessages] = useState<readonly ThreadMessageLike[]>([])
-  const [pending, setPending] = useState<PendingPermission | null>(null)
-  const [denied, setDenied] = useState<readonly PermissionDeniedInfo[]>([])
-  const [failureReason, setFailureReason] = useState<LaunchFailureReason | null>(null)
-  const [rejectReason, setRejectReason] = useState<SessionLaunchRejectReason | null>(null)
-  // **強制終了したか。** kill() は worker を落とすが、その `done` state イベントは port を先に閉じるため
-  // renderer に届かない。UI をローカルで終端に落とす標識にする (pr-gate po H-401)。
-  const [killed, setKilled] = useState(false)
-  // **下書きは useLiveSession に持つ** (SessionScreen の親 hook。phase/isDisabled で LiveThread や
-  // useExternalStoreRuntime が再構成されても保持される。X-2 / FR-007)。会話由来テキストなので
-  // 境界・ログ・永続層に出さない (Principle V / FR-008)。
-  const [draft, setDraftValue] = useState('')
-  const [lastConfig, setLastConfig] = useState<SessionLaunchConfig | null>(null)
-  const [previousFailure, setPreviousFailure] = useState<LaunchFailureReason | null>(null)
-  /** reset 時点の失敗理由を読むための写し (reset は依存なしの callback のため state を直接読めない)。 */
-  const failureRef = useRef<LaunchFailureReason | null>(null)
-
-  const sessionIdRef = useRef<string | null>(null)
-  const portRef = useRef<MessagePort | null>(null)
-  /** launch handshake より先に届いた port を待避する (postMessage と invoke 解決の順序が保証されないため)。 */
-  const bufferedRef = useRef<BufferedPort | null>(null)
-
-  const applyEvent = useCallback((event: SessionEvent): void => {
-    switch (event.kind) {
-      case 'state':
-        setRunState(event.state)
-        break
-      case 'message':
-        setMessages((prev) => upsertMessage(prev, toThreadMessage(event.message)))
-        break
-      case 'permission-request':
-        setPending({
-          requestId: event.request.requestId,
-          toolName: event.request.toolName,
-          input: event.request.input,
-          scope: event.request.scope
-        })
-        break
-      case 'permission-denied':
-        setDenied((prev) => [...prev, event.denied])
-        break
-      case 'failure':
-        failureRef.current = event.reasonKey
-        setFailureReason(event.reasonKey)
-        // **承認待ちを畳む** (pr-gate po M-401)。awaiting 中に provider-error/stream 例外が来ると
-        // FailureBanner と ApprovalCard が競合表示になる。terminal failure では承認カードを消す。
-        setPending(null)
-        break
-      case 'interrupt-receipt':
-        // 途中出力は保持され、承認待ち/キュー済みは state で反映される (FR-015)。表示は最小。
-        break
-    }
-  }, [])
-
-  const wirePort = useCallback(
-    (port: MessagePort): void => {
-      portRef.current = port
-      port.onmessage = (ev: MessageEvent): void => applyEvent(ev.data as SessionEvent)
-      port.start()
-    },
-    [applyEvent]
+  const getDraft = useCallback(() => store.getDraft(sessionId), [store, sessionId])
+  const setDraft = useCallback(
+    (text: string) => store.setDraft(sessionId, text),
+    [store, sessionId]
+  )
+  const appendUser = useCallback(
+    (text: string) => store.appendUser(sessionId, text),
+    [store, sessionId]
+  )
+  const send = useCallback((text: string) => store.send(sessionId, text), [store, sessionId])
+  const interrupt = useCallback(() => store.interrupt(sessionId), [store, sessionId])
+  const respond = useCallback(
+    (requestId: string, outcome: 'allow' | 'deny') => store.respond(sessionId, requestId, outcome),
+    [store, sessionId]
+  )
+  const end = useCallback(() => store.end(sessionId), [store, sessionId])
+  const kill = useCallback(() => store.kill(sessionId), [store, sessionId])
+  const close = useCallback(() => store.close(sessionId), [store, sessionId])
+  const clearQueueRejection = useCallback(
+    () => store.clearQueueRejection(sessionId),
+    [store, sessionId]
   )
 
-  useEffect(() => {
-    const onWindowMessage = (event: MessageEvent): void => {
-      // 自 origin・自 window 由来のみ (preload は自 origin へ transfer。pr-gate S-L-001)。
-      if (event.origin !== window.location.origin || event.source !== window) return
-      const data = event.data as SessionPortData
-      if (data.marker !== SESSION_PORT_MESSAGE || typeof data.sessionId !== 'string') return
-      const port = event.ports[0]
-      if (port === undefined) return
-      if (sessionIdRef.current === data.sessionId) wirePort(port)
-      // まだ handshake が返っていない (sessionId 未確定)。待避して launch で拾う。
-      else bufferedRef.current = { sessionId: data.sessionId, port }
+  return useMemo(() => {
+    if (state === undefined) return null
+    // 導出は store の純関数に一本化する (一覧と表示中セッションで判定を分けない)。
+    return {
+      sessionId,
+      state,
+      ...deriveSessionView(state, status),
+      queue: store.queueOf(sessionId),
+      getDraft,
+      setDraft,
+      appendUser,
+      send,
+      interrupt,
+      respond,
+      end,
+      kill,
+      close,
+      clearQueueRejection
     }
-    window.addEventListener('message', onWindowMessage)
-    return () => window.removeEventListener('message', onWindowMessage)
-  }, [wirePort])
-
-  // **unmount 時に稼働セッションを kill する** (画面遷移で SessionScreen が unmount される経路。
-  // これが無いと supervisor が孤児化し、単一セッション不変で再起動も拒否される (pr-gate C-001 / FR-017)。
-  useEffect(() => {
-    return () => {
-      const id = sessionIdRef.current
-      if (id !== null) void capability().killSession(id)
-      portRef.current?.close()
-      portRef.current = null
-    }
-  }, [])
-
-  const launch = useCallback(
-    async (config: SessionLaunchConfig): Promise<void> => {
-      setLastConfig(config)
-      // 前回の残りを片付けてから起動する。
-      // (bufferedRef はここで null 化しない — TS の control-flow が `.current` を `null` に固定し、
-      //  後段の buffered 取り出しが never になるため。別 sessionId の残りは line の照合で弾かれ無害。)
-      portRef.current?.close()
-      portRef.current = null
-      sessionIdRef.current = null
-      setMessages([])
-      setDenied([])
-      setPending(null)
-      failureRef.current = null
-      setFailureReason(null)
-      setPreviousFailure(null)
-      setRejectReason(null)
-      setKilled(false)
-      setDraftValue('') // 新規起動で下書きは持ち越さない (X-2 / R2-M-002 の discard 相当)
-      setRunState('launching')
-      setPhase('launching')
-
-      let handshake
-      try {
-        handshake = await capability().launchSession(config)
-      } catch {
-        setRejectReason('launch-failed')
-        setPhase('rejected')
-        return
-      }
-
-      if (handshake.status === 'rejected') {
-        setRejectReason(handshake.reasonKey)
-        setPhase('rejected')
-        return
-      }
-
-      sessionIdRef.current = handshake.sessionId
-      setPhase('active')
-      // handshake より先に port が届いていたら拾う (順序非保証への対処)。
-      const buffered = bufferedRef.current
-      if (buffered !== null && buffered.sessionId === handshake.sessionId) {
-        bufferedRef.current = null
-        wirePort(buffered.port)
-      }
-    },
-    [wirePort]
-  )
-
-  const userSeqRef = useRef(0)
-  const appendUser = useCallback((text: string): void => {
-    userSeqRef.current += 1
-    const message: ThreadMessageLike = {
-      role: 'user',
-      content: [{ type: 'text', text }],
-      id: `user-${userSeqRef.current}`
-    }
-    setMessages((prev) => upsertMessage(prev, message))
-  }, [])
-
-  const send = useCallback((text: string): void => {
-    const id = sessionIdRef.current
-    if (id !== null) void capability().sendPrompt(id, text)
-  }, [])
-
-  const setDraft = useCallback((text: string): void => setDraftValue(text), [])
-
-  const interrupt = useCallback((): void => {
-    const id = sessionIdRef.current
-    if (id !== null) void capability().interruptSession(id)
-  }, [])
-
-  const kill = useCallback((): void => {
-    const id = sessionIdRef.current
-    if (id !== null) void capability().killSession(id)
-    portRef.current?.close()
-    portRef.current = null
-    // **UI をローカルで終端に落とす** (pr-gate po H-401)。worker の `done` state は port を先に閉じるため
-    // 届かず runState が更新されない。killed を立てて composer を無効化し「強制終了しました」を明示する
-    // (worker は kill 後に exit し registry から外れるため送信は無効。復帰は SessionControls の「閉じる」)。
-    setKilled(true)
-    setRunState('done')
-  }, [])
-
-  const respond = useCallback((requestId: string, outcome: 'allow' | 'deny'): void => {
-    const id = sessionIdRef.current
-    // 要求 scope は常に `once` (capability 付与は I-3。AD-041 (c))。承認カードが唯一の承認経路。
-    if (id !== null) void capability().respondPermission(id, requestId, outcome, 'once')
-    setPending(null)
-  }, [])
-
-  const reset = useCallback((): void => {
-    // **稼働セッションが在れば先に kill してから畳む** (「閉じる」経路。pr-gate C-001 / FR-017)。
-    // これを欠くと supervisor が孤児化し、sessionIdRef を null 化した後は UI から kill 不能になり
-    // 単一セッション不変で再起動も拒否される (ソフトロック)。
-    const id = sessionIdRef.current
-    if (id !== null) void capability().killSession(id)
-    portRef.current?.close()
-    portRef.current = null
-    bufferedRef.current = null
-    sessionIdRef.current = null
-    setPhase('entry')
-    setRunState('idle')
-    setMessages([])
-    setDenied([])
-    setPending(null)
-    // 失敗から戻る場合は理由をダイアログへ引き継ぐ (US-1 AC7 / pr-gate M-07)。失敗でなければ前回の理由も消す。
-    setPreviousFailure(failureRef.current)
-    failureRef.current = null
-    setFailureReason(null)
-    setRejectReason(null)
-    setKilled(false)
-    setDraftValue('') // reset で下書きも破棄 (次セッションへ持ち越さない。X-2 / R2-M-002)
-  }, [])
-
-  // 終了状態 (error/done) に達しても port は閉じない — done からの継続送信 (FR-015) を許すため。
-  // kill / reset のみが port を閉じる。
-
-  return {
-    phase,
-    runState,
-    messages,
-    pending,
-    denied,
-    failureReason,
-    rejectReason,
-    killed,
-    draft,
+  }, [
+    state,
+    status,
+    store,
+    sessionId,
+    getDraft,
     setDraft,
-    lastConfig,
-    previousFailure,
-    launch,
     appendUser,
     send,
     interrupt,
-    kill,
     respond,
-    reset
-  }
+    end,
+    kill,
+    close,
+    clearQueueRejection
+  ])
 }

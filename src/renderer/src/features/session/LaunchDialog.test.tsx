@@ -13,8 +13,7 @@ import type {
 
 import { installCapability } from '@/test-support/capability'
 
-import { LaunchDialog } from './LaunchDialog'
-import type { LiveSession } from './useLiveSession'
+import { LaunchDialog, type LaunchSource } from './LaunchDialog'
 
 /**
  * 起動設定ダイアログの renderer 単体 (X-4 FE-005 / FE-020 / SC-001 / SC-002 / SC-005 / SC-008 / US-1 AC6-7 / US-2 AC3)。
@@ -100,27 +99,13 @@ const far: ProviderSummaryDTO = {
   models: []
 }
 
-function fakeSession(over: Partial<LiveSession> = {}): LiveSession {
+function fakeSession(over: Partial<LaunchSource> = {}): LaunchSource {
   return {
     phase: 'entry',
-    runState: 'idle',
-    messages: [],
-    pending: null,
-    denied: [],
-    failureReason: null,
     rejectReason: null,
-    killed: false,
-    draft: '',
-    setDraft: () => {},
     lastConfig: null,
     previousFailure: null,
     launch: vi.fn(async () => {}),
-    appendUser: () => {},
-    send: () => {},
-    interrupt: () => {},
-    kill: () => {},
-    respond: () => {},
-    reset: () => {},
     ...over
   }
 }
@@ -914,6 +899,44 @@ describe('LaunchDialog', () => {
       'plan'
     )
     expect(screen.getByText('起動に失敗しました。もう一度お試しください。')).toBeInTheDocument()
+  })
+
+  it('終わっていないセッションと同じフォルダを選ぶと警告し、起動ボタンは有効のまま (X-5 FE-003 / US-1 AC2)', async () => {
+    install()
+    const lastConfig: SessionLaunchConfig = {
+      folderId: 'ubuntu-proj',
+      runtimeId: 'wsl:Ubuntu',
+      providerId: null,
+      modelId: null,
+      effort: null,
+      permissionMode: 'default'
+    }
+    render(
+      <LaunchDialog
+        session={fakeSession({ lastConfig, activeFolderIds: ['ubuntu-proj', 'ubuntu-proj'] })}
+      />
+    )
+    await waitFor(() =>
+      expect(screen.getByTestId('same-folder-warning')).toHaveTextContent('既に 2 件')
+    )
+    await waitFor(() => expect(screen.getByRole('button', { name: /^起動$/ })).toBeEnabled())
+  })
+
+  it('同じフォルダのセッションが無ければ警告しない', async () => {
+    install()
+    render(<LaunchDialog session={fakeSession({ activeFolderIds: ['other'] })} />)
+    await waitFor(() => expect(selects()[0].options.length).toBeGreaterThan(1))
+    fireEvent.change(selects()[0], { target: { value: 'ubuntu-proj' } })
+    expect(selects()[0].value).toBe('ubuntu-proj')
+    expect(screen.queryByTestId('same-folder-warning')).toBeNull()
+  })
+
+  it('session-limit の拒否は、終了・強制終了で空くこと (中断では空かない) を示す', () => {
+    install()
+    render(
+      <LaunchDialog session={fakeSession({ phase: 'rejected', rejectReason: 'session-limit' })} />
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent('中断だけでは空きません')
   })
 
   it('フォルダ 0 件 / WSL ランタイム 0 件の空状態を示す', async () => {

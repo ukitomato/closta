@@ -1,0 +1,146 @@
+import { describe, expect, it, vi } from 'vitest'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+
+import type { ThreadMessageLike } from '@assistant-ui/react'
+
+import type { RuntimeDescriptorDTO } from '@domain/runtime/dto'
+import type { WorkspaceFolderDTO } from '@domain/workspace/dto'
+
+import { installCapability } from '@/test-support/capability'
+
+import { createRunningSessionStore, type RunningSessionStore } from './running-session-store'
+import { RunningSessionStoreContext } from './running-session-context'
+import { SessionScreen } from './SessionScreen'
+import { MESSAGE_WINDOW } from './session-view'
+
+/**
+ * X-5 / SC-003 — 表示中セッションの本文の窓と、ヘッダの表示名 (pr-gate R2 po L-102 / L-101)。
+ * 純関数の境界は session-view.test.ts。ここでは画面としての振る舞いを確かめる:
+ * 省略行が出る → 「さらに表示」で消える → 別セッションへ切り替えて戻っても広げた窓が保たれる。
+ */
+
+const NOW = 1_700_000_000_000
+const A = '11111111-1111-4111-8111-111111111111'
+const B = '22222222-2222-4222-8222-222222222222'
+
+const UBUNTU: RuntimeDescriptorDTO = {
+  id: 'wsl:Ubuntu',
+  kind: 'wsl',
+  distroName: 'Ubuntu',
+  wslVersion: 2,
+  state: 'running',
+  isDefault: true,
+  capabilities: {
+    probeState: 'done',
+    sandboxKind: 'bubblewrap',
+    seccompStatus: 'unknown',
+    missingDependencies: [],
+    probedAt: NOW,
+    autoModeAllowed: true,
+    autoModeStatus: 'allowed'
+  },
+  hasPathMapping: true,
+  detectedAt: NOW
+}
+
+const FOLDER: WorkspaceFolderDTO = {
+  id: 'wf_0123456789ab',
+  location: { kind: 'wsl', distroName: 'Ubuntu' },
+  path: { namespace: 'wsl:Ubuntu', value: '/home/u/proj' },
+  displayName: '案件フォルダ',
+  reachability: 'reachable',
+  unreachableReason: null,
+  blockedReason: null,
+  resolutionSteps: [],
+  registeredAt: NOW
+}
+
+function messages(count: number): ThreadMessageLike[] {
+  return Array.from({ length: count }, (_, i) => ({
+    id: `m${i}`,
+    role: 'assistant' as const,
+    content: [{ type: 'text' as const, text: `本文 ${i}` }]
+  }))
+}
+
+async function setup(options: { lists: 'loaded' | 'pending' }): Promise<RunningSessionStore> {
+  const never = new Promise<never>(() => undefined)
+  const launch = vi.fn()
+  launch.mockResolvedValueOnce({ status: 'launching', sessionId: A })
+  launch.mockResolvedValueOnce({ status: 'launching', sessionId: B })
+  const cap = installCapability({
+    listFolders: () =>
+      options.lists === 'loaded'
+        ? Promise.resolve({
+            folders: [FOLDER],
+            restoreIssues: { skipped: 0, reasonKeys: [], backupPath: null }
+          })
+        : never,
+    listRuntimes: () =>
+      options.lists === 'loaded'
+        ? Promise.resolve({
+            runtimes: [UBUNTU],
+            enumerationIssues: [],
+            wslAvailability: 'available'
+          })
+        : never,
+    launchSession: launch
+  })
+  const store = createRunningSessionStore(() => cap)
+  store.attach(window)
+  for (let i = 0; i < 2; i += 1) {
+    await store.launch({
+      folderId: FOLDER.id,
+      runtimeId: UBUNTU.id,
+      providerId: null,
+      modelId: null,
+      effort: null,
+      permissionMode: 'default'
+    })
+  }
+  store.setState((s) => ({
+    sessions: {
+      ...s.sessions,
+      [A]: { ...s.sessions[A]!, messages: messages(MESSAGE_WINDOW + 1) }
+    },
+    selectedId: A
+  }))
+  render(
+    <RunningSessionStoreContext.Provider value={store}>
+      <SessionScreen />
+    </RunningSessionStoreContext.Provider>
+  )
+  return store
+}
+
+describe('SessionScreen — 本文の窓 (SC-003 / pr-gate R2 po L-102)', () => {
+  it('窓からあふれた件数を省略行で示し、「さらに表示」で消える。切り替えて戻っても広げた窓が保たれる', async () => {
+    const store = await setup({ lists: 'loaded' })
+    const older = await screen.findByTestId('older-messages')
+    expect(older).toHaveTextContent('古いメッセージ 1 件を省略しています。')
+
+    await userEvent.click(within(older).getByRole('button', { name: 'さらに表示' }))
+    await waitFor(() => expect(screen.queryByTestId('older-messages')).toBeNull())
+
+    act(() => store.select(B))
+    await waitFor(() => expect(store.getState().selectedId).toBe(B))
+    act(() => store.select(A))
+    await waitFor(() => expect(store.getState().selectedId).toBe(A))
+    expect(screen.queryByTestId('older-messages')).toBeNull()
+  })
+})
+
+describe('SessionScreen — ヘッダの表示名 (pr-gate R1 po L-001 / R2 po L-101)', () => {
+  it('一覧を読み込んだらフォルダの表示名を出す', async () => {
+    await setup({ lists: 'loaded' })
+    await waitFor(() =>
+      expect(screen.getByTestId('session-title')).toHaveTextContent('案件フォルダ')
+    )
+  })
+
+  it('一覧の読み込み中は「登録が解除された作業フォルダ」と断定しない', async () => {
+    await setup({ lists: 'pending' })
+    expect(await screen.findByTestId('session-title')).not.toHaveTextContent('登録が解除された')
+  })
+})

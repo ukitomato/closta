@@ -1,4 +1,5 @@
 import type { LaunchFailureReason, SessionLaunchRejectReason } from '@domain/session/agent-session'
+import { MAX_CONCURRENT_SESSIONS } from '@domain/session/concurrency'
 import { MAX_PRESETS, type SafePermissionMode } from '@domain/session/launch-config'
 import type { AxisResetReason, LaunchBlocker } from '@domain/session/launch-resolution'
 import type { SavePresetResult } from '@domain/session/preset'
@@ -8,8 +9,8 @@ import type { SessionRunState } from '@domain/session/run-state'
  * X-1 セッション起動 + ストリーミングの日本語ラベル (FE-030 / FR-020 / Principle XV)。
  *
  * **理由キーは `session`/`infra` が保持し、訳出は `ui`** (Principle XV。R-2 と同じ分担)。
- * `LaunchFailureReason` (9 種) + 調停由来 (`session-active` / `unknown-target`) + X-4 の起動前段
- * (`invalid-config` / `provider-unavailable` / `needs-confirmation`) の計 14 種を網羅する。
+ * `LaunchFailureReason` (10 種。X-5 で `supervisor-exited`) + 調停由来 (`session-limit` / `shutting-down` /
+ * `unknown-target`) + X-4 の起動前段 (`invalid-config` / `provider-unavailable` / `needs-confirmation`) の計 16 種を網羅する。
  */
 
 const LAUNCH_REJECT_LABELS: Record<SessionLaunchRejectReason, string> = {
@@ -26,10 +27,13 @@ const LAUNCH_REJECT_LABELS: Record<SessionLaunchRejectReason, string> = {
   'provider-error':
     'Provider の認証/接続でエラーが発生しました。ログイン状態やクレジットを確認してください。',
   'interrupt-unavailable': 'このセッションは中断に対応していないため強制終了に切り替えました。',
-  // 稼働中に加え、reset 直後の kill 完了前 (競合窓) にも出る。「停止してから起動」だと直前に停止した利用者に
-  // 矛盾して映るため、停止処理中も含めて「少し待って再試行」に寄せる (pr-gate po M-001)。
-  'session-active':
-    '別のセッションが稼働中、または停止処理中です。少し待ってから再度お試しください。',
+  // X-5: supervisor (全セッションをまとめるプロセス) の終了。全セッションが同時に終わる (FR-008)。
+  'supervisor-exited':
+    'セッションをまとめて管理するプロセスが終了したため、すべてのセッションが終了しました。新しく起動し直してください。',
+  // X-5: 上限超過 (FR-006)。停止処理中の枠も数えるため「終了を待つ」も含める。上限値は domain の定数から組む。
+  // 枠を空ける操作を、一覧に実際に出る操作どおりに案内する (pr-gate R1 po M-004)。中断だけでは枠は空かない (FR-011)。
+  'session-limit': `同時に動かせるセッションは ${MAX_CONCURRENT_SESSIONS} 件までです。プロンプト待ち・応答待ち・中断のセッションは「終了」、起動中・応答中・承認待ちのセッションは「強制終了」で枠が空きます (中断だけでは空きません)。停止処理中のセッションも数えるため、終わるまで少し待つ場合があります。`,
+  'shutting-down': 'アプリを終了しているため起動できません。',
   'unknown-target': '選んだ作業フォルダまたはランタイムが見つかりませんでした。',
   // X-4 の起動前段 (spec US-1 AC7)。値 (パス・モデル ID) は含めない。
   'invalid-config':
@@ -66,6 +70,81 @@ const RUN_STATE_LABELS: Record<SessionRunState, string> = {
 
 export function runStateLabel(state: SessionRunState): string {
   return RUN_STATE_LABELS[state]
+}
+
+/* ── 稼働中セッションの一覧 (X-5 FE-004 / FR-009 / FR-011 / Principle XV) ── */
+
+/**
+ * 一覧の行の状態。run-state と生存フラグの組から決める (`rowStatus`)。
+ * とくに `done` は生存なら「応答待ち」、終わっていれば「終了済み」(FR-009)。
+ */
+export const SESSION_ROW_STATUS_LABELS = {
+  launching: '起動中',
+  // 最初のプロンプトを待っている (claude は最初のプロンプトまで何もしない。pr-gate R1 po H-001)。
+  ready: 'プロンプト待ち',
+  running: '応答中',
+  awaiting: '承認待ち',
+  interrupted: '中断',
+  waiting: '応答待ち',
+  // 終了を押した後、claude の終わりを受けるまで (pr-gate R2 po L-103)。
+  ending: '終了中',
+  failed: '失敗',
+  ended: '終了済み'
+} as const
+
+export type SessionRowStatus = keyof typeof SESSION_ROW_STATUS_LABELS
+
+/** 一覧と表示中セッションの操作 (FR-011)。 */
+export const SESSION_ACTION_LABELS = {
+  newSession: '新規起動',
+  end: '終了',
+  ending: '終了中…',
+  endTitle: 'claude を正常に終了させます。',
+  interrupt: '中断',
+  kill: '強制終了',
+  killTitle: '強制終了します。途中出力の保全と履歴ファイルの整合は保証されません。',
+  close: '閉じる'
+} as const
+
+export const SESSION_LIST_LABELS = {
+  heading: '稼働中のセッション',
+  empty: '稼働中のセッションはありません。「新規起動」から起動できます。',
+  /** 一覧の aria-label。 */
+  list: '稼働中のセッション一覧'
+} as const
+
+/** 終わり方の通知 (FR-011)。 */
+export const SESSION_END_NOTICES = {
+  killed: '強制終了しました。途中出力の保全と履歴ファイルの整合は保証されません。',
+  /** 終了が期限内に終わらず強制終了に落ちた (X-1 FR-016 の警告の趣旨を黙って外さない)。 */
+  endForced:
+    '終了が時間内に完了しなかったため強制終了しました。途中出力の保全と履歴ファイルの整合は保証されません。',
+  ended: 'このセッションは終了しました。入力はできません。「閉じる」で一覧から外せます。'
+} as const
+
+/** 表示中セッションで古いメッセージを省略しているときの行 (X-5 / SC-003。本文は保持したまま、窓を広げて辿れる)。 */
+export const OLDER_MESSAGES_LABELS = {
+  showMore: 'さらに表示'
+} as const
+
+export function olderMessagesLabel(count: number): string {
+  return `古いメッセージ ${count} 件を省略しています。`
+}
+
+/** 一覧の行・表示中セッションのヘッダの表示名が引けないとき (pr-gate R1 po L-001。生の id を出さない)。 */
+export const SESSION_NAME_FALLBACKS = {
+  folder: '登録が解除された作業フォルダ',
+  runtime: '見つからないランタイム'
+} as const
+
+/** 起動時刻 (秒まで。FR-009)。 */
+export function formatStartedAt(epochMs: number): string {
+  return new Date(epochMs).toLocaleTimeString('ja-JP', { hour12: false })
+}
+
+/** 同じ登録フォルダで動いているセッションがあるときの警告 (起動はブロックしない。spec US-1 AC2)。 */
+export function sameFolderWarning(count: number): string {
+  return `この作業フォルダでは既に ${count} 件のセッションが動いています。同じファイルを同時に編集すると内容が食い違うことがあります。起動はできます。`
 }
 
 /* ── 起動設定ダイアログ (X-4 FE-004 / Principle XV) ─────────────────── */

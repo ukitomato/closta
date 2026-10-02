@@ -6,6 +6,7 @@ import { ResolutionScreen } from '@/features/folder-runtime-resolution/Resolutio
 import { SessionListScreen } from '@/features/session-list/SessionListScreen'
 import { ChatScreen } from '@/features/chat/ChatScreen'
 import { SessionScreen } from '@/features/session/SessionScreen'
+import { useRunningSessionStoreWiring } from '@/features/session/running-session-context'
 import { SCREEN_LABELS, SCREENS, useUiStore, type ScreenId } from '@/stores/ui'
 import { cn } from '@/lib/utils'
 
@@ -29,6 +30,8 @@ const SCREEN_COMPONENTS: Record<ScreenId, () => React.JSX.Element> = {
 }
 
 function App(): React.JSX.Element {
+  // 稼働中セッションの port と状態通知は画面の切り替えで外さない (X-5 / FR-008)。App の寿命で 1 回だけ張る。
+  useRunningSessionStoreWiring()
   const screen = useUiStore((s) => s.screen)
   const dark = useUiStore((s) => s.dark)
   const setScreen = useUiStore((s) => s.setScreen)

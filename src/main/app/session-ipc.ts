@@ -48,11 +48,11 @@ export interface SessionIpcDeps {
   /* ── セッション起動 + 制御 (X-1 / contracts C-1) ── */
 
   /**
-   * 起動を調停する (X-4: 依存解決の再評価 + env 導出 + VerifiedRunning + distro 一致 + 登録 + 単一セッション不変)。
+   * 起動を調停する (X-4: 依存解決の再評価 + env 導出 + VerifiedRunning + distro 一致 + 登録。X-5: 同時実行数の上限)。
    * 本文は port。
    */
   launchSession(config: SessionLaunchConfig): Promise<LaunchOutcome>
-  /** 制御を該当セッションへ送る。未知 / 終了済み sessionId なら `false`。 */
+  /** 制御を該当セッションへ送る。未知 / セッションスレッドが終わった sessionId なら `false`。 */
   controlSession(sessionId: string, control: SessionControl): boolean
 
   /* ── プリセット (X-4 / FR-009) ── */
@@ -130,7 +130,7 @@ export async function handleRefreshSessions(deps: SessionIpcDeps): Promise<Sessi
  * `launchSession(config)` (X-4 BE-005 / BE-007 の入口。US-1 の安全ゲート)。
  *
  * **起動設定の形を `checkLaunchConfig` で検証する** (6 軸・安全 3 値・モデル ID の文字種。inline の typeof を持たない)。
- * 意味 (登録済み・到達可能・カタログ・VerifiedRunning・distro 一致・単一セッション不変) は
+ * 意味 (登録済み・到達可能・カタログ・VerifiedRunning・distro 一致・同時実行数の上限) は
  * `launchSession` (→ prepareLaunch / service) が **登録の SSoT に対して**判定する (二重管理を避ける)。
  * 形の不正はプロセスを起こさず `invalid-config` で拒否する。**戻り値の `port` の transfer は `ipc.ts`。**
  */
@@ -199,15 +199,16 @@ export async function handleSendPrompt(
  * `respondPermission(sessionId, requestId, outcome, scope)` (BE-011)。**唯一の承認経路。**
  *
  * **`outcome` / `scope` を明示述語で enum 検証** (`as` 禁止。H-04)。requestId は awaiting 中の要求との一致を
- * agents (pending Map を保持) が最終判定する — main は本文経路 (port) を持たないため requestId の妥当性は
- * 形状 (非空・上限内) のみ検証し、実在照合は agents の defense-in-depth に委ねる (Principle IX / contracts C-2)。
+ * セッションスレッド (承認の受け口を保持) が最終判定する — main は本文経路 (port) を持たないため requestId の
+ * 妥当性は形状だけを検証する。X-5 で requestId は `crypto.randomUUID()` になったので、**UUID 形式**に締める
+ * (不正な形は supervisor まで届けない。design-gate R1 sec L-003)。
  */
 export async function handleRespondPermission(
   deps: SessionIpcDeps,
   args: readonly unknown[]
 ): Promise<void> {
   if (!isValidSessionId(args[0])) return
-  if (!isValidRequestToken(args[1])) return
+  if (!isValidSessionId(args[1])) return
   if (!isPermissionOutcome(args[2])) return
   if (!isPermissionScope(args[3])) return
   deps.controlSession(args[0], {
@@ -225,7 +226,19 @@ export async function handleInterruptSession(
   deps.controlSession(args[0], { kind: 'interrupt' })
 }
 
-/** `killSession(sessionId)` (BE-021)。強制終了。agents が保持する `SpawnedProcess` (wsl) を直接 kill する。 */
+/**
+ * `endSession(sessionId)` (X-5 / FR-011)。穏当な終了。応答待ち・中断済みのときだけセッションスレッドが受け付ける
+ * (他の状態では何もしない。判定はセッションの状態を知るセッションスレッドが行う)。
+ */
+export async function handleEndSession(
+  deps: SessionIpcDeps,
+  args: readonly unknown[]
+): Promise<void> {
+  if (!isValidSessionId(args[0])) return
+  deps.controlSession(args[0], { kind: 'end' })
+}
+
+/** `killSession(sessionId)` (BE-021)。強制終了。セッションスレッドが保持する `SpawnedProcess` (wsl) を直接 kill する。 */
 export async function handleKillSession(
   deps: SessionIpcDeps,
   args: readonly unknown[]

@@ -1,53 +1,155 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   AssistantRuntimeProvider,
-  createMessageQueue,
   useAui,
   useAuiState,
   useExternalStoreRuntime,
   type AppendMessage,
+  type ExternalStoreThreadListAdapter,
   type QueueItemState,
   type ThreadMessageLike
 } from '@assistant-ui/react'
 
-import type { LaunchFailureReason } from '@domain/session/agent-session'
+import type { LaunchFailureReason, PermissionDeniedInfo } from '@domain/session/agent-session'
+import type { SessionLaunchConfig } from '@domain/session/launch-config'
 
 import { EmptyState, EmptyStateGreeting } from '@/components/assistant-ui/elements/empty-state'
 import { GenerationLoader } from '@/components/assistant-ui/elements/loading-state'
 import { Thread } from '@/components/assistant-ui/elements/thread.aui'
 import { Button } from '@/components/ui/button'
+import { useRuntimes } from '@/features/runtime-list/useRuntimes'
+import { useFolders } from '@/features/workspace-folders/useFolders'
 
 import { ApprovalCard } from './ApprovalCard'
+import { DEFAULT_MAX_QUEUE_ITEMS, type EnqueueVerdict } from './composer-queue'
 import {
-  DEFAULT_MAX_QUEUE_ITEMS,
-  isBusyRunState,
-  isSendableText,
-  type EnqueueVerdict
-} from './composer-queue'
-import { createCappedAdapter } from './composer-queue-adapter'
-import { isReloginFailure, launchFailureLabel, runStateLabel } from './labels'
-import { LaunchDialog } from './LaunchDialog'
+  isReloginFailure,
+  launchFailureLabel,
+  formatStartedAt,
+  OLDER_MESSAGES_LABELS,
+  olderMessagesLabel,
+  SESSION_ACTION_LABELS,
+  SESSION_END_NOTICES,
+  SESSION_NAME_FALLBACKS,
+  SESSION_ROW_STATUS_LABELS
+} from './labels'
+import { LaunchDialog, type LaunchSource } from './LaunchDialog'
+import { useRunningThreadList } from './useRunningThreadList'
+import { useRunningSessionStore, useRunningSessionStoreApi } from './running-session-context'
+import type { LaunchState, SessionQueue } from './running-session-store'
+import { RunningSessionList } from './RunningSessionList'
+import { MESSAGE_WINDOW, rowStatus, windowMessages } from './session-view'
 import { useLiveSession, type LiveSession } from './useLiveSession'
 
 /**
- * 単一セッションの起動 + ストリーミング画面 (X-1 / FE-001・FE-002・FE-003・FE-010・FE-011・FE-020・FE-021・FE-030)。
+ * **稼働中セッションの一覧 + 表示中セッション** の 2 ペイン (X-5 / FE-012。X-1 の単一セッション画面を置き換える)。
  *
- * - **起動設定ダイアログ** (X-4 `LaunchDialog`): 6 軸を選び、依存解決・プリセット・越境警告を通して `launchSession` を発火。
- * - **live stream** (FE-001): port2 の `SessionEvent` を `useExternalStoreRuntime` に流す。
- * - **composer** (FE-002): R-3 の `isDisabled: true` を外し送信経路を開く。IME/Enter は assistant-ui の
- *   `ComposerPrimitive.Input` が扱う (composition 中の確定 Enter は送信にしない。FE-040)。
- * - **承認カード** (FE-010) / **聞かれず拒否の表示** (FE-011) / **中断・強制終了の 2 操作** (FE-020) /
- *   **失敗の理由表示 + 次操作** (FE-030)。
+ * - **一覧** (`RunningSessionList`): 行の選択で表示を切り替え、行ごとに終了・停止・閉じる (FR-009 / FR-011)。
+ * - **選択なし**: 起動設定ダイアログ (X-4 `LaunchDialog`)。同じフォルダで動いているセッションがあれば警告する。
+ * - **表示中セッション**: 本文 (port の `SessionEvent`) を `useExternalStoreRuntime` に流す。承認カード・聞かれず拒否・
+ *   失敗の理由・終わり方の通知はこのセッションに対して描く。
+ *
+ * セッションの寿命は画面と切り離す — この画面の unmount・切り替えで kill しない (FR-008)。
  */
 export function SessionScreen(): React.JSX.Element {
-  const session = useLiveSession()
-  if (session.phase === 'entry' || session.phase === 'rejected') {
-    // X-4: 起動設定ダイアログ (軸選択・プリセット・依存解決・越境警告)。X-1 の LaunchEntry を置き換える。
-    return <LaunchDialog session={session} />
+  const store = useRunningSessionStoreApi()
+  const selectedId = useRunningSessionStore((s) => s.selectedId)
+  const launch = useRunningSessionStore((s) => s.launch)
+  const folders = useFolders()
+  const runtimes = useRuntimes()
+
+  // 一覧をまだ持たない (読み込み中・失敗) 間は名前を空にし、「登録が解除された」と断定しない
+  // (一覧があって引けないときだけ fallback。X-4 po M-102 の規則の継承 / pr-gate R2 po L-101)。
+  const folderName = useCallback(
+    (id: string) =>
+      folders.list === null
+        ? ''
+        : (folders.list.folders.find((f) => f.id === id)?.displayName ??
+          SESSION_NAME_FALLBACKS.folder),
+    [folders.list]
+  )
+  const runtimeName = useCallback(
+    (id: string) =>
+      runtimes.list === null
+        ? ''
+        : (runtimes.list.runtimes.find((r) => r.id === id)?.distroName ??
+          SESSION_NAME_FALLBACKS.runtime),
+    [runtimes.list]
+  )
+
+  // **稼働中セッション = assistant-ui の thread** (Principle XIII。契約は useRunningThreadList.ts)。
+  const threadList = useRunningThreadList(folderName)
+
+  const live = useLiveSession(selectedId ?? '')
+  const runtime = useLiveRuntime(live, threadList)
+
+  return (
+    <AssistantRuntimeProvider runtime={runtime.runtime}>
+      <div className="flex h-full min-h-0">
+        <aside className="border-border w-64 shrink-0 border-r">
+          <RunningSessionList runtimeName={runtimeName} />
+        </aside>
+        <section className="min-w-0 flex-1" aria-label="表示中のセッション">
+          {live !== null && live.queue !== null ? (
+            <LiveSessionPane
+              key={live.sessionId}
+              session={live}
+              queue={live.queue}
+              hiddenCount={runtime.hiddenCount}
+              onShowMore={runtime.showMore}
+              title={folderName(live.state.config.folderId)}
+              subtitle={[
+                runtimeName(live.state.config.runtimeId),
+                formatStartedAt(live.state.startedAt)
+              ]
+                .filter((part) => part !== '')
+                .join(' · ')}
+            />
+          ) : launch.phase === 'launching' ? (
+            <Launching />
+          ) : (
+            <div className="h-full overflow-auto p-6">
+              <NewSessionDialog launch={launch} onLaunch={(config) => store.launch(config)} />
+            </div>
+          )}
+        </section>
+      </div>
+    </AssistantRuntimeProvider>
+  )
+}
+
+/** 起動設定ダイアログに渡す面 (起動状態と、終わっていないセッションのフォルダ)。 */
+function NewSessionDialog({
+  launch,
+  onLaunch
+}: {
+  readonly launch: LaunchState
+  readonly onLaunch: (config: SessionLaunchConfig) => Promise<void>
+}): React.JSX.Element {
+  const order = useRunningSessionStore((s) => s.order)
+  const sessions = useRunningSessionStore((s) => s.sessions)
+  const statuses = useRunningSessionStore((s) => s.statuses)
+  // 同一フォルダの警告の対象は**終わっていない**セッション (spec US-1 AC2)。
+  const activeFolderIds = useMemo(
+    () =>
+      order.flatMap((id) => {
+        const session = sessions[id]
+        if (session === undefined || statuses[id]?.claudeAlive === false) return []
+        return [session.config.folderId]
+      }),
+    [order, sessions, statuses]
+  )
+  const source: LaunchSource = {
+    phase: launch.phase,
+    rejectReason: launch.rejectReason,
+    lastConfig: launch.lastConfig,
+    previousFailure: launch.previousFailure,
+    activeFolderIds,
+    launch: onLaunch
   }
-  if (session.phase === 'launching') return <Launching />
-  return <LiveThread session={session} />
+  // 起動中は `Launching` に差し替わるので、拒否・失敗で戻るとダイアログは作り直され lastConfig を復元する (X-4 US-1 AC7)。
+  return <LaunchDialog session={source} />
 }
 
 function Launching(): React.JSX.Element {
@@ -67,129 +169,144 @@ function extractText(message: AppendMessage): string {
     .trim()
 }
 
-function LiveThread({ session }: { readonly session: LiveSession }): React.JSX.Element {
-  const pending = session.pending
+const EMPTY_MESSAGES: readonly ThreadMessageLike[] = []
 
-  // `appendUser` / `send` / `interrupt` は useLiveSession の**安定 useCallback (deps `[]`)** なので、driver から直接使える
-  // (毎 render 同一参照。ref を掴む必要がない = react-hooks/refs を避ける)。
-  const { appendUser, send, interrupt } = session
-
-  // **実行中の入力積み = assistant-ui の native message queue** (X-2 / FR-004/005)。
-  // `driver.cancel` を**渡さない** — こうすると実行中の送信 (steer lane) は割り込みでなく
-  // 「現ターン完了後に処理 (process next)」に degrade する = **次ターン送信・interrupt→steer しない** (FR-005)。
-  // dispatch (driver.run) が唯一の送信経路 (queue 提供時 runtime は onNew を呼ばず enqueue/steer に回す。
-  // external-store-thread-runtime-core の append 実装)。**controller は useState で 1 度だけ生成**し安定させる。
-  const [messageQueue] = useState(() =>
-    createMessageQueue({
-      run: (message) => {
-        const text = extractText(message)
-        if (!isSendableText(text)) return // 空/空白・バイト長超過は送らない (FR-003 / R2-M-003)
-        appendUser(text)
-        send(text)
-      }
-    })
+/**
+ * **ランタイムは 1 つ** (X-5 / Principle XIII)。表示中のセッションの本文・状態・キューを渡し、稼働中セッションを
+ * `adapters.threadList` で並べる。adapter の `threadId` が変わると assistant-ui はスレッドの中身 (composer を含む) を
+ * 作り直す。選択なし (起動ダイアログ表示中) は本文なし・composer 無効。
+ */
+function useLiveRuntime(
+  session: LiveSession | null,
+  threadList: ExternalStoreThreadListAdapter
+): {
+  readonly runtime: ReturnType<typeof useExternalStoreRuntime>
+  readonly hiddenCount: number
+  readonly showMore: () => void
+} {
+  /*
+   * **assistant-ui に渡すのは末尾の窓だけにする** (X-5 / SC-003)。assistant-ui の ThreadClient は messages が変わるたびに
+   * 全メッセージぶんの MessageClient を作り直す (件数に比例。仮想化は DOM にしか効かない) ため、表示中のセッションが
+   * 伸び続けると 1 件ごとの更新が 50ms を超える (実測: 約 280 件で 51〜76ms)。窓で切れば 1 回の更新は件数によらず一定になる。
+   * **本文の保持は store に全件残す** (FR-008)。省略した分は「さらに表示」で窓を広げて辿れる (Principle XII)。
+   * 配列は messages と窓が変わったときだけ作り直す — 下書きの入力などの再描画で毎回作ると、毎打鍵で窓ぶんの再構築が走る。
+   * 窓の広さはセッションごとに持つ。
+   */
+  const [windows, setWindows] = useState<Readonly<Record<string, number>>>({})
+  const sessionId = session?.sessionId ?? null
+  const messages = session?.state.messages ?? EMPTY_MESSAGES
+  const windowSize = sessionId === null ? MESSAGE_WINDOW : (windows[sessionId] ?? MESSAGE_WINDOW)
+  const { windowed, hiddenCount } = useMemo(
+    () => windowMessages(messages, windowSize),
+    [messages, windowSize]
   )
+  const showMore = useCallback(() => {
+    if (sessionId === null) return
+    setWindows((w) => ({ ...w, [sessionId]: (w[sessionId] ?? MESSAGE_WINDOW) + MESSAGE_WINDOW }))
+  }, [sessionId])
 
-  // **積み込み時の検証 (capped adapter)** (X-2 / FR-003 / FR-004 / R2-M-001)。native queue は積み込み口に
-  // validation を持たないため adapter を wrap し、enqueue 時に空/空白・バイト超過 (`'invalid'`) と件数上限 (`'full'`)
-  // を拒否して理由を提示する (最古破棄しない。dispatch 時の遅延失敗も作らない)。判定結果を `rejection` に写して表示する。
-  const [rejection, setRejection] = useState<EnqueueVerdict | null>(null)
-  const [cappedAdapter] = useState(() =>
-    createCappedAdapter(messageQueue.adapter, (verdict) =>
-      setRejection(verdict === 'ok' ? null : verdict)
-    )
-  )
-
-  // **実行中の pending を表示するため steer lane を state に写す** (X-2 / FR-004 の可視化)。
-  // runtime は実行中送信を steer lane (`adapter.steerItems`) に回すが、これは `composer.queue`
-  // (ComposerPrimitive.Queue の表示ソース = queue lane) に出ない (queue-behavior.test で確認)。
-  // controller の subscribe で steer lane を反映し、PendingQueueNotice で表示する。
-  const [pendingQueue, setPendingQueue] = useState<readonly QueueItemState[]>(
-    messageQueue.adapter.steerItems
-  )
-  useEffect(() => {
-    // 初期値は useState(...) で設定済み。以降の変化を subscribe で反映する。
-    return messageQueue.subscribe(() => setPendingQueue(messageQueue.adapter.steerItems))
-  }, [messageQueue])
-
-  // **turn が in-flight な間 = busy** (`running` / `awaiting_permission`。単一 locus は composer-queue の isBusyRunState)。
-  // busy 中の送信は queue に積み、busy 立下り (turn 完了) で dispatch する (FR-004/FR-005。承認待ち中も積む = C-3/AC-3/SC-003)。
-  const busy = isBusyRunState(session.runState)
-
-  // **中断の単一 locus** (FR-006 / R2-M-002 / pr-gate po-N-001)。composer の停止ボタン (onCancel) と SessionControls の
-  // 「中断」ボタンの両方からこれを呼ぶ。**notifyCancelled を interrupt の前に呼ぶ** — こうすると queue が pause され、
-  // 続く busy 立下りの notifyIdle でも積んだ入力が dispatch されず still_queued として残る (中断で誤 dispatch しない)。
-  // どちらか片方だけが notifyCancelled を呼ぶと、もう一方の経路で still_queued が即送信される欠陥になる (po-N-001)。
-  const handleInterrupt = useCallback(() => {
-    messageQueue.notifyCancelled()
-    interrupt()
-  }, [messageQueue, interrupt])
+  // **turn が in-flight な間 = busy** (`running` / `awaiting_permission`)。終端では busy にしない。
+  const busy =
+    session !== null &&
+    !session.terminal &&
+    (session.runState === 'running' || session.runState === 'awaiting_permission')
 
   const runtime = useExternalStoreRuntime({
-    messages: session.messages as ThreadMessageLike[],
-    // **`running` / `awaiting_permission` を busy = isRunning とみなす** (turn が in-flight。承認待ち中の送信も積むため。FR-004)。
-    // busy 中は runtime の append が送信を steer lane に回し (`message.steer ?? isRunning`)、notifyIdle まで held にする。
+    messages: windowed as ThreadMessageLike[],
     // `launching` は busy にしない — 「利用者の初回プロンプト待ち」であり (claude は初回 user メッセージが届くまで
-    // `system/init` すら出さない — 実測)、この間 composer を **送信ボタン**にしておかないと最初のプロンプトを送れず
-    // デッドロックする (quickstart 実機不具合)。起動窓の中断は SessionControls の「強制終了」が担う。
+    // `system/init` すら出さない — 実測)、composer を送信ボタンにしておかないと最初のプロンプトを送れない。
     isRunning: busy,
-    // **error / 強制終了後は composer を無効化する** (pr-gate po H-001 / H-401)。terminal error 後も
-    // 強制終了 (kill) 後も agents の query loop / worker は終了済みで、送信しても永久に消費されない
-    // (worker は kill で exit し registry から外れる) — 有効なままだと「打っても応答が来ない」dead-end を再生産する。
-    // 復帰は FailureBanner / SessionControls の「閉じる」(reset) に一本化。done / interrupted は継続有効なので無効化しない。
-    isDisabled: session.runState === 'error' || session.killed,
-    // **native message queue (capped adapter) を宣言** (FR-004)。実行中の送信はここに積まれ (steer lane。
-    // PendingQueueNotice で表示)、現ターン完了 (notifyIdle) で dispatch される。積み込み時に空/超過・件数上限を
-    // 拒否する (capped adapter。R2-M-001)。
-    queue: cappedAdapter,
+    // **送信できない終端では composer を無効化する** (失敗 / 終了済み / 強制終了 / 終了処理中。X-1 pr-gate po H-001 /
+    // FR-010 / R3-H-04)。有効なままだと「打っても応答が来ない」dead-end を再生産する。done / interrupted かつ生存中は有効。
+    isDisabled: session === null || session.terminal,
+    // **native message queue (capped adapter)** (X-2 FR-004)。**セッションごとに store が持つ** (FR-010) — 表示していない
+    // 間も状態の変化で dispatch / 取り消しが進む (完了 trigger は store の syncQueue)。`driver.cancel` を渡さないので
+    // 実行中の送信 (steer lane) は「現ターン完了後に処理」に degrade する (FR-005)。
+    ...(session?.queue != null ? { queue: session.queue.adapter } : {}),
     convertMessage: (message) => message,
-    // queue 提供時 runtime は送信を queue に回すため onNew は呼ばれない (append 実装)。
-    // queue 非提供時の fallback として dispatch と同じ処理を残す (二重送信は起きない = runtime はどちらか一方)。
+    // queue 提供時 runtime は送信を queue に回すため onNew は呼ばれない (append 実装)。queue 非提供時の fallback。
     onNew: (message) => {
       const text = extractText(message)
-      if (text.length > 0) {
+      if (session !== null && text.length > 0) {
         session.appendUser(text)
         session.send(text)
       }
       return Promise.resolve()
     },
-    // composer の停止ボタンは中断に割り当てる (強制終了は別ボタン。FR-015/016)。
-    // **中断は handleInterrupt に一本化** (notifyCancelled → interrupt。still_queued 残置。FR-006 / R2-M-002 / po-N-001)。
+    // composer の停止ボタンは中断に割り当てる (強制終了は一覧の別ボタン。X-1 FR-015/016)。
+    // **中断の単一 locus** (X-2 FR-006 / po-N-001): store の interrupt が notifyCancelled → interrupt の順で呼ぶ。
     onCancel: () => {
-      handleInterrupt()
+      session?.interrupt()
       return Promise.resolve()
-    }
+    },
+    adapters: { threadList }
   })
 
-  // **終端か** (error / 強制終了)。render 中に導出し、pending の disposition 表示と dispatch 抑止に使う (FR-006)。
-  const terminal = session.runState === 'error' || session.killed
+  return { runtime, hiddenCount, showMore }
+}
 
-  // **完了 trigger** (FR-005 / FR-006): busy 立上り (running/awaiting_permission へ) で notifyBusy、立下りで dispatch。
-  // 立下り先が **終端 (error/強制終了) なら notifyIdle でなく notifyCancelled** — 未 dispatch 項目を dispatch せず保持し
-  // (cancelled として提示。reset/再 launch で unmount 破棄)、通常完了 (done/interrupted) なら notifyIdle で次ターン dispatch する。
-  // running↔awaiting_permission の往復では busy が継続するため edge が立たず、承認を挟んでも mid-turn dispatch しない。
-  const prevBusyRef = useRef(false)
+/** 表示中セッションのペイン (通知・承認カード・Thread)。セッションごとに作り直す (`key`)。 */
+function LiveSessionPane({
+  session,
+  queue,
+  hiddenCount,
+  onShowMore,
+  title,
+  subtitle
+}: {
+  readonly session: LiveSession
+  readonly queue: SessionQueue
+  readonly hiddenCount: number
+  readonly onShowMore: () => void
+  /** ヘッダの表示名 (作業フォルダ) と補足 (ランタイム・起動時刻)。 */
+  readonly title: string
+  readonly subtitle: string
+}): React.JSX.Element {
+  const { state } = session
+  const pending = state.pending
+  const messageQueue = queue.controller
+
+  // **実行中の pending を表示するため steer lane を state に写す** (X-2 / FR-004 の可視化)。
+  // runtime は実行中送信を steer lane (`adapter.steerItems`) に回すが、これは `composer.queue`
+  // (ComposerPrimitive.Queue の表示ソース = queue lane) に出ない (queue-behavior.test で確認)。
+  const [pendingQueue, setPendingQueue] = useState<readonly QueueItemState[]>(
+    messageQueue.adapter.steerItems
+  )
   useEffect(() => {
-    if (busy && !prevBusyRef.current) messageQueue.notifyBusy()
-    else if (!busy && prevBusyRef.current) {
-      if (terminal) messageQueue.notifyCancelled()
-      else messageQueue.notifyIdle()
-    }
-    prevBusyRef.current = busy
-  }, [busy, terminal, messageQueue])
+    return messageQueue.subscribe(() => setPendingQueue(messageQueue.adapter.steerItems))
+  }, [messageQueue])
+
+  // 下書きの復元元はペインがマウントされた (= このセッションに切り替えた) 時点の値。
+  const { getDraft, setDraft } = session
+  const [draftSource] = useState(() => ({ draft: getDraft(), setDraft }))
+
+  const terminal = session.terminal
+  const errored = session.failureReason !== null || session.runState === 'error'
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <SessionControls session={session} onInterrupt={handleInterrupt} />
-      {/* error 状態は必ず理由と次操作を出す。failure イベントが理由を伴わず来た場合も汎用表示に倒す (US-4 AC-8 / M-002)。 */}
-      {(session.failureReason !== null || session.runState === 'error') && (
-        <FailureBanner reason={session.failureReason} onReset={session.reset} />
+      <SessionHeader session={session} title={title} subtitle={subtitle} />
+      {/* error 状態は必ず理由と次操作を出す。failure イベントが理由を伴わず来た場合も汎用表示に倒す (X-1 US-4 AC-8)。 */}
+      {errored && <FailureBanner reason={session.failureReason} onClose={session.close} />}
+      {/* 終わり方の通知 (FR-011): 終了が強制終了に落ちた / 強制終了 / 正常に終了した。 */}
+      {!errored && (state.endForced || state.killed || session.ended) && (
+        <EndNotice
+          message={
+            state.endForced
+              ? SESSION_END_NOTICES.endForced
+              : state.killed
+                ? SESSION_END_NOTICES.killed
+                : SESSION_END_NOTICES.ended
+          }
+          onClose={session.ended ? session.close : null}
+        />
       )}
-      {/* 強制終了は error ではないので専用の軽い終端通知を出す (pr-gate po H-401)。 */}
-      {session.killed && session.runState !== 'error' && <KilledNotice onReset={session.reset} />}
-      {session.denied.length > 0 && <DeniedNotice session={session} />}
-      {rejection !== null && !terminal && (
-        <QueueRejectionNotice verdict={rejection} onDismiss={() => setRejection(null)} />
+      {state.denied.length > 0 && <DeniedNotice denied={state.denied} />}
+      {state.queueRejection !== null && !terminal && (
+        <QueueRejectionNotice
+          verdict={state.queueRejection}
+          onDismiss={session.clearQueueRejection}
+        />
       )}
       {/* 終端では pending を「取り消された入力」として提示 (dispatch されない)。非終端では「実行後に送信予定」。 */}
       {terminal && pendingQueue.length > 0 && <CancelledQueueNotice items={pendingQueue} />}
@@ -198,7 +315,7 @@ function LiveThread({ session }: { readonly session: LiveSession }): React.JSX.E
           items={pendingQueue}
           onRemove={(id) => {
             messageQueue.adapter.remove(id)
-            setRejection(null) // 空きができたので拒否理由を消す
+            session.clearQueueRejection() // 空きができたので拒否理由を消す
           }}
         />
       )}
@@ -210,17 +327,26 @@ function LiveThread({ session }: { readonly session: LiveSession }): React.JSX.E
           />
         </div>
       )}
+      {hiddenCount > 0 && (
+        <div
+          role="status"
+          className="border-border text-muted-foreground flex items-center gap-2 border-b px-4 py-1.5 text-xs"
+          data-testid="older-messages"
+        >
+          <span className="flex-1">{olderMessagesLabel(hiddenCount)}</span>
+          <Button type="button" size="sm" variant="ghost" onClick={onShowMore}>
+            {OLDER_MESSAGES_LABELS.showMore}
+          </Button>
+        </div>
+      )}
       <div className="min-h-0 flex-1">
         {/*
          * **空でも Thread を描画する。** composer は Thread が内包しており、空状態を EmptyState で
          * 差し替えて Thread ごと隠すと入力欄が消え、初回プロンプトを送れずデッドロックする
          * (quickstart 実機不具合。claude は初回 user メッセージまで無出力なので UI 側が起点)。
-         * 空状態の案内は Thread の Welcome slot に日本語で出す。
          */}
-        <AssistantRuntimeProvider runtime={runtime}>
-          <DraftBridge session={session} />
-          <Thread components={{ Welcome: SessionWelcome }} />
-        </AssistantRuntimeProvider>
+        <DraftBridge session={draftSource} threadId={session.sessionId} />
+        <Thread components={{ Welcome: SessionWelcome }} />
       </div>
     </div>
   )
@@ -229,31 +355,43 @@ function LiveThread({ session }: { readonly session: LiveSession }): React.JSX.E
 /**
  * composer の下書き ↔ feature state (`session.draft`) の同期 (X-2 / FR-007 / T021)。
  *
- * `useExternalStoreRuntime` は runtime を `useState` で 1 度だけ生成し isDisabled/isRunning 変化では
- * 再生成しない (composer text は保持される) ため、単一セッションでは下書きは runtime 安定性で残る。
- * 本 bridge はそれに加え、**LiveThread (runtime) が再マウントされる経路 (将来の複数セッション/スレッド切替。
- * X-5) でも下書きを復元できるよう**、composer text を feature state に写し (捕捉)、runtime 生成時に
- * 保持していた下書きを流し込む (復元)。会話由来テキストなので境界・ログ・永続層に出さない (Principle V / FR-008)。
+ * セッションを切り替えると assistant-ui はスレッドの中身 (composer を含む) を作り直す (X-5 / FR-010)。本 bridge は
+ * composer text をセッションごとの下書きに写し (捕捉)、そのセッションのスレッドに切り替わった後で保持していた下書きを
+ * 流し込む (復元)。したがって下書きは別のセッションへ移らない。会話由来テキストなので境界・ログ・永続層に出さない
+ * (Principle V / FR-008)。
+ *
+ * **`threadId` を渡すときは、assistant-ui の表示中スレッド (`threads.mainThreadId`) がそれに切り替わるまで何もしない。**
+ * スレッドの作り直しは親 (`useExternalStoreRuntime`) の effect で起きるため子の effect より後になる。待たずに動くと、
+ * 前のセッションの composer の文字を新しいセッションの下書きに写し、復元した文字も作り直しで消える。
  */
-export function DraftBridge({ session }: { readonly session: LiveSession }): null {
+export function DraftBridge({
+  session,
+  threadId
+}: {
+  readonly session: { readonly draft: string; setDraft(text: string): void }
+  readonly threadId?: string
+}): null {
   const aui = useAui()
   const text = useAuiState((s) => s.composer.text)
+  const mainThreadId = useAuiState((s) => s.threads.mainThreadId)
+  const ready = threadId === undefined || mainThreadId === threadId
   const setDraft = session.setDraft
 
-  // 捕捉: composer の入力変化を下書き state に写す (メモリ内)。
-  useEffect(() => {
-    setDraft(text)
-  }, [setDraft, text])
-
-  // 復元: この runtime での初回のみ、保持していた下書きを空の composer に流し込む。
+  // 復元: 対象のスレッドになった後の初回のみ、保持していた下書きを空の composer に流し込む。
   const restoredRef = useRef(false)
   useEffect(() => {
-    if (restoredRef.current) return
+    if (!ready || restoredRef.current) return
     restoredRef.current = true
     if (session.draft !== '' && aui.composer.getState().text === '') {
       aui.composer.setText(session.draft)
     }
-  }, [aui, session.draft])
+  }, [aui, ready, session.draft])
+
+  // 捕捉: 復元の後の composer の入力変化を下書きに写す (メモリ内)。
+  useEffect(() => {
+    if (!ready || !restoredRef.current) return
+    setDraft(text)
+  }, [ready, setDraft, text])
 
   return null
 }
@@ -267,61 +405,42 @@ function SessionWelcome(): React.JSX.Element {
   )
 }
 
-/** 状態表示 + 中断/強制終了の 2 操作 (FE-020)。 */
-function SessionControls({
+/**
+ * 表示中セッションの状態 (一覧の行と同じラベル。操作は一覧の行に一本化する — 同名のボタンを 2 か所に出さない)。
+ */
+function SessionHeader({
   session,
-  onInterrupt
+  title,
+  subtitle
 }: {
   readonly session: LiveSession
-  readonly onInterrupt: () => void
+  readonly title: string
+  readonly subtitle: string
 }): React.JSX.Element {
-  const active =
-    session.runState === 'running' ||
-    session.runState === 'awaiting_permission' ||
-    session.runState === 'launching'
+  // どのセッションを表示しているかをヘッダでも示す (一覧の aria-current だけに頼らない。pr-gate R1 po L-001)。
   return (
     <div className="border-border flex shrink-0 items-center gap-3 border-b px-4 py-2">
-      {/* 強制終了後は runState='done' だが「完了」でなく「強制終了しました」を出す (pr-gate po H-401)。 */}
-      <span className="text-muted-foreground text-xs">
-        {session.killed ? '強制終了しました' : runStateLabel(session.runState)}
+      <span className="min-w-0 truncate text-xs font-medium" data-testid="session-title">
+        {title}
       </span>
-      <div className="ml-auto flex gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={session.runState !== 'running'}
-          // **中断は handleInterrupt に一本化** (notifyCancelled → interrupt。積んだ入力を still_queued に残す。po-N-001)。
-          onClick={onInterrupt}
-        >
-          中断
-        </Button>
-        <Button
-          type="button"
-          variant="destructive"
-          size="sm"
-          disabled={!active}
-          // 強制終了は途中出力の保全・JSONL 非破損を保証しない (FR-016)。
-          title="強制終了します。途中出力の保全と履歴ファイルの整合は保証されません。"
-          onClick={() => session.kill()}
-        >
-          強制終了
-        </Button>
-        <Button type="button" variant="ghost" size="sm" onClick={() => session.reset()}>
-          閉じる
-        </Button>
-      </div>
+      <span className="text-muted-foreground min-w-0 truncate text-xs">{subtitle}</span>
+      <span className="text-muted-foreground ms-auto shrink-0 text-xs" data-testid="session-status">
+        {SESSION_ROW_STATUS_LABELS[rowStatus(session)]}
+      </span>
     </div>
   )
 }
 
-/** 実行時失敗の理由表示 + 次操作 (FE-030)。`provider-error` は再ログイン導線。 */
+/**
+ * 実行時失敗の理由表示 + 次操作 (X-1 FE-030 / X-5 FE-030)。他のセッションの表示と選択は動かさない。
+ * 次操作は「閉じて起動し直す」— 行を閉じると起動設定ダイアログに前回の設定と理由が戻る (X-4 US-1 AC7)。
+ */
 function FailureBanner({
   reason,
-  onReset
+  onClose
 }: {
   readonly reason: LaunchFailureReason | null
-  readonly onReset: () => void
+  readonly onClose: () => void
 }): React.JSX.Element {
   // 理由キーがあれば訳出、無ければ汎用文 (error 状態は必ず理由と次操作を出す。US-4 AC-8)。
   const detail = reason !== null ? launchFailureLabel(reason) : 'セッションでエラーが発生しました。'
@@ -331,26 +450,32 @@ function FailureBanner({
       className="border-destructive/40 bg-destructive/10 text-destructive flex items-center gap-3 border-b px-4 py-2 text-sm"
     >
       <span className="flex-1">{detail}</span>
-      <Button type="button" variant="outline" size="sm" onClick={onReset}>
-        {isReloginFailure(reason) ? '起動し直す' : '再起動'}
+      <Button type="button" variant="outline" size="sm" onClick={onClose}>
+        {isReloginFailure(reason) ? '閉じて起動し直す' : '閉じて再起動'}
       </Button>
     </div>
   )
 }
 
-/** 強制終了 (kill) の終端通知 (pr-gate po H-401)。error ではないので FailureBanner とは別の軽い表示。 */
-function KilledNotice({ onReset }: { readonly onReset: () => void }): React.JSX.Element {
+/** 終わり方の通知 (FR-011)。error ではないので FailureBanner とは別の軽い表示。transcript はそのまま読める。 */
+function EndNotice({
+  message,
+  onClose
+}: {
+  readonly message: string
+  readonly onClose: (() => void) | null
+}): React.JSX.Element {
   return (
     <div
       role="status"
       className="border-border text-muted-foreground flex items-center gap-3 border-b px-4 py-2 text-sm"
     >
-      <span className="flex-1">
-        強制終了しました。途中出力の保全と履歴ファイルの整合は保証されません。
-      </span>
-      <Button type="button" variant="outline" size="sm" onClick={onReset}>
-        閉じる
-      </Button>
+      <span className="flex-1">{message}</span>
+      {onClose !== null && (
+        <Button type="button" variant="outline" size="sm" onClick={onClose}>
+          {SESSION_ACTION_LABELS.close}
+        </Button>
+      )}
     </div>
   )
 }
@@ -455,12 +580,16 @@ export function PendingQueueNotice({
 }
 
 /** 「聞かれずに拒否された」操作の表示 (FE-011 / FR-014)。 */
-function DeniedNotice({ session }: { readonly session: LiveSession }): React.JSX.Element {
+function DeniedNotice({
+  denied
+}: {
+  readonly denied: readonly PermissionDeniedInfo[]
+}): React.JSX.Element {
   return (
     <div className="border-border text-muted-foreground border-b px-4 py-2 text-xs">
       <span className="font-medium">自動的に拒否された操作:</span>
       <ul className="mt-1 list-disc pl-5">
-        {session.denied.map((d, i) => (
+        {denied.map((d, i) => (
           <li key={`${d.toolName}-${i}`}>
             {d.toolName} — {d.reason}
           </li>

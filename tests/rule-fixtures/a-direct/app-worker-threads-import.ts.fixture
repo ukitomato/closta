@@ -1,0 +1,8 @@
+// 違反サンプル (X-5 / code-gate platform-boundary M-001 / M-003): app レイヤが `node:worker_threads` を import する。
+// app / infra は標準モジュールを許されているが、`worker_threads` は全レイヤで禁じ 2 ファイルだけを開ける。
+// agents の中だけで絞ると、ここで Worker を起こして項目 20 が見ない形 (式で組んだ options) で env を注入できる。
+import { Worker } from 'node:worker_threads'
+
+export function startThread(entry: string): Worker {
+  return new Worker(entry)
+}

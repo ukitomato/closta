@@ -1,6 +1,12 @@
 import { createLineAssembler } from './protocol'
 
 /**
+ * 経路が解釈せずに運ぶ本文 (X-5)。セッションスレッドが `JSON.stringify` した `SessionEvent`。
+ * **transport (列挙と共有) に置く** — supervisor 専用のモジュールに依存しないため。`supervisor-protocol.ts` が再 export する。
+ */
+export type OpaqueBody = string & { readonly __opaqueBody: unique symbol }
+
+/**
  * 行のやり取りの経路 (AD-030 §5)。
  *
  * **本体は経路を知らない。** 本体は「行を読み、行を書く」だけであり、
@@ -25,10 +31,39 @@ import { createLineAssembler } from './protocol'
 export interface Transport {
   /** 1 行届いたときに呼ばれる。 */
   onLine(listener: (line: string) => void): void
+  /**
+   * 1 行届いたときに、そのメッセージに添えられた port と一緒に呼ばれる (X-5 / supervisor 用)。
+   * 標準入出力側の `ports` は常に空 (port を運べない)。
+   */
+  onMessage(listener: (line: string, ports: readonly BodyPortLike[]) => void): void
   /** 1 行送る。 */
   write(line: string): void
   /** 相手がいなくなったときに呼ばれる。**孤児として残らないための唯一の合図である。** */
   onClosed(listener: () => void): void
+  /**
+   * 起動要求を受けたときの**本文の出口**を作る (X-5 / AD-043 Decision 1・2)。
+   *
+   * **経路ごとの違いはここに閉じる** — 呼び出し側 (supervisor の本体) は経路を知らない (AD-030 §5)。
+   * - `parentPort` 側: 添えられた port がちょうど 1 本ならその port へ送る出口を返し、無ければ `null` (本文を
+   *   main に流す経路を作らないため、port の無い起動は拒否させる。FR-003)
+   * - 標準入出力側: 本文を `toLine(payload)` の 1 行にして書く出口を返す (単独起動の経路。FR-001)
+   */
+  openBodySink(
+    ports: readonly BodyPortLike[],
+    toLine: (payload: OpaqueBody) => string
+  ): BodySink | null
+}
+
+/** 本文の port の最小の形 (送信専用。受信 listener は登録しない — 一方向。AD-036 §2)。 */
+export interface BodyPortLike {
+  postMessage(message: unknown): void
+  close?: () => void
+}
+
+/** 1 セッション分の本文の出口。 */
+export interface BodySink {
+  post(payload: OpaqueBody): void
+  close(): void
 }
 
 /**
@@ -38,7 +73,10 @@ export interface Transport {
  * 構造だけを書き、グローバルの `process` から取り出す。
  */
 export interface ParentPortLike {
-  on(event: 'message', listener: (message: { data: unknown }) => void): void
+  on(
+    event: 'message',
+    listener: (message: { data: unknown; ports?: readonly BodyPortLike[] }) => void
+  ): void
   postMessage(message: unknown): void
   start?: () => void
 }
@@ -79,37 +117,60 @@ export function createTransport(): Transport {
 
 export function stdioTransport(): Transport {
   const closed: (() => void)[] = []
+  const write = (line: string): void => {
+    process.stdout.write(`${line}\n`)
+  }
+  const onLine = (listener: (line: string) => void): void => {
+    const assemble = createLineAssembler(listener)
+    // platform-ok: stdio は OS 分岐ではなくプロセス間の規約である。
+    process.stdin.setEncoding('utf8')
+    process.stdin.on('data', (chunk: string) => assemble(chunk))
+    process.stdin.on('end', () => {
+      for (const cb of closed) cb()
+    })
+  }
   return {
-    onLine(listener) {
-      const assemble = createLineAssembler(listener)
-      // platform-ok: stdio は OS 分岐ではなくプロセス間の規約である。
-      process.stdin.setEncoding('utf8')
-      process.stdin.on('data', (chunk: string) => assemble(chunk))
-      process.stdin.on('end', () => {
-        for (const cb of closed) cb()
-      })
+    onLine,
+    onMessage(listener) {
+      // 標準入出力は port を運べない。
+      onLine((line) => listener(line, []))
     },
-    write(line) {
-      process.stdout.write(`${line}\n`)
-    },
+    write,
     onClosed(listener) {
       closed.push(listener)
+    },
+    openBodySink(_ports, toLine) {
+      // 単独起動の経路: 本文は行に埋めて書く (FR-001 / SC-009)。
+      return { post: (payload) => write(toLine(payload)), close: () => undefined }
     }
   }
 }
 
 export function parentPortTransport(port: ParentPortLike): Transport {
+  const onMessage = (listener: (line: string, ports: readonly BodyPortLike[]) => void): void => {
+    port.on('message', (message) => {
+      /*
+       * **1 メッセージ = 1 行とする。** 標準入出力側と同じ単位にしておくと、
+       * 本体が経路の違いを見ないで済む。
+       * 文字列でない値は無視する — 送り手は親だけであり、来たら形の誤りである。
+       */
+      if (typeof message.data === 'string') listener(message.data, message.ports ?? [])
+    })
+    port.start?.()
+  }
   return {
     onLine(listener) {
-      port.on('message', (message) => {
-        /*
-         * **1 メッセージ = 1 行とする。** 標準入出力側と同じ単位にしておくと、
-         * 本体が経路の違いを見ないで済む。
-         * 文字列でない値は無視する — 送り手は親だけであり、来たら形の誤りである。
-         */
-        if (typeof message.data === 'string') listener(message.data)
-      })
-      port.start?.()
+      onMessage((line) => listener(line))
+    },
+    onMessage,
+    openBodySink(ports) {
+      // Electron 経路: 本文は port で renderer へ直送する。port が無ければ本文の出口を作らない (FR-003)。
+      if (ports.length !== 1) return null
+      const target = ports[0] as BodyPortLike
+      return {
+        post: (payload) => target.postMessage(payload),
+        close: () => target.close?.()
+      }
     },
     write(line) {
       port.postMessage(line)

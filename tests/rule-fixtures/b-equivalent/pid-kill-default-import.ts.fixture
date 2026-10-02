@@ -1,0 +1,9 @@
+// 違反サンプル (項目 19 / X-5 SH-010 / code-gate platform-boundary M-002): `process` を
+// **default import** で別名に束縛し、分割代入で kill を取る (`const { kill } = proc`)。以後は裸の `kill(...)`。
+import proc from 'process'
+
+const { kill } = proc
+
+export function reap(pid: number): void {
+  kill(pid, 'SIGKILL')
+}

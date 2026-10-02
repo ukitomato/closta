@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  isActive,
+  isSessionRunState,
   isTerminal,
   nextState,
+  SESSION_RUN_STATES,
   TERMINAL_STATES,
   type SessionAction,
   type SessionRunState
@@ -53,12 +54,16 @@ describe('nextState', () => {
     }
   })
 
-  it('終端状態 (error/done) は kill/fail で変化しない', () => {
+  it('終端状態 (error/done) は kill で変化しない。error は fail でも変化しない', () => {
     for (const s of TERMINAL_STATES) {
       expect(nextState(s, { kind: 'kill' })).toBe(s)
-      expect(nextState(s, { kind: 'fail' })).toBe(s)
     }
+    expect(nextState('error', { kind: 'fail' })).toBe('error')
     expect(nextState('error', { kind: 'send-prompt' })).toBe('error')
+  })
+
+  it('応答待ち (done) の間の失敗は error にする (X-5 / FR-012。done は claude 生存の応答待ちも表す)', () => {
+    expect(nextState('done', { kind: 'fail' })).toBe('error')
   })
 
   it('未定義の (state, action) は現状維持 (例外を投げない)', () => {
@@ -91,15 +96,12 @@ describe('nextState', () => {
   })
 })
 
-describe('isActive / isTerminal', () => {
-  it('isActive は非終端の稼働状態で true (単一セッション不変判定)', () => {
-    expect(isActive('launching')).toBe(true)
-    expect(isActive('running')).toBe(true)
-    expect(isActive('awaiting_permission')).toBe(true)
-    expect(isActive('interrupted')).toBe(true)
-    expect(isActive('idle')).toBe(false)
-    expect(isActive('error')).toBe(false)
-    expect(isActive('done')).toBe(false)
+describe('isSessionRunState / isTerminal', () => {
+  it('isSessionRunState は 7 状態だけを受け付ける (X-5 で isActive を廃止し、受信検証用の述語を足した)', () => {
+    for (const s of SESSION_RUN_STATES) expect(isSessionRunState(s)).toBe(true)
+    expect(isSessionRunState('ended')).toBe(false)
+    expect(isSessionRunState(3)).toBe(false)
+    expect(isSessionRunState(undefined)).toBe(false)
   })
 
   it('isTerminal は error/done で true', () => {

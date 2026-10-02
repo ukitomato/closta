@@ -38,11 +38,13 @@ total_terms: 42
 #### **AgentSession**
 
 - **Definition**: 稼働中の 1 セッションの**操作面の概念 interface** (X-1)。`start(input)` で起動 + stream し、
-  `sendPrompt` / `respondPermission` / `interrupt` / `stop` を持つ。**宣言は `domain`**。**実装はクラスでなく
-  `agents` の module worker (`sdk-agent-session.ts`)** が parentPort 制御 + port `SessionEvent` のメッセージ
-  プロトコルで実現する (`query()` を呼ぶ唯一の場所。`read-transcript` / `enumerate-sessions` と同じ構え)
+  `sendPrompt` / `respondPermission` / `interrupt` / `end` / `kill` を持つ (操作語彙は `SessionControl` と一致させる。
+  X-5 で `stop()` を削除)。**宣言は `domain`**。**実装はクラスでなく `agents` の セッションスレッド
+  (`sdk-agent-session.ts` を `worker_threads` の Worker として起こしたもの)** が、調停役スレッド経由の制御 +
+  本文 (`SessionEvent`) のメッセージプロトコルで実現する (`query()` を呼ぶ唯一の場所。X-5 / AD-043)
 - **日本語表記**: セッション (型名は原語のまま)
-- **Domain**: `session` (宣言) / `agents` (実装 = module worker)
+- **Domain**: `session` (宣言) / `agents` (実装 = セッションスレッド)
+- **Note**: [AD-023](decisions/0023-application-architecture.md) §3 の例示 (`stop()`) は X-5 で古くなった (AD-043 Decision 1)
 - **Counterexamples**: `Session` (Claude Code の 1 会話・永続実体) とは別。あちらは会話ログ、
   こちらは稼働中プロセスの操作面。プロセス実体は **supervisor** を参照
 - **Ref**: [AD-036](decisions/0036-single-session-launch-process-and-live-stream.md) / [AD-023](decisions/0023-application-architecture.md) §3
@@ -160,6 +162,24 @@ total_terms: 42
 - **Counterexamples**: `CredentialSource`（方式の enum）/ 平文秘密（`CredentialRef` は持たない。値は safeStorage へ）
 - **Ref**: [AD-005](decisions/0005-provider-as-registrable-value.md) / [007 spec](../specs/007-provider-registration-and-reachability/spec.md)
 
+#### **Concurrency limit（同時実行数の上限）**
+
+- **Definition**: 同時に動かせるセッションの上限 (X-5)。**10 に固定**。枠は起動要求の予約で占め、`claude` が
+  終わるまで占め続ける (応答待ちの `done` と中断済みも数える)。超過した起動は `session-limit` で拒否する
+- **日本語表記**: 同時実行数の上限
+- **Domain**: `session`
+- **Counterexamples**: **SessionLaunchConfig の「上限」軸 (コスト・ターン数。X-6) とは別物**
+- **Ref**: [AD-043](decisions/0043-single-supervisor-session-threads-and-session-limit.md) Decision 3
+
+#### **Coordinator thread（調停役スレッド）**
+
+- **Definition**: supervisor の主スレッド (X-5)。main (または標準入出力) との制御のやり取り、セッションスレッドの
+  起動と終了、状態通知のバッチ化、本文の中継を受け持つ。**本文を JSON として解釈しない**。経路 (Electron /
+  標準入出力) を知らず、本文の出口は transport が作る
+- **日本語表記**: 調停役スレッド
+- **Domain**: `session` / `agents`
+- **Ref**: [AD-043](decisions/0043-single-supervisor-session-threads-and-session-limit.md) Decision 1・2
+
 ### D
 
 #### **DetectedCandidate（検出候補）**
@@ -264,14 +284,29 @@ total_terms: 42
 - **Domain**: `runtime` / `isolation`
 - **Ref**: [AD-012](decisions/0012-docker-control-via-cli.md)
 
+#### **End（終了。穏当な終了）**
+
+- **Definition**: 応答待ち (`done`)・中断済み (`interrupted`)・最初のプロンプト待ち (起動済みで一度も送信していない `launching`) で
+  `claude` が生きているセッションに出す操作 (X-5。受け付ける状態の規則は domain の `canEnd`)。最初のプロンプト待ちでは、入力を閉じても
+  `claude` が自分から終わらないので期限を待たずに子を止める (会話の履歴がまだ無いので破損の警告は出さない)。それ以外は
+  制御 `end` で、プロンプトの入力を閉じて `claude` を正常終了させる。破損の警告は出さない。期限内に終わらなければ
+  強制終了に落とし、その旨を `end-forced` で示す
+- **日本語表記**: 終了 (操作を指すときは「終了 (穏当)」か `end` を添え、`claude` の終了・アプリの終了と区別する)
+- **Domain**: `session` / 表示は `ui`
+- **Counterexamples**: 強制終了 (`kill`。途中出力と JSONL の非破損を保証しない) とも、中断 (`interrupt`。`claude` は
+  生きたまま枠も空かない) とも別
+- **Ref**: [AD-043](decisions/0043-single-supervisor-session-threads-and-session-limit.md) Decision 3
+
 ### F
 
 #### **FailureReason (起動系)**
 
-- **Definition**: セッション起動 + 実行時失敗の**理由キー** (X-1)。9 種
+- **Definition**: セッション起動 + 実行時失敗の**理由キー** (X-1)。10 種
   (`distro-not-running` / `not-verified-running` / `distro-mismatch` / `claude-not-found` /
   `launch-failed` / `process-crashed` / `stream-protocol-error` / `provider-error` /
-  `interrupt-unavailable`)。参照キーであり**訳出は `ui`** (Principle XV)
+  `interrupt-unavailable` / `supervisor-exited`)。`supervisor-exited` は X-5 で追加 (supervisor の異常終了で
+  その supervisor の全セッションに付く)。セッションスレッドの例外とメモリ上限超過は `process-crashed`。
+  参照キーであり**訳出は `ui`** (Principle XV)。起動の拒否理由には別に `session-limit` / `shutting-down` (X-5) がある
 - **日本語表記**: 失敗理由 (起動系)
 - **Domain**: `session`/`infra` (保持) / `ui` (訳出)
 - **Counterexamples**: 列挙/transcript 読み取りの `FailureReason` (`@domain/session/target`) とは**別概念**。
@@ -394,7 +429,8 @@ total_terms: 42
 
 - **Definition**: `running` / `awaiting_permission` 中に積む未送信入力。assistant-ui の native queue
   (`createMessageQueue` / `ExternalThreadQueueAdapter`) が renderer 側の**単一 locus**として保持し、現ターン完了後に
-  同一セッションの**次ターン**として送る (X-2 / FR-004・FR-005)。中断で still_queued 維持、error/killed 終端で cancelled
+  同一セッションの**次ターン**として送る (X-2 / FR-004・FR-005)。中断で still_queued 維持、error/killed 終端で cancelled。
+  X-5 以降は**セッションごと**に保ち、`claude` の終了 (生存フラグ false。終了・強制終了を要求した時点を含む) でも cancelled
 - **日本語表記**: メッセージキュー / 実行中積み
 - **Domain**: `ui`
 - **Counterexamples**: **message mapping (メッセージ変換) とは別物** — こちらは入力欄の積み、あちらは表示への変換。
@@ -507,6 +543,17 @@ total_terms: 42
 - **Domain**: `runtime`
 - **Ref**: [AD-004](decisions/0004-branded-path-types.md)
 
+#### **Running session list（稼働中セッション一覧）**
+
+- **Definition**: renderer が持つ、この起動で開いたセッションの一覧 (X-5)。行の状態は run-state と生存フラグの組から
+  決める (`error` は「失敗」、それ以外で生存フラグ false は「終了済み」、`done` かつ生存は「応答待ち」、起動済みで一度も送信していない `launching` は「プロンプト待ち」)。
+  `claude` が終わったセッションの行も、利用者が閉じるまで残る
+- **日本語表記**: 稼働中セッション一覧
+- **Domain**: `session` (状態) / `ui` (見た目)
+- **Counterexamples**: **R-2 の (列挙の) セッション一覧とは別物** — あちらは config ディレクトリの過去のセッションを
+  列挙した一覧 (SessionSummary の集まり)
+- **Ref**: [spec 009](../specs/009-session-supervisor-and-multi-session/spec.md) FR-009
+
 ### S
 
 #### **SafePermissionMode**
@@ -530,8 +577,11 @@ total_terms: 42
 #### **SessionEvent**
 
 - **Definition**: `agents → renderer` の**一方向データ** (data plane。X-1)。`message` (逐次/完了メッセージ) /
-  `state` / `permission-request` / `permission-denied` / `interrupt-receipt` / `failure` の判別 union。
-  `MessageChannelMain` の port で直通し、**main は本文を保持・deserialize しない** (Principle IX)
+  `state` / `permission-request` / `permission-denied` / `interrupt-receipt` / `failure` / `end-forced` (X-5。
+  終了が期限切れで強制終了に落ちた) の判別 union。`MessageChannelMain` の port で届き、**main は本文を保持・
+  deserialize しない** (Principle IX)。X-5 以降はセッションスレッドが文字列化し、**調停役スレッドが JSON として
+  解釈せずに** port へ中継する (AD-043 Decision 2)。renderer が復元して形を検証する。中継中の文字列は型 `OpaqueBody`
+  (branded string) で運び、中身を解釈する関数に渡す経路を作らない
 - **日本語表記**: セッションイベント (型名は原語のまま)
 - **Domain**: `session`
 - **Counterexamples**: **制御はここに載せない** — 制御 (`SessionControl`) は control plane の検証済み IPC を通す。
@@ -541,7 +591,8 @@ total_terms: 42
 #### **SessionControl**
 
 - **Definition**: `renderer → main` の**制御要求** (control plane。X-1)。`send-prompt` / `respond-permission` /
-  `interrupt` / `kill` の判別 union。**renderer → main の検証済み IPC のみが発行できる** (data plane から発行しない)
+  `interrupt` / `end` / `kill` の判別 union (`end` は X-5。応答待ち・中断済み・最初のプロンプト待ちのセッションの `claude` を
+  終わらせる穏当な「終了」。最初のプロンプト待ちは期限を待たずに止める)。**renderer → main の検証済み IPC のみが発行できる** (data plane から発行しない)。起動 (launch) は含まない
 - **日本語表記**: セッション制御
 - **Domain**: `session`
 - **Ref**: [AD-036](decisions/0036-single-session-launch-process-and-live-stream.md) / contracts C-1
@@ -550,10 +601,14 @@ total_terms: 42
 
 - **Definition**: 単一セッションの**状態機械** (X-1)。7 状態
   (`idle` / `launching` / `running` / `awaiting_permission` / `interrupted` / `error` / `done`)。
-  遷移は純関数 `nextState(state, action)`。`launching` は launch invoke〜初 stream の窓で、単一セッション不変の判定に使う
+  遷移は純関数 `nextState(state, action)`。`launching` は launch invoke〜最初のプロンプト後の初 stream の窓
 - **日本語表記**: セッション実行状態
 - **Domain**: `session`
-- **Counterexamples**: 描画用 `SessionEvent` とは別型。単一セッション不変 (`isActive`) は registry 側で判定する
+- **Counterexamples**: 描画用 `SessionEvent` とは別型。**`done` は「応答完了・次のプロンプト待ち」と「強制終了後」の
+  両方を表す** — `claude` が終わったかどうかは run-state では判定せず、状態通知の生存フラグで判定する (X-5)。
+  状態通知の畳み込みでは `done` を終端として扱わない。応答待ちの `done` で `claude` が異常終了したら `error` に進む
+  (X-5 / FR-012)。X-1 の単一セッション不変は X-5 で廃止し、同時実行数の上限
+  (registry の生存フラグで数える) に置き換えた (AD-043)
 - **Ref**: [AD-036](decisions/0036-single-session-launch-process-and-live-stream.md)
 
 #### **SessionMessage（セッションメッセージ）**
@@ -581,7 +636,7 @@ total_terms: 42
 - **Counterexamples**: **`summary` / `firstPrompt` / `customTitle` を「要約だから安全」と扱わない。**
   SDK の定義上これらは会話由来の**逐語文字列**を含みうる（`firstPrompt` は
   "First meaningful user prompt in the session."）。IPC 境界を越える前に
-  切り詰めと制御文字の除去を通す
+  切り詰めと制御文字の除去を通す。**X-5 の状態通知 (SessionStatusUpdate) とは別物**
 - **Ref**: [AD-007](decisions/0007-session-source-of-truth-is-claude-code.md) / [AD-029](decisions/0029-session-cwd-origin-classification.md)
 
 #### **Subagent（サブエージェント）**
@@ -623,11 +678,54 @@ total_terms: 42
 
 #### **supervisor**
 
-- **Definition**: セッションのプロセスとストリームを持つ `utilityProcess`。
+- **Definition**: セッションのプロセスとストリームを持つ**単一の** `utilityProcess` (X-5 から)。
+  主スレッドの**調停役スレッド**と、セッションごとの**セッションスレッド** (`worker_threads`) からなる。
   **実体のディレクトリは `src/agents/`** である (AD-023 のレイヤ構成)。
-  **Electron API にもネイティブモジュールにも依存しない**。`node dist/supervisor.js` で単独起動できる
+  **Electron API にもネイティブモジュールにも依存しない**。単独起動の形は
+  `node <supervisor entry> --worker-entry=<worker entry の絶対パス>` (AD-043 Decision 6。AD-010 の
+  `node dist/supervisor.js` は例示)。最初の起動要求で起こし、アプリ終了まで常駐する
 - **Domain**: `session`
-- **Ref**: [AD-006](decisions/0006-supervisor-in-utility-process.md) / [AD-010](decisions/0010-supervisor-runs-standalone.md)
+- **Counterexamples**: X-1 / X-4 の「セッションごとの `utilityProcess`」は X-5 で廃止した
+- **Ref**: [AD-006](decisions/0006-supervisor-in-utility-process.md) / [AD-010](decisions/0010-supervisor-runs-standalone.md) / [AD-043](decisions/0043-single-supervisor-session-threads-and-session-limit.md)
+
+#### **Session thread（セッションスレッド）**
+
+- **Definition**: supervisor の中で 1 セッションを受け持つ `worker_threads` の Worker (X-5)。SDK `query()` の実行・
+  stream のパース・`wsl.exe` の spawn ハンドルを持ち、本文を文字列化して調停役スレッドへ送る。
+  実体は `src/agents/sdk-agent-session.ts`
+- **日本語表記**: セッションスレッド (実装語として Worker を括弧で添えてよい)
+- **Domain**: `session` / `agents`
+- **Ref**: [AD-043](decisions/0043-single-supervisor-session-threads-and-session-limit.md)
+
+#### **SessionStatusUpdate（状態通知）**
+
+- **Definition**: 一覧に要る状態だけを運ぶ小さな値 (X-5)。sessionId / run-state / 失敗の理由キー /
+  `claude` の生存フラグ。supervisor→main→renderer の経路で 100ms 窓にまとめて送る。**会話由来の文字列を含まない**
+- **日本語表記**: 状態通知
+- **Domain**: `session`
+- **Counterexamples**: **SessionSummary (セッション要約行) とは別物** — あちらは R-2 の列挙一覧の 1 行 (過去の
+  セッション)、こちらは稼働中セッションの状態。生存フラグは true→false の一方向にしか変わらない
+- **Ref**: [AD-043](decisions/0043-single-supervisor-session-threads-and-session-limit.md) Decision 4
+
+#### **claudeAlive（生存フラグ）**
+
+- **Definition**: セッションの `claude` (`wsl.exe` の子) がまだ生きているか (X-5)。状態通知のフィールドの 1 つで、
+  **枠 (同時実行数の上限) はこの値で数え、run-state では数えない**。false にするのは調停役スレッド (子の exit・
+  スレッドの終了) と main (supervisor の異常終了の合成) だけで、セッションスレッドが送る値は常に true
+- **日本語表記**: 生存フラグ
+- **Domain**: `session`
+- **Counterexamples**: run-state の `done` とは別 — `done` は「応答待ち (生存)」と「終わった後」の両方を表す。
+  true→false の一方向にしか変わらない (main の受信規則 `acceptBatch` が単調性を掛ける)
+- **Ref**: [AD-043](decisions/0043-single-supervisor-session-threads-and-session-limit.md) Decision 3・4
+
+#### **Supervisor generation（supervisor の世代）**
+
+- **Definition**: main が supervisor を fork するたびに進める番号 (X-5)。状態通知・スレッドの終了・異常終了の合成に付け、
+  **前の世代の残骸を新しい世代のセッションに付けない**ために照合する
+- **日本語表記**: supervisor の世代
+- **Domain**: `session`
+- **Counterexamples**: セッション ID とは別 — 1 世代に複数のセッションが属し、supervisor の異常終了はその世代の全セッションを `supervisor-exited` にする
+- **Ref**: [AD-043](decisions/0043-single-supervisor-session-threads-and-session-limit.md) Decision 1・4
 
 ### T
 

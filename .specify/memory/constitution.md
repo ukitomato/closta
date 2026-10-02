@@ -1,10 +1,48 @@
 ---
 status: active
-version: 1.2.7
+version: 1.2.9
 ratified: 2026-09-13
-last_amended: 2026-09-28
+last_amended: 2026-10-02
 generated_by: /speckit.constitution (素材: /spec-gate bootstrap Phase 6 の draft)
 ---
+
+<!--
+Sync Impact Report (v1.2.9)
+- Version change: 1.2.8 → 1.2.9
+- Last amended: 2026-10-02
+- Bump rationale: PATCH。Principle IX の Verification (Automated) の字面を X-5 の事実に追随させるのみ
+  (バージョニング方針表「Verification の事実追随は PATCH」)。Statement・禁じる対象 (main process で stream を
+  パースしない) は変えていない。利用者承認 2026-10-02 (X-5 pr-gate R3 の後)
+
+Modified sections:
+- Principle IX (Verification Automated) — 「`src/agents/` の外に stream の `JSON.parse` が無い」→
+  「main process と調停役スレッドに無い。renderer による中継本文の復元は対象外 (AD-043 Decision 2)」
+
+Templates requiring updates:
+- ✅ docs/decisions/0043-single-supervisor-session-threads-and-session-limit.md (Decision 2 / Consequences の「未改定」を更新)
+- ✅ docs/roadmap.md (申し送り「Principle IX の Automated の改定」を v1.2.9 で完了に)
+-->
+
+<!--
+Sync Impact Report (v1.2.8)
+- Version change: 1.2.7 → 1.2.8
+- Last amended: 2026-10-01
+- Bump rationale: PATCH。X-5 (supervisor 分離とマルチセッション) の事実への追随のみ。Principle VII の Statement は
+  単独起動の形 (worker のパスを引数で渡す) を書き改めたが、「Electron なしで単独起動できる」趣旨は変えていない
+  (非意味的な refinement)。Principle IX は Good example の追加と「現状の制約」の事実追随
+  (バージョニング方針表「Verification の現状の制約の事実追随は PATCH」)。利用者承認 2026-10-01 (X-5 SH-092)
+
+Modified sections:
+- Principle VII (Statement) — `node dist/supervisor.js` → `node <supervisor> --worker-entry=<worker>`
+- Principle IX (Examples) — 中継の分岐の Good example (調停役は文字列を解釈せず中継し、renderer がデコードする)
+- Principle IX (現状の制約) — X-5 の本文経路 (セッションスレッド → 調停役 → port → renderer) と、
+  `check.mjs` 項目 18 が置き場だけを見ること・多段の別名代入を拾わないこと
+
+Templates requiring updates:
+- ✅ docs/decisions/0043-single-supervisor-session-threads-and-session-limit.md (本 PATCH の根拠。SH-000 (4b) の
+  ビルド確認の後、2026-10-01 に accepted — X-5 SH-001)
+- ✅ scripts/constitution/check.mjs (項目 18〜20。X-5 SH-010)
+-->
 
 <!--
 Sync Impact Report (v1.2.7)
@@ -490,10 +528,10 @@ if (!isMac) { ... }
   `grep -rnE "from ['\"]electron['\"]" src/agents/` および
   `grep -rnE "(require|import)\(?['\"](better-sqlite3|node-pty|keytar)['\"]" src/agents/`)
 - `adoption_date`: 2026-09-13
-- `amended`: 2026-09-15 (AD-024 #1 / #2)
+- `amended`: 2026-09-15 (AD-024 #1 / #2), 2026-10-01 (AD-043 / v1.2.8)
 
 <!-- BOOTSTRAP_SECTION_START principle=VII -->
-**Statement**: supervisor は Electron API に依存してはならず、**ネイティブモジュールにも依存してはならない**。`node dist/supervisor.js` として単独起動でき、標準入出力経由でプロトコルを話せる形を保つ。SQLite アクセスは main process 側に置く。
+**Statement**: supervisor は Electron API に依存してはならず、**ネイティブモジュールにも依存してはならない**。ビルド成果物の supervisor を `node <supervisor> --worker-entry=<worker>` (worker のパスを引数で渡す形。X-5 / [AD-043](../../docs/decisions/0043-single-supervisor-session-threads-and-session-limit.md)) として単独起動でき、標準入出力経由でプロトコルを話せる形を保つ。SQLite アクセスは main process 側に置く。
 
 **Why**: AD-010 の目的は (1) Electron を立てずにテストできること、(2) AD-001 (Electron 採用) の後戻り可能性の担保。ネイティブ依存を持たせない理由は、Electron 同梱 Node とホスト Node で `NODE_MODULE_VERSION` が異なるため、`better-sqlite3` のような依存があると 2 種類のビルドが必要になり単独起動可能性が実質的に失われるからである (AD-013)。
 
@@ -559,7 +597,7 @@ if (!isMac) { ... }
 - `violation_threshold`: 0
 - `bad_pattern_grep`: `grep -rn "JSON.parse" src/ | grep -v "src/agents/" | grep -iE "chunk|stdout|stream|line"`
 - `adoption_date`: 2026-09-13
-- `amended`: 2026-09-15 (AD-024 #6), 2026-09-23 (AD-031), 2026-09-24 (AD-034)
+- `amended`: 2026-09-15 (AD-024 #6), 2026-09-23 (AD-031), 2026-09-24 (AD-034), 2026-10-01 (AD-043 / v1.2.8)
 
 <!-- BOOTSTRAP_SECTION_START principle=IX -->
 **Statement**: stream の逐次パースは supervisor (`utilityProcess`。**実体は `src/agents/`**) 側で行うべきであり、main process で行うべきではない。
@@ -568,12 +606,16 @@ if (!isMac) { ... }
 
 **Examples**:
 - ✓ Good: supervisor がパース済みの構造体を MessagePort で renderer に直送する
+- ✓ Good (X-5): セッションスレッドが `SessionEvent` を文字列化し、調停役スレッドは中身を解釈せず (`JSON.parse` しない) port へ中継し、renderer がデコードする (port は Worker へ渡せない。X-5 SH-000 (2) / [AD-043](../../docs/decisions/0043-single-supervisor-session-threads-and-session-limit.md))
 - ✗ Bad: main process が stdout chunk を受けて `JSON.parse` してから renderer へ転送する
 
 **Exceptions**: 設定ファイルのような小さく境界の明確な JSON の同期読み込みは対象外。
 
 **Verification**:
-- Automated: `src/agents/` の外に stream の `JSON.parse` 処理が存在しないこと (AD-024 #6)。
+- Automated: main process と調停役スレッドに stream の `JSON.parse` 処理が存在しないこと (AD-024 #6)。
+  renderer が中継された本文 (各 part は `BODY_MAX_BYTES` で有界) を復元することは対象外とする
+  ([AD-043](../../docs/decisions/0043-single-supervisor-session-threads-and-session-limit.md) Decision 2 による AD-006 の読み替え)。
+  調停役スレッドの置き場は `check.mjs` 項目 18 が見る。
   `agents → infra` の到達禁止は `.dependency-cruiser.js` の `agents-not-to-infra` が見る
 - Manual: `architecture-reviewer`
 
@@ -598,6 +640,13 @@ R-2 が残した「本文を運ぶ時点で再評価する」宿題に構造的�
 未構築である** — SC-007 は port transfer の構造検査 + 手動レビューで担保しており、
 `existing_violations: 0` は本 Principle の自動証明を意味しない。
 到達集合検査の持ち主 feature を `docs/roadmap.md` に登録した (R-3 SH-062b)。
+
+**2026-10-01 (X-5 / [AD-043](../../docs/decisions/0043-single-supervisor-session-threads-and-session-limit.md))**:
+セッションの本文の経路は **セッションスレッド (`worker_threads`) → 調停役スレッド → port → renderer** である。
+調停役スレッドは文字列を中継するだけで、main も本文を経由しない。
+`check.mjs` 項目 18 は `src/agents/supervisor.ts` / `supervisor-core.ts` の `JSON.parse` への参照が 0 件であることを見るが、
+**置き場を見るだけで、どのスレッドで評価されるかは見ない**。多段の別名代入も拾わない。
+したがって `existing_violations: 0` は本 Principle の自動証明を意味しない (従来どおり)。
 <!-- BOOTSTRAP_SECTION_END principle=IX -->
 
 <!-- MIGRATE_SECTION_START principle=IX -->
@@ -933,6 +982,8 @@ v1.2.4 は改定手順に新しい規則 (ADR の in-place 訂正) を足した�
 | 1.2.5 | 2026-09-23 | バージョニング方針表に **Governance への規則追加 = MINOR** と **Verification の事実追随 = PATCH** の 2 行を追加した (pr-gate Round 4 / M4-12)。v1.2.4 は改定手順に新規則を足しながら表に該当行が無く、**PATCH の妥当性を表から導けなかった**。本表に照らすと v1.2.4 は MINOR 相当だが、**版番号は遡って振り直さない** — 既に参照されており Amendment trail の参照が壊れる |
 | 1.2.6 | 2026-09-24 | [AD-034](../../docs/decisions/0034-transcript-read-path-and-process-boundary.md)。Principle IX の「現状の制約」を事実に追随 (Verification の事実追随 = PATCH)。R-3 が transcript 本文を `MessageChannelMain` の port transfer で取得プロセス↔renderer 直通にし、**main を本文のデータ経路から外した**。**ただし composition-root からの到達集合検査 (自動証明) は依然未構築**であり「解決済み」とは書かない — その持ち主 feature を roadmap の「E2E / 検証基盤 feature」に登録した |
 | 1.2.7 | 2026-09-28 | [AD-037](../../docs/decisions/0037-japanese-ime-composer-behavior.md) D3 / [AD-038](../../docs/decisions/0038-e2e-screenshot-harness.md)。Principle VIII の Verification の「現状の制約」を X-2 の事実に追随 (Verification の事実追随 = PATCH)。X-2 (日本語 composer) が送信経路を開き Playwright + Electron の E2E ハーネスを載せた。**Automated (A) IME E2E と (B) 日本語スクリーンショット比較は搭載済み・持ち主 X-2・local 緑** ((A) `e2e/ime.spec.ts` idle/running+queue/変換中マウス送信の 3/3 緑。(B) `e2e/composer-screenshot.spec.ts` が同梱フォント Noto Sans JP を FontFace + CSSOM で CSP 非破壊注入し基準画像 `composer-fullwidth-win32.png` と比較。水平あふれ/桁ずれ/要素崩れ 0)。「2 項目とも載っていない」→「(A)(B) とも搭載・持ち主 X-2」に改めた。**CI が緑であることが本 Principle を保証しないという注記は残す** ((A)(B) とも stub 到達の E2E で、実機 IME 目視と基準画像の最終 aesthetic 承認は人間 quickstart が担う)。マウス送信経路の未確定送信 (grep 不可視) と CSP × addStyleTag の衝突は E2E 実走が検出し、それぞれ `thread.aui.tsx` の確定優先の最小処理 (AC-6 / AD-037 D1(d)) と FontFace API への切替で塞いだ |
+| 1.2.8 | 2026-10-01 | [AD-043](../../docs/decisions/0043-single-supervisor-session-threads-and-session-limit.md) (X-5)。事実の追随 (PATCH)。Principle VII の Statement の単独起動の形を「worker のパスを引数で渡す」に改めた (Electron なしで単独起動できるという趣旨は不変 = 非意味的な refinement)。Principle IX に中継の分岐の Good example (調停役は文字列を解釈せず中継し renderer がデコードする) を足し、「現状の制約」に X-5 の本文経路と `check.mjs` 項目 18 の限界 (置き場だけを見る・多段の別名代入を拾わない) を追記した |
+| 1.2.9 | 2026-10-02 | [AD-043](../../docs/decisions/0043-single-supervisor-session-threads-and-session-limit.md) Decision 2 (X-5 pr-gate R1〜R3 architecture H-001)。事実の追随 (PATCH)。Principle IX の Automated の字面「`src/agents/` の外に stream の `JSON.parse` 処理が存在しないこと」を「main process と調停役スレッドに存在しないこと」に改めた。X-5 では renderer が中継された本文 (`BODY_MAX_BYTES` で有界) を復元し、同じ節の Good example (X-5) と字面が食い違っていた。禁じる対象 (main を固めない) と Statement は不変 |
 
 ## References
 
@@ -944,4 +995,4 @@ v1.2.4 は改定手順に新しい規則 (ADR の in-place 訂正) を足した�
 
 ---
 
-**Version**: 1.2.7 | **Ratified**: 2026-09-13 | **Last Amended**: 2026-09-28
+**Version**: 1.2.9 | **Ratified**: 2026-09-13 | **Last Amended**: 2026-10-02

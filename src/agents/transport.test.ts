@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import type { OpaqueBody } from './transport'
 import {
   createTransport,
   parentPortTransport,
   stdioTransport,
+  type BodyPortLike,
   type ParentPortLike
 } from './transport'
 
@@ -226,5 +228,55 @@ describe('stdioTransport', () => {
     process.stdin.emit('end')
 
     expect(closed).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('本文の出口と port の受け渡し (X-5 / BE-003。経路の違いは transport に閉じる)', () => {
+  const body = (s: string): OpaqueBody => s as OpaqueBody
+
+  it('parentPort 側は、メッセージに添えられた port を行と一緒に渡す', () => {
+    const listeners: ((m: { data: unknown; ports?: readonly BodyPortLike[] }) => void)[] = []
+    const port: ParentPortLike = {
+      on: (_e, l) => listeners.push(l),
+      postMessage: () => undefined
+    }
+    const bodyPort: BodyPortLike = { postMessage: vi.fn() }
+    const got: [string, readonly BodyPortLike[]][] = []
+    parentPortTransport(port).onMessage((line, ports) => got.push([line, ports]))
+    for (const l of listeners) l({ data: 'launch', ports: [bodyPort] })
+    expect(got).toEqual([['launch', [bodyPort]]])
+  })
+
+  it('parentPort 側の出口は、port がちょうど 1 本ならその port へ本文を送る', () => {
+    const fake = fakePort()
+    const bodyPort = { postMessage: vi.fn(), close: vi.fn() }
+    const sink = parentPortTransport(fake.port).openBodySink([bodyPort], () => 'unused')
+    sink?.post(body('{"kind":"state"}'))
+    sink?.close()
+    expect(bodyPort.postMessage).toHaveBeenCalledWith('{"kind":"state"}')
+    expect(bodyPort.close).toHaveBeenCalled()
+    // 本文を親 (main) へ書かない。
+    expect(fake.sent).toEqual([])
+  })
+
+  it('parentPort 側で port が無い (または 2 本以上の) 起動には出口を作らない (本文が main を通る経路を作らない)', () => {
+    const fake = fakePort()
+    expect(parentPortTransport(fake.port).openBodySink([], () => 'line')).toBeNull()
+    const p = { postMessage: vi.fn() }
+    expect(parentPortTransport(fake.port).openBodySink([p, p], () => 'line')).toBeNull()
+  })
+
+  it('標準入出力側の onMessage は port を渡さない (常に空)', () => {
+    const got: readonly BodyPortLike[][] = []
+    stdioTransport().onMessage((_line, ports) => (got as BodyPortLike[][]).push([...ports]))
+    process.stdin.emit('data', 'x\n')
+    expect(got).toEqual([[]])
+  })
+
+  it('標準入出力側の出口は、本文を toLine の 1 行にして書く (単独起動の経路)', () => {
+    const write = vi.spyOn(process.stdout, 'write').mockReturnValue(true)
+    const sink = stdioTransport().openBodySink([], (payload) => `EVENT ${payload}`)
+    sink?.post(body('{}'))
+    expect(write).toHaveBeenCalledWith('EVENT {}\n')
   })
 })

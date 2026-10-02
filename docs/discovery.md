@@ -81,7 +81,7 @@ present の行にも「入っているが使っていない」ものがあるの
 | 状態管理 | Zustand (renderer のみ) | PLAN.md:76 | **present** (5) |
 | 仮想化 | `@tanstack/react-virtual` | PLAN.md:77 | **present** (3.14.13)。R-3 で導入。`thread.aui.tsx` の仮想化パス (件数 > 40) で使用 ([AD-033](decisions/0033-assistant-ui-elements-introduction-cost.md)) |
 | エージェント連携 | `@anthropic-ai/claude-agent-sdk` (TS, V1 `query()`) | PLAN.md:78, AD-002 (L134) | **present** (0.3.270)。**依存として入れただけで呼び出していない** (AD-026) |
-| supervisor | Electron `utilityProcess` (単独起動可能) | PLAN.md:79, AD-006/AD-010 | absent (X-5 で入る)。**実体のディレクトリは `src/agents/`** |
+| supervisor | Electron `utilityProcess` (単独起動可能) | PLAN.md:79, AD-006/AD-010 | **present** (X-5)。**単一の `utilityProcess`** (`src/agents/supervisor.ts`) が調停役スレッドとなり、セッションごとに `worker_threads` の Worker (`src/agents/sdk-agent-session.ts`) を起こす ([AD-043](decisions/0043-single-supervisor-session-threads-and-session-limit.md))。main は `utilityProcess.fork(<supervisor>, ['--worker-entry=<worker>'])` で起こし、どちらのパスも electron-vite の `?modulePath` で得る。単独起動は同じ 2 ファイルを `node <supervisor> --worker-entry=<worker>` で起こし、標準入出力で話す |
 | ターミナル | xterm.js + node-pty | PLAN.md:80 | absent (optional scope) |
 | 秘密保管 | Electron `safeStorage` (OS キーチェーン) | PLAN.md:81, AD-011 (L229) | **present** (X-3 で導入)。`src/main/infra/secrets/safe-storage.ts` が `api-key`/`oauth-token` の秘密を seal し参照値のみ保持 |
 | 永続化 | SQLite (better-sqlite3) | PLAN.md:82 | absent (I-1 で入る)。R-1 の設定は JSON ファイル |
@@ -143,9 +143,10 @@ commit subject が壊れるのを防ぐためである。
 | **lint** | `pnpm lint` | `node node_modules/eslint/bin/eslint.js --cache .` | ESLint 9 (`eslint.config.mjs`)。`eslint-plugin-boundaries` によるレイヤ間の許可行列と、`no-restricted-imports` による標準モジュールの直接 import 禁止 |
 | **型検査** | `pnpm typecheck` | `node node_modules/typescript/bin/tsc --noEmit -p tsconfig.node.json --composite false` と `… -p tsconfig.web.json …` の 2 本 | `tsconfig.node.json` と `tsconfig.web.json` の 2 project を順に `tsc --noEmit` |
 | **依存グラフ** | `pnpm depcruise` | `node node_modules/dependency-cruiser/bin/dependency-cruise.mjs src` | dependency-cruiser 18 (`.dependency-cruiser.js`)。**推移的な到達**と循環、`require()` 形式 |
-| **Constitution 検証** | `pnpm check:constitution` | `node scripts/constitution/check.mjs` (同一) | `scripts/constitution/check.mjs`。11 項目。許可リストの正本は `scripts/constitution/allowlists.mjs` |
+| **Constitution 検証** | `pnpm check:constitution` | `node scripts/constitution/check.mjs` (同一) | `scripts/constitution/check.mjs`。20 項目 (X-5 で 18〜20 を追加)。許可リストの正本は `scripts/constitution/allowlists.mjs` |
 | **ユニットテスト** | `pnpm test` | 全件 `node node_modules/vitest/vitest.mjs run` / 絞り込み `node node_modules/vitest/vitest.mjs related --run <files…>` | Vitest 5。2 project (node / renderer)。いずれも `pool: 'threads'` |
 | **ルール検証** | `pnpm test:rules` | `node scripts/rules/run.mjs` (同一)。**code-gate では実行しない** — 下記参照 | `scripts/rules/run.mjs`。**違反サンプルを検査対象へ展開し、期待した検出器が発火することを確かめる** |
+| **E2E の型検査** | `pnpm exec tsc --noEmit -p e2e/tsconfig.json` (`package.json` に script は置かない。CI の e2e job が実行) | `node node_modules/typescript/bin/tsc --noEmit -p e2e/tsconfig.json` | `e2e/` は src グラフ外で上の型検査の対象外。Playwright は型検査せずに transpile するため、E2E の型の崩れはここでしか見えない (X-5 code-gate convention M-005) |
 | **E2E** | `pnpm exec playwright test -c playwright.config.ts` (全) / `… e2e/ime.spec.ts …` (IME のみ) | `node node_modules/@playwright/test/cli.js test -c playwright.config.ts` | Playwright + Electron (`_electron.launch`。X-2 / AD-038)。**要ビルド** (`out/main/index.js` を起動)。IME E2E は独立ブラウザ不要。スクショ比較は同梱フォント + 承認済み基準画像が前提。`e2e/` は src グラフ外 (AD-038 D2) なので lint/depcruise/typecheck の対象外 (専用 `e2e/tsconfig.json`) |
 | **ビルド** | `pnpm build` | — (agent は実行しない) | 型検査 → `electron-vite build` |
 | **パッケージング** | `pnpm build:win` | — (agent は実行しない) | `scripts/build/package.mjs` 経由で `electron-builder` ([AD-026](decisions/0026-packaging-first-pass.md)) |

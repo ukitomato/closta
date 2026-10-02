@@ -13,6 +13,7 @@ import type { SessionLaunchHandshakeDTO } from './session/agent-session'
 import type { SessionIndexDTO } from './session/dto'
 import type { SessionLaunchConfig } from './session/launch-config'
 import type { PresetDTO, SavePresetResult } from './session/preset'
+import type { SessionStatusUpdate } from './session/status-update'
 import type { TranscriptHandshakeDTO } from './session/transcript-dto'
 import type {
   BeginBrowseResult,
@@ -107,15 +108,16 @@ export interface ClostaCapability {
 
   /**
    * 検証済みの起動設定 (X-4: フォルダ / WSL ランタイム / Provider / モデル / effort / 権限モード) で
-   * 単一セッションを起動する (X-1 / FR-001 / contracts C-1)。main が形を検証し、依存解決を再評価する。
+   * セッションを 1 本起動する (X-1 / X-5 / FR-001 / contracts C-1)。main が形を検証し、依存解決を再評価する。
    *
    * **戻り値は本文を含まない handshake (status / sessionId)。** 逐次応答 (`SessionEvent`) は
-   * `MessageChannelMain` の port で **agents↔renderer 直通**に届く (main を本文経路から外す。Principle IX)。
+   * `MessageChannelMain` の port で **supervisor↔renderer 直通**に届く (main を本文経路から外す。Principle IX)。
    * port は `window` メッセージ (`SESSION_PORT_MESSAGE`) として renderer main world へ渡り、renderer は
    * `sessionId` で自分の port を照合する (MessagePort は contextBridge を越えられないため)。
    *
-   * main が **VerifiedRunning + 所在 distro 一致 + 登録済み + 単一セッション不変**を検証する。
-   * 停止中 / 未確認 / 不一致 / 既に稼働中は `rejected` を理由キーつきで返す (SC-002 / SC-011)。
+   * main が **VerifiedRunning + 所在 distro 一致 + 登録済み + 同時実行数の上限 (10)** を検証する。
+   * 停止中 / 未確認 / 不一致 / 上限超過 (`session-limit`) / 終了処理中 (`shutting-down`) は `rejected` を
+   * 理由キーつきで返す (SC-002 / X-5 SC-001)。X-1 の単一セッション不変 (`session-active`) は X-5 で廃止した。
    */
   launchSession(config: SessionLaunchConfig): Promise<SessionLaunchHandshakeDTO>
   /** 稼働セッションへプロンプトを送る (FR-011 / FR-018)。main が空/空白拒否 + 長さ上限を検証する。 */
@@ -132,6 +134,12 @@ export interface ClostaCapability {
   ): Promise<void>
   /** 実行中の応答を中断する (FR-015)。途中出力は保持され同一セッションで継続できる。 */
   interruptSession(sessionId: string): Promise<void>
+  /**
+   * 穏当に終了する (X-5 / FR-011)。応答待ち (`done`) か中断済み (`interrupted`) のセッションの `claude` を、
+   * プロンプトの入力を閉じて正常終了させる。他の状態ではセッションが何もしない。期限内に終わらなければ
+   * 強制終了に落ち、本文に `end-forced` が流れる。
+   */
+  endSession(sessionId: string): Promise<void>
   /** 強制終了する (FR-016)。**中断とは別経路** — 途中出力保全・JSONL 非破損を保証しない。 */
   killSession(sessionId: string): Promise<void>
 
@@ -177,6 +185,11 @@ export interface ClostaCapability {
   onRuntimesChanged(listener: (list: RuntimeListDTO) => void): () => void
   onFoldersChanged(listener: (list: FolderListDTO) => void): () => void
   onSessionsChanged(listener: (index: SessionIndexDTO) => void): () => void
+  /**
+   * 稼働中セッションの状態通知 (X-5 / FR-004)。supervisor の窓 (100ms) でまとめたものが 1 回で届く。
+   * 会話由来の文字列を含まない (sessionId / run-state / 理由キー / `claude` の生存フラグだけ)。
+   */
+  onSessionStatus(listener: (updates: readonly SessionStatusUpdate[]) => void): () => void
 }
 
 /** `contextBridge.exposeInMainWorld` で公開する名前。 */
@@ -204,9 +217,12 @@ export const IPC_CHANNELS = {
   sendPrompt: 'closta:sendPrompt',
   respondPermission: 'closta:respondPermission',
   interruptSession: 'closta:interruptSession',
+  endSession: 'closta:endSession',
   killSession: 'closta:killSession',
-  /** main → preload: agents に繋がった port2 を transfer する専用チャネル (X-1 / AD-036 §2)。 */
+  /** main → preload: supervisor に繋がった port2 を transfer する専用チャネル (X-1 / AD-036 §2)。 */
   sessionPort: 'closta:sessionPort',
+  /** main → renderer: 状態通知のバッチ (X-5 / FR-004)。 */
+  sessionStatus: 'closta:sessionStatus',
   listProviders: 'closta:listProviders',
   detectProviders: 'closta:detectProviders',
   registerProvider: 'closta:registerProvider',

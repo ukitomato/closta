@@ -1,0 +1,7 @@
+// 違反サンプル (項目 19 / X-5 SH-010): 許可外モジュールが process の kill を**分割代入**で取る。
+// 以後は裸の `kill(...)` になり `process.kill` の綴りが現れない等価形。項目 19 は分割代入も参照として数える。
+const { kill } = process
+
+export function reap(pid: number): void {
+  kill(pid, 'SIGKILL')
+}
