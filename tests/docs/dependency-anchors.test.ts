@@ -22,7 +22,8 @@ import { DEPENDENCY_DOC_PATH } from '../../src/renderer/src/features/runtime-lis
 /** GitHub の見出しアンカー規則のうち、本文書に必要な範囲。 */
 function headingAnchors(markdown: string): ReadonlySet<string> {
   const anchors = new Set<string>()
-  for (const line of markdown.split('\n')) {
+  // CRLF でも見出しを取る (CI の Windows runner は改行を CRLF で checkout する。`.` は `\r` に当たらず `$` が外れる)。
+  for (const line of markdown.split(/\r?\n/)) {
     const match = /^#{1,6}\s+(.*)$/.exec(line)
     if (match === null) continue
     const slug = match[1]
@@ -62,5 +63,7 @@ describe('不足依存の案内が指すアンカー', () => {
     const anchors = headingAnchors('# 見出し A\n\n## bubblewrap\n\n本文\n')
     expect(anchors.has('bubblewrap')).toBe(true)
     expect(anchors.has('socat')).toBe(false)
+    // CRLF の文書でも同じ見出しが取れる。
+    expect(headingAnchors('# 見出し A\r\n\r\n## bubblewrap\r\n').has('bubblewrap')).toBe(true)
   })
 })
