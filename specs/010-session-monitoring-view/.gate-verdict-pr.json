@@ -1,0 +1,421 @@
+{
+    "gate": "pr",
+    "run": "2026-10-03T00:00:00+09:00",
+    "spec_dir": "specs/010-session-monitoring-view",
+    "spec_id": "010-session-monitoring-view",
+    "round": 1,
+    "base_branch": "main",
+    "base_sha": "949ad1b",
+    "head_sha": "0ba910f",
+    "diff_stat": {
+        "files": 61,
+        "additions": 6947,
+        "deletions": 190
+    },
+    "severity_counts": {
+        "critical": 0,
+        "high": 2,
+        "medium": 8,
+        "low": 10
+    },
+    "convergence": {
+        "resolved_from_prev": 0,
+        "new_in_round": 2,
+        "unresolved": 0
+    },
+    "round_history": [
+        {
+            "round": 1,
+            "critical": 0,
+            "high": 2,
+            "convergence": {
+                "resolved_from_prev": 0,
+                "new_in_round": 2,
+                "unresolved": 0
+            },
+            "high_findings": [
+                {
+                    "id": "H-01",
+                    "origin": "security H-001",
+                    "where": "playwright.perf.config.ts:26-28",
+                    "title": "perf failure writes error-context.md aria snapshot with conversation text"
+                },
+                {
+                    "id": "H-02",
+                    "origin": "po H-001 + architecture M-001",
+                    "where": "docs/domains/session/charter.md:140-142",
+                    "title": "KPI real-machine measurement carried over with no roadmap owner"
+                }
+            ]
+        }
+    ],
+    "suppressed_by_code_gate": [],
+    "touched_files": [
+        {
+            "path": ".dependency-cruiser.js",
+            "sha": "b173ba537208863f79d2523eeac65c9a95e40453"
+        },
+        {
+            "path": ".github/workflows/verify.yml",
+            "sha": "e35f8a34df2f43c7600934318ca889212a46b3a1"
+        },
+        {
+            "path": ".specify/feature.json",
+            "sha": "5c500440d1c636835428c500c229466ffecbcfb1"
+        },
+        {
+            "path": "docs/discovery.md",
+            "sha": "2fab22b4b06ae728bfe52ce306a9ea87f2ab6b1a"
+        },
+        {
+            "path": "docs/domains/_overview.md",
+            "sha": "5ff26c8d851b71bb32e535cc14d435d3159e375c"
+        },
+        {
+            "path": "docs/domains/session/charter.md",
+            "sha": "d6162f8b02d9bf978da1ca0bfb0ece98bcab48dc"
+        },
+        {
+            "path": "docs/domains/ui/charter.md",
+            "sha": "0de6b3adb1df77f23ea13aefd8ee33c494f70099"
+        },
+        {
+            "path": "docs/glossary.md",
+            "sha": "82f4d5a66468df3a23adf331ea4d9a2d33849d18"
+        },
+        {
+            "path": "docs/roadmap.md",
+            "sha": "edc089fff7ad7fc97dbe221d1088bc4678ba95e0"
+        },
+        {
+            "path": "e2e/multi-session.spec.ts",
+            "sha": "b13a31ffebf52150b3f2d11a4c28962c56231fff"
+        },
+        {
+            "path": "e2e/support/input-probe.ts",
+            "sha": "b0e4534d11d88bf3128b167d98c51686b912ad0a"
+        },
+        {
+            "path": "eslint.config.mjs",
+            "sha": "3ea9134292a4580e0a6cd4c6ad7feff2a9f1e5f2"
+        },
+        {
+            "path": "perf/real-sessions.spec.ts",
+            "sha": "5024a4e0da4bcd6e650e7374c478cba953411bc9"
+        },
+        {
+            "path": "perf/tsconfig.json",
+            "sha": "c9d83050fa8667a3c05f8097802244a6aca11b67"
+        },
+        {
+            "path": "playwright.perf.config.ts",
+            "sha": "1c1c4dbd626e6d13cfd4596e15a2c29e0b43abc5"
+        },
+        {
+            "path": "specs/010-session-monitoring-view/.gate-verdict-code.json",
+            "sha": "b4af652ad420bfcff72306572fb52a74b58cfe5b"
+        },
+        {
+            "path": "specs/010-session-monitoring-view/.gate-verdict-design.json",
+            "sha": "03c3b456d443506ed9886121b8e9f79784ad972c"
+        },
+        {
+            "path": "specs/010-session-monitoring-view/analyze.md",
+            "sha": "a49672c736d737d17f4229d0e25ec5ccb77c3068"
+        },
+        {
+            "path": "specs/010-session-monitoring-view/architecture-reviewer.design-gate.md",
+            "sha": "a39fd3aae21a8fefd85e4eff4ec4706ef786693c"
+        },
+        {
+            "path": "specs/010-session-monitoring-view/checklists/requirements.md",
+            "sha": "1f5ed97c582e2016e7cf677e146aa97b14355259"
+        },
+        {
+            "path": "specs/010-session-monitoring-view/code-gate.md",
+            "sha": "e4057726e207fde7f5eec5604d930da9fa0e55f2"
+        },
+        {
+            "path": "specs/010-session-monitoring-view/convention-reviewer.code-gate.md",
+            "sha": "bd1a4c9f138f6478c2e25ea414b570764dbdca15"
+        },
+        {
+            "path": "specs/010-session-monitoring-view/data-model.md",
+            "sha": "3c4262d6d765383b256bafb4a07709c364a9c0f1"
+        },
+        {
+            "path": "specs/010-session-monitoring-view/design-gate.md",
+            "sha": "ce3930bd7d1a2a6ab4f0009d57608e127f90523c"
+        },
+        {
+            "path": "specs/010-session-monitoring-view/gate-r1/.gate-verdict-design.json",
+            "sha": "2d7a4ac509ccf3d6ffb0c120391214de155f1d60"
+        },
+        {
+            "path": "specs/010-session-monitoring-view/gate-r1/analyze.md",
+            "sha": "fadf0e975553e7556939976a93873eafe64681fb"
+        },
+        {
+            "path": "specs/010-session-monitoring-view/gate-r1/architecture-reviewer.design-gate.md",
+            "sha": "359c72f9ce5b710bde62f55d91c04f7c46f1d1db"
+        },
+        {
+            "path": "specs/010-session-monitoring-view/gate-r1/design-gate.md",
+            "sha": "986425331a121ac3611043ab828f44c2f779ed6d"
+        },
+        {
+            "path": "specs/010-session-monitoring-view/gate-r1/platform-boundary-reviewer.design-gate.md",
+            "sha": "44aa21961079f523e650b6374ccb8c9fdff6baa4"
+        },
+        {
+            "path": "specs/010-session-monitoring-view/gate-r1/po-reviewer.design-gate.md",
+            "sha": "6d1bb012fdc24bfbfc0a5e453fb08cbb716b348a"
+        },
+        {
+            "path": "specs/010-session-monitoring-view/gate-r1/security-reviewer.design-gate.md",
+            "sha": "30fc51e16a2bc5489b83cedb0dc72e572eb24670"
+        },
+        {
+            "path": "specs/010-session-monitoring-view/lint-agent.code-gate.json",
+            "sha": "2af983c9781df07b956d80cbf532e6cdaa1ad7fe"
+        },
+        {
+            "path": "specs/010-session-monitoring-view/plan.md",
+            "sha": "14e3c1fda6ad8b339ecdd219b1b38150f98455ca"
+        },
+        {
+            "path": "specs/010-session-monitoring-view/platform-boundary-reviewer.code-gate.md",
+            "sha": "1122400ebca11b210e9ad62f348a95d9f9acb993"
+        },
+        {
+            "path": "specs/010-session-monitoring-view/platform-boundary-reviewer.design-gate.md",
+            "sha": "4c5569fbfa831d3bdd0cf3cc05068dd04619df3e"
+        },
+        {
+            "path": "specs/010-session-monitoring-view/po-reviewer.design-gate.md",
+            "sha": "c8a692c05a330943b9b075f74ff4345a6af6d42a"
+        },
+        {
+            "path": "specs/010-session-monitoring-view/quickstart-results.md",
+            "sha": "cd3def081e43bbdc23b4b31aa6a7814368c44999"
+        },
+        {
+            "path": "specs/010-session-monitoring-view/quickstart.md",
+            "sha": "53902e841576d1453a866bca9500f0a560f9c6ee"
+        },
+        {
+            "path": "specs/010-session-monitoring-view/research.md",
+            "sha": "016346bae329b51c522b4036991f091204417a8e"
+        },
+        {
+            "path": "specs/010-session-monitoring-view/security-reviewer.design-gate.md",
+            "sha": "b7753ee25c23e53b89aa4fa7e9f599468748feb4"
+        },
+        {
+            "path": "specs/010-session-monitoring-view/spec.md",
+            "sha": "8ce29b218f7247ecff9374793445ab69a2edd310"
+        },
+        {
+            "path": "specs/010-session-monitoring-view/tasks.md",
+            "sha": "f40e526d36da2ab9402034656caac9a7f0c776dc"
+        },
+        {
+            "path": "specs/010-session-monitoring-view/test-agent.code-gate.json",
+            "sha": "029664a5e3a54d141303be90bd5cf1a0a303249e"
+        },
+        {
+            "path": "specs/010-session-monitoring-view/touched-files.txt",
+            "sha": "7aef070c9c0e8e2583405845c67bd2d162920186"
+        },
+        {
+            "path": "src/renderer/src/App.tsx",
+            "sha": "cb087830563a6bc036623e23d732036afad638ef"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/thread-list.aui.tsx",
+            "sha": "bedae9890c913f4e4c19738c54ea60c0e16da49d"
+        },
+        {
+            "path": "src/renderer/src/components/ui/badge.tsx",
+            "sha": "1a94cc539326e26227271a0b3599be99e0e55fb6"
+        },
+        {
+            "path": "src/renderer/src/features/session/RunningSessionList.monitor.test.tsx",
+            "sha": "7c159cac2ff520c830a9d38981bed0f015bcfda2"
+        },
+        {
+            "path": "src/renderer/src/features/session/RunningSessionList.tsx",
+            "sha": "b0fe6fb3d047726f75753448fd9224741bd29b87"
+        },
+        {
+            "path": "src/renderer/src/features/session/SessionAttentionAnnouncer.tsx",
+            "sha": "e0b08351610bf78ec7400e1bb06e36ecd1b6c417"
+        },
+        {
+            "path": "src/renderer/src/features/session/SessionNavBadge.tsx",
+            "sha": "68d9a0579c2027081ce38fb3dc978310c8d807c5"
+        },
+        {
+            "path": "src/renderer/src/features/session/SessionScreen.test.tsx",
+            "sha": "76a1522fec221e821499d054dead5536a6cbf29e"
+        },
+        {
+            "path": "src/renderer/src/features/session/SessionScreen.tsx",
+            "sha": "59f6eb42cb9323a58aeeed13bb0a76dbfaefba5c"
+        },
+        {
+            "path": "src/renderer/src/features/session/labels.ts",
+            "sha": "11378008bf259c384ef5b65e8e7b81721e16ab7f"
+        },
+        {
+            "path": "src/renderer/src/features/session/running-session-store.monitor.test.ts",
+            "sha": "451d5a26841e019c5a11f98154ed998b4582ff44"
+        },
+        {
+            "path": "src/renderer/src/features/session/running-session-store.ts",
+            "sha": "7746791eb9434d70013b7b697d095fd4e2f0db48"
+        },
+        {
+            "path": "src/renderer/src/features/session/running-session-types.ts",
+            "sha": "f7c080b465fb126c66f3638af8baba1f3591b22e"
+        },
+        {
+            "path": "src/renderer/src/features/session/session-view.monitor.test.ts",
+            "sha": "7e58d1044291f016c10b4b6a277a7338fc320e56"
+        },
+        {
+            "path": "src/renderer/src/features/session/session-view.ts",
+            "sha": "ce7c623139ce9601a192038625fdde8516022de8"
+        },
+        {
+            "path": "src/renderer/src/features/session/useSessionClock.test.tsx",
+            "sha": "46d42b9ec249df63baa16098741ec6a153a2358a"
+        },
+        {
+            "path": "src/renderer/src/features/session/useSessionClock.ts",
+            "sha": "eac269cb93eb7693fd6f9f4564c989294e19e4e8"
+        }
+    ],
+    "viewpoint_coverage": {
+        "A": "Critical:0 High:1",
+        "B": "Critical:0 High:0",
+        "C": "Critical:0 High:0",
+        "D": "Critical:0 High:0",
+        "E": "Critical:0 High:1",
+        "F": "Critical:0 High:0",
+        "G": "n/a",
+        "H": "Critical:0 High:0"
+    },
+    "fr_coverage": [
+        {
+            "fr": "FR-001",
+            "covered": true
+        },
+        {
+            "fr": "FR-002",
+            "covered": true
+        },
+        {
+            "fr": "FR-003",
+            "covered": "partial",
+            "note": "M-02 compact"
+        },
+        {
+            "fr": "FR-004",
+            "covered": true
+        },
+        {
+            "fr": "FR-005",
+            "covered": true
+        },
+        {
+            "fr": "FR-006",
+            "covered": true
+        },
+        {
+            "fr": "FR-007",
+            "covered": true
+        },
+        {
+            "fr": "FR-008",
+            "covered": "partial",
+            "note": "M-02 compact"
+        },
+        {
+            "fr": "FR-009",
+            "covered": true
+        },
+        {
+            "fr": "FR-010",
+            "covered": true
+        },
+        {
+            "fr": "FR-011",
+            "covered": true
+        },
+        {
+            "fr": "FR-012",
+            "covered": "closed-by-user",
+            "note": "SC-005 0 valid rounds; M-01, H-02"
+        },
+        {
+            "fr": "FR-013",
+            "covered": true
+        }
+    ],
+    "rule_verification": {
+        "ran": true,
+        "round": 1,
+        "reason": "Round 1",
+        "result": "exit 0, 64 matched expectations"
+    },
+    "skipped_reviewers": [
+        {
+            "name": "database-reviewer",
+            "reason": "auto_invoke_patterns \u306b\u4e00\u81f4\u3059\u308b\u5909\u66f4\u30d5\u30a1\u30a4\u30eb\u304c\u7121\u3044"
+        },
+        {
+            "name": "ux-reviewer",
+            "reason": "auto_invoke_patterns \u306b\u4e00\u81f4\u3059\u308b\u5909\u66f4\u30d5\u30a1\u30a4\u30eb\u304c\u7121\u3044"
+        },
+        {
+            "name": "a11y-reviewer",
+            "reason": "auto_invoke_patterns \u306b\u4e00\u81f4\u3059\u308b\u5909\u66f4\u30d5\u30a1\u30a4\u30eb\u304c\u7121\u3044"
+        }
+    ],
+    "tracks": {
+        "security-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 1,
+            "medium": 1,
+            "low": 2
+        },
+        "architecture-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 3,
+            "low": 4
+        },
+        "po-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 1,
+            "medium": 5,
+            "low": 3
+        },
+        "platform-boundary-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 0,
+            "low": 1
+        }
+    },
+    "verdict": "PASS"
+}
