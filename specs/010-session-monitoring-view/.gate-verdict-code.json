@@ -1,145 +1,77 @@
 {
     "gate": "code",
-    "run": "2026-10-03T00:10:00+09:00",
+    "run": "2026-10-03T01:25:00+09:00",
     "spec_dir": "specs/010-session-monitoring-view",
     "spec_id": "010-session-monitoring-view",
-    "iter": 2,
+    "iter": 4,
     "severity_counts": {
         "critical": 0,
         "high": 0,
-        "medium": 1,
-        "low": 1,
+        "medium": 2,
+        "low": 3,
         "must_fix": 0
     },
     "must_fix_findings": [],
     "touched_files": [
         {
-            "path": ".dependency-cruiser.js",
-            "sha": "b173ba537208863f79d2523eeac65c9a95e40453"
-        },
-        {
-            "path": ".github/workflows/verify.yml",
-            "sha": "e35f8a34df2f43c7600934318ca889212a46b3a1"
-        },
-        {
             "path": "docs/discovery.md",
-            "sha": "2fab22b4b06ae728bfe52ce306a9ea87f2ab6b1a"
-        },
-        {
-            "path": "docs/domains/_overview.md",
-            "sha": "5ff26c8d851b71bb32e535cc14d435d3159e375c"
+            "sha": "587ceac8808798a864b37514cda437f31b02332e"
         },
         {
             "path": "docs/domains/session/charter.md",
-            "sha": "d6162f8b02d9bf978da1ca0bfb0ece98bcab48dc"
-        },
-        {
-            "path": "docs/domains/ui/charter.md",
-            "sha": "0de6b3adb1df77f23ea13aefd8ee33c494f70099"
-        },
-        {
-            "path": "docs/glossary.md",
-            "sha": "82f4d5a66468df3a23adf331ea4d9a2d33849d18"
+            "sha": "52eacf33c857674f10a8847ba5e00d020abfd23c"
         },
         {
             "path": "docs/roadmap.md",
-            "sha": "edc089fff7ad7fc97dbe221d1088bc4678ba95e0"
+            "sha": "02a09dbb18ad4d1855327a8e09c761ad83d571f3"
         },
         {
             "path": "e2e/multi-session.spec.ts",
-            "sha": "b13a31ffebf52150b3f2d11a4c28962c56231fff"
-        },
-        {
-            "path": "e2e/support/input-probe.ts",
-            "sha": "b0e4534d11d88bf3128b167d98c51686b912ad0a"
-        },
-        {
-            "path": "eslint.config.mjs",
-            "sha": "3ea9134292a4580e0a6cd4c6ad7feff2a9f1e5f2"
+            "sha": "202f6197b244303519c099e79fb0815a2272fccf"
         },
         {
             "path": "perf/real-sessions.spec.ts",
-            "sha": "5024a4e0da4bcd6e650e7374c478cba953411bc9"
+            "sha": "44d6a8c480165de0eac75b00c4ea28e3b5cf056a"
         },
         {
-            "path": "perf/tsconfig.json",
-            "sha": "c9d83050fa8667a3c05f8097802244a6aca11b67"
+            "path": "perf/run-judgement.test.ts",
+            "sha": "b0a8205a0ec4d00bc950a5c059dcb94da753ce3d"
+        },
+        {
+            "path": "perf/run-judgement.ts",
+            "sha": "bffc369a1b91e98523d26659c172f91327a91ee5"
         },
         {
             "path": "playwright.perf.config.ts",
-            "sha": "1c1c4dbd626e6d13cfd4596e15a2c29e0b43abc5"
+            "sha": "3f768da8c02fbd71aa5193fa8c6b38c0eabf9fc6"
         },
         {
             "path": "specs/010-session-monitoring-view/quickstart-results.md",
-            "sha": "cd3def081e43bbdc23b4b31aa6a7814368c44999"
-        },
-        {
-            "path": "src/renderer/src/App.tsx",
-            "sha": "cb087830563a6bc036623e23d732036afad638ef"
-        },
-        {
-            "path": "src/renderer/src/components/assistant-ui/elements/thread-list.aui.tsx",
-            "sha": "bedae9890c913f4e4c19738c54ea60c0e16da49d"
-        },
-        {
-            "path": "src/renderer/src/components/ui/badge.tsx",
-            "sha": "1a94cc539326e26227271a0b3599be99e0e55fb6"
+            "sha": "05269ddde15d3b66b6808ccb029539017fdaca76"
         },
         {
             "path": "src/renderer/src/features/session/labels.ts",
-            "sha": "11378008bf259c384ef5b65e8e7b81721e16ab7f"
+            "sha": "a06a18fd42d8a89b278d2df09caa851192a8e0fe"
         },
         {
             "path": "src/renderer/src/features/session/RunningSessionList.monitor.test.tsx",
-            "sha": "7c159cac2ff520c830a9d38981bed0f015bcfda2"
+            "sha": "91482da65d9f7a6562766d1d5b24e692ea8a9823"
         },
         {
             "path": "src/renderer/src/features/session/RunningSessionList.tsx",
-            "sha": "b0fe6fb3d047726f75753448fd9224741bd29b87"
-        },
-        {
-            "path": "src/renderer/src/features/session/running-session-store.monitor.test.ts",
-            "sha": "451d5a26841e019c5a11f98154ed998b4582ff44"
-        },
-        {
-            "path": "src/renderer/src/features/session/running-session-store.ts",
-            "sha": "7746791eb9434d70013b7b697d095fd4e2f0db48"
-        },
-        {
-            "path": "src/renderer/src/features/session/running-session-types.ts",
-            "sha": "f7c080b465fb126c66f3638af8baba1f3591b22e"
-        },
-        {
-            "path": "src/renderer/src/features/session/SessionAttentionAnnouncer.tsx",
-            "sha": "e0b08351610bf78ec7400e1bb06e36ecd1b6c417"
-        },
-        {
-            "path": "src/renderer/src/features/session/SessionNavBadge.tsx",
-            "sha": "68d9a0579c2027081ce38fb3dc978310c8d807c5"
-        },
-        {
-            "path": "src/renderer/src/features/session/SessionScreen.test.tsx",
-            "sha": "76a1522fec221e821499d054dead5536a6cbf29e"
-        },
-        {
-            "path": "src/renderer/src/features/session/SessionScreen.tsx",
-            "sha": "59f6eb42cb9323a58aeeed13bb0a76dbfaefba5c"
+            "sha": "66a37b7928dfb731f1835bd02427a4aee6f27624"
         },
         {
             "path": "src/renderer/src/features/session/session-view.monitor.test.ts",
-            "sha": "7e58d1044291f016c10b4b6a277a7338fc320e56"
+            "sha": "48d7cbd587b198775c9f092e1f1a79eb3cd26124"
         },
         {
             "path": "src/renderer/src/features/session/session-view.ts",
-            "sha": "ce7c623139ce9601a192038625fdde8516022de8"
+            "sha": "3954dec7793137bc9606b897957f7bb27f65239f"
         },
         {
-            "path": "src/renderer/src/features/session/useSessionClock.test.tsx",
-            "sha": "46d42b9ec249df63baa16098741ec6a153a2358a"
-        },
-        {
-            "path": "src/renderer/src/features/session/useSessionClock.ts",
-            "sha": "eac269cb93eb7693fd6f9f4564c989294e19e4e8"
+            "path": "vitest.config.ts",
+            "sha": "4c67a442e0e3977b57ed830d35cd21bb8260b4be"
         }
     ],
     "fr_coverage": [
@@ -249,11 +181,11 @@
         "A": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
         "B": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
         "C": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
-        "D": "Low:2 (platform-boundary)",
+        "D": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
         "E": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
-        "F": "Medium:4 Low:7 (convention 3/7, platform-boundary 1/0)",
+        "F": "Medium:2 Low:3 (convention)",
         "G": "\u8a72\u5f53\u306a\u3057: optional reviewer \u306a\u3057",
-        "H": "Low:1 (platform-boundary)"
+        "H": "Medium:0 Low:0"
     },
     "tracks": {
         "lint-agent": {
@@ -270,7 +202,7 @@
             ]
         },
         "test-agent": {
-            "passed": 1719,
+            "passed": 1731,
             "failed": 0,
             "exit_code": 0,
             "scope": "full"
@@ -279,10 +211,6 @@
             "viewpoint_missing": [],
             "cascade_demotions": 0,
             "lint_input": "lint-agent"
-        },
-        "platform-boundary-reviewer": {
-            "viewpoint_missing": [],
-            "cascade_demotions": 0
         }
     },
     "skipped_reviewers": [
@@ -296,7 +224,11 @@
         },
         {
             "name": "database-reviewer",
-            "reason": "auto_invoke_patterns \u306b\u4e00\u81f4\u3059\u308b\u5909\u66f4\u30d5\u30a1\u30a4\u30eb\u304c\u7121\u3044"
+            "reason": "auto_invoke_patterns \u306b\u4e00\u81f4\u3059\u308b\u5909\u66f4\u30d5\u30a1\u30a4\u30eb\u304c\u7121\u3044 (\u5909\u66f4 15 \u4ef6 / pattern 5 \u4ef6)"
+        },
+        {
+            "name": "platform-boundary-reviewer",
+            "reason": "auto_invoke_patterns \u306b\u4e00\u81f4\u3059\u308b\u5909\u66f4\u30d5\u30a1\u30a4\u30eb\u304c\u7121\u3044 (\u5909\u66f4 15 \u4ef6 / pattern 8 \u4ef6)"
         }
     ],
     "cascade_demotions": 0,
@@ -309,6 +241,18 @@
         },
         {
             "iter": 2,
+            "must_fix": 0,
+            "skipped": 0,
+            "error": 0
+        },
+        {
+            "iter": 3,
+            "must_fix": 2,
+            "skipped": 0,
+            "error": 0
+        },
+        {
+            "iter": 4,
             "must_fix": 0,
             "skipped": 0,
             "error": 0

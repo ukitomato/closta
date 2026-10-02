@@ -78,6 +78,13 @@ describe('toActivityLine (FR-006)', () => {
     expect(toActivityLine('  a\t\t b   c ')).toBe('a b c')
   })
 
+  it('ゼロ幅文字・語結合子・タグ文字を除き、切り詰めの長さを不可視文字で埋めさせない (security L-001)', () => {
+    expect(toActivityLine('a\u200Bb\u200Cc\u200Dd\u2060e\u2064f\u180Eg')).toBe('abcdefg')
+    expect(toActivityLine('x\u{E0041}\u{E007F}y')).toBe('xy')
+    const padded = toActivityLine('\u200B'.repeat(200) + '見える')
+    expect(padded).toBe('見える')
+  })
+
   it('80 コードポイントで切り詰めて … を付け、サロゲートペアを割らない', () => {
     const emoji = '😀'.repeat(ACTIVITY_MAX_CODE_POINTS + 5)
     const line = toActivityLine(emoji)

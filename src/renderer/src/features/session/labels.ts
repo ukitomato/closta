@@ -52,6 +52,27 @@ export function launchFailureLabel(reason: LaunchFailureReason): string {
   return LAUNCH_REJECT_LABELS[reason]
 }
 
+/**
+ * compact の行で状態の印の横に出す短い理由 (O-1 FR-003 / FR-008。pr-gate R1 po M-002)。全文は
+ * ツールチップと読み上げ (`launchFailureLabel`) で出す。
+ */
+const LAUNCH_FAILURE_SHORT_LABELS: Record<LaunchFailureReason, string> = {
+  'distro-not-running': 'ディストロ停止',
+  'not-verified-running': '実行中確認なし',
+  'distro-mismatch': 'ディストロ不一致',
+  'claude-not-found': 'claude なし',
+  'launch-failed': '起動失敗',
+  'process-crashed': '異常終了',
+  'stream-protocol-error': 'ストリーム破損',
+  'provider-error': 'Provider エラー',
+  'interrupt-unavailable': '中断非対応',
+  'supervisor-exited': '管理プロセス終了'
+}
+
+export function launchFailureShortLabel(reason: LaunchFailureReason): string {
+  return LAUNCH_FAILURE_SHORT_LABELS[reason]
+}
+
 /** `provider-error` だけ「再ログイン」導線を出す (FR-030)。他は再起動導線。 */
 export function isReloginFailure(reason: LaunchFailureReason | null): boolean {
   return reason === 'provider-error'
@@ -143,6 +164,8 @@ export const SESSION_NAME_FALLBACKS = {
 export const MONITOR_LABELS = {
   /** 承認待ちの件数のボタンが押せないとき (移れる先が無い。FR-002)。 */
   awaitingNoTarget: 'ほかに承認待ちのセッションはありません。',
+  /** 押せない理由が「表示中のセッションだけが承認待ち」のとき (spec Edge Cases。pr-gate R1 po L-003)。 */
+  awaitingOnlyWatched: '承認待ちは表示中のセッションだけです。',
   awaitingNext: '承認待ちのセッションへ移る (承認待ちになったのが早い順)',
   density: '表示の密度',
   densityComfortable: '詳しく',

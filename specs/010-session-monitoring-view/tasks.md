@@ -6,7 +6,7 @@
 
 **規則の正本**: 振る舞いの正本は spec の FR / SC、値と導出の正本は data-model、方式の理由は research である。本書は作業単位とテストの観点だけを書き、規則を書き写さない。
 
-**順序の制約**: SH-001 (glossary) → reviewer の確認 → コード。SH-033 (実機計測) は pr-gate の前 (spec FR-012 の完了条件)。
+**順序の制約**: SH-001 (glossary) → reviewer の確認 → コード。SH-033 (実機計測) は pr-gate の前 (spec FR-012 の完了条件。**2026-10-02 に改訂** — 有効な回 0 件で利用者が SC-005 を閉じた。spec FR-012 の改訂の行)。
 
 ## Shared Tasks (先行: 用語・規則・ストア・導出)
 
@@ -75,6 +75,7 @@
 
 - [x] **FE-020** [FE] `thread-list.aui.tsx` — 行の密度を受ける口 (context) と compact の形 (操作を同じ段に横並び。折り返さない。表示名は切り詰め) を足す (research R-06)。口を使わないとき (R-2) は現状のまま
 - [x] **FE-021** [FE] `RunningSessionList.tsx` + `labels.ts` — 見出しの密度の切り替え (導入済みの `Button` + `aria-pressed`)・compact の行 (状態・作業フォルダの表示名・経過時間 + 操作のアイコンボタン。accessible name は X-5 の操作の文言)・compact で外した情報 (ランタイム・起動時刻・直近の活動) を導入済みの Tooltip とフォーカス時の説明 (`aria-describedby`) で読めるようにする。将来の隔離バッジの置き場を行の中に残す (spec FR-008)
+  - **pr-gate R1 で補った点**: 隔離バッジの置き場は compact の分岐に注記として置いた (状態の印の前。I-2 が置く。architecture L-001)。compact の失敗の行は印の横に短い理由を出し、全文と終了の告知 (強制終了 / 強制停止) はツールチップと読み上げに出す (po M-002)
 - [x] **FE-022** [FE] `RunningSessionList.test.tsx` — 観点 (SC-003 の component 側): compact の行に状態・表示名・経過時間と操作が出て、ランタイム・起動時刻・直近の活動が説明として読める / compact でも US-1 の強調・件数・live region が同じに出る / 密度は切り替え・新規起動・表示の切り替えで保たれる
 - [x] **FE-023** [FE] R-2 のセッション一覧の既存テストを回帰として流す (`thread-list.aui.tsx` の変更が波及しないこと。plan RK-05)
 
@@ -89,7 +90,7 @@
 - [x] **SH-032** [SH] `perf/real-sessions.spec.ts` + `playwright.perf.config.ts` + `perf/tsconfig.json` + verify.yml の型検査の step — 実機計測 (research R-07 / quickstart V-3)。観点:
   - 安全柵: config は `CI` で例外 / spec は `CI`・`CLOSTA_E2E` の設定、`CLOSTA_PERF_FOLDER` / `CLOSTA_PERF_RUNTIME` の未設定で**失敗** (skip にしない) / 起動の env から `CLOSTA_E2E` を取り除く / 起動後に本物の composition であることを確かめ、結果に `composition: real` を出す / perf は子プロセスを自ら起こさない (`child_process` や `wsl.exe` を使わない) / `app.evaluate` を使わない
   - 観測: 判定は `page.evaluate` で一覧の `data-row-status` と `data-received-messages` の値だけを返す関数の `expect.poll` で行う (locator の待機を使わない。失敗時の出力に要素の HTML を出さない) / 窓の中のメッセージ数は窓の始まりと終わりの累計の差
-  - 成果物: `trace` / `screenshot` / `video` は off、reporter は `list`、`outputDir` は gitignore 済みの場所
+  - 成果物: `trace` / `screenshot` / `video` は off、**失敗時の error-context (aria snapshot) も off** (`PLAYWRIGHT_NO_COPY_PROMPT=1`。pr-gate R1 security H-001)、reporter は `list`、`outputDir` は gitignore 済みの場所
   - 負荷: 10 本を起動して既定のプロンプト (繰り返しの上限つき。`CLOSTA_PERF_PROMPT` で差し替え可) を送る / 10 本が応答中になってから 30 秒打鍵する
   - 有効な回: 窓の始まりと終わりで 10 本が応答中、承認待ち・応答待ち・失敗が 0 本、窓の中のメッセージ数が下限以上 (spec FR-012)。満たさなければ無効として理由キーだけを出す。承認カードには応答しない
   - 出力: spec SC-005 の許可リストの項目だけ。env・本文を出さない
@@ -109,3 +110,14 @@
 - [x] **SH-092** [SH] [P] 型検査 (`tsc --noEmit`。src と e2e / perf)・lint・depcruise・単体・E2E を流す (コマンドは discovery.md の agent 用の列)。**`git diff --name-only main...HEAD -- src/main src/preload src/agents src/domain` が 0 件**、**`.github/workflows/verify.yml` に perf の実行 (`playwright.perf`) が 0 件** (型検査の step だけ) であることを確かめる (SC-006 / quickstart V-5)
 - [x] **SH-093** [SH] [P] quickstart V-4 の目視 (承認待ちの強調と移動・別画面でのナビの件数と読み上げ・compact の操作・全角の長い表示名の compact の行・ナレーターでの読み上げ) を行い、`quickstart-results.md` に記録する
   - **実施時の変更**: ナレーターでの読み上げの目視は利用者判断でスコープ外にした (2026-10-02)。読み上げの中身は component テストで固定し、実際の聞こえ方は pr-gate の a11y-reviewer の観点に残す
+
+## pr-gate Round 1 の対応 (2026-10-03。利用者が直す範囲を決めた)
+
+- [x] **PR-01** [SH] H-01: `playwright.perf.config.ts` で `PLAYWRIGHT_NO_COPY_PROMPT=1` (error-context を止める)。research R-07 / SH-032 の成果物に error-context を足し、残っていた `%TEMP%\closta-perf-results\` の削除を quickstart-results に記録
+- [x] **PR-02** [SH] H-02 / M-03 / M-04: KPI「並列時の滑らかさ」の宿題を roadmap の O-3 の「義務 (O-1 から)」に登録し、charter と quickstart-results から指す。roadmap の O-1 の行を今の状態に直す。quickstart-results の行の切り替えの記述を観測に書き直し、E2E の long task 33 件の評価を V-3 の結論に足す
+- [x] **PR-03** [SH] M-01: FR-012 の完了条件の下に改訂の行を足し、plan / quickstart / tasks から指す
+- [x] **PR-04** [FE] M-02 / L-03 / L-04 / L-06: compact の失敗の短い理由と終了の告知 (`RunningSessionList.tsx`)・押せない理由の区別 (`labels.ts`)・不可視の書式文字の除去 (`session-view.ts`)・隔離バッジの置き場の注記。テスト: compact の失敗 / 終了の告知、表示中だけが承認待ちのときの理由、不可視文字。E2E: compact の幅の測定に強制終了と終了済みの行を混ぜる (失敗の行は E2E の偽 supervisor が流さないので作れない。FR-010)
+- [x] **PR-05** [FE] M-05: 件数を押した直後に承認待ちが解けたときのテスト、3 本での行ごとの再描画の分離のテスト (`RunningSessionList.monitor.test.tsx`)
+- [x] **PR-06** [SH] M-06 / M-07 / L-05 / L-10: quickstart V-3 に outputDir の確認と `teardown=killed` のときの `ps` の確認を足す。perf の判定を `perf/run-judgement.ts` の純関数に切り出して Vitest で固定 (下限の検証・`probe-missing`・`minMessages` / `thresholdOverridden` を記録。SC-005 の許可リストに 1 項目)。例外の文を理由キーと件数だけにする。後始末が kill に落ちたら 1 行出す
+- [x] **PR-07** [SH] L-01 / L-02 / L-08 / L-09: quickstart-results の本数の幅と V-5 の再確認、plan の時刻の源の注記、plan / research の「実装時の変更」
+- [x] **PR-08** [SH] M-08 / L-07: roadmap に回す (実機計測ハーネスの ADR 化を system-scope の項目に、行の状態の型の置き場を O-2 の前の store の切り出しの項目に)

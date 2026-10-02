@@ -31,7 +31,9 @@ CLOSTA_PERF_FOLDER=<作業フォルダの表示名> CLOSTA_PERF_RUNTIME=<ディ�
 3. 10 本が応答中になったら、1 本目を表示して 30 秒間打鍵する
 4. 出力を quickstart-results に記録する。**写してよいのは spec SC-005 の許可リストの項目だけ**とし、本文や env は写さない。端末の出力をそのまま貼らない
 5. ホストの `wsl.exe` と WSL 内の `claude` の数が手順 1 の値に戻ったことを確かめて記録する (無効になった回も含め、各回の後に行う)。残っていたら WSL 内の該当する `claude` を止め、AD-043 Decision 5 の残余として X-6 に記録する
-6. 有効な回が 3 回そろうまで繰り返す。**そろうまで pr-gate に進まない** (spec FR-012 の完了条件)。有効な回で閾値を割ったら止めて利用者が判断する
+   - 出力に `[O-1 SC-005] teardown=killed` の行が出た回は、後始末が kill に落ちている (Electron の main の PID だけを終わらせ、WSL 内の `claude` が残りうる)。その回は必ず `wsl -d <ディストロ名> -- ps -eo pid,etime,args` で残ったプロセスを確かめる (pr-gate R1 platform-boundary L-001)
+   - 実行後に outputDir (`%TEMP%\closta-perf-results\`) の下に `.last-run.json` 以外が無いことを確かめる。`error-context.md` などがあれば会話由来の文字列が残っているので、消してから記録に残す (pr-gate R1 security M-001)
+6. 有効な回が 3 回そろうまで繰り返す。**そろうまで pr-gate に進まない** (spec FR-012 の完了条件。**2026-10-02 に改訂** — 有効な回 0 件で利用者が SC-005 を閉じた。spec FR-012 の改訂の行)。有効な回で閾値を割ったら止めて利用者が判断する
 
 トークンを消費する。プロンプトを短くしたい場合は `CLOSTA_PERF_PROMPT` で差し替え、その旨 (識別子) を記録する。計測で作られた会話の履歴 (transcript) は WSL 内に残り、R-2 のセッション一覧に並ぶ。アプリはこれを消さない (Principle X)。
 

@@ -138,8 +138,11 @@ O-1 では、監視ビュー = セッション画面のサイドバーの稼働�
   10 本 × 20 件/秒の負荷。`e2e/multi-session.spec.ts`。X-5 SC-003 / O-1 SC-004) + **実機計測** (ビルドした実アプリと
   実 `claude` 10 本。`perf/real-sessions.spec.ts`。CI では実行しない。O-1 SC-005)。指標は入力遅延 p95 と long task の最大。
   **O-1 の実機計測 (2026-10-02)** は、実 `claude` が窓の途中で応答を終えるため有効な回を得られず、利用者判断で締めた
-  (手順を直した後の 4 回は p95 13.6〜14.9ms・long task 0 件)。10 本が窓の全期間で応答を流し続ける負荷の作り方は、
-  次にこの KPI を測る feature の宿題 ([quickstart-results](../../../specs/010-session-monitoring-view/quickstart-results.md) V-3)
+  (手順を直した後の 4 回は p95 13.6〜14.9ms・long task 0 件。ただし測ったのは打鍵の間だけで、**行の切り替え (Journey 3 の
+  手順 3) は実負荷の下で測っていない** — 1〜3 回目では切り替えの直後に 100〜275ms の long task が出た)。E2E の 50ms 超の
+  long task は X-5 の 0〜10 件から O-1 で 33 件に増えた (原因は未切り分け)。10 本が窓の全期間で応答を流し続ける負荷の作り方・
+  窓の終わりの行の状態の内訳・行の切り替えの計測は、**持ち主 = O-3** ([roadmap の O-3 の「義務 (O-1 から)」](../../roadmap.md#o3-kpi-smoothness)。
+  経緯は [quickstart-results](../../../specs/010-session-monitoring-view/quickstart-results.md) V-3)
 - **列挙の網羅**: **実行中のディストロについて**、その中の config ディレクトリを
   Windows 側から取りこぼさず列挙できる — 計測経路: **当面は Vitest + quickstart**。
   **本来は E2E だが、E2E 基盤の構築は M4 完了後に再検討する**（R-2 の `[USER]` 判断 /

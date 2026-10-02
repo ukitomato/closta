@@ -30,6 +30,7 @@ import {
   failedCountLabel,
   formatStartedAt,
   launchFailureLabel,
+  launchFailureShortLabel,
   launchRejectLabel,
   MONITOR_LABELS,
   SESSION_ACTION_LABELS,
@@ -37,8 +38,8 @@ import {
   SESSION_LIST_LABELS,
   SESSION_ROW_STATUS_LABELS,
   slotUsageLabel,
-  type SessionRowStatus,
-  slotUsageTitle
+  slotUsageTitle,
+  type SessionRowStatus
 } from './labels'
 import { useRunningSessionStore, useRunningSessionStoreApi } from './running-session-context'
 import type { Density } from './running-session-types'
@@ -135,6 +136,9 @@ function MonitorSummary(): React.JSX.Element {
   const counts = useRunningSessionStore(useShallow((s) => attentionCounts(s)))
   const hasTarget = useRunningSessionStore((s) => nextAwaiting(s) !== null)
   const density = useRunningSessionStore((s) => s.density)
+  // 押せない理由: 承認待ちが表示中のセッションだけか、1 件も無いか (spec Edge Cases。pr-gate R1 po L-003)。
+  const noTarget =
+    counts.awaiting > 0 ? MONITOR_LABELS.awaitingOnlyWatched : MONITOR_LABELS.awaitingNoTarget
 
   return (
     <div className="flex flex-wrap items-center gap-1.5 text-xs">
@@ -150,7 +154,7 @@ function MonitorSummary(): React.JSX.Element {
         size="xs"
         variant={counts.awaiting > 0 ? 'default' : 'outline'}
         disabled={!hasTarget}
-        title={hasTarget ? MONITOR_LABELS.awaitingNext : MONITOR_LABELS.awaitingNoTarget}
+        title={hasTarget ? MONITOR_LABELS.awaitingNext : noTarget}
         aria-describedby={hasTarget ? undefined : 'monitor-awaiting-no-target'}
         onClick={() => store.selectNextAwaiting()}
         data-testid="awaiting-count"
@@ -160,7 +164,7 @@ function MonitorSummary(): React.JSX.Element {
       </Button>
       {!hasTarget && (
         <span id="monitor-awaiting-no-target" className="sr-only">
-          {MONITOR_LABELS.awaitingNoTarget}
+          {noTarget}
         </span>
       )}
       <Badge variant={counts.failed > 0 ? 'destructive' : 'outline'} data-testid="failed-count">
@@ -255,13 +259,38 @@ function useRowFacts(sessionId: string): {
   return { session, view: deriveSessionView(session, status) }
 }
 
-/** 行の状態の文言と、承認待ち・失敗の強調 (アイコン + 文言。FR-001 / FR-003)。 */
+/** 行の文脈 (ランタイム · 起動時刻)。詳しく の行と compact のツールチップ・読み上げで同じものを出す。 */
+function rowContext(
+  session: { readonly runtimeId: string; readonly startedAt: number },
+  runtimeName: (runtimeId: string) => string
+): string {
+  return [runtimeName(session.runtimeId), formatStartedAt(session.startedAt)]
+    .filter((part) => part !== '')
+    .join(' · ')
+}
+
+/** 終わり方の告知 (強制停止 / 強制終了。X-5 FR-011)。詳しく は行に、compact はツールチップと読み上げに出す。 */
+function endNoticeOf(session: {
+  readonly endForced: boolean
+  readonly killed: boolean
+}): string | null {
+  if (session.endForced) return SESSION_END_NOTICES.endForced
+  if (session.killed) return SESSION_END_NOTICES.killed
+  return null
+}
+
+/**
+ * 行の状態の文言と、承認待ち・失敗の強調 (アイコン + 文言。FR-001 / FR-003)。compact の失敗は印の横に短い理由を出し、
+ * 全文はツールチップと読み上げに回す (FR-008 は理由を落としてよいとしていない。pr-gate R1 po M-002)。
+ */
 function RowStatusBadge({
   status,
-  failureReason
+  failureReason,
+  compact = false
 }: {
   readonly status: SessionRowStatus
   readonly failureReason: LaunchFailureReason | null
+  readonly compact?: boolean
 }): React.JSX.Element {
   const label = SESSION_ROW_STATUS_LABELS[status]
   // `data-row-status` は実機計測の観測点 (行の状態の 9 値。会話由来の値を含まない。FR-012)。
@@ -274,17 +303,33 @@ function RowStatusBadge({
     )
   }
   if (status === 'failed') {
+    const badge = (
+      <Badge
+        variant="destructive"
+        data-testid="session-row-status"
+        data-row-status={status}
+        data-attention="failure"
+      >
+        <CircleAlertIcon aria-hidden />
+        {label}
+      </Badge>
+    )
+    if (compact) {
+      return (
+        <span className="flex min-w-0 items-center gap-1">
+          {badge}
+          {failureReason !== null && (
+            // 読み上げは全文 (SessionRowMeta の sr-only) に任せ、短い理由は見た目だけにする (二重に読ませない)。
+            <span aria-hidden className="max-w-24 truncate" data-testid="session-row-failure-short">
+              {launchFailureShortLabel(failureReason)}
+            </span>
+          )}
+        </span>
+      )
+    }
     return (
       <span className="flex min-w-0 flex-col gap-0.5">
-        <Badge
-          variant="destructive"
-          data-testid="session-row-status"
-          data-row-status={status}
-          data-attention="failure"
-        >
-          <CircleAlertIcon aria-hidden />
-          {label}
-        </Badge>
+        {badge}
         {failureReason !== null && (
           <span className="text-foreground whitespace-normal" data-testid="session-row-failure">
             {launchFailureLabel(failureReason)}
@@ -343,18 +388,22 @@ function SessionRowMeta({
   const { session, view } = useRowFacts(sessionId)
   if (session === undefined) return null
   const status = rowStatus(view)
-  const context = [runtimeName(session.runtimeId), formatStartedAt(session.startedAt)]
-    .filter((part) => part !== '')
-    .join(' · ')
+  const context = rowContext(session, runtimeName)
+  const endNotice = endNoticeOf(session)
 
   if (density === 'compact') {
     return (
       <span className="flex items-center gap-1.5">
-        <RowStatusBadge status={status} failureReason={null} />
+        {/* I-2: 隔離バッジはここ (状態の印の前) に置く。SC-003 の E2E が行の幅を守る (pr-gate R1 architecture L-001)。 */}
+        <RowStatusBadge status={status} failureReason={view.failureReason} compact />
         <ElapsedTime sessionId={sessionId} />
         {/* 行から外した情報はフォーカス時にも読まれる (FR-008)。見た目はツールチップ。 */}
         <span className="sr-only">
           {context}
+          {status === 'failed' && view.failureReason !== null && (
+            <span>{launchFailureLabel(view.failureReason)}</span>
+          )}
+          {endNotice !== null && <span>{endNotice}</span>}
           <RowActivity sessionId={sessionId} />
         </span>
       </span>
@@ -369,11 +418,7 @@ function SessionRowMeta({
         <ElapsedTime sessionId={sessionId} />
       </span>
       <RowActivity sessionId={sessionId} />
-      {(session.endForced || session.killed) && (
-        <span data-testid="session-row-end-notice">
-          {session.endForced ? SESSION_END_NOTICES.endForced : SESSION_END_NOTICES.killed}
-        </span>
-      )}
+      {endNotice !== null && <span data-testid="session-row-end-notice">{endNotice}</span>}
     </span>
   )
 }
@@ -388,14 +433,14 @@ function RowTooltip({
 }): React.JSX.Element | null {
   const { session, view } = useRowFacts(sessionId)
   if (session === undefined) return null
+  const endNotice = endNoticeOf(session)
+  // 理由を出す条件は 詳しく の行と読み上げにそろえる (失敗の行だけ。code-gate R2 convention M-002)。
+  const failure = rowStatus(view) === 'failed' ? view.failureReason : null
   return (
     <span className="flex max-w-64 flex-col gap-0.5">
-      <span>
-        {[runtimeName(session.runtimeId), formatStartedAt(session.startedAt)]
-          .filter((part) => part !== '')
-          .join(' · ')}
-      </span>
-      {view.failureReason !== null && <span>{launchFailureLabel(view.failureReason)}</span>}
+      <span>{rowContext(session, runtimeName)}</span>
+      {failure !== null && <span>{launchFailureLabel(failure)}</span>}
+      {endNotice !== null && <span>{endNotice}</span>}
       <RowActivity sessionId={sessionId} />
     </span>
   )

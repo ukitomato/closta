@@ -30,3 +30,6 @@ src/renderer/src/features/session/session-view.monitor.test.ts
 src/renderer/src/features/session/session-view.ts
 src/renderer/src/features/session/useSessionClock.test.tsx
 src/renderer/src/features/session/useSessionClock.ts
+perf/run-judgement.ts
+perf/run-judgement.test.ts
+vitest.config.ts

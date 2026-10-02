@@ -210,6 +210,15 @@ test.describe('マルチセッション (X-5)', () => {
         'aria-pressed',
         'true'
       )
+      // 終わり方の告知を持つ行 (強制終了) と終了済みの行を混ぜてから幅を測る (pr-gate R1 po M-002)。compact の告知は
+      // 読み上げとツールチップに出る。失敗の行 (印の横の短い理由) は E2E の偽 supervisor が失敗を流さないので
+      // ここでは作れない (main を変えない。FR-010)。短い理由は `max-w-24 truncate` で幅を持たない。
+      await rows(page).nth(0).getByRole('button', { name: '強制終了', exact: true }).click()
+      await expect(rows(page).nth(0).getByRole('button').first()).toHaveAccessibleName(
+        /強制終了しました。/
+      )
+      await rows(page).nth(1).getByRole('button', { name: '終了', exact: true }).click()
+      await expect(rows(page).nth(1).getByTestId('session-row-status')).toHaveText('終了済み')
 
       const layout = await page.evaluate(() => {
         const list = document.querySelector('[data-slot="aui_thread-list-root"]')

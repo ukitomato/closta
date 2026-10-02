@@ -162,13 +162,21 @@ function isLineBreak(code: number): boolean {
   return code === 0x0a || code === 0x0d || code === 0x2028 || code === 0x2029
 }
 
+/**
+ * 不可視の書式文字: ゼロ幅 (U+200B-200D)、語結合子など (U+2060-2064)、モンゴル語母音区切り (U+180E)、タグ文字
+ * (U+E0000-E007F)。domain の `sanitizeBody` の除去対象に無いので、ここで落とす (FR-010 で domain は変えない。
+ * 切り詰めの 80 文字を不可視文字で埋めさせない。pr-gate R1 security L-001)。
+ */
+const INVISIBLE_FORMAT = /[\u200B-\u200D\u2060-\u2064\u180E]|[\u{E0000}-\u{E007F}]/gu
+
 /** 1 行を表示用に正規化する (制御文字・双方向制御文字の除去は domain の `sanitizeBody` を再利用する)。 */
 function normalizeLine(line: string): string {
   // 切り出しで高位サロゲートだけが末尾に残ったら落とす (サロゲートペアを割らない)。
   const last = line.charCodeAt(line.length - 1)
   const whole = last >= 0xd800 && last <= 0xdbff ? line.slice(0, -1) : line
   return sanitizeBody(whole, ACTIVITY_LINE_HEAD * 4)
-    .value.replace(/\s+/g, ' ')
+    .value.replace(INVISIBLE_FORMAT, '')
+    .replace(/\s+/g, ' ')
     .trim()
 }
 

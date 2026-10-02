@@ -10,6 +10,8 @@ import {
   typeContinuously
 } from '../e2e/support/input-probe'
 
+import { judgeRun, parseMinMessages } from './run-judgement'
+
 /**
  * **実機計測** (O-1 SH-032 / FR-012 / SC-005)。charter KPI「並列時の滑らかさ」の実機側を、ビルドした実アプリと
  * 実 `claude` 10 本で測る。**CI では実行しない。agent は利用者の明示的な指示があるときだけ実行する。**
@@ -22,16 +24,13 @@ import {
  * | perf 自身は子プロセスを起こさない (Playwright 経由でアプリを起動するだけ) | plan「機械強制の変更」 |
  * | 承認カードには応答しない。承認待ちに入ったセッションがあった回は無効 | FR-012 / Principle III |
  * | 後始末は `afterEach` で行う (test 本体のタイムアウトでは本体の `finally` が動かない): 全セッションを強制終了 → `app.close()` → 期限を超えたら kill | design-gate R2 platform-boundary M-002 |
- * | 出力は spec SC-005 の許可リストの項目だけ (数値と理由キー)。env・本文を出さない | SC-005 |
+ * | 出力は spec SC-005 の許可リストの項目だけ (数値と理由キー)。env・本文を出さない。例外の文も理由キーと件数だけ | SC-005 / pr-gate R1 security L-002 |
+ * | 回の判定 (下限の検証を含む) は `run-judgement.ts` の純関数 (Vitest で固定) | pr-gate R1 architecture M-002 |
+ * | 後始末が kill に落ちたら `teardown=killed` を 1 行出す (WSL に `claude` が残っていないか `ps` で確かめる合図) | pr-gate R1 platform-boundary L-001 |
  */
 
 const SESSIONS = 10
 const WINDOW_MS = 30_000
-/**
- * 有効な回の下限 (窓の中のメッセージ数)。当初の 100 は実 claude では届かなかった (1 回目の実測で 30 秒に 40 件。
- * tool を 1 回呼ぶたびに数秒かかる)。利用者判断 2026-10-02 で 30 に下げた。
- */
-const MIN_MESSAGES = Number(process.env.CLOSTA_PERF_MIN_MESSAGES ?? '30')
 /** 既定のプロンプト: 読み取り専用の tool を回数の上限つきで小刻みに繰り返させる (承認を要さない。research R-07)。 */
 const DEFAULT_PROMPT =
   'このリポジトリのファイルを Glob で列挙し、Read で 1 ファイルずつ最大 80 ファイル読んでください。1 ファイル読むたびに、ファイル名と 1 行の要約を返してください。ファイルの変更やコマンドの実行はしないでください。'
@@ -53,7 +52,8 @@ async function snapshot(page: Page): Promise<{ readonly statuses: string[]; read
 
 /**
  * select の選択肢の表示名から位置を引く (作業フォルダは**表示名**、ランタイムはディストロ名。会話由来ではない)。
- * 見つからなければ、どちらが見つからなかったかと候補を添えて失敗する (候補は表示名だけで、パスは出ない)。
+ * 見つからなければ、理由キーと件数だけを添えて失敗する (env の値と候補の表示名は出さない。表示名に顧客名・案件名が
+ * 入りうる。pr-gate R1 security L-002)。
  */
 async function optionIndex(
   page: Page,
@@ -77,16 +77,16 @@ async function optionIndex(
   const exact = texts.findIndex((t) => t.toLowerCase() === wanted.toLowerCase())
   const partial = texts.flatMap((t, i) => (matches(t) ? [i] : []))
   if (exact < 0 && partial.length > 1)
-    throw new Error(`${key.replace('not-found', 'ambiguous')}: "${wanted}" が複数に一致します。候補: ${JSON.stringify(texts)}`)
+    throw new Error(`${key.replace('not-found', 'ambiguous')}: matches=${partial.length}`)
   const index = exact >= 0 ? exact : (partial[0] ?? -1)
-  if (index < 0) throw new Error(`${key}: "${wanted}" が選択肢にありません。候補: ${JSON.stringify(texts)}`)
+  if (index < 0) throw new Error(`${key}: options=${texts.length}`)
   return { index: index + 1, text: texts[index] ?? '' }
 }
 
 /** 起動する。無人で走らせるので、権限モードが既定 (`default`) であることを起動の直前に確かめる (Principle III)。 */
 async function pressLaunch(page: Page): Promise<void> {
   const mode = await page.getByRole('combobox', { name: '権限モード' }).inputValue()
-  if (mode !== 'default') throw new Error(`permission-mode-not-default: ${mode}`)
+  if (mode !== 'default') throw new Error('permission-mode-not-default')
   await page.getByRole('button', { name: '起動', exact: true }).click()
   await page.getByRole('textbox', { name: 'Message input' }).waitFor({ timeout: 60_000 })
 }
@@ -103,7 +103,7 @@ async function launchOne(
   const f = await optionIndex(page, '作業フォルダ', folder, 'folder-not-found')
   await page.getByRole('combobox', { name: '作業フォルダ' }).selectOption({ index: f.index })
   const r = await optionIndex(page, 'ランタイム (WSL)', runtime, 'runtime-not-found')
-  if (r.text.includes('停止中')) throw new Error(`runtime-stopped: "${runtime}"`)
+  if (r.text.includes('停止中')) throw new Error('runtime-stopped')
   await page.getByRole('combobox', { name: 'ランタイム (WSL)' }).selectOption({ index: r.index })
   // モデルの選択肢は Provider のモデルカタログから出る (既定の Provider にはカタログが無い)。
   if (provider !== undefined && provider !== '') {
@@ -115,12 +115,11 @@ async function launchOne(
     return 'default'
   }
   const m = await optionIndex(page, 'モデル', model, 'model-not-found').catch(async (error) => {
+    // モデルを選ぶには Provider のモデルカタログが要る。選べる Provider の件数だけを添える (CLOSTA_PERF_PROVIDER で選ぶ)。
     const providers = await page
       .getByRole('combobox', { name: 'Provider' })
-      .evaluate((el) => [...(el as HTMLSelectElement).options].slice(1).map((o) => o.text))
-    throw new Error(
-      `${(error as Error).message} (CLOSTA_PERF_PROVIDER で選べる Provider: ${JSON.stringify(providers)})`
-    )
+      .evaluate((el) => (el as HTMLSelectElement).options.length - 1)
+    throw new Error(`${(error as Error).message} providers=${providers}`)
   })
   await page.getByRole('combobox', { name: 'モデル' }).selectOption({ index: m.index })
   await pressLaunch(page)
@@ -152,6 +151,9 @@ test.afterEach(async () => {
       new Promise((_, reject) => setTimeout(() => reject(new Error('close-timeout')), 15_000))
     ])
   } catch {
+    // kill は Electron の main の PID だけを終わらせる。utility process が起こした wsl.exe と WSL の中の `claude` が
+    // 残りうるので、落ちたことを理由キーだけで出す (操作者は `ps` でディストロを確かめる。quickstart V-3)。
+    console.log('[O-1 SC-005] teardown=killed')
     current.process().kill()
   }
 })
@@ -164,6 +166,8 @@ test('実 claude 10 本が応答を流す中で、表示中のセッションの
   const runtime = process.env.CLOSTA_PERF_RUNTIME
   if (folder === undefined || folder === '' || runtime === undefined || runtime === '')
     throw new Error('refused: CLOSTA_PERF_FOLDER / CLOSTA_PERF_RUNTIME are required')
+  // 有効な回の下限 (窓の中のメッセージ数)。既定は 30 (当初の 100 は実 claude では届かなかった。利用者判断 2026-10-02)。
+  const { minMessages, thresholdOverridden } = parseMinMessages(process.env.CLOSTA_PERF_MIN_MESSAGES)
   const prompt = process.env.CLOSTA_PERF_PROMPT ?? DEFAULT_PROMPT
   const promptId = process.env.CLOSTA_PERF_PROMPT === undefined ? 'default' : 'custom'
   // モデルの表示名の一部 (大文字小文字を区別しない)。未指定なら既定のモデル (Provider のカタログが要る。既定の Provider には無い)。
@@ -221,14 +225,14 @@ test('実 claude 10 本が応答を流す中で、表示中のセッションの
 
   const runningAtStart = start.statuses.filter((s) => s === 'running').length
   const runningAtEnd = end.statuses.filter((s) => s === 'running').length
-  const messages = end.received - start.received
-  // 2 点の確認で全期間を代表できる: 承認に応じず追加の送信もしないので、窓の途中で応答中を外れたセッションは戻らない。
-  const reason =
-    runningAtStart < SESSIONS || runningAtEnd < SESSIONS
-      ? 'not-all-running'
-      : messages < MIN_MESSAGES
-        ? 'too-few-messages'
-        : null
+  const { messages, reason } = judgeRun({
+    sessions: SESSIONS,
+    runningAtStart,
+    runningAtEnd,
+    receivedAtStart: start.received,
+    receivedAtEnd: end.received,
+    minMessages
+  })
 
   // 許可リストの項目だけを出す (spec SC-005)。
   const record = {
@@ -237,6 +241,8 @@ test('実 claude 10 本が応答を流す中で、表示中のセッションの
     prompt: promptId,
     windowSize: size,
     messagesInWindow: messages,
+    minMessages,
+    thresholdOverridden,
     runningAtStart,
     runningAtEnd,
     valid: reason === null,

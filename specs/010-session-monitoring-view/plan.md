@@ -136,6 +136,7 @@ Grep "密度|compact|comfortable|没入|隔離" in docs/domains (design-gate R1 
 - **`running-session-store.ts`**:
   - `patch` / 状態通知の受信 / 起動の受付 / 利用者の送信の後に `trackDerived(sessionIds)` を呼ぶ。これは (1) `rowStatus` が変わったセッションの `statusSince` を**まとめて 1 回の `setState`** で更新し (同じ値なら `setState` しない)、(2) 対象のセッションの `scheduleActivity` を呼ぶ。状態通知のバッチは含まれる全セッションを 1 回で渡す。起動の受付では固定値ではなく、その時点の `rowStatus` を入れる
   - `scheduleActivity(sessionId)`: セッションごとに 500ms の間隔で `deriveActivity` を評価して `activity` に書く (先頭は即時、間隔の中の更新は最後の 1 回だけ trailing で書く。値が等しければ書かない)。タイマはストアに注入する
+    - **実装時の変更** (pr-gate R1 architecture L-003): タイマは注入せず、`setTimeout` を直接使った。経過時間は、ストアに注入した `now` で書いた `statusSince.at` と、時計 (`useSessionClock`) の `Date.now()` の差で出す。**時刻の源は本番では `Date.now` にそろえる前提**とし、`now` に `Date.now` 以外を注入するときは時計にも同じ源を渡すこと。テストは fake timers で両方を進める
   - port の `message` で `receivedMessages` を 1 足す (観測点)
   - `launch(config, folderLabel)`: 起動の受付時に作業フォルダの表示名を各セッションに写す (`SessionScreen` が既に引いている値。引けていなければ `null`)
   - `close` で `statusSince` / `activity` を消し、間引きのタイマを止める
@@ -150,6 +151,7 @@ Grep "密度|compact|comfortable|没入|隔離" in docs/domains (design-gate R1 
   - 行 (`useRowFacts`) は `activity[id]` と `statusSince[id].status` だけを足して選ぶ。本文の配列・メッセージのオブジェクト・時計を選ばない
   - 経過時間は行の子の `ElapsedTime` (新設) だけが時計と `statusSince[id].at` を読む (行本体は時計で再描画されない。research R-03)
   - 行の強調: 承認待ちと失敗に、状態の文言に加えてアイコンを付け、行の左端の帯などを既存のトークンで出す。色だけに頼らない (spec FR-001)。強調の値と行の状態 (`data-row-status`) は `RunningSessionList.tsx` が決め、element には `data-*` 属性を解決する関数として渡す
+    - **実装時の変更**: 左端の帯と Root の属性の口は作らなかった。強調はアイコン + 文言の Badge で、属性は meta の中の状態の要素に付けた (tasks FE-001 を参照。pr-gate R1 architecture L-004)
   - 直近の活動は kind ごとの固定の前置き + 会話由来の部分を別の要素で出し、状態の文言の要素とは分ける
   - 観測点: 一覧の中の視覚的に隠した小さな要素だけが `receivedMessages` を購読し、`data-received-messages` に出す (data-model §1)
   - 件数の表示は shadcn Badge (公式の CLI で導入。research R-06)。compact で外した情報は導入済みの Tooltip
@@ -159,6 +161,7 @@ Grep "密度|compact|comfortable|没入|隔離" in docs/domains (design-gate R1 
 - **`App.tsx`**: ナビの `launch` の行に `SessionNavBadge` を差し込み、`SessionAttentionAnnouncer` を置くだけ。冒頭コメントに「ナビのバッジと通知は各 feature のコンポーネントを差し込む」と足す
 - **`SessionScreen.tsx`**: `store.launch(config)` の呼び出しで、引けている作業フォルダの表示名も渡す
 - **`thread-list.aui.tsx`**: 行の密度と、行の Root に付ける `data-*` 属性を解決する関数を context で受ける口を足す (`RowMetaContext` と同じ形)。compact では操作を Trigger と同じ段に置き (横並び・折り返さない・表示名は切り詰め)、comfortable は現状の縦積み。**R-2 の一覧は口を使わないので現状のまま**。session の語彙を element に書かない
+  - **実装時の変更**: Root の属性の口は作らず、足したのは密度とツールチップの口だけ (tasks FE-001 を参照。pr-gate R1 architecture L-004)
 - **`labels.ts`**: 見出し (枠の使用数・承認待ちの件数・失敗の件数・密度の 2 値・押せない理由)、ナビの件数の accessible name、経過時間の表記、直近の活動の前置き (承認を求めている / 実行 / 送信 / 応答)、live region の文と表示名の代替語、compact の操作のアイコンボタンの accessible name (X-5 の操作の文言を流用)
 
 ### E2E と実機計測
@@ -166,7 +169,7 @@ Grep "密度|compact|comfortable|没入|隔離" in docs/domains (design-gate R1 
 - **`e2e/support/input-probe.ts` (新設)**: `e2e/multi-session.spec.ts:131-205` の仕込みと集計 (long task・入力遅延・p95) を関数に切り出す。E2E の挙動は変えない
 - **`e2e/multi-session.spec.ts` (変更)**: SC-003 のテストを、comfortable で経過時間と直近の活動 (本文の分岐) が出ていることを確かめてから流す (SC-004)。強調は含めない (USER 決定。E2E stub を変えない)。compact で 10 本の行がすべて一覧の可視領域に収まり、各行で `scrollWidth <= clientWidth`、操作のボタンが行の内側にあることのテストを足す (SC-003)
 - **`perf/real-sessions.spec.ts` + `playwright.perf.config.ts` + `perf/tsconfig.json` (新設)**: research R-07 のとおり (置き場・安全柵・観測点・成果物・負荷・有効な回・`afterEach` の後始末)。結果は spec SC-005 の許可リストの項目だけを annotation と標準出力に出し、quickstart-results に人が写す
-- **順序**: 実機計測 (SH-033) は pr-gate の前に済ませる。有効な回が 3 回記録されるまで `/cl-pr-gate` / `/cl-done` に進まない (spec FR-012 の完了条件)
+- **順序**: 実機計測 (SH-033) は pr-gate の前に済ませる。有効な回が 3 回記録されるまで `/cl-pr-gate` / `/cl-done` に進まない (spec FR-012 の完了条件)。**2026-10-02 に改訂**: 有効な回 0 件で利用者が SC-005 を閉じ、この条件を外した (spec FR-012 の改訂の行)
 
 ### 記録の追随
 

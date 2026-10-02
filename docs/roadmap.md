@@ -140,10 +140,27 @@ workspace として扱われていたら `packages:` の有無を先に確認す
   の flat config ブロックで `child_process` / `node:child_process` の `no-restricted-imports` を掛けること (O-1 code-gate convention M-003 /
   platform-boundary M-001)。あわせて、`.dependency-cruiser.js` の `not-to-test` (e2e / perf) には発火を確かめる違反サンプルが無い
   (`scripts/rules` / `tests/rule-fixtures`。O-1 code-gate platform-boundary L-003)。
+  O-1 の pr-gate R1 の対応で `perf/run-judgement.ts` とその Vitest (`perf/*.test.ts`。node project の include) が入り、perf/ は CI で回る
+  純関数も持つようになった。ESLint の ignores の判断の前提が変わったので、あわせて見直す (O-1 code-gate R2 convention L-002)。
   持ち主 = 本 E2E / 検証基盤 feature
 - **renderer の `dangerouslySetInnerHTML` を lint で禁じる (O-1 起点。design-gate R1 security L-005。system-scope)** —
   O-1 で会話由来の文字列 (直近の活動) を表示する箇所が増えた。XSS 境界はテスト (要素 0 件) と注記で守っているが、
   `react/no-danger` 相当の機械強制が無い。持ち主 = 本 E2E / 検証基盤 feature
+- **実機計測ハーネス (`perf/`) の ADR 化 (O-1 起点。pr-gate R1 architecture M-003。system-scope)** —
+  O-1 は「CI 外・実資格情報・自動操作」の検証経路を、ADR を起こさず AD-038 D2 の類推として入れた (`specs/010-session-monitoring-view/plan.md`
+  の ADR 節、`eslint.config.mjs` の ignores、`perf/tsconfig.json`)。決めごとが plan・コードの注記・`docs/discovery.md` に分散している。
+  ADR (proposed) で決めるもの: 置き場 (src のグラフの外)、安全柵 (CI / `CLOSTA_E2E` の拒否、既定の権限モードの確認、成果物を repo の外に出す、
+  失敗時の error-context を止める)、agent が実行してよい条件、`e2e/support` の共有、ESLint を ignore にするか override にするか
+  (AD-038 D2 の字面は override)。上の `SCAN_ROOTS` / ESLint の項目からこの ADR を指す。accepted の AD-038 は書き換えない。
+  持ち主 = 本 E2E / 検証基盤 feature (次に実機計測を足す feature — O-3 の KPI の宿題 — の前に決めるのが望ましい)
+- **`running-session-store.ts` の切り出しと、行の状態の型の置き場 (O-1 起点。code-gate convention M-002 (CM-02) / pr-gate R1 architecture L-002)** —
+  (1) `running-session-store.ts` が O-1 で 587 行になった。派生値の追跡と間引き (`trackDerived` / `scheduleActivity`) を
+  `running-session-monitor.ts` のような小さなモジュールに切り出す (O-1 tasks SH-004)。(2) `SessionRowStatus` と `Elapsed` の型が文言の表
+  (`labels.ts`) にあり、ストアの型と純粋な導出が UI ラベルに依存している (依存の向きが逆)。型は `running-session-types.ts` か
+  `session-view.ts` に移し、labels 側は `Record<SessionRowStatus, string>` で検査する。`announcements` は表示名の組を返し、文は呼び出し側が組む。
+  (3) `RunningSessionList.tsx` も O-1 の pr-gate R1 の対応で 500 行を超えた (code-gate R2 convention M-001)。行の部品
+  (`RowStatusBadge` / `ElapsedTime` / `RowActivity` / `SessionRowMeta` / `RowTooltip`) を `RunningSessionRow.tsx` などに切り出す (I-2 の隔離バッジの前に)。
+  O-3 の i18n リソース化の前に済ませる。持ち主 = O-2 の着手前 (O-2 で派生値が増える前に session の renderer で行う)
 - **E2E stub の production-inert 性の自動 backstop (X-2 起点。pr-gate arch-M-002。system-scope)** —
   `createE2eCapability` (`src/main/app/e2e-capability.ts`) の配線ゲート `!app.isPackaged && CLOSTA_E2E==='1'` が env 単独ゲートへ
   退行しても CI が落ちる回帰検査が無い (Vitest は electron `app` を mock しにくく、index.ts の分岐を直接 assert できない)。
@@ -224,9 +241,9 @@ X-2 (日本語 composer) で判断する** — R-3 は過去ログの表示で�
 
 | 順 | ID | feature | domain | 依存 | 前提 SPIKE |
 |---|---|---|---|---|---|
-| 10 | O-1 | セッション監視ビュー | `session` | X-5 | — / design-gate R2 PASS / **実装中** ([010 spec](../specs/010-session-monitoring-view/spec.md)。稼働中セッション一覧の拡張。実機計測 SC-005 は pr-gate 前の完了条件) |
+| 10 | O-1 | セッション監視ビュー | `session` | X-5 | — / design-gate R2 PASS / code-gate PASS / pr-gate R1 PASS (Critical 0) / **pr-gate R1 の指摘を対応中** ([010 spec](../specs/010-session-monitoring-view/spec.md)。稼働中セッション一覧の拡張。実機計測 SC-005 は有効な回 0 件で、利用者が 2026-10-02 に閉じた (spec FR-012 の改訂の行)。残した宿題は O-3 の「義務 (O-1 から)」) |
 | 11 | O-2 | `docs/ui-coverage.md` の確立（**SDK 39 型から導出**）+ Tier B/C 再棚卸し | `ui` | O-1 | SPIKE-12 **完了** / **義務 (O-1 から)**: (1) Hook / Background task の表示の割当と、状態の保持が要る場合の持ち主 domain の判断 (session は含めないと決めた。AD-020 Consequences) (2) Tool group の既定 open 化 (AD-035 の「O-1 候補」) (3) transcript の情報密度の切替 (監視ビューの行の密度は O-1 が持つ) (4) 直近の活動の tool ごとの整形 (対象のファイル名やコマンドの先頭語だけを出す。tool 入力の先頭に秘密が出うる点も扱う) |
-| 12 | O-3 | Thread 検索と observability | `ui` | O-2 | — / **義務 (X-4 から)**: session charter KPI「再利用率」の計測経路 (起動元 `preset` / `manual` のローカル利用ログ。AD-041 (h)) / **義務 (O-1 から)**: UI ラベルの i18n リソース化の判断 (Constitution Principle XV の期限 M3。`target-finder.ts` の 2 本を含める) |
+| 12 | O-3 | Thread 検索と observability | `ui` | O-2 | — / **義務 (X-4 から)**: session charter KPI「再利用率」の計測経路 (起動元 `preset` / `manual` のローカル利用ログ。AD-041 (h)) / **義務 (O-1 から)**: (1) UI ラベルの i18n リソース化の判断 (Constitution Principle XV の期限 M3。`target-finder.ts` の 2 本を含める) (2) <a id="o3-kpi-smoothness"></a>**session charter KPI「並列時の滑らかさ」の実機計測の宿題** (X-5 → O-1 と繰り越し、O-1 では有効な回 0 件で利用者が閉じた。[O-1 quickstart-results V-3](../specs/010-session-monitoring-view/quickstart-results.md)): (a) `perf/` の出力に窓の終わりの行の状態の内訳 (応答待ち・承認待ち・失敗) を足す — **SC-005 の出力の許可リストの変更なので利用者の承認が要る** (b) 10 本が窓のあいだ応答を流し続けるように、プロンプトか有効な回の条件を見直す (c) 行の切り替え (charter Journey 3 の手順 3。O-1 の 1〜3 回目で 100〜275ms の long task) も含めて測り直す。E2E の 50ms 超の long task が X-5 の 0〜10 件から O-1 で 33 件に増えた点も比較の基準として並べる |
 
 **O-2 で対応表そのものを成果物にする。** これが揃うまで Principle XII は検証不能である。
 
