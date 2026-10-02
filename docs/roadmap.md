@@ -152,7 +152,12 @@ workspace として扱われていたら `packages:` の有無を先に確認す
   ADR (proposed) で決めるもの: 置き場 (src のグラフの外)、安全柵 (CI / `CLOSTA_E2E` の拒否、既定の権限モードの確認、成果物を repo の外に出す、
   失敗時の error-context を止める)、agent が実行してよい条件、`e2e/support` の共有、ESLint を ignore にするか override にするか
   (AD-038 D2 の字面は override)。上の `SCAN_ROOTS` / ESLint の項目からこの ADR を指す。accepted の AD-038 は書き換えない。
-  持ち主 = 本 E2E / 検証基盤 feature (次に実機計測を足す feature — O-3 の KPI の宿題 — の前に決めるのが望ましい)
+  持ち主 = 本 E2E / 検証基盤 feature。**ただし本 feature は M4 完了後に切るので、O-3 (M3。KPI の宿題で perf を変える) が先に着手したら O-3 が持つ** ([O-3 の義務 (2)(d)](#o3-kpi-smoothness))
+- **直近の活動の不可視文字の残り (O-1 起点。pr-gate R2 security L-001。記録のみ)** —
+  O-1 の `normalizeLine` (`session-view.ts`) はゼロ幅文字・語結合子・タグ文字を除くが、U+00AD / U+034F / U+FE00-FE0F / ハングルの埋め字
+  (U+115F / U+1160 / U+3164 / U+FFA0) は残り、先頭 1024 コードユニットを不可視文字で埋めた行は空として飛ばされる。並びを入れ替える文字ではなく
+  偽装の力は弱い。transcript 本文と承認カードの集合 (domain の `sanitizeBody`) も同じなので、足すなら domain 側とあわせて決める。
+  持ち主 = 次に `sanitizeBody` か直近の活動を触る feature (O-2 の義務 (4) の tool ごとの整形が候補)
 - **`running-session-store.ts` の切り出しと、行の状態の型の置き場 (O-1 起点。code-gate convention M-002 (CM-02) / pr-gate R1 architecture L-002)** —
   (1) `running-session-store.ts` が O-1 で 587 行になった。派生値の追跡と間引き (`trackDerived` / `scheduleActivity`) を
   `running-session-monitor.ts` のような小さなモジュールに切り出す (O-1 tasks SH-004)。(2) `SessionRowStatus` と `Elapsed` の型が文言の表
@@ -243,7 +248,7 @@ X-2 (日本語 composer) で判断する** — R-3 は過去ログの表示で�
 |---|---|---|---|---|---|
 | 10 | O-1 | セッション監視ビュー | `session` | X-5 | — / design-gate R2 PASS / code-gate PASS / pr-gate R1 PASS (Critical 0) / **pr-gate R1 の指摘を対応中** ([010 spec](../specs/010-session-monitoring-view/spec.md)。稼働中セッション一覧の拡張。実機計測 SC-005 は有効な回 0 件で、利用者が 2026-10-02 に閉じた (spec FR-012 の改訂の行)。残した宿題は O-3 の「義務 (O-1 から)」) |
 | 11 | O-2 | `docs/ui-coverage.md` の確立（**SDK 39 型から導出**）+ Tier B/C 再棚卸し | `ui` | O-1 | SPIKE-12 **完了** / **義務 (O-1 から)**: (1) Hook / Background task の表示の割当と、状態の保持が要る場合の持ち主 domain の判断 (session は含めないと決めた。AD-020 Consequences) (2) Tool group の既定 open 化 (AD-035 の「O-1 候補」) (3) transcript の情報密度の切替 (監視ビューの行の密度は O-1 が持つ) (4) 直近の活動の tool ごとの整形 (対象のファイル名やコマンドの先頭語だけを出す。tool 入力の先頭に秘密が出うる点も扱う) |
-| 12 | O-3 | Thread 検索と observability | `ui` | O-2 | — / **義務 (X-4 から)**: session charter KPI「再利用率」の計測経路 (起動元 `preset` / `manual` のローカル利用ログ。AD-041 (h)) / **義務 (O-1 から)**: (1) UI ラベルの i18n リソース化の判断 (Constitution Principle XV の期限 M3。`target-finder.ts` の 2 本を含める) (2) <a id="o3-kpi-smoothness"></a>**session charter KPI「並列時の滑らかさ」の実機計測の宿題** (X-5 → O-1 と繰り越し、O-1 では有効な回 0 件で利用者が閉じた。[O-1 quickstart-results V-3](../specs/010-session-monitoring-view/quickstart-results.md)): (a) `perf/` の出力に窓の終わりの行の状態の内訳 (応答待ち・承認待ち・失敗) を足す — **SC-005 の出力の許可リストの変更なので利用者の承認が要る** (b) 10 本が窓のあいだ応答を流し続けるように、プロンプトか有効な回の条件を見直す (c) 行の切り替え (charter Journey 3 の手順 3。O-1 の 1〜3 回目で 100〜275ms の long task) も含めて測り直す。E2E の 50ms 超の long task が X-5 の 0〜10 件から O-1 で 33 件に増えた点も比較の基準として並べる |
+| 12 | O-3 | Thread 検索と observability | `ui` | O-2 | — / **義務 (X-4 から)**: session charter KPI「再利用率」の計測経路 (起動元 `preset` / `manual` のローカル利用ログ。AD-041 (h)) / **義務 (O-1 から)**: (1) UI ラベルの i18n リソース化の判断 (Constitution Principle XV の期限 M3。`target-finder.ts` の 2 本を含める) (2) <a id="o3-kpi-smoothness"></a>**session charter KPI「並列時の滑らかさ」の実機計測の宿題** (X-5 → O-1 と繰り越し、O-1 では有効な回 0 件で利用者が閉じた。[O-1 quickstart-results V-3](../specs/010-session-monitoring-view/quickstart-results.md)): (a) `perf/` の出力に窓の終わりの行の状態の内訳 (応答待ち・承認待ち・失敗) を足す — **SC-005 の出力の許可リストの変更なので利用者の承認が要る** (b) 10 本が窓のあいだ応答を流し続けるように、プロンプトか有効な回の条件を見直す (c) 行の切り替え (charter Journey 3 の手順 3。O-1 の 1〜3 回目で 100〜275ms の long task) も含めて測り直す。E2E の 50ms 超の long task が X-5 の 0〜10 件から O-1 で 33 件に増えた点も比較の基準として並べる (d) 着手時に上の system-scope の「実機計測ハーネス (`perf/`) の ADR 化」が未了なら、O-3 で proposed の ADR を起こしてから perf の安全柵・出力を変える (O-1 pr-gate R2 architecture L-101) |
 
 **O-2 で対応表そのものを成果物にする。** これが揃うまで Principle XII は検証不能である。
 

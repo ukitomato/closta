@@ -81,6 +81,8 @@
 
 ## US-4 — 実 `claude` 10 本が応答を流す中でも入力が滑らか (P2。範囲から削らない)
 
+**2026-10-02 改訂**: SC-005 は有効な回 0 件で利用者が閉じ、残りは roadmap O-3 の「義務 (O-1 から)」(2) に移した (spec FR-012 の改訂の行)。
+
 **Goal**: 監視ビュー込みで X-5 SC-003 の閾値を保ち、実 `claude` 10 本の実機計測を記録する (spec US-4 / FR-011 / FR-012)。
 
 **Independent Test**: E2E + 実機計測の手順 (spec US-4 Independent Test)。
