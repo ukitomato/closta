@@ -5,7 +5,7 @@ domain: ui
 domain_selected_by: user
 targets: both
 targets_selected_by: user
-status: tasking
+status: implementing
 bf_ids: []
 sf_ids: []
 linear: null
@@ -87,8 +87,8 @@ Claude Code (Agent SDK) が emit する情報と、その表示の対応表 **`d
 
 1. **Given** 実行中のセッションで `Bash` の呼び出しが出ている、**When** その結果が届く、**Then** 同じ呼び出しの表示 (Terminal block) に出力が出る。過去ログで同じセッションを開いたときと同じ形である
 2. **Given** tool の結果がエラー、または本文の上限を超えて切り詰められた、**When** 届く、**Then** エラーであること・切り詰めたことが呼び出しの表示に出る
-3. **Given** SessionStart / Setup の Hook が設定されている、**When** セッションを起動する、**Then** Hook の名前と結果 (成功・失敗・取り消し) が 1 行で出る。Hook の出力本文は出さない。PreToolUse などの Hook は本 feature では出ない (対応表で後続に割り当てる)
-4. **Given** Background task が始まり、状態が変わり、終わる、**When** transcript を見る、**Then** task ごとに 1 行が出て、状態 (実行中→完了・失敗など) が同じ行で書き換わる。進捗の要約は出さず、実行中の task の一覧も出さない
+3. **Given** SessionStart / Setup の Hook が設定されている、**When** セッションを起動する、**Then** Hook の名前 (または Hook の種類) と結果 (成功・失敗・取り消し) が 1 行で出る。Hook の出力本文は出さない。PreToolUse などの Hook は本 feature では出ない (対応表で後続に割り当てる)
+4. **Given** 背景で始まった task (Background task) が始まり、状態が変わり、終わる、**When** transcript を見る、**Then** task ごとに 1 行が出て、状態 (実行中→完了・失敗など) が同じ行で書き換わる。進捗の要約は出さず、実行中の task の一覧も出さない
 5. **Given** 過去ログに同じ Hook / Background task のシステムメッセージが残っている、**When** 過去ログを開く、**Then** 実行中と同じ形で出る (残っているかは実データで確かめ、残っていなければ対応表の経路を「実行中のみ」と書く)
 6. **Given** Hook / task の行の終わり (応答・完了の通知) が来ないままセッションが終了・失敗した、または過去ログに終わりが無い、**When** transcript を見る、**Then** その行は「結果不明」として出る (「実行中」のまま残らない)
 7. **Given** subagent の呼び出し (SDK の tool 名が `Agent` でも `Task` でも)、**When** 表示する、**Then** Subagent の専用表示になる (fallback にならない)
@@ -141,7 +141,10 @@ Claude Code (Agent SDK) が emit する情報と、その表示の対応表 **`d
 - tool の結果やシステムイベントの文字列に制御文字・双方向制御文字・HTML が含まれる → 既存の本文と同じ無害化 (`sanitizeBody`) を通し、テキストとしてだけ描く
 - Hook の出力や Background task の説明に秘密が含まれうる → Hook は出力本文を出さない。task の説明は会話由来の文字列として扱い、1 行に正規化して切り詰め、状態の文言と見た目で区別する
 - Hook が失敗した → 失敗の行に、Hook の設定と Claude Code のログを確かめるよう案内する文言を添える (出力本文は出さない)
-- 名前を持たない task の更新が、行の無い task (開始を見ていない・transcript から隠すよう SDK が指定した task) に届く → 行を作らず捨てる
+- task の更新が、行の無い task (開始を見ていない・前景の・transcript から隠すよう SDK が指定した task) に届く → 説明を含む更新でも行を作らず捨てる
+- 状態を持たない task の更新 (背景への移動・経過時間の更新だけなど) → 行の状態を変えない
+- 過去ログを開いた時点で外の端末でまだ動いている task → 記録に終わりが無いので「結果不明 (記録に終わりが無い)」と出る
+- task の説明がコマンドの文字列で、代入や秘密の形を含む → 説明を出さず task の種類だけで描く
 - SDK が知らない subtype のシステムメッセージを送る → 通す経路の許可リストに無いものは捨てる (SDK の注記「知らない型と subtype は無視する」に従う)
 - 密度を切り替えた瞬間にストリーミング中 → スクロール位置を奪わない (R-3 のアンカリングを壊さない)
 - 直近の活動の tool 入力が JSON として読めない・必要なフィールドが無い・代入の値にクォートやバックスラッシュがある → tool 名だけを出す
@@ -160,7 +163,7 @@ Claude Code (Agent SDK) が emit する情報と、その表示の対応表 **`d
   - アプリが SDK の callback や制御から作る表示の経路 (承認要求 `canUseTool` など)。X-1 の承認カードと「聞かれずに拒否された操作」を含む
   - 対応表には調べた SDK のバージョンと、SDK を上げたときの手順を書く
   - 他 domain の一覧画面に出る値 (`SDKSessionInfo` の各フィールドなど) は行にしない (ui charter Out of scope。理由を対応表に書く)
-  - **表の書式 (節・列・割当の書き方) の正本は対応表の凡例と AD-044 に置く**
+  - **決定 (割当の 3 種類と後続 ID の読み方、Tier の決め方、機械照合する節、M3 の完了の条件) の正本は AD-044、書式の詳細 (列・値の綴り・SDK を上げたときの手順) の正本は対応表の凡例**。食い違ったら AD-044 を正とする
 - **FR-002**: 各行は、表示の割当を次の 3 種類のどれかで持たなければならない。空・「未割当」・「TBD」・「—」は割当ではない。
   - **実装済み**: 表示を担うコンポーネント (element) と、実行中 / 過去ログのどちらで出るか。汎用の表示 (ToolFallback など) だけで出る行を実装済みにできるのは Tier B / C の行に限る
   - **後続 feature**: roadmap に実在する feature の ID
@@ -170,9 +173,10 @@ Claude Code (Agent SDK) が emit する情報と、その表示の対応表 **`d
   - SDK の型定義にある型・tool・制御要求の行が無い / 対応表にあって型定義に無い行がある
   - 割当が FR-002 の 3 種類のどれでもない / 後続 feature の ID が roadmap に無い / ToolFallback だけで実装済みの行が Tier A
   - 対応表の SDK のバージョンが入っている SDK と違う / 検査の入力のファイルが無い・読めた名前が極端に少ない
-  - 失敗の出力は該当する行と理由を示す。通ったときの出力に、節ごとの行の数、割当の種類 × Tier の件数、後続 feature の ID ごとの件数を出す (M3 の残りを数えるため)
+  - 後続 feature の ID として有効なのは roadmap の feature の表の ID だけで、完了済みの feature の ID は違反にする
+  - 失敗の出力は該当する行と理由を示す。通ったときの出力に、節ごとの行の数、割当の種類 × Tier の件数、後続 feature の ID ごとの件数とその milestone を出す。**M3 の完了の条件は「Tier A の後続のうち、割当先が M3 の feature の行が 0」** (M4 以降の feature に割り当てた Tier A の行 (Permission grant → I-3 など) は M3 の条件に数えない)
 - **FR-004**: 本 feature で割り当てる後続 feature を roadmap に登録しなければならない。持ち主のいない延期を残さない (AD-028 §5)。
-  - M3 に **O-4** (計量と制限: 費用と使用量・レート制限・API の再試行・コンテキストの使用量・task の進捗)、**O-5** (MCP・Elicitation・プラグイン・コマンド: Server panel・Elicitation form・`AskUserQuestion` など)、**O-6** (会話の境界と tool の専用表示の第 2 弾: 圧縮・ファイル・Checkpoints・モデルの拒否・通知・`Read` / `Glob` / `Grep`・Web search / fetch・Agent plan の markdown・実行中の subagent の入れ子・一般の Hook (`includeHookEvents` の ADR を含む)・実行中の Background task の一覧の要否) の 3 行を足す。domain はいずれも `ui`。Permission grant は I-3 のまま
+  - M3 に **O-4** (計量と制限: 費用と使用量・レート制限・API の再試行・コンテキストの使用量・task の進捗)、**O-5** (MCP・Elicitation・プラグイン・コマンド: Server panel・Elicitation form・`AskUserQuestion` など)、**O-6** (会話の境界と tool の専用表示の第 2 弾: 圧縮・ファイル・Checkpoints・モデルの拒否・通知・`Read` / `Glob` / `Grep`・Web search / fetch・Agent plan の markdown・実行中の subagent の入れ子・一般の Hook (`includeHookEvents` の ADR を含む)・実行中の Background task の一覧の要否・前景から背景に移った task の行・B 節 (中身のブロック) の機械照合) の 3 行を足す。domain はいずれも `ui`。Permission grant は I-3 のまま
   - 元の O-2 のプロンプト (docs/prompts.md) が名指した 8 つの表示は、それぞれの行の割当先として現れる
 - **FR-005**: element 側の Tier B / C の再棚卸し (AD-019 で未分類の 59 要素) を行い、結果を対応表の文書に element の分類として記録しなければならない。charter と AD-019 の Open Questions に答える
 - **FR-006**: `ui-coverage-reviewer` を `/cl-add-reviewer` で追加しなければならない (P-4)。
@@ -183,12 +187,14 @@ Claude Code (Agent SDK) が emit する情報と、その表示の対応表 **`d
 
 - **FR-007**: 実行中のセッションで、SDK の `user` メッセージに含まれる tool の結果を renderer に届け、対応する tool の呼び出しの表示に出さなければならない。表示の形は過去ログ (R-3 / R-4) と同じにし、エラーと切り詰めを示す。あわせて、実行中の経路で捨てている `redacted_thinking` を過去ログと同じ扱い (Reasoning) にそろえる
 - **FR-008**: 実行中のセッションで、次の 5 つのシステムメッセージを変換して renderer に届けなければならない: `hook_started` / `hook_response` / `task_started` / `task_updated` / `task_notification`。
-  - 通すフィールドの正本は data-model §2。**Hook の出力本文・終了コード、task の prompt・要約・出力ファイルは通さない**
+  - 通すフィールドの正本は data-model §2。**Hook の出力本文・終了コード、task の prompt・要約・出力ファイル・更新の説明は通さない**
+  - task は背景で始まった task (`is_backgrounded` が true で、ambient でも transcript から隠すものでもない) だけを変換する。前景の task (subagent の呼び出しなど) は既存の表示がある
   - 会話由来の文字列は既存の本文と同じ無害化を通す。状態通知 (`SessionStatusUpdate`) には載せない (X-5 FR-004)
   - `hook_progress` / `task_progress` / `background_tasks_changed` と、許可リストに無い型・subtype は通さない (対応表で表示不要か後続に割り当てる)
   - query の options は変えない (`includeHookEvents` を足さない。AD-041 (g))。したがって Hook は SessionStart / Setup のものだけが届く
 - **FR-009**: transcript は、FR-008 のイベントを会話の流れの中の 1 行として描かなければならない (Hook: 名前と結果、task: 説明と状態)。
-  - 1 つの Hook / task は 1 行とし、同じ Hook / task の後続のイベントは同じ行に合成する (名前の無い更新は前の名前を保つ)。行の無い Hook / task への更新は捨てる。過去ログも同じ規則
+  - 1 つの Hook / task は 1 行とし、同じ Hook / task の後続のイベントは同じ行に合成する (名前や状態の無い更新は前の値を保つ)。行を作れるのは Hook の開始・応答と task の開始だけで、行の無い Hook / task への更新は捨てる。過去ログも同じ規則
+  - 行は assistant の発話と見分けられる形で描き、コピーなどの操作や応答中の印を付けない
   - セッションが終了・失敗した後、または過去ログの終わりで、終わりの来ていない行は「結果不明」として描く
   - 実行中の task の一覧 (状態の保持) は作らない
 - **FR-010**: Subagent の専用表示は、実行時の tool 名が `Agent` でも `Task` でも当たらなければならない (SDK 0.3.270 の入力型は `AgentInput`)。対応表の tool の行も実行時の名前で書く
@@ -220,13 +226,15 @@ Claude Code (Agent SDK) が emit する情報と、その表示の対応表 **`d
   - glossary: ui-coverage 対応表 (割当の 3 種類と行の Tier の決め方)、transcript の情報密度 (監視ビューの行の密度と区別)、システムイベントの行、Subagent (`Agent` / `Task`)
   - ui charter: Open Questions (Tier B/C の再棚卸し、§4.2 の暫定、Hook / Background task の持ち主、Tier C の転用) を閉じる。KPI「表示網羅」の計測経路を FR-003 の検査と ui-coverage-reviewer にし、M3 の完了の条件 (Tier A の後続の行が 0) を足す。Related Specs に O-2
   - session charter: Hook / Background task の状態を保持しないこと (tool の結果の対応づけはセッションスレッドの中で一時的に持つ)、直近の活動の読み飛ばしと整形の規則
-  - `_overview.md`: 帰属の判断根拠 (Hook / Background task の結論)、Feature 帰属の表 (O-2 の題、O-4 / O-5 / O-6)、M3 の範囲 (O-1〜O-6)
+  - `_overview.md`: 帰属の判断根拠 (Hook / Background task の結論)、Feature 帰属の表 (O-2 の題、O-4 / O-5 / O-6)、M3 の範囲 (O-1〜O-6)。roadmap と `_overview.md` の M3 の達成状態「未表示情報がゼロ」に「AD-044 の M3 の完了の条件で判定する」と注記する
   - roadmap: O-2 の行、O-4 / O-5 / O-6 の行、P-4 を完了に、store / 一覧の切り出しの持ち主の付け替え、O-2 の題の「Tier A 完全化」を今の範囲に (`docs/prompts.md` も)
   - O-1 の観測点 `receivedMessages` が tool の結果の送り直しと Hook / task の行も数えるようになったことを、010 の data-model と roadmap の O-3 の義務 (2) に注記する
   - AD-019 / AD-020 の Open Questions への回答は AD-044 に記録する。accepted の本文は変えない
 - **FR-016**: Constitution の Principle XII と XIII を改めなければならない (USER 決定 2026-10-03)。
   - 先に ADR (AD-044) を起こし、利用者が accepted にする (Constitution の改定手順 1)
-  - 版は MINOR (v1.3.0。後続 feature の ID を割当とみなすのは指針の実質的な拡張)
+  - 版は MINOR (v1.3.0。後続 feature の ID を割当とみなすのは指針の実質的な拡張。これまで適合していた状態が違反になることは無く、MAJOR に当たらない理由を Sync Impact Report と AD-044 に書く)
+  - XII の Adoption metadata: `violation_threshold` を「項目 21 は CI で常に違反にする。後続 ID の行は違反にしない。UI 系 feature の completed の判定は M3 の完了の条件による」に、`existing_violations` を項目 21 の初回の結果にそろえる (強化に当たるので既存違反の enumeration を Sync Impact Report に書く)
+  - SDK の版を上げる PR は domain を問わず対応表を同じ PR で直すことを、AD-044 の Consequences と discovery の手順に書く
   - XII: Automated を FR-003 の検査に、Manual を配置済みの `ui-coverage-reviewer` に改め、「roadmap に実在する後続 feature の ID を書いた行は割当済み」と、M3 の完了の条件を明記する。`bad_pattern_grep` は割当の列だけを見る形にする
   - XIII: 「未分類 59 要素」など、FR-005 の再棚卸しで変わる記述を結果に合わせる (数には確認日を併記する。AD-019 D3)
   - plan のテンプレートの XII の検査の行を追随させる
@@ -251,13 +259,16 @@ Claude Code (Agent SDK) が emit する情報と、その表示の対応表 **`d
 - **[ASSUMED]** transcript の密度の既定は comfortable で、永続化しない。既定で Tool group を開くのは AD-035 Trade-off (専用表示が既定で畳まれて見えない) への回答であり、実機の見え方は quickstart V-4 で利用者が確かめる
 - **[ASSUMED]** 過去ログ (`getSessionMessages` の `includeSystemMessages: true`) に Hook / Background task のシステムメッセージが残るかは実データ (quickstart V-4) で確かめる。確かめるまで、対応表の経路は「実行中」とし、備考に「過去ログは未確認 (V-4)」と書く
 - **[ASSUMED]** 実行時の subagent の tool 名は `Agent` か `Task` か未確認。両方を当てる (V-4 で記録する)
+- **[ASSUMED]** `hook_name` がコマンドの文字列を含むと V-4 で分かったら、名前の代わりに Hook の種類 (`hook_event`) を出す
+- **[ASSUMED]** task の行は背景で始まった task だけにする (前景の task と後から背景に移った task は行にしない。後者は O-6)。送り直し 1 回の結果の合計は 1MB まで (data-model §3)
+- **[設計判断 2026-10-03 design-gate R2]** M3 の完了の条件は「Tier A の後続のうち、割当先が M3 の feature の行が 0」。利用者が AD-044 を accepted にするときに確かめる
 
 ## Success Criteria
 
 - **SC-001**: **対応表が SDK と一致し、未割当が 0。** 現在の SDK に対して検査が通り、対応表の全行が FR-002 の 3 種類のどれかを持つ。検査の出力に、割当の種類 × Tier と後続 feature の ID ごとの件数が出る。計測経路: Constitution 検証の項目 21 (CI)
 - **SC-002**: **検査が外れを捕まえる。** FR-003 の失敗の条件のそれぞれについて、わざと崩した入力で検査が該当する行を示して落ち、Constitution 検証の項目 21 が違反として終了コードを非 0 にする。計測経路: 検査の単体テスト (違反のサンプル) + 項目 21 の発火のテスト
 - **SC-003**: **実行中の tool の結果とシステムイベントが出る。** FR-007〜FR-010 の各経路と US-2 の AC について、SDK のメッセージから transcript の表示までが AC のとおりになり、data-model §2 の許可リストの外のフィールドの値・無害化されていない文字列が `SessionEvent` と DOM に 0 件。計測経路: agents の変換の単体 (SDK のメッセージの fixture → `SessionEvent`) + renderer の component テスト。実 `claude` での見え方 (Hook の名前の中身、過去ログに残るか、tool 名) は quickstart V-4 で利用者が確かめ、自動の合否には含めない
-- **SC-004**: **境界を広げない。** IPC のチャネル・preload・main・調停役スレッドのモジュール・状態通知のフィールド・query の options のキーの差分が 0 件で、追加の経路は既存の `message` の port だけを通る。計測経路: `git diff` (quickstart V-3) + X-5 の状態通知の全フィールド走査 + options のキーの固定テスト
+- **SC-004**: **境界を広げない。** IPC のチャネル・preload・main・調停役スレッドのモジュール・状態通知のフィールド・query の options のキー・`SessionEvent` の種類の差分が 0 件で、追加の経路は既存の `message` の port だけを通る。計測経路: `git diff` (quickstart V-3) + X-5 の状態通知の全フィールド走査 + options のキーと `SESSION_EVENT_KINDS` の固定テスト
 - **SC-005**: **密度の切り替えが効き、保たれる。** US-3 の AC1〜AC5 のとおりになり、既存の transcript のテストと仮想化のテストが既定の密度で通る。計測経路: transcript の component テスト
 - **SC-006**: **直近の活動が要点だけを出す。** FR-014 の各規則について data-model §4 の出力になり、FR-014 で出すと決めた値以外の入力の値 (引数・代入の値) が出力に 0 件。Hook / task の行が末尾にあっても直近の活動が保たれる。計測経路: 純関数の単体
 - **SC-007**: **reviewer が組み込まれる。** `ui-coverage-reviewer` が reviewers.yml と agent registry に登録され、対応表か表示の実装を触る差分で pr-gate に起動される。計測経路: `reviewers_filter` の出力 (quickstart V-5)

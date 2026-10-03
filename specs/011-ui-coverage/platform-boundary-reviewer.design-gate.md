@@ -3,92 +3,83 @@
 **Run**: 2026-10-03
 **Reviewer**: platform-boundary-reviewer
 **Spec**: specs/011-ui-coverage/spec.md
-**Round**: 1 (design-gate)
+**Round**: 2 (design-gate)
+
+R1 の 6 件はすべて解消。新しい指摘は Medium 1 / Low 2。
 
 ## 初回読了 viewpoint
 
-- FR/SC: FR-003 / SC-001 / SC-002 (項目 21。PB-7)、FR-007 / FR-008 / FR-011 / SC-003 / SC-004 (agents の分岐と結果待ちの Map。PB-2、AD-043)、FR-014 / SC-006 (ファイル名の取り出し。PB-1)、FR-006 / SC-007 (reviewer の組み込み)
-- touched files に該当する charter / Confirmation: AD-043 Decision 2 / 7、AD-034 Decision 1、Principle I / VII。runtime / isolation の charter と AD-003 / AD-004 / AD-012 は touched files に該当しない
+- FR/SC: FR-003 / SC-001 / SC-002 (項目 21 と照合の自己完結性。PB-7)、FR-007 / FR-008 / FR-011 / SC-003 / SC-004 (agents の分岐・結果待ちの Map・境界の計測。PB-2、AD-043)、FR-014 / SC-006 (パスの末尾。PB-1)、FR-006 / SC-007
+- touched files に該当する charter / Confirmation: AD-043 Decision 2、AD-034 Decision 1、AD-041 (g)、Principle I / IV / VII。runtime / isolation の charter と AD-003 / AD-004 / AD-012 は該当しない
 - A. 認可 / 認証 / secret 管理: 該当なし: owner は security-reviewer
 - B. 入力検証 / injection / CSP / 暗号: 該当なし: owner は security-reviewer
 - C. 業務不変条件 / Charter drift: Critical:0 High:0 Medium:0 Low:0
-- D. Constitution / ADR drift: Critical:0 High:0 Medium:1 Low:1
+- D. Constitution / ADR drift: Critical:0 High:0 Medium:0 Low:0
 - E. User Story / SC / AC / UX: 該当なし: owner は po-reviewer
-- F. 命名 / module / lint hookup: Critical:0 High:0 Medium:1 Low:0
+- F. 命名 / module / lint hookup: Critical:0 High:0 Medium:1 Low:1
 - G. optional reviewer 範囲: 該当なし: 担当外
-- H. テスト / coverage / observability / regression: Critical:0 High:0 Medium:1 Low:2
+- H. テスト / coverage / observability / regression: Critical:0 High:0 Medium:0 Low:1
 
 ## スコープ要約
 
-対応表と項目 21、agents の 3 つの追加 (`user` の tool_result、system の Hook / task、結果待ちの Map)、送り直しによる結果の配送、transcript の密度、直近の活動の要点、reviewer の組み込み、Constitution の PATCH。ランタイム・branded path・capability・権限モード・子プロセス・IPC / preload には触れない (PB-3 / PB-5 / PB-6 は該当なし)。
+送り直しの境界と上限 (`run()` の closure、256 件、約 100MB、`post` の kind の固定)、境界の計測 (V-3 と SH-092 に調停役スレッドの 4 モジュール。実在を確認)、項目 21 は pending を持たない、E2E は回帰の確認だけ、が入った。`post` の kind の現行の値 (`status` / `event` / `ended` / `child-exited`) と options のキーの固定 (`session-core.test.ts:191`) を確かめた。
 
 ## 固有観点
 
-- **PB-1**: 該当なし: `HostPath` / `RuntimePath` を生成・復元・永続化しない。`summarizeToolInput` は表示のために末尾を切り出すだけで、`/` と `\` の両方で区切るのでプラットフォーム分岐にならない (前例 `WorkspaceFoldersScreen.tsx:574`)。task の `output_file` は読まない。過去ログの取得は既に `includeSystemMessages: true`
-- **PB-2**: 1 Worker = 1 セッション (`sdk-agent-session.ts:257`) で、renderer の upsert も sessionId ごと。Map の置き場所が未定 → L-001
-- **PB-3**: 該当なし: capabilities / autoModeSafe に触れない
-- **PB-4**: 該当なし: `permissionMode` の注入経路は不変。監視ビューの行から承認する導線は無い。tool_result の分岐は `canUseTool` に戻らない
+- **PB-1**: 該当なし (パス型を生成・復元・永続化しない。`summarizeToolInput` は表示用の末尾。`output_file` は読まない)
+- **PB-2**: 結果待ちの Map は `run()` の closure。renderer の合成は sessionId ごとの store の中。合成 id の衝突は 1 セッションの中に限られる
+- **PB-3**: 該当なし
+- **PB-4**: 該当なし (options のキーを変えない。新しい分岐は `canUseTool` に戻らない。項目 16 が引き続き見る)
 - **PB-5**: 該当なし
-- **PB-6**: 該当なし: 子プロセス・ボリューム・ホストのファイルへの書き込みを足さない。密度は永続化しない。`coverage.mjs` は読み取り専用の純関数
-- **PB-7**: 新設の domain モジュールは boundaries のディレクトリ単位の要素に入り、dependency-cruiser の `agents-not-to-electron` / `agents-not-to-native` が引き続き塞ぐ。項目 21 の pending が広い → M-003
+- **PB-6**: 該当なし (element の再棚卸しは web の読み取りだけ)
+- **PB-7**: 項目 21 の照合の自己参照 (M-101) と、入力のパスを差し替える口 (L-102)
 
 ## Findings
 
-### [Medium] RK-02 (送り直しの負荷) の手当てに挙げた E2E は、送り直しの経路を通らない (M-001) (scope: feature)
+### [Medium] 照合の正解 (対応表の A・C・E 節) を、照合する parse 自身の出力から起こすので、parse の取りこぼしが恒久的に検出されない (M-101) (scope: feature)
 
-- **観察**: E2E のセッションは main の偽物 `e2e-capability.ts` が作り、text のメッセージしか出さない (:172、:187)。`sdk-agent-session.ts` を通らないので送り直しは起きない。SC-004 / V-3 で `src/main` の差分は 0 件なので、本 feature で E2E 側を変えられない
-- **同種事象探索**: RK-02 / 負荷 E2E の言及 3 件 (plan.md:169、quickstart.md:20、tasks.md:87)。`e2e-capability.ts` の `kind: 'message'` 2 件 (text のみ)
-- **リスク/影響**: RK-02 が検証されないまま「確かめた」と記録されうる
-- **推奨アクション**: RK-02 の手当てから E2E を外し明記する。BE-024 に有界性の観点 (N 個の tool_use に N 個の結果で送り直しが N 以下、各回の payload が上限内、256 件を超えたら古いものを捨てて `result:<id>`)。renderer は FE-012 で同じ id の更新で行が増えないこと。実負荷は quickstart V-4 に
-- **根拠**: AD-043 Decision 2、Principle IX、spec SC-003
+- **観察**: SH-011 は A・C・E 節の行を BE-010 の parse の出力から起こし、項目 21 は同じ parse の結果と対応表を比べる。parse が取りこぼすと対応表も同じだけ欠け、集合は一致する。歯止め (「極端に少ない」・抜粋の fixture・V-1.3 の目視) はどれも parse から独立していない。E 節は「約 45」で比べる数が無い
+- **同種事象探索**: `極端に少ない|約 45|parse の出力から起こす` で 5 件 (spec.md:172、plan.md:131、plan.md:179、research.md:17、tasks.md:34)
+- **リスク/影響**: 初版で取りこぼした型は一度も行に現れず、SDK を上げても通り続ける
+- **推奨アクション**: BE-011 に、devDependency の `typescript` のコンパイラ API でインストール済みの `sdk.d.ts` / `sdk-tools.d.ts` から集合を列挙し、`coverage.mjs` の regex の parse と一致することを確かめるテストを足す (`coverage.mjs` は依存なしのまま)。「極端に少ない」を具体的な下限にし、E 節の実数を research と quickstart に記録する
+- **根拠**: AD-020 Decision 1、`check.mjs:8-15` (検証の 3 状態)、PB-7
 
-### [Medium] SC-004 / V-3 の境界の計測が調停役スレッドを含まない (M-002) (scope: feature)
+### [Low] FR-011 の「`SessionEvent` の種類を増やさない」に計測の経路が無い (L-101) (scope: feature)
 
-- **観察**: 計測は `git diff --name-only main...HEAD -- src/preload src/main` だけ。AD-043 Decision 2 の調停役スレッドのモジュール (`supervisor.ts` / `supervisor-core.ts` / `supervisor-protocol.ts` / `transport.ts`) はこの diff の外
-- **リスク/影響**: 実装中に調停役のプロトコルに新しい kind を足しても V-3 は緑のまま
-- **推奨アクション**: V-3 と SH-092 の diff の対象に 4 つのファイルを足す。BE-024 に「`post` に渡す kind は `status` / `event` / `ended` / `child-exited` のまま」を足す
-- **根拠**: AD-043 Decision 2 / AD-034 Decision 1 / spec SC-004
+- **観察**: `SESSION_EVENT_KINDS` (`agent-session.ts:181`) は V-3 の diff の外で、固定するテストが無い。調停役は payload を不透明に中継するので、kind を足しても main / preload の差分は出ない
+- **推奨アクション**: `[...SESSION_EVENT_KINDS].sort()` を 7 値と比べる固定テスト。SC-004 の計測に「`SessionEvent` の種類」を足す
 
-### [Medium] 項目 21 の pending の条件が広く、検査が届かないまま CI が緑になりうる (M-003) (scope: feature)
+### [Low] 項目 21 の入力のパスを差し替える口が、CI の ok を別の入力に向けうる (L-102) (scope: feature)
 
-- **観察**: plan / tasks は「SDK が入っていなければ pending」。check.mjs は pending を終了コード 0 で通す (:1310-1315)。`.d.ts` が版上げで移った・対応表や roadmap が無い場合の判定が無い。既存の項目の pending は「未実装の対象」に限る
-- **リスク/影響**: SDK の `.d.ts` の配置が変わった時点で「検査していないのに緑」になり、AD-020 の「型が増えたら CI が落ちる」が黙って外れる
-- **推奨アクション**: 項目 21 は pending を持たず、5 つの入力ファイルのどれかが無ければ violation にする。BE-012 / BE-011 に観点を足す
-- **根拠**: Constitution VI Verification「pending を ok に混ぜない」(constitution.md:507-509)、AD-020 Decision 1
+- **観察**: 今の `check.mjs` は `process.env` / `process.argv` を読まない。差し替えの口は新しい入口で、通ったときの出力に読んだ入力が出ない
+- **推奨アクション**: 差し替えは引数の形に限る (環境変数は読まない)。差し替えたときは note に読んだパスを出す。BE-012 に「差し替え無しで実の 5 ファイルを読む」
 
-### [Low] 結果待ちの Map の置き場所と、空の `toolCallId` の扱いが決まっていない (L-001) (scope: feature)
+## R1 指摘の判定
 
-- **推奨アクション**: data-model §3 に「Map は `run()` の closure に置く (`permissions` と同じ寿命)」。`toolCallId === ''` の tool_use は結果待ちに登録しない。BE-024 に観点
-
-### [Low] 監視ビューの観測点 `receivedMessages` の意味が、送り直しと event の行で変わる (L-002) (scope: feature)
-
-- **推奨アクション**: data-model に「`receivedMessages` は送り直しと event の行も数える」と書き、O-1 の data-model §1 に注記する (FR-015)。区別が要るなら別の観測点に
-
-### [Low] 結果待ちの上限が件数だけで、セッションスレッドのヒープ上限との関係が書かれていない (L-003) (scope: feature)
-
-- **観察**: 最悪 256 × (200KB + 200KB) ≈ 100MB。ヒープ上限は 1024MB (`supervisor.ts:22,49`)
-- **推奨アクション**: data-model §3 に見積もりとヒープ上限との比を 1 行書く
+| R1 ID | 判定 |
+|---|---|
+| M-001 (RK-02 の E2E) | resolved |
+| M-002 (V-3 に調停役) | resolved (同種の残りは L-101) |
+| M-003 (pending) | resolved (照合の自己参照は M-101) |
+| L-001 / L-002 / L-003 | resolved |
 
 ## 他の owner への申し送り (指摘数には含めない)
 
-- `task_updated` は `skip_transcript` を持たない (`sdk.d.ts:5632-5649`) → 捨てた task が後続で現れうる
-- `local_bash` の task の `description` にはコマンドの文字列がそのまま入りうる。FR-014 で外した引数 (秘密) が event の行の `name` から出る経路になる → security
-- `exit_code` の扱いの食い違い (research.md:52 と data-model.md:63)
+- `local_bash` の task の `description` にコマンドの文字列がそのまま入りうる (data-model は `description` を読む)。task 側に `hook_name` と同じ手当てが無い → security
+- 結果の本文の上限の書き方: data-model は `sanitizeBody` (`BODY_MAX_BYTES`)、過去ログは `TOOL_RESULT_MAX_BYTES` (`transcript.ts:232`)。値はどちらも 200,000。共通化で揃える → convention
 
 ## 同種事象探索 cascade summary
 
 | 指摘 ID | Grep query | 該当件数 | path:line |
 |---|---|---|---|
-| M-001 | `負荷 E2E\|multi-session\|RK-02` / `kind: 'message'` (e2e-capability.ts) | 3 / 2 | plan.md:169、quickstart.md:20、tasks.md:87 / e2e-capability.ts:172,187 |
-| M-002 | `git diff --name-only main...HEAD -- src/preload src/main` | 2 | quickstart.md:18、tasks.md:87 |
-| M-003 | 項目 21 の入力と pending の条件 / `pending(` (check.mjs) | 2 / 8 | plan.md:127、tasks.md:29 / check.mjs:162,242,251,269,417,943,1027 |
-| L-001 | `^let ` (sdk-agent-session.ts) / `toolCallId: typeof` | 2 / 1 | sdk-agent-session.ts:260,263 / live-message.ts:55 |
-| L-002 | `receivedMessages` (src) | 7 | running-session-store.ts:120,259 ほか |
-| L-003 | `BODY_MAX_BYTES\s*=\|maxOldGenerationSizeMb` | 2 | sanitize-body.ts:12、supervisor.ts:49 |
+| M-101 | `極端に少ない\|約 45\|parse の出力から起こす` | 5 | spec.md:172、plan.md:131、plan.md:179、research.md:17、tasks.md:34 |
+| L-101 | `SESSION_EVENT_KINDS` | 3 | agent-session.ts:181、session-event-decoder.ts:3、:60 |
+| L-102 | `process\.env\.\|process\.argv` (check.mjs) / `入力のパスを差し替える口` | 1 / 2 | check.mjs:1215 (コメント) / plan.md:129、tasks.md:32 |
 
 ## Verdict
 
 - Critical: 0
 - High: 0
-- Medium: 3
-- Low: 3
+- Medium: 1
+- Low: 2
+- Round inheritance: resolved from 1: 6 / unresolved: 0 / new: 3

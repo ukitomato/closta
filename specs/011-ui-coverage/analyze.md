@@ -1,42 +1,35 @@
-# Specification Analysis Report: 011-ui-coverage (O-2) — design-gate Round 1 Track A
+# Specification Analysis Report: 011-ui-coverage (O-2) — design-gate Round 2 Track A
 
-読んだもの: spec / plan / tasks / data-model / research / quickstart、constitution (v1.2.9)、ui charter、`_overview.md`、glossary、roadmap、AD-019 / AD-020 / AD-028 / AD-034 / AD-035 / AD-043。ファイルは編集していない。
+読んだもの: spec / plan / tasks / data-model / research / quickstart、constitution v1.2.9 (改定手順・XII・XIII・版の方針表)、ui charter、`_overview.md`、glossary、roadmap、AD-019 / AD-035 / AD-041 (g)、SDK 0.3.270 の `sdk.d.ts` の hook / task の型。AD-020 / AD-034 / AD-043 の Decision と Confirmation は R1 の確認に依った。ファイルは編集していない。
+
+## R1 の指摘の判定
+
+25 件のうち 24 件 resolved、1 件 (T1: research の ID が feature の ID に見える) が一部 resolved、unresolved 0。C1 (ADR なしの改定) → AD-044 を先に起こす。C2 (版) → MINOR v1.3.0。I1〜I11 / U1〜U4 / G1 / G2 / D1 / T2 / A1 / A2 / R1 → resolved。
+
+## 新しい指摘 (Round 2)
 
 | ID | Category | Severity | Location(s) | Summary | Recommendation |
 |----|----------|----------|-------------|---------|----------------|
-| C1 | Constitution | CRITICAL | plan.md「ADR: 起票しない」; research R-10; spec FR-016; tasks SH-090; constitution.md L284-296 (改定手順) | Constitution の改定手順は、既存の Principle を変えるときの手順 1 に ADR を求める。plan は XII (後続 feature の ID を割当とみなす記述の追加、Automated / Manual の入れ替え) と XIII を変えるが、ADR を起こさないと決めている。直近の PATCH (v1.2.6〜v1.2.9) はすべて ADR を引いている | XII / XIII の改定の ADR を短く起こす (AD-019 / AD-020 の Open Questions の回答も載せられる)。または ADR を省くことに人間の明示の承認を得る。SH-090 の前にタスクを足す |
-| C2 | Constitution | HIGH | research R-10 (「PATCH。原則の意味を変えず」); spec FR-016; constitution の版の表 L956-962 | 後続 feature の ID だけの行を「割当」とみなすのは、XII の意味を緩める (今の Statement は各行に表示実装を求める)。版の表では「指針の実質的な拡張」(MINOR) か再定義に当たり、文言だけの PATCH ではない | 版の上げ方を見直す (MINOR で v1.3.0 にするか、PATCH の理由を書く)。architecture-reviewer と人間に確かめる |
-| I1 | Inconsistency | HIGH | spec FR-008 vs research R-04、data-model §2、tasks BE-024 | FR-008 は `hook_progress` / `task_progress` / `background_tasks_changed` を含む 8 つの subtype を renderer に届けるとするが、R-04・data-model・BE-024 は 5 つだけを変換し、その 3 つは送らないことをテストする | FR-008 を 5 つに直し、残り 3 つは対応表の割当 (表示不要 / 後続) で扱い届けないと書く |
-| I2 | Inconsistency | MEDIUM | spec US-2 AC4 (「1 行ずつ出る」「進み」) vs research R-04、quickstart V-4.4、BE-024 | AC は状態の変化ごとに 1 行・進捗を出す、と読める。設計は 1 つの task を 1 行にして書き換え、進捗を出さない | AC4 を「task ごとに 1 行、状態を書き換える。進捗は出さない」に直す |
-| I3 | Inconsistency | MEDIUM | research R-04 (「と `exit_code` の有無」) vs data-model §2 (`exit_code` は読まない) | `exit_code` (の有無) を許可リストに通すかが食い違う | data-model を正本として R-04 を直す |
-| I4 | Inconsistency | MEDIUM | research R-04 (`background_tasks_changed` → O-6) vs spec Out of Scope (人間に諮る) と FR-004 の O-6 | 一覧の要否の判断の行き先が 2 つ。O-6 の範囲に一覧が無い | どちらかにそろえる |
-| I5 | Inconsistency | MEDIUM | spec FR-006 (cl-code-gate / cl-pr-gate の候補) vs research R-09 (gates は pr-gate だけ)、SC-007 | code-gate の候補の一覧に足すのに gates は pr-gate だけ。registry の `invoked_by` の値が書かれていない | code-gate を範囲にするかを決める。`invoked_by` を書く |
-| I6 | Inconsistency | MEDIUM | spec FR-012 (利用者の開閉を上書きしない) vs research R-06 / tasks FE-020 (`key={density}` で作り直す) | 密度を切り替えると利用者の開閉もリセットされる | FR-012 を「新しいメッセージでは上書きしない。密度の切り替えでは新しい既定に戻る」に狭める |
-| I7 | Inconsistency | MEDIUM | data-model §1; constitution XII の `bad_pattern_grep`; research R-10 | 経路の列の `—` を表示不要の行で許すが、XII の grep はどの列の `—` にも当たる | 経路の列に別の語 (`なし`) を使うか、grep を割当の列に絞る |
-| I8 | Inconsistency | MEDIUM | research R-01 (A 節の「union の外」) vs spec FR-003 (余分な行で失敗)、data-model §1 | union の外の行が「余分な行」で落ちる。parse が小節を飛ばす規則が無い | data-model §1 に小節の目印と parse の規則、BE-011 に場合を足す |
-| I9 | Inconsistency | LOW | spec FR-001 (`type` / `subtype` で区別できる単位) vs spec Assumptions (メンバー 1 つにつき 1 行) | 行の単位の定義が 2 つ | FR-001 を「メンバー 1 つにつき 1 行。subtype は備考」に |
-| I10 | Inconsistency | LOW | spec FR-003 (失敗の条件 5 つ)、SC-002 vs data-model §1 / BE-011 (ToolFallback だけの Tier A でも失敗) | 6 つ目の条件が FR-003 と SC-002 に無い | FR-003 に足す |
-| I11 | Inconsistency | LOW | data-model §4 (`Agent` / `Task` → `subagent_type`) vs spec FR-014 / US-4 | spec に無い規則がある。SC-006 は「tool の入力の引数」を 0 件とする | FR-014 に足すか、規則を消す |
-| U1 | Underspecification | MEDIUM | tasks BE-001、plan、data-model §2 (「SC-009 の台帳」) | 本 spec に SC-009 は無い (003 の SC) | 「003 SC-009 / `transcript-schema.test.ts`」と書く |
-| U2 | Underspecification | MEDIUM | spec FR-015 / FR-004; tasks SH-091; `_overview.md` L55-66・L100 (M3 = O-1〜O-3) | O-4〜O-6 を足すと `_overview.md` の feature の表と M3 の行も変わる | SH-091 / FR-015 に足す |
-| U3 | Underspecification | LOW | spec FR-014 (整形の規則を対応表の tool の行から参照) | 参照を作るタスクが無い | SH-011 か FE-030 に足す |
-| U4 | Underspecification | LOW | spec FR-015 (AD-019 / AD-020 の Open Questions の回答); tasks SH-091 | 回答の記録先がタスクに書かれていない | SH-091 に記録先を書く |
-| G1 | Coverage | MEDIUM | spec Edge Case (ストリーミング中の密度の切り替えでスクロールを奪わない); tasks FE-022 | `key={density}` の作り直しがスクロールを動かしうるが、目視だけ | FE-022 に足すか、目視だけと明記する |
-| G2 | Coverage | MEDIUM | spec Edge Case (巨大な結果の切り詰めが分かる); tasks BE-024 / FE-012 | 実行中の結果の切り詰めと表示のテストが無い | BE-024 / FE-012 に足す |
-| D1 | Constitution (template) | MEDIUM | plan Constitution Check vs plan-template | Principle VIII の行が無い (日本語の文言と切り替えを足す) | VIII の行を足す |
-| T1 | Terminology | LOW | plan (「R-06」など) vs spec の「R-3 / R-4」 | research の ID が roadmap の feature ID に見える | 「research R-06」と書く |
-| T2 | Terminology | LOW | glossary の Density (session / `density`) | transcript の密度の用語が要る | SH-001 で別の用語を作る |
-| A1 | Ambiguity | LOW | spec FR-012 / FR-013 [ASSUMED]、data-model §3 (256) | 仮定が残る (許容) | gate か quickstart で確かめる |
-| A2 | Ambiguity | LOW | spec FR-012 comfortable | comfortable の Reasoning の開閉が書かれていない | 「既存の既定のまま」と書く |
-| R1 | References | LOW | spec Dependencies | FR-011 が引く AD-034 / AD-043 が Dependencies に無い | 足す |
+| N1 | Inconsistency | HIGH | data-model §2 (合成「`status` は `next`」「知らない値は `unknown`」); `sdk.d.ts:5639-5646` (`patch.status?` は任意); spec US-2 AC4; BE-021 | `task_updated` はよく `patch.status` を持たない (`is_backgrounded` / `end_time` / `description` / `total_paused_ms` だけの変化)。変換が `unknown` を作り、合成が `running` を上書きして、実行中に「結果不明」になる | 変換の出力の status を任意 (無しの印) にし、合成は無しのとき `prev.status` を保つ。BE-021 に「status の無い更新で `running` が保たれる」 |
+| N2 | Inconsistency | MEDIUM | spec FR-009 (行の無い更新は捨てる) vs data-model §2 (名前があれば行を作る); BE-021 | 隠した task・開始を見ていない task への `patch.description` つきの更新が行を作り、spec に反する | 行を作れるのを `hook_started` / `task_started` に限るか、spec を合わせる。BE-021 にケース |
+| N3 | Underspec | MEDIUM | spec US-2 / FR-008 / glossary; data-model §2; `sdk.d.ts:5606-5627` (`is_backgrounded`、`ambient`) | `task_started` は前景の task (`is_backgrounded: false`) にも出る。`Agent` の subagent (local_agent) ごとに Subagent の表示に加えて event の行が出る | `is_backgrounded` / `ambient` で絞るか重複を受け入れるかを決めて data-model §2 と AD-044 / A 節の備考に。V-4 で確かめる。絞るなら許可リストに足す |
+| N4 | Underspec | MEDIUM | plan「thread.aui.tsx の data part の分岐」; data-model §2; FE-010 / FE-012; `thread.aui.tsx` (data part の分岐は今は無い) | 分岐は新しく作る必要がある。event の行は `role: 'assistant'` なので、assistant のメッセージの体裁 (action bar・コピー・読み上げ) で描かれうる | FE-010 に data part の登録の仕方と assistant の体裁なしで描くことを書く。FE-012 に action bar が無いこと・assistant の発話として読まれないこと |
+| N5 | Ambiguity | LOW | spec FR-003 (「読めた名前が極端に少ない」); plan RK-03; BE-011 | 閾値が定義されていない | data-model §1 に節ごとの下限を書く |
+| N6 | Underspec | LOW | data-model §1 (`後続` の ID は roadmap の表の ID 列); roadmap (P-4・SPIKE-12・完了済みの O-1 も ID 列にある) | どの表の ID を有効とするかが無い。`後続: SPIKE-12` や完了済みの `O-1` が通る | feature の順の表に限り、完了済みの ID を違反にするかを決める。BE-011 にケース |
+| N7 | Inconsistency | LOW | plan Project Structure (`features/session/.../labels.ts`、`cl-{code,pr}-gate/SKILL.md`) vs research R-06 / R-09 | R1 の残り | `features/chat/labels.ts` と `cl-pr-gate/SKILL.md` だけに |
+| N8 | Inconsistency | LOW | spec FR-004 (O-6 の範囲) vs research R-11 / R-01 / SH-010 (B 節の機械照合は O-6) | FR-004 に B 節の機械照合が無い | FR-004 の O-6 に足す |
+| N9 | Constitution (procedure) | LOW | tasks SH-090; constitution 改定手順 step 2 / step 4; FR-016 (Manual の `ux-reviewer`) | SH-090 に手順 2 (人間と architecture-reviewer の確認) と 4 (Amendment trail) が無い。`ux-reviewer` を残すかが不明 | SH-090 に足し、`ux-reviewer` を残すか書く |
+| N10 | Underspec | LOW | spec FR-009 / data-model §2 (終了・失敗の後に結果不明); FE-010 | 過去ログと共有の `thread.aui.tsx` が実行中のセッションの終了・失敗をどこから知るかが無い | FE-010 に源 (store の状態 → context) を書き、FE-012 に |
+| T1' | Terminology | LOW | plan Summary (素の R-03〜R-07) | R1 T1 の残り | plan では「research R-0x」と書く |
 
-ADR の引用は正しい (AD-019 D2、AD-020 D1、AD-028 §5、AD-034 D1、AD-035 Trade-off、AD-043 D2)。O-4 / O-5 / O-6 は docs に無く衝突しない。I-3 は実在する。
+**確かめて問題が無かったもの**: AD-044 は未使用の番号。AD-041 (g) のキー集合は変わらない。SDK の `includeHookEvents` (L1731)、`hook_response` の `exit_code` / `outcome`、`skip_transcript`。`read-transcript.ts:70` の `includeSystemMessages: true`。AD-035 の既定 open は Trade-off で ADR drift ではない。plan-template の XII の行と discovery の「20 項目」はタスクにある。Critical の Constitution の衝突は残っていない。
 
-### Coverage Summary
+## Coverage Summary
 
-FR-001〜FR-016 / SC-001〜SC-007 の 23 件すべてにタスクがある (100%)。注記: FR-004 (U2)、FR-006 (I5)、FR-007 (G2)、FR-008 (I1)、FR-012 (I6)、FR-014 (U3)、FR-015 (U2 / U4)、FR-016 (C1 / C2)。
+FR-001〜FR-016 / SC-001〜SC-007 の 23 件すべてにタスクがある (100%)。注記: FR-003 (N5 / N6)、FR-004 (N8)、FR-006 (N7)、FR-008 (N1 / N3)、FR-009 (N1 / N2 / N10)、FR-010 (N3)、FR-016 (N9)、SC-003 (N4)。
 
-### Metrics
+## Metrics
 
-- 要件 23 (FR 16 + SC 7) / タスク 26 / 被覆 100%
-- Critical 1 (C1) / High 2 (C2, I1) / Medium 12 / Low 10
+- 要件 23 / タスク 28 / 被覆 100%
+- R1: 25 件 (24 resolved、1 一部)
+- 新規: 11 件 (Critical 0 / High 1 / Medium 3 / Low 7)

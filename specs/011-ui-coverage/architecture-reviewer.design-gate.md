@@ -1,160 +1,109 @@
 # architecture-reviewer Review: ui-coverage 対応表の確立 (O-2)
 
 **Run**: 2026-10-03
-**Reviewer**: architecture-reviewer (default mode + `scope: adr-drift`)
+**Reviewer**: architecture-reviewer (default mode と `scope: adr-drift`)
 **Spec**: specs/011-ui-coverage/spec.md
-**Round**: 1 (design-gate)
+**Round**: 2 (design-gate)
 
 ## 初回読了 viewpoint
 
-- FR/SC: FR-001〜FR-016 / SC-001〜SC-007 (本 feature が実装または影響するもの)
-- touched files に該当する charter / Confirmation: ui charter (Scope、業務ルール、KPI「表示網羅」、Open Questions :180-195)、session charter (Open Questions :218-220)、`_overview.md` (Feature 帰属 :60-62、帰属の判断根拠 :85-89、M3 :100)、Constitution XII / XIII / XIV と改定手順 (:284-296)、AD-019 D2 / D3、AD-020 D1 / D2 / Open Questions、AD-034 D1、AD-035 D1 / D4 / Trade-off、AD-036 §4 P1 と AD-041 (g)、AD-043 D2、AD-027、AD-028 §5、AD-031
+- FR/SC: FR-001〜FR-016 / SC-001〜SC-007 (R2 で中身が変わったのは FR-001 / 002 / 004 / 008 / 009 / 014 / 015 / 016、SC-002 / SC-004)
+- touched files に当たる charter / Confirmation: ui charter (:41-43、:126-127、:135、:180-195)、session charter (:54-58、:218-220)、`_overview.md` (:60-62、:85-89、:100)、Constitution (改定手順 :284-296、XII :712-734、XIII :753-770、方針表 :954-962)、AD-019 D2/D3、AD-020 D1/D2/Open Questions、AD-034、AD-035 Trade-off、AD-036 §4 P1、AD-041 (g)、AD-043、AD-027、AD-028 §5、AD-031
 - A. 認可 / 認証 / secret 管理: 該当なし: security-reviewer の担当
 - B. 入力検証 / injection / CSP / 暗号: 該当なし: security-reviewer の担当
-- C. 業務不変条件 / Charter drift: Critical:0 High:3 Medium:3 Low:2
-- D. Constitution / ADR drift: Critical:1 High:2 Medium:4 Low:2
-- E. User Story / SC / AC / UX: 該当なし: po-reviewer の担当 (C-001 は AC3 の成否に効くが軸は ADR drift)
-- F. 命名 / module / lint hookup: 該当なし: convention-reviewer の担当 (M-006 はレイヤの向きとして D で出す)
+- C. 業務不変条件 / Charter drift: Critical:0 High:1 Medium:0 Low:2
+- D. Constitution / ADR drift: Critical:0 High:0 Medium:3 Low:3
+- E. User Story / SC / AC / UX: 該当なし: po-reviewer の担当
+- F. 命名 / module / lint hookup: 該当なし: convention-reviewer の担当 (L-102 は Ubiquitous Language の衝突として C)
 - G. optional reviewer 範囲: 該当なし: 永続化スキーマの変更なし
-- H. テスト / coverage / observability / regression: Critical:0 High:0 Medium:2 Low:0
+- H. テスト / coverage / observability / regression: Critical:0 High:0 Medium:0 Low:0 (テストの欠けは各指摘の推奨アクションに入れた)
 
 ## スコープ要約
 
-対応表 (6 節、A / C / E 節を機械照合)、`coverage.mjs` と項目 21、ui-coverage-reviewer。session の契約を 1 か所広げる (tool_result で同じ id の `message` を送り直す、Hook / task は `event` part の `role: 'system'` のメッセージ)。transcript の密度、直近の活動の整形、Constitution XII / XIII の PATCH v1.2.10、roadmap に O-4〜O-6。plan は ADR を起こさないとしている。
+R2 の改訂: Hook は SessionStart / Setup だけ、event の DTO は `role: 'system'` のまま `convert.ts` が `role: 'assistant'` の data part に写す、`mergeSystemEvent` で 1 行に合成、`deriveActivity` の読み飛ばし、AD-044 → v1.3.0、O-4〜O-6 は ui、書式の正本を凡例と AD-044 に、項目 21 は pending を持たず発火のテスト。利用者の決定は覆していない。
 
 ## Findings
 
-### [Critical] Hook のイベントは query の options に `includeHookEvents` が無いと出ない。キー集合は accepted ADR で固定されており、US-2 AC3 は ADR drift なしには満たせない (C-001) (scope: feature)
+### [High] 名前つきの `task_updated` が、`skip_transcript` で隠した task の行を作る。data-model §2 の合成の規則が FR-009 と食い違う (H-101) (scope: feature)
 
-- **観察**: `sdk.d.ts:1722-1731` — `hook_started` / `hook_progress` / `hook_response` は `includeHookEvents: true` のときだけ全 hook event で出る (既定 false。SessionStart と Setup は常に出る)。`session-core.ts:46-55` の `QUERY_OPTION_KEYS` にこのキーは無く、`:44` は「集合を変えるには ADR が要る」、`session-core.test.ts:191` がリテラルで固定。根拠は AD-036 §4 P1 を読み替えた AD-041 (g) (`0041:125-131`)。spec US-2 AC3 / FR-008 / quickstart V-4-2 は一般の Hook を求め、plan の Constitution Check IV は「分岐を足すだけ」、ADR 節は「起票しない」
-- **同種事象探索**: `includeHookEvents` を全体 (node_modules 除く) で 0 件。`QUERY_OPTION_KEYS` の定義は 1 件
-- **リスク/影響**: 今の設計では PreToolUse などの Hook は実行中に 1 件も出ず AC3 / V-4-2 は通らない。キーを足すと AD-036 P1 / AD-041 (g) に反する
-- **推奨アクション** (人間に諮る): (a) AC3 / FR-008 / V-4-2 を既定で出る Hook (SessionStart / Setup) に限り、他は `後続: <ID>` (理由: `includeHookEvents` の追加には ADR が要る)。(b) `includeHookEvents` を足す後続 ADR (escalation-neutral の検討と `hook_progress` の stdout / stderr の面の評価)。どちらでも research に「SDK が既定で何を出すか」の節
-- **根拠**: AD-036 §4 P1、AD-041 (g)、Constitution 改定手順 / Governance
+- **観察**: FR-009 と Clarifications は「行の無い Hook / task への更新は捨てる」。data-model §2 は「行が無くても `next.name` が空でなければ行を作る」で、`task_updated` の `patch.description` を `name` にする。`task_updated` は `skip_transcript` を持たない (`sdk.d.ts:5632-5649`)。research R-04 の「隠した task の後続も現れない」は名前の無い更新にしか成り立たない
+- **同種事象探索**: `patch\.description|行の無い` で 8 件。spec の 2 か所は「更新は捨てる」、data-model / plan / research / tasks の 4 か所は「名前の無い更新は捨てる」
+- **リスク/影響**: SDK の注記に反し、ambient / housekeeping の task が出る。実装者が spec と data-model のどちらに従うかで振る舞いが分かれる。R1 H-002 の残り
+- **推奨アクション**: (a) `task_updated` の `patch.description` を読まない、(b) DTO の `event` に「行を作ってよいか」(`opens`) を足し、`hook_started` / `hook_response` / `task_started` だけ true。8 か所をそろえ、BE-021 / FE-012 に「隠した task に `patch.description` つきの `task_updated` が届いても行が出ない」
+- **根拠**: SDK の注記 (`sdk.d.ts:5620-5623`)、spec FR-009、R1 H-002
 
-### [High] `role: 'system'` のメッセージに data part を載せると assistant-ui の変換が例外を投げる (H-001) (scope: feature)
+### [Medium] 合成と読み飛ばしの規則を DTO の形で書いているが、実行中の store が持つのは変換後の ThreadMessageLike である (M-101) (scope: feature)
 
-- **観察**: data-model §2 は Hook / task を `{ role: 'system', parts: [event] }`、plan / FE-010 は `event` を data part にする。`@assistant-ui/core/src/runtime/utils/thread-message-like.ts:269-273` は system ロールで content が text 1 つでなければ `throw new Error("System messages must have exactly one text message part.")`。今の divider は text 1 つなので通る。`thread.aui.tsx:471` の `SystemMessage` は data part の分岐を持たない
-- **リスク/影響**: Hook / task の行が 1 件届いただけで transcript の変換が落ち、実行中も過去ログも描けなくなる
-- **推奨アクション**: (i) event のメッセージを `role: 'assistant'` の data part にする、(ii) system のまま text 1 つに直列化して描く、のどちらか。FE-012 に system ロールの制約を固定するテスト。SH-002 にこの制約を入れる
-- **根拠**: Principle XIII、AD-035 D1
+- **観察**: `running-session-store.ts:256` は変換してから upsert し、store の `messages` は `ThreadMessageLike[]`。data-model / plan / FE-010 は store の upsert で DTO の `mergeSystemEvent` を使う前提。`deriveActivity` も `ThreadMessageLike` を受け、event の行は `role: 'assistant'` の data part で届く
+- **リスク/影響**: store に DTO を持たせるか、data part を対象にした別の合成を書くことになり、規則の正本が 2 か所になりうる
+- **推奨アクション**: store の upsert では変換の前に DTO どうしで `mergeSystemEvent` を通す (前の値は data part の `data` から DTO の `event` を復元する小さな関数を `convert.ts` に置き、規則は domain の 1 か所)。読み飛ばしは「data part の `name === 'system-event'` だけのメッセージ、または id が `result:` で始まる」と ThreadMessageLike の形で書く。FE-010 / FE-031 は ThreadMessageLike で
+- **根拠**: spec FR-009、AD-034、`convert.ts:5-11`
 
-### [High] task_updated / task_notification だけでは行を作れない。利用者が決めた「状態を保持しない」と両立しない (H-002) (scope: feature)
+### [Medium] event の行を `role: 'assistant'` にすると、assistant-ui の「最後の assistant メッセージ」の扱いと AssistantMessage の部品がそのまま付く (M-102) (scope: feature)
 
-- **観察**: `SDKTaskUpdatedMessage` は「Clients merge into their local task map.」で `patch.description` は任意。`SDKTaskNotificationMessage` は description も task_type も持たない。renderer の `upsertMessage` は同じ id のメッセージを丸ごと差し替える。agents が task_id ごとに name / detail / skip を覚えないと 2 通目で名前が `''` になり、`skip_transcript` で隠した task も task_updated で現れる
-- **リスク/影響**: 実装が黙って session 側に上限なしの task の表を持つ (USER 決定と session charter からの drift) か、行が名前を失い隠すべき task が漏れる
-- **推奨アクション**: (a) renderer の upsert で前の値と合わせる (event の part を差分として合成。状態は transcript の配列の中にだけある)、(b) agents が上限つき・セッション寿命の最小の表 (task_id → name / detail / skip) を持つ。(b) なら「状態を保持しない」の範囲を「一覧や集計を持たない」に言い換え、charter に書く前に人間に確かめる。BE-024 に「task_updated だけが来たとき」「skip した task の task_updated」
-- **根拠**: session charter :218-220、`_overview.md:88-89`、spec の USER 決定
+- **観察**: `thread.aui.tsx:463-473` は role だけで分岐し、event の行は `AssistantMessage` (BranchPicker・ActionBar・余白・running indicator) で描かれる。external store は `isRunning` で末尾が assistant のとき placeholder を足さない (`external-store-thread-runtime-core.ts:75-78`) ので、応答の前に Hook / task の行が末尾に来ると、その行に「●」が出る
+- **リスク/影響**: 応答中の印が Hook の行に出て動かない。Copy / Reload が付く。仮想化の高さの見積もりがずれる
+- **推奨アクション**: `ThreadMessage` で data part `system-event` だけのメッセージを専用の部品に回し、footer・action bar・indicator を持たせない。`isRunning` で末尾が event の行のときの indicator の扱いを決めて書く。FE-012 に観点。SH-002 の前提に
 
-### [High] system メッセージが末尾に来ると、監視ビューの直近の活動が消える (session domain の不変条件の regression) (H-003) (scope: feature)
+### [Medium] Constitution XII の Adoption metadata「開発途上の未割当は違反としない」が、常に CI で落とす項目 21 と食い違う。FR-016 / SH-090 の改定の対象に入っていない (M-103) (scope: feature)
 
-- **観察**: `deriveActivity` (`session-view.ts:239-267`) は末尾 1 件だけを見て、assistant / user 以外なら `null`。本 feature は新しい id の system メッセージを末尾に足す (PreToolUse / PostToolUse の Hook は tool のたびに出うる)。`result:<id>` の新しいメッセージも末尾に来る
-- **リスク/影響**: O-1 FR-006「直近の活動」を ui の feature が壊す (domain をまたぐ regression)
-- **推奨アクション**: FE-030 に「末尾から遡り、`role: 'system'` (event) と結果だけのメッセージを読み飛ばす」。FE-031 にテスト。session charter に規則を記録
-- **根拠**: O-1 spec FR-006、`_overview.md` の帰属の判断根拠、Constitution XI
+- **観察**: `constitution.md:716` の `violation_threshold` は「UI 系 feature の完了時点。開発途上の未割当は違反としない」。項目 21 はすべての PR で違反にする。改定手順 5 は強化のときに既存違反の enumeration を求める。SDK の版を上げる PR は domain を問わず対応表を直す必要が生まれる
+- **推奨アクション**: FR-016 / SH-090 に `violation_threshold` と `existing_violations` の改定、Sync Impact Report に既存違反の enumeration を足す。AD-044 の Consequences に「SDK の版を上げる PR は対応表を同じ PR で直す」を書き、discovery の手順にも置く
+- **根拠**: Constitution 改定手順 5、XII Adoption metadata、AD-020 D1
 
-### [High] Constitution の Principle を変えるのに ADR を起こさない (改定手順 1 に反する) (H-004) (scope: feature)
+### [Low] 対応表の書式の正本を「凡例と AD-044」の 2 か所にしている (L-101)
 
-- **観察**: plan の ADR 節は「起票しない」。改定手順 (`constitution.md:286-288`) は既存 Principle の変更に「1. ADR で議論を記録」を求める。改定は XII の判定の意味 (後続 ID も割当) に及ぶ。これまでの Principle の改定はすべて ADR を挙げる (v1.2.5 は方針表の変更)
-- **リスク/影響**: M3 の完了判定と今後の UI 系 feature の completed 判定を左右する決定の置き場が、feature 完了後に保守されない data-model と PATCH 行だけになる
-- **推奨アクション**: PATCH v1.2.10 という版はそのままでよい。ADR を 1 本 (proposed → 人間が accepted) 起こし、割当の 3 種類と後続 ID の読み方、対応表の節の構成と機械照合の範囲、ToolFallback と Tier の規則、AD-019 / AD-020 の Open Questions への回答を記録する。SH-090 の前に。Sync Impact Report に方針表のどの行で PATCH かを書く
-- **根拠**: Constitution 改定手順 1・3、Governance、AD-031
+- **推奨アクション**: AD-044 は決定の正本、凡例は書式の詳細の正本。食い違ったら AD-044 を正とし、決定を変えるときは後続 ADR
 
-### [High] O-4 / O-5 / O-6 の domain が決まっておらず、`_overview.md` の Feature 帰属表と Milestone 表が更新の対象から漏れている (H-005) (scope: feature)
+### [Low] 「event」という語が同じ経路で 3 つの意味を持つ (L-102)
 
-- **観察**: FR-004 / R-11 は domain を書いていない。roadmap の M3 表と `_overview.md` の帰属表は domain 列を持ち、`_overview.md:100` の M3 は O-1〜O-3。O-5 の Server panel・プラグイン・コマンドは ui charter の Out of scope「他 domain の操作 UI」に当たりうる。O-4 の費用とレート制限は provider / session との境界に触れる。AGENTS.md は domain decomposition を人間の承認とする
-- **推奨アクション**: O-4 / O-5 / O-6 の domain を人間に確かめ FR-004 に書く。FR-015 / SH-091 に `_overview.md` の帰属表 (3 行) と Milestone 表 (M3 = O-1〜O-6) を足す。prompts.md に行を足すかを決める
-- **根拠**: AGENTS.md、ui charter の Out of scope、`_overview.md`
+- **観察**: `post` の kind `event`、`SessionEvent`、DTO の part `type: 'event'`
+- **推奨アクション**: DTO の part の type を `system-event` にし、glossary・data part の名前・`TRANSCRIPT_PART_FIELDS` のキーとそろえる
 
-### [Medium] Constitution XII の `bad_pattern_grep` が、経路の列の `—` を違反として拾う (M-001) (scope: feature)
+### [Low] 項目 21 の入力のパスを差し替える口を、Constitution 検証の本体に置く (L-103)
 
-- **推奨アクション**: 経路の列の空値を `なし` にするか、PATCH で grep を割当の列に限る
+- **推奨アクション**: (a) 引数だけにし、差し替えたときは出力に `[override]` と入力のパス、(b) item21.test.ts は一時ディレクトリにリポジトリの形を組み `cwd` を変えて呼ぶ (口を足さない)
 
-### [Medium] Tier (element の実装優先度) を SDK の行に広げているが、決め方がどこにも無い (M-002) (scope: feature)
+### [Low] MINOR の理由の書き方 (L-104)
 
-- **観察**: glossary / ui charter の Tier は element の優先度。FR-002 は SDK の行に Tier を付け判定に使う (ToolFallback の可否、Tier C の対象外) が基準が無い
-- **リスク/影響**: Tier A の tool を B と書くだけで ToolFallback のまま通る抜け道
-- **推奨アクション**: SH-001 で glossary の Tier に「対応表の行の Tier」の定義と決め方を足す。data-model §1 に「Tier C の行は `表示不要: Tier C (<理由>)`」。reviewer の観点に Tier の妥当性
+- **推奨アクション**: 版は利用者の決定どおり。Sync Impact Report と AD-044 に「MAJOR に当たらない理由」(これまで適合していた状態が違反になることは無く、適合の範囲を広げるだけ) を 1 文
 
-### [Medium] FR-014 が session の整形の規則を ui の対応表から参照させており、FR-001 の除外の理由と食い違う (M-003) (scope: feature)
+### [Low] roadmap の M3 に 3 行を足すと、M4 / M5 の「順」の列 (13〜16) と重なる (L-105)
 
-- **推奨アクション**: FR-014 の最後の文を「規則の正本は data-model §4 / `session-view.ts`。session charter に記録する」に。対応表の tool の行には参照を置かない
+- **推奨アクション**: SH-010 に順の振り直しか「順の数は振らない」を書く。D-1 の依存を O-3 のままにするかも決める
 
-### [Medium] 対応表の書式の正本を spec の中 (data-model §1) に置いている (M-004) (scope: feature)
+## R1 指摘の判定
 
-- **推奨アクション**: 書式の正本を `docs/ui-coverage.md` の凡例 (ADR を起こすならその ADR) に移し、data-model §1 は参照の形に。`coverage.mjs` の冒頭から凡例を指す
-
-### [Medium] 実行中の Background task の一覧の持ち主が、spec と research で食い違う (M-005) (scope: feature)
-
-- **推奨アクション**: FR-004 の O-6 の範囲と spec の Out of Scope を「O-6 で要否を判断。要るなら持ち主の domain を人間に諮る」にそろえる
-
-### [Medium] transcript の文言 (ui) を `features/session/labels.ts` に置こうとしている (M-006) (scope: feature)
-
-- **観察**: 描画は `components/.../thread.aui.tsx` で過去ログと共有。今の elements が import する features は `features/chat/tool-args` だけ
-- **推奨アクション**: 文言は `features/chat` の側 (`features/chat/labels.ts` など) か `thread.aui.tsx` の近くに置く
-
-### [Medium] B 節 (中身のブロック) を手で維持するが、型の集合は SDK が import している型から取れる (M-007) (scope: feature)
-
-- **観察**: `sdk.d.ts:1` が `@anthropic-ai/sdk` の `BetaMessage` を import し、content block の union はそこに型として定義されている
-- **推奨アクション**: B 節の識別子の集合を取る parse を足す。足さないなら R-01 の理由を事実に合わせ、凡例に「B 節は機械照合の外」と明記する
-
-### [Medium] 送り直しで O-1 の実機計測の観測点 `receivedMessages` の意味が変わる (M-008) (scope: feature)
-
-- **推奨アクション**: 送り直しを数えるかを data-model に書き、数えるなら O-3 の義務の行と 010 data-model に注記
-
-### [Medium] 項目 21 の配線 (check.mjs → violations(21) → 終了コード) を発火で確かめる検査が無い (M-009) (scope: feature)
-
-- **推奨アクション**: (a) 崩した対応表で check.mjs を呼び `[VIOLATE] #21` と非 0 の終了コードを確かめるテスト、(b) 確かめないなら `UNDETECTED_NOTES` に持ち主つきで記録
-- **根拠**: AD-027 Decision 2
-
-### [Low] Subagent の定義が `Task` 固定、Hook / Background task / Tool group が glossary に無い (L-001)
-
-### [Low] `TranscriptMessageDTO.id` の意味が「SDK の uuid」から変わる (L-002)
-
-- **推奨アクション**: BE-001 で注記を直し、合成した id の名前空間の一覧を data-model §2 に置く
-
-### [Low] 行の単位の定義が FR-001 と Assumptions で食い違う (L-003)
-
-### [Low] reviewers.yml の発火パターンの案に、実在しないパスと漏れがある (L-004)
-
-- **観察**: 「SDK の `package.json` の版の変更」は node_modules 側で diff に現れない (出るのはルートの `package.json` / `pnpm-lock.yaml`)。`tool-result.ts`・`scripts/ui-coverage/**`・`session-view.ts` が無い。gates は pr-gate だけなのに cl-code-gate の候補にも足す
+| R1 ID | 判定 |
+|---|---|
+| C-001 | resolved |
+| H-001 | resolved (派生は M-102) |
+| H-002 | unresolved (一部) → H-101 |
+| H-003 | resolved (表現の問題は M-101) |
+| H-004 / H-005 | resolved |
+| M-001〜M-003、M-005〜M-009 | resolved |
+| M-004 | unresolved (一部) → L-101 |
+| L-001〜L-004 | resolved |
 
 ## ADR-drift 節
 
-| ADR | 照合 | 結果 |
-|---|---|---|
-| AD-036 §4 P1 / AD-041 (g) | query の options のキー集合 | **drift の危険 (C-001)** |
-| AD-020 D1 | 機械で導く / 版の記録 / control 経路 | A / C / E 節。B 節は趣旨に届かない (M-007) |
-| AD-020 D2 | §4.2 を暫定にし O-2 で引き直す | 従っている |
-| AD-020 Open Questions | 表示不要の欄 / Hook・BG の持ち主 / Partial | 回答を記録し本文は変えない (AD-031 に従う) |
-| AD-019 D2 / D3 | Tier B / C の再棚卸し / 数に確認日 | 従っている (XIII の「143」の書き換えに確認日の併記を) |
-| AD-034 D1 | 本文は port、変換は domain の純関数 | 従っている |
-| AD-035 D1 / D4 / D6 / Trade-off | ToolFallback / 台帳 / 無害化 / 既定は閉 | 従っている。Trade-off への回答であり決定の変更ではない |
-| AD-043 D2 / D4 | 本文の中継、main は状態通知だけ | 従っている |
-| AD-027 | 発火の確認 | 項目 21 の発火確認が無い (M-009) |
-| AD-028 §5 / AD-031 | 持ち主のいない延期 / in-place の訂正 | 一覧の延期先が食い違う (M-005)。本文は書き換えない |
-| Constitution の改定手順 | Principle の変更は ADR | **ADR 無しで XII を変える (H-004)** |
-
-accepted ADR の in-place の書き換えの計画は 0 件。
+AD-036 §4 P1 / AD-041 (g) 従っている。AD-020 D1 / D2 / Open Questions 従っている (B 節は D1 の分母の外)。AD-019 D3 従っている。AD-023 drift ではない (M-102 で最後の assistant の扱いを取り込む)。AD-034 従っている (M-101 の二重化の危険)。AD-035 Trade-off への回答。AD-043 / AD-027 / AD-028 §5 従っている。AD-031 / 改定手順 1 従っている (M-103 / L-104 が残る)。AD-044 の番号は空き。in-place の書き換えの計画 0 件。
 
 ## 同種事象探索 cascade summary
 
 | 指摘 ID | Grep query | 該当件数 | path:line |
 |---|---|---|---|
-| C-001 | `includeHookEvents` (node_modules を除く) / `QUERY_OPTION_KEYS` の定義 | 0 / 1 | sdk.d.ts:1731 / session-core.ts:46 (pin: session-core.test.ts:191) |
-| H-001 | `System messages must have` (`@assistant-ui`) | 1 | thread-message-like.ts:272 |
-| H-002 | spec 011 での task_id の保持 | 0 | data-model.md:73 は tool 用だけ |
-| H-003 | 末尾 1 件と role の分岐 | 3 | session-view.ts:249, :251, :262 |
-| H-004 | Amendment trail で ADR 参照の無い行 | 1 | constitution.md:982 (v1.2.5。Principle の変更ではない) |
-| H-005 | O-4 / O-5 / O-6 の domain | 0 | _overview.md:100 の M3 = O-1〜O-3 |
-| M-001 | 判定に `—` を使う箇所 | 4 | data-model.md:22, :25, :26, constitution.md:717 |
-| M-006 | `components/` → `features/` の import | 5 | すべて `features/chat` |
-| M-007 | 知らないブロックを捨てる箇所 | 2 | live-message.ts:65, transcript.ts:263-270 |
-| M-008 | `receivedMessages` | 9 ファイル | running-session-store.ts:259 ほか |
+| H-101 | `patch\.description\|行の無い` / `skip_transcript` (sdk.d.ts) | 8 / 3 型 | data-model.md:73, :79 / plan.md:139 / research.md:50 / spec.md:56, :144, :191 / tasks.md:48 |
+| M-101 | `mergeSystemEvent` / `upsertMessage` | 8 / 2 | plan / data-model / research / tasks、running-session-store.ts:256, :433 |
+| M-102 | `role === "system"` の描画分岐 / `hasUpcomingMessage` | 1 / 1 | thread.aui.tsx:471 / external-store-thread-runtime-core.ts:75-78 |
+| M-103 | `violation_threshold\|existing_violations` (XII) | 2 | constitution.md:715, :716 |
+| L-103 | check.mjs の入力を env / argv で読む箇所 | 0 | — |
+| L-105 | M3〜M5 の「順」の列 | 7 行 | roadmap.md:249-251, :266-268, :280 |
 
 ## Verdict
 
-- Critical: 1
-- High: 5
-- Medium: 9
-- Low: 4
+- Critical: 0
+- High: 1
+- Medium: 3
+- Low: 5
+- Round inheritance: resolved 17 / unresolved 2 / new 7

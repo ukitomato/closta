@@ -28,7 +28,7 @@
 
 ## V-4 実機の目視 (利用者が行う)
 
-1. 実 `claude` で `Bash` を使わせる → 実行中の transcript で Terminal block に出力が出る。エラーになるコマンドではエラーが出る。tool を多く呼ばせても transcript がもたつかない (RK-02)
+1. 実 `claude` で `Bash` を使わせる → 実行中の transcript で Terminal block に出力が出る。エラーになるコマンドではエラーが出る。tool を多く呼ばせても transcript がもたつかない (RK-02)。**並列の tool の結果が user メッセージ 1 つで来るか、1 つずつ来るかを記録する** (research R-03 の前提)
 2. SessionStart の Hook を設定した作業フォルダで起動する → Hook の名前と結果が 1 行で出る。出力本文は出ない。**`hook_name` の実際の値を記録し、コマンドの文字列を含まないことを確かめる** (含むなら `hook_event` だけを出すよう直す)
 3. subagent を使わせる → Subagent の専用表示になる (tool 名が `Agent` / `Task` のどちらかを記録する。RK-04)
 4. Background task を使わせる → task の説明と状態が 1 行で、状態が変わると同じ行が書き換わる。セッションを強制終了すると、終わっていない行は「結果不明」になる
@@ -37,5 +37,5 @@
 
 ## V-5 reviewer の組み込み (SC-007)
 
-- `bash -c 'source .specify/scripts/gate-common.sh; printf "docs/ui-coverage.md\n" > /tmp/s.txt; gate_common::reviewers_filter pr-gate /tmp/s.txt ui-coverage-reviewer'` が `ui-coverage-reviewer` を返す
+- `bash -c 'source .specify/scripts/gate-common.sh; for p in docs/ui-coverage.md src/renderer/src/components/assistant-ui/elements/thread.aui.tsx package.json; do printf "%s\n" "$p" > /tmp/s.txt; gate_common::reviewers_filter pr-gate /tmp/s.txt ui-coverage-reviewer; done'` が 3 回とも `ui-coverage-reviewer` を返す
 - cl-pr-gate の候補の一覧に名前がある。registry の `invoked_by` が `pr-gate`

@@ -126,8 +126,8 @@ Grep "011-ui-coverage|\bO-2\b|ui-coverage" (docs / .specify / tests / specs / sc
 ### 対応表と検査 (US-1)
 
 - `scripts/ui-coverage/coverage.mjs` (research R-02): `parseSdkMessageUnion(dts)` / `parseToolInputs(toolsDts)` / `parseControlRequestSubtypes(dts)` / `parseCoverage(markdown)` / `parseRoadmapIds(markdown)` / `checkCoverage({...})` → 失敗の配列 `{ section, id, reason }`
-- `check.mjs` の項目 21 は、`node_modules/@anthropic-ai/claude-agent-sdk/{sdk.d.ts,sdk-tools.d.ts,package.json}`・`docs/ui-coverage.md`・`docs/roadmap.md` を読んで `checkCoverage` に渡す。**pending を持たない** — 入力のどれかが無ければファイル名を示して違反 (research R-02)。通ったときに節ごとの行の数、割当の種類 × Tier、後続 ID ごとの件数を出す (data-model §1)。入力のパスを差し替える口 (環境変数か引数) を足し、発火のテストに使う
-- `tests/ui-coverage/coverage.test.ts`: FR-003 の失敗の条件のそれぞれ (行の欠け / 余分な行 / 割当が 3 種類でない / roadmap に無い ID / ToolFallback だけの Tier A / 版の違い / 入力が無い・名前が極端に少ない) を文字列の fixture で落とし、A' 節 (union の外) の行は余分な行にならないことを確かめる (SC-002)。`tests/ui-coverage/item21.test.ts`: 崩した対応表で `check.mjs` を呼び、`[VIOLATE] #21` と非 0 の終了コード (AD-027)
+- `check.mjs` の項目 21 は、`node_modules/@anthropic-ai/claude-agent-sdk/{sdk.d.ts,sdk-tools.d.ts,package.json}`・`docs/ui-coverage.md`・`docs/roadmap.md` を読んで `checkCoverage` に渡す。**pending を持たない** — 入力のどれかが無ければファイル名を示して違反 (research R-02)。通ったときに節ごとの行の数、割当の種類 × Tier、後続 ID ごとの件数と milestone を出す (data-model §1)。入力を差し替える口は足さない (発火のテストは一時ディレクトリにリポジトリの形を組んで `cwd` を変えて呼ぶ)
+- `tests/ui-coverage/coverage.test.ts`: FR-003 の失敗の条件のそれぞれ (行の欠け / 余分な行 / 割当が 3 種類でない / roadmap に無い ID / ToolFallback だけの Tier A / 版の違い / 入力が無い・名前が極端に少ない) を文字列の fixture で落とし、A' 節 (union の外) の行は余分な行にならないことを確かめる (SC-002)。parse から独立した正解 (`typescript` のコンパイラ API で列挙した集合) と parse の結果の一致。`tests/ui-coverage/item21.test.ts`: 一時ディレクトリに組んだ崩した対応表で `check.mjs` を呼び、`[VIOLATE] #21` と非 0 の終了コード (AD-027)
 - `docs/ui-coverage.md` を書く。A・C・E 節の行は parse 関数の出力から起こし、割当は人が書く。凡例が書式の正本 (data-model §1 の初版から起こす)
 
 ### 実行中の tool の結果と Hook / task (US-2)
@@ -197,13 +197,13 @@ src/domain/session/system-event.ts (+ .test.ts)      (新設)
 src/domain/session/tool-result.ts (+ .test.ts)       (新設。transcript.ts から移す)
 src/domain/session/transcript.ts / live-message.ts
 src/agents/sdk-agent-session.ts (+ test)
-src/renderer/src/features/session/session-event-decoder.ts / session-view.ts / labels.ts
+src/renderer/src/features/session/session-event-decoder.ts / session-view.ts
 src/renderer/src/features/chat/convert.ts / tool-args.ts / ChatScreen.tsx (密度の切り替え)
 src/renderer/src/features/session/SessionScreen.tsx (密度の切り替え)
 src/renderer/src/components/assistant-ui/elements/thread.aui.tsx / tool-registry.aui.tsx
 src/renderer/src/stores/ui.ts
 .claude/agents/ui-coverage-reviewer.md               (/cl-add-reviewer)
-.specify/spec-gate/reviewers.yml / .specify/.agents-registry.yaml / .claude/skills/cl-{code,pr}-gate/SKILL.md / .claude/agents/reviewer-base.md
+.specify/spec-gate/reviewers.yml / .specify/.agents-registry.yaml / .claude/skills/cl-pr-gate/SKILL.md / .claude/agents/reviewer-base.md
 .specify/memory/constitution.md / .specify/templates/plan-template.md
 docs/glossary.md / docs/roadmap.md / docs/domains/{ui,session}/charter.md / docs/domains/_overview.md / docs/prompts.md / docs/discovery.md / PLAN.md
 ```

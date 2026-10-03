@@ -28,7 +28,8 @@
 - **Decision**: 検査のロジックを `scripts/ui-coverage/coverage.mjs` (依存なしの純関数) に置き、`scripts/constitution/check.mjs` の **項目 21** から呼ぶ。単体テストは `tests/ui-coverage/coverage.test.ts` (Vitest の node project。`tests/**/*.test.ts` が既に含まれる)
   - 純関数: SDK の `.d.ts` から A / C / E 節の名前の集合を取る関数、対応表の markdown から行を取る関数、roadmap から feature ID の集合を取る関数、照合して失敗の一覧を返す関数
   - 項目 21 は、ファイルを読んで純関数に渡し、失敗を `violations(21, …)` に流すだけ。**pending (検査対象なし) を持たない** — 5 つの入力 (`sdk.d.ts` / `sdk-tools.d.ts` / SDK の `package.json` / `docs/ui-coverage.md` / `docs/roadmap.md`) のどれかが無ければ、ファイル名を示して違反にする。SDK は直接の依存で CI は必ず install するので、入力の欠けは「検査が届かなくなった」ことを意味する (design-gate R1 platform-boundary M-003。Constitution VI「pending を ok に混ぜない」)
-  - 配線の発火の確認: 崩した対応表を一時ディレクトリに置いて `check.mjs` を呼び、`[VIOLATE] #21` と非 0 の終了コードを確かめるテストを置く (`check.mjs` に入力のパスを差し替える口を足す。design-gate R1 architecture M-009 / AD-027)
+  - 配線の発火の確認: 一時ディレクトリにリポジトリの形 (scripts・docs・SDK の 3 ファイル) を組み、崩した対応表を置いて `cwd` を変えて `check.mjs` を呼び、`[VIOLATE] #21` と非 0 の終了コードを確かめる (design-gate R1 architecture M-009 / AD-027)。**`check.mjs` に入力を差し替える口は足さない** — 環境に残った値で別の入力を見て ok を返す経路を作らない (design-gate R2 platform-boundary L-102 / architecture L-103)
+  - parse の取りこぼしの歯止め: 節ごとの下限と、`typescript` のコンパイラ API で列挙した独立した正解とのテスト (data-model §1。design-gate R2 platform-boundary M-101)
 - **Rationale**: Principle XII の Verification (Automated) の実装であり、Constitution 検証の項目に置くのが自然である (X-5 が 18〜20 を足した先例)。CI の `check:constitution` の step と agent 用のコマンド (`node scripts/constitution/check.mjs`) が既にあるので、**CI・package.json・discovery の表を変えずに**検査が回る
 - **Alternatives considered**: (a) 独立した `pnpm check:ui-coverage` — package.json と verify.yml と discovery の表を足すことになる。(b) ルール検証 (`scripts/rules`) の違反サンプルに足す — 違反サンプルは `src/` に展開する方式で、`docs/` のファイルの検査に合わない。SC-002 は単体テストの違反サンプル (文字列の fixture) で満たす
 

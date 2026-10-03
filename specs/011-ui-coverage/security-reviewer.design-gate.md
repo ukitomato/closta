@@ -3,97 +3,77 @@
 **Run**: 2026-10-03
 **Reviewer**: security-reviewer
 **Spec**: specs/011-ui-coverage/spec.md
-**Round**: 1 (design-gate)
+**Round**: 2 (design-gate)
 
 ## 初回読了 viewpoint
 
-- FR/SC: FR-007 (実行中の tool の結果。新しい本文経路)、FR-008 (Hook / BG。新しい本文経路)、FR-009 (event の行。新しい sink)、FR-010、FR-011 (プロセス境界)、FR-014 (要点。秘密の露出を減らす)、SC-003 / SC-004 / SC-006。他は security の論点が無いか小さい
-- touched files に該当する charter / Confirmation: AD-034 Decision 1、AD-043 Decision 2 / 4、AD-041 (g) (`QUERY_OPTION_KEYS` の集合はリテラルで固定。変えるには ADR)、session charter、ui charter
-- A. 認可 / 認証 / secret 管理 / プロセス境界: Critical:0 High:1 Medium:0 Low:1
-- B. 入力検証 / injection / XSS / CSP / 暗号: Critical:0 High:0 Medium:3 Low:3
+- FR/SC: FR-007 / FR-008 / FR-009 / FR-011 / FR-014、SC-003 / SC-004 / SC-006
+- touched files に該当する charter / Confirmation: AD-041 (g) (`QUERY_OPTION_KEYS` は固定。BE-024 の pin)、AD-043 Decision 2 (本文は part ごとに `BODY_MAX_BYTES` で有界)、AD-034 Decision 1、session charter、ui charter
+- A. 認可 / 認証 / secret 管理 / プロセス境界: Critical:0 High:0 Medium:0 Low:1
+- B. 入力検証 / injection / XSS / CSP / 暗号: Critical:0 High:0 Medium:1 Low:2
 - C. 業務不変条件 / Charter drift: 該当なし: architecture-reviewer の担当
-- D. Constitution / ADR drift: 該当なし: architecture-reviewer の担当 (AD-041 の options 集合は H-001 で security の観点からだけ扱う)
+- D. Constitution / ADR drift: 該当なし: architecture-reviewer の担当
 - E. User Story / SC / AC / UX: 該当なし: po-reviewer の担当
 - F. 命名 / module / lint hookup: 該当なし: convention-reviewer の担当
 - G. optional reviewer 範囲: 該当なし: 本 reviewer の担当外
-- H. テスト / coverage / observability / regression: Critical:0 High:0 Medium:1 Low:0
+- H. テスト / coverage / observability / regression: Critical:0 High:0 Medium:1 Low:1 (A / B と同じもの。別には数えない)
 
 ## スコープ要約
 
-会話由来の文字列の経路が 3 つ増える (実行中の tool の結果の送り直し、Hook / BG の `event`、直近の活動の要点)。`SessionEvent` の種類・IPC・preload・main は変えない。無害化は既存と同じ形 (`sanitizeBody` を agents で通し、renderer はテキストノード)。Hook の出力本文と task の `prompt` / `summary` / `output_file` を通さない許可リストは設計として成立している。詰め切れていないのは、SDK の Hook イベントの既定、過去ログに decoder が無いこと、`Bash` の要点のクォート、通す subtype の集合の食い違い。
+R1 の改訂で、Hook は既定で出るものだけ・options は pin のまま、subtype とフィールドの許可リストは data-model §2 に一本化、`isEventPart` を両方の経路で `Object.hasOwn` で照合、`Bash` の要点のクォートの扱い、element の照合は web の読み取りだけ、が入った。残りは 4 点。
 
 ## Findings
 
-### [High] Hook イベントは SDK の既定では SessionStart / Setup しか出ない。全 Hook を出すには `QUERY_OPTION_KEYS` を変える必要があるが、設計が扱いを決めていない (H-001) (scope: feature)
+### [Medium] 送り直す payload の「上限」が data-model に無い。「N² にならない」も確かめていない SDK の出し方を前提にしている (M-004 の残り) (scope: feature)
 
-- **観察**: `includeHookEvents` は `@default false`。true のときに全 Hook の `hook_started` / `hook_progress` / `hook_response` が出て、SessionStart と Setup は常に出る (`sdk.d.ts:1722-1731`)。現行の options 許可リストに `includeHookEvents` は無く (`session-core.ts:46-55`)、AD-041 (g) がこの集合をリテラルで固定し変えるには ADR を要るとする (`session-core.ts:44`、`0041:129`, `:161`)。spec US-2 AC3 と quickstart V-4 の 2 は一般の Hook を想定して読める。plan はこれに触れていない
-- **同種事象探索**: `includeHookEvents|includePartialMessages|agentProgressSummaries` を src で 0 件、`includeHookEvents` を docs / specs / .specify の md で 0 件
-- **リスク/影響**: AC3 を満たそうとすると、AD-041 が ADR を求める権限面の正の構成を変えることになる。足さなければ AC3 と V-4 は SessionStart / Setup だけで成立する。設計で決めずに実装に送ると、pin テストを書き換えて通す経路が開く
-- **推奨アクション**: (a) 足さない — 表示される Hook は SessionStart / Setup だけと AC3・V-4・対応表 A 節の備考に書き、一般の Hook は後続に。(b) 足す — AD-041 の集合を改める ADR を起票し escalation-neutral を論証、pin テストを ADR の参照で更新
-- **根拠**: AD-041 (g) / Constitution III・IV
-
-### [Medium] 過去ログの経路には frame の decoder が存在しないが、FE-010 は「過去ログの frame の decoder」が `event` を検証する前提 (M-001) (scope: feature)
-
-- **観察**: 過去ログの受け口は `frameEvent.data as TranscriptFrameDTO` のキャストだけ (`useTranscript.ts:111`, `:123`)。実行中の decoder も part は `typeof p.type === 'string'` しか見ない (`session-event-decoder.ts:28-37`)
-- **同種事象探索**: frame を受けるのは `useTranscript.ts:106-127` の 1 か所。`decode\w*Frame|isTranscriptPart` は 0 件
-- **リスク/影響**: 過去ログでは `event` の `status` / `category` が未検証のまま labels の参照キーになる (`constructor` などの prototype のキーで関数が React の子に渡る)。source は無害化済みなので多層防御の欠け
-- **推奨アクション**: `isEventPart` を作り両方の経路で使う。過去ログの受け口に frame decoder か part 単位の検査を置く (置かないなら FE-010 から外し理由を書く)。labels の参照は `Object.hasOwn` か列挙の照合の後に
-- **根拠**: CWE-20 / AD-043 Decision 2
-
-### [Medium] `Bash` の要点「先頭の `NAME=value` を飛ばして最初の語」が、クォートした値の断片を出力する (M-002) (scope: feature)
-
-- **観察**: data-model §4 / research R-07 は語の区切りを定めていない。`TOKEN="sk-ant-abc def" curl ...` を空白で区切ると、最初の語は `def"` (秘密の後半) になる。FE-031 は素朴な `TOKEN=secret` だけ
-- **推奨アクション**: 先頭の代入の値にクォートかバックスラッシュがあれば tool 名だけにする。出す語は basename を取り `^[A-Za-z0-9._+-]{1,64}$` に合うときだけ出す。FE-031 に `TOKEN="a b" cmd` / `TOKEN='a b' cmd` / `A=1 B=2 cmd` / `FOO=a\ b cmd` / `/home/user/bin/tool` と、`sk-` / `ghp_` / `AIza` / `Bearer` が出ないことを足す
-- **根拠**: CWE-200 / CWE-532 / O-1 security L-003 / Constitution V
-
-### [Medium] 通すシステムメッセージの subtype の集合が、spec (正本) と data-model / research / tasks で食い違う (M-003) (scope: feature)
-
-- **観察**: FR-008 は 8 つを届けるとし、フィールドも「など」と閉じていない。research R-04 / BE-024 は 3 つを送らない。`exit_code` は research で通す、data-model で通さない
-- **リスク/影響**: `hook_progress` は stdout / stderr / output だけを中身に持つ型で、正本どおりに通すと空の行か出力本文を通す誘惑が生じる。SC-003 の基準が 2 通りに読める
-- **推奨アクション**: FR-008 を data-model §2 に合わせ (5 つを変換、3 つは捨てて対応表で割当)、フィールドの正本は data-model §2 と参照する。`exit_code` は通さない方にそろえる
-- **根拠**: CWE-213 / Constitution V
-
-### [Medium] RK-02 (送り直しの負荷) の手当てとした負荷 E2E は tool を流さないので、送り直しの経路を通らない (M-004) (scope: feature)
-
-- **観察**: RK-02 の手当ては multi-session の負荷 E2E だが、偽 supervisor は tool を流さない。`BODY_MAX_BYTES` は part ごとの上限で、N 個の tool_use のメッセージは 1 回で最大 N×(200KB + 200KB) になり、それを N 回送り直す
-- **リスク/影響**: renderer の `JSON.parse` と upsert の量が N² で増える経路を観測するテストが無い。モデルの出力が N を決めるので可用性の入口になる
-- **推奨アクション**: (a) BE-024 の単体に合計バイトの観点とメッセージ単位の合計上限、(b) 結果がそろうまで送り直しをまとめる、(c) 偽 supervisor に tool を流す負荷ケース (main に差分を出さない形が可能か先に確かめる) のどれか。RK-02 の手当てを観測できる手段に直す
+- **観察**: BE-024 と plan RK-02 は「payload が上限内」とするが、data-model §3 の上限は結果待ちの 256 件だけで、1 回の送り直しの合計バイトに上限が無い。research R-03 の「並列の結果は 1 つの user メッセージで来る」は根拠が無く、V-4 の記録項目にも無い。tool_use を N 個持つメッセージに結果が 1 つずつ別の user メッセージで来れば、最大 N×400KB を N 回送り直す
+- **同種事象探索**: `payload の上限|上限内` で 2 件 (tasks.md:53、plan.md:178)。data-model の数値の定義 0 件
+- **リスク/影響**: テストが固定する値が無い。renderer の `JSON.parse` と upsert が可用性の入口として残る (CWE-400)
+- **推奨アクション**: (a) data-model §3 に 1 回あたりの合計の上限を数値で書き、超えたら `result` を切り詰めて `truncated` にするか `result:` に倒す。(b) quickstart V-4-1 に「並列の結果が user メッセージ 1 つで来るか」の記録を足す
 - **根拠**: CWE-400 / AD-043 Decision 2
 
-### [Low] `hook_name` が Hook のコマンド文字列を含まないことを確かめる手段が無い (L-001) (scope: feature)
+### [Low] 名前のある `task_updated` (`patch.description`) が、行の無い id に行を作る。FR-009 と食い違い、`skip_transcript` で隠した task が現れる (L-003 の残り) (scope: feature)
 
-- **推奨アクション**: quickstart V-4 の 2 に「`hook_name` の実際の値を記録し、コマンドを含まないことを確かめる」を足す。含むなら `hook_event` だけを出す
+- **観察**: data-model §2 の合成は「行が無くても `next.name` が空でなければ行を作る」。`task_updated` は `patch.description` を読み `skip_transcript` を持たないので、隠した task でも description の更新で行ができる。FR-009 は「行の無い Hook / task への更新は捨てる」
+- **推奨アクション**: 行を作れるのは `hook_started` / `hook_response` / `task_started` だけにし、`task_updated` / `task_notification` は行の無い id では捨てる。BE-021 / FE-012 に観点
 
-### [Low] task の説明 (第三者や model が決める文字列) が、アプリのシステム行と同じ見た目で描かれる (L-002) (scope: feature)
+### [Low] `Bash` の要点の文字種の判定を、`$(` / backtick / 区切りだけの語ですり抜けられる (L-102) (scope: feature)
 
-- **推奨アクション**: FE-010 で `name` を状態の文言と見た目で分ける。偽の状態文言を `name` に入れた component テストを足す (CWE-451)
+- **観察**: `A=$( ghp_xxxx… ) cmd` を空白で区切ると最初の語がトークンそのもので、`^[A-Za-z0-9._+-]{1,64}$` にも合う。素のトークンが最初の語の場合も同じ
+- **推奨アクション**: 代入の値に `$` / backtick / `(` があるときも出さない。既知の秘密の接頭辞 (`sk-` / `ghp_` / `gho_` / `glpat-` / `AIza` / `xox`) で始まる名前も出さない。FE-031 にケースを足す
+- **根拠**: CWE-200 / CWE-532 / Constitution V
 
-### [Low] 状態を持たない変換では、`skip_transcript` の task の後続の `task_updated` を隠せない (L-003) (scope: feature)
+### [Low] 実行中の decoder が tool-call の `result` / `isError` / `truncated` の形を見ない。O-2 からこの経路に値が流れ始める (L-101) (scope: feature)
 
-- **観察**: `skip_transcript` は `task_started` と `task_notification` にしか無い (`sdk.d.ts:5562`, `:5623`)
-- **推奨アクション**: セッションスレッドに隠す task の id の集合を上限付きで持つか、`task_updated` は先行する `task_started` の行があるときだけ送る。BE-024 に観点を足す
+- **観察**: `isMessage` は part の `type` が文字列であることだけを見る (`session-event-decoder.ts:28-37`)。`convert.ts:65-66` は `result` / `isError` をそのまま渡す。今まで実行中の `result` は常に `null` だった
+- **推奨アクション**: FE-010 で tool-call の part の `result` (`string | null`)・`isError` / `truncated` (boolean) を確かめ、外れた part を落とす。両方の経路で同じ関数
+- **根拠**: CWE-20 / AD-043 Decision 2
 
-### [Low] element の registry の取り直し (R-08) の手段が決まっていない (L-004) (scope: feature)
+## R1 指摘の判定
 
-- **推奨アクション**: SH-012 に「一覧は読み取りだけで取得する。CLI で component を add しない。package.json / lockfile の差分は 0」と書く (SEC-8)
+| R1 ID | 判定 |
+|---|---|
+| H-001 | resolved |
+| M-001 | resolved (tool-call の part は L-101 として別) |
+| M-002 | resolved (すり抜けの残りは L-102) |
+| M-003 | resolved |
+| M-004 | unresolved (一部。上の Medium) |
+| L-001 / L-002 / L-004 | resolved |
+| L-003 | unresolved (一部。上の Low) |
 
 ## 同種事象探索 cascade summary
 
 | 指摘 ID | Grep query | 該当件数 | path:line |
 |---|---|---|---|
-| H-001 | `includeHookEvents\|includePartialMessages\|agentProgressSummaries` (src) / `includeHookEvents` (md) | 0 / 0 | sdk.d.ts:1722-1731, session-core.ts:44-55, 0041:129 |
-| M-001 | `kind === 'messages'\|requestToken` / `decode\w*Frame\|isTranscriptPart` | 1 / 0 | useTranscript.ts:111, :123 |
-| M-002 | `NAME=value\|TOKEN=secret\|先頭の語` (specs/011) | 3 | data-model.md:86, research.md:74, tasks.md:77 |
-| M-003 | `hook_progress` / `exit_code` (specs/011) | 4 / 2 | spec.md:171, research.md:50, tasks.md:51 / research.md:52, data-model.md:63 |
-| M-004 | `RK-02\|負荷 E2E` (specs/011) | 3 | plan.md:169, quickstart.md:20, tasks.md:87 |
-| L-001 | `hook_name` (specs/011) | 3 | data-model.md:45, :62, :63 |
-| L-002 | `description` (data-model.md) | 2 | data-model.md:45, :64 |
-| L-003 | `skip_transcript` (specs/011) | 3 | data-model.md:64, :66, :68 |
-| L-004 | `registry` (research / tasks) | 5 | research.md:80-81, tasks.md:14, :32 |
+| M-004 | `payload の上限\|上限内` / data-model の数値 | 2 / 0 | tasks.md:53, plan.md:178 |
+| L-003 | `空でなければ行を作る\|行の無い` | 4 | data-model.md:79, spec.md:144, spec.md:191, tasks.md:48 |
+| L-102 | `クォート\|バックスラッシュ` | 4 | data-model.md:112, research.md:81, spec.md:147, spec.md:210 |
+| L-101 | `isEventPart\|isToolCallPart` | 3 (`event` だけ) | data-model.md:83, plan.md:138, tasks.md:59 |
 
 ## Verdict
 
 - Critical: 0
-- High: 1
-- Medium: 4
-- Low: 4
+- High: 0
+- Medium: 1
+- Low: 3
+- Round inheritance: resolved from 1: 7 / unresolved: 2 (一部) / new: 2
