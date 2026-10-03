@@ -1,0 +1,9 @@
+# 改行は LF に固定する。CI (windows-latest) の既定の checkout は CRLF で、prettier の検出 (`␍`) と
+# 見出しを行で読むテストが CI でだけ落ちていた (O-1 PR #10 で判明。ローカルは core.autocrlf=input で LF)。
+* text=auto eol=lf
+
+*.png binary
+*.ttf binary
+*.woff binary
+*.woff2 binary
+*.ico binary
