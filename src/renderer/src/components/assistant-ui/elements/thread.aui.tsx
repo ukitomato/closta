@@ -163,7 +163,7 @@ const ThreadHistorySkeleton: FC = () => (
  * - react-virtual は `measureElement` による行の実測と padding spacer の再計算を要し、
  *   **小規模ではその複雑性が得るものより回帰面を増やす**（skill reference messages.md §Virtualization:
  *   「マウント/更新がボトルネックのときだけ使う」）。数十件では素の DOM でマウントコストは問題にならない。
- * - 非仮想パスは assistant-ui の `Viewport` が auto-follow / measurement guard / turnAnchor="top" を
+ * - 非仮想パスは assistant-ui の `Viewport` が auto-follow / measurement guard を
  *   すでに実装しており、**既存のスクロール挙動の回帰テストがそのまま番人になる** (design-gate H narrative)。
  * 40 は「1 画面には収まらないが数百 ms のマウントにはならない」目安。**実測で見直す** (SC-002/SC-003)。
  */
@@ -205,8 +205,13 @@ const ThreadRoot: FC<{ isEmpty: boolean; autoFocus: boolean }> = ({
         ["--composer-padding" as string]: "8px",
       }}
     >
+      {/*
+        `turnAnchor` は既定 ("bottom") のまま。registry のテンプレートは "top" を置いていたが、"top" だと
+        `autoScroll` の既定が false になり、40 件以下の transcript が最下部に追従しない
+        (仮想パスは stickyRef で追従するので、件数で振る舞いが割れていた)。Claude Code は 1 回の依頼で
+        tool の呼び出しを多数流すため、最下部にいる間は追従する従来のチャットの振る舞いを採る。
+      */}
       <ThreadPrimitive.Viewport
-        turnAnchor="top"
         data-slot="aui_thread-viewport"
         className="relative flex flex-1 flex-col overflow-x-auto overflow-y-scroll scroll-smooth"
       >
@@ -272,8 +277,8 @@ const AT_BOTTOM_THRESHOLD = 4;
  * - **`MessageByIndex` を使う** (spec 選択)。R-3 は過去ログ = 静的列で index が安定なため index ベースで足りる。
  *   末尾が伸び窓がずれるライブセッション (X-5) のため、**行のキーと高さのキャッシュはメッセージ id** にした
  *   (`getItemKey`)。turn グルーピング + `Unstable_MessageById` への移行は research R-01 のとおり残課題。
- * - turnAnchor="top" の top-anchor 機構は `Viewport` 前提のため仮想化では使えない。R-3 は過去ログなので
- *   **初期位置は最下部** (最新メッセージ。chat 慣習) とし、追従は stickyRef で持つ。
+ * - **初期位置は最下部** (最新メッセージ。chat 慣習) とし、追従は stickyRef で持つ。非仮想パスの
+ *   `Viewport` (turnAnchor 既定の "bottom" で autoScroll) と同じ振る舞いにそろえる。
  */
 const VirtualThreadRoot: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
   const messageCount = useAuiState((s) => s.thread.messages.length);
