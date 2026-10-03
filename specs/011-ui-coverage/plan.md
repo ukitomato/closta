@@ -8,18 +8,18 @@
 
 - 対応表は 6 節 (メッセージ型 / 中身のブロック / tool / アプリが作る経路 / 制御要求 / element の分類)。A・C・E 節は SDK の型定義の名前の集合と一致することを機械で確かめる (research R-01 / R-02)。形は [data-model.md](./data-model.md) §1 が正本
 - 実行中の tool の結果は、`SessionEvent` の種類を増やさず、agents が結果を埋めた assistant メッセージを同じ id で送り直す (R-03)
-- Hook / Background task は `TranscriptPartDTO` の新しい variant `event` にし、1 つの Hook / task を 1 行に保つ (R-04)。実行中と過去ログで同じ純関数を使う
+- Hook / Background task は `TranscriptPartDTO` の新しい variant `system-event` にし、1 つの Hook / task を 1 行に保つ (R-04)。実行中と過去ログで同じ純関数を使う
 - transcript の密度 (R-06)、直近の活動の tool ごとの要点 (R-07)、Subagent の `Agent` / `Task` (R-05)
 - `ui-coverage-reviewer` を組み込み (research R-09)、AD-044 を起こして Constitution XII / XIII を MINOR (v1.3.0) で改め (research R-10)、roadmap に O-4 / O-5 / O-6 (domain `ui`) を足す (research R-11)
-- design-gate R1 の指摘の反映: Hook は既定で出る SessionStart / Setup だけ (query の options を変えない)、event のメッセージは assistant-ui に `role: 'assistant'` の data part で渡す、1 つの task の行は renderer が合成する、直近の活動は event の行を読み飛ばす
+- design-gate R1 の指摘の反映: Hook は既定で出る SessionStart / Setup だけ (query の options を変えない)、system-event のメッセージは assistant-ui に `role: 'assistant'` の data part で渡す、1 つの task の行は renderer が合成する、直近の活動はシステムイベントの行を読み飛ばす
 
 ## Technical Context
 
 - **Stack**: Electron 39 / React 19 / TypeScript / zustand 5 / Vitest / assistant-ui / `@anthropic-ai/claude-agent-sdk` 0.3.270 ([docs/discovery.md](../../docs/discovery.md))
 - **レイヤ**:
-  - domain (`src/domain/session/`): `transcript-dto.ts` (event の variant)、`system-event.ts` (新設。Hook / task → DTO の純関数)、`tool-result.ts` (新設。tool の結果の取り出しと `withToolResult`。`transcript.ts` から共通部分を移す)、`live-message.ts` (`redacted_thinking`)
+  - domain (`src/domain/session/`): `transcript-dto.ts` (`system-event` の variant)、`system-event.ts` (新設。Hook / task → DTO の純関数)、`tool-result.ts` (新設。tool の結果の取り出しと `withToolResult` / `withToolResults`。`transcript.ts` から共通部分を移す)、`live-message.ts` (`redacted_thinking`)
   - agents (`src/agents/sdk-agent-session.ts`): メッセージの switch に `user` の tool_result と system の Hook / task の分岐を足す。結果待ちの対応 (data-model §3)
-  - renderer: decoder (`session-event-decoder.ts` と過去ログの frame の decoder) が `event` の part を受ける、`convert.ts` が `event` を data part に写す、`thread.aui.tsx` がシステムイベントの行と密度を描く、`tool-registry.aui.tsx` / `tool-args.ts` (`Agent`)、`stores/ui` (密度)、`session-view.ts` (要点)
+  - renderer: decoder (`session-event-decoder.ts` と過去ログの frame の decoder) が `system-event` の part を受ける、`convert.ts` が `system-event` を data part に写す、`thread.aui.tsx` がシステムイベントの行と密度を描く、`tool-registry.aui.tsx` / `tool-args.ts` (`Agent`)、`stores/ui` (密度)、`session-view.ts` (要点)
   - scripts: `scripts/ui-coverage/coverage.mjs` (新設)、`scripts/constitution/check.mjs` (項目 21)
 - **既存の起点** (2026-10-03 の調べ):
   - `sdk-agent-session.ts:509-543` — SDK のメッセージの switch。`assistant` → `message`、`result` → `state` / `failure`、`system` は `permission_denied` だけを見て他を捨てる、`user` などは `default:` で捨てる (AD-020 / H-06 の注記)
@@ -44,10 +44,10 @@
 | IX (main をブロックしない) | ✅ | 本文は port を通り main を経由しない (AD-034 / AD-043)。main は変えない |
 | X (正本は Claude Code) | ✅ | 表示は SDK のメッセージから導くだけ。transcript を書き換えない |
 | XI (観測可能な垂直スライス) | ✅ | tool の結果と Hook / task の行は component テストと実機の目視 (quickstart V-4) で観測できる |
-| XII (ui-coverage) | ✅ | 本 feature が対応表と検査を作る。本 feature 自身が足す表示 (tool の結果・event の行) は対応表の行として同じ PR に入る |
+| XII (ui-coverage) | ✅ | 本 feature が対応表と検査を作る。本 feature 自身が足す表示 (tool の結果・システムイベントの行) は対応表の行として同じ PR に入る |
 | XIII (element 優先) | ✅ | システムイベントの行と密度の切り替えの候補を registry で照合する (research R-06 / tasks)。独自のトークンを足さない |
 | XIV (glossary) | ✅ | 用語 (割当の 3 種類、transcript の情報密度、システムイベントの行) を glossary に先に足す |
-| XV (Multi-language) | ✅ | 新しい文言 (event の状態の訳、密度) は `labels.ts` に置く |
+| XV (Multi-language) | ✅ | 新しい文言 (システムイベントの状態の訳、密度) は `labels.ts` に置く |
 
 Constitution 自体の変更: AD-044 を起こして利用者が accepted にしてから、XII / XIII を MINOR (v1.3.0) で改める (research R-10。利用者の決定 2026-10-03)。
 
@@ -132,12 +132,12 @@ Grep "011-ui-coverage|\bO-2\b|ui-coverage" (docs / .specify / tests / specs / sc
 
 ### 実行中の tool の結果と Hook / task (US-2)
 
-- domain: `tool-result.ts` (新設) に結果の取り出し (`transcript.ts:230-252` から移す) と `withToolResult`。`system-event.ts` (新設) に `toSystemEventMessage(msg): TranscriptMessageDTO | null` と `mergeSystemEvent(prev, next)` (data-model §2)。`transcript.ts` は過去ログで同じ関数を使い、同じ id の後続を合成する
+- domain: `tool-result.ts` (新設) に結果の取り出し (`transcript.ts:230-252` から移す) と `withToolResult` / `withToolResults`。`system-event.ts` (新設) に `toSystemEventMessage(msg): TranscriptMessageDTO | null` と `mergeSystemEvent(prev, next)` (data-model §2)。`transcript.ts` は過去ログで同じ関数を使い、同じ id の後続を合成する
 - agents: `sdk-agent-session.ts` の switch に `user` (tool_result のブロックだけを見る。本文は renderer に送らない) と `system` の Hook / task の分岐。結果待ちの対応は data-model §3 (`run()` の closure、user メッセージ 1 つにつき送り直し 1 回)。`post` に渡す kind と query の options は変えない
 - renderer:
-  - `isEventPart` (domain か `features/chat` の純関数) で `event` の part を検証する。実行中の decoder (`session-event-decoder.ts`) と、過去ログの frame の受け口 (`useTranscript.ts:123`。今はキャストだけ) の両方で使う
-  - 実行中の store の upsert は、event のメッセージを `mergeSystemEvent` で合成する。行の無い id への名前の無い更新は捨てる
-  - `convert.ts` は event のメッセージを `role: 'assistant'` の data part (`name: 'system-event'`) に写す (system ロールは text 1 つしか受けない。research R-04)。`thread.aui.tsx` の data part の分岐で、システムイベントの行を描く (アイコン + 状態の文言 + 名前。名前は状態の文言と見た目で分けたテキストノード)。終わりの来ない行は、セッションが終了・失敗した後と過去ログで「結果不明」。Hook の失敗の行に案内の文言。行の element は registry の候補を照合して決める (tasks の最初で記録)
+  - `isSystemEventPart` (`features/chat/transcript-guard.ts`) で `system-event` の part を検証する。実行中の decoder (`session-event-decoder.ts`) と、過去ログの frame の受け口 (`useTranscript.ts:123`。今はキャストだけ) の両方で使う
+  - 実行中の store の upsert は、system-event のメッセージを `mergeSystemEvent` で合成する。行の無い id への名前の無い更新は捨てる
+  - `convert.ts` は system-event のメッセージを `role: 'assistant'` の data part (`name: 'system-event'`) に写す (system ロールは text 1 つしか受けない。research R-04)。`thread.aui.tsx` の data part の分岐で、システムイベントの行を描く (アイコン + 状態の文言 + 名前。名前は状態の文言と見た目で分けたテキストノード)。終わりの来ない行は、セッションが終了・失敗した後と過去ログで「結果不明」。Hook の失敗の行に案内の文言。行の element は registry の候補を照合して決める (tasks の最初で記録)
 - Subagent: `tool-registry.aui.tsx` に `Agent`、`tool-args.ts` の parse を `AgentInput` の形にも当てる
 
 ### transcript の情報密度 (US-3)
@@ -148,7 +148,7 @@ Grep "011-ui-coverage|\bO-2\b|ui-coverage" (docs / .specify / tests / specs / sc
 
 ### 直近の活動 (US-4)
 
-- `session-view.ts` に `summarizeToolInput` (data-model §4)。`deriveActivity` の tool の分岐と承認待ちの分岐で使い、`toActivityLine` を通す。`deriveActivity` は末尾から遡って event の行と結果だけのメッセージを読み飛ばす
+- `session-view.ts` に `summarizeToolInput` (data-model §4)。`deriveActivity` の tool の分岐と承認待ちの分岐で使い、`toActivityLine` を通す。`deriveActivity` は末尾から遡ってシステムイベントの行と結果だけのメッセージを読み飛ばす
 
 ### 記録の追随と Constitution
 
@@ -162,12 +162,12 @@ Grep "011-ui-coverage|\bO-2\b|ui-coverage" (docs / .specify / tests / specs / sc
 
 **AD-044「ui-coverage 対応表の割当と機械照合」を proposed で起こし、利用者が accepted にする** (Constitution の改定手順 1。design-gate R1 analyze C1 / architecture H-004)。中身は research R-10。Constitution XII / XIII の改定 (v1.3.0) はこの ADR を根拠にする。
 
-ほかの決定は ADR を要しない: `event` の part は AD-034 の DTO の variant を足すだけで取得経路・プロセス境界を変えない。tool の結果を同じ id で送り直すのは X-1 の「メッセージ単位で更新する」(live-message.ts の注記) の範囲。query の options のキー集合 (AD-041 (g)) は変えない。AD-019 / AD-020 の Open Questions への回答は AD-044 に、AD-035 Trade-off への回答は roadmap・charter に記録し、accepted の本文は変えない。
+ほかの決定は ADR を要しない: `system-event` の part は AD-034 の DTO の variant を足すだけで取得経路・プロセス境界を変えない。tool の結果を同じ id で送り直すのは X-1 の「メッセージ単位で更新する」(live-message.ts の注記) の範囲。query の options のキー集合 (AD-041 (g)) は変えない。AD-019 / AD-020 の Open Questions への回答は AD-044 に、AD-035 Trade-off への回答は roadmap・charter に記録し、accepted の本文は変えない。
 
 ## 機械強制の変更
 
 - `check.mjs` 項目 21 (新設。Principle XII)。pending を持たず、発火のテストを置く。項目の数が 20 → 21 になるので、`docs/discovery.md` の「20 項目」の記述と、`scripts/rules` の期待表が項目の数を持つならそれを直す (tasks で確かめる)
-- `TRANSCRIPT_PART_FIELDS` に `event` (003 SC-009 の台帳 / `transcript-schema.test.ts` が自動で効く)
+- `TRANSCRIPT_PART_FIELDS` に `system-event` (003 SC-009 の台帳 / `transcript-schema.test.ts` が自動で効く)
 - reviewers.yml / registry / cl-pr-gate の候補の一覧 (R-09)
 
 ## Risks / 未確定
@@ -190,10 +190,14 @@ scripts/ui-coverage/coverage.mjs                     (新設)
 scripts/constitution/check.mjs                       (項目 21)
 tests/ui-coverage/coverage.test.ts / item21.test.ts  (新設)
 src/renderer/src/features/chat/labels.ts             (新設。密度・システムイベントの行の文言)
-src/renderer/src/features/chat/useTranscript.ts      (過去ログの event の part の検証)
-src/renderer/src/features/session/running-session-store.ts (event の合成)
-src/domain/session/transcript-dto.ts                 (event の variant)
+src/renderer/src/features/chat/useTranscript.ts      (過去ログの system-event の part の検証)
+src/renderer/src/features/session/running-session-store.ts (system-event の合成)
+src/domain/session/transcript-dto.ts                 (system-event の variant)
 src/domain/session/system-event.ts (+ .test.ts)      (新設)
+src/agents/live-tool-results.ts (+ .test.ts)         (新設。実行中の tool の結果待ちの表。data-model §3)
+src/renderer/src/features/chat/transcript-guard.ts (+ .test.ts) (新設。isSystemEventPart と tool-call の result の検証)
+src/renderer/src/features/chat/transcript-context.ts (新設。密度とセッションの状態の context)
+src/renderer/src/features/chat/TranscriptDensityToggle.tsx (新設。密度の切り替え)
 src/domain/session/tool-result.ts (+ .test.ts)       (新設。transcript.ts から移す)
 src/domain/session/transcript.ts / live-message.ts
 src/agents/sdk-agent-session.ts (+ test)

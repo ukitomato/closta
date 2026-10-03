@@ -1320,8 +1320,15 @@ function splitTopLevel(text) {
   const found = []
   const text = {}
   for (const [key, file] of Object.entries(inputs)) {
-    if (existsSync(file)) text[key] = readFileSync(file, 'utf8')
-    else found.push(`${file}  検査の入力が無い (検査対象なしでは通さない。Principle XII)`)
+    if (!existsSync(file)) {
+      found.push(`${file}  検査の入力が無い (検査対象なしでは通さない。Principle XII)`)
+      continue
+    }
+    try {
+      text[key] = readFileSync(file, 'utf8')
+    } catch (e) {
+      found.push(`${file}  検査の入力を読めない: ${e instanceof Error ? e.message : String(e)}`)
+    }
   }
   let note = ''
   if (found.length === 0) {

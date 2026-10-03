@@ -13,7 +13,7 @@
 - [x] **SH-001** [SH] **glossary を追随させる** (Principle XIV。FR-015): ui-coverage 対応表 (割当の 3 種類、行の Tier の決め方、ToolFallback と Tier B / C)、transcript の情報密度 (監視ビューの行の密度と区別。Counterexamples)、システムイベントの行 (状態を保持しない・1 つの Hook / task で 1 行)、Subagent (`Agent` / `Task`)、Hook / Background task / Tool group の見出し
 - [x] **SH-002** [SH] **element の照合を記録する** (Principle XIII。research R-06 / plan US-2): システムイベントの行と transcript の密度の切り替えについて、assistant-ui の registry の候補を実名で照合し、採否と理由を research に追記する。assistant-ui の system ロールの制約 (text 1 つ) を前提に入れる。独自のトークンを足さない
 - [x] **SH-003** [SH] **AD-044 を proposed で起こす** (FR-016 / research R-10): 割当の 3 種類と後続 ID の読み方、M3 の完了の条件、対応表の節と機械照合の範囲、行の Tier の決め方、ToolFallback と Tier、対応表の書式の正本、AD-019 / AD-020 の Open Questions への回答。**利用者に accepted にしてもらう** (SH-090 の前提)
-- [x] **BE-001** [BE] `transcript-dto.ts` — `system-event` の variant (`opens` と任意の `status` を含む) と `EventStatus`、`TRANSCRIPT_PART_FIELDS['system-event']`、`id` の注記 (合成 id の接頭辞) (data-model §2)。003 SC-009 の台帳 (`transcript-schema.test.ts`) が `system-event` で通ること
+- [x] **BE-001** [BE] `transcript-dto.ts` — `system-event` の variant (`opens` と任意の `status` を含む) と `SystemEventStatus`、`TRANSCRIPT_PART_FIELDS['system-event']`、`id` の注記 (合成 id の接頭辞) (data-model §2)。003 SC-009 の台帳 (`transcript-schema.test.ts`) が `system-event` で通ること
 
 ## US-1 — SDK が emit する情報のどれがどこに表示されるかが分かる (P1)
 
@@ -32,7 +32,7 @@
   - 件数の集計 (割当の種類 × Tier、後続 ID ごとと milestone、M3 の完了の条件の件数)
 - [x] **BE-012** [BE] `scripts/constitution/check.mjs` — 項目 21 (Principle XII)。pending を持たず、入力のファイルが無ければ違反。通ったときに件数を出す。**入力を差し替える口は足さない** (環境変数も引数も読まない。design-gate R2 platform-boundary L-102 / architecture L-103)。`tests/ui-coverage/item21.test.ts` は一時ディレクトリにリポジトリの形 (scripts・docs・node_modules の SDK の 3 ファイル) を組み、`cwd` を変えて `check.mjs` を呼び、崩した対応表で `[VIOLATE] #21` と非 0 の終了コード (SC-002 / AD-027)。`docs/discovery.md` の「20 項目」と、`scripts/rules` が項目の数を持つならそれを直す
 - [x] **SH-010** [SH] **後続 feature を roadmap に登録する** (FR-004 / research R-11): M3 に O-4 / O-5 / O-6 の行 (domain `ui`、依存は O-2、各行に対応表の割当の範囲。O-4 に task の進捗、O-6 に一般の Hook と `includeHookEvents` の ADR・Background task の一覧の要否・後から背景に移った task・B 節の機械照合)。「順」の列は O-4〜O-6 を 13〜15 とし、M4 / M5 を 16〜19 に振り直す。D-1 の依存は O-3 のまま (M3 の完了は待たない) と注記する (design-gate R2 architecture L-105)。`_overview.md` の Feature 帰属の表と M3 の範囲、M3 の達成状態の読み方 (AD-044 の条件) も同じコミットで
-- [x] **SH-011** [SH] **`docs/ui-coverage.md` を書く** (FR-001 / FR-002 / data-model §1): 凡例 (書式の正本・Tier の決め方・SDK を上げたときの手順・機械照合の外の節の理由)、A〜F 節。A・C・E 節の行は BE-010 の parse の出力から起こし (parse の正しさは BE-011 の独立した正解で確かめる)、E 節の実数を research R-01 と quickstart V-1 に記録する。割当は US-2〜US-4 で足した表示 (tool の結果・event の行・Subagent の `Agent`) を含め、Hook / task の経路は「実行中」(過去ログは未確認 V-4) とする。plan の「上流からの申し送り」#3・#4・#5・#15・#16・#18〜#24 の各行の扱いを反映する。項目 21 が ok になること
+- [x] **SH-011** [SH] **`docs/ui-coverage.md` を書く** (FR-001 / FR-002 / data-model §1): 凡例 (書式の正本・Tier の決め方・SDK を上げたときの手順・機械照合の外の節の理由)、A〜F 節。A・C・E 節の行は BE-010 の parse の出力から起こし (parse の正しさは BE-011 の独立した正解で確かめる)、E 節の実数を research R-01 と quickstart V-1 に記録する。割当は US-2〜US-4 で足した表示 (tool の結果・システムイベントの行・Subagent の `Agent`) を含め、Hook / task の経路は「実行中」(過去ログは未確認 V-4) とする。plan の「上流からの申し送り」#3・#4・#5・#15・#16・#18〜#24 の各行の扱いを反映する。項目 21 が ok になること
 - [x] **SH-012** [SH] **element の Tier B / C の再棚卸し** (FR-005 / research R-08): registry の一覧を web の読み取りだけで取り直し (CLI で add しない。package.json / lockfile の差分 0)、Tier A 35 と PLAN.md の Tier B / C の名前を引いた残りを分類して F 節に書く。AD-019 の Open Questions と ui charter :194 に AD-044 で答える。registry が取れなければ未確認として記録する (RK-06)
 - [x] **SH-013** [SH] **`ui-coverage-reviewer` を組み込む** (FR-006 / research R-09): `/cl-add-reviewer ui-coverage-reviewer`。観点は判断を要するものだけ。reviewers.yml (gates: pr-gate / research R-09 の auto_invoke_patterns)、registry の `invoked_by: [pr-gate]`、cl-pr-gate の候補の一覧、reviewer-base の担当表 (G)。reviewers.yml:101 のコメントを消す。quickstart V-5 で起動されることを確かめる (SC-007)
 
@@ -87,7 +87,7 @@
 
 ## US-4 — 監視ビューの直近の活動が tool ごとに要点だけを出す (P3)
 
-**Goal**: `summarizeToolInput` と event の読み飛ばし (spec US-4 / FR-014)。
+**Goal**: `summarizeToolInput` とシステムイベントの行の読み飛ばし (spec US-4 / FR-014)。
 
 **Independent Test**: 純関数の単体。
 

@@ -37,26 +37,26 @@
 export const LOWER_BOUNDS = Object.freeze({ A: 39, C: 45, E: 38 })
 
 /** A〜E (と A') の列。 */
-export const ROW_COLUMNS = Object.freeze(['識別子', '判別子', 'Tier', '割当', '経路', '備考'])
+const ROW_COLUMNS = Object.freeze(['識別子', '判別子', 'Tier', '割当', '経路', '備考'])
 
 /** F の列。 */
-export const ELEMENT_COLUMNS = Object.freeze(['element', 'Tier', '使い道', '備考'])
+const ELEMENT_COLUMNS = Object.freeze(['element', 'Tier', '使い道', '備考'])
 
 /** 対応表に必ずある節。 */
-export const SECTIONS = Object.freeze(['A', 'B', 'C', 'D', 'E', 'F'])
+const SECTIONS = Object.freeze(['A', 'B', 'C', 'D', 'E', 'F'])
 
 /** 割当の書式を検査する節 (F は element の分類で、表示の割当の対象ではない)。 */
-export const ASSIGNMENT_SECTIONS = Object.freeze(['A', "A'", 'B', 'C', 'D', 'E'])
+const ASSIGNMENT_SECTIONS = Object.freeze(['A', "A'", 'B', 'C', 'D', 'E'])
 
-export const TIERS = Object.freeze(['A', 'B', 'C'])
+const TIERS = Object.freeze(['A', 'B', 'C'])
 
-export const PATHS = Object.freeze(['実行中', '過去ログ', '両方', 'なし'])
+const PATHS = Object.freeze(['実行中', '過去ログ', '両方', 'なし'])
 
 /** 割当の種類 (件数の集計の鍵)。 */
-export const ASSIGNMENT_KINDS = Object.freeze(['実装済み', '後続', '表示不要'])
+const ASSIGNMENT_KINDS = Object.freeze(['実装済み', '後続', '表示不要'])
 
 /** 汎用の表示。これだけで `実装済み` にできるのは Tier B / C の行に限る (FR-002)。 */
-export const GENERIC_ELEMENT = 'ToolFallback'
+const GENERIC_ELEMENT = 'ToolFallback'
 
 /* ── .d.ts の読み取り ─────────────────────────────────────────────── */
 
@@ -64,7 +64,7 @@ export const GENERIC_ELEMENT = 'ToolFallback'
  * コメントを空白に置き換える (文字列リテラルの中の `//` は残す)。
  * JSDoc に `subtype: 'x'` のような例が書かれても拾わないため。
  */
-export function stripComments(source) {
+function stripComments(source) {
   let out = ''
   let i = 0
   const n = source.length
@@ -144,7 +144,7 @@ function escapeRegExp(value) {
  * 型エイリアス `name` の右辺 (`=` の後ろから深さ 0 の `;` の前まで)。無ければ null。
  * `export declare type` (sdk.d.ts) と `export type` (sdk-tools.d.ts) の両方を読む。
  */
-export function typeAliasBody(dts, name) {
+function typeAliasBody(dts, name) {
   const code = strippedOf(dts)
   const head = new RegExp(
     String.raw`(?:^|[\s;])(?:export\s+)?(?:declare\s+)?type\s+${escapeRegExp(name)}\s*=`,
@@ -179,7 +179,7 @@ export function parseSdkMessageUnion(dts) {
 }
 
 /** C 節の集合から外すメンバー (入力型ではない)。 */
-export const TOOL_INPUT_EXCLUDED = Object.freeze(['ToolOutputSchemas'])
+const TOOL_INPUT_EXCLUDED = Object.freeze(['ToolOutputSchemas'])
 
 /** C 節の集合: `ToolInputSchemas` の union のメンバー (`ToolOutputSchemas` を除く)。 */
 export function parseToolInputs(toolsDts) {
@@ -264,7 +264,7 @@ export function parsePackageVersion(packageJson) {
 /* ── markdown の表 ────────────────────────────────────────────────── */
 
 /** 行を `\|` 以外の `|` で分け、両端の空セルを落とす。 */
-export function splitRow(line) {
+function splitRow(line) {
   const cells = []
   let current = ''
   const body = line.trim()

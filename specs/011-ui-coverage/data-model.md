@@ -64,11 +64,11 @@ part の type は `system-event` (glossary の「システムイベントの行�
     /** Hook: hook_event (SessionStart など) / task: task_type。無ければ ''。同じ正規化。 */
     readonly detail: string
     /** 無ければ null (task_updated の patch.status は任意。design-gate R2 analyze N1)。 */
-    readonly status: EventStatus | null
+    readonly status: SystemEventStatus | null
   }
 ```
 
-- `EventStatus` (理由キー。訳は renderer の `features/chat/labels.ts`):
+- `SystemEventStatus` (理由キー。訳は renderer の `features/chat/labels.ts`):
   - Hook: `started` (hook_started) / `succeeded` / `failed` / `cancelled` (hook_response の `outcome`)
   - task: `pending` / `running` / `completed` / `failed` / `killed` / `paused` / `stopped` (task_started は `running`、task_updated の `patch.status`、task_notification の `status`)
   - 値があるのに知らない値は `unknown`。値が無いときは `null`
@@ -103,7 +103,7 @@ part の type は `system-event` (glossary の「システムイベントの行�
 - `pendingToolCalls: Map<toolUseId, messageId>` と `lastMessages: Map<messageId, TranscriptMessageDTO>` (結果待ちの tool_use を含むメッセージだけ)
 - `toolCallId` が `''` の tool_use は登録しない
 - `user` メッセージを受けたら、その中の `tool_result` ブロックをまとめて処理する:
-  1. 結果ごとに `toolUseId` で `messageId` を引き、domain の純関数 `withToolResult(dto, toolUseId, block)` で part を埋める
+  1. 結果ごとに `toolUseId` で `messageId` を引き、domain の純関数 `withToolResults(message, results, maxTotalBytes)` で part を埋める (1 件ずつは `withToolResult(message, result)`。`src/domain/session/tool-result.ts`)
   2. 影響を受けたメッセージを **user メッセージ 1 つにつき 1 回だけ** 送り直す (並列の tool の結果が 1 つの user メッセージで来ても送り直しは 1 回)。結果待ちが 0 になったメッセージは両方の Map から消す
   3. 引けない結果は、結果だけの tool-call のメッセージを `result:<toolUseId>` で送る
   4. `user` メッセージの `tool_result` 以外のブロック (本文) は送らない

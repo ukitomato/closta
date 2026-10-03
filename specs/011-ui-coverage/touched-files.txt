@@ -15,6 +15,7 @@ docs/glossary.md
 docs/prompts.md
 docs/roadmap.md
 docs/ui-coverage.md
+eslint.config.mjs
 scripts/constitution/check.mjs
 scripts/ui-coverage/coverage.mjs
 specs/003-ui-transcript-rendering/data-model.md

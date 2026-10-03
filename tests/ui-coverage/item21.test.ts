@@ -119,11 +119,14 @@ describe('Constitution 検証の項目 21 (Principle XII)', () => {
     expect(added).toEqual(['#21'])
   }, 120_000)
 
-  it('対応表が無いと、ファイル名を示して違反にする (pending にしない)', () => {
+  it('対応表と SDK の型定義が無いと、ファイル名を示して違反にする (pending にしない)', () => {
+    // 1 回の起動で両方を確かめる (プロセスの起動が重いため)。SDK だけを特別扱いする退行も拾う。
     rmSync(join(root, 'docs/ui-coverage.md'), { force: true })
+    rmSync(join(root, SDK_DIR, 'sdk.d.ts'), { force: true })
     const result = runCheck()
     expect(result.output).toMatch(/^\[VIOLATE\] #21 /m)
     expect(result.output).toContain('docs/ui-coverage.md  検査の入力が無い')
+    expect(result.output).toContain(`${SDK_DIR}/sdk.d.ts  検査の入力が無い`)
     expect(result.output).not.toMatch(/^\[pending\] #21 /m)
     expect(result.status).not.toBe(0)
   }, 60_000)
