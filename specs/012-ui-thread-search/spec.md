@@ -5,7 +5,7 @@ domain: ui
 domain_selected_by: user
 targets: both
 targets_selected_by: user
-status: drafting
+status: tasking
 bf_ids: []
 sf_ids: []
 linear: null
@@ -27,8 +27,10 @@ linear: null
 
 - **Thread search**: セッション一覧を、題・要約・最初のプロンプト・ブランチ・タグ・作業フォルダの表示名で絞り込む。
 - **会話内検索**: 開いている transcript の本文を検索し、一致した箇所へ移る。
-- **Command palette**: キーボードだけで、画面の移動・セッションを開く・起動ダイアログ・会話内検索などを呼び出す。
-- **Empty state**: 一覧・検索結果・transcript が空のとき、なぜ空かと次の操作を示す。
+- **Command palette**: キーボードだけで、セッションを開く・新規起動・設定の項目・会話内検索などを呼び出す。
+- **Empty state**: 検索の結果・palette の候補・再利用率の記録が空のとき、なぜ空かと次の操作を示す (シェルの空の状態は O-7)。
+
+**O-7 (アプリのシェル。[spec 013](../013-ui-app-shell/spec.md)) の上に作る。** 置き場所は O-7 の語彙 (AD-046 Decision 6) で書く: Thread search はサイドバーの過去のセッションの区画、会話内検索は中央のヘッダ、Command palette はアプリ全体のダイアログ、再利用率は起動ダイアログのプリセットの欄。
 - **再利用率の計測経路** (X-4 からの義務): 起動がプリセット経由か手動かを、日ごとの回数だけローカルに記録し、プリセットの欄に直近 30 日の内訳を出す。
 - **i18n リソース化の判断** (O-1 からの義務 (1)): 判断を ADR (proposed) に記録する。
 
@@ -37,8 +39,8 @@ linear: null
 ## 本 feature の位置づけ
 
 - **範囲を分ける (未承認)。** 入力の表示 7 種と義務 3 つを 1 spec に入れると FR 20 を超える。本 feature は「探す」(Thread search・会話内検索・Command palette・Empty state) と義務 (X-4) と義務 (O-1) (1) に絞り、残りを 2 つの後続 feature に分けて roadmap に登録する (FR-016):
-  - **O-7 (新規・M3・domain `session`)**: 並列時の滑らかさの実機計測 — 義務 (O-1 から) (2) の (a)〜(d) をそのまま移す。(a) は perf の出力の許可リスト (O-1 SC-005) の変更で利用者の承認が要り、(d) の実機計測ハーネスの ADR を先に起こす必要があり、計測そのものは実機でしか行えない。「探す」と独立に進められる
-  - **O-8 (新規・M3・domain `ui`)**: 会話の時間と活動の可視化 — conversation map・message timing・活動の heat graph (と、対応表 F 節で O-3 に預けた Activity graph / Trace waterfall の判断)。message timing はメッセージの時刻 (`createdAt`。今は過去ログ・実行中とも `null`) を agents / domain の変換で埋める必要があり、session の変換の契約に触れる
+  - **O-8 (新規・M3・domain `session`)**: 並列時の滑らかさの実機計測 — 義務 (O-1 から) (2) の (a)〜(d) をそのまま移す。(a) は perf の出力の許可リスト (O-1 SC-005) の変更で利用者の承認が要り、(d) の実機計測ハーネスの ADR を先に起こす必要があり、計測そのものは実機でしか行えない。「探す」と独立に進められる
+  - **O-9 (新規・M3・domain `ui`)**: 会話の時間と活動の可視化 — conversation map・message timing・活動の heat graph (と、対応表 F 節で O-3 に預けた Activity graph / Trace waterfall の判断)。message timing はメッセージの時刻 (`createdAt`。今は過去ログ・実行中とも `null`) を agents / domain の変換で埋める必要があり、session の変換の契約に触れる
 - **domain は `ui`、ただし session の起動の経路を 1 か所広げる (未承認)。** 再利用率の記録には「この起動がプリセット経由か」を renderer から main に渡す必要がある。起動の IPC の入力に起動元 (`preset` / `manual`) を 1 つ足し、main の永続化層に日ごとの回数を書く。KPI の持ち主は session charter で、計測経路を O-3 が作るのは AD-041 (h) の指名による
 - **検索は renderer の中で行う。** Thread search は一覧に既にある要約行 (`SessionSummaryDTO`) を絞り込むだけで、transcript の本文を横断して読まない (本文の横断検索は下の Out of Scope)。会話内検索は開いている transcript (renderer が持つメッセージ) だけを見る。新しい IPC のチャネル・preload の関数は足さない (再利用率の読み出しを除く。FR-013)
 - **i18n はリソース化しない (未承認)。** 判断を ADR (proposed) に記録し、利用者が accepted にした後で Constitution XV の字面を改める。`running-session-store.ts` の切り出しは「i18n リソース化の前に済ませる」とされていたが、リソース化しないので本 feature の前提ではない (持ち主は roadmap の記録のまま)
@@ -49,8 +51,8 @@ AGENTS.md が人間の承認を要求する判断と、domain をまたぐ判断
 
 | # | 判断 | 仮採用した案 | 代わりの案 |
 |---|---|---|---|
-| U-1 | O-3 の範囲の分割 (domain の分解に当たる) | 「探す」+ 義務 (X-4) + 義務 (O-1) (1) を O-3 に残し、義務 (O-1) (2) を O-7 (`session`)、conversation map / message timing / heat graph を O-8 (`ui`) に分ける | 全部を O-3 に入れる (FR 20 を超える) / perf だけ分ける |
-| U-2 | ui の feature が session の起動の IPC の入力を広げてよいか | 起動元 (`preset` / `manual`) の 1 フィールドだけを足す。値は列挙の 2 値で、main は未知の値を拒否する | 再利用率を renderer の中だけで数える (再起動で消え、KPI の計測経路にならない) |
+| U-1 | O-3 の範囲の分割 (domain の分解に当たる) | 「探す」+ 義務 (X-4) + 義務 (O-1) (1) を O-3 に残し、義務 (O-1) (2) を O-8 (`session`)、conversation map / message timing / heat graph を O-9 (`ui`) に分ける | 全部を O-3 に入れる (FR 20 を超える) / perf だけ分ける |
+| U-2 | ui の feature が session の起動の IPC の入力を広げてよいか | 起動元 (`preset` / `manual`) の 1 フィールドだけを足す。値は列挙の 2 値で、main は未知の値を記録しない (起動は拒否しない。FR-010) | 再利用率を renderer の中だけで数える (再起動で消え、KPI の計測経路にならない) |
 | U-3 | Principle XV の i18n リソース化 (Constitution Principle の採否) | リソース化しない。日本語単一を維持し、ADR (AD-045、proposed) に再検討の条件を書く。Constitution XV の改定 (PATCH) は accepted の後 | リソース化する (全 feature の文言を移す大きな作業になり、`running-session-store.ts` の切り出しが先に要る) |
 | U-4 | 再利用率のローカル利用ログの置き場と保持 | ユーザデータディレクトリの JSON 1 つに、日ごとの回数だけを 90 日分持つ (FR-012) | 起動ごとの行を追記するログ (時刻・プリセット名が残る) |
 
@@ -107,7 +109,7 @@ AGENTS.md が人間の承認を要求する判断と、domain をまたぐ判断
 
 利用者は Command palette を開き、語で操作やセッションを選んで実行する。
 
-**Why this priority**: 画面の移動・セッションを開く・検索の呼び出しが、それぞれ別の場所にある。US-1 / US-2 が無くても価値はあるが、それらの入口を 1 つにまとめるので P2 とする。
+**Why this priority**: セッションを開く・新規起動・設定の項目・検索の呼び出しが、サイドバー・中央のヘッダ・設定のダイアログに分かれている。US-1 / US-2 が無くても価値はあるが、それらの入口を 1 つにまとめるので P2 とする。
 
 **Independent Test**: Command palette の component テストで、開閉・絞り込み・キーボード操作・実行・フォーカスの戻りを確かめる。
 
@@ -147,7 +149,7 @@ AGENTS.md が人間の承認を要求する判断と、domain をまたぐ判断
 - 検索語や本文に制御文字・双方向制御文字・HTML が含まれる → 強調は DOM を書き換えずに掛け、HTML として解釈しない (`dangerouslySetInnerHTML` を使わない)。検索語の正規化で制御文字を除く
 - 非常に長い transcript (数千メッセージ) で検索する → 入力のたびに全文を走査しない (FR-005 の間引き)
 - 会話内検索の一致が、ストリーミング中で本文が増えている最中のメッセージにある → 件数は確定したメッセージと同じ規則で数え、現在の位置は奪わない
-- Command palette からセッションを開いたが、そのセッションが一覧から消えていた → 一覧と同じ「見つからない」扱いにする (既存の取得の失敗の表示)
+- Command palette からセッションを開いたが、そのセッションが一覧から消えていた → サイドバーで消えた行を選んだときと同じ (O-7: 選択が外れ、中央は空の状態)
 - Ctrl+K / Ctrl+F が composer のテキスト入力中に押された → IME の変換中でなければ palette / 検索を開く。変換中は何もしない
 - 起動元の値が未知・欠けている (古い renderer・改ざん) → 起動は拒否せず、記録だけを行わない (起動の可否と計測を結び付けない)
 - 日付の境界はローカルの暦日で数える。時計が戻った (日付が過去になった) → その日の回数に足す。90 日より前の日は書き込み時に消す
@@ -159,7 +161,7 @@ AGENTS.md が人間の承認を要求する判断と、domain をまたぐ判断
 
 #### Thread search (US-1)
 
-- **FR-001**: セッション一覧は検索欄を持ち、入力した語に一致するセッションだけを出さなければならない。
+- **FR-001**: サイドバーの過去のセッションの区画 (O-7) は、区画の見出しの下に検索欄を持ち、入力した語に一致するセッションだけを出さなければならない。
   - 対象のフィールドは `SessionSummaryDTO` の `customTitle` / `summary` / `firstPrompt` / `gitBranch` / `tag` / `cwdDisplay` / `targetLabel`。transcript の本文は読まない
   - 一致の無いグループ (フォルダ / 保留 / 未登録) は見出しごと出さない。一致の件数を出す
   - 既存の所在・フォルダの絞り込み (R-2 FR-040) と AND で組み合わせ、同じく IPC を往復させない。一致 0 件は既存の `filtered-out` の空の表示に合流させる
@@ -172,11 +174,12 @@ AGENTS.md が人間の承認を要求する判断と、domain をまたぐ判断
 #### 会話内検索 (US-2)
 
 - **FR-003**: transcript は会話内検索を持たなければならない。
-  - 開く: 検索のボタンと Ctrl+F (transcript の画面にいるとき)。閉じる: Esc と閉じるボタン
+  - 置き場: 中央のヘッダ (O-7) に検索のボタン、開くと中央のヘッダの下に検索のバー
+  - 開く: 検索のボタンと Ctrl+F (中央に会話を出しているとき)。閉じる: Esc と閉じるボタン
   - 一致の件数と現在の位置 (n / m) を出し、次 / 前 (Enter / Shift+Enter とボタン) で移る。端では反対の端に戻る
   - 移った箇所は、仮想化で描かれていなくても描かせて画面に入れる。一致した語を強調する
   - 過去ログと実行中のどちらでも使える。セッションを切り替えると検索は閉じる
-- **FR-004**: 会話内検索の対象は、user / assistant のメッセージの `text` part の本文に限らなければならない。tool の入力・結果、Reasoning、システムイベントの行は対象にしない [ASSUMED — 閉じた要素を開かずに強調できないため。対象を広げるかは O-8 で再検討]
+- **FR-004**: 会話内検索の対象は、user / assistant のメッセージの `text` part の本文に限らなければならない。tool の入力・結果、Reasoning、システムイベントの行は対象にしない [ASSUMED — 閉じた要素を開かずに強調できないため。対象を広げるかは O-9 で再検討]
 - **FR-005**: 会話内検索は、入力のたびに全文を同期で走査してはならない。
   - 入力は 150ms 間引いてから走査する [ASSUMED]
   - 実行中に届いたメッセージは件数に足すが、現在の位置とスクロールを奪わない (R-3 のアンカリングを壊さない)
@@ -189,21 +192,20 @@ AGENTS.md が人間の承認を要求する判断と、domain をまたぐ判断
   - 入力・候補の一覧は combobox / listbox の役割を持ち、上下キーで選び Enter で実行する
   - IME の変換中は開かない・確定しない (Principle VIII。X-2 の `isComposing` の扱いを継ぐ)
 - **FR-007**: palette の候補は、次の操作と、FR-002 で一致したセッション (一覧と稼働中の一覧の両方) でなければならない。
-  - 操作: 各画面への移動 (ナビゲーションにある画面。`stores/ui.ts` の `SCREENS` のうちナビゲーションに出るもの)、起動ダイアログを開く、会話内検索を開く (transcript の画面にいるとき)、transcript の情報密度の切り替え (同)
+  - 操作: 新規起動 (起動ダイアログを開く)、設定の各項目を開く (O-7 の設定のダイアログの 4 項目)、サイドバー / 右のペインの畳み・開き、会話内検索を開く (中央に会話を出しているとき)、transcript の情報密度の切り替え (同)
+  - セッションの候補を実行すると、サイドバーで行を選んだのと同じになる (O-7 の focus の書き手を通る)
   - 操作の一覧は 1 か所 (renderer の表) に置き、操作の名前は日本語の文言の表から取る
   - 候補は最大 50 件 [ASSUMED]。操作を先、セッションを後に並べる
 
 #### Empty state (US-1〜US-4)
 
-- **FR-008**: 次の空の状態は、なぜ空かと次の操作を 1 つの Empty state の部品で示さなければならない。
-  - セッション一覧が空 (フォルダが無い → フォルダの登録へ / フォルダはあるがセッションが無い → 起動ダイアログへ)
+- **FR-008**: 本 feature が足す次の空の状態は、なぜ空かと次の操作を Empty state の部品で示さなければならない。
   - Thread search の一致が 0 (語を消す)
   - 会話内検索の一致が 0
-  - 稼働中のセッションが無い (起動ダイアログへ)
-  - transcript にメッセージが無い
   - Command palette の候補が 0
   - 再利用率の記録が無い
-  - 部品は既存の element `EmptyState` (`components/assistant-ui/elements/empty-state.tsx`) を使う。一覧の画面の既存の空の表示 (`SessionListScreen` の `EmptyState`)・稼働中の一覧・transcript の 2 つの空の表示は、この element にそろえる (文言は変えない。次の操作が無いものに操作を足す)。新しい文言の正本は data-model の文言の表
+  - 部品は既存の element `EmptyState` (`components/assistant-ui/elements/empty-state.tsx`)。新しい文言の正本は data-model の文言の表
+  - シェルの空の状態 (中央の未選択・稼働中の区画の 0 件・右のペインの未選択) は O-7 が持つ。一覧の既存の空の表示は O-7 で区画に置かれたものをそのまま使う
 
 #### 再利用率の計測経路 (US-4)
 
@@ -235,11 +237,11 @@ AGENTS.md が人間の承認を要求する判断と、domain をまたぐ判断
   - Constitution XV の字面 (「要否は M3 までに判断する」) の改定 (PATCH) は、利用者が AD-045 を accepted にした後に行う。本 feature の PR は accepted を待つ
 - **FR-015**: 表示の追加を `docs/ui-coverage.md` に同じ PR で反映しなければならない (Constitution XII / AD-044)。
   - F 節の Thread search / Conversation search / Command palette / Empty state の使い道を本 feature の表示にする
-  - F 節で O-3 に預けた Activity graph / Heat graph / Message timing / Trace waterfall の備考を O-8 に付け替える
+  - F 節で O-3 に預けた Activity graph / Heat graph / Message timing / Trace waterfall の備考を O-9 に付け替える
   - A〜E 節の行は増えない (本 feature は SDK が emit する情報の表示を足さない)
 - **FR-016**: 導入した用語と判断を記録に反映しなければならない (Principle XIV)。
-  - roadmap: O-3 の行を本 feature の範囲に直し、義務 (O-1 から) (2) を新しい **O-7** (並列時の滑らかさの実機計測。M3・`session`・依存 O-1) に、conversation map / message timing / heat graph と本文の横断検索の要否を新しい **O-8** (会話の時間と活動の可視化。M3・`ui`・依存 O-3) に移す。system-scope の「実機計測ハーネス (`perf/`) の ADR 化」の「O-3 が持つ」を O-7 に直す。`_overview.md` の Feature 帰属の表と M3 の範囲、`docs/prompts.md` の O-3 のプロンプトも直す
-  - session charter: KPI「再利用率」の計測経路 (FR-012 / FR-013)。KPI「並列時の滑らかさ」の持ち主を O-7 に。起動の IPC の入力の起動元 (U-2)
+  - roadmap: O-3 の行を本 feature の範囲に直し、義務 (O-1 から) (2) を新しい **O-8** (並列時の滑らかさの実機計測。M3・`session`・依存 O-1) に、conversation map / message timing / heat graph と本文の横断検索の要否を新しい **O-9** (会話の時間と活動の可視化。M3・`ui`・依存 O-3) に移す。system-scope の「実機計測ハーネス (`perf/`) の ADR 化」の「O-3 が持つ」を O-8 に直す。`_overview.md` の Feature 帰属の表と M3 の範囲、`docs/prompts.md` の O-3 のプロンプトも直す
+  - session charter: KPI「再利用率」の計測経路 (FR-012 / FR-013)。KPI「並列時の滑らかさ」の持ち主を O-8 に。起動の IPC の入力の起動元 (U-2)
   - ui charter: Related Specs に O-3。Thread search と会話内検索の範囲 (本文の横断検索をしない)
   - glossary: Thread search、会話内検索、Command palette、起動元 (preset / manual)、再利用率の記録
   - discovery: `launch-usage.json` の置き場と消し方 (ファイルを消せば記録は消える)
@@ -266,10 +268,10 @@ AGENTS.md が人間の承認を要求する判断と、domain をまたぐ判断
 - **SC-001**: **一覧を絞り込める。** US-1 の AC1〜AC6 のとおりになり、FR-002 の正規化の各規則 (全角 / 半角・大文字 / 小文字・制御文字・複数語の AND) が一致の純関数の単体で通る。計測経路: 一致の純関数の単体 + 一覧の component テスト
 - **SC-002**: **会話の中を辿れる。** US-2 の AC1〜AC6 のとおりになり、仮想化の範囲の外の一致へ移れる。1,000 メッセージの transcript で、入力から件数が出るまでの走査 1 回が 50ms 以内 (jsdom の目安)。計測経路: transcript の component テスト + 走査の単体
 - **SC-003**: **palette で操作できる。** US-3 の AC1〜AC6 のとおりになり、axe の違反 0 (combobox / listbox の役割、フォーカスの戻り)。計測経路: palette の component テスト (vitest-axe)
-- **SC-004**: **空の状態が次の操作を示す。** FR-008 の各状態で Empty state の部品が出て、操作が 1 つ以上ある (記録の無い状態と一致 0 を除く)。計測経路: 各画面の component テスト
+- **SC-004**: **空の状態が次の操作を示す。** FR-008 の 4 つの状態で Empty state の部品が出て、なぜ空かを示す。Thread search の一致 0 は語を消す操作を持つ。計測経路: 各部品の component テスト
 - **SC-005**: **再利用率が記録され、秘密を含まない。** US-4 の AC1〜AC5 のとおりになり、記録のファイルのキーが FR-011 の集合 (版・日付・2 つの回数) の外に 0 件。未知の起動元で起動が拒否されない。計測経路: store の単体 (固定のキー集合のテスト) + 起動の IPC の検証の単体 + プリセットの欄の component テスト
 - **SC-006**: **境界を広げすぎない。** 追加の IPC のチャネルは FR-013 の読み出しの 1 つだけで、起動の IPC の入力の追加は起動元の 1 フィールドだけ。`SessionLaunchConfig`・`SessionEvent` の種類・query の options のキーの差分が 0。計測経路: `git diff` (quickstart。`IPC_CHANNELS` の差分が 1 件) + 本 feature で足す `IPC_CHANNELS` の集合の固定テスト (今はチャネルの集合を固定するテストが無い)
-- **SC-007**: **記録が追随する。** ADR (AD-045) が proposed で存在し、Constitution 検証の項目 21 (対応表) が通り、roadmap に O-7 / O-8 があり、O-3 の行に義務 (O-1 から) (2) が残っていない。計測経路: `node scripts/constitution/check.mjs` + quickstart の確認
+- **SC-007**: **記録が追随する。** ADR (AD-045) が proposed で存在し、Constitution 検証の項目 21 (対応表) が通り、roadmap に O-8 / O-9 があり、O-3 の行に義務 (O-1 から) (2) が残っていない。計測経路: `node scripts/constitution/check.mjs` + quickstart の確認
 
 ## Dependencies
 
@@ -277,13 +279,14 @@ AGENTS.md が人間の承認を要求する判断と、domain をまたぐ判断
 - **R-2 / R-3** ([002](../002-session-cross-folder-session-enumeration/spec.md) / [003](../003-ui-transcript-rendering/spec.md)): 一覧の要約行 (`SessionSummaryDTO`。本文を含まない FR-044)、transcript の仮想化とアンカリングを継承する
 - **X-2** ([006](../006-ui-japanese-ime-composer/spec.md)): IME の変換中の扱い (`isComposing`) を継承する
 - **X-4** ([008](../008-session-launch-settings-dialog-and-presets/spec.md)): 起動ダイアログ・プリセット・settings の store の書き込み方 (一時ファイルからの置き換え・`.bak`) を継承する。AD-041 (h) が再利用率の計測経路を O-3 に指名した
-- **O-1** ([010](../010-session-monitoring-view/spec.md)): 稼働中の一覧 (palette の候補と Empty state)
+- **O-1** ([010](../010-session-monitoring-view/spec.md)): 稼働中の一覧 (palette の候補)
+- **O-7** ([013](../013-ui-app-shell/spec.md)): シェルの面と置き場所の語彙 (AD-046。proposed)、面の状態 (focus の書き手・設定のダイアログ)、シェルの空の状態。**O-7 が先にマージされてから実装する**
 
 ## Out of Scope
 
-- transcript の本文を横断する検索 (全セッションの本文を読む) → **O-8** で要否を判断する (列挙と取得の負荷の判断を伴う。O-8 は会話の時間の情報 (`createdAt`) を変換で埋めるので、本文の取得の経路を同じ feature で見る)
-- conversation map・message timing・活動の heat graph・Activity graph・Trace waterfall → **O-8**
-- 並列時の滑らかさの実機計測 (perf の出力の許可リスト・負荷の作り方・行の切り替えの計測・実機計測ハーネスの ADR) → **O-7**
+- transcript の本文を横断する検索 (全セッションの本文を読む) → **O-9** で要否を判断する (列挙と取得の負荷の判断を伴う。O-9 は会話の時間の情報 (`createdAt`) を変換で埋めるので、本文の取得の経路を同じ feature で見る)
+- conversation map・message timing・活動の heat graph・Activity graph・Trace waterfall → **O-9**
+- 並列時の滑らかさの実機計測 (perf の出力の許可リスト・負荷の作り方・行の切り替えの計測・実機計測ハーネスの ADR) → **O-8**
 - i18n リソース化の実施 (判断はリソース化しない。FR-014)
 - `running-session-store.ts` / `RunningSessionList.tsx` の切り出し → 持ち主は roadmap の記録のまま
 - Command palette からのセッションの操作 (停止・名前の変更など) → X-6

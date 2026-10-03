@@ -36,11 +36,12 @@ interface SearchHit { readonly messageIndex: number; readonly messageId: string;
 
 | id | 文言のキー | 使える条件 | 実行 |
 |---|---|---|---|
-| `nav:<screen>` | `SCREEN_LABELS[screen]` + 「へ移動」 | ナビゲーションに出る画面 | `setScreen(screen)` |
-| `launch:open` | 起動ダイアログを開く | 常に | 起動の画面へ移り、ダイアログを開く |
-| `chat:search` | 会話内検索 | transcript を表示しているとき | §2 を開く |
-| `chat:density` | transcript の情報密度を切り替える | transcript を表示しているとき | O-2 の密度を切り替える |
-| `session:<id>` | セッションの表示名 | §1 で一致 | 過去ログ → 一覧の選択と同じ / 稼働中 → 稼働中の行の選択と同じ |
+| `launch:open` | 新しいセッションを起動 | 常に | O-7 の `launchOpen = true` |
+| `settings:<section>` | 設定: {項目の名前} | 常に | O-7 の設定のダイアログをその項目で開く |
+| `shell:sidebar` / `shell:panel` | サイドバー / 詳細を畳む・開く | 常に | O-7 の畳みを切り替える |
+| `chat:search` | 会話内検索 | 中央に会話を出しているとき (O-7 の `focus !== 'none'`) | §2 を開く |
+| `chat:density` | transcript の情報密度を切り替える | 同上 | O-2 の密度を切り替える |
+| `session:<id>` | セッションの表示名 | §1 で一致 | 過去 → `sessions.select` / 稼働中 → 稼働中の行の `select`。O-7 の focus の書き手が中央を切り替える |
 
 - 並び: 操作 → 稼働中のセッション → 一覧のセッション。最大 50 件
 - 語が空のときは操作だけを出す

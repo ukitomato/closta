@@ -14,7 +14,7 @@
 
 - `docs/decisions/0045-ui-labels-no-i18n-resources.md` が `status: proposed` (利用者が accepted にするまで Constitution XV を変えない)
 - `node scripts/constitution/check.mjs` の項目 21 が ok
-- roadmap に O-7 / O-8 の行があり、O-3 の行に義務 (O-1 から) (2) が残っていない。`#o3-kpi-smoothness` を指していたリンク (session charter・010 quickstart-results) が O-7 の行を指す
+- roadmap に O-8 / O-9 の行があり、O-3 の行に義務 (O-1 から) (2) が残っていない。`#o3-kpi-smoothness` を指していたリンク (session charter・010 quickstart-results) が O-8 の行を指す
 
 ## V-3 実機の目視 (利用者。自動の合否に含めない)
 

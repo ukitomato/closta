@@ -4,7 +4,7 @@
 
 ## R-01 範囲の分割 (spec U-1。未承認)
 
-- **Decision**: O-3 は「探す」(Thread search・会話内検索・Command palette・Empty state) と、義務 (X-4 から) の再利用率の計測経路、義務 (O-1 から) (1) の i18n の判断に絞る。義務 (O-1 から) (2) は O-7 (`session`)、conversation map / message timing / heat graph と本文の横断検索の要否は O-8 (`ui`) に移す
+- **Decision**: O-3 は「探す」(Thread search・会話内検索・Command palette・Empty state) と、義務 (X-4 から) の再利用率の計測経路、義務 (O-1 から) (1) の i18n の判断に絞る。義務 (O-1 から) (2) は O-8 (`session`)、conversation map / message timing / heat graph と本文の横断検索の要否は O-9 (`ui`) に移す
 - **Rationale**:
   - 入力の全部を入れると FR が 20 を超える (メモリの目安)。表示 7 種のうち 3 種 (map / timing / heat graph) は時刻の情報を要るが、メッセージの `createdAt` は過去ログ (`transcript.ts:279`)・実行中 (`live-message.ts:76`) とも `null` で、agents / domain の変換を変える必要がある。「探す」は renderer の中で閉じる
   - 義務 (2) は (a) が利用者の承認を要し、(d) が ADR を要り、計測は実機でしかできない。夜間には一つも完了できない。「探す」と依存が無い
