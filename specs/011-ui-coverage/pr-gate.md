@@ -1,58 +1,48 @@
-# PR Gate Round 2: ui-coverage 対応表の確立 (O-2)
+# PR Gate Round 3: ui-coverage 対応表の確立 (O-2)
 
 **Run**: 2026-10-03
 **Base**: main (merge-base 2dcc694)
-**Diff stat**: +8588 -224 over 101 files (HEAD 57fcc0b)
-**Reviewers**: security, architecture, po, ux, a11y, platform-boundary, ui-coverage (7 本。ux / a11y は reviewers.yml の修正で今回から起動)
-**起動しなかった reviewer**: database-reviewer (auto_invoke_patterns に一致する変更ファイルが無い)
-**Rule verification**: 実行せず — Round 1 以降、規則定義 (`eslint.config.mjs` / `.dependency-cruiser.js` / `scripts/constitution/**` / `tests/rule-fixtures/**` / `scripts/rules/**`) の変更 0 件。Round 1 の実行は exit 0
-**Round inheritance**: Round 1 (Critical 0, High 5) を引継ぎ
+**Diff stat**: +9057 -234 over 104 files (HEAD a28fcf9)
+**Reviewers**: security, architecture, po, ux, a11y (5 本。利用者の判断で Round 3 は変更部分に絞った)
+**起動しなかった reviewer**: platform-boundary-reviewer / ui-coverage-reviewer (reviewers_filter は start だが、利用者の判断で Round 3 は変更部分に絞った。前 round の指摘は 0 件 / Low 2 件で、どちらも a28fcf9 で対応済み。担当範囲の変更はほぼ無い)、database-reviewer (auto_invoke_patterns に一致する変更ファイルが無い)
+**Rule verification**: 実行せず — Round 1 以降、規則定義の変更 0 件 (Round 1 で exit 0)
+**Round inheritance**: Round 2 (Critical 0, High 2) を引継ぎ。Round 3 で打ち切り (利用者の判断)
 
 ## Verdict
 
-| Severity | This round | Resolved from 1 | New in 2 | Net | Suppressed by code-gate |
+| Severity | This round | Resolved from 2 | New in 3 | Net | Suppressed by code-gate |
 |---|---|---|---|---|---|
 | Critical | 0 | 0 | 0 | 0 | 0 |
-| High | 2 | 5 | 2 | 2 | 0 |
-| Medium | 13 | 10 | 13 | 13 | 0 |
-| Low | 22 | 12 | 22 | 22 | 0 |
+| High | 0 | 2 | 0 | 0 | 0 |
+| Medium | 2 | — | 2 | 2 | 0 |
+| Low | 10 | — | 10 | 10 | 0 |
 
-**Status**: PASS (Critical=0)
-**Next**: /cl-done は可能。High 2 件 (a11y) は小さく直せる
+**Status**: PASS (Critical=0, High=0)
+**Next**: /cl-done
 
-## Round 1 の High の行方
+## Round 2 の High の行方
 
-| R1 | 判定 |
+| R2 | 判定 |
 |---|---|
-| H-1 ux / a11y の配線 (architecture H-001) | resolved (残りの漏れは architecture M-101 = elements/** の手書き部分) |
-| H-2 エラー・切り詰めが Bash だけ (po H-001) | resolved (Terminal block だけ文字の印が無い = ux M-002 / po L-002 / a11y L-002) |
-| H-3 `result` の失敗の理由 (ui-coverage H-001) | resolved |
-| H-4 `informational` / `conversation_reset` の Tier (ui-coverage H-002) | resolved |
-| H-5 Task* の Tier (ui-coverage H-003) | resolved |
+| H-6 「（切り詰め）」のコントラスト (a11y H-001) | resolved |
+| H-7 密度の選択中が色だけ (a11y H-002) | resolved |
 
-## High (Round 2)
+## 残した Medium / Low (持ち主)
 
-| ID | 出所 | 内容 | 推奨 |
+| ID | 出所 | 内容 | 持ち主 |
 |---|---|---|---|
-| H-6 | a11y H-001 | 「（切り詰め）」が `text-muted-foreground` + `opacity-70` でコントラスト 2.8:1 (light) / 3.9:1 (dark)。WCAG 1.4.3 | `opacity-70` を外す (既存トークンで 4.8:1)。terminal-block も |
-| H-7 | a11y H-002 | 密度の切り替えの選択中が背景の淡い差 (≈1.1:1) だけ。WCAG 1.4.1 / 1.4.11 | `aria-pressed:font-semibold` など (先例 `SessionListScreen.tsx:645`) |
-
-## 主な Medium
-
-- ux M-001: tool の表示で結果待ち / 成功 / 結果不明の区別が無い (結果不明はシステムイベントの行にはある)
-- ux M-002 / po L-002 / a11y L-002: Terminal block だけ失敗が文字でなくアイコン
-- ux M-003 / ui-coverage L-102 / po H: TodoList / AgentPlan / Write の印のテストが無い
-- a11y M-001〜M-003: 名前の `/80` のコントラスト、切り詰めた名前の全文、行の書き換えの読み上げ
-- architecture M-101: elements/** の手書きの表示が ux / a11y の発火から外れる (O-4〜O-6 で漏れる)
-- architecture M-102: O-4 / O-5 が session の契約 (`ResultTermination`・control 経路) を変える依存が未記載
-- architecture M-H01 (system): Constitution の版の 3 点一致の検査が無い
+| M-201 | architecture | Tier A `実装済み` の行の備考で O-6 に回した残り (5 行) を項目 21 の M3 の件数が数えない | O-6 の design で D 節に行を起こすか凡例に規定 (roadmap O-6 の行に記載済みの残り自体の持ち主は O-6) |
+| M-H02 | architecture (system) | Constitution の版の 3 点一致の検査が無い | system scope。別 spec |
+| L-201 | architecture | O-6 の後続のうち session の無害化と query の options を変えるものに domain 間の依存が無い | O-6 の design |
+| L-202 | architecture | ux / a11y の発火の手書き element の列挙が明示で、新しいファイルが漏れうる | 次に elements/ を触る feature |
+| a11y L-001 / L-202 / L-201 | a11y | 密度の説明が title だけ / 成功の ✓ のコントラスト / SystemEventRow の title のテスト | O-6 |
+| po H-001 | po | TodoList のエラーのテスト | O-6 |
+| ux L-101〜L-104 | ux | 「SDK が知らない状態」の文言 / 伏せた Hook 名の見分け / 監視ビューの密度の見出し / matcher のテスト | O-6 (L-103 は O-1 の続き) |
 
 ## Track raw outputs
 
-- [security-reviewer.pr-gate.round2.md](security-reviewer.pr-gate.round2.md) — C0 H0 M0 L2 (R1 の 4 件 resolved)
-- [architecture-reviewer.pr-gate.round2.md](architecture-reviewer.pr-gate.round2.md) — C0 H0 M3 L3 (R1 の 8 件 resolved)
-- [po-reviewer.pr-gate.round2.md](po-reviewer.pr-gate.round2.md) — C0 H0 M0 L4 (R1 の 6 件 resolved)
-- [ux-reviewer.pr-gate.round2.md](ux-reviewer.pr-gate.round2.md) — C0 H0 M3 L7 (初回)
-- [a11y-reviewer.pr-gate.round2.md](a11y-reviewer.pr-gate.round2.md) — C0 H2 M4 L3 (初回)
-- [platform-boundary-reviewer.pr-gate.round2.md](platform-boundary-reviewer.pr-gate.round2.md) — C0 H0 M0 L0
-- [ui-coverage-reviewer.pr-gate.round2.md](ui-coverage-reviewer.pr-gate.round2.md) — C0 H0 M0 L2 (R1 の 10 件 resolved)
+- [security-reviewer.pr-gate.round3.md](security-reviewer.pr-gate.round3.md) — C0 H0 M0 L0 (R2 の 2 件 resolved)
+- [architecture-reviewer.pr-gate.round3.md](architecture-reviewer.pr-gate.round3.md) — C0 H0 M2 L2 (R2 の 5 件 resolved)
+- [po-reviewer.pr-gate.round3.md](po-reviewer.pr-gate.round3.md) — C0 H0 M0 L1 (R2 の 3 件 resolved)
+- [ux-reviewer.pr-gate.round3.md](ux-reviewer.pr-gate.round3.md) — C0 H0 M0 L4 (R2 の 6 件 resolved、3 件 O-6)
+- [a11y-reviewer.pr-gate.round3.md](a11y-reviewer.pr-gate.round3.md) — C0 H0 M0 L3 (R2 の 6 件 resolved、M-003 は O-6)
