@@ -6,9 +6,9 @@
 
 - `node scripts/constitution/check.mjs`: 項目 21 が ok (ok 20 / 違反 0 / 検査対象なし 1 = 項目 5、既存)
   - 行: A 39 / A' 4 / B 10 / C 45 / D 8 / E 38 / F 127
-  - 割当 × Tier: 実装済み A27 B30 C0 / 後続 A18 B45 C0 / 表示不要 A0 B24 C0
-  - 後続: I-3 (M4) 2 [Tier A 1] / O-4 (M3) 10 [Tier A 4] / O-5 (M3) 21 [Tier A 5] / O-6 (M3) 26 [Tier A 8] / X-6 (M2) 4
-  - M3 の完了の条件の残り (Tier A の後続で割当先が M3): 17
+  - 割当 × Tier: 実装済み A27 B26 C0 / 後続 A25 B42 C0 / 表示不要 A0 B24 C0
+  - 後続: I-3 (M4) 2 [Tier A 1] / O-4 (M3) 10 [Tier A 5] / O-5 (M3) 21 [Tier A 5] / O-6 (M3) 30 [Tier A 14] / X-6 (M2) 4
+  - M3 の完了の条件の残り (Tier A の後続で割当先が M3): 24 (pr-gate R1 の ui-coverage-reviewer の指摘で 7 行の Tier を A に直した後。直す前は 17)
 - `tests/ui-coverage` (coverage 48 件 / item21 2 件): 全件緑 (下の全件の単体に含む)。崩した対応表で `[VIOLATE] #21` と非 0 の終了コード
 - A・C・E 節の行の数は SDK 0.3.270 の型定義 (39 / 45 / 38) と一致。正解は TypeScript のコンパイラ API での列挙 (coverage.test.ts)
 

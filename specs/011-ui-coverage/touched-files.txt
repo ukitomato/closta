@@ -9,6 +9,7 @@ PLAN.md
 docs/decisions/0044-ui-coverage-assignment.md
 docs/discovery.md
 docs/domains/_overview.md
+docs/domains/isolation/charter.md
 docs/domains/session/charter.md
 docs/domains/ui/charter.md
 docs/glossary.md
@@ -25,6 +26,7 @@ specs/011-ui-coverage/data-model.md
 specs/011-ui-coverage/quickstart-results.md
 specs/011-ui-coverage/quickstart.md
 specs/011-ui-coverage/research.md
+specs/011-ui-coverage/spec.md
 specs/011-ui-coverage/tasks.md
 src/agents/live-tool-results.test.ts
 src/agents/live-tool-results.ts
@@ -41,10 +43,15 @@ src/domain/session/transcript-dto.ts
 src/domain/session/transcript-schema.test.ts
 src/domain/session/transcript.system-event.test.ts
 src/domain/session/transcript.ts
+src/renderer/src/components/assistant-ui/elements/agent-plan.aui.tsx
+src/renderer/src/components/assistant-ui/elements/code-diff.aui.tsx
 src/renderer/src/components/assistant-ui/elements/subagent.aui.tsx
 src/renderer/src/components/assistant-ui/elements/terminal-block.aui.tsx
 src/renderer/src/components/assistant-ui/elements/thread.aui.tsx
+src/renderer/src/components/assistant-ui/elements/todo-list.aui.tsx
+src/renderer/src/components/assistant-ui/elements/tool-fallback.aui.tsx
 src/renderer/src/components/assistant-ui/elements/tool-registry.aui.tsx
+src/renderer/src/components/assistant-ui/elements/tool-result-marks.tsx
 src/renderer/src/features/chat/ChatScreen.o2.test.tsx
 src/renderer/src/features/chat/ChatScreen.test.tsx
 src/renderer/src/features/chat/ChatScreen.tsx

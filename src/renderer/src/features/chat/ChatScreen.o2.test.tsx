@@ -135,6 +135,46 @@ describe('過去ログのシステムイベントの行 (FR-009 / SC-003)', () =
     expect(nameOf(task!)).toHaveTextContent('npm run build')
   })
 
+  it('task の種類は文言の表で出し、知らない値は識別子のまま (po L-002)', () => {
+    show([
+      eventDto('task:a', { category: 'task', name: '', detail: 'local_bash', status: 'running' }),
+      eventDto('task:b', { category: 'task', detail: 'local_agent', status: 'completed' }),
+      eventDto('task:c', { category: 'task', detail: 'remote_future', status: 'completed' }),
+      eventDto('task:d', { category: 'task', detail: 'toString', status: 'completed' }),
+      // Hook の detail (hook_event) は表を通さない。
+      eventDto('hook:h', { detail: 'local_bash' })
+    ])
+    const { container } = render(<ChatScreen />)
+    const details = rowsOf(container).map(
+      (row) => row.querySelector('[data-slot="system-event-detail"]')?.textContent
+    )
+    expect(details).toEqual([
+      'シェルのコマンド',
+      'サブエージェント',
+      'remote_future',
+      'toString',
+      'local_bash'
+    ])
+  })
+
+  it('名前の無い Hook の行は hook_event と状態だけで描く (security L-001)', () => {
+    const dto = toSystemEventMessage({
+      type: 'system',
+      subtype: 'hook_response',
+      hook_id: 'h1',
+      hook_name: 'TOKEN=abc ./notify.sh',
+      hook_event: 'PostToolUse',
+      outcome: 'success'
+    })
+    show([dto!])
+    const { container } = render(<ChatScreen />)
+    const [row] = rowsOf(container)
+    expect(nameOf(row!)).toBeNull()
+    expect(row).toHaveTextContent('PostToolUse')
+    expect(statusOf(row!)).toBe('成功')
+    expect(container.textContent).not.toContain('TOKEN')
+  })
+
   it('行に action bar・branch picker・footer が無い', () => {
     show([eventDto('hook:h1', {})])
     const { container } = render(<ChatScreen />)
@@ -171,6 +211,9 @@ describe('過去ログのシステムイベントの行 (FR-009 / SC-003)', () =
     const { container } = render(<ChatScreen />)
     const [failed, succeeded, cancelled, taskFailed] = rowsOf(container)
     expect(failed).toHaveTextContent(SYSTEM_EVENT_LABELS.hookFailedGuidance)
+    // 案内は見る場所 (hooks の設定と debug の出力) を示す (po L-003)。
+    expect(failed).toHaveTextContent('.claude/settings.json')
+    expect(failed).toHaveTextContent('claude --debug')
     expect(statusOf(failed!)).toBe('失敗')
     for (const row of [succeeded, cancelled, taskFailed]) {
       expect(row).not.toHaveTextContent(SYSTEM_EVENT_LABELS.hookFailedGuidance)

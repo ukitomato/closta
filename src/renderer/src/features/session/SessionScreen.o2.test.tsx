@@ -7,7 +7,11 @@ import type { SessionEvent } from '@domain/session/agent-session'
 import type { SessionStatusUpdate } from '@domain/session/status-update'
 import type { TranscriptMessageDTO, TranscriptPartDTO } from '@domain/session/transcript-dto'
 
-import { SYSTEM_EVENT_LABELS, TRANSCRIPT_DENSITY_LABELS } from '@/features/chat/labels'
+import {
+  SYSTEM_EVENT_LABELS,
+  TOOL_RESULT_LABELS,
+  TRANSCRIPT_DENSITY_LABELS
+} from '@/features/chat/labels'
 import { useUiStore } from '@/stores/ui'
 import { installCapability } from '@/test-support/capability'
 
@@ -196,6 +200,87 @@ describe('実行中の tool の結果 (FR-007 / US-2 AC1・AC2)', () => {
     expect(block).toHaveTextContent('（切り詰め）')
   })
 
+  /* ── エラーと切り詰めは Bash 以外の表示にも出る (pr-gate R1 po H-001) ── */
+
+  const shown = async (slot: string): Promise<HTMLElement> =>
+    waitFor(() => {
+      const el = document.querySelector<HTMLElement>(`[data-slot="${slot}"]`)
+      expect(el).not.toBeNull()
+      return el!
+    })
+
+  it('失敗した Edit は適用済みの diff に見えない (「失敗」とエラーの本文を出す)', async () => {
+    const h = await setup()
+    h.emit(
+      A,
+      toolMessage(
+        'Edit',
+        { file_path: '/w/a.ts', old_string: 'a', new_string: 'b' },
+        'File has not been read yet',
+        {
+          isError: true
+        }
+      )
+    )
+    const block = await shown('aui_code-diff')
+    expect(within(block).getByText(TOOL_RESULT_LABELS.failed)).toHaveAttribute(
+      'data-slot',
+      'tool-result-error'
+    )
+    expect(block).toHaveTextContent('File has not been read yet')
+  })
+
+  it('成功した Edit は結果の本文も「失敗」も出さない', async () => {
+    const h = await setup()
+    h.emit(
+      A,
+      toolMessage('Edit', { file_path: '/w/a.ts', old_string: 'a', new_string: 'b' }, 'updated OK')
+    )
+    const block = await shown('aui_code-diff')
+    expect(block).not.toHaveTextContent('updated OK')
+    expect(block.querySelector('[data-slot="tool-result-error"]')).toBeNull()
+  })
+
+  it('専用の表示の無い tool (Read) のエラーは ToolFallback の閉じた見出しに「失敗」が出る', async () => {
+    const h = await setup()
+    h.emit(
+      A,
+      toolMessage('Read', { file_path: '/w/missing.ts' }, 'File does not exist.', { isError: true })
+    )
+    const root = await shown('tool-fallback-root')
+    expect(within(root).getByText(TOOL_RESULT_LABELS.failed)).toBeInTheDocument()
+    expect(root.querySelector('[data-slot="tool-fallback-trigger"]')).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    )
+  })
+
+  it('専用の表示の無い tool (Glob) の切り詰めは ToolFallback に「（切り詰め）」が出る', async () => {
+    const h = await setup()
+    h.emit(A, toolMessage('Glob', { pattern: '**/*' }, 'a\nb', { truncated: true }))
+    const root = await shown('tool-fallback-root')
+    expect(root).toHaveTextContent(TOOL_RESULT_LABELS.truncated)
+    expect(root.querySelector('[data-slot="tool-result-error"]')).toBeNull()
+  })
+
+  it('失敗した Agent は最上位に「失敗」が出る', async () => {
+    const h = await setup()
+    h.emit(
+      A,
+      toolMessage(
+        'Agent',
+        { description: '調べる', prompt: 'x', subagent_type: 'Explore' },
+        'Agent failed',
+        { isError: true, truncated: true }
+      )
+    )
+    const block = await shown('aui_subagent')
+    const header = block.querySelector<HTMLElement>('.aui-subagent-header')!
+    expect(within(header).getByText(TOOL_RESULT_LABELS.failed)).toBeInTheDocument()
+    expect(header).toHaveTextContent(TOOL_RESULT_LABELS.truncated)
+    expect(block).toHaveTextContent('Agent failed')
+  })
+
   it('Agent は Subagent の表示になる', async () => {
     const h = await setup()
     h.emit(
@@ -235,7 +320,7 @@ describe('実行中のシステムイベントの行 (FR-009 / US-2 AC3・AC4・
   it('終わりの来ない行は、実行中は状態のまま、セッションの終了後に「結果不明」になる', async () => {
     const h = await setup()
     h.emit(A, eventMessage('hook:h1', { opens: true, name: 'setup.sh', status: 'started' }))
-    await waitFor(() => expect(statusOf(rows()[0])).toBe('開始'))
+    await waitFor(() => expect(statusOf(rows()[0])).toBe('実行中'))
     h.pushStatus({ sessionId: A, state: 'done', claudeAlive: false })
     await waitFor(() => expect(statusOf(rows()[0])).toBe(SYSTEM_EVENT_LABELS.outcomeUnknown))
   })
@@ -279,6 +364,17 @@ describe('transcript の密度と監視ビューの密度 (FR-012 / FR-013 / US-
       .getAllByRole('button')
       .map((b) => b.textContent)
     for (const name of transcriptNames) expect(monitorNames).not.toContain(name)
+    // 見える文言でも区別できる: transcript の切り替えには group 名が見出しとして出て、監視ビューの側には出ない
+    // (aria 名だけに頼らない。pr-gate R1 po M-001)。
+    expect(transcript).toHaveTextContent(TRANSCRIPT_DENSITY_LABELS.group)
+    expect(monitor).not.toHaveTextContent(TRANSCRIPT_DENSITY_LABELS.group)
+    // 各ボタンの title で何が開閉するかを示す。
+    expect(
+      within(transcript).getByRole('button', { name: TRANSCRIPT_DENSITY_LABELS.comfortable })
+    ).toHaveAttribute('title', TRANSCRIPT_DENSITY_LABELS.comfortableHint)
+    expect(
+      within(transcript).getByRole('button', { name: TRANSCRIPT_DENSITY_LABELS.compact })
+    ).toHaveAttribute('title', TRANSCRIPT_DENSITY_LABELS.compactHint)
 
     await userEvent.click(
       within(transcript).getByRole('button', { name: TRANSCRIPT_DENSITY_LABELS.compact })

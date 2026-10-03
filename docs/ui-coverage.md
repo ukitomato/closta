@@ -28,7 +28,7 @@ SDK: `@anthropic-ai/claude-agent-sdk` 0.3.270
 **SDK の版を上げる PR は、domain を問わずこの表を同じ PR で直す** (AD-044 Consequences)。
 
 1. `node scripts/constitution/check.mjs` の項目 21 の失敗の出力を読む (足りない行・消えた行・版の違い)
-2. 足りない行を足して割当を書き、消えた行を消し、冒頭の `SDK:` の版を書き換える
+2. 足りない行を足して割当を書き、消えた行を消し、冒頭の `SDK:` の版を書き換える。**SDK が型を正当に減らしたとき** (「SDK から読めた名前が極端に少ない」で落ちる) は、`scripts/ui-coverage/coverage.mjs` の `LOWER_BOUNDS` (parse の取りこぼしを捕まえる下限。今は実数と同じ) も新しい数に直す
 3. 項目 21 が ok になることを確かめる。`ui-coverage-reviewer` が pr-gate で割当の妥当性を見る
 
 ## A メッセージ型
@@ -40,25 +40,25 @@ SDK: `@anthropic-ai/claude-agent-sdk` 0.3.270
 | SDKAssistantMessage | `assistant` | A | 実装済み: Thread / MarkdownText / Reasoning / ToolGroup (両方) | 両方 | 中身のブロックは B 節。実行中はメッセージ単位で更新 (X-1) |
 | SDKUserMessage | `user` | A | 実装済み: UserMessage / tool の結果は各 tool の表示 (両方) | 両方 | 実行中の利用者の本文は送信時に楽観的に出す。tool_result は O-2 から実行中も呼び出しの表示に埋める (FR-007) |
 | SDKUserMessageReplay | `user` (replay) | B | 表示不要: resume 時の再送。元の user メッセージを表示している | なし | |
-| SDKResultMessage | `result` | A | 後続: O-4 | なし | 成否はセッションの状態 (完了・失敗) として出ている。費用・使用量・ターン数・`permission_denials` は O-4 (Cost meter) |
-| SDKSystemMessage | `system` / `init` | B | 後続: O-5 | なし | `mcp_servers` / `slash_commands` / `tools` / `model` は O-5 (Server panel・コマンド) |
+| SDKResultMessage | `result` | A | 後続: O-4 | なし | 成功・失敗はセッションの状態として出ているが、**失敗は理由を区別せず「Provider の認証/接続」のエラーとして出ている** (`session-core.ts` の `classifyResult`)。失敗の理由 (subtype・`errors`)・費用・使用量・ターン数・`permission_denials` は O-4 |
+| SDKSystemMessage | `system` / `init` | B | 後続: O-5 | なし | `mcp_servers` / `slash_commands` / `tools` / `model` は O-5 (Server panel・コマンド・セッションの構成)。Tier B: 起動の設定は起動のダイアログ (X-4) で利用者が選んでいる |
 | SDKPartialAssistantMessage | `stream_event` | B | 表示不要: 部分メッセージを要求しない (X-1 はメッセージ単位で更新する) | なし | `includePartialMessages` を渡していない |
 | SDKCompactBoundaryMessage | `system` / `compact_boundary` | A | 後続: O-6 | 過去ログ | 過去ログは最小の区切り (divider) で出る。専用 element と実行中の表示は O-6 |
-| SDKStatusMessage | `system` / `status` | B | 後続: O-4 | なし | |
+| SDKStatusMessage | `system` / `status` | A | 後続: O-4 | なし | 権限モードの変化 (`permissionMode`。ExitPlanMode の後など)・圧縮中・圧縮の失敗 (`compact_result` / `compact_error`) を運ぶ。承認とコンテキストに直結するので Tier A |
 | SDKAPIRetryMessage | `system` / `api_retry` | A | 後続: O-4 | なし | |
 | SDKControlRequestProgressMessage | `system` / `control_request_progress` | B | 表示不要: アプリが送った制御要求の進捗の内部通知 | なし | |
 | SDKModelRefusalFallbackMessage | `system` / `model_refusal_fallback` | A | 後続: O-6 | なし | |
 | SDKModelRefusalNoFallbackMessage | `system` / `model_refusal_no_fallback` | A | 後続: O-6 | なし | |
 | SDKLocalCommandOutputMessage | `system` / `local_command_output` | B | 後続: O-6 | なし | |
-| SDKHookStartedMessage | `system` / `hook_started` | A | 実装済み: SystemEventRow (実行中) | 実行中 | SDK は既定で SessionStart / Setup の Hook だけを出す。一般の Hook (`includeHookEvents`) は O-6。過去ログに残るかは未確認 (O-2 quickstart V-4) |
+| SDKHookStartedMessage | `system` / `hook_started` | A | 実装済み: SystemEventRow (実行中) | 実行中 | SDK は既定で SessionStart / Setup の Hook だけを出す。一般の Hook (`includeHookEvents`) は O-6。過去ログの変換は実装済み (`transcript.ts`)。実データに残るかは O-2 quickstart V-4 で確かめ、残れば経路を「両方」に直す |
 | SDKHookProgressMessage | `system` / `hook_progress` | B | 表示不要: 開始と結果の行で足りる。出力本文 (stdout / stderr) は出さない | なし | |
-| SDKHookResponseMessage | `system` / `hook_response` | A | 実装済み: SystemEventRow (実行中) | 実行中 | 開始と同じ行を結果で書き換える。出力本文と終了コードは出さない |
+| SDKHookResponseMessage | `system` / `hook_response` | A | 実装済み: SystemEventRow (実行中) | 実行中 | 開始と同じ行を結果で書き換える。出力本文と終了コードは出さない。過去ログの変換は実装済み (`transcript.ts`)。実データに残るかは O-2 quickstart V-4 で確かめ、残れば経路を「両方」に直す |
 | SDKPluginInstallMessage | `system` / `plugin_install` | B | 後続: O-5 | なし | |
 | SDKToolProgressMessage | `tool_progress` | B | 後続: O-4 | なし | tool の経過時間 |
 | SDKAuthStatusMessage | `auth_status` | A | 後続: O-5 | なし | |
-| SDKTaskNotificationMessage | `system` / `task_notification` | A | 実装済み: SystemEventRow (実行中) | 実行中 | task の行の状態を完了・失敗・停止に書き換える。要約・出力ファイルは出さない |
-| SDKTaskStartedMessage | `system` / `task_started` | A | 実装済み: SystemEventRow (実行中) | 実行中 | 背景で始まった task (`is_backgrounded`) だけ。前景の task は Subagent・tool の結果で出る。後から背景に移った task は O-6 |
-| SDKTaskUpdatedMessage | `system` / `task_updated` | A | 実装済み: SystemEventRow (実行中) | 実行中 | 行の状態だけを書き換える (説明の変更は読まない) |
+| SDKTaskNotificationMessage | `system` / `task_notification` | A | 実装済み: SystemEventRow (実行中) | 実行中 | task の行の状態を完了・失敗・停止に書き換える。要約・出力ファイルは出さない。過去ログの変換は実装済み (`transcript.ts`)。実データに残るかは O-2 quickstart V-4 で確かめ、残れば経路を「両方」に直す |
+| SDKTaskStartedMessage | `system` / `task_started` | A | 実装済み: SystemEventRow (実行中) | 実行中 | 背景で始まった task (`is_backgrounded`) だけ。前景の task は Subagent・tool の結果で出る。後から背景に移った task は O-6。過去ログの変換は実装済み (`transcript.ts`)。実データに残るかは O-2 quickstart V-4 で確かめ、残れば経路を「両方」に直す |
+| SDKTaskUpdatedMessage | `system` / `task_updated` | A | 実装済み: SystemEventRow (実行中) | 実行中 | 行の状態だけを書き換える (説明の変更は読まない)。過去ログの変換は実装済み (`transcript.ts`)。実データに残るかは O-2 quickstart V-4 で確かめ、残れば経路を「両方」に直す |
 | SDKTaskProgressMessage | `system` / `task_progress` | B | 後続: O-4 | なし | |
 | SDKBackgroundTasksChangedMessage | `system` / `background_tasks_changed` | B | 後続: O-6 | なし | 実行中の task の一覧の要否は O-6 で判断する |
 | SDKThinkingTokensMessage | `system` / `thinking_tokens` | B | 後続: O-4 | なし | |
@@ -74,8 +74,8 @@ SDK: `@anthropic-ai/claude-agent-sdk` 0.3.270
 | SDKPermissionDeniedMessage | `system` / `permission_denied` | A | 実装済み: DeniedNotice (実行中) | 実行中 | X-1 からの申し送り (聞かれずに拒否された操作) |
 | SDKPromptSuggestionMessage | `prompt_suggestion` | B | 後続: O-6 | なし | |
 | SDKMirrorErrorMessage | `system` / `mirror_error` | B | 後続: O-6 | なし | |
-| SDKInformationalMessage | `system` / `informational` | B | 後続: O-6 | なし | Hook の block の理由・slash command の出力などの文言 |
-| SDKConversationResetMessage | `conversation_reset` | B | 後続: O-6 | なし | |
+| SDKInformationalMessage | `system` / `informational` | A | 後続: O-6 | なし | UserPromptSubmit の Hook が prompt を止めた理由・Stop の Hook が続行を止めたこと (`prevent_continuation`)・slash command の出力の文言。止まった理由が分からないと判断を誤るので Tier A (中断) |
+| SDKConversationResetMessage | `conversation_reset` | A | 後続: O-6 | なし | /clear・plan モードの終了などで会話が新しくなる。古い transcript がコンテキストに残っているように見えるので Tier A (セッションの境界) |
 
 ### A' union の外
 
@@ -101,7 +101,7 @@ assistant / user のメッセージの content block。型は `@anthropic-ai/sdk
 | assistant/server_tool_use | `server_tool_use` | B | 後続: O-6 | なし | 知らないブロックとして捨てている |
 | assistant/web_search_tool_result | `web_search_tool_result` | B | 後続: O-6 | なし | |
 | user/text | `text` | A | 実装済み: UserMessage (両方) | 両方 | |
-| user/tool_result | `tool_result` | A | 実装済み: 各 tool の表示 (両方) | 両方 | O-2 で実行中も呼び出しの表示に埋める (FR-007)。対応の無い結果は結果だけの表示 |
+| user/tool_result | `tool_result` | A | 実装済み: 各 tool の表示 (両方) | 両方 | O-2 で実行中も呼び出しの表示に埋める (FR-007)。エラーと切り詰めは Terminal block・Code diff・ToolFallback・Subagent などの各表示に印を出す (O-2 pr-gate R1)。対応の無い結果は結果だけの表示 |
 | user/image | `image` | B | 実装済み: Image (過去ログ) | 過去ログ | 安全な data 画像の MIME だけ (svg を除く) |
 | user/document | `document` | B | 後続: O-6 | 過去ログ | 今はファイル名の文字列だけ。File element は O-6 |
 
@@ -122,9 +122,9 @@ assistant / user のメッセージの content block。型は `@anthropic-ai/sdk
 | GrepInput | `Grep` | A | 後続: O-6 | 両方 | 今は ToolFallback |
 | TaskStopInput | `TaskStop` | B | 実装済み: ToolFallback (両方) | 両方 | |
 | ListMcpResourcesInput | `ListMcpResourcesTool` | B | 後続: O-5 | 両方 | 今は ToolFallback |
-| RefreshMcpToolsInput | `RefreshMcpTools` | B | 後続: O-5 | 両方 | 今は ToolFallback |
+| RefreshMcpToolsInput | `RefreshMcpTools` | B | 後続: O-5 | 両方 | 今は ToolFallback。MCP 系の組み込み tool として O-5 の範囲 |
 | McpInput | `mcp__<server>__<tool>` | A | 後続: O-5 | 両方 | 今は ToolFallback |
-| NotebookEditInput | `NotebookEdit` | B | 実装済み: ToolFallback (両方) | 両方 | |
+| NotebookEditInput | `NotebookEdit` | B | 実装済み: ToolFallback (両方) | 両方 | Tier B: 実行前に承認カードが入力 (対象と内容) を出し、ToolFallback が入力と結果を出す。notebook の diff 表示は無い |
 | ReadMcpResourceDirInput | `ReadMcpResourceDir` | B | 後続: O-5 | 両方 | 今は ToolFallback |
 | ReadMcpResourceInput | `ReadMcpResourceTool` | B | 後続: O-5 | 両方 | 今は ToolFallback |
 | ReportFindingsInput | `ReportFindings` | B | 実装済み: ToolFallback (両方) | 両方 | |
@@ -136,10 +136,10 @@ assistant / user のメッセージの content block。型は `@anthropic-ai/sdk
 | ClaudeDesignInput | `ClaudeDesign` | B | 実装済み: ToolFallback (両方) | 両方 | |
 | ProjectsInput | `Projects` | B | 実装済み: ToolFallback (両方) | 両方 | |
 | EnterPlanModeInput | `EnterPlanMode` | B | 実装済み: ToolFallback (両方) | 両方 | |
-| TaskCreateInput | `TaskCreate` | B | 実装済み: ToolFallback (両方) | 両方 | |
-| TaskGetInput | `TaskGet` | B | 実装済み: ToolFallback (両方) | 両方 | |
-| TaskUpdateInput | `TaskUpdate` | B | 実装済み: ToolFallback (両方) | 両方 | |
-| TaskListInput | `TaskList` | B | 実装済み: ToolFallback (両方) | 両方 | |
+| TaskCreateInput | `TaskCreate` | A | 後続: O-6 | 両方 | TodoWrite と同じ計画・進捗の概念 (Tier A。AD-019 Todo list)。今は ToolFallback。TodoList で出すのは O-6 |
+| TaskGetInput | `TaskGet` | A | 後続: O-6 | 両方 | TaskCreate と同じ。今は ToolFallback |
+| TaskUpdateInput | `TaskUpdate` | A | 後続: O-6 | 両方 | TaskCreate と同じ (状態の変化)。今は ToolFallback |
+| TaskListInput | `TaskList` | A | 後続: O-6 | 両方 | TaskCreate と同じ。今は ToolFallback |
 | REPLInput | `REPL` | B | 実装済み: ToolFallback (両方) | 両方 | |
 | WorkflowInput | `Workflow` | B | 実装済み: ToolFallback (両方) | 両方 | |
 | CronCreateInput | `CronCreate` | B | 実装済み: ToolFallback (両方) | 両方 | |
@@ -154,8 +154,8 @@ assistant / user のメッセージの content block。型は `@anthropic-ai/sdk
 | ProposeGoalInput | `ProposeGoal` | B | 実装済み: ToolFallback (両方) | 両方 | |
 | ArtifactInput | `Artifact` | B | 実装済み: ToolFallback (両方) | 両方 | |
 | PushNotificationInput | `PushNotification` | B | 実装済み: ToolFallback (両方) | 両方 | |
-| EnterWorktreeInput | `EnterWorktree` | B | 実装済み: ToolFallback (両方) | 両方 | |
-| ExitWorktreeInput | `ExitWorktree` | B | 実装済み: ToolFallback (両方) | 両方 | |
+| EnterWorktreeInput | `EnterWorktree` | B | 実装済み: ToolFallback (両方) | 両方 | Tier B: 作業ディレクトリが変わることは承認カードと ToolFallback の入力・結果で出る |
+| ExitWorktreeInput | `ExitWorktree` | B | 実装済み: ToolFallback (両方) | 両方 | Tier B: worktree / branch の削除 (`remove` + `discard_changes`) は実行前に承認カードが入力を出す。ToolFallback が入力と結果を出す |
 
 ## D アプリが作る経路
 
@@ -226,7 +226,7 @@ assistant-ui の element の一覧 (https://www.assistant-ui.com/elements。**20
 | Activity graph | B | 未使用 | O-3 (活動の heat graph) で判断 |
 | Agent card | B | 未使用 | |
 | Agent handoff | A | 未使用 | subagent の受け渡し (PLAN §4.2)。O-6 の入れ子と合わせる |
-| Agent plan | A | C AgentInput / ExitPlanModeInput | AgentPlan |
+| Agent plan | A | C ExitPlanModeInput | AgentPlan |
 | Agent status | A | 未使用 | セッションの状態は一覧と表示中のセッションで出ている (D session-state) |
 | Approval card | A | D permission-request | アプリは ApprovalCard を自作 (assistant-ui の版に ApprovalPrimitive が無い。X-1) |
 | Artifact card | B | 未使用 | |

@@ -193,6 +193,31 @@ describe('live-tool-results: 結果を同じ id のメッセージに埋めて�
     expect(parts.some((p) => p.truncated)).toBe(true)
   })
 
+  it('上限を使い切った後に届いた同じメッセージの結果は空の truncated になる (累積で効く。security L-004)', () => {
+    const t = createLiveToolResultTracker()
+    const ids = ['a', 'b', 'c', 'd', 'e', 'f']
+    t.trackAssistant(assistant('m1', ...ids, 'late'))
+    // 先の送り直しで合計がちょうど上限に達する (190KB × 6 > 1MB なので最後の 1 件が削られる)。
+    const first = t.applyUserMessage(user(...ids.map((id) => result(id, 'z'.repeat(190_000)))))
+    const filled = calls(first[0] as TranscriptMessageDTO)
+    const total = filled.reduce(
+      (sum, p) => sum + new TextEncoder().encode(p.result ?? '').length,
+      0
+    )
+    expect(total).toBe(RESEND_RESULT_MAX_BYTES)
+
+    const out = t.applyUserMessage(user(result('late', 'あとから届いた結果')))
+    expect(out.map((m) => m.id)).toEqual(['m1'])
+    const late = calls(out[0] as TranscriptMessageDTO).find((p) => p.toolCallId === 'late')
+    expect(late).toMatchObject({ result: '', truncated: true })
+    // 先に埋まっていた結果は削らない。
+    expect(
+      calls(out[0] as TranscriptMessageDTO)
+        .filter((p) => p.toolCallId !== 'late')
+        .map((p) => p.result)
+    ).toEqual(filled.filter((p) => p.toolCallId !== 'late').map((p) => p.result))
+  })
+
   it('user の本文 (tool_result 以外のブロック・文字列の content) は返さない', () => {
     const t = createLiveToolResultTracker()
     t.trackAssistant(assistant('m1', 'a'))

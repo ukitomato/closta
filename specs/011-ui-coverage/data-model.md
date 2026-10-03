@@ -85,7 +85,7 @@ part の type は `system-event` (glossary の「システムイベントの行�
   | `task_notification` | `task_id`、`status`、`skip_transcript` | `summary`、`output_file`、`usage`、`resource_links` | false |
 
 - **Background task だけを行にする** (design-gate R2 analyze N3): `task_started` は `is_backgrounded === true` かつ `ambient !== true` かつ `skip_transcript !== true` のときだけ変換する。前景の task (subagent の呼び出しは Subagent の表示がある、前景の Bash は tool の結果がある) と、後から背景に移った task は行にしない (O-6 に記録)。`task_updated` は `patch.description` を読まない (名前は開始のときのものを保つ。design-gate R2 architecture H-101)
-- `task_type` が `local_bash` の task の `description` はコマンドの文字列でありうる。`description` は名前に使うが、§4 と同じ規則 (代入・`$(`・backtick・クォート・既知の秘密の接頭辞を含めば出さない) を通し、通らなければ名前を `''` にして detail の `task_type` だけで描く (design-gate R2 platform-boundary の申し送り)
+- `task_type` が `local_bash` の task の `description` はコマンドの文字列でありうるので、**名前を常に `''` にして detail の `task_type` だけで描く** (コマンドの全体は Bash の呼び出しの表示に出ている。pr-gate R1 security L-002 — 判定 (`mayCarrySecret`) は URL の資格情報・`Bearer`・`-p<pw>` を通すため)。`hook_name` は `mayCarrySecret` (代入・`$(`・backtick・クォート・既知の秘密の接頭辞) を通し、当たれば名前を `''` にして `hook_event` だけで描く (pr-gate R1 security L-001)
 - メッセージ: `{ id: 'hook:<hook_id>' | 'task:<task_id>', role: 'system', parts: [system-event], createdAt }`。上の条件に合わないもの・`skip_transcript: true` のものは変換しない (`null`)
 - `TranscriptMessageDTO.id` は「SDK の `uuid`、または接頭辞つきの合成 id (`hook:` / `task:` / `result:`)」とする (注記を直す)
 - **合成** (`mergeSystemEvent(prev, next)`。domain の純関数。規則の正本はここだけ):
@@ -107,7 +107,7 @@ part の type は `system-event` (glossary の「システムイベントの行�
   2. 影響を受けたメッセージを **user メッセージ 1 つにつき 1 回だけ** 送り直す (並列の tool の結果が 1 つの user メッセージで来ても送り直しは 1 回)。結果待ちが 0 になったメッセージは両方の Map から消す
   3. 引けない結果は、結果だけの tool-call のメッセージを `result:<toolUseId>` で送る
   4. `user` メッセージの `tool_result` 以外のブロック (本文) は送らない
-- 1 回の送り直しの合計の上限 (design-gate R2 security M-004): 送り直すメッセージの tool-call の `result` の合計を 1MB [ASSUMED] までにする。超えた分の `result` は短くして `truncated: true` にする (先に埋まった結果から削らない。今回埋めた結果を削る)。並列の結果が 1 つの user メッセージで来るかは quickstart V-4 で確かめる
+- 1 回の送り直しの合計の上限 (design-gate R2 security M-004): 送り直すメッセージの tool-call の `result` の合計を 1MB [ASSUMED] までにする。超えた分の `result` は短くして `truncated: true` にする (先に埋まった結果から削らない。今回埋めた結果を削る)。**上限は累積で効く** — 先に埋まった結果の合計が 1MB に達していれば、後から届いた結果は `''` + `truncated: true` になる (実行中の表示では空。過去ログでは出る)。**数えるのは `result` だけ**で、part ごとに `BODY_MAX_BYTES` で切られた `argsText` と、対応の無い結果だけのメッセージは数えない (送る元は自プロセスの SDK。pr-gate R1 security L-003 / L-004)。並列の結果が 1 つの user メッセージで来るかは quickstart V-4 で確かめる (持ち主は roadmap の O-6)
 - 上限: 結果待ち 256 件 [ASSUMED]。超えたら古いメッセージから捨てる。見積もり: 1 件が `argsText` と `result` で最大 200KB × 2 として約 100MB で、セッションスレッドのヒープ上限 (1024MB。`supervisor.ts`) の 1/10 に収まる
 - 結果の本文: 過去ログと同じ取り出し (`text` ブロックの連結、`content` が文字列ならそのまま) + `sanitizeBody` (`BODY_MAX_BYTES`)。`is_error` → `isError`、切り詰め → `truncated`
 - `post` に渡す kind は `status` / `event` / `ended` / `child-exited` のまま (調停役スレッドのプロトコルを変えない)

@@ -41,7 +41,7 @@ function oneLine(raw: unknown): string {
 }
 
 /**
- * コマンドの文字列として秘密を含みうるか (data-model §4 と同じ判定。`local_bash` の task の説明に使う)。
+ * コマンドの文字列として秘密を含みうるか (data-model §4 と同じ判定。Hook の名前 `hook_name` に使う)。
  * クォート・バックスラッシュ・`$`・backtick・`(`、環境変数の代入、既知の秘密の接頭辞のどれかがあれば true。
  */
 export function mayCarrySecret(text: string): boolean {
@@ -102,9 +102,12 @@ export function toSystemEventMessage(
           : typeof m.outcome === 'string'
             ? (HOOK_OUTCOMES[m.outcome] ?? 'unknown')
             : 'unknown'
+      // hook_name は Hook の設定のコマンドになりうる (`TOKEN=... cmd` など)。秘密を含みうるなら名前を出さず、
+      // 行は hook_event と状態だけで描く (pr-gate R1 security L-001)。
+      const hookName = oneLine(m.hook_name)
       return message(
         `hook:${m.hook_id}`,
-        part('hook', true, oneLine(m.hook_name), oneLine(m.hook_event), status),
+        part('hook', true, mayCarrySecret(hookName) ? '' : hookName, oneLine(m.hook_event), status),
         createdAt
       )
     }
@@ -113,8 +116,9 @@ export function toSystemEventMessage(
       if (m.skip_transcript === true || m.ambient === true || m.is_backgrounded !== true)
         return null
       const taskType = oneLine(m.task_type)
-      const description = oneLine(m.description)
-      const name = taskType === 'local_bash' && mayCarrySecret(description) ? '' : description
+      // local_bash の説明はコマンドそのもの。秘密の判定は URL の資格情報・`Bearer` などを通すので使わず、
+      // 名前は常に出さない (コマンド全体は Bash の呼び出しの表示に出ている。pr-gate R1 security L-002)。
+      const name = taskType === 'local_bash' ? '' : oneLine(m.description)
       return message(`task:${m.task_id}`, part('task', true, name, taskType, 'running'), createdAt)
     }
     case 'task_updated': {

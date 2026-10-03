@@ -26,6 +26,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { isTruncatedArgs, ToolResultMarks } from "./tool-result-marks";
 
 const ANIMATION_DURATION = 200;
 
@@ -670,17 +671,34 @@ function ToolFallbackApproval({
   );
 }
 
+/**
+ * closta: エラーの結果 (`isError`) を状態にも写す (O-2 / FR-007 / pr-gate R1 po H-001)。
+ * `ThreadMessageLike` の tool-call の part には part ごとの status が無く、外部 store の runtime は結果のある
+ * tool-call を `complete` にするため、`isError` を見て完了の印 (✓) を失敗の印 (✗) に替える。
+ * 実行中・承認待ち・取り消しなど runtime が決めた状態はそのまま。
+ */
+const statusWithError = (
+  status: ToolCallMessagePartStatus | undefined,
+  isError: boolean | undefined,
+): ToolCallMessagePartStatus | undefined =>
+  isError && (status === undefined || status.type === "complete")
+    ? { type: "incomplete", reason: "error" }
+    : status;
+
 const ToolFallbackImpl: ToolCallMessagePartComponent = ({
   toolName,
+  args,
   argsText,
   result,
-  status,
+  isError,
+  status: runtimeStatus,
   addResult,
   resume,
   interrupt,
   approval,
   respondToApproval,
 }) => {
+  const status = statusWithError(runtimeStatus, isError);
   const isCancelled =
     status?.type === "incomplete" && status.reason === "cancelled";
   const isRequiresAction = status?.type === "requires-action";
@@ -697,7 +715,11 @@ const ToolFallbackImpl: ToolCallMessagePartComponent = ({
 
   return (
     <ToolFallbackRoot open={open} onOpenChange={setOpen}>
-      <ToolFallbackTrigger toolName={toolName} status={status} />
+      {/* closta: エラーと切り詰めの印は閉じたままでも見えるよう trigger の横に出す (pr-gate R1 po H-001)。 */}
+      <div className="flex items-center gap-2">
+        <ToolFallbackTrigger toolName={toolName} status={status} />
+        <ToolResultMarks isError={isError} truncated={isTruncatedArgs(args)} />
+      </div>
       <ToolFallbackContent>
         <ToolFallbackError status={status} />
         <ToolFallbackArgs

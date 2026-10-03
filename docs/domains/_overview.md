@@ -144,6 +144,10 @@ domain をまたいで守られるべき不変条件。いずれも Constitution
 | supervisor は Electron に依存せず単独起動できる | VII | `session` / `isolation` |
 | 重いパースを main process で行わない | IX | `session` / `isolation` / `ui` |
 | セッションの正本はアプリ外にある | X | `session` / `isolation` |
+| SDK が emit する情報は `docs/ui-coverage.md` で割当を持つ。`後続: <ID>` の feature は完了の PR で対象の行を書き換え、SDK の版を上げる PR は同じ PR で対応表を直す (項目 21) | XII | `ui` / `session` / `isolation` |
+
+**XII を O-2 で追加した** (pr-gate R1 architecture M-003)。対応表の `後続` に他 domain の feature
+(X-6 は `session`、I-3 は `isolation`) を書いたことで、それらの完了が項目 21 の条件に入った ([AD-044](../decisions/0044-ui-coverage-assignment.md))。
 
 **VII / IX を R-2 で追加した** (pr-gate Round 4 / M4-13)。`agents` を持つ feature が
 初めて実装されたことで、この 2 つが cross-domain invariant として実体を持った。

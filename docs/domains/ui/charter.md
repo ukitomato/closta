@@ -3,14 +3,20 @@ domain: ui
 status: needs-human-review
 owner: ukitomato
 generated_by: human (PLAN.md を素案として再導出)
-last_reviewed: 2026-09-29
+last_reviewed: 2026-10-03
 related_adrs:
   - docs/decisions/0001-adopt-electron-over-tauri.md
   - docs/decisions/0006-supervisor-in-utility-process.md
+  - docs/decisions/0019-assistant-ui-element-inventory.md
+  - docs/decisions/0020-sdk-emitted-message-inventory.md
+  - docs/decisions/0034-transcript-read-path-and-process-boundary.md
+  - docs/decisions/0035-tier-a-tool-display-and-subagent-nesting.md
+  - docs/decisions/0044-ui-coverage-assignment.md
 related_specs:
   - specs/003-ui-transcript-rendering/spec.md
   - specs/004-ui-tier-a-tool-display/spec.md
   - specs/006-ui-japanese-ime-composer/spec.md
+  - specs/011-ui-coverage/spec.md
 ---
 
 # Domain Charter: ui
@@ -111,7 +117,7 @@ O-1 で読み替えた: 監視ビューはセッション画面のサイドバ�
 
 ## Key concepts
 
-- **Element**: assistant-ui が提供する UI 部品。202 種（2026-09-13 確認、[AD-019](../../decisions/0019-assistant-ui-element-inventory.md)）
+- **Element**: assistant-ui が提供する UI 部品。202 種（2026-09-13 確認、[AD-019](../../decisions/0019-assistant-ui-element-inventory.md)）。2026-10-03 の registry の名前は 127（数え方が違う。分類は `docs/ui-coverage.md` F 節）
 - **Tier A / B / C**: Element の実装優先度。A は Claude Code の一次概念に直結する必須、
   B は体験を押し上げるもの、C は対象外
 - **ui-coverage 対応表**: `docs/ui-coverage.md`。emit される情報と表示実装の対応

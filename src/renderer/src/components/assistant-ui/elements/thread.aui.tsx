@@ -31,6 +31,7 @@ import {
   SYSTEM_EVENT_CATEGORY_LABELS,
   SYSTEM_EVENT_LABELS,
   SYSTEM_EVENT_STATUS_LABELS,
+  taskTypeLabel,
 } from "@/features/chat/labels";
 import {
   useTranscriptDensity,
@@ -947,7 +948,8 @@ const SystemEventRow: FC = () => {
         </span>
         {detail !== "" ? (
           <span data-slot="system-event-detail" className="max-w-40 shrink-0 truncate">
-            {detail}
+            {/* task の detail は SDK の task_type。文言の表で読める形に (知らない値はそのまま。pr-gate R1 po L-002)。 */}
+            {category === "task" ? taskTypeLabel(detail) : detail}
           </span>
         ) : null}
         {statusText !== null ? (

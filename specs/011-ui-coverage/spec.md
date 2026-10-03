@@ -259,7 +259,8 @@ Claude Code (Agent SDK) が emit する情報と、その表示の対応表 **`d
 - **[ASSUMED]** transcript の密度の既定は comfortable で、永続化しない。既定で Tool group を開くのは AD-035 Trade-off (専用表示が既定で畳まれて見えない) への回答であり、実機の見え方は quickstart V-4 で利用者が確かめる
 - **[ASSUMED]** 過去ログ (`getSessionMessages` の `includeSystemMessages: true`) に Hook / Background task のシステムメッセージが残るかは実データ (quickstart V-4) で確かめる。確かめるまで、対応表の経路は「実行中」とし、備考に「過去ログは未確認 (V-4)」と書く
 - **[ASSUMED]** 実行時の subagent の tool 名は `Agent` か `Task` か未確認。両方を当てる (V-4 で記録する)
-- **[ASSUMED]** `hook_name` がコマンドの文字列を含むと V-4 で分かったら、名前の代わりに Hook の種類 (`hook_event`) を出す
+- **[ASSUMED]** `hook_name` がコマンドの文字列を含むと V-4 で分かったら、名前の代わりに Hook の種類 (`hook_event`) を出す (それまでの間も、秘密を含みうる形の名前は出さない。pr-gate R1 security L-001)
+- 上の V-4 の 4 項目 (過去ログの経路・`Agent` / `Task`・`hook_name`・並列の結果の届き方) の結果の反映は、merge 後の持ち主を roadmap の O-6 の行に置く (pr-gate R1 po M-002)
 - **[ASSUMED]** task の行は背景で始まった task だけにする (前景の task と後から背景に移った task は行にしない。後者は O-6)。送り直し 1 回の結果の合計は 1MB まで (data-model §3)
 - **[設計判断 2026-10-03 design-gate R2]** M3 の完了の条件は「Tier A の後続のうち、割当先が M3 の feature の行が 0」。利用者が AD-044 を accepted にするときに確かめる
 

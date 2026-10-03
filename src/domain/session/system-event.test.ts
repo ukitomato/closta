@@ -157,23 +157,37 @@ describe('toSystemEventMessage', () => {
     expect(part?.detail).toBe('')
   })
 
-  it('local_bash の説明が代入・サブシェル・秘密の接頭辞を含むと名前を出さない', () => {
-    for (const description of ['TOKEN=abc curl x', 'echo $(cat key)', 'run ghp_abcdef', 'say "hi"'])
-      expect(
-        systemEventPartOf(
-          toSystemEventMessage({ ...taskStarted, task_type: 'local_bash', description }) ??
-            undefined
-        )?.name
-      ).toBe('')
-    expect(
-      systemEventPartOf(
-        toSystemEventMessage({
-          ...taskStarted,
-          task_type: 'local_bash',
-          description: 'npm test'
-        }) ?? undefined
-      )?.name
-    ).toBe('npm test')
+  it('local_bash の説明は秘密の判定に関わらず名前に出さない (秘密の判定を通る形も含む。security L-002)', () => {
+    for (const description of [
+      'TOKEN=abc curl x',
+      'echo $(cat key)',
+      'curl -H Authorization:Bearer abc https://x',
+      'curl https://user:tok@host/x',
+      'mysql -pS3cret',
+      'npm test'
+    ]) {
+      const part = systemEventPartOf(
+        toSystemEventMessage({ ...taskStarted, task_type: 'local_bash', description }) ?? undefined
+      )
+      expect(part?.name).toBe('')
+      expect(part?.detail).toBe('local_bash')
+    }
+    // local_bash 以外の説明は名前に出す。
+    expect(systemEventPartOf(toSystemEventMessage(taskStarted) ?? undefined)?.name).toBe(
+      'ビルドを走らせる'
+    )
+  })
+
+  it('秘密を含みうる hook_name は名前に出さず、hook_event と状態だけを残す (security L-001)', () => {
+    for (const hookName of ['TOKEN=abc ./notify.sh', 'curl "$URL"', 'run ghp_abcdef']) {
+      const part = systemEventPartOf(
+        toSystemEventMessage({ ...hookResponse, hook_name: hookName }) ?? undefined
+      )
+      expect(part).toMatchObject({ name: '', detail: 'SessionStart', status: 'failed' })
+    }
+    expect(systemEventPartOf(toSystemEventMessage(hookStarted) ?? undefined)?.name).toBe(
+      'format-check'
+    )
   })
 })
 

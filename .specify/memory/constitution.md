@@ -20,13 +20,14 @@ Sync Impact Report (v1.3.0)
 
 Modified sections:
 - Principle XII (Adoption metadata) — `violation_threshold` / `existing_violations` / `bad_pattern_grep` (割当の列に限定) / `amended`
+- Principle XII (Statement) — 「各項目に表示実装を割り当てる」→「各項目に割当 (表示実装・後続 feature・表示不要の理由) を持たせる」(O-2 pr-gate R1 architecture M-001)
 - Principle XII (本文) — 割当の意味、M3 の完了の条件、Exceptions の割当の書き方
 - Principle XII (Verification) — Automated を項目 21 に、Manual の ui-coverage-reviewer を配置済みに
 - Principle XIII (Why / Exceptions) — element の数 143 → 127 (registry の名前の数)、未分類 59 → F 節で解消 (確認日 2026-10-03)
 
 既存違反の enumeration (2026-10-03):
-- 項目 21: ok (A 39 / A' 4 / B 10 / C 45 / D 8 / E 38 / F 127)。後続 I-3 (M4) 2 / O-4 10 / O-5 21 / O-6 26 / X-6 4。
-  M3 の完了の条件の残り 17 (違反ではない。M3 の達成状態の件数)
+- 項目 21: ok (A 39 / A' 4 / B 10 / C 45 / D 8 / E 38 / F 127)。後続 I-3 (M4) 2 / O-4 10 / O-5 21 / O-6 30 / X-6 4。
+  M3 の完了の条件の残り 24 (違反ではない。M3 の達成状態の件数。pr-gate R1 で Tier の判断を 7 行直した後の数)
 - XII の `bad_pattern_grep`: 0 件 (割当のある 6 列の行は 144)
 - XIII の `bad_pattern_grep`: 変更なし
 
@@ -751,7 +752,7 @@ R-2 が残した「本文を運ぶ時点で再評価する」宿題に構造的�
 - `amended`: 2026-10-03 (AD-044 / v1.3.0)
 
 <!-- BOOTSTRAP_SECTION_START principle=XII -->
-**Statement**: SDK のメッセージ型・tool 名・システムイベントの対応表を `docs/ui-coverage.md` に維持し、各項目に表示実装を割り当てるべきである。未割当が残っている間、UI 系 feature を `completed` にしてはならない。
+**Statement**: SDK のメッセージ型・tool 名・システムイベントの対応表を `docs/ui-coverage.md` に維持し、各項目に割当 (表示実装・後続 feature・表示不要の理由。下記「割当の意味」) を持たせるべきである。未割当が残っている間、UI 系 feature を `completed` にしてはならない。
 
 **Why**: PLAN.md §4.1 は UI 完成を「Claude Code が emit する情報のうち、専用表示を持たないものをゼロにする」と定義している。対応表がなければ「完成」を判定できず、軸 1 が検証不能な目標になる。
 
@@ -796,7 +797,7 @@ M4 以降の feature に割り当てた行と Tier B の行は数えない。件
 - `theme_baseline_exclusions`: `src/renderer/src/assets/main.css` — CLI 生成の標準テーマの写し。
   **除外はファイル単位の明示リストとする**
 - `adoption_date`: 2026-09-13
-- `amended`: 2026-09-15 (AD-024 #10 / #11)
+- `amended`: 2026-09-15 (AD-024 #10 / #11)、2026-10-03 (AD-044 / v1.3.0。Why と Exceptions の element の数)
 
 <!-- BOOTSTRAP_SECTION_START principle=XIII -->
 **Statement**: 同等の element が存在する UI を自作すべきではない。独自のカラートークン・スペーシングスケールを追加すべきではない。
@@ -1034,7 +1035,7 @@ v1.2.4 は改定手順に新しい規則 (ADR の in-place 訂正) を足した�
 | 1.2.7 | 2026-09-28 | [AD-037](../../docs/decisions/0037-japanese-ime-composer-behavior.md) D3 / [AD-038](../../docs/decisions/0038-e2e-screenshot-harness.md)。Principle VIII の Verification の「現状の制約」を X-2 の事実に追随 (Verification の事実追随 = PATCH)。X-2 (日本語 composer) が送信経路を開き Playwright + Electron の E2E ハーネスを載せた。**Automated (A) IME E2E と (B) 日本語スクリーンショット比較は搭載済み・持ち主 X-2・local 緑** ((A) `e2e/ime.spec.ts` idle/running+queue/変換中マウス送信の 3/3 緑。(B) `e2e/composer-screenshot.spec.ts` が同梱フォント Noto Sans JP を FontFace + CSSOM で CSP 非破壊注入し基準画像 `composer-fullwidth-win32.png` と比較。水平あふれ/桁ずれ/要素崩れ 0)。「2 項目とも載っていない」→「(A)(B) とも搭載・持ち主 X-2」に改めた。**CI が緑であることが本 Principle を保証しないという注記は残す** ((A)(B) とも stub 到達の E2E で、実機 IME 目視と基準画像の最終 aesthetic 承認は人間 quickstart が担う)。マウス送信経路の未確定送信 (grep 不可視) と CSP × addStyleTag の衝突は E2E 実走が検出し、それぞれ `thread.aui.tsx` の確定優先の最小処理 (AC-6 / AD-037 D1(d)) と FontFace API への切替で塞いだ |
 | 1.2.8 | 2026-10-01 | [AD-043](../../docs/decisions/0043-single-supervisor-session-threads-and-session-limit.md) (X-5)。事実の追随 (PATCH)。Principle VII の Statement の単独起動の形を「worker のパスを引数で渡す」に改めた (Electron なしで単独起動できるという趣旨は不変 = 非意味的な refinement)。Principle IX に中継の分岐の Good example (調停役は文字列を解釈せず中継し renderer がデコードする) を足し、「現状の制約」に X-5 の本文経路と `check.mjs` 項目 18 の限界 (置き場だけを見る・多段の別名代入を拾わない) を追記した |
 | 1.2.9 | 2026-10-02 | [AD-043](../../docs/decisions/0043-single-supervisor-session-threads-and-session-limit.md) Decision 2 (X-5 pr-gate R1〜R3 architecture H-001)。事実の追随 (PATCH)。Principle IX の Automated の字面「`src/agents/` の外に stream の `JSON.parse` 処理が存在しないこと」を「main process と調停役スレッドに存在しないこと」に改めた。X-5 では renderer が中継された本文 (`BODY_MAX_BYTES` で有界) を復元し、同じ節の Good example (X-5) と字面が食い違っていた。禁じる対象 (main を固めない) と Statement は不変 |
-| 1.3.0 | 2026-10-03 | [AD-044](../../docs/decisions/0044-ui-coverage-assignment.md) (O-2)。指針の実質的な拡張 (MINOR)。**Principle XII の割当を 3 種類 (実装済み / 後続 / 表示不要) にし、`後続: <未完了の feature ID>` を割当済みとみなした**。ToolFallback だけの `実装済み` は Tier B / C に限る。**M3 の完了の条件を「Tier A の後続の行のうち割当先が M3 の feature の行が 0」と定めた**。Automated を Constitution 検証の項目 21 (SDK の型定義との名前の集合の照合・割当の書式・SDK の版) に移し、`bad_pattern_grep` を割当の列に限った。Manual の `ui-coverage-reviewer` を配置済みにした。Principle XIII の element の数を registry の 127 名に、未分類 59 を F 節での解消に追随させた。既存違反 0 (項目 21 ok、M3 の残り 17) |
+| 1.3.0 | 2026-10-03 | [AD-044](../../docs/decisions/0044-ui-coverage-assignment.md) (O-2)。指針の実質的な拡張 (MINOR)。**Principle XII の割当を 3 種類 (実装済み / 後続 / 表示不要) にし、`後続: <未完了の feature ID>` を割当済みとみなした**。ToolFallback だけの `実装済み` は Tier B / C に限る。**M3 の完了の条件を「Tier A の後続の行のうち割当先が M3 の feature の行が 0」と定めた**。Automated を Constitution 検証の項目 21 (SDK の型定義との名前の集合の照合・割当の書式・SDK の版) に移し、`bad_pattern_grep` を割当の列に限った。Manual の `ui-coverage-reviewer` を配置済みにした。Principle XIII の element の数を registry の 127 名に、未分類 59 を F 節での解消に追随させた。Statement も「割当を持たせる」に改めた。既存違反 0 (項目 21 ok、M3 の残り 24) |
 
 ## References
 
@@ -1046,4 +1047,4 @@ v1.2.4 は改定手順に新しい規則 (ADR の in-place 訂正) を足した�
 
 ---
 
-**Version**: 1.2.9 | **Ratified**: 2026-09-13 | **Last Amended**: 2026-10-02
+**Version**: 1.3.0 | **Ratified**: 2026-09-13 | **Last Amended**: 2026-10-03

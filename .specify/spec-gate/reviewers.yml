@@ -36,9 +36,13 @@ reviewers:
   # ─────────────────────────────────────────────────────────────────────
   - name: a11y-reviewer
     enabled: true
+    # chat (transcript) と session (セッション画面・監視ビュー) は R-3 以降本番の画面であり、
+    # Constitution VIII / XII / XIII の Manual の検証者が当たるよう対象に入れる
+    # (O-2 pr-gate R1 architecture H-001。利用者承認 2026-10-03)。
     auto_invoke_patterns:
       - "src/renderer/src/features/session-list/**/*.tsx"
-      # - "src/renderer/src/features/chat/**/*.tsx"                      # 仮実装
+      - "src/renderer/src/features/chat/**/*.tsx"
+      - "src/renderer/src/features/session/**/*.tsx"
       # - "src/renderer/src/features/runtime-list/**/*.tsx"              # 仮実装
       # - "src/renderer/src/features/workspace-folders/**/*.tsx"         # 仮実装
       # - "src/renderer/src/features/folder-runtime-resolution/**/*.tsx" # 仮実装
@@ -57,7 +61,8 @@ reviewers:
     # a11y-reviewer と同一の対象。片方だけ広げると指摘の出所が追えなくなる。
     auto_invoke_patterns:
       - "src/renderer/src/features/session-list/**/*.tsx"
-      # - "src/renderer/src/features/chat/**/*.tsx"                      # 仮実装
+      - "src/renderer/src/features/chat/**/*.tsx"
+      - "src/renderer/src/features/session/**/*.tsx"
       # - "src/renderer/src/features/runtime-list/**/*.tsx"              # 仮実装
       # - "src/renderer/src/features/workspace-folders/**/*.tsx"         # 仮実装
       # - "src/renderer/src/features/folder-runtime-resolution/**/*.tsx" # 仮実装
@@ -115,6 +120,9 @@ reviewers:
       - "src/domain/session/tool-result*.ts"
       - "src/renderer/src/components/assistant-ui/elements/**"
       - "src/renderer/src/features/chat/**"
+      # 実行中のシステムイベントの行の合成と SessionEvent の message のデコード (pr-gate R1 architecture M-004)
+      - "src/renderer/src/features/session/running-session-store.ts"
+      - "src/renderer/src/features/session/session-event-decoder.ts"
       - "scripts/ui-coverage/**"
     exclude_patterns:
       - "**/*.test.ts"

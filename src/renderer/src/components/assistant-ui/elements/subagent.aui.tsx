@@ -8,9 +8,12 @@ import type { TranscriptMessageDTO, TranscriptPartDTO } from "@domain/session/tr
 import {
   SYSTEM_EVENT_CATEGORY_LABELS,
   SYSTEM_EVENT_STATUS_LABELS,
+  TOOL_RESULT_LABELS,
 } from "@/features/chat/labels";
 import { parseAgentArgs, parseTaskArgs } from "@/features/chat/tool-args";
+import { cn } from "@/lib/utils";
 import { ToolFallback } from "./tool-fallback.aui";
+import { isTruncatedArgs, ToolResultMarks } from "./tool-result-marks";
 
 /**
  * Task (subagent) を Subagent 表示にする (R-4 / FR-004 / FR-005 / US-2 / Tier A: Subagent list)。
@@ -77,7 +80,7 @@ function SubagentPart({
           <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
             <WrenchIcon className="size-3 shrink-0" />
             <span className="font-medium">{part.toolName}</span>
-            {part.isError ? <span className="text-destructive">失敗</span> : null}
+            {part.isError ? <span className="text-destructive">{TOOL_RESULT_LABELS.failed}</span> : null}
           </div>
           {result ? (
             <pre className="text-foreground/70 max-h-40 overflow-auto whitespace-pre-wrap font-mono text-[11px]">
@@ -167,6 +170,12 @@ const SubagentImpl: ToolCallMessagePartComponent = (props) => {
             {args.subagent_type}
           </span>
         ) : null}
+        {/* 最上位の失敗と切り詰め (入れ子の「失敗」だけでなく。O-2 / FR-007 / pr-gate R1 po H-001)。 */}
+        <ToolResultMarks
+          isError={props.isError}
+          truncated={isTruncatedArgs(props.args)}
+          className="ms-auto"
+        />
       </div>
       <div className="border-border/40 flex flex-col gap-2 border-t px-3 py-2">
         {args.description ? (
@@ -181,7 +190,12 @@ const SubagentImpl: ToolCallMessagePartComponent = (props) => {
         {result ? (
           <div className="border-border/30 border-t pt-2">
             <p className="text-muted-foreground mb-1 text-xs font-medium">結果</p>
-            <pre className="text-foreground/80 max-h-60 overflow-auto whitespace-pre-wrap font-mono text-[11px]">
+            <pre
+              className={cn(
+                "max-h-60 overflow-auto whitespace-pre-wrap font-mono text-[11px]",
+                props.isError ? "text-destructive/90" : "text-foreground/80",
+              )}
+            >
               {result}
             </pre>
           </div>

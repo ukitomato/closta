@@ -912,10 +912,10 @@ total_terms: 85
 
 - **Definition**: `docs/ui-coverage.md`。SDK のメッセージ型・中身のブロック・tool・アプリが作る経路・制御要求と
   表示実装の対応表 (O-2)。各行は**割当**を 3 種類のどれかで持つ: **実装済み** (element と経路。ToolFallback だけで実装済みに
-  できるのは Tier B / C の行)、**後続** (roadmap に実在する feature の ID)、**表示不要** (理由)。
+  できるのは Tier B / C の行)、**後続** (roadmap に実在し、完了していない feature の ID)、**表示不要** (理由)。
   **未割当行がある間、UI 系 feature を `completed` にしない**。SDK の型定義と機械で照合する (Constitution 検証の項目 21)
 - **Domain**: `ui`
-- **Counterexamples**: 「後続」は未割当ではない (roadmap に実在する ID に限る)。M3 の完了の条件は「Tier A の後続のうち、
+- **Counterexamples**: 「後続」は未割当ではない (roadmap に実在し、完了していない feature の ID に限る)。M3 の完了の条件は「Tier A の後続のうち、
   割当先が M3 の feature の行が 0」(AD-044)。他 domain の一覧画面の値 (`SDKSessionInfo` など) は行にしない
 - **Ref**: Constitution Principle XII / AD-044 / [011 spec](../specs/011-ui-coverage/spec.md)
 
