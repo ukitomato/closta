@@ -40,14 +40,52 @@ export type TranscriptPartDTO =
     }
   | { readonly type: 'image'; readonly url: string }
   | { readonly type: 'file'; readonly filename: string; readonly text: string }
-  /** コンパクション境界などの最小の区切り (FR-018)。専用 element は O-2。 */
+  /** コンパクション境界などの最小の区切り (FR-018)。専用 element は対応表 A 節の割当 (O-6)。 */
   | { readonly type: 'divider'; readonly label: string }
+  /**
+   * Hook / Background task のシステムイベントの行 (O-2 / FR-008・FR-009。[data-model](../../../specs/011-ui-coverage/data-model.md) §2)。
+   * 1 つの Hook / task は 1 行で、同じ id の後続は `mergeSystemEvent` で合成する。状態の一覧は持たない。
+   */
+  | {
+      readonly type: 'system-event'
+      readonly category: SystemEventCategory
+      /** 行を作ってよいイベントか (hook_started / hook_response / task_started だけ true)。 */
+      readonly opens: boolean
+      /** Hook: hook_name / task: description (無害化・1 行・120 コードポイント)。無ければ ''。 */
+      readonly name: string
+      /** Hook: hook_event / task: task_type。無ければ ''。 */
+      readonly detail: string
+      /** 無ければ null (task_updated の patch.status は任意)。 */
+      readonly status: SystemEventStatus | null
+    }
+
+export const SYSTEM_EVENT_CATEGORIES = ['hook', 'task'] as const
+export type SystemEventCategory = (typeof SYSTEM_EVENT_CATEGORIES)[number]
+
+/** Hook / task の状態の理由キー (訳は renderer の `features/chat/labels.ts`)。 */
+export const SYSTEM_EVENT_STATUSES = [
+  'started',
+  'succeeded',
+  'failed',
+  'cancelled',
+  'pending',
+  'running',
+  'completed',
+  'killed',
+  'paused',
+  'stopped',
+  'unknown'
+] as const
+export type SystemEventStatus = (typeof SYSTEM_EVENT_STATUSES)[number]
 
 export type TranscriptMessageRole = 'user' | 'assistant' | 'system'
 
 /** transcript の 1 メッセージ。`ThreadMessageLike` へ 1:1 で写せる形。 */
 export interface TranscriptMessageDTO {
-  /** SDK の `uuid`。行の同一性と仮想化の key に使う。 */
+  /**
+   * SDK の `uuid`、または接頭辞つきの合成 id (`hook:<hook_id>` / `task:<task_id>` / `result:<tool_use_id>`。O-2)。
+   * 行の同一性と仮想化の key に使う。
+   */
   readonly id: string
   readonly role: TranscriptMessageRole
   readonly parts: readonly TranscriptPartDTO[]
@@ -93,7 +131,8 @@ export const TRANSCRIPT_PART_FIELDS = {
   ],
   image: ['type', 'url'],
   file: ['type', 'filename', 'text'],
-  divider: ['type', 'label']
+  divider: ['type', 'label'],
+  'system-event': ['type', 'category', 'opens', 'name', 'detail', 'status']
 } as const satisfies {
   [K in TranscriptPartDTO['type']]: readonly (keyof Extract<TranscriptPartDTO, { type: K }>)[]
 }

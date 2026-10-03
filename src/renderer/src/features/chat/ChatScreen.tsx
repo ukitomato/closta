@@ -13,6 +13,8 @@ import { ErrorState } from '@/components/assistant-ui/elements/error-state'
 import { GenerationLoader } from '@/components/assistant-ui/elements/loading-state'
 import { Thread } from '@/components/assistant-ui/elements/thread.aui'
 
+import { TranscriptSettledContext } from './transcript-context'
+import { TranscriptDensityToggle } from './TranscriptDensityToggle'
 import { useTranscript } from './useTranscript'
 
 /**
@@ -111,8 +113,15 @@ export function ChatScreen(): React.JSX.Element {
         </Centered>
       ) : (
         <AssistantRuntimeProvider runtime={runtime}>
+          {/* transcript の密度 (O-2 / FR-012)。実行中のペインと同じ部品・同じ値 (FR-013)。 */}
+          <div className="border-border flex shrink-0 items-center justify-end border-b px-4 py-2">
+            <TranscriptDensityToggle />
+          </div>
           <div className="min-h-0 flex-1">
-            <Thread />
+            {/* 過去ログは記録に終わりが無い行を常に「結果不明」で描く (O-2 / FR-009)。 */}
+            <TranscriptSettledContext.Provider value>
+              <Thread />
+            </TranscriptSettledContext.Provider>
           </div>
         </AssistantRuntimeProvider>
       )}

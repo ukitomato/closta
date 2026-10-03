@@ -1,0 +1,122 @@
+{
+    "gate": "pr",
+    "run": "2026-10-03T21:00:00+09:00",
+    "spec_dir": "specs/011-ui-coverage",
+    "spec_id": "011-ui-coverage",
+    "round": 3,
+    "base_branch": "main",
+    "diff_stat": {
+        "files": 104,
+        "additions": 9057,
+        "deletions": 234
+    },
+    "severity_counts": {
+        "critical": 0,
+        "high": 0,
+        "medium": 2,
+        "low": 10
+    },
+    "convergence": {
+        "resolved_from_prev": 2,
+        "new_in_round": 0,
+        "unresolved": 0
+    },
+    "round_history": [
+        {
+            "round": 1,
+            "critical": 0,
+            "high": 5,
+            "convergence": {
+                "resolved_from_prev": 0,
+                "new_in_round": 5,
+                "unresolved": 0
+            }
+        },
+        {
+            "round": 2,
+            "critical": 0,
+            "high": 2,
+            "convergence": {
+                "resolved_from_prev": 5,
+                "new_in_round": 2,
+                "unresolved": 0
+            }
+        },
+        {
+            "round": 3,
+            "critical": 0,
+            "high": 0,
+            "convergence": {
+                "resolved_from_prev": 2,
+                "new_in_round": 0,
+                "unresolved": 0
+            }
+        }
+    ],
+    "inheritance": "full",
+    "suppressed_by_code_gate": [],
+    "touched_files": [],
+    "viewpoint_coverage": {
+        "A": "Low:0",
+        "B": "Low:0",
+        "C": "Medium:1 Low:1",
+        "D": "Low:1",
+        "E": "Low:0",
+        "F": "\u8a72\u5f53\u306a\u3057: code-gate \u5c02\u4efb",
+        "G": "Low:5",
+        "H": "Medium:1 Low:3"
+    },
+    "fr_coverage": [],
+    "rule_verification": {
+        "ran": false,
+        "round": 3,
+        "reason": "\u898f\u5247\u5b9a\u7fa9\u306e\u5909\u66f4\u306a\u3057 (Round 1 \u3067\u5b9f\u884c exit 0)"
+    },
+    "skipped_reviewers": [
+        {
+            "name": "database-reviewer",
+            "reason": "auto_invoke_patterns \u306b\u4e00\u81f4\u3059\u308b\u5909\u66f4\u30d5\u30a1\u30a4\u30eb\u304c\u7121\u3044"
+        },
+        {
+            "name": "platform-boundary-reviewer",
+            "reason": "\u5229\u7528\u8005\u306e\u5224\u65ad\u3067 Round 3 \u306f\u5909\u66f4\u90e8\u5206\u306b\u7d5e\u3063\u305f (R2 \u6307\u6458 0 \u4ef6)"
+        },
+        {
+            "name": "ui-coverage-reviewer",
+            "reason": "\u5229\u7528\u8005\u306e\u5224\u65ad\u3067 Round 3 \u306f\u5909\u66f4\u90e8\u5206\u306b\u7d5e\u3063\u305f (R2 \u306e Low 2 \u4ef6\u306f a28fcf9 \u3067\u5bfe\u5fdc)"
+        }
+    ],
+    "tracks": {
+        "security-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0
+        },
+        "architecture-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0
+        },
+        "po-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0
+        },
+        "ux-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0
+        },
+        "a11y-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0
+        }
+    },
+    "verdict": "PASS"
+}

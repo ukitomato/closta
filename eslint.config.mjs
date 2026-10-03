@@ -555,10 +555,14 @@ export default defineConfig(
     }
   },
   {
-    // scaffold だが R-3 の仮想化 (回帰核) を足したので、依存配列の番人だけ戻す。
+    // scaffold だが R-3 の仮想化 (回帰核) を足したので、依存配列の番人を戻す。
+    // O-2 が手書きの `SystemEventRow` / `AssistantOrSystemEvent` を足したので、thread-list.aui.tsx と
+    // 同じく ref と空の catch の番人も戻す (O-2 code-gate convention L-005)。
     files: ['src/renderer/src/components/assistant-ui/elements/thread.aui.tsx'],
     rules: {
-      'react-hooks/exhaustive-deps': 'error'
+      'react-hooks/exhaustive-deps': 'error',
+      'react-hooks/refs': 'error',
+      'no-empty': 'error'
     }
   },
   {

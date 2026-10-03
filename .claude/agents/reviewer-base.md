@@ -78,7 +78,7 @@ reviewer は最初の指摘を出す前に **必ず** 以下を Read する:
 | D | Constitution Principle drift / accepted ADR drift / layering | `architecture-reviewer` |
 | E | User Story 価値 / SC 計測可能性 / AC testability / UX negative | `po-reviewer` |
 | F | 命名 / module 配置 / lint hookup / import order / dead code | `convention-reviewer` |
-| G | optional reviewer 範囲 — 永続化スキーマ (`database-reviewer`) / WCAG (`a11y-reviewer`) / empty・error state・i18n (`ux-reviewer`) | 各 optional reviewer |
+| G | optional reviewer 範囲 — 永続化スキーマ (`database-reviewer`) / WCAG (`a11y-reviewer`) / empty・error state・i18n (`ux-reviewer`) / SDK の emit と表示の対応表 `docs/ui-coverage.md` の判断 (`ui-coverage-reviewer`) | 各 optional reviewer |
 | H | テスト戦略 / coverage / observability / 既存 regression | **全 reviewer が必ず埋める** (下記) |
 
 `platform-boundary-reviewer` は C / D / F の**プラットフォーム境界スライス**だけを owner とする (詳細は同ファイルの Owner matrix)。`/cl-add-reviewer` で追加した reviewer は G に入る。

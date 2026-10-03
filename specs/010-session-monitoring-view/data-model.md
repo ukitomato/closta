@@ -9,7 +9,7 @@
 | `statusSince` | `Readonly<Record<sessionId, { status: SessionRowStatus; at: number }>>` | `RunningSessionStoreState` | ストアの更新の後で `rowStatus(viewOf(state, id))` が前の値と変わったとき (research R-01)。**1 回のストア更新 (状態通知のバッチ 1 回を含む) の中の変化は `setState` 1 回にまとめる** (同じ更新の複数の遷移を 1 つの文で読むため)。起動の受付時もその時点の `rowStatus` を評価して入れる (handshake より先に状態通知が届いていても行と食い違わない) |
 | `activity` | `Readonly<Record<sessionId, Activity \| null>>` | `RunningSessionStoreState` | **購読の手前で間引いて書く** (research R-03)。`deriveActivity` の入力 (メッセージ・`pending`・行の状態) が変わりうる更新の後、つまり `statusSince` を見直すのと同じ位置 (`patch` の後・状態通知の受信の後・利用者の送信の後) で「書き込み予定」を立て、セッションごとに 500ms の間隔で `deriveActivity` の結果を書く。最後の値は必ず書く (trailing)。値が前と等しければ書かない |
 | `folderLabel` | `LiveSessionState` のフィールド (`string \| null`) | 各セッション | 起動の受付時に、その時点で引けた作業フォルダの表示名を写す。引けなければ `null` (読み上げと行は固定の代替語)。App の寿命の live region が IPC を増やさずに文を組むため (research R-05) |
-| `receivedMessages` | `number` | `RunningSessionStoreState` | port の `message` を受けるたびに 1 足す (全セッションの累計。会話由来の値を持たない)。実機計測の観測点 (spec FR-012) |
+| `receivedMessages` | `number` | `RunningSessionStoreState` | port の `message` を受けるたびに 1 足す (全セッションの累計。会話由来の値を持たない)。実機計測の観測点 (spec FR-012)。**O-2 の後は、tool の結果の送り直しと Hook / task の行の作成・更新も数える** (O-2 data-model §6。値を比べるときは基準の変化を並べて書く) |
 | `density` | `'comfortable' \| 'compact'` | `RunningSessionStoreState` | 利用者の切り替えだけ。既定 `comfortable`。永続化しない (spec FR-009) |
 
 - `statusSince` / `activity` は行を閉じたときに消し、そのセッションの間引きのタイマも止める

@@ -13,6 +13,7 @@ import {
 import { cn } from "@/lib/utils";
 import { codeScroll, codeSurface, mono } from "./surfaces";
 import { ToolFallback } from "./tool-fallback.aui";
+import { isTruncatedArgs, ToolErrorResult, ToolResultMarks } from "./tool-result-marks";
 
 /**
  * Edit / Write / MultiEdit を hunk 単位の diff で示す (R-4 / FR-002 / Tier A: Code diff)。
@@ -76,13 +77,21 @@ function Hunk({ rows }: { rows: readonly DiffRow[] }): React.JSX.Element {
   );
 }
 
+/**
+ * diff の枠。失敗・拒否された変更が適用済みの diff に見えないよう、ヘッダに「エラー」の Badge を出し、
+ * エラーの結果の本文を diff の後に出す (成功の結果は出さない。O-2 / FR-007 / pr-gate R1 po H-001)。
+ */
 function DiffShell({
   filePath,
   truncated,
+  isError,
+  result,
   children,
 }: {
   filePath: string;
   truncated: boolean;
+  isError: boolean | undefined;
+  result: unknown;
   children: React.ReactNode;
 }): React.JSX.Element {
   return (
@@ -93,27 +102,28 @@ function DiffShell({
       <div className="aui-code-diff-header text-muted-foreground flex items-center gap-2 px-3 py-1.5 text-xs">
         <FileDiffIcon className="size-3.5 shrink-0" />
         <span className={cn(mono, "text-foreground/80 truncate")}>{filePath}</span>
-        {truncated ? <span className="ms-auto shrink-0 opacity-70">（切り詰め）</span> : null}
+        <ToolResultMarks isError={isError} truncated={truncated} className="ms-auto" />
       </div>
       {children}
+      <ToolErrorResult isError={isError} result={result} />
     </div>
   );
 }
 
 const CodeDiffImpl: ToolCallMessagePartComponent = (props) => {
   const { toolName, argsText } = props;
-  // 切り詰めフラグは convert.ts が args.__truncated に載せる (assistant-ui の tool-call part に専用フィールドが無いため)。
-  const isTruncated =
-    typeof props.args === "object" &&
-    props.args !== null &&
-    (props.args as Record<string, unknown>).__truncated === true;
+  const shell = {
+    truncated: isTruncatedArgs(props.args),
+    isError: props.isError,
+    result: props.result,
+  };
 
   if (toolName === "Write") {
     const args = parseWriteArgs(argsText);
     if (!args) return <ToolFallback {...props} />;
     const rows = diffRows("", args.content);
     return (
-      <DiffShell filePath={args.file_path} truncated={isTruncated}>
+      <DiffShell filePath={args.file_path} {...shell}>
         <Hunk rows={rows} />
       </DiffShell>
     );
@@ -123,7 +133,7 @@ const CodeDiffImpl: ToolCallMessagePartComponent = (props) => {
     const args = parseMultiEditArgs(argsText);
     if (!args) return <ToolFallback {...props} />;
     return (
-      <DiffShell filePath={args.file_path} truncated={isTruncated}>
+      <DiffShell filePath={args.file_path} {...shell}>
         {args.edits.map((edit: MultiEditItem, index) => (
           <Hunk key={index} rows={diffRows(edit.old_string, edit.new_string)} />
         ))}
@@ -135,7 +145,7 @@ const CodeDiffImpl: ToolCallMessagePartComponent = (props) => {
   const args = parseEditArgs(argsText);
   if (!args) return <ToolFallback {...props} />;
   return (
-    <DiffShell filePath={args.file_path} truncated={isTruncated}>
+    <DiffShell filePath={args.file_path} {...shell}>
       <Hunk rows={diffRows(args.old_string, args.new_string)} />
     </DiffShell>
   );

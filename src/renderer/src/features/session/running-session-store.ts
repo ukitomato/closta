@@ -4,8 +4,10 @@ import { createStore, type StoreApi } from 'zustand/vanilla'
 import { SESSION_PORT_MESSAGE, type ClostaCapability } from '@domain/capability'
 import type { SessionEvent } from '@domain/session/agent-session'
 import type { SessionLaunchConfig } from '@domain/session/launch-config'
+import { mergeSystemEvent, systemEventPartOf } from '@domain/session/system-event'
+import type { TranscriptMessageDTO } from '@domain/session/transcript-dto'
 
-import { toThreadMessage } from '@/features/chat/convert'
+import { fromSystemEventData, toThreadMessage } from '@/features/chat/convert'
 
 import { isBusyRunState, isSendableText } from './composer-queue'
 import { createCappedAdapter } from './composer-queue-adapter'
@@ -98,6 +100,25 @@ function upsertMessage(
   const copy = [...prev]
   copy[index] = next
   return copy
+}
+
+/**
+ * port の `message` を本文に取り込む。tool の結果を埋めた送り直しは同じ id の差し替え (O-2 / FR-007)。
+ * **システムイベントの行は domain の `mergeSystemEvent` で合成する** (規則の正本は domain の 1 か所。data-model §2):
+ * 前の行の data part から DTO を復元し、DTO どうしで合成してから変換する。行を作れない更新 (`null`) は捨てる
+ * (戻り値 `null` = 本文を変えない)。
+ */
+function applyMessage(
+  prev: readonly ThreadMessageLike[],
+  dto: TranscriptMessageDTO
+): ThreadMessageLike[] | null {
+  if (systemEventPartOf(dto) === null) return upsertMessage(prev, toThreadMessage(dto))
+  const existing = prev.find((m) => m.id !== undefined && m.id === dto.id)
+  const merged = mergeSystemEvent(
+    existing === undefined ? undefined : fromSystemEventData(existing),
+    dto
+  )
+  return merged === null ? null : upsertMessage(prev, toThreadMessage(merged))
 }
 
 interface PortData {
@@ -245,17 +266,15 @@ export function createRunningSessionStore(
         break
       case 'message':
         // 受信の累計 (実機計測の観測点。O-1 / FR-012) を同じ `setState` で数える。
+        // 行を作れないシステムイベント (合成の結果が null) は本文を変えず、受信の累計だけを数える。
         store.setState((s) => {
           const current = s.sessions[sessionId]
           if (current === undefined) return s
+          const messages = applyMessage(current.messages, event.message)
           return {
-            sessions: {
-              ...s.sessions,
-              [sessionId]: {
-                ...current,
-                messages: upsertMessage(current.messages, toThreadMessage(event.message))
-              }
-            },
+            ...(messages === null
+              ? {}
+              : { sessions: { ...s.sessions, [sessionId]: { ...current, messages } } }),
             receivedMessages: s.receivedMessages + 1
           }
         })

@@ -5,8 +5,14 @@ import { BotIcon, WrenchIcon } from "lucide-react";
 import type { ToolCallMessagePartComponent } from "@assistant-ui/react";
 
 import type { TranscriptMessageDTO, TranscriptPartDTO } from "@domain/session/transcript-dto";
-import { parseTaskArgs } from "@/features/chat/tool-args";
+import {
+  SYSTEM_EVENT_CATEGORY_LABELS,
+  SYSTEM_EVENT_STATUS_LABELS,
+} from "@/features/chat/labels";
+import { parseAgentArgs, parseTaskArgs } from "@/features/chat/tool-args";
+import { cn } from "@/lib/utils";
 import { ToolFallback } from "./tool-fallback.aui";
+import { isTruncatedArgs, ToolResultMarks } from "./tool-result-marks";
 
 /**
  * Task (subagent) を Subagent 表示にする (R-4 / FR-004 / FR-005 / US-2 / Tier A: Subagent list)。
@@ -73,7 +79,9 @@ function SubagentPart({
           <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
             <WrenchIcon className="size-3 shrink-0" />
             <span className="font-medium">{part.toolName}</span>
-            {part.isError ? <span className="text-destructive">失敗</span> : null}
+            {/* 入れ子でも最上位と同じ印 (エラーと切り詰め。pr-gate R2 ui-coverage L-101)。 */}
+            <ToolResultMarks isError={part.isError} truncated={part.truncated === true} />
+
           </div>
           {result ? (
             <pre className="text-foreground/70 max-h-40 overflow-auto whitespace-pre-wrap font-mono text-[11px]">
@@ -92,6 +100,14 @@ function SubagentPart({
       return <p className="text-muted-foreground text-xs">📎 {part.filename}</p>;
     case "divider":
       return <p className="text-muted-foreground text-center text-xs">── {part.label} ──</p>;
+    case "system-event":
+      // 入れ子の中のシステムイベントは最小の 1 行 (種類と状態。O-2)。行の合成と「結果不明」は transcript の行が担う。
+      return (
+        <p className="text-muted-foreground text-xs">
+          {SYSTEM_EVENT_CATEGORY_LABELS[part.category]}
+          {part.status !== null ? ` — ${SYSTEM_EVENT_STATUS_LABELS[part.status]}` : ""}
+        </p>
+      );
   }
 }
 
@@ -132,7 +148,11 @@ function SubagentBody({
 }
 
 const SubagentImpl: ToolCallMessagePartComponent = (props) => {
-  const args = parseTaskArgs(props.argsText);
+  // 実行時の名前は `Agent` (SDK 0.3.270) と旧名 `Task` のどちらも来る (O-2 / FR-010)。
+  const args =
+    props.toolName === "Agent"
+      ? parseAgentArgs(props.argsText)
+      : parseTaskArgs(props.argsText);
   if (!args) return <ToolFallback {...props} />;
 
   const children = extractChildren(props.args);
@@ -151,6 +171,12 @@ const SubagentImpl: ToolCallMessagePartComponent = (props) => {
             {args.subagent_type}
           </span>
         ) : null}
+        {/* 最上位の失敗と切り詰め (入れ子の印だけでなく。O-2 / FR-007 / pr-gate R1 po H-001)。 */}
+        <ToolResultMarks
+          isError={props.isError}
+          truncated={isTruncatedArgs(props.args)}
+          className="ms-auto"
+        />
       </div>
       <div className="border-border/40 flex flex-col gap-2 border-t px-3 py-2">
         {args.description ? (
@@ -165,7 +191,12 @@ const SubagentImpl: ToolCallMessagePartComponent = (props) => {
         {result ? (
           <div className="border-border/30 border-t pt-2">
             <p className="text-muted-foreground mb-1 text-xs font-medium">結果</p>
-            <pre className="text-foreground/80 max-h-60 overflow-auto whitespace-pre-wrap font-mono text-[11px]">
+            <pre
+              className={cn(
+                "max-h-60 overflow-auto whitespace-pre-wrap font-mono text-[11px]",
+                props.isError ? "text-destructive/90" : "text-foreground/80",
+              )}
+            >
               {result}
             </pre>
           </div>

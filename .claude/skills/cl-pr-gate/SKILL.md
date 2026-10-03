@@ -101,7 +101,8 @@ git diff --name-only "$base"...HEAD > "$spec_dir/.pr-gate-scope.txt"
 
 active=$(gate_common::reviewers_filter pr-gate "$spec_dir/.pr-gate-scope.txt" \
   security-reviewer architecture-reviewer po-reviewer \
-  database-reviewer ux-reviewer a11y-reviewer platform-boundary-reviewer)
+  database-reviewer ux-reviewer a11y-reviewer platform-boundary-reviewer \
+  ui-coverage-reviewer)
 ```
 
 **起動数に固定上限はない。`reviewers_filter` が返した集合がそのまま並列起動の対象である。**

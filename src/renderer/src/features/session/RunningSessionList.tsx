@@ -179,6 +179,8 @@ function MonitorSummary(): React.JSX.Element {
             size="xs"
             variant={density === d ? 'secondary' : 'ghost'}
             aria-pressed={density === d}
+            // 選択を背景差だけに頼らず太字でも示す (SessionListScreen の FilterChip と同じ。O-2 pr-gate R2 a11y H-002)
+            className="aria-pressed:font-semibold"
             onClick={() => store.setDensity(d)}
           >
             {d === 'comfortable'

@@ -34,8 +34,10 @@ export default defineConfig({
            * 実行時間を支配していた (実測 `forks` 28.81s / transform 93% →
            * `threads` 2.05s)。
            * この project のテストは `process.chdir` / `process.env` の書き換え /
-           * `process.exit` / `child_process` / `worker_threads` を使わないため、
+           * `process.exit` / `worker_threads` を使わないため、
            * プロセス分離を落としても影響しない (661 テスト全 pass を確認済)。
+           * 例外: `tests/ui-coverage/item21.test.ts` (O-2) は Constitution 検証の配線の発火を確かめるため
+           * `child_process.spawnSync` で `check.mjs` を一時ディレクトリで起こす。テストのプロセスの状態は変えない。
            */
           pool: 'threads',
           // `tests/` 側は `.test.ts` を node、`.test.tsx` を renderer に振り分ける。

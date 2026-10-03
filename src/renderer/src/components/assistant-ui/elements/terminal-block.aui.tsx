@@ -1,13 +1,15 @@
 "use client";
 
 import { memo } from "react";
-import { CheckIcon, TerminalIcon, XCircleIcon } from "lucide-react";
+import { CheckIcon, TerminalIcon } from "lucide-react";
 import type { ToolCallMessagePartComponent } from "@assistant-ui/react";
 
+import { TOOL_RESULT_LABELS } from "@/features/chat/labels";
 import { parseBashArgs } from "@/features/chat/tool-args";
 import { cn } from "@/lib/utils";
 import { codeScroll, codeSurface, mono } from "./surfaces";
 import { ToolFallback } from "./tool-fallback.aui";
+import { isTruncatedArgs, ToolResultMarks } from "./tool-result-marks";
 
 /**
  * Bash の tool 実行を端末風ブロックで示す (R-4 / FR-001 / Tier A: Terminal block)。
@@ -28,6 +30,8 @@ const TerminalBlockImpl: ToolCallMessagePartComponent = (props) => {
 
   const output = typeof props.result === "string" ? props.result : null;
   const hasOutput = output !== null && output.length > 0;
+  // 切り詰めフラグは convert.ts が args.__truncated に載せる (Code diff と同じ経路。O-2 / FR-007 で実行中の結果も通る)。
+  const isTruncated = isTruncatedArgs(props.args);
 
   return (
     <div
@@ -40,10 +44,13 @@ const TerminalBlockImpl: ToolCallMessagePartComponent = (props) => {
         {args.description ? (
           <span className="truncate opacity-80">— {args.description}</span>
         ) : null}
-        {props.isError ? (
-          <XCircleIcon className="text-destructive ms-auto size-3.5 shrink-0" aria-label="失敗" />
-        ) : hasOutput ? (
-          <CheckIcon className="ms-auto size-3.5 shrink-0 text-emerald-500" aria-label="完了" />
+        {/* 切り詰めと失敗は他の表示と同じ見える文字の印 (pr-gate R2 ux M-002 / po L-002 / a11y L-002)。 */}
+        <ToolResultMarks isError={props.isError} truncated={isTruncated} className="ms-auto" />
+        {!props.isError && hasOutput ? (
+          <CheckIcon
+            className={cn("size-3.5 shrink-0 text-emerald-500", !isTruncated && "ms-auto")}
+            aria-label={TOOL_RESULT_LABELS.completed}
+          />
         ) : null}
       </div>
       <div className={cn(codeScroll, "border-border/40 border-t")}>

@@ -28,7 +28,9 @@ import {
 import { toLiveAssistantMessage } from '@domain/session/live-message'
 import { nextState, type SessionRunState } from '@domain/session/run-state'
 import { sanitizeBody } from '@domain/session/sanitize-body'
+import { toSystemEventMessage } from '@domain/session/system-event'
 
+import { createLiveToolResultTracker } from './live-tool-results'
 import {
   acceptsWhileClosing,
   buildQueryOptions,
@@ -270,6 +272,8 @@ async function run(
   const promptQueue = new PromptQueue()
   const abortController = new AbortController()
   const permissions = createPermissionRegistry(() => globalThis.crypto.randomUUID())
+  // 実行中の tool の結果の対応 (data-model §3。closure に置く — module スコープに置かない)。
+  const toolResults = createLiveToolResultTracker()
   let state: SessionRunState = 'idle'
   let reasonKey: LaunchFailureReason | null = null
   let queryHandle: Query | null = null
@@ -507,8 +511,18 @@ async function run(
         transition({ kind: 'ready' }) // launching → running (他状態では no-op)
       }
       switch (message.type) {
-        case 'assistant':
-          emit({ kind: 'message', message: toLiveAssistantMessage(message) })
+        case 'assistant': {
+          const dto = toLiveAssistantMessage(message)
+          // 結果待ちの tool_use を覚える (結果は後の user メッセージで同じ id に埋めて送り直す。O-2 / FR-007)。
+          toolResults.trackAssistant(dto)
+          emit({ kind: 'message', message: dto })
+          break
+        }
+        case 'user':
+          // **tool_result ブロックだけを読み、user の本文は送らない** (data-model §3)。
+          // 影響を受けたメッセージは user メッセージ 1 つにつき 1 回だけ、同じ id で送り直す。
+          for (const dto of toolResults.applyUserMessage(message))
+            emit({ kind: 'message', message: dto })
           break
         case 'result':
           // streaming-input では turn ごとに result が来て generator は開いたまま (次の sendPrompt を待つ)。
@@ -536,9 +550,14 @@ async function run(
               }
             })
           }
+          {
+            // Hook / Background task の行 (O-2 / FR-008)。後続は同じ id で送り、renderer が合成する (FR-009)。
+            const event = toSystemEventMessage(message, null)
+            if (event !== null) emit({ kind: 'message', message: event })
+          }
           break
         default:
-          // user echo / stream_event / partial 等は message 単位表示では扱わない (AD-020 / H-06)。
+          // stream_event / partial 等の扱いは docs/ui-coverage.md の対応表が正本 (AD-020 / H-06)。
           break
       }
       if (terminated) break

@@ -1,8 +1,8 @@
 ---
 status: needs-human-review
-last_updated: 2026-10-02
-generated_by: human (PLAN.md 付録A + §3〜§7 を素材に起草。X-1 で AgentSession 系 8 語を追記)
-total_terms: 80
+last_updated: 2026-10-03
+generated_by: human (PLAN.md 付録A + §3〜§7 を素材に起草。X-1 で AgentSession 系 8 語を追記。O-2 で 5 語を追記)
+total_terms: 85
 ---
 
 # Glossary (Ubiquitous Language)
@@ -75,6 +75,17 @@ total_terms: 80
 - **Ref**: [008 spec](../specs/008-session-launch-settings-dialog-and-presets/spec.md) FR-006 / FR-007
 
 ### B
+
+#### **Background task（バックグラウンドタスク）**
+
+- **Definition**: Claude Code が背景で走らせる task (SDK の `task_started` で `is_backgrounded: true`)。O-2 は
+  transcript に **task ごとに 1 行**のシステムイベントの行として出し、状態 (実行中・完了・失敗など) を同じ行で書き換える
+- **日本語表記**: バックグラウンドタスク
+- **Domain**: 外部概念 (SDK)。表示は `ui`。**状態の一覧は持たない** (session も ui も task の状態の表を保持しない。
+  1 行の状態は transcript のメッセージの中にだけある。O-2 USER 決定 2026-10-03)
+- **Counterexamples**: 前景の task (`is_backgrounded` が true でない。subagent の呼び出しなど) は行にしない — 既存の表示
+  (Subagent・tool の結果) がある。実行中の task の一覧 (`background_tasks_changed`) は O-6 で要否を判断する
+- **Ref**: [011 spec](../specs/011-ui-coverage/spec.md) FR-008 / FR-009
 
 #### **Browse session**
 
@@ -189,7 +200,7 @@ total_terms: 80
   識別子は `density`。renderer の表示状態であり永続化しない (既定は `comfortable`)
 - **日本語表記**: 情報密度
 - **Domain**: `session` (監視ビューは session の操作 UI)
-- **Counterexamples**: transcript の表示の密度とは別物 — そちらは O-2 (`ui`) が扱う。`compact` でも隔離バッジ (Isolation badge。I-x) は行に残す
+- **Counterexamples**: transcript の表示の密度 (Transcript density。O-2 の `ui`) とは別の値で、切り替えも別。`compact` でも隔離バッジ (Isolation badge。I-x) は行に残す
 - **Ref**: [010 spec](../specs/010-session-monitoring-view/spec.md) FR-008 / FR-009
 
 #### **DetectedCandidate（検出候補）**
@@ -352,6 +363,17 @@ total_terms: 80
 - **Ref**: [AD-041](decisions/0041-x4-launch-config-on-x1-launch-gate.md) (e) 2・3
 
 ### H
+
+#### **Hook（フック）**
+
+- **Definition**: Claude Code の設定で、セッションのイベント (SessionStart・PreToolUse など) に合わせて走るコマンド。
+  SDK は `hook_started` / `hook_progress` / `hook_response` を emit する。O-2 は開始と応答を **1 つの Hook につき 1 行**の
+  システムイベントの行 (名前と結果) にし、**出力本文 (stdout / stderr / output) と終了コードは出さない**
+- **日本語表記**: フック
+- **Domain**: 外部概念 (SDK)。表示は `ui`
+- **Counterexamples**: SDK は既定では SessionStart / Setup の Hook だけを emit する。PreToolUse などの Hook を出すには
+  query の options (`includeHookEvents`) が要り、そのキー集合は AD-041 (g) で固定されている (一般の Hook の表示は O-6)
+- **Ref**: [011 spec](../specs/011-ui-coverage/spec.md) FR-008
 
 #### **HostPath**
 
@@ -683,7 +705,8 @@ total_terms: 80
 
 #### **Subagent（サブエージェント）**
 
-- **Definition**: Task tool で起動される副エージェント。過去ログでは配下メッセージが **`parent_tool_use_id`**
+- **Definition**: subagent の tool (実行時の名前は `Agent`。旧名 `Task`。SDK 0.3.270 の入力型は `AgentInput`) で起動される
+  副エージェント。Subagent の専用表示は両方の名前に当てる (O-2 FR-010)。過去ログでは配下メッセージが **`parent_tool_use_id`**
   （起動した Task の `tool_use.id`。一次リンク鍵）で親 Task に対応づく。多段時は `parent_agent_id`（親 subagent の
   agentId）が連鎖鍵。R-4 は親 Task の下に**入れ子**表示する
 - **日本語表記**: サブエージェント
@@ -799,13 +822,44 @@ total_terms: 80
 - **Counterexamples**: セッション ID とは別 — 1 世代に複数のセッションが属し、supervisor の異常終了はその世代の全セッションを `supervisor-exited` にする
 - **Ref**: [AD-043](decisions/0043-single-supervisor-session-threads-and-session-limit.md) Decision 1・4
 
+#### **System event row（システムイベントの行）**
+
+- **Definition**: transcript の中で Hook / Background task を **1 つにつき 1 行**で示す表示 (O-2)。DTO は
+  `TranscriptPartDTO` の `system-event`。同じ Hook / task の後続のイベントは同じ行に合成する (`mergeSystemEvent`)。
+  行を作れるのは Hook の開始・応答と task の開始だけで、行の無い id への更新は捨てる。終わりの来ない行は、セッションの
+  終了・失敗の後と過去ログで「結果不明」と描く
+- **日本語表記**: システムイベントの行
+- **Domain**: `ui` (表示)。経路 (agents での変換) は session
+- **Counterexamples**: assistant の発話ではない — コピーなどの操作や応答中の印を付けない。状態の一覧 (task の表) ではない。
+  agents の `post` の kind `event` (セッションスレッドの通知の種類) とも別物
+- **Ref**: [011 spec](../specs/011-ui-coverage/spec.md) FR-009 / [data-model](../specs/011-ui-coverage/data-model.md) §2
+
 ### T
 
 #### **Tier A / B / C**
 
 - **Definition**: Element の実装優先度。A は Claude Code の一次概念に直結する必須、
-  B は体験を押し上げるもの、C は対象外（Voice 系 / Generative 群など）
+  B は体験を押し上げるもの、C は対象外（Voice 系 / Generative 群など）。
+  **ui-coverage 対応表の行の Tier** (O-2) も同じ 3 値で、Claude Code の一次概念 (会話・tool の実行と結果・承認・中断・
+  コンテキスト・費用と制限・セッションの境界) に直結し、利用者が見ないと判断を誤る行を A、無くても判断を誤らない行を B、
+  対象外を C とする (正本は AD-044)
 - **Domain**: `ui`
+
+#### **Tool group（tool のまとまり）**
+
+- **Definition**: transcript で連続する tool の呼び出しをまとめて畳める element (R-3)。R-4 の専用表示はこの内側に出る。
+  O-2 で、transcript の情報密度が comfortable のとき既定で開き、compact のとき既定で閉じる (AD-035 Trade-off への回答)
+- **日本語表記**: tool のまとまり
+- **Domain**: `ui`
+
+#### **Transcript density（transcript の情報密度）**
+
+- **Definition**: transcript の表示の詰め方 (O-2)。`comfortable` (Tool group を開く) と `compact` (Tool group と Reasoning を
+  閉じ、間隔を詰める) の 2 値。識別子は `transcriptDensity`。renderer の表示状態であり永続化しない (既定は `comfortable`)
+- **日本語表記**: transcript の情報密度
+- **Domain**: `ui`
+- **Counterexamples**: 監視ビューの行の Density (O-1。`density`。session) とは別の値で、切り替えも別の位置・文言
+- **Ref**: [011 spec](../specs/011-ui-coverage/spec.md) FR-012 / FR-013
 
 #### **transcript**
 
@@ -856,10 +910,14 @@ total_terms: 80
 
 #### **ui-coverage 対応表**
 
-- **Definition**: `docs/ui-coverage.md`。SDK のメッセージ型・tool 名・システムイベントと
-  表示実装の対応表。**未割当行がある間、UI 系 feature を `completed` にしない**
+- **Definition**: `docs/ui-coverage.md`。SDK のメッセージ型・中身のブロック・tool・アプリが作る経路・制御要求と
+  表示実装の対応表 (O-2)。各行は**割当**を 3 種類のどれかで持つ: **実装済み** (element と経路。ToolFallback だけで実装済みに
+  できるのは Tier B / C の行)、**後続** (roadmap に実在し、完了していない feature の ID)、**表示不要** (理由)。
+  **未割当行がある間、UI 系 feature を `completed` にしない**。SDK の型定義と機械で照合する (Constitution 検証の項目 21)
 - **Domain**: `ui`
-- **Ref**: Constitution Principle XII
+- **Counterexamples**: 「後続」は未割当ではない (roadmap に実在し、完了していない feature の ID に限る)。M3 の完了の条件は「Tier A の後続のうち、
+  割当先が M3 の feature の行が 0」(AD-044)。他 domain の一覧画面の値 (`SDKSessionInfo` など) は行にしない
+- **Ref**: Constitution Principle XII / AD-044 / [011 spec](../specs/011-ui-coverage/spec.md)
 
 ### W
 

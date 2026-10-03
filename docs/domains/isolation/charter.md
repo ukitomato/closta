@@ -3,11 +3,12 @@ domain: isolation
 status: needs-human-review
 owner: ukitomato
 generated_by: human (PLAN.md を素案として再導出。素案の container domain を改名・拡張)
-last_reviewed: 2026-09-15
+last_reviewed: 2026-10-03
 related_adrs:
   - docs/decisions/0008-no-persistent-environment-provisioning.md
   - docs/decisions/0012-docker-control-via-cli.md
   - docs/decisions/0007-session-source-of-truth-is-claude-code.md
+  - docs/decisions/0044-ui-coverage-assignment.md
 related_specs: []
 ---
 
@@ -130,7 +131,7 @@ sandbox capability の判定（Seatbelt / bubblewrap を含む）、権限モー
 
 - 依存する domain: `runtime`（`capabilities` の表明、endpoint 判別、パス変換）
 - 依存される domain: `session`（起動時の権限ゲート）、`ui`（隔離表示）
-- 共有 invariant: Principle III / V / VI / VII / IX / X。詳細は [docs/domains/_overview.md](../_overview.md)
+- 共有 invariant: Principle III / V / VI / VII / IX / X / XII (I-3 は `docs/ui-coverage.md` の `後続: I-3` の行を完了の PR で書き換える)。詳細は [docs/domains/_overview.md](../_overview.md)
   (VII = supervisor は Electron 非依存 / IX = 重いパースを main で行わない。`_overview.md` の割り当てに合わせた)
 
 ## Related ADRs

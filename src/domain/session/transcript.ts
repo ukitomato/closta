@@ -1,4 +1,6 @@
 import { sanitizeBody, TOOL_RESULT_MAX_BYTES } from './sanitize-body'
+import { mergeSystemEvent, systemEventPartOf, toSystemEventMessage } from './system-event'
+import { orphanResultPart, readToolResult } from './tool-result'
 import type {
   TranscriptMessageDTO,
   TranscriptMessageRole,
@@ -84,21 +86,6 @@ function safeStringify(v: unknown): string {
   }
 }
 
-/** tool_result.content (文字列 or block 配列) を平坦な文字列にする。 */
-function toolResultText(content: unknown): string {
-  if (typeof content === 'string') return content
-  if (Array.isArray(content)) {
-    return content
-      .map((c) => {
-        const r = asRecord(c)
-        return r && typeof r.text === 'string' ? r.text : ''
-      })
-      .filter((s) => s.length > 0)
-      .join('\n')
-  }
-  return ''
-}
-
 /**
  * `<img>` 経由でも安全な data 画像 MIME。**`ui` の `safe-url.ts` の `SAFE_DATA_IMAGE` と揃える** —
  * `image/svg+xml` は script 面が残るため除外する (pr-gate security M-001。CSP `img-src 'self' data:` と同方針)。
@@ -178,6 +165,9 @@ export function toTranscriptMessages(
   const toolCallById = new Map<string, MutableToolCall>()
   /** tool-call → その tool-call を持つメッセージの深さ (ネスト深さの計算に使う)。 */
   const ownerDepth = new Map<MutableToolCall, number>()
+  /** Hook / task の行 (合成済み) と、その行の id → 位置。 */
+  const systemEvents: TranscriptMessageDTO[] = []
+  const systemEventIndex = new Map<string, number>()
 
   for (const rec of records) {
     if (!rec || typeof rec.uuid !== 'string' || rec.uuid.length === 0) continue
@@ -186,7 +176,33 @@ export function toTranscriptMessages(
     const orphanResults: BuildPart[] = []
     const ownToolCalls: MutableToolCall[] = []
 
-    // コンパクション境界を最小の区切りで示す (FR-018)。専用 element は O-2。
+    // Hook / Background task のシステムメッセージは 1 つの Hook / task を 1 行に合成する (O-2 / FR-009)。
+    // 規則は実行中の経路と同じ `system-event.ts`。行の無い id への更新は捨てる。
+    if (role === 'system') {
+      const event = toSystemEventMessage({ ...asRecord(rec.message), type: 'system' })
+      if (event) {
+        const index = systemEventIndex.get(event.id)
+        const merged = mergeSystemEvent(
+          index === undefined ? undefined : systemEvents[index],
+          event
+        )
+        const mergedPart = systemEventPartOf(merged ?? undefined)
+        if (merged && mergedPart) {
+          if (index === undefined) {
+            systemEventIndex.set(event.id, systemEvents.length)
+            systemEvents.push(merged)
+            topLevel.push({ id: merged.id, role: 'system', parts: [mergedPart], createdAt: null })
+          } else {
+            systemEvents[index] = merged
+            const row = topLevel.find((m) => m.id === merged.id)
+            if (row) row.parts = [mergedPart]
+          }
+        }
+        continue
+      }
+    }
+
+    // コンパクション境界を最小の区切りで示す (FR-018)。専用 element は対応表 A 節の割当 (O-6)。
     if (role === 'system' && isCompactBoundary(rec.message)) {
       parts.push({ type: 'divider', label: 'コンテキストを圧縮' })
     }
@@ -228,26 +244,17 @@ export function toTranscriptMessages(
           break
         }
         case 'tool_result': {
-          const id = typeof b.tool_use_id === 'string' ? b.tool_use_id : ''
-          const res = sanitizeBody(toolResultText(b.content), TOOL_RESULT_MAX_BYTES)
-          const isError = b.is_error === true
-          const target = id.length > 0 ? toolCallById.get(id) : undefined
+          // 取り出しと無害化は実行中の経路と共有する (`tool-result.ts`。O-2 / FR-007)。
+          const res = readToolResult(b)
+          if (!res) break
+          const target = res.toolUseId.length > 0 ? toolCallById.get(res.toolUseId) : undefined
           if (target) {
-            target.result = res.value
-            target.isError = isError
+            target.result = res.text
+            target.isError = res.isError
             if (res.truncated) target.truncated = true
           } else {
             // 孤児 tool_result: 対応する tool_use が無い。**欠落させず単独表示** (data-model §4)。
-            orphanResults.push({
-              type: 'tool-call',
-              toolCallId: id,
-              toolName: '(tool result)',
-              argsText: '',
-              result: res.value,
-              isError,
-              truncated: res.truncated,
-              children: []
-            })
+            orphanResults.push({ ...(orphanResultPart(res) as MutableToolCall), children: [] })
           }
           break
         }

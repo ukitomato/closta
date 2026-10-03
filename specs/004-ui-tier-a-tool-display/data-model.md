@@ -45,6 +45,8 @@ R-4 は新たに SDK を呼ばない。入力は R-3 の取得経路が渡す [`
 
 ## §3 表示先の割り当て表 (Principle XII の暫定台帳。FR-016 / SC-008)
 
+> **2026-10-03 追記 (O-2)**: この暫定台帳の正本は [`docs/ui-coverage.md`](../../docs/ui-coverage.md) に移った。下で O-2 に送った行は、対応表で O-4 / O-5 / O-6 に割り当てた。
+
 **この表が R-4 が扱う範囲の割り当ての正本である。** `docs/ui-coverage.md` は **O-2** で作る。
 **その不在中、Principle XII の自動検証 (未割当行 grep) はファイル不在で vacuously pass する** —
 本 feature の未割当ゼロは**この表 + レビュー**でのみ担保される。この scope 解釈 (R-3 が design-gate 承認済み) の

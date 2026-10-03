@@ -3,7 +3,7 @@ domain: session
 status: needs-human-review
 owner: ukitomato
 generated_by: human (PLAN.md を素案として再導出)
-last_reviewed: 2026-10-02
+last_reviewed: 2026-10-03
 related_adrs:
   - docs/decisions/0002-use-agent-sdk-not-cli.md
   - docs/decisions/0006-supervisor-in-utility-process.md
@@ -14,12 +14,14 @@ related_adrs:
   - docs/decisions/0036-single-session-launch-process-and-live-stream.md
   - docs/decisions/0041-x4-launch-config-on-x1-launch-gate.md
   - docs/decisions/0043-single-supervisor-session-threads-and-session-limit.md
+  - docs/decisions/0044-ui-coverage-assignment.md
 related_specs:
   - specs/002-session-cross-folder-session-enumeration/spec.md
   - specs/005-session-launch-and-streaming/spec.md
   - specs/008-session-launch-settings-dialog-and-presets/spec.md
   - specs/009-session-supervisor-and-multi-session/spec.md
   - specs/010-session-monitoring-view/spec.md
+  - specs/011-ui-coverage/spec.md
 ---
 
 # Domain Charter: session
@@ -160,7 +162,7 @@ O-1 では、監視ビュー = セッション画面のサイドバーの稼働�
 
 - 依存する domain: `runtime`（起動とパス解決）、`provider`（環境変数とモデルカタログの導出）
 - 依存される domain: `ui`, `isolation`
-- 共有 invariant: Principle III / IV / V / VII / IX / X。詳細は [docs/domains/_overview.md](../_overview.md)
+- 共有 invariant: Principle III / IV / V / VII / IX / X / XII (X-6 は `docs/ui-coverage.md` の `後続: X-6` の行を完了の PR で書き換える。SDK の版を上げる PR は対応表を同じ PR で直す)。詳細は [docs/domains/_overview.md](../_overview.md)
   (VII = supervisor は Electron 非依存で単独起動できる。R-2 で `agents` を持つ feature が実装され実体を持った)
 
 ## Related ADRs
@@ -217,6 +219,14 @@ X-6 は未着手。
 - [ ] transcript ミラーの保持期限と削除経路（AD-007 の blocking gap）を本 domain が持つか
 - [x] ~~Hook / Background task の状態管理を本 domain の責務に含めるか ([AD-020](../../decisions/0020-sdk-emitted-message-inventory.md) Consequences「O-1 着手時に判断する」)~~ →
       **含めない** (O-1 USER 決定 2026-10-02)。表示の割当と、状態の保持が要る場合の持ち主 domain の判断は O-2 に送った
-      (ui charter の Open Questions / roadmap の O-2 行)
+      (ui charter の Open Questions / roadmap の O-2 行)。**O-2 の結論 (USER 決定 2026-10-03)**: 状態は保持しない。
+      本 domain が持つのは、agents のセッションスレッドで Hook / Background task のシステムメッセージを無害化して既存の
+      `message` の経路で通すことだけ (`system-event.ts`。許可リストは O-2 data-model §2)。実行中の task の一覧は持たない。
+      tool の結果の対応づけ (tool_use の id → 結果待ちのメッセージ) はセッションスレッドの中で一時的に持つ
+      (上限 256 件、セッションの終了で破棄。O-2 data-model §3) が、表示の状態ではない
+- [x] 監視ビューの直近の活動の tool ごとの整形 (O-1 の義務 (4)) → O-2。規則の正本は O-2 data-model §4 と `session-view.ts`
+      の `summarizeToolInput`: ファイルを扱う tool はファイル名だけ、`Bash` はコマンドの名前だけ (クォート・`$`・backtick・`(`・
+      環境変数の代入・秘密の接頭辞があれば出さない)、`Agent` / `Task` は subagent の種類、それ以外は tool 名だけ。
+      `deriveActivity` は Hook / task の行と結果だけのメッセージを読み飛ばす (O-1 FR-006 を保つ)
 - [x] ~~終了済みセッションの行の件数の上限・自動で閉じる (X-5 Out of Scope「O-1 で再検討」)~~ → **持たない** (O-1 で再検討した結論)。
       枠を占めるのは最大 10 本で、終了済みの行は compact で 1 行に縮むので俯瞰を妨げない。利用者が「閉じる」で外す

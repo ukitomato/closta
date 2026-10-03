@@ -143,3 +143,12 @@ agents:
     managed_by: project
     invoked_by: [design-gate, code-gate, pr-gate]
     install_hint: "install 済み。Principle I/II/III/VI/VII と AD-003/004/012 の drift を owner とする"
+
+  - name: ui-coverage-reviewer
+    status: optional
+    role: project-specific
+    placement: .claude/agents/ui-coverage-reviewer.md
+    purpose: "docs/ui-coverage.md judgement: table updated in the same PR as display changes, assignment kind and Tier validity, follow-up feature scope, SDK version bumps. Principle XII / AD-044 owner. Does not repeat check:constitution item 21"
+    managed_by: project
+    invoked_by: [pr-gate]
+    install_hint: "O-2 (spec 011) で追加。機械照合は Constitution 検証の項目 21"

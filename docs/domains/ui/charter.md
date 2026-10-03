@@ -3,14 +3,20 @@ domain: ui
 status: needs-human-review
 owner: ukitomato
 generated_by: human (PLAN.md を素案として再導出)
-last_reviewed: 2026-09-29
+last_reviewed: 2026-10-03
 related_adrs:
   - docs/decisions/0001-adopt-electron-over-tauri.md
   - docs/decisions/0006-supervisor-in-utility-process.md
+  - docs/decisions/0019-assistant-ui-element-inventory.md
+  - docs/decisions/0020-sdk-emitted-message-inventory.md
+  - docs/decisions/0034-transcript-read-path-and-process-boundary.md
+  - docs/decisions/0035-tier-a-tool-display-and-subagent-nesting.md
+  - docs/decisions/0044-ui-coverage-assignment.md
 related_specs:
   - specs/003-ui-transcript-rendering/spec.md
   - specs/004-ui-tier-a-tool-display/spec.md
   - specs/006-ui-japanese-ime-composer/spec.md
+  - specs/011-ui-coverage/spec.md
 ---
 
 # Domain Charter: ui
@@ -111,7 +117,7 @@ O-1 で読み替えた: 監視ビューはセッション画面のサイドバ�
 
 ## Key concepts
 
-- **Element**: assistant-ui が提供する UI 部品。202 種（2026-09-13 確認、[AD-019](../../decisions/0019-assistant-ui-element-inventory.md)）
+- **Element**: assistant-ui が提供する UI 部品。202 種（2026-09-13 確認、[AD-019](../../decisions/0019-assistant-ui-element-inventory.md)）。2026-10-03 の registry の名前は 127（数え方が違う。分類は `docs/ui-coverage.md` F 節）
 - **Tier A / B / C**: Element の実装優先度。A は Claude Code の一次概念に直結する必須、
   B は体験を押し上げるもの、C は対象外
 - **ui-coverage 対応表**: `docs/ui-coverage.md`。emit される情報と表示実装の対応
@@ -132,7 +138,9 @@ O-1 で読み替えた: 監視ビューはセッション画面のサイドバ�
 
 ## KPI / Success metrics
 
-- **表示網羅**: `docs/ui-coverage.md` の未割当行が 0 — 計測経路: ui-coverage-reviewer による機械検証
+- **表示網羅**: `docs/ui-coverage.md` の未割当行が 0、かつ M3 の完了の条件 (Tier A の後続のうち、割当先が M3 の feature の
+  行が 0。[AD-044](../../decisions/0044-ui-coverage-assignment.md)) — 計測経路: Constitution 検証の項目 21 (SDK の型との機械照合と
+  割当の種類 × Tier・後続の件数の出力。CI) + `ui-coverage-reviewer` (割当の妥当性の判断。pr-gate) (O-2)
 - **日本語の健全性**: composer の IME テストが E2E に存在し通過、
   日本語を含むスクリーンショット比較が CI に存在する — 計測経路: Playwright + CI
 - **スクロールの安定**: 数千メッセージの transcript でストリーミング中にスクロール位置が奪われない —
@@ -171,19 +179,22 @@ O-1 で読み替えた: 監視ビューはセッション画面のサイドバ�
   Principle VIII Automated 2 項目 (IME E2E / 日本語スクリーンショット比較) を CI に常設する。
   自前 IME ガードは新設せず assistant-ui の二重ガードを殺さない ([AD-037](../../decisions/0037-japanese-ime-composer-behavior.md) D1)。
   E2E / スクリーンショット検証ハーネスは [AD-038](../../decisions/0038-e2e-screenshot-harness.md)
-- （残り。O-2 / O-3 / OPT-pty が本 domain に属する）
+- [O-2: ui-coverage 対応表の確立](../../../specs/011-ui-coverage/spec.md) — **実装中**。`docs/ui-coverage.md` を作り
+  SDK の型と機械で照合する (Constitution 検証の項目 21)。各行の割当を確定し、表示の実装の残りを O-4 / O-5 / O-6 に割り当てた。
+  実行中の tool の結果と Hook / Background task の行 (システムイベントの行)、transcript の情報密度、`ui-coverage-reviewer` を足す。
+  割当の読み方は [AD-044](../../decisions/0044-ui-coverage-assignment.md)
+- （残り。O-3 / O-4 / O-5 / O-6 / OPT-pty が本 domain に属する）
 
 ## Open Questions
 
 - [x] ~~element の実在確認~~ → [AD-019](../../decisions/0019-assistant-ui-element-inventory.md)。
       §4.2 / §4.3 が名指しする 35 element はすべて実在。Tier A の選定を変える理由はない
-- [ ] **Tier B / C の再棚卸し（未分類 59 要素）** — O-2 のスコープ
-- [ ] **§4.2 の Tier A 表は暫定** — [AD-020](../../decisions/0020-sdk-emitted-message-inventory.md)。
-      SDK が emit するのは 39 型で、Hook / Background task / コンパクション / 自動拒否が
-      §4.2 に無い。O-2 で SDK 型から引き直す
-- [ ] **Hook / Background task の表示の割当と、状態の保持が要る場合の持ち主 domain** — O-2 が判断する。
-      session は状態管理を責務に含めないと決めた (O-1 USER 決定 2026-10-02。session charter の Open Questions)。
-      本 domain の Out of scope「状態遷移 → session」とあわせ、保持が要ると分かったら domain の帰属を人間に諮る
+- [x] ~~Tier B / C の再棚卸し（未分類 59 要素）~~ → O-2。registry を 2026-10-03 に引き直し、`docs/ui-coverage.md` の F 節に
+      分類した ([AD-044](../../decisions/0044-ui-coverage-assignment.md) Decision 6)
+- [x] ~~§4.2 の Tier A 表は暫定~~ → O-2。`docs/ui-coverage.md` が SDK の型から導いた正本になった (PLAN.md §4.2 は参照)
+- [x] ~~Hook / Background task の表示の割当と、状態の保持が要る場合の持ち主 domain~~ → O-2 (USER 決定 2026-10-03)。
+      状態は保持せず、transcript の 1 行 (システムイベントの行) として本 domain が描く。持ち主の domain は要らない。
+      実行中の task の一覧の要否は O-6 で判断し、要るなら持ち主の domain を人間に諮る
 - [ ] SPIKE-2: assistant-ui Elements の導入コスト実測。element のインストール単位、
       カスタマイズ範囲、design system の拘束度、Claude Code の tool_result 形式との変換コスト。
       **結果次第では本 charter の Scope を見直す**
@@ -191,8 +202,8 @@ O-1 で読み替えた: 監視ビューはセッション画面のサイドバ�
       [AD-037](../../decisions/0037-japanese-ime-composer-behavior.md)。`ComposerPrimitive.Input` が変換確定 Enter を
       二重ガード (keydown の `nativeEvent.isComposing` + `compositionRef`) で扱う。**自前ガードは不要**。
       実行中積み・下書き復元は IME でなく runtime capability / composer state として X-2 が持つ (D2)
-- [ ] Tier C のうち Data table / Chart / Timeline / Diagram は、将来 MCP ツールの
-      結果表示に転用しうる。いつ判断するか
+- [x] ~~Tier C のうち Data table / Chart / Timeline / Diagram は、将来 MCP ツールの結果表示に転用しうる。いつ判断するか~~
+      → O-5 (MCP) で判断する (AD-044 Decision 6。roadmap の O-5 の行)
 
 ## Principles (domain-specific)
 

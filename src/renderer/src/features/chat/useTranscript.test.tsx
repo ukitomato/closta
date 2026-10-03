@@ -129,6 +129,69 @@ describe('useTranscript', () => {
     expect(port.close).toHaveBeenCalled()
   })
 
+  it('frame の本文を検証する: prototype のキーの status の行と、result が文字列でない tool-call の part を落とす (O-2)', async () => {
+    let token = ''
+    installCapability({
+      getTranscript: vi.fn(async (_s: string, _t: string, t: string) => {
+        token = t
+        return { status: 'streaming' as const, requestToken: t }
+      })
+    })
+    sel.selectedRowKey = 'host#0::s1'
+
+    const { result } = renderHook(() => useTranscript())
+    await waitFor(() => expect(token).not.toBe(''))
+
+    const event = {
+      type: 'system-event',
+      category: 'hook',
+      opens: true,
+      name: 'setup',
+      detail: 'SessionStart',
+      status: 'succeeded'
+    }
+    const port = fakePort()
+    act(() => deliverPort(token, port))
+    act(() =>
+      port.deliver({
+        kind: 'messages',
+        requestToken: token,
+        messages: [
+          { id: 'hook:ok', role: 'system', parts: [event], createdAt: null },
+          {
+            id: 'hook:bad',
+            role: 'system',
+            parts: [{ ...event, status: 'constructor' }],
+            createdAt: null
+          },
+          {
+            id: 'a1',
+            role: 'assistant',
+            createdAt: null,
+            parts: [
+              { type: 'text', text: '本文' },
+              {
+                type: 'tool-call',
+                toolCallId: 'c1',
+                toolName: 'Bash',
+                argsText: '{}',
+                result: { not: 'string' },
+                isError: false,
+                truncated: false,
+                children: []
+              }
+            ]
+          }
+        ]
+      })
+    )
+
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    expect(result.current.messages.map((m) => m.id)).toEqual(['hook:ok', 'a1'])
+    const a1 = result.current.messages[1]
+    expect(typeof a1?.content !== 'string' && a1?.content.map((p) => p.type)).toEqual(['text'])
+  })
+
   it('messages が空の frame は empty になる', async () => {
     let token = ''
     installCapability({

@@ -1,0 +1,75 @@
+{
+    "gate": "design",
+    "run": "2026-10-03T15:00:00+09:00",
+    "spec_dir": "specs/011-ui-coverage",
+    "spec_id": "011-ui-coverage",
+    "round": 2,
+    "tracks": {
+        "analyze": {
+            "status": "ok",
+            "raw_out": "analyze.md",
+            "viewpoint_missing": null,
+            "cascade_demotions": null
+        },
+        "po-reviewer": {
+            "status": "ok",
+            "raw_out": "po-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "architecture-reviewer": {
+            "status": "ok",
+            "raw_out": "architecture-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "security-reviewer": {
+            "status": "ok",
+            "raw_out": "security-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "platform-boundary-reviewer": {
+            "status": "ok",
+            "raw_out": "platform-boundary-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        }
+    },
+    "severity_counts": {
+        "critical": 0,
+        "high": 3,
+        "medium": 7,
+        "low": 15
+    },
+    "round_history": [
+        {
+            "round": 1,
+            "critical": 3,
+            "high": 8
+        },
+        {
+            "round": 2,
+            "critical": 0,
+            "high": 3
+        }
+    ],
+    "dedup_log": [
+        {
+            "merged": [
+                "arch-H-101",
+                "analyze-N2",
+                "sec-L-003"
+            ],
+            "key": "FR-009"
+        },
+        {
+            "merged": [
+                "analyze-N4",
+                "arch-M-102"
+            ],
+            "key": "thread.aui.tsx role"
+        }
+    ],
+    "verdict": "PASS"
+}

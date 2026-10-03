@@ -134,6 +134,7 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
         }
         h.prompts.push(next.value.message.content)
         yield { type: 'system', subtype: 'init' }
+        for (const m of h.feed) yield m
         if (h.mode === 'crash-midstream') {
           // wsl.exe だけが異常終了し、stream が壊れる。
           h.child?.emit('exit', 1, null)
@@ -164,8 +165,12 @@ interface Posted {
 let posted: Posted[] = []
 let listener: ((data: unknown) => void) | null = null
 
-async function boot(mode: Mode = 'normal'): Promise<(data: unknown) => void> {
+async function boot(
+  mode: Mode = 'normal',
+  feed: Record<string, unknown>[] = []
+): Promise<(data: unknown) => void> {
   h.mode = mode
+  h.feed = feed
   h.preMessageConsumed = false
   h.prompts = []
   h.child = null
@@ -374,5 +379,135 @@ describe('sdk-agent-session: 調停役スレッドとのメッセージ (X-5 / B
     })
     expect(kinds()).toEqual(['status', 'ended'])
     expect(posted[0]).toMatchObject({ state: 'error', reasonKey: 'launch-failed' })
+  })
+})
+
+describe('sdk-agent-session: tool の結果と Hook / task の行 (O-2 / BE-024)', () => {
+  interface MessageEvent {
+    kind: string
+    message?: { id: string; role: string; parts: Record<string, unknown>[] }
+  }
+  const messages = (): NonNullable<MessageEvent['message']>[] =>
+    (events() as MessageEvent[])
+      .filter((e) => e.kind === 'message')
+      .map((e) => e.message as NonNullable<MessageEvent['message']>)
+
+  async function runTurn(feed: Record<string, unknown>[]): Promise<void> {
+    const send = await boot('normal', feed)
+    send(launch)
+    await vi.waitFor(() => expect(h.preMessageConsumed).toBe(true))
+    send(control({ kind: 'send-prompt', text: 'go' }))
+    await vi.waitFor(() => expect(states()).toContain('done'))
+  }
+
+  const assistantWithTools = (uuid: string, ...ids: string[]): Record<string, unknown> => ({
+    type: 'assistant',
+    uuid,
+    message: { content: ids.map((id) => ({ type: 'tool_use', id, name: 'Bash', input: {} })) }
+  })
+  const userWith = (...content: unknown[]): Record<string, unknown> => ({
+    type: 'user',
+    message: { role: 'user', content },
+    parent_tool_use_id: null
+  })
+
+  it('並列の結果が 1 つの user メッセージで来たら、同じ id の message を 1 回だけ送り直す', async () => {
+    await runTurn([
+      assistantWithTools('m1', 'a', 'b'),
+      userWith(
+        { type: 'tool_result', tool_use_id: 'a', content: 'one' },
+        { type: 'tool_result', tool_use_id: 'b', content: 'two', is_error: true }
+      )
+    ])
+    const m1 = messages().filter((m) => m.id === 'm1')
+    expect(m1).toHaveLength(2) // 初回 + 送り直し 1 回
+    expect(m1[1]?.parts).toMatchObject([
+      { toolCallId: 'a', result: 'one', isError: false },
+      { toolCallId: 'b', result: 'two', isError: true }
+    ])
+  })
+
+  it('対応の無い結果は result:<id>、user の本文は送らない', async () => {
+    await runTurn([
+      userWith(
+        { type: 'text', text: 'USER-BODY-TEXT' },
+        { type: 'tool_result', tool_use_id: 'ghost', content: 'r' }
+      ),
+      { type: 'user', message: { role: 'user', content: 'USER-BODY-TEXT' } }
+    ])
+    expect(messages().map((m) => m.id)).toEqual(['result:ghost'])
+    expect(posted.some((p) => (p.payload ?? '').includes('USER-BODY-TEXT'))).toBe(false)
+  })
+
+  it('hook_started / hook_response は同じ id (hook:<id>) の message', async () => {
+    await runTurn([
+      {
+        type: 'system',
+        subtype: 'hook_started',
+        hook_id: 'h1',
+        hook_name: 'fmt',
+        hook_event: 'PostToolUse'
+      },
+      {
+        type: 'system',
+        subtype: 'hook_response',
+        hook_id: 'h1',
+        outcome: 'success',
+        output: 'SECRET'
+      }
+    ])
+    const rows = messages()
+    expect(rows.map((m) => m.id)).toEqual(['hook:h1', 'hook:h1'])
+    expect(rows[1]?.parts[0]).toMatchObject({ type: 'system-event', status: 'succeeded' })
+    expect(JSON.stringify(rows)).not.toContain('SECRET')
+  })
+
+  it('task_started / task_updated / task_notification は同じ id (task:<id>) の message', async () => {
+    await runTurn([
+      {
+        type: 'system',
+        subtype: 'task_started',
+        task_id: 't1',
+        task_type: 'local_agent',
+        description: 'scan',
+        is_backgrounded: true
+      },
+      { type: 'system', subtype: 'task_updated', task_id: 't1', patch: { status: 'running' } },
+      { type: 'system', subtype: 'task_notification', task_id: 't1', status: 'completed' }
+    ])
+    expect(messages().map((m) => m.id)).toEqual(['task:t1', 'task:t1', 'task:t1'])
+    expect(messages()[2]?.parts[0]).toMatchObject({ status: 'completed' })
+  })
+
+  it('hook_progress / task_progress / background_tasks_changed は送らない', async () => {
+    await runTurn([
+      { type: 'system', subtype: 'hook_progress', hook_id: 'h1', stdout: 'x' },
+      { type: 'system', subtype: 'task_progress', task_id: 't1', description: 'x' },
+      { type: 'system', subtype: 'background_tasks_changed', tasks: [] }
+    ])
+    expect(messages()).toEqual([])
+  })
+
+  it('permission_denied の扱いは変わらない', async () => {
+    await runTurn([
+      { type: 'system', subtype: 'permission_denied', tool_name: 'Bash', message: 'no' }
+    ])
+    expect(events().filter((e) => e.kind === 'permission-denied')).toHaveLength(1)
+    expect(messages()).toEqual([])
+  })
+
+  it('調停役スレッドへの post の kind は status / event / ended / child-exited のまま', async () => {
+    const send = await boot('normal', [
+      assistantWithTools('m1', 'a'),
+      userWith({ type: 'tool_result', tool_use_id: 'a', content: 'ok' }),
+      { type: 'system', subtype: 'hook_started', hook_id: 'h1', hook_name: 'n', hook_event: 'e' }
+    ])
+    send(launch)
+    await vi.waitFor(() => expect(h.preMessageConsumed).toBe(true))
+    send(control({ kind: 'send-prompt', text: 'go' }))
+    await vi.waitFor(() => expect(states()).toContain('done'))
+    send(control({ kind: 'end' }))
+    await vi.waitFor(() => expect(kinds()).toContain('ended'))
+    expect([...new Set(kinds())].sort()).toEqual(['child-exited', 'ended', 'event', 'status'])
   })
 })

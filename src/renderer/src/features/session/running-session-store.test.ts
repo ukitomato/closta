@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { AppendMessage } from '@assistant-ui/react'
+import type { AppendMessage, ThreadMessageLike } from '@assistant-ui/react'
 
 import { SESSION_PORT_MESSAGE, type ClostaCapability } from '@domain/capability'
 import type { SessionEvent } from '@domain/session/agent-session'
+import type { TranscriptPartDTO } from '@domain/session/transcript-dto'
 import type { SessionLaunchConfig } from '@domain/session/launch-config'
 import type { SessionStatusUpdate } from '@domain/session/status-update'
 
@@ -443,5 +444,101 @@ describe('running-session-store — 送信待ちキュー (X-2 をセッショ�
     h.pushStatus([status(A, { state: 'running', claudeAlive: false })])
     emit(port, { kind: 'state', state: 'done' })
     expect(h.cap.sendPrompt).not.toHaveBeenCalled()
+  })
+})
+
+describe('running-session-store — tool の結果とシステムイベントの行 (O-2 FE-010)', () => {
+  type EventPart = Extract<TranscriptPartDTO, { type: 'system-event' }>
+  const event = (id: string, part: Partial<EventPart>): SessionEvent => ({
+    kind: 'message',
+    message: {
+      id,
+      role: 'system',
+      parts: [
+        {
+          type: 'system-event',
+          category: 'task',
+          opens: false,
+          name: '',
+          detail: '',
+          status: null,
+          ...part
+        }
+      ],
+      createdAt: 1
+    }
+  })
+  const rows = (h: Harness): readonly ThreadMessageLike[] =>
+    h.store.getState().sessions[A]!.messages
+  const dataOf = (m: ThreadMessageLike | undefined): unknown =>
+    m !== undefined && typeof m.content !== 'string' && m.content[0]?.type === 'data'
+      ? m.content[0].data
+      : undefined
+
+  it('同じ id の更新は行を増やさず合成する。名前・状態の無い更新は前の値を保つ', async () => {
+    const h = harness()
+    const port = await launched(h, A)
+    emit(
+      port,
+      event('task:t1', {
+        opens: true,
+        name: 'npm run build',
+        detail: 'local_bash',
+        status: 'running'
+      })
+    )
+    emit(port, event('task:t1', { status: null })) // 状態の無い task_updated
+    expect(rows(h)).toHaveLength(1)
+    expect(dataOf(rows(h)[0])).toMatchObject({ name: 'npm run build', status: 'running' })
+    emit(port, event('task:t1', { status: 'completed' }))
+    expect(rows(h)).toHaveLength(1)
+    expect(dataOf(rows(h)[0])).toEqual({
+      category: 'task',
+      opens: true,
+      name: 'npm run build',
+      detail: 'local_bash',
+      status: 'completed'
+    })
+  })
+
+  it('行の無い id への opens が false の更新は捨てる (隠した・前景の task)', async () => {
+    const h = harness()
+    const port = await launched(h, A)
+    emit(port, event('task:hidden', { status: 'completed' }))
+    expect(rows(h)).toHaveLength(0)
+    // 受信の累計 (O-1 の観測点) は数える。
+    expect(h.store.getState().receivedMessages).toBe(1)
+  })
+
+  it('tool の結果を埋めた同じ id の送り直しは差し替える', async () => {
+    const h = harness()
+    const port = await launched(h, A)
+    const call = (result: string | null): SessionEvent => ({
+      kind: 'message',
+      message: {
+        id: 'a1',
+        role: 'assistant',
+        parts: [
+          {
+            type: 'tool-call',
+            toolCallId: 'c1',
+            toolName: 'Bash',
+            argsText: '{"command":"ls"}',
+            result,
+            isError: false,
+            truncated: false,
+            children: []
+          }
+        ],
+        createdAt: 1
+      }
+    })
+    emit(port, call(null))
+    emit(port, call('out.txt'))
+    expect(rows(h)).toHaveLength(1)
+    const content = rows(h)[0]!.content
+    expect(
+      typeof content !== 'string' && content[0]?.type === 'tool-call' && content[0].result
+    ).toBe('out.txt')
   })
 })

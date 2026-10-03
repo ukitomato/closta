@@ -5,6 +5,8 @@ import {
 } from '@domain/session/agent-session'
 import { isSessionRunState } from '@domain/session/run-state'
 
+import { decodeTranscriptMessage } from '@/features/chat/transcript-guard'
+
 /**
  * port から届いた本文のデコード (X-5 / FE-001 / plan renderer 節)。
  *
@@ -13,6 +15,7 @@ import { isSessionRunState } from '@domain/session/run-state'
  * | 本文は**文字列化された `SessionEvent`** で届く (セッションスレッドが `JSON.stringify` し、調停役スレッドは中身を見ずに中継する)。`JSON.parse` はここで 1 回だけ、try で囲む | AD-043 Decision 2 / SH-000 (2) / Principle IX |
  * | `kind` を enum で検証し、kind ごとの形を確かめる。**失敗したら null (破棄)** — 他のセッションに影響させない | spec FR-012 / Principle IV |
  * | 本文のサニタイズは agents 側で完了済み。ここは形の検証だけを行う | X-1 FR-009 / SC-008 |
+ * | `message` の part は過去ログの受け口と同じ `decodeTranscriptMessage` で検証し、外れた part を落とす | O-2 data-model §2 |
  */
 
 type Rec = Record<string, unknown>
@@ -23,17 +26,6 @@ function isRecord(value: unknown): value is Rec {
 
 function isStringArray(value: unknown): value is readonly string[] {
   return Array.isArray(value) && value.every((v) => typeof v === 'string')
-}
-
-function isMessage(value: unknown): boolean {
-  if (!isRecord(value)) return false
-  return (
-    typeof value.id === 'string' &&
-    typeof value.role === 'string' &&
-    Array.isArray(value.parts) &&
-    value.parts.every((p) => isRecord(p) && typeof p.type === 'string') &&
-    (value.createdAt === null || typeof value.createdAt === 'number')
-  )
 }
 
 function isPermissionRequest(value: unknown): boolean {
@@ -61,8 +53,11 @@ export function decodeSessionEvent(raw: unknown): SessionEvent | null {
     return null
   }
   switch (kind) {
-    case 'message':
-      return isMessage(value.message) ? (value as unknown as SessionEvent) : null
+    case 'message': {
+      // part の検証 (system-event の列挙・tool-call の結果の型) は過去ログと同じ関数 (O-2 / data-model §2)。
+      const message = decodeTranscriptMessage(value.message)
+      return message === null ? null : { kind: 'message', message }
+    }
     case 'state':
       return isSessionRunState(value.state) ? { kind: 'state', state: value.state } : null
     case 'permission-request':

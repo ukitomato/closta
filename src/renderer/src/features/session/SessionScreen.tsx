@@ -18,6 +18,8 @@ import { EmptyState, EmptyStateGreeting } from '@/components/assistant-ui/elemen
 import { GenerationLoader } from '@/components/assistant-ui/elements/loading-state'
 import { Thread } from '@/components/assistant-ui/elements/thread.aui'
 import { Button } from '@/components/ui/button'
+import { TranscriptSettledContext } from '@/features/chat/transcript-context'
+import { TranscriptDensityToggle } from '@/features/chat/TranscriptDensityToggle'
 import { useRuntimes } from '@/features/runtime-list/useRuntimes'
 import { useFolders } from '@/features/workspace-folders/useFolders'
 
@@ -352,7 +354,10 @@ function LiveSessionPane({
          * (quickstart 実機不具合。claude は初回 user メッセージまで無出力なので UI 側が起点)。
          */}
         <DraftBridge session={draftSource} threadId={session.sessionId} />
-        <Thread components={{ Welcome: SessionWelcome }} />
+        {/* 終了・失敗の後は、終わりの来ないシステムイベントの行を「結果不明」で描く (O-2 / FR-009)。 */}
+        <TranscriptSettledContext.Provider value={session.ended || errored}>
+          <Thread components={{ Welcome: SessionWelcome }} />
+        </TranscriptSettledContext.Provider>
       </div>
     </div>
   )
@@ -433,6 +438,8 @@ function SessionHeader({
       <span className="text-muted-foreground ms-auto shrink-0 text-xs" data-testid="session-status">
         {SESSION_ROW_STATUS_LABELS[rowStatus(session)]}
       </span>
+      {/* transcript の密度 (O-2 / FR-012)。監視ビューの行の密度 (一覧の見出し) とは別の位置・文言。 */}
+      <TranscriptDensityToggle />
     </div>
   )
 }

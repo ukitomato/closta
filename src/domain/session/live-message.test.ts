@@ -51,8 +51,14 @@ describe('toLiveAssistantMessage', () => {
     expect(toLiveAssistantMessage(assistant(undefined)).parts).toEqual([])
     expect(toLiveAssistantMessage(assistant('not-array')).parts).toEqual([])
     expect(
-      toLiveAssistantMessage(assistant([{ type: 'redacted_thinking', data: 'x' }, null, 42])).parts
+      toLiveAssistantMessage(assistant([{ type: 'server_tool_use', id: 's' }, null, 42])).parts
     ).toEqual([])
+  })
+
+  it('redacted_thinking は過去ログと同じ Reasoning の文言にそろえる (O-2 / FR-007)', () => {
+    expect(
+      toLiveAssistantMessage(assistant([{ type: 'redacted_thinking', data: 'x' }])).parts
+    ).toEqual([{ type: 'reasoning', text: '[redacted thinking]' }])
   })
 
   it('tool_use の input が文字列化不能でも空 argsText に倒す', () => {

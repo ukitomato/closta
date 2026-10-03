@@ -1,9 +1,11 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render } from '@testing-library/react'
 
 import type { ThreadMessageLike } from '@assistant-ui/react'
 
 import type { TranscriptMessageDTO } from '@domain/session/transcript-dto'
+
+import { useUiStore } from '@/stores/ui'
 
 import { toThreadMessage } from './convert'
 
@@ -88,6 +90,11 @@ function stubLayout(size = 400): void {
   vi.stubGlobal('ResizeObserver', SizedResizeObserver)
 }
 
+// 既定の密度 (comfortable。Tool group が開く) で通す (O-2 / SC-005 / research R-06)。
+beforeEach(() => {
+  useUiStore.setState({ transcriptDensity: 'comfortable' })
+})
+
 afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
@@ -99,6 +106,7 @@ describe('transcript の仮想化', () => {
 
     view.messages = build(200)
     const small = render(<ChatScreen />)
+    expect(small.container.querySelector('[data-density="comfortable"]')).not.toBeNull()
     const smallRows = mountedRows(small.container)
     small.unmount()
 

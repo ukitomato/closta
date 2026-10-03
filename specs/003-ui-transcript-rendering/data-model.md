@@ -78,6 +78,8 @@ API reference)。`role` / `content` (string | MessagePart[]) / `id` / `createdAt
 
 ### 表示先の割り当て (Principle XII の先取り。FR-019 / SC-009)
 
+> **2026-10-03 追記 (O-2)**: この割り当ては先行の台帳である。正本は [`docs/ui-coverage.md`](../../docs/ui-coverage.md) (SDK の型から導き、Constitution 検証の項目 21 で照合する) に移った。
+
 `docs/ui-coverage.md` は O-2 で作る。**その不在中、Principle XII の自動検証 (未割当行 grep) は
 ファイル不在で vacuously pass する** — 本 feature の未割当ゼロは**この割り当て表 + レビュー**でのみ担保される。
 この scope 解釈 (data-model §3 を O-2 前の暫定台帳とする) は **design-gate の人間承認を要する**。
