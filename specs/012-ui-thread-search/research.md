@@ -12,7 +12,7 @@
 
 ## R-02 Thread search の一致の規則
 
-- **Decision**: renderer の純関数 `matchSession(summary, query)` を `src/renderer/src/features/search/match.ts` に置き、一覧と palette で共有する。正規化は NFKC → 小文字化 → 制御文字 (C0 / C1 / 双方向制御 / ゼロ幅) の除去 → 空白の圧縮。語を空白で区切り、全語がどれかのフィールドに部分一致したら一致
+- **Decision**: renderer の純関数 `matchSession(row, query)` を `src/renderer/src/features/search/session-search.ts` に置き (`domain/session/match.ts` と名前を分ける)、一覧と palette で共有する。一致は字面の部分一致で、検索語から `RegExp` を組まない (ReDoS を避ける)。対象はグループの見出しの文字列を含む (data-model §1)。正規化は NFKC → 小文字化 → 制御文字 (C0 / C1 / 双方向制御 / ゼロ幅) の除去 → 空白の圧縮。語を空白で区切り、全語がどれかのフィールドに部分一致したら一致
 - **Rationale**: 一覧の DTO は既に renderer にあり、既存の所在・フォルダの絞り込みも IPC を往復させない (`SessionListScreen.tsx:731`)。NFKC で全角 / 半角の英数とカナの揺れを吸収できる (Principle VIII)
 - **Alternatives**: main で検索する (IPC が要り、既存の絞り込みと揃わない) / あいまい一致 (並びが変わり、既存の並びと所在の見出しの読み方が崩れる)
 
@@ -24,6 +24,8 @@
   - 移動は transcript の context に `scrollToMessage(index)` を足す。仮想化のときは `virtualizer.scrollToIndex(index, { align: 'center' })`、仮想化しないときは `data-message-id` の要素の `scrollIntoView`。最下部への追従は検索中は止める (R-3 のアンカリングの「利用者が上にいるときは追従しない」と同じ扱い)
   - 強調は **CSS Custom Highlight API** (`CSS.highlights` と `Range`) で、描かれた DOM の text node に掛ける。DOM を書き換えない・HTML を組まないので、markdown の描画と XSS 境界 (R-3 FR-020) に触れない。Electron 39 (Chromium) で使える
   - markdown の記号を含む語 (`**` など) は、本文の出現数と描画の出現数がずれうる。件数は本文の出現で数え、強調は描画の中で一致したものすべてに掛け、現在の位置はメッセージ単位で示す [ASSUMED]
+  - 正規化 (NFKC・`toLowerCase`・除去・圧縮) は長さを変える。正規化後の位置をそのまま text node の offset に使うと `IndexSizeError` や誤った範囲の強調になる (design-gate R1 security H-001)。正規化後 → 元の文字列 → (text node, offset) の 2 つの位置の表で写し、範囲外は飛ばす (data-model §2)
+  - `::highlight()` の規則はバンドルされる CSS に置く。本番の CSP は `style-src 'self'` で、実行時の `<style>` は本番でだけ落ちる
 - **Alternatives**: 本文を区切って `<mark>` を差し込む (MarkdownText の内側を変える必要があり、markdown の構文を壊す) / ブラウザの検索 (`webContents.findInPage`。仮想化の外に届かず main を経由する)
 
 ## R-04 Command palette と element (Principle XIII)
@@ -38,7 +40,8 @@
 - 事実: 起動は `IPC_CHANNELS.launchSession` (`capability.ts:199-216`) を `launchSession(config)` で呼ぶ (`preload/index.ts:58`)。main は `ipc.ts:282-291` の `handle()` で送信元を検査し、`session-ipc.ts:137-144` で形を検査し、`session-launch-service.ts:187-202` で受け付けか拒否かを決める。`ipc.ts:284-290` で `launching` のときだけ port を渡す。preset の store は一時ファイルからの置き換えと `.bak` の退避を持ち (`preset-store.ts:74-178`)、直列化は service 側 (`preset-service.ts:51-56`)
 - **Decision**:
   - capability の `launchSession(config, origin?)` に第 2 引数 `origin: LaunchOrigin` を足す。`SessionLaunchConfig` は変えない (起動の設定と計測を分ける)
-  - main は `ipc.ts` の起動の handler で、結果が `launching` のときだけ `launchUsage.record(origin)` を await せずに呼ぶ (失敗は握りつぶし、起動の応答を遅らせない)。origin の検証は `validate.ts` に `checkLaunchOrigin` を足す
+  - main は `session-ipc.ts` の `handleLaunchSession` で、結果が `launching` のときだけ `deps.recordLaunchUsage(origin)` を await せずに呼ぶ (失敗はコードだけをログに出して捨て、起動の応答を遅らせない)。`ipc.ts` は ipcMain に依存して Vitest で読めないので、検証と委譲を置かない (既存の分担 `session-ipc.ts:20-32`)。origin の検証 `checkLaunchOrigin` は domain の厳密比較
+  - 読み込みの結果ごとの扱いは既存の settings の store (将来版で書かない・日単位の不正を飛ばす・退避に失敗したら書かない・読めないときは読み直す) に合わせる (design-gate R1 database-reviewer)
   - 記録は `src/main/infra/settings/launch-usage-store.ts` (store) と `src/main/app/launch-usage-service.ts` (直列化と日付の計算)。純粋な集計 (足す・90 日の刈り込み・30 日の合計) は `src/domain/session/launch-usage.ts`
   - 読み出しは新しいチャネル `closta:getLaunchUsage` が `{ preset, manual, days: 30 }` を返す
   - 日付は main が `now()` からローカルの暦日 (`YYYY-MM-DD`) を作る。renderer の時計を信じない

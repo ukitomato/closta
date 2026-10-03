@@ -31,7 +31,9 @@ Constitution Principle XV は「UI labels: 日本語を第一言語とする。i
 
 ## Consequences
 
-- Constitution XV の「i18n リソース化の要否は M3 (O-1〜O-3) までに判断する」を、accepted の後に「リソース化しない (AD-045)。再検討の条件は AD-045」に改める (PATCH。指針の意味を変えず、期限付きの宿題を判断の記録に置き換える)
+- Constitution XV の「i18n リソース化の要否は M3 (O-1〜O-3) までに判断する」を、accepted の後に「リソース化しない (AD-045)。UI の文言は feature ごとの文言の表に置き、直書きを新たに増やさない。再検討の条件は AD-045」に改める。**MINOR** (Decision 2 の規則を指針に足す拡張であり、期限付きの宿題を確定の判断に置き換える意味の変更でもある。design-gate R1 architecture M-002)。改定は O-3 の PR で、改定手順 2 (architecture-reviewer を交えた人間のレビュー) と 4 (Amendment trail) を踏む
+- 「直書きを新たに増やさない」の基準線: O-3 の実装の最初に、コンポーネントの中の日本語の直書きの件数を数えて本 ADR の Confirmation に記録する (ux-reviewer が「新たに」を判定する基準)
+- 本 ADR の accepted は O-3 の /cl-implement の着手の条件である
 - `running-session-store.ts` の切り出しは「i18n リソース化の前に済ませる」前提を失う。切り出しそのものの理由 (ファイルの大きさ・型の依存の向き) は残るので、持ち主は roadmap の記録のまま
 - 英語の UI が要るようになったら、全 feature の文言の表を移す作業が一度に要る。表に集めてあるので移す量は読める
 

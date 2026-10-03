@@ -19,12 +19,13 @@
 - **Stack**: Electron 39 / React 19 / TypeScript / zustand 5 / Vitest / assistant-ui / `@tanstack/react-virtual` ([docs/discovery.md](../../docs/discovery.md))
 - **レイヤ**:
   - domain: `src/domain/session/launch-usage.ts` (新設。`LaunchOrigin`・記録の型・足す / 刈り込む / 合計する純関数)、`src/domain/capability.ts` (`launchSession` の第 2 引数・`getLaunchUsage` のチャネル)
-  - main: `src/main/infra/settings/launch-usage-store.ts` (新設)、`src/main/app/launch-usage-service.ts` (新設。直列化と日付)、`validate.ts` (`checkLaunchOrigin`)、`ipc.ts` (起動の handler で記録・読み出しの handler)、`composition-root.ts` (配線)、`e2e-capability.ts` (E2E の stub に読み出しを足す)
+  - main: `src/main/infra/settings/launch-usage-store.ts` (新設)、`src/main/app/launch-usage-service.ts` (新設。直列化と日付)、`session-ipc.ts` (`handleLaunchSession` で `checkLaunchOrigin` と「`launching` のときだけ await せずに記録」、`SessionIpcDeps` に `recordLaunchUsage` / `getLaunchUsage`、読み出しの handler の本体)、`ipc.ts` (チャネルの登録と port の transfer だけ。既存の分担 `session-ipc.ts:20-32`)、`composition-root.ts` (配線)、`e2e-capability.ts` (記録と読み出しのメモリ内の fake。ファイルに書かない)
   - preload: `index.ts` (`launchSession` の第 2 引数・`getLaunchUsage`)
-  - renderer: `features/search/match.ts` (新設)、`features/session-list/SessionListScreen.tsx` (O-7 で過去の区画になった一覧に検索欄と AND の絞り込み)、`features/chat/` (会話内検索の hook・バー。中央のヘッダのボタン)、`components/assistant-ui/elements/thread.aui.tsx` (`scrollToMessage` と検索中の追従の停止)、`features/palette/` (新設。操作の表と palette)、`features/shell/AppShell.tsx` (O-7。palette のマウントと Ctrl+K)、`features/session/LaunchDialog.tsx` / `PresetPanel.tsx` (起動元・回数の表示)、本 feature の空の状態の 4 か所
+  - renderer の起動元の経路: `LaunchDialog.tsx` (`applyPreset` で `preset`) → 起動の面 (O-7 の `NewSessionDialog`。`session.launch(config, origin)`) → `running-session-store.ts` の `launch(config, folderLabel, origin)` (`lastOrigin` を `lastConfig` と一緒に持つ) → capability の `launchSession(config, origin)`。型は `running-session-types.ts` (`SessionActions`)、テストの stub は `test-support/capability.ts`
+  - renderer: `features/search/session-search.ts` (新設)、`features/session-list/SessionListScreen.tsx` (O-7 で過去の区画になった一覧に検索欄と AND の絞り込み)、`features/chat/` (会話内検索の hook・バー。中央のヘッダのボタン)、`components/assistant-ui/elements/thread.aui.tsx` (`scrollToMessage` と検索中の追従の停止)、`features/palette/` (新設。操作の表と palette)、`features/shell/AppShell.tsx` (O-7。palette のマウントと Ctrl+K)、`features/session/LaunchDialog.tsx` / `PresetPanel.tsx` (起動元・回数の表示)、本 feature の空の状態の 4 か所
 - **前提**: O-7 ([spec 013](../013-ui-app-shell/spec.md)) がマージされた main の上に作る。ブランチは今 `013-ui-app-shell` の上に積んである。下の「既存の起点」の行番号は O-7 の前の main のもので、O-7 の後に読み直す
 - **既存の起点** (2026-10-04 の調べ):
-  - `SessionListScreen.tsx:694-731` — 所在の絞り込み (`applyLocationFilter`。IPC を往復させない)。`:800` `filtering`、`:844-859` 空の表示の優先順位 (`filtered-out` を含む)、`:1036-1119` 画面の `EmptyState`
+  - `SessionListScreen.tsx:694-731` — 所在の絞り込み (`narrowToLocation`。:706。IPC を往復させない)。`:800` `filtering`、`:844-859` 空の表示の優先順位 (`filtered-out` を含む)、`:1036-1119` 画面の `EmptyState`
   - `thread.aui.tsx:170-187` — 40 件を超えると仮想化。`:316` `useVirtualizer`、`:337` 最下部への `scrollToIndex`。`:770` text part は `MarkdownText`
   - `ChatScreen.tsx:88-90,108-112` — transcript の 2 つの空の表示。`:117-119` 密度の切り替えのバー
   - O-7 の後: 面の状態は `stores/ui.ts` の `ShellState` (focus・設定・畳み・`launchOpen`)。focus の書き手は `features/shell/useShellFocus.ts` (013 data-model §1)。`SCREENS` / `setScreen` は無い
@@ -36,7 +37,7 @@
 
 | Principle | 判定 | 根拠 |
 |---|---|---|
-| I (パス名前空間) | ✅ | パスを扱わない。`cwdDisplay` は表示用の文字列として一致に使うだけ |
+| I (パス名前空間) | ✅ | パスを解決しない。一致の対象は画面が描く表示用の文字列 (グループの見出し・`cwdDisplay`) だけで、`cwd.value` (PathDTO) を直接は使わない (Windows とディストロの名前空間を同じ平面で比べない)。`cwdDisplay` が非 null なのは所在の決まらない出自だけ (`SessionListScreen.tsx:386-392`) なので、登録フォルダは見出しの表示名で一致させる |
 | II (プラットフォーム差を infra に閉じる) | ✅ | ファイルの読み書きは `infra/settings` の store に閉じる。パスは composition root が `userData` から渡す (AD-023 §8) |
 | III (権限ゲート) | ✅ | 起動元は起動の可否と `SessionLaunchConfig` に影響させない (spec FR-009 / FR-010) |
 | IV (SDK 経由) | N/A | SDK の呼び出し・query の options を変えない |
@@ -50,7 +51,7 @@
 | XII (ui-coverage) | ✅ | SDK が emit する情報の表示を足さない (A〜E 節の差分 0)。F 節の element の使い道を同じ PR で直す (spec FR-015) |
 | XIII (element 優先) | ✅ | `EmptyState` は既存の element。palette / 検索は registry の element を先に確かめる (research R-04) |
 | XIV (glossary) | ✅ | 用語を先に glossary に足す (spec FR-016) |
-| XV (Multi-language) | ⚠ 未承認 | 新しい文言は `labels.ts` (data-model §5)。リソース化しない判断は AD-045 (proposed)。**Constitution XV の字面の改定は accepted の後** |
+| XV (Multi-language) | ⚠ 未承認 | 新しい文言は `labels.ts` (data-model §5)。リソース化しない判断は AD-045 (proposed)。**AD-045 の accepted が /cl-implement の着手の条件**。Constitution XV の改定 (MINOR) は本 feature の PR に含める |
 
 ## Domain Context
 
@@ -98,7 +99,8 @@ rg -n "O-3\b" (node_modules を除く)                      → 130 件 / 49 フ
 | 2 | roadmap:255 | 義務 (O-1) (1): i18n リソース化の判断・`target-finder.ts` の 2 本 | **受ける** — FR-014 / AD-045 (proposed) |
 | 3 | roadmap:255 / `#o3-kpi-smoothness` | 義務 (O-1) (2) (a)〜(d) | **送る** — O-8 (新規。R-01)。アンカーと参照元 (session charter:146・010 quickstart-results:66・roadmap:155) を O-8 に直す |
 | 4 | roadmap:155 | 実機計測ハーネスの ADR は「O-3 が先に着手したら O-3 が持つ」 | **送る** — O-3 は perf を変えないので O-8 が持つ。字面を直す |
-| 5 | roadmap:170-172 | `running-session-store.ts` の切り出しは O-3 の i18n リソース化の前に | **該当なし** — リソース化しない (AD-045)。持ち主は roadmap の記録のまま。字面に AD-045 を注記する |
+| 5 | roadmap:170-172 | `running-session-store.ts` の切り出しは O-3 の i18n リソース化の前に。持ち主は「store に派生値を足すか、監視ビューの行を触る次の feature」 | **該当なし** — リソース化しない (AD-045)。本 feature は store の `launch` に起動元の引数と `lastOrigin` を足すが、派生値ではなく行も触らないので切り出しの発動条件に当たらない。持ち主は roadmap の記録のまま。字面に AD-045 を注記する |
+| 22 | 013 spec (Clarifications / Out of Scope) | 稼働中と過去を 1 つの一覧に混ぜるかは O-3 の後に再検討 | **受ける (閉じる)** — 混ぜない。palette が両方を候補にし、Thread search は過去の区画にある (FR-016) |
 | 6 | roadmap:191-195 | Principle XV の棚卸し: `target-finder.ts` の 2 本を必ず含める | **受ける** — AD-045 Decision 3 |
 | 7 | roadmap:289 / PLAN.md:706 | D-1 の依存は O-3 | **該当なし** — 依存は変えない。AD-045 の再検討の条件 (b) を D-1 の行に注記する |
 | 8 | constitution:849 | i18n の要否は M3 までに判断 | **受ける (改定は accepted の後)** — FR-014 |
@@ -120,7 +122,7 @@ rg -n "O-3\b" (node_modules を除く)                      → 130 件 / 49 フ
 
 ### Thread search (US-1)
 
-`match.ts` (data-model §1) を作り、`SessionListScreen` の区画の導出で既存の所在の絞り込みの後に当てる。`filtering` に検索語を加え、一致 0 件は既存の `filtered-out` に合流させる。語は `stores/sessions.ts` の画面の状態 (永続化しない) に持ち、画面を離れても保つ。区画の開閉の `useState` は触らない。
+`session-search.ts` (data-model §1) を作り、`SessionListScreen` の区画の導出で既存の所在の絞り込みの後に当てる。対象にグループの見出しの文字列を入れるため、見出しの導出 (`folderLabels.nameOf` と未登録の見出し) を関数にして一覧と共有する。一致 0 件は新しい `search-empty` (data-model §1)。語は `stores/sessions.ts` に (永続化しない)。区画の開閉の `useState` は書き換えず、検索中は畳まれたグループも開いて描く。
 
 ### 会話内検索 (US-2)
 
@@ -132,7 +134,7 @@ rg -n "O-3\b" (node_modules を除く)                      → 130 件 / 49 フ
 
 ### 再利用率 (US-4)
 
-`launch-usage.ts` (domain) → `launch-usage-store.ts` (infra) → `launch-usage-service.ts` (app) → `ipc.ts`。`LaunchDialog` は `applyPreset` を呼んだら `origin = 'preset'` を覚え、ダイアログを開き直したら `manual` に戻す。`PresetPanel` は `getLaunchUsage()` を開いたときに 1 回読む。
+`launch-usage.ts` (domain。暦日の計算も純関数) → `launch-usage-store.ts` (infra) → `launch-usage-service.ts` (app。直列化と読み込みの状態) → `session-ipc.ts` (`handleLaunchSession` / 読み出し) → `ipc.ts` (登録だけ)。`LaunchDialog` は `applyPreset` を呼んだら `origin = 'preset'` を覚え、新しく開いたら `manual`。拒否・失敗の後に前回の設定で作り直すときは、ストアの `lastOrigin` を戻す。`PresetPanel` は `getLaunchUsage()` を開いたときに 1 回読み、`unreadable` は「記録を読めません」。
 
 ### Empty state
 
@@ -140,7 +142,7 @@ rg -n "O-3\b" (node_modules を除く)                      → 130 件 / 49 フ
 
 ### 記録の追随
 
-glossary → roadmap (O-3 の行・O-8 / O-9 の追加・system-scope の ADR の持ち主・切り出しの注記・D-1 の注記) → `_overview.md` → charter 2 つ → `ui-coverage.md` F 節 → prompts → discovery (`launch-usage.json`)。AD-045 は proposed のまま置き、Constitution XV は変えない。
+glossary → roadmap (O-3 の行・O-8 / O-9 の追加・system-scope の ADR の持ち主・切り出しの注記・D-1 の注記) → `_overview.md` → charter 2 つ → `ui-coverage.md` F 節 → prompts → discovery (`launch-usage.json`)。Constitution XV の改定 (MINOR。AD-045 が accepted の後、本 feature の PR で。改定手順 2 / 4)。
 
 ## ADR
 
@@ -162,7 +164,9 @@ glossary → roadmap (O-3 の行・O-8 / O-9 の追加・system-scope の ADR �
 | RK-02 | CSS Custom Highlight API の強調が markdown の描画とずれる | 件数は本文で数え、強調は描画の中の一致すべてに掛ける (research R-03)。実機の目視 (quickstart V-3) |
 | RK-03 | registry の palette / 検索の element が assistant-ui の runtime を前提にしていて合わない | Radix の Dialog と listbox で作り、F 節の備考に理由を書く (R-04) |
 | RK-04 | 仮想化の `scrollToIndex` が可変の高さで目標の位置に止まらない | 移動の後に要素が描かれたら `scrollIntoView` で合わせ直す。component テストは index が描かれる範囲に入ることだけを見る |
-| RK-05 | 記録の書き込みの失敗が起動の応答を遅らせる | await しない。service の直列化の失敗は握りつぶす (テストで、store が投げても起動の結果が `launching` のまま) |
+| RK-05 | 記録の書き込みの失敗が起動の応答を遅らせる | await しない。失敗は理由キーと errno のコードだけをログに出して捨てる (テストで、store が投げても起動の結果が `launching` のまま) |
+| RK-06 | window の capture の Ctrl+K / Ctrl+F が composer の IME の経路に割り込む | 変換中は何もしない (`preventDefault` もしない)。`e2e/ime.spec.ts` に「変換中に Ctrl+K / Ctrl+F を押しても開かず、変換が確定できる」を 1 ケース足す (jsdom は発火順を再現しない) |
+| RK-07 | 強調の位置が正規化でずれて例外を出す | data-model §2 の 2 つの位置の表と範囲の検査。長さの変わる文字のテスト |
 
 ## Project Structure
 
@@ -172,9 +176,13 @@ src/domain/session/launch-usage.ts (+ .test.ts)      (新設)
 src/domain/capability.ts                              (launchSession の第 2 引数・getLaunchUsage)
 src/main/infra/settings/launch-usage-store.ts (+ .test.ts) (新設)
 src/main/app/launch-usage-service.ts (+ .test.ts)    (新設)
-src/main/app/validate.ts / ipc.ts / composition-root.ts / e2e-capability.ts
+src/main/app/validate.ts / session-ipc.ts (+ test) / ipc.ts / composition-root.ts / e2e-capability.ts
+src/renderer/src/features/session/running-session-store.ts / running-session-types.ts / (O-7 の) 起動の面
+src/renderer/src/test-support/capability.ts
+src/renderer/src/assets/main.css (`::highlight()` の規則)
+e2e/ime.spec.ts (変換中の Ctrl+K / Ctrl+F の 1 ケース)
 src/preload/index.ts
-src/renderer/src/features/search/match.ts (+ .test.ts)          (新設)
+src/renderer/src/features/search/session-search.ts (+ .test.ts) (新設)
 src/renderer/src/features/palette/commands.ts / CommandPalette.tsx / labels.ts (+ tests) (新設)
 src/renderer/src/features/chat/useConversationSearch.ts / ConversationSearchBar.tsx / search-highlight.ts (+ tests) (新設)
 src/renderer/src/features/chat/ChatScreen.tsx / labels.ts / transcript-context.ts
