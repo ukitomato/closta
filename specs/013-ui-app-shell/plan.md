@@ -8,10 +8,11 @@
 
 上部の 7 つのタブをやめ、サイドバー・中央・右のペインの 3 面にする (AD-046 proposed)。各画面の中身は変えず、置き場所と遷移だけを変える。
 
-- 面の状態を `stores/ui.ts` に 1 つ (data-model §1)。選んだ行の id は今の 2 つのストアのまま、中央に出すものを `focus` で決める
-- 稼働中の thread list の runtime の provider をシェル全体に上げる (research R-03)
-- サイドバーは 4 つの区画 (data-model §3)、右のペインはタブの表と「概要」(§4 / §5)、設定は全面のダイアログ
-- E2E の nav の手順を「新規起動」に直す。基準画像は変えない
+- 面の状態を `stores/ui.ts` に 1 つ (data-model §1)。選んだ行の id は今の 2 つのストアのまま、中央に出すものを `focus` で決める。focus の書き手はシェルの 1 か所で、2 つのストアの選択の操作を購読する。読み上げと承認待ちのボタンは `watchedId` を共有する
+- 稼働中の thread list の assistant-ui の runtime (`AssistantRuntimeProvider`。glossary の `AgentRuntime` ではない) の provider をシェル全体に上げる (research R-03)
+- サイドバーは 4 つの区画 (data-model §3)、右のペインはタブの表と「概要」(§4 / §5。既定で畳む)、設定は全面のダイアログ (閉じたら中を unmount)
+- 失敗したセッションを閉じたら起動ダイアログを前回の設定と理由つきで開く (X-4 US-1 AC7)。過去の区画の初回の取得はランタイムの一覧の後 (FR-016)
+- E2E と perf の nav の手順を「新規起動」に直す。右を既定で畳むので composer の幅は今と同じで、基準画像は変えない
 
 ## Technical Context
 
@@ -19,12 +20,12 @@
 - **targets**: frontend だけ (main / preload / domain / agents を変えない)
 - **レイヤ** (renderer):
   - `stores/ui.ts` — `SCREENS` 系を面の状態に置き換える
-  - `features/shell/` (新設) — `AppShell.tsx` (3 面の配置と畳み)、`Sidebar.tsx`、`CenterPane.tsx` (focus に応じた中身と中央のヘッダ)、`RightPanel.tsx` と `panel-tabs.ts`、`OverviewTab.tsx`、`SettingsDialog.tsx`、`labels.ts`
-  - `features/session/` — `SessionScreen.tsx` を 3 つに分ける: `RunningSessionsProvider.tsx` (runtime の provider)、サイドバーの稼働中の区画 (今の `RunningSessionList`)、中央の実行中のペイン (今の `LiveSessionPane`・`Launching`)。起動ダイアログは `launchOpen` のダイアログに移す。`SessionNavBadge` は区画の見出しへ
-  - `features/session-list/SessionListScreen.tsx` — 一覧の部分をサイドバーで使える形に (画面の見出しと `max-w-3xl` の外枠を外す)。`setScreen('chat')` → `focus = 'past'`、`setScreen('folders')` → 設定を「作業フォルダ」で開く
+  - `features/shell/` (新設) — `AppShell.tsx` (3 面の配置と畳み)、`Sidebar.tsx`、`CenterPane.tsx` (focus に応じた中身と中央のヘッダ)、`RightPanel.tsx` と `panel-tabs.ts`、`OverviewTab.tsx`、`SettingsDialog.tsx`、`useShellFocus.ts` (focus の書き手と `watchedId`。data-model §1)、`labels.ts`
+  - `features/session/` — `SessionScreen.tsx` を 3 つに分ける: `RunningSessionsProvider.tsx` (assistant-ui の runtime の provider)、サイドバーの稼働中の区画 (今の `RunningSessionList`。`nav` を `section` に、`ThreadListNew` を外す)、中央の実行中のペイン (今の `LiveSessionPane`・`Launching`)。起動ダイアログは `launchOpen` のダイアログに移す。`SessionNavBadge` は区画の見出しへ。`SessionAttentionAnnouncer` と `nextAwaiting` は `watchedId` を受ける。`running-session-store` に選択の操作の通知 (`selectionSeq`) を足す
+  - `features/session-list/` — `SessionListScreen.tsx` の一覧の部分をサイドバーで使える形に (画面の見出しと `max-w-3xl` の外枠を外す。data-model §3)。`setScreen('folders')` → 設定を「作業フォルダ」で開く。`useSessions.ts` の初回の取得を `listRuntimes()` の解決の後にする (FR-016)。`locationLabelOf` とグループの表示の関数を export する (「概要」と共有)
   - `features/chat/ChatScreen.tsx` — 中央の本体として使う。密度の切り替えを中央のヘッダへ
   - `App.tsx` — `AppShell` を描くだけにする。`useRunningSessionStoreWiring()` と `SessionAttentionAnnouncer` は残す
-  - `e2e/support/launch.ts` / `e2e/launch-dialog.spec.ts` — nav の「セッション起動」→ サイドバーの「新規起動」
+  - `e2e/support/launch.ts` / `e2e/launch-dialog.spec.ts` / `perf/real-sessions.spec.ts` — nav の「セッション起動」→ サイドバーの「新規起動」(locator はサイドバーに限る)。perf は CI で流さず、本 feature でも実行しない。perf の安全柵・出力は変えないので、roadmap の「実機計測ハーネスの ADR」の条件 (perf の安全柵・出力を変える) には当たらない
 - **既存の起点**: research R-02
 
 ## Constitution Check
@@ -33,7 +34,7 @@
 |---|---|---|
 | I / II / IV / V / VI / VII / IX / X | N/A | renderer の配置だけを変える。IPC・永続化・プロセスを変えない |
 | III (権限ゲート) | ✅ | 起動ダイアログ (選べない選択肢を出さない) の中身を変えない |
-| VIII (日本語環境) | ✅ | 新しい文言は `features/shell/labels.ts`。長い日本語の題・フォルダ名はサイドバーと概要で 1 行に切り詰める (component テスト)。composer は変えない。基準画像 (composer の領域) を変えない |
+| VIII (日本語環境) | ✅ | 新しい文言は `features/shell/labels.ts`。長い日本語の題・フォルダ名はサイドバーと概要で 1 行に切り詰める (component テスト)。composer は変えない。右のペインを既定で畳むので、既定のウィンドウの幅で中央は 780px、composer は上限 704px のままで基準画像は変わらない (data-model §2)。変わったら撮り直し、人間の見た目の承認を quickstart-results に記録する |
 | XI (観測可能な垂直スライス) | ✅ | 各 US は component テストと E2E で観測でき、見た目は quickstart V-3 |
 | XII (ui-coverage) | ✅ | SDK が emit する情報の表示を足さない (A〜E 節の差分 0)。F 節の使い道 (Thread list sidebar / Settings / Empty state) を同じ PR で直す |
 | XIII (element 優先) | ✅ | thread-list-sidebar・Settings・Empty state・resizable を registry で先に確かめる (research R-04) |
@@ -82,35 +83,44 @@ rg -n "目標レイアウト|最初の UI 系 feature|FE-001" (docs / PLAN.md / 
 | # | 出所 | 内容 | 処理 |
 |---|---|---|---|
 | 1 | AD-025:244-277 | 目標レイアウト。採用には ADR。最初の UI 系 feature がシェルを組み替える | **受ける** — AD-046 (proposed)。右のペインの Browser / PR Webview の CSP の条件は AD-046 Decision 4 で引き継ぐ |
-| 2 | AD-024:182,198 / AD-028:184 / constitution:165,1031 / 002 plan:168,388 / 003 plan:28 | Principle VIII (B) の延期条件「目標レイアウト ADR が accepted」 | **注記** — 本 feature は (B) の範囲を変えない (composer の領域の基準画像のまま)。AD-046 が accepted になった時点で条件が満たされることを roadmap の E2E / 検証基盤の項目に注記する |
+| 2 | AD-024:182,198 / AD-028:184 / constitution:165,1031 / 002 plan:168,388 / 003 plan:28 | Principle VIII (B) の延期条件「目標レイアウト ADR が accepted」。採択時に基準画像の撮り直しになる | **受ける** — 撮り直しが要るなら持ち主は本 feature。右を既定で畳むことで composer の幅を保ち、撮り直しを避ける (data-model §2)。変わったら撮り直して人間の承認を記録する (FR-011)。AD-046 の accepted で延期条件が満たされることを roadmap の E2E / 検証基盤の項目に注記する。全画面の基準画像を足すかは本 feature で決めない |
 | 3 | `folder-service.ts:55` | 目標レイアウトは Browser / PR Webview を別 WebContents で持つ | **該当なし** — 右のペインの Browser は OPT-panel。注記はそのまま正しい |
 | 4 | `App.tsx:16` / `stores/ui.ts:9` | FE-001 アプリシェル (R-1) | **受ける** — 注記を O-7 / AD-046 に直す |
 | 5 | glossary:485,949 | 「サイドバー」は位置の説明に限る | **受ける** — 面の名前として定義し直す (FR-013) |
 | 6 | ui charter:114 / session charter:99 | 監視ビュー = セッション画面のサイドバー | **受ける** — 「シェルのサイドバーの稼働中の区画」に直す |
 | 7 | ui-coverage.md F 節 (Thread list sidebar / Settings / Empty state / Assistant sidebar / Chat panel) | 未使用・「アプリの画面構成と合わない」 | **受ける** — 使うものの使い道を直す。Assistant sidebar / Chat panel の備考は新しいシェルで読み直す |
 | 8 | roadmap の O-3〜O-6 の行 | 依存は O-2 | **受ける** — 依存に O-7 を足す。O-4〜O-6 に右のペインのタブの候補を注記 |
+| 9 | roadmap:163-172 | `running-session-store.ts` / `RunningSessionList.tsx` の切り出しの持ち主は「store に派生値を足すか、監視ビューの行を触る次の feature」 | **該当なし** — 本 feature は行の部品と派生値を変えない (`nav` → `section`・`ThreadListNew` を外す・選択の操作の通知だけ)。roadmap に「O-7 は当たらない」と注記する |
+| 10 | `useSessions.ts:71-77` / `src/main/index.ts:192-196` | セッション一覧は起動直後に取らない (ランタイム検出の後) | **受ける** — FR-016。コメントを新しい前提 (区画は常時マウント、初回の取得は `listRuntimes()` の後) に直す |
+| 11 | `perf/real-sessions.spec.ts:189,191` / roadmap O-3 の義務 (2)(c) | 実機計測は nav から起動する。行の切り替えの計測 | **受ける** — 手順を直す (FR-011)。(2)(c) の計測の基準が新しいシェル (focus の切り替え) で変わる注記を roadmap に |
+| 12 | glossary:389-390 / session charter:101,194 | 没入ビュー = セッション画面のペイン。ナビの件数 | **受ける** — FR-013 |
+| 13 | OPT-pty (roadmap:298 / `_overview.md`:76 / AD-025:274) | Terminal タブは OPT-pty | **受ける** — OPT-panel から Terminal を外す (FR-013) |
 
 ## 実装方針
 
 ### 面の状態
 
-`stores/ui.ts` を data-model §1 に置き換え、型検査で今の `screen` の参照をすべて洗い出して直す。`seedFolderDraft` は設定を「作業フォルダ」で開く。
+`stores/ui.ts` を data-model §1 に置き換え、型検査で今の `screen` の参照をすべて洗い出して直す (`SessionAttentionAnnouncer.tsx:28`・`RunningSessionList.monitor.test.tsx:244-291` を含む)。`seedFolderDraft` は設定を「作業フォルダ」で開く。focus の書き手は `useShellFocus` の 1 か所で、`running-session-store` の選択の操作の通知 (`selectionSeq`) と `stores/sessions.ts` の選択を購読し、data-model §1 の表のとおりに focus と `launchOpen` を決める。session のコンポーネントは面の状態を書かない。
 
 ### provider の持ち上げ
 
-`SessionScreen` の `AssistantRuntimeProvider` (稼働中の thread list の runtime。`useRunningThreadList` / `useLiveSession` / `useLiveRuntime`) を `RunningSessionsProvider` に切り出し、`AppShell` の全体を包む。`LiveSessionPane` は中央の本体、`RunningSessionList` はサイドバーの区画で、同じ provider の内側にある。過去の一覧と `ChatScreen` は自分の provider を内側に持つ。
+`SessionScreen` の `AssistantRuntimeProvider` (稼働中の thread list の assistant-ui の runtime。`useRunningThreadList` / `useLiveSession` / `useLiveRuntime`) を `RunningSessionsProvider` に切り出し、`AppShell` の全体を包む。`LiveSessionPane` は中央の本体、`RunningSessionList` はサイドバーの区画で、同じ provider の内側にある。過去の一覧と `ChatScreen` は自分の provider を内側に持つ。
 
 ### シェル
 
-`AppShell` は 3 面を横に並べ、§2 の幅と畳みを持つ。幅の監視は `ResizeObserver` (ウィンドウの幅) で、自動の畳みは状態の変化として 1 回だけ起こす。分割の element は registry を先に確かめる。
+`AppShell` は 3 面を横に並べ、§2 の固定の幅と畳みを持つ (幅のドラッグは入れない。依存を足さない)。幅の監視は `ResizeObserver` (ウィンドウの幅) で、自動の畳みは状態の変化として 1 回だけ起こす。
 
 ### 設定のダイアログ
 
-左に 4 項目とテーマ、右に今の 4 画面。項目の切り替えで画面を unmount してよい (今の画面も切り替えで unmount している)。閉じたら「設定」のボタンにフォーカスを戻す。
+左に 4 項目とテーマ、右に今の 4 画面。項目の切り替えと閉じたときに中の画面を unmount する (Provider の画面の平文の秘密を残さない。覚えるのは項目の id だけ)。閉じたら開いた元の要素にフォーカスを戻す。
 
 ### 起動ダイアログ
 
-`launchOpen` で開くダイアログに `NewSessionDialog` を載せる。起動中 (`launch.phase === 'launching'`) はダイアログの中で `Launching` を出し、受け付けられたら閉じて `focus = 'running'`。拒否・失敗はダイアログの中に今どおり出す。
+`launchOpen` で開くダイアログに `NewSessionDialog` を載せる。起動中 (`launch.phase === 'launching'`) はダイアログの中で `Launching` を出し、閉じられない。受け付けられたら閉じて `focus = 'running'` (`useShellFocus` が起動の受け付けの選択を受ける)。拒否・失敗はダイアログの中に今どおり出す。失敗したセッションを閉じたら `launchOpen = true` にし、ダイアログは `lastConfig` と `previousFailure` を出す (X-4 US-1 AC7)。
+
+### 過去の区画の初回の取得
+
+`useSessions.ts` の初回の `listSessions()` を、`listRuntimes()` の解決の後に直列化する (`runtime-store.list()` は未検出なら検出を待ってから返す)。区画が常時マウントでも、R-2 の「検出より先に列挙しない」を保つ。main は変えない。
 
 ### テスト
 
@@ -133,8 +143,10 @@ rg -n "目標レイアウト|最初の UI 系 feature|FE-001" (docs / PLAN.md / 
 | RK-01 | 未承認の判断 (U-1〜U-5) が覆る (とくに右のペインの幅・設定をダイアログにする) | design-gate で止める。見た目は実機の目視 (quickstart V-3) で利用者が決める |
 | RK-02 | 入れ子の `AssistantRuntimeProvider` で、過去の一覧・transcript の hook が外側の runtime を拾う | 過去の一覧と transcript の component テストを、外側に稼働中の provider がある形で流す |
 | RK-03 | provider の持ち上げで、稼働中の接続の寿命 (X-5 FR-008) が変わる | `useRunningSessionStoreWiring` は App に残し、provider は runtime の購読だけを持つ。`multi-session.spec.ts` (E2E) を流す |
-| RK-04 | 設定の画面がダイアログの中で幅が足りず崩れる | ダイアログは全面 (左の項目 + 右の画面の `max-w-3xl`)。今の画面の外枠と同じ幅を保つ |
+| RK-04 | 設定の画面がダイアログの中で、過去の一覧が 280px のサイドバーの中で、幅が足りず崩れる | ダイアログは全面 (左の項目 + 右の画面の `max-w-3xl`)。過去の一覧は外枠と見出しを外し、残りは折り返しで収める (data-model §3)。component テストで長い日本語のフォルダ名を流す。実機の見た目は quickstart V-3 |
 | RK-05 | 自動で畳む処理がウィンドウのサイズの変化のたびに状態を揺らす | 閾値を割った瞬間に 1 回だけ畳み、利用者の操作を優先する (data-model §2) |
+| RK-06 | 過去の区画の常時マウントで、ランタイム検出の前に列挙が走る (WSL の所在が「未検出」になりキャッシュに残る) | FR-016 / 上の「過去の区画の初回の取得」。component テストで順序を確かめ、実機は quickstart V-3。E2E は `listSessions` が空を返すので検出できない |
+| RK-07 | 右のペインを既定で畳んでも、帯の 40px の分で composer の基準画像が変わる | 中央 780px で composer は上限 704px のまま (data-model §2)。変わったら撮り直して人間の承認を記録する (FR-011) |
 
 ## Project Structure
 
@@ -142,12 +154,15 @@ rg -n "目標レイアウト|最初の UI 系 feature|FE-001" (docs / PLAN.md / 
 docs/decisions/0046-app-shell-layout.md                 (新設。proposed)
 src/renderer/src/App.tsx
 src/renderer/src/stores/ui.ts (+ test)
-src/renderer/src/features/shell/AppShell.tsx / Sidebar.tsx / CenterPane.tsx / RightPanel.tsx / panel-tabs.ts / OverviewTab.tsx / SettingsDialog.tsx / labels.ts (+ tests) (新設)
+src/renderer/src/features/shell/AppShell.tsx / Sidebar.tsx / CenterPane.tsx / RightPanel.tsx / panel-tabs.ts / OverviewTab.tsx / SettingsDialog.tsx / useShellFocus.ts / labels.ts (+ tests) (新設)
 src/renderer/src/features/session/SessionScreen.tsx → RunningSessionsProvider.tsx / LivePane.tsx (分割)
-src/renderer/src/features/session/RunningSessionList.tsx / SessionNavBadge.tsx
-src/renderer/src/features/session-list/SessionListScreen.tsx
+src/renderer/src/features/session/RunningSessionList.tsx / SessionNavBadge.tsx / SessionAttentionAnnouncer.tsx / session-view.ts / running-session-store.ts (選択の操作の通知) / labels.ts
+src/renderer/src/features/session-list/SessionListScreen.tsx / useSessions.ts
+src/renderer/src/features/workspace-folders/WorkspaceFoldersScreen.tsx (注記)
 src/renderer/src/features/chat/ChatScreen.tsx
 src/renderer/src/components/assistant-ui/elements/ (registry から取り込む element があれば)
-e2e/support/launch.ts / e2e/launch-dialog.spec.ts
+src/main/index.ts (注記だけ)
+e2e/support/launch.ts / e2e/launch-dialog.spec.ts / e2e/README.md
+perf/real-sessions.spec.ts (手順だけ。実行しない)
 docs/glossary.md / docs/roadmap.md / docs/domains/{ui,session}/charter.md / docs/domains/_overview.md / docs/ui-coverage.md / docs/prompts.md
 ```
