@@ -167,7 +167,9 @@ function without(excluded) {
 
 export default defineConfig(
   // e2e/ は Playwright 専用 (別 tsconfig / 別 runner)。src の lint/型グラフに混ぜない (X-2 / AD-038 D2)。
-  // Playwright 向けの lint は e2e/ 配下の設定で別途行う (`@playwright/test` 導入後)。
+  // `@playwright/test` は導入済みだが、e2e/ と perf/ を lint する設定は**まだ無い** (型検査だけ。roadmap の
+  // E2E / 検証基盤 feature の項目)。perf/ (実機計測。CI では実行しない) も e2e/ と同じく src のグラフの外に置く
+  // (O-1 / AD-038 D2 の類推)。perf が子プロセスを起こさないことは、当面レビューだけで守っている。
   {
     ignores: [
       '**/node_modules',
@@ -175,7 +177,9 @@ export default defineConfig(
       '**/out',
       'tests/rule-fixtures/**',
       'e2e/**',
-      'playwright.config.ts'
+      'playwright.config.ts',
+      'perf/**',
+      'playwright.perf.config.ts'
     ]
   },
   tseslint.configs.recommended,

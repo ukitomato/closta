@@ -1,0 +1,245 @@
+{
+    "gate": "design",
+    "run": "2026-10-02T18:00:00+09:00",
+    "spec_dir": "specs/010-session-monitoring-view",
+    "spec_id": "010-session-monitoring-view",
+    "round": 2,
+    "tracks": {
+        "analyze": {
+            "status": "ok",
+            "raw_out": "analyze.md",
+            "viewpoint_missing": null,
+            "cascade_demotions": null
+        },
+        "po-reviewer": {
+            "status": "ok",
+            "raw_out": "po-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "architecture-reviewer": {
+            "status": "ok",
+            "raw_out": "architecture-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "security-reviewer": {
+            "status": "ok",
+            "raw_out": "security-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "platform-boundary-reviewer": {
+            "status": "ok",
+            "raw_out": "platform-boundary-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        }
+    },
+    "severity_counts": {
+        "critical": 0,
+        "high": 2,
+        "medium": 10,
+        "low": 16
+    },
+    "prev_round": {
+        "resolved": {
+            "critical": 0,
+            "high": 7
+        },
+        "unresolved": {
+            "critical": 0,
+            "high": 0
+        },
+        "new": {
+            "critical": 0,
+            "high": 2
+        }
+    },
+    "fr_coverage": [
+        {
+            "fr": "FR-001",
+            "covered": true,
+            "by": [
+                "tasks.md:FE-001",
+                "tasks.md:FE-002",
+                "tasks.md:FE-003"
+            ]
+        },
+        {
+            "fr": "FR-002",
+            "covered": true,
+            "by": [
+                "tasks.md:SH-003",
+                "tasks.md:FE-002",
+                "tasks.md:FE-004"
+            ]
+        },
+        {
+            "fr": "FR-003",
+            "covered": true,
+            "by": [
+                "tasks.md:FE-002",
+                "tasks.md:FE-003"
+            ]
+        },
+        {
+            "fr": "FR-004",
+            "covered": true,
+            "by": [
+                "tasks.md:SH-003",
+                "tasks.md:FE-004",
+                "tasks.md:FE-003"
+            ]
+        },
+        {
+            "fr": "FR-005",
+            "covered": true,
+            "by": [
+                "tasks.md:SH-003",
+                "tasks.md:FE-010",
+                "tasks.md:FE-011"
+            ]
+        },
+        {
+            "fr": "FR-006",
+            "covered": true,
+            "by": [
+                "tasks.md:SH-003",
+                "tasks.md:SH-004",
+                "tasks.md:FE-011"
+            ]
+        },
+        {
+            "fr": "FR-007",
+            "covered": true,
+            "by": [
+                "tasks.md:SH-003",
+                "tasks.md:FE-011",
+                "tasks.md:FE-012"
+            ]
+        },
+        {
+            "fr": "FR-008",
+            "covered": true,
+            "by": [
+                "tasks.md:FE-020",
+                "tasks.md:FE-021",
+                "tasks.md:FE-022"
+            ]
+        },
+        {
+            "fr": "FR-009",
+            "covered": true,
+            "by": [
+                "tasks.md:SH-004",
+                "tasks.md:FE-022"
+            ]
+        },
+        {
+            "fr": "FR-010",
+            "covered": true,
+            "by": [
+                "tasks.md:FE-011",
+                "tasks.md:SH-092"
+            ]
+        },
+        {
+            "fr": "FR-011",
+            "covered": true,
+            "by": [
+                "tasks.md:SH-030",
+                "tasks.md:SH-031"
+            ]
+        },
+        {
+            "fr": "FR-012",
+            "covered": true,
+            "by": [
+                "tasks.md:SH-005",
+                "tasks.md:SH-032",
+                "tasks.md:SH-033"
+            ]
+        },
+        {
+            "fr": "FR-013",
+            "covered": true,
+            "by": [
+                "tasks.md:SH-001",
+                "tasks.md:SH-090"
+            ]
+        }
+    ],
+    "viewpoint_coverage": {
+        "A": "Critical:0 High:0 (security L:1)",
+        "B": "Critical:0 High:0 (security L:2)",
+        "C": "Critical:0 High:0 (architecture M:2 L:2 / platform-boundary L:1)",
+        "D": "Critical:0 High:0 (architecture L:2 / platform-boundary M:1)",
+        "E": "Critical:0 High:2 (po)",
+        "F": "Critical:0 High:0 (platform-boundary L:1)",
+        "G": "\u8a72\u5f53\u306a\u3057: optional reviewer \u306f design-gate \u3067\u8d77\u52d5\u3057\u306a\u3044",
+        "H": "Critical:0 High:1 (architecture) / po M:1 / platform-boundary M:1"
+    },
+    "dedup_log": [
+        {
+            "merged": [
+                "po-H-102",
+                "arch-H-101",
+                "analyze-N4"
+            ],
+            "key": "SC-005"
+        },
+        {
+            "merged": [
+                "po-H-101",
+                "analyze-N2"
+            ],
+            "key": "FR-004"
+        },
+        {
+            "merged": [
+                "analyze-N3",
+                "arch-L-101"
+            ],
+            "key": "FR-006"
+        },
+        {
+            "merged": [
+                "analyze-N6",
+                "pb-M-001"
+            ],
+            "key": "AD-038 D4"
+        },
+        {
+            "merged": [
+                "sec-L-010",
+                "pb-L-002"
+            ],
+            "key": "FR-012"
+        },
+        {
+            "merged": [
+                "po-L-101",
+                "analyze-N15"
+            ],
+            "key": "FR-012"
+        },
+        {
+            "merged": [
+                "po-L-102",
+                "analyze-N10",
+                "arch-L-103"
+            ],
+            "key": "SC-006"
+        },
+        {
+            "merged": [
+                "arch-L-104",
+                "analyze-N7",
+                "analyze-N9"
+            ],
+            "key": "FR-006"
+        }
+    ],
+    "verdict": "PASS"
+}

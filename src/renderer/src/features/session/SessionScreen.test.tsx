@@ -144,3 +144,26 @@ describe('SessionScreen — ヘッダの表示名 (pr-gate R1 po L-001 / R2 po L
     expect(await screen.findByTestId('session-title')).not.toHaveTextContent('登録が解除された')
   })
 })
+
+describe('SessionScreen — 承認待ちの件数から移る (O-1 US-1 AC2 / design-gate R2 M-07)', () => {
+  it('見出しの件数を押すと承認待ちのセッションへ移り、その承認カードが描画される', async () => {
+    const store = await setup({ lists: 'loaded' })
+    act(() =>
+      store.setState((s) => ({
+        sessions: {
+          ...s.sessions,
+          [B]: {
+            ...s.sessions[B]!,
+            runState: 'awaiting_permission',
+            pending: { requestId: 'r1', toolName: 'Bash', input: 'ls -la', scope: 'once' }
+          }
+        }
+      }))
+    )
+    expect(store.getState().selectedId).toBe(A)
+    await userEvent.click(await screen.findByTestId('awaiting-count'))
+    await waitFor(() => expect(store.getState().selectedId).toBe(B))
+    expect(await screen.findByText(/の実行を求めています/)).toBeInTheDocument()
+    expect(screen.getAllByText('Bash').length).toBeGreaterThan(0)
+  })
+})

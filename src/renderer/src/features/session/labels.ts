@@ -52,6 +52,27 @@ export function launchFailureLabel(reason: LaunchFailureReason): string {
   return LAUNCH_REJECT_LABELS[reason]
 }
 
+/**
+ * compact の行で状態の印の横に出す短い理由 (O-1 FR-003 / FR-008。pr-gate R1 po M-002)。全文は
+ * ツールチップと読み上げ (`launchFailureLabel`) で出す。
+ */
+const LAUNCH_FAILURE_SHORT_LABELS: Record<LaunchFailureReason, string> = {
+  'distro-not-running': 'ディストロ停止',
+  'not-verified-running': '実行中確認なし',
+  'distro-mismatch': 'ディストロ不一致',
+  'claude-not-found': 'claude なし',
+  'launch-failed': '起動失敗',
+  'process-crashed': '異常終了',
+  'stream-protocol-error': 'ストリーム破損',
+  'provider-error': 'Provider エラー',
+  'interrupt-unavailable': '中断非対応',
+  'supervisor-exited': '管理プロセス終了'
+}
+
+export function launchFailureShortLabel(reason: LaunchFailureReason): string {
+  return LAUNCH_FAILURE_SHORT_LABELS[reason]
+}
+
 /** `provider-error` だけ「再ログイン」導線を出す (FR-030)。他は再起動導線。 */
 export function isReloginFailure(reason: LaunchFailureReason | null): boolean {
   return reason === 'provider-error'
@@ -136,6 +157,92 @@ export const SESSION_NAME_FALLBACKS = {
   folder: '登録が解除された作業フォルダ',
   runtime: '見つからないランタイム'
 } as const
+
+/* ── 監視ビュー (O-1 / FR-001〜FR-009 / Principle XV) ─────────────────── */
+
+/** 一覧の見出し・ナビの件数・密度 (O-1)。 */
+export const MONITOR_LABELS = {
+  /** 承認待ちの件数のボタンが押せないとき (移れる先が無い。FR-002)。 */
+  awaitingNoTarget: 'ほかに承認待ちのセッションはありません。',
+  /** 押せない理由が「表示中のセッションだけが承認待ち」のとき (spec Edge Cases。pr-gate R1 po L-003)。 */
+  awaitingOnlyWatched: '承認待ちは表示中のセッションだけです。',
+  awaitingNext: '承認待ちのセッションへ移る (承認待ちになったのが早い順)',
+  density: '表示の密度',
+  densityComfortable: '詳しく',
+  densityCompact: 'コンパクト',
+  /** 枠が上限に達しているときの見出し (空け方は `session-limit` の拒否文言を再利用する。FR-007)。 */
+  limitReached: '同時に動かせるセッションの上限に達しています。',
+  /** 実機計測の観測点の要素 (視覚的に隠す。FR-012)。 */
+  receivedMessages: '受信したメッセージの累計'
+} as const
+
+export function slotUsageLabel(used: number, limit: number): string {
+  return `枠 ${used}/${limit}`
+}
+
+export function slotUsageTitle(used: number, limit: number): string {
+  return `同時に動かせるセッション ${limit} 件のうち ${used} 件を使っています。`
+}
+
+export function awaitingCountLabel(count: number): string {
+  return `承認待ち ${count} 件`
+}
+
+export function failedCountLabel(count: number): string {
+  return `失敗 ${count} 件`
+}
+
+/** 直近の活動の前置き (会話由来の部分と別の要素で出す。FR-006)。 */
+const ACTIVITY_PREFIX_LABELS = {
+  approval: '承認を求めています',
+  tool: '実行',
+  prompt: '送信',
+  reply: '応答'
+} as const
+
+/** 直近の活動の前置き (区切りの記号まで含めて `labels.ts` で組む。Principle XV)。 */
+export function activityPrefixLabel(kind: keyof typeof ACTIVITY_PREFIX_LABELS): string {
+  return `${ACTIVITY_PREFIX_LABELS[kind]}:`
+}
+
+/** 経過時間の表記の区分 (`session-view.ts` の `formatElapsed` が導き、ここで訳す。spec FR-005 [ASSUMED])。 */
+export type Elapsed =
+  | { readonly unit: 'sec'; readonly sec: number }
+  | { readonly unit: 'min'; readonly min: number }
+  | { readonly unit: 'hourMin'; readonly hour: number; readonly min: number }
+
+/** 経過時間 (FR-005 [ASSUMED]: 1 分未満は秒、1 時間未満は分、それ以上は時間と分)。 */
+export function elapsedLabel(elapsed: Elapsed): string {
+  switch (elapsed.unit) {
+    case 'sec':
+      return `${elapsed.sec}秒`
+    case 'min':
+      return `${elapsed.min}分`
+    case 'hourMin':
+      return `${elapsed.hour}時間${elapsed.min}分`
+  }
+}
+
+/** 読み上げの文で作業フォルダの表示名が引けないとき (FR-004。文を壊さない)。 */
+const ANNOUNCE_FOLDER_FALLBACK = '名前を取得できないセッション'
+
+function joinNames(names: readonly (string | null)[]): string {
+  return names.map((n) => (n === null || n === '' ? ANNOUNCE_FOLDER_FALLBACK : n)).join('、')
+}
+
+/**
+ * 支援技術に読ませる文 (FR-004)。**作業フォルダの表示名と固定の文言だけ**で組む (会話由来の文字列を入れない)。
+ * 同じ更新で複数が遷移したら 1 つの文にまとめる。
+ */
+export function attentionAnnouncement(
+  awaiting: readonly (string | null)[],
+  failed: readonly (string | null)[]
+): string {
+  const parts: string[] = []
+  if (awaiting.length > 0) parts.push(`${joinNames(awaiting)}: 承認待ちになりました。`)
+  if (failed.length > 0) parts.push(`${joinNames(failed)}: 失敗しました。`)
+  return parts.join(' ')
+}
 
 /** 起動時刻 (秒まで。FR-009)。 */
 export function formatStartedAt(epochMs: number): string {

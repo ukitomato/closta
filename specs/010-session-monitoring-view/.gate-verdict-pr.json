@@ -1,0 +1,319 @@
+{
+    "gate": "pr",
+    "run": "2026-10-03T01:50:00+09:00",
+    "spec_dir": "specs/010-session-monitoring-view",
+    "spec_id": "010-session-monitoring-view",
+    "round": 2,
+    "base_branch": "main",
+    "base_sha": "949ad1b",
+    "head_sha": "0ba910f",
+    "diff_stat": {
+        "files": 70,
+        "additions": 8530,
+        "deletions": 196
+    },
+    "severity_counts": {
+        "critical": 0,
+        "high": 0,
+        "medium": 1,
+        "low": 5
+    },
+    "convergence": {
+        "resolved_from_prev": 2,
+        "new_in_round": 0,
+        "unresolved": 0
+    },
+    "round_history": [
+        {
+            "round": 1,
+            "critical": 0,
+            "high": 2,
+            "convergence": {
+                "resolved_from_prev": 0,
+                "new_in_round": 2,
+                "unresolved": 0
+            },
+            "high_findings": [
+                {
+                    "id": "H-01",
+                    "origin": "security H-001",
+                    "where": "playwright.perf.config.ts:26-28",
+                    "title": "perf failure writes error-context.md aria snapshot with conversation text"
+                },
+                {
+                    "id": "H-02",
+                    "origin": "po H-001 + architecture M-001",
+                    "where": "docs/domains/session/charter.md:140-142",
+                    "title": "KPI real-machine measurement carried over with no roadmap owner"
+                }
+            ]
+        },
+        {
+            "round": 2,
+            "critical": 0,
+            "high": 0,
+            "convergence": {
+                "resolved_from_prev": 2,
+                "new_in_round": 0,
+                "unresolved": 0
+            }
+        }
+    ],
+    "suppressed_by_code_gate": [],
+    "touched_files": [
+        {
+            "path": ".dependency-cruiser.js",
+            "sha": "b173ba537208863f79d2523eeac65c9a95e40453"
+        },
+        {
+            "path": ".github/workflows/verify.yml",
+            "sha": "e35f8a34df2f43c7600934318ca889212a46b3a1"
+        },
+        {
+            "path": "docs/discovery.md",
+            "sha": "587ceac8808798a864b37514cda437f31b02332e"
+        },
+        {
+            "path": "docs/domains/_overview.md",
+            "sha": "5ff26c8d851b71bb32e535cc14d435d3159e375c"
+        },
+        {
+            "path": "docs/domains/session/charter.md",
+            "sha": "52eacf33c857674f10a8847ba5e00d020abfd23c"
+        },
+        {
+            "path": "docs/domains/ui/charter.md",
+            "sha": "0de6b3adb1df77f23ea13aefd8ee33c494f70099"
+        },
+        {
+            "path": "docs/glossary.md",
+            "sha": "82f4d5a66468df3a23adf331ea4d9a2d33849d18"
+        },
+        {
+            "path": "docs/roadmap.md",
+            "sha": "02a09dbb18ad4d1855327a8e09c761ad83d571f3"
+        },
+        {
+            "path": "e2e/multi-session.spec.ts",
+            "sha": "202f6197b244303519c099e79fb0815a2272fccf"
+        },
+        {
+            "path": "e2e/support/input-probe.ts",
+            "sha": "b0e4534d11d88bf3128b167d98c51686b912ad0a"
+        },
+        {
+            "path": "eslint.config.mjs",
+            "sha": "3ea9134292a4580e0a6cd4c6ad7feff2a9f1e5f2"
+        },
+        {
+            "path": "perf/real-sessions.spec.ts",
+            "sha": "44d6a8c480165de0eac75b00c4ea28e3b5cf056a"
+        },
+        {
+            "path": "perf/tsconfig.json",
+            "sha": "c9d83050fa8667a3c05f8097802244a6aca11b67"
+        },
+        {
+            "path": "playwright.perf.config.ts",
+            "sha": "3f768da8c02fbd71aa5193fa8c6b38c0eabf9fc6"
+        },
+        {
+            "path": "specs/010-session-monitoring-view/quickstart-results.md",
+            "sha": "05269ddde15d3b66b6808ccb029539017fdaca76"
+        },
+        {
+            "path": "src/renderer/src/App.tsx",
+            "sha": "cb087830563a6bc036623e23d732036afad638ef"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/thread-list.aui.tsx",
+            "sha": "bedae9890c913f4e4c19738c54ea60c0e16da49d"
+        },
+        {
+            "path": "src/renderer/src/components/ui/badge.tsx",
+            "sha": "1a94cc539326e26227271a0b3599be99e0e55fb6"
+        },
+        {
+            "path": "src/renderer/src/features/session/labels.ts",
+            "sha": "a06a18fd42d8a89b278d2df09caa851192a8e0fe"
+        },
+        {
+            "path": "src/renderer/src/features/session/RunningSessionList.monitor.test.tsx",
+            "sha": "91482da65d9f7a6562766d1d5b24e692ea8a9823"
+        },
+        {
+            "path": "src/renderer/src/features/session/RunningSessionList.tsx",
+            "sha": "66a37b7928dfb731f1835bd02427a4aee6f27624"
+        },
+        {
+            "path": "src/renderer/src/features/session/running-session-store.monitor.test.ts",
+            "sha": "451d5a26841e019c5a11f98154ed998b4582ff44"
+        },
+        {
+            "path": "src/renderer/src/features/session/running-session-store.ts",
+            "sha": "7746791eb9434d70013b7b697d095fd4e2f0db48"
+        },
+        {
+            "path": "src/renderer/src/features/session/running-session-types.ts",
+            "sha": "f7c080b465fb126c66f3638af8baba1f3591b22e"
+        },
+        {
+            "path": "src/renderer/src/features/session/SessionAttentionAnnouncer.tsx",
+            "sha": "e0b08351610bf78ec7400e1bb06e36ecd1b6c417"
+        },
+        {
+            "path": "src/renderer/src/features/session/SessionNavBadge.tsx",
+            "sha": "68d9a0579c2027081ce38fb3dc978310c8d807c5"
+        },
+        {
+            "path": "src/renderer/src/features/session/SessionScreen.test.tsx",
+            "sha": "76a1522fec221e821499d054dead5536a6cbf29e"
+        },
+        {
+            "path": "src/renderer/src/features/session/SessionScreen.tsx",
+            "sha": "59f6eb42cb9323a58aeeed13bb0a76dbfaefba5c"
+        },
+        {
+            "path": "src/renderer/src/features/session/session-view.monitor.test.ts",
+            "sha": "48d7cbd587b198775c9f092e1f1a79eb3cd26124"
+        },
+        {
+            "path": "src/renderer/src/features/session/session-view.ts",
+            "sha": "3954dec7793137bc9606b897957f7bb27f65239f"
+        },
+        {
+            "path": "src/renderer/src/features/session/useSessionClock.test.tsx",
+            "sha": "46d42b9ec249df63baa16098741ec6a153a2358a"
+        },
+        {
+            "path": "src/renderer/src/features/session/useSessionClock.ts",
+            "sha": "eac269cb93eb7693fd6f9f4564c989294e19e4e8"
+        },
+        {
+            "path": "perf/run-judgement.ts",
+            "sha": "bffc369a1b91e98523d26659c172f91327a91ee5"
+        },
+        {
+            "path": "perf/run-judgement.test.ts",
+            "sha": "b0a8205a0ec4d00bc950a5c059dcb94da753ce3d"
+        },
+        {
+            "path": "vitest.config.ts",
+            "sha": "4c67a442e0e3977b57ed830d35cd21bb8260b4be"
+        }
+    ],
+    "viewpoint_coverage": {
+        "A": "Critical:0 High:0 (security)",
+        "B": "Low:1 (security)",
+        "C": "Low:1 (architecture)",
+        "D": "Low:1 (architecture)",
+        "E": "Low:2 (po)",
+        "F": "\u8a72\u5f53\u306a\u3057: code-gate \u5c02\u4efb (platform-boundary 0)",
+        "G": "\u8a72\u5f53\u306a\u3057: optional reviewer \u306f auto_invoke_patterns \u4e0d\u4e00\u81f4",
+        "H": "Medium:1 (po)"
+    },
+    "fr_coverage": [
+        {
+            "fr": "FR-001",
+            "covered": true
+        },
+        {
+            "fr": "FR-002",
+            "covered": true
+        },
+        {
+            "fr": "FR-003",
+            "covered": "partial",
+            "note": "M-02 compact"
+        },
+        {
+            "fr": "FR-004",
+            "covered": true
+        },
+        {
+            "fr": "FR-005",
+            "covered": true
+        },
+        {
+            "fr": "FR-006",
+            "covered": true
+        },
+        {
+            "fr": "FR-007",
+            "covered": true
+        },
+        {
+            "fr": "FR-008",
+            "covered": "partial",
+            "note": "M-02 compact"
+        },
+        {
+            "fr": "FR-009",
+            "covered": true
+        },
+        {
+            "fr": "FR-010",
+            "covered": true
+        },
+        {
+            "fr": "FR-011",
+            "covered": true
+        },
+        {
+            "fr": "FR-012",
+            "covered": "closed-by-user",
+            "note": "SC-005 0 valid rounds; M-01, H-02"
+        },
+        {
+            "fr": "FR-013",
+            "covered": true
+        }
+    ],
+    "rule_verification": {
+        "ran": false,
+        "round": 2,
+        "reason": "R1 (0ba910f) \u4ee5\u964d\u306b\u898f\u5247\u5b9a\u7fa9 / fixture \u306e\u5909\u66f4\u304c 0 \u4ef6"
+    },
+    "skipped_reviewers": [
+        {
+            "name": "database-reviewer",
+            "reason": "auto_invoke_patterns \u306b\u4e00\u81f4\u3059\u308b\u5909\u66f4\u30d5\u30a1\u30a4\u30eb\u304c\u7121\u3044 (\u5909\u66f4 70 \u4ef6 / pattern 5 \u4ef6)"
+        },
+        {
+            "name": "ux-reviewer",
+            "reason": "auto_invoke_patterns \u306b\u4e00\u81f4\u3059\u308b\u5909\u66f4\u30d5\u30a1\u30a4\u30eb\u304c\u7121\u3044 (\u5909\u66f4 70 \u4ef6 / pattern 1 \u4ef6)"
+        },
+        {
+            "name": "a11y-reviewer",
+            "reason": "auto_invoke_patterns \u306b\u4e00\u81f4\u3059\u308b\u5909\u66f4\u30d5\u30a1\u30a4\u30eb\u304c\u7121\u3044 (\u5909\u66f4 70 \u4ef6 / pattern 1 \u4ef6)"
+        }
+    ],
+    "tracks": {
+        "security-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0
+        },
+        "architecture-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0
+        },
+        "po-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0
+        },
+        "platform-boundary-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0
+        }
+    },
+    "verdict": "PASS",
+    "inheritance": "full"
+}

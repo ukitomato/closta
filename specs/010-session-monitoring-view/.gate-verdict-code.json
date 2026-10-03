@@ -1,0 +1,262 @@
+{
+    "gate": "code",
+    "run": "2026-10-03T01:25:00+09:00",
+    "spec_dir": "specs/010-session-monitoring-view",
+    "spec_id": "010-session-monitoring-view",
+    "iter": 4,
+    "severity_counts": {
+        "critical": 0,
+        "high": 0,
+        "medium": 2,
+        "low": 3,
+        "must_fix": 0
+    },
+    "must_fix_findings": [],
+    "touched_files": [
+        {
+            "path": "docs/discovery.md",
+            "sha": "587ceac8808798a864b37514cda437f31b02332e"
+        },
+        {
+            "path": "docs/domains/session/charter.md",
+            "sha": "52eacf33c857674f10a8847ba5e00d020abfd23c"
+        },
+        {
+            "path": "docs/roadmap.md",
+            "sha": "02a09dbb18ad4d1855327a8e09c761ad83d571f3"
+        },
+        {
+            "path": "e2e/multi-session.spec.ts",
+            "sha": "202f6197b244303519c099e79fb0815a2272fccf"
+        },
+        {
+            "path": "perf/real-sessions.spec.ts",
+            "sha": "44d6a8c480165de0eac75b00c4ea28e3b5cf056a"
+        },
+        {
+            "path": "perf/run-judgement.test.ts",
+            "sha": "b0a8205a0ec4d00bc950a5c059dcb94da753ce3d"
+        },
+        {
+            "path": "perf/run-judgement.ts",
+            "sha": "bffc369a1b91e98523d26659c172f91327a91ee5"
+        },
+        {
+            "path": "playwright.perf.config.ts",
+            "sha": "3f768da8c02fbd71aa5193fa8c6b38c0eabf9fc6"
+        },
+        {
+            "path": "specs/010-session-monitoring-view/quickstart-results.md",
+            "sha": "05269ddde15d3b66b6808ccb029539017fdaca76"
+        },
+        {
+            "path": "src/renderer/src/features/session/labels.ts",
+            "sha": "a06a18fd42d8a89b278d2df09caa851192a8e0fe"
+        },
+        {
+            "path": "src/renderer/src/features/session/RunningSessionList.monitor.test.tsx",
+            "sha": "91482da65d9f7a6562766d1d5b24e692ea8a9823"
+        },
+        {
+            "path": "src/renderer/src/features/session/RunningSessionList.tsx",
+            "sha": "66a37b7928dfb731f1835bd02427a4aee6f27624"
+        },
+        {
+            "path": "src/renderer/src/features/session/session-view.monitor.test.ts",
+            "sha": "48d7cbd587b198775c9f092e1f1a79eb3cd26124"
+        },
+        {
+            "path": "src/renderer/src/features/session/session-view.ts",
+            "sha": "3954dec7793137bc9606b897957f7bb27f65239f"
+        },
+        {
+            "path": "vitest.config.ts",
+            "sha": "4c67a442e0e3977b57ed830d35cd21bb8260b4be"
+        }
+    ],
+    "fr_coverage": [
+        {
+            "fr": "FR-001",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/session/RunningSessionList.tsx"
+            ]
+        },
+        {
+            "fr": "FR-002",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/session/session-view.ts",
+                "src/renderer/src/features/session/SessionNavBadge.tsx"
+            ]
+        },
+        {
+            "fr": "FR-003",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/session/RunningSessionList.tsx",
+                "src/renderer/src/features/session/SessionNavBadge.tsx"
+            ]
+        },
+        {
+            "fr": "FR-004",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/session/SessionAttentionAnnouncer.tsx"
+            ]
+        },
+        {
+            "fr": "FR-005",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/session/useSessionClock.ts",
+                "src/renderer/src/features/session/running-session-store.ts"
+            ]
+        },
+        {
+            "fr": "FR-006",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/session/session-view.ts",
+                "src/renderer/src/features/session/running-session-store.ts"
+            ]
+        },
+        {
+            "fr": "FR-007",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/session/session-view.ts"
+            ]
+        },
+        {
+            "fr": "FR-008",
+            "covered": true,
+            "by": [
+                "src/renderer/src/components/assistant-ui/elements/thread-list.aui.tsx",
+                "src/renderer/src/features/session/RunningSessionList.tsx"
+            ]
+        },
+        {
+            "fr": "FR-009",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/session/running-session-store.ts"
+            ]
+        },
+        {
+            "fr": "FR-010",
+            "covered": true,
+            "by": [
+                "git diff: src/main src/preload src/agents src/domain = 0"
+            ]
+        },
+        {
+            "fr": "FR-011",
+            "covered": true,
+            "by": [
+                "e2e/multi-session.spec.ts",
+                "e2e/support/input-probe.ts"
+            ]
+        },
+        {
+            "fr": "FR-012",
+            "covered": true,
+            "by": [
+                "perf/real-sessions.spec.ts",
+                "playwright.perf.config.ts"
+            ]
+        },
+        {
+            "fr": "FR-013",
+            "covered": true,
+            "by": [
+                "docs/glossary.md",
+                "docs/domains/session/charter.md",
+                "docs/domains/ui/charter.md",
+                "docs/roadmap.md"
+            ]
+        }
+    ],
+    "viewpoint_coverage": {
+        "A": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+        "B": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+        "C": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+        "D": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+        "E": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+        "F": "Medium:2 Low:3 (convention)",
+        "G": "\u8a72\u5f53\u306a\u3057: optional reviewer \u306a\u3057",
+        "H": "Medium:0 Low:0"
+    },
+    "tracks": {
+        "lint-agent": {
+            "violations": 0,
+            "exit_code": 0,
+            "detectors": [
+                "eslint",
+                "tsc:tsconfig.node.json",
+                "tsc:tsconfig.web.json",
+                "tsc:e2e/tsconfig.json",
+                "tsc:perf/tsconfig.json",
+                "dependency-cruiser",
+                "constitution-check"
+            ]
+        },
+        "test-agent": {
+            "passed": 1731,
+            "failed": 0,
+            "exit_code": 0,
+            "scope": "full"
+        },
+        "convention-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "lint_input": "lint-agent"
+        }
+    },
+    "skipped_reviewers": [
+        {
+            "name": "a11y-reviewer",
+            "reason": "gates=['pr-gate'] \u306b code-gate \u304c\u7121\u3044"
+        },
+        {
+            "name": "ux-reviewer",
+            "reason": "gates=['pr-gate'] \u306b code-gate \u304c\u7121\u3044"
+        },
+        {
+            "name": "database-reviewer",
+            "reason": "auto_invoke_patterns \u306b\u4e00\u81f4\u3059\u308b\u5909\u66f4\u30d5\u30a1\u30a4\u30eb\u304c\u7121\u3044 (\u5909\u66f4 15 \u4ef6 / pattern 5 \u4ef6)"
+        },
+        {
+            "name": "platform-boundary-reviewer",
+            "reason": "auto_invoke_patterns \u306b\u4e00\u81f4\u3059\u308b\u5909\u66f4\u30d5\u30a1\u30a4\u30eb\u304c\u7121\u3044 (\u5909\u66f4 15 \u4ef6 / pattern 8 \u4ef6)"
+        }
+    ],
+    "cascade_demotions": 0,
+    "iter_history": [
+        {
+            "iter": 1,
+            "must_fix": 0,
+            "skipped": 0,
+            "error": 0
+        },
+        {
+            "iter": 2,
+            "must_fix": 0,
+            "skipped": 0,
+            "error": 0
+        },
+        {
+            "iter": 3,
+            "must_fix": 2,
+            "skipped": 0,
+            "error": 0
+        },
+        {
+            "iter": 4,
+            "must_fix": 0,
+            "skipped": 0,
+            "error": 0
+        }
+    ],
+    "verdict": "PASS"
+}

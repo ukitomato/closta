@@ -39,7 +39,12 @@ export default defineConfig({
            */
           pool: 'threads',
           // `tests/` 側は `.test.ts` を node、`.test.tsx` を renderer に振り分ける。
-          include: ['src/{domain,main,preload,agents}/**/*.test.ts', 'tests/**/*.test.ts']
+          // `perf/*.test.ts` は実機計測の判定の純関数 (O-1。実機の spec `*.spec.ts` は Playwright で、ここでは拾わない)。
+          include: [
+            'src/{domain,main,preload,agents}/**/*.test.ts',
+            'tests/**/*.test.ts',
+            'perf/**/*.test.ts'
+          ]
         }
       },
       {

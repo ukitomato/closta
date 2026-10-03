@@ -110,7 +110,13 @@ export function SessionScreen(): React.JSX.Element {
             <Launching />
           ) : (
             <div className="h-full overflow-auto p-6">
-              <NewSessionDialog launch={launch} onLaunch={(config) => store.launch(config)} />
+              <NewSessionDialog
+                launch={launch}
+                // 引けている作業フォルダの表示名を写す (App の寿命の読み上げが IPC を持たずに文を組むため。O-1 FR-004)。
+                onLaunch={(config) =>
+                  store.launch(config, folders.list === null ? null : folderName(config.folderId))
+                }
+              />
             </div>
           )}
         </section>

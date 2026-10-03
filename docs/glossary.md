@@ -1,8 +1,8 @@
 ---
 status: needs-human-review
-last_updated: 2026-09-26
+last_updated: 2026-10-02
 generated_by: human (PLAN.md 付録A + §3〜§7 を素材に起草。X-1 で AgentSession 系 8 語を追記)
-total_terms: 42
+total_terms: 80
 ---
 
 # Glossary (Ubiquitous Language)
@@ -182,6 +182,16 @@ total_terms: 42
 
 ### D
 
+#### **Density（情報密度）**
+
+- **Definition**: 監視ビュー (稼働中セッション一覧) の行の表示の詰め方 (O-1)。`comfortable` (X-5 の行の情報に経過時間と
+  直近の活動を足す) と `compact` (状態・作業フォルダの表示名・経過時間と行の操作を 1 行に並べる) の 2 値。
+  識別子は `density`。renderer の表示状態であり永続化しない (既定は `comfortable`)
+- **日本語表記**: 情報密度
+- **Domain**: `session` (監視ビューは session の操作 UI)
+- **Counterexamples**: transcript の表示の密度とは別物 — そちらは O-2 (`ui`) が扱う。`compact` でも隔離バッジ (Isolation badge。I-x) は行に残す
+- **Ref**: [010 spec](../specs/010-session-monitoring-view/spec.md) FR-008 / FR-009
+
 #### **DetectedCandidate（検出候補）**
 
 - **Definition**: 検出で得た**登録前の候補** (X-3)。`config dir` / `aws profile` / `env passthrough` の 3 由来を持つ。
@@ -352,6 +362,15 @@ total_terms: 42
 
 ### I
 
+#### **Immersive view（没入ビュー）**
+
+- **Definition**: charter Journey 3 の「1 つを選んで没入ビューに切り替える」の没入ビュー。O-1 では、セッション画面の
+  **表示中セッションのペイン** (X-5 の transcript と composer) を指す。新しい画面ではない
+- **日本語表記**: 没入ビュー
+- **Domain**: `session`
+- **Counterexamples**: 監視ビュー (Monitoring view) とは対になる語。監視ビューで行を選ぶと、没入ビューの内容が切り替わる
+- **Ref**: [010 spec](../specs/010-session-monitoring-view/spec.md) Key Entities
+
 #### **Isolation badge**
 
 - **Definition**: セッションが隔離境界の内側で動いていることを示す表示。
@@ -437,6 +456,18 @@ total_terms: 42
   `interrupt`→steer はしない (次ターン送信に限る。FR-005)
 - **Ref**: [AD-037](decisions/0037-japanese-ime-composer-behavior.md) D2
 
+#### **Monitoring view（監視ビュー）**
+
+- **Definition**: 稼働中セッション一覧 (Running session list) を拡張したもの (O-1)。承認待ち・失敗の強調、
+  承認待ちと失敗の件数、枠の使用数、各行の経過時間と直近の活動、情報密度の切り替えを持つ。**新しい画面ではなく**、
+  セッション画面のサイドバーである。session の操作 UI (行の形と強調の出し方は session が決める)。
+  **コード識別子は `RunningSessionList` のまま (改名しない)**。監視ビューは O-1 の機能群 (強調・件数・枠の使用数・経過時間・
+  直近の活動・密度) を備えた稼働中セッション一覧の呼び名である
+- **日本語表記**: 監視ビュー
+- **Domain**: `session`
+- **Counterexamples**: R-2 の (列挙の) セッション一覧とは別物。全面の監視画面 (カード / グリッド) ではない
+- **Ref**: [010 spec](../specs/010-session-monitoring-view/spec.md)
+
 #### **Model catalog**
 
 - **Definition**: Provider ごとに使えるモデルの集合。Bedrock は inference profile ID で pin する
@@ -504,6 +535,18 @@ total_terms: 42
 
 ### R
 
+#### **Recent activity（直近の活動）**
+
+- **Definition**: 監視ビューの各行に出す 1 行の plain text (O-1)。renderer が保持する本文と承認要求から導く —
+  承認を求めている tool 名と入力の先頭 / 応答中に呼び出した tool 名と入力の先頭 / 送ったプロンプトの先頭行 /
+  最後の応答の先頭行。識別子は `Activity` (kind は `approval` / `tool` / `prompt` / `reply`。`deriveActivity` が導き、
+  ストアが間引いて `activity` に持つ)
+- **日本語表記**: 直近の活動
+- **Domain**: `session`
+- **Counterexamples**: **状態通知 (SessionStatusUpdate) には載らない** — 状態通知は会話由来の文字列を持たない。
+  会話由来の逐語なので `toActivityLine` を通した plain text としてだけ描画し、支援技術への自動の通知 (live region) にも入れない
+- **Ref**: [010 spec](../specs/010-session-monitoring-view/spec.md) FR-006
+
 #### **Reachability**
 
 - **Definition**: あるランタイムからある作業フォルダに**到達できるか**を表す 3 値 —
@@ -545,14 +588,13 @@ total_terms: 42
 
 #### **Running session list（稼働中セッション一覧）**
 
-- **Definition**: renderer が持つ、この起動で開いたセッションの一覧 (X-5)。行の状態は run-state と生存フラグの組から
-  決める (`error` は「失敗」、それ以外で生存フラグ false は「終了済み」、`done` かつ生存は「応答待ち」、起動済みで一度も送信していない `launching` は「プロンプト待ち」)。
-  `claude` が終わったセッションの行も、利用者が閉じるまで残る
+- **Definition**: renderer が持つ、この起動で開いたセッションの一覧 (X-5)。各行は **SessionRowStatus (行の状態)** を示す。
+  `claude` が終わったセッションの行も、利用者が閉じるまで残る。O-1 で**監視ビュー**に拡張した (session の操作 UI)
 - **日本語表記**: 稼働中セッション一覧
-- **Domain**: `session` (状態) / `ui` (見た目)
+- **Domain**: `session` (状態と一覧の操作 UI。O-1 で見た目の持ち主を ui から移した) / `ui` (承認カード・transcript・共有 element `thread-list.aui.tsx`)
 - **Counterexamples**: **R-2 の (列挙の) セッション一覧とは別物** — あちらは config ディレクトリの過去のセッションを
   列挙した一覧 (SessionSummary の集まり)
-- **Ref**: [spec 009](../specs/009-session-supervisor-and-multi-session/spec.md) FR-009
+- **Ref**: [spec 009](../specs/009-session-supervisor-and-multi-session/spec.md) FR-009 / [010 spec](../specs/010-session-monitoring-view/spec.md) FR-013
 
 ### S
 
@@ -718,6 +760,36 @@ total_terms: 42
   true→false の一方向にしか変わらない (main の受信規則 `acceptBatch` が単調性を掛ける)
 - **Ref**: [AD-043](decisions/0043-single-supervisor-session-threads-and-session-limit.md) Decision 3・4
 
+#### **Slot usage（枠の使用数）**
+
+- **Definition**: 監視ビューの見出しに出す「枠を占めるセッションの本数 / 上限」(例: 8/10。O-1)。数え方は main の上限判定と
+  同じ domain の `countOccupying` (生存フラグで数える) に、起動要求の応答を待っている 1 件を足す。識別子は `slotUsage`
+- **日本語表記**: 枠の使用数
+- **Domain**: `session`
+- **Counterexamples**: 同時実行数の上限 (Concurrency limit) そのものではなく、その現在値の表示である。起動の可否は main が判定する
+- **Ref**: [010 spec](../specs/010-session-monitoring-view/spec.md) FR-007
+
+#### **SessionRowStatus（行の状態）**
+
+- **Definition**: 稼働中セッション一覧の各行が示す状態 (X-5)。run-state と生存フラグの組から `rowStatus` が導く 9 値 —
+  `launching` (起動中) / `ready` (プロンプト待ち) / `running` (応答中) / `awaiting` (承認待ち) / `interrupted` (中断) /
+  `waiting` (応答待ち) / `ending` (終了中) / `failed` (失敗) / `ended` (終了済み)。優先順は失敗 → 終了済み → 終了中 → run-state
+- **日本語表記**: 行の状態
+- **Domain**: `session`
+- **Counterexamples**: SessionRunState (7 状態) とは別の型。`awaiting` は `awaiting_permission`、`failed` は `error` に対応し、
+  `done` は生存フラグで `waiting` と `ended` に分かれる
+- **Ref**: [spec 009](../specs/009-session-supervisor-and-multi-session/spec.md) FR-009 / [010 spec](../specs/010-session-monitoring-view/spec.md) data-model §1
+
+#### **Status since（状態に入った時刻）**
+
+- **Definition**: 行の状態 (SessionRowStatus) が変わったのを renderer のストアが観測した時刻 (O-1)。状態通知・本文・利用者の操作
+  (終了・強制終了) のどれで変わっても記録する。経過時間の起点、承認待ちの件数から移る順、支援技術への通知の検出に使う。
+  識別子は `statusSince` (行の状態と時刻の組)。renderer の保持の中だけにある
+- **日本語表記**: 状態に入った時刻
+- **Domain**: `session`
+- **Counterexamples**: 状態通知の時刻ではない (状態通知は時刻を持たない)。起動時刻 (`startedAt`) とも別 — ただし最初の値は起動の受付時刻
+- **Ref**: [010 spec](../specs/010-session-monitoring-view/spec.md) FR-005
+
 #### **Supervisor generation（supervisor の世代）**
 
 - **Definition**: main が supervisor を fork するたびに進める番号 (X-5)。状態通知・スレッドの終了・異常終了の合成に付け、
@@ -816,6 +888,7 @@ total_terms: 42
 | Concept | 使われている表記 | Proposed canonical | 備考 |
 |---|---|---|---|
 | AgentRuntime | 「ランタイム」「Runtime」「実行環境」 | `AgentRuntime`（コード）/ ランタイム（日本語文） | 「実行環境」は Provider の意味でも使われうるため避ける |
+| 稼働中セッション一覧 | 「監視ビュー」「稼働中セッション一覧」「一覧」「サイドバー」 | `RunningSessionList`（コード）/ 監視ビュー（charter Journey と O-1 以降の文書）/ 稼働中のセッション（UI 文言） | 同じ 1 つの部品を指す。「サイドバー」は画面上の位置の説明に限り、用語としては使わない |
 | Disposable container | 「使い捨てコンテナ」「コンテナ」 | `Disposable container` / 使い捨てコンテナ | 単に「コンテナ」と書くとイメージと紛れる |
 | Isolation | 「隔離」「サンドボックス」 | 隔離（境界全般）/ sandbox（OS 組み込み機構に限定） | Seatbelt / bubblewrap を指すときのみ sandbox |
 | Location | 「所在」「ロケーション」「置き場所」 | `Location`（コード）/ 所在（日本語文） | 「置き場所」はパスの意味にも読めるため避ける |

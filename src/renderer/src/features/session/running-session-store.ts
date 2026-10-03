@@ -10,13 +10,15 @@ import { toThreadMessage } from '@/features/chat/convert'
 import { isBusyRunState, isSendableText } from './composer-queue'
 import { createCappedAdapter } from './composer-queue-adapter'
 import type {
+  Density,
   LaunchState,
   LiveSessionState,
   RunningSessionStoreState,
-  SessionQueue
+  SessionQueue,
+  StatusSince
 } from './running-session-types'
 import { decodeSessionEvent } from './session-event-decoder'
-import { viewOf } from './session-view'
+import { deriveActivity, nextAwaiting, rowStatus, sameActivity, viewOf } from './session-view'
 
 export type {
   LaunchState,
@@ -38,13 +40,20 @@ export type {
  * | `ended = statuses[id].claudeAlive === false`。一覧のラベル・composer の無効化・キューの取り消し・操作の出し分けはこの値で行う | FR-009 / FR-010 |
  * | port が閉じても transcript は消さない。消すのは「閉じる」だけ | FR-008 / FR-011 |
  * | 下書きと送信待ちキュー (X-2) はセッションごとに持ち、キューの dispatch は**表示していなくても**状態の変化で進む | FR-010 |
+ * | **監視ビューの派生値** (O-1): 行の状態に入った時刻 (`statusSince`) はストアの更新ごとに見直し、1 回の更新の中の変化を 1 回の `setState` にまとめる。直近の活動 (`activity`) は**購読の手前で**セッションごとに 500ms に間引いて書く (行は文字列を選ぶだけ) | O-1 data-model §1 / research R-01・R-03 |
+ * | ストアを `window` などの global に出さない。実機計測は一覧の `data-*` の値だけを読む | O-1 FR-012 |
  *
  * 会話由来のテキスト (本文・下書き・キュー) は境界・ログ・永続層に出さない (Principle V / X-2 FR-008)。
  */
 
 export interface SessionActions {
-  launch(config: SessionLaunchConfig): Promise<void>
+  /** `folderLabel` は起動の受付時に引けている作業フォルダの表示名 (App の寿命の読み上げに使う。O-1)。 */
+  launch(config: SessionLaunchConfig, folderLabel?: string | null): Promise<void>
   select(sessionId: string | null): void
+  /** 監視ビューの情報密度 (O-1 / FR-008。永続化しない)。 */
+  setDensity(density: Density): void
+  /** 表示中を除く承認待ちのうち、承認待ちになったのが最も早いものへ切り替える (O-1 / FR-002)。無ければ何もしない。 */
+  selectNextAwaiting(): void
   /**
    * composer の下書き (メモリ内限定。X-2 FR-007)。**再描画を起こさない保持**に置く — 下書きは切り替えで Thread を
    * 作り直したときの復元にだけ読む。state に置くと打鍵のたびに表示中のペイン全体が再描画され、表示中の本文の更新と
@@ -68,6 +77,9 @@ export interface SessionActions {
 }
 
 export type RunningSessionStore = StoreApi<RunningSessionStoreState> & SessionActions
+
+/** 直近の活動を書き直す間隔 (1 行あたり毎秒 2 回まで。spec FR-006 [ASSUMED])。 */
+export const ACTIVITY_THROTTLE_MS = 500
 
 const INITIAL_LAUNCH: LaunchState = {
   phase: 'entry',
@@ -102,7 +114,11 @@ export function createRunningSessionStore(
     sessions: {},
     statuses: {},
     selectedId: null,
-    launch: INITIAL_LAUNCH
+    launch: INITIAL_LAUNCH,
+    statusSince: {},
+    activity: {},
+    receivedMessages: 0,
+    density: 'comfortable'
   }))
 
   /** sessionId → 繋いだ port。 */
@@ -114,6 +130,8 @@ export function createRunningSessionStore(
   const queues = new Map<string, SessionQueue & { prevBusy: boolean }>()
   /** sessionId → 下書き (再描画を起こさない保持。`setDraft` の注記)。 */
   const drafts = new Map<string, string>()
+  /** sessionId → 直近の活動の間引き (間隔の中に更新があったら `dirty`)。 */
+  const activityTimers = new Map<string, { timer: ReturnType<typeof setTimeout>; dirty: boolean }>()
   let inFlight = 0
   let userSeq = 0
 
@@ -124,6 +142,69 @@ export function createRunningSessionStore(
       return { sessions: { ...s.sessions, [sessionId]: { ...current, ...update } } }
     })
     syncQueue(sessionId)
+    trackDerived([sessionId])
+  }
+
+  /** 直近の活動を導いて、変わっていれば書く (O-1 / data-model §1)。 */
+  const writeActivity = (sessionId: string): void => {
+    const state = store.getState()
+    const session = state.sessions[sessionId]
+    if (session === undefined) return
+    const next = deriveActivity(session.messages, session.pending, viewOf(state, sessionId))
+    if (sameActivity(state.activity[sessionId], next)) return
+    store.setState((s) => ({ activity: { ...s.activity, [sessionId]: next } }))
+  }
+
+  const armActivity = (sessionId: string): void => {
+    const timer = setTimeout(() => {
+      const slot = activityTimers.get(sessionId)
+      if (slot === undefined) return
+      if (!slot.dirty) {
+        activityTimers.delete(sessionId)
+        return
+      }
+      slot.dirty = false
+      writeActivity(sessionId)
+      armActivity(sessionId)
+    }, ACTIVITY_THROTTLE_MS)
+    const slot = activityTimers.get(sessionId)
+    if (slot === undefined) activityTimers.set(sessionId, { timer, dirty: false })
+    else slot.timer = timer
+  }
+
+  /**
+   * **購読の手前で間引く** (O-1 / research R-03)。先頭は即時に書き、間隔の中の更新は最後の 1 回だけを間隔の終わりに書く。
+   * 行の中で表示値を遅らせても行の再描画は減らないため、ストアが書く回数そのものを抑える。
+   */
+  const scheduleActivity = (sessionId: string): void => {
+    const slot = activityTimers.get(sessionId)
+    if (slot !== undefined) {
+      slot.dirty = true
+      return
+    }
+    writeActivity(sessionId)
+    armActivity(sessionId)
+  }
+
+  /**
+   * 監視ビューの派生値を見直す (O-1)。行の状態が変わったセッションの `statusSince` を **1 回の `setState`** で書き
+   * (同じ更新の複数の遷移を 1 つの文で読ませるため)、直近の活動の書き込みを予約する。
+   */
+  const trackDerived = (sessionIds: readonly string[]): void => {
+    const state = store.getState()
+    let changed: Record<string, StatusSince> | null = null
+    for (const id of sessionIds) {
+      if (state.sessions[id] === undefined) continue
+      const status = rowStatus(viewOf(state, id))
+      if (state.statusSince[id]?.status === status) continue
+      changed ??= { ...state.statusSince }
+      changed[id] = { status, at: now() }
+    }
+    if (changed !== null) {
+      const statusSince = changed
+      store.setState({ statusSince })
+    }
+    for (const id of sessionIds) if (state.sessions[id] !== undefined) scheduleActivity(id)
   }
 
   /**
@@ -163,9 +244,23 @@ export function createRunningSessionStore(
         })
         break
       case 'message':
-        patch(sessionId, {
-          messages: upsertMessage(session.messages, toThreadMessage(event.message))
+        // 受信の累計 (実機計測の観測点。O-1 / FR-012) を同じ `setState` で数える。
+        store.setState((s) => {
+          const current = s.sessions[sessionId]
+          if (current === undefined) return s
+          return {
+            sessions: {
+              ...s.sessions,
+              [sessionId]: {
+                ...current,
+                messages: upsertMessage(current.messages, toThreadMessage(event.message))
+              }
+            },
+            receivedMessages: s.receivedMessages + 1
+          }
         })
+        syncQueue(sessionId)
+        trackDerived([sessionId])
         break
       case 'permission-request':
         patch(sessionId, {
@@ -230,7 +325,7 @@ export function createRunningSessionStore(
   }
 
   const actions: SessionActions = {
-    async launch(config) {
+    async launch(config, folderLabel = null) {
       inFlight += 1
       store.setState({
         launch: {
@@ -273,7 +368,8 @@ export function createRunningSessionStore(
         ending: false,
         endForced: false,
         promptSent: false,
-        queueRejection: null
+        queueRejection: null,
+        folderLabel
       }
       createQueue(sessionId)
       store.setState((s) => ({
@@ -282,6 +378,8 @@ export function createRunningSessionStore(
         selectedId: sessionId,
         launch: { ...s.launch, phase: 'entry', rejectReason: null }
       }))
+      // 固定値ではなく、その時点の行の状態を入れる (handshake より先に状態通知が届いていても行と食い違わない)。
+      trackDerived([sessionId])
       const port = buffered.get(sessionId)
       if (port !== undefined) {
         buffered.delete(sessionId)
@@ -303,6 +401,15 @@ export function createRunningSessionStore(
               }
             : s.launch
       }))
+    },
+
+    setDensity(density) {
+      if (store.getState().density !== density) store.setState({ density })
+    },
+
+    selectNextAwaiting() {
+      const target = nextAwaiting(store.getState())
+      if (target !== null) actions.select(target)
     },
 
     setDraft(sessionId, text) {
@@ -371,6 +478,9 @@ export function createRunningSessionStore(
       queues.delete(sessionId)
       drafts.delete(sessionId)
       closed.add(sessionId)
+      const activityTimer = activityTimers.get(sessionId)
+      if (activityTimer !== undefined) clearTimeout(activityTimer.timer)
+      activityTimers.delete(sessionId)
       const failure = view.failureReason
       // 失敗したセッションを閉じたら、メッセージの有無を問わず**そのセッションの**設定と理由を起動ダイアログへ戻す
       // (「閉じて再起動」が別のセッションの設定を出さない。pr-gate R1 po M-005 / X-4 US-1 AC7)。
@@ -378,12 +488,18 @@ export function createRunningSessionStore(
       store.setState((s) => {
         const sessions = { ...s.sessions }
         const statuses = { ...s.statuses }
+        const statusSince = { ...s.statusSince }
+        const activity = { ...s.activity }
         delete sessions[sessionId]
         delete statuses[sessionId]
+        delete statusSince[sessionId]
+        delete activity[sessionId]
         return {
           order: s.order.filter((id) => id !== sessionId),
           sessions,
           statuses,
+          statusSince,
+          activity,
           selectedId: s.selectedId === sessionId ? null : s.selectedId,
           // 失敗したセッションを閉じたら、起動ダイアログでそのセッションの理由と設定を示す (X-4 US-1 AC7 / pr-gate R1 po M-005)。
           launch: failed
@@ -456,6 +572,8 @@ export function createRunningSessionStore(
           return { statuses }
         })
         for (const id of touched) syncQueue(id)
+        // バッチ 1 回に含まれる全セッションをまとめて見直す (同じ更新の複数の遷移を 1 回の `setState` にする。O-1)。
+        trackDerived(touched)
       })
 
       return () => {

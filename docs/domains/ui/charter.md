@@ -39,7 +39,8 @@ UI は本来 delivery mechanism であり domain ではない。それでも独�
 - tool 出力の専用表示（Terminal block / Code diff / Todo / Subagent / Agent plan / Reasoning ほか）
 - composer（日本語 IME、message queue、draft restore、slash commands、mentions、attachments）
 - `docs/ui-coverage.md`（SDK のメッセージ型・tool 名・システムイベントと表示実装の対応表）の維持
-- 情報密度の切替（compact / comfortable）
+- 情報密度の切替（compact / comfortable）— **transcript の密度** (O-2)。稼働中セッション一覧 (監視ビュー) の行の密度は
+  session の操作 UI として O-1 が持つ (下の Out of scope「他 domain の操作 UI」。O-1 USER 決定 2026-10-02)
 - Thread 検索、conversation map、observability 系の表示
 - Electron 特有の配線（preload / IPC 越しのストリーミングブリッジ）
   — **基盤そのものではない。** renderer の配信プロトコル・CSP 基線・
@@ -103,6 +104,10 @@ UI は本来 delivery mechanism であり domain ではない。それでも独�
 
 1. 監視ビューでは各セッションが compact に並ぶ
 2. 1 つを開くと comfortable な没入ビューになる
+
+O-1 で読み替えた: 監視ビューはセッション画面のサイドバー (session の操作 UI) で、行の密度 (compact / comfortable) は
+利用者が切り替える。没入ビューは表示中セッションのペイン。transcript 側の密度の切替は本 domain の O-2 が扱う
+([010 spec](../../../specs/010-session-monitoring-view/spec.md))
 
 ## Key concepts
 
@@ -176,6 +181,9 @@ UI は本来 delivery mechanism であり domain ではない。それでも独�
 - [ ] **§4.2 の Tier A 表は暫定** — [AD-020](../../decisions/0020-sdk-emitted-message-inventory.md)。
       SDK が emit するのは 39 型で、Hook / Background task / コンパクション / 自動拒否が
       §4.2 に無い。O-2 で SDK 型から引き直す
+- [ ] **Hook / Background task の表示の割当と、状態の保持が要る場合の持ち主 domain** — O-2 が判断する。
+      session は状態管理を責務に含めないと決めた (O-1 USER 決定 2026-10-02。session charter の Open Questions)。
+      本 domain の Out of scope「状態遷移 → session」とあわせ、保持が要ると分かったら domain の帰属を人間に諮る
 - [ ] SPIKE-2: assistant-ui Elements の導入コスト実測。element のインストール単位、
       カスタマイズ範囲、design system の拘束度、Claude Code の tool_result 形式との変換コスト。
       **結果次第では本 charter の Scope を見直す**

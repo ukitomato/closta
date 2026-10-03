@@ -1,0 +1,26 @@
+{
+  "command": "node node_modules/eslint/bin/eslint.js --cache .",
+  "detectors": ["eslint", "tsc:tsconfig.node.json", "tsc:tsconfig.web.json", "tsc:e2e/tsconfig.json", "tsc:perf/tsconfig.json", "dependency-cruiser", "constitution-check"],
+  "commands": [
+    {"name": "eslint", "command": "node node_modules/eslint/bin/eslint.js --cache --format json .", "exit_code": 0, "duration_ms": 68093},
+    {"name": "tsc:tsconfig.node.json", "command": "node node_modules/typescript/bin/tsc --noEmit -p tsconfig.node.json --composite false", "exit_code": 0, "duration_ms": 8953},
+    {"name": "tsc:tsconfig.web.json", "command": "node node_modules/typescript/bin/tsc --noEmit -p tsconfig.web.json --composite false", "exit_code": 0, "duration_ms": 17441},
+    {"name": "tsc:e2e/tsconfig.json", "command": "node node_modules/typescript/bin/tsc --noEmit -p e2e/tsconfig.json --composite false", "exit_code": 0, "duration_ms": 3879},
+    {"name": "tsc:perf/tsconfig.json", "command": "node node_modules/typescript/bin/tsc --noEmit -p perf/tsconfig.json --composite false", "exit_code": 0, "duration_ms": 3669},
+    {"name": "dependency-cruiser", "command": "node node_modules/dependency-cruiser/bin/dependency-cruise.mjs src", "exit_code": 0, "duration_ms": 11049},
+    {"name": "constitution-check", "command": "node scripts/constitution/check.mjs", "exit_code": 0, "duration_ms": 2830}
+  ],
+  "exit_code": 0,
+  "scope": "full-repo (results classified against specs/010-session-monitoring-view/.code-gate-scope.txt)",
+  "touched_count": 32,
+  "violations": [],
+  "violations_in_scope": [],
+  "violations_out_of_scope": [],
+  "violation_count_by_severity": {"error": 0, "warning": 0, "info": 0},
+  "detector_notes": {
+    "eslint": "302 files linted, 0 messages",
+    "tsc": "4 projects: no output",
+    "dependency-cruiser": "no dependency violations found (315 modules, 1444 dependencies cruised)",
+    "constitution-check": "20 items: ok 19 / violations 0 / no target 1 (#5 pending: no docker module yet, by design since R-1)"
+  }
+}

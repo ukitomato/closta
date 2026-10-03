@@ -1,9 +1,19 @@
+import type { ThreadMessageLike } from '@assistant-ui/react'
+
 import type { LaunchFailureReason } from '@domain/session/agent-session'
+import { countOccupying, MAX_CONCURRENT_SESSIONS } from '@domain/session/concurrency'
 import { canEnd, type SessionRunState } from '@domain/session/run-state'
+import { sanitizeBody } from '@domain/session/sanitize-body'
 import type { SessionStatusUpdate } from '@domain/session/status-update'
 
-import type { SessionRowStatus } from './labels'
-import type { LiveSessionState, RunningSessionStoreState } from './running-session-types'
+import { attentionAnnouncement, type Elapsed, type SessionRowStatus } from './labels'
+import type {
+  Activity,
+  LiveSessionState,
+  PendingPermission,
+  RunningSessionStoreState,
+  StatusSince
+} from './running-session-types'
 
 /**
  * 稼働中セッションの表示用の導出 (X-5 / FE-001 / FE-011。純関数のみ)。一覧の行・表示中セッション・ストアの
@@ -132,6 +142,216 @@ export function availableActions(
 
 export function viewOf(state: RunningSessionStoreState, sessionId: string): SessionView {
   return deriveSessionView(state.sessions[sessionId], state.statuses[sessionId])
+}
+
+/* ── 監視ビューの導出 (O-1 / data-model §2。純関数のみ) ─────────────────── */
+
+/** 直近の活動の長さ (コードポイント。spec FR-006 [ASSUMED])。 */
+export const ACTIVITY_MAX_CODE_POINTS = 80
+/** 直近の活動を探して走査する上界 (コードユニット。part をまたいで合計で数える。data-model §2)。 */
+const ACTIVITY_SCAN_BUDGET = 4_096
+/** 1 行のうち正規化に回す先頭の長さ (コードユニット)。 */
+const ACTIVITY_LINE_HEAD = 1_024
+
+/** 走査の残量。`reply` では part をまたいで共有する。 */
+export interface ScanBudget {
+  remaining: number
+}
+
+function isLineBreak(code: number): boolean {
+  return code === 0x0a || code === 0x0d || code === 0x2028 || code === 0x2029
+}
+
+/**
+ * 不可視の書式文字: ゼロ幅 (U+200B-200D)、語結合子など (U+2060-2064)、モンゴル語母音区切り (U+180E)、タグ文字
+ * (U+E0000-E007F)。domain の `sanitizeBody` の除去対象に無いので、ここで落とす (FR-010 で domain は変えない。
+ * 切り詰めの 80 文字を不可視文字で埋めさせない。pr-gate R1 security L-001)。
+ */
+const INVISIBLE_FORMAT = /[\u200B-\u200D\u2060-\u2064\u180E]|[\u{E0000}-\u{E007F}]/gu
+
+/** 1 行を表示用に正規化する (制御文字・双方向制御文字の除去は domain の `sanitizeBody` を再利用する)。 */
+function normalizeLine(line: string): string {
+  // 切り出しで高位サロゲートだけが末尾に残ったら落とす (サロゲートペアを割らない)。
+  const last = line.charCodeAt(line.length - 1)
+  const whole = last >= 0xd800 && last <= 0xdbff ? line.slice(0, -1) : line
+  return sanitizeBody(whole, ACTIVITY_LINE_HEAD * 4)
+    .value.replace(INVISIBLE_FORMAT, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function truncateCodePoints(text: string): string {
+  const points = Array.from(text)
+  return points.length > ACTIVITY_MAX_CODE_POINTS
+    ? `${points.slice(0, ACTIVITY_MAX_CODE_POINTS).join('')}…`
+    : text
+}
+
+/**
+ * 会話由来の値を 1 行の plain text にする (spec FR-006 / data-model §2)。
+ *
+ * - 文字列でなければ `''` (renderer の decoder は message の part のフィールドの型を検証しないため。例外を投げない)
+ * - 先頭から行を取り出し、最初に空でなくなった行を採る。走査は `budget` の範囲に限る (全体を分割しない)
+ * - HTML・マークダウンとして解釈しない (呼び出し側は React のテキストノードでだけ描く)
+ */
+export function toActivityLine(
+  raw: unknown,
+  budget: ScanBudget = { remaining: ACTIVITY_SCAN_BUDGET }
+): string {
+  if (typeof raw !== 'string') return ''
+  let start = 0
+  while (start < raw.length && budget.remaining > 0) {
+    const limit = Math.min(raw.length, start + budget.remaining)
+    let end = start
+    while (end < limit && !isLineBreak(raw.charCodeAt(end))) end += 1
+    budget.remaining -= end - start + 1
+    const line = normalizeLine(raw.slice(start, Math.min(end, start + ACTIVITY_LINE_HEAD)))
+    if (line !== '') return truncateCodePoints(line)
+    start = end + 1
+  }
+  return ''
+}
+
+type ContentPart = Exclude<ThreadMessageLike['content'], string>[number]
+
+function partsOf(message: ThreadMessageLike): readonly ContentPart[] {
+  return typeof message.content === 'string'
+    ? [{ type: 'text', text: message.content }]
+    : message.content
+}
+
+/** text の part を順に見て、最初に得た空でない行 (連結しない。`text` が文字列でない part は飛ばす)。 */
+function firstTextLine(message: ThreadMessageLike): string {
+  const budget: ScanBudget = { remaining: ACTIVITY_SCAN_BUDGET }
+  for (const part of partsOf(message)) {
+    if (budget.remaining <= 0) break
+    if (part.type !== 'text') continue
+    const line = toActivityLine((part as { readonly text?: unknown }).text, budget)
+    if (line !== '') return line
+  }
+  return ''
+}
+
+/**
+ * 直近の活動 (spec FR-006 / data-model §2)。見るのは末尾 1 件と承認要求だけ (件数に依存しない)。
+ * 優先順: 承認待ち → 応答中で末尾が tool の呼び出し → 送信直後 → 最後の応答。
+ */
+export function deriveActivity(
+  messages: readonly ThreadMessageLike[],
+  pending: PendingPermission | null,
+  view: SessionView
+): Activity | null {
+  if (pending !== null) {
+    const tool = toActivityLine(pending.toolName)
+    const detail = toActivityLine(pending.input)
+    return tool === '' && detail === '' ? null : { kind: 'approval', tool, detail }
+  }
+  const last = messages[messages.length - 1]
+  if (last === undefined) return null
+  if (last.role === 'assistant') {
+    const parts = partsOf(last)
+    const tail = parts[parts.length - 1]
+    if (rowStatus(view) === 'running' && tail?.type === 'tool-call') {
+      const call = tail as { readonly toolName?: unknown; readonly argsText?: unknown }
+      const tool = toActivityLine(call.toolName)
+      if (tool !== '') return { kind: 'tool', tool, detail: toActivityLine(call.argsText) }
+    }
+    const detail = firstTextLine(last)
+    return detail === '' ? null : { kind: 'reply', tool: null, detail }
+  }
+  if (last.role === 'user') {
+    const detail = firstTextLine(last)
+    return detail === '' ? null : { kind: 'prompt', tool: null, detail }
+  }
+  return null
+}
+
+/** 2 つの直近の活動が同じか (同じなら書き込まない。data-model §1)。 */
+export function sameActivity(a: Activity | null | undefined, b: Activity | null): boolean {
+  if (a === undefined) return false
+  if (a === null || b === null) return a === b
+  return a.kind === b.kind && a.tool === b.tool && a.detail === b.detail
+}
+
+/** 経過時間の表記の区分を導く (型と訳出は `labels.ts`。spec FR-005 [ASSUMED])。 */
+export function formatElapsed(ms: number): Elapsed {
+  const sec = Math.floor(Math.max(0, ms) / 1000)
+  if (sec < 60) return { unit: 'sec', sec }
+  const min = Math.floor(sec / 60)
+  if (min < 60) return { unit: 'min', min }
+  return { unit: 'hourMin', hour: Math.floor(min / 60), min: min % 60 }
+}
+
+/**
+ * 枠の使用数 (spec FR-007)。数え方は main の上限判定と同じ domain の `countOccupying` (生存フラグで数える)。
+ * 起動要求の応答を待っている 1 件を足す (main の予約に当たる)。**前提**: 起動要求は UI で直列化されている
+ * (`SessionScreen` は `launching` の間ダイアログを出さない)。並行起動を許すなら起動要求の件数を state に出して足す。
+ */
+export function slotUsage(state: RunningSessionStoreState): {
+  readonly used: number
+  readonly limit: number
+} {
+  const occupying = countOccupying(
+    state.order.map((id) => ({ claudeAlive: state.statuses[id]?.claudeAlive !== false }))
+  )
+  return {
+    used: occupying + (state.launch.phase === 'launching' ? 1 : 0),
+    limit: MAX_CONCURRENT_SESSIONS
+  }
+}
+
+/** 承認待ちと失敗の本数 (一覧の見出しとナビ。spec FR-002 / FR-003)。 */
+export function attentionCounts(state: RunningSessionStoreState): {
+  readonly awaiting: number
+  readonly failed: number
+} {
+  let awaiting = 0
+  let failed = 0
+  for (const id of state.order) {
+    const status = rowStatus(viewOf(state, id))
+    if (status === 'awaiting') awaiting += 1
+    else if (status === 'failed') failed += 1
+  }
+  return { awaiting, failed }
+}
+
+/**
+ * 承認待ちの件数を押したときの移動先 (spec FR-002 / research R-04)。表示中を除く承認待ちのうち、承認待ちに入った
+ * 時刻が最も早いもの。同時刻なら `order` の順。無ければ `null` (ボタンは押せない)。
+ */
+export function nextAwaiting(state: RunningSessionStoreState): string | null {
+  let best: { readonly id: string; readonly at: number } | null = null
+  for (const id of state.order) {
+    if (id === state.selectedId) continue
+    if (rowStatus(viewOf(state, id)) !== 'awaiting') continue
+    const at = state.statusSince[id]?.at ?? Number.POSITIVE_INFINITY
+    if (best === null || at < best.at) best = { id, at }
+  }
+  return best?.id ?? null
+}
+
+/**
+ * 支援技術に読ませる文 (spec FR-004 / data-model §2)。`watchedId` (見ているセッション。セッション画面が表示されて
+ * いるときだけ選ばれているもの) 以外のうち、承認待ち・失敗に**入った**ものを 1 つの文にまとめる。
+ * **会話由来の値を引数に取らない** — 文は作業フォルダの表示名と固定の文言だけで組む。
+ */
+export function announcements(
+  prev: Readonly<Record<string, StatusSince>>,
+  next: Readonly<Record<string, StatusSince>>,
+  watchedId: string | null,
+  folderLabel: (sessionId: string) => string | null
+): string | null {
+  const awaiting: (string | null)[] = []
+  const failed: (string | null)[] = []
+  for (const [id, entry] of Object.entries(next)) {
+    if (id === watchedId) continue
+    if (prev[id]?.status === entry.status) continue
+    if (entry.status === 'awaiting') awaiting.push(folderLabel(id))
+    else if (entry.status === 'failed') failed.push(folderLabel(id))
+  }
+  return awaiting.length === 0 && failed.length === 0
+    ? null
+    : attentionAnnouncement(awaiting, failed)
 }
 
 /** assistant-ui に渡す末尾の窓 (件数)。「さらに表示」でこの件数ずつ広げる (X-5 / SC-003)。 */

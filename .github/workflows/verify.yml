@@ -149,6 +149,11 @@ jobs:
       - name: typecheck (e2e)
         run: pnpm exec tsc --noEmit -p e2e/tsconfig.json
 
+      # 実機計測 (`perf/`。O-1 FR-012) は**型検査だけ**を行い、実行しない (実 claude と実資格情報を要する。AD-038 D3)。
+      # 設定 (`playwright.perf.config.ts`) も CI で読み込むと例外で止まる。
+      - name: typecheck (perf)
+        run: pnpm exec tsc --noEmit -p perf/tsconfig.json
+
       # 起動設定ダイアログ (X-4 SC-001 / SC-002 / SC-004)。
       - name: e2e (起動設定ダイアログ)
         run: pnpm exec playwright test e2e/launch-dialog.spec.ts -c playwright.config.ts
@@ -157,3 +162,13 @@ jobs:
       # 最大 < 100ms」で判定し、件数は annotation に記録するだけ (実行環境の揺れで件数が変わるため。spec SC-003)。
       - name: e2e (マルチセッション)
         run: pnpm exec playwright test e2e/multi-session.spec.ts -c playwright.config.ts
+
+      # 失敗したときだけ、Playwright の出力 (スクリーンショット比較の expected / actual / diff を含む) を取り出せるようにする。
+      # 中身は E2E stub の固定文言だけ (credential-free。AD-038 D3)。基準画像を CI の描画で取り直すときに使う (O-1 PR #10)。
+      - name: upload e2e results (失敗時)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results
+          path: test-results/
+          retention-days: 7

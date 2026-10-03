@@ -82,6 +82,11 @@ spec_id（`001-runtime-...`）とは独立させる。差し込み作業で番�
   素案では誰の担当でもなかった
 - **D-1（配布）は `runtime`** — `asarUnpack` とネイティブモジュールの ABI（AD-009 / AD-013）は
   実行環境の問題であり `runtime` の関心事と重なる
+- **O-1（監視ビュー）は `session`、見た目も含めて** — 稼働中セッション一覧は session の操作 UI であり
+  （ui charter の「他 domain の一覧・操作 UI は各 domain」）、行の形と強調の出し方も session が決める。
+  承認カードと transcript の見た目は `ui` のまま（O-1 USER 決定 2026-10-02）
+- **Hook / Background task の状態管理は `session` に含めない** — AD-020 Consequences の問いへの O-1 の回答
+  （USER 決定 2026-10-02）。表示の割当と、状態の保持が要る場合の持ち主 domain は O-2 が判断する
 
 ## Milestone
 

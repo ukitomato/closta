@@ -135,10 +135,11 @@ module.exports = {
     },
     {
       name: 'not-to-test',
-      comment: 'テスト・仕様・E2E 置き場への依存 (src→e2e の逆流入を塞ぐ。X-2 / AD-038 D2)。',
+      comment:
+        'テスト・仕様・E2E・実機計測の置き場への依存 (src→e2e / perf の逆流入を塞ぐ。X-2 / AD-038 D2、perf は O-1)。',
       severity: 'error',
-      from: { pathNot: '^(specs|tests|e2e)' },
-      to: { path: '^(specs|tests|e2e)' }
+      from: { pathNot: '^(specs|tests|e2e|perf)' },
+      to: { path: '^(specs|tests|e2e|perf)' }
     },
     {
       name: 'not-to-spec',
