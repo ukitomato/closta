@@ -1,0 +1,71 @@
+{
+    "gate": "design",
+    "run": "2026-10-03T12:00:00+09:00",
+    "spec_dir": "specs/011-ui-coverage",
+    "spec_id": "011-ui-coverage",
+    "round": 1,
+    "tracks": {
+        "analyze": {
+            "status": "ok",
+            "raw_out": "analyze.md",
+            "viewpoint_missing": null,
+            "cascade_demotions": null
+        },
+        "po-reviewer": {
+            "status": "ok",
+            "raw_out": "po-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "architecture-reviewer": {
+            "status": "ok",
+            "raw_out": "architecture-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "security-reviewer": {
+            "status": "ok",
+            "raw_out": "security-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "platform-boundary-reviewer": {
+            "status": "ok",
+            "raw_out": "platform-boundary-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        }
+    },
+    "severity_counts": {
+        "critical": 3,
+        "high": 8,
+        "medium": 22,
+        "low": 14
+    },
+    "dedup_log": [
+        {
+            "merged": [
+                "arch-C-001",
+                "sec-H-001"
+            ],
+            "key": "includeHookEvents / FR-008 AC3"
+        },
+        {
+            "merged": [
+                "po-C-001",
+                "analyze-I1",
+                "sec-M-003"
+            ],
+            "key": "FR-008"
+        },
+        {
+            "merged": [
+                "analyze-C1",
+                "analyze-C2",
+                "arch-H-004"
+            ],
+            "key": "Principle XII"
+        }
+    ],
+    "verdict": "FIX_REQUIRED"
+}
