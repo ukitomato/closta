@@ -23,7 +23,11 @@
 - `session-core.test.ts` の query の options のキーの pin は変更なし。X-5 の状態通知の全フィールド走査のテストは緑
 - ビルド (`electron-vite build`) の後、X-5 の負荷 E2E `e2e/multi-session.spec.ts` が **4 passed (1.4m)**。既存の経路の回帰の確認であり、偽 supervisor は text だけなので tool の結果の送り直しは通らない (RK-02)
 
-## V-4 実機の目視 — 未実施 (利用者が行う)
+## V-4 実機の目視 — 利用者が実施 (2026-10-03、O-2 のマージ後に main の dev ビルドで)
+
+- **結果**: 利用者の判定は「いい感じ」(表示の崩れ・誤りの報告なし)
+- **見つかった不具合**: transcript が最下部に追従しない。原因は O-2 ではなく R-3 からのもの — 40 件以下の非仮想パスの `ThreadPrimitive.Viewport` に registry のテンプレートの `turnAnchor="top"` が残っており、`autoScroll` の既定が false になっていた (41 件以上の仮想パスは追従する)。`turnAnchor` を既定 ("bottom") に戻して直した (PR「fix(ui): follow transcript bottom with default turn anchor」)
+- **未記録**: 下の 📝 の観測値 (並列の結果の届き方・`hook_name` の実際の値・`Agent` / `Task`・過去ログの Hook / task の行) は記録していない。O-6 はこれらを未確認として扱う (roadmap の O-6 の行)
 
 agent は実 `claude` を起動しない。quickstart V-4 の 1〜6 を利用者が行い、次を記録する:
 
