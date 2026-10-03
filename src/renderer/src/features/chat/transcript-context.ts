@@ -11,7 +11,7 @@ import { useUiStore, type TranscriptDensity } from '@/stores/ui'
  * - 実行中: セッションが終了済み・失敗のとき true (`SessionScreen` が store のセッションの状態から渡す)
  * - 過去ログ: 常に true (`ChatScreen`)。過去ログを開いた時点でまだ動いている task も同じ (記録に結果が無いことは事実)
  *
- * true のとき、終わりを表さない状態のシステムイベントの行は「結果不明 (記録に終わりが無い)」で描く (DTO は変えない)。
+ * true のとき、終わりを表さない状態のシステムイベントの行は「結果不明」で描く (DTO は変えない)。
  */
 export const TranscriptSettledContext = createContext<boolean>(false)
 

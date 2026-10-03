@@ -28,7 +28,7 @@
 
 ## V-4 実機の目視 (利用者が行う)
 
-1. 実 `claude` で `Bash` を使わせる → 実行中の transcript で Terminal block に出力が出る。エラーになるコマンドではエラーが出る。tool を多く呼ばせても transcript がもたつかない (RK-02)。**並列の tool の結果が user メッセージ 1 つで来るか、1 つずつ来るかを記録する** (research R-03 の前提)
+1. 実 `claude` で `Bash` を使わせる → 実行中の transcript で Terminal block に出力が出る。エラーになるコマンドではエラーが出る。tool を多く呼ばせても transcript がもたつかない (RK-02)。**並列の tool の結果が user メッセージ 1 つで来るか、1 つずつ来るかを記録する** (research R-03 の前提)。**Edit を失敗させる (存在しない文字列の置き換え) か承認を拒否する** → Code diff のヘッダに「エラー」とエラーの本文が出て、適用済みの diff に見えない (pr-gate R2 po L-003)
 2. SessionStart の Hook を設定した作業フォルダで起動する → Hook の名前と結果が 1 行で出る。出力本文は出ない。**`hook_name` の実際の値を記録し、コマンドの文字列を含まないことを確かめる** (含むなら `hook_event` だけを出すよう直す)
 3. subagent を使わせる → Subagent の専用表示になる (tool 名が `Agent` / `Task` のどちらかを記録する。RK-04)
 4. Background task を使わせる → task の説明と状態が 1 行で、状態が変わると同じ行が書き換わる。セッションを強制終了すると、終わっていない行は「結果不明」になる

@@ -3,11 +3,12 @@ domain: isolation
 status: needs-human-review
 owner: ukitomato
 generated_by: human (PLAN.md を素案として再導出。素案の container domain を改名・拡張)
-last_reviewed: 2026-09-15
+last_reviewed: 2026-10-03
 related_adrs:
   - docs/decisions/0008-no-persistent-environment-provisioning.md
   - docs/decisions/0012-docker-control-via-cli.md
   - docs/decisions/0007-session-source-of-truth-is-claude-code.md
+  - docs/decisions/0044-ui-coverage-assignment.md
 related_specs: []
 ---
 

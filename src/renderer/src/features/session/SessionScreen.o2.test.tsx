@@ -196,8 +196,28 @@ describe('実行中の tool の結果 (FR-007 / US-2 AC1・AC2)', () => {
       expect(el).not.toBeNull()
       return el!
     })
-    expect(within(block).getByLabelText('失敗')).toBeInTheDocument()
-    expect(block).toHaveTextContent('（切り詰め）')
+    // 他の表示と同じ見える文字の印 (アイコンの aria-label だけに頼らない。pr-gate R2 ux M-002 / a11y L-002)。
+    expect(within(block).getByText(TOOL_RESULT_LABELS.failed)).toHaveAttribute(
+      'data-slot',
+      'tool-result-error'
+    )
+    expect(block).toHaveTextContent(TOOL_RESULT_LABELS.truncated)
+    // 切り詰めの印は透明度を足さない (muted-foreground のまま 4.5:1。pr-gate R2 a11y H-001)。
+    const truncated = block.querySelector('[data-slot="tool-result-truncated"]')
+    expect(truncated).not.toBeNull()
+    expect(truncated!.className).not.toMatch(/opacity-/)
+  })
+
+  it('成功した Bash は完了のアイコンだけで、エラーの印を出さない', async () => {
+    const h = await setup()
+    h.emit(A, toolMessage('Bash', { command: 'ls' }, 'out.txt'))
+    const block = await waitFor(() => {
+      const el = document.querySelector<HTMLElement>('[data-slot="aui_terminal-block"]')
+      expect(el).not.toBeNull()
+      return el!
+    })
+    expect(within(block).getByLabelText(TOOL_RESULT_LABELS.completed)).toBeInTheDocument()
+    expect(block.querySelector('[data-slot="tool-result-marks"]')).toBeNull()
   })
 
   /* ── エラーと切り詰めは Bash 以外の表示にも出る (pr-gate R1 po H-001) ── */
@@ -209,7 +229,7 @@ describe('実行中の tool の結果 (FR-007 / US-2 AC1・AC2)', () => {
       return el!
     })
 
-  it('失敗した Edit は適用済みの diff に見えない (「失敗」とエラーの本文を出す)', async () => {
+  it('失敗した Edit は適用済みの diff に見えない (「エラー」の印とエラーの本文を出す)', async () => {
     const h = await setup()
     h.emit(
       A,
@@ -230,7 +250,7 @@ describe('実行中の tool の結果 (FR-007 / US-2 AC1・AC2)', () => {
     expect(block).toHaveTextContent('File has not been read yet')
   })
 
-  it('成功した Edit は結果の本文も「失敗」も出さない', async () => {
+  it('成功した Edit は結果の本文も「エラー」の印も出さない', async () => {
     const h = await setup()
     h.emit(
       A,
@@ -241,7 +261,7 @@ describe('実行中の tool の結果 (FR-007 / US-2 AC1・AC2)', () => {
     expect(block.querySelector('[data-slot="tool-result-error"]')).toBeNull()
   })
 
-  it('専用の表示の無い tool (Read) のエラーは ToolFallback の閉じた見出しに「失敗」が出る', async () => {
+  it('専用の表示の無い tool (Read) のエラーは ToolFallback の閉じた見出しに「エラー」の印が出る', async () => {
     const h = await setup()
     h.emit(
       A,
@@ -263,7 +283,7 @@ describe('実行中の tool の結果 (FR-007 / US-2 AC1・AC2)', () => {
     expect(root.querySelector('[data-slot="tool-result-error"]')).toBeNull()
   })
 
-  it('失敗した Agent は最上位に「失敗」が出る', async () => {
+  it('失敗した Agent は最上位に「エラー」の印が出る', async () => {
     const h = await setup()
     h.emit(
       A,
@@ -279,6 +299,78 @@ describe('実行中の tool の結果 (FR-007 / US-2 AC1・AC2)', () => {
     expect(within(header).getByText(TOOL_RESULT_LABELS.failed)).toBeInTheDocument()
     expect(header).toHaveTextContent(TOOL_RESULT_LABELS.truncated)
     expect(block).toHaveTextContent('Agent failed')
+  })
+
+  /* ── Agent plan / Todo list / Write の印と、エラーの本文が plain text であること (pr-gate R2) ── */
+
+  it('失敗した ExitPlanMode は Agent plan に「エラー」の印と本文を出す (ui-coverage L-102 / po H)', async () => {
+    const h = await setup()
+    h.emit(
+      A,
+      toolMessage('ExitPlanMode', { plan: '1. 調べる' }, 'User rejected the plan', {
+        isError: true
+      })
+    )
+    const block = await shown('aui_agent-plan')
+    expect(within(block).getByText(TOOL_RESULT_LABELS.failed)).toHaveAttribute(
+      'data-slot',
+      'tool-result-error'
+    )
+    expect(block.querySelector('[data-slot="tool-result-error-text"]')).toHaveTextContent(
+      'User rejected the plan'
+    )
+  })
+
+  it('切り詰めた TodoWrite は Todo list に「（切り詰め）」を出す (ui-coverage L-102 / ux M-003)', async () => {
+    const h = await setup()
+    h.emit(
+      A,
+      toolMessage(
+        'TodoWrite',
+        { todos: [{ content: '書く', status: 'pending', activeForm: '書いている' }] },
+        'ok',
+        { truncated: true }
+      )
+    )
+    const block = await shown('aui_todo-list')
+    expect(block).toHaveTextContent(TOOL_RESULT_LABELS.truncated)
+    expect(block.querySelector('[data-slot="tool-result-error"]')).toBeNull()
+    expect(block.querySelector('[data-slot="tool-result-truncated"]')!.className).not.toMatch(
+      /opacity-/
+    )
+  })
+
+  it('失敗した Write は Code diff に「エラー」の印と本文を出す (ux M-003)', async () => {
+    const h = await setup()
+    h.emit(
+      A,
+      toolMessage('Write', { file_path: '/w/a.ts', content: 'x' }, 'Permission denied', {
+        isError: true
+      })
+    )
+    const block = await shown('aui_code-diff')
+    expect(within(block).getByText(TOOL_RESULT_LABELS.failed)).toHaveAttribute(
+      'data-slot',
+      'tool-result-error'
+    )
+    expect(block).toHaveTextContent('Permission denied')
+  })
+
+  it('エラーの本文の HTML は要素にならず、文字のまま出る (security L-102 / CWE-79)', async () => {
+    const payload = '<img src=x onerror="window.__pwned=1">'
+    const h = await setup()
+    h.emit(
+      A,
+      toolMessage('Edit', { file_path: '/w/a.ts', old_string: 'a', new_string: 'b' }, payload, {
+        isError: true
+      })
+    )
+    const block = await shown('aui_code-diff')
+    const errorText = block.querySelector<HTMLElement>('[data-slot="tool-result-error-text"]')
+    expect(errorText).not.toBeNull()
+    expect(errorText!.querySelector('img')).toBeNull()
+    expect(errorText).toHaveTextContent(payload)
+    expect((window as { __pwned?: unknown }).__pwned).toBeUndefined()
   })
 
   it('Agent は Subagent の表示になる', async () => {
@@ -375,6 +467,13 @@ describe('transcript の密度と監視ビューの密度 (FR-012 / FR-013 / US-
     expect(
       within(transcript).getByRole('button', { name: TRANSCRIPT_DENSITY_LABELS.compact })
     ).toHaveAttribute('title', TRANSCRIPT_DENSITY_LABELS.compactHint)
+    // 選択は背景の色の差だけでなく太字でも示す (両方の切り替え。pr-gate R2 a11y H-002 / M-004)。
+    for (const button of [
+      ...within(transcript).getAllByRole('button'),
+      ...within(monitor).getAllByRole('button')
+    ]) {
+      expect(button).toHaveClass('aria-pressed:font-semibold')
+    }
 
     await userEvent.click(
       within(transcript).getByRole('button', { name: TRANSCRIPT_DENSITY_LABELS.compact })

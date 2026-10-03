@@ -8,7 +8,6 @@ import type { TranscriptMessageDTO, TranscriptPartDTO } from "@domain/session/tr
 import {
   SYSTEM_EVENT_CATEGORY_LABELS,
   SYSTEM_EVENT_STATUS_LABELS,
-  TOOL_RESULT_LABELS,
 } from "@/features/chat/labels";
 import { parseAgentArgs, parseTaskArgs } from "@/features/chat/tool-args";
 import { cn } from "@/lib/utils";
@@ -80,7 +79,9 @@ function SubagentPart({
           <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
             <WrenchIcon className="size-3 shrink-0" />
             <span className="font-medium">{part.toolName}</span>
-            {part.isError ? <span className="text-destructive">{TOOL_RESULT_LABELS.failed}</span> : null}
+            {/* 入れ子でも最上位と同じ印 (エラーと切り詰め。pr-gate R2 ui-coverage L-101)。 */}
+            <ToolResultMarks isError={part.isError} truncated={part.truncated === true} />
+
           </div>
           {result ? (
             <pre className="text-foreground/70 max-h-40 overflow-auto whitespace-pre-wrap font-mono text-[11px]">
@@ -170,7 +171,7 @@ const SubagentImpl: ToolCallMessagePartComponent = (props) => {
             {args.subagent_type}
           </span>
         ) : null}
-        {/* 最上位の失敗と切り詰め (入れ子の「失敗」だけでなく。O-2 / FR-007 / pr-gate R1 po H-001)。 */}
+        {/* 最上位の失敗と切り詰め (入れ子の印だけでなく。O-2 / FR-007 / pr-gate R1 po H-001)。 */}
         <ToolResultMarks
           isError={props.isError}
           truncated={isTruncatedArgs(props.args)}

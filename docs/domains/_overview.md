@@ -1,6 +1,6 @@
 ---
 status: needs-human-review
-last_updated: 2026-09-30
+last_updated: 2026-10-03
 generated_by: human (PLAN.md を素案として再導出)
 ---
 
@@ -144,7 +144,8 @@ domain をまたいで守られるべき不変条件。いずれも Constitution
 | supervisor は Electron に依存せず単独起動できる | VII | `session` / `isolation` |
 | 重いパースを main process で行わない | IX | `session` / `isolation` / `ui` |
 | セッションの正本はアプリ外にある | X | `session` / `isolation` |
-| SDK が emit する情報は `docs/ui-coverage.md` で割当を持つ。`後続: <ID>` の feature は完了の PR で対象の行を書き換え、SDK の版を上げる PR は同じ PR で対応表を直す (項目 21) | XII | `ui` / `session` / `isolation` |
+| SDK が emit する情報は `docs/ui-coverage.md` で割当を持つ。`後続: <ID>` の feature は完了の PR で対象の行を書き換える (項目 21) | XII | `ui` / `session` / `isolation` |
+| SDK (`@anthropic-ai/claude-agent-sdk`) の版を上げる PR は、同じ PR で `docs/ui-coverage.md` を直す (項目 21) | XII | すべて |
 
 **XII を O-2 で追加した** (pr-gate R1 architecture M-003)。対応表の `後続` に他 domain の feature
 (X-6 は `session`、I-3 は `isolation`) を書いたことで、それらの完了が項目 21 の条件に入った ([AD-044](../decisions/0044-ui-coverage-assignment.md))。

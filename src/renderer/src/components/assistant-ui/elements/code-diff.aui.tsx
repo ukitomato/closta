@@ -78,7 +78,7 @@ function Hunk({ rows }: { rows: readonly DiffRow[] }): React.JSX.Element {
 }
 
 /**
- * diff の枠。失敗・拒否された変更が適用済みの diff に見えないよう、ヘッダに「失敗」の Badge を出し、
+ * diff の枠。失敗・拒否された変更が適用済みの diff に見えないよう、ヘッダに「エラー」の Badge を出し、
  * エラーの結果の本文を diff の後に出す (成功の結果は出さない。O-2 / FR-007 / pr-gate R1 po H-001)。
  */
 function DiffShell({

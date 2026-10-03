@@ -14,7 +14,7 @@ import type {
 import { useUiStore } from '@/stores/ui'
 
 import { toThreadMessage } from './convert'
-import { SYSTEM_EVENT_LABELS, TRANSCRIPT_DENSITY_LABELS } from './labels'
+import { SYSTEM_EVENT_LABELS, TOOL_RESULT_LABELS, TRANSCRIPT_DENSITY_LABELS } from './labels'
 
 /**
  * O-2 FE-012 / FE-022 — 過去ログの transcript のシステムイベントの行・Subagent の `Agent`・情報密度
@@ -214,10 +214,42 @@ describe('過去ログのシステムイベントの行 (FR-009 / SC-003)', () =
     // 案内は見る場所 (hooks の設定と debug の出力) を示す (po L-003)。
     expect(failed).toHaveTextContent('.claude/settings.json')
     expect(failed).toHaveTextContent('claude --debug')
+    // 次の操作 (直したら起動し直す) も示す (pr-gate R2 ux L-004)。
+    expect(failed).toHaveTextContent('セッションを起動し直してください')
     expect(statusOf(failed!)).toBe('失敗')
     for (const row of [succeeded, cancelled, taskFailed]) {
       expect(row).not.toHaveTextContent(SYSTEM_EVENT_LABELS.hookFailedGuidance)
     }
+    // 失敗した task には tool の呼び出しの表示を見る案内が出る (pr-gate R2 ux L-004)。
+    expect(taskFailed).toHaveTextContent(SYSTEM_EVENT_LABELS.taskFailedGuidance)
+    for (const row of [failed, succeeded, cancelled]) {
+      expect(row).not.toHaveTextContent(SYSTEM_EVENT_LABELS.taskFailedGuidance)
+    }
+  })
+
+  it('強制停止した task には案内が出て、完了した task には出ない (pr-gate R2 ux L-004)', () => {
+    show([
+      eventDto('task:a', { category: 'task', status: 'killed' }),
+      eventDto('task:b', { category: 'task', status: 'completed' })
+    ])
+    const { container } = render(<ChatScreen />)
+    const [killed, completed] = rowsOf(container)
+    expect(killed).toHaveTextContent(SYSTEM_EVENT_LABELS.taskFailedGuidance)
+    expect(completed).not.toHaveTextContent(SYSTEM_EVENT_LABELS.taskFailedGuidance)
+  })
+
+  it('切り詰めた名前と detail は title で全文を見られ、名前は透明度を足さない (pr-gate R2 a11y M-001 / M-002)', () => {
+    show([eventDto('task:t1', { category: 'task', name: 'ビルドを走らせる', status: 'completed' })])
+    const { container } = render(<ChatScreen />)
+    const [row] = rowsOf(container)
+    const name = nameOf(row!) as HTMLElement
+    expect(name).toHaveAttribute('title', 'ビルドを走らせる')
+    expect(name.className).not.toMatch(/\/80\b/)
+    const detail = row!.querySelector('[data-slot="system-event-detail"]')
+    expect(detail).not.toBeNull()
+    expect(detail).toHaveAttribute('title', detail!.textContent)
+    // 動きを減らす設定では fade-in しない (a11y L-003)。
+    expect(row!.className).toContain('motion-reduce:animate-none')
   })
 
   it('HTML・偽の状態の文言を含む名前は要素にならず、状態の文言と別の span に入る', () => {
@@ -240,7 +272,8 @@ describe('過去ログのシステムイベントの行 (FR-009 / SC-003)', () =
       type: 'system',
       subtype: 'hook_response',
       hook_id: 'h1',
-      hook_name: 'evil‮name\nsecond line',
+      // 空白を含む名前は allowlist で落ちる (pr-gate R2 security L-101) ので、改行は末尾に置いて除かれることを確かめる。
+      hook_name: 'evil‮name\n',
       hook_event: 'SessionStart',
       outcome: 'success',
       output: 'SECRET OUTPUT'
@@ -250,7 +283,7 @@ describe('過去ログのシステムイベントの行 (FR-009 / SC-003)', () =
     const { container } = render(<ChatScreen />)
     expect(container.textContent).not.toContain('‮')
     expect(container.textContent).not.toContain('SECRET OUTPUT')
-    expect(nameOf(rowsOf(container)[0]!)?.textContent).toBe('「evilname second line」')
+    expect(nameOf(rowsOf(container)[0]!)?.textContent).toBe('「evilname」')
   })
 
   it('全角の長い名前は 1 行で切り詰める (truncate。改行しない)', () => {
@@ -279,6 +312,54 @@ describe('Subagent の Agent (FR-010)', () => {
     expect(container.querySelector('[data-slot="aui_subagent"]')).not.toBeNull()
     expect(container.textContent).toContain('見つかった')
     expect(container.textContent).toContain('調べる')
+  })
+
+  it('入れ子の tool 呼び出しにもエラーと切り詰めの印が出る (pr-gate R2 ui-coverage L-101)', async () => {
+    const nested = (
+      id: string,
+      over: { isError: boolean; truncated: boolean }
+    ): TranscriptMessageDTO => ({
+      id,
+      role: 'assistant' as const,
+      parts: [
+        {
+          type: 'tool-call' as const,
+          toolCallId: `${id}-c`,
+          toolName: 'Read',
+          argsText: '{}',
+          result: 'r',
+          children: [],
+          ...over
+        }
+      ],
+      createdAt: null
+    })
+    const parent = toolDto('m', 'Agent', { description: '調べる', prompt: 'x' }, 'done')
+    const call = parent.parts[0]
+    if (call?.type !== 'tool-call') throw new Error('tool-call が無い')
+    show([
+      {
+        ...parent,
+        parts: [
+          {
+            ...call,
+            children: [
+              nested('c1', { isError: true, truncated: false }),
+              nested('c2', { isError: false, truncated: true })
+            ]
+          }
+        ]
+      }
+    ])
+    const { container } = render(<ChatScreen />)
+    await screen.findByText('調べる')
+    const body = container.querySelector<HTMLElement>('[data-slot="aui_subagent"]')!
+    const marks = Array.from(body.querySelectorAll('[data-slot="tool-result-marks"]'))
+    expect(marks).toHaveLength(2)
+    expect(marks[0]).toHaveTextContent(TOOL_RESULT_LABELS.failed)
+    expect(marks[0]).not.toHaveTextContent(TOOL_RESULT_LABELS.truncated)
+    expect(marks[1]).toHaveTextContent(TOOL_RESULT_LABELS.truncated)
+    expect(marks[1]).not.toHaveTextContent(TOOL_RESULT_LABELS.failed)
   })
 })
 

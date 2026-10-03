@@ -109,7 +109,7 @@
 ## R-10 Constitution の PATCH
 
 - **Decision**: **先に ADR (AD-044「ui-coverage 対応表の割当と機械照合」) を proposed で起こし、利用者が accepted にしてから** Constitution を v1.2.9 → **v1.3.0** (MINOR) に改める (design-gate R1 analyze C1・C2 / architecture H-004。USER 決定 2026-10-03)
-  - AD-044 に書くもの: 割当の 3 種類と「後続 feature の ID は roadmap に実在するものに限り割当とみなす」読み方、M3 の完了の条件 (Tier A の `後続` の行が 0)、対応表の節と機械照合の範囲 (R-01)、行の Tier の決め方、ToolFallback を実装済みにできるのは Tier B / C に限ること、AD-019 / AD-020 の Open Questions への回答 (表示不要の欄、Hook / BG の持ち主、`SDKPartialAssistantMessage`、Tier C の転用、59 要素)。対応表の書式の正本は対応表の凡例と AD-044 に置く
+  - AD-044 に書くもの: 割当の 3 種類と「後続 feature の ID は roadmap に実在するものに限り割当とみなす」読み方、M3 の完了の条件 (Tier A の `後続` の行のうち、割当先が M3 の feature の行が 0。design-gate R2 po H-101 で AD-044 Decision 3 の字面に改めた)、対応表の節と機械照合の範囲 (R-01)、行の Tier の決め方、ToolFallback を実装済みにできるのは Tier B / C に限ること、AD-019 / AD-020 の Open Questions への回答 (表示不要の欄、Hook / BG の持ち主、`SDKPartialAssistantMessage`、Tier C の転用、59 要素)。対応表の書式の正本は対応表の凡例と AD-044 に置く
   - XII: Automated を「`check:constitution` 項目 21 (対応表の検査)」に、`bad_pattern_grep` を割当の列だけを見る形に改めて補助に、Manual の「未配置」を外す。Statement の後に後続 ID の読み方と M3 の完了の条件を足す
   - XIII: 「未分類 59 要素」と「143」の記述を R-08 の結果に合わせ、数に確認日を併記する (AD-019 D3)
   - Sync Impact Report に、版の方針表の「指針の実質的な拡張」の行で MINOR とした理由を書く。plan テンプレートの XII の行 (`.specify/templates/plan-template.md:61`) を追随させる

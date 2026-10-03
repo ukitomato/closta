@@ -17,7 +17,7 @@ import { isTruncatedArgs, ToolErrorResult, ToolResultMarks } from "./tool-result
  * R-4 は独自 markdown 経路を作らず plain text とする (rich markdown 化は将来、plan を text part 化して行う)。
  * `argsText` は domain で `sanitizeBody` (bidi/C1 除去 + byte 上限) 済み (design-gate H-1)。
  * narrowing 失敗時は `ToolFallback` に退避 (FR-009 / SC-005)。
- * 結果は普段は出さず、エラー (計画の却下など) のときだけ「失敗」と本文を出す。切り詰めの印も出す (O-2 / FR-007)。
+ * 結果は普段は出さず、エラー (計画の却下など) のときだけ「エラー」の印と本文を出す。切り詰めの印も出す (O-2 / FR-007)。
  *
  * registry 照合 (Principle XIII / FR-013): assistant-ui `elements-agent-plan` (`AgentPlan`)。
  * Claude Code の ExitPlanMode (plan 文字列) 形に合わせて `.aui.tsx` として自作した (ADR 参照)。

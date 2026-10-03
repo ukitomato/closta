@@ -66,6 +66,7 @@ src/renderer/src/features/chat/useTranscript.test.tsx
 src/renderer/src/features/chat/useTranscript.ts
 src/renderer/src/features/chat/virtualization.test.tsx
 src/renderer/src/features/session/RunningSessionList.monitor.test.tsx
+src/renderer/src/features/session/RunningSessionList.tsx
 src/renderer/src/features/session/SessionScreen.o2.test.tsx
 src/renderer/src/features/session/SessionScreen.tsx
 src/renderer/src/features/session/running-session-store.test.ts

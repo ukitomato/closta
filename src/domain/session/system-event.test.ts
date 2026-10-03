@@ -145,16 +145,24 @@ describe('toSystemEventMessage', () => {
   })
 
   it('名前の制御文字・双方向制御文字・改行を除き、120 コードポイントで切る。文字列でなければ空', () => {
+    // 空白を含む名前は Hook では allowlist で落ちるので、変換は task の説明で確かめる (pr-gate R2 security L-101)。
     const msg = toSystemEventMessage({
-      ...hookStarted,
-      hook_name: `a‮b\nc\u0007d${'x'.repeat(200)}`,
-      hook_event: 7
+      ...taskStarted,
+      description: `a‮b\nc\u0007d${'x'.repeat(200)}`
     })
     const part = systemEventPartOf(msg ?? undefined)
     expect(part?.name.startsWith('ab cd')).toBe(true)
     expect(Array.from(part?.name ?? '')).toHaveLength(121)
     expect(part?.name.endsWith('…')).toBe(true)
-    expect(part?.detail).toBe('')
+    const hook = systemEventPartOf(
+      toSystemEventMessage({
+        ...hookStarted,
+        hook_name: 'Pre‮ToolUse:\u0007Bash',
+        hook_event: 7
+      }) ?? undefined
+    )
+    expect(hook?.name).toBe('PreToolUse:Bash')
+    expect(hook?.detail).toBe('')
   })
 
   it('local_bash の説明は秘密の判定に関わらず名前に出さない (秘密の判定を通る形も含む。security L-002)', () => {
@@ -188,6 +196,34 @@ describe('toSystemEventMessage', () => {
     expect(systemEventPartOf(toSystemEventMessage(hookStarted) ?? undefined)?.name).toBe(
       'format-check'
     )
+  })
+
+  it('hook_name は allowlist の形 (`<event>:<matcher>` など) だけを出す。Bearer・URL の資格情報・長い名前は出さない (security L-101)', () => {
+    for (const hookName of [
+      'curl -H Authorization:Bearer abc',
+      'https://u:tok@host',
+      'mysql -pS3cret',
+      './notify.sh',
+      'x'.repeat(200)
+    ]) {
+      const part = systemEventPartOf(
+        toSystemEventMessage({ ...hookResponse, hook_name: hookName }) ?? undefined
+      )
+      expect(part).toMatchObject({ name: '', detail: 'SessionStart', status: 'failed' })
+    }
+    for (const hookName of [
+      'PreToolUse:Bash',
+      'PostToolUse:Edit|Write',
+      'SessionStart:startup',
+      'PreToolUse:mcp__memory__.*',
+      'lint'
+    ]) {
+      expect(
+        systemEventPartOf(
+          toSystemEventMessage({ ...hookResponse, hook_name: hookName }) ?? undefined
+        )?.name
+      ).toBe(hookName)
+    }
   })
 })
 

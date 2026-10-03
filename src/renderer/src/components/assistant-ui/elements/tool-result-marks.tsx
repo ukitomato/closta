@@ -41,9 +41,8 @@ export function ToolResultMarks({
       className={cn("flex shrink-0 items-center gap-2", className)}
     >
       {truncated ? (
-        <span data-slot="tool-result-truncated" className="opacity-70">
-          {TOOL_RESULT_LABELS.truncated}
-        </span>
+        // 透明度を足さない — 周りの muted-foreground のまま 4.5:1 を保つ (pr-gate R2 a11y H-001)
+        <span data-slot="tool-result-truncated">{TOOL_RESULT_LABELS.truncated}</span>
       ) : null}
       {isError ? (
         <Badge data-slot="tool-result-error" variant="destructive">

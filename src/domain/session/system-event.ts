@@ -50,6 +50,20 @@ export function mayCarrySecret(text: string): boolean {
   return /(^|[^A-Za-z0-9])(sk-|ghp_|gho_|glpat-|AIza|xox)/.test(text)
 }
 
+/**
+ * Hook の名前として出してよい形 (allowlist。pr-gate R2 security L-101)。Claude Code の `hook_name` は
+ * `<hook_event>:<matcher>` (`PreToolUse:Bash` / `PostToolUse:Edit|Write` / `SessionStart:startup` など) か
+ * 短い識別子なので、英数字と `_.*|-` の語を `:` でつないだ形だけを通す。空白・`/`・`@`・`=` を含むもの
+ * (コマンド・`Bearer` の header・URL の資格情報) と、120 コードポイントで切り詰めた (`…` の付いた) ものは出さない。
+ */
+const HOOK_NAME_SHAPE = /^[\w.*|-]+(?::[\w.*|-]*)*$/
+
+/** 会話由来の `hook_name` を出してよい名前にする。形が allowlist に合い、秘密を含みうる形でもないときだけ。 */
+function hookNameOf(raw: unknown): string {
+  const name = oneLine(raw)
+  return HOOK_NAME_SHAPE.test(name) && !mayCarrySecret(name) ? name : ''
+}
+
 const STATUS_SET: ReadonlySet<string> = new Set(SYSTEM_EVENT_STATUSES)
 
 /** 値があれば理由キーに (知らない値は `unknown`)、無ければ `null`。 */
@@ -102,12 +116,11 @@ export function toSystemEventMessage(
           : typeof m.outcome === 'string'
             ? (HOOK_OUTCOMES[m.outcome] ?? 'unknown')
             : 'unknown'
-      // hook_name は Hook の設定のコマンドになりうる (`TOKEN=... cmd` など)。秘密を含みうるなら名前を出さず、
-      // 行は hook_event と状態だけで描く (pr-gate R1 security L-001)。
-      const hookName = oneLine(m.hook_name)
+      // hook_name は Hook の設定のコマンドになりうる (`TOKEN=... cmd` など)。allowlist の形に合わない・秘密を
+      // 含みうるなら名前を出さず、行は hook_event と状態だけで描く (pr-gate R1 security L-001 / R2 L-101)。
       return message(
         `hook:${m.hook_id}`,
-        part('hook', true, mayCarrySecret(hookName) ? '' : hookName, oneLine(m.hook_event), status),
+        part('hook', true, hookNameOf(m.hook_name), oneLine(m.hook_event), status),
         createdAt
       )
     }

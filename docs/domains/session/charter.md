@@ -3,7 +3,7 @@ domain: session
 status: needs-human-review
 owner: ukitomato
 generated_by: human (PLAN.md を素案として再導出)
-last_reviewed: 2026-10-02
+last_reviewed: 2026-10-03
 related_adrs:
   - docs/decisions/0002-use-agent-sdk-not-cli.md
   - docs/decisions/0006-supervisor-in-utility-process.md
@@ -14,12 +14,14 @@ related_adrs:
   - docs/decisions/0036-single-session-launch-process-and-live-stream.md
   - docs/decisions/0041-x4-launch-config-on-x1-launch-gate.md
   - docs/decisions/0043-single-supervisor-session-threads-and-session-limit.md
+  - docs/decisions/0044-ui-coverage-assignment.md
 related_specs:
   - specs/002-session-cross-folder-session-enumeration/spec.md
   - specs/005-session-launch-and-streaming/spec.md
   - specs/008-session-launch-settings-dialog-and-presets/spec.md
   - specs/009-session-supervisor-and-multi-session/spec.md
   - specs/010-session-monitoring-view/spec.md
+  - specs/011-ui-coverage/spec.md
 ---
 
 # Domain Charter: session

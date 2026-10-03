@@ -15,7 +15,7 @@ import { isTruncatedArgs, ToolErrorResult, ToolResultMarks } from "./tool-result
  * 各 Todo の status (pending / in_progress / completed) を **status ごとに区別可能な DOM マーカー**で示す
  * (視覚差の確認は quickstart 実機。SC-003)。未知 status は生値で示し欠落させない (SC-003)。
  * narrowing 失敗時は `ToolFallback` に退避 (FR-009 / SC-005)。
- * 結果は普段は出さず、エラーのときだけ「失敗」と本文を出す。切り詰めの印も出す (O-2 / FR-007)。
+ * 結果は普段は出さず、エラーのときだけ「エラー」の印と本文を出す。切り詰めの印も出す (O-2 / FR-007)。
  *
  * registry 照合 (Principle XIII / FR-013): assistant-ui `elements-todo-list` (`TodoList` / `TodoItem`)。
  * Claude Code の todos (content/status/activeForm) 形に合わせて `.aui.tsx` として自作した (ADR 参照)。
@@ -40,7 +40,8 @@ const TodoListImpl: ToolCallMessagePartComponent = (props) => {
       <div className="aui-todo-list-header text-muted-foreground flex items-center gap-2 px-3 py-1.5 text-xs">
         <ListTodoIcon className="size-3.5 shrink-0" />
         <span className="font-medium">Todo</span>
-        <span className="opacity-70">（{args.todos.length}）</span>
+        {/* 透明度を足さない — muted-foreground のまま 4.5:1 を保つ (pr-gate R2 a11y H-001 の同種事象)。 */}
+        <span>（{args.todos.length}）</span>
         <ToolResultMarks
           isError={props.isError}
           truncated={isTruncatedArgs(props.args)}

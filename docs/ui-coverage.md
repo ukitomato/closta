@@ -101,7 +101,7 @@ assistant / user のメッセージの content block。型は `@anthropic-ai/sdk
 | assistant/server_tool_use | `server_tool_use` | B | 後続: O-6 | なし | 知らないブロックとして捨てている |
 | assistant/web_search_tool_result | `web_search_tool_result` | B | 後続: O-6 | なし | |
 | user/text | `text` | A | 実装済み: UserMessage (両方) | 両方 | |
-| user/tool_result | `tool_result` | A | 実装済み: 各 tool の表示 (両方) | 両方 | O-2 で実行中も呼び出しの表示に埋める (FR-007)。エラーと切り詰めは Terminal block・Code diff・ToolFallback・Subagent などの各表示に印を出す (O-2 pr-gate R1)。対応の無い結果は結果だけの表示 |
+| user/tool_result | `tool_result` | A | 実装済み: 各 tool の表示 (両方) | 両方 | O-2 で実行中も呼び出しの表示に埋める (FR-007)。エラーと切り詰めは Terminal block・Code diff・ToolFallback・Subagent などの各表示に印を出す (O-2 pr-gate R1)。結果待ち・結果不明の印と読み上げは O-6。対応の無い結果は結果だけの表示 |
 | user/image | `image` | B | 実装済み: Image (過去ログ) | 過去ログ | 安全な data 画像の MIME だけ (svg を除く) |
 | user/document | `document` | B | 後続: O-6 | 過去ログ | 今はファイル名の文字列だけ。File element は O-6 |
 

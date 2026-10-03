@@ -27,15 +27,25 @@ export const SYSTEM_EVENT_STATUS_LABELS: Readonly<Record<SystemEventStatus, stri
   killed: '強制停止',
   paused: '一時停止',
   stopped: '停止',
-  unknown: '不明な状態'
+  // SDK が新しく足した、本アプリの知らない状態。「結果不明」と紛らわしくしない (pr-gate R2 ux L-005)。
+  unknown: 'SDK が知らない状態'
 }
 
 export const SYSTEM_EVENT_LABELS = {
-  /** 終わりの来ない行 (セッションの終了・失敗の後と過去ログ。FR-009 / US-2 AC6)。 */
-  outcomeUnknown: '結果不明 (記録に終わりが無い)',
-  /** 失敗した Hook の行の案内 (出力本文は出さない。見る場所を示す。spec Edge Cases / pr-gate R1 po L-003)。 */
+  /**
+   * 終わりの来ない行 (セッションの終了・失敗の後と過去ログ。FR-009 / US-2 AC6)。括弧の中は実行中のペインと
+   * 過去ログのどちらにも通じる言い方にする (pr-gate R2 ux L-005)。
+   */
+  outcomeUnknown: '結果不明 (終わりの知らせが届いていない)',
+  /**
+   * 失敗した Hook の行の案内 (出力本文は出さない。見る場所と次の操作を示す。spec Edge Cases / pr-gate R1 po L-003 /
+   * R2 ux L-004)。
+   */
   hookFailedGuidance:
-    'Hook の設定 (.claude/settings.json などの hooks) と、claude --debug の出力を確かめてください。'
+    'Hook の設定 (.claude/settings.json などの hooks) と、claude --debug の出力を確かめてください。直したらセッションを起動し直してください。',
+  /** 失敗・強制停止した Background task の行の案内 (出力本文は出さない。pr-gate R2 ux L-004)。 */
+  taskFailedGuidance:
+    'task を起動した tool の呼び出し (Bash・Task など) の表示で出力を確かめてください。'
 } as const
 
 /**
@@ -61,8 +71,11 @@ export function taskTypeLabel(taskType: string): string {
  * 同じ文言を使う (pr-gate R1 po H-001)。
  */
 export const TOOL_RESULT_LABELS = {
-  /** 結果がエラー (失敗・拒否) だったとき。 */
-  failed: '失敗',
+  /**
+   * 結果がエラー (失敗・拒否) だったとき。利用者自身の拒否も含むので「失敗」とは書かず中立な「エラー」にする
+   * (pr-gate R2 po L-001 / ux L-001)。
+   */
+  failed: 'エラー',
   /** 完了したとき (Terminal block のアイコンの名前)。 */
   completed: '完了',
   /** args か結果が上限で切り詰められたとき。 */
@@ -78,6 +91,8 @@ export const TRANSCRIPT_DENSITY_LABELS = {
   group: 'transcript の表示',
   comfortable: '開いて表示',
   compact: '畳んで表示',
-  comfortableHint: 'Tool group を既定で開いて表示します (Reasoning は応答中だけ開きます)。',
-  compactHint: 'Tool group と Reasoning を既定で畳んで表示します。'
+  // 内部用語 (Tool group / Reasoning) ではなく画面で見る言葉で書く (pr-gate R2 ux L-003)
+  comfortableHint:
+    'tool の呼び出しのまとまりを最初から開いて表示します (考えている過程は応答中だけ開きます)。',
+  compactHint: 'tool の呼び出しのまとまりと考えている過程を最初から畳んで表示します。'
 } as const

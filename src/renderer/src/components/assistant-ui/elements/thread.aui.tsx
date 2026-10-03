@@ -887,7 +887,7 @@ const SystemMessage: FC = () => {
     <MessagePrimitive.Root
       data-slot="aui_system-message-root"
       data-role="system"
-      className="fade-in animate-in my-1 flex justify-center px-2 duration-150 [contain-intrinsic-size:auto_48px] [content-visibility:auto]"
+      className="fade-in animate-in motion-reduce:animate-none my-1 flex justify-center px-2 duration-150 [contain-intrinsic-size:auto_48px] [content-visibility:auto]"
     >
       <div className="text-muted-foreground text-center text-xs">
         <MessagePrimitive.Parts components={{ Text: SystemText }} />
@@ -913,7 +913,8 @@ const systemEventDataOf = (s: AssistantState): unknown => {
  * - 状態の文言は `Badge`、名前は「」で括った muted の別の span (偽の状態の文言を含む名前と区別する)。
  *   名前・detail は会話由来なので**テキストノードだけ**で描き、1 行で切り詰める (`truncate`)
  * - 終わりを表さない状態の行は、記録にこれ以上の終わりが来ない (セッションの終了・失敗の後 / 過去ログ) とき
- *   「結果不明 (記録に終わりが無い)」。失敗した Hook には設定とログを確かめる案内を添える (出力本文は出さない)
+ *   「結果不明」。失敗した Hook には設定とログを確かめる案内、失敗・強制停止した task には tool の呼び出しの
+ *   表示を見る案内を添える (出力本文は出さない)
  *
  * registry 照合 (Principle XIII): 既存の system メッセージの体裁 + 導入済みの `Badge` (状態)。
  * ToolFallback / Reasoning / Tool group (開閉する card) は 1 行の状態表示に過剰で、tool 呼び出しと誤読させるため採らない。
@@ -932,6 +933,14 @@ const SystemEventRow: FC = () => {
       : SYSTEM_EVENT_STATUS_LABELS[status];
   const failed = status === "failed";
   const Icon = category === "hook" ? WebhookIcon : TimerIcon;
+  // 失敗した Hook には設定とログ、失敗・強制停止した task には起動した tool の呼び出しの表示を案内する (pr-gate R2 ux L-004)
+  const guidance =
+    category === "hook" && failed
+      ? SYSTEM_EVENT_LABELS.hookFailedGuidance
+      : category === "task" && (failed || status === "killed")
+        ? SYSTEM_EVENT_LABELS.taskFailedGuidance
+        : null;
+  const detailText = category === "task" ? taskTypeLabel(detail) : detail;
 
   return (
     <MessagePrimitive.Root
@@ -939,7 +948,7 @@ const SystemEventRow: FC = () => {
       data-role="system-event"
       data-category={category}
       data-status={unresolved ? "unresolved" : (status ?? "none")}
-      className="fade-in animate-in px-2 duration-150 [contain-intrinsic-size:auto_32px] [content-visibility:auto]"
+      className="fade-in animate-in motion-reduce:animate-none px-2 duration-150 [contain-intrinsic-size:auto_32px] [content-visibility:auto]"
     >
       <div className="text-muted-foreground flex min-w-0 items-center gap-2 text-xs">
         <Icon aria-hidden className="size-3.5 shrink-0" />
@@ -947,9 +956,14 @@ const SystemEventRow: FC = () => {
           {SYSTEM_EVENT_CATEGORY_LABELS[category]}
         </span>
         {detail !== "" ? (
-          <span data-slot="system-event-detail" className="max-w-40 shrink-0 truncate">
+          // 切り詰めた全文は title で見られるようにする (pr-gate R2 a11y M-002)
+          <span
+            data-slot="system-event-detail"
+            className="max-w-40 shrink-0 truncate"
+            title={detailText}
+          >
             {/* task の detail は SDK の task_type。文言の表で読める形に (知らない値はそのまま。pr-gate R1 po L-002)。 */}
-            {category === "task" ? taskTypeLabel(detail) : detail}
+            {detailText}
           </span>
         ) : null}
         {statusText !== null ? (
@@ -964,15 +978,16 @@ const SystemEventRow: FC = () => {
         {name !== "" ? (
           <span
             data-slot="system-event-name"
-            className="text-muted-foreground/80 min-w-0 truncate"
+            className="text-muted-foreground min-w-0 truncate"
+            title={name}
           >
             「{name}」
           </span>
         ) : null}
       </div>
-      {category === "hook" && failed ? (
+      {guidance !== null ? (
         <p data-slot="system-event-guidance" className="text-muted-foreground mt-1 ps-5.5 text-xs">
-          {SYSTEM_EVENT_LABELS.hookFailedGuidance}
+          {guidance}
         </p>
       ) : null}
     </MessagePrimitive.Root>

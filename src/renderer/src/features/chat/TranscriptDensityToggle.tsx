@@ -33,6 +33,8 @@ export function TranscriptDensityToggle(): React.JSX.Element {
           size="xs"
           variant={density === d ? 'secondary' : 'ghost'}
           aria-pressed={density === d}
+          // 選択を背景差 (≈1.1:1) だけに頼らず太字でも示す (SessionListScreen の FilterChip と同じ。pr-gate R2 a11y H-002)
+          className="aria-pressed:font-semibold"
           title={
             d === 'comfortable'
               ? TRANSCRIPT_DENSITY_LABELS.comfortableHint

@@ -43,6 +43,19 @@ reviewers:
       - "src/renderer/src/features/session-list/**/*.tsx"
       - "src/renderer/src/features/chat/**/*.tsx"
       - "src/renderer/src/features/session/**/*.tsx"
+      # elements/ の手書きの表示 (R-4 の Tier A・O-2 の SystemEventRow と印など)。後続の表示 feature (O-4〜O-6) は
+      # ここだけで完結しうるので明示で入れる (O-2 pr-gate R2 architecture M-101)。新しい手書きの element を足したらここにも足す。
+      - "src/renderer/src/components/assistant-ui/elements/terminal-block.aui.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/code-diff.aui.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/todo-list.aui.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/subagent.aui.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/agent-plan.aui.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/tool-registry.aui.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/thread.aui.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/thread-list.aui.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/tool-fallback.aui.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/tool-result-marks.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/surfaces.tsx"
       # - "src/renderer/src/features/runtime-list/**/*.tsx"              # 仮実装
       # - "src/renderer/src/features/workspace-folders/**/*.tsx"         # 仮実装
       # - "src/renderer/src/features/folder-runtime-resolution/**/*.tsx" # 仮実装
@@ -51,7 +64,18 @@ reviewers:
       # vendored primitive であり、a11y 指摘は upstream の管轄である。
       # 直すと registry から乖離し、次の `add` で戻る。
       - "src/renderer/src/components/ui/**"                     # shadcn 生成 (8 files)
-      - "src/renderer/src/components/assistant-ui/elements/**"  # assistant-ui registry の複製 (14 files)
+      # assistant-ui registry の複製 (CLI 生成物)。elements/ には手書きの表示も混在するので、
+      # ディレクトリ単位ではなくファイル単位で除外する (O-2 pr-gate R2 architecture M-101)
+      - "src/renderer/src/components/assistant-ui/elements/attachment.aui.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/data-table.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/empty-state.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/error-state.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/file-tree.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/follow-up-suggestions.aui.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/loading-state.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/reasoning.aui.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/reasoning.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/tool-group.aui.tsx"
       - "**/*.test.tsx"                                         # テストは a11y の対象ではない
     gates: [pr-gate]
     source: bootstrap-recommended
@@ -63,12 +87,34 @@ reviewers:
       - "src/renderer/src/features/session-list/**/*.tsx"
       - "src/renderer/src/features/chat/**/*.tsx"
       - "src/renderer/src/features/session/**/*.tsx"
+      # elements/ の手書きの表示 (R-4 の Tier A・O-2 の SystemEventRow と印など)。後続の表示 feature (O-4〜O-6) は
+      # ここだけで完結しうるので明示で入れる (O-2 pr-gate R2 architecture M-101)。新しい手書きの element を足したらここにも足す。
+      - "src/renderer/src/components/assistant-ui/elements/terminal-block.aui.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/code-diff.aui.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/todo-list.aui.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/subagent.aui.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/agent-plan.aui.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/tool-registry.aui.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/thread.aui.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/thread-list.aui.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/tool-fallback.aui.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/tool-result-marks.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/surfaces.tsx"
       # - "src/renderer/src/features/runtime-list/**/*.tsx"              # 仮実装
       # - "src/renderer/src/features/workspace-folders/**/*.tsx"         # 仮実装
       # - "src/renderer/src/features/folder-runtime-resolution/**/*.tsx" # 仮実装
     exclude_patterns:
       - "src/renderer/src/components/ui/**"
-      - "src/renderer/src/components/assistant-ui/elements/**"
+      - "src/renderer/src/components/assistant-ui/elements/attachment.aui.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/data-table.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/empty-state.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/error-state.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/file-tree.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/follow-up-suggestions.aui.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/loading-state.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/reasoning.aui.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/reasoning.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/tool-group.aui.tsx"
       - "**/*.test.tsx"
     gates: [pr-gate]
     source: bootstrap-recommended
