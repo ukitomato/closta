@@ -32,7 +32,15 @@ const SAMPLE_PARTS: { [K in TranscriptPartDTO['type']]: Extract<TranscriptPartDT
     },
     image: { type: 'image', url: 'data:image/png;base64,AA' },
     file: { type: 'file', filename: 'f', text: '' },
-    divider: { type: 'divider', label: 'l' }
+    divider: { type: 'divider', label: 'l' },
+    'system-event': {
+      type: 'system-event',
+      category: 'task',
+      opens: true,
+      name: 'n',
+      detail: '',
+      status: 'running'
+    }
   }
 
 describe('transcript DTO schema', () => {
@@ -99,8 +107,10 @@ describe('transcript DTO schema', () => {
   })
 
   it('表示する SessionMessage / content 種別すべてに割り当てがある (Principle XII 台帳)', () => {
-    // data-model §3 の割り当て表に対応する part 種別が DTO に存在すること。
+    // data-model §3 の割り当て表に対応する part 種別が DTO に存在すること (O-2 で system-event。正本は docs/ui-coverage.md)。
     const covered = Object.keys(TRANSCRIPT_PART_FIELDS).sort()
-    expect(covered).toEqual(['divider', 'file', 'image', 'reasoning', 'text', 'tool-call'].sort())
+    expect(covered).toEqual(
+      ['divider', 'file', 'image', 'reasoning', 'system-event', 'text', 'tool-call'].sort()
+    )
   })
 })

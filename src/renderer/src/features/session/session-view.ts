@@ -232,9 +232,106 @@ function firstTextLine(message: ThreadMessageLike): string {
   return ''
 }
 
+/* ── 直近の活動の tool ごとの要点 (O-2 / FR-014 / data-model §4) ─────────────────── */
+
+/** コマンド名・subagent の種類として出してよい文字の形。 */
+const SAFE_NAME = /^[A-Za-z0-9._+-]{1,64}$/
+/** 既知の秘密の接頭辞 (これで始まる名前は出さない)。 */
+const SECRET_PREFIX = /^(sk-|ghp_|gho_|glpat-|AIza|xox)/
+/** コマンドの文字列にあれば何も出さない文字 (クォート・バックスラッシュ・`$`・backtick・`(`。design-gate R2 security L-102)。 */
+const UNSAFE_COMMAND_CHARS = /["'\\$`(]/
+/** 先頭の環境変数の代入 (`NAME=...`)。 */
+const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/
+
+const FILE_PATH_TOOLS: ReadonlySet<string> = new Set(['Read', 'Edit', 'Write', 'MultiEdit'])
+
+function safeName(value: string): string {
+  return SAFE_NAME.test(value) && !SECRET_PREFIX.test(value) ? value : ''
+}
+
+/** パスの末尾 (`/` と `\` の両方で区切った最後の要素)。 */
+function pathTail(path: string): string {
+  const segments = path.split(/[\\/]/)
+  return segments[segments.length - 1] ?? ''
+}
+
+function bashCommandName(command: string): string {
+  if (UNSAFE_COMMAND_CHARS.test(command)) return ''
+  const words = command.trim().split(/\s+/)
+  let index = 0
+  while (index < words.length && ASSIGNMENT.test(words[index] ?? '')) index += 1
+  const first = words[index]
+  return first === undefined || first === '' ? '' : safeName(pathTail(first))
+}
+
+function parseInput(raw: unknown): Record<string, unknown> | null {
+  if (typeof raw !== 'string' || raw.length === 0) return null
+  try {
+    const value: unknown = JSON.parse(raw)
+    return typeof value === 'object' && value !== null && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : null
+  } catch {
+    return null
+  }
+}
+
+function stringField(input: Record<string, unknown> | null, key: string): string | null {
+  const value = input?.[key]
+  return typeof value === 'string' ? value : null
+}
+
 /**
- * 直近の活動 (spec FR-006 / data-model §2)。見るのは末尾 1 件と承認要求だけ (件数に依存しない)。
+ * tool の入力から tool ごとの要点だけを取り出す (FR-014 / data-model §4 が規則の正本)。
+ * 規則の無い tool・入力が JSON として読めない・フィールドが無いときは detail を出さない (tool 名だけ)。
+ * 入力の値 (引数・代入の値・検索語) をそのまま出さない — 出すのはファイル名・コマンド名・subagent の種類だけ。
+ */
+export function summarizeToolInput(
+  toolName: unknown,
+  argsText: unknown
+): { readonly tool: string; readonly detail: string } {
+  const tool = toActivityLine(toolName)
+  if (typeof toolName !== 'string') return { tool, detail: '' }
+  const input = parseInput(argsText)
+  let raw = ''
+  if (FILE_PATH_TOOLS.has(toolName)) raw = pathTail(stringField(input, 'file_path') ?? '')
+  else if (toolName === 'NotebookEdit') raw = pathTail(stringField(input, 'notebook_path') ?? '')
+  else if (toolName === 'Bash') raw = bashCommandName(stringField(input, 'command') ?? '')
+  else if (toolName === 'Agent' || toolName === 'Task')
+    raw = safeName(stringField(input, 'subagent_type') ?? '')
+  return { tool, detail: toActivityLine(raw) }
+}
+
+/** 直近の活動を探して末尾から遡る件数の上界 (件数に依存しない。システムイベントの行が続いても止まる)。 */
+const ACTIVITY_LOOKBACK = 64
+
+/**
+ * 直近の活動の対象から外すメッセージ: システムイベントの行 (`metadata.custom.systemEvent`) と結果だけのメッセージ
+ * (id が `result:`)。末尾 1 件だけを見ると Hook の行が届くたびに直近の活動が空になる (O-1 FR-006 の regression。
+ * O-2 design-gate R1 architecture H-003)。
+ */
+function isSideMessage(message: ThreadMessageLike): boolean {
+  return (
+    message.metadata?.custom?.['systemEvent'] === true || message.id?.startsWith('result:') === true
+  )
+}
+
+function lastActivityMessage(
+  messages: readonly ThreadMessageLike[]
+): ThreadMessageLike | undefined {
+  const stop = Math.max(0, messages.length - ACTIVITY_LOOKBACK)
+  for (let i = messages.length - 1; i >= stop; i -= 1) {
+    const message = messages[i]
+    if (message !== undefined && !isSideMessage(message)) return message
+  }
+  return undefined
+}
+
+/**
+ * 直近の活動 (spec FR-006 / data-model §2)。見るのは承認要求と、末尾から遡ってシステムイベントの行・結果だけの
+ * メッセージを読み飛ばした最初の 1 件だけ (遡る件数に上界があり、件数に依存しない。O-2 / FR-014)。
  * 優先順: 承認待ち → 応答中で末尾が tool の呼び出し → 送信直後 → 最後の応答。
+ * tool の入力は `summarizeToolInput` の要点だけを出す (O-2 / FR-014)。
  */
 export function deriveActivity(
   messages: readonly ThreadMessageLike[],
@@ -242,19 +339,18 @@ export function deriveActivity(
   view: SessionView
 ): Activity | null {
   if (pending !== null) {
-    const tool = toActivityLine(pending.toolName)
-    const detail = toActivityLine(pending.input)
+    const { tool, detail } = summarizeToolInput(pending.toolName, pending.input)
     return tool === '' && detail === '' ? null : { kind: 'approval', tool, detail }
   }
-  const last = messages[messages.length - 1]
+  const last = lastActivityMessage(messages)
   if (last === undefined) return null
   if (last.role === 'assistant') {
     const parts = partsOf(last)
     const tail = parts[parts.length - 1]
     if (rowStatus(view) === 'running' && tail?.type === 'tool-call') {
       const call = tail as { readonly toolName?: unknown; readonly argsText?: unknown }
-      const tool = toActivityLine(call.toolName)
-      if (tool !== '') return { kind: 'tool', tool, detail: toActivityLine(call.argsText) }
+      const { tool, detail } = summarizeToolInput(call.toolName, call.argsText)
+      if (tool !== '') return { kind: 'tool', tool, detail }
     }
     const detail = firstTextLine(last)
     return detail === '' ? null : { kind: 'reply', tool: null, detail }

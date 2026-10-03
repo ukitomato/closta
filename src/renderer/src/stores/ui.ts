@@ -4,7 +4,7 @@ import type { PathDTO } from '@domain/runtime/dto'
 import type { LocationDTO } from '@domain/workspace/dto'
 
 /**
- * 画面遷移とテーマだけを持つ UI ストア。
+ * 画面遷移とテーマ (と画面をまたぐ表示の設定) だけを持つ UI ストア。
  *
  * FE-001 (アプリシェル) の範囲。業務データは持たない —
  * ランタイム・登録フォルダ・解決結果は preload の capability 越しに取得し、
@@ -54,12 +54,21 @@ export interface FolderDraftSeed {
   readonly suggestedDisplayName: string
 }
 
+/**
+ * transcript の情報密度 (O-2 / FR-012・FR-013 / data-model §5)。**監視ビューの行の密度** (`running-session-store` の
+ * `density`) とは別の値。過去ログと実行中で共有するためここに置く (セッションの切り替え・過去ログとの行き来で保つ)。
+ * **永続化しない** — アプリの再起動で既定 (`comfortable`) に戻る。
+ */
+export type TranscriptDensity = 'comfortable' | 'compact'
+
 interface UiState {
   screen: ScreenId
   dark: boolean
   /** 登録画面が受け取る初期値。受け取ったら消す (使い切り)。 */
   folderDraftSeed: FolderDraftSeed | null
+  transcriptDensity: TranscriptDensity
   setScreen: (screen: ScreenId) => void
+  setTranscriptDensity: (density: TranscriptDensity) => void
   toggleTheme: () => void
   /** 初期値を積んで登録画面へ移る。 */
   seedFolderDraft: (seed: FolderDraftSeed) => void
@@ -70,7 +79,9 @@ export const useUiStore = create<UiState>((set) => ({
   screen: 'runtimes',
   dark: false,
   folderDraftSeed: null,
+  transcriptDensity: 'comfortable',
   setScreen: (screen) => set({ screen }),
+  setTranscriptDensity: (transcriptDensity) => set({ transcriptDensity }),
   seedFolderDraft: (folderDraftSeed) => set({ folderDraftSeed, screen: 'folders' }),
   clearFolderDraftSeed: () => set({ folderDraftSeed: null }),
   toggleTheme: () =>

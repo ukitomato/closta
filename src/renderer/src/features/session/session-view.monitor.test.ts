@@ -56,7 +56,7 @@ const toolCall = (toolName: string, argsText: string): ThreadMessageLike['conten
 const pending = (over: Partial<PendingPermission> = {}): PendingPermission => ({
   requestId: 'r1',
   toolName: 'Bash',
-  input: 'ls -la',
+  input: '{"command":"ls -la"}',
   scope: 'once',
   ...over
 })
@@ -109,12 +109,13 @@ describe('toActivityLine (FR-006)', () => {
 })
 
 describe('deriveActivity (FR-006 / data-model §2)', () => {
-  it('承認要求が他より優先され、入力が空でも tool 名は残る', () => {
+  // O-2 / FR-014: 入力の先頭 1 行ではなく tool ごとの要点 (summarizeToolInput) を出す。
+  it('承認要求が他より優先され、入力が空でも tool 名は残る (要点はコマンド名だけ)', () => {
     const messages = [assistant(toolCall('Edit', '{"file_path":"a.ts"}'))]
     expect(deriveActivity(messages, pending(), RUNNING)).toEqual({
       kind: 'approval',
       tool: 'Bash',
-      detail: 'ls -la'
+      detail: 'ls'
     })
     expect(deriveActivity([], pending({ input: '' }), RUNNING)).toEqual({
       kind: 'approval',
@@ -123,12 +124,12 @@ describe('deriveActivity (FR-006 / data-model §2)', () => {
     })
   })
 
-  it('応答中で末尾が tool の呼び出しなら tool 名と入力の先頭', () => {
-    const messages = [assistant(toolCall('Edit', '{"file_path":"a.ts"}'))]
+  it('応答中で末尾が tool の呼び出しなら tool 名とファイル名', () => {
+    const messages = [assistant(toolCall('Edit', '{"file_path":"src/a.ts"}'))]
     expect(deriveActivity(messages, null, RUNNING)).toEqual({
       kind: 'tool',
       tool: 'Edit',
-      detail: '{"file_path":"a.ts"}'
+      detail: 'a.ts'
     })
   })
 
@@ -171,7 +172,7 @@ describe('deriveActivity (FR-006 / data-model §2)', () => {
     ).toBeNull()
   })
 
-  it('メッセージが無ければ null。末尾 1 件より前は見ない', () => {
+  it('メッセージが無ければ null。末尾 1 件 (システムイベントの行・結果だけのメッセージを除く) より前は見ない', () => {
     expect(deriveActivity([], null, RUNNING)).toBeNull()
     expect(
       deriveActivity(

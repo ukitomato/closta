@@ -143,7 +143,7 @@ commit subject が壊れるのを防ぐためである。
 | **lint** | `pnpm lint` | `node node_modules/eslint/bin/eslint.js --cache .` | ESLint 9 (`eslint.config.mjs`)。`eslint-plugin-boundaries` によるレイヤ間の許可行列と、`no-restricted-imports` による標準モジュールの直接 import 禁止 |
 | **型検査** | `pnpm typecheck` | `node node_modules/typescript/bin/tsc --noEmit -p tsconfig.node.json --composite false` と `… -p tsconfig.web.json …` の 2 本 | `tsconfig.node.json` と `tsconfig.web.json` の 2 project を順に `tsc --noEmit` |
 | **依存グラフ** | `pnpm depcruise` | `node node_modules/dependency-cruiser/bin/dependency-cruise.mjs src` | dependency-cruiser 18 (`.dependency-cruiser.js`)。**推移的な到達**と循環、`require()` 形式 |
-| **Constitution 検証** | `pnpm check:constitution` | `node scripts/constitution/check.mjs` (同一) | `scripts/constitution/check.mjs`。20 項目 (X-5 で 18〜20 を追加)。許可リストの正本は `scripts/constitution/allowlists.mjs` |
+| **Constitution 検証** | `pnpm check:constitution` | `node scripts/constitution/check.mjs` (同一) | `scripts/constitution/check.mjs`。21 項目 (X-5 で 18〜20、O-2 で 21 を追加)。許可リストの正本は `scripts/constitution/allowlists.mjs`。**項目 21 は `docs/ui-coverage.md` と SDK の型の機械照合 (Principle XII / AD-044)** — SDK (`@anthropic-ai/claude-agent-sdk`) の版を上げる PR は、domain を問わず対応表を同じ PR で直す (手順は対応表の冒頭) |
 | **ユニットテスト** | `pnpm test` | 全件 `node node_modules/vitest/vitest.mjs run` / 絞り込み `node node_modules/vitest/vitest.mjs related --run <files…>` | Vitest 5。2 project (node / renderer)。いずれも `pool: 'threads'` |
 | **ルール検証** | `pnpm test:rules` | `node scripts/rules/run.mjs` (同一)。**code-gate では実行しない** — 下記参照 | `scripts/rules/run.mjs`。**違反サンプルを検査対象へ展開し、期待した検出器が発火することを確かめる** |
 | **E2E の型検査** | `pnpm exec tsc --noEmit -p e2e/tsconfig.json` (`package.json` に script は置かない。CI の e2e job が実行) | `node node_modules/typescript/bin/tsc --noEmit -p e2e/tsconfig.json` | `e2e/` は src グラフ外で上の型検査の対象外。Playwright は型検査せずに transpile するため、E2E の型の崩れはここでしか見えない (X-5 code-gate convention M-005) |
@@ -557,7 +557,7 @@ claude 実行パスは `probe-script.ts` の `command -v claude` で検出時解
 | has_test_dir | **no** | プロダクトのテスト 0 件。`.claude\skills\spec-gate\scripts\tests\` (5 ファイル) は vendored skill の self-test で算入不可 |
 | has_ci | **no** | `.github/` 不在、CI 設定ファイル 0 件。PLAN.md AD-013 / P-13 は CI の存在を前提にしている |
 | has_changelog | **no** | CHANGELOG.md 不在。git 履歴もコミット 1 本のみで変更傾向を導出不能 |
-| docs_exist | **yes** | 25 ファイル。ADR 14 / charter 5 / glossary / roadmap / prompts / verify-report。`docs/ui-coverage.md` のみ O-2 待ち |
+| docs_exist | **yes** | 25 ファイル。ADR 14 / charter 5 / glossary / roadmap / prompts / verify-report。`docs/ui-coverage.md` のみ O-2 待ち (**2026-10-03 追記**: O-2 で作成した) |
 | **score** | **2 / 6** | 初版 1/6 から docs_exist が partial → yes に改善。threshold (default 3) は依然未満だが、**本プロジェクトは greenfield であり migrate の対象ではない**ため実害はない。残り 4 項目 (readme / test / ci / changelog) はソースコードの着手後に改善する |
 
 ### score の解釈 (invoker 向け)

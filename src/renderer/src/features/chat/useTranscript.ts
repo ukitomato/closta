@@ -10,6 +10,7 @@ import { buildSessionRows } from '@/features/session-list/rows'
 import { useSessionsStore } from '@/stores/sessions'
 
 import { toThreadMessage } from './convert'
+import { decodeTranscriptMessage } from './transcript-guard'
 
 /**
  * 選んだセッションの transcript を取得して表示用メッセージに配線する (R-3 / FE-031)。
@@ -46,6 +47,14 @@ function nextToken(): string {
   tokenCounter += 1
   return `transcript-${tokenCounter}-${Date.now()}`
 }
+
+/** port の frame (未信頼。`TranscriptFrameDTO` の形のはずだが、検証してから使う)。 */
+type UntrustedFrame = Readonly<
+  Partial<Record<'kind' | 'requestToken' | 'messages' | 'reasonKey', unknown>>
+>
+/** `kind` の値は `TranscriptFrameDTO` に従う (型の追随を tsc で見る)。 */
+const FRAME_MESSAGES: TranscriptFrameDTO['kind'] = 'messages'
+const FRAME_ERROR: TranscriptFrameDTO['kind'] = 'error'
 
 interface PortMessageData {
   readonly marker?: unknown
@@ -108,19 +117,32 @@ export function useTranscript(): TranscriptView {
       if (port === undefined) return
 
       port.onmessage = (frameEvent: MessageEvent): void => {
-        const frame = frameEvent.data as TranscriptFrameDTO
+        const frame = frameEvent.data as UntrustedFrame | null
         /* **現在の選択と一致しない応答は破棄** (US-1 AC-5)。 */
-        if (frame.requestToken !== currentToken.current) {
+        if (
+          frame === null ||
+          typeof frame !== 'object' ||
+          frame.requestToken !== currentToken.current
+        ) {
           port.close()
           return
         }
-        if (frame.kind === 'error') {
-          setReasonKey(frame.reasonKey)
+        if (frame.kind === FRAME_ERROR) {
+          setReasonKey(frame.reasonKey as FailureReason)
           setStatus('failed')
           port.close()
           return
         }
-        const converted = frame.messages.map(toThreadMessage)
+        /*
+         * **frame の本文も形を検証する** (O-2 / data-model §2)。実行中の decoder と同じ関数で、system-event の列挙と
+         * tool-call の結果の型を確かめ、外れた part・メッセージを落とす。
+         */
+        const raw =
+          frame.kind === FRAME_MESSAGES && Array.isArray(frame.messages) ? frame.messages : []
+        const converted = raw.flatMap((m: unknown) => {
+          const dto = decodeTranscriptMessage(m)
+          return dto === null ? [] : [toThreadMessage(dto)]
+        })
         setMessages(converted)
         setStatus(converted.length === 0 ? 'empty' : 'ready')
         port.close()

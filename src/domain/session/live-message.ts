@@ -31,7 +31,8 @@ function safeJsonString(input: unknown): string {
 }
 
 /**
- * assistant メッセージを表示 DTO に変換する。**未知のブロック型は落とす** (専用表示は O-2)。
+ * assistant メッセージを表示 DTO に変換する。**未知のブロック型は落とす** (割当は docs/ui-coverage.md の B 節)。
+ * tool の結果は後から届く `user` メッセージで `withToolResults` が埋める (`tool-result.ts`。O-2 / FR-007)。
  * content が配列でない / ブロックが object でない場合も例外を投げず空 parts に倒す (行を落とさない)。
  */
 export function toLiveAssistantMessage(msg: LiveAssistantMessage): TranscriptMessageDTO {
@@ -48,6 +49,10 @@ export function toLiveAssistantMessage(msg: LiveAssistantMessage): TranscriptMes
       case 'thinking':
         parts.push({ type: 'reasoning', text: sanitizeBody(b.thinking).value })
         break
+      case 'redacted_thinking':
+        // 過去ログ (`transcript.ts`) と同じ文言にそろえる (O-2 / FR-007)。
+        parts.push({ type: 'reasoning', text: '[redacted thinking]' })
+        break
       case 'tool_use': {
         const args = sanitizeBody(safeJsonString(b.input))
         parts.push({
@@ -63,7 +68,7 @@ export function toLiveAssistantMessage(msg: LiveAssistantMessage): TranscriptMes
         break
       }
       default:
-        // redacted_thinking / server_tool_use など専用表示を持たないブロックは落とす。
+        // server_tool_use など専用表示を持たないブロックは落とす (割当は docs/ui-coverage.md の B 節。O-6)。
         break
     }
   }

@@ -28,6 +28,11 @@ const TerminalBlockImpl: ToolCallMessagePartComponent = (props) => {
 
   const output = typeof props.result === "string" ? props.result : null;
   const hasOutput = output !== null && output.length > 0;
+  // 切り詰めフラグは convert.ts が args.__truncated に載せる (Code diff と同じ経路。O-2 / FR-007 で実行中の結果も通る)。
+  const isTruncated =
+    typeof props.args === "object" &&
+    props.args !== null &&
+    (props.args as Record<string, unknown>).__truncated === true;
 
   return (
     <div
@@ -40,10 +45,19 @@ const TerminalBlockImpl: ToolCallMessagePartComponent = (props) => {
         {args.description ? (
           <span className="truncate opacity-80">— {args.description}</span>
         ) : null}
+        {isTruncated ? (
+          <span className="ms-auto shrink-0 opacity-70">（切り詰め）</span>
+        ) : null}
         {props.isError ? (
-          <XCircleIcon className="text-destructive ms-auto size-3.5 shrink-0" aria-label="失敗" />
+          <XCircleIcon
+            className={cn("text-destructive size-3.5 shrink-0", !isTruncated && "ms-auto")}
+            aria-label="失敗"
+          />
         ) : hasOutput ? (
-          <CheckIcon className="ms-auto size-3.5 shrink-0 text-emerald-500" aria-label="完了" />
+          <CheckIcon
+            className={cn("size-3.5 shrink-0 text-emerald-500", !isTruncated && "ms-auto")}
+            aria-label="完了"
+          />
         ) : null}
       </div>
       <div className={cn(codeScroll, "border-border/40 border-t")}>

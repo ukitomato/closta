@@ -45,7 +45,7 @@ DTO と純関数の値と形の正本は本書。振る舞いの正本は spec �
 
 ### 照合の歯止め (parse の取りこぼし)
 
-- 下限: A 節 ≥ 39、C 節 ≥ 45、E 節 ≥ 調べた実数 (SH-011 で記録する)。下回れば「読めた名前が極端に少ない」で違反
+- 下限: A 節 ≥ 39、C 節 ≥ 45、E 節 ≥ 38 (SDK 0.3.270 の実数。`coverage.mjs` の `LOWER_BOUNDS`)。下回れば「読めた名前が極端に少ない」で違反
 - parse から独立した正解: テスト (BE-011) が devDependency の `typescript` のコンパイラ API で、インストール済みの `sdk.d.ts` / `sdk-tools.d.ts` から `SDKMessage` の union のメンバー・`ToolInputSchemas` のメンバー・control_request の `subtype` のリテラルを列挙し、`coverage.mjs` (依存なし) の parse の結果と集合が一致することを確かめる (design-gate R2 platform-boundary M-101)
 - `後続` の ID として有効なのは、roadmap の milestone ごとの feature の表 (`| 順 | ID | feature |` の表) と Optional scope の表の ID だけ。`P-4` / `SPIKE-12` などは無効。完了済みの feature の ID は違反にする (表示が実装されたなら `実装済み` に直す)
 

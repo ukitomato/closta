@@ -6,7 +6,7 @@
 
 1. `node scripts/constitution/check.mjs` — 項目 21 が ok。出力に節ごとの行の数、割当の種類 × Tier、後続 feature の ID ごとの件数が出る。対応表の SDK の版が入っている SDK と同じ
 2. `node node_modules/vitest/vitest.mjs run tests/ui-coverage` — 失敗の条件のそれぞれが該当する行を示して落ち、崩した対応表で項目 21 が `[VIOLATE] #21` と非 0 の終了コードになる
-3. 対応表の A・C・E 節の行の数が、SDK の型定義の数 (メッセージ型 39 / tool の入力型 45 / control_request の subtype) と一致する
+3. 対応表の A・C・E 節の行の数が、SDK の型定義の数 (メッセージ型 39 / tool の入力型 45 / control_request の subtype 38。0.3.270) と一致する
 
 ### SDK を上げたとき (開発者の手順)
 

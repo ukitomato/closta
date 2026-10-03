@@ -2,6 +2,8 @@ import type { ThreadMessageLike } from '@assistant-ui/react'
 
 import type { TranscriptMessageDTO, TranscriptPartDTO } from '@domain/session/transcript-dto'
 
+import { isSystemEventFields } from './transcript-guard'
+
 /**
  * `TranscriptMessageDTO` (domain / port 由来) を assistant-ui の `ThreadMessageLike` に変換する (R-3 / FE-031)。
  *
@@ -72,16 +74,87 @@ function convertPart(part: TranscriptPartDTO): MessagePart {
       // R-3 は最小表示。File element への完全対応は R-4 / O-2 に譲り、ファイル名を text で示す。
       return { type: 'text', text: `📎 ${part.filename}` }
     case 'divider':
-      // コンパクション境界の最小の区切り (FR-018 / [USER] 確定)。専用 element は O-2。
+      // コンパクション境界の最小の区切り (FR-018 / [USER] 確定)。専用 element は対応表 A 節の割当 (O-6)。
       return { type: 'text', text: `── ${part.label} ──` }
+    case 'system-event':
+      return systemEventDataPart(part)
   }
 }
 
-export function toThreadMessage(dto: TranscriptMessageDTO): ThreadMessageLike {
+/* ── システムイベントの行 (O-2 / data-model §2「assistant-ui への写し」) ─────────────── */
+
+type SystemEventPart = Extract<TranscriptPartDTO, { type: 'system-event' }>
+
+/** data part の名前 (glossary の「システムイベントの行」。agents の kind `event` と区別する)。 */
+export const SYSTEM_EVENT_DATA_NAME = 'system-event'
+
+/** data part の `data` (DTO の part から `type` を除いたもの)。 */
+export type SystemEventData = Omit<SystemEventPart, 'type'>
+
+function systemEventDataPart(part: SystemEventPart): MessagePart {
+  const data: SystemEventData = {
+    category: part.category,
+    opens: part.opens,
+    name: part.name,
+    detail: part.detail,
+    status: part.status
+  }
+  return { type: 'data', name: SYSTEM_EVENT_DATA_NAME, data }
+}
+
+/** ThreadMessageLike がシステムイベントの行か (`metadata.custom.systemEvent`)。 */
+export function isSystemEventMessage(message: ThreadMessageLike): boolean {
+  return message.metadata?.custom?.systemEvent === true
+}
+
+/**
+ * 変換済みのシステムイベントの行から DTO を復元する (実行中の store が domain の `mergeSystemEvent` に渡すため。
+ * data-model §2「renderer の store での合成」/ design-gate R2 architecture M-101)。行でなければ `undefined`。
+ */
+export function fromSystemEventData(message: ThreadMessageLike): TranscriptMessageDTO | undefined {
+  if (!isSystemEventMessage(message) || message.id === undefined) return undefined
+  const content = message.content
+  if (typeof content === 'string' || content.length !== 1) return undefined
+  const part = content[0]
+  if (part?.type !== 'data' || part.name !== SYSTEM_EVENT_DATA_NAME) return undefined
+  const data: unknown = part.data
+  if (!isSystemEventFields(data)) return undefined
   return {
-    role: dto.role,
-    content: dto.parts.map(convertPart),
+    id: message.id,
+    role: 'system',
+    parts: [
+      {
+        type: 'system-event',
+        category: data.category,
+        opens: data.opens,
+        name: data.name,
+        detail: data.detail,
+        status: data.status
+      }
+    ],
+    createdAt: message.createdAt?.getTime() ?? null
+  }
+}
+
+/**
+ * assistant-ui の system ロールは text の part を 1 つしか受けない (`@assistant-ui/core` の
+ * `thread-message-like.ts:269-273`。外れると変換が例外を投げる)。
+ */
+function isPlainSystemContent(content: readonly MessagePart[]): boolean {
+  return content.length === 1 && content[0]?.type === 'text'
+}
+
+export function toThreadMessage(dto: TranscriptMessageDTO): ThreadMessageLike {
+  const content = dto.parts.map(convertPart)
+  const systemEvent = dto.parts.length === 1 && dto.parts[0]?.type === 'system-event'
+  // システムイベントの行は DTO では `system` (意味として) のまま、assistant-ui には data part 1 つの assistant で渡す
+  // (research R-04 / design-gate R1 architecture H-001)。text 1 つでない system も同じ理由で assistant に倒す。
+  const role = dto.role === 'system' && !isPlainSystemContent(content) ? 'assistant' : dto.role
+  return {
+    role,
+    content,
     id: dto.id,
-    ...(dto.createdAt !== null ? { createdAt: new Date(dto.createdAt) } : {})
+    ...(dto.createdAt !== null ? { createdAt: new Date(dto.createdAt) } : {}),
+    ...(systemEvent ? { metadata: { custom: { systemEvent: true } } } : {})
   }
 }

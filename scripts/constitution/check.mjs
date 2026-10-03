@@ -4,6 +4,7 @@
  *
  * research R-08 の**検証項目すべて**を実装する。項目は 11 個ある。
  * 許可リストの正本は `allowlists.mjs` で、**追加には ADR を要する**。
+ * 項目 21 (Principle XII の ui-coverage 対応表) は O-2 で足した。照合の本体は `scripts/ui-coverage/coverage.mjs`。
  *
  * **結果は 3 状態で報告する。**
  *   `ok`        — 検査して違反が無かった
@@ -14,7 +15,7 @@
  * 「検証したから通った」と見分けられなくなり、検証が意味を失う。
  */
 
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 
 import {
   ALLOWED_ORIGINS_FILE,
@@ -65,6 +66,17 @@ import {
   WSL_CALLER_MODULES
 } from './allowlists.mjs'
 import { collectFiles, readSource, stringLiterals } from './scan.mjs'
+import {
+  checkCoverage,
+  formatCounts,
+  formatFailure,
+  parseControlRequestSubtypes,
+  parseCoverage,
+  parsePackageVersion,
+  parseRoadmapFeatures,
+  parseSdkMessageUnion,
+  parseToolInputs
+} from '../ui-coverage/coverage.mjs'
 
 const files = collectFiles()
 const sources = files.map(readSource)
@@ -1280,6 +1292,61 @@ function splitTopLevel(text) {
     'V / AD-043 Decision 7',
     found,
     '対象: src/ (書き換えと workerData は調停役スレッドのモジュール) / 式で組んだ options は見えない (UNDETECTED_NOTES)'
+  )
+}
+
+/* ── 項目 21: ui-coverage 対応表が SDK と一致し、未割当が 0 (Principle XII) ── */
+{
+  /*
+   * O-2 / FR-003 / SC-001 / SC-002。照合の本体は `scripts/ui-coverage/coverage.mjs` の純関数で、
+   * ここはファイルを読んで渡し、失敗を 1 行ずつ流すだけ。書式の正本は `docs/ui-coverage.md` の凡例、決定の正本は AD-044。
+   *
+   * **pending を持たない。** 5 つの入力のどれかが無ければファイル名を示して違反にする。
+   * SDK は直接の依存で CI は必ず install するので、入力の欠けは「検査が届かなくなった」ことを意味する
+   * (research R-02 / design-gate R1 platform-boundary M-003)。
+   *
+   * **入力を差し替える口は持たない** (環境変数も引数も読まない。design-gate R2 platform-boundary L-102)。
+   * 他の項目と同じく、パスは `process.cwd()` からの相対で読む。発火のテスト (`tests/ui-coverage/item21.test.ts`) は
+   * 一時ディレクトリにリポジトリの形を組み、`cwd` を変えて本スクリプトを起こす。
+   */
+  const SDK_DIR = 'node_modules/@anthropic-ai/claude-agent-sdk'
+  const inputs = {
+    sdkDts: `${SDK_DIR}/sdk.d.ts`,
+    toolsDts: `${SDK_DIR}/sdk-tools.d.ts`,
+    sdkPackage: `${SDK_DIR}/package.json`,
+    table: 'docs/ui-coverage.md',
+    roadmap: 'docs/roadmap.md'
+  }
+  const found = []
+  const text = {}
+  for (const [key, file] of Object.entries(inputs)) {
+    if (existsSync(file)) text[key] = readFileSync(file, 'utf8')
+    else found.push(`${file}  検査の入力が無い (検査対象なしでは通さない。Principle XII)`)
+  }
+  let note = ''
+  if (found.length === 0) {
+    try {
+      const { failures, counts } = checkCoverage({
+        sdkVersion: parsePackageVersion(text.sdkPackage),
+        messageTypes: parseSdkMessageUnion(text.sdkDts),
+        toolInputs: parseToolInputs(text.toolsDts),
+        controlSubtypes: parseControlRequestSubtypes(text.sdkDts),
+        table: parseCoverage(text.table),
+        roadmap: parseRoadmapFeatures(text.roadmap)
+      })
+      for (const failure of failures) found.push(`${inputs.table}  ${formatFailure(failure)}`)
+      if (failures.length === 0) note = formatCounts(counts)
+    } catch (error) {
+      // parse の失敗 (SDK の型定義の形が変わった等) も通さない。
+      found.push(`検査の入力を読めない: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+  violations(
+    21,
+    'ui-coverage 対応表が SDK の型定義と一致し、全行に割当がある (`docs/ui-coverage.md`)',
+    'XII',
+    found,
+    note
   )
 }
 

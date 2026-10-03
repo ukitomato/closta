@@ -86,6 +86,55 @@ describe('decodeSessionEvent', () => {
     expect(decodeSessionEvent(enc({ kind: 'failure', reasonKey: 'session-active' }))).toBeNull()
   })
 
+  it('message (O-2): system-event の列挙と tool-call の結果の型を検証し、外れた part を落とす', () => {
+    const event = {
+      type: 'system-event',
+      category: 'task',
+      opens: true,
+      name: 'build',
+      detail: 'local_bash',
+      status: 'running'
+    }
+    const ok = { id: 'task:t1', role: 'system', parts: [event], createdAt: null }
+    expect(decodeSessionEvent(enc({ kind: 'message', message: ok }))).toEqual({
+      kind: 'message',
+      message: ok
+    })
+    // prototype のキーの status だけのメッセージは破棄 (空の行を作らない)。
+    expect(
+      decodeSessionEvent(
+        enc({
+          kind: 'message',
+          message: { ...ok, parts: [{ ...event, status: 'constructor' }] }
+        })
+      )
+    ).toBeNull()
+    const tool = {
+      type: 'tool-call',
+      toolCallId: 'c1',
+      toolName: 'Bash',
+      argsText: '{}',
+      result: 42,
+      isError: false,
+      truncated: false,
+      children: []
+    }
+    const decoded = decodeSessionEvent(
+      enc({
+        kind: 'message',
+        message: {
+          id: 'a1',
+          role: 'assistant',
+          createdAt: 1,
+          parts: [{ type: 'text', text: 'hi' }, tool]
+        }
+      })
+    )
+    expect(decoded?.kind === 'message' && decoded.message.parts.map((p) => p.type)).toEqual([
+      'text'
+    ])
+  })
+
   it('end-forced: 余分なフィールドを持ち込まない', () => {
     expect(decodeSessionEvent(enc({ kind: 'end-forced', injected: '<script>' }))).toEqual({
       kind: 'end-forced'

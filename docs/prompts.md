@@ -51,7 +51,7 @@ reviewer の追加も以下のとおり決着している。
 | reviewer | 状態 |
 |---|---|
 | `platform-boundary-reviewer` | **作成・登録済み**。観点は lint / tsc が見られない領域のみ（PB-1〜PB-7） |
-| `ui-coverage-reviewer` | **O-2 へ延期**。検査対象の `docs/ui-coverage.md` が O-2 まで存在しないため |
+| `ui-coverage-reviewer` | **作成・登録済み (O-2)**。pr-gate のみ。観点は判断を要するもの (UC-1〜UC-7)。機械照合は Constitution 検証の項目 21 |
 
 **M1 に着手できる状態である。**
 
@@ -217,6 +217,12 @@ AD-018 が本 feature の設計を直接縛る。
 ```
 
 ### O-2 — ui-coverage 対応表の確立と Tier A 完全化
+
+> **O-2 の design で範囲を改めた (USER 決定 2026-10-03。[spec 011](../specs/011-ui-coverage/spec.md))。** O-2 は対応表・SDK の型との
+> 機械照合 (Constitution 検証の項目 21)・割当の確定・`ui-coverage-reviewer` と、実行中の tool の結果・Hook / Background task の行・
+> transcript の情報密度に絞った。下のプロンプトの 8 つの表示は、対応表の割当として後続に回した: Permission grant → I-3、
+> Cost meter / Quota banner / Context display → O-4、Elicitation form / Server panel → O-5、Checkpoints / Web search → O-6。
+> 下は当初のプロンプトの記録として残す。
 
 ```
 /cl-design "[ui] SDK のメッセージ型・tool 名・システムイベントと表示実装の対応表を docs/ui-coverage.md として確立し、未割当をゼロにする。Permission grant、Elicitation form、Server panel、Checkpoints、Web search、Cost meter、Quota banner、Context display を実装する。対応表の未割当行を検出する CI スクリプトも用意する。" --targets frontend

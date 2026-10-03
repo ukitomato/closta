@@ -14,7 +14,7 @@
   | B. 中身のブロック | assistant / user の content block の `type` | 手で維持 (割当だけを検査) | `live-message.ts:44-67` / `transcript.ts:196-265` |
   | C. tool | `ToolInputSchemas` のメンバー 1 つ (45) + 実行時の tool 名 | **機械** (入力型の名前の集合と一致すること) | `sdk-tools.d.ts:11-57` |
   | D. アプリが作る経路 | 承認要求 (`canUseTool`)・状態通知・失敗など、SDK のメッセージではなくアプリが作る表示 | 手で維持 (割当だけを検査) | `session-core.ts:169-185` など |
-  | E. 制御要求 | `control_request` の `subtype` (約 45) | **機械** (subtype の集合と一致すること) | `sdk.d.ts:3578-4806` |
+  | E. 制御要求 | `control_request` の `subtype` (**38**。2026-10-03 に `SDKControlRequestInner` の union から数えた) | **機械** (subtype の集合と一致すること) | `sdk.d.ts:3578-4806` |
   | F. element の分類 | assistant-ui の element (Tier A / B / C) | 手で維持 (表示の割当の対象ではない) | AD-019、registry |
 
   - AD-020 の「control_request / system subtype は約 70 種」は、system の subtype (A 節のメッセージ型に含まれる) と control_request の subtype を合わせた数である。E 節は control_request の subtype だけを数え、system の subtype は A 節の行の備考に書く
@@ -72,6 +72,13 @@
   - 間隔は `data-density` 属性で切り替える (既存のスペーシングのトークンの範囲。独自トークンを足さない)
   - 文言 (密度・システムイベントの行の状態) は `features/chat/labels.ts` に置く。transcript の element は過去ログと共有し、今 elements が import する features は `features/chat` だけなので、session の `labels.ts` には置かない (design-gate R1 architecture M-006)
   - 既存のテストの前提が変わる: `ChatScreen.test.tsx` の `expandToolGroups` は「既定は閉」を前提に trigger を押すので、密度の前提に合わせて直す。`virtualization.test.tsx` を既定 (comfortable) で通す (po M-006)
+- **element の照合** (Principle XIII。SH-002。実装時 2026-10-03 に記録):
+  - **システムイベントの行**: 採ったのは既存の system メッセージの見た目 + 導入済みの `ui/badge` (O-1 の監視ビューで状態の表示に使っているもの。新しい導入なし)。assistant-ui の system ロールは text 1 つしか受けない (R-04) ので、system ロールそのものは候補にならない
+    - `ToolFallback` — 採らない。開閉するカードで、tool の呼び出しに見える
+    - `Reasoning` / `Tool group` — 採らない。1 行の状態に開閉は過剰
+    - registry の状態系 (agent plan / trace waterfall / message timing) — 採らない。計画・トレース・時間の表示であり、1 つの Hook / task の 1 行に合わない
+  - **密度の切り替え**: 採ったのは導入済みの `Button` (`size="xs"`) + `aria-pressed` を `role="group"` (「transcript の表示」) に並べる形。`ToggleGroup` / `Tabs` は未導入で、2 値の切り替えのために CLI で導入する理由が無いので採らない。監視ビューの密度 (「表示の密度」) とは group 名とボタンの文言で区別し、テストで確かめる
+  - 独自のカラー / スペーシングのトークンは足していない
 - **Rationale**: AD-035 の Trade-off「既定 open 化の要否」に、既定の密度 (comfortable) で開く、と答える。開閉の状態を利用者ごとに覚える仕組みを作らない
 - **Alternatives considered**: Tool group を制御された状態 (open を外から持つ) にする — 利用者の開閉を覚えるストアが要る
 

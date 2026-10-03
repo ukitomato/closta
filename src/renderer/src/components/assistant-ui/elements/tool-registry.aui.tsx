@@ -25,7 +25,10 @@ const TOOL_DISPLAY: Readonly<Record<string, ToolCallMessagePartComponent>> = {
   Write: CodeDiff,
   MultiEdit: CodeDiff,
   TodoWrite: TodoList,
+  // subagent の実行時の名前は SDK 0.3.270 で `Agent` (入力型 `AgentInput`)。旧名 `Task` も同じ表示に当てる
+  // (O-2 / FR-010 / research R-05)。
   Task: Subagent,
+  Agent: Subagent,
   ExitPlanMode: AgentPlan,
 };
 

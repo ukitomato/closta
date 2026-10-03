@@ -322,17 +322,23 @@ describe('行の情報 (FE-012 / SC-002)', () => {
     expect(rowA.querySelector('script, strong')).toBeNull()
   })
 
-  it('承認待ちの行は承認を求めている tool 名と入力を出す', async () => {
+  // O-2 / FR-014: 入力は tool ごとの要点 (Bash はコマンド名) だけ。引数は出さない。
+  it('承認待ちの行は承認を求めている tool 名と入力の要点を出す', async () => {
     const s = await setup([A])
     s.emit(A, { kind: 'state', state: 'awaiting_permission' })
     s.emit(A, {
       kind: 'permission-request',
-      request: { requestId: 'r1', toolName: 'Bash', input: 'ls -la', scope: 'once' }
+      request: {
+        requestId: 'r1',
+        toolName: 'Bash',
+        input: '{"command":"ls -la"}',
+        scope: 'once'
+      }
     })
     const rowA = await rowOf('案件A')
-    expect(await within(rowA).findByTestId('session-row-activity')).toHaveTextContent(
-      '承認を求めています:Bash ls -la'
-    )
+    const activity = await within(rowA).findByTestId('session-row-activity')
+    expect(activity).toHaveTextContent('承認を求めています:Bash ls')
+    expect(activity.textContent).not.toContain('-la')
   })
 
   it('経過時間が時計の進みで更新され、状態が変わると 0 から数え直す', async () => {

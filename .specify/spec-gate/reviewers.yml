@@ -98,6 +98,27 @@ reviewers:
     # design-gate での起動は registry の `invoked_by` が決める (上の注記参照)。
     gates: [code-gate, pr-gate]
     source: project-specific
-    # ui-coverage-reviewer は O-2 (docs/ui-coverage.md を作る feature) と同時に追加する。
-    # それ以前は検査対象が存在せず、指摘がノイズにしかならないため。
+
+  - name: ui-coverage-reviewer
+    enabled: true
+    # O-2 (spec 011 / AD-044) で追加。docs/ui-coverage.md の**判断を要する点**だけを見る
+    # (機械で確かめられることは Constitution 検証の項目 21 が CI で見る)。
+    # 発火: 対応表そのもの、SDK の版 (package.json / lockfile)、SDK のメッセージを変換・描画するモジュール。
+    auto_invoke_patterns:
+      - "docs/ui-coverage.md"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "src/agents/**"
+      - "src/domain/session/transcript*.ts"
+      - "src/domain/session/live-message*.ts"
+      - "src/domain/session/system-event*.ts"
+      - "src/domain/session/tool-result*.ts"
+      - "src/renderer/src/components/assistant-ui/elements/**"
+      - "src/renderer/src/features/chat/**"
+      - "scripts/ui-coverage/**"
+    exclude_patterns:
+      - "**/*.test.ts"
+      - "**/*.test.tsx"
+    gates: [pr-gate]
+    source: project-specific
 

@@ -337,6 +337,10 @@ SDK のメッセージ型・tool 名・システムイベントを網羅した�
 
 ### 4.2 Tier A — 必須（Claude Code の一次概念に直結）
 
+> **正本は [`docs/ui-coverage.md`](docs/ui-coverage.md)** (O-2。SDK の型から導き、Constitution 検証の項目 21 で照合する)。
+> 下の表は当初の代表例であり、更新しない ([AD-020](docs/decisions/0020-sdk-emitted-message-inventory.md) Decision 2 /
+> [AD-044](docs/decisions/0044-ui-coverage-assignment.md))。
+
 | Claude Code の概念 | assistant-ui Element | 備考 |
 |---|---|---|
 | tool_use / tool_result（汎用） | Tool fallback AUI, Tool group AUI | 未定義ツールの既定表示と連続 tool の折り畳み |

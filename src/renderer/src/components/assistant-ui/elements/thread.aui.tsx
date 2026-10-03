@@ -23,9 +23,22 @@ import {
   ToolGroupTrigger,
 } from "@/components/assistant-ui/elements/tool-group.aui";
 import { TooltipIconButton } from "@/components/tooltip-icon-button";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { SYSTEM_EVENT_DATA_NAME } from "@/features/chat/convert";
+import {
+  SYSTEM_EVENT_CATEGORY_LABELS,
+  SYSTEM_EVENT_LABELS,
+  SYSTEM_EVENT_STATUS_LABELS,
+} from "@/features/chat/labels";
+import {
+  useTranscriptDensity,
+  useTranscriptSettled,
+} from "@/features/chat/transcript-context";
+import { isSystemEventFields } from "@/features/chat/transcript-guard";
 import { cn } from "@/lib/utils";
+import { isTerminalSystemEventStatus } from "@domain/session/system-event";
 import {
   ActionBarMorePrimitive,
   ActionBarPrimitive,
@@ -57,6 +70,8 @@ import {
   PencilIcon,
   RefreshCwIcon,
   SquareIcon,
+  TimerIcon,
+  WebhookIcon,
 } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
@@ -176,10 +191,12 @@ const ThreadRoot: FC<{ isEmpty: boolean; autoFocus: boolean }> = ({
   autoFocus,
 }) => {
   const { Welcome = ThreadWelcome } = useContext(ThreadComponentsContext);
+  const density = useTranscriptDensity();
 
   return (
     <ThreadPrimitive.Root
-      className="aui-root aui-thread-root bg-background @container flex h-full flex-col"
+      data-density={density}
+      className="aui-root aui-thread-root bg-background @container group/thread flex h-full flex-col"
       style={{
         ["--thread-max-width" as string]: "44rem",
         ["--composer-bg" as string]: "var(--color-card)",
@@ -207,7 +224,7 @@ const ThreadRoot: FC<{ isEmpty: boolean; autoFocus: boolean }> = ({
 
           <div
             data-slot="aui_message-group"
-            className="mb-14 flex flex-col gap-y-6 empty:hidden"
+            className="mb-14 flex flex-col gap-y-6 empty:hidden group-data-[density=compact]/thread:gap-y-3"
           >
             <ThreadPrimitive.Messages>
               {() => <ThreadMessage />}
@@ -258,11 +275,9 @@ const AT_BOTTOM_THRESHOLD = 4;
  *   **初期位置は最下部** (最新メッセージ。chat 慣習) とし、追従は stickyRef で持つ。
  */
 const VirtualThreadRoot: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
-  const { AssistantMessage: AssistantOverride } = useContext(
-    ThreadComponentsContext,
-  );
   const messageCount = useAuiState((s) => s.thread.messages.length);
   const isRunning = useAuiState((s) => s.thread.isRunning);
+  const density = useTranscriptDensity();
   /*
    * **行のキーと高さのキャッシュはメッセージ id で持つ** (X-5 / SC-003)。ライブセッションは末尾が伸び、assistant-ui に
    * 渡す窓 (SessionScreen の MESSAGE_WINDOW) もずれるため、index をキーにすると窓がずれるたびに全行が別のメッセージに
@@ -276,13 +291,17 @@ const VirtualThreadRoot: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
   const stickyRef = useRef(true);
   const [isAtBottom, setIsAtBottom] = useState(true);
 
+  /*
+   * MessageByIndex は role で部品を選ぶので、システムイベントの行 (assistant の data part。O-2) は assistant の枠の中で
+   * 振り分ける (非仮想パスの ThreadMessage と同じ規則)。
+   */
   const messageComponents = useMemo(
     () => ({
       UserMessage,
-      AssistantMessage: AssistantOverride ?? AssistantMessage,
+      AssistantMessage: AssistantOrSystemEvent,
       SystemMessage,
     }),
-    [AssistantOverride],
+    [],
   );
 
   // react-virtual は memo 化できない関数を返すため React Compiler はこのコンポーネントの
@@ -401,7 +420,8 @@ const VirtualThreadRoot: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
 
   return (
     <ThreadPrimitive.Root
-      className="aui-root aui-thread-root bg-background @container flex h-full flex-col"
+      data-density={density}
+      className="aui-root aui-thread-root bg-background @container group/thread flex h-full flex-col"
       style={{
         ["--thread-max-width" as string]: "44rem",
         ["--composer-bg" as string]: "var(--color-card)",
@@ -425,7 +445,7 @@ const VirtualThreadRoot: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
                 key={item.key}
                 data-index={item.index}
                 ref={virtualizer.measureElement}
-                className="pb-6"
+                className="pb-6 group-data-[density=compact]/thread:pb-3"
               >
                 <ThreadPrimitive.MessageByIndex
                   index={item.index}
@@ -465,11 +485,26 @@ const ThreadMessage: FC = () => {
     useContext(ThreadComponentsContext);
   const role = useAuiState((s) => s.message.role);
   const isEditing = useAuiState((s) => s.message.composer.isEditing);
+  const isSystemEvent = useAuiState(isSystemEventMessageState);
 
   if (isEditing) return <EditComposer />;
   if (role === "user") return <UserMessage />;
   if (role === "system") return <SystemMessage />;
+  // システムイベントの行は AssistantMessage (footer・action bar・branch picker・running indicator) を通さない (O-2)。
+  if (isSystemEvent) return <SystemEventRow />;
   return <AssistantMessageComponent />;
+};
+
+/** `convert.ts` がシステムイベントの行に付ける印 (`metadata.custom.systemEvent`)。 */
+const isSystemEventMessageState = (s: AssistantState): boolean =>
+  s.message.metadata.custom["systemEvent"] === true;
+
+/** 仮想化パスの assistant の枠: システムイベントの行を振り分ける (ThreadMessage と同じ規則)。 */
+const AssistantOrSystemEvent: FC = () => {
+  const { AssistantMessage: AssistantMessageComponent = AssistantMessage } =
+    useContext(ThreadComponentsContext);
+  const isSystemEvent = useAuiState(isSystemEventMessageState);
+  return isSystemEvent ? <SystemEventRow /> : <AssistantMessageComponent />;
 };
 
 const ThreadScrollToBottom: FC = () => {
@@ -656,6 +691,13 @@ const AssistantMessage: FC = () => {
     ToolGroup,
     ReasoningGroup,
   } = useContext(ThreadComponentsContext);
+  /*
+   * transcript の情報密度 (O-2 / FR-012 / research R-06)。comfortable は Tool group を開いて、compact は Tool group と
+   * Reasoning を閉じて出す。**`key` に密度を含め、密度を切り替えたときだけ作り直す** — 新しいメッセージ・ストリーミングでは
+   * 作り直さないので、利用者が個々に開閉したものは保たれる。
+   */
+  const density = useTranscriptDensity();
+  const comfortable = density === "comfortable";
 
   const ACTION_BAR_PT = "pt-1.5";
   // Keep the action bar inside the contained root's paint box, then cancel its reserved space in flow.
@@ -687,7 +729,11 @@ const AssistantMessage: FC = () => {
                   return <ToolGroup group={part}>{children}</ToolGroup>;
                 }
                 return (
-                  <ToolGroupRoot variant="ghost">
+                  <ToolGroupRoot
+                    key={`tool-group-${density}`}
+                    variant="ghost"
+                    defaultOpen={comfortable}
+                  >
                     <ToolGroupTrigger
                       count={part.indices.length}
                       active={part.status.type === "running"}
@@ -702,8 +748,12 @@ const AssistantMessage: FC = () => {
                   );
                 }
                 const running = part.status.type === "running";
+                // compact は応答中も閉じたまま (印は trigger の active で示す)。comfortable は既存の既定のまま。
                 return (
-                  <ReasoningRoot streaming={running}>
+                  <ReasoningRoot
+                    key={`reasoning-${density}`}
+                    streaming={comfortable && running}
+                  >
                     <ReasoningTrigger active={running} />
                     <ReasoningContent aria-busy={running}>
                       <ReasoningText>{children}</ReasoningText>
@@ -825,7 +875,7 @@ const UserImagePart: ImageMessagePartComponent = (part) => (
  * system メッセージの最小表示 (R-3。コンパクション境界などの区切り)。
  *
  * 会話の主役ではないので action bar を付けず、中央寄せの控えめな体裁にする。
- * 専用 element は O-2 (data-model §3 の暫定台帳)。
+ * 専用 element は対応表 A 節の割当 (O-6)。
  */
 const SystemText: TextMessagePartComponent = ({ text }) => (
   <span className="aui-system-text">{text}</span>
@@ -841,6 +891,88 @@ const SystemMessage: FC = () => {
       <div className="text-muted-foreground text-center text-xs">
         <MessagePrimitive.Parts components={{ Text: SystemText }} />
       </div>
+    </MessagePrimitive.Root>
+  );
+};
+
+/** 行の data part の `data` (検証して読む。外れたら行を描かない)。 */
+const systemEventDataOf = (s: AssistantState): unknown => {
+  const part = s.message.parts[0];
+  return part?.type === "data" && part.name === SYSTEM_EVENT_DATA_NAME
+    ? part.data
+    : undefined;
+};
+
+/**
+ * Hook / Background task のシステムイベントの行 (O-2 / FR-009 / data-model §2「描き分け」)。
+ *
+ * - 1 つの Hook / task は 1 行。同じ id の更新は store / domain が合成済み (ここは描くだけ)
+ * - assistant の発話と見分けられる控えめな 1 行 (system メッセージの体裁)。**footer・action bar・branch picker・
+ *   running indicator を付けない** — 末尾がこの行で `isRunning` でも、実行中の印は composer 側の既存の表示に任せる
+ * - 状態の文言は `Badge`、名前は「」で括った muted の別の span (偽の状態の文言を含む名前と区別する)。
+ *   名前・detail は会話由来なので**テキストノードだけ**で描き、1 行で切り詰める (`truncate`)
+ * - 終わりを表さない状態の行は、記録にこれ以上の終わりが来ない (セッションの終了・失敗の後 / 過去ログ) とき
+ *   「結果不明 (記録に終わりが無い)」。失敗した Hook には設定とログを確かめる案内を添える (出力本文は出さない)
+ *
+ * registry 照合 (Principle XIII): 既存の system メッセージの体裁 + 導入済みの `Badge` (状態)。
+ * ToolFallback / Reasoning / Tool group (開閉する card) は 1 行の状態表示に過剰で、tool 呼び出しと誤読させるため採らない。
+ */
+const SystemEventRow: FC = () => {
+  const raw = useAuiState(systemEventDataOf);
+  const settled = useTranscriptSettled();
+  if (!isSystemEventFields(raw)) return null;
+
+  const { category, name, detail, status } = raw;
+  const unresolved = settled && !isTerminalSystemEventStatus(status);
+  const statusText = unresolved
+    ? SYSTEM_EVENT_LABELS.outcomeUnknown
+    : status === null
+      ? null
+      : SYSTEM_EVENT_STATUS_LABELS[status];
+  const failed = status === "failed";
+  const Icon = category === "hook" ? WebhookIcon : TimerIcon;
+
+  return (
+    <MessagePrimitive.Root
+      data-slot="aui_system-event-row"
+      data-role="system-event"
+      data-category={category}
+      data-status={unresolved ? "unresolved" : (status ?? "none")}
+      className="fade-in animate-in px-2 duration-150 [contain-intrinsic-size:auto_32px] [content-visibility:auto]"
+    >
+      <div className="text-muted-foreground flex min-w-0 items-center gap-2 text-xs">
+        <Icon aria-hidden className="size-3.5 shrink-0" />
+        <span className="shrink-0 font-medium">
+          {SYSTEM_EVENT_CATEGORY_LABELS[category]}
+        </span>
+        {detail !== "" ? (
+          <span data-slot="system-event-detail" className="max-w-40 shrink-0 truncate">
+            {detail}
+          </span>
+        ) : null}
+        {statusText !== null ? (
+          <Badge
+            data-slot="system-event-status"
+            variant={failed && !unresolved ? "destructive" : "outline"}
+            className="shrink-0"
+          >
+            {statusText}
+          </Badge>
+        ) : null}
+        {name !== "" ? (
+          <span
+            data-slot="system-event-name"
+            className="text-muted-foreground/80 min-w-0 truncate"
+          >
+            「{name}」
+          </span>
+        ) : null}
+      </div>
+      {category === "hook" && failed ? (
+        <p data-slot="system-event-guidance" className="text-muted-foreground mt-1 ps-5.5 text-xs">
+          {SYSTEM_EVENT_LABELS.hookFailedGuidance}
+        </p>
+      ) : null}
     </MessagePrimitive.Root>
   );
 };

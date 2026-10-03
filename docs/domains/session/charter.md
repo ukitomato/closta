@@ -217,6 +217,14 @@ X-6 は未着手。
 - [ ] transcript ミラーの保持期限と削除経路（AD-007 の blocking gap）を本 domain が持つか
 - [x] ~~Hook / Background task の状態管理を本 domain の責務に含めるか ([AD-020](../../decisions/0020-sdk-emitted-message-inventory.md) Consequences「O-1 着手時に判断する」)~~ →
       **含めない** (O-1 USER 決定 2026-10-02)。表示の割当と、状態の保持が要る場合の持ち主 domain の判断は O-2 に送った
-      (ui charter の Open Questions / roadmap の O-2 行)
+      (ui charter の Open Questions / roadmap の O-2 行)。**O-2 の結論 (USER 決定 2026-10-03)**: 状態は保持しない。
+      本 domain が持つのは、agents のセッションスレッドで Hook / Background task のシステムメッセージを無害化して既存の
+      `message` の経路で通すことだけ (`system-event.ts`。許可リストは O-2 data-model §2)。実行中の task の一覧は持たない。
+      tool の結果の対応づけ (tool_use の id → 結果待ちのメッセージ) はセッションスレッドの中で一時的に持つ
+      (上限 256 件、セッションの終了で破棄。O-2 data-model §3) が、表示の状態ではない
+- [x] 監視ビューの直近の活動の tool ごとの整形 (O-1 の義務 (4)) → O-2。規則の正本は O-2 data-model §4 と `session-view.ts`
+      の `summarizeToolInput`: ファイルを扱う tool はファイル名だけ、`Bash` はコマンドの名前だけ (クォート・`$`・backtick・`(`・
+      環境変数の代入・秘密の接頭辞があれば出さない)、`Agent` / `Task` は subagent の種類、それ以外は tool 名だけ。
+      `deriveActivity` は Hook / task の行と結果だけのメッセージを読み飛ばす (O-1 FR-006 を保つ)
 - [x] ~~終了済みセッションの行の件数の上限・自動で閉じる (X-5 Out of Scope「O-1 で再検討」)~~ → **持たない** (O-1 で再検討した結論)。
       枠を占めるのは最大 10 本で、終了済みの行は compact で 1 行に縮むので俯瞰を妨げない。利用者が「閉じる」で外す

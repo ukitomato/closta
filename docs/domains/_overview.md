@@ -58,8 +58,11 @@ spec_id（`001-runtime-...`）とは独立させる。差し込み作業で番�
 | X-6 | 起動設定の拡張軸とセッション操作（追加ディレクトリ / 上限 / セッション名 / Win32 直接起動 / fork・resume 等） | `session` | M2 後続 |
 | X-7 | aws-assume-role helper の生成と CloudTrail 追跡 | `provider` | M2 後続 |
 | O-1 | セッション監視ビュー（状態一覧、密度切替、承認待ちの強調） | `session` | M3 |
-| O-2 | `docs/ui-coverage.md` の確立と Tier A 完全化 | `ui` | M3 |
+| O-2 | `docs/ui-coverage.md` の確立 (SDK の型と機械照合・割当の確定)、実行中の tool の結果と Hook / Background task の行、transcript の情報密度 | `ui` | M3 |
 | O-3 | Thread 検索と observability | `ui` | M3 |
+| O-4 | 計量と制限の表示 (費用と使用量・レート制限・API の再試行・コンテキストの使用量・task の進捗) | `ui` | M3 |
+| O-5 | MCP・Elicitation・プラグイン・コマンドの表示 (Server panel・Elicitation form・`AskUserQuestion` など。操作画面は含めない) | `ui` | M3 |
+| O-6 | 会話の境界と tool の専用表示の第 2 弾 (圧縮・ファイル・Checkpoints・モデルの拒否・通知・`Read` / `Glob` / `Grep`・Web search / fetch・一般の Hook など) | `ui` | M3 |
 | I-1 | `DockerRuntime` と endpoint 抽象 + `sessionStore` ミラー | `isolation` | M4 |
 | I-2 | コンテナライフサイクルと隔離可視化 | `isolation` | M4 |
 | I-3 | sandbox capability 判定と権限モードのゲート | `isolation` | M4 |
@@ -86,7 +89,12 @@ spec_id（`001-runtime-...`）とは独立させる。差し込み作業で番�
   （ui charter の「他 domain の一覧・操作 UI は各 domain」）、行の形と強調の出し方も session が決める。
   承認カードと transcript の見た目は `ui` のまま（O-1 USER 決定 2026-10-02）
 - **Hook / Background task の状態管理は `session` に含めない** — AD-020 Consequences の問いへの O-1 の回答
-  （USER 決定 2026-10-02）。表示の割当と、状態の保持が要る場合の持ち主 domain は O-2 が判断する
+  （USER 決定 2026-10-02）。**O-2 の結論 (USER 決定 2026-10-03)**: 状態は保持しないので持ち主の domain は要らない。
+  session は agents で無害化して既存の `message` の経路で通すだけ、ui が transcript の 1 行 (システムイベントの行) として
+  描き、同じ Hook / task の行を合成する。実行中の task の一覧の要否は O-6 で判断し、要るなら持ち主の domain を人間に諮る
+  ([AD-044](../decisions/0044-ui-coverage-assignment.md))
+- **O-4 / O-5 / O-6 は `ui`** — いずれも SDK が emit する情報の表示 (Principle XII の判定対象) であり、MCP サーバーの
+  追加・削除などの操作画面は含めない (USER 決定 2026-10-03)
 
 ## Milestone
 
@@ -97,7 +105,7 @@ spec_id（`001-runtime-...`）とは独立させる。差し込み作業で番�
 |---|---|---|---|
 | **M1** | **読める** | R-1〜R-4 | WSL 内の過去セッションを Windows の assistant-ui で読める。**ここで §4 の方針を確定する** |
 | **M2** | **走らせられる** | X-1〜X-5 | 起動条件を選んで複数セッションを回せる。日本語で誤送信しない |
-| **M3** | **差配できる** | O-1〜O-3 | 10 セッションを俯瞰でき、未表示情報がゼロ |
+| **M3** | **差配できる** | O-1〜O-6 | 10 セッションを俯瞰でき、未表示情報がゼロ。**「未表示ゼロ」は [AD-044](../decisions/0044-ui-coverage-assignment.md) の M3 の完了の条件 (Tier A の後続のうち割当先が M3 の feature の行が 0) で判定する** |
 | **M4** | **任せられる** | I-1〜I-3 | Auto / bypassPermissions を隔離内で安全に回せる |
 | **M5** | **配れる** | D-1 | 自分以外が使える |
 

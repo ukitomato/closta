@@ -26,7 +26,7 @@ M1 に入る前に必要。いずれも feature ではない。
 | P-1 | `pnpm` のインストールと `nodeLinker: hoisted` の設定 | **完了** | pnpm 12.4.1 導入済み。`pnpm-workspace.yaml` に `nodeLinker: hoisted` を配置済み |
 | P-2 | Constitution を `active` に昇格する | **完了** | v1.0.0 批准 (2026-09-13)。15 Principle。`constitution.draft.md` は削除済み |
 | P-3 | Principle VI の検証条件を書き直す | **完了** | 文字列 grep をやめ、モジュール境界で縛る形に変更済み |
-| P-4 | `/cl-add-reviewer ui-coverage-reviewer` | **O-2 へ延期** | 検査対象の `docs/ui-coverage.md` が O-2 まで存在しない。それ以前は指摘がノイズにしかならない。O-2 のスコープに移動 |
+| P-4 | `/cl-add-reviewer ui-coverage-reviewer` | **完了 (O-2)** | 検査対象の `docs/ui-coverage.md` を作る O-2 で追加した (pr-gate のみ。機械照合は Constitution 検証の項目 21) |
 | P-5 | `/cl-add-reviewer platform-boundary-reviewer` | **完了** | 作成・両レジストリ登録済み。観点は lint / tsc が見られない領域のみ（PB-1〜PB-7） |
 | P-6 | `docs/discovery.md` を人間レビューし `status: active` へ | **完了** | revision 2 (2026-09-13)。scan 以降に変わった事実を更新したうえで active に昇格 |
 
@@ -157,7 +157,9 @@ workspace として扱われていたら `packages:` の有無を先に確認す
   O-1 の `normalizeLine` (`session-view.ts`) はゼロ幅文字・語結合子・タグ文字を除くが、U+00AD / U+034F / U+FE00-FE0F / ハングルの埋め字
   (U+115F / U+1160 / U+3164 / U+FFA0) は残り、先頭 1024 コードユニットを不可視文字で埋めた行は空として飛ばされる。並びを入れ替える文字ではなく
   偽装の力は弱い。transcript 本文と承認カードの集合 (domain の `sanitizeBody`) も同じなので、足すなら domain 側とあわせて決める。
-  持ち主 = 次に `sanitizeBody` か直近の活動を触る feature (O-2 の義務 (4) の tool ごとの整形が候補)
+  持ち主 = 次に `sanitizeBody` か直近の活動を触る feature (O-2 の義務 (4) の tool ごとの整形が候補)。
+  **O-2 の後の状態**: O-2 の整形 (`summarizeToolInput`) は tool の入力の大半を直近の活動に出さなくなった (ファイル名・コマンドの名前・
+  subagent の種類だけで、どれも安全な文字に限る) ので、この経路の影響は小さくなった。`sanitizeBody` の集合は O-2 では変えていない。持ち主は変えない
 - **`running-session-store.ts` の切り出しと、行の状態の型の置き場 (O-1 起点。code-gate convention M-002 (CM-02) / pr-gate R1 architecture L-002)** —
   (1) `running-session-store.ts` が O-1 で 587 行になった。派生値の追跡と間引き (`trackDerived` / `scheduleActivity`) を
   `running-session-monitor.ts` のような小さなモジュールに切り出す (O-1 tasks SH-004)。(2) `SessionRowStatus` と `Elapsed` の型が文言の表
@@ -165,7 +167,9 @@ workspace として扱われていたら `packages:` の有無を先に確認す
   `session-view.ts` に移し、labels 側は `Record<SessionRowStatus, string>` で検査する。`announcements` は表示名の組を返し、文は呼び出し側が組む。
   (3) `RunningSessionList.tsx` も O-1 の pr-gate R1 の対応で 500 行を超えた (code-gate R2 convention M-001)。行の部品
   (`RowStatusBadge` / `ElapsedTime` / `RowActivity` / `SessionRowMeta` / `RowTooltip`) を `RunningSessionRow.tsx` などに切り出す (I-2 の隔離バッジの前に)。
-  O-3 の i18n リソース化の前に済ませる。持ち主 = O-2 の着手前 (O-2 で派生値が増える前に session の renderer で行う)
+  O-3 の i18n リソース化の前に済ませる。**持ち主 = store に派生値を足すか、監視ビューの行を触る次の feature** (O-2 の design で
+  付け替えた。USER 決定 2026-10-03。O-2 は store に派生値を足さず、直近の活動の導出 `deriveActivity` を変えるだけなので切り出しの
+  理由が無い。O-3 の i18n リソース化はこの切り出しの後に行う)
 - **E2E stub の production-inert 性の自動 backstop (X-2 起点。pr-gate arch-M-002。system-scope)** —
   `createE2eCapability` (`src/main/app/e2e-capability.ts`) の配線ゲート `!app.isPackaged && CLOSTA_E2E==='1'` が env 単独ゲートへ
   退行しても CI が落ちる回帰検査が無い (Vitest は electron `app` を mock しにくく、index.ts の分岐を直接 assert できない)。
@@ -227,7 +231,7 @@ R-1 の残り 2 つは R-2 をブロックしない。
 
 | ID | feature | domain | 依存 | 内容 |
 |---|---|---|---|---|
-| X-6 | 起動設定の拡張軸とセッション操作 | `session` | X-5 | `SessionLaunchConfig` の残りの軸 (追加ディレクトリ / 上限 / セッション名) / Win32Runtime 直接起動 / fork・resume・rename・tag・delete / providers.json・presets.json の退避ファイル一覧・復元・版不一致の UI (件数の 1 行表示は X-4 で実装済み。AD-042 Decision 4) / 同一内容の `.bak` の重複抑止 / claudePath の形の判定 (shebang 形の案内。AD-041 記録 2) / settings store 3 種の読み取り失敗・非配列 root・mutation 直列化の是正 (X-4 code-gate db H-001 / M-002 / M-003 の provider・folder 分) / セッションスレッド内のプロンプトキューが上限を超えたときの通知 (X-5 から繰越) / 失敗したセッションの再開 (X-5 FR-013 は自動で再開しない) / ツール実行中に Worker だけが異常終了したときの孤児の実機観測 (X-5 は claude がアイドルのときだけ観測。残るなら AD-043 Decision 5 の回収経路を作る。X-5 pr-gate R1 platform-boundary M-001) |
+| X-6 | 起動設定の拡張軸とセッション操作 | `session` | X-5 | **対応表の割当 (O-2 から)**: 実行中のセッションの操作 — 制御要求 `set_permission_mode` / `set_model` / `set_max_thinking_tokens` / `rename_session` (`docs/ui-coverage.md` で `後続: X-6` の行) / `SessionLaunchConfig` の残りの軸 (追加ディレクトリ / 上限 / セッション名) / Win32Runtime 直接起動 / fork・resume・rename・tag・delete / providers.json・presets.json の退避ファイル一覧・復元・版不一致の UI (件数の 1 行表示は X-4 で実装済み。AD-042 Decision 4) / 同一内容の `.bak` の重複抑止 / claudePath の形の判定 (shebang 形の案内。AD-041 記録 2) / settings store 3 種の読み取り失敗・非配列 root・mutation 直列化の是正 (X-4 code-gate db H-001 / M-002 / M-003 の provider・folder 分) / セッションスレッド内のプロンプトキューが上限を超えたときの通知 (X-5 から繰越) / 失敗したセッションの再開 (X-5 FR-013 は自動で再開しない) / ツール実行中に Worker だけが異常終了したときの孤児の実機観測 (X-5 は claude がアイドルのときだけ観測。残るなら AD-043 Decision 5 の回収経路を作る。X-5 pr-gate R1 platform-boundary M-001) |
 | X-7 | aws-assume-role helper の生成と CloudTrail 追跡 | `provider` | X-4 | `RoleSessionName` 付き helper をアプリが生成する (roleArn / region / profile の登録スキーマ、`check.mjs` 項目 6 の file sink 拡張、helper の完全性)。X-4 までは X-3 のユーザ供給 helperPath 方式。POSIX helperPath に所属 distro を持たせる (AD-042 残存リスク)。api-key / oauth-token / aws-profile / env-passthrough に固有の `forwardKeys`、Bash tool からの秘密 env の可視性、helper のシェル実行方式を実機で観測する (X-4 から繰越。AD-041 記録 3)。extraEnv を名前の allowlist にするかを検討する (AD-041 (e) 3) |
 
 X-2 を X-1 の直後に置いたのは、**日本語入力が壊れたままでは以降の feature を自分で使えない**ため。
@@ -242,13 +246,18 @@ X-2 (日本語 composer) で判断する** — R-3 は過去ログの表示で�
 
 ## M3: 差配できる
 
-**達成状態**: 10 セッションを俯瞰でき、未表示情報がゼロ。
+**達成状態**: 10 セッションを俯瞰でき、未表示情報がゼロ。**「未表示ゼロ」は [AD-044](decisions/0044-ui-coverage-assignment.md) の M3 の完了の条件 (Tier A の後続のうち割当先が M3 の feature の行が 0。Constitution 検証の項目 21 の出力で読む) で判定する** (O-2)。
 
 | 順 | ID | feature | domain | 依存 | 前提 SPIKE |
 |---|---|---|---|---|---|
 | 10 | O-1 | セッション監視ビュー | `session` | X-5 | — / design-gate R2 PASS / code-gate PASS / pr-gate R2 PASS (Critical 0) / **完了** (PR #10。[010 spec](../specs/010-session-monitoring-view/spec.md)。稼働中セッション一覧の拡張。実機計測 SC-005 は有効な回 0 件で、利用者が 2026-10-02 に閉じた (spec FR-012 の改訂の行)。残した宿題は O-3 の「義務 (O-1 から)」) |
-| 11 | O-2 | `docs/ui-coverage.md` の確立（**SDK 39 型から導出**）+ Tier B/C 再棚卸し | `ui` | O-1 | SPIKE-12 **完了** / **義務 (O-1 から)**: (1) Hook / Background task の表示の割当と、状態の保持が要る場合の持ち主 domain の判断 (session は含めないと決めた。AD-020 Consequences) (2) Tool group の既定 open 化 (AD-035 の「O-1 候補」) (3) transcript の情報密度の切替 (監視ビューの行の密度は O-1 が持つ) (4) 直近の活動の tool ごとの整形 (対象のファイル名やコマンドの先頭語だけを出す。tool 入力の先頭に秘密が出うる点も扱う) |
-| 12 | O-3 | Thread 検索と observability | `ui` | O-2 | — / **義務 (X-4 から)**: session charter KPI「再利用率」の計測経路 (起動元 `preset` / `manual` のローカル利用ログ。AD-041 (h)) / **義務 (O-1 から)**: (1) UI ラベルの i18n リソース化の判断 (Constitution Principle XV の期限 M3。`target-finder.ts` の 2 本を含める) (2) <a id="o3-kpi-smoothness"></a>**session charter KPI「並列時の滑らかさ」の実機計測の宿題** (X-5 → O-1 と繰り越し、O-1 では有効な回 0 件で利用者が閉じた。[O-1 quickstart-results V-3](../specs/010-session-monitoring-view/quickstart-results.md)): (a) `perf/` の出力に窓の終わりの行の状態の内訳 (応答待ち・承認待ち・失敗) を足す — **SC-005 の出力の許可リストの変更なので利用者の承認が要る** (b) 10 本が窓のあいだ応答を流し続けるように、プロンプトか有効な回の条件を見直す (c) 行の切り替え (charter Journey 3 の手順 3。O-1 の 1〜3 回目で 100〜275ms の long task) も含めて測り直す。E2E の 50ms 超の long task が X-5 の 0〜10 件から O-1 で 33 件に増えた点も比較の基準として並べる (d) 着手時に上の system-scope の「実機計測ハーネス (`perf/`) の ADR 化」が未了なら、O-3 で proposed の ADR を起こしてから perf の安全柵・出力を変える (O-1 pr-gate R2 architecture L-101) |
+| 11 | O-2 | `docs/ui-coverage.md` の確立（**SDK の型と機械照合**。割当の確定）+ Tier B/C 再棚卸し + 実行中の tool の結果と Hook / Background task の行 + transcript の情報密度 | `ui` | O-1 | SPIKE-12 **完了** / design-gate R2 PASS / **実装中** ([011 spec](../specs/011-ui-coverage/spec.md)。表示の実装の残りは O-4 / O-5 / O-6 に割り当てた。P-4 (ui-coverage-reviewer) を含む) / **義務 (O-1 から)**: (1) Hook / Background task の表示の割当と、状態の保持が要る場合の持ち主 domain の判断 (session は含めないと決めた。AD-020 Consequences) (2) Tool group の既定 open 化 (AD-035 の「O-1 候補」) (3) transcript の情報密度の切替 (監視ビューの行の密度は O-1 が持つ) (4) 直近の活動の tool ごとの整形 (対象のファイル名やコマンドの先頭語だけを出す。tool 入力の先頭に秘密が出うる点も扱う) |
+| 12 | O-3 | Thread 検索と observability | `ui` | O-2 | — / **義務 (X-4 から)**: session charter KPI「再利用率」の計測経路 (起動元 `preset` / `manual` のローカル利用ログ。AD-041 (h)) / **義務 (O-1 から)**: (1) UI ラベルの i18n リソース化の判断 (Constitution Principle XV の期限 M3。`target-finder.ts` の 2 本を含める) (2) <a id="o3-kpi-smoothness"></a>**session charter KPI「並列時の滑らかさ」の実機計測の宿題** (X-5 → O-1 と繰り越し、O-1 では有効な回 0 件で利用者が閉じた。[O-1 quickstart-results V-3](../specs/010-session-monitoring-view/quickstart-results.md)): (a) `perf/` の出力に窓の終わりの行の状態の内訳 (応答待ち・承認待ち・失敗) を足す — **SC-005 の出力の許可リストの変更なので利用者の承認が要る** (b) 10 本が窓のあいだ応答を流し続けるように、プロンプトか有効な回の条件を見直す (c) 行の切り替え (charter Journey 3 の手順 3。O-1 の 1〜3 回目で 100〜275ms の long task) も含めて測り直す。E2E の 50ms 超の long task が X-5 の 0〜10 件から O-1 で 33 件に増えた点も比較の基準として並べる。**観測点 `receivedMessages` は O-2 から tool の結果の送り直しと Hook / task の行の作成・更新も数える** (O-2 data-model §6) ので、O-1 / X-5 の値と比べるときはこの基準の変化を並べて書く (d) 着手時に上の system-scope の「実機計測ハーネス (`perf/`) の ADR 化」が未了なら、O-3 で proposed の ADR を起こしてから perf の安全柵・出力を変える (O-1 pr-gate R2 architecture L-101) |
+| 13 | O-4 | 計量と制限の表示 | `ui` | O-2 | — / **対応表の割当 (O-2 から)**: `result` の費用・使用量・ターン数・`permission_denials`、`rate_limit_event` (Quota banner)、`api_retry`、`status`、`thinking_tokens`、`tool_progress` (tool の経過時間)、コンテキストの使用量 (`get_context_usage`。Context display)、Cost meter (`get_session_cost` / `get_usage`)、task の進捗 (`task_progress`)。対象の行は `docs/ui-coverage.md` で `後続: O-4` の行 |
+| 14 | O-5 | MCP・Elicitation・プラグイン・コマンドの表示 | `ui` | O-2 | — / **対応表の割当 (O-2 から)**: MCP の Server panel (`init` の `mcp_servers`・MCP の制御要求 `mcp_status` / `mcp_call` / `mcp_message` / `mcp_set_servers` / `mcp_reconnect` / `mcp_toggle`・MCP の resource の tool)、Elicitation form (`elicitation_complete`・制御要求 `elicitation`)、`AskUserQuestion` の応答 UI、`request_user_dialog`、`plugin_install` / `reload_plugins` / `reload_skills`、`commands_changed` (slash command の一覧)、`auth_status`、MCP の tool の表示、Tier C の Data table / Chart / Timeline / Diagram を MCP の結果に転用するかの判断。**操作画面 (MCP サーバーの追加・削除など) は含めない**。対象の行は `後続: O-5` |
+| 15 | O-6 | 会話の境界と tool の専用表示の第 2 弾 | `ui` | O-2 | — / **対応表の割当 (O-2 から)**: コンパクション境界の専用 element (実行中を含む)、`file` part の File element、Checkpoints (`files_persisted` / `rewind_files`)、モデルの拒否 (`model_refusal_*`)、`notification` / `informational` / `local_command_output` / `memory_recall` / `prompt_suggestion` / `conversation_reset` / `mirror_error` / `tool_use_summary` / `active_goal`、`background_tasks_changed` と制御要求 `background_tasks` / `stop_task` / `get_hooks_listing`、`Read` / `Glob` / `Grep` の File tree、Web search / fetch (`server_tool_use` / `web_search_tool_result` を含む)、Agent plan の markdown (AD-035 D6)、実行中の subagent の入れ子 (`parent_tool_use_id`・`getSubagentMessages`)、**一般の Hook の表示と `includeHookEvents` を足す ADR** (AD-041 (g) の読み替え)、実行中の Background task の一覧の要否 (要るなら持ち主の domain を人間に諮る)、後から背景に移った task の行、対応表 B 節 (中身のブロック) の機械照合。対象の行は `後続: O-6` |
+
+順 13〜15 (O-4〜O-6) は O-2 で足した。M4 / M5 の順はそれに合わせて振り直した (O-2 design-gate R2 architecture L-105)。D-1 の依存は O-3 のままで、M3 の完了 (O-4〜O-6) は待たない。
 
 **O-2 で対応表そのものを成果物にする。** これが揃うまで Principle XII は検証不能である。
 
@@ -263,9 +272,9 @@ SDK メッセージ型と表示の対応表は O-2 が正本にする。持ち�
 
 | 順 | ID | feature | domain | 依存 | 前提 SPIKE |
 |---|---|---|---|---|---|
-| 13 | I-1 | `DockerRuntime` と endpoint 抽象 + `sessionStore` | `isolation` | X-5 | SPIKE-10 **完了** / SPIKE-11（再定義） / 作業領域戦略の軸 AD-017 (X-4 から付け替え。AD-041 (d)) / 転送禁止キーの登録時検証を transport の和集合として作り直す (AD-041 (e) 3・(h)) |
-| 14 | I-2 | コンテナライフサイクルと隔離可視化 **+ volume 孤児回収** | `isolation` | I-1 | — / **義務 (O-1 から)**: 監視ビュー (稼働中セッション一覧) の compact の行にも隔離バッジを出す (O-1 FR-008 が置き場を残した) |
-| 15 | I-3 | sandbox capability 判定と権限モードのゲート | `isolation` | I-2 | — / **義務 (X-4 から)**: 昇格モードの capability 連動提示、承認の `scope: 'capability'` 永続化 (AD-041 (c)) |
+| 16 | I-1 | `DockerRuntime` と endpoint 抽象 + `sessionStore` | `isolation` | X-5 | SPIKE-10 **完了** / SPIKE-11（再定義） / 作業領域戦略の軸 AD-017 (X-4 から付け替え。AD-041 (d)) / 転送禁止キーの登録時検証を transport の和集合として作り直す (AD-041 (e) 3・(h)) |
+| 17 | I-2 | コンテナライフサイクルと隔離可視化 **+ volume 孤児回収** | `isolation` | I-1 | — / **義務 (O-1 から)**: 監視ビュー (稼働中セッション一覧) の compact の行にも隔離バッジを出す (O-1 FR-008 が置き場を残した) |
+| 18 | I-3 | sandbox capability 判定と権限モードのゲート | `isolation` | I-2 | — / **義務 (X-4 から)**: 昇格モードの capability 連動提示、承認の `scope: 'capability'` 永続化 (AD-041 (c)) / **対応表の割当 (O-2 から)**: Permission grant (承認の capability 付与の表示)、制御要求 `list_permission_rules`。対象の行は `docs/ui-coverage.md` で `後続: I-3` の行 (Tier A だが M4 なので M3 の完了の条件には数えない。AD-044) |
 
 I-1 では **`wsl:<distro>` endpoint（WSL 内 Docker Engine）を第一に検証する。**
 主開発ホストに Docker Desktop は入っていない。`/mnt/c` 越し bind mount の実効速度もここで実測し、
@@ -277,7 +286,7 @@ I-1 では **`wsl:<distro>` endpoint（WSL 内 Docker Engine）を第一に検�
 
 | 順 | ID | feature | domain | 依存 | 前提 SPIKE |
 |---|---|---|---|---|---|
-| 16 | D-1 | パッケージングと Windows インストーラ | `runtime` | O-3 | **SPIKE-13**（本格確認） |
+| 19 | D-1 | パッケージングと Windows インストーラ | `runtime` | O-3 | **SPIKE-13**（本格確認） |
 
 ## Optional scope
 

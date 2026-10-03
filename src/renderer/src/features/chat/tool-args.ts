@@ -162,6 +162,17 @@ export function parseTaskArgs(argsText: string): TaskArgs | null {
   return out
 }
 
+/**
+ * subagent の呼び出し `Agent` の入力 (SDK 0.3.270 の `AgentInput`: `description` / `prompt` / 任意の `subagent_type`。
+ * O-2 / FR-010 / research R-05)。表示に使うフィールドは旧名 `Task` と同じなので、同じ narrowing を使う
+ * (`model` / `run_in_background` などの他のフィールドは読まない)。
+ */
+export type AgentArgs = TaskArgs
+
+export function parseAgentArgs(argsText: string): AgentArgs | null {
+  return parseTaskArgs(argsText)
+}
+
 export function parsePlanArgs(argsText: string): PlanArgs | null {
   const o = parseObject(argsText)
   if (!o) return null

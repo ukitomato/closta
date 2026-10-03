@@ -5,7 +5,11 @@ import { BotIcon, WrenchIcon } from "lucide-react";
 import type { ToolCallMessagePartComponent } from "@assistant-ui/react";
 
 import type { TranscriptMessageDTO, TranscriptPartDTO } from "@domain/session/transcript-dto";
-import { parseTaskArgs } from "@/features/chat/tool-args";
+import {
+  SYSTEM_EVENT_CATEGORY_LABELS,
+  SYSTEM_EVENT_STATUS_LABELS,
+} from "@/features/chat/labels";
+import { parseAgentArgs, parseTaskArgs } from "@/features/chat/tool-args";
 import { ToolFallback } from "./tool-fallback.aui";
 
 /**
@@ -92,6 +96,14 @@ function SubagentPart({
       return <p className="text-muted-foreground text-xs">📎 {part.filename}</p>;
     case "divider":
       return <p className="text-muted-foreground text-center text-xs">── {part.label} ──</p>;
+    case "system-event":
+      // 入れ子の中のシステムイベントは最小の 1 行 (種類と状態。O-2)。行の合成と「結果不明」は transcript の行が担う。
+      return (
+        <p className="text-muted-foreground text-xs">
+          {SYSTEM_EVENT_CATEGORY_LABELS[part.category]}
+          {part.status !== null ? ` — ${SYSTEM_EVENT_STATUS_LABELS[part.status]}` : ""}
+        </p>
+      );
   }
 }
 
@@ -132,7 +144,11 @@ function SubagentBody({
 }
 
 const SubagentImpl: ToolCallMessagePartComponent = (props) => {
-  const args = parseTaskArgs(props.argsText);
+  // 実行時の名前は `Agent` (SDK 0.3.270) と旧名 `Task` のどちらも来る (O-2 / FR-010)。
+  const args =
+    props.toolName === "Agent"
+      ? parseAgentArgs(props.argsText)
+      : parseTaskArgs(props.argsText);
   if (!args) return <ToolFallback {...props} />;
 
   const children = extractChildren(props.args);
