@@ -1,66 +1,68 @@
 {
     "gate": "design",
-    "run": "2026-10-04T23:30:00+09:00",
+    "run": "2026-10-05T09:00:00+09:00",
     "spec_dir": "specs/016-ui-boundaries-and-tool-displays",
     "spec_id": "016-ui-boundaries-and-tool-displays",
     "tracks": {
         "analyze": {
             "status": "ok",
-            "raw_out": "analyze.md",
+            "raw_out": "analyze.round2.md",
             "viewpoint_missing": null,
             "cascade_demotions": null
         },
         "po-reviewer": {
             "status": "ok",
-            "raw_out": "po-reviewer.design-gate.md",
+            "raw_out": "po-reviewer.design-gate.round2.md",
             "viewpoint_missing": [],
             "cascade_demotions": 0
         },
         "architecture-reviewer": {
             "status": "ok",
-            "raw_out": "architecture-reviewer.design-gate.md",
+            "raw_out": "architecture-reviewer.design-gate.round2.md",
             "viewpoint_missing": [],
             "cascade_demotions": 0
         },
         "security-reviewer": {
             "status": "ok",
-            "raw_out": "security-reviewer.design-gate.md",
+            "raw_out": "security-reviewer.design-gate.round2.md",
             "viewpoint_missing": [],
             "cascade_demotions": 0
         },
         "platform-boundary-reviewer": {
             "status": "ok",
-            "raw_out": "platform-boundary-reviewer.design-gate.md",
+            "raw_out": "platform-boundary-reviewer.design-gate.round2.md",
             "viewpoint_missing": [],
             "cascade_demotions": 0
         }
     },
     "severity_counts": {
-        "critical": 1,
-        "high": 12,
-        "medium": 23,
-        "low": 20
+        "critical": 0,
+        "high": 3,
+        "medium": 12,
+        "low": 25
     },
     "fr_coverage": [
         {
-            "fr": "FR-006",
+            "fr": "FR-007",
             "covered": true,
             "by": [
-                "tasks.md FE-020"
+                "tasks.md FE-021"
             ]
         },
         {
             "fr": "FR-016",
-            "covered": false,
-            "by": []
+            "covered": true,
+            "by": [
+                "docs/decisions/0049-boundaries-retraction-and-o11-split.md"
+            ]
         }
     ],
     "viewpoint_coverage": {
         "A": "Critical:0 High:1",
-        "B": "Critical:0 High:2",
-        "C": "Critical:0 High:3",
-        "D": "Critical:1 High:5",
-        "E": "Critical:0 High:5",
+        "B": "Critical:0 High:0",
+        "C": "Critical:0 High:1",
+        "D": "Critical:0 High:1",
+        "E": "Critical:0 High:0",
         "F": "Critical:0 High:0",
         "G": "\u8a72\u5f53\u306a\u3057",
         "H": "Critical:0 High:0"
@@ -68,77 +70,55 @@
     "dedup_log": [
         {
             "merged": [
-                "pb-C-001",
-                "arch-H-004",
-                "analyze-K1"
-            ],
-            "key": "FR-006 UNC"
-        },
-        {
-            "merged": [
-                "sec-H-001",
                 "analyze-S1",
-                "arch-M-004"
+                "sec-M-001"
             ],
-            "key": "U-3"
-        },
-        {
-            "merged": [
-                "arch-H-001",
-                "sec-H-002",
-                "analyze-U2",
-                "analyze-I11"
-            ],
-            "key": "FR-009"
-        },
-        {
-            "merged": [
-                "sec-H-003",
-                "pb-M-002"
-            ],
-            "key": "File tree"
+            "key": "FR-007"
         },
         {
             "merged": [
                 "arch-H-002",
-                "pb-H-002",
-                "analyze-U3",
-                "analyze-U4",
-                "analyze-C1",
-                "sec-M-005"
+                "analyze-K2"
             ],
-            "key": "retraction"
+            "key": "Inline citation"
         },
         {
             "merged": [
-                "pb-H-001",
-                "arch-H-003",
-                "analyze-U1"
+                "po-M-104",
+                "arch-M-001a",
+                "analyze-C1"
             ],
-            "key": "FR-011 toolUseId"
+            "key": "FR-012"
         },
         {
             "merged": [
-                "po-H-001",
-                "analyze-U8"
-            ],
-            "key": "data-model \u00a73"
-        },
-        {
-            "merged": [
-                "arch-H-005",
-                "pb-M-001"
+                "arch-M-001bc",
+                "analyze-C2"
             ],
             "key": "FR-015"
         },
         {
             "merged": [
-                "arch-H-006",
-                "analyze-K3",
-                "analyze-C3"
+                "sec-M-002",
+                "analyze-S2",
+                "po-L-105"
             ],
-            "key": "session \u5951\u7d04"
+            "key": "redactSecrets"
+        },
+        {
+            "merged": [
+                "analyze-U1",
+                "sec-L-002"
+            ],
+            "key": "File tree element"
+        },
+        {
+            "merged": [
+                "po-M-105",
+                "analyze-A2"
+            ],
+            "key": "File tree items"
         }
     ],
-    "verdict": "FIX_REQUIRED"
+    "verdict": "PASS"
 }
