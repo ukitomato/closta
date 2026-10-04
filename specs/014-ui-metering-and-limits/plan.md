@@ -27,7 +27,7 @@
 | Principle | 判定 | 根拠 |
 |---|---|---|
 | I / II / VI | N/A | パス・プラットフォーム差・子プロセスを扱わない |
-| III (権限ゲート) | ✅ | 権限モードの変化を表示するだけ。選択肢は変えない。安全 3 値の外のモード (アプリの外で変更) は注意の見た目で出し、アプリから選ばせない |
+| III (権限ゲート) | ⚠ 未承認 | 権限モードの変化を表示し、選択肢は変えない。安全 3 値の外のモードを観測したら警告の帯 (AD-041 の「昇格経路 0 件」の逸脱の信号)。強制はしない (U-6。持ち主は I-3)。昇格値のリテラルは domain の `meter.ts` だけに置き、Constitution 検証の項目 16 に例外を足さない |
 | IV (SDK 経由) | ✅ | 新しい SDK の呼び出しなし (`AGENT_SDK_ALLOWED_CALLS` の差分 0)。query の options のキー (AD-041 (g)) の差分 0。既に受けているメッセージの分岐を足すだけ |
 | V (資格情報非永続) | ✅ | 永続化なし。失敗の文字列・`compact_error`・`api_retry` の `error`・task の要約を運ばない (data-model §2 の許可リスト) |
 | VII (supervisor Electron 非依存) | ✅ | agents の変更は分岐と純関数だけ |
@@ -46,7 +46,7 @@ Constitution 自体の変更なし。AD-047 (proposed) は session の契約の�
 ### Charter reference
 
 - Domain: `ui` ([docs/domains/ui/charter.md](../../docs/domains/ui/charter.md)) — Mission: Claude Code が emit する情報のすべてに専用表示を与える。Scope: Elements / transcript / `docs/ui-coverage.md`
-- 関わる他 domain: `session` (失敗の理由のキーと `SessionEvent` の持ち主。U-1)
+- 関わる他 domain: `session` (失敗の理由のキーと `SessionEvent`・監視ビューの行・稼働中のストアの持ち主。U-1)、`isolation` (権限モードの可視化ポリシーとゲートの持ち主。本 feature は domain の `isSafePermissionMode` とランタイムの `autoModeAllowed` で警告の帯を出すだけで、ポリシーと強制は I-3)
 
 ### Related ADRs
 
@@ -55,7 +55,7 @@ Constitution 自体の変更なし。AD-047 (proposed) は session の契約の�
 - [AD-044](../../docs/decisions/0044-ui-coverage-assignment.md) — 対応表の割当と M3 の完了の条件: accepted
 - [AD-043](../../docs/decisions/0043-single-supervisor-session-threads-and-session-limit.md) / [AD-034](../../docs/decisions/0034-transcript-read-path-and-process-boundary.md) — 本文は port で main を経由しない: accepted
 - [AD-041](../../docs/decisions/0041-x4-launch-config-on-x1-launch-gate.md) (g) — query の options のキーの固定: accepted (変えない)
-- [AD-036](../../docs/decisions/0036-single-session-launch-process-and-live-stream.md) — X-1 のライブストリーム (FR-030): accepted
+- [AD-036](../../docs/decisions/0036-single-session-launch-process-and-live-stream.md) — X-1 のライブストリーム (FR-020 / US-4 AC6。コードの注記では V-11): accepted。本 feature は FR-020 の `provider-error` の範囲を読み替える (AD-047)
 
 ### Glossary excerpt
 
@@ -83,6 +83,12 @@ Constitution 自体の変更なし。AD-047 (proposed) は session の契約の�
 | 6 | prompts.md:224 | Cost meter / Quota banner / Context display → O-4 | **受ける** |
 | 7 | `_overview.md`:63,96 / ui charter:183,186 / AD-044:19,103 / 004 data-model:48 / 011 の spec・plan・research・tasks | O-4 の範囲と domain `ui` | **該当なし (記録のとおり)** — 範囲は変えない。`_overview.md` の帰属の判断根拠に「session の契約の拡張を伴う (U-1)」を 1 行足す |
 | 8 | 013 spec / plan / research / tasks | 右のペインのタブの候補 (Context display・Cost meter) | **受ける** — 「使用量」のタブ (FR-008) |
+| 9 | 005 spec FR-020 / US-4 AC6 / data-model §6 | クレジット不足・rate limit などは `provider-error` | **読み替える** — AD-047 の「読み替える箇所」。005 の正本に AD-047 への参照を置く |
+| 10 | roadmap の O-6 の行 / ui-coverage `compact_boundary` | コンパクション境界の専用 element (実行中を含む) | **送る** — O-4 の `compaction` の行は進み具合、O-6 は区切り。統合するか並べるかの判断を O-6 の行に書く |
+| 11 | AD-044 Decision 6 / session charter / `_overview.md` | Hook / Background task の状態を保持しない | **保つ** — task の進み具合は行の更新 (data-model §3) |
+| 12 | 013 data-model §5 | 中央のヘッダと「概要」の項目を重ねない | **保つ** — 権限モードは「概要」だけ。中央のヘッダには昇格の警告の帯だけ |
+| 13 | roadmap の I-3 の行 / AD-041 (a) | 権限モードのゲート・昇格経路 0 件 | **送る** — 昇格を観測したときの強制の要否を I-3 の行に書く (U-6) |
+| 14 | roadmap の O-3 (O-8) の義務 (c) / 010 data-model | 観測点 `receivedMessages` の基準 | **注記** — `meter` は数えない、新しい行は数える |
 
 ## 実装方針
 
@@ -110,6 +116,8 @@ decoder の `isMeterUpdate`、稼働中のストアに `meters[sessionId]` (data
 
 - `SESSION_EVENT_KINDS` (8) と `LAUNCH_FAILURE_REASONS` (17) の固定テスト
 - `meter` の許可リストのテスト (SDK の fixture の許可リストの外のフィールドに目印の値を入れ、`SessionEvent` に 0 件)
+- `sdk-agent-session.ts` の `Equal<…>` で `PermissionModeKey` / `RateLimitType` / `RateLimitStatus` / `SDKAssistantMessageError` の値域を SDK と固定 (既存の :80-84 の型)
+- Constitution 検証の項目 16 に例外を足さない (昇格値のリテラルは domain だけ)
 - 項目 21 (対応表) は既存の検査がそのまま効く
 
 ## Risks / 未確定
@@ -119,8 +127,11 @@ decoder の `isMeterUpdate`、稼働中のストアに `meters[sessionId]` (data
 | RK-01 | 未承認の判断 (U-1〜U-4)・AD-046 / AD-047 が覆る | design-gate で止める |
 | RK-02 | `rate_limit_event` は claude.ai のサブスクリプションでだけ届き、Bedrock / API キーの Provider では Quota banner が出ない | 出ないのが正しい (制限が無い)。quickstart V-3 で Provider ごとに確かめる |
 | RK-03 | `contextWindow` と主ループの `usage` からの推定が実際の使用量とずれる (subagent・圧縮) | 「推定」と明示。カテゴリ別の内訳は AD-047 の再検討の条件 |
-| RK-04 | 高頻度のメッセージで renderer の負荷が上がる | 間引き (SC-004)。E2E の負荷の long task の件数を比べる (偽の supervisor は計量を流さないので、agents の単体で回数を固定する) |
-| RK-05 | 失敗の理由の判定が SDK の版で変わる (subtype が増える) | 知らないものは `provider-error`。SDK を上げるときは対応表の手順で見直す |
+| RK-04 | 高頻度のメッセージで renderer の負荷が上がる | 間引き・上限・取り消し (SC-004。data-model §2)。agents の単体 (偽の時計) で回数を固定する。E2E は計量を流さないので計測経路にしない |
+| RK-05 | 失敗の理由の判定が SDK の版で変わる (subtype・列挙が増える) | 知らないものは `provider-error`。`Equal<…>` で SDK の列挙の値域を固定し、版を上げたら tsc が落ちる |
+| RK-06 | 認証切れ・課金のエラーが実際にどの形 (subtype / `api_error_status` / assistant の `error`) で届くかを誰も観察していない (X-1 の V-11 は実機で deferred) | 実機の形を確かめるまで `execution-error` / `api-error` の文言に「ログイン状態も確かめる」を添える。**実装の最初に、利用者が認証切れの状態で 1 回送り、result と assistant のメッセージを fixture として採る** (実機の操作。利用者の作業) |
+| RK-07 | `utilization` の値域 (0〜1 か 0〜100) と `resetsAt` の単位が型に書かれていない | data-model §2 の検証で両方を受け、範囲外は null。実データで確かめる (quickstart V-3) |
+| RK-08 | コンテキストの推定が `/context` とずれる | 1 回の API 呼び出しの usage を使う (data-model §2)。quickstart V-3 で `/context` と比べ、±10% を超えたら式を見直す |
 
 ## Project Structure
 
