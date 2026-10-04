@@ -1,111 +1,130 @@
 # Implementation Plan: 会話の境界と tool の専用表示の第 2 弾 (O-6)
 
-**Branch**: `016-ui-boundaries-and-tool-displays` (`014-ui-metering-and-limits` → `013-ui-app-shell` の上に積んである。実装は O-7 と O-4 のマージの後) | **Date**: 2026-10-04 | **Spec**: [spec.md](./spec.md)
+**Branch**: `016-ui-boundaries-and-tool-displays` (`015-ui-mcp-elicitation-commands` → `014-ui-metering-and-limits` → `013-ui-app-shell` の上に積んである。実装は O-7・O-4・O-5 のマージの後) | **Date**: 2026-10-04 | **Spec**: [spec.md](./spec.md)
 
-**未承認の判断を含む** (spec の U-1〜U-5) / **proposed の ADR に依る** (AD-046 / AD-047 / AD-048 / AD-049)。本 plan は design-gate までの成果物で、利用者の承認と O-7 / O-4 / O-5 のマージまで実装に入らない。
+**未承認の判断を含む** (spec の U-1〜U-6) / **proposed の ADR に依る** (AD-046 / AD-047 / AD-048 / AD-049)。本 plan は design-gate までの成果物で、利用者の承認と O-7 / O-4 / O-5 のマージまで実装に入らない。
 
 ## Summary
 
-- 会話の境界と知らせ: agents (O-4 の `live-system-rows.ts`) で `compact_boundary` / `conversation_reset` / `model_refusal_*` / `informational` を O-2 のシステムイベントの行に。拒否の取り消しは `meter` の `retraction` で稼働中のストアから外す。過去ログの divider は Compaction boundary の表示に写す
-- tool の専用表示: `Read` / `Glob` / `Grep` / `WebFetch` / `WebSearch` / `TaskCreate` / `TaskGet` / `TaskUpdate` / `TaskList` を `tool-registry.aui.tsx` に登録。Agent plan を `MarkdownText` で
+- 会話の境界と知らせ: agents (O-4 の `live-system-rows.ts`) で `compact_boundary` / `conversation_reset` / `model_refusal_*` / `informational` を O-2 のシステムイベントの行に。本文は伏せ字を通す。拒否の取り消しは `supersedes` と `retracted_message_uuids` から `meter` の `retraction` で送り、agents の追跡と稼働中のストアの両方から外す。過去ログの divider は Compaction boundary の表示に写す
+- tool の専用表示: `Read` / `Glob` / `Grep` / `WebFetch` / `WebSearch` / `TaskCreate` / `TaskGet` / `TaskUpdate` / `TaskList` を `tool-registry.aui.tsx` に登録。パスは本文。Agent plan を `TextMessagePartProvider` + `MarkdownText` で
 - 結果の状態の純関数 (data-model §3) と `TranscriptAnnouncer`。ToolFallback の見出しの日本語化
-- O-11 に分ける (AD-049)
+- 項目 16 の禁止に 3 つのメソッドを足す (FR-018)。O-11 に分ける (AD-049)
 
 ## Technical Context
 
 - **レイヤ**:
-  - domain: `system-event.ts` (category と status)、O-4 の `meter.ts` (`retraction`)
-  - agents: `sdk-agent-session.ts` / O-4 の `live-system-rows.ts` (`system` の `compact_boundary` / `model_refusal_*` / `informational` と、トップレベルの `conversation_reset` の分岐)
-  - renderer: `running-session-store.ts` (取り消し)、`features/chat/convert.ts` (divider の写し)、`components/assistant-ui/elements/` (`compaction-boundary.tsx`・`file-tool.aui.tsx`・`web-tool.aui.tsx`・`task-tool.aui.tsx` を新設、`tool-registry.aui.tsx`・`agent-plan.aui.tsx`・`tool-fallback.aui.tsx`・`thread.aui.tsx` の `SystemEventRow`)、`features/chat/tool-result-state.ts` (新設)・`TranscriptAnnouncer.tsx` (新設)・`labels.ts`
-- **既存の起点**: research R-01〜R-05。`transcript.ts:207` (過去ログの divider)、`transcript-dto.ts:44,134`、`tool-registry.aui.tsx:22-38`、AD-035 D6
+  - domain: `transcript-dto.ts` (category と status の列挙)、`system-event.ts` (終わりの判定)、`secret-redaction.ts` (新設。伏せ字の純関数)、O-4 の `meter.ts` (`retraction`)
+  - agents: `sdk-agent-session.ts` (トップレベルの `conversation_reset` の分岐、assistant の `supersedes`) / O-4 の `live-system-rows.ts` (`system` の `compact_boundary` / `model_refusal_*` / `informational`) / `live-tool-results.ts` (`retract`)
+  - renderer: `session-event-decoder.ts` (`retraction` の検証)、`running-session-store.ts` (取り消しと戻さない仕組み)、`features/chat/convert.ts` (divider の写し)、`components/assistant-ui/elements/` (`compaction-boundary.tsx`・`file-tool.aui.tsx`・`web-tool.aui.tsx`・`task-tool.aui.tsx` を新設、`tool-registry.aui.tsx`・`agent-plan.aui.tsx`・`tool-fallback.aui.tsx`・`thread.aui.tsx` の `SystemEventRow`)、`features/chat/tool-result-state.ts` (新設)・`TranscriptAnnouncer.tsx` (新設)・`labels.ts`、`pathTail` の共通化
+  - scripts: `scripts/constitution/allowlists.mjs` (`QUERY_MUTATION_METHODS`)、`tests/rule-fixtures/` (fixture と期待表)
+- **既存の起点**: research R-01〜R-12。`transcript.ts:207` (過去ログの divider)、`transcript-dto.ts:44,62-79,134`、`tool-registry.aui.tsx:22-38`、`live-tool-results.ts:61-131`、`markdown-text.tsx:41-61`、`session-view.ts:252-256` (`pathTail`)、AD-035 D6
 
 ## Constitution Check
 
 | Principle | 判定 | 根拠 |
 |---|---|---|
-| I (パス) | ✅ | `Read` / `Glob` / `Grep` のパスは表示用の文字列。解決しない。UNC の接頭辞を出さない (R-2 FR-042) |
-| III / IV / VI / VII / IX / X | ✅ / N/A | 承認・SDK の呼び出し・options・プロセス・main を変えない。行は port で main を経由しない |
-| V (資格情報非永続) | ✅ | `api_refusal_explanation`・`preserved_*` を通さない。`informational` は `mayCarrySecret` で隠す。`WebFetch` の URL の資格情報・クエリを出さない |
-| VIII | ✅ | 文言は `labels.ts`。`transcript.ts:207` の日本語の label は AD-045 の例外の一覧に足す |
+| I (パス) | ✅ | tool の入力と結果のパスは会話由来の本文で、解決しない・UNC を判定しない・`path-api` に触れない。見出しの末尾は表示だけの切り出し (`/` と `\` の両方。ホスト OS で分けない)。切った値を IPC・port に戻さない (R-08) |
+| II (プラットフォーム分岐) | ✅ | 区切りをホスト OS やランタイムで選ばない |
+| III / IV / VI / VII / IX / X | ✅ / N/A | 承認の要求と応答の形・SDK の呼び出し・options・プロセス・main を変えない。行は port で main を経由しない。`Query` のメソッドは `interrupt` だけで、項目 16 の禁止を 3 つ広げる (FR-018) |
+| V (資格情報非永続) | ✅ | `api_refusal_explanation`・`preserved_*` を通さない。`informational` などの本文は伏せ字 (`redactSecrets`) を通し、伏せ字の前の本文をログに書かない。`WebFetch` の見出しにクエリ・資格情報を出さない |
+| VIII (日本語の表示) | ✅ | 見出しは 1 行・80 コードポイントで切り詰め、日本語のファイル名・全角の検索語で崩れない (component テスト) |
 | XI | ✅ | 単体・component テストと実機の目視 (quickstart V-3) |
-| XII | ✅ | O-6 の行を同じ PR で書き換え (data-model §5) |
-| XIII | ✅ | File tree / Tool call / Web search / Compaction boundary を registry で先に確かめる |
-| XIV / XV | ✅ | 用語を先に glossary に。文言は `labels.ts` |
+| XII | ✅ | O-6 の行を同じ PR で書き換え、O-11 の Tier A 3 行を D 節に立てる (data-model §5) |
+| XIII | ✅ | File tree / Tool call / Web search / Todo list / Compaction boundary を registry で先に確かめる (SH-002) |
+| XIV | ✅ | 用語を先に glossary に (SH-001) |
+| XV (i18n) | ✅ | 文言は `labels.ts`。`transcript.ts:207` の日本語の label の扱いは AD-045 の採否で記録先を分ける (SH-010) |
 
 ## Domain Context
 
 ### Charter reference
 
 - Domain: `ui` ([docs/domains/ui/charter.md](../../docs/domains/ui/charter.md)) — transcript の表示、tool 出力の専用表示、`docs/ui-coverage.md`
+- session の契約と操作 UI に触れる (U-6): agents の分岐、`meter` の `retraction`、稼働中のストアからの削除。[session charter](../../docs/domains/session/charter.md) に記録する
 
 ### Related ADRs
 
-- [AD-049](../../docs/decisions/0049-boundaries-retraction-and-o11-split.md) — O-11 への分割・取り消し・`informational`・Agent plan の markdown: **proposed** (本 feature)
-- [AD-047](../../docs/decisions/0047-session-meter-and-failure-reasons.md) — `meter` と行の作り方: **proposed** (O-4)
-- [AD-046](../../docs/decisions/0046-app-shell-layout.md) — シェル: **proposed** (O-7)
-- [AD-044](../../docs/decisions/0044-ui-coverage-assignment.md) — 対応表の割当と M3 の完了の条件: accepted
-- [AD-035](../../docs/decisions/0035-tier-a-tool-display-and-subagent-nesting.md) — Tier A の tool の表示 (D6 の Trade-off を読み替える): accepted
+- [AD-049](../../docs/decisions/0049-boundaries-retraction-and-o11-split.md) — O-11 への分割・取り消し・本文の伏せ字・Agent plan の markdown・tool のパス: **proposed** (本 feature)
+- [AD-048](../../docs/decisions/0048-session-config-display-and-answer-ui-split.md) — tool の登録の 2 段・`QUERY_MUTATION_METHODS` の拡張・`meter` の上限の例外: **proposed** (O-5)
+- [AD-047](../../docs/decisions/0047-session-meter-and-failure-reasons.md) — `meter` と行の作り方 (D2 を読み替える): **proposed** (O-4)
+- [AD-046](../../docs/decisions/0046-app-shell-layout.md) — シェル・`watchedId`: **proposed** (O-7)
+- [AD-044](../../docs/decisions/0044-ui-coverage-assignment.md) — 対応表の割当と M3 の完了の条件 (D4 / D6 の持ち主を O-11 に): accepted
+- [AD-041](../../docs/decisions/0041-x4-launch-config-on-x1-launch-gate.md) — options のキーの pin ((g)。O-11 の義務): accepted
+- [AD-036](../../docs/decisions/0036-single-session-launch-process-and-live-stream.md) — §4 P3 (Query のメソッドは interrupt だけ): accepted
+- [AD-035](../../docs/decisions/0035-tier-a-tool-display-and-subagent-nesting.md) — Tier A の tool の表示 (D6 を読み替える。D3 は O-11 の義務): accepted
 - [AD-034](../../docs/decisions/0034-transcript-read-path-and-process-boundary.md) — 本文の経路: accepted
+- [AD-032](../../docs/decisions/0032-unc-shape-classification-by-separator-count.md) / [AD-029](../../docs/decisions/0029-session-cwd-origin-classification.md) — UNC の判定の唯一の入口 (本 feature は当てない): accepted
 
 ### Glossary excerpt
 
-- **システムイベントの行** (O-2) / **計量 (meter)** (O-4) / **Tool group**
-- 新しく足す: 会話の境界、結果待ち / 結果不明、O-11
+- **システムイベントの行** (O-2) / **計量 (meter)** (O-4) / **Tool group** / **見ているセッション** (O-7)
+- 新しく足す・直す: 会話の境界、取り消し (retraction)、結果待ち / 結果不明、O-11、System event row と Hook の定義
 
 ## 上流からの申し送り
 
 ```
 # 1) spec_id: rg "016-ui-boundaries-and-tool-displays" → 0 件 (本 spec と AD-049 を除く)
-# 2) feature ID: rg "\bO-6\b" → roadmap:258 (O-6 の行) / ui-coverage の 30 行と F 節 / constitution:29 / _overview.md / ui charter /
-#    AD-044 / AD-020 / 011 一式 (spec・plan・research・tasks・data-model・quickstart-results) / 013・014 の注記 / 004 data-model:48
-# 3) 実名リスト方式のルール: 変えない。新設の element と純関数は既存のレイヤ規則に入る
+# 2) feature ID: rg "\bO-6\b" → roadmap:258 (O-6 の行) / ui-coverage の 30 行と F 節 / constitution:29 / _overview.md:65,94,96,108 /
+#    ui charter / glossary:375 / AD-044:19,66,84,103 / AD-046 / 011 一式 (spec・plan・research・tasks・data-model・quickstart-results・pr-gate) /
+#    013・014・015 の注記 / 004 data-model:48
+# 3) 実名リスト方式のルール: QUERY_MUTATION_METHODS に 3 つ足す (FR-018)。新設の element と純関数は既存のレイヤ規則に入る
 ```
 
 | # | 出所 | 内容 | 処理 |
 |---|---|---|---|
-| 1 | roadmap:258 (O-6 の行) | 対応表の割当・O-2 の pr-gate R2 の 4 項目・V-4 の 4 項目 | **受ける / 送る** — 本 spec の範囲と O-11 (U-1) |
+| 1 | roadmap:258 (O-6 の行) | 対応表の割当・O-2 の pr-gate の項目・V-4 の 4 項目 | **受ける / 送る** — 本 spec の範囲と O-11 (U-1) |
 | 2 | ui-coverage の `後続: O-6` と F 節・A / B / C 節の備考の「O-6」 | 書き換え | **受ける** — data-model §5 |
-| 3 | 011 quickstart-results V-4 | 利用者の判定と未記録の 4 項目 | **受ける / 送る** — 本 feature の 2 つは両方に耐える規則、残り 2 つは O-11 |
-| 4 | 014 data-model §3 / O-4 design-gate arch M-003 | 圧縮の行 (進み具合) と境界 (区切り) の関係を O-6 が決める | **受ける** — 両方を並べて描く (FR-017) |
-| 5 | AD-035 D6 Trade-off | Agent plan の markdown は将来課題 | **受ける** — AD-049 Decision 4 |
-| 6 | AD-044 / AD-020 の Open Questions の「O-6」 (Hook / Background task / B 節の照合) | 持ち主 | **送る** — O-11。AD-044 (accepted) の本文は変えず、roadmap と charter に記録 |
-| 7 | constitution:29 | 項目 21 の件数 | **注記** — 完了の PR で項目 21 の出力が変わる |
-| 8 | ui charter の Open Questions の「実行中の task の一覧の要否は O-6」 | 持ち主 | **送る** — O-11 |
-| 9 | `transcript.ts:207` | domain が日本語の label を作る | **注記** — AD-045 (proposed) の例外の一覧に足す (O-3 の AD-045 と合わせる) |
+| 3 | 011 pr-gate M-201 | Tier A の備考の残り (5 行) を M3 の件数が数えない | **受ける** — 2 行は O-6 で解消、3 行は D 節に `後続: O-11` (data-model §5) |
+| 4 | 011 pr-gate po H-001 / a11y L-201 / ux L-101・L-104 | TodoList のエラーのテスト / SystemEventRow の title のテスト / 「SDK が知らない状態」の文言 / matcher のテスト | **受ける** — FE-022 / FE-011 |
+| 5 | 011 pr-gate a11y L-001 / L-202 | 密度の説明が title だけ / 成功の ✓ のコントラスト | **受ける** — FE-031 |
+| 6 | 011 pr-gate ux L-102 / arch L-201 / ux L-103 | 伏せた Hook 名の見分け / session の無害化に触れる後続の domain の依存 / 監視ビューの密度の見出し | **送る** — L-102・L-201 は O-11、L-103 は O-1 の続き |
+| 7 | 011 quickstart-results V-4 | 利用者の判定と未記録の 4 項目 | **受ける / 送る** — 本 feature の 2 つは両方に耐える規則、残り 2 つは O-11 |
+| 8 | 014 data-model §3 | 圧縮の行と境界の関係を O-6 が決める | **受ける** — 並べる (research R-07) |
+| 9 | AD-035 D6 | Agent plan は plain text | **受ける** — AD-049 Decision 4 で読み替える |
+| 10 | AD-044 D4 / D6 (B 節の照合・task の一覧の要否は O-6) | 持ち主 | **送る** — O-11。AD-049 に読み替えを書く (AD-044 の本文は変えない) |
+| 11 | ui charter の Open Questions の「実行中の task の一覧の要否は O-6」 | 持ち主 | **送る** — O-11 |
+| 12 | constitution:29 | 項目 21 の件数 | **注記** — 完了の PR で項目 21 の出力が変わる |
+| 13 | `transcript.ts:207` | domain が日本語の label を作る | **注記** — SH-010 (AD-045 の採否で記録先を分ける) |
 
 ## 実装方針
 
-- 行: O-4 の `live-system-rows.ts` に 5 つの category。`conversation_reset` はトップレベルの `type` なので `sdk-agent-session.ts` の switch に `case 'conversation_reset'` を足す。取り消しは `meter` の `retraction` → 稼働中のストアの `removeMessages(sessionId, ids)`
-- 表示: `tool-registry.aui.tsx` に 9 つ。`toolResultState` を各専用表示と ToolFallback の見出しで使う。`TranscriptAnnouncer` は thread の中に 1 つで、表示中のセッションのメッセージの変化 (結果のエラー・行の終わり) を見て 1 秒に 1 回までにまとめる
-- Agent plan: `agent-plan.aui.tsx` の本文を `MarkdownText` に。既存の XSS の境界のテスト (`<script>` / `javascript:`) を Agent plan にも
+- 行: O-4 の `live-system-rows.ts` に 4 つの category。`conversation_reset` はトップレベルの `type` なので `sdk-agent-session.ts` の switch に `case 'conversation_reset'` を足す。値は `Object.hasOwn` の表で照合する
+- 取り消し: `sdk-agent-session.ts` が assistant の `supersedes` と `model_refusal_fallback` の `retracted_message_uuids` から `retraction` を即時に送り、`live-tool-results.ts` の `retract` を呼ぶ。renderer は decoder で検証し、ストアの `removeMessages(sessionId, ids)` が外して覚える
+- 表示: `tool-registry.aui.tsx` に 9 つ。`toolResultState` を §3 の表示すべてで使う。`TranscriptAnnouncer` は見ているセッションの thread の中に 1 つ
+- Agent plan: `agent-plan.aui.tsx` の本文を `TextMessagePartProvider` + `MarkdownText` に。「原文」の切り替え
 
 ## ADR
 
-**AD-049 を proposed で起こした**。O-11 の 2 つの ADR は O-11 の design の前に起こす。
+**AD-049 を proposed で起こした**。O-11 の ADR (`includeHookEvents`・`getSubagentMessages`・`get_hooks_listing` を呼ぶなら) は O-11 の design の前に起こす。
 
 ## 機械強制の変更
 
-- `meter` の `retraction` の検証 (id の形と件数) の単体
-- tool の振り分けの単体 (9 つの tool が ToolFallback に落ちない)
+- 項目 16: `QUERY_MUTATION_METHODS` に `readFile` / `backgroundTasks` / `reloadOutputStyles`、違反の fixture と期待表 (FR-018)
+- 固定テスト: `MeterUpdate` の種類の集合 (`retraction` を含む)、`PermissionRequest` のフィールドの集合、`toPermissionResult` の出力の形、`@assistant-ui/react-markdown` の import が `markdown-text.tsx` だけ、domain の divider の生成が 1 か所
+- 単体: `retraction` の検証・`redactSecrets`・tool の振り分け (9 つの tool が ToolFallback に落ちない)
 
 ## Risks / 未確定
 
 | ID | リスク | 手当て |
 |---|---|---|
-| RK-01 | 未承認の判断 (U-1〜U-5)・AD-046 / AD-047 / AD-048 / AD-049 が覆る | design-gate で止める |
-| RK-02 | 取り消しで外したメッセージに、表示中の承認カードや結果待ちの tool が含まれる | 外したメッセージの tool の結果待ち・承認の要求は既存の経路のまま (承認の要求は agents が解決する)。表示だけを外す。テストで固定 |
-| RK-03 | 読み上げが多すぎる / 少なすぎる | 1 秒に 1 回のまとめと、対象の限定 (data-model §4)。実機の目視で利用者が確かめる (quickstart V-3) |
-| RK-04 | `Grep` の `output_mode` の結果の形が CLI の版で変わる | File tree への写しは `files_with_matches` だけ。それ以外は text |
+| RK-01 | 未承認の判断 (U-1〜U-6)・AD-046 / AD-047 / AD-048 / AD-049 が覆る | design-gate で止める |
+| RK-02 | 取り消したメッセージに結果待ちの tool や承認カードが含まれる | agents の追跡から外し、後の結果を捨てる。ストアも外した id を覚える。承認の要求は agents が解決するので承認カードはそのまま (何の操作かは承認カードの入力で分かる)。テストで固定 |
+| RK-03 | 読み上げが多すぎる / 少なすぎる | 新しく届いた出来事だけ・1 秒に 1 回のまとめ・対象の限定 (data-model §4)。実機の目視で利用者が確かめる (quickstart V-3) |
+| RK-04 | `Glob` / `Grep` の結果の形が CLI の版で変わる | 区切りを含む行だけを項目にし、0 件なら text に倒す (data-model §2)。全部の行がどこかに見える |
 | RK-05 | V-4 の未記録の項目が本 feature の前提を崩す | 両方の形に耐える規則 (data-model §3)。残りは O-11 |
+| RK-06 | `TextMessagePartProvider` の中で `MarkdownText` が描けない | 実装の最初に確かめる (R-06)。描けなければ U-4 を plain text に戻し、AD-049 Decision 4 を取り下げる |
+| RK-07 | 伏せ字の取りこぼし | パターンの fixture と、普通の文 (括弧・引用符を含む) が変わらない fixture を両方固定する。漏れの型が見つかれば data-model §1 に足す |
 
 ## Project Structure
 
 ```
 docs/decisions/0049-boundaries-retraction-and-o11-split.md   (新設。proposed)
-src/domain/session/system-event.ts / meter.ts (O-4)
-src/agents/sdk-agent-session.ts (+ test) / live-system-rows.ts (O-4)
-src/renderer/src/features/session/running-session-store.ts (取り消し)
+src/domain/session/transcript-dto.ts / system-event.ts / secret-redaction.ts (新設) / meter.ts (O-4)
+src/agents/sdk-agent-session.ts (+ test) / live-system-rows.ts (O-4) / live-tool-results.ts (+ test)
+src/renderer/src/features/session/session-event-decoder.ts / running-session-store.ts / session-view.ts (pathTail の共通化)
 src/renderer/src/features/chat/convert.ts / tool-result-state.ts (新設) / TranscriptAnnouncer.tsx (新設) / labels.ts
 src/renderer/src/components/assistant-ui/elements/compaction-boundary.tsx / file-tool.aui.tsx / web-tool.aui.tsx / task-tool.aui.tsx (新設) / tool-registry.aui.tsx / agent-plan.aui.tsx / tool-fallback.aui.tsx / thread.aui.tsx
+scripts/constitution/allowlists.mjs / tests/rule-fixtures/sdk-query-task-control.ts.fixture (新設) / expected.mjs
 docs/ui-coverage.md / docs/glossary.md / docs/domains/{ui,session}/charter.md / docs/domains/_overview.md / docs/roadmap.md / docs/prompts.md
+specs/014-ui-metering-and-limits/data-model.md (§2 の検証の表) / docs/decisions/0047-session-meter-and-failure-reasons.md (Consequences の参照)
 ```
