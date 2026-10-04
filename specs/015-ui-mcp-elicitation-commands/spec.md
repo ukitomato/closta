@@ -13,7 +13,7 @@ linear: null
 
 # Feature Specification: MCP・プラグイン・コマンドの表示 (O-5)
 
-**Feature Branch**: `015-ui-mcp-elicitation-commands` (今は `013-ui-app-shell` の上に積んである)
+**Feature Branch**: `015-ui-mcp-elicitation-commands` (`014-ui-metering-and-limits` → `013-ui-app-shell` の上に積んである)
 
 **Created**: 2026-10-04 (夜間の自走で起案。**人間の承認が要る判断を仮採用している — 下の「未承認の判断」を参照**)
 

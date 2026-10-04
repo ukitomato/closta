@@ -1,6 +1,6 @@
 # Implementation Plan: MCP・プラグイン・コマンドの表示 (O-5)
 
-**Branch**: `015-ui-mcp-elicitation-commands` (今は `013-ui-app-shell` の上に積んである。O-4 (`014-ui-metering-and-limits`) の `meter` に依るので、実装は O-7 と O-4 のマージの後) | **Date**: 2026-10-04 | **Spec**: [spec.md](./spec.md)
+**Branch**: `015-ui-mcp-elicitation-commands` (O-4 の `meter` に依るので `014-ui-metering-and-limits` (その下に `013-ui-app-shell`) の上に積んである。実装は O-7 と O-4 のマージの後) | **Date**: 2026-10-04 | **Spec**: [spec.md](./spec.md)
 
 **未承認の判断を含む** (spec の U-1〜U-5) / **proposed の ADR に依る** (AD-046 / AD-047 / AD-048)。本 plan は design-gate までの成果物で、利用者の承認と O-7 / O-4 のマージまで実装に入らない。
 
