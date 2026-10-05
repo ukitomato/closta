@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2026-10-04
 id: AD-047
 deciders: ukitomato
@@ -21,7 +21,7 @@ O-4 ([spec 014](../../specs/014-ui-metering-and-limits/spec.md)) は、SDK が e
 
 O-2 は `SessionEvent` の種類を増やさず、Hook / Background task を `message` の経路のシステムイベントの行で通した ([AD-044](0044-ui-coverage-assignment.md)・011 SC-004)。計量は行ではないので同じ形にできない。
 
-本 ADR は O-4 が夜間の自走で起こした。**未承認である (spec 014 の U-1〜U-6)。** ui の feature が session の契約を広げるので、持ち主の判断を利用者が行う。
+本 ADR は O-4 が夜間の自走で起こした。ui の feature が session の契約を広げるので持ち主の判断を利用者が行い、2026-10-05 に本 ADR と spec 014 の U-1〜U-6 を承認した。
 
 ### 読み替える箇所
 

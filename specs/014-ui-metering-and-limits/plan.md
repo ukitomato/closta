@@ -2,7 +2,7 @@
 
 **Branch**: `014-ui-metering-and-limits` (今は `013-ui-app-shell` の上に積んである) | **Date**: 2026-10-04 | **Spec**: [spec.md](./spec.md)
 
-**未承認の判断を含む** (spec の U-1〜U-4) / **proposed の ADR に依る** (AD-046 / AD-047)。本 plan は design-gate までの成果物で、利用者の承認と O-7 のマージまで実装に入らない。
+spec の U-1〜U-6 と AD-046 / AD-047 は 2026-10-05 に利用者が承認した。O-7 のマージの後に実装する。
 
 ## Summary
 
@@ -27,7 +27,7 @@
 | Principle | 判定 | 根拠 |
 |---|---|---|
 | I / II / VI | N/A | パス・プラットフォーム差・子プロセスを扱わない |
-| III (権限ゲート) | ⚠ 未承認 | 権限モードの変化を表示し、選択肢は変えない。安全 3 値の外のモードを観測したら警告の帯 (AD-041 の「昇格経路 0 件」の逸脱の信号)。強制はしない (U-6。持ち主は I-3)。昇格値のリテラルは domain の `meter.ts` だけに置き、Constitution 検証の項目 16 に例外を足さない |
+| III (権限ゲート) | ✅ (2026-10-05 に承認) | 権限モードの変化を表示し、選択肢は変えない。安全 3 値の外のモードを観測したら警告の帯 (AD-041 の「昇格経路 0 件」の逸脱の信号)。強制はしない (U-6。持ち主は I-3)。昇格値のリテラルは domain の `meter.ts` だけに置き、Constitution 検証の項目 16 に例外を足さない |
 | IV (SDK 経由) | ✅ | 新しい SDK の呼び出しなし (`AGENT_SDK_ALLOWED_CALLS` の差分 0)。query の options のキー (AD-041 (g)) の差分 0。既に受けているメッセージの分岐を足すだけ |
 | V (資格情報非永続) | ✅ | 永続化なし。失敗の文字列・`compact_error`・`api_retry` の `error`・task の要約を運ばない (data-model §2 の許可リスト) |
 | VII (supervisor Electron 非依存) | ✅ | agents の変更は分岐と純関数だけ |
@@ -50,8 +50,8 @@ Constitution 自体の変更なし。AD-047 (proposed) は session の契約の�
 
 ### Related ADRs
 
-- [AD-047](../../docs/decisions/0047-session-meter-and-failure-reasons.md) — 計量と失敗の理由のキー: **proposed** (本 feature。未承認)
-- [AD-046](../../docs/decisions/0046-app-shell-layout.md) — シェルの 3 面: **proposed** (O-7) — 置き場所の語彙
+- [AD-047](../../docs/decisions/0047-session-meter-and-failure-reasons.md) — 計量と失敗の理由のキー: **accepted** (本 feature で起こし、2026-10-05 に承認)
+- [AD-046](../../docs/decisions/0046-app-shell-layout.md) — シェルの 3 面: **accepted** (O-7。2026-10-05 に承認) — 置き場所の語彙
 - [AD-044](../../docs/decisions/0044-ui-coverage-assignment.md) — 対応表の割当と M3 の完了の条件: accepted
 - [AD-043](../../docs/decisions/0043-single-supervisor-session-threads-and-session-limit.md) / [AD-034](../../docs/decisions/0034-transcript-read-path-and-process-boundary.md) — 本文は port で main を経由しない: accepted
 - [AD-041](../../docs/decisions/0041-x4-launch-config-on-x1-launch-gate.md) (g) — query の options のキーの固定: accepted (変えない)
@@ -124,7 +124,7 @@ decoder の `isMeterUpdate`、稼働中のストアに `meters[sessionId]` (data
 
 | ID | リスク | 手当て |
 |---|---|---|
-| RK-01 | 未承認の判断 (U-1〜U-4)・AD-046 / AD-047 が覆る | design-gate で止める |
+| RK-01 | 仮採用した判断 (U-1〜U-4)・AD-046 / AD-047 が覆る | 2026-10-05 に利用者が推奨案どおり承認した |
 | RK-02 | `rate_limit_event` は claude.ai のサブスクリプションでだけ届き、Bedrock / API キーの Provider では Quota banner が出ない | 出ないのが正しい (制限が無い)。quickstart V-3 で Provider ごとに確かめる |
 | RK-03 | `contextWindow` と主ループの `usage` からの推定が実際の使用量とずれる (subagent・圧縮) | 「推定」と明示。カテゴリ別の内訳は AD-047 の再検討の条件 |
 | RK-04 | 高頻度のメッセージで renderer の負荷が上がる | 間引き・上限・取り消し (SC-004。data-model §2)。agents の単体 (偽の時計) で回数を固定する。E2E は計量を流さないので計測経路にしない |

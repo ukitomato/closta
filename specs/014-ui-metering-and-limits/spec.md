@@ -15,7 +15,7 @@ linear: null
 
 **Feature Branch**: `014-ui-metering-and-limits`
 
-**Created**: 2026-10-04 (夜間の自走で起案。**人間の承認が要る判断を仮採用している — 下の「未承認の判断」を参照**)
+**Created**: 2026-10-04 (夜間の自走で起案。夜間に仮採用した判断は **2026-10-05 に利用者が推奨案どおり承認した** — 下の「判断」を参照)
 
 **Status**: frontmatter の `status:` を正とする
 
@@ -37,13 +37,13 @@ linear: null
 ## 本 feature の位置づけ
 
 - **O-7 (アプリのシェル。[spec 013](../013-ui-app-shell/spec.md)) の上に置き場所を書く。** 置き場所の語彙は AD-046 Decision 6 (中央のヘッダ・中央の本体・右のペインのタブ)
-- **session の契約を広げる (未承認)。** SDK のメッセージは agents (セッションスレッド) で変換されて renderer に届く。理由の区別と計量を届けるには、session の契約 (`LaunchFailureReason` の集合・`SessionEvent` の種類) を広げる必要がある。決定は ADR (AD-047、proposed) に記録する
-- **制御要求を新たに呼ばない。** Context display と Cost meter は、毎ターンの `result` が運ぶ値 (`total_cost_usd` / `modelUsage` / `usage` / `contextWindow`) から出す。`get_context_usage` / `get_session_cost` / `get_usage` を呼ばないので、Agent SDK の呼び出しの許可リスト (Constitution 検証の項目 14) と query の options のキー (AD-041 (g)) は変えない (未承認)
+- **session の契約を広げる (U-1)。** SDK のメッセージは agents (セッションスレッド) で変換されて renderer に届く。理由の区別と計量を届けるには、session の契約 (`LaunchFailureReason` の集合・`SessionEvent` の種類) を広げる必要がある。決定は ADR (AD-047、proposed) に記録する
+- **制御要求を新たに呼ばない。** Context display と Cost meter は、毎ターンの `result` が運ぶ値 (`total_cost_usd` / `modelUsage` / `usage` / `contextWindow`) から出す。`get_context_usage` / `get_session_cost` / `get_usage` を呼ばないので、Agent SDK の呼び出しの許可リスト (Constitution 検証の項目 14) と query の options のキー (AD-041 (g)) は変えない (U-3)
 - **過去ログは対象にしない。** 計量と制限は実行中のセッションの情報である。過去ログ (`getSessionMessages`) に `result` などが残るかは対応表の経路で「実行中」とする
 
-## 未承認の判断 (夜間の自走で仮採用。2026-10-04)
+## 判断 (2026-10-04 の夜間の自走で仮採用し、2026-10-05 に利用者が承認)
 
-**本 spec は design-gate で止め、利用者の承認まで /cl-implement に入らない。**
+利用者は下の表の「仮採用した案」と AD-047 を 2026-10-05 に推奨案どおり承認した。
 
 | # | 判断 | 仮採用した案 | 代わりの案 |
 |---|---|---|---|
@@ -216,7 +216,7 @@ linear: null
 
 ### Assumptions / Clarifications
 
-- **[未承認 U-1〜U-6]** 上の「未承認の判断」の表
+- **[承認済み U-1〜U-6]** 上の「判断」の表 (2026-10-05)
 - **[ASSUMED]** 失敗の文字列は出さない。費用は `total_cost_usd`。コンテキストの推定の式。帯の条件。間引きは 1 秒に 1 回
 - 過去ログの `result` などは対象にしない (対応表の経路は「実行中」)
 
