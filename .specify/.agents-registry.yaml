@@ -90,6 +90,14 @@ agents:
     invoked_by: [code-gate]
 
   # ─── Actors (main の context を空けるための作業委譲) ─────────────────
+  - name: designer
+    status: required
+    role: actor
+    placement: .claude/agents/designer.md
+    purpose: "/cl-plan・/cl-tasks の fork 先として設計文書を書き、design-gate の指摘を直す"
+    managed_by: workflow
+    invoked_by: [cl-plan, cl-tasks, cl-design]
+
   - name: task-implementer
     status: required
     role: actor
