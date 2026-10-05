@@ -15,7 +15,7 @@ linear: null
 
 **Feature Branch**: `012-ui-thread-search`
 
-**Created**: 2026-10-04 (夜間の自走で起案。**人間の承認が要る判断を仮採用している — 下の「未承認の判断」を参照**)
+**Created**: 2026-10-04 (夜間の自走で起案。夜間に仮採用した判断は **2026-10-05 に利用者が推奨案どおり承認した** — 下の「判断」を参照)
 
 **Status**: frontmatter の `status:` を正とする
 
@@ -38,16 +38,16 @@ linear: null
 
 ## 本 feature の位置づけ
 
-- **範囲を分ける (未承認)。** 入力の表示 7 種と義務 3 つを 1 spec に入れると FR 20 を超える。本 feature は「探す」(Thread search・会話内検索・Command palette・Empty state) と義務 (X-4) と義務 (O-1) (1) に絞り、残りを 2 つの後続 feature に分けて roadmap に登録する (FR-016):
+- **範囲を分ける (U-1)。** 入力の表示 7 種と義務 3 つを 1 spec に入れると FR 20 を超える。本 feature は「探す」(Thread search・会話内検索・Command palette・Empty state) と義務 (X-4) と義務 (O-1) (1) に絞り、残りを 2 つの後続 feature に分けて roadmap に登録する (FR-016):
   - **O-8 (新規・M3・domain `session`)**: 並列時の滑らかさの実機計測 — 義務 (O-1 から) (2) の (a)〜(d) をそのまま移す。(a) は perf の出力の許可リスト (O-1 SC-005) の変更で利用者の承認が要り、(d) の実機計測ハーネスの ADR を先に起こす必要があり、計測そのものは実機でしか行えない。「探す」と独立に進められる
   - **O-9 (新規・M3・domain `ui`)**: 会話の時間と活動の可視化 — conversation map・message timing・活動の heat graph (と、対応表 F 節で O-3 に預けた Activity graph / Trace waterfall の判断)。message timing はメッセージの時刻 (`createdAt`。今は過去ログ・実行中とも `null`) を agents / domain の変換で埋める必要があり、session の変換の契約に触れる
-- **domain は `ui`、ただし session の起動の経路を 1 か所広げる (未承認)。** 再利用率の記録には「この起動がプリセット経由か」を renderer から main に渡す必要がある。起動の IPC の入力に起動元 (`preset` / `manual`) を 1 つ足し、main の永続化層に日ごとの回数を書く。KPI の持ち主は session charter で、計測経路を O-3 が作るのは AD-041 (h) の指名による
+- **domain は `ui`、ただし session の起動の経路を 1 か所広げる (U-2)。** 再利用率の記録には「この起動がプリセット経由か」を renderer から main に渡す必要がある。起動の IPC の入力に起動元 (`preset` / `manual`) を 1 つ足し、main の永続化層に日ごとの回数を書く。KPI の持ち主は session charter で、計測経路を O-3 が作るのは AD-041 (h) の指名による
 - **検索は renderer の中で行う。** Thread search は一覧に既にある要約行 (`SessionSummaryDTO`) を絞り込むだけで、transcript の本文を横断して読まない (本文の横断検索は下の Out of Scope)。会話内検索は開いている transcript (renderer が持つメッセージ) だけを見る。新しい IPC のチャネル・preload の関数は足さない (再利用率の読み出しを除く。FR-013)
-- **i18n はリソース化しない (未承認)。** 判断を ADR (proposed) に記録し、利用者が accepted にした後で Constitution XV の字面を改める。`running-session-store.ts` の切り出しは「i18n リソース化の前に済ませる」とされていたが、リソース化しないので本 feature の前提ではない (持ち主は roadmap の記録のまま)
+- **i18n はリソース化しない (U-3)。** 判断を ADR (proposed) に記録し、利用者が accepted にした後で Constitution XV の字面を改める。`running-session-store.ts` の切り出しは「i18n リソース化の前に済ませる」とされていたが、リソース化しないので本 feature の前提ではない (持ち主は roadmap の記録のまま)
 
-## 未承認の判断 (夜間の自走で仮採用。2026-10-04)
+## 判断 (2026-10-04 の夜間の自走で仮採用し、2026-10-05 に利用者が承認)
 
-AGENTS.md が人間の承認を要求する判断と、domain をまたぐ判断を、推奨案で仮に採用している。**本 spec は design-gate で止め、利用者の承認まで /cl-implement に入らない。**
+AGENTS.md が人間の承認を要求する判断と、domain をまたぐ判断を、推奨案で仮に採用した。利用者は下の表の「仮採用した案」と AD-045 を 2026-10-05 に推奨案どおり承認した。
 
 | # | 判断 | 仮採用した案 | 代わりの案 |
 |---|---|---|---|
@@ -62,7 +62,7 @@ AGENTS.md が人間の承認を要求する判断と、domain をまたぐ判断
 
 ### Session 2026-10-04 (夜間の自走。利用者は不在)
 
-- Q: どこまで入れるか → A: U-1 のとおり。「探す」に絞る (未承認)
+- Q: どこまで入れるか → A: U-1 のとおり。「探す」に絞る
 - Q: Thread search は transcript の本文まで探すか → A: 探さない。要約行のフィールドだけを絞り込む。本文の横断検索は全セッションの transcript を読み直すことになり、列挙と取得の経路 (R-2 / R-3) の負荷の判断が要る [ASSUMED]
 - Q: 「プリセット経由の起動」とは → A: 起動ダイアログでプリセットを適用してから起動したもの。適用した後に軸を変えてもプリセット経由に数える [ASSUMED]
 - Q: 再利用率をどこで読むか → A: プリセットの欄に直近 30 日の内訳 (プリセット N 回 / 手動 M 回) を出す [ASSUMED]
@@ -273,7 +273,7 @@ AGENTS.md が人間の承認を要求する判断と、domain をまたぐ判断
 
 ### Assumptions / Clarifications
 
-- **[未承認 U-1〜U-6]** 上の「未承認の判断」の表
+- **[承認済み U-1〜U-6]** 上の「判断」の表 (2026-10-05)
 - **[ASSUMED]** Thread search は要約行のフィールドだけを対象にする (本文の横断検索は Out of Scope)
 - **[ASSUMED]** 会話内検索の対象は `text` part だけ (FR-004)。間引きは 150ms
 - **[ASSUMED]** プリセットを適用した後に軸を変えた起動もプリセット経由に数える (FR-009)

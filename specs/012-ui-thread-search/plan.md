@@ -2,7 +2,7 @@
 
 **Branch**: `012-ui-thread-search` | **Date**: 2026-10-04 | **Spec**: [spec.md](./spec.md)
 
-**未承認の判断を含む** (spec の U-1〜U-4)。本 plan は design-gate までの成果物で、利用者の承認まで実装に入らない。
+spec の U-1〜U-6 と AD-045 / AD-046 は 2026-10-05 に利用者が承認した。O-7 (spec 013) のマージの後に実装する。
 
 ## Summary
 
@@ -51,7 +51,7 @@
 | XII (ui-coverage) | ✅ | SDK が emit する情報の表示を足さない (A〜E 節の差分 0)。F 節の element の使い道を同じ PR で直す (spec FR-015) |
 | XIII (element 優先) | ✅ | `EmptyState` は既存の element。palette / 検索は registry の element を先に確かめる (research R-04) |
 | XIV (glossary) | ✅ | 用語を先に glossary に足す (spec FR-016) |
-| XV (Multi-language) | ⚠ 未承認 | 新しい文言は `labels.ts` (data-model §5)。リソース化しない判断は AD-045 (proposed)。**AD-045 の accepted が /cl-implement の着手の条件**。Constitution XV の改定 (MINOR) は本 feature の PR に含める |
+| XV (Multi-language) | ⚠ 改定を伴う | 新しい文言は `labels.ts` (data-model §5)。リソース化しない判断は AD-045。AD-045 の accepted (/cl-implement の着手の条件) は 2026-10-05 に済み。Constitution XV の改定 (MINOR) は本 feature の PR に含める |
 
 ## Domain Context
 
@@ -69,8 +69,8 @@
 - [AD-034](../../docs/decisions/0034-transcript-read-path-and-process-boundary.md) — transcript の取得経路: accepted — 本文は port を通り main を経由しない (検索は renderer の中で閉じる)
 - [AD-041](../../docs/decisions/0041-x4-launch-config-on-x1-launch-gate.md) (h) — 繰越先の指名: accepted — 再利用率の計測経路を O-3 に指名
 - [AD-044](../../docs/decisions/0044-ui-coverage-assignment.md) — ui-coverage の割当: accepted — F 節の使い道を同じ PR で直す
-- [AD-046](../../docs/decisions/0046-app-shell-layout.md) — アプリのシェルを 3 面にする: **proposed** (O-7。未承認) — 置き場所の語彙
-- [AD-045](../../docs/decisions/0045-ui-labels-no-i18n-resources.md) — UI の文言を i18n リソース化しない: **proposed** (本 feature で起こした。未承認)
+- [AD-046](../../docs/decisions/0046-app-shell-layout.md) — アプリのシェルを 3 面にする: **accepted** (O-7。2026-10-05 に承認) — 置き場所の語彙
+- [AD-045](../../docs/decisions/0045-ui-labels-no-i18n-resources.md) — UI の文言を i18n リソース化しない: **accepted** (本 feature で起こし、2026-10-05 に承認)
 - [AD-028](../../docs/decisions/0028-session-enumeration-process-and-unc-handoff.md) §5 — 持ち主のいない延期を残さない (O-8 / O-9 の登録)
 
 ### Glossary excerpt
@@ -160,7 +160,7 @@ glossary → roadmap (O-3 の行・O-8 / O-9 の追加・system-scope の ADR �
 
 | ID | リスク | 手当て |
 |---|---|---|
-| RK-01 | 未承認の判断 (U-1〜U-4) が覆る | 本 spec は design-gate で止める。覆ったら spec を直して design-gate からやり直す |
+| RK-01 | 仮採用した判断 (U-1〜U-4) が覆る | 2026-10-05 に利用者が推奨案どおり承認した。覆ったら spec を直して design-gate からやり直す |
 | RK-02 | CSS Custom Highlight API の強調が markdown の描画とずれる | 件数は本文で数え、強調は描画の中の一致すべてに掛ける (research R-03)。実機の目視 (quickstart V-3) |
 | RK-03 | registry の palette / 検索の element が assistant-ui の runtime を前提にしていて合わない | Radix の Dialog と listbox で作り、F 節の備考に理由を書く (R-04) |
 | RK-04 | 仮想化の `scrollToIndex` が可変の高さで目標の位置に止まらない | 移動の後に要素が描かれたら `scrollIntoView` で合わせ直す。component テストは index が描かれる範囲に入ることだけを見る |

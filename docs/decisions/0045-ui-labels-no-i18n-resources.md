@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2026-10-04
 id: AD-045
 deciders: ukitomato
@@ -20,7 +20,7 @@ Constitution Principle XV は「UI labels: 日本語を第一言語とする。i
 - 利用者は 1 人で、配布 (D-1) の前である
 - roadmap は、リソース化するなら先に `running-session-store.ts` の切り出し (行の状態の型を文言の表から外す) を済ませるよう求めている
 
-本 ADR は O-3 ([spec 012](../../specs/012-ui-thread-search/spec.md)) が夜間の自走で起こした。**判断は未承認である (spec 012 の U-3)。** 利用者が accepted にするまで、Constitution XV の字面は変えない。
+本 ADR は O-3 ([spec 012](../../specs/012-ui-thread-search/spec.md)) が夜間の自走で起こした。判断 (spec 012 の U-3) と本 ADR は 2026-10-05 に利用者が承認した。Constitution XV の字面は O-3 の PR で改める (Consequences)。
 
 ## Decision
 

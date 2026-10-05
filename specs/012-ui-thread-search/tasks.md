@@ -6,7 +6,7 @@
 
 **規則の正本**: 振る舞いの正本は spec の FR / SC、一致の規則・検索の状態と強調・palette の操作・記録の形と読み込みの扱い・文言の正本は data-model、方式の理由は research。本書は作業単位とテストの観点だけを書く。
 
-**着手の条件**: **O-7 (spec 013) がマージされ、AD-045 / AD-046 が accepted になり、spec の U-1〜U-6 を利用者が承認するまで /cl-implement に入らない。**
+**着手の条件**: **O-7 (spec 013) がマージされるまで /cl-implement に入らない。** AD-045 / AD-046 の accepted と spec の U-1〜U-6 の承認は 2026-10-05 に済み。
 
 **順序の制約**: SH-001 (glossary) → コード。SH-002 (element の照合) → FE-010 / FE-020 / FE-030。BE-001 (domain の型) → BE / FE の他。SH-010 (roadmap ほか) と SH-003 (Constitution XV) は最後。
 
