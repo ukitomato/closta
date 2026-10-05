@@ -75,20 +75,29 @@ export function useSessions(): SessionsView {
      * 取り直すまで残る。O-7 で過去のセッションの区画はアプリの起動の直後からサイドバーにマウントされるので、
      * 「画面を開いたとき」ではなくランタイムの一覧の解決を待つ。失敗しても待ちを外して取得はする
      * (ランタイムの一覧の失敗は区画の取得を止める理由にならない)。
+     *
+     * **待っている間も「取得中」にする** (pr-gate R1 ux H-002 / po M-002)。待ちの間に `loading` が false だと、区画は
+     * 「未取得」のまま止まって見え、押せる「全件を取り直す」が検出より先に列挙して FR-016 の順序を迂回する。
      */
     let active = true
+    setLoading(true)
     void capability()
       .listRuntimes()
       .catch(() => undefined)
       .then(() => {
         if (active) void load()
       })
-    const unsubscribe = capability().onSessionsChanged(setIndex)
+    // 初回の取得の前に main が配る「未取得の索引」(取得時刻 0。判定バッチの通知で再グループしたもの) は受けない。
+    // 受けると取得中の表示が外れ、取得時刻 1970/01/01 が出る (pr-gate R1 platform-boundary L-004)。
+    const unsubscribe = capability().onSessionsChanged((next) => {
+      if (next.fetchedAt === 0) return
+      setIndex(next)
+    })
     return () => {
       active = false
       unsubscribe()
     }
-  }, [load, setIndex])
+  }, [load, setIndex, setLoading])
 
   const refresh = useCallback(async () => {
     setLoading(true)

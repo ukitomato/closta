@@ -29,11 +29,18 @@ export function CenterHeader({
       className="border-border flex shrink-0 items-center gap-3 border-b px-4 py-2"
       data-testid="center-header"
     >
-      <span className="min-w-0 truncate text-xs font-medium" data-testid={titleTestId}>
+      {/* 1 行に切り詰めた全文は title で出す (pr-gate R1 a11y M-006)。 */}
+      <span
+        className="min-w-0 truncate text-xs font-medium"
+        title={title}
+        data-testid={titleTestId}
+      >
         {title}
       </span>
       {detail !== null && detail !== '' && (
-        <span className="text-muted-foreground min-w-0 truncate text-xs">{detail}</span>
+        <span className="text-muted-foreground min-w-0 truncate text-xs" title={detail}>
+          {detail}
+        </span>
       )}
       <span className="text-muted-foreground ms-auto shrink-0 text-xs">{status}</span>
       {/* transcript の密度 (O-2 / FR-012)。監視ビューの行の密度 (一覧の見出し) とは別の位置・文言。 */}

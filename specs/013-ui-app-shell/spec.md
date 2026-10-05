@@ -48,7 +48,7 @@ linear: null
 | U-2 | シェルの持ち主の domain | `ui`。サイドバーの中の一覧 (過去・稼働中) は今の持ち主 (session) のまま | session がシェルを持つ (一覧の持ち主と同じになるが、設定の 4 画面は session の外) |
 | U-3 | 設定の 4 画面の置き場 | サイドバーの「設定」から開く、全面のダイアログ (左に 4 項目、右に画面)。閉じると元の会話に戻る | 中央の面を設定に切り替える (Chat と設定が同じ面を取り合い、会話の位置を失う) |
 | U-4 | 右のペイン (AD-025) | **枠と、タブを足す仕組みと、「概要」のタブ 1 つ**を本 feature で作る。**既定で畳む** (既定のウィンドウ幅 1100px で中央を今と同じ程度 (780px) に保つ。開くと中央は 500px。design-gate R1 H-02)。Changes / PR の Webview / Terminal / Files / Browser は後続 (Optional scope の **OPT-panel**) に登録する (利用者 2026-10-04: 「右ペインも入れることになるが、最初に入れたほうが良ければ入れて」。シェルの分割を後から変えると O-3〜O-6 の置き場所を書き直すため、枠は先に入れる) | 右を作らない (後で分割を変える) / 右の中身まで作る (git・node-pty・別の WebContents が要り 1 feature に収まらない) |
-| U-5 | 目標レイアウトの採用の ADR | AD-046 を **proposed** で起こす (AD-025 の記録は「決定ではない。採用には ADR を要する」) | ADR なしで実装する (AD-025 の条件に反する) |
+| U-5 | 目標レイアウトの採用の ADR | AD-046 を **proposed** で起こす (AD-025 の記録は「決定ではない。採用には ADR を要する」)。2026-10-05 に利用者が accepted にした | ADR なしで実装する (AD-025 の条件に反する) |
 
 ## Clarifications
 
@@ -156,7 +156,7 @@ linear: null
 - **FR-001**: アプリは上部のタブのナビゲーションを持ってはならない。面は、左のサイドバー・中央・右のペインの 3 つにしなければならない。
   - 左は `nav` のランドマーク、中央は `main` のランドマーク、右は名前付きの `complementary` のランドマークにする。トップレベルの `nav` は 1 つ (区画の中で `nav` を入れ子にしない)
   - サイドバーの幅は固定の既定の幅を持ち、畳める (畳んだ状態は再起動で既定に戻る) [ASSUMED]
-  - アプリの CSP と配信 (`src/main/app/protocol.ts`) を変えない。取り込む部品は本番の CSP (`style-src 'self'`。inline の `<style>` を足さない) の下で動くものに限る
+  - アプリの CSP と配信 (`src/main/app/protocol.ts`) を変えない。取り込む部品は本番の CSP (`style-src 'self'`。inline の `<style>` を足さない) の下で動くものに限る (実装の追記: 既存の Dialog (Radix) は開くたびに scroll-lock の inline の `<style>` を差し込み本番の CSP が弾くが、失うのは scroll-lock の CSS だけで、CSP は緩めない。research R-04 の訂正。pr-gate R1 security M-001)
 - **FR-002**: サイドバーは、上から順に「新規起動」のボタン・稼働中のセッションの区画・過去のセッションの区画・「設定」のボタンを持たなければならない。
   - 稼働中の区画は O-1 の `RunningSessionList` を、過去の区画は R-2 の `SessionListScreen` の一覧の部分 (フォルダごとのグループ・所在の絞り込み) を、行と規則を変えずに置く (画面の外枠・見出しは外す。区画の幅に収める調整の範囲は plan)
   - 稼働中の区画が 0 件のときは「稼働中のセッションはありません。」(今の文言) を 1 行で出す
@@ -206,7 +206,7 @@ linear: null
   - ナビゲーションのボタンを押していた手順 (`e2e/support/launch.ts:47` / `e2e/launch-dialog.spec.ts:18` / `perf/real-sessions.spec.ts:189,191`) をサイドバーの「新規起動」に直す。locator はサイドバーに限る (「新規起動」の文言は中央の空の状態にも出る)
   - 基準画像 (composer の領域) は、右のペインを既定で畳むことで今の幅 (composer の上限 704px) を保ち、変えない。変わったときは撮り直し、人間の見た目の承認 (Principle VIII (B)) を quickstart-results に記録する
   - perf は CI で流さないので、実行しない。直した手順は O-3 の義務 (2) を引き継ぐ feature が実機で確かめる (perf の安全柵・出力は変えないので、実機計測ハーネスの ADR の条件には当たらない)
-- **FR-012**: 目標レイアウトの採用を ADR (AD-046、**proposed**) に記録しなければならない (U-5)。
+- **FR-012**: 目標レイアウトの採用を ADR (AD-046。design の時点で proposed、2026-10-05 に利用者が accepted) に記録しなければならない (U-5)。
   - AD-025 の目標レイアウト (左 Thread list・中央 Chat・右 Workspace / Panel) を採用する。右は枠とタブの仕組みと「概要」までを本 feature で作り、Changes / PR の Webview / Terminal / Files / Browser を OPT-panel に送る
   - 設定の 4 画面をダイアログに移す理由と、AD-025 の「上部ナビの 4 画面」(R-1 の設定・セットアップの 3 画面 + chat) の読み替え: 3 画面と X-3 のプロバイダの画面 → 設定のダイアログ、chat (R-3 で過去ログ) → 中央の本体
   - 右のペインに外部コンテンツを載せるときの境界: 主ウィンドウの `webviewTag` を有効にしない (main が管理する `WebContentsView`)、モーダル (設定・起動・承認) を開いている間は外部のビューを隠す、renderer が報告する配置の矩形を main で検証する
@@ -241,7 +241,7 @@ linear: null
 - **SC-008**: **起動の順序を守る。** 過去の区画の初回の `listSessions` は、`listRuntimes` が解決する前に呼ばれない。計測経路: 過去の区画の component テスト + quickstart V-3 (WSL を実行中にして起動し、取り直さずにその所在のセッションが出る)
 - **SC-004**: **設定に届く。** US-3 の AC1〜AC4 のとおりになり、設定の 4 画面の既存の component テストが、ダイアログの中に置いた形で通る。計測経路: 設定のダイアログの component テスト + 既存のテスト
 - **SC-005**: **画面の ID が残らない。** `SCREENS` / `ScreenId` / `setScreen` の参照と、nav の「セッション起動」のボタンを押す手順が `src` / `e2e` / `perf` に 0 件。計測経路: grep (quickstart) + 型検査
-- **SC-006**: **記録が追随する。** AD-046 が proposed で存在し、roadmap に O-7 と OPT-panel があり、O-3〜O-6 の依存に O-7 があり、Constitution 検証が通る。計測経路: `node scripts/constitution/check.mjs` + quickstart の確認
+- **SC-006**: **記録が追随する。** AD-046 が存在し利用者が accepted にしている (2026-10-05)、roadmap に O-7 と OPT-panel があり、O-3〜O-6 の依存に O-7 があり、Constitution 検証が通る。計測経路: `node scripts/constitution/check.mjs` + quickstart の確認
 
 ## Dependencies
 

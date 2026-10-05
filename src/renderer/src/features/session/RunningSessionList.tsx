@@ -147,11 +147,13 @@ function MonitorSummary(): React.JSX.Element {
   const store = useRunningSessionStoreApi()
   const usage = useRunningSessionStore(useShallow((s) => slotUsage(s)))
   const counts = useRunningSessionStore(useShallow((s) => attentionCounts(s)))
-  // 「表示中を除く」の表示中は見ているセッション (中央に稼働中の会話を出していて設定を開いていないときの選択中。O-7 FR-006)。
+  // 「表示中を除く」の表示中は見ているセッション (中央に稼働中の会話を出していて、設定も起動ダイアログも開いていないときの
+  // 選択中。O-7 FR-006)。
   const focus = useUiStore((s) => s.focus)
   const settingsOpen = useUiStore((s) => s.settings.open)
+  const launchOpen = useUiStore((s) => s.launchOpen)
   const watchedId = useRunningSessionStore((s) =>
-    watchedIdOf({ focus, settings: { open: settingsOpen } }, s.selectedId)
+    watchedIdOf({ focus, settings: { open: settingsOpen }, launchOpen }, s.selectedId)
   )
   const hasTarget = useRunningSessionStore((s) => nextAwaiting(s, watchedId) !== null)
   const density = useRunningSessionStore((s) => s.density)

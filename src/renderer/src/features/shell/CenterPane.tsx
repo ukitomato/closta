@@ -20,13 +20,14 @@ import { useUiStore } from '@/stores/ui'
 
 import { CenterHeader } from './CenterHeader'
 import { SHELL_LABELS } from './labels'
+import { CENTER_ID } from './shell-layout'
 
 /**
  * **中央** (O-7 / FR-003 / FR-005)。`main` のランドマーク。`focus` に応じて次のどれか 1 つを出す:
  *
  * - `running` → 中央のヘッダ + 実行中の Chat (`LivePane`)
  * - `past` → 中央のヘッダ (一覧の行と同じ題とグループの表示) + 過去ログの transcript (`ChatScreen`)
- * - `none` → 空の状態 (新規起動と、フォルダが未登録なら「設定 → 作業フォルダ」)
+ * - `none` → 空の状態 (新規起動と、フォルダが未登録なら「作業フォルダを登録する」を主な操作に)
  *
  * 稼働中の会話の状態 (接続・transcript・下書き・キュー) はストアと `RunningSessionsProvider` が持つので、面を切り替えても
  * 保たれる (X-5 FR-008 / FR-004)。スクロールの位置は保たない (戻ると下端に追従する)。
@@ -36,8 +37,11 @@ export function CenterPane(): React.JSX.Element {
   const view = useRunningSessionsView()
   return (
     <main
+      id={CENTER_ID}
+      // スキップリンクの行き先 (Tab 順には入れない)。
+      tabIndex={-1}
       aria-label={SHELL_LABELS.center}
-      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden outline-none"
       data-testid="center"
       data-focus={focus}
     >
@@ -88,22 +92,26 @@ function CenterEmpty(): React.JSX.Element {
   const openSettings = useUiStore((s) => s.openSettings)
   // 一覧を読み込み中は「登録されていない」と断定しない (X-4 po M-102 の規則)。
   const noFolders = view.folders !== null && view.folders.folders.length === 0
+  // フォルダが 0 件のときは起動できないので、登録を主な操作にし、見出しも状態に合わせる (pr-gate R1 ux M-001)。
   return (
     <div className="flex min-h-0 flex-1 items-center justify-center p-6" data-testid="center-empty">
       <EmptyState>
-        <EmptyStateGreeting className="text-lg">{SHELL_LABELS.centerEmpty}</EmptyStateGreeting>
-        {noFolders && (
-          <p className="text-muted-foreground text-sm">{SHELL_LABELS.centerEmptyNoFolders}</p>
-        )}
+        <EmptyStateGreeting className="text-lg">
+          {noFolders ? SHELL_LABELS.centerEmptyNoFolders : SHELL_LABELS.centerEmpty}
+        </EmptyStateGreeting>
         <div className="flex flex-wrap justify-center gap-2">
-          <Button type="button" onClick={() => setLaunchOpen(true)}>
-            {SHELL_LABELS.centerEmptyLaunch}
-          </Button>
           {noFolders && (
-            <Button type="button" variant="outline" onClick={() => openSettings('folders')}>
+            <Button type="button" onClick={() => openSettings('folders')}>
               {SHELL_LABELS.centerEmptyFolders}
             </Button>
           )}
+          <Button
+            type="button"
+            variant={noFolders ? 'outline' : 'default'}
+            onClick={() => setLaunchOpen(true)}
+          >
+            {SHELL_LABELS.centerEmptyLaunch}
+          </Button>
         </div>
       </EmptyState>
     </div>

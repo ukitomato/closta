@@ -91,19 +91,25 @@ function SectionHeading({
   switch (group.kind) {
     case 'folder':
       return (
-        <div className="flex items-baseline gap-2">
+        <div className="flex min-w-0 items-baseline gap-2">
           {/*
             **`folderId` をそのまま出さない** (FR-047)。識別子は乱数由来の 32 桁であり、
             利用者に意味を持たない。登録一覧と突き合わせて表示名を引く。
             引けない窓 (登録解除と取得の交差) では種別名だけを出す — 空欄にしない。
+            長い名前は 1 行に切り詰め、全文は title で出す (280px のサイドバー。pr-gate R1 ux H-003)。
           */}
-          <span className="text-sm font-medium">{folderName ?? GROUP_KIND_LABELS.folder}</span>
+          <span
+            className="min-w-0 truncate text-sm font-medium"
+            title={folderName ?? GROUP_KIND_LABELS.folder}
+          >
+            {folderName ?? GROUP_KIND_LABELS.folder}
+          </span>
           {/*
             **フォルダ単位の値は「含む」と読める形にする** (po H-001)。
             この値は行ごとの越境を OR に畳んだものであり、
             どの行が越境かはここから決まらない。行単位は `SessionMeta` が出す。
           */}
-          <span className="text-muted-foreground text-xs">
+          <span className="text-muted-foreground shrink-0 text-xs">
             {group.boundary === 'cross' ? '越境を含む' : BOUNDARY_LABELS[group.boundary]}
           </span>
         </div>
@@ -119,8 +125,8 @@ function SectionHeading({
       )
     case 'unregistered':
       return (
-        <div className="flex items-baseline gap-2">
-          <span className="text-sm font-medium">{GROUP_KIND_LABELS.unregistered}</span>
+        <div className="flex min-w-0 items-baseline gap-2">
+          <span className="shrink-0 text-sm font-medium">{GROUP_KIND_LABELS.unregistered}</span>
           {/*
             **表示するのは変換済みのパスか安全な表示用文字列だけ。**
             UNC 接頭辞は境界を越えてこない (FR-042)。
@@ -220,14 +226,18 @@ function Section({
        */
       aria-labelledby={headingId}
     >
-      <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0">
+      {/*
+       * 280px のサイドバーでは件数・「作業フォルダとして登録」・「開く」が見出しの横に収まらないので、折り返して 2 行目に
+       * 落とす。見出しは 1 行に切り詰める (O-7 data-model §3。pr-gate R1 ux H-003)。
+       */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0 max-w-full">
           {/* **heading にする** (a11y H-004)。見た目は `text-sm font-medium` のまま。 */}
           <h3 id={headingId} className="min-w-0">
             <SectionHeading group={section.group} folderName={folderName} />
           </h3>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="text-muted-foreground text-xs">{countText(count, coverage)}</span>
           {registerSeed !== null && (
             <Button
@@ -558,8 +568,13 @@ function Outcomes({
 }): React.JSX.Element {
   return (
     <section className={cn(paper, 'rounded-xl p-3')}>
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-sm font-medium">列挙の結果</h2>
+      {/*
+       * 280px のサイドバーでは操作 (「ランタイムを再検出して取り直す」など) が見出しの横に収まらないので、折り返して
+       * 2 行目に落とす (O-7 data-model §3。pr-gate R1 ux H-003)。見出しの段はサイドバーの区画の見出し (h2) の下の h3
+       * (pr-gate R1 a11y L-001)。
+       */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-sm font-medium">列挙の結果</h3>
         {/* **理由に見合う操作だけを出す。** 判定は `RemedyButton` が 1 箇所で持つ。 */}
         <RemedyButton
           reasons={failureReasonsOf(outcomes)}
@@ -913,7 +928,7 @@ export function SessionListScreen({
 
         {sessions.failed && (
           <ErrorState
-            title="セッション一覧を取得できませんでした"
+            title="過去のセッションを取得できませんでした"
             detail="再取得してください。続く場合はログを確認してください。"
             retryLabel="再取得"
             retryingLabel="取得中"

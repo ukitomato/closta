@@ -1,8 +1,9 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { axe } from 'vitest-axe'
 
+import type { ThreadMessageLike } from '@assistant-ui/react'
 import { InfoIcon } from 'lucide-react'
 
 import { SESSION_PORT_MESSAGE } from '@domain/capability'
@@ -30,9 +31,24 @@ import { useUiStore } from '@/stores/ui'
 import { installCapability } from '@/test-support/capability'
 
 import { AppShell } from './AppShell'
-import { SHELL_LABELS } from './labels'
+import { OVERVIEW_LABELS, SHELL_LABELS } from './labels'
 import { OverviewTab } from './OverviewTab'
 import type { PanelTab } from './panel-tabs'
+
+/*
+ * 過去ログの取得 (`useTranscript`) だけを差し替える。既定は「読み込み中」(今までの `getTranscript` が解決しない形と同じ)。
+ * 入れ子の provider の下で過去ログの composer が無効のままかを見るテストだけが、取得済みにする (pr-gate R1 security M-002)。
+ */
+const { transcript } = vi.hoisted(() => ({
+  transcript: {
+    messages: [] as readonly ThreadMessageLike[],
+    status: 'loading' as 'idle' | 'loading' | 'ready' | 'empty' | 'failed',
+    reasonKey: null,
+    retry: () => {},
+    hasSelection: true
+  }
+}))
+vi.mock('@/features/chat/useTranscript', () => ({ useTranscript: () => transcript }))
 
 /**
  * O-7 FE-014 / FE-021 / FE-031 / FE-042 — シェル (SC-001 / SC-002 / SC-004 / SC-007 / US-1〜US-4)。
@@ -148,6 +164,8 @@ interface Harness {
 let detach: (() => void) | null = null
 
 beforeEach(() => {
+  transcript.messages = []
+  transcript.status = 'loading'
   useUiStore.setState({
     focus: 'none',
     settings: { open: false, section: 'runtimes' },
@@ -291,7 +309,7 @@ describe('起動直後 (US-1 AC1 / AC5 / SC-001)', () => {
     ).toBeEnabled()
   })
 
-  it('作業フォルダが未登録なら中央に「設定 → 作業フォルダ」の操作が出て、押すと設定が作業フォルダで開く', async () => {
+  it('作業フォルダが未登録なら中央の見出しが状態を言い、「作業フォルダを登録する」が主な操作で、押すと設定が作業フォルダで開く', async () => {
     await setup({
       folders: [],
       index: { groups: [], outcomes: [], fetchedAt: NOW, complete: true }
@@ -709,5 +727,273 @@ describe('右のペイン (US-4 AC1〜AC5 / FR-014 / FR-015)', () => {
     expect(useUiStore.getState().sidebarCollapsed).toBe(true)
     resize(1400) // 幅が戻っても自動では開かない
     expect(useUiStore.getState().sidebarCollapsed).toBe(true)
+  })
+})
+
+function stubResizeObserver(): (width: number) => void {
+  let callback: ((entries: { contentRect: { width: number } }[]) => void) | null = null
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      constructor(cb: typeof callback) {
+        callback = cb
+      }
+      observe(): void {
+        // 幅は callback を直接呼んで与える。
+      }
+      disconnect(): void {
+        // 何も持たない。
+      }
+    }
+  )
+  return (width) => act(() => callback?.([{ contentRect: { width } }]))
+}
+
+const unregisteredIndex = (): SessionIndexDTO => ({
+  groups: [
+    {
+      kind: 'unregistered',
+      cwdKey: 'k1',
+      location: { kind: 'wsl', distroName: 'Ubuntu' },
+      cwd: { namespace: 'wsl:Ubuntu', value: '/home/u/other' },
+      cwdDisplay: null,
+      suggestedDisplayName: 'other',
+      sessions: [pastSession()]
+    }
+  ],
+  outcomes: pastIndex().outcomes,
+  fetchedAt: NOW,
+  complete: true
+})
+
+describe('pr-gate R1 の負の経路 (O-7)', () => {
+  it('過去の会話を読んでいる間に、失敗したセッションをサイドバーの行の「閉じる」で閉じても、中央は過去のままで起動ダイアログは開かない (po H-001)', async () => {
+    const h = await setup({ ids: [A] })
+    await selectRunning(0)
+    h.emit(A, { kind: 'failure', reasonKey: 'provider-error' })
+    h.push([{ sessionId: A, state: 'error', reasonKey: 'provider-error', claudeAlive: false }])
+    await selectPast(0)
+    await userEvent.click(within(runningRows()[0]!).getByRole('button', { name: '閉じる' }))
+    expect(center()).toHaveAttribute('data-focus', 'past')
+    expect(screen.queryByTestId('launch-dialog-host')).toBeNull()
+    // 失敗の告知は古くなるので消す (次に開いたときに出さない)。前回の設定は残す。
+    expect(h.store.getState().launch.previousFailure).toBeNull()
+    expect(h.store.getState().launch.lastConfig).not.toBeNull()
+  })
+
+  it('拒否の後に起動ダイアログを閉じて開き直すと、古い拒否の告知は出ない (po M-001 / ux M-004)', async () => {
+    const h = await setup()
+    await userEvent.click(within(sidebar()).getByRole('button', { name: SHELL_LABELS.newSession }))
+    const host = await screen.findByTestId('launch-dialog-host')
+    act(() =>
+      h.store.setState((s) => ({
+        launch: { ...s.launch, phase: 'rejected', rejectReason: 'session-limit' }
+      }))
+    )
+    expect(await within(host).findByText(/同時に動かせるセッションは/)).toBeInTheDocument()
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByTestId('launch-dialog-host')).toBeNull())
+    expect(h.store.getState().launch).toMatchObject({ phase: 'entry', rejectReason: null })
+    await userEvent.click(within(sidebar()).getByRole('button', { name: SHELL_LABELS.newSession }))
+    const reopened = await screen.findByTestId('launch-dialog-host')
+    expect(within(reopened).queryByText(/同時に動かせるセッションは/)).toBeNull()
+  })
+
+  it('起動ダイアログを開いている間も、見ていたセッションの承認待ちを読み上げる (po M-003 / a11y M-002)', async () => {
+    const h = await setup({ ids: [A] })
+    await selectRunning(0)
+    await userEvent.click(within(sidebar()).getByRole('button', { name: SHELL_LABELS.newSession }))
+    await screen.findByTestId('launch-dialog-host')
+    h.emit(A, { kind: 'state', state: 'awaiting_permission' })
+    expect(screen.getByTestId('session-announcer')).toHaveTextContent(
+      '案件フォルダ: 承認待ちになりました。'
+    )
+  })
+
+  it('設定のダイアログの中にも承認待ちの件数の印が出る (ux H-001)', async () => {
+    const h = await setup({ ids: [A] })
+    await userEvent.click(within(sidebar()).getByRole('button', { name: SHELL_LABELS.settings }))
+    const dialog = await screen.findByTestId('settings-dialog')
+    h.emit(A, { kind: 'state', state: 'awaiting_permission' })
+    expect(await within(dialog).findByTestId('session-nav-awaiting')).toHaveTextContent(
+      '承認待ち 1 件'
+    )
+  })
+
+  it('起動ダイアログを Esc で閉じると、押した「新規起動」にフォーカスが戻る (a11y H-001)', async () => {
+    await setup()
+    const opener = within(sidebar()).getByRole('button', { name: SHELL_LABELS.newSession })
+    await userEvent.click(opener)
+    await screen.findByTestId('launch-dialog-host')
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByTestId('launch-dialog-host')).toBeNull())
+    await waitFor(() => expect(opener).toHaveFocus())
+  })
+
+  it('「閉じて起動し直す」から開いた起動ダイアログを閉じると、開いた元が消えているのでサイドバーの「新規起動」へ移る (a11y H-001)', async () => {
+    const h = await setup({ ids: [A] })
+    await selectRunning(0)
+    h.emit(A, { kind: 'failure', reasonKey: 'provider-error' })
+    h.push([{ sessionId: A, state: 'error', reasonKey: 'provider-error', claudeAlive: false }])
+    await userEvent.click(await within(center()).findByRole('button', { name: '閉じて起動し直す' }))
+    await screen.findByTestId('launch-dialog-host')
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByTestId('launch-dialog-host')).toBeNull())
+    await waitFor(() =>
+      expect(within(sidebar()).getByRole('button', { name: SHELL_LABELS.newSession })).toHaveFocus()
+    )
+    expect(h.store.getState().launch.previousFailure).toBeNull()
+  })
+
+  it('設定を開いた元が中の操作 (登録) で消えたら、閉じたときサイドバーの「設定」にフォーカスが移る (a11y M-003 / po M-004)', async () => {
+    await setup({ index: unregisteredIndex() })
+    const register = await within(screen.getByTestId('past-sessions')).findByRole('button', {
+      name: '作業フォルダとして登録'
+    })
+    await userEvent.click(register)
+    await screen.findByTestId('settings-dialog')
+    // 登録されて、グループが登録フォルダに変わった (「登録」のボタンが消える)。
+    act(() => useSessionsStore.getState().setIndex(pastIndex()))
+    expect(register.isConnected).toBe(false)
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByTestId('settings-dialog')).toBeNull())
+    await waitFor(() =>
+      expect(within(sidebar()).getByRole('button', { name: SHELL_LABELS.settings })).toHaveFocus()
+    )
+  })
+
+  it('Provider の秘密を入力して閉じ、開き直すと入力欄は空 (US-3 AC2 / FR-008。security L-001)', async () => {
+    await setup()
+    const opener = (): HTMLElement =>
+      within(sidebar()).getByRole('button', { name: SHELL_LABELS.settings })
+    await userEvent.click(opener())
+    const dialog = await screen.findByTestId('settings-dialog')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'プロバイダ' }))
+    fireEvent.change(await within(dialog).findByTestId('provider-secret'), {
+      target: { value: 'sk-plain' }
+    })
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByTestId('settings-dialog')).toBeNull())
+    await userEvent.click(opener())
+    const reopened = await screen.findByTestId('settings-dialog')
+    expect(within(reopened).getByTestId('settings-section')).toHaveAttribute(
+      'data-section',
+      'providers'
+    )
+    const secret = (await within(reopened).findByTestId('provider-secret')) as HTMLInputElement
+    expect(secret.value).toBe('')
+  })
+
+  it('サイドバーの開閉のボタンは同じ要素のままで、押してもフォーカスが残り aria-expanded が変わる (a11y H-002)', async () => {
+    await setup()
+    const toggle = within(sidebar()).getByRole('button', { name: SHELL_LABELS.collapseSidebar })
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    await userEvent.click(toggle)
+    expect(toggle.isConnected).toBe(true)
+    expect(toggle).toHaveFocus()
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(toggle).toHaveAccessibleName(SHELL_LABELS.expandSidebar)
+  })
+
+  it('右のペインの帯のタブのアイコンから開くと、そのタブにフォーカスが移る (a11y H-002)', async () => {
+    await setup()
+    const panel = screen.getByTestId('right-panel')
+    await userEvent.click(within(panel).getByRole('button', { name: SHELL_LABELS.overviewTab }))
+    expect(panel).toHaveAttribute('data-collapsed', 'false')
+    await waitFor(() =>
+      expect(within(panel).getByRole('tab', { name: SHELL_LABELS.overviewTab })).toHaveFocus()
+    )
+  })
+
+  it('自動で畳んだ面の中にフォーカスがあったら開閉のボタンへ移し、右を畳んだ直後に一気に狭くなってもサイドバーを畳む (a11y H-002 / ux M-009)', async () => {
+    const resize = stubResizeObserver()
+    useUiStore.setState({ panel: { collapsed: false, tab: 'overview' } })
+    await setup()
+    resize(1100)
+    const tab = screen.getByRole('tab', { name: SHELL_LABELS.overviewTab })
+    act(() => tab.focus())
+    resize(1000) // 右を畳む (畳んだ後の閾値 800 は割っていない)
+    expect(useUiStore.getState().panel.collapsed).toBe(true)
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: SHELL_LABELS.expandPanel })).toHaveFocus()
+    )
+    resize(700) // 畳んだ後の状態で「割った瞬間」を判定するので、サイドバーも畳む
+    expect(useUiStore.getState().sidebarCollapsed).toBe(true)
+  })
+
+  it('中央に出していない側の一覧の行 (listitem) には aria-current が残らない (a11y M-001)', async () => {
+    await setup({ ids: [A] })
+    await selectRunning(0)
+    await selectPast(0)
+    expect(runningRows()[0]).not.toHaveAttribute('aria-current')
+    expect((await pastRows())[0]).not.toHaveAttribute('aria-current')
+  })
+
+  it('「概要」の effort は起動ダイアログと同じ訳で、モデルと権限モードは起動時の値と分かる見出し (ux M-006 / ui-coverage M-004)', async () => {
+    const h = await setup()
+    h.launchMock.mockResolvedValueOnce({ status: 'launching', sessionId: B })
+    await act(() =>
+      h.store.launch({
+        folderId: 'folder-1',
+        runtimeId: UBUNTU.id,
+        providerId: null,
+        modelId: 'claude-custom',
+        effort: 'high',
+        permissionMode: 'default'
+      })
+    )
+    await userEvent.click(screen.getByRole('button', { name: SHELL_LABELS.expandPanel }))
+    const overview = await within(screen.getByTestId('right-panel')).findByTestId('overview')
+    expect(overview).toHaveTextContent('高')
+    expect(overview).not.toHaveTextContent('high')
+    expect(overview).toHaveTextContent(OVERVIEW_LABELS.model)
+    expect(overview).toHaveTextContent('claude-custom') // カタログに無ければ ID
+    expect(overview).toHaveTextContent(OVERVIEW_LABELS.permissionMode)
+  })
+
+  it('長い日本語の題とフォルダ名は 1 行に切り詰め、全文は title で読める (po M-005 / a11y M-006 / ux H-003)', async () => {
+    const longTitle = '日本語のとても長い題'.repeat(12)
+    const longFolder = '作業フォルダのとても長い表示名'.repeat(6)
+    await setup({
+      folders: [folder(longFolder)],
+      index: pastIndex([pastSession({ summary: longTitle })])
+    })
+    await selectPast(0)
+    const title = within(center()).getByTestId('past-title')
+    expect(title).toHaveClass('truncate')
+    expect(title).toHaveAttribute('title', longTitle)
+    const heading = await within(screen.getByTestId('past-sessions')).findByTitle(longFolder)
+    expect(heading).toHaveClass('truncate')
+  })
+
+  it('外側に稼働中の runtime があっても、過去ログの composer は無効で、入力は稼働中のセッションへ送られない (plan RK-02 / security M-002)', async () => {
+    transcript.status = 'ready'
+    transcript.messages = [
+      { id: 'p1', role: 'assistant', content: [{ type: 'text', text: '過去の応答' }] }
+    ]
+    const h = await setup({ ids: [A] })
+    await selectRunning(0)
+    await selectPast(0)
+    await within(center()).findByText('過去の応答')
+    const composer = within(center()).getByRole('textbox', { name: 'Message input' })
+    expect(composer).toBeDisabled()
+    const before = h.store.getState().sessions[A]?.messages.length
+    await userEvent.type(composer, 'こんにちは{Enter}')
+    expect(h.store.getState().sessions[A]?.messages.length).toBe(before)
+  })
+
+  it('vitest-axe: 稼働中の会話・右のペインを開いた状態・畳んだサイドバー・起動ダイアログでも違反 0 (a11y M-007)', async () => {
+    const h = await setup({ ids: [A] })
+    const rules = { rules: { 'color-contrast': { enabled: false } } }
+    await selectRunning(0)
+    await userEvent.click(screen.getByRole('button', { name: SHELL_LABELS.expandPanel }))
+    expect((await axe(h.container, rules)).violations).toEqual([])
+    await userEvent.click(
+      within(sidebar()).getByRole('button', { name: SHELL_LABELS.collapseSidebar })
+    )
+    expect((await axe(h.container, rules)).violations).toEqual([])
+    await userEvent.click(within(sidebar()).getByRole('button', { name: SHELL_LABELS.newSession }))
+    const host = await screen.findByTestId('launch-dialog-host')
+    expect((await axe(host, rules)).violations).toEqual([])
   })
 })

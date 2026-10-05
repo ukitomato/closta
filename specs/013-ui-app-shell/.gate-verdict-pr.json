@@ -1,0 +1,129 @@
+{
+    "gate": "pr",
+    "run": "2026-10-05T19:30:00+09:00",
+    "spec_dir": "specs/013-ui-app-shell",
+    "spec_id": "013-ui-app-shell",
+    "round": 1,
+    "base_branch": "origin/main",
+    "head": "7d46352",
+    "diff_stat": {
+        "files": 93,
+        "additions": 5457,
+        "deletions": 575
+    },
+    "severity_counts": {
+        "critical": 0,
+        "high": 7,
+        "medium": 29,
+        "low": 33
+    },
+    "convergence": {
+        "resolved_from_prev": 0,
+        "new_in_round": 7,
+        "unresolved": 0
+    },
+    "round_history": [
+        {
+            "round": 1,
+            "critical": 0,
+            "high": 7,
+            "convergence": {
+                "resolved_from_prev": 0,
+                "new_in_round": 7,
+                "unresolved": 0
+            },
+            "high_findings": [
+                "HI-1 \u5931\u6557\u306e close \u304c\u904e\u53bb\u306e\u4f1a\u8a71\u304b\u3089\u4e2d\u592e\u3092\u596a\u3044\u8d77\u52d5\u30c0\u30a4\u30a2\u30ed\u30b0\u3092\u958b\u304f (po H-001 = ux M-005)",
+                "HI-2 \u8d77\u52d5\u30c0\u30a4\u30a2\u30ed\u30b0\u3092\u9589\u3058\u3066\u3082\u30d5\u30a9\u30fc\u30ab\u30b9\u304c\u623b\u3089\u306a\u3044 (a11y H-001)",
+                "HI-3 \u7573\u3080 / \u958b\u304f\u30dc\u30bf\u30f3\u304c unmount \u3055\u308c\u30d5\u30a9\u30fc\u30ab\u30b9\u3068 aria-expanded \u306e\u5909\u5316\u304c\u5931\u308f\u308c\u308b (a11y H-002)",
+                "HI-4 \u8a2d\u5b9a\u306e\u30c0\u30a4\u30a2\u30ed\u30b0\u306e\u9593\u3001\u6ce8\u610f\u306e\u5370\u304c\u898b\u3048\u306a\u3044 (ux H-001)",
+                "HI-5 listRuntimes \u306e\u5f85\u3061\u306e\u9593\u306b\u8aad\u307f\u8fbc\u307f\u4e2d\u3092\u793a\u3055\u305a FR-016 \u3092\u8fc2\u56de\u3067\u304d\u308b (ux H-002 = po M-002)",
+                "HI-6 280px \u3067\u904e\u53bb\u306e\u533a\u753b\u306e\u898b\u51fa\u3057\u306e\u884c\u304c\u3042\u3075\u308c\u308b (ux H-003)",
+                "HI-7 AD-046 :38 \u3068\u4f8b\u5916 2 \u4ef6\u306e\u98df\u3044\u9055\u3044 (architecture H-001)"
+            ]
+        }
+    ],
+    "suppressed_by_code_gate": [],
+    "viewpoint_coverage": {
+        "A": "security Low:3",
+        "B": "security Medium:1",
+        "C": "architecture Medium:2 Low:2 / platform-boundary Medium:1 Low:2",
+        "D": "architecture High:1 Medium:2 Low:4",
+        "E": "po High:1 Medium:4 Low:3",
+        "F": "platform-boundary Medium:1 Low:1",
+        "G": "ux High:3 Medium:10 Low:5 / a11y High:2 Medium:6 Low:7 / ui-coverage Medium:4 Low:1",
+        "H": "security Medium:1 Low:2 / architecture Low:2 / po Medium:2 Low:1 / ux Medium:1 / a11y Medium:1 / platform-boundary Low:1 / ui-coverage Medium:1 Low:1"
+    },
+    "rule_verification": {
+        "ran": true,
+        "round": 1,
+        "reason": "Round 1",
+        "exit_code": 0
+    },
+    "skipped_reviewers": [
+        {
+            "name": "database-reviewer",
+            "reason": "auto_invoke_patterns \u306b\u4e00\u81f4\u3059\u308b\u5909\u66f4\u30d5\u30a1\u30a4\u30eb\u304c\u7121\u3044 (\u5909\u66f4 93 \u4ef6 / pattern 5 \u4ef6)"
+        }
+    ],
+    "tracks": {
+        "security-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 2,
+            "low": 5
+        },
+        "architecture-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 1,
+            "medium": 4,
+            "low": 8
+        },
+        "po-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 1,
+            "medium": 6,
+            "low": 4
+        },
+        "ux-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 3,
+            "medium": 11,
+            "low": 5
+        },
+        "a11y-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 2,
+            "medium": 7,
+            "low": 7
+        },
+        "platform-boundary-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 2,
+            "low": 4
+        },
+        "ui-coverage-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 5,
+            "low": 2
+        }
+    },
+    "invoker_note": "Critical 0 \u3067 PASS\u3002High 7 \u4ef6\u3092\u76f4\u3057\u3066\u304b\u3089 Round 2 \u3067\u518d\u691c\u8a3c\u3059\u308b (cl-done \u306f\u305d\u306e\u5f8c)",
+    "verdict": "PASS"
+}

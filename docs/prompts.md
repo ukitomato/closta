@@ -309,5 +309,5 @@ O-7 の後は、端末は右のペインのタブ (Terminal) として足す (AD
 ### OPT-panel — 右のペインのタブ
 
 ```
-/cl-design "[ui] O-7 の右のペインに、表示中のセッションの作業フォルダの Changes (git の差分)、Files (ファイルの一覧)、Browser、PR の Webview のタブを足す。Browser と PR の Webview は主ウィンドウの webviewTag を使わず、main が管理する WebContentsView に独立した partition と CSP で載せ、アプリの CSP を緩めない (AD-046 Decision 4)。main / infra 側の作業 (git・ファイルの監視・別の WebContents) をどの domain が持つかは design で人間に諮る。Terminal は OPT-pty が持つ。" --targets both
+/cl-design "[ui] O-7 の右のペインに、表示中のセッションの作業フォルダの Changes (git の差分)、Files (ファイルの一覧)、Browser、PR の Webview のタブを足す。Browser と PR の Webview は AD-046 Decision 4 の境界のすべてに従う: 主ウィンドウの webviewTag を使わず、main が管理する WebContentsView に独立した partition と CSP で載せる。モーダル (設定・起動・承認) を開いている間は外部のビューを隠すか外す。renderer が報告する配置の矩形は main で検証する。アプリの CSP を緩めない。main / infra 側の作業 (git・ファイルの監視・別の WebContents) をどの domain が持つかは design で人間に諮る。Terminal は OPT-pty が持つ。" --targets both
 ```

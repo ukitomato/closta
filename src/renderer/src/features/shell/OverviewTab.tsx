@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 
+import { EFFORT_LABELS } from '@/features/provider/labels'
 import { useProviders } from '@/features/provider/useProviders'
 import { groupLabelOf, locationIndexOf, locationLabelOf } from '@/features/session-list/group-label'
 import { buildSessionRows, findRow, formatSessionTime } from '@/features/session-list/rows'
@@ -62,33 +63,38 @@ function RunningOverview(): React.JSX.Element {
   const config = live.state.config
 
   const items: Item[] = []
+  const provider =
+    config.providerId === null
+      ? null
+      : (providers.providers?.find((p) => p.id === config.providerId) ?? null)
   if (config.providerId === null) {
     items.push({ label: OVERVIEW_LABELS.provider, value: OVERVIEW_LABELS.providerDefault })
   } else if (providers.providers !== null) {
     items.push({
       label: OVERVIEW_LABELS.provider,
-      value:
-        providers.providers.find((p) => p.id === config.providerId)?.displayName ??
-        OVERVIEW_LABELS.providerRemoved
+      value: provider?.displayName ?? OVERVIEW_LABELS.providerRemoved
     })
   }
+  // 起動時に選んだ値 (実行中の変化は O-4 / O-5 が対応表の行で扱う)。表示は起動ダイアログと同じ表示名と訳
+  // (Provider のモデルカタログの displayName・EFFORT_LABELS。引けなければ ID。pr-gate R1 ux M-006 / ui-coverage M-004)。
   items.push({
     label: OVERVIEW_LABELS.model,
-    value: config.modelId ?? OVERVIEW_LABELS.modelDefault
+    value:
+      config.modelId === null
+        ? OVERVIEW_LABELS.modelDefault
+        : (provider?.models.find((m) => m.id === config.modelId)?.displayName ?? config.modelId)
   })
-  if (config.effort !== null) items.push({ label: OVERVIEW_LABELS.effort, value: config.effort })
+  if (config.effort !== null)
+    items.push({ label: OVERVIEW_LABELS.effort, value: EFFORT_LABELS[config.effort] })
   items.push({
     label: OVERVIEW_LABELS.permissionMode,
     value: PERMISSION_MODE_LABELS[config.permissionMode]
   })
-  // 所在は登録フォルダの一覧から引く。読み込み中は出さず、引けなければ中央のヘッダと同じ fallback の文言に倒す。
-  if (view.folders !== null) {
-    const folder = view.folders.folders.find((f) => f.id === config.folderId)
-    items.push({
-      label: OVERVIEW_LABELS.folderLocation,
-      value:
-        folder === undefined ? view.folderName(config.folderId) : locationLabelOf(folder.location)
-    })
+  // 所在は登録フォルダの一覧から引く。読み込み中・引けないとき (登録の解除) は行ごと出さない (所在の欄にフォルダの
+  // 状態の文を入れない。pr-gate R1 ux M-006)。
+  const folder = view.folders?.folders.find((f) => f.id === config.folderId)
+  if (folder !== undefined) {
+    items.push({ label: OVERVIEW_LABELS.folderLocation, value: locationLabelOf(folder.location) })
   }
   return <Items items={items} />
 }

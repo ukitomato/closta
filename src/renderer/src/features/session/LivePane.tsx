@@ -92,7 +92,13 @@ function NewSessionDialog({
 
 function Launching(): React.JSX.Element {
   return (
-    <div className="flex min-h-40 items-center justify-center p-6" data-testid="session-launching">
+    // 起動中になったことを読み上げる (「起動」のボタンが消えてフォーカスが容器に移るので、名前だけが読まれていた。
+    // pr-gate R1 a11y L-004)。
+    <div
+      role="status"
+      className="flex min-h-40 items-center justify-center p-6"
+      data-testid="session-launching"
+    >
       <GenerationLoader label="セッションを起動中…" tick={0} />
     </div>
   )

@@ -18,14 +18,19 @@ export const SHELL_LABELS = {
   themeLight: 'ライト',
   themeDark: 'ダーク',
   centerEmpty: 'セッションを選ぶか、新しく起動してください。',
-  centerEmptyNoFolders: '作業フォルダがまだ登録されていません。設定から登録してください。',
-  /** 中央の空の状態のボタン。サイドバーの「新規起動」と文言を分ける (E2E の locator がぶつからない)。 */
+  /** フォルダが 0 件のときの中央の見出し (起動できないので「選ぶか起動」とは言わない。pr-gate R1 ux M-001)。 */
+  centerEmptyNoFolders: '作業フォルダがまだ登録されていません。登録すると起動できます。',
+  /** 中央の空の状態の CTA。次の一手を説明的に書く (サイドバーの短い「新規起動」と同じ操作。pr-gate R1 ux L-001)。 */
   centerEmptyLaunch: '新しいセッションを起動',
-  centerEmptyFolders: '設定 → 作業フォルダ',
+  /** 作業フォルダの登録へ向かうボタン。一覧の空の状態のボタンと同じ文言 (pr-gate R1 ux M-002)。 */
+  centerEmptyFolders: '作業フォルダを登録する',
+  /** フォーカスしたときだけ見える、中央の会話へのスキップリンク (pr-gate R1 a11y M-005)。 */
+  skipToCenter: '会話へ移動',
   /** 中央の本体のランドマーク名。 */
   center: '会話',
   pastReadOnly: '読み取り専用',
-  launchDialogTitle: '新しいセッション',
+  /** 起動ダイアログの名前。中身の見える見出しと同じ文言 (pr-gate R1 a11y L-002)。 */
+  launchDialogTitle: 'セッションを起動',
   panelLabel: 'セッションの詳細',
   panelTabs: 'セッションの詳細のタブ',
   overviewTab: '概要',
@@ -47,16 +52,17 @@ export const SETTINGS_SECTION_LABELS: Record<SettingsSection, string> = {
 
 /**
  * 「概要」の項目の見出し (data-model §5)。起動の軸の名前は起動ダイアログの見出し (`LAUNCH_AXIS_LABELS`) と同じ文字列を使う
- * (軸の名前を変えたときに概要だけが古く残らない。code-gate convention L-004)。
+ * (軸の名前を変えたときに概要だけが古く残らない。code-gate convention L-004)。モデルと権限モードは実行中に変わりうる
+ * (SDK の `status` / `init`。O-4 / O-5 が対応表の行で扱う) ので、起動時の値であることを見出しで示す (pr-gate R1 ui-coverage M-004)。
  */
 export const OVERVIEW_LABELS = {
   provider: LAUNCH_AXIS_LABELS.provider,
   providerDefault: '既定',
   providerRemoved: '登録が解除された Provider',
-  model: LAUNCH_AXIS_LABELS.model,
+  model: `起動時の${LAUNCH_AXIS_LABELS.model}`,
   modelDefault: '既定',
   effort: LAUNCH_AXIS_LABELS.effort,
-  permissionMode: LAUNCH_AXIS_LABELS.permissionMode,
+  permissionMode: `起動時の${LAUNCH_AXIS_LABELS.permissionMode}`,
   folderLocation: '作業フォルダの所在',
   folder: 'フォルダ',
   location: '所在',

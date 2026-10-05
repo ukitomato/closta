@@ -46,6 +46,11 @@
   - `elements-settings-panel` (Settings・B): **不採用**。モデル・system prompt・temperature などのアシスタントの設定の部品で、アプリの設定の 4 画面と合わない。既存の Dialog (`components/ui/dialog.tsx`) で全面のダイアログを組んだ
   - `Empty state` (B): 中央の空の状態に使った
   - 取り込んだ部品は無いので、本番の CSP (`style-src 'self'`) に触れる依存は増えていない
+  - **訂正 (pr-gate R1 security M-001)**: 既存の Dialog (`components/ui/dialog.tsx`。Radix) は、開くたびに react-remove-scroll-bar
+    (`RemoveScroll` → `styleSingleton`) の inline の `<style>` を head に差し込み、本番の CSP がそれを弾く。O-7 でこの Dialog が
+    設定と起動の入口になり、起動のたびに開く。失うのは scroll-lock の CSS (スクロールバーの幅の補正と body の overflow の固定) だけで、
+    ホイールとタッチの封じは JS のイベントで残る。**CSP を緩めて通さない** (AD-025 §7)。違反を E2E で集める仕組みと、nonce の配信で
+    違反そのものを消すかは roadmap の system-scope (O-7 pr-gate R1 の項目 (1)) に送った
 
 ## R-05 Cursor の Agent View との対応
 

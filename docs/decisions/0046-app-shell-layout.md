@@ -53,3 +53,17 @@ superseded-by: []
 
 - spec 013 の SC-001〜SC-005 (component テスト・E2E)
 - 実機の目視 (spec 013 quickstart V-3) で、利用者が Cursor の Agent View の意図に近いと確かめる
+
+## 訂正: session のコンポーネントは面の状態を「書かない」ではなく「focus を書かない」(2026-10-05 / O-7 pr-gate R1)
+
+Consequences の 1 つ目は「session のコンポーネントは面の状態を書かない」と例外なしで書いた。これは、同じ日に承認した
+spec 013 の FR-009 と plan の FE-011 と食い違っていた (AD-031 の訂正の規則に従い、ここで直す。Decision 1〜6 は変えない)。
+
+- **focus を書くのはシェル (`features/shell/useShellFocus.ts`) だけ**である。session のコンポーネントは focus を書かない
+- session のコンポーネントは、見ているセッションを導くために focus と設定・起動ダイアログの開閉を**読む** (`watchedIdOf`。
+  `RunningSessionList` の承認待ちの件数のボタンと `SessionAttentionAnnouncer`)
+- 過去のセッションの一覧が設定の開閉を**書く**のは、設定を「作業フォルダ」で開く 2 つの導線だけである — 未登録フォルダの
+  「登録」(`seedFolderDraft`) と、フォルダが 0 件のときの案内 (`openSettings('folders')`)。どちらも R-2 から続く登録の受け渡しで、
+  focus には触れない
+
+運用上の正本は ui charter の Cross-domain dependencies の「面の状態」で、glossary・data-model・`stores/ui.ts` はそこを参照する。

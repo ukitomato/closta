@@ -32,7 +32,7 @@ interface ShellState {
 | 承認待ちへの移動 (`selectNextAwaiting`。`RunningSessionList.tsx:159`) | 同上 | `running` |
 | 過去の行の選択 (`sessions.select`) | `selectedRowKey` が非 null に変わる | `past` |
 | 稼働中のセッションを閉じる (`close`。`:522`) | `selectedId` が null に変わる | `focus === 'running'` なら `none` |
-| 失敗したセッションを閉じる (`close` で `launch.previousFailure` が立つ) | 同上 | `none`、かつ `launchOpen = true` (X-4 US-1 AC7) |
+| 失敗したセッションを閉じる (`close` で `launch.previousFailure` が立つ) | 同上 | `focus === 'running'` なら `none`、かつ `launchOpen = true` (X-4 US-1 AC7)。**それ以外は focus を変えず、起動ダイアログも開かない** (過去の会話を読んでいる間にサイドバーの行の「閉じる」で閉じた場合。失敗の告知は古くなるので消す。pr-gate R1 po H-001) |
 | 一覧の再取得で過去の行が消える | `useTranscript` の `hasSelection` が false | `focus === 'past'` なら `none` |
 
 - 同じ id を選び直した (値が変わらない) ときも focus をその側に移す。そのため購読は値の変化ではなく、ストアの選択の操作 (`select` / `selectNextAwaiting` / 起動の受け付け) のたびに上がる通知 (`selectionSeq` などの単調増加の値) で受ける
@@ -40,11 +40,12 @@ interface ShellState {
 ### 見ているセッション (`watchedId`)
 
 ```ts
-watchedId = focus === 'running' && !settings.open ? selectedId : null
+watchedId = focus === 'running' && !settings.open && !launchOpen ? selectedId : null
 ```
 
 - 読み上げ (`SessionAttentionAnnouncer`。今の `screen === 'launch'` の判定) と、承認待ちの件数のボタン (`nextAwaiting`。`session-view.ts:421` の「表示中を除く」) は、どちらも `watchedId` を「表示中」として使う
-- 起動ダイアログを開いている間は、中央の会話は見えているので `watchedId` を変えない
+- **起動ダイアログを開いている間も `watchedId` は null にする** (pr-gate R1 po M-003 / a11y M-002)。起動ダイアログはモーダルで、全面の overlay が中央の会話と承認カードを覆い、外側は支援技術から隠れる (`aria-hidden`)。design の時点の「中央の会話は見えている」は誤りだった
+- **起動ダイアログと設定のダイアログの通知**: 起動ダイアログを起動せずに閉じたときは、拒否と前回の失敗の告知を消す (`dismissLaunchNotice`。`lastConfig` は残す。pr-gate R1 po M-001 / ux M-004)。設定のダイアログの左の列には注意の件数の印を置く (O-1 の USER 決定「設定を開いている間も承認待ちと失敗を別々に見せる」。pr-gate R1 ux H-001)
 
 ### 選択中の強調
 
@@ -78,6 +79,11 @@ watchedId = focus === 'running' && !settings.open ? selectedId : null
 | 4 | 設定 | ボタン。`settings.open = true` | ui (シェル) |
 
 - 280px に収める調整の範囲 (plan RK-04): 画面の見出し (「セッション一覧」) と外枠 (`max-w-3xl`) を外す。取得の時刻・「全件を取り直す」・列挙の結果の行・絞り込みのチップは残し、折り返しで収める。行と規則は変えない
+- **実装の追記 (pr-gate R1)**:
+  - グループの見出しの行と「列挙の結果」の見出しの行は `flex-wrap` で操作を 2 行目に落とし、フォルダ名・パスは 1 行に切り詰める (全文は `title`)。「列挙の結果」は区画の見出し (h2) の下の h3 (ux H-003 / a11y L-001)
+  - 起動の直後、`listRuntimes()` を待っている間も「取得中」(スケルトン・`aria-busy`・「全件を取り直す」は busy) にする。初回の取得の前に main が配る取得時刻 0 の索引は受けない (ux H-002 / platform-boundary L-004)
+  - 取得時刻と件数の `role="status"` の通知は、常時マウントになったので起動の直後と取り直しのたびに読まれる。通知は 1 文で短いので受け入れる (a11y L-005)
+  - **残した判断**: 稼働中の区画が上限まで伸びたとき、過去の区画の 8rem が常設の要素 (取得時刻・列挙の結果・絞り込み) で埋まり行が見えない (ux M-008)。「列挙の結果」を全部が成功なら 1 行に要約するか、過去の区画の最小の高さを上げるかは、過去の区画に検索を足す O-3 の design で判断する (roadmap の O-3 の行)。サイドバーではグループを region (`section`) のままにしている (a11y L-006。ランドマークの移動でグループの数だけ止まる) のも同じく O-3 で判断する
 
 ## §4 右のペインのタブ (`features/shell/panel-tabs.ts`)
 

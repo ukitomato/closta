@@ -16,6 +16,9 @@ export const SHELL_WIDTHS = {
   centerMin: { px: 480 }
 } as const
 
+/** 中央 (`main`) の id。スキップリンクの行き先 (pr-gate R1 a11y M-005)。 */
+export const CENTER_ID = 'shell-center'
+
 /** 今の開閉の状態で、中央が最小の幅を保つのに要る幅。 */
 export function shellThreshold(sidebarCollapsed: boolean, panelCollapsed: boolean): number {
   return (

@@ -51,7 +51,7 @@ export interface FolderDraftSeed {
  */
 export type TranscriptDensity = 'comfortable' | 'compact'
 
-interface UiState {
+export interface UiState {
   /** 中央に出すもの。 */
   focus: CenterFocus
   /** 設定のダイアログ。閉じても項目の id だけを覚える (中の画面は unmount する。FR-008)。 */
@@ -112,12 +112,17 @@ export const useUiStore = create<UiState>((set) => ({
 
 /**
  * 見ているセッション (data-model §1)。読み上げ (`SessionAttentionAnnouncer`) と承認待ちの件数のボタン (`nextAwaiting`) が
- * 「表示中」として使う。中央に稼働中の会話を出していて、設定のダイアログを開いていないときだけ選択中のもの。
- * 起動ダイアログを開いている間は中央の会話が見えているので変えない。
+ * 「表示中」として使う。中央に稼働中の会話を出していて、設定のダイアログも起動ダイアログも開いていないときだけ選択中のもの。
+ * 起動ダイアログはモーダルで中央の会話と承認カードを覆い、外側は支援技術から隠れるので、開いている間は見ていない扱い
+ * (pr-gate R1 po M-003 / a11y M-002)。
  */
 export function watchedIdOf(
-  ui: { readonly focus: CenterFocus; readonly settings: { readonly open: boolean } },
+  ui: {
+    readonly focus: CenterFocus
+    readonly settings: { readonly open: boolean }
+    readonly launchOpen: boolean
+  },
   selectedId: string | null
 ): string | null {
-  return ui.focus === 'running' && !ui.settings.open ? selectedId : null
+  return ui.focus === 'running' && !ui.settings.open && !ui.launchOpen ? selectedId : null
 }

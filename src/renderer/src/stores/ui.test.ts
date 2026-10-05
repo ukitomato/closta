@@ -44,11 +44,14 @@ describe('設定のダイアログ', () => {
 })
 
 describe('見ているセッション (watchedIdOf)', () => {
-  it('中央に稼働中の会話を出していて設定を開いていないときだけ選択中のもの', () => {
-    expect(watchedIdOf({ focus: 'running', settings: { open: false } }, 'a')).toBe('a')
-    expect(watchedIdOf({ focus: 'running', settings: { open: true } }, 'a')).toBeNull()
-    expect(watchedIdOf({ focus: 'past', settings: { open: false } }, 'a')).toBeNull()
-    expect(watchedIdOf({ focus: 'none', settings: { open: false } }, 'a')).toBeNull()
-    expect(watchedIdOf({ focus: 'running', settings: { open: false } }, null)).toBeNull()
+  it('中央に稼働中の会話を出していて、設定も起動ダイアログも開いていないときだけ選択中のもの', () => {
+    const closed = { settings: { open: false }, launchOpen: false } as const
+    expect(watchedIdOf({ focus: 'running', ...closed }, 'a')).toBe('a')
+    expect(watchedIdOf({ focus: 'running', ...closed, settings: { open: true } }, 'a')).toBeNull()
+    // 起動ダイアログはモーダルで中央を覆う (pr-gate R1 po M-003 / a11y M-002)。
+    expect(watchedIdOf({ focus: 'running', ...closed, launchOpen: true }, 'a')).toBeNull()
+    expect(watchedIdOf({ focus: 'past', ...closed }, 'a')).toBeNull()
+    expect(watchedIdOf({ focus: 'none', ...closed }, 'a')).toBeNull()
+    expect(watchedIdOf({ focus: 'running', ...closed }, null)).toBeNull()
   })
 })

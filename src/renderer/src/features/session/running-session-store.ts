@@ -52,6 +52,11 @@ export interface SessionActions {
   /** `folderLabel` は起動の受付時に引けている作業フォルダの表示名 (App の寿命の読み上げに使う。O-1)。 */
   launch(config: SessionLaunchConfig, folderLabel?: string | null): Promise<void>
   select(sessionId: string | null): void
+  /**
+   * 起動の拒否と前回の失敗の告知を消す (O-7。起動ダイアログを起動せずに閉じたとき・失敗したセッションを中央に出さずに
+   * 閉じたとき)。`lastConfig` は残す (次に開いたときの初期値)。起動中は何もしない。
+   */
+  dismissLaunchNotice(): void
   /** 監視ビューの情報密度 (O-1 / FR-008。永続化しない)。 */
   setDensity(density: Density): void
   /**
@@ -426,6 +431,20 @@ export function createRunningSessionStore(
               }
             : s.launch
       }))
+    },
+
+    dismissLaunchNotice() {
+      const { launch } = store.getState()
+      if (launch.phase === 'launching') return
+      if (
+        launch.phase === 'entry' &&
+        launch.rejectReason === null &&
+        launch.previousFailure === null
+      )
+        return
+      store.setState({
+        launch: { ...launch, phase: 'entry', rejectReason: null, previousFailure: null }
+      })
     },
 
     setDensity(density) {

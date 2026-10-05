@@ -6,7 +6,7 @@ spec の U-1〜U-5 と AD-046 は 2026-10-05 に利用者が承認した。
 
 ## Summary
 
-上部の 7 つのタブをやめ、サイドバー・中央・右のペインの 3 面にする (AD-046 proposed)。各画面の中身は変えず、置き場所と遷移だけを変える。
+上部の 7 つのタブをやめ、サイドバー・中央・右のペインの 3 面にする (AD-046。design の時点で proposed、2026-10-05 に accepted)。各画面の中身は変えず、置き場所と遷移だけを変える。
 
 - 面の状態を `stores/ui.ts` に 1 つ (data-model §1)。選んだ行の id は今の 2 つのストアのまま、中央に出すものを `focus` で決める。focus の書き手はシェルの 1 か所で、2 つのストアの選択の操作を購読する。読み上げと承認待ちのボタンは `watchedId` を共有する
 - 稼働中の thread list の assistant-ui の runtime (`AssistantRuntimeProvider`。glossary の `AgentRuntime` ではない) の provider をシェル全体に上げる (research R-03)
@@ -34,7 +34,7 @@ spec の U-1〜U-5 と AD-046 は 2026-10-05 に利用者が承認した。
 |---|---|---|
 | I / II / IV / V / VI / VII / IX / X | N/A | renderer の配置だけを変える。IPC・永続化・プロセスを変えない |
 | III (権限ゲート) | ✅ | 起動ダイアログ (選べない選択肢を出さない) の中身を変えない |
-| VIII (日本語環境) | ✅ | 新しい文言は `features/shell/labels.ts`。長い日本語の題・フォルダ名はサイドバーと概要で 1 行に切り詰める (component テスト)。composer は変えない。右のペインを既定で畳むので、既定のウィンドウの幅で中央は 780px、composer は上限 704px のままで基準画像は変わらない (data-model §2)。変わったら撮り直し、人間の見た目の承認を quickstart-results に記録する |
+| VIII (日本語環境) | ✅ | 新しい文言は `features/shell/labels.ts`。長い日本語の題・フォルダ名はサイドバーと中央のヘッダで 1 行に切り詰め (全文は `title`)、概要は折り返して全文を出す (実装の追記。pr-gate R1 po M-005 / a11y M-006)。jsdom は幅を測れないので、component テストは切り詰めの class と `title` を確かめ、崩れは quickstart V-3 で見る。composer は変えない。右のペインを既定で畳むので、既定のウィンドウの幅で中央は 780px、composer は上限 704px のままで基準画像は変わらない (data-model §2)。変わったら撮り直し、人間の見た目の承認を quickstart-results に記録する |
 | XI (観測可能な垂直スライス) | ✅ | 各 US は component テストと E2E で観測でき、見た目は quickstart V-3 |
 | XII (ui-coverage) | ✅ | SDK が emit する情報の表示を足さない (A〜E 節の差分 0)。F 節の使い道 (Thread list sidebar / Settings / Empty state) を同じ PR で直す |
 | XIII (element 優先) | ✅ | thread-list-sidebar・Settings・Empty state・resizable を registry で先に確かめる (research R-04) |
@@ -130,7 +130,7 @@ rg -n "目標レイアウト|最初の UI 系 feature|FE-001" (docs / PLAN.md / 
 
 ## ADR
 
-**AD-046「アプリのシェルを 3 面にする」を proposed で起こした** (本 design の成果物)。accepted は利用者が行う。AD-025 (accepted) は変えない。
+**AD-046「アプリのシェルを 3 面にする」を proposed で起こした** (本 design の成果物)。accepted は利用者が行う (2026-10-05 に accepted)。AD-025 (accepted) は変えない。
 
 ## 機械強制の変更
 
@@ -143,7 +143,7 @@ rg -n "目標レイアウト|最初の UI 系 feature|FE-001" (docs / PLAN.md / 
 | RK-01 | 未承認の判断 (U-1〜U-5) が覆る (とくに右のペインの幅・設定をダイアログにする) | design-gate で止める。見た目は実機の目視 (quickstart V-3) で利用者が決める |
 | RK-02 | 入れ子の `AssistantRuntimeProvider` で、過去の一覧・transcript の hook が外側の runtime を拾う | 過去の一覧と transcript の component テストを、外側に稼働中の provider がある形で流す |
 | RK-03 | provider の持ち上げで、稼働中の接続の寿命 (X-5 FR-008) が変わる | `useRunningSessionStoreWiring` は App に残し、provider は runtime の購読だけを持つ。`multi-session.spec.ts` (E2E) を流す |
-| RK-04 | 設定の画面がダイアログの中で、過去の一覧が 280px のサイドバーの中で、幅が足りず崩れる | ダイアログは全面 (左の項目 + 右の画面の `max-w-3xl`)。過去の一覧は外枠と見出しを外し、残りは折り返しで収める (data-model §3)。component テストで長い日本語のフォルダ名を流す。実機の見た目は quickstart V-3 |
+| RK-04 | 設定の画面がダイアログの中で、過去の一覧が 280px のサイドバーの中で、幅が足りず崩れる | ダイアログは全面 (左の項目 + 右の画面の `max-w-3xl`)。過去の一覧は外枠と見出しを外し、残りは折り返しで収める (data-model §3)。component テストで長い日本語のフォルダ名を流す (切り詰めの class と `title` を確かめる。幅は jsdom で測れない)。実機の見た目は quickstart V-3 |
 | RK-05 | 自動で畳む処理がウィンドウのサイズの変化のたびに状態を揺らす | 閾値を割った瞬間に 1 回だけ畳み、利用者の操作を優先する (data-model §2) |
 | RK-06 | 過去の区画の常時マウントで、ランタイム検出の前に列挙が走る (WSL の所在が「未検出」になりキャッシュに残る) | FR-016 / 上の「過去の区画の初回の取得」。component テストで順序を確かめ、実機は quickstart V-3。E2E は `listSessions` が空を返すので検出できない |
 | RK-07 | 右のペインを既定で畳んでも、帯の 40px の分で composer の基準画像が変わる | 中央 780px で composer は上限 704px のまま (data-model §2)。変わったら撮り直して人間の承認を記録する (FR-011) |

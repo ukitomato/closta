@@ -1,4 +1,5 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { FolderListDTO, RegisterFolderResult } from '@domain/workspace/dto'
@@ -299,7 +300,8 @@ describe('SessionListScreen', () => {
     render(<SessionListScreen />)
 
     await waitFor(() =>
-      expect(screen.getByText('セッション一覧を取得できませんでした')).toBeInTheDocument()
+      // 区画の見出し (「過去のセッション」) と同じ語で言う (O-7 pr-gate R1 ux L-002)。
+      expect(screen.getByText('過去のセッションを取得できませんでした')).toBeInTheDocument()
     )
   })
 
@@ -1147,6 +1149,42 @@ describe('SessionListScreen — 件数が多い場合 (FE-073)', () => {
     resolveRuntimes()
     await waitFor(() => expect(listSessions).toHaveBeenCalledTimes(1))
     await waitFor(() => expect(screen.getByText('要約')).toBeInTheDocument())
+  })
+
+  it('ランタイムの一覧を待っている間も取得中で、「全件を取り直す」を押しても検出より先に列挙しない (pr-gate R1 ux H-002)', async () => {
+    let resolveRuntimes: () => void = () => {}
+    const listRuntimes = vi.fn(
+      () =>
+        new Promise<never>((resolve) => {
+          resolveRuntimes = () =>
+            resolve({ runtimes: [], enumerationIssues: [], wslAvailability: 'available' } as never)
+        })
+    )
+    const refreshSessions = vi.fn(() => Promise.resolve(index([folderGroup([session()])])))
+    let notify: ((value: SessionIndexDTO) => void) | null = null
+    installCapability({
+      listRuntimes,
+      listSessions: () => Promise.resolve(index([folderGroup([session()])])),
+      refreshSessions,
+      onSessionsChanged: (listener) => {
+        notify = listener
+        return () => {}
+      }
+    })
+
+    const { container } = render(<SessionListScreen />)
+    await waitFor(() => expect(listRuntimes).toHaveBeenCalledTimes(1))
+    expect(container.querySelector('[aria-busy="true"]')).not.toBeNull()
+    const button = screen.getByRole('button', { name: '取得中…' })
+    await userEvent.click(button)
+    expect(refreshSessions).not.toHaveBeenCalled()
+    // 初回の取得の前に配られる未取得の索引 (取得時刻 0) では取得中の表示を外さない (pr-gate R1 platform-boundary L-004)。
+    act(() => notify?.(index([], { fetchedAt: 0, complete: false })))
+    expect(screen.getByRole('button', { name: '取得中…' })).toBeInTheDocument()
+
+    resolveRuntimes()
+    await waitFor(() => expect(screen.getByText('要約')).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: '全件を取り直す' })).toBeInTheDocument()
   })
 
   it('ランタイムの一覧が失敗しても、待ちを外して取得する (O-7 FR-016)', async () => {

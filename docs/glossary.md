@@ -854,7 +854,9 @@ total_terms: 86
   (例外は [ui charter](domains/ui/charter.md) の「面の状態」)。
   画面の ID (`SCREENS`) は O-7 で無くなった。「見ているセッション」(`watchedId`) は `focus` から導く (中央に稼働中の会話を出していて、
   設定のダイアログを開いていないときの選択中のセッション)。`focus` は中央にどちらの側を出すかであり、キーボードのフォーカス
-  (DOM のフォーカス) ではない。コードの "Pane" (`CenterPane` / `LivePane`) は面の語の「ペイン」(右のペイン。コードは `RightPanel`) ではない
+  (DOM のフォーカス) ではない。コードの "Pane" (`CenterPane` / `LivePane`) は面の語の「ペイン」(右のペイン。コードは `RightPanel`) ではない。
+  OS のシェル (Bash・ログインシェル・`--exec` でシェルを経由しない・transcript の `local_bash`「シェルのコマンド」) とは別 —
+  紛れうる文書ではアプリの面を「アプリのシェル」と書く (O-7 pr-gate R1 architecture L-001)
 - **Ref**: [AD-046](decisions/0046-app-shell-layout.md) / [013 spec](../specs/013-ui-app-shell/spec.md) / data-model §1
 
 ### T

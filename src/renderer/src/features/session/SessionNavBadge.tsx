@@ -18,11 +18,23 @@ import { attentionCounts } from './session-view'
  * | 色だけに頼らない (アイコンと件数の文言)。件数は表示だけで、押したときの移動は持たない (移動は区画の見出しの承認待ちの件数のボタン) | FR-001 / FR-002 |
  * | シェルは差し込むだけ (シェルは面の配置と遷移だけを持つ) | design-gate R2 architecture L-102 / O-7 U-2 |
  */
-export function SessionNavBadge(): React.JSX.Element | null {
+export function SessionNavBadge({
+  orientation = 'row'
+}: {
+  /** `column` は畳んだサイドバーの帯 (48px) 用。横に並べると 2 つで帯の幅を超える (pr-gate R1 ux M-010)。 */
+  readonly orientation?: 'row' | 'column'
+} = {}): React.JSX.Element | null {
   const counts = useRunningSessionStore(useShallow((s) => attentionCounts(s)))
   if (counts.awaiting === 0 && counts.failed === 0) return null
   return (
-    <span className="ms-1.5 inline-flex gap-1" data-testid="session-nav-badge">
+    <span
+      className={
+        orientation === 'column'
+          ? 'inline-flex flex-col items-center gap-1'
+          : 'ms-1.5 inline-flex gap-1'
+      }
+      data-testid="session-nav-badge"
+    >
       {counts.awaiting > 0 && (
         <Badge className="px-1.5 py-0" data-testid="session-nav-awaiting">
           <ShieldAlertIcon aria-hidden />

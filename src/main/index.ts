@@ -194,7 +194,8 @@ if (!gotTheLock) {
      * O-7 で区画はアプリの起動の直後からサイドバーにマウントされるので、renderer は
      * ランタイムの一覧 (`listRuntimes`) の解決を待ってから最初の `listSessions` を呼ぶ (O-7 FR-016 / `useSessions.ts`)。
      * ランタイム検出より先に実行中確認が走ると、停止中の所在が「停止中」ではなく「未検出」として並ぶ。
-     * 加えて main の起動経路に UNC I/O を伴う子プロセスを乗せない。
+     * main の起動経路 (この関数) には UNC I/O を伴う子プロセスを乗せないが、**起動の直後に renderer が列挙を起こすので、
+     * 列挙は上の判定バッチ (`probeAll`) と時間が重なる** (AD-046 Consequences。O-7 pr-gate R1 platform-boundary L-002)。
      */
 
     app.on('activate', () => {

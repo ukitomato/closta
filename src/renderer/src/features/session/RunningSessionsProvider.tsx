@@ -103,7 +103,7 @@ function extractText(message: AppendMessage): string {
 const EMPTY_MESSAGES: readonly ThreadMessageLike[] = []
 
 /**
- * **ランタイムは 1 つ** (X-5 / Principle XIII)。表示中のセッションの本文・状態・キューを渡し、稼働中セッションを
+ * **assistant-ui の runtime は 1 つ** (X-5 / Principle XIII。`AgentRuntime` のランタイムではない)。表示中のセッションの本文・状態・キューを渡し、稼働中セッションを
  * `adapters.threadList` で並べる。adapter の `threadId` が変わると assistant-ui はスレッドの中身 (composer を含む) を
  * 作り直す。選択なしは本文なし・composer 無効。
  */

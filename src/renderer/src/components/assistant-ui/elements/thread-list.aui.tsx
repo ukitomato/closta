@@ -344,6 +344,12 @@ export const ThreadListItem: FC = () => {
       /* **リストの項目であることを伝える** (a11y H-004)。実体は素の div である。 */
       role="listitem"
       /*
+       * **選択の状態は Trigger だけに持たせる** (O-7 pr-gate R1 a11y M-001)。primitive の Root は選択中の行に無条件で
+       * `aria-current="true"` を付けるので、強調しない側の一覧でも「現在」と読まれ、強調する側では Root と Trigger で
+       * 二重に読まれていた。props は primitive の付与の後に展開されるので、ここで打ち消せる。
+       */
+      aria-current={undefined}
+      /*
        * **選択とフォーカスを同じ色で表さない** (a11y H-008)。
        * 以前は `data-active` (選択) と `has-focus-visible` (フォーカス) の
        * どちらも `bg-muted` で、白に対し 1.04:1 の差しかなかった。

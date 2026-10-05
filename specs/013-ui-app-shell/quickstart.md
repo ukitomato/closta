@@ -8,7 +8,7 @@ Grep で `\b(SCREENS|ScreenId|setScreen)\b` (単語の境界つき。code-gate c
 
 ## V-2 記録の追随 (SC-006)
 
-- `docs/decisions/0046-app-shell-layout.md` が `status: proposed`
+- `docs/decisions/0046-app-shell-layout.md` が存在し、`status: accepted` (design の時点では proposed。2026-10-05 に利用者が accepted にした)
 - roadmap の M3 に O-7 が O-3 の前にあり、O-3〜O-6 の依存に O-7 がある。Optional scope に OPT-panel (Terminal を含まない)
 - `node scripts/constitution/check.mjs` が ok
 - `git diff main...HEAD -- src/main/app/protocol.ts` が空 (SC-001)

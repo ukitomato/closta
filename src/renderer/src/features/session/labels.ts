@@ -281,10 +281,15 @@ export const LAUNCH_AXIS_LABELS = {
   permissionMode: '権限モード'
 } as const
 
-/** 空状態と次の一手 (FE-004 / spec Edge Cases)。 */
+/**
+ * 空状態と次の一手 (FE-004 / spec Edge Cases)。起動ダイアログはモーダルで、サイドバーの「設定」に手が届かないので、
+ * 設定へ移る手順を文に含める (O-7 pr-gate R1 ux M-003)。
+ */
 export const LAUNCH_EMPTY_STATE_LABELS = {
-  noFolders: '作業フォルダが登録されていません。設定の「作業フォルダ」で登録してください。',
-  noWslRuntimes: 'WSL ランタイムが見つかりません。設定の「ランタイム」で再検出してください。',
+  noFolders:
+    '作業フォルダが登録されていません。このダイアログを閉じて、サイドバーの「設定」→「作業フォルダ」で登録してください。',
+  noWslRuntimes:
+    'WSL ランタイムが見つかりません。このダイアログを閉じて、サイドバーの「設定」→「ランタイム」で再検出してください。',
   allRuntimesStopped:
     'WSL ランタイムがすべて停止しています。WSL ディストロを起動してから「再評価」を押してください (アプリはディストロを起動しません)。',
   noProviders: '既定 Provider で起動できます。Provider の登録は設定の「プロバイダ」から行えます。',

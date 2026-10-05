@@ -16,7 +16,7 @@ import { useUiStore } from '@/stores/ui'
  * | 稼働中の行の選択・承認待ちへの移動・起動の受け付け (`selectionSeq` が上がり `selectedId` が非 null) | `running` (起動の受け付けなら起動ダイアログも閉じる) |
  * | 過去の行の選択 (`selectionSeq` が上がり `selectedRowKey` が非 null) | `past` |
  * | 稼働中のセッションを閉じる (`selectedId` が null に変わる) | `focus === 'running'` なら `none` |
- * | 失敗したセッションを閉じる (同時に `launch.previousFailure` が立つ) | `none`、かつ起動ダイアログを開く (X-4 US-1 AC7) |
+ * | 失敗したセッションを閉じる (同時に `launch.previousFailure` が立つ) | `focus === 'running'` なら `none`、かつ起動ダイアログを開く (X-4 US-1 AC7)。それ以外は面を動かさず、失敗の告知を消す (pr-gate R1 po H-001) |
  * | 一覧の再取得で過去の行が消える | `focus === 'past'` なら `none` |
  *
  * 同じ id を選び直したときも移すため、値の変化ではなく選択の操作の通知 (`selectionSeq`) で受ける。
@@ -36,11 +36,15 @@ export function useShellFocus(): void {
         }
         if (prev.selectedId !== null && next.selectedId === null) {
           const failedClose = next.launch !== prev.launch && next.launch.previousFailure !== null
-          if (ui.focus === 'running') ui.setFocus('none')
-          if (failedClose) {
-            ui.setFocus('none')
-            ui.setLaunchOpen(true)
+          if (ui.focus !== 'running') {
+            // 中央に出していないセッションを閉じた (過去の会話や空の状態のまま、サイドバーの行の「閉じる」)。面は動かさず、
+            // 起動ダイアログも開かない。失敗の告知は次に開いたときには古いので消す (pr-gate R1 po H-001 / ux M-004)。
+            if (failedClose) running.dismissLaunchNotice()
+            return
           }
+          ui.setFocus('none')
+          // 中央に出していた失敗したセッションを閉じた: 前回の設定と理由つきで起動ダイアログを開く (X-4 US-1 AC7)。
+          if (failedClose) ui.setLaunchOpen(true)
         }
       }),
     [running]

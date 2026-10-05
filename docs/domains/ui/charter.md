@@ -60,10 +60,13 @@ UI は本来 delivery mechanism であり domain ではない。それでも独�
   `unsafe-eval` は両環境で禁止。ゲートは `app.isPackaged` である）
 - PTY フォールバックタブ（optional scope）
 - **アプリのシェル** (面の配置と遷移。O-7 / [AD-046](../../decisions/0046-app-shell-layout.md)) — サイドバー・中央・右のペインの
-  3 面、設定と起動のダイアログ、中央の focus、右のペインのタブの表。サイドバーの 2 つの一覧の中身と行の形は session が持ち
-  (下の Out of scope「他 domain の操作 UI」)、シェルは置き場所と選択に応じた中央の切り替えを持つ。**シェルは SDK の emit の
-  表示ではないので、Principle XII (対応表) の判定の対象外**。右のペインに足すタブ (O-4〜O-6・OPT-panel) は、SDK の emit を
-  表示するものなら各 feature で対応表に割り当てる
+  3 面、設定と起動のダイアログの枠 (開閉・項目・フォーカスの戻り)、中央の focus と中央のヘッダ、右のペインのタブの表。
+  サイドバーの 2 つの一覧の中身と行の形は session が、ダイアログの中身 (X-4 の `LaunchDialog`、ランタイム・作業フォルダ・
+  プロバイダ・組み合わせの画面) は各 domain が持ち (下の Out of scope「他 domain の操作 UI」)、シェルは置き場所と選択に応じた
+  中央の切り替えを持つ。**面の配置と遷移そのものは SDK の emit の表示ではないので、対応表 (Principle XII) に行を足さない。
+  ただしシェルの部品 (中央のヘッダ・右のペインのタブ) が SDK の emit や D 節の経路を表示するときは、その行の割当にその部品を
+  書き、表示を変える PR で対応表を直す** (中央のヘッダは D 節の session-state を描く。右のペインに足すタブ (O-4〜O-6・OPT-panel)
+  も同じ。pr-gate R1 ui-coverage M-002)
 
 ### Out of scope
 
@@ -160,14 +163,16 @@ O-1 で読み替えた: 監視ビューはサイドバーの稼働中の区画 (
 ## Cross-domain dependencies
 
 - 依存する domain: `runtime`, `session`, `provider`, `isolation`（表示対象がすべてにまたがる）
-- 依存される domain: なし（最上層）
+- 依存される domain: なし（最上層）。ただし `stores/ui.ts` (面の状態と画面をまたぐ受け渡し) は他 domain の操作 UI が**読む** —
+  session は `watchedIdOf` で focus と設定・起動ダイアログの開閉を (`RunningSessionList` / `SessionAttentionAnnouncer`)、
+  runtime は `folderDraftSeed` を (`WorkspaceFoldersScreen`)。書くのは下の「面の状態」の例外 2 件だけ (pr-gate R1 architecture M-001)
 - 共有 invariant: Principle III（選べない選択肢を出さない）/ VIII / XII / XIII。
   詳細は [docs/domains/_overview.md](../_overview.md)
-- **面の状態** (O-7): 中央の focus・設定・畳みは `stores/ui.ts` の 1 か所にあり、focus はシェル (`useShellFocus`) だけが書く。
-  シェルは session のストアの選択 (`selectionSeq`) を購読し、session のコンポーネントは面の状態を書かない。
-  例外は設定の「作業フォルダ」を開く 2 つの導線だけで、どちらも R-2 から続く登録の受け渡しとして残る:
-  `seedFolderDraft` (未登録フォルダの「登録」から初期値つきで開く) と `openSettings('folders')` (フォルダが 0 件のときの案内)。
-  どちらも `focus` には触れない
+- **面の状態** (O-7。**この項が運用上の正本**。AD-046 の訂正の節と同じ内容): 中央の focus・設定・畳みは `stores/ui.ts` の 1 か所にあり、
+  focus はシェル (`useShellFocus`) だけが書く。シェルは session のストアの選択 (`selectionSeq`) を購読し、session のコンポーネントは
+  focus を書かない。session のコンポーネントが面の状態を書く例外は設定の「作業フォルダ」を開く 2 つの導線だけで、どちらも R-2 から
+  続く登録の受け渡しとして残る: `seedFolderDraft` (未登録フォルダの「登録」から初期値つきで開く) と `openSettings('folders')`
+  (フォルダが 0 件のときの案内)。どちらも `focus` には触れない
 
 ## Related ADRs
 

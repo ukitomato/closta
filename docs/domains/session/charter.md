@@ -165,7 +165,9 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
 
 ## Cross-domain dependencies
 
-- 依存する domain: `runtime`（起動とパス解決）、`provider`（環境変数とモデルカタログの導出）
+- 依存する domain: `runtime`（起動とパス解決）、`provider`（環境変数とモデルカタログの導出）。
+  操作 UI は ui の `stores/ui.ts` の面の状態を**読む** (監視ビューの承認待ちの件数のボタンと読み上げが「見ているセッション」を
+  導く。O-7)。書くのは設定を「作業フォルダ」で開く 2 つの導線だけ ([ui charter](../ui/charter.md) の「面の状態」)
 - 依存される domain: `ui`, `isolation`
 - 共有 invariant: Principle III / IV / V / VII / IX / X / XII (X-6 は `docs/ui-coverage.md` の `後続: X-6` の行を完了の PR で書き換える。SDK の版を上げる PR は対応表を同じ PR で直す)。詳細は [docs/domains/_overview.md](../_overview.md)
   (VII = supervisor は Electron 非依存で単独起動できる。R-2 で `agents` を持つ feature が実装され実体を持った)
