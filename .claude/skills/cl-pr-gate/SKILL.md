@@ -16,6 +16,8 @@ PR 提出前の **adversarial review gate**。`/cl-code-gate` PASS 後に手動�
 
 ## 実行モデル
 
+共通規則の正本は AGENTS.md の「実行モデル (context 管理)」節。本 skill 固有の点:
+
 - 本 skill は **background の fork** で動く。呼び出し元の会話は見えず、入力は引数とファイルだけである
 - **人間には質問できない** (fork には `AskUserQuestion` が渡らない)。判断が要る分岐は halt して理由を返す
 - reviewer は Agent ツールで起動し、**バックグラウンドで返る**。起動したらターンを終え、起動した全 reviewer の報告が届いてから集約に進む
@@ -163,7 +165,7 @@ active=$(gate_common::reviewers_filter pr-gate "$spec_dir/.pr-gate-scope.txt" \
 **Status**: <PASS (Critical=0) | FIX_REQUIRED | CONVERGENCE_FAILURE (N>=4)>
 **Next**:
   PASS         → /cl-done <spec_dir>
-  FIX_REQUIRED → コード修正 + /cl-pr-gate 再実行 (Round <N+1>)
+  FIX_REQUIRED → Agent(task-implementer) で修正 → /cl-code-gate → /cl-pr-gate (Round <N+1>)
   CONVERGENCE  → ADR 起票 + spec 範囲調整
 
 ## Critical (Round <N>)
@@ -249,7 +251,8 @@ active=$(gate_common::reviewers_filter pr-gate "$spec_dir/.pr-gate-scope.txt" \
   - verdict JSON: <spec_dir>/.gate-verdict-pr.json
   - 次のアクション:
     PASS → /cl-done <spec_dir>
-    FIX_REQUIRED → 修正後 /cl-pr-gate (Round <N+1>)
+    FIX_REQUIRED → Agent(task-implementer) に <spec_dir>/pr-gate.md と Critical の finding ID (<C-001, ...>) を渡して直させる
+                   → /cl-code-gate で lint / test を通し直す → /cl-pr-gate (Round <N+1>)
     CONVERGENCE → ADR 起票 + spec 範囲調整
 ```
 

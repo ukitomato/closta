@@ -14,6 +14,8 @@ Implementation Phase の **self-review gate**。`/cl-implement` 完了後に aut
 
 ## 実行モデル
 
+共通規則の正本は AGENTS.md の「実行モデル (context 管理)」節。本 skill 固有の点:
+
 - 本 skill は **background の fork** で動く。呼び出し元の会話は見えず、入力は引数とファイルだけである
 - **人間には質問できない** (fork には `AskUserQuestion` が渡らない)。判断が要る分岐は halt して理由を返す
 - reviewer と implementer は Agent ツールで起動し、**バックグラウンドで返る**。起動したらターンを終え、報告が届いてから次の段に進む (Phase 3 の直列順もこの形で守る)

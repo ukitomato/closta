@@ -3,25 +3,40 @@
 すべての feature 開発は以下の順序で行う。SKILL の一覧は `/help` または `.claude/skills/cl-*/SKILL.md` を参照。
 
 ```
-/cl-design <description>    ─ Design フェーズを 1 コマンドで完走 (下の 4 つを連鎖)
-  ├─ /cl-spec               ─→ specs/<NNN>-<domain>-<slug>/spec.md   (drafting)
-  ├─ /cl-plan               ─→ plan.md                                (drafting → planning)
-  ├─ /cl-tasks              ─→ tasks.md                               (planning → tasking)
-  └─ /cl-design-gate        ─[bundle review]
-                              Critical=0 で                           (tasking → implementing)
-                              FIX_REQUIRED なら implementing → tasking に降格
-/cl-implement               ─→ コード + code-gate へ auto-chain
-/cl-code-gate               ─[lint / test / convention + auto-fix loop]
-                              PASS で                                 (implementing → reviewing)
-/cl-pr-gate                 ─[adversarial review: multi-round]
-                              Critical=0 で done を許可
-/cl-done                    ─→ PR 提出                                (reviewing → completed)
+/cl-design <description>    [main]    ─ Design フェーズを 1 コマンドで完走 (下の 4 つを連鎖)
+  ├─ /cl-spec               [main]    ─→ specs/<NNN>-<domain>-<slug>/spec.md   (drafting)
+  ├─ /cl-plan               [fork]    ─→ plan.md                                (drafting → planning)
+  ├─ /cl-tasks              [fork]    ─→ tasks.md                               (planning → tasking)
+  └─ /cl-design-gate        [fork:bg] ─[bundle review]
+                                        Critical=0 で                           (tasking → implementing)
+                                        FIX_REQUIRED なら implementing → tasking に降格
+/cl-implement               [main]    ─→ section ごとに task-implementer [subagent] + code-gate へ auto-chain
+/cl-code-gate               [fork:bg] ─[lint / test / convention + auto-fix loop]
+                                        PASS で                                 (implementing → reviewing)
+/cl-pr-gate                 [fork:bg] ─[adversarial review: multi-round]
+                                        Critical=0 で done を許可
+/cl-done                    [main]    ─→ PR 提出                                (reviewing → completed)
 ```
 
+`[main]` = main の context で動く / `[fork]` = 同期の fork / `[fork:bg]` = background の fork / `[subagent]` = Agent ツールで起動する actor。規則は下の「実行モデル (context 管理)」。
+
 個別に `/cl-spec` / `/cl-plan` / `/cl-tasks` / `/cl-design-gate` を叩くこともできる。
-design-gate が FIX_REQUIRED なら status は `tasking` に留まる。修正後 `/cl-design --spec-dir <dir> --from gate` で再開する。
+design-gate が FIX_REQUIRED なら status は `tasking` に留まる。`Agent(designer)` で修正したあと `/cl-design --spec-dir <dir> --from gate` で再開する。
 
 新規 reviewer の追加には `/cl-add-reviewer` を使う。
+
+## 実行モデル (context 管理)
+
+本節が正本である。各 SKILL.md の「実行モデル」節はこれを参照する。
+
+- **main の責務は人間との対話と連鎖の制御だけ。** 設計文書・ソース・reviewer 出力の本文を main で読まない。段の受け渡しはファイルで行う
+- **fork する skill**:
+  - `/cl-plan` / `/cl-tasks` — `agent: designer` の同期 fork
+  - `/cl-design-gate` / `/cl-code-gate` / `/cl-pr-gate` — `agent: general-purpose` の background fork。同期の fork では、中で起動した reviewer の結果を受け取れない (fork が先に終わり、報告が main に流れる)。main は gate の完了通知が届いてから次の段に進む
+- **戻り値は完了通知だけ。** fork と subagent は、最終メッセージに生出力・diff・findings 本文を含めない
+- **`AskUserQuestion` は main でしか使えない。** fork / subagent で判断が要るときは halt する。designer は `<spec_dir>/.needs-input.md` に質問を書いて `NEEDS_INPUT` を返し、`/cl-design` が main で聞く
+- **actor は直列に動かす。** 同じ作業ツリーで task-implementer / implementer / designer を並列に起動しない (lint / test のキャッシュが互いに無効化される)。並列にしてよいのは read-only の reviewer だけ
+- **指摘の修正は委譲する。** design-gate の指摘 → `Agent(designer)`、pr-gate の指摘 → `Agent(task-implementer)`、code-gate の MUST_FIX → gate 内の `implementer`
 
 ## gate の原則
 

@@ -19,6 +19,8 @@ plan.md から tasks.md を起草する。`/speckit.tasks` を内部委譲しつ
 
 ## 実行モデル
 
+共通規則の正本は AGENTS.md の「実行モデル (context 管理)」節。本 skill 固有の点:
+
 - 本 skill は `designer` agent の fork で動く。呼び出し元の会話は見えず、入力は引数とファイルだけである
 - **人間には質問できない。** 判断が要る点は designer の規則どおり `<spec_dir>/.needs-input.md` に書き、`NEEDS_INPUT` で返す
 - **最終メッセージは Phase 8 の完了通知 (または halt 理由) だけにする**

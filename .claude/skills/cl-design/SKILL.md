@@ -10,7 +10,7 @@ allowed-tools: Read Write Edit Bash Glob Grep Agent AskUserQuestion
 Design フェーズ (spec → plan → tasks → design-gate) を **1 コマンドで完走**するラッパー。
 各ステップは既存スキルに委譲し、本 wrapper は **チェーンと状態管理**のみを担う。
 
-本 skill は main で動く。`/cl-plan` / `/cl-tasks` は designer の fork、`/cl-design-gate` は background の fork で動き、main に戻るのは各段の完了通知だけである。**本 skill が plan.md / tasks.md / reviewer 出力の本文を Read してはならない** — 分岐に要るのは完了通知と verdict JSON だけで、本文を読むと fork にした意味がなくなる。
+本 skill は main で動く。`/cl-plan` / `/cl-tasks` は designer の fork、`/cl-design-gate` は background の fork で動き、main に戻るのは各段の完了通知だけである。**本 skill が plan.md / tasks.md / reviewer 出力の本文を Read してはならない** — 分岐に要るのは完了通知と verdict JSON だけで、本文を読むと fork にした意味がなくなる。共通規則の正本は AGENTS.md の「実行モデル (context 管理)」節。
 
 ## When to invoke
 

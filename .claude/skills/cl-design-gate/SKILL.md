@@ -14,6 +14,8 @@ Design Phase の **最後の品質ゲート**。`/cl-implement` 起動前に手�
 
 ## 実行モデル
 
+共通規則の正本は AGENTS.md の「実行モデル (context 管理)」節。本 skill 固有の点:
+
 - 本 skill は **background の fork** で動く。呼び出し元の会話は見えず、入力は引数とファイルだけである
 - **人間には質問できない** (fork には `AskUserQuestion` が渡らない)。判断が要る分岐は halt して理由を返す
 - reviewer は Agent ツールで起動し、**バックグラウンドで返る**。起動したらターンを終え、起動した全トラックの報告が届いてから集約に進む

@@ -7,7 +7,7 @@ allowed-tools: Read Write Edit Bash Glob Grep Agent AskUserQuestion
 
 # cl-implement
 
-tasks.md に従って実装を実行する。**本 skill は main で動く指揮役であり、ソースを読まず、自分では実装しない。** 実装は section ごとに `task-implementer` subagent が行う。本 wrapper は以下を担当する:
+tasks.md に従って実装を実行する。**本 skill は main で動く指揮役であり、ソースを読まず、自分では実装しない。** 実装は section ごとに `task-implementer` subagent が行う (共通規則の正本は AGENTS.md の「実行モデル (context 管理)」節)。本 wrapper は以下を担当する:
 
 - **前提検証** — `/cl-design-gate` PASS (Critical=0、status: implementing) と checklist の完了を確認
 - **targets=both の BE→FE order** — Backend section を先に完走させてから Frontend に進む
