@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2026-10-04
 id: AD-046
 deciders: ukitomato
@@ -18,7 +18,7 @@ superseded-by: []
 
 2026-10-04、利用者は「今のタブビューは全部廃止されて、ThreadList と Chat 画面の UI しかないアプリになるはず」「Cursor の AgentView のイメージが近い。右ペインも入れることになる」と示した。M3 の残り (O-3〜O-6) は置き場所 (サイドバー・中央のヘッダ・右のタブ) で中身が変わるので、シェルを先に決める。
 
-本 ADR は O-7 ([spec 013](../../specs/013-ui-app-shell/spec.md)) が夜間の自走で起こした。**細部は未承認である (spec 013 の U-1〜U-5)。** 番号の AD-045 は、同じ夜に O-3 (ブランチ `012-ui-thread-search`。未マージ) が proposed で起こした「UI の文言を i18n リソース化しない」が使っている。
+本 ADR は O-7 ([spec 013](../../specs/013-ui-app-shell/spec.md)) が夜間の自走で起こした。細部 (spec 013 の U-1〜U-5) と本 ADR は 2026-10-05 に利用者が承認した。 番号の AD-045 は、同じ夜に O-3 (ブランチ `012-ui-thread-search`。未マージ) が proposed で起こした「UI の文言を i18n リソース化しない」が使っている。
 
 ## Decision
 

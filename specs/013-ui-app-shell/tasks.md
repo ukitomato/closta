@@ -6,7 +6,7 @@
 
 **規則の正本**: 振る舞いの正本は spec の FR / SC、状態・focus の書き手・幅・タブ・概要の項目・文言の正本は data-model、方式の理由は research。本書は作業単位とテストの観点だけを書く。
 
-**着手の条件**: **AD-046 が accepted になり、spec の U-1〜U-5 を利用者が承認するまで /cl-implement に入らない。**
+**着手の条件**: AD-046 の accepted と spec の U-1〜U-5 の承認 (どちらも 2026-10-05 に済み)。
 
 **順序の制約**: SH-001 (glossary) → コード。SH-002 (element の照合) → FE-010 / FE-030 / FE-040。FE-001 (面の状態と focus の書き手) → 他の FE。FE-002 (provider の持ち上げ) → FE-010 / FE-020。SH-010 (roadmap ほか) は最後。
 

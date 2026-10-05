@@ -2,7 +2,7 @@
 
 **Branch**: `013-ui-app-shell` | **Date**: 2026-10-04 | **Spec**: [spec.md](./spec.md)
 
-**未承認の判断を含む** (spec の U-1〜U-5)。本 plan は design-gate までの成果物で、利用者の承認まで実装に入らない。
+spec の U-1〜U-5 と AD-046 は 2026-10-05 に利用者が承認した。
 
 ## Summary
 
@@ -49,13 +49,13 @@ Constitution 自体の変更なし。AD-024 / AD-028 の Principle VIII (B) の�
 
 - Domain: `ui` ([docs/domains/ui/charter.md](../../docs/domains/ui/charter.md))
 - Mission: Claude Code が emit する情報のすべてに専用表示を与え、日本語環境で破綻しない操作体験を提供する
-- Scope: assistant-ui の Elements、transcript の表示、`docs/ui-coverage.md`、transcript の密度。**シェル (面の配置と遷移) を本 feature で足す (未承認 U-2)**。他 domain の操作 UI (一覧・登録・選択画面) の中身は各 domain
+- Scope: assistant-ui の Elements、transcript の表示、`docs/ui-coverage.md`、transcript の密度。**シェル (面の配置と遷移) を本 feature で足す (U-2)**。他 domain の操作 UI (一覧・登録・選択画面) の中身は各 domain
 - Principle (domain): 見た目の判断を先送りしない
 
 ### Related ADRs
 
 - [AD-025](../../docs/decisions/0025-workspace-folder-carries-location.md) — 作業フォルダが所在を持つ: accepted — 「目標レイアウト」節 (3 ペイン。採用には ADR を要する)
-- [AD-046](../../docs/decisions/0046-app-shell-layout.md) — アプリのシェルを 3 面にする: **proposed** (本 feature で起こした。未承認)
+- [AD-046](../../docs/decisions/0046-app-shell-layout.md) — アプリのシェルを 3 面にする: **accepted** (本 feature で起こし、2026-10-05 に承認)
 - [AD-043](../../docs/decisions/0043-single-supervisor-session-threads-and-session-limit.md) — supervisor とセッションスレッド: accepted — 稼働中の接続は画面の寿命と切り離す (X-5 FR-008)
 - [AD-019](../../docs/decisions/0019-assistant-ui-element-inventory.md) — element の実在確認: accepted
 - [AD-024](../../docs/decisions/0024-constitution-verification-paths.md) / [AD-028](../../docs/decisions/0028-session-enumeration-process-and-unc-handoff.md) §5 — Principle VIII (B) の延期条件に目標レイアウト ADR が入っている
