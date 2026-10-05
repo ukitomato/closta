@@ -15,7 +15,7 @@ linear: null
 
 **Feature Branch**: `016-ui-boundaries-and-tool-displays` (`015-ui-mcp-elicitation-commands` → `014-ui-metering-and-limits` → `013-ui-app-shell` の上に積んである)
 
-**Created**: 2026-10-04 (夜間の自走で起案。**人間の承認が要る判断を仮採用している — 下の「未承認の判断」を参照**)
+**Created**: 2026-10-04 (夜間の自走で起案。夜間に仮採用した判断は **2026-10-05 に利用者が推奨案どおり承認した** — 下の「判断」を参照)
 
 **Status**: frontmatter の `status:` を正とする
 
@@ -33,7 +33,7 @@ transcript の中で、会話がどこで区切られたか (圧縮・会話の�
 
 ## 本 feature の位置づけ
 
-- **範囲を分ける (未承認 U-1)。** O-6 の行は 30 行 (Tier A 14) と、O-2 の pr-gate と V-4 から回した宿題を持つ。1 つの spec では FR が 20 を超える。本 feature は **Tier A の 14 行と、表示の状態 (結果待ち・結果不明・読み上げ・見出し)** に絞り、残りを新しい feature **O-11「Hook・背景の task・実行中の subagent と知らせの類の表示」(M3・`ui`・依存 O-6)** に送る:
+- **範囲を分ける (U-1)。** O-6 の行は 30 行 (Tier A 14) と、O-2 の pr-gate と V-4 から回した宿題を持つ。1 つの spec では FR が 20 を超える。本 feature は **Tier A の 14 行と、表示の状態 (結果待ち・結果不明・読み上げ・見出し)** に絞り、残りを新しい feature **O-11「Hook・背景の task・実行中の subagent と知らせの類の表示」(M3・`ui`・依存 O-6)** に送る:
   - 一般の Hook の表示と `includeHookEvents` の ADR (AD-041 (g) の読み替え)、`get_hooks_listing` (AD-036 §4 P3 の読み替えが要る)、`hook_name` にコマンドの文字列が入るかの確認 (V-4 の未記録の項目)
   - 実行中の Background task の一覧の要否 (`background_tasks_changed`。要るなら持ち主の domain を人間に諮る)、後から背景に移った task の行、シェルの Background task を秘密を出さずに見分ける手がかり
   - 実行中の subagent の入れ子 (`parent_tool_use_id`・`getSubagentMessages`。AD-035 D3 の読み替えと Agent SDK の呼び出しの許可リストの追加に ADR が要る) と Agent handoff
@@ -47,9 +47,9 @@ transcript の中で、会話がどこで区切られたか (圧縮・会話の�
 - **tool の入力と結果のパスは会話由来の本文である。** アプリのパスの値 (R-2 FR-042・AD-029・AD-032 の対象) ではないので、UNC の判定も接頭辞の除去もしない。見出しにはパスの末尾だけを出し、全体は今の ToolFallback / Code diff と同じく本文として出す (AD-049 Decision 5)
 - **V-4 の未記録の項目は未確認として扱う** (quickstart-results の V-4 は「いい感じ」の判定と、追従の不具合の修正だけを記録している)。本 feature に関わる 2 つは、確かめずに両方の形に耐える規則にする: 並列の tool の結果の届き方 (送り直しの回数) → 結果の状態は tool の part ごとに決める / subagent の tool 名 (`Agent` / `Task`) → 既に両方に当たっている
 
-## 未承認の判断 (夜間の自走で仮採用。2026-10-04)
+## 判断 (2026-10-04 の夜間の自走で仮採用し、2026-10-05 に利用者が承認)
 
-**本 spec は design-gate で止め、利用者の承認まで /cl-implement に入らない。**
+利用者は下の表の「仮採用した案」と AD-049 を 2026-10-05 に推奨案どおり承認した。
 
 | # | 判断 | 仮採用した案 | 代わりの案 |
 |---|---|---|---|
@@ -186,7 +186,7 @@ transcript の中で、会話がどこで区切られたか (圧縮・会話の�
 
 ### Assumptions / Clarifications
 
-- **[未承認 U-1〜U-7]** 上の「未承認の判断」の表
+- **[承認済み U-1〜U-7]** 上の「判断」の表 (2026-10-05)
 - **[ASSUMED]** パスと URL の見せ方、計画の一覧を作らないこと、読み上げの量と中身、拒否の説明を出さないこと、`new_conversation_id` を読まないこと、圧縮の行と境界を並べること、過去ログに取り消しの印が無いこと
 - V-4 の未記録の項目は未確認として扱う (本 feature に関わる 2 つは両方の形に耐える規則にする)
 

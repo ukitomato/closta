@@ -6,7 +6,7 @@
 
 **規則の正本**: 振る舞いは spec の FR / SC、行・本文の伏せ字・取り消し・tool の見出しと中身・File tree の作り方・結果の状態・読み上げ・文言・対応表の書き換え先は data-model、方式の理由は research。
 
-**着手の条件**: **O-7 (013)・O-4 (014)・O-5 (015) がマージされ、AD-046 / AD-047 / AD-048 / AD-049 が accepted になり、spec の U-1〜U-7 を利用者が承認するまで /cl-implement に入らない。**
+**着手の条件**: **O-7 (013)・O-4 (014)・O-5 (015) がマージされるまで /cl-implement に入らない。** AD-046 / AD-047 / AD-048 / AD-049 の accepted と spec の U-1〜U-7 の承認は 2026-10-05 に済み。
 
 **順序の制約**: SH-001 → コード。SH-002 / FE-001 → FE-020〜FE-023 (照合と provider の確認の結果で表示の作りを決める。FE-001 が失敗したら U-4 を plain text に戻し、FR-009・data-model §5 の ExitPlanMode の行・AD-049 Decision 4 を取り下げる)。BE-001 → BE / FE の他。SH-010 は最後。
 

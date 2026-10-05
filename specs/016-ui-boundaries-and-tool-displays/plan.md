@@ -2,7 +2,7 @@
 
 **Branch**: `016-ui-boundaries-and-tool-displays` (`015-ui-mcp-elicitation-commands` → `014-ui-metering-and-limits` → `013-ui-app-shell` の上に積んである。実装は O-7・O-4・O-5 のマージの後) | **Date**: 2026-10-04 | **Spec**: [spec.md](./spec.md)
 
-**未承認の判断を含む** (spec の U-1〜U-7) / **proposed の ADR に依る** (AD-046 / AD-047 / AD-048 / AD-049)。本 plan は design-gate までの成果物で、利用者の承認と O-7 / O-4 / O-5 のマージまで実装に入らない。
+spec の U-1〜U-7 と AD-046 / AD-047 / AD-048 / AD-049 は 2026-10-05 に利用者が承認した。O-7 / O-4 / O-5 のマージの後に実装する。
 
 ## Summary
 
@@ -45,10 +45,10 @@
 
 ### Related ADRs
 
-- [AD-049](../../docs/decisions/0049-boundaries-retraction-and-o11-split.md) — O-11 への分割・取り消し・本文の伏せ字・Agent plan の markdown・tool のパス: **proposed** (本 feature)
-- [AD-048](../../docs/decisions/0048-session-config-display-and-answer-ui-split.md) — tool の登録の 2 段・`QUERY_MUTATION_METHODS` の拡張・`meter` の上限の例外: **proposed** (O-5)
-- [AD-047](../../docs/decisions/0047-session-meter-and-failure-reasons.md) — `meter` と行の作り方 (D2 を読み替える): **proposed** (O-4)
-- [AD-046](../../docs/decisions/0046-app-shell-layout.md) — シェル・`watchedId`: **proposed** (O-7)
+- [AD-049](../../docs/decisions/0049-boundaries-retraction-and-o11-split.md) — O-11 への分割・取り消し・本文の伏せ字・Agent plan の markdown・tool のパス: **accepted** (本 feature で起こし、2026-10-05 に承認)
+- [AD-048](../../docs/decisions/0048-session-config-display-and-answer-ui-split.md) — tool の登録の 2 段・`QUERY_MUTATION_METHODS` の拡張・`meter` の上限の例外: **accepted** (O-5。2026-10-05 に承認)
+- [AD-047](../../docs/decisions/0047-session-meter-and-failure-reasons.md) — `meter` と行の作り方 (D2 を読み替える): **accepted** (O-4。2026-10-05 に承認)
+- [AD-046](../../docs/decisions/0046-app-shell-layout.md) — シェル・`watchedId`: **accepted** (O-7。2026-10-05 に承認)
 - [AD-044](../../docs/decisions/0044-ui-coverage-assignment.md) — 対応表の割当と M3 の完了の条件 (D4 / D6 の持ち主を O-11 に): accepted
 - [AD-041](../../docs/decisions/0041-x4-launch-config-on-x1-launch-gate.md) — options のキーの pin ((g)。O-11 の義務): accepted
 - [AD-036](../../docs/decisions/0036-single-session-launch-process-and-live-stream.md) — §4 P3 (Query のメソッドは interrupt だけ): accepted
@@ -111,7 +111,7 @@
 
 | ID | リスク | 手当て |
 |---|---|---|
-| RK-01 | 未承認の判断 (U-1〜U-7)・AD-046 / AD-047 / AD-048 / AD-049 が覆る | design-gate で止める |
+| RK-01 | 仮採用した判断 (U-1〜U-7)・AD-046 / AD-047 / AD-048 / AD-049 が覆る | 2026-10-05 に利用者が推奨案どおり承認した |
 | RK-02 | 取り消したメッセージに結果待ちの tool や承認カードが含まれる | agents の追跡から外し、後の結果を捨てる。ストアも外した id を覚える。承認の要求 (`pending`) は消さず、承認カードは利用者の応答を待つ (自動で解決しない。何の操作かは承認カードの入力で分かる)。拒否のときに承認待ちが残るかは V-3 で記録する。テストで固定 (FE-010) |
 | RK-03 | 読み上げが多すぎる / 少なすぎる | 新しく届いた出来事だけ・1 秒に 1 回のまとめ・対象の限定 (data-model §4)。実機の目視で利用者が確かめる (quickstart V-3) |
 | RK-04 | `Glob` / `Grep` の結果の形が CLI の版で変わる | 注記の形以外の行を項目にし、0 件なら text に倒す (data-model §2)。全部の行がどこかに見える。V-3 で実際の結果を記録して fixture にする |

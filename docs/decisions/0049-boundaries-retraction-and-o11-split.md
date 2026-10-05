@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2026-10-04
 id: AD-049
 deciders: ukitomato
@@ -21,7 +21,7 @@ O-6 ([spec 016](../../specs/016-ui-boundaries-and-tool-displays/spec.md)) は `d
 - [AD-035](0035-tier-a-tool-display-and-subagent-nesting.md) Decision 6 は、`MarkdownText` が text part の context に依り任意の文字列を受けられないため、Agent plan を plain text で描くと決めた
 - tool の入力と結果のパスは会話由来の本文で、WSL・Windows 形式・UNC が混ざる。UNC の判定の唯一の入口 (`classifyRawPath`。[AD-032](0032-unc-shape-classification-by-separator-count.md)) は renderer から届かない
 
-本 ADR は O-6 が夜間の自走で起こした。**未承認である (spec 016 の U-1〜U-7)。** [AD-046](0046-app-shell-layout.md) / [AD-047](0047-session-meter-and-failure-reasons.md) / [AD-048](0048-session-config-display-and-answer-ui-split.md) (proposed) を前提にする。
+本 ADR は O-6 が夜間の自走で起こした。本 ADR と spec 016 の U-1〜U-7 は 2026-10-05 に利用者が承認した。[AD-046](0046-app-shell-layout.md) / [AD-047](0047-session-meter-and-failure-reasons.md) / [AD-048](0048-session-config-display-and-answer-ui-split.md) (同日に accepted) を前提にする。
 
 ## 読み替える箇所
 
