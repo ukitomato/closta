@@ -2,12 +2,22 @@
 name: cl-code-gate
 description: 実装の self-review gate。touched files を lint / test / convention で検証し、MUST_FIX があれば implementer で auto-fix loop を回す。PASS で implementing → reviewing に昇格する。
 argument-hint: [spec_dir]
-allowed-tools: Read Write Edit Bash Glob Grep Agent AskUserQuestion
+allowed-tools: Read Write Edit Bash Glob Grep Agent
+context: fork
+agent: general-purpose
+background: true
 ---
 
 # cl-code-gate
 
 Implementation Phase の **self-review gate**。`/cl-implement` 完了後に auto-chain で起動される (手動起動も可)。touched files を **lint / test / convention 専任 reviewer + stack-conditional optional reviewer** で検証し、`MUST_FIX` 指摘があれば `implementer` subagent で **auto-fix loop** を最大 3 iteration 実行。すべて解消で `implementing → reviewing` に昇格。
+
+## 実行モデル
+
+- 本 skill は **background の fork** で動く。呼び出し元の会話は見えず、入力は引数とファイルだけである
+- **人間には質問できない** (fork には `AskUserQuestion` が渡らない)。判断が要る分岐は halt して理由を返す
+- reviewer と implementer は Agent ツールで起動し、**バックグラウンドで返る**。起動したらターンを終え、報告が届いてから次の段に進む (Phase 3 の直列順もこの形で守る)
+- **最終メッセージは Phase 7 の完了通知だけにする。** reviewer の生出力・diff・findings 本文は含めない。main に届くのは最終メッセージだけで、そこに積んだ分だけ main の context が埋まる
 
 ## 責務スコープ (vs pr-gate)
 
@@ -85,11 +95,14 @@ fi
 [ -n "$base_commit" ] || halt "diff の起点を解決できません。--base <commit> を指定してください"
 
 # **実装がコミット済みなら base との差分を使う** — `git diff HEAD` は未コミット変更しか見ない。
+# diff 本文は reviewer に貼らず、ファイルに 1 回だけ書き出してパスを渡す (Phase 3)。
 if [ -n "$(git status --porcelain)" ]; then
-  diff_files=$(git diff --name-only HEAD | normalize)
+  diff_range=HEAD
 else
-  diff_files=$(git diff --name-only "$base_commit..HEAD" | normalize)
+  diff_range="$base_commit..HEAD"
 fi
+diff_files=$(git diff --name-only "$diff_range" | normalize)
+git diff "$diff_range" > "$spec_dir/.code-gate.diff"
 touched_files=$(cat "$spec_dir/touched-files.txt" 2>/dev/null | normalize || true)
 if [ -n "$touched_files" ]; then
   scope=$(comm -12 <(echo "$diff_files") <(echo "$touched_files"))
@@ -150,14 +163,14 @@ active=$(gate_common::reviewers_filter code-gate "$spec_dir/.code-gate-scope.txt
 
 **`convention-reviewer` は `lint-agent` の後に起動し、その stdout JSON を context でそのまま渡す。** `convention-reviewer` は自分で lint を実行しないため、渡さないと lint 観点が空になる。**`exit_code` を落とさずに渡すこと** — `convention-reviewer` は「lint が非ゼロ exit で終わったこと自体を Critical とする」判定をこの値で行い、それが `gate-common.sh` の機械 gate (`PASS` かつ `critical>0` は exit 5) に直結する。
 
-各 reviewer に context として渡す:
+各 reviewer に渡す素材は **パスだけ** である。**本文を prompt に貼ってはならない** — reviewer は自分で Read する定義になっており (`reviewer-base.md` の Tier-0)、貼ると並列 reviewer の数だけ同じ本文が重複する。
 
-- `<spec_dir>/{spec,plan,tasks}.md`
+- `<spec_dir>` — `{spec,plan,tasks}.md` を reviewer が Read する
 - `<spec_dir>/.code-gate-scope.txt` (touched files の絞り込み結果)
-- `git diff HEAD` の full diff (大きすぎる場合は `git diff --stat` + 個別 file の diff)
+- `<spec_dir>/.code-gate.diff` (Phase 1 で書き出した diff。reviewer の多くは Bash を持たず自分で diff を取れない)
 - `.specify/memory/constitution.md`
 - `docs/domains/<domain>/charter.md`
-- **`convention-reviewer` のみ**: `lint-agent` の stdout JSON 全体
+- **`convention-reviewer` のみ**: `lint-agent` の stdout JSON 全体 (小さいのでこれだけは本文で渡す)
 - **`test-agent` のみ**: `scope: touched-files` か `scope: full` を**明示的に指示する**。
   test-agent は「自分が最終 iteration か」を観測できない (その回の結果が出る前に走る) ため、
   **判断は invoker が行う**。収束見込みの回、`--max-iter` 最終回、および PASS を出す前は `full`
@@ -274,7 +287,7 @@ active=$(gate_common::reviewers_filter code-gate "$spec_dir/.code-gate-scope.txt
 
 - **START**: iter N 開始時の `.gate-verdict-code.json` (Phase 4b で emit 済) を input
 - **BODY**: `implementer` subagent を Agent ツールで 1 回起動
-  - context: verdict JSON 全体 + `touched-files.txt` + spec.md / plan.md / tasks.md
+  - context: `spec_dir` と iter 番号だけ。verdict JSON / `touched-files.txt` / spec.md / plan.md / tasks.md は implementer が自分で Read する (本文を貼らない)
   - 任務: `must_fix_findings[]` を順に処理、touched files を更新、`code-gate.md.iter<N>.implementer.json` を Write
   - **戻ってきた action log を読む。** `resolutions[]` の `status: skipped` / `error` を
     数え、`iter_history[N]` に `skipped` / `error` として記録し、Phase 7 の完了通知にも出す。
@@ -349,10 +362,19 @@ fi
 
 ## Failure modes
 
-- lint / test コマンド検出失敗 (lint-agent / test-agent が exit 2) → 以下の順で自動探索し、全滅したときだけ AskUserQuestion でコマンド指定を求める。**得られたコマンドは `docs/discovery.md` の "Build / Test / Lint" 表に追記する** — そこが agent 用コマンドの正本であり、次回の探索が step 1 で当たるようになる:
+- lint / test コマンド検出失敗 (lint-agent / test-agent が exit 2) → 以下の順で自動探索する:
   1. `docs/discovery.md` の "Build / Test / Lint" 表の「agent 用」列
   2. `package.json` の `scripts.lint` / `scripts.test`
   3. `Makefile` の `lint:` / `test:` ターゲット
+
+  全滅したら halt し、完了通知の代わりに次を返す (fork では人間に聞けない)。**コマンドの追記先は `docs/discovery.md` の表** — そこが agent 用コマンドの正本であり、次回の探索が step 1 で当たるようになる:
+
+  ```
+  ✗ /cl-code-gate NEEDS_INPUT
+    - 理由: <lint | test> コマンドを解決できません (探索: discovery.md / package.json / Makefile)
+    - 対処: docs/discovery.md の "Build / Test / Lint" 表の「agent 用」列にコマンドを追記して再実行
+            (一度だけ試すなら --lint-cmd / --test-cmd)
+  ```
 - 必須 agent が registry に無い → halt with "`.claude/agents/<name>.md` の存在と `.specify/.agents-registry.yaml` の entry を確認してください"
 - implementer の auto-fix が partial → 次 iter で残りに再挑戦
 - cascade exhaustion (3 連続単調非減少) → halt + 直前 iter の verdict / code-gate.md を最終とみなして表示

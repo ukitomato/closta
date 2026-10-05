@@ -2,12 +2,22 @@
 name: cl-design-gate
 description: Design Phase 末尾の hard gate。spec.md + plan.md + tasks.md を bundle で並列レビューし、Critical=0 で tasking → implementing に昇格する。
 argument-hint: [spec_dir]
-allowed-tools: Read Write Edit Bash Glob Grep Agent AskUserQuestion
+allowed-tools: Read Write Edit Bash Glob Grep Agent
+context: fork
+agent: general-purpose
+background: true
 ---
 
 # cl-design-gate
 
 Design Phase の **最後の品質ゲート**。`/cl-implement` 起動前に手動起動する。`spec.md` + `plan.md` + `tasks.md` を **bundle で** レビューし、Critical 指摘が解消されるまで status を `tasking` から進めない。
+
+## 実行モデル
+
+- 本 skill は **background の fork** で動く。呼び出し元の会話は見えず、入力は引数とファイルだけである
+- **人間には質問できない** (fork には `AskUserQuestion` が渡らない)。判断が要る分岐は halt して理由を返す
+- reviewer は Agent ツールで起動し、**バックグラウンドで返る**。起動したらターンを終え、起動した全トラックの報告が届いてから集約に進む
+- **最終メッセージは Phase 6 の完了通知だけにする。** reviewer の生出力・findings 本文は含めない。main に届くのは最終メッセージだけで、そこに積んだ分だけ main の context が埋まる
 
 ## When to invoke
 
@@ -68,16 +78,15 @@ gate_common::phase0_check_charter "$spec_dir" || exit 1
 | **D. `security-reviewer`** | Agent ツール (`subagent_type: security-reviewer`) | **secrets / 認可 / プロセス境界 hardening**: spec / plan が秘密の扱いや権限境界をどう定めているか |
 | **E+. registry 由来の追加 reviewer** | Agent ツール (`subagent_type: <name>`) | 各 reviewer の担当スライスに従う。Phase 0 step 6 で解決した分だけトラックを増やす (Track B-D と重複させない) |
 
-各 subagent に context として渡す素材:
+各 subagent に渡す素材は **パスだけ** である。**本文を prompt に貼ってはならない** — reviewer は自分で Read する定義になっており (`reviewer-base.md` の Tier-0)、貼ると並列トラックの数だけ同じ本文が重複する。
 
-- `<spec_dir>/spec.md` (必須)
-- `<spec_dir>/{plan.md, tasks.md, data-model.md, research.md, contracts/, quickstart.md, checklists/}` (存在分すべて)
+- `<spec_dir>` — `spec.md` (必須) と `{plan.md, tasks.md, data-model.md, research.md, contracts/, quickstart.md, checklists/}` (存在分すべて) を reviewer が Read する
 - `docs/domains/<domain>/charter.md`
 - `docs/domains/_overview.md` (存在すれば)
 - `docs/glossary.md`
 - `.specify/memory/constitution.md`
-- `docs/decisions/*.md` で `status: accepted` のもの: **header (frontmatter + `# Title`) + `## Decision Outcome` + `## Confirmation` section のみ** を context として提供 (Context / Considered options / Pros&Cons は除外)
-- **前回 design-gate.md が存在する場合** (`<spec_dir>/design-gate.md`): Critical / High findings の一覧を "Previous gate findings" として context に追加。reviewers はこれを参照し "resolved from prev / unresolved from prev / new" を finding ごとに付記する
+- `docs/decisions/` — 読む範囲は `reviewer-base.md` の「ADR 読了範囲」に従う (architecture-reviewer だけ全文)
+- **前回 design-gate.md が存在する場合**: そのパス (`<spec_dir>/design-gate.md`) を "Previous gate findings" として渡す。reviewers はその Critical / High を参照し "resolved from prev / unresolved from prev / new" を finding ごとに付記する
 
 **clean-context isolation の意味**: subagent は本 skill のメインスレッドの会話履歴を一切見ない。reviewer は frontmatter `tools: Read, Grep, Glob` で Edit/Write も禁止 (read-only)。
 
@@ -138,17 +147,13 @@ _(前回 gate が存在する場合のみ表示)_
 
 ## Track raw outputs
 
-<details>
-<summary>analyze</summary>
-
-<full output、または分量が大きい場合は `analyze.md` へのリンク>
-</details>
-
-<details>
-<summary>po-reviewer</summary>
-...
-</details>
+- [analyze.md](./analyze.md)
+- [po-reviewer.design-gate.md](./po-reviewer.design-gate.md)
+- [architecture-reviewer.design-gate.md](./architecture-reviewer.design-gate.md)
+- ...
 ```
+
+**raw output の本文を design-gate.md に複製しない。リンクだけを置く。** 本文は Phase 1 で各ファイルに Write 済みである。
 
 ### Phase 3: 重複排除 (dedup) — 既定で完全自動
 
@@ -162,8 +167,7 @@ _(前回 gate が存在する場合のみ表示)_
      4. **一行サマリの Levenshtein 距離 < 5** → 集約候補 (**Critical severity には適用しない**)
    - **集約後 finding の `Where` / `Issue` は全候補の union** で記録する (例: `Where: spec.md:42, plan.md:90`)。片方の location のみ残すことを禁止
    - 集約された findings は dedup_log にペアで記録
-2. `--no-auto-dedup` 指定時のみ各ペアで AskUserQuestion を実行 (opt-in)
-3. dedup 結果を Total 行に反映、`<spec_dir>/.gate-verdict-design.json` の `dedup_log` 配列に記録
+2. dedup 結果を Total 行に反映、`<spec_dir>/.gate-verdict-design.json` の `dedup_log` 配列に記録
 
 ### Phase 4: 集計と enforcement
 
@@ -240,6 +244,7 @@ fi
   - critical (total dedup): <N>
   - verdict: <PASS|FIX_REQUIRED>
   - status: <tasking → implementing | tasking 据置>
+  - verdict JSON: <spec_dir>/.gate-verdict-design.json
 ```
 
 ## Idempotency
@@ -264,7 +269,7 @@ fi
 4. Verdict が PASS / FIX_REQUIRED / ERROR で明記
 5. Critical 件数が dedup 後の値で表示
 6. PASS の場合のみ spec.md frontmatter `status:` が `implementing` に遷移
-7. design-gate.md に subagent の raw output が `<details>` 内に保存されている
+7. design-gate.md の "Track raw outputs" に各トラックの raw output ファイルへのリンクがある (本文は複製しない)
 8. いずれかの track が error のとき verdict が ERROR (not silently PASS)
 9. viewpoint coverage の missing カテゴリが verdict JSON に記録される (Track A は適用外の `null`)
 10. cascade_demotions count が verdict JSON に記録される

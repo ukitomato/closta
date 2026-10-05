@@ -87,3 +87,5 @@ specs/**/*-round[0-9]*
 specs/**/*.iter[0-9]*
 specs/**/*-gate.md.[0-9]*
 specs/**/.*-scope.txt
+# code-gate / pr-gate が reviewer に渡すために書き出す diff (再実行のたびに作り直す)
+specs/**/.*-gate.diff
