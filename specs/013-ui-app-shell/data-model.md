@@ -73,7 +73,7 @@ watchedId = focus === 'running' && !settings.open ? selectedId : null
 | 順 | 区画 | 中身 | 持ち主 |
 |---|---|---|---|
 | 1 | 新規起動 | ボタン。`launchOpen = true` | ui (シェル) |
-| 2 | 稼働中 | `RunningSessionList` (O-1)。見出しに注意の件数の印 (`SessionNavBadge` の役割)。高さの上限は区画の 50%。0 件のときは今の文言 (「稼働中のセッションはありません。」) を 1 行。区画の要素は `section` (今の `RunningSessionList.tsx:93` の `nav` を替える。トップレベルの `nav` はサイドバーの 1 つだけ)。`ThreadListNew` は区画の中に置かない | session |
+| 2 | 稼働中 | `RunningSessionList` (O-1)。見出しに注意の件数の印 (`SessionNavBadge` の役割)。高さの上限は、過去のセッションの区画に最小の高さ (8rem) を残した値 (実装で 50% から直した。50% では既定のウィンドウ (1100×760) で compact の 10 行が収まらず、O-1 SC-003 を壊す)。0 件のときは今の文言 (「稼働中のセッションはありません。」) を 1 行。区画の要素は `section` (今の `RunningSessionList.tsx:93` の `nav` を替える。トップレベルの `nav` はサイドバーの 1 つだけ)。`ThreadListNew` は区画の中に置かない | session |
 | 3 | 過去のセッション | `SessionListScreen` の一覧の部分 (所在の絞り込み・フォルダのグループ・空の表示)。初回の取得は `listRuntimes()` の解決の後 (spec FR-016) | session |
 | 4 | 設定 | ボタン。`settings.open = true` | ui (シェル) |
 

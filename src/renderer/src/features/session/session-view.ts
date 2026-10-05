@@ -381,7 +381,7 @@ export function formatElapsed(ms: number): Elapsed {
 /**
  * 枠の使用数 (spec FR-007)。数え方は main の上限判定と同じ domain の `countOccupying` (生存フラグで数える)。
  * 起動要求の応答を待っている 1 件を足す (main の予約に当たる)。**前提**: 起動要求は UI で直列化されている
- * (`SessionScreen` は `launching` の間ダイアログを出さない)。並行起動を許すなら起動要求の件数を state に出して足す。
+ * (`LaunchPanel` は `launching` の間ダイアログを出さず、シェルの起動ダイアログも閉じられない)。並行起動を許すなら起動要求の件数を state に出して足す。
  */
 export function slotUsage(state: RunningSessionStoreState): {
   readonly used: number
@@ -412,13 +412,17 @@ export function attentionCounts(state: RunningSessionStoreState): {
 }
 
 /**
- * 承認待ちの件数を押したときの移動先 (spec FR-002 / research R-04)。表示中を除く承認待ちのうち、承認待ちに入った
- * 時刻が最も早いもの。同時刻なら `order` の順。無ければ `null` (ボタンは押せない)。
+ * 承認待ちの件数を押したときの移動先 (spec FR-002 / research R-04)。見ているセッション (`watchedId`。O-7 data-model §1。
+ * 省略時は選択中) を除く承認待ちのうち、承認待ちに入った時刻が最も早いもの。同時刻なら `order` の順。
+ * 無ければ `null` (ボタンは押せない)。
  */
-export function nextAwaiting(state: RunningSessionStoreState): string | null {
+export function nextAwaiting(
+  state: RunningSessionStoreState,
+  watchedId: string | null = state.selectedId
+): string | null {
   let best: { readonly id: string; readonly at: number } | null = null
   for (const id of state.order) {
-    if (id === state.selectedId) continue
+    if (id === watchedId) continue
     if (rowStatus(viewOf(state, id)) !== 'awaiting') continue
     const at = state.statusSince[id]?.at ?? Number.POSITIVE_INFINITY
     if (best === null || at < best.at) best = { id, at }
@@ -427,8 +431,8 @@ export function nextAwaiting(state: RunningSessionStoreState): string | null {
 }
 
 /**
- * 支援技術に読ませる文 (spec FR-004 / data-model §2)。`watchedId` (見ているセッション。セッション画面が表示されて
- * いるときだけ選ばれているもの) 以外のうち、承認待ち・失敗に**入った**ものを 1 つの文にまとめる。
+ * 支援技術に読ませる文 (spec FR-004 / data-model §2)。`watchedId` (見ているセッション。O-7 の `watchedIdOf`: 中央に
+ * 稼働中の会話を出していて設定のダイアログを開いていないときだけ選ばれているもの) 以外のうち、承認待ち・失敗に**入った**ものを 1 つの文にまとめる。
  * **会話由来の値を引数に取らない** — 文は作業フォルダの表示名と固定の文言だけで組む。
  */
 export function announcements(

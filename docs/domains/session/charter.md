@@ -3,7 +3,7 @@ domain: session
 status: needs-human-review
 owner: ukitomato
 generated_by: human (PLAN.md を素案として再導出)
-last_reviewed: 2026-10-03
+last_reviewed: 2026-10-05
 related_adrs:
   - docs/decisions/0002-use-agent-sdk-not-cli.md
   - docs/decisions/0006-supervisor-in-utility-process.md
@@ -22,6 +22,7 @@ related_specs:
   - specs/009-session-supervisor-and-multi-session/spec.md
   - specs/010-session-monitoring-view/spec.md
   - specs/011-ui-coverage/spec.md
+  - specs/013-ui-app-shell/spec.md
 ---
 
 # Domain Charter: session
@@ -99,6 +100,10 @@ Closta の出発点にある課題「並行して走らせたセッションの�
 O-1 では、監視ビュー = セッション画面のサイドバーの稼働中セッション一覧 (強調・件数・経過時間・直近の活動・密度を持つ)、
 没入ビュー = 表示中セッションのペイン (transcript と composer) と読み替えた。全面の監視画面は持たない (USER 決定 2026-10-02)。
 「一覧へ戻る」は別の行を選ぶことに当たる。承認待ちと失敗の件数はセッション画面以外でもナビに出る
+
+O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビューが無くなり、監視ビュー = シェルのサイドバーの稼働中の区画、
+没入ビュー = 中央の本体の実行中の Chat になった。承認待ちと失敗の件数は稼働中の区画の見出しに出て、サイドバーを畳んでも帯に残る。
+稼働中の一覧の中身と行の形は今どおり session が持ち、どちらの一覧の行を中央に出すかはシェル (ui) が選択を購読して決める
 
 ### Journey 4: 中断と再開
 
@@ -191,8 +196,11 @@ O-1 では、監視ビュー = セッション画面のサイドバーの稼働�
   終了・停止・閉じる。実装中。[AD-043](../../decisions/0043-single-supervisor-session-threads-and-session-limit.md)）
 
 - **O-1** — [セッション監視ビュー](../../../specs/010-session-monitoring-view/spec.md)
-  （稼働中セッション一覧の拡張: 承認待ち・失敗の強調と件数、ナビの件数と読み上げ、枠の使用数、経過時間と直近の活動、
+  （稼働中セッション一覧の拡張: 承認待ち・失敗の強調と件数、ナビの件数と読み上げ (O-7 からは稼働中の区画の見出し)、枠の使用数、経過時間と直近の活動、
   compact / comfortable、charter KPI「並列時の滑らかさ」の実機計測。実装中）
+- **O-7 (ui)** — [アプリのシェル](../../../specs/013-ui-app-shell/spec.md)
+  （本 domain の feature ではない。稼働中と過去のセッションの一覧をサイドバーに置き、起動の面をダイアログに移した。
+  session のストアには選択の操作の通知 `selectionSeq` だけを足し、行の部品と派生値は変えていない）
 
 X-6 は未着手。
 

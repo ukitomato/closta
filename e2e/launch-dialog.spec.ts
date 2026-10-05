@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 
-import { launchApp } from './support/launch'
+import { launchApp, openLaunchDialog } from './support/launch'
 
 /**
  * X-4 / SH-022 — **起動設定ダイアログの E2E** (SC-001 / SC-002 / SC-004。charter KPI「依存解決の正しさ」)。
@@ -14,9 +14,9 @@ import { launchApp } from './support/launch'
  * **IPC は本物の main 側検証を通る** (`checkLaunchConfig` / `checkPreset` / `findRuntime`)。preload も本番と同一。
  */
 
-async function openDialog(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'セッション起動' }).click()
-  await page.getByRole('heading', { name: 'セッションを起動' }).waitFor()
+/** サイドバーの「新規起動」から開く (O-7)。 */
+function openDialog(page: Page): Promise<void> {
+  return openLaunchDialog(page)
 }
 
 // select は位置でなく label で拾う (X-5 SH-011)。

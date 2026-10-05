@@ -20,7 +20,6 @@ import { useSessionThreadListAdapter } from '@/runtime/thread-list-adapter'
 import { useUiStore, type FolderDraftSeed } from '@/stores/ui'
 
 import type { EnumerationOutcomeDTO, SessionGroupDTO, SessionSummaryDTO } from '@domain/session/dto'
-import type { LocationDTO } from '@domain/workspace/dto'
 import { sessionRowKey } from '@domain/session/summary'
 import type { FailureReason } from '@domain/session/target'
 
@@ -37,6 +36,7 @@ import {
   remedyFor,
   type Coverage
 } from './labels'
+import { locationIndexOf, locationLabelOf } from './group-label'
 import { buildSessionRows, rowTitleText, type SessionSection } from './rows'
 import { useFolderLabels } from './useFolderLabels'
 import { useSessions } from './useSessions'
@@ -180,10 +180,16 @@ function registerSeedOf(group: SessionGroupDTO): FolderDraftSeed | null {
 function Section({
   section,
   folderName,
-  coverage
+  coverage,
+  highlightSelected,
+  onSelectRow
 }: {
   section: SessionSection
   folderName: string | null
+  /** 選択中の行を強調するか (O-7。中央に過去の会話を出しているときだけ)。 */
+  highlightSelected: boolean
+  /** 行を押したとき (選択中の行の押し直しを含む。O-7)。 */
+  onSelectRow: (rowKey: string) => void
   /**
    * 索引をどこまで信じてよいか (不変条件 5)。**件数と 0 件の意味を両方決める。**
    *
@@ -285,6 +291,8 @@ function Section({
             */}
             <ThreadListItemsByKey
               rowKeys={section.rowKeys}
+              highlightSelected={highlightSelected}
+              onSelectRow={onSelectRow}
               renderMeta={(rowKey) => {
                 const session = section.sessions.find((s) => sessionRowKey(s) === rowKey)
                 return session === undefined ? null : <SessionMeta session={session} />
@@ -671,25 +679,6 @@ function FilterChip({
 /** 所在の絞り込みの選択肢。**参照キーではなく表示名を鍵にしない** — 同名の所在はない。 */
 type LocationFilter = { readonly kind: 'all' } | { readonly kind: 'one'; readonly label: string }
 
-/** 所在の表示名。**1 箇所で決める** — 選択肢の生成と絞り込みが同じ文字列を使う必要がある。 */
-function locationLabelOf(location: LocationDTO): string {
-  return location.kind === 'wsl' ? location.distroName : 'Windows'
-}
-
-/**
- * `targetKey` から所在を引く索引。
- *
- * **所在はセッションではなく列挙の結果が持つ。** `SessionGroupDTO` の `folder` variant は
- * `location` を持たない (登録フォルダは複数所在のセッションを含みうる) ため、
- * グループから所在は引けない。`SessionSummaryDTO.targetKey` と
- * `EnumerationOutcomeDTO.targetKey` が同じ値なので、これで行単位に引ける。
- */
-function locationIndexOf(outcomes: readonly EnumerationOutcomeDTO[]): ReadonlyMap<string, string> {
-  const index = new Map<string, string>()
-  for (const outcome of outcomes) index.set(outcome.targetKey, locationLabelOf(outcome.location))
-  return index
-}
-
 /**
  * 所在の絞り込みを**セッション単位**で適用する (FR-040 / code-gate iteration 1 / ux H-005)。
  *
@@ -723,7 +712,12 @@ function narrowToLocation(
   return { ...section, sessions, rowKeys }
 }
 
-export function SessionListScreen(): React.JSX.Element {
+export function SessionListScreen({
+  highlightSelected = true
+}: {
+  /** 選択中の行を強調するか (O-7。シェルは中央に過去の会話を出しているときだけ強調する)。省略時は強調する。 */
+  readonly highlightSelected?: boolean
+} = {}): React.JSX.Element {
   const sessions = useSessions()
   const folderLabels = useFolderLabels()
 
@@ -733,7 +727,7 @@ export function SessionListScreen(): React.JSX.Element {
    */
   const [locationFilter, setLocationFilter] = useState<LocationFilter>({ kind: 'all' })
   const [folderFilter, setFolderFilter] = useState<string | null>(null)
-  const setScreen = useUiStore((state) => state.setScreen)
+  const openSettings = useUiStore((state) => state.openSettings)
 
   /*
    * **selector の外で変換する。** `useAuiState` の selector が配列リテラルを返すと
@@ -861,20 +855,24 @@ export function SessionListScreen(): React.JSX.Element {
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <div
-        className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto p-4"
+        className="flex h-full min-h-0 flex-col gap-2 overflow-y-auto p-2"
         /* **取得中であることを支援技術に伝える** (a11y H-001)。 */
         aria-busy={sessions.loading}
       >
         {/* 遷移を伴うボタンの説明。**参照されるだけで視覚には出さない** (a11y H-006)。 */}
         <span id="register-seed-help" className="sr-only">
-          押すと作業フォルダの登録画面へ移動します。
+          押すと設定の「作業フォルダ」が登録の初期値つきで開きます。
         </span>
 
+        {/*
+         * O-7: サイドバーの過去のセッションの区画に置く。区画の見出し (「過去のセッション」) はシェルが持つので、
+         * 画面の見出しと外枠を外し、取得の時刻・全件を取り直す・列挙の結果・絞り込みは残して折り返しで収める
+         * (data-model §3)。
+         */}
         <header className="flex flex-wrap items-baseline justify-between gap-2">
-          <div>
-            <h1 className="text-base font-medium">セッション一覧</h1>
+          <div className="min-w-0">
             <p
-              className="text-muted-foreground mt-0.5 text-xs"
+              className="text-muted-foreground text-xs"
               /*
                * **段階描画の進みをここ 1 箇所で通知する** (code-gate iteration 1 / a11y H-001)。
                *
@@ -1041,7 +1039,7 @@ export function SessionListScreen(): React.JSX.Element {
                 <p className="text-muted-foreground text-xs">
                   登録すると、そのフォルダのセッションがここに並びます。
                 </p>
-                <Button variant="outline" size="sm" onClick={() => setScreen('folders')}>
+                <Button variant="outline" size="sm" onClick={() => openSettings('folders')}>
                   作業フォルダを登録する
                 </Button>
               </>
@@ -1124,6 +1122,8 @@ export function SessionListScreen(): React.JSX.Element {
               key={section.key}
               section={section}
               coverage={coverage}
+              highlightSelected={highlightSelected}
+              onSelectRow={sessions.select}
               folderName={
                 section.group.kind === 'folder' ? folderLabels.nameOf(section.group.folderId) : null
               }

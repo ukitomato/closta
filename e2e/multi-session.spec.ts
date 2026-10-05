@@ -8,7 +8,7 @@ import {
   LONG_TASK_MAX_MS,
   typeContinuously
 } from './support/input-probe'
-import { launchApp, reachActiveComposer } from './support/launch'
+import { launchApp, openLaunchDialog, reachActiveComposer, runningRows } from './support/launch'
 
 /**
  * X-5 / SH-020・FE-020 — **マルチセッションの E2E** (SC-001 / SC-003 / SC-006)。
@@ -24,10 +24,9 @@ import { launchApp, reachActiveComposer } from './support/launch'
 const LOAD_PROMPT = '__e2e_load__'
 const BIG_PROMPT = '__e2e_big__'
 
-/** 一覧の「新規起動」から、直前の起動設定 (復元済み) のまま起動する。最初の 1 本は reachActiveComposer で作る。 */
+/** サイドバーの「新規起動」から、直前の起動設定 (復元済み) のまま起動する。最初の 1 本は reachActiveComposer で作る。 */
 async function launchAnother(page: Page): Promise<void> {
-  await page.getByRole('button', { name: '新規起動' }).click()
-  await page.getByRole('heading', { name: 'セッションを起動' }).waitFor()
+  await openLaunchDialog(page)
   const folder = page.getByRole('combobox', { name: '作業フォルダ' })
   if ((await folder.inputValue()) === '') {
     await folder.selectOption({ index: 1 })
@@ -36,9 +35,9 @@ async function launchAnother(page: Page): Promise<void> {
   await page.getByRole('button', { name: '起動', exact: true }).click()
 }
 
-/** 稼働中セッションの行 (assistant-ui の ThreadList の項目)。 */
+/** 稼働中セッションの行 (assistant-ui の ThreadList の項目。O-7 でサイドバーの稼働中の区画に限る)。 */
 function rows(page: Page): Locator {
-  return page.locator('[data-slot="aui_thread-list-item"]')
+  return runningRows(page)
 }
 
 /** 行の選択 (ThreadListItem の Trigger = 行の最初のボタン。操作ボタンはその後に並ぶ)。 */
@@ -105,6 +104,9 @@ test.describe('マルチセッション (X-5)', () => {
       }
       await launchAnother(page)
       await expect(page.getByRole('alert')).toContainText('10 件まで')
+      // 拒否は起動ダイアログを閉じずに理由を出す (O-7 US-2 AC5)。行の操作の前に閉じる。
+      await page.keyboard.press('Escape')
+      await expect(page.getByRole('heading', { name: 'セッションを起動' })).toHaveCount(0)
       await expect(rows(page)).toHaveCount(10)
 
       // 起動しただけ (プロンプト未送信) の行は「プロンプト待ち」で、強制終了でなく「終了」で枠を空けられる
@@ -161,7 +163,7 @@ test.describe('マルチセッション (X-5)', () => {
          */
         const bigStatus = (): string | null =>
           document
-            .querySelector('[data-slot="aui_thread-list-item"]')
+            .querySelector('[data-testid="session-list"] [data-slot="aui_thread-list-item"]')
             ?.querySelector('[data-testid="session-row-status"]')?.textContent ?? null
         w.__bigArrived = { atStart: bigStatus() === '応答待ち', at: null }
         const poll = setInterval(() => {
@@ -221,7 +223,9 @@ test.describe('マルチセッション (X-5)', () => {
       await expect(rows(page).nth(1).getByTestId('session-row-status')).toHaveText('終了済み')
 
       const layout = await page.evaluate(() => {
-        const list = document.querySelector('[data-slot="aui_thread-list-root"]')
+        const list = document.querySelector(
+          '[data-testid="session-list"] [data-slot="aui_thread-list-root"]'
+        )
         if (list === null) return null
         const listBox = list.getBoundingClientRect()
         const items = [...list.querySelectorAll('[data-slot="aui_thread-list-item"]')]

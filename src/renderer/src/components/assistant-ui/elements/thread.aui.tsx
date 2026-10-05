@@ -286,7 +286,7 @@ const VirtualThreadRoot: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
   const density = useTranscriptDensity();
   /*
    * **行のキーと高さのキャッシュはメッセージ id で持つ** (X-5 / SC-003)。ライブセッションは末尾が伸び、assistant-ui に
-   * 渡す窓 (SessionScreen の MESSAGE_WINDOW) もずれるため、index をキーにすると窓がずれるたびに全行が別のメッセージに
+   * 渡す窓 (RunningSessionsProvider の MESSAGE_WINDOW) もずれるため、index をキーにすると窓がずれるたびに全行が別のメッセージに
    * 入れ替わって再マウント・再測定になり long task が出る (実測)。描画は従来どおり MessageByIndex で行う。
    */
   const messages = useAuiState((s) => s.thread.messages);

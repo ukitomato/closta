@@ -90,8 +90,13 @@ export interface RunningSessionStoreState {
   readonly sessions: Readonly<Record<string, LiveSessionState>>
   /** main から届いた状態通知 (受理済み)。一覧の行と `ended` の導出に使う。 */
   readonly statuses: Readonly<Record<string, SessionStatusUpdate>>
-  /** 表示中のセッション。null は起動ダイアログを表示する。 */
+  /** 選択中の稼働中のセッション。null は選択なし。中央に出すかはシェルの `focus` が決める (O-7)。 */
   readonly selectedId: string | null
+  /**
+   * 選択の操作 (行の選択・承認待ちへの移動・起動の受け付け) のたびに増える通知の値 (O-7 / data-model §1)。
+   * 同じ id を選び直しても上がるので、シェルは値の変化ではなくこれで「稼働中の側が選ばれた」を受ける。
+   */
+  readonly selectionSeq: number
   readonly launch: LaunchState
   /** 行の状態に入った時刻 (O-1)。1 回のストア更新の中の変化は 1 回の `setState` にまとめる (data-model §1)。 */
   readonly statusSince: Readonly<Record<string, StatusSince>>

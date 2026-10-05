@@ -43,7 +43,8 @@ Principle VIII の Automated 2 項目 (IME E2E / 日本語スクリーンショ�
 
 - **導入済み**: `@playwright/test` (1.63)。app 側 E2E フック (T030) 実装済み。
 - **IME E2E (`ime.spec.ts`) は local で 3/3 緑** — idle / running+queue / 変換中マウス送信。DOM セレクタ (`[data-role="user"]` /
-  「セッション起動」nav / 「起動」exact) と CDP composition 注入列は実走で調整済み。**変換中マウス送信の未確定送信は E2E が
+  サイドバーの「新規起動」(O-7 で上部のタブの「セッション起動」から移した。`support/launch.ts` の `openLaunchDialog`) /
+  「起動」exact) と CDP composition 注入列は実走で調整済み。**変換中マウス送信の未確定送信は E2E が
   実検出し、`thread.aui.tsx` の確定優先の最小処理 (onMouseDownCapture/onClickCapture) で塞いだ** (AC-6 / AD-037 D1(d))。
 - **スクリーンショット比較 (`composer-screenshot.spec.ts`) も local 緑** — 同梱フォント Noto Sans JP (OFL。
   `e2e/fonts/NotoSansJP-Regular.ttf` + `e2e/fonts/OFL.txt`) を **FontFace API + CSSOM で CSP を壊さず注入**

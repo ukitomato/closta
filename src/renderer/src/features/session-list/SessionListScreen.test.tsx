@@ -94,7 +94,7 @@ function install(value: SessionIndexDTO): void {
 beforeEach(() => {
   // ストアはモジュール寿命なので、テストごとに初期状態へ戻す。
   useSessionsStore.setState({ index: null, loading: false, failed: false, selectedRowKey: null })
-  useUiStore.setState({ screen: 'sessions', folderDraftSeed: null })
+  useUiStore.setState({ settings: { open: false, section: 'runtimes' }, folderDraftSeed: null })
 })
 
 describe('SessionListScreen', () => {
@@ -374,7 +374,9 @@ describe('SessionListScreen — 未登録フォルダからの登録 (FE-051 / F
 
     // **登録は呼ばれない。** 初期値が積まれ、画面が登録側へ移るだけである。
     expect(registerFolder).not.toHaveBeenCalled()
-    await waitFor(() => expect(useUiStore.getState().screen).toBe('folders'))
+    await waitFor(() =>
+      expect(useUiStore.getState().settings).toEqual({ open: true, section: 'folders' })
+    )
     expect(useUiStore.getState().folderDraftSeed).toEqual({
       location: { kind: 'windows' },
       path: { namespace: 'host', value: 'C:\\work\\other' },
@@ -677,7 +679,9 @@ describe('SessionListScreen — 失敗の封じ込めと空状態 (FE-064)', () 
       expect(screen.getByText('作業フォルダがまだ登録されていません。')).toBeInTheDocument()
     )
     screen.getByRole('button', { name: '作業フォルダを登録する' }).click()
-    await waitFor(() => expect(useUiStore.getState().screen).toBe('folders'))
+    await waitFor(() =>
+      expect(useUiStore.getState().settings).toEqual({ open: true, section: 'folders' })
+    )
   })
 
   it('登録フォルダ 3 件 / セッション 0 件で folder グループが 3 件現れる (FR-051 / SC-013)', async () => {
@@ -1121,6 +1125,39 @@ describe('SessionListScreen — 件数が多い場合 (FE-073)', () => {
 
     /* 見出しは「含む」と読める形にする (どの行かはここから決まらない)。 */
     expect(screen.getByText('越境を含む')).toBeInTheDocument()
+  })
+
+  it('初回の listSessions はランタイムの一覧 (listRuntimes) が解決する前に呼ばれない (O-7 FR-016 / SC-008)', async () => {
+    let resolveRuntimes: () => void = () => {}
+    const listRuntimes = vi.fn(
+      () =>
+        new Promise<never>((resolve) => {
+          resolveRuntimes = () =>
+            resolve({ runtimes: [], enumerationIssues: [], wslAvailability: 'available' } as never)
+        })
+    )
+    const listSessions = vi.fn(() => Promise.resolve(index([folderGroup([session()])])))
+    installCapability({ listRuntimes, listSessions, onSessionsChanged: () => () => {} })
+
+    render(<SessionListScreen />)
+    await waitFor(() => expect(listRuntimes).toHaveBeenCalledTimes(1))
+    await new Promise((r) => setTimeout(r, 20))
+    expect(listSessions).not.toHaveBeenCalled()
+
+    resolveRuntimes()
+    await waitFor(() => expect(listSessions).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(screen.getByText('要約')).toBeInTheDocument())
+  })
+
+  it('ランタイムの一覧が失敗しても、待ちを外して取得する (O-7 FR-016)', async () => {
+    const listSessions = vi.fn(() => Promise.resolve(index([folderGroup([session()])])))
+    installCapability({
+      listRuntimes: () => Promise.reject(new Error('失敗')),
+      listSessions,
+      onSessionsChanged: () => () => {}
+    })
+    render(<SessionListScreen />)
+    await waitFor(() => expect(listSessions).toHaveBeenCalledTimes(1))
   })
 
   it('絞り込みで IPC を往復させない (FR-040)', async () => {

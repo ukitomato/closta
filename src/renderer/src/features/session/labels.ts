@@ -128,8 +128,10 @@ export const SESSION_ACTION_LABELS = {
 } as const
 
 export const SESSION_LIST_LABELS = {
-  heading: '稼働中のセッション',
-  empty: '稼働中のセッションはありません。「新規起動」から起動できます。',
+  /** サイドバーの稼働中の区画の見出し (O-7 data-model §6)。 */
+  heading: '稼働中',
+  /** 「新規起動」はサイドバーの上にあるので案内を外す (O-7 data-model §6)。 */
+  empty: '稼働中のセッションはありません。',
   /** 一覧の aria-label。 */
   list: '稼働中のセッション一覧'
 } as const

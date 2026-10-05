@@ -3,7 +3,7 @@ domain: ui
 status: needs-human-review
 owner: ukitomato
 generated_by: human (PLAN.md を素案として再導出)
-last_reviewed: 2026-10-03
+last_reviewed: 2026-10-05
 related_adrs:
   - docs/decisions/0001-adopt-electron-over-tauri.md
   - docs/decisions/0006-supervisor-in-utility-process.md
@@ -12,11 +12,13 @@ related_adrs:
   - docs/decisions/0034-transcript-read-path-and-process-boundary.md
   - docs/decisions/0035-tier-a-tool-display-and-subagent-nesting.md
   - docs/decisions/0044-ui-coverage-assignment.md
+  - docs/decisions/0046-app-shell-layout.md
 related_specs:
   - specs/003-ui-transcript-rendering/spec.md
   - specs/004-ui-tier-a-tool-display/spec.md
   - specs/006-ui-japanese-ime-composer/spec.md
   - specs/011-ui-coverage/spec.md
+  - specs/013-ui-app-shell/spec.md
 ---
 
 # Domain Charter: ui
@@ -57,6 +59,11 @@ UI は本来 delivery mechanism であり domain ではない。それでも独�
   `unsafe-inline` は開発ビルドの `script-src` / `style-src` に限り許され、
   `unsafe-eval` は両環境で禁止。ゲートは `app.isPackaged` である）
 - PTY フォールバックタブ（optional scope）
+- **アプリのシェル** (面の配置と遷移。O-7 / [AD-046](../../decisions/0046-app-shell-layout.md)) — サイドバー・中央・右のペインの
+  3 面、設定と起動のダイアログ、中央の focus、右のペインのタブの表。サイドバーの 2 つの一覧の中身と行の形は session が持ち
+  (下の Out of scope「他 domain の操作 UI」)、シェルは置き場所と選択に応じた中央の切り替えを持つ。**シェルは SDK の emit の
+  表示ではないので、Principle XII (対応表) の判定の対象外**。右のペインに足すタブ (O-4〜O-6・OPT-panel) は、SDK の emit を
+  表示するものなら各 feature で対応表に割り当てる
 
 ### Out of scope
 
@@ -111,9 +118,10 @@ UI は本来 delivery mechanism であり domain ではない。それでも独�
 1. 監視ビューでは各セッションが compact に並ぶ
 2. 1 つを開くと comfortable な没入ビューになる
 
-O-1 で読み替えた: 監視ビューはセッション画面のサイドバー (session の操作 UI) で、行の密度 (compact / comfortable) は
-利用者が切り替える。没入ビューは表示中セッションのペイン。transcript 側の密度の切替は本 domain の O-2 が扱う
-([010 spec](../../../specs/010-session-monitoring-view/spec.md))
+O-1 で読み替えた: 監視ビューはサイドバーの稼働中の区画 (session の操作 UI) で、行の密度 (compact / comfortable) は
+利用者が切り替える。没入ビューは中央の本体の実行中の Chat。transcript 側の密度の切替は本 domain の O-2 が扱う
+([010 spec](../../../specs/010-session-monitoring-view/spec.md))。O-1 の時点の「セッション画面のサイドバー」と「表示中セッションの
+ペイン」は、O-7 でシェルのサイドバーと中央に置き換わった ([013 spec](../../../specs/013-ui-app-shell/spec.md))
 
 ## Key concepts
 
@@ -134,7 +142,7 @@ O-1 で読み替えた: 監視ビューはセッション画面のサイドバ�
 - **日本語で破綻しない。** IME 変換確定時の誤送信、フォント崩れ、
   全角混在時のレイアウト崩れを許容しない（Principle VIII）
 - **長大スレッドは仮想化する。** スクロールアンカリングを壊さない
-- **隔離状態は一目で分かること。** セッションカード・タブ・ヘッダに隔離バッジを表示する
+- **隔離状態は一目で分かること。** セッションの行・中央のヘッダに隔離バッジを表示する (O-7 でタブは無くなった)
 
 ## KPI / Success metrics
 
@@ -155,6 +163,9 @@ O-1 で読み替えた: 監視ビューはセッション画面のサイドバ�
 - 依存される domain: なし（最上層）
 - 共有 invariant: Principle III（選べない選択肢を出さない）/ VIII / XII / XIII。
   詳細は [docs/domains/_overview.md](../_overview.md)
+- **面の状態** (O-7): 中央の focus・設定・畳みは `stores/ui.ts` の 1 か所にあり、focus はシェル (`useShellFocus`) だけが書く。
+  シェルは session のストアの選択 (`selectionSeq`) を購読し、session のコンポーネントは面の状態を書かない。
+  `seedFolderDraft` (session の一覧から設定の「作業フォルダ」を初期値つきで開く) は既存の受け渡しとして残る
 
 ## Related ADRs
 
@@ -162,6 +173,7 @@ O-1 で読み替えた: 監視ビューはセッション画面のサイドバ�
 - [AD-006](../../decisions/0006-supervisor-in-utility-process.md) — supervisor 分離（描画をブロックしないため）
 - [AD-037](../../decisions/0037-japanese-ime-composer-behavior.md) — 日本語 IME の composer 挙動（SPIKE-4）。二重ガードで自前ガード不要 / 実行中積み・下書きは runtime capability / Principle VIII Automated の持ち主は X-2
 - [AD-038](../../decisions/0038-e2e-screenshot-harness.md) — E2E / スクリーンショット検証ハーネス（Playwright + Electron。credential-free・フォント同梱・e2e を src グラフ外に分離）
+- [AD-046](../../decisions/0046-app-shell-layout.md) — アプリのシェル（サイドバー・中央・右のペインの 3 面。設定と起動はダイアログ。右のペインのタブの表と外部コンテンツの境界）
 
 ## Related Specs
 
@@ -183,7 +195,10 @@ O-1 で読み替えた: 監視ビューはセッション画面のサイドバ�
   SDK の型と機械で照合する (Constitution 検証の項目 21)。各行の割当を確定し、表示の実装の残りを O-4 / O-5 / O-6 に割り当てた。
   実行中の tool の結果と Hook / Background task の行 (システムイベントの行)、transcript の情報密度、`ui-coverage-reviewer` を足す。
   割当の読み方は [AD-044](../../decisions/0044-ui-coverage-assignment.md)
-- （残り。O-3 / O-4 / O-5 / O-6 / OPT-pty が本 domain に属する）
+- [O-7: アプリのシェル](../../../specs/013-ui-app-shell/spec.md) — **実装中**。タブのビューを廃し、サイドバー (稼働中と過去の
+  セッション)・中央 (実行中の Chat / 過去ログ)・右のペイン (枠・タブの表・「概要」) の 3 面にする。設定と起動はダイアログ。
+  [AD-046](../../decisions/0046-app-shell-layout.md)
+- （残り。O-3 / O-4 / O-5 / O-6 / OPT-pty / OPT-panel が本 domain に属する）
 
 ## Open Questions
 

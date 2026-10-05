@@ -5,7 +5,7 @@ import userEvent from '@testing-library/user-event'
 import type { QueueItemState } from '@assistant-ui/react'
 
 import { DEFAULT_MAX_QUEUE_ITEMS } from './composer-queue'
-import { CancelledQueueNotice, PendingQueueNotice, QueueRejectionNotice } from './SessionScreen'
+import { CancelledQueueNotice, PendingQueueNotice, QueueRejectionNotice } from './LivePane'
 
 /**
  * X-2 / FR-004 / T011 (AD-034 / L-4) — **実行中に積んだキュー項目の表示は会話由来テキストをリテラル表示し、

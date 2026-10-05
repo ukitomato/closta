@@ -4,38 +4,26 @@ import type { PathDTO } from '@domain/runtime/dto'
 import type { LocationDTO } from '@domain/workspace/dto'
 
 /**
- * 画面遷移とテーマ (と画面をまたぐ表示の設定) だけを持つ UI ストア。
+ * シェルの面の状態とテーマ (と画面をまたぐ表示の設定) だけを持つ UI ストア (O-7 / AD-046 / data-model §1)。
  *
- * FE-001 (アプリシェル) の範囲。業務データは持たない —
- * ランタイム・登録フォルダ・解決結果は preload の capability 越しに取得し、
- * それぞれの feature が自分のストアを持つ (FE-010 / FE-020 / FE-030)。
+ * 業務データは持たない — ランタイム・登録フォルダ・解決結果は preload の capability 越しに取得し、
+ * それぞれの feature が自分のストアを持つ。**選んだ行の id もここに持たない** — 稼働中は `running-session-store` の
+ * `selectedId`、過去は `stores/sessions.ts` の `selectedRowKey` が持つ。ここは中央にどちらを出すか (`focus`) だけを持つ。
+ *
+ * **面の状態を書くのはシェル** (`features/shell/`)。session のコンポーネントは `focus` を書かない (シェルが 2 つのストアの
+ * 選択の通知を購読して決める。`features/shell/useShellFocus.ts`)。**永続化しない** — 再起動で既定に戻る。
  */
 
-export const SCREENS = [
-  'runtimes',
-  'folders',
-  'providers',
-  'sessions',
-  'resolution',
-  'launch',
-  'chat'
-] as const
+/** 中央に何を出すか。 */
+export type CenterFocus = 'none' | 'running' | 'past'
 
-export type ScreenId = (typeof SCREENS)[number]
+/** 設定のダイアログの項目 (今の 4 画面)。並びは左の項目の並び。 */
+export const SETTINGS_SECTIONS = ['runtimes', 'folders', 'providers', 'resolution'] as const
 
-export const SCREEN_LABELS: Record<ScreenId, string> = {
-  runtimes: 'ランタイム',
-  folders: '作業フォルダ',
-  // X-3。Provider の検出・登録・編集・削除 (US-1)。到達可能性フィルタ UI は起動設定ダイアログ (X-4)。
-  providers: 'プロバイダ',
-  // R-2。**読み取り専用**であることは画面側の文言で示す (FR-002 / FR-003)。
-  sessions: 'セッション',
-  resolution: '組み合わせ',
-  // X-1 / X-5。セッションを並行に起動し、稼働中セッションの一覧から切り替えてストリーミング表示する。
-  launch: 'セッション起動',
-  // **内部 feature ID ("R-3") を出さない** (FR-047)。利用者に意味を持たない記号である。
-  chat: '会話 (準備中)'
-}
+export type SettingsSection = (typeof SETTINGS_SECTIONS)[number]
+
+/** 右のペインのタブの id。後続 feature (O-4〜O-6・OPT-panel) が足す (`features/shell/panel-tabs.ts`)。 */
+export type PanelTabId = 'overview'
 
 /**
  * 登録操作へ渡す初期値 (FE-051)。
@@ -62,27 +50,55 @@ export interface FolderDraftSeed {
 export type TranscriptDensity = 'comfortable' | 'compact'
 
 interface UiState {
-  screen: ScreenId
+  /** 中央に出すもの。 */
+  focus: CenterFocus
+  /** 設定のダイアログ。閉じても項目の id だけを覚える (中の画面は unmount する。FR-008)。 */
+  settings: { readonly open: boolean; readonly section: SettingsSection }
+  sidebarCollapsed: boolean
+  /** 右のペイン。**既定で畳む** (data-model §2)。 */
+  panel: { readonly collapsed: boolean; readonly tab: PanelTabId }
+  /** 起動ダイアログ (X-4 の `LaunchDialog`) を開いているか。 */
+  launchOpen: boolean
   dark: boolean
   /** 登録画面が受け取る初期値。受け取ったら消す (使い切り)。 */
   folderDraftSeed: FolderDraftSeed | null
   transcriptDensity: TranscriptDensity
-  setScreen: (screen: ScreenId) => void
+  setFocus: (focus: CenterFocus) => void
+  openSettings: (section?: SettingsSection) => void
+  setSettingsSection: (section: SettingsSection) => void
+  closeSettings: () => void
+  setSidebarCollapsed: (collapsed: boolean) => void
+  setPanelCollapsed: (collapsed: boolean) => void
+  setPanelTab: (tab: PanelTabId) => void
+  setLaunchOpen: (open: boolean) => void
   setTranscriptDensity: (density: TranscriptDensity) => void
   toggleTheme: () => void
-  /** 初期値を積んで登録画面へ移る。 */
+  /** 初期値を積んで、設定のダイアログを「作業フォルダ」で開く。 */
   seedFolderDraft: (seed: FolderDraftSeed) => void
   clearFolderDraftSeed: () => void
 }
 
 export const useUiStore = create<UiState>((set) => ({
-  screen: 'runtimes',
+  focus: 'none',
+  settings: { open: false, section: 'runtimes' },
+  sidebarCollapsed: false,
+  panel: { collapsed: true, tab: 'overview' },
+  launchOpen: false,
   dark: false,
   folderDraftSeed: null,
   transcriptDensity: 'comfortable',
-  setScreen: (screen) => set({ screen }),
+  setFocus: (focus) => set({ focus }),
+  openSettings: (section) =>
+    set((s) => ({ settings: { open: true, section: section ?? s.settings.section } })),
+  setSettingsSection: (section) => set((s) => ({ settings: { ...s.settings, section } })),
+  closeSettings: () => set((s) => ({ settings: { ...s.settings, open: false } })),
+  setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
+  setPanelCollapsed: (collapsed) => set((s) => ({ panel: { ...s.panel, collapsed } })),
+  setPanelTab: (tab) => set((s) => ({ panel: { ...s.panel, tab } })),
+  setLaunchOpen: (launchOpen) => set({ launchOpen }),
   setTranscriptDensity: (transcriptDensity) => set({ transcriptDensity }),
-  seedFolderDraft: (folderDraftSeed) => set({ folderDraftSeed, screen: 'folders' }),
+  seedFolderDraft: (folderDraftSeed) =>
+    set({ folderDraftSeed, settings: { open: true, section: 'folders' } }),
   clearFolderDraftSeed: () => set({ folderDraftSeed: null }),
   toggleTheme: () =>
     set((state) => {
@@ -91,3 +107,15 @@ export const useUiStore = create<UiState>((set) => ({
       return { dark }
     })
 }))
+
+/**
+ * 見ているセッション (data-model §1)。読み上げ (`SessionAttentionAnnouncer`) と承認待ちの件数のボタン (`nextAwaiting`) が
+ * 「表示中」として使う。中央に稼働中の会話を出していて、設定のダイアログを開いていないときだけ選択中のもの。
+ * 起動ダイアログを開いている間は中央の会話が見えているので変えない。
+ */
+export function watchedIdOf(
+  ui: { readonly focus: CenterFocus; readonly settings: { readonly open: boolean } },
+  selectedId: string | null
+): string | null {
+  return ui.focus === 'running' && !ui.settings.open ? selectedId : null
+}

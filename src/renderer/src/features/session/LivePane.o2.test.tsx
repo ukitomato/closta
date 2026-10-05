@@ -14,11 +14,11 @@ import {
 } from '@/features/chat/labels'
 import { useUiStore } from '@/stores/ui'
 import { installCapability } from '@/test-support/capability'
+import { RunningWorkspace } from '@/test-support/running-workspace'
 
 import { MONITOR_LABELS } from './labels'
 import { RunningSessionStoreContext } from './running-session-context'
 import { createRunningSessionStore, type RunningSessionStore } from './running-session-store'
-import { SessionScreen } from './SessionScreen'
 
 /**
  * O-2 FE-012 / FE-022 — 実行中のセッションの transcript (SC-003 / SC-005)。
@@ -97,7 +97,7 @@ async function setup(ids: readonly string[] = [A]): Promise<Harness> {
   act(() => store.select(ids[0] ?? null))
   render(
     <RunningSessionStoreContext.Provider value={store}>
-      <SessionScreen />
+      <RunningWorkspace />
     </RunningSessionStoreContext.Provider>
   )
   return {

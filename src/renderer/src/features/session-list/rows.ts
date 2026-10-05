@@ -102,6 +102,23 @@ export function buildSessionRows(index: SessionIndexDTO | null): SessionRowsView
 }
 
 /**
+ * 選択中の行と、それが属する区画を引く (O-7 の中央のヘッダ・「概要」・過去の行の消失の判定)。無ければ `null`。
+ */
+export function findRow(
+  view: SessionRowsView,
+  rowKey: string | null
+): { readonly row: SessionRow; readonly section: SessionSection } | null {
+  if (rowKey === null) return null
+  for (const section of view.sections) {
+    const at = section.rowKeys.indexOf(rowKey)
+    if (at === -1) continue
+    const row = view.rows.find((r) => r.rowKey === rowKey)
+    return row === undefined ? null : { row, section }
+  }
+  return null
+}
+
+/**
  * 行 1 件の表示文字列 (FR-047)。
  *
  * **`domain` は「どれを使うか」しか決めない。** 並べ方と日本語の体裁は `ui` の責務である

@@ -1,8 +1,8 @@
 ---
 status: needs-human-review
-last_updated: 2026-10-03
-generated_by: human (PLAN.md 付録A + §3〜§7 を素材に起草。X-1 で AgentSession 系 8 語を追記。O-2 で 5 語を追記)
-total_terms: 85
+last_updated: 2026-10-05
+generated_by: human (PLAN.md 付録A + §3〜§7 を素材に起草。X-1 で AgentSession 系 8 語を追記。O-2 で 5 語を追記。O-7 で Shell を追記)
+total_terms: 86
 ---
 
 # Glossary (Ubiquitous Language)
@@ -32,7 +32,9 @@ total_terms: 85
 - **日本語表記**: ランタイム
 - **Domain**: `runtime`
 - **Counterexamples**: 「プラットフォーム」（posix / win32）は軸として持たない。
-  ホストが Windows でもコンテナ内は Linux でありうるため
+  ホストが Windows でもコンテナ内は Linux でありうるため。
+  assistant-ui の runtime (`useExternalStoreRuntime` などの会話の状態の層。`AssistantRuntimeProvider`) ではない — renderer の文書で
+  「runtime」と書くときはどちらかを明記する (O-7)
 - **Ref**: [AD-003](decisions/0003-runtime-abstraction-by-transport.md)
 
 #### **AgentSession**
@@ -386,8 +388,8 @@ total_terms: 85
 
 #### **Immersive view（没入ビュー）**
 
-- **Definition**: charter Journey 3 の「1 つを選んで没入ビューに切り替える」の没入ビュー。O-1 では、セッション画面の
-  **表示中セッションのペイン** (X-5 の transcript と composer) を指す。新しい画面ではない
+- **Definition**: charter Journey 3 の「1 つを選んで没入ビューに切り替える」の没入ビュー。O-7 以降は、シェルの
+  **中央の本体の実行中の Chat** (X-5 の transcript と composer) を指す (O-1 ではセッション画面の表示中セッションのペイン)。新しい画面ではない
 - **日本語表記**: 没入ビュー
 - **Domain**: `session`
 - **Counterexamples**: 監視ビュー (Monitoring view) とは対になる語。監視ビューで行を選ぶと、没入ビューの内容が切り替わる
@@ -482,7 +484,7 @@ total_terms: 85
 
 - **Definition**: 稼働中セッション一覧 (Running session list) を拡張したもの (O-1)。承認待ち・失敗の強調、
   承認待ちと失敗の件数、枠の使用数、各行の経過時間と直近の活動、情報密度の切り替えを持つ。**新しい画面ではなく**、
-  セッション画面のサイドバーである。session の操作 UI (行の形と強調の出し方は session が決める)。
+  シェル (O-7) のサイドバーの稼働中の区画に置く。session の操作 UI (行の形と強調の出し方は session が決める)。
   **コード識別子は `RunningSessionList` のまま (改名しない)**。監視ビューは O-1 の機能群 (強調・件数・枠の使用数・経過時間・
   直近の活動・密度) を備えた稼働中セッション一覧の呼び名である
 - **日本語表記**: 監視ビュー
@@ -834,6 +836,23 @@ total_terms: 85
   agents の `post` の kind `event` (セッションスレッドの通知の種類) とも別物
 - **Ref**: [011 spec](../specs/011-ui-coverage/spec.md) FR-009 / [data-model](../specs/011-ui-coverage/data-model.md) §2
 
+#### **Shell（シェル）**
+
+- **Definition**: アプリの面の配置と遷移 (O-7)。上部のタブを持たず、次の面と領域からなる。**後続 feature は表示の置き場所をこの語で書く** (AD-046 Decision 6):
+  - **サイドバー** (Sidebar): 左の面 (`nav` のランドマーク)。上から「新規起動」・**稼働中の区画**・**過去のセッションの区画**・「設定」。畳むと帯になる
+    - **稼働中の区画** (Running section): 監視ビュー (`RunningSessionList`) を置く区画。見出しに注意の件数の印
+    - **過去のセッションの区画** (Past sessions section): R-2 の一覧 (`SessionListScreen` の一覧の部分) を置く区画
+  - **中央のヘッダ** (Center header): 中央の上端。表示中のセッションの題・フォルダ・状態と transcript の密度の切り替え
+  - **中央の本体** (Center body): 中央の会話 (`main` のランドマーク)。稼働中なら実行中の Chat、過去なら過去ログの transcript、未選択なら空の状態
+  - **右のペインのタブ** (Panel tab): 右の面 (名前付きの `complementary`) のタブ。1 か所の表 (`panel-tabs.ts`) に登録する。既定で畳む
+  - **設定のダイアログ** (Settings dialog): ランタイム・作業フォルダ・プロバイダ・組み合わせの画面とテーマを開く全面のダイアログ
+- **日本語表記**: シェル
+- **Domain**: `ui` (サイドバーの区画の中身は session)
+- **Counterexamples**: 面の状態 (`focus`・設定・畳み) は `stores/ui.ts` の 1 か所にあり、session のコンポーネントは書かない。
+  画面の ID (`SCREENS`) は O-7 で無くなった。「見ているセッション」(`watchedId`) は `focus` から導く (中央に稼働中の会話を出していて、
+  設定のダイアログを開いていないときの選択中のセッション)
+- **Ref**: [AD-046](decisions/0046-app-shell-layout.md) / [013 spec](../specs/013-ui-app-shell/spec.md) / data-model §1
+
 ### T
 
 #### **Tier A / B / C**
@@ -946,7 +965,7 @@ total_terms: 85
 | Concept | 使われている表記 | Proposed canonical | 備考 |
 |---|---|---|---|
 | AgentRuntime | 「ランタイム」「Runtime」「実行環境」 | `AgentRuntime`（コード）/ ランタイム（日本語文） | 「実行環境」は Provider の意味でも使われうるため避ける |
-| 稼働中セッション一覧 | 「監視ビュー」「稼働中セッション一覧」「一覧」「サイドバー」 | `RunningSessionList`（コード）/ 監視ビュー（charter Journey と O-1 以降の文書）/ 稼働中のセッション（UI 文言） | 同じ 1 つの部品を指す。「サイドバー」は画面上の位置の説明に限り、用語としては使わない |
+| 稼働中セッション一覧 | 「監視ビュー」「稼働中セッション一覧」「一覧」「サイドバー」 | `RunningSessionList`（コード）/ 監視ビュー（charter Journey と O-1 以降の文書）/ 稼働中（UI 文言。サイドバーの区画の見出し） | 同じ 1 つの部品を指す。O-7 以降「サイドバー」はシェルの左の面の名前で、監視ビューはその中の**稼働中の区画**に置く (Shell を参照)。監視ビューを「サイドバー」と呼ばない |
 | Disposable container | 「使い捨てコンテナ」「コンテナ」 | `Disposable container` / 使い捨てコンテナ | 単に「コンテナ」と書くとイメージと紛れる |
 | Isolation | 「隔離」「サンドボックス」 | 隔離（境界全般）/ sandbox（OS 組み込み機構に限定） | Seatbelt / bubblewrap を指すときのみ sandbox |
 | Location | 「所在」「ロケーション」「置き場所」 | `Location`（コード）/ 所在（日本語文） | 「置き場所」はパスの意味にも読めるため避ける |

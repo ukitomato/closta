@@ -54,8 +54,11 @@ export interface SessionActions {
   select(sessionId: string | null): void
   /** 監視ビューの情報密度 (O-1 / FR-008。永続化しない)。 */
   setDensity(density: Density): void
-  /** 表示中を除く承認待ちのうち、承認待ちになったのが最も早いものへ切り替える (O-1 / FR-002)。無ければ何もしない。 */
-  selectNextAwaiting(): void
+  /**
+   * 見ているセッション (`watchedId`。省略時は選択中) を除く承認待ちのうち、承認待ちになったのが最も早いものへ切り替える
+   * (O-1 / FR-002・O-7 / FR-006)。無ければ何もしない。
+   */
+  selectNextAwaiting(watchedId?: string | null): void
   /**
    * composer の下書き (メモリ内限定。X-2 FR-007)。**再描画を起こさない保持**に置く — 下書きは切り替えで Thread を
    * 作り直したときの復元にだけ読む。state に置くと打鍵のたびに表示中のペイン全体が再描画され、表示中の本文の更新と
@@ -135,6 +138,7 @@ export function createRunningSessionStore(
     sessions: {},
     statuses: {},
     selectedId: null,
+    selectionSeq: 0,
     launch: INITIAL_LAUNCH,
     statusSince: {},
     activity: {},
@@ -395,6 +399,7 @@ export function createRunningSessionStore(
         order: [...s.order, sessionId],
         sessions: { ...s.sessions, [sessionId]: session },
         selectedId: sessionId,
+        selectionSeq: s.selectionSeq + 1,
         launch: { ...s.launch, phase: 'entry', rejectReason: null }
       }))
       // 固定値ではなく、その時点の行の状態を入れる (handshake より先に状態通知が届いていても行と食い違わない)。
@@ -410,6 +415,7 @@ export function createRunningSessionStore(
     select(sessionId) {
       store.setState((s) => ({
         selectedId: sessionId,
+        selectionSeq: sessionId === null ? s.selectionSeq : s.selectionSeq + 1,
         // 新規起動に戻るときは直前の拒否表示を残さない。
         launch:
           sessionId === null
@@ -426,8 +432,9 @@ export function createRunningSessionStore(
       if (store.getState().density !== density) store.setState({ density })
     },
 
-    selectNextAwaiting() {
-      const target = nextAwaiting(store.getState())
+    selectNextAwaiting(watchedId) {
+      const state = store.getState()
+      const target = nextAwaiting(state, watchedId === undefined ? state.selectedId : watchedId)
       if (target !== null) actions.select(target)
     },
 

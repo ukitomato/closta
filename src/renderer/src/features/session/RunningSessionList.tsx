@@ -16,12 +16,12 @@ import type { SessionRunState } from '@domain/session/run-state'
 
 import {
   ThreadListItemsByKey,
-  ThreadListNew,
   ThreadListRoot
 } from '@/components/assistant-ui/elements/thread-list.aui'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { useUiStore, watchedIdOf } from '@/stores/ui'
 
 import {
   activityPrefixLabel,
@@ -52,6 +52,7 @@ import {
   rowStatus,
   slotUsage
 } from './session-view'
+import { SessionNavBadge } from './SessionNavBadge'
 import { useSessionClock, useSessionClockTicking } from './useSessionClock'
 
 /**
@@ -60,7 +61,9 @@ import { useSessionClock, useSessionClockTicking } from './useSessionClock'
  *
  * | 規則 | 根拠 |
  * |---|---|
- * | **assistant-ui の ThreadList で組む** (`thread-list.aui.tsx`)。選択と新規起動は `SessionScreen` の `ExternalStoreThreadListAdapter` を通る | Principle XIII |
+ * | **assistant-ui の ThreadList で組む** (`thread-list.aui.tsx`)。選択は `RunningSessionsProvider` の `ExternalStoreThreadListAdapter` を通る。新規起動はシェルのサイドバーの上のボタンに一本化する (区画の中に置かない) | Principle XIII / O-7 FR-002 |
+ * | **サイドバーの稼働中の区画** (O-7)。要素は `section` (トップレベルの `nav` はサイドバーの 1 つだけ)。見出しに注意の件数の印 (`SessionNavBadge`) | O-7 data-model §3 |
+ * | 承認待ちの件数のボタンの移動先は「見ているセッション」(`watchedIdOf`) を除く | O-7 FR-006 |
  * | 行はフォルダ表示名 (表題)・ランタイム・起動時刻・状態・経過時間・直近の活動を示し、表示中の行が分かる (`aria-current`) | X-5 FR-009 / O-1 FR-005 / FR-006 |
  * | 承認待ち・失敗は**表示中かどうかにかかわらず**強調する (アイコン + 文言。色だけに頼らない)。行の並びは変えない | O-1 FR-001 / FR-003 |
  * | 見出しに枠の使用数・承認待ちの件数 (押すと表示中を除く最古へ移る)・失敗の件数・密度の切り替えを置く | O-1 FR-002 / FR-003 / FR-007 / FR-008 |
@@ -75,9 +78,17 @@ import { useSessionClock, useSessionClockTicking } from './useSessionClock'
 export interface RunningSessionListProps {
   /** runtimeId → 表示名。 */
   readonly runtimeName: (runtimeId: string) => string
+  /** 選択中の行を強調するか (O-7。中央に稼働中の会話を出しているときだけ強調する)。省略時は強調する。 */
+  readonly highlightSelected?: boolean
 }
 
-export function RunningSessionList({ runtimeName }: RunningSessionListProps): React.JSX.Element {
+export function RunningSessionList({
+  runtimeName,
+  highlightSelected = true
+}: RunningSessionListProps): React.JSX.Element {
+  const store = useRunningSessionStoreApi()
+  // 選択中の行の押し直しも選択の操作として通知する (シェルが中央を稼働中の会話に戻す。O-7 data-model §1)。
+  const selectRow = useCallback((id: string) => store.select(id), [store])
   const order = useRunningSessionStore((s) => s.order)
   const density = useRunningSessionStore((s) => s.density)
   useSessionClockTicking()
@@ -90,17 +101,17 @@ export function RunningSessionList({ runtimeName }: RunningSessionListProps): Re
 
   return (
     <TooltipProvider>
-      <nav
+      <section
         aria-label={SESSION_LIST_LABELS.list}
         className="flex h-full min-h-0 flex-col"
         data-testid="session-list"
       >
         <div className="border-border flex shrink-0 flex-col gap-1.5 border-b px-3 py-2">
           <div className="flex items-center gap-2">
-            <h2 className="flex-1 text-sm font-semibold">{SESSION_LIST_LABELS.heading}</h2>
-            <ThreadListNew className="border-border border">
-              {SESSION_ACTION_LABELS.newSession}
-            </ThreadListNew>
+            <h2 className="flex-1 text-sm font-semibold">
+              {SESSION_LIST_LABELS.heading}
+              <SessionNavBadge />
+            </h2>
           </div>
           <MonitorSummary />
           <LimitNotice />
@@ -115,6 +126,8 @@ export function RunningSessionList({ runtimeName }: RunningSessionListProps): Re
             <ThreadListItemsByKey
               rowKeys={order}
               density={density}
+              highlightSelected={highlightSelected}
+              onSelectRow={selectRow}
               renderTooltip={renderTooltip}
               renderMeta={(id) => (
                 <SessionRowMeta sessionId={id} runtimeName={runtimeName} density={density} />
@@ -123,7 +136,7 @@ export function RunningSessionList({ runtimeName }: RunningSessionListProps): Re
             />
           </ThreadListRoot>
         )}
-      </nav>
+      </section>
     </TooltipProvider>
   )
 }
@@ -134,7 +147,13 @@ function MonitorSummary(): React.JSX.Element {
   const store = useRunningSessionStoreApi()
   const usage = useRunningSessionStore(useShallow((s) => slotUsage(s)))
   const counts = useRunningSessionStore(useShallow((s) => attentionCounts(s)))
-  const hasTarget = useRunningSessionStore((s) => nextAwaiting(s) !== null)
+  // 「表示中を除く」の表示中は見ているセッション (中央に稼働中の会話を出していて設定を開いていないときの選択中。O-7 FR-006)。
+  const focus = useUiStore((s) => s.focus)
+  const settingsOpen = useUiStore((s) => s.settings.open)
+  const watchedId = useRunningSessionStore((s) =>
+    watchedIdOf({ focus, settings: { open: settingsOpen } }, s.selectedId)
+  )
+  const hasTarget = useRunningSessionStore((s) => nextAwaiting(s, watchedId) !== null)
   const density = useRunningSessionStore((s) => s.density)
   // 押せない理由: 承認待ちが表示中のセッションだけか、1 件も無いか (spec Edge Cases。pr-gate R1 po L-003)。
   const noTarget =
@@ -156,7 +175,7 @@ function MonitorSummary(): React.JSX.Element {
         disabled={!hasTarget}
         title={hasTarget ? MONITOR_LABELS.awaitingNext : noTarget}
         aria-describedby={hasTarget ? undefined : 'monitor-awaiting-no-target'}
-        onClick={() => store.selectNextAwaiting()}
+        onClick={() => store.selectNextAwaiting(watchedId)}
         data-testid="awaiting-count"
       >
         <ShieldAlertIcon aria-hidden />
