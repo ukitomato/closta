@@ -6,7 +6,18 @@
   },
   "permissions": {
     "allow": [
-      "Edit(/.claude/skills/cl-spec/**)"
+      "Edit(/.claude/skills/cl-spec/**)",
+      "PowerShell(Select-String *)",
+      "PowerShell(Get-ChildItem *)",
+      "PowerShell(Get-Content *)",
+      "PowerShell(ConvertFrom-Json *)",
+      "PowerShell(Test-Path *)",
+      "PowerShell(Get-Process *)",
+      "PowerShell(Get-CimInstance *)",
+      "Bash(pnpm typecheck *)",
+      "Bash(pnpm depcruise *)",
+      "Bash(pnpm check:constitution *)",
+      "Bash(pnpm test *)"
     ]
   }
 }
