@@ -251,14 +251,14 @@ export function ResolutionScreen(): React.JSX.Element {
             <div className="text-sm">
               <p>登録された作業フォルダがありません。</p>
               <p className="text-muted-foreground mt-1 text-xs">
-                「作業フォルダ」画面で所在を選んで登録してください。
+                設定の「作業フォルダ」で所在を選んで登録してください。
               </p>
             </div>
           ) : (
             <div className="text-sm">
               <p>利用できるランタイムがありません。</p>
               <p className="text-muted-foreground mt-1 text-xs">
-                「ランタイム」画面で再検出してください。
+                設定の「ランタイム」で再検出してください。
               </p>
             </div>
           )}

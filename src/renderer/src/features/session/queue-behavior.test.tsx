@@ -135,7 +135,7 @@ describe('native message queue の挙動 (FR-004 / FR-005 / T011・T012)', () =>
 
   it('中断 (notifyCancelled) 後は notifyIdle でも dispatch せず still_queued として残る (FR-006 / po-N-001 / po-H-201)', async () => {
     // 中断は notifyCancelled で queue を pause する。続く busy 立下りの notifyIdle が来ても、積んだ入力は
-    // dispatch されず steer lane に残る (= still_queued。次の send まで drain 再開しない)。RunningSessionsProvider の中断が
+    // dispatch されず steer lane に残る (= still_queued。次の send まで drain 再開しない)。ストアの interrupt が
     // notifyCancelled → interrupt を単一 locus で呼ぶことの土台となる native 挙動を固定する。
     const dispatched: string[] = []
     const mq = createMessageQueue({ run: (m) => dispatched.push(textOf(m)) })

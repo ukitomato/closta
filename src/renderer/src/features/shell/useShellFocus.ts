@@ -8,7 +8,8 @@ import { useUiStore } from '@/stores/ui'
 /**
  * **中央の `focus` の書き手** (O-7 / data-model §1。シェルの 1 か所)。
  *
- * session のコンポーネントは面の状態 (`stores/ui.ts`) を書かない。ここが 2 つのストアの選択の変化を購読して決める:
+ * session のコンポーネントは面の状態 (`stores/ui.ts`) を書かない (例外は ui charter の「面の状態」)。ここが 2 つのストアの
+ * 選択の変化を購読して決める:
  *
  * | きっかけ | focus |
  * |---|---|

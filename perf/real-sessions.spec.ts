@@ -9,6 +9,8 @@ import {
   LONG_TASK_MAX_MS,
   typeContinuously
 } from '../e2e/support/input-probe'
+// 起動の入口だけを使う (`launchApp` は `CLOSTA_E2E` を立てるので使わない)。
+import { openLaunchDialog } from '../e2e/support/launch'
 
 import { judgeRun, parseMinMessages } from './run-judgement'
 
@@ -186,13 +188,10 @@ test('実 claude 10 本が応答を流す中で、表示中のセッションの
 
   // 先に 10 本を全部起動する (プロンプト待ちのまま)。1 本ずつ起動してすぐ送ると、先に起動したセッションが窓の前に
   // 進みすぎて、窓の途中で応答を終えてしまう (2・3 回目の実測で not-all-running)。
-  // 起動ダイアログはサイドバーの「新規起動」から開く (O-7。上部のタブは無い。locator はサイドバーに限る)。
+  // 起動ダイアログはサイドバーの「新規起動」から開く (O-7。E2E と同じ `openLaunchDialog`。locator はサイドバーに限る)。
   // 起動の受け付けでダイアログは閉じるので、毎回開き直す。
-  const newSession = page
-    .getByRole('navigation', { name: 'サイドバー' })
-    .getByRole('button', { name: '新規起動', exact: true })
   for (let i = 0; i < SESSIONS; i += 1) {
-    await newSession.click()
+    await openLaunchDialog(page)
     modelName = await launchOne(page, folder, runtime, process.env.CLOSTA_PERF_PROVIDER, modelWanted)
   }
 

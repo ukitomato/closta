@@ -1,11 +1,11 @@
 import { useMemo } from 'react'
 
-import { buildSessionRows, findRow } from '@/features/session-list/rows'
+import { useProviders } from '@/features/provider/useProviders'
 import { groupLabelOf, locationIndexOf, locationLabelOf } from '@/features/session-list/group-label'
+import { buildSessionRows, findRow, formatSessionTime } from '@/features/session-list/rows'
 import { useFolderLabels } from '@/features/session-list/useFolderLabels'
 import { PERMISSION_MODE_LABELS } from '@/features/session/labels'
 import { useRunningSessionsView } from '@/features/session/running-sessions-view'
-import { useProviders } from '@/features/provider/useProviders'
 import { useSessionsStore } from '@/stores/sessions'
 import { useUiStore } from '@/stores/ui'
 
@@ -93,14 +93,6 @@ function RunningOverview(): React.JSX.Element {
   return <Items items={items} />
 }
 
-const TIME_FORMAT = new Intl.DateTimeFormat('ja-JP', {
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit'
-})
-
 function PastOverview(): React.JSX.Element {
   const index = useSessionsStore((s) => s.index)
   const selectedRowKey = useSessionsStore((s) => s.selectedRowKey)
@@ -124,11 +116,11 @@ function PastOverview(): React.JSX.Element {
   push(OVERVIEW_LABELS.branch, session.gitBranch)
   push(
     OVERVIEW_LABELS.createdAt,
-    session.createdAt === null ? null : TIME_FORMAT.format(new Date(session.createdAt))
+    session.createdAt === null ? null : formatSessionTime(session.createdAt)
   )
   push(
     OVERVIEW_LABELS.lastModified,
-    session.lastModified === null ? null : TIME_FORMAT.format(new Date(session.lastModified))
+    session.lastModified === null ? null : formatSessionTime(session.lastModified)
   )
   push(
     OVERVIEW_LABELS.origin,

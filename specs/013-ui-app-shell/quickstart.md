@@ -4,7 +4,7 @@
 
 ## V-1 画面の ID と nav の手順が残らない (SC-005)
 
-Grep で `SCREENS|ScreenId|setScreen` と `name: /?\^?セッション起動` を `src` / `e2e` / `perf` に対して検索し、0 件であること。
+Grep で `\b(SCREENS|ScreenId|setScreen)\b` (単語の境界つき。code-gate convention L-009) と `name: /?\^?セッション起動` を `src` / `e2e` / `perf` に対して検索し、0 件であること。
 
 ## V-2 記録の追随 (SC-006)
 

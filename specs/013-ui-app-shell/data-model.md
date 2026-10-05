@@ -23,7 +23,7 @@ interface ShellState {
 ### 選択の id と focus
 
 - **選択の id は今のストアのまま持つ**: 稼働中は `running-session-store` の `selectedId`、過去は `stores/sessions.ts` の `selectedRowKey`。`focus` はどちらを中央に出すかだけを持つ。片方を選んでも、もう片方の選択は消さない (戻ったときに同じ会話に戻る)
-- **focus の書き手はシェルの 1 か所** (`features/shell/useShellFocus.ts`)。session のコンポーネントは `stores/ui.ts` の面の状態を書かない。シェルが 2 つのストアの選択の変化を購読して決める:
+- **focus の書き手はシェルの 1 か所** (`features/shell/useShellFocus.ts`)。session のコンポーネントは `stores/ui.ts` の面の状態を書かない (例外は ui charter の「面の状態」。実装で明記した)。シェルが 2 つのストアの選択の変化を購読して決める:
 
 | きっかけ (どこで選択が変わるか) | 選択の変化 | focus |
 |---|---|---|
@@ -115,10 +115,12 @@ interface PanelTab {
 
 ### 中央のヘッダ
 
-| 中央 | 題 | 補足 |
-|---|---|---|
-| running | 作業フォルダの表示名 (今の `SessionHeader`) | ランタイム・開始の時刻 |
-| past | `sessionTitle()` (一覧の行と同じ題) | フォルダ (グループの表示)・状態 (読み取り専用) |
+稼働中と過去で同じ部品 `CenterHeader` (`features/shell/CenterHeader.tsx`) を使う (code-gate convention M-003)。欄は題・補足・状態の 3 つで、末尾に transcript の密度の切り替え。
+
+| 中央 | 題 | 補足 | 状態 |
+|---|---|---|---|
+| running | 作業フォルダの表示名 | ランタイム・開始の時刻 | 一覧の行と同じ状態のラベル |
+| past | `sessionTitle()` (一覧の行と同じ題。時刻の表記は `formatSessionTime`) | フォルダ (グループの表示) | 読み取り専用 |
 
 ## §6 新しい文言 (正本。`features/shell/labels.ts`)
 
@@ -141,3 +143,9 @@ interface PanelTab {
 | `collapsePanel` / `expandPanel` | 詳細を畳む / 詳細を開く |
 
 稼働中の区画の 0 件の文言は今の `SESSION_LIST_LABELS.empty` を短くした「稼働中のセッションはありません。」(`session/labels.ts`。「「新規起動」から起動できます。」はサイドバーの上にボタンがあるので外す)。
+
+**実装の追記 (code-gate convention L-004)**:
+
+- `runningHeading` は区画の見出しを描く `RunningSessionList` (session) の文言なので、`session/labels.ts` の `SESSION_LIST_LABELS.heading` に置いた。`settingsSections` は `SETTINGS_SECTION_LABELS`、`theme` は `theme` / `themeLight` / `themeDark` に分けた
+- 上の表に無いキーは、ランドマーク名と補助の文言 (`appName` / `sidebar` / `settingsNav` / `close` / `centerEmptyFolders` / `center` / `pastReadOnly` / `launchDialogTitle` / `panelTabs`) と、「概要」の項目の見出し (`OVERVIEW_LABELS`。起動の軸の名前は `LAUNCH_AXIS_LABELS` から引く)。どれも `features/shell/labels.ts` が正本
+- 起動ダイアログと設定の画面の中の「「作業フォルダ」画面で」などの案内は、「設定の「作業フォルダ」で」に直した (上部のタブの画面は無い)

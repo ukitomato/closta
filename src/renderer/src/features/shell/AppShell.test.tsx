@@ -18,6 +18,7 @@ import type { SessionStatusUpdate } from '@domain/session/status-update'
 import type { WorkspaceFolderDTO } from '@domain/workspace/dto'
 
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { TRANSCRIPT_DENSITY_LABELS } from '@/features/chat/labels'
 import { RunningSessionStoreContext } from '@/features/session/running-session-context'
 import {
   createRunningSessionStore,
@@ -387,6 +388,35 @@ describe('中央の切り替えと稼働中の状態の保持 (US-1 AC2〜AC4 / 
     expect(header.querySelector('img')).toBeNull()
     expect(header).toHaveTextContent(XSS)
     expect((window as { __pwned?: unknown }).__pwned).toBeUndefined()
+  })
+
+  it('transcript の密度の切り替えは中央のヘッダに 1 つだけあり、稼働中でも過去でも押すと密度が変わる (O-2 FR-012 の本番の経路)', async () => {
+    const h = await setup({ ids: [A] })
+    const toggleIn = (): HTMLElement => {
+      const groups = within(center()).getAllByRole('group', {
+        name: TRANSCRIPT_DENSITY_LABELS.group
+      })
+      expect(groups).toHaveLength(1)
+      expect(within(center()).getByTestId('center-header')).toContainElement(groups[0]!)
+      return groups[0]!
+    }
+
+    await selectPast(0)
+    await userEvent.click(
+      within(toggleIn()).getByRole('button', { name: TRANSCRIPT_DENSITY_LABELS.compact })
+    )
+    expect(useUiStore.getState().transcriptDensity).toBe('compact')
+
+    await selectRunning(0)
+    expect(h.store.getState().selectedId).toBe(A)
+    const running = toggleIn()
+    expect(
+      within(running).getByRole('button', { name: TRANSCRIPT_DENSITY_LABELS.compact })
+    ).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.click(
+      within(running).getByRole('button', { name: TRANSCRIPT_DENSITY_LABELS.comfortable })
+    )
+    expect(useUiStore.getState().transcriptDensity).toBe('comfortable')
   })
 })
 

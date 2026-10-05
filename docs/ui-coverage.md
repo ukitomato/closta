@@ -320,7 +320,7 @@ assistant-ui の element の一覧 (https://www.assistant-ui.com/elements。**20
 | Schedule card | C | 未使用 | Generative |
 | Score breakdown | C | 未使用 | Generative |
 | Scroll anchor | A | A SDKAssistantMessage | R-3 |
-| Settings | B | 未使用 | registry の lements-settings-panel はモデル・system prompt・temperature の設定の部品で、アプリの設定 (ランタイム・作業フォルダ・プロバイダ・組み合わせ) と合わない。O-7 の設定のダイアログは既存の Dialog で組んだ (AD-046) |
+| Settings | B | 未使用 | registry の `elements-settings-panel` はモデル・system prompt・temperature の設定の部品で、アプリの設定 (ランタイム・作業フォルダ・プロバイダ・組み合わせ) と合わない。O-7 の設定のダイアログは既存の Dialog で組んだ (AD-046) |
 | Shared conversation | C | 未使用 | |
 | Shiki highlighter | A | B assistant/text | markdown のコード |
 | Sources | B | C WebSearchInput | O-6 |
@@ -335,7 +335,7 @@ assistant-ui の element の一覧 (https://www.assistant-ui.com/elements。**20
 | Thinking indicator | A | B assistant/thinking | 応答中の印 |
 | Thread | A | A SDKAssistantMessage / SDKUserMessage | |
 | Thread list | A | 未使用 | 過去のセッションの一覧 (R-2) は session の操作 UI |
-| Thread list sidebar | A | 未使用 | 	hreadlist-sidebar は shadcn の SidebarProvider (開閉を cookie に保存・Ctrl+B) を要し、1 つの runtime の thread list を描く。O-7 のサイドバーは 2 つの runtime の一覧 (稼働中・過去) と新規起動・設定を並べ、開閉を永続化しないので、既存の 	hread-list.aui.tsx の行と Button で組んだ (AD-046。照合の正本は O-7 の PR の説明) |
+| Thread list sidebar | A | 未使用 | `threadlist-sidebar` は shadcn の SidebarProvider (開閉を cookie に保存・Ctrl+B) を要し、1 つの runtime の thread list を描く。O-7 のサイドバーは 2 つの runtime の一覧 (稼働中・過去) と新規起動・設定を並べ、開閉を永続化しないので、既存の `thread-list.aui.tsx` の行と Button で組んだ (AD-046。照合の正本は O-7 の PR の説明) |
 | Thread search | B | 未使用 | O-3 |
 | Timeline | C | 未使用 | MCP の結果への転用は O-5 で判断 |
 | Todo list | A | C TodoWriteInput | TodoList |

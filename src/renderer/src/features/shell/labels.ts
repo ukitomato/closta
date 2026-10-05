@@ -1,3 +1,4 @@
+import { LAUNCH_AXIS_LABELS } from '@/features/session/labels'
 import type { SettingsSection } from '@/stores/ui'
 
 /**
@@ -35,7 +36,7 @@ export const SHELL_LABELS = {
   expandPanel: '詳細を開く'
 } as const
 
-/** 設定のダイアログの項目 (今の `SCREEN_LABELS` の文言を引き継ぐ)。 */
+/** 設定のダイアログの項目 (O-7 で消した上部のタブの文言 `SCREEN_LABELS` を引き継ぐ)。 */
 export const SETTINGS_SECTION_LABELS: Record<SettingsSection, string> = {
   runtimes: 'ランタイム',
   folders: '作業フォルダ',
@@ -44,15 +45,18 @@ export const SETTINGS_SECTION_LABELS: Record<SettingsSection, string> = {
   resolution: '組み合わせ'
 }
 
-/** 「概要」の項目の見出し (data-model §5)。 */
+/**
+ * 「概要」の項目の見出し (data-model §5)。起動の軸の名前は起動ダイアログの見出し (`LAUNCH_AXIS_LABELS`) と同じ文字列を使う
+ * (軸の名前を変えたときに概要だけが古く残らない。code-gate convention L-004)。
+ */
 export const OVERVIEW_LABELS = {
-  provider: 'Provider',
+  provider: LAUNCH_AXIS_LABELS.provider,
   providerDefault: '既定',
   providerRemoved: '登録が解除された Provider',
-  model: 'モデル',
+  model: LAUNCH_AXIS_LABELS.model,
   modelDefault: '既定',
-  effort: 'effort',
-  permissionMode: '権限モード',
+  effort: LAUNCH_AXIS_LABELS.effort,
+  permissionMode: LAUNCH_AXIS_LABELS.permissionMode,
   folderLocation: '作業フォルダの所在',
   folder: 'フォルダ',
   location: '所在',

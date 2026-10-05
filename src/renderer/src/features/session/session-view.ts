@@ -381,7 +381,7 @@ export function formatElapsed(ms: number): Elapsed {
 /**
  * 枠の使用数 (spec FR-007)。数え方は main の上限判定と同じ domain の `countOccupying` (生存フラグで数える)。
  * 起動要求の応答を待っている 1 件を足す (main の予約に当たる)。**前提**: 起動要求は UI で直列化されている
- * (`LaunchPanel` は `launching` の間ダイアログを出さず、シェルの起動ダイアログも閉じられない)。並行起動を許すなら起動要求の件数を state に出して足す。
+ * (`LaunchDialogContent` は `launching` の間ダイアログを出さず、シェルの起動ダイアログも閉じられない)。並行起動を許すなら起動要求の件数を state に出して足す。
  */
 export function slotUsage(state: RunningSessionStoreState): {
   readonly used: number
@@ -396,7 +396,7 @@ export function slotUsage(state: RunningSessionStoreState): {
   }
 }
 
-/** 承認待ちと失敗の本数 (一覧の見出しとナビ。spec FR-002 / FR-003)。 */
+/** 承認待ちと失敗の本数 (一覧の見出しと件数の印。spec FR-002 / FR-003)。 */
 export function attentionCounts(state: RunningSessionStoreState): {
   readonly awaiting: number
   readonly failed: number

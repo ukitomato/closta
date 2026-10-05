@@ -3,22 +3,29 @@ import { useMemo } from 'react'
 import { EmptyState, EmptyStateGreeting } from '@/components/assistant-ui/elements/empty-state'
 import { Button } from '@/components/ui/button'
 import { ChatScreen } from '@/features/chat/ChatScreen'
-import { TranscriptDensityToggle } from '@/features/chat/TranscriptDensityToggle'
 import { groupLabelOf } from '@/features/session-list/group-label'
-import { buildSessionRows, findRow, rowTitleText } from '@/features/session-list/rows'
+import {
+  buildSessionRows,
+  findRow,
+  formatSessionTime,
+  rowTitleText
+} from '@/features/session-list/rows'
 import { useFolderLabels } from '@/features/session-list/useFolderLabels'
-import { LiveCenter } from '@/features/session/LivePane'
+import { formatStartedAt, SESSION_ROW_STATUS_LABELS } from '@/features/session/labels'
+import { LivePane } from '@/features/session/LivePane'
 import { useRunningSessionsView } from '@/features/session/running-sessions-view'
+import { rowStatus } from '@/features/session/session-view'
 import { useSessionsStore } from '@/stores/sessions'
 import { useUiStore } from '@/stores/ui'
 
+import { CenterHeader } from './CenterHeader'
 import { SHELL_LABELS } from './labels'
 
 /**
  * **中央** (O-7 / FR-003 / FR-005)。`main` のランドマーク。`focus` に応じて次のどれか 1 つを出す:
  *
- * - `running` → 実行中の Chat (`LiveCenter`。中央のヘッダは `SessionHeader`)
- * - `past` → 過去ログの transcript (`ChatScreen`。中央のヘッダは一覧の行と同じ題とグループの表示)
+ * - `running` → 中央のヘッダ + 実行中の Chat (`LivePane`)
+ * - `past` → 中央のヘッダ (一覧の行と同じ題とグループの表示) + 過去ログの transcript (`ChatScreen`)
  * - `none` → 空の状態 (新規起動と、フォルダが未登録なら「設定 → 作業フォルダ」)
  *
  * 稼働中の会話の状態 (接続・transcript・下書き・キュー) はストアと `RunningSessionsProvider` が持つので、面を切り替えても
@@ -35,13 +42,43 @@ export function CenterPane(): React.JSX.Element {
       data-focus={focus}
     >
       {focus === 'running' && view.live !== null ? (
-        <LiveCenter />
+        <RunningCenter />
       ) : focus === 'past' ? (
         <PastCenter />
       ) : (
         <CenterEmpty />
       )}
     </main>
+  )
+}
+
+/**
+ * 稼働中の会話。中央のヘッダ (作業フォルダの表示名・ランタイム・起動時刻・状態) と実行中の Chat。
+ * どのセッションを表示しているかをヘッダでも示す (一覧の aria-current だけに頼らない。X-5 pr-gate R1 po L-001)。
+ * 状態は一覧の行と同じラベル。選択が無いときは何も描かない。
+ */
+export function RunningCenter(): React.JSX.Element | null {
+  const view = useRunningSessionsView()
+  const live = view.live
+  if (live === null) return null
+  const detail = [
+    view.runtimeName(live.state.config.runtimeId),
+    formatStartedAt(live.state.startedAt)
+  ]
+    .filter((part) => part !== '')
+    .join(' · ')
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <CenterHeader
+        title={view.folderName(live.state.config.folderId)}
+        detail={detail}
+        status={SESSION_ROW_STATUS_LABELS[rowStatus(live)]}
+        titleTestId="session-title"
+      />
+      <div className="min-h-0 flex-1">
+        <LivePane />
+      </div>
+    </div>
   )
 }
 
@@ -73,18 +110,6 @@ function CenterEmpty(): React.JSX.Element {
   )
 }
 
-const TIME_FORMAT = new Intl.DateTimeFormat('ja-JP', {
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit'
-})
-
-function formatTime(ms: number): string {
-  return TIME_FORMAT.format(new Date(ms))
-}
-
 /** 過去の会話。中央のヘッダ (題・グループ・読み取り専用・密度) と transcript。 */
 function PastCenter(): React.JSX.Element {
   const index = useSessionsStore((s) => s.index)
@@ -95,7 +120,7 @@ function PastCenter(): React.JSX.Element {
     [index, selectedRowKey]
   )
 
-  const title = found === null ? '' : rowTitleText(found.row.title, formatTime)
+  const title = found === null ? '' : rowTitleText(found.row.title, formatSessionTime)
   const group =
     found === null
       ? null
@@ -109,22 +134,12 @@ function PastCenter(): React.JSX.Element {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div
-        className="border-border flex shrink-0 items-center gap-3 border-b px-4 py-2"
-        data-testid="center-header"
-      >
-        {/* 題・グループは DTO の時点で正規化済みの表示用の値をテキストとして描く (US-4 AC5)。 */}
-        <span className="min-w-0 truncate text-xs font-medium" data-testid="past-title">
-          {title}
-        </span>
-        {group !== null && (
-          <span className="text-muted-foreground min-w-0 truncate text-xs">{group}</span>
-        )}
-        <span className="text-muted-foreground ms-auto shrink-0 text-xs">
-          {SHELL_LABELS.pastReadOnly}
-        </span>
-        <TranscriptDensityToggle />
-      </div>
+      <CenterHeader
+        title={title}
+        detail={group}
+        status={SHELL_LABELS.pastReadOnly}
+        titleTestId="past-title"
+      />
       <div className="min-h-0 flex-1">
         <ChatScreen densityToggle={false} />
       </div>

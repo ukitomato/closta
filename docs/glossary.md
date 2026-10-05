@@ -489,7 +489,9 @@ total_terms: 86
   直近の活動・密度) を備えた稼働中セッション一覧の呼び名である
 - **日本語表記**: 監視ビュー
 - **Domain**: `session`
-- **Counterexamples**: R-2 の (列挙の) セッション一覧とは別物。全面の監視画面 (カード / グリッド) ではない
+- **Counterexamples**: R-2 の (列挙の) セッション一覧とは別物。全面の監視画面 (カード / グリッド) ではない。
+  コードの `RunningSessionsView` (`features/session/running-sessions-view.ts`) は監視ビューではない — 稼働中のセッションを
+  シェルの面 (中央・右のペイン) に渡す値 (選択中のセッション・本文の窓・表示名の解決・起動の関数) である (O-7)
 - **Ref**: [010 spec](../specs/010-session-monitoring-view/spec.md)
 
 #### **Model catalog**
@@ -842,15 +844,17 @@ total_terms: 86
   - **サイドバー** (Sidebar): 左の面 (`nav` のランドマーク)。上から「新規起動」・**稼働中の区画**・**過去のセッションの区画**・「設定」。畳むと帯になる
     - **稼働中の区画** (Running section): 監視ビュー (`RunningSessionList`) を置く区画。見出しに注意の件数の印
     - **過去のセッションの区画** (Past sessions section): R-2 の一覧 (`SessionListScreen` の一覧の部分) を置く区画
-  - **中央のヘッダ** (Center header): 中央の上端。表示中のセッションの題・フォルダ・状態と transcript の密度の切り替え
-  - **中央の本体** (Center body): 中央の会話 (`main` のランドマーク)。稼働中なら実行中の Chat、過去なら過去ログの transcript、未選択なら空の状態
+  - **中央のヘッダ** (Center header): 中央の上端。表示中のセッションの題・フォルダ・状態と transcript の密度の切り替え。稼働中と過去で同じ部品 (`features/shell/CenterHeader.tsx`)
+  - **中央の本体** (Center body): 中央の会話 (`main` のランドマーク。中央の全体は `features/shell/CenterPane.tsx`)。稼働中なら実行中の Chat (`features/session/LivePane.tsx`)、過去なら過去ログの transcript (`ChatScreen`)、未選択なら空の状態
   - **右のペインのタブ** (Panel tab): 右の面 (名前付きの `complementary`) のタブ。1 か所の表 (`panel-tabs.ts`) に登録する。既定で畳む
   - **設定のダイアログ** (Settings dialog): ランタイム・作業フォルダ・プロバイダ・組み合わせの画面とテーマを開く全面のダイアログ
 - **日本語表記**: シェル
 - **Domain**: `ui` (サイドバーの区画の中身は session)
-- **Counterexamples**: 面の状態 (`focus`・設定・畳み) は `stores/ui.ts` の 1 か所にあり、session のコンポーネントは書かない。
+- **Counterexamples**: 面の状態 (`focus`・設定・畳み) は `stores/ui.ts` の 1 か所にあり、session のコンポーネントは書かない
+  (例外は [ui charter](domains/ui/charter.md) の「面の状態」)。
   画面の ID (`SCREENS`) は O-7 で無くなった。「見ているセッション」(`watchedId`) は `focus` から導く (中央に稼働中の会話を出していて、
-  設定のダイアログを開いていないときの選択中のセッション)
+  設定のダイアログを開いていないときの選択中のセッション)。`focus` は中央にどちらの側を出すかであり、キーボードのフォーカス
+  (DOM のフォーカス) ではない。コードの "Pane" (`CenterPane` / `LivePane`) は面の語の「ペイン」(右のペイン。コードは `RightPanel`) ではない
 - **Ref**: [AD-046](decisions/0046-app-shell-layout.md) / [013 spec](../specs/013-ui-app-shell/spec.md) / data-model §1
 
 ### T

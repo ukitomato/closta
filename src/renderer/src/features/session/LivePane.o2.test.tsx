@@ -14,7 +14,7 @@ import {
 } from '@/features/chat/labels'
 import { useUiStore } from '@/stores/ui'
 import { installCapability } from '@/test-support/capability'
-import { RunningWorkspace } from '@/test-support/running-workspace'
+import { RunningSessionsHarness } from '@/test-support/running-sessions-harness'
 
 import { MONITOR_LABELS } from './labels'
 import { RunningSessionStoreContext } from './running-session-context'
@@ -97,7 +97,7 @@ async function setup(ids: readonly string[] = [A]): Promise<Harness> {
   act(() => store.select(ids[0] ?? null))
   render(
     <RunningSessionStoreContext.Provider value={store}>
-      <RunningWorkspace />
+      <RunningSessionsHarness />
     </RunningSessionStoreContext.Provider>
   )
   return {

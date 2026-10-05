@@ -11,7 +11,9 @@ import type { LocationDTO } from '@domain/workspace/dto'
  * `selectedId`、過去は `stores/sessions.ts` の `selectedRowKey` が持つ。ここは中央にどちらを出すか (`focus`) だけを持つ。
  *
  * **面の状態を書くのはシェル** (`features/shell/`)。session のコンポーネントは `focus` を書かない (シェルが 2 つのストアの
- * 選択の通知を購読して決める。`features/shell/useShellFocus.ts`)。**永続化しない** — 再起動で既定に戻る。
+ * 選択の通知を購読して決める。`features/shell/useShellFocus.ts`)。**例外は設定の「作業フォルダ」を開く 2 つの導線だけ** —
+ * 過去のセッションの一覧の未登録フォルダの「登録」(`seedFolderDraft`) と、フォルダが 0 件のときの案内 (`openSettings('folders')`)。
+ * どちらも R-2 から続く登録の受け渡しで、`focus` には触れない。**永続化しない** — 再起動で既定に戻る。
  */
 
 /** 中央に何を出すか。 */

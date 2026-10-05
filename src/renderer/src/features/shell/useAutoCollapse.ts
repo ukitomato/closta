@@ -2,23 +2,7 @@ import { useEffect, useRef, type RefObject } from 'react'
 
 import { useUiStore } from '@/stores/ui'
 
-/** 面の幅 (data-model §2 が正本)。 */
-export const SHELL_WIDTHS = {
-  sidebar: 280,
-  sidebarCollapsed: 48,
-  panel: 320,
-  panelCollapsed: 40,
-  centerMin: 480
-} as const
-
-/** 今の開閉の状態で、中央が最小の幅を保つのに要る幅。 */
-export function shellThreshold(sidebarCollapsed: boolean, panelCollapsed: boolean): number {
-  return (
-    (sidebarCollapsed ? SHELL_WIDTHS.sidebarCollapsed : SHELL_WIDTHS.sidebar) +
-    (panelCollapsed ? SHELL_WIDTHS.panelCollapsed : SHELL_WIDTHS.panel) +
-    SHELL_WIDTHS.centerMin
-  )
-}
+import { shellThreshold } from './shell-layout'
 
 /**
  * ウィンドウが狭くなり、中央が最小の幅を割るとき、右のペイン → サイドバーの順に自動で畳む (data-model §2)。

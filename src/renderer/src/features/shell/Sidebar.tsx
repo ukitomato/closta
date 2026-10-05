@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils'
 import { useUiStore } from '@/stores/ui'
 
 import { SHELL_LABELS } from './labels'
+import { SHELL_WIDTHS } from './shell-layout'
 
 /**
  * **左のサイドバー** (O-7 / FR-002 / data-model §3)。トップレベルの `nav` のランドマークはここの 1 つだけ。
@@ -35,7 +36,10 @@ export function Sidebar(): React.JSX.Element {
     return (
       <nav
         aria-label={SHELL_LABELS.sidebar}
-        className="border-border flex w-12 shrink-0 flex-col items-center gap-1 border-r py-2"
+        className={cn(
+          'border-border flex shrink-0 flex-col items-center gap-1 border-r py-2',
+          SHELL_WIDTHS.sidebarCollapsed.className
+        )}
         data-testid="sidebar"
         data-collapsed="true"
       >
@@ -79,7 +83,10 @@ export function Sidebar(): React.JSX.Element {
   return (
     <nav
       aria-label={SHELL_LABELS.sidebar}
-      className="border-border flex w-[280px] shrink-0 flex-col border-r"
+      className={cn(
+        'border-border flex shrink-0 flex-col border-r',
+        SHELL_WIDTHS.sidebar.className
+      )}
       data-testid="sidebar"
       data-collapsed="false"
     >
@@ -139,7 +146,7 @@ export function Sidebar(): React.JSX.Element {
           type="button"
           variant="ghost"
           size="sm"
-          className={cn('w-full justify-start')}
+          className="w-full justify-start"
           onClick={() => openSettings()}
         >
           <SettingsIcon aria-hidden />

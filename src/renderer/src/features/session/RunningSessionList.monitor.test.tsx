@@ -30,7 +30,7 @@ vi.mock('./session-view', async (importOriginal) => {
 })
 
 /**
- * O-1 FE-003 / FE-012 / FE-022 — 監視ビュー (一覧の見出し・強調・経過時間・直近の活動・密度・ナビ・読み上げ)。
+ * O-1 FE-003 / FE-012 / FE-022 — 監視ビュー (一覧の見出し・強調・経過時間・直近の活動・密度・件数の印・読み上げ)。
  * SC-001 / SC-002 / SC-003 (component 側) / SC-006。
  */
 
@@ -160,7 +160,7 @@ const rowOf = async (name: string): Promise<HTMLElement> => {
 const awaitingButton = (): HTMLElement => screen.getByTestId('awaiting-count')
 
 describe('承認待ちと失敗の強調・件数 (FE-003 / SC-001)', () => {
-  it('表示中以外が承認待ちになると行が強調され、見出しとナビの件数が 1 になり、並びは変わらない', async () => {
+  it('表示中以外が承認待ちになると行が強調され、見出しと件数の印が 1 になり、並びは変わらない', async () => {
     const s = await setup([A, B])
     s.emit(A, { kind: 'state', state: 'awaiting_permission' })
     const rowA = await rowOf('案件A')
@@ -224,7 +224,7 @@ describe('承認待ちと失敗の強調・件数 (FE-003 / SC-001)', () => {
     expect(screen.queryByTestId('session-nav-awaiting')).toBeNull()
   })
 
-  it('失敗は承認待ちと別の印で理由が出て、見出しとナビの失敗の件数が一致する', async () => {
+  it('失敗は承認待ちと別の印で理由が出て、見出しと件数の印の失敗の件数が一致する', async () => {
     const s = await setup([A, B])
     s.emit(A, { kind: 'failure', reasonKey: 'provider-error' })
     s.push([st(A, { state: 'error', reasonKey: 'provider-error' })])

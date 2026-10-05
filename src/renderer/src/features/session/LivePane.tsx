@@ -9,39 +9,35 @@ import { GenerationLoader } from '@/components/assistant-ui/elements/loading-sta
 import { Thread } from '@/components/assistant-ui/elements/thread.aui'
 import { Button } from '@/components/ui/button'
 import { TranscriptSettledContext } from '@/features/chat/transcript-context'
-import { TranscriptDensityToggle } from '@/features/chat/TranscriptDensityToggle'
 
 import { ApprovalCard } from './ApprovalCard'
 import { DEFAULT_MAX_QUEUE_ITEMS, type EnqueueVerdict } from './composer-queue'
 import {
   isReloginFailure,
   launchFailureLabel,
-  formatStartedAt,
   OLDER_MESSAGES_LABELS,
   olderMessagesLabel,
   SESSION_ACTION_LABELS,
-  SESSION_END_NOTICES,
-  SESSION_ROW_STATUS_LABELS
+  SESSION_END_NOTICES
 } from './labels'
 import { LaunchDialog, type LaunchSource } from './LaunchDialog'
 import { useRunningSessionStore } from './running-session-context'
 import type { SessionQueue } from './running-session-store'
 import { useRunningSessionsView } from './running-sessions-view'
-import { rowStatus } from './session-view'
 import type { LiveSession } from './useLiveSession'
 
 /**
  * **中央の本体の実行中の Chat と、起動ダイアログの中身** (O-7 / FE-002。X-5 の `SessionScreen` から移した)。
  *
- * - `LiveCenter`: 選択中の稼働中のセッションの会話 (通知・承認カード・Thread)。中央のヘッダは `SessionHeader`
- * - `LaunchPanel`: 起動ダイアログの中身。起動中は `Launching`、それ以外は X-4 の `LaunchDialog`
+ * - `LivePane`: 選択中の稼働中のセッションの会話 (通知・承認カード・Thread)。中央のヘッダはシェルの `CenterHeader`
+ * - `LaunchDialogContent`: 起動ダイアログの中身。起動中は `Launching`、それ以外は X-4 の `LaunchDialog`
  *
  * **`RunningSessionsProvider` の内側で使う** (runtime と表示中のセッションをそこから受ける)。
  * セッションの寿命は面と切り離す — unmount・切り替えで kill しない (X-5 FR-008)。
  */
 
 /** 中央の本体の実行中の Chat。選択が無いときは何も描かない (中央の空の状態はシェルが出す)。 */
-export function LiveCenter(): React.JSX.Element | null {
+export function LivePane(): React.JSX.Element | null {
   const view = useRunningSessionsView()
   const live = view.live
   if (live === null || live.queue === null) return null
@@ -52,19 +48,12 @@ export function LiveCenter(): React.JSX.Element | null {
       queue={live.queue}
       hiddenCount={view.hiddenCount}
       onShowMore={view.showMore}
-      title={view.folderName(live.state.config.folderId)}
-      subtitle={[
-        view.runtimeName(live.state.config.runtimeId),
-        formatStartedAt(live.state.startedAt)
-      ]
-        .filter((part) => part !== '')
-        .join(' · ')}
     />
   )
 }
 
 /** 起動ダイアログの中身。起動中は差し替わるので、拒否・失敗で戻るとダイアログは作り直され lastConfig を復元する (X-4 US-1 AC7)。 */
-export function LaunchPanel(): React.JSX.Element {
+export function LaunchDialogContent(): React.JSX.Element {
   const view = useRunningSessionsView()
   const launch = useRunningSessionStore((s) => s.launch)
   return launch.phase === 'launching' ? <Launching /> : <NewSessionDialog onLaunch={view.launch} />
@@ -114,17 +103,12 @@ function LiveSessionPane({
   session,
   queue,
   hiddenCount,
-  onShowMore,
-  title,
-  subtitle
+  onShowMore
 }: {
   readonly session: LiveSession
   readonly queue: SessionQueue
   readonly hiddenCount: number
   readonly onShowMore: () => void
-  /** ヘッダの表示名 (作業フォルダ) と補足 (ランタイム・起動時刻)。 */
-  readonly title: string
-  readonly subtitle: string
 }): React.JSX.Element {
   const { state } = session
   const pending = state.pending
@@ -149,7 +133,6 @@ function LiveSessionPane({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <SessionHeader session={session} title={title} subtitle={subtitle} />
       {/* error 状態は必ず理由と次操作を出す。failure イベントが理由を伴わず来た場合も汎用表示に倒す (X-1 US-4 AC-8)。 */}
       {errored && <FailureBanner reason={session.failureReason} onClose={session.close} />}
       {/* 終わり方の通知 (FR-011): 終了が強制終了に落ちた / 強制終了 / 正常に終了した。 */}
@@ -269,38 +252,6 @@ function SessionWelcome(): React.JSX.Element {
     <EmptyState>
       <EmptyStateGreeting>プロンプトを送ると応答が表示されます</EmptyStateGreeting>
     </EmptyState>
-  )
-}
-
-/**
- * 中央のヘッダ (O-7 FR-005 / data-model §5): 表示中セッションの作業フォルダの表示名・ランタイム・起動時刻・状態と、
- * transcript の密度の切り替え。状態は一覧の行と同じラベル。操作は一覧の行に一本化する — 同名のボタンを 2 か所に出さない。
- */
-function SessionHeader({
-  session,
-  title,
-  subtitle
-}: {
-  readonly session: LiveSession
-  readonly title: string
-  readonly subtitle: string
-}): React.JSX.Element {
-  // どのセッションを表示しているかをヘッダでも示す (一覧の aria-current だけに頼らない。pr-gate R1 po L-001)。
-  return (
-    <div
-      className="border-border flex shrink-0 items-center gap-3 border-b px-4 py-2"
-      data-testid="center-header"
-    >
-      <span className="min-w-0 truncate text-xs font-medium" data-testid="session-title">
-        {title}
-      </span>
-      <span className="text-muted-foreground min-w-0 truncate text-xs">{subtitle}</span>
-      <span className="text-muted-foreground ms-auto shrink-0 text-xs" data-testid="session-status">
-        {SESSION_ROW_STATUS_LABELS[rowStatus(session)]}
-      </span>
-      {/* transcript の密度 (O-2 / FR-012)。監視ビューの行の密度 (一覧の見出し) とは別の位置・文言。 */}
-      <TranscriptDensityToggle />
-    </div>
   )
 }
 

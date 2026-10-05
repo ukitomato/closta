@@ -23,11 +23,13 @@ import type { EnumerationOutcomeDTO, SessionGroupDTO, SessionSummaryDTO } from '
 import { sessionRowKey } from '@domain/session/summary'
 import type { FailureReason } from '@domain/session/target'
 
+import { locationIndexOf, locationLabelOf } from './group-label'
 import {
   BOUNDARY_LABELS,
   CWD_ORIGIN_LABELS,
   FAILURE_REASON_HINTS,
   FAILURE_REASON_LABELS,
+  GROUP_KIND_LABELS,
   PENDING_REASON_LABELS,
   TARGET_STATUS_LABELS,
   UNKNOWN_REASON_LABELS,
@@ -36,8 +38,7 @@ import {
   remedyFor,
   type Coverage
 } from './labels'
-import { locationIndexOf, locationLabelOf } from './group-label'
-import { buildSessionRows, rowTitleText, type SessionSection } from './rows'
+import { buildSessionRows, formatSessionTime, rowTitleText, type SessionSection } from './rows'
 import { useFolderLabels } from './useFolderLabels'
 import { useSessions } from './useSessions'
 
@@ -58,18 +59,6 @@ import { useSessions } from './useSessions'
  * ([quickstart-results.md](../../../../../specs/002-session-cross-folder-session-enumeration/quickstart-results.md))。
  * 取得後に初めて描くと予算を超える。
  */
-
-const TIME_FORMAT = new Intl.DateTimeFormat('ja-JP', {
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit'
-})
-
-function formatTime(ms: number): string {
-  return TIME_FORMAT.format(new Date(ms))
-}
 
 /**
  * transcript の大きさ (FE-048)。
@@ -108,7 +97,7 @@ function SectionHeading({
             利用者に意味を持たない。登録一覧と突き合わせて表示名を引く。
             引けない窓 (登録解除と取得の交差) では種別名だけを出す — 空欄にしない。
           */}
-          <span className="text-sm font-medium">{folderName ?? '登録フォルダ'}</span>
+          <span className="text-sm font-medium">{folderName ?? GROUP_KIND_LABELS.folder}</span>
           {/*
             **フォルダ単位の値は「含む」と読める形にする** (po H-001)。
             この値は行ごとの越境を OR に畳んだものであり、
@@ -122,9 +111,7 @@ function SectionHeading({
     case 'pending':
       return (
         <div className="flex items-baseline gap-2">
-          <span className="text-sm font-medium">
-            {group.location.kind === 'wsl' ? group.location.distroName : 'Windows'}
-          </span>
+          <span className="text-sm font-medium">{locationLabelOf(group.location)}</span>
           <span className="text-muted-foreground text-xs">
             {PENDING_REASON_LABELS[group.reasonKey]}
           </span>
@@ -133,7 +120,7 @@ function SectionHeading({
     case 'unregistered':
       return (
         <div className="flex items-baseline gap-2">
-          <span className="text-sm font-medium">未登録フォルダ</span>
+          <span className="text-sm font-medium">{GROUP_KIND_LABELS.unregistered}</span>
           {/*
             **表示するのは変換済みのパスか安全な表示用文字列だけ。**
             UNC 接頭辞は境界を越えてこない (FR-042)。
@@ -146,7 +133,7 @@ function SectionHeading({
     case 'unknown':
       return (
         <div className="flex items-baseline gap-2">
-          <span className="text-sm font-medium">作業フォルダ不明</span>
+          <span className="text-sm font-medium">{GROUP_KIND_LABELS.unknown}</span>
           <span className="text-muted-foreground text-xs">
             {UNKNOWN_REASON_LABELS[group.reasonKey]}
           </span>
@@ -403,7 +390,7 @@ function SessionMeta({ session }: { session: SessionSummaryDTO }): React.JSX.Ele
           {session.cwdDisplay}
         </span>
       )}
-      {session.createdAt !== null && <span>開始 {formatTime(session.createdAt)}</span>}
+      {session.createdAt !== null && <span>開始 {formatSessionTime(session.createdAt)}</span>}
       {session.gitBranch !== null && <span>ブランチ {session.gitBranch}</span>}
       {session.tag !== null && <span>タグ {session.tag}</span>}
       {session.fileSize !== null && (
@@ -584,9 +571,7 @@ function Outcomes({
       <ul className="mt-2 space-y-1 text-sm">
         {outcomes.map((outcome) => (
           <li key={outcome.targetKey} className="flex flex-wrap items-baseline gap-2">
-            <span className="font-medium">
-              {outcome.location.kind === 'wsl' ? outcome.location.distroName : 'Windows'}
-            </span>
+            <span className="font-medium">{locationLabelOf(outcome.location)}</span>
             <SourceLabel label={outcome.targetLabel} />
             <span className="text-muted-foreground text-xs">
               {TARGET_STATUS_LABELS[outcome.status]}
@@ -736,7 +721,8 @@ export function SessionListScreen({
   const view = useMemo(() => buildSessionRows(sessions.index), [sessions.index])
 
   const titleOf = useCallback(
-    (row: { title: Parameters<typeof rowTitleText>[0] }) => rowTitleText(row.title, formatTime),
+    (row: { title: Parameters<typeof rowTitleText>[0] }) =>
+      rowTitleText(row.title, formatSessionTime),
     []
   )
 
@@ -899,7 +885,7 @@ export function SessionListScreen({
               */}
               {sessions.index === null
                 ? '未取得'
-                : `取得時刻 ${formatTime(sessions.index.fetchedAt)}`}
+                : `取得時刻 ${formatSessionTime(sessions.index.fetchedAt)}`}
               {/*
                 **「試した」で断言しない** (pr-gate Round 4 / 不変条件 5 / UX3-005)。
                 `complete` は全所在を*試した*ことしか意味しない。失敗があっても真になるので、

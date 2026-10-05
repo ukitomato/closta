@@ -90,7 +90,7 @@ rg -n "目標レイアウト|最初の UI 系 feature|FE-001" (docs / PLAN.md / 
 | 6 | ui charter:114 / session charter:99 | 監視ビュー = セッション画面のサイドバー | **受ける** — 「シェルのサイドバーの稼働中の区画」に直す |
 | 7 | ui-coverage.md F 節 (Thread list sidebar / Settings / Empty state / Assistant sidebar / Chat panel) | 未使用・「アプリの画面構成と合わない」 | **受ける** — 使うものの使い道を直す。Assistant sidebar / Chat panel の備考は新しいシェルで読み直す |
 | 8 | roadmap の O-3〜O-6 の行 | 依存は O-2 | **受ける** — 依存に O-7 を足す。O-4〜O-6 に右のペインのタブの候補を注記 |
-| 9 | roadmap:163-172 | `running-session-store.ts` / `RunningSessionList.tsx` の切り出しの持ち主は「store に派生値を足すか、監視ビューの行を触る次の feature」 | **該当なし** — 本 feature は行の部品と派生値を変えない (`nav` → `section`・`ThreadListNew` を外す・選択の操作の通知だけ)。roadmap に「O-7 は当たらない」と注記する |
+| 9 | roadmap:163-172 | `running-session-store.ts` / `RunningSessionList.tsx` の切り出しの持ち主は「store に派生値を足すか、監視ビューの行を触る次の feature」 | **該当なし** — (design の時点の判断。実装は下の追記) 本 feature は行の部品と派生値を変えない (`nav` → `section`・`ThreadListNew` を外す・選択の操作の通知)。roadmap に「O-7 は当たらない」と注記する。**実装の追記 (code-gate convention M-007)**: 実装では共通の行の部品 `thread-list.aui.tsx` に選択の強調の有無と押下の通知を、`nextAwaiting` に「見ているセッション」の引数を足した。roadmap が名指す行の部品と派生値の追跡は変えていないので、利用者が「当たらない」のままと決めた (USER 決定 2026-10-05) |
 | 10 | `useSessions.ts:71-77` / `src/main/index.ts:192-196` | セッション一覧は起動直後に取らない (ランタイム検出の後) | **受ける** — FR-016。コメントを新しい前提 (区画は常時マウント、初回の取得は `listRuntimes()` の後) に直す |
 | 11 | `perf/real-sessions.spec.ts:189,191` / roadmap O-3 の義務 (2)(c) | 実機計測は nav から起動する。行の切り替えの計測 | **受ける** — 手順を直す (FR-011)。(2)(c) の計測の基準が新しいシェル (focus の切り替え) で変わる注記を roadmap に |
 | 12 | glossary:389-390 / session charter:101,194 | 没入ビュー = セッション画面のペイン。ナビの件数 | **受ける** — FR-013 |
@@ -151,13 +151,15 @@ rg -n "目標レイアウト|最初の UI 系 feature|FE-001" (docs / PLAN.md / 
 ## Project Structure
 
 ```
-docs/decisions/0046-app-shell-layout.md                 (新設。proposed)
+docs/decisions/0046-app-shell-layout.md                 (新設。2026-10-05 accepted)
 src/renderer/src/App.tsx
 src/renderer/src/stores/ui.ts (+ test)
 src/renderer/src/features/shell/AppShell.tsx / Sidebar.tsx / CenterPane.tsx / RightPanel.tsx / panel-tabs.ts / OverviewTab.tsx / SettingsDialog.tsx / useShellFocus.ts / labels.ts (+ tests) (新設)
-src/renderer/src/features/session/SessionScreen.tsx → RunningSessionsProvider.tsx / LivePane.tsx (分割)
+  (実装で足した: CenterHeader.tsx (中央のヘッダ) / LaunchDialogHost.tsx (起動ダイアログ) / useAutoCollapse.ts / shell-layout.ts (面の幅))
+src/renderer/src/features/session/SessionScreen.tsx → RunningSessionsProvider.tsx / running-sessions-view.ts / LivePane.tsx (分割)
 src/renderer/src/features/session/RunningSessionList.tsx / SessionNavBadge.tsx / SessionAttentionAnnouncer.tsx / session-view.ts / running-session-store.ts (選択の操作の通知) / labels.ts
-src/renderer/src/features/session-list/SessionListScreen.tsx / useSessions.ts
+src/renderer/src/features/session-list/SessionListScreen.tsx / useSessions.ts / group-label.ts (新設) / rows.ts
+src/renderer/src/test-support/running-sessions-harness.tsx (新設。X-5 の 2 ペインのテストの観点を保つ面)
 src/renderer/src/features/workspace-folders/WorkspaceFoldersScreen.tsx (注記)
 src/renderer/src/features/chat/ChatScreen.tsx
 src/renderer/src/components/assistant-ui/elements/ (registry から取り込む element があれば)

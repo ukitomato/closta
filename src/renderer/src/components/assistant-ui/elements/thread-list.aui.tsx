@@ -32,7 +32,7 @@ import {
  *
  * | 外したもの | 理由 |
  * |---|---|
- * | `ThreadListNew` (New Thread ボタン) | R-2 はセッションを**作らない** (FR-003)。起動は X-1。**X-5 の稼働中セッション一覧のために復元した** (下の `ThreadListNew`。R-2 は使わない) |
+ * | `ThreadListNew` (New Thread ボタン) | R-2 はセッションを**作らない** (FR-003)。起動は X-1。X-5 で稼働中セッション一覧のために復元したが、**O-7 で再び外した** (起動の入口はシェルのサイドバーの「新規起動」に一本化した。AD-046) |
  * | rename (インライン入力 + `aui.threadListItem.rename`) | config ディレクトリへの**書き込み**になる (FR-013 / Principle X) |
  * | archive / delete (More メニュー) | 同上。**正本はアプリ外にある** (AD-007) |
  * | 検索 + 日付グルーピング (Today / Yesterday / Earlier) | R-2 のまとまりは**登録フォルダ**である (FR-022)。検索は O-3 |
@@ -110,25 +110,6 @@ const RowOptionsContext = createContext<RowOptions>({
   highlightSelected: true,
   onSelectRow: null,
 });
-
-/**
- * 新しいスレッド = 新規起動 (X-5)。生成物の `ThreadListNew` を、R-2 が外した理由 (セッションを作らない) の外で
- * 復元したもの。adapter の `onSwitchToNewThread` を渡したときだけ使う (R-2 は使わない)。
- */
-export const ThreadListNew: FC<
-  ComponentPropsWithoutRef<typeof ThreadListPrimitive.New>
-> = ({ className, ...props }) => {
-  return (
-    <ThreadListPrimitive.New
-      data-slot="aui_thread-list-new"
-      className={cn(
-        "hover:bg-muted data-active:bg-accent focus-visible:ring-ring flex h-8 items-center rounded-md px-2.5 text-sm font-medium outline-none focus-visible:ring-2",
-        className,
-      )}
-      {...props}
-    />
-  );
-};
 
 export const ThreadListRoot: FC<
   ComponentPropsWithoutRef<typeof ThreadListPrimitive.Root>

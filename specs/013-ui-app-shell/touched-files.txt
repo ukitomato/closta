@@ -7,7 +7,6 @@ docs/prompts.md
 docs/roadmap.md
 docs/ui-coverage.md
 e2e/README.md
-e2e/composer-screenshot.spec.ts-snapshots/composer-fullwidth-win32.png
 e2e/launch-dialog.spec.ts
 e2e/multi-session.spec.ts
 e2e/support/launch.ts
@@ -15,7 +14,9 @@ package.json
 perf/real-sessions.spec.ts
 pnpm-lock.yaml
 specs/013-ui-app-shell/data-model.md
+specs/013-ui-app-shell/plan.md
 specs/013-ui-app-shell/quickstart-results.md
+specs/013-ui-app-shell/quickstart.md
 specs/013-ui-app-shell/research.md
 specs/013-ui-app-shell/tasks.md
 src/main/index.ts
@@ -25,9 +26,13 @@ src/renderer/src/components/assistant-ui/elements/thread.aui.tsx
 src/renderer/src/features/chat/ChatScreen.o2.test.tsx
 src/renderer/src/features/chat/ChatScreen.tsx
 src/renderer/src/features/chat/transcript-context.ts
+src/renderer/src/features/folder-runtime-resolution/ResolutionScreen.tsx
 src/renderer/src/features/session-list/SessionListScreen.test.tsx
 src/renderer/src/features/session-list/SessionListScreen.tsx
+src/renderer/src/features/session-list/group-label.test.ts
 src/renderer/src/features/session-list/group-label.ts
+src/renderer/src/features/session-list/labels.ts
+src/renderer/src/features/session-list/rows.test.ts
 src/renderer/src/features/session-list/rows.ts
 src/renderer/src/features/session-list/useSessions.ts
 src/renderer/src/features/session/LivePane.o2.test.tsx
@@ -53,6 +58,7 @@ src/renderer/src/features/session/useRunningThreadList.ts
 src/renderer/src/features/session/useSessionClock.ts
 src/renderer/src/features/shell/AppShell.test.tsx
 src/renderer/src/features/shell/AppShell.tsx
+src/renderer/src/features/shell/CenterHeader.tsx
 src/renderer/src/features/shell/CenterPane.tsx
 src/renderer/src/features/shell/LaunchDialogHost.tsx
 src/renderer/src/features/shell/OverviewTab.tsx
@@ -60,11 +66,14 @@ src/renderer/src/features/shell/RightPanel.tsx
 src/renderer/src/features/shell/SettingsDialog.tsx
 src/renderer/src/features/shell/Sidebar.tsx
 src/renderer/src/features/shell/labels.ts
+src/renderer/src/features/shell/panel-tabs.test.ts
 src/renderer/src/features/shell/panel-tabs.ts
+src/renderer/src/features/shell/shell-layout.test.ts
+src/renderer/src/features/shell/shell-layout.ts
 src/renderer/src/features/shell/useAutoCollapse.ts
 src/renderer/src/features/shell/useShellFocus.ts
 src/renderer/src/features/workspace-folders/WorkspaceFoldersScreen.tsx
 src/renderer/src/stores/sessions.ts
 src/renderer/src/stores/ui.test.ts
 src/renderer/src/stores/ui.ts
-src/renderer/src/test-support/running-workspace.tsx
+src/renderer/src/test-support/running-sessions-harness.tsx

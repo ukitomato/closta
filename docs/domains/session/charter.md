@@ -200,7 +200,8 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
   compact / comfortable、charter KPI「並列時の滑らかさ」の実機計測。実装中）
 - **O-7 (ui)** — [アプリのシェル](../../../specs/013-ui-app-shell/spec.md)
   （本 domain の feature ではない。稼働中と過去のセッションの一覧をサイドバーに置き、起動の面をダイアログに移した。
-  session のストアには選択の操作の通知 `selectionSeq` だけを足し、行の部品と派生値は変えていない）
+  session のストアには選択の操作の通知 `selectionSeq` を足し、`nextAwaiting` に「見ているセッション」の引数を足した。
+  稼働中の一覧の行の部品 (状態の印・経過時間・直近の活動) と派生値の追跡は変えていない）
 
 X-6 は未着手。
 

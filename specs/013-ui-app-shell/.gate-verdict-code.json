@@ -1,0 +1,528 @@
+{
+    "gate": "code",
+    "run": "2026-10-05T08:17:33.425Z",
+    "spec_dir": "specs/013-ui-app-shell",
+    "spec_id": "013-ui-app-shell",
+    "iter": 2,
+    "severity_counts": {
+        "critical": 0,
+        "high": 0,
+        "medium": 0,
+        "low": 10,
+        "must_fix": 0
+    },
+    "must_fix_findings": [],
+    "touched_files": [
+        {
+            "path": ".specify/spec-gate/reviewers.yml",
+            "sha": "02650e06a5d2327ae28a497471df697532406bef"
+        },
+        {
+            "path": "docs/domains/_overview.md",
+            "sha": "caf619e8188c62be814a9e2bf4a6477c8cc24cbe"
+        },
+        {
+            "path": "docs/domains/session/charter.md",
+            "sha": "f11e8c290fbbb8ce4bb1e9751b27043265e3ee68"
+        },
+        {
+            "path": "docs/domains/ui/charter.md",
+            "sha": "1119141ff5493577a82bd3b80fa8f7a95e213312"
+        },
+        {
+            "path": "docs/glossary.md",
+            "sha": "790ba8646c8272a1cf6f0ee85a365b943cc2fbb5"
+        },
+        {
+            "path": "docs/prompts.md",
+            "sha": "4373f296d37fd68831774629d9c7608abfc98e4b"
+        },
+        {
+            "path": "docs/roadmap.md",
+            "sha": "13ca6cb53b589cad4137c93390501f4ef7266c02"
+        },
+        {
+            "path": "docs/ui-coverage.md",
+            "sha": "aa33d06f7b87e500e01274e75c4c84f471e1dbd1"
+        },
+        {
+            "path": "e2e/README.md",
+            "sha": "6f51e39638c9c3786ca39084075f6f54df6d4e49"
+        },
+        {
+            "path": "e2e/launch-dialog.spec.ts",
+            "sha": "a76d481e1e0af545a91ca85456c7ace658e20e99"
+        },
+        {
+            "path": "e2e/multi-session.spec.ts",
+            "sha": "27afda49e871b02e9e6099708c3516214464c1ee"
+        },
+        {
+            "path": "e2e/support/launch.ts",
+            "sha": "453ba899d0ef6e6ef44892a384221d3f8dbc6411"
+        },
+        {
+            "path": "package.json",
+            "sha": "c5ad1567c32cecbab7af01499080239e946a052f"
+        },
+        {
+            "path": "perf/real-sessions.spec.ts",
+            "sha": "fb1ef78704b9212b4bd4c2165a7d45d942d327e1"
+        },
+        {
+            "path": "pnpm-lock.yaml",
+            "sha": "ec626fdb211bac4029fedee9ade3808fd93e1dfe"
+        },
+        {
+            "path": "specs/013-ui-app-shell/data-model.md",
+            "sha": "d5df9a3990840728a27ea0875117b5597fb89fde"
+        },
+        {
+            "path": "specs/013-ui-app-shell/plan.md",
+            "sha": "a1a3c989a5d47b9221ac7d0395d9909a0759adc7"
+        },
+        {
+            "path": "specs/013-ui-app-shell/quickstart-results.md",
+            "sha": "8c56988997bf2a27c3d0adcd9c7e7c3f03b08d53"
+        },
+        {
+            "path": "specs/013-ui-app-shell/quickstart.md",
+            "sha": "fab4170b5b29267ce9ee07e638c92ed939940623"
+        },
+        {
+            "path": "specs/013-ui-app-shell/research.md",
+            "sha": "0faffb9658d2c00a01a647a823f141a0728e3b13"
+        },
+        {
+            "path": "specs/013-ui-app-shell/tasks.md",
+            "sha": "e86342a4fafb666d6d3d5a0ca3e004b020591061"
+        },
+        {
+            "path": "src/main/index.ts",
+            "sha": "db5f3d88152b4859e1b4de398988e3e5eab81217"
+        },
+        {
+            "path": "src/renderer/src/App.tsx",
+            "sha": "4a7983b56f19d72dc7494b2498a6c3e6ca313d5b"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/thread-list.aui.tsx",
+            "sha": "39d28254ac06d823e4615868dc0839c9e79f814d"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/thread.aui.tsx",
+            "sha": "5f36838c1740cfbe02a9f0628a3f131db1270fb1"
+        },
+        {
+            "path": "src/renderer/src/features/chat/ChatScreen.o2.test.tsx",
+            "sha": "21de6d4c77254d9229b261b1aeaf6041bbd81d1e"
+        },
+        {
+            "path": "src/renderer/src/features/chat/ChatScreen.tsx",
+            "sha": "9c7ab31227d1b34a292978eccab6861b18409d21"
+        },
+        {
+            "path": "src/renderer/src/features/chat/transcript-context.ts",
+            "sha": "9becb1c9b43610ab41cb4991a6a256fac8941874"
+        },
+        {
+            "path": "src/renderer/src/features/folder-runtime-resolution/ResolutionScreen.tsx",
+            "sha": "88e2de06617bbc36fb430ba631832c4c6f7a2762"
+        },
+        {
+            "path": "src/renderer/src/features/session-list/SessionListScreen.test.tsx",
+            "sha": "ea6f93d649f49de6d988a404614feb1ab8f6321c"
+        },
+        {
+            "path": "src/renderer/src/features/session-list/SessionListScreen.tsx",
+            "sha": "7b8b2d447dbae806203268ddd37ee9c1c857be26"
+        },
+        {
+            "path": "src/renderer/src/features/session-list/group-label.test.ts",
+            "sha": "136ac699e891168c251ea37792a64c04d62b959d"
+        },
+        {
+            "path": "src/renderer/src/features/session-list/group-label.ts",
+            "sha": "d7be31aa141d18b75a812d33052c31685f68b1e0"
+        },
+        {
+            "path": "src/renderer/src/features/session-list/labels.ts",
+            "sha": "21fa6e24729e70b755355da2dbd155d432890250"
+        },
+        {
+            "path": "src/renderer/src/features/session-list/rows.test.ts",
+            "sha": "d839dd96d3bcbb695d2a80d06b52dc86d5a16ea8"
+        },
+        {
+            "path": "src/renderer/src/features/session-list/rows.ts",
+            "sha": "a843a8cea2428731215723b4e2d423d917facae9"
+        },
+        {
+            "path": "src/renderer/src/features/session-list/useSessions.ts",
+            "sha": "1a7aa6e33c8ae5a36544740ab848f5b478640813"
+        },
+        {
+            "path": "src/renderer/src/features/session/LivePane.o2.test.tsx",
+            "sha": "499a721a1d5b7cd99fca6ffc6cf38715353b411c"
+        },
+        {
+            "path": "src/renderer/src/features/session/LivePane.test.tsx",
+            "sha": "086834357ec983c162e2b4127137a22196938bb6"
+        },
+        {
+            "path": "src/renderer/src/features/session/LivePane.tsx",
+            "sha": "108c8257bce59756bf8a1c173463b590e3da00bc"
+        },
+        {
+            "path": "src/renderer/src/features/session/RunningSessionList.monitor.test.tsx",
+            "sha": "724dd9e852e06a8b92beec0444bc4a4db85e6150"
+        },
+        {
+            "path": "src/renderer/src/features/session/RunningSessionList.test.tsx",
+            "sha": "8c421585a5f4c0e3649a8567ff6d381b41891150"
+        },
+        {
+            "path": "src/renderer/src/features/session/RunningSessionList.tsx",
+            "sha": "a361a90f2011638c4f82ec9831c2d5c5c12beca4"
+        },
+        {
+            "path": "src/renderer/src/features/session/RunningSessionsProvider.tsx",
+            "sha": "73e569802bc209a6a56bfbe658b43b9d0119bf8a"
+        },
+        {
+            "path": "src/renderer/src/features/session/SessionAttentionAnnouncer.tsx",
+            "sha": "2167ace5291037f215cdf29dfc230d838fb00fe3"
+        },
+        {
+            "path": "src/renderer/src/features/session/SessionNavBadge.tsx",
+            "sha": "d692daa9a0b08c86672aaa056cd00667ac077280"
+        },
+        {
+            "path": "src/renderer/src/features/session/composer-queue.ts",
+            "sha": "d094e6d433e6c023013f1aa50966f1df4598d548"
+        },
+        {
+            "path": "src/renderer/src/features/session/draft-bridge.test.tsx",
+            "sha": "ee356d3eda6f024ad176dfa11f2a9c91553a8129"
+        },
+        {
+            "path": "src/renderer/src/features/session/labels.ts",
+            "sha": "3d07253d734f3136eafbb90199a1306ee7ebd00c"
+        },
+        {
+            "path": "src/renderer/src/features/session/pending-queue-notice.test.tsx",
+            "sha": "9fb3eb78db68011a60ef2e8e19ffcdd460d25514"
+        },
+        {
+            "path": "src/renderer/src/features/session/queue-behavior.test.tsx",
+            "sha": "ba56422fb0e7434452385f4cc6a54fecbec2ee02"
+        },
+        {
+            "path": "src/renderer/src/features/session/running-session-store.ts",
+            "sha": "7b5868820489dacdb3a1a4e8bdaf416b5a6447fc"
+        },
+        {
+            "path": "src/renderer/src/features/session/running-session-types.ts",
+            "sha": "257b58bc2872c91dc4f2928572d0aa329972b381"
+        },
+        {
+            "path": "src/renderer/src/features/session/running-sessions-view.ts",
+            "sha": "b8001f6fb313fc0a6de956c797237ede15066a01"
+        },
+        {
+            "path": "src/renderer/src/features/session/session-view.monitor.test.ts",
+            "sha": "1ab8ff3a4b7a3adc8b5369d5a555786f245a8b14"
+        },
+        {
+            "path": "src/renderer/src/features/session/session-view.ts",
+            "sha": "12b63ead8c76c85b9a297ae2ed53760b18736fa4"
+        },
+        {
+            "path": "src/renderer/src/features/session/useRunningThreadList.ts",
+            "sha": "d23a6e22808ef769fb744af7cf5cf8a3149c158d"
+        },
+        {
+            "path": "src/renderer/src/features/session/useSessionClock.ts",
+            "sha": "eaca8789d02fdaa525fe80bc9a2e0d907ec755d9"
+        },
+        {
+            "path": "src/renderer/src/features/shell/AppShell.test.tsx",
+            "sha": "b9fb30c24272d19548dfd914943e0f65ec67819b"
+        },
+        {
+            "path": "src/renderer/src/features/shell/AppShell.tsx",
+            "sha": "d6b0f301082a741cef3fcdc8085cb72de53d0fa4"
+        },
+        {
+            "path": "src/renderer/src/features/shell/CenterHeader.tsx",
+            "sha": "a49dea0982dc0f378515ec0e3cf1fb4a32d460e4"
+        },
+        {
+            "path": "src/renderer/src/features/shell/CenterPane.tsx",
+            "sha": "de86ec67a98772a56c47465245ce38af2ece062c"
+        },
+        {
+            "path": "src/renderer/src/features/shell/LaunchDialogHost.tsx",
+            "sha": "e5c4e72a5ecc1a6365a00368d43f50320b66faa1"
+        },
+        {
+            "path": "src/renderer/src/features/shell/OverviewTab.tsx",
+            "sha": "470a816b5cb4e93b8d2800dc710c56e071fb123c"
+        },
+        {
+            "path": "src/renderer/src/features/shell/RightPanel.tsx",
+            "sha": "f72f13239ca248161958ba00f7622626553a1a36"
+        },
+        {
+            "path": "src/renderer/src/features/shell/SettingsDialog.tsx",
+            "sha": "3678dad2ef856e5af39e179c65345cf268d770cd"
+        },
+        {
+            "path": "src/renderer/src/features/shell/Sidebar.tsx",
+            "sha": "3778f90a20008925d801986e4095096d47dd60dd"
+        },
+        {
+            "path": "src/renderer/src/features/shell/labels.ts",
+            "sha": "af3cf5807c02f7b4e4df0dcf6c06de3a411dffa5"
+        },
+        {
+            "path": "src/renderer/src/features/shell/panel-tabs.test.ts",
+            "sha": "0f1ee052333a4c299f1498ff2988b0b5b939ebe1"
+        },
+        {
+            "path": "src/renderer/src/features/shell/panel-tabs.ts",
+            "sha": "f1430903625d8e9e53526feddd75f5ee822dbb53"
+        },
+        {
+            "path": "src/renderer/src/features/shell/shell-layout.test.ts",
+            "sha": "ec03ca4c1c769ce36d2109bf64db82a35b26d97a"
+        },
+        {
+            "path": "src/renderer/src/features/shell/shell-layout.ts",
+            "sha": "fa038fdad5cf81068f8dbd7c21b6faf09980fcbf"
+        },
+        {
+            "path": "src/renderer/src/features/shell/useAutoCollapse.ts",
+            "sha": "b57c5090dcc18c6fbfc306d8788ae6ac0e6ee5db"
+        },
+        {
+            "path": "src/renderer/src/features/shell/useShellFocus.ts",
+            "sha": "c13463310c6a53cfe2e218857422d236711512b7"
+        },
+        {
+            "path": "src/renderer/src/features/workspace-folders/WorkspaceFoldersScreen.tsx",
+            "sha": "f6d5821039a717db1442b529e9e738b4314dde58"
+        },
+        {
+            "path": "src/renderer/src/stores/sessions.ts",
+            "sha": "70ffc3cf3850f7404ae7c226a67054773cfbe8c1"
+        },
+        {
+            "path": "src/renderer/src/stores/ui.test.ts",
+            "sha": "a68a7aa809ecbc36d58b3104f426b5171645062c"
+        },
+        {
+            "path": "src/renderer/src/stores/ui.ts",
+            "sha": "19626b7f02df098e3583d40642a49dc588d7e5a4"
+        },
+        {
+            "path": "src/renderer/src/test-support/running-sessions-harness.tsx",
+            "sha": "4fafd7e0ede24e6b8844622ffe500cae3b5a2a8c"
+        }
+    ],
+    "fr_coverage": [
+        {
+            "fr": "FR-001",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/shell/AppShell.tsx"
+            ]
+        },
+        {
+            "fr": "FR-002",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/shell/Sidebar.tsx"
+            ]
+        },
+        {
+            "fr": "FR-003",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/shell/CenterPane.tsx"
+            ]
+        },
+        {
+            "fr": "FR-004",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/session/RunningSessionsProvider.tsx"
+            ]
+        },
+        {
+            "fr": "FR-005",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/shell/CenterHeader.tsx"
+            ]
+        },
+        {
+            "fr": "FR-006",
+            "covered": true,
+            "by": [
+                "src/renderer/src/stores/ui.ts",
+                "src/renderer/src/features/session/SessionAttentionAnnouncer.tsx"
+            ]
+        },
+        {
+            "fr": "FR-007",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/shell/LaunchDialogHost.tsx"
+            ]
+        },
+        {
+            "fr": "FR-008",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/shell/SettingsDialog.tsx"
+            ]
+        },
+        {
+            "fr": "FR-009",
+            "covered": true,
+            "by": [
+                "src/renderer/src/stores/ui.ts"
+            ]
+        },
+        {
+            "fr": "FR-010",
+            "covered": true,
+            "by": [
+                "src/renderer/src/stores/ui.ts"
+            ]
+        },
+        {
+            "fr": "FR-011",
+            "covered": true,
+            "by": [
+                "e2e/support/launch.ts",
+                "perf/real-sessions.spec.ts"
+            ]
+        },
+        {
+            "fr": "FR-012",
+            "covered": true,
+            "by": [
+                "docs/decisions/0046-app-shell-layout.md"
+            ]
+        },
+        {
+            "fr": "FR-013",
+            "covered": true,
+            "by": [
+                "docs/glossary.md",
+                "docs/roadmap.md",
+                "docs/domains/ui/charter.md"
+            ]
+        },
+        {
+            "fr": "FR-014",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/shell/RightPanel.tsx",
+                "src/renderer/src/features/shell/panel-tabs.ts"
+            ]
+        },
+        {
+            "fr": "FR-015",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/shell/OverviewTab.tsx"
+            ]
+        },
+        {
+            "fr": "FR-016",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/session-list/useSessions.ts"
+            ]
+        }
+    ],
+    "viewpoint_coverage": {
+        "A": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+        "B": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+        "C": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+        "D": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+        "E": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+        "F": "iter1 Medium:7 Low:10 / iter2 Low:9",
+        "G": "\u8a72\u5f53\u306a\u3057: optional reviewer \u306a\u3057 (a11y / ux / ui-coverage \u306f pr-gate)",
+        "H": "iter1 Medium:2 / iter2 Low:1"
+    },
+    "tracks": {
+        "lint-agent": {
+            "violations": 0,
+            "exit_code": 0,
+            "detectors": [
+                "eslint",
+                "tsc:node",
+                "tsc:web",
+                "tsc:e2e",
+                "tsc:perf",
+                "depcruise",
+                "check:constitution"
+            ],
+            "note": "iter1 \u306f lint-agent\u3002iter2 (SHOULD_FIX \u306e\u5bfe\u5fdc\u306e\u518d\u691c\u8a3c) \u306f invoker \u304c agent \u7528\u306e\u5217\u306e\u30b3\u30de\u30f3\u30c9\u3092\u76f4\u63a5\u5b9f\u884c"
+        },
+        "test-agent": {
+            "passed": 1943,
+            "failed": 0,
+            "exit_code": 0,
+            "scope": "full",
+            "note": "iter1 \u306f test-agent (scope full, 1926 passed)\u3002iter2 \u306f invoker \u304c\u5168\u4ef6\u3092\u76f4\u63a5\u5b9f\u884c"
+        },
+        "convention-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "lint_input": "lint-agent (iter1) / invoker \u306e\u76f4\u63a5\u5b9f\u884c\u306e\u7d50\u679c (iter2)"
+        }
+    },
+    "skipped_reviewers": [
+        {
+            "name": "a11y-reviewer",
+            "reason": "gates=['pr-gate'] \u306b code-gate \u304c\u7121\u3044"
+        },
+        {
+            "name": "ux-reviewer",
+            "reason": "gates=['pr-gate'] \u306b code-gate \u304c\u7121\u3044"
+        },
+        {
+            "name": "ui-coverage-reviewer",
+            "reason": "gates=['pr-gate'] \u306b code-gate \u304c\u7121\u3044"
+        },
+        {
+            "name": "database-reviewer",
+            "reason": "auto_invoke_patterns \u306b\u4e00\u81f4\u3059\u308b\u5909\u66f4\u30d5\u30a1\u30a4\u30eb\u304c\u7121\u3044 (\u5909\u66f4 70 \u4ef6 / pattern 5 \u4ef6)"
+        },
+        {
+            "name": "platform-boundary-reviewer",
+            "reason": "auto_invoke_patterns \u306b\u4e00\u81f4\u3059\u308b\u5909\u66f4\u30d5\u30a1\u30a4\u30eb\u304c\u7121\u3044 (\u5909\u66f4 70 \u4ef6 / pattern 8 \u4ef6)"
+        }
+    ],
+    "cascade_demotions": 0,
+    "iter_history": [
+        {
+            "iter": 1,
+            "must_fix": 0,
+            "skipped": 0,
+            "error": 0
+        },
+        {
+            "iter": 2,
+            "must_fix": 0,
+            "skipped": 0,
+            "error": 0
+        }
+    ],
+    "verdict": "PASS"
+}

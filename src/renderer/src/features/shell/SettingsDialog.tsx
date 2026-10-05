@@ -13,7 +13,7 @@ import { SETTINGS_SECTIONS, useUiStore, type SettingsSection } from '@/stores/ui
 
 import { SETTINGS_SECTION_LABELS, SHELL_LABELS } from './labels'
 
-const SECTION_CONTENT: Record<SettingsSection, () => React.JSX.Element> = {
+const SETTINGS_SECTION_CONTENT: Record<SettingsSection, () => React.JSX.Element> = {
   runtimes: RuntimeListScreen,
   folders: WorkspaceFoldersScreen,
   providers: ProviderScreen,
@@ -52,7 +52,7 @@ export function SettingsDialog(): React.JSX.Element {
     []
   )
 
-  const Screen = SECTION_CONTENT[section]
+  const Screen = SETTINGS_SECTION_CONTENT[section]
 
   return (
     <Dialog

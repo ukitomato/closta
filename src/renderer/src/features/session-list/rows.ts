@@ -118,6 +118,22 @@ export function findRow(
   return null
 }
 
+const TIME_FORMAT = new Intl.DateTimeFormat('ja-JP', {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit'
+})
+
+/**
+ * 過去のセッションの時刻の表記。**1 箇所で決める** — 一覧の行・中央のヘッダの題・「概要」が同じ表記を使う
+ * (O-7 data-model §5。中央のヘッダの題は一覧の行と同じ文字列)。
+ */
+export function formatSessionTime(ms: number): string {
+  return TIME_FORMAT.format(new Date(ms))
+}
+
 /**
  * 行 1 件の表示文字列 (FR-047)。
  *

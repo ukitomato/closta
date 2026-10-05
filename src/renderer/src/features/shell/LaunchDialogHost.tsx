@@ -2,7 +2,7 @@ import { XIcon } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/components/ui/dialog'
-import { LaunchPanel } from '@/features/session/LivePane'
+import { LaunchDialogContent } from '@/features/session/LivePane'
 import { useRunningSessionStore } from '@/features/session/running-session-context'
 import { useUiStore } from '@/stores/ui'
 
@@ -55,7 +55,7 @@ export function LaunchDialogHost(): React.JSX.Element {
             </Button>
           </DialogClose>
         )}
-        <LaunchPanel />
+        <LaunchDialogContent />
       </DialogContent>
     </Dialog>
   )

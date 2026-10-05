@@ -165,7 +165,9 @@ O-1 で読み替えた: 監視ビューはサイドバーの稼働中の区画 (
   詳細は [docs/domains/_overview.md](../_overview.md)
 - **面の状態** (O-7): 中央の focus・設定・畳みは `stores/ui.ts` の 1 か所にあり、focus はシェル (`useShellFocus`) だけが書く。
   シェルは session のストアの選択 (`selectionSeq`) を購読し、session のコンポーネントは面の状態を書かない。
-  `seedFolderDraft` (session の一覧から設定の「作業フォルダ」を初期値つきで開く) は既存の受け渡しとして残る
+  例外は設定の「作業フォルダ」を開く 2 つの導線だけで、どちらも R-2 から続く登録の受け渡しとして残る:
+  `seedFolderDraft` (未登録フォルダの「登録」から初期値つきで開く) と `openSettings('folders')` (フォルダが 0 件のときの案内)。
+  どちらも `focus` には触れない
 
 ## Related ADRs
 

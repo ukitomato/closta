@@ -6,6 +6,7 @@ import { useUiStore } from '@/stores/ui'
 
 import { SHELL_LABELS } from './labels'
 import { activeTab, PANEL_TABS, visibleTabs, type PanelTab } from './panel-tabs'
+import { SHELL_WIDTHS } from './shell-layout'
 
 /**
  * **右のペイン** (O-7 / FR-014 / data-model §2・§4)。表示中のセッションに付く情報をタブで切り替える面。
@@ -35,7 +36,9 @@ export function RightPanel({
       aria-label={SHELL_LABELS.panelLabel}
       className={cn(
         'border-border flex min-h-0 shrink-0 flex-col border-l',
-        collapsed ? 'w-10 items-center gap-1 py-2' : 'w-80'
+        collapsed
+          ? [SHELL_WIDTHS.panelCollapsed.className, 'items-center gap-1 py-2']
+          : SHELL_WIDTHS.panel.className
       )}
       data-testid="right-panel"
       data-collapsed={collapsed}

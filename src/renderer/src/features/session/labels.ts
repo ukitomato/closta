@@ -115,9 +115,8 @@ export const SESSION_ROW_STATUS_LABELS = {
 
 export type SessionRowStatus = keyof typeof SESSION_ROW_STATUS_LABELS
 
-/** 一覧と表示中セッションの操作 (FR-011)。 */
+/** 一覧と表示中セッションの操作 (FR-011)。新規起動の文言はシェルの `SHELL_LABELS.newSession` (O-7)。 */
 export const SESSION_ACTION_LABELS = {
-  newSession: '新規起動',
   end: '終了',
   ending: '終了中…',
   endTitle: 'claude を正常に終了させます。',
@@ -162,7 +161,7 @@ export const SESSION_NAME_FALLBACKS = {
 
 /* ── 監視ビュー (O-1 / FR-001〜FR-009 / Principle XV) ─────────────────── */
 
-/** 一覧の見出し・ナビの件数・密度 (O-1)。 */
+/** 一覧の見出し (O-7 からは件数の印もここ)・密度 (O-1)。 */
 export const MONITOR_LABELS = {
   /** 承認待ちの件数のボタンが押せないとき (移れる先が無い。FR-002)。 */
   awaitingNoTarget: 'ほかに承認待ちのセッションはありません。',
@@ -284,11 +283,11 @@ export const LAUNCH_AXIS_LABELS = {
 
 /** 空状態と次の一手 (FE-004 / spec Edge Cases)。 */
 export const LAUNCH_EMPTY_STATE_LABELS = {
-  noFolders: '作業フォルダが登録されていません。「作業フォルダ」画面で登録してください。',
-  noWslRuntimes: 'WSL ランタイムが見つかりません。「ランタイム」画面で再検出してください。',
+  noFolders: '作業フォルダが登録されていません。設定の「作業フォルダ」で登録してください。',
+  noWslRuntimes: 'WSL ランタイムが見つかりません。設定の「ランタイム」で再検出してください。',
   allRuntimesStopped:
     'WSL ランタイムがすべて停止しています。WSL ディストロを起動してから「再評価」を押してください (アプリはディストロを起動しません)。',
-  noProviders: '既定 Provider で起動できます。Provider の登録はプロバイダ画面から行えます。',
+  noProviders: '既定 Provider で起動できます。Provider の登録は設定の「プロバイダ」から行えます。',
   /** 一覧の読み込み中・失敗は空状態と分ける (読み込み中に「登録してください」と案内しない。po M-102)。 */
   foldersLoading: '作業フォルダを読み込んでいます…',
   foldersLoadFailed: '作業フォルダを読み込めませんでした。',
@@ -389,7 +388,7 @@ export const CROSS_BOUNDARY_LABELS = {
 export const FOLDER_RUNTIME_BLOCKED_LABELS = {
   waitingProbe: 'ランタイムの準備 (パス変換の取得) を待っています…',
   probeFailed:
-    'ランタイムの能力確認に失敗しました。再評価してください。繰り返し失敗する場合はランタイム画面で状態を確認してください。'
+    'ランタイムの能力確認に失敗しました。再評価してください。繰り返し失敗する場合は設定の「ランタイム」で状態を確認してください。'
 } as const
 
 /** 前回のセッションが失敗して起動設定ダイアログに戻ったときの理由 (US-1 AC7 / pr-gate M-07)。 */

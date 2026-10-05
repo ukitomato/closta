@@ -1,6 +1,8 @@
 import type { EnumerationOutcomeDTO, SessionGroupDTO, SessionSummaryDTO } from '@domain/session/dto'
 import type { LocationDTO } from '@domain/workspace/dto'
 
+import { GROUP_KIND_LABELS } from './labels'
+
 /**
  * 過去のセッションのグループと所在の表示 (R-2 の一覧の見出しの規則。O-7 の中央のヘッダと「概要」が共有する。
  * data-model §5)。**表示は DTO の時点で正規化済みの値だけを使う** — パスを renderer で組み立てない (FR-025)。
@@ -42,7 +44,7 @@ export function groupLabelOf(
 ): string | null {
   switch (group.kind) {
     case 'folder':
-      return folderName ?? '登録フォルダ'
+      return folderName ?? GROUP_KIND_LABELS.folder
     case 'pending':
       return locationLabelOf(group.location)
     case 'unregistered':

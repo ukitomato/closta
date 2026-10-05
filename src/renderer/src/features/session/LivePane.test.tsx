@@ -8,7 +8,7 @@ import type { RuntimeDescriptorDTO } from '@domain/runtime/dto'
 import type { WorkspaceFolderDTO } from '@domain/workspace/dto'
 
 import { installCapability } from '@/test-support/capability'
-import { RunningWorkspace } from '@/test-support/running-workspace'
+import { RunningSessionsHarness } from '@/test-support/running-sessions-harness'
 
 import { createRunningSessionStore, type RunningSessionStore } from './running-session-store'
 import { RunningSessionStoreContext } from './running-session-context'
@@ -18,7 +18,7 @@ import { MESSAGE_WINDOW } from './session-view'
  * X-5 / SC-003 — 表示中セッションの本文の窓と、中央のヘッダの表示名 (pr-gate R2 po L-102 / L-101)。
  * 純関数の境界は session-view.test.ts。ここでは面としての振る舞いを確かめる:
  * 省略行が出る → 「さらに表示」で消える → 別セッションへ切り替えて戻っても広げた窓が保たれる。
- * O-7 で `SessionScreen` を稼働中の区画 (`RunningSessionList`) と中央の本体 (`LiveCenter`) に分けた (観点は変えない)。
+ * O-7 で `SessionScreen` を稼働中の区画 (`RunningSessionList`) と中央 (シェルの `RunningCenter` = 中央のヘッダ + `LivePane`) に分けた (観点は変えない)。
  */
 
 const NOW = 1_700_000_000_000
@@ -109,7 +109,7 @@ async function setup(options: { lists: 'loaded' | 'pending' }): Promise<RunningS
   }))
   render(
     <RunningSessionStoreContext.Provider value={store}>
-      <RunningWorkspace />
+      <RunningSessionsHarness />
     </RunningSessionStoreContext.Provider>
   )
   return store
@@ -132,7 +132,7 @@ describe('LivePane — 本文の窓 (SC-003 / pr-gate R2 po L-102)', () => {
   })
 })
 
-describe('LivePane — ヘッダの表示名 (pr-gate R1 po L-001 / R2 po L-101)', () => {
+describe('RunningCenter (シェル) — 中央のヘッダの表示名 (pr-gate R1 po L-001 / R2 po L-101)', () => {
   it('一覧を読み込んだらフォルダの表示名を出す', async () => {
     await setup({ lists: 'loaded' })
     await waitFor(() =>
