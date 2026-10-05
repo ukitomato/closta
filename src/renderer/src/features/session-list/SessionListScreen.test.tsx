@@ -1175,6 +1175,10 @@ describe('SessionListScreen — 件数が多い場合 (FE-073)', () => {
     const { container } = render(<SessionListScreen />)
     await waitFor(() => expect(listRuntimes).toHaveBeenCalledTimes(1))
     expect(container.querySelector('[aria-busy="true"]')).not.toBeNull()
+    // 状態の行も「未取得」(止まって見える語) ではなく取得中と言う (O-7 pr-gate R2 ux L-102)。
+    expect(
+      screen.getAllByRole('status').some((status) => status.textContent?.startsWith('取得中…'))
+    ).toBe(true)
     const button = screen.getByRole('button', { name: '取得中…' })
     await userEvent.click(button)
     expect(refreshSessions).not.toHaveBeenCalled()

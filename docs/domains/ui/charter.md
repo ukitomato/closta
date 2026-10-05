@@ -165,14 +165,18 @@ O-1 で読み替えた: 監視ビューはサイドバーの稼働中の区画 (
 - 依存する domain: `runtime`, `session`, `provider`, `isolation`（表示対象がすべてにまたがる）
 - 依存される domain: なし（最上層）。ただし `stores/ui.ts` (面の状態と画面をまたぐ受け渡し) は他 domain の操作 UI が**読む** —
   session は `watchedIdOf` で focus と設定・起動ダイアログの開閉を (`RunningSessionList` / `SessionAttentionAnnouncer`)、
-  runtime は `folderDraftSeed` を (`WorkspaceFoldersScreen`)。書くのは下の「面の状態」の例外 2 件だけ (pr-gate R1 architecture M-001)
+  runtime は `folderDraftSeed` を (`WorkspaceFoldersScreen`。受け取ったら `clearFolderDraftSeed` で消す。使い切りの受け渡しの受け手が
+  消す操作で、面の状態ではない)。他 domain が面の状態を書くのは下の「面の状態」の例外 2 件だけ (pr-gate R1 architecture M-001 /
+  R2 architecture L-101)
 - 共有 invariant: Principle III（選べない選択肢を出さない）/ VIII / XII / XIII。
   詳細は [docs/domains/_overview.md](../_overview.md)
 - **面の状態** (O-7。**この項が運用上の正本**。AD-046 の訂正の節と同じ内容): 中央の focus・設定・畳みは `stores/ui.ts` の 1 か所にあり、
   focus はシェル (`useShellFocus`) だけが書く。シェルは session のストアの選択 (`selectionSeq`) を購読し、session のコンポーネントは
   focus を書かない。session のコンポーネントが面の状態を書く例外は設定の「作業フォルダ」を開く 2 つの導線だけで、どちらも R-2 から
   続く登録の受け渡しとして残る: `seedFolderDraft` (未登録フォルダの「登録」から初期値つきで開く) と `openSettings('folders')`
-  (フォルダが 0 件のときの案内)。どちらも `focus` には触れない
+  (フォルダが 0 件のときの案内)。どちらも `focus` には触れない。逆向きに、シェルが session のストアの操作を呼ぶのは起動の告知を
+  消す操作 (`dismissLaunchNotice`) だけ: 起動ダイアログを起動せずに閉じたときと、中央に出していない失敗したセッションを閉じたとき。
+  起動の状態の遷移のロジックは session のストアの中に残る (pr-gate R2 architecture M-101)
 
 ## Related ADRs
 

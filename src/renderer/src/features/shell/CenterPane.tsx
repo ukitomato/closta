@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 
 import { EmptyState, EmptyStateGreeting } from '@/components/assistant-ui/elements/empty-state'
 import { Button } from '@/components/ui/button'
@@ -21,6 +21,7 @@ import { useUiStore } from '@/stores/ui'
 import { CenterHeader } from './CenterHeader'
 import { SHELL_LABELS } from './labels'
 import { CENTER_ID } from './shell-layout'
+import { useFocusRescue } from './useFocusRescue'
 
 /**
  * **中央** (O-7 / FR-003 / FR-005)。`main` のランドマーク。`focus` に応じて次のどれか 1 つを出す:
@@ -35,19 +36,29 @@ import { CENTER_ID } from './shell-layout'
 export function CenterPane(): React.JSX.Element {
   const focus = useUiStore((s) => s.focus)
   const view = useRunningSessionsView()
+  const shown =
+    focus === 'running' && view.live !== null ? 'running' : focus === 'past' ? 'past' : 'none'
+  // 押した「閉じる」や表示中の過去の行が中身ごと消えたら、空の状態の主な操作へフォーカスを移す (pr-gate R2 a11y M-102)。
+  const mainRef = useRef<HTMLElement>(null)
+  useFocusRescue(
+    mainRef,
+    shown,
+    () => mainRef.current?.querySelector<HTMLElement>('[data-center-primary]') ?? null
+  )
   return (
     <main
+      ref={mainRef}
+      // スキップリンクの行き先。`tabindex` は常には付けない — 付けると本文のクリックで `main` がフォーカスを取り、
+      // キーボードでの transcript のスクロールが効かなくなる (移す間だけ付ける。`AppShell` の focusCenter。pr-gate R2 a11y M-103)。
       id={CENTER_ID}
-      // スキップリンクの行き先 (Tab 順には入れない)。
-      tabIndex={-1}
       aria-label={SHELL_LABELS.center}
       className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden outline-none"
       data-testid="center"
       data-focus={focus}
     >
-      {focus === 'running' && view.live !== null ? (
+      {shown === 'running' ? (
         <RunningCenter />
-      ) : focus === 'past' ? (
+      ) : shown === 'past' ? (
         <PastCenter />
       ) : (
         <CenterEmpty />
@@ -101,7 +112,7 @@ function CenterEmpty(): React.JSX.Element {
         </EmptyStateGreeting>
         <div className="flex flex-wrap justify-center gap-2">
           {noFolders && (
-            <Button type="button" onClick={() => openSettings('folders')}>
+            <Button type="button" onClick={() => openSettings('folders')} data-center-primary>
               {SHELL_LABELS.centerEmptyFolders}
             </Button>
           )}
@@ -109,6 +120,7 @@ function CenterEmpty(): React.JSX.Element {
             type="button"
             variant={noFolders ? 'outline' : 'default'}
             onClick={() => setLaunchOpen(true)}
+            data-center-primary={noFolders ? undefined : true}
           >
             {SHELL_LABELS.centerEmptyLaunch}
           </Button>

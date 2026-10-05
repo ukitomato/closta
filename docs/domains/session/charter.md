@@ -167,7 +167,8 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
 
 - 依存する domain: `runtime`（起動とパス解決）、`provider`（環境変数とモデルカタログの導出）。
   操作 UI は ui の `stores/ui.ts` の面の状態を**読む** (監視ビューの承認待ちの件数のボタンと読み上げが「見ているセッション」を
-  導く。O-7)。書くのは設定を「作業フォルダ」で開く 2 つの導線だけ ([ui charter](../ui/charter.md) の「面の状態」)
+  導く。O-7)。書くのは設定を「作業フォルダ」で開く 2 つの導線だけ ([ui charter](../ui/charter.md) の「面の状態」)。
+  逆向きに、ui のシェルが本 domain のストアの起動の告知を消す操作 (`dismissLaunchNotice`) を呼ぶ (O-7。下の Related Specs)
 - 依存される domain: `ui`, `isolation`
 - 共有 invariant: Principle III / IV / V / VII / IX / X / XII (X-6 は `docs/ui-coverage.md` の `後続: X-6` の行を完了の PR で書き換える。SDK の版を上げる PR は対応表を同じ PR で直す)。詳細は [docs/domains/_overview.md](../_overview.md)
   (VII = supervisor は Electron 非依存で単独起動できる。R-2 で `agents` を持つ feature が実装され実体を持った)
@@ -203,6 +204,11 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
 - **O-7 (ui)** — [アプリのシェル](../../../specs/013-ui-app-shell/spec.md)
   （本 domain の feature ではない。稼働中と過去のセッションの一覧をサイドバーに置き、起動の面をダイアログに移した。
   session のストアには選択の操作の通知 `selectionSeq` を足し、`nextAwaiting` に「見ているセッション」の引数を足した。
+  起動の告知 (拒否の理由と前回の失敗) を消す公開の操作 `dismissLaunchNotice` を足し、**呼ぶのは ui のシェル** (起動ダイアログを起動せずに
+  閉じたとき・中央に出していない失敗したセッションを閉じたとき。起動中は何もせず `lastConfig` は残す)。X-4 US-1 AC7 の「失敗したセッションを
+  閉じたら前回の設定と理由つきで起動ダイアログを開く」は、**中央に出していた失敗したセッションを閉じたときだけ**になった (ui の面の状態
+  `focus === 'running'` に依存する。[013 data-model §1](../../../specs/013-ui-app-shell/data-model.md))。起動の状態の遷移のロジックは
+  ストアの中のまま (pr-gate R2 architecture M-101)。
   稼働中の一覧の行の部品 (状態の印・経過時間・直近の活動) と派生値の追跡は変えていない）
 
 X-6 は未着手。

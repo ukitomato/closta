@@ -42,7 +42,7 @@
   - 取り込む element は、照合の観点に「本番の CSP (`style-src 'self'`) の下で動くこと」を入れる (design-gate R1 security M-001)
   - 照合の結果の記録の正本は PR の説明 (Constitution XIII)。research と F 節の備考は写し
 - **照合の結果 (実装の時点。SH-002)**:
-  - `threadlist-sidebar` (Thread list sidebar・A): **不採用**。shadcn の `SidebarProvider` (開閉を cookie に保存・Ctrl+B) を要し、1 つの runtime の thread list を描く sidebar の枠である。本 feature のサイドバーは稼働中 (シェル全体の runtime) と過去 (入れ子の runtime) の 2 つの一覧と新規起動・設定を並べ、開閉を永続化しない (FR-001)。既存の `thread-list.aui.tsx` の行 (Thread list) と Button で組んだ
+  - `threadlist-sidebar` (Thread list sidebar・A): **不採用**。shadcn の `SidebarProvider` (開閉を cookie に保存・Ctrl+B) を要し、1 つの assistant-ui の runtime の thread list を描く sidebar の枠である。本 feature のサイドバーは稼働中 (シェル全体の assistant-ui の runtime) と過去 (入れ子の assistant-ui の runtime) の 2 つの一覧と新規起動・設定を並べ、開閉を永続化しない (FR-001)。既存の `thread-list.aui.tsx` の行 (Thread list) と Button で組んだ
   - `elements-settings-panel` (Settings・B): **不採用**。モデル・system prompt・temperature などのアシスタントの設定の部品で、アプリの設定の 4 画面と合わない。既存の Dialog (`components/ui/dialog.tsx`) で全面のダイアログを組んだ
   - `Empty state` (B): 中央の空の状態に使った
   - 取り込んだ部品は無いので、本番の CSP (`style-src 'self'`) に触れる依存は増えていない
@@ -50,7 +50,8 @@
     (`RemoveScroll` → `styleSingleton`) の inline の `<style>` を head に差し込み、本番の CSP がそれを弾く。O-7 でこの Dialog が
     設定と起動の入口になり、起動のたびに開く。失うのは scroll-lock の CSS (スクロールバーの幅の補正と body の overflow の固定) だけで、
     ホイールとタッチの封じは JS のイベントで残る。**CSP を緩めて通さない** (AD-025 §7)。違反を E2E で集める仕組みと、nonce の配信で
-    違反そのものを消すかは roadmap の system-scope (O-7 pr-gate R1 の項目 (1)) に送った
+    違反そのものを消すかは roadmap の system-scope (O-7 pr-gate R1 の項目 (1)) に送った。
+    **失う CSS の記述の正本はこの項** (`AppShell.tsx` の規則の表・spec FR-001・roadmap はここを参照する。pr-gate R2 security L-101)
 
 ## R-05 Cursor の Agent View との対応
 

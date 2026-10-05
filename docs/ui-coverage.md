@@ -20,7 +20,7 @@ SDK: `@anthropic-ai/claude-agent-sdk` 0.3.270
 - **Tier**: `A` (Claude Code の一次概念に直結し、利用者が見ないと判断を誤る) / `B` (無くても判断を誤らない) / `C` (対象外)
 - **経路**: `実行中` / `過去ログ` / `両方` / `なし` (表示していない)
 - **行の単位**: A 節は `SDKMessage` のメンバー 1 つにつき 1 行 (メンバーの中の subtype は備考)。C 節は入力型 1 つにつき 1 行で、判別子に実行時の tool 名を書く
-- **行にしないもの**: 他 domain の一覧・操作画面に出る値 (`SDKSessionInfo` のフィールドなど) は行にしない。ui charter の Out of scope (他 domain の操作 UI は Principle XII の判定対象にしない) による
+- **行にしないもの**: 他 domain の一覧・操作画面に出る値 (`SDKSessionInfo` のフィールドなど) は行にしない。ui charter の Out of scope (他 domain の操作 UI は Principle XII の判定対象にしない) による。`SDKSessionInfo` はそもそも SDK の emit (AD-020 Decision 1 の分母) の外である。O-7 の右のペインの「概要」(ui) も過去のセッションの値 (`gitBranch` / `createdAt` / `lastModified`) を出すが、一覧の行と同じ値の再掲なので行にしない (O-7 pr-gate R2 ui-coverage L-104)
 - **M3 の完了の条件**: Tier A の `後続` の行のうち、割当先が M3 の feature の行が 0 (項目 21 の出力の最後の行で読む)
 
 ### SDK を上げたときの手順
@@ -219,7 +219,7 @@ SDK のメッセージではなく、アプリが SDK の callback・制御・�
 
 ## F element の分類
 
-assistant-ui の element の一覧 (https://www.assistant-ui.com/elements。**2026-10-03 確認で 127** (一覧の名前を数えた数)。AD-019 の 2026-09-13 の数え方 (202) とは registry のページの構成が違い、未分類の 59 要素の一覧は残っていなかったので、今の一覧から引き直した)。Tier A の 35 (AD-019) と PLAN.md §4.3 / §4.4 の名前を当て、残りを分類した。使い道は対応表の行か、`SDK の外: <置き場所>` (SDK の emit を表示しないが、シェル・設定・他 domain の操作 UI で使っている。O-7 で追加。pr-gate R1 ui-coverage M-005) か、`未使用` (入れていない・描いていない)。
+assistant-ui の element の一覧 (https://www.assistant-ui.com/elements。**2026-10-03 確認で 127** (一覧の名前を数えた数)。AD-019 の 2026-09-13 の数え方 (202) とは registry のページの構成が違い、未分類の 59 要素の一覧は残っていなかったので、今の一覧から引き直した)。Tier A の 35 (AD-019) と PLAN.md §4.3 / §4.4 の名前を当て、残りを分類した。使い道は対応表の行か、`SDK の外: <置き場所>` (SDK の emit を表示しない用途 — シェル・設定・他 domain の操作 UI・transcript の空と読み込み中・composer の入力の部品。O-7 で追加。pr-gate R1 ui-coverage M-005) か、`未使用` (入れていない・描いていない)。対応表の行と `SDK の外` の両方に使うときは `/` で並べる。`<置き場所>` は AD-046 Decision 6 の語 (サイドバー・中央のヘッダ・中央の本体・右のペインのタブ・設定のダイアログ) で書き、ダイアログの中身などその語で表せない置き場所はコンポーネントの名前を添える (O-7 pr-gate R2 ui-coverage L-101)。
 
 | element | Tier | 使い道 | 備考 |
 |---|---|---|---|
@@ -232,7 +232,7 @@ assistant-ui の element の一覧 (https://www.assistant-ui.com/elements。**20
 | Artifact card | B | 未使用 | |
 | Assistant modal | C | 未使用 | PLAN §4.4 |
 | Assistant sidebar | C | 未使用 | アプリの画面構成と合わない。O-7 のシェルの左右の面 (サイドバー・右のペイン) は copilot 型の会話の横置きとは役割が違う (AD-046) |
-| Attachment | B | 未使用 | PLAN §4.3 |
+| Attachment | B | SDK の外: 中央の本体の composer と利用者のメッセージ (`thread.aui.tsx` が `attachment.aui.tsx` の部品を組み込み済み) | PLAN §4.3。attachment の adapter を設定していないので、添付は受け付けない (O-7 pr-gate R2 ui-coverage M-005 の残り) |
 | Background runs | B | 未使用 | 実行中の task の一覧 (O-6 で判断) の候補 |
 | Canvas | B | 未使用 | PLAN §4.3 (Canvas split) |
 | Chart | C | 未使用 | MCP の結果への転用は O-5 で判断 |
@@ -243,7 +243,7 @@ assistant-ui の element の一覧 (https://www.assistant-ui.com/elements。**20
 | Command palette | B | 未使用 | O-3 |
 | Comparison | C | 未使用 | Generative |
 | Composer | A | D message-queue | X-2 |
-| Composer attachments | B | 未使用 | |
+| Composer attachments | B | SDK の外: 中央の本体の composer (`thread.aui.tsx` の `ComposerAttachments` / `ComposerAddAttachment`) | adapter を設定していないので、添付は受け付けない (O-7 pr-gate R2 ui-coverage M-005 の残り) |
 | Composer context | B | 未使用 | |
 | Composer mentions | B | 未使用 | E file_suggestions |
 | Composer model picker | B | 未使用 | 起動設定ダイアログで選ぶ (X-4) |
@@ -266,7 +266,7 @@ assistant-ui の element の一覧 (https://www.assistant-ui.com/elements。**20
 | Edit message | B | 未使用 | |
 | Elicitation form | A | A SDKElicitationCompleteMessage / E elicitation | O-5 |
 | Empty state | B | SDK の外: アプリの空の状態 (O-7 の中央・過去のセッションの区画・実行中の Thread の Welcome・過去ログ・設定の 4 画面) | O-3 の Empty states も同じ element |
-| Error state | A | D launch-failure | FailureBanner |
+| Error state | A | D launch-failure / SDK の外: 設定のダイアログ (4 画面の取得の失敗)・サイドバーの過去のセッションの区画・中央の本体の過去ログの取得の失敗 | D launch-failure は element ではなくアプリが自作した `FailureBanner` (`LivePane.tsx`) が描く。`ErrorState` を使うのは SDK の外の 6 か所 (設定の 4 画面・`SessionListScreen`・`ChatScreen`) (O-7 pr-gate R2 ui-coverage L-101) |
 | Feedback dialog | B | 未使用 | |
 | File | B | B user/document | O-6 |
 | File tree | A | C FileReadInput / GlobInput / GrepInput | O-6 |
@@ -335,7 +335,7 @@ assistant-ui の element の一覧 (https://www.assistant-ui.com/elements。**20
 | Thinking indicator | A | B assistant/thinking | 応答中の印 |
 | Thread | A | A SDKAssistantMessage / SDKUserMessage | |
 | Thread list | A | SDK の外: サイドバーの稼働中の区画と過去のセッションの区画の行 (`thread-list.aui.tsx`。session の操作 UI) | 過去のセッションの一覧 (R-2) と監視ビュー (O-1) は session の操作 UI |
-| Thread list sidebar | A | 未使用 | `threadlist-sidebar` は shadcn の SidebarProvider (開閉を cookie に保存・Ctrl+B) を要し、1 つの runtime の thread list を描く。O-7 のサイドバーは 2 つの runtime の一覧 (稼働中・過去) と新規起動・設定を並べ、開閉を永続化しないので、既存の `thread-list.aui.tsx` の行と Button で組んだ (O-7 research R-04。照合の正本は O-7 の PR の説明。R-2 plan の「目標レイアウト ADR が accepted になったら寄せる」の約束はこの照合で閉じた) |
+| Thread list sidebar | A | 未使用 | `threadlist-sidebar` は shadcn の SidebarProvider (開閉を cookie に保存・Ctrl+B) を要し、1 つの assistant-ui の runtime の thread list を描く。O-7 のサイドバーは 2 つの assistant-ui の runtime の一覧 (稼働中・過去) と新規起動・設定を並べ、開閉を永続化しないので、既存の `thread-list.aui.tsx` の行と Button で組んだ (O-7 research R-04。照合の正本は O-7 の PR の説明。R-2 plan の「目標レイアウト ADR が accepted になったら寄せる」の約束はこの照合で閉じた) |
 | Thread search | B | 未使用 | O-3 |
 | Timeline | C | 未使用 | MCP の結果への転用は O-5 で判断 |
 | Todo list | A | C TodoWriteInput | TodoList |
@@ -344,7 +344,7 @@ assistant-ui の element の一覧 (https://www.assistant-ui.com/elements。**20
 | Tool fallback | A | C (Tier B の tool) | ToolFallback |
 | Tool group | A | B assistant/tool_use | ToolGroup。O-2 で transcript の密度 comfortable のとき既定で開く |
 | Tool timeline | B | 未使用 | PLAN §4.3 |
-| Tooltip icon button | B | 未使用 | |
+| Tooltip icon button | B | SDK の外: 中央の本体の Thread の操作ボタン (`components/tooltip-icon-button.tsx`。コピー・編集・送信・下端へなど) | 表示の部品ではなく操作のボタンの部品 (O-7 pr-gate R2 ui-coverage M-005 の残り) |
 | Trace waterfall | B | 未使用 | O-3 |
 | Typing indicator | B | 未使用 | |
 | Voice conversation | C | 未使用 | Voice 系 |

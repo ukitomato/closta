@@ -98,6 +98,9 @@ export function runStateLabel(state: SessionRunState): string {
 /**
  * 一覧の行の状態。run-state と生存フラグの組から決める (`rowStatus`)。
  * とくに `done` は生存なら「応答待ち」、終わっていれば「終了済み」(FR-009)。
+ * **対応表 (`docs/ui-coverage.md`) D 節 session-state の文言の正本** (失敗の理由の文言 `LAUNCH_REJECT_LABELS` は
+ * launch-failure の正本)。変えるときは対応表の該当の行を見る (監視ビューと共有するので ui-coverage-reviewer の発火条件には
+ * 入れていない。O-7 pr-gate R2 ui-coverage M-101)。
  */
 export const SESSION_ROW_STATUS_LABELS = {
   launching: '起動中',
@@ -193,6 +196,15 @@ export function failedCountLabel(count: number): string {
   return `失敗 ${count} 件`
 }
 
+/** 件数の印の `title` (0 件のものは書かない。O-7 pr-gate R2 ux M-101)。 */
+export function attentionSummaryLabel(awaiting: number, failed: number): string {
+  const parts = [
+    awaiting > 0 ? awaitingCountLabel(awaiting) : null,
+    failed > 0 ? failedCountLabel(failed) : null
+  ].filter((part): part is string => part !== null)
+  return `稼働中のセッション: ${parts.join('・')}`
+}
+
 /** 直近の活動の前置き (会話由来の部分と別の要素で出す。FR-006)。 */
 const ACTIVITY_PREFIX_LABELS = {
   approval: '承認を求めています',
@@ -286,13 +298,15 @@ export const LAUNCH_AXIS_LABELS = {
  * 設定へ移る手順を文に含める (O-7 pr-gate R1 ux M-003)。
  */
 export const LAUNCH_EMPTY_STATE_LABELS = {
+  // 「→」は読み上げで「右矢印」になるので「の」でつなぐ (O-7 pr-gate R2 ux M-003)。
   noFolders:
-    '作業フォルダが登録されていません。このダイアログを閉じて、サイドバーの「設定」→「作業フォルダ」で登録してください。',
+    '作業フォルダが登録されていません。このダイアログを閉じて、サイドバーの「設定」の「作業フォルダ」で登録してください。',
   noWslRuntimes:
-    'WSL ランタイムが見つかりません。このダイアログを閉じて、サイドバーの「設定」→「ランタイム」で再検出してください。',
+    'WSL ランタイムが見つかりません。このダイアログを閉じて、サイドバーの「設定」の「ランタイム」で再検出してください。',
   allRuntimesStopped:
     'WSL ランタイムがすべて停止しています。WSL ディストロを起動してから「再評価」を押してください (アプリはディストロを起動しません)。',
-  noProviders: '既定 Provider で起動できます。Provider の登録は設定の「プロバイダ」から行えます。',
+  noProviders:
+    '既定 Provider で起動できます。登録するには、このダイアログを閉じて、サイドバーの「設定」の「プロバイダ」を開いてください。',
   /** 一覧の読み込み中・失敗は空状態と分ける (読み込み中に「登録してください」と案内しない。po M-102)。 */
   foldersLoading: '作業フォルダを読み込んでいます…',
   foldersLoadFailed: '作業フォルダを読み込めませんでした。',
@@ -393,7 +407,7 @@ export const CROSS_BOUNDARY_LABELS = {
 export const FOLDER_RUNTIME_BLOCKED_LABELS = {
   waitingProbe: 'ランタイムの準備 (パス変換の取得) を待っています…',
   probeFailed:
-    'ランタイムの能力確認に失敗しました。再評価してください。繰り返し失敗する場合は設定の「ランタイム」で状態を確認してください。'
+    'ランタイムの能力確認に失敗しました。再評価してください。繰り返し失敗する場合は、このダイアログを閉じて、サイドバーの「設定」の「ランタイム」で状態を確認してください。'
 } as const
 
 /** 前回のセッションが失敗して起動設定ダイアログに戻ったときの理由 (US-1 AC7 / pr-gate M-07)。 */

@@ -360,7 +360,7 @@ export function WorkspaceFoldersScreen(): React.JSX.Element {
           唯一の手がかりになる。起点レベルが画面ごとに違うと、
           遷移後にどこに居るか把握できない。見た目は変えない。
         */}
-        <h1 className="text-lg font-medium">作業フォルダ</h1>
+        <h2 className="text-lg font-medium">作業フォルダ</h2>
       </div>
 
       {/* ── セッション一覧から渡された初期値 (FE-051 / R-2) ────────── */}

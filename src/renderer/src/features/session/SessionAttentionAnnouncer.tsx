@@ -10,7 +10,7 @@ import { announcements } from './session-view'
  *
  * | 規則 | 根拠 |
  * |---|---|
- * | 対象は**見ていないセッション** — `watchedIdOf` (中央に稼働中の会話を出していて、設定のダイアログを開いていないときの選択中) 以外。過去の会話や設定を開いている間は、選ばれていたものも通知する | FR-004 / design-gate R2 po H-101 / O-7 FR-006 |
+ * | 対象は**見ていないセッション** — `watchedIdOf` (定義は `stores/ui.ts` = 013 data-model §1) 以外。過去の会話・設定・起動ダイアログを開いている間は、選ばれていたものも通知する | FR-004 / design-gate R2 po H-101 / O-7 FR-006・pr-gate R2 architecture M-102 |
  * | 承認待ち・失敗に**入った**ときだけ。同じ更新の複数の遷移は 1 つの文 (ストアが `statusSince` の変化を 1 回の `setState` にまとめる) | FR-004 / data-model §1 |
  * | 文は作業フォルダの表示名 (起動時に写した `folderLabel`) と固定の文言だけ。**会話由来の文字列を入れない**。IPC を持たない | FR-004 / design-gate R2 architecture M-101 |
  * | 同じ文が続いても読まれるよう、書き込みのたびに要素を入れ替える | research R-05 |

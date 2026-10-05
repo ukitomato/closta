@@ -853,7 +853,8 @@ total_terms: 86
 - **Counterexamples**: 面の状態 (`focus`・設定・畳み) は `stores/ui.ts` の 1 か所にあり、session のコンポーネントは書かない
   (例外は [ui charter](domains/ui/charter.md) の「面の状態」)。
   画面の ID (`SCREENS`) は O-7 で無くなった。「見ているセッション」(`watchedId`) は `focus` から導く (中央に稼働中の会話を出していて、
-  設定のダイアログを開いていないときの選択中のセッション)。`focus` は中央にどちらの側を出すかであり、キーボードのフォーカス
+  設定のダイアログも起動ダイアログも開いていないときの選択中のセッション。定義の正本は 013 data-model §1 の `watchedIdOf`。
+  O-7 pr-gate R2 architecture M-102)。`focus` は中央にどちらの側を出すかであり、キーボードのフォーカス
   (DOM のフォーカス) ではない。コードの "Pane" (`CenterPane` / `LivePane`) は面の語の「ペイン」(右のペイン。コードは `RightPanel`) ではない。
   OS のシェル (Bash・ログインシェル・`--exec` でシェルを経由しない・transcript の `local_bash`「シェルのコマンド」) とは別 —
   紛れうる文書ではアプリの面を「アプリのシェル」と書く (O-7 pr-gate R1 architecture L-001)

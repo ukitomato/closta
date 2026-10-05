@@ -130,8 +130,12 @@ function SectionHeading({
           {/*
             **表示するのは変換済みのパスか安全な表示用文字列だけ。**
             UNC 接頭辞は境界を越えてこない (FR-042)。
+            1 行に切り詰めるので、見分けに効く末尾も読めるよう全文を title で出す (O-7 pr-gate R2 ux M-102)。
           */}
-          <span className="text-muted-foreground min-w-0 truncate text-xs">
+          <span
+            className="text-muted-foreground min-w-0 truncate text-xs"
+            title={group.cwd?.value ?? group.cwdDisplay ?? '作業ディレクトリ不明'}
+          >
             {group.cwd?.value ?? group.cwdDisplay ?? '作業ディレクトリ不明'}
           </span>
         </div>
@@ -395,7 +399,7 @@ function SessionMeta({ session }: { session: SessionSummaryDTO }): React.JSX.Ele
         「名前が出ないと訳語だけの差になる」退行がそのまま残っていた。
       */}
       {session.cwdDisplay !== null && session.cwdDisplay.length > 0 && (
-        <span className="min-w-0 truncate">
+        <span className="min-w-0 truncate" title={session.cwdDisplay}>
           <span className="sr-only">作業ディレクトリ </span>
           {session.cwdDisplay}
         </span>
@@ -898,8 +902,11 @@ export function SessionListScreen({
                 **取得時刻を必ず出す** (FR-034 / SC-012)。
                 正本はアプリ外にあり、鮮度は原理的に保証できない (Principle X / R-10)。
               */}
+              {/* 待っている間は「未取得」(止まって見える語) と言わない (O-7 pr-gate R2 ux L-102)。 */}
               {sessions.index === null
-                ? '未取得'
+                ? sessions.loading
+                  ? '取得中…'
+                  : '未取得'
                 : `取得時刻 ${formatSessionTime(sessions.index.fetchedAt)}`}
               {/*
                 **「試した」で断言しない** (pr-gate Round 4 / 不変条件 5 / UX3-005)。

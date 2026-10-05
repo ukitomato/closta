@@ -5,6 +5,7 @@ import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/components/ui
 import { ResolutionScreen } from '@/features/folder-runtime-resolution/ResolutionScreen'
 import { ProviderScreen } from '@/features/provider/ProviderScreen'
 import { RuntimeListScreen } from '@/features/runtime-list/RuntimeListScreen'
+import { SESSION_LIST_LABELS } from '@/features/session/labels'
 import { SessionNavBadge } from '@/features/session/SessionNavBadge'
 import { WorkspaceFoldersScreen } from '@/features/workspace-folders/WorkspaceFoldersScreen'
 import { cn } from '@/lib/utils'
@@ -31,7 +32,7 @@ const isSettingsOpen = (s: UiState): boolean => s.settings.open
  * | Esc と閉じるボタンで閉じ、開いた元の要素 (「設定」のボタン・一覧の「登録」のボタンなど) にフォーカスを戻す。元が消えていたらサイドバーの「設定」へ | FR-008 / US-3 AC2 / pr-gate R1 a11y M-003 |
  * | 外側 (四辺の余白) の押下では閉じない — 入力中の登録・Provider のフォームを誤って捨てない | pr-gate R1 ux M-007 |
  * | 閉じたら中の画面を unmount する (Radix の Dialog は閉じると中身を外す)。覚えるのは項目の id だけ。Provider の画面の平文の秘密を残さない | FR-008 |
- * | 左の列に承認待ち・失敗の件数の印を置く (サイドバーの印はダイアログの下に隠れる) | O-1 USER 決定 (設定を開いている間も見せる) / pr-gate R1 ux H-001 |
+ * | 左の列に承認待ち・失敗の件数の印を、見える「稼働中」の語を添えて置く (サイドバーの印はダイアログの下に隠れる) | O-1 USER 決定 (設定を開いている間も見せる) / pr-gate R1 ux H-001・R2 M-101 |
  * | 画面をまたぐ受け渡し (`seedFolderDraft`) は「作業フォルダ」の項目で開く形にする | FR-009 |
  * | registry の `Settings` は外部の取得・画面の構成が合わないので、既存の Dialog で組む (照合の結果の正本は PR の説明) | Principle XIII / research R-04 |
  */
@@ -64,7 +65,8 @@ export function SettingsDialog(): React.JSX.Element {
         <div className="border-border flex min-h-0 flex-col gap-2 border-r p-3">
           <div className="flex flex-wrap items-center gap-1 px-2">
             <DialogTitle className="text-base">{SHELL_LABELS.settingsTitle}</DialogTitle>
-            <SessionNavBadge />
+            {/* 「設定」の題の横では何の件数か読めないので、見える語を添える (pr-gate R2 ux M-101)。 */}
+            <SessionNavBadge context={SESSION_LIST_LABELS.heading} />
           </div>
           <nav aria-label={SHELL_LABELS.settingsNav} className="flex flex-col gap-0.5">
             {SETTINGS_SECTIONS.map((id) => (

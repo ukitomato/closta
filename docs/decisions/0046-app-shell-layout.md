@@ -35,7 +35,7 @@ superseded-by: []
 
 ## Consequences
 
-- 面の状態は `stores/ui.ts` の 1 か所 (中央の focus・設定・畳み) になり、画面の ID (`SCREENS`) は無くなる。focus はシェルが session のストアの選択を購読して決め、session のコンポーネントは面の状態を書かない。「見ているセッション」(読み上げと承認待ちの移動の基準) は focus から導く
+- 面の状態は `stores/ui.ts` の 1 か所 (中央の focus・設定・畳み) になり、画面の ID (`SCREENS`) は無くなる。focus はシェルが session のストアの選択を購読して決め、session のコンポーネントは面の状態を書かない。「見ているセッション」(読み上げと承認待ちの移動の基準) は focus から導く (下の「訂正」節)
 - 稼働中の thread list の assistant-ui の runtime (`AssistantRuntimeProvider`。`AgentRuntime` ではない) の provider をシェルの全体に上げる。過去の一覧と transcript は内側に自分の provider を持つ (入れ子)
 - 過去のセッションの区画はアプリの起動の直後からマウントされる。R-2 の「ランタイムの検出より先にセッションを列挙しない」を保つため、初回の取得はランタイムの一覧の後にする
 - Principle VIII (B) の延期条件 (AD-024 #18 / AD-028 §5 の「目標レイアウト ADR が accepted」) は、本 ADR の accepted で満たされる
@@ -67,3 +67,5 @@ spec 013 の FR-009 と plan の FE-011 と食い違っていた (AD-031 の訂�
   focus には触れない
 
 運用上の正本は ui charter の Cross-domain dependencies の「面の状態」で、glossary・data-model・`stores/ui.ts` はそこを参照する。
+この節は訂正した時点の事実の記録であり、その後の運用で書き換えるのは ui charter の側である (この節は書き換えない。O-7 pr-gate R2
+architecture L-102。たとえば R2 で足した「シェルが session のストアの `dismissLaunchNotice` を呼ぶ」は ui charter にだけある)。

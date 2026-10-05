@@ -89,6 +89,8 @@ export function useSessions(): SessionsView {
       })
     // 初回の取得の前に main が配る「未取得の索引」(取得時刻 0。判定バッチの通知で再グループしたもの) は受けない。
     // 受けると取得中の表示が外れ、取得時刻 1970/01/01 が出る (pr-gate R1 platform-boundary L-004)。
+    // 「取得時刻 0 = 未取得」は DTO の契約に無い main の初期値 (`session-service.ts` の `let fetchedAt = 0`) に依る。
+    // main の側で取得前の publish を止めたら、この除外を外す (roadmap の system-scope (4)。pr-gate R2 platform-boundary L-101)。
     const unsubscribe = capability().onSessionsChanged((next) => {
       if (next.fetchedAt === 0) return
       setIndex(next)

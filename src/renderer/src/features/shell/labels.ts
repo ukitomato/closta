@@ -53,7 +53,8 @@ export const SETTINGS_SECTION_LABELS: Record<SettingsSection, string> = {
 /**
  * 「概要」の項目の見出し (data-model §5)。起動の軸の名前は起動ダイアログの見出し (`LAUNCH_AXIS_LABELS`) と同じ文字列を使う
  * (軸の名前を変えたときに概要だけが古く残らない。code-gate convention L-004)。モデルと権限モードは実行中に変わりうる
- * (SDK の `status` / `init`。O-4 / O-5 が対応表の行で扱う) ので、起動時の値であることを見出しで示す (pr-gate R1 ui-coverage M-004)。
+ * (SDK の `status` / `init` と `set_permission_mode` / `set_model`。O-4・O-5・X-6 が対応表の行で扱う) ので、起動時の値で
+ * あることを見出しで示す (pr-gate R1 ui-coverage M-004・R2 L-102)。付けるのは対応表に実行中の変化の行がある 2 軸だけ。
  */
 export const OVERVIEW_LABELS = {
   provider: LAUNCH_AXIS_LABELS.provider,

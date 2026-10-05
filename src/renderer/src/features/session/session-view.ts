@@ -76,6 +76,8 @@ export function deriveSessionView(
  * `launching` は、最初のプロンプト待ちなら「プロンプト待ち」、最初のプロンプトを送った後なら「応答中」、
  * 状態通知がまだ届いていなければ「起動中」(pr-gate R1 po H-001)。
  * 終了を押した後は、`claude` の終わりを受けるまで「終了中」(「起動中」に戻して見せない。pr-gate R2 po L-103)。
+ * **対応表 (`docs/ui-coverage.md`) D 節 session-state の判定の正本。** 変えるときは対応表の該当の行を見る
+ * (監視ビューと共有するので ui-coverage-reviewer の発火条件には入れていない。O-7 pr-gate R2 ui-coverage M-101)。
  */
 export function rowStatus(view: SessionView): SessionRowStatus {
   if (view.runState === 'error') return 'failed'
@@ -431,8 +433,8 @@ export function nextAwaiting(
 }
 
 /**
- * 支援技術に読ませる文 (spec FR-004 / data-model §2)。`watchedId` (見ているセッション。O-7 の `watchedIdOf`: 中央に
- * 稼働中の会話を出していて設定のダイアログを開いていないときだけ選ばれているもの) 以外のうち、承認待ち・失敗に**入った**ものを 1 つの文にまとめる。
+ * 支援技術に読ませる文 (spec FR-004 / data-model §2)。`watchedId` (見ているセッション。定義は `stores/ui.ts` の
+ * `watchedIdOf` = 013 data-model §1。O-7 pr-gate R2 architecture M-102) 以外のうち、承認待ち・失敗に**入った**ものを 1 つの文にまとめる。
  * **会話由来の値を引数に取らない** — 文は作業フォルダの表示名と固定の文言だけで組む。
  */
 export function announcements(

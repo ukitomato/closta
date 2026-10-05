@@ -157,7 +157,9 @@ workspace として扱われていたら `packages:` の有無を先に確認す
   `ThreadListNew` などが参照 0 のまま残っていた)。knip などの追加を判断する (2) import の並びの規則が無い (eslint-plugin-import の
   `order` などを入れるか) (3) a11y / ux reviewer の `auto_invoke_patterns` が `*.tsx` だけで、文言の表 (`features/*/labels.ts`) だけを
   変える PR では起動しない (O-7 で `features/shell/labels.ts` と `panel-tabs.ts` だけは足した。session / session-list / chat の
-  `labels.ts` は残る) (4) docs の制御文字 (ESC / TAB。PowerShell の二重引用符の文字列の backtick が化けたもの) を検出する検査が無い
+  `labels.ts` は残る。ui-coverage-reviewer には O-7 の pr-gate R2 で `session/ApprovalCard.tsx` と `shell/labels.ts` を足した。D 節の
+  文言の正本 `session/labels.ts`・`session-view.ts` は監視ビューと共有で文言だけの変更でも起動するので入れず、ファイルの側に
+  「変えるときは対応表の行を見る」と書いた。機械で引く形は持ち主が判断する) (4) docs の制御文字 (ESC / TAB。PowerShell の二重引用符の文字列の backtick が化けたもの) を検出する検査が無い
   (O-7 で `docs/ui-coverage.md` の F 節の element 名が化け、名前で引けなくなっていた)。持ち主 = 本 E2E / 検証基盤 feature
 - **O-7 の pr-gate R1 が見つけた system-scope の項目 (O-7 起点。記録)** — 持ち主 = 本 E2E / 検証基盤 feature (別に書いたものを除く)
   (1) **CSP の違反を E2E で集める仕組みが無い** (security M-001)。既存の Dialog (Radix) は開くたびに react-remove-scroll-bar の
@@ -169,15 +171,34 @@ workspace として扱われていたら `packages:` の有無を先に確認す
   (3) **`runtime-store.ts` の検出を束ねる (single-flight)** (platform-boundary M-001)。`list()` が進行中の検出を待たずにもう 1 本起こす
   ので、O-7 で起動直後にマウントされる 2 つの呼び出し元 (`RunningSessionsProvider` の `useRuntimes` と `useSessions`) の数だけ
   wsl.exe が増える (起動時に最大 9 本)。並行の `list()` と「`list()` の後の `snapshot()` が WSL の descriptor を含む」(FR-016 の main
-  側の前提) のテストも足す。持ち主 = 次に `runtime-store.ts` を触る feature (それまでは本 E2E / 検証基盤 feature)
+  側の前提) のテストも足す。あわせて「`probeAll` の後に解決した `list()` が判定の結果を消さない」のテスト (R1 の推奨の (c)。遅れて
+  終わった `detect()` は `byId` を丸ごと置き換え、`list()` の経路は `notify()` を呼ばない) も足す。single-flight を入れたら、過去の区画を
+  マウントした状態で起動時の `probe-batch` を測る (O-7 では未計測。013 quickstart-results。pr-gate R2 platform-boundary M-001 / L-002)。
+  持ち主 = 次に `runtime-store.ts` を触る feature (それまでは本 E2E / 検証基盤 feature)
   (4) **`session-service` の `onRuntimesChanged` / `onFoldersChanged` が初回の取得の前に「未取得の索引」(取得時刻 0) を publish する**
-  (platform-boundary L-004)。O-7 は renderer の側で取得時刻 0 の通知を受けないようにした。main の側で `!loaded` のとき publish しない
+  (platform-boundary L-004)。O-7 は renderer の側で取得時刻 0 の通知を受けないようにした。main の側で `!loaded` のとき publish しない。
+  main で止めたら `useSessions.ts` の取得時刻 0 の除外を外すか、残すなら「取得時刻 0 = 未取得」を `SessionIndexDTO.fetchedAt` の文書に書き
+  `session-service.test.ts` で固定する。それまでは DTO と R-2 の契約に無い main と renderer の取り決め (生産側は `session-service.ts:189` の
+  初期値。pr-gate R2 platform-boundary L-101 / architecture L-104)
   (5) **Constitution 検証の項目 8 が `navigator.*` を見ない** (platform-boundary L-003。001 R1 M-004・016 design-gate R2 L-105 と同じ。
   項目 8 の持ち主に送る)
   (6) **renderer の feature 間の向き (shell → 各 feature。逆は禁止) を機械で強制していない** (architecture L-004。AD-023 の「M3 で肥大
   したら再検討」の契機)。depcruise に `features-not-to-shell` を足すか、AD-023 の再検討として扱う
   (7) **composer の名前と placeholder が英語** (a11y L-007。Principle XV / WCAG 3.1.2。e2e の locator を同時に直す)。持ち主 = O-3
   (UI ラベルの i18n リソース化の判断を持つ)
+- **O-7 の pr-gate R2 が見つけた system-scope の項目 (O-7 起点。記録)** —
+  (1) **表示中のセッションのターンが始まるたびに composer がフォーカスを奪う** (a11y M-101。WCAG 2.4.3 / 3.2 系)。`thread.aui.tsx:579-592`
+  の `ComposerPrimitive.Input` は `unstable_focusOnRunStart` / `unstable_focusOnThreadSwitched` を上書きせず、ライブラリの既定 (どちらも
+  true) のまま。外部ストアの runtime は `isRunning` が false → true に変わるたびに run の開始を出すので、キューに積んだ入力が送られると、
+  サイドバー・右のペイン・中央のヘッダにいた利用者のフォーカスが composer に移る。O-7 で過去の一覧と右のペインが稼働中の会話と同じ画面に
+  並ぶようになり、起きる場面が増えた。`LivePane` の composer で `unstable_focusOnRunStart={false}` にし、`unstable_focusOnThreadSwitched`
+  (行の選択で入力へ移る) を保つかを判断して記録する。テストは「サイドバーの行にフォーカスがある間に表示中のセッションが idle から running に
+  変わっても動かない」。持ち主 = X-6 (実行中のセッションの操作 `set_model` / `set_permission_mode` を足し、`docs/ui-coverage.md` の Settings の行のとおり
+  Composer model picker を照合する。composer の振る舞いを次に触る session の feature)
+  (2) **サイドバーの稼働中の行の「閉じる」で行ごと消えると、フォーカスが body に落ちる** (a11y M-102 の行の経路。WCAG 2.4.3)。
+  `RunningSessionList.tsx:538-549` の「閉じる」は押したボタンを含む行を消す (X-5 からある)。O-7 は中央の経路 (中央の「閉じる」・表示中の
+  過去の行が消える) だけを `useFocusRescue` で拾った (013 data-model §1)。行の経路は隣の行の Trigger か稼働中の区画の見出しへ移す。
+  持ち主 = 監視ビューの行を触る次の feature (上の「`running-session-store.ts` の切り出し」の (3) の行の部品の切り出しとあわせる)
 - **実機計測ハーネス (`perf/`) の ADR 化 (O-1 起点。pr-gate R1 architecture M-003。system-scope)** —
   O-1 は「CI 外・実資格情報・自動操作」の検証経路を、ADR を起こさず AD-038 D2 の類推として入れた (`specs/010-session-monitoring-view/plan.md`
   の ADR 節、`eslint.config.mjs` の ignores、`perf/tsconfig.json`)。決めごとが plan・コードの注記・`docs/discovery.md` に分散している。
@@ -206,8 +227,10 @@ workspace として扱われていたら `packages:` の有無を先に確認す
   理由が無い。O-3 の i18n リソース化はこの切り出しの後に行う)。**O-7 も当たらない** (USER 決定 2026-10-05。上の (1)〜(3) が名指す
   派生値の追跡と行の部品 (`RowStatusBadge` など) は変えていない。O-7 が変えたのは、区画の要素 (`nav` → `section`)・`ThreadListNew` を
   外す・選択の操作の通知 `selectionSeq`・共通の行の部品 `thread-list.aui.tsx` の選択の強調の有無と押下の通知 (選んだ行を押し直したときに
-  中央を切り替えるため)・`nextAwaiting` / `selectNextAwaiting` の「見ているセッション」の引数・一覧の見出しの件数の印。
-  行数は `RunningSessionList.tsx` 531 → 550、`running-session-store.ts` 606 → 613。code-gate convention M-007)
+  中央を切り替えるため)・`nextAwaiting` / `selectNextAwaiting` の「見ているセッション」の引数・一覧の見出しの件数の印・
+  起動の告知を消す公開の操作 `dismissLaunchNotice` (呼ぶのは ui のシェル)・`MonitorSummary` が `stores/ui.ts` の面の状態
+  (`focus`・設定と起動ダイアログの開閉) を読んで `watchedIdOf` を導くこと。
+  行数は `RunningSessionList.tsx` 531 → 552、`running-session-store.ts` 606 → 632。code-gate convention M-007 / pr-gate R2 architecture M-101)
 - **E2E stub の production-inert 性の自動 backstop (X-2 起点。pr-gate arch-M-002。system-scope)** —
   `createE2eCapability` (`src/main/app/e2e-capability.ts`) の配線ゲート `!app.isPackaged && CLOSTA_E2E==='1'` が env 単独ゲートへ
   退行しても CI が落ちる回帰検査が無い (Vitest は electron `app` を mock しにくく、index.ts の分岐を直接 assert できない)。
@@ -290,7 +313,7 @@ X-2 (日本語 composer) で判断する** — R-3 は過去ログの表示で�
 |---|---|---|---|---|---|
 | 10 | O-1 | セッション監視ビュー | `session` | X-5 | — / design-gate R2 PASS / code-gate PASS / pr-gate R2 PASS (Critical 0) / **完了** (PR #10。[010 spec](../specs/010-session-monitoring-view/spec.md)。稼働中セッション一覧の拡張。実機計測 SC-005 は有効な回 0 件で、利用者が 2026-10-02 に閉じた (spec FR-012 の改訂の行)。残した宿題は O-3 の「義務 (O-1 から)」) |
 | 11 | O-2 | `docs/ui-coverage.md` の確立（**SDK の型と機械照合**。割当の確定）+ Tier B/C 再棚卸し + 実行中の tool の結果と Hook / Background task の行 + transcript の情報密度 | `ui` | O-1 | SPIKE-12 **完了** / design-gate R2 PASS / code-gate PASS / pr-gate R3 PASS (Critical 0) / **完了** (PR #11。[011 spec](../specs/011-ui-coverage/spec.md)。表示の実装の残りは O-4 / O-5 / O-6 に割り当てた。P-4 (ui-coverage-reviewer) を含む) / **義務 (O-1 から)**: (1) Hook / Background task の表示の割当と、状態の保持が要る場合の持ち主 domain の判断 (session は含めないと決めた。AD-020 Consequences) (2) Tool group の既定 open 化 (AD-035 の「O-1 候補」) (3) transcript の情報密度の切替 (監視ビューの行の密度は O-1 が持つ) (4) 直近の活動の tool ごとの整形 (対象のファイル名やコマンドの先頭語だけを出す。tool 入力の先頭に秘密が出うる点も扱う) |
-| 12 | O-7 | アプリのシェル (タブのビューを廃し、サイドバー・中央・右のペインの 3 面に) | `ui` | O-2 | — / [AD-046](decisions/0046-app-shell-layout.md) / design-gate R1 PASS / code-gate PASS / pr-gate R1 PASS (Critical 0。High を直して R2 で再検証) ([013 spec](../specs/013-ui-app-shell/spec.md))。quickstart V-3 (AD-046 Confirmation・SC-008 の実機の目視) は利用者が 2026-10-05 に全項目 OK と確かめた。**completed にする前に**: PR の CI の e2e (composer の基準画像を含む) の合否を quickstart-results に記録する。右のペインは枠・タブの表・「概要」まで (他のタブは O-4〜O-6 と OPT-panel)。**`running-session-store.ts` / `RunningSessionList.tsx` の切り出し (上の system-scope) の持ち主には当たらない** (USER 決定 2026-10-05。O-7 が変えたものの一覧は切り出しの項目に書いた) |
+| 12 | O-7 | アプリのシェル (タブのビューを廃し、サイドバー・中央・右のペインの 3 面に) | `ui` | O-2 | — / [AD-046](decisions/0046-app-shell-layout.md) / design-gate R1 PASS / code-gate PASS / pr-gate R1 PASS (Critical 0。High を直して R2 で再検証) / pr-gate R2 PASS (Critical 0 / High 0) ([013 spec](../specs/013-ui-app-shell/spec.md))。quickstart V-3 (AD-046 Confirmation・SC-008 の実機の目視) は利用者が 2026-10-05 に全項目 OK と確かめた。**completed にする前に**: R2 の Medium を直した後、quickstart V-3b (R2 の修正の見た目) と PR の CI の e2e (composer の基準画像を含む) の合否を quickstart-results に記録する。右のペインは枠・タブの表・「概要」まで (他のタブは O-4〜O-6 と OPT-panel)。**`running-session-store.ts` / `RunningSessionList.tsx` の切り出し (上の system-scope) の持ち主には当たらない** (USER 決定 2026-10-05。O-7 が変えたものの一覧は切り出しの項目に書いた) |
 | 13 | O-3 | Thread 検索と observability | `ui` | O-2 / O-7 | — / **義務 (O-7 から)**: サイドバーの過去のセッションの区画に検索を足すときに、(i) 稼働中の区画が上限まで伸びたときの過去の区画の高さ (「列挙の結果」を全部が成功なら 1 行に要約するか、最小の高さを上げるか。O-7 pr-gate R1 ux M-008)、(ii) グループを region のままにするか (a11y L-006)、(iii) 全画面 (シェル) の基準画像を足すか (architecture M-002。上の E2E / 検証基盤の項目) を判断する ([013 data-model §3](../specs/013-ui-app-shell/data-model.md)) / **義務 (X-4 から)**: session charter KPI「再利用率」の計測経路 (起動元 `preset` / `manual` のローカル利用ログ。AD-041 (h)) / **義務 (O-1 から)**: (1) UI ラベルの i18n リソース化の判断 (Constitution Principle XV の期限 M3。`target-finder.ts` の 2 本を含める) (2) <a id="o3-kpi-smoothness"></a>**session charter KPI「並列時の滑らかさ」の実機計測の宿題** (X-5 → O-1 と繰り越し、O-1 では有効な回 0 件で利用者が閉じた。[O-1 quickstart-results V-3](../specs/010-session-monitoring-view/quickstart-results.md)): (a) `perf/` の出力に窓の終わりの行の状態の内訳 (応答待ち・承認待ち・失敗) を足す — **SC-005 の出力の許可リストの変更なので利用者の承認が要る** (b) 10 本が窓のあいだ応答を流し続けるように、プロンプトか有効な回の条件を見直す (c) 行の切り替え (charter Journey 3 の手順 3。O-1 の 1〜3 回目で 100〜275ms の long task) も含めて測り直す。**O-7 から行の切り替えはシェルの中央の切り替え (稼働中と過去の会話のあいだを含む) になり、サイドバーに過去のセッションの一覧が常に並ぶ** ので、O-1 / X-5 の値と比べるときはこの基準の変化を並べて書く (O-7 のビルドでの E2E の値は [013 quickstart-results](../specs/013-ui-app-shell/quickstart-results.md) に記録した)。**O-7 で perf の起動と行の選択の locator を直したが、perf は実行していない** — 直した手順を実機で確かめるのも本義務を引き継ぐ feature (O-7 pr-gate R1 po L-003)。E2E の 50ms 超の long task が X-5 の 0〜10 件から O-1 で 33 件に増えた点も比較の基準として並べる。**観測点 `receivedMessages` は O-2 から tool の結果の送り直しと Hook / task の行の作成・更新も数える** (O-2 data-model §6) ので、O-1 / X-5 の値と比べるときはこの基準の変化を並べて書く (d) 着手時に上の system-scope の「実機計測ハーネス (`perf/`) の ADR 化」が未了なら、O-3 で proposed の ADR を起こしてから perf の安全柵・出力を変える (O-1 pr-gate R2 architecture L-101) |
 | 14 | O-4 | 計量と制限の表示 | `ui` | O-2 / O-7 | — / **右のペインのタブの候補 (O-7 から)**: Context display・Cost meter (AD-046 のタブの表に足す。最初に右のペインのタブを足す feature なので、タブのテストは `features/shell/AppShell.test.tsx` (O-7 で 700 行を超えた) に追記せず、共通の setup を `test-support/` に出して分ける。O-7 code-gate convention M-008 で分割を見送った分。**2 つ目のタブを足すときに tablist に矢印キーと roving tabindex を入れる** (WAI-ARIA APG の Tabs pattern。O-7 pr-gate R1 a11y M-004)) / **対応表の割当 (O-2 から)**: `result` の**失敗の理由** (subtype の区別・`errors`。今は全部「Provider の認証/接続」と出る。理由ごとの文言のテストを足す。**session の契約の拡張を伴う** — `session-core.ts` の `ResultTermination` (`complete` / `provider-error`) と失敗の理由キーを広げる。X-1 FR-030 (認証の失敗を黙って完了にしない) を保つ。持ち主の確認は O-4 の design で session charter と合わせて行う)・費用・使用量・ターン数・`permission_denials`、`rate_limit_event` (Quota banner)、`api_retry`、`status` (権限モードの変化・圧縮中・圧縮の失敗)、`thinking_tokens`、`tool_progress` (tool の経過時間)、コンテキストの使用量 (`get_context_usage`。Context display)、Cost meter (`get_session_cost` / `get_usage`)、task の進捗 (`task_progress`)。対象の行は `docs/ui-coverage.md` で `後続: O-4` の行 |
 | 15 | O-5 | MCP・Elicitation・プラグイン・コマンドの表示 | `ui` | O-2 / O-7 | — / **右のペインのタブの候補 (O-7 から)**: Server panel / **対応表の割当 (O-2 から)**: セッションの構成 (`init` の `model` / `tools` / `slash_commands`)、MCP の Server panel (`init` の `mcp_servers`・MCP 系の組み込み tool `RefreshMcpTools`・MCP の制御要求 `mcp_status` / `mcp_call` / `mcp_message` / `mcp_set_servers` / `mcp_reconnect` / `mcp_toggle`・MCP の resource の tool)、Elicitation form (`elicitation_complete`・制御要求 `elicitation`)、`AskUserQuestion` の応答 UI (Elicitation とともに**応答を session の control 経路で返す** — session の契約の拡張を伴う)、`request_user_dialog`、`plugin_install` / `reload_plugins` / `reload_skills`、`commands_changed` (slash command の一覧)、`auth_status`、MCP の tool の表示、Tier C の Data table / Chart / Timeline / Diagram を MCP の結果に転用するかの判断。**操作画面 (MCP サーバーの追加・削除など) は含めない**。対象の行は `後続: O-5` |

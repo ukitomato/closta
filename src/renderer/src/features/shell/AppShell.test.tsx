@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import userEvent, { PointerEventsCheckLevel } from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { axe } from 'vitest-axe'
 
@@ -159,6 +159,7 @@ interface Harness {
   readonly push: (updates: readonly SessionStatusUpdate[]) => void
   readonly container: HTMLElement
   readonly launchMock: ReturnType<typeof vi.fn>
+  readonly sendMock: ReturnType<typeof vi.fn>
 }
 
 let detach: (() => void) | null = null
@@ -202,6 +203,7 @@ async function setup(
   let listener: ((u: readonly SessionStatusUpdate[]) => void) | null = null
   const launch = vi.fn()
   for (const id of ids) launch.mockResolvedValueOnce({ status: 'launching', sessionId: id })
+  const send = vi.fn().mockResolvedValue(undefined)
   const cap = installCapability({
     listFolders: () =>
       Promise.resolve({
@@ -217,7 +219,7 @@ async function setup(
     killSession: vi.fn(async () => {}),
     endSession: vi.fn(async () => {}),
     interruptSession: vi.fn(async () => {}),
-    sendPrompt: vi.fn(async () => {}),
+    sendPrompt: send,
     onSessionStatus: (l) => {
       listener = l
       return () => {
@@ -258,6 +260,7 @@ async function setup(
     store,
     container,
     launchMock: launch,
+    sendMock: send,
     emit: (sessionId, event) =>
       act(() => ports.get(sessionId)?.onmessage?.({ data: JSON.stringify(event) })),
     push: (updates) => act(() => listener?.(updates))
@@ -481,7 +484,8 @@ describe('サイドバーの畳み (US-1 AC8) と 1 回の操作で届く入口 
     expect(
       within(sidebar()).getByRole('button', { name: SHELL_LABELS.settings })
     ).toBeInTheDocument()
-    expect(screen.queryByTestId('past-sessions')).toBeNull()
+    // 開いたときの中身は外さずに隠す (pr-gate R2 ux M-103)。
+    expect(screen.getByTestId('past-sessions')).not.toBeVisible()
     await userEvent.click(
       within(sidebar()).getByRole('button', { name: SHELL_LABELS.expandSidebar })
     )
@@ -818,6 +822,10 @@ describe('pr-gate R1 の負の経路 (O-7)', () => {
     expect(await within(dialog).findByTestId('session-nav-awaiting')).toHaveTextContent(
       '承認待ち 1 件'
     )
+    // 「設定」の題の横では何の件数か読めないので、見える語と title を添える (pr-gate R2 ux M-101)。
+    const badge = within(dialog).getByTestId('session-nav-badge')
+    expect(badge).toHaveTextContent('稼働中')
+    expect(badge).toHaveAttribute('title', '稼働中のセッション: 承認待ち 1 件')
   })
 
   it('起動ダイアログを Esc で閉じると、押した「新規起動」にフォーカスが戻る (a11y H-001)', async () => {
@@ -869,9 +877,10 @@ describe('pr-gate R1 の負の経路 (O-7)', () => {
     await userEvent.click(opener())
     const dialog = await screen.findByTestId('settings-dialog')
     await userEvent.click(within(dialog).getByRole('button', { name: 'プロバイダ' }))
-    fireEvent.change(await within(dialog).findByTestId('provider-secret'), {
-      target: { value: 'sk-plain' }
-    })
+    const typed = (await within(dialog).findByTestId('provider-secret')) as HTMLInputElement
+    fireEvent.change(typed, { target: { value: 'sk-plain' } })
+    // 前提: 秘密が入った (入らないまま閉じると、空の確認が黙って空振りする。pr-gate R2 security L-102)。
+    expect(typed.value).toBe('sk-plain')
     await userEvent.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByTestId('settings-dialog')).toBeNull())
     await userEvent.click(opener())
@@ -946,9 +955,12 @@ describe('pr-gate R1 の負の経路 (O-7)', () => {
     const overview = await within(screen.getByTestId('right-panel')).findByTestId('overview')
     expect(overview).toHaveTextContent('高')
     expect(overview).not.toHaveTextContent('high')
-    expect(overview).toHaveTextContent(OVERVIEW_LABELS.model)
+    // 定数どうしではなく文字列で確かめる (見出しを戻すと落ちる。pr-gate R2 ui-coverage L-102)。
+    expect(OVERVIEW_LABELS.model).toBe('起動時のモデル')
+    expect(OVERVIEW_LABELS.permissionMode).toBe('起動時の権限モード')
+    expect(overview).toHaveTextContent('起動時のモデル')
     expect(overview).toHaveTextContent('claude-custom') // カタログに無ければ ID
-    expect(overview).toHaveTextContent(OVERVIEW_LABELS.permissionMode)
+    expect(overview).toHaveTextContent('起動時の権限モード')
   })
 
   it('長い日本語の題とフォルダ名は 1 行に切り詰め、全文は title で読める (po M-005 / a11y M-006 / ux H-003)', async () => {
@@ -973,6 +985,8 @@ describe('pr-gate R1 の負の経路 (O-7)', () => {
     ]
     const h = await setup({ ids: [A] })
     await selectRunning(0)
+    // 前提: 外側 (稼働中) の composer は有効 (無効なら下の確認は入れ子と関係なく通る。pr-gate R2 security L-102)。
+    expect(within(center()).getByRole('textbox', { name: 'Message input' })).toBeEnabled()
     await selectPast(0)
     await within(center()).findByText('過去の応答')
     const composer = within(center()).getByRole('textbox', { name: 'Message input' })
@@ -980,6 +994,7 @@ describe('pr-gate R1 の負の経路 (O-7)', () => {
     const before = h.store.getState().sessions[A]?.messages.length
     await userEvent.type(composer, 'こんにちは{Enter}')
     expect(h.store.getState().sessions[A]?.messages.length).toBe(before)
+    expect(h.sendMock).not.toHaveBeenCalled()
   })
 
   it('vitest-axe: 稼働中の会話・右のペインを開いた状態・畳んだサイドバー・起動ダイアログでも違反 0 (a11y M-007)', async () => {
@@ -995,5 +1010,170 @@ describe('pr-gate R1 の負の経路 (O-7)', () => {
     await userEvent.click(within(sidebar()).getByRole('button', { name: SHELL_LABELS.newSession }))
     const host = await screen.findByTestId('launch-dialog-host')
     expect((await axe(host, rules)).violations).toEqual([])
+  })
+})
+
+/**
+ * いちばん上のダイアログの外側 (overlay) を押す。Radix の DismissableLayer は外側の押下の購読をマウントの次の tick で
+ * 始め、pointerdown の後の click まで待って閉じるので、user-event で一連の押下を送る。overlay は body の
+ * `pointer-events: none` を継ぐことがあるので、user-event の確認は外す。
+ */
+async function pressOutside(): Promise<void> {
+  await act(() => new Promise((resolve) => setTimeout(resolve, 0)))
+  const overlays = document.querySelectorAll<HTMLElement>('[data-slot="dialog-overlay"]')
+  const overlay = overlays[overlays.length - 1]
+  expect(overlay).toBeDefined()
+  await userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never }).click(overlay!)
+}
+
+describe('pr-gate R2 の負の経路 (O-7)', () => {
+  it('中央に出していない失敗したセッションを行の「閉じる」で閉じると、次の「新規起動」に古い失敗の告知が出ない (po M-101 / ux M-004)', async () => {
+    const h = await setup({ ids: [A, B] })
+    await selectRunning(1) // B を中央に出す
+    expect(h.store.getState().selectedId).toBe(B)
+    h.emit(A, { kind: 'failure', reasonKey: 'provider-error' })
+    h.push([{ sessionId: A, state: 'error', reasonKey: 'provider-error', claudeAlive: false }])
+    await userEvent.click(within(runningRows()[0]!).getByRole('button', { name: '閉じる' }))
+    expect(h.store.getState().order).toEqual([B])
+    expect(center()).toHaveAttribute('data-focus', 'running')
+    expect(screen.queryByTestId('launch-dialog-host')).toBeNull()
+    expect(h.store.getState().launch.previousFailure).toBeNull()
+    await userEvent.click(within(sidebar()).getByRole('button', { name: SHELL_LABELS.newSession }))
+    const host = await screen.findByTestId('launch-dialog-host')
+    expect(within(host).queryByTestId('previous-failure')).toBeNull()
+  })
+
+  it('起動ダイアログも設定のダイアログも外側の押下では閉じない。入れ子の確認のダイアログは外側の押下と Esc で内側だけ閉じる (ux M-104 / M-007 / spec Edge Cases)', async () => {
+    await setup()
+    await userEvent.click(within(sidebar()).getByRole('button', { name: SHELL_LABELS.newSession }))
+    await screen.findByTestId('launch-dialog-host')
+    await pressOutside()
+    expect(screen.getByTestId('launch-dialog-host')).toBeInTheDocument()
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByTestId('launch-dialog-host')).toBeNull())
+
+    await userEvent.click(within(sidebar()).getByRole('button', { name: SHELL_LABELS.settings }))
+    const dialog = await screen.findByTestId('settings-dialog')
+    await pressOutside()
+    expect(screen.getByTestId('settings-dialog')).toBeInTheDocument()
+
+    // 入れ子: 「作業フォルダ」の「登録を解除」の確認。外側の押下は内側 (既定のまま閉じる) だけを閉じる — 上の 2 つが
+    // 閉じないのは押下が届かないからではないことの対照でもある。
+    await userEvent.click(
+      within(within(dialog).getByRole('navigation', { name: SHELL_LABELS.settingsNav })).getByRole(
+        'button',
+        { name: '作業フォルダ' }
+      )
+    )
+    const openConfirm = async (): Promise<void> => {
+      await userEvent.click(await within(dialog).findByRole('button', { name: '登録を解除' }))
+      expect(await screen.findByRole('dialog', { name: '登録を解除しますか' })).toBeInTheDocument()
+    }
+    await openConfirm()
+    await pressOutside()
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: '登録を解除しますか' })).toBeNull()
+    )
+    expect(screen.getByTestId('settings-dialog')).toBeInTheDocument()
+    await openConfirm()
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: '登録を解除しますか' })).toBeNull()
+    )
+    expect(screen.getByTestId('settings-dialog')).toBeInTheDocument()
+  })
+
+  it('サイドバーを畳んで開いても過去の区画は同じもののまま (絞り込みと開いたグループを失わない)。畳んだときに中にあったフォーカスは開閉のボタンへ (ux M-103 / po L-101)', async () => {
+    await setup({ ids: [A] })
+    await pastRows()
+    const past = screen.getByTestId('past-sessions')
+    const toggle = within(sidebar()).getByRole('button', { name: SHELL_LABELS.collapseSidebar })
+    act(() => within(runningRows()[0]!).getAllByRole('button')[0]!.focus())
+    // 自動の畳みと同じ経路 (利用者の押下を通らない)。
+    act(() => useUiStore.getState().setSidebarCollapsed(true))
+    expect(past).not.toBeVisible()
+    await waitFor(() => expect(toggle).toHaveFocus())
+    await userEvent.click(toggle)
+    expect(screen.getByTestId('past-sessions')).toBe(past)
+    expect(past).toBeVisible()
+  })
+
+  it('未登録グループの見出しのパスは全文を title で読める (ux M-102)', async () => {
+    await setup({ index: unregisteredIndex() })
+    const path = await within(screen.getByTestId('past-sessions')).findByTitle('/home/u/other')
+    expect(path).toHaveClass('truncate')
+  })
+
+  it('スキップリンクで中央へフォーカスが移る。main は常には tabindex を持たず、外れたら消す (a11y M-103 / M-005)', async () => {
+    await setup()
+    expect(center()).not.toHaveAttribute('tabindex')
+    const skip = screen.getByRole('link', { name: SHELL_LABELS.skipToCenter })
+    act(() => skip.focus())
+    await userEvent.keyboard('{Enter}')
+    expect(center()).toHaveFocus()
+    expect(center()).toHaveAttribute('tabindex', '-1')
+    act(() => within(sidebar()).getByRole('button', { name: SHELL_LABELS.newSession }).focus())
+    expect(center()).not.toHaveAttribute('tabindex')
+  })
+
+  it('中央の「閉じる」で表示中のセッションを閉じると、押したボタンが消えても空の状態の主な操作にフォーカスが移る (a11y M-102)', async () => {
+    const h = await setup({ ids: [A] })
+    await selectRunning(0)
+    h.push([{ sessionId: A, state: 'done', reasonKey: null, claudeAlive: false }])
+    await userEvent.click(await within(center()).findByRole('button', { name: '閉じる' }))
+    expect(center()).toHaveAttribute('data-focus', 'none')
+    await waitFor(() =>
+      expect(
+        within(center()).getByRole('button', { name: SHELL_LABELS.centerEmptyLaunch })
+      ).toHaveFocus()
+    )
+  })
+
+  it('稼働中の会話は、設定のダイアログを開閉した後も同じ thread・下書き・選択のまま (SC-002)', async () => {
+    const h = await setup({ ids: [A] })
+    act(() => h.store.setDraft(A, '書きかけ'))
+    await selectRunning(0)
+    h.emit(A, {
+      kind: 'message',
+      message: {
+        id: 'm1',
+        role: 'assistant',
+        parts: [{ type: 'text', text: '応答 1' }],
+        createdAt: 1
+      }
+    })
+    await within(center()).findByText('応答 1')
+    await userEvent.click(within(sidebar()).getByRole('button', { name: SHELL_LABELS.settings }))
+    await screen.findByTestId('settings-dialog')
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByTestId('settings-dialog')).toBeNull())
+    expect(center()).toHaveAttribute('data-focus', 'running')
+    expect(within(center()).getByText('応答 1')).toBeInTheDocument()
+    expect(h.store.getDraft(A)).toBe('書きかけ')
+    expect(h.store.getState().selectedId).toBe(A)
+  })
+
+  it('中央のヘッダの状態は一覧の行と同じ状態のラベルで、状態が変わると追随する (ui-coverage L-002 / D 節 session-state)', async () => {
+    const h = await setup({ ids: [A] })
+    await selectRunning(0)
+    const header = (): HTMLElement => within(center()).getByTestId('center-header')
+    h.emit(A, { kind: 'state', state: 'running' })
+    await waitFor(() => expect(header()).toHaveTextContent('応答中'))
+    h.emit(A, { kind: 'state', state: 'awaiting_permission' })
+    await waitFor(() => expect(header()).toHaveTextContent('承認待ち'))
+  })
+
+  it('vitest-axe: 設定のダイアログの 4 項目と、過去の会話を出した状態でも違反 0 (a11y M-007)', async () => {
+    const h = await setup()
+    const rules = { rules: { 'color-contrast': { enabled: false } } }
+    await selectPast(0)
+    expect((await axe(h.container, rules)).violations).toEqual([])
+    await userEvent.click(within(sidebar()).getByRole('button', { name: SHELL_LABELS.settings }))
+    const dialog = await screen.findByTestId('settings-dialog')
+    const nav = within(dialog).getByRole('navigation', { name: SHELL_LABELS.settingsNav })
+    for (const name of ['ランタイム', '作業フォルダ', 'プロバイダ', '組み合わせ']) {
+      await userEvent.click(within(nav).getByRole('button', { name }))
+      expect((await axe(dialog, rules)).violations).toEqual([])
+    }
   })
 })

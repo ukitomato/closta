@@ -74,8 +74,8 @@ src/renderer/src/features/shell/panel-tabs.ts
 src/renderer/src/features/shell/shell-layout.test.ts
 src/renderer/src/features/shell/shell-layout.ts
 src/renderer/src/features/shell/useAutoCollapse.ts
-src/renderer/src/features/shell/useCollapseFocus.ts
 src/renderer/src/features/shell/useDialogReturnFocus.ts
+src/renderer/src/features/shell/useFocusRescue.ts
 src/renderer/src/features/shell/useShellFocus.ts
 src/renderer/src/features/workspace-folders/WorkspaceFoldersScreen.tsx
 src/renderer/src/stores/sessions.ts

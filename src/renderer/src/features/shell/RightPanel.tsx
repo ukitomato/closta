@@ -9,7 +9,7 @@ import { useUiStore, type PanelTabId } from '@/stores/ui'
 import { SHELL_LABELS } from './labels'
 import { activeTab, PANEL_TABS, visibleTabs, type PanelTab } from './panel-tabs'
 import { SHELL_WIDTHS } from './shell-layout'
-import { useCollapseFocus } from './useCollapseFocus'
+import { useFocusRescue } from './useFocusRescue'
 
 /**
  * **右のペイン** (O-7 / FR-014 / data-model §2・§4)。表示中のセッションに付く情報をタブで切り替える面。
@@ -42,7 +42,7 @@ export function RightPanel({
   const toggleRef = useRef<HTMLButtonElement>(null)
   // 帯のタブのアイコンから開いたときの行き先。
   const openedTabRef = useRef<PanelTabId | null>(null)
-  useCollapseFocus(asideRef, collapsed, () => {
+  useFocusRescue(asideRef, collapsed, () => {
     const tab = openedTabRef.current
     openedTabRef.current = null
     if (tab !== null) return document.getElementById(`panel-tab-${tab}`) ?? toggleRef.current

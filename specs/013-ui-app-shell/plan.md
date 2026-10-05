@@ -36,7 +36,7 @@ spec の U-1〜U-5 と AD-046 は 2026-10-05 に利用者が承認した。
 | III (権限ゲート) | ✅ | 起動ダイアログ (選べない選択肢を出さない) の中身を変えない |
 | VIII (日本語環境) | ✅ | 新しい文言は `features/shell/labels.ts`。長い日本語の題・フォルダ名はサイドバーと中央のヘッダで 1 行に切り詰め (全文は `title`)、概要は折り返して全文を出す (実装の追記。pr-gate R1 po M-005 / a11y M-006)。jsdom は幅を測れないので、component テストは切り詰めの class と `title` を確かめ、崩れは quickstart V-3 で見る。composer は変えない。右のペインを既定で畳むので、既定のウィンドウの幅で中央は 780px、composer は上限 704px のままで基準画像は変わらない (data-model §2)。変わったら撮り直し、人間の見た目の承認を quickstart-results に記録する |
 | XI (観測可能な垂直スライス) | ✅ | 各 US は component テストと E2E で観測でき、見た目は quickstart V-3 |
-| XII (ui-coverage) | ✅ | SDK が emit する情報の表示を足さない (A〜E 節の差分 0)。F 節の使い道 (Thread list sidebar / Settings / Empty state) を同じ PR で直す |
+| XII (ui-coverage) | ✅ | SDK が emit する情報の表示を足さない。F 節の使い道 (Thread list sidebar / Settings / Empty state) を同じ PR で直す (実装の追記: A〜E 節のうち D 節 session-state (`docs/ui-coverage.md:169`) の割当の部品を、中央のヘッダ (`CenterHeader`) に移したので直した。表示する情報と Tier は変えていない。pr-gate R1 ui-coverage M-001 / R2 L-103) |
 | XIII (element 優先) | ✅ | thread-list-sidebar・Settings・Empty state・resizable を registry で先に確かめる (research R-04) |
 | XIV (glossary) | ✅ | シェル・サイドバー・中央のヘッダ・右のペイン・設定のダイアログを先に glossary に足す |
 | XV (Multi-language) | ✅ | 文言は `labels.ts` |
