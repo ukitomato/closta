@@ -165,7 +165,7 @@ active=$(gate_common::reviewers_filter pr-gate "$spec_dir/.pr-gate-scope.txt" \
 **Status**: <PASS (Critical=0) | FIX_REQUIRED | CONVERGENCE_FAILURE (N>=4)>
 **Next**:
   PASS         → /cl-done <spec_dir>
-  FIX_REQUIRED → Agent(task-implementer) で修正 → /cl-code-gate → /cl-pr-gate (Round <N+1>)
+  FIX_REQUIRED → Agent(implementer, mode: fix) で修正 → /cl-code-gate → /cl-pr-gate (Round <N+1>)
   CONVERGENCE  → ADR 起票 + spec 範囲調整
 
 ## Critical (Round <N>)
@@ -251,7 +251,7 @@ active=$(gate_common::reviewers_filter pr-gate "$spec_dir/.pr-gate-scope.txt" \
   - verdict JSON: <spec_dir>/.gate-verdict-pr.json
   - 次のアクション:
     PASS → /cl-done <spec_dir>
-    FIX_REQUIRED → Agent(task-implementer) に <spec_dir>/pr-gate.md と Critical の finding ID (<C-001, ...>) を渡して直させる
+    FIX_REQUIRED → Agent(implementer) に mode: fix / round: <N> / <spec_dir>/pr-gate.md / Critical の finding ID (<C-001, ...>) を渡して直させる
                    → /cl-code-gate で lint / test を通し直す → /cl-pr-gate (Round <N+1>)
     CONVERGENCE → ADR 起票 + spec 範囲調整
 ```

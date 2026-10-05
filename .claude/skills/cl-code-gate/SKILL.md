@@ -288,8 +288,8 @@ active=$(gate_common::reviewers_filter code-gate "$spec_dir/.code-gate-scope.txt
 各 iteration は以下を **1 単位**として定義:
 
 - **START**: iter N 開始時の `.gate-verdict-code.json` (Phase 4b で emit 済) を input
-- **BODY**: `implementer` subagent を Agent ツールで 1 回起動
-  - context: `spec_dir` と iter 番号だけ。verdict JSON / `touched-files.txt` / spec.md / plan.md / tasks.md は implementer が自分で Read する (本文を貼らない)
+- **BODY**: `implementer` subagent を Agent ツールで **fix モード**で 1 回起動
+  - context: `mode: fix` / `spec_dir` / `iter` / 入力 `<spec_dir>/.gate-verdict-code.json` だけ。verdict JSON / `touched-files.txt` / spec.md / plan.md / tasks.md は implementer が自分で Read する。**本文も規則も貼らない** — 修正の規則と action log の形は `implementer.md` が正本である
   - 任務: `must_fix_findings[]` を順に処理、touched files を更新、`code-gate.md.iter<N>.implementer.json` を Write
   - **戻ってきた action log を読む。** `resolutions[]` の `status: skipped` / `error` を
     数え、`iter_history[N]` に `skipped` / `error` として記録し、Phase 7 の完了通知にも出す。

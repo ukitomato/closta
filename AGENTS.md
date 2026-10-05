@@ -10,7 +10,7 @@
   └─ /cl-design-gate        [fork:bg] ─[bundle review]
                                         Critical=0 で                           (tasking → implementing)
                                         FIX_REQUIRED なら implementing → tasking に降格
-/cl-implement               [main]    ─→ section ごとに task-implementer [subagent] + code-gate へ auto-chain
+/cl-implement               [main]    ─→ section ごとに implementer [subagent] + code-gate へ auto-chain
 /cl-code-gate               [fork:bg] ─[lint / test / convention + auto-fix loop]
                                         PASS で                                 (implementing → reviewing)
 /cl-pr-gate                 [fork:bg] ─[adversarial review: multi-round]
@@ -35,8 +35,8 @@ design-gate が FIX_REQUIRED なら status は `tasking` に留まる。`Agent(d
   - `/cl-design-gate` / `/cl-code-gate` / `/cl-pr-gate` — `agent: general-purpose` の background fork。同期の fork では、中で起動した reviewer の結果を受け取れない (fork が先に終わり、報告が main に流れる)。main は gate の完了通知が届いてから次の段に進む
 - **戻り値は完了通知だけ。** fork と subagent は、最終メッセージに生出力・diff・findings 本文を含めない
 - **`AskUserQuestion` は main でしか使えない。** fork / subagent で判断が要るときは halt する。designer は `<spec_dir>/.needs-input.md` に質問を書いて `NEEDS_INPUT` を返し、`/cl-design` が main で聞く
-- **actor は直列に動かす。** 同じ作業ツリーで task-implementer / implementer / designer を並列に起動しない (lint / test のキャッシュが互いに無効化される)。並列にしてよいのは read-only の reviewer だけ
-- **指摘の修正は委譲する。** design-gate の指摘 → `Agent(designer)`、pr-gate の指摘 → `Agent(task-implementer)`、code-gate の MUST_FIX → gate 内の `implementer`
+- **actor は直列に動かす。** 同じ作業ツリーで implementer / designer を並列に起動しない (lint / test のキャッシュが互いに無効化される)。並列にしてよいのは read-only の reviewer だけ
+- **作業は委譲し、規則は agent 側に置く。** 実装 → `implementer` の tasks モード、code-gate / pr-gate の指摘 → `implementer` の fix モード、design-gate の指摘 → `designer`。invoker が渡すのはモード名と入力だけで、規則や出力の形を prompt に書かない (正本は各 agent ファイル)
 
 ## gate の原則
 

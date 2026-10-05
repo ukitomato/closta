@@ -1,17 +1,17 @@
 ---
 name: cl-implement
-description: tasks.md に従い実装を実行する。section ごとに task-implementer subagent を直列で起動し、touched-files を確定し、tasks.md の checkbox 100% を検証して `/cl-code-gate` へ auto-chain する。
+description: tasks.md に従い実装を実行する。section ごとに implementer subagent (tasks モード) を直列で起動し、touched-files を確定し、tasks.md の checkbox 100% を検証して `/cl-code-gate` へ auto-chain する。
 argument-hint: [spec_dir]
 allowed-tools: Read Write Edit Bash Glob Grep Agent AskUserQuestion
 ---
 
 # cl-implement
 
-tasks.md に従って実装を実行する。**本 skill は main で動く指揮役であり、ソースを読まず、自分では実装しない。** 実装は section ごとに `task-implementer` subagent が行う (共通規則の正本は AGENTS.md の「実行モデル (context 管理)」節)。本 wrapper は以下を担当する:
+tasks.md に従って実装を実行する。**本 skill は main で動く指揮役であり、ソースを読まず、自分では実装しない。** 実装は section ごとに `implementer` subagent が tasks モードで行う (共通規則の正本は AGENTS.md の「実行モデル (context 管理)」節)。本 wrapper は以下を担当する:
 
 - **前提検証** — `/cl-design-gate` PASS (Critical=0、status: implementing) と checklist の完了を確認
 - **targets=both の BE→FE order** — Backend section を先に完走させてから Frontend に進む
-- **task-implementer の直列起動** — 未完了タスクを含む section ごとに 1 つずつ
+- **implementer の直列起動** — 未完了タスクを含む section ごとに 1 つずつ
 - **touched-files の確定** — subagent の追記と git の差分の和集合を `<spec_dir>/touched-files.txt` に記録
 - **tasks.md checkbox 100% 検証** — 全タスクが `[x]` であることを確認
 - **`/cl-code-gate` auto-chain** — 実装完了後に自動起動
@@ -63,12 +63,12 @@ impl_base=$(cat "$spec_dir/.implement-base")
 
 `tasks.md` に Backend/Frontend/Shared section が無い (targets=single) ならそのまま順次実装。
 
-### Phase 2: section ごとに `task-implementer` を起動
+### Phase 2: section ごとに `implementer` を起動
 
 `/speckit.implement` には委譲しない。実装はすべて subagent で行い、main はソースを読まない。
 
 1. tasks.md の `## ` 見出しを上から列挙し、未完了タスク (`- [ ]`) を含む section だけを対象にする。targets=both のときは Phase 1 の順 (Backend → Shared → Frontend) に並べる
-2. 対象 section ごとに `Agent(subagent_type: task-implementer)` を **1 つずつ直列で**起動する。渡すのは `spec_dir` / `impl_base` / section 見出しだけで、本文は貼らない
+2. 対象 section ごとに `Agent(subagent_type: implementer)` を **1 つずつ直列で**起動する。渡すのは `mode: tasks` / `spec_dir` / `impl_base` / section 見出しだけで、本文も規則も貼らない (規則と報告の形は `implementer.md` が正本)
    - **並列に起動しない。** 同じ作業ツリーで動かすと eslint / vitest / tsbuildinfo のキャッシュが互いに無効化される
    - Agent はバックグラウンドで返る。報告が届いてから次の section を起動する
 3. 報告の 1 行目で分岐する:
@@ -78,11 +78,11 @@ impl_base=$(cat "$spec_dir/.implement-base")
 
 ### Phase 3: touched-files の確定
 
-task-implementer の追記だけに頼らない。次の 3 つの和集合を **1 回の bash** で取り、`sort -u` する。`<spec_dir>/` 配下 (tasks.md の `[x]` など) は実装ではないので除く:
+implementer の追記だけに頼らない。次の 3 つの和集合を **1 回の bash** で取り、`sort -u` する。`<spec_dir>/` 配下 (tasks.md の `[x]` など) は実装ではないので除く:
 
 ```bash
 impl_base=$(cat "$spec_dir/.implement-base")
-{ cat "$spec_dir/touched-files.txt" 2>/dev/null       # task-implementer の追記分
+{ cat "$spec_dir/touched-files.txt" 2>/dev/null       # implementer の追記分
   git diff --name-only "$impl_base"                   # 実装開始以降の変更 (コミット済みを含む)
   git ls-files --others --exclude-standard            # 新規ファイル
 } | tr -d '\r' | sed '/^[[:space:]]*$/d' | grep -v "^${spec_dir%/}/" | sort -u \
@@ -153,7 +153,7 @@ auto-chain 中の status 遷移は code-gate 側が担当。本 skill の責務�
 
 ## Failure modes
 
-- task-implementer が `BLOCKED` を返した (判断が要る / ビルド・test を直せない) → 該当タスクは `[ ]` のまま。`blocked` 行を提示して halt
+- implementer が `BLOCKED` を返した (判断が要る / ビルド・test を直せない) → 該当タスクは `[ ]` のまま。`blocked` 行を提示して halt
 - design-gate.md が FIX_REQUIRED → halt with "design-gate PASS 後に再実行してください"
 - status が implementing でない → halt
 - auto-chain した code-gate が MUST_FIX → code-gate の auto-fix loop に委ねる (本 skill は終了)
