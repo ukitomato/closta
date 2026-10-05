@@ -89,3 +89,5 @@ specs/**/*-gate.md.[0-9]*
 specs/**/.*-scope.txt
 # code-gate / pr-gate が reviewer に渡すために書き出す diff (再実行のたびに作り直す)
 specs/**/.*-gate.diff
+# /cl-implement が記録する実装開始時の commit (手元の差分起点。clone 先では意味を持たない)
+specs/**/.implement-base

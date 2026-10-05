@@ -89,6 +89,15 @@ agents:
     managed_by: workflow
     invoked_by: [code-gate]
 
+  # ─── Actors (main の context を空けるための作業委譲) ─────────────────
+  - name: task-implementer
+    status: required
+    role: actor
+    placement: .claude/agents/task-implementer.md
+    purpose: "tasks.md の section / pr-gate の finding 単位で実装し、10 行以内で報告する"
+    managed_by: workflow
+    invoked_by: [cl-implement, pr-gate-fix]
+
   # ─── Optional reviewers (/cl-add-reviewer) ──────────────────────────
   - name: database-reviewer
     status: optional
