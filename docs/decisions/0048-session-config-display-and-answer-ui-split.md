@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2026-10-04
 id: AD-048
 deciders: ukitomato
@@ -21,7 +21,7 @@ O-5 ([spec 015](../../specs/015-ui-mcp-elicitation-commands/spec.md)) は、`doc
 - MCP・プラグイン・スキルの制御は `Query` のメソッドである (`mcpServerStatus` :2775、`reloadPlugins` :2838、`reloadSkills` :2846、`reconnectMcpServer` :2898、`toggleMcpServer` :2906、`setMcpServers` :2935)。AD-036 §4 P3 は `Query` のメソッドを `interrupt()` だけに限った。Constitution 検証の項目 16 の P3 の検査は 6 名の denylist で、上のどれも含まない
 - `init` (`sdk.d.ts:5482-5543`) は毎ターンの最初に届き、`mcp_servers` の名前と状態を運ぶ。`commands_changed` はスラッシュコマンドの一覧の置き換え
 
-本 ADR は O-5 が夜間の自走で起こした。**未承認である (spec 015 の U-1〜U-7)。** [AD-047](0047-session-meter-and-failure-reasons.md) (proposed。O-4) を前提にする。
+本 ADR は O-5 が夜間の自走で起こした。本 ADR と spec 015 の U-1〜U-7 は 2026-10-05 に利用者が承認した。[AD-047](0047-session-meter-and-failure-reasons.md) (O-4。同日に accepted) を前提にする。
 
 ### 読み替える箇所
 

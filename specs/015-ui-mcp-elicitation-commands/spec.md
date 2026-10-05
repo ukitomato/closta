@@ -15,7 +15,7 @@ linear: null
 
 **Feature Branch**: `015-ui-mcp-elicitation-commands` (`014-ui-metering-and-limits` → `013-ui-app-shell` の上に積んである)
 
-**Created**: 2026-10-04 (夜間の自走で起案。design-gate R1 の後に High を手当てした。**人間の承認が要る判断を仮採用している — 下の「未承認の判断」を参照**)
+**Created**: 2026-10-04 (夜間の自走で起案。design-gate R1 の後に High を手当てした。夜間に仮採用した判断は **2026-10-05 に利用者が推奨案どおり承認した** — 下の「判断」を参照)
 
 **Status**: frontmatter の `status:` を正とする
 
@@ -36,7 +36,7 @@ linear: null
 
 ## 本 feature の位置づけ
 
-- **範囲を分ける (未承認 U-1)。** Claude Code からの問いに答える UI (`AskUserQuestion` の回答・Elicitation の form / URL・`request_user_dialog`) は、承認済みの ADR が固定している境界の変更を伴う。
+- **範囲を分ける (U-1)。** Claude Code からの問いに答える UI (`AskUserQuestion` の回答・Elicitation の form / URL・`request_user_dialog`) は、承認済みの ADR が固定している境界の変更を伴う。
   - `AskUserQuestion` の回答は、承認の応答 (`canUseTool`) に `updatedInput` (`answers`) を返す必要がある。AD-036 Decision 4 は承認の応答から `updatedInput` を構造的に除いている (正の構成 P2)
   - Elicitation は query の options に `onElicitation` を、`request_user_dialog` は `onUserDialog` を足す必要がある。AD-041 (g) は options のキーの集合を固定している (今は Elicitation は自動で断られる)
   - これらは新しい feature **O-10「Claude Code からの問いに答える UI と composer のコマンドの候補」(M3・依存 O-5)** に分ける。O-10 の domain (ui か session か) は利用者が決める (U-1)。対応表の 4 行 (`AskUserQuestion`・`elicitation`・`elicitation_complete`・`request_user_dialog`) は `後続: O-10` にする。問いの読み取り専用の表示と承認カードの暫定の注記は、境界を変えないので本 feature で行う
@@ -44,9 +44,9 @@ linear: null
 - **O-7 の上に置き場所を書き (AD-046)、O-4 の `meter` の経路を使う (U-3)。** `init` と `commands_changed` はセッションの最新の値なので、O-4 の `SessionEvent` の `meter` (AD-047) に種類 `init-report` / `commands` を足して運ぶ。運ぶ文字列は会話本文ではないが、**利用者の設定・作業フォルダ (`.claude/`)・MCP サーバー・プラグインの作者に由来する未信頼の文字列**なので、名前は allowlist の形の検査、説明は無害化と切り詰めを通す。決定は ADR (AD-048、proposed)
 - **MCP の tool の表示は今の経路のまま。** tool の呼び出しと結果は既存の `message` の経路 (過去ログ・実行中の両方) に来ている。表示の部品を足すだけで、tool-call の part の形 (`TRANSCRIPT_PART_FIELDS`) を変えない。ただし過去ログの tool 名は今無害化されていない (`transcript.ts:233`) ので、実行中と同じ無害化に揃える (session の変換の 1 行の修正)
 
-## 未承認の判断 (夜間の自走で仮採用。2026-10-04)
+## 判断 (2026-10-04 の夜間の自走で仮採用し、2026-10-05 に利用者が承認)
 
-**本 spec は design-gate で止め、利用者の承認まで /cl-implement に入らない。**
+利用者は下の表の「仮採用した案」と AD-048 を 2026-10-05 に推奨案どおり承認した。
 
 | # | 判断 | 仮採用した案 | 代わりの案 |
 |---|---|---|---|
@@ -199,7 +199,7 @@ linear: null
 
 ### Assumptions / Clarifications
 
-- **[未承認 U-1〜U-7]** 上の「未承認の判断」の表
+- **[承認済み U-1〜U-7]** 上の「判断」の表 (2026-10-05)
 - **[ASSUMED]** MCP の入力は閉じた中身・URI は要約だけ・プラグインの `path` は出さない・構成からコマンドを実行しない・モデルの見出しを分ける・状態はターンの開始時点
 - アプリの起動では `CLAUDE_CODE_SYNC_PLUGIN_INSTALL` を渡さないので、`plugin_install` は通常は届かない (行は fixture の単体と component で確かめる)
 

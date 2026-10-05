@@ -2,7 +2,7 @@
 
 **Branch**: `015-ui-mcp-elicitation-commands` (O-4 の `meter` に依るので `014-ui-metering-and-limits` (その下に `013-ui-app-shell`) の上に積んである。実装は O-7 と O-4 のマージの後) | **Date**: 2026-10-04 (design-gate R1 の後に手当て) | **Spec**: [spec.md](./spec.md)
 
-**未承認の判断を含む** (spec の U-1〜U-7) / **proposed の ADR に依る** (AD-046 / AD-047 / AD-048)。本 plan は design-gate までの成果物で、利用者の承認と O-7 / O-4 のマージまで実装に入らない。
+spec の U-1〜U-7 と AD-046 / AD-047 / AD-048 は 2026-10-05 に利用者が承認した。O-7 / O-4 のマージの後に実装する。
 
 ## Summary
 
@@ -43,9 +43,9 @@
 
 ### Related ADRs
 
-- [AD-048](../../docs/decisions/0048-session-config-display-and-answer-ui-split.md) — 構成の運び方・MCP を操作しない・O-10 の分割・tool の登録の 2 段: **proposed** (本 feature)
-- [AD-047](../../docs/decisions/0047-session-meter-and-failure-reasons.md) — `meter`: **proposed** (O-4)。Decision 2 を読み替える
-- [AD-046](../../docs/decisions/0046-app-shell-layout.md) — シェル: **proposed** (O-7)。タブの表に `attention` を足す
+- [AD-048](../../docs/decisions/0048-session-config-display-and-answer-ui-split.md) — 構成の運び方・MCP を操作しない・O-10 の分割・tool の登録の 2 段: **accepted** (本 feature で起こし、2026-10-05 に承認)
+- [AD-047](../../docs/decisions/0047-session-meter-and-failure-reasons.md) — `meter`: **accepted** (O-4。2026-10-05 に承認)。Decision 2 を読み替える
+- [AD-046](../../docs/decisions/0046-app-shell-layout.md) — シェル: **accepted** (O-7。2026-10-05 に承認)。タブの表に `attention` を足す
 - [AD-036](../../docs/decisions/0036-single-session-launch-process-and-live-stream.md) Decision 4 / §4 P3 — 承認の応答の正の構成と `Query` のメソッドの制約: accepted (変えない。P3 を MCP に当てはめる)
 - [AD-041](../../docs/decisions/0041-x4-launch-config-on-x1-launch-gate.md) (e)(f)(g) — env の転送と options のキー: accepted (変えない)
 - [AD-035](../../docs/decisions/0035-tier-a-tool-display-and-subagent-nesting.md) Decision 1 — tool の登録: accepted (2 段に読み替える)
@@ -103,7 +103,7 @@
 
 | ID | リスク | 手当て |
 |---|---|---|
-| RK-01 | 未承認の判断 (U-1〜U-7)・AD-046 / AD-047 / AD-048 が覆る (とくに O-10 への分割と domain) | design-gate で止める |
+| RK-01 | 仮採用した判断 (U-1〜U-7)・AD-046 / AD-047 / AD-048 が覆る (とくに O-10 への分割と domain) | 2026-10-05 に利用者が推奨案どおり承認した |
 | RK-02 | O-4 の `meter` が変わる・O-4 が後回しになる | 依存を明記。O-4 が覆ったら U-3 を見直す |
 | RK-03 | MCP のサーバー名に `__` を含み、見出しのサーバー名を取り違える | 構成のサーバー名の最長一致、推定の印、承認カードは生の名前 (data-model §1) |
 | RK-04 | `AskUserQuestion` を承認カードで許可しても回答が届かない (今の不具合のまま) | 暫定の注記で利用者に伝える (US-1 AC9)。O-10 が直す |
