@@ -1,7 +1,7 @@
 ---
 reviewer: architecture-reviewer
 gate: pr-gate
-round: 2
+round: 3
 scope: default+adr-drift
 ---
 
@@ -10,137 +10,113 @@ scope: default+adr-drift
 **Run**: 2026-10-06
 **Reviewer**: architecture-reviewer
 **Spec**: specs/013-ui-app-shell/spec.md
-**Round**: 2
-**Scope**: default (ARCH-1〜7) と ADR-drift (ARCH-3 の集中レビュー) を 1 本にまとめた
+**Round**: 3
+**Scope**: default (ARCH-1〜7) と ADR-drift (ARCH-3) を 1 本にまとめた。対象は R2 の修正の差分 `a78a291..bcd6aa4`
 
 ## 初回読了 viewpoint
 
-- FR/SC (R1 の後の修正が触れたもの): FR-006 / SC-002 (`watchedIdOf` が `launchOpen` も見る)、FR-007 (`LaunchDialogHost` の `dismissLaunchNotice` とフォーカス、`useShellFocus` の失敗の close)、FR-008 / FR-009 (設定のダイアログ)、FR-001 / FR-002 / FR-014 (スキップリンク・開閉ボタン・`useCollapseFocus`)、FR-016 / SC-008 (`useSessions` の取得中と取得時刻 0)、FR-012 / SC-006 (AD-046 の訂正の節、accepted への追随)、FR-013 (記録)
-- touched files に当たる charter / Confirmation: ui charter In scope :62-69・Cross-domain :163-175、session charter Cross-domain :166-171・Related Specs :203-206、AD-046 Consequences :38・訂正 :57-69・Confirmation :52-55、AD-031 Decision 1、AD-024 / AD-036 の訂正の先例、AD-025 §4 / §7、AD-038 D5、AD-043、AD-044、AD-023、X-4 spec US-1 AC7、Constitution XIV・Governance の優先順位
+- FR/SC (R2 の修正が触れたもの): FR-007 / X-4 US-1 AC7 (`useShellFocus` の失敗した close の判定、起動ダイアログは外側の押下で閉じない)、FR-006 / SC-002 (`watchedIdOf` の定義の参照の形)、FR-001 / FR-002 (サイドバーの `hidden`、スキップリンクの `focusCenter`)、FR-003 (`useFocusRescue`)、FR-008 (件数の印 `context`)、FR-016 (取得中の文言)、FR-012 / SC-006 (AD-046 :38 と訂正の節の追記)、FR-013 (glossary・charter・roadmap・prompts の記録)
+- touched files に当たる charter / Confirmation: ui charter In scope :48 (composer) と :62-69、Cross-domain :166-179。session charter Cross-domain :168-171、Related Specs :204-212。AD-046 Consequences :38、訂正 :57-71、Confirmation :52-55。AD-031 Decision 1。AD-023、AD-025 §7、AD-020 D1、AD-044、AD-038 D5、AD-043。Constitution XII / XIV
 - A. 認可 / 認証 / secret 管理: 該当なし: security-reviewer の範囲
-- B. 入力検証 / injection / CSP / 暗号: 該当なし: security-reviewer の範囲 (`protocol.ts` は PR 全体で差分 0)
-- C. 業務不変条件 / Charter drift: Critical:0 High:0 Medium:2 Low:1
-- D. Constitution / ADR drift: Critical:0 High:0 Medium:0 Low:3
+- B. 入力検証 / injection / CSP / 暗号: 該当なし: security-reviewer の範囲 (CSP と protocol の変更は無い)
+- C. 業務不変条件 / Charter drift: Critical:0 High:0 Medium:0 Low:3
+- D. Constitution / ADR drift: Critical:0 High:0 Medium:0 Low:1
 - E. User Story / SC / AC / UX: 該当なし: po-reviewer の範囲
 - F. 命名 / module / lint hookup: 該当なし: convention-reviewer の範囲
 - G. optional reviewer 範囲: 該当なし: a11y / ux / ui-coverage reviewer の範囲
-- H. テスト / coverage / observability / regression: Critical:0 High:0 Medium:0 Low:3
+- H. テスト / coverage / observability / regression: Critical:0 High:0 Medium:0 Low:2
 
 ## スコープ要約
 
-R1 の後の修正は renderer の負の経路と a11y の手当て、記録の追随が中心。domain・agents・preload・main/app の差分は 0。**accepted ADR の Decision に反する変更は見つからなかった。AD-046 に足した訂正の節は AD-031 の規則に合っている。** 新しく見つかったのは、R1 の修正が入れた 2 つの振る舞いの変更 (シェルが session のストアの起動の状態を書く / 「見ているセッション」の定義) が上位の記録に追随していないこと。
+R2 の修正は renderer と記録と reviewers.yml だけ。domain・agents・preload・main の差分は 0。**accepted ADR の Decision 1〜6 を変える箇所は無い。AD-046 :38 の参照と訂正の節の追記は決定を変えていない。** R2 の自分の指摘 7 件はすべて直った。新しく見つかったのは文書の小さな食い違い 4 件で、どれも Low。原因は (1) R2 の追記で ADR と charter の「同じ内容」が成り立たなくなった (2) シェルが session のストアの状態の形から「失敗した close」を推し量っていて前提が書かれていない (3) 新しい語と持ち主の記録が charter と合っていない。
 
-## Round 1 の指摘の判定
+## Round 2 の指摘の判定
 
-| R1 ID | 判定 | 確かめた事実 |
+| R2 ID | 判定 | 確かめた事実 |
 |---|---|---|
-| H-001 | **resolved** | AD-046 :57-69 に日付つきの訂正の節。Decision 1〜6 は差分 0。形の不足は L-102 |
-| M-001 | **partially** | ui charter と session charter に読み取りを書いた。roadmap の「O-7 が変えたもの」に `MonitorSummary` が `stores/ui.ts` を読むことが無い (M-101 にまとめた)。ui charter :168 の文言が不正確 (L-101) |
-| M-002 | **resolved** | roadmap :130-133 と O-3 の行に持ち主 |
-| M-003 | **resolved** | quickstart-results に 2 回分の値。O-3 の行から参照 |
-| M-004 | **resolved** | reviewers.yml の ui-coverage-reviewer に shell と LivePane |
-| L-001 | **resolved** | glossary に OS のシェルとの区別。roadmap の O-6 は「Bash の Background task」 |
-| L-002 | **resolved** | F 節が research R-04 を引き、R-2 plan の約束を閉じたと書く |
-| L-003 | **resolved** | roadmap の O-7 の行。V-3 の記録の粒度は L-105 |
-| L-004 | **resolved** (追跡) | roadmap system-scope (6) |
-| L-005 | **resolved** | ui charter の In scope が枠と中身に分かれた |
-| L-006 | **unresolved** | 持ち越し |
-| L-007 | **unresolved** (CI 待ち) | 持ち越し |
-| L-008 | **resolved** | roadmap の perf の ADR 化の項目に追記 |
+| M-101 | **resolved** | session charter :171・:207-211、ui charter :177-179、roadmap :231-233。行数 552 / 632 は実ファイルと一致。シェルが呼ぶ session のストアの操作は `dismissLaunchNotice` の 2 か所だけ (`LaunchDialogHost.tsx:40`、`useShellFocus.ts:53`) |
+| M-102 | **resolved** | glossary.md:855-857、session-view.ts:436-437、SessionAttentionAnnouncer.tsx:13。`stores/ui.ts:113-127` と食い違う箇所は 0 |
+| L-101 | **resolved** | ui charter :168-170 |
+| L-102 | **resolved** (追記の文面から L-201) | :38 に「(下の「訂正」節)」。`stores/ui.ts:13-15` と data-model.md:26 は charter を参照 |
+| L-103 | **resolved** | prompts.md:312 |
+| L-104 | **resolved** | roadmap の (4)、useSessions.ts:92-93、session-service.ts:189 |
+| L-105 | **resolved** | quickstart-results の V-3 / V-3b |
+| L-006 | **unresolved** (持ち越し) | `setFocus(` (テスト以外) 5 件はすべて useShellFocus.ts。検出の手段が無い |
+| L-007 | **unresolved** (持ち越し) | CI の e2e は未記録。V-3b も未実施 |
 
-## ADR-drift (R1 の後の修正の差分に対して)
+## ADR-drift (R2 の修正の差分に対して)
 
 | ADR | 照合した対象 | 結果 |
 |---|---|---|
-| AD-046 Decision 1〜6 | スキップリンク、開閉ボタン、設定の外側の押下、件数の印、起動ダイアログの名前、tablist の 0 件 | 違反なし |
-| AD-046 訂正 (:57-69) | AD-031 Decision 1 | **合っている**。形の不足は L-102 |
-| AD-046 Decision 4 | `prompts.md:312` の OPT-panel の起動文 | 「すべてに従う」と書きながら 1 項目欠ける → L-103 |
-| AD-046 Confirmation | V-3 は記録済み。SC-003 は CI 待ち | L-105 / L-007 |
-| AD-025 §4 / §7 | renderer → domain の import は増えていない。CSP は緩めていない | 違反なし |
-| AD-038 D5 | 基準画像の差分 0 | 違反なし |
-| AD-043 | provider / wiring の寿命 | 違反なし |
-| AD-044 | ui-coverage-reviewer の発火条件、F 節の「SDK の外」 | 違反なし (AD-044 は F 節の使い道の語の集合を閉じていない) |
-| AD-023 | 本番コードの feature → shell の逆向き import | 0 件 |
-
-**AD-046 の訂正の節は AD-031 に合っている**: (1) 種別は事実誤認の訂正 (:38 は採択の時点で同じ日に承認された FR-009 / FE-011 と食い違っていた。Decision 1〜6 は変わらず、読み手は同じ決定に至る) (2) 日付と経緯がある (3) 決定の変更を含まない (4) 先例 (AD-036 :106、AD-024 :213) と整合する。
+| AD-046 Decision 1〜6 | Decision 節の差分 0。サイドバーの `hidden`、外側の押下、概要のモデル行、F 節の置き場所の語 | 違反なし |
+| AD-046 Consequences :38 | 末尾に参照を足しただけ | 合っている (AD-024 の先例と同じ形) |
+| AD-046 訂正 :70-71 の追記 | AD-031 Decision 1 | 決定の変更は無い。日付が無いことと事実と合わない一句 → L-201 |
+| AD-025 §7 | CSP の差分 0。`focusCenter` は属性の付け外しだけ | 違反なし |
+| AD-023 | 本番コードの feature → shell の import は 0 | 違反なし |
+| AD-020 D1 / AD-044 | ui-coverage.md の追記と F 節の語の規則 | 違反なし |
+| AD-038 D5 | e2e と基準画像の変更なし | 違反なし |
+| AD-043 | provider の寿命。読み上げは App の階層 (App.tsx:20) で `hidden` の影響を受けない | 違反なし |
 
 ## Findings
 
-### [Medium] R1 の修正で、シェル (ui) が session のストアの起動の状態を書くようになった (`dismissLaunchNotice`)。X-4 US-1 AC7 の開き直しも「失敗のセッションを中央に出していたときだけ」になった。どちらも session の側の記録に無い (M-101) (scope: feature)
+### [Low] R2 の追記で、AD-046 の訂正の節と ui charter の「同じ内容」が成り立たなくなった。ADR に足した一文には日付が無く、「ui charter にだけある」は事実と違う (L-201) (scope: feature)
 
-- **観察**: `running-session-store.ts:55-59` に公開の操作 `dismissLaunchNotice`、呼び出し元は shell の 2 件 (`LaunchDialogHost.tsx:39`、`useShellFocus.ts:42`)。R1 の時点では shell は session のストアを購読するだけだった。AC7 の開き直しは `ui.focus === 'running'` のときだけになった。記録があるのは data-model だけで、session charter の O-7 の項、roadmap の「O-7 が変えたもの」、ui charter の「面の状態」に無い。roadmap の行数 (613 / 550) は今の 632 / 552 と合わない
-- **同種事象探索**: `dismissLaunchNotice` は src 3 ファイル + data-model 1 件、docs 0 件。shell から session のストアの操作を呼ぶ箇所は 2 件
-- **リスク/影響**: 起動の流れを触る session の feature (X-6) や切り出しの持ち主が、起動の状態の書き手が session の外にもあること、AC7 の開き直しが ui の面の状態に依存することを知らずに変える。境界 (遷移のロジックは session の store の中) は保たれている。利用者の「O-7 は当たらない」の判断は覆らない
-- **推奨アクション** (最小案。文書の追記だけ): session charter の O-7 の項に `dismissLaunchNotice` と AC7 の開き直しの条件を足す。roadmap の一覧に `dismissLaunchNotice` と `MonitorSummary` が `stores/ui.ts` を読むことを足し、行数を 632 / 552 に直す。ui charter の「面の状態」に「起動の告知を消す操作 (`dismissLaunchNotice`) だけは呼ぶ」を足す
-- **根拠**: ARCH-2 / ARCH-5、ui charter Out of scope :73-74、X-4 spec US-1 AC7、R1 M-001
+- **観察**: `0046-app-shell-layout.md:70-71` は R2 (2026-10-06) の追記だが節の日付は 2026-10-05 / R1 のまま。「`dismissLaunchNotice` を呼ぶ … は ui charter にだけある」と書くが、session charter :171・:207-211、data-model.md:35・:51、roadmap :231 にもある。`docs/domains/ui/charter.md:173` は「AD-046 の訂正の節と同じ内容」と書くが、charter :177-179 に ADR に無い文がある。`stores/ui.ts:14` の「(AD-046 の訂正の節)」も同じ前提
+- **同種事象探索**: `訂正の節と同じ内容|AD-046 の訂正の節|ui charter にだけある` 3 件 (ui/charter.md:173、stores/ui.ts:14、0046:71)
+- **推奨アクション** (最小案): (1) charter :173 を「AD-046 の訂正の節 (2026-10-05 の時点の記録) に、その後の追加を足したもの」に (2) ADR :70-71 に「(2026-10-06 追記)」を足し、「ui charter にだけある」を「本 ADR には書かず charter の側にある」に直すか、例の句を消す (3) `stores/ui.ts:14` の括弧を外す
+- **根拠**: AD-031 Decision 1、ARCH-2 / ARCH-3
 
-### [Medium] 「見ているセッション」の定義が、R1 の修正 (起動ダイアログを開いている間は見ていない扱い) に追随していない箇所が 3 つある。うち 1 つは glossary (M-102) (scope: feature)
+### [Low] シェルが session のストアの状態の形から「失敗した close」を推し量っている。前提の不変条件がシェルのコメントにしか無い (L-202) (scope: feature)
 
-- **観察**: 古い定義のまま: `glossary.md:855-856`、`session-view.ts:434-435` (`announcements` の doc)、`SessionAttentionAnnouncer.tsx:13` (規則の表)。実装はどれも `watchedIdOf` を通すので振る舞いは正しい
-- **リスク/影響**: glossary は Ubiquitous Language の正本。後続が glossary の定義で読み上げ・件数のボタンを設計すると、R1 で直した不具合を作り直す
-- **推奨アクション**: 3 か所を「設定のダイアログも起動ダイアログも開いていないとき」に直す。より良くは glossary を「定義は 013 data-model §1 の `watchedIdOf`」の参照にし、コードの 2 か所も `watchedIdOf` を指すだけにする
-- **根拠**: Constitution XIV、ARCH-7、AD-046 Decision 6
+- **観察**: `useShellFocus.ts:38-42` は「`launch` の参照が変わり、`previousFailure` が非 null で、`order` が減った」をもって判断する。前提は :38 のコメントだけ。store の `close` の doc (`running-session-store.ts:515-559`)、`dismissLaunchNotice` (:55-59)、session charter :207-211 は、ui がこの形を読んでいることを書いていない。R2 で `selectedId` の条件を外したので推論に頼る範囲が広がった
+- **同種事象探索**: `next\.launch !== prev\.launch|order\.length <` (shell) 1 件。`previousFailure:` を立てる箇所は store に 1 件 (:554)
+- **リスク/影響**: X-6 が行を減らすか `previousFailure` を立てる別の経路を足すと、シェルが黙って告知を消すか起動ダイアログを開く。経路のテスト (AppShell.test.tsx:1030 / :783) は崩れを捕まえるが、どの不変条件が崩れたかは読み取れない
+- **推奨アクション** (最小案): store の `close` の doc と session charter :207-211 の O-7 の項に「ui のシェルはこの組み合わせを失敗した close として読む。ほかの操作でこの組み合わせを作らない」を 1 文。明示の通知 (`closeSeq` など) を足すかは持ち主が判断
+- **根拠**: ARCH-5、ui charter :179
 
-### [Low] ui charter :168 の「書くのは下の『面の状態』の例外 2 件だけ」は、runtime の画面が `stores/ui.ts` を書く事実と合わない (L-101) (scope: feature)
+### [Low] 新しい横断の語「起動の告知」が glossary に無い (L-203) (scope: feature)
 
-- **観察**: `WorkspaceFoldersScreen.tsx:242,301,312` は `clearFolderDraftSeed` を呼ぶ (使い切りの受け渡しの受け手が消す)
-- **推奨アクション**: :168 を「runtime は `folderDraftSeed` を読み、受け取ったら消す (`clearFolderDraftSeed`。使い切り)。面の状態を他 domain が書くのは下の例外 2 件だけ」に直す
-- **根拠**: ARCH-2 / ARCH-5
+- **観察**: ui charter :177-178 と session charter :171・:207 が「起動の告知 (拒否の理由と前回の失敗) を消す操作」と呼ぶ。glossary に「告知」は 0 件
+- **同種事象探索**: `起動の告知|失敗の告知|拒否の告知` docs 4・src 5、glossary 0
+- **推奨アクション**: glossary に「起動の告知 (launch notice): 起動ダイアログに出す拒否の理由 (`rejectReason`) と前回の失敗 (`previousFailure`)。`lastConfig` は含まない」を足すか candidate として登録
+- **根拠**: Constitution XIV、ARCH-7
 
-### [Low] AD-046 の訂正の節の形の不足: 訂正した文 (:38) からの参照が無い。「`stores/ui.ts` はそこを参照する」が事実でない。規則の本文が 3 か所に写されている (L-102) (scope: feature)
+### [Low] composer がフォーカスを奪う件の持ち主を session の X-6 にしたが、composer は ui charter の In scope で、X-6 は critical path の外にある (L-204) (scope: feature)
 
-- **推奨アクション**: :38 の末尾に「(下の『訂正』節)」を足す (AD-024 の先例と同じ)。`stores/ui.ts:13-16` を ui charter の参照に縮めるか、:69 から `stores/ui.ts` を外す。charter :171 はそのままでよく、ADR の訂正の節は事実の記録、運用で書き換えるのは charter の側、とどちらかに 1 文で書く
-- **根拠**: AD-031 Decision 1、AD-024 の先例、ARCH-3
+- **観察**: `docs/roadmap.md:189-197` の持ち主は X-6。直す箇所は `thread.aui.tsx:579` の `ComposerPrimitive.Input` か呼び出し元。ui charter :48 は composer を ui の In scope に置く。X-6 は roadmap :291-295 の「M2 の後続 (critical path 外)」で着手の時期が無い。M3 の O-5 は slash commands を持つ ui の feature で composer に触れうる
+- **推奨アクション** (最小案): 持ち主を「composer を次に触る feature (O-5 か X-6 の早いほう)」にするか、X-6 のままなら ui charter の composer の項に 1 文書く
+- **根拠**: ARCH-2、ui charter In scope :48
 
-### [Low] `prompts.md` の OPT-panel の起動文が「AD-046 Decision 4 の境界のすべてに従う」と書きながら、「タブの表の `Content` では表さない」を欠く (L-103) (scope: feature)
+### [Low] (H) 持ち越し: 「focus を書くのは `useShellFocus` だけ」に検出の手段が無い (L-006) (scope: feature)
 
-- **推奨アクション**: 「外部コンテンツのタブはタブの表の `Content` では表さず、OPT-panel で種別を足す」を足すか、roadmap の OPT-panel の行の参照の形にする
-- **根拠**: AD-046 Decision 4、ARCH-3
-
-### [Low] 「取得時刻 0 = 未取得」が main と renderer の暗黙の取り決めになった。DTO にも roadmap の項目にも書かれていない (L-104) (scope: feature)
-
-- **推奨アクション**: roadmap の (4) に「main を直したら `useSessions.ts` の取得時刻 0 の除外を外す。それまでは取得時刻 0 = 未取得は DTO に無い取り決め」を足す。DTO に注記するかは (4) の持ち主が決める
-- **根拠**: ARCH-4 / ARCH-5
-
-### [Low] (H) 持ち越し: 「focus を書くのは `useShellFocus` だけ」に、破られたことを検出する手段が無い (L-006) (scope: feature)
-
-- **観察**: R1 と同じ。R1 の修正で `UiState` が export になった
 - **推奨アクション**: R1 と同じ
 
-### [Low] (H) 持ち越し: composer の基準画像の CI の結果が未記録 (L-007) (scope: feature)
+### [Low] (H) 持ち越し: composer の基準画像の CI の結果と V-3b が未記録 (L-007) (scope: feature)
 
-- **推奨アクション**: PR の CI の e2e の結果を記録してから `/cl-done` (completed) に進む
-
-### [Low] (H) AD-046 Confirmation の証跡 (V-3) が、どのコミットに対するものか特定できない (L-105) (scope: feature)
-
-- **観察**: quickstart-results の V-3 は「pr-gate R1 の修正を含む作業ツリー」(2026-10-05) と書くが、コミットの記載が無い
-- **推奨アクション**: V-3 の見出しに確かめたツリーのコミットを足し、その後に変えたファイルがあれば列挙する
-- **根拠**: AD-046 Confirmation、ARCH-3、H
+- **推奨アクション**: CI の e2e の合否と V-3b を記録してから completed に進む
 
 ### H の観点 (担当範囲)
 
-- M-101 の振る舞いは `AppShell.test.tsx:770,784` が確かめる。store 側の `dismissLaunchNotice` の単体テストは 0 件で、`launching` のときは何もしない分岐は通っていない
-- M-102 の振る舞いは `ui.test.ts:52` と `AppShell.test.tsx:802` が確かめる。文書の揃え漏れを検出する手段は無い
-- 既存の振る舞いを壊していない根拠: vitest 119 files / 1960 passed、E2E 11 passed (composer は L-007)、depcruise 違反 0、Constitution 検証 ok 20、逆向き import 0 件、基準画像の差分 0、V-3 全項目 OK
+- L-201 / L-203 / L-204 は文書の食い違いで、検出するテストや検査は無い
+- L-202 の振る舞いは AppShell.test.tsx:1030 と :783 が確かめる。store の `dismissLaunchNotice` の単体テストは 0 件のまま
+- 既存の振る舞いを壊していない根拠: domain・main・preload・agents の差分 0、逆向き import 0、基準画像の差分 0。quickstart-results の vitest 1969 passed・depcruise 0・Constitution ok 20・E2E 11 passed は修正した側の申告で本 reviewer は実行していない。R2 の E2E の計測の行は値が無く、O-3 の比較の基準にはならない
 
 ## 同種事象探索 cascade summary
 
 | 指摘 ID | Grep query | 該当件数 | path:line |
 |---|---|---|---|
-| M-101 | `dismissLaunchNotice` | src 3 ファイル + data-model 1 件、docs 0 件 | running-session-store.ts:59,436 / LaunchDialogHost.tsx:39 / useShellFocus.ts:42 / data-model.md:48 |
-| M-102 | `見ているセッション\|watchedId` (定義を文で書く箇所) | 9 (古いもの 3) | glossary.md:855-856 / session-view.ts:434-435 / SessionAttentionAnnouncer.tsx:13 |
-| L-101 | `useUiStore` (shell・stores の外の書き込み) | 4 ファイル | SessionListScreen.tsx:202,248,730,1043 / WorkspaceFoldersScreen.tsx:242,301,312 / TranscriptDensityToggle.tsx:22 (ui) |
-| L-102 | 訂正した箇所に印を置く先例 | AD-024 4 か所 / AD-036 2 か所 | 0046:38 (印なし) |
-| L-103 | `OPT-panel` (prompts.md) | 1 | prompts.md:312 |
-| L-104 | renderer で `fetchedAt` を 0 と判定 | 1 | useSessions.ts:93 / dto.ts:133 / session-service.ts:189 |
-| L-006 | `setFocus(` (テスト外) | 6 (すべて useShellFocus.ts) | useShellFocus.ts |
+| L-201 | `訂正の節と同じ内容\|AD-046 の訂正の節\|ui charter にだけある` | 3 | docs/domains/ui/charter.md:173 / src/renderer/src/stores/ui.ts:14 / docs/decisions/0046-app-shell-layout.md:71 |
+| L-202 | `next\.launch !== prev\.launch\|order\.length <` (shell)、`previousFailure:` (store) | 1 / 1 | useShellFocus.ts:39-42 / running-session-store.ts:554 |
+| L-203 | `起動の告知\|失敗の告知\|拒否の告知` (glossary) | 0 (docs 4・src 5) | ui/charter.md:177 / session/charter.md:171,207 / roadmap.md:231 |
+| L-204 | `ComposerPrimitive\.Input` (本番) / roadmap の持ち主 | 2 / 1 | thread.aui.tsx:579,1053 / roadmap.md:196-197 |
+| L-006 | `setFocus\(` (テスト以外) | 5 (すべて useShellFocus.ts) | useShellFocus.ts:33,46,63,69,74 |
 
 ## Verdict
 
 - Critical: 0
 - High: 0
-- Medium: 2 (M-101, M-102)
-- Low: 7 (L-101, L-102, L-103, L-104, L-105, 持ち越しの L-006, L-007)
-- Round inheritance: resolved from 1: 10 / partially: 1 (M-001。残りは M-101 に統合) / unresolved: 2 (L-006, L-007) / new: 7 (M-101, M-102, L-101〜L-105)
+- Medium: 0
+- Low: 6 (L-201, L-202, L-203, L-204, 持ち越しの L-006, L-007)
+- Round inheritance: resolved from 2: 7 / unresolved: 2 (L-006, L-007) / new: 4 (L-201〜L-204)
 
 (invoker 注: 保存の際に観察の文を要約した箇所がある。ID・severity・file:line・根拠は原文のまま)
