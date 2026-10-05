@@ -1,108 +1,106 @@
 # platform-boundary-reviewer Review: アプリのシェルを目標レイアウトにする (O-7)
 
-**Run**: 2026-10-05 (pr-gate R1、system scope の track)
+**Run**: 2026-10-06 (pr-gate R2、system scope の track)
 **Reviewer**: platform-boundary-reviewer
 **Spec**: specs/013-ui-app-shell/spec.md
+**Round**: 2
 
 ## 初回読了 viewpoint
 
-- FR/SC: FR-016 / SC-008 (過去の区画の初回の取得はランタイムの一覧の後)、FR-001 / FR-002 (サイドバーの常時マウント)、FR-004 (`RunningSessionsProvider` をシェル全体に)、FR-007、FR-009 (`seedFolderDraft`)、FR-011 (E2E と perf のハーネス)、FR-015
-- touched files に該当する charter / Confirmation: runtime charter (Journey 1、不変条件、KPI「検出の所要時間」:129)、`wsl-detector.ts:44-48` の C-1 呼び出し回数の契約、AD-038 Confirmation :113-115 (production-inert)、AD-046 Consequences :40、Constitution Principle I / II / III / VI / VII。AD-003 / AD-004 / AD-012 にパス変換・endpoint の変更はない
+- FR/SC: FR-016 / SC-008 (`listRuntimes` を待つ間も `loading`。取得時刻 0 の通知を受けない)、FR-007 (`dismissLaunchNotice`)、FR-006 (`watchedId` が `launchOpen` も見る。境界には関わらない)、FR-011 (E2E と perf は変わっていない)
+- touched files に該当する charter / Confirmation: runtime charter の KPI「検出の所要時間」(:129) と判定バッチの余裕が薄いという注記 (:209)、`wsl-detector.ts:40-48` の C-1、`runtime-store.ts:28`、R-2 の `ipc-session-list.md:60`、glossary.md:36-37、Constitution Principle II / III、AD-003。AD-004 / AD-012 の領域に差分はない
 - A. 認可 / 認証 / secret 管理: 該当なし: security-reviewer の担当
 - B. 入力検証 / injection / CSP / 暗号: 該当なし: security-reviewer の担当
-- C. 業務不変条件 / Charter drift: Critical:0 High:0 Medium:1 Low:2
+- C. 業務不変条件 / Charter drift: Critical:0 High:0 Medium:1 Low:3
 - D. Constitution / ADR drift: Critical:0 High:0 Medium:0 Low:0
 - E. User Story / SC / AC / UX: 該当なし: po-reviewer の担当
-- F. 命名 / module / lint hookup: Critical:0 High:0 Medium:1 Low:1
+- F. 命名 / module / lint hookup: Critical:0 High:0 Medium:0 Low:1
 - G. optional reviewer 範囲: 該当なし: 本 reviewer は optional reviewer ではない
 - H. テスト / coverage / observability / regression: Critical:0 High:0 Medium:0 Low:1
 
 ## スコープ要約
 
-renderer の再構成。main の差分は `src/main/index.ts:192-198` の注記だけ。IPC・preload・`protocol.ts`・`e2e-capability.ts` は scope に無い。境界に触れるのは (1) 過去の区画と `RunningSessionsProvider` がアプリの起動直後からマウントされランタイム検出と同じ時間帯に IPC を発行する、(2) `useSessions.ts:79-90` が `listRuntimes()` の解決を待ってから `listSessions()` を呼ぶ (FR-016)、(3) E2E と perf の起動の入口を `openLaunchDialog` に揃えた、の 3 点。
+R1 の後の修正のうち境界に関わるのは、`useSessions.ts` の `setLoading(true)` と取得時刻 0 の除外、`reviewers.yml` の `src/main/index.ts`、`index.ts` の注記、`dismissLaunchNotice`。main の差分は注記だけ。IPC・preload・`protocol.ts`・`runtime-store.ts`・`session-service.ts`・`eslint.config.mjs` は差分なし。
 
-design-gate R1 の自分の指摘の引き継ぎ: H-001 は renderer 側で塞がった (`listRuntimes` の解決の時点で `runtime-store` の `byId` は埋まっている。`runtime-store.ts:84-93,114-124`)。ただし残りが 2 つ (M-001 / L-004)。M-001 は解消 (`group-label.ts` を共有)。M-002 は半分だけ解消 (component テストは足されたが main 側の前提を固定するテストが無く、V-3 は未実施)。L-001 は解消 (glossary.md:36-37。ただし移した注記に 1 件残る → L-001)。
+### R1 の指摘ごとの判定
+
+| R1 ID | 判定 | 根拠 (観察) |
+|---|---|---|
+| M-001 | **unresolved** (system に移した) | `runtime-store.ts:114-124` は不変。roadmap の (3) に記録はあるが、R1 の推奨テスト (c) が抜けている |
+| M-002 | **resolved** | `reviewers.yml:159` に `"src/main/index.ts"`。`glob_to_re` で完全一致することを確かめた |
+| L-001 | **resolved** | `RunningSessionsProvider.tsx:106` は「assistant-ui の runtime は 1 つ」。同じ種類の残りは L-102 |
+| L-002 | **partially** | 注記は事実どおりになった。V-3 に `probe-batch` の計測は足されていない |
+| L-003 | **unresolved** (system に移した) | roadmap の (5) に記録 |
+| L-004 | **partially** | renderer の側は塞がった。main の側は roadmap の (4) に移した |
+
+### R2 の修正の検証 (指摘にはしない事実)
+
+- **取得時刻 0 の除外は、正しい通知を落とさない**: `fetchedAt` が書き換わるのは `commit` (`session-service.ts:551`) だけで値は `Date.now()`。値が 0 になるのは最初の commit より前の snapshot だけで、セッションを持たない。判定の完了による `onRuntimesChanged` は最初の commit の後なら 0 でなく受けられ、前に届いた分はその後の commit の regroup に反映される。最初の取得が IPC で失敗した後の 0 の通知を落とすのはむしろ正しい。E2E の capability は `Date.now()` を使う
+- **`loading` の立て方は FR-016 の順序と矛盾しない**: 起動の直後に検出より先に列挙できた唯一の入口 (見出しのボタン) は閉じた。最初の描画と passive effect のあいだの 1 フレームは busy にならないが、実際に押せる経路は観察していない
+- **`dismissLaunchNotice` は権限のゲートに触れない**: 消すのは告知だけで、`lastConfig` の `permissionMode` は安全 3 値の型
 
 ## Findings
 
-### [Medium] `listRuntimes` の待ちが「検出の完了を待つ」ではなく「検出をもう 1 本起こす」になっている。起動時の検出の本数が mount される呼び出し元の数に比例する (M-001) (scope: system)
+### [Medium] `listRuntimes` の待ちが「検出の完了を待つ」ではなく「検出をもう 1 本起こす」になっている (M-001) (scope: system)
 
-- **観察**: `runtime-store.ts:114-124` の `list()` は `if (detected)` を await の前に見て、`detected = true` は `detect()` の完了後 (:92) に立つ。進行中の検出を束ねる仕組み (single-flight) が無い。起動時、main が `index.ts:190` で検出 A を起こし、同じ時間帯に O-7 で起動時にマウントされるようになった 2 つの呼び出し元 (`RunningSessionsProvider.tsx:42` → `useRuntimes.ts:49-50`、`useSessions.ts:80-81`) が `listRuntimes` を発行し、それぞれが `detect()` を走らせる (`detector.list()` 1 回で wsl.exe を並列に 3 本)。起動時の wsl.exe は O-7 以前の 6 本から最大 9 本に増える。畳んだサイドバーは `SessionListScreen` を描かないので、検出中に畳む・開くを繰り返すとそのたびに検出が増える (`wsl-detector.ts:48`「利用者の操作回数にも比例させてはならない (FR-010)」と `runtime-store.ts:28`「未検出なら 1 回だけ検出する」に反する)。後から終わった検出が `probeAll` の置き換えより後に着くと判定の結果が判定前の値に戻りうる (安全側に倒れるが、起動は `capabilities-not-probed` で止まる。実機では観察していない)
-- **同種事象探索**: `listRuntimes\(` (renderer、テスト以外) 3 件 (起動時は 2 件)。`if (!detected) await detect()` 形 3 件 (runtime-store.ts:120-122、:136、:185)。並行の `list()` のテストは 0 件
-- **リスク/影響**: 起動経路の wsl.exe が 1.5 倍になり runtime charter の KPI (一覧 3,000 ms / 判定バッチ 4,000 ms) を圧迫する。まれに判定の結果が消える
-- **推奨アクション**: `runtime-store.ts` で進行中の検出を 1 本に束ねる (`detecting ??= detect().finally(...)`)。`runtime-store.test.ts` に (a) 並行の `list()` で検出 1 回、(b) `list()` の後の `snapshot()` が WSL の descriptor を含む (FR-016 の main 側の前提)、(c) `probeAll` の後に解決した `list()` が判定の結果を消さない、を足す。feature 側の変更は要らない
-- **根拠**: runtime charter Journey 1 / 不変条件、`wsl-detector.ts:40-48`、`runtime-store.ts:28`
-- **scope 根拠**: 直す場所は touched files の外の `src/main/app/runtime-store.ts`。この PR の新しい呼び出しが顕在化させた既存の欠陥
+- **観察**: R1 と同じ。R2 で見えたこと: roadmap の (3) が写したのは R1 の推奨テストの (a)(b) だけで、**(c)「`probeAll` の後に解決した `list()` が判定の結果を消さない」が抜けている**。遅れて終わった `detect()` は `byId` を丸ごと置き換え (`runtime-store.ts:86`)、`list()` の経路は `notify()` を呼ばないので、main の判定の基準は「判定中」のまま残り、renderer の表示と食い違いうる (安全側には倒れる。実機では未観察)
+- **同種事象探索**: `listRuntimes\(` 3 件、`useRuntimes()` の呼び出し元 5 件、`if (!detected) await detect()` 3 件、並行の `list()` のテスト 0 件
+- **推奨アクション**: `runtime-store.ts` で single-flight にし (a)(b)(c) のテストを足す (system)。**この PR でできること**: roadmap の (3) に (c) を 1 文で書き足す
+- **根拠**: runtime charter Journey 1 と不変条件、`wsl-detector.ts:40-48`、`runtime-store.ts:28`
+- **scope 根拠**: 直す場所は touched files の外。roadmap の追記だけは feature で直せる
 
-### [Medium] platform-boundary-reviewer の発火条件に `src/main/index.ts` が無い。そのため、この reviewer の design-gate High (H-001) を閉じる差分が code-gate で一度も見られなかった (M-002) (scope: feature)
+### [Low] V-3 に起動時の `probe-batch` の計測がない (L-002) (scope: feature)
 
-- **観察**: `reviewers.yml:146-154` の発火条件は `src/main/app/**` を含むが `src/main/index.ts` を含まない。code-gate はこの reviewer を「一致する変更ファイルが無い」で起動しなかった (`code-gate.md:31`)。今回の起動は `eslint.config.mjs` の注記の 1 行による偶然。`src/main/index.ts` には起動時の検出の結線 (:190)、AD-038 の production-inert の門 (:100)、Principle II の例外注記 `platform-ok:` (:210。注記の正直さは本 reviewer が判定する。constitution.md:404) がある
-- **同種事象探索**: `platform-ok:` (src) 7 件。発火条件の外は `src/main/index.ts:210` の 1 件
-- **推奨アクション**: `reviewers.yml` の platform-boundary-reviewer の `auto_invoke_patterns` に `"src/main/index.ts"` を足す。renderer 側の結線 (`useSessions.ts`、`features/runtime-list/**`) を入れるかは owner の判断
-- **根拠**: AGENTS.md、Constitution Principle II、PB-7
-- **scope 根拠**: `reviewers.yml` は touched file
-
-### [Low] 移した注記の「ランタイムは 1 つ」が、この PR で足した glossary の規則に反する (L-001) (scope: feature)
-
-- **観察**: `RunningSessionsProvider.tsx:106` の「**ランタイムは 1 つ**」は assistant-ui の runtime を指すが、glossary が `AgentRuntime` の日本語表記として定める「ランタイム」と同じ語。glossary.md:36-37 は「renderer の文書で runtime と書くときはどちらかを明記する」と定めた
-- **推奨アクション**: 「assistant-ui の runtime は 1 つ」と明記する
-- **根拠**: glossary `AgentRuntime` の Counterexamples、AD-003
-
-### [Low] `index.ts` の注記「main の起動経路に UNC I/O を伴う子プロセスを乗せない」は字面の上でしか成り立たず、判定バッチとの重なりを隠している (L-002) (scope: feature)
-
-- **観察**: FR-016 の同期点は検出の完了で `probeAll` の開始と同じ時刻 (`index.ts:190`)。起動のたびに過去の区画の初回の列挙が判定バッチと重なる (O-7 以前は利用者が一覧を開くまで起きなかった)。判定バッチの予算 (runtime charter:129「4,000 ms」) を確かめる手順が V-3 に無い
-- **推奨アクション**: 注記を「起動の直後に renderer が列挙を起こし、判定バッチと重なる (AD-046)」と事実どおりに書く。quickstart V-3 に「過去の区画が開いた状態で起動し、`probe-batch` の計測値が 4,000 ms 以内」を足す
-- **根拠**: runtime charter KPI「検出の所要時間」
+- **推奨アクション**: roadmap の (3) に「single-flight を入れたら、過去の区画をマウントした状態で起動時の `probe-batch` を測る」と 1 文足し、quickstart-results に「未計測」と明記する
+- **根拠**: runtime charter の KPI「検出の所要時間」と :209
 
 ### [Low] Constitution 検証の項目 8 は `navigator.*` を見ない (L-003) (scope: system)
 
-- **観察**: `PLATFORM_BRANCH_PATTERNS` (`allowlists.mjs:564-579`) は `process.*` と `os.*` だけ。renderer で使えるプラットフォーム判定は実質 `navigator.*` だけで、シェルはショートカットの表示 (Cmd / Ctrl) のような分岐が最初に現れやすい
-- **同種事象探索**: `navigator\.(platform|userAgent|userAgentData)` (src) 0 件、scripts/constitution 0 件。既出: 001 R1 M-004、016 design-gate R2 L-105 (どちらも未対応)
-- **推奨アクション**: 項目 8 に `navigator.(platform|userAgent|userAgentData)` を足し、rule-fixtures にサンプルを 1 件 (項目 8 の持ち主に送る)
-- **根拠**: Principle II の Verification、PB-7
+- **推奨アクション**: roadmap の (5) に記録済み。項目 8 の持ち主に送る
 
-### [Low] FR-016 の後も、判定バッチの通知が初回の取得の完了前に「未取得の索引」(取得時刻 0) を renderer に配る (L-004) (scope: system)
+### [Low] main は今も、初回の取得の前に取得時刻 0 の索引を publish する (L-004) (scope: system)
 
-- **観察**: `composition-root.ts:198` → `session-service.ts:773-782` は `loaded` を見ずに regroup して publish し、取得前の snapshot は `{ groups: [], outcomes: [], fetchedAt: 0, complete: false }`。O-7 で `useSessions.ts:86` の購読が起動直後から張られ、`probeAll` は起動直後に 2 回通知する。renderer の `setIndex` が `loading` を false にし、ヘッダに「取得時刻 1970/01/01 …」が出る (空状態の断言は `coverage === 'pending'` で抑えられている)
-- **同種事象探索**: `publish()` (session-service.ts) 6 件。`loaded` を見ずに取得前に発火しうるのは `onFoldersChanged` (:770) と `onRuntimesChanged` (:781) の 2 件。テスト 0 件
-- **推奨アクション**: `onRuntimesChanged` / `onFoldersChanged` は `!loaded` のとき publish しない。`session-service.test.ts` にテストを足す
-- **根拠**: AD-046 Consequences :40、R-2 FR-034
+- **推奨アクション**: roadmap の (4) のとおり main の側で `!loaded` のときは publish しない。テストを足す
+
+### [Low] renderer の除外の条件「取得時刻 0 = 未取得」が契約に書かれておらず、main のテストでも固定されていない (L-101) (scope: feature)
+
+- **観察**: `useSessions.ts:93` の `if (next.fetchedAt === 0) return` は main の内部の初期値 `let fetchedAt = 0` (`session-service.ts:189`) に依存する。DTO の文書 (`dto.ts:132-133`) と R-2 の契約に 0 の意味は無く、取得前の snapshot が 0 であることを固定するテストも 0 件。IPC の境界を越える暗黙の前提で、(4) を直す人が変えると除外は警告なしに効かなくなる
+- **推奨アクション**: roadmap の (4) に「main で `!loaded` の publish を止めたら `useSessions.ts` の除外を消すか、残すなら『取得時刻 0 = 未取得』を `SessionIndexDTO.fetchedAt` の文書に書く。`session-service.test.ts` で固定する」を書き足す。`useSessions.ts` の注記に生産側の行 `session-service.ts:189` を書く
+- **根拠**: R-2 FR-034、`ipc-session-list.md:60`
+
+### [Low] O-7 で足した文書に、どちらの runtime かを書いていない「runtime」が残る (L-102) (scope: feature)
+
+- **観察**: `docs/ui-coverage.md:338` の「1 つの runtime の thread list」「2 つの runtime の一覧」と、写し元の `research.md:45` (3 か所) は assistant-ui の runtime であることを書いていない。glossary.md:36-37 の規則に反する
+- **推奨アクション**: 「assistant-ui の runtime」と明記する
+- **根拠**: glossary の `AgentRuntime` の Counterexamples、AD-003
 
 ### 観点ごとの該当なし
 
-- PB-1: `FolderDraftSeed.path` は `PathDTO` を運ぶだけ。概要は所在を `locationLabelOf` / `locationIndexOf` で引き、パスを組み立てない
-- PB-2: シェルの store は UI の状態だけ (L-001 の語の問題を除く)
-- PB-3: `capabilities` を扱う差分が無い
-- PB-4: 起動で選べるのは安全な 3 値だけで、型の段階で昇格モードを持たない (`launch-config.ts:19-29`)。modal にしても「閉じて起動し直す」で `lastConfig` を戻しても昇格の経路はできない
-- PB-5: パス変換の差分が無い
-- PB-6: 永続化が無い。`vitest-axe` は devDependency だけ
-- PB-7: `features/shell/` は `ui` 要素・`no-restricted-imports`・名前空間リテラルの禁止に乗っている。`eslint.config.mjs` の差分は注記 1 行で規則は緩んでいない。renderer から `electron` / main / preload への import は 0 件
-- perf の安全柵: 壊れていない (`e2e/support/launch.ts` のトップレベルは import と関数宣言だけで、`CLOSTA_E2E` を立てるのは `launchApp` の子プロセスの env だけ。perf は `openLaunchDialog` しか import しない)
-- E2E の production-inert: 壊れていない (差分は locator だけ)
+- PB-1: パスの扱いの差分なし。PB-2: 指摘は M-001 と L-102 だけ。PB-3: `capabilities` の扱いの差分なし。PB-4: `dismissLaunchNotice` は告知を消すだけ。PB-5: パスの変換の差分なし。PB-6: 永続化と依存の追加なし。PB-7: M-002 は解消、L-003 は残る。規則は緩んでいない
 
 ### H の実質
 
-- M-001 を検出できるテストが無い (並行の `list()` と `list()` の解決後の `snapshot()`)
-- SC-008 の実機の半分 (V-3) は未実施
-- E2E は 11 passed で、落ちた 1 件は基準画像の 1px の差
+- R2 の新しいテスト (`SessionListScreen.test.tsx:1154-1188`) は待っている間の `aria-busy`・busy のボタンで列挙しないこと・値 0 の通知で取得中が外れないことを固定する
+- L-101 と M-001 を検出できる main 側のテストは 0 件
+- SC-008 の実機の目視 (V-3 #2) は 2026-10-05 に OK。PR の CI の e2e の合否はまだ記録されていない
 
 ## 同種事象探索 cascade summary
 
 | 指摘 ID | Grep query | 該当件数 | path:line |
 |---|---|---|---|
-| M-001 | `listRuntimes\(` (renderer、テスト以外) | 3 (起動時は 2) | useRuntimes.ts:50,96; useSessions.ts:81 |
-| M-001 | `if (!detected) await detect()` 形 (runtime-store.ts) | 3 | runtime-store.ts:120-122,136,185 |
-| M-002 | `platform-ok:` (src) | 7 (発火条件の外は 1) | src/main/index.ts:210 |
-| L-001 | `ランタイムは 1 つ` (src) | 1 | RunningSessionsProvider.tsx:106 |
-| L-002 | `UNC I/O` (src/main/index.ts) | 1 | index.ts:197 |
-| L-003 | `navigator\.(platform\|userAgent\|userAgentData)` | 0 / 0 | allowlists.mjs:564-579 に無い |
-| L-004 | `publish()` (session-service.ts。取得前に発火しうるもの) | 6 (うち 2) | session-service.ts:770,781 |
+| M-001 | `listRuntimes\(` (renderer、テスト以外) | 3 | useRuntimes.ts:50,96; useSessions.ts:85 |
+| M-001 | `useRuntimes\(\)` | 5 | RunningSessionsProvider.tsx:42; LaunchDialog.tsx:174; WorkspaceFoldersScreen.tsx:324; ResolutionScreen.tsx:152; RuntimeListScreen.tsx:161 |
+| L-003 | `navigator` (scripts/constitution) | 0 | — |
+| L-004 | 取得前に発火しうる `publish()` | 2 | session-service.ts:770,781 |
+| L-101 | `fetchedAt === 0\|fetchedAt = 0` (src、テスト以外) | 2 (契約での定義は 0) | useSessions.ts:93; session-service.ts:189 |
+| L-102 | どちらか明記のない `runtime の` | 2 + 3 | ui-coverage.md:338; research.md:45 |
 
 ## Verdict
 
 - Critical: 0
 - High: 0
-- Medium: 2
-- Low: 4
+- Medium: 1
+- Low: 5
+- Round inheritance: resolved from 1: 2 (M-002 / L-001) / unresolved: 4 (M-001 / L-003 は未対応。L-002 / L-004 は一部だけ対応) / new: 2 (L-101 / L-102)
 
 (invoker 注: 保存の際に観察の文を要約した箇所がある。ID・severity・file:line・根拠は原文のまま)
