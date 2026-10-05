@@ -25,7 +25,7 @@
 | New in this run | 0 | 3 |
 
 **Status**: PASS (Critical 0)
-**Next**: status は tasking → implementing。**ただし本 spec は未承認の判断 (U-1〜U-6)・proposed の AD-046〜AD-049・未マージの O-7 / O-4 / O-5 に依るので、/cl-implement には入らない。** R2 の High 3 件と Medium は gate の後に手当てした。手当ては再レビューを受けていない
+**Next**: status は tasking → implementing。**ただし本 spec は未承認の判断 (U-1〜U-7。U-7 は gate の後に arch L-004 を受けて足した)・proposed の AD-046〜AD-049・未マージの O-7 / O-4 / O-5 に依るので、/cl-implement には入らない。** R2 の High 3 件・Medium 12 件と Low の大半は gate の後に spec / data-model / plan / tasks / research / quickstart / AD-049 で手当てした。手当ては再レビューを受けていない。system scope の Low (pb M-101 の項目 16 の作り・sec L-006・pb L-105・arch L-005) は roadmap の system scope に記録する (SH-010)
 
 ## High (dedup 後 3 件。すべて new)
 
