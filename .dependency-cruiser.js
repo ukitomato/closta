@@ -232,7 +232,7 @@ module.exports = {
         'そちらは I/O を解決して渡すのが役割である。' +
         'I-2 の `ContainerService` を作るときは、ここに実名を足すこと。' +
         '**R-2 で `SessionService`、X-1 で `session-launch-service`、X-3 で `provider-service`、' +
-        'X-4 で `preset-service` を追加した** ' +
+        'X-4 で `preset-service`、O-3 で `launch-usage-service` を追加した** ' +
         '(AD-027 Consequences の履行)。' +
         '`session-enumerator.ts` は**含めない** — プロセスハンドルを持つが、' +
         '役割は子プロセスの生成と結線であり、`composition-root.ts` と同じ' +
@@ -251,7 +251,7 @@ module.exports = {
        */
       from: {
         path:
-          '^src/main/app/(folder-service|runtime-store|session-service|session-launch-service|provider-service|preset-service)[.]ts$' +
+          '^src/main/app/(folder-service|runtime-store|session-service|session-launch-service|provider-service|preset-service|launch-usage-service)[.]ts$' +
           '|^src/main/app/__rulecheck__/service-io-import[.]ts$'
       },
       to: {

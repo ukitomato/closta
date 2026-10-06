@@ -3,6 +3,7 @@ import { useRef } from 'react'
 import { RunningSessionsProvider } from '@/features/session/RunningSessionsProvider'
 
 import { CenterPane } from './CenterPane'
+import { CommandPalette } from './CommandPalette'
 import { SHELL_LABELS } from './labels'
 import { LaunchDialogHost } from './LaunchDialogHost'
 import type { PanelTab } from './panel-tabs'
@@ -25,6 +26,7 @@ import { useShellFocus } from './useShellFocus'
  * | 幅は固定で畳む / 開くだけ。狭いときは右 → 左の順に 1 回だけ自動で畳む | data-model §2 |
  * | アプリの CSP と配信を変えない。新しく取り込む部品は本番の CSP (`style-src 'self'`) の下で動くものに限る。既存の Dialog (Radix) は開くたびに scroll-lock の inline の `<style>` を差し込み、本番の CSP がそれを弾く (失う CSS は research R-04)。**CSP を緩めて通さない** | FR-001 / AD-025 §7 / pr-gate R1 security M-001・R2 L-101 |
  * | 先頭にフォーカスしたときだけ見える「会話へ移動」のスキップリンクを置く。サイドバーの過去の行は数百件になりうるので、Tab で中央に届くまでの回数を行の数に比例させない。`main` には移す間だけ `tabindex` を付ける (`focusCenter`) | WCAG 2.4.1 / pr-gate R1 a11y M-005・R2 M-103 |
+ * | Command palette (`CommandPalette`) はアプリ全体のダイアログ。セッションの候補を実行した後の行き先 (中央) は、スキップリンクと同じ `focusCenter` を渡して共有する | O-3 / 012 data-model §3「閉じた後のフォーカス」 |
  *
  * テストはタブの表を差し替えられる (`panelTabs`)。
  */
@@ -67,6 +69,8 @@ function ShellLayout({
       <RightPanel tabs={panelTabs} />
       <LaunchDialogHost />
       <SettingsDialog />
+      {/* Command palette (O-3)。稼働中の候補に `RunningSessionsProvider` が要るので、その内側に置く。 */}
+      <CommandPalette focusCenter={focusCenter} />
     </div>
   )
 }

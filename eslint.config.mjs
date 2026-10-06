@@ -596,5 +596,21 @@ export default defineConfig(
       'react-refresh/only-export-components': 'error',
       'no-empty': 'error'
     }
+  },
+  {
+    // registry の element (`elements-conversation-search` / `elements-command-palette`) だが、O-3 が手を入れた
+    // (conversation-search はスクロールバーの一致の印を外した。command-palette は option の DOM の id を添字で作り、
+    // 中の絞り込みを外した。spec 012 SH-003 / FE-031 / research R-04)。手を入れた element なので、thread.aui.tsx と
+    // 同方針で意味論の番人だけ戻す (上流の整形 (double-quote / semicolon) は保つ)。
+    files: [
+      'src/renderer/src/components/assistant-ui/elements/conversation-search.tsx',
+      'src/renderer/src/components/assistant-ui/elements/command-palette.tsx'
+    ],
+    rules: {
+      'react-hooks/refs': 'error',
+      'react-hooks/exhaustive-deps': 'error',
+      'react-refresh/only-export-components': 'error',
+      'no-empty': 'error'
+    }
   }
 )

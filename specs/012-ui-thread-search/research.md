@@ -61,6 +61,18 @@
   - 取り込んだ element に手を入れたら、`eslint.config.mjs` の手書きの element の一覧 (`:557-599`) に足す (`thread.aui.tsx` と同方針)
   - **thread-search は使わない**。時刻のまとまりと pinned を前提にし、R-2 の登録フォルダのまとまり (FR-022) と合わない。過去の区画に検索欄だけを足す。F 節の行は `未使用` と理由を書く (spec FR-015 の「使い道を本 feature の表示にする」は、使わない理由を本 feature の結論として書くことで満たす)
   - キー: Ctrl+K / Ctrl+F は `window` の keydown (capture) で受ける。`event.isComposing` か `keyCode === 229`、または `[aria-modal="true"]` の要素が開いているときは何もしない (`preventDefault` もしない)。既存の keydown の購読は画像ダイアログのフォーカストラップ 1 件 (`components/image.tsx:298`) だけで、Electron の既定のメニューにも Ctrl+K / Ctrl+F の accelerator は無い (`window.ts:48` は `autoHideMenuBar` だけ)
+- **照合の結果** (SH-003。2026-10-07。正本は PR の説明で、ここは写し): 2 つとも**採る**。直す量は中身の大半にならない
+  - 取り込み方: registry の item (`https://r.assistant-ui.com/styles/new-york/elements-command-palette.json` / `…/elements-conversation-search.json`) の `files[].content` を `components/assistant-ui/elements/` にそのまま置いた。`npx assistant-ui@latest add` は使っていない — item の npm の依存 (`lucide-react` / `tw-shimmer`) はどちらも入っているが、`add` は版を付けずに入れ直すので `lucide-react` (今 1.45.0) が上がりうる (Technical Context の「新しい npm の依存を足さない」)。registry の依存 `elements-surfaces` は取り込み済みで、手を入れた `surfaces.tsx` は上書きしていない
+  - command-palette: (a) 入力は combobox (`aria-controls` / `aria-activedescendant` / `aria-expanded`)、候補は listbox / option ✔。(d) `<style>` も `style` 属性も無い ✔。(b)(c)(e) は取り込んだ中で直せる。**FE-031 が直し、直したら eslint の手書きの element の一覧に足す**:
+    - (e) option の DOM の id と `aria-activedescendant` を命令の id から組んでいる (`${listId}-${id}`)。`useId()` と添字 (`${prefix}-opt-${index}`) にし、現在の候補を添字で持つ。現在の候補を画面に入れるのも `getElementById(optionId(activeId))` から option の ref の `scrollIntoView` にする (data-model §3)
+    - (b) 英語の文言 (`Type a command` / `Commands` / `No command matches …`) を props で渡す。0 件の表示は element の中の文をやめ `EmptyState` (`paletteNone` / `paletteNoneHint`。FR-008)
+    - (c) 入力の keydown は `isComposing` だけを見ている。`keyCode === 229` も見る (AD-037)
+    - element の中の絞り込み (`label.toLowerCase().includes(query.toLowerCase())`) を外す。絞り込みは features 側の `matchesAllTerms` (FR-002。セッションの候補は題以外のフィールドでも一致する) で行い、element は渡された候補を描くだけにする
+  - conversation-search: (d) の唯一の `style` (スクロールバーの印の `top`) は、印ごと外した (SH-003。`SearchHit.position` も外した)。(e) DOM の id を作らない (React の `key` だけ) ✔。(c) element はキーを扱わないので、Enter / Shift+Enter / Esc と IME のガードは外側 (FE-024) が持つ。手を入れたので eslint の一覧に足した。**FE-024 が取り込んだ中で直す**:
+    - (b) 英語の文言 (`Find in conversation` / `Previous match` / `Next match`) と件数の書式 (`i/n`。data-model §5 は `{i} / {n} 件`) を props で渡す
+    - 閉じるボタン (`searchClose`) と、入力欄へフォーカスを移す口 (palette の `chat:search`) が無いので足す
+    - 一致の前後の文 (`before` / `match` / `after`) の表示は data-model §2 に無い。使わないなら出さない形にする
+  - thread-search は取り込んでいない (上の Decision)
 - **Alternatives**: `cmdk` のライブラリを足す (依存が増える。element に同等がある)
 
 ## R-05 再利用率の記録

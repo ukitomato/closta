@@ -55,7 +55,7 @@ linear: null
 ### Session 2026-10-04 (夜間。利用者は方向だけを示した)
 
 - Q: タブの画面は全部なくすか → A: なくす。上部のナビゲーションの行を消す (利用者の言)
-- Q: 過去のセッションと稼働中のセッションを 1 つの一覧にまとめるか → A: まとめない。サイドバーの中で「稼働中」と「過去のセッション」の 2 つの区画に分ける [ASSUMED — 監視ビュー (O-1) の行と過去の行は持つ情報と操作が違う。1 つに混ぜるかは O-3 の Thread search の後に再検討]
+- Q: 過去のセッションと稼働中のセッションを 1 つの一覧にまとめるか → A: まとめない。サイドバーの中で「稼働中」と「過去のセッション」の 2 つの区画に分ける [ASSUMED — 監視ビュー (O-1) の行と過去の行は持つ情報と操作が違う。1 つに混ぜるかは O-3 の Thread search の後に再検討]。**O-3 で閉じた (2026-10-06。[012 spec](../012-ui-thread-search/spec.md) FR-016)**: 混ぜない。Command palette が稼働中と過去の両方を種別 (稼働中 / 過去) つきで候補に出し、Thread search はサイドバーの過去のセッションの区画にある
 - Q: テーマの切り替えはどこに → A: 設定のダイアログ [ASSUMED]
 - Q: 起動の直後の初期の面 → A: 中央は空の状態。フォルダが未登録なら「設定 → 作業フォルダ」へ案内する [ASSUMED]
 
@@ -258,7 +258,7 @@ linear: null
 
 - 右のペインの「概要」以外のタブ (Changes / PR の Webview / Files / Browser) → **OPT-panel** (新規登録)。Terminal は OPT-pty。Context / Cost / Server panel / TodoList などは O-4〜O-6 がタブとして足す
 - 一覧の中身の変更 (行の形・グループ分け・絞り込み) → 持ち主 (session) のまま。検索は O-3
-- 稼働中と過去を 1 つの一覧に混ぜること → O-3 の後に再検討 (Clarifications)
+- 稼働中と過去を 1 つの一覧に混ぜること → O-3 の後に再検討 (Clarifications)。**O-3 で閉じた: 混ぜない** (palette が両方を候補にし、Thread search は過去の区画にある。[012 spec](../012-ui-thread-search/spec.md) FR-016)
 - Command palette → O-3
 - 設定の 4 画面の中身の変更・統合
 - 見た目の方針 (色・タイポグラフィ) の改訂 → assistant-ui の design system のまま (ui charter の業務ルール)

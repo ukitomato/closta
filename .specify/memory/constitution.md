@@ -1,10 +1,38 @@
 ---
 status: active
-version: 1.3.0
+version: 1.4.0
 ratified: 2026-09-13
-last_amended: 2026-10-03
+last_amended: 2026-10-07
 generated_by: /speckit.constitution (素材: /spec-gate bootstrap Phase 6 の draft)
 ---
+
+<!--
+Sync Impact Report (v1.4.0)
+- Version change: 1.3.0 → 1.4.0
+- Last amended: 2026-10-07
+- Bump rationale: MINOR。Principle XV の UI labels の期限付きの宿題 (「i18n リソース化の要否は M3 (O-1〜O-3) までに判断する」) を
+  確定の判断 (リソース化しない) に置き換え、AD-045 Decision 2 の規則 (文言は feature ごとの文言の表に置き、コンポーネントへの
+  直書きを新たに増やさない) を指針に足した (指針の実質的な拡張。AD-045 Consequences / design-gate R1 architecture M-002)。
+  MAJOR に当たらない理由: 既存の直書きを違反に変えない (「新たに増やさない」の規則で、基準線は AD-045 の Confirmation)。
+  これまで適合していた状態が違反になることは無い
+- 改定手順: 1 = AD-045 (accepted 2026-10-05) / 2 = O-3 の PR で architecture-reviewer を交えた人間のレビューを受ける
+  (本改定の時点では未了。利用者に残す) / 3 = MINOR / 4 = Amendment trail / 5 = 下記の enumeration
+
+Modified sections:
+- Principle XV (UI labels) — 「i18n リソース化の要否は M3 (O-1〜O-3) までに判断する」→「i18n リソース化しない (AD-045)。
+  文言は feature ごとの文言の表に置き、直書きを新たに増やさない。再検討の条件は AD-045 Decision 4」
+- Principle XV (Exceptions) — `target-finder.ts` の `候補 #N` / `名前 (#N)` を infra の例外として足した (AD-045 Decision 3)
+- Principle XV (Verification) — 新設。Automated なし (AD-045 Decision 2)、Manual は ux-reviewer の i18n の観点と基準線
+
+既存違反の enumeration (2026-10-07):
+- XV: 0 件 (規則は「新たに増やさない」で、既存の直書きは違反に数えない)。基準線は 331 行
+  (AD-045 Confirmation。O-3 の実装の前の `73ebbc0` で数えた。式と範囲は同じ節)
+
+Templates requiring updates:
+- ✅ .specify/templates/plan-template.md (XV の行)
+- ✅ docs/decisions/0045-ui-labels-no-i18n-resources.md (accepted。Confirmation に基準線)
+- ✅ docs/roadmap.md (D-1 の行に AD-045 の再検討の条件 (b) を注記)
+-->
 
 <!--
 Sync Impact Report (v1.3.0)
@@ -846,7 +874,11 @@ SessionLaunchConfig / Element / Tier A-C / HostPath / RuntimePath) はその一�
 日本語 / 英語の使い分けルール:
 
 - **Code identifiers**: 英語のみ
-- **UI labels**: 日本語を第一言語とする。i18n リソース化の要否は M3 (O-1〜O-3) までに判断する
+- **UI labels**: 日本語を第一言語とする。**i18n リソース化しない**
+  ([AD-045](../../docs/decisions/0045-ui-labels-no-i18n-resources.md)。M3 の期限の判断を O-3 で確定した)。
+  UI の文言は feature ごとの文言の表 (`labels.ts` など) に置き、**コンポーネントへの直書きを新たに増やさない**。
+  リソース化を再検討するとき、表をそのまま翻訳の単位にできる形を保つ。再検討の条件は AD-045 Decision 4
+  ((a) 日本語以外の UI の要求が出たとき、(b) D-1 (配布) の前)
 - **Documentation / spec**: 日本語を SSoT とする (PLAN.md / Constitution / spec がすべて日本語であるため)
 - **Commit message**: 英語。件名 1 行の最小限の表現とし、attribution 行を付けない
 
@@ -855,6 +887,16 @@ SessionLaunchConfig / Element / Tier A-C / HostPath / RuntimePath) はその一�
 外部 OSS としての体裁を最初のコミットから持たせるためであり (`docs/prompts.md`)、
 「Documentation は日本語を SSoT」の逸脱ではなく**表層と内部を分けた規約**である。
 内部文書 (`PLAN.md` / Constitution / `docs/` / `specs/`) は日本語を SSoT とする。
+
+**Exceptions** (AD-045 Decision 3): `src/main/infra/session/target-finder.ts` が作る `候補 #N` / `名前 (#N)` の 2 本は、
+infra が作る日本語として据え置く (一意性を境界の手前で決める必要があり、移すと `EnumerationTarget` と DTO 2 本に
+フィールドが増える)。リソース化を再検討するときは、infra は序数だけを持ち、`ui` が文言を組む形に移す。
+
+**Verification** (AD-045 Decision 2 / Consequences):
+- Automated: なし。直書きの検出は誤検出が多いので、機械強制は足さない
+- Manual: reviewer (`ux-reviewer` の i18n の観点) が「新たに増やさない」を見る。基準線は AD-045 の Confirmation
+  (O-3 の実装の前の `73ebbc0` で 331 行。数え方の式と範囲も同じ節にある)。同じ式の件数が基準線から増えたら、
+  増えた行がコメントか直書きかを差分で見る
 <!-- BOOTSTRAP_SECTION_END principle=XV -->
 
 <!-- MIGRATE_SECTION_START principle=XV -->
@@ -1036,6 +1078,7 @@ v1.2.4 は改定手順に新しい規則 (ADR の in-place 訂正) を足した�
 | 1.2.8 | 2026-10-01 | [AD-043](../../docs/decisions/0043-single-supervisor-session-threads-and-session-limit.md) (X-5)。事実の追随 (PATCH)。Principle VII の Statement の単独起動の形を「worker のパスを引数で渡す」に改めた (Electron なしで単独起動できるという趣旨は不変 = 非意味的な refinement)。Principle IX に中継の分岐の Good example (調停役は文字列を解釈せず中継し renderer がデコードする) を足し、「現状の制約」に X-5 の本文経路と `check.mjs` 項目 18 の限界 (置き場だけを見る・多段の別名代入を拾わない) を追記した |
 | 1.2.9 | 2026-10-02 | [AD-043](../../docs/decisions/0043-single-supervisor-session-threads-and-session-limit.md) Decision 2 (X-5 pr-gate R1〜R3 architecture H-001)。事実の追随 (PATCH)。Principle IX の Automated の字面「`src/agents/` の外に stream の `JSON.parse` 処理が存在しないこと」を「main process と調停役スレッドに存在しないこと」に改めた。X-5 では renderer が中継された本文 (`BODY_MAX_BYTES` で有界) を復元し、同じ節の Good example (X-5) と字面が食い違っていた。禁じる対象 (main を固めない) と Statement は不変 |
 | 1.3.0 | 2026-10-03 | [AD-044](../../docs/decisions/0044-ui-coverage-assignment.md) (O-2)。指針の実質的な拡張 (MINOR)。**Principle XII の割当を 3 種類 (実装済み / 後続 / 表示不要) にし、`後続: <未完了の feature ID>` を割当済みとみなした**。ToolFallback だけの `実装済み` は Tier B / C に限る。**M3 の完了の条件を「Tier A の後続の行のうち割当先が M3 の feature の行が 0」と定めた**。Automated を Constitution 検証の項目 21 (SDK の型定義との名前の集合の照合・割当の書式・SDK の版) に移し、`bad_pattern_grep` を割当の列に限った。Manual の `ui-coverage-reviewer` を配置済みにした。Principle XIII の element の数を registry の 127 名に、未分類 59 を F 節での解消に追随させた。Statement も「割当を持たせる」に改めた。既存違反 0 (項目 21 ok、M3 の残り 24) |
+| 1.4.0 | 2026-10-07 | [AD-045](../../docs/decisions/0045-ui-labels-no-i18n-resources.md) (O-3)。指針の実質的な拡張 (MINOR)。**Principle XV の UI labels の「i18n リソース化の要否は M3 (O-1〜O-3) までに判断する」を確定の判断に置き換えた** — リソース化しない。UI の文言は feature ごとの文言の表に置き、コンポーネントへの直書きを新たに増やさない (AD-045 Decision 2)。再検討の条件 (AD-045 Decision 4)、`target-finder.ts` の 2 本の例外 (Decision 3)、Verification (機械強制なし・`ux-reviewer` が基準線 331 行 (AD-045 Confirmation) から見る) を足した。既存の直書きは違反に数えない (「新たに増やさない」の規則)。改定手順 2 (architecture-reviewer を交えた人間のレビュー) は O-3 の PR で受ける |
 
 ## References
 
@@ -1047,4 +1090,4 @@ v1.2.4 は改定手順に新しい規則 (ADR の in-place 訂正) を足した�
 
 ---
 
-**Version**: 1.3.0 | **Ratified**: 2026-09-13 | **Last Amended**: 2026-10-03
+**Version**: 1.4.0 | **Ratified**: 2026-09-13 | **Last Amended**: 2026-10-07

@@ -9,6 +9,7 @@ import {
 } from '@assistant-ui/react'
 
 import type { SessionLaunchConfig } from '@domain/session/launch-config'
+import type { LaunchOrigin } from '@domain/session/launch-usage'
 
 import { useRuntimes } from '@/features/runtime-list/useRuntimes'
 import { useFolders } from '@/features/workspace-folders/useFolders'
@@ -66,8 +67,8 @@ export function RunningSessionsProvider({
   const runtime = useLiveRuntime(live, threadList)
 
   const launch = useCallback(
-    (config: SessionLaunchConfig) =>
-      store.launch(config, folders.list === null ? null : folderName(config.folderId)),
+    (config: SessionLaunchConfig, origin: LaunchOrigin) =>
+      store.launch(config, folders.list === null ? null : folderName(config.folderId), origin),
     [store, folders.list, folderName]
   )
 
@@ -76,12 +77,22 @@ export function RunningSessionsProvider({
       live,
       hiddenCount: runtime.hiddenCount,
       showMore: runtime.showMore,
+      revealMessage: runtime.revealMessage,
       folderName,
       runtimeName,
       folders: folders.list,
       launch
     }),
-    [live, runtime.hiddenCount, runtime.showMore, folderName, runtimeName, folders.list, launch]
+    [
+      live,
+      runtime.hiddenCount,
+      runtime.showMore,
+      runtime.revealMessage,
+      folderName,
+      runtimeName,
+      folders.list,
+      launch
+    ]
   )
 
   return (
@@ -114,6 +125,7 @@ function useLiveRuntime(
   readonly runtime: ReturnType<typeof useExternalStoreRuntime>
   readonly hiddenCount: number
   readonly showMore: () => void
+  readonly revealMessage: (messageId: string) => void
 } {
   /*
    * **assistant-ui に渡すのは末尾の窓だけにする** (X-5 / SC-003)。assistant-ui の ThreadClient は messages が変わるたびに
@@ -135,6 +147,27 @@ function useLiveRuntime(
     if (sessionId === null) return
     setWindows((w) => ({ ...w, [sessionId]: (w[sessionId] ?? MESSAGE_WINDOW) + MESSAGE_WINDOW }))
   }, [sessionId])
+  /*
+   * **id のメッセージが入るところまで窓を広げる** (O-3 / 012 data-model §2「移動」/ research R-03 / plan RK-04)。
+   * 「さらに表示」と同じ操作 (`MESSAGE_WINDOW` ずつ) を、そのメッセージが窓に入るまで重ねる。会話内検索が窓の外の一致へ
+   * 移るときだけ呼ばれる。窓の中の id・知らない id では窓を変えない (同じ state を返して再描画させない)。
+   * 窓を元に戻す操作は足さない (「さらに表示」と同じ)。
+   */
+  const revealMessage = useCallback(
+    (messageId: string) => {
+      if (sessionId === null) return
+      const index = messages.findIndex((message) => message.id === messageId)
+      if (index === -1) return
+      const needed = messages.length - index
+      setWindows((w) => {
+        const current = w[sessionId] ?? MESSAGE_WINDOW
+        if (needed <= current) return w
+        const steps = Math.ceil((needed - current) / MESSAGE_WINDOW)
+        return { ...w, [sessionId]: current + steps * MESSAGE_WINDOW }
+      })
+    },
+    [sessionId, messages]
+  )
 
   // **turn が in-flight な間 = busy** (`running` / `awaiting_permission`)。終端では busy にしない。
   const busy =
@@ -173,5 +206,5 @@ function useLiveRuntime(
     adapters: { threadList }
   })
 
-  return { runtime, hiddenCount, showMore }
+  return { runtime, hiddenCount, showMore, revealMessage }
 }

@@ -63,6 +63,13 @@ export interface UiState {
   /** 登録画面が受け取る初期値。受け取ったら消す (使い切り)。 */
   folderDraftSeed: FolderDraftSeed | null
   transcriptDensity: TranscriptDensity
+  /** Command palette (O-3 / 012 data-model §3) を開いているか。全面の overlay で中央を覆う。 */
+  paletteOpen: boolean
+  /**
+   * palette の「会話内を検索」の要求 (O-3 / 012 data-model §2)。**単調増加の値** — 同じ要求を続けても上がるので、
+   * 会話内検索の provider は値の変化で「開く (開いていれば入力欄へフォーカスを移す)」を受ける。
+   */
+  conversationSearchRequest: number
   setFocus: (focus: CenterFocus) => void
   openSettings: (section?: SettingsSection) => void
   setSettingsSection: (section: SettingsSection) => void
@@ -72,6 +79,9 @@ export interface UiState {
   setPanelTab: (tab: PanelTabId) => void
   setLaunchOpen: (open: boolean) => void
   setTranscriptDensity: (density: TranscriptDensity) => void
+  setPaletteOpen: (open: boolean) => void
+  /** 会話内検索を開く要求を上げる (`conversationSearchRequest` を 1 増やす)。 */
+  requestConversationSearch: () => void
   toggleTheme: () => void
   /** 初期値を積んで、設定のダイアログを「作業フォルダ」で開く。 */
   seedFolderDraft: (seed: FolderDraftSeed) => void
@@ -87,6 +97,8 @@ export const useUiStore = create<UiState>((set) => ({
   dark: false,
   folderDraftSeed: null,
   transcriptDensity: 'comfortable',
+  paletteOpen: false,
+  conversationSearchRequest: 0,
   setFocus: (focus) => set({ focus }),
   openSettings: (section) =>
     set((s) => ({ settings: { open: true, section: section ?? s.settings.section } })),
@@ -97,6 +109,9 @@ export const useUiStore = create<UiState>((set) => ({
   setPanelTab: (tab) => set((s) => ({ panel: { ...s.panel, tab } })),
   setLaunchOpen: (launchOpen) => set({ launchOpen }),
   setTranscriptDensity: (transcriptDensity) => set({ transcriptDensity }),
+  setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
+  requestConversationSearch: () =>
+    set((s) => ({ conversationSearchRequest: s.conversationSearchRequest + 1 })),
   seedFolderDraft: (folderDraftSeed) =>
     set({ folderDraftSeed, settings: { open: true, section: 'folders' } }),
   clearFolderDraftSeed: () => set({ folderDraftSeed: null }),
@@ -110,17 +125,20 @@ export const useUiStore = create<UiState>((set) => ({
 
 /**
  * 見ているセッション (data-model §1)。読み上げ (`SessionAttentionAnnouncer`) と承認待ちの件数のボタン (`nextAwaiting`) が
- * 「表示中」として使う。中央に稼働中の会話を出していて、設定のダイアログも起動ダイアログも開いていないときだけ選択中のもの。
- * 起動ダイアログはモーダルで中央の会話と承認カードを覆い、外側は支援技術から隠れるので、開いている間は見ていない扱い
- * (pr-gate R1 po M-003 / a11y M-002)。
+ * 「表示中」として使う。中央に稼働中の会話を出していて、設定のダイアログも起動ダイアログも Command palette も開いていない
+ * ときだけ選択中のもの。起動ダイアログはモーダルで中央の会話と承認カードを覆い、外側は支援技術から隠れるので、開いている
+ * 間は見ていない扱い (pr-gate R1 po M-003 / a11y M-002)。palette も全面の overlay で中央を覆うので同じ扱い (O-3 / spec FR-006)。
  */
 export function watchedIdOf(
   ui: {
     readonly focus: CenterFocus
     readonly settings: { readonly open: boolean }
     readonly launchOpen: boolean
+    readonly paletteOpen: boolean
   },
   selectedId: string | null
 ): string | null {
-  return ui.focus === 'running' && !ui.settings.open && !ui.launchOpen ? selectedId : null
+  return ui.focus === 'running' && !ui.settings.open && !ui.launchOpen && !ui.paletteOpen
+    ? selectedId
+    : null
 }

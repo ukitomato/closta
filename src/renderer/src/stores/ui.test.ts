@@ -44,8 +44,8 @@ describe('設定のダイアログ', () => {
 })
 
 describe('見ているセッション (watchedIdOf)', () => {
-  it('中央に稼働中の会話を出していて、設定も起動ダイアログも開いていないときだけ選択中のもの', () => {
-    const closed = { settings: { open: false }, launchOpen: false } as const
+  it('中央に稼働中の会話を出していて、設定も起動ダイアログも palette も開いていないときだけ選択中のもの', () => {
+    const closed = { settings: { open: false }, launchOpen: false, paletteOpen: false } as const
     expect(watchedIdOf({ focus: 'running', ...closed }, 'a')).toBe('a')
     expect(watchedIdOf({ focus: 'running', ...closed, settings: { open: true } }, 'a')).toBeNull()
     // 起動ダイアログはモーダルで中央を覆う (pr-gate R1 po M-003 / a11y M-002)。
@@ -53,5 +53,34 @@ describe('見ているセッション (watchedIdOf)', () => {
     expect(watchedIdOf({ focus: 'past', ...closed }, 'a')).toBeNull()
     expect(watchedIdOf({ focus: 'none', ...closed }, 'a')).toBeNull()
     expect(watchedIdOf({ focus: 'running', ...closed }, null)).toBeNull()
+  })
+
+  it('palette を開いている間は null (全面の overlay で中央を覆う。O-3 FR-006)', () => {
+    useUiStore.setState({ focus: 'running' })
+    expect(watchedIdOf(useUiStore.getState(), 'a')).toBe('a')
+    useUiStore.getState().setPaletteOpen(true)
+    expect(watchedIdOf(useUiStore.getState(), 'a')).toBeNull()
+    useUiStore.getState().setPaletteOpen(false)
+    expect(watchedIdOf(useUiStore.getState(), 'a')).toBe('a')
+  })
+})
+
+describe('Command palette と会話内検索の要求 (O-3)', () => {
+  it('palette は既定で閉じていて、setPaletteOpen で開閉する', () => {
+    expect(useUiStore.getState().paletteOpen).toBe(false)
+    useUiStore.getState().setPaletteOpen(true)
+    expect(useUiStore.getState().paletteOpen).toBe(true)
+    useUiStore.getState().setPaletteOpen(false)
+    expect(useUiStore.getState().paletteOpen).toBe(false)
+  })
+
+  it('会話内検索の要求の値は呼ぶたびに増える (同じ要求を続けても上がる)', () => {
+    const before = useUiStore.getState().conversationSearchRequest
+    useUiStore.getState().requestConversationSearch()
+    const once = useUiStore.getState().conversationSearchRequest
+    useUiStore.getState().requestConversationSearch()
+    const twice = useUiStore.getState().conversationSearchRequest
+    expect(once).toBeGreaterThan(before)
+    expect(twice).toBeGreaterThan(once)
   })
 })

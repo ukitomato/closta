@@ -12,6 +12,7 @@ import type { RuntimeDescriptorDTO, RuntimeListDTO } from './runtime/dto'
 import type { SessionLaunchHandshakeDTO } from './session/agent-session'
 import type { SessionIndexDTO } from './session/dto'
 import type { SessionLaunchConfig } from './session/launch-config'
+import type { LaunchOrigin, LaunchUsageSummaryDTO } from './session/launch-usage'
 import type { PresetDTO, SavePresetResult } from './session/preset'
 import type { SessionStatusUpdate } from './session/status-update'
 import type { TranscriptHandshakeDTO } from './session/transcript-dto'
@@ -118,8 +119,14 @@ export interface ClostaCapability {
    * main が **VerifiedRunning + 所在 distro 一致 + 登録済み + 同時実行数の上限 (10)** を検証する。
    * 停止中 / 未確認 / 不一致 / 上限超過 (`session-limit`) / 終了処理中 (`shutting-down`) は `rejected` を
    * 理由キーつきで返す (SC-002 / X-5 SC-001)。X-1 の単一セッション不変 (`session-active`) は X-5 で廃止した。
+   *
+   * `origin` は起動元 (`preset` / `manual`。O-3 / 012 spec FR-009・FR-010) で、**計測にだけ使う**。main は厳密比較で
+   * 検証し、欠けている・未知でも起動は通常どおり扱って記録だけを行わない。起動の可否・`config` に影響させない。
    */
-  launchSession(config: SessionLaunchConfig): Promise<SessionLaunchHandshakeDTO>
+  launchSession(
+    config: SessionLaunchConfig,
+    origin: LaunchOrigin
+  ): Promise<SessionLaunchHandshakeDTO>
   /** 稼働セッションへプロンプトを送る (FR-011 / FR-018)。main が空/空白拒否 + 長さ上限を検証する。 */
   sendPrompt(sessionId: string, text: string): Promise<void>
   /**
@@ -179,6 +186,14 @@ export interface ClostaCapability {
   /** プリセットを削除する。未知 id は `{ ok: false }`。 */
   removePreset(id: string): Promise<{ readonly ok: boolean }>
 
+  // --- 起動の利用記録 (O-3) ---
+
+  /**
+   * 直近 30 日のプリセット / 手動の起動の回数 (O-3 / 012 spec FR-013)。**引数を取らない。**
+   * 返すのは集計済みの 2 つの回数と集計の日数、または `unreadable` だけで、日ごとの記録を渡さない。
+   */
+  getLaunchUsage(): Promise<LaunchUsageSummaryDTO>
+
   // --- 通知 (main → renderer) ---
 
   /** 購読解除は返る**トークン**で行う。renderer からコールバックを main に渡さない。 */
@@ -233,6 +248,8 @@ export const IPC_CHANNELS = {
   listPresets: 'closta:listPresets',
   savePreset: 'closta:savePreset',
   removePreset: 'closta:removePreset',
+  /** 起動の利用記録の集計の読み出し (O-3 / 012 spec FR-013。本 feature で足す唯一のチャネル。SC-006)。 */
+  getLaunchUsage: 'closta:getLaunchUsage',
   runtimesChanged: 'closta:runtimesChanged',
   foldersChanged: 'closta:foldersChanged',
   sessionsChanged: 'closta:sessionsChanged'

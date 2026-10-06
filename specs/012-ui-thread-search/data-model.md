@@ -169,6 +169,7 @@ interface ConversationSearchState {
 
 - 開く: 中央のヘッダの検索のボタン、Ctrl+F、palette の「会話内を検索」。開いていれば入力欄にフォーカスを移すだけ
 - Ctrl+F は provider が `window` の keydown (capture) で受ける (provider は会話を出しているときだけマウントされる)。`event.isComposing` / `keyCode === 229`、`[aria-modal="true"]` の要素が開いている (palette を含む) ときは何もしない (`preventDefault` もしない)。受けたときだけ `preventDefault`
+  - Radix の Dialog は `aria-modal` を出さないので、共有の `components/ui/dialog.tsx` の `DialogContent` が `aria-modal="true"` を出す (2026-10-07 の決定。判定は `[aria-modal="true"]` のまま。`modal={false}` で使う Dialog は無く、画像ダイアログ (`components/image.tsx`) は自前で出している)
 - palette からの要求は `stores/ui.ts` の `conversationSearchRequest` (単調増加の値。palette が上げる) を provider が購読して受ける
 - 検索のバーの Enter / Shift+Enter (次 / 前) と Esc (閉じる) は、変換中は何もしない
 - 閉じる: Esc・閉じるボタン・セッションの切り替え・中央が未選択になったとき。閉じたら強調を 2 つとも消す。スクロール位置はそのまま

@@ -1,10 +1,11 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, type Mock } from 'vitest'
 
 import type { ClostaCapability } from '@domain/capability'
 import type { ProviderSummaryDTO } from '@domain/provider/dto'
 import type { RuntimeDescriptorDTO, RuntimeListDTO } from '@domain/runtime/dto'
 import type { SessionLaunchConfig } from '@domain/session/launch-config'
+import type { PresetDTO } from '@domain/session/preset'
 import type {
   FolderListDTO,
   FolderRuntimeResolutionDTO,
@@ -14,6 +15,7 @@ import type {
 import { installCapability } from '@/test-support/capability'
 
 import { LaunchDialog, type LaunchSource } from './LaunchDialog'
+import { createRunningSessionStore, type RunningSessionStore } from './running-session-store'
 
 /**
  * 起動設定ダイアログの renderer 単体 (X-4 FE-005 / FE-020 / SC-001 / SC-002 / SC-005 / SC-008 / US-1 AC6-7 / US-2 AC3)。
@@ -104,6 +106,7 @@ function fakeSession(over: Partial<LaunchSource> = {}): LaunchSource {
     phase: 'entry',
     rejectReason: null,
     lastConfig: null,
+    lastOrigin: null,
     previousFailure: null,
     launch: vi.fn(async () => {}),
     ...over
@@ -121,6 +124,7 @@ function install(over: Parameters<typeof installCapability>[0] = {}): ClostaCapa
         : { reachable: [bedrock, far], excluded: [] },
     listPresets: async () => [],
     resolveFolderRuntime: async () => resolutionDto('native'),
+    getLaunchUsage: async () => ({ status: 'ok', preset: 0, manual: 0, days: 30 }),
     ...over
   })
 }
@@ -267,14 +271,17 @@ describe('LaunchDialog', () => {
       target: { value: 'high' }
     })
     fireEvent.click(screen.getByRole('button', { name: '起動' }))
-    expect(session.launch).toHaveBeenCalledWith({
-      folderId: 'ubuntu-proj',
-      runtimeId: 'wsl:Ubuntu',
-      providerId: 'p-bedrock',
-      modelId: 'sonnet',
-      effort: 'high',
-      permissionMode: 'default'
-    })
+    expect(session.launch).toHaveBeenCalledWith(
+      {
+        folderId: 'ubuntu-proj',
+        runtimeId: 'wsl:Ubuntu',
+        providerId: 'p-bedrock',
+        modelId: 'sonnet',
+        effort: 'high',
+        permissionMode: 'default'
+      },
+      'manual'
+    )
   })
 
   it('ランタイム変更で到達不可になった Provider は既定へ戻り、起動前に確認する (承認 → 既定で起動)', async () => {
@@ -302,7 +309,10 @@ describe('LaunchDialog', () => {
     const dialog = screen.getByRole('alertdialog', { name: '既定 Provider での起動の確認' })
     expect(dialog.textContent).toContain('既定の資格情報と課金先')
     fireEvent.click(within(dialog).getByRole('button', { name: '既定 Provider で起動する' }))
-    expect(session.launch).toHaveBeenCalledWith(expect.objectContaining({ providerId: null }))
+    expect(session.launch).toHaveBeenCalledWith(
+      expect.objectContaining({ providerId: null }),
+      'manual'
+    )
   })
 
   it('確認を拒否するとダイアログに戻り、起動しない', async () => {
@@ -590,7 +600,8 @@ describe('LaunchDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: '起動' }))
     expect(screen.queryByRole('alertdialog')).toBeNull()
     expect(session.launch).toHaveBeenCalledWith(
-      expect.objectContaining({ providerId: 'p-bedrock', modelId: 'sonnet', effort: 'high' })
+      expect.objectContaining({ providerId: 'p-bedrock', modelId: 'sonnet', effort: 'high' }),
+      'manual'
     )
   })
 
@@ -655,7 +666,8 @@ describe('LaunchDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: '起動' }))
     expect(screen.queryByRole('alertdialog')).toBeNull()
     expect(session.launch).toHaveBeenCalledWith(
-      expect.objectContaining({ providerId: 'p-bedrock' })
+      expect.objectContaining({ providerId: 'p-bedrock' }),
+      'manual'
     )
   })
 
@@ -789,7 +801,8 @@ describe('LaunchDialog', () => {
       expect(screen.queryByRole('status', { name: '既定に戻した軸' })).toBeNull()
       fireEvent.click(screen.getByRole('button', { name: '起動' }))
       expect(session.launch).toHaveBeenCalledWith(
-        expect.objectContaining({ modelId: 'opus', effort: 'high' })
+        expect.objectContaining({ modelId: 'opus', effort: 'high' }),
+        'manual'
       )
     })
 
@@ -829,7 +842,8 @@ describe('LaunchDialog', () => {
       expect((screen.getByRole('combobox', { name: 'effort' }) as HTMLSelectElement).value).toBe('')
       fireEvent.click(screen.getByRole('button', { name: '起動' }))
       expect(session.launch).toHaveBeenCalledWith(
-        expect.objectContaining({ providerId: 'p-bedrock', modelId: null, effort: null })
+        expect.objectContaining({ providerId: 'p-bedrock', modelId: null, effort: null }),
+        'manual'
       )
     })
 
@@ -1065,5 +1079,278 @@ describe('LaunchDialog', () => {
     expect(screen.getByText(/WSL ランタイムがすべて停止しています/)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '再評価' }))
     await waitFor(() => expect(refreshRuntimes).toHaveBeenCalled())
+  })
+})
+
+/**
+ * 起動元 (O-3 FE-040 / 012 spec FR-009 / US-4 AC1・AC2・AC6・AC7・AC8 / data-model §4「renderer の起動元」の表)。
+ */
+describe('LaunchDialog — 起動元 (O-3)', () => {
+  const presetConfig: SessionLaunchConfig = {
+    folderId: 'ubuntu-proj',
+    runtimeId: 'wsl:Ubuntu',
+    providerId: null,
+    modelId: null,
+    effort: null,
+    permissionMode: 'plan'
+  }
+  const preset: PresetDTO = { id: 'preset-1', name: '業務用', config: presetConfig, updatedAt: NOW }
+
+  async function applyPreset(): Promise<void> {
+    await waitFor(() => expect(screen.getByRole('button', { name: '適用' })).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: '適用' }))
+  }
+
+  async function clickLaunch(): Promise<void> {
+    await waitFor(() => expect(screen.getByRole('button', { name: '起動' })).toBeEnabled())
+    fireEvent.click(screen.getByRole('button', { name: '起動' }))
+  }
+
+  function permissionMode(): HTMLSelectElement {
+    return screen.getByRole('combobox', { name: '権限モード' }) as HTMLSelectElement
+  }
+
+  describe('起動元の表の各行 (ダイアログ単体)', () => {
+    it('プリセットを適用して起動すると preset (US-4 AC1)', async () => {
+      install({ listPresets: async () => [preset] })
+      const session = fakeSession()
+      render(<LaunchDialog session={session} />)
+      await applyPreset()
+      await clickLaunch()
+      expect(session.launch).toHaveBeenCalledWith(presetConfig, 'preset')
+    })
+
+    it('適用した後に軸を変えても preset', async () => {
+      install({ listPresets: async () => [preset] })
+      const session = fakeSession()
+      render(<LaunchDialog session={session} />)
+      await applyPreset()
+      await waitFor(() => expect(permissionMode().value).toBe('plan'))
+      fireEvent.change(permissionMode(), { target: { value: 'default' } })
+      await clickLaunch()
+      expect(session.launch).toHaveBeenCalledWith(
+        { ...presetConfig, permissionMode: 'default' },
+        'preset'
+      )
+    })
+
+    it('前回の設定が無いダイアログで適用せずに起動すると manual (US-4 AC2)', async () => {
+      install({ listPresets: async () => [preset] })
+      const session = fakeSession({ lastOrigin: 'preset' })
+      render(<LaunchDialog session={session} />)
+      await choose(0, 'ubuntu-proj')
+      await choose(1, 'wsl:Ubuntu')
+      await clickLaunch()
+      expect(session.launch).toHaveBeenCalledWith(
+        expect.objectContaining({ folderId: 'ubuntu-proj' }),
+        'manual'
+      )
+    })
+
+    it.each([
+      ['拒否で作り直したダイアログ', { phase: 'rejected', rejectReason: 'session-limit' }] as const,
+      [
+        '失敗したセッションを閉じて開いたダイアログ',
+        { previousFailure: 'process-crashed' }
+      ] as const,
+      ['受け付けの後・起動せずに閉じた後に開き直したダイアログ', {}] as const
+    ])(
+      '前回の設定を初期値に出した%sで、適用も軸の変更もせずに起動すると前回の起動元を引き継ぐ (US-4 AC6 / AC7)',
+      async (_l, over) => {
+        for (const lastOrigin of ['preset', 'manual'] as const) {
+          install()
+          const session = fakeSession({ ...over, lastConfig: presetConfig, lastOrigin })
+          const view = render(<LaunchDialog session={session} />)
+          await clickLaunch()
+          expect(session.launch).toHaveBeenCalledWith(presetConfig, lastOrigin)
+          view.unmount()
+        }
+      }
+    )
+
+    it('前回の設定があり起動元が無い (null) なら manual', async () => {
+      install()
+      const session = fakeSession({ lastConfig: presetConfig, lastOrigin: null })
+      render(<LaunchDialog session={session} />)
+      await clickLaunch()
+      expect(session.launch).toHaveBeenCalledWith(presetConfig, 'manual')
+    })
+
+    it('前回の設定を初期値に出したダイアログで、適用せずに軸を手で変えて起動すると manual (US-4 AC8)', async () => {
+      install()
+      const session = fakeSession({ lastConfig: presetConfig, lastOrigin: 'preset' })
+      render(<LaunchDialog session={session} />)
+      await waitFor(() => expect(permissionMode().value).toBe('plan'))
+      fireEvent.change(permissionMode(), { target: { value: 'default' } })
+      await clickLaunch()
+      expect(session.launch).toHaveBeenCalledWith(
+        { ...presetConfig, permissionMode: 'default' },
+        'manual'
+      )
+    })
+
+    it('軸を変えてから元に戻した起動も manual (変えたことは消えない)', async () => {
+      install()
+      const session = fakeSession({ lastConfig: presetConfig, lastOrigin: 'preset' })
+      render(<LaunchDialog session={session} />)
+      await waitFor(() => expect(permissionMode().value).toBe('plan'))
+      fireEvent.change(permissionMode(), { target: { value: 'default' } })
+      fireEvent.change(permissionMode(), { target: { value: 'plan' } })
+      await clickLaunch()
+      expect(session.launch).toHaveBeenCalledWith(presetConfig, 'manual')
+    })
+
+    it('依存解決の自動の reset (削除された Provider が既定に戻る) だけでは manual にならない', async () => {
+      install()
+      const session = fakeSession({
+        lastConfig: { ...presetConfig, providerId: 'p-removed' },
+        lastOrigin: 'preset'
+      })
+      render(<LaunchDialog session={session} />)
+      await waitFor(() =>
+        expect(screen.getByRole('status', { name: '既定に戻した軸' }).textContent).toContain(
+          '削除されていた'
+        )
+      )
+      await clickLaunch()
+      const dialog = screen.getByRole('alertdialog', { name: '既定 Provider での起動の確認' })
+      fireEvent.click(within(dialog).getByRole('button', { name: '既定 Provider で起動する' }))
+      expect(session.launch).toHaveBeenCalledWith(
+        expect.objectContaining({ providerId: null }),
+        'preset'
+      )
+    })
+  })
+
+  describe('稼働中のストアとつないだ並び (US-4 AC6〜AC8)', () => {
+    const A = '11111111-1111-4111-8111-111111111111'
+
+    /** 本物のストアと、起動ダイアログを開くたびにストアの起動の状態から作る LaunchSource (LivePane の NewSessionDialog と同じ形)。 */
+    function harness(over: Partial<ClostaCapability> = {}): {
+      readonly store: RunningSessionStore
+      readonly launchSession: Mock<ClostaCapability['launchSession']>
+      readonly open: () => ReturnType<typeof render>
+    } {
+      let seq = 0
+      const launchSession = vi.fn<ClostaCapability['launchSession']>(async () => ({
+        status: 'launching' as const,
+        sessionId: `${A.slice(0, -2)}${String((seq += 1)).padStart(2, '0')}`
+      }))
+      const cap = install({ listPresets: async () => [preset], launchSession, ...over })
+      const store = createRunningSessionStore(() => cap)
+      const open = (): ReturnType<typeof render> => {
+        const launch = store.getState().launch
+        const source: LaunchSource = {
+          phase: launch.phase,
+          rejectReason: launch.rejectReason,
+          lastConfig: launch.lastConfig,
+          lastOrigin: launch.lastOrigin,
+          previousFailure: launch.previousFailure,
+          launch: (config, origin) => store.launch(config, null, origin)
+        }
+        return render(<LaunchDialog session={source} />)
+      }
+      return { store, launchSession, open }
+    }
+
+    /** 起動して、ストアが起動の結果を受け取るまで待ち、ダイアログを閉じる。 */
+    async function launchAndClose(
+      h: ReturnType<typeof harness>,
+      view: ReturnType<typeof render>,
+      calls: number
+    ): Promise<void> {
+      await clickLaunch()
+      await waitFor(() => expect(h.launchSession).toHaveBeenCalledTimes(calls))
+      await waitFor(() => expect(h.store.getState().launch.phase).not.toBe('launching'))
+      view.unmount()
+    }
+
+    function origins(h: ReturnType<typeof harness>): unknown[] {
+      return h.launchSession.mock.calls.map((call) => call[1])
+    }
+
+    it('適用して起動 → 受け付け → 開き直して初期値のまま起動で preset が 2 回届く (AC7)。設定は起動元で変わらない', async () => {
+      const h = harness()
+      let view = h.open()
+      await applyPreset()
+      await launchAndClose(h, view, 1)
+
+      view = h.open()
+      await launchAndClose(h, view, 2)
+      expect(origins(h)).toEqual(['preset', 'preset'])
+      // capability に渡る設定は 6 軸だけで、起動元を含まない。
+      for (const [config] of h.launchSession.mock.calls) {
+        expect(config).toEqual(presetConfig)
+        expect(Object.keys(config).sort()).toEqual(
+          ['effort', 'folderId', 'modelId', 'permissionMode', 'providerId', 'runtimeId'].sort()
+        )
+      }
+    })
+
+    it('preset で起動 → 開き直して軸を 1 つ変えて起動で manual (AC8)', async () => {
+      const h = harness()
+      let view = h.open()
+      await applyPreset()
+      await launchAndClose(h, view, 1)
+
+      view = h.open()
+      await waitFor(() => expect(permissionMode().value).toBe('plan'))
+      fireEvent.change(permissionMode(), { target: { value: 'default' } })
+      await launchAndClose(h, view, 2)
+      expect(origins(h)).toEqual(['preset', 'manual'])
+    })
+
+    it('preset → 開き直して軸を変えて manual → 開き直して初期値のまま manual (引き継ぐのは直前の起動元) → 開き直して適用して preset', async () => {
+      const h = harness()
+      let view = h.open()
+      await applyPreset()
+      await launchAndClose(h, view, 1)
+
+      view = h.open()
+      await waitFor(() => expect(permissionMode().value).toBe('plan'))
+      fireEvent.change(permissionMode(), { target: { value: 'default' } })
+      await launchAndClose(h, view, 2)
+
+      view = h.open()
+      await launchAndClose(h, view, 3)
+
+      view = h.open()
+      await applyPreset()
+      await launchAndClose(h, view, 4)
+      expect(origins(h)).toEqual(['preset', 'manual', 'manual', 'preset'])
+    })
+
+    it('拒否で作り直したダイアログで前回の設定のまま起動し直すと preset (AC6)', async () => {
+      const h = harness()
+      h.launchSession.mockResolvedValueOnce({ status: 'rejected', reasonKey: 'session-limit' })
+      let view = h.open()
+      await applyPreset()
+      await launchAndClose(h, view, 1)
+      expect(h.store.getState().launch).toMatchObject({
+        phase: 'rejected',
+        lastConfig: presetConfig,
+        lastOrigin: 'preset'
+      })
+
+      view = h.open()
+      await launchAndClose(h, view, 2)
+      expect(origins(h)).toEqual(['preset', 'preset'])
+    })
+
+    it('起動せずに閉じた (告知を消した) 後に開き直しても前回の起動元を引き継ぐ。告知を消しても lastOrigin は残る', async () => {
+      const h = harness()
+      let view = h.open()
+      await applyPreset()
+      await launchAndClose(h, view, 1)
+
+      view = h.open()
+      view.unmount()
+      act(() => h.store.dismissLaunchNotice())
+      expect(h.store.getState().launch.lastOrigin).toBe('preset')
+
+      view = h.open()
+      await launchAndClose(h, view, 2)
+      expect(origins(h)).toEqual(['preset', 'preset'])
+    })
   })
 })

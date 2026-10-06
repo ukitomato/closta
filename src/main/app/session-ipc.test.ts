@@ -1,11 +1,15 @@
-import { describe, expect, it } from 'vitest'
+import type { MessagePortMain } from 'electron'
+import { describe, expect, it, vi, type Mock } from 'vitest'
 
 import type { SessionControl } from '@domain/session/agent-session'
 import type { SessionIndexDTO } from '@domain/session/dto'
+import type { LaunchOrigin, LaunchUsageSummaryDTO } from '@domain/session/launch-usage'
 import { MAX_PROMPT_BYTES, MAX_SESSION_OFFSET } from '@domain/validation'
 
+import type { LaunchOutcome } from './session-launch-service'
 import {
   handleFetchMoreSessions,
+  handleGetLaunchUsage,
   handleGetTranscript,
   handleInterruptSession,
   handleEndSession,
@@ -41,9 +45,13 @@ interface Calls {
   readonly controls: { sessionId: string; control: SessionControl }[]
   readonly presetSaves: unknown[]
   readonly presetRemoves: string[]
+  readonly usageRecords: LaunchOrigin[]
 }
 
-function deps(keys: readonly string[] = ['host#0', 'wsl:Ubuntu#0']): {
+function deps(
+  keys: readonly string[] = ['host#0', 'wsl:Ubuntu#0'],
+  over: Partial<SessionIpcDeps> = {}
+): {
   deps: SessionIpcDeps
   calls: Calls
 } {
@@ -55,7 +63,8 @@ function deps(keys: readonly string[] = ['host#0', 'wsl:Ubuntu#0']): {
     launches: [],
     controls: [],
     presetSaves: [],
-    presetRemoves: []
+    presetRemoves: [],
+    usageRecords: []
   }
   return {
     calls,
@@ -106,7 +115,15 @@ function deps(keys: readonly string[] = ['host#0', 'wsl:Ubuntu#0']): {
       },
       async presetIds() {
         return ['preset-1']
-      }
+      },
+      // O-3 の起動の利用記録。記録の呼び出しを数える (負例で「記録しない」を検証)。
+      async recordLaunchUsage(origin) {
+        calls.usageRecords.push(origin)
+      },
+      async getLaunchUsage() {
+        return { status: 'ok' as const, preset: 0, manual: 0, days: 30 as const }
+      },
+      ...over
     }
   }
 }
@@ -433,6 +450,131 @@ describe('X-1 起動 + 制御ハンドラ — main 直接呼び (SC-004 / SC-007
       await handleEndSession(d, args as readonly unknown[])
       await handleKillSession(d, args as readonly unknown[])
       expect(calls.controls).toEqual([])
+    })
+  })
+})
+
+describe('起動元と起動の利用記録 — main 直接呼び (O-3 BE-043 / 012 spec FR-010・FR-013 / SC-005)', () => {
+  const UUID = '11111111-1111-4111-8111-111111111111'
+  const LAUNCHING: LaunchOutcome = {
+    status: 'launching',
+    sessionId: UUID,
+    port: {} as MessagePortMain
+  }
+
+  /** 起動が受け付けられる deps (起動の service の引数を記録する)。 */
+  function launchingDeps(over: Partial<SessionIpcDeps> = {}): {
+    deps: SessionIpcDeps
+    calls: Calls
+    launch: Mock<SessionIpcDeps['launchSession']>
+  } {
+    const launch = vi.fn<SessionIpcDeps['launchSession']>(async () => LAUNCHING)
+    const built = deps(undefined, { launchSession: launch, ...over })
+    return { ...built, launch }
+  }
+
+  it.each([
+    ['preset', ['preset']],
+    ['manual', ['manual']],
+    ['欠落', []],
+    ['未知 (大文字)', ['Preset']],
+    ['未知 (プロトタイプの名前)', ['toString']],
+    ['未知 (数値)', [1]],
+    ['未知 (null)', [null]],
+    ['未知 (オブジェクト)', [{ origin: 'preset' }]]
+  ])(
+    '起動元が %s でも、起動の service は config だけで 1 回呼ばれ、拒否されない',
+    async (_l, originArgs) => {
+      const { deps: d, launch } = launchingDeps()
+      const outcome = await handleLaunchSession(d, [CONFIG, ...originArgs])
+      expect(outcome).toBe(LAUNCHING)
+      expect(launch).toHaveBeenCalledTimes(1)
+      expect(launch.mock.calls[0]).toEqual([CONFIG])
+    }
+  )
+
+  it.each([
+    ['preset', 'preset', ['preset']],
+    ['manual', 'manual', ['manual']],
+    ['欠落', undefined, []],
+    ['未知', 'Preset', []],
+    ['未知 (プロトタイプの名前)', 'constructor', []]
+  ])(
+    '受け付けた起動の起動元が preset / manual のときだけ記録する (%s)',
+    async (_l, origin, expected) => {
+      const { deps: d, calls } = launchingDeps()
+      await handleLaunchSession(d, origin === undefined ? [CONFIG] : [CONFIG, origin])
+      expect(calls.usageRecords).toEqual(expected)
+    }
+  )
+
+  it.each([
+    ['起動ゲートの拒否 (上限)', 'session-limit'],
+    ['起動ゲートの拒否 (停止中)', 'distro-not-running'],
+    ['起動の失敗', 'launch-failed'],
+    ['未知の対象', 'unknown-target']
+  ] as const)('拒否・失敗した起動は記録しない (%s)', async (_l, reason) => {
+    const { deps: d, calls } = launchingDeps({
+      launchSession: async () => ({ status: 'rejected', reason })
+    })
+    const outcome = await handleLaunchSession(d, [CONFIG, 'preset'])
+    expect(outcome).toEqual({ status: 'rejected', reason })
+    expect(calls.usageRecords).toEqual([])
+  })
+
+  it('形の不正な起動設定は起動も記録もしない', async () => {
+    const { deps: d, calls, launch } = launchingDeps()
+    const outcome = await handleLaunchSession(d, [{ ...CONFIG, folderId: '' }, 'preset'])
+    expect(outcome).toEqual({ status: 'rejected', reason: 'invalid-config' })
+    expect(launch).not.toHaveBeenCalled()
+    expect(calls.usageRecords).toEqual([])
+  })
+
+  it.each([
+    ['reject する', (): Promise<void> => Promise.reject(new Error('disk full'))],
+    [
+      '同期で投げる',
+      (): Promise<void> => {
+        throw new Error('sync throw')
+      }
+    ],
+    ['終わらない (await しない)', (): Promise<void> => new Promise<void>(() => {})]
+  ])('recordLaunchUsage が %s ときも結果は launching', async (_l, recordLaunchUsage) => {
+    const record = vi.fn(recordLaunchUsage)
+    const { deps: d } = launchingDeps({ recordLaunchUsage: record })
+    await expect(handleLaunchSession(d, [CONFIG, 'manual'])).resolves.toBe(LAUNCHING)
+    expect(record).toHaveBeenCalledTimes(1)
+    expect(record).toHaveBeenCalledWith('manual')
+  })
+
+  describe('handleGetLaunchUsage', () => {
+    it('集計の DTO だけを返す (service の値に余計なキーがあっても渡さない)', async () => {
+      const leaky = {
+        status: 'ok',
+        preset: 3,
+        manual: 1,
+        days: 30,
+        perDay: { '2026-10-04': { preset: 3, manual: 1 } },
+        path: 'C:\\Users\\someone\\launch-usage.json'
+      } as unknown as LaunchUsageSummaryDTO
+      const { deps: d } = deps(undefined, { getLaunchUsage: async () => leaky })
+      expect(await handleGetLaunchUsage(d)).toEqual({
+        status: 'ok',
+        preset: 3,
+        manual: 1,
+        days: 30
+      })
+    })
+
+    it('読めないは unreadable のまま、service が投げても unreadable', async () => {
+      const unreadable = deps(undefined, {
+        getLaunchUsage: async () => ({ status: 'unreadable', reason: 'EBUSY' }) as never
+      })
+      expect(await handleGetLaunchUsage(unreadable.deps)).toEqual({ status: 'unreadable' })
+      const throwing = deps(undefined, {
+        getLaunchUsage: () => Promise.reject(new Error('boom'))
+      })
+      expect(await handleGetLaunchUsage(throwing.deps)).toEqual({ status: 'unreadable' })
     })
   })
 })

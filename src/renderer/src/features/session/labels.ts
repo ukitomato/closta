@@ -466,3 +466,21 @@ export const PRESET_REMOVE_CONFIRM_LABELS = {
   confirm: '削除する',
   cancel: 'やめる'
 } as const
+
+/**
+ * プリセットの欄の起動の利用記録 (O-3 / 012 data-model §4「表示」・§5 の `session/labels.ts` の行)。
+ * 「プリセットを適用」は起動元が `preset` の回数で、語は session charter の KPI「再利用率」の文言 (U-6) と同じにする。
+ * 前回の設定を変えずに起動し直した起動は前回の起動元のまま入る (数え方の正本は data-model §4「renderer の起動元」)。
+ */
+export const LAUNCH_USAGE_LABELS = {
+  usageTitle: '直近 30 日の起動',
+  usageCounts: (preset: number, manual: number) =>
+    `プリセットを適用 ${preset} 回 / 適用なし ${manual} 回`,
+  usageLoading: '記録を読み込み中…',
+  /** `ok` で 2 つとも 0 (記録が無い)。 */
+  usageEmpty: 'まだ記録がありません。',
+  usageEmptyHint: '起動すると、プリセットを適用したかどうかを日ごとに数えます。',
+  /** `unreadable` (将来版・読めない) と、読み出しの invoke の失敗。 */
+  usageUnreadable: '記録を読めません。',
+  usageUnreadableHint: '次に起動ダイアログを開いたときに読み直します。'
+} as const

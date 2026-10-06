@@ -105,7 +105,7 @@ test.describe('起動設定ダイアログ (X-4)', () => {
       // 起動 (main の検証を通り、合成 stream の composer に到達する)。
       await page.getByRole('button', { name: '起動', exact: true }).click()
       await page
-        .getByRole('textbox', { name: 'Message input' })
+        .getByRole('textbox', { name: 'メッセージ', exact: true })
         .waitFor({ state: 'visible', timeout: 30_000 })
     } finally {
       await app.close()
@@ -137,7 +137,7 @@ test.describe('起動設定ダイアログ (X-4)', () => {
       await expect(confirm).toContainText('既定の資格情報と課金先')
       await confirm.getByRole('button', { name: '既定 Provider で起動する' }).click()
       await page
-        .getByRole('textbox', { name: 'Message input' })
+        .getByRole('textbox', { name: 'メッセージ', exact: true })
         .waitFor({ state: 'visible', timeout: 30_000 })
     } finally {
       await app.close()

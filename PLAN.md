@@ -699,7 +699,7 @@ spec_id（`001-runtime-...`）とは独立させる。差し込み作業で番�
 | X-5 | supervisor 分離とマルチセッション（10 並列） | `session` | X-4 | M2 |
 | O-1 | セッション監視ビュー（状態一覧、密度切替、承認待ちの強調） | `session` | X-5 | M3 |
 | O-2 | `docs/ui-coverage.md` の確立と Tier A 完全化 | `ui` | O-1 | M3 |
-| O-3 | Thread 検索と observability | `ui` | O-2 | M3 |
+| O-3 | Thread 検索と observability (現行は「Thread 検索と探す操作」。observability の表示は O-9 に、滑らかさの実機計測は O-8 に分けた。正本は [docs/roadmap.md](docs/roadmap.md)) | `ui` | O-2 | M3 |
 | I-1 | `DockerRuntime` と endpoint 抽象 + `sessionStore` ミラー | `isolation` | X-5 | M4 |
 | I-2 | コンテナライフサイクルと隔離可視化 | `isolation` | I-1 | M4 |
 | I-3 | sandbox capability 判定と権限モードのゲート | `isolation` | I-2 | M4 |
@@ -726,7 +726,7 @@ Windows 主軸の個人開発では macOS が critical path に乗らないた�
 |---|---|---|---|
 | **M1** | **読める** | R-1〜R-4 | WSL 内の過去セッションを Windows の assistant-ui で読める。**ここで軸 1 の方針を確定する** |
 | **M2** | **走らせられる** | X-1〜X-5 | 起動条件を選んで複数セッションを回せる。日本語で誤送信しない |
-| **M3** | **差配できる** | O-1〜O-3 | 10 セッションを俯瞰でき、未表示情報がゼロ |
+| **M3** | **差配できる** | O-1〜O-3 (現行は O-1〜O-9。正本は [docs/roadmap.md](docs/roadmap.md)) | 10 セッションを俯瞰でき、未表示情報がゼロ |
 | **M4** | **任せられる** | I-1〜I-3 | Auto / `bypassPermissions` を隔離内で安全に回せる |
 | **M5** | **配れる** | D-1 | 自分以外が使える |
 

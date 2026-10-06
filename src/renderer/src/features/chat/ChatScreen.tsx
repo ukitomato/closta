@@ -15,7 +15,7 @@ import { Thread } from '@/components/assistant-ui/elements/thread.aui'
 
 import { TranscriptSettledContext } from './transcript-context'
 import { TranscriptDensityToggle } from './TranscriptDensityToggle'
-import { useTranscript } from './useTranscript'
+import { useTranscript, type TranscriptView } from './useTranscript'
 
 /**
  * 選んだセッションの過去 transcript を assistant-ui で表示する画面 (R-3 / FE-032)。
@@ -65,6 +65,10 @@ function useTick(active: boolean): number {
   return tick
 }
 
+/**
+ * 単体で描く過去ログの画面 (取得 + 本体)。シェルの中央 (`PastCenter`) は取得 (`useTranscript()`) を自分で 1 回だけ呼び、
+ * 会話内検索の供給元と `ChatScreenBody` の両方に渡す (O-3 / 012 data-model §2「本文の供給元」。2 か所で呼ぶと port が 2 本開く)。
+ */
 export function ChatScreen({
   densityToggle = true
 }: {
@@ -74,7 +78,20 @@ export function ChatScreen({
    */
   readonly densityToggle?: boolean
 } = {}): React.JSX.Element {
-  const { messages, status, reasonKey, retry, hasSelection } = useTranscript()
+  const transcript = useTranscript()
+  return <ChatScreenBody transcript={transcript} densityToggle={densityToggle} />
+}
+
+/** 過去ログの画面の本体 (取得済みの `TranscriptView` を描く)。取得は呼び出し側が持つ。 */
+export function ChatScreenBody({
+  transcript,
+  densityToggle = true
+}: {
+  readonly transcript: TranscriptView
+  /** `ChatScreen` の `densityToggle` と同じ。 */
+  readonly densityToggle?: boolean
+}): React.JSX.Element {
+  const { messages, status, reasonKey, retry, hasSelection } = transcript
   const tick = useTick(status === 'loading')
 
   const runtime = useExternalStoreRuntime({

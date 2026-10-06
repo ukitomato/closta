@@ -11,6 +11,7 @@ import {
   type SafePermissionMode,
   type SessionLaunchConfig
 } from '@domain/session/launch-config'
+import type { LaunchOrigin } from '@domain/session/launch-usage'
 import {
   resolveLaunchAxes,
   toLaunchConfig,
@@ -54,10 +55,13 @@ export interface LaunchSource {
   readonly phase: 'entry' | 'launching' | 'rejected'
   readonly rejectReason: SessionLaunchRejectReason | null
   readonly lastConfig: SessionLaunchConfig | null
+  /** `lastConfig` と組の起動元 (O-3)。初期値の設定のまま起動したときだけ引き継ぐ。 */
+  readonly lastOrigin: LaunchOrigin | null
   readonly previousFailure: LaunchFailureReason | null
   /** 終わっていないセッションの作業フォルダ (同一フォルダの警告。X-5 FE-003)。重複を数える。 */
   readonly activeFolderIds?: readonly string[]
-  launch(config: SessionLaunchConfig): Promise<void>
+  /** `origin` は起動元 (O-3 / 012 data-model §4「renderer の起動元」。計測にだけ使い、`config` に影響させない)。 */
+  launch(config: SessionLaunchConfig, origin: LaunchOrigin): Promise<void>
 }
 
 /**
@@ -73,6 +77,7 @@ export interface LaunchSource {
  * | 到達可能性の取得中・失敗は Provider を「既定」だけにする (fail-open にしない)。取得中は reset を保留する | FR-002 / SC-001 |
  * | 起動設定はセッションストアが保持し、失敗・拒否で戻ったとき復元する | US-1 AC7 |
  * | 終わっていないセッションと同じ登録フォルダを選ぶと**警告だけ**を出す (起動ボタンは有効のまま) | X-5 spec US-1 AC2 / FE-003 |
+ * | 起動元: このダイアログで適用したら `preset` (適用後に軸を変えても)、適用せずに軸を手で変えたら `manual`、どちらも無ければ初期値の設定と組の `lastOrigin` (前回の設定が無ければ `manual`)。「手で変えた」は `update` を通ったかで決め、依存解決の自動の reset は数えない | O-3 / 012 spec FR-009 / data-model §4「renderer の起動元」 |
  */
 
 function capability(): typeof window.closta {
@@ -178,6 +183,17 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
   const [draft, setDraft] = useState<LaunchDraft>(() =>
     session.lastConfig !== null ? toLaunchDraft(session.lastConfig) : EMPTY_DRAFT
   )
+  /**
+   * 初期値の設定と組の起動元 (O-3)。下書きの初期値と同じ時点で 1 回だけ決める — 前回の設定を初期値に出すなら、経路
+   * (拒否・失敗・受け付けの後・起動せずに閉じた後) を問わずその起動元、出さないなら `manual`。
+   */
+  const [initialOrigin] = useState<LaunchOrigin>(() =>
+    session.lastConfig !== null ? (session.lastOrigin ?? 'manual') : 'manual'
+  )
+  /** このダイアログでプリセットを適用したか (O-3)。作り直したダイアログでは初めから。 */
+  const [presetApplied, setPresetApplied] = useState(false)
+  /** このダイアログで軸を手で変えたか (`update` を通ったか。変えてから戻しても立ったまま。O-3)。 */
+  const [axisEdited, setAxisEdited] = useState(false)
   const [confirming, setConfirming] = useState(false)
   /** 「再評価」/「再試行」の回数。到達可能性と解決結果の取得キーに含め、押すたびに取り直す (pr-gate H-003)。 */
   const [nonce, setNonce] = useState(0)
@@ -304,6 +320,7 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
    */
   const update = (patch: Partial<LaunchDraft>): void => {
     setConfirming(false)
+    setAxisEdited(true)
     const next: LaunchDraft = { ...draft, ...patch }
     const changesCatalogAxis = 'providerId' in patch || 'modelId' in patch || 'effort' in patch
     const settled = resolveLaunchAxes(next, facts)
@@ -319,10 +336,14 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
     setDraft(next)
   }
 
-  /** プリセットの適用。下書きを丸ごと差し替え、reset は従来どおり解決結果から通知する (書き戻さない)。 */
+  /**
+   * プリセットの適用。下書きを丸ごと差し替え、reset は従来どおり解決結果から通知する (書き戻さない)。
+   * 「適用した」に数え、「軸を手で変えた」には数えない (O-3)。
+   */
   const applyPreset = (next: LaunchDraft): void => {
     setConfirming(false)
     setNotices([])
+    setPresetApplied(true)
     setDraft(next)
   }
 
@@ -351,7 +372,8 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
       return
     }
     setConfirming(false)
-    void session.launch(launchConfig)
+    const origin: LaunchOrigin = presetApplied ? 'preset' : axisEdited ? 'manual' : initialOrigin
+    void session.launch(launchConfig, origin)
   }
 
   const foldersLoading = folders.list === null && !folders.failed

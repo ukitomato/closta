@@ -61,7 +61,7 @@
 - [ ] **XII. 未表示情報を残さない** — 新しいメッセージ型・tool・ブロックの表示を足すなら `docs/ui-coverage.md` の行を同じ PR で直す。割当は `実装済み` / `後続: <未完了の feature ID>` / `表示不要` の 3 種類 (AD-044)。項目 21 が ok
 - [ ] **XIII. assistant-ui の element と design system を優先** — 自作時は理由を PR に記載
 - [ ] **XIV. Ubiquitous Language** — `docs/glossary.md` の canonical 用語を使う
-- [ ] **XV. 多言語規約** — code は英語、UI / docs は日本語、commit は英語 1 行
+- [ ] **XV. 多言語規約** — code は英語、UI / docs は日本語、commit は英語 1 行。UI の文言は feature の文言の表 (`labels.ts` など) に置き、コンポーネントへの直書きを新たに増やさない (i18n リソース化しない。AD-045)
 
 **Domain charter の整合**
 

@@ -43,6 +43,28 @@ export const SHELL_LABELS = {
   expandPanel: '詳細を開く'
 } as const
 
+/**
+ * Command palette の文言 (O-3 / 012 data-model §5 が正本)。サイドバーと詳細の畳み / 開くの操作の名前は `SHELL_LABELS` の
+ * 既存のキー (`collapseSidebar` など) を使う。
+ */
+export const PALETTE_LABELS = {
+  /** palette のダイアログと候補の一覧の名前。 */
+  paletteTitle: 'コマンド',
+  /** 入力欄の名前と placeholder。 */
+  paletteInput: '操作やセッションを探す',
+  paletteNone: '一致する操作はありません。',
+  paletteNoneHint: '語を変えるか、Esc で閉じてください。',
+  paletteGroupActions: '操作',
+  paletteGroupSessions: 'セッション',
+  paletteKindRunning: '稼働中',
+  paletteKindPast: '過去',
+  paletteLaunch: '新しいセッションを起動',
+  paletteSettings: (label: string): string => `設定: ${label}`,
+  paletteChatSearch: '会話内を検索',
+  /** `label` は `TRANSCRIPT_DENSITY_LABELS` の次の値の文言。 */
+  paletteDensity: (label: string): string => `transcript を「${label}」にする`
+} as const
+
 /** 設定のダイアログの項目 (O-7 で消した上部のタブの文言 `SCREEN_LABELS` を引き継ぐ)。 */
 export const SETTINGS_SECTION_LABELS: Record<SettingsSection, string> = {
   runtimes: 'ランタイム',

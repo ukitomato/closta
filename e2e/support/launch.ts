@@ -40,7 +40,8 @@ export async function launchApp(): Promise<{ app: ElectronApplication; page: Pag
 /**
  * 起動 entry (フォルダ + ランタイム選択 → 起動) を通って有効 composer (active phase) に到達する。
  * CLOSTA_E2E stub が fake の folder/runtime を seed し launchSession を成功させる前提 (T030)。
- * 戻り値は composer の textarea (`aria-label="Message input"`。thread.aui.tsx の ComposerPrimitive.Input)。
+ * 戻り値は composer の textarea (名前は「メッセージ」。thread.aui.tsx の ComposerPrimitive.Input に
+ * `features/chat/labels.ts` の `COMPOSER_LABELS.composerInput` を渡している。O-3 / FR-014)。
  */
 export async function reachActiveComposer(page: Page): Promise<import('@playwright/test').Locator> {
   // サイドバーの「新規起動」で起動ダイアログを開く (O-7。上部のタブは無い)。
@@ -56,7 +57,7 @@ export async function reachActiveComposer(page: Page): Promise<import('@playwrig
   // exact 一致にする — 「新規起動」なども「起動」を部分一致で拾うため (strict mode 回避)。
   await page.getByRole('button', { name: '起動', exact: true }).click()
 
-  const composer = page.getByRole('textbox', { name: 'Message input' })
+  const composer = page.getByRole('textbox', { name: 'メッセージ', exact: true })
   await composer.waitFor({ state: 'visible', timeout: 30_000 })
   return composer
 }

@@ -148,6 +148,24 @@
   --chart-5: oklch(0.645 0.246 16.439);
 }
 
+/*
+ * 会話内検索の強調 (O-3 / spec 012 FR-005 / data-model §2「強調」)。
+ *
+ * CSS Custom Highlight API の名前 2 つ (`features/chat/search-highlight.ts` の `SEARCH_HIGHLIGHT` /
+ * `SEARCH_HIGHLIGHT_CURRENT`)。**規則はバンドルされるこの CSS に置く** — 本番の CSP は `style-src 'self'` で、
+ * 実行時に足した `<style>` や `style` 属性は本番でだけ落ちる。色は既存のテーマのトークンだけを使う (Principle XIII)。
+ * 現在の一致は前景と背景を反転させ (`--primary` / `--primary-foreground`)、ほかの一致と色の差だけに頼らず区別する。
+ */
+::highlight(closta-search) {
+  background-color: color-mix(in oklab, var(--chart-4) 45%, transparent);
+  color: var(--foreground);
+}
+
+::highlight(closta-search-current) {
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+}
+
 @layer base {
   * {
     @apply border-border;

@@ -8,8 +8,18 @@ import type { WslRuntimeDescriptor } from '@domain/runtime/descriptor'
 import type { RuntimeDescriptorDTO, RuntimeListDTO } from '@domain/runtime/dto'
 import { wslNamespace } from '@domain/runtime/namespace'
 import type { LaunchInput, SessionControl, SessionEvent } from '@domain/session/agent-session'
-import type { SessionIndexDTO } from '@domain/session/dto'
+import type { SessionIndexDTO, SessionSummaryDTO } from '@domain/session/dto'
 import { normalizePresetName } from '@domain/session/launch-config'
+import {
+  addLaunch,
+  EMPTY_LAUNCH_USAGE,
+  prune,
+  summarizeLaunchUsage,
+  toLocalDayKey,
+  type LaunchUsage,
+  type LocalDayKey
+} from '@domain/session/launch-usage'
+import { cwdKeyOf } from '@domain/session/match'
 import type { PresetDTO } from '@domain/session/preset'
 import { canEnd, type SessionRunState } from '@domain/session/run-state'
 import { BODY_MAX_BYTES } from '@domain/session/sanitize-body'
@@ -60,6 +70,147 @@ function descriptorBase(
 /** fake の値の生成時刻。DTO の `detectedAt` / `registeredAt` に使う。 */
 function emptySessionIndex(fetchedAt: number): SessionIndexDTO {
   return { groups: [], outcomes: [], fetchedAt, complete: true }
+}
+
+/** 固定の索引の時刻 (取得時刻・最終更新)。実行ごとに変えない (012 data-model §7)。 */
+const E2E_INDEX_AT = Date.UTC(2026, 0, 15, 3, 0)
+
+/** 固定の索引の 1 行。題と表示用の値だけを持ち、会話の本文・設定の値・資格情報を含めない (AD-038 / H-3)。 */
+function e2ePastRow(
+  overrides: Pick<SessionSummaryDTO, 'sessionId' | 'targetKey' | 'cwd' | 'originKind'> &
+    Partial<SessionSummaryDTO>
+): SessionSummaryDTO {
+  return {
+    targetLabel: 'e2e',
+    summary: null,
+    firstPrompt: null,
+    customTitle: null,
+    lastModified: E2E_INDEX_AT,
+    // 行に時刻を出さない (基準画像がタイムゾーンで変わらない。012 data-model §7)。
+    createdAt: null,
+    fileSize: 2048,
+    gitBranch: null,
+    tag: null,
+    cwdDisplay: null,
+    programmatic: false,
+    worktree: false,
+    boundary: 'native',
+    normalized: { truncated: false, controlCharsRemoved: false },
+    ...overrides
+  }
+}
+
+/**
+ * **過去のセッションの固定の索引** (O-3 / BE-010 / 012 data-model §7)。サイドバーの過去の区画の基準画像と高さの確認
+ * (`e2e/sidebar-screenshot.spec.ts`) が使う。
+ *
+ * | 規則 | 根拠 |
+ * |---|---|
+ * | 登録フォルダ (`E2E Project`) 3 行・(`E2E Windows Project`) 1 行・未登録 2 行 (既定で畳む) | data-model §7 |
+ * | 列挙の結果は全部 `ok` で `complete: true` (「列挙の結果」が 1 行の要約になる) | data-model §7 / §6 |
+ * | 行は題を必ず持ち、`createdAt` は `null` (識別子と時刻の代替表示を出さない)。取得時刻は固定 | data-model §7 |
+ * | 題は既存の E2E の locator (起動・composer・稼働中の行・`コンパクト` / `詳しく` などの部分一致) と重ならない合成の文 | plan RK-07 |
+ * | 会話の本文・設定の値・資格情報を含めない | AD-038 / H-3 |
+ */
+function e2eSessionIndex(input: {
+  readonly runtimeId: ReturnType<typeof wslNamespace>
+  readonly distroName: string
+  readonly folderId: string
+  readonly winFolderId: string
+}): SessionIndexDTO {
+  const wslTarget = `${input.runtimeId}#0`
+  const hostTarget = 'host#0'
+  const wslRow = (sessionId: string, extra: Partial<SessionSummaryDTO>): SessionSummaryDTO =>
+    e2ePastRow({
+      sessionId,
+      targetKey: wslTarget,
+      cwd: { namespace: input.runtimeId, value: '/home/e2e/project' },
+      originKind: 'wsl-inherited',
+      ...extra
+    })
+  const scratch = { namespace: input.runtimeId, value: '/home/e2e/scratch' } as const
+  return {
+    groups: [
+      {
+        kind: 'folder',
+        folderId: input.folderId,
+        boundary: 'native',
+        sessions: [
+          wslRow('e2e00000-0000-4000-8000-000000000001', {
+            customTitle: 'ログイン画面の API 修正 v2',
+            gitBranch: 'feature/login-v2',
+            tag: 'review'
+          }),
+          wslRow('e2e00000-0000-4000-8000-000000000002', {
+            summary: 'テストを 3 段の並列に分ける'
+          }),
+          wslRow('e2e00000-0000-4000-8000-000000000003', { summary: 'README を日本語で整える' })
+        ]
+      },
+      {
+        kind: 'folder',
+        folderId: input.winFolderId,
+        boundary: 'native',
+        sessions: [
+          e2ePastRow({
+            sessionId: 'e2e00000-0000-4000-8000-000000000004',
+            targetKey: hostTarget,
+            cwd: { namespace: 'host', value: 'C:\\e2e\\project' },
+            originKind: 'host',
+            summary: 'Windows 版のビルド手順 2026'
+          })
+        ]
+      },
+      {
+        kind: 'unregistered',
+        cwdKey: cwdKeyOf(scratch.namespace, scratch.value),
+        cwd: scratch,
+        cwdDisplay: null,
+        suggestedDisplayName: 'scratch',
+        location: { kind: 'wsl', distroName: input.distroName },
+        sessions: [
+          e2ePastRow({
+            sessionId: 'e2e00000-0000-4000-8000-000000000005',
+            targetKey: wslTarget,
+            cwd: scratch,
+            originKind: 'wsl-inherited',
+            summary: '一度きりの調査 A'
+          }),
+          e2ePastRow({
+            sessionId: 'e2e00000-0000-4000-8000-000000000006',
+            targetKey: wslTarget,
+            cwd: scratch,
+            originKind: 'wsl-inherited',
+            summary: '一度きりの調査 B'
+          })
+        ]
+      }
+    ],
+    outcomes: [
+      {
+        location: { kind: 'wsl', distroName: input.distroName },
+        targetKey: wslTarget,
+        targetLabel: 'e2e',
+        status: 'ok',
+        reasonKey: null,
+        count: 5,
+        truncated: false,
+        fetchedAt: E2E_INDEX_AT
+      },
+      {
+        location: { kind: 'windows' },
+        targetKey: hostTarget,
+        targetLabel: 'e2e',
+        status: 'ok',
+        reasonKey: null,
+        count: 1,
+        truncated: false,
+        fetchedAt: E2E_INDEX_AT
+      }
+    ],
+    fetchedAt: E2E_INDEX_AT,
+    complete: true
+  }
 }
 
 /** E2E の負荷経路 (SC-003 / FE-020) を起こす合成プロンプト。本番では本コードに到達しない。 */
@@ -321,6 +472,13 @@ export function createE2eCapability(): E2eCapability {
   let presets: PresetDTO[] = [stalePreset]
   let presetSeq = 0
 
+  // O-3: 起動の利用記録はメモリ内の fake (ファイルに書かない。AD-038)。足す・刈り込む・集計は本番と同じ domain の純関数。
+  let launchUsage: LaunchUsage = EMPTY_LAUNCH_USAGE
+  const usageToday = (): LocalDayKey => {
+    const ms = Date.now()
+    return toLocalDayKey(ms, -new Date(ms).getTimezoneOffset())
+  }
+
   const fakeFolderDto: WorkspaceFolderDTO = {
     id: folderId,
     location: { kind: 'wsl', distroName: distro },
@@ -343,6 +501,7 @@ export function createE2eCapability(): E2eCapability {
     folders: [fakeFolderDto, fakeWinFolderDto],
     restoreIssues: { skipped: 0, reasonKeys: [], backupPath: null }
   }
+  const pastIndex = e2eSessionIndex({ runtimeId, distroName: distro, folderId, winFolderId })
 
   /*
    * **本物の起動調停** (上限・制御の宛先・状態通知の受信規則を本番と共有する) に fake の supervisor 接続を差す。
@@ -390,8 +549,9 @@ export function createE2eCapability(): E2eCapability {
     resolveFolderRuntime: async () => null,
     pickHostFolder: async () => null,
 
-    listSessions: async () => emptySessionIndex(Date.now()),
-    refreshSessions: async () => emptySessionIndex(Date.now()),
+    // 過去の一覧は固定の索引 (O-3 / 012 data-model §7)。打ち切りが無いので「続きを取る」は出ない。
+    listSessions: async () => pastIndex,
+    refreshSessions: async () => pastIndex,
     fetchMoreSessions: async () => emptySessionIndex(Date.now()),
     sessionTargetKeys: () => [],
     getTranscript: async (_sessionId, _targetKey, requestToken) => ({
@@ -429,6 +589,12 @@ export function createE2eCapability(): E2eCapability {
       return { ok: presets.length < before }
     },
     presetIds: async () => presets.map((p) => p.id),
+
+    recordLaunchUsage: async (origin) => {
+      const today = usageToday()
+      launchUsage = prune(addLaunch(launchUsage, today, origin), today)
+    },
+    getLaunchUsage: async () => summarizeLaunchUsage(launchUsage, usageToday()),
 
     launchSession: (config): Promise<LaunchOutcome> => launchService.launch(config),
     controlSession: (sessionId, control) => launchService.control(sessionId, control),

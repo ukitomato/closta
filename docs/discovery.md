@@ -356,6 +356,19 @@ claude 実行パスは `probe-script.ts` の `command -v claude` で検出時解
 `src/renderer/src/features/provider/` に登録・検出・CRUD UI。C-001 の権限ゲート調停で `session-core.ts` の `buildQueryOptions` を
 `settings?: HelperSettings` 対応に拡張、`check.mjs` 項目 16 / `allowlists.mjs` を AD-040 で更新 (`QUERY_SETTINGS_ALLOWED_KEYS`)。
 
+**O-3 (Thread 検索と探す操作) が加えた永続化のファイル** (spec 012 FR-012 / FR-016): 起動の利用記録 `launch-usage.json`
+(session charter の KPI「再利用率」の計測経路)。
+
+- **置き場**: Electron のユーザデータディレクトリ (`app.getPath('userData')`。composition root が `launch-usage-store.ts` に渡す)。
+  `workspace-folders.json` / `providers.json` / `presets.json` と同じ置き場で、書き方 (一時ファイル `launch-usage.json.<時刻>.<連番>.tmp`
+  からの置き換え・壊れたときの退避 `launch-usage.json.<時刻>.bak`) も同じ
+- **中身**: 書式の版 (`schemaVersion`) と、ローカルの暦日ごとの `preset` / `manual` の回数だけ (日の鍵は 90 個まで)。
+  セッション id・プリセット・フォルダ・時刻 (日より細かいもの) などは入らない
+- **消し方**: アプリを閉じてから `launch-usage.json` を消す (退避の `launch-usage.json.*.bak` も要らなければ消す)。消すと記録は消え、
+  次に起動を受け付けたときから数え直す。記録を消す UI は無い (spec 012 Out of Scope)。**アプリが動いている間に消さない** —
+  読み込み済みの回数がメモリに残り、次に起動を受け付けたときにそのまま書き戻される (`launch-usage-service.ts` は同じプロセスで再読しない)
+- E2E (`CLOSTA_E2E=1` の偽の capability) は記録をメモリ内の fake に入れ、ファイルに書かない (AD-038)
+
 テストは `src/` 内の実装と同じ場所に置く。`tests/` にあるのは基盤の検証と違反サンプルだけである。
 
 ---

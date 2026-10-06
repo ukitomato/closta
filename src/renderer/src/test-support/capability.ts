@@ -69,6 +69,7 @@ export function stubCapability(overrides: Partial<ClostaCapability> = {}): Clost
     listPresets: notStubbed('listPresets'),
     savePreset: notStubbed('savePreset'),
     removePreset: notStubbed('removePreset'),
+    getLaunchUsage: notStubbed('getLaunchUsage'),
     onRuntimesChanged: noSubscription,
     onFoldersChanged: noSubscription,
     onSessionsChanged: noSubscription,

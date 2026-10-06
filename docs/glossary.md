@@ -1,8 +1,8 @@
 ---
 status: needs-human-review
-last_updated: 2026-10-05
-generated_by: human (PLAN.md 付録A + §3〜§7 を素材に起草。X-1 で AgentSession 系 8 語を追記。O-2 で 5 語を追記。O-7 で Shell を追記)
-total_terms: 86
+last_updated: 2026-10-07
+generated_by: human (PLAN.md 付録A + §3〜§7 を素材に起草。X-1 で AgentSession 系 8 語を追記。O-2 で 5 語を追記。O-7 で Shell を追記。O-3 で 5 語を追記)
+total_terms: 92
 ---
 
 # Glossary (Ubiquitous Language)
@@ -192,6 +192,31 @@ total_terms: 86
 - **日本語表記**: 調停役スレッド
 - **Domain**: `session` / `agents`
 - **Ref**: [AD-043](decisions/0043-single-supervisor-session-threads-and-session-limit.md) Decision 1・2
+
+#### **Command palette（コマンドパレット）**
+
+- **Definition**: Ctrl+K で開く、アプリ全体のモーダルのダイアログ (O-3)。語で操作とセッションを絞り込み、キーボードだけで実行する。
+  - 操作は 1 か所の表 (`features/shell/palette-commands.ts`) に置く: 新規起動・設定の各項目・サイドバー / 右のペインの畳み・開き・会話内検索・transcript の情報密度の切り替え。
+  - セッションの候補は、セッションの検索 (Thread search) と同じ一致の規則で一致した稼働中と過去のセッション。種別 (稼働中 / 過去) を添える。
+  - シェルの部品 (`features/shell/CommandPalette.tsx`) で、開いている間は「見ているセッション」(`watchedId`) を null にする。
+- **日本語表記**: コマンドパレット (ダイアログの名前は「コマンド」)
+- **Domain**: `ui`
+- **Counterexamples**: セッションの候補の実行は session のストアの選択の操作 (`select` / `sessions.select`) を呼ぶだけで、中央の `focus` を書かない
+  (書くのはシェルの `useShellFocus`。例外は [ui charter](domains/ui/charter.md) の「面の状態」)。同じ会話の稼働中と過去の候補を 1 つに結ばない —
+  稼働中の id はアプリが振る値で、過去の行の `sessionId` (Claude Code のセッションの id) とは名前空間が違う
+- **Ref**: [012 spec](../specs/012-ui-thread-search/spec.md) FR-006 / FR-007 / [data-model](../specs/012-ui-thread-search/data-model.md) §3
+
+#### **Conversation search（会話内検索）**
+
+- **Definition**: 中央に出している会話 (過去ログ・実行中) の transcript の本文を語で検索し、一致した箇所へ移る機能 (O-3)。
+  - 中央のヘッダの検索のボタンと Ctrl+F で開き、中央のヘッダの下に検索のバーを出す。一致の件数と現在の位置 (n / m) を出し、次 / 前で移る。
+  - 対象は user / assistant のメッセージの `text` part の本文だけ。仮想化で描かれていない範囲の一致にも移る。
+  - 強調は CSS Custom Highlight API で、描かれた DOM を書き換えずに掛ける。
+- **日本語表記**: 会話内検索
+- **Domain**: `ui`
+- **Counterexamples**: **セッションの検索 (Thread search) とは別** — あちらは一覧の要約行を絞り込み、transcript の本文を読まない。
+  tool の入力・結果・Reasoning・システムイベントの行は対象にしない。ブラウザの検索 (`findInPage`) ではない (仮想化の外に届かない)
+- **Ref**: [012 spec](../specs/012-ui-thread-search/spec.md) FR-003〜FR-005 / [data-model](../specs/012-ui-thread-search/data-model.md) §2
 
 ### D
 
@@ -425,7 +450,7 @@ total_terms: 86
 
 - **Definition**: 起動ダイアログに出す、直前の拒否の理由 (`launch.rejectReason`) と前回の失敗 (`launch.previousFailure`)。
   - 起動せずにダイアログを閉じたとき・中央に出していない失敗したセッションを閉じたときは、古くなるので消す (`dismissLaunchNotice`。呼ぶのは ui のシェル)。
-  - 起動の初期値 (`launch.lastConfig`) は含まない (告知を消しても残る)。
+  - 起動の初期値 (`launch.lastConfig` と `launch.lastOrigin`) は含まない (告知を消しても残る)。
 - **日本語表記**: 起動の告知
 - **Domain**: `session` (保持) / `ui` (消す時機を決める)
 - **Counterexamples**: 稼働中の行の失敗の表示 (`FailureBanner` / 行の状態の印) は告知ではない。そちらはセッションを閉じるまで残る。
@@ -453,6 +478,33 @@ total_terms: 86
   - `SessionLaunchConfig` (renderer が選ぶ起動設定) とは別物である。
   - `permissionMode` を 6 値ユニオンにしない。昇格 3 値 (`acceptEdits`/`auto`/`bypassPermissions`) は型で持てない (正の構成)。
 - **Ref**: [AD-036](decisions/0036-single-session-launch-process-and-live-stream.md) / [AD-041](decisions/0041-x4-launch-config-on-x1-launch-gate.md) (a)(g)
+
+#### **LaunchOrigin（起動元）**
+
+- **Definition**: 起動の要求に付く計測用の値 (O-3)。`preset` / `manual` の 2 値。数え方の正本は
+  [012 spec](../specs/012-ui-thread-search/spec.md) FR-009 と [data-model](../specs/012-ui-thread-search/data-model.md) §4「renderer の起動元」で、要点は次のとおり。
+  - 起動ダイアログでプリセットを適用した後の起動は `preset` (適用した後に軸を変えても `preset`)。適用せずに軸を手で変えた起動は `manual`。
+  - 適用も軸の手での変更もしていなければ、ダイアログが初期値に出した設定と組の起動元 (`launch.lastOrigin`。前回の設定が無ければ `manual`)。
+  - 前回の設定を変えずに起動し直した起動は、その設定と組の起動元を引き継ぐ。
+  - main は厳密比較 (`checkLaunchOrigin`) で検証する。欠けている・未知の値でも起動は拒否せず、記録だけを行わない。
+- **日本語表記**: 起動元 (UI 文言は「プリセットを適用」/「適用なし」)
+- **Domain**: `session`
+- **Counterexamples**: `SessionLaunchConfig` の軸ではない — 起動の可否・起動の設定・権限モードに影響させず、プリセットにも保存しない。
+  1 度適用した起動元を、アプリを閉じるまでの起動に付けて回らない (引き継ぐのは初期値の設定のまま起動したときだけ)
+- **Ref**: [012 spec](../specs/012-ui-thread-search/spec.md) FR-009 / FR-010 / [data-model](../specs/012-ui-thread-search/data-model.md) §4
+
+#### **LaunchUsage（起動の利用記録）**
+
+- **Definition**: 起動元ごとの起動の回数を、ローカルの暦日ごとに持つ記録 (O-3)。
+  - ユーザデータディレクトリの `launch-usage.json` 1 つに `{ schemaVersion, days: { "YYYY-MM-DD": { preset, manual } } }` を 90 日分 (鍵の数) 持つ。
+  - 起動が受け付けられたとき (`launching`) だけ 1 回足す。数える単位は受け付けた起動の要求。
+  - 起動ダイアログのプリセットの欄が直近 30 日の 2 つの回数を出し、session charter の KPI「再利用率」の計測経路になる。
+- **日本語表記**: 起動の利用記録
+- **Domain**: `session` (永続化層)
+- **Counterexamples**: **「ローカル利用ログ」「再利用率の記録」と呼ばない。** 起動ごとの行を追記するログではなく、日ごとの 2 つの回数しか持たない —
+  セッション id・プリセットの id と名前・フォルダ・ランタイム・Provider・モデル・日より細かい時刻を記録しない (Principle V)。
+  再利用率そのものではなく、その判定の材料である
+- **Ref**: [012 spec](../specs/012-ui-thread-search/spec.md) FR-011〜FR-013 / [data-model](../specs/012-ui-thread-search/data-model.md) §4
 
 #### **Location**
 
@@ -871,6 +923,18 @@ total_terms: 86
 - **Ref**: [AD-046](decisions/0046-app-shell-layout.md) / [013 spec](../specs/013-ui-app-shell/spec.md) / data-model §1
 
 ### T
+
+#### **Thread search（セッションの検索）**
+
+- **Definition**: サイドバーの過去のセッションの区画の検索欄で、一覧の要約行を語で絞り込む機能 (O-3)。element 名は Thread search。
+  - 対象は要約行の `customTitle` / `summary` / `firstPrompt` / `gitBranch` / `tag` / `cwdDisplay` と、行が属するグループの見出しとして画面が描く文字列。
+  - 正規化 (NFKC・小文字化・制御文字の除去・空白の圧縮) と語の AND の部分一致の規則は 1 か所 (`features/search/text-search.ts`) に置き、Command palette のセッションの候補と共有する。
+  - 所在・フォルダの絞り込みと AND で組み合わせる。読み込み済みの行だけを探す。
+- **日本語表記**: セッションの検索
+- **Domain**: `ui` (session の一覧の上に ui が載せる例外。[ui charter](domains/ui/charter.md))
+- **Counterexamples**: **transcript の本文を横断して読まない** (本文の横断検索は O-9 で要否を判断する)。会話内検索 (Conversation search) とは別。
+  パス (`cwd.value`) を直接の対象にしない。検索語から `RegExp` を組まない (字面の部分一致だけ)。registry の `elements-thread-search` (時刻のまとまりと pinned を前提にする) は使わない
+- **Ref**: [012 spec](../specs/012-ui-thread-search/spec.md) FR-001 / FR-002 / [data-model](../specs/012-ui-thread-search/data-model.md) §1
 
 #### **Tier A / B / C**
 

@@ -1,6 +1,11 @@
 import type { SessionControl } from '@domain/session/agent-session'
 import type { SessionIndexDTO } from '@domain/session/dto'
 import type { SessionLaunchConfig } from '@domain/session/launch-config'
+import {
+  checkLaunchOrigin,
+  type LaunchOrigin,
+  type LaunchUsageSummaryDTO
+} from '@domain/session/launch-usage'
 import type { PresetDTO, SavePresetResult } from '@domain/session/preset'
 import type { FailureReason } from '@domain/session/target'
 import { isValidPromptText, isValidRequestToken, isValidSessionId } from '@domain/validation'
@@ -62,6 +67,13 @@ export interface SessionIpcDeps {
   removePreset(id: string): Promise<{ readonly ok: boolean }>
   /** 未信頼入力の照合に使う既知のプリセット id。 */
   presetIds(): Promise<readonly string[]>
+
+  /* ── 起動の利用記録 (O-3 / 012 spec FR-010〜FR-013) ── */
+
+  /** 受け付けた起動を 1 回数える。**reject しない** (失敗は service が握ってログに出す)。呼び出し側は await しない。 */
+  recordLaunchUsage(origin: LaunchOrigin): Promise<void>
+  /** 直近 30 日の集計。 */
+  getLaunchUsage(): Promise<LaunchUsageSummaryDTO>
 }
 
 function failedTranscript(requestToken: string, reasonKey: FailureReason): TranscriptResult {
@@ -127,12 +139,18 @@ export async function handleRefreshSessions(deps: SessionIpcDeps): Promise<Sessi
 /* ── セッション起動 + 制御 (X-1 / BE-006・BE-007・BE-011・BE-021) ─────── */
 
 /**
- * `launchSession(config)` (X-4 BE-005 / BE-007 の入口。US-1 の安全ゲート)。
+ * `launchSession(config, origin)` (X-4 BE-005 / BE-007 の入口。US-1 の安全ゲート。O-3 で起動元を足した)。
  *
  * **起動設定の形を `checkLaunchConfig` で検証する** (6 軸・安全 3 値・モデル ID の文字種。inline の typeof を持たない)。
  * 意味 (登録済み・到達可能・カタログ・VerifiedRunning・distro 一致・同時実行数の上限) は
  * `launchSession` (→ prepareLaunch / service) が **登録の SSoT に対して**判定する (二重管理を避ける)。
  * 形の不正はプロセスを起こさず `invalid-config` で拒否する。**戻り値の `port` の transfer は `ipc.ts`。**
+ *
+ * **起動元 (`args[1]`) は計測にだけ使う** (O-3 / 012 spec FR-010):
+ * - domain の `checkLaunchOrigin` (厳密比較) で検証する。欠けている・未知でも起動は拒否せず、記録だけを行わない
+ * - どの起動元でも、起動の service (`deps.launchSession`) に渡るのは `config` だけで、1 回だけ呼ぶ
+ * - 起動が受け付けられた (`launching`) ときだけ、**await せずに** 1 回記録する。拒否・失敗は記録しない
+ * - 記録が reject しても同期に投げても、起動の結果は変えない
  */
 export async function handleLaunchSession(
   deps: SessionIpcDeps,
@@ -140,7 +158,38 @@ export async function handleLaunchSession(
 ): Promise<LaunchOutcome> {
   const config = args[0]
   if (!checkLaunchConfig(config)) return { status: 'rejected', reason: 'invalid-config' }
-  return deps.launchSession(config)
+  const origin = checkLaunchOrigin(args[1])
+  const outcome = await deps.launchSession(config)
+  if (outcome.status === 'launching' && origin !== null) recordWithoutWaiting(deps, origin)
+  return outcome
+}
+
+/** 記録を待たずに発火する。記録の失敗 (reject・同期の例外) は起動の応答に届かせない (spec FR-012)。 */
+function recordWithoutWaiting(deps: SessionIpcDeps, origin: LaunchOrigin): void {
+  try {
+    deps.recordLaunchUsage(origin).catch(() => undefined)
+  } catch {
+    // 同期に投げても起動の結果は変えない (記録の失敗は service がログに出す)。
+  }
+}
+
+/**
+ * `getLaunchUsage()` (O-3 / 012 spec FR-013)。**引数を取らない。**
+ * 集計済みの DTO の形だけを返す (service の値に余計なキーがあっても renderer に渡さない)。失敗は `unreadable`。
+ */
+export async function handleGetLaunchUsage(deps: SessionIpcDeps): Promise<LaunchUsageSummaryDTO> {
+  try {
+    const summary = await deps.getLaunchUsage()
+    if (summary.status !== 'ok') return { status: 'unreadable' }
+    return {
+      status: 'ok',
+      preset: summary.preset,
+      manual: summary.manual,
+      days: summary.days
+    }
+  } catch {
+    return { status: 'unreadable' }
+  }
 }
 
 /* ── プリセット (X-4 BE-013 / FR-009) ─────────────────────────────── */
