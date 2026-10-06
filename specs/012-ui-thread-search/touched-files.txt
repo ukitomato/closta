@@ -91,3 +91,5 @@ src/renderer/src/features/shell/useShellFocus.ts
 src/renderer/src/stores/ui.test.ts
 src/renderer/src/stores/ui.ts
 src/renderer/src/test-support/capability.ts
+.github/workflows/verify.yml
+specs/012-ui-thread-search/quickstart-results.md

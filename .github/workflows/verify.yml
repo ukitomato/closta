@@ -163,6 +163,14 @@ jobs:
       - name: e2e (マルチセッション)
         run: pnpm exec playwright test e2e/multi-session.spec.ts -c playwright.config.ts
 
+      # サイドバーの過去のセッションの区画 (O-3 FR-018 / SC-008。O-7 の義務 (iii))。日本語スクリーンショット比較
+      # (`sidebar-past-sessions`) と、既定のウィンドウで compact の 10 行を出しても見出しと検索欄が見えることの確認の 2 ケース。
+      # 基準画像は本機で作らず、本ステップが落ちた回の artifact (`e2e-test-results`) の actual を利用者が承認してから
+      # `e2e/sidebar-screenshot.spec.ts-snapshots/` に commit する (AD-038 D5 / 012 quickstart-results V-4)。commit するまで
+      # 本ステップは基準画像が無くて落ちる (偽の緑にしない。012 pr-gate R1 C-001)。他の E2E の結果を先に見るため最後に置く。
+      - name: e2e (サイドバーの過去のセッションの区画)
+        run: pnpm exec playwright test e2e/sidebar-screenshot.spec.ts -c playwright.config.ts
+
       # 失敗したときだけ、Playwright の出力 (スクリーンショット比較の expected / actual / diff を含む) を取り出せるようにする。
       # 中身は E2E stub の固定文言だけ (credential-free。AD-038 D3)。基準画像を CI の描画で取り直すときに使う (O-1 PR #10)。
       - name: upload e2e results (失敗時)

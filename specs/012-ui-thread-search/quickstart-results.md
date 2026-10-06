@@ -15,8 +15,14 @@
     M3 の完了の条件の残りは 24 (O-2 の後と同じ。O-3 は `後続` の行を持たない)
   - 項目 15 の対象に `src/main/app/launch-usage-service.ts` が入っている (BE-042 で `WSL_FREE_DIRECTORIES` に足した)
 - 全件 `vitest run`: **132 files / 2266 tests passed**
-- E2E (要ビルド) と基準画像は本機では流していない。**CI の e2e job で通す** (`e2e/sidebar-screenshot.spec.ts` の基準画像は CI の
-  artifact から取る。`composer-fullwidth` が CI で変わったら、CI の artifact から取り直して理由をここに書く (FE-004))
+- E2E (要ビルド) と基準画像は本機では流していない
+  - **訂正 (pr-gate R1 C-001)**: この記録は当初「CI の e2e job で通す」と書いたが、事実と違った。`9d98c39` の時点で
+    `verify.yml` の e2e job が流す spec は名指しの 4 本 (`ime` / `composer-screenshot` / `launch-dialog` / `multi-session`) だけで、
+    `e2e/sidebar-screenshot.spec.ts` を流していなかった。基準画像もコミットしていない (`e2e/**/*.png` は composer の 1 枚だけ)。
+    FR-018 / SC-008 の E2E (基準画像と高さ) は CI で一度も判定されていない
+  - pr-gate R1 の修正で、e2e job の最後にステップ「e2e (サイドバーの過去のセッションの区画)」を足した。基準画像をコミットする
+    までこのステップは落ちる。基準画像は CI の artifact から取り、利用者の承認の後にコミットする (下の V-4。未了)
+  - `composer-fullwidth` が CI で変わったら、CI の artifact から取り直して理由をここに書く (FE-004)
 
 ## V-1 境界の差分 (SC-006) — 2026-10-07
 
@@ -64,3 +70,13 @@
 
 利用者に残す。結果 (特に「過去のセッションが 50 件以上ある状態で、目当てを語 1〜2 個で絞れたか」。O-9 の本文の横断検索の
 要否の判断の材料) はここに書く。
+
+## V-4 サイドバーの基準画像の承認 (利用者。FR-018 / SC-008 / AD-038 D5) — 未実施
+
+- 基準画像 `e2e/sidebar-screenshot.spec.ts-snapshots/sidebar-past-sessions-win32.png` はまだコミットしていない。CI の e2e job の
+  「e2e (サイドバーの過去のセッションの区画)」は、コミットするまで基準画像が無くて落ちる
+- 手順: 落ちた回の artifact (`e2e-test-results`) の actual (`sidebar-past-sessions-actual.png`) を利用者が見て、見出し・検索欄・
+  グループの見出し・行の日本語の並び (全角の行送り・折返し・字幅の揃い) が許容範囲かを判断する。承認したら上の名前でコミットする。
+  本機では撮らない (本機の描画は揺れる。013 quickstart-results)
+- 記録すること: 承認の日、画像を取った CI の run、画像の大きさ、承認の根拠。コミットの後の CI でこのステップ (基準画像と高さの
+  2 ケース) が通ったこと

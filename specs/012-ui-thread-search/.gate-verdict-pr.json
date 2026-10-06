@@ -1,0 +1,808 @@
+{
+    "gate": "pr",
+    "run": "2026-10-07T00:00:00+09:00",
+    "spec_dir": "specs/012-ui-thread-search",
+    "spec_id": "012-ui-thread-search",
+    "round": 1,
+    "base_branch": "main",
+    "base": {
+        "merge_base": "7bdb27107182a6a52eb4e4cdcdfcf09803121055",
+        "head": "9d98c3926ed49337a9b92166541f0d0ac597ad21",
+        "diff_range": "main...HEAD"
+    },
+    "diff_stat": {
+        "files": 114,
+        "additions": 14512,
+        "deletions": 437
+    },
+    "severity_counts": {
+        "critical": 1,
+        "high": 1,
+        "medium": 21,
+        "low": 40
+    },
+    "severity_counts_before_dedup": {
+        "critical": 1,
+        "high": 2,
+        "medium": 26,
+        "low": 45
+    },
+    "convergence": {
+        "resolved_from_prev": 0,
+        "new_in_round": 2,
+        "unresolved": 0
+    },
+    "inheritance": "none (Round 1)",
+    "round_history": [
+        {
+            "round": 1,
+            "critical": 1,
+            "high": 1,
+            "medium": 21,
+            "low": 40,
+            "critical_ids": [
+                "C-001"
+            ],
+            "high_ids": [
+                "H-001"
+            ],
+            "convergence": {
+                "resolved_from_prev": 0,
+                "new_in_round": 2,
+                "unresolved": 0
+            }
+        }
+    ],
+    "critical_findings": [
+        {
+            "id": "C-001",
+            "origin": [
+                "po-reviewer:C-001",
+                "architecture-reviewer:H-001"
+            ],
+            "title": "\u30b5\u30a4\u30c9\u30d0\u30fc\u306e\u57fa\u6e96\u753b\u50cf\u306e E2E (e2e/sidebar-screenshot.spec.ts) \u304c CI \u304b\u3089\u5b9f\u884c\u3055\u308c\u305a\u3001\u57fa\u6e96\u753b\u50cf\u3082\u30b3\u30df\u30c3\u30c8\u3055\u308c\u3066\u3044\u306a\u3044 (FR-018 / SC-008)",
+            "where": [
+                ".github/workflows/verify.yml:139",
+                ".github/workflows/verify.yml:145",
+                ".github/workflows/verify.yml:159",
+                ".github/workflows/verify.yml:164",
+                "e2e/sidebar-screenshot.spec.ts:81",
+                "specs/012-ui-thread-search/quickstart-results.md:18"
+            ],
+            "status": "new",
+            "scope": "feature"
+        }
+    ],
+    "high_findings": [
+        {
+            "id": "H-001",
+            "origin": [
+                "a11y-reviewer:H-001"
+            ],
+            "title": "palette \u306e\u73fe\u5728\u306e\u5019\u88dc\u306e\u6307\u6a19\u304c\u80cc\u666f\u306e 6% \u306e\u6fc3\u6de1 (1.14:1) \u3060\u3051\u3067\u3001\u5165\u529b\u6b04\u3082 outline-none",
+            "where": [
+                "src/renderer/src/components/assistant-ui/elements/command-palette.tsx:205",
+                "src/renderer/src/components/assistant-ui/elements/command-palette.tsx:166"
+            ],
+            "status": "new",
+            "scope": "feature"
+        }
+    ],
+    "suppressed_by_code_gate": [],
+    "cascade_reversals": [
+        {
+            "reviewer": "po-reviewer",
+            "finding_id": "C-001",
+            "demoted_as": "FR-018",
+            "reason": "cascade_enforce \u304c\u898b\u51fa\u3057\u306e\u4e00\u884c\u30b5\u30de\u30ea\u4e2d\u306e FR-018 \u3092\u6307\u6458 ID \u3068\u3057\u3066\u62fe\u3063\u305f (reviewer-base.md:142 \u306e\u66f8\u5f0f\u3067\u5ba3\u8a00\u3055\u308c\u305f ID \u306f C-001)\u3002cascade summary \u306e C-001 \u306e\u884c\u306f\u4ef6\u6570 1 (\u6574\u6570) \u3067 verified_in_table \u306b\u5f53\u305f\u308b\u3002invoker \u304c verify.yml \u3068 e2e/**/*.png \u3067\u4e8b\u5b9f\u3092\u78ba\u8a8d"
+        }
+    ],
+    "viewpoint_coverage": {
+        "A": "Critical:0 High:0 Medium:0 Low:0 (security)",
+        "B": "Critical:0 High:0 Medium:0 Low:0 (security)",
+        "C": "Critical:0 High:0 Medium:3 Low:4 (architecture / platform-boundary)",
+        "D": "Critical:0 High:0 Medium:2 Low:6 (architecture / platform-boundary)",
+        "E": "Critical:1 High:0 Medium:4 Low:6 (po)",
+        "F": "Critical:0 High:0 Medium:1 Low:1 (platform-boundary)",
+        "G": "Critical:0 High:1 Medium:13 Low:18 (database / ux / a11y / ui-coverage)",
+        "H": "Critical:0 High:1 Medium:3 Low:10 (\u5168 reviewer)"
+    },
+    "fr_coverage": [
+        {
+            "fr": "FR-001",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/session-list/SessionListScreen.tsx:814"
+            ]
+        },
+        {
+            "fr": "FR-002",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/search/session-search.ts:57"
+            ]
+        },
+        {
+            "fr": "FR-003",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/chat/ConversationSearchProvider.tsx:48"
+            ]
+        },
+        {
+            "fr": "FR-004",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/chat/conversation-search.ts:30"
+            ]
+        },
+        {
+            "fr": "FR-005",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/chat/useConversationSearch.ts:47"
+            ]
+        },
+        {
+            "fr": "FR-006",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/shell/CommandPalette.tsx:38"
+            ]
+        },
+        {
+            "fr": "FR-007",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/shell/palette-commands.ts:296",
+                "src/renderer/src/features/search/session-search.ts:146"
+            ]
+        },
+        {
+            "fr": "FR-008",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/session/PresetPanel.tsx:222"
+            ]
+        },
+        {
+            "fr": "FR-009",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/session/LaunchDialog.tsx:191"
+            ]
+        },
+        {
+            "fr": "FR-010",
+            "covered": true,
+            "by": [
+                "src/main/app/session-ipc.ts:161"
+            ]
+        },
+        {
+            "fr": "FR-011",
+            "covered": true,
+            "by": [
+                "src/domain/session/launch-usage.ts:208"
+            ]
+        },
+        {
+            "fr": "FR-012",
+            "covered": true,
+            "by": [
+                "src/main/infra/settings/launch-usage-store.ts:189"
+            ]
+        },
+        {
+            "fr": "FR-013",
+            "covered": true,
+            "by": [
+                "src/domain/session/launch-usage.ts:54"
+            ]
+        },
+        {
+            "fr": "FR-014",
+            "covered": true,
+            "by": [
+                "docs/decisions/0045-ui-labels-no-i18n-resources.md"
+            ]
+        },
+        {
+            "fr": "FR-015",
+            "covered": true,
+            "by": [
+                "docs/ui-coverage.md"
+            ]
+        },
+        {
+            "fr": "FR-016",
+            "covered": true,
+            "by": [
+                "docs/glossary.md:499",
+                "docs/discovery.md"
+            ]
+        },
+        {
+            "fr": "FR-017",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/session-list/SessionListScreen.tsx:800"
+            ]
+        },
+        {
+            "fr": "FR-018",
+            "covered": false,
+            "by": [
+                "e2e/sidebar-screenshot.spec.ts:81"
+            ],
+            "note": "spec \u306f\u3042\u308b\u304c CI \u304b\u3089\u5b9f\u884c\u3055\u308c\u305a\u3001\u57fa\u6e96\u753b\u50cf\u3082\u7121\u3044 (C-001)"
+        }
+    ],
+    "rule_verification": {
+        "ran": true,
+        "round": 1,
+        "reason": "Round 1 (\u672c diff \u306f eslint.config.mjs / .dependency-cruiser.js / scripts/constitution/allowlists.mjs \u3082\u5909\u66f4)",
+        "command": "node scripts/rules/run.mjs",
+        "matched": 64,
+        "total": 64,
+        "uncaught_paths_declared": 9,
+        "elapsed_s": 561,
+        "isolated": true
+    },
+    "skipped_reviewers": [],
+    "not_invoked_by_design": [
+        "lint-agent",
+        "test-agent",
+        "convention-reviewer"
+    ],
+    "reviewer_selection": {
+        "security-reviewer": "\u5e38\u99d0",
+        "architecture-reviewer": "\u5e38\u99d0 (default + ADR-drift)",
+        "po-reviewer": "\u5e38\u99d0",
+        "database-reviewer": "src/main/infra/settings/launch-usage-store.test.ts \u304c src/main/infra/settings/** \u306b\u4e00\u81f4",
+        "ux-reviewer": "src/renderer/src/components/assistant-ui/elements/thread-list.aui.tsx \u306b\u4e00\u81f4",
+        "a11y-reviewer": "src/renderer/src/components/assistant-ui/elements/thread-list.aui.tsx \u306b\u4e00\u81f4",
+        "platform-boundary-reviewer": ".dependency-cruiser.js \u304c **/.dependency-cruiser.* \u306b\u4e00\u81f4",
+        "ui-coverage-reviewer": "docs/ui-coverage.md \u306b\u4e00\u81f4"
+    },
+    "tracks": {
+        "security-reviewer": {
+            "status": "ok",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 0,
+            "low": 2
+        },
+        "architecture-reviewer": {
+            "status": "ok",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 1,
+            "medium": 6,
+            "low": 9
+        },
+        "po-reviewer": {
+            "status": "ok",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "cascade_demotions_mechanical": 1,
+            "cascade_demotions_reverted": 1,
+            "critical": 1,
+            "high": 0,
+            "medium": 5,
+            "low": 7
+        },
+        "database-reviewer": {
+            "status": "ok",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 2,
+            "low": 7
+        },
+        "ux-reviewer": {
+            "status": "ok",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 7,
+            "low": 6
+        },
+        "a11y-reviewer": {
+            "status": "ok",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 1,
+            "medium": 5,
+            "low": 6,
+            "note": "reviewer \u306e Verdict \u884c\u306f Low 5 \u3060\u304c\u6307\u6458\u306e\u672c\u6587\u306f L-001\u301cL-006 \u306e 6 \u4ef6\u3002\u672c\u6587\u306e\u4ef6\u6570\u3092\u63a1\u3063\u305f"
+        },
+        "platform-boundary-reviewer": {
+            "status": "ok",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 1,
+            "low": 5
+        },
+        "ui-coverage-reviewer": {
+            "status": "ok",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 0,
+            "low": 3
+        }
+    },
+    "system_followups": [
+        "gate_common::cascade_enforce \u306e\u6307\u6458 ID \u306e\u53d6\u308a\u65b9 (.specify/scripts/gate-common.sh:506): \u898b\u51fa\u3057\u306e \\(([A-Z]+-\\d+)\\) \u3092\u5148\u306b\u898b\u308b\u5f62\u306b\u76f4\u3059",
+        "e2e/*.spec.ts \u304c\u3059\u3079\u3066 verify.yml \u304b\u3089\u6d41\u308c\u308b\u3053\u3068\u3092\u78ba\u304b\u3081\u308b\u691c\u67fb (C-001 \u306e\u518d\u767a\u9632\u6b62)"
+    ],
+    "verdict": "FIX_REQUIRED",
+    "touched_files": [
+        {
+            "path": ".dependency-cruiser.js",
+            "sha": "8e9be1906a9fea9f8b0483099ab4112036bb8936"
+        },
+        {
+            "path": ".specify/memory/constitution.md",
+            "sha": "f76575a15f801efa6067a589d15cbe001e140d60"
+        },
+        {
+            "path": ".specify/templates/plan-template.md",
+            "sha": "cdebf5ffba4594d91a42084e2b493923ff325eba"
+        },
+        {
+            "path": "PLAN.md",
+            "sha": "bfe0de96a09315b763307aae81e75382468819e2"
+        },
+        {
+            "path": "docs/decisions/0045-ui-labels-no-i18n-resources.md",
+            "sha": "a43b6c2d2fdfec1960cdbf5a597b48664f798bcc"
+        },
+        {
+            "path": "docs/discovery.md",
+            "sha": "2bd2c89e303c1c15dced8abd1145198c9b121d20"
+        },
+        {
+            "path": "docs/domains/_overview.md",
+            "sha": "d718f9f075a5aaed0e2e67ef9a69cb5e6d839446"
+        },
+        {
+            "path": "docs/domains/session/charter.md",
+            "sha": "cb05eb447af0e63db3e14f7a3a21104c7919cad3"
+        },
+        {
+            "path": "docs/domains/ui/charter.md",
+            "sha": "92da4472b57736aa0c073ae2780f7b1994c3b0ac"
+        },
+        {
+            "path": "docs/glossary.md",
+            "sha": "aba6cbf49cf74b4f2f022b2632706c5eb3e4aba2"
+        },
+        {
+            "path": "docs/prompts.md",
+            "sha": "f8362ab355655136fabb4ea2b40caf6178f97a4c"
+        },
+        {
+            "path": "docs/roadmap.md",
+            "sha": "080b8aeb5f1a499b67dc2d1c65eb83f16f4f335d"
+        },
+        {
+            "path": "docs/ui-coverage.md",
+            "sha": "bae73f67fbd3d4260d55e9410e5ffd4af48e9a9c"
+        },
+        {
+            "path": "e2e/ime.spec.ts",
+            "sha": "70331e3b0252a6ec1f633244528d8b91620b5911"
+        },
+        {
+            "path": "e2e/launch-dialog.spec.ts",
+            "sha": "22add5772e1f9ed132b911c94ff0a72a7c3d8c2c"
+        },
+        {
+            "path": "e2e/multi-session.spec.ts",
+            "sha": "0ac12e2153e85ff4ac0544d9f1ffee9a4637fee3"
+        },
+        {
+            "path": "e2e/sidebar-screenshot.spec.ts",
+            "sha": "2b5f65234d5edd3a0b8cbdf14694001b4dd10a70"
+        },
+        {
+            "path": "e2e/support/launch.ts",
+            "sha": "2f29fd3f1abe657e58813ee04e74ee170cf9633a"
+        },
+        {
+            "path": "eslint.config.mjs",
+            "sha": "bdc084951280d9309281a697a67573433fbe8ca4"
+        },
+        {
+            "path": "perf/real-sessions.spec.ts",
+            "sha": "d80982246c5d805969681fbc45cb147a2de80544"
+        },
+        {
+            "path": "scripts/constitution/allowlists.mjs",
+            "sha": "8886b0c0efe228d6b053ab3b71a33a1ffd043545"
+        },
+        {
+            "path": "specs/010-session-monitoring-view/quickstart-results.md",
+            "sha": "2c84213be0c2d0421b844fdd14699318c179d9f3"
+        },
+        {
+            "path": "specs/012-ui-thread-search/.gate-verdict-code.json",
+            "sha": "4353ec2710fa356c14c12e4749bd9e33c468eff1"
+        },
+        {
+            "path": "specs/012-ui-thread-search/.gate-verdict-design.json",
+            "sha": "65d8b04fcec1d42b7e13ea20dddc4b229d01f35b"
+        },
+        {
+            "path": "specs/012-ui-thread-search/analyze.md",
+            "sha": "3dced75a616dd64edc199cafda50e84356857b90"
+        },
+        {
+            "path": "specs/012-ui-thread-search/architecture-reviewer.design-gate.md",
+            "sha": "29401d3a9b0f37355cc6680d9cf5f69bf4a4b590"
+        },
+        {
+            "path": "specs/012-ui-thread-search/code-gate.md",
+            "sha": "6da2cfa99af15bc715e98847116fd497326c3baa"
+        },
+        {
+            "path": "specs/012-ui-thread-search/convention-reviewer.code-gate.md",
+            "sha": "ae5a46009330283867f6cb962f1eb44870625300"
+        },
+        {
+            "path": "specs/012-ui-thread-search/data-model.md",
+            "sha": "2ac6babfccbc8f30c11741cb1cbf317d3d252de9"
+        },
+        {
+            "path": "specs/012-ui-thread-search/database-reviewer.code-gate.md",
+            "sha": "eec6d600593b12c0aa94e39e647dcd72d00d4ccc"
+        },
+        {
+            "path": "specs/012-ui-thread-search/database-reviewer.design-gate.md",
+            "sha": "24a9ebccc303d3c3893cad1c81407dcf04dfb310"
+        },
+        {
+            "path": "specs/012-ui-thread-search/design-gate.md",
+            "sha": "90f3e9bdf8a67b0d4a3f64123920ceebde7e2012"
+        },
+        {
+            "path": "specs/012-ui-thread-search/plan.md",
+            "sha": "5f0c2baec5e3491ebb034f8d4955655fb824bba1"
+        },
+        {
+            "path": "specs/012-ui-thread-search/platform-boundary-reviewer.code-gate.md",
+            "sha": "8719b62adf5506193edc0071063a685924093fb8"
+        },
+        {
+            "path": "specs/012-ui-thread-search/platform-boundary-reviewer.design-gate.md",
+            "sha": "1025093202c5c509313b1366227a0d1108b85b48"
+        },
+        {
+            "path": "specs/012-ui-thread-search/po-reviewer.design-gate.md",
+            "sha": "c3977cdb5793df999c123876579439bad36a7261"
+        },
+        {
+            "path": "specs/012-ui-thread-search/quickstart-results.md",
+            "sha": "a5af7611790319da38ca2685b57b21a50d555af7"
+        },
+        {
+            "path": "specs/012-ui-thread-search/quickstart.md",
+            "sha": "277ecd33e63a35a81677c9ec6a66e9d47d3896a3"
+        },
+        {
+            "path": "specs/012-ui-thread-search/research.md",
+            "sha": "e7291950eca2afee8e7e2ebf550925f793a775ba"
+        },
+        {
+            "path": "specs/012-ui-thread-search/security-reviewer.design-gate.md",
+            "sha": "1ff3beba8e86c39e6e4a3e2e1f497ff84cbcd351"
+        },
+        {
+            "path": "specs/012-ui-thread-search/spec.md",
+            "sha": "cd3be6f478b3dab6112fe953380b8410b40207db"
+        },
+        {
+            "path": "specs/012-ui-thread-search/tasks.md",
+            "sha": "50eb80c88d8687a12c485ea6e0fa045ef322336d"
+        },
+        {
+            "path": "specs/012-ui-thread-search/touched-files.txt",
+            "sha": "b97fb93bd87db307690eda5b416fddf2d650b896"
+        },
+        {
+            "path": "specs/013-ui-app-shell/spec.md",
+            "sha": "bee5ef01de751d9496813b75955451ac89a0c556"
+        },
+        {
+            "path": "src/domain/capability.test.ts",
+            "sha": "9e0579a9c19bb6c8e02d43b7ff7e79b30f224511"
+        },
+        {
+            "path": "src/domain/capability.ts",
+            "sha": "6c648e2beb0b79f2d4945cb35fe5a2e3109cad69"
+        },
+        {
+            "path": "src/domain/session/launch-usage.test.ts",
+            "sha": "b4463bc12fd8db9852a3397574263acf96b4d50e"
+        },
+        {
+            "path": "src/domain/session/launch-usage.ts",
+            "sha": "a657bf156dbd02b1e6fc26f40669c604929b367b"
+        },
+        {
+            "path": "src/main/app/composition-root.ts",
+            "sha": "46242dbb3f5442fad15451a46efa723e50e3ecfe"
+        },
+        {
+            "path": "src/main/app/e2e-capability.ts",
+            "sha": "4225375953f8fd5077a5bb0711ce8702d7d7df14"
+        },
+        {
+            "path": "src/main/app/ipc.ts",
+            "sha": "47dfe5233676906eae65ef1fe2e0bd4a5bc2809c"
+        },
+        {
+            "path": "src/main/app/launch-usage-service.test.ts",
+            "sha": "f2c7aa100e6ba2d81f75672572609c5b582e0a2e"
+        },
+        {
+            "path": "src/main/app/launch-usage-service.ts",
+            "sha": "c751f7fd9ad4da24827f6d1e55b74994b6a95fae"
+        },
+        {
+            "path": "src/main/app/session-ipc.test.ts",
+            "sha": "5be7b5fefe8f3da0e9697a584bc6a8357357bf01"
+        },
+        {
+            "path": "src/main/app/session-ipc.ts",
+            "sha": "857736be49276501776d5e646a955592e5823719"
+        },
+        {
+            "path": "src/main/infra/settings/launch-usage-store.test.ts",
+            "sha": "116518272bdd277781d713d6aaaf4aef267439ad"
+        },
+        {
+            "path": "src/main/infra/settings/launch-usage-store.ts",
+            "sha": "6985949281e75962212d0f2b584d0593f7e26874"
+        },
+        {
+            "path": "src/preload/index.ts",
+            "sha": "441f9091b42f5e778c8b079b9d6e1bdd76331a9e"
+        },
+        {
+            "path": "src/renderer/src/assets/main.css",
+            "sha": "0b7f3a8e55907724c024fed293808548d3affb84"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/command-palette.tsx",
+            "sha": "c8ab03aa76acda638d90a0c6ad483f0fb71cdfc2"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/conversation-search.tsx",
+            "sha": "0aeceb735417a515d3e3dd5ac5c34c9ee61b6904"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/thread-list.aui.tsx",
+            "sha": "95a6ab249345271a54ba25f830e47caff941362a"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/thread.aui.tsx",
+            "sha": "62d2b38d1fc3714a74dc2a39f8264f69e719dbdd"
+        },
+        {
+            "path": "src/renderer/src/components/ui/dialog.tsx",
+            "sha": "e50eeaa365487d2c39cfee9866a2855e1266d5ce"
+        },
+        {
+            "path": "src/renderer/src/features/chat/ChatScreen.test.tsx",
+            "sha": "3968297a61860cd716dc930be60679bc2d426b9a"
+        },
+        {
+            "path": "src/renderer/src/features/chat/ChatScreen.tsx",
+            "sha": "30d37ef8c64e7aff14258a923dbcfac1ea4deee4"
+        },
+        {
+            "path": "src/renderer/src/features/chat/ConversationSearch.test.tsx",
+            "sha": "ef2e8ef00c49462b5d842fb252c0fdf9157efa3a"
+        },
+        {
+            "path": "src/renderer/src/features/chat/ConversationSearchBar.tsx",
+            "sha": "6890de5a885193f9a9f871a9fef1139b25d70597"
+        },
+        {
+            "path": "src/renderer/src/features/chat/ConversationSearchProvider.tsx",
+            "sha": "e7563d255e41c500ec7174a258ee08505b5d2758"
+        },
+        {
+            "path": "src/renderer/src/features/chat/conversation-search.test.ts",
+            "sha": "70fac79f3b85f2606f14016fb5159e299de41999"
+        },
+        {
+            "path": "src/renderer/src/features/chat/conversation-search.ts",
+            "sha": "3db2b810ebce3c8d63500e2daeab5972111332c6"
+        },
+        {
+            "path": "src/renderer/src/features/chat/labels.ts",
+            "sha": "12eb65449d95ec28b78af6f073f9053f19a0bb61"
+        },
+        {
+            "path": "src/renderer/src/features/chat/search-highlight.test.ts",
+            "sha": "01028912074e17e4d4868cf97848e908fdede36d"
+        },
+        {
+            "path": "src/renderer/src/features/chat/search-highlight.ts",
+            "sha": "6d04d241d1bbcd2e8c6dab771f174324536e0708"
+        },
+        {
+            "path": "src/renderer/src/features/chat/transcript-context.ts",
+            "sha": "1c8e43eb691268828a70a0e26cc994c0ed2ae1b9"
+        },
+        {
+            "path": "src/renderer/src/features/chat/transcript-navigator.test.tsx",
+            "sha": "e1b7eeafd65f31ef20058fd970b80f1275d0ea11"
+        },
+        {
+            "path": "src/renderer/src/features/chat/useConversationSearch.ts",
+            "sha": "a8dd862d1fc1938e3d8064689b244f7d39bd8cfa"
+        },
+        {
+            "path": "src/renderer/src/features/search/session-search.test.ts",
+            "sha": "ad28321d21e60826b8dffad75ad59d3ac0422a3e"
+        },
+        {
+            "path": "src/renderer/src/features/search/session-search.ts",
+            "sha": "20f42ef9db09853567ef74a9524fd167c30150fd"
+        },
+        {
+            "path": "src/renderer/src/features/search/text-search.test.ts",
+            "sha": "1275f2b9c546e69185f25eaee6cf448ff39864c5"
+        },
+        {
+            "path": "src/renderer/src/features/search/text-search.ts",
+            "sha": "1f8ef25ae2d048d691abfa84324713dbc4d6c643"
+        },
+        {
+            "path": "src/renderer/src/features/session-list/SessionListScreen.test.tsx",
+            "sha": "f74b5787be0921ad03dc37208ff33e2867cb2d7d"
+        },
+        {
+            "path": "src/renderer/src/features/session-list/SessionListScreen.tsx",
+            "sha": "ed62d11cb6d6d791c3a588b0e5ce87353a1ebdac"
+        },
+        {
+            "path": "src/renderer/src/features/session-list/labels.ts",
+            "sha": "a2c62214b35c9e3851e6dc506b66d5118c6a1cb0"
+        },
+        {
+            "path": "src/renderer/src/features/session/LaunchDialog.test.tsx",
+            "sha": "efbb56058f7880d8de03ff02d31c9bc3ada878c9"
+        },
+        {
+            "path": "src/renderer/src/features/session/LaunchDialog.tsx",
+            "sha": "f88e8d58177ee645a1bcbed0fa9d0a81667595df"
+        },
+        {
+            "path": "src/renderer/src/features/session/LivePane.tsx",
+            "sha": "4b5a47b25ddf3340b2b5074ba701c51bf0c86060"
+        },
+        {
+            "path": "src/renderer/src/features/session/PresetPanel.test.tsx",
+            "sha": "c3a4f40dd47109bc68abf0c301433e8a10d8a52c"
+        },
+        {
+            "path": "src/renderer/src/features/session/PresetPanel.tsx",
+            "sha": "cd1cc6120fcf1232b2ee9a0e3d34dcba5c241e78"
+        },
+        {
+            "path": "src/renderer/src/features/session/RunningSessionList.tsx",
+            "sha": "741e6ad3832b6e2f87686cf9df1491ede452b677"
+        },
+        {
+            "path": "src/renderer/src/features/session/RunningSessionsProvider.test.tsx",
+            "sha": "47666f48c9788c7e61a4b9718a301634caa1a89b"
+        },
+        {
+            "path": "src/renderer/src/features/session/RunningSessionsProvider.tsx",
+            "sha": "f0a4de12b69bd4f0f0cc74f2c449e0c4a64cab2a"
+        },
+        {
+            "path": "src/renderer/src/features/session/labels.ts",
+            "sha": "59bd1c2ffa874a3d880536a46336a2b4d1d92ec3"
+        },
+        {
+            "path": "src/renderer/src/features/session/running-session-store.test.ts",
+            "sha": "23c122ad3c72da6d484fb3e3a195e7a8fb655b21"
+        },
+        {
+            "path": "src/renderer/src/features/session/running-session-store.ts",
+            "sha": "158fab558b3a854f14b6bbbacbdb6d5e0f9577be"
+        },
+        {
+            "path": "src/renderer/src/features/session/running-session-types.ts",
+            "sha": "45025dfc2bfcff06fe5be475b3c23f8800f60b43"
+        },
+        {
+            "path": "src/renderer/src/features/session/running-sessions-view.ts",
+            "sha": "9cac8a12ecce8c3272bd2bb3ab16caf524b7bf3c"
+        },
+        {
+            "path": "src/renderer/src/features/session/session-view.monitor.test.ts",
+            "sha": "fb08dd68dc582e8eadc8cda69969f9a01e3726e3"
+        },
+        {
+            "path": "src/renderer/src/features/session/useLaunchUsage.ts",
+            "sha": "a598f6d7256f213c80275e0700792a3bb1ad7499"
+        },
+        {
+            "path": "src/renderer/src/features/shell/AppShell.test.tsx",
+            "sha": "45727bafac7f412aa95da90c3867373afd743c79"
+        },
+        {
+            "path": "src/renderer/src/features/shell/AppShell.tsx",
+            "sha": "80608ef9167c4018765805326559d742693cbe7e"
+        },
+        {
+            "path": "src/renderer/src/features/shell/CenterHeader.tsx",
+            "sha": "2c068280bea3d293d3fcc9b8a2e0cc1f1e2fa811"
+        },
+        {
+            "path": "src/renderer/src/features/shell/CenterPane.tsx",
+            "sha": "fbfa8e3cf2355afd13cbf794ee28b2e99310b86e"
+        },
+        {
+            "path": "src/renderer/src/features/shell/CommandPalette.test.tsx",
+            "sha": "f0952523b35ef036bed67747035c00bb371a3913"
+        },
+        {
+            "path": "src/renderer/src/features/shell/CommandPalette.tsx",
+            "sha": "240357feb0884fab20ef96ebef281e5bc78ed17a"
+        },
+        {
+            "path": "src/renderer/src/features/shell/Sidebar.tsx",
+            "sha": "ae1f9a2592103d7bab5f7f7106d29ae045f0eef8"
+        },
+        {
+            "path": "src/renderer/src/features/shell/center-shown.ts",
+            "sha": "f54bbd898c2a7ac55b97694a104dc083cd7039b7"
+        },
+        {
+            "path": "src/renderer/src/features/shell/labels.ts",
+            "sha": "230916d3ebb8b1a99dea3047c1ef4b14c78140be"
+        },
+        {
+            "path": "src/renderer/src/features/shell/palette-commands.test.ts",
+            "sha": "20c7e86a7a3919f029acc86d8fa559fa1f08fd8e"
+        },
+        {
+            "path": "src/renderer/src/features/shell/palette-commands.ts",
+            "sha": "8ae5110871a0c33d6fe1c37b95a8df10d39fc29e"
+        },
+        {
+            "path": "src/renderer/src/features/shell/useShellFocus.ts",
+            "sha": "650a7623f94df3d5987879a1cef67e806dfae4e9"
+        },
+        {
+            "path": "src/renderer/src/stores/ui.test.ts",
+            "sha": "39ae53fad32f228eef775dd288948e16e8539d8c"
+        },
+        {
+            "path": "src/renderer/src/stores/ui.ts",
+            "sha": "698a64ca90917ea67c66f63676698fc531bd74e7"
+        },
+        {
+            "path": "src/renderer/src/test-support/capability.ts",
+            "sha": "8f0bba5b9b0b72c07febb9ddd28760049f1d22cb"
+        }
+    ]
+}
