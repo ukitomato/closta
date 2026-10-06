@@ -19,7 +19,7 @@ import { RunningSessionStoreContext } from './running-session-context'
 
 /**
  * X-5 FE-011 / FE-013 — 一覧の行・選択・操作の出し分け・空状態 (FR-009 / FR-011 / SC-006)。
- * 一覧は assistant-ui の ThreadList で組むので、SessionScreen と同じ adapter (`useRunningThreadList`) を持つ
+ * 一覧は assistant-ui の ThreadList で組むので、`RunningSessionsProvider` と同じ adapter (`useRunningThreadList`) を持つ
  * ランタイムの内側に置いて確かめる。
  */
 
@@ -91,11 +91,12 @@ const st = (sessionId: string, over: Partial<SessionStatusUpdate>): SessionStatu
 })
 
 describe('RunningSessionList', () => {
-  it('「新規起動」は adapter の onSwitchToNewThread を通って選択を外す (起動ダイアログを開く)', async () => {
-    const { store } = await setup([A])
-    expect(store.getState().selectedId).toBe(A)
-    await userEvent.click(screen.getByRole('button', { name: '新規起動' }))
-    await waitFor(() => expect(store.getState().selectedId).toBeNull())
+  it('サイドバーの区画として section で描き、区画の中に「新規起動」を置かない (O-7 FR-001 / FR-002)', async () => {
+    await setup([A])
+    const region = screen.getByTestId('session-list')
+    expect(region.tagName).toBe('SECTION')
+    expect(screen.queryByRole('navigation')).toBeNull()
+    expect(screen.queryByRole('button', { name: '新規起動' })).toBeNull()
   })
 
   it('行が 0 件なら空状態を出す', async () => {

@@ -25,7 +25,7 @@ export const DEFAULT_MAX_QUEUE_ITEMS = 20
  *
  * `running` に加え **`awaiting_permission` (承認待ちも同一 turn の継続中)** を busy とする — ドメイン状態機械
  * (`run-state.ts` の `send-prompt`: running / awaiting_permission では「積むだけで状態は変わらない」) と契約 C-3 の SSoT に従う。
- * `launching` は busy にしない (初回プロンプト待ち。即送信できないとデッドロックする。`SessionScreen` の isRunning 注記参照)。
+ * `launching` は busy にしない (初回プロンプト待ち。即送信できないとデッドロックする。`RunningSessionsProvider` の isRunning 注記参照)。
  * `interrupted` / `done` / `error` / `idle` も busy でない (次の送信は新ターンとして即 dispatch される)。
  *
  * runtime の `append` は `isRunning` (= 本判定) のとき送信を steer lane に回し (`message.steer ?? isRunning`)、

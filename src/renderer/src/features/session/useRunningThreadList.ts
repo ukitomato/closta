@@ -13,7 +13,7 @@ import { useRunningSessionStore, useRunningSessionStoreApi } from './running-ses
  * |---|---|
  * | `threadId` | store の `selectedId` と同期させる (食い違うと選択した行と表示中の会話がずれる) |
  * | `onSwitchToThread` | 表示を切り替える (kill しない。FR-008) |
- * | `onSwitchToNewThread` | 選択を外して起動ダイアログを開く (新規起動) |
+ * | `onSwitchToNewThread` | 選択を外す (assistant-ui の契約上の口。新規起動はシェルのサイドバーのボタンが起動ダイアログを開く。O-7) |
  *
  * **書き込み操作 (`onRename` / `onArchive` / `onDelete`) は配線しない。** 「閉じる」は一覧と renderer の保持から外す
  * だけで、正本 (Claude Code 側の transcript) を消さない (Principle X)。行の中の操作として `RunningSessionList` が持つ。

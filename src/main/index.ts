@@ -190,10 +190,12 @@ if (!gotTheLock) {
     void composition.runtimes.list().then(() => composition.runtimes.probeAll())
 
     /*
-     * **セッション一覧は起動直後に取らない。** 一覧を開いたときに取る (FR-031)。
-     * 起動時に取ると、ランタイム検出より先に実行中確認が走って
-     * 停止中の所在が「停止中」ではなく「未検出」として並ぶ。
-     * 加えて起動経路に UNC I/O を伴う子プロセスが乗る。
+     * **セッション一覧は main からは取らない。** renderer の過去のセッションの区画が取る (FR-031)。
+     * O-7 で区画はアプリの起動の直後からサイドバーにマウントされるので、renderer は
+     * ランタイムの一覧 (`listRuntimes`) の解決を待ってから最初の `listSessions` を呼ぶ (O-7 FR-016 / `useSessions.ts`)。
+     * ランタイム検出より先に実行中確認が走ると、停止中の所在が「停止中」ではなく「未検出」として並ぶ。
+     * main の起動経路 (この関数) には UNC I/O を伴う子プロセスを乗せないが、**起動の直後に renderer が列挙を起こすので、
+     * 列挙は上の判定バッチ (`probeAll`) と時間が重なる** (AD-046 Consequences。O-7 pr-gate R1 platform-boundary L-002)。
      */
 
     app.on('activate', () => {

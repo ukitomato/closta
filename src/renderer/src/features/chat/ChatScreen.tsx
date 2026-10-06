@@ -65,7 +65,15 @@ function useTick(active: boolean): number {
   return tick
 }
 
-export function ChatScreen(): React.JSX.Element {
+export function ChatScreen({
+  densityToggle = true
+}: {
+  /**
+   * transcript の密度の切り替えを本文の上に出すか。O-7 のシェルは中央のヘッダに置くので `false` を渡す (FR-005)。
+   * 既定の `true` は単体で描くとき (O-2 の component テスト) 用。
+   */
+  readonly densityToggle?: boolean
+} = {}): React.JSX.Element {
   const { messages, status, reasonKey, retry, hasSelection } = useTranscript()
   const tick = useTick(status === 'loading')
 
@@ -113,10 +121,15 @@ export function ChatScreen(): React.JSX.Element {
         </Centered>
       ) : (
         <AssistantRuntimeProvider runtime={runtime}>
-          {/* transcript の密度 (O-2 / FR-012)。実行中のペインと同じ部品・同じ値 (FR-013)。 */}
-          <div className="border-border flex shrink-0 items-center justify-end border-b px-4 py-2">
-            <TranscriptDensityToggle />
-          </div>
+          {/*
+           * transcript の密度 (O-2 / FR-012)。本番はシェルの中央のヘッダ (`CenterHeader`) が描くので `densityToggle={false}`。
+           * 既定の `true` は単体で描くとき (O-2 の component テスト) 用。値は稼働中と同じ `stores/ui` (FR-013)。
+           */}
+          {densityToggle && (
+            <div className="border-border flex shrink-0 items-center justify-end border-b px-4 py-2">
+              <TranscriptDensityToggle />
+            </div>
+          )}
           <div className="min-h-0 flex-1">
             {/* 過去ログは記録に終わりが無い行を常に「結果不明」で描く (O-2 / FR-009)。 */}
             <TranscriptSettledContext.Provider value>

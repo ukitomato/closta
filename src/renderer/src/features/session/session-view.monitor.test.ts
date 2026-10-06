@@ -246,6 +246,7 @@ function state(
     sessions,
     statuses,
     selectedId: null,
+    selectionSeq: 0,
     launch: { phase: 'entry', rejectReason: null, lastConfig: null, previousFailure: null },
     statusSince: {},
     activity: {},
@@ -349,7 +350,7 @@ describe('announcements (FR-004 / SC-001)', () => {
     ).toBe('案件A、案件B: 承認待ちになりました。')
   })
 
-  it('見ているセッション・変わらない状態・応答中 ⇄ 応答待ちでは null。セッション画面以外 (watchedId null) なら選ばれていたものも通知', () => {
+  it('見ているセッション・変わらない状態・応答中 ⇄ 応答待ちでは null。中央が稼働中でない (watchedId null) なら選ばれていたものも通知', () => {
     const prev = { [A]: entry('running') }
     const next = { [A]: entry('awaiting') }
     expect(announcements(prev, next, A, label)).toBeNull()

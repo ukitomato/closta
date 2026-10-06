@@ -1,140 +1,71 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
-import {
-  AssistantRuntimeProvider,
-  useAui,
-  useAuiState,
-  useExternalStoreRuntime,
-  type AppendMessage,
-  type ExternalStoreThreadListAdapter,
-  type QueueItemState,
-  type ThreadMessageLike
-} from '@assistant-ui/react'
+import { useAui, useAuiState, type QueueItemState } from '@assistant-ui/react'
 
 import type { LaunchFailureReason, PermissionDeniedInfo } from '@domain/session/agent-session'
-import type { SessionLaunchConfig } from '@domain/session/launch-config'
 
 import { EmptyState, EmptyStateGreeting } from '@/components/assistant-ui/elements/empty-state'
 import { GenerationLoader } from '@/components/assistant-ui/elements/loading-state'
 import { Thread } from '@/components/assistant-ui/elements/thread.aui'
 import { Button } from '@/components/ui/button'
 import { TranscriptSettledContext } from '@/features/chat/transcript-context'
-import { TranscriptDensityToggle } from '@/features/chat/TranscriptDensityToggle'
-import { useRuntimes } from '@/features/runtime-list/useRuntimes'
-import { useFolders } from '@/features/workspace-folders/useFolders'
 
 import { ApprovalCard } from './ApprovalCard'
 import { DEFAULT_MAX_QUEUE_ITEMS, type EnqueueVerdict } from './composer-queue'
 import {
   isReloginFailure,
   launchFailureLabel,
-  formatStartedAt,
   OLDER_MESSAGES_LABELS,
   olderMessagesLabel,
   SESSION_ACTION_LABELS,
-  SESSION_END_NOTICES,
-  SESSION_NAME_FALLBACKS,
-  SESSION_ROW_STATUS_LABELS
+  SESSION_END_NOTICES
 } from './labels'
 import { LaunchDialog, type LaunchSource } from './LaunchDialog'
-import { useRunningThreadList } from './useRunningThreadList'
-import { useRunningSessionStore, useRunningSessionStoreApi } from './running-session-context'
-import type { LaunchState, SessionQueue } from './running-session-store'
-import { RunningSessionList } from './RunningSessionList'
-import { MESSAGE_WINDOW, rowStatus, windowMessages } from './session-view'
-import { useLiveSession, type LiveSession } from './useLiveSession'
+import { useRunningSessionStore } from './running-session-context'
+import type { SessionQueue } from './running-session-store'
+import { useRunningSessionsView } from './running-sessions-view'
+import type { LiveSession } from './useLiveSession'
 
 /**
- * **稼働中セッションの一覧 + 表示中セッション** の 2 ペイン (X-5 / FE-012。X-1 の単一セッション画面を置き換える)。
+ * **中央の本体の実行中の Chat と、起動ダイアログの中身** (O-7 / FE-002。X-5 の `SessionScreen` から移した)。
  *
- * - **一覧** (`RunningSessionList`): 行の選択で表示を切り替え、行ごとに終了・停止・閉じる (FR-009 / FR-011)。
- * - **選択なし**: 起動設定ダイアログ (X-4 `LaunchDialog`)。同じフォルダで動いているセッションがあれば警告する。
- * - **表示中セッション**: 本文 (port の `SessionEvent`) を `useExternalStoreRuntime` に流す。承認カード・聞かれず拒否・
- *   失敗の理由・終わり方の通知はこのセッションに対して描く。
+ * - `LivePane`: 選択中の稼働中のセッションの会話 (通知・承認カード・Thread)。中央のヘッダはシェルの `CenterHeader`
+ * - `LaunchDialogContent`: 起動ダイアログの中身。起動中は `Launching`、それ以外は X-4 の `LaunchDialog`
  *
- * セッションの寿命は画面と切り離す — この画面の unmount・切り替えで kill しない (FR-008)。
+ * **`RunningSessionsProvider` の内側で使う** (runtime と表示中のセッションをそこから受ける)。
+ * セッションの寿命は面と切り離す — unmount・切り替えで kill しない (X-5 FR-008)。
  */
-export function SessionScreen(): React.JSX.Element {
-  const store = useRunningSessionStoreApi()
-  const selectedId = useRunningSessionStore((s) => s.selectedId)
-  const launch = useRunningSessionStore((s) => s.launch)
-  const folders = useFolders()
-  const runtimes = useRuntimes()
 
-  // 一覧をまだ持たない (読み込み中・失敗) 間は名前を空にし、「登録が解除された」と断定しない
-  // (一覧があって引けないときだけ fallback。X-4 po M-102 の規則の継承 / pr-gate R2 po L-101)。
-  const folderName = useCallback(
-    (id: string) =>
-      folders.list === null
-        ? ''
-        : (folders.list.folders.find((f) => f.id === id)?.displayName ??
-          SESSION_NAME_FALLBACKS.folder),
-    [folders.list]
-  )
-  const runtimeName = useCallback(
-    (id: string) =>
-      runtimes.list === null
-        ? ''
-        : (runtimes.list.runtimes.find((r) => r.id === id)?.distroName ??
-          SESSION_NAME_FALLBACKS.runtime),
-    [runtimes.list]
-  )
-
-  // **稼働中セッション = assistant-ui の thread** (Principle XIII。契約は useRunningThreadList.ts)。
-  const threadList = useRunningThreadList(folderName)
-
-  const live = useLiveSession(selectedId ?? '')
-  const runtime = useLiveRuntime(live, threadList)
-
+/** 中央の本体の実行中の Chat。選択が無いときは何も描かない (中央の空の状態はシェルが出す)。 */
+export function LivePane(): React.JSX.Element | null {
+  const view = useRunningSessionsView()
+  const live = view.live
+  if (live === null || live.queue === null) return null
   return (
-    <AssistantRuntimeProvider runtime={runtime.runtime}>
-      <div className="flex h-full min-h-0">
-        <aside className="border-border w-64 shrink-0 border-r">
-          <RunningSessionList runtimeName={runtimeName} />
-        </aside>
-        <section className="min-w-0 flex-1" aria-label="表示中のセッション">
-          {live !== null && live.queue !== null ? (
-            <LiveSessionPane
-              key={live.sessionId}
-              session={live}
-              queue={live.queue}
-              hiddenCount={runtime.hiddenCount}
-              onShowMore={runtime.showMore}
-              title={folderName(live.state.config.folderId)}
-              subtitle={[
-                runtimeName(live.state.config.runtimeId),
-                formatStartedAt(live.state.startedAt)
-              ]
-                .filter((part) => part !== '')
-                .join(' · ')}
-            />
-          ) : launch.phase === 'launching' ? (
-            <Launching />
-          ) : (
-            <div className="h-full overflow-auto p-6">
-              <NewSessionDialog
-                launch={launch}
-                // 引けている作業フォルダの表示名を写す (App の寿命の読み上げが IPC を持たずに文を組むため。O-1 FR-004)。
-                onLaunch={(config) =>
-                  store.launch(config, folders.list === null ? null : folderName(config.folderId))
-                }
-              />
-            </div>
-          )}
-        </section>
-      </div>
-    </AssistantRuntimeProvider>
+    <LiveSessionPane
+      key={live.sessionId}
+      session={live}
+      queue={live.queue}
+      hiddenCount={view.hiddenCount}
+      onShowMore={view.showMore}
+    />
   )
+}
+
+/** 起動ダイアログの中身。起動中は差し替わるので、拒否・失敗で戻るとダイアログは作り直され lastConfig を復元する (X-4 US-1 AC7)。 */
+export function LaunchDialogContent(): React.JSX.Element {
+  const view = useRunningSessionsView()
+  const launch = useRunningSessionStore((s) => s.launch)
+  return launch.phase === 'launching' ? <Launching /> : <NewSessionDialog onLaunch={view.launch} />
 }
 
 /** 起動設定ダイアログに渡す面 (起動状態と、終わっていないセッションのフォルダ)。 */
 function NewSessionDialog({
-  launch,
   onLaunch
 }: {
-  readonly launch: LaunchState
-  readonly onLaunch: (config: SessionLaunchConfig) => Promise<void>
+  readonly onLaunch: LaunchSource['launch']
 }): React.JSX.Element {
+  const launch = useRunningSessionStore((s) => s.launch)
   const order = useRunningSessionStore((s) => s.order)
   const sessions = useRunningSessionStore((s) => s.sessions)
   const statuses = useRunningSessionStore((s) => s.statuses)
@@ -156,101 +87,17 @@ function NewSessionDialog({
     activeFolderIds,
     launch: onLaunch
   }
-  // 起動中は `Launching` に差し替わるので、拒否・失敗で戻るとダイアログは作り直され lastConfig を復元する (X-4 US-1 AC7)。
   return <LaunchDialog session={source} />
 }
 
 function Launching(): React.JSX.Element {
   return (
-    <div className="flex h-full items-center justify-center p-6">
+    // 起動中になったことの読み上げは、ダイアログが開いている間ずっとマウントしてある live region (`LaunchDialogHost`) が持つ。
+    // 中身と一緒に差し込んだ live region は読まれない支援技術がある (pr-gate R1 a11y L-004 / R3 L-004)。
+    <div className="flex min-h-40 items-center justify-center p-6" data-testid="session-launching">
       <GenerationLoader label="セッションを起動中…" tick={0} />
     </div>
   )
-}
-
-/* ── ライブスレッド (FE-001/002/010/011/020/030) ───────────────────── */
-
-function extractText(message: AppendMessage): string {
-  return message.content
-    .map((part) => (part.type === 'text' ? part.text : ''))
-    .join('')
-    .trim()
-}
-
-const EMPTY_MESSAGES: readonly ThreadMessageLike[] = []
-
-/**
- * **ランタイムは 1 つ** (X-5 / Principle XIII)。表示中のセッションの本文・状態・キューを渡し、稼働中セッションを
- * `adapters.threadList` で並べる。adapter の `threadId` が変わると assistant-ui はスレッドの中身 (composer を含む) を
- * 作り直す。選択なし (起動ダイアログ表示中) は本文なし・composer 無効。
- */
-function useLiveRuntime(
-  session: LiveSession | null,
-  threadList: ExternalStoreThreadListAdapter
-): {
-  readonly runtime: ReturnType<typeof useExternalStoreRuntime>
-  readonly hiddenCount: number
-  readonly showMore: () => void
-} {
-  /*
-   * **assistant-ui に渡すのは末尾の窓だけにする** (X-5 / SC-003)。assistant-ui の ThreadClient は messages が変わるたびに
-   * 全メッセージぶんの MessageClient を作り直す (件数に比例。仮想化は DOM にしか効かない) ため、表示中のセッションが
-   * 伸び続けると 1 件ごとの更新が 50ms を超える (実測: 約 280 件で 51〜76ms)。窓で切れば 1 回の更新は件数によらず一定になる。
-   * **本文の保持は store に全件残す** (FR-008)。省略した分は「さらに表示」で窓を広げて辿れる (Principle XII)。
-   * 配列は messages と窓が変わったときだけ作り直す — 下書きの入力などの再描画で毎回作ると、毎打鍵で窓ぶんの再構築が走る。
-   * 窓の広さはセッションごとに持つ。
-   */
-  const [windows, setWindows] = useState<Readonly<Record<string, number>>>({})
-  const sessionId = session?.sessionId ?? null
-  const messages = session?.state.messages ?? EMPTY_MESSAGES
-  const windowSize = sessionId === null ? MESSAGE_WINDOW : (windows[sessionId] ?? MESSAGE_WINDOW)
-  const { windowed, hiddenCount } = useMemo(
-    () => windowMessages(messages, windowSize),
-    [messages, windowSize]
-  )
-  const showMore = useCallback(() => {
-    if (sessionId === null) return
-    setWindows((w) => ({ ...w, [sessionId]: (w[sessionId] ?? MESSAGE_WINDOW) + MESSAGE_WINDOW }))
-  }, [sessionId])
-
-  // **turn が in-flight な間 = busy** (`running` / `awaiting_permission`)。終端では busy にしない。
-  const busy =
-    session !== null &&
-    !session.terminal &&
-    (session.runState === 'running' || session.runState === 'awaiting_permission')
-
-  const runtime = useExternalStoreRuntime({
-    messages: windowed as ThreadMessageLike[],
-    // `launching` は busy にしない — 「利用者の初回プロンプト待ち」であり (claude は初回 user メッセージが届くまで
-    // `system/init` すら出さない — 実測)、composer を送信ボタンにしておかないと最初のプロンプトを送れない。
-    isRunning: busy,
-    // **送信できない終端では composer を無効化する** (失敗 / 終了済み / 強制終了 / 終了処理中。X-1 pr-gate po H-001 /
-    // FR-010 / R3-H-04)。有効なままだと「打っても応答が来ない」dead-end を再生産する。done / interrupted かつ生存中は有効。
-    isDisabled: session === null || session.terminal,
-    // **native message queue (capped adapter)** (X-2 FR-004)。**セッションごとに store が持つ** (FR-010) — 表示していない
-    // 間も状態の変化で dispatch / 取り消しが進む (完了 trigger は store の syncQueue)。`driver.cancel` を渡さないので
-    // 実行中の送信 (steer lane) は「現ターン完了後に処理」に degrade する (FR-005)。
-    ...(session?.queue != null ? { queue: session.queue.adapter } : {}),
-    convertMessage: (message) => message,
-    // queue 提供時 runtime は送信を queue に回すため onNew は呼ばれない (append 実装)。queue 非提供時の fallback。
-    onNew: (message) => {
-      const text = extractText(message)
-      if (session !== null && text.length > 0) {
-        session.appendUser(text)
-        session.send(text)
-      }
-      return Promise.resolve()
-    },
-    // composer の停止ボタンは中断に割り当てる (強制終了は一覧の別ボタン。X-1 FR-015/016)。
-    // **中断の単一 locus** (X-2 FR-006 / po-N-001): store の interrupt が notifyCancelled → interrupt の順で呼ぶ。
-    onCancel: () => {
-      session?.interrupt()
-      return Promise.resolve()
-    },
-    adapters: { threadList }
-  })
-
-  return { runtime, hiddenCount, showMore }
 }
 
 /** 表示中セッションのペイン (通知・承認カード・Thread)。セッションごとに作り直す (`key`)。 */
@@ -258,17 +105,12 @@ function LiveSessionPane({
   session,
   queue,
   hiddenCount,
-  onShowMore,
-  title,
-  subtitle
+  onShowMore
 }: {
   readonly session: LiveSession
   readonly queue: SessionQueue
   readonly hiddenCount: number
   readonly onShowMore: () => void
-  /** ヘッダの表示名 (作業フォルダ) と補足 (ランタイム・起動時刻)。 */
-  readonly title: string
-  readonly subtitle: string
 }): React.JSX.Element {
   const { state } = session
   const pending = state.pending
@@ -293,7 +135,6 @@ function LiveSessionPane({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <SessionHeader session={session} title={title} subtitle={subtitle} />
       {/* error 状態は必ず理由と次操作を出す。failure イベントが理由を伴わず来た場合も汎用表示に倒す (X-1 US-4 AC-8)。 */}
       {errored && <FailureBanner reason={session.failureReason} onClose={session.close} />}
       {/* 終わり方の通知 (FR-011): 終了が強制終了に落ちた / 強制終了 / 正常に終了した。 */}
@@ -417,36 +258,8 @@ function SessionWelcome(): React.JSX.Element {
 }
 
 /**
- * 表示中セッションの状態 (一覧の行と同じラベル。操作は一覧の行に一本化する — 同名のボタンを 2 か所に出さない)。
- */
-function SessionHeader({
-  session,
-  title,
-  subtitle
-}: {
-  readonly session: LiveSession
-  readonly title: string
-  readonly subtitle: string
-}): React.JSX.Element {
-  // どのセッションを表示しているかをヘッダでも示す (一覧の aria-current だけに頼らない。pr-gate R1 po L-001)。
-  return (
-    <div className="border-border flex shrink-0 items-center gap-3 border-b px-4 py-2">
-      <span className="min-w-0 truncate text-xs font-medium" data-testid="session-title">
-        {title}
-      </span>
-      <span className="text-muted-foreground min-w-0 truncate text-xs">{subtitle}</span>
-      <span className="text-muted-foreground ms-auto shrink-0 text-xs" data-testid="session-status">
-        {SESSION_ROW_STATUS_LABELS[rowStatus(session)]}
-      </span>
-      {/* transcript の密度 (O-2 / FR-012)。監視ビューの行の密度 (一覧の見出し) とは別の位置・文言。 */}
-      <TranscriptDensityToggle />
-    </div>
-  )
-}
-
-/**
  * 実行時失敗の理由表示 + 次操作 (X-1 FE-030 / X-5 FE-030)。他のセッションの表示と選択は動かさない。
- * 次操作は「閉じて起動し直す」— 行を閉じると起動設定ダイアログに前回の設定と理由が戻る (X-4 US-1 AC7)。
+ * 次操作は「閉じて起動し直す」— 行を閉じると起動設定ダイアログが前回の設定と理由つきで開く (X-4 US-1 AC7 / O-7 FR-007)。
  */
 function FailureBanner({
   reason,

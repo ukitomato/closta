@@ -1,4 +1,5 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { FolderListDTO, RegisterFolderResult } from '@domain/workspace/dto'
@@ -94,7 +95,7 @@ function install(value: SessionIndexDTO): void {
 beforeEach(() => {
   // ストアはモジュール寿命なので、テストごとに初期状態へ戻す。
   useSessionsStore.setState({ index: null, loading: false, failed: false, selectedRowKey: null })
-  useUiStore.setState({ screen: 'sessions', folderDraftSeed: null })
+  useUiStore.setState({ settings: { open: false, section: 'runtimes' }, folderDraftSeed: null })
 })
 
 describe('SessionListScreen', () => {
@@ -299,7 +300,8 @@ describe('SessionListScreen', () => {
     render(<SessionListScreen />)
 
     await waitFor(() =>
-      expect(screen.getByText('セッション一覧を取得できませんでした')).toBeInTheDocument()
+      // 区画の見出し (「過去のセッション」) と同じ語で言う (O-7 pr-gate R1 ux L-002)。
+      expect(screen.getByText('過去のセッションを取得できませんでした')).toBeInTheDocument()
     )
   })
 
@@ -374,7 +376,9 @@ describe('SessionListScreen — 未登録フォルダからの登録 (FE-051 / F
 
     // **登録は呼ばれない。** 初期値が積まれ、画面が登録側へ移るだけである。
     expect(registerFolder).not.toHaveBeenCalled()
-    await waitFor(() => expect(useUiStore.getState().screen).toBe('folders'))
+    await waitFor(() =>
+      expect(useUiStore.getState().settings).toEqual({ open: true, section: 'folders' })
+    )
     expect(useUiStore.getState().folderDraftSeed).toEqual({
       location: { kind: 'windows' },
       path: { namespace: 'host', value: 'C:\\work\\other' },
@@ -677,7 +681,9 @@ describe('SessionListScreen — 失敗の封じ込めと空状態 (FE-064)', () 
       expect(screen.getByText('作業フォルダがまだ登録されていません。')).toBeInTheDocument()
     )
     screen.getByRole('button', { name: '作業フォルダを登録する' }).click()
-    await waitFor(() => expect(useUiStore.getState().screen).toBe('folders'))
+    await waitFor(() =>
+      expect(useUiStore.getState().settings).toEqual({ open: true, section: 'folders' })
+    )
   })
 
   it('登録フォルダ 3 件 / セッション 0 件で folder グループが 3 件現れる (FR-051 / SC-013)', async () => {
@@ -1121,6 +1127,79 @@ describe('SessionListScreen — 件数が多い場合 (FE-073)', () => {
 
     /* 見出しは「含む」と読める形にする (どの行かはここから決まらない)。 */
     expect(screen.getByText('越境を含む')).toBeInTheDocument()
+  })
+
+  it('初回の listSessions はランタイムの一覧 (listRuntimes) が解決する前に呼ばれない (O-7 FR-016 / SC-008)', async () => {
+    let resolveRuntimes: () => void = () => {}
+    const listRuntimes = vi.fn(
+      () =>
+        new Promise<never>((resolve) => {
+          resolveRuntimes = () =>
+            resolve({ runtimes: [], enumerationIssues: [], wslAvailability: 'available' } as never)
+        })
+    )
+    const listSessions = vi.fn(() => Promise.resolve(index([folderGroup([session()])])))
+    installCapability({ listRuntimes, listSessions, onSessionsChanged: () => () => {} })
+
+    render(<SessionListScreen />)
+    await waitFor(() => expect(listRuntimes).toHaveBeenCalledTimes(1))
+    await new Promise((r) => setTimeout(r, 20))
+    expect(listSessions).not.toHaveBeenCalled()
+
+    resolveRuntimes()
+    await waitFor(() => expect(listSessions).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(screen.getByText('要約')).toBeInTheDocument())
+  })
+
+  it('ランタイムの一覧を待っている間も取得中で、「全件を取り直す」を押しても検出より先に列挙しない (pr-gate R1 ux H-002)', async () => {
+    let resolveRuntimes: () => void = () => {}
+    const listRuntimes = vi.fn(
+      () =>
+        new Promise<never>((resolve) => {
+          resolveRuntimes = () =>
+            resolve({ runtimes: [], enumerationIssues: [], wslAvailability: 'available' } as never)
+        })
+    )
+    const refreshSessions = vi.fn(() => Promise.resolve(index([folderGroup([session()])])))
+    let notify: ((value: SessionIndexDTO) => void) | null = null
+    installCapability({
+      listRuntimes,
+      listSessions: () => Promise.resolve(index([folderGroup([session()])])),
+      refreshSessions,
+      onSessionsChanged: (listener) => {
+        notify = listener
+        return () => {}
+      }
+    })
+
+    const { container } = render(<SessionListScreen />)
+    await waitFor(() => expect(listRuntimes).toHaveBeenCalledTimes(1))
+    expect(container.querySelector('[aria-busy="true"]')).not.toBeNull()
+    // 状態の行も「未取得」(止まって見える語) ではなく取得中と言う (O-7 pr-gate R2 ux L-102)。
+    expect(
+      screen.getAllByRole('status').some((status) => status.textContent?.startsWith('取得中…'))
+    ).toBe(true)
+    const button = screen.getByRole('button', { name: '取得中…' })
+    await userEvent.click(button)
+    expect(refreshSessions).not.toHaveBeenCalled()
+    // 初回の取得の前に配られる未取得の索引 (取得時刻 0) では取得中の表示を外さない (pr-gate R1 platform-boundary L-004)。
+    act(() => notify?.(index([], { fetchedAt: 0, complete: false })))
+    expect(screen.getByRole('button', { name: '取得中…' })).toBeInTheDocument()
+
+    resolveRuntimes()
+    await waitFor(() => expect(screen.getByText('要約')).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: '全件を取り直す' })).toBeInTheDocument()
+  })
+
+  it('ランタイムの一覧が失敗しても、待ちを外して取得する (O-7 FR-016)', async () => {
+    const listSessions = vi.fn(() => Promise.resolve(index([folderGroup([session()])])))
+    installCapability({
+      listRuntimes: () => Promise.reject(new Error('失敗')),
+      listSessions,
+      onSessionsChanged: () => () => {}
+    })
+    render(<SessionListScreen />)
+    await waitFor(() => expect(listSessions).toHaveBeenCalledTimes(1))
   })
 
   it('絞り込みで IPC を往復させない (FR-040)', async () => {

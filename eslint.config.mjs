@@ -566,7 +566,7 @@ export default defineConfig(
     }
   },
   {
-    // scaffold だが X-5 が手書きの hooks (`RowActionsContext` / `renderActions` / `ThreadListNew`) を足した
+    // scaffold だが X-5 / O-7 が手書きの hooks (`RowActionsContext` / `renderActions` / `RowOptionsContext`) を足した
     // (R-2 のセッション一覧も使う)。thread.aui.tsx と同方針で意味論の番人を戻す (code-gate convention M-003)。
     files: ['src/renderer/src/components/assistant-ui/elements/thread-list.aui.tsx'],
     rules: {

@@ -43,8 +43,8 @@ export async function launchApp(): Promise<{ app: ElectronApplication; page: Pag
  * 戻り値は composer の textarea (`aria-label="Message input"`。thread.aui.tsx の ComposerPrimitive.Input)。
  */
 export async function reachActiveComposer(page: Page): Promise<import('@playwright/test').Locator> {
-  // 既定画面は 'runtimes'。X-1 のセッション起動画面 (SessionScreen) へ nav で遷移する (App.tsx / stores/ui.ts)。
-  await page.getByRole('button', { name: 'セッション起動' }).click()
+  // サイドバーの「新規起動」で起動ダイアログを開く (O-7。上部のタブは無い)。
+  await openLaunchDialog(page)
 
   // 起動設定ダイアログ (X-4) のフォルダ / ランタイムを stub seed の先頭で埋めて起動する。
   // Provider / モデル / effort / 権限モードは既定のまま (既定 Provider は X-1 と同じ curated base で起動する)。
@@ -53,10 +53,27 @@ export async function reachActiveComposer(page: Page): Promise<import('@playwrig
   const runtimeSelect = page.getByRole('combobox', { name: 'ランタイム (WSL)' })
   await folderSelect.selectOption({ index: 1 }) // index 0 は「選択してください」
   await runtimeSelect.selectOption({ index: 1 })
-  // exact 一致にする — nav の「セッション起動」も「起動」を部分一致で拾うため (strict mode 回避)。
+  // exact 一致にする — 「新規起動」なども「起動」を部分一致で拾うため (strict mode 回避)。
   await page.getByRole('button', { name: '起動', exact: true }).click()
 
   const composer = page.getByRole('textbox', { name: 'Message input' })
   await composer.waitFor({ state: 'visible', timeout: 30_000 })
   return composer
+}
+
+/**
+ * サイドバーの「新規起動」から起動ダイアログを開く (O-7 / FR-007)。**locator はサイドバー (`nav`) に限る** —
+ * 中央の空の状態にも起動のボタン (文言は「新しいセッションを起動」) があり、文言を分けたうえで場所でも分ける。
+ */
+export async function openLaunchDialog(page: Page): Promise<void> {
+  await page
+    .getByRole('navigation', { name: 'サイドバー' })
+    .getByRole('button', { name: '新規起動', exact: true })
+    .click()
+  await page.getByRole('heading', { name: 'セッションを起動' }).waitFor()
+}
+
+/** 稼働中の区画の行 (過去のセッションの区画の行を拾わない)。 */
+export function runningRows(page: Page): import('@playwright/test').Locator {
+  return page.getByTestId('session-list').locator('[data-slot="aui_thread-list-item"]')
 }

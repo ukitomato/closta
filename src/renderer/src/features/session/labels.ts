@@ -13,6 +13,10 @@ import type { SessionRunState } from '@domain/session/run-state'
  * `unknown-target`) + X-4 の起動前段 (`invalid-config` / `provider-unavailable` / `needs-confirmation`) の計 16 種を網羅する。
  */
 
+/**
+ * **対応表 (`docs/ui-coverage.md`) D 節 launch-failure の文言の正本** (FailureBanner は `launchFailureLabel` を通して描く)。
+ * 変えるときは対応表の該当の行を見る (ui-coverage-reviewer の発火条件の外。O-7 pr-gate R2 ui-coverage M-101 / R3 L-202)。
+ */
 const LAUNCH_REJECT_LABELS: Record<SessionLaunchRejectReason, string> = {
   'distro-not-running': '所在 (WSL ディストロ) が停止しています。起動してから再度お試しください。',
   'not-verified-running':
@@ -98,6 +102,9 @@ export function runStateLabel(state: SessionRunState): string {
 /**
  * 一覧の行の状態。run-state と生存フラグの組から決める (`rowStatus`)。
  * とくに `done` は生存なら「応答待ち」、終わっていれば「終了済み」(FR-009)。
+ * **対応表 (`docs/ui-coverage.md`) D 節 session-state の文言の正本** (launch-failure の正本は `LAUNCH_REJECT_LABELS`)。
+ * 変えるときは対応表の該当の行を見る (監視ビューと共有するので ui-coverage-reviewer の発火条件には入れていない。
+ * O-7 pr-gate R2 ui-coverage M-101)。
  */
 export const SESSION_ROW_STATUS_LABELS = {
   launching: '起動中',
@@ -115,9 +122,8 @@ export const SESSION_ROW_STATUS_LABELS = {
 
 export type SessionRowStatus = keyof typeof SESSION_ROW_STATUS_LABELS
 
-/** 一覧と表示中セッションの操作 (FR-011)。 */
+/** 一覧と表示中セッションの操作 (FR-011)。新規起動の文言はシェルの `SHELL_LABELS.newSession` (O-7)。 */
 export const SESSION_ACTION_LABELS = {
-  newSession: '新規起動',
   end: '終了',
   ending: '終了中…',
   endTitle: 'claude を正常に終了させます。',
@@ -128,8 +134,10 @@ export const SESSION_ACTION_LABELS = {
 } as const
 
 export const SESSION_LIST_LABELS = {
-  heading: '稼働中のセッション',
-  empty: '稼働中のセッションはありません。「新規起動」から起動できます。',
+  /** サイドバーの稼働中の区画の見出し (O-7 data-model §6)。 */
+  heading: '稼働中',
+  /** 「新規起動」はサイドバーの上にあるので案内を外す (O-7 data-model §6)。 */
+  empty: '稼働中のセッションはありません。',
   /** 一覧の aria-label。 */
   list: '稼働中のセッション一覧'
 } as const
@@ -160,7 +168,7 @@ export const SESSION_NAME_FALLBACKS = {
 
 /* ── 監視ビュー (O-1 / FR-001〜FR-009 / Principle XV) ─────────────────── */
 
-/** 一覧の見出し・ナビの件数・密度 (O-1)。 */
+/** 一覧の見出し (O-7 からは件数の印もここ)・密度 (O-1)。 */
 export const MONITOR_LABELS = {
   /** 承認待ちの件数のボタンが押せないとき (移れる先が無い。FR-002)。 */
   awaitingNoTarget: 'ほかに承認待ちのセッションはありません。',
@@ -190,6 +198,15 @@ export function awaitingCountLabel(count: number): string {
 
 export function failedCountLabel(count: number): string {
   return `失敗 ${count} 件`
+}
+
+/** 件数の印の `title` (0 件のものは書かない。O-7 pr-gate R2 ux M-101)。 */
+export function attentionSummaryLabel(awaiting: number, failed: number): string {
+  const parts = [
+    awaiting > 0 ? awaitingCountLabel(awaiting) : null,
+    failed > 0 ? failedCountLabel(failed) : null
+  ].filter((part): part is string => part !== null)
+  return `稼働中のセッション: ${parts.join('・')}`
 }
 
 /** 直近の活動の前置き (会話由来の部分と別の要素で出す。FR-006)。 */
@@ -280,13 +297,20 @@ export const LAUNCH_AXIS_LABELS = {
   permissionMode: '権限モード'
 } as const
 
-/** 空状態と次の一手 (FE-004 / spec Edge Cases)。 */
+/**
+ * 空状態と次の一手 (FE-004 / spec Edge Cases)。起動ダイアログはモーダルで、サイドバーの「設定」に手が届かないので、
+ * 設定へ移る手順を文に含める (O-7 pr-gate R1 ux M-003)。
+ */
 export const LAUNCH_EMPTY_STATE_LABELS = {
-  noFolders: '作業フォルダが登録されていません。「作業フォルダ」画面で登録してください。',
-  noWslRuntimes: 'WSL ランタイムが見つかりません。「ランタイム」画面で再検出してください。',
+  // 「→」は読み上げで「右矢印」になるので「の」でつなぐ (O-7 pr-gate R2 ux M-003)。
+  noFolders:
+    '作業フォルダが登録されていません。このダイアログを閉じて、サイドバーの「設定」の「作業フォルダ」で登録してください。',
+  noWslRuntimes:
+    'WSL ランタイムが見つかりません。このダイアログを閉じて、サイドバーの「設定」の「ランタイム」で再検出してください。',
   allRuntimesStopped:
     'WSL ランタイムがすべて停止しています。WSL ディストロを起動してから「再評価」を押してください (アプリはディストロを起動しません)。',
-  noProviders: '既定 Provider で起動できます。Provider の登録はプロバイダ画面から行えます。',
+  noProviders:
+    '既定 Provider で起動できます。登録するには、このダイアログを閉じて、サイドバーの「設定」の「プロバイダ」を開いてください。',
   /** 一覧の読み込み中・失敗は空状態と分ける (読み込み中に「登録してください」と案内しない。po M-102)。 */
   foldersLoading: '作業フォルダを読み込んでいます…',
   foldersLoadFailed: '作業フォルダを読み込めませんでした。',
@@ -387,7 +411,7 @@ export const CROSS_BOUNDARY_LABELS = {
 export const FOLDER_RUNTIME_BLOCKED_LABELS = {
   waitingProbe: 'ランタイムの準備 (パス変換の取得) を待っています…',
   probeFailed:
-    'ランタイムの能力確認に失敗しました。再評価してください。繰り返し失敗する場合はランタイム画面で状態を確認してください。'
+    'ランタイムの能力確認に失敗しました。再評価してください。繰り返し失敗する場合は、このダイアログを閉じて、サイドバーの「設定」の「ランタイム」で状態を確認してください。'
 } as const
 
 /** 前回のセッションが失敗して起動設定ダイアログに戻ったときの理由 (US-1 AC7 / pr-gate M-07)。 */

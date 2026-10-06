@@ -8,7 +8,7 @@ import { useUiStore, type TranscriptDensity } from '@/stores/ui'
 
 /**
  * **記録にこれ以上の終わりが来ないか** (FR-009 / US-2 AC6 / data-model §2「結果不明」)。
- * - 実行中: セッションが終了済み・失敗のとき true (`SessionScreen` が store のセッションの状態から渡す)
+ * - 実行中: セッションが終了済み・失敗のとき true (`LivePane` の `LiveSessionPane` が store のセッションの状態から渡す)
  * - 過去ログ: 常に true (`ChatScreen`)。過去ログを開いた時点でまだ動いている task も同じ (記録に結果が無いことは事実)
  *
  * true のとき、終わりを表さない状態のシステムイベントの行は「結果不明」で描く (DTO は変えない)。

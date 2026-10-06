@@ -1,6 +1,6 @@
 ---
 status: needs-human-review
-last_updated: 2026-10-03
+last_updated: 2026-10-05
 generated_by: human (PLAN.md を素案として再導出)
 ---
 
@@ -59,6 +59,7 @@ spec_id（`001-runtime-...`）とは独立させる。差し込み作業で番�
 | X-7 | aws-assume-role helper の生成と CloudTrail 追跡 | `provider` | M2 後続 |
 | O-1 | セッション監視ビュー（状態一覧、密度切替、承認待ちの強調） | `session` | M3 |
 | O-2 | `docs/ui-coverage.md` の確立 (SDK の型と機械照合・割当の確定)、実行中の tool の結果と Hook / Background task の行、transcript の情報密度 | `ui` | M3 |
+| O-7 | アプリのシェル (タブのビューを廃し、サイドバー・中央・右のペインの 3 面に。設定と起動はダイアログ。右のペインは枠・タブの表・「概要」まで。[AD-046](../decisions/0046-app-shell-layout.md)) | `ui` | M3 (O-3 の前) |
 | O-3 | Thread 検索と observability | `ui` | M3 |
 | O-4 | 計量と制限の表示 (費用と使用量・レート制限・API の再試行・コンテキストの使用量・task の進捗) | `ui` | M3 |
 | O-5 | MCP・Elicitation・プラグイン・コマンドの表示 (Server panel・Elicitation form・`AskUserQuestion` など。操作画面は含めない) | `ui` | M3 |
@@ -73,7 +74,8 @@ spec_id（`001-runtime-...`）とは独立させる。差し込み作業で番�
 | ID | feature | domain | 備考 |
 |---|---|---|---|
 | OPT-mac | macOS 対応（`DirectRuntime`、Seatbelt capability、IME / レンダリング検証） | `runtime` | Windows 主軸の個人開発では critical path に乗らない |
-| OPT-pty | PTY フォールバックタブ（xterm.js + node-pty） | `ui` | SDK 経路で足りない対話 TUI 用 |
+| OPT-pty | PTY フォールバックタブ（xterm.js + node-pty） | `ui` | SDK 経路で足りない対話 TUI 用。O-7 の右のペインの Terminal のタブはここが持つ |
+| OPT-panel | 右のペインのタブ（Changes / PR の Webview / Files / Browser） | `ui` | O-7 から。main / infra 側の作業の domain は OPT-panel の design で人間に諮る。Browser / PR の Webview は AD-046 Decision 4 の境界に従う |
 
 ### 帰属の判断根拠（迷いやすいもの）
 
@@ -95,6 +97,10 @@ spec_id（`001-runtime-...`）とは独立させる。差し込み作業で番�
   ([AD-044](../decisions/0044-ui-coverage-assignment.md))
 - **O-4 / O-5 / O-6 は `ui`** — いずれも SDK が emit する情報の表示 (Principle XII の判定対象) であり、MCP サーバーの
   追加・削除などの操作画面は含めない (USER 決定 2026-10-03)
+- **O-7（アプリのシェル）は `ui`** — 面の配置と遷移はどの domain の操作でもなく、R-1 から App と面の状態 (`stores/ui.ts`) を
+  ui が持ってきた。SDK の emit の表示ではないので Principle XII の判定の対象外。サイドバーの 2 つの一覧の中身・行の形は今どおり
+  session が持ち、シェルは置き場所と選択に応じた中央の切り替えだけを持つ ([AD-046](../decisions/0046-app-shell-layout.md)。
+  USER 決定 2026-10-05)。O-3〜O-6 の置き場所 (サイドバー / 中央のヘッダ / 右のペインのタブ) がこの分割で決まるので O-3 の前に置く
 
 ## Milestone
 
@@ -105,7 +111,7 @@ spec_id（`001-runtime-...`）とは独立させる。差し込み作業で番�
 |---|---|---|---|
 | **M1** | **読める** | R-1〜R-4 | WSL 内の過去セッションを Windows の assistant-ui で読める。**ここで §4 の方針を確定する** |
 | **M2** | **走らせられる** | X-1〜X-5 | 起動条件を選んで複数セッションを回せる。日本語で誤送信しない |
-| **M3** | **差配できる** | O-1〜O-6 | 10 セッションを俯瞰でき、未表示情報がゼロ。**「未表示ゼロ」は [AD-044](../decisions/0044-ui-coverage-assignment.md) の M3 の完了の条件 (Tier A の後続のうち割当先が M3 の feature の行が 0) で判定する** |
+| **M3** | **差配できる** | O-1〜O-7 | 10 セッションを俯瞰でき、未表示情報がゼロ。**「未表示ゼロ」は [AD-044](../decisions/0044-ui-coverage-assignment.md) の M3 の完了の条件 (Tier A の後続のうち割当先が M3 の feature の行が 0) で判定する** |
 | **M4** | **任せられる** | I-1〜I-3 | Auto / bypassPermissions を隔離内で安全に回せる |
 | **M5** | **配れる** | D-1 | 自分以外が使える |
 

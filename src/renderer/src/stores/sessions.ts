@@ -30,6 +30,11 @@ interface SessionsState {
    * 同一 UUID が 2 つの config ディレクトリにある場合に一意でない。
    */
   readonly selectedRowKey: string | null
+  /**
+   * 行を選ぶたびに増える通知の値 (O-7 / data-model §1)。同じ行を選び直しても上がるので、
+   * シェルはこれで「過去の側が選ばれた」を受けて中央を過去の会話に切り替える。
+   */
+  readonly selectionSeq: number
   setIndex: (index: SessionIndexDTO) => void
   setLoading: (loading: boolean) => void
   setFailed: (failed: boolean) => void
@@ -41,8 +46,13 @@ export const useSessionsStore = create<SessionsState>((set) => ({
   loading: false,
   failed: false,
   selectedRowKey: null,
+  selectionSeq: 0,
   setIndex: (index) => set({ index, failed: false, loading: false }),
   setLoading: (loading) => set({ loading }),
   setFailed: (failed) => set({ failed, loading: false }),
-  select: (selectedRowKey) => set({ selectedRowKey })
+  select: (selectedRowKey) =>
+    set((s) => ({
+      selectedRowKey,
+      selectionSeq: selectedRowKey === null ? s.selectionSeq : s.selectionSeq + 1
+    }))
 }))

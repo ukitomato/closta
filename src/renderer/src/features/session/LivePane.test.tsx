@@ -8,16 +8,17 @@ import type { RuntimeDescriptorDTO } from '@domain/runtime/dto'
 import type { WorkspaceFolderDTO } from '@domain/workspace/dto'
 
 import { installCapability } from '@/test-support/capability'
+import { RunningSessionsHarness } from '@/test-support/running-sessions-harness'
 
 import { createRunningSessionStore, type RunningSessionStore } from './running-session-store'
 import { RunningSessionStoreContext } from './running-session-context'
-import { SessionScreen } from './SessionScreen'
 import { MESSAGE_WINDOW } from './session-view'
 
 /**
- * X-5 / SC-003 — 表示中セッションの本文の窓と、ヘッダの表示名 (pr-gate R2 po L-102 / L-101)。
- * 純関数の境界は session-view.test.ts。ここでは画面としての振る舞いを確かめる:
+ * X-5 / SC-003 — 表示中セッションの本文の窓と、中央のヘッダの表示名 (pr-gate R2 po L-102 / L-101)。
+ * 純関数の境界は session-view.test.ts。ここでは面としての振る舞いを確かめる:
  * 省略行が出る → 「さらに表示」で消える → 別セッションへ切り替えて戻っても広げた窓が保たれる。
+ * O-7 で `SessionScreen` を稼働中の区画 (`RunningSessionList`) と中央 (シェルの `RunningCenter` = 中央のヘッダ + `LivePane`) に分けた (観点は変えない)。
  */
 
 const NOW = 1_700_000_000_000
@@ -108,13 +109,13 @@ async function setup(options: { lists: 'loaded' | 'pending' }): Promise<RunningS
   }))
   render(
     <RunningSessionStoreContext.Provider value={store}>
-      <SessionScreen />
+      <RunningSessionsHarness />
     </RunningSessionStoreContext.Provider>
   )
   return store
 }
 
-describe('SessionScreen — 本文の窓 (SC-003 / pr-gate R2 po L-102)', () => {
+describe('LivePane — 本文の窓 (SC-003 / pr-gate R2 po L-102)', () => {
   it('窓からあふれた件数を省略行で示し、「さらに表示」で消える。切り替えて戻っても広げた窓が保たれる', async () => {
     const store = await setup({ lists: 'loaded' })
     const older = await screen.findByTestId('older-messages')
@@ -131,7 +132,7 @@ describe('SessionScreen — 本文の窓 (SC-003 / pr-gate R2 po L-102)', () => 
   })
 })
 
-describe('SessionScreen — ヘッダの表示名 (pr-gate R1 po L-001 / R2 po L-101)', () => {
+describe('RunningCenter (シェル) — 中央のヘッダの表示名 (pr-gate R1 po L-001 / R2 po L-101)', () => {
   it('一覧を読み込んだらフォルダの表示名を出す', async () => {
     await setup({ lists: 'loaded' })
     await waitFor(() =>
@@ -145,7 +146,7 @@ describe('SessionScreen — ヘッダの表示名 (pr-gate R1 po L-001 / R2 po L
   })
 })
 
-describe('SessionScreen — 承認待ちの件数から移る (O-1 US-1 AC2 / design-gate R2 M-07)', () => {
+describe('LivePane — 承認待ちの件数から移る (O-1 US-1 AC2 / design-gate R2 M-07)', () => {
   it('見出しの件数を押すと承認待ちのセッションへ移り、その承認カードが描画される', async () => {
     const store = await setup({ lists: 'loaded' })
     act(() =>
