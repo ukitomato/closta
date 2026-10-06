@@ -68,7 +68,8 @@ watchedId = focus === 'running' && !settings.open && !launchOpen ? selectedId : 
 | 中央 | 残り | 480px | — | — |
 | 右のペイン | 320px | 260px | 40px の帯 (タブのアイコンだけ) | **畳む** |
 
-- 既定のウィンドウの幅 (1100px。`src/main/app/window.ts:45`) では、中央は 1100 − 280 − 40 = **780px**。composer は上限 (`--thread-max-width: 44rem` = 704px) のまま描かれ、今の基準画像 (`composer-fullwidth`) と同じ幅になる。右を開くと中央は 500px
+- 既定のウィンドウの幅 (1100px。`src/main/app/window.ts:45`) では、中央は 1100 − 280 − 40 = **780px**。composer は上限 (`--thread-max-width: 44rem` = 704px) のまま描かれる。右を開くと中央は 500px
+  - **実装の追記 (PR #13 の CI)**: 「今の基準画像 (`composer-fullwidth`) と同じ幅になる」は CI では成り立たなかった。CI の Windows のランナーは画面が狭く、ウィンドウが画面に合わせて縮むので、中央が composer の上限より狭くなり、composer は 673px → 641px になった (文言・折り返し・行送りは同じ)。利用者の承認を得て、基準画像を CI の成果物 (641×134) に替えた (2026-10-06。quickstart-results の「基準画像」)
 - 幅のドラッグでの変更は**本 feature に入れない** (registry と F 節に resizable が無く、shadcn の `resizable` (react-resizable-panels) は依存の追加と本番の CSP との両立の確認が要る。research R-04)。幅は固定で、畳む / 開くだけ
 - ウィンドウが狭くなり、中央が最小の幅を割るときは、右のペイン → サイドバーの順に自動で畳む。閾値は「開いている面の幅の合計 + 480px」(右を開いていれば 1080px、畳んでいれば 800px)。自動で畳むのは閾値を割った瞬間に 1 回だけで、利用者が開いたら開く (その間は中央の最小の幅を割ってよい)。自動で畳んだものは、幅が戻っても自動では開かない
 - 両方を畳んでも 48 + 480 + 40 = 568px を割るときは、中央の最小の幅を割ってよい (横にスクロールさせない)。`BrowserWindow` の最小の幅は変えない
