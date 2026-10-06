@@ -21,7 +21,7 @@ import { useFocusRescue } from './useFocusRescue'
  * | 順 | 区画 | 持ち主 |
  * |---|---|---|
  * | 1 | 新規起動 (起動ダイアログを開く) | ui (シェル) |
- * | 2 | 稼働中 (`RunningSessionList`。高さの上限は過去の区画の 8rem を残した値) | session |
+ * | 2 | 稼働中 (`RunningSessionList`。高さの上限は過去の区画の 6rem を残した値) | session |
  * | 3 | 過去のセッション (`SessionListScreen` の一覧の部分) | session |
  * | 4 | 設定 (設定のダイアログを開く) | ui (シェル) |
  *
@@ -128,10 +128,11 @@ export function Sidebar(): React.JSX.Element {
         <div className="border-border flex min-h-0 flex-1 flex-col border-t">
           {/*
            * 稼働中の区画は高さの上限を持つ (過去の区画が見えなくならない。spec Edge Cases)。上限は過去の区画の
-           * 最小の高さ (8rem) を残した値 (data-model §3)。50% では既定のウィンドウ (760px) で compact の 10 行が
-           * 収まらず、O-1 SC-003 (スクロールなしで収まる) を壊す。
+           * 最小の高さ (6rem) を残した値 (data-model §3)。50% では既定のウィンドウ (760px) で compact の 10 行が
+           * 収まらず、O-1 SC-003 (スクロールなしで収まる) を壊す。8rem でも画面が 768px の環境 (CI のランナー・小さい
+           * ノート PC) ではウィンドウが縮んで 10〜20px 足りなかった (PR #13 の CI。利用者の判断で 6rem)。
            */}
-          <div className="flex max-h-[calc(100%-8rem)] min-h-0 shrink-0 flex-col overflow-hidden">
+          <div className="flex max-h-[calc(100%-6rem)] min-h-0 shrink-0 flex-col overflow-hidden">
             <RunningSessionList
               runtimeName={view.runtimeName}
               highlightSelected={focus === 'running'}
