@@ -1,8 +1,11 @@
 ---
 name: cl-plan
 description: spec.md から plan.md を起草する。Domain Context (charter + 関連 ADR + glossary 抜粋) を auto-fill し、status を drafting → planning に遷移させる。
-argument-hint: [spec_dir]
-allowed-tools: Read Write Edit Bash Glob Grep AskUserQuestion
+argument-hint: [spec_dir] [--force]
+allowed-tools: Read Write Edit Bash Glob Grep
+context: fork
+agent: designer
+background: false
 ---
 
 # cl-plan
@@ -13,6 +16,14 @@ spec.md から plan.md を起草する。`/speckit.plan` を内部委譲しつ�
 - **Domain Context auto-fill** — `docs/domains/<domain>/charter.md` の Mission/Scope/業務ルール、関連 ADR (`docs/decisions/`)、`docs/glossary.md` の関連用語を plan.md の "Domain Context" section に注入
 - **Status 遷移** — `drafting → planning`
 
+## 実行モデル
+
+共通規則の正本は AGENTS.md の「実行モデル (context 管理)」節。本 skill 固有の点:
+
+- 本 skill は `designer` agent の fork で動く。呼び出し元の会話は見えず、入力は引数とファイルだけである
+- **人間には質問できない。** 判断が要る点は designer の規則どおり `<spec_dir>/.needs-input.md` に書き、`NEEDS_INPUT` で返す
+- **最終メッセージは Phase 6 の完了通知 (または halt 理由) だけにする**
+
 ## When to invoke
 
 - `/cl-spec` で spec.md を起草した直後
@@ -22,6 +33,7 @@ spec.md から plan.md を起草する。`/speckit.plan` を内部委譲しつ�
 
 - `<spec_dir>` (optional): 対象 spec のディレクトリ (例: `specs/001-auth-login/` または `specs/2026-05-17-1030-AUT-login/`)
   - 省略時は `.specify/scripts/spec-resolve.sh` で現在 branch 名から推定 (`feature/<spec_id>` パターン)
+- `--force` (optional): status が `tasking` 以降でも plan.md を再生成する (tasks.md を削除する)
 
 ## Steps
 
@@ -33,9 +45,9 @@ spec.md から plan.md を起草する。`/speckit.plan` を内部委譲しつ�
 4. `status` の扱い:
    - `drafting` → 正常、そのまま続行
    - `planning` → plan.md を **自動上書き** し、完了通知に `[warn: plan.md re-generated]` を記録する
-   - `tasking` 以降 → tasks.md が無効化される副作用があるため **AskUserQuestion** で確認する:
-     「plan.md を再生成すると tasks.md が stale になります。tasks.md も同時に削除して再生成しますか? (yes=両方再生成 / no=abort)」
-     yes の場合は tasks.md を削除してから plan.md を上書きし、status を `planning` に降格させる
+   - `tasking` 以降 → tasks.md が無効化される副作用がある:
+     - `--force` なし → halt with "plan.md を再生成すると tasks.md が stale になります。tasks.md も削除して再生成するなら --force を付けて再実行してください"
+     - `--force` あり → tasks.md を削除してから plan.md を上書きし、status を `planning` に降格させる
 
 ### Phase 1: Domain Context 素材を収集
 
@@ -114,7 +126,7 @@ placeholder section が存在しない場合は、生成 plan.md の冒頭 (`# P
 ## Idempotency
 
 - status=planning で既存 plan.md がある場合: 自動上書き (完了通知に warn 記録)
-- status=tasking 以降: AskUserQuestion で確認 → yes なら tasks.md 削除 + 両方再生成、no なら abort
+- status=tasking 以降: `--force` があれば tasks.md 削除 + plan.md 再生成、なければ halt
 - Domain Context section が既に埋まっている場合: 上書きせず差分のみ追加 (Edit で diff merge)
 
 ## Failure modes

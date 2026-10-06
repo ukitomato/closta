@@ -87,3 +87,9 @@ specs/**/*-round[0-9]*
 specs/**/*.iter[0-9]*
 specs/**/*-gate.md.[0-9]*
 specs/**/.*-scope.txt
+# code-gate / pr-gate が reviewer に渡すために書き出す diff (再実行のたびに作り直す)
+specs/**/.*-gate.diff
+# /cl-implement が記録する実装開始時の commit (手元の差分起点。clone 先では意味を持たない)
+specs/**/.implement-base
+# designer が人間への質問を書き、/cl-design が回答を書き込む受け渡しファイル (反映後に消す)
+specs/**/.needs-input.md

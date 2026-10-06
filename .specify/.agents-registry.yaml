@@ -64,14 +64,14 @@ agents:
     managed_by: workflow
     invoked_by: [code-gate]
 
-  # ─── Actors (code-gate auto-fix loop) ───────────────────────────────
+  # ─── Actors ─────────────────────────────────────────────────────────
   - name: implementer
     status: required
     role: actor
     placement: .claude/agents/implementer.md
-    purpose: "code-gate auto-fix loop の中核 actor (MUST_FIX 適用)"
+    purpose: "実装と修正の actor。tasks モード = tasks.md の section、fix モード = code-gate / pr-gate の指摘"
     managed_by: workflow
-    invoked_by: [code-gate]
+    invoked_by: [cl-implement, code-gate, pr-gate-fix]
 
   - name: lint-agent
     status: required
@@ -88,6 +88,14 @@ agents:
     purpose: "project test 実行 + JSON pass/fail 出力"
     managed_by: workflow
     invoked_by: [code-gate]
+
+  - name: designer
+    status: required
+    role: actor
+    placement: .claude/agents/designer.md
+    purpose: "/cl-plan・/cl-tasks の fork 先として設計文書を書き、design-gate の指摘を直す"
+    managed_by: workflow
+    invoked_by: [cl-plan, cl-tasks, cl-design]
 
   # ─── Optional reviewers (/cl-add-reviewer) ──────────────────────────
   - name: database-reviewer

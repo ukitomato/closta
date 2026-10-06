@@ -67,7 +67,7 @@ tools: Read, Grep, Glob, Bash
 - lint が graceful に error 件数を返すなら**その件数**で severity を決める
 - `commands[]` が複数あるときは**非ゼロで終わった各コマンドを 1 件ずつ Critical** にする
 
-lint コマンドが project に未設定の場合、`lint-agent` の JSON にその旨が入る。**AskUserQuestion で聞くのは lint-agent の役目**であり、本 reviewer は受け取った内容を報告するだけ。
+lint コマンドが project に未設定の場合、`lint-agent` の JSON にその旨が入る。**コマンドの解決は `/cl-code-gate` の役目** (解決できなければ `NEEDS_INPUT` で止まる) であり、本 reviewer は受け取った内容を報告するだけ。
 
 ## 出力
 

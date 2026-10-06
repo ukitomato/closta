@@ -2,7 +2,10 @@
 name: cl-pr-gate
 description: PR 提出前の adversarial review gate。`git diff <base>...HEAD` 全体を security / architecture / po + system scope reviewer で多角的に検証し、Critical=0 になるまで /cl-done を許可しない。
 argument-hint: [spec_dir]
-allowed-tools: Read Write Edit Bash Glob Grep Agent AskUserQuestion
+allowed-tools: Read Write Edit Bash Glob Grep Agent
+context: fork
+agent: general-purpose
+background: true
 ---
 
 # cl-pr-gate
@@ -10,6 +13,15 @@ allowed-tools: Read Write Edit Bash Glob Grep Agent AskUserQuestion
 PR 提出前の **adversarial review gate**。`/cl-code-gate` PASS 後に手動起動する。`git diff <base>...HEAD` 全体をレビューし、Critical 指摘が解消されるまで `/cl-done` を許可しない。
 
 **本 gate は pure hard gate である。** Critical 残存で done に進む経路は存在しない。妥協が必要な場合は新 ADR を起票して記録し、Constitution Principle 修正か spec 範囲調整で Critical を解消してから再実行する。
+
+## 実行モデル
+
+共通規則の正本は AGENTS.md の「実行モデル (context 管理)」節。本 skill 固有の点:
+
+- 本 skill は **background の fork** で動く。呼び出し元の会話は見えず、入力は引数とファイルだけである
+- **人間には質問できない** (fork には `AskUserQuestion` が渡らない)。判断が要る分岐は halt して理由を返す
+- reviewer は Agent ツールで起動し、**バックグラウンドで返る**。起動したらターンを終え、起動した全 reviewer の報告が届いてから集約に進む
+- **最終メッセージは Phase 7 の完了通知だけにする。** reviewer の生出力・diff・findings 本文は含めない。main に届くのは最終メッセージだけで、そこに積んだ分だけ main の context が埋まる
 
 ## 責務スコープ (vs code-gate)
 
@@ -30,7 +42,6 @@ PR 提出前の **adversarial review gate**。`/cl-code-gate` PASS 後に手動�
 - `<spec_dir>` (optional): 省略時 branch 名から推定
 - `--base <branch>` (default: 下の Failure modes の fallback 順で解決): diff の基準
 - `--round <N>`: 明示的に round 番号を指定 (省略時は既存 pr-gate.md から推定 + 1)
-- `--no-auto-dedup`: dedup を手動確認モードに切り替える (default: 完全自動)
 
 ## Steps
 
@@ -72,7 +83,7 @@ done
 1. `.gate-verdict-pr.json` が存在すれば、その `round` + 1 を新 round 番号とする
 2. 存在しなければ N = 1
 3. `--round` 指定があればそちらを優先
-4. N >= 2 の場合、`round_history[]` の直前 entry と、あれば `.gate-verdict-pr.round<N-1>.json` の Critical / High findings 本文を Read し subagent context に含める。
+4. N >= 2 の場合、`round_history[]` の直前 entry と、あれば `.gate-verdict-pr.round<N-1>.json` の Critical / High findings 本文を Read して Phase 5 の引継ぎ判定に使う。reviewer にはパスで渡す (Phase 4)。
    **snapshot が無く findings 本文が復元できないときは `inheritance: "summary-only"` として記録し、黙って「全部 new」扱いにしない** — 引継ぎ 0 件と引継ぎ不能は別物である
 
 ### Phase 2: Convergence gate (N >= 4 のときのみ)
@@ -98,6 +109,8 @@ halt 時のメッセージ: "Convergence failure: Round N-1 と Round N の両�
 
 ```bash
 git diff --name-only "$base"...HEAD > "$spec_dir/.pr-gate-scope.txt"
+# diff 本文は reviewer に貼らず、ファイルに 1 回だけ書き出してパスを渡す (Phase 4)
+git diff "$base"...HEAD > "$spec_dir/.pr-gate.diff"
 
 active=$(gate_common::reviewers_filter pr-gate "$spec_dir/.pr-gate-scope.txt" \
   security-reviewer architecture-reviewer po-reviewer \
@@ -117,17 +130,17 @@ active=$(gate_common::reviewers_filter pr-gate "$spec_dir/.pr-gate-scope.txt" \
 
 ### Phase 4: 並列起動 + code-gate verdict 受け渡し
 
-1 message 内で全 active reviewer を並列 Agent 起動 (clean-context isolation)。各 subagent に渡す context:
+1 message 内で全 active reviewer を並列 Agent 起動 (clean-context isolation)。各 subagent に渡す素材は **パスだけ** である。**本文を prompt に貼ってはならない** — reviewer は自分で Read する定義になっており (`reviewer-base.md` の Tier-0)、貼ると並列 reviewer の数だけ同じ本文が重複する。
 
-- `<spec_dir>/{spec,plan,tasks,design-gate,code-gate}.md` (前段の判断材料)
+- `<spec_dir>` — `{spec,plan,tasks,design-gate,code-gate}.md` (前段の判断材料) を reviewer が Read する
 - `<spec_dir>/.gate-verdict-code.json` — **重複 suppress 用**。reviewer はこの JSON の `must_fix_findings[].where` に列挙された `file:line` を **再指摘してはならない**
-- `git diff <base>...HEAD` の full diff (50KB 超なら `--stat` + 重要 file のみ)
+- `<spec_dir>/.pr-gate.diff` (Phase 3 で書き出した diff。reviewer の多くは Bash を持たず自分で diff を取れない)
 - `<spec_dir>/touched-files.txt`
 - `<spec_dir>/.pr-gate-scope.txt` — **対象ファイル集合**。これを渡さないと reviewer が scope (feature / system) を diff 本文から推測するしかなくなる
 - `.specify/memory/constitution.md`
 - `docs/domains/<domain>/charter.md`
-- `docs/decisions/*.md` (status: accepted): **architecture-reviewer のみ全文**、他 reviewer は header + Decision Outcome + Confirmation のみ
-- (N >= 2 のとき) Round N-1 の Critical / High findings 一覧 + convergence block
+- `docs/decisions/` — 読む範囲は `reviewer-base.md` の「ADR 読了範囲」に従う (architecture-reviewer だけ全文)
+- (N >= 2 のとき) Round N-1 の findings として `<spec_dir>/pr-gate.md` (前 round の最新版) と `.gate-verdict-pr.json` (`round_history[]` の convergence block)
 
 ### Phase 5: 集約 — `<spec_dir>/pr-gate.md.round<N>`
 
@@ -152,7 +165,7 @@ active=$(gate_common::reviewers_filter pr-gate "$spec_dir/.pr-gate-scope.txt" \
 **Status**: <PASS (Critical=0) | FIX_REQUIRED | CONVERGENCE_FAILURE (N>=4)>
 **Next**:
   PASS         → /cl-done <spec_dir>
-  FIX_REQUIRED → コード修正 + /cl-pr-gate 再実行 (Round <N+1>)
+  FIX_REQUIRED → Agent(implementer, mode: fix) で修正 → /cl-code-gate → /cl-pr-gate (Round <N+1>)
   CONVERGENCE  → ADR 起票 + spec 範囲調整
 
 ## Critical (Round <N>)
@@ -166,8 +179,11 @@ active=$(gate_common::reviewers_filter pr-gate "$spec_dir/.pr-gate-scope.txt" \
 
 ## Track raw outputs
 
-<details>...
+- [security-reviewer.pr-gate.md](./security-reviewer.pr-gate.md)
+- ...
 ```
+
+**raw output の本文を pr-gate.md に複製しない。リンクだけを置く。**
 
 **reviewer 出力は本 skill が Write する。** reviewer は read-only なので自分では保存できない。各 reviewer の返り値を `<spec_dir>/<reviewer>.pr-gate.round<N>.md` に Write し、最新版を `<spec_dir>/<reviewer>.pr-gate.md` にも置いてから、そのパスに対して次を実行する:
 
@@ -221,7 +237,7 @@ active=$(gate_common::reviewers_filter pr-gate "$spec_dir/.pr-gate-scope.txt" \
    - 一致したものは `suppressed_by_code_gate` フラグ付きで verdict JSON に記録、表示は dim
    - **`suppressed_by_code_gate` は visual dim のみ。** `severity_counts.critical` と PASS 判定のカウントから除外しない。同一行に異種 origin の finding がある場合 (lint error と security finding が同一行等) は suppress しない
 2. **Multi-reviewer dedup** (design-gate Phase 3 と同じ完全自動戦略): 集約 key は `path:line` > FR-NNN > Principle > Levenshtein < 5
-3. AskUserQuestion は **使用しない**。`--no-auto-dedup` 指定時のみ各ペアで確認する
+3. AskUserQuestion は **使用しない** (fork では使えない)。dedup は常に完全自動である
 
 ### Phase 7: 完了通知
 
@@ -235,7 +251,8 @@ active=$(gate_common::reviewers_filter pr-gate "$spec_dir/.pr-gate-scope.txt" \
   - verdict JSON: <spec_dir>/.gate-verdict-pr.json
   - 次のアクション:
     PASS → /cl-done <spec_dir>
-    FIX_REQUIRED → 修正後 /cl-pr-gate (Round <N+1>)
+    FIX_REQUIRED → Agent(implementer) に mode: fix / round: <N> / <spec_dir>/pr-gate.md / Critical の finding ID (<C-001, ...>) を渡して直させる
+                   → /cl-code-gate で lint / test を通し直す → /cl-pr-gate (Round <N+1>)
     CONVERGENCE → ADR 起票 + spec 範囲調整
 ```
 
@@ -253,7 +270,7 @@ Status は変更しない (`reviewing` 据置)。`/cl-done` が完了時に `rev
 - 全 reviewer 失敗 → halt
 - convergence failure (N >= 4) → halt with "ADR 起票 + spec 範囲調整が必須"
 - diff が空 → halt with "実装変更がありません"
-- base branch が不明 → `git symbolic-ref refs/remotes/origin/HEAD` → `develop` → `main` の順にフォールバック。すべて存在しなければ AskUserQuestion で指定を求める
+- base branch が不明 → `git symbolic-ref refs/remotes/origin/HEAD` → `develop` → `main` の順にフォールバック。すべて存在しなければ halt with "base branch を解決できません。`--base <branch>` を指定して再実行してください"
 - code-gate verdict JSON 不在 → halt with "/cl-code-gate を先に PASS させてください"
 - 必須 reviewer が registry に無い → halt with "`.claude/agents/<name>.md` の存在と `.specify/.agents-registry.yaml` の entry を確認してください"
 

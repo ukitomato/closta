@@ -2,7 +2,10 @@
 name: cl-tasks
 description: plan.md から tasks.md を起草する。User Story 単位の section 構造と `[P]` 並列マーカーを検証し、status を planning → tasking に遷移させる。
 argument-hint: [spec_dir]
-allowed-tools: Read Write Edit Bash Glob Grep AskUserQuestion
+allowed-tools: Read Write Edit Bash Glob Grep
+context: fork
+agent: designer
+background: false
 ---
 
 # cl-tasks
@@ -13,6 +16,14 @@ plan.md から tasks.md を起草する。`/speckit.tasks` を内部委譲しつ
 - **`[P]` 並列マーカー** — 同 phase 内で並列実行可能なタスクに `[P]` を付与する慣習が守られているか検証
 - **targets=both の分割** — FE / BE / shared (DB migration / API contract 等) の 3 section に自動分割
 - **Status 遷移** — `planning → tasking`
+
+## 実行モデル
+
+共通規則の正本は AGENTS.md の「実行モデル (context 管理)」節。本 skill 固有の点:
+
+- 本 skill は `designer` agent の fork で動く。呼び出し元の会話は見えず、入力は引数とファイルだけである
+- **人間には質問できない。** 判断が要る点は designer の規則どおり `<spec_dir>/.needs-input.md` に書き、`NEEDS_INPUT` で返す
+- **最終メッセージは Phase 8 の完了通知 (または halt 理由) だけにする**
 
 ## When to invoke
 
