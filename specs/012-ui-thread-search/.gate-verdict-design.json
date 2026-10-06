@@ -1,0 +1,138 @@
+{
+    "gate": "design",
+    "run": "2026-10-04T05:00:00+09:00",
+    "spec_dir": "specs/012-ui-thread-search",
+    "spec_id": "012-ui-thread-search",
+    "tracks": {
+        "analyze": {
+            "status": "ok",
+            "raw_out": "analyze.md",
+            "viewpoint_missing": null,
+            "cascade_demotions": null
+        },
+        "po-reviewer": {
+            "status": "ok",
+            "raw_out": "po-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "architecture-reviewer": {
+            "status": "ok",
+            "raw_out": "architecture-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "security-reviewer": {
+            "status": "ok",
+            "raw_out": "security-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "platform-boundary-reviewer": {
+            "status": "ok",
+            "raw_out": "platform-boundary-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "database-reviewer": {
+            "status": "ok",
+            "raw_out": "database-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        }
+    },
+    "severity_counts": {
+        "critical": 0,
+        "high": 10,
+        "medium": 20,
+        "low": 14
+    },
+    "fr_coverage": [
+        {
+            "fr": "FR-010",
+            "covered": true,
+            "by": [
+                "tasks.md BE-042"
+            ]
+        },
+        {
+            "fr": "FR-012",
+            "covered": true,
+            "by": [
+                "tasks.md BE-040",
+                "tasks.md BE-041"
+            ]
+        }
+    ],
+    "viewpoint_coverage": {
+        "A": "Critical:0 High:0",
+        "B": "Critical:0 High:1",
+        "C": "Critical:0 High:1",
+        "D": "Critical:0 High:2",
+        "E": "Critical:0 High:3",
+        "F": "\u8a72\u5f53\u306a\u3057",
+        "G": "Critical:0 High:1",
+        "H": "Critical:0 High:0"
+    },
+    "dedup_log": [
+        {
+            "merged": [
+                "arch-H-001",
+                "analyze-U1",
+                "pb-M-002"
+            ],
+            "key": "FR-010"
+        },
+        {
+            "merged": [
+                "arch-H-002",
+                "analyze-I1"
+            ],
+            "key": "SC-007"
+        },
+        {
+            "merged": [
+                "po-H-001",
+                "arch-M-003",
+                "analyze-U3"
+            ],
+            "key": "FR-009"
+        },
+        {
+            "merged": [
+                "po-H-002",
+                "analyze-I2"
+            ],
+            "key": "FR-001"
+        },
+        {
+            "merged": [
+                "po-H-003",
+                "analyze-U5"
+            ],
+            "key": "data-model \u00a72 \u8d70\u67fb"
+        },
+        {
+            "merged": [
+                "sec-H-001",
+                "analyze-U6"
+            ],
+            "key": "data-model \u00a72 \u5f37\u8abf"
+        },
+        {
+            "merged": [
+                "analyze-U2",
+                "arch-M-001"
+            ],
+            "key": "FR-009 \u7d4c\u8def"
+        },
+        {
+            "merged": [
+                "pb-M-001",
+                "analyze-T1"
+            ],
+            "key": "FR-001 \u7167\u5408\u5148"
+        }
+    ],
+    "verdict": "PASS"
+}
