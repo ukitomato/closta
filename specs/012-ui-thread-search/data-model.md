@@ -319,7 +319,7 @@ E2E の配線 (`e2e-capability.ts`) の `recordLaunchUsage` はメモリ内の f
 | 置き場 | キー | 文言 |
 |---|---|---|
 | `session-list/labels.ts` | `searchLabel` | セッションを検索 |
-| 同 | `searchPlaceholder` | 題・ブランチ・フォルダなどで探す |
+| 同 | `searchPlaceholder` | 題・ブランチ・フォルダなど (サイドバーの幅で切れない長さ。入力欄の文字の幅は約 200px で、`text-sm` で全角 14 字まで。前の「題・ブランチ・フォルダなどで探す」は切れた。pr-gate R1 C-001) |
 | 同 | `searchCount(n)` | {n} 件が一致 |
 | 同 | `searchClear` | 検索を消す |
 | 同 | `searchEmpty` | 読み込み済みのセッションに一致するものはありません。 |
@@ -396,6 +396,7 @@ section[data-testid=past-sessions] (サイドバーの過去の区画のラン�
 - 撮る前に主ウィンドウの内容の大きさを固定する (CI の画面に収まる大きさ)。サイドバーの幅は固定 (280px) なので、区画の大きさが CI と本機で揃う
 - 同梱フォントを `composer-screenshot.spec.ts` と同じ方法 (FontFace + CSSOM) で区画の要素に当てる
 - 対象は `[data-testid="past-sessions"]`。取得時刻の行 (`role="status"`) は mask する (表記がタイムゾーンで変わる)
+- グループの見出しと行は、既定の高さでは区画のスクロールの下にある。撮る前に、レイアウトは変えずに区画のスクロールの領域をグループの並びの上端まで送り、最初のグループの見出しと最初の行が欠けずに見えることを確かめる (pr-gate R1 C-001。最初の CI の artifact では見出し・検索欄・取得時刻・列挙の結果・絞り込みまでしか写らなかった)
 - 基準画像は CI の artifact から取る (本機の描画は揺れる。013 quickstart-results)
 
 ### 高さの確認 (SC-008)

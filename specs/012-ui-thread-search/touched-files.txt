@@ -93,3 +93,6 @@ src/renderer/src/stores/ui.ts
 src/renderer/src/test-support/capability.ts
 .github/workflows/verify.yml
 specs/012-ui-thread-search/quickstart-results.md
+e2e/sidebar-screenshot.spec.ts
+src/renderer/src/features/session-list/labels.ts
+specs/012-ui-thread-search/data-model.md

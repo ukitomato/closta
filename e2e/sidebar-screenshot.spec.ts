@@ -14,6 +14,7 @@ import { launchApp, openLaunchDialog, reachActiveComposer, runningRows } from '.
  * | 撮る前に主ウィンドウの**内容の大きさを固定する** (CI のランナーは画面が 768px で、既定のウィンドウが縮む)。サイドバーの幅は固定 (280px) なので、区画の大きさが CI と本機で揃う | data-model §7 / 013 quickstart-results |
  * | 同梱フォントは `composer-screenshot.spec.ts` と同じく FontFace + CSSOM で当てる (アプリの CSP `style-src 'self'` が inline `<style>` を禁じる)。OS 登録などのホスト永続変更はしない | AD-038 D4 / Principle VI |
  * | 取得時刻の行 (`role="status"`) は mask する (表記がタイムゾーンで変わる)。行は `createdAt: null` で時刻を出さない | data-model §7 |
+ * | グループの見出しと行は、既定の高さでは区画のスクロールの下 (取得時刻・列挙の結果・絞り込みの下) にある。撮る前に、**レイアウトは変えずに**区画のスクロールの領域をグループの並びの上端まで送る (利用者がスクロールした状態と同じ)。最初のグループの見出しと最初の行が欠けずに見えることを確かめてから撮る | spec FR-018 / data-model §7 / 012 pr-gate R1 C-001 |
  * | **基準画像は本機で作らない。** CI の e2e job の artifact から取る (本機の描画は揺れる) | spec FR-018 / 013 quickstart-results |
  * | 全画面は撮らない (O-4〜O-6 が右のペインと中央のヘッダを変えるたびに取り直しになる) | spec FR-018 |
  */
@@ -77,6 +78,23 @@ test.describe('サイドバーの過去のセッションの区画 (O-3 / FR-018
         })
         await document.fonts.ready
       }, fontBase64)
+
+      // グループの並び (過去の区画の thread-list の root) を、区画のスクロールの領域の上の余白の位置まで送る。フォントを当てた
+      // 後に送る (字幅で高さが変わるため)。送り先は内容と大きさで決まるので、実行ごとに揃う。
+      const groups = past.locator('[data-slot="aui_thread-list-root"]')
+      await groups.evaluate((el) => {
+        let scroller = el.parentElement
+        while (scroller !== null && getComputedStyle(scroller).overflowY !== 'auto') {
+          scroller = scroller.parentElement
+        }
+        if (scroller === null) throw new Error('過去の区画のスクロールの領域が見つかりません')
+        const gap = parseFloat(getComputedStyle(scroller).paddingTop)
+        scroller.scrollTop +=
+          el.getBoundingClientRect().top - scroller.getBoundingClientRect().top - gap
+      })
+      // FR-018 の対象が画像に入っていること: 最初のグループの見出しと最初の行が欠けずに見える。
+      await expect(groups.getByRole('heading', { level: 3 }).first()).toBeInViewport({ ratio: 1 })
+      await expect(past.locator(PAST_ROW).first()).toBeInViewport({ ratio: 1 })
 
       await expect(past).toHaveScreenshot('sidebar-past-sessions.png', {
         mask: [past.getByRole('status').filter({ hasText: '取得時刻' })]

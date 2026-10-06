@@ -199,7 +199,11 @@ export const GROUP_KIND_LABELS: Record<Exclude<SessionGroupDTO['kind'], 'pending
 export const PAST_SESSIONS_LABELS = {
   /** 検索欄の名前。 */
   searchLabel: 'セッションを検索',
-  searchPlaceholder: '題・ブランチ・フォルダなどで探す',
+  /**
+   * 検索欄の placeholder。**サイドバーの幅 (280px) で切れない長さにする** — 入力欄の文字の幅は約 200px (`text-sm` で
+   * 全角 14 字まで)。前の「題・ブランチ・フォルダなどで探す」(16 字) は切れていた (012 pr-gate R1 C-001 の CI の artifact)。
+   */
+  searchPlaceholder: '題・ブランチ・フォルダなど',
   /** 語があるときの一致した行の件数 (検索欄の下の `role="status"`)。 */
   searchCount: (n: number) => `${n} 件が一致`,
   /** 語を消すボタンの名前。 */
