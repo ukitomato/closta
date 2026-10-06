@@ -421,6 +421,16 @@ total_terms: 86
 - **Counterexamples**: 軸の reset (既定に戻して通知するもの) とは別物である。越境は警告であり、blocker ではない。
 - **Ref**: [008 spec](../specs/008-session-launch-settings-dialog-and-presets/spec.md) FR-006
 
+#### **Launch notice（起動の告知）**
+
+- **Definition**: 起動ダイアログに出す、直前の拒否の理由 (`launch.rejectReason`) と前回の失敗 (`launch.previousFailure`)。
+  - 起動せずにダイアログを閉じたとき・中央に出していない失敗したセッションを閉じたときは、古くなるので消す (`dismissLaunchNotice`。呼ぶのは ui のシェル)。
+  - 起動の初期値 (`launch.lastConfig`) は含まない (告知を消しても残る)。
+- **日本語表記**: 起動の告知
+- **Domain**: `session` (保持) / `ui` (消す時機を決める)
+- **Counterexamples**: 稼働中の行の失敗の表示 (`FailureBanner` / 行の状態の印) は告知ではない。そちらはセッションを閉じるまで残る。
+- **Ref**: [013 data-model](../specs/013-ui-app-shell/data-model.md) §1 (O-7 pr-gate R3 architecture L-203)
+
 #### **Launch preflight reason（起動前段の拒否理由）**
 
 - **Definition**: main の起動前段が起動を拒否するときの理由キー (`LaunchPreflightReason`)。

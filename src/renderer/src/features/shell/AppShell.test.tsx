@@ -197,6 +197,8 @@ async function setup(
     readonly folders?: readonly WorkspaceFolderDTO[]
     readonly index?: SessionIndexDTO
     readonly panelTabs?: readonly PanelTab[]
+    /** Provider の一覧の取得 (既定は 0 件で解決)。 */
+    readonly providers?: 'loading' | 'failed'
   } = {}
 ): Promise<Harness> {
   const ids = options.ids ?? []
@@ -213,7 +215,12 @@ async function setup(
     listRuntimes: () =>
       Promise.resolve({ runtimes: [UBUNTU], enumerationIssues: [], wslAvailability: 'available' }),
     listSessions: () => Promise.resolve(options.index ?? pastIndex()),
-    listProviders: () => Promise.resolve([]),
+    listProviders: () =>
+      options.providers === 'loading'
+        ? new Promise<never>(() => undefined)
+        : options.providers === 'failed'
+          ? Promise.reject(new Error('取得の失敗'))
+          : Promise.resolve([]),
     getTranscript: () => new Promise<never>(() => undefined),
     launchSession: launch,
     killSession: vi.fn(async () => {}),
@@ -538,8 +545,11 @@ describe('起動ダイアログ (US-2 AC1〜AC5 / FR-007)', () => {
     const h = await setup()
     await userEvent.click(within(sidebar()).getByRole('button', { name: SHELL_LABELS.newSession }))
     await screen.findByTestId('launch-dialog-host')
+    // 起動中の読み上げは、開いている間ずっとある live region の中身を替えて出す (pr-gate R3 a11y L-004)。
+    expect(screen.getByTestId('launch-status')).toHaveTextContent('')
     act(() => h.store.setState((s) => ({ launch: { ...s.launch, phase: 'launching' } })))
     expect(await screen.findByTestId('session-launching')).toBeInTheDocument()
+    expect(screen.getByTestId('launch-status')).toHaveTextContent(SHELL_LABELS.launching)
     await userEvent.keyboard('{Escape}')
     expect(screen.getByTestId('launch-dialog-host')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: SHELL_LABELS.close })).toBeNull()
@@ -1114,6 +1124,12 @@ describe('pr-gate R2 の負の経路 (O-7)', () => {
     expect(center()).toHaveAttribute('tabindex', '-1')
     act(() => within(sidebar()).getByRole('button', { name: SHELL_LABELS.newSession }).focus())
     expect(center()).not.toHaveAttribute('tabindex')
+    // 移った後に main の中を押すと (押した先が main 自身で blur が起きない)、そこで外す (pr-gate R3 a11y L-201)。
+    act(() => skip.focus())
+    await userEvent.keyboard('{Enter}')
+    expect(center()).toHaveAttribute('tabindex', '-1')
+    fireEvent.pointerDown(center())
+    expect(center()).not.toHaveAttribute('tabindex')
   })
 
   it('中央の「閉じる」で表示中のセッションを閉じると、押したボタンが消えても空の状態の主な操作にフォーカスが移る (a11y M-102)', async () => {
@@ -1151,6 +1167,17 @@ describe('pr-gate R2 の負の経路 (O-7)', () => {
     expect(within(center()).getByText('応答 1')).toBeInTheDocument()
     expect(h.store.getDraft(A)).toBe('書きかけ')
     expect(h.store.getState().selectedId).toBe(A)
+    // 閉じた後も同じ接続で届く (pr-gate R3 po L-201)。
+    h.emit(A, {
+      kind: 'message',
+      message: {
+        id: 'm2',
+        role: 'assistant',
+        parts: [{ type: 'text', text: '応答 2' }],
+        createdAt: 2
+      }
+    })
+    expect(await within(center()).findByText('応答 2')).toBeInTheDocument()
   })
 
   it('中央のヘッダの状態は一覧の行と同じ状態のラベルで、状態が変わると追随する (ui-coverage L-002 / D 節 session-state)', async () => {
@@ -1161,6 +1188,9 @@ describe('pr-gate R2 の負の経路 (O-7)', () => {
     await waitFor(() => expect(header()).toHaveTextContent('応答中'))
     h.emit(A, { kind: 'state', state: 'awaiting_permission' })
     await waitFor(() => expect(header()).toHaveTextContent('承認待ち'))
+    // 状態の通知 (`SessionStatusUpdate`。D 節 session-state の判別子) だけで決まる「失敗」にも追随する (pr-gate R3 ui-coverage L-203)。
+    h.push([{ sessionId: A, state: 'error', reasonKey: 'provider-error', claudeAlive: false }])
+    await waitFor(() => expect(header()).toHaveTextContent('失敗'))
   })
 
   it('vitest-axe: 設定のダイアログの 4 項目と、過去の会話を出した状態でも違反 0 (a11y M-007)', async () => {
@@ -1175,5 +1205,69 @@ describe('pr-gate R2 の負の経路 (O-7)', () => {
       await userEvent.click(within(nav).getByRole('button', { name }))
       expect((await axe(dialog, rules)).violations).toEqual([])
     }
+  })
+})
+
+/** Provider を指定して B を起動し、右のペインの「概要」を開く。 */
+async function openOverviewWithProvider(h: Harness): Promise<HTMLElement> {
+  h.launchMock.mockResolvedValueOnce({ status: 'launching', sessionId: B })
+  await act(() =>
+    h.store.launch({
+      folderId: 'folder-1',
+      runtimeId: UBUNTU.id,
+      providerId: 'provider-1',
+      modelId: 'claude-custom',
+      effort: null,
+      permissionMode: 'default'
+    })
+  )
+  await userEvent.click(screen.getByRole('button', { name: SHELL_LABELS.expandPanel }))
+  return within(screen.getByTestId('right-panel')).findByTestId('overview')
+}
+
+describe('pr-gate R3 の負の経路 (O-7)', () => {
+  it('Provider の一覧の読み込み中は、Provider とモデルの行を出さない (断定しない。ux L-103 / M-011)', async () => {
+    const h = await setup({ providers: 'loading' })
+    const overview = await openOverviewWithProvider(h)
+    expect(overview).not.toHaveTextContent('Provider')
+    expect(overview).not.toHaveTextContent('起動時のモデル')
+    expect(overview).not.toHaveTextContent('claude-custom')
+    expect(overview).toHaveTextContent('起動時の権限モード')
+  })
+
+  it('Provider の一覧の取得に失敗したら、行を黙って消さず「取得できませんでした」と言い、モデルは ID で出す (ux L-201)', async () => {
+    const h = await setup({ providers: 'failed' })
+    const overview = await openOverviewWithProvider(h)
+    await waitFor(() => expect(overview).toHaveTextContent(OVERVIEW_LABELS.providerUnavailable))
+    expect(overview).toHaveTextContent('起動時のモデル')
+    expect(overview).toHaveTextContent('claude-custom')
+  })
+
+  it('設定を開いた元がサイドバーを畳んで隠れたら、閉じたとき帯の「設定」にフォーカスが移る (a11y M-007 (3))', async () => {
+    await setup()
+    await userEvent.click(within(sidebar()).getByRole('button', { name: SHELL_LABELS.settings }))
+    await screen.findByTestId('settings-dialog')
+    act(() => useUiStore.getState().setSidebarCollapsed(true))
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByTestId('settings-dialog')).toBeNull())
+    const strip = within(sidebar()).getByRole('button', { name: SHELL_LABELS.settings })
+    expect(strip.closest('[hidden]')).toBeNull()
+    await waitFor(() => expect(strip).toHaveFocus())
+  })
+
+  it('中央のヘッダにフォーカスがある間に表示中の過去の行が取り直しで消えても、空の状態の主な操作にフォーカスが移る (a11y M-007 (4))', async () => {
+    await setup()
+    await selectPast(0)
+    const toggle = within(within(center()).getByTestId('center-header')).getByRole('button', {
+      name: TRANSCRIPT_DENSITY_LABELS.compact
+    })
+    act(() => toggle.focus())
+    act(() => useSessionsStore.getState().setIndex(pastIndex([])))
+    expect(center()).toHaveAttribute('data-focus', 'none')
+    await waitFor(() =>
+      expect(
+        within(center()).getByRole('button', { name: SHELL_LABELS.centerEmptyLaunch })
+      ).toHaveFocus()
+    )
   })
 })

@@ -29,14 +29,13 @@ export function CenterHeader({
       className="border-border flex shrink-0 items-center gap-3 border-b px-4 py-2"
       data-testid="center-header"
     >
-      {/* 1 行に切り詰めた全文は title で出す (pr-gate R1 a11y M-006)。 */}
-      <span
-        className="min-w-0 truncate text-xs font-medium"
-        title={title}
-        data-testid={titleTestId}
-      >
+      {/*
+       * 1 行に切り詰めた全文は title で出す (pr-gate R1 a11y M-006)。題は中央 (`main`) の見出し — 見出しで移動する
+       * 支援技術の利用者が中央に何を出しているかを読める (pr-gate R3 a11y L-001)。
+       */}
+      <h2 className="min-w-0 truncate text-xs font-medium" title={title} data-testid={titleTestId}>
         {title}
-      </span>
+      </h2>
       {detail !== null && detail !== '' && (
         <span className="text-muted-foreground min-w-0 truncate text-xs" title={detail}>
           {detail}

@@ -92,13 +92,9 @@ function NewSessionDialog({
 
 function Launching(): React.JSX.Element {
   return (
-    // 起動中になったことを読み上げる (「起動」のボタンが消えてフォーカスが容器に移るので、名前だけが読まれていた。
-    // pr-gate R1 a11y L-004)。
-    <div
-      role="status"
-      className="flex min-h-40 items-center justify-center p-6"
-      data-testid="session-launching"
-    >
+    // 起動中になったことの読み上げは、ダイアログが開いている間ずっとマウントしてある live region (`LaunchDialogHost`) が持つ。
+    // 中身と一緒に差し込んだ live region は読まれない支援技術がある (pr-gate R1 a11y L-004 / R3 L-004)。
+    <div className="flex min-h-40 items-center justify-center p-6" data-testid="session-launching">
       <GenerationLoader label="セッションを起動中…" tick={0} />
     </div>
   )

@@ -208,7 +208,9 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
   閉じたとき・中央に出していない失敗したセッションを閉じたとき。起動中は何もせず `lastConfig` は残す)。X-4 US-1 AC7 の「失敗したセッションを
   閉じたら前回の設定と理由つきで起動ダイアログを開く」は、**中央に出していた失敗したセッションを閉じたときだけ**になった (ui の面の状態
   `focus === 'running'` に依存する。[013 data-model §1](../../../specs/013-ui-app-shell/data-model.md))。起動の状態の遷移のロジックは
-  ストアの中のまま (pr-gate R2 architecture M-101)。
+  ストアの中のまま (pr-gate R2 architecture M-101)。**シェルは「`launch` が変わり・`previousFailure` が立ち・`order` が減る」組み合わせを
+  失敗した close として読む** — `close` 以外の操作でこの組み合わせを作らない (作るなら明示の通知を足して shell と合わせて直す。
+  `running-session-store.ts` の `close` の注記。pr-gate R3 architecture L-202)。
   稼働中の一覧の行の部品 (状態の印・経過時間・直近の活動) と派生値の追跡は変えていない）
 
 X-6 は未着手。

@@ -67,5 +67,6 @@ spec 013 の FR-009 と plan の FE-011 と食い違っていた (AD-031 の訂�
   focus には触れない
 
 運用上の正本は ui charter の Cross-domain dependencies の「面の状態」で、glossary・data-model・`stores/ui.ts` はそこを参照する。
-この節は訂正した時点の事実の記録であり、その後の運用で書き換えるのは ui charter の側である (この節は書き換えない。O-7 pr-gate R2
-architecture L-102。たとえば R2 で足した「シェルが session のストアの `dismissLaunchNotice` を呼ぶ」は ui charter にだけある)。
+(2026-10-06 追記。O-7 pr-gate R2 architecture L-102 / R3 L-201) この節は訂正した時点 (2026-10-05) の事実の記録であり、その後の
+運用で書き換えるのは ui charter の「面の状態」の側である。たとえば R2 で足した「シェルが session のストアの `dismissLaunchNotice` を
+呼ぶ」は本 ADR には書かず、charter の側にある。

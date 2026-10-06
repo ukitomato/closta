@@ -170,7 +170,8 @@ O-1 で読み替えた: 監視ビューはサイドバーの稼働中の区画 (
   R2 architecture L-101)
 - 共有 invariant: Principle III（選べない選択肢を出さない）/ VIII / XII / XIII。
   詳細は [docs/domains/_overview.md](../_overview.md)
-- **面の状態** (O-7。**この項が運用上の正本**。AD-046 の訂正の節と同じ内容): 中央の focus・設定・畳みは `stores/ui.ts` の 1 か所にあり、
+- **面の状態** (O-7。**この項が運用上の正本**。AD-046 の訂正の節 (2026-10-05 の時点の記録) に、その後の追加を足したもの。
+  pr-gate R3 architecture L-201): 中央の focus・設定・畳みは `stores/ui.ts` の 1 か所にあり、
   focus はシェル (`useShellFocus`) だけが書く。シェルは session のストアの選択 (`selectionSeq`) を購読し、session のコンポーネントは
   focus を書かない。session のコンポーネントが面の状態を書く例外は設定の「作業フォルダ」を開く 2 つの導線だけで、どちらも R-2 から
   続く登録の受け渡しとして残る: `seedFolderDraft` (未登録フォルダの「登録」から初期値つきで開く) と `openSettings('folders')`

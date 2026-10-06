@@ -13,6 +13,10 @@ import type { SessionRunState } from '@domain/session/run-state'
  * `unknown-target`) + X-4 の起動前段 (`invalid-config` / `provider-unavailable` / `needs-confirmation`) の計 16 種を網羅する。
  */
 
+/**
+ * **対応表 (`docs/ui-coverage.md`) D 節 launch-failure の文言の正本** (FailureBanner は `launchFailureLabel` を通して描く)。
+ * 変えるときは対応表の該当の行を見る (ui-coverage-reviewer の発火条件の外。O-7 pr-gate R2 ui-coverage M-101 / R3 L-202)。
+ */
 const LAUNCH_REJECT_LABELS: Record<SessionLaunchRejectReason, string> = {
   'distro-not-running': '所在 (WSL ディストロ) が停止しています。起動してから再度お試しください。',
   'not-verified-running':
@@ -98,9 +102,9 @@ export function runStateLabel(state: SessionRunState): string {
 /**
  * 一覧の行の状態。run-state と生存フラグの組から決める (`rowStatus`)。
  * とくに `done` は生存なら「応答待ち」、終わっていれば「終了済み」(FR-009)。
- * **対応表 (`docs/ui-coverage.md`) D 節 session-state の文言の正本** (失敗の理由の文言 `LAUNCH_REJECT_LABELS` は
- * launch-failure の正本)。変えるときは対応表の該当の行を見る (監視ビューと共有するので ui-coverage-reviewer の発火条件には
- * 入れていない。O-7 pr-gate R2 ui-coverage M-101)。
+ * **対応表 (`docs/ui-coverage.md`) D 節 session-state の文言の正本** (launch-failure の正本は `LAUNCH_REJECT_LABELS`)。
+ * 変えるときは対応表の該当の行を見る (監視ビューと共有するので ui-coverage-reviewer の発火条件には入れていない。
+ * O-7 pr-gate R2 ui-coverage M-101)。
  */
 export const SESSION_ROW_STATUS_LABELS = {
   launching: '起動中',

@@ -73,13 +73,19 @@ function ShellLayout({
 
 /**
  * スキップリンクの行き先 (`main`) へフォーカスを移す。`main` に常には `tabindex` を付けない — 付けると本文のクリックで
- * `main` がフォーカスを取り、矢印 / PageDown で transcript がスクロールしなくなる。移す間だけ付け、外れたら消す
- * (pr-gate R2 a11y M-103)。
+ * `main` がフォーカスを取り、矢印 / PageDown で transcript がスクロールしなくなる。移す間だけ付け、フォーカスが外れたとき
+ * と、`main` の中を押したとき (押した先が `main` 自身なら blur が起きない) に消す (pr-gate R2 a11y M-103 / R3 L-201)。
  */
 function focusCenter(): void {
   const center = document.getElementById(CENTER_ID)
   if (center === null) return
+  const release = (): void => {
+    center.removeAttribute('tabindex')
+    center.removeEventListener('blur', release)
+    center.removeEventListener('pointerdown', release, true)
+  }
   center.setAttribute('tabindex', '-1')
-  center.addEventListener('blur', () => center.removeAttribute('tabindex'), { once: true })
+  center.addEventListener('blur', release)
+  center.addEventListener('pointerdown', release, true)
   center.focus()
 }

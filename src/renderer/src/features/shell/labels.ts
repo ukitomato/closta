@@ -31,6 +31,8 @@ export const SHELL_LABELS = {
   pastReadOnly: '読み取り専用',
   /** 起動ダイアログの名前。中身の見える見出しと同じ文言 (pr-gate R1 a11y L-002)。 */
   launchDialogTitle: 'セッションを起動',
+  /** 起動ダイアログの live region が起動中に読む文 (見える「起動中」の表示と同じ文言)。 */
+  launching: 'セッションを起動中…',
   panelLabel: 'セッションの詳細',
   panelTabs: 'セッションの詳細のタブ',
   overviewTab: '概要',
@@ -60,6 +62,8 @@ export const OVERVIEW_LABELS = {
   provider: LAUNCH_AXIS_LABELS.provider,
   providerDefault: '既定',
   providerRemoved: '登録が解除された Provider',
+  /** Provider の一覧の取得に失敗したとき (行を黙って消さない。pr-gate R3 ux L-201)。 */
+  providerUnavailable: '取得できませんでした',
   model: `起動時の${LAUNCH_AXIS_LABELS.model}`,
   modelDefault: '既定',
   effort: LAUNCH_AXIS_LABELS.effort,

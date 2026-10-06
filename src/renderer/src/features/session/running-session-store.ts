@@ -529,6 +529,9 @@ export function createRunningSessionStore(
       const failure = view.failureReason
       // 失敗したセッションを閉じたら、メッセージの有無を問わず**そのセッションの**設定と理由を起動ダイアログへ戻す
       // (「閉じて再起動」が別のセッションの設定を出さない。pr-gate R1 po M-005 / X-4 US-1 AC7)。
+      // **ui のシェル (`useShellFocus`) は「`launch` が変わり・`previousFailure` が立ち・`order` が減る」組み合わせを
+      // 失敗した close として読む** (起動ダイアログを開くか、告知を消すかを決める)。ほかの操作でこの組み合わせを作らない
+      // (O-7 pr-gate R3 architecture L-202。session charter の O-7 の項)。
       const failed = failure !== null
       store.setState((s) => {
         const sessions = { ...s.sessions }

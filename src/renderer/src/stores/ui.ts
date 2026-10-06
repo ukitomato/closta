@@ -11,8 +11,7 @@ import type { LocationDTO } from '@domain/workspace/dto'
  * `selectedId`、過去は `stores/sessions.ts` の `selectedRowKey` が持つ。ここは中央にどちらを出すか (`focus`) だけを持つ。
  *
  * **面の状態を書くのはシェル** (`features/shell/`)。`focus` の書き手は `features/shell/useShellFocus.ts` の 1 か所。
- * ほかの domain が書いてよい操作 (例外) の正本は ui charter の「面の状態」(AD-046 の訂正の節)。**永続化しない** — 再起動で
- * 既定に戻る。
+ * ほかの domain が書いてよい操作 (例外) の正本は ui charter の「面の状態」。**永続化しない** — 再起動で既定に戻る。
  */
 
 /** 中央に何を出すか。 */

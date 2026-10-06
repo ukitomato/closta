@@ -59,6 +59,13 @@ export function LaunchDialogHost(): React.JSX.Element {
         <DialogTitle asChild>
           <span className="sr-only">{SHELL_LABELS.launchDialogTitle}</span>
         </DialogTitle>
+        {/*
+         * 起動中になったことを読み上げる live region。開いている間ずっとマウントして中身だけ替える (中身ごと差し込むと
+         * 読まれない支援技術がある。pr-gate R3 a11y L-004)。
+         */}
+        <p role="status" className="sr-only" data-testid="launch-status">
+          {launching ? SHELL_LABELS.launching : ''}
+        </p>
         {!launching && (
           <DialogClose asChild>
             <Button

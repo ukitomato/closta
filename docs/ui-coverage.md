@@ -219,7 +219,7 @@ SDK のメッセージではなく、アプリが SDK の callback・制御・�
 
 ## F element の分類
 
-assistant-ui の element の一覧 (https://www.assistant-ui.com/elements。**2026-10-03 確認で 127** (一覧の名前を数えた数)。AD-019 の 2026-09-13 の数え方 (202) とは registry のページの構成が違い、未分類の 59 要素の一覧は残っていなかったので、今の一覧から引き直した)。Tier A の 35 (AD-019) と PLAN.md §4.3 / §4.4 の名前を当て、残りを分類した。使い道は対応表の行か、`SDK の外: <置き場所>` (SDK の emit を表示しない用途 — シェル・設定・他 domain の操作 UI・transcript の空と読み込み中・composer の入力の部品。O-7 で追加。pr-gate R1 ui-coverage M-005) か、`未使用` (入れていない・描いていない)。対応表の行と `SDK の外` の両方に使うときは `/` で並べる。`<置き場所>` は AD-046 Decision 6 の語 (サイドバー・中央のヘッダ・中央の本体・右のペインのタブ・設定のダイアログ) で書き、ダイアログの中身などその語で表せない置き場所はコンポーネントの名前を添える (O-7 pr-gate R2 ui-coverage L-101)。
+assistant-ui の element の一覧 (https://www.assistant-ui.com/elements。**2026-10-03 確認で 127** (一覧の名前を数えた数)。AD-019 の 2026-09-13 の数え方 (202) とは registry のページの構成が違い、未分類の 59 要素の一覧は残っていなかったので、今の一覧から引き直した)。Tier A の 35 (AD-019) と PLAN.md §4.3 / §4.4 の名前を当て、残りを分類した。使い道は対応表の行か、`SDK の外: <置き場所>` (SDK の emit を表示しない用途。例: シェル・設定・他 domain の操作 UI・transcript の空と読み込み中と取得の失敗・composer の入力の部品・Thread の操作のボタン。O-7 で追加。pr-gate R1 ui-coverage M-005 / R3 L-101) か、`未使用` (入れていない・描いていない)。対応表の行と `SDK の外` の両方に使うときは `/` で並べる。`<置き場所>` は AD-046 Decision 6 の語 (サイドバー・中央のヘッダ・中央の本体・右のペインのタブ・設定のダイアログ) で書き、ダイアログの中身などその語で表せない置き場所はコンポーネントの名前を添える (O-7 pr-gate R2 ui-coverage L-101)。
 
 | element | Tier | 使い道 | 備考 |
 |---|---|---|---|
@@ -263,9 +263,9 @@ assistant-ui の element の一覧 (https://www.assistant-ui.com/elements。**20
 | Directive text | C | 未使用 | |
 | Document reference | B | B user/document | O-6 |
 | Draft restore | B | D message-queue | X-2 (下書きの復元) |
-| Edit message | B | 未使用 | |
+| Edit message | B | SDK の外: 中央の本体の Thread の利用者のメッセージの操作 (`thread.aui.tsx` が `ActionBarPrimitive.Edit` と `EditComposer` を組み込み済み) | runtime が `onEdit` を渡さないので編集は効かない。fork / resume と合わせて X-6 で照合する (O-7 pr-gate R3 ui-coverage L-201) |
 | Elicitation form | A | A SDKElicitationCompleteMessage / E elicitation | O-5 |
-| Empty state | B | SDK の外: アプリの空の状態 (O-7 の中央・過去のセッションの区画・実行中の Thread の Welcome・過去ログ・設定の 4 画面) | O-3 の Empty states も同じ element |
+| Empty state | B | SDK の外: 中央の本体 (空の状態・実行中の Thread の Welcome・過去ログ)・サイドバーの過去のセッションの区画・設定のダイアログ | O-3 の Empty states も同じ element |
 | Error state | A | D launch-failure / SDK の外: 設定のダイアログ (4 画面の取得の失敗)・サイドバーの過去のセッションの区画・中央の本体の過去ログの取得の失敗 | D launch-failure は element ではなくアプリが自作した `FailureBanner` (`LivePane.tsx`) が描く。`ErrorState` を使うのは SDK の外の 6 か所 (設定の 4 画面・`SessionListScreen`・`ChatScreen`) (O-7 pr-gate R2 ui-coverage L-101) |
 | Feedback dialog | B | 未使用 | |
 | File | B | B user/document | O-6 |
@@ -283,7 +283,7 @@ assistant-ui の element の一覧 (https://www.assistant-ui.com/elements。**20
 | Job progress | B | A SDKTaskProgressMessage | O-4 の候補 |
 | Launcher | C | 未使用 | PLAN §4.4 (Launcher bubble) |
 | Link preview | B | 未使用 | |
-| Loading state | B | SDK の外: 読み込み中の表示 (`GenerationLoader`。起動ダイアログの起動中・設定の 4 画面・過去ログ) | |
+| Loading state | B | SDK の外: 中央の本体の過去ログ・設定のダイアログ・起動ダイアログ (`LaunchDialogHost`) の起動中 (`GenerationLoader`) | |
 | Logos | C | 未使用 | |
 | Map answer | C | 未使用 | PLAN §4.4 |
 | Markdown text | A | B assistant/text | MarkdownText |
@@ -293,7 +293,7 @@ assistant-ui の element の一覧 (https://www.assistant-ui.com/elements。**20
 | Media player | C | 未使用 | |
 | Memory | B | A SDKMemoryRecallMessage | O-6 |
 | Mermaid diagram | A | B assistant/text | markdown の中の図。未導入 |
-| Message actions | B | 未使用 | |
+| Message actions | B | SDK の外: 中央の本体の Thread の応答の操作のバー (`thread.aui.tsx` が `ActionBarPrimitive.Copy` / `Reload` と More の Export as Markdown を組み込み済み) | コピーと Markdown の書き出しは効く。再生成は runtime が `onReload` を渡さないので効かない (O-7 pr-gate R3 ui-coverage L-201) |
 | Message branches | A | 未使用 | fork / resume (X-6) |
 | Message pair | B | 未使用 | |
 | Message queue | A | D message-queue | X-2 |
@@ -313,7 +313,7 @@ assistant-ui の element の一覧 (https://www.assistant-ui.com/elements。**20
 | Reasoning | A | B assistant/thinking / assistant/redacted_thinking | Reasoning |
 | Reasoning effort | A | 未使用 | effort は起動設定ダイアログ (X-4) |
 | Recommendation card | C | 未使用 | Generative |
-| Regenerate menu | A | 未使用 | fork (X-6) |
+| Regenerate menu | A | 未使用 | fork (X-6)。element は入れていない。Thread の応答の操作のバーに再生成のボタン (`ActionBarPrimitive.Reload`) は組み込み済みだが、`onReload` を渡さないので効かない (Message actions の行。O-7 pr-gate R3 ui-coverage L-201) |
 | Research report | C | 未使用 | Generative |
 | Retrieval chunks | B | 未使用 | |
 | Reviewable diff | A | C FileEditInput | CodeDiff で代替 (R-4) |

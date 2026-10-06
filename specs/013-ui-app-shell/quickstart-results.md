@@ -2,15 +2,15 @@
 
 手順は [quickstart.md](./quickstart.md)。合否の定義は spec の SC が正本。
 
-## 自動の検証 (SH-011) — 2026-10-06 (pr-gate R2 の修正の後の値)
+## 自動の検証 (SH-011) — 2026-10-06 (pr-gate R3 の修正の後の値)
 
 `docs/discovery.md` の "Build / Test / Lint" 表の agent 用の列で流した。
 
 - 型検査: node / web / e2e / perf の 4 本とも 0 件
 - ESLint: 0 件。dependency-cruiser: 違反 0 (358 modules)
 - Constitution 検証: ok 20 / 違反 0 / 検査対象なし 1
-- 全件 `vitest run`: **119 files / 1969 tests passed** (`--maxWorkers=2`。pr-gate R1 の修正の後は 1960。O-7 で足した主なテスト: `AppShell.test.tsx` 50 / `stores/ui.test.ts` / `SessionListScreen.test.tsx` の FR-016 の 3 件 / `panel-tabs.test.ts` / `shell-layout.test.ts` / `session-list/group-label.test.ts` / `session-list/rows.test.ts`)
-- E2E (ビルドした実アプリ + 偽の supervisor 接続): **11 passed / 1 failed** (`ime` 3 / `launch-dialog` 4 / `multi-session` 4 が合格。`composer-screenshot` は下の「基準画像」のとおり本機と CI の 1px の差 (673×135 に対して 134) で落ちる。pr-gate R1 の修正の後も同じ結果)
+- 全件 `vitest run`: **119 files / 1973 tests passed** (`--maxWorkers=2`。pr-gate R1 の修正の後は 1960、R2 の後は 1969。O-7 で足した主なテスト: `AppShell.test.tsx` 54 / `stores/ui.test.ts` / `SessionListScreen.test.tsx` の FR-016 の 3 件 / `panel-tabs.test.ts` / `shell-layout.test.ts` / `session-list/group-label.test.ts` / `session-list/rows.test.ts`)
+- E2E (ビルドした実アプリ + 偽の supervisor 接続): **11 passed / 1 failed** (`ime` 3 / `launch-dialog` 4 / `multi-session` 4 が合格。`composer-screenshot` は下の「基準画像」のとおり本機と CI の 1px の差 (673×135 に対して 134) で落ちる。pr-gate R1・R2 の修正の後も同じ結果)
   - **X-5 SC-003 / O-1 SC-004 の計測値** (本 spec の SC-003 ではない。session charter KPI「並列時の滑らかさ」の E2E の側。O-3 の義務 (2)(c) の比較の基準。pr-gate R1 architecture M-003):
 
     | 回 | 入力遅延 p95 | long task (50ms 超) の件数 / 最大 | 打鍵 n | 巨大な part の着信 |
@@ -68,15 +68,18 @@ component テストでは、初回の `listSessions` が `listRuntimes` の解�
 
 **起動時の `probe-batch` は未計測。** 過去の区画が起動の直後から `listRuntimes()` を呼ぶようになったので、検出がもう 1 本起きうる (roadmap の system-scope (3))。single-flight を入れたときに、過去の区画をマウントした状態で測る (pr-gate R2 platform-boundary L-002)。
 
-## V-3b pr-gate R2 の修正の見た目 (利用者) — 未実施
+## V-3b pr-gate R2 / R3 の修正の見た目 (利用者) — 未実施
 
-pr-gate R2 の修正で見た目・操作が変わった点。component テストでは見え方 (余白・ツールチップ・スクロール) を確かめられないので、利用者が dev 起動で確かめる。
+pr-gate R2 / R3 の修正で見た目・操作が変わった点と、どこでも通しで確かめていない US-3 AC4。component テストでは見え方 (余白・ツールチップ・スクロール) と通しの流れを確かめられないので、利用者が dev 起動で確かめる。
 
 | # | 観点 | 結果 |
 |---|---|---|
 | 1 | 設定を開いている間に承認待ち・失敗があると、左上の「設定」の横に「稼働中」と件数の印が並び、何の件数か読める。印にマウスを載せると「稼働中のセッション: 承認待ち N 件…」が出る (畳んだ帯の印も同じ) (ux M-101) | 未 |
 | 2 | 過去の区画で所在・フォルダを絞り込み、未登録グループを開いた状態でサイドバーを畳んで開くと、絞り込み・開いたグループ・スクロールが残り、「取得中…」が一瞬出ない (ux M-103) | 未 |
-| 3 | 最初の Tab で出る「会話へ移動」に余白がある。押すと中央へ移る。会話の本文をクリックしてから PageDown / Space で transcript がスクロールする (a11y M-103 / L-103) | 未 |
+| 3a | 最初の Tab で出る「会話へ移動」に余白がある。押すと中央へ移り、中央の縁に印 (ring) が出る (a11y L-103 / R3 L-201) | 未 |
+| 3b | スキップリンクを使わずに、会話の本文をクリックしてから PageDown / Space で transcript がスクロールする (a11y M-103) | 未 |
+| 3c | スキップリンクで中央へ移った後に本文をクリックし、PageDown / Space で transcript がスクロールする (a11y R3 L-201) | 未 |
 | 4 | 起動ダイアログの外側 (overlay) を押しても閉じず、選びかけの設定が残る。Esc と閉じるボタンでは閉じる (ux M-104) | 未 |
 | 5 | 表示中の終了したセッションを中央の「閉じる」で閉じると、中央の空の状態の主なボタンにフォーカスが移る (a11y M-102) | 未 |
 | 6 | 未登録グループの見出しのパスが長いとき、マウスを載せると全文が出る (ux M-102) | 未 |
+| 7 | 設定の「作業フォルダ」で登録して閉じると、過去のセッションの区画に新しいフォルダのグループが出る (US-3 AC4 の通し。区間ごとのテストはあるが通しは未確認。po R3 L-202) | 未 |

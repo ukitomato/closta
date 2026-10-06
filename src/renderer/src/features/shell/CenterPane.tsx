@@ -52,7 +52,8 @@ export function CenterPane(): React.JSX.Element {
       // キーボードでの transcript のスクロールが効かなくなる (移す間だけ付ける。`AppShell` の focusCenter。pr-gate R2 a11y M-103)。
       id={CENTER_ID}
       aria-label={SHELL_LABELS.center}
-      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden outline-none"
+      // 移った先の印 (`tabindex` を付けている間だけフォーカスを受けるので、スキップリンクの後にだけ出る。pr-gate R3 a11y L-201)。
+      className="focus-visible:ring-ring flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-inset"
       data-testid="center"
       data-focus={focus}
     >

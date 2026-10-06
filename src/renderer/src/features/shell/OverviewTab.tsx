@@ -19,7 +19,7 @@ import { OVERVIEW_LABELS, SHELL_LABELS } from './labels'
  * |---|---|
  * | renderer が既に持つ値だけで描く。新しい IPC・preload の関数を足さない | FR-015 |
  * | 中央のヘッダと重なる項目 (フォルダの表示名・ランタイム・開始の時刻・題) は稼働中では出さない | data-model §5 |
- * | 値の無い項目は行ごと出さない。Provider の一覧の読み込み中は Provider の行を出さない (断定しない) | data-model §5 / X-4 po M-102 |
+ * | 値の無い項目は行ごと出さない。Provider の一覧の読み込み中は Provider とモデルの行を出さない (断定しない)。取得に失敗したら Provider の行で「取得できませんでした」と言い、モデルは ID で出す | data-model §5 / X-4 po M-102 / pr-gate R3 ux L-201 |
  * | 会話由来・パス由来の文字列は DTO の時点で正規化済みの値を**テキストとして**描く (HTML として解釈しない) | US-4 AC5 |
  */
 export function OverviewTab(): React.JSX.Element {
@@ -67,8 +67,12 @@ function RunningOverview(): React.JSX.Element {
     config.providerId === null
       ? null
       : (providers.providers?.find((p) => p.id === config.providerId) ?? null)
+  // 読み込み中は行を出さない (断定しない)。取得に失敗したら、出せなかったことを行で言う (黙って消さない。pr-gate R3 ux L-201)。
+  const providersLoading = config.providerId !== null && providers.loadState === 'loading'
   if (config.providerId === null) {
     items.push({ label: OVERVIEW_LABELS.provider, value: OVERVIEW_LABELS.providerDefault })
+  } else if (providers.loadState === 'failed') {
+    items.push({ label: OVERVIEW_LABELS.provider, value: OVERVIEW_LABELS.providerUnavailable })
   } else if (providers.providers !== null) {
     items.push({
       label: OVERVIEW_LABELS.provider,
@@ -78,9 +82,8 @@ function RunningOverview(): React.JSX.Element {
   // 起動時に選んだ値 (実行中の変化は O-4 (`status`)・O-5 (`init` の `model`)・X-6 (`set_permission_mode` / `set_model`)
   // が対応表の行で扱う)。表示は起動ダイアログと同じ表示名と訳 (Provider のモデルカタログの displayName・EFFORT_LABELS。
   // 引けなければ ID。pr-gate R1 ux M-006 / ui-coverage M-004・R2 L-102)。Provider の一覧の読み込み中は、表示名を
-  // 引けるか決まらないので Provider の行と同じく出さない (生の ID を一瞬出さない。pr-gate R2 ux L-103)。
-  const modelPending = config.providerId !== null && providers.providers === null
-  if (!modelPending) {
+  // 引けるか決まらないので Provider の行と同じく出さない (生の ID を一瞬出さない。pr-gate R2 ux L-103)。失敗したら ID で出す。
+  if (!providersLoading) {
     items.push({
       label: OVERVIEW_LABELS.model,
       value:
