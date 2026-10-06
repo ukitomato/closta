@@ -102,6 +102,39 @@ export function buildSessionRows(index: SessionIndexDTO | null): SessionRowsView
 }
 
 /**
+ * 選択中の行と、それが属する区画を引く (O-7 の中央のヘッダ・「概要」・過去の行の消失の判定)。無ければ `null`。
+ */
+export function findRow(
+  view: SessionRowsView,
+  rowKey: string | null
+): { readonly row: SessionRow; readonly section: SessionSection } | null {
+  if (rowKey === null) return null
+  for (const section of view.sections) {
+    const at = section.rowKeys.indexOf(rowKey)
+    if (at === -1) continue
+    const row = view.rows.find((r) => r.rowKey === rowKey)
+    return row === undefined ? null : { row, section }
+  }
+  return null
+}
+
+const TIME_FORMAT = new Intl.DateTimeFormat('ja-JP', {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit'
+})
+
+/**
+ * 過去のセッションの時刻の表記。**1 箇所で決める** — 一覧の行・中央のヘッダの題・「概要」が同じ表記を使う
+ * (O-7 data-model §5。中央のヘッダの題は一覧の行と同じ文字列)。
+ */
+export function formatSessionTime(ms: number): string {
+  return TIME_FORMAT.format(new Date(ms))
+}
+
+/**
  * 行 1 件の表示文字列 (FR-047)。
  *
  * **`domain` は「どれを使うか」しか決めない。** 並べ方と日本語の体裁は `ui` の責務である

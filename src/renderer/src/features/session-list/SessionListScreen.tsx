@@ -20,15 +20,16 @@ import { useSessionThreadListAdapter } from '@/runtime/thread-list-adapter'
 import { useUiStore, type FolderDraftSeed } from '@/stores/ui'
 
 import type { EnumerationOutcomeDTO, SessionGroupDTO, SessionSummaryDTO } from '@domain/session/dto'
-import type { LocationDTO } from '@domain/workspace/dto'
 import { sessionRowKey } from '@domain/session/summary'
 import type { FailureReason } from '@domain/session/target'
 
+import { locationIndexOf, locationLabelOf } from './group-label'
 import {
   BOUNDARY_LABELS,
   CWD_ORIGIN_LABELS,
   FAILURE_REASON_HINTS,
   FAILURE_REASON_LABELS,
+  GROUP_KIND_LABELS,
   PENDING_REASON_LABELS,
   TARGET_STATUS_LABELS,
   UNKNOWN_REASON_LABELS,
@@ -37,7 +38,7 @@ import {
   remedyFor,
   type Coverage
 } from './labels'
-import { buildSessionRows, rowTitleText, type SessionSection } from './rows'
+import { buildSessionRows, formatSessionTime, rowTitleText, type SessionSection } from './rows'
 import { useFolderLabels } from './useFolderLabels'
 import { useSessions } from './useSessions'
 
@@ -58,18 +59,6 @@ import { useSessions } from './useSessions'
  * ([quickstart-results.md](../../../../../specs/002-session-cross-folder-session-enumeration/quickstart-results.md))。
  * 取得後に初めて描くと予算を超える。
  */
-
-const TIME_FORMAT = new Intl.DateTimeFormat('ja-JP', {
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit'
-})
-
-function formatTime(ms: number): string {
-  return TIME_FORMAT.format(new Date(ms))
-}
 
 /**
  * transcript の大きさ (FE-048)。
@@ -102,19 +91,25 @@ function SectionHeading({
   switch (group.kind) {
     case 'folder':
       return (
-        <div className="flex items-baseline gap-2">
+        <div className="flex min-w-0 items-baseline gap-2">
           {/*
             **`folderId` をそのまま出さない** (FR-047)。識別子は乱数由来の 32 桁であり、
             利用者に意味を持たない。登録一覧と突き合わせて表示名を引く。
             引けない窓 (登録解除と取得の交差) では種別名だけを出す — 空欄にしない。
+            長い名前は 1 行に切り詰め、全文は title で出す (280px のサイドバー。pr-gate R1 ux H-003)。
           */}
-          <span className="text-sm font-medium">{folderName ?? '登録フォルダ'}</span>
+          <span
+            className="min-w-0 truncate text-sm font-medium"
+            title={folderName ?? GROUP_KIND_LABELS.folder}
+          >
+            {folderName ?? GROUP_KIND_LABELS.folder}
+          </span>
           {/*
             **フォルダ単位の値は「含む」と読める形にする** (po H-001)。
             この値は行ごとの越境を OR に畳んだものであり、
             どの行が越境かはここから決まらない。行単位は `SessionMeta` が出す。
           */}
-          <span className="text-muted-foreground text-xs">
+          <span className="text-muted-foreground shrink-0 text-xs">
             {group.boundary === 'cross' ? '越境を含む' : BOUNDARY_LABELS[group.boundary]}
           </span>
         </div>
@@ -122,9 +117,7 @@ function SectionHeading({
     case 'pending':
       return (
         <div className="flex items-baseline gap-2">
-          <span className="text-sm font-medium">
-            {group.location.kind === 'wsl' ? group.location.distroName : 'Windows'}
-          </span>
+          <span className="text-sm font-medium">{locationLabelOf(group.location)}</span>
           <span className="text-muted-foreground text-xs">
             {PENDING_REASON_LABELS[group.reasonKey]}
           </span>
@@ -132,13 +125,17 @@ function SectionHeading({
       )
     case 'unregistered':
       return (
-        <div className="flex items-baseline gap-2">
-          <span className="text-sm font-medium">未登録フォルダ</span>
+        <div className="flex min-w-0 items-baseline gap-2">
+          <span className="shrink-0 text-sm font-medium">{GROUP_KIND_LABELS.unregistered}</span>
           {/*
             **表示するのは変換済みのパスか安全な表示用文字列だけ。**
             UNC 接頭辞は境界を越えてこない (FR-042)。
+            1 行に切り詰めるので、見分けに効く末尾も読めるよう全文を title で出す (O-7 pr-gate R2 ux M-102)。
           */}
-          <span className="text-muted-foreground min-w-0 truncate text-xs">
+          <span
+            className="text-muted-foreground min-w-0 truncate text-xs"
+            title={group.cwd?.value ?? group.cwdDisplay ?? '作業ディレクトリ不明'}
+          >
             {group.cwd?.value ?? group.cwdDisplay ?? '作業ディレクトリ不明'}
           </span>
         </div>
@@ -146,7 +143,7 @@ function SectionHeading({
     case 'unknown':
       return (
         <div className="flex items-baseline gap-2">
-          <span className="text-sm font-medium">作業フォルダ不明</span>
+          <span className="text-sm font-medium">{GROUP_KIND_LABELS.unknown}</span>
           <span className="text-muted-foreground text-xs">
             {UNKNOWN_REASON_LABELS[group.reasonKey]}
           </span>
@@ -180,10 +177,16 @@ function registerSeedOf(group: SessionGroupDTO): FolderDraftSeed | null {
 function Section({
   section,
   folderName,
-  coverage
+  coverage,
+  highlightSelected,
+  onSelectRow
 }: {
   section: SessionSection
   folderName: string | null
+  /** 選択中の行を強調するか (O-7。中央に過去の会話を出しているときだけ)。 */
+  highlightSelected: boolean
+  /** 行を押したとき (選択中の行の押し直しを含む。O-7)。 */
+  onSelectRow: (rowKey: string) => void
   /**
    * 索引をどこまで信じてよいか (不変条件 5)。**件数と 0 件の意味を両方決める。**
    *
@@ -227,14 +230,18 @@ function Section({
        */
       aria-labelledby={headingId}
     >
-      <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0">
+      {/*
+       * 280px のサイドバーでは件数・「作業フォルダとして登録」・「開く」が見出しの横に収まらないので、折り返して 2 行目に
+       * 落とす。見出しは 1 行に切り詰める (O-7 data-model §3。pr-gate R1 ux H-003)。
+       */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0 max-w-full">
           {/* **heading にする** (a11y H-004)。見た目は `text-sm font-medium` のまま。 */}
           <h3 id={headingId} className="min-w-0">
             <SectionHeading group={section.group} folderName={folderName} />
           </h3>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="text-muted-foreground text-xs">{countText(count, coverage)}</span>
           {registerSeed !== null && (
             <Button
@@ -285,6 +292,8 @@ function Section({
             */}
             <ThreadListItemsByKey
               rowKeys={section.rowKeys}
+              highlightSelected={highlightSelected}
+              onSelectRow={onSelectRow}
               renderMeta={(rowKey) => {
                 const session = section.sessions.find((s) => sessionRowKey(s) === rowKey)
                 return session === undefined ? null : <SessionMeta session={session} />
@@ -390,12 +399,12 @@ function SessionMeta({ session }: { session: SessionSummaryDTO }): React.JSX.Ele
         「名前が出ないと訳語だけの差になる」退行がそのまま残っていた。
       */}
       {session.cwdDisplay !== null && session.cwdDisplay.length > 0 && (
-        <span className="min-w-0 truncate">
+        <span className="min-w-0 truncate" title={session.cwdDisplay}>
           <span className="sr-only">作業ディレクトリ </span>
           {session.cwdDisplay}
         </span>
       )}
-      {session.createdAt !== null && <span>開始 {formatTime(session.createdAt)}</span>}
+      {session.createdAt !== null && <span>開始 {formatSessionTime(session.createdAt)}</span>}
       {session.gitBranch !== null && <span>ブランチ {session.gitBranch}</span>}
       {session.tag !== null && <span>タグ {session.tag}</span>}
       {session.fileSize !== null && (
@@ -563,8 +572,13 @@ function Outcomes({
 }): React.JSX.Element {
   return (
     <section className={cn(paper, 'rounded-xl p-3')}>
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-sm font-medium">列挙の結果</h2>
+      {/*
+       * 280px のサイドバーでは操作 (「ランタイムを再検出して取り直す」など) が見出しの横に収まらないので、折り返して
+       * 2 行目に落とす (O-7 data-model §3。pr-gate R1 ux H-003)。見出しの段はサイドバーの区画の見出し (h2) の下の h3
+       * (pr-gate R1 a11y L-001)。
+       */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-sm font-medium">列挙の結果</h3>
         {/* **理由に見合う操作だけを出す。** 判定は `RemedyButton` が 1 箇所で持つ。 */}
         <RemedyButton
           reasons={failureReasonsOf(outcomes)}
@@ -576,9 +590,7 @@ function Outcomes({
       <ul className="mt-2 space-y-1 text-sm">
         {outcomes.map((outcome) => (
           <li key={outcome.targetKey} className="flex flex-wrap items-baseline gap-2">
-            <span className="font-medium">
-              {outcome.location.kind === 'wsl' ? outcome.location.distroName : 'Windows'}
-            </span>
+            <span className="font-medium">{locationLabelOf(outcome.location)}</span>
             <SourceLabel label={outcome.targetLabel} />
             <span className="text-muted-foreground text-xs">
               {TARGET_STATUS_LABELS[outcome.status]}
@@ -671,25 +683,6 @@ function FilterChip({
 /** 所在の絞り込みの選択肢。**参照キーではなく表示名を鍵にしない** — 同名の所在はない。 */
 type LocationFilter = { readonly kind: 'all' } | { readonly kind: 'one'; readonly label: string }
 
-/** 所在の表示名。**1 箇所で決める** — 選択肢の生成と絞り込みが同じ文字列を使う必要がある。 */
-function locationLabelOf(location: LocationDTO): string {
-  return location.kind === 'wsl' ? location.distroName : 'Windows'
-}
-
-/**
- * `targetKey` から所在を引く索引。
- *
- * **所在はセッションではなく列挙の結果が持つ。** `SessionGroupDTO` の `folder` variant は
- * `location` を持たない (登録フォルダは複数所在のセッションを含みうる) ため、
- * グループから所在は引けない。`SessionSummaryDTO.targetKey` と
- * `EnumerationOutcomeDTO.targetKey` が同じ値なので、これで行単位に引ける。
- */
-function locationIndexOf(outcomes: readonly EnumerationOutcomeDTO[]): ReadonlyMap<string, string> {
-  const index = new Map<string, string>()
-  for (const outcome of outcomes) index.set(outcome.targetKey, locationLabelOf(outcome.location))
-  return index
-}
-
 /**
  * 所在の絞り込みを**セッション単位**で適用する (FR-040 / code-gate iteration 1 / ux H-005)。
  *
@@ -723,7 +716,12 @@ function narrowToLocation(
   return { ...section, sessions, rowKeys }
 }
 
-export function SessionListScreen(): React.JSX.Element {
+export function SessionListScreen({
+  highlightSelected = true
+}: {
+  /** 選択中の行を強調するか (O-7。シェルは中央に過去の会話を出しているときだけ強調する)。省略時は強調する。 */
+  readonly highlightSelected?: boolean
+} = {}): React.JSX.Element {
   const sessions = useSessions()
   const folderLabels = useFolderLabels()
 
@@ -733,7 +731,7 @@ export function SessionListScreen(): React.JSX.Element {
    */
   const [locationFilter, setLocationFilter] = useState<LocationFilter>({ kind: 'all' })
   const [folderFilter, setFolderFilter] = useState<string | null>(null)
-  const setScreen = useUiStore((state) => state.setScreen)
+  const openSettings = useUiStore((state) => state.openSettings)
 
   /*
    * **selector の外で変換する。** `useAuiState` の selector が配列リテラルを返すと
@@ -742,7 +740,8 @@ export function SessionListScreen(): React.JSX.Element {
   const view = useMemo(() => buildSessionRows(sessions.index), [sessions.index])
 
   const titleOf = useCallback(
-    (row: { title: Parameters<typeof rowTitleText>[0] }) => rowTitleText(row.title, formatTime),
+    (row: { title: Parameters<typeof rowTitleText>[0] }) =>
+      rowTitleText(row.title, formatSessionTime),
     []
   )
 
@@ -861,20 +860,24 @@ export function SessionListScreen(): React.JSX.Element {
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <div
-        className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto p-4"
+        className="flex h-full min-h-0 flex-col gap-2 overflow-y-auto p-2"
         /* **取得中であることを支援技術に伝える** (a11y H-001)。 */
         aria-busy={sessions.loading}
       >
         {/* 遷移を伴うボタンの説明。**参照されるだけで視覚には出さない** (a11y H-006)。 */}
         <span id="register-seed-help" className="sr-only">
-          押すと作業フォルダの登録画面へ移動します。
+          押すと設定の「作業フォルダ」が登録の初期値つきで開きます。
         </span>
 
+        {/*
+         * O-7: サイドバーの過去のセッションの区画に置く。区画の見出し (「過去のセッション」) はシェルが持つので、
+         * 画面の見出しと外枠を外し、取得の時刻・全件を取り直す・列挙の結果・絞り込みは残して折り返しで収める
+         * (data-model §3)。
+         */}
         <header className="flex flex-wrap items-baseline justify-between gap-2">
-          <div>
-            <h1 className="text-base font-medium">セッション一覧</h1>
+          <div className="min-w-0">
             <p
-              className="text-muted-foreground mt-0.5 text-xs"
+              className="text-muted-foreground text-xs"
               /*
                * **段階描画の進みをここ 1 箇所で通知する** (code-gate iteration 1 / a11y H-001)。
                *
@@ -899,9 +902,12 @@ export function SessionListScreen(): React.JSX.Element {
                 **取得時刻を必ず出す** (FR-034 / SC-012)。
                 正本はアプリ外にあり、鮮度は原理的に保証できない (Principle X / R-10)。
               */}
+              {/* 待っている間は「未取得」(止まって見える語) と言わない (O-7 pr-gate R2 ux L-102)。 */}
               {sessions.index === null
-                ? '未取得'
-                : `取得時刻 ${formatTime(sessions.index.fetchedAt)}`}
+                ? sessions.loading
+                  ? '取得中…'
+                  : '未取得'
+                : `取得時刻 ${formatSessionTime(sessions.index.fetchedAt)}`}
               {/*
                 **「試した」で断言しない** (pr-gate Round 4 / 不変条件 5 / UX3-005)。
                 `complete` は全所在を*試した*ことしか意味しない。失敗があっても真になるので、
@@ -929,7 +935,7 @@ export function SessionListScreen(): React.JSX.Element {
 
         {sessions.failed && (
           <ErrorState
-            title="セッション一覧を取得できませんでした"
+            title="過去のセッションを取得できませんでした"
             detail="再取得してください。続く場合はログを確認してください。"
             retryLabel="再取得"
             retryingLabel="取得中"
@@ -1041,7 +1047,7 @@ export function SessionListScreen(): React.JSX.Element {
                 <p className="text-muted-foreground text-xs">
                   登録すると、そのフォルダのセッションがここに並びます。
                 </p>
-                <Button variant="outline" size="sm" onClick={() => setScreen('folders')}>
+                <Button variant="outline" size="sm" onClick={() => openSettings('folders')}>
                   作業フォルダを登録する
                 </Button>
               </>
@@ -1124,6 +1130,8 @@ export function SessionListScreen(): React.JSX.Element {
               key={section.key}
               section={section}
               coverage={coverage}
+              highlightSelected={highlightSelected}
+              onSelectRow={sessions.select}
               folderName={
                 section.group.kind === 'folder' ? folderLabels.nameOf(section.group.folderId) : null
               }

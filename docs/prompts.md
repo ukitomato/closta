@@ -241,6 +241,15 @@ AD-018 が本 feature の設計を直接縛る。
 なっていないか」といった**判断が要るもの**に限る。未割当行の検出そのものは grep なので
 CI スクリプトの担当とし、reviewer に複製しない。
 
+### O-7 — アプリのシェル (O-3 の前)
+
+> 利用者の発言 (2026-10-04) から O-2 と O-3 のあいだに足した ([spec 013](../specs/013-ui-app-shell/spec.md) /
+> [AD-046](decisions/0046-app-shell-layout.md))。O-3〜O-6 の置き場所がシェルの分割で決まるので、O-3 より先に行う。
+
+```
+/cl-design "[ui] 上部のタブのビューを廃し、Cursor の Agent View に近い 3 面のシェルにする。左のサイドバーに新規起動・稼働中のセッション・過去のセッション・設定、中央に選んだセッションの会話 (実行中の Chat か過去ログ)、右に表示中のセッションの情報をタブで切り替えるペインを置く。設定の 4 画面と起動はダイアログにする。右のペインは枠とタブを足す仕組みと「概要」のタブまでで、他のタブは後続に回す。素材は AD-025 の目標レイアウト。" --targets frontend
+```
+
 ### O-3 — Thread 検索と observability
 
 ```
@@ -293,4 +302,12 @@ CI スクリプトの担当とし、reviewer に複製しない。
 
 ```
 /cl-design "[ui] xterm.js と node-pty による端末タブを追加し、SDK 経路では扱えない対話 TUI に切り替えられるようにする。" --targets both
+```
+
+O-7 の後は、端末は右のペインのタブ (Terminal) として足す (AD-046 Decision 4。OPT-panel は Terminal を持たない)。
+
+### OPT-panel — 右のペインのタブ
+
+```
+/cl-design "[ui] O-7 の右のペインに、表示中のセッションの作業フォルダの Changes (git の差分)、Files (ファイルの一覧)、Browser、PR の Webview のタブを足す。Browser と PR の Webview は AD-046 Decision 4 の境界のすべてに従う: 主ウィンドウの webviewTag を使わず、main が管理する WebContentsView に独立した partition と CSP で載せる。モーダル (設定・起動・承認) を開いている間は外部のビューを隠すか外す。renderer が報告する配置の矩形は main で検証する。外部コンテンツのタブはタブの表 (panel-tabs.ts) の Content では表さず、OPT-panel でタブの種別を足す。アプリの CSP を緩めない。main / infra 側の作業 (git・ファイルの監視・別の WebContents) をどの domain が持つかは design で人間に諮る。Terminal は OPT-pty が持つ。" --targets both
 ```

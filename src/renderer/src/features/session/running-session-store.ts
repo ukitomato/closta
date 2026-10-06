@@ -52,10 +52,18 @@ export interface SessionActions {
   /** `folderLabel` は起動の受付時に引けている作業フォルダの表示名 (App の寿命の読み上げに使う。O-1)。 */
   launch(config: SessionLaunchConfig, folderLabel?: string | null): Promise<void>
   select(sessionId: string | null): void
+  /**
+   * 起動の拒否と前回の失敗の告知を消す (O-7。起動ダイアログを起動せずに閉じたとき・失敗したセッションを中央に出さずに
+   * 閉じたとき)。`lastConfig` は残す (次に開いたときの初期値)。起動中は何もしない。
+   */
+  dismissLaunchNotice(): void
   /** 監視ビューの情報密度 (O-1 / FR-008。永続化しない)。 */
   setDensity(density: Density): void
-  /** 表示中を除く承認待ちのうち、承認待ちになったのが最も早いものへ切り替える (O-1 / FR-002)。無ければ何もしない。 */
-  selectNextAwaiting(): void
+  /**
+   * 見ているセッション (`watchedId`。省略時は選択中) を除く承認待ちのうち、承認待ちになったのが最も早いものへ切り替える
+   * (O-1 / FR-002・O-7 / FR-006)。無ければ何もしない。
+   */
+  selectNextAwaiting(watchedId?: string | null): void
   /**
    * composer の下書き (メモリ内限定。X-2 FR-007)。**再描画を起こさない保持**に置く — 下書きは切り替えで Thread を
    * 作り直したときの復元にだけ読む。state に置くと打鍵のたびに表示中のペイン全体が再描画され、表示中の本文の更新と
@@ -135,6 +143,7 @@ export function createRunningSessionStore(
     sessions: {},
     statuses: {},
     selectedId: null,
+    selectionSeq: 0,
     launch: INITIAL_LAUNCH,
     statusSince: {},
     activity: {},
@@ -395,6 +404,7 @@ export function createRunningSessionStore(
         order: [...s.order, sessionId],
         sessions: { ...s.sessions, [sessionId]: session },
         selectedId: sessionId,
+        selectionSeq: s.selectionSeq + 1,
         launch: { ...s.launch, phase: 'entry', rejectReason: null }
       }))
       // 固定値ではなく、その時点の行の状態を入れる (handshake より先に状態通知が届いていても行と食い違わない)。
@@ -410,6 +420,7 @@ export function createRunningSessionStore(
     select(sessionId) {
       store.setState((s) => ({
         selectedId: sessionId,
+        selectionSeq: sessionId === null ? s.selectionSeq : s.selectionSeq + 1,
         // 新規起動に戻るときは直前の拒否表示を残さない。
         launch:
           sessionId === null
@@ -422,12 +433,27 @@ export function createRunningSessionStore(
       }))
     },
 
+    dismissLaunchNotice() {
+      const { launch } = store.getState()
+      if (launch.phase === 'launching') return
+      if (
+        launch.phase === 'entry' &&
+        launch.rejectReason === null &&
+        launch.previousFailure === null
+      )
+        return
+      store.setState({
+        launch: { ...launch, phase: 'entry', rejectReason: null, previousFailure: null }
+      })
+    },
+
     setDensity(density) {
       if (store.getState().density !== density) store.setState({ density })
     },
 
-    selectNextAwaiting() {
-      const target = nextAwaiting(store.getState())
+    selectNextAwaiting(watchedId) {
+      const state = store.getState()
+      const target = nextAwaiting(state, watchedId === undefined ? state.selectedId : watchedId)
       if (target !== null) actions.select(target)
     },
 
@@ -503,6 +529,9 @@ export function createRunningSessionStore(
       const failure = view.failureReason
       // 失敗したセッションを閉じたら、メッセージの有無を問わず**そのセッションの**設定と理由を起動ダイアログへ戻す
       // (「閉じて再起動」が別のセッションの設定を出さない。pr-gate R1 po M-005 / X-4 US-1 AC7)。
+      // **ui のシェル (`useShellFocus`) は「`launch` が変わり・`previousFailure` が立ち・`order` が減る」組み合わせを
+      // 失敗した close として読む** (起動ダイアログを開くか、告知を消すかを決める)。ほかの操作でこの組み合わせを作らない
+      // (O-7 pr-gate R3 architecture L-202。session charter の O-7 の項)。
       const failed = failure !== null
       store.setState((s) => {
         const sessions = { ...s.sessions }

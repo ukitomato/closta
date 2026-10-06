@@ -1,0 +1,128 @@
+{
+    "gate": "design",
+    "run": "2026-10-04T03:30:00+09:00",
+    "spec_dir": "specs/013-ui-app-shell",
+    "spec_id": "013-ui-app-shell",
+    "tracks": {
+        "analyze": {
+            "status": "ok",
+            "raw_out": "analyze.md",
+            "viewpoint_missing": null,
+            "cascade_demotions": null
+        },
+        "po-reviewer": {
+            "status": "ok",
+            "raw_out": "po-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "architecture-reviewer": {
+            "status": "ok",
+            "raw_out": "architecture-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "security-reviewer": {
+            "status": "ok",
+            "raw_out": "security-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "platform-boundary-reviewer": {
+            "status": "ok",
+            "raw_out": "platform-boundary-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        }
+    },
+    "severity_counts": {
+        "critical": 0,
+        "high": 8,
+        "medium": 17,
+        "low": 12
+    },
+    "fr_coverage": [
+        {
+            "fr": "FR-005",
+            "covered": true,
+            "by": [
+                "tasks.md FE-010"
+            ]
+        },
+        {
+            "fr": "FR-006",
+            "covered": true,
+            "by": [
+                "tasks.md FE-013",
+                "tasks.md FE-014"
+            ]
+        }
+    ],
+    "viewpoint_coverage": {
+        "A": "Critical:0 High:0",
+        "B": "Critical:0 High:0",
+        "C": "Critical:0 High:4",
+        "D": "Critical:0 High:1",
+        "E": "Critical:0 High:3",
+        "F": "\u8a72\u5f53\u306a\u3057",
+        "G": "\u8a72\u5f53\u306a\u3057",
+        "H": "Critical:0 High:2"
+    },
+    "dedup_log": [
+        {
+            "merged": [
+                "analyze-H3",
+                "po-H-001",
+                "arch-H-002"
+            ],
+            "key": "FR-007 (X-4 US-1 AC7)"
+        },
+        {
+            "merged": [
+                "analyze-H1",
+                "po-H-002",
+                "arch-H-003"
+            ],
+            "key": "SC-003"
+        },
+        {
+            "merged": [
+                "analyze-H2",
+                "arch-H-001"
+            ],
+            "key": "FR-006"
+        },
+        {
+            "merged": [
+                "po-H-003",
+                "arch-M-003"
+            ],
+            "key": "FR-004"
+        },
+        {
+            "merged": [
+                "sec-L-001",
+                "po-L-001",
+                "analyze-M2",
+                "analyze-L3",
+                "pb-M-001"
+            ],
+            "key": "data-model \u00a75"
+        },
+        {
+            "merged": [
+                "sec-M-003",
+                "pb-M-002"
+            ],
+            "key": "FE-042"
+        },
+        {
+            "merged": [
+                "arch-L-001",
+                "sec-M-001"
+            ],
+            "key": "research R-04"
+        }
+    ],
+    "verdict": "PASS"
+}

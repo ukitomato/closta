@@ -1,89 +1,26 @@
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { RuntimeListScreen } from '@/features/runtime-list/RuntimeListScreen'
-import { WorkspaceFoldersScreen } from '@/features/workspace-folders/WorkspaceFoldersScreen'
-import { ProviderScreen } from '@/features/provider/ProviderScreen'
-import { ResolutionScreen } from '@/features/folder-runtime-resolution/ResolutionScreen'
-import { SessionListScreen } from '@/features/session-list/SessionListScreen'
-import { ChatScreen } from '@/features/chat/ChatScreen'
-import { SessionScreen } from '@/features/session/SessionScreen'
+import { AppShell } from '@/features/shell/AppShell'
 import { SessionAttentionAnnouncer } from '@/features/session/SessionAttentionAnnouncer'
-import { SessionNavBadge } from '@/features/session/SessionNavBadge'
 import { useRunningSessionStoreWiring } from '@/features/session/running-session-context'
-import { SCREEN_LABELS, SCREENS, useUiStore, type ScreenId } from '@/stores/ui'
-import { cn } from '@/lib/utils'
 
 /**
- * FE-001 アプリシェル。
+ * アプリのルート (O-7 / AD-046)。シェル (`AppShell`: サイドバー・中央・右のペインと、設定・起動のダイアログ) を描くだけにする。
  *
- * 画面の切り替えとテーマだけを持ち、業務ロジック・IPC・永続化を持たない。
- * 各 feature の中身は FE-010 / FE-020 / FE-030 が実装する。
- * ナビのバッジと支援技術への通知は、各 feature が export するコンポーネントを差し込むだけにする
- * (O-1: `SessionNavBadge` / `SessionAttentionAnnouncer`)。
+ * App の寿命で 1 回だけ持つもの:
+ * - 稼働中セッションの port と状態通知の購読 (`useRunningSessionStoreWiring`。面の切り替えで外さない。X-5 / FR-008・O-7 FR-004)
+ * - 支援技術への通知 (`SessionAttentionAnnouncer`。どの面を表示していても・設定のダイアログを開いていても働く。O-1 FR-004 / O-7 FR-006)
  *
  * UI 文言は日本語を第一言語とする (FR-047)。
  */
-
-const SCREEN_COMPONENTS: Record<ScreenId, () => React.JSX.Element> = {
-  runtimes: RuntimeListScreen,
-  folders: WorkspaceFoldersScreen,
-  providers: ProviderScreen,
-  sessions: SessionListScreen,
-  resolution: ResolutionScreen,
-  launch: SessionScreen,
-  chat: ChatScreen
-}
-
 function App(): React.JSX.Element {
-  // 稼働中セッションの port と状態通知は画面の切り替えで外さない (X-5 / FR-008)。App の寿命で 1 回だけ張る。
   useRunningSessionStoreWiring()
-  const screen = useUiStore((s) => s.screen)
-  const dark = useUiStore((s) => s.dark)
-  const setScreen = useUiStore((s) => s.setScreen)
-  const toggleTheme = useUiStore((s) => s.toggleTheme)
-
-  const Screen = SCREEN_COMPONENTS[screen]
-  // chat (R-3 過去ログ) と launch (X-1 ライブ) は Thread が全高を占める。
-  const isChat = screen === 'chat' || screen === 'launch'
-
   return (
     <TooltipProvider>
       <div className="bg-background text-foreground flex h-dvh flex-col">
-        <header className="border-border flex shrink-0 items-center gap-4 border-b px-4 py-2.5">
-          <span className="text-sm font-semibold tracking-tight">Closta</span>
-          <nav className="flex gap-1">
-            {SCREENS.map((id) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setScreen(id)}
-                aria-current={screen === id ? 'page' : undefined}
-                className={cn(
-                  'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
-                  screen === id
-                    ? 'bg-accent text-accent-foreground'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
-              >
-                {SCREEN_LABELS[id]}
-                {id === 'launch' && <SessionNavBadge />}
-              </button>
-            ))}
-          </nav>
-          <button
-            type="button"
-            onClick={toggleTheme}
-            className="text-muted-foreground hover:text-foreground ml-auto rounded-md px-2 py-1 text-xs"
-          >
-            {dark ? 'ライト' : 'ダーク'}
-          </button>
-        </header>
         <SessionAttentionAnnouncer />
-
-        <main className={cn('min-h-0 flex-1', isChat ? 'overflow-hidden' : 'overflow-auto')}>
-          <div className={cn(isChat ? 'h-full' : 'mx-auto max-w-3xl p-6')}>
-            <Screen />
-          </div>
-        </main>
+        <div className="min-h-0 flex-1">
+          <AppShell />
+        </div>
       </div>
     </TooltipProvider>
   )

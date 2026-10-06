@@ -32,7 +32,7 @@ import {
  *
  * | 外したもの | 理由 |
  * |---|---|
- * | `ThreadListNew` (New Thread ボタン) | R-2 はセッションを**作らない** (FR-003)。起動は X-1。**X-5 の稼働中セッション一覧のために復元した** (下の `ThreadListNew`。R-2 は使わない) |
+ * | `ThreadListNew` (New Thread ボタン) | R-2 はセッションを**作らない** (FR-003)。起動は X-1。X-5 で稼働中セッション一覧のために復元したが、**O-7 で再び外した** (起動の入口はシェルのサイドバーの「新規起動」に一本化した。AD-046) |
  * | rename (インライン入力 + `aui.threadListItem.rename`) | config ディレクトリへの**書き込み**になる (FR-013 / Principle X) |
  * | archive / delete (More メニュー) | 同上。**正本はアプリ外にある** (AD-007) |
  * | 検索 + 日付グルーピング (Today / Yesterday / Earlier) | R-2 のまとまりは**登録フォルダ**である (FR-022)。検索は O-3 |
@@ -92,31 +92,24 @@ interface RowOptions {
   readonly density: ThreadListRowDensity;
   /** 行にポインタ / フォーカスを当てたときの補足 (compact で行から外した情報)。 */
   readonly renderTooltip: ((rowKey: string) => ReactNode) | null;
+  /**
+   * 選択中の行を強調するか (O-7 / data-model §1)。シェルのサイドバーは 2 つの一覧を並べ、中央に出している側の
+   * 選択だけを強調する。もう片方の選択は保つが強調しない (`aria-current` も付けない)。
+   */
+  readonly highlightSelected: boolean;
+  /**
+   * 行を押したときに呼ぶ (O-7)。assistant-ui は表示中のスレッドへの切り替えを adapter に伝えないので、
+   * 選択中の行を押し直したこと (シェルの中央をその側に戻す操作) は adapter では受けられない。
+   */
+  readonly onSelectRow: ((rowKey: string) => void) | null;
 }
 
 const RowOptionsContext = createContext<RowOptions>({
   density: "comfortable",
   renderTooltip: null,
+  highlightSelected: true,
+  onSelectRow: null,
 });
-
-/**
- * 新しいスレッド = 新規起動 (X-5)。生成物の `ThreadListNew` を、R-2 が外した理由 (セッションを作らない) の外で
- * 復元したもの。adapter の `onSwitchToNewThread` を渡したときだけ使う (R-2 は使わない)。
- */
-export const ThreadListNew: FC<
-  ComponentPropsWithoutRef<typeof ThreadListPrimitive.New>
-> = ({ className, ...props }) => {
-  return (
-    <ThreadListPrimitive.New
-      data-slot="aui_thread-list-new"
-      className={cn(
-        "hover:bg-muted data-active:bg-accent focus-visible:ring-ring flex h-8 items-center rounded-md px-2.5 text-sm font-medium outline-none focus-visible:ring-2",
-        className,
-      )}
-      {...props}
-    />
-  );
-};
 
 export const ThreadListRoot: FC<
   ComponentPropsWithoutRef<typeof ThreadListPrimitive.Root>
@@ -153,6 +146,10 @@ export const ThreadListItemsByKey: FC<
     density?: ThreadListRowDensity;
     /** 行の補足のツールチップ (O-1)。null を返した行には付けない。 */
     renderTooltip?: (rowKey: string) => ReactNode;
+    /** 選択中の行を強調するか (O-7)。省略時は強調する。 */
+    highlightSelected?: boolean;
+    /** 行を押したときに呼ぶ (O-7。選択中の行の押し直しも含む)。 */
+    onSelectRow?: (rowKey: string) => void;
   }
 > = ({
   className,
@@ -161,13 +158,20 @@ export const ThreadListItemsByKey: FC<
   renderActions,
   density = "comfortable",
   renderTooltip,
+  highlightSelected = true,
+  onSelectRow,
   ...props
 }) => {
   const threadIds = useAuiState((s) => s.threads.threadIds);
   // 行は context を読むので、値が変わらない限り同じ参照を渡す (一覧の再描画で全行を描き直さない)。
   const rowOptions = useMemo<RowOptions>(
-    () => ({ density, renderTooltip: renderTooltip ?? null }),
-    [density, renderTooltip],
+    () => ({
+      density,
+      renderTooltip: renderTooltip ?? null,
+      highlightSelected,
+      onSelectRow: onSelectRow ?? null,
+    }),
+    [density, renderTooltip, highlightSelected, onSelectRow],
   );
 
   return (
@@ -256,14 +260,14 @@ export const ThreadListLoading: FC = () => {
 export const ThreadListItem: FC = () => {
   const isRunning = useAuiState((s) => s.threadListItem.isRunning);
   const rowKey = useAuiState((s) => s.threadListItem.id);
+  const options = useContext(RowOptionsContext);
   const isActive = useAuiState(
     (s) => s.threads.mainThreadId === s.threadListItem.id,
-  );
+  ) && options.highlightSelected;
   const renderMeta = useContext(RowMetaContext);
   const meta = renderMeta === null ? null : renderMeta(rowKey);
   const renderActions = useContext(RowActionsContext);
   const actions = renderActions === null ? null : renderActions(rowKey);
-  const options = useContext(RowOptionsContext);
   const compact = options.density === "compact";
   const tooltip = options.renderTooltip?.(rowKey) ?? null;
 
@@ -276,6 +280,11 @@ export const ThreadListItem: FC = () => {
        * フォーカスが当たるのはこの Trigger であり、祖先の `aria-current` は読まれない。
        */
       aria-current={isActive ? "true" : undefined}
+      onClick={
+        options.onSelectRow === null
+          ? undefined
+          : () => options.onSelectRow?.(rowKey)
+      }
       className={cn(
         "focus-visible:ring-ring flex h-full min-w-0 flex-1 justify-center rounded-md px-2.5 text-start text-sm outline-none focus-visible:ring-2",
         // compact は表題と付帯情報を 1 行に並べる (付帯情報は縮めず、表題を切り詰める)。
@@ -335,6 +344,12 @@ export const ThreadListItem: FC = () => {
       /* **リストの項目であることを伝える** (a11y H-004)。実体は素の div である。 */
       role="listitem"
       /*
+       * **選択の状態は Trigger だけに持たせる** (O-7 pr-gate R1 a11y M-001)。primitive の Root は選択中の行に無条件で
+       * `aria-current="true"` を付けるので、強調しない側の一覧でも「現在」と読まれ、強調する側では Root と Trigger で
+       * 二重に読まれていた。props は primitive の付与の後に展開されるので、ここで打ち消せる。
+       */
+      aria-current={undefined}
+      /*
        * **選択とフォーカスを同じ色で表さない** (a11y H-008)。
        * 以前は `data-active` (選択) と `has-focus-visible` (フォーカス) の
        * どちらも `bg-muted` で、白に対し 1.04:1 の差しかなかった。
@@ -362,6 +377,9 @@ export const ThreadListItem: FC = () => {
        */
       className={cn(
         "group hover:bg-muted data-active:bg-accent data-active:before:bg-foreground relative flex min-h-8 rounded-md transition-colors data-active:font-medium data-active:before:absolute data-active:before:inset-y-1 data-active:before:start-0 data-active:before:w-0.5 data-active:before:rounded-full",
+        // 中央に出していない側の一覧は選択を保つが強調しない (O-7 / data-model §1)。
+        !options.highlightSelected &&
+          "data-active:bg-transparent data-active:font-normal data-active:before:hidden",
         actions === null || compact ? "items-center" : "flex-col items-stretch",
       )}
     >

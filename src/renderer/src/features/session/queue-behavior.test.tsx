@@ -18,7 +18,7 @@ import {
  *
  * - 実行中 (isRunning) の送信は runtime の `append` が **steer lane** (`adapter.steerItems`) に回す
  *   (`message.steer ?? isRunning`)。`ComposerPrimitive.Queue` の表示ソース `composer.queue` (queue lane `items`) には
- *   出ない → **実行中 pending の可視化は steer lane を別途表示する必要がある** (SessionScreen の PendingQueueNotice。研究 R-02 修正案(a))。
+ *   出ない → **実行中 pending の可視化は steer lane を別途表示する必要がある** (LivePane の PendingQueueNotice。研究 R-02 修正案(a))。
  * - 現ターン完了 (isRunning→false で notifyIdle) で dispatch (driver.run) される (次ターン送信。FR-005)。
  * - `driver.cancel` を渡さないため実行中送信は割り込まない (interrupt→steer しない。FR-005)。
  */
@@ -135,7 +135,7 @@ describe('native message queue の挙動 (FR-004 / FR-005 / T011・T012)', () =>
 
   it('中断 (notifyCancelled) 後は notifyIdle でも dispatch せず still_queued として残る (FR-006 / po-N-001 / po-H-201)', async () => {
     // 中断は notifyCancelled で queue を pause する。続く busy 立下りの notifyIdle が来ても、積んだ入力は
-    // dispatch されず steer lane に残る (= still_queued。次の send まで drain 再開しない)。SessionScreen の handleInterrupt が
+    // dispatch されず steer lane に残る (= still_queued。次の send まで drain 再開しない)。ストアの interrupt が
     // notifyCancelled → interrupt を単一 locus で呼ぶことの土台となる native 挙動を固定する。
     const dispatched: string[] = []
     const mq = createMessageQueue({ run: (m) => dispatched.push(textOf(m)) })

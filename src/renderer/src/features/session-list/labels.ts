@@ -1,4 +1,4 @@
-import type { SessionIndexDTO } from '@domain/session/dto'
+import type { SessionGroupDTO, SessionIndexDTO } from '@domain/session/dto'
 import type { CwdOriginKind, PendingReason, UnknownReason } from '@domain/session/keys'
 import type { FailureReason, TargetStatus } from '@domain/session/target'
 import type { Boundary } from '@domain/workspace/dto'
@@ -179,6 +179,17 @@ export const CWD_ORIGIN_LABELS: Record<CwdOriginKind, string> = {
   'unknown-location': '所在不明',
   'undetected-distro': '未検出のディストロ',
   absent: '作業ディレクトリなし'
+}
+
+/**
+ * グループの種別名 (FR-047)。登録フォルダの表示名が引けない窓 (登録解除と取得の交差) では種別名を出す — 空欄にしない。
+ * 一覧の見出し・中央のヘッダ・「概要」が同じ文字列を使う (O-7 data-model §5)。
+ * `pending` は所在 (`locationLabelOf`) を出すので種別名を持たない。
+ */
+export const GROUP_KIND_LABELS: Record<Exclude<SessionGroupDTO['kind'], 'pending'>, string> = {
+  folder: '登録フォルダ',
+  unregistered: '未登録フォルダ',
+  unknown: '作業フォルダ不明'
 }
 
 /** 越境の有無 (R-1 の 3 値)。**2 値に潰さない。** */

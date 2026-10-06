@@ -18,7 +18,7 @@ import { SYSTEM_EVENT_LABELS, TOOL_RESULT_LABELS, TRANSCRIPT_DENSITY_LABELS } fr
 
 /**
  * O-2 FE-012 / FE-022 — 過去ログの transcript のシステムイベントの行・Subagent の `Agent`・情報密度
- * (SC-003 / SC-005)。実行中の経路は `features/session/SessionScreen.o2.test.tsx`。
+ * (SC-003 / SC-005)。実行中の経路は `features/session/LivePane.o2.test.tsx`。
  *
  * `useTranscript` は mock し、描画経路 (assistant-ui の Thread / 変換) は本物を通す。
  */

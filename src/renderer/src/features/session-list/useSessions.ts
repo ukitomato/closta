@@ -70,13 +70,36 @@ export function useSessions(): SessionsView {
 
   useEffect(() => {
     /*
-     * **初回の取得は画面を開いたときに行う** (FR-031)。
-     * 起動時に取らないのは、ランタイム検出より先に実行状態の確認が走ると
-     * 停止中の所在が「停止中」ではなく「未検出」として並ぶためである。
+     * **初回の取得はランタイムの一覧 (`listRuntimes`) が解決した後に行う** (FR-031 / O-7 FR-016)。
+     * ランタイム検出より先に実行状態の確認が走ると、停止中・実行中の所在が「未検出」として並び、
+     * 取り直すまで残る。O-7 で過去のセッションの区画はアプリの起動の直後からサイドバーにマウントされるので、
+     * 「画面を開いたとき」ではなくランタイムの一覧の解決を待つ。失敗しても待ちを外して取得はする
+     * (ランタイムの一覧の失敗は区画の取得を止める理由にならない)。
+     *
+     * **待っている間も「取得中」にする** (pr-gate R1 ux H-002 / po M-002)。待ちの間に `loading` が false だと、区画は
+     * 「未取得」のまま止まって見え、押せる「全件を取り直す」が検出より先に列挙して FR-016 の順序を迂回する。
      */
-    void load()
-    return capability().onSessionsChanged(setIndex)
-  }, [load, setIndex])
+    let active = true
+    setLoading(true)
+    void capability()
+      .listRuntimes()
+      .catch(() => undefined)
+      .then(() => {
+        if (active) void load()
+      })
+    // 初回の取得の前に main が配る「未取得の索引」(取得時刻 0。判定バッチの通知で再グループしたもの) は受けない。
+    // 受けると取得中の表示が外れ、取得時刻 1970/01/01 が出る (pr-gate R1 platform-boundary L-004)。
+    // 「取得時刻 0 = 未取得」は DTO の契約に無い main の初期値 (`session-service.ts` の `let fetchedAt = 0`) に依る。
+    // main の側で取得前の publish を止めたら、この除外を外す (roadmap の system-scope (4)。pr-gate R2 platform-boundary L-101)。
+    const unsubscribe = capability().onSessionsChanged((next) => {
+      if (next.fetchedAt === 0) return
+      setIndex(next)
+    })
+    return () => {
+      active = false
+      unsubscribe()
+    }
+  }, [load, setIndex, setLoading])
 
   const refresh = useCallback(async () => {
     setLoading(true)

@@ -9,7 +9,7 @@ import {
   type ThreadMessageLike
 } from '@assistant-ui/react'
 
-import { DraftBridge } from './SessionScreen'
+import { DraftBridge } from './LivePane'
 
 /**
  * X-2 / FR-007 / SC-005 / T021 — DraftBridge が composer の下書きを feature state と同期する。

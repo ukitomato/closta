@@ -43,6 +43,12 @@ reviewers:
       - "src/renderer/src/features/session-list/**/*.tsx"
       - "src/renderer/src/features/chat/**/*.tsx"
       - "src/renderer/src/features/session/**/*.tsx"
+      # シェル (O-7。サイドバー・中央・右のペイン・設定と起動のダイアログ) は本番の画面の枠。文言の表とタブの表だけを
+      # 変える PR でも起動する (O-7 code-gate convention L-010)。
+      - "src/renderer/src/features/shell/**/*.tsx"
+      - "src/renderer/src/features/shell/labels.ts"
+      - "src/renderer/src/features/shell/panel-tabs.ts"
+      - "src/renderer/src/App.tsx"
       # elements/ の手書きの表示 (R-4 の Tier A・O-2 の SystemEventRow と印など)。後続の表示 feature (O-4〜O-6) は
       # ここだけで完結しうるので明示で入れる (O-2 pr-gate R2 architecture M-101)。新しい手書きの element を足したらここにも足す。
       - "src/renderer/src/components/assistant-ui/elements/terminal-block.aui.tsx"
@@ -87,6 +93,12 @@ reviewers:
       - "src/renderer/src/features/session-list/**/*.tsx"
       - "src/renderer/src/features/chat/**/*.tsx"
       - "src/renderer/src/features/session/**/*.tsx"
+      # シェル (O-7。サイドバー・中央・右のペイン・設定と起動のダイアログ) は本番の画面の枠。文言の表とタブの表だけを
+      # 変える PR でも起動する (O-7 code-gate convention L-010)。
+      - "src/renderer/src/features/shell/**/*.tsx"
+      - "src/renderer/src/features/shell/labels.ts"
+      - "src/renderer/src/features/shell/panel-tabs.ts"
+      - "src/renderer/src/App.tsx"
       # elements/ の手書きの表示 (R-4 の Tier A・O-2 の SystemEventRow と印など)。後続の表示 feature (O-4〜O-6) は
       # ここだけで完結しうるので明示で入れる (O-2 pr-gate R2 architecture M-101)。新しい手書きの element を足したらここにも足す。
       - "src/renderer/src/components/assistant-ui/elements/terminal-block.aui.tsx"
@@ -142,6 +154,9 @@ reviewers:
       - "src/agents/**"
       - "src/domain/runtime/**"
       - "src/main/app/**"
+      # 起動時の検出の結線・AD-038 の production-inert の門・Principle II の例外注記 (`platform-ok:`) を持つ
+      # (O-7 pr-gate R1 platform-boundary M-002。code-gate で一度も見られなかった)。
+      - "src/main/index.ts"
       - "scripts/constitution/**"
       - "**/eslint.config.*"
       - "**/.dependency-cruiser.*"
@@ -169,6 +184,18 @@ reviewers:
       # 実行中のシステムイベントの行の合成と SessionEvent の message のデコード (pr-gate R1 architecture M-004)
       - "src/renderer/src/features/session/running-session-store.ts"
       - "src/renderer/src/features/session/session-event-decoder.ts"
+      # 稼働中の会話の表示の部品 (失敗と終了の告知・拒否の一覧。D 節の行) (O-7 pr-gate R1 ui-coverage M-003)
+      - "src/renderer/src/features/session/LivePane.tsx"
+      # 承認カード (D 節 permission-request・E 節 can_use_tool。Tier A)。LivePane の外の部品 (O-7 pr-gate R2 ui-coverage M-101)。
+      # D 節の状態・失敗の文言の正本 (session/labels.ts・session-view.ts の rowStatus) は監視ビューと共有で、文言だけの
+      # 変更でも起動してしまうので入れない (ファイルの側に「変えるときは対応表の行を見る」と書いた)
+      - "src/renderer/src/features/session/ApprovalCard.tsx"
+      # シェルの中央のヘッダ (D 節の session-state を描く)・右のペインのタブの表・「概要」の見出し (起動時の値)。後続の表示
+      # feature (O-4〜O-6・OPT-panel) はここだけで完結しうるので明示で入れる (elements/** と同じ理由。O-7 pr-gate R1
+      # ui-coverage M-003 / architecture M-004・R2 ui-coverage L-102)
+      - "src/renderer/src/features/shell/panel-tabs.ts"
+      - "src/renderer/src/features/shell/labels.ts"
+      - "src/renderer/src/features/shell/**/*.tsx"
       - "scripts/ui-coverage/**"
     exclude_patterns:
       - "**/*.test.ts"

@@ -1,5 +1,5 @@
 import { Profiler } from 'react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
@@ -21,7 +21,6 @@ import { createRunningSessionStore, type RunningSessionStore } from './running-s
 import { RunningSessionList } from './RunningSessionList'
 import { RunningSessionStoreContext } from './running-session-context'
 import { SessionAttentionAnnouncer } from './SessionAttentionAnnouncer'
-import { SessionNavBadge } from './SessionNavBadge'
 import { deriveSessionView } from './session-view'
 
 // 行ごとの再描画を数えるため、行が描画のたびに呼ぶ導出を素通しの spy にする (SC-006 / pr-gate R1 po M-005)。
@@ -31,7 +30,7 @@ vi.mock('./session-view', async (importOriginal) => {
 })
 
 /**
- * O-1 FE-003 / FE-012 / FE-022 — 監視ビュー (一覧の見出し・強調・経過時間・直近の活動・密度・ナビ・読み上げ)。
+ * O-1 FE-003 / FE-012 / FE-022 — 監視ビュー (一覧の見出し・強調・経過時間・直近の活動・密度・件数の印・読み上げ)。
  * SC-001 / SC-002 / SC-003 (component 側) / SC-006。
  */
 
@@ -79,11 +78,15 @@ interface Setup {
 }
 
 let detach: (() => void) | null = null
+// 「表示中」は見ているセッション (O-7 の watchedIdOf)。既定は中央に稼働中の会話を出している状態にする (X-5 の 2 ペインと同じ)。
+beforeEach(() => {
+  useUiStore.setState({ focus: 'running', settings: { open: false, section: 'runtimes' } })
+})
 afterEach(() => {
   detach?.()
   detach = null
   vi.useRealTimers()
-  useUiStore.setState({ screen: 'runtimes' })
+  useUiStore.setState({ focus: 'none', settings: { open: false, section: 'runtimes' } })
 })
 
 async function setup(ids: readonly string[], extra?: React.ReactNode): Promise<Setup> {
@@ -125,7 +128,7 @@ async function setup(ids: readonly string[], extra?: React.ReactNode): Promise<S
       <Profiler id="list" onRender={() => (renders.count += 1)}>
         <Harness />
       </Profiler>
-      <SessionNavBadge />
+      {/* 件数の印 (`SessionNavBadge`) は O-7 で区画の見出しに入った。 */}
       <SessionAttentionAnnouncer />
       {extra}
     </RunningSessionStoreContext.Provider>
@@ -157,7 +160,7 @@ const rowOf = async (name: string): Promise<HTMLElement> => {
 const awaitingButton = (): HTMLElement => screen.getByTestId('awaiting-count')
 
 describe('承認待ちと失敗の強調・件数 (FE-003 / SC-001)', () => {
-  it('表示中以外が承認待ちになると行が強調され、見出しとナビの件数が 1 になり、並びは変わらない', async () => {
+  it('表示中以外が承認待ちになると行が強調され、見出しと件数の印が 1 になり、並びは変わらない', async () => {
     const s = await setup([A, B])
     s.emit(A, { kind: 'state', state: 'awaiting_permission' })
     const rowA = await rowOf('案件A')
@@ -221,7 +224,7 @@ describe('承認待ちと失敗の強調・件数 (FE-003 / SC-001)', () => {
     expect(screen.queryByTestId('session-nav-awaiting')).toBeNull()
   })
 
-  it('失敗は承認待ちと別の印で理由が出て、見出しとナビの失敗の件数が一致する', async () => {
+  it('失敗は承認待ちと別の印で理由が出て、見出しと件数の印の失敗の件数が一致する', async () => {
     const s = await setup([A, B])
     s.emit(A, { kind: 'failure', reasonKey: 'provider-error' })
     s.push([st(A, { state: 'error', reasonKey: 'provider-error' })])
@@ -241,7 +244,7 @@ describe('読み上げ (FR-004 / SC-001)', () => {
   const announcer = (): HTMLElement => screen.getByTestId('session-announcer')
 
   it('見ていないセッションの承認待ちで 1 回だけ文が入り、応答中 ⇄ 応答待ちでは変わらない。会話由来の文字列を含まない', async () => {
-    useUiStore.setState({ screen: 'launch' })
+    useUiStore.setState({ focus: 'running' })
     const s = await setup([A, B])
     s.emit(A, { kind: 'state', state: 'awaiting_permission' })
     s.emit(A, {
@@ -256,27 +259,27 @@ describe('読み上げ (FR-004 / SC-001)', () => {
     expect(announcer().innerHTML).toBe(before)
   })
 
-  it('見ているセッション (セッション画面で選択中) の遷移は読まない。セッション画面以外では選ばれていたものも読む', async () => {
-    useUiStore.setState({ screen: 'launch' })
+  it('見ているセッション (中央に出している稼働中の会話) の遷移は読まない。中央が稼働中でなければ選ばれていたものも読む', async () => {
+    useUiStore.setState({ focus: 'running' })
     const s = await setup([A, B])
     expect(s.store.getState().selectedId).toBe(B)
     s.emit(B, { kind: 'state', state: 'awaiting_permission' })
     expect(announcer()).toHaveTextContent('')
     s.emit(B, { kind: 'state', state: 'running' })
-    act(() => useUiStore.setState({ screen: 'sessions' }))
+    act(() => useUiStore.setState({ focus: 'past' }))
     s.emit(B, { kind: 'state', state: 'awaiting_permission' })
     expect(announcer()).toHaveTextContent('案件B: 承認待ちになりました。')
   })
 
   it('同じ状態通知のバッチの 2 本は 1 つの文', async () => {
-    useUiStore.setState({ screen: 'sessions' })
+    useUiStore.setState({ focus: 'past' })
     const s = await setup([A, B])
     s.push([st(A, { state: 'error' }), st(B, { state: 'error' })])
     expect(announcer()).toHaveTextContent('案件A、案件B: 失敗しました。')
   })
 
   it('同じ文が続いても要素が入れ替わる (読み上げ直される)', async () => {
-    useUiStore.setState({ screen: 'sessions' })
+    useUiStore.setState({ focus: 'past' })
     const s = await setup([A])
     s.emit(A, { kind: 'state', state: 'awaiting_permission' })
     const first = announcer().firstElementChild
@@ -288,7 +291,7 @@ describe('読み上げ (FR-004 / SC-001)', () => {
   })
 
   it('表示名が引けなくても文が壊れない', async () => {
-    useUiStore.setState({ screen: 'sessions' })
+    useUiStore.setState({ focus: 'past' })
     const s = await setup([A])
     act(() =>
       s.store.setState((x) => ({
@@ -353,13 +356,12 @@ describe('行の情報 (FE-012 / SC-002)', () => {
     expect(within(rowA).getByTestId('session-row-elapsed')).toHaveTextContent(/^[01]秒$/)
   })
 
-  it('枠の使用数は終了済みを数えない。上限で空け方の案内が出て、新規起動の導線は押せる', async () => {
+  it('枠の使用数は終了済みを数えない。上限で空け方の案内が出る (新規起動の導線はシェルのサイドバー。AppShell.test)', async () => {
     const ids = Array.from({ length: 10 }, (_, i) => `${i}0000000-0000-4000-8000-000000000000`)
     const s = await setup(ids)
     expect(screen.getByTestId('slot-usage')).toHaveTextContent('枠 10/10')
     expect(screen.getByTestId('limit-notice')).toHaveTextContent('上限に達しています')
     expect(screen.getByTestId('limit-notice')).toHaveTextContent('「終了」')
-    expect(screen.getByRole('button', { name: '新規起動' })).toBeEnabled()
     s.push([st(ids[0]!, { state: 'done', claudeAlive: false })])
     expect(screen.getByTestId('slot-usage')).toHaveTextContent('枠 9/10')
     expect(screen.queryByTestId('limit-notice')).toBeNull()
@@ -527,11 +529,11 @@ describe('情報密度 (FE-022 / SC-003 の component 側)', () => {
     expect(tooltip).not.toHaveTextContent('中断に対応していない')
   })
 
-  it('密度は新規起動と表示の切り替えで保たれる', async () => {
+  it('密度は選択を外すこと (新規起動) と表示の切り替えで保たれる', async () => {
     const s = await setup([A, B])
     await userEvent.click(screen.getByRole('button', { name: 'コンパクト' }))
     act(() => s.store.select(A))
-    await userEvent.click(screen.getByRole('button', { name: '新規起動' }))
+    act(() => s.store.select(null))
     expect(s.store.getState().density).toBe('compact')
     expect(screen.getByRole('button', { name: 'コンパクト' })).toHaveAttribute(
       'aria-pressed',
