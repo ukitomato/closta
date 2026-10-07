@@ -1,43 +1,34 @@
 # Code Gate: Thread 検索と探す操作 (O-3)
 
-**Run**: 2026-10-07T00:00:00+09:00
+**Run**: 2026-10-07T12:14:23+09:00
 **Spec**: specs/012-ui-thread-search/
-**Entry status**: reviewing (pr-gate round 1 の修正の後の再実行。status は動かさない)
-**Final iteration**: 2 (詳細は `code-gate.md.iter2`。前回の本ファイルは `code-gate.md.20261007T100842` に退避)
-**Diff scope**: 96 files, +10348/-437 (base 7bdb271 = merge-base main..HEAD ddc052e)
+**Entry status**: reviewing (pr-gate round 1 の修正と iter 2 の MUST_FIX の修正の後の再実行。status は動かさない)
+**Final iteration**: 3 (詳細は `code-gate.md.iter3`。前回の本ファイルは `code-gate.md.20261007T121405` に退避)
+**Diff scope**: 97 files (base 7bdb271 = merge-base main..HEAD 397d5f1。diff 全体は 127 files, +17798/-437 で、scope 外の 30 件は spec_dir の gate 出力・設計文書と基準画像 png)
+**Tracks**: lint-agent, test-agent, convention-reviewer, database-reviewer, platform-boundary-reviewer
 
 ## Verdict
 
-**Status**: FIX_REQUIRED — MUST_FIX (halt: 人間の判断が要る)
+**Status**: PASS
 
 | Severity | Count | Where |
 |---|---|---|
-| MUST_FIX | 1 | src/renderer/src/features/chat/virtualization.test.tsx:104 |
+| MUST_FIX | 0 | - |
 | SHOULD_FIX | 0 | - |
-| CONSIDER | 26 | Medium 6 / Low 20 (`<reviewer>.code-gate.md` を参照) |
+| CONSIDER | 27 | Medium 6 / Low 21 (`<reviewer>.code-gate.md` を参照) |
 
-- lint track: 6 detectors すべて exit 0、violations 0
-- test track (scope: full): exit 1。2265 passed / 1 failed / 0 errors (132 files すべて起動)
-- reviewer: convention / database / platform-boundary いずれも Critical 0 / High 0
+- lint track: 6 detectors (lint / typecheck / depcruise / check:constitution / typecheck:e2e / typecheck:perf) すべて exit 0、violations 0。`test:rules` は code-gate では実行しない
+- test track (scope: full): exit 0。132/132 files、2266 passed / 0 failed / 0 errors / 0 unhandled errors
+  - この iteration の 1 回目の起動は親プロセスの終了で結果を返さずに止まった (vitest のプロセスは残っていない)。他の agent を止めた状態で単独で取り直した
+  - iter 2 の MF-001 の対象 (`virtualization.test.tsx` の SC-003) は 5814ms で pass。旧既定の 5000ms は超えるが、testTimeout 20000ms の内側
+- reviewer: convention (Medium 3 / Low 8)、database (Medium 2 / Low 8)、platform-boundary (Medium 1 / Low 5)。いずれも Critical 0 / High 0。iter 2 から解消 0 / 新規 0 (convention の L-008 は箇所が `vitest.config.ts:21` に移った)
+- cascade_enforce: 降格 0 件 (3 本とも)。viewpoint_coverage_check: A-H の欠落 0 件 (3 本とも)
 - 起動しなかった reviewer: a11y-reviewer, ux-reviewer (gates=['pr-gate'] に code-gate が無い)
-
-## MUST_FIX (max_iter 未到達で halt)
-
-### MF-001 — 仮想化のテストが全件実行の中で 5000ms の timeout を超える [origin: test]
-
-- 全件実行で 6063ms、`Test timed out in 5000ms`。assertion の失敗ではない
-- implementer (fix, iter 2) は **skipped** (`code-gate.md.iter2.implementer.json`):
-  - base (7bdb271) と HEAD (ddc052e) の A/B 計測 (単独・交互に 7 回ずつ) で、本 feature による描画コストの後退は否定された (平均 約1543ms 対 約1586ms、差はノイズの範囲)
-  - 原因は、テスト自体の重さ (3000 件の描画で単独 約1.5-2s) が全件実行の負荷で約 3 倍に伸びること
-- 直し方の選択に人間の判断が要るため、auto-fix loop を止めた。コードは何も変えていないので、もう 1 周しても同じ結果になる (偶然通ることはありうるが、それは信号を消すだけで原因の修正にならない)
-- 選択肢:
-  - (a) このテストにだけ timeout を明示する — 閾値を緩める案。検出しなくなるだけ
-  - (b) テストの件数 (200/3000) を減らす — spec 003 の SC-003 のテスト設計を変える
-  - (c) `vitest.config` の `testTimeout` か `maxWorkers` を見直す — LivePane.test.tsx:119 と SessionListScreen.test.tsx:735 (単独 3354ms) にも効く全体の判断。012 の範囲の外
 
 ## Iteration history
 
-| iter | must_fix | skipped | error |
-|---|---|---|---|
-| 1 | 0 | 0 | 0 |
-| 2 | 1 | 1 | 0 |
+| iter | must_fix | skipped | error | 内容 |
+|---|---|---|---|---|
+| 1 | 0 | 0 | 0 | pr-gate round 1 より前の実行。PASS |
+| 2 | 1 | 1 | 0 | MF-001: 全件実行の負荷の下で `virtualization.test.tsx` の SC-003 が既定 5000ms の timeout を超えた。implementer (fix) は A/B 計測で本 feature による描画コストの後退を否定し、直し方の選択に人間の判断が要るとして skipped |
+| 3 | 0 | 0 | 0 | iter 2 の MF-001 は人間の判断で選択肢 (c) を選び、397d5f1 で `vitest.config.ts` の node / renderer 両 project に testTimeout 20s (`TEST_TIMEOUT_MS`) を置いた (implementer の applied 1。737e118 の per-test の 20s は差し戻し)。inline の project は `extends: true` が無いとルートの `test` を継がないので、ルートではなく project ごとに置いている。全件実行で PASS |
