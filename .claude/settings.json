@@ -17,7 +17,20 @@
       "Bash(pnpm typecheck *)",
       "Bash(pnpm depcruise *)",
       "Bash(pnpm check:constitution *)",
-      "Bash(pnpm test *)"
+      "Bash(pnpm test *)",
+      "mcp__codegraph__*"
+    ]
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "codegraph.cmd prompt-hook"
+          }
+        ]
+      }
     ]
   }
 }
