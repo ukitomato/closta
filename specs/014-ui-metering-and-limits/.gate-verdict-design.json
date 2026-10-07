@@ -1,10 +1,14 @@
 {
     "gate": "design",
-    "run": "2026-10-07T18:40:52+09:00",
+    "run": "2026-10-08T01:29:11+09:00",
     "spec_dir": "specs/014-ui-metering-and-limits",
     "spec_id": "014-ui-metering-and-limits",
-    "round": 2,
-    "previous": "design-gate.md.20261004T063000",
+    "round": 3,
+    "previous": "design-gate.md.20261007T184052",
+    "entry_status": "implementing",
+    "warnings": [
+        "re-run on status=implementing"
+    ],
     "tracks": {
         "analyze": {
             "status": "ok",
@@ -39,15 +43,15 @@
     },
     "severity_counts": {
         "critical": 0,
-        "high": 6,
-        "medium": 14,
-        "low": 22
+        "high": 1,
+        "medium": 16,
+        "low": 32
     },
     "severity_counts_raw": {
         "critical": 0,
-        "high": 6,
-        "medium": 23,
-        "low": 28
+        "high": 1,
+        "medium": 28,
+        "low": 42
     },
     "prev_comparison": {
         "critical": {
@@ -56,9 +60,9 @@
             "new": 0
         },
         "high": {
-            "resolved": 7,
+            "resolved": 6,
             "unresolved": 0,
-            "new": 6
+            "new": 1
         }
     },
     "fr_coverage": [
@@ -175,6 +179,7 @@
             "covered": true,
             "by": [
                 "tasks.md BE-003",
+                "tasks.md BE-041",
                 "tasks.md BE-042",
                 "tasks.md FE-042"
             ]
@@ -191,7 +196,8 @@
             "covered": true,
             "by": [
                 "tasks.md BE-002",
-                "tasks.md BE-010"
+                "tasks.md BE-010",
+                "tasks.md SH-013"
             ]
         },
         {
@@ -229,51 +235,33 @@
         }
     ],
     "viewpoint_coverage": {
-        "A": "Critical:0 High:0",
-        "B": "Critical:0 High:0",
-        "C": "Critical:0 High:1",
-        "D": "Critical:0 High:2",
-        "E": "Critical:0 High:1",
-        "F": "Critical:0 High:0",
+        "A": "Critical:0 High:0 Medium:0 Low:2",
+        "B": "Critical:0 High:0 Medium:2 Low:2",
+        "C": "Critical:0 High:0 Medium:4 Low:3",
+        "D": "Critical:0 High:0 Medium:1 Low:3",
+        "E": "Critical:0 High:0 Medium:9 Low:9",
+        "F": "Critical:0 High:0 Medium:0 Low:1",
         "G": "\u8a72\u5f53\u306a\u3057",
-        "H": "Critical:0 High:0"
+        "H": "Critical:0 High:0 Medium:1 Low:4"
     },
     "dedup_log": [
         {
             "merged": [
-                "arch-H-101",
-                "analyze-I2",
-                "sec-L-004"
+                "analyze-U2",
+                "sec-M-001",
+                "arch-M-202",
+                "analyze-I5"
             ],
-            "key": "AD-047 Decision 2/4 (spec.md:188 / plan.md:255)",
+            "key": "data-model.md:110-113 / FR-013 / BE-041",
             "as": "HG-01"
         },
         {
             "merged": [
-                "po-H-001",
-                "sec-M-002",
-                "arch-M-104",
-                "po-M-009"
+                "po-M-001",
+                "analyze-U4",
+                "po-L-008"
             ],
-            "key": "quickstart.md:28 (V-4 #1)",
-            "as": "HG-02"
-        },
-        {
-            "merged": [
-                "analyze-D1",
-                "sec-L-002"
-            ],
-            "key": "data-model.md:82 (modelId)",
-            "as": "HG-03"
-        },
-        {
-            "merged": [
-                "analyze-U2",
-                "sec-M-001",
-                "arch-M-102",
-                "analyze-I5"
-            ],
-            "key": "data-model.md:107-110 / FR-013",
+            "key": "data-model.md:158-165,242 (Quota banner \u306e\u6587\u8a00)",
             "as": "MG-01"
         },
         {
@@ -281,32 +269,82 @@
                 "po-M-002",
                 "analyze-E1"
             ],
-            "key": "FR-006 (data-model \u00a74 Quota banner)",
+            "key": "data-model.md:156-167 / FE-020 (resetsAt \u7d4c\u904e)",
             "as": "MG-02"
+        },
+        {
+            "merged": [
+                "po-M-003",
+                "analyze-I3",
+                "analyze-I7"
+            ],
+            "key": "FR-010 / FR-012 / FR-008 (spec.md:134,152,156)",
+            "as": "MG-03"
+        },
+        {
+            "merged": [
+                "po-M-004",
+                "po-M-006",
+                "analyze-C2"
+            ],
+            "key": "data-model.md:11-24,219,223 (\u00a71 / \u00a75)",
+            "as": "MG-04"
+        },
+        {
+            "merged": [
+                "po-M-005",
+                "analyze-E4"
+            ],
+            "key": "data-model.md:69 / spec.md:164 (api_retry \u306e error / no_response)",
+            "as": "MG-05"
+        },
+        {
+            "merged": [
+                "po-M-007",
+                "analyze-E5"
+            ],
+            "key": "data-model.md:172-177 / FE-040 (\u8b66\u544a\u306e\u5e2f)",
+            "as": "MG-06"
+        },
+        {
+            "merged": [
+                "po-M-008",
+                "analyze-I8"
+            ],
+            "key": "spec.md:142-146 (US-4 \u306e\u512a\u5148\u5ea6)",
+            "as": "MG-07"
+        },
+        {
+            "merged": [
+                "arch-M-201",
+                "analyze-I4"
+            ],
+            "key": "plan.md:78 / SH-013 (U-1 \u306e\u7bc4\u56f2)",
+            "as": "MG-09"
+        },
+        {
+            "merged": [
+                "arch-M-203",
+                "analyze-T3"
+            ],
+            "key": "data-model.md:185,216 / glossary.md:184 (\u30bf\u30fc\u30f3)",
+            "as": "MG-10"
+        },
+        {
+            "merged": [
+                "pb-M-001",
+                "sec-L-004"
+            ],
+            "key": "quickstart.md:43 (\u5f62\u306e\u63a7\u3048\u65b9)",
+            "as": "MG-14"
         },
         {
             "merged": [
                 "analyze-U1",
                 "po-L-001"
             ],
-            "key": "spec.md:133 (US-3 AC2)",
-            "as": "MG-03"
-        },
-        {
-            "merged": [
-                "po-M-003",
-                "analyze-I3"
-            ],
-            "key": "FR-012 (spec.md:154,209)",
-            "as": "MG-04"
-        },
-        {
-            "merged": [
-                "arch-M-101",
-                "analyze-I4"
-            ],
-            "key": "FR-016 / SH-013 (ui charter In scope)",
-            "as": "MG-05"
+            "key": "spec.md:135 / data-model.md:201-202 (US-3 AC2)",
+            "as": "MG-15"
         },
         {
             "merged": [
@@ -314,8 +352,32 @@
                 "analyze-E3",
                 "analyze-T1"
             ],
-            "key": "FR-019 (data-model.md:264)",
+            "key": "FR-019 / data-model.md:276-279",
             "as": "LG-01"
+        },
+        {
+            "merged": [
+                "sec-L-003",
+                "analyze-U5"
+            ],
+            "key": "data-model.md:85 (modelId \u306e userinfo)",
+            "as": "LG-02"
+        },
+        {
+            "merged": [
+                "po-L-010",
+                "analyze-U6"
+            ],
+            "key": "data-model.md:195-200 (\u4e3b\u30e2\u30c7\u30eb\u306e\u7167\u5408)",
+            "as": "LG-03"
+        },
+        {
+            "merged": [
+                "analyze-T2",
+                "arch-L-205"
+            ],
+            "key": "tasks.md:15 (SH-001 \u306e glossary \u306e\u4e00\u89a7)",
+            "as": "LG-04"
         }
     ],
     "verdict": "PASS"

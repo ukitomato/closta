@@ -209,7 +209,7 @@ U-3 の字面は 2026-10-08 に、Context display の材料の書き誤り (「r
 - **FR-010**: 権限モードの変化は、transcript の行に出し、「概要」のタブ (O-7) に今のモードを出さなければならない (中央のヘッダには常設しない。O-7 data-model §5 の「重ねない」を保つ)。O-7 の「起動時の権限モード」の行は起動時の値のまま残し、今のモードが起動時と違うときだけ「現在の権限モード」の行を足す [ASSUMED — O-7 data-model §5 が「起動時の」を実行中に変わりうる軸にだけ付け、実行中の変化を O-4 に預けた形に合わせる]。今のモードが安全 3 値の外のときは、中央のヘッダの下に警告の帯を出す (U-6)。判定は domain の `isSafePermissionMode`、文言の正本は data-model §4 / §5。強制はしない (持ち主は I-3)
 - **FR-011**: 圧縮中・圧縮の成功・失敗を transcript の 1 行で出さなければならない (`compact_error` の文字列は出さない)
 - **FR-012**: 実行中の tool の表示に経過時間を、Reasoning の表示に思考のトークン数の推定を出さなければならない
-- **FR-013**: 背景の task の行 (O-2) に、`task_progress` の数 (トークン・tool の回数・経過時間) を、行の更新 (`opens: false`) として出さなければならない。task ごとの状態をセッションスレッドにも renderer にも持たない (AD-044 Decision 6)。要約・説明・最後の tool 名は出さない
+- **FR-013**: 背景の task の行 (O-2) に、`task_progress` の数 (トークン・tool の回数・経過時間) を、行の更新 (`opens: false`) として出さなければならない。task の状態 (種類・実行中か・一覧) をセッションスレッドにも renderer にも持たない (AD-044 Decision 6)。間引きの鍵 (1 秒以内の保留の値と時刻。保留が無ければ 1 秒を過ぎて外れる。data-model §2) は task の状態に含めない。要約・説明・最後の tool 名は出さない
 
 #### 対応表と記録 (完了の条件)
 
@@ -260,7 +260,7 @@ U-3 の字面は 2026-10-08 に、Context display の材料の書き誤り (「r
 - **SC-001**: **失敗の理由が区別される。** data-model §1 の表の各行の fixture が、対応する理由のキーになり、どの失敗も完了にならない (X-1 FR-020 / US-4 AC6)。再ログインの導線は data-model §1 のとおりに出る。計測経路: 分類の純関数の単体 + 失敗の表示の component テスト
 - **SC-002**: **計量が届き、会話由来の文字列を運ばない。** SDK のメッセージの fixture から `meter` と システムイベントの行までが data-model §2 / §3 のとおりになり、許可リストの外のフィールドの値が `SessionEvent` と DOM に 0 件 (fixture → port → decoder → ストア → DOM を 1 本通すテストで、2 つのセッションの値が混ざらないことも)。値の検証の外れ (`__proto__`・長い id・URL と scheme の無い userinfo の資格情報の形の modelId・`resetsAt: 1e300`) で例外が出ず落ち、起動の設定が受け付ける形の modelId (`[1m]` 付き・`_` を含む) は落ちない。状態通知のフィールドの差分 0。計測経路: agents の変換の単体 + X-5 の状態通知の全フィールドの走査
 - **SC-003**: **制限・使用量・進み具合が出る。** US-2〜US-4 の AC のとおりになる。計測経路: renderer の component テスト (Quota banner・使用量のタブ・目盛り・再試行と圧縮と権限モードの行・tool の経過時間・Reasoning・task の行)
-- **SC-004**: **負荷を上げない。** 1 つの tool・思考・task あたり 1 秒に 1 件以下、セッションあたり 1 秒に 20 件以下。tool の結果・assistant・終了の後に保留の送信が 0 件 (`ended` の後の `event` が 0 件)。計測経路: agents の単体 (偽の時計。並列の tool N 個の合計の流量を含む)。E2E (偽の supervisor) は計量を流さないので計測経路にしない
+- **SC-004**: **負荷を上げない。** 1 つの tool・思考・task あたり 1 秒に 1 件以下、セッションあたり 1 秒に 20 件以下。tool の結果・assistant・終了の後に保留の送信が 0 件 (`ended` の後の `event` が 0 件)。上限で値を黙って失わない: 休んだ鍵と取り消した鍵は同時に追う上限 (64) を空けるので、長いセッションの 65 個目以降の tool / task にも値が届き、20 件を超えた保留もどの鍵も 4 秒以内に送られる (data-model §2)。計測経路: agents の単体 (偽の時計。並列の tool N 個の合計の流量を含む)。E2E (偽の supervisor) は計量を流さないので計測経路にしない
 - **SC-005**: **対応表の O-4 の行が無くなる。** 項目 21 が通り、出力で割当先が O-4 の行が 0、M3 の完了の条件の残りから O-4 の Tier A 5 行が消える。計測経路: `node scripts/constitution/check.mjs`
 - **SC-007**: **預かった義務が閉じる。** タブの表で ←/→・Home / End が隣と端のタブへ移り、選ばれたタブだけが `tabIndex=0` で vitest-axe の違反 0 (FR-017)。タブのテストが `AppShell.test.tsx` の外にある。FR-018 の切り出しの前後で既存のテストを書き換えずに通る (`announcements` の単体を除く)。FR-019 の各行き先で、押した後のフォーカスが body でない (「承認待ちで『許可』を押した後、composer にフォーカスがある」を含む)。「プロバイダ」の表記が renderer の文言の表に 0 件。計測経路: タブの表と各部品の component テスト + `git diff` (quickstart)
 - **SC-006**: **境界の変更が ADR のとおり。** `SessionEvent` の種類の追加は `meter` の 1 つ、`LaunchFailureReason` の追加は data-model §1 のとおり、Agent SDK の呼び出しの許可リスト・query の options のキー・IPC のチャネル・preload の差分が 0。計測経路: 固定テスト + `git diff` (quickstart)

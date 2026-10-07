@@ -1,184 +1,194 @@
 # platform-boundary-reviewer Review: 計量と制限の表示 (O-4)
 
-**Run**: 2026-10-07T00:00:00+09:00
+**Run**: 2026-10-08T00:00:00+09:00
 **Reviewer**: platform-boundary-reviewer
 **Spec**: specs/014-ui-metering-and-limits/spec.md
-**Round**: 2 (前回: design-gate R1 2026-10-04 / `design-gate.md.20261004T063000`)
+**Round**: 3 (前回: design-gate R2 2026-10-07 / `design-gate.md.20261007T184052`。本 reviewer の R2 の生出力は H-001 / H-002 / L-001 / L-002 / L-003。gate では HG-05 / HG-06 と LG の pb 3 件)
 
 ## 初回読了 viewpoint
 
 - FR/SC (本 reviewer の担当範囲で影響を受けるもの):
-  - FR-001 / FR-002 — 失敗の理由のキーは状態通知の `reasonKey` として main を通る。`isLaunchFailureReason` が追随するので main の差分は 0 (`src/domain/session/status-update.ts:39`。main に `Record<LaunchFailureReason,…>` は無い)
-  - FR-003 — `meter` は `emit` で文字列にされて調停役スレッドを通り、調停役は中身を解釈しない (`src/agents/sdk-agent-session.ts:300-301`)
-  - FR-005 — `meters.permissionMode` を起動の設定やプリセットに書き戻さない (PB-4)
-  - FR-010 / US-4 AC1a — U-6 の警告の帯 (Principle III の逸脱の信号)
-  - SC-002 / SC-004 / SC-006
+  - FR-001 / FR-002 — 失敗の理由のキーは状態通知の `reasonKey` として main を通る。フィールドは変わらず、main の差分は 0 (data-model.md:27)
+  - FR-003 — `meter` は許可リストのフィールドだけを読む。`init` から読むのは `permissionMode` だけで、`cwd`・`plugins[].path` は読まない (data-model.md:67)。PB-1
+  - FR-005 — `meters.permissionMode` を `config` / `lastConfig` / プリセットに書き戻さない (data-model.md:125)。PB-4
+  - FR-010 / US-4 AC1 / AC1a — `status` と各ターンの `init` で権限モードを比べる。警告の帯の隔離の文言 (spec.md:152-153、data-model.md:141 / :172-176)。PB-3 / PB-4
+  - FR-015 — AD-047 の訂正節 #3。昇格値の綴りを renderer の文言の表に置くこと (plan.md:258 / :263)。Principle III / 項目 16
+  - SC-002 (`init` の `permissionMode` 以外のフィールドが 0 件)、SC-004 (`ended` の後の `event` が 0 件)、SC-006 (`QUERY_OPTION_KEYS` / `PERMISSION_MODE_ESCALATION_VALUES` の差分が 0)
+  - quickstart V-4 #1 / #2 / #4 / #5 と「形の控え方」(アプリの外で claude を走らせる手順)。PB-1 / PB-4 / PB-6
 - 該当する charter / Confirmation:
-  - isolation charter: `:30-33` 権限ゲート / `:41` 隔離状態の可視化ポリシー / `:119` 隔離状態は一目で分かること
-  - runtime charter: `:113-114` capabilities を正直に表明し、確認していないことを `true` に丸めない
-  - AD-003 Decision Outcome (複数インスタンス。`runtimeId` で引く)
-  - AD-041 (a)、Consequences `:157`、Confirmation `:169`
-  - AD-047 Decision 5
-  - Principle III / VII
-  - `scripts/constitution/check.mjs` 項目 16 / 18、`.dependency-cruiser.js` の agents 系の規則
+  - isolation charter `:30-33` 権限ゲート、`:41` 可視化ポリシー、`:101-104` 判定を 1 つの関数に集める、`:119` 隔離状態は一目で分かること
+  - runtime charter `:108-110` パスの名前空間、`:113-114` capabilities を正直に表明し、確かめていないことを丸めない
+  - AD-003 Decision Outcome `:42-44` (インスタンスは複数ありうる。シングルトンではない)
+  - AD-004 / Principle I (Provider の `configDir` は `HostPath | WslUncPath`、起動時の値は `RuntimePath`。`src/domain/provider/types.ts:98,149-153`)
+  - AD-041 (a) `:39-43`、(e) `:76-84`、(f) `:116-118`、Confirmation `:162,169`、記録 2 `:177`
+  - AD-047 Decision 5 `:37`。SH-013 で訂正節を足す予定
+  - Constitution Principle III `:450` / VII `:603-606`
+  - `scripts/constitution/check.mjs` 項目 16 `:875-880,893-915`、`allowlists.mjs:363,435`、`.dependency-cruiser.js:193,200,207,298`
 - A. 認可 / 認証 / secret 管理: 該当なし: security-reviewer の範囲
-- B. 入力検証 / injection / CSP / 暗号: 該当なし: security-reviewer の範囲 (`modelId` の文字種の規則も同 reviewer)
-- C. 業務不変条件 / Charter drift: Critical:0 High:1 Medium:0 Low:0
-- D. Constitution / ADR drift: Critical:0 High:1 Medium:0 Low:0
+- B. 入力検証 / injection / CSP / 暗号: 該当なし: security-reviewer の範囲 (`modelId` の規則・`task_id` の形も同 reviewer)
+- C. 業務不変条件 / Charter drift: Critical:0 High:0 Medium:0 Low:0
+- D. Constitution / ADR drift: Critical:0 High:0 Medium:0 Low:1
 - E. User Story / SC / AC / UX: 該当なし: po-reviewer の範囲
 - F. 命名 / module / lint hookup: Critical:0 High:0 Medium:0 Low:1
 - G. optional reviewer 範囲: 該当なし: 担当外
-- H. テスト / coverage / observability / regression: Critical:0 High:0 Medium:0 Low:2
+- H. テスト / coverage / observability / regression: Critical:0 High:0 Medium:1 Low:2
 
 ## スコープ要約
 
-O-7 / O-3 の後の main に載せ直した O-4 の design (spec / plan / data-model / research / tasks / quickstart) を見た。
+R2 の後に直した design (spec / plan / data-model / research / quickstart / tasks) を見直した。
 
-確かめた結果、次の点は守られている。
-- 計量は port の上の `SessionEvent` の `meter` で運ばれ、main と調停役スレッドを経由しない。調停役は解釈しない
-- 新設の agents のモジュール (`live-signals` / `meter-throttle`) は `run()` の closure に作る。ディレクトリの正規表現の規則 (`.dependency-cruiser.js:193,200,207` / `allowlists.mjs:363,481,483`) に自動で入る
-- 昇格値の綴りは domain の `meter.ts` に置き、項目 16 に例外を足さない
-- `meters.permissionMode` は起動の設定・プリセットに書き戻さない
-- 隔離の文言は表示用の `autoModeStatus` を使い、`autoModeAllowed` を表示に使わない
+R2 の High 2 件は解消されていた。
+- **`init` も読む (R2 H-001 / HG-05)**: data-model §2 の許可リストに `system`/`init` の行が足された。読むのは `permissionMode` だけである。§3 は「`status` か `init` のどちらで先に見ても 1 回」になった。RK-09、BE-040 のテスト、ui-coverage の `init` の行の備考 (SH-012) も追随している
+- **隔離の文言 (R2 H-002 / HG-06)**: `unavailable` だけを「隔離がありません」にし、`allowed` / `undetermined` は「このセッションの隔離をアプリは確かめていません」にした。この文言は暫定であると data-model §4・glossary (SH-001)・roadmap の I-2 / I-3 (SH-013) に書かれる
 
-R1 の指摘 7 件のうち 6 件は手当てされた。残る問題は Principle III の逸脱の信号 (U-6) の 2 点。
-- **入力**: 権限モードを `status` の省略可能なフィールドだけから読み、SDK がターンごとに必ず送る `init` の `permissionMode` を読まない
-- **文言**: 隔離の文言がランタイムの能力をセッションの隔離状態として扱っている
+あわせて次のことを確かめた。
+- 起動のダイアログの選択肢は domain の `SAFE_PERMISSION_MODES` から作られる (`LaunchDialog.tsx:616-618`)。そのため、renderer に昇格値を key にした表示名の表を置いても、昇格値が選べるようにはならない
+- port はセッションが登録されるまで溜めておかれる (`running-session-store.ts:425-429`)。そのため、最初の `init` の `meter` が「`sessions[id]` が無いので捨てる」に当たることはない
+
+残る問題は次の 3 種で、どれも High に届かない。
+- **アプリの外で形を控える手順 (新規)**: R2 HG-02 の手当てとして足された手順が、アプリの起動と条件を揃えていない。名前空間・権限モード・`--exec` の 3 点が違う
+- **`init` に `permissionMode` が無いとき (新規)**: 扱いが書かれていない
+- **R2 から残る Low 3 件**
 
 ## Findings
 
-### [High] U-6 の警告の帯 (AC1a / P1) が権限モードを `status` の省略可能な `permissionMode` だけから読み、SDK がターンごとに必ず送る `system/init` の `permissionMode` を読まない (H-001) (scope: feature)
+### [Medium] quickstart「形の控え方」は、アプリの外の claude をアプリの起動と同じ条件で走らせない。名前空間・権限モード・`--exec` が違う (M-001) (scope: feature)
 
 - **観察**:
-  - `C:\dev\closta\specs\014-ui-metering-and-limits\data-model.md:65`: 許可リストで権限モードを読む行は `system` / `status` の `permissionMode` だけ。`init` の行が無い
-  - `C:\dev\closta\node_modules\@anthropic-ai\claude-agent-sdk\sdk.d.ts:5467-5477`: `SDKStatusMessage.permissionMode?` は省略可能
-  - 同 `:5479-5503`: `SDKSystemMessage` (`init`) は「各ターンの最初に、そのターンの他のどのメッセージよりも先に」送られ、`permissionMode: PermissionMode` は**必須**
-  - `C:\dev\closta\specs\014-ui-metering-and-limits\plan.md:280` RK-09: `init` を比べるのは「`status` で届かなかったら O-5 の行に送る」の条件付き。確かめ方の V-4 #5 (`quickstart.md:32`) は `plan` → ExitPlanMode の安全な遷移 1 つを利用者が手で見るだけ
-  - `C:\dev\closta\docs\ui-coverage.md:49`: `init` の行は Tier B で、根拠は「起動の設定は起動のダイアログで利用者が選んでいる」。この前提は U-6 が確かめようとしているものそのもの
-- **同種事象探索**: `init` (014 の 6 文書) は 1 件 (`plan.md:280`)。`permissionMode` (sdk.d.ts) は 4 件 (`:91, :1844, :5471, :5503`)。agents で `init` を扱う分岐は 0 件 (`sdk-agent-session.ts:543-558` は `permission_denied` と Hook / task だけ)
-- **リスク/影響**: 強制はしない (AD-047 Decision 5) ので、昇格を知らせるのはこの帯だけである。次の 2 つは `status` が出たときしか検知できない。
-  - 起動の直後から安全 3 値の外で動いているセッション
-  - `status` を伴わずにモードが変わる経路 (PermissionRequest hook の `setMode` など。利用者の settings は `settingSources` の既定で全部読まれる。`sdk.d.ts:2092`)
+  - `C:\dev\closta\specs\014-ui-metering-and-limits\quickstart.md:43` は「同じ `CLAUDE_CONFIG_DIR`」を与えるよう書く。しかし Provider の `configDir` は `HostPath | WslUncPath` で持たれる (`C:\dev\closta\src\domain\provider\types.ts:98`)。利用者が見るのは host 側の値 (`configDirValue`、`:113-114`) である。アプリが実際に渡すのは、ランタイムの `RuntimePath` に変換した `configDirRuntimePath` (`:149-153`) で、画面には出ない。表示された値 (`\\wsl.localhost\<distro>\home\…\.claude` や `C:\…`) を distro のシェルに写すと、Claude Code はそれを相対パスとして扱う。作業フォルダの下に、認証の無い新しい設定ディレクトリができる
+  - `quickstart.md:44` の手順 2 は `--permission-mode` を渡さない。一方で `:52` の `init` の行は「起動の設定 (`--permission-mode`) と同じ値か」を比べる。渡さなければ CLI は利用者の settings の `permissions.defaultMode` で動く。そのため `claude -p "<短い依頼>"` が、アプリの安全 3 値のゲート (AD-041 (a)) の外で、作業フォルダに対して tool を動かしうる
+  - アプリは `wsl.exe --cd <cwd> -d <distro> --exec <claudePath>` で起動し、env は生成した `WSLENV` で渡す (`C:\dev\closta\docs\decisions\0041-x4-launch-config-on-x1-launch-gate.md:76-84,116-118`。記録 2 `:177`「`--exec` は login PATH を通さない」)。手順 1 は「同じランタイムの中で」としか書かない。distro の端末は login shell を通るので、`~/.bashrc` の `ANTHROPIC_API_KEY` / `CLAUDE_CODE_USE_BEDROCK` や PATH 上の別の `claude` が効きうる
+- **同種事象探索**: `CLAUDE_CONFIG_DIR|--permission-mode|claude -p|--exec|login` (014 の 6 文書) は quickstart の 3 件 (`:43,44,52`)。どれも名前空間・`--exec`・`--permission-mode` の付与に触れていない。`configDir` (provider/types.ts) は 3 件 (`:98,114,153`)
+- **リスク/影響**: 次の正本は、この手順で控えた形をもとに直すことになっている (tasks SH-014 `tasks.md:150-155`)。
+  - data-model §1 の分類表 (RK-06)
+  - §2 の値の検証 (RK-07)
+  - §4 の主モデルの照合 (RK-15)
+  - 権限モードの比較 (RK-09)
 
-  SDK がターンごとに必ず送る報告は手元にあるのに使っていない。そのため P1 として扱う AC1a の網羅性が、実機の手作業 1 つの結果だけに懸かっている
+  条件がアプリの起動と違えば、違う形を正として data-model を「直す」ことになる。例:
+  - #1: `.bashrc` の鍵が期限切れを隠す
+  - #2: 別の claude が別の `modelUsage` のキーを出す
+
+  また、アプリの権限ゲートの外で tool を動かせる CLI を走らせるよう、設計文書が案内している。R2 の HG-02 は「生の値を取る手段が無い」という High で、それを閉じたのがこの手順なので、手順の正確さがそのまま検証の正確さになる
+- **推奨アクション** (quickstart.md の「形の控え方」だけを直す):
+  - 手順 1: `CLAUDE_CONFIG_DIR` は**ランタイムの中から見たパス** (`/home/<user>/.claude`、Windows 側なら `/mnt/c/...`) を渡すと書く。Provider の画面の値 (UNC / Windows のパス) をそのまま写さないこと。必要なら `wslpath -u` で変換する
+  - 手順 2: アプリと同じ経路で走らせる。例: `wsl.exe --cd <cwd> -d <distro> --exec env CLAUDE_CONFIG_DIR=<RuntimePath> <claudePath> -p "<依頼>" --permission-mode <起動の設定の値 (default / plan / dontAsk)> --model <id> --output-format stream-json --verbose`。`<claudePath>` はアプリが probe で解決するのと同じ絶対パス (AD-041 (f))
+  - 依頼は tool を要さないものにする (または `--permission-mode plan`)。アプリの外の実行でファイルを変えないため
+  - この実行は設定ディレクトリにセッションを 1 つ残し、過去のセッションの一覧 (R-2) に出る。利用者の操作なので Principle VI の違反ではないが、そのことを 1 行書く
+- **根拠**: AD-004 / Principle I (名前空間)、AD-041 (a) (e) (f) と記録 2、Principle III、runtime charter `:108-110`
+- **scope 根拠**: quickstart.md の字面で直せる
+
+### [Low] `init` に `permissionMode` が無いときの扱いが書かれていない。`unknown` に倒すと、観測していない値を「アプリが選んでいない権限モードで動いています」と表明する (L-004) (scope: feature)
+
+- **観察**:
+  - `C:\dev\closta\specs\014-ui-metering-and-limits\data-model.md:67`: `init` の行は「`permissionMode` が基準と変わったら … (`status` と同じ比較)」とだけ書く。`:87` は、列挙から外れたら `mode` は `unknown` とする。`:58` は「agents は `message.permissionMode` を `toPermissionModeKey` に渡すだけ」とする
+  - `C:\dev\closta\specs\014-ui-metering-and-limits\tasks.md:104` (BE-040): 「`permissionMode` の無い `status` で何も送らない」のテストはあるが、`init` に無い場合のテストは無い
+  - アプリが動かすのは利用者が入れた claude である。probe で解決したもので (AD-041 (f) `:116-117`、`C:\dev\closta\src\agents\sdk-agent-session.ts:493` の `pathToClaudeCodeExecutable`)、SDK 0.3.270 の型が前提にする版とは限らない。型が必須とするフィールド (`sdk.d.ts:5503`) が、版の違いで欠けうる
+- **同種事象探索**: `permissionMode` の無い (014 の 6 文書) は 1 件 (`tasks.md:104`。`status` だけ)
+- **リスク/影響**: `toPermissionModeKey(undefined)` → `unknown` と実装すると、毎ターンの最初に `permission-mode` の `meter` と行が出る。さらに `unsafeModeBanner`「アプリが選んでいない権限モード (「不明なモード」) で動いています」が全セッションに出る。
+  - **誤った表明になる**: 観測できないことと、アプリが選んでいないモードで動いていることは違う (runtime charter `:113-114` の「確認していないことを丸めない」と同じ趣旨)
+  - **信号が効かなくなる**: Principle III の逸脱の唯一の信号 (AD-047 Decision 5) が常時出る警告になり、利用者が気にしなくなる
 - **推奨アクション**:
-  - data-model §2 の許可リストに `system` / `init` の行を足す。読むのは `permissionMode` だけ。`cwd`・`plugins[].path`・`tools`・`mcp_servers`・`model` などは読まない (RuntimePath を運ばない。PB-1)。`status` と同じく `toPermissionModeKey` → `modeBaseline` と比べ、違えば `permission-mode` の meter と行を出す
-  - plan の RK-09 を「`init` と `status` の両方で比べる」に直し、O-5 への条件付きの申し送りをやめる
-  - BE-040 のテストに次を足す: `init` が起動時と同じモードなら何も送らない、`init` が昇格値なら meter と行が 1 つずつ、`status` の直後の同じモードの `init` では重複しない
-  - `docs/ui-coverage.md:49` の備考に「`permissionMode` は O-4 が比較に使う (表示は権限モードの行)」と書く (SH-012)
-- **根拠**: Constitution Principle III / AD-041 Consequences (昇格経路 0 件) / AD-047 Decision 5 / isolation charter `:119`
-- **scope 根拠**: data-model §2・plan RK-09・tasks BE-040 は本 feature の文書で直せる
+  - data-model §2 の `init` の行に次を書く: 「`permissionMode` が文字列でない (無い) ときは比べない (`status` と同じ)。文字列で列挙の外なら `unknown`」
+  - BE-040 のテストに 2 つ足す: `init` に `permissionMode` が無いと何も送らない。知らない文字列なら `unknown` の `meter` と行が 1 つずつ出る
+- **根拠**: Constitution Principle III / AD-047 Decision 5 / runtime charter `:113-114`
+- **scope 根拠**: data-model §2 と tasks BE-040 の字面で直せる
 
-### [High] 警告の帯の隔離の文言が、ランタイムの能力 (`autoModeStatus`) をセッションの隔離状態として扱っている。主な開発ホストでは `allowed` になり、隔離の文言が出ない (H-002) (scope: feature)
+### [Low] 項目 16 の昇格値の検査は引用符の 2 形しか見ない (L-001。R2 から残る) (scope: system)
 
 - **観察**:
-  - `C:\dev\closta\specs\014-ui-metering-and-limits\data-model.md:169`: `autoModeStatus` が `unavailable` なら「隔離がありません」、`undetermined` なら「確かめられていません」を添え、`allowed` では何も添えない。spec `:70` / `:151` はこれを「隔離の無いランタイムでは文言を強める」と書く
-  - `C:\dev\closta\src\domain\runtime\capabilities.ts:72,85-90,165-169`: `allowed` は「ランタイムに bubblewrap がある」ことしか意味しない
-  - アプリがセッションで Claude Code の sandbox を有効にする経路は無い: `C:\dev\closta\src\agents\session-core.ts:46-55` の `QUERY_OPTION_KEYS` に `sandbox` が無く、`:142` の `settings` は helper の 2 キーに限られる。`src/agents` の `sandbox` は 0 件
-  - `C:\dev\closta\docs\domains\runtime\charter.md:198-200`: 計測環境 (主な開発ホスト) は `sandbox: 'bubblewrap'` なので、ふつうの構成では `allowed` になる
-  - 可視化の持ち主は I-2 (`docs\roadmap.md:372`「隔離可視化」)。O-4 からの申し送りは I-3 への「強制の要否」だけ (plan.md 申し送り #8)
-- **追加事実 (R1 M-001 から High に上げる根拠)**:
-  - (1) アプリは sandbox を有効にする経路を持たない (上記 `session-core.ts:46-55,142`)
-  - (2) 主な開発ホストのランタイムは `allowed` を表明する (runtime charter `:199`)
-  - (3) R1 の時点では対応づけが未確定だった。今回の data-model `:169` で、`allowed` には何も添えないと確定した
-
-  R1 は「誰が決めるか」の指摘だったが、今回は「表示の意味が事実と違う」という観察事実である
-- **同種事象探索**: `unsafeModeNoIsolation|unsafeModeIsolationUnknown|autoModeStatus|隔離の無いランタイム` (014) は 7 件 (`data-model.md:169,233`、`plan.md:64,91,213`、`spec.md:70,151`) と `tasks.md:105`。`sandbox` (src/agents) は 0 件
-- **リスク/影響**: 帯が出るのは「アプリが選んでいない権限モード (例: すべて許可) で動いている」異常のときである。いちばん重い場面で、主な構成では「隔離がありません」が出ない。利用者は隔離されていると推測しうる。これは次の 2 つの規則に反する。
-  - isolation charter `:119`「隔離されているかどうかを利用者が推測する必要があってはならない」
-  - runtime charter `:113-114`「確認していないことは `unknown` として表明し、`true` に丸めない」
-
-  セッションの隔離はアプリが確認していない (利用者の settings で sandbox が有効でも、アプリは観測しない)。その値を、ランタイムの能力の `true` で事実上「隔離あり」に丸めている
-- **推奨アクション (最小)**:
-  - data-model §4 `:169` を次のように直す: `unavailable` → `unsafeModeNoIsolation`。`allowed` / `undetermined` → 「このセッションの隔離をアプリは確かめていません」(`unsafeModeIsolationUnknown` の文言をセッションの主語に)
-  - §5 `:233` の文言と FE-040 のテスト (`tasks.md:106` の「隔離の 3 状態の文言」) を、`allowed` でも「確かめていません」が出る形に直す
-  - roadmap の I-2 の行 (`:372`) と I-3 の行に「O-4 の警告の帯の隔離の文言は暫定でランタイムの `autoModeStatus` から導く。セッションの隔離状態 (隔離バッジ) が定義されたら置き換える」を足す (SH-013)
-  - glossary の「権限モードの警告の帯」に、隔離の文言はセッションの隔離状態ではないと 1 行書く
-- **根拠**: isolation charter `:41` / `:119`、runtime charter `:113-114`、Principle III、AD-047 Decision 5 (原因を断定しない)
-- **scope 根拠**: data-model §4 / §5、tasks FE-040 / SH-013 で直せる。isolation charter 本体は変えずに、roadmap への申し送りで足りる
-
-### [Low] 項目 16 の昇格値の検査は引用符の 2 形しか見ない。O-4 は 6 値の権限モードを agents に通す最初の feature である (L-001) (scope: system)
-
-- **観察**:
-  - `C:\dev\closta\scripts\constitution\check.mjs:875-880`: 照合は `'value'` と `"value"` の 2 形だけ。テンプレートリテラル・素のオブジェクトキー (`{ bypassPermissions: … }`)・`case` に backtick で書く形は見ない
-  - `C:\dev\closta\tests\rule-fixtures\expected.mjs:821-838` の `UNDETECTED_NOTES` は計算キーと反射 API だけを挙げ、この 2 形を挙げていない
-  - plan `:64` / tasks BE-004 (`tasks.md:47`) は「`src/agents/` に昇格値の綴りを置かない」の担保を項目 16 に頼っている
-- **同種事象探索**: `includes(\`'${value}'\`)` は 1 件 (`check.mjs:876`)。昇格値の引用符付きリテラル (src の非テスト) は 0 件
-- **リスク/影響**: load-bearing gate は `SafePermissionMode` 型と `assertSafePermissionMode` であり (expected.mjs `:828-831`)、query の権限面は塞がれている。ただし O-4 の不変条件 (agents に綴りを置かない) は、この 2 形で書かれると黙って破れる
-- **推奨アクション**: BE-004 の項目 16 の注記に「テンプレートリテラル・素のキーでも書かない (検査は引用符の 2 形しか見ない)」を足す。`UNDETECTED_NOTES` に 1 項目足すか、照合に backtick を足すのは I-3 の項目 16 の作り直しでまとめてよい
+  - 照合は今も `'value'` と `"value"` の 2 形だけ (`C:\dev\closta\scripts\constitution\check.mjs:875-880`)。`UNDETECTED_NOTES` (`C:\dev\closta\tests\rule-fixtures\expected.mjs:821`) も変わっていない
+  - feature 側では手当てされた。BE-004 (`tasks.md:47`) は「`src/agents/` の非テストのファイルに昇格値の綴りを書かない」と形を問わずに禁じ、`permissionMode` を値位置のキー・shorthand・分割代入で書かない規則 (`check.mjs:892-915`) にも合わせてある。`launchPermissionMode` の名前は `(?<![.\w])` (`:893`) と shorthand の正規表現 (`:911`) に当たらないので、誤検出も起きない
+- **同種事象探索**: `` includes(`'${value}'`) `` (check.mjs) は 1 件 (`:876`)。`template|backtick|テンプレート` (expected.mjs の注記) は 1 件 (`:684`。別の fixture の話で、項目 16 の 2 形には触れない)
+- **リスク/影響**: load-bearing gate は `SafePermissionMode` 型と `assertSafePermissionMode` なので、query の権限面は塞がれている。テンプレートリテラルや素のキーで書かれた綴りを検査が見逃す穴は、仕組みとして残る
+- **推奨アクション**: feature では追加の作業は要らない。I-3 で項目 16 を作り直すときに、backtick の照合を足すか、`UNDETECTED_NOTES` に 1 項目足す
 - **根拠**: Principle III / AD-041 (a) / PB-7
-- **scope 根拠**: 規則の穴そのものは既存。本 feature で直せるのは tasks の注記だけ
+- **scope 根拠**: 規則の穴は既存で、本 feature の touched files の外にある
 
-### [Low] `dispose()` の後の呼び出しで間引きが再び動きうる。異常終了の経路のテストが無い (L-002) (scope: feature)
+### [Low] `dispose()` の後に `on*` が呼ばれたら何もしない、という規則が正本に無い。異常終了の経路のテストも無い (L-002。R2 から残る。範囲を絞った) (scope: feature)
 
 - **観察**:
-  - `C:\dev\closta\src\agents\sdk-agent-session.ts:415-418`: `fatalSink` は stream のループが動いている間に `finish()` を呼ぶ
-  - `:342-356`: `finish()` は子の exit を最大 2 回 × 3 秒待ってから `ended` を送る。待っている間もループはメッセージを処理しうる
-  - data-model `:110` / tasks BE-041 (`:111`) は、`dispose()` の時点の保留と timer を捨てることしか定めていない。その後の `on*` を受けないことは定めていない
-- **同種事象探索**: `finish()` の呼び出しは 4 件 (`sdk-agent-session.ts:417,462,482,572`)。ループの外から呼ぶのは 3 件
-- **リスク/影響**: 異常終了の経路で、`ended` の後に `tool-elapsed` などの `event` が出うる (SC-004 の「`ended` の後の `event` 0 件」に反する)。renderer は閉じた id の meter を捨てるので、実害は小さい
-- **推奨アクション**: `dispose()` で `disposed` の印を立て、以後の `on*` と timer を張る処理を何もしないようにする。BE-041 / BE-042 のテストに「`dispose()` の後に `onToolProgress` / `onSystem(thinking_tokens)` を呼んでも timer が張られず、何も送られない」を足す
-- **根拠**: AD-043 (セッションスレッドの出口は 1 つ) / SC-004 / R1 M-004 の残り
+  - 手当てされたもの:
+    - data-model `:113`: 「`finish()` の最初 → 全部の保留と timer を捨てる」
+    - plan `:244`: 「`dispose` の後に何も送らない」
+    - BE-041 (`tasks.md:111`): 「全部を取り消した後に何も送らず timer が残らない」
+    - BE-042 (`tasks.md:118`): 「`ended` の後の `event` が 0 件」
+  - 残るもの:
+    - 正本の data-model に「`dispose()` の後の `on*` は timer を張らない」が無い
+    - 異常終了の経路で `finish()` を呼ぶのは `fatalSink` (`C:\dev\closta\src\agents\sdk-agent-session.ts:415-418`)。このとき stream のループ (`:508`) は `waitChildExit` の待ち (`:351-353`) の間も動き続ける。meter-throttle の timer の callback が投げた未捕捉の例外そのものが `fatalSink` を起こしうる
+- **同種事象探索**: `finish()` の呼び出しは 4 件 (`sdk-agent-session.ts:417,462,482,572`)。ループが動いたまま呼ぶのは `:417` (fatalSink)
+- **リスク/影響**: `ended` の直前 1 秒以内に `onToolProgress` が来ると、`ended` の後に `tool-elapsed` が出うる (SC-004 に反する)。調停役スレッドは `ended` を受けて Worker を止めるので、窓は狭い
+- **推奨アクション**:
+  - data-model §2 `:113` に「`dispose()` の後の `on*` は何もしない (timer を張らない・送らない)」を足す
+  - BE-041 のテストに「`dispose()` の後の `onToolProgress` / `thinking` で timer が張られない」を足す
+  - BE-042 の `sdk-agent-session.test.ts` に、異常終了の経路で `finish()` の待ちの間に `tool_progress` を流し、`ended` の後の `event` が 0 件であることを足す
+- **根拠**: AD-043 (セッションスレッドの出口は 1 つ) / SC-004
 - **scope 根拠**: data-model §2 と tasks BE-041 / BE-042 で直せる
 
-### [Low] 昇格の観測は renderer のメモリにしか残らず、I-3 が強制の要否を決める材料が集まらない (L-003) (scope: feature)
+### [Low] 昇格の観測を記録しないことが、I-3 への申し送りに書かれていない (L-003。R2 から残る) (scope: feature)
 
-- **観察**: 帯・行・`meters.permissionMode` はどれも永続化せず、`close()` で消える (data-model §2 `:113-128`)。状態通知のフィールドの差分は 0 (SC-006)。plan 申し送り #8 は I-3 に「強制の要否」だけを送る
-- **同種事象探索**: `I-3` (plan.md) は申し送り #8 と Domain Context の 2 か所
-- **リスク/影響**: 「昇格経路 0 件」(AD-041) の逸脱がいつ・何回起きたかを後から確かめる観測点が無い。I-3 の判断が実機の手作業 (V-4 #5) だけに依る
-- **推奨アクション**: roadmap の I-3 の行に「O-4 は昇格の観測を記録しない (renderer のメモリだけ)。強制の要否を決めるときに観測点を足すかを決める」を足す (SH-013)。コードは変えない
-- **根拠**: AD-041 Consequences / AD-047 Decision 5
+- **観察**:
+  - SH-013 (`tasks.md:145`) が I-3 の行に書くのは「昇格を観測したときの強制の要否」と、隔離の文言が暫定であることだけ
+  - RK-14 (`plan.md:295`) が扱うのは、知らない形の失敗と、decoder が捨てた `meter` の観測点である。昇格の観測 (帯・行・`meters.permissionMode`) は renderer のメモリにしか残らず、`close()` で消える (data-model `:125,129`)
+- **同種事象探索**: `I-3` (tasks.md) は 2 件 (`:145` の 2 か所)。`RK-14` (plan.md) は 1 件 (`:295`)
+- **リスク/影響**: AD-041 の「昇格経路 0 件」からの逸脱が、いつ・何回起きたかを後から確かめられない。I-3 が強制の要否を決める材料が、quickstart V-4 #5 の手作業だけになる
+- **推奨アクション**: SH-013 の I-3 の行に「O-4 は昇格の観測を記録しない (renderer のメモリだけ)。強制の要否を決めるときに観測点を足すかを決める」を足す。コードは変えない
+- **根拠**: AD-041 Consequences `:157` / AD-047 Decision 5
 - **scope 根拠**: roadmap の字面の追加で足りる
 
-### 該当なしの固有観点
+### 固有観点の確認
 
-- **PB-1**: 該当なし。`meter` と失敗の理由のキーはパスを運ばない。H-001 で `init` を読むときは `cwd` / `plugins[].path` を読まないこと (推奨アクションに含めた)
-- **PB-2**: 該当なし。`live-signals` / `meter-throttle` は `run()` の closure に作る (data-model `:89`)。renderer の保持は sessionId をキーにする。隔離の文言はランタイムの一覧を `runtimeId` で引き (`RunningSessionsProvider.tsx:59` と同じ形)、引けなければ `undetermined` になる
-- **PB-3**: ランタイムの capabilities の表明は変えない。表明された能力の使い方は H-002
+- **PB-1**: `init` から読むのは `permissionMode` だけで、`cwd`・`plugins[].path` は読まない (data-model.md:67)。BE-040 は目印の値で 0 件を確かめる (tasks.md:104)。quickstart も `cwd`・パスを控えない (quickstart.md:45)。穴は、人の手を介して渡る `CLAUDE_CONFIG_DIR` の名前空間だけ → M-001
+- **PB-2**: 該当なし。理由:
+  - `live-signals` / `meter-throttle` は `run()` の closure に作る (data-model.md:92)
+  - renderer は sessionId をキーに持つ
+  - 隔離の文言は、ランタイムの一覧を `runtimeId` で引く (`RunningSessionsProvider.tsx:57-59` と同じ形。引けなければ `undetermined`)
+  - port はセッションが登録されるまで溜めるので、最初の `init` の `meter` は捨てられない (`running-session-store.ts:425-429`)
+- **PB-3**: ランタイムの capabilities の表明は変えない。`unavailable` は「判定が済み、sandbox が安全の種別に無い」場合だけである (`capabilities.ts:85-90,165-169`)。なので「このランタイムには隔離がありません」は正直な表明である。`meter` 側で観測していない値を表明しうる点は L-004
+- **PB-4**: 起動のダイアログの選択肢は `SAFE_PERMISSION_MODES` から作られ (`LaunchDialog.tsx:616-618`)、安全 3 値だけであることを既存のテストが固定している (`LaunchDialog.test.tsx:207`)。renderer の `PERMISSION_MODE_NAMES` に昇格値の key を置いても、選べる入口にはならない。書き戻しは無い (data-model.md:125、FE-040 のテスト)。アプリの外で CLI を走らせる案内は M-001
 - **PB-5**: 該当なし。パスの変換を扱わない
-- **PB-6**: 該当なし。子プロセス・ファイル・環境を変えない。計量を永続化しない
-- **PB-7**: 新設のモジュールはディレクトリの正規表現で規則に入る。`supervisor` で始まらず、`worker_threads` も使わない。`tests/meter/` の通しのテストが agents を import するのは、規則の対象外の `tests/` からなので問題ない。穴は L-001
+- **PB-6**: アプリのコードは、子プロセス・ファイル・環境を変えない。quickstart の手作業でセッションが 1 つ残る点は、M-001 の推奨に注記した
+- **PB-7**: 新しい agents のモジュールは、ディレクトリの正規表現の規則 (`.dependency-cruiser.js:193,200,207`) と項目 16 の走査範囲 (`allowlists.mjs:363`) に自動で入る。`supervisor` で始まらず、`worker_threads` も使わない (`:298`)。項目 16 の `permissionMode` の形の検査は、`launchPermissionMode` を誤検出しない。残る穴は L-001
 
 ## 同種事象探索 cascade summary
 
 | 指摘 ID | Grep query | 該当件数 | path:line |
 |---|---|---|---|
-| H-001 | `init` (014 の 6 文書) | 1 | plan.md:280 |
-| H-001 | `permissionMode` (sdk.d.ts) | 4 | sdk.d.ts:91, 1844, 5471, 5503 |
-| H-001 | agents の `init` の分岐 | 0 | sdk-agent-session.ts:543-558 (permission_denied と Hook / task だけ) |
-| H-002 | `unsafeModeNoIsolation\|unsafeModeIsolationUnknown\|autoModeStatus\|隔離の無いランタイム` (014) | 8 | data-model.md:169, 233 / plan.md:64, 91, 213 / spec.md:70, 151 / tasks.md:105 |
-| H-002 | `sandbox` (src/agents) | 0 | — (QUERY_OPTION_KEYS session-core.ts:46-55 に無い) |
+| M-001 | `CLAUDE_CONFIG_DIR\|--permission-mode\|claude -p\|--exec\|login` (014 の 6 文書) | 3 | quickstart.md:43, 44, 52 |
+| M-001 | `configDir` (src/domain/provider/types.ts) | 3 | types.ts:98, 114, 153 |
+| L-004 | `permissionMode` の無い (014 の 6 文書) | 1 | tasks.md:104 (`status` だけ) |
 | L-001 | `` includes(`'${value}'`) `` (check.mjs) | 1 | check.mjs:876 |
-| L-001 | 昇格値の引用符付きリテラル (src の非テスト) | 0 | — |
-| L-002 | `finish()` の呼び出し | 4 | sdk-agent-session.ts:417, 462, 482, 572 |
-| L-003 | `I-3` (plan.md) | 2 | plan.md:91, 157 (申し送り #8) |
+| L-001 | `template\|backtick\|テンプレート` (expected.mjs) | 1 | expected.mjs:684 (項目 16 とは無関係) |
+| L-002 | `finish()` の呼び出し (sdk-agent-session.ts) | 4 | sdk-agent-session.ts:417, 462, 482, 572 |
+| L-003 | `I-3` (tasks.md) / `RK-14` (plan.md) | 2 / 1 | tasks.md:145 / plan.md:295 |
 
 ## Verdict
 
 - Critical: 0
-- High: 2
-- Medium: 0
-- Low: 3
+- High: 0
+- Medium: 1
+- Low: 4
 - Round inheritance:
-  - R1 から解消 6 件:
-    - H-001 → U-6 / AD-047 Decision 5
-    - M-002 → data-model §2 の `Equal` と項目 16
-    - M-003 → FE-004 の `close()`
-    - M-004 → data-model §2 の取り消し。残りは L-002
-    - L-001 → closure の表
-    - L-002 → 書き戻さない
-  - 未解消 1 件: M-001 → H-002 (追加事実つきで High に上げた)
-  - 新規 4 件: H-001 / L-001 / L-002 / L-003
+  - R2 から解消 2 件:
+    - H-001 (HG-05) → data-model.md:67, 141、plan.md:290 (RK-09)、tasks.md:104 (BE-040)、tasks.md:140 (SH-012 の `init` の行の備考)
+    - H-002 (HG-06) → data-model.md:172-176, 245、spec.md:153、tasks.md:105-106 (FE-040)、tasks.md:145 (SH-013)、tasks.md:15 (SH-001)
+  - 未解消 3 件:
+    - L-001 (system。feature 側は BE-004 で手当て済み)
+    - L-002 (一部解消。正本の規則と異常終了の経路のテストに絞った)
+    - L-003
+  - 新規 2 件: M-001 / L-004
 
 関連ファイル:
+- C:\dev\closta\specs\014-ui-metering-and-limits\quickstart.md
 - C:\dev\closta\specs\014-ui-metering-and-limits\data-model.md
-- C:\dev\closta\specs\014-ui-metering-and-limits\plan.md
 - C:\dev\closta\specs\014-ui-metering-and-limits\tasks.md
-- C:\dev\closta\node_modules\@anthropic-ai\claude-agent-sdk\sdk.d.ts
-- C:\dev\closta\src\agents\session-core.ts
+- C:\dev\closta\specs\014-ui-metering-and-limits\plan.md
+- C:\dev\closta\src\domain\provider\types.ts
 - C:\dev\closta\src\agents\sdk-agent-session.ts
 - C:\dev\closta\src\domain\runtime\capabilities.ts
+- C:\dev\closta\src\renderer\src\features\session\LaunchDialog.tsx
+- C:\dev\closta\src\renderer\src\features\session\running-session-store.ts
 - C:\dev\closta\scripts\constitution\check.mjs
 - C:\dev\closta\tests\rule-fixtures\expected.mjs
-- C:\dev\closta\docs\roadmap.md
-- C:\dev\closta\docs\ui-coverage.md
+- C:\dev\closta\docs\decisions\0041-x4-launch-config-on-x1-launch-gate.md
+- C:\dev\closta\node_modules\@anthropic-ai\claude-agent-sdk\sdk.d.ts

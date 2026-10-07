@@ -82,6 +82,7 @@ type AssistantErrorKey = SDK の SDKAssistantMessageError の 13 値
 | `resetsAtSec` | epoch 秒で `1e9 <= x <= 1e11`。超えたら ms とみなして 1000 で割り、同じ範囲に入るか確かめる | null |
 | `contextWindow` | `Number.isSafeInteger(n) && 0 < n <= 1e8` | 0 (目盛りを出さない) |
 | `toolUseId` | `^[A-Za-z0-9_-]{1,128}$` | `tool-elapsed` を出さない |
+| `taskId` (`task_progress` の `task_id`。agents だけで使う。行の更新は `message` の経路なので decoder を通らない) | `toolUseId` と同じ述語 (`^[A-Za-z0-9_-]{1,128}$`) | task の行の更新を送らない (間引きの鍵も作らない) |
 | `modelId` | 文字種と長さの正本は domain の `isValidModelId` (`src/domain/provider/model-catalog.ts:28`。英数と `._:/@-[]`・先頭は英数・128 文字まで。起動の設定とモデルカタログと同じ述語なので、`[1m]` 付き・`_` を含む id・Bedrock の ARN も通る)。`meter.ts` はその上に 3 つだけを足す: `//` を含まない、`:` の後ろに `@` がある形 (`/^[^/]*:[^/]*@/`。scheme の無い userinfo `u:p@h/m`) でない、`mayCarrySecret` (`system-event.ts:47`) が false。Vertex の `model@date` (`:` が無い) と Bedrock の ARN (`@` が無い) は通る | その行を内訳から落とす |
 | `models` の件数 | 16 まで | 17 件目以降を落とす |
 | 列挙 (`type`・`status`・`limitType`・`mode`・`AssistantErrorKey`) | `Object.create(null)` の表と `Object.hasOwn` (`transcript-guard.ts:29-40` の方式) | `mode` は `unknown`、他は null / 送らない |
@@ -109,8 +110,12 @@ type AssistantErrorKey = SDK の SDKAssistantMessageError の 13 値
 
 - 鍵ごとに 1 秒に 1 回: `thinking` (1 つ)・`tool:<toolUseId>`・`task:<taskId>`。間隔の中の値は最後の 1 つだけを持ち、次の 1 秒の境で送る
 - セッションあたり、間引きの対象 (`thinking` / `tool-elapsed` / task の行の更新) の合計は直近 1 秒に 20 件まで。超えた分は保留し、次の境で最新の値を送る
-- 同時に追う鍵 (tool と task) は 64 まで。超えた新しい鍵の更新は捨てる
-- 取り消し: `user` の `tool_result` → その tool の鍵の保留を捨てる。主ループの assistant のメッセージと result → `thinking` の保留を捨てる。result → 全部の tool の鍵の保留を捨てる。`finish()` の最初 → 全部の保留と timer を捨てる (`ended` の後に `event` を送らない)
+- **保留から送る順**: 鍵ごとの間隔が明けた鍵のうち、保留になった時刻の古い順に、20 件の枠まで送る。保留の値を上書きしても順は変えない。枠で送れなかった鍵は、保留と順を保ったまま次の境に回す。枠のために待っている保留があるときは、新しく来た値もすぐには送らず列の末尾に並べる (列を追い越さない)。保留のある鍵は多くても 65 (`thinking` と下の上限の 64) なので、どの鍵の保留も 4 秒以内に送られる (20 件を超えても飢える鍵が無い)
+- **鍵の寿命 (tool と task)**: 鍵が持つのは保留の値・保留になった時刻・最後に送った時刻だけ。追うのは「保留がある」か「最後に送ってから 1 秒たっていない」鍵だけで、保留が無く、最後に送ってから 1 秒を過ぎた鍵は外す。外した鍵に後から更新が来たら新しい鍵として受ける (1 秒を過ぎているので、鍵ごとに 1 秒に 1 回を破らない)。外す判定は、新しい鍵を受ける前 (下の上限の判定の前) に行えば足りる (外すためだけの timer を置かない)
+- **同時に追う鍵の上限**: tool と task の鍵を合わせて 64 まで (上の寿命で外した後の数)。埋まっているときに来た新しい鍵の更新は捨てる (覚えない。枠が空いた後の更新は受ける)。古い鍵を追い出さないのは、動いている tool / task の値を途切れさせないため
+- **行の無い task**: 前景の subagent の task など、transcript に行の無い task の `task_progress` も、鍵と 20 件の枠を使う。agents は行の有無を知らない (task の状態を持たない) ため。行の無い task への更新は `mergeSystemEvent` が捨てる (§3)。`task_id` の形が外れた更新は、鍵を作らずに捨てる (上の「値の検証」)
+- 取り消し: `user` の `tool_result` → その tool の鍵を保留ごと外す。主ループの assistant のメッセージと result → `thinking` の保留を捨てる。result → 全部の tool の鍵を保留ごと外す (task の鍵は残す。背景の task はターンをまたいで続き、上の寿命で外れる)。`finish()` の最初 → 全部の鍵・保留・timer を捨てる (`ended` の後に `event` を送らない)
+- 鍵は task の状態 (種類・実行中か・一覧) ではない。持つのは 1 秒の間引きのための値と時刻だけで、保留が無ければ 1 秒を過ぎた時点で外れる (spec FR-013 / AD-044 Decision 6)
 - 間引かないもの: `turn` / `context` / `rate-limit` / `permission-mode` と §3 の再試行・圧縮・権限モードの行 (どれも低頻度)
 
 ### renderer の保持 (稼働中のストアの `meters`。永続化しない。session の操作 UI の変更。U-1)
@@ -124,8 +129,9 @@ type AssistantErrorKey = SDK の SDKAssistantMessageError の 13 値
 | `rateLimit` | `rate-limit` の最新 (表示中のセッションの最新の event で決める。FR-006) |
 | `permissionMode` | `permission-mode` の最新。**`config` / `lastConfig` / プリセットに書き戻さない** |
 | `thinkingTokens` | `thinking` の最新。そのセッションの主ループの assistant の `message` (role が assistant でシステムイベントでない) と `turn` で null に戻す |
-| `toolElapsed` | `ReadonlyMap<toolUseId, seconds>`。`turn` で空にする。64 を超えたら古いものから落とす |
+| `toolElapsed` | `ReadonlyMap<toolUseId, seconds>`。`turn` で空にする。64 を超えたら、更新の古いものから落とす (更新のたびにその id を末尾に移す) |
 
+- `toolElapsed` の上限は、agents の間引きの上限 (§2「間引きと後始末」。新しい鍵を捨てる) と向きが違う。数えるものが違うためである。agents が数えるのは今動いている鍵だけで、休んだ鍵と結果の届いた tool の鍵は外れる。renderer の Map には、結果の届いた tool の値も `turn` まで残る。更新の古いものほど結果が届いている見込みが高い。結果のある tool には経過時間を出さない (§4「進み具合」) ので、落としても見え方は変わらない
 - `sessions[id]` が無いときの `meter` は捨てる (閉じた id を含む)。`close()` の削除の列挙に `meters` を足す
 - `meter` は `patch()` を通さない (キューの同期と監視ビューの派生値の見直しを起こさない)
 - `meter` は観測点 `receivedMessages` (O-1) に数えない。§3 の行は `message` なので数える (O-8 の比較の基準の変化として roadmap に書く)
@@ -139,7 +145,7 @@ type AssistantErrorKey = SDK の SDKAssistantMessageError の 13 値
 | `api-retry` | `retry:<turnSeq>` | `api_retry` (同じターンの続きは同じ行に合成) | 次の主ループの assistant → `succeeded`。result → 成功なら `succeeded`、失敗なら `failed`。どちらも開いた行があるときだけ | `<attempt>/<max_retries>/<error_status>/<retry_delay_ms>` (各整数。`error_status` が null・整数でなければ `-`) | `retrying` → `succeeded` / `failed` |
 | `compaction` | `compact:<compactSeq>` | `status === 'compacting'` で、開いた行が無いとき。開いた行が無いまま `compact_result` が来たら、結果の状態で作る | `compact_result` → `succeeded` / `failed` | '' | `compacting` → `succeeded` / `failed` |
 | `permission-mode` | `mode:<modeSeq>` | `status` か `init` の `permissionMode` の鍵が `modeBaseline` と違う (どちらで先に観測しても 1 回。基準を更新するので、もう一方で同じモードが届いても作らない) | — | `PermissionModeKey` | `changed` |
-| `task` (既存) の更新 | `task:<task_id>` (既存。`task_id` は空でない文字列) | — (行の無い task への更新は `mergeSystemEvent` が捨てる) | `task_progress` (間引く) | `\n<total_tokens>/<tool_uses>/<duration_ms>` (先頭の改行 = 進み具合だけの更新) | null (前の値を保つ) |
+| `task` (既存) の更新 | `task:<task_id>` (既存の行は、空でない文字列の `task_id` で作られる。進み具合の更新を送るのは、`task_id` が §2「値の検証」の `taskId` の形のときだけ) | — (行の無い task への更新は `mergeSystemEvent` が捨てる) | `task_progress` (間引く) | `\n<total_tokens>/<tool_uses>/<duration_ms>` (先頭の改行 = 進み具合だけの更新) | null (前の値を保つ) |
 
 - `turnSeq` は result で +1 し、`openRetryRowId` を消す。`compactSeq` は行を作るたびに +1 し、結果で `openCompactRowId` を消す
 - `name` は常に ''。会話由来の文字列を入れない

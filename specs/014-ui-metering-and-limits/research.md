@@ -75,7 +75,7 @@
 - **Decision**: 進み具合だけの更新は `detail` の先頭に改行を置いた形 (`\n<total_tokens>/<tool_uses>/<duration_ms>`) にし、`mergeSystemEvent` がこの形を見たときだけ「前の行の種類 + 改行 + 新しい進み具合」に合成する (data-model §3)。`oneLine` は空白を畳むので、過去ログと開始の行の `detail` は改行を含まない。part の形 (`TRANSCRIPT_PART_FIELDS`) は変えない (AD-047 Decision 3)
 - **Alternatives**:
   - `name` に入れる — task の説明 (`description`) が消える
-  - セッションスレッドが task ごとに種類を覚える — AD-044 Decision 6 / FR-013 の「task ごとの状態を持たない」に反する
+  - セッションスレッドが task ごとに種類を覚える — AD-044 Decision 6 / FR-013 の「task の状態 (種類・実行中か・一覧) を持たない」に反する
   - part にフィールドを足す — `TRANSCRIPT_PART_FIELDS` を変える (AD-047 Decision 3 に反し、新しい ADR が要る)
   - 進み具合の行を別に作る — 行の無い task への進み具合を捨てる規則 (FR-013) を agents が判定できない (状態を持たないので)
 
@@ -149,3 +149,4 @@
 - **Decision**: 7 値 (`PermissionModeKey`) の表示名の表 `PERMISSION_MODE_NAMES` を `features/chat/labels.ts` に置き、`session/labels.ts` の `PERMISSION_MODE_LABELS` はそこから安全 3 値を取る (文字列は今と同じ)。shell (概要・警告の帯) は chat の表を読む
 - **Alternatives**: session と chat に別々の表 — 同じモードの名前が 2 か所に分かれる (Principle XIV)
 - **AD-047 との差**: Decision 5 の字面は「昇格値のリテラルは domain だけに置く」で、本決定は renderer の文言の表に昇格値を key として置く (`src/agents/` には置かず、項目 16 に例外を足さない)。Decision 5 の字面は書き誤りとして AD-047 の訂正節で直す (2026-10-08 に利用者が決定。plan の ADR 節 #3)
+- **根拠 (design-gate R3 MG-11。2026-10-08 に利用者が、記録と判断の両方を根拠に書くと決めた)**: renderer に昇格値の表示名を置くこと自体は、採択の時点の設計にあった。記録は承認の commit `c89b423` (2026-10-05。branch `014-ui-metering-and-limits-old`) の data-model.md:178 (§5 の chat の「権限モードの名前」の表。`acceptEdits` / `bypassPermissions` / `auto` を key にする) と spec.md:134 (US-4 AC1「権限モードが {モード} に変わりました」)。本節 (R-15) が決めたのは、表の置き場 (`features/chat/labels.ts`) と、session の表がそこから安全 3 値を取る形だけである。同じ版の data-model.md:76 の「domain の `meter.ts` だけ」は agents と対比した字面で、§5 の表と食い違っていた。Decision 5 の字面はこの :76 から来ている

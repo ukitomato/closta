@@ -25,7 +25,7 @@ spec の U-1〜U-6 と AD-047 は 2026-10-05 に利用者が承認した。O-7 (
 - **targets**: both (agents / domain と renderer。main と preload は変えない)
 - **Performance Goals**: 間引きの対象は鍵 (tool・task・思考) ごとに 1 秒に 1 件以下、セッションあたり 1 秒に 20 件以下 (SC-004)。計量の更新でストアの `sessions` の参照を変えず、表示中の Thread を描き直さない (data-model §2)。tool の経過時間は tool ごとに購読する
 - **Constraints**: 実行時に `<style>` を足さない (CSP)。会話由来の文字列・エラー文・パスを `meter` に入れない。`src/agents/` に昇格値の綴りを置かない (項目 16)。main / preload / IPC の差分 0 (SC-006)
-- **Scale/Scope**: 稼働中は最大 10 本。同時に追う tool / task は 64 まで
+- **Scale/Scope**: 稼働中は最大 10 本。間引きで同時に追う tool / task の鍵は 64 まで (休んだ鍵と取り消した鍵は外す。data-model §2)
 
 ### レイヤ
 
@@ -75,7 +75,7 @@ research R-01 (コードの事実) と R-02 (SDK の型の事実) に行番号�
 | XIV (glossary) | ✅ | 用語を先に glossary に足す。権限モードの表示名は 1 つの表 (research R-15)。Provider の表記を揃える (research R-13) |
 | XV (多言語) | ✅ | 新しい文言は各 `labels.ts` (data-model §5)。コンポーネントへの直書きを増やさない |
 
-**Domain charter の整合**: ui の In scope に「observability 系の表示」と「右のペインに足すタブ (O-4〜O-6)」(ui charter:75) がある。session の契約 (失敗の理由のキー・`SessionEvent` の種類) と session の操作 UI (監視ビューの行の短い理由・稼働中のストアの `meters`・行と派生値の切り出し) に手を入れるのは U-1 で承認された例外で、session charter と AD-047 に記録する (FR-016)。シェルは session のストアを読むだけで、ui charter の「面の状態」の例外 (シェルが session のストアの操作を呼ぶ 2 つ・session が面の状態を書く 2 つ) は増やさない。
+**Domain charter の整合**: ui の In scope に「observability 系の表示」と「右のペインに足すタブ (O-4〜O-6)」(ui charter:75) がある。session のコードに手を入れる根拠は 2 つに分かれる。(1) U-1 (2026-10-05 承認) — session の契約 (失敗の理由のキー・`SessionEvent` の種類) と session の操作 UI (監視ビューの行の短い理由と再ログインの導線・稼働中のストアの `meters`)。稼働中のセッションを表示するための小さな読み取りの追加 2 つ (session の view の `RunningSessionsView.runtimeAutoMode(runtimeId)` (FE-040) と、`session/labels.ts` の `PERMISSION_MODE_LABELS` を chat の `PERMISSION_MODE_NAMES` から取る形 (research R-15)) も、U-1 の「session の操作 UI」の範囲と読む (2026-10-08 に利用者が決めた。design-gate R3 MG-09)。(2) spec「義務の扱い」(roadmap の system-scope の持ち主の記録) — FR-018 の行と派生値の切り出しと、FR-019 の消えるボタンのフォーカス (`focus-handoff.ts`・`LivePane` / `RunningSessionRow` の押下の処理)。U-1 の範囲は session charter と AD-047 に記録する (FR-016)。シェルは session のストアを読むだけで、ui charter の「面の状態」の例外 (シェルが session のストアの操作を呼ぶ 2 つ・session が面の状態を書く 2 つ) は増やさない。
 
 **Phase 1 の後の見直し**: data-model と research の決定 (`live-signals` への分岐の集約・task の `detail` の合成・思考の印の置き場・拒否の 2 行・フォーカスを先に移す形) は上の表の判定を変えない。Complexity Tracking に書く違反は無い。
 
@@ -241,23 +241,26 @@ scripts/constitution/allowlists.mjs:363,435 AGENT_SDK_IMPORT_DIRECTORIES / PERMI
 
 ### テスト
 
-- 単体 (node): `classifyResultFailure` (data-model §1 の各行と、どれも完了にならない)・`meter.ts` (検証の各規則・`__proto__`・長い id・URL と scheme の無い userinfo (`u:p@h/m`) の資格情報の形の `modelId` を落とす・`[1m]` 付きと `_` を含む `modelId` を落とさない・`resetsAt: 1e300`・知らない `type`)・`mergeSystemEvent` (task の進み具合の合成・種類が残る・行の無い task は捨てる・Hook と他の category は今のまま)・`isTerminalSystemEventStatus`・`detail` の符号化と復号・`transcript.ts` が新しい subtype から行を作らない・`meter-throttle` (偽の時計。鍵ごと 1 秒 1 件・並列の tool N 個の合計 20 件/秒・64 の上限・取り消し・`dispose` の後に何も送らない)・`live-signals` (許可リストの外のフィールドに目印の値を入れ、emit した `SessionEvent` の文字列に 0 件・主ループの assistant だけ・0 に倒した result・`turns`・拒否の重複を除く数・権限モードの基準 (`status` と `init` の両方で比べ、同じモードを 2 回送らない。`init` の `permissionMode` 以外のフィールドを読まない)・再試行と圧縮の行の開閉)・`sdk-agent-session.test.ts` (配線: 429 の失敗で `rate-limited`・`ended` の後に `event` が 0 件)・固定テスト (`SESSION_EVENT_KINDS` 8・`LAUNCH_FAILURE_REASONS` 18・category と status の集合)
-- 単体 (renderer): decoder (`meter` の各 `type` と外れ)・ストア (`meters` の更新・閉じた id は捨てる・`close()`・思考を assistant で消す・`turn` で tool を空に・`sessions` の参照が変わらない・`receivedMessages` を数えない)・`labels` (全理由に全文と短い理由・`isReloginFailure`)・`attentionTransitions`
+- 単体 (node): `classifyResultFailure` (data-model §1 の各行と、どれも完了にならない)・`meter.ts` (検証の各規則・`__proto__`・長い id・URL と scheme の無い userinfo (`u:p@h/m`) の資格情報の形の `modelId` を落とす・`[1m]` 付きと `_` を含む `modelId` を落とさない・`resetsAt: 1e300`・知らない `type`)・`mergeSystemEvent` (task の進み具合の合成・種類が残る・行の無い task は捨てる・Hook と他の category は今のまま)・`isTerminalSystemEventStatus`・`detail` の符号化と復号・`transcript.ts` が新しい subtype から行を作らない・`meter-throttle` (偽の時計。鍵ごと 1 秒 1 件・並列の tool N 個の合計 20 件/秒・64 の上限・鍵が休んだ後と取り消しの後に 65 個目が通る・20 件を超えた保留が古い順に送られ飢えない・取り消し・`dispose` の後に何も送らない)・`live-signals` (許可リストの外のフィールドに目印の値を入れ、emit した `SessionEvent` の文字列に 0 件・主ループの assistant だけ・形の外れた `task_id` で送らない・0 に倒した result・`turns`・拒否の重複を除く数・権限モードの基準 (`status` と `init` の両方で比べ、同じモードを 2 回送らない。`init` の `permissionMode` 以外のフィールドを読まない)・再試行と圧縮の行の開閉)・`sdk-agent-session.test.ts` (配線: 429 の失敗で `rate-limited`・`ended` の後に `event` が 0 件)・固定テスト (`SESSION_EVENT_KINDS` 8・`LAUNCH_FAILURE_REASONS` 18・category と status の集合)
+- 単体 (renderer): decoder (`meter` の各 `type` と外れ)・ストア (`meters` の更新・閉じた id は捨てる・`close()`・思考を assistant で消す・`turn` で tool を空に・tool が 64 を超えたら更新の古いものから落とす・`sessions` の参照が変わらない・`receivedMessages` を数えない)・`labels` (全理由に全文と短い理由・`isReloginFailure`)・`attentionTransitions`
 - component (vitest-axe): 失敗の表示 (理由ごとの文言と再ログインの導線)、監視ビューの行の短い理由、Quota banner (3 状態・解除の時刻の有無・割合の有無・超過分)、権限モードの警告の帯 (`unavailable` で隔離なし、`allowed` / `undetermined` で「確かめていない」)、中央のヘッダの目盛り (80%・100% 超・`contextWindow` 0・過去は出ない・主モデルの照合の 3 段)、使用量のタブ (項目・空の状態 3 つ・2 つのセッションが混ざらない)、「概要」の現在の権限モード、`SystemEventRow` (3 category と task の進み具合)、tool の経過時間 (結果の後に消える)、思考の印、タブのキーボード (§6)、FR-019 の 5 か所
 - 通し (`tests/meter/meter-through.test.tsx`): fixture → `live-signals` → `JSON.stringify` → 偽の port → decoder → ストア → DOM。目印の値が DOM に 0 件、2 つのセッションの値が混ざらない (SC-002)
 - E2E: 足さない (計量を流す偽の supervisor を作らない。SC-004 の計測経路は agents の単体)。既存の E2E と基準画像を通す
 
 ## ADR
 
-新しい ADR は起こさない。AD-047 (accepted) の範囲で作る。AD-047 の字面と設計の間に次の 3 つの差がある (design-gate R2 HG-01 / HG-04)。どれも採択 (2026-10-05) の時点で設計に既にあった。
+新しい ADR は起こさない。AD-047 (accepted) の範囲で作る。AD-047 の字面と設計の間に次の 3 つの差がある (design-gate R2 HG-01 / HG-04)。どれも採択 (2026-10-05) の時点の設計に既にあった。根拠は項目ごとに次のとおり (AD-047 の訂正節にも同じ根拠を書く。tasks SH-013)。
+
+- #1 / #2: 採択の前の design-gate R1 の手当て。#1 は R1 H-05 (コンテキストの推定の材料を最後の assistant の usage に替えた)、#2 は R1 security M-002 (`toolUseId` の形の検証)
+- #3: 採択の時点の設計は、renderer に昇格値を key にした表示名を置いていた。記録は承認の commit `c89b423` (2026-10-05。branch `014-ui-metering-and-limits-old`) の data-model.md:178 (§5 の chat の文言の表「権限モードの名前」) と spec.md:134 (US-4 AC1「権限モードが {モード} に変わりました」)。同じ版の data-model.md:76 の「昇格値のリテラルは domain の `meter.ts` だけに置き」は agents と対比した字面で、§5 の表と食い違っていた。AD-047 Decision 5 の「domain だけ」と、R1 の手当ての記録の「昇格値は domain だけ」(design-gate.md.20261004T063000:29) は、この :76 の字面から来ている。2026-10-08 に利用者が、これを書き誤りと判断した (design-gate R3 MG-11)
 
 | # | AD-047 の字面 | 設計 | 変わらない決定 |
 |---|---|---|---|
 | 1 | Decision 4 (`:38`) と Consequences (`:48`) は Context display の材料を result の値 (`usage` を含む) とする | 主ループの最後の assistant の入力側の usage を、result の `modelUsage` の `contextWindow` で割る。result の `usage` は読まない (data-model §2 / research R-04) | 制御要求を呼ばない |
 | 2 | Decision 2 (`:35`) は運ぶ値を「数・真偽・列挙・モデルの id だけ」とする | `tool-elapsed` は形を検証した tool の id (`toolUseId`) も運ぶ (data-model §2)。同じ Decision 2 が `tool_progress` を間引いて運ぶと定めており、運ぶには tool の id が要る | 会話由来の文字列・エラー文・パスを運ばない |
-| 3 | Decision 5 (`:37`) は「昇格値のリテラルは domain だけに置く」とする | renderer の `features/chat/labels.ts` の `PERMISSION_MODE_NAMES` が昇格値を key にした表示名を持つ (data-model §5 / research R-15)。今の renderer に昇格値の綴りは 0 件で、本 feature が初めて置く。`src/agents/` には置かない | Constitution 検証の項目 16 に例外を足さない |
+| 3 | Decision 5 (`:37`) は「昇格値のリテラルは domain だけに置く」とする | renderer の `features/chat/labels.ts` の `PERMISSION_MODE_NAMES` が昇格値を key にした表示名を持つ (data-model §5 / research R-15)。今の renderer のコードに昇格値の綴りは 0 件で、コードとして置くのは本 feature が初めて (設計には採択の時点からあった。上の #3 の根拠)。`src/agents/` には置かない | Constitution 検証の項目 16 に例外を足さない |
 
-- **2026-10-08 に利用者が、3 つとも訂正として扱うと決めた** (AD-031 Decision 1。読み手が同じ決定に至る)。tasks SH-013 で AD-047 に日付つきの「訂正」節を 1 つ足し、次の 3 項目と「決定 (制御要求を呼ばない・会話由来の文字列・エラー文・パスを運ばない・項目 16 に例外を足さない) は変えない」を書く。Decision と Consequences の本文は書き換えない
+- **2026-10-08 に利用者が、3 つとも訂正として扱うと決めた** (AD-031 Decision 1。読み手が同じ決定に至る)。tasks SH-013 で AD-047 に日付つきの「訂正」節を 1 つ足し、次の 3 項目と、各項目の根拠 (上の 2 つの箇条) と、「決定 (制御要求を呼ばない・会話由来の文字列・エラー文・パスを運ばない・項目 16 に例外を足さない) は変えない」を書く。Decision と Consequences の本文は書き換えない
   - #1: Decision 4 と Consequences の Context display の材料は、主ループの最後の assistant の 1 回の API 呼び出しの入力側の usage と、result の `modelUsage[].contextWindow` である。result の `usage` は読まない (ターン内の往復の合算でありうる)
   - #2: Decision 2 の運ぶ値には、形を検証した tool の id (`tool-elapsed` の `toolUseId`) を含む。同じ Decision 2 が `tool_progress` を間引いて運ぶと定めており、tool の id なしでは成り立たない
   - #3: Decision 5 の「昇格値のリテラルは domain だけに置く」は、「`src/agents/` (項目 16 の走査範囲) に置かない。値域は domain、表示名は renderer の文言の表に置く」の書き誤りである
