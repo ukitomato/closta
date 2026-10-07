@@ -3,36 +3,42 @@
     "run": "2026-10-07T00:00:00+09:00",
     "spec_dir": "specs/012-ui-thread-search",
     "spec_id": "012-ui-thread-search",
-    "round": 1,
+    "round": 2,
     "base_branch": "main",
     "base": {
         "merge_base": "7bdb27107182a6a52eb4e4cdcdfcf09803121055",
-        "head": "9d98c3926ed49337a9b92166541f0d0ac597ad21",
-        "diff_range": "main...HEAD"
+        "head": "a4c37a8547a7eb91ea8ac6cabeab6a4163ba69ac",
+        "diff_range": "main...HEAD",
+        "prev_round_head": "9d98c3926ed49337a9b92166541f0d0ac597ad21"
     },
     "diff_stat": {
-        "files": 114,
-        "additions": 14512,
+        "files": 127,
+        "additions": 17864,
         "deletions": 437
     },
     "severity_counts": {
-        "critical": 1,
+        "critical": 0,
         "high": 1,
-        "medium": 21,
-        "low": 40
+        "medium": 23,
+        "low": 44
     },
     "severity_counts_before_dedup": {
-        "critical": 1,
-        "high": 2,
-        "medium": 26,
-        "low": 45
+        "critical": 0,
+        "high": 1,
+        "medium": 29,
+        "low": 50
     },
     "convergence": {
-        "resolved_from_prev": 0,
-        "new_in_round": 2,
-        "unresolved": 0
+        "resolved_from_prev": 1,
+        "new_in_round": 0,
+        "unresolved": 1
     },
-    "inheritance": "none (Round 1)",
+    "convergence_scope": "critical+high (Round 1 \udc82\u0193\udcaf\udc82\udcb6\udc92\udce8\udc8b`)",
+    "inheritance": "full",
+    "inheritance_source": [
+        "specs/012-ui-thread-search/pr-gate.md.round1",
+        ".gate-verdict-pr.json round_history[0]"
+    ],
     "round_history": [
         {
             "round": 1,
@@ -51,26 +57,57 @@
                 "new_in_round": 2,
                 "unresolved": 0
             }
+        },
+        {
+            "round": 2,
+            "critical": 0,
+            "high": 1,
+            "medium": 23,
+            "low": 44,
+            "critical_ids": [],
+            "high_ids": [
+                "H-001"
+            ],
+            "resolved_ids": [
+                "C-001"
+            ],
+            "new_medium_ids": [
+                "M#22",
+                "M#23"
+            ],
+            "new_low_ids": [
+                "L#41",
+                "L#42",
+                "L#43",
+                "L#44"
+            ],
+            "convergence": {
+                "resolved_from_prev": 1,
+                "new_in_round": 0,
+                "unresolved": 1
+            }
         }
     ],
-    "critical_findings": [
+    "critical_findings": [],
+    "resolved_findings": [
         {
             "id": "C-001",
-            "origin": [
-                "po-reviewer:C-001",
-                "architecture-reviewer:H-001"
+            "round_raised": 1,
+            "round_resolved": 2,
+            "title": "\udc83T\udc83C\udc83h\udc83o\udc81[\udc82\u030a\ue3c0\udc89\u645c\udc82\udccc E2E \udc82\udcaa CI \udc82\udca9\udc82\udce7\udc8e\udcc0\udc8ds\udc82\udcb3\udc82\ua0b8\udc81A\udc8a\ue3c0\udc89\u645c\udc82\udce0\udc83R\udc83~\udc83b\udc83g\udc82\udcb3\udc82\udcea\udc82\u0102\udca2\udc82\u0202\udca2 (FR-018 / SC-008)",
+            "evidence": [
+                ".github/workflows/verify.yml:171-172",
+                "e2e/sidebar-screenshot.spec.ts:96-97",
+                "e2e/sidebar-screenshot.spec.ts-snapshots/sidebar-past-sessions-win32.png",
+                "CI run 37565959731 (a4c37a8) e2e 6 steps success",
+                "CI run 37553390941 (ddc052e) success"
             ],
-            "title": "\u30b5\u30a4\u30c9\u30d0\u30fc\u306e\u57fa\u6e96\u753b\u50cf\u306e E2E (e2e/sidebar-screenshot.spec.ts) \u304c CI \u304b\u3089\u5b9f\u884c\u3055\u308c\u305a\u3001\u57fa\u6e96\u753b\u50cf\u3082\u30b3\u30df\u30c3\u30c8\u3055\u308c\u3066\u3044\u306a\u3044 (FR-018 / SC-008)",
-            "where": [
-                ".github/workflows/verify.yml:139",
-                ".github/workflows/verify.yml:145",
-                ".github/workflows/verify.yml:159",
-                ".github/workflows/verify.yml:164",
-                "e2e/sidebar-screenshot.spec.ts:81",
-                "specs/012-ui-thread-search/quickstart-results.md:18"
+            "confirmed_by": [
+                "po-reviewer",
+                "architecture-reviewer",
+                "platform-boundary-reviewer"
             ],
-            "status": "new",
-            "scope": "feature"
+            "remainder": "\udc97\udc98\udc97p\udc8e\u0482\u0316\u068e\udc8b\udc82\u030f\udcb3\udc94F\udc82\u018bL\udc98^\udc82\udccd Medium #22\udc81A\udc8d\u0114\udcad\udc96h\udc8e~\udc82\u030c\udc9f\udc8d\udcb8\udc82\u0313o\udc98^\udc82\udccd Low #44"
         }
     ],
     "high_findings": [
@@ -79,33 +116,56 @@
             "origin": [
                 "a11y-reviewer:H-001"
             ],
-            "title": "palette \u306e\u73fe\u5728\u306e\u5019\u88dc\u306e\u6307\u6a19\u304c\u80cc\u666f\u306e 6% \u306e\u6fc3\u6de1 (1.14:1) \u3060\u3051\u3067\u3001\u5165\u529b\u6b04\u3082 outline-none",
+            "title": "palette \udc82\u030c\udcbb\udc8d\u0742\u030c\udcf3\udc95\udce2\udc82\u030ew\udc95W\udc82\udcaa\udc94w\udc8ci\udc82\udccc 6% \udc82\u0314Z\udc92W (1.14:1) \udc82\udcbe\udc82\udcaf\udc82\u0141A\udc93\udcfc\udc97\u0357\udc93\udc82\udce0 outline-none",
             "where": [
                 "src/renderer/src/components/assistant-ui/elements/command-palette.tsx:205",
                 "src/renderer/src/components/assistant-ui/elements/command-palette.tsx:166"
             ],
-            "status": "new",
+            "status": "unresolved",
+            "scope": "feature"
+        }
+    ],
+    "new_medium_findings": [
+        {
+            "id": "M#22",
+            "origin": [
+                "architecture-reviewer:M-007",
+                "po-reviewer:M-006",
+                "po-reviewer:L-008"
+            ],
+            "title": "\udc83T\udc83C\udc83h\udc83o\udc81[\udc82\u030a\ue3c0\udc89\u645c\udc82\u030f\udcb3\udc94F\udc82\u030bL\udc98^\udc82\udcaa\udc8e\udca9\udc8c\u0216\udcb5\udc8f\udc82\udc82\udcb5\udc81A\udc97\udc98\udc97p\udc8e\u0482\u0316\u068e\udc8b\udc82\udcaa\udc96\udca2\udc97\udcb9\udc81Bquickstart.md \udc82\u024f\udcb3\udc94F\udc82\u030e\u83c7\udc82\udcaa\udc96\udcb3\udc82\udca2",
+            "where": [
+                "specs/012-ui-thread-search/quickstart-results.md:23-24",
+                "specs/012-ui-thread-search/quickstart-results.md:74-93",
+                "specs/012-ui-thread-search/quickstart.md",
+                ".github/workflows/verify.yml:168-170"
+            ],
+            "scope": "feature"
+        },
+        {
+            "id": "M#23",
+            "origin": [
+                "ux-reviewer:M-008"
+            ],
+            "title": "\udc89\u07cb\udc8e\udc82\u030b\udce6\udc89\udce6\udc82\u030d\u014f\udc89\udc82\u030c\udca9\udc82\udcbd\udc96\u0682\u018c\udc9f\udc8d\udcf5\udc82\u030c\udc8b\udc89\u0282\udcaa\udc91\udc80\udc8d\udcec\udc82\u0315\udc94\udc95i\udc82\u0309\udcba\udc82\u0249\udc9f\udc82\udcb5\udc8fo\udc82\udcb3\udc82\udcea\udc81A768px \udc82\u0309\udce6\udc96\u0282\u0142\u034ds\udc82\udcaa\udc8c\udca9\udc82\udca6\udc82\u0202\udca2",
+            "where": [
+                "src/renderer/src/features/session-list/SessionListScreen.tsx:1135-1306",
+                "specs/012-ui-thread-search/data-model.md:364-369"
+            ],
             "scope": "feature"
         }
     ],
     "suppressed_by_code_gate": [],
-    "cascade_reversals": [
-        {
-            "reviewer": "po-reviewer",
-            "finding_id": "C-001",
-            "demoted_as": "FR-018",
-            "reason": "cascade_enforce \u304c\u898b\u51fa\u3057\u306e\u4e00\u884c\u30b5\u30de\u30ea\u4e2d\u306e FR-018 \u3092\u6307\u6458 ID \u3068\u3057\u3066\u62fe\u3063\u305f (reviewer-base.md:142 \u306e\u66f8\u5f0f\u3067\u5ba3\u8a00\u3055\u308c\u305f ID \u306f C-001)\u3002cascade summary \u306e C-001 \u306e\u884c\u306f\u4ef6\u6570 1 (\u6574\u6570) \u3067 verified_in_table \u306b\u5f53\u305f\u308b\u3002invoker \u304c verify.yml \u3068 e2e/**/*.png \u3067\u4e8b\u5b9f\u3092\u78ba\u8a8d"
-        }
-    ],
+    "cascade_reversals": [],
     "viewpoint_coverage": {
         "A": "Critical:0 High:0 Medium:0 Low:0 (security)",
         "B": "Critical:0 High:0 Medium:0 Low:0 (security)",
         "C": "Critical:0 High:0 Medium:3 Low:4 (architecture / platform-boundary)",
-        "D": "Critical:0 High:0 Medium:2 Low:6 (architecture / platform-boundary)",
-        "E": "Critical:1 High:0 Medium:4 Low:6 (po)",
+        "D": "Critical:0 High:0 Medium:3 Low:7 (architecture / platform-boundary)",
+        "E": "Critical:0 High:0 Medium:5 Low:7 (po)",
         "F": "Critical:0 High:0 Medium:1 Low:1 (platform-boundary)",
-        "G": "Critical:0 High:1 Medium:13 Low:18 (database / ux / a11y / ui-coverage)",
-        "H": "Critical:0 High:1 Medium:3 Low:10 (\u5168 reviewer)"
+        "G": "Critical:0 High:1 Medium:14 Low:18 (database / ux / a11y / ui-coverage)",
+        "H": "Critical:0 High:0 Medium:3 Low:13 (\udc91S reviewer)"
     },
     "fr_coverage": [
         {
@@ -231,23 +291,25 @@
         },
         {
             "fr": "FR-018",
-            "covered": false,
+            "covered": true,
             "by": [
-                "e2e/sidebar-screenshot.spec.ts:81"
+                "e2e/sidebar-screenshot.spec.ts:96-99",
+                ".github/workflows/verify.yml:171-172",
+                "e2e/sidebar-screenshot.spec.ts-snapshots/sidebar-past-sessions-win32.png"
             ],
-            "note": "spec \u306f\u3042\u308b\u304c CI \u304b\u3089\u5b9f\u884c\u3055\u308c\u305a\u3001\u57fa\u6e96\u753b\u50cf\u3082\u7121\u3044 (C-001)"
+            "note": "Round 2 \udc82\udcc5 CI \udc82\udca9\udc82\u75ec\udc82\udcea\udc81A\udc8a\ue3c0\udc89\u645c\udc82\udce0\udc83R\udc83~\udc83b\udc83g\udc8d\u03c2\udcdd (C-001 resolved)\udc81B\udc97\udc98\udc97p\udc8e\u0482\u0316\u068e\udc8b\udc82\u030f\udcb3\udc94F\udc82\u0356\udca2\udc97\udcb9 (Medium #22)"
         }
     ],
     "rule_verification": {
-        "ran": true,
-        "round": 1,
-        "reason": "Round 1 (\u672c diff \u306f eslint.config.mjs / .dependency-cruiser.js / scripts/constitution/allowlists.mjs \u3082\u5909\u66f4)",
-        "command": "node scripts/rules/run.mjs",
-        "matched": 64,
-        "total": 64,
-        "uncaught_paths_declared": 9,
-        "elapsed_s": 561,
-        "isolated": true
+        "ran": false,
+        "round": 2,
+        "reason": "\udc8bK\udc91\udca5\udc82\u0312\udce8\udc8b`\udc82\udcc6 fixture (eslint.config.mjs / .dependency-cruiser.js / scripts/constitution/** / tests/rule-fixtures/** / scripts/rules/**) \udc82\udcaa 9d98c39..a4c37a8 \udc82\udcc5 0 \udc8c\udc8f\udc82\u0315\u03cdX\udc81BRound 1 \udc82\udccc 64/64 \udc88\udcea\udc92v\udc82\udcaa\udc82\udcbb\udc82\u0302\u0702\u0713\udc96\udc82\udcbd\udc82\udce9",
+        "last_run": {
+            "round": 1,
+            "command": "node scripts/rules/run.mjs",
+            "matched": 64,
+            "total": 64
+        }
     },
     "skipped_reviewers": [],
     "not_invoked_by_design": [
@@ -256,14 +318,14 @@
         "convention-reviewer"
     ],
     "reviewer_selection": {
-        "security-reviewer": "\u5e38\u99d0",
-        "architecture-reviewer": "\u5e38\u99d0 (default + ADR-drift)",
-        "po-reviewer": "\u5e38\u99d0",
-        "database-reviewer": "src/main/infra/settings/launch-usage-store.test.ts \u304c src/main/infra/settings/** \u306b\u4e00\u81f4",
-        "ux-reviewer": "src/renderer/src/components/assistant-ui/elements/thread-list.aui.tsx \u306b\u4e00\u81f4",
-        "a11y-reviewer": "src/renderer/src/components/assistant-ui/elements/thread-list.aui.tsx \u306b\u4e00\u81f4",
-        "platform-boundary-reviewer": ".dependency-cruiser.js \u304c **/.dependency-cruiser.* \u306b\u4e00\u81f4",
-        "ui-coverage-reviewer": "docs/ui-coverage.md \u306b\u4e00\u81f4"
+        "security-reviewer": "\udc8f\ud493",
+        "architecture-reviewer": "\udc8f\ud493 (default + ADR-drift)",
+        "po-reviewer": "\udc8f\ud493",
+        "database-reviewer": "src/main/infra/settings/launch-usage-store.test.ts \udc82\udcaa src/main/infra/settings/** \udc82\u0248\udcea\udc92v",
+        "ux-reviewer": "src/renderer/src/components/assistant-ui/elements/thread-list.aui.tsx \udc82\u0248\udcea\udc92v",
+        "a11y-reviewer": "src/renderer/src/components/assistant-ui/elements/thread-list.aui.tsx \udc82\u0248\udcea\udc92v",
+        "platform-boundary-reviewer": ".dependency-cruiser.js \udc82\udcaa **/.dependency-cruiser.* \udc82\u0248\udcea\udc92v",
+        "ui-coverage-reviewer": "docs/ui-coverage.md \udc82\u0248\udcea\udc92v"
     },
     "tracks": {
         "security-reviewer": {
@@ -273,27 +335,40 @@
             "critical": 0,
             "high": 0,
             "medium": 0,
-            "low": 2
+            "low": 2,
+            "inheritance": {
+                "resolved": 0,
+                "unresolved": 2,
+                "new": 0
+            }
         },
         "architecture-reviewer": {
             "status": "ok",
             "viewpoint_missing": [],
             "cascade_demotions": 0,
             "critical": 0,
-            "high": 1,
-            "medium": 6,
-            "low": 9
+            "high": 0,
+            "medium": 7,
+            "low": 10,
+            "inheritance": {
+                "resolved": 1,
+                "unresolved": 15,
+                "new": 2
+            }
         },
         "po-reviewer": {
             "status": "ok",
             "viewpoint_missing": [],
             "cascade_demotions": 0,
-            "cascade_demotions_mechanical": 1,
-            "cascade_demotions_reverted": 1,
-            "critical": 1,
+            "critical": 0,
             "high": 0,
-            "medium": 5,
-            "low": 7
+            "medium": 6,
+            "low": 9,
+            "inheritance": {
+                "resolved": 1,
+                "unresolved": 12,
+                "new": 3
+            }
         },
         "database-reviewer": {
             "status": "ok",
@@ -302,7 +377,12 @@
             "critical": 0,
             "high": 0,
             "medium": 2,
-            "low": 7
+            "low": 7,
+            "inheritance": {
+                "resolved": 0,
+                "unresolved": 9,
+                "new": 0
+            }
         },
         "ux-reviewer": {
             "status": "ok",
@@ -310,8 +390,13 @@
             "cascade_demotions": 0,
             "critical": 0,
             "high": 0,
-            "medium": 7,
-            "low": 6
+            "medium": 8,
+            "low": 7,
+            "inheritance": {
+                "resolved": 0,
+                "unresolved": 13,
+                "new": 2
+            }
         },
         "a11y-reviewer": {
             "status": "ok",
@@ -320,8 +405,12 @@
             "critical": 0,
             "high": 1,
             "medium": 5,
-            "low": 6,
-            "note": "reviewer \u306e Verdict \u884c\u306f Low 5 \u3060\u304c\u6307\u6458\u306e\u672c\u6587\u306f L-001\u301cL-006 \u306e 6 \u4ef6\u3002\u672c\u6587\u306e\u4ef6\u6570\u3092\u63a1\u3063\u305f"
+            "low": 7,
+            "inheritance": {
+                "resolved": 0,
+                "unresolved": 12,
+                "new": 1
+            }
         },
         "platform-boundary-reviewer": {
             "status": "ok",
@@ -330,7 +419,12 @@
             "critical": 0,
             "high": 0,
             "medium": 1,
-            "low": 5
+            "low": 5,
+            "inheritance": {
+                "resolved": 0,
+                "unresolved": 6,
+                "new": 0
+            }
         },
         "ui-coverage-reviewer": {
             "status": "ok",
@@ -339,14 +433,53 @@
             "critical": 0,
             "high": 0,
             "medium": 0,
-            "low": 3
+            "low": 3,
+            "inheritance": {
+                "resolved": 0,
+                "unresolved": 3,
+                "new": 0
+            }
         }
     },
+    "ci_evidence": {
+        "collected_by": "invoker (gh run list / gh run view)",
+        "runs": [
+            {
+                "id": 37542957621,
+                "head": "8204b8b",
+                "conclusion": "failure",
+                "note": "baseline image missing (as designed)"
+            },
+            {
+                "id": 37546036334,
+                "head": "811b788",
+                "conclusion": "failure",
+                "note": "baseline image missing; artifact actual taken as baseline"
+            },
+            {
+                "id": 37553390941,
+                "head": "ddc052e",
+                "conclusion": "success",
+                "note": "first run with committed baseline"
+            },
+            {
+                "id": 37565959731,
+                "head": "a4c37a8",
+                "conclusion": "success",
+                "note": "verify (node 24) + e2e 6 steps success; node 26 allow-failure"
+            }
+        ]
+    },
     "system_followups": [
-        "gate_common::cascade_enforce \u306e\u6307\u6458 ID \u306e\u53d6\u308a\u65b9 (.specify/scripts/gate-common.sh:506): \u898b\u51fa\u3057\u306e \\(([A-Z]+-\\d+)\\) \u3092\u5148\u306b\u898b\u308b\u5f62\u306b\u76f4\u3059",
-        "e2e/*.spec.ts \u304c\u3059\u3079\u3066 verify.yml \u304b\u3089\u6d41\u308c\u308b\u3053\u3068\u3092\u78ba\u304b\u3081\u308b\u691c\u67fb (C-001 \u306e\u518d\u767a\u9632\u6b62)"
+        "gate_common::cascade_enforce \udc82\u030ew\udc93E ID \udc82\u030e\udce6\udc82\udce8\udc95\udcfb (.specify/scripts/gate-common.sh:506): \udc8c\udca9\udc8fo\udc82\udcb5\udc82\udccc \\(([A-Z]+-\\d+)\\) \udc82\udcf0\udc90\udce6\udc82\u024c\udca9\udc82\udce9\udc8c`\udc82\u0252\udcbc\udc82\udcb7",
+        "e2e/*.spec.ts \udc82\udcaa\udc82\udcb7\udc82\u05c2\udcc4 verify.yml \udc82\udca9\udc82\u75ec\udc82\udcea\udc82\u90b1\udc82\u0182\udcf0\udc8am\udc82\udca9\udc82\u07c2\u931f\udc8d\udcb8 (C-001 \udc82\u030d\u0114\udcad\udc96h\udc8e~)"
     ],
-    "verdict": "FIX_REQUIRED",
+    "done_notes": [
+        "H-001 (a11y) \udc82\udccd unresolved \udc82\u0302\u0702\u0701BPR \udc82\u0310\udce0\udc96\udcbe\udc82\u024d\u0682\udcb9\udc82\udce9",
+        "\udc8a\ue3c0\udc89\u645c\udc82\u0317\udc98\udc97p\udc8e\u0482\u0316\u068e\udc8b\udc82\u0356\udca2\udc97\udcb9 (Medium #22)\udc81BAD-038 D5 \udc82\u0310l\udc8a\udcd4 deferred",
+        "\udc8a\ue3c0\udc89\u645c\udc82\u030e\udce6\udc82\u84bc\udc82\udcb5\udc82\udcf0 1 \udc89\udcf1\udc82\u014d\u03c2\u0702\udcb9\udc82\udce9\udc82\u0202\udce7\udc81A\udc96\u068e\udc8b\udc82\u0311O\udc82\udcc9 a11y M-001 \udc82\udccc SessionListScreen.tsx:853 \udc82\ud80b\udf02\udcb7\udc82\udca9\udc8c\udc88\udc82\u07c2\udce9 (Low #41)"
+    ],
+    "verdict": "PASS",
     "touched_files": [
         {
             "path": ".dependency-cruiser.js",
@@ -359,10 +492,6 @@
         {
             "path": ".specify/templates/plan-template.md",
             "sha": "cdebf5ffba4594d91a42084e2b493923ff325eba"
-        },
-        {
-            "path": "PLAN.md",
-            "sha": "bfe0de96a09315b763307aae81e75382468819e2"
         },
         {
             "path": "docs/decisions/0045-ui-labels-no-i18n-resources.md",
@@ -414,7 +543,7 @@
         },
         {
             "path": "e2e/sidebar-screenshot.spec.ts",
-            "sha": "2b5f65234d5edd3a0b8cbdf14694001b4dd10a70"
+            "sha": "c4211ffa205eff1159ba9f8e9d35ec2d7af17af4"
         },
         {
             "path": "e2e/support/launch.ts",
@@ -429,96 +558,16 @@
             "sha": "d80982246c5d805969681fbc45cb147a2de80544"
         },
         {
+            "path": "PLAN.md",
+            "sha": "bfe0de96a09315b763307aae81e75382468819e2"
+        },
+        {
             "path": "scripts/constitution/allowlists.mjs",
             "sha": "8886b0c0efe228d6b053ab3b71a33a1ffd043545"
         },
         {
             "path": "specs/010-session-monitoring-view/quickstart-results.md",
             "sha": "2c84213be0c2d0421b844fdd14699318c179d9f3"
-        },
-        {
-            "path": "specs/012-ui-thread-search/.gate-verdict-code.json",
-            "sha": "4353ec2710fa356c14c12e4749bd9e33c468eff1"
-        },
-        {
-            "path": "specs/012-ui-thread-search/.gate-verdict-design.json",
-            "sha": "65d8b04fcec1d42b7e13ea20dddc4b229d01f35b"
-        },
-        {
-            "path": "specs/012-ui-thread-search/analyze.md",
-            "sha": "3dced75a616dd64edc199cafda50e84356857b90"
-        },
-        {
-            "path": "specs/012-ui-thread-search/architecture-reviewer.design-gate.md",
-            "sha": "29401d3a9b0f37355cc6680d9cf5f69bf4a4b590"
-        },
-        {
-            "path": "specs/012-ui-thread-search/code-gate.md",
-            "sha": "6da2cfa99af15bc715e98847116fd497326c3baa"
-        },
-        {
-            "path": "specs/012-ui-thread-search/convention-reviewer.code-gate.md",
-            "sha": "ae5a46009330283867f6cb962f1eb44870625300"
-        },
-        {
-            "path": "specs/012-ui-thread-search/data-model.md",
-            "sha": "2ac6babfccbc8f30c11741cb1cbf317d3d252de9"
-        },
-        {
-            "path": "specs/012-ui-thread-search/database-reviewer.code-gate.md",
-            "sha": "eec6d600593b12c0aa94e39e647dcd72d00d4ccc"
-        },
-        {
-            "path": "specs/012-ui-thread-search/database-reviewer.design-gate.md",
-            "sha": "24a9ebccc303d3c3893cad1c81407dcf04dfb310"
-        },
-        {
-            "path": "specs/012-ui-thread-search/design-gate.md",
-            "sha": "90f3e9bdf8a67b0d4a3f64123920ceebde7e2012"
-        },
-        {
-            "path": "specs/012-ui-thread-search/plan.md",
-            "sha": "5f0c2baec5e3491ebb034f8d4955655fb824bba1"
-        },
-        {
-            "path": "specs/012-ui-thread-search/platform-boundary-reviewer.code-gate.md",
-            "sha": "8719b62adf5506193edc0071063a685924093fb8"
-        },
-        {
-            "path": "specs/012-ui-thread-search/platform-boundary-reviewer.design-gate.md",
-            "sha": "1025093202c5c509313b1366227a0d1108b85b48"
-        },
-        {
-            "path": "specs/012-ui-thread-search/po-reviewer.design-gate.md",
-            "sha": "c3977cdb5793df999c123876579439bad36a7261"
-        },
-        {
-            "path": "specs/012-ui-thread-search/quickstart-results.md",
-            "sha": "a5af7611790319da38ca2685b57b21a50d555af7"
-        },
-        {
-            "path": "specs/012-ui-thread-search/quickstart.md",
-            "sha": "277ecd33e63a35a81677c9ec6a66e9d47d3896a3"
-        },
-        {
-            "path": "specs/012-ui-thread-search/research.md",
-            "sha": "e7291950eca2afee8e7e2ebf550925f793a775ba"
-        },
-        {
-            "path": "specs/012-ui-thread-search/security-reviewer.design-gate.md",
-            "sha": "1ff3beba8e86c39e6e4a3e2e1f497ff84cbcd351"
-        },
-        {
-            "path": "specs/012-ui-thread-search/spec.md",
-            "sha": "cd3be6f478b3dab6112fe953380b8410b40207db"
-        },
-        {
-            "path": "specs/012-ui-thread-search/tasks.md",
-            "sha": "50eb80c88d8687a12c485ea6e0fa045ef322336d"
-        },
-        {
-            "path": "specs/012-ui-thread-search/touched-files.txt",
-            "sha": "b97fb93bd87db307690eda5b416fddf2d650b896"
         },
         {
             "path": "specs/013-ui-app-shell/spec.md",
@@ -593,12 +642,12 @@
             "sha": "0aeceb735417a515d3e3dd5ac5c34c9ee61b6904"
         },
         {
-            "path": "src/renderer/src/components/assistant-ui/elements/thread-list.aui.tsx",
-            "sha": "95a6ab249345271a54ba25f830e47caff941362a"
-        },
-        {
             "path": "src/renderer/src/components/assistant-ui/elements/thread.aui.tsx",
             "sha": "62d2b38d1fc3714a74dc2a39f8264f69e719dbdd"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/thread-list.aui.tsx",
+            "sha": "95a6ab249345271a54ba25f830e47caff941362a"
         },
         {
             "path": "src/renderer/src/components/ui/dialog.tsx",
@@ -613,8 +662,16 @@
             "sha": "30d37ef8c64e7aff14258a923dbcfac1ea4deee4"
         },
         {
+            "path": "src/renderer/src/features/chat/conversation-search.test.ts",
+            "sha": "70fac79f3b85f2606f14016fb5159e299de41999"
+        },
+        {
             "path": "src/renderer/src/features/chat/ConversationSearch.test.tsx",
             "sha": "ef2e8ef00c49462b5d842fb252c0fdf9157efa3a"
+        },
+        {
+            "path": "src/renderer/src/features/chat/conversation-search.ts",
+            "sha": "3db2b810ebce3c8d63500e2daeab5972111332c6"
         },
         {
             "path": "src/renderer/src/features/chat/ConversationSearchBar.tsx",
@@ -623,14 +680,6 @@
         {
             "path": "src/renderer/src/features/chat/ConversationSearchProvider.tsx",
             "sha": "e7563d255e41c500ec7174a258ee08505b5d2758"
-        },
-        {
-            "path": "src/renderer/src/features/chat/conversation-search.test.ts",
-            "sha": "70fac79f3b85f2606f14016fb5159e299de41999"
-        },
-        {
-            "path": "src/renderer/src/features/chat/conversation-search.ts",
-            "sha": "3db2b810ebce3c8d63500e2daeab5972111332c6"
         },
         {
             "path": "src/renderer/src/features/chat/labels.ts",
@@ -673,16 +722,8 @@
             "sha": "1f8ef25ae2d048d691abfa84324713dbc4d6c643"
         },
         {
-            "path": "src/renderer/src/features/session-list/SessionListScreen.test.tsx",
-            "sha": "f74b5787be0921ad03dc37208ff33e2867cb2d7d"
-        },
-        {
-            "path": "src/renderer/src/features/session-list/SessionListScreen.tsx",
-            "sha": "ed62d11cb6d6d791c3a588b0e5ce87353a1ebdac"
-        },
-        {
-            "path": "src/renderer/src/features/session-list/labels.ts",
-            "sha": "a2c62214b35c9e3851e6dc506b66d5118c6a1cb0"
+            "path": "src/renderer/src/features/session/labels.ts",
+            "sha": "59bd1c2ffa874a3d880536a46336a2b4d1d92ec3"
         },
         {
             "path": "src/renderer/src/features/session/LaunchDialog.test.tsx",
@@ -717,10 +758,6 @@
             "sha": "f0a4de12b69bd4f0f0cc74f2c449e0c4a64cab2a"
         },
         {
-            "path": "src/renderer/src/features/session/labels.ts",
-            "sha": "59bd1c2ffa874a3d880536a46336a2b4d1d92ec3"
-        },
-        {
             "path": "src/renderer/src/features/session/running-session-store.test.ts",
             "sha": "23c122ad3c72da6d484fb3e3a195e7a8fb655b21"
         },
@@ -729,12 +766,12 @@
             "sha": "158fab558b3a854f14b6bbbacbdb6d5e0f9577be"
         },
         {
-            "path": "src/renderer/src/features/session/running-session-types.ts",
-            "sha": "45025dfc2bfcff06fe5be475b3c23f8800f60b43"
-        },
-        {
             "path": "src/renderer/src/features/session/running-sessions-view.ts",
             "sha": "9cac8a12ecce8c3272bd2bb3ab16caf524b7bf3c"
+        },
+        {
+            "path": "src/renderer/src/features/session/running-session-types.ts",
+            "sha": "45025dfc2bfcff06fe5be475b3c23f8800f60b43"
         },
         {
             "path": "src/renderer/src/features/session/session-view.monitor.test.ts",
@@ -743,6 +780,18 @@
         {
             "path": "src/renderer/src/features/session/useLaunchUsage.ts",
             "sha": "a598f6d7256f213c80275e0700792a3bb1ad7499"
+        },
+        {
+            "path": "src/renderer/src/features/session-list/labels.ts",
+            "sha": "501b7fc8cce8c26d9728646c4f8d51eabfa04c0e"
+        },
+        {
+            "path": "src/renderer/src/features/session-list/SessionListScreen.test.tsx",
+            "sha": "f74b5787be0921ad03dc37208ff33e2867cb2d7d"
+        },
+        {
+            "path": "src/renderer/src/features/session-list/SessionListScreen.tsx",
+            "sha": "ed62d11cb6d6d791c3a588b0e5ce87353a1ebdac"
         },
         {
             "path": "src/renderer/src/features/shell/AppShell.test.tsx",
@@ -761,20 +810,16 @@
             "sha": "fbfa8e3cf2355afd13cbf794ee28b2e99310b86e"
         },
         {
+            "path": "src/renderer/src/features/shell/center-shown.ts",
+            "sha": "f54bbd898c2a7ac55b97694a104dc083cd7039b7"
+        },
+        {
             "path": "src/renderer/src/features/shell/CommandPalette.test.tsx",
             "sha": "f0952523b35ef036bed67747035c00bb371a3913"
         },
         {
             "path": "src/renderer/src/features/shell/CommandPalette.tsx",
             "sha": "240357feb0884fab20ef96ebef281e5bc78ed17a"
-        },
-        {
-            "path": "src/renderer/src/features/shell/Sidebar.tsx",
-            "sha": "ae1f9a2592103d7bab5f7f7106d29ae045f0eef8"
-        },
-        {
-            "path": "src/renderer/src/features/shell/center-shown.ts",
-            "sha": "f54bbd898c2a7ac55b97694a104dc083cd7039b7"
         },
         {
             "path": "src/renderer/src/features/shell/labels.ts",
@@ -787,6 +832,10 @@
         {
             "path": "src/renderer/src/features/shell/palette-commands.ts",
             "sha": "8ae5110871a0c33d6fe1c37b95a8df10d39fc29e"
+        },
+        {
+            "path": "src/renderer/src/features/shell/Sidebar.tsx",
+            "sha": "ae1f9a2592103d7bab5f7f7106d29ae045f0eef8"
         },
         {
             "path": "src/renderer/src/features/shell/useShellFocus.ts",
@@ -803,6 +852,34 @@
         {
             "path": "src/renderer/src/test-support/capability.ts",
             "sha": "8f0bba5b9b0b72c07febb9ddd28760049f1d22cb"
+        },
+        {
+            "path": ".github/workflows/verify.yml",
+            "sha": "4e9a80ad05d08ac8d9188ed00d6870a17be0d83a"
+        },
+        {
+            "path": "specs/012-ui-thread-search/quickstart-results.md",
+            "sha": "169c19ded9a664308e33e9c3bb496c0a26527257"
+        },
+        {
+            "path": "e2e/sidebar-screenshot.spec.ts",
+            "sha": "c4211ffa205eff1159ba9f8e9d35ec2d7af17af4"
+        },
+        {
+            "path": "src/renderer/src/features/session-list/labels.ts",
+            "sha": "501b7fc8cce8c26d9728646c4f8d51eabfa04c0e"
+        },
+        {
+            "path": "specs/012-ui-thread-search/data-model.md",
+            "sha": "a2db1e0e0f13aacb89b896a004e185edbba9a34c"
+        },
+        {
+            "path": "src/renderer/src/features/chat/virtualization.test.tsx",
+            "sha": "438aaeb21e32b72e861407ba9cb3e351cf391ada"
+        },
+        {
+            "path": "vitest.config.ts",
+            "sha": "37951600775b57298013bc56cf7487dc5fa9efca"
         }
     ]
 }

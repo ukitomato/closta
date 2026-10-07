@@ -1,315 +1,304 @@
 # a11y-reviewer Review: Thread 検索と探す操作 (O-3)
 
-**Run**: 2026-10-07T12:00:00+09:00
+**Run**: 2026-10-07
 **Reviewer**: a11y-reviewer
 **Spec**: specs/012-ui-thread-search/spec.md
+**Round**: 2
 
 ## 初回読了 viewpoint
 
 - FR/SC:
-  - FR-001 / FR-017: 過去のセッションの区画の検索欄・件数の `role="status"`・グループの `role="group"`・過去の行のツールチップ (`SessionListScreen.tsx` / `thread-list.aui.tsx`)
-  - FR-003 / FR-005: 会話内検索のバー・中央のヘッダの検索ボタン・`::highlight()` の強調 (`conversation-search.tsx` / `ConversationSearchBar.tsx` / `ConversationSearchProvider.tsx` / `main.css`)
-  - FR-006 / FR-007: Command palette (Dialog・combobox / listbox・`aria-activedescendant`・閉じた後のフォーカス) (`CommandPalette.tsx` / `command-palette.tsx`)
-  - FR-008: 新しい空の状態 4 つ (`EmptyState`)
-  - FR-013: プリセットの欄の回数の表示 (`PresetPanel.tsx`)
-  - FR-014: composer の名前と placeholder の日本語化 (WCAG 3.1.2。`thread.aui.tsx:649-656`)
-  - SC-003 (palette の axe 違反 0)・SC-004 (空の状態)・SC-008 (ランドマーク 0・フォーカスでツールチップ)
+  - FR-001 / FR-017: 過去のセッションの区画に関わる。検索欄、件数の `role="status"`、グループの `role="group"` と h3、過去の行のツールチップ (`SessionListScreen.tsx` / `thread-list.aui.tsx`)。Round 2 では placeholder の文言だけが変わった (`session-list/labels.ts:206`)
+  - FR-003 / FR-005: 会話内検索のバーと `::highlight()` (`conversation-search.tsx` / `main.css`)。Round 2 の差分では変わっていない
+  - FR-006 / FR-007: Command palette の combobox / listbox と `aria-activedescendant` (`command-palette.tsx` / `CommandPalette.tsx`)。Round 2 の差分では変わっていない
+  - FR-014: composer の名前と placeholder の日本語化 (`thread.aui.tsx:649-656`)。変わっていない
+  - FR-018 / SC-008: サイドバーの基準画像と高さの E2E。Round 2 で、CI のステップ・スクロールの位置合わせ・基準画像の 3 つが入った (`verify.yml:171-172`・`sidebar-screenshot.spec.ts:82-97`・`sidebar-past-sessions-win32.png`)
+  - SC-003: palette の axe 違反 0
 - touched files に該当する charter / Confirmation:
-  - ui charter「業務ルール / 不変条件」: assistant-ui の design system に乗り、独自トークンを増やさない (Principle XIII)。日本語で破綻しない (Principle VIII)
-  - ui charter「面の状態」: focus はシェル (`useShellFocus`) だけが書く。palette が実行したセッションの候補の行き先は `focusCenter`
-  - Constitution Principle VIII の Verification の Manual 検証者が a11y-reviewer (`constitution.md:638`)
-  - AD-037 Decision (IME の `isComposing` / 229 のガード)。palette・会話内検索・検索欄のキーの処理が該当する
-  - AD-045 Decision 2 (文言は `labels.ts` に置く)。下で勧める sr-only の文言の置き場がこれに当たる
-  - AD-046 Confirmation (spec 013 の SC・quickstart V-3 の実機の目視)
+  - ui charter の業務ルール「assistant-ui の design system に乗り、独自のトークンを増やさない」(`ui/charter.md:148`)。Principle XIII
+  - Constitution Principle VIII の Verification で、Manual の検証者に a11y-reviewer が入っている (`constitution.md:638,1013`)。対象は日本語のスクリーンショット比較と、Round 2 で入った基準画像の目視
+  - AD-038 Confirmation「基準画像に会話/config 由来情報が含まれない」(`0038-e2e-screenshot-harness.md:119`)。基準画像を目視して確かめた。写っているのは合成の題・ブランチ・タグだけだった
+  - AD-045 Confirmation (文言は `labels.ts` に置く)。Round 2 の placeholder の変更はこれに従っている
+  - AD-037 (IME の二重ガード)。対象の 4 か所は Round 1 から変わっていない
 - A. 認可 / 認証 / secret 管理: 該当なし: a11y-reviewer の担当外 (security-reviewer が持つ)
-- B. 入力検証 / injection / CSP / 暗号: 該当なし: a11y-reviewer の担当外 (security-reviewer が持つ。id を DOM の id やセレクタに入れない件は security の観点)
+- B. 入力検証 / injection / CSP / 暗号: 該当なし: a11y-reviewer の担当外 (security-reviewer が持つ)
 - C. 業務不変条件 / Charter drift: 該当なし: architecture-reviewer が持つ
-- D. Constitution / ADR drift: 該当なし: architecture-reviewer が持つ (a11y の観点で accepted ADR の Decision に反するものは見つからなかった)
+- D. Constitution / ADR drift: 該当なし: architecture-reviewer が持つ (a11y の観点で、accepted ADR の Decision / Confirmation に反するものは見つからなかった)
 - E. User Story / SC / AC / UX: 該当なし: po-reviewer が持つ
 - F. 命名 / module / lint hookup: 該当なし: convention-reviewer が持つ
 - G. optional reviewer 範囲: Critical:0 High:1 Medium:4 Low:5
-- H. テスト / coverage / observability / regression: Critical:0 High:0 Medium:1 Low:1
+- H. テスト / coverage / observability / regression: Critical:0 High:0 Medium:1 Low:2
 
 ## スコープ要約
 
-O-3 は renderer に 3 つの「探す」UI を足し、プリセットの欄に記録の表示を足す。
-- Command palette: Radix の Dialog の中に、registry の element に手を入れた `command-palette.tsx` を置く
-- 会話内検索: 中央のヘッダのボタンと、その下の検索のバー (`conversation-search.tsx`)。強調は CSS Custom Highlight API で掛ける
-- Thread search: 過去のセッションの区画の上端に固定した検索欄
-- O-7 の義務として、グループを `div role="group"` にし、過去の行にツールチップを付けた。composer の名前と placeholder も日本語にした
+Round 1 から Round 2 への差分 (9d98c39..a4c37a8。gate の成果物を除く) は、pr-gate R1 の C-001 (サイドバーの基準画像の E2E が CI で流れていない) を閉じるためのものだった。次の 6 点が入った。
+- `verify.yml` に、サイドバーの E2E のステップを 1 つ足した
+- `sidebar-screenshot.spec.ts` で、撮る前に区画のスクロールをグループの並びの上端まで送り、h3 と最初の行が見えることを確かめるようにした
+- CI の artifact から取った基準画像をコミットした
+- 過去の区画の検索欄の placeholder を 16 字から 13 字に縮めた (280px で切れていたため)
+- vitest の上限を 20s にした
+- 記録 (data-model / quickstart-results / touched-files) を直した
 
-本 reviewer は次を Read で直接確かめた。
-- `reviewers.yml` で対象の UI ファイル: CommandPalette / command-palette / conversation-search / ConversationSearchBar / ConversationSearchProvider / CenterHeader / CenterPane / SessionListScreen / Sidebar / PresetPanel / LaunchDialog / thread.aui / thread-list.aui
-- テーマのトークン: `main.css`・`surfaces.tsx`
+a11y の対象の UI ファイル (`command-palette.tsx`・`conversation-search.tsx`・`CommandPalette.tsx`・`SessionListScreen.tsx`・`thread.aui.tsx`・`thread-list.aui.tsx`・`main.css`) は 1 つも変わっていない。code-gate iter 3 の verdict の sha が、Round 1 の pr-gate の verdict と全部一致する。HEAD で Read と Grep を掛け、Round 1 の指摘の行が残っていることを確かめた。
 
-既定のテーマは light である (`stores/ui.ts:118-123` の `toggleTheme`。初期値は `dark: false`)。コントラストの値は、トークンの oklch を sRGB に直し、アルファを合成して計算した。
+したがって Round 1 の a11y の指摘 12 件 (High 1 / Medium 5 / Low 6) はすべて未解決で持ち越す。Round 1 で R1 の pr-gate が直すよう求めたのは C-001 だけで、a11y の High は直す対象になっていなかった。
 
-次のファイルは指摘の対象にしない (`reviewers.yml:68-85` の `exclude_patterns`)。
-- `components/ui/dialog.tsx` の `aria-modal` の追加 (vendored の shadcn)
-- `empty-state.tsx` (vendored)
+Round 2 の差分から新しい指摘が 1 件ある (L-007。基準画像が、基準を下回る placeholder の色を固定した)。L-006 には追加事実が 1 つある (重大度は変えない)。
 
-IME のガードは 4 か所すべてにあり、どれも `isComposing` と `keyCode === 229` の両方を見る。
-- `CommandPalette.tsx:79-84`
-- `command-palette.tsx:126`
-- `ConversationSearchProvider.tsx:143-147,164-177`
-- `SessionListScreen.tsx:1039-1042`
+Round 1 の Verdict 行の Low 5 は、本文 6 件の数え違いだった。本 Round では本文の件数に合わせた。
 
 ## Findings
 
-### [High] palette の現在の候補の指標が背景の 6% の濃淡 (1.14:1) だけで、入力欄も `outline-none`。ダイアログの中に見えるフォーカス指標が無い (H-001) (scope: feature)
+### [High] palette の現在の候補の指標が背景の 6% の濃淡 (1.14:1) だけで、入力欄も outline-none。ダイアログの中に見えるフォーカス指標が無い (H-001) (scope: feature)
 
-- **観察**:
-  - 現在の候補 (`selected`) を他と区別するのは `bg-foreground/[0.06]` の 1 つだけ (`src/renderer/src/components/assistant-ui/elements/command-palette.tsx:202-209`、該当は :205)。枠線・outline・太さ・印のどれも変わらない
-  - 下地は `floating` (`surfaces.tsx:9`) = `bg-background`。light は `oklch(1 0 0)` (`main.css:87`)、dark は `--popover` (`main.css:131`)
-  - 計算した比: light は 白 vs #f0f0f0 で **1.14:1**、dark は #18181b vs #262628 で **1.16:1**
-  - DOM のフォーカスは combobox の input に残る (`aria-activedescendant`)。その input は `outline-none` で、代わりの指標が無い (`command-palette.tsx:166`)
-  - option は `tabIndex={-1}` (`:259`)。したがって、キーボード利用者が ↑↓ で動かす「今の位置」を見る手段はこの 1.14:1 の濃淡しかない
-  - hover は `hover:bg-foreground/[0.03]` (`:207`) で、hover は現在の候補 (`activeIndex`) を動かさない。指している行と Enter で実行される行が、ほぼ見えない 2 種類の濃淡で並ぶ
-  - Windows の Contrast themes (forced colors) では背景色がシステムの色に置き換わる。背景色だけの指標はそこでは完全に消える (plan の Target Platform は Windows 11)
-- **同種事象探索**: Grep `bg-foreground/\[0\.0\d\]` を `src/renderer/src` に掛けて 12 件。
-  - 状態 (選択・現在) の指標に使っているのは `command-palette.tsx:205` の 1 件だけ
-  - 残りは hover か下地: `command-palette.tsx:207`・`surfaces.tsx:11,14,20`・`WorkspaceFoldersScreen.tsx:528`・`data-table.tsx:47,52,55` と `file-tree.tsx:63` (この 2 つは vendored で対象外)
-  - `ResolutionScreen.tsx:54` は仮実装の画面で対象外 (`reviewers.yml:65-67`)
-  - 先例が 2 つある。どちらも同じ欠陥 (1.04:1) を a11y の High として直している: `thread-list.aui.tsx:352-369` (H-008 / H-202。2px の `bg-foreground` の帯で 19:1 にした) と `SessionListScreen.tsx:1232-1238` (H-003)
+- **Round 2 の状態**: Round 1 から持ち越し (未解決)。重大度は変えない (追加事実なし)
+- **観察** (HEAD で確かめ直した):
+  - 現在の候補を区別する手がかりは `src/renderer/src/components/assistant-ui/elements/command-palette.tsx:205` の `bg-foreground/[0.06]` だけである。hover は `:207` の `hover:bg-foreground/[0.03]`
+  - 入力欄は `:166` で `outline-none` になっていて、代わりの指標が無い。option は `:259` で `tabIndex={-1}` なので、DOM のフォーカスは combobox の input に残る (`:163` の `aria-activedescendant`)
+  - Round 1 の計算では、下地の `floating` に対し light が 1.14:1、dark が 1.16:1 である。Windows の Contrast themes (forced colors) では背景色が置き換わり、指標が消える
+- **同種事象探索**:
+  - Grep `bg-foreground/\[0\.0\d\]` (`src/renderer/src`) で 11 件 (6 ファイル)。Round 1 の「12 件」は数え違いで、列挙した 11 件は同じ
+  - 状態の指標に使っているのは `command-palette.tsx:205` の 1 件だけ。残りは hover か下地 (`command-palette.tsx:207`・`surfaces.tsx` 3 件・`WorkspaceFoldersScreen.tsx` 1 件)、vendored (`data-table.tsx` 3 件・`file-tree.tsx` 1 件)、仮実装 (`ResolutionScreen.tsx` 1 件)
 - **リスク/影響**:
-  - 晴眼のキーボード利用者は、↑↓ で選んだ候補がどれかをほぼ見分けられない。Enter で意図しない操作が走りうる (セッションを開く・サイドバーを畳むなど)
-  - palette はキーボード操作のための部品 (US-3「キーボードだけで操作を呼び出す」) なので、中核の用途が損なわれる
-- **推奨アクション**: 現在の候補に 3:1 以上の、背景色に依らない指標を足す。既存のトークンだけを使う (Principle XIII)。
+  - 晴眼のキーボード利用者は、↑↓ で選んだ候補を見分けられない。Enter で意図しない操作 (セッションを開く・サイドバーを畳むなど) が走りうる
+  - US-3「キーボードだけで操作を呼び出す」の中核が損なわれる
+- **推奨アクション**: 既存のトークンだけで、背景色に依らない 3:1 以上の指標を足す。
   ```tsx
   // command-palette.tsx:202-209
-  const className = cn(
-    "flex items-center gap-2 rounded-xl px-2 py-1.5 text-start transition-colors",
-    selected
-      ? "bg-accent font-medium outline-2 -outline-offset-2 outline-ring" // --ring は白に対し 4.83:1 (main.css:117)
-      : onRun ? "hover:bg-foreground/[0.03]" : undefined,
-  );
+  selected
+    ? "bg-accent font-medium outline-2 -outline-offset-2 outline-ring" // --ring は白に対し 4.83:1
+    : onRun ? "hover:bg-foreground/[0.03]" : undefined,
   ```
-  - outline は forced colors でも残る。`thread-list.aui.tsx:379` と同じ形の `before:` の帯でもよいが、帯も背景色なので forced colors では消える。outline を勧める
-  - 直したら、Playwright で現在の候補の矩形の見た目を確かめる手段を足す (M-004)
-- **根拠**:
-  - WCAG 2.1 SC 2.4.7 Focus Visible (AA)
-  - SC 1.4.11 Non-text Contrast (AA。状態の指標は 3:1)
-  - WAI-ARIA APG Combobox パターン (`aria-activedescendant` では現在の option の見た目がフォーカスの指標になる)
-  - 本リポジトリの先例: `thread-list.aui.tsx:352-369`・`SessionListScreen.tsx:1232-1238`
-  - ui charter「業務ルール」(独自トークンを増やさない)
-- **scope 根拠**: `command-palette.tsx` は本 PR が取り込んで手を入れた element で、touched files にある (`eslint.config.mjs:601-607` に手書きの element として登録済み)。
+  - outline は forced colors のモードでも残る
+  - 本リポジトリの先例: `thread-list.aui.tsx:352-369` と `SessionListScreen.tsx:1232-1238`
+- **根拠**: WCAG 2.1 SC 2.4.7 (AA)、SC 1.4.11 (AA)、WAI-ARIA APG Combobox、ui charter の業務ルール (`ui/charter.md:148`)
+- **scope 根拠**: `command-palette.tsx` は本 PR が取り込んで手を入れた element で、touched files にある。
 
 ### [Medium] 新しい UI の文字のコントラストが 4.5:1 に届かない (placeholder・palette のグループ名・種別の札) (M-001) (scope: feature)
 
-- **観察** (light は既定のテーマ。括弧の中は dark):
-
-  | 箇所 | 指定 | 下地 | 比 |
-  |---|---|---|---|
-  | palette の入力欄の placeholder (この入力欄の唯一の見える名前。`paletteInput` は aria-label と同じ文言) | `placeholder:text-foreground/30` (`command-palette.tsx:166`) | 白 | **2.04:1** (2.63:1) |
-  | palette のグループ名「操作」「セッション」 | `text-foreground/25` 11px (`command-palette.tsx:195`) | 白 | **1.79:1** (2.21:1) |
-  | palette の「esc」の案内 | `text-foreground/35` (`:173`) | `field` | 2.33:1 |
-  | palette の種別の札「稼働中 / 過去」(FR-007 が稼働中と過去を見分ける唯一の手がかり) | `text-muted-foreground` 11px on `field` (`:221-227`) | #f5f5f5 / 現在の候補では #e7e7e7 | **4.44:1 / 3.90:1** |
-  | palette の補足 (`detail`) | `text-muted-foreground` 11px (`:215`) | 現在の候補の #f0f0f0 | 4.24:1 |
-  | 会話内検索の placeholder「語を入力」 | `placeholder:text-foreground/30` (`conversation-search.tsx:83`) | `paper` の白 | **2.04:1** (2.63:1) |
-  | 過去の区画の検索欄の placeholder | `placeholder:text-muted-foreground` on `bg-input` (`SessionListScreen.tsx:853`) | `--input` = oklch(0.92) #e4e4e7 (`main.css:103`) | **3.81:1** (dark 5.17:1) |
-  | composer の placeholder「メッセージを入力」(本 PR は文言を変えた。色は前からのもの) | `placeholder:text-muted-foreground/60` (`thread.aui.tsx:651`) | `--color-card` の白 | 2.32:1 |
-
+- **Round 2 の状態**: Round 1 から持ち越し (未解決)
+  - Round 2 で過去の区画の検索欄の placeholder の文言は変わった (`src/renderer/src/features/session-list/labels.ts:206`)。色の指定 (`SessionListScreen.tsx:853`) は変わっていない
+  - この状態が基準画像に写った (L-007)
+- **観察** (HEAD で確かめた。比は Round 1 の計算。light が既定のテーマ):
+  - `command-palette.tsx:166` の `placeholder:text-foreground/30`: 2.04:1
+  - `command-palette.tsx:195` のグループ名 `text-foreground/25`: 1.79:1
+  - `command-palette.tsx:173` の esc の案内 `text-foreground/35`: 2.33:1
+  - `command-palette.tsx:221-227` の種別の札「稼働中 / 過去」: 4.44:1。現在の候補の上では 3.90:1
+  - `conversation-search.tsx:83` の `placeholder:text-foreground/30`: 2.04:1
+  - `SessionListScreen.tsx:853` の `bg-input` と `placeholder:text-muted-foreground` の組: 3.81:1
+  - `thread.aui.tsx:651` の `placeholder:text-muted-foreground/60`: 2.32:1
 - **同種事象探索**:
-  - Grep `placeholder:text-[a-z/0-9\-\[\]\.]+` (`src/renderer/src`) で 6 件
-    - 基準を満たさない: `command-palette.tsx:166`・`conversation-search.tsx:83`・`SessionListScreen.tsx:853`・`thread.aui.tsx:651`
-    - 満たす: `components/ui/input.tsx:10`・`textarea.tsx:9` (vendored。`bg-transparent` なので 4.83:1)
-  - Grep `text-foreground/(2|3)\d\b` で 13 件
-    - 対象: `command-palette.tsx:150,166,173,195`・`conversation-search.tsx:70,83`
-    - 対象外: `empty-state.tsx:92`・`data-table.tsx:39,40,43`・`file-tree.tsx:68,69,76` (vendored)
+  - Grep `placeholder:text-` (`src/renderer/src`) で 6 件
+    - 基準を下回る 4 件: `command-palette.tsx:166`・`conversation-search.tsx:83`・`SessionListScreen.tsx:853`・`thread.aui.tsx:651`
+    - 満たす 2 件 (vendored): `components/ui/input.tsx:10`・`components/ui/textarea.tsx:9`
+  - Grep `text-foreground/(2|3)\d\b` の対象 6 件は Round 1 から変わっていない
 - **リスク/影響**:
-  - 弱視の利用者は palette の入力欄が何をするか (唯一の見える名前が 2.04:1) を読めない
-  - グループの区切りと種別の札 (稼働中 / 過去) も読みにくい
-  - vitest-axe は `color-contrast` を切っているので、テストでは検出されない (M-004)
+  - 弱視の利用者は、palette の入力欄の唯一の見える名前 (2.04:1) と、種別の札を読みにくい
+  - vitest-axe は `color-contrast` を切っているので、テストでは検出されない
 - **推奨アクション**:
-  - `command-palette.tsx:166` と `conversation-search.tsx:83` を `placeholder:text-muted-foreground` にする (白 4.83:1・dark の popover 6.7:1)
+  - `command-palette.tsx:166` と `conversation-search.tsx:83` を `placeholder:text-muted-foreground` にする
   - `command-palette.tsx:195` を `text-muted-foreground` にする
-  - 種別の札は `field` の下地を外すか、`text-foreground/70` 相当にする。H-001 で現在の候補の背景を `bg-accent` にするなら、その上で 4.5:1 になることを確かめる
-  - `SessionListScreen.tsx:853` は既存の shadcn の `Input` (`components/ui/input.tsx:10`。`bg-transparent dark:bg-input/30`) と同じ下地にする (Principle XIII の element 優先)
-  - composer (`thread.aui.tsx:651`) の `/60` を外すのは同じ PR で直せる (1 語の変更)。前からある色なので、直さないなら持ち主を roadmap に書く
-- **根拠**: WCAG 2.1 SC 1.4.3 Contrast (Minimum) (AA。placeholder も情報を運ぶ文字として対象)、SC 1.4.11 (検索のアイコン `:150` / `conversation-search.tsx:70` は装飾の `aria-hidden` なので参考)。
-- **scope 根拠**: 表のファイルはすべて touched files にある。composer の色だけは前からあるが、同じ行を本 PR が変えた。
+  - 種別の札は `field` の下地を外す
+  - `SessionListScreen.tsx:853` は shadcn の `Input` と同じ下地 (`bg-transparent dark:bg-input/30`) にする。light で 4.83:1 になる。**基準画像の承認の前に決める (L-007)**
+  - `thread.aui.tsx:651` の `/60` を外す
+- **根拠**: WCAG 2.1 SC 1.4.3 (AA)
+- **scope 根拠**: 列挙したファイルはすべて touched files にある。
 
-### [Medium] 会話内検索の入力欄にフォーカスの指標が無い (`outline-none`。囲みに `focus-within` も無い) (M-002) (scope: feature)
+### [Medium] 会話内検索の入力欄にフォーカスの指標が無い (outline-none で、囲みに focus-within も無い) (M-002) (scope: feature)
 
+- **Round 2 の状態**: Round 1 から持ち越し (未解決)
 - **観察**:
-  - 入力欄は `outline-none` で、代わりの指標が無い (`conversation-search.tsx:83`)
-  - 囲み (`:62-67`) は `paper` (`bg-background border border-border/60`) のままで、`focus-within` の変化も無い
-  - バーには、入力欄・前へ・次へ・閉じるの 4 つのフォーカス先がある。ボタンは `ghostButton` の `focus-visible:ring-1 ring-ring` を持つ (`surfaces.tsx:20`) が、入力欄に戻ると指標はキャレットだけになる
-  - 同じ PR の過去の区画の検索欄は `focus-visible:ring-[3px]` を持つ (`SessionListScreen.tsx:853`)。同じ種類の欄で扱いが揃っていない
-- **同種事象探索**: Grep `outline-none` (`src/renderer/src`。`components/ui` を除く) で 17 件。
-  - 入力欄で代わりの指標が無いもの: `conversation-search.tsx:83`・`command-palette.tsx:166` (H-001 で扱う)
-  - composer の `thread.aui.tsx:651,1150` は囲みの `focus-within:border-border` (`:646`) が代わりだが、#e4e4e7 と白で 1.27:1。前からのもので本 PR は変えていない (system)
-  - 残り: 代わりの指標を持つもの (`thread-list.aui.tsx:289`・`CenterPane.tsx:58`・`surfaces.tsx:20`・`SessionListScreen.tsx:853`・`WorkspaceFoldersScreen.tsx:281,557` は `focus-visible:ring`)、フォーカスを受けない内容の領域 (`tool-fallback.aui.tsx:198`)、vendored のもの (`tool-group.aui.tsx`・`reasoning.tsx`・`attachment.aui.tsx`・`empty-state.tsx`・`error-state.tsx`)
-- **リスク/影響**: Tab で入力欄に戻ったとき、晴眼のキーボード利用者には今どこにフォーカスがあるかが見えにくい。
-- **推奨アクション**: 囲みに `focus-within:ring-1 focus-within:ring-ring` (または `has-[input:focus-visible]:ring-2`) を足す。トークンは既存の `--ring` (4.83:1)。
-- **根拠**: WCAG 2.1 SC 2.4.7 Focus Visible (AA)。
-- **scope 根拠**: `conversation-search.tsx` は本 PR が取り込んで手を入れた element (touched)。
+  - 入力欄は `src/renderer/src/components/assistant-ui/elements/conversation-search.tsx:83` で `outline-none` になっていて、代わりの指標が無い
+  - 囲み (`:62-67`) は `paper` のままで、フォーカスで変わる指定が無い
+  - 同じバーのボタン (`:99,108,120`) は `ghostButton` の `focus-visible:ring` を持つ。過去の区画の検索欄は `SessionListScreen.tsx:853` で `focus-visible:ring-[3px]` を持つ
+- **同種事象探索**: Grep `outline-none` (`components/ui` を除く) で、代わりの指標が無い入力欄は Round 1 と同じ 2 件 (`conversation-search.tsx:83`・`command-palette.tsx:166`)。後者は H-001 で扱う。
+- **リスク/影響**: Tab で入力欄に戻ったとき、晴眼のキーボード利用者には指標がキャレットだけしか見えない。
+- **推奨アクション**: 囲みに `focus-within:ring-1 focus-within:ring-ring` を足す。
+- **根拠**: WCAG 2.1 SC 2.4.7 (AA)
+- **scope 根拠**: touched files の element である。
 
-### [Medium] palette は候補の件数も 0 件も読み上げない (他の 2 つの検索は `role="status"` で読み上げる) (M-003) (scope: feature)
+### [Medium] palette は候補の件数も 0 件も読み上げない (他の 2 つの検索は role="status" で読み上げる) (M-003) (scope: feature)
 
+- **Round 2 の状態**: Round 1 から持ち越し (未解決)
 - **観察**:
-  - 0 件の表示は `EmptyState` で出すが、live region ではない (`CommandPalette.tsx:184-189`、`command-palette.tsx:283-285`)
-  - palette の中に `role="status"` / `aria-live` が 1 つも無い。Grep `aria-live` で、renderer の本番コードにある 7 件のうち palette の 2 ファイルは 0 件
-  - 語を入れると `activeIndex` は 0 に戻る (`CommandPalette.tsx:190-194`)。先頭の候補の id は `${prefix}-opt-0` のまま変わらないので、`aria-activedescendant` が変化せず読み上げが起きないことがある
-  - 0 件になると、`aria-expanded="false"` と `aria-activedescendant` が外れるだけ (テストで確かめている: `CommandPalette.test.tsx:466-473`)
-  - 同じ PR の他の 2 つの検索は件数を `role="status" aria-live="polite"` で読み上げる (`conversation-search.tsx:85-91`・`SessionListScreen.tsx:873-879`)
-- **同種事象探索**: Grep `aria-live` (`src/renderer/src`) で 7 件 (本番 6・テスト 1)。O-3 の検索の UI 3 つのうち、件数の live region が無いのは palette だけ。
-- **リスク/影響**: スクリーンリーダーの利用者は、入れた語で候補が何件になったか、0 件になったかが分からない。「一致する操作はありません」は読まれない。
+  - palette の 2 ファイル (`command-palette.tsx`・`CommandPalette.tsx`) に `aria-live` も `role="status"` も無い
+  - 0 件の表示 (`command-palette.tsx:283-285`) は live region ではない
+  - 他の 2 つの検索は件数を `role="status" aria-live="polite"` で読み上げる (`conversation-search.tsx:85-91`・`SessionListScreen.tsx:873-879`)
+- **同種事象探索**: Grep `aria-live` (`src/renderer/src`) で、本番の属性は 7 件 (`WorkspaceFoldersScreen.tsx:484,595,610`・`conversation-search.tsx:87`・`SessionListScreen.tsx:875,1163`・`SessionAttentionAnnouncer.tsx:41`)。palette は 0 件。
+- **リスク/影響**: スクリーンリーダーの利用者には、候補が何件になったか、0 件になったかが伝わらない。
 - **推奨アクション**:
   - `PaletteBody` に、常にマウントする sr-only の `<p role="status" aria-live="polite">` を置く
   - 中身は、語が空でなければ「{n} 件の候補」、0 件なら `paletteNone`
-  - 文言は `PALETTE_LABELS` に足す (AD-045 Decision 2)
-  - 常にマウントして中身だけを差し替えるのは、`SessionListScreen.tsx:869-872` の注記と同じ形
-- **根拠**: WCAG 2.1 SC 4.1.3 Status Messages (AA。検索結果の件数は Understanding の典型例)。
-- **scope 根拠**: `CommandPalette.tsx` は本 PR の新設 (touched)。
+  - 文言は `PALETTE_LABELS` に置く (AD-045)
+- **根拠**: WCAG 2.1 SC 4.1.3 (AA)
+- **scope 根拠**: `CommandPalette.tsx` は本 PR の新設で、touched files にある。
 
 ### [Medium] Windows の Contrast themes (forced colors) で、新しいフォーカス指標と選択の指標が消える。renderer に forced-colors の扱いが 0 件 (M-005) (scope: system)
 
+- **Round 2 の状態**: Round 1 から持ち越し (未解決)
 - **観察**:
-  - Tailwind は 4.3.3 (`package.json:75`)。v4 の `outline-none` は `outline-style: none`
-  - forced colors のモードでは `box-shadow` が `none` に強制されるので、`ring` (box-shadow) の指標は消える
-  - 本 PR の UI のうち影響を受けるもの:
-    - 過去の区画の検索欄の `focus-visible:ring-[3px] focus-visible:outline-none` (`SessionListScreen.tsx:853`)
-    - 会話内検索のボタンの `ghostButton` (`surfaces.tsx:20`。`conversation-search.tsx:99,108,120` で使う)
-    - palette の現在の候補の背景色 (H-001)
-  - 過去の行の Trigger (`thread-list.aui.tsx:289`) も同じ形。こちらは前からある
-- **同種事象探索**: Grep `forced-colors|forced-color` (`src/renderer/src`) で **0 件**。Grep `focus-visible:ring` は上の M-002 の列挙と重なる。
-- **リスク/影響**: 対象のプラットフォームは Windows 11 (plan の Technical Context)。Contrast themes を使う利用者には、Tab で移っても今どこにいるかが見えない。
+  - Grep `forced-colors` (`src/renderer/src`) で 0 件
+  - forced colors のモードでは box-shadow が強制で外れる。そのため、`ring` で描く指標 (`SessionListScreen.tsx:853`、`surfaces.tsx:20` の `ghostButton`) と、背景色だけの指標 (`command-palette.tsx:205`) が消える
+- **同種事象探索**: Grep `forced-colors|forced-color` で 0 件。e2e でも Grep `emulateMedia|forcedColors` で 0 件。
+- **リスク/影響**: 対象のプラットフォームは Windows 11 である。Contrast themes を使う利用者は、Tab で移った先が見えない。
 - **推奨アクション**:
-  - バンドルされる `main.css` (本 PR が触った) の層の外に、次の規則を置く。層の外の規則は Tailwind の `@layer utilities` に勝つ
-    ```css
-    @media (forced-colors: active) { :focus-visible { outline: 2px solid CanvasText; outline-offset: 2px; } }
-    ```
-  - H-001 の outline の指標と合わせれば、palette の現在の候補も残る
-  - アプリ全体の基線なので、別の spec で扱うなら roadmap に持ち主を書く
-- **根拠**: WCAG 2.1 SC 2.4.7 (AA)、CSS Color Adjustment Module Level 1 (forced colors のモードで強制されるプロパティ)。
+  - バンドルされる `main.css` の層の外に `@media (forced-colors: active) { :focus-visible { outline: 2px solid CanvasText; outline-offset: 2px; } }` を置く
+  - 本 PR で扱わないなら、roadmap に持ち主を書く
+- **根拠**: WCAG 2.1 SC 2.4.7 (AA)、CSS Color Adjustment Module Level 1
 - **scope 根拠**: 原因は renderer 全体の focus ring の書き方 (前からあるもの) で、本 PR の新しい UI がそれを継いでいる。
 
-### [Low] 会話内検索の「現在以外の一致」の強調が下地に対し 1.29:1 (light) / 1.89:1 (dark) (L-001) (scope: feature)
+### [Low] 会話内検索の現在以外の一致の強調が下地に対し 1.29:1 (light) / 1.89:1 (dark) (L-001) (scope: feature)
 
-- **観察**: `::highlight(closta-search)` は `color-mix(in oklab, var(--chart-4) 45%, transparent)` (`main.css:159-162`)。
-  - light: 白の上で #FFDF8C 相当になり、白に対し 1.29:1
-  - dark: `--chart-4` が紫 (`main.css:147`) になり、#09090b の上で #512B75 相当。1.89:1
-  - 強調の中の文字は 10:1 以上で読める。現在の一致は前景と背景を反転させていて区別できる (`:164-167`)
-- **同種事象探索**: Grep `::highlight` (`src/renderer/src`) で 2 件。どちらも `main.css` で、問題は `:159` だけ。
-- **リスク/影響**: 弱視の利用者は、現在の一致以外の箇所を見落としうる。厳密な基準違反ではない (1.4.11 を強調に当てるかは解釈が分かれる)。
-- **推奨アクション**: `::highlight(closta-search)` に `text-decoration: underline` (`::highlight` で使えるプロパティ) を足し、色以外の手がかりにする。または混ぜる割合を上げる。
-- **根拠**: WCAG 2.1 SC 1.4.11 (参考)、SC 1.4.1 Use of Color。
-- **scope 根拠**: `main.css` は touched。
+- **Round 2 の状態**: Round 1 から持ち越し (未解決)
+- **観察**: `src/renderer/src/assets/main.css:159-162` の `::highlight(closta-search)` は `color-mix(in oklab, var(--chart-4) 45%, transparent)` で描く。現在の一致 (`:164-167`) は前景と背景の反転で区別できる。
+- **同種事象探索**: Grep `::highlight` で 2 件 (`main.css:159,164`)。
+- **リスク/影響**: 弱視の利用者は、現在以外の一致を見落としうる。
+- **推奨アクション**: `text-decoration: underline` を足すか、混ぜる割合を上げる。
+- **根拠**: WCAG 2.1 SC 1.4.11 (参考)、SC 1.4.1
+- **scope 根拠**: `main.css` は touched files にある。
 
-### [Low] 会話内検索の移動のたびに長い距離を smooth scroll する。`prefers-reduced-motion` で止める手段が無い (L-002) (scope: feature)
+### [Low] 会話内検索の移動のたびに長い距離を smooth scroll し、prefers-reduced-motion で止まらない (L-002) (scope: feature)
 
-- **観察**:
-  - transcript のスクローラは無条件に `scroll-smooth` (`thread.aui.tsx:223,512`)
-  - 本 PR の navigator は、Enter のたびに `scrollIntoView({ block: "center" })` と `scrollToIndex` を呼ぶ (`:285,394,400`)
-  - behavior を指定しないので CSS の smooth が効き、数千メッセージの間を動きながら移る
-- **同種事象探索**: Grep `scroll-smooth|scroll-behavior|reduced-motion` (`src/renderer/src`) で 2 件 (`thread.aui.tsx:223,512`)。`motion-reduce:` による打ち消しは 0 件。
-- **リスク/影響**: 前庭障害のある利用者に、操作のたびに大きな動きが出る (SC 2.3.3 は AAA なので Low)。
-- **推奨アクション**: 2 か所を `motion-safe:scroll-smooth` にする (または `motion-reduce:scroll-auto` を足す)。
-- **根拠**: WCAG 2.1 SC 2.3.3 Animation from Interactions (AAA)。
-- **scope 根拠**: `thread.aui.tsx` は touched。
+- **Round 2 の状態**: Round 1 から持ち越し (未解決)
+- **観察**: `src/renderer/src/components/assistant-ui/elements/thread.aui.tsx:223,512` が無条件に `scroll-smooth` を指定している。navigator の `scrollIntoView` と `scrollToIndex` はこれを継ぐ。
+- **同種事象探索**: Grep `scroll-smooth|scroll-behavior|reduced-motion` で 2 件 (`thread.aui.tsx:223,512`)。`motion-reduce:` による打ち消しは 0 件。
+- **リスク/影響**: 前庭障害のある利用者に、操作のたびに大きな動きが出る。
+- **推奨アクション**: 2 か所を `motion-safe:scroll-smooth` にする。
+- **根拠**: WCAG 2.1 SC 2.3.3 (AAA)
+- **scope 根拠**: touched files にある。
 
-### [Low] 過去の行のツールチップが行の名前と同じ文を `aria-describedby` で再び読ませる (L-003) (scope: feature)
+### [Low] 過去の行のツールチップが、行の名前と同じ文を aria-describedby で再び読ませる (L-003) (scope: feature)
 
-- **観察**:
-  - `renderTooltip` は全行に題の全文を返す。切り詰めていない行も同じ (`SessionListScreen.tsx:945-948`)
-  - Radix の Tooltip は、開いている間 Trigger に `aria-describedby` を付ける
-  - Provider の `delayDuration` は 0 (`components/ui/tooltip.tsx:8`) なので、フォーカスと同時に開く
-  - Trigger の名前には題がすでに入っている (`thread-list.aui.tsx:308-318`)。数百行のどれにフォーカスしても、題が 2 回読まれる (`thread-list.aui.tsx:386-392`)
-- **同種事象探索**: Grep `renderTooltip` で、渡しているのは `SessionListScreen.tsx:333,1417` と稼働中の一覧 (O-7 の前からの形)。
-- **リスク/影響**: スクリーンリーダーの読み上げが冗長になる。機能は損なわれない。
-- **推奨アクション**: 題が切り詰められたとき (`scrollWidth > clientWidth`) だけツールチップを渡す。そうしないなら、冗長を受け入れる理由を注記に書く。
-- **根拠**: WCAG 2.1 SC 4.1.2 (名前と説明の適切さ)、ARIA の「不要な ARIA を被せない」。
-- **scope 根拠**: `SessionListScreen.tsx` / `thread-list.aui.tsx` は touched。
+- **Round 2 の状態**: Round 1 から持ち越し (未解決)
+- **観察**: `src/renderer/src/features/session-list/SessionListScreen.tsx:945-948` の `renderTooltip` は、切り詰めていない行にも題の全文を渡す。Trigger の名前にはすでに題が入っている (`thread-list.aui.tsx:308-318`)。
+- **同種事象探索**: Grep `renderTooltip` で、渡しているのは `SessionListScreen.tsx:333,1417` の 2 件。
+- **リスク/影響**: 読み上げが冗長になる。機能は損なわれない。
+- **推奨アクション**: 題が切り詰められたときだけツールチップを渡す。そうしないなら、冗長を受け入れる理由を注記に書く。
+- **根拠**: WCAG 2.1 SC 4.1.2
+- **scope 根拠**: touched files にある。
 
 ### [Low] 会話内検索では、スクリーンリーダーの利用者が一致の中身を得られない (件数と位置しか読まれない) (L-004) (scope: feature)
 
-- **観察**:
-  - 読み上げは `status` の「{i} / {n} 件」だけ (`conversation-search.tsx:85-91`)
-  - 強調 (CSS Custom Highlight) はアクセシビリティツリーに出ない
-  - フォーカスは入力欄に残る
-  - registry の原本にあった一致の前後の文 (`before` / `match` / `after`) は外した (`conversation-search.tsx:12-13`)
+- **Round 2 の状態**: Round 1 から持ち越し (未解決)
+- **観察**: 読み上げは `conversation-search.tsx:85-91` の status 「{i} / {n} 件」だけである。強調 (CSS Custom Highlight) はアクセシビリティツリーに出ない。
 - **同種事象探索**: 該当は会話内検索の 1 か所だけ。
-- **リスク/影響**: 支援技術の利用者は、どの文に当たったかを知るには入力欄を離れて transcript を辿るしかない。
-- **推奨アクション**: `status` に、現在の一致の役割 (user / assistant) と前後の数語を sr-only で足す (文言は `CONVERSATION_SEARCH_LABELS`)。または、移った先のメッセージへフォーカスを移す操作を足す。O-9 で扱うなら roadmap に書く。
-- **根拠**: WCAG 2.1 SC 1.3.1 / 4.1.3 (参考)。
-- **scope 根拠**: touched の element と provider で直せる。
+- **リスク/影響**: 支援技術の利用者は、どの文に当たったかを、入力欄を離れて transcript を辿らないと知れない。
+- **推奨アクション**: status に、現在の一致の役割と前後の数語を sr-only で足す。O-9 で扱うなら roadmap に書く。
+- **根拠**: WCAG 2.1 SC 1.3.1 / 4.1.3 (参考)
+- **scope 根拠**: touched files にある。
 
-### [Low] Thread search の検索欄と件数の live region が `aria-busy` の中にある (L-005) (scope: feature)
+### [Low] Thread search の検索欄と件数の live region が aria-busy の中にある (L-005) (scope: feature)
 
+- **Round 2 の状態**: Round 1 から持ち越し (未解決)
+- **観察**: `src/renderer/src/features/session-list/SessionListScreen.tsx:1113` で、画面の全体の `div` が `aria-busy={sessions.loading}` を持つ。その内側に検索欄と件数の `role="status"` (`:873-879`) がある。
+- **同種事象探索**: Grep `aria-busy` (`SessionListScreen.tsx`) で、属性は `:1113` の 1 件 (`:1149` はコメント)。
+- **リスク/影響**: WSL の取得の間に打った語の件数の読み上げが遅れうる。
+- **推奨アクション**: `aria-busy` を一覧のスクロールの領域に移し、検索欄を外に出す。
+- **根拠**: WAI-ARIA 1.2 `aria-busy`
+- **scope 根拠**: touched files にある。
+
+### [Medium] (H) コントラストとフォーカスの見えを確かめる経路が、自動にも手順にも無い (M-004) (scope: feature)
+
+- **Round 2 の状態**: Round 1 から持ち越し (未解決)。下に Round 2 の観察を足した
 - **観察**:
-  - 画面の全体の `div` が `aria-busy={sessions.loading}` を持つ (`SessionListScreen.tsx:1110-1113`)
-  - 本 PR が、その内側に検索欄と件数の `role="status"` を置いた (`:1125-1132`・`:873-879`)
-  - 検索は取得中でも使える設計 (data-model §1 の `search-empty`「取得中でも出す」)
-- **同種事象探索**: Grep `aria-busy` (`SessionListScreen.tsx`) で `:1113` の 1 件。
-- **リスク/影響**: ARIA 1.2 は「busy の領域の live region の通知は busy が外れるまで待つべき」としている。WSL の取得 (実測 1.8 秒以上) の間に打った語の件数の読み上げが遅れうる。読み上げの間は支援技術ごとに違う。
-- **推奨アクション**: `aria-busy` を一覧の部分 (スクロールする領域 `:1135`) に移し、検索欄を外に出す。
-- **根拠**: WAI-ARIA 1.2 `aria-busy`。
-- **scope 根拠**: `SessionListScreen.tsx` は touched。
-
-### [Medium] (H) コントラストとフォーカスの見えを確かめる経路が自動にも手順にも無い (M-004) (scope: feature)
-
-- **観察**:
-  - 本 PR の vitest-axe の 4 本は、すべて `color-contrast` を切っている (jsdom は色を計算できない)
-    - `CommandPalette.test.tsx:315`
-    - `ConversationSearch.test.tsx:622,628`
-    - `SessionListScreen.test.tsx:1961`
-    - `PresetPanel.test.tsx:144`
-  - quickstart V-3 (`quickstart.md:29-36`) に、次の項目が無い: palette の現在の候補の見え、placeholder とグループ名のコントラスト、入力欄のフォーカスの見え、Windows の Contrast themes での見え
-  - そのため H-001 / M-001 / M-002 / M-005 を検出するテストも手順も無い
-  - V-3 は未実施 (`quickstart-results.md:63-66`)
+  - vitest-axe の 4 本はすべて `color-contrast` を切っている (`CommandPalette.test.tsx:315`・`ConversationSearch.test.tsx:622,628`・`SessionListScreen.test.tsx:1961`・`PresetPanel.test.tsx:144`)
+  - quickstart の V-3 (`specs/012-ui-thread-search/quickstart.md:29-36`) に、palette の現在の候補の見え・placeholder のコントラスト・入力欄のフォーカスの見え・Contrast themes の項目が無い。Round 2 でも変わっていない
+  - Round 2 で CI に入ったスクリーンショット比較は 2 本 (`composer-screenshot.spec.ts:53`・`sidebar-screenshot.spec.ts:99`)。どちらもフォーカスした状態と forced colors の状態を撮らない (Grep `emulateMedia|forcedColors` で 0 件。`focus()` を呼ぶのは `ime.spec.ts` と `multi-session.spec.ts` だけ)
 - **同種事象探索**: Grep `axe\(|toHaveNoViolations` (対象の 4 つのテスト) で 8 件。どれも `color-contrast` を切っている。
-- **リスク/影響**: 色とフォーカスの見えの退行は CI でも人手の手順でも捕まらない。直した後に戻っても気づけない。
+- **リスク/影響**: H-001 / M-001 / M-002 / M-005 を直しても、退行を CI でも人の手順でも捕まえられない。
 - **推奨アクション**:
-  - V-3 に次の項目を足す: 「palette で ↑↓ の現在の候補が見分けられる」「各入力欄にフォーカスの指標が出る」「Windows の Contrast themes で同じ 2 点」
-  - 加えて、E2E (AD-038 のハーネス) で axe-core を `page.addScriptTag` で注入し、palette を開いた状態と検索のバーを開いた状態で `color-contrast` を有効にして流す
-  - axe-core は `node_modules/axe-core` にあり (vitest-axe の依存)、新しい npm の依存は要らない
-- **根拠**: Constitution Principle VIII の Verification (Manual の検証者に a11y-reviewer。`constitution.md:638`)、Principle XI (観測できる垂直スライス)。
+  - V-3 に「palette で ↑↓ の現在の候補が見分けられる」「各入力欄にフォーカスの指標が出る」「Windows の Contrast themes で同じ 2 点」を足す
+  - Round 2 で CI に載った `sidebar-screenshot.spec.ts` は、安く足せる置き場である。そこに、検索欄にフォーカスした状態のケースを足せる
+  - forced colors を Playwright の `page.emulateMedia({ forcedColors: 'active' })` で撮るケースも候補になる。ただし Electron の page で効くかは本 reviewer は確かめていない
+  - E2E で axe-core (`node_modules/axe-core`) を注入し、`color-contrast` を有効にして流す案は Round 1 のまま
+- **根拠**: Constitution Principle VIII の Verification (Manual の検証者に a11y-reviewer。`constitution.md:638`)、Principle XI
 - **scope 根拠**: `quickstart.md` と `e2e/` は本 PR の範囲で直せる。
 
-### [Low] (H) 本 PR が手を入れた 2 つの element が、a11y / ux reviewer の起動条件に入っていない (L-006) (scope: system)
+### [Low] (H) 本 PR が手を入れた 2 つの element と、名前の文言の表が、a11y / ux reviewer の起動条件に入っていない (L-006) (scope: system)
 
+- **Round 2 の状態**: Round 1 から持ち越し (未解決)。追加事実が 1 つある (重大度は変えない)
 - **観察**:
-  - `reviewers.yml:52-53` は「新しい手書きの element を足したらここにも足す」と定めている
-  - しかし a11y-reviewer の `auto_invoke_patterns` (`:54-64`) にも ux-reviewer の (`:102-114`) にも、`command-palette.tsx` / `conversation-search.tsx` が無い
-  - 同じ 2 ファイルは、本 PR で `eslint.config.mjs:601-607` の手書きの element の一覧には足されている
-  - 本 PR では `features/shell/**` などで起動したが、この 2 つの element だけを変える後続の PR では a11y / ux reviewer が起動しない
-- **同種事象探索**: Grep `command-palette|conversation-search` (`eslint.config.mjs`・`reviewers.yml`) で 4 件。すべて `eslint.config.mjs` で、`reviewers.yml` は 0 件。
-- **リスク/影響**: H-001 / M-001 / M-002 を直した後の退行が、pr-gate の a11y の観点から外れる。
-- **推奨アクション**: `reviewers.yml` の a11y-reviewer と ux-reviewer の `auto_invoke_patterns` に、2 つのパスを足す (plan は「reviewers.yml は変えない」としているが、根拠は database-reviewer の起動の話に限られる)。
-- **根拠**: `reviewers.yml:52-53` の規則、AGENTS.md「reviewer の発火条件の正本は reviewers.yml」。
-- **scope 根拠**: `reviewers.yml` は touched files の外。
+  - `.specify/spec-gate/reviewers.yml:52-53` は「新しい手書きの element を足したらここにも足す」と定めている
+  - しかし a11y-reviewer の `auto_invoke_patterns` (`:42-64`) にも ux-reviewer の (`:92-114`) にも、`command-palette.tsx` / `conversation-search.tsx` が無い
+  - **追加事実 (Round 2)**: Round 2 の renderer の変更は `src/renderer/src/features/session-list/labels.ts` の 1 ファイルだけだった (検索欄の placeholder。同じ表に、名前の `searchLabel` と、消すボタンの名前の `searchClear` もある)
+    - 両 reviewer の patterns のうち、文言の表は `features/shell/labels.ts` の 1 つだけ (`:49,99`)
+    - `features/session-list/**/*.tsx` は `.ts` に当たらない
+    - したがって、この Round 2 と同じ「名前と placeholder の文言だけを変える PR」は、単独では a11y / ux reviewer を起こさない
+    - 本 PR で起動したのは、main...HEAD の差分が `thread-list.aui.tsx` に当たったからである
+- **同種事象探索**:
+  - Grep `command-palette|conversation-search` (`reviewers.yml`) で 0 件
+  - Grep `labels\.ts` (`reviewers.yml`) で 4 件。`shell/labels.ts` が 3 件 (`:49,99,197`)、`:190` は ui-coverage の除外の理由の注記
+- **リスク/影響**: H-001 / M-001 / M-002 を直した後の退行と、accessible name の文言の退行が、pr-gate の a11y の観点から外れる。
+- **推奨アクション**: a11y-reviewer と ux-reviewer の `auto_invoke_patterns` に、次の 4 つを足す。
+  - element 2 つ (`command-palette.tsx`・`conversation-search.tsx`)
+  - 名前の文言の表 (`features/session-list/labels.ts`・`features/chat/labels.ts`)
+- **根拠**: `reviewers.yml:52-53` の規則、AGENTS.md「reviewer の発火条件の正本は reviewers.yml」
+- **scope 根拠**: `reviewers.yml` は touched files の外にある。
+
+### [Low] (H) 新しい基準画像が、基準を下回る検索欄の placeholder の色を固定した。直す時期を利用者が画像を目視する前に決めないと、承認が 2 回要る (L-007) (scope: feature)
+
+- **Round 2 の状態**: new (Round 2 の差分による)
+- **観察**:
+  - Round 2 でコミットした `e2e/sidebar-screenshot.spec.ts-snapshots/sidebar-past-sessions-win32.png` を Read で目視した。区画の見出しの下に、灰の下地に灰の placeholder「題・ブランチ・フォルダなど」が写っている
+  - その色は M-001 の `src/renderer/src/features/session-list/SessionListScreen.tsx:853` (`bg-input` と `placeholder:text-muted-foreground`。light で 3.81:1) である
+  - 比較は `e2e/sidebar-screenshot.spec.ts:99` の `toHaveScreenshot` で行う。CI では `.github/workflows/verify.yml:171-172` で毎回走る。invoker が観察した run 37565959731 で緑だった
+  - 利用者による画像の目視は終わっていない (`specs/012-ui-thread-search/quickstart-results.md:92-93`「画像そのものの目視は朝に利用者が確かめる項目に残す」)
+  - AD-038 D5 と V-4 では、基準画像を取り直すには CI の artifact と利用者の承認が要る (`quickstart-results.md:74-81`)
+- **同種事象探索**: Grep `toHaveScreenshot` (`e2e`) で 2 件。
+  - `composer-screenshot.spec.ts:53` は、撮る前に入力欄に文字を入れる (`:32` の `composer.fill`)。placeholder (`thread.aui.tsx:651`) は写らない
+  - 本 PR の a11y の指摘の箇所が基準画像に写るのは、サイドバーの `:853` の 1 件だけ
+- **リスク/影響**:
+  - M-001 の `:853` を merge の後に直すと、基準画像が変わる。CI の artifact からの取り直しと利用者の承認がもう 1 回要る
+  - 取り直しの手間が「直さない理由」になり、基準を下回る色が画像で固定されやすい
+- **推奨アクション**:
+  - 利用者が朝に基準画像を目視する前に、M-001 の `:853` の扱いを決める
+  - 直すなら本 PR で直し (shadcn の `Input` と同じ `bg-transparent dark:bg-input/30`)、取り直した画像を 1 回だけ承認する
+  - 直さないなら、roadmap に持ち主と「直すときは `sidebar-past-sessions-win32.png` を取り直す」を書く
+- **根拠**: WCAG 2.1 SC 1.4.3 (AA)、AD-038 D5、Constitution Principle VIII の Verification (Manual の検証者に a11y-reviewer)
+- **scope 根拠**: `SessionListScreen.tsx`・基準画像・`quickstart-results.md` は、すべて touched files にある。
 
 ## H. テスト / regression の根拠 (担当範囲の実質記入)
 
 - **既存の振る舞いを壊していない根拠 (観察)**:
-  - palette の開閉・Esc / 外の押下でのフォーカスの戻り・`aria-activedescendant` が実在の option を指すこと・axe の構造の違反 0 (3 つの状態) は `CommandPalette.test.tsx:437-474` にある
-  - 会話内検索の位置の `role="status"` は `ConversationSearch.test.tsx:264,313`、Thread search の件数の `role="status"` は `SessionListScreen.test.tsx:1724`
-  - IME の変換中のキーのテストは `CommandPalette.test.tsx:425-433` ほか
-  - composer の名前の変更は、E2E の locator と一緒に直してある (`e2e/support/launch.ts` ほか。touched)
-- **検出できていないもの**: H-001 / M-001 / M-002 / M-005 (色・フォーカスの見え・forced colors)。M-004 で手当てする。
+  - Round 2 の差分は、a11y の対象の UI ファイルを変えていない (sha が一致する)。Round 1 で確かめた次の根拠は、そのまま有効である
+    - palette のフォーカスの戻りと axe の構造の違反 0 (`CommandPalette.test.tsx:437-474`)
+    - 2 つの検索の件数の `role="status"` (`ConversationSearch.test.tsx:264,313`・`SessionListScreen.test.tsx:1724`)
+    - IME の変換中のキー (`CommandPalette.test.tsx:425-433` ほか)
+  - Round 2 で入った E2E は、a11y の構造の退行も見張る
+    - `sidebar-screenshot.spec.ts:96` は、グループの見出しが `heading level 3` であることを確かめる (FR-017 の h3)
+    - `:124` は、検索欄が `searchbox` の役割と名前「セッションを検索」を持つことを確かめる
+  - invoker の CI の証拠では、run 37565959731 で e2e の 6 ステップがすべて緑だった (IME の変換確定・日本語スクリーンショット・サイドバーを含む)
+  - Principle VIII の Manual の確認として、基準画像を目視した
+    - placeholder は切れずに収まっている
+    - 全角の括弧・題・グループの見出し「E2E Project / 同じ所在 / 3 件」に、欠け・重なり・桁ずれは見当たらない
+    - ただし画像は E2E の同梱フォント (Noto Sans JP) で描いている。本番のフォント (`main.css:45` の `system-ui, 'Segoe UI', 'Yu Gothic UI', …`) で placeholder が収まるかは、quickstart の V-3 の目視に任される (V-3 にその項目は無い)
+- **検出できていないもの**: H-001 / M-001 / M-002 / M-005 (色・フォーカスの見え・forced colors)。手当ては M-004 と L-007 に書いた。
 - **観測点**: a11y の観点で足すべき log / metric は無い (表示の問題で、実行時のエラーの経路ではない)。
 
 ## 同種事象探索 cascade summary
 
 | 指摘 ID | Grep query | 該当件数 | path:line |
 |---|---|---|---|
-| H-001 | `bg-foreground/\[0\.0\d\]` (src/renderer/src) | 12 (状態の指標は 1) | command-palette.tsx:205 (状態)・:207 / surfaces.tsx:11,14,20 / WorkspaceFoldersScreen.tsx:528 (hover・下地) / data-table.tsx:47,52,55・file-tree.tsx:63 (vendored) / ResolutionScreen.tsx:54 (仮実装) |
-| M-001 | `placeholder:text-[a-z/0-9\-\[\]\.]+` | 6 (基準を下回る 4) | command-palette.tsx:166 / conversation-search.tsx:83 / SessionListScreen.tsx:853 / thread.aui.tsx:651 (満たす: ui/input.tsx:10・ui/textarea.tsx:9) |
-| M-001 | `text-foreground/(2\|3)\d\b` | 13 (対象 6) | command-palette.tsx:150,166,173,195 / conversation-search.tsx:70,83 (vendored の 7 件は対象外) |
-| M-002 | `outline-none` (components/ui を除く) | 17 (代わりの指標が無い入力欄 2) | conversation-search.tsx:83 / command-palette.tsx:166 (H-001) / thread.aui.tsx:651,1150 (前からの composer。system) |
-| M-003 | `aria-live` (src/renderer/src) | 7 (palette 0) | conversation-search.tsx:87 / SessionListScreen.tsx:875,1163 / WorkspaceFoldersScreen.tsx:484,595,610 / SessionAttentionAnnouncer.tsx:41 |
+| H-001 | `bg-foreground/\[0\.0\d\]` (src/renderer/src) | 11 | command-palette.tsx:205 (状態の指標)・:207 / surfaces.tsx (3) / WorkspaceFoldersScreen.tsx (1) / data-table.tsx (3)・file-tree.tsx (1) (vendored) / ResolutionScreen.tsx (1) (仮実装) |
+| M-001 | `placeholder:text-` (src/renderer/src) | 6 | command-palette.tsx:166 / conversation-search.tsx:83 / SessionListScreen.tsx:853 / thread.aui.tsx:651 (満たす: ui/input.tsx:10・ui/textarea.tsx:9) |
+| M-002 | `outline-none` (components/ui を除く) | 2 | conversation-search.tsx:83 / command-palette.tsx:166 (代わりの指標が無い入力欄。残りは Round 1 の列挙と同じ) |
+| M-003 | `aria-live` (src/renderer/src、本番の属性) | 7 | WorkspaceFoldersScreen.tsx:484,595,610 / conversation-search.tsx:87 / SessionListScreen.tsx:875,1163 / SessionAttentionAnnouncer.tsx:41 (palette は 0) |
 | M-005 | `forced-colors\|forced-color` (src/renderer/src) | 0 | — |
-| L-001 | `::highlight` | 2 | main.css:159,164 |
+| L-001 | `::highlight` (src/renderer/src/assets) | 2 | main.css:159,164 |
 | L-002 | `scroll-smooth\|scroll-behavior\|reduced-motion` | 2 | thread.aui.tsx:223,512 |
-| L-003 | `renderTooltip` (渡す側) | 2 (本 PR) | SessionListScreen.tsx:333,1417 |
-| L-005 | `aria-busy` (SessionListScreen.tsx) | 1 | SessionListScreen.tsx:1113 |
-| M-004 | `axe\(\|toHaveNoViolations` (対象のテスト 4 本) | 8 (どれも color-contrast を切る) | CommandPalette.test.tsx:315,444,456,473 / ConversationSearch.test.tsx:622,628 / SessionListScreen.test.tsx:1961-1969 / PresetPanel.test.tsx:144,244 |
-| L-006 | `command-palette\|conversation-search` (eslint.config.mjs・reviewers.yml) | 4 (reviewers.yml は 0) | eslint.config.mjs:601,602,606,607 |
+| L-003 | `renderTooltip` (渡す側) | 2 | SessionListScreen.tsx:333,1417 |
+| L-004 | 会話内検索の status | 1 | conversation-search.tsx:85-91 |
+| L-005 | `aria-busy` (SessionListScreen.tsx、属性) | 1 | SessionListScreen.tsx:1113 |
+| M-004 | `axe\(\|toHaveNoViolations` (対象のテスト 4 本) | 8 | CommandPalette.test.tsx:315,444,456,473 / ConversationSearch.test.tsx:622,628 / SessionListScreen.test.tsx:1961-1969 / PresetPanel.test.tsx:144,244 |
+| M-004 | `emulateMedia\|forcedColors` (e2e) | 0 | — |
+| L-006 | `command-palette\|conversation-search` (reviewers.yml) | 0 | — |
+| L-006 | `labels\.ts` (reviewers.yml) | 4 | reviewers.yml:49,99,197 (shell/labels.ts) / :190 (注記) |
+| L-007 | `toHaveScreenshot` (e2e) | 2 | composer-screenshot.spec.ts:53 (placeholder は写らない) / sidebar-screenshot.spec.ts:99 (SessionListScreen.tsx:853 が写る) |
 
 ## Verdict
 
 - Critical: 0
 - High: 1
 - Medium: 5
-- Low: 5
+- Low: 7
+- Round inheritance: resolved from 1: 0 / unresolved: 12 / new: 1 (L-007)
