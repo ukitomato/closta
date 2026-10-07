@@ -55,7 +55,8 @@ const capability: ClostaCapability = {
   getTranscript: (sessionId, targetKey, requestToken) =>
     ipcRenderer.invoke(IPC_CHANNELS.getTranscript, sessionId, targetKey, requestToken),
 
-  launchSession: (config) => ipcRenderer.invoke(IPC_CHANNELS.launchSession, config),
+  // 起動元 (O-3) はそのまま 2 つめの引数で渡す。検証は main の `handleLaunchSession` (未知・欠落は記録しないだけ)。
+  launchSession: (config, origin) => ipcRenderer.invoke(IPC_CHANNELS.launchSession, config, origin),
   sendPrompt: (sessionId, text) => ipcRenderer.invoke(IPC_CHANNELS.sendPrompt, sessionId, text),
   respondPermission: (sessionId, requestId, outcome, scope) =>
     ipcRenderer.invoke(IPC_CHANNELS.respondPermission, sessionId, requestId, outcome, scope),
@@ -76,6 +77,8 @@ const capability: ClostaCapability = {
   savePreset: (name, config, overwrite) =>
     ipcRenderer.invoke(IPC_CHANNELS.savePreset, name, config, overwrite),
   removePreset: (id) => ipcRenderer.invoke(IPC_CHANNELS.removePreset, id),
+
+  getLaunchUsage: () => ipcRenderer.invoke(IPC_CHANNELS.getLaunchUsage),
 
   onRuntimesChanged: (listener) =>
     subscribe<RuntimeListDTO>(IPC_CHANNELS.runtimesChanged, listener),

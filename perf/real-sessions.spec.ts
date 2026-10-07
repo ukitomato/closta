@@ -90,7 +90,7 @@ async function pressLaunch(page: Page): Promise<void> {
   const mode = await page.getByRole('combobox', { name: '権限モード' }).inputValue()
   if (mode !== 'default') throw new Error('permission-mode-not-default')
   await page.getByRole('button', { name: '起動', exact: true }).click()
-  await page.getByRole('textbox', { name: 'Message input' }).waitFor({ timeout: 60_000 })
+  await page.getByRole('textbox', { name: 'メッセージ', exact: true }).waitFor({ timeout: 60_000 })
 }
 
 /** 1 本起動する。選んだモデルの表示名を返す (計測条件として記録する)。 */
@@ -197,7 +197,7 @@ test('実 claude 10 本が応答を流す中で、表示中のセッションの
 
   // 続けて 10 本にプロンプトを送る (行の選択はクリックを evaluate で送る。locator に本文を含む要素を掴ませない)。
   // 最後に送るのは最後の行なので、送り終えたときに表示中なのは計測で打鍵するセッションになる。
-  const composer = page.getByRole('textbox', { name: 'Message input' })
+  const composer = page.getByRole('textbox', { name: 'メッセージ', exact: true })
   for (let i = 0; i < SESSIONS; i += 1) {
     await page.evaluate((index) => {
       document

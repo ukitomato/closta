@@ -14,7 +14,7 @@ import { useUiStore } from '@/stores/ui'
  * | きっかけ | focus |
  * |---|---|
  * | 稼働中の行の選択・承認待ちへの移動・起動の受け付け (`selectionSeq` が上がり `selectedId` が非 null) | `running` (起動の受け付けなら起動ダイアログも閉じる) |
- * | 過去の行の選択 (`selectionSeq` が上がり `selectedRowKey` が非 null) | `past` |
+ * | 過去の行の選択 (`selectionSeq` が上がり `selectedRowKey` が非 null) | `past`。選んだ行が一覧に無ければ `none` (Command palette の候補を実行する前に再取得で消えた。下の「消える」と同じ扱い。O-3 / 012 data-model §3) |
  * | 稼働中のセッションを閉じる (`selectedId` が null に変わる) | `focus === 'running'` なら `none` |
  * | 中央に出していた失敗したセッションを閉じる (`selectedId` が null に変わり、`launch.previousFailure` が立つ) | `focus === 'running'` なら `none`、かつ起動ダイアログを開く (X-4 US-1 AC7) |
  * | それ以外の失敗したセッションを閉じる (選んでいない行・中央が過去の会話のときの選択中の行) | 面を動かさず、失敗の告知を消す (pr-gate R1 po H-001 / R2 po M-101)。`lastConfig` は X-4 の規則のまま (閉じたセッションの設定) |
@@ -60,7 +60,10 @@ export function useShellFocus(): void {
       useSessionsStore.subscribe((next, prev) => {
         const ui = useUiStore.getState()
         if (next.selectionSeq !== prev.selectionSeq && next.selectedRowKey !== null) {
-          ui.setFocus('past')
+          // 選んだ行が一覧に無い (palette の候補を実行する前に再取得で消えた) なら、消えたときと同じく空の状態 (O-3)。
+          ui.setFocus(
+            findRow(buildSessionRows(next.index), next.selectedRowKey) === null ? 'none' : 'past'
+          )
           return
         }
         if (ui.focus !== 'past') return

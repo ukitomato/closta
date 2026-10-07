@@ -83,6 +83,7 @@ function NewSessionDialog({
     phase: launch.phase,
     rejectReason: launch.rejectReason,
     lastConfig: launch.lastConfig,
+    lastOrigin: launch.lastOrigin,
     previousFailure: launch.previousFailure,
     activeFolderIds,
     launch: onLaunch

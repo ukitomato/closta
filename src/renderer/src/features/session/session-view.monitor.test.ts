@@ -223,6 +223,7 @@ function session(id: string, over: Partial<LiveSessionState> = {}): LiveSessionS
     promptSent: true,
     queueRejection: null,
     folderLabel: null,
+    launchOrigin: 'manual',
     ...over
   }
 }
@@ -247,7 +248,13 @@ function state(
     statuses,
     selectedId: null,
     selectionSeq: 0,
-    launch: { phase: 'entry', rejectReason: null, lastConfig: null, previousFailure: null },
+    launch: {
+      phase: 'entry',
+      rejectReason: null,
+      lastConfig: null,
+      lastOrigin: null,
+      previousFailure: null
+    },
     statusSince: {},
     activity: {},
     receivedMessages: 0,
@@ -274,7 +281,13 @@ describe('slotUsage (FR-007)', () => {
 
   it('起動要求中は +1', () => {
     const s = state([[A, {}]], {
-      launch: { phase: 'launching', rejectReason: null, lastConfig: null, previousFailure: null }
+      launch: {
+        phase: 'launching',
+        rejectReason: null,
+        lastConfig: null,
+        lastOrigin: null,
+        previousFailure: null
+      }
     })
     expect(slotUsage(s).used).toBe(2)
   })

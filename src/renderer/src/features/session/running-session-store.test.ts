@@ -221,6 +221,78 @@ describe('running-session-store — 起動と port の受け渡し (FE-001)', ()
   })
 })
 
+describe('running-session-store — 起動元 (O-3 FE-040 / 012 data-model §4「renderer の起動元」)', () => {
+  it('起動元を capability の launchSession に渡し、lastConfig と組で lastOrigin とセッションの launchOrigin に入れる', async () => {
+    const h = harness()
+    await h.store.launch(cfg(), null, 'preset')
+    expect(h.cap.launchSession).toHaveBeenCalledWith(cfg(), 'preset')
+    expect(h.store.getState().launch).toMatchObject({
+      phase: 'entry',
+      lastConfig: cfg(),
+      lastOrigin: 'preset'
+    })
+    expect(h.store.getState().sessions[A]?.launchOrigin).toBe('preset')
+  })
+
+  it('起動元の省略は manual (起動ダイアログを通らない呼び出し)', async () => {
+    const h = harness()
+    await h.store.launch(cfg())
+    expect(h.cap.launchSession).toHaveBeenCalledWith(cfg(), 'manual')
+    expect(h.store.getState().launch.lastOrigin).toBe('manual')
+  })
+
+  it('拒否されても受け付けられても lastOrigin は残る (前回の設定と同じ規則)', async () => {
+    const h = harness()
+    vi.mocked(h.cap.launchSession).mockResolvedValueOnce({
+      status: 'rejected',
+      reasonKey: 'session-limit'
+    })
+    await h.store.launch(cfg('f2'), null, 'preset')
+    expect(h.store.getState().launch).toMatchObject({
+      phase: 'rejected',
+      lastConfig: cfg('f2'),
+      lastOrigin: 'preset'
+    })
+    vi.mocked(h.cap.launchSession).mockRejectedValueOnce(new Error('ipc failed'))
+    await h.store.launch(cfg('f3'), null, 'manual')
+    expect(h.store.getState().launch).toMatchObject({
+      phase: 'rejected',
+      rejectReason: 'launch-failed',
+      lastOrigin: 'manual'
+    })
+    await h.store.launch(cfg('f1'), null, 'preset')
+    expect(h.store.getState().launch).toMatchObject({ phase: 'entry', lastOrigin: 'preset' })
+  })
+
+  it('告知を消しても (dismissLaunchNotice) lastOrigin が残る', async () => {
+    const h = harness()
+    vi.mocked(h.cap.launchSession).mockResolvedValueOnce({
+      status: 'rejected',
+      reasonKey: 'session-limit'
+    })
+    await h.store.launch(cfg(), null, 'preset')
+    h.store.dismissLaunchNotice()
+    expect(h.store.getState().launch).toMatchObject({
+      phase: 'entry',
+      rejectReason: null,
+      lastConfig: cfg(),
+      lastOrigin: 'preset'
+    })
+  })
+
+  it('起動元で SessionLaunchConfig は変わらない (capability に渡る設定とセッションの config が同じ)', async () => {
+    const h = harness()
+    vi.mocked(h.cap.launchSession).mockResolvedValueOnce({ status: 'launching', sessionId: A })
+    await h.store.launch(cfg(), null, 'preset')
+    vi.mocked(h.cap.launchSession).mockResolvedValueOnce({ status: 'launching', sessionId: B })
+    await h.store.launch(cfg(), null, 'manual')
+    const [first, second] = vi.mocked(h.cap.launchSession).mock.calls
+    expect(first?.[0]).toEqual(second?.[0])
+    expect(h.store.getState().sessions[A]?.config).toEqual(cfg())
+    expect(h.store.getState().sessions[B]?.config).toEqual(cfg())
+  })
+})
+
 describe('running-session-store — 状態の導出 (FR-009 / FR-010)', () => {
   it('done の行は生存フラグで「応答待ち」と「終了済み」に分かれ、終了済みは送信できない終端になる', async () => {
     const h = harness()
@@ -413,6 +485,37 @@ describe('running-session-store — 制御の宛先と終わらせ方 (FR-010 / 
       previousFailure: 'supervisor-exited',
       lastConfig: cfg('f1')
     })
+  })
+
+  it('失敗したセッションを閉じると、起動元も最後に起動した別のセッションのものでなくそのセッションのものに戻す (O-3 FE-040)', async () => {
+    const h = harness()
+    vi.mocked(h.cap.launchSession).mockResolvedValueOnce({ status: 'launching', sessionId: A })
+    await h.store.launch(cfg('f1'), null, 'preset')
+    const portA = fakePort()
+    deliverPort(A, portA)
+    vi.mocked(h.cap.launchSession).mockResolvedValueOnce({ status: 'launching', sessionId: B })
+    await h.store.launch(cfg('f2'), null, 'manual') // 最後に起動したのは B (manual)
+    expect(h.store.getState().launch.lastOrigin).toBe('manual')
+
+    emit(portA, { kind: 'failure', reasonKey: 'provider-error' })
+    h.pushStatus([status(A, { state: 'error', reasonKey: 'provider-error', claudeAlive: false })])
+    h.store.close(A)
+    expect(h.store.getState().launch).toMatchObject({
+      previousFailure: 'provider-error',
+      lastConfig: cfg('f1'),
+      lastOrigin: 'preset'
+    })
+  })
+
+  it('失敗していないセッションを閉じても起動元は変わらない (O-3 FE-040)', async () => {
+    const h = harness()
+    vi.mocked(h.cap.launchSession).mockResolvedValueOnce({ status: 'launching', sessionId: A })
+    await h.store.launch(cfg('f1'), null, 'manual')
+    vi.mocked(h.cap.launchSession).mockResolvedValueOnce({ status: 'launching', sessionId: B })
+    await h.store.launch(cfg('f2'), null, 'preset')
+    h.pushStatus([status(A, { state: 'done', claudeAlive: false })])
+    h.store.close(A)
+    expect(h.store.getState().launch).toMatchObject({ lastConfig: cfg('f2'), lastOrigin: 'preset' })
   })
 
   it('最初のプロンプトを送ると promptSent が立つ (プロンプト待ちの判定。pr-gate R1 po H-001)', async () => {

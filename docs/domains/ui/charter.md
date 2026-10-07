@@ -19,6 +19,7 @@ related_specs:
   - specs/006-ui-japanese-ime-composer/spec.md
   - specs/011-ui-coverage/spec.md
   - specs/013-ui-app-shell/spec.md
+  - specs/012-ui-thread-search/spec.md
 ---
 
 # Domain Charter: ui
@@ -50,6 +51,12 @@ UI は本来 delivery mechanism であり domain ではない。それでも独�
 - 情報密度の切替（compact / comfortable）— **transcript の密度** (O-2)。稼働中セッション一覧 (監視ビュー) の行の密度は
   session の操作 UI として O-1 が持つ (下の Out of scope「他 domain の操作 UI」。O-1 USER 決定 2026-10-02)
 - Thread 検索、conversation map、observability 系の表示
+  — **O-3 の例外 (U-5。2026-10-05 に利用者が承認。[012 spec](../../../specs/012-ui-thread-search/spec.md))**: Thread search は
+  session の操作 UI (サイドバーの過去のセッションの区画。下の Out of scope「他 domain の操作 UI」) の上に ui が載せる。一致の規則
+  (`features/search/`) と検索欄・絞り込みは本 domain が持ち、一覧の中身・行の形・取得は session のまま。**transcript の本文を
+  横断して検索しない** (読み込み済みの要約行のフィールドだけを探す。本文の横断検索の要否は O-9)。同じ U-5 で、O-3 は起動ダイアログの
+  プリセットの欄 (再利用率の表示) と、起動の利用記録の domain / main のモジュールにも手を入れた (置き場は session の永続化層。
+  session charter の KPI「再利用率」)
 - Electron 特有の配線（preload / IPC 越しのストリーミングブリッジ）
   — **基盤そのものではない。** renderer の配信プロトコル・CSP 基線・
   Constitution 検証項目 10 は **R-1 が `app` レイヤで固定した**。
@@ -175,9 +182,11 @@ O-1 で読み替えた: 監視ビューはサイドバーの稼働中の区画 (
   focus はシェル (`useShellFocus`) だけが書く。シェルは session のストアの選択 (`selectionSeq`) を購読し、session のコンポーネントは
   focus を書かない。session のコンポーネントが面の状態を書く例外は設定の「作業フォルダ」を開く 2 つの導線だけで、どちらも R-2 から
   続く登録の受け渡しとして残る: `seedFolderDraft` (未登録フォルダの「登録」から初期値つきで開く) と `openSettings('folders')`
-  (フォルダが 0 件のときの案内)。どちらも `focus` には触れない。逆向きに、シェルが session のストアの操作を呼ぶのは起動の告知を
-  消す操作 (`dismissLaunchNotice`) だけ: 起動ダイアログを起動せずに閉じたときと、中央に出していない失敗したセッションを閉じたとき。
-  起動の状態の遷移のロジックは session のストアの中に残る (pr-gate R2 architecture M-101)
+  (フォルダが 0 件のときの案内)。どちらも `focus` には触れない。逆向きに、シェルが session のストアの操作を呼ぶのは次の 2 つだけ。
+  (1) 起動の告知を消す操作 (`dismissLaunchNotice`): 起動ダイアログを起動せずに閉じたときと、中央に出していない失敗したセッションを
+  閉じたとき。起動の状態の遷移のロジックは session のストアの中に残る (pr-gate R2 architecture M-101)。(2) **Command palette の
+  セッションの候補の実行** (O-3。012 spec FR-007): 選択の操作 (稼働中は `select`、過去は `sessions.select`) を呼ぶだけで、サイドバーで
+  行を選んだのと同じになる。palette は `focus` を書かず、focus はシェル (`useShellFocus`) が選択の通知から決める
 
 ## Related ADRs
 
@@ -210,7 +219,12 @@ O-1 で読み替えた: 監視ビューはサイドバーの稼働中の区画 (
 - [O-7: アプリのシェル](../../../specs/013-ui-app-shell/spec.md) — **実装中**。タブのビューを廃し、サイドバー (稼働中と過去の
   セッション)・中央 (実行中の Chat / 過去ログ)・右のペイン (枠・タブの表・「概要」) の 3 面にする。設定と起動はダイアログ。
   [AD-046](../../decisions/0046-app-shell-layout.md)
-- （残り。O-3 / O-4 / O-5 / O-6 / OPT-pty / OPT-panel が本 domain に属する）
+- [O-3: Thread 検索と探す操作](../../../specs/012-ui-thread-search/spec.md) — **実装中**。サイドバーの過去のセッションの区画の
+  Thread search、中央のヘッダの会話内検索、Command palette、本 feature の空の状態。session charter の KPI「再利用率」の計測経路
+  (起動元 `preset` / `manual` と `launch-usage.json`。AD-041 (h))、UI の文言を i18n リソース化しない判断
+  ([AD-045](../../decisions/0045-ui-labels-no-i18n-resources.md))、O-7 から預かった過去の区画の並び (`role="group"`・
+  ツールチップ・基準画像) を含む。conversation map / message timing / heat graph は O-9 に分けた (U-1)
+- （残り。O-4 / O-5 / O-6 / O-9 / OPT-pty / OPT-panel が本 domain に属する）
 
 ## Open Questions
 

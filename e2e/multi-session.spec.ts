@@ -50,7 +50,7 @@ function sentUserMessages(page: Page, text: string): Locator {
 }
 
 async function send(page: Page, text: string): Promise<void> {
-  const composer = page.getByRole('textbox', { name: 'Message input' })
+  const composer = page.getByRole('textbox', { name: 'メッセージ', exact: true })
   await composer.fill(text)
   await composer.press('Enter')
   await expect(sentUserMessages(page, text)).toHaveCount(1)
@@ -65,10 +65,10 @@ test.describe('マルチセッション (X-5)', () => {
 
       await launchAnother(page)
       await expect(rows(page)).toHaveCount(2)
-      await page.getByRole('textbox', { name: 'Message input' }).waitFor()
+      await page.getByRole('textbox', { name: 'メッセージ', exact: true }).waitFor()
       // 新しいセッションの transcript には 1 本目の発話が無い。
       await expect(sentUserMessages(page, '一本目への指示')).toHaveCount(0)
-      await page.getByRole('textbox', { name: 'Message input' }).fill('二本目の下書き')
+      await page.getByRole('textbox', { name: 'メッセージ', exact: true }).fill('二本目の下書き')
 
       // 1 本目へ切り替える: 1 本目の発話と応答が見え、2 本目の下書きは持ち込まれない。
       await selectRow(page, 0)
@@ -77,11 +77,11 @@ test.describe('マルチセッション (X-5)', () => {
       await expect(
         page.locator('[data-role="assistant"]').filter({ hasText: '（E2E stub）受け取りました。' })
       ).toHaveCount(1)
-      await expect(page.getByRole('textbox', { name: 'Message input' })).toHaveValue('')
+      await expect(page.getByRole('textbox', { name: 'メッセージ', exact: true })).toHaveValue('')
 
       // 2 本目へ戻ると下書きが戻る。
       await selectRow(page, 1)
-      await expect(page.getByRole('textbox', { name: 'Message input' })).toHaveValue(
+      await expect(page.getByRole('textbox', { name: 'メッセージ', exact: true })).toHaveValue(
         '二本目の下書き'
       )
 
@@ -117,7 +117,7 @@ test.describe('マルチセッション (X-5)', () => {
       await expect(first.getByTestId('session-row-status')).toHaveText('終了済み')
       await launchAnother(page)
       await expect(rows(page)).toHaveCount(11)
-      await page.getByRole('textbox', { name: 'Message input' }).waitFor()
+      await page.getByRole('textbox', { name: 'メッセージ', exact: true }).waitFor()
     } finally {
       await app.close()
     }
@@ -138,7 +138,7 @@ test.describe('マルチセッション (X-5)', () => {
         await send(page, i === 0 ? BIG_PROMPT : LOAD_PROMPT)
       }
       await selectRow(page, 9)
-      const composer = page.getByRole('textbox', { name: 'Message input' })
+      const composer = page.getByRole('textbox', { name: 'メッセージ', exact: true })
       await composer.waitFor()
 
       // O-1 SC-004: 監視ビューの経過時間と直近の活動 (本文の分岐) を出した comfortable の状態で流す

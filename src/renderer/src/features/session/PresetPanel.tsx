@@ -3,18 +3,21 @@ import { useState } from 'react'
 import { normalizePresetName, type SessionLaunchConfig } from '@domain/session/launch-config'
 import type { PresetDTO } from '@domain/session/preset'
 
+import { EmptyState } from '@/components/assistant-ui/elements/empty-state'
 import { Button } from '@/components/ui/button'
 
 import {
   LAUNCH_EMPTY_STATE_LABELS,
+  LAUNCH_USAGE_LABELS,
   PRESET_NOTICE_LABELS,
   PRESET_REMOVE_CONFIRM_LABELS,
   PRESET_SAVE_FAILURE_LABELS
 } from './labels'
+import { useLaunchUsage } from './useLaunchUsage'
 import type { PresetsView } from './usePresets'
 
 /**
- * プリセットの一覧・保存・適用・削除 (X-4 FE-010 / FR-009〜011)。
+ * プリセットの一覧・保存・適用・削除 (X-4 FE-010 / FR-009〜011) と、直近 30 日の起動の内訳 (O-3 FE-041 / 012 FR-013)。
  *
  * **適用は起動しない** — 起動設定ダイアログの下書きへ戻し、依存解決 (`resolveLaunchAxes`) に通す (FR-011)。
  * 無効な軸の reset / blocker は、ダイアログが通知する。
@@ -84,6 +87,8 @@ export function PresetPanel({
       className="border-border flex flex-col gap-2 rounded-md border p-3"
     >
       <h3 className="text-sm font-medium">プリセット</h3>
+
+      <LaunchUsageSummary />
 
       {view.failed ? (
         <p role="alert" className="text-destructive text-xs">
@@ -190,5 +195,38 @@ export function PresetPanel({
         </p>
       )}
     </section>
+  )
+}
+
+/**
+ * 直近 30 日のプリセット / 手動の起動の回数 (O-3 / 012 spec FR-013 / data-model §4「表示」)。欄を描いたときに 1 回読む。
+ * 記録が無い・読めないは、なぜ空かと次の操作を `EmptyState` で示す (FR-008)。読み込み中も含めて live region にしない
+ * (開いたときに 1 回読むだけで、ダイアログの告知の live region と重ねない)。
+ */
+function LaunchUsageSummary(): React.JSX.Element {
+  const usage = useLaunchUsage()
+  return (
+    <div className="flex flex-col gap-1 text-xs" data-testid="launch-usage">
+      <h4 className="text-muted-foreground font-medium">{LAUNCH_USAGE_LABELS.usageTitle}</h4>
+      {usage.status === 'loading' ? (
+        <p className="text-muted-foreground" data-testid="launch-usage-loading">
+          {LAUNCH_USAGE_LABELS.usageLoading}
+        </p>
+      ) : usage.status === 'unreadable' ? (
+        <EmptyState className="max-w-none items-start gap-1" data-testid="launch-usage-unreadable">
+          <p>{LAUNCH_USAGE_LABELS.usageUnreadable}</p>
+          <p className="text-muted-foreground">{LAUNCH_USAGE_LABELS.usageUnreadableHint}</p>
+        </EmptyState>
+      ) : usage.preset === 0 && usage.manual === 0 ? (
+        <EmptyState className="max-w-none items-start gap-1" data-testid="launch-usage-empty">
+          <p>{LAUNCH_USAGE_LABELS.usageEmpty}</p>
+          <p className="text-muted-foreground">{LAUNCH_USAGE_LABELS.usageEmptyHint}</p>
+        </EmptyState>
+      ) : (
+        <p data-testid="launch-usage-counts">
+          {LAUNCH_USAGE_LABELS.usageCounts(usage.preset, usage.manual)}
+        </p>
+      )}
+    </div>
   )
 }

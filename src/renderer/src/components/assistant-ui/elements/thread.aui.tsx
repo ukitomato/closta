@@ -28,14 +28,18 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SYSTEM_EVENT_DATA_NAME } from "@/features/chat/convert";
 import {
+  COMPOSER_LABELS,
   SYSTEM_EVENT_CATEGORY_LABELS,
   SYSTEM_EVENT_LABELS,
   SYSTEM_EVENT_STATUS_LABELS,
   taskTypeLabel,
 } from "@/features/chat/labels";
 import {
+  findMessageElement,
+  useRegisterTranscriptNavigator,
   useTranscriptDensity,
   useTranscriptSettled,
+  type TranscriptNavigator,
 } from "@/features/chat/transcript-context";
 import { isSystemEventFields } from "@/features/chat/transcript-guard";
 import { cn } from "@/lib/utils";
@@ -193,6 +197,8 @@ const ThreadRoot: FC<{ isEmpty: boolean; autoFocus: boolean }> = ({
 }) => {
   const { Welcome = ThreadWelcome } = useContext(ThreadComponentsContext);
   const density = useTranscriptDensity();
+  /** メッセージを含む要素 (会話内検索の navigator が要素を引く範囲。O-3)。 */
+  const contentRef = useRef<HTMLDivElement>(null);
 
   return (
     <ThreadPrimitive.Root
@@ -205,6 +211,7 @@ const ThreadRoot: FC<{ isEmpty: boolean; autoFocus: boolean }> = ({
         ["--composer-padding" as string]: "8px",
       }}
     >
+      <NonVirtualNavigator contentRef={contentRef} />
       {/*
         `turnAnchor` は既定 ("bottom") のまま。registry のテンプレートは "top" を置いていたが、"top" だと
         `autoScroll` の既定が false になり、40 件以下の transcript が最下部に追従しない
@@ -216,6 +223,7 @@ const ThreadRoot: FC<{ isEmpty: boolean; autoFocus: boolean }> = ({
         className="relative flex flex-1 flex-col overflow-x-auto overflow-y-scroll scroll-smooth"
       >
         <div
+          ref={contentRef}
           className={cn(
             "mx-auto flex w-full max-w-(--thread-max-width) flex-1 flex-col px-4 pt-4",
             isEmpty && "justify-center",
@@ -257,8 +265,37 @@ const ThreadRoot: FC<{ isEmpty: boolean; autoFocus: boolean }> = ({
   );
 };
 
+/**
+ * 非仮想パスの会話内検索の navigator (O-3 / 012 data-model §2「移動」)。40 件以下はすべて描かれているので、
+ * `findMessageElement` (固定のセレクタ + `dataset.messageId` の厳密比較。id をセレクタに埋め込まない) で引いた要素を
+ * `scrollIntoView` で中央に入れる。最下部を離れると `Viewport` の autoScroll は追従しないので、追従はそこで止まる。
+ * 本文の更新で `ThreadRoot` (composer を含む) を再描画させないよう、メッセージの購読はこの部品に閉じる。
+ */
+const NonVirtualNavigator: FC<{ contentRef: RefObject<HTMLDivElement | null> }> = ({
+  contentRef,
+}) => {
+  const messages = useAuiState((s) => s.thread.messages);
+  const navigator = useMemo<TranscriptNavigator>(
+    () => ({
+      root: () => contentRef.current,
+      scrollToMessage: (id) => {
+        if (!messages.some((message) => message.id === id)) return false;
+        const root = contentRef.current;
+        const element = root === null ? null : findMessageElement(root, id);
+        element?.scrollIntoView({ block: "center" });
+        return true;
+      },
+    }),
+    [messages, contentRef],
+  );
+  useRegisterTranscriptNavigator(navigator);
+  return null;
+};
+
 /** 仮想行の高さ見積もり (実測 `measureElement` で上書きされる。初期スパン用)。 */
 const ESTIMATED_MESSAGE_HEIGHT = 160;
+/** 会話内検索で移った先が描かれるのを待つ最大のフレーム数 (描かれたら `scrollIntoView` で合わせ直す。O-3)。 */
+const MAX_ALIGN_FRAMES = 10;
 /** 「最下部にいる」とみなす許容差 (px)。 */
 const AT_BOTTOM_THRESHOLD = 4;
 
@@ -340,6 +377,39 @@ const VirtualThreadRoot: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
       if (el && stickyRef.current) el.scrollTop = el.scrollHeight;
     });
   }, [messageCount, virtualizer]);
+
+  /*
+   * 会話内検索の navigator (O-3 / 012 data-model §2「移動」)。id から assistant-ui に渡したメッセージの添字を引き
+   * (`===`)、`scrollToIndex` で中央へ寄せる。可変の高さで目標に止まらないことがあるので、要素が描かれたら
+   * `scrollIntoView` で合わせ直す (plan RK-03)。**移るときに最下部への追従を切る** (R-3 のアンカリングと同じ扱い)。
+   * 要素は `findMessageElement` で引き、id をセレクタに埋め込まない。
+   */
+  const navigator = useMemo<TranscriptNavigator>(
+    () => ({
+      root: () => scrollerRef.current,
+      scrollToMessage: (id) => {
+        const index = messages.findIndex((message) => message.id === id);
+        if (index === -1) return false;
+        stickyRef.current = false;
+        virtualizer.scrollToIndex(index, { align: "center" });
+        let frames = 0;
+        const align = (): void => {
+          const scroller = scrollerRef.current;
+          const element = scroller === null ? null : findMessageElement(scroller, id);
+          if (element !== null) {
+            element.scrollIntoView({ block: "center" });
+            return;
+          }
+          frames += 1;
+          if (frames < MAX_ALIGN_FRAMES) requestAnimationFrame(align);
+        };
+        requestAnimationFrame(align);
+        return true;
+      },
+    }),
+    [messages, virtualizer],
+  );
+  useRegisterTranscriptNavigator(navigator);
 
   // ユーザの上スクロールで追従解除、最下部復帰で再武装 (公式サンプルの disarm ガード)。
   useEffect(() => {
@@ -577,12 +647,12 @@ const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
         >
           <ComposerAttachments />
           <ComposerPrimitive.Input
-            placeholder="Send a message..."
+            placeholder={COMPOSER_LABELS.composerPlaceholder}
             className="aui-composer-input caret-primary placeholder:text-muted-foreground/60 max-h-48 min-h-10 w-full resize-none bg-transparent px-2.5 py-1 text-base leading-6 outline-none"
             rows={1}
             autoFocus={autoFocus}
             enterKeyHint="send"
-            aria-label="Message input"
+            aria-label={COMPOSER_LABELS.composerInput}
             onCompositionStart={() => {
               composingRef.current = true;
             }}
@@ -704,6 +774,8 @@ const AssistantMessage: FC = () => {
    */
   const density = useTranscriptDensity();
   const comfortable = density === "comfortable";
+  // 会話内検索が要素を引く印 (O-3 / 012 data-model §2)。外部由来の id は React の属性として渡すだけ。
+  const messageId = useAuiState((s) => s.message.id);
 
   const ACTION_BAR_PT = "pt-1.5";
   // Keep the action bar inside the contained root's paint box, then cancel its reserved space in flow.
@@ -713,6 +785,7 @@ const AssistantMessage: FC = () => {
     <MessagePrimitive.Root
       data-slot="aui_assistant-message-root"
       data-role="assistant"
+      data-message-id={messageId}
       className="fade-in slide-in-from-bottom-1 animate-in relative -mb-7.5 pb-7.5 duration-150 [contain-intrinsic-size:auto_200px] [content-visibility:auto]"
     >
       <div
@@ -768,7 +841,12 @@ const AssistantMessage: FC = () => {
                 );
               }
               case "text":
-                return <MarkdownText />;
+                // 会話内検索の強調の対象の印 (O-3 / 012 data-model §2)。text part だけに付け、箱は作らない (`contents`)。
+                return (
+                  <div data-search-text="" className="contents">
+                    <MarkdownText />
+                  </div>
+                );
               case "reasoning":
                 return <Reasoning {...part} />;
               case "tool-call":
@@ -999,19 +1077,37 @@ const SystemEventRow: FC = () => {
   );
 };
 
+/**
+ * user の本文の text part (O-3 / 012 data-model §2)。assistant-ui の既定の Text (`<p>` の `white-space: pre-line`) と
+ * 同じ見た目を class で出し (実行時の `style` 属性を足さない)、会話内検索の強調の対象の印 (`data-search-text`) を付ける。
+ * 本文はテキストとして描く。
+ */
+const UserTextPart: TextMessagePartComponent = ({ text }) => (
+  <p data-search-text="" className="whitespace-pre-line">
+    {text}
+  </p>
+);
+
 const UserMessage: FC = () => {
+  // 会話内検索が要素を引く印 (O-3 / 012 data-model §2)。外部由来の id は React の属性として渡すだけ。
+  const messageId = useAuiState((s) => s.message.id);
   return (
     <MessagePrimitive.Root
       data-slot="aui_user-message-root"
       className="fade-in slide-in-from-bottom-1 animate-in grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] content-start gap-y-2 px-2 duration-150 [contain-intrinsic-size:auto_200px] [content-visibility:auto] [&:where(>*)]:col-start-2"
       data-role="user"
+      data-message-id={messageId}
     >
       <UserMessageAttachments />
 
       <div className="aui-user-message-content-wrapper relative col-start-2 min-w-0">
         <div className="aui-user-message-content peer bg-muted text-foreground rounded-xl px-4 py-2 wrap-break-word empty:hidden">
           <MessagePrimitive.Parts
-            components={{ File: UserFilePart, Image: UserImagePart }}
+            components={{
+              Text: UserTextPart,
+              File: UserFilePart,
+              Image: UserImagePart,
+            }}
           />
         </div>
         <div className="aui-user-action-bar-wrapper absolute start-0 top-1/2 -translate-x-full -translate-y-1/2 pe-2 peer-empty:hidden rtl:translate-x-full">

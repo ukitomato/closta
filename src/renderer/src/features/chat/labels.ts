@@ -83,6 +83,30 @@ export const TOOL_RESULT_LABELS = {
 } as const
 
 /**
+ * composer の入力欄の名前と placeholder (O-3 / spec FR-014 / 012 data-model §5)。`thread.aui.tsx` の
+ * `ComposerPrimitive.Input` に渡す (部品は差し替えない。AD-037)。ほかの composer のボタンの名前は対象外 (012 plan RK-08)。
+ */
+export const COMPOSER_LABELS = {
+  composerInput: 'メッセージ',
+  composerPlaceholder: 'メッセージを入力'
+} as const
+
+/**
+ * 会話内検索 (O-3 / spec FR-003 / FR-008 / 012 data-model §5)。中央のヘッダのボタンと、その下の検索のバーの文言。
+ * `searchOpen` はボタンと入力欄の名前を兼ねる。
+ */
+export const CONVERSATION_SEARCH_LABELS = {
+  searchOpen: '会話内を検索',
+  searchPlaceholder: '語を入力',
+  searchPosition: (i: number, n: number): string => `${i} / ${n} 件`,
+  searchNone: '一致する箇所はありません。',
+  searchNoneHint: '語を変えるか、検索を閉じてください。',
+  searchNext: '次へ',
+  searchPrev: '前へ',
+  searchClose: '検索を閉じる'
+} as const
+
+/**
  * transcript の情報密度の切り替え (FR-012)。**監視ビューの行の密度 (`MONITOR_LABELS.density`) と区別できる文言**
  * にする (US-3 AC5 / design-gate R1 po M-005)。group 名は見える見出しとしても出す (pr-gate R1 po M-001)。
  * ボタンの説明 (`title`) は `thread.aui.tsx` の描き分けに合わせる。

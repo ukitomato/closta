@@ -110,3 +110,129 @@ test.describe('IME 変換確定 Enter が送信にならない (SC-001)', () => 
     }
   })
 })
+
+/**
+ * O-3 / 012 SC-002 / US-2 AC7 — **会話内検索のバーで変換確定の Enter が次の一致への移動にならない**。
+ * 検索のバーの Enter / Shift+Enter / Esc は `isComposing` / 229 のときに何もしない (`ConversationSearchProvider`)。
+ * jsdom はキーの発火順を再現しないので、実描画の Chromium で確かめる (plan RK-06)。
+ */
+test.describe('会話内検索のバーの IME (012 SC-002)', () => {
+  test('検索のバーで変換中に Enter を押しても次の一致へ移らず、変換が確定できる', async () => {
+    const { app, page } = await launchApp()
+    try {
+      const composer = await reachActiveComposer(page)
+      // 一致が 2 つある本文を transcript に置く (E2E stub の応答の文には語が無い)。
+      await composer.fill('りんご と りんご')
+      await page.keyboard.press('Enter')
+      await expect(sentUserMessages(page, 'りんご と りんご')).toHaveCount(1)
+
+      // 中央のヘッダの検索のボタンで検索のバーを開く (入力欄にフォーカスが移る)。
+      await page
+        .getByTestId('center-header')
+        .getByRole('button', { name: '会話内を検索', exact: true })
+        .click()
+      const searchBar = page.getByTestId('conversation-search')
+      const searchInput = searchBar.getByRole('searchbox', { name: '会話内を検索', exact: true })
+      const position = searchBar.getByRole('status')
+      await expect(searchInput).toBeFocused()
+
+      // 変換中の状態で語を入れる (未確定の文字列でも、間引きの後に件数と位置が出る)。
+      const cdp = await page.context().newCDPSession(page)
+      await cdp.send('Input.imeSetComposition', {
+        text: 'りんご',
+        selectionStart: 3,
+        selectionEnd: 3
+      })
+      await expect(position).toHaveText('1 / 2 件')
+
+      // 変換確定の Enter (isComposing=true / keyCode 229) は次の一致への移動にならない。
+      await cdp.send('Input.dispatchKeyEvent', {
+        type: 'rawKeyDown',
+        windowsVirtualKeyCode: 229,
+        key: 'Process'
+      })
+      await cdp.send('Input.dispatchKeyEvent', {
+        type: 'keyUp',
+        windowsVirtualKeyCode: 229,
+        key: 'Process'
+      })
+      // 間引き (150ms) を越えて待ってから、位置が動いていないことを確かめる (動かないことの確認なので待つ)。
+      await page.waitForTimeout(400)
+      await expect(position).toHaveText('1 / 2 件')
+
+      // 変換を確定できる (確定した語が入力欄に残り、位置もそのまま)。
+      await cdp.send('Input.insertText', { text: 'りんご' })
+      await expect(searchInput).toHaveValue('りんご')
+      await expect(position).toHaveText('1 / 2 件')
+
+      // 確定した後の Enter (変換していない) は次の一致へ移る (ガードが変換中のキーだけを止めている)。
+      await page.keyboard.press('Enter')
+      await expect(position).toHaveText('2 / 2 件')
+    } finally {
+      await app.close()
+    }
+  })
+})
+
+/**
+ * O-3 / 012 SC-003 / US-3 AC5 — **composer で変換中に Ctrl+K を押しても Command palette が開かない**。
+ * palette の Ctrl+K は `window` の keydown (capture) で受け、`isComposing` / 229 のときは何もしない (`preventDefault` も
+ * しない。`CommandPalette`)。jsdom はキーの発火順を再現しないので、実描画の Chromium で確かめる (plan RK-06)。
+ */
+test.describe('Command palette の Ctrl+K と IME (012 SC-003)', () => {
+  test('composer で変換中に Ctrl+K を押しても palette が開かず、変換が確定できる', async () => {
+    const { app, page } = await launchApp()
+    try {
+      const composer = await reachActiveComposer(page)
+      await composer.focus()
+      const paletteDialog = page.getByRole('dialog', { name: 'コマンド', exact: true })
+
+      // 変換中の状態を作る。
+      const cdp = await page.context().newCDPSession(page)
+      await cdp.send('Input.imeSetComposition', {
+        text: 'にほんご',
+        selectionStart: 4,
+        selectionEnd: 4
+      })
+
+      // 変換中に Ctrl+K (Blink は変換中の keydown に isComposing=true を付ける)。palette は開かない。
+      await cdp.send('Input.dispatchKeyEvent', {
+        type: 'rawKeyDown',
+        modifiers: 2,
+        key: 'k',
+        code: 'KeyK',
+        windowsVirtualKeyCode: 75
+      })
+      await cdp.send('Input.dispatchKeyEvent', {
+        type: 'keyUp',
+        modifiers: 2,
+        key: 'k',
+        code: 'KeyK',
+        windowsVirtualKeyCode: 75
+      })
+      // 開かないことの確認なので、ダイアログの描画を待てるだけ待ってから数える。
+      await page.waitForTimeout(400)
+      await expect(paletteDialog).toHaveCount(0)
+      await expect(composer).toBeFocused()
+
+      // 変換を確定できる (確定した語が composer に残る)。
+      await cdp.send('Input.insertText', { text: 'にほんご' })
+      await expect(composer).toHaveValue('にほんご')
+
+      // 確定した後の Ctrl+K (変換していない) は palette を開く (ガードが変換中のキーだけを止めている)。
+      await page.keyboard.press('Control+K')
+      await expect(paletteDialog).toBeVisible()
+      await expect(
+        paletteDialog.getByRole('combobox', { name: '操作やセッションを探す', exact: true })
+      ).toBeFocused()
+
+      // Esc で閉じると composer へ戻り、確定した語はそのまま。
+      await page.keyboard.press('Escape')
+      await expect(paletteDialog).toHaveCount(0)
+      await expect(composer).toBeFocused()
+      await expect(composer).toHaveValue('にほんご')
+    } finally {
+      await app.close()
+    }
+  })
+})

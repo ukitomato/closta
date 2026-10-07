@@ -146,6 +146,10 @@ export function Sidebar(): React.JSX.Element {
             <h2 id="sidebar-past-heading" className="shrink-0 px-3 pt-2 text-sm font-semibold">
               {SHELL_LABELS.pastHeading}
             </h2>
+            {/*
+             * 包みは高さを渡すだけ (スクロールも余白も持たない)。区画の中の固定 (検索欄) とスクロールする領域
+             * (取得時刻・列挙の結果・絞り込み・グループ) の分け方は `SessionListScreen` が持つ (O-3 / 012 data-model §6)。
+             */}
             <div className="min-h-0 flex-1">
               <SessionListScreen highlightSelected={focus === 'past'} />
             </div>

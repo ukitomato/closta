@@ -1,3 +1,7 @@
+import {
+  ConversationSearchBar,
+  ConversationSearchButton
+} from '@/features/chat/ConversationSearchBar'
 import { TranscriptDensityToggle } from '@/features/chat/TranscriptDensityToggle'
 
 /**
@@ -9,6 +13,7 @@ import { TranscriptDensityToggle } from '@/features/chat/TranscriptDensityToggle
  * | 値は DTO・ストアの時点で正規化済みの表示用の値を**テキストとして**描く (HTML として解釈しない) | US-1 / US-4 AC5 |
  * | 操作 (停止・閉じる) は置かない。一覧の行に一本化する — 同名のボタンを 2 か所に出さない | X-5 / O-1 |
  * | 後続 feature がヘッダに表示を足すときはここに足す (稼働中と過去で別々に直さない) | code-gate convention M-003 |
+ * | 会話内検索のボタンを行に置き、開くとヘッダの下に検索のバーを出す (会話内検索の provider の内側でだけ描く) | O-3 / 012 spec FR-003 |
  */
 export function CenterHeader({
   title,
@@ -22,6 +27,26 @@ export function CenterHeader({
   /** 状態 (稼働中は一覧の行と同じ状態のラベル、過去は「読み取り専用」)。 */
   readonly status: string
   /** 稼働中 (`session-title`) と過去 (`past-title`) の題をテストが見分けるための id。 */
+  readonly titleTestId: string
+}): React.JSX.Element {
+  return (
+    <>
+      <CenterHeaderRow title={title} detail={detail} status={status} titleTestId={titleTestId} />
+      {/* 会話内検索のバー (O-3 / 012 data-model §2)。閉じている間は描かない。 */}
+      <ConversationSearchBar />
+    </>
+  )
+}
+
+function CenterHeaderRow({
+  title,
+  detail,
+  status,
+  titleTestId
+}: {
+  readonly title: string
+  readonly detail: string | null
+  readonly status: string
   readonly titleTestId: string
 }): React.JSX.Element {
   return (
@@ -42,6 +67,8 @@ export function CenterHeader({
         </span>
       )}
       <span className="text-muted-foreground ms-auto shrink-0 text-xs">{status}</span>
+      {/* 会話内検索を開く (O-3 / 012 spec FR-003。Ctrl+F でも開く)。 */}
+      <ConversationSearchButton />
       {/* transcript の密度 (O-2 / FR-012)。監視ビューの行の密度 (一覧の見出し) とは別の位置・文言。 */}
       <TranscriptDensityToggle />
     </div>

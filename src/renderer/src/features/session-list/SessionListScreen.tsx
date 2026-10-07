@@ -1,10 +1,11 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useId, useMemo, useRef, useState } from 'react'
 
 import {
   AssistantRuntimeProvider,
   useExternalStoreRuntime,
   type ThreadMessageLike
 } from '@assistant-ui/react'
+import { SearchIcon, XIcon } from 'lucide-react'
 
 import { EmptyState } from '@/components/assistant-ui/elements/empty-state'
 import { ErrorState } from '@/components/assistant-ui/elements/error-state'
@@ -16,6 +17,13 @@ import {
   ThreadListSkeleton
 } from '@/components/assistant-ui/elements/thread-list.aui'
 import { Button } from '@/components/ui/button'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import {
+  createPastSearchIndexer,
+  pastRowMatches,
+  type PastSearchIndex
+} from '@/features/search/session-search'
+import { toTerms } from '@/features/search/text-search'
 import { useSessionThreadListAdapter } from '@/runtime/thread-list-adapter'
 import { useUiStore, type FolderDraftSeed } from '@/stores/ui'
 
@@ -30,6 +38,7 @@ import {
   FAILURE_REASON_HINTS,
   FAILURE_REASON_LABELS,
   GROUP_KIND_LABELS,
+  PAST_SESSIONS_LABELS,
   PENDING_REASON_LABELS,
   TARGET_STATUS_LABELS,
   UNKNOWN_REASON_LABELS,
@@ -52,6 +61,8 @@ import { useSessions } from './useSessions'
  * | 先頭ページ段階では**件数を確定値として見せない** | FR-037 |
  * | **由来候補 (ユーザ) を常時出す** | FR-052 |
  * | element 内蔵の日付グルーピングと検索を使わない | Principle XIII / plan の UI 構成 |
+ * | **Thread search は区画の上端の検索欄の語で絞る** — 要約行のフィールドとグループの見出しだけを見て、transcript の本文を読まない。語と開閉の状態はここの local state (サイドバーを畳んでもマウントしたまま) | O-3 FR-001 / 012 data-model §1 |
+ * | 区画の上端に固定するのは見出し (シェル) と検索欄だけ。取得時刻・列挙の結果・絞り込み・空の状態・グループはスクロールする | O-3 FR-017 / 012 data-model §6 |
  * | 起動・改名・削除の導線を持たない | FR-002 / FR-003 |
  *
  * **取得の完了を待たずに枠を描く。** 実測で WSL の先頭 50 件に 1.8 秒かかり、
@@ -173,13 +184,19 @@ function registerSeedOf(group: SessionGroupDTO): FolderDraftSeed | null {
  *
  * **未登録グループは既定で畳む** (FR-025)。他人のフォルダや一度きりの作業ディレクトリが
  * 大量に並ぶと、登録済みフォルダが画面から押し出される。
+ *
+ * **開閉の状態は持たない** (O-3 / plan RK-10 / 012 data-model §1)。`SessionListScreen` が区画の鍵で持つ —
+ * 区画の中の `useState` だと、絞り込み (所在・検索) で区画が描かれなくなるたびに開閉が消えていた。
  */
 function Section({
   section,
   folderName,
   coverage,
   highlightSelected,
-  onSelectRow
+  onSelectRow,
+  open,
+  onToggle,
+  renderTooltip
 }: {
   section: SessionSection
   folderName: string | null
@@ -187,6 +204,15 @@ function Section({
   highlightSelected: boolean
   /** 行を押したとき (選択中の行の押し直しを含む。O-7)。 */
   onSelectRow: (rowKey: string) => void
+  /** 中身を描くか (畳んだ区画は `false`。検索中は一致した区画を開いて描く)。 */
+  open: boolean
+  /**
+   * 開閉のボタンの押下。**`null` ならボタンを出さない** — 畳めない区画と、検索中 (一致した区画は開いて描くので、
+   * 畳むボタンを出すと押しても変わらない)。
+   */
+  onToggle: (() => void) | null
+  /** 行の題の全文のツールチップ (O-3 / FR-017。テキストとして描く)。 */
+  renderTooltip: (rowKey: string) => React.ReactNode
   /**
    * 索引をどこまで信じてよいか (不変条件 5)。**件数と 0 件の意味を両方決める。**
    *
@@ -200,13 +226,17 @@ function Section({
    */
   coverage: Coverage
 }): React.JSX.Element {
-  const collapsible = section.group.kind === 'unregistered'
-  const [open, setOpen] = useState(!collapsible)
   const count = section.rowKeys.length
   const seedFolderDraft = useUiStore((s) => s.seedFolderDraft)
   const group = section.group
-  const headingId = `section-heading-${section.key}`
-  const panelId = `section-panel-${section.key}`
+  /*
+   * **見出しと開閉の中身の id は区画の鍵から作らない** (O-3 / 012 data-model §6 / §2「外部由来の値と DOM の id・
+   * セレクタ」)。未登録の区画の鍵はパス (`cwdKey`) を含み、空白があると IDREF (`aria-labelledby` / `aria-controls`)
+   * の参照が途中で切れる。区画ごとの `useId()` を接頭辞にして固定の語を付ける。
+   */
+  const prefix = useId()
+  const headingId = `${prefix}-heading`
+  const panelId = `${prefix}-panel`
 
   /*
    * **登録の導線 (FE-051 / FR-026)。**
@@ -220,14 +250,16 @@ function Section({
   const registerSeed = registerSeedOf(group)
 
   return (
-    <section
-      className={cn(paper, 'rounded-xl p-3')}
+    <div
       /*
-       * **区画に名前を与える** (a11y H-004)。
-       * `<section>` はアクセシブル名を持たないと region として露出せず、
-       * 4 種のグループが「名前の無い generic」になる。
-       * この 4 種の読み分けは本 feature の中核である (FR-022 / FR-025 / FR-028)。
+       * **区画に名前を与える** (a11y H-004)。4 種のグループの読み分けは本 feature の中核である
+       * (FR-022 / FR-025 / FR-028)。
+       *
+       * **ランドマーク (region) にしない** (O-3 / FR-017 / O-7 の義務 (ii))。サイドバーの過去の区画のランドマークは
+       * シェルの `section` 1 つだけにし、グループは `role="group"` で見出し (h3) を名前にする。
        */
+      role="group"
+      className={cn(paper, 'rounded-xl p-3')}
       aria-labelledby={headingId}
     >
       {/*
@@ -254,7 +286,7 @@ function Section({
               作業フォルダとして登録
             </Button>
           )}
-          {collapsible && (
+          {onToggle !== null && (
             <Button
               variant="ghost"
               size="sm"
@@ -266,7 +298,7 @@ function Section({
                */
               aria-expanded={open}
               aria-controls={panelId}
-              onClick={() => setOpen(!open)}
+              onClick={onToggle}
             >
               {open ? '畳む' : '開く'}
             </Button>
@@ -294,6 +326,11 @@ function Section({
               rowKeys={section.rowKeys}
               highlightSelected={highlightSelected}
               onSelectRow={onSelectRow}
+              /*
+               * **切り詰めた題の全文をフォーカスでも出す** (O-3 / FR-017 / O-7 の義務 (iv))。稼働中の行と同じ部品
+               * (`thread-list.aui.tsx` の Tooltip)。中身はテキストとして描く (HTML として解釈しない)。
+               */
+              renderTooltip={renderTooltip}
               renderMeta={(rowKey) => {
                 const session = section.sessions.find((s) => sessionRowKey(s) === rowKey)
                 return session === undefined ? null : <SessionMeta session={session} />
@@ -302,7 +339,7 @@ function Section({
           </div>
         )}
       </div>
-    </section>
+    </div>
   )
 }
 
@@ -570,6 +607,18 @@ function Outcomes({
   /** 索引をどこまで信じてよいか (不変条件 5)。**件数の見せ方を決める** (FR-037)。 */
   coverage: Coverage
 }): React.JSX.Element {
+  /*
+   * **全部を読めたときは 1 行に要約する** (O-3 / FR-017 / 012 data-model §6)。過去の区画が最小の高さ (6rem) まで
+   * 縮むと、所在ごとの行が行の場所を取る。失敗・打ち切り・取得中は理由と操作が要るので今の行を出す
+   * (`complete` は失敗と打ち切りが無いことまで含む。`coverageOf`)。
+   */
+  if (coverage === 'complete') {
+    return (
+      <p className="text-muted-foreground px-1 text-xs">
+        {PAST_SESSIONS_LABELS.outcomesAllOk(outcomes.length)}
+      </p>
+    )
+  }
   return (
     <section className={cn(paper, 'rounded-xl p-3')}>
       {/*
@@ -649,7 +698,13 @@ function Outcomes({
  * `folder` グループは登録フォルダから必ず seed されるので、区画数では判定できない。
  */
 type EmptyNotice =
-  'no-folders' | 'filtered-out' | 'all-unlisted' | 'some-unlisted' | 'no-sessions' | null
+  | 'no-folders'
+  | 'search-empty'
+  | 'filtered-out'
+  | 'all-unlisted'
+  | 'some-unlisted'
+  | 'no-sessions'
+  | null
 
 /**
  * 絞り込みの選択肢 1 つ (code-gate iteration 1 / a11y H-003)。
@@ -716,6 +771,116 @@ function narrowToLocation(
   return { ...section, sessions, rowKeys }
 }
 
+/**
+ * 検索語で区画の中の行を絞る (O-3 / FR-001 / 012 data-model §1「Thread search の状態」)。絞り込みの最後の段
+ * (フォルダ → 所在 → 語)。**同じ添字で削る** (`rowKeys` と `sessions` の順と長さの一致を保つ)。
+ * 一致の規則は `features/search/` の 1 か所 (FR-002)。並べ替えない。
+ *
+ * @returns 絞り込み後の区画。1 件も残らなければ `null` (一致の無いグループは見出しごと出さない)。
+ */
+function narrowToTerms(
+  section: SessionSection,
+  index: PastSearchIndex,
+  terms: readonly string[]
+): SessionSection | null {
+  const sessions: SessionSummaryDTO[] = []
+  const rowKeys: string[] = []
+  section.sessions.forEach((session, at) => {
+    const rowKey = section.rowKeys[at]
+    if (rowKey === undefined || !pastRowMatches(index, rowKey, terms)) return
+    sessions.push(session)
+    rowKeys.push(rowKey)
+  })
+
+  if (sessions.length === 0) return null
+  return { ...section, sessions, rowKeys }
+}
+
+/** 区画を既定で開くか。**未登録グループは既定で畳む** (FR-025)。畳めるのは未登録だけ。 */
+function openByDefault(section: SessionSection): boolean {
+  return section.group.kind !== 'unregistered'
+}
+
+/** IME の変換中のキーか (Principle VIII / AD-037 の `isComposing` / 229)。変換中は確定・取り消しに任せる。 */
+function isComposingKey(event: React.KeyboardEvent): boolean {
+  return event.nativeEvent.isComposing || event.keyCode === 229
+}
+
+/**
+ * 過去の区画の検索欄 (O-3 / FR-001 / 012 data-model §1・§6)。区画の上端 (シェルの見出しの下) に固定する。
+ * 高さは 2rem (`h-8`) に収め、過去の区画が最小の高さ (6rem) まで縮んでもスクロールの領域を残す。
+ * 文言は `PAST_SESSIONS_LABELS` から取る (AD-045 Decision 2)。
+ */
+function PastSearchField({
+  inputRef,
+  query,
+  onQueryChange,
+  onKeyDown,
+  onClear,
+  status
+}: {
+  inputRef: React.RefObject<HTMLInputElement | null>
+  query: string
+  onQueryChange: (query: string) => void
+  onKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => void
+  /** 語を消す (消すボタンは語があるときだけ出す)。 */
+  onClear: () => void
+  /** 語があるときの一致した件数の文。語が無ければ `null`。 */
+  status: string | null
+}): React.JSX.Element {
+  return (
+    <div className="shrink-0 px-2 pt-2">
+      <div className="relative">
+        <SearchIcon
+          aria-hidden
+          className="text-muted-foreground pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2"
+        />
+        <input
+          ref={inputRef}
+          /*
+           * `type="search"` にしない — Chromium の search 欄は Esc で値を消し、消すボタンを内蔵する。Esc の扱いを
+           * IME のガード (`onKeyDown`) の 1 か所にするため、text の欄に searchbox の役割を与える。
+           */
+          type="text"
+          role="searchbox"
+          aria-label={PAST_SESSIONS_LABELS.searchLabel}
+          placeholder={PAST_SESSIONS_LABELS.searchPlaceholder}
+          autoComplete="off"
+          spellCheck={false}
+          value={query}
+          onChange={(event) => onQueryChange(event.target.value)}
+          onKeyDown={onKeyDown}
+          className="bg-input border-border focus-visible:ring-ring placeholder:text-muted-foreground h-8 w-full min-w-0 rounded-md border pr-8 pl-7 text-sm focus-visible:ring-[3px] focus-visible:outline-none"
+        />
+        {query !== '' && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            aria-label={PAST_SESSIONS_LABELS.searchClear}
+            title={PAST_SESSIONS_LABELS.searchClear}
+            className="absolute top-1/2 right-1 -translate-y-1/2"
+            onClick={onClear}
+          >
+            <XIcon aria-hidden />
+          </Button>
+        )}
+      </div>
+      {/*
+       * 語があるときの一致した件数 (data-model §1)。**常時マウントして中身だけ差し替える** (取得時刻の行と同じ形。
+       * 条件付きのマウントは読まれないことがある)。語が無いときは空で、高さを取らない。
+       */}
+      <p
+        role="status"
+        aria-live="polite"
+        className={cn('text-muted-foreground text-xs', status !== null && 'pt-1')}
+      >
+        {status}
+      </p>
+    </div>
+  )
+}
+
 export function SessionListScreen({
   highlightSelected = true
 }: {
@@ -734,6 +899,30 @@ export function SessionListScreen({
   const openSettings = useUiStore((state) => state.openSettings)
 
   /*
+   * **Thread search の語** (O-3 / FR-001 / 012 data-model §1)。所在・フォルダの絞り込みと同じく local state に置く —
+   * 区画はサイドバーを畳んでもマウントしたままなので、中央の切り替え・サイドバーの畳みで保たれ、アプリの再起動で消える。
+   * `stores/ui.ts` (面の状態) にも `stores/sessions.ts` にも置かない。値の変化で絞る (変換中の未確定の文字列でも)。
+   */
+  const [query, setQuery] = useState('')
+  const terms = useMemo(() => toTerms(query), [query])
+  const searching = terms.length > 0
+  const searchRef = useRef<HTMLInputElement>(null)
+
+  /*
+   * **区画の開閉は区画の鍵で持つ** (O-3 / plan RK-10 / 012 data-model §1)。値は「既定から反転した区画」の集合
+   * (未登録は既定で畳む)。検索中は一致した区画を開いて描くが、この集合は書き換えないので、語を消すと元の開閉に戻る。
+   */
+  const [toggled, setToggled] = useState<ReadonlySet<string>>(() => new Set())
+  const toggleSection = useCallback((key: string) => {
+    setToggled((previous) => {
+      const next = new Set(previous)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }, [])
+
+  /*
    * **selector の外で変換する。** `useAuiState` の selector が配列リテラルを返すと
    * 毎回の再描画になる (assistant-ui の契約)。
    */
@@ -744,6 +933,28 @@ export function SessionListScreen({
       rowTitleText(row.title, formatSessionTime),
     []
   )
+
+  /*
+   * 過去の行のツールチップは行の題の全文 (O-3 / FR-017)。行は context で受けるので、同じ参照を渡し続ける
+   * (`ThreadListItemsByKey` の `rowOptions`。一覧の再描画で全行を描き直さない)。
+   */
+  const titleTextByKey = useMemo(
+    () => new Map(view.rows.map((row) => [row.rowKey, titleOf(row)] as const)),
+    [view.rows, titleOf]
+  )
+  const renderTooltip = useCallback(
+    (rowKey: string): React.ReactNode => titleTextByKey.get(rowKey) ?? null,
+    [titleTextByKey]
+  )
+
+  /*
+   * 行ごとの正規化したフィールドは、索引 (`view`) とフォルダの表示名が変わったときだけ作り直す (012 data-model §1)。
+   * 作り手は前回の索引を覚える (表示名は値で比べるので、描画ごとに別の `nameOf` を渡してよい)。語が無ければ作らない。
+   */
+  const [searchIndexer] = useState(() => createPastSearchIndexer())
+  const searchIndex: PastSearchIndex | null = searching
+    ? searchIndexer(view, folderLabels.nameOf)
+    : null
 
   const threadList = useSessionThreadListAdapter({
     rows: view.rows,
@@ -791,12 +1002,44 @@ export function SessionListScreen({
         if (section.group.kind !== 'folder' || section.group.folderId !== folderFilter) continue
       }
       const narrowed = narrowToLocation(section, locationFilter, locationOf)
-      if (narrowed !== null) kept.push(narrowed)
+      if (narrowed === null) continue
+      // 検索語は最後の段 (O-3 / data-model §1)。所在・フォルダの絞り込みと AND で、IPC を往復させない。
+      const matched = searchIndex === null ? narrowed : narrowToTerms(narrowed, searchIndex, terms)
+      if (matched !== null) kept.push(matched)
     }
     return kept
-  }, [view.sections, locationFilter, folderFilter, locationOf])
+  }, [view.sections, locationFilter, folderFilter, locationOf, searchIndex, terms])
 
   const filtering = locationFilter.kind !== 'all' || folderFilter !== null
+
+  const folderNameOf = (section: SessionSection): string | null =>
+    section.group.kind === 'folder' ? folderLabels.nameOf(section.group.folderId) : null
+
+  /** 語があるときの一致した行の件数 (検索欄の下に出す。所在・フォルダの絞り込みの後の行の数)。 */
+  const matchedCount = visible.reduce((sum, section) => sum + section.rowKeys.length, 0)
+
+  /** 語を消して検索欄へ戻す (消すボタンは語が空になると消えるので、フォーカスを落とさない)。 */
+  const clearQuery = useCallback(() => {
+    setQuery('')
+    searchRef.current?.focus()
+  }, [])
+
+  /** `search-empty` の操作 — 語・所在・フォルダを既定に戻す (012 data-model §1「Thread search の空の状態」)。 */
+  const resetSearchAndFilters = useCallback(() => {
+    setQuery('')
+    setLocationFilter({ kind: 'all' })
+    setFolderFilter(null)
+    searchRef.current?.focus()
+  }, [])
+
+  /**
+   * 検索欄のキー (O-3 / FR-001 / Principle VIII)。**Enter は何もしない** (確定の操作は要らない)。Esc は変換中でなければ
+   * 語を消す。**変換中は何もしない** — `preventDefault` もしない (変換の確定・取り消しを奪わない)。
+   */
+  const onSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>): void => {
+    if (isComposingKey(event)) return
+    if (event.key === 'Escape' && query !== '') setQuery('')
+  }
 
   /**
    * 全所在が未列挙か (FR-032 の 4 つ目の条件)。
@@ -844,15 +1087,20 @@ export function SessionListScreen({
     if (sessions.index === null) return null
     /* 1. 登録が無い。**初回利用者の最優先はこれである。** */
     if (folderLabels.entries.length === 0 && view.sections.length === 0) return 'no-folders'
-    /* 2. 絞り込みの結果 0 件。解除すれば直るので、索引の性質と混ぜない。 */
+    /*
+     * 2. 検索語に一致する行が無い (O-3 / FR-001 / FR-008)。取得中でも出す — 文言が「読み込み済み」と範囲を示す。
+     *    語・所在・フォルダをすべて解除する操作を持つ。
+     */
+    if (searching && visible.length === 0) return 'search-empty'
+    /* 3. 絞り込みの結果 0 件 (語が空のときだけ届く)。解除すれば直るので、索引の性質と混ぜない。 */
     if (filtering && visible.length === 0) return 'filtered-out'
-    /* 3. 取得中は断言しない (FR-037)。 */
+    /* 4. 取得中は断言しない (FR-037)。 */
     if (coverage === 'pending') return null
-    /* 4. どの所在も読めていない。 */
+    /* 5. どの所在も読めていない。 */
     if (allUnlisted) return 'all-unlisted'
-    /* 5. 読めた所在にセッションが無い。**「無い」ではなく「分からない」である。** */
+    /* 6. 読めた所在にセッションが無い。**「無い」ではなく「分からない」である。** */
     if (total === 0 && coverage === 'partial') return 'some-unlisted'
-    /* 6. 全部読めて 0 件。**ここでだけ「まだありません」と言える。** */
+    /* 7. 全部読めて 0 件。**ここでだけ「まだありません」と言える。** */
     if (total === 0 && folderLabels.entries.length > 0) return 'no-sessions'
     return null
   })()
@@ -860,7 +1108,7 @@ export function SessionListScreen({
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <div
-        className="flex h-full min-h-0 flex-col gap-2 overflow-y-auto p-2"
+        className="flex h-full min-h-0 flex-col"
         /* **取得中であることを支援技術に伝える** (a11y H-001)。 */
         aria-busy={sessions.loading}
       >
@@ -870,274 +1118,309 @@ export function SessionListScreen({
         </span>
 
         {/*
-         * O-7: サイドバーの過去のセッションの区画に置く。区画の見出し (「過去のセッション」) はシェルが持つので、
-         * 画面の見出しと外枠を外し、取得の時刻・全件を取り直す・列挙の結果・絞り込みは残して折り返しで収める
-         * (data-model §3)。
+         * **区画の上端に固定するのは見出し (シェルの h2) と検索欄だけ** (O-3 / FR-017 / 012 data-model §6)。
+         * 稼働中の区画が上限まで伸びて過去の区画が最小の高さ (6rem) まで縮んでも、検索欄が見えて、その下を
+         * スクロールして行に届く。
          */}
-        <header className="flex flex-wrap items-baseline justify-between gap-2">
-          <div className="min-w-0">
-            <p
-              className="text-muted-foreground text-xs"
-              /*
-               * **段階描画の進みをここ 1 箇所で通知する** (code-gate iteration 1 / a11y H-001)。
-               *
-               * 以前は `features/session-list/` 配下に `aria-live` / `role="status"` /
-               * `aria-busy` が 1 つも無く、spec が最も力を入れている 3 つの状態
-               * (段階描画中である = FR-037 / 件数が確定した / 所在が列挙できなかった =
-               * FR-030・FR-031) が**視覚のみに存在**していた。
-               * WSL の先頭 50 件に実測 1.8 秒かかるため、無音の 2 秒が生まれる。
-               *
-               * **行ごとには付けない。** 所在ごとに行が増える経路
-               * (`Outcomes` / `Section`) に live region を置くと、700 件規模で
-               * 読み上げが実用にならない。**通知はこの要約 1 行に集約する。**
-               * `assertive` は使わない (作業を中断させない)。
-               *
-               * **常時マウントして中身だけ差し替える** — 条件付きマウントは
-               * 実装依存で読まれないことがある (`WorkspaceFoldersScreen` と同じ形)。
-               */
-              role="status"
-              aria-live="polite"
+        <PastSearchField
+          inputRef={searchRef}
+          query={query}
+          onQueryChange={setQuery}
+          onKeyDown={onSearchKeyDown}
+          onClear={clearQuery}
+          status={searching ? PAST_SESSIONS_LABELS.searchCount(matchedCount) : null}
+        />
+
+        {/* スクロールする領域 (取得時刻・列挙の結果・絞り込み・空の状態・グループ。012 data-model §6)。 */}
+        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2">
+          {/*
+           * O-7: サイドバーの過去のセッションの区画に置く。区画の見出し (「過去のセッション」) はシェルが持つので、
+           * 画面の見出しと外枠を外し、取得の時刻・全件を取り直す・列挙の結果・絞り込みは残して折り返しで収める
+           * (data-model §3)。
+           */}
+          <header className="flex flex-wrap items-baseline justify-between gap-2">
+            <div className="min-w-0">
+              <p
+                className="text-muted-foreground text-xs"
+                /*
+                 * **段階描画の進みをここ 1 箇所で通知する** (code-gate iteration 1 / a11y H-001)。
+                 *
+                 * 以前は `features/session-list/` 配下に `aria-live` / `role="status"` /
+                 * `aria-busy` が 1 つも無く、spec が最も力を入れている 3 つの状態
+                 * (段階描画中である = FR-037 / 件数が確定した / 所在が列挙できなかった =
+                 * FR-030・FR-031) が**視覚のみに存在**していた。
+                 * WSL の先頭 50 件に実測 1.8 秒かかるため、無音の 2 秒が生まれる。
+                 *
+                 * **行ごとには付けない。** 所在ごとに行が増える経路
+                 * (`Outcomes` / `Section`) に live region を置くと、700 件規模で
+                 * 読み上げが実用にならない。**通知はこの要約 1 行に集約する。**
+                 * `assertive` は使わない (作業を中断させない)。
+                 *
+                 * **常時マウントして中身だけ差し替える** — 条件付きマウントは
+                 * 実装依存で読まれないことがある (`WorkspaceFoldersScreen` と同じ形)。
+                 */
+                role="status"
+                aria-live="polite"
+              >
+                {/*
+                  **取得時刻を必ず出す** (FR-034 / SC-012)。
+                  正本はアプリ外にあり、鮮度は原理的に保証できない (Principle X / R-10)。
+                */}
+                {/* 待っている間は「未取得」(止まって見える語) と言わない (O-7 pr-gate R2 ux L-102)。 */}
+                {sessions.index === null
+                  ? sessions.loading
+                    ? '取得中…'
+                    : '未取得'
+                  : `取得時刻 ${formatSessionTime(sessions.index.fetchedAt)}`}
+                {/*
+                  **「試した」で断言しない** (pr-gate Round 4 / 不変条件 5 / UX3-005)。
+                  `complete` は全所在を*試した*ことしか意味しない。失敗があっても真になるので、
+                  読めなかった所在があるときに「全 N 件」と断言していた。
+                */}
+                {sessions.index !== null && coverage === 'pending' && (
+                  <span> — 先頭ページのみ表示しています（件数は確定していません）</span>
+                )}
+                {coverage === 'partial' && (
+                  <span> — {total} 件以上（読めていない所在があります）</span>
+                )}
+                {coverage === 'complete' && <span> — 全 {total} 件</span>}
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              {...busyProps(sessions.loading)}
+              onClick={busyGuard(sessions.loading, () => void sessions.refresh())}
             >
-              {/*
-                **取得時刻を必ず出す** (FR-034 / SC-012)。
-                正本はアプリ外にあり、鮮度は原理的に保証できない (Principle X / R-10)。
-              */}
-              {/* 待っている間は「未取得」(止まって見える語) と言わない (O-7 pr-gate R2 ux L-102)。 */}
-              {sessions.index === null
-                ? sessions.loading
-                  ? '取得中…'
-                  : '未取得'
-                : `取得時刻 ${formatSessionTime(sessions.index.fetchedAt)}`}
-              {/*
-                **「試した」で断言しない** (pr-gate Round 4 / 不変条件 5 / UX3-005)。
-                `complete` は全所在を*試した*ことしか意味しない。失敗があっても真になるので、
-                読めなかった所在があるときに「全 N 件」と断言していた。
-              */}
-              {sessions.index !== null && coverage === 'pending' && (
-                <span> — 先頭ページのみ表示しています（件数は確定していません）</span>
-              )}
-              {coverage === 'partial' && (
-                <span> — {total} 件以上（読めていない所在があります）</span>
-              )}
-              {coverage === 'complete' && <span> — 全 {total} 件</span>}
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            {...busyProps(sessions.loading)}
-            onClick={busyGuard(sessions.loading, () => void sessions.refresh())}
-          >
-            {/* **再取得は利用者の明示操作に限る** (FR-033)。自動ポーリングをしない。 */}
-            {sessions.loading ? '取得中…' : '全件を取り直す'}
-          </Button>
-        </header>
+              {/* **再取得は利用者の明示操作に限る** (FR-033)。自動ポーリングをしない。 */}
+              {sessions.loading ? '取得中…' : '全件を取り直す'}
+            </Button>
+          </header>
 
-        {sessions.failed && (
-          <ErrorState
-            title="過去のセッションを取得できませんでした"
-            detail="再取得してください。続く場合はログを確認してください。"
-            retryLabel="再取得"
-            retryingLabel="取得中"
-            retrying={sessions.loading}
-            onRetry={() => void sessions.refresh()}
-          />
-        )}
+          {sessions.failed && (
+            <ErrorState
+              title="過去のセッションを取得できませんでした"
+              detail="再取得してください。続く場合はログを確認してください。"
+              retryLabel="再取得"
+              retryingLabel="取得中"
+              retrying={sessions.loading}
+              onRetry={() => void sessions.refresh()}
+            />
+          )}
 
-        {sessions.index === null && sessions.loading && (
-          <div className={cn(paper, 'rounded-xl p-3')}>
-            <ThreadListSkeleton />
-          </div>
-        )}
-
-        {sessions.index !== null && (
-          <Outcomes
-            outcomes={sessions.index.outcomes}
-            busy={sessions.loading}
-            coverage={coverage}
-            onRediscover={() => void sessions.rediscover()}
-            onRetry={() => void sessions.refresh()}
-            onFetchMore={(targetKey, offset) => void sessions.fetchMore(targetKey, offset)}
-          />
-        )}
-
-        {/* ── 絞り込み (FE-072)。**IPC を往復させない。** ────────────── */}
-        {sessions.index !== null &&
-          (locationLabels.length > 1 || folderLabels.entries.length > 0) && (
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              {/*
-                **選択状態を色だけで表さない** (code-gate iteration 1 / a11y H-003)。
-                `variant` の `secondary` と `ghost` の背景差は白に対し **1.04:1** しかなく、
-                晴眼キーボード利用者にも実質不可視だった。さらに `aria-pressed` も
-                `role="radiogroup"` も無く、支援技術には**同格のボタン列**に見えていた。
-                解除の導線は結果 0 件のときしか出ないため、
-                状態が分からないまま「セッションが消えた」と読み違える経路が残っていた。
-
-                **群にアクセシブル名を与える。** 裸の `<span>絞り込み</span>` は
-                ラベルとして紐づいていなかった。
-              */}
-              <span className="text-muted-foreground" aria-hidden>
-                絞り込み
-              </span>
-              <div role="group" aria-label="所在で絞り込む" className="flex flex-wrap gap-2">
-                <FilterChip
-                  selected={locationFilter.kind === 'all'}
-                  onSelect={() => setLocationFilter({ kind: 'all' })}
-                >
-                  すべての所在
-                </FilterChip>
-                {locationLabels.map((label) => (
-                  <FilterChip
-                    key={label}
-                    selected={locationFilter.kind === 'one' && locationFilter.label === label}
-                    onSelect={() => setLocationFilter({ kind: 'one', label })}
-                  >
-                    {label}
-                  </FilterChip>
-                ))}
-              </div>
-              {folderLabels.entries.length > 0 && (
-                <>
-                  {/* 装飾の区切り。**読み上げない** (a11y L-001)。 */}
-                  <span className="text-muted-foreground" aria-hidden>
-                    /
-                  </span>
-                  <div
-                    role="group"
-                    aria-label="フォルダで絞り込む"
-                    className="flex flex-wrap gap-2"
-                  >
-                    <FilterChip
-                      selected={folderFilter === null}
-                      onSelect={() => setFolderFilter(null)}
-                    >
-                      すべてのフォルダ
-                    </FilterChip>
-                    {folderLabels.entries.map((entry) => (
-                      <FilterChip
-                        key={entry.id}
-                        selected={folderFilter === entry.id}
-                        onSelect={() => setFolderFilter(entry.id)}
-                      >
-                        {entry.name}
-                      </FilterChip>
-                    ))}
-                  </div>
-                </>
-              )}
+          {sessions.index === null && sessions.loading && (
+            <div className={cn(paper, 'rounded-xl p-3')}>
+              <ThreadListSkeleton />
             </div>
           )}
 
-        {/*
-         * **空状態は 1 枚だけ出す** (pr-gate Round 4 / 不変条件 5 / FR-032 / SC-013)。
-         *
-         * 以前は索引レベルの通知と「区画が 1 つも無いとき」の通知が**別々の条件**で
-         * 描かれ、排他でなかった。初回起動 (登録 0 件 + ディストロ停止中) で
-         * `EmptyState` が 2 枚積まれ、最優先の「作業フォルダを登録する」が下に来ていた。
-         *
-         * **区画は消さない** (FR-051)。説明と導線を区画一覧の上に出す。
-         * どの分岐も**文言ではなく操作**を出す — 文言だけでは、次に何をすればよいか
-         * 分かってもその場でできない。
-         */}
-        {emptyNotice !== null && (
-          <EmptyState>
-            {emptyNotice === 'no-folders' && (
-              <>
-                <p className="text-sm">作業フォルダがまだ登録されていません。</p>
-                <p className="text-muted-foreground text-xs">
-                  登録すると、そのフォルダのセッションがここに並びます。
-                </p>
-                <Button variant="outline" size="sm" onClick={() => openSettings('folders')}>
-                  作業フォルダを登録する
-                </Button>
-              </>
-            )}
-
-            {emptyNotice === 'filtered-out' && (
-              <>
-                <p className="text-sm">絞り込みに一致するセッションがありません。</p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setLocationFilter({ kind: 'all' })
-                    setFolderFilter(null)
-                  }}
-                >
-                  絞り込みを解除する
-                </Button>
-              </>
-            )}
-
-            {emptyNotice === 'all-unlisted' && sessions.index !== null && (
-              <>
-                <p className="text-sm">どの所在も列挙できていません。</p>
-                <p className="text-muted-foreground text-xs">
-                  {unlistedHint(sessions.index.outcomes)}
-                </p>
-                {/* **理由に見合う操作だけを出す** (不変条件 2)。判定は 1 箇所。 */}
-                <RemedyButton
-                  reasons={failureReasonsOf(sessions.index.outcomes)}
-                  busy={sessions.loading}
-                  onRetry={() => void sessions.refresh()}
-                  onRediscover={() => void sessions.rediscover()}
-                />
-              </>
-            )}
-
-            {emptyNotice === 'some-unlisted' && sessions.index !== null && (
-              /*
-               * 読めた所在が 0 件で、読めなかった所在がある。
-               * **画面に出ている 0 件は「無い」ではなく「分からない」である。**
-               * 導線も違う — 使い始めを促すのではなく、読めなかった所在を直す。
-               */
-              <>
-                <p className="text-sm">列挙できた所在にセッションがありません。</p>
-                <p className="text-muted-foreground text-xs">
-                  列挙できていない所在があります — {unlistedHint(sessions.index.outcomes)}
-                </p>
-                <RemedyButton
-                  reasons={failureReasonsOf(sessions.index.outcomes)}
-                  busy={sessions.loading}
-                  onRetry={() => void sessions.refresh()}
-                  onRediscover={() => void sessions.rediscover()}
-                />
-              </>
-            )}
-
-            {emptyNotice === 'no-sessions' && (
-              <>
-                <p className="text-sm">セッションがまだありません。</p>
-                <p className="text-muted-foreground text-xs">
-                  登録したフォルダで Claude Code を使うと、ここに並びます。
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  {...busyProps(sessions.loading)}
-                  onClick={busyGuard(sessions.loading, () => void sessions.refresh())}
-                >
-                  {sessions.loading ? '取得中…' : '取り直す'}
-                </Button>
-              </>
-            )}
-          </EmptyState>
-        )}
-
-        <ThreadListRoot className="gap-3">
-          {visible.map((section) => (
-            <Section
-              key={section.key}
-              section={section}
+          {sessions.index !== null && (
+            <Outcomes
+              outcomes={sessions.index.outcomes}
+              busy={sessions.loading}
               coverage={coverage}
-              highlightSelected={highlightSelected}
-              onSelectRow={sessions.select}
-              folderName={
-                section.group.kind === 'folder' ? folderLabels.nameOf(section.group.folderId) : null
-              }
+              onRediscover={() => void sessions.rediscover()}
+              onRetry={() => void sessions.refresh()}
+              onFetchMore={(targetKey, offset) => void sessions.fetchMore(targetKey, offset)}
             />
-          ))}
-        </ThreadListRoot>
+          )}
+
+          {/* ── 絞り込み (FE-072)。**IPC を往復させない。** ────────────── */}
+          {sessions.index !== null &&
+            (locationLabels.length > 1 || folderLabels.entries.length > 0) && (
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                {/*
+                  **選択状態を色だけで表さない** (code-gate iteration 1 / a11y H-003)。
+                  `variant` の `secondary` と `ghost` の背景差は白に対し **1.04:1** しかなく、
+                  晴眼キーボード利用者にも実質不可視だった。さらに `aria-pressed` も
+                  `role="radiogroup"` も無く、支援技術には**同格のボタン列**に見えていた。
+                  解除の導線は結果 0 件のときしか出ないため、
+                  状態が分からないまま「セッションが消えた」と読み違える経路が残っていた。
+
+                  **群にアクセシブル名を与える。** 裸の `<span>絞り込み</span>` は
+                  ラベルとして紐づいていなかった。
+                */}
+                <span className="text-muted-foreground" aria-hidden>
+                  絞り込み
+                </span>
+                <div role="group" aria-label="所在で絞り込む" className="flex flex-wrap gap-2">
+                  <FilterChip
+                    selected={locationFilter.kind === 'all'}
+                    onSelect={() => setLocationFilter({ kind: 'all' })}
+                  >
+                    すべての所在
+                  </FilterChip>
+                  {locationLabels.map((label) => (
+                    <FilterChip
+                      key={label}
+                      selected={locationFilter.kind === 'one' && locationFilter.label === label}
+                      onSelect={() => setLocationFilter({ kind: 'one', label })}
+                    >
+                      {label}
+                    </FilterChip>
+                  ))}
+                </div>
+                {folderLabels.entries.length > 0 && (
+                  <>
+                    {/* 装飾の区切り。**読み上げない** (a11y L-001)。 */}
+                    <span className="text-muted-foreground" aria-hidden>
+                      /
+                    </span>
+                    <div
+                      role="group"
+                      aria-label="フォルダで絞り込む"
+                      className="flex flex-wrap gap-2"
+                    >
+                      <FilterChip
+                        selected={folderFilter === null}
+                        onSelect={() => setFolderFilter(null)}
+                      >
+                        すべてのフォルダ
+                      </FilterChip>
+                      {folderLabels.entries.map((entry) => (
+                        <FilterChip
+                          key={entry.id}
+                          selected={folderFilter === entry.id}
+                          onSelect={() => setFolderFilter(entry.id)}
+                        >
+                          {entry.name}
+                        </FilterChip>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+          {/*
+           * **空状態は 1 枚だけ出す** (pr-gate Round 4 / 不変条件 5 / FR-032 / SC-013)。
+           *
+           * 以前は索引レベルの通知と「区画が 1 つも無いとき」の通知が**別々の条件**で
+           * 描かれ、排他でなかった。初回起動 (登録 0 件 + ディストロ停止中) で
+           * `EmptyState` が 2 枚積まれ、最優先の「作業フォルダを登録する」が下に来ていた。
+           *
+           * **区画は消さない** (FR-051)。説明と導線を区画一覧の上に出す。
+           * どの分岐も**文言ではなく操作**を出す — 文言だけでは、次に何をすればよいか
+           * 分かってもその場でできない。
+           */}
+          {emptyNotice !== null && (
+            <EmptyState>
+              {emptyNotice === 'no-folders' && (
+                <>
+                  <p className="text-sm">作業フォルダがまだ登録されていません。</p>
+                  <p className="text-muted-foreground text-xs">
+                    登録すると、そのフォルダのセッションがここに並びます。
+                  </p>
+                  <Button variant="outline" size="sm" onClick={() => openSettings('folders')}>
+                    作業フォルダを登録する
+                  </Button>
+                </>
+              )}
+
+              {/* O-3 / FR-008: 検索語に一致する行が無い。語と絞り込みをすべて解除する操作を持つ。 */}
+              {emptyNotice === 'search-empty' && (
+                <>
+                  <p className="text-sm">{PAST_SESSIONS_LABELS.searchEmpty}</p>
+                  <Button variant="outline" size="sm" onClick={resetSearchAndFilters}>
+                    {PAST_SESSIONS_LABELS.searchEmptyReset}
+                  </Button>
+                </>
+              )}
+
+              {emptyNotice === 'filtered-out' && (
+                <>
+                  <p className="text-sm">絞り込みに一致するセッションがありません。</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setLocationFilter({ kind: 'all' })
+                      setFolderFilter(null)
+                    }}
+                  >
+                    絞り込みを解除する
+                  </Button>
+                </>
+              )}
+
+              {emptyNotice === 'all-unlisted' && sessions.index !== null && (
+                <>
+                  <p className="text-sm">どの所在も列挙できていません。</p>
+                  <p className="text-muted-foreground text-xs">
+                    {unlistedHint(sessions.index.outcomes)}
+                  </p>
+                  {/* **理由に見合う操作だけを出す** (不変条件 2)。判定は 1 箇所。 */}
+                  <RemedyButton
+                    reasons={failureReasonsOf(sessions.index.outcomes)}
+                    busy={sessions.loading}
+                    onRetry={() => void sessions.refresh()}
+                    onRediscover={() => void sessions.rediscover()}
+                  />
+                </>
+              )}
+
+              {emptyNotice === 'some-unlisted' && sessions.index !== null && (
+                /*
+                 * 読めた所在が 0 件で、読めなかった所在がある。
+                 * **画面に出ている 0 件は「無い」ではなく「分からない」である。**
+                 * 導線も違う — 使い始めを促すのではなく、読めなかった所在を直す。
+                 */
+                <>
+                  <p className="text-sm">列挙できた所在にセッションがありません。</p>
+                  <p className="text-muted-foreground text-xs">
+                    列挙できていない所在があります — {unlistedHint(sessions.index.outcomes)}
+                  </p>
+                  <RemedyButton
+                    reasons={failureReasonsOf(sessions.index.outcomes)}
+                    busy={sessions.loading}
+                    onRetry={() => void sessions.refresh()}
+                    onRediscover={() => void sessions.rediscover()}
+                  />
+                </>
+              )}
+
+              {emptyNotice === 'no-sessions' && (
+                <>
+                  <p className="text-sm">セッションがまだありません。</p>
+                  <p className="text-muted-foreground text-xs">
+                    登録したフォルダで Claude Code を使うと、ここに並びます。
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    {...busyProps(sessions.loading)}
+                    onClick={busyGuard(sessions.loading, () => void sessions.refresh())}
+                  >
+                    {sessions.loading ? '取得中…' : '取り直す'}
+                  </Button>
+                </>
+              )}
+            </EmptyState>
+          )}
+
+          {/* 過去の行のツールチップ (O-3 / FR-017)。稼働中の一覧 (`RunningSessionList`) と同じく自前で持つ。 */}
+          <TooltipProvider>
+            <ThreadListRoot className="gap-3">
+              {visible.map((section) => {
+                // 未登録は既定で畳む (FR-025)。検索中は一致した区画を開いて描き、開閉のボタンを出さない。
+                const defaultOpen = openByDefault(section)
+                return (
+                  <Section
+                    key={section.key}
+                    section={section}
+                    coverage={coverage}
+                    highlightSelected={highlightSelected}
+                    onSelectRow={sessions.select}
+                    folderName={folderNameOf(section)}
+                    open={searching || defaultOpen !== toggled.has(section.key)}
+                    onToggle={defaultOpen || searching ? null : () => toggleSection(section.key)}
+                    renderTooltip={renderTooltip}
+                  />
+                )
+              })}
+            </ThreadListRoot>
+          </TooltipProvider>
+        </div>
       </div>
     </AssistantRuntimeProvider>
   )

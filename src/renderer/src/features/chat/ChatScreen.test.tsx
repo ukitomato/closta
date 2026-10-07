@@ -10,6 +10,7 @@ import { toTranscriptMessages, type SessionMessageLike } from '@domain/session/t
 import { useUiStore } from '@/stores/ui'
 
 import { toThreadMessage } from './convert'
+import { COMPOSER_LABELS } from './labels'
 
 /**
  * FE-032 / FE-034 — `ChatScreen` の状態別描画と XSS 境界、及び composer 回帰 (SC-001/SC-005/SC-008)。
@@ -112,7 +113,7 @@ describe('ChatScreen の状態別描画', () => {
     render(<ChatScreen />)
 
     expect(screen.getByText('セッションを選ぶと会話が表示されます')).toBeInTheDocument()
-    expect(screen.queryByLabelText('Message input')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(COMPOSER_LABELS.composerInput)).not.toBeInTheDocument()
   })
 
   it('loading は読み込み表示を出す', () => {
@@ -261,14 +262,14 @@ describe('ChatScreen の composer (Principle VIII 回帰)', () => {
   it('composer は描画されるが入力が無効である', async () => {
     render(<ChatScreen />)
 
-    const input = await screen.findByLabelText('Message input')
+    const input = await screen.findByLabelText(COMPOSER_LABELS.composerInput)
 
     expect(input).toBeDisabled()
   })
 
   it('変換確定直後の Enter が送信経路に届かない', async () => {
     render(<ChatScreen />)
-    const input = await screen.findByLabelText('Message input')
+    const input = await screen.findByLabelText(COMPOSER_LABELS.composerInput)
 
     fireEvent.compositionStart(input)
     fireEvent.compositionEnd(input, { data: 'にほんご' })

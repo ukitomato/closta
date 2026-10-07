@@ -250,11 +250,39 @@ CI スクリプトの担当とし、reviewer に複製しない。
 /cl-design "[ui] 上部のタブのビューを廃し、Cursor の Agent View に近い 3 面のシェルにする。左のサイドバーに新規起動・稼働中のセッション・過去のセッション・設定、中央に選んだセッションの会話 (実行中の Chat か過去ログ)、右に表示中のセッションの情報をタブで切り替えるペインを置く。設定の 4 画面と起動はダイアログにする。右のペインは枠とタブを足す仕組みと「概要」のタブまでで、他のタブは後続に回す。素材は AD-025 の目標レイアウト。" --targets frontend
 ```
 
-### O-3 — Thread 検索と observability
+### O-3 — Thread 検索と探す操作
+
+> **O-3 の design で範囲を分けた (U-1。2026-10-05 に利用者が承認。[spec 012](../specs/012-ui-thread-search/spec.md))。** O-3 は「探す」
+> (Thread search・会話内検索・Command palette・Empty state) と、roadmap が預けた義務 (再利用率の計測経路・i18n リソース化の判断・
+> O-7 からの過去の区画の並び) に絞った。conversation map / message timing / 活動の heat graph は O-9 に、KPI「並列時の滑らかさ」の
+> 実機計測は O-8 に分けた。義務を含めるので targets は both にした。下の 1 つめは当初のプロンプトの記録、2 つめは実際に使った入力である。
 
 ```
 /cl-design "[ui] セッションを横断して探せるようにする。Thread search、会話内検索、conversation map、message timing、活動の heat graph、command palette、empty state を実装する。" --targets frontend
 ```
+
+```
+/cl-design "[ui] O-3 (roadmap M3 の順 12、domain: ui、依存: O-2): セッションを横断して探せるようにする。Thread search、会話内検索、conversation map、message timing、活動の heat graph、command palette、empty state。義務 (X-4 から): session charter KPI「再利用率」の計測経路 (起動元 preset / manual のローカル利用ログ。AD-041 (h))。義務 (O-1 から): (1) UI ラベルの i18n リソース化の判断 (Constitution Principle XV の期限 M3。target-finder.ts の 2 本を含める) (2) session charter KPI「並列時の滑らかさ」の実機計測の宿題 (roadmap O-3 の行の (a)〜(d))。表示の追加は docs/ui-coverage.md の行を同じ PR で直す (Constitution XII / AD-044)。" --targets both
+```
+
+### O-8 — 並列時の滑らかさの実機計測
+
+> O-3 の design で O-3 から分けた (spec 012 の U-1)。宿題の正本は [roadmap の O-8 の行](roadmap.md#o3-kpi-smoothness) の (a)〜(d) と基準の変化の追記。
+
+```
+/cl-design "[session] O-8 (roadmap M3、domain: session、依存: O-7): session charter KPI「並列時の滑らかさ」を実機で測り直す。roadmap の O-8 の行の (a)〜(d) を扱う: (a) perf の出力に窓の終わりの行の状態の内訳を足す (SC-005 の出力の許可リストの変更なので利用者の承認が要る) (b) 10 本が窓のあいだ応答を流し続けるように、プロンプトか有効な回の条件を見直す (c) 行の切り替え (シェルの中央の切り替え) も含めて測る (d) 実機計測ハーネス (perf/) の ADR が未了なら、proposed の ADR を起こしてから perf の安全柵・出力を変える。O-1 / X-5 の値と比べるときは、roadmap の O-8 の行にある基準の変化を並べて書く。"
+```
+
+### O-9 — 会話の時間と活動の可視化
+
+> O-3 の design で O-3 から分けた (spec 012 の U-1)。範囲の正本は [roadmap の O-9 の行](roadmap.md)。
+
+```
+/cl-design "[ui] O-9 (roadmap M3、domain: ui、依存: O-3): 会話の時間と活動を見えるようにする。conversation map、message timing、活動の heat graph と、docs/ui-coverage.md の F 節で O-9 に預けた Activity graph / Heat graph / Message timing / Trace waterfall の判断。message timing はメッセージの時刻 (createdAt。今は過去ログ・実行中とも null) を変換で埋める必要があり、session の契約の拡張を伴うので、持ち主を session charter と合わせて確かめる。transcript の本文を横断する検索の要否 (列挙と取得の負荷) もあわせて判断する。"
+```
+
+**注**: O-8 / O-9 の `--targets` はまだ決めていない (`_overview.md` の帰属に targets の記録が無い)。O-8 は src のグラフの外の `perf/` が中心で、
+O-9 は変換 (agents / domain) に触れうる。着手のときに決めて上の 2 つに書き足す。
 
 ---
 

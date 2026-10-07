@@ -192,6 +192,30 @@ export const GROUP_KIND_LABELS: Record<Exclude<SessionGroupDTO['kind'], 'pending
   unknown: '作業フォルダ不明'
 }
 
+/**
+ * 過去のセッションの区画の Thread search と「列挙の結果」の要約の文言 (O-3 / spec FR-001・FR-008・FR-017 /
+ * 012 data-model §5)。**コンポーネントに直書きしない** (AD-045 Decision 2)。
+ */
+export const PAST_SESSIONS_LABELS = {
+  /** 検索欄の名前。 */
+  searchLabel: 'セッションを検索',
+  /**
+   * 検索欄の placeholder。**サイドバーの幅 (280px) で切れない長さにする** — 入力欄の文字の幅は約 200px (`text-sm` で
+   * 全角 14 字まで)。前の「題・ブランチ・フォルダなどで探す」(16 字) は切れていた (012 pr-gate R1 C-001 の CI の artifact)。
+   */
+  searchPlaceholder: '題・ブランチ・フォルダなど',
+  /** 語があるときの一致した行の件数 (検索欄の下の `role="status"`)。 */
+  searchCount: (n: number) => `${n} 件が一致`,
+  /** 語を消すボタンの名前。 */
+  searchClear: '検索を消す',
+  /** `search-empty` (一致 0。読み込み済みの範囲で一致が無い)。 */
+  searchEmpty: '読み込み済みのセッションに一致するものはありません。',
+  /** `search-empty` の操作 (語・所在・フォルダを既定に戻す)。 */
+  searchEmptyReset: '検索と絞り込みをすべて解除する',
+  /** 「列挙の結果」の 1 行の要約 (`coverage` が `complete` のとき。`n` は対象の数)。 */
+  outcomesAllOk: (n: number) => `列挙の結果: ${n} 件の対象をすべて読めました`
+} as const
+
 /** 越境の有無 (R-1 の 3 値)。**2 値に潰さない。** */
 export const BOUNDARY_LABELS: Record<Boundary, string> = {
   native: '同じ所在',

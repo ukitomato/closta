@@ -1,6 +1,7 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { axe } from 'vitest-axe'
 
 import type { FolderListDTO, RegisterFolderResult } from '@domain/workspace/dto'
 import type {
@@ -14,7 +15,7 @@ import type { FailureReason } from '@domain/session/target'
 
 import { installCapability } from '@/test-support/capability'
 
-import { FAILURE_REASON_LABELS } from './labels'
+import { FAILURE_REASON_LABELS, PAST_SESSIONS_LABELS } from './labels'
 
 import { SessionListScreen } from './SessionListScreen'
 import { useSessionsStore } from '@/stores/sessions'
@@ -954,9 +955,10 @@ describe('SessionListScreen — 件数が多い場合 (FE-073)', () => {
     render(<SessionListScreen />)
     await waitFor(() => expect(screen.getByText('要約')).toBeInTheDocument())
 
-    const status = screen.getByRole('status')
+    // O-3 で検索欄の件数の status が加わった (語が無いときは空)。鮮度の行はそれと別の 1 つ。
+    const status = screen.getAllByRole('status').find((s) => s.textContent?.includes('取得時刻'))
+    expect(status).toBeDefined()
     expect(status).toHaveAttribute('aria-live', 'polite')
-    expect(status.textContent).toContain('取得時刻')
   })
 
   it('行がリストの項目として露出する (a11y H-004)', async () => {
@@ -1361,7 +1363,8 @@ describe('SessionListScreen — 空状態の断言', () => {
 
     render(<SessionListScreen />)
 
-    const section = await screen.findByRole('region', { name: /project/ })
+    // O-3 / FR-017: グループは region ではなく group (名前は見出しの h3)。
+    const section = await screen.findByRole('group', { name: /project/ })
     /* **0 件を断言しない。** 「無い」ではなく「見つからなかった」に留める。 */
     expect(section.textContent).not.toContain('このフォルダのセッションはありません。')
     expect(section.textContent).toContain('列挙できていない所在があります')
@@ -1395,7 +1398,7 @@ describe('SessionListScreen — 空状態の断言', () => {
     expect(screen.getAllByText('ディストロを起動してから再取得してください。').length).toBe(1)
 
     /* 区画は参照だけを持つ。 */
-    const section = screen.getByRole('region', { name: /project/ })
+    const section = screen.getByRole('group', { name: /project/ })
     expect(section.textContent).not.toContain('そのユーザのホームは Windows 側から読めません。')
     expect(section.textContent).toContain('「列挙の結果」を確認してください')
   })
@@ -1599,7 +1602,8 @@ describe('SessionListScreen — 断言してよいかの一貫性', () => {
     )
 
     render(<SessionListScreen />)
-    await waitFor(() => expect(screen.getByText('列挙の結果')).toBeInTheDocument())
+    // 全部を読めた場合 (成功 0 件) は「列挙の結果」が 1 行の要約になる (O-3 / FR-017)。どちらも先頭は同じ語。
+    await waitFor(() => expect(screen.getByText(/^列挙の結果/)).toBeInTheDocument())
 
     expect(document.querySelectorAll('[data-slot="empty-state"]')).toHaveLength(1)
   })
@@ -1628,5 +1632,340 @@ describe('SessionListScreen — 断言してよいかの一貫性', () => {
     )
     /* 失敗のバナーに押し下げられない。 */
     expect(screen.queryByText('どの所在も列挙できていません。')).not.toBeInTheDocument()
+  })
+})
+
+/* ── O-3 US-1: Thread search と過去の区画の並び (FE-012 / SC-001 / SC-008) ─────────── */
+
+const FOLDER_A = '案件A'
+const FOLDER_B = '案件B'
+
+function searchFolders(): FolderListDTO {
+  const [base] = folderList().folders
+  if (base === undefined) throw new Error('fixture')
+  return {
+    folders: [
+      { ...base, id: 'folder-1', displayName: FOLDER_A },
+      { ...base, id: 'folder-2', displayName: FOLDER_B }
+    ],
+    restoreIssues: { skipped: 0, reasonKeys: [], backupPath: null }
+  }
+}
+
+function installSearch(value: SessionIndexDTO): void {
+  installCapability({
+    listSessions: () => Promise.resolve(value),
+    refreshSessions: () => Promise.resolve(value),
+    fetchMoreSessions: () => Promise.resolve(value),
+    onSessionsChanged: () => () => {},
+    listFolders: () => Promise.resolve(searchFolders()),
+    onFoldersChanged: () => () => {}
+  })
+}
+
+/** 登録フォルダ 2 つ (2 行と 1 行) と、既定で畳む未登録 1 つ (1 行)。 */
+function searchIndex(overrides: Partial<SessionIndexDTO> = {}): SessionIndexDTO {
+  return index(
+    [
+      folderGroup([
+        session({ sessionId: 'a1', summary: 'ログイン画面の修正', gitBranch: 'feature/login' }),
+        session({ sessionId: 'a2', summary: 'テストの並列化' })
+      ]),
+      {
+        kind: 'folder',
+        folderId: 'folder-2',
+        boundary: 'native',
+        sessions: [session({ sessionId: 'b1', summary: 'ビルド手順の整理', tag: 'docs' })]
+      },
+      {
+        kind: 'unregistered',
+        cwdKey: 'scratch',
+        cwd: { namespace: 'host', value: 'C:\\scratch' },
+        cwdDisplay: null,
+        suggestedDisplayName: 'scratch',
+        location: { kind: 'windows' },
+        sessions: [session({ sessionId: 'c1', summary: '一度きりのログイン調査' })]
+      }
+    ],
+    overrides
+  )
+}
+
+const searchbox = (): HTMLElement =>
+  screen.getByRole('searchbox', { name: PAST_SESSIONS_LABELS.searchLabel })
+
+/** 描かれている過去の行の題 (表示の順)。 */
+function rowTitles(): string[] {
+  const titles = document.querySelectorAll('[data-slot="aui_thread-list-item-title"]')
+  return Array.from(titles, (title) => title.textContent ?? '')
+}
+
+function firstRowTrigger(): HTMLElement {
+  const trigger = document.querySelector<HTMLElement>('[data-slot="aui_thread-list-item-trigger"]')
+  if (trigger === null) throw new Error('行が描かれていない')
+  return trigger
+}
+
+describe('SessionListScreen — Thread search (O-3 / US-1 / FE-012)', () => {
+  it('語に一致した行だけが残り、一致の無いグループは見出しごと出ず、件数が出る。畳まれた未登録も検索中は出て、語を消すと畳みに戻る (AC1)', async () => {
+    installSearch(searchIndex())
+    render(<SessionListScreen />)
+    await waitFor(() => expect(rowTitles()).toContain('ログイン画面の修正'))
+    // 未登録は既定で畳む (中身を描かない)。
+    expect(rowTitles()).not.toContain('一度きりのログイン調査')
+
+    await userEvent.type(searchbox(), 'ログイン')
+
+    await waitFor(() =>
+      expect(rowTitles()).toEqual(['ログイン画面の修正', '一度きりのログイン調査'])
+    )
+    expect(screen.queryByRole('group', { name: new RegExp(FOLDER_B) })).not.toBeInTheDocument()
+    expect(screen.getByRole('group', { name: new RegExp(FOLDER_A) })).toBeInTheDocument()
+    expect(screen.getByText(PAST_SESSIONS_LABELS.searchCount(2))).toHaveAttribute('role', 'status')
+    // 検索中は一致した区画を開いて描くので、開閉のボタンは出さない。
+    expect(screen.queryByRole('button', { name: '開く' })).not.toBeInTheDocument()
+
+    await userEvent.clear(searchbox())
+
+    await waitFor(() => expect(rowTitles()).not.toContain('一度きりのログイン調査'))
+    expect(rowTitles()).toEqual(['ログイン画面の修正', 'テストの並列化', 'ビルド手順の整理'])
+    expect(screen.getByRole('button', { name: '開く' })).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it.each([
+    ['全角の英大文字', 'ＬＯＧＩＮ', ['ログイン画面の修正']],
+    ['半角カナと半角の濁点', 'ﾛｸﾞｲﾝ', ['ログイン画面の修正', '一度きりのログイン調査']]
+  ] as const)('%s の語でも一致する (AC2 / FR-002)', async (_label, term, expected) => {
+    installSearch(searchIndex())
+    render(<SessionListScreen />)
+    await waitFor(() => expect(rowTitles()).toContain('ログイン画面の修正'))
+
+    await userEvent.type(searchbox(), term)
+
+    await waitFor(() => expect(rowTitles()).toEqual(expected))
+  })
+
+  it('一致が 0 件なら search-empty の文言と、語・所在・フォルダをすべて解除する操作が出る。押すと既定に戻る (AC3 / FR-008)', async () => {
+    installSearch(searchIndex())
+    render(<SessionListScreen />)
+    await waitFor(() => expect(rowTitles()).toContain('ビルド手順の整理'))
+
+    await userEvent.click(screen.getByRole('button', { name: FOLDER_A }))
+    await waitFor(() => expect(rowTitles()).not.toContain('ビルド手順の整理'))
+    await userEvent.type(searchbox(), 'zzzz')
+
+    expect(await screen.findByText(PAST_SESSIONS_LABELS.searchEmpty)).toBeInTheDocument()
+    // フォルダの絞り込みも掛かっているが、検索の 0 件を先に出す (空の状態は 1 枚だけ)。
+    expect(screen.queryByText('絞り込みに一致するセッションがありません。')).not.toBeInTheDocument()
+    expect(document.querySelectorAll('[data-slot="empty-state"]')).toHaveLength(1)
+
+    await userEvent.click(
+      screen.getByRole('button', { name: PAST_SESSIONS_LABELS.searchEmptyReset })
+    )
+
+    await waitFor(() =>
+      expect(rowTitles()).toEqual(['ログイン画面の修正', 'テストの並列化', 'ビルド手順の整理'])
+    )
+    expect(searchbox()).toHaveValue('')
+    // 押したボタンは消えるので、フォーカスは検索欄へ移す。
+    expect(searchbox()).toHaveFocus()
+    expect(screen.getByRole('button', { name: /すべてのフォルダ/ })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    )
+    expect(screen.getByRole('button', { name: /すべての所在/ })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    )
+  })
+
+  it('取得中 (先頭ページ) でも search-empty を出す (data-model §1「Thread search の空の状態」)', async () => {
+    installSearch(searchIndex({ complete: false }))
+    render(<SessionListScreen />)
+    await waitFor(() => expect(rowTitles()).toContain('ログイン画面の修正'))
+
+    await userEvent.type(searchbox(), 'zzzz')
+
+    expect(await screen.findByText(PAST_SESSIONS_LABELS.searchEmpty)).toBeInTheDocument()
+  })
+
+  it('Esc で語を消して元の一覧に戻り、手で開いた未登録の区画は開いたまま (AC4)', async () => {
+    installSearch(searchIndex())
+    render(<SessionListScreen />)
+    await userEvent.click(await screen.findByRole('button', { name: '開く' }))
+    await waitFor(() => expect(rowTitles()).toContain('一度きりのログイン調査'))
+
+    await userEvent.type(searchbox(), 'テスト')
+    await waitFor(() => expect(rowTitles()).toEqual(['テストの並列化']))
+    await userEvent.keyboard('{Escape}')
+
+    await waitFor(() => expect(searchbox()).toHaveValue(''))
+    expect(rowTitles()).toContain('一度きりのログイン調査')
+    expect(screen.getByRole('button', { name: '畳む' })).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  it('変換中の Enter / Esc では語を消さず、preventDefault もしない (AC6 / Principle VIII)', async () => {
+    installSearch(searchIndex())
+    render(<SessionListScreen />)
+    await waitFor(() => expect(rowTitles()).toContain('ログイン画面の修正'))
+    await userEvent.type(searchbox(), 'ログイン')
+
+    for (const init of [
+      { key: 'Escape', isComposing: true },
+      { key: 'Escape', keyCode: 229 },
+      { key: 'Enter', isComposing: true },
+      { key: 'Enter', keyCode: 229 }
+    ]) {
+      // fireEvent は preventDefault されたら false を返す。
+      expect(fireEvent.keyDown(searchbox(), init)).toBe(true)
+    }
+    expect(searchbox()).toHaveValue('ログイン')
+    expect(rowTitles()).toEqual(['ログイン画面の修正', '一度きりのログイン調査'])
+    // 変換していない Enter も何もしない (確定の操作は要らない)。
+    expect(fireEvent.keyDown(searchbox(), { key: 'Enter' })).toBe(true)
+    expect(searchbox()).toHaveValue('ログイン')
+  })
+
+  it('所在の絞り込みと AND で組み合わさる (FR-001)', async () => {
+    installSearch(
+      index(
+        [
+          folderGroup([
+            session({ sessionId: 'a1', summary: 'ログイン画面の修正' }),
+            session({ sessionId: 'a3', targetKey: 'wsl:Ubuntu#0', summary: 'ログインの再試行' }),
+            session({ sessionId: 'a4', targetKey: 'wsl:Ubuntu#0', summary: 'テストの並列化' })
+          ])
+        ],
+        {
+          outcomes: [
+            outcome({ count: 1 }),
+            outcome({
+              location: { kind: 'wsl', distroName: 'Ubuntu' },
+              targetKey: 'wsl:Ubuntu#0',
+              count: 2
+            })
+          ]
+        }
+      )
+    )
+    render(<SessionListScreen />)
+    await waitFor(() => expect(rowTitles()).toContain('ログイン画面の修正'))
+
+    await userEvent.type(searchbox(), 'ログイン')
+    await waitFor(() => expect(rowTitles()).toEqual(['ログイン画面の修正', 'ログインの再試行']))
+    await userEvent.click(screen.getByRole('button', { name: 'Ubuntu' }))
+
+    await waitFor(() => expect(rowTitles()).toEqual(['ログインの再試行']))
+    expect(screen.getByText(PAST_SESSIONS_LABELS.searchCount(1))).toBeInTheDocument()
+  })
+})
+
+describe('SessionListScreen — 過去の区画の並び (O-3 / FR-017 / SC-008)', () => {
+  it('グループはランドマークにせず role="group" で、名前は見出しの h3 (AC7)', async () => {
+    installSearch(searchIndex())
+    render(<SessionListScreen />)
+
+    const group = await screen.findByRole('group', { name: new RegExp(FOLDER_A) })
+
+    expect(screen.queryAllByRole('region')).toHaveLength(0)
+    const headingId = group.getAttribute('aria-labelledby') ?? ''
+    expect(document.getElementById(headingId)?.tagName).toBe('H3')
+  })
+
+  it('過去の行の切り詰めた題は、キーボードのフォーカスでもツールチップで全文が出る (AC7)', async () => {
+    const longTitle = '日本語のとても長い題'.repeat(8)
+    installSearch(index([folderGroup([session({ summary: longTitle })])]))
+    render(<SessionListScreen />)
+    await waitFor(() => expect(rowTitles()).toEqual([longTitle]))
+
+    act(() => firstRowTrigger().focus())
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(longTitle)
+  })
+
+  it('題に HTML が含まれてもツールチップで要素にならない (FR-017)', async () => {
+    const xss = '<img src=x onerror="window.__pwned=1">'
+    installSearch(index([folderGroup([session({ summary: xss })])]))
+    render(<SessionListScreen />)
+    await waitFor(() => expect(rowTitles()).toEqual([xss]))
+
+    act(() => firstRowTrigger().focus())
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(xss)
+    expect(document.querySelectorAll('img')).toHaveLength(0)
+    expect((window as { __pwned?: unknown }).__pwned).toBeUndefined()
+  })
+
+  it('列挙の結果は、全部を読めたときは 1 行の要約にする (FR-017)', async () => {
+    installSearch(searchIndex())
+    render(<SessionListScreen />)
+
+    expect(await screen.findByText(PAST_SESSIONS_LABELS.outcomesAllOk(1))).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '列挙の結果' })).not.toBeInTheDocument()
+  })
+
+  it('列挙の結果は、読めなかった所在があれば今の所在ごとの行のまま (FR-017)', async () => {
+    installSearch(searchIndex({ outcomes: [outcome(), UBUNTU_FAILED] }))
+    render(<SessionListScreen />)
+
+    expect(await screen.findByRole('heading', { name: '列挙の結果' })).toBeInTheDocument()
+    expect(screen.getByText('停止中のため未列挙')).toBeInTheDocument()
+    expect(screen.queryByText(/すべて読めました/)).not.toBeInTheDocument()
+  })
+
+  it('区画の鍵が空白や `"` `]` `:` を含んでも、グループの名前と開閉の参照が引け、DOM の id に鍵が出ない (data-model §2 / §6)', async () => {
+    const path = 'C:\\my "work" ]: dir'
+    const cwdKey = JSON.stringify(['host', path])
+    installSearch(
+      index([
+        {
+          kind: 'unregistered',
+          cwdKey,
+          cwd: { namespace: 'host', value: path },
+          cwdDisplay: null,
+          suggestedDisplayName: 'dir',
+          location: { kind: 'windows' },
+          sessions: [session({ sessionId: 'x1', summary: '特殊な鍵の行' })]
+        }
+      ])
+    )
+    render(<SessionListScreen />)
+
+    // 名前 (h3 の全文) が途中で切れずに引ける。
+    const group = await screen.findByRole('group', { name: (name) => name.includes(path) })
+    const labelledBy = group.getAttribute('aria-labelledby') ?? ''
+    expect(document.getElementById(labelledBy)).not.toBeNull()
+    const toggle = within(group).getByRole('button', { name: '開く' })
+    const panel = document.getElementById(toggle.getAttribute('aria-controls') ?? '')
+    expect(panel).not.toBeNull()
+
+    await userEvent.click(toggle)
+
+    await waitFor(() => expect(panel?.textContent).toContain('特殊な鍵の行'))
+    for (const element of document.querySelectorAll('[id]')) {
+      expect(element.id).not.toContain(cwdKey)
+      expect(element.id).not.toContain(path)
+      expect(element.id).not.toContain('unregistered:')
+    }
+  })
+
+  it('vitest-axe: 検索中・search-empty でも違反 0 (SC-008)', async () => {
+    installSearch(searchIndex())
+    const { container } = render(
+      <section aria-labelledby="past-heading">
+        <h2 id="past-heading">過去のセッション</h2>
+        <SessionListScreen />
+      </section>
+    )
+    await waitFor(() => expect(rowTitles()).toContain('ログイン画面の修正'))
+    const rules = { rules: { 'color-contrast': { enabled: false } } }
+
+    await userEvent.type(searchbox(), 'ログイン')
+    await waitFor(() => expect(rowTitles()).toHaveLength(2))
+    expect((await axe(container, rules)).violations).toEqual([])
+
+    await userEvent.type(searchbox(), 'zzzz')
+    await screen.findByText(PAST_SESSIONS_LABELS.searchEmpty)
+    expect((await axe(container, rules)).violations).toEqual([])
   })
 })

@@ -6,6 +6,7 @@ import type {
   SessionLaunchRejectReason
 } from '@domain/session/agent-session'
 import type { SessionLaunchConfig } from '@domain/session/launch-config'
+import type { LaunchOrigin } from '@domain/session/launch-usage'
 import type { SessionRunState } from '@domain/session/run-state'
 import type { SessionStatusUpdate } from '@domain/session/status-update'
 
@@ -53,6 +54,11 @@ export interface LiveSessionState {
    * 文を組むために使う。引けなかったときは `null` (固定の代替語を使う)。
    */
   readonly folderLabel: string | null
+  /**
+   * このセッションを起動したときの起動元 (O-3 / 012 data-model §4「renderer の起動元」)。失敗したセッションを閉じたとき、
+   * `config` と一緒に起動の状態の `lastOrigin` へ戻す (`lastConfig` と同じ規則)。計測にだけ使う。
+   */
+  readonly launchOrigin: LaunchOrigin
 }
 
 /** 監視ビューの情報密度 (O-1 / FR-008)。renderer の表示状態であり永続化しない。 */
@@ -80,6 +86,12 @@ export interface LaunchState {
   readonly rejectReason: SessionLaunchRejectReason | null
   /** 最後に起動を試みた設定 (失敗・拒否で戻ったときの復元。X-4 US-1 AC7)。 */
   readonly lastConfig: SessionLaunchConfig | null
+  /**
+   * `lastConfig` と組の起動元 (O-3 / 012 data-model §4「renderer の起動元」)。`lastConfig` と同じ規則で残す・戻す:
+   * 起動の開始で入り、受け付けられても告知を消しても残り、失敗したセッションを閉じたらそのセッションの起動元に替わる。
+   * 起動の初期値の片方で、起動の告知 (Launch notice) には含めない。
+   */
+  readonly lastOrigin: LaunchOrigin | null
   /** 起動直後に失敗したセッションを閉じて戻ったときの理由 (X-4 US-1 AC7)。 */
   readonly previousFailure: LaunchFailureReason | null
 }

@@ -35,7 +35,7 @@ import {
  * | `ThreadListNew` (New Thread ボタン) | R-2 はセッションを**作らない** (FR-003)。起動は X-1。X-5 で稼働中セッション一覧のために復元したが、**O-7 で再び外した** (起動の入口はシェルのサイドバーの「新規起動」に一本化した。AD-046) |
  * | rename (インライン入力 + `aui.threadListItem.rename`) | config ディレクトリへの**書き込み**になる (FR-013 / Principle X) |
  * | archive / delete (More メニュー) | 同上。**正本はアプリ外にある** (AD-007) |
- * | 検索 + 日付グルーピング (Today / Yesterday / Earlier) | R-2 のまとまりは**登録フォルダ**である (FR-022)。検索は O-3 |
+ * | 検索 + 日付グルーピング (Today / Yesterday / Earlier) | R-2 のまとまりは**登録フォルダ**である (FR-022)。Thread search は過去のセッションの区画 (`SessionListScreen`) の検索欄 (O-3)。element 内蔵の検索は使わない |
  *
  * **`ThreadListPrimitive.Items` を使わない。** 既定の `Items` は全件を 1 列に並べるが、
  * R-2 はグループごとに区切って並べる必要がある (FR-022 / FR-025 / FR-028)。

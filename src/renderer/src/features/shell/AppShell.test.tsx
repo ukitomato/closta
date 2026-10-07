@@ -19,13 +19,14 @@ import type { SessionStatusUpdate } from '@domain/session/status-update'
 import type { WorkspaceFolderDTO } from '@domain/workspace/dto'
 
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { TRANSCRIPT_DENSITY_LABELS } from '@/features/chat/labels'
+import { COMPOSER_LABELS, TRANSCRIPT_DENSITY_LABELS } from '@/features/chat/labels'
 import { RunningSessionStoreContext } from '@/features/session/running-session-context'
 import {
   createRunningSessionStore,
   type RunningSessionStore
 } from '@/features/session/running-session-store'
 import { SessionAttentionAnnouncer } from '@/features/session/SessionAttentionAnnouncer'
+import { PAST_SESSIONS_LABELS } from '@/features/session-list/labels'
 import { useSessionsStore } from '@/stores/sessions'
 import { useUiStore } from '@/stores/ui'
 import { installCapability } from '@/test-support/capability'
@@ -174,7 +175,10 @@ beforeEach(() => {
     panel: { collapsed: true, tab: 'overview' },
     launchOpen: false,
     folderDraftSeed: null,
-    transcriptDensity: 'comfortable'
+    transcriptDensity: 'comfortable',
+    // シェルは Command palette を持つ (O-3)。前のテストの開閉と会話内検索の要求を持ち越さない。
+    paletteOpen: false,
+    conversationSearchRequest: 0
   })
   useSessionsStore.setState({
     index: null,
@@ -996,10 +1000,12 @@ describe('pr-gate R1 の負の経路 (O-7)', () => {
     const h = await setup({ ids: [A] })
     await selectRunning(0)
     // 前提: 外側 (稼働中) の composer は有効 (無効なら下の確認は入れ子と関係なく通る。pr-gate R2 security L-102)。
-    expect(within(center()).getByRole('textbox', { name: 'Message input' })).toBeEnabled()
+    expect(
+      within(center()).getByRole('textbox', { name: COMPOSER_LABELS.composerInput })
+    ).toBeEnabled()
     await selectPast(0)
     await within(center()).findByText('過去の応答')
-    const composer = within(center()).getByRole('textbox', { name: 'Message input' })
+    const composer = within(center()).getByRole('textbox', { name: COMPOSER_LABELS.composerInput })
     expect(composer).toBeDisabled()
     const before = h.store.getState().sessions[A]?.messages.length
     await userEvent.type(composer, 'こんにちは{Enter}')
@@ -1269,5 +1275,99 @@ describe('pr-gate R3 の負の経路 (O-7)', () => {
         within(center()).getByRole('button', { name: SHELL_LABELS.centerEmptyLaunch })
       ).toHaveFocus()
     )
+  })
+})
+
+describe('Thread search (O-3 / US-1 AC5 / FE-012)', () => {
+  const PAST_TITLE = '[data-slot="aui_thread-list-item-title"]'
+  const P1 = '44444444-4444-4444-8444-444444444444'
+  const P2 = '55555555-5555-4555-8555-555555555555'
+
+  function pastTitles(): string[] {
+    const past = screen.getByTestId('past-sessions')
+    return Array.from(past.querySelectorAll(PAST_TITLE), (title) => title.textContent ?? '')
+  }
+
+  it('語と結果は、中央の切り替えとサイドバーの畳み・開きで保たれる。検索中も vitest-axe の違反 0', async () => {
+    const h = await setup({
+      ids: [A],
+      index: pastIndex([
+        pastSession({ sessionId: P1, summary: 'ログインの修正' }),
+        pastSession({ sessionId: P2, summary: 'テストの整理' })
+      ])
+    })
+    await pastRows()
+    const box = within(screen.getByTestId('past-sessions')).getByRole('searchbox', {
+      name: PAST_SESSIONS_LABELS.searchLabel
+    })
+
+    await userEvent.type(box, 'ログイン')
+    await waitFor(() => expect(pastTitles()).toEqual(['ログインの修正']))
+    const rules = { rules: { 'color-contrast': { enabled: false } } }
+    expect((await axe(h.container, rules)).violations).toEqual([])
+
+    // 中央の切り替え (稼働中 → 過去 → 稼働中)。
+    await selectRunning(0)
+    expect(center()).toHaveAttribute('data-focus', 'running')
+    expect(box).toHaveValue('ログイン')
+    expect(pastTitles()).toEqual(['ログインの修正'])
+    await selectPast(0)
+    expect(center()).toHaveAttribute('data-focus', 'past')
+    expect(box).toHaveValue('ログイン')
+    expect(pastTitles()).toEqual(['ログインの修正'])
+
+    // サイドバーを畳んで開く (区画は外さずに隠す。O-7 pr-gate R2 ux M-103)。
+    await userEvent.click(
+      within(sidebar()).getByRole('button', { name: SHELL_LABELS.collapseSidebar })
+    )
+    expect(screen.getByTestId('past-sessions')).not.toBeVisible()
+    await userEvent.click(
+      within(sidebar()).getByRole('button', { name: SHELL_LABELS.expandSidebar })
+    )
+    expect(screen.getByTestId('past-sessions')).toBeVisible()
+    expect(box).toHaveValue('ログイン')
+    expect(pastTitles()).toEqual(['ログインの修正'])
+  })
+})
+
+/*
+ * 会話内検索の Ctrl+F は `[aria-modal="true"]` の要素が開いている間は何もしない (012 data-model §2「開く・閉じる・キー」)。
+ * Radix の Dialog は `aria-modal` を出さないので、共有の `DialogContent` が出す (2026-10-07 の決定)。起動・設定の
+ * ダイアログの背面で検索のバーが開かないことを、本物のダイアログで確かめる。
+ */
+describe('会話内検索の Ctrl+F とモーダルのダイアログ (O-3 / FE-024)', () => {
+  /** フォーカスのある要素で Ctrl+F を押す。`preventDefault` されなければ true。 */
+  const ctrlF = (): boolean =>
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'f', ctrlKey: true })
+  const searchBar = (): HTMLElement | null => screen.queryByTestId('conversation-search')
+
+  it('起動のダイアログの背面では開かず preventDefault もしない。閉じた後は開く', async () => {
+    await setup({ ids: [A] })
+    await selectRunning(0)
+    await userEvent.click(within(sidebar()).getByRole('button', { name: SHELL_LABELS.newSession }))
+    expect(await screen.findByTestId('launch-dialog-host')).toHaveAttribute('aria-modal', 'true')
+
+    expect(ctrlF()).toBe(true)
+    expect(searchBar()).toBeNull()
+
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByTestId('launch-dialog-host')).toBeNull())
+    expect(ctrlF()).toBe(false)
+    expect(searchBar()).not.toBeNull()
+  })
+
+  it('設定のダイアログの背面では開かず preventDefault もしない。閉じた後は開く', async () => {
+    await setup({ ids: [A] })
+    await selectRunning(0)
+    await userEvent.click(within(sidebar()).getByRole('button', { name: SHELL_LABELS.settings }))
+    expect(await screen.findByTestId('settings-dialog')).toHaveAttribute('aria-modal', 'true')
+
+    expect(ctrlF()).toBe(true)
+    expect(searchBar()).toBeNull()
+
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByTestId('settings-dialog')).toBeNull())
+    expect(ctrlF()).toBe(false)
+    expect(searchBar()).not.toBeNull()
   })
 })

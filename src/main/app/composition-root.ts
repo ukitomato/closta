@@ -22,6 +22,7 @@ import { createRuntimeDetector } from '../infra/runtime/wsl-detector'
 import { createWslCli } from '../infra/runtime/wsl-cli'
 import { createSecretStore } from '../infra/secrets/safe-storage'
 import { createFolderStore } from '../infra/settings/folder-store'
+import { createLaunchUsageStore } from '../infra/settings/launch-usage-store'
 import { createPresetStore } from '../infra/settings/preset-store'
 import { createProviderStore } from '../infra/settings/provider-store'
 import { buildTranscriptEnv } from '../infra/session/config-dir'
@@ -30,6 +31,7 @@ import { createUtilityProcessLauncher } from './enumerator-spawner'
 import { createFolderService, type FolderService } from './folder-service'
 import type { IpcDependencies } from './ipc'
 import { createPrepareLaunch } from './launch-preparation'
+import { createLaunchUsageService } from './launch-usage-service'
 import { createMeasure } from './measure'
 import { isDevBuild } from './origins'
 import { createPresetService } from './preset-service'
@@ -299,6 +301,16 @@ export function createComposition(): Composition {
     newId: () => randomUUID().replace(/-/g, '')
   })
 
+  /**
+   * 起動の利用記録 (O-3 / 012 spec FR-012)。日ごとの 2 つの回数だけを `launch-usage.json` に持つ。
+   * 今日はローカルの暦日 — その時刻の時差 (分。UTC より進んでいれば正) をここで解決して渡す (data-model §4「書き込み」)。
+   */
+  const launchUsage = createLaunchUsageService({
+    store: createLaunchUsageStore(userDataResult.path, now),
+    now,
+    localOffsetMinutes: (epochMs) => -new Date(epochMs).getTimezoneOffset()
+  })
+
   const ipc: IpcDependencies = {
     listRuntimes: () => runtimes.list(),
     refreshRuntimes: async () => {
@@ -337,6 +349,9 @@ export function createComposition(): Composition {
     savePreset: (input) => presets.save(input),
     removePreset: (id) => presets.remove(id),
     presetIds: async () => (await presets.list()).map((p) => p.id),
+
+    recordLaunchUsage: (origin) => launchUsage.record(origin),
+    getLaunchUsage: () => launchUsage.summary(),
 
     listProviders: () => providers.list(),
     detectProviders: () => providers.detect(),

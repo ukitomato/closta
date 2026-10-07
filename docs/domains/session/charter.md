@@ -23,6 +23,7 @@ related_specs:
   - specs/010-session-monitoring-view/spec.md
   - specs/011-ui-coverage/spec.md
   - specs/013-ui-app-shell/spec.md
+  - specs/012-ui-thread-search/spec.md
 ---
 
 # Domain Charter: session
@@ -148,7 +149,8 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
   (手順を直した後の 4 回は p95 13.6〜14.9ms・long task 0 件。ただし測ったのは打鍵の間だけで、**行の切り替え (Journey 3 の
   手順 3) は実負荷の下で測っていない** — 1〜3 回目では切り替えの直後に 100〜275ms の long task が出た)。E2E の 50ms 超の
   long task は X-5 の 0〜10 件から O-1 で 33 件に増えた (原因は未切り分け)。10 本が窓の全期間で応答を流し続ける負荷の作り方・
-  窓の終わりの行の状態の内訳・行の切り替えの計測は、**持ち主 = O-3** ([roadmap の O-3 の「義務 (O-1 から)」](../../roadmap.md#o3-kpi-smoothness)。
+  窓の終わりの行の状態の内訳・行の切り替えの計測は、**持ち主 = O-8** ([roadmap の O-8 の「義務 (O-1 から)」](../../roadmap.md#o3-kpi-smoothness)。
+  O-1 から O-3 に繰り越し、O-3 の design で O-8 に移した ([012 spec](../../../specs/012-ui-thread-search/spec.md) の U-1)。
   経緯は [quickstart-results](../../../specs/010-session-monitoring-view/quickstart-results.md) V-3)
 - **列挙の網羅**: **実行中のディストロについて**、その中の config ディレクトリを
   Windows 側から取りこぼさず列挙できる — 計測経路: **当面は Vitest + quickstart**。
@@ -160,15 +162,31 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
   R-1 が検出のためにディストロを起動しないと決めたためである（SC-005 / `runtime` charter）。
   停止中を含めた列挙を KPI に掲げると、達成する唯一の道が SC-005 違反になる
 - **依存解決の正しさ**: 上流の軸を変えたとき無効値が既定に戻り通知される — 計測経路: E2E
-- **再利用率**: プリセット経由の起動が、全軸を手で選ぶ起動を上回る — 計測経路: ローカル利用ログ。
-  **計測経路は O-3 (observability) が作る。X-4 では未計測**（本 domain に計測基盤が無いため。AD-041 (h)）
+- **再利用率**: プリセットを適用した起動が、適用しない起動を上回る — 計測経路: 起動ダイアログのプリセットの欄に出す
+  直近 30 日の 2 つの回数 (プリセットを適用 / 適用なし) と、その元の記録 `launch-usage.json` (ユーザデータディレクトリ。ローカルの
+  暦日ごとの `preset` / `manual` の回数だけを 90 日分持つ)。**計測経路は O-3 が作った** ([012 spec](../../../specs/012-ui-thread-search/spec.md)
+  FR-009〜FR-013。X-4 では未計測で、AD-041 (h) が O-3 を指名した)。文言は O-3 で「プリセット経由の起動が、全軸を手で選ぶ起動を
+  上回る」から改めた (U-6。2026-10-05 に利用者が承認)。計測経路の注記:
+  - 判定は、プリセットの欄の直近 30 日 (今日を含む 30 暦日) の 2 つの回数で行う。最低件数と判定の時期は持たない
+    (2026-10-06 の design-gate R3 M-01。利用者が選択)
+  - 数える単位は、受け付けた起動の要求 1 回である。起動ゲートで拒否された・起動に失敗した要求は数えない。受け付けた後に
+    セッションが失敗し、閉じて開いたダイアログから再試行した起動は別の 1 回に数える (FR-010)
+  - 起動元は、そのダイアログでプリセットを適用したら `preset` (適用した後に軸を変えても)、適用せずに軸を手で変えたら `manual`。
+    前回の設定を変えずに起動し直した起動 (拒否の後・受け付けの後・起動せずに閉じた後に開き直したダイアログで、初期値のまま起動した
+    もの) は、前回の起動元に数える。前回の設定が無ければ `manual` (FR-009。場面ごとの正本は 012 data-model §4「renderer の起動元」)
+  - 起動の利用記録 (`LaunchUsage`) は本 domain の永続化層に置く (`src/domain/session/launch-usage.ts`・
+    `src/main/infra/settings/launch-usage-store.ts`・`src/main/app/launch-usage-service.ts`)。作ったのは ui の O-3 (U-5)
+  - E2E の偽の capability では記録はメモリ内の fake に入り、ファイルに書かない (AD-038)
 
 ## Cross-domain dependencies
 
 - 依存する domain: `runtime`（起動とパス解決）、`provider`（環境変数とモデルカタログの導出）。
   操作 UI は ui の `stores/ui.ts` の面の状態を**読む** (監視ビューの承認待ちの件数のボタンと読み上げが「見ているセッション」を
   導く。O-7)。書くのは設定を「作業フォルダ」で開く 2 つの導線だけ ([ui charter](../ui/charter.md) の「面の状態」)。
-  逆向きに、ui のシェルが本 domain のストアの起動の告知を消す操作 (`dismissLaunchNotice`) を呼ぶ (O-7。下の Related Specs)
+  逆向きに、ui のシェルが本 domain のストアの起動の告知を消す操作 (`dismissLaunchNotice`) を呼ぶ (O-7。下の Related Specs)。
+  **起動の IPC の入力に起動元 (`preset` / `manual`) が 1 つ足された** (O-3。U-2。`launchSession(config, origin)`)。起動元は計測にだけ
+  使い、起動の可否・`SessionLaunchConfig`・権限モードに影響させない。main (`session-ipc.ts` の `handleLaunchSession`) は厳密比較で
+  検証し、欠けている・未知の値でも起動は通常どおり扱って記録だけを行わない
 - 依存される domain: `ui`, `isolation`
 - 共有 invariant: Principle III / IV / V / VII / IX / X / XII (X-6 は `docs/ui-coverage.md` の `後続: X-6` の行を完了の PR で書き換える。SDK の版を上げる PR は対応表を同じ PR で直す)。詳細は [docs/domains/_overview.md](../_overview.md)
   (VII = supervisor は Electron 非依存で単独起動できる。R-2 で `agents` を持つ feature が実装され実体を持った)
@@ -212,6 +230,15 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
   失敗した close として読む** — `close` 以外の操作でこの組み合わせを作らない (作るなら明示の通知を足して shell と合わせて直す。
   `running-session-store.ts` の `close` の注記。pr-gate R3 architecture L-202)。
   稼働中の一覧の行の部品 (状態の印・経過時間・直近の活動) と派生値の追跡は変えていない）
+- **O-3 (ui)** — [Thread 検索と探す操作](../../../specs/012-ui-thread-search/spec.md)
+  （本 domain の feature ではない。U-5 (2026-10-05 に利用者が承認) で、本 domain の操作 UI と domain / main のモジュールに手を入れた:
+  過去のセッションの区画の検索欄 (一致の規則は ui の `features/search/`。一覧の中身・取得は本 domain のまま)、起動ダイアログの
+  プリセットの欄の再利用率の表示、起動の IPC の入力の起動元 (U-2) と起動の利用記録 (KPI「再利用率」の計測経路)。稼働中のストアには
+  起動の状態の `lastOrigin` と稼働中のセッションの `launchOrigin` (`lastConfig` と同じ規則で残す・戻す) と、実行中の窓をそのメッセージ
+  まで広げる `RunningSessionsView.revealMessage` (会話内検索の移動) を足した。Command palette のセッションの候補は本 domain のストアの
+  選択の操作 (`select` / `sessions.select`) を呼ぶだけで focus を書かない (ui charter の「面の状態」)。KPI「並列時の滑らかさ」の
+  実機計測は O-8 に移した。派生値の追跡と稼働中の一覧の行の部品は変えていない）
+- **O-8** — 並列時の滑らかさの実機計測 ([roadmap の O-8 の行](../../roadmap.md#o3-kpi-smoothness))。未着手
 
 X-6 は未着手。
 

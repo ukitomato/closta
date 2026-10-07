@@ -15,6 +15,7 @@ import type { DetectedCandidate } from '@domain/provider/types'
 import type { SessionControl, SessionLaunchHandshakeDTO } from '@domain/session/agent-session'
 import type { SessionIndexDTO } from '@domain/session/dto'
 import type { SessionLaunchConfig } from '@domain/session/launch-config'
+import type { LaunchOrigin, LaunchUsageSummaryDTO } from '@domain/session/launch-usage'
 import type { PresetDTO, SavePresetResult } from '@domain/session/preset'
 import type { RuntimeDescriptor } from '@domain/runtime/descriptor'
 import type { RuntimeDescriptorDTO, RuntimeListDTO } from '@domain/runtime/dto'
@@ -36,6 +37,7 @@ import type { SavePresetInput } from './preset-service'
 import type { LaunchOutcome } from './session-launch-service'
 import {
   handleFetchMoreSessions,
+  handleGetLaunchUsage,
   handleGetTranscript,
   handleEndSession,
   handleInterruptSession,
@@ -134,6 +136,12 @@ export interface IpcDependencies {
   savePreset(input: SavePresetInput): Promise<SavePresetResult>
   removePreset(id: string): Promise<{ readonly ok: boolean }>
   presetIds(): Promise<readonly string[]>
+
+  /* ── 起動の利用記録 (O-3) ── */
+
+  /** 受け付けた起動を 1 回数える (reject しない)。起動元の検証と呼ぶかの判定は `session-ipc.ts` の `handleLaunchSession`。 */
+  recordLaunchUsage(origin: LaunchOrigin): Promise<void>
+  getLaunchUsage(): Promise<LaunchUsageSummaryDTO>
 
   /* ── Provider (X-3) ── */
 
@@ -323,6 +331,13 @@ export function registerIpcHandlers(deps: IpcDependencies): void {
 
   handle(IPC_CHANNELS.removePreset, async (_event, ...args): Promise<{ readonly ok: boolean }> =>
     handleRemovePreset(deps, args)
+  )
+
+  /* ── 起動の利用記録 (O-3) ─────────────────────────────────────────── */
+
+  // 引数を取らない。DTO への射影は `session-ipc.ts`。起動元の記録は launchSession の handler (`handleLaunchSession`) が行う。
+  handle(IPC_CHANNELS.getLaunchUsage, async (): Promise<LaunchUsageSummaryDTO> =>
+    handleGetLaunchUsage(deps)
   )
 
   /* ── Provider (X-3) ─────────────────────────────────────────────── */

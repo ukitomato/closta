@@ -4,6 +4,7 @@ import { createStore, type StoreApi } from 'zustand/vanilla'
 import { SESSION_PORT_MESSAGE, type ClostaCapability } from '@domain/capability'
 import type { SessionEvent } from '@domain/session/agent-session'
 import type { SessionLaunchConfig } from '@domain/session/launch-config'
+import type { LaunchOrigin } from '@domain/session/launch-usage'
 import { mergeSystemEvent, systemEventPartOf } from '@domain/session/system-event'
 import type { TranscriptMessageDTO } from '@domain/session/transcript-dto'
 
@@ -49,12 +50,20 @@ export type {
  */
 
 export interface SessionActions {
-  /** `folderLabel` は起動の受付時に引けている作業フォルダの表示名 (App の寿命の読み上げに使う。O-1)。 */
-  launch(config: SessionLaunchConfig, folderLabel?: string | null): Promise<void>
+  /**
+   * `folderLabel` は起動の受付時に引けている作業フォルダの表示名 (App の寿命の読み上げに使う。O-1)。
+   * `origin` は起動元 (O-3 / 012 data-model §4)。`lastConfig` と一緒に `lastOrigin` へ入れ、capability の `launchSession` に渡す。
+   * 省略は `manual` (起動ダイアログを通らない呼び出し。本番の経路は `RunningSessionsView.launch` が必ず渡す)。
+   */
+  launch(
+    config: SessionLaunchConfig,
+    folderLabel?: string | null,
+    origin?: LaunchOrigin
+  ): Promise<void>
   select(sessionId: string | null): void
   /**
    * 起動の拒否と前回の失敗の告知を消す (O-7。起動ダイアログを起動せずに閉じたとき・失敗したセッションを中央に出さずに
-   * 閉じたとき)。`lastConfig` は残す (次に開いたときの初期値)。起動中は何もしない。
+   * 閉じたとき)。`lastConfig` と `lastOrigin` は残す (次に開いたときの初期値)。起動中は何もしない。
    */
   dismissLaunchNotice(): void
   /** 監視ビューの情報密度 (O-1 / FR-008。永続化しない)。 */
@@ -95,6 +104,7 @@ const INITIAL_LAUNCH: LaunchState = {
   phase: 'entry',
   rejectReason: null,
   lastConfig: null,
+  lastOrigin: null,
   previousFailure: null
 }
 
@@ -353,19 +363,21 @@ export function createRunningSessionStore(
   }
 
   const actions: SessionActions = {
-    async launch(config, folderLabel = null) {
+    async launch(config, folderLabel = null, origin = 'manual') {
       inFlight += 1
       store.setState({
         launch: {
           phase: 'launching',
           rejectReason: null,
           lastConfig: config,
+          // 起動元は前回の設定と組で残す (拒否・受け付け・告知を消した後も。012 data-model §4「renderer の起動元」)。
+          lastOrigin: origin,
           previousFailure: null
         }
       })
       let handshake: Awaited<ReturnType<ClostaCapability['launchSession']>>
       try {
-        handshake = await capability().launchSession(config)
+        handshake = await capability().launchSession(config, origin)
       } catch {
         inFlight -= 1
         dropOrphanPorts()
@@ -397,7 +409,8 @@ export function createRunningSessionStore(
         endForced: false,
         promptSent: false,
         queueRejection: null,
-        folderLabel
+        folderLabel,
+        launchOrigin: origin
       }
       createQueue(sessionId)
       store.setState((s) => ({
@@ -550,10 +563,12 @@ export function createRunningSessionStore(
           activity,
           selectedId: s.selectedId === sessionId ? null : s.selectedId,
           // 失敗したセッションを閉じたら、起動ダイアログでそのセッションの理由と設定を示す (X-4 US-1 AC7 / pr-gate R1 po M-005)。
+          // 起動元も設定と組でそのセッションのものに戻す (O-3 / 012 data-model §4「renderer の起動元」)。
           launch: failed
             ? {
                 ...s.launch,
                 lastConfig: state.sessions[sessionId]?.config ?? s.launch.lastConfig,
+                lastOrigin: state.sessions[sessionId]?.launchOrigin ?? s.launch.lastOrigin,
                 previousFailure: failure
               }
             : s.launch
