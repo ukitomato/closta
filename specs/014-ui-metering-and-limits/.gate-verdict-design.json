@@ -1,0 +1,105 @@
+{
+    "gate": "design",
+    "run": "2026-10-04T06:30:00+09:00",
+    "spec_dir": "specs/014-ui-metering-and-limits",
+    "spec_id": "014-ui-metering-and-limits",
+    "tracks": {
+        "analyze": {
+            "status": "ok",
+            "raw_out": "analyze.md",
+            "viewpoint_missing": null,
+            "cascade_demotions": null
+        },
+        "po-reviewer": {
+            "status": "ok",
+            "raw_out": "po-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "architecture-reviewer": {
+            "status": "ok",
+            "raw_out": "architecture-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "security-reviewer": {
+            "status": "ok",
+            "raw_out": "security-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "platform-boundary-reviewer": {
+            "status": "ok",
+            "raw_out": "platform-boundary-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        }
+    },
+    "severity_counts": {
+        "critical": 0,
+        "high": 7,
+        "medium": 18,
+        "low": 12
+    },
+    "fr_coverage": [
+        {
+            "fr": "FR-001",
+            "covered": true,
+            "by": [
+                "tasks.md BE-010"
+            ]
+        },
+        {
+            "fr": "FR-013",
+            "covered": true,
+            "by": [
+                "tasks.md BE-041"
+            ]
+        }
+    ],
+    "viewpoint_coverage": {
+        "A": "Critical:0 High:0",
+        "B": "Critical:0 High:0",
+        "C": "Critical:0 High:1",
+        "D": "Critical:0 High:2",
+        "E": "Critical:0 High:3",
+        "F": "Critical:0 High:0",
+        "G": "\u8a72\u5f53\u306a\u3057",
+        "H": "Critical:0 High:0"
+    },
+    "dedup_log": [
+        {
+            "merged": [
+                "pb-H-001",
+                "arch-M-007",
+                "po-M-006"
+            ],
+            "key": "FR-010"
+        },
+        {
+            "merged": [
+                "analyze-I1",
+                "arch-M-008",
+                "sec-M-005",
+                "po-M-004"
+            ],
+            "key": "FR-002"
+        },
+        {
+            "merged": [
+                "po-H-003",
+                "analyze-U1"
+            ],
+            "key": "FR-009"
+        },
+        {
+            "merged": [
+                "po-H-002",
+                "analyze-C2",
+                "arch-M-006"
+            ],
+            "key": "SC-004"
+        }
+    ],
+    "verdict": "PASS"
+}
