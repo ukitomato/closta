@@ -3,24 +3,39 @@
     "run": "2026-10-07T00:00:00+09:00",
     "spec_dir": "specs/012-ui-thread-search",
     "spec_id": "012-ui-thread-search",
-    "iter": 1,
+    "iter": 2,
     "base": {
-        "diff_range": "HEAD (working tree, untracked included via temporary intent-to-add index)",
-        "head": "73ebbc0fa37d27d35624d5d6ce03b26abd03904e",
-        "merge_base_resolved": "1198a95dbddeba0542acce3c25aec21bf72176d9"
+        "diff_range": "7bdb27107182a6a52eb4e4cdcdfcf09803121055..HEAD (working tree clean; committed implementation)",
+        "head": "ddc052eb8bf139da5b242d2e9bb7a3b87e8fcc76",
+        "merge_base_resolved": "7bdb27107182a6a52eb4e4cdcdfcf09803121055",
+        "note": "origin/HEAD symref points to the stale 001 branch; merge-base with main used (PR base is main)"
     },
     "severity_counts": {
         "critical": 0,
-        "high": 0,
-        "medium": 5,
-        "low": 16,
-        "must_fix": 0
+        "high": 1,
+        "medium": 6,
+        "low": 20,
+        "must_fix": 1
     },
-    "must_fix_findings": [],
+    "must_fix_findings": [
+        {
+            "mf_id": "MF-001",
+            "where": "src/renderer/src/features/chat/virtualization.test.tsx:104",
+            "origin": "test",
+            "rule": "vitest testTimeout (5000ms)",
+            "message": "Full run (scope: full, 132 files / 2266 tests, exit 1): 'transcript \u306e\u4eee\u60f3\u5316 > \u540c\u6642\u30de\u30a6\u30f3\u30c8 DOM \u30ce\u30fc\u30c9\u6570\u304c\u7dcf\u4ef6\u6570\u306b\u4f9d\u5b58\u3057\u306a\u3044 (SC-003)' timed out in 5000ms (took 6063ms). No assertion failure; the test body is synchronous, so the time is the test's own render cost. Observed: failed under load twice (5938ms in a 26-file rerun, 6063ms in the clean full run), passed alone in 2000ms. In code-gate iter 1 the full suite passed (2266 passed). The virtualization path renders thread.aui.tsx, which is in this diff scope (conversation search highlighting etc.), so a render-cost regression from this feature has not been ruled out. Other tests that timed out only under heavier load: LivePane.test.tsx:119, SessionListScreen.test.tsx:735 (both passed in the clean full run; SessionListScreen:735 took 3354ms alone = 67% of the limit).",
+            "severity": "error",
+            "flaky": true
+        }
+    ],
     "touched_files": [
         {
             "path": ".dependency-cruiser.js",
             "sha": "8e9be1906a9fea9f8b0483099ab4112036bb8936"
+        },
+        {
+            "path": ".github/workflows/verify.yml",
+            "sha": "4e9a80ad05d08ac8d9188ed00d6870a17be0d83a"
         },
         {
             "path": ".specify/memory/constitution.md",
@@ -80,7 +95,7 @@
         },
         {
             "path": "e2e/sidebar-screenshot.spec.ts",
-            "sha": "2b5f65234d5edd3a0b8cbdf14694001b4dd10a70"
+            "sha": "c4211ffa205eff1159ba9f8e9d35ec2d7af17af4"
         },
         {
             "path": "e2e/support/launch.ts",
@@ -105,6 +120,14 @@
         {
             "path": "specs/010-session-monitoring-view/quickstart-results.md",
             "sha": "2c84213be0c2d0421b844fdd14699318c179d9f3"
+        },
+        {
+            "path": "specs/012-ui-thread-search/data-model.md",
+            "sha": "a2db1e0e0f13aacb89b896a004e185edbba9a34c"
+        },
+        {
+            "path": "specs/012-ui-thread-search/quickstart-results.md",
+            "sha": "169c19ded9a664308e33e9c3bb496c0a26527257"
         },
         {
             "path": "specs/013-ui-app-shell/spec.md",
@@ -320,7 +343,7 @@
         },
         {
             "path": "src/renderer/src/features/session-list/labels.ts",
-            "sha": "a2c62214b35c9e3851e6dc506b66d5118c6a1cb0"
+            "sha": "501b7fc8cce8c26d9728646c4f8d51eabfa04c0e"
         },
         {
             "path": "src/renderer/src/features/session-list/SessionListScreen.test.tsx",
@@ -525,11 +548,11 @@
         "A": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
         "B": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
         "C": "Critical:0 High:0 Medium:0 Low:0 (platform-boundary)",
-        "D": "Critical:0 High:0 Medium:0 Low:0 (platform-boundary)",
+        "D": "Critical:0 High:0 Medium:0 Low:2 (platform-boundary)",
         "E": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
-        "F": "Medium:4 Low:8",
-        "G": "Medium:1 Low:4 (database)",
-        "H": "Low:4"
+        "F": "Medium:4 Low:8 (convention Medium:3 Low:7 / platform-boundary Medium:1 Low:1)",
+        "G": "Medium:2 Low:6 (database)",
+        "H": "MUST_FIX:1 (test) Low:4 (database Low:2 / platform-boundary Low:2)"
     },
     "tracks": {
         "lint-agent": {
@@ -545,12 +568,13 @@
             ]
         },
         "test-agent": {
-            "passed": 2266,
-            "failed": 0,
+            "passed": 2265,
+            "failed": 1,
             "skipped": 0,
             "error": 0,
-            "exit_code": 0,
-            "scope": "full"
+            "exit_code": 1,
+            "scope": "full",
+            "note": "First full run (exit 1) had 26 renderer files fail to start ('Timeout waiting for worker to respond', 1811 passed / 0 failed / 26 errors) while another agent was spawning processes; rerun with no concurrent load: 132/132 files started, 1 timeout failure."
         },
         "convention-reviewer": {
             "viewpoint_missing": [],
@@ -569,8 +593,8 @@
             "counts": {
                 "critical": 0,
                 "high": 0,
-                "medium": 1,
-                "low": 6
+                "medium": 2,
+                "low": 8
             }
         },
         "platform-boundary-reviewer": {
@@ -580,7 +604,7 @@
                 "critical": 0,
                 "high": 0,
                 "medium": 1,
-                "low": 3
+                "low": 5
             }
         }
     },
@@ -601,7 +625,13 @@
             "must_fix": 0,
             "skipped": 0,
             "error": 0
+        },
+        {
+            "iter": 2,
+            "must_fix": 1,
+            "skipped": 1,
+            "error": 0
         }
     ],
-    "verdict": "PASS"
+    "verdict": "FIX_REQUIRED"
 }
