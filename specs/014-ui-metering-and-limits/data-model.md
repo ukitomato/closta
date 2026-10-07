@@ -1,165 +1,213 @@
 # Data Model: 計量と制限の表示 (O-4)
 
-各規則の正本は本ファイルの節。spec / plan / tasks は節を参照する。SDK の型は `@anthropic-ai/claude-agent-sdk` 0.3.270 の `sdk.d.ts` (`SDKResultSuccess` / `SDKResultError` :5276-5380、`SDKAssistantMessageError` :3411 と assistant の `error` :3346、`SDKRateLimitEvent` / `SDKRateLimitInfo` :5239-5274、`SDKAPIRetryMessage` :3317、`SDKStatusMessage` :5467、`SDKTaskProgressMessage` :5571、`SDKThinkingTokensMessage` :5654、`SDKToolProgressMessage` :5667、`ModelUsage` :1317)。
+各規則の正本は本ファイルの節。spec / plan / tasks は節を参照する。SDK の型の行番号は research R-02。2026-10-04 の版を O-7・O-3 の後の main に合わせて作り直した。
 
-**読み替える先行の決定**: X-1 (005) の FR-020 / US-4 AC6 / data-model §6 は「未ログイン・認証切れ・クレジット不足・rate limit・API 到達不可を `provider-error` に保つ」と定めた (コードの注記では V-11)。本 feature はこれを §1 の表に分ける。終わり方 (失敗にする・黙って完了にしない) は変えない。読み替えの記録は AD-047。
+**読み替える先行の決定**: X-1 (005) の FR-020 / US-4 AC6 / data-model §6 は「未ログイン・認証切れ・クレジット不足・rate limit・API 到達不可を `provider-error` に保つ」と定めた (コードの注記では V-11。注記の「FR-030」は 005 に無く、FR-020 の誤り)。本 feature はこれを §1 の表に分ける。終わり方 (失敗にする・黙って完了にしない) は変えない。読み替えの記録は AD-047。
 
 ## §1 失敗の理由のキー (`LaunchFailureReason` の拡張。**再ログインの導線の規則の正本もここ**)
 
-`classifyResult(subtype, isError)` は変えない (完了か失敗か)。失敗のとき、`classifyResultFailure(result, lastAssistantError)` (agents の純関数。`session-core.ts`) が理由のキーを決める。`lastAssistantError` は同じターンの最後の assistant のメッセージの `error` (`SDKAssistantMessageError` の列挙。文字列を含まない) で、セッションスレッドが `run()` の closure に持ち、result で消す。
+`classifyResult(subtype, isError)` は変えない (完了か失敗か)。失敗のとき、`classifyResultFailure(input)` (agents の純関数。`session-core.ts`) が理由のキーを決める。入力は `{ subtype, apiErrorStatus, lastAssistantError }` で、`lastAssistantError` は同じターンの**主ループの** assistant のメッセージ (`parent_tool_use_id === null`) の最後の `error` (`AssistantErrorKey`。13 値の列挙。文字列を含まない)。セッションスレッドの `live-signals` が覚え、result で消す。
 
 | 条件 (上から順に評価) | キー | 再ログインの導線 |
 |---|---|---|
-| `lastAssistantError` が `authentication_failed` / `oauth_org_not_allowed` / `verification_required` / `cloud_credential_error`、または `api_error_status` が 401 | `auth-failed` | **あり** |
+| `lastAssistantError` が `authentication_failed` / `oauth_org_not_allowed` / `verification_required` / `cloud_credential_error`、または `apiErrorStatus` が 401 | `auth-failed` | **あり** |
 | `lastAssistantError` が `billing_error` / `account_on_hold` | `billing` | なし (請求とアカウントを確かめる案内) |
-| `lastAssistantError` が `rate_limit`、または `api_error_status` が 429 | `rate-limited` | なし |
-| `api_error_status` が 403 | `auth-failed` (403 は組織のポリシーや地域でも返るので、文言は「認証または権限」とする) | **あり** |
+| `lastAssistantError` が `rate_limit`、または `apiErrorStatus` が 429 | `rate-limited` | なし |
+| `apiErrorStatus` が 403 | `auth-failed` (403 は組織のポリシーや地域でも返るので、文言は「認証または権限」) | **あり** |
 | `subtype === 'error_max_turns'` | `max-turns` | なし |
 | `subtype === 'error_max_budget_usd'` | `max-budget` | なし |
 | `subtype === 'error_max_structured_output_retries'` | `structured-output-retries` | なし |
-| `subtype === 'error_during_execution'` | `execution-error` | なし。文言に「ログイン状態も確かめる」を添える (実機の形を確かめるまで。RK-06) |
-| `api_error_status` が数 (それ以外) | `api-error` | なし。文言に「ログイン状態も確かめる」を添える |
+| `subtype === 'error_during_execution'` | `execution-error` | なし。文言に「ログイン状態も確かめる」を添える (実機の形を確かめるまで。plan RK-06) |
+| `apiErrorStatus` が 0〜999 の整数 (それ以外) | `api-error` | なし。文言に「ログイン状態も確かめる」を添える |
 | それ以外 (状態が無い・知らない subtype・`lastAssistantError` がそれ以外) | `provider-error` (既存) | **あり** (今と同じ) |
 
 - 再ログインの導線 (`isReloginFailure`) は `auth-failed` と `provider-error`。spec の FR-002 / SC-001 はこの表を参照する
-- `errors` / `result` (文字列) は運ばない (U-5)。HTTP の状態は文言に入れない (`failure` は理由のキーだけを運び、起動ダイアログに戻ったときも同じ文言で出せるように)
-- `LAUNCH_FAILURE_REASONS` は 10 → 18 (`max-turns` / `max-budget` / `structured-output-retries` / `execution-error` / `auth-failed` / `billing` / `rate-limited` / `api-error`)。固定テストを直す。`SessionLaunchRejectReason` (`LaunchFailureReason` を含む) と状態通知の `reasonKey` の値の集合も広がる (フィールドは変わらない。`isLaunchFailureReason` が追随する)
+- 表の条件は SDK の型から組んだもので、認証切れ・課金のエラーが実機でどの形で届くかは誰も観察していない (plan RK-06)。quickstart V-4 #1 の手順 (アプリの外の CLI で、数と列挙だけを控える) で確かめ、違えばこの表を直す (tasks SH-014)
+- `errors` / `result` (文字列) は運ばない (U-5)。HTTP の状態は文言に入れない (`failure` は理由のキーだけを運び、起動ダイアログに戻ったとき (`previousFailureLabel`) も同じ文言で出す)
+- `LAUNCH_FAILURE_REASONS` は 10 → 18 (`max-turns` / `max-budget` / `structured-output-retries` / `execution-error` / `auth-failed` / `billing` / `rate-limited` / `api-error`)。`SessionLaunchRejectReason` は 16 → 24 (コメントの件数も直す)。状態通知の `reasonKey` の値の集合も広がる (フィールドは変わらない。`isLaunchFailureReason` が追随し、main のコードの差分は 0)
 
 ## §2 `meter` (`SessionEvent` の新しい種類)
 
+### 形 (domain `src/domain/session/meter.ts`。SDK を import しない)
+
 ```ts
-| { readonly kind: 'meter'; readonly meter: MeterUpdate }
+| { readonly kind: 'meter'; readonly meter: MeterUpdate }       // SessionEvent に足す (SESSION_EVENT_KINDS 7 → 8)
 
 type MeterUpdate =
-  | { readonly type: 'turn'; readonly costUsd: number; readonly numTurns: number;
+  | { readonly type: 'turn'; readonly costUsd: number; readonly turns: number;
       readonly models: readonly ModelMeter[]; readonly permissionDenials: number }
-  | { readonly type: 'context'; readonly usedTokens: number }   // 最後の assistant のメッセージの usage
-  | { readonly type: 'rate-limit'; readonly status: RateLimitStatus;
-      readonly limitType: RateLimitType | null; readonly utilization: number | null;
-      readonly resetsAtSec: number | null; readonly usingOverage: boolean }
+  | { readonly type: 'context'; readonly usedTokens: number }
+  | { readonly type: 'rate-limit'; readonly status: RateLimitStatus; readonly limitType: RateLimitType | null;
+      readonly utilizationPct: number | null; readonly resetsAtSec: number | null; readonly usingOverage: boolean }
   | { readonly type: 'permission-mode'; readonly mode: PermissionModeKey }
   | { readonly type: 'thinking'; readonly estimatedTokens: number }
   | { readonly type: 'tool-elapsed'; readonly toolUseId: string; readonly elapsedSeconds: number }
 
-interface ModelMeter { modelId: string; input: number; output: number; cacheRead: number;
-                       cacheCreation: number; costUsd: number; contextWindow: number }
+interface ModelMeter { readonly modelId: string; readonly input: number; readonly output: number;
+  readonly cacheRead: number; readonly cacheCreation: number; readonly costUsd: number; readonly contextWindow: number }
+
+type PermissionModeKey = SDK の PermissionMode の 6 値 | 'unknown'
+type RateLimitStatus = 'allowed' | 'allowed_warning' | 'rejected'
+type RateLimitType = SDK の rateLimitType の 6 値
+type AssistantErrorKey = SDK の SDKAssistantMessageError の 13 値
 ```
+
+- 運ぶ値は数・真偽・列挙・モデルの id と、形を検証した tool の id (`tool-elapsed` の `toolUseId`。規則は下の「値の検証」) だけ。AD-047 Decision 2 の字面 (数・真偽・列挙・モデルの id) は、tool の id を含むと AD-047 の訂正節で直す (plan の ADR 節 #2)
+- `type` で判別する union にし、decoder は知らない `type` を捨てる (後続 feature が種類を足せる形。O-6 の旧版の design は `retraction` を足す前提だった)
+- `sdk-agent-session.ts` の `Equal<…>` (`:80-84` の型) で `PermissionModeKey` (`unknown` を除く)・`RateLimitStatus`・`RateLimitType`・`AssistantErrorKey`・失敗の subtype の値域を SDK の型と固定する。SDK を上げて値域が変わったら tsc が落ちる
+- **昇格値の綴り (`bypassPermissions` / `acceptEdits` / `auto`) を `src/agents/` に置かない** (Constitution 検証の項目 16 の走査範囲)。値域は domain の `meter.ts`、表示名は renderer の文言の表 (§5)。agents は `message.permissionMode` を domain の `toPermissionModeKey` に渡すだけ
 
 ### 変換の入力 (SDK のフィールドの許可リスト。**これが正本**)
 
 | SDK のメッセージ | 読むフィールド | 読まないフィールド | 出すもの |
 |---|---|---|---|
-| `assistant` | `message.usage` の `input_tokens`・`cache_read_input_tokens`・`cache_creation_input_tokens`、`error` (列挙) | 本文ほか (本文は既存の `message` の経路) | `meter` `context` (1 回の API 呼び出しの入力 = その時点のコンテキストの大きさ)。`error` は §1 の分類にだけ使う |
-| `result` (成功・失敗とも) | `total_cost_usd`・`num_turns`・`modelUsage` の各モデルの数と `contextWindow`・`permission_denials` の件数・`api_error_status`・`subtype`・`is_error` | `result`・`errors`・`usage` (主ループのターンの合算でコンテキストの推定に使えない)・`stop_reason`・`permission_denials` の中身・`user_message_uuid(s)`・`resume_reason`・`terminal_reason`・タイミングの数・`origin` ほか | `meter` `turn` + §1 |
-| `rate_limit_event` | `rate_limit_info` の `status`・`rateLimitType`・`utilization`・`resetsAt`・`isUsingOverage` | `overageDisabledReason`・`limitScope`・`errorCode`・購入の可否ほか | `meter` `rate-limit` |
-| `system` / `status` | `permissionMode`・`status` (`compacting` か)・`compact_result` | `compact_error` | `meter` `permission-mode` (変わったとき) + §3 の行 |
+| `assistant` (`parent_tool_use_id === null` のときだけ) | `message.usage` の `input_tokens`・`cache_read_input_tokens`・`cache_creation_input_tokens`、`error` (列挙) | 本文 (既存の `message` の経路)・`usage` の出力側・他のすべて | `context` (3 つの和。前に送った値と同じなら送らない)。`error` は §1 の分類にだけ使う |
+| `result` (成功・失敗とも) | `total_cost_usd`・`num_turns` (0 に倒した result の判定にだけ)・`modelUsage` の各モデルの 4 つのトークン数と `costUSD` と `contextWindow`・`permission_denials` の各要素の `tool_use_id`・`api_error_status`・`subtype`・`is_error` | `result`・`errors`・`usage`・`stop_reason`・`permission_denials` の `tool_name` / `tool_input`・`user_message_uuid(s)`・`resume_reason`・`terminal_reason`・タイミングの数・`origin`・`modelUsage` の他のフィールド ほか | `turn` + §1 + §3 (再試行の行を閉じる) |
+| `rate_limit_event` | `rate_limit_info` の `status`・`rateLimitType`・`utilization`・`resetsAt`・`isUsingOverage` | `overage*`・`limitScope`・`errorCode`・購入の可否・`surpassedThreshold` ほか | `rate-limit` |
+| `system` / `init` (各ターンの最初に届き、`permissionMode` は必須。research R-02) | `permissionMode` だけ | `cwd`・`tools`・`mcp_servers`・`model`・`slash_commands`・`terminal_slash_commands`・`plugins` (`path` を含む)・`agents`・`skills`・`apiKeySource`・`betas`・`claude_code_version`・`output_style`・`effort`・`fast_mode_*`・`capabilities` ほか全部 (パスと会話の構成を運ばない) | `permissionMode` が基準と変わったら `permission-mode` と §3 の行 (`status` と同じ比較) |
+| `system` / `status` | `status` (`compacting` か)・`compact_result`・`permissionMode` | `compact_error` | §3 の行。`permissionMode` が基準と変わったら `permission-mode` |
 | `system` / `api_retry` | `attempt`・`max_retries`・`retry_delay_ms`・`error_status` | `error`・`no_response` | §3 の行 |
-| `system` / `thinking_tokens` | `estimated_tokens` | `user_message_uuid` | `meter` `thinking` (間引く) |
-| `tool_progress` | `tool_use_id`・`elapsed_time_seconds` | `tool_name`・`subagent_*`・`task_id` | `meter` `tool-elapsed` (間引く) |
-| `system` / `task_progress` | `task_id`・`usage` の 3 つの数 | `description`・`summary`・`last_tool_name`・`subagent_type` | §3 の task の行の更新 (`opens: false`。状態を持たない) |
+| `system` / `thinking_tokens` | `estimated_tokens` | `estimated_tokens_delta`・`user_message_uuid` | `thinking` (間引く) |
+| `tool_progress` (`parent_tool_use_id === null` のときだけ) | `tool_use_id`・`elapsed_time_seconds` | `tool_name`・`heartbeat`・`subagent_*`・`task_id` | `tool-elapsed` (間引く) |
+| `system` / `task_progress` | `task_id`・`usage` の 3 つの数 | `description`・`summary`・`last_tool_name`・`subagent_type`・`tool_use_id` | §3 の task の行の更新 (間引く) |
+| `user` | `tool_result` ブロックの `tool_use_id` だけ (既存の `readToolResult`) | 本文 | 取り消し (下記) |
 
-### 値の検証 (agents の変換と renderer の decoder で同じ定数。domain の `meter.ts`)
+### 値の検証 (agents の組み立てと renderer の decoder で同じ関数・同じ定数。domain の `meter.ts`)
 
 | 値 | 規則 | 外れたとき |
 |---|---|---|
-| 数 (トークン・回数・秒・ms) | `Number.isSafeInteger(n) && n >= 0` | 0 |
-| 費用 | `Number.isFinite(x) && 0 <= x <= 1e6` | 0 |
-| `utilization` | `Number.isFinite(x)`。SDK の値域を実データで確かめるまで、0〜1 なら百分率に直し、1〜100 ならそのまま、それ以外は null (RK-07) | null |
-| `resetsAtSec` | epoch 秒。`Number.isFinite(x) && 1e9 <= x <= 1e11` (ms で届いたら 1000 で割って同じ範囲に入るか確かめる) | null |
+| 数 (トークン・回数・秒・ms) | `Number.isSafeInteger(n) && 0 <= n`。秒は `Math.floor` してから | 0 |
+| 費用 (USD) | `Number.isFinite(x) && 0 <= x <= 1e6` | 0 |
+| `utilizationPct` | `Number.isFinite(x)` で、`0 <= x <= 1` なら ×100、`1 < x <= 100` ならそのまま、それ以外は null (値域を実データで確かめるまで。plan RK-07) | null |
+| `resetsAtSec` | epoch 秒で `1e9 <= x <= 1e11`。超えたら ms とみなして 1000 で割り、同じ範囲に入るか確かめる | null |
 | `contextWindow` | `Number.isSafeInteger(n) && 0 < n <= 1e8` | 0 (目盛りを出さない) |
-| `toolUseId` | `^[A-Za-z0-9_-]{1,128}$` | `meter` を出さない |
-| `modelId` | `^[A-Za-z0-9._:@/-]{1,128}$` かつ `//` を含まず、`mayCarrySecret` (O-2 の `system-event.ts`) が false | その行を内訳から落とす |
+| `toolUseId` | `^[A-Za-z0-9_-]{1,128}$` | `tool-elapsed` を出さない |
+| `modelId` | 文字種と長さの正本は domain の `isValidModelId` (`src/domain/provider/model-catalog.ts:28`。英数と `._:/@-[]`・先頭は英数・128 文字まで。起動の設定とモデルカタログと同じ述語なので、`[1m]` 付き・`_` を含む id・Bedrock の ARN も通る)。`meter.ts` はその上に 3 つだけを足す: `//` を含まない、`:` の後ろに `@` がある形 (`/^[^/]*:[^/]*@/`。scheme の無い userinfo `u:p@h/m`) でない、`mayCarrySecret` (`system-event.ts:47`) が false。Vertex の `model@date` (`:` が無い) と Bedrock の ARN (`@` が無い) は通る | その行を内訳から落とす |
 | `models` の件数 | 16 まで | 17 件目以降を落とす |
-| 列挙 (`type`・`status`・`limitType`・`mode`・`lastAssistantError`) | `transcript-guard.ts` の `enumTable` / `inEnum` の方式 (`Object.create(null)` と `Object.hasOwn`) | 知らない値は null / `unknown` |
+| 列挙 (`type`・`status`・`limitType`・`mode`・`AssistantErrorKey`) | `Object.create(null)` の表と `Object.hasOwn` (`transcript-guard.ts:29-40` の方式) | `mode` は `unknown`、他は null / 送らない |
 
-- 文言の表も `Object.hasOwn` で引く。id をキーにする保持は `Map` に限る
-- `PermissionModeKey`: SDK の `PermissionMode` の値の列挙 (6 値) と `unknown`。**昇格値のリテラルは domain の `meter.ts` だけに置き**、agents は `message.permissionMode` を domain の関数に渡すだけにする (Constitution 検証の項目 16 に例外を足さない)。`sdk-agent-session.ts` で `Equal<…>` (既存の :80-84 の型) により `PermissionModeKey` (`unknown` を除く)・`RateLimitType`・`RateLimitStatus`・`SDKAssistantMessageError` の値域を SDK の型と固定する
+- decoder は検証を通した値だけで新しい object を組む (余分なキーを運ばない)。`resetsAt: 1e300`・`__proto__` のキー・長い id・URL の資格情報の形の `modelId` で例外を出さない (SC-002)
+- 文言の表も `Object.hasOwn` で引く。外部由来の id をキーにする保持は `Map` に限る
 
-### 間引きと後始末 (`meter-throttle.ts`。セッションスレッドの `run()` の closure に 1 つ)
+### セッションスレッドの状態 (`src/agents/live-signals.ts`。`run()` の closure に 1 つ作る。module スコープに置かない)
 
-- `thinking` は 1 秒に 1 回、`tool-elapsed` は tool ごとに 1 秒に 1 回、task の行の更新 (task_progress) は task ごとに 1 秒に 1 回。間引いた最後の値は次の 1 秒の境で送る
-- セッションあたりの `meter` と間引きの対象の行の合計は 1 秒に 20 件まで (超えた分は捨てる。最新の値は次の境で送る)
-- 同時に追う tool / task は 64 まで
-- 取り消し: tool の結果 (`user` の tool_result) → その tool の保留を捨てる。assistant のメッセージ → `thinking` の保留を捨てる。`finish()` → 全部の保留と timer を捨ててから `ended` を送る (`ended` の後に `event` を送らない)
+| 状態 | 初期値 | 更新 |
+|---|---|---|
+| `lastAssistantError` | null | 主ループの assistant の `error` で書き、result で消す |
+| `lastContextTokens` | null | `context` を送ったとき |
+| `turns` | 0 | 0 に倒していない result で +1 |
+| `deniedIds` (`Set`。1,024 まで) | 空 | result の `permission_denials` の `tool_use_id` (形は `toolUseId` と同じ規則) を足す。上限に達したら足さない (件数は「1,024 件以上」と出す) |
+| `turnSeq` / `compactSeq` / `modeSeq` (行の id の連番) | 0 | §3 |
+| `openRetryRowId` / `openCompactRowId` | null | §3 |
+| `modeBaseline` (権限モードの比較の基準) | 起動の設定の権限モード (`launchOptions.permissionMode`) | `permission-mode` を送ったとき |
+| 間引き (`meter-throttle.ts`) | — | 下記 |
 
-### 連番と比較の基準 (`run()` の closure)
+- **0 に倒した result**: `num_turns === 0 && total_cost_usd === 0`。`turn` を送らず、`turns` も増やさない (前の値を上書きしない。spec Edge Cases の正本)。§1 の分類は行う
+- `/clear`・再開で費用とトークンが 0 から数え直される → そのまま送る (`turns` はセッションスレッドが数えるので減らない)
 
-- 行の id の連番 (`retry` / `compact` / `mode`) と権限モードの比較の基準は `run()` の closure に持つ (module スコープに置かない)。基準の初期値は起動の設定の権限モード (`launchOptions.permissionMode`)。domain の関数は連番と基準を引数で受ける純関数
-- `api-retry` の連番は result で増やす (同じターンの再試行は同じ行)
+### 間引きと後始末 (`src/agents/meter-throttle.ts`。時計と timer は注入。偽の時計で単体)
+
+- 鍵ごとに 1 秒に 1 回: `thinking` (1 つ)・`tool:<toolUseId>`・`task:<taskId>`。間隔の中の値は最後の 1 つだけを持ち、次の 1 秒の境で送る
+- セッションあたり、間引きの対象 (`thinking` / `tool-elapsed` / task の行の更新) の合計は直近 1 秒に 20 件まで。超えた分は保留し、次の境で最新の値を送る
+- 同時に追う鍵 (tool と task) は 64 まで。超えた新しい鍵の更新は捨てる
+- 取り消し: `user` の `tool_result` → その tool の鍵の保留を捨てる。主ループの assistant のメッセージと result → `thinking` の保留を捨てる。result → 全部の tool の鍵の保留を捨てる。`finish()` の最初 → 全部の保留と timer を捨てる (`ended` の後に `event` を送らない)
+- 間引かないもの: `turn` / `context` / `rate-limit` / `permission-mode` と §3 の再試行・圧縮・権限モードの行 (どれも低頻度)
 
 ### renderer の保持 (稼働中のストアの `meters`。永続化しない。session の操作 UI の変更。U-1)
 
+`RunningSessionStoreState` に `meters: Readonly<Record<sessionId, SessionMeters>>` を足す (`sessions` とは別の枝 — 計量の更新で `sessions` の参照を変えず、表示中の Thread を描き直さない)。
+
 | 値 | 更新 |
 |---|---|
-| `lastTurn` | `turn` の最新。ただし `costUsd === 0` かつ `numTurns === 0` (起動時のエラーの result) は前の値を上書きしない |
+| `lastTurn` | `turn` の最新 |
 | `contextUsed` | `context` の最新 |
-| `rateLimit` | `rate-limit` の最新 |
+| `rateLimit` | `rate-limit` の最新 (表示中のセッションの最新の event で決める。FR-006) |
 | `permissionMode` | `permission-mode` の最新。**`config` / `lastConfig` / プリセットに書き戻さない** |
-| `thinkingTokens` | `thinking` の最新。assistant のメッセージが届いたら消す |
-| `toolElapsed` | `Map<toolUseId, seconds>`。tool の結果が届いたら消す |
+| `thinkingTokens` | `thinking` の最新。そのセッションの主ループの assistant の `message` (role が assistant でシステムイベントでない) と `turn` で null に戻す |
+| `toolElapsed` | `ReadonlyMap<toolUseId, seconds>`。`turn` で空にする。64 を超えたら古いものから落とす |
 
-- `close()` の削除の列挙に `meters` を足す。閉じた id への `meter` は捨てる (`sessions[id]` が無いときは捨てる、を保つ)
-- `meter` は観測点 `receivedMessages` (O-1) に数えない。§3 の行は `message` なので数える (O-3 → O-8 の比較の基準の変化として roadmap に注記する)
+- `sessions[id]` が無いときの `meter` は捨てる (閉じた id を含む)。`close()` の削除の列挙に `meters` を足す
+- `meter` は `patch()` を通さない (キューの同期と監視ビューの派生値の見直しを起こさない)
+- `meter` は観測点 `receivedMessages` (O-1) に数えない。§3 の行は `message` なので数える (O-8 の比較の基準の変化として roadmap に書く)
 
 ## §3 システムイベントの行の追加 (O-2 の `system-event` の category)
 
-`category` に 3 つを足し、task の行の `detail` に進み具合を足す。part の形 (`type` / `category` / `opens` / `name` / `detail` / `status`) は変えない (`TRANSCRIPT_PART_FIELDS` は変わらない)。**行の組み立ては agents (`sdk-agent-session.ts` か新設の `live-system-rows.ts`) に置き、過去ログと共有の `toSystemEventMessage` には足さない** (経路は実行中だけ。`transcript.ts` が `status` / `api_retry` / `task_progress` から行を作らないことを回帰テストで固定する)。
+`SYSTEM_EVENT_CATEGORIES` に 3 つを足し、task の行の `detail` に進み具合を足す。part の形 (`TRANSCRIPT_PART_FIELDS`) は変えない。**行の組み立て (いつ・どの id で作るか) は agents (`live-signals.ts`) に置き、過去ログと共有の `toSystemEventMessage` には足さない** (経路は実行中だけ)。`detail` の符号化と復号は domain (`system-event.ts`) の純関数。
 
-| category | 行の id | 作る (opens) | `detail` | `status` |
-|---|---|---|---|---|
-| `api-retry` | `retry:<連番>` | `api_retry` | `<attempt>/<max_retries>`、`error_status` が整数なら ` HTTP <n>`、` <retry_delay_ms>ms` (整数だけで組む) | `retrying` → 次の assistant のメッセージか result で `succeeded` (result が失敗なら `failed`) |
-| `compaction` | `compact:<連番>` | `status` が `compacting` | '' | `compacting` → `compact_result` の `succeeded` / `failed` |
-| `permission-mode` | `mode:<連番>` | `permissionMode` が基準と変わった | モードのキー | `changed` |
-| `task` (既存) の更新 | `task:<task_id>` (既存) | false (`task_progress`。行の無い task は `mergeSystemEvent` が捨てる) | `<total_tokens> tokens / <tool_uses> tools / <duration_ms>ms` (整数だけ) | null (前の値を保つ) |
+| category | 行の id | 作る (`opens: true`) | 更新 (`opens: false`) | `detail` | `status` |
+|---|---|---|---|---|---|
+| `api-retry` | `retry:<turnSeq>` | `api_retry` (同じターンの続きは同じ行に合成) | 次の主ループの assistant → `succeeded`。result → 成功なら `succeeded`、失敗なら `failed`。どちらも開いた行があるときだけ | `<attempt>/<max_retries>/<error_status>/<retry_delay_ms>` (各整数。`error_status` が null・整数でなければ `-`) | `retrying` → `succeeded` / `failed` |
+| `compaction` | `compact:<compactSeq>` | `status === 'compacting'` で、開いた行が無いとき。開いた行が無いまま `compact_result` が来たら、結果の状態で作る | `compact_result` → `succeeded` / `failed` | '' | `compacting` → `succeeded` / `failed` |
+| `permission-mode` | `mode:<modeSeq>` | `status` か `init` の `permissionMode` の鍵が `modeBaseline` と違う (どちらで先に観測しても 1 回。基準を更新するので、もう一方で同じモードが届いても作らない) | — | `PermissionModeKey` | `changed` |
+| `task` (既存) の更新 | `task:<task_id>` (既存。`task_id` は空でない文字列) | — (行の無い task への更新は `mergeSystemEvent` が捨てる) | `task_progress` (間引く) | `\n<total_tokens>/<tool_uses>/<duration_ms>` (先頭の改行 = 進み具合だけの更新) | null (前の値を保つ) |
 
+- `turnSeq` は result で +1 し、`openRetryRowId` を消す。`compactSeq` は行を作るたびに +1 し、結果で `openCompactRowId` を消す
 - `name` は常に ''。会話由来の文字列を入れない
-- `SystemEventStatus` に `retrying` / `compacting` / `changed` を足す。終わりを表す値 (`isTerminalSystemEventStatus`。`system-event.ts:193`) に `changed` を足す (`succeeded` / `failed` は既存)。`retrying` / `compacting` のまま終わった行は O-2 の「結果不明」の規則に従う
-- 合成は O-2 の `mergeSystemEvent` のまま
-- **O-6 との関係**: O-4 の `compaction` の行は「圧縮の進み具合 (中・成功・失敗)」、O-6 の `compact_boundary` の element は「会話の区切り」。O-6 は実行中の境界の element を足すときに、この行と統合するか並べるかを決める (roadmap の O-6 の行に書く)
+- `SYSTEM_EVENT_STATUSES` に `retrying` / `compacting` / `changed` を足す。`isTerminalSystemEventStatus` に `changed` を足す (`succeeded` / `failed` は既存)。`retrying` / `compacting` のまま終わった行は O-2 の「結果不明」の規則に従う
+- **合成の規則の追加 (`mergeSystemEvent`。正本はここ)**: 前の行がある task の行で、次の `detail` が改行で始まるときは、`detail` = (前の `detail` の最初の改行より前) + `\n` + (次の `detail` の改行より後)。それ以外は今のまま (空でなければ次の値)。`oneLine` は空白を畳むので、開始の行と過去ログの `detail` は改行を含まない (research R-06)
+- 復号: `splitTaskDetail(detail) → { taskType, progress: { tokens, tools, durationMs } | null }`・`decodeRetryDetail(detail)`。形が合わなければ進み具合は null (種類だけを描く)
+- `transcript.ts` (過去ログ) が `status` / `api_retry` / `task_progress` / `thinking_tokens` から行を作らないことを回帰テストで固定する
+- **O-6 との関係**: `compaction` の行は「圧縮の進み具合 (中・成功・失敗)」、O-6 の `compact_boundary` の element は「会話の区切り」。O-6 が実行中の境界の element を足すときに、この行と統合するか並べるかを決める (roadmap の O-6 の行に書く)
 
 ## §4 表示
 
+置き場所は AD-046 Decision 6 の語。中央のヘッダの下の帯は、ヘッダの行と会話内検索のバーの間に置く (順: ヘッダの行 → 権限モードの警告の帯 → Quota banner → 会話内検索のバー → 本体)。どれも稼働中のセッションだけで、過去のセッションには出さない。
+
 ### Quota banner (中央のヘッダの下)
 
-| `rateLimit.status` | 見た目 | 文言 |
+| `rateLimit.status` | 見た目 | 文言 (§5) |
 |---|---|---|
 | `allowed` / 無い | 出さない | — |
-| `allowed_warning` | 注意 (`role="status"`) | {種類}の利用が {utilization}% に達しました。{resetsAt} にリセットされます |
-| `rejected` | 警告 (`role="alert"`) | {種類}の上限に達しました。{resetsAt} まで待ってください |
+| `allowed_warning` | 注意 (`role="status"`) | `quotaWarning` (+ `quotaReset`) |
+| `rejected` | 警告 (`role="alert"`) | `quotaRejected` |
 
-- `limitType` の文言: `five_hour` → 5 時間、`seven_day` → 7 日、`seven_day_opus` → 7 日 (Opus)、`seven_day_sonnet` → 7 日 (Sonnet)、`seven_day_overage_included` → 7 日 (超過分を含む)、`overage` → 超過分、知らない値 → 利用枠
-- `resetsAt` の書式: 今日なら `HH:mm`、別の日なら `M/d HH:mm` (ローカル)。`new Date(sec * 1000)` が Invalid Date (`Number.isNaN(getTime())`) なら「しばらく待ってから」。`utilization` が無い → 割合を出さない。`usingOverage` → 「超過分を使っています」を添える
-- 帯はセッションごと (アカウントの制限を他のセッションに出さない。届いた event はそのセッションのもので、他のセッションに当てはまるかを renderer は知らない)
+- `limitType` の文言は §5。null・知らない値 → 「利用枠」
+- 解除の時刻: 今日なら `HH:mm`、別の日なら `M/d HH:mm` (ローカル)。`resetsAtSec` が null → 時刻を出さず「しばらく待ってから」。`utilizationPct` が null → 割合を出さない。`usingOverage` → 「超過分を使っています。」を添える
+- 帯はセッションごと (届いた event はそのセッションのもので、他のセッションに当てはまるかを renderer は知らない)
+- 429 で失敗したが `rate_limit_event` が届かない Provider (API キー・Bedrock) では帯は出ない。失敗の文言 (`rate-limited`) は帯を参照しない
 
 ### 権限モード
 
-- 「概要」のタブ (O-7 data-model §5) の権限モードの出所を `meters[id].permissionMode ?? config.permissionMode` にする。中央のヘッダには常設しない (O-7 §5 の「中央のヘッダと重ねない」を保つ)
-- 今のモードが安全 3 値 (`isSafePermissionMode`。`launch-config.ts`) の外のとき、中央のヘッダの下に警告の帯 (`role="alert"`) を出す: 「アプリが選んでいない権限モード ({モード名}) で動いています。承認なしで操作が走ることがあります。」(原因を断定しない)。判定の関数は domain (`launch-config.ts` の `isSafePermissionMode`) を使い、ui は見た目だけを持つ。ランタイムの `autoModeAllowed` が false / 判定中なら文言に「このランタイムには隔離がありません」を足す (U-6)
-- 強制 (中断・失敗にする) はしない (U-6)。持ち主は I-3 (権限モードのゲート。roadmap の I-3 の行に注記する)
+- 「概要」のタブ (O-7 data-model §5): 「起動時の権限モード」の行は起動時の値のまま。`meters.permissionMode` が null でなく起動時の値と違うときだけ、その下に「現在の権限モード」の行を足す (FR-010)。中央のヘッダには常設しない (O-7 data-model §5 の「重ねない」を保つ)
+- **警告の帯**: `meters.permissionMode` が null でなく `isSafePermissionMode` (domain `launch-config.ts:27`) が false (`unknown` を含む) のとき、中央のヘッダの下に `role="alert"` で `unsafeModeBanner` を出す。原因を断定しない。隔離の文言はランタイムの `autoModeStatus` (表示用の 3 値。`domain/runtime/dto.ts:57`) から次のとおり添える (U-6)。`autoModeAllowed` (ゲート用) は表示に使わない
+  - `unavailable` → `unsafeModeNoIsolation` (ランタイムに隔離の仕組みが無い)
+  - `allowed` / `undetermined` (一覧の読み込み中・引けない を含む) → `unsafeModeIsolationUnverified` (このセッションの隔離をアプリは確かめていない)
+  - `allowed` は「ランタイムに隔離の仕組み (bubblewrap) がある」ことしか意味しない (`domain/runtime/capabilities.ts`)。アプリはセッションで Claude Code の sandbox を有効にする経路を持たない (`session-core.ts:46-55` の `QUERY_OPTION_KEYS` に `sandbox` が無い)。そのため `allowed` でも隔離されていると読める文言にしない (isolation charter :119「隔離されているかを利用者が推測する必要があってはならない」/ runtime charter :113-114「確認していないことを `true` に丸めない」)
+  - この文言はセッションの隔離状態ではなく暫定である。セッションの隔離状態 (I-2 の隔離バッジ) が定義されたら置き換える (roadmap の I-2 / I-3 の行に書く。tasks SH-013)
+- 強制 (中断・失敗にする) はしない (U-6)。持ち主は I-3 (roadmap の I-3 の行に書く)
 
-### 使用量のタブ (右のペイン。O-7 のタブの表に `usage` を 1 行。`availableFor: ['running', 'past', 'none']`)
+### 使用量のタブ (右のペイン。O-7 のタブの表に `usage` を 1 行。`availableFor: ['none', 'running', 'past']`)
 
 | 項目 | 導出 |
 |---|---|
-| このセッションの費用の累計 (推定) | `lastTurn.costUsd` を USD で小数 4 桁。「推定。請求額ではありません。再開・/clear で 0 から数え直します」を添える |
-| このセッションのトークンの累計 | `lastTurn.models` の合計の入力 / 出力 / キャッシュの読み込み / キャッシュの作成 |
-| ターン数 | `lastTurn.numTurns` |
-| モデルごとの内訳 | `models` の各行 (モデルの id・トークン・費用) |
-| 聞かれずに拒否された操作 | `lastTurn.permissionDenials` の件数 (中身は X-1 の DeniedNotice に出ている) |
+| 費用の累計 (推定) | `lastTurn.costUsd` (USD。小数 4 桁まで。`ja-JP` の書式) と `usageEstimateNote` |
+| トークンの累計 | `lastTurn.models` の合計の入力 / 出力 / キャッシュの読み込み / キャッシュの作成 |
+| ターン数 | `lastTurn.turns` (このアプリが受けたターン。research R-08) |
+| モデルごとの内訳 | `models` の各行 (モデルの id・4 つのトークン数・費用) |
+| 聞かれずに拒否された操作 | 稼働中のストアの `denied` の長さ (会話の上の DeniedNotice と同じ出来事) |
+| 拒否された操作の合計 (SDK の記録) | `lastTurn.permissionDenials` (1,024 に達したら「1,024 件以上」) |
 
-- 過去 → 「実行中のセッションだけ」、未選択 → O-7 の空の状態、`lastTurn` が無い → 「最初の応答の後に出ます」
+- 過去 → `usageLiveOnly`、未選択 → `usageEmpty`、`lastTurn` が無い → `usageAwaitFirst`
+- モデルの id・数はテキストとして描く。表の構造は `dl` か `table` (registry の Cost meter を採るならその構造。research R-09)
 
-### コンテキストと費用の目盛り (中央のヘッダ)
+### コンテキストと費用の目盛り (中央のヘッダの行)
 
-- 主モデル: 起動の設定のモデル id に一致する `models` の行。無ければ出力トークンの最も多い行
-- `ratio = contextUsed / main.contextWindow`。`contextWindow` が 0 → 出さない。`ratio >= 0.8` → 注意の見た目。`ratio > 1` → 「100% 以上」と出す (数を出さない)
-- 表示: 「コンテキスト 約 {ratio}%」と「費用 約 ${costUsd}」を並べる (右のペインを畳んでいても費用が見える)。`aria-label` に「推定」を含める
+- 主モデル: 起動の設定のモデル id と `models` の行のモデルの id (`modelUsage` のキー) を次の順で照合する
+  1. 完全一致
+  2. 両方の末尾の `[…]` (`[1m]` などの context の指定) を外して一致
+  3. どれも一致しない (alias の `sonnet` などで起動した・起動の設定にモデルが無い) → 出力トークンの最も多い行
+
+  `modelUsage` のキーに `[1m]` が付くか・alias が解決された id になるかは誰も観察していない。quickstart V-4 #2 / #3 でキーの形を控え、違えばこの規則を直す (tasks SH-014)
+- `ratio = contextUsed / main.contextWindow`。`contextWindow` が 0・`contextUsed` が null → コンテキストの目盛りを出さない。`ratio >= 0.8` → 注意の見た目。`ratio > 1` → `contextOver` (数を出さない)
+- 費用は `lastTurn` があれば出す (右のペインを畳んでいても見える)。`lastTurn` も `contextUsed` も無ければ何も出さない (ヘッダに空の印を置かない)
+- 推定であることを `aria-label` と `title` で伝える。live region にしない (ターンごとに読み上げない)
 
 ### 進み具合
 
-- tool の経過時間: tool の表示の見出しに「{n} 秒」(`toolElapsed`)
-- 思考: Reasoning の見出しに「思考中 約 {n} トークン」(`thinkingTokens`)
-- task の行: O-2 の行の `detail` の進み具合を文言に組む
+- tool の経過時間: tool の表示の見出しの右端の印 (`ToolResultMarks`) に `toolElapsed` を出す。出すのは結果がまだ無い tool の呼び出しだけ。値は実行中の Thread の外側の context から tool の id ごとに購読し、他の tool の更新で描き直さない
+- 思考: 実行中の transcript の末尾 (viewport の footer の composer の上) に `thinkingTokens` を出す (research R-07)。`role="status"` を重ねて毎秒読ませない (見た目だけを更新し、読み上げは出たときの 1 回)
+- task の行: `splitTaskDetail` の進み具合を `taskProgress` の文言で組み、種類の後ろに並べる
+- 過去ログでは context が無いので、どれも出ない
 
 ## §5 新しい文言 (正本。`labels.ts`)
 
@@ -173,16 +221,64 @@ interface ModelMeter { modelId: string; input: number; output: number; cacheRead
 | session | `billing` | 請求またはアカウントの問題で止まりました。クレジットとアカウントの状態を確かめてください。 |
 | session | `rate-limited` | レート制限のため止まりました。しばらく待ってから起動し直してください。 |
 | session | `api-error` | API がエラーを返しました。ログイン状態を確かめ、しばらく待ってから起動し直してください。 |
-| session | 短い理由 | ターン上限 / 費用上限 / 出力再試行上限 / 実行エラー / 認証エラー / 請求エラー / レート制限 / API エラー |
-| chat | システムイベントの行 | API を再試行中 ({detail}) / 再試行しました / 再試行に失敗しました / コンテキストを圧縮中 / 圧縮しました / 圧縮に失敗しました / 権限モードが {mode} に変わりました |
-| chat | 権限モードの名前 | `default` 既定 / `plan` 計画 / `dontAsk` 聞かずに拒否 / `acceptEdits` 編集を自動で許可 / `bypassPermissions` すべて許可 / `auto` 自動 / `unknown` 不明なモード |
-| shell | `usageTab` | 使用量 |
-| shell | `usageEstimateNote` | 推定。請求額ではありません。再開・/clear で 0 から数え直します |
-| shell | `usageLiveOnly` | 実行中のセッションだけ出ます。 |
-| shell | `usageAwaitFirst` | 最初の応答の後に出ます。 |
-| shell | `contextMeter` / `contextOver` | コンテキスト 約 {n}% / コンテキスト 100% 以上 |
-| shell | `costMeter` | 費用 約 ${n} |
-| shell | `unsafeModeBanner` | アプリが選んでいない権限モード ({mode}) で動いています。承認なしで操作が走ることがあります。 |
-| shell | `unsafeModeNoIsolation` | このランタイムには隔離がありません。 |
+| session | 短い理由 (8) | ターン上限 / 費用上限 / 出力再試行上限 / 実行エラー / 認証エラー / 請求エラー / レート制限 / API エラー |
+| session | `provider-error` (既存) | 変えない (既に「Provider」の表記。再ログインの導線を出す汎用の理由として残る) |
+| session | `noProviders` (既存) | 「プロバイダ」→「Provider」 |
+| shell | `SETTINGS_SECTION_LABELS.providers` (既存) | プロバイダ → Provider |
+| chat | category | `api-retry` API の再試行 / `compaction` コンテキストの圧縮 / `permission-mode` 権限モード |
+| chat | status | `retrying` 再試行中 / `compacting` 圧縮中 / `changed` 変更 |
+| chat | `retryDetail` | {attempt}/{max} 回目・HTTP {status}・{秒} 秒後 (status が `-` なら HTTP の部分を出さない) |
+| chat | `permissionModeChanged` | 権限モードが「{name}」に変わりました |
+| chat | `PERMISSION_MODE_NAMES` | `default` / `plan` / `dontAsk` は今の `PERMISSION_MODE_LABELS` と同じ文字列。`acceptEdits` 編集を自動で許可 / `bypassPermissions` すべて許可 / `auto` 自動で判断 / `unknown` 不明なモード |
+| chat | `taskProgress` | 約 {tokens} トークン・tool {n} 回・{秒} 秒 |
 | chat | `thinkingTokens` | 思考中 約 {n} トークン |
-| chat | `toolElapsed` | {n} 秒 |
+| chat | `toolElapsed` | {n}秒 / {m}分{s}秒 |
+| shell | `usageTab` | 使用量 |
+| shell | `usageCost` / `usageTokens` / `usageTurns` / `usageModels` / `usageDeniedAuto` / `usageDeniedTotal` | 費用の累計 (推定) / トークンの累計 / ターン数 / モデルごとの内訳 / 聞かれずに拒否された操作 / 拒否された操作の合計 (SDK の記録) |
+| shell | `usageEstimateNote` | 推定です。請求額ではありません。再開と /clear で 0 から数え直します。 |
+| shell | `usageLiveOnly` / `usageAwaitFirst` / `usageEmpty` | 実行中のセッションだけ出ます。 / 最初の応答の後に出ます。 / セッションを選ぶと使用量が出ます。 |
+| shell | `contextMeter` / `contextOver` / `contextMeterLabel` | コンテキスト 約 {n}% / コンテキスト 100% 以上 / コンテキストの使用量 (推定) |
+| shell | `costMeter` / `costMeterLabel` | 費用 約 ${n} / 費用の累計 (推定) |
+| shell | `quotaWarning` / `quotaRejected` / `quotaReset` / `quotaWait` / `quotaOverage` | {種類}の利用が {n}% に達しました。 / {種類}の上限に達しました。 / {時刻} にリセットされます。 / しばらく待ってから送ってください。 / 超過分を使っています。 |
+| shell | `RATE_LIMIT_TYPE_LABELS` | `five_hour` 5 時間 / `seven_day` 7 日 / `seven_day_opus` 7 日 (Opus) / `seven_day_sonnet` 7 日 (Sonnet) / `seven_day_overage_included` 7 日 (超過分を含む) / `overage` 超過分 / 知らない値 利用枠 |
+| shell | `unsafeModeBanner` | アプリが選んでいない権限モード (「{name}」) で動いています。承認なしで操作が走ることがあります。 |
+| shell | `unsafeModeNoIsolation` / `unsafeModeIsolationUnverified` | このランタイムには隔離がありません。 / このセッションの隔離をアプリは確かめていません。 |
+| shell | `OVERVIEW_LABELS.currentPermissionMode` | 現在の権限モード |
+
+- 「Provider」の表記は glossary の `Provider` (英字のまま) に揃える (research R-13)
+
+## §6 右のペインのタブのキーボード操作 (FR-017)
+
+- tablist (`RightPanel.tsx`) の `onKeyDown`: ← / → で `visibleTabs` の隣 (端で反対の端へ)、Home / End で端。移った先のタブを選び (`setPanelTab`)、そのタブの button にフォーカスを移す
+- 選ばれているタブだけ `tabIndex=0`、他は `-1`。`aria-selected` / `aria-controls` / `aria-labelledby` は今のまま
+- 出せないタブ (`availableFor` の外) は並びに入らない (今の `visibleTabs`)。選んでいたタブが出せなくなったら最初のタブに戻る (今の `activeTab`)
+- 畳んだ帯のアイコンは tablist ではないので変えない
+- テスト: `features/shell/RightPanel.tabs.test.tsx` (新設。タブの表を差し替えて 3 つのタブで ←/→・Home / End・端の回り込み・`tabIndex`・出せないタブの飛ばし・vitest-axe)。共通の setup は `test-support/app-shell-harness.tsx` (research R-12)
+
+## §7 稼働中のストアと監視ビューの行の切り出し (FR-018)
+
+research R-11 のとおり。`meters` を足すより前のコミットで行い、既存のテストを書き換えずに通す (例外は `announcements` の単体だけ)。切り出した後の行数を roadmap の system-scope の記録に書く (O-7・O-3 と同じ書き方)。
+
+| 移すもの | 移す前 | 移した後 |
+|---|---|---|
+| 派生値の追跡と間引き | `running-session-store.ts:173-248` | `running-session-monitor.ts` (`createRunningSessionMonitor`) |
+| `SessionRowStatus` (と 9 値の配列)・`Elapsed` | `labels.ts:109-123,225-230` | `running-session-types.ts`。labels は `Record<SessionRowStatus, string>` |
+| `announcements` (文) | `session-view.ts:440-457` | `attentionTransitions` (名前の組)。文は `SessionAttentionAnnouncer` が `attentionAnnouncement` で組む |
+| 行の部品と行の操作 | `RunningSessionList.tsx:248-553` | `RunningSessionRow.tsx` |
+
+## §8 押したボタンが自分ごと消えるときの行き先 (FR-019)
+
+各部品が、消える操作を呼ぶ**前**にフォーカスを移す (research R-10)。移すのは、押した要素 (またはその部品の中) にフォーカスがあるときだけ。行き先の探し方は `features/session/focus-handoff.ts` (新設) の 2 つの関数。
+
+| 押すもの | 置き場 | 行き先 | 探し方 |
+|---|---|---|---|
+| サイドバーの稼働中の行の「閉じる」 | `RunningSessionRow.tsx` の行の操作 | 次の行の Trigger → 無ければ前の行の Trigger → 無ければ稼働中の区画の見出し (`h2`。`tabIndex={-1}` を足す) | `closest('[data-slot="aui_thread-list-item"]')` の兄弟の行の中の `[data-slot="aui_thread-list-item-trigger"]`。見出しは `RunningSessionList` の `section` の中の固定の印 |
+| 承認カードの「許可」「拒否」 | `LivePane.tsx` (`onDecision`) | composer | `closest('[data-live-pane]')` の中の `[data-composer-input]` (composer の入力に印を足す) |
+| キューの拒否の告知の「閉じる」 | `LivePane.tsx` の `QueueRejectionNotice` | composer | 同上 |
+| 積んだ入力の「キューから削除」 | `LivePane.tsx` の `PendingQueueNotice` | composer | 同上 |
+| 「さらに表示」の最後の押下 (`hiddenCount <= MESSAGE_WINDOW`) | `LivePane.tsx` | composer | 同上 |
+
+- composer が無効 (終了済みなど) なら移さない (今のまま)
+- セレクタは固定の文字列だけ。外部由来の id をセレクタに入れない (O-3 の `findMessageElement` と同じ規則)
+- O-7 の `useFocusRescue` (中央の中身の切り替え) は変えない。中央の「閉じる」(FailureBanner / EndNotice) は今のまま `useFocusRescue` が拾う
+- テスト: 各部品の component テストで、押した後の `document.activeElement` が body でなく行き先であること (「承認待ちで『許可』を押した後、composer にフォーカスがある」を含む)

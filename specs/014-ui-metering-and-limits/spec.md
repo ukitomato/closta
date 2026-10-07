@@ -5,7 +5,7 @@ domain: ui
 domain_selected_by: user
 targets: both
 targets_selected_by: user
-status: drafting
+status: implementing
 bf_ids: []
 sf_ids: []
 linear: null
@@ -40,7 +40,7 @@ linear: null
 
 - **O-7 (アプリのシェル。[spec 013](../013-ui-app-shell/spec.md)。PR #13 で完了) の上に置き場所を書く。** 置き場所の語彙は AD-046 Decision 6 (中央のヘッダ・中央の本体・右のペインのタブ)。面の状態の書き手の規則は ui charter の「面の状態」に従う。中央のヘッダには O-3 の会話内検索のボタンが並ぶ
 - **session の契約を広げる (U-1)。** SDK のメッセージは agents (セッションスレッド) で変換されて renderer に届く。理由の区別と計量を届けるには、session の契約 (`LaunchFailureReason` の集合・`SessionEvent` の種類) を広げる必要がある。決定は ADR (AD-047。2026-10-05 に accepted) に記録した
-- **制御要求を新たに呼ばない。** Context display と Cost meter は、毎ターンの `result` が運ぶ値 (`total_cost_usd` / `modelUsage` / `usage` / `contextWindow`) から出す。`get_context_usage` / `get_session_cost` / `get_usage` を呼ばないので、Agent SDK の呼び出しの許可リスト (Constitution 検証の項目 14) と query の options のキー (AD-041 (g)) は変えない (U-3)
+- **制御要求を新たに呼ばない。** Cost meter は毎ターンの `result` が運ぶ値 (`total_cost_usd` / `modelUsage`) から出す。Context display は、主ループの最後の assistant のメッセージの入力側の `usage` を、`result` の `modelUsage` の `contextWindow` で割って出す (Clarifications / data-model §2 / §4。`result` の `usage` はターン内の往復の合算でありうるので使わない)。`get_context_usage` / `get_session_cost` / `get_usage` を呼ばないので、Agent SDK の呼び出しの許可リスト (Constitution 検証の項目 14) と query の options のキー (AD-041 (g)) は変えない (U-3)
 - **過去ログは対象にしない。** 計量と制限は実行中のセッションの情報である。過去ログ (`getSessionMessages`) に `result` などが残るかは対応表の経路で「実行中」とする
 
 ### 義務の扱い
@@ -65,10 +65,12 @@ roadmap が O-4 に預けた義務 (O-4 の行と、system-scope の持ち主の
 |---|---|---|---|
 | U-1 | ui の feature が session の契約 (失敗の理由のキー・`SessionEvent` の種類) と session の操作 UI (監視ビューの行の短い理由と再ログインの導線・稼働中のストアの `meters`) を変えてよいか (domain をまたぐ)。X-1 FR-020 / US-4 AC6 (クレジット不足・rate limit などは `provider-error`) の読み替えを含む | 変える。O-4 (ui) が持ち、session charter に記録する。決定と読み替えは AD-047 (proposed) | session の feature (X-6 など) に切り出し、O-4 はその後に表示だけを作る |
 | U-2 | 計量の運び方 | `SessionEvent` に種類 `meter` を 1 つ足し、数と列挙の値だけを運ぶ (会話由来の文字列を運ばない)。transcript の行になるもの (API の再試行・圧縮・権限モードの変化) は O-2 のシステムイベントの行の経路 (`message`) で運ぶ | 状態通知 (`SessionStatusUpdate`) に載せる (main を経由し、X-5 FR-004 の「状態通知に会話由来を載せない」の検査の範囲が広がる) / 全部をシステムイベントの行にする (計量は行ではない) |
-| U-3 | 制御要求 `get_context_usage` / `get_session_cost` / `get_usage` | 呼ばない。対応表の 3 行は `表示不要` と理由 (result の値で足りる・カテゴリ別の内訳は Claude Code の `/context` で見られる) にする。Tier A の `get_context_usage` を表示不要にするのは、Context display を result の推定で実装済みにするため | 呼ぶ (Constitution 検証の項目 14 の許可リストの追加に ADR が要る。カテゴリ別の内訳を出せる) |
+| U-3 | 制御要求 `get_context_usage` / `get_session_cost` / `get_usage` | 呼ばない。対応表の 3 行は `表示不要` と理由 (毎ターンの result と主ループの assistant の値で足りる・カテゴリ別の内訳は Claude Code の `/context` で見られる) にする。Tier A の `get_context_usage` を表示不要にするのは、Context display を推定 (主ループの最後の assistant の入力側の usage を result の `contextWindow` で割る) で実装済みにするため | 呼ぶ (Constitution 検証の項目 14 の許可リストの追加に ADR が要る。カテゴリ別の内訳を出せる) |
 | U-5 | 失敗の文字列 (`errors`。roadmap の O-4 の行が挙げる) を出すか | 出さない。CLI のエラー文にパスや秘密が含まれうる。理由のキーで区別する (data-model §1) | sanitize して 1 行で出す |
 | U-6 | 実行中に権限モードが安全 3 値の外になったのを観測したとき (AD-041 の「昇格経路 0 件」の逸脱の信号) | 警告の帯 (`role="alert"`) で知らせ、隔離の無いランタイムでは文言を強める。強制 (中断・失敗にする) はしない。強制の持ち主は I-3 (権限モードのゲート) とし、roadmap の I-3 の行に書く | 隔離の無いランタイムでは中断する (理由のキー `permission-escalated`) |
 | U-4 | 失敗の後の扱い | 今と同じく、エラーの result でセッションを「失敗」にする (X-1 FR-020 / US-4 AC6 を保つ)。理由のキーを細かくするだけで、終わり方は変えない | ターンの失敗だけでセッションを続ける (session の状態遷移の変更。別 feature) |
+
+U-3 の字面は 2026-10-08 に、Context display の材料の書き誤り (「result の値」「result の推定」) を直した。決定 (制御要求を呼ばない) は変えない。利用者が訂正として扱うと決め、AD-047 にも同じ訂正節を足す (plan の ADR 節。design-gate R2 HG-01)。
 
 ## Clarifications
 
@@ -147,8 +149,8 @@ roadmap が O-4 に預けた義務 (O-4 の行と、system-scope の持ち主の
 
 **Acceptance Scenarios**:
 
-1. **Given** `status` の `permissionMode` が変わった (ExitPlanMode の後など)、**When** 届く、**Then** transcript に「権限モードが {モード} に変わりました」の 1 行が出て、「概要」のタブ (O-7) の権限モードが今のモードになる (起動の設定・プリセットには書き戻さない)
-1a. **Given** 今のモードが安全 3 値の外 (`acceptEdits` / `bypassPermissions` / `auto` など)、**When** 中央を見る、**Then** 中央のヘッダの下に警告の帯 (`role="alert"`) が出て、隔離の無いランタイムでは文言が強まる (U-6。**この AC は P1 として扱い、US-4 の他の AC と分けて後回しにしない** — Principle III)
+1. **Given** `status` か、各ターンの最初の `init` の `permissionMode` が、前に観測したモード (最初は起動の設定) と違う (ExitPlanMode の後など)、**When** 届く、**Then** transcript に「権限モードが {モード} に変わりました」の 1 行が出て、「概要」のタブ (O-7) の権限モードが今のモードになる (起動の設定・プリセットには書き戻さない)
+1a. **Given** 今のモードが安全 3 値の外 (`acceptEdits` / `bypassPermissions` / `auto` など)、**When** 中央を見る、**Then** 中央のヘッダの下に警告の帯 (`role="alert"`) が出て、隔離の無いランタイムでは文言が強まる。それ以外 (隔離の仕組みのあるランタイム・未確定) では、このセッションの隔離をアプリが確かめていないことを添え、隔離されていると読める文言にしない (data-model §4) (U-6。**この AC は P1 として扱い、US-4 の他の AC と分けて後回しにしない** — Principle III)
 2. **Given** `status` が圧縮中 (`compacting`)、**When** 届く、**Then** transcript に「コンテキストを圧縮中」の行が出て、終わると成功 / 失敗に書き換わる。失敗の理由の文字列 (`compact_error`) は出さない
 3. **Given** tool が走っている (`tool_progress`)、**When** tool の表示を見る、**Then** 経過時間 (秒) が出て更新される (1 秒に 1 回まで)
 4. **Given** 思考中 (`thinking_tokens`)、**When** Reasoning の表示を見る、**Then** 「思考中 約 N トークン」が出る (推定)
@@ -162,11 +164,11 @@ roadmap が O-4 に預けた義務 (O-4 の行と、system-scope の持ち主の
 - `api_retry` の `error` の中身 → 出さない。HTTP の状態 (数) と回数だけ
 - 起動時のエラーの result (費用もターン数も 0) → 前の値を上書きしない (条件の正本は data-model §2)。`/clear`・再開で累計が 0 から数え直される → そのまま出す (推定と数え直しを添える)
 - 429 で失敗したが `rate_limit_event` が届かない Provider (API キー・Bedrock) → 帯は出ず、失敗の文言は「しばらく待ってから」(帯を参照しない)
-- `modelUsage` に複数のモデル (subagent・圧縮) → 内訳はモデルごと。コンテキストの推定は主モデル (起動の設定のモデル、無ければ出力トークンの最も多いモデル) で出す
+- `modelUsage` に複数のモデル (subagent・圧縮) → 内訳はモデルごと。コンテキストの推定は主モデル (起動の設定のモデル、無ければ出力トークンの最も多いモデル。照合の規則の正本は data-model §4) で出す
 - `contextWindow` が 0 か無い → コンテキストの目盛りを出さない
 - `tool_progress` / `thinking_tokens` が大量に届く → セッションスレッドで間引く (tool ごと・思考ごとに 1 秒に 1 回まで)。renderer の負荷 (O-1 の並列時の滑らかさ) を上げない
 - 表示中でないセッションの計量 → ストアに最新の値だけを持ち、表示しない (行の数を増やさない)
-- `status` の `permissionMode` が安全 3 値の外 → 原因を断定せず「アプリが選んでいない権限モード」の警告の帯 (U-6 / data-model §4)。アプリはそのモードを選ばせない (Principle III)
+- `status` か `init` の `permissionMode` が安全 3 値の外 (起動の直後からを含む) → 原因を断定せず「アプリが選んでいない権限モード」の警告の帯 (U-6 / data-model §4)。アプリはそのモードを選ばせない (Principle III)
 - tool の結果・assistant の応答・セッションの終了の後に、間引いて保留した経過時間や思考の値を送らない (data-model §2 の取り消し)
 - セッションが終了・失敗した後の計量 → 最後の値を残す (読み取り専用)
 
@@ -185,7 +187,7 @@ roadmap が O-4 に預けた義務 (O-4 の行と、system-scope の持ち主の
 #### 計量の運び方 (US-2〜US-4)
 
 - **FR-003**: セッションスレッドは、計量を `SessionEvent` の新しい種類 `meter` で renderer に届けなければならない (U-2。AD-047)。
-  - 運ぶ値は data-model §2 の許可リストに限る (数・真偽・列挙・モデルの id)。会話由来の文字列・エラー文・パスを運ばない
+  - 運ぶ値は data-model §2 の許可リストに限る (数・真偽・列挙・モデルの id・形を検証した tool の id)。会話由来の文字列・エラー文・パスを運ばない
   - 状態通知 (`SessionStatusUpdate`) には載せない (X-5 FR-004)。既存の port (AD-034 / AD-043) を通り、main を経由しない
   - 値の検証 (数の範囲と単位・id の形・列挙・件数の上限) と、間引き・取り消し・上限の正本は data-model §2。agents と decoder で同じ定数を使う
   - 行の id の連番と権限モードの比較の基準は、セッションスレッドの `run()` の closure に持つ
@@ -215,7 +217,7 @@ roadmap が O-4 に預けた義務 (O-4 の行と、system-scope の持ち主の
   - A 節の `result` / `status` / `api_retry` / `rate_limit_event` / `tool_progress` / `task_progress` / `thinking_tokens` → `実装済み: <element> (実行中)`。経路は「実行中」
   - E 節の `get_context_usage` / `get_session_cost` / `get_usage` → `表示不要: <理由>` (U-3)。Tier A の `get_context_usage` の備考に「Context display は assistant の usage と result の contextWindow の推定で実装済み (経路: 実行中)」「カテゴリ別の内訳は出さない」「AD-047 Decision 4」(AD-044 Decision 2)。`result` の行の備考に「`errors` は出さない (U-5)」
   - 項目 21 の出力で、割当先が O-4 の Tier A の行が 0 になる
-- **FR-015**: 決定を ADR (AD-047。2026-10-05 に accepted) に記録しなければならない: 失敗の理由のキーの拡張、`meter` の種類と許可リスト、制御要求を呼ばないこと。`SESSION_EVENT_KINDS` と `LAUNCH_FAILURE_REASONS` の固定テストを直す
+- **FR-015**: 決定を ADR (AD-047。2026-10-05 に accepted) に記録しなければならない: 失敗の理由のキーの拡張、`meter` の種類と許可リスト、制御要求を呼ばないこと。AD-047 の字面と設計の差 3 つ (Context display の材料・運ぶ値の tool の id・昇格値の綴りの置き場) は、AD-047 に日付つきの訂正節を足して直す (AD-031 Decision 1。2026-10-08 に利用者が訂正として扱うと決めた。項目は plan の ADR 節)。`SESSION_EVENT_KINDS` と `LAUNCH_FAILURE_REASONS` の固定テストを直す
 - **FR-016**: 導入した用語と判断を記録に反映しなければならない (Principle XIV)。
   - glossary: 計量 (meter)、Quota banner、コンテキストの使用量の推定、失敗の理由の各キー。「FailureReason (起動系)」を「起動とターンの失敗」に改め件数を直す。「システムイベントの行」の定義に新しい category を足す
   - session charter: 失敗の理由のキーと `meter`、監視ビューの行の短い理由と再ログインの導線、稼働中のストアの `meters` を記録する (U-1)。KPI の計測には使わない
@@ -231,7 +233,7 @@ roadmap が O-4 に預けた義務 (O-4 の行と、system-scope の持ち主の
   - ←/→ で隣のタブ、Home / End で端のタブへ移り、選ばれているタブだけが Tab 順に入る (roving tabindex)。フォーカスの移動で選択も移す (自動の選択) [ASSUMED — パネルの中身はすぐ描けるので APG の推奨のとおり]
   - 表示できないタブ (`availableFor`) は矢印キーの移動の対象にもしない
   - タブのテストは `features/shell/AppShell.test.tsx` に足さない。共通の setup を `test-support/` に出し、タブの表のテストを別のファイルにする (O-7 code-gate convention M-008)
-- **FR-018**: `meters` を足す前に、稼働中のストアと監視ビューの行を roadmap の system-scope の記録 (1)〜(3) のとおりに分けなければならない。振る舞いは変えない (既存のテストは書き換えずに通る)。
+- **FR-018**: `meters` を足す前に、稼働中のストアと監視ビューの行を roadmap の system-scope の記録 (1)〜(3) のとおりに分けなければならない。振る舞いは変えない (既存のテストは書き換えずに通る。例外は (2) が戻り値を変える `announcements` の単体だけで、名前の組の検査に直す — plan で確定。research R-11)。
   - (1) 派生値の追跡と間引き (`trackDerived` / `scheduleActivity`) を `running-session-store.ts` から小さなモジュール (`running-session-monitor.ts` など) に出す
   - (2) `SessionRowStatus` と `Elapsed` の型を文言の表 (`labels.ts`) から出し、labels 側は `Record<SessionRowStatus, string>` で検査する。`announcements` は表示名の組を返し、文は呼び出し側が組む
   - (3) `RunningSessionList.tsx` の行の部品 (`RowStatusBadge` / `ElapsedTime` / `RowActivity` / `SessionRowMeta` / `RowTooltip`) を `RunningSessionRow.tsx` などに出す。O-4 の短い理由と再ログインの導線は切り出した後の部品に足す
@@ -256,11 +258,11 @@ roadmap が O-4 に預けた義務 (O-4 の行と、system-scope の持ち主の
 ## Success Criteria
 
 - **SC-001**: **失敗の理由が区別される。** data-model §1 の表の各行の fixture が、対応する理由のキーになり、どの失敗も完了にならない (X-1 FR-020 / US-4 AC6)。再ログインの導線は data-model §1 のとおりに出る。計測経路: 分類の純関数の単体 + 失敗の表示の component テスト
-- **SC-002**: **計量が届き、会話由来の文字列を運ばない。** SDK のメッセージの fixture から `meter` と システムイベントの行までが data-model §2 / §3 のとおりになり、許可リストの外のフィールドの値が `SessionEvent` と DOM に 0 件 (fixture → port → decoder → ストア → DOM を 1 本通すテストで、2 つのセッションの値が混ざらないことも)。値の検証の外れ (`__proto__`・長い id・URL の資格情報の形の modelId・`resetsAt: 1e300`) で例外が出ず落ちる。状態通知のフィールドの差分 0。計測経路: agents の変換の単体 + X-5 の状態通知の全フィールドの走査
+- **SC-002**: **計量が届き、会話由来の文字列を運ばない。** SDK のメッセージの fixture から `meter` と システムイベントの行までが data-model §2 / §3 のとおりになり、許可リストの外のフィールドの値が `SessionEvent` と DOM に 0 件 (fixture → port → decoder → ストア → DOM を 1 本通すテストで、2 つのセッションの値が混ざらないことも)。値の検証の外れ (`__proto__`・長い id・URL と scheme の無い userinfo の資格情報の形の modelId・`resetsAt: 1e300`) で例外が出ず落ち、起動の設定が受け付ける形の modelId (`[1m]` 付き・`_` を含む) は落ちない。状態通知のフィールドの差分 0。計測経路: agents の変換の単体 + X-5 の状態通知の全フィールドの走査
 - **SC-003**: **制限・使用量・進み具合が出る。** US-2〜US-4 の AC のとおりになる。計測経路: renderer の component テスト (Quota banner・使用量のタブ・目盛り・再試行と圧縮と権限モードの行・tool の経過時間・Reasoning・task の行)
 - **SC-004**: **負荷を上げない。** 1 つの tool・思考・task あたり 1 秒に 1 件以下、セッションあたり 1 秒に 20 件以下。tool の結果・assistant・終了の後に保留の送信が 0 件 (`ended` の後の `event` が 0 件)。計測経路: agents の単体 (偽の時計。並列の tool N 個の合計の流量を含む)。E2E (偽の supervisor) は計量を流さないので計測経路にしない
 - **SC-005**: **対応表の O-4 の行が無くなる。** 項目 21 が通り、出力で割当先が O-4 の行が 0、M3 の完了の条件の残りから O-4 の Tier A 5 行が消える。計測経路: `node scripts/constitution/check.mjs`
-- **SC-007**: **預かった義務が閉じる。** タブの表で ←/→・Home / End が隣と端のタブへ移り、選ばれたタブだけが `tabIndex=0` で vitest-axe の違反 0 (FR-017)。タブのテストが `AppShell.test.tsx` の外にある。FR-018 の切り出しの前後で既存のテストを書き換えずに通る。FR-019 の各行き先で、押した後のフォーカスが body でない (「承認待ちで『許可』を押した後、composer にフォーカスがある」を含む)。「プロバイダ」の表記が renderer の文言の表に 0 件。計測経路: タブの表と各部品の component テスト + `git diff` (quickstart)
+- **SC-007**: **預かった義務が閉じる。** タブの表で ←/→・Home / End が隣と端のタブへ移り、選ばれたタブだけが `tabIndex=0` で vitest-axe の違反 0 (FR-017)。タブのテストが `AppShell.test.tsx` の外にある。FR-018 の切り出しの前後で既存のテストを書き換えずに通る (`announcements` の単体を除く)。FR-019 の各行き先で、押した後のフォーカスが body でない (「承認待ちで『許可』を押した後、composer にフォーカスがある」を含む)。「プロバイダ」の表記が renderer の文言の表に 0 件。計測経路: タブの表と各部品の component テスト + `git diff` (quickstart)
 - **SC-006**: **境界の変更が ADR のとおり。** `SessionEvent` の種類の追加は `meter` の 1 つ、`LaunchFailureReason` の追加は data-model §1 のとおり、Agent SDK の呼び出しの許可リスト・query の options のキー・IPC のチャネル・preload の差分が 0。計測経路: 固定テスト + `git diff` (quickstart)
 
 ## Dependencies

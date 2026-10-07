@@ -1,8 +1,10 @@
 {
     "gate": "design",
-    "run": "2026-10-04T06:30:00+09:00",
+    "run": "2026-10-07T18:40:52+09:00",
     "spec_dir": "specs/014-ui-metering-and-limits",
     "spec_id": "014-ui-metering-and-limits",
+    "round": 2,
+    "previous": "design-gate.md.20261004T063000",
     "tracks": {
         "analyze": {
             "status": "ok",
@@ -37,23 +39,192 @@
     },
     "severity_counts": {
         "critical": 0,
-        "high": 7,
-        "medium": 18,
-        "low": 12
+        "high": 6,
+        "medium": 14,
+        "low": 22
+    },
+    "severity_counts_raw": {
+        "critical": 0,
+        "high": 6,
+        "medium": 23,
+        "low": 28
+    },
+    "prev_comparison": {
+        "critical": {
+            "resolved": 0,
+            "unresolved": 0,
+            "new": 0
+        },
+        "high": {
+            "resolved": 7,
+            "unresolved": 0,
+            "new": 6
+        }
     },
     "fr_coverage": [
         {
             "fr": "FR-001",
             "covered": true,
             "by": [
-                "tasks.md BE-010"
+                "tasks.md BE-011",
+                "tasks.md BE-012"
+            ]
+        },
+        {
+            "fr": "FR-002",
+            "covered": true,
+            "by": [
+                "tasks.md BE-010",
+                "tasks.md FE-010",
+                "tasks.md FE-011"
+            ]
+        },
+        {
+            "fr": "FR-003",
+            "covered": true,
+            "by": [
+                "tasks.md BE-001",
+                "tasks.md BE-002",
+                "tasks.md BE-004",
+                "tasks.md BE-020",
+                "tasks.md BE-030",
+                "tasks.md BE-040",
+                "tasks.md BE-042",
+                "tasks.md FE-004"
+            ]
+        },
+        {
+            "fr": "FR-004",
+            "covered": true,
+            "by": [
+                "tasks.md BE-003",
+                "tasks.md BE-020",
+                "tasks.md BE-040",
+                "tasks.md BE-042"
+            ]
+        },
+        {
+            "fr": "FR-005",
+            "covered": true,
+            "by": [
+                "tasks.md FE-004"
+            ]
+        },
+        {
+            "fr": "FR-006",
+            "covered": true,
+            "by": [
+                "tasks.md FE-005",
+                "tasks.md FE-020"
+            ]
+        },
+        {
+            "fr": "FR-007",
+            "covered": true,
+            "by": [
+                "tasks.md BE-020",
+                "tasks.md FE-021"
+            ]
+        },
+        {
+            "fr": "FR-008",
+            "covered": true,
+            "by": [
+                "tasks.md FE-031"
+            ]
+        },
+        {
+            "fr": "FR-009",
+            "covered": true,
+            "by": [
+                "tasks.md BE-030",
+                "tasks.md FE-005",
+                "tasks.md FE-032"
+            ]
+        },
+        {
+            "fr": "FR-010",
+            "covered": true,
+            "by": [
+                "tasks.md BE-040",
+                "tasks.md FE-040",
+                "tasks.md FE-041",
+                "tasks.md FE-042"
+            ]
+        },
+        {
+            "fr": "FR-011",
+            "covered": true,
+            "by": [
+                "tasks.md BE-042",
+                "tasks.md FE-042"
+            ]
+        },
+        {
+            "fr": "FR-012",
+            "covered": true,
+            "by": [
+                "tasks.md BE-041",
+                "tasks.md BE-042",
+                "tasks.md FE-043",
+                "tasks.md FE-044"
             ]
         },
         {
             "fr": "FR-013",
             "covered": true,
             "by": [
-                "tasks.md BE-041"
+                "tasks.md BE-003",
+                "tasks.md BE-042",
+                "tasks.md FE-042"
+            ]
+        },
+        {
+            "fr": "FR-014",
+            "covered": true,
+            "by": [
+                "tasks.md SH-012"
+            ]
+        },
+        {
+            "fr": "FR-015",
+            "covered": true,
+            "by": [
+                "tasks.md BE-002",
+                "tasks.md BE-010"
+            ]
+        },
+        {
+            "fr": "FR-016",
+            "covered": true,
+            "by": [
+                "tasks.md SH-001",
+                "tasks.md SH-013",
+                "tasks.md FE-051"
+            ]
+        },
+        {
+            "fr": "FR-017",
+            "covered": true,
+            "by": [
+                "tasks.md FE-030",
+                "tasks.md FE-031"
+            ]
+        },
+        {
+            "fr": "FR-018",
+            "covered": true,
+            "by": [
+                "tasks.md FE-001",
+                "tasks.md FE-002",
+                "tasks.md FE-003"
+            ]
+        },
+        {
+            "fr": "FR-019",
+            "covered": true,
+            "by": [
+                "tasks.md FE-050"
             ]
         }
     ],
@@ -62,7 +233,7 @@
         "B": "Critical:0 High:0",
         "C": "Critical:0 High:1",
         "D": "Critical:0 High:2",
-        "E": "Critical:0 High:3",
+        "E": "Critical:0 High:1",
         "F": "Critical:0 High:0",
         "G": "\u8a72\u5f53\u306a\u3057",
         "H": "Critical:0 High:0"
@@ -70,35 +241,81 @@
     "dedup_log": [
         {
             "merged": [
-                "pb-H-001",
-                "arch-M-007",
-                "po-M-006"
+                "arch-H-101",
+                "analyze-I2",
+                "sec-L-004"
             ],
-            "key": "FR-010"
+            "key": "AD-047 Decision 2/4 (spec.md:188 / plan.md:255)",
+            "as": "HG-01"
         },
         {
             "merged": [
-                "analyze-I1",
-                "arch-M-008",
-                "sec-M-005",
-                "po-M-004"
+                "po-H-001",
+                "sec-M-002",
+                "arch-M-104",
+                "po-M-009"
             ],
-            "key": "FR-002"
+            "key": "quickstart.md:28 (V-4 #1)",
+            "as": "HG-02"
         },
         {
             "merged": [
-                "po-H-003",
-                "analyze-U1"
+                "analyze-D1",
+                "sec-L-002"
             ],
-            "key": "FR-009"
+            "key": "data-model.md:82 (modelId)",
+            "as": "HG-03"
         },
         {
             "merged": [
-                "po-H-002",
-                "analyze-C2",
-                "arch-M-006"
+                "analyze-U2",
+                "sec-M-001",
+                "arch-M-102",
+                "analyze-I5"
             ],
-            "key": "SC-004"
+            "key": "data-model.md:107-110 / FR-013",
+            "as": "MG-01"
+        },
+        {
+            "merged": [
+                "po-M-002",
+                "analyze-E1"
+            ],
+            "key": "FR-006 (data-model \u00a74 Quota banner)",
+            "as": "MG-02"
+        },
+        {
+            "merged": [
+                "analyze-U1",
+                "po-L-001"
+            ],
+            "key": "spec.md:133 (US-3 AC2)",
+            "as": "MG-03"
+        },
+        {
+            "merged": [
+                "po-M-003",
+                "analyze-I3"
+            ],
+            "key": "FR-012 (spec.md:154,209)",
+            "as": "MG-04"
+        },
+        {
+            "merged": [
+                "arch-M-101",
+                "analyze-I4"
+            ],
+            "key": "FR-016 / SH-013 (ui charter In scope)",
+            "as": "MG-05"
+        },
+        {
+            "merged": [
+                "po-L-004",
+                "analyze-E3",
+                "analyze-T1"
+            ],
+            "key": "FR-019 (data-model.md:264)",
+            "as": "LG-01"
         }
     ],
     "verdict": "PASS"
