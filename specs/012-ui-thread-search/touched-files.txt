@@ -97,3 +97,4 @@ e2e/sidebar-screenshot.spec.ts
 src/renderer/src/features/session-list/labels.ts
 specs/012-ui-thread-search/data-model.md
 src/renderer/src/features/chat/virtualization.test.tsx
+vitest.config.ts

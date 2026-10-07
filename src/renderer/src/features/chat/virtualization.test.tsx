@@ -101,7 +101,6 @@ afterEach(() => {
 })
 
 describe('transcript の仮想化', () => {
-  // 判定はマウント数で時間ではない。3000 件の jsdom 描画は単独で約 2s、全件実行の負荷下で約 6s になり既定の 5000ms を超えるので上限を上げる (012 の前後で差は無い。012 code-gate MF-001)。
   it('同時マウント DOM ノード数が総件数に依存しない (SC-003)', () => {
     stubLayout()
 
@@ -121,7 +120,7 @@ describe('transcript の仮想化', () => {
     expect(largeRows).toBe(smallRows)
     // 3000 件でも一定の窓しか載らない (総件数に比例しない)。
     expect(largeRows).toBeLessThan(100)
-  }, 20_000)
+  })
 
   it('閾値以下は非仮想パス / 超過は仮想パスに切り替わる (FE-042)', () => {
     view.messages = build(5)
