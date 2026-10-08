@@ -1,15 +1,18 @@
 {
     "gate": "code",
-    "run": "2026-10-08T17:00:48Z",
+    "run": "2026-10-08T22:44:11Z",
     "spec_dir": "specs/014-ui-metering-and-limits",
     "spec_id": "014-ui-metering-and-limits",
-    "iter": 1,
+    "iter": 2,
+    "entry_status": "reviewing",
+    "trigger": "pr-gate round 1 \u306e\u4fee\u6b63 (8aed1db) \u5f8c\u306e\u518d\u5b9f\u884c",
     "base_commit": "44ce81066d9d3340471e1706dc2de546a5118879",
+    "head": "8aed1db",
     "severity_counts": {
         "critical": 0,
         "high": 0,
         "medium": 3,
-        "low": 11,
+        "low": 12,
         "must_fix": 0
     },
     "must_fix_findings": [],
@@ -20,7 +23,7 @@
         },
         {
             "path": "docs/decisions/0047-session-meter-and-failure-reasons.md",
-            "sha": "9ec2502d84ccaab3b3d9f10cb7de1ae83d9a48ba"
+            "sha": "e8d68ca1ab27476d0b7e3785de1f913a67123f0c"
         },
         {
             "path": "docs/domains/_overview.md",
@@ -123,12 +126,12 @@
             "sha": "9b4d222fda8e91728b4a285514566431a54e7422"
         },
         {
-            "path": "src/domain/session/transcript.system-event.test.ts",
-            "sha": "374afe24fc4bde89bab4e06ad469de79b99597c5"
-        },
-        {
             "path": "src/domain/session/transcript-dto.ts",
             "sha": "32924ab0c97c17536537a9d949aea3681006f72f"
+        },
+        {
+            "path": "src/domain/session/transcript.system-event.test.ts",
+            "sha": "374afe24fc4bde89bab4e06ad469de79b99597c5"
         },
         {
             "path": "src/renderer/src/components/assistant-ui/elements/agent-plan.aui.tsx",
@@ -152,7 +155,7 @@
         },
         {
             "path": "src/renderer/src/components/assistant-ui/elements/thread.aui.tsx",
-            "sha": "5ac5bb7fbd8afef102410f0b3c21488f1baad69b"
+            "sha": "c272cc5acaa114864c1094e94655294a3567e2b1"
         },
         {
             "path": "src/renderer/src/components/assistant-ui/elements/todo-list.aui.tsx",
@@ -179,18 +182,6 @@
             "sha": "4008e8c4e7c5322dce2e77b6d98efbd466e6e4e4"
         },
         {
-            "path": "src/renderer/src/features/session/focus-handoff.ts",
-            "sha": "02dc6ced997b97ea57d685e9a135b7fa293f62cc"
-        },
-        {
-            "path": "src/renderer/src/features/session/labels.test.ts",
-            "sha": "3c7fc67838e88fb0be9b7e8a4eece950c906d4b7"
-        },
-        {
-            "path": "src/renderer/src/features/session/labels.ts",
-            "sha": "2d680cb10bb7a0ec1c8d38db6ed9bfd58cb2d3f1"
-        },
-        {
             "path": "src/renderer/src/features/session/LaunchDialog.test.tsx",
             "sha": "b7fecac21ad56c400a9ac0d4e23dd82745cccac3"
         },
@@ -204,7 +195,7 @@
         },
         {
             "path": "src/renderer/src/features/session/LivePane.progress.test.tsx",
-            "sha": "da249967bed817e1e8bcf7d9b82598a8ac80f80d"
+            "sha": "b6342d2cc2e39dc142781f7177160465edccf93c"
         },
         {
             "path": "src/renderer/src/features/session/LivePane.test.tsx",
@@ -213,10 +204,6 @@
         {
             "path": "src/renderer/src/features/session/LivePane.tsx",
             "sha": "72bfd804eafd49545ca6767a7906ffcdf5e7a480"
-        },
-        {
-            "path": "src/renderer/src/features/session/pending-queue-notice.test.tsx",
-            "sha": "181d00ed8bb9ac5a6c1418969a205a9560317ed4"
         },
         {
             "path": "src/renderer/src/features/session/RunningSessionList.monitor.test.tsx",
@@ -231,16 +218,36 @@
             "sha": "d624d418799ae3c5a89d828dd591d54bbdf40d13"
         },
         {
-            "path": "src/renderer/src/features/session/running-session-monitor.ts",
-            "sha": "00381d15fd50ce0c9f7c43adada53dd86dafbc27"
-        },
-        {
             "path": "src/renderer/src/features/session/RunningSessionRow.tsx",
             "sha": "5b280a3b6dcbb1b503a368299f9a679379a6fbcc"
         },
         {
             "path": "src/renderer/src/features/session/RunningSessionsProvider.tsx",
             "sha": "2f0a582741c2166c0aa0e6258ebad22dec00d8fe"
+        },
+        {
+            "path": "src/renderer/src/features/session/SessionAttentionAnnouncer.tsx",
+            "sha": "9bf3ff13082c1f89a3dfec73420245f71c8f72f5"
+        },
+        {
+            "path": "src/renderer/src/features/session/focus-handoff.ts",
+            "sha": "02dc6ced997b97ea57d685e9a135b7fa293f62cc"
+        },
+        {
+            "path": "src/renderer/src/features/session/labels.test.ts",
+            "sha": "3c7fc67838e88fb0be9b7e8a4eece950c906d4b7"
+        },
+        {
+            "path": "src/renderer/src/features/session/labels.ts",
+            "sha": "2d680cb10bb7a0ec1c8d38db6ed9bfd58cb2d3f1"
+        },
+        {
+            "path": "src/renderer/src/features/session/pending-queue-notice.test.tsx",
+            "sha": "181d00ed8bb9ac5a6c1418969a205a9560317ed4"
+        },
+        {
+            "path": "src/renderer/src/features/session/running-session-monitor.ts",
+            "sha": "00381d15fd50ce0c9f7c43adada53dd86dafbc27"
         },
         {
             "path": "src/renderer/src/features/session/running-session-store.test.ts",
@@ -251,16 +258,12 @@
             "sha": "fd2f5a36450bdd430ef43fce44d6152e9b5c98ff"
         },
         {
-            "path": "src/renderer/src/features/session/running-sessions-view.ts",
-            "sha": "233c1e7347aae65e8020d58a84044ae0cb618349"
-        },
-        {
             "path": "src/renderer/src/features/session/running-session-types.ts",
             "sha": "e11f4c3b810434c20d18cb841e591b078fe66a43"
         },
         {
-            "path": "src/renderer/src/features/session/SessionAttentionAnnouncer.tsx",
-            "sha": "9bf3ff13082c1f89a3dfec73420245f71c8f72f5"
+            "path": "src/renderer/src/features/session/running-sessions-view.ts",
+            "sha": "233c1e7347aae65e8020d58a84044ae0cb618349"
         },
         {
             "path": "src/renderer/src/features/session/session-event-decoder.test.ts",
@@ -292,7 +295,7 @@
         },
         {
             "path": "src/renderer/src/features/shell/CenterBanners.tsx",
-            "sha": "a492ffee3885d8fbaffbbe0c66f0f00ed91d311e"
+            "sha": "23e8ef25f575bd6f0b16be7b55a20e44af0e61f6"
         },
         {
             "path": "src/renderer/src/features/shell/CenterHeader.tsx",
@@ -311,32 +314,12 @@
             "sha": "e1909692220df2af591996d5c85acc64eb3c6a26"
         },
         {
-            "path": "src/renderer/src/features/shell/labels.ts",
-            "sha": "fdb95c3bb91248841172f0fbb4cbbb10ad48bec4"
-        },
-        {
             "path": "src/renderer/src/features/shell/OverviewTab.test.tsx",
             "sha": "c496309a4091a233c7fa242c740d1ba4c6406703"
         },
         {
             "path": "src/renderer/src/features/shell/OverviewTab.tsx",
             "sha": "80f5fbcc736ac000c6c8d26afba520b7c7c571aa"
-        },
-        {
-            "path": "src/renderer/src/features/shell/palette-commands.test.ts",
-            "sha": "ceb004c3a96b48a1facf15be6d216a37aea53d7f"
-        },
-        {
-            "path": "src/renderer/src/features/shell/panel-tabs.ts",
-            "sha": "9b778b1fd85eeefd751dc0c433e8d0d068ddc8c5"
-        },
-        {
-            "path": "src/renderer/src/features/shell/quota-banner.test.ts",
-            "sha": "18d31836e021d9d22d4cf7e0a0b3ff3c513b8c34"
-        },
-        {
-            "path": "src/renderer/src/features/shell/quota-banner.ts",
-            "sha": "77ac9e17cbf50a3f71d1c36471f1b43a63fe11aa"
         },
         {
             "path": "src/renderer/src/features/shell/RightPanel.tabs.test.tsx",
@@ -353,6 +336,26 @@
         {
             "path": "src/renderer/src/features/shell/UsageTab.tsx",
             "sha": "14a091bece7f021cf0650813d6513a8494352041"
+        },
+        {
+            "path": "src/renderer/src/features/shell/labels.ts",
+            "sha": "fdb95c3bb91248841172f0fbb4cbbb10ad48bec4"
+        },
+        {
+            "path": "src/renderer/src/features/shell/palette-commands.test.ts",
+            "sha": "ceb004c3a96b48a1facf15be6d216a37aea53d7f"
+        },
+        {
+            "path": "src/renderer/src/features/shell/panel-tabs.ts",
+            "sha": "9b778b1fd85eeefd751dc0c433e8d0d068ddc8c5"
+        },
+        {
+            "path": "src/renderer/src/features/shell/quota-banner.test.ts",
+            "sha": "18d31836e021d9d22d4cf7e0a0b3ff3c513b8c34"
+        },
+        {
+            "path": "src/renderer/src/features/shell/quota-banner.ts",
+            "sha": "77ac9e17cbf50a3f71d1c36471f1b43a63fe11aa"
         },
         {
             "path": "src/renderer/src/stores/ui.ts",
@@ -434,7 +437,7 @@
         "C": "Critical:0 High:0 Medium:0 Low:1 (platform-boundary-reviewer)",
         "D": "Critical:0 High:0 Medium:1 Low:1 (platform-boundary-reviewer)",
         "E": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb (po-reviewer)",
-        "F": "Critical:0 High:0 Medium:2 Low:7 (convention 2/6, platform-boundary 0/1)",
+        "F": "Critical:0 High:0 Medium:2 Low:8 (convention 2/7, platform-boundary 0/1)",
         "G": "\u8a72\u5f53\u306a\u3057: optional reviewer \u306a\u3057 (a11y/ux/ui-coverage \u306f gates=pr-gate\u3001database \u306f pattern \u4e0d\u4e00\u81f4)",
         "H": "Critical:0 High:0 Medium:0 Low:2 (convention 1, platform-boundary 1)"
     },
@@ -450,7 +453,7 @@
             ]
         },
         "test-agent": {
-            "passed": 2604,
+            "passed": 2605,
             "failed": 0,
             "skipped": 0,
             "error": 0,
@@ -489,6 +492,12 @@
     "iter_history": [
         {
             "iter": 1,
+            "must_fix": 0,
+            "skipped": 0,
+            "error": 0
+        },
+        {
+            "iter": 2,
             "must_fix": 0,
             "skipped": 0,
             "error": 0

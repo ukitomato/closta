@@ -1,18 +1,19 @@
-# test-agent — code-gate iteration 1
+# test-agent — code-gate iter 2
+
+**Run**: 2026-10-08T22:3xZ (reviewing からの再実行、pr-gate round 1 の修正 8aed1db の後)
+**Scope**: full (invoker 指示: PASS を出す前の全件実行)
 
 ```json
 {
-  "command": "node node_modules/vitest/vitest.mjs run --reporter=default --reporter=json --outputFile.json=<scratchpad>/vitest.json",
-  "command_source": "docs/discovery.md Build / Test / Lint table, unit test row, agent column, full-run form",
-  "runner": "vitest 5.0.0 (projects: node / renderer, pool: threads)",
+  "command": "node node_modules/vitest/vitest.mjs run --reporter=json --outputFile=<scratchpad>/vitest.json",
   "exit_code": 0,
-  "duration_ms": 136416,
-  "vitest_reported_duration_ms": 125230,
-  "timeout_wrapper": "gate_common::run_with_timeout 560s -> ok",
+  "duration_ms": 66975,
   "scope": "full",
-  "test_files": {"passed": 144, "failed": 0, "total": 144},
-  "totals": {"passed": 2604, "failed": 0, "skipped": 0, "error": 0},
+  "totals": {"passed": 2605, "failed": 0, "skipped": 0, "error": 0},
   "failed_tests": [],
-  "note": "Totals come from the default reporter summary ('Test Files 144 passed (144)' / 'Tests 2604 passed (2604)'). The summary lists no skipped or todo tests. Coverage is left out because no @vitest/coverage-* provider is installed under node_modules. The stderr noise is not a failure: React's 'flushSync was called from inside a lifecycle method' warnings in transcript-navigator / virtualization / ConversationSearch tests, and one expected provider-store log line in provider-service.test.ts."
+  "test_files": {"total": 144, "passed": 144, "failed": 0},
+  "note": "Command came from the agent column of the unit test row in docs/discovery.md (full run), with the JSON reporter added. Ran under run-with-timeout with a 540 s limit; did not time out. Vitest itself took about 59.5 s. coverage omitted: no @vitest/coverage-* provider is installed."
 }
 ```
+
+判定は exit code (0) を正とした。Errors / Unhandled Errors は 0 件。iter 1 (2604 passed) からの +1 は 8aed1db で足した `LivePane.progress.test.tsx` の class のテスト。
