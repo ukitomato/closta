@@ -86,3 +86,7 @@ src/renderer/src/features/shell/UsageTab.tsx
 src/renderer/src/stores/ui.ts
 src/renderer/src/test-support/app-shell-harness.tsx
 tests/meter/meter-through.test.tsx
+src/renderer/src/components/assistant-ui/elements/thread.aui.tsx
+src/renderer/src/features/session/LivePane.progress.test.tsx
+src/renderer/src/features/shell/CenterBanners.tsx
+docs/decisions/0047-session-meter-and-failure-reasons.md

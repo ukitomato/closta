@@ -54,6 +54,7 @@ export function CenterBanners({
  * | `role="alert"` で知らせる。原因を断定しない | U-6 |
  * | 隔離の文言はランタイムの表示用の `autoModeStatus` から: `unavailable` → 隔離なし、`allowed` / `undetermined` → このセッションの隔離をアプリは確かめていない。`allowed` でも隔離されていると読める文言にしない。`autoModeAllowed` を使わない | 014 data-model §4 / isolation charter / DTO の不変条件 |
  * | 強制 (中断・失敗にする) はしない。起動の設定とプリセットの権限モードに書き戻さない | U-6 (持ち主は I-3) / 014 spec FR-005 |
+ * | 文字色は light で `text-red-700`、dark で `text-destructive` (light の `text-destructive` は `bg-destructive/10` の上で 3.99:1 になり 4.5:1 に届かない。Quota banner の `warning` も同じ) | WCAG 1.4.3 / 014 pr-gate R1 H-002 |
  */
 function UnsafeModeBanner({
   sessionId,
@@ -87,7 +88,7 @@ function UnsafeModeBannerOf({
     <div
       role="alert"
       data-testid="unsafe-mode-banner"
-      className="border-destructive/40 bg-destructive/10 text-destructive flex shrink-0 items-center gap-3 border-b px-4 py-2 text-sm"
+      className="border-destructive/40 bg-destructive/10 text-red-700 dark:text-destructive flex shrink-0 items-center gap-3 border-b px-4 py-2 text-sm"
     >
       <p className="min-w-0 flex-1">
         {UNSAFE_MODE_BANNER_LABELS.unsafeModeBanner(PERMISSION_MODE_NAMES[mode])}
@@ -154,7 +155,7 @@ function QuotaBannerOf({
       className={cn(
         'flex shrink-0 items-center gap-3 border-b px-4 py-2 text-sm',
         view.tone === 'warning'
-          ? 'border-destructive/40 bg-destructive/10 text-destructive'
+          ? 'border-destructive/40 bg-destructive/10 text-red-700 dark:text-destructive'
           : 'border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-300'
       )}
     >

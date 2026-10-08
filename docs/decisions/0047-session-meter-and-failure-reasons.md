@@ -85,3 +85,5 @@ O-2 は `SessionEvent` の種類を増やさず、Hook / Background task を `me
      書き誤りと判断した (design-gate R3 MG-11)
 
 spec 014 の U-3 の字面も同じ日に 1. と同じ形に直した (決定は変えない)。
+
+本文の Decision 5 と 4 は書いた順が逆で、Decision は番号で引く (4 = 制御要求を呼ばない、5 = 権限モードの昇格を観測したとき。Markdown の表示では連番に振り直されて 4 と 5 が入れ替わって見える。2026-10-09 / O-4 pr-gate R1 M-002)。

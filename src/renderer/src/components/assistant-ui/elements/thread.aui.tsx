@@ -566,6 +566,8 @@ const VirtualThreadRoot: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
  *   描き直さず、思考の更新で本文を描き直さない。過去ログには購読元が無いので出ない
  * - 次の主ループの assistant のメッセージとターンの終わり (`turn`) で、稼働中のストアが値を消す (印も消える)
  * - live region にしない (`role="status"` を重ねて毎秒読ませない)
+ * - 文字色は `text-muted-foreground` (light で 4.83:1。WCAG 1.4.3)。vendored の root の `text-foreground/55` と値の span の
+ *   `text-foreground/30` は 4.5:1 に届かないので、vendored を直さず呼び出し側で上書きする (014 pr-gate R1 H-001)
  */
 const LiveThinkingIndicator: FC = () => {
   const tokens = useLiveThinkingTokens();
@@ -574,7 +576,7 @@ const LiveThinkingIndicator: FC = () => {
     <ThinkingIndicator
       label={THINKING_LABELS.thinking}
       elapsed={THINKING_LABELS.tokens(tokens)}
-      className="px-2 text-xs"
+      className="px-2 text-xs text-muted-foreground [&_.tabular-nums]:text-muted-foreground"
     />
   );
 };

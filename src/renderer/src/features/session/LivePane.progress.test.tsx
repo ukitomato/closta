@@ -292,6 +292,18 @@ describe('思考の印 (US-4 AC4 / FR-012)', () => {
     expect(indicator()?.closest('[role="status"], [aria-live]')).toBeNull()
   })
 
+  it('文字色は呼び出し側で text-muted-foreground に上書きする (WCAG 1.4.3。pr-gate R1 H-001)', async () => {
+    const h = await setup()
+    h.emit(A, thinking(1_234))
+    await waitFor(() => expect(indicator()).not.toBeNull())
+    // root の「思考中」(vendored の `text-foreground/55`) を tailwind-merge で置き換える
+    expect(indicator()).toHaveClass('text-muted-foreground')
+    expect(indicator()).not.toHaveClass('text-foreground/55')
+    // 値の span (vendored の `text-foreground/30`) は子孫の選択子で上書きする
+    expect(indicator()).toHaveClass('[&_.tabular-nums]:text-muted-foreground')
+    expect(indicator()?.querySelector('.tabular-nums')).toHaveTextContent('約 1,234 トークン')
+  })
+
   it('主ループの assistant のメッセージで消える', async () => {
     const h = await setup()
     h.emit(A, thinking(100))
