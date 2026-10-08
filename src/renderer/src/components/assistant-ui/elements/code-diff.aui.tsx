@@ -83,12 +83,17 @@ function Hunk({ rows }: { rows: readonly DiffRow[] }): React.JSX.Element {
  */
 function DiffShell({
   filePath,
+  toolCallId,
+  pending,
   truncated,
   isError,
   result,
   children,
 }: {
   filePath: string;
+  toolCallId: string;
+  /** 結果待ちか (経過時間の印。O-4)。 */
+  pending: boolean;
   truncated: boolean;
   isError: boolean | undefined;
   result: unknown;
@@ -102,7 +107,13 @@ function DiffShell({
       <div className="aui-code-diff-header text-muted-foreground flex items-center gap-2 px-3 py-1.5 text-xs">
         <FileDiffIcon className="size-3.5 shrink-0" />
         <span className={cn(mono, "text-foreground/80 truncate")}>{filePath}</span>
-        <ToolResultMarks isError={isError} truncated={truncated} className="ms-auto" />
+        <ToolResultMarks
+          toolCallId={toolCallId}
+          pending={pending}
+          isError={isError}
+          truncated={truncated}
+          className="ms-auto"
+        />
       </div>
       {children}
       <ToolErrorResult isError={isError} result={result} />
@@ -113,6 +124,8 @@ function DiffShell({
 const CodeDiffImpl: ToolCallMessagePartComponent = (props) => {
   const { toolName, argsText } = props;
   const shell = {
+    toolCallId: props.toolCallId,
+    pending: props.result === undefined,
     truncated: isTruncatedArgs(props.args),
     isError: props.isError,
     result: props.result,

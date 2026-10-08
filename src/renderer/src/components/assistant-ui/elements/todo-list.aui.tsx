@@ -43,6 +43,8 @@ const TodoListImpl: ToolCallMessagePartComponent = (props) => {
         {/* 透明度を足さない — muted-foreground のまま 4.5:1 を保つ (pr-gate R2 a11y H-001 の同種事象)。 */}
         <span>（{args.todos.length}）</span>
         <ToolResultMarks
+          toolCallId={props.toolCallId}
+          pending={props.result === undefined}
           isError={props.isError}
           truncated={isTruncatedArgs(props.args)}
           className="ms-auto"

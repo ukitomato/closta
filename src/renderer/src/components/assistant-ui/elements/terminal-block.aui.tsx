@@ -45,7 +45,13 @@ const TerminalBlockImpl: ToolCallMessagePartComponent = (props) => {
           <span className="truncate opacity-80">— {args.description}</span>
         ) : null}
         {/* 切り詰めと失敗は他の表示と同じ見える文字の印 (pr-gate R2 ux M-002 / po L-002 / a11y L-002)。 */}
-        <ToolResultMarks isError={props.isError} truncated={isTruncated} className="ms-auto" />
+        <ToolResultMarks
+          toolCallId={props.toolCallId}
+          pending={props.result === undefined}
+          isError={props.isError}
+          truncated={isTruncated}
+          className="ms-auto"
+        />
         {!props.isError && hasOutput ? (
           <CheckIcon
             className={cn("size-3.5 shrink-0 text-emerald-500", !isTruncated && "ms-auto")}

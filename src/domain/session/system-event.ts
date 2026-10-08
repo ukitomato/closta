@@ -19,6 +19,7 @@ import {
  * | task は背景で始まったもの (`is_backgrounded` が true、ambient でも隠すものでもない) だけを行にする | data-model §2 |
  * | 行を作れるのは開始 (と Hook の応答) だけ。後続は同じ id の行に合成し、行の無い id への更新は捨てる | FR-009 |
  * | 状態の一覧は持たない (状態は transcript のメッセージの中にだけある) | USER 決定 2026-10-03 |
+ * | O-4 の行 (API の再試行・圧縮・権限モード) と task の進み具合の `detail` の符号化・復号・合成はここ。行の組み立て (いつ・どの id で作るか) は agents (`live-signals.ts`) で、`toSystemEventMessage` には足さない | 014 data-model §3 |
  */
 
 /** 名前と detail の長さ (コードポイント)。 */
@@ -164,9 +165,23 @@ export function systemEventPartOf(msg: TranscriptMessageDTO | undefined): System
 }
 
 /**
+ * 合成した後の `detail`。task の行で次の `detail` が改行で始まる (進み具合だけの更新。O-4 / 014 data-model §3) ときは、
+ * 前の `detail` の最初の改行より前 (task の種類) + 改行 + 次の `detail` の改行より後 (進み具合) にする。
+ * それ以外は空でなければ次の値 (O-2 のまま)。`oneLine` は空白を畳むので、開始の行と過去ログの `detail` は改行を含まない。
+ */
+function mergedDetail(prev: SystemEventPart, next: SystemEventPart): string {
+  if (prev.category === 'task' && next.detail.startsWith('\n')) {
+    const taskType = prev.detail.split('\n', 1)[0] ?? ''
+    return `${taskType}\n${next.detail.slice(1)}`
+  }
+  return next.detail !== '' ? next.detail : prev.detail
+}
+
+/**
  * 同じ id の行への合成 (FR-009。規則の正本はここだけ)。
  * - 前の行が無い: `next.opens` なら行を作る (`next` を返す)。そうでなければ捨てる (`null`)
- * - 前の行がある: `status` は `next` が null でなければ `next`、`name` / `detail` は空でなければ `next`、`opens` は前のまま
+ * - 前の行がある: `status` は `next` が null でなければ `next`、`name` は空でなければ `next`、`detail` は `mergedDetail`、
+ *   `opens` は前のまま
  */
 export function mergeSystemEvent(
   prev: TranscriptMessageDTO | undefined,
@@ -183,7 +198,7 @@ export function mergeSystemEvent(
         ...prevPart,
         status: nextPart.status ?? prevPart.status,
         name: nextPart.name !== '' ? nextPart.name : prevPart.name,
-        detail: nextPart.detail !== '' ? nextPart.detail : prevPart.detail
+        detail: mergedDetail(prevPart, nextPart)
       }
     ]
   }
@@ -197,6 +212,117 @@ export function isTerminalSystemEventStatus(status: SystemEventStatus | null): b
     status === 'cancelled' ||
     status === 'completed' ||
     status === 'killed' ||
-    status === 'stopped'
+    status === 'stopped' ||
+    status === 'changed'
   )
+}
+
+/* ── O-4 の行の `detail` の符号化と復号 (014 data-model §3。part の形は変えない) ───── */
+
+/** 安全な整数で 0 以上なら文字列に、そうでなければ null。 */
+function intText(raw: unknown): string | null {
+  return typeof raw === 'number' && Number.isSafeInteger(raw) && raw >= 0 ? String(raw) : null
+}
+
+/** `\d+` の 1 つを安全な整数に読む。読めなければ null。 */
+function readInt(text: string): number | null {
+  const n = Number(text)
+  return Number.isSafeInteger(n) ? n : null
+}
+
+/** API の再試行の行の中身 (`api_retry` の 4 つの数。エラーの中身は持たない)。 */
+export interface RetryDetail {
+  readonly attempt: number
+  readonly maxRetries: number
+  /** HTTP の状態。無い・整数でないときは null (符号化では `-`)。 */
+  readonly errorStatus: number | null
+  readonly retryDelayMs: number
+}
+
+/** `api_retry` の 4 つの値 (未信頼。SDK の `attempt` / `max_retries` / `error_status` / `retry_delay_ms`)。 */
+export interface RetryDetailInput {
+  readonly attempt: unknown
+  readonly maxRetries: unknown
+  readonly errorStatus: unknown
+  readonly retryDelayMs: unknown
+}
+
+/**
+ * `api_retry` の値 (未信頼) → 再試行の行の `detail` (`<attempt>/<max_retries>/<error_status>/<retry_delay_ms>`)。
+ * 各値は 0 以上の安全な整数で、外れたら 0。`error_status` が null・整数でなければ `-`。
+ */
+export function encodeRetryDetail(raw: RetryDetailInput): string {
+  const attempt = intText(raw.attempt) ?? '0'
+  const maxRetries = intText(raw.maxRetries) ?? '0'
+  const errorStatus = intText(raw.errorStatus) ?? '-'
+  const retryDelayMs = intText(raw.retryDelayMs) ?? '0'
+  return `${attempt}/${maxRetries}/${errorStatus}/${retryDelayMs}`
+}
+
+const RETRY_DETAIL_SHAPE = /^(\d{1,16})\/(\d{1,16})\/(\d{1,16}|-)\/(\d{1,16})$/
+
+/** 再試行の行の `detail` → 4 つの数。形が合わなければ null (detail を出さない)。 */
+export function decodeRetryDetail(detail: string): RetryDetail | null {
+  const m = RETRY_DETAIL_SHAPE.exec(detail)
+  if (m === null) return null
+  const [, attemptText = '', maxText = '', statusText = '', delayText = ''] = m
+  const attempt = readInt(attemptText)
+  const maxRetries = readInt(maxText)
+  const errorStatus = statusText === '-' ? null : readInt(statusText)
+  const retryDelayMs = readInt(delayText)
+  if (attempt === null || maxRetries === null || retryDelayMs === null) return null
+  if (statusText !== '-' && errorStatus === null) return null
+  return { attempt, maxRetries, errorStatus, retryDelayMs }
+}
+
+/** task の進み具合 (`task_progress` の `usage` の 3 つの数)。 */
+export interface TaskProgress {
+  readonly tokens: number
+  readonly tools: number
+  readonly durationMs: number
+}
+
+/** `task_progress` の `usage` の 3 つの値 (未信頼。SDK の `total_tokens` / `tool_uses` / `duration_ms`)。 */
+export interface TaskProgressInput {
+  readonly totalTokens: unknown
+  readonly toolUses: unknown
+  readonly durationMs: unknown
+}
+
+/**
+ * `task_progress` の `usage` の値 (未信頼) → task の行の進み具合だけの更新の `detail` (`\n<total_tokens>/<tool_uses>/<duration_ms>`)。
+ * 先頭の改行が「進み具合だけの更新」の印で、`mergeSystemEvent` が前の行の種類と合成する。外れた値は 0。
+ */
+export function encodeTaskProgress(raw: TaskProgressInput): string {
+  const tokens = intText(raw.totalTokens) ?? '0'
+  const tools = intText(raw.toolUses) ?? '0'
+  const durationMs = intText(raw.durationMs) ?? '0'
+  return `\n${tokens}/${tools}/${durationMs}`
+}
+
+const TASK_PROGRESS_SHAPE = /^(\d{1,16})\/(\d{1,16})\/(\d{1,16})$/
+
+/** task の行の `detail` を分けたもの。 */
+export interface TaskDetail {
+  /** SDK の `task_type` (renderer が `taskTypeLabel` で訳す)。 */
+  readonly taskType: string
+  readonly progress: TaskProgress | null
+}
+
+/**
+ * task の行の `detail` → 種類 (`task_type`) と進み具合。改行が無ければ進み具合は null。改行の後ろが形に合わなければ
+ * 進み具合は null (種類だけを描く)。
+ */
+export function splitTaskDetail(detail: string): TaskDetail {
+  const newline = detail.indexOf('\n')
+  if (newline < 0) return { taskType: detail, progress: null }
+  const taskType = detail.slice(0, newline)
+  const m = TASK_PROGRESS_SHAPE.exec(detail.slice(newline + 1))
+  if (m === null) return { taskType, progress: null }
+  const [, tokensText = '', toolsText = '', durationText = ''] = m
+  const tokens = readInt(tokensText)
+  const tools = readInt(toolsText)
+  const durationMs = readInt(durationText)
+  if (tokens === null || tools === null || durationMs === null) return { taskType, progress: null }
+  return { taskType, progress: { tokens, tools, durationMs } }
 }

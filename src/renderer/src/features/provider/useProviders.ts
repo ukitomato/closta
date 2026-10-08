@@ -150,7 +150,7 @@ export function useProviders(): ProvidersView {
 /**
  * providers.json の読み込みで退避したレコードの**件数**と、ファイルごと読めなかったか
  * (X-4 pr-gate R1 M-03 / po M-006 / R2 database M-401)。
- * プロバイダ画面の 1 行表示だけに使う (起動ダイアログは呼ばない)。取得失敗は null (表示しない)。
+ * Provider の画面の 1 行表示だけに使う (起動ダイアログは呼ばない)。取得失敗は null (表示しない)。
  */
 export function useProviderLoadIssues(): ProviderLoadIssuesDTO | null {
   const [issues, setIssues] = useState<ProviderLoadIssuesDTO | null>(null)

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 import type { QueueItemState } from '@assistant-ui/react'
@@ -66,6 +66,76 @@ describe('QueueRejectionNotice (FR-003 / FR-004 / R2-M-001)', () => {
     render(<QueueRejectionNotice verdict="full" onDismiss={onDismiss} />)
     await userEvent.click(screen.getByRole('button', { name: '閉じる' }))
     expect(onDismiss).toHaveBeenCalled()
+  })
+})
+
+/**
+ * O-4 FR-019 / SC-007 (014 data-model §8) — 押したボタンが自分ごと消えるので、消す前に表示中のペインの composer へ
+ * フォーカスを移す。ペイン (`data-live-pane`) と composer の入力 (`data-composer-input`) は本番の印と同じ属性で組む。
+ */
+describe('告知のボタンを押した後のフォーカス (O-4 FR-019 / SC-007)', () => {
+  function Pane({
+    children,
+    composerDisabled = false
+  }: {
+    readonly children: React.ReactNode
+    readonly composerDisabled?: boolean
+  }): React.JSX.Element {
+    return (
+      <div data-live-pane="">
+        {children}
+        <button type="button">別の場所</button>
+        <textarea data-composer-input="" aria-label="メッセージ" disabled={composerDisabled} />
+      </div>
+    )
+  }
+  const composer = (): HTMLElement => screen.getByRole('textbox', { name: 'メッセージ' })
+
+  it('キューの拒否の告知の「閉じる」の後、composer にフォーカスがある', async () => {
+    const onDismiss = vi.fn()
+    render(
+      <Pane>
+        <QueueRejectionNotice verdict="full" onDismiss={onDismiss} />
+      </Pane>
+    )
+    await userEvent.click(screen.getByRole('button', { name: '閉じる' }))
+    expect(onDismiss).toHaveBeenCalled()
+    expect(document.activeElement).toBe(composer())
+  })
+
+  it('積んだ入力の「キューから削除」の後、composer にフォーカスがある', async () => {
+    const onRemove = vi.fn()
+    render(
+      <Pane>
+        <PendingQueueNotice items={[item('rm-1', '取り消す項目')]} onRemove={onRemove} />
+      </Pane>
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'キューから削除' }))
+    expect(onRemove).toHaveBeenCalledWith('rm-1')
+    expect(document.activeElement).toBe(composer())
+  })
+
+  it('composer が無効なら移さない', async () => {
+    render(
+      <Pane composerDisabled>
+        <QueueRejectionNotice verdict="full" onDismiss={vi.fn()} />
+      </Pane>
+    )
+    await userEvent.click(screen.getByRole('button', { name: '閉じる' }))
+    expect(document.activeElement).not.toBe(composer())
+  })
+
+  it('フォーカスが別の場所にあるときは動かさない', () => {
+    render(
+      <Pane>
+        <PendingQueueNotice items={[item('rm-1', '取り消す項目')]} onRemove={vi.fn()} />
+      </Pane>
+    )
+    const elsewhere = screen.getByRole('button', { name: '別の場所' })
+    elsewhere.focus()
+    // ポインタで押してもフォーカスを移さない経路 (フォーカスは告知の外に残る)。
+    fireEvent.click(screen.getByRole('button', { name: 'キューから削除' }))
+    expect(document.activeElement).toBe(elsewhere)
   })
 })
 

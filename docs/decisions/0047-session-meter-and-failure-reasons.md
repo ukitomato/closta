@@ -58,3 +58,30 @@ O-2 は `SessionEvent` の種類を増やさず、Hook / Background task を `me
 
 - spec 014 の SC-001 / SC-002 / SC-006 (分類の純関数・変換の単体・固定テスト)
 - 状態通知の全フィールドの走査 (X-5) で、状態通知のフィールドの差分が 0
+
+## 訂正: Decision 2・4・5 の字面と採択の時点の設計の差 3 つ (2026-10-08 / O-4 design-gate R2 HG-01 / HG-04)
+
+採択 (2026-10-05) の後の O-4 の design-gate R2 (HG-01 / HG-04) で、Decision 2・4・5 と Consequences の字面が、採択の時点で既にあった設計
+(spec 014 の data-model・research) と 3 か所で食い違っていると分かった。2026-10-08 に利用者が、3 つとも訂正として扱うと決めた (AD-031 の
+訂正の規則。読み手が同じ決定に至る)。**決定 (制御要求を呼ばない・会話由来の文字列・エラー文・パスを運ばない・Constitution 検証の項目 16 に
+例外を足さない) は変えない。** Decision と Consequences の本文は書き換えない。各項目の根拠の正本は spec 014 の plan の ADR 節である。
+
+1. **Decision 4 と Consequences (最後の行) の Context display の材料**: 主ループの最後の assistant の 1 回の API 呼び出しの入力側の usage
+   (入力 + キャッシュの読み込み + キャッシュの作成) と、result の `modelUsage[].contextWindow` である。result の `usage` は読まない (ターン内の
+   往復の合算でありうる)
+   - 根拠: 採択の前の design-gate R1 (2026-10-04。spec 014 の `design-gate.md.20261004T063000`) の H-05 (po H-003) の手当てで、コンテキストの
+     推定の材料を最後の assistant の usage に替えていた (spec 014 research R-04)
+2. **Decision 2 の運ぶ値**: 数・真偽・列挙・モデルの id に加え、形を検証した tool の id (`tool-elapsed` の `toolUseId`) を含む。同じ Decision 2 が
+   `tool_progress` を間引いて運ぶと定めており、tool の id なしでは成り立たない
+   - 根拠: 採択の前の design-gate R1 (2026-10-04) の security M-002 の手当てで、`toolUseId` の形の検証 (`^[A-Za-z0-9_-]{1,128}$`) を足していた
+     (spec 014 data-model §2「値の検証」)
+3. **Decision 5 の「昇格値のリテラルは domain だけに置く」**: 「`src/agents/` (項目 16 の走査範囲) に置かない。値域は domain
+   (`src/domain/session/meter.ts`)、表示名は renderer の文言の表 (`features/chat/labels.ts` の `PERMISSION_MODE_NAMES`) に置く」の書き誤りである
+   - 根拠 (採択の時点の設計): renderer に昇格値を key にした表示名を置く設計は採択の時点からあった。記録は承認の commit `c89b423`
+     (2026-10-05。branch `014-ui-metering-and-limits-old`) の data-model.md:178 (§5 の chat の文言の表「権限モードの名前」。`acceptEdits` /
+     `bypassPermissions` / `auto` を key にする) と spec.md:134 (US-4 AC1「権限モードが {モード} に変わりました」)
+   - 根拠 (利用者の判断): 同じ版の data-model.md:76 の「昇格値のリテラルは domain の `meter.ts` だけに置き」は agents と対比した字面で、§5 の
+     表と食い違っていた。Decision 5 の字面と R1 の手当ての記録の「昇格値は domain だけ」はこの :76 から来ている。2026-10-08 に利用者が、これを
+     書き誤りと判断した (design-gate R3 MG-11)
+
+spec 014 の U-3 の字面も同じ日に 1. と同じ形に直した (決定は変えない)。

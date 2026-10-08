@@ -8,10 +8,15 @@ import { EmptyState, EmptyStateGreeting } from '@/components/assistant-ui/elemen
 import { GenerationLoader } from '@/components/assistant-ui/elements/loading-state'
 import { Thread } from '@/components/assistant-ui/elements/thread.aui'
 import { Button } from '@/components/ui/button'
-import { TranscriptSettledContext } from '@/features/chat/transcript-context'
+import {
+  LiveProgressContext,
+  TranscriptSettledContext,
+  type LiveProgressSource
+} from '@/features/chat/transcript-context'
 
 import { ApprovalCard } from './ApprovalCard'
 import { DEFAULT_MAX_QUEUE_ITEMS, type EnqueueVerdict } from './composer-queue'
+import { handOffFocusToComposer } from './focus-handoff'
 import {
   isReloginFailure,
   launchFailureLabel,
@@ -21,9 +26,10 @@ import {
   SESSION_END_NOTICES
 } from './labels'
 import { LaunchDialog, type LaunchSource } from './LaunchDialog'
-import { useRunningSessionStore } from './running-session-context'
+import { useRunningSessionStore, useRunningSessionStoreApi } from './running-session-context'
 import type { SessionQueue } from './running-session-store'
 import { useRunningSessionsView } from './running-sessions-view'
+import { MESSAGE_WINDOW } from './session-view'
 import type { LiveSession } from './useLiveSession'
 
 /**
@@ -133,9 +139,13 @@ function LiveSessionPane({
 
   const terminal = session.terminal
   const errored = session.failureReason !== null || session.runState === 'error'
+  const progress = useLiveProgressSource(session.sessionId)
+  // 承認カードは応答すると消える。押したボタンがカードの中にあれば、消す前に composer へ移す (O-4 FR-019)。
+  const approvalRef = useRef<HTMLDivElement>(null)
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    // `data-live-pane`: 消えるボタンのフォーカスの行き先 (この中の composer) を探す根 (O-4 FR-019。`focus-handoff.ts`)。
+    <div className="flex h-full min-h-0 flex-col" data-live-pane="">
       {/* error 状態は必ず理由と次操作を出す。failure イベントが理由を伴わず来た場合も汎用表示に倒す (X-1 US-4 AC-8)。 */}
       {errored && <FailureBanner reason={session.failureReason} onClose={session.close} />}
       {/* 終わり方の通知 (FR-011): 終了が強制終了に落ちた / 強制終了 / 正常に終了した。 */}
@@ -170,10 +180,13 @@ function LiveSessionPane({
         />
       )}
       {pending !== null && (
-        <div className="px-4 pt-3">
+        <div className="px-4 pt-3" ref={approvalRef}>
           <ApprovalCard
             request={pending}
-            onDecision={(outcome) => session.respond(pending.requestId, outcome)}
+            onDecision={(outcome) => {
+              handOffFocusToComposer(approvalRef.current)
+              session.respond(pending.requestId, outcome)
+            }}
           />
         </div>
       )}
@@ -184,7 +197,16 @@ function LiveSessionPane({
           data-testid="older-messages"
         >
           <span className="flex-1">{olderMessagesLabel(hiddenCount)}</span>
-          <Button type="button" size="sm" variant="ghost" onClick={onShowMore}>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={(event) => {
+              // 最後の押下 (残りが 1 回分の窓に収まる) では省略の行ごと消えるので、消す前に composer へ移す (O-4 FR-019)。
+              if (hiddenCount <= MESSAGE_WINDOW) handOffFocusToComposer(event.currentTarget)
+              onShowMore()
+            }}
+          >
             {OLDER_MESSAGES_LABELS.showMore}
           </Button>
         </div>
@@ -198,10 +220,34 @@ function LiveSessionPane({
         <DraftBridge session={draftSource} threadId={session.sessionId} />
         {/* 終了・失敗の後は、終わりの来ないシステムイベントの行を「結果不明」で描く (O-2 / FR-009)。 */}
         <TranscriptSettledContext.Provider value={session.ended || errored}>
-          <Thread components={{ Welcome: SessionWelcome }} />
+          {/* tool の経過時間と思考のトークン数は Thread の外側から購読元を渡す (O-4 / 014 data-model §4「進み具合」)。 */}
+          <LiveProgressContext.Provider value={progress}>
+            <Thread components={{ Welcome: SessionWelcome }} />
+          </LiveProgressContext.Provider>
         </TranscriptSettledContext.Provider>
       </div>
     </div>
+  )
+}
+
+/**
+ * 表示中のセッションの進み具合の購読元 (O-4 / 014 data-model §4「進み具合」)。稼働中のストアの `meters` (`sessions` とは別の
+ * 枝) から、tool の id ごとの経過時間と思考のトークン数を引く。ペインはセッションごとに作り直す (`key`) ので、値は 1 つの
+ * セッションのものだけ。購読はそのセッションの計量が変わったときだけ知らせる (他のセッションの計量・本文の更新では知らせない)。
+ */
+function useLiveProgressSource(sessionId: string): LiveProgressSource {
+  const store = useRunningSessionStoreApi()
+  return useMemo<LiveProgressSource>(
+    () => ({
+      toolElapsed: (toolCallId) =>
+        store.getState().meters[sessionId]?.toolElapsed.get(toolCallId) ?? null,
+      thinkingTokens: () => store.getState().meters[sessionId]?.thinkingTokens ?? null,
+      subscribe: (listener) =>
+        store.subscribe((state, prev) => {
+          if (state.meters[sessionId] !== prev.meters[sessionId]) listener()
+        })
+    }),
+    [store, sessionId]
   )
 }
 
@@ -337,7 +383,11 @@ export function QueueRejectionNotice({
       </span>
       <button
         type="button"
-        onClick={onDismiss}
+        onClick={(event) => {
+          // 告知ごと消えるので、消す前に composer へ移す (O-4 FR-019)。
+          handOffFocusToComposer(event.currentTarget)
+          onDismiss()
+        }}
         aria-label="閉じる"
         className="hover:text-foreground shrink-0 px-1"
       >
@@ -393,7 +443,11 @@ export function PendingQueueNotice({
             <span className="min-w-0 flex-1 truncate">{queueItemText(item)}</span>
             <button
               type="button"
-              onClick={() => onRemove(item.id)}
+              onClick={(event) => {
+                // 項目ごと消えるので、消す前に composer へ移す (O-4 FR-019)。
+                handOffFocusToComposer(event.currentTarget)
+                onRemove(item.id)
+              }}
               aria-label="キューから削除"
               className="hover:text-foreground shrink-0 px-1"
             >

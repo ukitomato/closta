@@ -99,6 +99,9 @@ spec_id（`001-runtime-...`）とは独立させる。差し込み作業で番�
   ([AD-044](../decisions/0044-ui-coverage-assignment.md))
 - **O-4 / O-5 / O-6 は `ui`** — いずれも SDK が emit する情報の表示 (Principle XII の判定対象) であり、MCP サーバーの
   追加・削除などの操作画面は含めない (USER 決定 2026-10-03)
+- **O-4 は `ui` のまま、session の契約の拡張を伴う** — 失敗の理由のキー (`LaunchFailureReason`)・`SessionEvent` の種類 `meter`・
+  監視ビューの行の短い理由と稼働中のストアの `meters` を O-4 が変える (U-1。2026-10-05 に利用者が承認。
+  [AD-047](../decisions/0047-session-meter-and-failure-reasons.md))。記録は session charter の Related Specs
 - **O-7（アプリのシェル）は `ui`** — 面の配置と遷移はどの domain の操作でもなく、R-1 から App と面の状態 (`stores/ui.ts`) を
   ui が持ってきた。SDK の emit の表示ではないので Principle XII の判定の対象外。サイドバーの 2 つの一覧の中身・行の形は今どおり
   session が持ち、シェルは置き場所と選択に応じた中央の切り替えだけを持つ ([AD-046](../decisions/0046-app-shell-layout.md)。

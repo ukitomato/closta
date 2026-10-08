@@ -79,7 +79,7 @@ U-3 の字面は 2026-10-08 に、Context display の材料の書き誤り (「r
 - Q: 失敗の理由の文字列 (`errors`) を出すか → A: 出さない。理由のキーだけを運ぶ (CLI のエラー文に秘密やパスが含まれうる) [ASSUMED]
 - Q: 費用は何を出すか → A: `total_cost_usd` (セッションの累計の推定)。「推定であり請求ではない」と添える [ASSUMED]
 - Q: コンテキストの使用量の推定 → A: 最後の assistant のメッセージ (1 回の API 呼び出し) の `usage` の入力 (入力 + キャッシュの読み込み + キャッシュの作成) を、result の `modelUsage` の主モデルの `contextWindow` で割る。result の `usage` はターン内の往復の合算でありうるので使わない (design-gate R1)。推定と明示し、実機で `/context` と比べる (quickstart V-3) [ASSUMED]
-- Q: レート制限の帯を出す条件 → A: `status` が `allowed_warning` か `rejected` のとき。`allowed` に戻ったら消す [ASSUMED]
+- Q: レート制限の帯を出す条件 → A: `status` が `allowed_warning` か `rejected` のとき。`allowed` に戻ったら消す。解除の時刻を過ぎたときも消す (2026-10-08 に design-gate R3 MG-02 の手当てとして追加。data-model §4) [ASSUMED]
 
 ## User Scenarios & Testing
 
@@ -114,8 +114,8 @@ U-3 の字面は 2026-10-08 に、Context display の材料の書き誤り (「r
 **Acceptance Scenarios**:
 
 1. **Given** `rate_limit_event` の `status` が `allowed_warning`、**When** 届く、**Then** 中央のヘッダの下に注意の帯が出て、制限の種類 (5 時間・7 日など)・使用率・解除の時刻が出る
-2. **Given** `status` が `rejected`、**When** 届く、**Then** 帯は警告の見た目になり、解除の時刻まで待つことを案内する
-3. **Given** 帯が出ている、**When** `status` が `allowed` の event が届く、**Then** 帯が消える
+2. **Given** `status` が `rejected`、**When** 届く、**Then** 帯は警告の見た目になり、解除の時刻まで待つことを案内する (時刻が無ければ「しばらく待ってから」。送れない終端のセッションでは送る案内を出さない。組み合わせの正本は data-model §4)
+3. **Given** 帯が出ている、**When** `status` が `allowed` の event が届くか、解除の時刻を過ぎる、**Then** 帯が消える
 4. **Given** `api_retry` が届く、**When** transcript を見る、**Then** 「API を再試行中 (n / m 回目、HTTP の状態、待ち時間)」の 1 行が出て、同じターンの再試行は同じ行で書き換わる
 5. **Given** 別のセッションを表示している、**When** 稼働中のセッションがレート制限を受ける、**Then** そのセッションを表示したときに帯が出る (帯はセッションごと)
 
@@ -160,7 +160,9 @@ U-3 の字面は 2026-10-08 に、Context display の材料の書き誤り (「r
 
 ### Edge Cases
 
-- `rate_limit_event` が `resetsAt` を持たない → 解除の時刻を出さず「しばらく待ってから」とだけ出す
+- `rate_limit_event` が `resetsAt` を持たない → 解除の時刻を出さない。`rejected` なら「しばらく待ってから送ってください」と案内する。`allowed_warning` はまだ送れるので、待つ案内を出さない (data-model §4)
+- 解除の時刻を過ぎた (待機中のセッションには event が来ない) → 次の event を待たずに帯を消す。次の `rate_limit_event` で再び出る (data-model §4) [ASSUMED]
+- 帯が出たままセッションが失敗・終了した → 帯は残し、送る案内を出さずに解除の時刻だけを出す。`role` は `status` に下げる。失敗の表示の「起動し直してください」と逆の操作を案内しないためである (data-model §4) [ASSUMED]
 - `api_retry` の `error` の中身 → 出さない。HTTP の状態 (数) と回数だけ
 - 起動時のエラーの result (費用もターン数も 0) → 前の値を上書きしない (条件の正本は data-model §2)。`/clear`・再開で累計が 0 から数え直される → そのまま出す (推定と数え直しを添える)
 - 429 で失敗したが `rate_limit_event` が届かない Provider (API キー・Bedrock) → 帯は出ず、失敗の文言は「しばらく待ってから」(帯を参照しない)

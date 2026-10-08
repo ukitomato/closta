@@ -180,6 +180,8 @@ network / プロセスの世界に踏み込む最初の feature であるため�
 6. **Given** 起動は成功したが **Provider が未ログイン / 認証切れ / クレジット不足 / rate limit /
    API 到達不可**を返す、**When** 結果を受け取る、**Then** `provider-error` として理由つきに示され、
    **黙って `done` に見せない**。再ログイン等の次の操作の導線が示される (crash と区別する)
+   (O-4 で読み替えた — 理由は `provider-error` に限らず認証・請求・レート制限・API のエラーなどに分け、再ログインの導線は認証の失敗と
+   汎用の `provider-error` に出す。黙って `done` に見せない規則は変わらない。[AD-047](../../docs/decisions/0047-session-meter-and-failure-reasons.md) Decision 1)
 7. **Given** 選んだ作業フォルダの所在ディストロと選択ランタイムのディストロが不一致、**When** 起動しようとする、
    **Then** 拒否され、理由が示される
 8. **Given** いずれの失敗でも、**When** 表示する、**Then** 空白の画面にせず、理由と次の操作を示す
@@ -204,7 +206,8 @@ network / プロセスの世界に踏み込む最初の feature であるため�
 - 同じ作業フォルダで 2 回起動しようとする / 稼働・launching 中に再度 launch する —
   本 feature は単一セッションに限り、新たな launch を拒否する (多重は X-5)
 - 起動は成功したが Provider が未ログイン / 認証切れ / クレジット不足 / rate limit / API 到達不可を返す —
-  `provider-error` として封じ込め、crash と区別する (SDK は error message で返す。AD-020)
+  `provider-error` として封じ込め、crash と区別する (SDK は error message で返す。AD-020)。O-4 で理由のキーを分けた
+  ([AD-047](../../docs/decisions/0047-session-meter-and-failure-reasons.md) Decision 1)
 - 選んだフォルダの所在ディストロと選択ランタイムのディストロが食い違う — 起動前ゲートで拒否する
 - `running` 中に次のプロンプトを送る — 最小の in-memory キューに積む (中断時の `still_queued`/`cancelled` の素)
 - 空 / 空白のみ / 巨大なプロンプトを送ろうとする — 空は送信不能、巨大はバイト長上限で扱う
@@ -344,6 +347,8 @@ network / プロセスの世界に踏み込む最初の feature であるため�
   認証切れ / クレジット不足 / rate limit / API 到達不可) は `provider-error` として保持する — SDK では
   crash でなく `SDKResultMessage`(error) 等で返り (AD-020)、黙って `done` に見せてはならない。
   pre-launch の到達可能性判定は X-3 の責務、**実行中に返る API/認証エラーの表示と理由キーは本 feature**の責務。
+  (O-4 で読み替えた — 実行中のエラーの result の理由は `provider-error` に限らず、014 data-model §1 の表のキーに分ける。黙って `done` に
+  見せない規則は変えない。[AD-047](../../docs/decisions/0047-session-meter-and-failure-reasons.md) Decision 1)
   失敗はセッション内に閉じ、**アプリを例外で落としてはならない**。本 feature で導入・変更する用語は
   [docs/glossary.md](../../docs/glossary.md) に反映する (Principle XIV)
 

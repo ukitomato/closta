@@ -109,6 +109,27 @@
 
 採らないときは既存の `Badge` / `Button` / 文字の体裁で作り、理由を F 節に書く。registry の element に手を入れたら eslint の手書きの element の一覧と reviewers.yml の a11y / ux の対象に足す (plan「機械強制の変更」)。
 
+- **照合の結果** (SH-002。2026-10-08。正本は PR の説明で、ここは写し): **Thinking indicator だけを採る**。Quota banner・Cost meter・Context display は採らない
+  - 取り込み方: O-3 (012 research R-04) と同じく、registry の item (`https://r.assistant-ui.com/styles/new-york/<name>.json` と、その registry の依存 `elements-range` / `elements-context-display`) の `files[].content` を取り出して照合した。`npx assistant-ui@latest add` は使っていない — `add` は item の npm の依存を版を付けずに入れ直す。`context-display` は新しい依存 (`@assistant-ui/ai-sdk@^0.0.11`) と `@assistant-ui/react@^0.15.25` (今は `^0.15.19`) を求める (Technical Context の「新しい npm の依存を足さない」)。リポジトリに置いたのは採った 1 つだけで、採らない 3 つ (と `elements-range` の `utils/range.ts`) は置いていない
+  - **Thinking indicator** (`elements-thinking-indicator`) — **採る**。手を入れずに `components/assistant-ui/elements/thinking-indicator.tsx` に置いた (registry の中身と同じ)
+    - 文言は `label` / `elapsed` の props で日本語にできる ✔。`role` も live region も持たない (`role="status"` を重ねない) ✔
+    - `<style>` も `style` 属性も無い。アニメーションは既に読み込んでいる `tw-animate-css` / `tw-shimmer` の class だけ ✔。npm の依存なし。registry の依存は取り込み済みの `elements-surfaces` (`mono` / `ShimmerLabel`) だけ ✔
+    - 手を入れていないので、SH-011 では a11y / ux の `exclude_patterns` に実名で足す (手を入れたら eslint の一覧と `auto_invoke_patterns`)
+    - FE-044 への申し送り: `ShimmerLabel` は `key={label}` で付け替わる。毎秒変わる数を `label` に入れると、更新のたびに入りのアニメーション (`fade-in slide-in-from-bottom-1`) が走る。文言の渡し方 (`label` と `elapsed` の分け方) は FE-044 で決める
+  - **Quota banner** (`elements-quota-banner`) — **採らない**。直す量が中身の大半になる。帯は既存の文字の体裁と `role` (status / alert) で作る (FE-020)
+    - 「もっと得る」の button を常に描く (`upgradeLabel` が必須)。採る条件の「『もっと得る』の操作を出さずに使える」✗
+    - 文 (`{left} {unit} left` / `resets in …` / `{used} of {limit} used`) が英語の直書きで、props で替えられない
+    - 材料が合わない。使用量と上限の数 (`used` / `limit`) と解除までの相対時間 (`resetsIn`) を取るが、届くのは割合と解除の時刻で、どちらも null がありうる。null のときの描き分け (割合なし・「しばらく待ってから」) も無い。見た目の強弱は割合の 90% で決まり、`status` で決める data-model §4 と違う
+  - **Cost meter** (`elements-cost-meter`) — **採らない**。使用量のタブは `dl` / `table` と既存の文字の体裁で作る (FE-031)
+    - 構造が `dl` / `table` でなく `div` の並び。採る条件の「表としての構造」✗
+    - `this run` / `session` / `k in · … k out` と、モデルごとの `aria-label` (`… cost share`) が英語の直書き
+    - 材料が合わない。「この実行」と「セッション」の 2 つの費用を取るが、届くのはセッションの累計の推定 (`total_cost_usd`) だけ。モデルの行はキャッシュの読み込み / 作成のトークンを持たない (data-model §4 は 4 つのトークン数を出す)
+  - **Context display** (`context-display`) — **採らない**。目盛りは文字の体裁で作り、推定であることは `aria-label` と `title` で伝える (FE-032)
+    - AUI 接続の `context-display.aui.tsx` は `@assistant-ui/ai-sdk` の `useThreadTokenUsage` を import するので、`usage` で上書きして使う場合も新しい npm の依存が要る ✗
+    - その下の standalone の `context-display.tsx` (`elements-context-display`) は依存なしで `usage` を受けるが、文言 (`Context usage` / `% full` / `Input` ほか) が直書き。割合を 100 で止めて `N% full` と出す (data-model §4 は 100% を超えたら数を出さず「100% 以上」)。色の閾値 (65% / 85%) が §4 の 80% と違う。中身はホバーのツールチップ (button) で、推定であることが出ない。直す量が中身の大半になる
+  - **Context breakdown** (`elements-context-breakdown`) — 取り込んでいない。カテゴリ別の内訳を出さない (AD-047 Decision 4 / U-3)
+  - **Job progress** (`elements-job-progress`) — 取り込んでいない。重みのある段階・残り時間・中止の操作を前提にするが、`task_progress` は段階も残り時間も持たず、本 feature に task の中止の操作は無い。task の進み具合は task の行の `detail` で出す (data-model §3)
+
 ## R-10 押したボタンが自分ごと消えるときのフォーカス (FR-019)
 
 - **事実**: 消えるのは 5 か所 (data-model §8)。うち 4 か所は中央の本体、1 か所 (稼働中の行の「閉じる」) はサイドバー。O-7 の `useFocusRescue` (`features/shell/`) は面の中身の切り替え (`trigger`) で拾う形で、session のコンポーネントからは使えない (本番の依存は shell → session の向き。`test-support/running-sessions-harness.tsx:12-13`)

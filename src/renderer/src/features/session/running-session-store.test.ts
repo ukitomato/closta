@@ -6,11 +6,16 @@ import { SESSION_PORT_MESSAGE, type ClostaCapability } from '@domain/capability'
 import type { SessionEvent } from '@domain/session/agent-session'
 import type { TranscriptPartDTO } from '@domain/session/transcript-dto'
 import type { SessionLaunchConfig } from '@domain/session/launch-config'
+import type { MeterUpdate } from '@domain/session/meter'
 import type { SessionStatusUpdate } from '@domain/session/status-update'
 
 import { stubCapability } from '@/test-support/capability'
 
-import { createRunningSessionStore, type RunningSessionStore } from './running-session-store'
+import {
+  createRunningSessionStore,
+  type RunningSessionStore,
+  type SessionMeters
+} from './running-session-store'
 import { availableActions, rowStatus, viewOf } from './session-view'
 
 /**
@@ -643,5 +648,141 @@ describe('running-session-store — tool の結果とシステムイベントの
     expect(
       typeof content !== 'string' && content[0]?.type === 'tool-call' && content[0].result
     ).toBe('out.txt')
+  })
+})
+
+describe('running-session-store — 計量の受け口 (O-4 FE-004 / 014 data-model §2「renderer の保持」)', () => {
+  const meter = (m: MeterUpdate): SessionEvent => ({ kind: 'meter', meter: m })
+  const turn = (costUsd: number): MeterUpdate => ({
+    type: 'turn',
+    costUsd,
+    turns: 1,
+    models: [],
+    permissionDenials: 0
+  })
+  const tool = (toolUseId: string, elapsedSeconds: number): SessionEvent =>
+    meter({ type: 'tool-elapsed', toolUseId, elapsedSeconds })
+  const metersOf = (h: Harness, id = A): SessionMeters | undefined => h.store.getState().meters[id]
+  const assistant = (id: string): SessionEvent => ({
+    kind: 'message',
+    message: { id, role: 'assistant', parts: [{ type: 'text', text: 'hi' }], createdAt: 1 }
+  })
+  const systemRow: SessionEvent = {
+    kind: 'message',
+    message: {
+      id: 'task:t1',
+      role: 'system',
+      parts: [
+        {
+          type: 'system-event',
+          category: 'task',
+          opens: true,
+          name: '',
+          detail: 'local_agent',
+          status: 'running'
+        }
+      ],
+      createdAt: 1
+    }
+  }
+
+  it('各 type の最新の値を持ち、sessions の参照を変えず、receivedMessages に数えない', async () => {
+    const h = harness()
+    const port = await launched(h)
+    const sessions = h.store.getState().sessions
+    emit(port, meter(turn(0.25)))
+    emit(port, meter({ type: 'context', usedTokens: 1_000 }))
+    emit(port, meter({ type: 'context', usedTokens: 2_000 }))
+    emit(port, meter({ type: 'permission-mode', mode: 'plan' }))
+    emit(port, meter({ type: 'thinking', estimatedTokens: 300 }))
+    emit(port, tool('t1', 4))
+    const rateLimit: MeterUpdate = {
+      type: 'rate-limit',
+      status: 'allowed_warning',
+      limitType: 'five_hour',
+      utilizationPct: 85,
+      resetsAtSec: 1_760_000_000,
+      usingOverage: false
+    }
+    emit(port, meter(rateLimit))
+    const m = metersOf(h)
+    expect(m?.lastTurn).toEqual(turn(0.25))
+    expect(m?.contextUsed).toBe(2_000)
+    expect(m?.permissionMode).toBe('plan')
+    expect(m?.thinkingTokens).toBe(300)
+    expect(m?.rateLimit).toEqual(rateLimit)
+    expect([...(m?.toolElapsed ?? [])]).toEqual([['t1', 4]])
+    expect(h.store.getState().sessions).toBe(sessions)
+    expect(h.store.getState().receivedMessages).toBe(0)
+  })
+
+  it('権限モードを起動の設定・lastConfig に書き戻さない', async () => {
+    const h = harness()
+    const port = await launched(h)
+    emit(port, meter({ type: 'permission-mode', mode: 'unknown' }))
+    expect(h.store.getState().sessions[A]?.config.permissionMode).toBe('default')
+    expect(h.store.getState().launch.lastConfig).toEqual(cfg())
+  })
+
+  it('思考のトークンは主ループの assistant のメッセージと turn で null に戻り、システムイベントの行では残る', async () => {
+    const h = harness()
+    const port = await launched(h)
+    emit(port, meter({ type: 'thinking', estimatedTokens: 100 }))
+    emit(port, systemRow)
+    expect(metersOf(h)?.thinkingTokens).toBe(100)
+    emit(port, assistant('a1'))
+    expect(metersOf(h)?.thinkingTokens).toBeNull()
+    emit(port, meter({ type: 'thinking', estimatedTokens: 200 }))
+    emit(port, meter(turn(0.1)))
+    expect(metersOf(h)?.thinkingTokens).toBeNull()
+  })
+
+  it('tool の経過時間は turn で空になる', async () => {
+    const h = harness()
+    const port = await launched(h)
+    emit(port, tool('t1', 1))
+    emit(port, tool('t2', 2))
+    emit(port, meter(turn(0)))
+    expect(metersOf(h)?.toolElapsed.size).toBe(0)
+  })
+
+  it('65 個目の tool で更新の最も古い id が落ち、更新の続く id は残る', async () => {
+    const h = harness()
+    const port = await launched(h)
+    for (let i = 0; i < 64; i++) emit(port, tool(`t${i}`, 1))
+    // t0 は更新が続く (末尾へ移る)。更新の最も古いのは t1 になる。
+    emit(port, tool('t0', 2))
+    emit(port, tool('t64', 1))
+    const elapsed = metersOf(h)!.toolElapsed
+    expect(elapsed.size).toBe(64)
+    expect(elapsed.has('t1')).toBe(false)
+    expect(elapsed.get('t0')).toBe(2)
+    expect(elapsed.get('t64')).toBe(1)
+  })
+
+  it('2 つのセッションの値が混ざらない', async () => {
+    const h = harness()
+    const portA = await launched(h, A)
+    const portB = await launched(h, B)
+    emit(portA, meter({ type: 'context', usedTokens: 111 }))
+    emit(portB, meter({ type: 'context', usedTokens: 222 }))
+    emit(portB, tool('tb', 3))
+    expect(metersOf(h, A)?.contextUsed).toBe(111)
+    expect(metersOf(h, B)?.contextUsed).toBe(222)
+    expect(metersOf(h, A)?.toolElapsed.size).toBe(0)
+  })
+
+  it('失敗の後も close までは最後の値が残り、閉じた後は meters[id] が undefined で、届いた meter は捨てる', async () => {
+    const h = harness()
+    const port = await launched(h)
+    emit(port, meter(turn(0.5)))
+    emit(port, { kind: 'failure', reasonKey: 'provider-error' })
+    h.pushStatus([status(A, { state: 'error', reasonKey: 'provider-error', claudeAlive: false })])
+    expect(metersOf(h)?.lastTurn?.costUsd).toBe(0.5)
+    h.store.close(A)
+    expect(metersOf(h)).toBeUndefined()
+    emit(port, meter({ type: 'context', usedTokens: 1 }))
+    expect(metersOf(h)).toBeUndefined()
+    expect(h.store.getState().meters).toEqual({})
   })
 })

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { ThreadMessageLike } from '@assistant-ui/react'
 
+import type { LaunchFailureReason } from '@domain/session/agent-session'
 import { countOccupying } from '@domain/session/concurrency'
 import type { SessionStatusUpdate } from '@domain/session/status-update'
 
@@ -13,8 +14,8 @@ import type {
 } from './running-session-types'
 import {
   ACTIVITY_MAX_CODE_POINTS,
-  announcements,
   attentionCounts,
+  attentionTransitions,
   deriveActivity,
   deriveSessionView,
   formatElapsed,
@@ -259,6 +260,7 @@ function state(
     activity: {},
     receivedMessages: 0,
     density: 'comfortable',
+    meters: {},
     ...over
   }
 }
@@ -339,42 +341,74 @@ describe('attentionCounts / nextAwaiting (FR-002 / FR-003)', () => {
   })
 })
 
-describe('announcements (FR-004 / SC-001)', () => {
+/**
+ * O-4 FR-018 (2): 導出は名前の組までを返す (文は `labels.ts` の `attentionAnnouncement` が組む。文の検査は
+ * `labels.test.ts`、読み上げの振る舞いは `SessionAttentionAnnouncer` を通す component テスト)。
+ */
+describe('attentionTransitions (FR-004 / SC-001)', () => {
   const entry = (status: StatusSince['status']): StatusSince => ({ status, at: 1 })
   const label = (id: string): string | null => ({ [A]: '案件A', [B]: '案件B' })[id] ?? null
 
-  it('見ていないセッションが承認待ち・失敗に入ったときだけ文を返す', () => {
-    expect(announcements({ [A]: entry('running') }, { [A]: entry('awaiting') }, null, label)).toBe(
-      '案件A: 承認待ちになりました。'
-    )
-    expect(announcements({ [A]: entry('running') }, { [A]: entry('failed') }, null, label)).toBe(
-      '案件A: 失敗しました。'
-    )
+  it('見ていないセッションが承認待ち・失敗に入ったときだけ名前の組を返す', () => {
+    expect(
+      attentionTransitions({ [A]: entry('running') }, { [A]: entry('awaiting') }, null, label)
+    ).toEqual({ awaiting: ['案件A'], failed: [] })
+    expect(
+      attentionTransitions({ [A]: entry('running') }, { [A]: entry('failed') }, null, label)
+    ).toEqual({ awaiting: [], failed: [{ name: '案件A', reason: null }] })
   })
 
-  it('同じ更新の 2 本は 1 つの文', () => {
+  it('失敗には理由のキーを添える (O-4 US-1 AC5。理由を引けなければ null)', () => {
+    const reason = (id: string): LaunchFailureReason | null => (id === A ? 'rate-limited' : null)
     expect(
-      announcements(
+      attentionTransitions(
+        { [A]: entry('running'), [B]: entry('running') },
+        { [A]: entry('failed'), [B]: entry('failed') },
+        null,
+        label,
+        reason
+      )
+    ).toEqual({
+      awaiting: [],
+      failed: [
+        { name: '案件A', reason: 'rate-limited' },
+        { name: '案件B', reason: null }
+      ]
+    })
+  })
+
+  it('同じ更新の複数の遷移は 1 つの組', () => {
+    expect(
+      attentionTransitions(
         { [A]: entry('running'), [B]: entry('running') },
         { [A]: entry('awaiting'), [B]: entry('awaiting') },
         null,
         label
       )
-    ).toBe('案件A、案件B: 承認待ちになりました。')
+    ).toEqual({ awaiting: ['案件A', '案件B'], failed: [] })
+    expect(
+      attentionTransitions(
+        { [A]: entry('running'), [B]: entry('running') },
+        { [A]: entry('awaiting'), [B]: entry('failed') },
+        null,
+        label
+      )
+    ).toEqual({ awaiting: ['案件A'], failed: [{ name: '案件B', reason: null }] })
   })
 
-  it('見ているセッション・変わらない状態・応答中 ⇄ 応答待ちでは null。中央が稼働中でない (watchedId null) なら選ばれていたものも通知', () => {
+  it('見ているセッション・変わらない状態・応答中 ⇄ 応答待ちでは null。中央が稼働中でない (watchedId null) なら選ばれていたものも返す', () => {
     const prev = { [A]: entry('running') }
     const next = { [A]: entry('awaiting') }
-    expect(announcements(prev, next, A, label)).toBeNull()
-    expect(announcements(next, next, null, label)).toBeNull()
-    expect(announcements(prev, { [A]: entry('waiting') }, null, label)).toBeNull()
-    expect(announcements(prev, next, null, label)).not.toBeNull()
+    expect(attentionTransitions(prev, next, A, label)).toBeNull()
+    expect(attentionTransitions(next, next, null, label)).toBeNull()
+    expect(attentionTransitions(prev, { [A]: entry('waiting') }, null, label)).toBeNull()
+    expect(attentionTransitions(prev, next, null, label)).not.toBeNull()
   })
 
-  it('表示名が引けなくても文が壊れない', () => {
-    expect(announcements({}, { [C]: entry('awaiting') }, null, label)).toBe(
-      '名前を取得できないセッション: 承認待ちになりました。'
-    )
+  it('表示名が引けないセッションは null の名前で組に入る (代替語は文を組む側が入れる)', () => {
+    expect(attentionTransitions({}, { [C]: entry('awaiting') }, null, label)).toEqual({
+      awaiting: [null],
+      failed: []
+    })
   })
 })

@@ -1,18 +1,25 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import type { PermissionDecision, RuntimeLaunchSpec } from '@domain/session/agent-session'
+import type {
+  LaunchFailureReason,
+  PermissionDecision,
+  RuntimeLaunchSpec
+} from '@domain/session/agent-session'
 
 import {
   acceptsWhileClosing,
   buildQueryOptions,
   canEnd,
   classifyResult,
+  classifyResultFailure,
   composeClaudeSpawn,
   createCanUseTool,
   createPermissionRegistry,
   QUERY_OPTION_KEYS,
+  RESULT_ERROR_SUBTYPES,
   resultAction,
   type AgentSpawnOptions,
+  type ResultFailureInput,
   type SpawnedLike
 } from './session-core'
 
@@ -392,5 +399,119 @@ describe('classifyResult (V-11 / FR-030 — 認証失敗を黙って done にし
     expect(classifyResult('error', true)).toEqual({ kind: 'provider-error' })
     // 未知 subtype も既定で provider-error (allowlist 的に success のみ complete)。
     expect(classifyResult('unexpected_new_subtype', false)).toEqual({ kind: 'provider-error' })
+  })
+})
+
+describe('classifyResultFailure (O-4 / 014 data-model §1 / SC-001)', () => {
+  const base: ResultFailureInput = {
+    subtype: 'success',
+    apiErrorStatus: null,
+    lastAssistantError: null
+  }
+  const classify = (overrides: Partial<ResultFailureInput>): LaunchFailureReason =>
+    classifyResultFailure({ ...base, ...overrides })
+
+  it('HTTP の状態: 401 / 403 は auth-failed、429 は rate-limited、5xx と他の状態は api-error', () => {
+    expect(classify({ apiErrorStatus: 401 })).toBe('auth-failed')
+    expect(classify({ apiErrorStatus: 403 })).toBe('auth-failed')
+    expect(classify({ apiErrorStatus: 429 })).toBe('rate-limited')
+    expect(classify({ apiErrorStatus: 500 })).toBe('api-error')
+    expect(classify({ apiErrorStatus: 503 })).toBe('api-error')
+    expect(classify({ apiErrorStatus: 529 })).toBe('api-error')
+    expect(classify({ apiErrorStatus: 400 })).toBe('api-error')
+    expect(classify({ apiErrorStatus: 0 })).toBe('api-error')
+    expect(classify({ apiErrorStatus: 999 })).toBe('api-error')
+  })
+
+  it('assistant の認証系の error は auth-failed', () => {
+    for (const error of [
+      'authentication_failed',
+      'oauth_org_not_allowed',
+      'verification_required',
+      'cloud_credential_error'
+    ] as const) {
+      expect(classify({ lastAssistantError: error })).toBe('auth-failed')
+    }
+  })
+
+  it('assistant の billing_error / account_on_hold は billing', () => {
+    expect(classify({ lastAssistantError: 'billing_error' })).toBe('billing')
+    expect(classify({ lastAssistantError: 'account_on_hold' })).toBe('billing')
+  })
+
+  it('assistant の rate_limit は rate-limited', () => {
+    expect(classify({ lastAssistantError: 'rate_limit' })).toBe('rate-limited')
+  })
+
+  it('失敗の 4 つの subtype が区別される', () => {
+    expect(classify({ subtype: 'error_max_turns' })).toBe('max-turns')
+    expect(classify({ subtype: 'error_max_budget_usd' })).toBe('max-budget')
+    expect(classify({ subtype: 'error_max_structured_output_retries' })).toBe(
+      'structured-output-retries'
+    )
+    expect(classify({ subtype: 'error_during_execution' })).toBe('execution-error')
+  })
+
+  it('状態が無い・知らない subtype・表に無い assistant の error は provider-error', () => {
+    expect(classify({})).toBe('provider-error')
+    expect(classify({ apiErrorStatus: undefined })).toBe('provider-error')
+    expect(classify({ subtype: 'unexpected_new_subtype' })).toBe('provider-error')
+    expect(classify({ subtype: '__proto__' })).toBe('provider-error')
+    expect(classify({ subtype: 'toString' })).toBe('provider-error')
+    expect(classify({ subtype: 42 })).toBe('provider-error')
+    expect(classify({ subtype: undefined })).toBe('provider-error')
+    for (const error of [
+      'overloaded',
+      'invalid_request',
+      'model_not_found',
+      'server_error',
+      'unknown',
+      'max_output_tokens'
+    ] as const) {
+      expect(classify({ lastAssistantError: error })).toBe('provider-error')
+    }
+  })
+
+  it('apiErrorStatus が 1000・-1・小数・数でないなら状態が無いのと同じ (provider-error)', () => {
+    expect(classify({ apiErrorStatus: 1000 })).toBe('provider-error')
+    expect(classify({ apiErrorStatus: -1 })).toBe('provider-error')
+    expect(classify({ apiErrorStatus: 401.5 })).toBe('provider-error')
+    expect(classify({ apiErrorStatus: Number.NaN })).toBe('provider-error')
+    expect(classify({ apiErrorStatus: Number.POSITIVE_INFINITY })).toBe('provider-error')
+    expect(classify({ apiErrorStatus: '401' })).toBe('provider-error')
+  })
+
+  it('評価の順: 表の上の行が勝つ', () => {
+    // billing_error と 401 → auth-failed (1 行目が 2 行目より先)
+    expect(classify({ lastAssistantError: 'billing_error', apiErrorStatus: 401 })).toBe(
+      'auth-failed'
+    )
+    // rate_limit と error_max_turns → rate-limited (3 行目が subtype より先)
+    expect(classify({ lastAssistantError: 'rate_limit', subtype: 'error_max_turns' })).toBe(
+      'rate-limited'
+    )
+    // error_during_execution と 500 → execution-error (subtype が api-error より先)
+    expect(classify({ subtype: 'error_during_execution', apiErrorStatus: 500 })).toBe(
+      'execution-error'
+    )
+    // billing_error と 429 → billing (2 行目が 3 行目より先)
+    expect(classify({ lastAssistantError: 'billing_error', apiErrorStatus: 429 })).toBe('billing')
+    // 429 と 403 は同時に来ないが、rate_limit と 403 → rate-limited (3 行目が 4 行目より先)
+    expect(classify({ lastAssistantError: 'rate_limit', apiErrorStatus: 403 })).toBe('rate-limited')
+    // 403 と error_max_turns → auth-failed (4 行目が subtype より先)
+    expect(classify({ apiErrorStatus: 403, subtype: 'error_max_turns' })).toBe('auth-failed')
+    // 表に無い error と 500 → api-error
+    expect(classify({ lastAssistantError: 'server_error', apiErrorStatus: 500 })).toBe('api-error')
+  })
+
+  it('どの失敗の分類も完了にしない (classifyResult は失敗のまま。X-1 FR-020 / US-4 AC6)', () => {
+    for (const subtype of [...RESULT_ERROR_SUBTYPES, 'success', 'unexpected_new_subtype']) {
+      expect(classifyResult(subtype, true)).toEqual({ kind: 'provider-error' })
+      expect(resultAction(classifyResult(subtype, true), false)).toBe('fail')
+    }
+    for (const subtype of RESULT_ERROR_SUBTYPES) {
+      expect(classifyResult(subtype, false)).toEqual({ kind: 'provider-error' })
+      expect(classifyResultFailure({ ...base, subtype })).not.toBe('provider-error')
+    }
   })
 })

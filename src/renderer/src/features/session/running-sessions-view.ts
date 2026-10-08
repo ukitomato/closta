@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'react'
 
+import type { AutoModeStatus } from '@domain/runtime/capabilities'
 import type { SessionLaunchConfig } from '@domain/session/launch-config'
 import type { LaunchOrigin } from '@domain/session/launch-usage'
 import type { FolderListDTO } from '@domain/workspace/dto'
@@ -25,6 +26,12 @@ export interface RunningSessionsView {
   readonly folderName: (folderId: string) => string
   /** runtimeId → 表示名。規則は `folderName` と同じ。 */
   readonly runtimeName: (runtimeId: string) => string
+  /**
+   * runtimeId → ランタイムの無人実行の表示用の状態 (`capabilities.autoModeStatus`。O-4 / 014 data-model §4「権限モード」)。
+   * 一覧を読み込み中・失敗・引けないときは `undetermined` (確かめていないことを `allowed` に丸めない)。ゲート用の
+   * `autoModeAllowed` は返さない (表示に使わない。DTO の不変条件)。中央の権限モードの警告の帯の隔離の文言が使う。
+   */
+  readonly runtimeAutoMode: (runtimeId: string) => AutoModeStatus
   /** 登録フォルダの一覧 (読み込み中は null)。中央の空の状態と概要が使う。 */
   readonly folders: FolderListDTO | null
   /**

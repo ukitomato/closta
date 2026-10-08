@@ -82,6 +82,9 @@ reviewers:
       - "src/renderer/src/components/assistant-ui/elements/reasoning.aui.tsx"
       - "src/renderer/src/components/assistant-ui/elements/reasoning.tsx"
       - "src/renderer/src/components/assistant-ui/elements/tool-group.aui.tsx"
+      # O-4 が registry から手を入れずに取り込んだ element (014 research R-09 / tasks SH-011)。手を入れたら
+      # 上の auto_invoke_patterns に移し、eslint.config.mjs の手書きの element の一覧に足す
+      - "src/renderer/src/components/assistant-ui/elements/thinking-indicator.tsx"
       - "**/*.test.tsx"                                         # テストは a11y の対象ではない
     gates: [pr-gate]
     source: bootstrap-recommended
@@ -127,6 +130,8 @@ reviewers:
       - "src/renderer/src/components/assistant-ui/elements/reasoning.aui.tsx"
       - "src/renderer/src/components/assistant-ui/elements/reasoning.tsx"
       - "src/renderer/src/components/assistant-ui/elements/tool-group.aui.tsx"
+      # O-4 が registry から手を入れずに取り込んだ element (a11y-reviewer と同じ)
+      - "src/renderer/src/components/assistant-ui/elements/thinking-indicator.tsx"
       - "**/*.test.tsx"
     gates: [pr-gate]
     source: bootstrap-recommended
@@ -179,6 +184,8 @@ reviewers:
       - "src/domain/session/live-message*.ts"
       - "src/domain/session/system-event*.ts"
       - "src/domain/session/tool-result*.ts"
+      # SDK のメッセージの値を計量 (meter) に正規化する domain のモジュール (O-4 / 014 plan「機械強制の変更」)
+      - "src/domain/session/meter*.ts"
       - "src/renderer/src/components/assistant-ui/elements/**"
       - "src/renderer/src/features/chat/**"
       # 実行中のシステムイベントの行の合成と SessionEvent の message のデコード (pr-gate R1 architecture M-004)

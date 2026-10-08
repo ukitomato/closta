@@ -16,6 +16,7 @@ import {
   ReasoningText,
   ReasoningTrigger,
 } from "@/components/assistant-ui/elements/reasoning.aui";
+import { ThinkingIndicator } from "@/components/assistant-ui/elements/thinking-indicator";
 import { ToolDisplay } from "@/components/assistant-ui/elements/tool-registry.aui";
 import {
   ToolGroupContent,
@@ -29,13 +30,16 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { SYSTEM_EVENT_DATA_NAME } from "@/features/chat/convert";
 import {
   COMPOSER_LABELS,
+  permissionModeName,
   SYSTEM_EVENT_CATEGORY_LABELS,
   SYSTEM_EVENT_LABELS,
   SYSTEM_EVENT_STATUS_LABELS,
   taskTypeLabel,
+  THINKING_LABELS,
 } from "@/features/chat/labels";
 import {
   findMessageElement,
+  useLiveThinkingTokens,
   useRegisterTranscriptNavigator,
   useTranscriptDensity,
   useTranscriptSettled,
@@ -43,7 +47,12 @@ import {
 } from "@/features/chat/transcript-context";
 import { isSystemEventFields } from "@/features/chat/transcript-guard";
 import { cn } from "@/lib/utils";
-import { isTerminalSystemEventStatus } from "@domain/session/system-event";
+import {
+  decodeRetryDetail,
+  isTerminalSystemEventStatus,
+  splitTaskDetail,
+} from "@domain/session/system-event";
+import type { SystemEventCategory } from "@domain/session/transcript-dto";
 import {
   ActionBarMorePrimitive,
   ActionBarPrimitive,
@@ -70,10 +79,13 @@ import {
   ChevronRightIcon,
   CopyIcon,
   DownloadIcon,
+  FoldVerticalIcon,
+  type LucideIcon,
   MicIcon,
   MoreHorizontalIcon,
   PencilIcon,
   RefreshCwIcon,
+  ShieldIcon,
   SquareIcon,
   TimerIcon,
   WebhookIcon,
@@ -254,6 +266,7 @@ const ThreadRoot: FC<{ isEmpty: boolean; autoFocus: boolean }> = ({
           >
             <ThreadScrollToBottom />
             <ThreadFollowupSuggestions />
+            <LiveThinkingIndicator />
             <Composer autoFocus={autoFocus} />
             <AuiIf condition={(s) => isNewChatView(s) && s.composer.isEmpty}>
               <ThreadSuggestions />
@@ -536,10 +549,33 @@ const VirtualThreadRoot: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
       <div className="aui-thread-viewport-footer bg-background sticky bottom-0 overflow-visible px-4 pb-4 md:pb-6">
         <div className="relative mx-auto flex w-full max-w-(--thread-max-width) flex-col gap-4">
           {!isAtBottom && <VirtualScrollToBottom onClick={jumpToBottom} />}
+          <LiveThinkingIndicator />
           {composer}
         </div>
       </div>
     </ThreadPrimitive.Root>
+  );
+};
+
+/**
+ * **実行中の思考の印** (O-4 / 014 spec FR-012 / US-4 AC4。data-model §4「進み具合」/ research R-07)。
+ *
+ * - 思考のブロックが完成するまで Reasoning の part は無いので、transcript の末尾 (viewport の footer の composer の上) に
+ *   1 行で出す。表示は registry の Thinking indicator (Reasoning の表示の語彙)
+ * - 値は実行中のペインが Thread の外側から渡す購読元 (`LiveProgressContext`) から自分で購読する — 本文の更新で composer を
+ *   描き直さず、思考の更新で本文を描き直さない。過去ログには購読元が無いので出ない
+ * - 次の主ループの assistant のメッセージとターンの終わり (`turn`) で、稼働中のストアが値を消す (印も消える)
+ * - live region にしない (`role="status"` を重ねて毎秒読ませない)
+ */
+const LiveThinkingIndicator: FC = () => {
+  const tokens = useLiveThinkingTokens();
+  if (tokens === null) return null;
+  return (
+    <ThinkingIndicator
+      label={THINKING_LABELS.thinking}
+      elapsed={THINKING_LABELS.tokens(tokens)}
+      className="px-2 text-xs"
+    />
   );
 };
 
@@ -649,6 +685,11 @@ const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
           <ComposerPrimitive.Input
             placeholder={COMPOSER_LABELS.composerPlaceholder}
             className="aui-composer-input caret-primary placeholder:text-muted-foreground/60 max-h-48 min-h-10 w-full resize-none bg-transparent px-2.5 py-1 text-base leading-6 outline-none"
+            /*
+             * 押したボタンが自分ごと消えたときのフォーカスの行き先の印 (O-4 FR-019 / 014 data-model §8)。
+             * 探すのは `features/session/focus-handoff.ts` で、入力の振る舞いは変えない。
+             */
+            data-composer-input=""
             rows={1}
             autoFocus={autoFocus}
             enterKeyHint="send"
@@ -988,9 +1029,62 @@ const systemEventDataOf = (s: AssistantState): unknown => {
 };
 
 /**
- * Hook / Background task のシステムイベントの行 (O-2 / FR-009 / data-model §2「描き分け」)。
+ * 行の detail の文言 (空なら detail を出さない。O-4 / 014 data-model §3 / §5)。
+ * - task: 種類 (`task_type`。進み具合を合成した detail は `splitTaskDetail` で種類だけを取る) の文言
+ * - API の再試行: 回数・HTTP の状態・待ち時間 (`decodeRetryDetail`。形が合わなければ出さない)
+ * - 権限モード: detail の鍵 (知らない鍵は `unknown`) の名前を入れた文
+ * - コンテキストの圧縮: 出さない (detail は常に空。`compact_error` は届かない)
+ * - Hook: detail (`hook_event`) のまま
+ */
+function systemEventDetailText(
+  category: SystemEventCategory,
+  detail: string,
+): string {
+  switch (category) {
+    case "task":
+      return taskTypeLabel(splitTaskDetail(detail).taskType);
+    case "api-retry": {
+      const retry = decodeRetryDetail(detail);
+      return retry === null ? "" : SYSTEM_EVENT_LABELS.retryDetail(retry);
+    }
+    case "permission-mode":
+      return SYSTEM_EVENT_LABELS.permissionModeChanged(
+        permissionModeName(detail),
+      );
+    case "compaction":
+      return "";
+    case "hook":
+      return detail;
+  }
+}
+
+/** task の行の進み具合の文言 (O-4 / 014 data-model §4「進み具合」)。task でない・進み具合が無い・復号できなければ null。 */
+function taskProgressText(
+  category: SystemEventCategory,
+  detail: string,
+): string | null {
+  if (category !== "task") return null;
+  const { progress } = splitTaskDetail(detail);
+  return progress === null ? null : SYSTEM_EVENT_LABELS.taskProgress(progress);
+}
+
+/** 行の種類のアイコン。 */
+const SYSTEM_EVENT_ICONS: Readonly<Record<SystemEventCategory, LucideIcon>> = {
+  hook: WebhookIcon,
+  task: TimerIcon,
+  "api-retry": RefreshCwIcon,
+  compaction: FoldVerticalIcon,
+  "permission-mode": ShieldIcon,
+};
+
+/**
+ * Hook / Background task と O-4 の行 (API の再試行・コンテキストの圧縮・権限モード) のシステムイベントの行
+ * (O-2 / FR-009 / data-model §2「描き分け」。O-4 / 014 data-model §3 / §4)。
  *
- * - 1 つの Hook / task は 1 行。同じ id の更新は store / domain が合成済み (ここは描くだけ)
+ * - 1 つの Hook / task は 1 行。同じ id の更新は store / domain が合成済み (ここは描くだけ)。API の再試行は
+ *   ターンごとに 1 行 (同じターンの再試行は同じ行で書き換わる。014 spec US-2 AC4)。圧縮は 1 回の圧縮で 1 行
+ *   (圧縮中 → 成功 / 失敗に書き換わる)。権限モードは変わるたびに 1 行。task の行は種類の後ろに進み具合
+ *   (トークン・tool の回数・経過時間) を並べ、進み具合の更新で種類は消えない
  * - assistant の発話と見分けられる控えめな 1 行 (system メッセージの体裁)。**footer・action bar・branch picker・
  *   running indicator を付けない** — 末尾がこの行で `isRunning` でも、実行中の印は composer 側の既存の表示に任せる
  * - 状態の文言は `Badge`、名前は「」で括った muted の別の span (偽の状態の文言を含む名前と区別する)。
@@ -1015,7 +1109,7 @@ const SystemEventRow: FC = () => {
       ? null
       : SYSTEM_EVENT_STATUS_LABELS[status];
   const failed = status === "failed";
-  const Icon = category === "hook" ? WebhookIcon : TimerIcon;
+  const Icon = SYSTEM_EVENT_ICONS[category];
   // 失敗した Hook には設定とログ、失敗・強制停止した task には起動した tool の呼び出しの表示を案内する (pr-gate R2 ux L-004)
   const guidance =
     category === "hook" && failed
@@ -1023,7 +1117,8 @@ const SystemEventRow: FC = () => {
       : category === "task" && (failed || status === "killed")
         ? SYSTEM_EVENT_LABELS.taskFailedGuidance
         : null;
-  const detailText = category === "task" ? taskTypeLabel(detail) : detail;
+  const detailText = systemEventDetailText(category, detail);
+  const progressText = taskProgressText(category, detail);
 
   return (
     <MessagePrimitive.Root
@@ -1038,15 +1133,35 @@ const SystemEventRow: FC = () => {
         <span className="shrink-0 font-medium">
           {SYSTEM_EVENT_CATEGORY_LABELS[category]}
         </span>
-        {detail !== "" ? (
+        {detailText !== "" ? (
           // 切り詰めた全文は title で見られるようにする (pr-gate R2 a11y M-002)
           <span
             data-slot="system-event-detail"
-            className="max-w-40 shrink-0 truncate"
+            className={cn(
+              "truncate",
+              // 権限モードの行の detail は文なので、幅を固定せずに縮める (切り詰めた全文は title)。
+              category === "permission-mode"
+                ? "min-w-0"
+                : "max-w-40 shrink-0",
+            )}
             title={detailText}
           >
-            {/* task の detail は SDK の task_type。文言の表で読める形に (知らない値はそのまま。pr-gate R1 po L-002)。 */}
+            {/*
+             * task の detail は SDK の task_type。文言の表で読める形に (知らない値はそのまま。pr-gate R1 po L-002)。
+             * API の再試行は符号化した数を文言にする (エラーの中身は届かない。復号できなければ出さない。014 spec FR-007)。
+             * 権限モードは鍵を文言の表で名前にする (O-4 / 014 data-model §5)。
+             */}
             {detailText}
+          </span>
+        ) : null}
+        {progressText !== null ? (
+          // task の進み具合 (数だけ。要約・説明は届かない。O-4 / 014 spec FR-013)。種類の後ろに並べる。
+          <span
+            data-slot="system-event-progress"
+            className="min-w-0 truncate"
+            title={progressText}
+          >
+            {progressText}
           </span>
         ) : null}
         {statusText !== null ? (

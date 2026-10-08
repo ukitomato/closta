@@ -45,7 +45,7 @@ spec の U-1〜U-6 と AD-047 は 2026-10-05 に利用者が承認した。O-7 (
   - session の表示: `labels.ts` (失敗の文言・短い理由・`isReloginFailure`・Provider)、`LivePane.tsx` (実行中の進み具合の context の供給・`data-live-pane`・FR-019)、`ApprovalCard.tsx` (変えないか、`onDecision` の呼び出し側で移す)、`focus-handoff.ts` (新設)
   - chat: `transcript-context.ts` (実行中の進み具合の context と、tool ごと・思考の購読の hook)、`labels.ts` (category・status・`detail`・権限モードの名前・思考・経過時間)
   - elements: `thread.aui.tsx` (`SystemEventRow` の 3 category・task の進み具合・思考の印 (2 つの footer)・composer の入力の印)、`tool-result-marks.tsx` (経過時間) と呼び出し側 6 か所 (`toolCallId` と結果待ちを渡す)
-  - shell: `panel-tabs.ts` (`usage`)、`RightPanel.tsx` (FR-017)、`UsageTab.tsx` (新設)、`CenterHeader.tsx` (稼働中だけの `live` の props)、`ContextCostMeter.tsx` (新設)、`CenterBanners.tsx` (新設。権限モードの警告の帯と Quota banner)、`CenterPane.tsx` (`RunningCenter` が `live` を渡す)、`OverviewTab.tsx` (現在の権限モード)、`labels.ts`
+  - shell: `panel-tabs.ts` (`usage`)、`RightPanel.tsx` (FR-017)、`UsageTab.tsx` (新設)、`CenterHeader.tsx` (稼働中だけの `live` の props)、`ContextCostMeter.tsx` (新設)、`CenterBanners.tsx` (新設。権限モードの警告の帯と Quota banner)、`quota-banner.ts` (新設。Quota banner の判定と文の純関数。data-model §4)、`CenterPane.tsx` (`RunningCenter` が `live` (送れない終端か (`terminal`) を含む) を渡す)、`OverviewTab.tsx` (現在の権限モード)、`labels.ts`
   - `stores/ui.ts` (`PanelTabId` に `usage`)、`test-support/app-shell-harness.tsx` (新設。FR-017)
 - **tests**: `tests/meter/meter-through.test.tsx` (新設。renderer の project で fixture → `live-signals` → port → decoder → ストア → DOM。SC-002)
 
@@ -210,7 +210,7 @@ scripts/constitution/allowlists.mjs:363,435 AGENT_SDK_IMPORT_DIRECTORIES / PERMI
 
 ### 中央のヘッダ (US-2 / US-3 / US-4 AC1a。data-model §4)
 
-`CenterHeader` に稼働中だけの `live` の props (`sessionId`・`runtimeId`・起動の設定のモデル)を足し、行の右に `ContextCostMeter`、行と検索のバーの間に `CenterBanners` (権限モードの警告の帯 → Quota banner) を描く。過去の会話は `live` を渡さないので何も出ない (稼働中と過去で別々に直さない。`CenterHeader.tsx:15` の規則)。隔離の文言は `RunningSessionsView.runtimeAutoMode(runtimeId)` (ランタイムの一覧の `autoModeStatus`。読み込み中・引けないは `undetermined`) から。`unavailable` だけ「隔離がありません」、`allowed` / `undetermined` は「このセッションの隔離をアプリは確かめていません」(data-model §4)。
+`CenterHeader` に稼働中だけの `live` の props (`sessionId`・`runtimeId`・起動の設定のモデル・送れない終端か (`terminal`。Quota banner が待つ案内を出すかに使う。data-model §4))を足し、行の右に `ContextCostMeter`、行と検索のバーの間に `CenterBanners` (権限モードの警告の帯 → Quota banner) を描く。過去の会話は `live` を渡さないので何も出ない (稼働中と過去で別々に直さない。`CenterHeader.tsx:15` の規則)。隔離の文言は `RunningSessionsView.runtimeAutoMode(runtimeId)` (ランタイムの一覧の `autoModeStatus`。読み込み中・引けないは `undetermined`) から。`unavailable` だけ「隔離がありません」、`allowed` / `undetermined` は「このセッションの隔離をアプリは確かめていません」(data-model §4)。
 
 ### 右のペイン (US-3 / FR-017。data-model §4・§6)
 
@@ -243,7 +243,7 @@ scripts/constitution/allowlists.mjs:363,435 AGENT_SDK_IMPORT_DIRECTORIES / PERMI
 
 - 単体 (node): `classifyResultFailure` (data-model §1 の各行と、どれも完了にならない)・`meter.ts` (検証の各規則・`__proto__`・長い id・URL と scheme の無い userinfo (`u:p@h/m`) の資格情報の形の `modelId` を落とす・`[1m]` 付きと `_` を含む `modelId` を落とさない・`resetsAt: 1e300`・知らない `type`)・`mergeSystemEvent` (task の進み具合の合成・種類が残る・行の無い task は捨てる・Hook と他の category は今のまま)・`isTerminalSystemEventStatus`・`detail` の符号化と復号・`transcript.ts` が新しい subtype から行を作らない・`meter-throttle` (偽の時計。鍵ごと 1 秒 1 件・並列の tool N 個の合計 20 件/秒・64 の上限・鍵が休んだ後と取り消しの後に 65 個目が通る・20 件を超えた保留が古い順に送られ飢えない・取り消し・`dispose` の後に何も送らない)・`live-signals` (許可リストの外のフィールドに目印の値を入れ、emit した `SessionEvent` の文字列に 0 件・主ループの assistant だけ・形の外れた `task_id` で送らない・0 に倒した result・`turns`・拒否の重複を除く数・権限モードの基準 (`status` と `init` の両方で比べ、同じモードを 2 回送らない。`init` の `permissionMode` 以外のフィールドを読まない)・再試行と圧縮の行の開閉)・`sdk-agent-session.test.ts` (配線: 429 の失敗で `rate-limited`・`ended` の後に `event` が 0 件)・固定テスト (`SESSION_EVENT_KINDS` 8・`LAUNCH_FAILURE_REASONS` 18・category と status の集合)
 - 単体 (renderer): decoder (`meter` の各 `type` と外れ)・ストア (`meters` の更新・閉じた id は捨てる・`close()`・思考を assistant で消す・`turn` で tool を空に・tool が 64 を超えたら更新の古いものから落とす・`sessions` の参照が変わらない・`receivedMessages` を数えない)・`labels` (全理由に全文と短い理由・`isReloginFailure`)・`attentionTransitions`
-- component (vitest-axe): 失敗の表示 (理由ごとの文言と再ログインの導線)、監視ビューの行の短い理由、Quota banner (3 状態・解除の時刻の有無・割合の有無・超過分)、権限モードの警告の帯 (`unavailable` で隔離なし、`allowed` / `undetermined` で「確かめていない」)、中央のヘッダの目盛り (80%・100% 超・`contextWindow` 0・過去は出ない・主モデルの照合の 3 段)、使用量のタブ (項目・空の状態 3 つ・2 つのセッションが混ざらない)、「概要」の現在の権限モード、`SystemEventRow` (3 category と task の進み具合)、tool の経過時間 (結果の後に消える)、思考の印、タブのキーボード (§6)、FR-019 の 5 か所
+- component (vitest-axe): 失敗の表示 (理由ごとの文言と再ログインの導線)、監視ビューの行の短い理由、Quota banner (状態 × 送れない終端か × 解除の時刻の有無の組・割合の有無・超過分・解除の時刻を過ぎると消える)、権限モードの警告の帯 (`unavailable` で隔離なし、`allowed` / `undetermined` で「確かめていない」)、中央のヘッダの目盛り (80%・100% 超・`contextWindow` 0・過去は出ない・主モデルの照合の 3 段)、使用量のタブ (項目・空の状態 3 つ・2 つのセッションが混ざらない)、「概要」の現在の権限モード、`SystemEventRow` (3 category と task の進み具合)、tool の経過時間 (結果の後に消える)、思考の印、タブのキーボード (§6)、FR-019 の 5 か所
 - 通し (`tests/meter/meter-through.test.tsx`): fixture → `live-signals` → `JSON.stringify` → 偽の port → decoder → ストア → DOM。目印の値が DOM に 0 件、2 つのセッションの値が混ざらない (SC-002)
 - E2E: 足さない (計量を流す偽の supervisor を作らない。SC-004 の計測経路は agents の単体)。既存の E2E と基準画像を通す
 

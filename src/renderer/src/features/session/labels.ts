@@ -5,12 +5,17 @@ import type { AxisResetReason, LaunchBlocker } from '@domain/session/launch-reso
 import type { SavePresetResult } from '@domain/session/preset'
 import type { SessionRunState } from '@domain/session/run-state'
 
+import { PERMISSION_MODE_NAMES } from '@/features/chat/labels'
+
+import type { Elapsed, SessionRowStatus } from './running-session-types'
+
 /**
  * X-1 セッション起動 + ストリーミングの日本語ラベル (FE-030 / FR-020 / Principle XV)。
  *
  * **理由キーは `session`/`infra` が保持し、訳出は `ui`** (Principle XV。R-2 と同じ分担)。
- * `LaunchFailureReason` (10 種。X-5 で `supervisor-exited`) + 調停由来 (`session-limit` / `shutting-down` /
- * `unknown-target`) + X-4 の起動前段 (`invalid-config` / `provider-unavailable` / `needs-confirmation`) の計 16 種を網羅する。
+ * `LaunchFailureReason` (18 種。X-5 で `supervisor-exited`、O-4 でターンの失敗の 8 種) + 調停由来 (`session-limit` /
+ * `shutting-down` / `unknown-target`) + X-4 の起動前段 (`invalid-config` / `provider-unavailable` / `needs-confirmation`) の
+ * 計 24 種を網羅する。
  */
 
 /**
@@ -34,6 +39,21 @@ const LAUNCH_REJECT_LABELS: Record<SessionLaunchRejectReason, string> = {
   // X-5: supervisor (全セッションをまとめるプロセス) の終了。全セッションが同時に終わる (FR-008)。
   'supervisor-exited':
     'セッションをまとめて管理するプロセスが終了したため、すべてのセッションが終了しました。新しく起動し直してください。',
+  // O-4: ターンの失敗の理由 (014 data-model §1 / §5)。HTTP の状態と失敗の文字列 (`errors`) は文言に入れない (U-5)。
+  // `execution-error` / `api-error` の「ログイン状態」は、実機の失敗の形を確かめるまでの添え書き (014 plan RK-06)。
+  'max-turns': 'ターン数の上限に達したため止まりました。',
+  'max-budget': '費用の上限に達したため止まりました。',
+  'structured-output-retries': '構造化出力の再試行の上限に達したため止まりました。',
+  'execution-error':
+    '実行中にエラーが起きました。ログイン状態を確かめてから、起動し直してください。',
+  'auth-failed':
+    '認証または権限のエラーです。ログイン状態や API キー、組織の設定を確かめてください。',
+  billing:
+    '請求またはアカウントの問題で止まりました。クレジットとアカウントの状態を確かめてください。',
+  // Quota banner の有無に依らない (帯を参照しない。014 spec Edge Cases)。
+  'rate-limited': 'レート制限のため止まりました。しばらく待ってから起動し直してください。',
+  'api-error':
+    'API がエラーを返しました。ログイン状態を確かめ、しばらく待ってから起動し直してください。',
   // X-5: 上限超過 (FR-006)。停止処理中の枠も数えるため「終了を待つ」も含める。上限値は domain の定数から組む。
   // 枠を空ける操作を、一覧に実際に出る操作どおりに案内する (pr-gate R1 po M-004)。中断だけでは枠は空かない (FR-011)。
   'session-limit': `同時に動かせるセッションは ${MAX_CONCURRENT_SESSIONS} 件までです。プロンプト待ち・応答待ち・中断のセッションは「終了」、起動中・応答中・承認待ちのセッションは「強制終了」で枠が空きます (中断だけでは空きません)。停止処理中のセッションも数えるため、終わるまで少し待つ場合があります。`,
@@ -70,16 +90,28 @@ const LAUNCH_FAILURE_SHORT_LABELS: Record<LaunchFailureReason, string> = {
   'stream-protocol-error': 'ストリーム破損',
   'provider-error': 'Provider エラー',
   'interrupt-unavailable': '中断非対応',
-  'supervisor-exited': '管理プロセス終了'
+  'supervisor-exited': '管理プロセス終了',
+  'max-turns': 'ターン上限',
+  'max-budget': '費用上限',
+  'structured-output-retries': '出力再試行上限',
+  'execution-error': '実行エラー',
+  'auth-failed': '認証エラー',
+  billing: '請求エラー',
+  'rate-limited': 'レート制限',
+  'api-error': 'API エラー'
 }
 
 export function launchFailureShortLabel(reason: LaunchFailureReason): string {
   return LAUNCH_FAILURE_SHORT_LABELS[reason]
 }
 
-/** `provider-error` だけ「再ログイン」導線を出す (FR-030)。他は再起動導線。 */
+/**
+ * 「再ログイン」導線を出す理由 (正本は 014 data-model §1): 認証または権限の失敗 (`auth-failed`) と、汎用の
+ * `provider-error` (分類できない失敗。X-1 FR-020 / US-4 AC6 から変えない)。他は再起動導線 (レート制限・請求などで
+ * 再ログインを案内しない)。
+ */
 export function isReloginFailure(reason: LaunchFailureReason | null): boolean {
-  return reason === 'provider-error'
+  return reason === 'auth-failed' || reason === 'provider-error'
 }
 
 const RUN_STATE_LABELS: Record<SessionRunState, string> = {
@@ -102,11 +134,12 @@ export function runStateLabel(state: SessionRunState): string {
 /**
  * 一覧の行の状態。run-state と生存フラグの組から決める (`rowStatus`)。
  * とくに `done` は生存なら「応答待ち」、終わっていれば「終了済み」(FR-009)。
+ * 状態の値 (`SessionRowStatus`) は `running-session-types.ts` にあり、ここは `Record` で網羅を型で検査する (O-4 FR-018 (2))。
  * **対応表 (`docs/ui-coverage.md`) D 節 session-state の文言の正本** (launch-failure の正本は `LAUNCH_REJECT_LABELS`)。
  * 変えるときは対応表の該当の行を見る (監視ビューと共有するので ui-coverage-reviewer の発火条件には入れていない。
  * O-7 pr-gate R2 ui-coverage M-101)。
  */
-export const SESSION_ROW_STATUS_LABELS = {
+export const SESSION_ROW_STATUS_LABELS: Record<SessionRowStatus, string> = {
   launching: '起動中',
   // 最初のプロンプトを待っている (claude は最初のプロンプトまで何もしない。pr-gate R1 po H-001)。
   ready: 'プロンプト待ち',
@@ -118,9 +151,7 @@ export const SESSION_ROW_STATUS_LABELS = {
   ending: '終了中',
   failed: '失敗',
   ended: '終了済み'
-} as const
-
-export type SessionRowStatus = keyof typeof SESSION_ROW_STATUS_LABELS
+}
 
 /** 一覧と表示中セッションの操作 (FR-011)。新規起動の文言はシェルの `SHELL_LABELS.newSession` (O-7)。 */
 export const SESSION_ACTION_LABELS = {
@@ -222,13 +253,10 @@ export function activityPrefixLabel(kind: keyof typeof ACTIVITY_PREFIX_LABELS): 
   return `${ACTIVITY_PREFIX_LABELS[kind]}:`
 }
 
-/** 経過時間の表記の区分 (`session-view.ts` の `formatElapsed` が導き、ここで訳す。spec FR-005 [ASSUMED])。 */
-export type Elapsed =
-  | { readonly unit: 'sec'; readonly sec: number }
-  | { readonly unit: 'min'; readonly min: number }
-  | { readonly unit: 'hourMin'; readonly hour: number; readonly min: number }
-
-/** 経過時間 (FR-005 [ASSUMED]: 1 分未満は秒、1 時間未満は分、それ以上は時間と分)。 */
+/**
+ * 経過時間 (FR-005 [ASSUMED]: 1 分未満は秒、1 時間未満は分、それ以上は時間と分)。区分 (`Elapsed`。型は
+ * `running-session-types.ts`) は `session-view.ts` の `formatElapsed` が導き、ここで訳す。
+ */
 export function elapsedLabel(elapsed: Elapsed): string {
   switch (elapsed.unit) {
     case 'sec':
@@ -247,17 +275,33 @@ function joinNames(names: readonly (string | null)[]): string {
   return names.map((n) => (n === null || n === '' ? ANNOUNCE_FOLDER_FALLBACK : n)).join('、')
 }
 
+/** 失敗の読み上げで理由を添えるか (理由が無い・汎用の `provider-error` は添えない。014 data-model §5)。 */
+function announcedFailureReason(reason: LaunchFailureReason | null): string | null {
+  return reason === null || reason === 'provider-error' ? null : launchFailureShortLabel(reason)
+}
+
 /**
  * 支援技術に読ませる文 (FR-004)。**作業フォルダの表示名と固定の文言だけ**で組む (会話由来の文字列を入れない)。
- * 同じ更新で複数が遷移したら 1 つの文にまとめる。
+ * 同じ更新で複数が遷移したら 1 回の読み上げにまとめる。失敗には監視ビューの行と同じ短い理由を添え
+ * (`{名前}: 失敗しました ({短い理由})。`。014 spec US-1 AC5 / data-model §5)、同じ理由のものは名前をつないで 1 文にする。
  */
 export function attentionAnnouncement(
   awaiting: readonly (string | null)[],
-  failed: readonly (string | null)[]
+  failed: readonly { readonly name: string | null; readonly reason: LaunchFailureReason | null }[]
 ): string {
   const parts: string[] = []
   if (awaiting.length > 0) parts.push(`${joinNames(awaiting)}: 承認待ちになりました。`)
-  if (failed.length > 0) parts.push(`${joinNames(failed)}: 失敗しました。`)
+  // 短い理由ごとに名前をまとめる (最初に出た順)。理由を添えないものは null の鍵にまとめる。
+  const groups = new Map<string | null, (string | null)[]>()
+  for (const { name, reason } of failed) {
+    const key = announcedFailureReason(reason)
+    const names = groups.get(key)
+    if (names === undefined) groups.set(key, [name])
+    else names.push(name)
+  }
+  for (const [reason, names] of groups) {
+    parts.push(`${joinNames(names)}: 失敗しました${reason === null ? '' : ` (${reason})`}。`)
+  }
   return parts.join(' ')
 }
 
@@ -273,10 +317,15 @@ export function sameFolderWarning(count: number): string {
 
 /* ── 起動設定ダイアログ (X-4 FE-004 / Principle XV) ─────────────────── */
 
+/**
+ * 起動ダイアログの権限モードの名前 (安全 3 値)。文字列は transcript と共有の権限モードの名前の表
+ * (`features/chat/labels.ts` の `PERMISSION_MODE_NAMES`) から取る — 同じモードの名前を 2 か所に分けない
+ * (O-4 / 014 research R-15 / Principle XIV)。
+ */
 export const PERMISSION_MODE_LABELS: Record<SafePermissionMode, string> = {
-  default: '通常 (操作ごとに承認)',
-  plan: '計画のみ (実行しない)',
-  dontAsk: '事前承認のみ (承認カードを出さない)'
+  default: PERMISSION_MODE_NAMES.default,
+  plan: PERMISSION_MODE_NAMES.plan,
+  dontAsk: PERMISSION_MODE_NAMES.dontAsk
 }
 
 /** 権限モードの意味の説明 (`dontAsk` は承認カードが出ず、事前承認の無い操作は拒否される。plan R-03)。 */
@@ -310,7 +359,7 @@ export const LAUNCH_EMPTY_STATE_LABELS = {
   allRuntimesStopped:
     'WSL ランタイムがすべて停止しています。WSL ディストロを起動してから「再評価」を押してください (アプリはディストロを起動しません)。',
   noProviders:
-    '既定 Provider で起動できます。登録するには、このダイアログを閉じて、サイドバーの「設定」の「プロバイダ」を開いてください。',
+    '既定 Provider で起動できます。登録するには、このダイアログを閉じて、サイドバーの「設定」の「Provider」を開いてください。',
   /** 一覧の読み込み中・失敗は空状態と分ける (読み込み中に「登録してください」と案内しない。po M-102)。 */
   foldersLoading: '作業フォルダを読み込んでいます…',
   foldersLoadFailed: '作業フォルダを読み込めませんでした。',

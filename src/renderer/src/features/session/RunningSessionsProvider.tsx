@@ -8,6 +8,7 @@ import {
   type ThreadMessageLike
 } from '@assistant-ui/react'
 
+import type { AutoModeStatus } from '@domain/runtime/capabilities'
 import type { SessionLaunchConfig } from '@domain/session/launch-config'
 import type { LaunchOrigin } from '@domain/session/launch-usage'
 
@@ -60,6 +61,13 @@ export function RunningSessionsProvider({
           SESSION_NAME_FALLBACKS.runtime),
     [runtimes.list]
   )
+  // 表示用の 3 値だけを返す。一覧が無い・引けないときは `undetermined` (O-4 / 014 data-model §4「権限モード」)。
+  const runtimeAutoMode = useCallback(
+    (id: string): AutoModeStatus =>
+      runtimes.list?.runtimes.find((r) => r.id === id)?.capabilities.autoModeStatus ??
+      'undetermined',
+    [runtimes.list]
+  )
 
   // **稼働中セッション = assistant-ui の thread** (Principle XIII。契約は useRunningThreadList.ts)。
   const threadList = useRunningThreadList(folderName)
@@ -80,6 +88,7 @@ export function RunningSessionsProvider({
       revealMessage: runtime.revealMessage,
       folderName,
       runtimeName,
+      runtimeAutoMode,
       folders: folders.list,
       launch
     }),
@@ -90,6 +99,7 @@ export function RunningSessionsProvider({
       runtime.revealMessage,
       folderName,
       runtimeName,
+      runtimeAutoMode,
       folders.list,
       launch
     ]

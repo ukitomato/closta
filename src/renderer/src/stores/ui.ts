@@ -22,8 +22,11 @@ export const SETTINGS_SECTIONS = ['runtimes', 'folders', 'providers', 'resolutio
 
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number]
 
-/** 右のペインのタブの id。後続 feature (O-4〜O-6・OPT-panel) が足す (`features/shell/panel-tabs.ts`)。 */
-export type PanelTabId = 'overview'
+/**
+ * 右のペインのタブの id (`features/shell/panel-tabs.ts`)。O-4 が `usage` (使用量) を足した。後続 feature (O-5・O-6・
+ * OPT-panel) が足す。
+ */
+export type PanelTabId = 'overview' | 'usage'
 
 /**
  * 登録操作へ渡す初期値 (FE-051)。

@@ -7,17 +7,42 @@ import type {
 } from '@domain/session/agent-session'
 import type { SessionLaunchConfig } from '@domain/session/launch-config'
 import type { LaunchOrigin } from '@domain/session/launch-usage'
+import type { MeterUpdate, PermissionModeKey } from '@domain/session/meter'
 import type { SessionRunState } from '@domain/session/run-state'
 import type { SessionStatusUpdate } from '@domain/session/status-update'
 
 import type { EnqueueVerdict } from './composer-queue'
 import type { QueueAdapter } from './composer-queue-adapter'
-import type { SessionRowStatus } from './labels'
 
 /**
  * 稼働中セッションのストアの状態型 (X-5)。ストア (`running-session-store.ts`) と表示用の導出 (`session-view.ts`) の
  * 両方が読む — 型をストア側に置くと、ストア → 導出 → ストアの循環になる (depcruise `no-circular`)。
+ * 文言の表 (`labels.ts`) を import しない — ストアの型と導出が UI の文言に依存しない (O-4 FR-018 (2))。
  */
+
+/**
+ * 一覧の行の状態の 9 値 (X-5 FR-009 / O-1)。run-state と生存フラグの組から `rowStatus` (`session-view.ts`) が決める。
+ * 文言は `labels.ts` の `SESSION_ROW_STATUS_LABELS` (`Record<SessionRowStatus, string>` で網羅を型で検査する)。
+ */
+export const SESSION_ROW_STATUSES = [
+  'launching',
+  'ready',
+  'running',
+  'awaiting',
+  'interrupted',
+  'waiting',
+  'ending',
+  'failed',
+  'ended'
+] as const
+
+export type SessionRowStatus = (typeof SESSION_ROW_STATUSES)[number]
+
+/** 経過時間の表記の区分 (`session-view.ts` の `formatElapsed` が導き、`labels.ts` の `elapsedLabel` が訳す。O-1 FR-005 [ASSUMED])。 */
+export type Elapsed =
+  | { readonly unit: 'sec'; readonly sec: number }
+  | { readonly unit: 'min'; readonly min: number }
+  | { readonly unit: 'hourMin'; readonly hour: number; readonly min: number }
 
 /** 承認カード表示用 (サニタイズ済み plain text。X-1 H-05)。 */
 export interface PendingPermission {
@@ -63,6 +88,45 @@ export interface LiveSessionState {
 
 /** 監視ビューの情報密度 (O-1 / FR-008)。renderer の表示状態であり永続化しない。 */
 export type Density = 'comfortable' | 'compact'
+
+/** ターンの計量 (最新の `result` 由来。費用・ターン数・モデルごとの内訳・拒否の件数)。 */
+export type TurnMeter = Extract<MeterUpdate, { readonly type: 'turn' }>
+
+/** レート制限の最新の状態 (`rate_limit_event` 由来)。 */
+export type RateLimitMeter = Extract<MeterUpdate, { readonly type: 'rate-limit' }>
+
+/**
+ * 稼働中のセッション 1 本の計量の最新の値 (O-4 / 014 data-model §2「renderer の保持」)。永続化しない。
+ * 起動の設定・`lastConfig`・プリセットに書き戻さない (`permissionMode` を含む)。
+ */
+export interface SessionMeters {
+  readonly lastTurn: TurnMeter | null
+  /** コンテキストの使用量の推定 (主ループの最後の assistant の入力側のトークン)。 */
+  readonly contextUsed: number | null
+  readonly rateLimit: RateLimitMeter | null
+  /** 今の権限モード (起動時と違うかは表示側が比べる)。 */
+  readonly permissionMode: PermissionModeKey | null
+  /** 思考のトークンの推定。主ループの assistant のメッセージと `turn` で null に戻る。 */
+  readonly thinkingTokens: number | null
+  /** tool の id → 経過時間 (秒)。`turn` で空。更新のたびにその id を末尾へ移し、上限を超えたら先頭 (更新の古いもの) から落とす。 */
+  readonly toolElapsed: ReadonlyMap<string, number>
+}
+
+/**
+ * `toolElapsed` に持つ tool の数の上限。agents の間引きの上限 (新しい鍵を捨てる) と向きが違う — renderer の Map には
+ * 結果の届いた tool の値も `turn` まで残り、更新の古いものほど結果が届いている見込みが高い (014 data-model §2)。
+ */
+export const MAX_TOOL_ELAPSED_ENTRIES = 64
+
+/** 計量がまだ届いていないセッションの値 (共有する。中身を書き換えない)。 */
+export const EMPTY_SESSION_METERS: SessionMeters = {
+  lastTurn: null,
+  contextUsed: null,
+  rateLimit: null,
+  permissionMode: null,
+  thinkingTokens: null,
+  toolElapsed: new Map()
+}
 
 /** 行の状態に入った時刻 (O-1 / FR-005。glossary Status since)。 */
 export interface StatusSince {
@@ -114,9 +178,17 @@ export interface RunningSessionStoreState {
   readonly statusSince: Readonly<Record<string, StatusSince>>
   /** 直近の活動。購読の手前で間引いて書く (O-1 / research R-03)。 */
   readonly activity: Readonly<Record<string, Activity | null>>
-  /** 全セッションの受信メッセージの累計 (実機計測の観測点。会話由来の値を持たない。O-1 / FR-012)。 */
+  /**
+   * 全セッションの受信メッセージの累計 (実機計測の観測点。会話由来の値を持たない。O-1 / FR-012)。
+   * `meter` は数えない (O-4 / 014 data-model §2)。
+   */
   readonly receivedMessages: number
   readonly density: Density
+  /**
+   * セッションごとの計量の最新の値 (O-4 / 014 data-model §2)。`sessions` とは別の枝 — 計量の更新で `sessions` の参照を
+   * 変えず、表示中の Thread を描き直さない。`close()` で消す。
+   */
+  readonly meters: Readonly<Record<string, SessionMeters>>
 }
 
 /** セッション 1 本の送信待ちキュー (assistant-ui native queue + 積み込み検証)。 */

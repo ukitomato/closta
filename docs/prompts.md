@@ -265,6 +265,17 @@ CI スクリプトの担当とし、reviewer に複製しない。
 /cl-design "[ui] O-3 (roadmap M3 の順 12、domain: ui、依存: O-2): セッションを横断して探せるようにする。Thread search、会話内検索、conversation map、message timing、活動の heat graph、command palette、empty state。義務 (X-4 から): session charter KPI「再利用率」の計測経路 (起動元 preset / manual のローカル利用ログ。AD-041 (h))。義務 (O-1 から): (1) UI ラベルの i18n リソース化の判断 (Constitution Principle XV の期限 M3。target-finder.ts の 2 本を含める) (2) session charter KPI「並列時の滑らかさ」の実機計測の宿題 (roadmap O-3 の行の (a)〜(d))。表示の追加は docs/ui-coverage.md の行を同じ PR で直す (Constitution XII / AD-044)。" --targets both
 ```
 
+### O-4 — 計量と制限の表示
+
+> O-2 の design で後続に回した表示のうち O-4 の 3 つ (Cost meter / Quota banner / Context display。上の O-2 の注) と、対応表の `後続: O-4` の行を
+> そのまま範囲にした ([spec 014](../specs/014-ui-metering-and-limits/spec.md))。Cost meter は右のペインの「使用量」のタブ、Quota banner は中央の
+> ヘッダの下の帯、Context display は中央のヘッダの目盛りになった。session の契約 (失敗の理由のキー・`SessionEvent` の `meter`) を広げるので
+> targets は both にした (U-1。[AD-047](decisions/0047-session-meter-and-failure-reasons.md))。下は実際に使った入力である。
+
+```
+/cl-design "[ui] O-4 (roadmap M3 の順 13、domain: ui、依存: O-2): SDK が emit する計量と制限の情報を表示する。対象は docs/ui-coverage.md で「後続: O-4」の行で、範囲は roadmap の O-4 の行の「対応表の割当 (O-2 から)」に従う (result の失敗の理由・費用・使用量・ターン数・permission_denials、rate_limit_event (Quota banner)、api_retry、status (権限モードの変化・圧縮中・圧縮の失敗)、thinking_tokens、tool_progress、Context display、Cost meter、task_progress)。完了の PR で対象の行を実装済み / 表示不要に書き換え、Constitution 検証の項目 21 の M3 の残りを減らす。" --targets both
+```
+
 ### O-8 — 並列時の滑らかさの実機計測
 
 > O-3 の design で O-3 から分けた (spec 012 の U-1)。宿題の正本は [roadmap の O-8 の行](roadmap.md#o3-kpi-smoothness) の (a)〜(d) と基準の変化の追記。

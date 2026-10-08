@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect } from 'react'
+import { createContext, useCallback, useContext, useEffect, useSyncExternalStore } from 'react'
 
 import { useUiStore, type TranscriptDensity } from '@/stores/ui'
 
@@ -22,6 +22,60 @@ export function useTranscriptSettled(): boolean {
 /** transcript の情報密度 (FR-012。`stores/ui` の値。監視ビューの行の密度とは別)。 */
 export function useTranscriptDensity(): TranscriptDensity {
   return useUiStore((s) => s.transcriptDensity)
+}
+
+/* ── 実行中の進み具合 (O-4 / 014 data-model §4「進み具合」) ─────────────────────────────── */
+
+/**
+ * **実行中の進み具合の購読元** (tool の経過時間と思考のトークン数の推定)。実行中のペイン (`LivePane` の `LiveSessionPane`)
+ * が稼働中のストアの購読から作り、Thread の外側から渡す (`TranscriptSettledContext` と同じ形。chat は session を
+ * import しない)。値は数だけ。
+ *
+ * | 規則 | 根拠 |
+ * |---|---|
+ * | 過去ログ (`ChatScreen`) は渡さない (null)。過去ログには経過時間も思考の印も出ない | 014 data-model §4 |
+ * | 読む側は自分の値だけを `useSyncExternalStore` で購読する — 他の tool の更新・思考の更新で描き直さない | 014 data-model §4 / plan Performance Goals |
+ * | 値は表示中のセッションのものだけ (別のセッションの値を引かない) | 014 spec US-3 AC4 と同じ規則 |
+ */
+export interface LiveProgressSource {
+  /** tool の呼び出しの id → 経過時間 (秒)。値が無ければ null。 */
+  toolElapsed(toolCallId: string): number | null
+  /** 思考のトークン数の推定。値が無ければ null。 */
+  thinkingTokens(): number | null
+  /** 値が変わったときに呼ぶ listener を登録し、解除する関数を返す。 */
+  subscribe(listener: () => void): () => void
+}
+
+export const LiveProgressContext = createContext<LiveProgressSource | null>(null)
+
+const noopUnsubscribe = (): void => {}
+
+/**
+ * tool の呼び出し 1 つの経過時間 (秒)。`active` (結果待ち) の間だけ購読し、それ以外と購読元が無いとき (過去ログ) は null。
+ */
+export function useLiveToolElapsed(toolCallId: string, active: boolean): number | null {
+  const context = useContext(LiveProgressContext)
+  const source = active && toolCallId !== '' ? context : null
+  const subscribe = useCallback(
+    (listener: () => void) => (source === null ? noopUnsubscribe : source.subscribe(listener)),
+    [source]
+  )
+  const snapshot = useCallback(
+    () => (source === null ? null : source.toolElapsed(toolCallId)),
+    [source, toolCallId]
+  )
+  return useSyncExternalStore(subscribe, snapshot, snapshot)
+}
+
+/** 思考のトークン数の推定。購読元が無いとき (過去ログ) は null。 */
+export function useLiveThinkingTokens(): number | null {
+  const source = useContext(LiveProgressContext)
+  const subscribe = useCallback(
+    (listener: () => void) => (source === null ? noopUnsubscribe : source.subscribe(listener)),
+    [source]
+  )
+  const snapshot = useCallback(() => (source === null ? null : source.thinkingTokens()), [source])
+  return useSyncExternalStore(subscribe, snapshot, snapshot)
 }
 
 /* ── 会話内検索の navigator (O-3 / 012 data-model §2「移動」「メッセージの要素の引き方」) ─────────────── */

@@ -35,6 +35,8 @@ const AgentPlanImpl: ToolCallMessagePartComponent = (props) => {
         <ClipboardListIcon className="size-3.5 shrink-0" />
         <span className="font-medium">計画</span>
         <ToolResultMarks
+          toolCallId={props.toolCallId}
+          pending={props.result === undefined}
           isError={props.isError}
           truncated={isTruncatedArgs(props.args)}
           className="ms-auto"

@@ -101,6 +101,12 @@ export function RunningCenter(): React.JSX.Element | null {
           detail={detail}
           status={SESSION_ROW_STATUS_LABELS[rowStatus(live)]}
           titleTestId="session-title"
+          live={{
+            sessionId: live.sessionId,
+            runtimeId: live.state.config.runtimeId,
+            modelId: live.state.config.modelId,
+            terminal: live.terminal
+          }}
         />
         <div className="min-h-0 flex-1">
           <LivePane />

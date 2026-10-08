@@ -19,8 +19,10 @@ import { useFocusRescue } from './useFocusRescue'
  * - 選んでいたタブが出せなくなったら最初のタブに戻る (`activeTab`)
  * - **開閉のボタンは両方の状態で同じ要素** (先頭に描き続け、開いた状態では CSS で右端に置く)。帯のタブのアイコンから
  *   開いたら、そのタブへフォーカスを移す (pr-gate R1 a11y H-002)
- * - タブは今は 1 つなので矢印キーの移動 (roving tabindex) を持たない。**2 つ目のタブを足す feature が入れる**
- *   (WAI-ARIA APG の Tabs pattern。pr-gate R1 a11y M-004。roadmap の O-4 の行)
+ * - tablist は WAI-ARIA APG の Tabs pattern の自動の選択 (O-4 が 2 つ目のタブ「使用量」と一緒に入れた。O-7 pr-gate R1
+ *   a11y M-004 / 014 spec FR-017 / data-model §6): ← / → で隣のタブ (端で反対の端へ)、Home / End で端のタブへ移り、
+ *   移った先を選んでその button にフォーカスを移す。選ばれたタブだけが Tab 順に入る (roving tabindex)。並びは今の中央の
+ *   状態で出せるタブ (`visibleTabs`) だけ
  *
  * テストはタブの表を差し替えられる (`tabs`)。
  */
@@ -48,6 +50,18 @@ export function RightPanel({
     if (tab !== null) return document.getElementById(`panel-tab-${tab}`) ?? toggleRef.current
     return toggleRef.current
   })
+
+  /** tablist のキー操作 (014 data-model §6)。移った先を選び、そのタブの button にフォーカスを移す。 */
+  const onTabListKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+    const index = visible.findIndex((tab) => tab.id === current?.id)
+    const target = tabListTarget(event.key, index, visible.length)
+    if (target === null) return
+    const tab = visible[target]
+    if (tab === undefined) return
+    event.preventDefault()
+    setTab(tab.id)
+    document.getElementById(`panel-tab-${tab.id}`)?.focus()
+  }
 
   return (
     <aside
@@ -100,7 +114,12 @@ export function RightPanel({
             </Button>
           ))
         ) : visible.length > 0 ? (
-          <div role="tablist" aria-label={SHELL_LABELS.panelTabs} className="flex flex-1 gap-1">
+          <div
+            role="tablist"
+            aria-label={SHELL_LABELS.panelTabs}
+            className="flex flex-1 gap-1"
+            onKeyDown={onTabListKeyDown}
+          >
             {visible.map((tab) => {
               const isCurrent = current?.id === tab.id
               return (
@@ -111,6 +130,7 @@ export function RightPanel({
                   id={`panel-tab-${tab.id}`}
                   aria-selected={isCurrent}
                   aria-controls={`panel-tabpanel-${tab.id}`}
+                  tabIndex={isCurrent ? 0 : -1}
                   className={cn(
                     'rounded-md px-2 py-1 text-xs',
                     isCurrent
@@ -140,4 +160,25 @@ export function RightPanel({
       )}
     </aside>
   )
+}
+
+/**
+ * tablist のキーで移る先の位置 (014 data-model §6)。← / → は隣 (端で反対の端へ回る)、Home / End は端。
+ * 他のキー・タブが 0 件なら null (既定の動きを妨げない)。今の位置が見つからない (-1) ときは、→ と Home で先頭、
+ * ← と End で末尾。
+ */
+function tabListTarget(key: string, index: number, count: number): number | null {
+  if (count === 0) return null
+  switch (key) {
+    case 'ArrowRight':
+      return index < 0 ? 0 : (index + 1) % count
+    case 'ArrowLeft':
+      return index < 0 ? count - 1 : (index - 1 + count) % count
+    case 'Home':
+      return 0
+    case 'End':
+      return count - 1
+    default:
+      return null
+  }
 }

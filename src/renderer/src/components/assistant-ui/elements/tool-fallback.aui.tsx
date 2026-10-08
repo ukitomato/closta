@@ -686,6 +686,7 @@ const statusWithError = (
     : status;
 
 const ToolFallbackImpl: ToolCallMessagePartComponent = ({
+  toolCallId,
   toolName,
   args,
   argsText,
@@ -718,7 +719,12 @@ const ToolFallbackImpl: ToolCallMessagePartComponent = ({
       {/* closta: エラーと切り詰めの印は閉じたままでも見えるよう trigger の横に出す (pr-gate R1 po H-001)。 */}
       <div className="flex items-center gap-2">
         <ToolFallbackTrigger toolName={toolName} status={status} />
-        <ToolResultMarks isError={isError} truncated={isTruncatedArgs(args)} />
+        <ToolResultMarks
+          toolCallId={toolCallId}
+          pending={result === undefined}
+          isError={isError}
+          truncated={isTruncatedArgs(args)}
+        />
       </div>
       <ToolFallbackContent>
         <ToolFallbackError status={status} />

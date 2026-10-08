@@ -3,6 +3,7 @@ import {
   SESSION_EVENT_KINDS,
   type SessionEvent
 } from '@domain/session/agent-session'
+import { decodeMeterUpdate } from '@domain/session/meter'
 import { isSessionRunState } from '@domain/session/run-state'
 
 import { decodeTranscriptMessage } from '@/features/chat/transcript-guard'
@@ -16,6 +17,7 @@ import { decodeTranscriptMessage } from '@/features/chat/transcript-guard'
  * | `kind` を enum で検証し、kind ごとの形を確かめる。**失敗したら null (破棄)** — 他のセッションに影響させない | spec FR-012 / Principle IV |
  * | 本文のサニタイズは agents 側で完了済み。ここは形の検証だけを行う | X-1 FR-009 / SC-008 |
  * | `message` の part は過去ログの受け口と同じ `decodeTranscriptMessage` で検証し、外れた part を落とす | O-2 data-model §2 |
+ * | `meter` はセッションスレッドと同じ domain の `decodeMeterUpdate` で検証し、検証を通した値だけで組み直す (外れたら破棄) | O-4 / 014 data-model §2 |
  */
 
 type Rec = Record<string, unknown>
@@ -83,6 +85,11 @@ export function decodeSessionEvent(raw: unknown): SessionEvent | null {
         : null
     case 'end-forced':
       return { kind: 'end-forced' }
+    case 'meter': {
+      // 知らない `type`・形の外れた id は破棄する。余分なキーは運ばない (O-4 / 014 data-model §2)。
+      const meter = decodeMeterUpdate(value.meter)
+      return meter === null ? null : { kind: 'meter', meter }
+    }
     default:
       return null
   }

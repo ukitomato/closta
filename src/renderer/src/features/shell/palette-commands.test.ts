@@ -130,7 +130,7 @@ describe('操作の表 (data-model §3)', () => {
     expect(labels['settings:providers']).toBe(
       PALETTE_LABELS.paletteSettings(SETTINGS_SECTION_LABELS.providers)
     )
-    expect(labels['settings:providers']).toBe('設定: プロバイダ')
+    expect(labels['settings:providers']).toBe('設定: Provider')
     expect(labels['chat:search']).toBe('会話内を検索')
   })
 
@@ -259,8 +259,8 @@ describe('候補の組み立て (data-model §1 / §3)', () => {
     expect(labels('ﾛｸﾞｲﾝ')).toEqual(['ログイン画面'])
     expect(labels('ＦＥＡＴＵＲＥ')).toEqual(['ログイン画面'])
     expect(labels('ログ login')).toEqual(['ログイン画面'])
-    // 操作の文言も同じ規則 (半角カナの「ﾌﾟﾛﾊﾞｲﾀﾞ」が「設定: プロバイダ」に一致する)。
-    expect(labels('ﾌﾟﾛﾊﾞｲﾀﾞ')).toEqual(['設定: プロバイダ'])
+    // 操作の文言も同じ規則 (半角カナの「ﾗﾝﾀｲﾑ」が「設定: ランタイム」に一致する)。
+    expect(labels('ﾗﾝﾀｲﾑ')).toEqual(['設定: ランタイム'])
     // 検索語から RegExp を組まない (字面で扱う)。
     expect(labels('.*')).toEqual([])
   })

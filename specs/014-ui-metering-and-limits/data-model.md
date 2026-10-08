@@ -159,16 +159,36 @@ type AssistantErrorKey = SDK の SDKAssistantMessageError の 13 値
 
 置き場所は AD-046 Decision 6 の語。中央のヘッダの下の帯は、ヘッダの行と会話内検索のバーの間に置く (順: ヘッダの行 → 権限モードの警告の帯 → Quota banner → 会話内検索のバー → 本体)。どれも稼働中のセッションだけで、過去のセッションには出さない。
 
-### Quota banner (中央のヘッダの下)
+### Quota banner (中央のヘッダの下。**表示の条件と文の組み合わせの正本はここ**)
 
-| `rateLimit.status` | 見た目 | 文言 (§5) |
-|---|---|---|
-| `allowed` / 無い | 出さない | — |
-| `allowed_warning` | 注意 (`role="status"`) | `quotaWarning` (+ `quotaReset`) |
-| `rejected` | 警告 (`role="alert"`) | `quotaRejected` |
+出すかの判定と文の組み立ては純関数 `quotaBannerView(rateLimit, { terminal, nowMs })` (`features/shell/quota-banner.ts`) に置く。部品 (`CenterBanners.tsx`) は結果を描くだけにする。`terminal` は表示中のセッションの `LiveSession.terminal` である。意味は「送信できない終端」(失敗・終了済み・強制終了・終了処理中。`session-view.ts` の `deriveSessionView`) で、`RunningCenter` が `CenterHeaderLive` に足して渡す (session のコードは変えない)。
 
+**出すか** (上から順に評価)
+
+| 条件 | 帯 |
+|---|---|
+| `rateLimit` が null、または `status` が `allowed` | 出さない |
+| `resetsAtSec` が null でなく `nowMs >= resetsAtSec * 1000` (解除の時刻を過ぎた) | 出さない [ASSUMED] |
+| それ以外 (`allowed_warning` / `rejected`) | 出す (下の表) |
+
+**見た目と文** (文は左の列から順に 1 つの段落に並べる。キーは §5)
+
+| `status` | `terminal` | 見た目 | 状態の文 | 超過分 | `resetsAtSec` あり | `resetsAtSec` なし |
+|---|---|---|---|---|---|---|
+| `allowed_warning` | どちらでも | 注意 (`role="status"`) | `quotaWarning`。`utilizationPct` が null なら `quotaWarningNoPct` | `usingOverage` なら `quotaOverage` | `quotaReset` | なし |
+| `rejected` | false | 警告 (`role="alert"`) | `quotaRejected` | 同上 | `quotaWaitUntil` | `quotaWait` |
+| `rejected` | true | 警告の見た目のまま `role="status"` | `quotaRejected` | 同上 | `quotaReset` | なし |
+
+- **待つ案内** (`quotaWait` / `quotaWaitUntil`) は「送ってください」と案内する文である。そのため、まだ送れるセッション (`terminal` が false) の `rejected` にだけ出す (US-2 AC2)
+  - `allowed_warning` はまだ送れる状態なので、時刻の有無によらず待つ案内を出さない
+  - `terminal` のセッションでは、失敗の表示 (`rate-limited` の「起動し直してください」) や終わり方の通知と逆の操作を案内しない。そのため時刻だけを出す。`role` も `status` に下げる。失敗の表示が既に `role="alert"` で読まれるので、警告を重ねて読ませない [ASSUMED]
+- **解除の時刻を過ぎた後**: 待機中のセッションには event が来ない。そのため、次の event を待たずに描画の側で帯を消す。ストアの `rateLimit` は書き換えない (§2「renderer の保持」の最新の値のまま)。消えた帯は、次の `rate_limit_event` (`allowed_warning` / `rejected`) で再び出る [ASSUMED。「解除の時刻を過ぎました」に替える案は採らない。時刻を過ぎた後の状態をアプリは知らないので、過去の値を出し続けない方を採る]
+  - 再判定は部品の timer 1 つで行う。帯を出している間、`resetsAtSec * 1000 - Date.now()` ms の後に 1 回だけ判定し直す
+  - 遅延は `2 ** 31 - 1` ms で頭打ちにする。それを超える値を `setTimeout` に渡すと、すぐに発火するためである。発火した時点で時刻の前なら掛け直す
+  - `rateLimit` か `terminal` が変わったとき、部品が外れたときに timer を解く
+  - 判定はローカルの時計で行い、サーバの時計とは比べない。時計のずれで早く消えても、次の要求で event が来れば戻る
 - `limitType` の文言は §5。null・知らない値 → 「利用枠」
-- 解除の時刻: 今日なら `HH:mm`、別の日なら `M/d HH:mm` (ローカル)。`resetsAtSec` が null → 時刻を出さず「しばらく待ってから」。`utilizationPct` が null → 割合を出さない。`usingOverage` → 「超過分を使っています。」を添える
+- `{時刻}`: 今日なら `HH:mm`、別の日なら `M/d HH:mm` (ローカル。「今日」は描画した時点で決める)。`resetsAtSec` は §2 の検証を通った値なので Invalid Date にならないが、書式の関数は例外を出さない
 - 帯はセッションごと (届いた event はそのセッションのもので、他のセッションに当てはまるかを renderer は知らない)
 - 429 で失敗したが `rate_limit_event` が届かない Provider (API キー・Bedrock) では帯は出ない。失敗の文言 (`rate-limited`) は帯を参照しない
 
@@ -228,6 +248,7 @@ type AssistantErrorKey = SDK の SDKAssistantMessageError の 13 値
 | session | `rate-limited` | レート制限のため止まりました。しばらく待ってから起動し直してください。 |
 | session | `api-error` | API がエラーを返しました。ログイン状態を確かめ、しばらく待ってから起動し直してください。 |
 | session | 短い理由 (8) | ターン上限 / 費用上限 / 出力再試行上限 / 実行エラー / 認証エラー / 請求エラー / レート制限 / API エラー |
+| session | 失敗の読み上げ (`attentionAnnouncement`。spec US-1 AC5) | {名前}: 失敗しました ({短い理由})。 — 短い理由は監視ビューの行と同じ表 (`LAUNCH_FAILURE_SHORT_LABELS`)。理由が無い・汎用の `provider-error` は今の「{名前}: 失敗しました。」のまま。同じ更新で同じ理由のものは名前を「、」でつないで 1 文にし、違う理由は最初に出た順の別の文にして 1 回で読む |
 | session | `provider-error` (既存) | 変えない (既に「Provider」の表記。再ログインの導線を出す汎用の理由として残る) |
 | session | `noProviders` (既存) | 「プロバイダ」→「Provider」 |
 | shell | `SETTINGS_SECTION_LABELS.providers` (既存) | プロバイダ → Provider |
@@ -245,7 +266,7 @@ type AssistantErrorKey = SDK の SDKAssistantMessageError の 13 値
 | shell | `usageLiveOnly` / `usageAwaitFirst` / `usageEmpty` | 実行中のセッションだけ出ます。 / 最初の応答の後に出ます。 / セッションを選ぶと使用量が出ます。 |
 | shell | `contextMeter` / `contextOver` / `contextMeterLabel` | コンテキスト 約 {n}% / コンテキスト 100% 以上 / コンテキストの使用量 (推定) |
 | shell | `costMeter` / `costMeterLabel` | 費用 約 ${n} / 費用の累計 (推定) |
-| shell | `quotaWarning` / `quotaRejected` / `quotaReset` / `quotaWait` / `quotaOverage` | {種類}の利用が {n}% に達しました。 / {種類}の上限に達しました。 / {時刻} にリセットされます。 / しばらく待ってから送ってください。 / 超過分を使っています。 |
+| shell | `quotaWarning` / `quotaWarningNoPct` / `quotaRejected` / `quotaReset` / `quotaWaitUntil` / `quotaWait` / `quotaOverage` | {種類}の利用が {n}% に達しました。 / {種類}の上限に近づいています。 / {種類}の上限に達しました。 / {時刻} にリセットされます。 / {時刻} のリセットまで待ってから送ってください。 / しばらく待ってから送ってください。 / 超過分を使っています。 (並べ方は §4「Quota banner」の表。`quotaWarningNoPct` と `quotaWaitUntil` は [ASSUMED]) |
 | shell | `RATE_LIMIT_TYPE_LABELS` | `five_hour` 5 時間 / `seven_day` 7 日 / `seven_day_opus` 7 日 (Opus) / `seven_day_sonnet` 7 日 (Sonnet) / `seven_day_overage_included` 7 日 (超過分を含む) / `overage` 超過分 / 知らない値 利用枠 |
 | shell | `unsafeModeBanner` | アプリが選んでいない権限モード (「{name}」) で動いています。承認なしで操作が走ることがあります。 |
 | shell | `unsafeModeNoIsolation` / `unsafeModeIsolationUnverified` | このランタイムには隔離がありません。 / このセッションの隔離をアプリは確かめていません。 |
