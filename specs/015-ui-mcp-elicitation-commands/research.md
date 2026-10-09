@@ -15,7 +15,7 @@
 - `init` は「Session metadata the CLI emits at the start of each turn」(`sdk.d.ts:5479-5481`)。`mcp_servers` は `{ name, status: string }`。`status` の値域は `McpServerStatus.status` (`connected` / `failed` / `needs-auth` / `pending` / `disabled`。:1135)
 - `plugins` の `version` は「plugin-author-controlled — validate before trusting」(:5516)
 - `commands_changed` は「Clients should REPLACE their cached command list」(:3447)
-- **Decision**: O-4 の `meter` に `config` / `commands` を足す (AD-048 Decision 3)。`mcp_status` は呼ばない (Decision 2)
+- **Decision**: O-4 の `meter` に `init-report` / `commands` を足す (AD-048 Decision 3)。`init` の `permissionMode` は O-4 がすでに読んでいる (`live-signals.ts`。014 data-model §2)。`mcp_status` は呼ばない (Decision 2)
 
 ## R-03 MCP の tool の表示
 

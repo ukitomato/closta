@@ -7,7 +7,7 @@
 - `AGENT_SDK_ALLOWED_CALLS` (`scripts/constitution/allowlists.mjs`) と `QUERY_OPTION_KEYS` (`src/agents/session-core.ts`) の差分が 0。`QUERY_MUTATION_METHODS` は 11 増えている (AD-048)
 - `toPermissionResult` (`src/domain/session/agent-session.ts`) と `TRANSCRIPT_PART_FIELDS` の差分が 0
 - `sdk-agent-session.ts` の `Query` のメソッドの呼び出しが `interrupt` だけ。項目 16 の違反の fixture が発火する
-- `SESSION_EVENT_KINDS` の差分が 0 (O-4 の後の値から増えない)。IPC・preload・main の差分が 0
+- `SESSION_EVENT_KINDS` の差分が 0 (O-4 の後の値から増えない。増えるのは `METER_UPDATE_TYPES` の 2 つだけ)。IPC・preload・main の差分が 0
 
 ## V-2 対応表 (SC-004)
 

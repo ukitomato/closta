@@ -39,7 +39,6 @@
 
 ```ts
 | { readonly type: 'init-report'; readonly model: string | null;
-    readonly permissionMode: PermissionModeKey;           // O-4 の比較に渡す (表示は O-4 の規則)
     readonly mcpServers: readonly { name: string; status: McpStatusKey }[];
     readonly tools: readonly string[]; readonly skills: readonly string[];
     readonly plugins: readonly { name: string; version: string | null }[];
@@ -53,7 +52,7 @@
 
 | SDK のメッセージ | 読むフィールド | 読まないフィールド |
 |---|---|---|
-| `system` / `init` | `model`・`permissionMode`・`mcp_servers` の `name` と `status`・`tools`・`skills`・`plugins` の `name` と `version`・`slash_commands` | `cwd`・`plugins` の `path`・`apiKeySource`・`betas`・`claude_code_version`・`agents`・`output_style`・`capabilities`・`terminal_slash_commands`・`fast_mode_*`・`effort` |
+| `system` / `init` | `model`・`mcp_servers` の `name` と `status`・`tools`・`skills`・`plugins` の `name` と `version`・`slash_commands` | `cwd`・`plugins` の `path`・`apiKeySource`・`betas`・`claude_code_version`・`agents`・`output_style`・`capabilities`・`terminal_slash_commands`・`fast_mode_*`・`effort` |
 | `system` / `commands_changed` | `commands` の `name`・`description`・`argumentHint` | `aliases` |
 
 ### 形の検査 (agents と decoder で同じ定数。domain の `session-init-report.ts`)
@@ -68,24 +67,23 @@
 | `version` | `^[0-9A-Za-z.+-]{1,32}$` | null |
 | コマンドの `description` / `argumentHint` | O-2 の `sanitizeBody` を通し、Unicode の一般カテゴリ Cc / Cf / Zl / Zp を除き、1 行に正規化、200 / 64 コードポイントで切り詰め。平文で描く (markdown・自動リンクにしない) | '' |
 | `status` (MCP) | `connected` / `failed` / `needs-auth` / `pending` / `disabled` を `Object.hasOwn` の表で照合 (`init` の型は `string`) | `unknown` |
-| `permissionMode` | O-4 の `PermissionModeKey` | `unknown` |
 | 件数 | MCP サーバー 64、tool 256、スキル 128、プラグイン 64、スラッシュコマンド 256、コマンド 256 | 超えた分を落とし `omitted` に数える |
 | `meter` 1 件の直列化後のバイト数 | 64KB 以下 (`BODY_MAX_BYTES` (200,000) の内) | 後ろの要素から落として `omitted` に数える |
 
-- `sdk-agent-session.ts` で、domain に手書きした入力型 (`SessionInitReportInput` / `CommandsChangedInput` / `AuthStatusInput` / `PluginInstallInput`。読むフィールドだけ) と SDK の型の一方向の代入可能性 (既存の :82 の形) と、`McpStatusKey` (`unknown` を除く) の値域の `Equal<…>` (:80-81 の形) を固定する。SDK の import 文は 1 つに保つ
+- `sdk-agent-session.ts` で、domain に手書きした入力型 (`SessionInitReportInput` / `CommandsChangedInput` / `AuthStatusInput` / `PluginInstallInput`。読むフィールドだけ) と SDK の型の一方向の代入可能性と、`McpStatusKey` (`unknown` を除く) の値域の `Equal<…>` (既存の `sdk-agent-session.ts:91-103` の形) を固定する。SDK の import 文は 1 つに保つ
 - **送るかの判定**: 変換後の値を決まった順に直列化した文字列の全体で前回と比べる。同じなら送らない。**基準は実際に送ったときだけ更新する** (`run()` の closure)。`init-report` / `commands` は O-4 の `meter` の上限 (1 秒に 20 件) に掛けない
-- `init` の `permissionMode` は O-4 の権限モードの比較 (`meter.ts` の関数。基準は closure) にも渡す。変わったときは O-4 の `meter` `permission-mode` と行を出す (O-4 data-model §2 / §3。agents は値を渡すだけで、昇格値のリテラルは domain)
+- `init` の `permissionMode` は O-4 がすでに読み、権限モードの比較に使っている (`src/agents/live-signals.ts` の `onSystem` の `init`。014 data-model §2)。`init-report` には載せず、O-4 の扱いを変えない。構成のフィールドは同じ `init` の分岐で読み足す (読むフィールドを足すので、その分岐の「読むのは権限モードだけ」の注記を直す)
 
 ### renderer の保持
 
-O-4 data-model §2 の `meters` に `initReport` (最新) と `commands` (最新) と、スラッシュコマンドの一覧の出所の受信の連番を足す。スラッシュコマンドの一覧は、`init-report` の `slashCommands` と `commands` のうち後に届いた方を使う。保持は `Map` / `Object.hasOwn` (名前をキーにする集計を含む)。
+O-4 data-model §2 の `meters` (`SessionMeters`。`features/session/running-session-types.ts`。書き手は `running-session-store.ts`) に `initReport` (最新) と `commands` (最新) と、スラッシュコマンドの一覧の出所の受信の連番を足す。スラッシュコマンドの一覧は、`init-report` の `slashCommands` と `commands` のうち後に届いた方を使う。保持は `Map` / `Object.hasOwn` (名前をキーにする集計を含む)。
 
-## §3 構成のタブ (右のペイン。O-7 のタブの表に `config` を 1 行。`availableFor: ['running', 'past', 'none']`)
+## §3 構成のタブ (右のペイン。タブの表 `features/shell/panel-tabs.ts` の「概要」「使用量」の後に `config` を 1 行。`availableFor: ['none', 'running', 'past']`。`PanelTabId` (`stores/ui.ts`) に `config` を足す)
 
 | 節 | 中身 | 0 件 / 外れ |
 |---|---|---|
 | 状態の時点 | 「ターンの開始時点の状態です」 | — |
-| Claude Code が報告したモデル | `initReport.model` (「概要」の「選んだモデル」と見出しを分ける) | null → 「不明」 |
+| Claude Code が報告したモデル | `initReport.model` (「概要」の「起動時のモデル」(`OVERVIEW_LABELS.model`) と見出しを分ける) | null → 「不明」 |
 | MCP サーバー | 名前と状態 (§6)。`failed` / `needs-auth` は注意の印。案内は下 | 「MCP サーバーはありません」 |
 | tool | 件数と一覧。MCP の tool はサーバーごとにまとめる (`Map`。§1 の関数) | 「ありません」 |
 | スラッシュコマンド | 名前・`argumentHint`・説明 (平文) | 「ありません」 |
@@ -95,11 +93,11 @@ O-4 data-model §2 の `meters` に `initReport` (最新) と `commands` (最新
 - **注意の印**: `data-attention="true"`・警告のアイコン・`aria-label` に「注意」。`failed` / `needs-auth` だけ (`unknown` は印を付けない)
 - **案内**: `needs-auth` → 「このセッションを起動した環境で claude を開き、/mcp で認証してください (Provider が設定ディレクトリを指定している場合は、同じ `CLAUDE_CONFIG_DIR` で開いてください)」。`failed` → 「このセッションを起動した環境で claude を開き、/mcp で詳細を確かめてください」
 - 過去 → 「実行中のセッションだけ出ます」、未選択 → O-7 の空の状態、`initReport` がまだ無い → スラッシュコマンドの節 (`commands` があれば) だけを出し、他は「最初のターンの後に出ます」
-- **O-7 のタブの表の拡張**: `PanelTab` に `attention?: (sessionId: string) => boolean` を足す (O-7 data-model §4 の影響。AD-046 Decision 4 の「1 か所の表に登録」の形を保つ)。畳んだ帯は `attention` が true のタブのアイコンに印を出す
+- **O-7 のタブの表の拡張**: `PanelTab` に `attention?: (sessionId: string) => boolean` を足す (O-7 data-model §4 の影響。AD-046 Decision 4 の「1 か所の表に登録」の形を保つ)。畳んだ帯 (`RightPanel.tsx` の 40px の帯) は `attention` が true のタブのアイコンに印を出す。タブのテストは `RightPanel.tabs.test.tsx` の側に足す (O-4 の分割。`AppShell.test.tsx` に足さない)
 
 ## §4 システムイベントの行と承認カードの注記
 
-### 行 (O-2 の `system-event` の category。O-4 data-model §3 と同じ規則。行の組み立ては agents の `live-system-rows.ts`、過去ログの変換に足さない)
+### 行 (O-2 の `system-event` の category。O-4 data-model §3 と同じ規則。行の組み立ては agents の `live-signals.ts` (O-4 の行の `rowEvent` と同じ場所)、過去ログの変換に足さない。最上位の `auth_status` は今 `sdk-agent-session.ts` の分岐に無いので足す)
 
 | category | 判定 | 行の id | 作る (opens) | `name` | `detail` | `status` |
 |---|---|---|---|---|---|---|
@@ -107,8 +105,8 @@ O-4 data-model §2 の `meters` に `initReport` (最新) と `commands` (最新
 | `plugin` | `type === 'system' && subtype === 'plugin_install'` | `plugin:<連番>` (`started` から `completed` まで。closure) | `status: 'started'` | '' | 導入できた数 / できなかった数と、最後のマーケットプレイスの名前 (§2 の名前の形の検査) | `started` (既存) → `completed` (失敗が 1 つでもあれば `failed`) |
 
 - `output` / `error` の文字列は通さない
-- `SystemEventStatus` に足すのは `authenticating` だけ (`started` / `succeeded` / `failed` / `completed` は既存。`transcript-dto.ts:66-67`)。category の正本は `transcript-dto.ts:62`
-- `system-event.ts:117` の `HOOK_OUTCOMES[m.outcome] ?? 'unknown'` は同じファイルを触るので `Object.hasOwn` に直す
+- `SystemEventStatus` に足すのは `authenticating` だけ (`started` / `succeeded` / `failed` / `completed` は既存。`SYSTEM_EVENT_STATUSES`、`transcript-dto.ts:77`)。category の正本は `SYSTEM_EVENT_CATEGORIES` (`transcript-dto.ts:67`。O-4 の後は `hook` / `task` / `api-retry` / `compaction` / `permission-mode`)
+- `system-event.ts:118` の `HOOK_OUTCOMES[m.outcome] ?? 'unknown'` は同じファイルを触るので `Object.hasOwn` に直す
 
 ### 承認カードの `AskUserQuestion` の注記 (正本の文言は §6)
 
@@ -118,7 +116,7 @@ O-4 data-model §2 の `meters` に `initReport` (最新) と `commands` (最新
 
 | 節 | 行 | 割当 | 経路 |
 |---|---|---|---|
-| A | `init` | `実装済み: 構成のタブ (実行中)`。備考: `cwd`・`path`・`apiKeySource` などは出さない | 実行中 |
+| A | `init` | `実装済み: 構成のタブ (実行中)`。備考: `cwd`・`path`・`apiKeySource` などは出さない。`permissionMode` は O-4 が権限モードの比較に使う (014 data-model §2。今の備考を残す) | 実行中 |
 | A | `plugin_install` | `実装済み: SystemEventRow (実行中)`。備考: アプリの起動では `CLAUDE_CODE_SYNC_PLUGIN_INSTALL` を渡さない (AD-041 (e)) ので通常は届かない | 実行中 |
 | A | `auth_status` (Tier A) | `実装済み: SystemEventRow (実行中)`。備考: `output` / `error` は出さない (U-4) | 実行中 |
 | A | `commands_changed` | `実装済み: 構成のタブ (実行中)` | 実行中 |

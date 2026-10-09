@@ -1,13 +1,13 @@
 # Implementation Plan: MCP・プラグイン・コマンドの表示 (O-5)
 
-**Branch**: `015-ui-mcp-elicitation-commands` (O-4 の `meter` に依るので `014-ui-metering-and-limits` (その下に `013-ui-app-shell`) の上に積んである。実装は O-7 と O-4 のマージの後) | **Date**: 2026-10-04 (design-gate R1 の後に手当て) | **Spec**: [spec.md](./spec.md)
+**Branch**: `015-ui-mcp-elicitation-commands` (2026-10-09 に main (faafe91。O-7 / O-3 / O-4 のマージの後) から切り直した) | **Date**: 2026-10-04 (design-gate R1 の後に手当て。2026-10-09 に spec の載せ直しに合わせて古い参照だけを直した。本文は /cl-plan で作り直す) | **Spec**: [spec.md](./spec.md)
 
-spec の U-1〜U-7 と AD-046 / AD-047 / AD-048 は 2026-10-05 に利用者が承認した。O-7 / O-4 のマージの後に実装する。
+spec の U-1〜U-7 と AD-046 / AD-047 / AD-048 は 2026-10-05 に利用者が承認した。O-7 (PR #13) と O-4 (PR #15) はマージ済み。
 
 ## Summary
 
 - MCP の tool (`mcp__*` と組み込みの 4 tool) を `McpToolCall` で、`AskUserQuestion` を読み取り専用の表示で描く (過去ログ・実行中)。振り分けは完全一致の表 → `mcp__` の判定 → ToolFallback の 2 段 (AD-048 Decision 5)。承認カードは MCP の生の名前を切り詰めずに出し、`AskUserQuestion` に暫定の注記
-- `init` / `commands_changed` を O-4 の `meter` の `init-report` / `commands` で運び、右のペインの「構成」のタブに出す (送るかの判定は値の全体、送ったときだけ基準を更新、`meter` の上限に掛けない)。`init` の `permissionMode` を O-4 の比較に渡す
+- `init` / `commands_changed` を O-4 の `meter` の `init-report` / `commands` で運び、右のペインの「構成」のタブに出す (送るかの判定は値の全体、送ったときだけ基準を更新、`meter` の上限に掛けない)。`init` の `permissionMode` は O-4 がすでに比較に使っている (変えない)
 - `auth_status` (最上位の型) / `plugin_install` をシステムイベントの行に
 - 項目 16 の P3 の検査を広げる (MCP・プラグイン・スキルの `Query` のメソッド)。過去ログの tool 名を無害化に揃える
 - 応答の UI と composer の候補を O-10 に分ける (AD-048)
@@ -15,18 +15,18 @@ spec の U-1〜U-7 と AD-046 / AD-047 / AD-048 は 2026-10-05 に利用者が�
 ## Technical Context
 
 - **レイヤ**:
-  - domain: `session-init-report.ts` (新設。`init-report` / `commands` の型・読むフィールドだけの入力型・形の検査の定数・純粋な変換)、O-4 の `meter.ts` (`MeterUpdate` に 2 種類、権限モードの比較に `init` を足す)、`system-event.ts` (category `auth` / `plugin`、status `authenticating`、`HOOK_OUTCOMES` の照合を `Object.hasOwn` に)、`transcript.ts` (過去ログの tool 名の無害化。:233)
-  - agents: `sdk-agent-session.ts` (`system` の `init` / `commands_changed` / `plugin_install` と、最上位の `auth_status` の分岐。送るかの判定と基準 (closure)。入力型の代入可能性と `McpStatusKey` の `Equal<…>`。SDK の import 文は 1 つ)、O-4 の `live-system-rows.ts` (`auth` / `plugin` の行)
-  - renderer: `features/chat/mcp-tool-name.ts` (新設)、`components/assistant-ui/elements/mcp-tool-call.aui.tsx` / `ask-user-question.aui.tsx` (新設) と `tool-registry.aui.tsx` (2 段の振り分け・`Object.hasOwn`)、`features/session/ApprovalCard.tsx` (生の名前・補助の見出し・注記)、`session-event-decoder.ts` (2 種類の検証)、`running-session-store.ts` (`meters` の `initReport` / `commands`・後勝ち)、`features/shell/` (O-7: 構成のタブ・`PanelTab.attention`・帯の印)、`labels.ts`
+  - domain: `session-init-report.ts` (新設。`init-report` / `commands` の型・読むフィールドだけの入力型・形の検査の定数・純粋な変換)、O-4 の `meter.ts` (`MeterUpdate` と `METER_UPDATE_TYPES` に 2 種類)、`system-event.ts` (category `auth` / `plugin`、status `authenticating`、`HOOK_OUTCOMES` の照合を `Object.hasOwn` に)、`transcript.ts` (過去ログの tool 名の無害化。:233)
+  - agents: `sdk-agent-session.ts` (最上位の `auth_status` の分岐を足す。入力型の代入可能性と `McpStatusKey` の `Equal<…>`。SDK の import 文は 1 つ)、O-4 の `live-signals.ts` (`onSystem` の `init` で構成を読み足す・`commands_changed` / `plugin_install`。送るかの判定と基準 (closure)。`auth` / `plugin` の行)
+  - renderer: `features/chat/mcp-tool-name.ts` (新設)、`components/assistant-ui/elements/mcp-tool-call.aui.tsx` / `ask-user-question.aui.tsx` (新設) と `tool-registry.aui.tsx` (2 段の振り分け・`Object.hasOwn`)、`features/session/ApprovalCard.tsx` (生の名前・補助の見出し・注記)、`features/session/session-event-decoder.ts` (2 種類の検証)、`running-session-store.ts` / `running-session-types.ts` (`meters` の `initReport` / `commands`・後勝ち)、`stores/ui.ts` (`PanelTabId` に `config`)、`features/shell/` (`panel-tabs.ts` の構成のタブ・`PanelTab.attention`・`RightPanel.tsx` の帯の印。テストは `RightPanel.tabs.test.tsx`)、`labels.ts`
   - scripts: `scripts/constitution/allowlists.mjs` (`QUERY_MUTATION_METHODS` を 11 足す)、`tests/rule-fixtures/` (違反の fixture と期待表)
-- **既存の起点**: research R-01〜R-04。`tool-registry.aui.tsx:22-38`、`ApprovalCard.tsx:30`、`sdk-agent-session.ts:80-82,513-561`、`transcript.ts:233`、`system-event.ts:117`、`allowlists.mjs:419-427`、`check.mjs:917-924`
+- **既存の起点**: research R-01〜R-04。`tool-registry.aui.tsx:22-38`、`ApprovalCard.tsx:30`、`sdk-agent-session.ts:91-103,552-610`、`live-signals.ts:359-381`、`transcript.ts:233`、`system-event.ts:118`、`allowlists.mjs:420-427`、`check.mjs:918-924`
 
 ## Constitution Check
 
 | Principle | 判定 | 根拠 |
 |---|---|---|
 | I / II / VI / VII / IX / X | ✅ / N/A | パス (`cwd`・`path`) を通さない。URI は要約だけで解決しない。新しいプロセス・永続化なし。構成は port で main を経由しない。`meter` 1 件のバイト数に上限 |
-| III (権限ゲート) | ✅ | 承認の応答の形 (`toPermissionResult`) を変えない。承認カードは生の名前を必ず出す。`AskUserQuestion` の回答は O-10 で、今は暫定の注記だけ。`init` の `permissionMode` も昇格の観測に使う |
+| III (権限ゲート) | ✅ | 承認の応答の形 (`toPermissionResult`) を変えない。承認カードは生の名前を必ず出す。`AskUserQuestion` の回答は O-10 で、今は暫定の注記だけ。`init` の `permissionMode` による昇格の観測は O-4 のまま |
 | IV (SDK 経由) | ✅ | 新しい SDK の呼び出しなし。`Query` のメソッドは `interrupt` だけ (AD-036 §4 P3)。項目 16 の P3 を広げて機械で守る。`AGENT_SDK_ALLOWED_CALLS`・`QUERY_OPTION_KEYS` の差分 0 |
 | V (資格情報非永続) | ✅ | `apiKeySource`・auth の `output` / `error` を通さない。名前は allowlist、URI は userinfo / query を捨てる |
 | VIII | ✅ | 文言は `labels.ts`。名前は 1 行で切り詰め (承認カードは切り詰めず折り返す)。composer は変えない |
@@ -68,30 +68,30 @@ spec の U-1〜U-7 と AD-046 / AD-047 / AD-048 は 2026-10-05 に利用者が�
 
 | # | 出所 | 内容 | 処理 |
 |---|---|---|---|
-| 1 | roadmap:257 (O-5 の行) | 対応表の割当の範囲、操作画面を含めない、応答を session の control 経路で返す | **受ける / 送る** — 表示は US-1〜US-3。応答と composer の候補は O-10 (U-1 / U-6)。操作は行わない (U-2) |
+| 1 | roadmap:362 (O-5 の行) | 対応表の割当の範囲、操作画面を含めない、応答を session の control 経路で返す | **受ける / 送る** — 表示は US-1〜US-3。応答と composer の候補は O-10 (U-1 / U-6)。操作は行わない (U-2) |
 | 2 | ui-coverage の `後続: O-5` の行と F 節 | 書き換え | **受ける** — data-model §5 |
-| 3 | ui charter:205 (Open Questions。既に閉じた形) | Tier C の転用は O-5 で判断 | **受ける** — 答えを「転用しない (AD-048)」に更新 |
-| 4 | ui charter:46 / 006 spec:406 / PLAN.md:359 | composer の slash commands (In scope) | **送る** — O-10 (U-6)。charter に持ち主を書く |
+| 3 | ui charter:253-254 (Open Questions。既に閉じた形) | Tier C の転用は O-5 で判断 | **受ける** — 答えを「転用しない (AD-048)」に更新 |
+| 4 | ui charter:50 / 006 spec:406 / PLAN.md:359 | composer の slash commands (In scope) | **送る** — O-10 (U-6)。charter に持ち主を書く |
 | 5 | constitution:29 | 項目 21 の件数 (O-5 21) | **注記** — 完了の PR で項目 21 の出力が変わる (Constitution は改めない) |
 | 6 | `_overview.md`:64,96,108 / prompts.md:224 / AD-044:19,103 / 004 data-model:48 / 011 一式 | O-5 の範囲と domain `ui`、M3 の列 | **受ける** — Feature 帰属の表と M3 の列に O-10、帰属の判断根拠に O-10 の domain |
 | 7 | 013 data-model §4 (`PanelTab`) | タブの表の形 | **広げる** — `attention` を足す (data-model §3) |
-| 8 | 014 data-model §2 / AD-047 | `meter` の許可リストと上限、権限モードの比較 | **読み替える / 足す** — AD-048 の「読み替える箇所」。`init-report` / `commands` は上限に掛けない。`init.permissionMode` を比較に渡す |
+| 8 | 014 data-model §2 / AD-047 | `meter` の許可リストと上限、権限モードの比較 | **読み替える / 足す** — AD-048 の「読み替える箇所」。`init-report` / `commands` は上限に掛けない。`init.permissionMode` は O-4 がすでに比較に使っている (変えない) |
 | 9 | O-4 design-gate security M-001 / O-5 security M-002 | `tool-registry.aui.tsx:36`・`system-event.ts:117` の `??` / 過去ログの tool 名 (`transcript.ts:233`) | **受ける** — 同じファイルを触るので直す |
 | 10 | AD-036 §4 P3 / `allowlists.mjs:372,419-427` | `Query` のメソッドは `interrupt` だけ。denylist は漏れる | **受ける (一部)** — denylist を広げる。正の形への置き換えは項目 16 の持ち主へ (system scope) |
 | 11 | O-5 pb M-003 | 項目 14 は最初の `import {…}` しか読まない | **送る (system scope)** — 項目 14 の持ち主へ。本 feature は SDK の import 文を 1 つに保つ |
-| 12 | roadmap の O-3 (O-8) の義務 (c) | 観測点 `receivedMessages` の基準 | **注記** — `auth` / `plugin` の行は数え、`init-report` / `commands` は数えない |
+| 12 | roadmap の O-8 の行の (c) | 観測点 `receivedMessages` の基準 | **注記** — `auth` / `plugin` の行は数え、`init-report` / `commands` は数えない |
 
 ## 実装方針
 
 - MCP の表示: `mcp-tool-name.ts` (純関数。`knownServers` は表示中のセッションの `initReport`) → `tool-registry.aui.tsx` の 2 段の振り分け → `McpToolCall` (見出し・閉じた入力・平文の結果)。承認カードは生の名前 + 補助の見出し
 - `AskUserQuestion`: 表に登録し `ask-user-question.aui.tsx` で読み取り専用。承認カードに注記
-- 構成: `session-init-report.ts` の変換 → `sdk-agent-session.ts` の分岐 (送るかの判定と基準は closure、送ったときだけ更新) → `meter` → decoder → `meters` (後勝ち) → 構成のタブと帯の印 (`PanelTab.attention`)
-- 行: O-4 の `live-system-rows.ts` に `auth` (最上位の型) / `plugin`
+- 構成: `session-init-report.ts` の変換 → `live-signals.ts` の `init` / `commands_changed` の分岐 (送るかの判定と基準は closure、送ったときだけ更新) → `meter` → decoder → `meters` (後勝ち) → 構成のタブと帯の印 (`PanelTab.attention`)
+- 行: O-4 の `live-signals.ts` に `auth` (最上位の型。`sdk-agent-session.ts` の分岐を足す) / `plugin`
 - 検査: `QUERY_MUTATION_METHODS` に 11 足し、`sdk-query-mcp-control.ts.fixture` (`.setMcpServers(` / `.mcpServerStatus(`) を `tests/rule-fixtures/` に置き期待表に足す
 
 ## ADR
 
-**AD-048 を proposed で起こした** (design-gate R1 の後に、AD-036 §4 P3 の適用・未信頼の文字列の区分・読み替える箇所・tool の登録の 2 段を足した)。O-10 の 2 つの ADR は O-10 の design の前に起こす。
+**AD-048 は 2026-10-05 に accepted** (design-gate R1 の後に、AD-036 §4 P3 の適用・未信頼の文字列の区分・読み替える箇所・tool の登録の 2 段を足してから承認された)。本文は変えない。AD-047 への逆参照の訂正節は spec FR-014 (未承認)。O-10 の 2 つの ADR は O-10 の design の前に起こす。
 
 ## 機械強制の変更
 
@@ -104,7 +104,7 @@ spec の U-1〜U-7 と AD-046 / AD-047 / AD-048 は 2026-10-05 に利用者が�
 | ID | リスク | 手当て |
 |---|---|---|
 | RK-01 | 仮採用した判断 (U-1〜U-7)・AD-046 / AD-047 / AD-048 が覆る (とくに O-10 への分割と domain) | 2026-10-05 に利用者が推奨案どおり承認した |
-| RK-02 | O-4 の `meter` が変わる・O-4 が後回しになる | 依存を明記。O-4 が覆ったら U-3 を見直す |
+| RK-02 | O-4 の `meter` の形が O-5 の前提と違う | O-4 は PR #15 でマージ済み。2026-10-09 に `meter.ts` / `live-signals.ts` と突き合わせ、spec / data-model を直した |
 | RK-03 | MCP のサーバー名に `__` を含み、見出しのサーバー名を取り違える | 構成のサーバー名の最長一致、推定の印、承認カードは生の名前 (data-model §1) |
 | RK-04 | `AskUserQuestion` を承認カードで許可しても回答が届かない (今の不具合のまま) | 暫定の注記で利用者に伝える (US-1 AC9)。O-10 が直す |
 | RK-05 | `init` の `mcp_servers` の `status` が既知の値以外を運ぶ | `unknown` に倒し、注意の印を付けない |
@@ -114,13 +114,14 @@ spec の U-1〜U-7 と AD-046 / AD-047 / AD-048 は 2026-10-05 に利用者が�
 ## Project Structure
 
 ```
-docs/decisions/0048-session-config-display-and-answer-ui-split.md   (新設。proposed)
+docs/decisions/0047-session-meter-and-failure-reasons.md   (AD-048 への参照の訂正節。spec FR-014 の Q1 の回答による)
 src/domain/session/session-init-report.ts (+ test。新設) / meter.ts (O-4) / system-event.ts / transcript.ts (:233)
-src/agents/sdk-agent-session.ts (+ test) / live-system-rows.ts (O-4)
+src/agents/sdk-agent-session.ts (+ test) / live-signals.ts (+ test。O-4)
 src/renderer/src/features/chat/mcp-tool-name.ts (+ test。新設) / labels.ts
 src/renderer/src/components/assistant-ui/elements/mcp-tool-call.aui.tsx / ask-user-question.aui.tsx (+ test。新設) / tool-registry.aui.tsx (+ test。新設)
-src/renderer/src/features/session/ApprovalCard.tsx (+ test) / session-event-decoder.ts / running-session-store.ts / labels.ts
-src/renderer/src/features/shell/ (O-7: ConfigTab・panel-tabs の attention・帯の印・labels)
+src/renderer/src/features/session/ApprovalCard.tsx (+ test) / session-event-decoder.ts / running-session-store.ts / running-session-types.ts / labels.ts
+src/renderer/src/stores/ui.ts (PanelTabId)
+src/renderer/src/features/shell/ (ConfigTab・panel-tabs の attention・RightPanel の帯の印・labels。テストは RightPanel.tabs.test.tsx)
 scripts/constitution/allowlists.mjs / tests/rule-fixtures/ (sdk-query-mcp-control.ts.fixture・expected.mjs)
 docs/ui-coverage.md / docs/glossary.md / docs/domains/{ui,session}/charter.md / docs/domains/_overview.md / docs/roadmap.md / docs/prompts.md
 ```
