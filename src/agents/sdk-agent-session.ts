@@ -6,7 +6,10 @@ import {
   type EffortLevel as SdkEffortLevel,
   type Options,
   type PermissionMode as SdkPermissionMode,
-  type Query
+  type Query,
+  type SDKAssistantMessageError,
+  type SDKRateLimitInfo,
+  type SDKResultError
 } from '@anthropic-ai/claude-agent-sdk'
 
 import { isEffortLevel, isValidModelId } from '@domain/provider/model-catalog'
@@ -26,10 +29,17 @@ import {
   type SafePermissionMode
 } from '@domain/session/launch-config'
 import { toLiveAssistantMessage } from '@domain/session/live-message'
+import type {
+  AssistantErrorKey,
+  PermissionModeKey,
+  RateLimitStatus,
+  RateLimitType
+} from '@domain/session/meter'
 import { nextState, type SessionRunState } from '@domain/session/run-state'
 import { sanitizeBody } from '@domain/session/sanitize-body'
 import { toSystemEventMessage } from '@domain/session/system-event'
 
+import { createLiveSignals } from './live-signals'
 import { createLiveToolResultTracker } from './live-tool-results'
 import {
   acceptsWhileClosing,
@@ -42,6 +52,7 @@ import {
   decodeSessionControl,
   resultAction,
   type AgentSpawnOptions,
+  type ResultErrorSubtype,
   type SpawnedLike
 } from './session-core'
 
@@ -82,6 +93,19 @@ const effortLevelMatchesSdk: Equal<EffortLevel, SdkEffortLevel> = true
 const safeModeIsSdkMode: SafePermissionMode extends SdkPermissionMode ? true : false = true
 void effortLevelMatchesSdk
 void safeModeIsSdkMode
+// 計量と失敗の理由の列挙 (O-4 / 014 data-model §2 / plan RK-05)。値域は domain の `meter.ts` と `session-core.ts` が持つ。
+type KnownPermissionModeKey = Exclude<PermissionModeKey, 'unknown'>
+type SdkRateLimitType = NonNullable<SDKRateLimitInfo['rateLimitType']>
+const permissionModeKeyMatchesSdk: Equal<KnownPermissionModeKey, SdkPermissionMode> = true
+const rateLimitStatusMatchesSdk: Equal<RateLimitStatus, SDKRateLimitInfo['status']> = true
+const rateLimitTypeMatchesSdk: Equal<RateLimitType, SdkRateLimitType> = true
+const assistantErrorMatchesSdk: Equal<AssistantErrorKey, SDKAssistantMessageError> = true
+const resultErrorSubtypeMatchesSdk: Equal<ResultErrorSubtype, SDKResultError['subtype']> = true
+void permissionModeKeyMatchesSdk
+void rateLimitStatusMatchesSdk
+void rateLimitTypeMatchesSdk
+void assistantErrorMatchesSdk
+void resultErrorSubtypeMatchesSdk
 
 /** 子 (`wsl.exe`) の exit を待つ期限 (kill / `end` / 終了時。spec Assumptions [ASSUMED])。 */
 const CHILD_EXIT_TIMEOUT_MS = 3000
@@ -299,6 +323,16 @@ async function run(
   // **本文はここで文字列に直列化する** — 調停役スレッドは解釈せずに中継する (AD-043 Decision 2)。
   const emit = (event: SessionEvent): void =>
     post({ kind: 'event', payload: JSON.stringify(event) })
+  // 実行中の信号 (計量・失敗の理由の材料・O-4 の行) の分岐 (O-4 / 014 research R-14。closure に置く — module スコープに置かない)。
+  const signals = createLiveSignals({
+    launchPermissionMode: launchOptions.permissionMode,
+    emit,
+    clock: {
+      now: () => Date.now(),
+      setTimer: (callback, ms) => setTimeout(callback, ms),
+      clearTimer: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>)
+    }
+  })
 
   const transition = (action: Parameters<typeof nextState>[1]): void => {
     const next = nextState(state, action)
@@ -314,8 +348,10 @@ async function run(
 
   const fail = (reason: LaunchFailureReason): void => {
     reasonKey = reason
-    transition({ kind: 'fail' })
+    // 理由 (`failure`) を `state: error` より先に送る — renderer は `state: error` で行を「失敗」にし、その場で読み上げと
+    // 失敗の表示を組むので、そのときに理由が届いている必要がある (O-4 / 014 spec US-1 AC5)。
     emit({ kind: 'failure', reasonKey: reason })
+    transition({ kind: 'fail' })
     postStatus()
   }
 
@@ -342,6 +378,8 @@ async function run(
   const finish = async (): Promise<void> => {
     if (finished) return
     finished = true
+    // 間引きの保留と timer を最初に捨てる (`ended` の後に `event` を送らない。014 spec SC-004)。
+    signals.dispose()
     permissions.denyAll()
     promptQueue.close()
     if (!childExited && ending) {
@@ -516,6 +554,7 @@ async function run(
           // 結果待ちの tool_use を覚える (結果は後の user メッセージで同じ id に埋めて送り直す。O-2 / FR-007)。
           toolResults.trackAssistant(dto)
           emit({ kind: 'message', message: dto })
+          signals.onAssistant(message)
           break
         }
         case 'user':
@@ -523,23 +562,27 @@ async function run(
           // 影響を受けたメッセージは user メッセージ 1 つにつき 1 回だけ、同じ id で送り直す。
           for (const dto of toolResults.applyUserMessage(message))
             emit({ kind: 'message', message: dto })
+          signals.onUser(message)
           break
-        case 'result':
+        case 'result': {
           // streaming-input では turn ごとに result が来て generator は開いたまま (次の sendPrompt を待つ)。
-          // 終端分類は純関数 (session-core) に委ねる — 認証失敗を黙って done にしない (V-11 / FR-030)。
+          // 終端分類は純関数 (session-core) に委ねる — 認証失敗を黙って done にしない (X-1 FR-020 / US-4 AC6)。
           // 終了・強制終了の後に届いたエラー結果では失敗にしない (`resultAction`。pr-gate R1 architecture L-001 / R2 L-006)。
+          // 失敗の理由は `live-signals` が返す (計量と行の閉じは理由を返す前に送る。014 data-model §1 / §2)。
+          const failureReason = signals.onResult(message)
           switch (resultAction(classifyResult(message.subtype, message.is_error), closing)) {
             case 'complete':
               transition({ kind: 'complete' })
               break
             case 'fail':
-              fail('provider-error')
+              fail(failureReason)
               terminated = true
               break
             case 'ignore':
               break
           }
           break
+        }
         case 'system':
           if (message.subtype === 'permission_denied') {
             emit({
@@ -555,6 +598,15 @@ async function run(
             const event = toSystemEventMessage(message, null)
             if (event !== null) emit({ kind: 'message', message: event })
           }
+          signals.onSystem(message)
+          break
+        case 'rate_limit_event':
+          // レート制限 (O-4 / 014 data-model §2。許可リストのフィールドだけを読む)。
+          signals.onRateLimit(message)
+          break
+        case 'tool_progress':
+          // tool の経過時間 (O-4 / 014 data-model §2。間引いて送る)。
+          signals.onToolProgress(message)
           break
         default:
           // stream_event / partial 等の扱いは docs/ui-coverage.md の対応表が正本 (AD-020 / H-06)。

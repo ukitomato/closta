@@ -1,0 +1,846 @@
+{
+    "gate": "pr",
+    "run": "2026-10-08T17:48:39Z",
+    "spec_dir": "specs/014-ui-metering-and-limits",
+    "spec_id": "014-ui-metering-and-limits",
+    "round": 1,
+    "base_branch": "main",
+    "base_commit": "44ce81066d9d3340471e1706dc2de546a5118879",
+    "head_commit": "fc3a5fc2ce96cb660780f4b0ef651ce9486d3cab",
+    "diff_stat": {
+        "files": 115,
+        "additions": 15232,
+        "deletions": 896
+    },
+    "severity_counts": {
+        "critical": 0,
+        "high": 2,
+        "medium": 20,
+        "low": 27
+    },
+    "raw_severity_counts": {
+        "critical": 0,
+        "high": 2,
+        "medium": 26,
+        "low": 30
+    },
+    "inheritance": "none (round 1)",
+    "convergence": {
+        "resolved_from_prev": 0,
+        "new_in_round": 2,
+        "unresolved": 0
+    },
+    "round_history": [
+        {
+            "round": 1,
+            "critical": 0,
+            "high": 2,
+            "medium": 20,
+            "low": 27,
+            "convergence": {
+                "resolved_from_prev": 0,
+                "new_in_round": 2,
+                "unresolved": 0
+            },
+            "findings": {
+                "critical": [],
+                "high": [
+                    {
+                        "id": "H-001",
+                        "title": "\u601d\u8003\u306e\u5370\u306e\u30c8\u30fc\u30af\u30f3\u6570\u306e\u30b3\u30f3\u30c8\u30e9\u30b9\u30c8 2.05:1 / 2.52:1 (WCAG 1.4.3)",
+                        "origin": "a11y",
+                        "where": [
+                            "src/renderer/src/components/assistant-ui/elements/thread.aui.tsx:570-580"
+                        ],
+                        "status": "new"
+                    },
+                    {
+                        "id": "H-002",
+                        "title": "\u6a29\u9650\u30e2\u30fc\u30c9\u306e\u8b66\u544a\u306e\u5e2f\u3068 Quota banner (rejected) \u306e\u6587\u5b57\u304c light \u3067 3.99:1 (WCAG 1.4.3)",
+                        "origin": "a11y",
+                        "where": [
+                            "src/renderer/src/features/shell/CenterBanners.tsx:90",
+                            "src/renderer/src/features/shell/CenterBanners.tsx:157"
+                        ],
+                        "status": "new"
+                    }
+                ]
+            }
+        }
+    ],
+    "suppressed_by_code_gate": [],
+    "touched_files": [
+        {
+            "path": ".claude/CLAUDE.md",
+            "sha": "f3fca9a70577e77080f991eb3c22ba63675d1d29"
+        },
+        {
+            "path": ".claude/settings.json",
+            "sha": "d7643dd4573f7faaf323ceff02116dd5b2f8ed88"
+        },
+        {
+            "path": ".codegraph/.gitignore",
+            "sha": "d20c0fe4bdba98d3521079d2535222adddb2bf0c"
+        },
+        {
+            "path": ".mcp.json",
+            "sha": "152883ca5bfd310ffaf347f71b2abcdd0103d627"
+        },
+        {
+            "path": ".serena/.gitignore",
+            "sha": "2e510aff5855ba46f96cbcd10991d9d588f77e6c"
+        },
+        {
+            "path": ".serena/project.yml",
+            "sha": "343fa0a4b1a0eee1ec512e3c80cf5cfab7b71e7c"
+        },
+        {
+            "path": ".specify/spec-gate/reviewers.yml",
+            "sha": "2d87fa25767d079dc829fd64e596a7d1d717e1fc"
+        },
+        {
+            "path": "docs/decisions/0047-session-meter-and-failure-reasons.md",
+            "sha": "9ec2502d84ccaab3b3d9f10cb7de1ae83d9a48ba"
+        },
+        {
+            "path": "docs/domains/_overview.md",
+            "sha": "1883c1d1afbf3f8cd7732e44aa53e374e81eb071"
+        },
+        {
+            "path": "docs/domains/session/charter.md",
+            "sha": "b9ba1db3eb5834f5ecbbd049b2844b10ec451ac2"
+        },
+        {
+            "path": "docs/domains/ui/charter.md",
+            "sha": "c9e3b2028f03b97071c4ae523bb359a7badacd00"
+        },
+        {
+            "path": "docs/glossary.md",
+            "sha": "aedc771e4817905fd9d0b08941b70731329ee308"
+        },
+        {
+            "path": "docs/prompts.md",
+            "sha": "8194fe243b471e40a38b77c122d132a0f18c1130"
+        },
+        {
+            "path": "docs/roadmap.md",
+            "sha": "986acffa9e8641266f9f479bba315f40c3c92535"
+        },
+        {
+            "path": "docs/ui-coverage.md",
+            "sha": "141cf5b28ff9b45d848ebf248982123613c2522f"
+        },
+        {
+            "path": "eslint.config.mjs",
+            "sha": "8d8a789a452315eb2b66b284b4d56e3c018ce6ea"
+        },
+        {
+            "path": "specs/005-session-launch-and-streaming/data-model.md",
+            "sha": "83d00e731270689185067ab637bc0300933f53c7"
+        },
+        {
+            "path": "specs/005-session-launch-and-streaming/spec.md",
+            "sha": "a6bea7551b93bd42e1f6c3ea73032013be57dc0d"
+        },
+        {
+            "path": "specs/014-ui-metering-and-limits/.gate-verdict-code.json",
+            "sha": "efdf1547fae02d7b0ffa0ecda543beee2aa0d33c"
+        },
+        {
+            "path": "specs/014-ui-metering-and-limits/.gate-verdict-design.json",
+            "sha": "2b272c08898b08bbc4d7e70cf8718795ba1e0de4"
+        },
+        {
+            "path": "specs/014-ui-metering-and-limits/analyze.md",
+            "sha": "b9ab3e7277761c2d0d37868477d11ec0c2af316b"
+        },
+        {
+            "path": "specs/014-ui-metering-and-limits/architecture-reviewer.design-gate.md",
+            "sha": "535f6f4eb88182d6ddf1b8b504286e8fd4a835cf"
+        },
+        {
+            "path": "specs/014-ui-metering-and-limits/code-gate.md",
+            "sha": "aa45a1f86283f3832086987860bcca2e73e19205"
+        },
+        {
+            "path": "specs/014-ui-metering-and-limits/convention-reviewer.code-gate.md",
+            "sha": "d580c1942b7364df800c7d726d84b75a2d7530e2"
+        },
+        {
+            "path": "specs/014-ui-metering-and-limits/data-model.md",
+            "sha": "b6368c89456344c0c79fc3fe2d1a7d30deb59bf3"
+        },
+        {
+            "path": "specs/014-ui-metering-and-limits/design-gate.md",
+            "sha": "74331d815be89bb6f5d067793711e03082fea4c1"
+        },
+        {
+            "path": "specs/014-ui-metering-and-limits/lint-agent.code-gate.md",
+            "sha": "5a493a6bfa0e4d25aa16dd95e124d2171083ff3c"
+        },
+        {
+            "path": "specs/014-ui-metering-and-limits/plan.md",
+            "sha": "a2367792282e12ad2ef745d06d94e4b716b06ae5"
+        },
+        {
+            "path": "specs/014-ui-metering-and-limits/platform-boundary-reviewer.code-gate.md",
+            "sha": "b19d22a6a86b0b963df6034214bddf2065960018"
+        },
+        {
+            "path": "specs/014-ui-metering-and-limits/platform-boundary-reviewer.design-gate.md",
+            "sha": "1608f14b0dba6272dd5978021bdbd68631b31cfe"
+        },
+        {
+            "path": "specs/014-ui-metering-and-limits/po-reviewer.design-gate.md",
+            "sha": "d8d7e8e41a6d9dc18963f635ccf6f851584d0bd8"
+        },
+        {
+            "path": "specs/014-ui-metering-and-limits/quickstart-results.md",
+            "sha": "ec1c268aba74822439ac6b3c816819ad22090295"
+        },
+        {
+            "path": "specs/014-ui-metering-and-limits/quickstart.md",
+            "sha": "759ce12de055072d91c88877847d0e9e6444db0b"
+        },
+        {
+            "path": "specs/014-ui-metering-and-limits/research.md",
+            "sha": "d053b32579467f29487e63b47c6e4afaefe926bc"
+        },
+        {
+            "path": "specs/014-ui-metering-and-limits/security-reviewer.design-gate.md",
+            "sha": "fb58a6f18bdacd57304c88d4c5ca421885203ffd"
+        },
+        {
+            "path": "specs/014-ui-metering-and-limits/spec.md",
+            "sha": "46d7d288ff1e6457e9f5478938796fa34b1ff0eb"
+        },
+        {
+            "path": "specs/014-ui-metering-and-limits/tasks.md",
+            "sha": "cee080dcaf1c93af24c6a9141f8cad5565bec8a3"
+        },
+        {
+            "path": "specs/014-ui-metering-and-limits/test-agent.code-gate.md",
+            "sha": "70825c90aa1b40a246441f3a894a980c6f1d5550"
+        },
+        {
+            "path": "specs/014-ui-metering-and-limits/touched-files.txt",
+            "sha": "7b3107af7c609df909786088ac4a43f303a50864"
+        },
+        {
+            "path": "src/agents/live-signals.test.ts",
+            "sha": "55de1b03b53cd719bc72d51cc9b71b3ad4661e21"
+        },
+        {
+            "path": "src/agents/live-signals.ts",
+            "sha": "15991ba8a3498c43b525a709efea48bc282d4489"
+        },
+        {
+            "path": "src/agents/meter-throttle.test.ts",
+            "sha": "76d4ad20421bb3e3eec0f3616a1342e23984c52c"
+        },
+        {
+            "path": "src/agents/meter-throttle.ts",
+            "sha": "321ceab592dbb419d5e7d696ad91d49a2d2a8ddb"
+        },
+        {
+            "path": "src/agents/sdk-agent-session.test.ts",
+            "sha": "85965f2a5de8852cbaf5c62c0718c3aa7b8ab178"
+        },
+        {
+            "path": "src/agents/sdk-agent-session.ts",
+            "sha": "028766e90b53f56c52951d0f6d62cb3f9cb3fcf7"
+        },
+        {
+            "path": "src/agents/session-core.test.ts",
+            "sha": "ce8e34ecfb6831e844695b3368653ceaec38bf80"
+        },
+        {
+            "path": "src/agents/session-core.ts",
+            "sha": "0b8443fb6d10623637b3ae92ef64b65e686ba83e"
+        },
+        {
+            "path": "src/domain/session/agent-session.kinds.test.ts",
+            "sha": "b417c7a12e49c09da4b8be5eea310799f54218f1"
+        },
+        {
+            "path": "src/domain/session/agent-session.test.ts",
+            "sha": "b6187e414b5c293c856a4121e268f69b5f1eb3c8"
+        },
+        {
+            "path": "src/domain/session/agent-session.ts",
+            "sha": "4ee375b7a6a73aec9cee41e28d5bba56ef4eb767"
+        },
+        {
+            "path": "src/domain/session/meter.test.ts",
+            "sha": "ab07ff3432fed1200c131328eaaacff1929142e3"
+        },
+        {
+            "path": "src/domain/session/meter.ts",
+            "sha": "ab72ce4790b32bc03b315471d4ae1909ebd94192"
+        },
+        {
+            "path": "src/domain/session/system-event.test.ts",
+            "sha": "93199c64e099973c15a5fba2b9bc4b8247350571"
+        },
+        {
+            "path": "src/domain/session/system-event.ts",
+            "sha": "9b4d222fda8e91728b4a285514566431a54e7422"
+        },
+        {
+            "path": "src/domain/session/transcript-dto.ts",
+            "sha": "32924ab0c97c17536537a9d949aea3681006f72f"
+        },
+        {
+            "path": "src/domain/session/transcript.system-event.test.ts",
+            "sha": "374afe24fc4bde89bab4e06ad469de79b99597c5"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/agent-plan.aui.tsx",
+            "sha": "70322529f7976a2106fd0279432ad0c3fa7f0ee4"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/code-diff.aui.tsx",
+            "sha": "a29cb8b5aa537e99018de69a66d52325d4501080"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/subagent.aui.tsx",
+            "sha": "b971f3b60a8f84195b404d40cc75572cfc16db4c"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/terminal-block.aui.tsx",
+            "sha": "8ef5504af3336b8d42b642a4db34c4684fd1a0da"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/thinking-indicator.tsx",
+            "sha": "29e19ea5bce02c5aa6c61608193b6572ddc3ec15"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/thread.aui.tsx",
+            "sha": "5ac5bb7fbd8afef102410f0b3c21488f1baad69b"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/todo-list.aui.tsx",
+            "sha": "27e06f71be5b34266465bd94b9f2c2d20a5595aa"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/tool-fallback.aui.tsx",
+            "sha": "71edc93ba406ec8873bd4d339540b3e58e930f74"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/tool-result-marks.tsx",
+            "sha": "5cda31cee2e7dfca35bf235cc54f97a83d464fc3"
+        },
+        {
+            "path": "src/renderer/src/features/chat/labels.ts",
+            "sha": "a492a2132862f234d74b04ef5c54ec14d7999ee0"
+        },
+        {
+            "path": "src/renderer/src/features/chat/transcript-context.ts",
+            "sha": "af2d2a1034ce7c60512a3eeb71c921d9c529b13d"
+        },
+        {
+            "path": "src/renderer/src/features/provider/useProviders.ts",
+            "sha": "4008e8c4e7c5322dce2e77b6d98efbd466e6e4e4"
+        },
+        {
+            "path": "src/renderer/src/features/session/LaunchDialog.test.tsx",
+            "sha": "b7fecac21ad56c400a9ac0d4e23dd82745cccac3"
+        },
+        {
+            "path": "src/renderer/src/features/session/LivePane.failure.test.tsx",
+            "sha": "032dce5d0c9ed33744c5588f8780c65a263f61d2"
+        },
+        {
+            "path": "src/renderer/src/features/session/LivePane.o2.test.tsx",
+            "sha": "5da396dccc8a9c5e8a6a89112e4cd25e691900a8"
+        },
+        {
+            "path": "src/renderer/src/features/session/LivePane.progress.test.tsx",
+            "sha": "da249967bed817e1e8bcf7d9b82598a8ac80f80d"
+        },
+        {
+            "path": "src/renderer/src/features/session/LivePane.test.tsx",
+            "sha": "9a2ccb6f43b02d2109ae49559aecfb31c1638e87"
+        },
+        {
+            "path": "src/renderer/src/features/session/LivePane.tsx",
+            "sha": "72bfd804eafd49545ca6767a7906ffcdf5e7a480"
+        },
+        {
+            "path": "src/renderer/src/features/session/RunningSessionList.monitor.test.tsx",
+            "sha": "d40ac0fa27ce0f8cebd26b1acb5de8ba19d7a9aa"
+        },
+        {
+            "path": "src/renderer/src/features/session/RunningSessionList.test.tsx",
+            "sha": "eb626d18195ee5f698992af2a911a1346533dc4f"
+        },
+        {
+            "path": "src/renderer/src/features/session/RunningSessionList.tsx",
+            "sha": "d624d418799ae3c5a89d828dd591d54bbdf40d13"
+        },
+        {
+            "path": "src/renderer/src/features/session/RunningSessionRow.tsx",
+            "sha": "5b280a3b6dcbb1b503a368299f9a679379a6fbcc"
+        },
+        {
+            "path": "src/renderer/src/features/session/RunningSessionsProvider.tsx",
+            "sha": "2f0a582741c2166c0aa0e6258ebad22dec00d8fe"
+        },
+        {
+            "path": "src/renderer/src/features/session/SessionAttentionAnnouncer.tsx",
+            "sha": "9bf3ff13082c1f89a3dfec73420245f71c8f72f5"
+        },
+        {
+            "path": "src/renderer/src/features/session/focus-handoff.ts",
+            "sha": "02dc6ced997b97ea57d685e9a135b7fa293f62cc"
+        },
+        {
+            "path": "src/renderer/src/features/session/labels.test.ts",
+            "sha": "3c7fc67838e88fb0be9b7e8a4eece950c906d4b7"
+        },
+        {
+            "path": "src/renderer/src/features/session/labels.ts",
+            "sha": "2d680cb10bb7a0ec1c8d38db6ed9bfd58cb2d3f1"
+        },
+        {
+            "path": "src/renderer/src/features/session/pending-queue-notice.test.tsx",
+            "sha": "181d00ed8bb9ac5a6c1418969a205a9560317ed4"
+        },
+        {
+            "path": "src/renderer/src/features/session/running-session-monitor.ts",
+            "sha": "00381d15fd50ce0c9f7c43adada53dd86dafbc27"
+        },
+        {
+            "path": "src/renderer/src/features/session/running-session-store.test.ts",
+            "sha": "ffee363695f5dddd46ae6fa455dd8b69ba9525dd"
+        },
+        {
+            "path": "src/renderer/src/features/session/running-session-store.ts",
+            "sha": "fd2f5a36450bdd430ef43fce44d6152e9b5c98ff"
+        },
+        {
+            "path": "src/renderer/src/features/session/running-session-types.ts",
+            "sha": "e11f4c3b810434c20d18cb841e591b078fe66a43"
+        },
+        {
+            "path": "src/renderer/src/features/session/running-sessions-view.ts",
+            "sha": "233c1e7347aae65e8020d58a84044ae0cb618349"
+        },
+        {
+            "path": "src/renderer/src/features/session/session-event-decoder.test.ts",
+            "sha": "77f9a7a034e191e84487d9e19dd353be3d7ab7f8"
+        },
+        {
+            "path": "src/renderer/src/features/session/session-event-decoder.ts",
+            "sha": "ae407816aa44e6d2fbf382acdcd0817e4b04e306"
+        },
+        {
+            "path": "src/renderer/src/features/session/session-view.monitor.test.ts",
+            "sha": "ca6e7b8e5c9f765f154c5b22e251aff34415a321"
+        },
+        {
+            "path": "src/renderer/src/features/session/session-view.ts",
+            "sha": "6173979264d27f0340185381bc87f9d407ad4b80"
+        },
+        {
+            "path": "src/renderer/src/features/session/useSessionMeters.ts",
+            "sha": "11428b3818d27c3a368641186117e733f76eb90a"
+        },
+        {
+            "path": "src/renderer/src/features/shell/AppShell.test.tsx",
+            "sha": "989c380293e0ae326f433f7e45517fbddfebd573"
+        },
+        {
+            "path": "src/renderer/src/features/shell/CenterBanners.test.tsx",
+            "sha": "d73cb245580b2dd6c0c85893fa2f2a6e14a60261"
+        },
+        {
+            "path": "src/renderer/src/features/shell/CenterBanners.tsx",
+            "sha": "a492ffee3885d8fbaffbbe0c66f0f00ed91d311e"
+        },
+        {
+            "path": "src/renderer/src/features/shell/CenterHeader.tsx",
+            "sha": "3b39e42e98d6c3802ead7f400bb6b2e395fa5d8a"
+        },
+        {
+            "path": "src/renderer/src/features/shell/CenterPane.tsx",
+            "sha": "222f3622c2d490d3b11ee2dfb0534a027a020d80"
+        },
+        {
+            "path": "src/renderer/src/features/shell/ContextCostMeter.test.tsx",
+            "sha": "a3c808cbd2f57d3e6089d99d9fcd02be7076251e"
+        },
+        {
+            "path": "src/renderer/src/features/shell/ContextCostMeter.tsx",
+            "sha": "e1909692220df2af591996d5c85acc64eb3c6a26"
+        },
+        {
+            "path": "src/renderer/src/features/shell/OverviewTab.test.tsx",
+            "sha": "c496309a4091a233c7fa242c740d1ba4c6406703"
+        },
+        {
+            "path": "src/renderer/src/features/shell/OverviewTab.tsx",
+            "sha": "80f5fbcc736ac000c6c8d26afba520b7c7c571aa"
+        },
+        {
+            "path": "src/renderer/src/features/shell/RightPanel.tabs.test.tsx",
+            "sha": "274f09e132e88efb9ff63bb4c36ff2c13932cf23"
+        },
+        {
+            "path": "src/renderer/src/features/shell/RightPanel.tsx",
+            "sha": "62106c792f109c569fce65dcb09be56bde444341"
+        },
+        {
+            "path": "src/renderer/src/features/shell/UsageTab.test.tsx",
+            "sha": "9a223bf96facac5547eab4f22f39b073f50fba97"
+        },
+        {
+            "path": "src/renderer/src/features/shell/UsageTab.tsx",
+            "sha": "14a091bece7f021cf0650813d6513a8494352041"
+        },
+        {
+            "path": "src/renderer/src/features/shell/labels.ts",
+            "sha": "fdb95c3bb91248841172f0fbb4cbbb10ad48bec4"
+        },
+        {
+            "path": "src/renderer/src/features/shell/palette-commands.test.ts",
+            "sha": "ceb004c3a96b48a1facf15be6d216a37aea53d7f"
+        },
+        {
+            "path": "src/renderer/src/features/shell/panel-tabs.ts",
+            "sha": "9b778b1fd85eeefd751dc0c433e8d0d068ddc8c5"
+        },
+        {
+            "path": "src/renderer/src/features/shell/quota-banner.test.ts",
+            "sha": "18d31836e021d9d22d4cf7e0a0b3ff3c513b8c34"
+        },
+        {
+            "path": "src/renderer/src/features/shell/quota-banner.ts",
+            "sha": "77ac9e17cbf50a3f71d1c36471f1b43a63fe11aa"
+        },
+        {
+            "path": "src/renderer/src/stores/ui.ts",
+            "sha": "c718d94e06ffd27dee861da0c8918e8ee5faae9c"
+        },
+        {
+            "path": "src/renderer/src/test-support/app-shell-harness.tsx",
+            "sha": "7d7bb46e248d624cb700351508d51f8581e64bf2"
+        },
+        {
+            "path": "tests/meter/meter-through.test.tsx",
+            "sha": "dd040e3c3393b5ff440a0a821a5227b95f79076e"
+        }
+    ],
+    "viewpoint_coverage": {
+        "A": "Critical:0 High:0 Medium:1 Low:1 (security)",
+        "B": "Critical:0 High:0 Medium:1 Low:2 (security)",
+        "C": "Critical:0 High:0 Medium:1 Low:2 (architecture)",
+        "D": "Critical:0 High:0 Medium:4 Low:3 (architecture / adr-drift)",
+        "E": "Critical:0 High:0 Medium:5 Low:3 (po)",
+        "F": "Critical:0 High:0 Medium:0 Low:1 (platform-boundary)",
+        "G": "Critical:0 High:2 Medium:10 Low:15 (a11y / ux / ui-coverage)",
+        "H": "Critical:0 High:0 Medium:4 Low:3 (multi)"
+    },
+    "fr_coverage": [
+        {
+            "fr": "FR-001",
+            "covered": true,
+            "by": [
+                "src/agents/session-core.ts:403-417"
+            ]
+        },
+        {
+            "fr": "FR-002",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/session/LivePane.tsx:327",
+                "src/renderer/src/features/session/labels.ts:36-56"
+            ]
+        },
+        {
+            "fr": "FR-003",
+            "covered": true,
+            "by": [
+                "src/agents/live-signals.ts:366-370",
+                "src/domain/session/meter.ts:91-110"
+            ]
+        },
+        {
+            "fr": "FR-004",
+            "covered": true,
+            "by": [
+                "src/domain/session/system-event.ts:220-328"
+            ]
+        },
+        {
+            "fr": "FR-005",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/session/running-session-store.ts:177-178"
+            ]
+        },
+        {
+            "fr": "FR-006",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/shell/quota-banner.ts:37-74",
+                "src/renderer/src/features/shell/CenterBanners.tsx:149-163"
+            ]
+        },
+        {
+            "fr": "FR-007",
+            "covered": true,
+            "by": [
+                "src/renderer/src/components/assistant-ui/elements/thread.aui.tsx:1046-1049"
+            ]
+        },
+        {
+            "fr": "FR-008",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/shell/UsageTab.tsx"
+            ]
+        },
+        {
+            "fr": "FR-009",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/shell/ContextCostMeter.tsx"
+            ]
+        },
+        {
+            "fr": "FR-010",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/shell/CenterBanners.tsx:58-97",
+                "src/renderer/src/features/shell/OverviewTab.tsx:102-113"
+            ]
+        },
+        {
+            "fr": "FR-011",
+            "covered": true,
+            "by": [
+                "src/agents/live-signals.ts:262-276"
+            ]
+        },
+        {
+            "fr": "FR-012",
+            "covered": true,
+            "by": [
+                "src/renderer/src/components/assistant-ui/elements/thread.aui.tsx:570-580",
+                "src/renderer/src/components/assistant-ui/elements/tool-result-marks.tsx:49-60"
+            ]
+        },
+        {
+            "fr": "FR-013",
+            "covered": true,
+            "by": [
+                "src/agents/meter-throttle.ts:166-187"
+            ]
+        },
+        {
+            "fr": "FR-014",
+            "covered": true,
+            "by": [
+                "docs/ui-coverage.md"
+            ]
+        },
+        {
+            "fr": "FR-015",
+            "covered": true,
+            "by": [
+                "docs/decisions/0047-session-meter-and-failure-reasons.md:62-87",
+                "src/domain/session/meter.ts:23-31"
+            ]
+        },
+        {
+            "fr": "FR-016",
+            "covered": true,
+            "by": [
+                "docs/roadmap.md:361"
+            ]
+        },
+        {
+            "fr": "FR-017",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/shell/RightPanel.tsx:151-160",
+                "src/renderer/src/features/shell/RightPanel.tabs.test.tsx"
+            ]
+        },
+        {
+            "fr": "FR-018",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/session/running-session-monitor.ts",
+                "src/renderer/src/features/session/RunningSessionRow.tsx"
+            ]
+        },
+        {
+            "fr": "FR-019",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/session/focus-handoff.ts:19-27"
+            ]
+        }
+    ],
+    "rule_verification": {
+        "ran": true,
+        "round": 1,
+        "reason": "Round 1",
+        "command": "node scripts/rules/run.mjs",
+        "result": "64/64 match expected table; 9 known undetected paths (SC-017)",
+        "isolated": true
+    },
+    "skipped_reviewers": [
+        {
+            "name": "database-reviewer",
+            "reason": "auto_invoke_patterns \u306b\u4e00\u81f4\u3059\u308b\u5909\u66f4\u30d5\u30a1\u30a4\u30eb\u304c\u7121\u3044 (\u5909\u66f4 115 \u4ef6 / pattern 5 \u4ef6)"
+        }
+    ],
+    "tracks": {
+        "security-reviewer": {
+            "status": "ok",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 2,
+            "low": 3
+        },
+        "architecture-reviewer": {
+            "status": "ok",
+            "mode": "default",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 3,
+            "low": 5
+        },
+        "architecture-reviewer-adr-drift": {
+            "status": "ok",
+            "mode": "adr-drift",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 3,
+            "low": 2
+        },
+        "po-reviewer": {
+            "status": "ok",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 6,
+            "low": 3
+        },
+        "ux-reviewer": {
+            "status": "ok",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 5,
+            "low": 10
+        },
+        "a11y-reviewer": {
+            "status": "ok",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 2,
+            "medium": 4,
+            "low": 3
+        },
+        "platform-boundary-reviewer": {
+            "status": "ok",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 0,
+            "low": 1
+        },
+        "ui-coverage-reviewer": {
+            "status": "ok",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 3,
+            "low": 3
+        }
+    },
+    "dedup": [
+        {
+            "into": "M-001",
+            "from": [
+                "security:M-001",
+                "architecture:M-003"
+            ]
+        },
+        {
+            "into": "M-002",
+            "from": [
+                "architecture:M-002",
+                "adr-drift:M-001"
+            ]
+        },
+        {
+            "into": "M-003",
+            "from": [
+                "architecture:M-001",
+                "po:L-002"
+            ]
+        },
+        {
+            "into": "M-004",
+            "from": [
+                "po:M-002",
+                "ux:M-001",
+                "ux:M-005"
+            ]
+        },
+        {
+            "into": "M-005",
+            "from": [
+                "po:M-001",
+                "ux:M-002",
+                "ux:M-005"
+            ]
+        },
+        {
+            "into": "M-006",
+            "from": [
+                "ux:M-003",
+                "po:L-001"
+            ]
+        },
+        {
+            "into": "M-007",
+            "from": [
+                "po:M-006",
+                "ui-coverage:M-003"
+            ]
+        },
+        {
+            "into": "M-008",
+            "from": [
+                "po:M-003",
+                "ux:L-001"
+            ]
+        }
+    ],
+    "human_decisions_before_done": [
+        "M-001",
+        "M-002",
+        "M-019",
+        "M-007",
+        "H-001",
+        "H-002"
+    ],
+    "verdict": "PASS"
+}

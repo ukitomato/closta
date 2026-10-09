@@ -1,8 +1,8 @@
 ---
 status: needs-human-review
-last_updated: 2026-10-07
-generated_by: human (PLAN.md 付録A + §3〜§7 を素材に起草。X-1 で AgentSession 系 8 語を追記。O-2 で 5 語を追記。O-7 で Shell を追記。O-3 で 5 語を追記)
-total_terms: 92
+last_updated: 2026-10-08
+generated_by: human (PLAN.md 付録A + §3〜§7 を素材に起草。X-1 で AgentSession 系 8 語を追記。O-2 で 5 語を追記。O-7 で Shell を追記。O-3 で 5 語を追記。O-4 で 4 語を追記)
+total_terms: 96
 ---
 
 # Glossary (Ubiquitous Language)
@@ -218,6 +218,17 @@ total_terms: 92
   tool の入力・結果・Reasoning・システムイベントの行は対象にしない。ブラウザの検索 (`findInPage`) ではない (仮想化の外に届かない)
 - **Ref**: [012 spec](../specs/012-ui-thread-search/spec.md) FR-003〜FR-005 / [data-model](../specs/012-ui-thread-search/data-model.md) §2
 
+#### **Context usage estimate（コンテキストの使用量の推定）**
+
+- **Definition**: 実行中のセッションのコンテキストがどれだけ埋まっているかの推定 (O-4)。主ループの最後の assistant のメッセージ
+  (1 回の API 呼び出し) の入力側の usage (入力 + キャッシュの読み込み + キャッシュの作成) を、result の `modelUsage` の主モデルの
+  `contextWindow` で割る。中央のヘッダの目盛りに割合で出す (element 名は Context display)。80% で注意の見た目、100% を超えたら「100% 以上」
+- **日本語表記**: コンテキストの使用量の推定
+- **Domain**: `ui` (表示)。材料の運び方は `session` (Meter の `context` と `turn`)
+- **Counterexamples**: Claude Code の `/context` の値そのものではない — 制御要求 `get_context_usage` を呼ばず、カテゴリ別の内訳は出さない。
+  result の `usage` (ターン内の往復の合算でありうる) は使わない。subagent の文脈は入らない。主モデルの照合の規則の正本は 014 data-model §4
+- **Ref**: [AD-047](decisions/0047-session-meter-and-failure-reasons.md) Decision 4 / [014 data-model](../specs/014-ui-metering-and-limits/data-model.md) §2 / §4
+
 ### D
 
 #### **Density（情報密度）**
@@ -347,19 +358,28 @@ total_terms: 92
 
 ### F
 
-#### **FailureReason (起動系)**
+#### **FailureReason (起動とターンの失敗)**
 
-- **Definition**: セッション起動 + 実行時失敗の**理由キー** (X-1)。10 種
-  (`distro-not-running` / `not-verified-running` / `distro-mismatch` / `claude-not-found` /
-  `launch-failed` / `process-crashed` / `stream-protocol-error` / `provider-error` /
-  `interrupt-unavailable` / `supervisor-exited`)。`supervisor-exited` は X-5 で追加 (supervisor の異常終了で
-  その supervisor の全セッションに付く)。セッションスレッドの例外とメモリ上限超過は `process-crashed`。
+- **Definition**: セッションの起動・実行と、実行中のターンの失敗の**理由キー**。18 種 (X-1 の 10 種に O-4 が 8 種を足した)。
   参照キーであり**訳出は `ui`** (Principle XV)。起動の拒否理由には別に `session-limit` / `shutting-down` (X-5) がある
-- **日本語表記**: 失敗理由 (起動系)
-- **Domain**: `session`/`infra` (保持) / `ui` (訳出)
+  - 起動と実行の失敗 (X-1): `distro-not-running` / `not-verified-running` / `distro-mismatch` / `claude-not-found` /
+    `launch-failed` / `process-crashed` / `stream-protocol-error` / `provider-error` / `interrupt-unavailable` /
+    `supervisor-exited`。`supervisor-exited` は X-5 で追加 (supervisor の異常終了でその supervisor の全セッションに付く)。
+    セッションスレッドの例外とメモリ上限超過は `process-crashed`
+  - ターンの失敗 (O-4): SDK のエラーの result を agents の `classifyResultFailure` が次の 8 つに分ける。どれにも当たらない失敗
+    (状態が無い・知らない subtype) は今の `provider-error` (汎用)。条件と評価の順の正本は 014 data-model §1
+    - `auth-failed` (認証または権限のエラー) / `billing` (請求またはアカウントの問題) / `rate-limited` (レート制限) /
+      `api-error` (API がエラーを返した)
+    - `max-turns` (ターン数の上限) / `max-budget` (費用の上限) / `structured-output-retries` (構造化出力の再試行の上限) /
+      `execution-error` (実行中のエラー)
+  - 再ログインの導線を出すのは `auth-failed` と `provider-error` だけ (`isReloginFailure`)。`rate-limited` は待つことを案内する
+- **日本語表記**: 失敗理由 (起動とターンの失敗)
+- **Domain**: `session`/`infra` (保持) / `agents` (ターンの失敗の分類) / `ui` (訳出)
 - **Counterexamples**: 列挙/transcript 読み取りの `FailureReason` (`@domain/session/target`) とは**別概念**。
-  型名の衝突を避け `LaunchFailureReason` として分ける (`@domain/session/agent-session`)
-- **Ref**: [AD-036](decisions/0036-single-session-launch-process-and-live-stream.md)
+  型名の衝突を避け `LaunchFailureReason` として分ける (`@domain/session/agent-session`)。
+  ターンの失敗の理由を細かくしても終わり方は変えない — セッションは「失敗」になり、黙って完了にしない (X-1 FR-020 / US-4 AC6)。
+  失敗の文字列 (`errors`) と HTTP の状態は運ばない
+- **Ref**: [AD-036](decisions/0036-single-session-launch-process-and-live-stream.md) / [AD-047](decisions/0047-session-meter-and-failure-reasons.md) Decision 1 / [014 data-model](../specs/014-ui-metering-and-limits/data-model.md) §1
 
 #### **Forward keys（転送キー）**
 
@@ -542,6 +562,21 @@ total_terms: 92
   `interrupt`→steer はしない (次ターン送信に限る。FR-005)
 - **Ref**: [AD-037](decisions/0037-japanese-ime-composer-behavior.md) D2
 
+#### **Meter（計量）**
+
+- **Definition**: 実行中のセッションの「どれだけ使ったか・何に止められたか・今何をしているか」の最新の値 (O-4)。
+  `SessionEvent` の種類 `meter` でセッションスレッドから renderer に届き、稼働中のストアの `meters` にセッションごとの最新の値として持つ。
+  - 種類 (`type`) は 6 つ: `turn` (費用の累計・ターン数・モデルごとのトークン・拒否の件数) / `context` (コンテキストの使用量の推定の材料) /
+    `rate-limit` / `permission-mode` / `thinking` (思考のトークン数) / `tool-elapsed` (tool の経過時間)
+  - **運ぶのは数・真偽・列挙・モデルの id・形を検証した tool の id だけ**。会話由来の文字列・エラー文・パスを運ばない
+  - 高頻度のもの (思考・tool の経過時間・task の進み具合) はセッションスレッドで鍵ごとに 1 秒に 1 回まで間引く
+- **日本語表記**: 計量
+- **Domain**: `session` (契約と保持) / 表示は `ui`
+- **Counterexamples**: transcript の行ではない (API の再試行・圧縮・権限モードの変化はシステムイベントの行で運ぶ)。
+  状態通知 (`SessionStatusUpdate`) に載せない (main を経由しない)。永続化しない — セッションを閉じたら捨て、起動の設定・プリセットに
+  書き戻さない。観測点 `receivedMessages` (O-1) に数えない。費用は推定で、請求額ではない
+- **Ref**: [AD-047](decisions/0047-session-meter-and-failure-reasons.md) Decision 2 / [014 data-model](../specs/014-ui-metering-and-limits/data-model.md) §2
+
 #### **Monitoring view（監視ビュー）**
 
 - **Definition**: 稼働中セッション一覧 (Running session list) を拡張したもの (O-1)。承認待ち・失敗の強調、
@@ -609,6 +644,7 @@ total_terms: 92
 
 - **Definition**: 認証方式・設定ディレクトリ・モデルカタログを含む**登録可能なエンティティ**。
   コード上の列挙ではなくアプリに登録される値であり、同一バックエンドを複数登録できる
+- **日本語表記**: Provider (英字のまま。カタカナの「プロバイダ」は使わない)
 - **Domain**: `provider`
 - **Counterexamples**: 汎用語としての "Provider"（DI コンテナの provider 等）。
   本プロジェクトでは常に上記の意味で使う
@@ -620,6 +656,22 @@ total_terms: 92
   `models` / `extraEnv` を持つ (`id` / `displayName` が同一 backend 複数登録の識別鍵。型の正本は AD-005)
 - **Domain**: `provider`
 - **Ref**: [AD-005](decisions/0005-provider-as-registrable-value.md)
+
+### Q
+
+#### **Quota banner**
+
+- **Definition**: 中央のヘッダの下 (ヘッダの行と会話内検索のバーの間) に出す、表示中の稼働中セッションのレート制限の帯 (O-4)。
+  SDK の `rate_limit_event` の最新の状態で決める: `allowed_warning` で注意 (`role="status"`)、`rejected` で警告 (`role="alert"`)、
+  `allowed` に戻ると消える。制限の種類 (5 時間・7 日など)・使用率・解除の時刻を出す。
+  解除の時刻を過ぎると、次の event を待たずに消える。送信できない終端 (失敗・終了済み・強制終了・終了処理中) のセッションでは、
+  `rejected` でも `role="status"` に下げ、送る案内 (「待ってから送ってください」) を出さない
+- **日本語表記**: Quota banner (element 名のまま)
+- **Domain**: `ui` (表示)。値の保持は `session` (Meter の `rate-limit`)
+- **Counterexamples**: 帯はセッションごと (届いた event はそのセッションのもので、他のセッションに当てはめない)。過去のセッションには出さない。
+  `rate_limit_event` は claude.ai のサブスクリプションでだけ届き、API キー・Bedrock の Provider では出ない。429 で失敗したときの
+  失敗の理由 (`rate-limited`) の文言は帯を参照しない。権限モードの警告の帯 (Unsafe permission mode banner) とは別で、並びはその後ろ
+- **Ref**: [AD-047](decisions/0047-session-meter-and-failure-reasons.md) Decision 2 / [014 spec](../specs/014-ui-metering-and-limits/spec.md) FR-006 / [data-model](../specs/014-ui-metering-and-limits/data-model.md) §4
 
 ### R
 
@@ -890,15 +942,20 @@ total_terms: 92
 
 #### **System event row（システムイベントの行）**
 
-- **Definition**: transcript の中で Hook / Background task を **1 つにつき 1 行**で示す表示 (O-2)。DTO は
-  `TranscriptPartDTO` の `system-event`。同じ Hook / task の後続のイベントは同じ行に合成する (`mergeSystemEvent`)。
-  行を作れるのは Hook の開始・応答と task の開始だけで、行の無い id への更新は捨てる。終わりの来ない行は、セッションの
-  終了・失敗の後と過去ログで「結果不明」と描く
+- **Definition**: transcript の中で Hook / Background task などの出来事を **1 つにつき 1 行**で示す表示 (O-2)。DTO は
+  `TranscriptPartDTO` の `system-event`。同じ出来事の後続のイベントは同じ行に合成する (`mergeSystemEvent`)。
+  行を作れるのは Hook の開始・応答、task の開始と、下の O-4 の 3 つの category の出来事だけで、行の無い id への更新は捨てる。
+  終わりの来ない行は、セッションの終了・失敗の後と過去ログで「結果不明」と描く
+  - O-4 で、実行中のセッションだけの category を 3 つ足した: API の再試行 (`api-retry`。同じターンの再試行は 1 行を書き換える)・
+    コンテキストの圧縮 (`compaction`。圧縮中 → 成功 / 失敗)・権限モード (`permission-mode`。権限モードが変わったことを 1 行)。
+    行の組み立ては agents に置き、過去ログの変換には足さない
+  - O-4 で、task の行に進み具合 (トークン・tool の回数・経過時間) を同じ行の更新として足した。task の種類は残す
 - **日本語表記**: システムイベントの行
 - **Domain**: `ui` (表示)。経路 (agents での変換) は session
-- **Counterexamples**: assistant の発話ではない — コピーなどの操作や応答中の印を付けない。状態の一覧 (task の表) ではない。
-  agents の `post` の kind `event` (セッションスレッドの通知の種類) とも別物
-- **Ref**: [011 spec](../specs/011-ui-coverage/spec.md) FR-009 / [data-model](../specs/011-ui-coverage/data-model.md) §2
+- **Counterexamples**: assistant の発話ではない — コピーなどの操作や応答中の印を付けない。状態の一覧 (task の表) ではない —
+  task の進み具合も行の更新で、task の状態を持たない (AD-044 Decision 6)。
+  agents の `post` の kind `event` (セッションスレッドの通知の種類) とも別物。計量 (Meter) とも別 — あちらは行ではなく最新の値
+- **Ref**: [011 spec](../specs/011-ui-coverage/spec.md) FR-009 / [data-model](../specs/011-ui-coverage/data-model.md) §2 / [014 data-model](../specs/014-ui-metering-and-limits/data-model.md) §3
 
 #### **Shell（シェル）**
 
@@ -909,7 +966,7 @@ total_terms: 92
   - **中央のヘッダ** (Center header): 中央の上端。表示中のセッションの題・フォルダ・状態と transcript の密度の切り替え。稼働中と過去で同じ部品 (`features/shell/CenterHeader.tsx`)
   - **中央の本体** (Center body): 中央の会話 (`main` のランドマーク。中央の全体は `features/shell/CenterPane.tsx`)。稼働中なら実行中の Chat (`features/session/LivePane.tsx`)、過去なら過去ログの transcript (`ChatScreen`)、未選択なら空の状態
   - **右のペインのタブ** (Panel tab): 右の面 (名前付きの `complementary`) のタブ。1 か所の表 (`panel-tabs.ts`) に登録する。既定で畳む
-  - **設定のダイアログ** (Settings dialog): ランタイム・作業フォルダ・プロバイダ・組み合わせの画面とテーマを開く全面のダイアログ
+  - **設定のダイアログ** (Settings dialog): ランタイム・作業フォルダ・Provider・組み合わせの画面とテーマを開く全面のダイアログ
 - **日本語表記**: シェル
 - **Domain**: `ui` (サイドバーの区画の中身は session)
 - **Counterexamples**: 面の状態 (`focus`・設定・畳み) は `stores/ui.ts` の 1 か所にあり、session のコンポーネントは書かない
@@ -1008,6 +1065,19 @@ total_terms: 92
   **所在不明を推測で埋めない** — 同じ `/home/y/p` は複数のディストロに存在しうる
 - **Ref**: [AD-029](decisions/0029-session-cwd-origin-classification.md)
 
+#### **Unsafe permission mode banner（権限モードの警告の帯）**
+
+- **Definition**: 実行中のセッションの権限モードが安全 3 値 (SafePermissionMode) の外 (昇格値と不明なモード) になったのを観測したとき、
+  中央のヘッダの下に出す `role="alert"` の帯 (O-4。AD-041 の「昇格経路 0 件」の逸脱の信号)。観測するのは SDK の `status` と各ターンの
+  `init` の `permissionMode`。原因を断定せず、強制 (中断・失敗にする) はしない (強制の要否の持ち主は I-3)。並びは警告の帯 → Quota banner →
+  会話内検索のバー
+  - 隔離の文言は暫定で、セッションの隔離状態ではなくランタイムの `autoModeStatus` から導く (`unavailable` は「隔離がありません」、それ以外は「このセッションの隔離をアプリは確かめていません」。Isolation badge (I-2) が定義されたら置き換える)
+- **日本語表記**: 権限モードの警告の帯
+- **Domain**: `ui` (表示)。判定は `session` の `isSafePermissionMode`、ポリシーとゲートは `isolation` (I-3)
+- **Counterexamples**: 起動の設定・プリセットの権限モードは変えない (書き戻さない)。`autoModeAllowed` (ゲート用) を表示に使わない。
+  `allowed` のランタイムでも、隔離されていると読める文言にしない
+- **Ref**: [AD-047](decisions/0047-session-meter-and-failure-reasons.md) Decision 5 / [014 data-model](../specs/014-ui-metering-and-limits/data-model.md) §4
+
 #### **ui-coverage 対応表**
 
 - **Definition**: `docs/ui-coverage.md`。SDK のメッセージ型・中身のブロック・tool・アプリが作る経路・制御要求と
@@ -1051,6 +1121,7 @@ total_terms: 92
 | Isolation | 「隔離」「サンドボックス」 | 隔離（境界全般）/ sandbox（OS 組み込み機構に限定） | Seatbelt / bubblewrap を指すときのみ sandbox |
 | Location | 「所在」「ロケーション」「置き場所」 | `Location`（コード）/ 所在（日本語文） | 「置き場所」はパスの意味にも読めるため避ける |
 | supervisor | 「supervisor」「agents」 | `supervisor`（役割）/ `src/agents/`（実体のディレクトリ） | 役割名とディレクトリ名が一致しない。どちらを指しているかを明示する |
+| Provider | 「Provider」「プロバイダ」 | `Provider`（コード・日本語文・UI の文言とも英字） | カタカナの「プロバイダ」は使わない。O-4 で UI の文言と docs を英字に揃える (014 research R-13) |
 
 ## Generic words excluded
 

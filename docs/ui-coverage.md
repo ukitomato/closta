@@ -45,12 +45,12 @@ SDK: `@anthropic-ai/claude-agent-sdk` 0.3.270
 | SDKAssistantMessage | `assistant` | A | 実装済み: Thread / MarkdownText / Reasoning / ToolGroup (両方) | 両方 | 中身のブロックは B 節。実行中はメッセージ単位で更新 (X-1) |
 | SDKUserMessage | `user` | A | 実装済み: UserMessage / tool の結果は各 tool の表示 (両方) | 両方 | 実行中の利用者の本文は送信時に楽観的に出す。tool_result は O-2 から実行中も呼び出しの表示に埋める (FR-007) |
 | SDKUserMessageReplay | `user` (replay) | B | 表示不要: resume 時の再送。元の user メッセージを表示している | なし | |
-| SDKResultMessage | `result` | A | 後続: O-4 | なし | 成功・失敗はセッションの状態として出ているが、**失敗は理由を区別せず「Provider の認証/接続」のエラーとして出ている** (`session-core.ts` の `classifyResult`)。失敗の理由 (subtype・`errors`)・費用・使用量・ターン数・`permission_denials` は O-4 |
-| SDKSystemMessage | `system` / `init` | B | 後続: O-5 | なし | `mcp_servers` / `slash_commands` / `tools` / `model` は O-5 (Server panel・コマンド・セッションの構成)。Tier B: 起動の設定は起動のダイアログ (X-4) で利用者が選んでいる |
+| SDKResultMessage | `result` | A | 実装済み: FailureBanner / UsageTab / ContextCostMeter (実行中) | 実行中 | O-4。成功・失敗はセッションの状態。失敗は理由のキー (`subtype`・`api_error_status`・同じターンの主ループの assistant の `error` から `classifyResultFailure` が決める。AD-047 Decision 1 / 014 data-model §1) で区別し、中央の FailureBanner・監視ビューの行の短い理由・読み上げに出す。費用 (`total_cost_usd`。推定)・モデルごとのトークン (`modelUsage`)・ターン数 (セッションスレッドが result を数える)・拒否の件数は `meter` の `turn` で運び、右のペインの使用量のタブ (UsageTab) と中央のヘッダの目盛り (ContextCostMeter) に出す。**`errors` は出さない (U-5)**。**`num_turns` (1 ターンの往復の数) は出さない**。**`permission_denials` は件数** (tool の名前と入力は運ばない) |
+| SDKSystemMessage | `system` / `init` | B | 後続: O-5 | なし | `mcp_servers` / `slash_commands` / `tools` / `model` は O-5 (Server panel・コマンド・セッションの構成)。Tier B: 起動の設定は起動のダイアログ (X-4) で利用者が選んでいる。`permissionMode` は O-4 が権限モードの比較に使う (表示は権限モードの行と警告の帯。他のフィールドは読まない。014 data-model §2) |
 | SDKPartialAssistantMessage | `stream_event` | B | 表示不要: 部分メッセージを要求しない (X-1 はメッセージ単位で更新する) | なし | `includePartialMessages` を渡していない |
 | SDKCompactBoundaryMessage | `system` / `compact_boundary` | A | 後続: O-6 | 過去ログ | 過去ログは最小の区切り (divider) で出る。専用 element と実行中の表示は O-6 |
-| SDKStatusMessage | `system` / `status` | A | 後続: O-4 | なし | 権限モードの変化 (`permissionMode`。ExitPlanMode の後など)・圧縮中・圧縮の失敗 (`compact_result` / `compact_error`) を運ぶ。承認とコンテキストに直結するので Tier A |
-| SDKAPIRetryMessage | `system` / `api_retry` | A | 後続: O-4 | なし | |
+| SDKStatusMessage | `system` / `status` | A | 実装済み: SystemEventRow / UnsafeModeBanner / OverviewTab (実行中) | 実行中 | O-4。権限モードの変化 (`permissionMode`。ExitPlanMode の後など) は権限モードの行 (SystemEventRow)・「概要」の「現在の権限モード」(OverviewTab)・安全 3 値の外のときの警告の帯 (中央のヘッダの下。`CenterBanners.tsx` の UnsafeModeBanner。U-6)。圧縮中と圧縮の結果 (`compact_result`) はコンテキストの圧縮の行。`compact_error` は出さない。`status` の `requesting` は表示しない。承認とコンテキストに直結するので Tier A |
+| SDKAPIRetryMessage | `system` / `api_retry` | A | 実装済み: SystemEventRow (実行中) | 実行中 | O-4。API の再試行の行 (回数・最大回数・HTTP の状態・待ち時間)。同じターンの再試行は同じ行に合成し、次の主ループの assistant か result で成功 / 失敗に閉じる。`error`・`no_response` は出さない (014 data-model §3) |
 | SDKControlRequestProgressMessage | `system` / `control_request_progress` | B | 表示不要: アプリが送った制御要求の進捗の内部通知 | なし | |
 | SDKModelRefusalFallbackMessage | `system` / `model_refusal_fallback` | A | 後続: O-6 | なし | |
 | SDKModelRefusalNoFallbackMessage | `system` / `model_refusal_no_fallback` | A | 後続: O-6 | なし | |
@@ -59,14 +59,14 @@ SDK: `@anthropic-ai/claude-agent-sdk` 0.3.270
 | SDKHookProgressMessage | `system` / `hook_progress` | B | 表示不要: 開始と結果の行で足りる。出力本文 (stdout / stderr) は出さない | なし | |
 | SDKHookResponseMessage | `system` / `hook_response` | A | 実装済み: SystemEventRow (実行中) | 実行中 | 開始と同じ行を結果で書き換える。出力本文と終了コードは出さない。過去ログの変換は実装済み (`transcript.ts`)。実データに残るかは O-2 quickstart V-4 で確かめ、残れば経路を「両方」に直す |
 | SDKPluginInstallMessage | `system` / `plugin_install` | B | 後続: O-5 | なし | |
-| SDKToolProgressMessage | `tool_progress` | B | 後続: O-4 | なし | tool の経過時間 |
+| SDKToolProgressMessage | `tool_progress` | B | 実装済み: ToolResultMarks (実行中) | 実行中 | O-4。tool の経過時間 (結果待ちの間だけ、tool の表示の見出しの右端に出す)。主ループの tool だけ (subagent の中の tool の入れ子は O-6)。セッションスレッドで tool ごとに 1 秒に 1 回まで間引く (014 data-model §2)。`tool_name`・`heartbeat`・`subagent_*` は運ばない |
 | SDKAuthStatusMessage | `auth_status` | A | 後続: O-5 | なし | |
 | SDKTaskNotificationMessage | `system` / `task_notification` | A | 実装済み: SystemEventRow (実行中) | 実行中 | task の行の状態を完了・失敗・停止に書き換える。要約・出力ファイルは出さない。過去ログの変換は実装済み (`transcript.ts`)。実データに残るかは O-2 quickstart V-4 で確かめ、残れば経路を「両方」に直す |
 | SDKTaskStartedMessage | `system` / `task_started` | A | 実装済み: SystemEventRow (実行中) | 実行中 | 背景で始まった task (`is_backgrounded`) だけ。前景の task は Subagent・tool の結果で出る。後から背景に移った task は O-6。過去ログの変換は実装済み (`transcript.ts`)。実データに残るかは O-2 quickstart V-4 で確かめ、残れば経路を「両方」に直す |
 | SDKTaskUpdatedMessage | `system` / `task_updated` | A | 実装済み: SystemEventRow (実行中) | 実行中 | 行の状態だけを書き換える (説明の変更は読まない)。過去ログの変換は実装済み (`transcript.ts`)。実データに残るかは O-2 quickstart V-4 で確かめ、残れば経路を「両方」に直す |
-| SDKTaskProgressMessage | `system` / `task_progress` | B | 後続: O-4 | なし | |
+| SDKTaskProgressMessage | `system` / `task_progress` | B | 実装済み: SystemEventRow (実行中) | 実行中 | O-4。背景の task の行の種類の後ろに、使ったトークン・tool の回数・経過時間を並べる (行の更新。行の無い task への進み具合は捨てる。014 data-model §3)。要約 (`summary`)・説明・最後の tool 名は出さない。task の状態を持たない (AD-044 Decision 6)。task ごとに 1 秒に 1 回まで間引く |
 | SDKBackgroundTasksChangedMessage | `system` / `background_tasks_changed` | B | 後続: O-6 | なし | 実行中の task の一覧の要否は O-6 で判断する |
-| SDKThinkingTokensMessage | `system` / `thinking_tokens` | B | 後続: O-4 | なし | |
+| SDKThinkingTokensMessage | `system` / `thinking_tokens` | B | 実装済み: ThinkingIndicator (実行中) | 実行中 | O-4。実行中の transcript の末尾 (composer の上) に「思考中 約 N トークン」(推定)。次の主ループの assistant と result で消える。1 秒に 1 回まで間引く (014 data-model §2 / research R-07) |
 | SDKSessionStateChangedMessage | `system` / `session_state_changed` | B | 表示不要: セッションの状態は状態通知 (SessionStatusUpdate) から一覧と表示中のセッションに出ている | なし | |
 | SDKWorkerShuttingDownMessage | `system` / `worker_shutting_down` | B | 表示不要: 内部制御。supervisor の終了は `supervisor-exited` の失敗として出る | なし | |
 | SDKCommandsChangedMessage | `system` / `commands_changed` | B | 後続: O-5 | なし | slash command の一覧 |
@@ -74,7 +74,7 @@ SDK: `@anthropic-ai/claude-agent-sdk` 0.3.270
 | SDKFilesPersistedEvent | `system` / `files_persisted` | B | 後続: O-6 | なし | Checkpoints |
 | SDKToolUseSummaryMessage | `tool_use_summary` | B | 後続: O-6 | なし | |
 | SDKMemoryRecallMessage | `system` / `memory_recall` | B | 後続: O-6 | なし | |
-| SDKRateLimitEvent | `rate_limit_event` | A | 後続: O-4 | なし | Quota banner |
+| SDKRateLimitEvent | `rate_limit_event` | A | 実装済み: QuotaBanner (実行中) | 実行中 | O-4。中央のヘッダの下の帯 (`CenterBanners.tsx` の QuotaBanner。F 節の Quota banner)。`status` が `allowed_warning` / `rejected` のとき、制限の種類・使用率・解除の時刻を出し、`allowed` が届くか解除の時刻を過ぎたら消す (014 data-model §4)。`overage*`・`limitScope`・`errorCode`・`surpassedThreshold` は出さない。claude.ai のサブスクリプションの Provider でだけ届く |
 | SDKElicitationCompleteMessage | `system` / `elicitation_complete` | A | 後続: O-5 | なし | Elicitation form |
 | SDKPermissionDeniedMessage | `system` / `permission_denied` | A | 実装済み: DeniedNotice (実行中) | 実行中 | X-1 からの申し送り (聞かれずに拒否された操作) |
 | SDKPromptSuggestionMessage | `prompt_suggestion` | B | 後続: O-6 | なし | |
@@ -172,9 +172,10 @@ SDK のメッセージではなく、アプリが SDK の callback・制御・�
 | permission-request-capability | `canUseTool` (capability 付与) | A | 後続: I-3 | なし | Permission grant。M4 なので M3 の完了の条件には数えない (AD-044) |
 | permission-denied | `permission_denied` (A 節) の一覧 | A | 実装済み: DeniedNotice (実行中) | 実行中 | X-1 からの申し送り (聞かれずに拒否された操作) |
 | session-state | `SessionStatusUpdate` | A | 実装済み: CenterHeader の状態 (実行中) | 実行中 | O-7 で中央のヘッダ (シェルの `CenterHeader`。`RunningCenter` から) に移した。一覧の行の状態 (監視ビュー) は session の操作 UI |
-| launch-failure | `failure` (理由キー) | A | 実装済み: FailureBanner (実行中) | 実行中 | |
+| launch-failure | `failure` (理由キー) | A | 実装済み: FailureBanner (実行中) | 実行中 | O-4 で理由のキーが 18 になった (10 → 18。ターンの失敗を認証・請求・レート制限・API のエラー・実行中のエラー・3 つの上限に分ける。AD-047 Decision 1 / 014 data-model §1)。再ログインの導線は `auth-failed` と `provider-error` だけ。監視ビューの行の短い理由と読み上げも同じ理由 |
 | end-forced | `end-forced` | A | 実装済み: EndNotice (実行中) | 実行中 | 強制停止・強制終了の告知 |
 | interrupt-receipt | `interrupt-receipt` | B | 表示不要: 中断の受領。途中出力は transcript に残る | なし | |
+| meter | `meter` (計量) | A | 実装済み: UsageTab / ContextCostMeter / QuotaBanner / UnsafeModeBanner / OverviewTab / ToolResultMarks / ThinkingIndicator (実行中) | 実行中 | O-4 (AD-047 Decision 2)。セッションスレッドが A 節の result・assistant・rate_limit_event・status / init・thinking_tokens・tool_progress から、数・真偽・列挙・モデルの id・形を検証した tool の id だけを運ぶ (許可リストの正本は 014 data-model §2)。稼働中のストアの `meters` に最新の値だけを持ち、永続化しない。状態通知には載せない。transcript の行になる出来事 (API の再試行・圧縮・権限モード・task の進み具合) は `meter` ではなく `message` の経路 (SystemEventRow) |
 | message-queue | 実行中に積んだ入力 | A | 実装済み: MessageQueue (実行中) | 実行中 | X-2 |
 
 ## E 制御要求
@@ -192,10 +193,10 @@ SDK のメッセージではなく、アプリが SDK の callback・制御・�
 | rename_session | `rename_session` | B | 後続: X-6 | なし | セッション名 |
 | set_color | `set_color` | B | 表示不要: CLI の表示色でアプリに当たる設定が無い | なし | |
 | mcp_status | `mcp_status` | B | 後続: O-5 | なし | |
-| get_context_usage | `get_context_usage` | A | 後続: O-4 | なし | Context display |
-| get_session_cost | `get_session_cost` | B | 後続: O-4 | なし | |
+| get_context_usage | `get_context_usage` | A | 表示不要: 制御要求を呼ばない。コンテキストの使用量は主ループの assistant の usage と result の contextWindow から推定する (U-3) | なし | Context display は assistant の usage と result の contextWindow の推定で実装済み (経路: 実行中。中央のヘッダの ContextCostMeter)。カテゴリ別の内訳は出さない (Claude Code の `/context` で見られる)。AD-047 Decision 4 |
+| get_session_cost | `get_session_cost` | B | 表示不要: 制御要求を呼ばない。費用は毎ターンの result の total_cost_usd (推定) で足りる (U-3) | なし | 費用は使用量のタブ (UsageTab) と中央のヘッダの目盛り (ContextCostMeter) に出る。AD-047 Decision 4 |
 | list_models | `list_models` | B | 表示不要: モデルの一覧は Provider のモデルカタログから出す (X-3 / X-4) | なし | |
-| get_usage | `get_usage` | B | 後続: O-4 | なし | |
+| get_usage | `get_usage` | B | 表示不要: 制御要求を呼ばない。トークンとモデルごとの内訳は毎ターンの result の modelUsage で足りる (U-3) | なし | プランの全窓の利用率の一覧は出さない (レート制限に近づいたこと・超えたことは rate_limit_event の Quota banner)。AD-047 Decision 4 |
 | get_binary_version | `get_binary_version` | B | 表示不要: 内部制御 | なし | |
 | mcp_call | `mcp_call` | B | 後続: O-5 | なし | |
 | file_suggestions | `file_suggestions` | B | 表示不要: アプリの composer はファイル候補 (Mentions) を出さない | なし | |
@@ -258,10 +259,10 @@ assistant-ui の element の一覧 (https://www.assistant-ui.com/elements。**20
 | Computer use | C | 未使用 | |
 | Confidence | C | 未使用 | Generative |
 | Connection state | B | 未使用 | |
-| Context breakdown | A | E get_context_usage | O-4 |
-| Context display | A | E get_context_usage | O-4 |
+| Context breakdown | A | 未使用 | O-4 で使わないと決めた (014 research R-09)。取り込んでいない。カテゴリ別のコンテキストの内訳を出さない (E get_context_usage を呼ばない。AD-047 Decision 4 / U-3)。内訳は Claude Code の `/context` で見られる |
+| Context display | A | A SDKAssistantMessage / A SDKResultMessage | O-4。中央のヘッダの行の右の目盛り (`features/shell/ContextCostMeter.tsx`)。主ループの最後の assistant の入力側の usage を、result の `modelUsage` の主モデルの `contextWindow` で割った推定 (014 data-model §4)。registry の `context-display` は採らず、文字の体裁で作った (SH-002 の照合の写し。正本は O-4 の PR の説明。014 research R-09): AUI 接続の版は新しい npm の依存 (`@assistant-ui/ai-sdk`) を要し、standalone の版は文言が英語の直書き・100% で止める・色の閾値 (65% / 85%) が 80% と違う・推定であることが出ない |
 | Conversation search | B | SDK の外: 中央のヘッダの会話内検索のバー (`features/chat/ConversationSearchBar.tsx` が `conversation-search.tsx` を組み込む。Ctrl+F) | O-3 で registry の `elements-conversation-search` を採った (SH-003 の照合の写し。正本は O-3 の PR の説明。012 research R-04)。DOM の id を作らない。取り込んだ中で、スクロールバーの一致の印 (唯一の `style`。仮想化で描かれていない範囲の高さを知らないので印の位置を決められない) と一致の前後の文を外し、英語の文言と件数の書式を文言の表で受け、閉じるボタンと入力欄へフォーカスを移す口を足して、eslint の手書きの element の一覧に足した。Enter / Shift+Enter / Esc と IME のガード・走査・強調 (CSS Custom Highlight API) は外側 (`features/chat`) |
-| Cost meter | A | A SDKResultMessage | O-4 |
+| Cost meter | A | A SDKResultMessage | O-4。右のペインの使用量のタブ (`features/shell/UsageTab.tsx`。費用・トークン・ターン数・モデルごとの内訳・拒否の件数) と中央のヘッダの費用の目盛り (`ContextCostMeter`)。registry の `elements-cost-meter` は採らず、`dl` と文字の体裁で作った (SH-002 の照合の写し。正本は O-4 の PR の説明。014 research R-09): 構造が `dl` / `table` でない・文言が英語の直書き・「この実行」とセッションの 2 つの費用を取るが届くのはセッションの累計の推定だけ・モデルの行がキャッシュのトークンを持たない |
 | Data table | C | 未使用 | MCP の結果への転用は O-5 で判断 |
 | Day separator | B | 未使用 | |
 | Diagram | C | 未使用 | MCP の結果への転用は O-5 で判断 |
@@ -285,7 +286,7 @@ assistant-ui の element の一覧 (https://www.assistant-ui.com/elements。**20
 | Image gallery | C | 未使用 | |
 | Image generation | C | 未使用 | PLAN §4.4 |
 | Inline citation | A | C WebSearchInput | O-6 |
-| Job progress | B | A SDKTaskProgressMessage | O-4 の候補 |
+| Job progress | B | 未使用 | O-4 で使わないと決めた (014 research R-09)。取り込んでいない。重みのある段階・残り時間・中止の操作を前提にするが、`task_progress` は段階も残り時間も持たず、task の中止の操作も無い。task の進み具合は task の行 (SystemEventRow) の detail で出す (A SDKTaskProgressMessage) |
 | Launcher | C | 未使用 | PLAN §4.4 (Launcher bubble) |
 | Link preview | B | 未使用 | |
 | Loading state | B | SDK の外: 中央の本体の過去ログ・設定のダイアログ・起動ダイアログ (`LaunchDialogHost`) の起動中 (`GenerationLoader`) | |
@@ -312,7 +313,7 @@ assistant-ui の element の一覧 (https://www.assistant-ui.com/elements。**20
 | Permission grant | A | D permission-request-capability | I-3 |
 | Prompt library | B | 未使用 | |
 | Question flow | C | 未使用 | `AskUserQuestion` の応答 UI の候補は O-5 で判断 |
-| Quota banner | A | A SDKRateLimitEvent | O-4 |
+| Quota banner | A | A SDKRateLimitEvent | O-4。中央のヘッダの下の帯 (`features/shell/CenterBanners.tsx` の `QuotaBanner`。注意は `role="status"`、送れるセッションの上限は `role="alert"`)。registry の `elements-quota-banner` は採らず、文字の体裁と `role` で作った (SH-002 の照合の写し。正本は O-4 の PR の説明。014 research R-09): 「もっと得る」の button を常に描く・文言が英語の直書き・材料 (使用量と上限の数・解除までの相対時間) が届く値 (割合と解除の時刻。どちらも null がありうる) と合わない・見た目の強弱を `status` でなく割合で決める |
 | Quote | B | 未使用 | PLAN §4.3 |
 | Read aloud | C | 未使用 | Voice 系 |
 | Reasoning | A | B assistant/thinking / assistant/redacted_thinking | Reasoning |
@@ -325,7 +326,7 @@ assistant-ui の element の一覧 (https://www.assistant-ui.com/elements。**20
 | Schedule card | C | 未使用 | Generative |
 | Score breakdown | C | 未使用 | Generative |
 | Scroll anchor | A | A SDKAssistantMessage | R-3 |
-| Settings | B | 未使用 | registry の `elements-settings-panel` はモデル・system prompt・temperature の設定の部品で、アプリの設定 (ランタイム・作業フォルダ・プロバイダ・組み合わせ) と合わない。O-7 の設定のダイアログは既存の Dialog で組んだ (O-7 research R-04)。実行中のモデル・thinking の切り替え (E set_model / set_max_thinking_tokens。X-6) の候補 — X-6 で Model selector / Composer model picker と合わせて照合する (pr-gate R1 ui-coverage L-001) |
+| Settings | B | 未使用 | registry の `elements-settings-panel` はモデル・system prompt・temperature の設定の部品で、アプリの設定 (ランタイム・作業フォルダ・Provider・組み合わせ) と合わない。O-7 の設定のダイアログは既存の Dialog で組んだ (O-7 research R-04)。実行中のモデル・thinking の切り替え (E set_model / set_max_thinking_tokens。X-6) の候補 — X-6 で Model selector / Composer model picker と合わせて照合する (pr-gate R1 ui-coverage L-001) |
 | Shared conversation | C | 未使用 | |
 | Shiki highlighter | A | B assistant/text | markdown のコード |
 | Sources | B | C WebSearchInput | O-6 |
@@ -337,7 +338,7 @@ assistant-ui の element の一覧 (https://www.assistant-ui.com/elements。**20
 | Syntax highlighter | B | 未使用 | Shiki highlighter で足りる |
 | Task card | B | A SDKTaskStartedMessage | 背景の task の行 (O-2 は SystemEventRow)。O-6 で一覧と合わせて判断 |
 | Terminal block | A | C BashInput | TerminalBlock |
-| Thinking indicator | A | B assistant/thinking | 応答中の印 |
+| Thinking indicator | A | A SDKThinkingTokensMessage | O-4 で registry の `elements-thinking-indicator` を採った (SH-002 の照合の写し。正本は O-4 の PR の説明。014 research R-09)。手を入れずに `thinking-indicator.tsx` に置き、`thread.aui.tsx` の 2 つの viewport の footer (composer の上) で「思考中 約 N トークン」を出す。`role` も live region も持たず、`<style>` も `style` 属性も無い。npm の依存なし |
 | Thread | A | A SDKAssistantMessage / SDKUserMessage | |
 | Thread list | A | SDK の外: サイドバーの稼働中の区画と過去のセッションの区画の行 (`thread-list.aui.tsx`。session の操作 UI) | 過去のセッションの一覧 (R-2) と監視ビュー (O-1) は session の操作 UI |
 | Thread list sidebar | A | 未使用 | `threadlist-sidebar` は shadcn の SidebarProvider (開閉を cookie に保存・Ctrl+B) を要し、1 つの assistant-ui の runtime の thread list を描く。O-7 のサイドバーは 2 つの assistant-ui の runtime の一覧 (稼働中・過去) と新規起動・設定を並べ、開閉を永続化しないので、既存の `thread-list.aui.tsx` の行と Button で組んだ (O-7 research R-04。照合の正本は O-7 の PR の説明。R-2 plan の「目標レイアウト ADR が accepted になったら寄せる」の約束はこの照合で閉じた) |

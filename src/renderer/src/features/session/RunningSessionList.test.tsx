@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 import {
@@ -167,5 +167,60 @@ describe('RunningSessionList', () => {
     expect(await screen.findByTestId('session-row-end-notice')).toHaveTextContent(
       '時間内に完了しなかったため強制終了'
     )
+  })
+})
+
+describe('RunningSessionList — 行を閉じた後のフォーカス (O-4 FR-019 / SC-007。014 data-model §8)', () => {
+  const C = '33333333-3333-4333-8333-333333333333'
+
+  /** 全部の行を終了済みにして「閉じる」を出す。 */
+  async function endedRows(ids: readonly string[]): Promise<HTMLElement[]> {
+    const { push } = await setup(ids)
+    push(ids.map((id) => st(id, { state: 'done', claudeAlive: false })))
+    const rows = await rowsOf()
+    await waitFor(() =>
+      rows.forEach((row) =>
+        expect(within(row).getByRole('button', { name: '閉じる' })).toBeInTheDocument()
+      )
+    )
+    return rows
+  }
+  const triggerOf = (row: HTMLElement): HTMLElement =>
+    within(row).getByRole('button', { name: /案件フォルダ/ })
+
+  it('閉じた行の次の行の Trigger へ移す (body に落とさない)', async () => {
+    const [a, b] = await endedRows([A, B, C])
+    const next = triggerOf(b!)
+    await userEvent.click(within(a!).getByRole('button', { name: '閉じる' }))
+    await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(2))
+    expect(document.activeElement).not.toBe(document.body)
+    expect(document.activeElement).toBe(next)
+  })
+
+  it('閉じた行が最後なら前の行の Trigger へ移す', async () => {
+    const [, b, c] = await endedRows([A, B, C])
+    const previous = triggerOf(b!)
+    await userEvent.click(within(c!).getByRole('button', { name: '閉じる' }))
+    await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(2))
+    expect(document.activeElement).toBe(previous)
+  })
+
+  it('1 行だけなら稼働中の区画の見出しへ移す', async () => {
+    const [a] = await endedRows([A])
+    await userEvent.click(within(a!).getByRole('button', { name: '閉じる' }))
+    await waitFor(() => expect(screen.queryAllByRole('listitem')).toHaveLength(0))
+    const heading = screen.getByRole('heading', { level: 2 })
+    expect(heading).toHaveAttribute('tabindex', '-1')
+    expect(document.activeElement).toBe(heading)
+  })
+
+  it('フォーカスが別の場所にあるときは動かさない', async () => {
+    const [a] = await endedRows([A, B])
+    const elsewhere = screen.getByRole('button', { name: '詳しく' })
+    act(() => elsewhere.focus())
+    // ポインタで押してもフォーカスを移さない経路 (フォーカスは押した行の外に残る)。
+    fireEvent.click(within(a!).getByRole('button', { name: '閉じる' }))
+    await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(1))
+    expect(document.activeElement).toBe(elsewhere)
   })
 })

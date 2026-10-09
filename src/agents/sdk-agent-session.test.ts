@@ -479,13 +479,38 @@ describe('sdk-agent-session: tool の結果と Hook / task の行 (O-2 / BE-024)
     expect(messages()[2]?.parts[0]).toMatchObject({ status: 'completed' })
   })
 
-  it('hook_progress / task_progress / background_tasks_changed は送らない', async () => {
+  it('hook_progress / background_tasks_changed は送らない。task_progress は task の行の進み具合の更新だけを送る (O-4)', async () => {
     await runTurn([
       { type: 'system', subtype: 'hook_progress', hook_id: 'h1', stdout: 'x' },
-      { type: 'system', subtype: 'task_progress', task_id: 't1', description: 'x' },
+      {
+        type: 'system',
+        subtype: 'task_progress',
+        task_id: 't1',
+        description: 'TASK-DESCRIPTION',
+        summary: 'TASK-SUMMARY',
+        usage: { total_tokens: 10, tool_uses: 2, duration_ms: 3000 }
+      },
       { type: 'system', subtype: 'background_tasks_changed', tasks: [] }
     ])
-    expect(messages()).toEqual([])
+    // 行の無い task への更新は renderer の合成が捨てる (O-4 / 014 data-model §3。セッションスレッドは task の状態を持たない)。
+    expect(messages()).toEqual([
+      {
+        id: 'task:t1',
+        role: 'system',
+        parts: [
+          {
+            type: 'system-event',
+            category: 'task',
+            opens: false,
+            name: '',
+            detail: '\n10/2/3000',
+            status: null
+          }
+        ],
+        createdAt: null
+      }
+    ])
+    expect(JSON.stringify(posted)).not.toMatch(/TASK-DESCRIPTION|TASK-SUMMARY/)
   })
 
   it('permission_denied の扱いは変わらない', async () => {
@@ -509,5 +534,267 @@ describe('sdk-agent-session: tool の結果と Hook / task の行 (O-2 / BE-024)
     send(control({ kind: 'end' }))
     await vi.waitFor(() => expect(kinds()).toContain('ended'))
     expect([...new Set(kinds())].sort()).toEqual(['child-exited', 'ended', 'event', 'status'])
+  })
+})
+
+describe('sdk-agent-session: live-signals の配線 (O-4 / 014 tasks BE-004 / BE-012 / BE-020 / BE-040 / BE-042)', () => {
+  async function runTurn(feed: Record<string, unknown>[]): Promise<void> {
+    const send = await boot('normal', feed)
+    send(launch)
+    await vi.waitFor(() => expect(h.preMessageConsumed).toBe(true))
+    send(control({ kind: 'send-prompt', text: 'go' }))
+  }
+
+  async function failureOf(feed: Record<string, unknown>[]): Promise<unknown[]> {
+    await runTurn(feed)
+    await vi.waitFor(() => expect(kinds()).toContain('ended'))
+    expect(states()).toContain('error')
+    expect(states()).not.toContain('done')
+    return events().filter((e) => e.kind === 'failure')
+  }
+
+  it('api_error_status: 429 の失敗で failure が rate-limited (失敗になる)', async () => {
+    expect(
+      await failureOf([
+        { type: 'result', subtype: 'error_during_execution', is_error: true, api_error_status: 429 }
+      ])
+    ).toEqual([{ kind: 'failure', reasonKey: 'rate-limited' }])
+  })
+
+  it('failure (理由) は state: error より先に届く (renderer が失敗に入ったときに理由を読めるように。US-1 AC5)', async () => {
+    await failureOf([{ type: 'result', subtype: 'error_max_turns', is_error: true }])
+    const order = events()
+      .filter((e) => e.kind === 'failure' || (e.kind === 'state' && e.state === 'error'))
+      .map((e) => e.kind)
+    expect(order).toEqual(['failure', 'state'])
+  })
+
+  it('同じターンの主ループの assistant の billing_error で billing', async () => {
+    expect(
+      await failureOf([
+        {
+          type: 'assistant',
+          uuid: 'm1',
+          parent_tool_use_id: null,
+          message: { content: [] },
+          error: 'billing_error'
+        },
+        { type: 'result', subtype: 'success', is_error: true }
+      ])
+    ).toEqual([{ kind: 'failure', reasonKey: 'billing' }])
+  })
+
+  it('知らない形の失敗は provider-error (状態通知の reasonKey も同じ)', async () => {
+    expect(
+      await failureOf([{ type: 'result', subtype: 'unexpected_new_subtype', is_error: true }])
+    ).toEqual([{ kind: 'failure', reasonKey: 'provider-error' }])
+    const errorStatuses = posted.filter((p) => p.kind === 'status' && p.state === 'error')
+    expect(errorStatuses.length).toBeGreaterThan(0)
+    for (const status of errorStatuses) expect(status.reasonKey).toBe('provider-error')
+  })
+
+  it('失敗の文字列 (errors / result) は event にも状態通知にも載らない', async () => {
+    await failureOf([
+      {
+        type: 'result',
+        subtype: 'error_during_execution',
+        is_error: true,
+        errors: ['ERRORS-TEXT-MARKER'],
+        result: 'RESULT-TEXT-MARKER'
+      }
+    ])
+    const all = JSON.stringify(posted)
+    expect(all).not.toContain('ERRORS-TEXT-MARKER')
+    expect(all).not.toContain('RESULT-TEXT-MARKER')
+    expect(events().filter((e) => e.kind === 'failure')).toEqual([
+      { kind: 'failure', reasonKey: 'execution-error' }
+    ])
+  })
+
+  it('成功の result では完了のまま (失敗にしない)', async () => {
+    await runTurn([])
+    await vi.waitFor(() => expect(states()).toContain('done'))
+    expect(events().some((e) => e.kind === 'failure')).toBe(false)
+  })
+
+  it('rate_limit_event は meter の rate-limit、主ループの tool_progress は meter の tool-elapsed を送る (014 tasks BE-020 / BE-042)', async () => {
+    await runTurn([
+      {
+        type: 'rate_limit_event',
+        rate_limit_info: {
+          status: 'rejected',
+          utilization: 1,
+          resetsAt: 1_760_000_000,
+          limitScope: 'LEAK-limitScope',
+          errorCode: 'LEAK-errorCode'
+        }
+      },
+      {
+        type: 'tool_progress',
+        tool_use_id: 'toolu_1',
+        tool_name: 'Bash',
+        parent_tool_use_id: null,
+        elapsed_time_seconds: 3
+      }
+    ])
+    await vi.waitFor(() => expect(states()).toContain('done'))
+    expect(events().filter((e) => e.kind === 'meter')).toEqual([
+      {
+        kind: 'meter',
+        meter: {
+          type: 'rate-limit',
+          status: 'rejected',
+          limitType: null,
+          utilizationPct: 100,
+          resetsAtSec: 1_760_000_000,
+          usingOverage: false
+        }
+      },
+      { kind: 'meter', meter: { type: 'tool-elapsed', toolUseId: 'toolu_1', elapsedSeconds: 3 } }
+    ])
+    expect(events().some((e) => e.kind === 'failure')).toBe(false)
+    expect(events().filter((e) => e.kind === 'message')).toEqual([])
+    expect(JSON.stringify(posted)).not.toContain('LEAK')
+    expect(JSON.stringify(posted)).not.toContain('"Bash"')
+  })
+
+  it('間引いて保留した値は、終わった後 (ended の後) に送らない (終了の後に timer が発火しない。014 spec SC-004)', async () => {
+    const send = await boot('normal', [
+      // task の鍵は result の後も残る (背景の task はターンをまたぐ)。2 つ目は 1 秒の間隔の中なので保留になる。
+      {
+        type: 'system',
+        subtype: 'task_progress',
+        task_id: 't1',
+        usage: { total_tokens: 1, tool_uses: 1, duration_ms: 1 }
+      },
+      {
+        type: 'system',
+        subtype: 'task_progress',
+        task_id: 't1',
+        usage: { total_tokens: 2, tool_uses: 2, duration_ms: 2 }
+      },
+      { type: 'system', subtype: 'thinking_tokens', estimated_tokens: 5 },
+      { type: 'system', subtype: 'thinking_tokens', estimated_tokens: 6 }
+    ])
+    send(launch)
+    await vi.waitFor(() => expect(h.preMessageConsumed).toBe(true))
+    send(control({ kind: 'send-prompt', text: 'go' }))
+    await vi.waitFor(() => expect(states()).toContain('done'))
+    send(control({ kind: 'end' }))
+    await vi.waitFor(() => expect(kinds()).toContain('ended'))
+    const endedAt = kinds().lastIndexOf('ended')
+    // 保留の境 (1 秒) を過ぎるまで待つ
+    await new Promise((resolve) => setTimeout(resolve, 1_300))
+    expect(posted.slice(endedAt + 1)).toEqual([])
+    // 思考の保留 (2 つ目) は result で取り消したので、どこにも送られていない
+    const sentText = posted.map((p) => p.payload ?? '').join('\n')
+    expect(sentText).toContain('"estimatedTokens":5')
+    expect(sentText).not.toContain('"estimatedTokens":6')
+  })
+
+  interface RowEvent {
+    kind: string
+    message?: { id: string; role: string; parts: Record<string, unknown>[] }
+  }
+  const retryRows = (): Record<string, unknown>[] =>
+    (events() as RowEvent[])
+      .filter((e) => e.kind === 'message' && e.message?.id.startsWith('retry:') === true)
+      .map((e) => ({ id: e.message?.id, ...e.message?.parts[0] }))
+
+  it('api_retry は message の経路で再試行の行を送り、成功の result で succeeded に閉じる', async () => {
+    await runTurn([
+      {
+        type: 'system',
+        subtype: 'api_retry',
+        attempt: 1,
+        max_retries: 10,
+        retry_delay_ms: 2000,
+        error_status: 529,
+        error: 'LEAK-error',
+        no_response: { waited_ms: 'LEAK-waited', retry_wait_ms: 1 }
+      }
+    ])
+    await vi.waitFor(() => expect(states()).toContain('done'))
+    expect(retryRows()).toEqual([
+      {
+        id: 'retry:0',
+        type: 'system-event',
+        category: 'api-retry',
+        opens: true,
+        name: '',
+        detail: '1/10/529/2000',
+        status: 'retrying'
+      },
+      {
+        id: 'retry:0',
+        type: 'system-event',
+        category: 'api-retry',
+        opens: false,
+        name: '',
+        detail: '',
+        status: 'succeeded'
+      }
+    ])
+    expect(JSON.stringify(posted)).not.toContain('LEAK')
+  })
+
+  it('status / init の権限モードが起動の設定と違えば meter と権限モードの行を 1 回だけ送り、強制はしない (014 tasks BE-040)', async () => {
+    await runTurn([
+      { type: 'system', subtype: 'status', status: null, permissionMode: 'acceptEdits' },
+      {
+        type: 'system',
+        subtype: 'init',
+        permissionMode: 'acceptEdits',
+        cwd: '/home/LEAK-cwd',
+        tools: ['LEAK-tool']
+      }
+    ])
+    await vi.waitFor(() => expect(states()).toContain('done'))
+    expect(events().filter((e) => e.kind === 'meter')).toEqual([
+      { kind: 'meter', meter: { type: 'permission-mode', mode: 'acceptEdits' } }
+    ])
+    expect(
+      (events() as RowEvent[])
+        .filter((e) => e.kind === 'message')
+        .map((e) => ({ id: e.message?.id, ...e.message?.parts[0] }))
+    ).toEqual([
+      {
+        id: 'mode:0',
+        type: 'system-event',
+        category: 'permission-mode',
+        opens: true,
+        name: '',
+        detail: 'acceptEdits',
+        status: 'changed'
+      }
+    ])
+    // 強制しない (中断・失敗にしない。U-6)
+    expect(events().some((e) => e.kind === 'failure')).toBe(false)
+    expect(states()).not.toContain('error')
+    expect(JSON.stringify(posted)).not.toContain('LEAK')
+  })
+
+  it('失敗の result では再試行の行を failed に閉じ、閉じは failure と state: error より先に届く', async () => {
+    await failureOf([
+      {
+        type: 'system',
+        subtype: 'api_retry',
+        attempt: 3,
+        max_retries: 3,
+        retry_delay_ms: 8000,
+        error_status: null
+      },
+      { type: 'result', subtype: 'success', is_error: true, api_error_status: 529 }
+    ])
+    expect(retryRows().map((r) => r.status)).toEqual(['retrying', 'failed'])
+    const order = (events() as (RowEvent & { state?: string })[])
+      .filter(
+        (e) =>
+          (e.kind === 'message' && e.message?.parts[0]?.status === 'failed') ||
+          e.kind === 'failure' ||
+          (e.kind === 'state' && e.state === 'error')
+      )
+      .map((e) => e.kind)
+    expect(order).toEqual(['message', 'failure', 'state'])
   })
 })

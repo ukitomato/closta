@@ -45,24 +45,35 @@ export type TranscriptPartDTO =
   /**
    * Hook / Background task のシステムイベントの行 (O-2 / FR-008・FR-009。[data-model](../../../specs/011-ui-coverage/data-model.md) §2)。
    * 1 つの Hook / task は 1 行で、同じ id の後続は `mergeSystemEvent` で合成する。状態の一覧は持たない。
+   * O-4 が API の再試行・コンテキストの圧縮・権限モードの行を足した (実行中だけ。
+   * [014 data-model](../../../specs/014-ui-metering-and-limits/data-model.md) §3)。
    */
   | {
       readonly type: 'system-event'
       readonly category: SystemEventCategory
-      /** 行を作ってよいイベントか (hook_started / hook_response / task_started だけ true)。 */
+      /** 行を作ってよいイベントか (hook_started / hook_response / task_started と O-4 の行の開始だけ true)。 */
       readonly opens: boolean
-      /** Hook: hook_name / task: description (無害化・1 行・120 コードポイント)。無ければ ''。 */
+      /** Hook: hook_name / task: description (無害化・1 行・120 コードポイント)。無ければ ''。O-4 の行は常に ''。 */
       readonly name: string
-      /** Hook: hook_event / task: task_type。無ければ ''。 */
+      /**
+       * Hook: hook_event / task: task_type (進み具合は改行の後ろ。`splitTaskDetail`) / api-retry: `encodeRetryDetail` /
+       * permission-mode: 権限モードの鍵 / compaction: ''。無ければ ''。
+       */
       readonly detail: string
       /** 無ければ null (task_updated の patch.status は任意)。 */
       readonly status: SystemEventStatus | null
     }
 
-export const SYSTEM_EVENT_CATEGORIES = ['hook', 'task'] as const
+export const SYSTEM_EVENT_CATEGORIES = [
+  'hook',
+  'task',
+  'api-retry',
+  'compaction',
+  'permission-mode'
+] as const
 export type SystemEventCategory = (typeof SYSTEM_EVENT_CATEGORIES)[number]
 
-/** Hook / task の状態の理由キー (訳は renderer の `features/chat/labels.ts`)。 */
+/** システムイベントの行の状態の理由キー (訳は renderer の `features/chat/labels.ts`)。 */
 export const SYSTEM_EVENT_STATUSES = [
   'started',
   'succeeded',
@@ -74,7 +85,10 @@ export const SYSTEM_EVENT_STATUSES = [
   'killed',
   'paused',
   'stopped',
-  'unknown'
+  'unknown',
+  'retrying',
+  'compacting',
+  'changed'
 ] as const
 export type SystemEventStatus = (typeof SYSTEM_EVENT_STATUSES)[number]
 

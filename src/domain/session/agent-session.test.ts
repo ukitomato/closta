@@ -81,8 +81,30 @@ describe('boundDecisionScope (scope 上限。FR-012 / H-04 / SC-004)', () => {
 })
 
 describe('isLaunchFailureReason', () => {
-  it('10 種の起動失敗理由を受理し、それ以外を拒否 (X-5 で supervisor-exited)', () => {
-    expect(LAUNCH_FAILURE_REASONS).toHaveLength(10)
+  it('18 種の起動とターンの失敗理由を受理し、それ以外を拒否 (X-5 で supervisor-exited、O-4 で 8 種)', () => {
+    expect(LAUNCH_FAILURE_REASONS).toHaveLength(18)
+    expect([...LAUNCH_FAILURE_REASONS].sort()).toEqual(
+      [
+        'distro-not-running',
+        'not-verified-running',
+        'distro-mismatch',
+        'claude-not-found',
+        'launch-failed',
+        'process-crashed',
+        'stream-protocol-error',
+        'provider-error',
+        'interrupt-unavailable',
+        'supervisor-exited',
+        'max-turns',
+        'max-budget',
+        'structured-output-retries',
+        'execution-error',
+        'auth-failed',
+        'billing',
+        'rate-limited',
+        'api-error'
+      ].sort()
+    )
     for (const reason of LAUNCH_FAILURE_REASONS) {
       expect(isLaunchFailureReason(reason)).toBe(true)
     }

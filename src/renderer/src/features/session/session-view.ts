@@ -6,18 +6,20 @@ import { canEnd, type SessionRunState } from '@domain/session/run-state'
 import { sanitizeBody } from '@domain/session/sanitize-body'
 import type { SessionStatusUpdate } from '@domain/session/status-update'
 
-import { attentionAnnouncement, type Elapsed, type SessionRowStatus } from './labels'
 import type {
   Activity,
+  Elapsed,
   LiveSessionState,
   PendingPermission,
   RunningSessionStoreState,
+  SessionRowStatus,
   StatusSince
 } from './running-session-types'
 
 /**
  * 稼働中セッションの表示用の導出 (X-5 / FE-001 / FE-011。純関数のみ)。一覧の行・表示中セッション・ストアの
  * キュー制御が同じ判定を使う (判定を分けない)。ストア本体は `running-session-store.ts`。
+ * 文言の表 (`labels.ts`) を import しない — 導出は値と名前の組までを返し、文は呼び出し側が組む (O-4 FR-018 (2))。
  */
 
 /**
@@ -371,7 +373,7 @@ export function sameActivity(a: Activity | null | undefined, b: Activity | null)
   return a.kind === b.kind && a.tool === b.tool && a.detail === b.detail
 }
 
-/** 経過時間の表記の区分を導く (型と訳出は `labels.ts`。spec FR-005 [ASSUMED])。 */
+/** 経過時間の表記の区分を導く (型は `running-session-types.ts`、訳出は `labels.ts`。spec FR-005 [ASSUMED])。 */
 export function formatElapsed(ms: number): Elapsed {
   const sec = Math.floor(Math.max(0, ms) / 1000)
   if (sec < 60) return { unit: 'sec', sec }
@@ -432,28 +434,43 @@ export function nextAwaiting(
   return best?.id ?? null
 }
 
+/** 失敗に入ったセッションの表示名と理由のキー (理由が届いていなければ null)。 */
+export interface AttentionFailure {
+  readonly name: string | null
+  readonly reason: LaunchFailureReason | null
+}
+
+/** 承認待ち・失敗に入ったセッションの表示名の組 (`attentionTransitions` の戻り値)。`null` の名前は表示名が引けない。 */
+export interface AttentionTransitions {
+  readonly awaiting: readonly (string | null)[]
+  readonly failed: readonly AttentionFailure[]
+}
+
 /**
- * 支援技術に読ませる文 (spec FR-004 / data-model §2)。`watchedId` (見ているセッション。定義は `stores/ui.ts` の
- * `watchedIdOf` = 013 data-model §1。O-7 pr-gate R2 architecture M-102) 以外のうち、承認待ち・失敗に**入った**ものを 1 つの文にまとめる。
- * **会話由来の値を引数に取らない** — 文は作業フォルダの表示名と固定の文言だけで組む。
+ * 支援技術に読ませる遷移 (spec FR-004 / data-model §2)。`watchedId` (見ているセッション。定義は `stores/ui.ts` の
+ * `watchedIdOf` = 013 data-model §1。O-7 pr-gate R2 architecture M-102) 以外のうち、承認待ち・失敗に**入った**ものの
+ * 表示名を 1 つの組にまとめる。失敗には理由のキーを添える (監視ビューの行と同じ理由を読む。014 spec US-1 AC5)。
+ * 無ければ `null`。文は呼び出し側 (`SessionAttentionAnnouncer`) が `labels.ts` の `attentionAnnouncement` で組む
+ * (O-4 FR-018 (2))。
+ * **会話由来の値を引数に取らない** — 名前は作業フォルダの表示名だけ、理由は理由のキーだけ。
  */
-export function announcements(
+export function attentionTransitions(
   prev: Readonly<Record<string, StatusSince>>,
   next: Readonly<Record<string, StatusSince>>,
   watchedId: string | null,
-  folderLabel: (sessionId: string) => string | null
-): string | null {
+  folderLabel: (sessionId: string) => string | null,
+  failureReason: (sessionId: string) => LaunchFailureReason | null = () => null
+): AttentionTransitions | null {
   const awaiting: (string | null)[] = []
-  const failed: (string | null)[] = []
+  const failed: AttentionFailure[] = []
   for (const [id, entry] of Object.entries(next)) {
     if (id === watchedId) continue
     if (prev[id]?.status === entry.status) continue
     if (entry.status === 'awaiting') awaiting.push(folderLabel(id))
-    else if (entry.status === 'failed') failed.push(folderLabel(id))
+    else if (entry.status === 'failed')
+      failed.push({ name: folderLabel(id), reason: failureReason(id) })
   }
-  return awaiting.length === 0 && failed.length === 0
-    ? null
-    : attentionAnnouncement(awaiting, failed)
+  return awaiting.length === 0 && failed.length === 0 ? null : { awaiting, failed }
 }
 
 /** assistant-ui に渡す末尾の窓 (件数)。「さらに表示」でこの件数ずつ広げる (X-5 / SC-003)。 */

@@ -14,6 +14,7 @@ import type {
 
 import { installCapability } from '@/test-support/capability'
 
+import { launchFailureLabel } from './labels'
 import { LaunchDialog, type LaunchSource } from './LaunchDialog'
 import { createRunningSessionStore, type RunningSessionStore } from './running-session-store'
 
@@ -892,6 +893,26 @@ describe('LaunchDialog', () => {
       'セッションのプロセスが異常終了しました'
     )
   })
+
+  it.each([
+    'max-turns',
+    'max-budget',
+    'structured-output-retries',
+    'execution-error',
+    'auth-failed',
+    'billing',
+    'rate-limited',
+    'api-error'
+  ] as const)(
+    'ターンの失敗 (%s) から戻ったときも、失敗の表示と同じ全文を出す (O-4 US-1 / FE-011)',
+    async (reason) => {
+      install()
+      render(<LaunchDialog session={fakeSession({ previousFailure: reason })} />)
+      expect(screen.getByTestId('previous-failure').textContent).toContain(
+        launchFailureLabel(reason)
+      )
+    }
+  )
 
   it('lastConfig から入力を復元し、起動の拒否理由を表示する (US-1 AC7)', async () => {
     install()

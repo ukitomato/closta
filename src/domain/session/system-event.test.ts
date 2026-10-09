@@ -1,13 +1,23 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  decodeRetryDetail,
+  encodeRetryDetail,
+  encodeTaskProgress,
   isTerminalSystemEventStatus,
   mayCarrySecret,
   mergeSystemEvent,
+  splitTaskDetail,
   systemEventPartOf,
   toSystemEventMessage
 } from './system-event'
-import type { TranscriptMessageDTO } from './transcript-dto'
+import {
+  SYSTEM_EVENT_CATEGORIES,
+  SYSTEM_EVENT_STATUSES,
+  type SystemEventCategory,
+  type SystemEventStatus,
+  type TranscriptMessageDTO
+} from './transcript-dto'
 
 /** O-2 BE-021 — Hook / Background task のシステムメッセージ → 1 行 (data-model §2)。 */
 
@@ -265,5 +275,191 @@ describe('mergeSystemEvent', () => {
     expect(mayCarrySecret('npm run build')).toBe(false)
     expect(mayCarrySecret('A=1 make')).toBe(true)
     expect(mayCarrySecret('use sk-live')).toBe(true)
+  })
+})
+
+/** O-4 BE-003 — 行の category と status の追加、task の進み具合の合成、`detail` の符号化と復号 (014 data-model §3)。 */
+
+const row = (
+  id: string,
+  category: SystemEventCategory,
+  opens: boolean,
+  detail: string,
+  status: SystemEventStatus | null,
+  name = ''
+): TranscriptMessageDTO => ({
+  id,
+  role: 'system',
+  parts: [{ type: 'system-event', category, opens, name, detail, status }],
+  createdAt: null
+})
+
+describe('category と status の集合 (固定テスト)', () => {
+  it('category は 5 つ', () => {
+    expect([...SYSTEM_EVENT_CATEGORIES].sort()).toEqual([
+      'api-retry',
+      'compaction',
+      'hook',
+      'permission-mode',
+      'task'
+    ])
+  })
+
+  it('status は 14', () => {
+    expect([...SYSTEM_EVENT_STATUSES].sort()).toEqual([
+      'cancelled',
+      'changed',
+      'compacting',
+      'completed',
+      'failed',
+      'killed',
+      'paused',
+      'pending',
+      'retrying',
+      'running',
+      'started',
+      'stopped',
+      'succeeded',
+      'unknown'
+    ])
+  })
+
+  it('changed は終わりを表し、retrying / compacting は表さない', () => {
+    expect(isTerminalSystemEventStatus('changed')).toBe(true)
+    expect(isTerminalSystemEventStatus('retrying')).toBe(false)
+    expect(isTerminalSystemEventStatus('compacting')).toBe(false)
+  })
+})
+
+describe('mergeSystemEvent の task の進み具合 (014 data-model §3「合成の規則の追加」)', () => {
+  const started = toSystemEventMessage(taskStarted)!
+  const progress = (tokens: number, tools: number, ms: number): TranscriptMessageDTO =>
+    row(
+      'task:t1',
+      'task',
+      false,
+      encodeTaskProgress({ totalTokens: tokens, toolUses: tools, durationMs: ms }),
+      null
+    )
+
+  it('task の行に進み具合が合成され、種類・名前・状態が残る', () => {
+    const merged = mergeSystemEvent(started, progress(1200, 3, 4500))
+    expect(systemEventPartOf(merged ?? undefined)).toMatchObject({
+      category: 'task',
+      opens: true,
+      name: 'ビルドを走らせる',
+      detail: 'local_agent\n1200/3/4500',
+      status: 'running'
+    })
+  })
+
+  it('進み具合だけが続けて来ても種類が残り、進み具合は最新', () => {
+    const first = mergeSystemEvent(started, progress(100, 1, 1000))
+    const second = mergeSystemEvent(first ?? undefined, progress(900, 4, 7000))
+    const part = systemEventPartOf(second ?? undefined)
+    expect(part?.detail).toBe('local_agent\n900/4/7000')
+    expect(splitTaskDetail(part?.detail ?? '')).toEqual({
+      taskType: 'local_agent',
+      progress: { tokens: 900, tools: 4, durationMs: 7000 }
+    })
+  })
+
+  it('進み具合の後の状態の更新で種類と進み具合が残る', () => {
+    const withProgress = mergeSystemEvent(started, progress(100, 1, 1000))
+    const update = toSystemEventMessage({
+      type: 'system',
+      subtype: 'task_notification',
+      task_id: 't1',
+      status: 'completed'
+    })!
+    const done = mergeSystemEvent(withProgress ?? undefined, update)
+    expect(systemEventPartOf(done ?? undefined)).toMatchObject({
+      detail: 'local_agent\n100/1/1000',
+      status: 'completed'
+    })
+  })
+
+  it('行の無い task への進み具合は今のまま捨てる', () => {
+    expect(mergeSystemEvent(undefined, progress(1, 1, 1))).toBeNull()
+  })
+
+  it('Hook と他の category の合成は今のまま (detail は空でなければ次の値。改行で始まらない)', () => {
+    const hook = toSystemEventMessage(hookStarted)!
+    const hookMerged = mergeSystemEvent(hook, toSystemEventMessage(hookResponse)!)
+    expect(systemEventPartOf(hookMerged ?? undefined)?.detail).toBe('SessionStart')
+    const retry = row('retry:0', 'api-retry', true, '1/10/529/2000', 'retrying')
+    const retryNext = row('retry:0', 'api-retry', false, '2/10/529/4000', 'retrying')
+    const retryDone = row('retry:0', 'api-retry', false, '', 'succeeded')
+    const merged = mergeSystemEvent(mergeSystemEvent(retry, retryNext) ?? undefined, retryDone)
+    expect(systemEventPartOf(merged ?? undefined)).toMatchObject({
+      detail: '2/10/529/4000',
+      status: 'succeeded'
+    })
+    // task 以外の category では、改行で始まる detail も合成の規則の対象にしない。
+    const hookNewline = mergeSystemEvent(hook, row('hook:h1', 'hook', false, '\nX', null))
+    expect(systemEventPartOf(hookNewline ?? undefined)?.detail).toBe('\nX')
+  })
+
+  it('開始の行と過去ログの task の detail は改行を含まない (oneLine が空白を畳む)', () => {
+    const raw = { ...taskStarted, task_type: 'local_agent\n1/2/3' }
+    const part = systemEventPartOf(toSystemEventMessage(raw) ?? undefined)
+    expect(part?.detail).toBe('local_agent 1/2/3')
+    expect(splitTaskDetail(part?.detail ?? '').progress).toBeNull()
+  })
+})
+
+describe('detail の符号化と復号', () => {
+  it('再試行の detail の往復', () => {
+    const detail = encodeRetryDetail({
+      attempt: 2,
+      maxRetries: 10,
+      errorStatus: 529,
+      retryDelayMs: 4000
+    })
+    expect(detail).toBe('2/10/529/4000')
+    expect(decodeRetryDetail(detail)).toEqual({
+      attempt: 2,
+      maxRetries: 10,
+      errorStatus: 529,
+      retryDelayMs: 4000
+    })
+  })
+
+  it('error_status が null・整数でなければ -、他の外れた値は 0', () => {
+    for (const errorStatus of [null, undefined, 'SECRET', 1.5, -1, Number.NaN]) {
+      const detail = encodeRetryDetail({ attempt: 1, maxRetries: 3, errorStatus, retryDelayMs: 5 })
+      expect(detail).toBe('1/3/-/5')
+      expect(decodeRetryDetail(detail)?.errorStatus).toBeNull()
+    }
+    const bad = encodeRetryDetail({
+      attempt: 'x',
+      maxRetries: -1,
+      errorStatus: 500,
+      retryDelayMs: Number.POSITIVE_INFINITY
+    })
+    expect(bad).toBe('0/0/500/0')
+  })
+
+  it('復号できない再試行の detail は null', () => {
+    const bad = ['', '1/2/3', '1/2/3/4/5', 'a/b/c/d', '1/2/x/4', '1/2/3/4\n', '-/2/3/4']
+    for (const detail of bad) expect(decodeRetryDetail(detail)).toBeNull()
+  })
+
+  it('task の進み具合の往復と、復号できない detail で進み具合が null', () => {
+    const detail = encodeTaskProgress({ totalTokens: 1200, toolUses: 3, durationMs: 4500 })
+    expect(detail).toBe('\n1200/3/4500')
+    expect(splitTaskDetail(`local_agent${detail}`)).toEqual({
+      taskType: 'local_agent',
+      progress: { tokens: 1200, tools: 3, durationMs: 4500 }
+    })
+    const zeroed = encodeTaskProgress({ totalTokens: 'x', toolUses: -1, durationMs: 1.5 })
+    expect(zeroed).toBe('\n0/0/0')
+    expect(splitTaskDetail('local_agent')).toEqual({ taskType: 'local_agent', progress: null })
+    for (const tail of ['', 'x/y/z', '1/2', '1/2/3/4', '1/2/3\n4']) {
+      expect(splitTaskDetail(`local_bash\n${tail}`)).toEqual({
+        taskType: 'local_bash',
+        progress: null
+      })
+    }
   })
 })

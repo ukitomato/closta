@@ -20,6 +20,7 @@ related_specs:
   - specs/011-ui-coverage/spec.md
   - specs/013-ui-app-shell/spec.md
   - specs/012-ui-thread-search/spec.md
+  - specs/014-ui-metering-and-limits/spec.md
 ---
 
 # Domain Charter: ui
@@ -69,7 +70,7 @@ UI は本来 delivery mechanism であり domain ではない。それでも独�
 - **アプリのシェル** (面の配置と遷移。O-7 / [AD-046](../../decisions/0046-app-shell-layout.md)) — サイドバー・中央・右のペインの
   3 面、設定と起動のダイアログの枠 (開閉・項目・フォーカスの戻り)、中央の focus と中央のヘッダ、右のペインのタブの表。
   サイドバーの 2 つの一覧の中身と行の形は session が、ダイアログの中身 (X-4 の `LaunchDialog`、ランタイム・作業フォルダ・
-  プロバイダ・組み合わせの画面) は各 domain が持ち (下の Out of scope「他 domain の操作 UI」)、シェルは置き場所と選択に応じた
+  Provider・組み合わせの画面) は各 domain が持ち (下の Out of scope「他 domain の操作 UI」)、シェルは置き場所と選択に応じた
   中央の切り替えを持つ。**面の配置と遷移そのものは SDK の emit の表示ではないので、対応表 (Principle XII) に行を足さない。
   ただしシェルの部品 (中央のヘッダ・右のペインのタブ) が SDK の emit や D 節の経路を表示するときは、その行の割当にその部品を
   書き、表示を変える PR で対応表を直す** (中央のヘッダは D 節の session-state を描く。右のペインに足すタブ (O-4〜O-6・OPT-panel)
@@ -224,7 +225,13 @@ O-1 で読み替えた: 監視ビューはサイドバーの稼働中の区画 (
   (起動元 `preset` / `manual` と `launch-usage.json`。AD-041 (h))、UI の文言を i18n リソース化しない判断
   ([AD-045](../../decisions/0045-ui-labels-no-i18n-resources.md))、O-7 から預かった過去の区画の並び (`role="group"`・
   ツールチップ・基準画像) を含む。conversation map / message timing / heat graph は O-9 に分けた (U-1)
-- （残り。O-4 / O-5 / O-6 / O-9 / OPT-pty / OPT-panel が本 domain に属する）
+- [O-4: 計量と制限の表示](../../../specs/014-ui-metering-and-limits/spec.md) — **実装中**。ターンの失敗の理由の区別、中央のヘッダの
+  目盛り (コンテキストの使用量の推定・費用) と帯 (権限モードの警告の帯・Quota banner)、右のペインの「使用量」のタブ、「概要」の現在の
+  権限モード、transcript の行 (API の再試行・コンテキストの圧縮・権限モード・task の進み具合)、tool の経過時間と思考の印。
+  session の契約 (失敗の理由のキー・`SessionEvent` の `meter`) を広げる (U-1。[AD-047](../../decisions/0047-session-meter-and-failure-reasons.md))。
+  O-7 から預かったタブのキーボード操作 (WAI-ARIA の Tabs pattern) とテストの分割、system-scope から預かった稼働中のストアと監視ビューの行の
+  切り出し・消えるボタンのフォーカス・「Provider」の表記を含む
+- （残り。O-5 / O-6 / O-9 / OPT-pty / OPT-panel が本 domain に属する）
 
 ## Open Questions
 

@@ -1,13 +1,15 @@
-import { InfoIcon, type LucideIcon } from 'lucide-react'
+import { GaugeIcon, InfoIcon, type LucideIcon } from 'lucide-react'
 
 import type { CenterFocus, PanelTabId } from '@/stores/ui'
 
 import { SHELL_LABELS } from './labels'
 import { OverviewTab } from './OverviewTab'
+import { UsageTab } from './UsageTab'
 
 /**
- * **右のペインのタブの表** (O-7 / FR-014 / data-model §4。1 か所の表)。後続 feature (O-4 の Context / Cost・O-5 の
- * Server panel・O-6 の TodoList / Background task・OPT-panel) はこの表に行を足す。
+ * **右のペインのタブの表** (O-7 / FR-014 / data-model §4。1 か所の表)。O-4 は「使用量」(Cost meter の置き場。Context display
+ * は中央のヘッダの目盛り。014 data-model §4) を足した。後続 feature (O-5 の Server panel・O-6 の TodoList / Background
+ * task・OPT-panel) はこの表に行を足す。
  *
  * **`Content` は renderer の DOM の中に描くものに限る。** 外部コンテンツ (Browser / PR の Webview) のタブはこの形で
  * 表さない (AD-046 Decision 4。OPT-panel で種別を足し、main が管理する `WebContentsView` の境界に従う)。
@@ -28,6 +30,14 @@ export const PANEL_TABS: readonly PanelTab[] = [
     icon: InfoIcon,
     availableFor: ['none', 'running', 'past'],
     Content: OverviewTab
+  },
+  {
+    id: 'usage',
+    label: SHELL_LABELS.usageTab,
+    icon: GaugeIcon,
+    // 値は稼働中だけで出す。過去と未選択はタブを出して空の状態を言う (014 spec US-3 AC5 / FR-008)。
+    availableFor: ['none', 'running', 'past'],
+    Content: UsageTab
   }
 ]
 

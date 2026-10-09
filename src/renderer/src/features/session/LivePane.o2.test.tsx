@@ -1,6 +1,7 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { axe } from 'vitest-axe'
 
 import { SESSION_PORT_MESSAGE } from '@domain/capability'
 import type { SessionEvent } from '@domain/session/agent-session'
@@ -8,6 +9,7 @@ import type { SessionStatusUpdate } from '@domain/session/status-update'
 import type { TranscriptMessageDTO, TranscriptPartDTO } from '@domain/session/transcript-dto'
 
 import {
+  PERMISSION_MODE_NAMES,
   SYSTEM_EVENT_LABELS,
   TOOL_RESULT_LABELS,
   TRANSCRIPT_DENSITY_LABELS
@@ -23,7 +25,11 @@ import { createRunningSessionStore, type RunningSessionStore } from './running-s
 /**
  * O-2 FE-012 / FE-022 — 実行中のセッションの transcript (SC-003 / SC-005)。
  * port の本文 (`SessionEvent`) → store の合成 → assistant-ui の Thread の描画までを本物で通す。
+ * O-4 FE-021 — API の再試行の行 (014 spec US-2 AC4 / FR-007。data-model §3 / §5)。
+ * O-4 FE-042 — 権限モード・コンテキストの圧縮・task の進み具合の行 (014 spec US-4 AC1・AC2・AC5。data-model §3 / §4 / §5)。
  */
+
+const AXE_RULES = { rules: { 'color-contrast': { enabled: false } } }
 
 const A = '11111111-1111-4111-8111-111111111111'
 const B = '22222222-2222-4222-8222-222222222222'
@@ -45,6 +51,7 @@ function deliverPort(sessionId: string, port: FakePort): void {
 
 interface Harness {
   readonly store: RunningSessionStore
+  readonly container: HTMLElement
   readonly emit: (sessionId: string, event: SessionEvent) => void
   readonly pushStatus: (update: Partial<SessionStatusUpdate> & { sessionId: string }) => void
 }
@@ -95,13 +102,14 @@ async function setup(ids: readonly string[] = [A]): Promise<Harness> {
     ports.set(id, port)
   }
   act(() => store.select(ids[0] ?? null))
-  render(
+  const { container } = render(
     <RunningSessionStoreContext.Provider value={store}>
       <RunningSessionsHarness />
     </RunningSessionStoreContext.Provider>
   )
   return {
     store,
+    container,
     emit: (sessionId, event) =>
       act(() => ports.get(sessionId)?.onmessage?.({ data: JSON.stringify(event) })),
     pushStatus: (update) =>
@@ -439,6 +447,260 @@ describe('実行中のシステムイベントの行 (FR-009 / US-2 AC3・AC4・
     expect(row.querySelector('.aui-branch-picker-root')).toBeNull()
     // 実行中の印は composer 側の既存の表示 (停止ボタン)。
     expect(screen.getByRole('button', { name: 'Stop generating' })).toBeInTheDocument()
+  })
+})
+
+describe('API の再試行の行 (O-4 FE-021 / 014 spec US-2 AC4 / FR-007)', () => {
+  const retry = (id: string, part: Partial<EventPart>): SessionEvent =>
+    eventMessage(id, { category: 'api-retry', ...part })
+  const detailOf = (row: HTMLElement | undefined): string | null =>
+    row?.querySelector('[data-slot="system-event-detail"]')?.textContent ?? null
+
+  it('回数・HTTP の状態・待ち時間を出し、同じターンの再試行は同じ行で書き換わる', async () => {
+    const h = await setup()
+    h.emit(A, retry('retry:0', { opens: true, detail: '1/10/529/2000', status: 'retrying' }))
+    await waitFor(() => expect(rows()).toHaveLength(1))
+    const row = (): HTMLElement | undefined => rows()[0]
+    expect(row()).toHaveAttribute('data-category', 'api-retry')
+    expect(row()).toHaveTextContent('API の再試行')
+    expect(detailOf(row())).toBe('1/10 回目・HTTP 529・2 秒後')
+    expect(statusOf(row())).toBe('再試行中')
+
+    // HTTP の状態が無い (接続の失敗など) ときは HTTP の部分を出さない。待ち時間は秒に切り上げる。
+    h.emit(A, retry('retry:0', { detail: '2/10/-/4500', status: 'retrying' }))
+    await waitFor(() => expect(detailOf(row())).toBe('2/10 回目・5 秒後'))
+    expect(rows()).toHaveLength(1)
+
+    // 閉じの更新は detail を持たない (前の detail のまま)。
+    h.emit(A, retry('retry:0', { detail: '', status: 'succeeded' }))
+    await waitFor(() => expect(statusOf(row())).toBe('成功'))
+    expect(detailOf(row())).toBe('2/10 回目・5 秒後')
+    expect(rows()).toHaveLength(1)
+
+    // 次のターンの再試行は別の行。
+    h.emit(A, retry('retry:1', { opens: true, detail: '1/3/500/1000', status: 'retrying' }))
+    await waitFor(() => expect(rows()).toHaveLength(2))
+    h.emit(A, retry('retry:1', { detail: '', status: 'failed' }))
+    await waitFor(() => expect(statusOf(rows()[1])).toBe('失敗'))
+    expect(statusOf(rows()[0])).toBe('成功')
+  })
+
+  it('形の合わない detail は出さない (エラーの中身を DOM に出さない)', async () => {
+    const h = await setup()
+    h.emit(
+      A,
+      retry('retry:0', {
+        opens: true,
+        detail: 'LEAK overloaded_error: upstream secret',
+        status: 'retrying'
+      })
+    )
+    await waitFor(() => expect(rows()).toHaveLength(1))
+    expect(detailOf(rows()[0])).toBeNull()
+    expect(statusOf(rows()[0])).toBe('再試行中')
+    expect(document.body.textContent).not.toContain('LEAK')
+  })
+
+  it('再試行中のまま終わった行は、セッションの終了後に「結果不明」になる', async () => {
+    const h = await setup()
+    h.emit(A, retry('retry:0', { opens: true, detail: '1/10/529/2000', status: 'retrying' }))
+    await waitFor(() => expect(statusOf(rows()[0])).toBe('再試行中'))
+    h.pushStatus({ sessionId: A, state: 'done', claudeAlive: false })
+    await waitFor(() => expect(statusOf(rows()[0])).toBe(SYSTEM_EVENT_LABELS.outcomeUnknown))
+  })
+
+  it('vitest-axe の違反 0 (再試行中と閉じた行)', async () => {
+    const h = await setup()
+    h.emit(A, retry('retry:0', { opens: true, detail: '1/10/529/2000', status: 'retrying' }))
+    h.emit(A, retry('retry:0', { detail: '', status: 'succeeded' }))
+    h.emit(A, retry('retry:1', { opens: true, detail: '2/10/-/4000', status: 'retrying' }))
+    await waitFor(() => expect(rows()).toHaveLength(2))
+    // 見る範囲は transcript の viewport (この harness はフォルダの一覧を読み込まないので、中央のヘッダの題が空になる)。
+    const viewport = h.container.querySelector<HTMLElement>('[data-slot="aui_thread-viewport"]')
+    expect(viewport).not.toBeNull()
+    expect((await axe(viewport!, AXE_RULES)).violations).toEqual([])
+  })
+})
+
+describe('権限モード・コンテキストの圧縮・task の進み具合の行 (O-4 FE-042 / 014 spec US-4 AC1・AC2・AC5)', () => {
+  const detailOf = (row: HTMLElement | undefined): string | null =>
+    row?.querySelector('[data-slot="system-event-detail"]')?.textContent ?? null
+  const progressOf = (row: HTMLElement | undefined): string | null =>
+    row?.querySelector('[data-slot="system-event-progress"]')?.textContent ?? null
+
+  it('権限モードの行: 文言とモードの名前。知らない鍵は「不明なモード」', async () => {
+    const h = await setup()
+    h.emit(
+      A,
+      eventMessage('mode:0', {
+        category: 'permission-mode',
+        opens: true,
+        detail: 'bypassPermissions',
+        status: 'changed'
+      })
+    )
+    h.emit(
+      A,
+      eventMessage('mode:1', {
+        category: 'permission-mode',
+        opens: true,
+        detail: '__proto__',
+        status: 'changed'
+      })
+    )
+    await waitFor(() => expect(rows()).toHaveLength(2))
+    const [first, second] = rows()
+    expect(first).toHaveAttribute('data-category', 'permission-mode')
+    expect(first).toHaveTextContent('権限モード')
+    expect(detailOf(first)).toBe(
+      SYSTEM_EVENT_LABELS.permissionModeChanged(PERMISSION_MODE_NAMES.bypassPermissions)
+    )
+    expect(statusOf(first)).toBe('変更')
+    expect(detailOf(second)).toBe('権限モードが「不明なモード」に変わりました')
+    // 変わった行は終わった行 (セッションの終了後も「結果不明」にしない)
+    h.pushStatus({ sessionId: A, state: 'done', claudeAlive: false })
+    await waitFor(() => expect(statusOf(rows()[0])).toBe('変更'))
+  })
+
+  it('コンテキストの圧縮の行は「圧縮中」から成功 / 失敗に書き換わり、行は増えない', async () => {
+    const h = await setup()
+    h.emit(
+      A,
+      eventMessage('compact:0', { category: 'compaction', opens: true, status: 'compacting' })
+    )
+    await waitFor(() => expect(rows()).toHaveLength(1))
+    expect(rows()[0]).toHaveAttribute('data-category', 'compaction')
+    expect(rows()[0]).toHaveTextContent('コンテキストの圧縮')
+    expect(statusOf(rows()[0])).toBe('圧縮中')
+    expect(detailOf(rows()[0])).toBeNull()
+    h.emit(A, eventMessage('compact:0', { category: 'compaction', status: 'succeeded' }))
+    await waitFor(() => expect(statusOf(rows()[0])).toBe('成功'))
+    expect(rows()).toHaveLength(1)
+
+    h.emit(A, eventMessage('compact:1', { category: 'compaction', opens: true, status: 'failed' }))
+    await waitFor(() => expect(rows()).toHaveLength(2))
+    expect(statusOf(rows()[1])).toBe('失敗')
+    expect(rows()[1]?.querySelector('[data-slot="system-event-status"]')).toHaveAttribute(
+      'data-variant',
+      'destructive'
+    )
+  })
+
+  it('圧縮中のまま終わった行は、セッションの終了後に「結果不明」になる', async () => {
+    const h = await setup()
+    h.emit(
+      A,
+      eventMessage('compact:0', { category: 'compaction', opens: true, status: 'compacting' })
+    )
+    await waitFor(() => expect(statusOf(rows()[0])).toBe('圧縮中'))
+    h.pushStatus({ sessionId: A, state: 'done', claudeAlive: false })
+    await waitFor(() => expect(statusOf(rows()[0])).toBe(SYSTEM_EVENT_LABELS.outcomeUnknown))
+  })
+
+  it('task の行に種類が残ったまま進み具合が更新される。進み具合が無ければ種類だけ', async () => {
+    const h = await setup()
+    h.emit(
+      A,
+      eventMessage('task:t1', {
+        category: 'task',
+        opens: true,
+        name: 'scan',
+        detail: 'local_agent',
+        status: 'running'
+      })
+    )
+    await waitFor(() => expect(rows()).toHaveLength(1))
+    const row = (): HTMLElement | undefined => rows()[0]
+    expect(detailOf(row())).toBe('サブエージェント')
+    expect(progressOf(row())).toBeNull()
+
+    h.emit(A, eventMessage('task:t1', { category: 'task', detail: '\n12345/3/4500' }))
+    await waitFor(() => expect(progressOf(row())).toBe('約 12,345 トークン・tool 3 回・4 秒'))
+    expect(detailOf(row())).toBe('サブエージェント')
+    expect(statusOf(row())).toBe('実行中')
+
+    h.emit(A, eventMessage('task:t1', { category: 'task', detail: '\n20000/7/61000' }))
+    await waitFor(() => expect(progressOf(row())).toBe('約 20,000 トークン・tool 7 回・61 秒'))
+    expect(detailOf(row())).toBe('サブエージェント')
+    expect(row()?.querySelector('[data-slot="system-event-name"]')).toHaveTextContent('「scan」')
+
+    // 状態の更新 (detail が空) でも種類と進み具合が残る
+    h.emit(A, eventMessage('task:t1', { category: 'task', status: 'completed' }))
+    await waitFor(() => expect(statusOf(row())).toBe('完了'))
+    expect(detailOf(row())).toBe('サブエージェント')
+    expect(progressOf(row())).toBe('約 20,000 トークン・tool 7 回・61 秒')
+    expect(rows()).toHaveLength(1)
+  })
+
+  it('行の無い task への進み具合は捨てる。復号できない進み具合 (要約・説明の形) は DOM に出さない', async () => {
+    const h = await setup()
+    h.emit(A, eventMessage('task:ghost', { category: 'task', detail: '\n1/2/3' }))
+    h.emit(
+      A,
+      eventMessage('task:t1', {
+        category: 'task',
+        opens: true,
+        detail: 'local_bash',
+        status: 'running'
+      })
+    )
+    await waitFor(() => expect(rows()).toHaveLength(1))
+    h.emit(A, eventMessage('task:t1', { category: 'task', detail: '\nLEAK summary: secret plan' }))
+    h.emit(A, eventMessage('task:t1', { category: 'task', status: 'running' }))
+    await waitFor(() => expect(detailOf(rows()[0])).toBe('シェルのコマンド'))
+    expect(progressOf(rows()[0])).toBeNull()
+    expect(document.body.textContent).not.toContain('LEAK')
+    // 行の無い task (`task:ghost`) の行は作られない
+    expect(rows()).toHaveLength(1)
+  })
+
+  it('種類ごとにアイコンを分ける (Hook・task・再試行・圧縮・権限モード)', async () => {
+    const h = await setup()
+    const categories = ['hook', 'task', 'api-retry', 'compaction', 'permission-mode'] as const
+    categories.forEach((category, i) =>
+      h.emit(
+        A,
+        eventMessage(`row:${i}`, { category, opens: true, status: 'succeeded', detail: '' })
+      )
+    )
+    await waitFor(() => expect(rows()).toHaveLength(categories.length))
+    const icons = rows().map((row) => row.querySelector('svg')?.getAttribute('class') ?? '')
+    for (const icon of icons) {
+      expect(icon).not.toBe('')
+      expect(rows()[icons.indexOf(icon)]?.querySelector('svg')).toHaveAttribute('aria-hidden')
+    }
+    expect(new Set(icons).size).toBe(categories.length)
+  })
+
+  it('vitest-axe の違反 0 (権限モード・圧縮・進み具合のある task の行)', async () => {
+    const h = await setup()
+    h.emit(
+      A,
+      eventMessage('mode:0', {
+        category: 'permission-mode',
+        opens: true,
+        detail: 'acceptEdits',
+        status: 'changed'
+      })
+    )
+    h.emit(
+      A,
+      eventMessage('compact:0', { category: 'compaction', opens: true, status: 'compacting' })
+    )
+    h.emit(
+      A,
+      eventMessage('task:t1', {
+        category: 'task',
+        opens: true,
+        detail: 'local_agent',
+        status: 'running'
+      })
+    )
+    h.emit(A, eventMessage('task:t1', { category: 'task', detail: '\n100/1/1000' }))
+    await waitFor(() => expect(rows()).toHaveLength(3))
+    const viewport = h.container.querySelector<HTMLElement>('[data-slot="aui_thread-viewport"]')
+    expect(viewport).not.toBeNull()
+    expect((await axe(viewport!, AXE_RULES)).violations).toEqual([])
   })
 })
 

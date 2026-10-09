@@ -159,6 +159,9 @@ export type FailureReason =
 
 - `provider-error` は SDK では crash でなく `SDKResultMessage`(error subtype) 等で返る (AD-020)。
   **黙って `done` にせず**この理由キーへ落とす。pre-launch 到達性判定は X-3、実行時エラーの表示は本 feature。
+  O-4 で読み替えた — 実行時のエラーの result の理由は `provider-error` に限らず 8 つのキーに分ける (条件の正本は
+  [014 data-model §1](../014-ui-metering-and-limits/data-model.md))。終わり方 (黙って `done` にしない) は変えない
+  ([AD-047](../../docs/decisions/0047-session-meter-and-failure-reasons.md) Decision 1)
 - **`distro-mismatch` の追加に伴い理由キーは 9 種。**
 - **監査ログ (任意だが推奨。L-101)**: permission 決定 (outcome/scope/requestId)・launch ゲート判定 (理由キー)・
   kill 発行を、**会話由来ペイロードを含めないメタのみ** (sessionId / requestId / サニタイズ済み toolName /

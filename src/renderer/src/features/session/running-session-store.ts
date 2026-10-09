@@ -5,6 +5,7 @@ import { SESSION_PORT_MESSAGE, type ClostaCapability } from '@domain/capability'
 import type { SessionEvent } from '@domain/session/agent-session'
 import type { SessionLaunchConfig } from '@domain/session/launch-config'
 import type { LaunchOrigin } from '@domain/session/launch-usage'
+import type { MeterUpdate } from '@domain/session/meter'
 import { mergeSystemEvent, systemEventPartOf } from '@domain/session/system-event'
 import type { TranscriptMessageDTO } from '@domain/session/transcript-dto'
 
@@ -12,22 +13,27 @@ import { fromSystemEventData, toThreadMessage } from '@/features/chat/convert'
 
 import { isBusyRunState, isSendableText } from './composer-queue'
 import { createCappedAdapter } from './composer-queue-adapter'
-import type {
-  Density,
-  LaunchState,
-  LiveSessionState,
-  RunningSessionStoreState,
-  SessionQueue,
-  StatusSince
+import { createRunningSessionMonitor } from './running-session-monitor'
+import {
+  EMPTY_SESSION_METERS,
+  MAX_TOOL_ELAPSED_ENTRIES,
+  type Density,
+  type LaunchState,
+  type LiveSessionState,
+  type RunningSessionStoreState,
+  type SessionMeters,
+  type SessionQueue
 } from './running-session-types'
 import { decodeSessionEvent } from './session-event-decoder'
-import { deriveActivity, nextAwaiting, rowStatus, sameActivity, viewOf } from './session-view'
+import { nextAwaiting, viewOf } from './session-view'
 
+export { ACTIVITY_THROTTLE_MS } from './running-session-monitor'
 export type {
   LaunchState,
   LiveSessionState,
   PendingPermission,
   RunningSessionStoreState,
+  SessionMeters,
   SessionQueue
 } from './running-session-types'
 
@@ -43,8 +49,9 @@ export type {
  * | `ended = statuses[id].claudeAlive === false`。一覧のラベル・composer の無効化・キューの取り消し・操作の出し分けはこの値で行う | FR-009 / FR-010 |
  * | port が閉じても transcript は消さない。消すのは「閉じる」だけ | FR-008 / FR-011 |
  * | 下書きと送信待ちキュー (X-2) はセッションごとに持ち、キューの dispatch は**表示していなくても**状態の変化で進む | FR-010 |
- * | **監視ビューの派生値** (O-1): 行の状態に入った時刻 (`statusSince`) はストアの更新ごとに見直し、1 回の更新の中の変化を 1 回の `setState` にまとめる。直近の活動 (`activity`) は**購読の手前で**セッションごとに 500ms に間引いて書く (行は文字列を選ぶだけ) | O-1 data-model §1 / research R-01・R-03 |
+ * | **監視ビューの派生値** (O-1): 行の状態に入った時刻 (`statusSince`) はストアの更新ごとに見直し、1 回の更新の中の変化を 1 回の `setState` にまとめる。直近の活動 (`activity`) は**購読の手前で**セッションごとに 500ms に間引いて書く (行は文字列を選ぶだけ)。追跡と間引きは `running-session-monitor.ts` が持ち、ストアは更新のたびに `track` を呼ぶ | O-1 data-model §1 / research R-01・R-03 / O-4 FR-018 (1) |
  * | ストアを `window` などの global に出さない。実機計測は一覧の `data-*` の値だけを読む | O-1 FR-012 |
+ * | **計量** (`meter`) はセッションごとの最新の値を `meters` の枝に持つ。`patch()` を通さない (キューの同期と派生値の見直しを起こさない)・`sessions` の参照を変えない・`receivedMessages` に数えない・閉じた id の値は捨てる・`close()` で消す。起動の設定・`lastConfig`・プリセットに書き戻さない | O-4 / 014 data-model §2「renderer の保持」 |
  *
  * 会話由来のテキスト (本文・下書き・キュー) は境界・ログ・永続層に出さない (Principle V / X-2 FR-008)。
  */
@@ -97,9 +104,6 @@ export interface SessionActions {
 
 export type RunningSessionStore = StoreApi<RunningSessionStoreState> & SessionActions
 
-/** 直近の活動を書き直す間隔 (1 行あたり毎秒 2 回まで。spec FR-006 [ASSUMED])。 */
-export const ACTIVITY_THROTTLE_MS = 500
-
 const INITIAL_LAUNCH: LaunchState = {
   phase: 'entry',
   rejectReason: null,
@@ -139,6 +143,64 @@ function applyMessage(
   return merged === null ? null : upsertMessage(prev, toThreadMessage(merged))
 }
 
+/** tool の経過時間を書く。その id を末尾へ移し、上限を超えたら先頭 (更新の古いもの) から落とす (014 data-model §2)。 */
+function withToolElapsed(
+  prev: ReadonlyMap<string, number>,
+  toolUseId: string,
+  seconds: number
+): ReadonlyMap<string, number> {
+  const next = new Map(prev)
+  next.delete(toolUseId)
+  next.set(toolUseId, seconds)
+  for (const oldest of next.keys()) {
+    if (next.size <= MAX_TOOL_ELAPSED_ENTRIES) break
+    next.delete(oldest)
+  }
+  return next
+}
+
+/** 計量の 1 件を 1 セッションの値に反映する (純関数。014 data-model §2「renderer の保持」の表)。 */
+function applyMeter(prev: SessionMeters, update: MeterUpdate): SessionMeters {
+  switch (update.type) {
+    case 'turn':
+      // ターンの終わりで思考の印と tool の経過時間を消す。
+      return {
+        ...prev,
+        lastTurn: update,
+        thinkingTokens: null,
+        toolElapsed: prev.toolElapsed.size === 0 ? prev.toolElapsed : new Map()
+      }
+    case 'context':
+      return { ...prev, contextUsed: update.usedTokens }
+    case 'rate-limit':
+      return { ...prev, rateLimit: update }
+    case 'permission-mode':
+      return { ...prev, permissionMode: update.mode }
+    case 'thinking':
+      return { ...prev, thinkingTokens: update.estimatedTokens }
+    case 'tool-elapsed':
+      return {
+        ...prev,
+        toolElapsed: withToolElapsed(prev.toolElapsed, update.toolUseId, update.elapsedSeconds)
+      }
+  }
+}
+
+/**
+ * 主ループの assistant のメッセージ (role が assistant でシステムイベントでない) が届いたら、そのセッションの思考の印を
+ * 消す (014 data-model §2)。変えないときは同じ参照を返す。
+ */
+function clearThinkingOnAssistant(
+  meters: Readonly<Record<string, SessionMeters>>,
+  sessionId: string,
+  dto: TranscriptMessageDTO
+): Readonly<Record<string, SessionMeters>> {
+  const current = meters[sessionId]
+  if (current === undefined || current.thinkingTokens === null) return meters
+  if (dto.role !== 'assistant' || systemEventPartOf(dto) !== null) return meters
+  return { ...meters, [sessionId]: { ...current, thinkingTokens: null } }
+}
+
 interface PortData {
   readonly marker?: unknown
   readonly sessionId?: unknown
@@ -158,8 +220,15 @@ export function createRunningSessionStore(
     statusSince: {},
     activity: {},
     receivedMessages: 0,
-    density: 'comfortable'
+    density: 'comfortable',
+    meters: {}
   }))
+  /** 監視ビューの派生値の追跡と間引き (O-1。FR-018 (1) で切り出した)。 */
+  const monitor = createRunningSessionMonitor({
+    getState: store.getState,
+    setState: store.setState,
+    now
+  })
 
   /** sessionId → 繋いだ port。 */
   const ports = new Map<string, MessagePort>()
@@ -170,8 +239,6 @@ export function createRunningSessionStore(
   const queues = new Map<string, SessionQueue & { prevBusy: boolean }>()
   /** sessionId → 下書き (再描画を起こさない保持。`setDraft` の注記)。 */
   const drafts = new Map<string, string>()
-  /** sessionId → 直近の活動の間引き (間隔の中に更新があったら `dirty`)。 */
-  const activityTimers = new Map<string, { timer: ReturnType<typeof setTimeout>; dirty: boolean }>()
   let inFlight = 0
   let userSeq = 0
 
@@ -182,69 +249,7 @@ export function createRunningSessionStore(
       return { sessions: { ...s.sessions, [sessionId]: { ...current, ...update } } }
     })
     syncQueue(sessionId)
-    trackDerived([sessionId])
-  }
-
-  /** 直近の活動を導いて、変わっていれば書く (O-1 / data-model §1)。 */
-  const writeActivity = (sessionId: string): void => {
-    const state = store.getState()
-    const session = state.sessions[sessionId]
-    if (session === undefined) return
-    const next = deriveActivity(session.messages, session.pending, viewOf(state, sessionId))
-    if (sameActivity(state.activity[sessionId], next)) return
-    store.setState((s) => ({ activity: { ...s.activity, [sessionId]: next } }))
-  }
-
-  const armActivity = (sessionId: string): void => {
-    const timer = setTimeout(() => {
-      const slot = activityTimers.get(sessionId)
-      if (slot === undefined) return
-      if (!slot.dirty) {
-        activityTimers.delete(sessionId)
-        return
-      }
-      slot.dirty = false
-      writeActivity(sessionId)
-      armActivity(sessionId)
-    }, ACTIVITY_THROTTLE_MS)
-    const slot = activityTimers.get(sessionId)
-    if (slot === undefined) activityTimers.set(sessionId, { timer, dirty: false })
-    else slot.timer = timer
-  }
-
-  /**
-   * **購読の手前で間引く** (O-1 / research R-03)。先頭は即時に書き、間隔の中の更新は最後の 1 回だけを間隔の終わりに書く。
-   * 行の中で表示値を遅らせても行の再描画は減らないため、ストアが書く回数そのものを抑える。
-   */
-  const scheduleActivity = (sessionId: string): void => {
-    const slot = activityTimers.get(sessionId)
-    if (slot !== undefined) {
-      slot.dirty = true
-      return
-    }
-    writeActivity(sessionId)
-    armActivity(sessionId)
-  }
-
-  /**
-   * 監視ビューの派生値を見直す (O-1)。行の状態が変わったセッションの `statusSince` を **1 回の `setState`** で書き
-   * (同じ更新の複数の遷移を 1 つの文で読ませるため)、直近の活動の書き込みを予約する。
-   */
-  const trackDerived = (sessionIds: readonly string[]): void => {
-    const state = store.getState()
-    let changed: Record<string, StatusSince> | null = null
-    for (const id of sessionIds) {
-      if (state.sessions[id] === undefined) continue
-      const status = rowStatus(viewOf(state, id))
-      if (state.statusSince[id]?.status === status) continue
-      changed ??= { ...state.statusSince }
-      changed[id] = { status, at: now() }
-    }
-    if (changed !== null) {
-      const statusSince = changed
-      store.setState({ statusSince })
-    }
-    for (const id of sessionIds) if (state.sessions[id] !== undefined) scheduleActivity(id)
+    monitor.track([sessionId])
   }
 
   /**
@@ -290,15 +295,18 @@ export function createRunningSessionStore(
           const current = s.sessions[sessionId]
           if (current === undefined) return s
           const messages = applyMessage(current.messages, event.message)
+          // 主ループの assistant の応答で思考の印を消す (同じ `setState` で。O-4 / 014 data-model §2)。
+          const meters = clearThinkingOnAssistant(s.meters, sessionId, event.message)
           return {
             ...(messages === null
               ? {}
               : { sessions: { ...s.sessions, [sessionId]: { ...current, messages } } }),
+            ...(meters === s.meters ? {} : { meters }),
             receivedMessages: s.receivedMessages + 1
           }
         })
         syncQueue(sessionId)
-        trackDerived([sessionId])
+        monitor.track([sessionId])
         break
       case 'permission-request':
         patch(sessionId, {
@@ -322,6 +330,17 @@ export function createRunningSessionStore(
         break
       case 'interrupt-receipt':
         // 途中出力は保持され、承認待ち / キュー済みは state で反映される (X-1 FR-015)。表示は最小。
+        break
+      case 'meter':
+        /*
+         * 計量は `meters` の枝だけを書く (O-4 / 014 data-model §2)。`patch()` を通さない — キューの同期と監視ビューの
+         * 派生値の見直しを起こさず、`sessions` の参照を変えない。`receivedMessages` に数えない。
+         */
+        store.setState((s) => {
+          if (s.sessions[sessionId] === undefined) return s
+          const current = s.meters[sessionId] ?? EMPTY_SESSION_METERS
+          return { meters: { ...s.meters, [sessionId]: applyMeter(current, event.meter) } }
+        })
         break
     }
   }
@@ -421,7 +440,7 @@ export function createRunningSessionStore(
         launch: { ...s.launch, phase: 'entry', rejectReason: null }
       }))
       // 固定値ではなく、その時点の行の状態を入れる (handshake より先に状態通知が届いていても行と食い違わない)。
-      trackDerived([sessionId])
+      monitor.track([sessionId])
       const port = buffered.get(sessionId)
       if (port !== undefined) {
         buffered.delete(sessionId)
@@ -536,9 +555,7 @@ export function createRunningSessionStore(
       queues.delete(sessionId)
       drafts.delete(sessionId)
       closed.add(sessionId)
-      const activityTimer = activityTimers.get(sessionId)
-      if (activityTimer !== undefined) clearTimeout(activityTimer.timer)
-      activityTimers.delete(sessionId)
+      monitor.forget(sessionId)
       const failure = view.failureReason
       // 失敗したセッションを閉じたら、メッセージの有無を問わず**そのセッションの**設定と理由を起動ダイアログへ戻す
       // (「閉じて再起動」が別のセッションの設定を出さない。pr-gate R1 po M-005 / X-4 US-1 AC7)。
@@ -551,16 +568,19 @@ export function createRunningSessionStore(
         const statuses = { ...s.statuses }
         const statusSince = { ...s.statusSince }
         const activity = { ...s.activity }
+        const meters = { ...s.meters }
         delete sessions[sessionId]
         delete statuses[sessionId]
         delete statusSince[sessionId]
         delete activity[sessionId]
+        delete meters[sessionId]
         return {
           order: s.order.filter((id) => id !== sessionId),
           sessions,
           statuses,
           statusSince,
           activity,
+          meters,
           selectedId: s.selectedId === sessionId ? null : s.selectedId,
           // 失敗したセッションを閉じたら、起動ダイアログでそのセッションの理由と設定を示す (X-4 US-1 AC7 / pr-gate R1 po M-005)。
           // 起動元も設定と組でそのセッションのものに戻す (O-3 / 012 data-model §4「renderer の起動元」)。
@@ -636,7 +656,7 @@ export function createRunningSessionStore(
         })
         for (const id of touched) syncQueue(id)
         // バッチ 1 回に含まれる全セッションをまとめて見直す (同じ更新の複数の遷移を 1 回の `setState` にする。O-1)。
-        trackDerived(touched)
+        monitor.track(touched)
       })
 
       return () => {

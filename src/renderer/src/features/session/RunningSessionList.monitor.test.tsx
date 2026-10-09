@@ -271,7 +271,29 @@ describe('読み上げ (FR-004 / SC-001)', () => {
     expect(announcer()).toHaveTextContent('案件B: 承認待ちになりました。')
   })
 
-  it('同じ状態通知のバッチの 2 本は 1 つの文', async () => {
+  it('同じ状態通知のバッチの 2 本は 1 つの文。失敗には行と同じ短い理由を添える (O-4 US-1 AC5)', async () => {
+    useUiStore.setState({ focus: 'past' })
+    const s = await setup([A, B])
+    s.push([
+      st(A, { state: 'error', reasonKey: 'rate-limited' }),
+      st(B, { state: 'error', reasonKey: 'rate-limited' })
+    ])
+    expect(announcer()).toHaveTextContent('案件A、案件B: 失敗しました (レート制限)。')
+  })
+
+  it('同じバッチで理由が違う失敗は、理由ごとの文を 1 回の読み上げにまとめる (O-4 US-1 AC5)', async () => {
+    useUiStore.setState({ focus: 'past' })
+    const s = await setup([A, B])
+    s.push([
+      st(A, { state: 'error', reasonKey: 'auth-failed' }),
+      st(B, { state: 'error', reasonKey: 'billing' })
+    ])
+    expect(announcer()).toHaveTextContent(
+      '案件A: 失敗しました (認証エラー)。 案件B: 失敗しました (請求エラー)。'
+    )
+  })
+
+  it('理由が無い失敗は理由を添えない', async () => {
     useUiStore.setState({ focus: 'past' })
     const s = await setup([A, B])
     s.push([st(A, { state: 'error' }), st(B, { state: 'error' })])

@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 
+import { PERMISSION_MODE_NAMES } from '@/features/chat/labels'
 import { EFFORT_LABELS } from '@/features/provider/labels'
 import { useProviders } from '@/features/provider/useProviders'
 import { groupLabelOf, locationIndexOf, locationLabelOf } from '@/features/session-list/group-label'
@@ -7,6 +8,7 @@ import { buildSessionRows, findRow, formatSessionTime } from '@/features/session
 import { useFolderLabels } from '@/features/session-list/useFolderLabels'
 import { PERMISSION_MODE_LABELS } from '@/features/session/labels'
 import { useRunningSessionsView } from '@/features/session/running-sessions-view'
+import { useSessionMeters } from '@/features/session/useSessionMeters'
 import { useSessionsStore } from '@/stores/sessions'
 import { useUiStore } from '@/stores/ui'
 
@@ -59,6 +61,8 @@ function RunningOverview(): React.JSX.Element {
   const view = useRunningSessionsView()
   const providers = useProviders()
   const live = view.live
+  // 実行中に観測した今の権限モード (O-4 / 014 data-model §4「権限モード」。起動の設定には書き戻さない)。
+  const currentMode = useSessionMeters(live?.sessionId ?? null, (meters) => meters.permissionMode)
   if (live === null) return <Empty />
   const config = live.state.config
 
@@ -79,8 +83,9 @@ function RunningOverview(): React.JSX.Element {
       value: provider?.displayName ?? OVERVIEW_LABELS.providerRemoved
     })
   }
-  // 起動時に選んだ値 (実行中の変化は O-4 (`status`)・O-5 (`init` の `model`)・X-6 (`set_permission_mode` / `set_model`)
-  // が対応表の行で扱う)。表示は起動ダイアログと同じ表示名と訳 (Provider のモデルカタログの displayName・EFFORT_LABELS。
+  // 起動時に選んだ値 (権限モードの実行中の変化は O-4 が下の「現在の権限モード」の行で出す。モデルの変化は O-5
+  // (`init` の `model`)・X-6 (`set_permission_mode` / `set_model`) が対応表の行で扱う)。表示は起動ダイアログと同じ表示名と訳
+  // (Provider のモデルカタログの displayName・EFFORT_LABELS。
   // 引けなければ ID。pr-gate R1 ux M-006 / ui-coverage M-004・R2 L-102)。Provider の一覧の読み込み中は、表示名を
   // 引けるか決まらないので Provider の行と同じく出さない (生の ID を一瞬出さない。pr-gate R2 ux L-103)。失敗したら ID で出す。
   if (!providersLoading) {
@@ -98,6 +103,14 @@ function RunningOverview(): React.JSX.Element {
     label: OVERVIEW_LABELS.permissionMode,
     value: PERMISSION_MODE_LABELS[config.permissionMode]
   })
+  // 「起動時の権限モード」の行は起動時の値のまま。今のモードが起動時と違うときだけ、その下に足す (014 spec FR-010)。
+  // 名前は transcript の権限モードの行・警告の帯と同じ表 (`PERMISSION_MODE_NAMES`)。中央のヘッダには常設しない。
+  if (currentMode !== null && currentMode !== config.permissionMode) {
+    items.push({
+      label: OVERVIEW_LABELS.currentPermissionMode,
+      value: PERMISSION_MODE_NAMES[currentMode]
+    })
+  }
   // 所在は登録フォルダの一覧から引く。読み込み中・引けないとき (登録の解除) は行ごと出さない (所在の欄にフォルダの
   // 状態の文を入れない。pr-gate R1 ux M-006)。
   const folder = view.folders?.folders.find((f) => f.id === config.folderId)

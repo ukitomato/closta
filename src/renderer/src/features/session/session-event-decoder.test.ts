@@ -141,3 +141,66 @@ describe('decodeSessionEvent', () => {
     })
   })
 })
+
+describe('decodeSessionEvent の meter (O-4 / 014 tasks FE-004)', () => {
+  const meter = (value: unknown): unknown =>
+    decodeSessionEvent(enc({ kind: 'meter', meter: value }))
+
+  it('6 つの type を通し、余分なキーを運ばない', () => {
+    const turn = {
+      type: 'turn',
+      costUsd: 0.5,
+      turns: 2,
+      models: [
+        {
+          modelId: 'claude-sonnet-4-5[1m]',
+          input: 1,
+          output: 2,
+          cacheRead: 3,
+          cacheCreation: 4,
+          costUsd: 0.5,
+          contextWindow: 1_000_000,
+          raw: 'SECRET_MARK'
+        }
+      ],
+      permissionDenials: 0,
+      errors: ['SECRET_MARK']
+    }
+    const rateLimit = {
+      type: 'rate-limit',
+      status: 'rejected',
+      limitType: 'seven_day',
+      utilizationPct: 100,
+      resetsAtSec: 1_760_000_000,
+      usingOverage: false,
+      overageStatus: 'SECRET_MARK'
+    }
+    const updates = [
+      turn,
+      rateLimit,
+      { type: 'context', usedTokens: 12_345, extra: 'SECRET_MARK' },
+      { type: 'permission-mode', mode: 'plan', extra: 'SECRET_MARK' },
+      { type: 'thinking', estimatedTokens: 99, extra: 'SECRET_MARK' },
+      { type: 'tool-elapsed', toolUseId: 'toolu_1', elapsedSeconds: 3, extra: 'SECRET_MARK' }
+    ]
+    const decoded = updates.map(meter)
+    expect(decoded.every((e) => e !== null)).toBe(true)
+    expect(JSON.stringify(decoded)).not.toContain('SECRET_MARK')
+    expect(decoded[2]).toEqual({ kind: 'meter', meter: { type: 'context', usedTokens: 12_345 } })
+    expect(decoded[5]).toEqual({
+      kind: 'meter',
+      meter: { type: 'tool-elapsed', toolUseId: 'toolu_1', elapsedSeconds: 3 }
+    })
+  })
+
+  it('知らない type・__proto__ のキー・形の外れた id は破棄し、例外を出さない', () => {
+    expect(meter({ type: 'retraction' })).toBeNull()
+    expect(meter({ type: '__proto__' })).toBeNull()
+    expect(meter({ type: 'tool-elapsed', toolUseId: 'a/b', elapsedSeconds: 1 })).toBeNull()
+    expect(meter(null)).toBeNull()
+    expect(meter('turn')).toBeNull()
+    const proto = '{"kind":"meter","meter":{"__proto__":{"type":"context"},"type":"__proto__"}}'
+    expect(() => decodeSessionEvent(proto)).not.toThrow()
+    expect(decodeSessionEvent(proto)).toBeNull()
+  })
+})

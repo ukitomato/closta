@@ -1,0 +1,384 @@
+{
+    "gate": "design",
+    "run": "2026-10-08T01:29:11+09:00",
+    "spec_dir": "specs/014-ui-metering-and-limits",
+    "spec_id": "014-ui-metering-and-limits",
+    "round": 3,
+    "previous": "design-gate.md.20261007T184052",
+    "entry_status": "implementing",
+    "warnings": [
+        "re-run on status=implementing"
+    ],
+    "tracks": {
+        "analyze": {
+            "status": "ok",
+            "raw_out": "analyze.md",
+            "viewpoint_missing": null,
+            "cascade_demotions": null
+        },
+        "po-reviewer": {
+            "status": "ok",
+            "raw_out": "po-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "architecture-reviewer": {
+            "status": "ok",
+            "raw_out": "architecture-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "security-reviewer": {
+            "status": "ok",
+            "raw_out": "security-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "platform-boundary-reviewer": {
+            "status": "ok",
+            "raw_out": "platform-boundary-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        }
+    },
+    "severity_counts": {
+        "critical": 0,
+        "high": 1,
+        "medium": 16,
+        "low": 32
+    },
+    "severity_counts_raw": {
+        "critical": 0,
+        "high": 1,
+        "medium": 28,
+        "low": 42
+    },
+    "prev_comparison": {
+        "critical": {
+            "resolved": 0,
+            "unresolved": 0,
+            "new": 0
+        },
+        "high": {
+            "resolved": 6,
+            "unresolved": 0,
+            "new": 1
+        }
+    },
+    "fr_coverage": [
+        {
+            "fr": "FR-001",
+            "covered": true,
+            "by": [
+                "tasks.md BE-011",
+                "tasks.md BE-012"
+            ]
+        },
+        {
+            "fr": "FR-002",
+            "covered": true,
+            "by": [
+                "tasks.md BE-010",
+                "tasks.md FE-010",
+                "tasks.md FE-011"
+            ]
+        },
+        {
+            "fr": "FR-003",
+            "covered": true,
+            "by": [
+                "tasks.md BE-001",
+                "tasks.md BE-002",
+                "tasks.md BE-004",
+                "tasks.md BE-020",
+                "tasks.md BE-030",
+                "tasks.md BE-040",
+                "tasks.md BE-042",
+                "tasks.md FE-004"
+            ]
+        },
+        {
+            "fr": "FR-004",
+            "covered": true,
+            "by": [
+                "tasks.md BE-003",
+                "tasks.md BE-020",
+                "tasks.md BE-040",
+                "tasks.md BE-042"
+            ]
+        },
+        {
+            "fr": "FR-005",
+            "covered": true,
+            "by": [
+                "tasks.md FE-004"
+            ]
+        },
+        {
+            "fr": "FR-006",
+            "covered": true,
+            "by": [
+                "tasks.md FE-005",
+                "tasks.md FE-020"
+            ]
+        },
+        {
+            "fr": "FR-007",
+            "covered": true,
+            "by": [
+                "tasks.md BE-020",
+                "tasks.md FE-021"
+            ]
+        },
+        {
+            "fr": "FR-008",
+            "covered": true,
+            "by": [
+                "tasks.md FE-031"
+            ]
+        },
+        {
+            "fr": "FR-009",
+            "covered": true,
+            "by": [
+                "tasks.md BE-030",
+                "tasks.md FE-005",
+                "tasks.md FE-032"
+            ]
+        },
+        {
+            "fr": "FR-010",
+            "covered": true,
+            "by": [
+                "tasks.md BE-040",
+                "tasks.md FE-040",
+                "tasks.md FE-041",
+                "tasks.md FE-042"
+            ]
+        },
+        {
+            "fr": "FR-011",
+            "covered": true,
+            "by": [
+                "tasks.md BE-042",
+                "tasks.md FE-042"
+            ]
+        },
+        {
+            "fr": "FR-012",
+            "covered": true,
+            "by": [
+                "tasks.md BE-041",
+                "tasks.md BE-042",
+                "tasks.md FE-043",
+                "tasks.md FE-044"
+            ]
+        },
+        {
+            "fr": "FR-013",
+            "covered": true,
+            "by": [
+                "tasks.md BE-003",
+                "tasks.md BE-041",
+                "tasks.md BE-042",
+                "tasks.md FE-042"
+            ]
+        },
+        {
+            "fr": "FR-014",
+            "covered": true,
+            "by": [
+                "tasks.md SH-012"
+            ]
+        },
+        {
+            "fr": "FR-015",
+            "covered": true,
+            "by": [
+                "tasks.md BE-002",
+                "tasks.md BE-010",
+                "tasks.md SH-013"
+            ]
+        },
+        {
+            "fr": "FR-016",
+            "covered": true,
+            "by": [
+                "tasks.md SH-001",
+                "tasks.md SH-013",
+                "tasks.md FE-051"
+            ]
+        },
+        {
+            "fr": "FR-017",
+            "covered": true,
+            "by": [
+                "tasks.md FE-030",
+                "tasks.md FE-031"
+            ]
+        },
+        {
+            "fr": "FR-018",
+            "covered": true,
+            "by": [
+                "tasks.md FE-001",
+                "tasks.md FE-002",
+                "tasks.md FE-003"
+            ]
+        },
+        {
+            "fr": "FR-019",
+            "covered": true,
+            "by": [
+                "tasks.md FE-050"
+            ]
+        }
+    ],
+    "viewpoint_coverage": {
+        "A": "Critical:0 High:0 Medium:0 Low:2",
+        "B": "Critical:0 High:0 Medium:2 Low:2",
+        "C": "Critical:0 High:0 Medium:4 Low:3",
+        "D": "Critical:0 High:0 Medium:1 Low:3",
+        "E": "Critical:0 High:0 Medium:9 Low:9",
+        "F": "Critical:0 High:0 Medium:0 Low:1",
+        "G": "\u8a72\u5f53\u306a\u3057",
+        "H": "Critical:0 High:0 Medium:1 Low:4"
+    },
+    "dedup_log": [
+        {
+            "merged": [
+                "analyze-U2",
+                "sec-M-001",
+                "arch-M-202",
+                "analyze-I5"
+            ],
+            "key": "data-model.md:110-113 / FR-013 / BE-041",
+            "as": "HG-01"
+        },
+        {
+            "merged": [
+                "po-M-001",
+                "analyze-U4",
+                "po-L-008"
+            ],
+            "key": "data-model.md:158-165,242 (Quota banner \u306e\u6587\u8a00)",
+            "as": "MG-01"
+        },
+        {
+            "merged": [
+                "po-M-002",
+                "analyze-E1"
+            ],
+            "key": "data-model.md:156-167 / FE-020 (resetsAt \u7d4c\u904e)",
+            "as": "MG-02"
+        },
+        {
+            "merged": [
+                "po-M-003",
+                "analyze-I3",
+                "analyze-I7"
+            ],
+            "key": "FR-010 / FR-012 / FR-008 (spec.md:134,152,156)",
+            "as": "MG-03"
+        },
+        {
+            "merged": [
+                "po-M-004",
+                "po-M-006",
+                "analyze-C2"
+            ],
+            "key": "data-model.md:11-24,219,223 (\u00a71 / \u00a75)",
+            "as": "MG-04"
+        },
+        {
+            "merged": [
+                "po-M-005",
+                "analyze-E4"
+            ],
+            "key": "data-model.md:69 / spec.md:164 (api_retry \u306e error / no_response)",
+            "as": "MG-05"
+        },
+        {
+            "merged": [
+                "po-M-007",
+                "analyze-E5"
+            ],
+            "key": "data-model.md:172-177 / FE-040 (\u8b66\u544a\u306e\u5e2f)",
+            "as": "MG-06"
+        },
+        {
+            "merged": [
+                "po-M-008",
+                "analyze-I8"
+            ],
+            "key": "spec.md:142-146 (US-4 \u306e\u512a\u5148\u5ea6)",
+            "as": "MG-07"
+        },
+        {
+            "merged": [
+                "arch-M-201",
+                "analyze-I4"
+            ],
+            "key": "plan.md:78 / SH-013 (U-1 \u306e\u7bc4\u56f2)",
+            "as": "MG-09"
+        },
+        {
+            "merged": [
+                "arch-M-203",
+                "analyze-T3"
+            ],
+            "key": "data-model.md:185,216 / glossary.md:184 (\u30bf\u30fc\u30f3)",
+            "as": "MG-10"
+        },
+        {
+            "merged": [
+                "pb-M-001",
+                "sec-L-004"
+            ],
+            "key": "quickstart.md:43 (\u5f62\u306e\u63a7\u3048\u65b9)",
+            "as": "MG-14"
+        },
+        {
+            "merged": [
+                "analyze-U1",
+                "po-L-001"
+            ],
+            "key": "spec.md:135 / data-model.md:201-202 (US-3 AC2)",
+            "as": "MG-15"
+        },
+        {
+            "merged": [
+                "po-L-004",
+                "analyze-E3",
+                "analyze-T1"
+            ],
+            "key": "FR-019 / data-model.md:276-279",
+            "as": "LG-01"
+        },
+        {
+            "merged": [
+                "sec-L-003",
+                "analyze-U5"
+            ],
+            "key": "data-model.md:85 (modelId \u306e userinfo)",
+            "as": "LG-02"
+        },
+        {
+            "merged": [
+                "po-L-010",
+                "analyze-U6"
+            ],
+            "key": "data-model.md:195-200 (\u4e3b\u30e2\u30c7\u30eb\u306e\u7167\u5408)",
+            "as": "LG-03"
+        },
+        {
+            "merged": [
+                "analyze-T2",
+                "arch-L-205"
+            ],
+            "key": "tasks.md:15 (SH-001 \u306e glossary \u306e\u4e00\u89a7)",
+            "as": "LG-04"
+        }
+    ],
+    "verdict": "PASS"
+}

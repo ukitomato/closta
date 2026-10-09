@@ -5,6 +5,7 @@ import type { VerifiedRunning } from '@domain/runtime/verified-running'
 import type { WorkspaceFolder } from '@domain/workspace/folder'
 
 import type { SafePermissionMode } from './launch-config'
+import type { MeterUpdate } from './meter'
 import type { SessionRunState } from './run-state'
 import type { TranscriptMessageDTO } from './transcript-dto'
 
@@ -17,11 +18,16 @@ import type { TranscriptMessageDTO } from './transcript-dto'
  */
 
 /**
- * 起動系の失敗理由 (data-model §6)。**参照キーであり訳出は `ui`。**
+ * 起動とターンの失敗の理由 (18 種。X-1 data-model §6 の 10 種 + O-4 の 8 種)。**参照キーであり訳出は `ui`。**
  *
  * **列挙用 `FailureReason` (`./target`) とは別概念** — あちらは列挙/transcript 読み取りの語彙、
- * こちらは**起動**の語彙 (design-gate H-03 で provider-error / distro-mismatch を追加)。
+ * こちらは**起動と実行**の語彙 (design-gate H-03 で provider-error / distro-mismatch を追加)。
  * 同一名で shadow せず `LaunchFailureReason` として分ける (実装時の統合判断)。
+ *
+ * ターンの失敗 (O-4 / AD-047 Decision 1): SDK のエラーの result を agents の `classifyResultFailure` が
+ * `max-turns` 以降の 8 つに分ける。どれにも当たらない失敗は `provider-error` (汎用)。条件と評価の順・
+ * 再ログインの導線の正本は 014 data-model §1。終わり方 (失敗にする・黙って完了にしない。X-1 FR-020 /
+ * US-4 AC6) は変えない。失敗の文字列 (`errors`) と HTTP の状態は運ばない。
  */
 export type LaunchFailureReason =
   | 'distro-not-running'
@@ -31,10 +37,27 @@ export type LaunchFailureReason =
   | 'launch-failed'
   | 'process-crashed'
   | 'stream-protocol-error'
+  /** ターンの失敗のうち、下の 8 つのどれにも当たらないもの (状態が無い・知らない subtype)。再ログインの導線あり。 */
   | 'provider-error'
   | 'interrupt-unavailable'
   /** supervisor プロセスの異常終了で、その supervisor の全セッションに付く (X-5 / FR-013)。 */
   | 'supervisor-exited'
+  /** result の subtype が `error_max_turns` (O-4)。 */
+  | 'max-turns'
+  /** result の subtype が `error_max_budget_usd` (O-4)。 */
+  | 'max-budget'
+  /** result の subtype が `error_max_structured_output_retries` (O-4)。 */
+  | 'structured-output-retries'
+  /** result の subtype が `error_during_execution` (O-4)。 */
+  | 'execution-error'
+  /** 認証または権限の失敗 (assistant の認証系の `error`・HTTP 401 / 403。O-4)。再ログインの導線あり。 */
+  | 'auth-failed'
+  /** 請求またはアカウントの問題 (assistant の `billing_error` / `account_on_hold`。O-4)。 */
+  | 'billing'
+  /** レート制限 (assistant の `rate_limit`・HTTP 429。O-4)。 */
+  | 'rate-limited'
+  /** API がエラーを返した (上のどれにも当たらない HTTP の状態。O-4)。 */
+  | 'api-error'
 
 export const LAUNCH_FAILURE_REASONS = [
   'distro-not-running',
@@ -46,7 +69,15 @@ export const LAUNCH_FAILURE_REASONS = [
   'stream-protocol-error',
   'provider-error',
   'interrupt-unavailable',
-  'supervisor-exited'
+  'supervisor-exited',
+  'max-turns',
+  'max-budget',
+  'structured-output-retries',
+  'execution-error',
+  'auth-failed',
+  'billing',
+  'rate-limited',
+  'api-error'
 ] as const satisfies readonly LaunchFailureReason[]
 
 export function isLaunchFailureReason(value: unknown): value is LaunchFailureReason {
@@ -68,7 +99,7 @@ export const LAUNCH_PREFLIGHT_REASONS = [
 ] as const satisfies readonly LaunchPreflightReason[]
 
 /**
- * launch invoke の拒否理由 (起動失敗 10 種 + 起動前段 3 種 + 調停由来の 3 種)。訳出は `ui`。
+ * launch invoke の拒否理由 (起動とターンの失敗 18 種 + 起動前段 3 種 + 調停由来の 3 種 = 24 種)。訳出は `ui`。
  *
  * 調停由来 (X-5 / FR-005):
  * - `session-limit`: 同時実行数の上限 (10) に達している。X-1 の `session-active` (単一セッション不変) は廃止した (AD-043)
@@ -177,6 +208,11 @@ export type SessionEvent =
   | { readonly kind: 'failure'; readonly reasonKey: LaunchFailureReason }
   /** 穏当な終了 (`end`) が期限内に終わらず、強制終了に落ちた (X-5 / FR-011。X-1 FR-016 の警告の趣旨を黙って外さない)。 */
   | { readonly kind: 'end-forced' }
+  /**
+   * 計量の最新の値 (O-4 / AD-047 Decision 2。形と許可リストの正本は `./meter.ts` と 014 data-model §2)。
+   * 数・真偽・列挙・モデルの id・形を検証した tool の id だけを運ぶ。状態通知 (`SessionStatusUpdate`) には載せない。
+   */
+  | { readonly kind: 'meter'; readonly meter: MeterUpdate }
 
 export const SESSION_EVENT_KINDS = [
   'message',
@@ -185,7 +221,8 @@ export const SESSION_EVENT_KINDS = [
   'permission-denied',
   'interrupt-receipt',
   'failure',
-  'end-forced'
+  'end-forced',
+  'meter'
 ] as const satisfies readonly SessionEvent['kind'][]
 
 /**

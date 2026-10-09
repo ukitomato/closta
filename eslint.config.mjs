@@ -558,7 +558,13 @@ export default defineConfig(
     // scaffold だが R-3 の仮想化 (回帰核) を足したので、依存配列の番人を戻す。
     // O-2 が手書きの `SystemEventRow` / `AssistantOrSystemEvent` を足したので、thread-list.aui.tsx と
     // 同じく ref と空の catch の番人も戻す (O-2 code-gate convention L-005)。
-    files: ['src/renderer/src/components/assistant-ui/elements/thread.aui.tsx'],
+    // tool-result-marks.tsx は O-2 の手書きの印で、O-4 が経過時間の購読の hooks を足した (014 tasks FE-043 / SH-011)。
+    // component でない `isTruncatedArgs` を export するので、`react-refresh/only-export-components` を戻す Tier A の一覧ではなく
+    // hooks の番人だけを戻すこの block に入れる (2026-10-09 の決定)。
+    files: [
+      'src/renderer/src/components/assistant-ui/elements/thread.aui.tsx',
+      'src/renderer/src/components/assistant-ui/elements/tool-result-marks.tsx'
+    ],
     rules: {
       'react-hooks/exhaustive-deps': 'error',
       'react-hooks/refs': 'error',

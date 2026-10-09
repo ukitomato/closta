@@ -80,7 +80,12 @@ function SubagentPart({
             <WrenchIcon className="size-3 shrink-0" />
             <span className="font-medium">{part.toolName}</span>
             {/* 入れ子でも最上位と同じ印 (エラーと切り詰め。pr-gate R2 ui-coverage L-101)。 */}
-            <ToolResultMarks isError={part.isError} truncated={part.truncated === true} />
+            <ToolResultMarks
+              toolCallId={part.toolCallId}
+              pending={part.result === null}
+              isError={part.isError}
+              truncated={part.truncated === true}
+            />
 
           </div>
           {result ? (
@@ -173,6 +178,8 @@ const SubagentImpl: ToolCallMessagePartComponent = (props) => {
         ) : null}
         {/* 最上位の失敗と切り詰め (入れ子の印だけでなく。O-2 / FR-007 / pr-gate R1 po H-001)。 */}
         <ToolResultMarks
+          toolCallId={props.toolCallId}
+          pending={props.result === undefined}
           isError={props.isError}
           truncated={isTruncatedArgs(props.args)}
           className="ms-auto"

@@ -15,6 +15,7 @@ related_adrs:
   - docs/decisions/0041-x4-launch-config-on-x1-launch-gate.md
   - docs/decisions/0043-single-supervisor-session-threads-and-session-limit.md
   - docs/decisions/0044-ui-coverage-assignment.md
+  - docs/decisions/0047-session-meter-and-failure-reasons.md
 related_specs:
   - specs/002-session-cross-folder-session-enumeration/spec.md
   - specs/005-session-launch-and-streaming/spec.md
@@ -24,6 +25,7 @@ related_specs:
   - specs/011-ui-coverage/spec.md
   - specs/013-ui-app-shell/spec.md
   - specs/012-ui-thread-search/spec.md
+  - specs/014-ui-metering-and-limits/spec.md
 ---
 
 # Domain Charter: session
@@ -124,6 +126,16 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
   Electron 非依存で、worker のパスを引数で渡せば `node` で単独起動できる（X-5 / AD-043）
 - **同時実行数の上限**: 枠を占めるセッションは 10 本まで。11 本目は `session-limit` で拒否する（X-5）
 - **transcript**: セッションの会話ログ
+- **失敗の理由のキー (`LaunchFailureReason`)**: 起動とターンの失敗の理由 (18 種)。O-4 ([AD-047](../../decisions/0047-session-meter-and-failure-reasons.md)
+  Decision 1) で、ターンの失敗 (エラーの result) を認証・請求・レート制限・API のエラー・実行中のエラー・3 つの上限に分けた。
+  理由の条件と、再ログインの導線を出す理由 (`auth-failed` と汎用の `provider-error` だけ) の正本は
+  [014 data-model §1](../../../specs/014-ui-metering-and-limits/data-model.md)。監視ビューの行の短い理由・読み上げ・中央の失敗の表示は
+  同じ理由の表から引く。失敗の文字列 (`errors`) は運ばない。終わり方 (失敗にする・黙って完了にしない。X-1 FR-020) は変えていない
+- **計量 (`meter`)**: `SessionEvent` の種類の 1 つ (O-4 / AD-047 Decision 2)。セッションスレッドが SDK のメッセージの許可リストの
+  フィールドから、数・真偽・列挙・モデルの id・形を検証した tool の id だけを運ぶ (運ぶ値の範囲の正本は
+  [014 data-model §2](../../../specs/014-ui-metering-and-limits/data-model.md))。状態通知 (`SessionStatusUpdate`) には載せない
+- **稼働中のストアの `meters`**: セッションごとの計量の最新の値 (O-4)。**永続化しない**。セッションを閉じたら捨て (`close()`)、
+  起動の設定・プリセットに書き戻さない。計量は KPI の計測には使わない
 
 詳細は [docs/glossary.md](../../glossary.md) を参照。
 
@@ -202,6 +214,7 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
 - [AD-023](../../decisions/0023-application-architecture.md) — アプリケーションアーキテクチャ（agents の寿命と単位は AD-043 が読み替える）
 - [AD-034](../../decisions/0034-transcript-read-path-and-process-boundary.md) — transcript の読み取り経路とプロセス境界
 - [AD-043](../../decisions/0043-single-supervisor-session-threads-and-session-limit.md) — 単一 supervisor・セッションスレッド・同時実行数の上限 (X-5)
+- [AD-047](../../decisions/0047-session-meter-and-failure-reasons.md) — 計量 (`meter`) と失敗の理由のキーを session の契約に足す (O-4。ui の feature が本 domain の契約を広げた。U-1)
 
 ## Related Specs
 
@@ -238,6 +251,15 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
   まで広げる `RunningSessionsView.revealMessage` (会話内検索の移動) を足した。Command palette のセッションの候補は本 domain のストアの
   選択の操作 (`select` / `sessions.select`) を呼ぶだけで focus を書かない (ui charter の「面の状態」)。KPI「並列時の滑らかさ」の
   実機計測は O-8 に移した。派生値の追跡と稼働中の一覧の行の部品は変えていない）
+- **O-4 (ui)** — [計量と制限の表示](../../../specs/014-ui-metering-and-limits/spec.md)
+  （本 domain の feature ではない。U-1 (2026-10-05 に利用者が承認。[AD-047](../../decisions/0047-session-meter-and-failure-reasons.md)) で、
+  本 domain の契約と操作 UI に手を入れた: 失敗の理由のキー (`LaunchFailureReason` 10 → 18)・`SessionEvent` の種類 `meter` (7 → 8)・
+  監視ビューの行の短い理由と再ログインの導線 (`isReloginFailure`)・稼働中のストアの `meters`。稼働中のセッションを表示するための読み取り
+  2 つ (`RunningSessionsView.runtimeAutoMode` と、`PERMISSION_MODE_LABELS` を chat の `PERMISSION_MODE_NAMES` から取る形) も U-1 の範囲と
+  読む (2026-10-08 に利用者が決定)。system-scope の持ち主の記録 (014 spec「義務の扱い」) で、稼働中のストアと監視ビューの行を切り出し
+  (FR-018。派生値の追跡を `running-session-monitor.ts`、行の状態の型を `running-session-types.ts`、行の部品と行の操作を `RunningSessionRow.tsx`
+  に。振る舞いは変えない)、押したボタンが自分ごと消えるときのフォーカスの行き先 (FR-019。`focus-handoff.ts`) を足した。計量は KPI の
+  計測には使わない）
 - **O-8** — 並列時の滑らかさの実機計測 ([roadmap の O-8 の行](../../roadmap.md#o3-kpi-smoothness))。未着手
 
 X-6 は未着手。

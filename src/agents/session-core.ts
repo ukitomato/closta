@@ -5,12 +5,14 @@ import { assertSafePermissionMode, type SafePermissionMode } from '@domain/sessi
 import {
   boundDecisionScope,
   toPermissionResult,
+  type LaunchFailureReason,
   type PermissionDecision,
   type PermissionRequest,
   type PermissionResultLike,
   type RuntimeLaunchSpec,
   type SessionControl
 } from '@domain/session/agent-session'
+import type { AssistantErrorKey } from '@domain/session/meter'
 
 /**
  * X-1 の agents 層の**検証可能な核** (SDK を import しない・注入式)。
@@ -321,23 +323,97 @@ export function composeClaudeSpawn(
   }
 }
 
-/* ── SDK `result` の終端分類 (V-11 / FR-030 / SC-010(H-03)) ─────────── */
+/* ── SDK `result` の終端分類 (X-1 FR-020 / US-4 AC6 / SC-010(H-03)) ─────────── */
 
 export type ResultTermination = { readonly kind: 'complete' } | { readonly kind: 'provider-error' }
+
+/**
+ * SDK の `result` の失敗の subtype (`SDKResultError['subtype']`)。SDK を import しないので手で持ち、値域は
+ * `sdk-agent-session.ts` の `Equal<…>` で SDK の型と固定する (O-4 / 014 data-model §2 / plan RK-05)。
+ */
+export const RESULT_ERROR_SUBTYPES = [
+  'error_during_execution',
+  'error_max_turns',
+  'error_max_budget_usd',
+  'error_max_structured_output_retries'
+] as const
+export type ResultErrorSubtype = (typeof RESULT_ERROR_SUBTYPES)[number]
 
 /**
  * SDK の `result` メッセージを終端アクションに分類する純関数 (SDK 非 import・テスト可能)。
  *
  * **`subtype==='success'` かつ `is_error===false` のときだけ正常完了**とし、それ以外
  * (認証失敗 / API エラー / max_turns / 実行中エラー等) は terminal な `provider-error` に倒す。
- * **黙って `done` にしない** — 利用者に理由と再ログイン導線を出すため (V-11 / FR-030)。
+ * **黙って `done` にしない** — 利用者に理由と再ログイン導線を出すため (X-1 FR-020 / US-4 AC6)。
  * 判定を `sdk-agent-session.ts` にインラインで置かず切り出すのは、この一点が「認証失敗が
  * サイレントに成功扱いされない」ことを保証する security-relevant な分岐だからである。
+ * 失敗の理由を細かくするのは `classifyResultFailure` で、本関数 (完了か失敗か) は変えない (O-4 / AD-047)。
  */
 export function classifyResult(subtype: string, isError: boolean): ResultTermination {
   return subtype === 'success' && isError === false
     ? { kind: 'complete' }
     : { kind: 'provider-error' }
+}
+
+/** `classifyResultFailure` の入力 (014 data-model §1)。どれも SDK の未信頼の値をそのまま受けてよい。 */
+export interface ResultFailureInput {
+  /** result の `subtype` (失敗の 4 つ・`success`・知らない値)。 */
+  readonly subtype: unknown
+  /** result の `api_error_status` (HTTP の状態)。0〜999 の整数でなければ「状態が無い」と同じに扱う。 */
+  readonly apiErrorStatus: unknown
+  /** 同じターンの主ループの assistant の最後の `error` (列挙。文字列の本文を含まない)。無ければ null。 */
+  readonly lastAssistantError: AssistantErrorKey | null
+}
+
+/** 再ログインが要る認証系の assistant の `error` (014 data-model §1 の表の 1 行目)。 */
+const AUTH_ASSISTANT_ERRORS: ReadonlySet<AssistantErrorKey> = new Set<AssistantErrorKey>([
+  'authentication_failed',
+  'oauth_org_not_allowed',
+  'verification_required',
+  'cloud_credential_error'
+])
+
+/** 請求とアカウントの assistant の `error` (014 data-model §1 の表の 2 行目)。 */
+const BILLING_ASSISTANT_ERRORS: ReadonlySet<AssistantErrorKey> = new Set<AssistantErrorKey>([
+  'billing_error',
+  'account_on_hold'
+])
+
+/** 失敗の subtype → 理由のキー (014 data-model §1 の表の 5〜8 行目)。 */
+const SUBTYPE_FAILURE_REASONS: Readonly<Record<ResultErrorSubtype, LaunchFailureReason>> = {
+  error_max_turns: 'max-turns',
+  error_max_budget_usd: 'max-budget',
+  error_max_structured_output_retries: 'structured-output-retries',
+  error_during_execution: 'execution-error'
+}
+
+/** HTTP の状態として受ける値 (0〜999 の整数)。それ以外 (1000・負・小数・非数) は null。 */
+function toHttpStatus(raw: unknown): number | null {
+  return typeof raw === 'number' && Number.isInteger(raw) && raw >= 0 && raw <= 999 ? raw : null
+}
+
+/**
+ * エラーの result の理由のキーを決める純関数 (O-4 / 014 spec FR-001 / data-model §1。AD-047 Decision 1)。
+ *
+ * data-model §1 の表を**上から順に**評価する。どれにも当たらない (状態が無い・知らない subtype・
+ * 表に無い assistant の `error`) ときは今と同じ `provider-error` (汎用。再ログインの導線あり)。
+ * 失敗の文字列 (`errors` / `result`) は入力に取らない (U-5)。完了か失敗かは `classifyResult` が決め、
+ * 本関数は失敗の理由を細かくするだけで終わり方を変えない (X-1 FR-020 / US-4 AC6)。
+ */
+export function classifyResultFailure(input: ResultFailureInput): LaunchFailureReason {
+  const error = input.lastAssistantError
+  const status = toHttpStatus(input.apiErrorStatus)
+  if ((error !== null && AUTH_ASSISTANT_ERRORS.has(error)) || status === 401) return 'auth-failed'
+  if (error !== null && BILLING_ASSISTANT_ERRORS.has(error)) return 'billing'
+  if (error === 'rate_limit' || status === 429) return 'rate-limited'
+  // 403 は組織のポリシーや地域でも返るので、文言は「認証または権限」(data-model §1)。
+  if (status === 403) return 'auth-failed'
+  const subtype = input.subtype
+  if (typeof subtype === 'string' && Object.hasOwn(SUBTYPE_FAILURE_REASONS, subtype)) {
+    return SUBTYPE_FAILURE_REASONS[subtype as ResultErrorSubtype]
+  }
+  if (status !== null) return 'api-error'
+  return 'provider-error'
 }
 
 /**

@@ -78,4 +78,36 @@ describe('toTranscriptMessages のシステムイベント', () => {
     expect(out[1]?.parts[0]).toMatchObject({ type: 'divider' })
     expect(JSON.stringify(out)).not.toMatch(/SECRET/)
   })
+
+  it('status / api_retry / task_progress / thinking_tokens から行を作らず、task の種類を変えない (O-4 / 014 plan RK-10)', () => {
+    const out = toTranscriptMessages([
+      system('s1', {
+        subtype: 'task_started',
+        task_id: 't1',
+        description: 'ビルド',
+        task_type: 'local_agent',
+        is_backgrounded: true
+      }),
+      system('s2', { subtype: 'status', status: 'compacting', permissionMode: 'plan' }),
+      system('s3', { subtype: 'status', status: null, compact_result: 'failed' }),
+      system('s4', {
+        subtype: 'api_retry',
+        attempt: 1,
+        max_retries: 10,
+        retry_delay_ms: 500,
+        error_status: 529,
+        error: 'SECRET'
+      }),
+      system('s5', {
+        subtype: 'task_progress',
+        task_id: 't1',
+        usage: { total_tokens: 10, tool_uses: 1, duration_ms: 100 },
+        summary: 'SECRET'
+      }),
+      system('s6', { subtype: 'thinking_tokens', estimated_tokens: 42 })
+    ])
+    expect(out.map((m) => m.id)).toEqual(['task:t1'])
+    expect(out[0]?.parts[0]).toMatchObject({ type: 'system-event', detail: 'local_agent' })
+    expect(JSON.stringify(out)).not.toMatch(/SECRET/)
+  })
 })
