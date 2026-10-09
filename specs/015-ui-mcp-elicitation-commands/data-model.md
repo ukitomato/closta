@@ -1,12 +1,16 @@
 # Data Model: MCP・プラグイン・コマンドの表示 (O-5)
 
-各規則の正本は本ファイルの節。SDK の型は `@anthropic-ai/claude-agent-sdk` 0.3.270 (`SDKSystemMessage` (init) `sdk.d.ts:5482-5543`、`SDKCommandsChangedMessage` :3449、`SlashCommand` :8696、`SDKAuthStatusMessage` :3413 (最上位の型)、`SDKPluginInstallMessage` :5213-5224、`McpServerStatus.status` :1135、MCP のサーバー名の正規化 :4322、`AskUserQuestionInput` `sdk-tools.d.ts:1058-2620`)。
+各規則の正本は本ファイルの節。SDK の型は `@anthropic-ai/claude-agent-sdk` 0.3.270 (`SDKSystemMessage` (init) `sdk.d.ts:5482-5543`、`SDKCommandsChangedMessage` :3449、`SlashCommand` :8696、`SDKAuthStatusMessage` :3413 (最上位の型)、`SDKPluginInstallMessage` :5216-5224、`McpServerStatus.status` :1135、MCP のサーバー名の正規化 :4322、`AskUserQuestionInput` `sdk-tools.d.ts:1058-2620`)。
 
 ## §1 MCP の tool の名前と表示 (`features/chat/mcp-tool-name.ts`。renderer の純関数)
 
 ### 名前の解き方 (`parseMcpToolName(name, knownServers)`)
 
 `knownServers` は表示中のセッションの `init-report` の `mcpServers` の名前 (過去ログ・構成が無いときは空)。
+transcript の element は session を import しないので、O-4 の購読元 `LiveProgressSource` (`features/chat/transcript-context.ts`) に
+`mcpServerNames(): readonly string[]` を足し、`useLiveMcpServerNames()` で読む (実行中のペイン `LivePane` の `LiveSessionPane` が
+`meters[sessionId].initReport` から作る。過去ログ (`ChatScreen`) は購読元が null で空)。snapshot は `initReport` が替わるまで同じ参照を返す
+(plan research R-05)。承認カードは `LivePane` から同じ名前の一覧を props で受ける。
 
 | 入力 (`toolName`) | 結果 |
 |---|---|
@@ -19,8 +23,10 @@
 - 名前は、実行中は `sanitizeBody` を通った値 (`live-message.ts:61`)、過去ログは本 feature で同じ無害化に揃える (`transcript.ts:233`)。`mcp-tool-name.ts` 自身も制御文字・双方向制御・ゼロ幅を落とす (2 層目)
 - **振り分け (`tool-registry.aui.tsx`)**: (1) 完全一致の表 (`Object.hasOwn`。組み込みの 4 tool と `AskUserQuestion` を含む) → (2) `parseMcpToolName` が `mcp` なら `McpToolCall` → (3) ToolFallback。AD-035 Decision 1 の「未登録は ToolFallback」は (1)(2) のどちらにも当たらない名前に対して保つ (AD-048 Decision 5)
 - **transcript の見出し**: `{server} › {tool}` (`inferred` なら「サーバー名は推定」の印)、server が null なら tool だけ。1 行・64 文字で切り詰める (transcript だけ)。resource の tool は URI の要約を添える
-- **URI の要約**: 入力の `uri` を WHATWG URL で読み、`protocol` と `host` と最後のパスの要素だけを出す (`username` / `password` / `search` / `hash` を捨てる)。読めない・`file:` で host が無い・256 文字を超える → 出さない
+- **URI の要約** [spec Q3 (a)。未承認]: 入力の `uri` を WHATWG URL で読み、`protocol` と `host` と最後のパスの要素だけを出す (`username` / `password` / `search` / `hash` を捨てる)。読めない・256 文字を超える → 出さない
+  - 最後のパスの要素は、ファイル名らしい形のときだけ出す: URL の `pathname` の最後の要素 (decode しない。`%` を含めば外れる) が `^[A-Za-z0-9._-]{1,64}$`、英数字が 20 文字以上続かない、`mayCarrySecret` が false。外れたら `protocol` と `host` だけ (host も無ければ `protocol` だけ)。webhook (`/services/T…/B…/<secret>`)・`/bot<token>/` のように末尾が秘密の URI を見出しに出さない (spec 016 design-gate R2 security M-001 の申し送り。research R-07)
 - **中身**: 入力は閉じた JSON (O-2 の本文の上限と無害化を通った `argsText`)。結果は `<pre>` の平文 (MarkdownText に通さない)。画像・resource の印は出さない (U-7)
+- **状態の印** (`McpToolCall` と `AskUserQuestion` の表示の両方。spec US-1 AC9): ToolFallback と同じにする — part の `status` による状態のアイコン (結果待ち・`requires-action`・`incomplete`。`tool-fallback.aui.tsx:97-98` の表)、`incomplete` の中断の印 (`reason === 'cancelled'` とエラーの出し分け。`:142` / `:294-302`)、経過時間 (`useToolCallElapsed`。`:113`) と O-4 の `ToolResultMarks` (エラー・切り詰め・実行中の経過時間。`tool-result-marks.tsx:49`)。印の判定と文言は ToolFallback の側の関数・部品を使い、専用の表示に写し直さない (共通にするために ToolFallback から切り出すのはよい。そのときは ToolFallback の DOM を変えない)
 
 ### 承認カード (`ApprovalCard.tsx`)
 
@@ -72,11 +78,20 @@
 
 - `sdk-agent-session.ts` で、domain に手書きした入力型 (`SessionInitReportInput` / `CommandsChangedInput` / `AuthStatusInput` / `PluginInstallInput`。読むフィールドだけ) と SDK の型の一方向の代入可能性と、`McpStatusKey` (`unknown` を除く) の値域の `Equal<…>` (既存の `sdk-agent-session.ts:91-103` の形) を固定する。SDK の import 文は 1 つに保つ
 - **送るかの判定**: 変換後の値を決まった順に直列化した文字列の全体で前回と比べる。同じなら送らない。**基準は実際に送ったときだけ更新する** (`run()` の closure)。`init-report` / `commands` は O-4 の `meter` の上限 (1 秒に 20 件) に掛けない
+- **固定テスト**: `METER_UPDATE_TYPES` の集合の pin テストは今は無い (`meter.test.ts`)。本 feature で 8 つ (O-4 の 6 + `init-report` / `commands`) を固定するテストを足す (spec FR-014 の「直す」は「足す」と読む。plan の申し送り #14)。`SESSION_EVENT_KINDS` は変えない
 - `init` の `permissionMode` は O-4 がすでに読み、権限モードの比較に使っている (`src/agents/live-signals.ts` の `onSystem` の `init`。014 data-model §2)。`init-report` には載せず、O-4 の扱いを変えない。構成のフィールドは同じ `init` の分岐で読み足す (読むフィールドを足すので、その分岐の「読むのは権限モードだけ」の注記を直す)
 
 ### renderer の保持
 
-O-4 data-model §2 の `meters` (`SessionMeters`。`features/session/running-session-types.ts`。書き手は `running-session-store.ts`) に `initReport` (最新) と `commands` (最新) と、スラッシュコマンドの一覧の出所の受信の連番を足す。スラッシュコマンドの一覧は、`init-report` の `slashCommands` と `commands` のうち後に届いた方を使う。保持は `Map` / `Object.hasOwn` (名前をキーにする集計を含む)。
+O-4 data-model §2 の `meters` (`SessionMeters`。`features/session/running-session-types.ts`。書き手は `running-session-store.ts`) に `initReport` (最新) と `commands` (最新) と、スラッシュコマンドの名前の集合の出所 (`'init-report' | 'commands'`) を足す。保持は `Map` / `Object.hasOwn` (名前をキーにする集計を含む)。
+
+**スラッシュコマンドの一覧の合流の規則** (正本。spec US-2 AC4 / FR-008):
+
+1. **名前の集合**は、出所の後勝ち。`commands` が届いたら出所を `commands` にする。`init-report` が届いたら、その `slashCommands` が直前に保持していた `initReport.slashCommands` と (並びを含めて) 違うとき、または直前の `initReport` が無いときだけ出所を `init-report` にする。`slashCommands` が同じ `init-report` (MCP の状態・tool・モデルだけが変わった再送) は `initReport` を置き換えるが、出所を変えない
+2. **説明と `argumentHint`** は、出所に依らず最新の `commands` から名前で引く (`Map`)。名前が `commands` に無い (または `commands` がまだ無い) コマンドは名前だけを出す
+3. 出所が `init-report` のときの名前は `initReport.slashCommands`、`commands` のときは `commands.commands` の `name` の並び
+
+例: `init-report` (`/a`) → `commands` (`/a` 説明つき・`/b`) → MCP の状態だけが違う `init-report` (`/a`) の後も、一覧は `/a` (説明つき)・`/b` のまま。その後の `init-report` の `slashCommands` が `/a`・`/c` に変われば、一覧は `/a` (説明つき)・`/c` (名前だけ)。
 
 ## §3 構成のタブ (右のペイン。タブの表 `features/shell/panel-tabs.ts` の「概要」「使用量」の後に `config` を 1 行。`availableFor: ['none', 'running', 'past']`。`PanelTabId` (`stores/ui.ts`) に `config` を足す)
 
@@ -86,7 +101,7 @@ O-4 data-model §2 の `meters` (`SessionMeters`。`features/session/running-ses
 | Claude Code が報告したモデル | `initReport.model` (「概要」の「起動時のモデル」(`OVERVIEW_LABELS.model`) と見出しを分ける) | null → 「不明」 |
 | MCP サーバー | 名前と状態 (§6)。`failed` / `needs-auth` は注意の印。案内は下 | 「MCP サーバーはありません」 |
 | tool | 件数と一覧。MCP の tool はサーバーごとにまとめる (`Map`。§1 の関数) | 「ありません」 |
-| スラッシュコマンド | 名前・`argumentHint`・説明 (平文) | 「ありません」 |
+| スラッシュコマンド | 名前・`argumentHint`・説明 (平文)。一覧は §2「renderer の保持」の合流の規則で作る (説明と hint が無いコマンドは名前だけ) | 「ありません」 |
 | スキル / プラグイン | 名前 (と版) | 「ありません」 |
 | 省いた数 | `omitted` の合計が 1 以上なら「形の合わない名前・多すぎる分を {n} 件省きました」 | — |
 
@@ -107,6 +122,8 @@ O-4 data-model §2 の `meters` (`SessionMeters`。`features/session/running-ses
 - `output` / `error` の文字列は通さない
 - `SystemEventStatus` に足すのは `authenticating` だけ (`started` / `succeeded` / `failed` / `completed` は既存。`SYSTEM_EVENT_STATUSES`、`transcript-dto.ts:77`)。category の正本は `SYSTEM_EVENT_CATEGORIES` (`transcript-dto.ts:67`。O-4 の後は `hook` / `task` / `api-retry` / `compaction` / `permission-mode`)
 - `system-event.ts:118` の `HOOK_OUTCOMES[m.outcome] ?? 'unknown'` は同じファイルを触るので `Object.hasOwn` に直す
+- category と status の集合の固定テスト (`system-event.test.ts:297-309`) を 5 → 7・14 → 15 に直す。`Record<SystemEventCategory, …>` の 2 つの表 (`features/chat/labels.ts` の `SYSTEM_EVENT_CATEGORY_LABELS`・`thread.aui.tsx:1074` の `SYSTEM_EVENT_ICONS`) と `SYSTEM_EVENT_STATUS_LABELS` に行を足す (tsc が漏れを落とす)。`thread.aui.tsx` で触るのはこの表だけで、composer の部分は変えない (spec Q2)
+- `transcript-dto.ts` の `detail` の注記 (category ごとの中身) に `auth` (常に '') と `plugin` を足す
 
 ### 承認カードの `AskUserQuestion` の注記 (正本の文言は §6)
 

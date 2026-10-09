@@ -1,8 +1,9 @@
 {
     "gate": "design",
-    "run": "2026-10-04T09:00:00+09:00",
+    "run": "2026-10-09T23:40:49+09:00",
     "spec_dir": "specs/015-ui-mcp-elicitation-commands",
     "spec_id": "015-ui-mcp-elicitation-commands",
+    "round": 2,
     "tracks": {
         "analyze": {
             "status": "ok",
@@ -37,88 +38,136 @@
     },
     "severity_counts": {
         "critical": 0,
-        "high": 7,
-        "medium": 19,
-        "low": 15
+        "high": 3,
+        "medium": 12,
+        "low": 19
+    },
+    "prev_comparison": {
+        "critical": {
+            "resolved": 0,
+            "unresolved": 0,
+            "new": 0
+        },
+        "high": {
+            "resolved": 6,
+            "unresolved": 1,
+            "new": 2
+        }
     },
     "fr_coverage": [
         {
+            "fr": "FR-001",
+            "covered": true
+        },
+        {
+            "fr": "FR-002",
+            "covered": true
+        },
+        {
+            "fr": "FR-003",
+            "covered": true
+        },
+        {
             "fr": "FR-004",
-            "covered": true,
-            "by": [
-                "tasks.md FE-012"
-            ]
+            "covered": true
+        },
+        {
+            "fr": "FR-005",
+            "covered": true
+        },
+        {
+            "fr": "FR-006",
+            "covered": true
+        },
+        {
+            "fr": "FR-007",
+            "covered": true
+        },
+        {
+            "fr": "FR-008",
+            "covered": true
+        },
+        {
+            "fr": "FR-009",
+            "covered": true
+        },
+        {
+            "fr": "FR-010",
+            "covered": true
         },
         {
             "fr": "FR-011",
-            "covered": true,
-            "by": [
-                "tasks.md BE-040"
-            ]
+            "covered": true
+        },
+        {
+            "fr": "FR-012",
+            "covered": true
+        },
+        {
+            "fr": "FR-013",
+            "covered": true
+        },
+        {
+            "fr": "FR-014",
+            "covered": true
+        },
+        {
+            "fr": "FR-015",
+            "covered": true
         }
     ],
     "viewpoint_coverage": {
-        "A": "Critical:0 High:1",
-        "B": "Critical:0 High:0",
-        "C": "Critical:0 High:2",
-        "D": "Critical:0 High:0",
-        "E": "Critical:0 High:3",
-        "F": "Critical:0 High:1",
-        "G": "\u8a72\u5f53\u306a\u3057",
-        "H": "Critical:0 High:1"
+        "A": "Critical:0 High:0 (security M:2 L:1)",
+        "B": "Critical:0 High:0 (security M:1 L:1)",
+        "C": "Critical:0 High:0 (arch M:1 L:4)",
+        "D": "Critical:0 High:1 (pb)",
+        "E": "Critical:0 High:1 (po)",
+        "F": "Critical:0 High:0 (pb M:1)",
+        "G": "\u8a72\u5f53\u306a\u3057: optional reviewer \u672a\u8d77\u52d5",
+        "H": "Critical:0 High:0"
     },
     "dedup_log": [
         {
             "merged": [
                 "analyze-F1",
-                "pb-H-002",
-                "arch-H-001"
-            ],
-            "key": "FR-007"
-        },
-        {
-            "merged": [
-                "analyze-C1",
-                "arch-H-002",
-                "sec-M-005"
-            ],
-            "key": "FR-001 \u5370"
-        },
-        {
-            "merged": [
-                "analyze-F2",
                 "po-M-001"
             ],
-            "key": "US-1 AC4"
-        },
-        {
-            "merged": [
-                "sec-H-001",
-                "pb-M-001",
-                "analyze-B2"
-            ],
-            "key": "FR-003 \u627f\u8a8d\u30ab\u30fc\u30c9"
-        },
-        {
-            "merged": [
-                "pb-H-001",
-                "arch-M-001"
-            ],
-            "key": "AD-048 Decision 2"
+            "key": "FR-008"
         },
         {
             "merged": [
                 "po-H-001",
-                "sec-M-006"
+                "analyze-L9"
             ],
-            "key": "AskUserQuestion"
+            "key": "tasks.md FE-012"
         },
         {
             "merged": [
-                "po-H-002",
-                "arch-M-004"
+                "analyze-C1",
+                "arch-M-101"
             ],
-            "key": "Composer slash commands"
+            "key": "data-model.md:102"
+        },
+        {
+            "merged": [
+                "analyze-G1",
+                "po-M-004"
+            ],
+            "key": "tasks.md:9"
+        },
+        {
+            "merged": [
+                "analyze-F2",
+                "arch-L-105"
+            ],
+            "key": "tasks.md:44"
+        },
+        {
+            "merged": [
+                "analyze-L2",
+                "arch-L-106"
+            ],
+            "key": "spec.md:209"
         }
     ],
     "verdict": "PASS"

@@ -5,7 +5,7 @@ domain: ui
 domain_selected_by: user
 targets: both
 targets_selected_by: user
-status: drafting
+status: implementing
 bf_ids: []
 sf_ids: []
 linear: null
@@ -110,6 +110,7 @@ roadmap が O-5 に預けた義務 (O-5 の行と、system-scope の持ち主の
 6. **Given** 承認待ちの MCP の tool、**When** 承認カードを見る、**Then** カードに生の tool 名が切り詰めずに等幅で必ず出て、補助としてサーバー名と tool 名の見出しが出る。MCP でない tool のカードは今のまま
 7. **Given** `AskUserQuestion` の呼び出し、**When** transcript を見る、**Then** 問い・見出し・選択肢 (説明つき) が読み取り専用で出る。過去ログで入力に回答 (`answers`) があれば、選ばれた選択肢が分かる
 8. **Given** 承認待ちの `AskUserQuestion`、**When** 承認カードを見る、**Then** 「このアプリからは回答を送れません。許可しても選択は Claude に届きません。拒否して、本文で答えてください」の注記が出る
+9. **Given** MCP の tool / `AskUserQuestion` の呼び出しが結果待ち・承認待ち (`requires-action`)・中断 (`incomplete`。cancelled とエラー) のいずれか、または経過時間を持つ、**When** transcript を見る、**Then** ToolFallback と同じ状態の印 (状態のアイコン・中断の印・経過時間。O-4 の `ToolResultMarks` を含む) が出る。専用の表示に移しても状態の印は減らない (data-model §1「状態の印」)
 
 ---
 
@@ -126,7 +127,7 @@ roadmap が O-5 に預けた義務 (O-5 の行と、system-scope の持ち主の
 1. **Given** 稼働中のセッションでターンが始まった (`init`)、**When** 「構成」のタブを見る、**Then** Claude Code が報告したモデル・MCP サーバーごとの状態・tool の数と一覧・スラッシュコマンド・スキル・プラグイン (名前と版) が出て、「ターンの開始時点の状態」と分かる
 2. **Given** MCP サーバーの状態が `failed` / `needs-auth`、**When** 見る、**Then** そのサーバーが注意の印 (アイコン・`data-attention`・`aria-label`) で出て、案内 (data-model §3) が出る
 3. **Given** 次のターンの `init` で、名前は同じまま状態だけが変わった (`pending` → `failed` など)、**When** 届く、**Then** タブと印が新しい状態になる
-4. **Given** `commands_changed`、**When** 届く、**Then** スラッシュコマンドの一覧が置き換わる。後から届いた `init` の一覧とは、届いた順の後勝ち
+4. **Given** `commands_changed`、**When** 届く、**Then** スラッシュコマンドの一覧が置き換わり、説明と引数の形が出る。後から届いた `init` とは、一覧の名前が前回の `init` から変わったときだけ名前の集合を後勝ちで置き換える。説明と引数の形は最新の `commands` から名前で引くので、`init` の後も消えない (MCP の状態だけが変わった `init` で一覧は変わらない。合流の規則の正本は data-model §2「renderer の保持」)
 5. **Given** MCP サーバーのどれかが `failed` / `needs-auth`、**When** 右のペインを畳んでいる、**Then** 右のペインの帯 (畳んだときのタブのアイコンの列) の「構成」のアイコンに注意の印が出る
 6. **Given** MCP サーバー・スキル・プラグイン・コマンドのどれかが 0 件・モデルが形の検査に通らない・状態が知らない値、**When** 見る、**Then** 節ごとに「ありません」・モデルは「不明」・状態は「不明」(注意の印は付けない) が出る
 7. **Given** 過去のセッション・未選択、**When** 「構成」のタブを見る、**Then** 「実行中のセッションだけ」/ O-7 の空の状態
@@ -188,7 +189,7 @@ roadmap が O-5 に預けた義務 (O-5 の行と、system-scope の持ち主の
   - 前回と同じかは、変換後の値の全体で比べ、実際に送ったときだけ基準を更新する。O-4 の `meter` の上限に掛けない
   - `init` の `permissionMode` は O-4 がすでに権限モードの比較に使っている (014 data-model §2)。`init-report` には載せず、O-4 の扱いを変えない
   - 状態通知には載せない
-- **FR-008**: renderer は、稼働中のセッションごとに最新の構成を持たなければならない (稼働中のストア `running-session-store.ts` の `meters` (`SessionMeters`)。O-4 の保持と同じく永続化しない・閉じたら捨てる)。`init-report` の `slashCommands` と `commands` は届いた順の後勝ち
+- **FR-008**: renderer は、稼働中のセッションごとに最新の構成を持たなければならない (稼働中のストア `running-session-store.ts` の `meters` (`SessionMeters`)。O-4 の保持と同じく永続化しない・閉じたら捨てる)。スラッシュコマンドの一覧は data-model §2「renderer の保持」の合流の規則で作る (名前の集合は届いた順の後勝ちだが、`init-report` は `slashCommands` が前回の `init-report` から変わったときだけ数える。説明と `argumentHint` は最新の `commands` から名前で引く)
 - **FR-009**: 右のペインのタブの表 (`features/shell/panel-tabs.ts`。O-7 の「概要」と O-4 の「使用量」がある) に「構成」のタブを足さなければならない。
   - 項目・見出し・空の状態・案内・注意の印の正本は data-model §3。タブの表に注意の印のフィールドを足し、畳んだ帯のアイコンに印を出す (data-model §3)
   - tablist のキー操作は O-4 が入れたもの (014 FR-017) をそのまま使う。タブのテストは `RightPanel.tabs.test.tsx` の側に足し、`AppShell.test.tsx` に足さない
@@ -199,7 +200,7 @@ roadmap が O-5 に預けた義務 (O-5 の行と、system-scope の持ち主の
 
 #### 境界の検査と記録
 
-- **FR-011**: Constitution 検証の項目 16 の P3 (`Query` の変更系のメソッドの検査) を広げなければならない。`QUERY_MUTATION_METHODS` に足すメソッドの正本は AD-048 Decision 2 (11 個)。違反の fixture を置く。正の形 (`interrupt` 以外を違反) への置き換えは項目 16 の持ち主に送る (system scope)
+- **FR-011**: Constitution 検証の項目 16 の P3 (`Query` の変更系のメソッドの検査) を広げなければならない。`QUERY_MUTATION_METHODS` に足すメソッドは AD-048 Decision 2 の 11 個と、AD-036 §4 P3 (`interrupt` だけ) を根拠とする `reloadOutputStyles` / `backgroundTasks` (ADR 不要。research R-06)。`Query` の自前のメソッドが漏れなく分類されていることを型で固定し、違反の fixture を置く。正の形 (`interrupt` 以外を違反) への置き換えは項目 16 の持ち主に送る (system scope)
 - **FR-012**: 完了の PR で `docs/ui-coverage.md` の `後続: O-5` の行をすべて書き換えなければならない。書き換え先の正本は data-model §5。項目 21 の出力で、割当先が O-5 の行が 0 になる
 - **FR-013**: roadmap に **O-10「Claude Code からの問いに答える UI と composer のコマンドの候補」**(M3・依存 O-5・domain `session` (U-1)) を登録しなければならない。範囲と義務:
   - `AskUserQuestion` の回答: 承認の応答の `updatedInput` は、agents の `canUseTool` の中で SDK が渡した元の `input` に `answers` だけを足して組む。renderer から受けるのは回答だけで、キーは元の問いの文と照合し、値の長さを制限する。tool 名は SDK の値で判定する。射影の関数は `toPermissionResult` の隣に置き、キーの集合を pin テストで固定する (AD-036 Decision 4 の読み替えの ADR)
@@ -229,11 +230,11 @@ roadmap が O-5 に預けた義務 (O-5 の行と、system-scope の持ち主の
 
 ## Success Criteria
 
-- **SC-001**: **MCP の tool と問いが読める。** US-1 の AC1〜AC8 のとおりになり、MCP の tool と `AskUserQuestion` の呼び出しが ToolFallback で描かれない (過去ログ・実行中)。名前の解き方の各規則 (data-model §1 の表の各行) と、非 MCP の名前 (`mcp_x`・`MCP__a__b`・`xmcp__a__b`・`constructor`) が ToolFallback に落ちることが単体で通る。既存の 8 つの名前の振り分けが変わらない。承認カードの DOM に 200 文字の tool 名が全文で出る。計測経路: 名前の純関数の単体 + tool の表示と承認カードの component テスト
+- **SC-001**: **MCP の tool と問いが読める。** US-1 の AC1〜AC9 のとおりになり、MCP の tool と `AskUserQuestion` の呼び出しが ToolFallback で描かれない (過去ログ・実行中)。名前の解き方の各規則 (data-model §1 の表の各行) と、非 MCP の名前 (`mcp_x`・`MCP__a__b`・`xmcp__a__b`・`constructor`) が ToolFallback に落ちることが単体で通る。既存の 8 つの名前の振り分けが変わらない。承認カードの DOM に 200 文字の tool 名が全文で出る。計測経路: 名前の純関数の単体 + tool の表示と承認カードの component テスト
 - **SC-002**: **構成が届き、変化が伝わり、通さないフィールドが漏れない。** `init` / `commands_changed` の fixture から `meter` までが data-model §2 のとおりになり、通さないフィールドの目印の値が `SessionEvent` と DOM に 0 件。名前が同じで状態だけが変わった 2 回目の `init`、同じ長さの別のモデルが送られ DOM まで届く。同じ内容は送られない。形の検査の外れ (制御文字・tag 文字・U+2028・長い名前・件数の超過・`__proto__` / `constructor`) で例外が出ず落ちる。計測経路: 変換の単体 + 経路の通しのテスト (O-4 の `tests/meter/meter-through.test.tsx` の形)
 - **SC-003**: **構成と出来事が見える。** US-2 / US-3 の AC のとおりになる。計測経路: 構成のタブ・帯の印・行の component テスト
 - **SC-004**: **対応表の O-5 の行が無くなる。** 項目 21 が通り、出力で割当先が O-5 の行が 0、O-10 の行が data-model §5 の 4 行。M3 の完了の条件の残りが O-5 の前より 2 減る。計測経路: `node scripts/constitution/check.mjs`
-- **SC-005**: **境界の変更が ADR のとおり。** Agent SDK の呼び出しの許可リスト・query の options のキー・承認の応答の形 (`toPermissionResult`)・`TRANSCRIPT_PART_FIELDS`・IPC・preload・main の差分が 0。`SESSION_EVENT_KINDS` の差分が 0 (O-4 の `meter` の中の種類 `METER_UPDATE_TYPES` だけが増える)。`sdk-agent-session.ts` の `Query` のメソッドの呼び出しは `interrupt` だけで、項目 16 の P3 が広げたメソッドの違反の fixture で発火する。計測経路: 固定テスト + 項目 16 の fixture + `git diff` (quickstart)
+- **SC-005**: **境界の変更が ADR のとおり。** Agent SDK の呼び出しの許可リスト・query の options のキー・承認の応答の形 (`toPermissionResult`)・`TRANSCRIPT_PART_FIELDS`・IPC・preload・main の差分が 0。`SESSION_EVENT_KINDS` の差分が 0 (O-4 の `meter` の中の種類 `METER_UPDATE_TYPES` だけが増える)。`sdk-agent-session.ts` の `Query` のメソッドの呼び出しは `interrupt` だけで、項目 16 の P3 が広げたメソッドの違反の fixture で発火する。`Query` の自前のメソッドは `interrupt`・変更系 (`QUERY_MUTATION_METHODS`)・呼ばない読み取りのどれかに分類され、SDK の版上げで増えたメソッドは型検査で落ちる。計測経路: 固定テスト + `sdk-agent-session.ts` の `keyof Query` の網羅 (`Equal<Exclude<…>, never>`。tsc) + 項目 16 の fixture + `git diff` (quickstart)
 
 ## Dependencies
 

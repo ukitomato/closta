@@ -1,105 +1,110 @@
 # security-reviewer Review: MCP・プラグイン・コマンドの表示 (O-5)
 
-**Run**: 2026-10-04 (design-gate R1)
+**Run**: 2026-10-09
 **Reviewer**: security-reviewer
 **Spec**: specs/015-ui-mcp-elicitation-commands/spec.md
+**Round**: 2
 
 ## 初回読了 viewpoint
 
-- FR/SC: FR-001 / FR-002 / FR-004 (MCP の見出しと結果)、FR-003 (承認カード)、FR-005〜FR-007 (第三者が決めた文字列を常時見える場所に)、FR-008、FR-010 (O-10 の申し送り)、SC-001〜SC-003 / SC-005
-- 該当 charter / Confirmation: ui charter:52-58、AD-036 Decision 4 (P2 / P3)、AD-041 (g)、AD-035 Decision 1、proposed の AD-046 / AD-047 / AD-048
-- A. 認可 / 認証 / secret 管理: Critical:0 High:1 Medium:2 Low:1
-- B. 入力検証 / injection / CSP / 暗号: Critical:0 High:0 Medium:4 Low:2
+- FR/SC: FR-001 / FR-002 (MCP の見出しと URI の要約)、FR-003 (2 段の振り分け、`Object.hasOwn`)、FR-004 (承認カード)、FR-005 (`AskUserQuestion` の読み取り専用の表示)、FR-006 (平文の結果)、FR-007 / FR-008 (未信頼の構成を `meter` で運ぶ)、FR-010 (`auth_status` / `plugin_install` の `output` / `error` を通さない)、FR-011 (項目 16 の P3)、FR-013 (O-10 のセキュリティの制約)、SC-001 / SC-002 / SC-005
+- touched files に該当する charter / Confirmation: ui charter (tool 出力の専用表示)、AD-048 Decision 2 / 3 / 5 と Confirmation (SC-002 / SC-005)、AD-036 Decision 4 / §4 P3、AD-041 (e)(g)、AD-035 Decision 1、AD-047 Decision 2
+- A. 認可 / 認証 / secret 管理: Critical:0 High:0 Medium:2 Low:1
+- B. 入力検証 / injection / CSP / 暗号: Critical:0 High:0 Medium:1 Low:1
 - C. 業務不変条件 / Charter drift: 該当なし: architecture-reviewer の担当
 - D. Constitution / ADR drift: 該当なし: architecture-reviewer の担当
 - E. User Story / SC / AC / UX: 該当なし: po-reviewer の担当
 - F. 命名 / module / lint hookup: 該当なし: convention-reviewer の担当
-- G. optional reviewer 範囲: 該当なし: ui-coverage / ux / a11y の担当
-- H. テスト / coverage / observability / regression: Critical:0 High:0 Medium:1 Low:0
+- G. optional reviewer 範囲: 該当なし: ui-coverage / ux / a11y reviewer の担当
+- H. テスト / coverage / observability / regression: Critical:0 High:0 Medium:0 Low:1
 
 ## スコープ要約
 
-IPC・preload・main・spawn・新しい SDK の呼び出しは無い。`cwd`・`path`・MCP の `error`・`apiKeySource`・auth の `output` / `error` を運ばない方針は SDK の型と一致する。`mcp_status` を呼ばないので `McpServerStatus.config` (URL・ヘッダ) の経路も無い。`AskUserQuestion` の暫定の状態は P2 / P3 が変わらず昇格の経路は増えない。
+この feature は IPC・preload・main・BrowserWindow・spawn・`shell.openExternal` を変えない (SC-005、plan Constraints)。このため SEC-2 / SEC-3 / SEC-5 / SEC-7 の新しい経路はありません。SDK の新しい呼び出しも無く、`Query` のメソッドは `interrupt` だけのままで、P3 の denylist は 17 個に広がります。
 
-担当外の観察 (採点外): 構成の「前回と同じか」を件数と名前の連結の長さで比べると MCP の `status` の変化と同じ長さのモデルの切り替えが送られない (data-model.md:51)。`started` は既に `transcript-dto.ts:67` にある。`mcp__*` のパターンでの振り分けと AD-035 Decision 1 の関係。
+R1 の 11 件はすべて設計に反映されていることを確かめました。
+- H-001: 承認カードは生の名前を出す (data-model §1、FE-014)
+- M-001: URI は WHATWG URL で読み、userinfo / query / hash を捨てる。末尾はファイル名らしい形のときだけ出す
+- M-002: BE-010 で過去ログの tool 名を無害化する。今のコードで `src/domain/session/transcript.ts:233` は生の `b.name`、`src/domain/session/live-message.ts:61` は `sanitizeBody` を通していることを確かめた
+- M-003: 集計に `Map` を使い、prototype のキーのテストを置く
+- M-004: 「未信頼の文字列」の文言、allowlist の正規表現、Cc / Cf / Zl / Zp の除去
+- M-005: U-7 で印を出さない
+- M-006: 注記を出す (§6)
+- M-007: 各タスクにテストの観点がある
+- L-001: SH-002 に不採用の条件がある
+- L-002: FR-013 に O-10 の制約がある
+- L-003: 結果は `<pre>` の平文
+
+今回の新しい指摘は 3 系統です。
+- 承認カードの補助見出しが、曖昧なサーバー名を確定したように出す
+- URI の要約の host を検査していない
+- 間引かない `commands` の送信に流量の上限が無い
+
+担当外の観察 (採点外): tasks.md:39 (BE-010) が `src/agents/live-message.ts:61` を指しているが、実体は `src/domain/session/live-message.ts:61`。
 
 ## Findings
 
-### [High] 承認カードの見出しが、MCP の名前を分割して 64 文字で切り詰めた形に置き換わる。承認する tool の生の名前がカードから消え、`__` を含むサーバー名では別のサーバーの tool に見える (H-001) (scope: feature)
+### [Medium] 承認カードの補助見出しが、前方一致するサーバーが複数あっても「推定」の印を付けずに最長一致のサーバーへ帰属させる (M-101) (scope: feature)
 
-- **観察**: 今の承認カードは無害化した `toolName` を全文で出す (`ApprovalCard.tsx:30`、H-05/H-06)。FR-003 と data-model §1 は最初の `__` で切り 64 文字で切り詰める。`mcp__github__mirror__push` は `github › mirror__push` に見える
-- **同種事象探索**: `\.toolName\b` (renderer) 13 件、承認の判断に使うのは `ApprovalCard.tsx:30` の 1 件
-- **推奨アクション**: 承認カードでは生の `toolName` を切り詰めずに常に出す (等幅・`break-all`)。分割は補助で、構成の `mcpServers` の名前と完全一致するときだけ帰属を出す (曖昧なら「サーバーを特定できません」)。テスト
-- **根拠**: AD-036 Decision 4、ApprovalCard H-05、CWE-451
+- **観察**: data-model.md:18 は「`rest` が `<s>__` で始まる `s` がちょうど 1 つ最長」なら `inferred: false` とする。サーバー `a` と `a__b` があるとき `mcp__a__b__c` は `a__b` › `c` に確定する。しかし SDK はサーバー名・tool 名を `[a-zA-Z0-9_-]` に正規化するので、サーバー `a` が tool `b__c` を公開すれば同じ `mcp__a__b__c` になる。どちらのサーバーの tool かは名前からは決まらない。tasks.md:48 (FE-014 のテスト) はこのケースで「補助の見出しが最長一致」になることを固定している。spec.md:108 (AC4) が推定にするのは「同じ長さで複数に一致」のときだけ
+- **同種事象探索**: `ちょうど 1 つ最長|最長一致` で 4 件 (data-model.md:18、spec.md:108、tasks.md:41、tasks.md:48)
+- **リスク/影響**: 承認カードは承認の唯一の経路 (`ApprovalCard.tsx:6`)。悪意のある (または名前の衝突した) MCP サーバー `a` が、信頼されたサーバー `a__b` の tool のように確定の見出しで出せる。生の名前は 1 行目に残る (AD-048 Decision 5) ので Critical ではないが、補助見出しが誤った確信を与える (CWE-451)
+- **推奨アクション**: `knownServers` のうち前方一致するものが 2 つ以上あれば、長さに関わらず `inferred: true` にする。せめて承認カードでは「サーバーを特定できません」を出す。transcript の見出しでも同じ扱いにする。data-model §1 の表の 2 行目、spec AC4、FE-010 と FE-014 のテスト (`a` と `a__b` の両方があるケース) を書き換える
+- **根拠**: AD-048 Decision 5 (分けた見出しは補助)、CWE-451、Constitution III
+- **scope 根拠**: data-model §1 と FE-010 / FE-014 の範囲
 
-### [Medium] resource の `uri` を見出しに出す可否を `mayCarrySecret` で決めている。この判定は URL の資格情報・クエリのトークンを通す。spec の「入力の値を見出しに出さない」とも矛盾する (M-001) (scope: feature)
+### [Medium] URI の要約が host を無条件に出す。独自の scheme では host の位置に任意の文字列が入り、秘密の形の検査は最後のパスの要素にしか掛からない (M-102) (scope: feature)
 
-- **同種事象探索**: `mayCarrySecret` 9 件、URL の判定に使うのは本 feature の 2 件
-- **推奨アクション**: URL として読み scheme・host・最後のパスの要素だけ (userinfo・query・fragment を捨てる)。読めないものは出さない。入力の `server` に名前の形の検査。テスト
-- **根拠**: spec.md:62、O-2 data-model §2、CWE-200
+- **観察**: data-model.md:26-27 は `protocol` と `host` を常に出し、`mayCarrySecret`・英数字 20 文字・長さの検査は「最後のパスの要素」だけに掛ける。WHATWG URL は特別でない scheme (`foo://<authority>/x`) でも authority を host として解く。research.md:60 が言うとおり、resource の URI の形は MCP サーバーの作者が決めるもので保証されない。FE-010 のテストの負例 (tasks.md:41) にも host の負例が無い
+- **同種事象探索**: `` `protocol` と `host` `` / `host も無ければ` で 2 件 (data-model.md:26、data-model.md:27)。テスト側は tasks.md:41 の 1 件
+- **リスク/影響**: `x-api://sk-ant-...../readme.md` のように authority にトークンを置く URI は、そのまま見出しに出る。R1 M-001 と spec 016 から申し送られた規則 (research R-07) の意図「秘密を見出しに出さない」が host では成り立たない (CWE-200)。設計段階で実害は観察できないので Medium とした
+- **推奨アクション**: host にも最後のパスの要素と同じ検査を掛ける。`mayCarrySecret` が false、英数字が 20 文字以上続かない、長さの上限 (たとえば 64)、`^[A-Za-z0-9.-]+$` (IDN は punycode のまま)。外れたら `protocol` だけを出す。FE-010 のテストに `foo://sk-ant-xxxxxxxxxxxxxxxxxxxxxxxx/readme.md` と、長い host の負例を足す
+- **根拠**: spec Q3 (a) の推奨理由「秘密を出さない安全側の形」、research R-07、CWE-200
+- **scope 根拠**: data-model §1 と FE-010 の範囲
 
-### [Medium] 過去ログの `toolName` は無害化されていない (M-002) (scope: feature)
+### [Medium] `commands` (と `init-report`) を間引きの対象から外すが、流量の上限が無い。内容が交互に変われば重複の抑止も効かず、1 件 64KB の送信が無制限に続く (M-103) (scope: feature)
 
-- **観察**: 実行中は `sanitizeBody` (`live-message.ts:61`)、過去ログは生の `b.name` (`transcript.ts:233`)
-- **同種事象探索**: `b\.name|tool_name` 4 件、無害化していないのは 1 件
-- **推奨アクション**: `transcript.ts:233` を `sanitizeBody(b.name).value` に。`mcp-tool-name.ts` にも 2 層目。U+202E の fixture
+- **観察**: spec.md:163、data-model.md:79、tasks.md:57 は `init-report` / `commands` を O-4 の上限 (1 秒に 20 件) に掛けず、「1 秒に 21 回以上の `init` でも間引かれない」をテストで固定する。抑止は「前回と同じ内容」だけ。`commands_changed` はスラッシュコマンドの一覧が変わるたびに届く。MCP の prompt はスラッシュコマンドとして出るので、prompt の一覧の変化を繰り返し通知するサーバーがあると、届く頻度は第三者が決めることになる (推測を含む)
+- **同種事象探索**: `間引かずに|間引かれない|上限に掛けない|掛けない` で 3 件 (spec.md:163、data-model.md:79、tasks.md:57)。FR-007 (spec.md:188) にも「O-4 の `meter` の上限に掛けない」がある
+- **リスク/影響**: A と B を交互に送られると、supervisor から main を経由して renderer へ 64KB の meter が流れ続け、構成のタブを再描画し続ける (可用性。CWE-400)。「最新の値を落とすと二度と届かない」という間引かない理由 (spec.md:163) は、末尾で必ず送る合流 (trailing-edge coalescing) でも満たせる
+- **推奨アクション**: 種類ごとに末尾で必ず送る合流を入れる。たとえば 250ms に 1 回までにして、窓の最後の値を必ず送る。spec の Edge Cases と FR-007 の「上限に掛けない」を「最新の値は落とさず、合流する」に書き換える。BE-020 のテストを「21 回で最後の値が必ず届く・送る回数は窓の数以下」に替え、SH-020 に A / B を交互に送るケースを足す
+- **根拠**: CWE-400、Constitution IX (main をブロックしない)、AD-048 Decision 3 (件数とバイト数の上限の趣旨)
+- **scope 根拠**: BE-020 / data-model §2 の範囲
 
-### [Medium] 構成のタブで tool をサーバー名ごとにまとめる方法が決まっていない。名前の規則は `constructor` / `toString` を通し、renderer には ErrorBoundary が無い (M-003) (scope: feature)
+### [Low] 過去ログの `AskUserQuestion` の入力にある `answers` を「選ばれた回答」と表示するが、その値の出所 (利用者の選択か、モデルが書いた入力か) を確かめていない (L-101) (scope: feature)
 
-- **同種事象探索**: ErrorBoundary 0 件
-- **推奨アクション**: 集計と結合は `Map`。FE-021 に prototype のキーのテスト
-- **根拠**: CWE-1321
+- **観察**: data-model.md:39 と spec.md:111 は、入力に `answers` があれば選ばれた選択肢として強調する。根拠は SDK の型の注記 (research.md:9) だけで、過去ログの `tool_use.input` に `updatedInput` が書き戻されるかは確かめられていない。モデルが自分の入力に `answers` を入れると、利用者が選んでいない回答が「選ばれた回答」と出る
+- **同種事象探索**: `answers` で spec.md:111、data-model.md:39、tasks.md:46 の 3 件
+- **推奨アクション**: quickstart V-3 に「過去ログの `tool_use.input` に `answers` が書かれるか」の確認を足す。確かめられるまでは文言を「入力に含まれる回答」にするか、tool_result 側の値だけを使う
+- **根拠**: CWE-451
 
-### [Medium] AD-048 Decision 3 と spec が運ぶ文字列を「利用者の設定由来」と捉えている。実際には第三者が決めた値で、名前の規則も allowlist ではなく blocklist (M-004) (scope: feature)
+### [Low] SH-002 が `npx assistant-ui@latest add …` で版を固定せずに registry のコードを取り込む (L-102) (scope: feature)
 
-- **同種事象探索**: `設定由来` 3 件
-- **推奨アクション**: 文言を「第三者由来を含む」に。名前は allowlist (MCP `^[A-Za-z0-9_-]{1,128}$`、コマンド・スキル・プラグイン `^[A-Za-z0-9_.:@/-]{1,128}$`)。説明は Cc / Cf / Zl / Zp を除き平文で描く (markdown・自動リンクにしない)。テストに tag 文字・U+2028
-- **根拠**: AD-047 Decision 2、`HOOK_NAME_SHAPE` の先例、CWE-451
+- **観察**: tasks.md:16。取り込んだコードを採るかは照合で決め、新しい npm の依存は不採用の条件にしている。CLI と registry の版はどちらも固定していない
+- **同種事象探索**: `assistant-ui@latest` で tasks.md:16 の 1 件 (この spec の中)
+- **推奨アクション**: CLI の版を `package.json` の assistant-ui に合わせて固定する。取り込んだ差分 (生の HTML・`dangerouslySetInnerHTML`・`fetch`・`eval`) を Grep で確かめてから採るという手順を、SH-002 の不採用の条件に足す
+- **根拠**: SEC-8、OWASP A08
 
-### [Medium] 結果の「画像」「resource」の印に要る情報が、今の DTO の契約では renderer に届かない (M-005) (scope: feature)
+### [Low] H: 上の指摘を検出するテストが無い。既存のテストの一部は、指摘した振る舞いを固定している (L-103) (scope: feature)
 
-- **観察**: `toolResultText` は `text` の無いブロックを捨てる。`TRANSCRIPT_PART_FIELDS` は固定
-- **推奨アクション**: (a) 件数だけを数え本文に固定の文言 / (b) 件数のフィールドを足しスキーマのテストを直す / (c) 印を外す。印は押せない表示
-- **根拠**: 003 SC-009、Principle I
-
-### [Medium] 暫定の `AskUserQuestion` の承認カードは「許可しても回答が届かない」ことを利用者に示さない (M-006) (scope: feature)
-
-- **推奨アクション**: `toolName === 'AskUserQuestion'` のとき固定の注記 (「許可しても回答は Claude に届きません。拒否して本文で答えてください」)。V-3 に tool_result の中身
-- **根拠**: AD-036 Decision 4、Principle III
-
-### [Medium] H: 上の指摘を検出するテストが tasks に無い (M-007) (scope: feature)
-
-- **同種事象探索**: tool-registry のテスト 0 件
-- **推奨アクション**: URI の負例、承認カードの全文と曖昧なケース、既存の 8 つの名前の振り分けの回帰、過去ログの双方向制御、prototype のキー、decoder の負例、注記の表示
-
-### [Low] SH-002 で registry の element を採るときの、セキュリティ上の外し方の条件が無い (L-001) (scope: feature)
-
-- **推奨アクション**: 生の HTML / iframe / `frame-src` / 遠隔の取得 / 操作のボタンを不採用の条件に
-
-### [Low] FR-010 の O-10 の登録文に、権限ゲートの例外を作るときのセキュリティ上の制約が書かれていない (L-002) (scope: feature)
-
-- **推奨アクション**: `updatedInput` は agents が元の入力から組み renderer からは回答だけ、`toolName` は SDK の値、Elicitation の入力は永続化しない、URL は `openExternalIfHttp` だけ、`supportedDialogKinds` は allowlist
-
-### [Low] MCP の結果の描き方 (平文か markdown か) が決まっていない (L-003) (scope: feature)
-
-- **推奨アクション**: 結果は `<pre>` の平文。MarkdownText に通さない
+- **観察**: FE-014 (tasks.md:48) は M-101 の曖昧なケースで最長一致を期待している。BE-020 (tasks.md:57) は M-103 の「間引かない」を期待している。FE-010 (tasks.md:41) に host の負例が無い (M-102)。承認・無害化の既存の回帰は `session-core.test.ts:315-321` (双方向制御の tool 名) が守っていて、ApprovalCard の「MCP でない tool の DOM が今のまま」も FE-014 にある
+- **推奨アクション**: M-101〜M-103 の推奨アクションに書いたテストに差し替える、または足す
 
 ## 同種事象探索 cascade summary
 
 | 指摘 ID | Grep query | 該当件数 | path:line |
 |---|---|---|---|
-| H-001 | `\.toolName\b` (renderer) | 13 (承認は 1) | ApprovalCard.tsx:30、SessionScreen.tsx:606-607 |
-| M-001 | `mayCarrySecret` | 9 (URL の判定 2) | data-model.md:16、tasks.md:22 |
-| M-002 | `b\.name\|tool_name` (src) | 4 (無害化なし 1) | transcript.ts:233 |
-| M-003 | ErrorBoundary (renderer) | 0 | — |
-| M-004 | `設定由来` | 3 | spec.md:43,54、0048:29 |
-| M-005 | 印の経路 | 0 | tool-result.ts:23-35 / transcript-dto.ts:30,122-131 |
-| M-006 | 暫定の注記 | 0 | ApprovalCard.tsx:30,48-50 |
-| M-007 | tool-registry のテスト | 0 | — |
-| L-001 | MCP の element の行 | 2 | ui-coverage.md:291,292 |
-| L-002 | `updatedInput` | 4 ファイル | spec.md:39,162、research.md:7、0048:19,27 |
-| L-003 | 結果の描き方 | 0 | — |
+| M-101 | `ちょうど 1 つ最長\|最長一致` | 4 | data-model.md:18, spec.md:108, tasks.md:41, tasks.md:48 |
+| M-102 | `` `protocol` と `host` `` / `host も無ければ` | 2 (+テスト 1) | data-model.md:26, data-model.md:27, tasks.md:41 |
+| M-103 | `間引かずに\|間引かれない\|上限に掛けない` | 3 (+FR 1) | spec.md:163, data-model.md:79, tasks.md:57, spec.md:188 |
+| L-101 | `answers` (表示) | 3 | spec.md:111, data-model.md:39, tasks.md:46 |
+| L-102 | `assistant-ui@latest` | 1 | tasks.md:16 |
+| L-103 | テストの期待値 | 3 | tasks.md:41, tasks.md:48, tasks.md:57 |
 
 ## Verdict
 
-- Critical: 0 / High: 1 / Medium: 7 / Low: 3
+- Critical: 0
+- High: 0
+- Medium: 3
+- Low: 3
+- Round inheritance: resolved from 1: 11 / unresolved: 0 / new: 6

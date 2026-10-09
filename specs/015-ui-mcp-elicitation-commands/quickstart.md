@@ -4,9 +4,9 @@
 
 ## V-1 境界の差分 (SC-005)
 
-- `AGENT_SDK_ALLOWED_CALLS` (`scripts/constitution/allowlists.mjs`) と `QUERY_OPTION_KEYS` (`src/agents/session-core.ts`) の差分が 0。`QUERY_MUTATION_METHODS` は 11 増えている (AD-048)
+- `AGENT_SDK_ALLOWED_CALLS` (`scripts/constitution/allowlists.mjs`) と `QUERY_OPTION_KEYS` (`src/agents/session-core.ts`) の差分が 0。`QUERY_MUTATION_METHODS` は 13 増えて 19 (AD-048 Decision 2 の 11 と AD-036 §4 P3 の `reloadOutputStyles` / `backgroundTasks`) で、`tests/docs/` の pin テストが同じ集合を固定している。`sdk-agent-session.ts` の `keyof Query` の網羅 (`Equal<Exclude<…>, never>`) が型検査で通る (research R-06)
 - `toPermissionResult` (`src/domain/session/agent-session.ts`) と `TRANSCRIPT_PART_FIELDS` の差分が 0
-- `sdk-agent-session.ts` の `Query` のメソッドの呼び出しが `interrupt` だけ。項目 16 の違反の fixture が発火する
+- `sdk-agent-session.ts` の `Query` のメソッドの呼び出しが `interrupt` だけ。項目 16 の違反の fixture が発火する。`Query` の自前のメソッドが `interrupt`・変更系 19・呼ばない読み取り 9 のどれかに分類されている (型の網羅)
 - `SESSION_EVENT_KINDS` の差分が 0 (O-4 の後の値から増えない。増えるのは `METER_UPDATE_TYPES` の 2 つだけ)。IPC・preload・main の差分が 0
 
 ## V-2 対応表 (SC-004)
