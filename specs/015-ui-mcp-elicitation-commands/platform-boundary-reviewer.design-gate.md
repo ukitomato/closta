@@ -1,94 +1,92 @@
 # platform-boundary-reviewer Review: MCP・プラグイン・コマンドの表示 (O-5)
 
-**Run**: 2026-10-09 (design-gate R2)
+**Run**: 2026-10-10 (design-gate R3)
 **Reviewer**: platform-boundary-reviewer
 **Spec**: specs/015-ui-mcp-elicitation-commands/spec.md
-**Round**: 2
+**Round**: 3
 
 ## 初回読了 viewpoint
 
-- FR/SC: FR-001 / FR-003 / FR-004 (PB-4: 承認カード)、FR-007 / FR-008 (PB-1 / PB-2: `init-report` の許可リストとセッションごとの保持)、FR-010 (PB-6: `plugin_install`)、FR-011 / SC-005 (PB-7: 項目 16 の P3)、SC-002 (PB-1: 通さないフィールド)
-- 該当する charter / Confirmation: AD-036 §4 P3、AD-048 Decision 2 / 3 / 5 と Confirmation (SC-002 / SC-005)、AD-047 Decision 2、check.mjs 項目 16 (`check.mjs:917-924`)、`allowlists.mjs:419-427`、`tests/rule-fixtures/expected.mjs` の `UNDETECTED_NOTES`
+- FR/SC: FR-001 / FR-004 (PB-4: 承認カード。応答は変えない)、FR-007 / FR-008 (PB-1 / PB-2: `init-report` の許可リストとセッションごとの保持)、FR-010 (PB-6: `plugin_install`)、FR-011 / SC-005 (PB-7: 項目 16 の P3、`keyof Query` の網羅)、SC-002 (PB-1: 通さないフィールド)
+- 該当する charter / Confirmation: AD-036 §4 P3、AD-048 Decision 2 / 3 / 5、`check.mjs:917-924` (項目 16 の P3)、`allowlists.mjs:420-427`、`sdk-agent-session.ts:91-108` (型の一致の並び)、`tsconfig.node.json:3-11`
 - A. 認可 / 認証 / secret 管理: 該当なし: security-reviewer の担当
 - B. 入力検証 / injection / CSP / 暗号: 該当なし: security-reviewer の担当
-- C. 業務不変条件 / Charter drift: 該当なし: runtime / isolation の Out of scope に触れていない。R1 L-001 (WSL の決め打ち) は「このセッションを起動した環境で」(data-model.md:100, spec.md:146) で直っている
-- D. Constitution / ADR drift: Critical:0 High:1 Medium:0 Low:1
+- C. 業務不変条件 / Charter drift: 該当なし: runtime / isolation の Out of scope に触れない。案内の文言は「このセッションを起動した環境で」のままで、WSL の決め打ちに戻っていない (data-model.md:109)
+- D. Constitution / ADR drift: Critical:0 High:0 Medium:0 Low:2
 - E. User Story / SC / AC / UX: 該当なし: po-reviewer の担当
-- F. 命名 / module / lint hookup: Critical:0 High:0 Medium:1 Low:0
+- F. 命名 / module / lint hookup: Critical:0 High:0 Medium:2 Low:0
 - G. optional reviewer 範囲: 該当なし: 担当外
-- H. テスト / coverage / observability / regression: Critical:0 High:0 Medium:0 Low:0 (テストの観点は H-101 / M-101 の推奨に入れた。R1 の H-002 / M-001 / M-002 / M-004 / L-002 は BE-020 / FE-014 / BE-001 のテストで検出できるようになった)
+- H. テスト / coverage / observability / regression: Critical:0 High:0 Medium:1 Low:0 (M-202 のずれを捕まえるテストが無い)
 
 ## スコープ要約
 
-R1 の指摘の手当てを確認した。H-002 (送るかの判定) は FR-007 / data-model.md:79 / BE-020 のテストで解消。M-001 は FR-004 / AC6 で解消。M-002 は O-4 がすでに `init.permissionMode` を読んでいる (`live-signals.ts:366-370`) ので解消。M-004 は BE-020 の `Equal<…>` で解消。L-002 は 64KB の上限 (data-model.md:76) で解消。L-003 は FR-013 で解消。M-003 は system scope に送った (plan #19 / SH-012)。H-001 は 11 個を足したので一部解消だが、SDK の `Query` の型 (`sdk.d.ts:2611-2972`) と突き合わせると、まだ穴が残っている (下の H-101)。
+R2 の H-101 (= gate H-03) の手当てを確かめた。BE-040 (tasks.md:86) は `QUERY_MUTATION_METHODS` を 6 → 19 に広げる (`reloadOutputStyles` / `backgroundTasks` を含む)。pin テストの注記は「外すには ADR」になった。`keyof Query` の 3 分類による網羅 (`Equal<Exclude<…>, never>`) を置き、SC-005 (spec.md:237) と quickstart V-1 (quickstart.md:7,9) にその計測経路を書いた。SDK 0.3.270 の `Query` の自前のメソッドは実際に 29 個ある (`sdk.d.ts:2625-2971`)。内訳は interrupt 1・変更系 19・読み取り 9 で research R-06 の分類と一致する。よって H-101 は解消した。
 
-PB-1: `cwd` とプラグインの `path` は通さない。URI は解決しない。PB-2: dedupe の基準は `createLiveSignals` の closure で、セッションごとに作られる (`sdk-agent-session.ts:327`)。購読元は `sessionId` ごと (`LivePane.tsx:238-252`)。承認カードは同じ `LivePane` から名前を受ける。PB-3 / PB-5: 該当なし。PB-6: 永続化と導入はなく、`CLAUDE_CODE_SYNC_PLUGIN_INSTALL` も渡さない。
+ただし R2 M-101 (= gate M-12) と L-101 (= gate L-19) は文書に反映されておらず未解消 (Grep `計算キー|UNDETECTED_NOTES|\^\(\?!` は 6 文書で 0 件)。新しく見つけたのは (a) 型の網羅の変更系 union と JS の `QUERY_MUTATION_METHODS` を機械でつなぐものが無い、(b) 「呼ばない読み取り」の 9 個の呼び出しを自動で見る検査が無い、の 2 つ。
 
 ## Findings
 
-### [High] 17 個に広げた P3 の denylist にも、スキルとタスクを操作する `Query` のメソッドが残っている。さらに pin テストの注記が、この穴を「ADR が要る」として固定してしまう (H-101) (scope: feature)
+### [Medium] 型の網羅の「変更系」の union と `QUERY_MUTATION_METHODS` (JS) が 2 つの別の列挙のままで、機械でつながっていない。SDK の版上げで増えた変更系のメソッドを union にだけ足すと、tsc も pin テストも緑のまま項目 16 が見逃す (M-202) (scope: feature) [new]
 
-- **観察**: SDK 0.3.270 の `Query` (`sdk.d.ts:2611-2972`) のうち、`interrupt` と BE-040 の 17 個のどちらにも入らないメソッドが 10 個ある。`initializationResult`・`supportedCommands`・`supportedModels`・`supportedAgents`・`getContextUsage`・`usage_EXPERIMENTAL…`・`readFile` (:2820)・`reloadOutputStyles` (:2856)・`accountInfo`・`backgroundTasks` (:2962) である (`close` は `promptQueue.close()` と同じ綴りになるので除く)。
-  - `reloadOutputStyles` の説明は「drops the shared markdown-file scan cache, so agents, skills and routines re-read their directories」(:2848-2852)。これは AD-048 Decision 2 の「スキルを操作しない」に当たる操作そのものである
-  - `backgroundTasks` (:2949-2962) は実行中のタスクの状態を変える
-  - `readFile` は cwd から相対でパスを解決し、セッション側のファイルを読む (:2811-2816)
-- tasks.md:82 の pin テストは 17 個を固定し、「集合を変えるには ADR が要る」と注記する。spec.md:236 (SC-005) と quickstart.md:9 は「`Query` のメソッドの呼び出しは `interrupt` だけ」を合格の条件にしているが、検査は 17 個の名前しか見ない
-- `package.json` は `^0.3.270` なので、SDK の版を上げて増えたメソッドも黙って通る
-- **同種事象探索**: `\.\s*(…|readFile|backgroundTasks|reloadOutputStyles)\s*\(` を `src/agents` で検索して 0 件。足しても誤検出は出ない (`readFile` は `fs` と同じ名前なので、正規表現の対象には向かない)。`QUERY_MUTATION_METHODS` を参照しているのは 3 件 (`check.mjs:51,918`、`allowlists.mjs:420`)。AD-048:35 に 11 個の列挙
-- **リスク/影響**: AD-036 §4 P3 (`interrupt` だけ) を、検査の上でも SC-005 の上でも「守った」と読めるのに、実際の歯止めは列挙した名前だけになっている。pin テストの注記があると、後から足すときに要らない ADR を求められる
-- **推奨アクション**:
-  - (1) BE-040 で `reloadOutputStyles` と `backgroundTasks` も足す。根拠は AD-036 §4 P3 そのものなので ADR は要らず、AD-048 の本文も変えない
-  - (2) pin テストの注記を「**外す**には ADR が要る (足すのは P3 の範囲内)」に直す
-  - (3) `tests/docs/` か `sdk-agent-session.test.ts` に型の網羅テストを置く。`keyof Query` を `'interrupt'`・`QUERY_MUTATION_METHODS`・「読み取りだけで呼ばない」の 3 つの表に分け、`Equal<Exclude<keyof Query, …>, never>` で固定する。そうすれば SDK の版を上げたときに tsc が落ちる。`readFile` と `close` はこの表で扱う
-  - (4) SC-005 の「`interrupt` だけ」の計測経路に (3) を書く
-- **根拠**: AD-036 Decision 4 §4 P3、AD-048 Decision 2、Principle III / IV
-- **scope 根拠**: BE-040 と SC-005 の範囲で直せる。正の形への置き換えは引き続き system scope
-- 追加事実 (R1 の H-001 からの継続): R1 では 11 個が無いことを指摘した。今回は SDK の型を全部並べて、AD-048 の 11 個に入っていない操作系のメソッド (`reloadOutputStyles`・`backgroundTasks`) を確かめた。Severity は R1 と同じ High
+- **観察**:
+  - tasks.md:86 は union を「19 個の union。pin テストと同じ名前」とする。union は `sdk-agent-session.ts` の型 (tsc が見る) にあり、pin テストは `tests/docs/query-mutation-methods.test.ts` で JS の配列 (`allowlists.mjs:420`) を 19 個に固定する
+  - `tsconfig.node.json:3-11` の include は `tests/setup/**` だけなので `tests/docs/` は型検査の対象外。pin テストの側で型を突き合わせることもできない
+  - research.md:55 (2) の「変更系なら (1) の集合と pin テストも同じ PR で足す」は人の手順にすぎない
+- **具体的な経路**: SDK の版上げで `Query.foo()` (変更系) が増える → tsc が網羅で落ちる → 開発者が `foo` を union に足して tsc が通る → JS の集合は 19 のままなので pin テストも通る → `check.mjs:918-919` は `.foo(` を見ないので項目 16 は緑
+- **同種事象探索**: `QUERY_MUTATION_METHODS` を repo 全体 (node_modules を除く) で 10 ファイル。コードは `allowlists.mjs` / `check.mjs` の 2 つだけで、`tests/` と `src/` は 0 件。union と配列をつなぐ参照は 0 件
+- **リスク/影響**: 型の網羅は「分類したか」を固定するだけで、分類が検出器の集合と一致することは誰も確かめない。AD-036 §4 P3 の歯止めが版上げで静かに外れる
+- **推奨アクション**: BE-040 に次のどちらかを足す
+  - (a) pin テストが `src/agents/sdk-agent-session.ts` を文字列として読み、変更系の union の文字列リテラルを抜き出して `new Set(QUERY_MUTATION_METHODS)` と等しいことを確かめる。union は 1 か所の `type QueryMutationMethod = 'a' | 'b' | …` に書く
+  - (b) union を `src/agents/` の SDK を import しないモジュールに `as const` の配列として置き、型は `[number]` で作る。pin テストはその配列と JS の集合が等しいことを確かめる
+  - どちらの場合も pin テストの注記と research R-06 (2) をこの照合で強制する書き方に直す
+- **根拠**: AD-036 Decision 4 §4 P3、Principle III / IV、PB-7
+- **scope 根拠**: BE-040 と同じファイル群で直せる
 
-### [Medium] P3 はドット呼び出しの形しか見ない。同じ項目の P1 が塞いでいる計算キーの形を P3 は塞がず、その記録もない (M-101) (scope: feature / 検出器は system)
+### [Medium] P3 はドット呼び出しの形しか見ない。計算キーの形は塞がれず、`UNDETECTED_NOTES` への記録も無い (M-201) (scope: feature / 検出器は system) [unresolved from prev M-101]
 
-- **観察**: P3 は `new RegExp('\\.\\s*' + method + '\\s*\\(')` (`check.mjs:919`) だけで検査している。次の形は掛からない。
-  - `q['reconnectMcpServer'](…)`
-  - `const { reloadPlugins } = q; reloadPlugins()`
-  - `q.reconnectMcpServer.call(q, …)`
-  - 同じ項目 16 の P1 は、計算キー・引用符キー・代入の形を `bypassForms` で塞いでいる (`check.mjs:827-853`)。塞げない形は `UNDETECTED_NOTES` に書いている (:832-833、`expected.mjs:649`)。P3 にはどちらも無い
-- BE-040 の fixture はドット呼び出しの 1 本だけである (tasks.md:82、research.md:53)
-- **同種事象探索**: `bypassForms|UNDETECTED_NOTES` で `check.mjs:837`、`expected.mjs:236,340,375,474,649` の 6 件。いずれも P1 か他の項目で、P3 に当たるものは 0 件
-- **リスク/影響**: FR-011 で「検査を広げた」と言える範囲は、ドットで呼ぶ形に限られる。H-101 の (3) は型の面を固め、本件は呼び出しの綴りの面を固める
-- **推奨アクション**: BE-040 で P3 に計算キーの形 (`\[\s*['"\x60]method['"\x60]\s*\]\s*\(`) を足し、fixture を 1 本置く。分割代入と `.call` は `UNDETECTED_NOTES` に理由と代替を書く。代替は H-101 (3) と、system scope の `queryHandle` の型を `Pick<Query,'interrupt'> & AsyncIterable<SDKMessage>` に絞る案
+- **観察**: `check.mjs:919` は今も `\.\s*method\s*\(` だけ。BE-040 (tasks.md:86) の fixture は `.reconnectMcpServer(` の 1 本で、計算キーの形 (`q['reconnectMcpServer'](…)`) の検出も `UNDETECTED_NOTES` への記録も無い。同じ項目 16 の P1 は計算キーを `bypassForms` で塞いでいる (`check.mjs:837-845`)
+- **同種事象探索**: specs/015 の 6 文書で `計算キー|UNDETECTED_NOTES` を 0 件。`check.mjs` の P3 の節 (:917-924) にも 0 件
+- **リスク/影響**: FR-011 の「広げた」と言える範囲はドットで呼ぶ形に限られる
+- **推奨アクション**: BE-040 で P3 に計算キーの形 (`\[\s*['"\x60]method['"\x60]\s*\]\s*\(`) を足し fixture を 1 本置く。分割代入と `.call` は `UNDETECTED_NOTES` に理由と代わりの手段 (system scope の `queryHandle` の型の絞り込み) を書く
 - **根拠**: AD-036 §4 P3、PB-7
 
-### [Low] その他の名前の allowlist は `/` を通すので、絶対パスの形の名前も形の検査に通る (L-101) (scope: feature)
+### [Low] 「呼ばない読み取り」の 9 個の呼び出しを自動で見る検査が無い。それでも SC-005 の計測経路は自動の検査だけで満たしたように読める (L-202) (scope: feature) [new]
 
-- **観察**: data-model.md:70 の規則は `^[A-Za-z0-9_.:@/-]{1,128}$` で、禁じているのは `//` だけである。`/home/alice/proj/.claude/skills/x` のような名前も通って、構成のタブに出る。AD-048 Decision 3 と FR-007 は `cwd` とプラグインの `path` を通さないと決めているが、名前のフィールドにパスが入った場合の規則は無い。SDK がパスの形の名前を出すことはまだ観察していないので Low にした
-- **同種事象探索**: `A-Za-z0-9_.:@/-` で data-model.md:70 の 1 件
-- **推奨アクション**: 先頭の `/` と `~` を外す規則を足す (`^(?![/~])`)。BE-001 のテストに、パスの形のスキル名とコマンド名が落ちて `omitted` に数えられるケースを足す
-- **根拠**: AD-048 Decision 3、Principle I (パスは名前空間を持つ値として扱い、表示の名前に混ぜない)
+- **観察**: SC-005 (spec.md:237) の計測経路は固定テスト・`keyof Query` の網羅・項目 16 の fixture・`git diff`。網羅は分類しかせず、項目 16 は変更系の 19 個しか見ない。`initializationResult` / `supportedCommands` / `accountInfo` / `readFile` などの呼び出しは quickstart V-1 (quickstart.md:9) の目視でしか捕まらない。`readFile` (`sdk.d.ts:2820`) は AD-036 §4 P3 の「`interrupt` だけ」の範囲に入る
+- **同種事象探索**: `src/agents` で Query メソッド名の呼び出しを検索して 7 件。`Query` のメソッドの呼び出しは `sdk-agent-session.ts:473` の `interrupt` だけ
+- **推奨アクション**: SC-005 の計測経路に「読み取りの 9 個の呼び出しは quickstart V-1 の目視で確かめる (自動の検出は system scope の正の形)」と明記する。あるいは `readFile` / `close` を除く 7 個を P3 の別の配列として検出に足す
+- **根拠**: AD-036 §4 P3、PB-7
+
+### [Low] その他の名前の allowlist は `/` を通すので、絶対パスの形の名前も形の検査を通る (L-201) (scope: feature) [unresolved from prev L-101]
+
+- **観察**: data-model.md:71 は今も `^[A-Za-z0-9_.:@/-]{1,128}$` で、禁じているのは `//` だけ。BE-001 のテスト (tasks.md:31) にもパスの形の名前のケースは無い
+- **推奨アクション**: `^(?![/~])` を足し、BE-001 に「パスの形のスキル名・コマンド名が落ちて `omitted` に数えられる」ケースを足す
+- **根拠**: AD-048 Decision 3、Principle I
 
 ### 固有観点の記録
 
-- PB-1: 該当なし。通さないフィールドは data-model §2 の許可リストで、SC-002 / SH-020 の目印のテストがある。パスの形の名前は L-101
-- PB-2: 該当なし。dedupe の基準・連番・購読元はどれもセッションごとに作られる (`live-signals.ts:127-162`、`LivePane.tsx:238-252`)
-- PB-3: 該当なし。`capabilities` は読まず、能力の表明にも触れていない
-- PB-4: R1 の M-001 と M-002 は解消した。承認の応答 (`toPermissionResult`) は変えない
+- PB-1: 該当なし。`cwd`・`plugins[].path` は許可リストの外 (data-model.md:61)。パスの形の名前は L-201
+- PB-2: 該当なし。`mcpServerNames()` は `LiveSessionPane` ごとに `meters[sessionId]` から作り (tasks.md:46)、判定の基準は `createLiveSignals` の closure (tasks.md:60)
+- PB-3: 該当なし。`capabilities` は読まない (data-model.md:61)
+- PB-4: 該当なし。`toPermissionResult` は変えず (FR-004)
 - PB-5: 該当なし。パスの変換は無い
 - PB-6: 該当なし。永続化・導入・設定ファイルの書き込みは無い
-- PB-7: H-101 と M-101
+- PB-7: M-201 / M-202 / L-202。H-101 は解消した
 
 ## 同種事象探索 cascade summary
 
 | 指摘 ID | Grep query | 該当件数 | path:line |
 |---|---|---|---|
-| H-101 | `\.\s*(mcpServerStatus\|…\|readFile\|backgroundTasks\|reloadOutputStyles)\s*\(` in src/agents | 0 | — |
-| H-101 | `QUERY_MUTATION_METHODS` | 3 | check.mjs:51,918 / allowlists.mjs:420 |
-| H-101 | `^    [a-zA-Z]+\(` in sdk.d.ts の Query | 28 | sdk.d.ts:2625-2971 |
-| M-101 | `bypassForms\|UNDETECTED_NOTES` | 6 | check.mjs:837 / expected.mjs:236,340,375,474,649 |
-| L-101 | `A-Za-z0-9_.:@/-` (specs/015) | 1 | data-model.md:70 |
+| M-202 | `QUERY_MUTATION_METHODS` (repo, node_modules を除く) | 10 ファイル (コードは 2) | scripts/constitution/allowlists.mjs:420 / check.mjs:51,918 |
+| M-202 | `tsconfig.node.json` の include | 1 | tsconfig.node.json:3-11 |
+| M-201 | `計算キー\|UNDETECTED_NOTES` (specs/015) | 0 | — |
+| L-202 | Query メソッド名の呼び出し in src/agents | 7 | sdk-agent-session.ts:384,473,499,505,518 / supervisor-core.ts:134 / transport.test.ts:255 |
+| L-201 | `A-Za-z0-9_.:@/-` (specs/015) | 1 | data-model.md:71 |
 
 ## Verdict
 
 - Critical: 0
-- High: 1
-- Medium: 1
-- Low: 1
-- Round inheritance: resolved from R1: 8 (H-002 / M-001 / M-002 / M-004 / L-001 / L-002 / L-003 と、M-003 の system scope への送り) / unresolved: 1 (H-001 は一部だけ解消し、H-101 として継続) / new: 2 (M-101 / L-101)
+- High: 0
+- Medium: 2
+- Low: 2
+- Round inheritance: resolved from R2: 1 (H-101 = gate H-03) / unresolved: 2 (M-201 = gate M-12、L-201 = gate L-19) / new: 2 (M-202 / L-202)

@@ -1,9 +1,12 @@
 {
     "gate": "design",
-    "run": "2026-10-09T23:40:49+09:00",
+    "run": "2026-10-10T00:01:12+09:00",
     "spec_dir": "specs/015-ui-mcp-elicitation-commands",
     "spec_id": "015-ui-mcp-elicitation-commands",
-    "round": 2,
+    "entry_status": "implementing",
+    "warnings": [
+        "re-run on status=implementing"
+    ],
     "tracks": {
         "analyze": {
             "status": "ok",
@@ -38,9 +41,9 @@
     },
     "severity_counts": {
         "critical": 0,
-        "high": 3,
-        "medium": 12,
-        "low": 19
+        "high": 0,
+        "medium": 13,
+        "low": 25
     },
     "prev_comparison": {
         "critical": {
@@ -49,125 +52,297 @@
             "new": 0
         },
         "high": {
-            "resolved": 6,
-            "unresolved": 1,
-            "new": 2
+            "resolved": 3,
+            "unresolved": 0,
+            "new": 0
         }
     },
     "fr_coverage": [
         {
             "fr": "FR-001",
-            "covered": true
+            "covered": true,
+            "by": [
+                "BE-010",
+                "FE-010",
+                "FE-012"
+            ]
         },
         {
             "fr": "FR-002",
-            "covered": true
+            "covered": true,
+            "by": [
+                "FE-010",
+                "FE-012"
+            ]
         },
         {
             "fr": "FR-003",
-            "covered": true
+            "covered": true,
+            "by": [
+                "FE-012",
+                "FE-013"
+            ]
         },
         {
             "fr": "FR-004",
-            "covered": true
+            "covered": true,
+            "by": [
+                "FE-014"
+            ]
         },
         {
             "fr": "FR-005",
-            "covered": true
+            "covered": true,
+            "by": [
+                "FE-013"
+            ]
         },
         {
             "fr": "FR-006",
-            "covered": true
+            "covered": true,
+            "by": [
+                "FE-012"
+            ]
         },
         {
             "fr": "FR-007",
-            "covered": true
+            "covered": true,
+            "by": [
+                "BE-001",
+                "BE-002",
+                "BE-020",
+                "SH-020"
+            ]
         },
         {
             "fr": "FR-008",
-            "covered": true
+            "covered": true,
+            "by": [
+                "FE-001",
+                "FE-021"
+            ]
         },
         {
             "fr": "FR-009",
-            "covered": true
+            "covered": true,
+            "by": [
+                "FE-020",
+                "FE-021"
+            ]
         },
         {
             "fr": "FR-010",
-            "covered": true
+            "covered": true,
+            "by": [
+                "BE-030",
+                "BE-031",
+                "FE-030"
+            ]
         },
         {
             "fr": "FR-011",
-            "covered": true
+            "covered": true,
+            "by": [
+                "BE-040"
+            ]
         },
         {
             "fr": "FR-012",
-            "covered": true
+            "covered": true,
+            "by": [
+                "SH-010"
+            ]
         },
         {
             "fr": "FR-013",
-            "covered": true
+            "covered": true,
+            "by": [
+                "SH-012"
+            ]
         },
         {
             "fr": "FR-014",
-            "covered": true
+            "covered": true,
+            "by": [
+                "BE-002",
+                "SH-013"
+            ]
         },
         {
             "fr": "FR-015",
-            "covered": true
+            "covered": true,
+            "by": [
+                "SH-001",
+                "SH-012",
+                "SH-013"
+            ]
         }
     ],
     "viewpoint_coverage": {
-        "A": "Critical:0 High:0 (security M:2 L:1)",
-        "B": "Critical:0 High:0 (security M:1 L:1)",
-        "C": "Critical:0 High:0 (arch M:1 L:4)",
-        "D": "Critical:0 High:1 (pb)",
-        "E": "Critical:0 High:1 (po)",
-        "F": "Critical:0 High:0 (pb M:1)",
-        "G": "\u8a72\u5f53\u306a\u3057: optional reviewer \u672a\u8d77\u52d5",
+        "A": "Critical:0 High:0",
+        "B": "Critical:0 High:0",
+        "C": "Critical:0 High:0",
+        "D": "Critical:0 High:0",
+        "E": "Critical:0 High:0",
+        "F": "Critical:0 High:0",
+        "G": "\u8a72\u5f53\u306a\u3057: optional reviewer \u306e\u62c5\u5f53",
         "H": "Critical:0 High:0"
     },
     "dedup_log": [
         {
             "merged": [
-                "analyze-F1",
-                "po-M-001"
-            ],
-            "key": "FR-008"
-        },
-        {
-            "merged": [
-                "po-H-001",
-                "analyze-L9"
-            ],
-            "key": "tasks.md FE-012"
-        },
-        {
-            "merged": [
-                "analyze-C1",
-                "arch-M-101"
-            ],
-            "key": "data-model.md:102"
-        },
-        {
-            "merged": [
-                "analyze-G1",
-                "po-M-004"
-            ],
-            "key": "tasks.md:9"
-        },
-        {
-            "merged": [
-                "analyze-F2",
+                "analyze-M-01",
+                "po-M-006",
                 "arch-L-105"
             ],
-            "key": "tasks.md:44"
+            "key": "FE-012 / spec.md:109"
         },
         {
             "merged": [
-                "analyze-L2",
+                "analyze-M-02",
+                "arch-M-101"
+            ],
+            "key": "data-model.md:111"
+        },
+        {
+            "merged": [
+                "analyze-M-04",
+                "po-M-002"
+            ],
+            "key": "spec.md:131"
+        },
+        {
+            "merged": [
+                "analyze-M-05",
+                "po-M-003"
+            ],
+            "key": "data-model.md:109"
+        },
+        {
+            "merged": [
+                "analyze-M-06",
+                "po-M-005"
+            ],
+            "key": "data-model.md:110"
+        },
+        {
+            "merged": [
+                "analyze-M-07",
+                "arch-M-102"
+            ],
+            "key": "FR-014"
+        },
+        {
+            "merged": [
+                "analyze-M-08",
+                "arch-M-103"
+            ],
+            "key": "Principle XIV / data-model.md:96"
+        },
+        {
+            "merged": [
+                "analyze-M-09",
+                "sec-M-101"
+            ],
+            "key": "data-model.md:18"
+        },
+        {
+            "merged": [
+                "analyze-M-10",
+                "sec-M-102"
+            ],
+            "key": "data-model.md:26-27"
+        },
+        {
+            "merged": [
+                "analyze-M-11",
+                "sec-M-103"
+            ],
+            "key": "FR-007 / data-model.md:80"
+        },
+        {
+            "merged": [
+                "analyze-M-12",
+                "pb-M-201"
+            ],
+            "key": "tasks.md:86"
+        },
+        {
+            "merged": [
+                "pb-M-202",
+                "arch-M-201"
+            ],
+            "key": "tasks.md:86 / QUERY_MUTATION_METHODS"
+        },
+        {
+            "merged": [
+                "analyze-L-02",
                 "arch-L-106"
             ],
-            "key": "spec.md:209"
+            "key": "spec.md:210"
+        },
+        {
+            "merged": [
+                "analyze-L-09",
+                "po-L-001"
+            ],
+            "key": "data-model.md:110"
+        },
+        {
+            "merged": [
+                "analyze-L-10",
+                "po-L-002"
+            ],
+            "key": "quickstart.md:23"
+        },
+        {
+            "merged": [
+                "analyze-L-11",
+                "po-L-003"
+            ],
+            "key": "spec.md:59-60"
+        },
+        {
+            "merged": [
+                "analyze-L-14",
+                "arch-L-103"
+            ],
+            "key": "tasks.md:104-105"
+        },
+        {
+            "merged": [
+                "analyze-L-15",
+                "arch-L-104"
+            ],
+            "key": "transcript-context.ts:32"
+        },
+        {
+            "merged": [
+                "analyze-L-16",
+                "sec-L-101"
+            ],
+            "key": "data-model.md:168"
+        },
+        {
+            "merged": [
+                "analyze-L-17",
+                "sec-L-102"
+            ],
+            "key": "tasks.md:20"
+        },
+        {
+            "merged": [
+                "analyze-L-18",
+                "sec-L-103"
+            ],
+            "key": "tasks.md:45,52,61"
+        },
+        {
+            "merged": [
+                "analyze-L-19",
+                "pb-L-201"
+            ],
+            "key": "data-model.md:71"
         }
     ],
     "verdict": "PASS"
