@@ -2,12 +2,12 @@
 
 **Branch**: `015-ui-mcp-elicitation-commands` (2026-10-09 に main (faafe91。O-7 / O-3 / O-4 のマージの後) から切り直した) | **Date**: 2026-10-09 (/cl-plan で作り直した。旧版は 2026-10-04) | **Spec**: [spec.md](./spec.md)
 
-**Input**: [spec.md](./spec.md)。U-1〜U-7 と AD-048 は 2026-10-05 に利用者が承認した。spec の「未承認」の 3 点 (`.needs-input.md` Q1〜Q3) は推奨案 A を仮採用したまま本 plan も書く (A 以外の回答なら、各節の「Q1〜Q3」の印の箇所を直す)。
+**Input**: [spec.md](./spec.md)。U-1〜U-7 と AD-048 は 2026-10-05 に利用者が承認した。載せ直しで残った 3 点 (spec「判断」の Q1〜Q3) は 2026-10-10 に利用者が推奨案 A どおり承認した。本 plan は A で書いてあり、`[Q1]`〜`[Q3]` の印は承認済みの判断に由来する箇所を示す。
 
 ## Summary
 
 - MCP の tool (`mcp__*` と組み込みの 4 tool) を `McpToolCall` で、`AskUserQuestion` を読み取り専用の表示で描く (過去ログ・実行中)。振り分けは完全一致の表 (`Object.hasOwn`) → `mcp__` の判定 → ToolFallback の 2 段 (AD-048 Decision 5)。承認カードは MCP の生の名前を切り詰めずに出し、`AskUserQuestion` に暫定の注記。過去ログの tool 名を `sanitizeBody` に揃える
-- `init` / `commands_changed` を O-4 の `meter` の `init-report` / `commands` で運び、右のペインの 3 つ目のタブ「構成」と畳んだ帯の注意の印に出す。送るかは変換後の値の全体で決め、送ったときだけ基準を更新し、`meter` の間引きに掛けない
+- `init` / `commands_changed` を O-4 の `meter` の `init-report` / `commands` で運び、右のペインの 3 つ目のタブ「構成」と畳んだ帯の注意の印に出す。送るかは変換後の値の全体で決め、送ったときだけ基準を更新し、`meter` の間引きに掛けない。流量は種類ごとの合流 (1 秒に 1 件。窓の終わりに最新を送る。`live-signals.ts`) で抑える
 - `auth_status` (最上位の型) / `plugin_install` をシステムイベントの行 (category `auth` / `plugin`) に
 - 項目 16 の P3 の `QUERY_MUTATION_METHODS` を 13 広げ (AD-048 Decision 2 の 11 と AD-036 §4 P3 の 2)、集合の pin テスト・`keyof Query` の型の網羅・違反の fixture で固定する
 - 応答の UI と composer の候補を O-10 に分け、roadmap・対応表・charter・glossary に記録する (AD-048)
@@ -45,7 +45,7 @@
 - [x] **V. 資格情報を永続化しない** — `apiKeySource`・`auth_status` の `output` / `error`・`plugin_install` の `error` を通さない。名前は allowlist、URI は userinfo / query / hash と、秘密の形の末尾を捨てる (data-model §1。research R-07)。構成は永続化しない
 - [x] **VI. 永続環境** — N/A
 - [x] **VII. supervisor は Electron 非依存** — `live-signals.ts` / `sdk-agent-session.ts` に足すのは domain の純関数の呼び出しだけ。Electron・renderer を import しない
-- [x] **VIII. 日本語** — composer を変えない (spec Q2)。文言は日本語で `labels.ts`。名前は 1 行で切り詰め、承認カードの生の名前は切り詰めず折り返す (`break-all`)
+- [x] **VIII. 日本語** — composer を変えない ([Q2])。文言は日本語で `labels.ts`。名前は 1 行で切り詰め、承認カードの生の名前は切り詰めず折り返す (`break-all`)
 
 **Standard**
 
@@ -74,7 +74,7 @@
 ### Related ADRs
 
 - [AD-048](../../docs/decisions/0048-session-config-display-and-answer-ui-split.md) — 構成を `meter` で運び、MCP・プラグイン・スキルを操作せず、問いに答える UI を O-10 に分ける: **accepted** — 本 feature の決定の正本 (Decision 1〜5)
-- [AD-047](../../docs/decisions/0047-session-meter-and-failure-reasons.md) — 計量 (`meter`) と失敗の理由: **accepted** (O-4) — Decision 2 の運ぶ値を AD-048 Decision 3 が読み替える。AD-048 への参照の訂正節を足す (spec FR-014。Q1)
+- [AD-047](../../docs/decisions/0047-session-meter-and-failure-reasons.md) — 計量 (`meter`) と失敗の理由: **accepted** (O-4) — Decision 2 の運ぶ値を AD-048 Decision 3 が読み替える。AD-048 への参照の訂正節を足す (spec FR-014。[Q1])
 - [AD-046](../../docs/decisions/0046-app-shell-layout.md) — アプリのシェル: **accepted** (O-7) — タブは 1 か所の表に登録する。本 feature は `PanelTab` に `attention` を足す
 - [AD-036](../../docs/decisions/0036-single-session-launch-process-and-live-stream.md) Decision 4 / §4 P3 — 承認の応答の正の構成と `Query` のメソッドの制約: **accepted** — 変えない。P3 を MCP・プラグインに当てはめる
 - [AD-041](../../docs/decisions/0041-x4-launch-config-on-x1-launch-gate.md) (e)(g) — env の転送禁止と options のキー: **accepted** — 変えない (`plugin_install` が通常届かない理由)
@@ -124,15 +124,15 @@ rg -n "session-init-report|SessionInitReport|mcp-tool-name|mcp-tool-call|McpTool
 | 5 | _overview.md:65 / :100-101 | Feature 帰属の表 (O-5 の題に Elicitation)、O-4〜O-6 は `ui` | **受ける** — O-5 の題、O-10 の行 (domain `session`)、帰属の判断根拠に「O-5 は `ui` のまま session の契約 (`meter` の種類) を広げる」と O-10 の domain (FR-015) |
 | 6 | prompts.md:224 / AD-044:19,88,103 / 004 data-model:48 / 011 一式 (spec / plan / research / tasks / reviewer) | O-2 が O-5 に割り当てた記録 (履歴) | **該当なし (履歴)** — 割当の出所の記録で、新しい義務を課さない。prompts.md には O-10 のプロンプトを足す (FR-015)。AD-044 は accepted で変えない |
 | 7 | constitution:57 | 項目 21 の件数の記録 (O-5 21) | **注記** — 完了の PR で項目 21 の出力が変わる (O-5 0 / O-10 4)。Constitution は改めない (件数は版の記録) |
-| 8 | roadmap:189-194 / :196-204 / 012 plan RK-08 / 012 spec:358 / 013 arch pr-gate:86-87 / 014 spec:58 | composer の英語の名前と、ターンの開始でのフォーカスの奪取 (持ち主 = O-5 と X-6 の早いほう) | **送る** [Q2。未承認] — 持ち主を「O-10 と X-6 の早いほう」に付け替える (FR-015)。O-5 は composer とその E2E・基準画像に触れない |
-| 9 | 013 data-model §4 (`PanelTab`) / panel-tabs.ts:11 / stores/ui.ts:26 | 後続 feature がタブの表に行を足す | **広げる** — `config` の行と `PanelTab.attention` (data-model §3)。2 つのファイルの注記の「O-5 の Server panel」を実装に合わせる |
+| 8 | roadmap:189-194 / :196-204 / 012 plan RK-08 / 012 spec:358 / 013 arch pr-gate:86-87 / 014 spec:58 | composer の英語の名前と、ターンの開始でのフォーカスの奪取 (持ち主 = O-5 と X-6 の早いほう) | **送る** [Q2。承認済み (2026-10-10)] — 持ち主を「O-10 と X-6 の早いほう」に付け替える (FR-015)。O-5 は composer とその E2E・基準画像に触れない |
+| 9 | 013 data-model §4 (`PanelTab`) / panel-tabs.ts:11 / stores/ui.ts:26 | 後続 feature がタブの表に行を足す | **広げる** — `init-report` の行と `PanelTab.attention` (data-model §3)。2 つのファイルの注記の「O-5 の Server panel」を実装に合わせる |
 | 10 | 013 data-model:134 / OverviewTab.tsx:86 / shell labels.ts:85 | 実行中のモデルの変化を描くのは O-5 (`init` の `model`) | **受ける** — 「構成」のタブの「Claude Code が報告したモデル」。「概要」の「起動時のモデル」は変えない (spec Clarifications)。2 つの注記を「構成のタブ」に合わせる |
-| 11 | 014 data-model §2 / AD-047 / glossary Meter / session charter:134-137 | `meter` の許可リストと上限、権限モードの比較、「運ぶのは数・真偽・列挙…」 | **読み替える / 足す** — AD-048 の読み替え。`init-report` / `commands` は間引きに掛けない。`init.permissionMode` は O-4 のまま。glossary と session charter の記述を直す (FR-015) |
-| 12 | AD-048:28 (読み替える箇所) / AD-047:40-48 | AD-047 に AD-048 への参照を足すはずが、参照の無いまま accepted | **受ける** [Q1。未承認] — AD-047 に日付つきの訂正節 (AD-031 Decision 1) で参照だけを足す (FR-014)。本文は変えない |
+| 11 | 014 data-model §2 / AD-047 / glossary Meter / session charter:134-137 | `meter` の許可リストと上限、権限モードの比較、「運ぶのは数・真偽・列挙…」 | **読み替える / 足す** — AD-048 の読み替え。`init-report` / `commands` は間引きに掛けず、種類ごとの合流 (1 秒に 1 件・trailing) を `live-signals.ts` に置く (data-model §2)。`init.permissionMode` は O-4 のまま。glossary と session charter の記述を直す (FR-015) |
+| 12 | AD-048:28 (読み替える箇所) / AD-047:40-48 | AD-047 に AD-048 への参照を足すはずが、参照の無いまま accepted | **受ける** [Q1。承認済み (2026-10-10)] — AD-047 に日付つきの訂正節 (AD-031 Decision 1) で参照だけを足す (FR-014)。本文は変えない |
 | 13 | O-4 design-gate security M-001 / O-5 R1 security M-002 | `tool-registry.aui.tsx:36`・`system-event.ts:118` の `??` の照合 / 過去ログの tool 名 (`transcript.ts:233`) | **受ける** — 同じファイルを触るので直す (FR-001 / FR-003 / data-model §4) |
 | 14 | spec FR-014 「`METER_UPDATE_TYPES` の固定テストを直す」 | 固定テストは今無い (`meter.test.ts` に集合の検査なし) | **読み替える** — 「足す」と読む (data-model §2)。spec の字面の誤りで、決定は変わらない |
-| 15 | AD-036 §4 P3 / allowlists.mjs:419-427 / check.mjs:917-924 / specs/016 platform-boundary R2:120-139 (M-102) | `Query` のメソッドは `interrupt` だけ。denylist は漏れる。fixture は項目の単位で照合し、既存の fixture は昇格値でも発火する。集合の pin テストが無い | **受ける (一部) / 送る** — 13 を足し (AD-048 の 11 と P3 の `reloadOutputStyles` / `backgroundTasks`)、集合の pin テスト・`keyof Query` の型の網羅・1 本の fixture・既存の fixture の引数の差し替え (research R-06)。正の形 (`interrupt` 以外を違反、`queryHandle` の型を絞る) は項目 16 の持ち主へ (system scope。roadmap に記録) |
-| 16 | specs/016 security R2:77-98 (M-001) | URI の要約の「最後のパスの要素」は webhook などの秘密を出す。O-5 の同じ規則を名指し | **受ける** — 最後の要素はファイル名らしい形のときだけ (data-model §1。research R-07)。Q3 (a) を狭める向き |
+| 15 | AD-036 §4 P3 / allowlists.mjs:419-427 / check.mjs:917-924 / specs/016 platform-boundary R2:120-139 (M-102) | `Query` のメソッドは `interrupt` だけ。denylist は漏れる。fixture は項目の単位で照合し、既存の fixture は昇格値でも発火する。集合の pin テストが無い | **受ける (一部) / 送る** — 13 を足し (AD-048 の 11 と P3 の `reloadOutputStyles` / `backgroundTasks`)、集合の pin テスト (変更系の union との集合一致を含む)・`keyof Query` の型の網羅・P3 の計算キーの検出と fixture 2 本 (ドット呼び出し・計算キー)・`UNDETECTED_NOTES` の記録・既存の fixture の引数の差し替え (research R-06)。正の形 (`interrupt` 以外を違反、`queryHandle` の型を絞る) は項目 16 の持ち主へ (system scope。roadmap に記録) |
+| 16 | specs/016 security R2:77-98 (M-001) | URI の要約の「最後のパスの要素」は webhook などの秘密を出す。O-5 の同じ規則を名指し | **受ける** — 最後の要素はファイル名らしい形のときだけ (data-model §1。research R-07)。[Q3] (a) を狭める向き。host にも同じ秘密の形の検査を掛ける (design-gate R3 M-09) |
 | 17 | eslint.config.mjs:588-594 | 手書きの element の一覧 (`GENERATED_FILES` の緩めた lint を戻す) | **足す** — `mcp-tool-call.aui.tsx` / `ask-user-question.aui.tsx` |
 | 18 | reviewers.yml:52-64 / :105-117 / :183-188 | a11y / ux の手書きの element の一覧 (「足したらここにも足す」)、ui-coverage の SDK 変換の domain のモジュール | **足す** — 同じ 2 つの element を a11y / ux に、`src/domain/session/session-init-report*.ts` を ui-coverage に |
 | 19 | O-5 R1 platform-boundary M-003 | 項目 14 は最初の `import {…}` しか読まない | **送る (system scope)** — 項目 14 の持ち主へ。本 feature は SDK の import 文を 1 つに保つ |
@@ -146,18 +146,18 @@ rg -n "session-init-report|SessionInitReport|mcp-tool-name|mcp-tool-call|McpTool
 3. **renderer の経路** — `session-event-decoder.ts` は変えない (`decodeMeterUpdate` が新しい種類を通す)。`running-session-types.ts` の `SessionMeters` に `initReport` / `commands` / スラッシュコマンドの名前の集合の出所、`running-session-store.ts` の `applyMeter` に 2 つの枝 (合流の規則は data-model §2「renderer の保持」。`slashCommands` の変わらない `init-report` は出所を変えず、説明と hint は最新の `commands` から引く)
 4. **MCP の表示** — `features/chat/mcp-tool-name.ts` (純関数と URI の要約) → `tool-registry.aui.tsx` の 2 段 → `mcp-tool-call.aui.tsx`。サーバー名は `transcript-context.ts` の `LiveProgressSource.mcpServerNames()` (research R-05)。`ask-user-question.aui.tsx` を表に登録
 5. **承認カード** — `ApprovalCard.tsx` に `mcpServerNames` の props、MCP なら生の名前 + 補助の見出し、`AskUserQuestion` なら注記 (`session/labels.ts`)。`LivePane.tsx` が渡す
-6. **シェル** — `stores/ui.ts` の `PanelTabId` に `config`、`panel-tabs.ts` に行と `attention`、`ConfigTab.tsx` (新設)、`RightPanel.tsx` の畳んだ帯のアイコンに印。テストは `RightPanel.tabs.test.tsx` と `ConfigTab.test.tsx`
+6. **シェル** — `stores/ui.ts` の `PanelTabId` に `init-report`、`panel-tabs.ts` に行と `attention`、`InitReportTab.tsx` (新設)、`RightPanel.tsx` の畳んだ帯のアイコンに印。テストは `RightPanel.tabs.test.tsx` と `InitReportTab.test.tsx`。識別子に `config` を使わない (`RunningSession.config` = `SessionLaunchConfig` と衝突する。Principle XIV。data-model §3)
 7. **検査と記録** — `allowlists.mjs`・pin テスト・fixture (research R-06)、実名リスト (#17 / #18)、docs (FR-012〜FR-015。対応表は data-model §5)
 
 ## ADR
 
 - **AD-048 は accepted。本文は変えない** (FR-014)
-- **AD-047 に訂正節を足す** [Q1。未承認]: 見出し「訂正: AD-048 への参照 (2026-10-xx / O-5)」。中身は「Decision 2 の運ぶ値は AD-048 Decision 3 が読み替える (形の検査を通った未信頼の名前と説明)。AD-048 の『読み替える箇所』が proposed のうちに足すとしていた参照を、accepted の後に訂正として足す」だけ。Decision・Consequences は書き換えない。Q1 が B なら足さず、spec FR-014 の該当の文を消す
+- **AD-047 に訂正節を足す** [Q1。承認済み (2026-10-10)]: 見出し「訂正: AD-048 への参照 (2026-10-xx / O-5)」。中身は「Decision 2 の運ぶ値は AD-048 Decision 3 が読み替える (形の検査を通った未信頼の名前と説明)。AD-048 の『読み替える箇所』が proposed のうちに足すとしていた参照を、accepted の後に訂正として足す」だけ。Decision・Consequences は書き換えない
 - 新しい ADR は起こさない。O-10 の 2 つの ADR (AD-036 Decision 4 と AD-041 (g) の読み替え) は O-10 の design の前に起こす (roadmap の O-10 の行に書く)
 
 ## 機械強制の変更
 
-- 項目 16 の P3: `QUERY_MUTATION_METHODS` に 13 (AD-048 Decision 2 の 11 と、AD-036 §4 P3 を根拠に `reloadOutputStyles` / `backgroundTasks`。ADR 不要)。集合の pin テスト (`tests/docs/`。19 個。「外すには ADR」)、`sdk-agent-session.ts` の `keyof Query` の網羅 (`Equal<Exclude<…>, never>`)、違反の fixture 1 本 (`tests/rule-fixtures/b-equivalent/sdk-query-mcp-control.ts.fixture`。`.reconnectMcpServer(` だけ) と期待表、既存の fixture の引数を `'default'` に (research R-06)
+- 項目 16 の P3: `QUERY_MUTATION_METHODS` に 13 (AD-048 Decision 2 の 11 と、AD-036 §4 P3 を根拠に `reloadOutputStyles` / `backgroundTasks`。ADR 不要)。集合の pin テスト (`tests/docs/`。19 個。「外すには ADR」)、`sdk-agent-session.ts` の `keyof Query` の網羅 (`Equal<Exclude<…>, never>`)、pin テストは `sdk-agent-session.ts` の変更系の union (`QueryMutationMethod`) のリテラルをソースから抜いて `QUERY_MUTATION_METHODS` と集合一致も確かめる (片方にだけ足すと落ちる)。P3 の検出に計算キーの形 (`q['reloadPlugins'](`) を足す (`check.mjs`)。違反の fixture 2 本 (`tests/rule-fixtures/b-equivalent/sdk-query-mcp-control.ts.fixture`。`.reconnectMcpServer(` だけ / `sdk-query-computed-key.ts.fixture`。計算キーの呼び出しだけ) と期待表、分割代入と `.call` / `.apply` は `UNDETECTED_NOTES` に記録、既存の fixture の引数を `'default'` に (research R-06)
 - tsc: 入力型の代入可能性と `McpStatusKey` の `Equal<…>` (`sdk-agent-session.ts`)。`Record<SystemEventCategory | SystemEventStatus, …>` の表が漏れを落とす
 - 固定テスト: `METER_UPDATE_TYPES` (新設。8)、`SYSTEM_EVENT_CATEGORIES` (5 → 7)・`SYSTEM_EVENT_STATUSES` (14 → 15)。`SESSION_EVENT_KINDS`・`QUERY_OPTION_KEYS`・`TRANSCRIPT_PART_FIELDS` は変えない
 - 振り分けのテスト: 既存の 8 つの名前の回帰、非 MCP の名前 (`mcp_x`・`MCP__a__b`・`xmcp__a__b`) と prototype のキー (`constructor`・`__proto__`・`toString`) が ToolFallback
@@ -167,7 +167,7 @@ rg -n "session-init-report|SessionInitReport|mcp-tool-name|mcp-tool-call|McpTool
 
 | ID | リスク | 手当て |
 |---|---|---|
-| RK-01 | `.needs-input.md` Q1〜Q3 の回答が A 以外 | 各箇所に Q の印を付けた (spec・本 plan・data-model §1)。B / C なら該当の FR・data-model の節・tasks を直す。O-5 は design-gate で止める (`.needs-input.md` の回答欄) |
+| RK-01 | 載せ直しで残った 3 点 (spec「判断」の Q1〜Q3) が未決のまま実装に入る | 解消済み — 2026-10-10 に利用者が 3 つとも推奨案 A で承認した。各箇所の `[Q1]`〜`[Q3]` の印は承認済みの判断の出所として残す |
 | RK-02 | MCP のサーバー名に `__` を含み、見出しのサーバー名を取り違える | 構成のサーバー名の最長一致、推定の印、承認カードは生の名前 (data-model §1) |
 | RK-03 | `AskUserQuestion` を承認カードで許可しても回答が届かない (今の不具合のまま) | 暫定の注記 (US-1 AC8)。O-10 が直す |
 | RK-04 | `init` の `mcp_servers` の `status` が既知の値以外 | `unknown` に倒し、注意の印を付けない |
@@ -219,17 +219,17 @@ src/renderer/src/
 │   ├── running-session-types.ts / running-session-store.ts (+ test)
 │   └── labels.ts                     # askUserQuestionNotice
 ├── features/shell/
-│   ├── ConfigTab.tsx (+ test)        # 新設
+│   ├── InitReportTab.tsx (+ test)    # 新設
 │   ├── panel-tabs.ts / RightPanel.tsx (+ RightPanel.tabs.test.tsx)
 │   └── labels.ts
 └── stores/ui.ts                      # PanelTabId
 tests/meter/meter-through.test.tsx    # init / commands_changed の通し
 tests/docs/                           # QUERY_MUTATION_METHODS の pin (新設)
-tests/rule-fixtures/                  # b-equivalent の fixture 1 本・既存の引数・expected.mjs
-scripts/constitution/allowlists.mjs
+tests/rule-fixtures/                  # b-equivalent の fixture 2 本・既存の引数・expected.mjs (UNDETECTED_NOTES)
+scripts/constitution/allowlists.mjs / check.mjs (P3 の計算キー)
 eslint.config.mjs / .specify/spec-gate/reviewers.yml
 docs/ui-coverage.md / docs/glossary.md / docs/domains/{ui,session}/charter.md / docs/domains/_overview.md /
-docs/roadmap.md / docs/prompts.md / docs/decisions/0047-session-meter-and-failure-reasons.md (Q1)
+docs/roadmap.md / docs/prompts.md / docs/decisions/0047-session-meter-and-failure-reasons.md ([Q1])
 ```
 
 **Structure Decision**: 既存のレイヤ (domain / agents / renderer の features と elements) にそのまま載せる。新しいディレクトリは作らない。
