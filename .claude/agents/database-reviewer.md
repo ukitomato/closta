@@ -1,7 +1,7 @@
 ---
 name: database-reviewer
 description: 永続化スキーマを敵対的にレビューする read-only subagent。JSON 設定ファイル・プリセット・SQLite のスキーマ互換性、マイグレーション、資格情報の置き場を見る。code-gate / pr-gate で `src/main/infra/settings/**` / `src/main/infra/secrets/**` / migration / `*.sql` の変更を伴う PR で起動される (発火条件は .specify/spec-gate/reviewers.yml)。
-tools: Read, Grep, Glob
+tools: Read, Grep, Glob, mcp__codegraph__*, mcp__serena__find_symbol, mcp__serena__find_referencing_symbols, mcp__serena__find_declaration, mcp__serena__find_implementations, mcp__serena__get_symbols_overview, mcp__serena__get_diagnostics_for_file
 model: sonnet
 effort: high
 ---
