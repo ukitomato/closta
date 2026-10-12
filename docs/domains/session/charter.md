@@ -26,6 +26,7 @@ related_specs:
   - specs/013-ui-app-shell/spec.md
   - specs/012-ui-thread-search/spec.md
   - specs/014-ui-metering-and-limits/spec.md
+  - specs/015-ui-mcp-elicitation-commands/spec.md
 ---
 
 # Domain Charter: session
@@ -133,7 +134,13 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
   同じ理由の表から引く。失敗の文字列 (`errors`) は運ばない。終わり方 (失敗にする・黙って完了にしない。X-1 FR-020) は変えていない
 - **計量 (`meter`)**: `SessionEvent` の種類の 1 つ (O-4 / AD-047 Decision 2)。セッションスレッドが SDK のメッセージの許可リストの
   フィールドから、数・真偽・列挙・モデルの id・形を検証した tool の id だけを運ぶ (運ぶ値の範囲の正本は
-  [014 data-model §2](../../../specs/014-ui-metering-and-limits/data-model.md))。状態通知 (`SessionStatusUpdate`) には載せない
+  [014 data-model §2](../../../specs/014-ui-metering-and-limits/data-model.md))。状態通知 (`SessionStatusUpdate`) には載せない。
+  **O-5 が種類を 2 つ足した** (`init-report` / `commands`。6 → 8。[AD-048](../../decisions/0048-session-config-display-and-answer-ui-split.md)
+  Decision 3 が AD-047 Decision 2 の運ぶ値を読み替える): `init` / `commands_changed` から、Claude Code が報告した構成 (モデル・MCP サーバーの
+  名前と状態・tool・スキル・プラグインの名前と版・スラッシュコマンドの名前と説明) を運ぶ。運ぶ値に**未信頼の文字列**の区分が加わった —
+  名前は形の検査 (allowlist・件数と長さの上限) を通ったものだけ、説明は無害化して 1 行に切り詰めたものだけで、外れたものは数だけを残す
+  (`omitted`)。`cwd`・プラグインの `path`・`apiKeySource` は運ばない。形の検査の正本は
+  [015 data-model §2](../../../specs/015-ui-mcp-elicitation-commands/data-model.md)
 - **稼働中のストアの `meters`**: セッションごとの計量の最新の値 (O-4)。**永続化しない**。セッションを閉じたら捨て (`close()`)、
   起動の設定・プリセットに書き戻さない。計量は KPI の計測には使わない
 
@@ -260,6 +267,14 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
   (FR-018。派生値の追跡を `running-session-monitor.ts`、行の状態の型を `running-session-types.ts`、行の部品と行の操作を `RunningSessionRow.tsx`
   に。振る舞いは変えない)、押したボタンが自分ごと消えるときのフォーカスの行き先 (FR-019。`focus-handoff.ts`) を足した。計量は KPI の
   計測には使わない）
+- **O-5 (ui)** — [MCP・プラグイン・コマンドの表示](../../../specs/015-ui-mcp-elicitation-commands/spec.md)
+  （本 domain の feature ではない。U-3 (2026-10-05 に利用者が承認。[AD-048](../../decisions/0048-session-config-display-and-answer-ui-split.md)) で、
+  本 domain の契約を広げた: `meter` の種類 `init-report` / `commands` (`METER_UPDATE_TYPES` 6 → 8。`SessionEvent` の種類は変えない)・
+  システムイベントの行の category `auth` / `plugin`・稼働中のストアの `meters` の構成 (`initReport` / `commands`。永続化しない)。
+  承認の応答 (`toPermissionResult`) と `Query` の呼び出しは変えない）
+- **O-10** — Claude Code からの問いに答える UI と composer のコマンドの候補 ([roadmap の O-10 の行](../../roadmap.md))。O-5 の design で
+  分けた本 domain の feature (015 spec U-1 / [AD-048](../../decisions/0048-session-config-display-and-answer-ui-split.md) Decision 1)。
+  design の前に AD-036 Decision 4 と AD-041 (g) の読み替えの ADR を起こす。未着手
 - **O-8** — 並列時の滑らかさの実機計測 ([roadmap の O-8 の行](../../roadmap.md#o3-kpi-smoothness))。未着手
 
 X-6 は未着手。

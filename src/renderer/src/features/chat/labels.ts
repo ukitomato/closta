@@ -1,4 +1,5 @@
 import type { PermissionModeKey } from '@domain/session/meter'
+import type { PluginDetail } from '@domain/session/session-init-report'
 import type { RetryDetail, TaskProgress } from '@domain/session/system-event'
 import type { SystemEventCategory, SystemEventStatus } from '@domain/session/transcript-dto'
 
@@ -20,7 +21,10 @@ export const SYSTEM_EVENT_CATEGORY_LABELS: Readonly<Record<SystemEventCategory, 
   // O-4 の行 (014 data-model §5)。アイコンと detail の描き分けは `thread.aui.tsx` の `SystemEventRow`。
   'api-retry': 'API の再試行',
   compaction: 'コンテキストの圧縮',
-  'permission-mode': '権限モード'
+  'permission-mode': '権限モード',
+  // O-5 の行 (015 data-model §4 / §6)。文の描き分けは `thread.aui.tsx` の `SystemEventRow`。
+  auth: '認証',
+  plugin: 'プラグイン'
 }
 
 /** 状態の理由キー → 文言。 */
@@ -41,7 +45,9 @@ export const SYSTEM_EVENT_STATUS_LABELS: Readonly<Record<SystemEventStatus, stri
   // O-4 の行 (014 data-model §5)。
   retrying: '再試行中',
   compacting: '圧縮中',
-  changed: '変更'
+  changed: '変更',
+  // O-5 の認証の行 (015 data-model §4)。
+  authenticating: '認証中'
 }
 
 export const SYSTEM_EVENT_LABELS = {
@@ -79,8 +85,51 @@ export const SYSTEM_EVENT_LABELS = {
    * 桁区切り、経過時間は秒に切り捨てる。要約・説明・最後の tool 名は届かない (014 spec FR-013)。
    */
   taskProgress: (progress: TaskProgress): string =>
-    `約 ${COUNT_FORMAT.format(progress.tokens)} トークン・tool ${COUNT_FORMAT.format(progress.tools)} 回・${COUNT_FORMAT.format(Math.floor(progress.durationMs / 1000))} 秒`
+    `約 ${COUNT_FORMAT.format(progress.tokens)} トークン・tool ${COUNT_FORMAT.format(progress.tools)} 回・${COUNT_FORMAT.format(Math.floor(progress.durationMs / 1000))} 秒`,
+  /**
+   * 認証の行の文 (O-5 / 015 data-model §6 の chat のシステムイベントの行・spec US-3 AC1〜AC3)。`output` / `error` の
+   * 文字列は届かない (U-4)。状態ごとに 1 つで、行の下の案内の段に出す。
+   */
+  authInProgress:
+    'Claude Code が認証中です。セッションを起動した環境の端末で claude にログインしてください',
+  authSucceeded: '認証しました',
+  authFailed: '認証に失敗しました (再ログインしてください)',
+  /** プラグインの行の進み具合 (O-5 / 015 data-model §6・spec US-3 AC5)。数は `ja-JP` の桁区切り。 */
+  pluginInstalling: 'プラグインのマーケットプレイスを導入中',
+  pluginInstalled: (n: number): string => `導入しました (${COUNT_FORMAT.format(n)} 件)`,
+  pluginFailed: (n: number): string => `導入に失敗しました (${COUNT_FORMAT.format(n)} 件)`
 } as const
+
+/** 認証の行の文 (状態ごと)。終わりの来ない行 (「結果不明」) と知らない状態では null。 */
+export function authRowText(status: SystemEventStatus | null, unresolved: boolean): string | null {
+  if (unresolved) return null
+  switch (status) {
+    case 'authenticating':
+      return SYSTEM_EVENT_LABELS.authInProgress
+    case 'succeeded':
+      return SYSTEM_EVENT_LABELS.authSucceeded
+    case 'failed':
+      return SYSTEM_EVENT_LABELS.authFailed
+    default:
+      return null
+  }
+}
+
+/**
+ * プラグインの行の detail の文 (015 data-model §4 / §6)。導入中の印 (`started` のとき)・導入できた数・できなかった数と、
+ * 最後のマーケットプレイスの名前 (形の検査済み。「」で括る) を `・` でつなぐ。0 件の数は出さない (終わった行の導入できた数は出す)。
+ */
+export function pluginRowText(plugin: PluginDetail, status: SystemEventStatus | null): string {
+  const done = status !== null && status !== 'started'
+  return [
+    ...(done ? [] : [SYSTEM_EVENT_LABELS.pluginInstalling]),
+    ...(plugin.installed > 0 || (done && plugin.failed === 0)
+      ? [SYSTEM_EVENT_LABELS.pluginInstalled(plugin.installed)]
+      : []),
+    ...(plugin.failed > 0 ? [SYSTEM_EVENT_LABELS.pluginFailed(plugin.failed)] : []),
+    ...(plugin.marketplace === null ? [] : [`「${plugin.marketplace}」`])
+  ].join('・')
+}
 
 /**
  * 権限モードの表示名 (O-4 / 014 data-model §5 / research R-15)。鍵は domain の `PermissionModeKey` (SDK の 6 値と
@@ -146,6 +195,26 @@ export const TOOL_RESULT_LABELS = {
    */
   toolElapsed: (seconds: number): string =>
     seconds < 60 ? `${seconds}秒` : `${Math.floor(seconds / 60)}分${seconds % 60}秒`
+} as const
+
+/**
+ * MCP の tool の表示 (O-5 / 015 data-model §1・§6 の chat の MCP の行)。見出しのサーバー名と tool 名は会話由来の値で、
+ * 文言はこの 3 つだけ。状態の印 (アイコン・中断・経過時間) は ToolFallback と同じ部品が出す。
+ */
+export const MCP_TOOL_LABELS = {
+  input: '入力',
+  result: '結果',
+  /** 構成のサーバー名で分け方を確かめられなかったとき (過去ログ・2 つ以上の前方一致。015 data-model §1)。 */
+  serverInferred: 'サーバー名は推定'
+} as const
+
+/**
+ * `AskUserQuestion` の読み取り専用の表示 (O-5 / 015 data-model §1・§6 の chat の問いの行)。回答の入力は出さない (O-10)。
+ */
+export const ASK_USER_QUESTION_LABELS = {
+  multiSelect: '複数選択',
+  selectedAnswer: '選ばれた回答',
+  result: MCP_TOOL_LABELS.result
 } as const
 
 /**

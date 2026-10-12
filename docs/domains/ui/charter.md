@@ -21,6 +21,7 @@ related_specs:
   - specs/013-ui-app-shell/spec.md
   - specs/012-ui-thread-search/spec.md
   - specs/014-ui-metering-and-limits/spec.md
+  - specs/015-ui-mcp-elicitation-commands/spec.md
 ---
 
 # Domain Charter: ui
@@ -48,6 +49,8 @@ UI は本来 delivery mechanism であり domain ではない。それでも独�
 - transcript の表示（markdown / streaming / 仮想スクロール / スクロールアンカリング）
 - tool 出力の専用表示（Terminal block / Code diff / Todo / Subagent / Agent plan / Reasoning ほか）
 - composer（日本語 IME、message queue、draft restore、slash commands、mentions、attachments）
+  — slash commands の候補の持ち主は O-10 (O-5 の design で分けた。015 spec U-6 / [AD-048](../../decisions/0048-session-config-display-and-answer-ui-split.md) Decision 1)。
+  O-5 は一覧を右のペインの「構成」のタブに出すだけで、composer を変えない
 - `docs/ui-coverage.md`（SDK のメッセージ型・tool 名・システムイベントと表示実装の対応表）の維持
 - 情報密度の切替（compact / comfortable）— **transcript の密度** (O-2)。稼働中セッション一覧 (監視ビュー) の行の密度は
   session の操作 UI として O-1 が持つ (下の Out of scope「他 domain の操作 UI」。O-1 USER 決定 2026-10-02)
@@ -231,7 +234,12 @@ O-1 で読み替えた: 監視ビューはサイドバーの稼働中の区画 (
   session の契約 (失敗の理由のキー・`SessionEvent` の `meter`) を広げる (U-1。[AD-047](../../decisions/0047-session-meter-and-failure-reasons.md))。
   O-7 から預かったタブのキーボード操作 (WAI-ARIA の Tabs pattern) とテストの分割、system-scope から預かった稼働中のストアと監視ビューの行の
   切り出し・消えるボタンのフォーカス・「Provider」の表記を含む
-- （残り。O-5 / O-6 / O-9 / OPT-pty / OPT-panel が本 domain に属する）
+- [O-5: MCP・プラグイン・コマンドの表示](../../../specs/015-ui-mcp-elicitation-commands/spec.md) — **実装中**。MCP の tool
+  (`mcp__*` と組み込みの 4 tool) の専用表示 (`McpToolCall`)、`AskUserQuestion` の読み取り専用の表示と承認カードの注記、右のペインの
+  「構成」のタブ (Claude Code が報告した構成) と畳んだ帯の注意の印、認証とプラグインの行。session の契約 (`meter` の種類 `init-report` /
+  `commands`) を広げる ([AD-048](../../decisions/0048-session-config-display-and-answer-ui-split.md))。問いに答える UI と composer の
+  スラッシュコマンドの候補は O-10 (domain `session`) に分けた
+- （残り。O-6 / O-9 / OPT-pty / OPT-panel が本 domain に属する。O-10 は `session` で、表示の部品を本 domain が持つ）
 
 ## Open Questions
 
@@ -251,7 +259,8 @@ O-1 で読み替えた: 監視ビューはサイドバーの稼働中の区画 (
       二重ガード (keydown の `nativeEvent.isComposing` + `compositionRef`) で扱う。**自前ガードは不要**。
       実行中積み・下書き復元は IME でなく runtime capability / composer state として X-2 が持つ (D2)
 - [x] ~~Tier C のうち Data table / Chart / Timeline / Diagram は、将来 MCP ツールの結果表示に転用しうる。いつ判断するか~~
-      → O-5 (MCP) で判断する (AD-044 Decision 6。roadmap の O-5 の行)
+      → O-5 (MCP) で判断する (AD-044 Decision 6。roadmap の O-5 の行)。**O-5 の答え: 転用しない**
+      ([AD-048](../../decisions/0048-session-config-display-and-answer-ui-split.md) Decision 4。015 spec U-5)。MCP の結果は平文として描く
 
 ## Principles (domain-specific)
 

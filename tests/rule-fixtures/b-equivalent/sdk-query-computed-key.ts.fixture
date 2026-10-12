@@ -1,0 +1,13 @@
+import { query } from '@anthropic-ai/claude-agent-sdk'
+
+/**
+ * 違反サンプル (O-5 / AD-048 Decision 2 / design-gate R3 M-11)。
+ *
+ * **`Query` の mutation メソッドを計算キーで呼ぶ。** `q['reloadPlugins']()` は `.reloadPlugins(` の
+ * ドット呼び出しの綴りにならない等価形。項目 16 の P3 は計算キーの形 (`['m'](` / `["m"](` / テンプレートリテラル)
+ * も見る。昇格値・昇格キーの綴りを含めない (015 research R-06 (6))。
+ */
+export async function bad(): Promise<void> {
+  const q = query({ prompt: 'hi' })
+  await q['reloadPlugins']()
+}

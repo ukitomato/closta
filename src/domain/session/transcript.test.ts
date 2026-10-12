@@ -67,6 +67,35 @@ describe('toTranscriptMessages', () => {
     expect(toolPart).toMatchObject({ toolName: 'MysteryTool', result: 'done' })
   })
 
+  it('過去ログの tool 名を実行中と同じ sanitizeBody に通す (双方向制御・ゼロ幅の方向記号が落ちる。O-5 FR-001)', () => {
+    const out = toTranscriptMessages([
+      msg('assistant', 'a1', [
+        {
+          type: 'tool_use',
+          id: 'tc1',
+          name: 'mcp__a‮__b‎‏',
+          input: {}
+        }
+      ])
+    ])
+    expect(out[0].parts[0]).toMatchObject({ type: 'tool-call', toolName: 'mcp__a__b' })
+  })
+
+  it('空の tool 名・文字列でない tool 名・無害化で空になる tool 名は (unknown tool) のまま', () => {
+    const out = toTranscriptMessages([
+      msg('assistant', 'a1', [
+        { type: 'tool_use', id: 'tc1', name: '', input: {} },
+        { type: 'tool_use', id: 'tc2', name: 42, input: {} },
+        { type: 'tool_use', id: 'tc3', name: '‮‎', input: {} }
+      ])
+    ])
+    expect(out[0].parts.map((p) => (p as { toolName: string }).toolName)).toEqual([
+      '(unknown tool)',
+      '(unknown tool)',
+      '(unknown tool)'
+    ])
+  })
+
   it('result を持たない tool_use は result: null で出す', () => {
     const out = toTranscriptMessages([
       msg('assistant', 'a1', [{ type: 'tool_use', id: 'tc1', name: 'Bash', input: {} }])
@@ -172,6 +201,27 @@ describe('toTranscriptMessages', () => {
   it('コンパクション境界でない system メッセージ (認識できる content なし) は出さない', () => {
     const out = toTranscriptMessages([
       { type: 'system', uuid: 's1', message: { subtype: 'something_else' } }
+    ])
+    expect(out).toHaveLength(0)
+  })
+
+  it('過去ログの auth_status / plugin_install から行を作らない (実行中だけ。O-5 BE-031 / 015 data-model §4)', () => {
+    const out = toTranscriptMessages([
+      {
+        type: 'system',
+        uuid: 's1',
+        message: { subtype: 'plugin_install', status: 'started', name: 'acme' }
+      },
+      {
+        type: 'system',
+        uuid: 's2',
+        message: { subtype: 'plugin_install', status: 'completed', name: 'acme' }
+      },
+      {
+        type: 'system',
+        uuid: 's3',
+        message: { type: 'auth_status', subtype: 'auth_status', isAuthenticating: true }
+      }
     ])
     expect(out).toHaveLength(0)
   })

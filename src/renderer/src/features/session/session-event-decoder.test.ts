@@ -204,3 +204,93 @@ describe('decodeSessionEvent の meter (O-4 / 014 tasks FE-004)', () => {
     expect(decodeSessionEvent(proto)).toBeNull()
   })
 })
+
+describe('decodeSessionEvent の meter の構成 (O-5 FE-001 / 015 data-model §2)', () => {
+  const meter = (value: unknown): unknown =>
+    decodeSessionEvent(enc({ kind: 'meter', meter: value }))
+  const initReport = {
+    type: 'init-report',
+    model: 'claude-sonnet-4-5',
+    mcpServers: [{ name: 'github', status: 'needs-auth' }],
+    tools: ['Bash', 'mcp__github__create_issue'],
+    skills: ['pdf'],
+    plugins: [{ name: 'p', version: '1.0.0' }],
+    slashCommands: ['review'],
+    omitted: 0
+  }
+  const commands = {
+    type: 'commands',
+    commands: [{ name: 'review', description: 'Review', argumentHint: '<pr>' }],
+    omitted: 0
+  }
+
+  it('init-report / commands の正例を通す', () => {
+    expect(meter(initReport)).toEqual({ kind: 'meter', meter: initReport })
+    expect(meter(commands)).toEqual({ kind: 'meter', meter: commands })
+  })
+
+  it('余分なキーを運ばない', () => {
+    const decoded = [
+      meter({
+        ...initReport,
+        cwd: 'SECRET_MARK',
+        mcpServers: [{ name: 'github', status: 'failed', error: 'SECRET_MARK' }],
+        plugins: [{ name: 'p', version: '1', path: 'SECRET_MARK' }]
+      }),
+      meter({
+        ...commands,
+        commands: [{ name: 'a', description: '', argumentHint: '', aliases: ['SECRET_MARK'] }],
+        extra: 'SECRET_MARK'
+      })
+    ]
+    expect(decoded.every((e) => e !== null)).toBe(true)
+    expect(JSON.stringify(decoded)).not.toContain('SECRET_MARK')
+  })
+
+  it('形の外れた名前は落とし、status の __proto__ は unknown、257 件は 256 件と omitted 1', () => {
+    expect(
+      meter({
+        ...initReport,
+        mcpServers: [
+          { name: `a${String.fromCodePoint(0x202e)}b`, status: 'connected' },
+          { name: 'ok', status: '__proto__' }
+        ]
+      })
+    ).toEqual({
+      kind: 'meter',
+      meter: { ...initReport, mcpServers: [{ name: 'ok', status: 'unknown' }], omitted: 1 }
+    })
+    const many = Array.from({ length: 257 }, (_, i) => ({
+      name: `c${i}`,
+      description: '',
+      argumentHint: ''
+    }))
+    const out = meter({ ...commands, commands: many }) as {
+      meter: { commands: unknown[]; omitted: number }
+    }
+    expect(out.meter.commands).toHaveLength(256)
+    expect(out.meter.omitted).toBe(1)
+  })
+
+  it('型の違いは破棄し、例外を出さない', () => {
+    const bad = [
+      { ...initReport, mcpServers: 'x' },
+      { ...initReport, model: 1 },
+      { ...initReport, omitted: '0' },
+      { ...commands, commands: {} },
+      { ...commands, omitted: undefined }
+    ]
+    for (const raw of bad) expect(meter(raw)).toBeNull()
+    const proto =
+      '{"kind":"meter","meter":{"type":"commands","commands":[{"__proto__":{"name":"x"},"name":"constructor"}],"omitted":0}}'
+    expect(() => decodeSessionEvent(proto)).not.toThrow()
+    expect(decodeSessionEvent(proto)).toEqual({
+      kind: 'meter',
+      meter: {
+        type: 'commands',
+        commands: [{ name: 'constructor', description: '', argumentHint: '' }],
+        omitted: 0
+      }
+    })
+  })
+})

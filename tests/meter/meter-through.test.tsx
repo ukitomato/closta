@@ -24,6 +24,7 @@ import {
 import { launchFailureLabel } from '@/features/session/labels'
 import {
   CONTEXT_COST_METER_LABELS,
+  MCP_STATUS_LABELS,
   QUOTA_BANNER_LABELS,
   rateLimitTypeLabel,
   SHELL_LABELS,
@@ -57,6 +58,7 @@ import { classifyResult } from '../../src/agents/session-core'
  * | 2 つのセッションの値が混ざらない | 014 spec SC-002 / US-3 AC4 |
  * | 値の検証の外れ (`__proto__`・長い id・URL の資格情報の形の `modelId`・`resetsAt: 1e300`) で例外が出ない | data-model §2「値の検証」 |
  * | 状態通知 (`SessionStatusUpdate`) のフィールドの差分 0 (X-5 の全フィールドの走査が通る) | 014 spec SC-002 / X-5 FR-004 |
+ * | 構成 (`init` / `commands_changed`) が構成のタブ・畳んだ帯の印・MCP の tool の見出しまで届き、合流の窓の後に最新の値になる。許可リストの外の値と形の外れは出ない | 015 spec SC-002 / tasks SH-020 |
  */
 
 registerAppShellHooks()
@@ -190,21 +192,42 @@ function sessionThread(h: Harness, sessionId: string): SessionThread {
 
 /* ── SDK のメッセージの fixture (許可リストの外のフィールドに目印の値を入れる) ─────────────── */
 
-function init(permissionMode: unknown): SdkMessage {
+/**
+ * `init`。構成の許可リスト (O-5 / 015 data-model §2: `model`・`mcp_servers` の `name` と `status`・`tools`・`skills`・
+ * `plugins` の `name` と `version`・`slash_commands`) は運ぶ値なので目印を入れず、その外 (`cwd`・プラグインの `path`・
+ * `apiKeySource` ほか) に目印の値を入れる。
+ */
+function init(permissionMode: unknown, over: SdkMessage = {}): SdkMessage {
   return {
     type: 'system',
     subtype: 'init',
     permissionMode,
     cwd: `/home/u/${LEAK}`,
-    tools: [LEAK],
-    mcp_servers: [{ name: LEAK, status: 'connected' }],
-    model: LEAK,
-    slash_commands: [LEAK],
-    plugins: [{ name: LEAK, path: `/plugins/${LEAK}` }],
+    tools: ['Bash', 'mcp__github__create_issue'],
+    mcp_servers: [{ name: 'github', status: 'connected' }],
+    model: 'claude-sonnet-4-5',
+    slash_commands: ['review'],
+    terminal_slash_commands: [LEAK],
+    plugins: [{ name: 'plug', path: `/plugins/${LEAK}`, version: '1.0.0' }],
     agents: [LEAK],
-    skills: [LEAK],
+    skills: ['skill-a'],
     apiKeySource: LEAK,
-    output_style: LEAK
+    betas: [LEAK],
+    capabilities: [LEAK],
+    claude_code_version: LEAK,
+    output_style: LEAK,
+    ...over
+  }
+}
+
+/** `commands_changed` (`aliases` に目印の値を入れる)。 */
+function commandsChanged(commands: readonly SdkMessage[]): SdkMessage {
+  return {
+    type: 'system',
+    subtype: 'commands_changed',
+    commands: commands.map((c) => ({ aliases: [LEAK], ...c })),
+    uuid: LEAK,
+    session_id: LEAK
   }
 }
 
@@ -497,6 +520,8 @@ describe('SDK のメッセージ → live-signals → port → decoder → 稼�
     expect(elapsedTexts()).toEqual([])
     expect(thinkingIndicator()).toBeNull()
     expect(meterTypes(a.sent)).toEqual([
+      // 構成 (O-5 / 015 data-model §2)。`init` は構成の許可リストのフィールドを読み、O-4 の権限モードの比較はそのまま
+      'init-report',
       'context',
       'tool-elapsed',
       'thinking',
@@ -684,6 +709,200 @@ describe('SDK のメッセージ → live-signals → port → decoder → 稼�
     // rate_limit_event が届かない (API キー・Bedrock の Provider) と帯は出ない。失敗の文言は帯を参照しない
     expect(screen.queryByTestId('quota-banner')).toBeNull()
     expect(document.body.textContent).not.toContain('429')
+    expect(leaks(a.sent)).toEqual([])
+    expect(document.body.innerHTML).not.toContain(LEAK)
+  })
+})
+
+/* ── 構成 (O-5 / 015 spec SC-002 / tasks SH-020) ──────────────────────── */
+
+async function openInitReport(): Promise<HTMLElement> {
+  await userEvent.click(screen.getByRole('button', { name: SHELL_LABELS.expandPanel }))
+  // 注意の印があると名前に「(注意)」が付く (015 pr-gate R1 MD-02)。
+  await userEvent.click(
+    screen.getByRole('tab', { name: new RegExp(`^${SHELL_LABELS.initReportTab}`) })
+  )
+  return screen.getByRole('tabpanel')
+}
+
+/** 畳んだ帯の「構成」のアイコン (印があると名前に「注意」が付く)。 */
+const initReportBand = (): HTMLElement =>
+  within(screen.getByTestId('right-panel')).getByRole('button', {
+    name: new RegExp(`^${SHELL_LABELS.initReportTab}`)
+  })
+
+const slashTexts = (scope: HTMLElement): string[] =>
+  within(scope)
+    .queryAllByTestId('init-report-slash-command')
+    .map((el) => el.textContent ?? '')
+
+describe('構成の経路: init / commands_changed → live-signals → port → decoder → 稼働中のストア → DOM (015 spec SC-002)', () => {
+  it('構成のタブ・畳んだ帯の印・MCP の tool の見出しのサーバー名まで届き、許可リストの外の値は出ない。2 つのセッションが混ざらない', async () => {
+    const h = await setup({ ids: [A, B] })
+    await selectRunning(0)
+    const a = sessionThread(h, A)
+    const b = sessionThread(h, B)
+
+    // ── A のターン: 構成・コマンドの一覧・MCP の tool の呼び出し ──
+    a.feed(
+      init('default', {
+        mcp_servers: [{ name: 'github', status: 'pending' }],
+        slash_commands: ['/a']
+      })
+    )
+    a.feed(commandsChanged([{ name: 'a', description: '説明 A', argumentHint: '<x>' }]))
+    const mcpCall = {
+      type: 'tool_use',
+      id: 'toolu_mcp',
+      name: 'mcp__github__create_issue',
+      input: { title: 't' }
+    }
+    a.feed(assistant('a-1', [mcpCall], [10, 0, 0]))
+    // MCP の tool の見出しのサーバー名は表示中のセッションの構成から引く (一致がちょうど 1 つなので推定の印なし)
+    await waitFor(() =>
+      expect(document.querySelector('[data-slot="mcp-tool-call-server"]')).toHaveTextContent(
+        'github'
+      )
+    )
+    expect(document.querySelector('[data-slot="mcp-tool-call-inferred"]')).toBeNull()
+    expect(initReportBand()).not.toHaveAttribute('data-attention')
+
+    // ── 名前は同じで状態だけが変わった 2 回目の init (1 秒の窓の中なので、窓の終わりに届く) ──
+    a.feed(
+      init('default', {
+        mcp_servers: [{ name: 'github', status: 'failed' }],
+        slash_commands: ['/a']
+      })
+    )
+    expect(initReportBand()).not.toHaveAttribute('data-attention')
+    a.advance(1_000)
+    await waitFor(() => expect(initReportBand()).toHaveAttribute('data-attention', 'true'))
+
+    const panel = await openInitReport()
+    const server = within(panel).getByTestId('init-report-mcp-server')
+    expect(server).toHaveTextContent('github')
+    expect(server).toHaveTextContent(MCP_STATUS_LABELS.failed)
+    expect(within(server).getByRole('img', { name: SHELL_LABELS.attention })).toHaveAttribute(
+      'data-attention',
+      'true'
+    )
+    // `init` の `slash_commands` が `/a`・`commands_changed` の `name` が `a` でも、`/a` に説明と引数の形が付く
+    expect(slashTexts(panel)).toEqual(['/a <x>説明 A'])
+    expect(within(panel).getByTestId('init-report-model')).toHaveTextContent('claude-sonnet-4-5')
+
+    // ── 同じ長さの別のモデル (窓の外なので、すぐ届く) ──
+    a.advance(1_000)
+    a.feed(
+      init('default', {
+        mcp_servers: [{ name: 'github', status: 'failed' }],
+        model: 'claude-sonnet-4-6',
+        slash_commands: ['/a']
+      })
+    )
+    await waitFor(() =>
+      expect(within(panel).getByTestId('init-report-model')).toHaveTextContent('claude-sonnet-4-6')
+    )
+    // MCP の状態だけが違う init の後も、説明と引数の形は消えない
+    expect(slashTexts(panel)).toEqual(['/a <x>説明 A'])
+
+    // ── 1 秒の窓の中の連続した init の後で、DOM は最後の値 ──
+    for (const skill of ['skill-1', 'skill-2', 'skill-3'])
+      a.feed(
+        init('default', { model: 'claude-sonnet-4-6', skills: [skill], slash_commands: ['/a'] })
+      )
+    a.advance(1_000)
+    await waitFor(() =>
+      expect(within(panel).getByTestId('init-report-skills')).toHaveTextContent('skill-3')
+    )
+    expect(panel).not.toHaveTextContent('skill-1')
+    expect(panel).not.toHaveTextContent('skill-2')
+
+    // ── 表示していない B の構成 ──
+    b.feed(
+      init('default', {
+        model: 'claude-haiku-4-5',
+        mcp_servers: [{ name: 'linear', status: 'connected' }],
+        skills: ['skill-of-b']
+      })
+    )
+    expect(panel).not.toHaveTextContent('skill-of-b')
+    expect(within(panel).getByTestId('init-report-model')).toHaveTextContent('claude-sonnet-4-6')
+    await selectRunning(1)
+    const panelB = screen.getByRole('tabpanel')
+    await waitFor(() =>
+      expect(within(panelB).getByTestId('init-report-model')).toHaveTextContent('claude-haiku-4-5')
+    )
+    expect(panelB).toHaveTextContent('skill-of-b')
+    expect(panelB).toHaveTextContent('linear')
+    expect(panelB).not.toHaveTextContent('skill-3')
+    expect(panelB.querySelector('[data-attention="true"]')).toBeNull()
+
+    // 許可リストの外の値 (cwd・プラグインの path・apiKeySource・aliases ほか) は SessionEvent の文字列にも DOM にも無い
+    expect(meterTypes(a.sent).filter((t) => t === 'init-report' || t === 'commands')).toEqual([
+      'init-report',
+      'commands',
+      'init-report',
+      'init-report',
+      'init-report'
+    ])
+    expect(leaks([...a.sent, ...b.sent])).toEqual([])
+    expect(document.body.innerHTML).not.toContain(LEAK)
+    // 構成は状態通知に載らない (状態通知の形は 4 つのフィールドのまま。構成を載せる余地は無い)
+    expect([...a.statuses, ...b.statuses]).toEqual([])
+    const update = { sessionId: A, state: 'running', reasonKey: null, claudeAlive: true }
+    expect(isSessionStatusUpdate(update)).toBe(true)
+    expect(isSessionStatusUpdate({ ...update, initReport: { type: 'init-report' } })).toBe(false)
+    a.dispose()
+    b.dispose()
+    expect(a.timerCount() + b.timerCount()).toBe(0)
+  })
+
+  it('形の検査の外れ (制御文字・tag 文字・U+2028・長い名前・件数の超過・__proto__ / constructor) で例外が出ず、外れた値だけが落ちる', async () => {
+    const h = await setup({ ids: [A] })
+    await selectRunning(0)
+    const a = sessionThread(h, A)
+    const many = Array.from({ length: 70 }, (_, i) => ({ name: `srv-${i}`, status: 'connected' }))
+    // `__proto__` を自分のキーに持つ object は JSON.parse でしか作れない (SDK のメッセージも JSON から来る)
+    const polluted: unknown = JSON.parse(
+      '{"__proto__":{"polluted":"yes"},"name":"p","status":"connected"}'
+    )
+    expect(() => {
+      a.feed(
+        init('default', {
+          mcp_servers: [
+            { name: 'a\u0000b', status: 'connected' },
+            { name: '__proto__', status: '__proto__' },
+            { name: 'constructor', status: 'failed' },
+            polluted,
+            ...many
+          ],
+          tools: ['x y', `t\u{E0041}`, 'n'.repeat(129), 'Bash'],
+          slash_commands: ['//a', 'ok'],
+          skills: '__proto__',
+          plugins: [{ name: 'p', path: `/${LEAK}`, version: 'v 1' }]
+        })
+      )
+      a.feed(
+        commandsChanged([
+          { name: '__proto__', description: 'd‮e', argumentHint: '' },
+          { name: 'x'.repeat(129), description: '', argumentHint: '' },
+          { name: 'constructor', description: `${'長'.repeat(250)}`, argumentHint: '' }
+        ])
+      )
+    }).not.toThrow()
+    // MCP サーバーのどれか (`constructor`) が failed なので帯に印が付く
+    await waitFor(() => expect(initReportBand()).toHaveAttribute('data-attention', 'true'))
+    const panel = await openInitReport()
+    const rows = within(panel).getAllByTestId('init-report-mcp-server')
+    expect(rows).toHaveLength(64)
+    expect(rows[0]).toHaveTextContent('__proto__')
+    expect(rows[0]).toHaveTextContent(MCP_STATUS_LABELS.unknown)
+    expect(within(panel).getByTestId('init-report-tools')).toHaveTextContent('Bash')
+    expect(within(panel).getByTestId('init-report-tool-count')).toHaveTextContent('1 件')
+    expect(within(panel).getByTestId('init-report-omitted')).toBeInTheDocument()
+    const commands = slashTexts(panel)
+    expect(commands.map((t) => t.slice(0, 12))).toEqual(['/__proto__de', '/constructor'])
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined()
     expect(leaks(a.sent)).toEqual([])
     expect(document.body.innerHTML).not.toContain(LEAK)
   })

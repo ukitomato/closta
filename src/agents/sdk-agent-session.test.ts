@@ -658,6 +658,40 @@ describe('sdk-agent-session: live-signals の配線 (O-4 / 014 tasks BE-004 / BE
     expect(JSON.stringify(posted)).not.toContain('"Bash"')
   })
 
+  it('最上位の auth_status と system の plugin_install は行になり、output / error を送らない (015 tasks BE-031)', async () => {
+    await runTurn([
+      { type: 'auth_status', isAuthenticating: true, output: ['LEAK-output'] },
+      {
+        type: 'auth_status',
+        isAuthenticating: false,
+        output: ['LEAK-output'],
+        error: 'LEAK-error'
+      },
+      { type: 'system', subtype: 'plugin_install', status: 'started', name: 'acme' },
+      { type: 'system', subtype: 'plugin_install', status: 'installed', name: 'acme' },
+      { type: 'system', subtype: 'plugin_install', status: 'completed', error: 'LEAK-plugin' }
+    ])
+    await vi.waitFor(() => expect(states()).toContain('done'))
+    type RowEvent = {
+      kind: string
+      message?: { id: string; parts: { type: string; status?: string | null }[] }
+    }
+    const rows = (events() as RowEvent[]).flatMap((e) => {
+      const part = e.message?.parts[0]
+      return e.kind === 'message' && e.message && part?.type === 'system-event'
+        ? [{ id: e.message.id, status: part.status }]
+        : []
+    })
+    expect(rows).toEqual([
+      { id: 'auth:0', status: 'authenticating' },
+      { id: 'auth:0', status: 'failed' },
+      { id: 'plugin:0', status: 'started' },
+      { id: 'plugin:0', status: null },
+      { id: 'plugin:0', status: 'completed' }
+    ])
+    expect(JSON.stringify(posted)).not.toContain('LEAK')
+  })
+
   it('間引いて保留した値は、終わった後 (ended の後) に送らない (終了の後に timer が発火しない。014 spec SC-004)', async () => {
     const send = await boot('normal', [
       // task の鍵は result の後も残る (背景の task はターンをまたぐ)。2 つ目は 1 秒の間隔の中なので保留になる。
@@ -772,6 +806,59 @@ describe('sdk-agent-session: live-signals の配線 (O-4 / 014 tasks BE-004 / BE
     expect(events().some((e) => e.kind === 'failure')).toBe(false)
     expect(states()).not.toContain('error')
     expect(JSON.stringify(posted)).not.toContain('LEAK')
+  })
+
+  it('init / commands_changed は meter の init-report / commands で送り、状態通知に載せない (015 tasks BE-020)', async () => {
+    await runTurn([
+      {
+        type: 'system',
+        subtype: 'init',
+        permissionMode: 'default',
+        cwd: '/home/LEAK-cwd',
+        apiKeySource: 'LEAK-api-key-source',
+        model: 'claude-opus-4',
+        mcp_servers: [{ name: 'github', status: 'needs-auth' }],
+        tools: ['Bash'],
+        skills: [],
+        plugins: [{ name: 'plug', path: '/LEAK-plugin-path' }],
+        slash_commands: ['/review']
+      },
+      {
+        type: 'system',
+        subtype: 'commands_changed',
+        commands: [
+          { name: 'review', description: 'd', argumentHint: '<pr>', aliases: ['LEAK-alias'] }
+        ]
+      }
+    ])
+    await vi.waitFor(() => expect(states()).toContain('done'))
+    expect(events().filter((e) => e.kind === 'meter')).toEqual([
+      {
+        kind: 'meter',
+        meter: {
+          type: 'init-report',
+          model: 'claude-opus-4',
+          mcpServers: [{ name: 'github', status: 'needs-auth' }],
+          tools: ['Bash'],
+          skills: [],
+          plugins: [{ name: 'plug', version: null }],
+          slashCommands: ['review'],
+          omitted: 0
+        }
+      },
+      {
+        kind: 'meter',
+        meter: {
+          type: 'commands',
+          commands: [{ name: 'review', description: 'd', argumentHint: '<pr>' }],
+          omitted: 0
+        }
+      }
+    ])
+    expect(JSON.stringify(posted)).not.toContain('LEAK')
+    const statusText = JSON.stringify(posted.filter((p) => p.kind === 'status'))
+    expect(statusText).not.toContain('init-report')
+    expect(statusText).not.toContain('github')
   })
 
   it('失敗の result では再試行の行を failed に閉じ、閉じは failure と state: error より先に届く', async () => {

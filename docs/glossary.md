@@ -1,8 +1,8 @@
 ---
 status: needs-human-review
-last_updated: 2026-10-08
-generated_by: human (PLAN.md 付録A + §3〜§7 を素材に起草。X-1 で AgentSession 系 8 語を追記。O-2 で 5 語を追記。O-7 で Shell を追記。O-3 で 5 語を追記。O-4 で 4 語を追記)
-total_terms: 96
+last_updated: 2026-10-10
+generated_by: human (PLAN.md 付録A + §3〜§7 を素材に起草。X-1 で AgentSession 系 8 語を追記。O-2 で 5 語を追記。O-7 で Shell を追記。O-3 で 5 語を追記。O-4 で 4 語を追記。O-5 で 3 語を追記)
+total_terms: 99
 ---
 
 # Glossary (Ubiquitous Language)
@@ -539,6 +539,22 @@ total_terms: 96
 
 ### M
 
+#### **MCP tool display（MCP の tool の表示）**
+
+- **Definition**: transcript で MCP の tool の呼び出しを描く専用の表示 (O-5。部品は `McpToolCall`)。対象は `mcp__<server>__<tool>` の形の tool と、
+  MCP の組み込みの 4 tool (`ListMcpResourcesTool` / `ReadMcpResourceTool` / `ReadMcpResourceDir` / `RefreshMcpTools`)。過去ログと実行中で同じ部品
+  - 見出しはサーバー名 › tool 名 (resource の tool は URI の要約を添える。入力の値は見出しに出さない)。中身は閉じた入力の JSON と、平文の結果
+  - サーバー名は、表示中のセッションの構成 (SessionInitReport) が報告したサーバー名の前方一致で分ける。一致が 2 つ以上・構成が無い (過去ログ)・
+    どれにも一致しないときは**サーバー名の推定の印** (「サーバー名は推定」) を付ける (SDK はサーバー名の `[a-zA-Z0-9_-]` 以外を `_` に正規化するので、
+    名前に `__` を含みうる)
+  - 承認カードは見出しではなく生の tool 名を切り詰めずに出す (承認の判断の正本の識別子)。見出しは補助
+- **日本語表記**: MCP の tool の表示
+- **Domain**: `ui`
+- **Counterexamples**: ToolFallback ではない — 振り分けは完全一致の表 → `mcp__` の接頭辞の判定 → ToolFallback の 2 段 (AD-048 Decision 5)。
+  MCP サーバーを操作する画面ではない — アプリは MCP・プラグイン・スキルを操作しない (再接続・有効化・再読み込み・tool の呼び出し。AD-048 Decision 2)。
+  結果を Tier C の Data table / Chart などに写さない (AD-048 Decision 4)。画像・resource の印は出さない
+- **Ref**: [AD-048](decisions/0048-session-config-display-and-answer-ui-split.md) / [015 data-model](../specs/015-ui-mcp-elicitation-commands/data-model.md) §1
+
 #### **message mapping（メッセージ変換）**
 
 - **Definition**: `SessionMessage[]` → `ThreadMessageLike[]` の**純粋変換**（tool_use ↔ tool_result の
@@ -566,16 +582,20 @@ total_terms: 96
 
 - **Definition**: 実行中のセッションの「どれだけ使ったか・何に止められたか・今何をしているか」の最新の値 (O-4)。
   `SessionEvent` の種類 `meter` でセッションスレッドから renderer に届き、稼働中のストアの `meters` にセッションごとの最新の値として持つ。
-  - 種類 (`type`) は 6 つ: `turn` (費用の累計・ターン数・モデルごとのトークン・拒否の件数) / `context` (コンテキストの使用量の推定の材料) /
-    `rate-limit` / `permission-mode` / `thinking` (思考のトークン数) / `tool-elapsed` (tool の経過時間)
-  - **運ぶのは数・真偽・列挙・モデルの id・形を検証した tool の id だけ**。会話由来の文字列・エラー文・パスを運ばない
-  - 高頻度のもの (思考・tool の経過時間・task の進み具合) はセッションスレッドで鍵ごとに 1 秒に 1 回まで間引く
+  - 種類 (`type`) は 8 つ: `turn` (費用の累計・ターン数・モデルごとのトークン・拒否の件数) / `context` (コンテキストの使用量の推定の材料) /
+    `rate-limit` / `permission-mode` / `thinking` (思考のトークン数) / `tool-elapsed` (tool の経過時間) /
+    `init-report` (セッションの構成。SessionInitReport。O-5) / `commands` (スラッシュコマンドの名前・説明・引数の形。O-5)
+  - **運ぶのは数・真偽・列挙・モデルの id・形を検証した tool の id と、形の検査を通った未信頼の名前と、無害化して切り詰めた説明だけ (AD-048 Decision 3)**。
+    会話由来の文字列・エラー文・パスを運ばない
+  - 高頻度のもの (思考・tool の経過時間・task の進み具合) はセッションスレッドで鍵ごとに 1 秒に 1 回まで間引く。`init-report` / `commands` は
+    間引きに掛けず、種類ごとに 1 秒に 1 件へ合流する (窓の終わりに最新を送る)
 - **日本語表記**: 計量
 - **Domain**: `session` (契約と保持) / 表示は `ui`
 - **Counterexamples**: transcript の行ではない (API の再試行・圧縮・権限モードの変化はシステムイベントの行で運ぶ)。
   状態通知 (`SessionStatusUpdate`) に載せない (main を経由しない)。永続化しない — セッションを閉じたら捨て、起動の設定・プリセットに
   書き戻さない。観測点 `receivedMessages` (O-1) に数えない。費用は推定で、請求額ではない
-- **Ref**: [AD-047](decisions/0047-session-meter-and-failure-reasons.md) Decision 2 / [014 data-model](../specs/014-ui-metering-and-limits/data-model.md) §2
+- **Ref**: [AD-047](decisions/0047-session-meter-and-failure-reasons.md) Decision 2 / [014 data-model](../specs/014-ui-metering-and-limits/data-model.md) §2 /
+  [AD-048](decisions/0048-session-config-display-and-answer-ui-split.md) Decision 3 / [015 data-model](../specs/015-ui-mcp-elicitation-commands/data-model.md) §2
 
 #### **Monitoring view（監視ビュー）**
 
@@ -658,6 +678,20 @@ total_terms: 96
 - **Ref**: [AD-005](decisions/0005-provider-as-registrable-value.md)
 
 ### Q
+
+#### **Question from Claude Code（Claude Code からの問い）**
+
+- **Definition**: Claude Code が利用者に答えを求めるもの。tool の `AskUserQuestion` (問いと選択肢)・Elicitation (MCP サーバーが求める form / URL)・
+  `request_user_dialog` の 3 つ。O-5 は `AskUserQuestion` の問い・選択肢 (過去ログに回答があれば回答) を読み取り専用で描き、承認カードに
+  「このアプリからは回答を送れない」注記を出すだけで、回答を送らない
+  - **O-10 の範囲**: 問いに答える UI (`AskUserQuestion` の回答・Elicitation の form / URL・`request_user_dialog`・`elicitation_complete` の表示) と、
+    composer のスラッシュコマンドの候補。domain は `session`。design の前に AD-036 Decision 4 (承認の応答の形) と AD-041 (g) (query の options のキー) の
+    読み替えの ADR を起こす
+- **日本語表記**: Claude Code からの問い
+- **Domain**: `session` (応答の経路。O-10) / 表示は `ui`
+- **Counterexamples**: 承認 (PermissionRequest) の応答ではない — `AskUserQuestion` は承認の要求としても届くが、今の承認の応答 (`toPermissionResult`) は
+  `updatedInput` を持たないので、許可しても選択は Claude に届かない (O-10 まで)。今の Elicitation は自動で断られる
+- **Ref**: [AD-048](decisions/0048-session-config-display-and-answer-ui-split.md) Decision 1 / [015 spec](../specs/015-ui-mcp-elicitation-commands/spec.md) FR-013
 
 #### **Quota banner**
 
@@ -852,6 +886,20 @@ total_terms: 96
 - **Domain**: `session`
 - **Ref**: [008 spec](../specs/008-session-launch-settings-dialog-and-presets/spec.md) / [AD-041](decisions/0041-x4-launch-config-on-x1-launch-gate.md)
 
+#### **SessionInitReport（セッションの構成）**
+
+- **Definition**: Claude Code が報告したセッションの構成 (O-5)。`init` (毎ターンの最初に届く) と `commands_changed` から作り、
+  Meter の種類 `init-report` / `commands` でセッションスレッドから renderer に届く。Claude Code が報告したモデル・MCP サーバーと接続の状態・tool・
+  スラッシュコマンド・スキル・プラグイン (名前と版) を持ち、右のペインの「構成」のタブに出す。状態はターンの開始時点の値
+  - 運ぶ文字列は会話本文ではないが、利用者の設定・作業フォルダ (`.claude/`)・MCP サーバー・プラグインの作者に由来する**未信頼の文字列**である。
+    名前は allowlist の形の検査、説明は無害化と切り詰めを通す。`cwd`・プラグインの `path`・`apiKeySource` などは運ばない
+- **日本語表記**: セッションの構成 / 構成
+- **Domain**: `session` (契約と保持) / 表示は `ui`
+- **Counterexamples**: **`SessionLaunchConfig` (起動の設定で選んだ構成) とは別物** — あちらは利用者が選んだ値 (「概要」の「起動時のモデル」)、
+  こちらは Claude Code が報告した値 (「構成」の「Claude Code が報告したモデル」)。コードの識別子に `config` を使わない
+  (`RunningSession.config` は `SessionLaunchConfig`)。永続化しない — セッションを閉じたら捨てる
+- **Ref**: [AD-048](decisions/0048-session-config-display-and-answer-ui-split.md) Decision 3 / [015 data-model](../specs/015-ui-mcp-elicitation-commands/data-model.md) §2・§3
+
 #### **sessionStore**
 
 - **Definition**: コンテナ内に閉じた JSONL をホスト側 SQLite にミラーするアダプタ。
@@ -944,18 +992,21 @@ total_terms: 96
 
 - **Definition**: transcript の中で Hook / Background task などの出来事を **1 つにつき 1 行**で示す表示 (O-2)。DTO は
   `TranscriptPartDTO` の `system-event`。同じ出来事の後続のイベントは同じ行に合成する (`mergeSystemEvent`)。
-  行を作れるのは Hook の開始・応答、task の開始と、下の O-4 の 3 つの category の出来事だけで、行の無い id への更新は捨てる。
+  行を作れるのは Hook の開始・応答、task の開始と、下の O-4 の 3 つ・O-5 の 2 つの category の出来事だけで、行の無い id への更新は捨てる。
   終わりの来ない行は、セッションの終了・失敗の後と過去ログで「結果不明」と描く
   - O-4 で、実行中のセッションだけの category を 3 つ足した: API の再試行 (`api-retry`。同じターンの再試行は 1 行を書き換える)・
     コンテキストの圧縮 (`compaction`。圧縮中 → 成功 / 失敗)・権限モード (`permission-mode`。権限モードが変わったことを 1 行)。
     行の組み立ては agents に置き、過去ログの変換には足さない
   - O-4 で、task の行に進み具合 (トークン・tool の回数・経過時間) を同じ行の更新として足した。task の種類は残す
+  - O-5 で、実行中のセッションだけの category を 2 つ足した: 認証 (`auth`。認証中 → 成功 / 失敗。`output` / `error` の文字列は出さない)・
+    プラグイン (`plugin`。マーケットプレイスの導入の進み具合を 1 行で書き換える)。行の組み立ては O-4 と同じく agents に置く
 - **日本語表記**: システムイベントの行
 - **Domain**: `ui` (表示)。経路 (agents での変換) は session
 - **Counterexamples**: assistant の発話ではない — コピーなどの操作や応答中の印を付けない。状態の一覧 (task の表) ではない —
   task の進み具合も行の更新で、task の状態を持たない (AD-044 Decision 6)。
   agents の `post` の kind `event` (セッションスレッドの通知の種類) とも別物。計量 (Meter) とも別 — あちらは行ではなく最新の値
-- **Ref**: [011 spec](../specs/011-ui-coverage/spec.md) FR-009 / [data-model](../specs/011-ui-coverage/data-model.md) §2 / [014 data-model](../specs/014-ui-metering-and-limits/data-model.md) §3
+- **Ref**: [011 spec](../specs/011-ui-coverage/spec.md) FR-009 / [data-model](../specs/011-ui-coverage/data-model.md) §2 / [014 data-model](../specs/014-ui-metering-and-limits/data-model.md) §3 /
+  [015 data-model](../specs/015-ui-mcp-elicitation-commands/data-model.md) §4
 
 #### **Shell（シェル）**
 

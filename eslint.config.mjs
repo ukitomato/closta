@@ -591,7 +591,10 @@ export default defineConfig(
       'src/renderer/src/components/assistant-ui/elements/todo-list.aui.tsx',
       'src/renderer/src/components/assistant-ui/elements/subagent.aui.tsx',
       'src/renderer/src/components/assistant-ui/elements/agent-plan.aui.tsx',
-      'src/renderer/src/components/assistant-ui/elements/tool-registry.aui.tsx'
+      'src/renderer/src/components/assistant-ui/elements/tool-registry.aui.tsx',
+      // O-5 の手書きの表示 (MCP の tool と AskUserQuestion。015 tasks SH-011)
+      'src/renderer/src/components/assistant-ui/elements/mcp-tool-call.aui.tsx',
+      'src/renderer/src/components/assistant-ui/elements/ask-user-question.aui.tsx'
     ],
     rules: {
       // `react/prop-types` は戻さない — TS が props を検証済みで、型別名 FC に false-positive を出す

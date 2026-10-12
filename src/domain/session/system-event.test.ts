@@ -295,18 +295,21 @@ const row = (
 })
 
 describe('category と status の集合 (固定テスト)', () => {
-  it('category は 5 つ', () => {
+  it('category は 7 つ (O-5 が auth / plugin を足した。015 data-model §4)', () => {
     expect([...SYSTEM_EVENT_CATEGORIES].sort()).toEqual([
       'api-retry',
+      'auth',
       'compaction',
       'hook',
       'permission-mode',
+      'plugin',
       'task'
     ])
   })
 
-  it('status は 14', () => {
+  it('status は 15 (O-5 が authenticating を足した)', () => {
     expect([...SYSTEM_EVENT_STATUSES].sort()).toEqual([
+      'authenticating',
       'cancelled',
       'changed',
       'compacting',
@@ -328,6 +331,27 @@ describe('category と status の集合 (固定テスト)', () => {
     expect(isTerminalSystemEventStatus('changed')).toBe(true)
     expect(isTerminalSystemEventStatus('retrying')).toBe(false)
     expect(isTerminalSystemEventStatus('compacting')).toBe(false)
+    expect(isTerminalSystemEventStatus('authenticating')).toBe(false)
+  })
+})
+
+describe('Hook の outcome の表引き (O-5 BE-030。Object.hasOwn)', () => {
+  it('prototype のキー・知らない値は unknown で、例外を出さない', () => {
+    for (const outcome of ['__proto__', 'constructor', 'toString', 'hasOwnProperty', 'exploded']) {
+      const part = systemEventPartOf(
+        toSystemEventMessage({ ...hookResponse, outcome }) ?? undefined
+      )
+      expect(part?.status).toBe('unknown')
+    }
+    for (const [outcome, status] of [
+      ['success', 'succeeded'],
+      ['error', 'failed'],
+      ['cancelled', 'cancelled']
+    ] as const) {
+      expect(
+        systemEventPartOf(toSystemEventMessage({ ...hookResponse, outcome }) ?? undefined)?.status
+      ).toBe(status)
+    }
   })
 })
 

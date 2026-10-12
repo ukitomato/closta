@@ -5,8 +5,18 @@ import { axe } from 'vitest-axe'
 
 import { InfoIcon } from 'lucide-react'
 
+import type { SessionEvent } from '@domain/session/agent-session'
+import type { McpStatusKey } from '@domain/session/session-init-report'
+
 import { useUiStore, type PanelTabId } from '@/stores/ui'
-import { registerAppShellHooks, setup } from '@/test-support/app-shell-harness'
+import {
+  A,
+  B,
+  registerAppShellHooks,
+  selectPast,
+  selectRunning,
+  setup
+} from '@/test-support/app-shell-harness'
 
 import { SHELL_LABELS } from './labels'
 import type { PanelTab } from './panel-tabs'
@@ -139,20 +149,21 @@ describe('右のペインの tablist のキー操作 (FR-017 / data-model §6)',
   })
 })
 
-describe('本物のタブの表 (概要・使用量。O-4 FE-031)', () => {
+describe('本物のタブの表 (概要・使用量・構成。O-4 FE-031 / O-5 FE-020)', () => {
   async function openRealPanel(): Promise<void> {
     await setup()
     await userEvent.click(screen.getByRole('button', { name: SHELL_LABELS.expandPanel }))
   }
 
-  it('並びは 概要 → 使用量。← / → と Home / End で移って選び、選ばれたタブだけが tabIndex=0', async () => {
+  it('並びは 概要 → 使用量 → 構成。← / → と Home / End で移って選び、選ばれたタブだけが tabIndex=0', async () => {
     await openRealPanel()
     const tabs = within(tabList()).getAllByRole('tab')
     expect(tabs.map((el) => el.textContent)).toEqual([
       SHELL_LABELS.overviewTab,
-      SHELL_LABELS.usageTab
+      SHELL_LABELS.usageTab,
+      SHELL_LABELS.initReportTab
     ])
-    expect(tabs.map((el) => el.getAttribute('tabindex'))).toEqual(['0', '-1'])
+    expect(tabs.map((el) => el.getAttribute('tabindex'))).toEqual(['0', '-1', '-1'])
     act(() => tabNamed(SHELL_LABELS.overviewTab).focus())
     await userEvent.keyboard('{ArrowRight}')
     expect(tabNamed(SHELL_LABELS.usageTab)).toHaveFocus()
@@ -163,26 +174,136 @@ describe('本物のタブの表 (概要・使用量。O-4 FE-031)', () => {
       within(tabList())
         .getAllByRole('tab')
         .map((el) => el.getAttribute('tabindex'))
-    ).toEqual(['-1', '0'])
+    ).toEqual(['-1', '0', '-1'])
+    await userEvent.keyboard('{ArrowRight}')
+    expect(tabNamed(SHELL_LABELS.initReportTab)).toHaveFocus()
+    expect(within(tabPanel()).getByTestId('init-report-empty')).toBeInTheDocument()
+    expect(useUiStore.getState().panel.tab).toBe('init-report')
     await userEvent.keyboard('{ArrowRight}')
     expect(tabNamed(SHELL_LABELS.overviewTab)).toHaveFocus()
     expect(within(tabPanel()).getByTestId('overview-empty')).toBeInTheDocument()
+    await userEvent.keyboard('{ArrowLeft}')
+    expect(tabNamed(SHELL_LABELS.initReportTab)).toHaveFocus()
     await userEvent.keyboard('{ArrowLeft}')
     expect(tabNamed(SHELL_LABELS.usageTab)).toHaveFocus()
     await userEvent.keyboard('{Home}')
     expect(tabNamed(SHELL_LABELS.overviewTab)).toHaveFocus()
     await userEvent.keyboard('{End}')
-    expect(tabNamed(SHELL_LABELS.usageTab)).toHaveFocus()
-    expect(useUiStore.getState().panel.tab).toBe('usage')
+    expect(tabNamed(SHELL_LABELS.initReportTab)).toHaveFocus()
+    expect(useUiStore.getState().panel.tab).toBe('init-report')
   })
 
-  it('vitest-axe の違反 0 (使用量のタブを選んだ後も)', async () => {
+  it('vitest-axe の違反 0 (使用量・構成のタブを選んだ後も)', async () => {
     await openRealPanel()
     const panel = screen.getByTestId('right-panel')
     const rules = { rules: { 'color-contrast': { enabled: false } } }
     expect((await axe(panel, rules)).violations).toEqual([])
     act(() => tabNamed(SHELL_LABELS.overviewTab).focus())
+    await userEvent.keyboard('{ArrowRight}')
+    expect((await axe(panel, rules)).violations).toEqual([])
     await userEvent.keyboard('{End}')
+    expect((await axe(panel, rules)).violations).toEqual([])
+  })
+})
+
+describe('注意の印 (畳んだ帯と開いた tablist。O-5 FE-020 / 015 spec US-2 AC5 / data-model §3)', () => {
+  const report = (statuses: readonly McpStatusKey[]): SessionEvent => ({
+    kind: 'meter',
+    meter: {
+      type: 'init-report',
+      model: null,
+      mcpServers: statuses.map((status, i) => ({ name: `s${i}`, status })),
+      tools: [],
+      skills: [],
+      plugins: [],
+      slashCommands: [],
+      omitted: 0
+    }
+  })
+  /** 畳んだ帯の「構成」のアイコン (名前は「構成」で始まる)。 */
+  const bandButton = (): HTMLElement =>
+    within(screen.getByTestId('right-panel')).getByRole('button', {
+      name: new RegExp(`^${SHELL_LABELS.initReportTab}`)
+    })
+
+  it('failed / needs-auth で「構成」のアイコンに印 (data-attention・警告のアイコン・名前に「注意」)', async () => {
+    const h = await setup({ ids: [A] })
+    await selectRunning(0)
+    h.emit(A, report(['connected', 'failed']))
+    expect(bandButton()).toHaveAttribute('data-attention', 'true')
+    expect(bandButton()).toHaveAccessibleName(
+      `${SHELL_LABELS.initReportTab} (${SHELL_LABELS.attention})`
+    )
+    expect(within(bandButton()).getByTestId('panel-tab-attention')).toBeInTheDocument()
+    h.emit(A, report(['needs-auth']))
+    expect(bandButton()).toHaveAttribute('data-attention', 'true')
+    // 他のタブのアイコンには出さない
+    expect(
+      within(screen.getByTestId('right-panel')).getByRole('button', {
+        name: SHELL_LABELS.usageTab
+      })
+    ).not.toHaveAttribute('data-attention')
+  })
+
+  it('unknown / pending / connected では出さない。状態が直れば印が消える', async () => {
+    const h = await setup({ ids: [A] })
+    await selectRunning(0)
+    h.emit(A, report(['unknown', 'pending', 'connected', 'disabled']))
+    expect(bandButton()).not.toHaveAttribute('data-attention')
+    expect(bandButton()).toHaveAccessibleName(SHELL_LABELS.initReportTab)
+    h.emit(A, report(['failed']))
+    expect(bandButton()).toHaveAttribute('data-attention', 'true')
+    h.emit(A, report(['connected']))
+    expect(bandButton()).not.toHaveAttribute('data-attention')
+  })
+
+  it('別のセッションの状態では出さない (表示中のセッションだけ)。切り替えると印が付く', async () => {
+    const h = await setup({ ids: [A, B] })
+    h.emit(A, report(['connected']))
+    h.emit(B, report(['failed']))
+    await selectRunning(0)
+    expect(bandButton()).not.toHaveAttribute('data-attention')
+    await selectRunning(1)
+    expect(bandButton()).toHaveAttribute('data-attention', 'true')
+  })
+
+  it('過去のセッション・未選択では出さない', async () => {
+    const h = await setup({ ids: [A] })
+    h.emit(A, report(['failed']))
+    expect(bandButton()).not.toHaveAttribute('data-attention')
+    await selectPast(0)
+    expect(bandButton()).not.toHaveAttribute('data-attention')
+  })
+
+  it('開いた tablist の「構成」のタブにも印 (別のタブを見ている間も。pr-gate R1 MD-02)', async () => {
+    const h = await setup({ ids: [A] })
+    await selectRunning(0)
+    await userEvent.click(screen.getByRole('button', { name: SHELL_LABELS.expandPanel }))
+    const initTab = (): HTMLElement =>
+      within(tabList()).getByRole('tab', { name: new RegExp(`^${SHELL_LABELS.initReportTab}`) })
+    expect(initTab()).not.toHaveAttribute('data-attention')
+    h.emit(A, report(['failed']))
+    expect(tabNamed(SHELL_LABELS.overviewTab)).toHaveAttribute('aria-selected', 'true')
+    expect(initTab()).toHaveAttribute('data-attention', 'true')
+    expect(initTab()).toHaveAccessibleName(
+      `${SHELL_LABELS.initReportTab} (${SHELL_LABELS.attention})`
+    )
+    expect(within(initTab()).getByTestId('panel-tab-attention')).toBeInTheDocument()
+    expect(tabNamed(SHELL_LABELS.usageTab)).not.toHaveAttribute('data-attention')
+    const panel = screen.getByTestId('right-panel')
+    const rules = { rules: { 'color-contrast': { enabled: false } } }
+    expect((await axe(panel, rules)).violations).toEqual([])
+    h.emit(A, report(['connected']))
+    expect(initTab()).not.toHaveAttribute('data-attention')
+    expect(initTab()).toHaveAccessibleName(SHELL_LABELS.initReportTab)
+  })
+
+  it('vitest-axe の違反 0 (印のある帯)', async () => {
+    const h = await setup({ ids: [A] })
+    await selectRunning(0)
+    h.emit(A, report(['failed']))
+    const panel = screen.getByTestId('right-panel')
+    const rules = { rules: { 'color-contrast': { enabled: false } } }
     expect((await axe(panel, rules)).violations).toEqual([])
   })
 })

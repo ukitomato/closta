@@ -1,4 +1,5 @@
 import type { RateLimitType } from '@domain/session/meter'
+import type { McpStatusKey } from '@domain/session/session-init-report'
 
 import { LAUNCH_AXIS_LABELS } from '@/features/session/labels'
 import type { SettingsSection } from '@/stores/ui'
@@ -41,6 +42,10 @@ export const SHELL_LABELS = {
   overviewEmpty: 'セッションを選ぶと概要が出ます。',
   /** 右のペインの「使用量」のタブ (O-4 / 014 data-model §5)。 */
   usageTab: '使用量',
+  /** 右のペインの「構成」のタブ (O-5 / 015 data-model §6)。 */
+  initReportTab: '構成',
+  /** 畳んだ帯のタブのアイコンの注意の印の名前 (O-5 / 015 data-model §3 / §6)。 */
+  attention: '注意',
   collapseSidebar: 'サイドバーを畳む',
   expandSidebar: 'サイドバーを開く',
   collapsePanel: '詳細を畳む',
@@ -85,6 +90,7 @@ export const SETTINGS_SECTION_LABELS: Record<SettingsSection, string> = {
  * (SDK の `status` / `init` と `set_permission_mode` / `set_model`。O-4・O-5・X-6 が対応表の行で扱う) ので、起動時の値で
  * あることを見出しで示す (pr-gate R1 ui-coverage M-004・R2 L-102)。付けるのは対応表に実行中の変化の行がある 2 軸だけ。
  * 権限モードの実行中の変化は O-4 が「現在の権限モード」の行で出す (起動時と違うときだけ。014 spec FR-010 / data-model §4)。
+ * Claude Code が報告した実行中のモデルは O-5 の「構成」のタブが出す (`INIT_REPORT_LABELS.reportedModel`。015 data-model §3)。
  */
 export const OVERVIEW_LABELS = {
   provider: LAUNCH_AXIS_LABELS.provider,
@@ -202,6 +208,45 @@ export const USAGE_LABELS = {
   /** 上限 (`MAX_METER_PERMISSION_DENIALS`) に達した件数。 */
   countAtLeast: (n: string): string => `${n} 件以上`
 } as const
+
+/**
+ * 右のペインの「構成」のタブ (O-5 / 015 data-model §3 / §6 が正本)。Claude Code が報告した構成 (`SessionInitReport`) で、
+ * 起動の設定 (`SessionLaunchConfig`。「概要」の「起動時のモデル」) とは別物。MCP の状態の文言は `MCP_STATUS_LABELS`。
+ */
+export const INIT_REPORT_LABELS = {
+  initReportTimepoint: 'ターンの開始時点の状態です',
+  initReportLiveOnly: '実行中のセッションだけ出ます。',
+  initReportAwaitFirst: '最初のターンの後に出ます。',
+  initReportEmpty: 'セッションを選ぶと構成が出ます。',
+  reportedModel: 'Claude Code が報告したモデル',
+  unknownValue: '不明',
+  mcpServers: 'MCP サーバー',
+  tools: 'tool',
+  slashCommands: 'スラッシュコマンド',
+  skills: 'スキル',
+  plugins: 'プラグイン',
+  noMcpServers: 'MCP サーバーはありません',
+  none: 'ありません',
+  mcpNeedsAuth:
+    'このセッションを起動した環境で claude を開き、/mcp で認証してください (Provider が設定ディレクトリを指定している場合は、同じ CLAUDE_CONFIG_DIR で開いてください)。',
+  mcpFailed: 'このセッションを起動した環境で claude を開き、/mcp で詳細を確かめてください。',
+  /** `n` は `formatCount` の値。 */
+  initReportOmitted: (n: string): string => `形の合わない名前・多すぎる分を ${n} 件省きました。`,
+  /** tool の件数。`n` は `formatCount` の値。 */
+  toolCount: (n: string): string => `${n} 件`,
+  /** MCP のサーバーごとにまとめた tool の見出し。 */
+  mcpToolGroup: (server: string): string => `${server} (MCP)`
+} as const
+
+/** MCP サーバーの状態 (O-5 / 015 data-model §6。`unknown` は SDK の値域の外)。 */
+export const MCP_STATUS_LABELS: Readonly<Record<McpStatusKey, string>> = {
+  connected: '接続済み',
+  failed: '失敗',
+  'needs-auth': '認証が必要',
+  pending: '接続中',
+  disabled: '無効',
+  unknown: '不明'
+}
 
 /**
  * 中央のヘッダの行の右の目盛り (O-4 / 014 data-model §4「コンテキストと費用の目盛り」/ §5)。`*Label` は支援技術と `title` に

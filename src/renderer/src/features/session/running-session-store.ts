@@ -6,6 +6,7 @@ import type { SessionEvent } from '@domain/session/agent-session'
 import type { SessionLaunchConfig } from '@domain/session/launch-config'
 import type { LaunchOrigin } from '@domain/session/launch-usage'
 import type { MeterUpdate } from '@domain/session/meter'
+import { normalizeSlashCommandName } from '@domain/session/session-init-report'
 import { mergeSystemEvent, systemEventPartOf } from '@domain/session/system-event'
 import type { TranscriptMessageDTO } from '@domain/session/transcript-dto'
 
@@ -22,7 +23,8 @@ import {
   type LiveSessionState,
   type RunningSessionStoreState,
   type SessionMeters,
-  type SessionQueue
+  type SessionQueue,
+  type SlashCommandEntry
 } from './running-session-types'
 import { decodeSessionEvent } from './session-event-decoder'
 import { nextAwaiting, viewOf } from './session-view'
@@ -34,7 +36,8 @@ export type {
   PendingPermission,
   RunningSessionStoreState,
   SessionMeters,
-  SessionQueue
+  SessionQueue,
+  SlashCommandEntry
 } from './running-session-types'
 
 /**
@@ -52,6 +55,7 @@ export type {
  * | **監視ビューの派生値** (O-1): 行の状態に入った時刻 (`statusSince`) はストアの更新ごとに見直し、1 回の更新の中の変化を 1 回の `setState` にまとめる。直近の活動 (`activity`) は**購読の手前で**セッションごとに 500ms に間引いて書く (行は文字列を選ぶだけ)。追跡と間引きは `running-session-monitor.ts` が持ち、ストアは更新のたびに `track` を呼ぶ | O-1 data-model §1 / research R-01・R-03 / O-4 FR-018 (1) |
  * | ストアを `window` などの global に出さない。実機計測は一覧の `data-*` の値だけを読む | O-1 FR-012 |
  * | **計量** (`meter`) はセッションごとの最新の値を `meters` の枝に持つ。`patch()` を通さない (キューの同期と派生値の見直しを起こさない)・`sessions` の参照を変えない・`receivedMessages` に数えない・閉じた id の値は捨てる・`close()` で消す。起動の設定・`lastConfig`・プリセットに書き戻さない | O-4 / 014 data-model §2「renderer の保持」 |
+ * | 構成 (`init-report` / `commands`) も同じ `meters` の枝に最新の値を持つ。スラッシュコマンドの一覧は合流の規則 (`slashCommandEntries`) で組む | O-5 / 015 data-model §2「renderer の保持」 |
  *
  * 会話由来のテキスト (本文・下書き・キュー) は境界・ログ・永続層に出さない (Principle V / X-2 FR-008)。
  */
@@ -183,7 +187,57 @@ function applyMeter(prev: SessionMeters, update: MeterUpdate): SessionMeters {
         ...prev,
         toolElapsed: withToolElapsed(prev.toolElapsed, update.toolUseId, update.elapsedSeconds)
       }
+    case 'init-report': {
+      // 名前の集合の出所は、`slashCommands` が直前の `initReport` から変わったとき (または初めて) だけ `init-report` にする
+      // (MCP の状態・tool・モデルだけが変わった再送で、`commands` の一覧を巻き戻さない。015 data-model §2 の合流の規則)。
+      const namesChanged =
+        prev.initReport === null ||
+        !sameSlashCommandNames(prev.initReport.slashCommands, update.slashCommands)
+      return {
+        ...prev,
+        initReport: update,
+        slashCommandSource: namesChanged ? 'init-report' : prev.slashCommandSource
+      }
+    }
+    case 'commands':
+      return { ...prev, commands: update, slashCommandSource: 'commands' }
   }
+}
+
+/** 2 つの名前の並びが (正規の形で、並びを含めて) 同じか。 */
+function sameSlashCommandNames(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false
+  return a.every((name, i) => normalizeSlashCommandName(name) === normalizeSlashCommandName(b[i]!))
+}
+
+/**
+ * スラッシュコマンドの一覧を組む (純関数。015 data-model §2「renderer の保持」の合流の規則。構成のタブが使う)。
+ * 名前の集合は出所 (`slashCommandSource`) のもの、説明と `argumentHint` は出所に依らず最新の `commands` から名前で引く
+ * (`Map`。名前は正規の形で比べる)。`commands` に無い名前は説明と hint が null (名前だけ)。呼ぶたびに新しい配列を返す。
+ */
+export function slashCommandEntries(meters: SessionMeters): readonly SlashCommandEntry[] {
+  const details = new Map<string, { description: string; argumentHint: string }>()
+  for (const c of meters.commands?.commands ?? []) {
+    details.set(normalizeSlashCommandName(c.name), {
+      description: c.description,
+      argumentHint: c.argumentHint
+    })
+  }
+  const names =
+    meters.slashCommandSource === 'commands'
+      ? (meters.commands?.commands ?? []).map((c) => c.name)
+      : meters.slashCommandSource === 'init-report'
+        ? (meters.initReport?.slashCommands ?? [])
+        : []
+  return names.map((raw) => {
+    const name = normalizeSlashCommandName(raw)
+    const detail = details.get(name)
+    return {
+      name,
+      description: detail?.description ?? null,
+      argumentHint: detail?.argumentHint ?? null
+    }
+  })
 }
 
 /**

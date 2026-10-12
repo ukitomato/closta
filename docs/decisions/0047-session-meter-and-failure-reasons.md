@@ -87,3 +87,13 @@ O-2 は `SessionEvent` の種類を増やさず、Hook / Background task を `me
 spec 014 の U-3 の字面も同じ日に 1. と同じ形に直した (決定は変えない)。
 
 本文の Decision 5 と 4 は書いた順が逆で、Decision は番号で引く (4 = 制御要求を呼ばない、5 = 権限モードの昇格を観測したとき。Markdown の表示では連番に振り直されて 4 と 5 が入れ替わって見える。2026-10-09 / O-4 pr-gate R1 M-002)。
+
+## 訂正: AD-048 への参照 (2026-10-10 / O-5)
+
+**Decision 2 の運ぶ値は [AD-048](0048-session-config-display-and-answer-ui-split.md) Decision 3 が読み替える** (形の検査を通った未信頼の名前と、
+無害化して切り詰めた説明。`meter` の種類 `init-report` / `commands`。形の検査の正本は
+[spec 015 data-model §2](../../specs/015-ui-mcp-elicitation-commands/data-model.md))。
+
+AD-048 の「読み替える箇所」は、本 ADR が proposed のうちに Consequences へ AD-048 への参照を足すとしていたが、本 ADR は参照を持たないまま
+accepted になった。その参照を、accepted の後に訂正として足す (AD-031 Decision 1。2026-10-10 に利用者が承認。spec 015 FR-014 / Q1)。
+Decision と Consequences の本文は書き換えない。AD-048 の本文も変えない。
