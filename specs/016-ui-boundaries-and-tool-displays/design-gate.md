@@ -1,66 +1,82 @@
 # Design Gate: 会話の境界と tool の専用表示の第 2 弾 (O-6)
 
-**Run**: 2026-10-05 (Round 2)
+**Run**: 2026-10-13T01:20+09:00 (Round 3)
 **Spec**: specs/016-ui-boundaries-and-tool-displays/spec.md
 **Domain**: ui
 **Charter**: docs/domains/ui/charter.md
 **Tracks**: analyze, po-reviewer, architecture-reviewer, security-reviewer, platform-boundary-reviewer (parallel clean-context subagents)
-**Previous**: [design-gate.md.20261004T2330](./design-gate.md.20261004T2330) (Round 1。FIX_REQUIRED、Critical 1 / High 12)
+**Previous**: [design-gate.md.20261013T0120](./design-gate.md.20261013T0120) (Round 2。PASS、Critical 0 / High 3)。Round 2 の後、2026-10-13 に main (791f72d。O-7 / O-3 / O-4 / O-5 のマージの後) の上に載せ直して再オープンした
 
 ## Verdict
 
 | Track | Critical | High | Medium | Low |
 |---|---|---|---|---|
-| analyze | 0 | 1 | 6 | 13 |
-| po-reviewer | 0 | 0 | 5 | 6 |
-| architecture-reviewer | 0 | 2 | 1 | 5 |
-| security-reviewer | 0 | 0 | 2 | 7 |
-| platform-boundary-reviewer | 0 | 0 | 2 | 5 |
-| **Total (dedup)** | **0** | 3 | 12 | 25 |
+| analyze | 0 | 1 | 1 | 8 |
+| po-reviewer | 0 | 0 | 0 | 2 |
+| architecture-reviewer | 0 | 0 | 0 | 5 |
+| security-reviewer | 0 | 0 | 1 | 3 |
+| platform-boundary-reviewer | 0 | 0 | 0 | 2 |
+| **Total (dedup)** | **0** | 1 | 2 | 18 |
 
 |  | Critical | High |
 |---|---|---|
-| Resolved from prev | 1 | 12 |
-| Unresolved from prev | 0 | 0 (po H-002 / H-004 の残りは Medium に下げて持ち越し) |
-| New in this run | 0 | 3 |
+| Resolved from prev | 0 | 3 (R2 H-01 / H-02 / H-03) |
+| Unresolved from prev | 0 | 0 |
+| New in this run | 0 | 1 |
 
 **Status**: PASS (Critical 0)
-**Next**: status は tasking → implementing。**ただし本 spec は未承認の判断 (U-1〜U-7。U-7 は gate の後に arch L-004 を受けて足した)・proposed の AD-046〜AD-049・未マージの O-7 / O-4 / O-5 に依るので、/cl-implement には入らない。** R2 の High 3 件・Medium 12 件と Low の大半は gate の後に spec / data-model / plan / tasks / research / quickstart / AD-049 で手当てした。手当ては再レビューを受けていない。system scope の Low (pb M-101 の項目 16 の作り・sec L-006・pb L-105・arch L-005) は roadmap の system scope に記録する (SH-010)
+**Next**: status は tasking → implementing。/cl-implement を起動できる。High 1 件 (H-01) は AD-050 に従い、この round で直す (確かめるための round は回さない)。Medium / Low は直さず、M3 の終わりの棚卸しで扱う
 
-## High (dedup 後 3 件。すべて new)
+## Critical (Total: 0)
+
+なし
+
+## High (dedup 後 1 件。new)
+
+### H-01 — 過去ログの圧縮の境界を data part に変えると、O-3 のスレッド内検索から外れ、既存の検索テストが落ちる [origin: analyze I1] [new]
+
+- **Where**: plan.md:219 (過去ログの境界), plan.md:179 (#24 で 012 を「当たらない」とする), tasks.md:48 (FE-011), specs/012-ui-thread-search/data-model.md:99, src/renderer/src/features/chat/conversation-search.ts:52-63, conversation-search.test.ts:219-220
+- **Issue**: 過去ログの `divider` を text part (`── コンテキストを圧縮 ──`) から system-event の data part に変える。O-3 の data-model §2 は「圧縮の境界」を検索の範囲 (描かれた本文) に入れている。`toSearchableMessage` は `type: 'text'` の part しか取らないので境界が検索から外れ、`scan(messages, '圧縮')` が当たる既存テストが落ちる。それを直す task が無く、plan #24 は 012 を影響なしと分類している
+- **Why high**: 完了済みの feature (O-3) の契約とテストに対する退行で、task が無い
+- **Action**: (a) 境界を検索できるままにする (scanner が data part の見出しか `labels.ts` の文言を読む) か、(b) O-3 の検索の範囲から外し、012 data-model §2 の変更として記録する。どちらかを plan に書き、FE-011 に検索テストの更新を足し、plan #24 を直す
+
+## Medium (dedup 後 2 件)
 
 | ID | 内容 | 出所 |
 |---|---|---|
-| H-01 | `WebFetch` の見出しの「最後のパスの要素」は、webhook (`/services/T…/B…/<secret>`・`/api/webhooks/<id>/<token>`) の秘密を常に見える見出しに出す。FE-021 のテストと正本の規則が両立しない (R1 sec M-001 の推奨が矛盾していた) | analyze S1 / sec M-001 |
-| H-02 | 過去ログの変換は `system` の記録の文字列の `content` を、伏せ字なしで text の part にしている (`transcript.ts:73`, `:214-216`)。spec は「過去ログでは出していない」前提で、伏せ字を実行中にだけ当てている | arch H-001 |
-| H-03 | data-model §5 が Inline citation の Tier を A から B に下げる。accepted の AD-019 (Tier A は確定) の変更なのに、AD-049 の読み替えに無い (R1 arch L-003 の推奨が原因) | arch H-002 / analyze K2 |
+| M-01 | Subagent の入れ子の子の tool の行 (`subagent.aui.tsx:83-85`) が 9 か所目の `pending` の表示。DTO の part なので `toolResultState` の `ctx` が定まらず、過去ログで結果不明にならない (US-3 AC2 と食い違う)。plan と FE-030 の列挙に無い | analyze U1 |
+| M-02 | `redactSecrets` の名前の代入 (data-model.md:49) と URL の userinfo (:44) のパターンは、先頭が錨の無い量指定子で O(n²) になる。同じ data-model が求める 50 ms の固定テスト (`a://` + `a`×4,000) と両立しないおそれ | security M-001 |
 
-## Medium (dedup 後 12 件)
+## Low (dedup 後 18 件)
 
 | ID | 内容 | 出所 |
 |---|---|---|
-| M-01 | O-2 から回された「Hook・task の状態の変化の読み上げ」が本 spec にも O-11 にも無い | po M-104 / arch M-001 (a) / analyze C1 |
-| M-02 | 持ち主の無い延期: 拒否の後の編集して再試行 (O-10 の行に足す作業が無い)、計画の一覧、ux L-102 / arch L-201、「O-1 の続き」 | arch M-001 (b)(c) / analyze C2 |
-| M-03 | `supersedes` で外した時点では理由が出ない | po M-101 |
-| M-04 | `informational` の出所 (Claude Code 自身の状態の行も含む) と `info` の水準 | po M-102 / analyze A1 |
-| M-05 | `TaskUpdate` の「タスク #{id}」をどのタスクかと結び付けられない。`status` の無い更新 | po M-103 |
-| M-06 | File tree の項目の判定が実データに依る。区切りの無い相対パスは注記に回る | po M-105 / analyze A2 |
-| M-07 | `redactSecrets` の境界と値の形が無い。取りこぼし (JSON のキー・`GITHUB_TOKEN=`・`--password x`・`sk_live_`・PEM) と誤検出 (`task-`・`Basic usage`・`-path`)。既存の `secret-scan.ts` を参照しない | sec M-002 / analyze S2 / po L-105 |
-| M-08 | 項目 16 の P3 は呼び出しの形しか見ない (ブラケット・`.call`・参照) | pb M-101 |
-| M-09 | FR-018 の fixture 1 本では 3 つの追加を固定できない。`QUERY_MUTATION_METHODS` の集合の pin が無い | pb M-102 |
-| M-10 | 既存の File tree の element は差分の要約 (英語の見出し・増減・`key={node.path}`) | analyze U1 / sec L-002 |
-| M-11 | Compaction boundary は registry に無い。SH-002 が実在しない名前と照合する | analyze K1 |
-| M-12 | assistant-ui の part の状態 (`running` / `requires-action`) で ToolFallback がアイコンと「Cancelled tool」を描き、§3 の結果の状態と食い違う。英語の文言が残る | analyze I1 |
+| L-01 | 結果の状態の印を出す表示の数が data-model (10 + ToolFallback) / plan:233 (9 + 3) / tasks:73 (11 + ToolFallback) で食い違う。plan.md:290 に tasks を古い版とする注記が残る | analyze I2 / arch L-104 (dedup: plan.md:233, tasks.md:73) |
+| L-02 | AD-047 への AD-049 の参照を、plan.md:262 は「Consequences に足す」、SH-010 は「訂正節を足す」と書く。訂正節に利用者の承認 (AD-031) の記録が無い | analyze K1 / arch L-103 (dedup: plan.md:262) |
+| L-03 | subtype の数が 3 と 4 で揺れる | analyze I3 |
+| L-04 | research R-01 の Decision の行番号が古い (:104/:117 → :109/:122) | analyze I4 |
+| L-05 | ToolFallback の `Result:` / `Cancelled reason:` の日本語化が FR-013 / §4 に無い | analyze U2 |
+| L-06 | 圧縮の境界で片方の数だけ欠けたときの文言が無い | analyze U3 |
+| L-07 | subagent (main loop 外) の `informational` / `compact_boundary` / `supersedes` の扱いが書かれていない | analyze U4 |
+| L-08 | data-model の File tree の [ASSUMED] が plan の [ASSUMED] の数に入っていない | analyze A1 |
+| L-09 | US-1 AC6 は形の検査を通った分類を出すと読めるが、data-model §4 / FE-011 は知らない分類を出さない | po L-201 |
+| L-10 | Hook の行の成功も読み上げるので、SessionStart / Setup の Hook で毎回読む。V-3 で量を確かめていない | po L-202 |
+| L-11 | session charter の「計量」と _overview の帰属の判断根拠に、O-6 の session の契約の拡張 (meter 8 → 9) の記録を足す作業が無い | arch L-101 |
+| L-12 | ui charter :79 の右のペインのタブの列挙に O-11 が入らない | arch L-102 |
+| L-13 | (system) 対応表の F 節の Tier を AD-019 の Tier A と照合する検査が無い | arch L-005 (unresolved from prev) |
+| L-14 | `Basic` の行の除外の条件が正規表現の外の括弧書きにある。fixture に `Basic authentication` が無い | security L-001 |
+| L-15 | 取り消した後に承認された tool の結果を agents が捨てる | security L-002 (R2 L-005 の一部が unresolved) |
+| L-16 | (system) `react/no-danger` の lint が無い | security L-006 (unresolved from prev) |
+| L-17 | 絞った `queryHandle` の型を戻されても気づけない。`sdk-query-method-indirect` の注記 (7 個) が古くなる | platform-boundary L-201 |
+| L-18 | (system) 項目 8 が `navigator.*` を見ない | platform-boundary L-105 (unresolved from prev) |
 
-## Low (25 件。抜粋。全文は各トラックの raw output)
+## Dedup log
 
-- po: 120 コードポイントの切り詰め (L-101)、自分で拒否・中断した後のエラーの読み上げ (L-102)、会話の作り直しの文言 (L-103)、256 件の上限の結果不明 (L-104)、fallback の `content` の列 (L-106 / analyze U2)
-- security: 伏せ字の計算量 (L-001)、markdown で描かれない部分の印 (L-003)、provider を Agent plan に限る (L-004)、取り消した tool の承認 (L-005)、`react/no-danger` (L-006。system)、見出しの自由文の伏せ字 (L-007)
-- platform-boundary: WslUncPath の glossary (L-101)、`pathTail` の置き場 (L-102)、本文のパスに操作を付けない (L-103)、取り消しの観測と退行の 4 点 (L-104 / analyze U5・C4)、項目 8 の `navigator` と `ui-path-concat` の注記 (L-105 / analyze K3)
-- architecture: D 節の定義 (L-001 / analyze I2)、O-6 を指したまま残る記述 (L-002 / analyze C3)、「計量」の定義 (L-003)、task・チェックポイントを操作しない判断の U (L-004)、AD-019 の Tier A の照合の検査 (L-005。system)
-- analyze: URI の要約の関数の違い (D1)、status の level (U3)、英語のキー (K4)、要素の名前と AC4 の文言 (I3)
+- analyze I2 + architecture L-104 → L-01 (key: plan.md:233 / tasks.md:73)
+- analyze K1 + architecture L-103 → L-02 (key: plan.md:262)
 
 ## Track raw outputs
 
+- Round 3: [analyze.round3.md](./analyze.round3.md) / [po-reviewer.design-gate.round3.md](./po-reviewer.design-gate.round3.md) / [architecture-reviewer.design-gate.round3.md](./architecture-reviewer.design-gate.round3.md) / [security-reviewer.design-gate.round3.md](./security-reviewer.design-gate.round3.md) / [platform-boundary-reviewer.design-gate.round3.md](./platform-boundary-reviewer.design-gate.round3.md)
 - Round 2: [analyze.round2.md](./analyze.round2.md) / [po-reviewer.design-gate.round2.md](./po-reviewer.design-gate.round2.md) / [architecture-reviewer.design-gate.round2.md](./architecture-reviewer.design-gate.round2.md) / [security-reviewer.design-gate.round2.md](./security-reviewer.design-gate.round2.md) / [platform-boundary-reviewer.design-gate.round2.md](./platform-boundary-reviewer.design-gate.round2.md)
 - Round 1: [analyze.md](./analyze.md) / [po-reviewer.design-gate.md](./po-reviewer.design-gate.md) / [architecture-reviewer.design-gate.md](./architecture-reviewer.design-gate.md) / [security-reviewer.design-gate.md](./security-reviewer.design-gate.md) / [platform-boundary-reviewer.design-gate.md](./platform-boundary-reviewer.design-gate.md)

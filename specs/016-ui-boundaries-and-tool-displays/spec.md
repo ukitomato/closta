@@ -5,7 +5,7 @@ domain: ui
 domain_selected_by: user
 targets: both
 targets_selected_by: user
-status: drafting
+status: implementing
 bf_ids: []
 sf_ids: []
 linear: null

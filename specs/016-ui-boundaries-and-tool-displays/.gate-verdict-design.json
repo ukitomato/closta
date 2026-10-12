@@ -1,123 +1,79 @@
 {
     "gate": "design",
-    "run": "2026-10-05T09:00:00+09:00",
+    "run": "2026-10-12T16:20:59Z",
     "spec_dir": "specs/016-ui-boundaries-and-tool-displays",
     "spec_id": "016-ui-boundaries-and-tool-displays",
+    "round": 3,
     "tracks": {
         "analyze": {
             "status": "ok",
-            "raw_out": "analyze.round2.md",
+            "raw_out": "analyze.round3.md",
             "viewpoint_missing": null,
             "cascade_demotions": null
         },
         "po-reviewer": {
             "status": "ok",
-            "raw_out": "po-reviewer.design-gate.round2.md",
+            "raw_out": "po-reviewer.design-gate.round3.md",
             "viewpoint_missing": [],
             "cascade_demotions": 0
         },
         "architecture-reviewer": {
             "status": "ok",
-            "raw_out": "architecture-reviewer.design-gate.round2.md",
+            "raw_out": "architecture-reviewer.design-gate.round3.md",
             "viewpoint_missing": [],
             "cascade_demotions": 0
         },
         "security-reviewer": {
             "status": "ok",
-            "raw_out": "security-reviewer.design-gate.round2.md",
+            "raw_out": "security-reviewer.design-gate.round3.md",
             "viewpoint_missing": [],
             "cascade_demotions": 0
         },
         "platform-boundary-reviewer": {
             "status": "ok",
-            "raw_out": "platform-boundary-reviewer.design-gate.round2.md",
+            "raw_out": "platform-boundary-reviewer.design-gate.round3.md",
             "viewpoint_missing": [],
             "cascade_demotions": 0
         }
     },
     "severity_counts": {
         "critical": 0,
-        "high": 3,
-        "medium": 12,
-        "low": 25
+        "high": 1,
+        "medium": 2,
+        "low": 18
     },
     "fr_coverage": [
         {
-            "fr": "FR-007",
-            "covered": true,
-            "by": [
-                "tasks.md FE-021"
-            ]
-        },
-        {
             "fr": "FR-016",
-            "covered": true,
-            "by": [
-                "docs/decisions/0049-boundaries-retraction-and-o11-split.md"
-            ]
+            "covered": false,
+            "by": [],
+            "note": "accepted ADR, no task by design"
         }
     ],
     "viewpoint_coverage": {
-        "A": "Critical:0 High:1",
+        "A": "Critical:0 High:0",
         "B": "Critical:0 High:0",
-        "C": "Critical:0 High:1",
-        "D": "Critical:0 High:1",
+        "C": "Critical:0 High:0",
+        "D": "Critical:0 High:0",
         "E": "Critical:0 High:0",
         "F": "Critical:0 High:0",
-        "G": "\u8a72\u5f53\u306a\u3057",
+        "G": "\u8a72\u5f53\u306a\u3057: optional reviewer \u672a\u8d77\u52d5",
         "H": "Critical:0 High:0"
     },
     "dedup_log": [
         {
             "merged": [
-                "analyze-S1",
-                "sec-M-001"
+                "analyze-I2",
+                "arch-L-104"
             ],
-            "key": "FR-007"
+            "key": "plan.md:233"
         },
         {
             "merged": [
-                "arch-H-002",
-                "analyze-K2"
+                "analyze-K1",
+                "arch-L-103"
             ],
-            "key": "Inline citation"
-        },
-        {
-            "merged": [
-                "po-M-104",
-                "arch-M-001a",
-                "analyze-C1"
-            ],
-            "key": "FR-012"
-        },
-        {
-            "merged": [
-                "arch-M-001bc",
-                "analyze-C2"
-            ],
-            "key": "FR-015"
-        },
-        {
-            "merged": [
-                "sec-M-002",
-                "analyze-S2",
-                "po-L-105"
-            ],
-            "key": "redactSecrets"
-        },
-        {
-            "merged": [
-                "analyze-U1",
-                "sec-L-002"
-            ],
-            "key": "File tree element"
-        },
-        {
-            "merged": [
-                "po-M-105",
-                "analyze-A2"
-            ],
-            "key": "File tree items"
+            "key": "plan.md:262"
         }
     ],
     "verdict": "PASS"

@@ -20,7 +20,7 @@ category と status の列挙の正本は `transcript-dto.ts` (`SYSTEM_EVENT_CAT
 - **行の id の素材**: `uuid` と `tool_use_id` は `^[A-Za-z0-9_-]{1,128}$` (O-4 data-model §2 の `toolUseId` と同じ)。`uuid` が外れたら行を作らない
 - **同じ `tool_use_id` の `informational`** は O-2 の合成で 1 行にまとめ、後の値に書き換える (空の本文は前の本文を残す。本文の規則は部分を伏せるだけで本文を丸ごと消さないので、残るのは前の正当な本文)
 - **`detail` の上限**は O-2 data-model §2 の 120 コードポイントのまま (O-2 の契約を変えない)。超えた本文は `…` で切れ、続きは出さない (U-3)。行の見た目は `detail` を折り返す (今の `truncate` を本 feature の category では外す)
-- **過去ログの圧縮**: `transcript.ts:207` の `{ type: 'divider', label: 'コンテキストを圧縮' }` はそのまま (DTO を変えない)。renderer が divider を境界の表示 (TranscriptBoundary) に写す (数は出さない)。**divider を作るのは圧縮だけ** (domain の生成箇所が 1 つであることをテストで固定する)。subagent の入れ子の中の divider は今のまま (O-11)
+- **過去ログの圧縮**: `transcript.ts:207` の `{ type: 'divider', label: 'コンテキストを圧縮' }` はそのまま (DTO を変えない)。renderer が divider を境界の表示 (TranscriptBoundary) に写す (数は出さない)。O-3 のスレッド内検索は描かれた見出しを今どおり対象にする (012 data-model §2。plan「過去ログの境界」)。**divider を作るのは圧縮だけ** (domain の生成箇所が 1 つであることをテストで固定する)。subagent の入れ子の中の divider は今のまま (O-11)
 - **過去ログの `system` の本文** (design-gate R2 H-02): 今の変換は、Hook / task でない `system` の記録の文字列の `content` を text の part にしている (`transcript.ts:73`, `:214-216`)。`informational`・`local_command_output`・拒否の本文が記録に残れば、伏せ字なしで出る。**`system` の記録の text の part に `redactSecrets` を当てる** (`sanitizeBody` の後。行は足さず、DTO を変えない。行への変換は O-11)。AD-047 D3 の「過去ログの変換には足さない」は行を足すことの禁止で、伏せ字はその外
 
 ### 本文の規則 (U-3。`informational` と no fallback の拒否の `content`、拒否の 2 つの `api_refusal_explanation`)
