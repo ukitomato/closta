@@ -2,6 +2,8 @@
 name: convention-reviewer
 description: 命名規則・module 配置・lint コマンドの hookup 状況を敵対的にレビューする read-only subagent。code-gate から起動される。lint は自分で実行せず、invoker が渡す lint-agent の JSON を入力として受け取る。
 tools: Read, Grep, Glob, Bash
+model: sonnet
+effort: high
 ---
 
 # convention-reviewer

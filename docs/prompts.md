@@ -26,6 +26,10 @@ design-gate が PASS すれば status が `implementing` まで進み、`/cl-imp
   推論に委ねる理由がないため
 - description は 1〜3 文。**詳細仕様は書かない。** 受け入れ条件と設計は
   spec → plan の過程で詰める
+- **形は `"[<domain>] <ID>: <何ができるようになるか>"`。** 範囲・義務・依存・design の前に起こす ADR の正本は
+  [roadmap](roadmap.md) の `<ID>` の行で、`/cl-spec` がそこから読む。プロンプトに義務を並べない
+  (2026-10-12 から。下の M1〜M3 の使用済みのプロンプトは実際に使った入力の記録として残す。
+  未使用のもの (O-8 / O-9 / O-10、M4、M5) は着手のときにこの形に書き直す)
 
 ### design-gate が FIX_REQUIRED で止まったとき
 

@@ -57,6 +57,21 @@ gate_common::phase0_check_repo || { echo ".specify/ が見つかりません。r
 
 両 description / `--linear` が空なら halt + 使い方を提示。
 
+### Phase 1.5: 新しい spec を切るかを確かめる
+
+description と `docs/roadmap.md` を照らし、次のどれかに当たったら spec を切らずに halt し、利用者に報告する。
+
+| 確かめること | 当たったら |
+|---|---|
+| 既存の spec の FR の範囲内 | その spec の tasks.md に追記するか、FR を参照した修正 PR にする |
+| 依存先の feature (roadmap の「依存」列) が main に入っていない | 依存先を先に進める (前倒しの design は依存先の実装に合わせて作り直しになる) |
+| 差分を 1 文で説明できる、ツール・CI・ワークフローの修正 | spec を切らない。通常のセッションで直し、`/code-review` を 1 回通す |
+| roadmap にその feature の行がない | roadmap に行を足してよいかを AskUserQuestion で確かめる |
+
+spec は「単体で確かめられる機能」で切る。
+
+**範囲と義務は roadmap の行から読む。** description の `<ID>` (例: `O-10`) で `docs/roadmap.md` の行を引き、範囲・義務・依存・前提 SPIKE を `/speckit.specify` への入力に足す。spec の「義務の扱い」の節には、各義務を「この spec で扱う / 扱わない (理由)」で 1 行ずつ書く。プロンプトに義務が書かれていても、正本は roadmap の行である (食い違えば roadmap に合わせ、食い違いを利用者に報告する)。
+
 ### Phase 2: External ticket fetch (`--linear` 指定時のみ)
 
 1. `mcp__linear-server__get_issue identifier=<PRJID>-NNN` (MCP 利用可能時)
@@ -160,12 +175,14 @@ linear: <"<PRJID>-NNN" or null>
 
 生成した spec.md に対して次を確認し、超過していれば**削ってから** Phase 9 に進む。
 
+**上限は「重くなった」という合図であって、feature を分ける理由ではない。** 超えたら、まず下の削り方と参照形で重複を消す。それでも超えるなら、単体で確かめられる機能が 2 つ以上入っていないかを見る。入っていれば分割を検討し、入っていなければ上限を超えたまま進めて `## 本 feature の位置づけ` に理由を 1 行書く (2026-10-12 に利用者が決定)。
+
 | 目安 | 上限 | 超過時の削り方 |
 |---|---|---|
 | Functional Requirements | **20 件** | 「先行 feature の規則をそのまま継ぐ」ものを FR にしない。`## Dependencies` に「R-N の FR-xxx を継承する」と 1 行書く |
 | Success Criteria | **10 件** | 1 つの SC に複数の計測対象をまとめる。**計測経路を持たない SC は作らない** |
 | Acceptance Scenarios (1 User Story あたり) | **8 件** | Edge Cases 節に移す。AC は「この Story が成立したと言える最小の観測」に絞る |
-| User Story | **4 本** | 超えるなら feature の分割を検討し、`docs/domains/_overview.md` の Feature 帰属表に諮る |
+| User Story | **4 本** | 超えたら、単体で確かめられる機能が 2 つ以上入っていないかを見る。入っていれば分割を検討し、`docs/domains/_overview.md` の Feature 帰属表に諮る |
 
 **例外**: プロジェクトの初期化を兼ねる feature (最初の 1 本) と、
 Constitution / ADR の改定を主目的とする feature はこの限りでない。

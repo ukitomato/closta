@@ -4,6 +4,7 @@
     "LANG": "ja_JP.UTF-8",
     "WINELOADERNOEXEC": "1"
   },
+  "autoCompactWindow": 300000,
   "permissions": {
     "allow": [
       "Edit(/.claude/skills/cl-spec/**)",

@@ -2,6 +2,8 @@
 name: a11y-reviewer
 description: WCAG 2.1 AA 準拠の観点で UI 実装を敵対的にレビューする read-only subagent。pr-gate の system scope で、対象画面の変更を伴う PR で起動される (発火条件は .specify/spec-gate/reviewers.yml)。
 tools: Read, Grep, Glob
+model: sonnet
+effort: high
 ---
 
 # a11y-reviewer (optional)
