@@ -7,7 +7,7 @@
 - `SESSION_EVENT_KINDS`・`TRANSCRIPT_PART_FIELDS`・`PermissionRequest` のフィールド・`toPermissionResult` の出力の差分が 0 (O-5 の後の値から増えない)
 - `MeterUpdate` の種類は O-5 の後の値から `retraction` の 1 つだけ増えている
 - `AGENT_SDK_ALLOWED_CALLS` と `QUERY_OPTION_KEYS` の差分が 0。IPC・preload・main の差分が 0
-- `sdk-agent-session.ts` の `Query` のメソッドの呼び出しが `interrupt` だけで、`queryHandle` の型が `interrupt` と非同期の反復だけに絞られている。`QUERY_MUTATION_METHODS` が 3 増え、集合の固定テストが通り、メソッドごとの違反の fixture で項目 16 が発火する
+- `sdk-agent-session.ts` の `Query` のメソッドの呼び出しが `interrupt` だけで、`queryHandle` の型が `interrupt` と非同期の反復だけに絞られている。`QUERY_MUTATION_METHODS` が `readFile` の 1 つだけ増え (21 → 22。`backgroundTasks` / `reloadOutputStyles` は O-5 で入っている)、集合の固定テスト (`tests/docs/query-mutation-methods.test.ts`) が通り、3 つのメソッドごとの違反の fixture で項目 16 が発火する
 
 ## V-2 対応表 (SC-004)
 
@@ -15,7 +15,7 @@
 
 ## V-3 実機の目視 (利用者。自動の合否に含めない。本番ビルドで)
 
-- `/compact` を実行し、圧縮の行 (O-4) の後に圧縮の境界が出ること。過去ログで同じセッションを開き、数を省いた境界が出ること
+- `/compact` を実行し、圧縮の行 (O-4) の後に圧縮の境界が出ること (`.needs-input.md` Q1 の回答に従う)。**`compact_result` と `compact_boundary` の届く順を記録する** (014 quickstart-results の V-4 の 7 も同じ操作で確かめられる)。過去ログで同じセッションを開き、数を省いた境界が出ること
 - `/clear` で会話の作り直しの境界が出ること。**/clear の後に過去ログの一覧で会話が分かれるか (別のセッションとして出るか) を記録する** (X-6 への申し送り)。**plan モードを抜けたときにも境界が出るかを記録する**
 - コードを読ませる依頼で `Read` / `Glob` / `Grep` が専用の表示で出て、WSL のパスがそのまま読めること。**`Glob` / `Grep` (`files_with_matches`) の結果の text をそのまま記録する** (絶対か相対か、見出しや打ち切りの行。FE-020 の fixture の元)
 - `WebFetch` / `WebSearch` が出ること (見出しが host だけで、クエリ付きの URL でパスとクエリが出ないこと)

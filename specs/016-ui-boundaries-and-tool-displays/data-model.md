@@ -2,17 +2,17 @@
 
 各規則の正本は本ファイルの節。SDK の型は `@anthropic-ai/claude-agent-sdk` 0.3.270 (`SDKCompactBoundaryMessage` `sdk.d.ts:3457`、assistant の `supersedes` :3370、`SDKConversationResetMessage` :4749、`SDKInformationalMessage` :4855、`SDKModelRefusalFallbackMessage` :5022、`SDKModelRefusalNoFallbackMessage` :5059、`sdk-tools.d.ts` の `FileReadInput` :812・`GlobInput` :840・`GrepInput` :850・`WebFetchInput` :1034・`WebSearchInput` :1044・`TaskCreateInput` :2724・`TaskGetInput` :2744・`TaskUpdateInput` :2750・`TaskListInput` :2790)。
 
-design-gate R2 の後に H-01〜H-03 と Medium を手当てした (再レビューを受けていない)。
+design-gate R2 の後に H-01〜H-03 と Medium を手当てした (再レビューを受けていない)。2026-10-13 に main (O-7・O-3・O-4・O-5 の実装の後) に合わせて、ファイル名・関数名・行番号と O-4 / O-5 が先に入れたもの (`ToolResultMarks` の経過時間・`QUERY_MUTATION_METHODS` の 2 つ・状態のアイコンの部品) を直した。
 
 ## §1 会話の境界と知らせの行 (O-2 の `system-event` の category。O-4 data-model §3 の作り方)
 
-category と status の列挙の正本は `transcript-dto.ts` (`SYSTEM_EVENT_CATEGORIES` / `SYSTEM_EVENT_STATUSES`)、終わりの判定は `system-event.ts` (`isTerminalSystemEventStatus`)。本 feature の status はすべて 1 回の出来事で、終わりを表す。`SystemEventStatus` の説明は「行の状態の理由キー (Hook / task の状態と、本 feature の行の見た目の段階)」に直す。
+category と status の列挙の正本は `transcript-dto.ts` (`SYSTEM_EVENT_CATEGORIES` / `SYSTEM_EVENT_STATUSES`。O-5 の後は category 7 (`hook` / `task` / `api-retry` / `compaction` / `permission-mode` / `auth` / `plugin`)・status 15)、終わりの判定は `system-event.ts` (`isTerminalSystemEventStatus`)。行は agents の `live-signals.ts` で組む: `system` の 3 つの subtype (`compact_boundary` / `model_refusal_*` / `informational`) は `onSystem` の switch に足し、最上位の `conversation_reset` は `sdk-agent-session.ts` の `message.type` の switch に分岐を足して `live-signals` の関数を呼ぶ (O-5 の `auth_status` と同じ形)。本 feature の status はすべて 1 回の出来事で、終わりを表す。`SystemEventStatus` の説明は「行の状態の理由キー (Hook / task の状態と、本 feature の行の見た目の段階)」に直す。
 
 | category | 行の id | opens | 読むフィールド | 読まないフィールド | `name` | `detail` | `status` |
 |---|---|---|---|---|---|---|---|
 | `compact-boundary` | `compact-boundary:<uuid>` | true | `compact_metadata.trigger`・`pre_tokens`・`post_tokens` | `preserved_segment`・`preserved_messages`・`duration_ms` | '' | `<trigger> <pre> <post>` | `marked` |
 | `conversation-reset` | `reset:<uuid>` | true | (なし) | `new_conversation_id` | '' | '' | `marked` |
-| `refusal` (fallback) | `refusal:<uuid>` | true | `direction`・`scope`・`fallback_model`・`api_refusal_category` | `content`・`api_refusal_explanation`・`request_id`・`refused_user_message_uuid`・`original_model` (`retracted_message_uuids` は行に入れず取り消しに使う) | fallback のモデル (O-4 の `modelId` の形の検査。外れたら '') | `<direction> <scope> <category>` | `fallback` |
+| `refusal` (fallback) | `refusal:<uuid>` | true | `direction`・`scope`・`fallback_model`・`api_refusal_category` | `content`・`api_refusal_explanation`・`request_id`・`refused_user_message_uuid`・`original_model` (`retracted_message_uuids` は行に入れず取り消しに使う) | fallback のモデル (O-4 の `modelId` の形の検査 `isMeterModelId`。外れたら '') | `<direction> <scope> <category>` | `fallback` |
 | `refusal` (no fallback) | `refusal:<uuid>` | true | `content`・`api_refusal_category` | `api_refusal_explanation`・`original_model`・`request_id`・`refused_user_message_uuid` | category (形の検査を通ったときだけ。外れたら '') | `content` を下の本文の規則で | `no-fallback` |
 | `informational` | `info:<tool_use_id>` (形の検査を通れば) / `info:<uuid>` | true | `content`・`level`・`prevent_continuation`・`tool_use_id` | — | '' | `content` を下の本文の規則で | `prevented` (`prevent_continuation`) / `warning` (`level` が `warning` / `suggestion`) / `notice` (`info` / `notice` / 照合に外れた値) |
 
@@ -35,7 +35,7 @@ category と status の列挙の正本は `transcript-dto.ts` (`SYSTEM_EVENT_CAT
 
 ### 伏せ字 (`redactSecrets`。`src/domain/session/secret-redaction.ts` に新設する純関数。import を持たない。秘密の綴りの正本)
 
-当たった部分を `•••` に置き換える (行全体は消さない)。境界 `B` は `(^|[^A-Za-z0-9])` (`system-event.ts:50` と同じ)。名前は大文字小文字を区別しない (`Basic` を除く)。
+当たった部分を `•••` に置き換える (行全体は消さない)。境界 `B` は `(^|[^A-Za-z0-9])` (`system-event.ts:51` の `mayCarrySecret` と同じ)。名前は大文字小文字を区別しない (`Basic` を除く)。
 
 | 種類 | 形 (正本) | 伏せる部分 |
 |---|---|---|
@@ -60,15 +60,15 @@ category と status の列挙の正本は `transcript-dto.ts` (`SYSTEM_EVENT_CAT
 
 - **合図は 2 つ**: (a) 実行中の assistant メッセージの `supersedes` (届いた時点。代わりのメッセージを送る前に送る)、(b) `model_refusal_fallback` の `retracted_message_uuids` (ターンの終わり。SDK の監査の記録)。どちらも冪等。(a) で外してから (b) の拒否の行が届くまで、理由の行は無い (U-2。V-3 で確かめる)
 - **運び方**: O-4 の `meter` に種類 `retraction` (`{ type: 'retraction'; messageIds: readonly string[] }`) を足す。`messageIds` は `^[A-Za-z0-9_-]{1,128}$` のものだけ、1 件の `meter` に 1〜128 件。128 件を超えたら分けて全部送る
-- **O-4 の上限と間引きに掛けない** (1 回限りの指示で、最新の値で置き換えられないため。O-5 の `init-report` / `commands` と同じ)。保留しないので `finish()` で捨てられない。renderer は `meters` に最新の値として持たず、届いた順に全部当てる
+- **O-4 の上限と間引きに掛けない** (1 回限りの指示で、最新の値で置き換えられないため。O-5 の `init-report` / `commands` と同じく `meter-throttle` を通さない。O-5 の種類ごとの合流 (1 秒の窓) も掛けない)。`live-signals.ts` の `send` で即時に送り、保留しないので `finish()` で捨てられない。(a) は `sdk-agent-session.ts` の `case 'assistant'` で、代わりのメッセージの `emit` と `toolResults.trackAssistant` の**前**に送る (今の `signals.onAssistant` は `emit` の後に呼ばれるので使わない)。renderer は `meters` (`SessionMeters`) に最新の値として持たず、届いた順に全部当てる
 - **戻らない仕組み**:
   - agents: tool の結果の追跡 (`live-tool-results.ts`) に `retract(messageIds)` を足す。該当のメッセージを忘れ、その結果待ちの `toolUseId` を上限つき (512) で覚え、後から届いた結果を送り直しにも結果だけのメッセージにもせず捨てる。取り消した id の `message` を後から送らない (上限つき 512)
   - renderer: 稼働中のストアは同じセッションの `messages` から外し、外した id をセッションごとに上限つき (512) で覚えて、後から同じ id の `message` が届いても足さない。閉じたセッションには書かない。`close()` で外した id の記憶を消す。隠れた古いメッセージの件数を直す。表示位置は既存のアンカリングで保つ
-  - 外した後に監視ビューの派生値 (`trackDerived`) を通す (直近の活動に取り消した tool が残らない)。O-4 の `toolElapsed` から取り消した `toolUseId` を消す。承認の要求 (`pending`) は消さない (承認カードは利用者の応答を待つ。何を許可するかは承認カードの入力で分かる)
+  - 外した後に監視ビューの派生値 (`running-session-monitor.ts` の `trackDerived`) を通す (直近の活動に取り消した tool が残らない)。O-4 の `SessionMeters.toolElapsed` から取り消した `toolUseId` を消す。承認の要求 (`pending`) は消さない (承認カードは利用者の応答を待つ。何を許可するかは承認カードの入力で分かる)
   - 結果だけの行 (`result:<toolUseId>`) は取り消しの対象外 (SDK の uuid と一致しない)。取り消した後の結果は agents が捨てるので新たにはできない
   - decoder: `messageIds` が配列でない・0 件・129 件以上なら `meter` ごと捨てる。形の合わない id は 1 件ずつ捨てる
 - **行の件数**: 拒否の行は取り消しの件数を出さない (SDK の列は tool_result の id も含み、外したメッセージの数と一致しないため)
-- **観測**: agents の開発用ログに、指示の件数・形の検査で落とした件数・送った assistant の id (上限つき 512) に当たらなかった件数を数だけ残す。roadmap の O-3 (O-8) の義務 (c) の `receivedMessages` は、本 feature の行を数え、`retraction` を数えない
+- **観測**: agents の開発用ログに、指示の件数・形の検査で落とした件数・送った assistant の id (上限つき 512) に当たらなかった件数を数だけ残す。roadmap の O-8 の行の (c) の `receivedMessages` は、本 feature の行を数え、`retraction` を数えない (O-4 の `meter` と同じく `meter` は数えない)
 - O-4 data-model §2 の値の検証の表に `messageIds` の行を足す (AD-047 D2 の読み替え。AD-049)
 
 ### 見た目
@@ -79,7 +79,7 @@ category と status の列挙の正本は `transcript-dto.ts` (`SYSTEM_EVENT_CAT
 | `refusal` | 注意の行 |
 | `informational` | `prevented` / `warning` は注意の行、`notice` は控えめの行 |
 
-- O-4 の `compaction` の行 (進み具合: 圧縮中 → 完了 / 失敗) と圧縮の境界は並べて描く。行が先、境界が後 (research R-07)
+- O-4 の `compaction` の行 (進み具合: 圧縮中 → 完了 / 失敗。`live-signals.ts` の `onStatus`) と圧縮の境界は並べて描く。行が先、境界が後 (research R-07) **[未承認 — `.needs-input.md` Q1]**
 
 ## §2 tool の専用表示
 
@@ -95,9 +95,9 @@ category と status の列挙の正本は `transcript-dto.ts` (`SYSTEM_EVENT_CAT
 | `TaskGet` / `TaskList` | 「タスクを確認 #{taskId}」/「タスクの一覧」 | 結果の text |
 
 - **見出しの自由文** (`pattern`・`glob`・`query`・`subject`) にも `redactSecrets` を通す (§1)
-- **WebFetch の見出しを host だけにする理由**: パスの末尾が秘密の webhook (`/services/T…/B…/<secret>`・`/api/webhooks/<id>/<token>`) があり、見出しは畳んでも見えるため (design-gate R2 H-01)。URL の読み取り (WHATWG URL) は O-5 data-model §1 の関数と共有し、見出しの組み立ては本 feature の規則にする。**O-5 の MCP resource の URI の要約も最後のパスの要素を出すので、O-5 の実装で同じ見直しをする** (roadmap の O-5 の行に書く。SH-010)
+- **WebFetch の見出しを host だけにする理由**: パスの末尾が秘密の webhook (`/services/T…/B…/<secret>`・`/api/webhooks/<id>/<token>`) があり、見出しは畳んでも見えるため (design-gate R2 H-01)。URL の読み取り (WHATWG URL) と見出しの組み立ては本 feature の純関数 (`web-tool.aui.tsx` の隣) に置く。O-5 の `summarizeResourceUri` (`features/chat/mcp-tool-name.ts`) は最後のパスの要素まで出す要約で規則が違うので共有しない。O-5 はその最後の要素を、ファイル名らしい形 (`^[A-Za-z0-9._-]{1,64}$`) で英数字 20 文字以上の連続を含まず `mayCarrySecret` が偽のときだけ出す形で実装した (015 data-model §1 の Q3) ので、O-6 から O-5 に送る見直しは無い
 - **パス**: tool の入力と結果のパスは会話由来の本文 (AD-034) で、アプリのパスの値ではない (R-2 FR-042・AD-025:181・AD-028 §3 規則 4・AD-029・AD-032 の対象外。範囲の確認で、読み替えではない)。UNC を判定も除去もしない。`path-api` を import しない。renderer に UNC の綴りを書かない (項目 12)。**本文のパスはすべて表示だけ**で、File tree の項目にも中身のパスにも操作 (選ぶ・開く・表示する) を付けない。ファイルを開く導線は Files (AD-025) の PathDTO の経路でだけ作る
-- **パスの末尾**: `features/chat/path-tail.ts` (renderer。新設) に表示用の純関数 `pathTail` を置き、`session-view.ts` からも使う。docstring に「表示用の文字列の切り出し。パス API ではない。名前空間を持たない本文に使う」と書く。末尾の `/` と `\` を除いてから、`/` と `\` の両方で切った最後の要素を返す (残りが空なら元の文字列)。ホスト OS やランタイムで切り方を変えない。切った値を IPC・port に戻さない
+- **パスの末尾**: `features/chat/path-tail.ts` (renderer。新設) に表示用の純関数 `pathTail` を置き、`session-view.ts:257` の同名の関数をここに移して両方から使う (直近の活動の出力が変わるのは末尾が区切りのパスだけ — 今は空を返して `safeName` で落ちる。移した後は最後の要素が出る。`session-view` のテストで固定する)。docstring に「表示用の文字列の切り出し。パス API ではない。名前空間を持たない本文に使う」と書く。末尾の `/` と `\` を除いてから、`/` と `\` の両方で切った最後の要素を返す (残りが空なら元の文字列)。ホスト OS やランタイムで切り方を変えない。切った値を IPC・port に戻さない
 - **File tree の作り方** (結果の text から):
   1. 改行で分け、前後の空白を除き、空の行を捨てる
   2. 次の形の行を注記、それ以外を項目にする: `(` で始まる行、`^Found \d+ (files?|matches)`、`^No (files|matches) found`。[ASSUMED: CLI の出力の形。V-3 で実際の結果の text を記録し、fixture をその記録から作る]
@@ -124,7 +124,8 @@ category と status の列挙の正本は `transcript-dto.ts` (`SYSTEM_EVENT_CAT
 | `live` かつ `latestTurn` かつ `runState` が `awaiting_permission` | 結果待ち | 「結果待ち」(動かない。どの tool の承認かは承認カードが示す) |
 | それ以外 (応答が終わった・中断した・終了・失敗・過去ログ・前のターン) | 結果不明 | 「結果不明」 |
 
-- **状態の正本は `toolResultState`**: 結果の無い tool-call の part に assistant-ui が当てる状態 (`running` / `requires-action` / `incomplete`) は使わない。ToolFallback を含むすべての表示の状態のアイコン (spinner / ✓ / ✗ / ⚠) と文言を `toolResultState` と part の `isError` から決める (design-gate R2 M-12)
+- **状態の正本は `toolResultState`**: 結果の無い tool-call の part に assistant-ui が当てる状態 (`running` / `requires-action` / `incomplete`) は使わない。ToolFallback を含むすべての表示の状態のアイコン (spinner / ✓ / ✗ / ⚠) と文言を `toolResultState` と part の `isError` から決める (design-gate R2 M-12)。O-5 が切り出した部品 (`tool-fallback.aui.tsx` の `ToolFallbackStatusIcon` / `statusWithError` / `isCancelledToolStatus`。McpToolCall・AskUserQuestion も使う) の入力を `toolResultState` から作る形に替える
+- **O-4 の印との関係**: 印は O-4 の `ToolResultMarks` (`tool-result-marks.tsx`。経過時間・切り詰め・エラー) に足す。今の `pending` (`result === undefined` で、経過時間を出すか) は `toolResultState` が結果待ちのときだけ真にする (結果不明・結果は別に表示では経過時間を出さない)。経過時間の購読 (`useLiveToolElapsed`) は変えない
 - 承認の要求を tool ごとに見分けない (`PermissionRequest` に `toolUseId` が無く、足すと session の契約が変わるため。U-6)
 - 並列の tool の結果が 1 つずつ届くか、まとめて届くか (V-4 未記録) に依らない (tool の part ごとに判定する)
 - **印を出す表示** (すべて): TerminalBlock (`Bash`)・CodeDiff (`Edit` / `Write` / `MultiEdit`)・TodoList (`TodoWrite`)・Subagent (`Agent` / `Task`)・AgentPlan (`ExitPlanMode`) (R-4)、McpToolCall・AskUserQuestion (O-5)、FileTool・WebTool・TaskTool (本 feature)、ToolFallback
@@ -135,7 +136,7 @@ category と status の列挙の正本は `transcript-dto.ts` (`SYSTEM_EVENT_CAT
 
 - **きっかけ**: 描画した後に新しく届いた出来事だけ。最初の描画・セッションの切り替え・過去ログ・「さらに表示」で現れたものは読まない (その時点の id の集合を基準にし、差分だけを読む)
 - **読むもの**: tool の結果のエラー、圧縮・会話の作り直し・拒否の行、`prevented` の知らせ、**O-2 の Hook / task の行が新しく終わりの状態 (`failed` / `killed` / `stopped` / `completed` / `succeeded` / `cancelled`) になったこと** (O-2 pr-gate a11y M-003)
-- **読まないもの**: セッションの終わりで一斉に結果不明になった tool と行 (失敗は `SessionScreen` の `role="alert"` が伝える)、承認 (`ApprovalCard` の `alertdialog`)、見ていないセッション (`SessionAttentionAnnouncer`)
+- **読まないもの**: セッションの終わりで一斉に結果不明になった tool と行 (失敗は `SessionScreen` の `role="alert"` が伝える)、承認 (`ApprovalCard` の `alertdialog`)、見ていないセッション (`SessionAttentionAnnouncer`)、O-4 / O-5 の行 (`api-retry`・`compaction`・`permission-mode`・`auth`・`plugin`。O-2 の割当の外で、権限モードの警告は O-4 の帯 (`role="alert"`) が伝える)
 - **中身**: 固定の文言・既知の列挙・件数だけ。tool 名は登録済みの名前か `^[A-Za-z0-9_-]{1,64}$` に合うときだけ出し、それ以外は「tool」。Hook 名・task の説明・`content`・`prompt`・パスを入れない
 - `aria-live="polite"`、1 秒に 1 回までにまとめる
 - 利用者が承認カードで拒否した・中断した直後の tool のエラーも読む (区別できないため)。拒否と中断の後の `is_error` を V-3 で記録し、エラーとして届くなら見直す
@@ -172,6 +173,7 @@ category と status の列挙の正本は `transcript-dto.ts` (`SYSTEM_EVENT_CAT
 | A | `local_command_output` / `notification` / `files_persisted` / `tool_use_summary` / `memory_recall` / `prompt_suggestion` / `mirror_error` / `background_tasks_changed` | `後続: O-11` (`background_tasks_changed` の備考の「O-6」も O-11 に。`local_command_output` の備考に「過去ログは伏せ字つきの system の本文」) |
 | A' | `active_goal` | `後続: O-11` |
 | A | `hook_started` / `task_started` の備考の「O-6」 | 「O-11 (D 節)」に |
+| A | `tool_progress` (O-4 の行) の備考の「subagent の中の tool の入れ子は O-6」 | 「O-11 (D 節)」に |
 | B | 節の冒頭の「照合は O-6」 | 「照合は O-11」に |
 | B | `server_tool_use` / `web_search_tool_result` / `user/document` | `後続: O-11` |
 | B | `user/tool_result` の備考の「結果待ち・結果不明の印と読み上げは O-6」 | 「実装済み (O-6)」に |
@@ -190,3 +192,4 @@ category と status の列挙の正本は `transcript-dto.ts` (`SYSTEM_EVENT_CAT
 | F | Sources | `未使用`。備考 同上 |
 
 - M3 の完了の条件の残り: O-6 の Tier A 14 行が消え、D 節の O-11 の 3 行が加わる (U-1)
+- 書き換えの前に `後続: O-6` の行を数え直す (2026-10-13 の main で 30 行・Tier A 14。O-4 / O-5 は O-6 の行を増やしていない。備考に「O-6」を持つ `実装済み` の行は上の表のとおり)

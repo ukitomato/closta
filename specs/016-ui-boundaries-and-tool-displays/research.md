@@ -1,12 +1,12 @@
 # Research: 会話の境界と tool の専用表示の第 2 弾 (O-6)
 
-調べた日: 2026-10-04 (夜間の自走)。design-gate R1 の後に R-06〜R-12 を、R2 の後に R-13 / R-14 を足し、R-05 / R-09 / R-10 を直した。
+調べた日: 2026-10-04 (夜間の自走)。design-gate R1 の後に R-06〜R-12 を、R2 の後に R-13 / R-14 を足し、R-05 / R-09 / R-10 を直した。2026-10-13 に main (O-7・O-3・O-4・O-5 の実装の後) と突き合わせ、ファイル名と行番号、O-4 / O-5 が先に入れたもの (R-14 の状態のアイコンの部品・O-4 の経過時間の印、`QUERY_MUTATION_METHODS` の `backgroundTasks` / `reloadOutputStyles`) を直した。
 
 ## R-01 範囲の分割 (U-1)
 
 - 対応表の `後続: O-6` は 30 行 (Tier A 14: `compact_boundary`・`model_refusal_fallback`・`model_refusal_no_fallback`・`informational`・`conversation_reset`・`Read`・`Glob`・`Grep`・`WebFetch`・`WebSearch`・`TaskCreate`・`TaskGet`・`TaskUpdate`・`TaskList`)。O-2 の quickstart-results V-1 の件数 (O-6 30 [Tier A 14])
 - roadmap の O-6 の行には、さらに O-2 の pr-gate R2 / R3 の項目と V-4 の 4 項目がある
-- Tier A の `実装済み` の行の備考で O-6 に回した残りが 5 行ある (ui-coverage.md:53 一般の Hook・:60 後から背景に移った task・:104 結果の状態・:114 実行中の subagent の入れ子・:117 Agent plan の markdown)。O-2 pr-gate M-201 は「項目 21 の M3 の件数がこれを数えない → O-6 の design で D 節に行を起こすか凡例に規定」とした
+- Tier A の `実装済み` の行の備考で O-6 に回した残りが 5 行ある (2026-10-13 の main の ui-coverage.md:58 一般の Hook・:65 後から背景に移った task・:109 結果の状態・:119 実行中の subagent の入れ子・:122 Agent plan の markdown。O-4 が足した :62 `tool_progress` の「subagent の中の tool の入れ子は O-6」は :119 と同じ入れ子で、O-11 に付け替える)。O-2 pr-gate M-201 は「項目 21 の M3 の件数がこれを数えない → O-6 の design で D 節に行を起こすか凡例に規定」とした
 - **Decision**: Tier A 14 行と表示の状態を O-6 に、残りを O-11 に (AD-049 Decision 1)。備考の 5 行のうち :104 / :117 は O-6 で解消し、残る 3 つは D 節に Tier A の `後続: O-11` の行を立てる (data-model §5)
 - **Rationale**: M3 の完了の条件は Tier A の `後続` の行だけで判定する (AD-044 Decision 3)。D 節に立てないと、3 つが出ないまま M3 が閉じる
 
@@ -48,9 +48,9 @@
 
 ## R-07 圧縮の行 (O-4) と境界 (本 feature) を並べるか
 
-- O-4 は統合するか並べるかを O-6 に任せた (014 data-model §3)
-- O-4 の行は進み具合で、圧縮中・完了・失敗を出す。境界は会話の区切りで、成功したときだけ届く
-- **Decision**: 並べる。行が先、境界が後 (届く順)。失敗のときは行だけが残るので、統合すると失敗が出せない
+- O-4 は統合するか並べるかを O-6 に任せた (014 data-model §3 の「O-6 との関係」・roadmap の O-6 の行の「O-4 から」)
+- O-4 の行は進み具合で、圧縮中・完了・失敗を出す (`live-signals.ts` の `onStatus`。`compact:<連番>` の行を `compacting` で開き、`compact_result` で閉じる。開いた行が無いまま結果が来たら結果の状態で行を作る)。境界は会話の区切りで、成功したときだけ届く。`compact_result` と `compact_boundary` のどちらが先に届くかは未確認 (014 quickstart-results V-4 の 7 も未確認)
+- **Decision**: 並べる。行が先、境界が後 (届く順)。失敗のときは行だけが残るので、統合すると失敗が出せない **[未承認 — `.needs-input.md` Q1]**
 - **Alternatives**: 成功した行を境界に置き換える (1 回の `/compact` で 2 つ出るのを避けられるが、行の合成の規則に例外が要る)
 
 ## R-08 tool の入力と結果のパス
@@ -85,12 +85,13 @@
 
 ## R-13 秘密の伏せ字の形 (design-gate R2 M-07)
 
-- 既存の秘密の綴りは src に 3 か所ある (`secret-scan.ts:15-25` が SSoT を名乗る、`system-event.ts:50`、`session-view.ts:240`)。中身がそろっていない
+- 既存の秘密の綴りは src に 3 か所ある (`secret-scan.ts:15-25` が SSoT を名乗る、`system-event.ts:51` の `mayCarrySecret`、`session-view.ts:244`)。中身がそろっていない。O-5 は MCP の URI の要約で `mayCarrySecret` と「英数字 20 文字以上の連続」を使った (`mcp-tool-name.ts:170-180`。新しい綴りの集合は足していない)
 - 文章に当てる伏せ字は、境界と値の終わりを決めないと取りこぼし (JSON のキー・`GITHUB_TOKEN=`・空白で区切ったフラグ・`sk_live_`・PEM) と誤検出 (`task-`・`Basic usage`・`-path`) が出る
 - **Decision**: 伏せ字の表を data-model §1 に正本として置き、`secret-redaction.ts` を秘密の綴りの正本にする。`secret-scan.ts` の接頭辞の集合を含むことを固定テストにする (既存の 3 か所を寄せるのは別 feature)。伏せすぎは受け入れる (U-3)
 
 ## R-14 結果の無い tool の状態 (design-gate R2 M-12)
 
-- assistant-ui は結果の無い tool-call の part にメッセージの状態をそのまま当てる (最後で応答中なら `running`、それ以外の未完了は `requires-action` / `incomplete`)。ToolFallback はこれでアイコン (spinner / ✓ / ✗ / ⚠) と「Cancelled tool」を描く (`tool-fallback.aui.tsx:94-99`, `:145`, `:303`)
+- assistant-ui は結果の無い tool-call の part にメッセージの状態をそのまま当てる (最後で応答中なら `running`、それ以外の未完了は `requires-action` / `incomplete`)。ToolFallback はこれでアイコン (spinner / ✓ / ✗ / ⚠) と「Used tool」/「Cancelled tool」を描く (`tool-fallback.aui.tsx:94-99`、`ToolFallbackStatusIcon` :144-163、見出し :178)。O-5 はこのアイコンの部品と `statusWithError` (:706-712) を切り出し、McpToolCall・AskUserQuestion も同じ部品で描く
+- O-4 は結果待ちの tool の経過時間を `ToolResultMarks` (`tool-result-marks.tsx`) に足した。経過時間を出すかの `pending` は `result === undefined` で、結果の来ないまま終わった tool でも購読元に値が残れば出うる
 - 応答中のターンで、前のメッセージの tool に ⚠、最後のメッセージの tool に spinner が付き、data-model §3 の「結果待ち」と食い違う
-- **Decision**: 状態の正本は `toolResultState`。すべての表示の状態のアイコンと文言をそこから決め、assistant-ui の part の状態を使わない
+- **Decision**: 状態の正本は `toolResultState`。すべての表示の状態のアイコンと文言をそこから決め、assistant-ui の part の状態を使わない。O-5 の部品の入力と O-4 の `pending` を `toolResultState` から作る (data-model §3)
