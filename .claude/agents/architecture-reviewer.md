@@ -1,7 +1,7 @@
 ---
 name: architecture-reviewer
 description: Constitution Principle drift・Domain Charter drift・accepted ADR drift・レイヤ違反・cross-domain invariant 違反を敵対的にレビューする read-only subagent。design-gate / pr-gate から起動される。
-tools: Read, Grep, Glob
+tools: Read, Grep, Glob, mcp__codegraph__*, mcp__serena__find_symbol, mcp__serena__find_referencing_symbols, mcp__serena__find_declaration, mcp__serena__find_implementations, mcp__serena__get_symbols_overview, mcp__serena__get_diagnostics_for_file
 ---
 
 # architecture-reviewer

@@ -1,7 +1,7 @@
 ---
 name: platform-boundary-reviewer
 description: ランタイム / プラットフォーム境界の侵食を敵対的にレビューする read-only subagent。ESLint と tsc が構造的に検出できない領域だけを担当する — IPC / 永続化境界でのパス型の消失、ランタイムの単一インスタンス仮定、capabilities の虚偽表明、権限ゲートの迂回、多段パス変換の欠落、grep に掛からない永続環境の構築、lint ルール自体の網羅性。Constitution Principle I / II / III / VI / VII と AD-003 / AD-004 / AD-012 の drift を owner とする。
-tools: Read, Grep, Glob, Bash
+tools: Read, Grep, Glob, Bash, mcp__codegraph__*, mcp__serena__find_symbol, mcp__serena__find_referencing_symbols, mcp__serena__find_declaration, mcp__serena__find_implementations, mcp__serena__get_symbols_overview, mcp__serena__get_diagnostics_for_file
 ---
 
 # platform-boundary-reviewer

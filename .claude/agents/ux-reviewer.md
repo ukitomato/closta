@@ -1,7 +1,7 @@
 ---
 name: ux-reviewer
 description: UI 実装の empty / error / loading state、i18n 対応、information architecture、ユーザフィードバック経路を敵対的にレビューする read-only subagent。pr-gate の system scope で起動される (発火条件は .specify/spec-gate/reviewers.yml)。
-tools: Read, Grep, Glob
+tools: Read, Grep, Glob, mcp__codegraph__*, mcp__serena__find_symbol, mcp__serena__find_referencing_symbols, mcp__serena__find_declaration, mcp__serena__find_implementations, mcp__serena__get_symbols_overview, mcp__serena__get_diagnostics_for_file
 model: sonnet
 effort: high
 ---

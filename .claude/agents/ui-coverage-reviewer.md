@@ -1,7 +1,7 @@
 ---
 name: ui-coverage-reviewer
 description: Claude Code (Agent SDK) が emit する情報と表示の対応表 docs/ui-coverage.md の判断を要する点を敵対的にレビューする read-only subagent。新しいメッセージ型・tool・ブロックの表示を足す PR に対応表の更新が同じ PR で含まれているか、割当の種類と Tier が妥当か、後続 feature への割当が持ち主の範囲に合うか、SDK の版を上げる PR で対応表が直っているかを見る。Constitution Principle XII と AD-044 の drift を owner とする。機械照合 (Constitution 検証の項目 21) と同じことは見ない。pr-gate で起動される (発火条件は .specify/spec-gate/reviewers.yml)。
-tools: Read, Grep, Glob
+tools: Read, Grep, Glob, mcp__codegraph__*, mcp__serena__find_symbol, mcp__serena__find_referencing_symbols, mcp__serena__find_declaration, mcp__serena__find_implementations, mcp__serena__get_symbols_overview, mcp__serena__get_diagnostics_for_file
 model: sonnet
 effort: high
 ---
