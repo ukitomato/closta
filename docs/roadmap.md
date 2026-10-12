@@ -13,6 +13,13 @@ feature の定義と domain 帰属は [docs/domains/_overview.md](domains/_overv
 ## 原則
 
 - **1 feature = 1 branch = 1 spec。** 各 feature は単体で動作確認できる垂直スライスとする（Principle XI）
+- **design は次の 1 本だけ。** 依存先の feature が main に入るまで、次の feature の `/cl-design` を起こさない
+  （前倒しの design は依存先の実装に合わせて作り直しになる。O-3〜O-5 の載せ直しが例）
+- **feature の範囲と義務の正本は本書の行。** `/cl-design` のプロンプトには書かず、`/cl-spec` が行から読む
+- **マイルストーンの終わりに棚卸しする。** そのマイルストーンの spec の gate の出力にある Medium / Low と、
+  持ち主の feature が決まっていない申し送り (「次に X を触る feature」) を一覧にし、利用者が
+  「直す / 次のマイルストーンの特定の feature に付ける / 捨てる」を決める。直すものは 1 本の整理の spec にまとめる
+  ([AD-050](decisions/0050-gate-finding-handling-and-round-limit.md))
 - **SPIKE は feature ではない。** 対応する feature の spec 着手**前**の調査タスクとして扱い、
   結果は `docs/decisions/` に ADR として起票する
 - **マイルストーンは「できるようになること」で定義する。** 完了判定を漸近線にしない

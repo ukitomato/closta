@@ -2,6 +2,8 @@
 name: database-reviewer
 description: 永続化スキーマを敵対的にレビューする read-only subagent。JSON 設定ファイル・プリセット・SQLite のスキーマ互換性、マイグレーション、資格情報の置き場を見る。code-gate / pr-gate で `src/main/infra/settings/**` / `src/main/infra/secrets/**` / migration / `*.sql` の変更を伴う PR で起動される (発火条件は .specify/spec-gate/reviewers.yml)。
 tools: Read, Grep, Glob
+model: sonnet
+effort: high
 ---
 
 # database-reviewer (optional)

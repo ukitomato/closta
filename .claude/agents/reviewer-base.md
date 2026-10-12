@@ -111,6 +111,8 @@ reviewer は最初の指摘を出す前に **必ず** 以下を Read する:
 | **Medium** | 保守性低下 / 将来的負債 / カバレッジ穴 |
 | **Low** | スタイル / 微小最適化 |
 
+**Critical / High にしてよいのは、正しさ・セキュリティ・spec の要件・プロジェクト不変条件に関わる指摘だけ。** 好み・将来の拡張・起こりえない場合への備えは Low にする。Medium / Low は gate で直されない ([AD-050](../../docs/decisions/0050-gate-finding-handling-and-round-limit.md)) ので、直すべきものを Medium に置かない。
+
 ### Severity 判定の禁則 (pr-gate / code-gate phase)
 
 以下を Critical として扱うことは禁止 (`/cl-pr-gate` で `gate_common::cascade_enforce` により機械的に High に降格される):

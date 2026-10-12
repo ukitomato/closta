@@ -83,7 +83,8 @@ done
 1. `.gate-verdict-pr.json` が存在すれば、その `round` + 1 を新 round 番号とする
 2. 存在しなければ N = 1
 3. `--round` 指定があればそちらを優先
-4. N >= 2 の場合、`round_history[]` の直前 entry と、あれば `.gate-verdict-pr.round<N-1>.json` の Critical / High findings 本文を Read して Phase 5 の引継ぎ判定に使う。reviewer にはパスで渡す (Phase 4)。
+4. **N >= 4 は `--round <N>` の明示があるときだけ受け付ける。** 明示がなければ halt し、「3 round で Critical が残っています。spec の範囲の調整か ADR の起票を人が判断してください」と返す (AGENTS.md の gate の原則 / AD-050)
+5. N >= 2 の場合、`round_history[]` の直前 entry と、あれば `.gate-verdict-pr.round<N-1>.json` の Critical / High findings 本文を Read して Phase 5 の引継ぎ判定に使う。reviewer にはパスで渡す (Phase 4)。
    **snapshot が無く findings 本文が復元できないときは `inheritance: "summary-only"` として記録し、黙って「全部 new」扱いにしない** — 引継ぎ 0 件と引継ぎ不能は別物である
 
 ### Phase 2: Convergence gate (N >= 4 のときのみ)
@@ -127,6 +128,16 @@ active=$(gate_common::reviewers_filter pr-gate "$spec_dir/.pr-gate-scope.txt" \
 絞った理由は stderr に 1 行ずつ出る。**Phase 5 の集約に「起動しなかった reviewer とその理由」を必ず転記する。**
 
 `lint-agent` / `test-agent` / `convention-reviewer` は **起動しない** (code-gate 専任)。
+
+#### Round 2 以降の reviewer の絞り込み
+
+Round N (N≥2) では、`active` をさらに次の和集合に絞る (AD-050):
+
+1. Round N-1 の `pr-gate.md` で、未解決の Critical / High を持つ reviewer
+2. `git diff <round N-1 の head>..HEAD --name-only` の変更ファイルを入力にした `gate_common::reviewers_filter pr-gate` が返す reviewer
+
+除いた reviewer は `skipped_reviewers[]` に `reason: "no-open-findings-and-untouched"` を付けて記録する。
+Round N-1 の head は `.gate-verdict-pr.json` の `round_history[]` の直前 entry の `head` から引く (Phase 5b で Round 1 から書く)。`head` が無い (本規則の導入前の round) ときは絞らず、全員を起動する。
 
 ### Phase 4: 並列起動 + code-gate verdict 受け渡し
 
@@ -210,7 +221,7 @@ active=$(gate_common::reviewers_filter pr-gate "$spec_dir/.pr-gate-scope.txt" \
   "severity_counts": {"critical": 0, "high": 3, "medium": 2, "low": 5},
   "convergence": {"resolved_from_prev": 0, "new_in_round": 3, "unresolved": 0},
   "round_history": [
-    {"round": 1, "critical": 0, "high": 3,
+    {"round": 1, "head": "<git rev-parse HEAD>", "critical": 0, "high": 3,
      "convergence": {"resolved_from_prev": 0, "new_in_round": 3, "unresolved": 0}}
   ],
   "suppressed_by_code_gate": [
@@ -250,7 +261,7 @@ active=$(gate_common::reviewers_filter pr-gate "$spec_dir/.pr-gate-scope.txt" \
   - verdict: <PASS | FIX_REQUIRED | CONVERGENCE_FAILURE>
   - verdict JSON: <spec_dir>/.gate-verdict-pr.json
   - 次のアクション:
-    PASS → /cl-done <spec_dir>
+    PASS → /clear してから /cl-done <spec_dir>
     FIX_REQUIRED → Agent(implementer) に mode: fix / round: <N> / <spec_dir>/pr-gate.md / Critical の finding ID (<C-001, ...>) を渡して直させる
                    → /cl-code-gate で lint / test を通し直す → /cl-pr-gate (Round <N+1>)
     CONVERGENCE → ADR 起票 + spec 範囲調整
