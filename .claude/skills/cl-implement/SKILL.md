@@ -75,6 +75,8 @@ impl_base=$(cat "$spec_dir/.implement-base")
    - `DONE` → 次の section へ
    - `BLOCKED` → **halt** し、報告の `blocked` 行を利用者に提示する。対処が決まったら `/cl-implement` を再実行する (完了済みの `[x]` は skip される)
 4. 報告 (10 行以内) 以外を読まない。tasks.md の `[x]` は Phase 4 の bash で確かめる
+5. **main は `src/`・`tests/`・`e2e/` を Edit / Write しない。** 小さな修正でも implementer に任せる (実装の Read / Edit が main の context に積もるため)
+6. 途中で追加の作業に気づいたら、spec の範囲内なら tasks.md の該当 section に追記してから implementer を起動する。範囲外なら spec の Out of Scope に 1 行書き、別の spec にするかを利用者に確かめる (design-gate はやり直さない)
 
 ### Phase 3: touched-files の確定
 
@@ -142,7 +144,7 @@ auto-chain 中の status 遷移は code-gate 側が担当。本 skill の責務�
   - spec dir: <spec_dir>
   - tasks completed: <N>/<N>
   - touched files: <count> (see <spec_dir>/touched-files.txt)
-  - 次のアクション: /cl-code-gate <spec_dir>
+  - 次のアクション: /cl-code-gate <spec_dir> (PASS したら /clear してから /cl-pr-gate)
 ```
 
 ## Idempotency

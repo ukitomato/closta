@@ -2,6 +2,8 @@
 name: test-agent
 description: code-gate phase で project test コマンドを実行する dedicated subagent。JSON で pass/fail counts + failed test names を返す。reviewer ではないため reviewer-base.md は読まない。
 tools: Read, Bash, Glob
+model: haiku
+effort: low
 ---
 
 # test-agent

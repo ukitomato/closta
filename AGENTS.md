@@ -42,6 +42,8 @@ design-gate が FIX_REQUIRED なら status は `tasking` に留まる。`Agent(d
 
 - **gate 失敗時は status を進めない。** Critical 指摘を解消してから再実行する
 - **pr-gate は pure hard gate。** Critical を残したまま `/cl-done` に進む経路は存在しない
+- **Medium / Low は直さない。** gate の出力に残し、マイルストーンの終わりの棚卸しで扱う (roadmap の原則)。roadmap や spec に 1 件ずつ転記しない。High はその round で直し、High を確かめるためだけの round は回さない ([AD-050](docs/decisions/0050-gate-finding-handling-and-round-limit.md))
+- **design-gate と pr-gate は 3 round まで。** 3 round で Critical が残ったら止めて、人に判断を求める。code-gate の auto-fix loop の上限は別 (cl-code-gate)
 - **gate を通ったかの判定は `gate_common::verdict_require_pass` が行う。**
   `verdict_validate` は schema 検査であり、`FIX_REQUIRED` を正当な verdict として exit 0 で通す。
   「次の段に進んでよいか」を `verdict_validate` で判定してはならない

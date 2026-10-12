@@ -2,6 +2,8 @@
 name: lint-agent
 description: code-gate phase で project lint コマンドを実行する dedicated subagent。docs/discovery.md の Tech Stack section から lint コマンドを resolve し、JSON で violations を返す。reviewer ではないため reviewer-base.md は読まない。
 tools: Read, Bash, Glob
+model: haiku
+effort: low
 ---
 
 # lint-agent

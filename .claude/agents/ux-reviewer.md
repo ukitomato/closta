@@ -2,6 +2,8 @@
 name: ux-reviewer
 description: UI 実装の empty / error / loading state、i18n 対応、information architecture、ユーザフィードバック経路を敵対的にレビューする read-only subagent。pr-gate の system scope で起動される (発火条件は .specify/spec-gate/reviewers.yml)。
 tools: Read, Grep, Glob
+model: sonnet
+effort: high
 ---
 
 # ux-reviewer (optional)

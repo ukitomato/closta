@@ -353,7 +353,7 @@ fi
   - verdict: <PASS | FIX_REQUIRED>
   - status: <implementing → reviewing | 据置>
   - verdict JSON: <spec_dir>/.gate-verdict-code.json
-  - 次のアクション: /cl-pr-gate (PASS 時)
+  - 次のアクション: /clear してから /cl-pr-gate <spec_dir> (PASS 時)
 ```
 
 ## Idempotency
