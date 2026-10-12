@@ -5,7 +5,7 @@ domain: ui
 domain_selected_by: user
 targets: both
 targets_selected_by: user
-status: implementing
+status: reviewing
 bf_ids: []
 sf_ids: []
 linear: null
@@ -156,9 +156,10 @@ roadmap が O-5 に預けた義務 (O-5 の行と、system-scope の持ち主の
 
 1. **Given** `auth_status` の `isAuthenticating: true`、**When** 届く、**Then** 「Claude Code が認証中です。セッションを起動した環境の端末で claude にログインしてください」の行が出る。`output` の行は出さない
 2. **Given** 認証が終わった (`isAuthenticating: false`、`error` なし)、**When** 届く、**Then** 同じ行が「認証しました」に書き換わる
-3. **Given** `auth_status` に `error` がある、**When** 届く、**Then** 同じ行が「認証に失敗」に書き換わり、再ログインを案内する。`error` の文字列は出さない
+3. **Given** `auth_status` に `error` がある、**When** 届く、**Then** 同じ行が「認証に失敗」に書き換わり、再ログインを案内する。「認証中」の行が無いまま届いたら、「認証に失敗」の行を 1 つ作る (2026-10-10 承認。pr-gate MD-01)。`error` の文字列は出さない
 4. **Given** 行が「認証中」のままセッションが終わった、**When** 見る、**Then** O-2 の規則で「結果不明」
 5. **Given** `plugin_install` の `started` → `installed` / `failed` → `completed`、**When** 届く、**Then** 1 つの行が進み具合で書き換わり、導入できた / できなかったマーケットプレイスの数と、最後のマーケットプレイスの名前 (形の検査済み) が出る。`error` の文字列は出さない
+6. **Given** `started` を経ずに `plugin_install` の `installed` / `failed` / `completed` が届いた、**When** 届く、**Then** 行を 1 つ作り、以後は AC5 と同じく同じ行が書き換わる (2026-10-10 承認。pr-gate MD-01)
 
 ---
 

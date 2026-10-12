@@ -7,15 +7,19 @@ import type { SessionEvent } from '@domain/session/agent-session'
 import type { TranscriptPartDTO } from '@domain/session/transcript-dto'
 import type { SessionLaunchConfig } from '@domain/session/launch-config'
 import type { MeterUpdate } from '@domain/session/meter'
+import type { InitReportMeter } from '@domain/session/session-init-report'
 import type { SessionStatusUpdate } from '@domain/session/status-update'
 
 import { stubCapability } from '@/test-support/capability'
 
 import {
   createRunningSessionStore,
+  slashCommandEntries,
   type RunningSessionStore,
-  type SessionMeters
+  type SessionMeters,
+  type SlashCommandEntry
 } from './running-session-store'
+import { EMPTY_SESSION_METERS } from './running-session-types'
 import { availableActions, rowStatus, viewOf } from './session-view'
 
 /**
@@ -784,5 +788,163 @@ describe('running-session-store — 計量の受け口 (O-4 FE-004 / 014 data-mo
     emit(port, meter({ type: 'context', usedTokens: 1 }))
     expect(metersOf(h)).toBeUndefined()
     expect(h.store.getState().meters).toEqual({})
+  })
+})
+
+describe('running-session-store — 構成の受け口 (O-5 FE-001 / 015 data-model §2「renderer の保持」)', () => {
+  const meter = (m: MeterUpdate): SessionEvent => ({ kind: 'meter', meter: m })
+  const metersOf = (h: Harness, id = A): SessionMeters | undefined => h.store.getState().meters[id]
+  const init = (
+    slashCommands: readonly string[],
+    over: Partial<InitReportMeter> = {}
+  ): MeterUpdate => ({
+    type: 'init-report',
+    model: 'claude-sonnet-4-5',
+    mcpServers: [{ name: 'github', status: 'connected' }],
+    tools: ['Bash'],
+    skills: [],
+    plugins: [],
+    slashCommands,
+    omitted: 0,
+    ...over
+  })
+  const commands = (
+    list: readonly { name: string; description?: string; argumentHint?: string }[]
+  ): MeterUpdate => ({
+    type: 'commands',
+    commands: list.map((c) => ({
+      name: c.name,
+      description: c.description ?? '',
+      argumentHint: c.argumentHint ?? ''
+    })),
+    omitted: 0
+  })
+  const entries = (h: Harness, id = A): readonly SlashCommandEntry[] =>
+    slashCommandEntries(metersOf(h, id)!)
+  /** `a` (説明と hint つき) と `b`。 */
+  const abCommands = commands([
+    { name: 'a', description: 'da', argumentHint: '<x>' },
+    { name: 'b' }
+  ])
+
+  it('init-report の後の commands で一覧が置き換わり、説明と argumentHint が付く', async () => {
+    const h = harness()
+    const port = await launched(h)
+    emit(port, meter(init(['a'])))
+    expect(entries(h)).toEqual([{ name: 'a', description: null, argumentHint: null }])
+    emit(port, meter(abCommands))
+    expect(entries(h)).toEqual([
+      { name: 'a', description: 'da', argumentHint: '<x>' },
+      { name: 'b', description: '', argumentHint: '' }
+    ])
+    expect(metersOf(h)?.slashCommandSource).toBe('commands')
+  })
+
+  it('commands の後に MCP の状態だけが違う init-report が来ても、一覧と説明・argumentHint が変わらない', async () => {
+    const h = harness()
+    const port = await launched(h)
+    emit(port, meter(init(['a'])))
+    emit(port, meter(abCommands))
+    const before = entries(h)
+    emit(port, meter(init(['a'], { mcpServers: [{ name: 'github', status: 'failed' }] })))
+    expect(entries(h)).toEqual(before)
+    expect(metersOf(h)?.slashCommandSource).toBe('commands')
+    expect(metersOf(h)?.initReport?.mcpServers).toEqual([{ name: 'github', status: 'failed' }])
+  })
+
+  it('commands の後に slashCommands が変わった init-report で名前の集合が置き換わり、commands にある名前は説明を保つ', async () => {
+    const h = harness()
+    const port = await launched(h)
+    emit(port, meter(init(['a'])))
+    emit(port, meter(abCommands))
+    emit(port, meter(init(['a', 'c'])))
+    expect(entries(h)).toEqual([
+      { name: 'a', description: 'da', argumentHint: '<x>' },
+      { name: 'c', description: null, argumentHint: null }
+    ])
+    expect(metersOf(h)?.slashCommandSource).toBe('init-report')
+  })
+
+  it('commands が無いまま init-report だけなら名前だけ', async () => {
+    const h = harness()
+    const port = await launched(h)
+    emit(port, meter(init(['x', 'y'])))
+    expect(entries(h)).toEqual([
+      { name: 'x', description: null, argumentHint: null },
+      { name: 'y', description: null, argumentHint: null }
+    ])
+  })
+
+  it('init-report の /a と commands の a は同じ名前として説明と hint を引く (書式の違い)', async () => {
+    const h = harness()
+    const port = await launched(h)
+    emit(port, meter(commands([{ name: 'a', description: 'da', argumentHint: '<x>' }])))
+    // decoder を通らない値で `/` 付きが残っても引き当てが外れないことを、ストアに直に入れて確かめる。
+    h.store.setState((s) => ({
+      meters: {
+        ...s.meters,
+        [A]: {
+          ...s.meters[A]!,
+          initReport: init(['/a']) as InitReportMeter,
+          slashCommandSource: 'init-report'
+        }
+      }
+    }))
+    expect(entries(h)).toEqual([{ name: 'a', description: 'da', argumentHint: '<x>' }])
+  })
+
+  it('commands の名前 __proto__ / constructor で例外が出ない', async () => {
+    const h = harness()
+    const port = await launched(h)
+    expect(() => {
+      const protoNames = [{ name: '__proto__', description: 'p' }, { name: 'constructor' }]
+      emit(port, meter(commands(protoNames)))
+      emit(port, meter(init(['__proto__', 'constructor', 'toString'])))
+    }).not.toThrow()
+    expect(entries(h)).toEqual([
+      { name: '__proto__', description: 'p', argumentHint: '' },
+      { name: 'constructor', description: '', argumentHint: '' },
+      { name: 'toString', description: null, argumentHint: null }
+    ])
+  })
+
+  it('initReport の更新で sessions の参照が変わらず、receivedMessages を増やさない', async () => {
+    const h = harness()
+    const port = await launched(h)
+    const sessions = h.store.getState().sessions
+    emit(port, meter(init(['a'])))
+    emit(port, meter(commands([{ name: 'a' }])))
+    expect(h.store.getState().sessions).toBe(sessions)
+    expect(h.store.getState().receivedMessages).toBe(0)
+    expect(metersOf(h)?.initReport?.model).toBe('claude-sonnet-4-5')
+  })
+
+  it('2 つのセッションの値が混ざらない', async () => {
+    const h = harness()
+    const portA = await launched(h, A)
+    const portB = await launched(h, B)
+    emit(portA, meter(init(['a'], { model: 'claude-opus-4-1' })))
+    emit(portB, meter(commands([{ name: 'b', description: 'db' }])))
+    expect(metersOf(h, A)?.initReport?.model).toBe('claude-opus-4-1')
+    expect(metersOf(h, A)?.commands).toBeNull()
+    expect(metersOf(h, B)?.initReport).toBeNull()
+    expect(entries(h, A).map((e) => e.name)).toEqual(['a'])
+    expect(entries(h, B)).toEqual([{ name: 'b', description: 'db', argumentHint: '' }])
+  })
+
+  it('閉じた後の meters[id] は undefined で、届いた構成は捨てる', async () => {
+    const h = harness()
+    const port = await launched(h)
+    emit(port, meter(init(['a'])))
+    h.pushStatus([status(A, { state: 'done', claudeAlive: false })])
+    h.store.close(A)
+    expect(metersOf(h)).toBeUndefined()
+    emit(port, meter(init(['b'])))
+    emit(port, meter(commands([{ name: 'c' }])))
+    expect(metersOf(h)).toBeUndefined()
+  })
+
+  it('一覧は出所が無ければ空', () => {
+    expect(slashCommandEntries(EMPTY_SESSION_METERS)).toEqual([])
   })
 })

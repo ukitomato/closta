@@ -349,8 +349,28 @@ export const FIXTURES = [
     target: 'src/agents/__rulecheck__/sdk-query-mutation-method.ts',
     group: 'b',
     what:
-      'Query の mutation メソッド (setPermissionMode) を呼ぶ ' +
-      '(正の構成 P3 を破る。項目14 は .method() を見ない。X-1 / SH-010)',
+      "Query の mutation メソッド (setPermissionMode) を安全値 'default' で呼ぶ " +
+      '(正の構成 P3 を破る。昇格値を含めず P3 だけで発火する形。項目14 は .method() を見ない。X-1 / SH-010 / O-5 BE-040)',
+    detectors: ['constitution'],
+    rules: ['#16']
+  },
+  {
+    file: 'b-equivalent/sdk-query-mcp-control.ts.fixture',
+    target: 'src/agents/__rulecheck__/sdk-query-mcp-control.ts',
+    group: 'b',
+    what:
+      'Query の MCP の操作のメソッド (reconnectMcpServer) を呼ぶ ' +
+      '(AD-048 Decision 2 で P3 の列挙に足した名前。昇格値・昇格キーを含めない。O-5 BE-040)',
+    detectors: ['constitution'],
+    rules: ['#16']
+  },
+  {
+    file: 'b-equivalent/sdk-query-computed-key.ts.fixture',
+    target: 'src/agents/__rulecheck__/sdk-query-computed-key.ts',
+    group: 'b',
+    what:
+      "Query の mutation メソッドを計算キー q['reloadPlugins']() で呼ぶ " +
+      '(`.reloadPlugins(` の綴りが現れない等価形。O-5 BE-040 / design-gate R3 M-11)',
     detectors: ['constitution'],
     rules: ['#16']
   },
@@ -835,5 +855,29 @@ export const UNDETECTED_NOTES = {
       '(query() の options 引数が `buildQueryOptions(...)` の戻り値であることを見る) に置き換え、' +
       '本サンプルが `constitution` で発火するよう `detectors` を更新する。**X-4 で regex を足さないのは、' +
       '変数形・反射 API はデータフローを追わないと誤検出と見逃しの両方が残り、正の構成 (allowlist + 型 + assert) と等価にならないためである。**'
+  },
+  /*
+   * サンプルを置かない記録 (O-5 BE-040 / design-gate R3 M-11)。P3 の検出が追わない形を 1 項目にまとめる。
+   */
+  'sdk-query-method-indirect': {
+    why:
+      '項目 16 の P3 (check.mjs) は SDK 保持ファイルの `Query` の mutation メソッドを**呼び出しの綴り**で見る ' +
+      '(ドット呼び出し `.m(` / `?.m(` と計算キー `[\'m\'](` / `["m"](` / テンプレートリテラルのキー)。' +
+      '分割代入 (`const { reconnectMcpServer } = q`)・`.reconnectMcpServer.call(` / `.apply(`・変数のキー (`q[k](`) は ' +
+      '`.m(` の形にならず、束縛を追うにはデータフロー解析が要るため grep backstop の射程外である。',
+    mitigatedBy:
+      '`Query` を持つのは `src/agents/sdk-agent-session.ts` の `queryHandle` 1 つで、呼ぶのは `interrupt()` だけ ' +
+      '(AD-036 §4 P3)。`Query` の自前のメソッドは同ファイルの型の網羅で `interrupt`・変更系 (`QueryMutationMethod`)・' +
+      '呼ばない読み取り (`QueryUnusedReadMethod`) に分類され、SDK の版上げでの増減は tsc が落とす。' +
+      '**この分類は呼び出しを禁じない** — `QueryUnusedReadMethod` の 7 個の呼び出しは項目 16 の検査の対象外で、' +
+      '`close` は `promptQueue.close()` と綴りが衝突するため denylist に足せない。AD-047 Decision 4 が呼ばないと決めた ' +
+      '`getContextUsage` / `usage_EXPERIMENTAL…` は変更系と同じ denylist に入れた。denylist の集合は ' +
+      '`tests/docs/query-mutation-methods.test.ts` が `QUERY_MUTATION_METHODS` と union の一致で固定する。' +
+      '間接の呼び出しは code-gate の platform-boundary-reviewer が agents の差分で確認する。',
+    nextFeature: 'system scope (項目 16 の持ち主。O-5 SH-012 で roadmap の system scope に記録)',
+    howToClose:
+      '項目 16 の P3 を正の形 (`interrupt` 以外の `Query` のメソッドの参照を違反にする) に置き換え、' +
+      "`queryHandle` の型を `Pick<Query, 'interrupt'> & AsyncIterable<SDKMessage>` に絞る (015 research R-06 Alternatives)。" +
+      '型で絞れば分割代入・`.call`・変数のキーも tsc が落とす。**O-5 で行わないのは spec FR-011 が正の形を持ち主に送ると決めたためである。**'
   }
 }

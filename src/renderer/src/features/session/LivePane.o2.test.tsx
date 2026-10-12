@@ -654,9 +654,17 @@ describe('権限モード・コンテキストの圧縮・task の進み具合�
     expect(rows()).toHaveLength(1)
   })
 
-  it('種類ごとにアイコンを分ける (Hook・task・再試行・圧縮・権限モード)', async () => {
+  it('種類ごとにアイコンを分ける (Hook・task・再試行・圧縮・権限モード・認証・プラグイン)', async () => {
     const h = await setup()
-    const categories = ['hook', 'task', 'api-retry', 'compaction', 'permission-mode'] as const
+    const categories = [
+      'hook',
+      'task',
+      'api-retry',
+      'compaction',
+      'permission-mode',
+      'auth',
+      'plugin'
+    ] as const
     categories.forEach((category, i) =>
       h.emit(
         A,
@@ -697,6 +705,170 @@ describe('権限モード・コンテキストの圧縮・task の進み具合�
       })
     )
     h.emit(A, eventMessage('task:t1', { category: 'task', detail: '\n100/1/1000' }))
+    await waitFor(() => expect(rows()).toHaveLength(3))
+    const viewport = h.container.querySelector<HTMLElement>('[data-slot="aui_thread-viewport"]')
+    expect(viewport).not.toBeNull()
+    expect((await axe(viewport!, AXE_RULES)).violations).toEqual([])
+  })
+})
+
+describe('認証とプラグインの行 (O-5 FE-030 / 015 spec US-3 AC1〜AC5 / data-model §4)', () => {
+  const MARK = 'LEAK_MARK'
+  const detailOf = (row: HTMLElement | undefined): string | null =>
+    row?.querySelector('[data-slot="system-event-detail"]')?.textContent ?? null
+  const guidanceOf = (row: HTMLElement | undefined): string | null =>
+    row?.querySelector('[data-slot="system-event-guidance"]')?.textContent ?? null
+  const auth = (id: string, part: Partial<EventPart>): SessionEvent =>
+    eventMessage(id, { category: 'auth', ...part })
+  const plugin = (id: string, part: Partial<EventPart>): SessionEvent =>
+    eventMessage(id, { category: 'plugin', ...part })
+
+  it('認証中 → 成功に同じ行が書き換わる (AC1・AC2)', async () => {
+    const h = await setup()
+    h.emit(A, auth('auth:0', { opens: true, status: 'authenticating' }))
+    await waitFor(() => expect(rows()).toHaveLength(1))
+    const row = (): HTMLElement | undefined => rows()[0]
+    expect(row()).toHaveAttribute('data-category', 'auth')
+    expect(row()).toHaveTextContent('認証')
+    expect(statusOf(row())).toBe('認証中')
+    expect(guidanceOf(row())).toBe(SYSTEM_EVENT_LABELS.authInProgress)
+    expect(detailOf(row())).toBeNull()
+    h.emit(A, auth('auth:0', { status: 'succeeded' }))
+    await waitFor(() => expect(statusOf(row())).toBe('成功'))
+    expect(guidanceOf(row())).toBe(SYSTEM_EVENT_LABELS.authSucceeded)
+    expect(rows()).toHaveLength(1)
+  })
+
+  it('認証中 → 失敗に同じ行が書き換わり、再ログインを案内する (AC3)', async () => {
+    const h = await setup()
+    h.emit(A, auth('auth:0', { opens: true, status: 'authenticating' }))
+    await waitFor(() => expect(rows()).toHaveLength(1))
+    h.emit(A, auth('auth:0', { status: 'failed' }))
+    await waitFor(() => expect(statusOf(rows()[0])).toBe('失敗'))
+    expect(guidanceOf(rows()[0])).toBe(SYSTEM_EVENT_LABELS.authFailed)
+    expect(rows()[0]?.querySelector('[data-slot="system-event-status"]')).toHaveAttribute(
+      'data-variant',
+      'destructive'
+    )
+    expect(rows()).toHaveLength(1)
+  })
+
+  it('output / error の目印が DOM に出ない', async () => {
+    const h = await setup()
+    const withMarks = (event: SessionEvent): SessionEvent => {
+      if (event.kind !== 'message') return event
+      const [part] = event.message.parts
+      return {
+        ...event,
+        message: {
+          ...event.message,
+          parts: [{ ...part, output: [MARK], error: MARK } as unknown as TranscriptPartDTO]
+        }
+      }
+    }
+    h.emit(A, withMarks(auth('auth:0', { opens: true, status: 'authenticating' })))
+    h.emit(A, withMarks(auth('auth:0', { status: 'failed' })))
+    h.emit(A, withMarks(plugin('plugin:0', { opens: true, detail: '0/0/', status: 'started' })))
+    h.emit(A, auth('auth:1', { opens: true, status: 'authenticating' }))
+    await waitFor(() => expect(rows().length).toBeGreaterThan(0))
+    expect(document.body.textContent).not.toContain(MARK)
+  })
+
+  it('「認証中」のまま終わった行は「結果不明」になり、ログインの案内を出さない (AC4)', async () => {
+    const h = await setup()
+    h.emit(A, auth('auth:0', { opens: true, status: 'authenticating' }))
+    await waitFor(() => expect(statusOf(rows()[0])).toBe('認証中'))
+    h.pushStatus({ sessionId: A, state: 'done', claudeAlive: false })
+    await waitFor(() => expect(statusOf(rows()[0])).toBe(SYSTEM_EVENT_LABELS.outcomeUnknown))
+    expect(guidanceOf(rows()[0])).toBeNull()
+  })
+
+  it('プラグインの行が 1 つで進み具合が書き換わる (AC5)', async () => {
+    const h = await setup()
+    h.emit(A, plugin('plugin:0', { opens: true, detail: '0/0/acme', status: 'started' }))
+    await waitFor(() => expect(rows()).toHaveLength(1))
+    const row = (): HTMLElement | undefined => rows()[0]
+    expect(row()).toHaveAttribute('data-category', 'plugin')
+    expect(row()).toHaveTextContent('プラグイン')
+    expect(detailOf(row())).toBe(`${SYSTEM_EVENT_LABELS.pluginInstalling}・「acme」`)
+    expect(statusOf(row())).toBe('実行中')
+
+    h.emit(A, plugin('plugin:0', { detail: '2/0/acme' }))
+    await waitFor(() =>
+      expect(detailOf(row())).toBe(
+        `${SYSTEM_EVENT_LABELS.pluginInstalling}・${SYSTEM_EVENT_LABELS.pluginInstalled(2)}・「acme」`
+      )
+    )
+    h.emit(A, plugin('plugin:0', { detail: '2/1/other', status: 'failed' }))
+    await waitFor(() => expect(statusOf(row())).toBe('失敗'))
+    expect(detailOf(row())).toBe(
+      `${SYSTEM_EVENT_LABELS.pluginInstalled(2)}・${SYSTEM_EVENT_LABELS.pluginFailed(1)}・「other」`
+    )
+    expect(rows()).toHaveLength(1)
+
+    h.emit(A, plugin('plugin:1', { opens: true, detail: '0/0/', status: 'started' }))
+    h.emit(A, plugin('plugin:1', { detail: '3/0/', status: 'completed' }))
+    await waitFor(() => expect(statusOf(rows()[1])).toBe('完了'))
+    expect(detailOf(rows()[1])).toBe(SYSTEM_EVENT_LABELS.pluginInstalled(3))
+  })
+
+  it('形の合わないプラグインの detail・名前は出さない', async () => {
+    const h = await setup()
+    h.emit(A, plugin('plugin:0', { opens: true, detail: `${MARK} error text`, status: 'started' }))
+    h.emit(A, plugin('plugin:1', { opens: true, detail: '1/0/a b', status: 'started' }))
+    await waitFor(() => expect(rows()).toHaveLength(2))
+    expect(detailOf(rows()[0])).toBeNull()
+    expect(detailOf(rows()[1])).toBe(
+      `${SYSTEM_EVENT_LABELS.pluginInstalling}・${SYSTEM_EVENT_LABELS.pluginInstalled(1)}`
+    )
+    expect(document.body.textContent).not.toContain(MARK)
+  })
+
+  it('「認証中」を経ない失敗で「認証に失敗」の行と再ログインの案内が 1 つ出る (AC3。FE-031)', async () => {
+    const h = await setup()
+    h.emit(A, auth('auth:0', { opens: true, status: 'failed' }))
+    await waitFor(() => expect(rows()).toHaveLength(1))
+    expect(rows()[0]).toHaveAttribute('data-category', 'auth')
+    expect(statusOf(rows()[0])).toBe('失敗')
+    expect(guidanceOf(rows()[0])).toBe(SYSTEM_EVENT_LABELS.authFailed)
+    h.pushStatus({ sessionId: A, state: 'done', claudeAlive: false })
+    await waitFor(() => expect(statusOf(rows()[0])).toBe('失敗'))
+    expect(rows()).toHaveLength(1)
+  })
+
+  it('started を経ないプラグインの結果で行が 1 つ出て、同じ行が書き換わる (AC6。FE-031)', async () => {
+    const h = await setup()
+    h.emit(A, plugin('plugin:0', { opens: true, detail: '1/0/acme', status: 'started' }))
+    await waitFor(() => expect(rows()).toHaveLength(1))
+    expect(detailOf(rows()[0])).toBe(
+      `${SYSTEM_EVENT_LABELS.pluginInstalling}・${SYSTEM_EVENT_LABELS.pluginInstalled(1)}・「acme」`
+    )
+    h.emit(A, plugin('plugin:0', { detail: '1/0/acme', status: 'completed' }))
+    await waitFor(() => expect(statusOf(rows()[0])).toBe('完了'))
+    expect(rows()).toHaveLength(1)
+
+    h.emit(A, plugin('plugin:1', { opens: true, detail: '0/0/', status: 'completed' }))
+    await waitFor(() => expect(rows()).toHaveLength(2))
+    expect(rows()[1]).toHaveAttribute('data-category', 'plugin')
+    expect(statusOf(rows()[1])).toBe('完了')
+  })
+
+  it('vitest-axe の違反 0 (単独の結果の行。FE-031)', async () => {
+    const h = await setup()
+    h.emit(A, auth('auth:0', { opens: true, status: 'failed' }))
+    h.emit(A, plugin('plugin:0', { opens: true, detail: '0/1/acme', status: 'started' }))
+    h.emit(A, plugin('plugin:1', { opens: true, detail: '0/0/', status: 'completed' }))
+    await waitFor(() => expect(rows()).toHaveLength(3))
+    const viewport = h.container.querySelector<HTMLElement>('[data-slot="aui_thread-viewport"]')
+    expect(viewport).not.toBeNull()
+    expect((await axe(viewport!, AXE_RULES)).violations).toEqual([])
+  })
+
+  it('vitest-axe の違反 0 (認証とプラグインの行)', async () => {
+    const h = await setup()
+    h.emit(A, auth('auth:0', { opens: true, status: 'authenticating' }))
+    h.emit(A, auth('auth:1', { opens: true, status: 'failed' }))
+    h.emit(A, plugin('plugin:0', { opens: true, detail: '1/1/acme', status: 'started' }))
     await waitFor(() => expect(rows()).toHaveLength(3))
     const viewport = h.container.querySelector<HTMLElement>('[data-slot="aui_thread-viewport"]')
     expect(viewport).not.toBeNull()

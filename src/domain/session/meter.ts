@@ -1,6 +1,12 @@
-import { isValidModelId } from '@domain/provider/model-catalog'
+import {
+  decodeCommands,
+  decodeInitReport,
+  isMeterModelId,
+  type CommandsMeter,
+  type InitReportMeter
+} from './session-init-report'
 
-import { mayCarrySecret } from './system-event'
+export { isMeterModelId }
 
 /**
  * 計量 (`SessionEvent` の `meter`) の形・値の検証・SDK の値の正規化 (O-4 / AD-047 Decision 2。
@@ -12,6 +18,7 @@ import { mayCarrySecret } from './system-event'
  * | 規則 | 根拠 |
  * |---|---|
  * | 運ぶ値は数・真偽・列挙・モデルの id と、形を検証した tool の id だけ。会話由来の文字列・エラー文・パスを運ばない | data-model §2 / spec FR-003 |
+ * | 例外: `init-report` / `commands` (O-5) は形の検査を通った未信頼の名前と、無害化して切り詰めた説明を運ぶ。形と検査の正本は `session-init-report.ts` | AD-048 Decision 3 / 015 data-model §2 |
  * | 列挙は prototype を持たない表と `Object.hasOwn` で照合する (`__proto__` / `constructor` / `toString` を通さない) | data-model §2「値の検証」 |
  * | decoder は検証を通した値だけで新しい object を組む (余分なキーを運ばない)。どの入力でも例外を出さない | spec SC-002 |
  * | 権限モードの昇格値の綴りはここ (domain) に置く。`src/agents/` には置かない | Constitution 検証の項目 16 / data-model §2 |
@@ -71,7 +78,9 @@ export const METER_UPDATE_TYPES = [
   'rate-limit',
   'permission-mode',
   'thinking',
-  'tool-elapsed'
+  'tool-elapsed',
+  'init-report',
+  'commands'
 ] as const
 export type MeterUpdateType = (typeof METER_UPDATE_TYPES)[number]
 
@@ -108,6 +117,8 @@ export type MeterUpdate =
   | { readonly type: 'permission-mode'; readonly mode: PermissionModeKey }
   | { readonly type: 'thinking'; readonly estimatedTokens: number }
   | { readonly type: 'tool-elapsed'; readonly toolUseId: string; readonly elapsedSeconds: number }
+  | InitReportMeter
+  | CommandsMeter
 
 /* ── 定数 (agents と decoder で共有) ────────────────────────────────── */
 
@@ -128,8 +139,6 @@ export const MAX_METER_PERMISSION_DENIALS = 1024
 
 /** tool の id (`tool_use_id`) と task の id (`task_id`) の形。 */
 const METER_ID_SHAPE = /^[A-Za-z0-9_-]{1,128}$/
-/** scheme の無い userinfo の形 (`u:p@h/m`)。 */
-const USERINFO_SHAPE = /^[^/]*:[^/]*@/
 
 /* ── 照合の部品 ───────────────────────────────────────────────────── */
 
@@ -242,16 +251,10 @@ export function isValidToolUseId(raw: unknown): raw is string {
 /** task の id (`task_progress` の `task_id`)。`toolUseId` と同じ述語。 */
 export const isValidTaskId: (raw: unknown) => raw is string = isValidToolUseId
 
-/**
- * 計量で運んでよいモデルの id。文字種と長さの正本は domain の `isValidModelId` (起動の設定・モデルカタログと同じ述語。
- * `[1m]` 付き・`_` を含む id・Bedrock の ARN・Vertex の `model@date` を通す)。その上に 3 つだけを足す:
- * `//` を含まない・scheme の無い userinfo の形 (`u:p@h/m`) でない・`mayCarrySecret` が false。
+/*
+ * 計量で運んでよいモデルの id (`isMeterModelId`) は `session-init-report.ts` に置き、上で再 export する
+ * (`init-report` の `model` と同じ関数を使う。本ファイルに置くと decoder の import と循環になる)。
  */
-export function isMeterModelId(raw: unknown): raw is string {
-  return (
-    isValidModelId(raw) && !raw.includes('//') && !USERINFO_SHAPE.test(raw) && !mayCarrySecret(raw)
-  )
-}
 
 /* ── SDK の値の正規化 (agents が使う) ───────────────────────────────── */
 
@@ -377,5 +380,10 @@ export function decodeMeterUpdate(raw: unknown): MeterUpdate | null {
         elapsedSeconds: toSeconds(m.elapsedSeconds)
       }
     }
+    // 構成 (O-5 / AD-048 Decision 3)。形の検査は agents と同じ `session-init-report.ts` の decoder。
+    case 'init-report':
+      return decodeInitReport(m)
+    case 'commands':
+      return decodeCommands(m)
   }
 }

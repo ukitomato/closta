@@ -9,8 +9,10 @@ import { GenerationLoader } from '@/components/assistant-ui/elements/loading-sta
 import { Thread } from '@/components/assistant-ui/elements/thread.aui'
 import { Button } from '@/components/ui/button'
 import {
+  createMcpServerNamesReader,
   LiveProgressContext,
   TranscriptSettledContext,
+  useMcpServerNamesOf,
   type LiveProgressSource
 } from '@/features/chat/transcript-context'
 
@@ -140,6 +142,8 @@ function LiveSessionPane({
   const terminal = session.terminal
   const errored = session.failureReason !== null || session.runState === 'error'
   const progress = useLiveProgressSource(session.sessionId)
+  // 承認カードの MCP の tool の補助の見出しは transcript と同じサーバー名の一覧で分ける (O-5 / 015 data-model §1)。
+  const mcpServerNames = useMcpServerNamesOf(progress)
   // 承認カードは応答すると消える。押したボタンがカードの中にあれば、消す前に composer へ移す (O-4 FR-019)。
   const approvalRef = useRef<HTMLDivElement>(null)
 
@@ -183,6 +187,7 @@ function LiveSessionPane({
         <div className="px-4 pt-3" ref={approvalRef}>
           <ApprovalCard
             request={pending}
+            mcpServerNames={mcpServerNames}
             onDecision={(outcome) => {
               handOffFocusToComposer(approvalRef.current)
               session.respond(pending.requestId, outcome)
@@ -242,6 +247,10 @@ function useLiveProgressSource(sessionId: string): LiveProgressSource {
       toolElapsed: (toolCallId) =>
         store.getState().meters[sessionId]?.toolElapsed.get(toolCallId) ?? null,
       thinkingTokens: () => store.getState().meters[sessionId]?.thinkingTokens ?? null,
+      // MCP サーバーの名前は構成 (`initReport`) が替わるまで同じ参照を返す (O-5 / 015 research R-05)。
+      mcpServerNames: createMcpServerNamesReader(
+        () => store.getState().meters[sessionId]?.initReport ?? null
+      ),
       subscribe: (listener) =>
         store.subscribe((state, prev) => {
           if (state.meters[sessionId] !== prev.meters[sessionId]) listener()

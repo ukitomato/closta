@@ -1,13 +1,15 @@
 import { useRef } from 'react'
 
-import { PanelRightCloseIcon, PanelRightOpenIcon } from 'lucide-react'
+import { PanelRightCloseIcon, PanelRightOpenIcon, TriangleAlertIcon } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { useRunningSessionsView } from '@/features/session/running-sessions-view'
+import { useSessionMeters } from '@/features/session/useSessionMeters'
 import { cn } from '@/lib/utils'
 import { useUiStore, type PanelTabId } from '@/stores/ui'
 
 import { SHELL_LABELS } from './labels'
-import { activeTab, PANEL_TABS, visibleTabs, type PanelTab } from './panel-tabs'
+import { activeTab, attentionTabIds, PANEL_TABS, visibleTabs, type PanelTab } from './panel-tabs'
 import { SHELL_WIDTHS } from './shell-layout'
 import { useFocusRescue } from './useFocusRescue'
 
@@ -23,6 +25,10 @@ import { useFocusRescue } from './useFocusRescue'
  *   a11y M-004 / 014 spec FR-017 / data-model §6): ← / → で隣のタブ (端で反対の端へ)、Home / End で端のタブへ移り、
  *   移った先を選んでその button にフォーカスを移す。選ばれたタブだけが Tab 順に入る (roving tabindex)。並びは今の中央の
  *   状態で出せるタブ (`visibleTabs`) だけ
+ * - 畳んだ帯のタブのアイコンに注意の印 (O-5 / 015 data-model §3): タブの表の `attention` が、表示中の稼働中のセッション
+ *   の計量で true のタブだけ。印は `data-attention="true"`・警告のアイコン・名前に「注意」。過去・未選択では出さない。
+ *   開いた tablist のタブにも同じ印を出す (開いて別のタブを見ている間にも気付けるように。015 pr-gate R1 MD-02)
+ *   1 セッションの計量だけを selector で読み、印の付くタブの id を文字列で返す (他のセッションの更新で描き直さない)
  *
  * テストはタブの表を差し替えられる (`tabs`)。
  */
@@ -39,6 +45,12 @@ export function RightPanel({
 
   const visible = visibleTabs(tabs, focus)
   const current = activeTab(tabs, focus, selected)
+  // 表示中の稼働中のセッションだけ (過去・未選択では印を出さない。015 spec US-2 AC5)。
+  const liveId = useRunningSessionsView().live?.sessionId ?? null
+  const attentionKey = useSessionMeters(focus === 'running' ? liveId : null, (meters) =>
+    attentionTabIds(visible, meters).join(' ')
+  )
+  const attentionIds = new Set(attentionKey === '' ? [] : attentionKey.split(' '))
 
   const asideRef = useRef<HTMLElement>(null)
   const toggleRef = useRef<HTMLButtonElement>(null)
@@ -96,23 +108,36 @@ export function RightPanel({
           {collapsed ? <PanelRightOpenIcon aria-hidden /> : <PanelRightCloseIcon aria-hidden />}
         </Button>
         {collapsed ? (
-          visible.map((tab) => (
-            <Button
-              key={tab.id}
-              type="button"
-              size="icon-sm"
-              variant="ghost"
-              aria-label={tab.label}
-              title={tab.label}
-              onClick={() => {
-                openedTabRef.current = tab.id
-                setTab(tab.id)
-                setCollapsed(false)
-              }}
-            >
-              <tab.icon aria-hidden />
-            </Button>
-          ))
+          visible.map((tab) => {
+            const attention = attentionIds.has(tab.id)
+            const name = attention ? `${tab.label} (${SHELL_LABELS.attention})` : tab.label
+            return (
+              <Button
+                key={tab.id}
+                type="button"
+                size="icon-sm"
+                variant="ghost"
+                className={attention ? 'relative' : undefined}
+                aria-label={name}
+                title={name}
+                data-attention={attention ? 'true' : undefined}
+                onClick={() => {
+                  openedTabRef.current = tab.id
+                  setTab(tab.id)
+                  setCollapsed(false)
+                }}
+              >
+                <tab.icon aria-hidden />
+                {attention && (
+                  <TriangleAlertIcon
+                    aria-hidden
+                    className="text-destructive absolute -top-0.5 -right-0.5 size-3"
+                    data-testid="panel-tab-attention"
+                  />
+                )}
+              </Button>
+            )
+          })
         ) : visible.length > 0 ? (
           <div
             role="tablist"
@@ -122,17 +147,21 @@ export function RightPanel({
           >
             {visible.map((tab) => {
               const isCurrent = current?.id === tab.id
+              const attention = attentionIds.has(tab.id)
               return (
                 <button
                   key={tab.id}
                   type="button"
                   role="tab"
                   id={`panel-tab-${tab.id}`}
+                  aria-label={attention ? `${tab.label} (${SHELL_LABELS.attention})` : undefined}
                   aria-selected={isCurrent}
                   aria-controls={`panel-tabpanel-${tab.id}`}
                   tabIndex={isCurrent ? 0 : -1}
+                  data-attention={attention ? 'true' : undefined}
                   className={cn(
                     'rounded-md px-2 py-1 text-xs',
+                    attention && 'inline-flex items-center gap-1',
                     isCurrent
                       ? 'bg-accent text-accent-foreground font-semibold'
                       : 'text-muted-foreground hover:text-foreground'
@@ -140,6 +169,13 @@ export function RightPanel({
                   onClick={() => setTab(tab.id)}
                 >
                   {tab.label}
+                  {attention && (
+                    <TriangleAlertIcon
+                      aria-hidden
+                      className="text-destructive size-3"
+                      data-testid="panel-tab-attention"
+                    />
+                  )}
                 </button>
               )
             })}

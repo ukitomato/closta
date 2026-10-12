@@ -227,10 +227,13 @@ export function toTranscriptMessages(
           const id = typeof b.id === 'string' ? b.id : ''
           // **argsText も sanitizeBody + byte 上限を通す** (R-4 / design-gate H-1/H-2)。
           const args = sanitizeBody(safeStringify(b.input), TOOL_RESULT_MAX_BYTES)
+          // tool 名は実行中 (`live-message.ts`) と同じ `sanitizeBody` を通す (O-5 FR-001)。
+          // MCP のサーバー名・tool 名は外部由来なので、双方向制御で見出しを偽装させない。
+          const name = sanitizeBody(b.name).value
           const toolCall: MutableToolCall = {
             type: 'tool-call',
             toolCallId: id,
-            toolName: typeof b.name === 'string' && b.name.length > 0 ? b.name : '(unknown tool)',
+            toolName: name.length > 0 ? name : '(unknown tool)',
             argsText: args.value,
             result: null,
             isError: false,

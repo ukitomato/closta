@@ -62,6 +62,9 @@ reviewers:
       - "src/renderer/src/components/assistant-ui/elements/tool-fallback.aui.tsx"
       - "src/renderer/src/components/assistant-ui/elements/tool-result-marks.tsx"
       - "src/renderer/src/components/assistant-ui/elements/surfaces.tsx"
+      # O-5 の手書きの表示 (MCP の tool と AskUserQuestion。015 tasks SH-011)
+      - "src/renderer/src/components/assistant-ui/elements/mcp-tool-call.aui.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/ask-user-question.aui.tsx"
       # - "src/renderer/src/features/runtime-list/**/*.tsx"              # 仮実装
       # - "src/renderer/src/features/workspace-folders/**/*.tsx"         # 仮実装
       # - "src/renderer/src/features/folder-runtime-resolution/**/*.tsx" # 仮実装
@@ -115,6 +118,9 @@ reviewers:
       - "src/renderer/src/components/assistant-ui/elements/tool-fallback.aui.tsx"
       - "src/renderer/src/components/assistant-ui/elements/tool-result-marks.tsx"
       - "src/renderer/src/components/assistant-ui/elements/surfaces.tsx"
+      # O-5 の手書きの表示 (a11y-reviewer と同じ)
+      - "src/renderer/src/components/assistant-ui/elements/mcp-tool-call.aui.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/ask-user-question.aui.tsx"
       # - "src/renderer/src/features/runtime-list/**/*.tsx"              # 仮実装
       # - "src/renderer/src/features/workspace-folders/**/*.tsx"         # 仮実装
       # - "src/renderer/src/features/folder-runtime-resolution/**/*.tsx" # 仮実装
@@ -186,6 +192,8 @@ reviewers:
       - "src/domain/session/tool-result*.ts"
       # SDK のメッセージの値を計量 (meter) に正規化する domain のモジュール (O-4 / 014 plan「機械強制の変更」)
       - "src/domain/session/meter*.ts"
+      # init / commands_changed を構成 (meter の init-report / commands) に正規化する domain のモジュール (O-5 / 015 tasks SH-011)
+      - "src/domain/session/session-init-report*.ts"
       - "src/renderer/src/components/assistant-ui/elements/**"
       - "src/renderer/src/features/chat/**"
       # 実行中のシステムイベントの行の合成と SessionEvent の message のデコード (pr-gate R1 architecture M-004)

@@ -416,14 +416,43 @@ export const QUERY_SETTINGS_ALLOWED_KEYS = ['apiKeyHelper', 'awsCredentialExport
  */
 export const SANCTIONED_SETTINGS_WRAPPER = 'assertHelperSettings'
 
-/** `Query` の mutation メソッド。呼んでよいのは `interrupt` のみ (P3)。 */
+/**
+ * `Query` の mutation メソッド。呼んでよいのは `interrupt` のみ (P3)。
+ *
+ * - 先頭の 6 個は X-1 (AD-036 §4 P3)
+ * - `mcpServerStatus` 〜 `reinitialize` の 11 個は O-5 の [AD-048](../../docs/decisions/0048-session-config-display-and-answer-ui-split.md)
+ *   Decision 2 (MCP・プラグイン・スキルを操作しない)
+ * - `reloadOutputStyles` / `backgroundTasks` は AD-036 §4 P3 (`interrupt` だけ) そのものを根拠に足した
+ *   (P3 の範囲内の締め付けなので ADR は要らない。015 research R-06)
+ * - `getContextUsage` / `usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET` は読み取りだが、
+ *   [AD-047](../../docs/decisions/0047-session-meter-and-failure-reasons.md) Decision 4 が呼ばないと決めたので足した
+ *   (O-5 pr-gate R1 MD-10)。`close` は `promptQueue.close()` と綴りが衝突するため足さない
+ *
+ * 集合は `tests/docs/query-mutation-methods.test.ts` が固定し、`src/agents/sdk-agent-session.ts` の
+ * `QueryMutationMethod` (型の union) と一致させる。**外すには ADR が要る** (足すのは P3 の範囲内で ADR 不要)。
+ */
 export const QUERY_MUTATION_METHODS = [
   'setPermissionMode',
   'setMcpPermissionModeOverride',
   'applyFlagSettings',
   'updateSettings',
   'setModel',
-  'setMaxThinkingTokens'
+  'setMaxThinkingTokens',
+  'mcpServerStatus',
+  'reconnectMcpServer',
+  'toggleMcpServer',
+  'setMcpServers',
+  'reloadPlugins',
+  'reloadSkills',
+  'rewindFiles',
+  'stopTask',
+  'seedReadState',
+  'streamInput',
+  'reinitialize',
+  'reloadOutputStyles',
+  'backgroundTasks',
+  'getContextUsage',
+  'usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET'
 ]
 
 /**

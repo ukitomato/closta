@@ -8,6 +8,7 @@ import type {
 import type { SessionLaunchConfig } from '@domain/session/launch-config'
 import type { LaunchOrigin } from '@domain/session/launch-usage'
 import type { MeterUpdate, PermissionModeKey } from '@domain/session/meter'
+import type { CommandsMeter, InitReportMeter } from '@domain/session/session-init-report'
 import type { SessionRunState } from '@domain/session/run-state'
 import type { SessionStatusUpdate } from '@domain/session/status-update'
 
@@ -110,6 +111,20 @@ export interface SessionMeters {
   readonly thinkingTokens: number | null
   /** tool の id → 経過時間 (秒)。`turn` で空。更新のたびにその id を末尾へ移し、上限を超えたら先頭 (更新の古いもの) から落とす。 */
   readonly toolElapsed: ReadonlyMap<string, number>
+  /** Claude Code が報告した構成の最新の値 (`init-report`。O-5 / 015 data-model §2「renderer の保持」)。 */
+  readonly initReport: InitReportMeter | null
+  /** スラッシュコマンドの一覧の最新の値 (`commands`。説明と `argumentHint` はここから名前で引く)。 */
+  readonly commands: CommandsMeter | null
+  /** スラッシュコマンドの名前の集合の出所 (合流の規則。015 data-model §2)。どちらもまだ無ければ null。 */
+  readonly slashCommandSource: 'init-report' | 'commands' | null
+}
+
+/** スラッシュコマンドの一覧の 1 行 (構成のタブが出す。`description` / `argumentHint` は `commands` に無ければ null)。 */
+export interface SlashCommandEntry {
+  /** 正規の名前 (先頭の `/` を外した形。表示は `/` を付ける)。 */
+  readonly name: string
+  readonly description: string | null
+  readonly argumentHint: string | null
 }
 
 /**
@@ -125,7 +140,10 @@ export const EMPTY_SESSION_METERS: SessionMeters = {
   rateLimit: null,
   permissionMode: null,
   thinkingTokens: null,
-  toolElapsed: new Map()
+  toolElapsed: new Map(),
+  initReport: null,
+  commands: null,
+  slashCommandSource: null
 }
 
 /** 行の状態に入った時刻 (O-1 / FR-005。glossary Status since)。 */

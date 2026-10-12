@@ -182,6 +182,16 @@ export const SESSION_END_NOTICES = {
   ended: 'このセッションは終了しました。入力はできません。「閉じる」で一覧から外せます。'
 } as const
 
+/** 承認カード (O-5 / 015 data-model §4・§6 の session の行)。 */
+export const APPROVAL_CARD_LABELS = {
+  /**
+   * `AskUserQuestion` の承認待ちの暫定の注記 (015 spec US-1 AC8)。承認の応答は `answers` を返さないので、許可しても選択は
+   * Claude に届かない (回答の UI は O-10)。
+   */
+  askUserQuestionNotice:
+    'このアプリからは回答を送れません。許可しても選択は Claude に届きません。拒否して、本文で答えてください。'
+} as const
+
 /** 表示中セッションで古いメッセージを省略しているときの行 (X-5 / SC-003。本文は保持したまま、窓を広げて辿れる)。 */
 export const OLDER_MESSAGES_LABELS = {
   showMore: 'さらに表示'

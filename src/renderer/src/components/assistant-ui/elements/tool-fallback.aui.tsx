@@ -127,6 +127,41 @@ function ToolFallbackDuration({
   );
 }
 
+/**
+ * closta: 中断 (`incomplete` の cancelled) か。ToolFallback と専用の表示 (MCP の tool・`AskUserQuestion`) が同じ判定を
+ * 使う (O-5 / 015 data-model §1「状態の印」)。
+ */
+function isCancelledToolStatus(
+  status: ToolCallMessagePartStatus | undefined,
+): boolean {
+  return status?.type === "incomplete" && status.reason === "cancelled";
+}
+
+/**
+ * closta: 状態のアイコン (結果待ち・完了・中断・`requires-action`)。ToolFallback の trigger から切り出した
+ * (O-5 / 015 data-model §1「状態の印」。DOM は切り出す前と同じ)。専用の表示も同じ部品で出す。
+ */
+function ToolFallbackStatusIcon({
+  status,
+}: {
+  status?: ToolCallMessagePartStatus;
+}) {
+  const statusType = status?.type ?? "complete";
+  const isRunning = statusType === "running";
+  const isCancelled = isCancelledToolStatus(status);
+  const Icon = statusIconMap[statusType];
+  return (
+    <Icon
+      data-slot="tool-fallback-trigger-icon"
+      className={cn(
+        "aui-tool-fallback-trigger-icon size-4 shrink-0",
+        isCancelled && "text-muted-foreground",
+        isRunning && "animate-spin [animation-duration:0.6s]",
+      )}
+    />
+  );
+}
+
 function ToolFallbackTrigger({
   toolName,
   status,
@@ -138,10 +173,8 @@ function ToolFallbackTrigger({
 }) {
   const statusType = status?.type ?? "complete";
   const isRunning = statusType === "running";
-  const isCancelled =
-    status?.type === "incomplete" && status.reason === "cancelled";
+  const isCancelled = isCancelledToolStatus(status);
 
-  const Icon = statusIconMap[statusType];
   const label = isCancelled ? "Cancelled tool" : "Used tool";
 
   return (
@@ -153,14 +186,7 @@ function ToolFallbackTrigger({
       )}
       {...props}
     >
-      <Icon
-        data-slot="tool-fallback-trigger-icon"
-        className={cn(
-          "aui-tool-fallback-trigger-icon size-4 shrink-0",
-          isCancelled && "text-muted-foreground",
-          isRunning && "animate-spin [animation-duration:0.6s]",
-        )}
-      />
+      <ToolFallbackStatusIcon status={status} />
       <span
         data-slot="tool-fallback-trigger-label"
         className={cn(
@@ -778,4 +804,10 @@ export {
   ToolFallbackResult,
   ToolFallbackError,
   ToolFallbackApproval,
+  // closta: 専用の表示 (MCP の tool・`AskUserQuestion`) が ToolFallback と同じ状態の印を出すために使う (O-5)。
+  ToolFallbackStatusIcon,
+  ToolFallbackDuration,
+  isCancelledToolStatus,
+  statusWithError,
+  offersInterruptAction,
 };

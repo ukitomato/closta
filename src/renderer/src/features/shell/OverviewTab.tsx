@@ -83,8 +83,9 @@ function RunningOverview(): React.JSX.Element {
       value: provider?.displayName ?? OVERVIEW_LABELS.providerRemoved
     })
   }
-  // 起動時に選んだ値 (権限モードの実行中の変化は O-4 が下の「現在の権限モード」の行で出す。モデルの変化は O-5
-  // (`init` の `model`)・X-6 (`set_permission_mode` / `set_model`) が対応表の行で扱う)。表示は起動ダイアログと同じ表示名と訳
+  // 起動時に選んだ値 (権限モードの実行中の変化は O-4 が下の「現在の権限モード」の行で出す。Claude Code が報告した実行中の
+  // モデルは「構成」のタブ (O-5 / `InitReportTab`。`init` の `model`) が出し、X-6 (`set_permission_mode` / `set_model`) は対応表の
+  // 行で扱う)。表示は起動ダイアログと同じ表示名と訳
   // (Provider のモデルカタログの displayName・EFFORT_LABELS。
   // 引けなければ ID。pr-gate R1 ux M-006 / ui-coverage M-004・R2 L-102)。Provider の一覧の読み込み中は、表示名を
   // 引けるか決まらないので Provider の行と同じく出さない (生の ID を一瞬出さない。pr-gate R2 ux L-103)。失敗したら ID で出す。

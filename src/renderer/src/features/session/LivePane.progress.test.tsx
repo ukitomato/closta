@@ -5,11 +5,15 @@ import { axe } from 'vitest-axe'
 
 import { SESSION_PORT_MESSAGE } from '@domain/capability'
 import type { SessionEvent } from '@domain/session/agent-session'
+import type { InitReportMeter } from '@domain/session/session-init-report'
 
 import { ToolResultMarks } from '@/components/assistant-ui/elements/tool-result-marks'
 import { TOOL_RESULT_LABELS } from '@/features/chat/labels'
 import {
+  createMcpServerNamesReader,
   LiveProgressContext,
+  NO_MCP_SERVER_NAMES,
+  useLiveMcpServerNames,
   useLiveThinkingTokens,
   type LiveProgressSource
 } from '@/features/chat/transcript-context'
@@ -19,7 +23,7 @@ import { RunningSessionsHarness } from '@/test-support/running-sessions-harness'
 
 import { RunningSessionStoreContext } from './running-session-context'
 import { createRunningSessionStore, type RunningSessionStore } from './running-session-store'
-import { EMPTY_SESSION_METERS } from './running-session-types'
+import { EMPTY_SESSION_METERS, type SessionMeters } from './running-session-types'
 
 /**
  * O-4 FE-043 — tool の経過時間 (014 spec FR-012 / US-4 AC3。data-model §4「進み具合」)。
@@ -404,6 +408,9 @@ function sourceOf(store: RunningSessionStore, sessionId: string): LiveProgressSo
   return {
     toolElapsed: (id) => store.getState().meters[sessionId]?.toolElapsed.get(id) ?? null,
     thinkingTokens: () => store.getState().meters[sessionId]?.thinkingTokens ?? null,
+    mcpServerNames: createMcpServerNamesReader(
+      () => store.getState().meters[sessionId]?.initReport ?? null
+    ),
     subscribe: (listener) =>
       store.subscribe((state, prev) => {
         if (state.meters[sessionId] !== prev.meters[sessionId]) listener()
@@ -500,5 +507,95 @@ describe('ToolResultMarks の購読 (014 data-model §4「進み具合」)', () 
     expect(TOOL_RESULT_LABELS.toolElapsed(59)).toBe('59秒')
     expect(TOOL_RESULT_LABELS.toolElapsed(60)).toBe('1分0秒')
     expect(TOOL_RESULT_LABELS.toolElapsed(3_725)).toBe('62分5秒')
+  })
+})
+
+/* ── MCP サーバーの名前の購読 (O-5 FE-011 / 015 research R-05) ─────────────────────── */
+
+function initReport(names: readonly string[]): InitReportMeter {
+  return {
+    type: 'init-report',
+    model: null,
+    mcpServers: names.map((name) => ({ name, status: 'connected' as const })),
+    tools: [],
+    skills: [],
+    plugins: [],
+    slashCommands: [],
+    omitted: 0
+  }
+}
+
+function setMeters(
+  store: RunningSessionStore,
+  sessionId: string,
+  patch: Partial<SessionMeters>
+): void {
+  act(() =>
+    store.setState((s) => ({
+      meters: {
+        ...s.meters,
+        [sessionId]: { ...(s.meters[sessionId] ?? EMPTY_SESSION_METERS), ...patch }
+      }
+    }))
+  )
+}
+
+/** 購読した名前の配列を外へ出す (参照の同一性を見る)。 */
+function McpNamesProbe({
+  onValue
+}: {
+  readonly onValue: (names: readonly string[]) => void
+}): null {
+  onValue(useLiveMcpServerNames())
+  return null
+}
+
+describe('MCP サーバーの名前の購読 (FE-011)', () => {
+  it('initReport と無関係な計量の更新で snapshot の参照が変わらず、initReport の更新で変わる', () => {
+    const store = createRunningSessionStore(() => stubCapability())
+    const source = sourceOf(store, A)
+    setMeters(store, A, { initReport: initReport(['github', 'a__b']) })
+    const first = source.mcpServerNames()
+    expect(first).toEqual(['github', 'a__b'])
+
+    setMeters(store, A, { contextUsed: 1_000 })
+    setMeters(store, A, { thinkingTokens: 5 })
+    expect(source.mcpServerNames()).toBe(first)
+
+    setMeters(store, A, { initReport: initReport(['github']) })
+    const second = source.mcpServerNames()
+    expect(second).not.toBe(first)
+    expect(second).toEqual(['github'])
+  })
+
+  it('構成がまだ無い・別のセッションの構成は引かない', () => {
+    const store = createRunningSessionStore(() => stubCapability())
+    const source = sourceOf(store, A)
+    expect(source.mcpServerNames()).toBe(NO_MCP_SERVER_NAMES)
+    setMeters(store, B, { initReport: initReport(['other']) })
+    expect(source.mcpServerNames()).toBe(NO_MCP_SERVER_NAMES)
+  })
+
+  it('購読元が null (過去ログ) なら空の配列 (同じ参照)。あれば構成の更新で描き直す', () => {
+    const store = createRunningSessionStore(() => stubCapability())
+    const seen: (readonly string[])[] = []
+    const onValue = (names: readonly string[]): void => {
+      seen.push(names)
+    }
+    const { rerender } = render(<McpNamesProbe onValue={onValue} />)
+    rerender(<McpNamesProbe onValue={onValue} />)
+    expect(seen.every((names) => names === NO_MCP_SERVER_NAMES)).toBe(true)
+
+    const source = sourceOf(store, A)
+    rerender(
+      <LiveProgressContext.Provider value={source}>
+        <McpNamesProbe onValue={onValue} />
+      </LiveProgressContext.Provider>
+    )
+    setMeters(store, A, { initReport: initReport(['github']) })
+    expect(seen[seen.length - 1]).toEqual(['github'])
+    const renders = seen.length
+    setMeters(store, A, { contextUsed: 10 })
+    expect(seen.length).toBe(renders)
   })
 })

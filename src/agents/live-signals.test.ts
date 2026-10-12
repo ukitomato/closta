@@ -34,6 +34,8 @@ const FEED: readonly unknown[] = [
   { type: 'system', subtype: 'api_retry', attempt: 1, max_retries: 3, error_status: 529 },
   { type: 'rate_limit_event', rate_limit_info: { status: 'rejected' } },
   { type: 'tool_progress', tool_use_id: 't1', parent_tool_use_id: null, elapsed_time_seconds: 2 },
+  { type: 'auth_status', isAuthenticating: false, output: 7, error: {} },
+  { type: 'system', subtype: 'plugin_install', status: 'completed', name: 42 },
   null,
   'x',
   42,
@@ -62,6 +64,7 @@ describe('createLiveSignals (土台)', () => {
         signals.onUser(message)
         signals.onSystem(message)
         signals.onRateLimit(message)
+        signals.onAuthStatus(message)
         signals.onToolProgress(message)
         signals.onResult(message)
       }).not.toThrow()
@@ -99,6 +102,7 @@ describe('createLiveSignals (土台)', () => {
       signals.onUser(message)
       signals.onSystem(message)
       signals.onRateLimit(message)
+      signals.onAuthStatus(message)
       signals.onToolProgress(message)
       signals.onResult(message)
     }
@@ -858,21 +862,22 @@ describe('createLiveSignals — 権限モード (O-4 BE-040 / 014 data-model §2
     expect(modeEventsOf(emitted)).toEqual([...changed(0, 'default'), ...changed(1, 'plan')])
   })
 
-  it('init の permissionMode 以外 (cwd・tools・mcp_servers・model ほか) の値を送らない (014 SC-002)', () => {
+  it('init の権限モードと構成の許可リスト (015 data-model §2) の外 (cwd・plugins の path ほか) の値を送らない (014 SC-002 / 015 SC-002)', () => {
     const { signals, emitted } = setup()
     signals.onSystem({
       type: 'system',
       subtype: 'init',
       permissionMode: 'acceptEdits',
       cwd: '/home/LEAK-cwd',
-      tools: ['LEAK-tool'],
-      mcp_servers: [{ name: 'LEAK-mcp', status: 'connected' }],
-      model: 'LEAK-model',
-      slash_commands: ['LEAK-slash'],
+      // 構成として運ぶフィールド (O-5 / AD-048 Decision 3。形の検査を通る値)
+      tools: ['Bash'],
+      mcp_servers: [{ name: 'srv', status: 'connected' }],
+      model: 'claude-opus-4',
+      slash_commands: ['review'],
       terminal_slash_commands: ['LEAK-terminal-slash'],
-      plugins: [{ name: 'LEAK-plugin', path: '/LEAK-plugin-path' }],
+      plugins: [{ name: 'plug', path: '/LEAK-plugin-path' }],
       agents: ['LEAK-agent'],
-      skills: ['LEAK-skill'],
+      skills: ['skill-a'],
       apiKeySource: 'LEAK-api-key-source',
       betas: ['LEAK-beta'],
       claude_code_version: 'LEAK-version',
@@ -888,7 +893,22 @@ describe('createLiveSignals — 権限モード (O-4 BE-040 / 014 data-model §2
         session_id: 'LEAK-session'
       })
     )
-    expect(modeEventsOf(emitted)).toEqual([...changed(0, 'acceptEdits'), ...changed(1, 'default')])
+    expect(modeEventsOf(emitted)).toEqual([
+      ...changed(0, 'acceptEdits'),
+      {
+        meter: {
+          type: 'init-report',
+          model: 'claude-opus-4',
+          mcpServers: [{ name: 'srv', status: 'connected' }],
+          tools: ['Bash'],
+          skills: ['skill-a'],
+          plugins: [{ name: 'plug', version: null }],
+          slashCommands: ['review'],
+          omitted: 0
+        }
+      },
+      ...changed(1, 'default')
+    ])
     expect(JSON.stringify(emitted)).not.toContain('LEAK')
   })
 
@@ -1262,5 +1282,488 @@ describe('createLiveSignals — 間引く進み具合 (O-4 BE-042 / 014 data-mod
     advance(5000)
     expect(sent).toHaveLength(before)
     expect(timerCount()).toBe(0)
+  })
+})
+
+/* ── 構成 (O-5 / 015 tasks BE-020 / data-model §2) ─────────────────────── */
+
+/** SDK の `init` の形 (構成の 6 つのフィールドがそろう)。 */
+const initMessage = (over: Record<string, unknown> = {}): Record<string, unknown> => ({
+  type: 'system',
+  subtype: 'init',
+  permissionMode: 'default',
+  model: 'claude-opus-4',
+  mcp_servers: [{ name: 'github', status: 'pending' }],
+  tools: ['Bash', 'mcp__github__create_issue'],
+  skills: ['skill-a'],
+  plugins: [{ name: 'plug', path: '/p', version: '1.0.0' }],
+  slash_commands: ['review'],
+  ...over
+})
+const commandsChanged = (commands: unknown): Record<string, unknown> => ({
+  type: 'system',
+  subtype: 'commands_changed',
+  commands
+})
+/** 送った `meter` のうち構成の種類だけ (と時刻)。 */
+const reportsAt = (sent: readonly Timed[]): { at: number; meter: Record<string, unknown> }[] =>
+  sent.flatMap(({ at, event }) =>
+    event.kind === 'meter' &&
+    (event.meter.type === 'init-report' || event.meter.type === 'commands')
+      ? [{ at, meter: event.meter as unknown as Record<string, unknown> }]
+      : []
+  )
+
+describe('createLiveSignals — 構成 (O-5 / 015 tasks BE-020 / data-model §2)', () => {
+  it('init から meter の init-report、commands_changed から commands を送る (許可リストのフィールドだけ)', () => {
+    const { signals, sent } = setupTimed()
+    signals.onSystem(initMessage())
+    signals.onSystem(
+      commandsChanged([
+        { name: 'review', description: 'レビュー', argumentHint: '<pr>', aliases: ['rv'] }
+      ])
+    )
+    expect(reportsAt(sent).map((r) => r.meter)).toEqual([
+      {
+        type: 'init-report',
+        model: 'claude-opus-4',
+        mcpServers: [{ name: 'github', status: 'pending' }],
+        tools: ['Bash', 'mcp__github__create_issue'],
+        skills: ['skill-a'],
+        plugins: [{ name: 'plug', version: '1.0.0' }],
+        slashCommands: ['review'],
+        omitted: 0
+      },
+      {
+        type: 'commands',
+        commands: [{ name: 'review', description: 'レビュー', argumentHint: '<pr>' }],
+        omitted: 0
+      }
+    ])
+  })
+
+  it('名前は同じで状態だけが変わった 2 回目の init と、同じ長さの別のモデルが送られる', () => {
+    const { signals, sent, advance } = setupTimed()
+    signals.onSystem(initMessage())
+    advance(1000)
+    signals.onSystem(initMessage({ mcp_servers: [{ name: 'github', status: 'failed' }] }))
+    advance(1000)
+    signals.onSystem(
+      initMessage({
+        model: 'claude-opus-5',
+        mcp_servers: [{ name: 'github', status: 'failed' }]
+      })
+    )
+    const reports = reportsAt(sent).map((r) => r.meter)
+    expect(reports).toHaveLength(3)
+    expect(reports.map((m) => m.mcpServers)).toEqual([
+      [{ name: 'github', status: 'pending' }],
+      [{ name: 'github', status: 'failed' }],
+      [{ name: 'github', status: 'failed' }]
+    ])
+    expect(reports.map((m) => m.model)).toEqual(['claude-opus-4', 'claude-opus-4', 'claude-opus-5'])
+  })
+
+  it('同じ内容の init / commands_changed は送らない。送らなかった回の後で基準が変わらない', () => {
+    const { signals, sent, advance } = setupTimed()
+    const commands = [{ name: 'a', description: 'x', argumentHint: '' }]
+    signals.onSystem(initMessage())
+    signals.onSystem(commandsChanged(commands))
+    advance(2000)
+    // キーの順が違っても同じ値なら送らない (変換後の値の直列化で比べる)
+    signals.onSystem({ ...initMessage(), tools: ['Bash', 'mcp__github__create_issue'] })
+    signals.onSystem(commandsChanged([{ argumentHint: '', description: 'x', name: '/a' }]))
+    advance(2000)
+    expect(reportsAt(sent)).toHaveLength(2)
+    // 送らなかった回の後も、基準は最初に送った値のまま (違う値は送り、元の値に戻すとまた送る)
+    signals.onSystem(initMessage({ skills: [] }))
+    advance(2000)
+    signals.onSystem(initMessage())
+    const reports = reportsAt(sent).map((r) => r.meter)
+    expect(reports).toHaveLength(4)
+    expect(reports.slice(2).map((m) => m.skills)).toEqual([[], ['skill-a']])
+  })
+
+  it('構成のフィールドが欠けた init からは構成を送らない (権限モードの比較は今のまま)', () => {
+    const { signals, sent } = setupTimed()
+    signals.onSystem({ type: 'system', subtype: 'init', permissionMode: 'default' })
+    signals.onSystem({
+      type: 'system',
+      subtype: 'init',
+      permissionMode: 'default',
+      tools: ['Bash']
+    })
+    expect(reportsAt(sent)).toEqual([])
+  })
+
+  it('合流: 1 秒の窓の中で中身の違う init を 21 回流すと、送るのは最初の 1 件と窓の終わりの最後の 1 件だけ', () => {
+    const { signals, sent, advance, timerCount } = setupTimed()
+    for (let i = 0; i < 21; i++) {
+      signals.onSystem(initMessage({ skills: [`skill-${i}`] }))
+      advance(40)
+    }
+    // 窓の終わり (1,000ms) まで進める
+    advance(1000 - 21 * 40)
+    const reports = reportsAt(sent)
+    expect(reports.map((r) => [r.at, r.meter.skills])).toEqual([
+      [0, ['skill-0']],
+      [1000, ['skill-20']]
+    ])
+    expect(timerCount()).toBe(0)
+  })
+
+  it('合流: 窓の終わりの保留が前回送った値と同じなら送らない', () => {
+    const { signals, sent, advance } = setupTimed()
+    signals.onSystem(initMessage())
+    advance(100)
+    signals.onSystem(initMessage({ skills: [] }))
+    advance(100)
+    signals.onSystem(initMessage())
+    advance(2000)
+    expect(reportsAt(sent)).toHaveLength(1)
+  })
+
+  it('合流: 窓の後に届いた値はすぐ送る (leading)。窓の終わりに送った後の 1 秒はまた保留する', () => {
+    const { signals, sent, advance } = setupTimed()
+    signals.onSystem(initMessage())
+    advance(500)
+    signals.onSystem(initMessage({ skills: ['b'] }))
+    advance(500)
+    // 1,000ms で保留 (b) を送った。その 1 秒の中の値は 2,000ms に送る
+    advance(300)
+    signals.onSystem(initMessage({ skills: ['c'] }))
+    advance(2000)
+    signals.onSystem(initMessage({ skills: ['d'] }))
+    expect(reportsAt(sent).map((r) => [r.at, r.meter.skills])).toEqual([
+      [0, ['skill-a']],
+      [1000, ['b']],
+      [2000, ['c']],
+      [3300, ['d']]
+    ])
+  })
+
+  it('合流: init-report と commands の窓は互いに独立', () => {
+    const { signals, sent, advance } = setupTimed()
+    signals.onSystem(initMessage())
+    advance(100)
+    // init-report の窓の中でも、commands の最初の 1 件はすぐ送る
+    signals.onSystem(commandsChanged([{ name: 'a', description: '', argumentHint: '' }]))
+    signals.onSystem(initMessage({ skills: [] }))
+    advance(100)
+    signals.onSystem(commandsChanged([{ name: 'b', description: '', argumentHint: '' }]))
+    advance(2000)
+    expect(reportsAt(sent).map((r) => [r.at, r.meter.type])).toEqual([
+      [0, 'init-report'],
+      [100, 'commands'],
+      [1000, 'init-report'],
+      [1100, 'commands']
+    ])
+  })
+
+  it('合流: O-4 の meter の間引き (meter-throttle の 1 秒に 20 件) を消費しない', () => {
+    const { signals, sent } = setupTimed()
+    for (let i = 0; i < 21; i++) {
+      signals.onSystem(initMessage({ skills: [`s${i}`] }))
+      signals.onSystem(commandsChanged([{ name: `c${i}`, description: '', argumentHint: '' }]))
+    }
+    for (let i = 0; i < 20; i++) signals.onToolProgress(toolProgress(`toolu_${i}`, 1))
+    const toolMeters = metersAt(sent).filter(
+      (m) => (m.meter as { type: string }).type === 'tool-elapsed'
+    )
+    expect(toolMeters).toHaveLength(20)
+  })
+
+  it('dispose の後は保留を送らず、timer も残らない', () => {
+    const { signals, sent, advance, timerCount } = setupTimed()
+    signals.onSystem(initMessage())
+    signals.onSystem(commandsChanged([]))
+    signals.onSystem(initMessage({ skills: [] }))
+    signals.onSystem(commandsChanged([{ name: 'a', description: '', argumentHint: '' }]))
+    expect(timerCount()).toBe(2)
+    const before = sent.length
+    signals.dispose()
+    expect(timerCount()).toBe(0)
+    advance(5000)
+    signals.onSystem(initMessage({ skills: ['z'] }))
+    signals.onSystem(commandsChanged([{ name: 'z', description: '', argumentHint: '' }]))
+    advance(5000)
+    expect(sent).toHaveLength(before)
+    expect(timerCount()).toBe(0)
+  })
+
+  it('init の通さないフィールドと commands の aliases の目印の値が送った文字列に 0 件 (015 SC-002)', () => {
+    const { signals, sent } = setupTimed()
+    signals.onSystem(
+      initMessage({
+        cwd: '/home/LEAK-cwd',
+        plugins: [{ name: 'plug', path: '/LEAK-plugin-path', version: '1.0.0' }],
+        apiKeySource: 'LEAK-api-key-source',
+        betas: ['LEAK-beta'],
+        capabilities: ['LEAK-capability'],
+        claude_code_version: 'LEAK-version',
+        agents: ['LEAK-agent'],
+        output_style: 'LEAK-style',
+        terminal_slash_commands: ['LEAK-terminal'],
+        fast_mode_state: 'LEAK-fast',
+        effort: 'LEAK-effort',
+        uuid: 'LEAK-uuid',
+        session_id: 'LEAK-session'
+      })
+    )
+    signals.onSystem({
+      ...commandsChanged([
+        { name: 'a', description: 'x', argumentHint: '', aliases: ['LEAK-alias'] }
+      ]),
+      uuid: 'LEAK-uuid',
+      session_id: 'LEAK-session'
+    })
+    expect(reportsAt(sent)).toHaveLength(2)
+    expect(JSON.stringify(sent.map((s) => s.event))).not.toContain('LEAK')
+  })
+
+  it('形の外れた構成 (制御文字・tag 文字・U+2028・長い名前・件数の超過・__proto__) で例外を出さず落とす', () => {
+    const { signals, sent } = setupTimed()
+    expect(() => {
+      signals.onSystem(
+        initMessage({
+          model: 42,
+          mcp_servers: [
+            { name: 'a\u0000b', status: 'connected' },
+            { name: 'x', status: '__proto__' },
+            ...Array.from({ length: 70 }, (_, i) => ({ name: `s${i}`, status: 'connected' }))
+          ],
+          tools: ['Bash ', `t\u{E0041}`, 'x'.repeat(129)],
+          skills: 'not-an-array',
+          plugins: [null, 42],
+          slash_commands: ['//a', 'ok']
+        })
+      )
+      signals.onSystem(commandsChanged({ __proto__: null }))
+      signals.onSystem(commandsChanged([{ name: 'constructor' }, null]))
+    }).not.toThrow()
+    const [report, commands] = reportsAt(sent).map((r) => r.meter)
+    expect(report?.model).toBeNull()
+    expect((report?.mcpServers as unknown[]).length).toBe(64)
+    expect((report?.mcpServers as { status: string }[])[0]).toEqual({
+      name: 'x',
+      status: 'unknown'
+    })
+    expect(report?.tools).toEqual([])
+    expect(report?.skills).toEqual([])
+    expect(report?.slashCommands).toEqual(['ok'])
+    expect(report?.omitted).toBeGreaterThan(0)
+    expect(commands).toEqual({ type: 'commands', commands: [], omitted: 0 })
+  })
+
+  it('構成は状態通知 (SessionStatusUpdate) に載らない (送るのは event の meter だけ)', () => {
+    const { signals, sent } = setupTimed()
+    signals.onSystem(initMessage())
+    signals.onSystem(commandsChanged([]))
+    expect(sent.map((s) => s.event.kind)).toEqual(['meter', 'meter'])
+  })
+})
+
+/** O-5 BE-031 — 認証とプラグインの行 (015 data-model §4 / spec FR-010)。 */
+describe('createLiveSignals — 認証とプラグインの行 (O-5 / 015 tasks BE-031 / data-model §4)', () => {
+  const MARK = 'SECRET_MARK'
+  interface Row {
+    readonly id: string
+    readonly category: string
+    readonly opens: boolean
+    readonly detail: string
+    readonly status: string | null
+  }
+  const rowsOf = (emitted: readonly SessionEvent[]): Row[] =>
+    emitted.flatMap((event) => {
+      if (event.kind !== 'message') return []
+      const part = event.message.parts[0]
+      if (part?.type !== 'system-event') return []
+      expect(part.name).toBe('')
+      expect(event.message.role).toBe('system')
+      return [
+        {
+          id: event.message.id,
+          category: part.category,
+          opens: part.opens,
+          detail: part.detail,
+          status: part.status
+        }
+      ]
+    })
+  const auth = (isAuthenticating: boolean, over: Record<string, unknown> = {}): unknown => ({
+    type: 'auth_status',
+    isAuthenticating,
+    output: [`${MARK}-output`],
+    uuid: 'u1',
+    session_id: 's1',
+    ...over
+  })
+  const plugin = (status: string, over: Record<string, unknown> = {}): unknown => ({
+    type: 'system',
+    subtype: 'plugin_install',
+    status,
+    uuid: 'u1',
+    session_id: 's1',
+    ...over
+  })
+
+  it('認証の開閉: true で authenticating の行を作り、false で succeeded に閉じる。次の認証は別の id', () => {
+    const { signals, emitted } = setup()
+    signals.onAuthStatus(auth(true))
+    signals.onAuthStatus(auth(true)) // 開いている間の続きは送らない
+    signals.onAuthStatus(auth(false))
+    signals.onAuthStatus(auth(true))
+    signals.onAuthStatus(auth(false, { error: `${MARK}-error` }))
+    expect(rowsOf(emitted)).toEqual([
+      { id: 'auth:0', category: 'auth', opens: true, detail: '', status: 'authenticating' },
+      { id: 'auth:0', category: 'auth', opens: false, detail: '', status: 'succeeded' },
+      { id: 'auth:1', category: 'auth', opens: true, detail: '', status: 'authenticating' },
+      { id: 'auth:1', category: 'auth', opens: false, detail: '', status: 'failed' }
+    ])
+  })
+
+  it('auth_status の output / error と plugin_install の error の文字列を送らない (U-4)', () => {
+    const { signals, emitted } = setup()
+    signals.onAuthStatus(auth(true, { error: `${MARK}-error` }))
+    signals.onAuthStatus(auth(false, { error: `${MARK}-error` }))
+    signals.onSystem(plugin('started', { name: 'acme' }))
+    signals.onSystem(plugin('failed', { name: 'acme', error: `${MARK}-plugin-error` }))
+    signals.onSystem(plugin('completed', { error: `${MARK}-plugin-error` }))
+    expect(emitted.length).toBeGreaterThan(0)
+    expect(JSON.stringify(emitted)).not.toContain(MARK)
+  })
+
+  it('開いた行が無いまま isAuthenticating: false (error なし) と形の外れは例外を出さず、何も送らない', () => {
+    const { signals, emitted } = setup()
+    expect(() => {
+      signals.onAuthStatus(auth(false))
+      signals.onAuthStatus(auth(false, { error: '' }))
+      signals.onAuthStatus(auth(false, { error: null }))
+      signals.onAuthStatus({ type: 'auth_status' })
+      signals.onAuthStatus({ type: 'auth_status', isAuthenticating: 'yes' })
+      signals.onAuthStatus({ type: 'other', isAuthenticating: true })
+    }).not.toThrow()
+    expect(emitted).toEqual([])
+  })
+
+  it('開いた行が無いまま error のある false が来たら failed の行を 1 つ作って閉じ、次の認証は別の id (015 data-model §4)', () => {
+    const { signals, emitted } = setup()
+    signals.onAuthStatus(auth(false, { error: `${MARK}-error` }))
+    signals.onAuthStatus(auth(true))
+    signals.onAuthStatus(auth(false))
+    expect(rowsOf(emitted)).toEqual([
+      { id: 'auth:0', category: 'auth', opens: true, detail: '', status: 'failed' },
+      { id: 'auth:1', category: 'auth', opens: true, detail: '', status: 'authenticating' },
+      { id: 'auth:1', category: 'auth', opens: false, detail: '', status: 'succeeded' }
+    ])
+    expect(JSON.stringify(emitted)).not.toContain(MARK)
+  })
+
+  it('プラグインの進み具合の合成: started で開き、installed / failed を数え、completed で閉じる', () => {
+    const { signals, emitted } = setup()
+    signals.onSystem(plugin('started', { name: 'acme' }))
+    signals.onSystem(plugin('installed', { name: 'acme' }))
+    signals.onSystem(plugin('installed', { name: 'other/market' }))
+    signals.onSystem(plugin('completed'))
+    expect(rowsOf(emitted)).toEqual([
+      { id: 'plugin:0', category: 'plugin', opens: true, detail: '0/0/acme', status: 'started' },
+      { id: 'plugin:0', category: 'plugin', opens: false, detail: '1/0/acme', status: null },
+      {
+        id: 'plugin:0',
+        category: 'plugin',
+        opens: false,
+        detail: '2/0/other/market',
+        status: null
+      },
+      {
+        id: 'plugin:0',
+        category: 'plugin',
+        opens: false,
+        detail: '2/0/other/market',
+        status: 'completed'
+      }
+    ])
+  })
+
+  it('失敗が 1 つでもあれば failed で閉じ、次の導入は別の id', () => {
+    const { signals, emitted } = setup()
+    signals.onSystem(plugin('started'))
+    signals.onSystem(plugin('installed'))
+    signals.onSystem(plugin('failed'))
+    signals.onSystem(plugin('completed'))
+    signals.onSystem(plugin('started'))
+    const rows = rowsOf(emitted)
+    expect(rows.at(-2)).toMatchObject({ id: 'plugin:0', detail: '1/1/', status: 'failed' })
+    expect(rows.at(-1)).toMatchObject({ id: 'plugin:1', opens: true, status: 'started' })
+  })
+
+  it('形の外れたマーケットプレイスの名前は detail に出ず、前の名前が残る', () => {
+    const { signals, emitted } = setup()
+    signals.onSystem(plugin('started', { name: 'acme' }))
+    for (const name of [
+      `a${String.fromCodePoint(0x202e)}b`,
+      'a b',
+      'a//b',
+      'x'.repeat(129),
+      `${MARK}${String.fromCodePoint(0x2028)}`,
+      42
+    ])
+      signals.onSystem(plugin('installed', { name }))
+    const rows = rowsOf(emitted)
+    expect(rows.at(-1)?.detail).toBe('6/0/acme')
+    expect(JSON.stringify(emitted)).not.toContain(MARK)
+  })
+
+  it('知らない status は開いた行の有無に依らず何も送らない', () => {
+    const { signals, emitted } = setup()
+    signals.onSystem(plugin('exploded'))
+    signals.onSystem(plugin('__proto__'))
+    signals.onSystem(plugin('started'))
+    signals.onSystem(plugin('exploded'))
+    signals.onSystem(plugin('__proto__'))
+    expect(rowsOf(emitted)).toEqual([
+      { id: 'plugin:0', category: 'plugin', opens: true, detail: '0/0/', status: 'started' }
+    ])
+  })
+
+  it('started の無い installed → completed は行を 1 つ開いて閉じる (数 1 / 0。015 data-model §4)', () => {
+    const { signals, emitted } = setup()
+    signals.onSystem(plugin('installed', { name: 'acme' }))
+    signals.onSystem(plugin('completed'))
+    signals.onSystem(plugin('started'))
+    expect(rowsOf(emitted)).toEqual([
+      { id: 'plugin:0', category: 'plugin', opens: true, detail: '1/0/acme', status: 'started' },
+      { id: 'plugin:0', category: 'plugin', opens: false, detail: '1/0/acme', status: 'completed' },
+      { id: 'plugin:1', category: 'plugin', opens: true, detail: '0/0/', status: 'started' }
+    ])
+  })
+
+  it('started の無い failed → completed は failed で閉じ、error を送らない', () => {
+    const { signals, emitted } = setup()
+    signals.onSystem(plugin('failed', { name: 'acme', error: `${MARK}-plugin-error` }))
+    signals.onSystem(plugin('completed', { error: `${MARK}-plugin-error` }))
+    expect(rowsOf(emitted)).toEqual([
+      { id: 'plugin:0', category: 'plugin', opens: true, detail: '0/1/acme', status: 'started' },
+      { id: 'plugin:0', category: 'plugin', opens: false, detail: '0/1/acme', status: 'failed' }
+    ])
+    expect(JSON.stringify(emitted)).not.toContain(MARK)
+  })
+
+  it('completed だけなら数 0 / 0 の completed の行を 1 つ作り、次の導入は別の id', () => {
+    const { signals, emitted } = setup()
+    signals.onSystem(plugin('completed'))
+    signals.onSystem(plugin('completed', { name: 'acme' }))
+    expect(rowsOf(emitted)).toEqual([
+      { id: 'plugin:0', category: 'plugin', opens: true, detail: '0/0/', status: 'completed' },
+      { id: 'plugin:1', category: 'plugin', opens: true, detail: '0/0/acme', status: 'completed' }
+    ])
+  })
+
+  it('dispose() の後は認証とプラグインの行を送らない', () => {
+    const { signals, emitted } = setup()
+    signals.dispose()
+    signals.onAuthStatus(auth(true))
+    signals.onSystem(plugin('started'))
+    expect(emitted).toEqual([])
   })
 })

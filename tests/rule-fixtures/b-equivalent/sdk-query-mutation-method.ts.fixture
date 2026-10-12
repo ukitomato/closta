@@ -4,11 +4,12 @@ import { query } from '@anthropic-ai/claude-agent-sdk'
  * 違反サンプル (X-1 / SH-010 / contracts C-4 P3)。
  *
  * **`Query` の mutation メソッドを呼ぶ。** 許可されるのは `interrupt()` のみだが、
- * `setPermissionMode('bypassPermissions')` でモードを昇格させる形。
+ * `setPermissionMode(...)` でモードを変える形。
  * 項目 14 は `.method()` 呼び出しを見ないため素通しする。
- * **項目 16 の backstop が Query の mutation メソッドと昇格値を捕まえる。**
+ * **引数は安全値 `'default'` にしてある** — 昇格値のリテラル検査 (P1) では発火せず、
+ * 項目 16 の P3 (mutation メソッドの呼び出し) だけで発火することを確かめる (O-5 / 015 research R-06 (4))。
  */
 export async function bad(): Promise<void> {
   const q = query({ prompt: 'hi' })
-  await q.setPermissionMode('bypassPermissions')
+  await q.setPermissionMode('default')
 }

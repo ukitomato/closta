@@ -42,6 +42,11 @@ export interface LiveProgressSource {
   toolElapsed(toolCallId: string): number | null
   /** 思考のトークン数の推定。値が無ければ null。 */
   thinkingTokens(): number | null
+  /**
+   * 表示中のセッションの構成 (`init-report`) が報告した MCP サーバーの名前 (O-5 / 015 data-model §1。MCP の tool の名前を
+   * 解く `parseMcpToolName` の `knownServers`)。構成が替わるまで同じ参照を返す (`useSyncExternalStore` の snapshot)。
+   */
+  mcpServerNames(): readonly string[]
   /** 値が変わったときに呼ぶ listener を登録し、解除する関数を返す。 */
   subscribe(listener: () => void): () => void
 }
@@ -76,6 +81,52 @@ export function useLiveThinkingTokens(): number | null {
   )
   const snapshot = useCallback(() => (source === null ? null : source.thinkingTokens()), [source])
   return useSyncExternalStore(subscribe, snapshot, snapshot)
+}
+
+/** MCP サーバーの名前が無いときの値 (過去ログ・構成がまだ無い。同じ参照を返す)。 */
+export const NO_MCP_SERVER_NAMES: readonly string[] = Object.freeze([])
+
+/**
+ * 構成から MCP サーバーの名前の一覧を引く関数を作る (購読元の `mcpServerNames` の実装)。`readReport` が返す構成が
+ * **同じ参照のあいだは同じ配列を返す** — 構成と無関係な計量 (`context` など) の更新で snapshot を変えない (015 research R-05)。
+ */
+export function createMcpServerNamesReader(
+  readReport: () => { readonly mcpServers: readonly { readonly name: string }[] } | null
+): () => readonly string[] {
+  let lastReport: ReturnType<typeof readReport> | undefined
+  let lastNames: readonly string[] = NO_MCP_SERVER_NAMES
+  return () => {
+    const report = readReport()
+    if (report !== lastReport) {
+      lastReport = report
+      lastNames =
+        report === null || report.mcpServers.length === 0
+          ? NO_MCP_SERVER_NAMES
+          : Object.freeze(report.mcpServers.map((s) => s.name))
+    }
+    return lastNames
+  }
+}
+
+/**
+ * 購読元から MCP サーバーの名前を購読する。購読元が null (過去ログ) なら空の配列 (同じ参照)。
+ * transcript の外 (承認カードを置く `LivePane`) が購読元を直接持つときに使う。
+ */
+export function useMcpServerNamesOf(source: LiveProgressSource | null): readonly string[] {
+  const subscribe = useCallback(
+    (listener: () => void) => (source === null ? noopUnsubscribe : source.subscribe(listener)),
+    [source]
+  )
+  const snapshot = useCallback(
+    () => (source === null ? NO_MCP_SERVER_NAMES : source.mcpServerNames()),
+    [source]
+  )
+  return useSyncExternalStore(subscribe, snapshot, snapshot)
+}
+
+/** 表示中のセッションの MCP サーバーの名前 (transcript の element が読む)。購読元が無いとき (過去ログ) は空。 */
+export function useLiveMcpServerNames(): readonly string[] {
+  return useMcpServerNamesOf(useContext(LiveProgressContext))
 }
 
 /* ── 会話内検索の navigator (O-3 / 012 data-model §2「移動」「メッセージの要素の引き方」) ─────────────── */

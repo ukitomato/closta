@@ -1,0 +1,598 @@
+{
+    "gate": "pr",
+    "run": "2026-10-10T15:58:46Z",
+    "spec_dir": "specs/015-ui-mcp-elicitation-commands",
+    "spec_id": "015-ui-mcp-elicitation-commands",
+    "round": 2,
+    "base_branch": "main",
+    "base_commit": "faafe9180280eaaaf2618679f04e35d54a9f7789",
+    "base_note": "origin/HEAD symref is stale (001-...); main used. Diff = merge-base..working tree + untracked (implementation uncommitted)",
+    "diff_stat": {
+        "files": 79,
+        "additions": 7505,
+        "deletions": 172
+    },
+    "severity_counts": {
+        "critical": 0,
+        "high": 0,
+        "medium": 8,
+        "low": 23
+    },
+    "severity_counts_raw": {
+        "critical": 0,
+        "high": 0,
+        "medium": 8,
+        "low": 24
+    },
+    "convergence": {
+        "resolved_from_prev": 3,
+        "new_in_round": 3,
+        "unresolved": 28
+    },
+    "inheritance": "full (pr-gate.md.round1 + .gate-verdict-pr.json round 1)",
+    "inheritance_detail": {
+        "resolved": [
+            "MD-01",
+            "MD-02",
+            "MD-10"
+        ],
+        "unresolved": [
+            "MD-03",
+            "MD-04",
+            "MD-05",
+            "MD-06",
+            "MD-07",
+            "MD-08",
+            "MD-09",
+            "MD-11",
+            "LW-01",
+            "LW-02",
+            "LW-03",
+            "LW-04",
+            "LW-05",
+            "LW-06",
+            "LW-07",
+            "LW-08",
+            "LW-09",
+            "LW-10",
+            "LW-11",
+            "LW-12",
+            "LW-13",
+            "LW-14",
+            "LW-15",
+            "LW-16",
+            "LW-17",
+            "LW-18",
+            "LW-19",
+            "LW-20"
+        ],
+        "partially_resolved": [
+            "LW-06",
+            "LW-17"
+        ],
+        "new": [
+            "NL-01",
+            "NL-02",
+            "NL-03"
+        ]
+    },
+    "round_history": [
+        {
+            "round": 1,
+            "critical": 0,
+            "high": 0,
+            "medium": 11,
+            "low": 20,
+            "convergence": {
+                "resolved_from_prev": 0,
+                "new_in_round": 0,
+                "unresolved": 0
+            }
+        },
+        {
+            "round": 2,
+            "critical": 0,
+            "high": 0,
+            "medium": 8,
+            "low": 23,
+            "convergence": {
+                "resolved_from_prev": 3,
+                "new_in_round": 3,
+                "unresolved": 28
+            }
+        }
+    ],
+    "suppressed_by_code_gate": [],
+    "medium_findings": [
+        {
+            "id": "MD-03",
+            "origin": [
+                "a11y M-001"
+            ],
+            "where": "src/renderer/src/features/session/ApprovalCard.tsx:35",
+            "status": "unresolved from N-1"
+        },
+        {
+            "id": "MD-04",
+            "origin": [
+                "ux M-001"
+            ],
+            "where": "src/renderer/src/features/session/ApprovalCard.tsx:82",
+            "status": "unresolved from N-1"
+        },
+        {
+            "id": "MD-05",
+            "origin": [
+                "ux M-003"
+            ],
+            "where": "src/renderer/src/components/assistant-ui/elements/ask-user-question.aui.tsx:228",
+            "status": "unresolved from N-1"
+        },
+        {
+            "id": "MD-06",
+            "origin": [
+                "ux M-004"
+            ],
+            "where": "src/renderer/src/components/assistant-ui/elements/ask-user-question.aui.test.tsx:180",
+            "status": "unresolved from N-1"
+        },
+        {
+            "id": "MD-07",
+            "origin": [
+                "po M-001"
+            ],
+            "where": "src/renderer/src/components/assistant-ui/elements/ask-user-question.aui.tsx:218",
+            "status": "unresolved from N-1"
+        },
+        {
+            "id": "MD-08",
+            "origin": [
+                "po M-002"
+            ],
+            "where": "src/renderer/src/features/shell/labels.ts:230",
+            "status": "unresolved from N-1"
+        },
+        {
+            "id": "MD-09",
+            "origin": [
+                "platform-boundary M-001"
+            ],
+            "where": "scripts/constitution/check.mjs:922",
+            "status": "unresolved from N-1"
+        },
+        {
+            "id": "MD-11",
+            "origin": [
+                "architecture M-002"
+            ],
+            "where": "tests/rule-fixtures/expected.mjs:877",
+            "status": "unresolved from N-1"
+        }
+    ],
+    "new_low_findings": [
+        {
+            "id": "NL-01",
+            "origin": [
+                "po L-101",
+                "ui-coverage L-004"
+            ],
+            "where": "specs/015-ui-mcp-elicitation-commands/data-model.md:126"
+        },
+        {
+            "id": "NL-02",
+            "origin": [
+                "ux L-007"
+            ],
+            "where": "src/renderer/src/features/shell/RightPanel.tsx:152"
+        },
+        {
+            "id": "NL-03",
+            "origin": [
+                "architecture L-003"
+            ],
+            "where": "specs/015-ui-mcp-elicitation-commands/spec.md:214"
+        }
+    ],
+    "touched_files": [
+        {
+            "path": ".specify/spec-gate/reviewers.yml",
+            "sha": "1e19fa7e1bdb3a3583598a139ecc24d08c53d6e4"
+        },
+        {
+            "path": "docs/decisions/0047-session-meter-and-failure-reasons.md",
+            "sha": "3b04fa450c9246885c8b8062caa150e99c77f213"
+        },
+        {
+            "path": "docs/decisions/0048-session-config-display-and-answer-ui-split.md",
+            "sha": "9384bd8cd25b9d80d4068e7e33ce93166d4ee97d"
+        },
+        {
+            "path": "docs/domains/_overview.md",
+            "sha": "ace803f0fcd3d161bc0684c49c88ed1d56673640"
+        },
+        {
+            "path": "docs/domains/session/charter.md",
+            "sha": "fddc9ad7eb05a7ca67e6985d056335f56ede2a1c"
+        },
+        {
+            "path": "docs/domains/ui/charter.md",
+            "sha": "e8d627e640dd9ab7cf2909c1af731aa3a32fcce3"
+        },
+        {
+            "path": "docs/glossary.md",
+            "sha": "a33256e0a9d2dadf5ba9f0f6d4eea7008f89c99c"
+        },
+        {
+            "path": "docs/prompts.md",
+            "sha": "723af3fef0230807066bbe0adc5955376e2bf695"
+        },
+        {
+            "path": "docs/roadmap.md",
+            "sha": "0c5dc3bb7290dd97bcd534627c0e3650c88e57c9"
+        },
+        {
+            "path": "docs/ui-coverage.md",
+            "sha": "4236621502d8abf0644d721a1f5abfffd70f1984"
+        },
+        {
+            "path": "eslint.config.mjs",
+            "sha": "2bef4e9ff623c50f97014dc6260caa7a5d0854f9"
+        },
+        {
+            "path": "scripts/constitution/allowlists.mjs",
+            "sha": "6295bc4857865df230fd8360e57e232e98d92b6b"
+        },
+        {
+            "path": "scripts/constitution/check.mjs",
+            "sha": "5fbc6e006068b0699daebacc288898aafaee0dd4"
+        },
+        {
+            "path": "specs/015-ui-mcp-elicitation-commands/.gate-verdict-design.json",
+            "sha": "f4d6a2b2fb43998ea5502d4d907f5085439db420"
+        },
+        {
+            "path": "specs/015-ui-mcp-elicitation-commands/analyze.md",
+            "sha": "63ba330efb5311d2acb16625fa87429ae6a70d46"
+        },
+        {
+            "path": "specs/015-ui-mcp-elicitation-commands/architecture-reviewer.design-gate.md",
+            "sha": "b074d9aa84d3319bdcd184e3883e6e0b75340803"
+        },
+        {
+            "path": "specs/015-ui-mcp-elicitation-commands/data-model.md",
+            "sha": "503237516373714f4ff3d3bf9edda3a703c76287"
+        },
+        {
+            "path": "specs/015-ui-mcp-elicitation-commands/design-gate.md",
+            "sha": "b823a67e962a29259fc1614927f4e9c74070fdc4"
+        },
+        {
+            "path": "specs/015-ui-mcp-elicitation-commands/plan.md",
+            "sha": "bd6d33e924103e8f44be976e199f78b6fa420d63"
+        },
+        {
+            "path": "specs/015-ui-mcp-elicitation-commands/platform-boundary-reviewer.design-gate.md",
+            "sha": "3ef6f42332a7fe3c9bb6a5e43c33d737777adc5a"
+        },
+        {
+            "path": "specs/015-ui-mcp-elicitation-commands/po-reviewer.design-gate.md",
+            "sha": "0ec756f917696e027239ce79c1e6e0d90a0e4456"
+        },
+        {
+            "path": "specs/015-ui-mcp-elicitation-commands/quickstart.md",
+            "sha": "122b50131bdb5e3cf2a27a655b0c1f040cd5e69e"
+        },
+        {
+            "path": "specs/015-ui-mcp-elicitation-commands/quickstart-results.md",
+            "sha": "025e23ca094533293520c088ba88f9ba27a8dfe6"
+        },
+        {
+            "path": "specs/015-ui-mcp-elicitation-commands/research.md",
+            "sha": "3d77edceafba36464df9411d463687c31d683356"
+        },
+        {
+            "path": "specs/015-ui-mcp-elicitation-commands/security-reviewer.design-gate.md",
+            "sha": "d3a205a70b1af73f6fe741f1503a923e9cdf13f0"
+        },
+        {
+            "path": "specs/015-ui-mcp-elicitation-commands/spec.md",
+            "sha": "ad809ee66cfdfc2e2e710f4c9c4bc3e6fe0a02cb"
+        },
+        {
+            "path": "specs/015-ui-mcp-elicitation-commands/tasks.md",
+            "sha": "60f3c189cc064132edd8d844b7b4be3938a2496c"
+        },
+        {
+            "path": "specs/015-ui-mcp-elicitation-commands/touched-files.txt",
+            "sha": "6993f6b5bdcbac56d7b6f2a6af0ce22266829ab6"
+        },
+        {
+            "path": "src/agents/live-signals.test.ts",
+            "sha": "97a8489c27222ddc3060e9624c43a46273c52b5a"
+        },
+        {
+            "path": "src/agents/live-signals.ts",
+            "sha": "451d1afa2771b9b84708f42b497508353a738733"
+        },
+        {
+            "path": "src/agents/sdk-agent-session.test.ts",
+            "sha": "ee4616df4f311df92346ff474af3a32bf088ff1c"
+        },
+        {
+            "path": "src/agents/sdk-agent-session.ts",
+            "sha": "28631c334850ff489c1dde02899619ce25ceeb0f"
+        },
+        {
+            "path": "src/domain/session/meter.test.ts",
+            "sha": "9ccaf9fe217cd0546e5a924ed71e5552cababb45"
+        },
+        {
+            "path": "src/domain/session/meter.ts",
+            "sha": "94bf49fc8c889912567e5729c4cbe2deefe019db"
+        },
+        {
+            "path": "src/domain/session/session-init-report.test.ts",
+            "sha": "b779166d553bb5dd0c2a12551829f0ee3ee94e65"
+        },
+        {
+            "path": "src/domain/session/session-init-report.ts",
+            "sha": "40ea32b47ed8c68190ee6ddf5df28c955d19cb80"
+        },
+        {
+            "path": "src/domain/session/system-event.test.ts",
+            "sha": "f6f47cd1b52f15b365a9bb2e612329d18e0c31a2"
+        },
+        {
+            "path": "src/domain/session/system-event.ts",
+            "sha": "b8f1ecd0deb8fa5cb72edb4dc6f00a6da47b88c3"
+        },
+        {
+            "path": "src/domain/session/transcript.test.ts",
+            "sha": "88790b280c8672e5cf41e25830d80822fd043e47"
+        },
+        {
+            "path": "src/domain/session/transcript.ts",
+            "sha": "b978a81ecdd862007fee6d5c8768b23d2b078080"
+        },
+        {
+            "path": "src/domain/session/transcript-dto.ts",
+            "sha": "9f2ad0515ba847f68e75be27e36f816c2d0da834"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/ask-user-question.aui.test.tsx",
+            "sha": "482bcf7eba5803917e8d9c45c0d735200f0240c3"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/ask-user-question.aui.tsx",
+            "sha": "ca044c81fb918dfac1dad86daf1ad5439c522aab"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/mcp-tool-call.aui.test.tsx",
+            "sha": "55ff69ae9bc0b17caa66bf2f62c30c1c4970224e"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/mcp-tool-call.aui.tsx",
+            "sha": "faec257a7d3b0e5ec2dae0cbee40c850ac3aaeee"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/thread.aui.tsx",
+            "sha": "e04e4ade1de70fc710d035b109205b0acbfad504"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/tool-fallback.aui.tsx",
+            "sha": "7c489d101bb5cf7302600dbb6a2bdbe7b2e49c5b"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/tool-registry.aui.test.tsx",
+            "sha": "3a1b9b49c1add10d364d4c4a8926bce1b8c9c4a7"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/tool-registry.aui.tsx",
+            "sha": "7b6542a07cf3287675fc4c8de1c71df45a18b4ed"
+        },
+        {
+            "path": "src/renderer/src/features/chat/labels.ts",
+            "sha": "c0c6df50b795540a8e2bb38286f1df0359c4a273"
+        },
+        {
+            "path": "src/renderer/src/features/chat/mcp-tool-name.test.ts",
+            "sha": "8af861dd367dabe801b30661f2e9acce21bbdee0"
+        },
+        {
+            "path": "src/renderer/src/features/chat/mcp-tool-name.ts",
+            "sha": "bc34a165d43aa0968a83e6c0851cf78e78774fa1"
+        },
+        {
+            "path": "src/renderer/src/features/chat/transcript-context.ts",
+            "sha": "02cf552943ad7b70a7a021b07b8d06b8abba2872"
+        },
+        {
+            "path": "src/renderer/src/features/session/ApprovalCard.test.tsx",
+            "sha": "517266f7be2769ef507c54c46128d6765c9e7afd"
+        },
+        {
+            "path": "src/renderer/src/features/session/ApprovalCard.tsx",
+            "sha": "824742be5853637c11ecbf905d45b87a773705e6"
+        },
+        {
+            "path": "src/renderer/src/features/session/labels.ts",
+            "sha": "c082ca53e8e82f2949de9da84c9eb563f1401a95"
+        },
+        {
+            "path": "src/renderer/src/features/session/LivePane.o2.test.tsx",
+            "sha": "227a47129db18c4304654de4811dd6be14874ba2"
+        },
+        {
+            "path": "src/renderer/src/features/session/LivePane.progress.test.tsx",
+            "sha": "d2d37ba873f3456e30d18e5a03a8fdbb75fd1ba6"
+        },
+        {
+            "path": "src/renderer/src/features/session/LivePane.tsx",
+            "sha": "c5b388d9623d46100b9d4fb0db1eba1cf351783e"
+        },
+        {
+            "path": "src/renderer/src/features/session/running-session-store.test.ts",
+            "sha": "bab6d092d95f922e2e0fc10ce2dcc675e3f4e1d6"
+        },
+        {
+            "path": "src/renderer/src/features/session/running-session-store.ts",
+            "sha": "9765cf33d4bd4c4506692f674a910690b781de61"
+        },
+        {
+            "path": "src/renderer/src/features/session/running-session-types.ts",
+            "sha": "4fb11be6ee6ba661adfd27f1f8b24c039718c864"
+        },
+        {
+            "path": "src/renderer/src/features/session/session-event-decoder.test.ts",
+            "sha": "a8dc037c394be1f055c2459f7f39afa081247696"
+        },
+        {
+            "path": "src/renderer/src/features/shell/init-report-attention.ts",
+            "sha": "842375bdb5c914a7213c16cd7fded1561eb4a748"
+        },
+        {
+            "path": "src/renderer/src/features/shell/InitReportTab.test.tsx",
+            "sha": "f5e8b6526ea8c4f1c597bdb138c488de95f7d33c"
+        },
+        {
+            "path": "src/renderer/src/features/shell/InitReportTab.tsx",
+            "sha": "076f0243fb9a3fef2ff80d79564032be987b7de2"
+        },
+        {
+            "path": "src/renderer/src/features/shell/labels.ts",
+            "sha": "b7be91c82bc0aea14a97dbaa15f3e2a43b49a57b"
+        },
+        {
+            "path": "src/renderer/src/features/shell/OverviewTab.tsx",
+            "sha": "b2204b36b98d5bc83433bc3c0e1cfb2b36f1acc2"
+        },
+        {
+            "path": "src/renderer/src/features/shell/panel-tabs.test.ts",
+            "sha": "e594ddef16e06688feed14a7006647a7cd56233a"
+        },
+        {
+            "path": "src/renderer/src/features/shell/panel-tabs.ts",
+            "sha": "e135287ffaa38b15940b82af491f92c44a3e94ff"
+        },
+        {
+            "path": "src/renderer/src/features/shell/RightPanel.tabs.test.tsx",
+            "sha": "722fcd6ec23118305f6ee8bb18e03235d0115941"
+        },
+        {
+            "path": "src/renderer/src/features/shell/RightPanel.tsx",
+            "sha": "9a09389e5f1ac949f0953f7985b08cf054d904d9"
+        },
+        {
+            "path": "src/renderer/src/stores/ui.ts",
+            "sha": "6dc5e0802bc529c4b157d79df7d8543027cfd5e4"
+        },
+        {
+            "path": "tests/docs/query-mutation-methods.test.ts",
+            "sha": "e71e276f29c689f8c19d7326ebfa58f8ceb83ebe"
+        },
+        {
+            "path": "tests/meter/meter-through.test.tsx",
+            "sha": "ff6d1084164daf2d699dd549c155b2d3cf68657b"
+        },
+        {
+            "path": "tests/rule-fixtures/b-equivalent/sdk-query-computed-key.ts.fixture",
+            "sha": "7a15b0d034e4f4310f4bebd7ffc3726cf109a5c1"
+        },
+        {
+            "path": "tests/rule-fixtures/b-equivalent/sdk-query-mcp-control.ts.fixture",
+            "sha": "a94a5ff4c97e4fb2c3c5c7549ab9381c3c1ddba6"
+        },
+        {
+            "path": "tests/rule-fixtures/b-equivalent/sdk-query-mutation-method.ts.fixture",
+            "sha": "5501e2f3d3d35f43d7d65a845e4985b70a8e26ba"
+        },
+        {
+            "path": "tests/rule-fixtures/expected.mjs",
+            "sha": "81067ece53374a86ec923f10c8d28d0a04feb24c"
+        }
+    ],
+    "viewpoint_coverage": {
+        "A": "Critical:0 High:0 Medium:0 Low:1",
+        "B": "Critical:0 High:0 Medium:0 Low:2",
+        "C": "Critical:0 High:0 Medium:0 Low:0",
+        "D": "Critical:0 High:0 Medium:1 Low:3",
+        "E": "Critical:0 High:0 Medium:2 Low:1",
+        "F": "Critical:0 High:0 Medium:1 Low:0",
+        "G": "Critical:0 High:0 Medium:3 Low:13",
+        "H": "Critical:0 High:0 Medium:1 Low:4"
+    },
+    "fr_coverage": [],
+    "rule_verification": {
+        "ran": true,
+        "round": 2,
+        "reason": "rule definitions changed since round 1 (scripts/constitution/allowlists.mjs, tests/rule-fixtures/expected.mjs, tests/rule-fixtures/b-equivalent/*)",
+        "exit_code": 0,
+        "matched": 66,
+        "declared_undetected": 9
+    },
+    "skipped_reviewers": [
+        {
+            "name": "database-reviewer",
+            "reason": "auto_invoke_patterns \u306b\u4e00\u81f4\u3059\u308b\u5909\u66f4\u30d5\u30a1\u30a4\u30eb\u304c\u7121\u3044 (\u5909\u66f4 79 \u4ef6 / pattern 5 \u4ef6)"
+        }
+    ],
+    "tracks": {
+        "security-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 0,
+            "low": 4
+        },
+        "architecture-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 1,
+            "low": 3
+        },
+        "po-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 2,
+            "low": 3
+        },
+        "ux-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 3,
+            "low": 7
+        },
+        "a11y-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 1,
+            "low": 4
+        },
+        "platform-boundary-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 1,
+            "low": 0
+        },
+        "ui-coverage-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 0,
+            "low": 3
+        }
+    },
+    "verdict": "PASS"
+}

@@ -4,12 +4,18 @@ import { parentPort } from 'node:worker_threads'
 import {
   query,
   type EffortLevel as SdkEffortLevel,
+  type McpServerStatus,
   type Options,
   type PermissionMode as SdkPermissionMode,
   type Query,
   type SDKAssistantMessageError,
+  type SDKAuthStatusMessage,
+  type SDKCommandsChangedMessage,
+  type SDKMessage,
+  type SDKPluginInstallMessage,
   type SDKRateLimitInfo,
-  type SDKResultError
+  type SDKResultError,
+  type SDKSystemMessage
 } from '@anthropic-ai/claude-agent-sdk'
 
 import { isEffortLevel, isValidModelId } from '@domain/provider/model-catalog'
@@ -37,6 +43,13 @@ import type {
 } from '@domain/session/meter'
 import { nextState, type SessionRunState } from '@domain/session/run-state'
 import { sanitizeBody } from '@domain/session/sanitize-body'
+import type {
+  AuthStatusInput,
+  CommandsChangedInput,
+  McpStatusKey,
+  PluginInstallInput,
+  SessionInitReportInput
+} from '@domain/session/session-init-report'
 import { toSystemEventMessage } from '@domain/session/system-event'
 
 import { createLiveSignals } from './live-signals'
@@ -106,6 +119,63 @@ void rateLimitStatusMatchesSdk
 void rateLimitTypeMatchesSdk
 void assistantErrorMatchesSdk
 void resultErrorSubtypeMatchesSdk
+// 構成と出来事の入力型 (O-5 / 015 data-model §2)。domain が手で書いた「読むフィールドだけ」の型に SDK の型が代入できる
+// (一方向)。SDK がフィールドを消す・型を変えると tsc で落ちる。MCP の状態の値域は `unknown` を除いて SDK と一致させる。
+const initInputFromSdk: SDKSystemMessage extends SessionInitReportInput ? true : false = true
+const commandsInputFromSdk: SDKCommandsChangedMessage extends CommandsChangedInput ? true : false =
+  true
+const authInputFromSdk: SDKAuthStatusMessage extends AuthStatusInput ? true : false = true
+const pluginInputFromSdk: SDKPluginInstallMessage extends PluginInstallInput ? true : false = true
+const mcpStatusMatchesSdk: Equal<Exclude<McpStatusKey, 'unknown'>, McpServerStatus['status']> = true
+void initInputFromSdk
+void commandsInputFromSdk
+void authInputFromSdk
+void pluginInputFromSdk
+void mcpStatusMatchesSdk
+// `Query` の自前のメソッドの網羅 (O-5 / 015 research R-06 (2) / AD-036 §4 P3 / AD-048 Decision 2)。
+// 呼ぶのは `interrupt` だけ。残りを項目 16 の denylist (`QueryMutationMethod`。変更系と、accepted の ADR が呼ばないと
+// 決めた読み取り = AD-047 Decision 4 の `getContextUsage` / `usage_EXPERIMENTAL…`) と、それ以外の呼ばないメソッド
+// (`QueryUnusedReadMethod`) に分ける。`QueryUnusedReadMethod` の分類は呼び出しを禁じない (項目 16 の検査の対象外)。
+// `close` は後始末で、`promptQueue.close()` と綴りが衝突するため denylist に足せない。
+// SDK の版上げでメソッドが増減すると tsc で落ちる — 分類を決め直し、denylist なら `allowlists.mjs` の
+// `QUERY_MUTATION_METHODS` にも同じ PR で足す (`tests/docs/query-mutation-methods.test.ts` が union と配列の一致を見る)。
+// `QueryMutationMethod` は 1 行に 1 つのリテラルで書く (pin テストがソースから抜き出す)。
+type QueryOwnMethod = Exclude<keyof Query, keyof AsyncGenerator<SDKMessage, void>>
+type QueryMutationMethod =
+  | 'setPermissionMode'
+  | 'setMcpPermissionModeOverride'
+  | 'applyFlagSettings'
+  | 'updateSettings'
+  | 'setModel'
+  | 'setMaxThinkingTokens'
+  | 'mcpServerStatus'
+  | 'reconnectMcpServer'
+  | 'toggleMcpServer'
+  | 'setMcpServers'
+  | 'reloadPlugins'
+  | 'reloadSkills'
+  | 'rewindFiles'
+  | 'stopTask'
+  | 'seedReadState'
+  | 'streamInput'
+  | 'reinitialize'
+  | 'reloadOutputStyles'
+  | 'backgroundTasks'
+  | 'getContextUsage'
+  | 'usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET'
+type QueryUnusedReadMethod =
+  | 'initializationResult'
+  | 'supportedCommands'
+  | 'supportedModels'
+  | 'supportedAgents'
+  | 'readFile'
+  | 'accountInfo'
+  | 'close'
+type QueryClassifiedMethod = 'interrupt' | QueryMutationMethod | QueryUnusedReadMethod
+const queryMethodsAreClassified: Equal<Exclude<QueryOwnMethod, QueryClassifiedMethod>, never> = true
+const queryClassifiedMethodsExist: QueryClassifiedMethod extends keyof Query ? true : false = true
+void queryMethodsAreClassified
+void queryClassifiedMethodsExist
 
 /** 子 (`wsl.exe`) の exit を待つ期限 (kill / `end` / 終了時。spec Assumptions [ASSUMED])。 */
 const CHILD_EXIT_TIMEOUT_MS = 3000
@@ -607,6 +677,10 @@ async function run(
         case 'tool_progress':
           // tool の経過時間 (O-4 / 014 data-model §2。間引いて送る)。
           signals.onToolProgress(message)
+          break
+        case 'auth_status':
+          // 認証の行 (O-5 / 015 data-model §4。`isAuthenticating` と `error` の有無だけを読む。`output` / `error` は運ばない)。
+          signals.onAuthStatus(message)
           break
         default:
           // stream_event / partial 等の扱いは docs/ui-coverage.md の対応表が正本 (AD-020 / H-06)。

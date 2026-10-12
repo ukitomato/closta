@@ -114,7 +114,7 @@ export function toSystemEventMessage(
       const status =
         m.subtype === 'hook_started'
           ? 'started'
-          : typeof m.outcome === 'string'
+          : typeof m.outcome === 'string' && Object.hasOwn(HOOK_OUTCOMES, m.outcome)
             ? (HOOK_OUTCOMES[m.outcome] ?? 'unknown')
             : 'unknown'
       // hook_name は Hook の設定のコマンドになりうる (`TOKEN=... cmd` など)。allowlist の形に合わない・秘密を

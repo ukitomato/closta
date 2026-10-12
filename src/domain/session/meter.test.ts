@@ -8,6 +8,7 @@ import {
   isValidTaskId,
   isValidToolUseId,
   MAX_METER_MODELS,
+  METER_UPDATE_TYPES,
   PERMISSION_MODE_KEYS,
   RATE_LIMIT_STATUSES,
   RATE_LIMIT_TYPES,
@@ -157,6 +158,22 @@ describe('列挙の照合 (Object.create(null) + Object.hasOwn)', () => {
     expect(RATE_LIMIT_STATUSES).toHaveLength(3)
     expect(RATE_LIMIT_TYPES).toHaveLength(6)
     expect(ASSISTANT_ERROR_KEYS).toHaveLength(13)
+  })
+
+  it('METER_UPDATE_TYPES の集合は 8 つ (O-4 の 6 + O-5 の 2)。集合を変えるには ADR が要る (AD-047 / AD-048)', () => {
+    expect(METER_UPDATE_TYPES).toHaveLength(8)
+    expect(new Set(METER_UPDATE_TYPES)).toEqual(
+      new Set([
+        'turn',
+        'context',
+        'rate-limit',
+        'permission-mode',
+        'thinking',
+        'tool-elapsed',
+        'init-report',
+        'commands'
+      ])
+    )
   })
 })
 
@@ -361,6 +378,46 @@ describe('decodeMeterUpdate', () => {
       42
     ]
     for (const raw of bad) expect(decodeMeterUpdate(raw)).toBeNull()
+  })
+
+  it('init-report / commands (O-5) を通し、余分なキーを運ばない', () => {
+    const init = decodeMeterUpdate({
+      type: 'init-report',
+      model: 'claude-sonnet-4-5',
+      mcpServers: [{ name: 'github', status: 'failed', error: 'SECRET_MARK' }],
+      tools: ['Bash'],
+      skills: [],
+      plugins: [{ name: 'p', version: '1.0.0', path: 'SECRET_MARK' }],
+      slashCommands: ['/review'],
+      omitted: 0,
+      cwd: 'SECRET_MARK'
+    })
+    expect(init).toEqual({
+      type: 'init-report',
+      model: 'claude-sonnet-4-5',
+      mcpServers: [{ name: 'github', status: 'failed' }],
+      tools: ['Bash'],
+      skills: [],
+      plugins: [{ name: 'p', version: '1.0.0' }],
+      slashCommands: ['review'],
+      omitted: 0
+    })
+    const commands = decodeMeterUpdate({
+      type: 'commands',
+      commands: [
+        { name: 'review', description: 'd', argumentHint: '<pr>', aliases: ['SECRET_MARK'] }
+      ],
+      omitted: 0,
+      extra: 'SECRET_MARK'
+    })
+    expect(commands).toEqual({
+      type: 'commands',
+      commands: [{ name: 'review', description: 'd', argumentHint: '<pr>' }],
+      omitted: 0
+    })
+    expect(JSON.stringify([init, commands])).not.toContain('SECRET_MARK')
+    expect(decodeMeterUpdate({ type: 'init-report', model: null })).toBeNull()
+    expect(decodeMeterUpdate({ type: 'commands', commands: 'x', omitted: 0 })).toBeNull()
   })
 
   it('JSON.parse した __proto__ のキーを持つ値でも例外を出さない', () => {

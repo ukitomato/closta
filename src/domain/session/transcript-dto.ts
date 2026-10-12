@@ -57,7 +57,8 @@ export type TranscriptPartDTO =
       readonly name: string
       /**
        * Hook: hook_event / task: task_type (進み具合は改行の後ろ。`splitTaskDetail`) / api-retry: `encodeRetryDetail` /
-       * permission-mode: 権限モードの鍵 / compaction: ''。無ければ ''。
+       * permission-mode: 権限モードの鍵 / compaction: '' / auth: 常に '' / plugin: `encodePluginDetail`
+       * (導入できた数・できなかった数・最後のマーケットプレイスの名前。O-5 / 015 data-model §4)。無ければ ''。
        */
       readonly detail: string
       /** 無ければ null (task_updated の patch.status は任意)。 */
@@ -69,7 +70,9 @@ export const SYSTEM_EVENT_CATEGORIES = [
   'task',
   'api-retry',
   'compaction',
-  'permission-mode'
+  'permission-mode',
+  'auth',
+  'plugin'
 ] as const
 export type SystemEventCategory = (typeof SYSTEM_EVENT_CATEGORIES)[number]
 
@@ -88,7 +91,8 @@ export const SYSTEM_EVENT_STATUSES = [
   'unknown',
   'retrying',
   'compacting',
-  'changed'
+  'changed',
+  'authenticating'
 ] as const
 export type SystemEventStatus = (typeof SYSTEM_EVENT_STATUSES)[number]
 

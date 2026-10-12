@@ -134,6 +134,9 @@ O-4 data-model §2 の `meters` (`SessionMeters`。`features/session/running-ses
 | `auth` | `type === 'auth_status'` (最上位の型) | `auth:<連番>` (認証の 1 回の流れ。closure) | `isAuthenticating: true` | '' | '' | `authenticating` → `isAuthenticating: false` で `succeeded`、`error` があれば `failed` |
 | `plugin` | `type === 'system' && subtype === 'plugin_install'` | `plugin:<連番>` (`started` から `completed` まで。closure) | `status: 'started'` | '' | 導入できた数 / できなかった数と、最後のマーケットプレイスの名前 (§2 の名前の形の検査) | `started` (既存) → `completed` (失敗が 1 つでもあれば `failed`) |
 
+- **開いた行が無いまま結果が届いたとき** (2026-10-10 承認。pr-gate MD-01。014 data-model §3 の圧縮の行と同じ「結果の状態で行を作る」形):
+  - `auth` — `isAuthenticating: false` に `error` があれば、`auth:<連番>` を `opens: true`・`failed` で作り、開いた行は持たない (作って閉じる)。`error` が無い (`succeeded`) なら作らない。始まりの見えない成功は、利用者が手を打つことが無い
+  - `plugin` — `installed` / `failed` なら `plugin:<連番>` を `opens: true`・`started` で開き、その 1 件を数える。以後は開いた行と同じ規則で合成し、`completed` で閉じる。`completed` だけなら数 0 / 0 の行を `opens: true`・`completed` で作る。どちらも 1 回の流れで行は 1 つ
 - `output` / `error` の文字列は通さない
 - `SystemEventStatus` に足すのは `authenticating` だけ (`started` / `succeeded` / `failed` / `completed` は既存。`SYSTEM_EVENT_STATUSES`、`transcript-dto.ts:77`)。category の正本は `SYSTEM_EVENT_CATEGORIES` (`transcript-dto.ts:67`。O-4 の後は `hook` / `task` / `api-retry` / `compaction` / `permission-mode`)
 - `system-event.ts:118` の `HOOK_OUTCOMES[m.outcome] ?? 'unknown'` は同じファイルを触るので `Object.hasOwn` に直す
@@ -149,8 +152,8 @@ O-4 data-model §2 の `meters` (`SessionMeters`。`features/session/running-ses
 | 節 | 行 | 割当 | 経路 |
 |---|---|---|---|
 | A | `init` | `実装済み: 構成のタブ (実行中)`。備考: `cwd`・`path`・`apiKeySource` などは出さない。`permissionMode` は O-4 が権限モードの比較に使う (014 data-model §2。今の備考を残す) | 実行中 |
-| A | `plugin_install` | `実装済み: SystemEventRow (実行中)`。備考: アプリの起動では `CLAUDE_CODE_SYNC_PLUGIN_INSTALL` を渡さない (AD-041 (e)) ので通常は届かない | 実行中 |
-| A | `auth_status` (Tier A) | `実装済み: SystemEventRow (実行中)`。備考: `output` / `error` は出さない (U-4) | 実行中 |
+| A | `plugin_install` | `実装済み: SystemEventRow (実行中)`。備考: アプリの起動では `CLAUDE_CODE_SYNC_PLUGIN_INSTALL` を渡さない (AD-041 (e)) ので通常は届かない。`started` を経ない結果でも行を 1 つ作る (§4) | 実行中 |
+| A | `auth_status` (Tier A) | `実装済み: SystemEventRow (実行中)`。備考: `output` / `error` は出さない (U-4)。「認証中」を経ない失敗でも失敗の行を作る。始まりの見えない成功は行にしない (§4) | 実行中 |
 | A | `commands_changed` | `実装済み: 構成のタブ (実行中)` | 実行中 |
 | A | `elicitation_complete` (Tier A) | `後続: O-10` | なし |
 | C | `ListMcpResourcesTool` / `RefreshMcpTools` / `ReadMcpResourceDir` / `ReadMcpResourceTool` | `実装済み: McpToolCall (両方)` | 両方 |

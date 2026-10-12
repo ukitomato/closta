@@ -915,8 +915,15 @@ function hasPackagedGate() {
       }
     }
     // (P3) Query の mutation メソッド呼び出し (interrupt 以外)。
+    //      ドット呼び出し (`.m(` / `?.m(`) と計算キー (`q['m'](` / `q["m"](` / q[`m`](。括弧の内側と前後の空白を許す)。
+    //      分割代入 (`const { m } = q`)・`.m.call(` / `.m.apply(`・変数のキー (`q[k](`) は追わない
+    //      (expected.mjs の UNDETECTED_NOTES['sdk-query-method-indirect']。正の形への置き換えで塞ぐ。015 research R-06)。
     for (const method of QUERY_MUTATION_METHODS) {
-      if (new RegExp(String.raw`\.\s*` + method + String.raw`\s*\(`).test(src.code)) {
+      const dotCall = new RegExp(String.raw`\.\s*` + method + String.raw`\s*\(`)
+      const computedKeyCall = new RegExp(
+        String.raw`\[\s*(['"\x60])` + method + String.raw`\1\s*\]\s*\(`
+      )
+      if (dotCall.test(src.code) || computedKeyCall.test(src.code)) {
         found.push(
           `${src.file}  Query の mutation メソッド ".${method}()" を呼んでいる (P3。interrupt のみ許可)`
         )

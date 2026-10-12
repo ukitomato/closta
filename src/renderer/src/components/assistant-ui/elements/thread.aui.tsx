@@ -29,8 +29,10 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SYSTEM_EVENT_DATA_NAME } from "@/features/chat/convert";
 import {
+  authRowText,
   COMPOSER_LABELS,
   permissionModeName,
+  pluginRowText,
   SYSTEM_EVENT_CATEGORY_LABELS,
   SYSTEM_EVENT_LABELS,
   SYSTEM_EVENT_STATUS_LABELS,
@@ -52,7 +54,11 @@ import {
   isTerminalSystemEventStatus,
   splitTaskDetail,
 } from "@domain/session/system-event";
-import type { SystemEventCategory } from "@domain/session/transcript-dto";
+import { decodePluginDetail } from "@domain/session/session-init-report";
+import type {
+  SystemEventCategory,
+  SystemEventStatus,
+} from "@domain/session/transcript-dto";
 import {
   ActionBarMorePrimitive,
   ActionBarPrimitive,
@@ -80,10 +86,12 @@ import {
   CopyIcon,
   DownloadIcon,
   FoldVerticalIcon,
+  KeyRoundIcon,
   type LucideIcon,
   MicIcon,
   MoreHorizontalIcon,
   PencilIcon,
+  PuzzleIcon,
   RefreshCwIcon,
   ShieldIcon,
   SquareIcon,
@@ -1037,10 +1045,13 @@ const systemEventDataOf = (s: AssistantState): unknown => {
  * - 権限モード: detail の鍵 (知らない鍵は `unknown`) の名前を入れた文
  * - コンテキストの圧縮: 出さない (detail は常に空。`compact_error` は届かない)
  * - Hook: detail (`hook_event`) のまま
+ * - 認証: 出さない (detail は常に空。状態ごとの文は案内の段。O-5 / 015 data-model §4)
+ * - プラグイン: 導入中の印・数・最後のマーケットプレイスの名前 (`decodePluginDetail`。形が合わなければ出さない)
  */
 function systemEventDetailText(
   category: SystemEventCategory,
   detail: string,
+  status: SystemEventStatus | null,
 ): string {
   switch (category) {
     case "task":
@@ -1057,6 +1068,12 @@ function systemEventDetailText(
       return "";
     case "hook":
       return detail;
+    case "auth":
+      return "";
+    case "plugin": {
+      const plugin = decodePluginDetail(detail);
+      return plugin === null ? "" : pluginRowText(plugin, status);
+    }
   }
 }
 
@@ -1077,6 +1094,8 @@ const SYSTEM_EVENT_ICONS: Readonly<Record<SystemEventCategory, LucideIcon>> = {
   "api-retry": RefreshCwIcon,
   compaction: FoldVerticalIcon,
   "permission-mode": ShieldIcon,
+  auth: KeyRoundIcon,
+  plugin: PuzzleIcon,
 };
 
 /**
@@ -1118,8 +1137,10 @@ const SystemEventRow: FC = () => {
       ? SYSTEM_EVENT_LABELS.hookFailedGuidance
       : category === "task" && (failed || status === "killed")
         ? SYSTEM_EVENT_LABELS.taskFailedGuidance
-        : null;
-  const detailText = systemEventDetailText(category, detail);
+        : category === "auth"
+          ? authRowText(status, unresolved)
+          : null;
+  const detailText = systemEventDetailText(category, detail, status);
   const progressText = taskProgressText(category, detail);
 
   return (
@@ -1142,7 +1163,7 @@ const SystemEventRow: FC = () => {
             className={cn(
               "truncate",
               // 権限モードの行の detail は文なので、幅を固定せずに縮める (切り詰めた全文は title)。
-              category === "permission-mode"
+              category === "permission-mode" || category === "plugin"
                 ? "min-w-0"
                 : "max-w-40 shrink-0",
             )}

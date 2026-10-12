@@ -296,6 +296,15 @@ CI スクリプトの担当とし、reviewer に複製しない。
 /cl-design "[ui] O-9 (roadmap M3、domain: ui、依存: O-3): 会話の時間と活動を見えるようにする。conversation map、message timing、活動の heat graph と、docs/ui-coverage.md の F 節で O-9 に預けた Activity graph / Heat graph / Message timing / Trace waterfall の判断。message timing はメッセージの時刻 (createdAt。今は過去ログ・実行中とも null) を変換で埋める必要があり、session の契約の拡張を伴うので、持ち主を session charter と合わせて確かめる。transcript の本文を横断する検索の要否 (列挙と取得の負荷) もあわせて判断する。"
 ```
 
+### O-10 — Claude Code からの問いに答える UI と composer のコマンドの候補
+
+> O-5 の design で O-5 から分けた (spec 015 の U-1。[AD-048](decisions/0048-session-config-display-and-answer-ui-split.md) Decision 1)。範囲と義務の正本は [roadmap の O-10 の行](roadmap.md) (015 spec FR-013)。
+> 回答は agents の `canUseTool` と SDK の callback で返し、表示の部品は renderer に置くので targets は both。**design の前に 2 つの ADR を起こす**。
+
+```
+/cl-design "[session] O-10 (roadmap M3、domain: session、依存: O-5): Claude Code からの問いに答える UI と composer のスラッシュコマンドの候補。roadmap の O-10 の行の範囲と義務に従う: (1) AskUserQuestion の回答 — 承認の応答の updatedInput は agents の canUseTool の中で SDK が渡した元の input に answers だけを足して組む。renderer から受けるのは回答だけで、キーは元の問いの文と照合し、値の長さを制限する。tool 名は SDK の値で判定し、射影の関数は toPermissionResult の隣に置いてキーの集合を pin テストで固定する (2) Elicitation の form / URL (onElicitation) と request_user_dialog (onUserDialog。supportedDialogKinds は allowlist)。Elicitation の入力は永続化しない・ログに出さない。URL は openExternalIfHttp だけを通す (3) elicitation_complete の表示と、composer のスラッシュコマンドの候補 (IME の変換中は出さない。一覧は O-5 の meter の commands と init-report)。design の前に AD-036 Decision 4 と AD-041 (g) の読み替えの ADR を起こす。system-scope の composer の 2 項目 (英語の名前の残り・ターンの開始のフォーカスの奪取) は持ち主が O-10 と X-6 の早いほうなので、先に着手するなら扱う。完了の PR で docs/ui-coverage.md の「後続: O-10」の行を書き換える (Constitution XII / AD-044)。" --targets both
+```
+
 **注**: O-8 / O-9 の `--targets` はまだ決めていない (`_overview.md` の帰属に targets の記録が無い)。O-8 は src のグラフの外の `perf/` が中心で、
 O-9 は変換 (agents / domain) に触れうる。着手のときに決めて上の 2 つに書き足す。
 
