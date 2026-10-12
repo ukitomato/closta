@@ -2,7 +2,7 @@
 
 **Branch**: `016-ui-boundaries-and-tool-displays` (2026-10-13 に main (791f72d。O-7 / O-3 / O-4 / O-5 のマージの後) の上に載せ直した) | **Date**: 2026-10-04 (2026-10-13 に spec の載せ直しに合わせて古い参照だけを直した。本文は /cl-plan で作り直す) | **Spec**: [spec.md](./spec.md)
 
-spec の U-1〜U-7 と AD-046 / AD-047 / AD-048 / AD-049 は 2026-10-05 に利用者が承認した。O-7 (PR #13)・O-3 (PR #14)・O-4 (PR #15)・O-5 (PR #17) はマージ済み。承認の無い 3 点は spec の `.needs-input.md` Q1〜Q3。
+spec の U-1〜U-7 と AD-046 / AD-047 / AD-048 / AD-049 は 2026-10-05 に利用者が承認した。O-7 (PR #13)・O-3 (PR #14)・O-4 (PR #15)・O-5 (PR #17) はマージ済み。載せ直しで残った 3 点 (圧縮の行と境界を並べる・O-2 の gate の Low を扱わない・拒否の説明を出す) は 2026-10-13 に利用者が回答した (spec の Clarifications の Session 2026-10-13)。
 
 ## Summary
 
@@ -28,7 +28,7 @@ spec の U-1〜U-7 と AD-046 / AD-047 / AD-048 / AD-049 は 2026-10-05 に利�
 | I (パス) | ✅ | tool の入力と結果のパスは会話由来の本文で、解決しない・UNC を判定しない・`path-api` に触れない (AD-025:181 / AD-028 §3 規則 4 の対象の外。範囲の確認)。見出しの末尾は renderer の表示用の純関数 `pathTail` で切り出す (`/` と `\` の両方。ホスト OS で分けない)。切った値を IPC・port に戻さず、本文のパスに操作を付けない (R-08) |
 | II (プラットフォーム分岐) | ✅ | 区切りをホスト OS やランタイムで選ばない |
 | III / IV / VI / VII / IX / X | ✅ / N/A | 承認の要求と応答の形・SDK の呼び出し・options・プロセス・main を変えない。行は port で main を経由しない。`Query` のメソッドは `interrupt` だけで、項目 16 の禁止に `readFile` を足す (FR-018) |
-| V (資格情報非永続) | ✅ | `api_refusal_explanation`・`preserved_*` を通さない。`informational` などの本文は伏せ字 (`redactSecrets`) を通し、伏せ字の前の本文をログに書かない。`WebFetch` の見出しにクエリ・資格情報を出さない |
+| V (資格情報非永続) | ✅ | `preserved_*` を通さない。`informational` と拒否の `content`・`api_refusal_explanation` の本文は伏せ字 (`redactSecrets`) を通し、伏せ字の前の本文をログに書かない。`WebFetch` の見出しにクエリ・資格情報を出さない |
 | VIII (日本語の表示) | ✅ | 見出しは 1 行・80 コードポイントで切り詰め、日本語のファイル名・全角の検索語で崩れない (component テスト) |
 | XI | ✅ | 単体・component テストと実機の目視 (quickstart V-3) |
 | XII | ✅ | O-6 の行を同じ PR で書き換え、O-11 の Tier A 3 行を D 節に立てる (data-model §5)。O-11 の行を同じ PR で roadmap に足す (FR-015) |
@@ -56,7 +56,7 @@ spec の U-1〜U-7 と AD-046 / AD-047 / AD-048 / AD-049 は 2026-10-05 に利�
 - [AD-035](../../docs/decisions/0035-tier-a-tool-display-and-subagent-nesting.md) — Tier A の tool の表示 (D6 を読み替える。D3 は O-11 の義務): accepted
 - [AD-034](../../docs/decisions/0034-transcript-read-path-and-process-boundary.md) — 本文の経路: accepted
 - [AD-032](../../docs/decisions/0032-unc-shape-classification-by-separator-count.md) / [AD-029](../../docs/decisions/0029-session-cwd-origin-classification.md) — UNC の判定の唯一の入口 (本 feature は当てない): accepted
-- [AD-050](../../docs/decisions/0050-gate-finding-handling-and-round-limit.md) — gate の Medium / Low の扱いと round の上限: proposed (本 feature の design-gate がパイロット 2。AGENTS.md の gate の原則に入っている。spec の `.needs-input.md` Q2)
+- [AD-050](../../docs/decisions/0050-gate-finding-handling-and-round-limit.md) — gate の Medium / Low の扱いと round の上限: proposed (本 feature の design-gate がパイロット 2。AGENTS.md の gate の原則に入っている。2026-10-13 の回答で、O-2 の gate の Low と gate の Low / Medium の転記を本 feature で扱わない)
 
 ### Glossary excerpt
 
@@ -78,14 +78,14 @@ spec の U-1〜U-7 と AD-046 / AD-047 / AD-048 / AD-049 は 2026-10-05 に利�
 | 1 | roadmap:380 (O-6 の行) | 対応表の割当・O-2 の pr-gate の項目・V-4 の 4 項目・O-7 のタブの候補・O-4 から | **受ける / 送る** — spec の「義務の扱い」の表が正本 |
 | 2 | ui-coverage の `後続: O-6` と F 節・A / B / C 節の備考の「O-6」(O-4 が足した `tool_progress` の備考を含む) | 書き換え | **受ける** — data-model §5 |
 | 3 | 011 pr-gate M-201 | Tier A の備考の残り (5 行) を M3 の件数が数えない | **受ける** — 2 行は O-6 で解消、3 行は D 節に `後続: O-11` (data-model §5) |
-| 4 | 011 pr-gate po H-001 / a11y L-201 / ux L-101・L-104 | TodoList のエラーのテスト / SystemEventRow の title のテスト / 「SDK が知らない状態」の文言 / matcher のテスト | **受ける** — FE-022 / FE-011。Low の 3 つは **[未承認 — spec の `.needs-input.md` Q2]** |
-| 5 | 011 pr-gate a11y L-001 / L-202 | 密度の説明が title だけ / 成功の ✓ のコントラスト | **受ける** — FE-031 **[未承認 — Q2]** |
-| 6 | 011 pr-gate ux L-102 / arch L-201 / ux L-103 | 伏せた Hook 名の見分け / session の無害化に触れる後続の domain の依存 / 監視ビューの密度の見出し | **送る** — L-102・L-201 は O-11 (spec の箇条書き)。L-103 は O-7 が完了したので持ち主が無い (Q2 の回答で、system scope に書くか O-2 の gate の出力に残すかを決める) |
+| 4 | 011 pr-gate po H-001 / a11y L-201 / ux L-101・L-104 | TodoList のエラーのテスト / SystemEventRow の title のテスト / 「SDK が知らない状態」の文言 / matcher のテスト | **受ける** — po H-001 だけ (FE-022)。Low の 3 つは扱わず、O-2 の gate の出力に残す (AD-050 Decision 3。2026-10-13 に承認) |
+| 5 | 011 pr-gate a11y L-001 / L-202 | 密度の説明が title だけ / 成功の ✓ のコントラスト | **扱わない** — O-2 の gate の出力に残す (#4 と同じ) |
+| 6 | 011 pr-gate ux L-102 / arch L-201 / ux L-103 | 伏せた Hook 名の見分け / session の無害化に触れる後続の domain の依存 / 監視ビューの密度の見出し | **送る** — L-102・L-201 は O-11 (spec の箇条書き。U-1 で承認済み)。L-103 は転記せず O-2 の gate の出力に残す (#4 と同じ) |
 | 6a | 011 pr-gate a11y M-003 (roadmap:380) | Hook・task の状態の変化と tool のエラーの読み上げ | **受ける** — data-model §4 (Hook / task の行の終わりを読む) |
 | 6b | 本 feature の範囲外 | 拒否の後の編集して再試行 | **送る** — O-10 (roadmap の O-10 の行に書く) |
 | 6c | 本 feature の design-gate R2 H-01 | O-5 の MCP resource の URI の要約も最後のパスの要素を出す | **当たらない** — O-5 は最後の要素を秘密の形の検査に通してから出す形で実装した (`mcp-tool-name.ts:170-212`。data-model §2) |
 | 7 | 011 quickstart-results V-4 | 利用者の判定と未記録の 4 項目 (2026-10-13 も未記録) | **受ける / 送る** — 本 feature の 2 つは両方に耐える規則、残り 2 つは O-11 |
-| 8 | 014 data-model §3 / roadmap の O-6 の行の「O-4 から」 | 圧縮の行と境界の関係を O-6 が決める | **受ける** — 並べる (research R-07) **[未承認 — Q1]** |
+| 8 | 014 data-model §3 / roadmap の O-6 の行の「O-4 から」 | 圧縮の行と境界の関係を O-6 が決める | **受ける** — 並べる (research R-07。2026-10-13 に承認) |
 | 9 | AD-035 D6 | Agent plan は plain text | **受ける** — AD-049 Decision 4 で読み替える |
 | 10 | AD-044 D4 / D6 (B 節の照合・task の一覧の要否は O-6) | 持ち主 | **送る** — O-11。AD-049 に読み替えを書いた (AD-044 の本文は変えない) |
 | 11 | ui charter:253 の Open Questions・glossary:89・_overview.md:99 の「実行中の task の一覧の要否は O-6」 | 持ち主 | **送る** — O-11 |
@@ -117,7 +117,7 @@ spec の U-1〜U-7 と AD-046 / AD-047 / AD-048 / AD-049 は 2026-10-05 に利�
 
 | ID | リスク | 手当て |
 |---|---|---|
-| RK-01 | 仮採用した判断 (U-1〜U-7)・AD-046 / AD-047 / AD-048 / AD-049 が覆る | 2026-10-05 に利用者が推奨案どおり承認した。承認の無い 3 点は `.needs-input.md` Q1〜Q3 |
+| RK-01 | 仮採用した判断 (U-1〜U-7)・AD-046 / AD-047 / AD-048 / AD-049 が覆る | 2026-10-05 に利用者が推奨案どおり承認した。載せ直しで残った 3 点は 2026-10-13 に承認した |
 | RK-02 | 取り消したメッセージに結果待ちの tool や承認カードが含まれる | agents の追跡から外し、後の結果を捨てる。ストアも外した id を覚える。承認の要求 (`pending`) は消さず、承認カードは利用者の応答を待つ (自動で解決しない。何の操作かは承認カードの入力で分かる)。拒否のときに承認待ちが残るかは V-3 で記録する。テストで固定 (FE-010) |
 | RK-03 | 読み上げが多すぎる / 少なすぎる | 新しく届いた出来事だけ・1 秒に 1 回のまとめ・対象の限定 (data-model §4)。実機の目視で利用者が確かめる (quickstart V-3) |
 | RK-04 | `Glob` / `Grep` の結果の形が CLI の版で変わる | 注記の形以外の行を項目にし、0 件なら text に倒す (data-model §2)。全部の行がどこかに見える。V-3 で実際の結果を記録して fixture にする |

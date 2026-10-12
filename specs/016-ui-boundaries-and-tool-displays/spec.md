@@ -17,7 +17,7 @@ linear: null
 
 **Created**: 2026-10-04 (夜間の自走で起案。夜間に仮採用した判断は **2026-10-05 に利用者が推奨案どおり承認した** — 下の「判断」を参照)
 
-**Reopened**: 2026-10-13。O-7 の設計段階の上で書いた design を main に載せ直し、O-7 の実装 (PR #13)・O-3 の実装 (PR #14)・O-4 の実装 (PR #15)・O-5 の実装 (PR #17)・roadmap の O-6 の行 (順 16) と system-scope の持ち主の記録・accepted の AD-049 に合わせて直した。承認済みの判断 (U-1〜U-7・AD-049) は選び直していない。承認の無い [ASSUMED] と、main の規則と食い違う点は `.needs-input.md` の Q1〜Q3 に置いた
+**Reopened**: 2026-10-13。O-7 の設計段階の上で書いた design を main に載せ直し、O-7 の実装 (PR #13)・O-3 の実装 (PR #14)・O-4 の実装 (PR #15)・O-5 の実装 (PR #17)・roadmap の O-6 の行 (順 16) と system-scope の持ち主の記録・accepted の AD-049 に合わせて直した。承認済みの判断 (U-1〜U-7・AD-049) は選び直していない。承認の無い [ASSUMED] と main の規則と食い違う 3 点は、同日に利用者が回答した (Clarifications の Session 2026-10-13)
 
 **Status**: frontmatter の `status:` を正とする
 
@@ -60,12 +60,12 @@ roadmap が O-6 に預けた義務 (O-6 の行と、system-scope の持ち主の
 | O-2 の pr-gate R2 から: シェルの Background task を秘密を出さずに見分ける手がかり | 送る (O-11。U-1) | 「本 feature の位置づけ」の O-11 の箇条書き |
 | O-2 の V-4 の反映 (`hook_name`・過去ログの Hook / task・`Agent` / `Task`・並列の結果) | 2 つは両方の形に耐える規則、2 つは O-11 (U-1) | 上の V-4 の箇条書き、data-model §3 |
 | O-7 から: 右のペインのタブの候補「TodoList」「Background task」 | 送る (O-11。U-1 の「計画の一覧の要否 (Background task の一覧と合わせる)」) | 本 feature は右のペインのタブを足さない。`TaskCreate` などは呼び出しごとに transcript で描く (FR-008) |
-| O-4 から: 圧縮の行 (`compaction`) と `compact_boundary` の境界の element を統合するか並べるか | 並べる **[未承認 — `.needs-input.md` Q1]** | FR-001、data-model §1「見た目」、research R-07 |
+| O-4 から: 圧縮の行 (`compaction`) と `compact_boundary` の境界の element を統合するか並べるか | 並べる (2026-10-13 に承認。Clarifications) | FR-001、data-model §1「見た目」、research R-07 |
 | O-8 の行の (c): 観測点 `receivedMessages` の基準の変化を並べて書く | 入れる (記録だけ) | FR-017。本 feature の行は `message` なので数え、`retraction` は `meter` なので数えない (data-model §1「観測」) |
 | system-scope「直近の活動の不可視文字の残り」(持ち主 = 次に `sanitizeBody` か直近の活動を触る feature) | 当たらない | 本 feature は `sanitizeBody` の集合と直近の活動の導出 (`normalizeLine`・`summarizeToolInput`) を変えない。`session-view.ts` の `pathTail` を `features/chat/path-tail.ts` に移すだけで (変わるのは末尾が区切りのパスの扱いだけ。data-model §2)、取り消しの後は既存の `trackDerived` を呼び直すだけ。伏せ字 (`redactSecrets`) は新しい関数で、`sanitizeBody` を変えない |
 | system-scope「`runtime-store.ts` の検出を束ねる」・composer の 2 項目 (持ち主 = O-10 と X-6 の早いほう) | 当たらない | 本 feature は `runtime-store.ts` と composer を変えない (拒否の後の「編集して再試行」は O-10 に送る) |
 | system-scope「`running-session-store.ts` の切り出し」・「押したボタンが自分ごと消える」・「Provider の表記の揺れ」 | 当たらない (O-4 が持って閉じた) | 本 feature はストアに削除の経路を足す (FR-003) が、切り出しは済んでいる (`running-session-monitor.ts` / `running-session-types.ts`)。承認カードは取り消しで消さない (data-model §1) |
-| O-2 の pr-gate の Low (a11y L-001 / L-201 / L-202、ux L-101 / L-104。roadmap の割当の外) | 入れる **[未承認 — `.needs-input.md` Q2]** | plan の申し送りの表 #4 / #5。AGENTS.md の gate の原則 (AD-050 Decision 3) と食い違う |
+| O-2 の pr-gate の Low (a11y L-001 / L-201 / L-202、ux L-101 / L-104。roadmap の割当の外) | 入れない。O-2 の gate の出力に残し、M3 の終わりの棚卸しで扱う。High の po H-001 (TodoList のエラーのテスト) だけを入れる (2026-10-13 に承認。Clarifications) | plan の申し送りの表 #4 / #5。AGENTS.md の gate の原則 (AD-050 Decision 3) |
 
 ## 判断 (2026-10-04 の夜間の自走で仮採用し、2026-10-05 に利用者が承認)
 
@@ -92,7 +92,13 @@ roadmap が O-6 に預けた義務 (O-6 の行と、system-scope の持ち主の
 - Q: `TaskCreate` などをまとめた計画の一覧 (右のペインのタブ) を作るか → A: 作らない。呼び出しごとに描く。一覧の要否は O-11 の Background task の一覧と合わせて判断する。U-1 (O-11 の箇条書き) で承認済み
 - Q: 読み上げの量と中身 → A: 見ているセッションで新しく届いた出来事だけ (O-2 から回された Hook / task の行の終わりを含む)。固定の文言と既知の列挙と件数だけを読み、会話由来の文字列を読まない [ASSUMED: 読み上げの文言 (ポジティブリスト)。会話由来の文字列を読まないのは U-3 の伏せ字の外に本文を出さないため]。1 秒に 1 回までにまとめる [ASSUMED: 数値の既定値 (ポジティブリスト)]
 - Q: `conversation_reset` の `new_conversation_id` をどうするか → A: 読まない。アプリは今 SDK の会話の id を追っていない (`src` で 0 件)。境界の表示だけにし、/clear の後の id の扱いは V-3 で記録して X-6 (再開・分岐) に申し送る (読まないフィールドは data-model §1 の許可リストの規則。id を追うのは X-6 の範囲)
-- Q: 圧縮の行 (O-4。進み具合) と圧縮の境界 (本 feature。区切り) を並べるか → A: 並べる。行 (圧縮中 → 完了) が先、境界が後。行は失敗も出すので境界に置き換えない (research R-07) [ASSUMED: **未承認 — ポジティブリストの外。roadmap の O-6 の行の「O-4 から」が O-6 に決めさせている。`.needs-input.md` Q1**]
+- Q: 圧縮の行 (O-4。進み具合) と圧縮の境界 (本 feature。区切り) を並べるか → A: 並べる。行 (圧縮中 → 完了) が先、境界が後。行は失敗も出すので境界に置き換えない (research R-07)。2026-10-13 に承認済み (下の Session)
+
+### Session 2026-10-13 (main への載せ直しで残った 3 点。利用者が回答)
+
+- Q: O-4 の圧縮の行と本 feature の圧縮の境界を並べるか統合するか (roadmap の O-6 の行の「O-4 から」) → A: 並べる。O-4 の行と O-2 の合成の規則は変えない。失敗は行だけが残る (FR-001、data-model §1「見た目」、research R-07)
+- Q: O-2 の pr-gate の Low (a11y L-001 / L-201 / L-202、ux L-101 / L-104) と、gate の Low / Medium の roadmap への転記 (O-2 pr-gate ux L-103・本 feature の design-gate R1 の system scope の項目) を本 feature で扱うか → A: 扱わない (AGENTS.md の gate の原則・AD-050 Decision 3 に合わせる)。O-2 と本 feature の gate の出力に残し、M3 の終わりの棚卸しで扱う。High の po H-001 (TodoList と Task 系のエラーの印のテスト) は本 feature に残す
+- Q: モデルの拒否の説明 (`api_refusal_explanation`) を出すか → A: 出す。U-3 の本文の規則 (無害化・伏せ字・1 行・120 コードポイント) を通して拒否の行の `detail` に入れる (US-1 AC3 / AC4 / AC6、data-model §1)
 
 ## User Scenarios & Testing
 
@@ -108,10 +114,10 @@ roadmap が O-6 に預けた義務 (O-6 の行と、system-scope の持ち主の
 
 1. **Given** 実行中に `compact_boundary` が届く、**When** transcript を見る、**Then** 圧縮の境界 (手動 / 自動と、前後のトークン数) が出る。過去ログでは同じ element で、手動 / 自動と数を省いた文言で出る (過去ログの DTO は数を運ばない)
 2. **Given** `conversation_reset`、**When** 届く、**Then** 「ここから新しい会話です」の境界が出る (SDK は /clear・plan モードの終了・新しいセッションで送るので、上の内容がコンテキストに無いとは断定しない)
-3. **Given** fallback のモデルでの再試行、**When** 代わりの応答 (`supersedes` 付き) が届く、**Then** 置き換えられた応答がその時点で実行中の transcript から外れ、ターンの終わりの `model_refusal_fallback` で「モデルが応答を拒否したため {fallback のモデル} に切り替えました」の行が出る (scope が local なら「この応答だけ」)。外してから拒否の行が届くまで理由の行は無い (U-2)。後から同じ id のメッセージや結果が届いても戻らない
-4. **Given** `model_refusal_no_fallback`、**When** 届く、**Then** 「モデルが応答を拒否しました」の行と、言い直して送り直せる旨と、`content` (U-3 の規則) が出る
+3. **Given** fallback のモデルでの再試行、**When** 代わりの応答 (`supersedes` 付き) が届く、**Then** 置き換えられた応答がその時点で実行中の transcript から外れ、ターンの終わりの `model_refusal_fallback` で「モデルが応答を拒否したため {fallback のモデル} に切り替えました」の行と、拒否の説明 (`api_refusal_explanation`。U-3 の規則) が出る (scope が local なら「この応答だけ」)。外してから拒否の行が届くまで理由の行は無い (U-2)。後から同じ id のメッセージや結果が届いても戻らない
+4. **Given** `model_refusal_no_fallback`、**When** 届く、**Then** 「モデルが応答を拒否しました」の行と、言い直して送り直せる旨と、`content` と拒否の説明 (`api_refusal_explanation`。どちらも U-3 の規則) が出る
 5. **Given** `informational`、**When** 届く、**Then** 「知らせ」の行に `content` (U-3 の規則) が出る。同じ `tool_use_id` の知らせは 1 行にまとまる。`prevent_continuation` なら「ここで止まりました」を添えて注意の見た目、`level` が `warning` / `suggestion` は注意の見た目、`info` / `notice` は控えめの見た目
-6. **Given** 拒否のカテゴリ (`api_refusal_category`)、**When** 表示する、**Then** 形の検査を通ったときだけ分類として出し、説明 (`api_refusal_explanation`。API の文章) は出さない [ASSUMED: **未承認 — ポジティブリストの外。`.needs-input.md` Q3**]
+6. **Given** 拒否のカテゴリ (`api_refusal_category`)、**When** 表示する、**Then** 形の検査を通ったときだけ分類として出す。説明 (`api_refusal_explanation`。API の文章) は U-3 の本文の規則を通して出す (2026-10-13 に承認。Clarifications)。説明が無い・空のときは分類だけ
 
 ---
 
@@ -173,7 +179,7 @@ roadmap が O-6 に預けた義務 (O-6 の行と、system-scope の持ち主の
 
 #### 会話の境界と知らせ (US-1)
 
-- **FR-001**: 圧縮の境界は、実行中と過去ログで同じ専用の表示 (TranscriptBoundary。registry に区切りの element が無いので作る) で描かなければならない。実行中は agents が `compact_boundary` から行を作り (O-4 の `live-signals.ts` の `onSystem`)、過去ログは今の `divider` の part を同じ表示に写す。O-4 の `compaction` の行とは並べる **[未承認 — `.needs-input.md` Q1]**。行の中身と文言の正本は data-model §1 / §4
+- **FR-001**: 圧縮の境界は、実行中と過去ログで同じ専用の表示 (TranscriptBoundary。registry に区切りの element が無いので作る) で描かなければならない。実行中は agents が `compact_boundary` から行を作り (O-4 の `live-signals.ts` の `onSystem`)、過去ログは今の `divider` の part を同じ表示に写す。O-4 の `compaction` の行とは並べる (2026-10-13 に承認)。行の中身と文言の正本は data-model §1 / §4
 - **FR-002**: `conversation_reset` を会話の境界として描かなければならない (実行中。最上位の型なので `sdk-agent-session.ts` の switch に分岐を足す)
 - **FR-003**: `model_refusal_fallback` / `model_refusal_no_fallback` を拒否の行として描き、置き換えられた応答を実行中の transcript (稼働中のストア) から外さなければならない (U-2)。外す合図・送り方・戻らない仕組み・通すフィールドの正本は data-model §1
 - **FR-004**: `informational` を知らせの行として描き、過去ログの `system` の記録の本文にも同じ伏せ字を当てなければならない (U-3)。本文の伏せ字・見た目の正本は data-model §1
@@ -212,7 +218,7 @@ roadmap が O-6 に預けた義務 (O-6 の行と、system-scope の持ち主の
 - **[承認済み U-1〜U-7]** 上の「判断」の表 (2026-10-05)
 - **[承認済み AD-049]** パスと URL の見せ方 (Decision 5)。計画の一覧を作らないことは U-1
 - **[ASSUMED]** 読み上げの量と中身 (ポジティブリスト)、`new_conversation_id` を読まないこと、過去ログに取り消しの印が無いこと (U-2 の中。V-3 で確かめる)
-- **[未承認]** 圧縮の行と境界を並べること (`.needs-input.md` Q1)、O-2 の pr-gate の Low を引き受けること (Q2)、拒否の説明を出さないこと (Q3)
+- **[承認済み 2026-10-13]** 圧縮の行と境界を並べること、O-2 の pr-gate の Low と gate の Low / Medium の転記を扱わないこと (po H-001 は扱う)、拒否の説明を U-3 の規則で出すこと (Clarifications の Session 2026-10-13)
 - V-4 の未記録の項目は未確認として扱う (本 feature に関わる 2 つは両方の形に耐える規則にする)
 
 ## Success Criteria

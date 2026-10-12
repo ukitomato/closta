@@ -12,18 +12,20 @@ category と status の列挙の正本は `transcript-dto.ts` (`SYSTEM_EVENT_CAT
 |---|---|---|---|---|---|---|---|
 | `compact-boundary` | `compact-boundary:<uuid>` | true | `compact_metadata.trigger`・`pre_tokens`・`post_tokens` | `preserved_segment`・`preserved_messages`・`duration_ms` | '' | `<trigger> <pre> <post>` | `marked` |
 | `conversation-reset` | `reset:<uuid>` | true | (なし) | `new_conversation_id` | '' | '' | `marked` |
-| `refusal` (fallback) | `refusal:<uuid>` | true | `direction`・`scope`・`fallback_model`・`api_refusal_category` | `content`・`api_refusal_explanation`・`request_id`・`refused_user_message_uuid`・`original_model` (`retracted_message_uuids` は行に入れず取り消しに使う) | fallback のモデル (O-4 の `modelId` の形の検査 `isMeterModelId`。外れたら '') | `<direction> <scope> <category>` | `fallback` |
-| `refusal` (no fallback) | `refusal:<uuid>` | true | `content`・`api_refusal_category` | `api_refusal_explanation`・`original_model`・`request_id`・`refused_user_message_uuid` | category (形の検査を通ったときだけ。外れたら '') | `content` を下の本文の規則で | `no-fallback` |
+| `refusal` (fallback) | `refusal:<uuid>` | true | `direction`・`scope`・`fallback_model`・`api_refusal_category`・`api_refusal_explanation` | `content`・`request_id`・`refused_user_message_uuid`・`original_model` (`retracted_message_uuids` は行に入れず取り消しに使う) | fallback のモデル (O-4 の `modelId` の形の検査 `isMeterModelId`。外れたら '') | `<direction> <scope> <category>` と、説明があれば空白 1 つの後に `api_refusal_explanation` を下の本文の規則で | `fallback` |
+| `refusal` (no fallback) | `refusal:<uuid>` | true | `content`・`api_refusal_category`・`api_refusal_explanation` | `original_model`・`request_id`・`refused_user_message_uuid` | category (形の検査を通ったときだけ。外れたら '') | `content` と `api_refusal_explanation` を改行でつないだ文字列を下の本文の規則で (片方が無ければもう片方だけ) | `no-fallback` |
 | `informational` | `info:<tool_use_id>` (形の検査を通れば) / `info:<uuid>` | true | `content`・`level`・`prevent_continuation`・`tool_use_id` | — | '' | `content` を下の本文の規則で | `prevented` (`prevent_continuation`) / `warning` (`level` が `warning` / `suggestion`) / `notice` (`info` / `notice` / 照合に外れた値) |
 
-- **値の照合** (agents。`Object.hasOwn` の表で引き、外れたら `-` にする): `trigger` ∈ {`manual`, `auto`}、`direction` ∈ {`retry`, `revert`, `sticky`}、`scope` ∈ {`session`, `local`} (無ければ `session`。SDK の定義どおり)、`level` ∈ {`info`, `notice`, `suggestion`, `warning`}、category は `^[a-z_-]{1,32}$`、トークン数は 0 以上の安全な整数。`detail` の各トークンはこの照合を通った値か `-` だけなので、renderer は空白で区切って読み戻してよい
+- **値の照合** (agents。`Object.hasOwn` の表で引き、外れたら `-` にする): `trigger` ∈ {`manual`, `auto`}、`direction` ∈ {`retry`, `revert`, `sticky`}、`scope` ∈ {`session`, `local`} (無ければ `session`。SDK の定義どおり)、`level` ∈ {`info`, `notice`, `suggestion`, `warning`}、category は `^[a-z_-]{1,32}$`、トークン数は 0 以上の安全な整数。`detail` の各トークンはこの照合を通った値か `-` だけなので、renderer は空白で区切って読み戻してよい。fallback の拒否の行は先頭の 3 トークンだけをこの形で読み、残り (4 つ目の空白の後) は説明の本文として読む (2026-10-13 の Q3。説明は本文の規則を通した後で、トークンの照合に掛けない)
 - **行の id の素材**: `uuid` と `tool_use_id` は `^[A-Za-z0-9_-]{1,128}$` (O-4 data-model §2 の `toolUseId` と同じ)。`uuid` が外れたら行を作らない
 - **同じ `tool_use_id` の `informational`** は O-2 の合成で 1 行にまとめ、後の値に書き換える (空の本文は前の本文を残す。本文の規則は部分を伏せるだけで本文を丸ごと消さないので、残るのは前の正当な本文)
 - **`detail` の上限**は O-2 data-model §2 の 120 コードポイントのまま (O-2 の契約を変えない)。超えた本文は `…` で切れ、続きは出さない (U-3)。行の見た目は `detail` を折り返す (今の `truncate` を本 feature の category では外す)
 - **過去ログの圧縮**: `transcript.ts:207` の `{ type: 'divider', label: 'コンテキストを圧縮' }` はそのまま (DTO を変えない)。renderer が divider を境界の表示 (TranscriptBoundary) に写す (数は出さない)。**divider を作るのは圧縮だけ** (domain の生成箇所が 1 つであることをテストで固定する)。subagent の入れ子の中の divider は今のまま (O-11)
 - **過去ログの `system` の本文** (design-gate R2 H-02): 今の変換は、Hook / task でない `system` の記録の文字列の `content` を text の part にしている (`transcript.ts:73`, `:214-216`)。`informational`・`local_command_output`・拒否の本文が記録に残れば、伏せ字なしで出る。**`system` の記録の text の part に `redactSecrets` を当てる** (`sanitizeBody` の後。行は足さず、DTO を変えない。行への変換は O-11)。AD-047 D3 の「過去ログの変換には足さない」は行を足すことの禁止で、伏せ字はその外
 
-### 本文の規則 (U-3。`informational` と no fallback の拒否の `content`)
+### 本文の規則 (U-3。`informational` と no fallback の拒否の `content`、拒否の 2 つの `api_refusal_explanation`)
+
+- 拒否の説明は 2026-10-13 に利用者が「出す」と回答した (spec の Clarifications)。fallback の行では、先頭の 3 トークンと空白 1 つを除いた残りの長さで 4. の切り詰めを当て、`detail` 全体が 120 コードポイントを超えないようにする
 
 1. O-2 の無害化 (`sanitizeBody(raw, 4_096)`。byte の上限を先に当てる)
 2. **伏せ字** (`redactSecrets`。下の表)
@@ -79,7 +81,7 @@ category と status の列挙の正本は `transcript-dto.ts` (`SYSTEM_EVENT_CAT
 | `refusal` | 注意の行 |
 | `informational` | `prevented` / `warning` は注意の行、`notice` は控えめの行 |
 
-- O-4 の `compaction` の行 (進み具合: 圧縮中 → 完了 / 失敗。`live-signals.ts` の `onStatus`) と圧縮の境界は並べて描く。行が先、境界が後 (research R-07) **[未承認 — `.needs-input.md` Q1]**
+- O-4 の `compaction` の行 (進み具合: 圧縮中 → 完了 / 失敗。`live-signals.ts` の `onStatus`) と圧縮の境界は並べて描く。行が先、境界が後 (research R-07。2026-10-13 に承認)
 
 ## §2 tool の専用表示
 
