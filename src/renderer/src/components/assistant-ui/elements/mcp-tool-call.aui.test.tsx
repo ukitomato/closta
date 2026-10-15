@@ -1,14 +1,23 @@
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { axe } from 'vitest-axe'
 
 import type { ToolCallMessagePartProps, ToolCallMessagePartStatus } from '@assistant-ui/react'
 
 import { MCP_TOOL_LABELS, TOOL_RESULT_LABELS } from '@/features/chat/labels'
 import { LiveProgressContext, type LiveProgressSource } from '@/features/chat/transcript-context'
+import { setToolResultContext } from '@/test-support/tool-result-mock'
 
 import { McpToolCall } from './mcp-tool-call.aui'
 import { ToolFallback } from './tool-fallback.aui'
+
+vi.mock('@/features/chat/transcript-context', async (importOriginal) =>
+  (await import('@/test-support/tool-result-mock')).withToolResultMock(await importOriginal())
+)
+
+beforeEach(() => {
+  setToolResultContext({})
+})
 
 /**
  * O-5 FE-012 — MCP の tool の表示 (015 spec US-1 AC1〜AC5 / AC9。data-model §1)。
@@ -169,31 +178,42 @@ describe('McpToolCall の状態の印は ToolFallback と同じ (US-1 AC9 / data
   const cases: readonly {
     readonly name: string
     readonly status: ToolCallMessagePartStatus
+    readonly ctx: Parameters<typeof setToolResultContext>[0]
     readonly result: unknown
     readonly isError: boolean
   }[] = [
-    { name: '結果待ち', status: { type: 'running' }, result: undefined, isError: false },
     {
-      name: 'requires-action',
-      status: { type: 'requires-action', reason: 'interrupt' },
+      name: '結果待ち',
+      status: { type: 'running' },
+      ctx: { live: true, runState: 'running' },
       result: undefined,
       isError: false
     },
     {
-      name: 'incomplete の cancelled',
+      name: '承認待ち',
+      status: { type: 'requires-action', reason: 'interrupt' },
+      ctx: { live: true, runState: 'awaiting_permission' },
+      result: undefined,
+      isError: false
+    },
+    {
+      name: '結果不明',
       status: { type: 'incomplete', reason: 'cancelled' },
+      ctx: { live: false },
       result: undefined,
       isError: false
     },
     {
       name: 'incomplete のエラー',
       status: { type: 'incomplete', reason: 'error', error: 'boom' },
+      ctx: { live: false },
       result: 'boom',
       isError: true
     }
   ]
 
   it.each(cases)('$name: 状態のアイコン・中断の印・経過時間が ToolFallback と同じ', (c) => {
+    setToolResultContext(c.ctx)
     const props = partProps({ status: c.status, result: c.result, isError: c.isError })
     const fallback = render(
       <LiveProgressContext.Provider value={liveSource(['a'], 7)}>
@@ -218,18 +238,17 @@ describe('McpToolCall の状態の印は ToolFallback と同じ (US-1 AC9 / data
   })
 
   it('結果待ちで経過時間が出る (実行中)', () => {
+    setToolResultContext({ live: true, runState: 'running' })
     renderLive(partProps({ status: { type: 'running' }, result: undefined }), ['a'], 12)
     expect(screen.getByText(TOOL_RESULT_LABELS.toolElapsed(12))).toBeInTheDocument()
   })
 
-  it('cancelled は見出しに中断の印 (取り消し線) が付き、結果を出さない', () => {
-    const { container } = render(
-      <McpToolCall
-        {...partProps({ status: { type: 'incomplete', reason: 'cancelled' }, result: 'x' })}
-      />
-    )
-    expect(slot(container, 'mcp-tool-call-heading')).toHaveClass('line-through')
-    expect(slot(container, 'mcp-tool-call-result')).toBeNull()
+  it('結果不明は印が出て、経過時間と取り消し線は出ない (US-3 AC1)', () => {
+    setToolResultContext({ live: false })
+    const { container } = render(<McpToolCall {...partProps({ result: undefined })} />)
+    expect(slot(container, 'tool-result-state')).toHaveTextContent(TOOL_RESULT_LABELS.unknown)
+    expect(slot(container, 'mcp-tool-call-heading')).not.toHaveClass('line-through')
+    expect(slot(container, 'tool-result-elapsed')).toBeNull()
   })
 
   it('requires-action で中身が開く', () => {

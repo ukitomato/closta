@@ -1,0 +1,80 @@
+{
+    "gate": "design",
+    "run": "2026-10-12T16:20:59Z",
+    "spec_dir": "specs/016-ui-boundaries-and-tool-displays",
+    "spec_id": "016-ui-boundaries-and-tool-displays",
+    "round": 3,
+    "tracks": {
+        "analyze": {
+            "status": "ok",
+            "raw_out": "analyze.round3.md",
+            "viewpoint_missing": null,
+            "cascade_demotions": null
+        },
+        "po-reviewer": {
+            "status": "ok",
+            "raw_out": "po-reviewer.design-gate.round3.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "architecture-reviewer": {
+            "status": "ok",
+            "raw_out": "architecture-reviewer.design-gate.round3.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "security-reviewer": {
+            "status": "ok",
+            "raw_out": "security-reviewer.design-gate.round3.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "platform-boundary-reviewer": {
+            "status": "ok",
+            "raw_out": "platform-boundary-reviewer.design-gate.round3.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        }
+    },
+    "severity_counts": {
+        "critical": 0,
+        "high": 1,
+        "medium": 2,
+        "low": 18
+    },
+    "fr_coverage": [
+        {
+            "fr": "FR-016",
+            "covered": false,
+            "by": [],
+            "note": "accepted ADR, no task by design"
+        }
+    ],
+    "viewpoint_coverage": {
+        "A": "Critical:0 High:0",
+        "B": "Critical:0 High:0",
+        "C": "Critical:0 High:0",
+        "D": "Critical:0 High:0",
+        "E": "Critical:0 High:0",
+        "F": "Critical:0 High:0",
+        "G": "\u8a72\u5f53\u306a\u3057: optional reviewer \u672a\u8d77\u52d5",
+        "H": "Critical:0 High:0"
+    },
+    "dedup_log": [
+        {
+            "merged": [
+                "analyze-I2",
+                "arch-L-104"
+            ],
+            "key": "plan.md:233"
+        },
+        {
+            "merged": [
+                "analyze-K1",
+                "arch-L-103"
+            ],
+            "key": "plan.md:262"
+        }
+    ],
+    "verdict": "PASS"
+}

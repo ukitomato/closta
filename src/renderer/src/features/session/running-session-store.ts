@@ -201,7 +201,23 @@ function applyMeter(prev: SessionMeters, update: MeterUpdate): SessionMeters {
     }
     case 'commands':
       return { ...prev, commands: update, slashCommandSource: 'commands' }
+    case 'retraction':
+      // 取り消しは最新の値ではなく 1 回限りの指示。`applyEvent` が先に分けて処理するので、ここへは来ない。
+      return prev
   }
+}
+
+/** 外した message の id を覚える上限 (セッションごと。016 data-model §1「戻らない仕組み」)。 */
+const MAX_RETRACTED_IDS = 512
+
+/** メッセージの tool-call の part の `toolCallId` (取り消した tool の経過時間を消すため)。 */
+function toolCallIdsOf(message: ThreadMessageLike): string[] {
+  if (typeof message.content === 'string') return []
+  const ids: string[] = []
+  for (const part of message.content) {
+    if (part.type === 'tool-call' && typeof part.toolCallId === 'string') ids.push(part.toolCallId)
+  }
+  return ids
 }
 
 /** 2 つの名前の並びが (正規の形で、並びを含めて) 同じか。 */
@@ -293,6 +309,8 @@ export function createRunningSessionStore(
   const queues = new Map<string, SessionQueue & { prevBusy: boolean }>()
   /** sessionId → 下書き (再描画を起こさない保持。`setDraft` の注記)。 */
   const drafts = new Map<string, string>()
+  /** sessionId → 外した message の id (後から同じ id の `message` が届いても足さない。上限 512。`close()` で消す)。 */
+  const retractedIds = new Map<string, Set<string>>()
   let inFlight = 0
   let userSeq = 0
 
@@ -325,6 +343,46 @@ export function createRunningSessionStore(
     queue.prevBusy = busy
   }
 
+  /**
+   * 取り消し (O-6 / 016 data-model §1「戻らない仕組み」)。同じセッションの `messages` から外し (冪等。知らない id・別の
+   * セッションの id には触れない)、O-4 の `toolElapsed` から外したメッセージの tool の id を消し、外した id を覚える。
+   * `syncQueue` は呼ばず、監視ビューの派生値 (直近の活動) だけ見直す。承認の要求 (`pending`) は消さない。
+   */
+  const retract = (sessionId: string, messageIds: readonly string[]): void => {
+    const memory = retractedIds.get(sessionId) ?? new Set<string>()
+    for (const id of messageIds) {
+      memory.delete(id)
+      memory.add(id)
+    }
+    while (memory.size > MAX_RETRACTED_IDS) {
+      const oldest = memory.values().next().value
+      if (oldest === undefined) break
+      memory.delete(oldest)
+    }
+    retractedIds.set(sessionId, memory)
+    const target = new Set(messageIds)
+    store.setState((s) => {
+      const current = s.sessions[sessionId]
+      if (current === undefined) return s
+      const removed = current.messages.filter((m) => m.id !== undefined && target.has(m.id))
+      if (removed.length === 0) return s
+      const messages = current.messages.filter((m) => !removed.includes(m))
+      const meters = s.meters[sessionId]
+      const toolIds = removed.flatMap(toolCallIdsOf).filter((id) => meters?.toolElapsed.has(id))
+      let nextMeters = s.meters
+      if (meters !== undefined && toolIds.length > 0) {
+        const toolElapsed = new Map(meters.toolElapsed)
+        for (const id of toolIds) toolElapsed.delete(id)
+        nextMeters = { ...s.meters, [sessionId]: { ...meters, toolElapsed } }
+      }
+      return {
+        sessions: { ...s.sessions, [sessionId]: { ...current, messages } },
+        ...(nextMeters === s.meters ? {} : { meters: nextMeters })
+      }
+    })
+    monitor.track([sessionId])
+  }
+
   const applyEvent = (sessionId: string, event: SessionEvent): void => {
     const session = store.getState().sessions[sessionId]
     if (session === undefined) return
@@ -343,6 +401,8 @@ export function createRunningSessionStore(
         })
         break
       case 'message':
+        // 外した id の `message` が後から届いても足さない (取り消しの後に結果が届いた assistant など)。
+        if (retractedIds.get(sessionId)?.has(event.message.id)) break
         // 受信の累計 (実機計測の観測点。O-1 / FR-012) を同じ `setState` で数える。
         // 行を作れないシステムイベント (合成の結果が null) は本文を変えず、受信の累計だけを数える。
         store.setState((s) => {
@@ -389,7 +449,12 @@ export function createRunningSessionStore(
         /*
          * 計量は `meters` の枝だけを書く (O-4 / 014 data-model §2)。`patch()` を通さない — キューの同期と監視ビューの
          * 派生値の見直しを起こさず、`sessions` の参照を変えない。`receivedMessages` に数えない。
+         * 例外は `retraction` (1 回限りの指示。上の `retract`)。
          */
+        if (event.meter.type === 'retraction') {
+          retract(sessionId, event.meter.messageIds)
+          break
+        }
         store.setState((s) => {
           if (s.sessions[sessionId] === undefined) return s
           const current = s.meters[sessionId] ?? EMPTY_SESSION_METERS
@@ -608,6 +673,7 @@ export function createRunningSessionStore(
       ports.delete(sessionId)
       queues.delete(sessionId)
       drafts.delete(sessionId)
+      retractedIds.delete(sessionId)
       closed.add(sessionId)
       monitor.forget(sessionId)
       const failure = view.failureReason

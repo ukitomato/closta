@@ -97,3 +97,13 @@ spec 014 の U-3 の字面も同じ日に 1. と同じ形に直した (決定は
 AD-048 の「読み替える箇所」は、本 ADR が proposed のうちに Consequences へ AD-048 への参照を足すとしていたが、本 ADR は参照を持たないまま
 accepted になった。その参照を、accepted の後に訂正として足す (AD-031 Decision 1。2026-10-10 に利用者が承認。spec 015 FR-014 / Q1)。
 Decision と Consequences の本文は書き換えない。AD-048 の本文も変えない。
+
+## 訂正: AD-049 への参照 (2026-10-14 / O-6)
+
+**Decision 2 の運ぶ値は [AD-049](0049-boundaries-retraction-and-o11-split.md) Decision 2 が読み替える** (`meter` の種類 `retraction`。
+message の id の列を運び、形の検査を通った 128 件までを 1 つの更新にし、O-4 の上限・間引き・`finish()` の破棄に掛けない。
+検査の正本は [spec 016 data-model §1](../../specs/016-ui-boundaries-and-tool-displays/data-model.md))。
+
+AD-049 の「読み替える箇所」は AD-047 Decision 2 を名指しているが、本 ADR は参照を持たないまま accepted になった。
+その参照を、AD-048 のときと同じ形で、accepted の後に訂正として足す (spec 016 FR-016 / SH-010)。
+Decision と Consequences の本文は書き換えない。AD-044 / AD-046 / AD-049 の本文も変えない。

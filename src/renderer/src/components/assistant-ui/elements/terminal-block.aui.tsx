@@ -6,6 +6,7 @@ import type { ToolCallMessagePartComponent } from "@assistant-ui/react";
 
 import { TOOL_RESULT_LABELS } from "@/features/chat/labels";
 import { parseBashArgs } from "@/features/chat/tool-args";
+import { useToolResultState } from "@/features/chat/transcript-context";
 import { cn } from "@/lib/utils";
 import { codeScroll, codeSurface, mono } from "./surfaces";
 import { ToolFallback } from "./tool-fallback.aui";
@@ -25,6 +26,7 @@ import { isTruncatedArgs, ToolResultMarks } from "./tool-result-marks";
  * (registry 版は live 行ストリーム前提で props 形が合わないため。ADR 参照)。
  */
 const TerminalBlockImpl: ToolCallMessagePartComponent = (props) => {
+  const resultState = useToolResultState(props);
   const args = parseBashArgs(props.argsText);
   if (!args) return <ToolFallback {...props} />;
 
@@ -47,7 +49,8 @@ const TerminalBlockImpl: ToolCallMessagePartComponent = (props) => {
         {/* 切り詰めと失敗は他の表示と同じ見える文字の印 (pr-gate R2 ux M-002 / po L-002 / a11y L-002)。 */}
         <ToolResultMarks
           toolCallId={props.toolCallId}
-          pending={props.result === undefined}
+          pending={resultState.pending}
+          state={resultState.state}
           isError={props.isError}
           truncated={isTruncated}
           className="ms-auto"

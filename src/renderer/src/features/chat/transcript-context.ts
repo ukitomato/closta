@@ -1,6 +1,17 @@
 import { createContext, useCallback, useContext, useEffect, useSyncExternalStore } from 'react'
 
+import { useAuiState, type ToolCallMessagePartStatus } from '@assistant-ui/react'
+
+import type { SessionRunState } from '@domain/session/run-state'
+
 import { useUiStore, type TranscriptDensity } from '@/stores/ui'
+
+import {
+  isToolResultPending,
+  toolResultState,
+  toolStatusInput,
+  type ToolResultState
+} from './tool-result-state'
 
 /**
  * transcript の element (`thread.aui.tsx`。過去ログと実行中で共有) に画面から渡す表示の前提 (O-2)。
@@ -17,6 +28,65 @@ export const TranscriptSettledContext = createContext<boolean>(false)
 
 export function useTranscriptSettled(): boolean {
   return useContext(TranscriptSettledContext)
+}
+
+/**
+ * **tool の結果の状態の前提** (O-6 / 016 data-model §3)。実行中は `LivePane` が `runState` つきで渡し、過去ログ
+ * (`ChatScreen`) は `live: false`。`latestTurn` / `orphanResult` は part ごとの値なので `useToolResultState` が thread から引く。
+ */
+export interface ToolResultThreadContext {
+  readonly live: boolean
+  readonly runState: SessionRunState | null
+}
+
+export const ToolResultThreadContext = createContext<ToolResultThreadContext>({
+  live: false,
+  runState: null
+})
+
+/**
+ * tool の part 1 つの結果の状態・状態のアイコンの入力・O-4 の `ToolResultMarks` の `pending` (結果待ちのときだけ真) を返す。
+ * 並列の tool は part ごとに判定する。
+ */
+export function useToolResultState(part: {
+  readonly toolCallId: string
+  readonly result?: unknown
+  readonly isError?: boolean
+}): {
+  readonly state: ToolResultState
+  readonly status: ToolCallMessagePartStatus
+  readonly pending: boolean
+} {
+  const thread = useContext(ToolResultThreadContext)
+  const messageId = useAuiState((s) => s.message.id)
+  // 末尾から自分のメッセージまで見る (結果だけのメッセージは後ろに付く)。primitive を返して再描画を絞る。
+  const flags = useAuiState((s) => {
+    const orphanId = `result:${part.toolCallId}`
+    const messages = s.thread.messages
+    let orphan = false
+    let latest = true
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const m = messages[i]
+      if (m === undefined) continue
+      if (m.id === orphanId) orphan = true
+      if (m.id === messageId) {
+        return `${latest ? 1 : 0}${orphan ? 1 : 0}`
+      }
+      if (m.role === 'user') latest = false
+    }
+    return `${latest ? 1 : 0}${orphan ? 1 : 0}`
+  })
+  const state = toolResultState(part, {
+    live: thread.live,
+    runState: thread.runState,
+    latestTurn: flags[0] === '1',
+    orphanResult: flags[1] === '1'
+  })
+  return {
+    state,
+    status: toolStatusInput(state, part.isError),
+    pending: isToolResultPending(state)
+  }
 }
 
 /** transcript の情報密度 (FR-012。`stores/ui` の値。監視ビューの行の密度とは別)。 */

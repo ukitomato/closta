@@ -1,20 +1,30 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useState } from "react";
 import { ClipboardListIcon } from "lucide-react";
-import type { ToolCallMessagePartComponent } from "@assistant-ui/react";
+import {
+  TextMessagePartProvider,
+  type ToolCallMessagePartComponent,
+} from "@assistant-ui/react";
 
+import { Button } from "@/components/ui/button";
+import { MarkdownText } from "@/components/markdown-text";
+import { TOOL_DISPLAY_LABELS } from "@/features/chat/labels";
 import { parsePlanArgs } from "@/features/chat/tool-args";
+import { planHasUnrenderedMarkup } from "@/features/chat/tool-display";
+import { useToolResultState } from "@/features/chat/transcript-context";
 import { ToolFallback } from "./tool-fallback.aui";
 import { isTruncatedArgs, ToolErrorResult, ToolResultMarks } from "./tool-result-marks";
 
 /**
  * ExitPlanMode の計画を Agent plan 表示にする (R-4 / FR-006 / Tier A: Agent plan)。
  *
- * plan は会話由来の untrusted markdown。**plain text (whitespace-pre-wrap) で描画する** — React が escape するため
- * 生 HTML は描画されず `javascript:` 等のリンクも inert text になる (FR-006 / FR-012 / SC-002 / design-gate M-5)。
- * `MarkdownText`/`MarkdownTextPrimitive` は text-part context 依存で任意文字列を安全に受けられないため、
- * R-4 は独自 markdown 経路を作らず plain text とする (rich markdown 化は将来、plan を text part 化して行う)。
+ * plan は会話由来の untrusted markdown。**既存の `MarkdownText` で描く** (O-6 / FE-023 / 016 data-model §2「Agent plan」。
+ * AD-049 Decision 4): `TextMessagePartProvider` (`isRunning={false}`) で plan の文字列を包む。新しい markdown の描画口は作らない
+ * (`@assistant-ui/react-markdown` の import は `markdown-text.tsx` だけ、`TextMessagePartProvider` の import はここだけ)。
+ * 生 HTML は描画されず (rehype-raw 無し)、リンクは `safeUrlTransform` の allowlist (http(s) か相対) を通る。
+ * 「原文」の切り替えで plain text (whitespace-pre-wrap) を出す。生 HTML・コメントがあるときは「表示されない部分が
+ * あります。原文で確かめてください」の印を出す。
  * `argsText` は domain で `sanitizeBody` (bidi/C1 除去 + byte 上限) 済み (design-gate H-1)。
  * narrowing 失敗時は `ToolFallback` に退避 (FR-009 / SC-005)。
  * 結果は普段は出さず、エラー (計画の却下など) のときだけ「エラー」の印と本文を出す。切り詰めの印も出す (O-2 / FR-007)。
@@ -23,8 +33,11 @@ import { isTruncatedArgs, ToolErrorResult, ToolResultMarks } from "./tool-result
  * Claude Code の ExitPlanMode (plan 文字列) 形に合わせて `.aui.tsx` として自作した (ADR 参照)。
  */
 const AgentPlanImpl: ToolCallMessagePartComponent = (props) => {
+  const [raw, setRaw] = useState(false);
+  const resultState = useToolResultState(props);
   const args = parsePlanArgs(props.argsText);
   if (!args) return <ToolFallback {...props} />;
+  const hasUnrendered = planHasUnrenderedMarkup(args.plan);
 
   return (
     <div
@@ -36,16 +49,52 @@ const AgentPlanImpl: ToolCallMessagePartComponent = (props) => {
         <span className="font-medium">計画</span>
         <ToolResultMarks
           toolCallId={props.toolCallId}
-          pending={props.result === undefined}
+          pending={resultState.pending}
+          state={resultState.state}
           isError={props.isError}
           truncated={isTruncatedArgs(props.args)}
           className="ms-auto"
         />
       </div>
       <div className="border-border/40 border-t px-3 py-2">
-        <p className="text-foreground/90 whitespace-pre-wrap wrap-break-word leading-relaxed">
-          {args.plan}
-        </p>
+        <div className="mb-1 flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            data-slot="agent-plan-raw-toggle"
+            aria-pressed={raw}
+            onClick={() => setRaw((v) => !v)}
+          >
+            {TOOL_DISPLAY_LABELS.raw}
+          </Button>
+          {hasUnrendered ? (
+            <span
+              data-slot="agent-plan-hidden-mark"
+              role="note"
+              className="text-muted-foreground text-xs"
+            >
+              {TOOL_DISPLAY_LABELS.planHidden}
+            </span>
+          ) : null}
+        </div>
+        {raw ? (
+          <p
+            data-slot="agent-plan-raw"
+            className="text-foreground/90 whitespace-pre-wrap wrap-break-word leading-relaxed"
+          >
+            {args.plan}
+          </p>
+        ) : (
+          <div
+            data-slot="agent-plan-markdown"
+            className="text-foreground/90 wrap-break-word"
+          >
+            <TextMessagePartProvider text={args.plan} isRunning={false}>
+              <MarkdownText />
+            </TextMessagePartProvider>
+          </div>
+        )}
       </div>
       <ToolErrorResult isError={props.isError} result={props.result} />
     </div>

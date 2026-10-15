@@ -65,6 +65,15 @@ reviewers:
       # O-5 の手書きの表示 (MCP の tool と AskUserQuestion。015 tasks SH-011)
       - "src/renderer/src/components/assistant-ui/elements/mcp-tool-call.aui.tsx"
       - "src/renderer/src/components/assistant-ui/elements/ask-user-question.aui.tsx"
+      # O-6 の手書きの表示 (会話の境界・ファイルと検索・Web・計画と読み上げ。016 tasks SH-012)。
+      # file-result-tree.tsx は registry の file-tree.tsx を写して変えた別ファイル (file-tree.tsx は除外のまま)
+      - "src/renderer/src/components/assistant-ui/elements/transcript-boundary.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/file-tool.aui.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/file-result-tree.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/web-tool.aui.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/task-tool.aui.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/tool-display-frame.tsx"
+      - "src/renderer/src/features/chat/TranscriptAnnouncer.tsx"
       # - "src/renderer/src/features/runtime-list/**/*.tsx"              # 仮実装
       # - "src/renderer/src/features/workspace-folders/**/*.tsx"         # 仮実装
       # - "src/renderer/src/features/folder-runtime-resolution/**/*.tsx" # 仮実装
@@ -121,6 +130,14 @@ reviewers:
       # O-5 の手書きの表示 (a11y-reviewer と同じ)
       - "src/renderer/src/components/assistant-ui/elements/mcp-tool-call.aui.tsx"
       - "src/renderer/src/components/assistant-ui/elements/ask-user-question.aui.tsx"
+      # O-6 の手書きの表示 (a11y-reviewer と同じ)
+      - "src/renderer/src/components/assistant-ui/elements/transcript-boundary.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/file-tool.aui.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/file-result-tree.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/web-tool.aui.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/task-tool.aui.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/tool-display-frame.tsx"
+      - "src/renderer/src/features/chat/TranscriptAnnouncer.tsx"
       # - "src/renderer/src/features/runtime-list/**/*.tsx"              # 仮実装
       # - "src/renderer/src/features/workspace-folders/**/*.tsx"         # 仮実装
       # - "src/renderer/src/features/folder-runtime-resolution/**/*.tsx" # 仮実装

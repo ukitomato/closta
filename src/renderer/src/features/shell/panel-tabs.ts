@@ -12,7 +12,7 @@ import { UsageTab } from './UsageTab'
 /**
  * **右のペインのタブの表** (O-7 / FR-014 / data-model §4。1 か所の表)。O-4 は「使用量」(Cost meter の置き場。Context display
  * は中央のヘッダの目盛り。014 data-model §4) を、O-5 は「構成」(roadmap の O-5 の行の Server panel の置き場。015 data-model
- * §3) と注意の印 (`attention`) を足した。後続 feature (O-6 の TodoList / Background task・OPT-panel) はこの表に行を足す。
+ * §3) と注意の印 (`attention`) を足した。後続 feature (O-11 の TodoList / Background task の要否の判断・OPT-panel) はこの表に行を足す。
  *
  * **`Content` は renderer の DOM の中に描くものに限る。** 外部コンテンツ (Browser / PR の Webview) のタブはこの形で
  * 表さない (AD-046 Decision 4。OPT-panel で種別を足し、main が管理する `WebContentsView` の境界に従う)。

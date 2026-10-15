@@ -948,3 +948,113 @@ describe('running-session-store — 構成の受け口 (O-5 FE-001 / 015 data-mo
     expect(slashCommandEntries(EMPTY_SESSION_METERS)).toEqual([])
   })
 })
+
+describe('running-session-store — 取り消し (O-6 FE-010 / 016 data-model §1「戻らない仕組み」)', () => {
+  const meter = (m: MeterUpdate): SessionEvent => ({ kind: 'meter', meter: m })
+  const retraction = (...messageIds: string[]): SessionEvent =>
+    meter({ type: 'retraction', messageIds })
+  const metersOf = (h: Harness, id = A): SessionMeters | undefined => h.store.getState().meters[id]
+  const idsOf = (h: Harness, id = A): (string | undefined)[] =>
+    h.store.getState().sessions[id]?.messages.map((m) => m.id) ?? []
+  const toolMessage = (id: string, toolCallId: string): SessionEvent => ({
+    kind: 'message',
+    message: {
+      id,
+      role: 'assistant',
+      parts: [
+        {
+          type: 'tool-call',
+          toolCallId,
+          toolName: 'Bash',
+          argsText: '{}',
+          result: null,
+          isError: false,
+          truncated: false,
+          children: []
+        }
+      ],
+      createdAt: 1
+    }
+  })
+  const textMessage = (id: string): SessionEvent => ({
+    kind: 'message',
+    message: { id, role: 'assistant', parts: [{ type: 'text', text: 'hi' }], createdAt: 1 }
+  })
+
+  it('同じセッションの messages から外す (冪等・知らない id・別のセッションの id に触れない)', async () => {
+    const h = harness()
+    const portA = await launched(h, A)
+    const portB = await launched(h, B)
+    emit(portA, textMessage('m1'))
+    emit(portA, textMessage('m2'))
+    emit(portB, textMessage('m1'))
+    emit(portA, retraction('m1', 'unknown'))
+    expect(idsOf(h, A)).toEqual(['m2'])
+    expect(idsOf(h, B)).toEqual(['m1'])
+    emit(portA, retraction('m1'))
+    expect(idsOf(h, A)).toEqual(['m2'])
+  })
+
+  it('外した id の後の message を足さない。別のセッションには効かない', async () => {
+    const h = harness()
+    const portA = await launched(h, A)
+    const portB = await launched(h, B)
+    emit(portA, textMessage('m1'))
+    emit(portA, retraction('m1'))
+    emit(portA, textMessage('m1'))
+    emit(portB, textMessage('m1'))
+    expect(idsOf(h, A)).toEqual([])
+    expect(idsOf(h, B)).toEqual(['m1'])
+  })
+
+  it('tool-elapsed から取り消したメッセージの tool の id を外し、承認の要求は消さない', async () => {
+    const h = harness()
+    const port = await launched(h)
+    emit(port, toolMessage('m1', 't1'))
+    emit(port, toolMessage('m2', 't2'))
+    emit(port, meter({ type: 'tool-elapsed', toolUseId: 't1', elapsedSeconds: 3 }))
+    emit(port, meter({ type: 'tool-elapsed', toolUseId: 't2', elapsedSeconds: 4 }))
+    emit(port, {
+      kind: 'permission-request',
+      request: { requestId: 'r1', toolName: 'Bash', input: '{}', scope: 'once' }
+    })
+    emit(port, retraction('m1'))
+    expect([...(metersOf(h)?.toolElapsed.keys() ?? [])]).toEqual(['t2'])
+    expect(h.store.getState().sessions[A]?.pending?.requestId).toBe('r1')
+  })
+
+  it('receivedMessages を増やさず、他の種類の meter は sessions の参照を変えない', async () => {
+    const h = harness()
+    const port = await launched(h)
+    emit(port, textMessage('m1'))
+    const received = h.store.getState().receivedMessages
+    emit(port, retraction('m1'))
+    expect(h.store.getState().receivedMessages).toBe(received)
+    const sessions = h.store.getState().sessions
+    emit(port, meter({ type: 'context', usedTokens: 5 }))
+    expect(h.store.getState().sessions).toBe(sessions)
+  })
+
+  it('閉じたセッションには書かない。close() で外した id の記憶を消す', async () => {
+    const h = harness()
+    const port = await launched(h, A)
+    emit(port, textMessage('m1'))
+    emit(port, retraction('m1'))
+    h.store.close(A)
+    emit(port, retraction('m1'))
+    emit(port, textMessage('m1'))
+    expect(h.store.getState().sessions[A]).toBeUndefined()
+    // 別のセッションに同じ id の message が届けば足される (記憶はセッションごと。close で消えている)。
+    const portB = await launched(h, B)
+    emit(portB, textMessage('m1'))
+    expect(idsOf(h, B)).toEqual(['m1'])
+  })
+
+  it('メッセージの数が減り、隠れた古いメッセージの件数が直る', async () => {
+    const h = harness()
+    const port = await launched(h)
+    for (let i = 0; i < 3; i++) emit(port, textMessage(`m${i}`))
+    emit(port, retraction('m0', 'm1'))
+    expect(idsOf(h)).toEqual(['m2'])
+  })
+})

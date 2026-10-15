@@ -10,6 +10,7 @@ import {
   SYSTEM_EVENT_STATUS_LABELS,
 } from "@/features/chat/labels";
 import { parseAgentArgs, parseTaskArgs } from "@/features/chat/tool-args";
+import { useToolResultState } from "@/features/chat/transcript-context";
 import { cn } from "@/lib/utils";
 import { ToolFallback } from "./tool-fallback.aui";
 import { isTruncatedArgs, ToolResultMarks } from "./tool-result-marks";
@@ -52,6 +53,46 @@ function extractChildren(args: unknown): readonly TranscriptMessageDTO[] {
   return Array.isArray(raw) ? raw.filter(isValidChild) : [];
 }
 
+/** 入れ子の tool-call の 1 つ (結果の状態の hook を使うので component に切り出す。DTO の `result: null` は結果なし)。 */
+function SubagentToolCall({
+  part,
+  depth,
+}: {
+  part: Extract<TranscriptPartDTO, { type: "tool-call" }>;
+  depth: number;
+}): React.JSX.Element {
+  const resultState = useToolResultState({
+    toolCallId: part.toolCallId,
+    result: part.result === null ? undefined : part.result,
+    isError: part.isError,
+  });
+  const result = typeof part.result === "string" && part.result.length > 0 ? part.result : null;
+  return (
+    <div className="border-border/40 flex flex-col gap-1 rounded-md border px-2 py-1">
+      <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
+        <WrenchIcon className="size-3 shrink-0" />
+        <span className="font-medium">{part.toolName}</span>
+        {/* 入れ子でも最上位と同じ印 (エラーと切り詰め。pr-gate R2 ui-coverage L-101)。 */}
+        <ToolResultMarks
+          toolCallId={part.toolCallId}
+          pending={resultState.pending}
+          state={resultState.state}
+          isError={part.isError}
+          truncated={part.truncated === true}
+        />
+      </div>
+      {result ? (
+        <pre className="text-foreground/70 max-h-40 overflow-auto whitespace-pre-wrap font-mono text-[11px]">
+          {result}
+        </pre>
+      ) : null}
+      {Array.isArray(part.children) && part.children.length > 0 ? (
+        <SubagentBody messages={part.children} depth={depth + 1} />
+      ) : null}
+    </div>
+  );
+}
+
 function SubagentPart({
   part,
   depth,
@@ -73,31 +114,7 @@ function SubagentPart({
         </p>
       );
     case "tool-call": {
-      const result = typeof part.result === "string" && part.result.length > 0 ? part.result : null;
-      return (
-        <div className="border-border/40 flex flex-col gap-1 rounded-md border px-2 py-1">
-          <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
-            <WrenchIcon className="size-3 shrink-0" />
-            <span className="font-medium">{part.toolName}</span>
-            {/* 入れ子でも最上位と同じ印 (エラーと切り詰め。pr-gate R2 ui-coverage L-101)。 */}
-            <ToolResultMarks
-              toolCallId={part.toolCallId}
-              pending={part.result === null}
-              isError={part.isError}
-              truncated={part.truncated === true}
-            />
-
-          </div>
-          {result ? (
-            <pre className="text-foreground/70 max-h-40 overflow-auto whitespace-pre-wrap font-mono text-[11px]">
-              {result}
-            </pre>
-          ) : null}
-          {Array.isArray(part.children) && part.children.length > 0 ? (
-            <SubagentBody messages={part.children} depth={depth + 1} />
-          ) : null}
-        </div>
-      );
+      return <SubagentToolCall part={part} depth={depth} />;
     }
     case "image":
       return <p className="text-muted-foreground text-xs">🖼 画像</p>;
@@ -154,6 +171,7 @@ function SubagentBody({
 
 const SubagentImpl: ToolCallMessagePartComponent = (props) => {
   // 実行時の名前は `Agent` (SDK 0.3.270) と旧名 `Task` のどちらも来る (O-2 / FR-010)。
+  const resultState = useToolResultState(props);
   const args =
     props.toolName === "Agent"
       ? parseAgentArgs(props.argsText)
@@ -179,7 +197,8 @@ const SubagentImpl: ToolCallMessagePartComponent = (props) => {
         {/* 最上位の失敗と切り詰め (入れ子の印だけでなく。O-2 / FR-007 / pr-gate R1 po H-001)。 */}
         <ToolResultMarks
           toolCallId={props.toolCallId}
-          pending={props.result === undefined}
+          pending={resultState.pending}
+          state={resultState.state}
           isError={props.isError}
           truncated={isTruncatedArgs(props.args)}
           className="ms-auto"

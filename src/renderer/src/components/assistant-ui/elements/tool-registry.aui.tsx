@@ -7,11 +7,14 @@ import { parseMcpToolName } from "@/features/chat/mcp-tool-name";
 import { AgentPlan } from "./agent-plan.aui";
 import { AskUserQuestion } from "./ask-user-question.aui";
 import { CodeDiff } from "./code-diff.aui";
+import { FileTool } from "./file-tool.aui";
 import { McpToolCall } from "./mcp-tool-call.aui";
 import { Subagent } from "./subagent.aui";
+import { TaskTool } from "./task-tool.aui";
 import { TerminalBlock } from "./terminal-block.aui";
 import { TodoList } from "./todo-list.aui";
 import { ToolFallback } from "./tool-fallback.aui";
+import { WebTool } from "./web-tool.aui";
 
 /**
  * `toolName` → 専用表示の登録 (R-4 / FE-022 / contracts C-1 / research R-01)。
@@ -45,6 +48,16 @@ const TOOL_DISPLAY: Readonly<Record<string, ToolCallMessagePartComponent>> = {
   RefreshMcpTools: McpToolCall,
   // Claude からの問い (読み取り専用。回答の入力は O-10。015 data-model §1)。
   AskUserQuestion,
+  // ファイル・検索・Web・計画の 9 tool (O-6 / 016 data-model §2)。`Task` は Subagent のまま (旧名の subagent)。
+  Read: FileTool,
+  Glob: FileTool,
+  Grep: FileTool,
+  WebFetch: WebTool,
+  WebSearch: WebTool,
+  TaskCreate: TaskTool,
+  TaskGet: TaskTool,
+  TaskUpdate: TaskTool,
+  TaskList: TaskTool,
 };
 
 const ToolDisplayImpl: ToolCallMessagePartComponent = (props) => {

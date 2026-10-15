@@ -378,10 +378,14 @@ describe('R-4 Tier A 専用表示 (FE-029 / SC-001)', () => {
   })
 
   it('未対応 tool は fallback のまま (専用表示に落ちない)', async () => {
-    ready([toolDto('m', 'Grep', JSON.stringify({ pattern: 'foo' }), { result: 'hit' })])
+    ready([
+      toolDto('m', 'NotebookEdit', JSON.stringify({ notebook_path: '/w/a.ipynb' }), {
+        result: 'hit'
+      })
+    ])
     const { container } = render(<ChatScreen />)
     toolGroupsOpenByDefault()
-    expect(await screen.findByText('Grep')).toBeInTheDocument()
+    expect(await screen.findByText('NotebookEdit')).toBeInTheDocument()
     expect(container.querySelector('[data-slot="aui_terminal-block"]')).toBeNull()
     expect(container.querySelector('[data-slot="aui_code-diff"]')).toBeNull()
   })

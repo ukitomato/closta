@@ -13,6 +13,9 @@ related_adrs:
   - docs/decisions/0035-tier-a-tool-display-and-subagent-nesting.md
   - docs/decisions/0044-ui-coverage-assignment.md
   - docs/decisions/0046-app-shell-layout.md
+  - docs/decisions/0047-session-meter-and-failure-reasons.md
+  - docs/decisions/0048-session-config-display-and-answer-ui-split.md
+  - docs/decisions/0049-boundaries-retraction-and-o11-split.md
 related_specs:
   - specs/003-ui-transcript-rendering/spec.md
   - specs/004-ui-tier-a-tool-display/spec.md
@@ -22,6 +25,7 @@ related_specs:
   - specs/012-ui-thread-search/spec.md
   - specs/014-ui-metering-and-limits/spec.md
   - specs/015-ui-mcp-elicitation-commands/spec.md
+  - specs/016-ui-boundaries-and-tool-displays/spec.md
 ---
 
 # Domain Charter: ui
@@ -239,7 +243,12 @@ O-1 で読み替えた: 監視ビューはサイドバーの稼働中の区画 (
   「構成」のタブ (Claude Code が報告した構成) と畳んだ帯の注意の印、認証とプラグインの行。session の契約 (`meter` の種類 `init-report` /
   `commands`) を広げる ([AD-048](../../decisions/0048-session-config-display-and-answer-ui-split.md))。問いに答える UI と composer の
   スラッシュコマンドの候補は O-10 (domain `session`) に分けた
-- （残り。O-6 / O-9 / OPT-pty / OPT-panel が本 domain に属する。O-10 は `session` で、表示の部品を本 domain が持つ）
+- [O-6: 会話の境界と tool の専用表示の第 2 弾](../../../specs/016-ui-boundaries-and-tool-displays/spec.md) — **実装中**。圧縮の境界・
+  `conversation_reset`・モデルの拒否・知らせ (`informational`) の行、`Read` / `Glob` / `Grep` / `WebFetch` / `WebSearch` /
+  `TaskCreate` などの専用表示、Agent plan の markdown、tool の結果待ち・結果不明の印と読み上げ。session の契約 (`meter` の種類
+  `retraction`・稼働中のストアからのメッセージの削除) を広げる ([AD-049](../../decisions/0049-boundaries-retraction-and-o11-split.md))。
+  Hook・背景の task・subagent の入れ子と知らせの類は O-11 に分けた
+- （残り。O-6 / O-9 / O-11 / OPT-pty / OPT-panel が本 domain に属する。O-10 は `session` で、表示の部品を本 domain が持つ）
 
 ## Open Questions
 
@@ -250,7 +259,7 @@ O-1 で読み替えた: 監視ビューはサイドバーの稼働中の区画 (
 - [x] ~~§4.2 の Tier A 表は暫定~~ → O-2。`docs/ui-coverage.md` が SDK の型から導いた正本になった (PLAN.md §4.2 は参照)
 - [x] ~~Hook / Background task の表示の割当と、状態の保持が要る場合の持ち主 domain~~ → O-2 (USER 決定 2026-10-03)。
       状態は保持せず、transcript の 1 行 (システムイベントの行) として本 domain が描く。持ち主の domain は要らない。
-      実行中の task の一覧の要否は O-6 で判断し、要るなら持ち主の domain を人間に諮る
+      実行中の task の一覧の要否は O-11 で判断し (O-6 から送った。AD-049 Decision 1)、要るなら持ち主の domain を人間に諮る
 - [ ] SPIKE-2: assistant-ui Elements の導入コスト実測。element のインストール単位、
       カスタマイズ範囲、design system の拘束度、Claude Code の tool_result 形式との変換コスト。
       **結果次第では本 charter の Scope を見直す**

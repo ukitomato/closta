@@ -365,6 +365,31 @@ export const FIXTURES = [
     rules: ['#16']
   },
   {
+    file: 'b-equivalent/sdk-query-read-file.ts.fixture',
+    target: 'src/agents/__rulecheck__/sdk-query-read-file.ts',
+    group: 'b',
+    what:
+      'Query の readFile を呼ぶ (AD-049 Decision 6 で P3 の列挙に足した名前。他の #16 の綴りを含めない。016 BE-040)',
+    detectors: ['constitution'],
+    rules: ['#16']
+  },
+  {
+    file: 'b-equivalent/sdk-query-background-tasks.ts.fixture',
+    target: 'src/agents/__rulecheck__/sdk-query-background-tasks.ts',
+    group: 'b',
+    what: 'Query の backgroundTasks を呼ぶ (P3 の列挙の名前を単独で確かめる。016 BE-040)',
+    detectors: ['constitution'],
+    rules: ['#16']
+  },
+  {
+    file: 'b-equivalent/sdk-query-reload-output-styles.ts.fixture',
+    target: 'src/agents/__rulecheck__/sdk-query-reload-output-styles.ts',
+    group: 'b',
+    what: 'Query の reloadOutputStyles を呼ぶ (P3 の列挙の名前を単独で確かめる。016 BE-040)',
+    detectors: ['constitution'],
+    rules: ['#16']
+  },
+  {
     file: 'b-equivalent/sdk-query-computed-key.ts.fixture',
     target: 'src/agents/__rulecheck__/sdk-query-computed-key.ts',
     group: 'b',
@@ -702,7 +727,9 @@ export const UNDETECTED_NOTES = {
       '**残る連結経路は依然として機械検証されない** — 既存の `PathDTO` を spread して ' +
       '`value` だけを差し替える形は `namespace` のリテラルを持たないため新ルールに掛からない。' +
       '**この fixture はテンプレート文字列の連結であり、新ルールでは発火しない** (実体を確認済み)。' +
-      '構造で塞げていない残余は renderer 単体テストとレビューが担う。',
+      '構造で塞げていない残余は renderer 単体テストとレビューが担う。' +
+      '**O-2 / O-6 は本文のパスを表示のためだけに切る (パスの末尾の取り出し)。名前空間を持つ値を作らず、IPC に戻さない** ' +
+      '(AD-049 Decision 5)。',
     nextFeature: 'X-6',
     howToClose:
       '**X-4 で確認 (SH-012): 追加ディレクトリ軸は X-6 に繰り越した** (AD-041 (h)) ため、X-4 でも renderer にパス入力は生じない ' +

@@ -295,19 +295,23 @@ const row = (
 })
 
 describe('category と status の集合 (固定テスト)', () => {
-  it('category は 7 つ (O-5 が auth / plugin を足した。015 data-model §4)', () => {
+  it('category は 11 (O-5 が auth / plugin、O-6 が 4 つを足した。015 / 016 data-model §1)', () => {
     expect([...SYSTEM_EVENT_CATEGORIES].sort()).toEqual([
       'api-retry',
       'auth',
+      'compact-boundary',
       'compaction',
+      'conversation-reset',
       'hook',
+      'informational',
       'permission-mode',
       'plugin',
+      'refusal',
       'task'
     ])
   })
 
-  it('status は 15 (O-5 が authenticating を足した)', () => {
+  it('status は 21 (O-5 が authenticating、O-6 が 6 つを足した)', () => {
     expect([...SYSTEM_EVENT_STATUSES].sort()).toEqual([
       'authenticating',
       'cancelled',
@@ -315,16 +319,34 @@ describe('category と status の集合 (固定テスト)', () => {
       'compacting',
       'completed',
       'failed',
+      'fallback',
       'killed',
+      'marked',
+      'no-fallback',
+      'notice',
       'paused',
       'pending',
+      'prevented',
       'retrying',
       'running',
       'started',
       'stopped',
       'succeeded',
-      'unknown'
+      'unknown',
+      'warning'
     ])
+  })
+
+  it('O-6 の 6 つの status は終わりを表す', () => {
+    for (const s of [
+      'marked',
+      'fallback',
+      'no-fallback',
+      'prevented',
+      'warning',
+      'notice'
+    ] as const)
+      expect(isTerminalSystemEventStatus(s)).toBe(true)
   })
 
   it('changed は終わりを表し、retrying / compacting は表さない', () => {

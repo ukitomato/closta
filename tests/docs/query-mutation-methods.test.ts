@@ -41,7 +41,9 @@ const EXPECTED = [
   'backgroundTasks',
   // O-5 (AD-047 Decision 4 が呼ばないと決めた読み取り。pr-gate R1 MD-10)
   'getContextUsage',
-  'usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET'
+  'usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET',
+  // 016 (AD-049 Decision 6 / FR-018)
+  'readFile'
 ]
 
 const SESSION_SOURCE = 'src/agents/sdk-agent-session.ts'
@@ -61,9 +63,9 @@ function unionLiterals(source: string): string[] {
 }
 
 describe('検証項目 16 の P3 の集合', () => {
-  it('`QUERY_MUTATION_METHODS` は 21 個で、並びを問わず固定した集合に一致する', () => {
-    expect(QUERY_MUTATION_METHODS).toHaveLength(21)
-    expect(new Set(QUERY_MUTATION_METHODS).size).toBe(21)
+  it('`QUERY_MUTATION_METHODS` は 22 個で、並びを問わず固定した集合に一致する', () => {
+    expect(QUERY_MUTATION_METHODS).toHaveLength(22)
+    expect(new Set(QUERY_MUTATION_METHODS).size).toBe(22)
     expect([...QUERY_MUTATION_METHODS].sort()).toEqual([...EXPECTED].sort())
   })
 

@@ -13,7 +13,7 @@ import { ErrorState } from '@/components/assistant-ui/elements/error-state'
 import { GenerationLoader } from '@/components/assistant-ui/elements/loading-state'
 import { Thread } from '@/components/assistant-ui/elements/thread.aui'
 
-import { TranscriptSettledContext } from './transcript-context'
+import { ToolResultThreadContext, TranscriptSettledContext } from './transcript-context'
 import { TranscriptDensityToggle } from './TranscriptDensityToggle'
 import { useTranscript, type TranscriptView } from './useTranscript'
 
@@ -53,6 +53,8 @@ function transcriptFailureDetail(reasonKey: FailureReason | null): string {
     ? '履歴を読み込めませんでした。再取得してください。'
     : (detail[reasonKey] ?? '履歴を読み込めませんでした。再取得してください。')
 }
+
+const PAST_LOG_TOOL_RESULT_THREAD = { live: false, runState: null } as const
 
 /** ローダのアニメーション用の tick。取得中だけ回す。 */
 function useTick(active: boolean): number {
@@ -150,7 +152,10 @@ export function ChatScreenBody({
           <div className="min-h-0 flex-1">
             {/* 過去ログは記録に終わりが無い行を常に「結果不明」で描く (O-2 / FR-009)。 */}
             <TranscriptSettledContext.Provider value>
-              <Thread />
+              {/* 過去ログは `live: false` (結果の無い tool は常に「結果不明」。O-6 / 016 data-model §3)。 */}
+              <ToolResultThreadContext.Provider value={PAST_LOG_TOOL_RESULT_THREAD}>
+                <Thread />
+              </ToolResultThreadContext.Provider>
             </TranscriptSettledContext.Provider>
           </div>
         </AssistantRuntimeProvider>

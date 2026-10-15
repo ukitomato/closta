@@ -111,6 +111,30 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+describe('過去ログの圧縮の境界 (O-6 FE-011 / 016 spec US-1)', () => {
+  it('divider の part は横いっぱいの境界として描かれ、SDK の定型文は出ない', () => {
+    show([
+      textDto('m1', '前の話'),
+      {
+        id: 'compact:1',
+        role: 'system',
+        parts: [
+          { type: 'divider', label: 'compact' },
+          { type: 'text', text: 'SDK BOILERPLATE SUMMARY' }
+        ],
+        createdAt: null
+      },
+      textDto('m2', '後の話')
+    ])
+    const { container } = render(<ChatScreen />)
+    const boundary = container.querySelector('[data-slot="aui_transcript-boundary"]')
+    expect(boundary).not.toBeNull()
+    expect(boundary).toHaveTextContent('ここでコンテキストを圧縮しました')
+    expect(container).not.toHaveTextContent('SDK BOILERPLATE SUMMARY')
+    expect(rowsOf(container)).toHaveLength(0)
+  })
+})
+
 describe('過去ログのシステムイベントの行 (FR-009 / SC-003)', () => {
   it('Hook の名前と結果、task の説明と状態を 1 行ずつ描く。assistant-ui の変換が例外を投げない', () => {
     show([

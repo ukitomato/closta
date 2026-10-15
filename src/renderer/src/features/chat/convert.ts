@@ -74,8 +74,16 @@ function convertPart(part: TranscriptPartDTO): MessagePart {
       // R-3 は最小表示。File element への完全対応は R-4 / O-2 に譲り、ファイル名を text で示す。
       return { type: 'text', text: `📎 ${part.filename}` }
     case 'divider':
-      // コンパクション境界の最小の区切り (FR-018 / [USER] 確定)。専用 element は対応表 A 節の割当 (O-6)。
-      return { type: 'text', text: `── ${part.label} ──` }
+      // コンパクション境界 (FR-018 / [USER] 確定)。実行中の行と同じ TranscriptBoundary で描くため、`compact-boundary` の
+      // data part に写す (数は出さない。`label` は読まない。O-6 / 016 data-model §1「過去ログの圧縮」)。
+      return systemEventDataPart({
+        type: 'system-event',
+        category: 'compact-boundary',
+        opens: true,
+        name: '',
+        detail: '',
+        status: 'marked'
+      })
     case 'system-event':
       return systemEventDataPart(part)
   }
@@ -145,7 +153,13 @@ function isPlainSystemContent(content: readonly MessagePart[]): boolean {
 }
 
 export function toThreadMessage(dto: TranscriptMessageDTO): ThreadMessageLike {
-  const content = dto.parts.map(convertPart)
+  // 圧縮の境界の記録 (divider) は境界だけを描く。同じ記録の本文 (SDK の定型文など) を境界の後に重ねて出さない
+  // (016 plan RK-10。DTO は変えず、ここで境界のメッセージにする)。
+  const parts =
+    dto.role === 'system' && dto.parts.some((p) => p.type === 'divider')
+      ? dto.parts.filter((p) => p.type === 'divider')
+      : dto.parts
+  const content = parts.map(convertPart)
   const systemEvent = dto.parts.length === 1 && dto.parts[0]?.type === 'system-event'
   // システムイベントの行は DTO では `system` (意味として) のまま、assistant-ui には data part 1 つの assistant で渡す
   // (research R-04 / design-gate R1 architecture H-001)。text 1 つでない system も同じ理由で assistant に倒す。

@@ -151,6 +151,7 @@ const elapsedMarks = (): HTMLElement[] =>
 describe('tool の経過時間 (US-4 AC3 / FR-012)', () => {
   it('結果待ちの tool の見出しに経過時間が出て、計量の更新で書き換わる', async () => {
     const h = await setup()
+    h.emit(A, { kind: 'state', state: 'running' })
     h.emit(A, toolCall('m1', 'toolu_bash', 'Bash', { command: 'sleep 90' }, null))
     await waitFor(() =>
       expect(document.querySelector('[data-slot="aui_terminal-block"]')).not.toBeNull()
@@ -167,7 +168,8 @@ describe('tool の経過時間 (US-4 AC3 / FR-012)', () => {
 
   it('専用の表示の無い tool (ToolFallback) と Code diff・Todo list・Agent plan・Subagent でも同じ印が出る', async () => {
     const h = await setup()
-    h.emit(A, toolCall('m1', 'toolu_read', 'Read', { file_path: '/a.ts' }, null))
+    h.emit(A, { kind: 'state', state: 'running' })
+    h.emit(A, toolCall('m1', 'toolu_read', 'NotebookEdit', { notebook_path: '/a.ipynb' }, null))
     h.emit(
       A,
       toolCall(
@@ -198,6 +200,7 @@ describe('tool の経過時間 (US-4 AC3 / FR-012)', () => {
 
   it('結果が届くと経過時間が消える', async () => {
     const h = await setup()
+    h.emit(A, { kind: 'state', state: 'running' })
     h.emit(A, toolCall('m1', 'toolu_bash', 'Bash', { command: 'ls' }, null))
     h.emit(A, elapsed('toolu_bash', 5))
     await waitFor(() => expect(elapsedMarks()).toHaveLength(1))
@@ -220,8 +223,9 @@ describe('tool の経過時間 (US-4 AC3 / FR-012)', () => {
 
   it('vitest-axe の違反 0 (経過時間のある tool の見出し)', async () => {
     const h = await setup()
+    h.emit(A, { kind: 'state', state: 'running' })
     h.emit(A, toolCall('m1', 'toolu_bash', 'Bash', { command: 'sleep 9' }, null))
-    h.emit(A, toolCall('m2', 'toolu_read', 'Read', { file_path: '/a.ts' }, null))
+    h.emit(A, toolCall('m2', 'toolu_read', 'NotebookEdit', { notebook_path: '/a.ipynb' }, null))
     h.emit(A, elapsed('toolu_bash', 4))
     h.emit(A, elapsed('toolu_read', 61))
     await waitFor(() => expect(elapsedMarks()).toHaveLength(2))

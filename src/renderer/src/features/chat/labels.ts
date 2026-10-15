@@ -24,7 +24,12 @@ export const SYSTEM_EVENT_CATEGORY_LABELS: Readonly<Record<SystemEventCategory, 
   'permission-mode': '権限モード',
   // O-5 の行 (015 data-model §4 / §6)。文の描き分けは `thread.aui.tsx` の `SystemEventRow`。
   auth: '認証',
-  plugin: 'プラグイン'
+  plugin: 'プラグイン',
+  // O-6 の行 (016 data-model §1 / §4)。境界は `TranscriptBoundary` が描く (見出しは `transcriptBoundaryHeading`)。
+  'compact-boundary': 'コンテキストの圧縮の境界',
+  'conversation-reset': '会話の作り直し',
+  refusal: 'モデルの拒否',
+  informational: '知らせ'
 }
 
 /** 状態の理由キー → 文言。 */
@@ -47,7 +52,118 @@ export const SYSTEM_EVENT_STATUS_LABELS: Readonly<Record<SystemEventStatus, stri
   compacting: '圧縮中',
   changed: '変更',
   // O-5 の認証の行 (015 data-model §4)。
-  authenticating: '認証中'
+  authenticating: '認証中',
+  // O-6 の行の見た目の段階 (016 data-model §1 / §4)。
+  marked: '区切り',
+  fallback: 'モデルを切り替え',
+  'no-fallback': '拒否',
+  prevented: 'ここで止まりました',
+  warning: '注意',
+  notice: '知らせ'
+}
+
+/** 状態の文言 (Badge) を出さない状態 (行の見出しや本文がそのまま伝える。016 data-model §4)。 */
+export const QUIET_SYSTEM_EVENT_STATUSES: ReadonlySet<SystemEventStatus> = new Set([
+  'marked',
+  'notice'
+])
+
+/**
+ * 会話の境界と拒否・知らせの行の文言 (O-6 / 016 data-model §4)。SDK は `conversation_reset` を /clear・plan モードの終了・
+ * 新しいセッションで出すので「これより上がコンテキストに無い」とは断定しない。
+ */
+export const TRANSCRIPT_BOUNDARY_LABELS = {
+  compactHeading: 'ここでコンテキストを圧縮しました',
+  resetHeading: 'ここから新しい会話です',
+  trigger: { manual: '手動', auto: '自動' } as Readonly<Record<string, string>>,
+  tokens: (pre: string, post: string): string => `${pre} → ${post} トークン`,
+  refusalFallback: (model: string): string =>
+    `モデルが応答を拒否したため${model === '' ? '別のモデル' : ` ${model} `}に切り替えました`,
+  refusalLocal: 'この応答だけ',
+  refusalNoFallback: 'モデルが応答を拒否しました。言い直して送り直せます',
+  refusalCategory: (label: string): string => `分類: ${label}`,
+  /** 拒否の分類の訳 (知らない値は出さない)。 */
+  categories: { cyber: 'サイバーセキュリティ', bio: '生物・化学' } as Readonly<
+    Record<string, string>
+  >
+} as const
+
+/**
+ * 読み上げの文言 (O-6 / 016 data-model §4「読み上げ」)。固定の文言・既知の列挙・件数だけ (`content`・説明・`prompt`・パス・
+ * Hook 名を入れない)。
+ */
+export const ANNOUNCER_LABELS = {
+  toolError: (toolName: string): string => `${toolName} がエラーになりました`,
+  toolErrors: (n: number): string => `${n} 件の tool がエラーになりました`,
+  /** 登録済みでも形に合わない tool 名のときの呼び名。 */
+  unknownTool: 'tool',
+  hookEnded: (status: string): string => `Hook が${status}`,
+  taskEnded: (status: string): string => `Background task が${status}`,
+  mixed: (n: number): string => `${n} 件の知らせがあります`,
+  compactBoundary: 'ここでコンテキストを圧縮しました',
+  conversationReset: 'ここから新しい会話です',
+  refusal: 'モデルが応答を拒否しました',
+  prevented: 'ここで止まりました'
+} as const
+
+/** 圧縮の境界の `detail` (`<trigger> <pre> <post>`。`-` は読めなかった値。空は過去ログ) から見出しの文言を作る。 */
+export function transcriptBoundaryHeading(
+  category: 'compact-boundary' | 'conversation-reset',
+  detail: string
+): string {
+  if (category === 'conversation-reset') return TRANSCRIPT_BOUNDARY_LABELS.resetHeading
+  const base = TRANSCRIPT_BOUNDARY_LABELS.compactHeading
+  const [trigger = '-', pre = '-', post = '-'] = detail.split(' ')
+  const parts: string[] = []
+  if (Object.hasOwn(TRANSCRIPT_BOUNDARY_LABELS.trigger, trigger)) {
+    parts.push(TRANSCRIPT_BOUNDARY_LABELS.trigger[trigger] ?? '')
+  }
+  if (/^\d{1,16}$/.test(pre) && /^\d{1,16}$/.test(post)) {
+    parts.push(
+      TRANSCRIPT_BOUNDARY_LABELS.tokens(
+        COUNT_FORMAT.format(Number(pre)),
+        COUNT_FORMAT.format(Number(post))
+      )
+    )
+  }
+  return parts.length === 0 ? base : `${base} (${parts.join('、')})`
+}
+
+/** 拒否の分類の訳 (表に無い値・`-`・空は '')。 */
+function refusalCategoryText(key: string): string {
+  return Object.hasOwn(TRANSCRIPT_BOUNDARY_LABELS.categories, key)
+    ? (TRANSCRIPT_BOUNDARY_LABELS.categories[key] ?? '')
+    : ''
+}
+
+/**
+ * 拒否の行の文 (`text`) と、モデルの説明・本文 (`body`。折り返して別の段に出す)。fallback は `name` がモデル名、`detail` が
+ * `<direction> <scope> <category>` と、あれば空白 1 つの後に説明。no fallback は `name` が分類、`detail` が本文。
+ */
+export function refusalRowText(
+  status: SystemEventStatus | null,
+  name: string,
+  detail: string
+): { readonly text: string; readonly body: string } {
+  if (status === 'fallback') {
+    const m = /^(\S+) (\S+) (\S+)(?: ([\s\S]*))?$/.exec(detail)
+    const scope = m?.[2] ?? '-'
+    const category = refusalCategoryText(m?.[3] ?? '-')
+    const text = [
+      TRANSCRIPT_BOUNDARY_LABELS.refusalFallback(name),
+      ...(scope === 'local' ? [`(${TRANSCRIPT_BOUNDARY_LABELS.refusalLocal})`] : []),
+      ...(category === '' ? [] : [`/ ${TRANSCRIPT_BOUNDARY_LABELS.refusalCategory(category)}`])
+    ].join(' ')
+    return { text, body: m?.[4] ?? '' }
+  }
+  const category = refusalCategoryText(name)
+  return {
+    text:
+      category === ''
+        ? TRANSCRIPT_BOUNDARY_LABELS.refusalNoFallback
+        : `${TRANSCRIPT_BOUNDARY_LABELS.refusalNoFallback} / ${TRANSCRIPT_BOUNDARY_LABELS.refusalCategory(category)}`,
+    body: detail
+  }
 }
 
 export const SYSTEM_EVENT_LABELS = {
@@ -187,6 +303,20 @@ export const TOOL_RESULT_LABELS = {
   failed: 'エラー',
   /** 完了したとき (Terminal block のアイコンの名前)。 */
   completed: '完了',
+  /** 結果待ち (O-6 / 016 data-model §3。応答中・承認待ち)。 */
+  pending: '結果待ち',
+  /** 結果不明 (応答が終わった・中断した・終了・失敗・過去ログ・前のターン)。 */
+  unknown: '結果不明',
+  /** 結果が別のメッセージに表示されている (O-2 の 256 件の上限で分かれたとき)。 */
+  elsewhere: '結果は別に表示',
+  /** ToolFallback の見出し (016 data-model §4)。 */
+  fallbackHeading: (toolName: string): string => `${toolName} を実行`,
+  /** 見出しの tool 名 (太字) の後ろ。`fallbackHeading` と同じ文言。 */
+  fallbackHeadingSuffix: ' を実行',
+  /** ToolFallback の中身の見出し・状態の文言。 */
+  fallbackResult: '結果',
+  fallbackError: 'エラー',
+  fallbackCancelled: '取り消されました',
   /** args か結果が上限で切り詰められたとき。 */
   truncated: '（切り詰め）',
   /**
@@ -215,6 +345,55 @@ export const ASK_USER_QUESTION_LABELS = {
   multiSelect: '複数選択',
   selectedAnswer: '選ばれた回答',
   result: MCP_TOOL_LABELS.result
+} as const
+
+/**
+ * ファイル・検索・Web・計画の tool の専用表示 (O-6 / 016 data-model §2・§4)。見出しの値 (パス・検索語・URL の host・
+ * subject) は会話由来で、ここに置くのは固定の文言だけ。知らない値を引く表は `Object.hasOwn` で照合する。
+ */
+export const TOOL_DISPLAY_LABELS = {
+  path: 'パス',
+  result: '結果',
+  prompt: 'prompt',
+  url: 'URL',
+  /** WebFetch の見出し (URL を読めないとき・http(s) でないとき・host が長すぎるとき)。 */
+  urlHeading: 'URL',
+  /** 結果が text でない・空のとき。 */
+  emptyResult: 'text でない結果か、空の結果です',
+  /** `Read` の範囲。 */
+  readRange: (offset: number | null, limit: number | null): string => {
+    if (offset !== null && limit !== null) return `${offset}〜${offset + limit} 行`
+    if (offset !== null) return `${offset} 行目から`
+    if (limit !== null) return `先頭 ${limit} 行`
+    return ''
+  },
+  readPages: (pages: string): string => `ページ ${pages}`,
+  /** `Grep` の `output_mode` の訳。知らない値は出さない。 */
+  outputMode: {
+    files_with_matches: 'ファイル名',
+    content: '一致した行',
+    count: '件数'
+  } as Readonly<Record<string, string>>,
+  more: (n: number): string => `ほか ${n} 件`,
+  files: (n: number): string => `${n} 件のファイル`,
+  domainRestriction: (n: number): string => `ドメイン制限 ${n} 件`,
+  taskCreate: 'タスクを追加',
+  taskUpdate: 'タスクを更新',
+  taskGet: 'タスクを確認',
+  taskList: 'タスクの一覧',
+  taskId: (id: string): string => `タスク #${id}`,
+  taskAdded: '追加した時点: 未着手',
+  /** タスクの状態の対応 (`Object.hasOwn` で引く。知らない値は「不明」)。 */
+  taskStatus: {
+    pending: '未着手',
+    in_progress: '進行中',
+    completed: '完了',
+    deleted: '削除'
+  } as Readonly<Record<string, string>>,
+  taskStatusUnknown: '不明',
+  /** Agent plan。 */
+  raw: '原文',
+  planHidden: '表示されない部分があります。原文で確かめてください'
 } as const
 
 /**

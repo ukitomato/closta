@@ -2,6 +2,7 @@
 
 import { Badge } from "@/components/ui/badge";
 import { TOOL_RESULT_LABELS } from "@/features/chat/labels";
+import type { ToolResultState } from "@/features/chat/tool-result-state";
 import { useLiveToolElapsed } from "@/features/chat/transcript-context";
 import { cn } from "@/lib/utils";
 import { codeScroll, codeSurface, mono } from "./surfaces";
@@ -30,10 +31,25 @@ export function isTruncatedArgs(args: unknown): boolean {
   );
 }
 
+function stateMarkLabel(state: ToolResultState | undefined): string | null {
+  switch (state) {
+    case "running":
+    case "awaiting":
+      return TOOL_RESULT_LABELS.pending;
+    case "unknown":
+      return TOOL_RESULT_LABELS.unknown;
+    case "elsewhere":
+      return TOOL_RESULT_LABELS.elsewhere;
+    default:
+      return null;
+  }
+}
+
 /** ヘッダの右端に置く印。どれも無ければ何も描かない。 */
 export function ToolResultMarks({
   toolCallId,
   pending,
+  state,
   isError,
   truncated,
   className,
@@ -42,17 +58,40 @@ export function ToolResultMarks({
   toolCallId: string;
   /** 結果待ちか (結果が届いたら経過時間を出さない)。 */
   pending: boolean;
+  /**
+   * 結果の状態 (O-6 / 016 data-model §3。`useToolResultState` の値)。結果待ち・結果不明・結果は別に表示の印を出す。
+   * 渡さないときは状態の印を出さない。
+   */
+  state?: ToolResultState;
   isError: boolean | undefined;
   truncated: boolean;
   className?: string;
 }): React.JSX.Element | null {
   const elapsed = useLiveToolElapsed(toolCallId, pending);
-  if (!isError && !truncated && elapsed === null) return null;
+  const stateLabel = stateMarkLabel(state);
+  if (!isError && !truncated && elapsed === null && stateLabel === null) return null;
   return (
     <span
       data-slot="tool-result-marks"
       className={cn("flex shrink-0 items-center gap-2", className)}
     >
+      {stateLabel !== null ? (
+        <span
+          data-slot="tool-result-state"
+          data-state={state}
+          // 動く印 (応答中) だけ aria-busy。承認待ちは動かない (どの tool の承認かは承認カードが示す)。
+          aria-busy={state === "running" ? true : undefined}
+        >
+          {state === "running" ? (
+            <span
+              data-slot="tool-result-spinner"
+              aria-hidden="true"
+              className="mr-1 inline-block size-3 animate-spin rounded-full border-2 border-current border-t-transparent align-[-2px] motion-reduce:animate-none"
+            />
+          ) : null}
+          {stateLabel}
+        </span>
+      ) : null}
       {elapsed !== null ? (
         <span data-slot="tool-result-elapsed" className="tabular-nums">
           {TOOL_RESULT_LABELS.toolElapsed(elapsed)}

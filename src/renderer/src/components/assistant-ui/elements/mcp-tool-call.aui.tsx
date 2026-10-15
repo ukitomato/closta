@@ -12,7 +12,10 @@ import {
   readMcpBuiltinArgs,
   summarizeResourceUri,
 } from "@/features/chat/mcp-tool-name";
-import { useLiveMcpServerNames } from "@/features/chat/transcript-context";
+import {
+  useLiveMcpServerNames,
+  useToolResultState,
+} from "@/features/chat/transcript-context";
 import { cn } from "@/lib/utils";
 import { codeScroll, codeSurface, mono } from "./surfaces";
 import {
@@ -78,8 +81,11 @@ const McpToolCallImpl: ToolCallMessagePartComponent = (props) => {
   );
 
   // 開閉は ToolFallback と同じ: 承認待ちになったら開く。それ以外は閉じた中身。
-  const status = statusWithError(runtimeStatus, isError);
-  const isRequiresAction = status?.type === "requires-action";
+  // 表示の状態は結果の状態から決める (O-6 / 016 data-model §3)。part の状態は承認の操作を出すかの判定にだけ使う。
+  const resultState = useToolResultState({ toolCallId, result, isError });
+  const status = resultState.status;
+  const approvalStatus = statusWithError(runtimeStatus, isError);
+  const isRequiresAction = approvalStatus?.type === "requires-action";
   const [open, setOpen] = useState(isRequiresAction);
   const [prevRequiresAction, setPrevRequiresAction] = useState(isRequiresAction);
   if (isRequiresAction !== prevRequiresAction) {
@@ -92,7 +98,7 @@ const McpToolCallImpl: ToolCallMessagePartComponent = (props) => {
   const isCancelled = isCancelledToolStatus(status);
   const isRunning = status?.type === "running";
   const shouldRenderApproval =
-    isRequiresAction && offersInterruptAction(status, approval, interrupt);
+    isRequiresAction && offersInterruptAction(approvalStatus, approval, interrupt);
   const heading = mcpToolHeadingParts(parts);
   const uriSummary =
     parts.kind === "mcp-builtin"
@@ -167,7 +173,8 @@ const McpToolCallImpl: ToolCallMessagePartComponent = (props) => {
           {/* エラーと切り詰めの印・経過時間は閉じたままでも見えるよう見出しの横に出す (ToolFallback と同じ)。 */}
           <ToolResultMarks
             toolCallId={toolCallId}
-            pending={result === undefined}
+            pending={resultState.pending}
+            state={resultState.state}
             isError={isError}
             truncated={isTruncatedArgs(args)}
             className="text-muted-foreground ms-auto text-xs"
@@ -197,7 +204,7 @@ const McpToolCallImpl: ToolCallMessagePartComponent = (props) => {
               interrupt={interrupt}
               approval={approval}
               respondToApproval={respondToApproval}
-              status={status}
+              status={approvalStatus}
             />
           )}
         </ToolFallbackContent>

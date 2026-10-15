@@ -163,12 +163,12 @@ type QueryMutationMethod =
   | 'backgroundTasks'
   | 'getContextUsage'
   | 'usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET'
+  | 'readFile'
 type QueryUnusedReadMethod =
   | 'initializationResult'
   | 'supportedCommands'
   | 'supportedModels'
   | 'supportedAgents'
-  | 'readFile'
   | 'accountInfo'
   | 'close'
 type QueryClassifiedMethod = 'interrupt' | QueryMutationMethod | QueryUnusedReadMethod
@@ -370,7 +370,7 @@ async function run(
   const toolResults = createLiveToolResultTracker()
   let state: SessionRunState = 'idle'
   let reasonKey: LaunchFailureReason | null = null
-  let queryHandle: Query | null = null
+  let queryHandle: (Pick<Query, 'interrupt'> & AsyncIterable<SDKMessage>) | null = null
   let spawnedChild: (SpawnedLike & { exitCode?: number | null }) | null = null
   let childExited = false
   const childExitWaiters: (() => void)[] = []
@@ -397,6 +397,13 @@ async function run(
   const signals = createLiveSignals({
     launchPermissionMode: launchOptions.permissionMode,
     emit,
+    // 取り消し (O-6 / 016 data-model §1)。tool の結果の追跡から外し、開発用のログに件数だけ残す (id・本文は書かない)。
+    onRetract: ({ ids, instructed, dropped }) => {
+      const { unmatched } = toolResults.retract(ids)
+      process.stderr.write(
+        `[retraction] instructed=${instructed} dropped=${dropped} unmatched=${unmatched}\n`
+      )
+    },
     clock: {
       now: () => Date.now(),
       setTimer: (callback, ms) => setTimeout(callback, ms),
@@ -620,10 +627,13 @@ async function run(
       }
       switch (message.type) {
         case 'assistant': {
+          // 拒否で置き換えられた応答の取り消しは、代わりのメッセージを送る前に送る (O-6 / 016 data-model §1)。
+          if (message.supersedes !== undefined) signals.onRetraction(message.supersedes)
           const dto = toLiveAssistantMessage(message)
           // 結果待ちの tool_use を覚える (結果は後の user メッセージで同じ id に埋めて送り直す。O-2 / FR-007)。
           toolResults.trackAssistant(dto)
-          emit({ kind: 'message', message: dto })
+          // 取り消した id の assistant を後から受けても送らない。
+          if (!toolResults.isRetracted(dto.id)) emit({ kind: 'message', message: dto })
           signals.onAssistant(message)
           break
         }
@@ -681,6 +691,10 @@ async function run(
         case 'auth_status':
           // 認証の行 (O-5 / 015 data-model §4。`isAuthenticating` と `error` の有無だけを読む。`output` / `error` は運ばない)。
           signals.onAuthStatus(message)
+          break
+        case 'conversation_reset':
+          // 会話の作り直しの行 (O-6 / 016 data-model §1。`uuid` だけを読み、`new_conversation_id` は読まない)。
+          signals.onConversationReset(message)
           break
         default:
           // stream_event / partial 等の扱いは docs/ui-coverage.md の対応表が正本 (AD-020 / H-06)。

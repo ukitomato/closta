@@ -40,7 +40,7 @@ export type TranscriptPartDTO =
     }
   | { readonly type: 'image'; readonly url: string }
   | { readonly type: 'file'; readonly filename: string; readonly text: string }
-  /** コンパクション境界などの最小の区切り (FR-018)。専用 element は対応表 A 節の割当 (O-6)。 */
+  /** コンパクション境界などの最小の区切り (FR-018)。 */
   | { readonly type: 'divider'; readonly label: string }
   /**
    * Hook / Background task のシステムイベントの行 (O-2 / FR-008・FR-009。[data-model](../../../specs/011-ui-coverage/data-model.md) §2)。
@@ -72,7 +72,11 @@ export const SYSTEM_EVENT_CATEGORIES = [
   'compaction',
   'permission-mode',
   'auth',
-  'plugin'
+  'plugin',
+  'compact-boundary',
+  'conversation-reset',
+  'refusal',
+  'informational'
 ] as const
 export type SystemEventCategory = (typeof SYSTEM_EVENT_CATEGORIES)[number]
 
@@ -92,8 +96,15 @@ export const SYSTEM_EVENT_STATUSES = [
   'retrying',
   'compacting',
   'changed',
-  'authenticating'
+  'authenticating',
+  'marked',
+  'fallback',
+  'no-fallback',
+  'prevented',
+  'warning',
+  'notice'
 ] as const
+/** 行の状態の理由キー (Hook / task の状態と、本 feature (O-6) の行の見た目の段階)。 */
 export type SystemEventStatus = (typeof SYSTEM_EVENT_STATUSES)[number]
 
 export type TranscriptMessageRole = 'user' | 'assistant' | 'system'

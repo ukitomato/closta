@@ -1,0 +1,504 @@
+{
+    "gate": "code",
+    "run": "2026-10-15T15:52:31Z",
+    "spec_dir": "specs/016-ui-boundaries-and-tool-displays",
+    "spec_id": "016-ui-boundaries-and-tool-displays",
+    "iter": 5,
+    "entry_status": "reviewing",
+    "severity_counts": {
+        "critical": 0,
+        "high": 0,
+        "medium": 2,
+        "low": 3,
+        "must_fix": 0
+    },
+    "must_fix_findings": [],
+    "should_fix_findings": [],
+    "consider_findings": [
+        {
+            "id": "M-001",
+            "where": "thread.aui.tsx and 5 others",
+            "origin": "convention",
+            "message": "files over 500 lines (unchanged)"
+        },
+        {
+            "id": "M-002",
+            "where": "tests/ scripts/constitution/",
+            "origin": "convention",
+            "message": "no check that hand-written elements are listed (was iter 4 M-003)"
+        },
+        {
+            "id": "L-001",
+            "where": "file-tool.aui.tsx:3-17, tool-display-frame.tsx",
+            "origin": "convention",
+            "message": "import order"
+        },
+        {
+            "id": "L-002",
+            "where": "tool-display.ts:21,30",
+            "origin": "convention",
+            "message": "same-name functions with different meaning"
+        },
+        {
+            "id": "L-003",
+            "where": "HOST_MAX etc.",
+            "origin": "convention",
+            "message": "exports used only by tests"
+        }
+    ],
+    "touched_files": [
+        {
+            "path": ".specify/spec-gate/reviewers.yml",
+            "sha": "6c9e71bce5345e91e9b6e860f2aac55fcbb7f935"
+        },
+        {
+            "path": "docs/decisions/0047-session-meter-and-failure-reasons.md",
+            "sha": "8db1c53308112a969ff42ea0e5beb791b0d8edb2"
+        },
+        {
+            "path": "docs/domains/_overview.md",
+            "sha": "8045eed3d96497a871c15a2b588a879b5e066e8a"
+        },
+        {
+            "path": "docs/domains/session/charter.md",
+            "sha": "eec1d31e9d62660e68071f93dcadf0d62ecea5d3"
+        },
+        {
+            "path": "docs/domains/ui/charter.md",
+            "sha": "b6d993eed1815ed37d545605e11c87192744a564"
+        },
+        {
+            "path": "docs/glossary.md",
+            "sha": "e55f853a20fefa45f58c7afdd44b49daa175e8ee"
+        },
+        {
+            "path": "docs/prompts.md",
+            "sha": "53e25a396d6eaa79ae5849eae99249bd7762a147"
+        },
+        {
+            "path": "docs/roadmap.md",
+            "sha": "630c05995003a72d93437008281f497c1af86baf"
+        },
+        {
+            "path": "docs/ui-coverage.md",
+            "sha": "6276e58c44e3f6a7c15b01bb8586a9b781011748"
+        },
+        {
+            "path": "eslint.config.mjs",
+            "sha": "eec92e55d9177b5a3f8b898604031b72adc949cc"
+        },
+        {
+            "path": "scripts/constitution/allowlists.mjs",
+            "sha": "327e117c277a376eb29a871e113fe5c5a3f9a1f1"
+        },
+        {
+            "path": "specs/014-ui-metering-and-limits/data-model.md",
+            "sha": "5f7da0f2fac149600b87a6f29dcfaf809d3624ea"
+        },
+        {
+            "path": "specs/016-ui-boundaries-and-tool-displays/data-model.md",
+            "sha": "2c3e13dd3afd7701c4e19964084bc82f6c9a787f"
+        },
+        {
+            "path": "src/agents/live-signals.o6.test.ts",
+            "sha": "193810f8b2fe4afa1c902ac0bf89bb2c745d5991"
+        },
+        {
+            "path": "src/agents/live-signals.ts",
+            "sha": "12eafe06919ce4c48603a8ba48ffb2b753156612"
+        },
+        {
+            "path": "src/agents/live-tool-results.test.ts",
+            "sha": "d0e0f4a6d10f00a0f20de09efa61aa5b25ee4c47"
+        },
+        {
+            "path": "src/agents/live-tool-results.ts",
+            "sha": "53fd0721f20bd25a0b7e19acf8d142305cc0724d"
+        },
+        {
+            "path": "src/agents/sdk-agent-session.test.ts",
+            "sha": "0c7f030e29a4a4ffaa9c780dafb8f06078368851"
+        },
+        {
+            "path": "src/agents/sdk-agent-session.ts",
+            "sha": "2d0de19cac4db866189cc89071b13701a8053528"
+        },
+        {
+            "path": "src/domain/session/agent-session.test.ts",
+            "sha": "8edf839d9181cb217564386daf2b1adf68dc8a0a"
+        },
+        {
+            "path": "src/domain/session/live-message.ts",
+            "sha": "9991354c92f0e4faa04e615d556aabef516c6c8a"
+        },
+        {
+            "path": "src/domain/session/meter.test.ts",
+            "sha": "5c18f2b2770c4672d7432b6dd9e48ff02d120bb3"
+        },
+        {
+            "path": "src/domain/session/meter.ts",
+            "sha": "cd1f225d912387a99eb3a938a6c7d75a111e399f"
+        },
+        {
+            "path": "src/domain/session/secret-redaction.test.ts",
+            "sha": "a42f6945cf5024b488696b8d9d30758023df1f5a"
+        },
+        {
+            "path": "src/domain/session/secret-redaction.ts",
+            "sha": "e0799b6fa0f4f73f3073a25bfd32f7371c83c243"
+        },
+        {
+            "path": "src/domain/session/system-event.test.ts",
+            "sha": "1957966a77a8b7ea7c3f7febd694fc58dc8ceee3"
+        },
+        {
+            "path": "src/domain/session/system-event.ts",
+            "sha": "cc7f19422b0fbf7594bade6391d59d3a2e8f1a58"
+        },
+        {
+            "path": "src/domain/session/transcript.system-event.test.ts",
+            "sha": "3ecaf893fadee0fb07a3fe5c5dc71455eb9b7d76"
+        },
+        {
+            "path": "src/domain/session/transcript.ts",
+            "sha": "4f0663e52ef17e6acd42830205ca2d96d7311746"
+        },
+        {
+            "path": "src/domain/session/transcript-dto.ts",
+            "sha": "342538f749c5223f58f53b2bf4d349321d8cf17e"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/agent-plan.aui.test.tsx",
+            "sha": "ef0104dd9b3f261641f9640161e690313e28d0b7"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/agent-plan.aui.tsx",
+            "sha": "5318a79a2708d98aafff040f0a6fcc9a358d952a"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/agent-plan.markdown-probe.test.tsx",
+            "sha": "1be9d2aa51eae96654c5d5cfc67b0a7d1d020dba"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/ask-user-question.aui.test.tsx",
+            "sha": "2a74aa0f51b12a67b8eedd90ad21cda73bc4c58d"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/ask-user-question.aui.tsx",
+            "sha": "be9c80c5587a99f32595420b4f37dfdf9674e2ea"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/code-diff.aui.tsx",
+            "sha": "4f58d52af51c0106639c3a8fd224af4f6b997110"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/file-result-tree.tsx",
+            "sha": "18318e91d3b87db61f5fd9bbecb14ec54bd494b8"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/file-tool.aui.test.tsx",
+            "sha": "974f3a42c11695d119d1715b9322313516e28178"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/file-tool.aui.tsx",
+            "sha": "e7b162d64cfc4d647482cdfe2fd8e9e029be0234"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/mcp-tool-call.aui.test.tsx",
+            "sha": "2e17e9768f6c7da2a0c8a88c8f62035d3830dc73"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/mcp-tool-call.aui.tsx",
+            "sha": "900d65822950f3a5cea78e90191e045d1130112c"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/subagent.aui.tsx",
+            "sha": "dd24f2bdafec21b0d50b0b4f6bad577133f015d5"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/task-tool.aui.test.tsx",
+            "sha": "6e556be750b601e91c9d9c397f0b2da950d51797"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/task-tool.aui.tsx",
+            "sha": "a5bb8ef69b86d18681c4b1c72998dd96c4dd1d2c"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/terminal-block.aui.tsx",
+            "sha": "c0f9d1525d3f3198189ba00c58e9691d3406fe36"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/thread.aui.tsx",
+            "sha": "c2a8e515e8eeb19e7eb2a04fd10b74956baa2f0c"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/todo-list.aui.test.tsx",
+            "sha": "4d9e5ae512ec15f746bf5de0fe6c307884f3647d"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/todo-list.aui.tsx",
+            "sha": "7b4029014dfbfc834066e96371beb208d2479d43"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/tool-display-frame.tsx",
+            "sha": "cb8a58b9c48d30f74fe9190e852cadc3204d3cb8"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/tool-fallback.aui.tsx",
+            "sha": "d2445b8c135d45c7caf3683dc28001c768d900ac"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/tool-registry.aui.test.tsx",
+            "sha": "f1367d86164a0fc8af82cd3678d4af0c21be52a8"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/tool-registry.aui.tsx",
+            "sha": "a0cb0660b566067a5172385294401d13199519a3"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/tool-result-marks.test.tsx",
+            "sha": "4071a2b48c5ab43be50312f942a81db190741334"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/tool-result-marks.tsx",
+            "sha": "0f8903f3da754a177f2d5c0711c4caf6a050a9ce"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/transcript-boundary.tsx",
+            "sha": "2ecdb879d180f04eaf9a3c8270b3654c1f53f72a"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/web-tool.aui.test.tsx",
+            "sha": "f5c1cf9f9066c937c30bcfec184a19a7cd0e68ee"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/web-tool.aui.tsx",
+            "sha": "15ff48dc4e7c46c9d122e88fb39902d4a806f1fb"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/web-tool-heading.test.ts",
+            "sha": "2ac4370bc67b56ecd7ac51b3f04df19d6e7e6449"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/web-tool-heading.ts",
+            "sha": "28d070b7f09eeeb6f865dfa15b7e42b681025261"
+        },
+        {
+            "path": "src/renderer/src/features/chat/ChatScreen.o2.test.tsx",
+            "sha": "5a38fb3276eef1920f3eaa3c4b1513e933158f7f"
+        },
+        {
+            "path": "src/renderer/src/features/chat/ChatScreen.test.tsx",
+            "sha": "183903676b2611479f7226af5b40d8427a6a89a0"
+        },
+        {
+            "path": "src/renderer/src/features/chat/ChatScreen.tsx",
+            "sha": "f31d6af7394b47f901b6317a4c5c0280d0cd7780"
+        },
+        {
+            "path": "src/renderer/src/features/chat/conversation-search.test.ts",
+            "sha": "4189d38cb8fb597ce0b891bb0e863eecb731b6ba"
+        },
+        {
+            "path": "src/renderer/src/features/chat/conversation-search.ts",
+            "sha": "054f8657d7c1e612c86fcfadd163672577d7c981"
+        },
+        {
+            "path": "src/renderer/src/features/chat/convert.ts",
+            "sha": "70829b4b6ad34e71f99dde6c51cad1edf827c870"
+        },
+        {
+            "path": "src/renderer/src/features/chat/labels.ts",
+            "sha": "82561e2629f95f151d13bd922718492bc360a649"
+        },
+        {
+            "path": "src/renderer/src/features/chat/path-tail.test.ts",
+            "sha": "f9f14263c1cb5b77387cabd85d4aad43a00ee582"
+        },
+        {
+            "path": "src/renderer/src/features/chat/path-tail.ts",
+            "sha": "28e3adaded0c776f0b902c42654db678e4195e0f"
+        },
+        {
+            "path": "src/renderer/src/features/chat/tool-display.test.ts",
+            "sha": "d7f4ab5e9c430ca9a2e5eb273b4b8c0888582ffd"
+        },
+        {
+            "path": "src/renderer/src/features/chat/tool-display.ts",
+            "sha": "da98a265f883e634fd20dcdb818874b6d9de8cdc"
+        },
+        {
+            "path": "src/renderer/src/features/chat/tool-result-state.test.ts",
+            "sha": "d239346696dcdecc777f11068763a92a17cc692c"
+        },
+        {
+            "path": "src/renderer/src/features/chat/tool-result-state.ts",
+            "sha": "98c5d30b4b7d0f7b5d1c2976097b698f2c2177e3"
+        },
+        {
+            "path": "src/renderer/src/features/chat/transcript-announcements.ts",
+            "sha": "0fb44963ee75397eb09b0b3ec9ec50375490d975"
+        },
+        {
+            "path": "src/renderer/src/features/chat/TranscriptAnnouncer.test.tsx",
+            "sha": "bdba2086129394081a1841d97dd671164ffff2cb"
+        },
+        {
+            "path": "src/renderer/src/features/chat/TranscriptAnnouncer.tsx",
+            "sha": "78d5cbc558ab5e0e51e86fac1fb4b3f1de1aedc4"
+        },
+        {
+            "path": "src/renderer/src/features/chat/transcript-context.ts",
+            "sha": "122f32f514594a14dae2c8f211c10e112f513d5f"
+        },
+        {
+            "path": "src/renderer/src/features/session/LivePane.o2.test.tsx",
+            "sha": "821c0958c3ea8ea73401c3e21d3b4686e88dbc64"
+        },
+        {
+            "path": "src/renderer/src/features/session/LivePane.progress.test.tsx",
+            "sha": "7ebc0b4a743e1cce8a644cecab1ab16753837c94"
+        },
+        {
+            "path": "src/renderer/src/features/session/LivePane.tsx",
+            "sha": "0d965f960eabe379c3d7d9ebddeb2e57dc62f868"
+        },
+        {
+            "path": "src/renderer/src/features/session/running-session-store.test.ts",
+            "sha": "99130a8e7c817a6bb9af19692167e1598ff9cce3"
+        },
+        {
+            "path": "src/renderer/src/features/session/running-session-store.ts",
+            "sha": "c7e639dec245566d0644b6132c3e5634727492dd"
+        },
+        {
+            "path": "src/renderer/src/features/session/session-view.summary.test.ts",
+            "sha": "8337e3667c9de85a454b0450a703fb1d37dba4ca"
+        },
+        {
+            "path": "src/renderer/src/features/session/session-view.ts",
+            "sha": "40b20e9a8bb49e6fccb63c5a76176fece2f20fac"
+        },
+        {
+            "path": "src/renderer/src/features/shell/panel-tabs.ts",
+            "sha": "b4ff30058a1043f32a614e546f3e4fdee1b75988"
+        },
+        {
+            "path": "src/renderer/src/stores/ui.ts",
+            "sha": "311efbbebe8951ac9c62ec1095c8de2305788511"
+        },
+        {
+            "path": "src/renderer/src/test-support/tool-result-mock.ts",
+            "sha": "8e2415628c0346451ef41feb76e34e3c0028999c"
+        },
+        {
+            "path": "tests/docs/query-mutation-methods.test.ts",
+            "sha": "94b4385d07c4898afbcc7e1b74de4ee260ebfeea"
+        },
+        {
+            "path": "tests/rule-fixtures/b-equivalent/sdk-query-background-tasks.ts.fixture",
+            "sha": "1cb99a027d00cabe127e645dae1664034f1b76fa"
+        },
+        {
+            "path": "tests/rule-fixtures/b-equivalent/sdk-query-read-file.ts.fixture",
+            "sha": "78c9aa15f9a77cf76690488d30f64a2856ed53c4"
+        },
+        {
+            "path": "tests/rule-fixtures/b-equivalent/sdk-query-reload-output-styles.ts.fixture",
+            "sha": "0aead737035c4e297d3e26a0a78bbfb46197ad7b"
+        },
+        {
+            "path": "tests/rule-fixtures/expected.mjs",
+            "sha": "16327ca806e3f5dac59a28d06c0f11dcc4cd7203"
+        }
+    ],
+    "fr_coverage": [],
+    "viewpoint_coverage": {
+        "A": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+        "B": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+        "C": "Critical:0 High:0 Medium:0 Low:0 (platform-boundary)",
+        "D": "Critical:0 High:0 Medium:0 Low:0 (platform-boundary)",
+        "E": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+        "F": "Critical:0 High:0 Medium:1 Low:3",
+        "G": "\u8a72\u5f53\u306a\u3057: optional reviewer \u306a\u3057",
+        "H": "Critical:0 High:0 Medium:1 Low:0"
+    },
+    "tracks": {
+        "lint-agent": {
+            "violations": 0,
+            "exit_code": 0,
+            "detectors": [
+                "eslint",
+                "typecheck",
+                "depcruise",
+                "check:constitution"
+            ]
+        },
+        "test-agent": {
+            "passed": 3059,
+            "failed": 0,
+            "exit_code": 0,
+            "scope": "full"
+        },
+        "convention-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "lint_input": "lint-agent"
+        },
+        "platform-boundary-reviewer": {
+            "critical": 0,
+            "high": 0,
+            "medium": 0,
+            "low": 0
+        }
+    },
+    "skipped_reviewers": [
+        {
+            "name": "a11y-reviewer",
+            "reason": "gates=['pr-gate'] \u306b code-gate \u304c\u7121\u3044"
+        },
+        {
+            "name": "ux-reviewer",
+            "reason": "gates=['pr-gate'] \u306b code-gate \u304c\u7121\u3044"
+        },
+        {
+            "name": "database-reviewer",
+            "reason": "auto_invoke_patterns \u306b\u4e00\u81f4\u3059\u308b\u5909\u66f4\u30d5\u30a1\u30a4\u30eb\u304c\u7121\u3044 (\u5909\u66f4 91 \u4ef6 / pattern 5 \u4ef6)"
+        }
+    ],
+    "cascade_demotions": 0,
+    "iter_history": [
+        {
+            "iter": 1,
+            "must_fix": 0,
+            "skipped": 0,
+            "error": 0
+        },
+        {
+            "iter": 2,
+            "must_fix": 0,
+            "skipped": 0,
+            "error": 0
+        },
+        {
+            "iter": 3,
+            "must_fix": 1,
+            "skipped": 0,
+            "error": 0,
+            "applied": 1
+        },
+        {
+            "iter": 4,
+            "must_fix": 0,
+            "skipped": 0,
+            "error": 0
+        },
+        {
+            "iter": 5,
+            "must_fix": 0,
+            "skipped": 0,
+            "error": 0
+        }
+    ],
+    "verdict": "PASS"
+}

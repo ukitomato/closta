@@ -24,6 +24,7 @@ import {
   ToolGroupTrigger,
 } from "@/components/assistant-ui/elements/tool-group.aui";
 import { TooltipIconButton } from "@/components/tooltip-icon-button";
+import { TranscriptBoundary } from "@/components/assistant-ui/elements/transcript-boundary";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -33,6 +34,8 @@ import {
   COMPOSER_LABELS,
   permissionModeName,
   pluginRowText,
+  QUIET_SYSTEM_EVENT_STATUSES,
+  refusalRowText,
   SYSTEM_EVENT_CATEGORY_LABELS,
   SYSTEM_EVENT_LABELS,
   SYSTEM_EVENT_STATUS_LABELS,
@@ -85,7 +88,9 @@ import {
   ChevronRightIcon,
   CopyIcon,
   DownloadIcon,
+  BanIcon,
   FoldVerticalIcon,
+  InfoIcon,
   KeyRoundIcon,
   type LucideIcon,
   MicIcon,
@@ -93,6 +98,8 @@ import {
   PencilIcon,
   PuzzleIcon,
   RefreshCwIcon,
+  RotateCcwIcon,
+  ScissorsIcon,
   ShieldIcon,
   SquareIcon,
   TimerIcon,
@@ -619,7 +626,16 @@ const ThreadMessage: FC = () => {
 
 /** `convert.ts` がシステムイベントの行に付ける印 (`metadata.custom.systemEvent`)。 */
 const isSystemEventMessageState = (s: AssistantState): boolean =>
-  s.message.metadata.custom["systemEvent"] === true;
+  s.message.metadata.custom["systemEvent"] === true || isHistoryBoundary(s);
+
+/**
+ * 過去ログの圧縮の境界 (domain の divider を `convert.ts` が data part 1 つに写したメッセージ。行の印は付かない)。実行中の行と
+ * 同じ `SystemEventRow` (→ `TranscriptBoundary`) で描く (O-6 / 016 data-model §1「過去ログの圧縮」)。
+ */
+const isHistoryBoundary = (s: AssistantState): boolean => {
+  const data = systemEventDataOf(s);
+  return isSystemEventFields(data) && data.category === "compact-boundary";
+};
 
 /** 仮想化パスの assistant の枠: システムイベントの行を振り分ける (ThreadMessage と同じ規則)。 */
 const AssistantOrSystemEvent: FC = () => {
@@ -1010,7 +1026,6 @@ const UserImagePart: ImageMessagePartComponent = (part) => (
  * system メッセージの最小表示 (R-3。コンパクション境界などの区切り)。
  *
  * 会話の主役ではないので action bar を付けず、中央寄せの控えめな体裁にする。
- * 専用 element は対応表 A 節の割当 (O-6)。
  */
 const SystemText: TextMessagePartComponent = ({ text }) => (
   <span className="aui-system-text">{text}</span>
@@ -1047,9 +1062,13 @@ const systemEventDataOf = (s: AssistantState): unknown => {
  * - Hook: detail (`hook_event`) のまま
  * - 認証: 出さない (detail は常に空。状態ごとの文は案内の段。O-5 / 015 data-model §4)
  * - プラグイン: 導入中の印・数・最後のマーケットプレイスの名前 (`decodePluginDetail`。形が合わなければ出さない)
+ * - 拒否: 固定の文 (モデル名・この応答だけ・分類の訳。`refusalRowText`。説明・本文は別の段)
+ * - 知らせ: detail (本文の規則を通した 1 行) のまま
+ * - 境界 (圧縮・作り直し): 行ではなく `TranscriptBoundary` が描くので出さない
  */
 function systemEventDetailText(
   category: SystemEventCategory,
+  name: string,
   detail: string,
   status: SystemEventStatus | null,
 ): string {
@@ -1074,8 +1093,19 @@ function systemEventDetailText(
       const plugin = decodePluginDetail(detail);
       return plugin === null ? "" : pluginRowText(plugin, status);
     }
+    case "refusal":
+      return refusalRowText(status, name, detail).text;
+    case "informational":
+      return detail;
+    case "compact-boundary":
+    case "conversation-reset":
+      return "";
   }
 }
+
+/** 本文を折り返して全文を出す行 (`truncate` しない。拒否の説明・知らせの本文は 120 コードポイントで切れている。U-3)。 */
+const isWrappedCategory = (category: SystemEventCategory): boolean =>
+  category === "refusal" || category === "informational";
 
 /** task の行の進み具合の文言 (O-4 / 014 data-model §4「進み具合」)。task でない・進み具合が無い・復号できなければ null。 */
 function taskProgressText(
@@ -1096,6 +1126,10 @@ const SYSTEM_EVENT_ICONS: Readonly<Record<SystemEventCategory, LucideIcon>> = {
   "permission-mode": ShieldIcon,
   auth: KeyRoundIcon,
   plugin: PuzzleIcon,
+  "compact-boundary": ScissorsIcon,
+  "conversation-reset": RotateCcwIcon,
+  refusal: BanIcon,
+  informational: InfoIcon,
 };
 
 /**
@@ -1123,12 +1157,22 @@ const SystemEventRow: FC = () => {
   if (!isSystemEventFields(raw)) return null;
 
   const { category, name, detail, status } = raw;
+  // 会話の境界は横いっぱいの区切り (O-6)。行の体裁・状態の文言・案内は持たない。
+  if (category === "compact-boundary" || category === "conversation-reset") {
+    return <TranscriptBoundary category={category} detail={detail} />;
+  }
   const unresolved = settled && !isTerminalSystemEventStatus(status);
   const statusText = unresolved
     ? SYSTEM_EVENT_LABELS.outcomeUnknown
-    : status === null
+    : status === null || QUIET_SYSTEM_EVENT_STATUSES.has(status)
       ? null
       : SYSTEM_EVENT_STATUS_LABELS[status];
+  const wrapped = isWrappedCategory(category);
+  // 止まった・注意の知らせは目立たせ、通常の知らせは控えめに (016 data-model §1「見た目」)。
+  const attention =
+    category === "refusal" ||
+    (category === "informational" &&
+      (status === "prevented" || status === "warning"));
   const failed = status === "failed";
   const Icon = SYSTEM_EVENT_ICONS[category];
   // 失敗した Hook には設定とログ、失敗・強制停止した task には起動した tool の呼び出しの表示を案内する (pr-gate R2 ux L-004)
@@ -1139,8 +1183,10 @@ const SystemEventRow: FC = () => {
         ? SYSTEM_EVENT_LABELS.taskFailedGuidance
         : category === "auth"
           ? authRowText(status, unresolved)
-          : null;
-  const detailText = systemEventDetailText(category, detail, status);
+          : category === "refusal"
+            ? refusalRowText(status, name, detail).body || null
+            : null;
+  const detailText = systemEventDetailText(category, name, detail, status);
   const progressText = taskProgressText(category, detail);
 
   return (
@@ -1149,9 +1195,16 @@ const SystemEventRow: FC = () => {
       data-role="system-event"
       data-category={category}
       data-status={unresolved ? "unresolved" : (status ?? "none")}
+      data-tone={attention ? "attention" : "quiet"}
       className="fade-in animate-in motion-reduce:animate-none px-2 duration-150 [contain-intrinsic-size:auto_32px] [content-visibility:auto]"
     >
-      <div className="text-muted-foreground flex min-w-0 items-center gap-2 text-xs">
+      <div
+        className={cn(
+          "flex min-w-0 gap-2 text-xs",
+          wrapped ? "flex-wrap items-start" : "items-center",
+          attention ? "text-foreground" : "text-muted-foreground",
+        )}
+      >
         <Icon aria-hidden className="size-3.5 shrink-0" />
         <span className="shrink-0 font-medium">
           {SYSTEM_EVENT_CATEGORY_LABELS[category]}
@@ -1161,11 +1214,13 @@ const SystemEventRow: FC = () => {
           <span
             data-slot="system-event-detail"
             className={cn(
-              "truncate",
+              // 拒否・知らせの本文は折り返して全文を出す (O-6)。それ以外は 1 行で切り詰める。
+              wrapped ? "min-w-0 wrap-break-word" : "truncate",
               // 権限モードの行の detail は文なので、幅を固定せずに縮める (切り詰めた全文は title)。
-              category === "permission-mode" || category === "plugin"
-                ? "min-w-0"
-                : "max-w-40 shrink-0",
+              !wrapped &&
+                (category === "permission-mode" || category === "plugin"
+                  ? "min-w-0"
+                  : "max-w-40 shrink-0"),
             )}
             title={detailText}
           >
@@ -1196,7 +1251,7 @@ const SystemEventRow: FC = () => {
             {statusText}
           </Badge>
         ) : null}
-        {name !== "" ? (
+        {name !== "" && category !== "refusal" ? (
           <span
             data-slot="system-event-name"
             className="text-muted-foreground min-w-0 truncate"

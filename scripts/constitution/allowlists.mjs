@@ -426,7 +426,9 @@ export const SANCTIONED_SETTINGS_WRAPPER = 'assertHelperSettings'
  *   (P3 の範囲内の締め付けなので ADR は要らない。015 research R-06)
  * - `getContextUsage` / `usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET` は読み取りだが、
  *   [AD-047](../../docs/decisions/0047-session-meter-and-failure-reasons.md) Decision 4 が呼ばないと決めたので足した
- *   (O-5 pr-gate R1 MD-10)。`close` は `promptQueue.close()` と綴りが衝突するため足さない
+ *   (O-5 pr-gate R1 MD-10)。
+ * - `readFile` はアプリが呼ばないと [AD-049](../../docs/decisions/0049-boundaries-retraction-and-o11-split.md) Decision 6 で決めたので足した
+ *   (016 BE-040 / FR-018)。`close` は `promptQueue.close()` と綴りが衝突するため足さない
  *
  * 集合は `tests/docs/query-mutation-methods.test.ts` が固定し、`src/agents/sdk-agent-session.ts` の
  * `QueryMutationMethod` (型の union) と一致させる。**外すには ADR が要る** (足すのは P3 の範囲内で ADR 不要)。
@@ -452,7 +454,8 @@ export const QUERY_MUTATION_METHODS = [
   'reloadOutputStyles',
   'backgroundTasks',
   'getContextUsage',
-  'usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET'
+  'usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET',
+  'readFile'
 ]
 
 /**

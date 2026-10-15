@@ -1,0 +1,185 @@
+import { act, render } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { axe } from 'vitest-axe'
+
+import { TranscriptAnnouncer } from './TranscriptAnnouncer'
+import type { AnnounceableMessage } from './transcript-announcements'
+
+/**
+ * O-6 FE-031 — 読み上げ (016 spec US-3 AC3 / SC-003。data-model §4「読み上げ」)。偽の時計で 1 秒のまとめ方を確かめる。
+ */
+
+const thread: { messages: AnnounceableMessage[] } = { messages: [] }
+
+vi.mock('@assistant-ui/react', () => ({
+  useAuiState: (selector: (s: unknown) => unknown) => selector({ thread })
+}))
+
+const toolCall = (
+  id: string,
+  toolName: string,
+  over: { result?: string; isError?: boolean } = { result: 'x', isError: true }
+): AnnounceableMessage => ({
+  id: `m-${id}`,
+  content: [
+    { type: 'tool-call', toolCallId: id, toolName, result: over.result, isError: over.isError }
+  ]
+})
+
+const row = (
+  id: string,
+  category: string,
+  status: string | null,
+  detail = 'SECRET-DETAIL'
+): AnnounceableMessage => ({
+  id,
+  content: [
+    {
+      type: 'data',
+      name: 'system-event',
+      data: { category, opens: true, name: 'SECRET-NAME', detail, status }
+    }
+  ]
+})
+
+const text = (container: HTMLElement): string =>
+  container.querySelector('[data-slot="transcript-announcer"]')?.textContent ?? ''
+
+function update(
+  view: ReturnType<typeof render>,
+  messages: AnnounceableMessage[],
+  advanceMs = 0
+): void {
+  thread.messages = messages
+  act(() => {
+    view.rerender(<TranscriptAnnouncer />)
+    vi.advanceTimersByTime(advanceMs)
+  })
+}
+
+beforeEach(() => {
+  vi.useFakeTimers()
+  thread.messages = []
+})
+
+afterEach(() => {
+  vi.useRealTimers()
+})
+
+describe('TranscriptAnnouncer (US-3 AC3)', () => {
+  it('aria-live="polite" の領域が 1 つあり、最初は空', () => {
+    thread.messages = [toolCall('t0', 'Bash')]
+    const view = render(<TranscriptAnnouncer />)
+    const region = view.container.querySelector('[aria-live]')
+    expect(region).toHaveAttribute('aria-live', 'polite')
+    expect(view.container.querySelectorAll('[aria-live]')).toHaveLength(1)
+    // 最初の描画の時点にあるエラーは読まない
+    expect(text(view.container)).toBe('')
+  })
+
+  it('新しく届いた tool のエラーを読む。tool 名は形に合うときだけ出す', () => {
+    const view = render(<TranscriptAnnouncer />)
+    update(view, [{ id: 'u', content: [{ type: 'text', text: 'hi' }] }])
+    update(view, [...thread.messages, toolCall('t1', 'Bash')])
+    expect(text(view.container)).toBe('Bash がエラーになりました')
+    vi.advanceTimersByTime(1500)
+    update(view, [...thread.messages, toolCall('t2', 'Evil <b>name</b> /etc/passwd')])
+    expect(text(view.container)).toBe('tool がエラーになりました')
+  })
+
+  it('結果の無い tool・エラーでない結果・結果不明は読まない', () => {
+    const view = render(<TranscriptAnnouncer />)
+    update(view, [{ id: 'u', content: [] }])
+    update(view, [
+      ...thread.messages,
+      toolCall('t1', 'Bash', { result: undefined, isError: false }),
+      toolCall('t2', 'Bash', { result: 'ok', isError: false })
+    ])
+    expect(text(view.container)).toBe('')
+  })
+
+  it('圧縮・会話の作り直し・拒否・prevented の知らせ・Hook / task の終わりを読む。本文は入れない', () => {
+    const cases: readonly [AnnounceableMessage, string][] = [
+      [row('r1', 'compact-boundary', 'marked'), 'ここでコンテキストを圧縮しました'],
+      [row('r2', 'conversation-reset', 'marked'), 'ここから新しい会話です'],
+      [row('r3', 'refusal', 'no-fallback'), 'モデルが応答を拒否しました'],
+      [row('r4', 'informational', 'prevented'), 'ここで止まりました'],
+      [row('r5', 'hook', 'failed'), 'Hook が失敗'],
+      [row('r6', 'task', 'completed'), 'Background task が完了']
+    ]
+    const view = render(<TranscriptAnnouncer />)
+    update(view, [{ id: 'u', content: [] }])
+    for (const [message, expected] of cases) {
+      update(view, [...thread.messages, message], 1500)
+      expect(text(view.container)).toBe(expected)
+      expect(text(view.container)).not.toMatch(/SECRET/)
+    }
+  })
+
+  it('notice / warning の知らせと O-4 / O-5 の行・実行中の Hook は読まない', () => {
+    const view = render(<TranscriptAnnouncer />)
+    update(view, [{ id: 'u', content: [] }])
+    update(view, [
+      ...thread.messages,
+      row('i1', 'informational', 'notice'),
+      row('i2', 'informational', 'warning'),
+      row('i3', 'api-retry', 'retrying'),
+      row('i4', 'compaction', 'compacting'),
+      row('i5', 'permission-mode', 'changed'),
+      row('i6', 'auth', 'authenticating'),
+      row('i7', 'plugin', 'succeeded'),
+      row('i8', 'hook', 'started')
+    ])
+    expect(text(view.container)).toBe('')
+  })
+
+  it('Hook の行が終わりの状態に変わったときに読む', () => {
+    const view = render(<TranscriptAnnouncer />)
+    update(view, [{ id: 'u', content: [] }, row('h1', 'hook', 'started')])
+    update(view, [{ id: 'u', content: [] }, row('h1', 'hook', 'succeeded')])
+    expect(text(view.container)).toBe('Hook が成功')
+  })
+
+  it('「さらに表示」で先頭に足された古いメッセージは読まない', () => {
+    const view = render(<TranscriptAnnouncer />)
+    update(view, [{ id: 'u', content: [] }, toolCall('t1', 'Bash')])
+    update(view, [toolCall('old', 'Read'), { id: 'u', content: [] }, toolCall('t1', 'Bash')])
+    expect(text(view.container)).toBe('')
+  })
+
+  it('並列の 10 件のエラーは 1 秒に 1 文以下で件数の文になる', () => {
+    const view = render(<TranscriptAnnouncer />)
+    update(view, [{ id: 'u', content: [] }])
+    update(view, [...thread.messages, toolCall('t0', 'Bash')])
+    expect(text(view.container)).toBe('Bash がエラーになりました')
+    // 同じ 1 秒の間に 9 件。まだ読まれない
+    let messages = thread.messages
+    for (let i = 1; i < 10; i += 1) {
+      messages = [...messages, toolCall(`t${i}`, 'Bash')]
+      update(view, messages, 50)
+    }
+    expect(text(view.container)).toBe('Bash がエラーになりました')
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+    expect(text(view.container)).toBe('9 件の tool がエラーになりました')
+  })
+
+  it('種類が混ざると「{n} 件の知らせがあります」', () => {
+    const view = render(<TranscriptAnnouncer />)
+    update(view, [{ id: 'u', content: [] }])
+    update(view, [
+      ...thread.messages,
+      toolCall('t1', 'Bash'),
+      row('r1', 'refusal', 'no-fallback'),
+      row('r2', 'conversation-reset', 'marked')
+    ])
+    expect(text(view.container)).toBe('3 件の知らせがあります')
+  })
+
+  it('vitest-axe の違反 0', async () => {
+    vi.useRealTimers()
+    const view = render(<TranscriptAnnouncer />)
+    expect((await axe(view.container)).violations).toEqual([])
+  })
+})

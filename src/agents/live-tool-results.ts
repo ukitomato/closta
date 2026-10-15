@@ -33,6 +33,28 @@ export interface LiveToolResultTracker {
   applyUserMessage(raw: unknown): readonly TranscriptMessageDTO[]
   /** 覚えているメッセージの数 (テスト用の観測点)。 */
   pendingMessageCount(): number
+  /**
+   * 取り消し (O-6 / 016 data-model §1「戻らない仕組み」)。該当のメッセージを忘れ、その結果待ちの `toolUseId` を覚えて
+   * (以後の結果を送り直しにも結果だけのメッセージにもしない)、取り消した id の assistant を後から送らないようにする。
+   * 冪等。送った assistant の id に当たらなかった件数を返す (開発用のログ用)。
+   */
+  retract(messageIds: readonly string[]): { readonly unmatched: number }
+  /** 取り消した id か (後から届いた assistant を送らない判定)。 */
+  isRetracted(messageId: string): boolean
+}
+
+/** 取り消した id と、取り消したメッセージの結果待ちの `toolUseId`、送った assistant の id の記憶の上限。 */
+export const MAX_RETRACTION_MEMORY = 512
+
+/** 挿入順の上限つきの集合 (超えたら古いものから捨てる)。 */
+function addBounded(set: Set<string>, value: string): void {
+  set.delete(value)
+  set.add(value)
+  while (set.size > MAX_RETRACTION_MEMORY) {
+    const oldest = set.values().next().value
+    if (oldest === undefined) break
+    set.delete(oldest)
+  }
 }
 
 function asRecord(v: unknown): Record<string, unknown> | null {
@@ -63,6 +85,10 @@ export function createLiveToolResultTracker(): LiveToolResultTracker {
   const pendingToolCalls = new Map<string, string>()
   const lastMessages = new Map<string, TranscriptMessageDTO>()
 
+  const retractedMessages = new Set<string>()
+  const retractedToolCalls = new Set<string>()
+  const sentAssistants = new Set<string>()
+
   const forget = (messageId: string): void => {
     const message = lastMessages.get(messageId)
     if (message === undefined) return
@@ -76,6 +102,12 @@ export function createLiveToolResultTracker(): LiveToolResultTracker {
   return {
     trackAssistant(message) {
       const ids = pendingToolCallIds(message)
+      if (retractedMessages.has(message.id)) {
+        // 取り消した id の assistant を後で受けた (送らない)。その tool の結果も捨てる。
+        for (const id of ids) addBounded(retractedToolCalls, id)
+        return
+      }
+      addBounded(sentAssistants, message.id)
       if (ids.length === 0) return
       forget(message.id)
       lastMessages.set(message.id, message)
@@ -88,7 +120,8 @@ export function createLiveToolResultTracker(): LiveToolResultTracker {
     },
 
     applyUserMessage(raw) {
-      const results = toolResultsOf(raw)
+      // 取り消したメッセージの tool の結果は捨てる (送り直しにも結果だけのメッセージにもしない)。
+      const results = toolResultsOf(raw).filter((r) => !retractedToolCalls.has(r.toolUseId))
       if (results.length === 0) return []
 
       // 対象のメッセージごとにまとめる (送り直しを 1 メッセージ 1 回にする)。
@@ -126,6 +159,24 @@ export function createLiveToolResultTracker(): LiveToolResultTracker {
 
     pendingMessageCount() {
       return lastMessages.size
+    },
+
+    retract(messageIds) {
+      let unmatched = 0
+      for (const messageId of messageIds) {
+        if (!sentAssistants.has(messageId) && !retractedMessages.has(messageId)) unmatched += 1
+        addBounded(retractedMessages, messageId)
+        const message = lastMessages.get(messageId)
+        if (message !== undefined) {
+          for (const id of pendingToolCallIds(message)) addBounded(retractedToolCalls, id)
+        }
+        forget(messageId)
+      }
+      return { unmatched }
+    },
+
+    isRetracted(messageId) {
+      return retractedMessages.has(messageId)
     }
   }
 }

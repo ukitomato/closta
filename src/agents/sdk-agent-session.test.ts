@@ -537,6 +537,108 @@ describe('sdk-agent-session: tool の結果と Hook / task の行 (O-2 / BE-024)
   })
 })
 
+describe('sdk-agent-session: 会話の境界・拒否・取り消しの配線 (O-6 / 016 tasks BE-011 / BE-012)', () => {
+  interface Ev {
+    kind: string
+    message?: { id: string; parts: Record<string, unknown>[] }
+    meter?: { type: string; messageIds?: string[] }
+  }
+  const evs = (): Ev[] => events() as Ev[]
+
+  async function runTurn(feed: Record<string, unknown>[]): Promise<void> {
+    const send = await boot('normal', feed)
+    send(launch)
+    await vi.waitFor(() => expect(h.preMessageConsumed).toBe(true))
+    send(control({ kind: 'send-prompt', text: 'go' }))
+    await vi.waitFor(() => expect(states()).toContain('done'))
+  }
+
+  const assistantWithTools = (
+    uuid: string,
+    toolIds: string[],
+    extra: Record<string, unknown> = {}
+  ): Record<string, unknown> => ({
+    type: 'assistant',
+    uuid,
+    parent_tool_use_id: null,
+    message: { content: toolIds.map((id) => ({ type: 'tool_use', id, name: 'Bash', input: {} })) },
+    ...extra
+  })
+
+  it('conversation_reset と compact_boundary は行になり、new_conversation_id などを送らない', async () => {
+    await runTurn([
+      { type: 'conversation_reset', uuid: 'r1', new_conversation_id: 'LEAK-conv', session_id: 's' },
+      {
+        type: 'system',
+        subtype: 'compact_boundary',
+        uuid: 'c1',
+        compact_metadata: {
+          trigger: 'manual',
+          pre_tokens: 9,
+          post_tokens: 3,
+          preserved_segment: 'LEAK-seg'
+        }
+      }
+    ])
+    const ids = evs()
+      .filter((e) => e.kind === 'message')
+      .map((e) => e.message?.id)
+    expect(ids).toEqual(['reset:r1', 'compact-boundary:c1'])
+    expect(posted.some((p) => (p.payload ?? '').includes('LEAK-'))).toBe(false)
+  })
+
+  it('supersedes の retraction は代わりのメッセージの message より前に届く', async () => {
+    await runTurn([
+      assistantWithTools('old1', ['tu1']),
+      assistantWithTools('new1', [], { supersedes: ['old1'] })
+    ])
+    const order = evs()
+      .filter((e) => e.kind === 'message' || e.meter?.type === 'retraction')
+      .map((e) =>
+        e.kind === 'message' ? e.message?.id : `retraction:${e.meter?.messageIds?.join(',')}`
+      )
+    expect(order).toEqual(['old1', 'retraction:old1', 'new1'])
+  })
+
+  it('取り消した後に結果が届いても同じ id の message も結果だけのメッセージも送らず、取り消した id の assistant を後で受けても送らない', async () => {
+    await runTurn([
+      assistantWithTools('old1', ['tu1']),
+      assistantWithTools('new1', [], { supersedes: ['old1'] }),
+      {
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [{ type: 'tool_result', tool_use_id: 'tu1', content: 'r' }]
+        },
+        parent_tool_use_id: null
+      },
+      assistantWithTools('old1', ['tu1'])
+    ])
+    const ids = evs()
+      .filter((e) => e.kind === 'message')
+      .map((e) => e.message?.id)
+    expect(ids).toEqual(['old1', 'new1'])
+  })
+
+  it('model_refusal_fallback の retracted_message_uuids も retraction になる (行には入れない)', async () => {
+    await runTurn([
+      assistantWithTools('old1', ['tu1']),
+      {
+        type: 'system',
+        subtype: 'model_refusal_fallback',
+        uuid: 'f1',
+        retracted_message_uuids: ['old1', 'old1'],
+        fallback_model: 'claude-sonnet-4-5'
+      }
+    ])
+    const retractions = evs().filter((e) => e.meter?.type === 'retraction')
+    expect(retractions).toHaveLength(1)
+    expect(retractions[0]?.meter?.messageIds).toEqual(['old1'])
+    const row = evs().find((e) => e.message?.id === 'refusal:f1')
+    expect(JSON.stringify(row)).not.toContain('old1')
+  })
+})
+
 describe('sdk-agent-session: live-signals の配線 (O-4 / 014 tasks BE-004 / BE-012 / BE-020 / BE-040 / BE-042)', () => {
   async function runTurn(feed: Record<string, unknown>[]): Promise<void> {
     const send = await boot('normal', feed)

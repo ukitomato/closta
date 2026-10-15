@@ -16,6 +16,7 @@ related_adrs:
   - docs/decisions/0043-single-supervisor-session-threads-and-session-limit.md
   - docs/decisions/0044-ui-coverage-assignment.md
   - docs/decisions/0047-session-meter-and-failure-reasons.md
+  - docs/decisions/0049-boundaries-retraction-and-o11-split.md
 related_specs:
   - specs/002-session-cross-folder-session-enumeration/spec.md
   - specs/005-session-launch-and-streaming/spec.md
@@ -27,6 +28,7 @@ related_specs:
   - specs/012-ui-thread-search/spec.md
   - specs/014-ui-metering-and-limits/spec.md
   - specs/015-ui-mcp-elicitation-commands/spec.md
+  - specs/016-ui-boundaries-and-tool-displays/spec.md
 ---
 
 # Domain Charter: session
@@ -143,6 +145,17 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
   [015 data-model §2](../../../specs/015-ui-mcp-elicitation-commands/data-model.md)
 - **稼働中のストアの `meters`**: セッションごとの計量の最新の値 (O-4)。**永続化しない**。セッションを閉じたら捨て (`close()`)、
   起動の設定・プリセットに書き戻さない。計量は KPI の計測には使わない
+- **取り消し (`retraction`)**: `meter` の種類の 1 つ (O-6 / [AD-049](../../decisions/0049-boundaries-retraction-and-o11-split.md) Decision 2。
+  `METER_UPDATE_TYPES` 8 → 9)。モデルの拒否で置き換えられた応答の message の id の列 (形の検査を通した 1 件に 128 件まで) を運び、
+  稼働中のストアが同じセッションの `messages` から外す。**稼働中のストアに初めての削除の経路**。外した id はセッションごとに上限つき (512) で
+  覚え、後から同じ id の `message` が届いても足さない。閉じたセッションには書かず、`close()` で記憶を消す。承認の要求 (`pending`) は消さない。
+  O-4 の上限・間引き・`finish()` の破棄に掛けない。過去ログは記録のまま。規則の正本は
+  [016 data-model §1](../../../specs/016-ui-boundaries-and-tool-displays/data-model.md)
+- **セッションスレッドの `system` の分岐**: O-6 が agents (`sdk-agent-session.ts` の `onSystem`) に 4 つの subtype (`compact_boundary` /
+  `informational` / `model_refusal_fallback` / `model_refusal_no_fallback`) と、最上位の `conversation_reset` の分岐を足した。どれも
+  システムイベントの行の経路 (`message`) で運び、`SessionEvent` の種類・`TRANSCRIPT_PART_FIELDS` は変えない。`informational` などの本文は
+  伏せ字 (`redactSecrets`。domain) を通し、読まないフィールドは運ばない (許可リストの正本は 016 data-model §1)。`conversation_reset` の
+  `new_conversation_id` は読まない (アプリは SDK の会話の id を追っていない。/clear の後の id の扱いは X-6 に申し送り)
 
 詳細は [docs/glossary.md](../../glossary.md) を参照。
 
@@ -222,6 +235,7 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
 - [AD-034](../../decisions/0034-transcript-read-path-and-process-boundary.md) — transcript の読み取り経路とプロセス境界
 - [AD-043](../../decisions/0043-single-supervisor-session-threads-and-session-limit.md) — 単一 supervisor・セッションスレッド・同時実行数の上限 (X-5)
 - [AD-047](../../decisions/0047-session-meter-and-failure-reasons.md) — 計量 (`meter`) と失敗の理由のキーを session の契約に足す (O-4。ui の feature が本 domain の契約を広げた。U-1)
+- [AD-049](../../decisions/0049-boundaries-retraction-and-o11-split.md) — 拒否の取り消し (`meter` の `retraction`)・`informational` の本文の伏せ字・項目 16 の `readFile`・O-11 への分割 (O-6。ui の feature が本 domain の契約を広げた。U-6)
 
 ## Related Specs
 
@@ -272,6 +286,17 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
   本 domain の契約を広げた: `meter` の種類 `init-report` / `commands` (`METER_UPDATE_TYPES` 6 → 8。`SessionEvent` の種類は変えない)・
   システムイベントの行の category `auth` / `plugin`・稼働中のストアの `meters` の構成 (`initReport` / `commands`。永続化しない)。
   承認の応答 (`toPermissionResult`) と `Query` の呼び出しは変えない）
+- **O-6 (ui)** — [会話の境界と tool の専用表示の第 2 弾](../../../specs/016-ui-boundaries-and-tool-displays/spec.md)
+  （本 domain の feature ではない。U-6 (2026-10-05 に利用者が承認。[AD-049](../../decisions/0049-boundaries-retraction-and-o11-split.md)) で、
+  本 domain の契約と操作 UI に手を入れた: agents の `system` の 4 つの subtype と最上位の `conversation_reset` の分岐・`meter` の種類
+  `retraction` (`METER_UPDATE_TYPES` 8 → 9。`SessionEvent` の種類は変えない)・稼働中のストアからのメッセージの削除 (取り消し)・
+  システムイベントの行の category の追加。Constitution 検証の項目 16 の `QUERY_MUTATION_METHODS` に `readFile` を足し (21 → 22)、
+  `sdk-agent-session.ts` の `queryHandle` の型を `interrupt` と非同期の反復だけに絞った。承認の応答 (`toPermissionResult`) と
+  `PermissionRequest` は変えない）
+- **O-11 (ui)** — Hook・背景の task・実行中の subagent と知らせの類の表示 ([roadmap の O-11 の行](../../roadmap.md))。O-6 の design で
+  分けた ui の feature。**ADR の義務は本 domain の境界にある** (`includeHookEvents` = query の options の追加・`getSubagentMessages` = Agent SDK の
+  呼び出しの許可リストの追加・`get_hooks_listing`。[AD-049](../../decisions/0049-boundaries-retraction-and-o11-split.md) Decision 1) ので、
+  O-11 の ADR は本 charter にも記録する。未着手
 - **O-10** — Claude Code からの問いに答える UI と composer のコマンドの候補 ([roadmap の O-10 の行](../../roadmap.md))。O-5 の design で
   分けた本 domain の feature (015 spec U-1 / [AD-048](../../decisions/0048-session-config-display-and-answer-ui-split.md) Decision 1)。
   design の前に AD-036 Decision 4 と AD-041 (g) の読み替えの ADR を起こす。未着手
