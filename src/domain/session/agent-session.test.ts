@@ -5,7 +5,8 @@ import {
   isLaunchFailureReason,
   LAUNCH_FAILURE_REASONS,
   toPermissionResult,
-  type PermissionDecision
+  type PermissionDecision,
+  type PermissionRequest
 } from './agent-session'
 
 describe('toPermissionResult (正の構成 P2)', () => {
@@ -43,6 +44,18 @@ describe('toPermissionResult (正の構成 P2)', () => {
         }
       }
     }
+  })
+})
+
+describe('PermissionRequest のフィールドの集合 (O-6 SC-005。足すと session の契約が変わる)', () => {
+  it('requestId / toolName / input / scope の 4 つだけ (toolUseId を足さない)', () => {
+    const req: Record<keyof PermissionRequest, true> = {
+      requestId: true,
+      toolName: true,
+      input: true,
+      scope: true
+    }
+    expect(Object.keys(req).sort()).toEqual(['input', 'requestId', 'scope', 'toolName'])
   })
 })
 

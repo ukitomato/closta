@@ -41,6 +41,12 @@ describe('summarizeToolInput — 表の各行', () => {
     expect(detailOf('NotebookEdit', { file_path: '/w/x.ipynb' })).toBe('')
   })
 
+  it('末尾が区切りのパスは最後の要素 (016 data-model §2 / pathTail の移設)', () => {
+    expect(detailOf('Read', { file_path: '/home/u/proj/bin/' })).toBe('bin')
+    expect(detailOf('Edit', { file_path: 'C:\\dev\\proj\\' })).toBe('proj')
+    expect(bash('./bin/ --x')).toBe('bin')
+  })
+
   it('Agent / Task は subagent の種類 (安全な文字だけ)', () => {
     expect(detailOf('Agent', { subagent_type: 'Explore', prompt: '秘密の依頼 sk-abc' })).toBe(
       'Explore'

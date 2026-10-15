@@ -2,9 +2,11 @@ import type { LaunchFailureReason, SessionEvent } from '@domain/session/agent-se
 import type { SafePermissionMode } from '@domain/session/launch-config'
 import {
   contextTokensOf,
+  isMeterModelId,
   isValidTaskId,
   isValidToolUseId,
   MAX_METER_PERMISSION_DENIALS,
+  MAX_RETRACTION_IDS,
   toAssistantErrorKey,
   toCostUsd,
   toCount,
@@ -29,7 +31,12 @@ import {
   type InitReportMeter,
   type SessionInitReportInput
 } from '@domain/session/session-init-report'
-import { encodeRetryDetail, encodeTaskProgress } from '@domain/session/system-event'
+import {
+  encodeRetryDetail,
+  encodeTaskProgress,
+  redactedBodyLine,
+  SYSTEM_EVENT_NAME_MAX_CODE_POINTS
+} from '@domain/session/system-event'
 import type { SystemEventCategory, SystemEventStatus } from '@domain/session/transcript-dto'
 
 import {
@@ -98,18 +105,45 @@ function rowEvent(
   category: SystemEventCategory,
   opens: boolean,
   detail: string,
-  status: SystemEventStatus | null
+  status: SystemEventStatus | null,
+  name = ''
 ): SessionEvent {
   return {
     kind: 'message',
     message: {
       id,
       role: 'system',
-      parts: [{ type: 'system-event', category, opens, name: '', detail, status }],
+      parts: [{ type: 'system-event', category, opens, name, detail, status }],
       createdAt: null
     }
   }
 }
+
+/* ── O-6 の行の値の照合 (016 data-model §1。`Object.hasOwn` の表で引き、外れたら `-`) ───── */
+
+const TRIGGERS: Readonly<Record<string, true>> = { manual: true, auto: true }
+const DIRECTIONS: Readonly<Record<string, true>> = { retry: true, revert: true, sticky: true }
+const SCOPES: Readonly<Record<string, true>> = { session: true, local: true }
+const WARNING_LEVELS: Readonly<Record<string, true>> = { warning: true, suggestion: true }
+const REFUSAL_CATEGORY_SHAPE = /^[a-z_-]{1,32}$/
+
+/** 表の鍵に合う文字列ならそれ、そうでなければ `-` (`constructor` / `__proto__` / 空白を含む値を通さない)。 */
+function pickKey(table: Readonly<Record<string, true>>, raw: unknown): string {
+  return typeof raw === 'string' && Object.hasOwn(table, raw) ? raw : '-'
+}
+
+/** 0 以上の安全な整数なら文字列、そうでなければ `-`。 */
+function countToken(raw: unknown): string {
+  return typeof raw === 'number' && Number.isSafeInteger(raw) && raw >= 0 ? String(raw) : '-'
+}
+
+/** 拒否の分類。形の検査を通ったときだけ (外れたら '')。 */
+function refusalCategory(raw: unknown): string {
+  return typeof raw === 'string' && REFUSAL_CATEGORY_SHAPE.test(raw) ? raw : ''
+}
+
+/** 取り消しの指示 1 回で見る id の件数の上限 (巨大な配列の走査を縛る)。 */
+const MAX_RETRACTION_SCAN = 4096
 
 /** result がターンの完了か (`classifyResult` と同じ規則。`subtype === 'success'` かつ `is_error === false` のときだけ)。 */
 function isCompletedResult(record: Record<string, unknown> | null): boolean {
@@ -190,6 +224,18 @@ export interface LiveSignalsDeps {
   /** `sdk-agent-session.ts` の `emit` (文字列にして調停役スレッドへ送る)。 */
   readonly emit: (event: SessionEvent) => void
   readonly clock: LiveSignalsClock
+  /**
+   * 取り消し (O-6 / 016 data-model §1「取り消し」) の指示を受けた。`meter` の `retraction` を送った後に、形の検査を通した
+   * id (重複なし) と件数 (指示の件数・形で落とした件数) を渡す。tool の結果の追跡 (`live-tool-results.ts`) に外させ、
+   * 開発用のログに件数だけ残すのは呼び出し側。
+   */
+  readonly onRetract?: (info: RetractionInfo) => void
+}
+
+export interface RetractionInfo {
+  readonly ids: readonly string[]
+  readonly instructed: number
+  readonly dropped: number
 }
 
 /** 各メソッドは SDK のメッセージ (未信頼) を構造だけで受ける。例外を投げない。 */
@@ -206,6 +252,10 @@ export interface LiveSignals {
   onRateLimit(message: unknown): void
   /** 最上位の `auth_status` (読むのは `isAuthenticating` と `error` の有無だけ。015 data-model §4)。 */
   onAuthStatus(message: unknown): void
+  /** 最上位の `conversation_reset` (`uuid` だけを読む。`new_conversation_id` は読まない。016 data-model §1)。 */
+  onConversationReset(message: unknown): void
+  /** assistant の `supersedes` (未信頼)。`retraction` の `meter` を即時に送る。代わりのメッセージを送る前に呼ぶ。 */
+  onRetraction(rawIds: unknown): void
   /** `tool_progress`。 */
   onToolProgress(message: unknown): void
   /** 間引きの保留と timer を捨て、以後は何も送らない。何度呼んでもよい。 */
@@ -524,6 +574,103 @@ export function createLiveSignals(deps: LiveSignalsDeps): LiveSignals {
     openPlugin = null
   }
 
+  /**
+   * 取り消しの指示 (assistant の `supersedes` と `model_refusal_fallback` の `retracted_message_uuids`。未信頼) →
+   * `meter` の `retraction` (128 件ごとに分けて即時に送る。`meter-throttle` にも種類ごとの合流にも掛けない)。
+   * 形の外れた id は 1 件ずつ落とし、重複は 1 つにする。配列でなければ何もしない。
+   */
+  const retractIds = (raw: unknown): void => {
+    if (disposed || !Array.isArray(raw)) return
+    const list = raw as readonly unknown[]
+    const seen = new Set<string>()
+    const ids: string[] = []
+    const scanned = Math.min(list.length, MAX_RETRACTION_SCAN)
+    for (let i = 0; i < scanned; i += 1) {
+      const id = list[i]
+      if (!isValidToolUseId(id) || seen.has(id)) continue
+      seen.add(id)
+      ids.push(id)
+    }
+    for (let i = 0; i < ids.length; i += MAX_RETRACTION_IDS) {
+      send({
+        kind: 'meter',
+        meter: { type: 'retraction', messageIds: ids.slice(i, i + MAX_RETRACTION_IDS) }
+      })
+    }
+    deps.onRetract?.({ ids, instructed: list.length, dropped: list.length - ids.length })
+  }
+
+  /** `system` / `compact_boundary` → 圧縮の境界の行 (016 data-model §1。`compact_metadata` の 3 つだけを読む)。 */
+  const onCompactBoundary = (record: Record<string, unknown>): void => {
+    const uuid = record.uuid
+    if (!isValidToolUseId(uuid)) return
+    const meta = asRecord(record.compact_metadata)
+    const detail = `${pickKey(TRIGGERS, meta?.trigger)} ${countToken(meta?.pre_tokens)} ${countToken(meta?.post_tokens)}`
+    send(rowEvent(`compact-boundary:${uuid}`, 'compact-boundary', true, detail, 'marked'))
+  }
+
+  /**
+   * `system` / `model_refusal_fallback` → 取り消しと拒否の行 (016 data-model §1)。読むのは `direction`・`scope`・
+   * `fallback_model`・`api_refusal_category`・`api_refusal_explanation` と、取り消しに使う `retracted_message_uuids` だけ。
+   */
+  const onRefusalFallback = (record: Record<string, unknown>): void => {
+    retractIds(record.retracted_message_uuids)
+    const uuid = record.uuid
+    if (!isValidToolUseId(uuid)) return
+    const scope =
+      record.scope === undefined || record.scope === null
+        ? 'session'
+        : pickKey(SCOPES, record.scope)
+    const category = refusalCategory(record.api_refusal_category)
+    const head = `${pickKey(DIRECTIONS, record.direction)} ${scope} ${category === '' ? '-' : category}`
+    // 説明は先頭の 3 トークンと空白 1 つを除いた残りの長さで切り詰める (`detail` 全体が 120 コードポイントを超えない)。
+    const explanation = redactedBodyLine(
+      record.api_refusal_explanation,
+      SYSTEM_EVENT_NAME_MAX_CODE_POINTS - head.length - 1
+    )
+    const detail = explanation === '' ? head : `${head} ${explanation}`
+    const model = isMeterModelId(record.fallback_model) ? record.fallback_model : ''
+    send(rowEvent(`refusal:${uuid}`, 'refusal', true, detail, 'fallback', model))
+  }
+
+  /** `system` / `model_refusal_no_fallback` → 拒否の行 (`content`・`api_refusal_category`・`api_refusal_explanation` だけを読む)。 */
+  const onRefusalNoFallback = (record: Record<string, unknown>): void => {
+    const uuid = record.uuid
+    if (!isValidToolUseId(uuid)) return
+    const texts = [record.content, record.api_refusal_explanation].filter(
+      (v): v is string => typeof v === 'string' && v !== ''
+    )
+    const detail = redactedBodyLine(texts.join('\n'))
+    send(
+      rowEvent(
+        `refusal:${uuid}`,
+        'refusal',
+        true,
+        detail,
+        'no-fallback',
+        refusalCategory(record.api_refusal_category)
+      )
+    )
+  }
+
+  /**
+   * `system` / `informational` → 知らせの行 (`content`・`level`・`prevent_continuation`・`tool_use_id` を読む)。同じ
+   * `tool_use_id` は同じ行の id にして renderer の合成で 1 行にまとめる。
+   */
+  const onInformational = (record: Record<string, unknown>): void => {
+    const uuid = record.uuid
+    if (!isValidToolUseId(uuid)) return
+    const toolUseId = record.tool_use_id
+    const id = isValidToolUseId(toolUseId) ? `info:${toolUseId}` : `info:${uuid}`
+    const status: SystemEventStatus =
+      record.prevent_continuation === true
+        ? 'prevented'
+        : typeof record.level === 'string' && Object.hasOwn(WARNING_LEVELS, record.level)
+          ? 'warning'
+          : 'notice'
+    send(rowEvent(id, 'informational', true, redactedBodyLine(record.content), status))
+  }
+
   /** `user` の `tool_result` ブロックの `tool_use_id` だけを読み、その tool の経過時間の保留を取り消す (本文は読まない)。 */
   const cancelToolsWithResults = (record: Record<string, unknown>): void => {
     const content = asRecord(record.message)?.content
@@ -603,6 +750,18 @@ export function createLiveSignals(deps: LiveSignalsDeps): LiveSignals {
         case 'task_progress':
           onTaskProgress(record)
           break
+        case 'compact_boundary':
+          onCompactBoundary(record)
+          break
+        case 'model_refusal_fallback':
+          onRefusalFallback(record)
+          break
+        case 'model_refusal_no_fallback':
+          onRefusalNoFallback(record)
+          break
+        case 'informational':
+          onInformational(record)
+          break
       }
     },
     onRateLimit: (message) => {
@@ -630,9 +789,20 @@ export function createLiveSignals(deps: LiveSignalsDeps): LiveSignals {
       if (record === null || record.type !== 'auth_status') return
       onAuth(record)
     },
+    onConversationReset: (message) => {
+      const record = asRecord(message)
+      if (record === null || record.type !== 'conversation_reset') return
+      // 読むのは `uuid` だけ (`new_conversation_id` は読まない。016 data-model §1)。
+      const uuid = record.uuid
+      if (!isValidToolUseId(uuid)) return
+      send(rowEvent(`reset:${uuid}`, 'conversation-reset', true, '', 'marked'))
+    },
+    onRetraction: (rawIds) => {
+      retractIds(rawIds)
+    },
     onToolProgress: (message) => {
       const record = asRecord(message)
-      // 主ループの tool だけ (subagent の中の tool の入れ子は O-6)。読むのは `tool_use_id` と `elapsed_time_seconds` だけ
+      // 主ループの tool だけ (subagent の中の tool の入れ子は O-11)。読むのは `tool_use_id` と `elapsed_time_seconds` だけ
       // (`tool_name`・`heartbeat`・`subagent_*`・`task_id` は読まない。014 data-model §2)。
       if (record === null || record.type !== 'tool_progress' || !isMainLoop(record)) return
       const toolUseId = record.tool_use_id

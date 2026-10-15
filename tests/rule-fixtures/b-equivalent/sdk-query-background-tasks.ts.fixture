@@ -1,0 +1,11 @@
+import { query } from '@anthropic-ai/claude-agent-sdk'
+
+/**
+ * 違反サンプル (016 / AD-036 §4 P3)。
+ *
+ * **`Query` の `backgroundTasks` を呼ぶ。** 1 つのメソッドだけを呼び、項目 16 の他の綴りを含めない。
+ */
+export async function bad(): Promise<void> {
+  const q = query({ prompt: 'hi' })
+  await q.backgroundTasks()
+}

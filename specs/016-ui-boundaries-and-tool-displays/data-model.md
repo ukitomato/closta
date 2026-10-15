@@ -48,7 +48,7 @@ category と status の列挙の正本は `transcript-dto.ts` (`SYSTEM_EVENT_CAT
 | `Bearer` / `Basic` | `B Bearer\s+[A-Za-z0-9._~+/=-]{8,}`・`B Basic\s+[A-Za-z0-9+/]{8,}={0,2}` (`Basic` は大文字小文字を区別し、数字か `+` / `/` / `=` を含むものだけ) | トークン |
 | 秘密の名前への代入 | `[A-Za-z0-9_-]*(token\|secret\|password\|passwd\|pwd\|api[_-]?key\|access[_-]?key\|client[_-]?secret\|private[_-]?key)["']?\s*[:=]\s*["']?[^\s"',;}]+` (名前の前の英数字と `_` / `-` を許し `GITHUB_TOKEN` に当てる。JSON の引用符を許す) | 値 |
 | 空白で区切ったフラグ | `--(password\|token\|api-key\|secret)[ =]\S+`、`(mysql\|mysqldump\|mysqladmin\|mariadb)\b[^\n]*?\s-p\S+` | 値 |
-| 既知のトークン | `B` の後の `sk-[A-Za-z0-9_-]{16,}`・`(sk\|rk)_(live\|test)_[A-Za-z0-9]{16,}`・`gh[pousr]_[A-Za-z0-9]{16,}`・`github_pat_[A-Za-z0-9_]{20,}`・`glpat-[A-Za-z0-9_-]{16,}`・`xox[abeprs]-[A-Za-z0-9-]{10,}`・`xapp-[A-Za-z0-9-]{10,}`・`AIza[A-Za-z0-9_-]{16,}`・`ya29\.[A-Za-z0-9_-]{16,}`・`npm_[A-Za-z0-9]{16,}`・`hf_[A-Za-z0-9]{16,}`・`(AKIA\|ASIA)[0-9A-Z]{16}`・JWT `eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}(\.[A-Za-z0-9_-]+)?` | トークン全体 |
+| 既知のトークン | `B` の後の `sk-[A-Za-z0-9_-]{16,}`・`(sk\|rk)_(live\|test)_[A-Za-z0-9]{16,}`・`gh[pousr]_[A-Za-z0-9]{16,}`・`github_pat_[A-Za-z0-9_]{20,}`・`glpat-[A-Za-z0-9_-]{16,}`・`xox[abeprs]-[A-Za-z0-9-]{10,}`・`xapp-[A-Za-z0-9-]{10,}`・`AIza[A-Za-z0-9_-]{16,}`・`ya29\.[A-Za-z0-9_-]{16,}`・`npm_[A-Za-z0-9]{16,}`・`hf_[A-Za-z0-9]{16,}`・`(AKIA\|ASIA)[0-9A-Z]{16}`・JWT `eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}(\.[A-Za-z0-9_-]+)?` (`B` の後。正規表現ではなく前から 1 回走査する関数で探す。`-eyJ…` の繰り返しでも線形) | トークン全体 |
 | PEM | `-----BEGIN [A-Z ]*PRIVATE KEY-----` から `-----END [A-Z ]*PRIVATE KEY-----` か本文の終わりまで | 全体 |
 
 - **正本は 1 か所**: 既存の `secret-scan.ts` (`SECRET_PREFIX_PATTERNS`) の接頭辞の集合が本表に含まれることを固定テストにする (寄せるのは別 feature)

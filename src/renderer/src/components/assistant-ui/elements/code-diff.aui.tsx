@@ -10,6 +10,8 @@ import {
   parseWriteArgs,
   type MultiEditItem,
 } from "@/features/chat/tool-args";
+import type { ToolResultState } from "@/features/chat/tool-result-state";
+import { useToolResultState } from "@/features/chat/transcript-context";
 import { cn } from "@/lib/utils";
 import { codeScroll, codeSurface, mono } from "./surfaces";
 import { ToolFallback } from "./tool-fallback.aui";
@@ -85,6 +87,7 @@ function DiffShell({
   filePath,
   toolCallId,
   pending,
+  state,
   truncated,
   isError,
   result,
@@ -94,6 +97,8 @@ function DiffShell({
   toolCallId: string;
   /** 結果待ちか (経過時間の印。O-4)。 */
   pending: boolean;
+  /** 結果の状態の印 (O-6)。 */
+  state: ToolResultState;
   truncated: boolean;
   isError: boolean | undefined;
   result: unknown;
@@ -110,6 +115,7 @@ function DiffShell({
         <ToolResultMarks
           toolCallId={toolCallId}
           pending={pending}
+          state={state}
           isError={isError}
           truncated={truncated}
           className="ms-auto"
@@ -123,9 +129,11 @@ function DiffShell({
 
 const CodeDiffImpl: ToolCallMessagePartComponent = (props) => {
   const { toolName, argsText } = props;
+  const resultState = useToolResultState(props);
   const shell = {
     toolCallId: props.toolCallId,
-    pending: props.result === undefined,
+    pending: resultState.pending,
+    state: resultState.state,
     truncated: isTruncatedArgs(props.args),
     isError: props.isError,
     result: props.result,

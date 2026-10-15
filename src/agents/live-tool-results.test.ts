@@ -236,3 +236,46 @@ describe('live-tool-results: 結果を同じ id のメッセージに埋めて�
     expect(t.applyUserMessage(user(null, 1, 'x'))).toEqual([])
   })
 })
+
+describe('live-tool-results: 取り消し (O-6 BE-012 / 016 data-model §1)', () => {
+  it('取り消した後に結果が届いても、送り直しにも結果だけのメッセージにもしない', () => {
+    const t = createLiveToolResultTracker()
+    t.trackAssistant(assistant('m1', 'tu1'))
+    expect(t.retract(['m1'])).toEqual({ unmatched: 0 })
+    expect(t.pendingMessageCount()).toBe(0)
+    expect(t.applyUserMessage(user(result('tu1', 'ok')))).toEqual([])
+  })
+
+  it('取り消していない tool の結果は今までどおり (同じ user メッセージの別の結果)', () => {
+    const t = createLiveToolResultTracker()
+    t.trackAssistant(assistant('m1', 'tu1'))
+    t.trackAssistant(assistant('m2', 'tu2'))
+    t.retract(['m1'])
+    const out = t.applyUserMessage(user(result('tu1', 'a'), result('tu2', 'b')))
+    expect(out.map((m) => m.id)).toEqual(['m2'])
+  })
+
+  it('取り消した id の assistant を後で受けても送らない判定になり、その tool の結果も捨てる', () => {
+    const t = createLiveToolResultTracker()
+    t.retract(['m1'])
+    expect(t.isRetracted('m1')).toBe(true)
+    t.trackAssistant(assistant('m1', 'tu1'))
+    expect(t.pendingMessageCount()).toBe(0)
+    expect(t.applyUserMessage(user(result('tu1', 'ok')))).toEqual([])
+  })
+
+  it('冪等。同じ id を続けて取り消しても例外が出ず、当たらなかった件数を数える', () => {
+    const t = createLiveToolResultTracker()
+    t.trackAssistant(assistant('m1'))
+    expect(t.retract(['m1', 'm1', 'unknown'])).toEqual({ unmatched: 1 })
+    expect(t.retract(['m1'])).toEqual({ unmatched: 0 })
+    expect(t.isRetracted('other')).toBe(false)
+  })
+
+  it('取り消した id の記憶は上限 512 (古いものから捨てる)', () => {
+    const t = createLiveToolResultTracker()
+    t.retract(Array.from({ length: 513 }, (_, i) => `m${i}`))
+    expect(t.isRetracted('m0')).toBe(false)
+    expect(t.isRetracted('m512')).toBe(true)
+  })
+})

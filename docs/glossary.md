@@ -86,7 +86,7 @@ total_terms: 99
 - **Domain**: 外部概念 (SDK)。表示は `ui`。**状態の一覧は持たない** (session も ui も task の状態の表を保持しない。
   1 行の状態は transcript のメッセージの中にだけある。O-2 USER 決定 2026-10-03)
 - **Counterexamples**: 前景の task (`is_backgrounded` が true でない。subagent の呼び出しなど) は行にしない — 既存の表示
-  (Subagent・tool の結果) がある。実行中の task の一覧 (`background_tasks_changed`) は O-6 で要否を判断する
+  (Subagent・tool の結果) がある。実行中の task の一覧 (`background_tasks_changed`) は O-11 で要否を判断する
 - **Ref**: [011 spec](../specs/011-ui-coverage/spec.md) FR-008 / FR-009
 
 #### **Browse session**
@@ -419,7 +419,9 @@ total_terms: 99
 - **日本語表記**: フック
 - **Domain**: 外部概念 (SDK)。表示は `ui`
 - **Counterexamples**: SDK は既定では SessionStart / Setup の Hook だけを emit する。PreToolUse などの Hook を出すには
-  query の options (`includeHookEvents`) が要り、そのキー集合は AD-041 (g) で固定されている (一般の Hook の表示は O-6)
+  query の options (`includeHookEvents`) が要り、そのキー集合は AD-041 (g) で固定されている (一般の Hook の表示は O-11)。
+  知らせ (`informational`。下の Informational notice) の本文には Hook の feedback が入りうる。O-2 の「出力本文を出さない」
+  規則の**例外**として、伏せ字・1 行・切り詰めを通して出す (U-3)。出所 (Hook か SDK 自身か) は見分けない
 - **Ref**: [011 spec](../specs/011-ui-coverage/spec.md) FR-008
 
 #### **HostPath**
@@ -439,6 +441,17 @@ total_terms: 99
 - **Domain**: `session`
 - **Counterexamples**: 監視ビュー (Monitoring view) とは対になる語。監視ビューで行を選ぶと、没入ビューの内容が切り替わる
 - **Ref**: [010 spec](../specs/010-session-monitoring-view/spec.md) Key Entities
+
+#### **Informational notice（知らせ）**
+
+- **Definition**: SDK の `system` の subtype `informational` が運ぶ、モデルの応答ではない通知 (O-6)。transcript の
+  システムイベントの行 (category `informational`) として 1 つにつき 1 行で出す。**出所 (Hook か SDK 自身か) を見分けない**。
+  行の見た目の段階は status で表す: `prevented` (続行を止めた。「ここで止まりました」) / `warning` / `notice`
+- **日本語表記**: 知らせ
+- **Domain**: `ui` (表示)。行の組み立ては session (agents)
+- **Counterexamples**: Hook の出力本文の表示ではない (Hook の本文は出さない。一般の Hook の表示は O-11)。本文は伏せ字と
+  長さの規則を通した 1 行で、全文ではない (U-3 の例外。data-model §1「本文の規則」)
+- **Ref**: [016 data-model](../specs/016-ui-boundaries-and-tool-displays/data-model.md) §1
 
 #### **Isolation badge**
 
@@ -582,9 +595,12 @@ total_terms: 99
 
 - **Definition**: 実行中のセッションの「どれだけ使ったか・何に止められたか・今何をしているか」の最新の値 (O-4)。
   `SessionEvent` の種類 `meter` でセッションスレッドから renderer に届き、稼働中のストアの `meters` にセッションごとの最新の値として持つ。
-  - 種類 (`type`) は 8 つ: `turn` (費用の累計・ターン数・モデルごとのトークン・拒否の件数) / `context` (コンテキストの使用量の推定の材料) /
+  - 種類 (`type`) は 9 つ (O-6 が `retraction` を足した。下の項): `turn` (費用の累計・ターン数・モデルごとのトークン・拒否の件数) / `context` (コンテキストの使用量の推定の材料) /
     `rate-limit` / `permission-mode` / `thinking` (思考のトークン数) / `tool-elapsed` (tool の経過時間) /
-    `init-report` (セッションの構成。SessionInitReport。O-5) / `commands` (スラッシュコマンドの名前・説明・引数の形。O-5)
+    `init-report` (セッションの構成。SessionInitReport。O-5) / `commands` (スラッシュコマンドの名前・説明・引数の形。O-5) /
+    `retraction` (message の id の列。O-6)
+  - `retraction` は**最新の値ではなく 1 回限りの指示**: 置き換えられた assistant メッセージを稼働中のストアから外す。
+    `meters` に持たず、届いた順に全部当てる。間引き・合流に掛けず即時に送る (id は `^[A-Za-z0-9_-]{1,128}$`、1 件に 1〜128 件)
   - **運ぶのは数・真偽・列挙・モデルの id・形を検証した tool の id と、形の検査を通った未信頼の名前と、無害化して切り詰めた説明だけ (AD-048 Decision 3)**。
     会話由来の文字列・エラー文・パスを運ばない
   - 高頻度のもの (思考・tool の経過時間・task の進み具合) はセッションスレッドで鍵ごとに 1 秒に 1 回まで間引く。`init-report` / `commands` は
@@ -618,6 +634,16 @@ total_terms: 99
 - **日本語表記**: モデルカタログ
 - **Domain**: `provider`
 - **Ref**: [AD-042](decisions/0042-provider-type-refinement-and-d4-lapse.md) Decision 1
+
+### O
+
+#### **O-11**
+
+- **Definition**: roadmap の feature「Hook・背景の task・実行中の subagent と知らせの類の表示」(M3・domain `ui`。O-6 の後に登録)。
+  O-6 が送った一般の Hook の表示・実行中の task の一覧・`tool_progress` などを扱う (範囲の正本は roadmap と
+  [016 spec](../specs/016-ui-boundaries-and-tool-displays/spec.md) の「本 feature の位置づけ」)
+- **Domain**: `ui`
+- **Ref**: [roadmap](roadmap.md)
 
 ### P
 
@@ -759,6 +785,17 @@ total_terms: 99
   `RuntimePath` と 2 段になる
 - **Domain**: `runtime`
 - **Ref**: [AD-004](decisions/0004-branded-path-types.md)
+
+#### **Retraction（取り消し）**
+
+- **Definition**: 実行中の transcript から、後で別の応答に置き換えられた assistant メッセージを外す指示 (O-6)。
+  合図は assistant メッセージの `supersedes` と `model_refusal_fallback` の `retracted_message_uuids` の 2 つ (どちらも冪等)。
+  Meter の種類 `retraction` で agents から renderer に届き、稼働中のストアは外した id を覚えて後から同じ id が届いても足さない
+- **日本語表記**: 取り消し
+- **Domain**: `session` (契約と agents での送出) / 表示は `ui` (稼働中のストア)
+- **Counterexamples**: O-4 の保留 (pending) の取り消しとは別物。承認の要求 (`pending`) は消さない。
+  結果だけの行 (`result:<toolUseId>`) は対象外。過去ログは外さない (記録は残る)
+- **Ref**: [016 data-model](../specs/016-ui-boundaries-and-tool-displays/data-model.md) §1「取り消し」
 
 #### **Running session list（稼働中セッション一覧）**
 
@@ -992,7 +1029,7 @@ total_terms: 99
 
 - **Definition**: transcript の中で Hook / Background task などの出来事を **1 つにつき 1 行**で示す表示 (O-2)。DTO は
   `TranscriptPartDTO` の `system-event`。同じ出来事の後続のイベントは同じ行に合成する (`mergeSystemEvent`)。
-  行を作れるのは Hook の開始・応答、task の開始と、下の O-4 の 3 つ・O-5 の 2 つの category の出来事だけで、行の無い id への更新は捨てる。
+  行を作れるのは Hook の開始・応答、task の開始と、下の O-4 の 3 つ・O-5 の 2 つ・O-6 の 4 つの category の出来事だけで、行の無い id への更新は捨てる。
   終わりの来ない行は、セッションの終了・失敗の後と過去ログで「結果不明」と描く
   - O-4 で、実行中のセッションだけの category を 3 つ足した: API の再試行 (`api-retry`。同じターンの再試行は 1 行を書き換える)・
     コンテキストの圧縮 (`compaction`。圧縮中 → 成功 / 失敗)・権限モード (`permission-mode`。権限モードが変わったことを 1 行)。
@@ -1000,6 +1037,9 @@ total_terms: 99
   - O-4 で、task の行に進み具合 (トークン・tool の回数・経過時間) を同じ行の更新として足した。task の種類は残す
   - O-5 で、実行中のセッションだけの category を 2 つ足した: 認証 (`auth`。認証中 → 成功 / 失敗。`output` / `error` の文字列は出さない)・
     プラグイン (`plugin`。マーケットプレイスの導入の進み具合を 1 行で書き換える)。行の組み立ては O-4 と同じく agents に置く
+  - O-6 で、実行中のセッションだけの category を 4 つ足した (category 7 → 11): 圧縮の境界 (`compact-boundary`)・会話の作り直し
+    (`conversation-reset`) — この 2 つは TranscriptBoundary で描く — と、モデルの拒否 (`refusal`。fallback / no fallback)・
+    知らせ (`informational`)。本 feature の status (`marked` / `fallback` / `no-fallback` / `prevented` / `warning` / `notice`) はすべて 1 回の出来事で終わりを表す
 - **日本語表記**: システムイベントの行
 - **Domain**: `ui` (表示)。経路 (agents での変換) は session
 - **Counterexamples**: assistant の発話ではない — コピーなどの操作や応答中の印を付けない。状態の一覧 (task の表) ではない —
@@ -1023,7 +1063,7 @@ total_terms: 99
 - **Counterexamples**: 面の状態 (`focus`・設定・畳み) は `stores/ui.ts` の 1 か所にあり、session のコンポーネントは書かない
   (例外は [ui charter](domains/ui/charter.md) の「面の状態」)。
   画面の ID (`SCREENS`) は O-7 で無くなった。「見ているセッション」(`watchedId`) は `focus` から導く (中央に稼働中の会話を出していて、
-  設定のダイアログも起動ダイアログも開いていないときの選択中のセッション。定義の正本は 013 data-model §1 の `watchedIdOf`。
+  設定のダイアログも起動ダイアログも開いていないときの選択中のセッション。O-6 の読み上げ (`TranscriptAnnouncer`) の対象はこのセッションだけ。定義の正本は 013 data-model §1 の `watchedIdOf`。
   O-7 pr-gate R2 architecture M-102)。`focus` は中央にどちらの側を出すかであり、キーボードのフォーカス
   (DOM のフォーカス) ではない。コードの "Pane" (`CenterPane` / `LivePane`) は面の語の「ペイン」(右のペイン。コードは `RightPanel`) ではない。
   OS のシェル (Bash・ログインシェル・`--exec` でシェルを経由しない・transcript の `local_bash`「シェルのコマンド」) とは別 —
@@ -1059,6 +1099,28 @@ total_terms: 99
   O-2 で、transcript の情報密度が comfortable のとき既定で開き、compact のとき既定で閉じる (AD-035 Trade-off への回答)
 - **日本語表記**: tool のまとまり
 - **Domain**: `ui`
+
+#### **Tool result state（tool の結果の状態）**
+
+- **Definition**: tool の呼び出しの結果が今どうなっているか (O-6)。**結果あり** / **結果あり (別に表示)** / **結果待ち** /
+  **結果不明** の 4 つで、renderer の純関数 `toolResultState` が part ごとに判定する。すべての tool の表示に印を出す。
+  結果待ちは「見ているターンが進行中で結果がまだ来ていない」、結果不明は「応答が終わった・中断・終了・失敗・過去ログ・前のターンで、結果が来なかった」
+- **日本語表記**: 結果待ち / 結果不明
+- **Domain**: `ui`
+- **Counterexamples**: assistant-ui の part の状態 (`running` / `requires-action` / `incomplete`) ではない (使わない)。
+  tool の成功・失敗 (`isError`) とは別の軸
+- **Ref**: [016 data-model](../specs/016-ui-boundaries-and-tool-displays/data-model.md) §3
+
+#### **TranscriptBoundary（会話の境界）**
+
+- **Definition**: transcript の中の、会話が区切られたことを示す横いっぱいの区切り (O-6)。圧縮の境界 (**コンパクション境界 /
+  Compaction boundary** と同じもの。category `compact-boundary`。過去ログの divider も同じ element に写す) と、会話の作り直し
+  (`conversation-reset`) の 2 つ。既存の「セッションの境界」(セッションの始まりと終わり) とは別で、1 つのセッションの中の区切りである
+- **日本語表記**: 会話の境界 (圧縮の境界)
+- **Domain**: `ui` (表示)。行の組み立ては session (agents)
+- **Counterexamples**: O-4 の圧縮の「行」(`compaction`。圧縮中 → 成功 / 失敗の進行) とは別 — 行が先、境界が後に並ぶ。
+  registry の Day separator (日付の区切り) とは意味が違う。会話の作り直しの境界は「コンテキストに無い」と断定しない
+- **Ref**: [016 data-model](../specs/016-ui-boundaries-and-tool-displays/data-model.md) §1
 
 #### **Transcript density（transcript の情報密度）**
 
@@ -1159,7 +1221,8 @@ total_terms: 99
   識別子はディストロ粒度で持つ (`unc:<distro>`)
 - **Domain**: `runtime`
 - **Counterexamples**: 登録・永続化・IPC が渡すパスの形ではない。
-  **UNC 形式は `infra` の内側に閉じる**
+  **UNC 形式は `infra` の内側に閉じる**。会話の本文の中の UNC の綴り (tool の入力のパスなど。O-2 / O-6 が表示のためだけに切る)
+  は WslUncPath ではない (AD-049 Decision 5)
 - **Ref**: [AD-025](decisions/0025-workspace-folder-carries-location.md)
 
 ## Detected synonyms (要統一)

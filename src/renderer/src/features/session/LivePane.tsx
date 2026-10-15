@@ -8,9 +8,11 @@ import { EmptyState, EmptyStateGreeting } from '@/components/assistant-ui/elemen
 import { GenerationLoader } from '@/components/assistant-ui/elements/loading-state'
 import { Thread } from '@/components/assistant-ui/elements/thread.aui'
 import { Button } from '@/components/ui/button'
+import { TranscriptAnnouncer } from '@/features/chat/TranscriptAnnouncer'
 import {
   createMcpServerNamesReader,
   LiveProgressContext,
+  ToolResultThreadContext,
   TranscriptSettledContext,
   useMcpServerNamesOf,
   type LiveProgressSource
@@ -142,6 +144,10 @@ function LiveSessionPane({
   const terminal = session.terminal
   const errored = session.failureReason !== null || session.runState === 'error'
   const progress = useLiveProgressSource(session.sessionId)
+  const toolResultThread = useMemo(
+    () => ({ live: true, runState: session.runState }),
+    [session.runState]
+  )
   // 承認カードの MCP の tool の補助の見出しは transcript と同じサーバー名の一覧で分ける (O-5 / 015 data-model §1)。
   const mcpServerNames = useMcpServerNamesOf(progress)
   // 承認カードは応答すると消える。押したボタンがカードの中にあれば、消す前に composer へ移す (O-4 FR-019)。
@@ -223,11 +229,16 @@ function LiveSessionPane({
          * (quickstart 実機不具合。claude は初回 user メッセージまで無出力なので UI 側が起点)。
          */}
         <DraftBridge session={draftSource} threadId={session.sessionId} />
+        {/* 見ているセッションの新しい出来事の読み上げ (O-6 / 016 data-model §4)。ペインはセッションごとに作り直す。 */}
+        <TranscriptAnnouncer />
         {/* 終了・失敗の後は、終わりの来ないシステムイベントの行を「結果不明」で描く (O-2 / FR-009)。 */}
         <TranscriptSettledContext.Provider value={session.ended || errored}>
           {/* tool の経過時間と思考のトークン数は Thread の外側から購読元を渡す (O-4 / 014 data-model §4「進み具合」)。 */}
           <LiveProgressContext.Provider value={progress}>
-            <Thread components={{ Welcome: SessionWelcome }} />
+            {/* tool の結果の状態 (結果待ち / 結果不明。O-6 / 016 data-model §3) の前提。 */}
+            <ToolResultThreadContext.Provider value={toolResultThread}>
+              <Thread components={{ Welcome: SessionWelcome }} />
+            </ToolResultThreadContext.Provider>
           </LiveProgressContext.Provider>
         </TranscriptSettledContext.Provider>
       </div>

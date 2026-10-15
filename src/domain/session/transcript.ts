@@ -1,4 +1,5 @@
 import { sanitizeBody, TOOL_RESULT_MAX_BYTES } from './sanitize-body'
+import { redactSecrets } from './secret-redaction'
 import { mergeSystemEvent, systemEventPartOf, toSystemEventMessage } from './system-event'
 import { orphanResultPart, readToolResult } from './tool-result'
 import type {
@@ -202,7 +203,7 @@ export function toTranscriptMessages(
       }
     }
 
-    // コンパクション境界を最小の区切りで示す (FR-018)。専用 element は対応表 A 節の割当 (O-6)。
+    // コンパクション境界を最小の区切りで示す (FR-018)。
     if (role === 'system' && isCompactBoundary(rec.message)) {
       parts.push({ type: 'divider', label: 'コンテキストを圧縮' })
     }
@@ -212,7 +213,10 @@ export function toTranscriptMessages(
       if (!b) continue
       switch (b.type) {
         case 'text': {
-          parts.push({ type: 'text', text: sanitizeBody(b.text).value })
+          // `system` の記録の本文 (informational / local_command_output / 拒否) は伏せ字を当てる (O-6 data-model §1)。
+          // assistant / user の本文は今のまま。行は足さない。
+          const body = sanitizeBody(b.text).value
+          parts.push({ type: 'text', text: role === 'system' ? redactSecrets(body) : body })
           break
         }
         case 'thinking': {

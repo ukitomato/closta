@@ -80,7 +80,8 @@ export const METER_UPDATE_TYPES = [
   'thinking',
   'tool-elapsed',
   'init-report',
-  'commands'
+  'commands',
+  'retraction'
 ] as const
 export type MeterUpdateType = (typeof METER_UPDATE_TYPES)[number]
 
@@ -119,6 +120,11 @@ export type MeterUpdate =
   | { readonly type: 'tool-elapsed'; readonly toolUseId: string; readonly elapsedSeconds: number }
   | InitReportMeter
   | CommandsMeter
+  /** 取り消し (O-6 / AD-049 Decision 2)。最新の値ではなく 1 回限りの指示 (message の id の列)。 */
+  | { readonly type: 'retraction'; readonly messageIds: readonly string[] }
+
+/** `retraction` の 1 件の `meter` が運ぶ id の件数の上限 (超えたら agents が分けて送る)。 */
+export const MAX_RETRACTION_IDS = 128
 
 /* ── 定数 (agents と decoder で共有) ────────────────────────────────── */
 
@@ -385,5 +391,14 @@ export function decodeMeterUpdate(raw: unknown): MeterUpdate | null {
       return decodeInitReport(m)
     case 'commands':
       return decodeCommands(m)
+    // 取り消し (O-6 / AD-049 Decision 2)。配列でない・0 件・129 件以上は捨て、形の外れた id は 1 件ずつ捨てる。
+    case 'retraction': {
+      const ids = m.messageIds
+      if (!Array.isArray(ids)) return null
+      const list = ids as readonly unknown[]
+      if (list.length === 0 || list.length > MAX_RETRACTION_IDS) return null
+      const messageIds = list.filter(isValidToolUseId)
+      return { type: 'retraction', messageIds }
+    }
   }
 }

@@ -6,6 +6,8 @@ import { canEnd, type SessionRunState } from '@domain/session/run-state'
 import { sanitizeBody } from '@domain/session/sanitize-body'
 import type { SessionStatusUpdate } from '@domain/session/status-update'
 
+import { pathTail } from '@/features/chat/path-tail'
+
 import type {
   Activity,
   Elapsed,
@@ -251,12 +253,6 @@ const FILE_PATH_TOOLS: ReadonlySet<string> = new Set(['Read', 'Edit', 'Write', '
 
 function safeName(value: string): string {
   return SAFE_NAME.test(value) && !SECRET_PREFIX.test(value) ? value : ''
-}
-
-/** パスの末尾 (`/` と `\` の両方で区切った最後の要素)。 */
-function pathTail(path: string): string {
-  const segments = path.split(/[\\/]/)
-  return segments[segments.length - 1] ?? ''
 }
 
 function bashCommandName(command: string): string {

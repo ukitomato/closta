@@ -26,6 +26,8 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { TOOL_RESULT_LABELS } from "@/features/chat/labels";
+import { useToolResultState } from "@/features/chat/transcript-context";
 import { isTruncatedArgs, ToolResultMarks } from "./tool-result-marks";
 
 const ANIMATION_DURATION = 200;
@@ -175,8 +177,6 @@ function ToolFallbackTrigger({
   const isRunning = statusType === "running";
   const isCancelled = isCancelledToolStatus(status);
 
-  const label = isCancelled ? "Cancelled tool" : "Used tool";
-
   return (
     <CollapsibleTrigger
       data-slot="tool-fallback-trigger"
@@ -195,7 +195,8 @@ function ToolFallbackTrigger({
           isRunning && "shimmer motion-reduce:animate-none",
         )}
       >
-        {label}: <b>{toolName}</b>
+        <b>{toolName}</b>
+        {TOOL_RESULT_LABELS.fallbackHeadingSuffix}
       </span>
       <ToolFallbackDuration />
       <ChevronDownIcon
@@ -301,7 +302,7 @@ function ToolFallbackResult({
       {...props}
     >
       <p className="aui-tool-fallback-result-header text-muted-foreground text-xs font-medium">
-        Result:
+        {TOOL_RESULT_LABELS.fallbackResult}
       </p>
       <pre className="aui-tool-fallback-result-content bg-muted/50 text-foreground/90 mt-1 rounded-md p-2.5 text-xs whitespace-pre-wrap">
         {formatUnknownValue(result, 2)}
@@ -326,7 +327,9 @@ function ToolFallbackError({
   if (!errorText) return null;
 
   const isCancelled = status.reason === "cancelled";
-  const headerText = isCancelled ? "Cancelled reason:" : "Error:";
+  const headerText = isCancelled
+    ? TOOL_RESULT_LABELS.fallbackCancelled
+    : TOOL_RESULT_LABELS.fallbackError;
 
   return (
     <div
@@ -725,12 +728,15 @@ const ToolFallbackImpl: ToolCallMessagePartComponent = ({
   approval,
   respondToApproval,
 }) => {
-  const status = statusWithError(runtimeStatus, isError);
-  const isCancelled =
-    status?.type === "incomplete" && status.reason === "cancelled";
-  const isRequiresAction = status?.type === "requires-action";
+  // 表示の状態 (アイコン・見出し・印) は結果の状態から決める (O-6 / 016 data-model §3)。assistant-ui の part の状態
+  // (`runtimeStatus`) は承認の操作 (host の機能) を出すかの判定にだけ使う。
+  const resultState = useToolResultState({ toolCallId, result, isError });
+  const status = resultState.status;
+  const approvalStatus = statusWithError(runtimeStatus, isError);
+  const isCancelled = false;
+  const isRequiresAction = approvalStatus?.type === "requires-action";
   const shouldRenderApproval =
-    isRequiresAction && offersInterruptAction(status, approval, interrupt);
+    isRequiresAction && offersInterruptAction(approvalStatus, approval, interrupt);
 
   const [open, setOpen] = useState(isRequiresAction);
   const [prevRequiresAction, setPrevRequiresAction] =
@@ -747,7 +753,8 @@ const ToolFallbackImpl: ToolCallMessagePartComponent = ({
         <ToolFallbackTrigger toolName={toolName} status={status} />
         <ToolResultMarks
           toolCallId={toolCallId}
-          pending={result === undefined}
+          pending={resultState.pending}
+          state={resultState.state}
           isError={isError}
           truncated={isTruncatedArgs(args)}
         />
@@ -765,7 +772,7 @@ const ToolFallbackImpl: ToolCallMessagePartComponent = ({
             interrupt={interrupt}
             approval={approval}
             respondToApproval={respondToApproval}
-            status={status}
+            status={approvalStatus}
           />
         )}
         {!isCancelled && <ToolFallbackResult result={result} />}

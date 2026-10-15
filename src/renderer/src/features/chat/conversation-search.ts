@@ -2,7 +2,9 @@ import type { ThreadMessageLike } from '@assistant-ui/react'
 
 import { normalizeForSearch } from '@/features/search/text-search'
 
-import { isSystemEventMessage } from './convert'
+import { isSystemEventMessage, SYSTEM_EVENT_DATA_NAME } from './convert'
+import { transcriptBoundaryHeading } from './labels'
+import { isSystemEventFields } from './transcript-guard'
 
 /**
  * 会話内検索の走査と移動の純関数 (O-3 / spec FR-003〜FR-005 / 012 data-model §2「状態」「走査」「移動」)。
@@ -60,7 +62,18 @@ export function toSearchableMessage(message: ThreadMessageLike): SearchableMessa
   const texts =
     typeof content === 'string'
       ? [content]
-      : content.flatMap((part) => (part.type === 'text' ? [part.text] : []))
+      : content.flatMap((part) => {
+          if (part.type === 'text') return [part.text]
+          // 過去ログの圧縮の境界 (data part)。描かれる見出し (TranscriptBoundary と同じ関数) を本文の 1 つとして取る。
+          // 実行中の境界の行は `isSystemEventMessage` で上で除かれ、他の data part は対象外 (O-3 の範囲を保つ)。
+          if (part.type === 'data' && part.name === SYSTEM_EVENT_DATA_NAME) {
+            const data: unknown = part.data
+            if (isSystemEventFields(data) && data.category === 'compact-boundary') {
+              return [transcriptBoundaryHeading(data.category, data.detail)]
+            }
+          }
+          return []
+        })
   return { id: message.id, role: message.role, texts }
 }
 

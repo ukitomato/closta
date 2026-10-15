@@ -160,8 +160,8 @@ describe('列挙の照合 (Object.create(null) + Object.hasOwn)', () => {
     expect(ASSISTANT_ERROR_KEYS).toHaveLength(13)
   })
 
-  it('METER_UPDATE_TYPES の集合は 8 つ (O-4 の 6 + O-5 の 2)。集合を変えるには ADR が要る (AD-047 / AD-048)', () => {
-    expect(METER_UPDATE_TYPES).toHaveLength(8)
+  it('METER_UPDATE_TYPES の集合は 9 つ (O-4 の 6 + O-5 の 2 + O-6 の retraction)。集合を変えるには ADR が要る (AD-047 / AD-048 / AD-049)', () => {
+    expect(METER_UPDATE_TYPES).toHaveLength(9)
     expect(new Set(METER_UPDATE_TYPES)).toEqual(
       new Set([
         'turn',
@@ -171,9 +171,40 @@ describe('列挙の照合 (Object.create(null) + Object.hasOwn)', () => {
         'thinking',
         'tool-elapsed',
         'init-report',
-        'commands'
+        'commands',
+        'retraction'
       ])
     )
+  })
+})
+
+describe('retraction の decoder (O-6 / AD-049 Decision 2)', () => {
+  it('正例: id の列を通し、余分なキーを運ばない', () => {
+    expect(decodeMeterUpdate({ type: 'retraction', messageIds: ['a', 'b-1'], extra: 'x' })).toEqual(
+      {
+        type: 'retraction',
+        messageIds: ['a', 'b-1']
+      }
+    )
+  })
+
+  it('配列でない・0 件・129 件以上は meter ごと捨てる。128 件は通る', () => {
+    expect(decodeMeterUpdate({ type: 'retraction', messageIds: 'a' })).toBeNull()
+    expect(decodeMeterUpdate({ type: 'retraction' })).toBeNull()
+    expect(decodeMeterUpdate({ type: 'retraction', messageIds: [] })).toBeNull()
+    const ids = (n: number): string[] => Array.from({ length: n }, (_, i) => `m${i}`)
+    expect(decodeMeterUpdate({ type: 'retraction', messageIds: ids(129) })).toBeNull()
+    const ok = decodeMeterUpdate({ type: 'retraction', messageIds: ids(128) })
+    expect(ok?.type === 'retraction' && ok.messageIds.length).toBe(128)
+  })
+
+  it('形の外れた id は 1 件ずつ捨てる', () => {
+    expect(
+      decodeMeterUpdate({
+        type: 'retraction',
+        messageIds: ['ok', 'a b', '', 7, null, 'x'.repeat(129), 'also_ok']
+      })
+    ).toEqual({ type: 'retraction', messageIds: ['ok', 'also_ok'] })
   })
 })
 

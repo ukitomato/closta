@@ -196,7 +196,29 @@ describe('createConversationScanner (走査 / SC-002)', () => {
     expect(scanner.scan(messages, '語')).toEqual([])
   })
 
-  it('添付のファイル名と圧縮の境界の text part は対象にする (convert.ts が text part にする)', () => {
+  it('実行中の境界の行 (isSystemEventMessage) と他の data part は対象にしない', () => {
+    const scanner = createConversationScanner()
+    const messages = [
+      dto({
+        id: 'live',
+        role: 'system',
+        parts: [
+          {
+            type: 'system-event',
+            category: 'compact-boundary',
+            opens: true,
+            name: '',
+            detail: 'auto 10 5',
+            status: 'marked'
+          }
+        ],
+        createdAt: null
+      })
+    ]
+    expect(scanner.scan(messages, '圧縮')).toEqual([])
+  })
+
+  it('添付のファイル名と圧縮の境界 (data part の見出し) は対象にする', () => {
     const scanner = createConversationScanner()
     const messages = [
       dto({
@@ -216,7 +238,7 @@ describe('createConversationScanner (走査 / SC-002)', () => {
       })
     ]
     expect(scanner.scan(messages, 'report')).toEqual([hit('u', 0)])
-    // text 1 つでない system は assistant に倒して描かれる (convert.ts) ので、境界の text part も対象。
+    // divider は compact-boundary の data part に写される (convert.ts)。検索は描かれる見出しを読む (O-6 FE-011)。
     expect(scanner.scan(messages, '圧縮')).toEqual([hit('s', 0)])
   })
 

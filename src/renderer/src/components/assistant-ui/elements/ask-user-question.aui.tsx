@@ -6,11 +6,11 @@ import type { ToolCallMessagePartComponent } from "@assistant-ui/react";
 
 import { Badge } from "@/components/ui/badge";
 import { ASK_USER_QUESTION_LABELS } from "@/features/chat/labels";
+import { useToolResultState } from "@/features/chat/transcript-context";
 import { cn } from "@/lib/utils";
 import { codeScroll, codeSurface, mono } from "./surfaces";
 import {
   isCancelledToolStatus,
-  statusWithError,
   ToolFallback,
   ToolFallbackDuration,
   ToolFallbackStatusIcon,
@@ -218,9 +218,10 @@ function QuestionView({
 const AskUserQuestionImpl: ToolCallMessagePartComponent = (props) => {
   const { toolCallId, toolName, args, argsText, result, isError } = props;
   const parsed = useMemo(() => parseAskUserQuestionArgs(argsText), [argsText]);
+  const resultState = useToolResultState({ toolCallId, result, isError });
   if (parsed === null) return <ToolFallback {...props} />;
 
-  const status = statusWithError(props.status, isError);
+  const status = resultState.status;
   const isCancelled = isCancelledToolStatus(status);
   const isRunning = status?.type === "running";
   const resultText = typeof result === "string" ? result : null;
@@ -245,7 +246,8 @@ const AskUserQuestionImpl: ToolCallMessagePartComponent = (props) => {
         <ToolFallbackDuration />
         <ToolResultMarks
           toolCallId={toolCallId}
-          pending={result === undefined}
+          pending={resultState.pending}
+          state={resultState.state}
           isError={isError}
           truncated={isTruncatedArgs(args)}
           className="ms-auto text-xs"

@@ -63,10 +63,11 @@ spec_id（`001-runtime-...`）とは独立させる。差し込み作業で番�
 | O-3 | Thread 検索と探す操作 (Thread search・会話内検索・Command palette・Empty state。再利用率の計測経路と i18n の判断 (AD-045) を含む。[spec 012](../../specs/012-ui-thread-search/spec.md)) | `ui` | M3 |
 | O-4 | 計量と制限の表示 (費用と使用量・レート制限・API の再試行・コンテキストの使用量・task の進捗) | `ui` | M3 |
 | O-5 | MCP・プラグイン・コマンドの表示 (MCP の tool・`AskUserQuestion` の読み取り専用の表示・右のペインの「構成」のタブ・認証とプラグインの行。操作画面と問いに答える UI は含めない。[spec 015](../../specs/015-ui-mcp-elicitation-commands/spec.md)) | `ui` | M3 |
-| O-6 | 会話の境界と tool の専用表示の第 2 弾 (圧縮・ファイル・Checkpoints・モデルの拒否・通知・`Read` / `Glob` / `Grep`・Web search / fetch・一般の Hook など) | `ui` | M3 |
+| O-6 | 会話の境界と tool の専用表示の第 2 弾 (圧縮・会話の作り直し・モデルの拒否・止まった知らせの境界の行、`Read` / `Glob` / `Grep` / `WebFetch` / `WebSearch` / `TaskCreate` などの専用表示、Agent plan の markdown、tool の結果待ち・結果不明の印と読み上げ。Hook・背景の task・subagent の入れ子と知らせの類は O-11 に分けた。[spec 016](../../specs/016-ui-boundaries-and-tool-displays/spec.md) / [AD-049](../decisions/0049-boundaries-retraction-and-o11-split.md)) | `ui` | M3 |
 | O-8 | 並列時の滑らかさの実機計測 (session charter KPI。O-1 から O-3 に繰り越した宿題を O-3 の design で移した) | `session` | M3 |
 | O-9 | 会話の時間と活動の可視化 (conversation map・message timing・活動の heat graph。本文の横断検索の要否。O-3 の design で分けた) | `ui` | M3 |
 | O-10 | Claude Code からの問いに答える UI と composer のコマンドの候補 (`AskUserQuestion` の回答・Elicitation・`request_user_dialog`・composer のスラッシュコマンドの候補。O-5 の design で分けた。[AD-048](../decisions/0048-session-config-display-and-answer-ui-split.md)) | `session` | M3 |
+| O-11 | Hook・背景の task・実行中の subagent と知らせの類の表示 (一般の Hook と `includeHookEvents`・Background task の一覧の要否・実行中の subagent の入れ子・Tier B の知らせの類・Checkpoints の表示。O-6 の design で分けた。[AD-049](../decisions/0049-boundaries-retraction-and-o11-split.md) Decision 1) | `ui` | M3 |
 | I-1 | `DockerRuntime` と endpoint 抽象 + `sessionStore` ミラー | `isolation` | M4 |
 | I-2 | コンテナライフサイクルと隔離可視化 | `isolation` | M4 |
 | I-3 | sandbox capability 判定と権限モードのゲート | `isolation` | M4 |
@@ -96,9 +97,9 @@ spec_id（`001-runtime-...`）とは独立させる。差し込み作業で番�
 - **Hook / Background task の状態管理は `session` に含めない** — AD-020 Consequences の問いへの O-1 の回答
   （USER 決定 2026-10-02）。**O-2 の結論 (USER 決定 2026-10-03)**: 状態は保持しないので持ち主の domain は要らない。
   session は agents で無害化して既存の `message` の経路で通すだけ、ui が transcript の 1 行 (システムイベントの行) として
-  描き、同じ Hook / task の行を合成する。実行中の task の一覧の要否は O-6 で判断し、要るなら持ち主の domain を人間に諮る
+  描き、同じ Hook / task の行を合成する。実行中の task の一覧の要否は O-11 で判断し (O-6 から送った。AD-049 Decision 1)、要るなら持ち主の domain を人間に諮る
   ([AD-044](../decisions/0044-ui-coverage-assignment.md))
-- **O-4 / O-5 / O-6 は `ui`** — いずれも SDK が emit する情報の表示 (Principle XII の判定対象) であり、MCP サーバーの
+- **O-4 / O-5 / O-6 / O-11 は `ui`** — いずれも SDK が emit する情報の表示 (Principle XII の判定対象) であり、MCP サーバーの
   追加・削除などの操作画面は含めない (USER 決定 2026-10-03)
 - **O-4 は `ui` のまま、session の契約の拡張を伴う** — 失敗の理由のキー (`LaunchFailureReason`)・`SessionEvent` の種類 `meter`・
   監視ビューの行の短い理由と稼働中のストアの `meters` を O-4 が変える (U-1。2026-10-05 に利用者が承認。
@@ -110,6 +111,13 @@ spec_id（`001-runtime-...`）とは独立させる。差し込み作業で番�
   (`onElicitation` / `onUserDialog`) で Claude Code に返すので、権限ゲートの例外と制御の経路を持つ session が境界の ADR
   (AD-036 Decision 4 と AD-041 (g) の読み替え) の持ち主になる。表示の部品は `ui` が持つ (015 spec U-1。2026-10-05 に利用者が承認。
   [AD-048](../decisions/0048-session-config-display-and-answer-ui-split.md) Decision 1)
+- **O-11 (Hook・背景の task・subagent の入れ子と知らせの類の表示) は `ui`** — 表示が主で、SDK が emit する情報の表示 (Principle XII の判定対象)。
+  O-10 と違い権限ゲートの例外を持たないので `session` にしない。ただし design の前に起こす ADR (`includeHookEvents`・`getSubagentMessages`・
+  `get_hooks_listing`) は session の境界 (agents の呼び出しの許可リストと query の options) に触れるので、O-11 の ADR は session charter にも
+  記録する (016 spec U-1。2026-10-05 に利用者が承認。[AD-049](../decisions/0049-boundaries-retraction-and-o11-split.md) Decision 1)
+- **O-6 は `ui` のまま、session の契約を広げる** — agents の `system` の 4 つの subtype と最上位の `conversation_reset` の分岐、`meter` の種類
+  `retraction`、稼働中のストアからのメッセージの削除を O-6 が足す (U-6。2026-10-05 に利用者が承認。AD-049)。O-4 / O-5 と同じ形の例外で、
+  記録は session charter
 - **O-7（アプリのシェル）は `ui`** — 面の配置と遷移はどの domain の操作でもなく、R-1 から App と面の状態 (`stores/ui.ts`) を
   ui が持ってきた。SDK の emit の表示ではないので Principle XII の判定の対象外。サイドバーの 2 つの一覧の中身・行の形は今どおり
   session が持ち、シェルは置き場所と選択に応じた中央の切り替えだけを持つ ([AD-046](../decisions/0046-app-shell-layout.md)。
@@ -124,7 +132,7 @@ spec_id（`001-runtime-...`）とは独立させる。差し込み作業で番�
 |---|---|---|---|
 | **M1** | **読める** | R-1〜R-4 | WSL 内の過去セッションを Windows の assistant-ui で読める。**ここで §4 の方針を確定する** |
 | **M2** | **走らせられる** | X-1〜X-5 | 起動条件を選んで複数セッションを回せる。日本語で誤送信しない |
-| **M3** | **差配できる** | O-1〜O-10 | 10 セッションを俯瞰でき、未表示情報がゼロ。**「未表示ゼロ」は [AD-044](../decisions/0044-ui-coverage-assignment.md) の M3 の完了の条件 (Tier A の後続のうち割当先が M3 の feature の行が 0) で判定する** |
+| **M3** | **差配できる** | O-1〜O-11 | 10 セッションを俯瞰でき、未表示情報がゼロ。**「未表示ゼロ」は [AD-044](../decisions/0044-ui-coverage-assignment.md) の M3 の完了の条件 (Tier A の後続のうち割当先が M3 の feature の行が 0) で判定する** |
 | **M4** | **任せられる** | I-1〜I-3 | Auto / bypassPermissions を隔離内で安全に回せる |
 | **M5** | **配れる** | D-1 | 自分以外が使える |
 

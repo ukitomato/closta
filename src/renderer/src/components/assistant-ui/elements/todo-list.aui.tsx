@@ -5,6 +5,7 @@ import { CircleIcon, CircleCheckBigIcon, CircleDotIcon, ListTodoIcon } from "luc
 import type { ToolCallMessagePartComponent } from "@assistant-ui/react";
 
 import { isKnownTodoStatus, parseTodoArgs, type TodoStatus } from "@/features/chat/tool-args";
+import { useToolResultState } from "@/features/chat/transcript-context";
 import { cn } from "@/lib/utils";
 import { ToolFallback } from "./tool-fallback.aui";
 import { isTruncatedArgs, ToolErrorResult, ToolResultMarks } from "./tool-result-marks";
@@ -29,6 +30,7 @@ const STATUS_META: Record<TodoStatus, { icon: React.ElementType; className: stri
   };
 
 const TodoListImpl: ToolCallMessagePartComponent = (props) => {
+  const resultState = useToolResultState(props);
   const args = parseTodoArgs(props.argsText);
   if (!args) return <ToolFallback {...props} />;
 
@@ -44,7 +46,8 @@ const TodoListImpl: ToolCallMessagePartComponent = (props) => {
         <span>（{args.todos.length}）</span>
         <ToolResultMarks
           toolCallId={props.toolCallId}
-          pending={props.result === undefined}
+          pending={resultState.pending}
+          state={resultState.state}
           isError={props.isError}
           truncated={isTruncatedArgs(props.args)}
           className="ms-auto"

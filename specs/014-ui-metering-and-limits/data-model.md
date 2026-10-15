@@ -86,6 +86,7 @@ type AssistantErrorKey = SDK の SDKAssistantMessageError の 13 値
 | `modelId` | 文字種と長さの正本は domain の `isValidModelId` (`src/domain/provider/model-catalog.ts:28`。英数と `._:/@-[]`・先頭は英数・128 文字まで。起動の設定とモデルカタログと同じ述語なので、`[1m]` 付き・`_` を含む id・Bedrock の ARN も通る)。`meter.ts` はその上に 3 つだけを足す: `//` を含まない、`:` の後ろに `@` がある形 (`/^[^/]*:[^/]*@/`。scheme の無い userinfo `u:p@h/m`) でない、`mayCarrySecret` (`system-event.ts:47`) が false。Vertex の `model@date` (`:` が無い) と Bedrock の ARN (`@` が無い) は通る | その行を内訳から落とす |
 | `models` の件数 | 16 まで | 17 件目以降を落とす |
 | 列挙 (`type`・`status`・`limitType`・`mode`・`AssistantErrorKey`) | `Object.create(null)` の表と `Object.hasOwn` (`transcript-guard.ts:29-40` の方式) | `mode` は `unknown`、他は null / 送らない |
+| `messageIds` (`retraction`。O-6 が足した。[AD-049](../../docs/decisions/0049-boundaries-retraction-and-o11-split.md) Decision 2 による AD-047 Decision 2 の読み替え。正本は [016 data-model §1](../016-ui-boundaries-and-tool-displays/data-model.md)) | 配列で、1〜128 件。各要素は `toolUseId` と同じ述語 (`^[A-Za-z0-9_-]{1,128}$`)。128 件を超えたら分けて全部送る。O-4 の上限・間引き・`finish()` の破棄に掛けない | 配列でない・0 件・129 件以上なら `meter` ごと捨てる。形の合わない id は 1 件ずつ捨てる |
 
 - decoder は検証を通した値だけで新しい object を組む (余分なキーを運ばない)。`resetsAt: 1e300`・`__proto__` のキー・長い id・URL の資格情報の形の `modelId` で例外を出さない (SC-002)
 - 文言の表も `Object.hasOwn` で引く。外部由来の id をキーにする保持は `Map` に限る

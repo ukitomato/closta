@@ -111,3 +111,49 @@ describe('toTranscriptMessages のシステムイベント', () => {
     expect(JSON.stringify(out)).not.toMatch(/SECRET/)
   })
 })
+
+describe('過去ログの system の本文の伏せ字 (O-6 BE-010 / data-model §1)', () => {
+  const MARKS = [
+    'Bearer abcdefgh12345678',
+    'https://user:pw0rd@example.com/x',
+    'AKIAABCDEFGHIJKLMNOP',
+    'eyJhbGciOiJIUzI1.eyJzdWIiOiIxMjM0.abcdefgh',
+    'token=hunter22secret'
+  ]
+
+  it('informational / local_command_output / 拒否の system の本文に伏せ字が当たり、DTO に目印が 0 件', () => {
+    for (const subtype of ['informational', 'local_command_output', 'model_refusal_no_fallback']) {
+      const out = toTranscriptMessages([
+        system('s1', { subtype, content: `before ${MARKS.join(' ')} after` })
+      ])
+      const json = JSON.stringify(out)
+      for (const mark of MARKS) expect(json).not.toContain(mark)
+      expect(json).toContain('•••')
+      expect(json).toContain('before')
+    }
+  })
+
+  it('assistant / user の本文には伏せ字を当てない', () => {
+    const text = `see ${MARKS.join(' ')}`
+    const out = toTranscriptMessages([
+      { type: 'user', uuid: 'u1', message: { role: 'user', content: text } },
+      { type: 'assistant', uuid: 'a1', message: { role: 'assistant', content: text } }
+    ])
+    expect(out.map((m) => m.parts[0])).toEqual([
+      { type: 'text', text },
+      { type: 'text', text }
+    ])
+  })
+
+  it('4 つの subtype から行を足さず、divider の生成は圧縮だけ (回帰)', () => {
+    const out = toTranscriptMessages([
+      system('s1', { subtype: 'model_refusal_fallback', fallback_model: 'm' }),
+      system('s2', { subtype: 'informational', level: 'warning' }),
+      system('s3', { subtype: 'conversation_reset' }),
+      system('s4', { subtype: 'compact_boundary', compact_metadata: {} })
+    ])
+    const types = out.flatMap((m) => m.parts.map((p) => p.type))
+    expect(types).not.toContain('system-event')
+    expect(types.filter((t) => t === 'divider')).toHaveLength(1)
+  })
+})

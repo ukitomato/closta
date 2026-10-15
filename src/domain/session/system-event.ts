@@ -1,4 +1,5 @@
 import { sanitizeBody } from './sanitize-body'
+import { redactSecrets } from './secret-redaction'
 import {
   SYSTEM_EVENT_STATUSES,
   type SystemEventCategory,
@@ -39,6 +40,25 @@ function oneLine(raw: unknown): string {
   return points.length > SYSTEM_EVENT_NAME_MAX_CODE_POINTS
     ? `${points.slice(0, SYSTEM_EVENT_NAME_MAX_CODE_POINTS).join('')}…`
     : line
+}
+
+/**
+ * 会話由来の本文 (`informational`・拒否の `content` / 説明) → 行の `detail` (O-6 data-model §1「本文の規則」)。
+ * 無害化 (`sanitizeBody(raw, 4_096)`) → 伏せ字 (`redactSecrets`) → 1 行に正規化 → `maxCodePoints` (`…` を含めて超えない)
+ * の順。伏せ字は切り詰めの前に当てる (切り詰めでトークンが割れて伏せ字を逃れないため)。文字列でなければ ''。
+ */
+export function redactedBodyLine(
+  raw: unknown,
+  maxCodePoints: number = SYSTEM_EVENT_NAME_MAX_CODE_POINTS
+): string {
+  if (typeof raw !== 'string' || maxCodePoints < 1) return ''
+  const line = redactSecrets(sanitizeBody(raw, 4_096).value).replace(/\s+/g, ' ').trim()
+  const points = Array.from(line)
+  if (points.length <= maxCodePoints) return line
+  return `${points
+    .slice(0, maxCodePoints - 1)
+    .join('')
+    .trimEnd()}…`
 }
 
 /**
@@ -213,7 +233,13 @@ export function isTerminalSystemEventStatus(status: SystemEventStatus | null): b
     status === 'completed' ||
     status === 'killed' ||
     status === 'stopped' ||
-    status === 'changed'
+    status === 'changed' ||
+    status === 'marked' ||
+    status === 'fallback' ||
+    status === 'no-fallback' ||
+    status === 'prevented' ||
+    status === 'warning' ||
+    status === 'notice'
   )
 }
 

@@ -269,11 +269,13 @@ describe('実行中の tool の結果 (FR-007 / US-2 AC1・AC2)', () => {
     expect(block.querySelector('[data-slot="tool-result-error"]')).toBeNull()
   })
 
-  it('専用の表示の無い tool (Read) のエラーは ToolFallback の閉じた見出しに「エラー」の印が出る', async () => {
+  it('専用の表示の無い tool (NotebookEdit) のエラーは ToolFallback の閉じた見出しに「エラー」の印が出る', async () => {
     const h = await setup()
     h.emit(
       A,
-      toolMessage('Read', { file_path: '/w/missing.ts' }, 'File does not exist.', { isError: true })
+      toolMessage('NotebookEdit', { notebook_path: '/w/missing.ipynb' }, 'File does not exist.', {
+        isError: true
+      })
     )
     const root = await shown('tool-fallback-root')
     expect(within(root).getByText(TOOL_RESULT_LABELS.failed)).toBeInTheDocument()
@@ -283,9 +285,12 @@ describe('実行中の tool の結果 (FR-007 / US-2 AC1・AC2)', () => {
     )
   })
 
-  it('専用の表示の無い tool (Glob) の切り詰めは ToolFallback に「（切り詰め）」が出る', async () => {
+  it('専用の表示の無い tool (NotebookEdit) の切り詰めは ToolFallback に「（切り詰め）」が出る', async () => {
     const h = await setup()
-    h.emit(A, toolMessage('Glob', { pattern: '**/*' }, 'a\nb', { truncated: true }))
+    h.emit(
+      A,
+      toolMessage('NotebookEdit', { notebook_path: '/w/a.ipynb' }, 'a\nb', { truncated: true })
+    )
     const root = await shown('tool-fallback-root')
     expect(root).toHaveTextContent(TOOL_RESULT_LABELS.truncated)
     expect(root.querySelector('[data-slot="tool-result-error"]')).toBeNull()
@@ -870,6 +875,191 @@ describe('認証とプラグインの行 (O-5 FE-030 / 015 spec US-3 AC1〜AC5 /
     h.emit(A, auth('auth:1', { opens: true, status: 'failed' }))
     h.emit(A, plugin('plugin:0', { opens: true, detail: '1/1/acme', status: 'started' }))
     await waitFor(() => expect(rows()).toHaveLength(3))
+    const viewport = h.container.querySelector<HTMLElement>('[data-slot="aui_thread-viewport"]')
+    expect(viewport).not.toBeNull()
+    expect((await axe(viewport!, AXE_RULES)).violations).toEqual([])
+  })
+})
+
+describe('会話の境界と拒否・知らせの行 (O-6 FE-011 / 016 spec US-1)', () => {
+  const boundaries = (): HTMLElement[] =>
+    Array.from(document.querySelectorAll<HTMLElement>('[data-slot="aui_transcript-boundary"]'))
+  const detailOf = (row: HTMLElement | undefined): string | null =>
+    row?.querySelector('[data-slot="system-event-detail"]')?.textContent ?? null
+
+  it('圧縮の境界: 手動 / 自動とトークン数を見出しに出し、状態の文言は出さない', async () => {
+    const h = await setup()
+    h.emit(
+      A,
+      eventMessage('compact-boundary:u1', {
+        category: 'compact-boundary',
+        opens: true,
+        detail: 'manual 120000 8000',
+        status: 'marked'
+      })
+    )
+    h.emit(
+      A,
+      eventMessage('compact-boundary:u2', {
+        category: 'compact-boundary',
+        opens: true,
+        detail: 'auto - -',
+        status: 'marked'
+      })
+    )
+    await waitFor(() => expect(boundaries()).toHaveLength(2))
+    expect(boundaries()[0]).toHaveTextContent(
+      'ここでコンテキストを圧縮しました (手動、120,000 → 8,000 トークン)'
+    )
+    expect(boundaries()[1]).toHaveTextContent('ここでコンテキストを圧縮しました (自動)')
+    expect(rows()).toHaveLength(0)
+  })
+
+  it('会話の作り直しの境界は「ここから新しい会話です」', async () => {
+    const h = await setup()
+    h.emit(
+      A,
+      eventMessage('reset:u1', { category: 'conversation-reset', opens: true, status: 'marked' })
+    )
+    await waitFor(() => expect(boundaries()).toHaveLength(1))
+    expect(boundaries()[0]).toHaveTextContent('ここから新しい会話です')
+  })
+
+  it('拒否して別のモデルへ切り替えた行: モデル名・この応答だけ・分類の訳・説明', async () => {
+    const h = await setup()
+    h.emit(
+      A,
+      eventMessage('refusal:u1', {
+        category: 'refusal',
+        opens: true,
+        name: 'claude-haiku-4-5',
+        detail: 'forward local cyber 理由の説明です',
+        status: 'fallback'
+      })
+    )
+    await waitFor(() => expect(rows()).toHaveLength(1))
+    const text = rows()[0]?.textContent ?? ''
+    expect(text).toContain('claude-haiku-4-5')
+    expect(text).toContain('この応答だけ')
+    expect(text).toContain('サイバーセキュリティ')
+    expect(text).toContain('理由の説明です')
+  })
+
+  it('知らない分類は出さず、説明が無ければ説明の段も出ない', async () => {
+    const h = await setup()
+    h.emit(
+      A,
+      eventMessage('refusal:u2', {
+        category: 'refusal',
+        opens: true,
+        name: '',
+        detail: 'forward session weird',
+        status: 'fallback'
+      })
+    )
+    await waitFor(() => expect(rows()).toHaveLength(1))
+    const text = rows()[0]?.textContent ?? ''
+    expect(text).not.toContain('weird')
+    expect(text).not.toContain('分類')
+    expect(text).toContain('別のモデル')
+  })
+
+  it('切り替え先が無い拒否の行: 言い直して送り直せる旨と本文', async () => {
+    const h = await setup()
+    h.emit(
+      A,
+      eventMessage('refusal:u3', {
+        category: 'refusal',
+        opens: true,
+        name: 'bio',
+        detail: '本文です',
+        status: 'no-fallback'
+      })
+    )
+    await waitFor(() => expect(rows()).toHaveLength(1))
+    const text = rows()[0]?.textContent ?? ''
+    expect(text).toContain('言い直して送り直せます')
+    expect(text).toContain('生物・化学')
+    expect(text).toContain('本文です')
+  })
+
+  it('知らせの行: ここで止まりました / 注意 / 知らせ。notice は状態の文言を出さない', async () => {
+    const h = await setup()
+    for (const [id, status] of [
+      ['info:1', 'prevented'],
+      ['info:2', 'warning'],
+      ['info:3', 'notice']
+    ] as const) {
+      h.emit(
+        A,
+        eventMessage(id, {
+          category: 'informational',
+          opens: true,
+          name: '',
+          detail: `本文 ${id}`,
+          status
+        })
+      )
+    }
+    await waitFor(() => expect(rows()).toHaveLength(3))
+    expect(statusOf(rows()[0])).toBe('ここで止まりました')
+    expect(statusOf(rows()[1])).toBe('注意')
+    expect(statusOf(rows()[2])).toBe('')
+    expect(detailOf(rows()[0]) ?? rows()[0]?.textContent).toContain('本文 info:1')
+  })
+
+  it('同じ id の知らせは行が増えず、書き換わる', async () => {
+    const h = await setup()
+    h.emit(
+      A,
+      eventMessage('info:t1', {
+        category: 'informational',
+        opens: true,
+        detail: '最初',
+        status: 'notice'
+      })
+    )
+    await waitFor(() => expect(rows()).toHaveLength(1))
+    h.emit(
+      A,
+      eventMessage('info:t1', { category: 'informational', detail: '次', status: 'warning' })
+    )
+    await waitFor(() => expect(statusOf(rows()[0])).toBe('注意'))
+    expect(rows()).toHaveLength(1)
+  })
+
+  it('境界と拒否・知らせの行に a11y の違反が無い', async () => {
+    const h = await setup()
+    h.emit(
+      A,
+      eventMessage('compact-boundary:ax', {
+        category: 'compact-boundary',
+        opens: true,
+        detail: 'manual 10 5',
+        status: 'marked'
+      })
+    )
+    h.emit(
+      A,
+      eventMessage('refusal:ax', {
+        category: 'refusal',
+        opens: true,
+        name: 'claude-haiku-4-5',
+        detail: 'forward local cyber 説明',
+        status: 'fallback'
+      })
+    )
+    h.emit(
+      A,
+      eventMessage('info:ax', {
+        category: 'informational',
+        opens: true,
+        detail: '本文',
+        status: 'prevented'
+      })
+    )
+    await waitFor(() => expect(rows()).toHaveLength(2))
+    expect(boundaries()).toHaveLength(1)
     const viewport = h.container.querySelector<HTMLElement>('[data-slot="aui_thread-viewport"]')
     expect(viewport).not.toBeNull()
     expect((await axe(viewport!, AXE_RULES)).violations).toEqual([])

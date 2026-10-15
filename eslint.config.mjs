@@ -561,9 +561,11 @@ export default defineConfig(
     // tool-result-marks.tsx は O-2 の手書きの印で、O-4 が経過時間の購読の hooks を足した (014 tasks FE-043 / SH-011)。
     // component でない `isTruncatedArgs` を export するので、`react-refresh/only-export-components` を戻す Tier A の一覧ではなく
     // hooks の番人だけを戻すこの block に入れる (2026-10-09 の決定)。
+    // web-tool-heading.ts は O-6 の component でない関数だけを export するファイルなので、同じくここに入れる (016 tasks SH-012)。
     files: [
       'src/renderer/src/components/assistant-ui/elements/thread.aui.tsx',
-      'src/renderer/src/components/assistant-ui/elements/tool-result-marks.tsx'
+      'src/renderer/src/components/assistant-ui/elements/tool-result-marks.tsx',
+      'src/renderer/src/components/assistant-ui/elements/web-tool-heading.ts'
     ],
     rules: {
       'react-hooks/exhaustive-deps': 'error',
@@ -594,7 +596,15 @@ export default defineConfig(
       'src/renderer/src/components/assistant-ui/elements/tool-registry.aui.tsx',
       // O-5 の手書きの表示 (MCP の tool と AskUserQuestion。015 tasks SH-011)
       'src/renderer/src/components/assistant-ui/elements/mcp-tool-call.aui.tsx',
-      'src/renderer/src/components/assistant-ui/elements/ask-user-question.aui.tsx'
+      'src/renderer/src/components/assistant-ui/elements/ask-user-question.aui.tsx',
+      // O-6 の手書きの表示 (会話の境界・ファイルと検索・Web・計画。016 tasks SH-012)。
+      // file-result-tree.tsx は registry の file-tree.tsx を写して変えた別ファイル (registry の複製は除外のまま)
+      'src/renderer/src/components/assistant-ui/elements/transcript-boundary.tsx',
+      'src/renderer/src/components/assistant-ui/elements/file-tool.aui.tsx',
+      'src/renderer/src/components/assistant-ui/elements/file-result-tree.tsx',
+      'src/renderer/src/components/assistant-ui/elements/web-tool.aui.tsx',
+      'src/renderer/src/components/assistant-ui/elements/task-tool.aui.tsx',
+      'src/renderer/src/components/assistant-ui/elements/tool-display-frame.tsx'
     ],
     rules: {
       // `react/prop-types` は戻さない — TS が props を検証済みで、型別名 FC に false-positive を出す
