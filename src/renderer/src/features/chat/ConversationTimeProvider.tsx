@@ -24,8 +24,11 @@ export function ConversationTimeProvider({
   conversationKey,
   messages,
   lastTurnOpen,
+  publish = true,
   children
 }: {
+  /** `false` のあいだは公開口へ publish しない (過去ログの loading / failed)。 */
+  readonly publish?: boolean
   /** 稼働中は `sessionId`、過去は `selectedRowKey` (公開口の `conversationKey`)。 */
   readonly conversationKey: string
   /** 記録の順の全件 (検索の provider と同じ値。稼働中は窓で切る前)。 */
@@ -54,8 +57,10 @@ export function ConversationTimeProvider({
     [conversationKey, messages, turns, navigateTo]
   )
   useEffect(() => {
-    store?.publish(published)
-  }, [store, published])
+    // 読み込み中・失敗のあいだは publish しない (空の messages を「ターンが無い」と読ませない。pr-gate H-001)。
+    if (publish) store?.publish(published)
+    else store?.clear(conversationKey)
+  }, [store, published, publish, conversationKey])
   useEffect(() => {
     return () => store?.clear(conversationKey)
   }, [store, conversationKey])

@@ -8,9 +8,10 @@ import type { TranscriptMessageDTO } from '@domain/session/transcript-dto'
 
 import { useUiStore } from '@/stores/ui'
 
+import { CenterConversationContext, createCenterConversationStore } from './center-conversation'
 import { ConversationTimeProvider } from './ConversationTimeProvider'
 import { toThreadMessage } from './convert'
-import { formatMessageTimeFull } from './message-time'
+import { formatMessageTimeFull, withReceivedAt } from './message-time'
 
 /**
  * O-9 FE-012 — 中央の時刻と所要時間 (SC-002)。`useTranscript` は mock し、描画経路 (assistant-ui の Thread / 変換) は本物。
@@ -108,6 +109,52 @@ describe('中央の時刻と所要時間 (O-9 FE-012)', () => {
     ])
     expect(container).not.toHaveTextContent('所要')
     expect(times(container)).toHaveLength(2)
+  })
+
+  it('時計が 2 つあるとき (createdAt が受信時刻と 5 分ずれる) 所要時間は受信時刻の差で出す (SC-002 / U-8)', () => {
+    const skew = 5 * 60_000
+    const base = [
+      dto('u1', 'user', '質問', T0 + skew),
+      dto('a1', 'assistant', '答え', T0 + skew + 90_000)
+    ].map(toThreadMessage)
+    // 受信時刻はランタイムの時計とは別。差は 5 秒。
+    view.messages = [withReceivedAt(base[0]!, T0), withReceivedAt(base[1]!, T0 + 5_000)]
+    const { container } = render(
+      <ConversationTimeProvider
+        conversationKey="test"
+        messages={view.messages}
+        lastTurnOpen={false}
+      >
+        <ChatScreen />
+      </ConversationTimeProvider>
+    )
+    const labels = times(container)
+    expect(labels).toHaveLength(2)
+    expect(labels[0]).toHaveTextContent('所要 0:05')
+    expect(container).not.toHaveTextContent('所要 1:30')
+  })
+
+  it('publish={false} のあいだは公開口へ値を出さず、前の値も消す (読み込み中・失敗。pr-gate H-001)', () => {
+    const store = createCenterConversationStore()
+    const messages = [dto('u1', 'user', '質問', T0)].map(toThreadMessage)
+    const tree = (publish: boolean): React.JSX.Element => (
+      <CenterConversationContext.Provider value={store}>
+        <ConversationTimeProvider
+          conversationKey="k"
+          messages={messages}
+          lastTurnOpen={false}
+          publish={publish}
+        >
+          <span />
+        </ConversationTimeProvider>
+      </CenterConversationContext.Provider>
+    )
+    const { rerender } = render(tree(false))
+    expect(store.current()).toBeNull()
+    rerender(tree(true))
+    expect(store.current()?.conversationKey).toBe('k')
+    rerender(tree(false))
+    expect(store.current()).toBeNull()
   })
 
   it('compact でも出る。axe の違反が無い', async () => {

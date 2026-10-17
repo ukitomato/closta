@@ -191,6 +191,7 @@ function PastCenter(): React.JSX.Element {
         conversationKey={selectedRowKey ?? ''}
         messages={transcript.messages}
         lastTurnOpen={false}
+        publish={transcript.status === 'ready' || transcript.status === 'empty'}
       >
         <div className="flex h-full min-h-0 flex-col">
           <CenterHeader

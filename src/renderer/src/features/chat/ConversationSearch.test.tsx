@@ -318,7 +318,7 @@ describe('件数・位置・移動・強調 (US-2 AC1 / AC2)', () => {
     await waitFor(() =>
       expect(position()).toHaveTextContent(CONVERSATION_SEARCH_LABELS.searchPosition(1, 4))
     )
-    expect(scrolledIds(spy).at(-1)).toBe('p0')
+    await waitFor(() => expect(scrolledIds(spy).at(-1)).toBe('p0'))
     await waitFor(() => expect(highlights.get(SEARCH_HIGHLIGHT_CURRENT)?.ranges).toHaveLength(1))
     const current = currentRange(highlights)
     expect(findMessageElement(container, 'p0')!.contains(current.startContainer)).toBe(true)

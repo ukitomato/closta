@@ -54,3 +54,12 @@ src/renderer/src/features/shell/RightPanel.tabs.test.tsx
 src/renderer/src/features/shell/useThrottledConversation.ts
 src/renderer/src/stores/ui.ts
 tests/meter/meter-through.test.tsx
+src/renderer/src/features/chat/ConversationTimeProvider.tsx
+src/renderer/src/features/shell/CenterPane.tsx
+src/renderer/src/features/shell/ConversationMapTab.tsx
+src/renderer/src/features/shell/ConversationMapTab.test.tsx
+src/renderer/src/features/chat/MessageTimeLabel.test.tsx
+docs/ui-coverage.md
+docs/roadmap.md
+specs/017-ui-conversation-time-and-activity/quickstart-results.md
+src/renderer/src/features/chat/ConversationSearch.test.tsx

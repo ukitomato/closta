@@ -237,6 +237,23 @@ describe('会話の地図のタブ (O-9 FE-022)', () => {
     expect(rows(container)).toHaveLength(1)
   })
 
+  it('実行中に行が増えても、フォーカスとスクロールの位置を奪わない (SC-003 / US-2 AC3)', () => {
+    const store = createCenterConversationStore()
+    store.publish(conversation('s', 5))
+    const { container } = mount(store)
+    const second = rows(container)[1]!
+    second.focus()
+    const target = container.querySelector<HTMLElement>('[data-testid="conversation-map"]')!
+    target.scrollTop = 40
+    const before = target.scrollTop
+    act(() => store.publish(conversation('s', 8)))
+    act(() => vi.advanceTimersByTime(500))
+    expect(rows(container).length).toBeGreaterThanOrEqual(5)
+    expect(document.activeElement).toBe(rows(container)[1])
+    expect(document.activeElement?.getAttribute('data-turn-id')).toBe('u1')
+    expect(target.scrollTop).toBe(before)
+  })
+
   it('中央の切り替えで新しい会話に替わり aria-current が消える', () => {
     const store = createCenterConversationStore()
     store.publish(conversation('a', 2))

@@ -393,7 +393,7 @@ function TurnRow({
       tabIndex={tabbable ? 0 : -1}
       aria-label={name}
       aria-current={isCurrent ? 'true' : undefined}
-      className="hover:bg-accent focus-visible:ring-ring aria-[current=true]:bg-accent flex h-full w-full flex-col justify-center gap-0.5 px-3 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-inset"
+      className="group/row hover:bg-accent focus-visible:ring-ring aria-[current=true]:bg-accent flex h-full w-full flex-col justify-center gap-0.5 px-3 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-inset"
       onFocus={onFocus}
       onClick={onClick}
       onKeyDown={onKeyDown}
@@ -403,7 +403,7 @@ function TurnRow({
       }}
     >
       <span className="truncate">{turn.head}</span>
-      <span className="text-muted-foreground flex min-w-0 gap-2 text-xs">
+      <span className="text-muted-foreground group-hover/row:text-accent-foreground group-aria-[current=true]/row:text-accent-foreground flex min-w-0 gap-2 text-xs">
         {time !== null && <span>{time}</span>}
         {duration !== null && <span>{duration}</span>}
         {turn.toolCount > 0 && <span>{CONVERSATION_MAP_LABELS.toolCount(turn.toolCount)}</span>}
