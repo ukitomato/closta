@@ -207,7 +207,7 @@ renderer は main の検証の前に同じ domain の述語と同じ照合の範
 | `SYSTEM_EVENT_CATEGORIES` | `elicitation` | 11 → 12 | category の名前「MCP の手続き」。行の文「{サーバー名 \|\| 'MCP サーバー'} の URL での手続きが終わりました」 |
 | `SYSTEM_EVENT_STATUSES` | `no-fallback-retry` | 21 → 22 | 表示は `no-fallback` と同じ (status の表示名を同じ文言にする)。拒否の行に「編集して再試行」を出す印 |
 
-`elicitation_complete` の行: id `elicitation:${elicitation_id}` (`isValidToolUseId` を通らなければ `elicitation:${uuid}`)・category `elicitation`・opens `true`・detail `''`・status `completed`・name はサーバー名 (`isMcpName` を通らなければ `''`)。`TRANSCRIPT_PART_FIELDS` は変えない。
+`elicitation_complete` の行: id `elicitation:${elicitation_id}` (`isValidToolUseId` を通らなければ `elicitation:${uuid}`)・category `elicitation`・opens `true`・detail `''`・status `completed`・name はサーバー名 (`isMcpName` を通らなければ `''`)。行は O-4 の他の行と同じ `live-signals.ts` の `rowEvent` で組み、`createdAt` は受信時刻 (O-9 / AD-051) になる。`TRANSCRIPT_PART_FIELDS` は変えない。
 
 ### 「編集して再試行」
 
@@ -247,18 +247,18 @@ composer と transcript の行の文言は `features/chat/labels.ts`、承認カ
 
 | 行 (`docs/ui-coverage.md`) | 書き換え先 |
 |---|---|
-| A `SDKElicitationCompleteMessage` (:78) | `実装済み: SystemEventRow (実行中)`・経路 `実行中`・備考「O-10。`elicitation` の行 (サーバー名は形の検査を通したものだけ)。過去ログは O-11 の変換に従う」 |
-| A `SDKModelRefusalNoFallbackMessage` (:56) | 備考の「「編集して再試行」は O-10」を「O-10: `refused_user_message_uuid` があれば「編集して再試行」(composer に戻すだけ。巻き戻さない)」に |
-| A `SDKCommandsChangedMessage` (:72) | 備考の「composer の候補は O-10」を「composer の候補 (O-10)」の実装の記述に |
-| C `AskUserQuestionInput` (:139) | `実装済み: AskUserQuestion + ApprovalCard (両方 / 回答は実行中)`・備考「O-10。回答は `updatedInput` の制約付き射影 (AD-052)」 |
-| D `permission-request` (:171) | 備考に「O-10: `AskUserQuestion` (SDK の tool 名の完全一致) は答える部品と「回答を送る」(AD-052)」 |
-| E `elicitation` (:225) | `実装済み: ElicitationCard (実行中)`・備考「O-10。`onElicitation` (AD-053)。form は部分集合だけ、URL は `openExternalIfHttp`」 |
-| E `request_user_dialog` (:226) | `表示不要: 宣言する種類が無い (payload の形が SDK に無い。AD-053 Decision 4)` |
-| F `Composer slash commands` (:259) | 使い道を `D composer` (候補)、備考に照合の結論 (SH) |
-| F `Composer trigger popover` (:260) | 照合の結論 (primitive を使ったか registry の element を採ったか) |
-| F `Elicitation form` (:276) | 備考に照合の結論 (自作の `ElicitationCard` と不採用の理由、または採用) |
-| F `Question flow` (:318) | 備考に照合の結論 (承認カードの答える部品と不採用の理由、または採用) |
-| F `Approval card` (:240) | 備考に「O-10: `AskUserQuestion` の答える部品」 |
+| A `SDKElicitationCompleteMessage` (:79) | `実装済み: SystemEventRow (実行中)`・経路 `実行中`・備考「O-10。`elicitation` の行 (サーバー名は形の検査を通したものだけ)。過去ログは O-11 の変換に従う」 |
+| A `SDKModelRefusalNoFallbackMessage` (:57) | 備考の「「編集して再試行」は O-10」を「O-10: `refused_user_message_uuid` があれば「編集して再試行」(composer に戻すだけ。巻き戻さない)」に。使い道の `SystemEventRow / ConversationMapTab` と O-9 の注記 (地図の拒否の印) は残す |
+| A `SDKCommandsChangedMessage` (:73) | 備考の「composer の候補は O-10」を「composer の候補 (O-10)」の実装の記述に |
+| C `AskUserQuestionInput` (:140) | `実装済み: AskUserQuestion + ApprovalCard (両方 / 回答は実行中)`・備考「O-10。回答は `updatedInput` の制約付き射影 (AD-052)」 |
+| D `permission-request` (:172) | 備考に「O-10: `AskUserQuestion` (SDK の tool 名の完全一致) は答える部品と「回答を送る」(AD-052)」 |
+| E `elicitation` (:226) | `実装済み: ElicitationCard (実行中)`・備考「O-10。`onElicitation` (AD-053)。form は部分集合だけ、URL は `openExternalIfHttp`」 |
+| E `request_user_dialog` (:227) | `表示不要: 宣言する種類が無い (payload の形が SDK に無い。AD-053 Decision 4)` |
+| F `Composer slash commands` (:260) | 使い道を `D composer` (候補)、備考に照合の結論 (SH) |
+| F `Composer trigger popover` (:261) | 照合の結論 (primitive を使ったか registry の element を採ったか) |
+| F `Elicitation form` (:278) | 備考に照合の結論 (自作の `ElicitationCard` と不採用の理由、または採用) |
+| F `Question flow` (:320) | 備考に照合の結論 (承認カードの答える部品と不採用の理由、または採用) |
+| F `Approval card` (:241) | 備考に「O-10: `AskUserQuestion` の答える部品」 |
 
 項目 21 の出力で割当先が O-10 の行が 0、`M3 の完了の条件の残り` が 6 → 3 (O-11 の 3 行)。
 

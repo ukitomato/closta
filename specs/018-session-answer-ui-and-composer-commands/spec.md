@@ -13,9 +13,9 @@ linear: null
 
 # Feature Specification: Claude Code からの問いに答える UI と composer のコマンドの候補 (O-10)
 
-**Feature Branch**: `018-session-answer-ui-and-composer-commands` (main (1761c32。O-6 の完了の後) から切った)
+**Feature Branch**: `018-session-answer-ui-and-composer-commands` (main (1761c32。O-6 の完了の後) から切り、2026-10-17 に O-9 の完了の後の main (886c514) に載せ直した)
 
-**Created**: 2026-10-16 (夜間の自走で起案。利用者は不在。下の「未承認の判断の一覧」は利用者の承認を待つ)
+**Created**: 2026-10-16 (夜間の自走で起案。利用者は不在。下の「承認の記録」のとおり 2026-10-17 に利用者が承認した)
 
 **Status**: frontmatter の `status:` を正とする
 
@@ -34,24 +34,24 @@ Claude Code が利用者に答えを求めたとき、アプリの中で答え�
 
 **なぜ今**: M3 の完了の条件の残りは O-10 の 3 行と O-11 の 3 行である。`AskUserQuestion` は Claude Code が判断を利用者に委ねる主な手段で、今は「拒否して本文で答える」しかない。MCP サーバーの認証 (URL) や入力 (form) は、アプリから起こしたセッションでは黙って断られ、tool が失敗した理由が分からない。
 
-## 未承認の判断の一覧
+## 承認の記録
 
-夜間の自走で、推奨案を仮に採用した。**どれも利用者の承認を待つ** (承認の前に plan / tasks / design-gate までは進めてよいが、承認で案が変われば plan 以降を直す)。**実装 (`/cl-implement`) の着手の条件は、利用者の承認を得て AD-052 / AD-053 の frontmatter を `status: accepted` (日付つき) にしたこと**である。proposed のままでは accepted の AD-036 Decision 4 P2 と AD-041 (g) に反するコードになるので、着手しない (tasks.md「着手の条件」・SH-013)。
+夜間の自走で推奨案を仮に採用し、**2026-10-17 に利用者がすべてをそのまま承認した** (「それぞれOK」。案は変わらない)。承認を受けて AD-052 / AD-053 の frontmatter を `status: accepted`・`date: 2026-10-17` にした。これで実装 (`/cl-implement`) の着手の条件 (tasks.md「着手の条件」・SH-013) を満たす。
 
-| # | 判断 | 箇所 |
-|---|---|---|
-| U-1 | `AskUserQuestion` の回答の返し方 (AD-052) | 下の「判断」の表 |
-| U-2 | Elicitation の受け方と経路 (AD-053 Decision 1〜3・5・6) | 同上 |
-| U-3 | `request_user_dialog` を今は受けない (AD-053 Decision 4。roadmap の行の「`supportedDialogKinds` は allowlist」を空の allowlist と読む) | 同上 |
-| U-4 | 「編集して再試行」の範囲 (composer に戻すだけで巻き戻さない) | 同上 |
-| U-5 | 問いを待つ間のセッションの状態 (承認待ちに載せる) | 同上 |
-| U-6 | ポジティブリストの外の細部の判断 5 つ | 同上 |
-| U-7 | Elicitation の応答を運ぶ IPC のチャネル `respondElicitation` を 1 つ足す (plan で見つけた FR-008 と SC-010 の食い違いの解消。2026-10-16 に main が推奨案で仮採用) | 同上 |
-| U-8 | URL の Elicitation の手続きの流れ (リンクを押すことを `accept` にする・`elicitation_complete` ではカードを外さない)。design-gate R1 H-001 / C-001 の解消。**未承認 (夜間の仮採用。推奨案)** | 同上 |
-| U-9 | 回答・Elicitation の応答が main の検証に落ちたときの扱い (IPC の戻り値は `Promise<void>` のまま、検証の述語を domain に置いて renderer・main・agents で同じものを使う)。design-gate R1 H-003 の解消。**未承認 (夜間の仮採用。推奨案)** | 同上 |
-| U-10 | SDK の側で中断された Elicitation のカードの扱い (知らせるイベントを足さず、残るカードを既知の限界とする)。design-gate R2 H-001 の解消。**未承認 (夜間の仮採用。推奨案)** | 同上 |
-| AD-052 | `AskUserQuestion` の回答の制約付き射影 (AD-036 Decision 4 P2 の読み替え)。proposed | [0052](../../docs/decisions/0052-ask-user-question-answer-projection.md) |
-| AD-053 | `onElicitation` を足し、`onUserDialog` / `supportedDialogKinds` は渡さない (AD-041 (g) の読み替え)。proposed | [0053](../../docs/decisions/0053-elicitation-callback-and-user-dialog.md) |
+| # | 判断 | 承認 | 箇所 |
+|---|---|---|---|
+| U-1 | `AskUserQuestion` の回答の返し方 (AD-052) | 承認済み (2026-10-17 利用者) | 下の「判断」の表 |
+| U-2 | Elicitation の受け方と経路 (AD-053 Decision 1〜3・5・6) | 承認済み (2026-10-17 利用者) | 同上 |
+| U-3 | `request_user_dialog` を今は受けない (AD-053 Decision 4。roadmap の行の「`supportedDialogKinds` は allowlist」を空の allowlist と読む) | 承認済み (2026-10-17 利用者) | 同上 |
+| U-4 | 「編集して再試行」の範囲 (composer に戻すだけで巻き戻さない) | 承認済み (2026-10-17 利用者) | 同上 |
+| U-5 | 問いを待つ間のセッションの状態 (承認待ちに載せる) | 承認済み (2026-10-17 利用者) | 同上 |
+| U-6 | ポジティブリストの外の細部の判断 5 つ | 承認済み (2026-10-17 利用者) | 同上 |
+| U-7 | Elicitation の応答を運ぶ IPC のチャネル `respondElicitation` を 1 つ足す (plan で見つけた FR-008 と SC-010 の食い違いの解消。2026-10-16 に main が推奨案で仮採用) | 承認済み (2026-10-17 利用者) | 同上 |
+| U-8 | URL の Elicitation の手続きの流れ (リンクを押すことを `accept` にする・`elicitation_complete` ではカードを外さない)。design-gate R1 H-001 / C-001 の解消 | 承認済み (2026-10-17 利用者) | 同上 |
+| U-9 | 回答・Elicitation の応答が main の検証に落ちたときの扱い (IPC の戻り値は `Promise<void>` のまま、検証の述語を domain に置いて renderer・main・agents で同じものを使う)。design-gate R1 H-003 の解消 | 承認済み (2026-10-17 利用者) | 同上 |
+| U-10 | SDK の側で中断された Elicitation のカードの扱い (知らせるイベントを足さず、残るカードを既知の限界とする)。design-gate R2 H-001 の解消 | 承認済み (2026-10-17 利用者) | 同上 |
+| AD-052 | `AskUserQuestion` の回答の制約付き射影 (AD-036 Decision 4 P2 の読み替え) | 承認済み (2026-10-17 利用者)。accepted | [0052](../../docs/decisions/0052-ask-user-question-answer-projection.md) |
+| AD-053 | `onElicitation` を足し、`onUserDialog` / `supportedDialogKinds` は渡さない (AD-041 (g) の読み替え) | 承認済み (2026-10-17 利用者)。accepted | [0053](../../docs/decisions/0053-elicitation-callback-and-user-dialog.md) |
 
 ## 本 feature の位置づけ
 
@@ -67,7 +67,7 @@ roadmap が O-10 に預けた義務 (O-10 の行と、system-scope の持ち主�
 
 | 義務 (roadmap の記録) | 扱い | 正本 / 当たる理由 |
 |---|---|---|
-| design の前に ADR を 2 つ起こす (AD-036 Decision 4 の読み替え・AD-041 (g) の読み替え) | 入れる。AD-052 / AD-053 を proposed で起こした (U-1 / U-2 / U-3) | 「未承認の判断の一覧」 |
+| design の前に ADR を 2 つ起こす (AD-036 Decision 4 の読み替え・AD-041 (g) の読み替え) | 入れる。AD-052 / AD-053 を proposed で起こし、2026-10-17 の利用者の承認で accepted にした (U-1 / U-2 / U-3) | 「承認の記録」 |
 | (1) `AskUserQuestion` の回答 (元の `input` に `answers` だけ・キーは元の問いの文・値の長さの制限・tool 名は SDK の値・射影の関数は `toPermissionResult` の隣・キーの集合の pin テスト) | 入れる。キーは元の問いの文から agents が決め、renderer は問いの位置で送る (U-1) | US-1 / FR-001〜FR-004 |
 | (2) Elicitation の form / URL (`onElicitation`)・入力を永続化しない・ログに出さない・URL は `openExternalIfHttp` だけ | 入れる (U-2) | US-2 / FR-005〜FR-009 |
 | (2) `request_user_dialog` (`onUserDialog`。`supportedDialogKinds` は allowlist) | 空の allowlist として入れ、callback は渡さない (U-3) | FR-005 / FR-016。AD-053 Decision 4 |
@@ -81,20 +81,20 @@ roadmap が O-10 に預けた義務 (O-10 の行と、system-scope の持ち主�
 | system-scope「押したボタンが自分ごと消える」(O-4 が持って閉じた) | 継ぐ (新しい義務はない) | 問いのカードのボタンにも O-4 の `focus-handoff.ts` の規則を当てる (FR-007) |
 | system-scope「`runtime-store.ts` の検出を束ねる」・「直近の活動の不可視文字の残り」・「`running-session-store.ts` の切り出し」 | 当たらない | 本 feature は `runtime-store.ts`・`sanitizeBody` の集合・直近の活動の導出を変えない。稼働中のストアには問いの要求の保持を足す (FR-006) が、切り出しは済んでいる |
 
-## 判断 (2026-10-16 の夜間の自走で仮採用。未承認)
+## 判断 (2026-10-16 の夜間の自走で仮採用。2026-10-17 に利用者が承認)
 
-| # | 判断 | 仮採用した案 (推奨) | 代わりの案 |
+| # | 判断 | 採用した案 (夜間の推奨案をそのまま承認) | 代わりの案 |
 |---|---|---|---|
-| U-1 | `AskUserQuestion` の回答を Claude に返す方式 (AD-036 Decision 4 P2 の読み替え。**未承認 (夜間の仮採用。推奨案)**) | AD-052 のとおり。`AskUserQuestion` の許可に限り、承認の応答に `updatedInput` を足す。中身は SDK が渡した元の入力に `answers` だけを足したもの (元の入力は agents に留める)。renderer は問いの**位置**ごとの回答を今の承認の経路 (`respond-permission`) で送り、agents が元の問いの文をキーにする (roadmap の「キーは元の問いの文と照合」を、照合ではなく agents が決める形で満たす。無害化で文が変わっても崩れない)。件数違い・長すぎる値は拒否として返す。`annotations` は送らない | 全 tool に `updatedInput` を許す / renderer から `updatedInput` の全体を受ける / 問いの文をキーとして renderer から受けて照合する (roadmap の字面) / 回答を承認と別の経路で送る |
-| U-2 | Elicitation の受け方 (AD-041 (g) の読み替え。**未承認 (夜間の仮採用。推奨案)**) | AD-053 のとおり。`onElicitation` を `QUERY_OPTION_KEYS` に足し (8 → 9)、要求は `SessionEvent` の新しい種類 `elicitation-request` (8 → 9)、応答は `SessionControl` の新しい種類 `respond-elicitation` で main の検証を通す。form は MCP のスキーマの部分集合 (平らな object・文字列・数・真偽・列挙) だけを描き、外れたら断る・取り消すだけ。URL は http(s) だけをリンクで出し、今の `openExternalIfHttp` の経路で開く | 要求を `permission-request` に載せる / URL を開く IPC を足す / 任意のスキーマを描く |
-| U-3 | `request_user_dialog` を受けるか (roadmap の行 (2) の範囲。**未承認 (夜間の仮採用。推奨案)**) | 受けない。`supportedDialogKinds` の allowlist は空の固定の定数として置き、空のあいだは `onUserDialog` / `supportedDialogKinds` を options に載せない (AD-053 Decision 4)。payload と結果の形が SDK の型に無く (`payload: Record<string, unknown>`・`result: unknown`)、推測で答えると CLI の流れを誤らせる。宣言しなければ CLI はダイアログの無い振る舞いに落ちる (`refusal_fallback_prompt` は従来の拒否のエラー → O-6 の拒否の行)。対応表の `request_user_dialog` (Tier B) は `表示不要: 宣言する種類が無い (payload の形が SDK に無い。AD-053)` | `refusal_fallback_prompt` を宣言し、payload を実機で観測して形を決める (観測の前に答え方を決められない) / callback を渡して全部 `cancelled` で答える (宣言が空なら届かない) |
-| U-4 | 拒否の後の「編集して再試行」の範囲 (**未承認 (夜間の仮採用。推奨案)**) | composer に戻すだけ。`model_refusal_no_fallback` の行で、`refused_user_message_uuid` が null でない (利用者が書いた入力が拒否された) ときだけ「編集して再試行」を出し、押すと拒否されたターンにアプリから送った入力の文が composer に入る (送らない。今の下書きがあれば置き換える前に確かめる)。会話の巻き戻し (拒否された入力より前に戻して送り直す) はしない (`rewind_files` は `表示不要`。会話の分岐は X-6)。agents が読むのは `refused_user_message_uuid` が null でないかだけ (値は運ばない)。`model_refusal_fallback` には出さない (代わりのモデルで応答が済んでいる) | 巻き戻してから送り直す (X-6 の分岐・`resumeSessionAt` の範囲で、Agent SDK の呼び出しか options の追加に ADR が要る) / fallback の行にも出す |
-| U-5 | 問いを待つ間のセッションの状態 (session の状態の機械。**未承認 (夜間の仮採用。推奨案)**) | 承認待ち (`awaiting_permission`) に載せる。新しい状態を足さない。監視ビューの承認待ちの強調と件数・読み上げ (O-1) がそのまま当たり、利用者が他のセッションを見ていても気付ける。`AskUserQuestion` は SDK の上でも承認の要求なので今もこの状態に入る | 新しい状態 `awaiting_answer` を足す (状態の列挙・監視ビュー・O-1 の件数の規則を全部直す) / 状態を変えない (他のセッションを見ていると問いに気付けない) |
-| U-6 | ポジティブリストの外の細部 (**未承認 (夜間の仮採用。推奨案)**) | (a) `AskUserQuestion` の「回答を送る」は全部の問いに答えるまで押せない (未回答の問いを送ると Claude が空の答えを受ける) (b) 問いのカード (Elicitation) が同じセッションで重なったら、届いた順に 1 枚ずつ出し、残りの数を添える (c) ターンの開始では composer にフォーカスを移さず (`unstable_focusOnRunStart={false}`)、行の選択でセッションを切り替えたときは今どおり移す (`unstable_focusOnThreadSwitched` を保つ。選んだ直後に打てる) (d) コマンドの候補は入力の先頭の `/` のときだけ出す (文の途中の `/` はパスなどと区別できない) (e) form の値がスキーマに合わない・応答が main の検証に落ちたら、送らずにカードに理由を出す (agents で落ちたら断る) | (a) 一部の回答で送れる (b) 全部を並べる (c) 行の選択でも移さない (d) 文の途中でも出す (e) 黙って断る |
-| U-7 | Elicitation の応答 (`respond-elicitation`) を renderer から main へ運ぶ経路 (**未承認 (夜間の仮採用。推奨案)**。plan の段で見つけた食い違い: 今の main には `SessionControl` を何でも運ぶ汎用のチャネルが無く、制御の種類ごとに専用のチャネルと capability のメソッドがある) | IPC のチャネル `respondElicitation` を 1 つ足す (`IPC_CHANNELS`・`ClostaCapability.respondElicitation`・preload・main の handler・チャネルの集合の固定テストを +1)。URL を開く IPC は作らない (AD-053 Decision 5 のまま)。AD-053 の Consequences にチャネルが 1 つ増えることを書く | `respondPermission` に相乗りさせ、引数の形で振り分ける (唯一の承認経路が承認でない応答を運び、AD-053 の Alternatives が退けた問題を応答の側に持ち込む) |
-| U-8 | URL の Elicitation の手続きの流れ (**未承認 (夜間の仮採用。推奨案)**。design-gate R1 H-001 / C-001) | カードの「ブラウザで手続きをする」(リンク) を押すと、URL を既定のブラウザで開き、**同時に `accept` (content なし) を返してカードを外す**。URL のカードに別の「送る」ボタンは無く、選べるのは「ブラウザで手続きをする」「断る」「取り消す」の 3 つ。MCP の URL モードの `accept` は「利用者が URL に進むことに同意した」の意味で、手続きの完了はサーバーが `elicitation_complete` で知らせる。`elicitation_complete` はカードを外さない (届いた事実の行を出すだけ。`elicitation_id` は行の id にだけ使い、カードと照合しない。AD-053 Decision 6)。開いた後に手続きを済ませずに閉じたときの回復は MCP サーバーの側 (tool の失敗か再要求) に任せる。`openUrl` が null (http(s) でない) の URL への `accept` は agents が `decline` に替える | リンクと「手続きに進む」(`accept`) のボタンを分ける (押す順で状態が 2 つに割れ、リンクだけ押して `accept` を送らないと承認待ちが残る) / `elicitation_complete` で `elicitationId` を照合してカードを外す (カードが残っていれば SDK の callback はまだ待っており、外すと応答が返らない) |
-| U-9 | 応答が main の検証に落ちたときの扱い (**未承認 (夜間の仮採用。推奨案)**。design-gate R1 H-003) | IPC の戻り値は今の `respondPermission` と同じ `Promise<void>` のまま。回答 (`isPermissionAnswers`) と Elicitation の応答 (`isElicitationAction` / `isElicitationContent`) の検証の述語を **domain に置き**、renderer (送る前の確かめ)・main (`validate.ts` から呼ぶ)・agents (`decodeSessionControl`) が同じ関数を使う。renderer は述語を通したものだけを送るので、main で落ちる応答は renderer の不具合でしか起きない。その不具合は domain の述語の単体と、renderer の送る前の確かめが同じ述語を呼ぶことの component テストで防ぐ。ストアが送る前にカードを外す今の規則は変えない | 戻り値を `Promise<boolean>` にし、`false` ならカードを戻す (capability・preload・store の非同期の戻しが要り、外した後に戻すとフォーカスと読み上げが揺れる。今の承認の経路の形とも割れる) |
-| U-10 | SDK の側で中断された Elicitation (`signal`。MCP 側のタイムアウトなど) のカードの扱い (**未承認 (夜間の仮採用。推奨案)**。design-gate R2 H-001) | 知らせるイベントを足さない。renderer がカードを外すのは US-2 AC7 の場面 (応答を送る・`failure`・強制終了・閉じる・`state` が `interrupted` / `error` / `done` になる) だけ。ターンを続けたまま SDK の側で中断された問いのカードは残る。押すとカードは外れて応答が agents に届くが、registry に無い `requestId` なので何もしない (害は無い)。それが最後の待ちならセッションは `running` に戻り、カードだけが残る。これを既知の限界として記録する | `state` が `awaiting_permission` を出たら `elicitations` を外す (承認と同時に待つ場合と、`state` と要求のイベントの順序を決める必要がある) / 既存のイベントに cancel を載せる (`SESSION_EVENT_KINDS` は 9 のまま。どのイベントに載せるかの契約が要る) / 新しいイベントの種類を足す (9 → 10。AD-053 の範囲を広げる) |
+| U-1 | `AskUserQuestion` の回答を Claude に返す方式 (AD-036 Decision 4 P2 の読み替え。**承認済み (2026-10-17 利用者)**) | AD-052 のとおり。`AskUserQuestion` の許可に限り、承認の応答に `updatedInput` を足す。中身は SDK が渡した元の入力に `answers` だけを足したもの (元の入力は agents に留める)。renderer は問いの**位置**ごとの回答を今の承認の経路 (`respond-permission`) で送り、agents が元の問いの文をキーにする (roadmap の「キーは元の問いの文と照合」を、照合ではなく agents が決める形で満たす。無害化で文が変わっても崩れない)。件数違い・長すぎる値は拒否として返す。`annotations` は送らない | 全 tool に `updatedInput` を許す / renderer から `updatedInput` の全体を受ける / 問いの文をキーとして renderer から受けて照合する (roadmap の字面) / 回答を承認と別の経路で送る |
+| U-2 | Elicitation の受け方 (AD-041 (g) の読み替え。**承認済み (2026-10-17 利用者)**) | AD-053 のとおり。`onElicitation` を `QUERY_OPTION_KEYS` に足し (8 → 9)、要求は `SessionEvent` の新しい種類 `elicitation-request` (8 → 9)、応答は `SessionControl` の新しい種類 `respond-elicitation` で main の検証を通す。form は MCP のスキーマの部分集合 (平らな object・文字列・数・真偽・列挙) だけを描き、外れたら断る・取り消すだけ。URL は http(s) だけをリンクで出し、今の `openExternalIfHttp` の経路で開く | 要求を `permission-request` に載せる / URL を開く IPC を足す / 任意のスキーマを描く |
+| U-3 | `request_user_dialog` を受けるか (roadmap の行 (2) の範囲。**承認済み (2026-10-17 利用者)**) | 受けない。`supportedDialogKinds` の allowlist は空の固定の定数として置き、空のあいだは `onUserDialog` / `supportedDialogKinds` を options に載せない (AD-053 Decision 4)。payload と結果の形が SDK の型に無く (`payload: Record<string, unknown>`・`result: unknown`)、推測で答えると CLI の流れを誤らせる。宣言しなければ CLI はダイアログの無い振る舞いに落ちる (`refusal_fallback_prompt` は従来の拒否のエラー → O-6 の拒否の行)。対応表の `request_user_dialog` (Tier B) は `表示不要: 宣言する種類が無い (payload の形が SDK に無い。AD-053)` | `refusal_fallback_prompt` を宣言し、payload を実機で観測して形を決める (観測の前に答え方を決められない) / callback を渡して全部 `cancelled` で答える (宣言が空なら届かない) |
+| U-4 | 拒否の後の「編集して再試行」の範囲 (**承認済み (2026-10-17 利用者)**) | composer に戻すだけ。`model_refusal_no_fallback` の行で、`refused_user_message_uuid` が null でない (利用者が書いた入力が拒否された) ときだけ「編集して再試行」を出し、押すと拒否されたターンにアプリから送った入力の文が composer に入る (送らない。今の下書きがあれば置き換える前に確かめる)。会話の巻き戻し (拒否された入力より前に戻して送り直す) はしない (`rewind_files` は `表示不要`。会話の分岐は X-6)。agents が読むのは `refused_user_message_uuid` が null でないかだけ (値は運ばない)。`model_refusal_fallback` には出さない (代わりのモデルで応答が済んでいる) | 巻き戻してから送り直す (X-6 の分岐・`resumeSessionAt` の範囲で、Agent SDK の呼び出しか options の追加に ADR が要る) / fallback の行にも出す |
+| U-5 | 問いを待つ間のセッションの状態 (session の状態の機械。**承認済み (2026-10-17 利用者)**) | 承認待ち (`awaiting_permission`) に載せる。新しい状態を足さない。監視ビューの承認待ちの強調と件数・読み上げ (O-1) がそのまま当たり、利用者が他のセッションを見ていても気付ける。`AskUserQuestion` は SDK の上でも承認の要求なので今もこの状態に入る | 新しい状態 `awaiting_answer` を足す (状態の列挙・監視ビュー・O-1 の件数の規則を全部直す) / 状態を変えない (他のセッションを見ていると問いに気付けない) |
+| U-6 | ポジティブリストの外の細部 (**承認済み (2026-10-17 利用者)**) | (a) `AskUserQuestion` の「回答を送る」は全部の問いに答えるまで押せない (未回答の問いを送ると Claude が空の答えを受ける) (b) 問いのカード (Elicitation) が同じセッションで重なったら、届いた順に 1 枚ずつ出し、残りの数を添える (c) ターンの開始では composer にフォーカスを移さず (`unstable_focusOnRunStart={false}`)、行の選択でセッションを切り替えたときは今どおり移す (`unstable_focusOnThreadSwitched` を保つ。選んだ直後に打てる) (d) コマンドの候補は入力の先頭の `/` のときだけ出す (文の途中の `/` はパスなどと区別できない) (e) form の値がスキーマに合わない・応答が main の検証に落ちたら、送らずにカードに理由を出す (agents で落ちたら断る) | (a) 一部の回答で送れる (b) 全部を並べる (c) 行の選択でも移さない (d) 文の途中でも出す (e) 黙って断る |
+| U-7 | Elicitation の応答 (`respond-elicitation`) を renderer から main へ運ぶ経路 (**承認済み (2026-10-17 利用者)**。plan の段で見つけた食い違い: 今の main には `SessionControl` を何でも運ぶ汎用のチャネルが無く、制御の種類ごとに専用のチャネルと capability のメソッドがある) | IPC のチャネル `respondElicitation` を 1 つ足す (`IPC_CHANNELS`・`ClostaCapability.respondElicitation`・preload・main の handler・チャネルの集合の固定テストを +1)。URL を開く IPC は作らない (AD-053 Decision 5 のまま)。AD-053 の Consequences にチャネルが 1 つ増えることを書く | `respondPermission` に相乗りさせ、引数の形で振り分ける (唯一の承認経路が承認でない応答を運び、AD-053 の Alternatives が退けた問題を応答の側に持ち込む) |
+| U-8 | URL の Elicitation の手続きの流れ (**承認済み (2026-10-17 利用者)**。design-gate R1 H-001 / C-001) | カードの「ブラウザで手続きをする」(リンク) を押すと、URL を既定のブラウザで開き、**同時に `accept` (content なし) を返してカードを外す**。URL のカードに別の「送る」ボタンは無く、選べるのは「ブラウザで手続きをする」「断る」「取り消す」の 3 つ。MCP の URL モードの `accept` は「利用者が URL に進むことに同意した」の意味で、手続きの完了はサーバーが `elicitation_complete` で知らせる。`elicitation_complete` はカードを外さない (届いた事実の行を出すだけ。`elicitation_id` は行の id にだけ使い、カードと照合しない。AD-053 Decision 6)。開いた後に手続きを済ませずに閉じたときの回復は MCP サーバーの側 (tool の失敗か再要求) に任せる。`openUrl` が null (http(s) でない) の URL への `accept` は agents が `decline` に替える | リンクと「手続きに進む」(`accept`) のボタンを分ける (押す順で状態が 2 つに割れ、リンクだけ押して `accept` を送らないと承認待ちが残る) / `elicitation_complete` で `elicitationId` を照合してカードを外す (カードが残っていれば SDK の callback はまだ待っており、外すと応答が返らない) |
+| U-9 | 応答が main の検証に落ちたときの扱い (**承認済み (2026-10-17 利用者)**。design-gate R1 H-003) | IPC の戻り値は今の `respondPermission` と同じ `Promise<void>` のまま。回答 (`isPermissionAnswers`) と Elicitation の応答 (`isElicitationAction` / `isElicitationContent`) の検証の述語を **domain に置き**、renderer (送る前の確かめ)・main (`validate.ts` から呼ぶ)・agents (`decodeSessionControl`) が同じ関数を使う。renderer は述語を通したものだけを送るので、main で落ちる応答は renderer の不具合でしか起きない。その不具合は domain の述語の単体と、renderer の送る前の確かめが同じ述語を呼ぶことの component テストで防ぐ。ストアが送る前にカードを外す今の規則は変えない | 戻り値を `Promise<boolean>` にし、`false` ならカードを戻す (capability・preload・store の非同期の戻しが要り、外した後に戻すとフォーカスと読み上げが揺れる。今の承認の経路の形とも割れる) |
+| U-10 | SDK の側で中断された Elicitation (`signal`。MCP 側のタイムアウトなど) のカードの扱い (**承認済み (2026-10-17 利用者)**。design-gate R2 H-001) | 知らせるイベントを足さない。renderer がカードを外すのは US-2 AC7 の場面 (応答を送る・`failure`・強制終了・閉じる・`state` が `interrupted` / `error` / `done` になる) だけ。ターンを続けたまま SDK の側で中断された問いのカードは残る。押すとカードは外れて応答が agents に届くが、registry に無い `requestId` なので何もしない (害は無い)。それが最後の待ちならセッションは `running` に戻り、カードだけが残る。これを既知の限界として記録する | `state` が `awaiting_permission` を出たら `elicitations` を外す (承認と同時に待つ場合と、`state` と要求のイベントの順序を決める必要がある) / 既存のイベントに cancel を載せる (`SESSION_EVENT_KINDS` は 9 のまま。どのイベントに載せるかの契約が要る) / 新しいイベントの種類を足す (9 → 10。AD-053 の範囲を広げる) |
 
 ## Clarifications
 
@@ -251,7 +251,7 @@ roadmap が O-10 に預けた義務 (O-10 の行と、system-scope の持ち主�
 
 ### Assumptions
 
-- **[未承認 U-1〜U-10・AD-052・AD-053]** 上の「判断」の表と「未承認の判断の一覧」
+- **[承認済み (2026-10-17 利用者) U-1〜U-10・AD-052・AD-053]** 上の「判断」の表と「承認の記録」
 - **[ASSUMED]** Clarifications の 9 項目と Edge Cases の 2 項目 (UI ラベル・既定の表示状態・数値の既定値・ソート順・エラーメッセージ。ポジティブリスト)
 - `AskUserQuestion` の tool_result の中身・`multiSelect` の回答の書式・`dontAsk` / `plan` での届き方・Elicitation (form / URL) と `elicitation_complete` の実機での届き方は未確認として扱い、quickstart の実機の目視で記録する (起こせなければ未確認のまま残す)
 - 起動したセッションの MCP サーバーが Elicitation を送るかはサーバー次第で、届く場面は少ない。振る舞いは fixture の単体と component で確かめる

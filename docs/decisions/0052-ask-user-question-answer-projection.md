@@ -1,6 +1,6 @@
 ---
-status: proposed
-date: 2026-10-16
+status: accepted
+date: 2026-10-17
 id: AD-052
 deciders: ukitomato
 tags: [session, sdk, security, permission, scope]
@@ -21,7 +21,7 @@ O-10 ([spec 018](../../specs/018-session-answer-ui-and-composer-commands/spec.md
 - `updatedInput` は任意の tool の入力の書き換えである。tool を問わず許すと、承認した後に `Bash` の `command` を差し替えるなど、承認の意味を変える経路になる (AD-036 が P2 で閉じた理由)
 - 先例: [AD-040](0040-provider-settings-constrained-projection.md) は、昇格レバーの `Options.settings` を「2 キー限定の制約付き射影」(型 + 実行時の assert + 項目 16 の backstop) に限って許した
 
-本 ADR は O-10 が夜間の自走で起こした (未承認)。
+本 ADR は O-10 が夜間の自走で起こした (spec 018 の U-1)。本 ADR と spec 018 の U-1〜U-10 は 2026-10-17 に利用者が承認した。
 
 ## 読み替える箇所
 

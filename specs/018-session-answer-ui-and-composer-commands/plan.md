@@ -2,7 +2,7 @@
 
 **Branch**: `018-session-answer-ui-and-composer-commands` | **Date**: 2026-10-16 | **Spec**: [spec.md](spec.md)
 
-**Input**: [spec.md](spec.md) (FR-001〜FR-017 / SC-001〜SC-010 / U-1〜U-10。夜間の自走で仮採用。未承認。U-8 / U-9 は design-gate R1、U-10 は R2 の修正で足した)
+**Input**: [spec.md](spec.md) (FR-001〜FR-017 / SC-001〜SC-010 / U-1〜U-10。夜間の自走で仮採用し、2026-10-17 に利用者が承認した。U-8 / U-9 は design-gate R1、U-10 は R2 の修正で足した)
 
 関連: [research.md](research.md) / [data-model.md](data-model.md) / [contracts/session-answer-boundary.md](contracts/session-answer-boundary.md) / [quickstart.md](quickstart.md)
 
@@ -32,7 +32,7 @@ Claude Code が利用者に答えを求めたとき、アプリの中で答え�
 
 **Performance Goals**: 新しい計測の目標は無い。`elicitation_complete` の行は `message` なので O-8 の観測点に数える (data-model「観測」)
 
-**Constraints**: AD-036 Decision 2 (port は一方向・制御は検証済み IPC)、AD-052 / AD-053 (proposed)、Principle VIII (IME)、XIII (element の照合)、XV (文言の表)
+**Constraints**: AD-036 Decision 2 (port は一方向・制御は検証済み IPC)、AD-052 / AD-053 (accepted。2026-10-17)、Principle VIII (IME)、XIII (element の照合)、XV (文言の表)
 
 **Scale/Scope**: 1 セッションの Elicitation の待ちは 4 まで。回答は 4 件まで。1 つの値は 1,000 コードポイントまで。Elicitation の項目は 32 まで。コマンドの候補は 20 件まで描く
 
@@ -106,8 +106,8 @@ Claude Code が利用者に答えを求めたとき、アプリの中で答え�
 
 ### Related ADRs
 
-- [AD-052](../../docs/decisions/0052-ask-user-question-answer-projection.md) — `AskUserQuestion` の回答を `updatedInput` の制約付き射影で返す: **proposed** (本 feature。U-1)
-- [AD-053](../../docs/decisions/0053-elicitation-callback-and-user-dialog.md) — `onElicitation` を足し、`onUserDialog` / `supportedDialogKinds` は渡さない: **proposed** (本 feature。U-2 / U-3 / U-7)
+- [AD-052](../../docs/decisions/0052-ask-user-question-answer-projection.md) — `AskUserQuestion` の回答を `updatedInput` の制約付き射影で返す: **accepted** (2026-10-17。本 feature。U-1)
+- [AD-053](../../docs/decisions/0053-elicitation-callback-and-user-dialog.md) — `onElicitation` を足し、`onUserDialog` / `supportedDialogKinds` は渡さない: **accepted** (2026-10-17。本 feature。U-2 / U-3 / U-7)
 - [AD-036](../../docs/decisions/0036-single-session-launch-process-and-live-stream.md) — 単一セッション起動とライブストリーム。Decision 2 (port は一方向・制御は検証済み IPC) は守り、Decision 4 (P2) は AD-052 が読み替える: **accepted**
 - [AD-041](../../docs/decisions/0041-x4-launch-config-on-x1-launch-gate.md) — (g) query の options のキーの固定。AD-053 が読み替える: **accepted**
 - [AD-048](../../docs/decisions/0048-session-config-display-and-answer-ui-split.md) — 問いに答える UI を O-10 に分ける (Decision 1)・Tier C を転用しない・MCP を操作しない (Decision 2): **accepted**
@@ -120,11 +120,11 @@ Claude Code が利用者に答えを求めたとき、アプリの中で答え�
 
 ### Glossary 抜粋
 
-- **Question from Claude Code (Claude Code からの問い)** — Claude Code が利用者に答えを求めるもの。`AskUserQuestion`・Elicitation・`request_user_dialog` の 3 つ。O-10 の範囲は問いに答える UI と composer のスラッシュコマンドの候補 (glossary:708-720)。本 feature で O-10 の結論 (答えるのは前 2 つ・`request_user_dialog` は受けない) に書き換える
+- **Question from Claude Code (Claude Code からの問い)** — Claude Code が利用者に答えを求めるもの。`AskUserQuestion`・Elicitation・`request_user_dialog` の 3 つ。O-10 の範囲は問いに答える UI と composer のスラッシュコマンドの候補 (glossary:736-748)。本 feature で O-10 の結論 (答えるのは前 2 つ・`request_user_dialog` は受けない) に書き換える
 - **Approval card (承認カード)** — `canUseTool` の permission 要求に応答する UI。`ui` (状態は `session`) (glossary:54-58)。本 feature で `AskUserQuestion` の答える部品を足す
-- **PermissionRequest / PermissionDecision** — `canUseTool` の権限往復。`toPermissionResult` の出力は `{behavior, message}` (glossary:669-679)。Counterexample の「`updatedInput` を出さない」を AD-052 の読み替えに直す
-- **Composer** — `ComposerPrimitive.Input` を用い、IME の二重ガードは assistant-ui 側。自前ガードを新設しない (glossary:151-159)。コマンドの候補も同じ Input の上に載せる
-- **System event row (システムイベントの行)** — agents が組む transcript の 1 行 (glossary:1028)。category `elicitation` と status `no-fallback-retry` を足す
+- **PermissionRequest / PermissionDecision** — `canUseTool` の権限往復。`toPermissionResult` の出力は `{behavior, message}` (glossary:697-707)。Counterexample の「`updatedInput` を出さない」を AD-052 の読み替えに直す
+- **Composer** — `ComposerPrimitive.Input` を用い、IME の二重ガードは assistant-ui 側。自前ガードを新設しない (glossary:160-168)。コマンドの候補も同じ Input の上に載せる
+- **System event row (システムイベントの行)** — agents が組む transcript の 1 行 (glossary:1056)。category `elicitation` と status `no-fallback-retry` を足す
 - 新しく足す: 問いのカード (Elicitation card)・コマンドの候補 (Slash command candidates)
 
 ## 上流からの申し送り
@@ -156,17 +156,19 @@ Grep pattern="ask-user-question|elicitation|question-card|slash-command|respondE
 | 6 | roadmap.md:380 (O-6 の行) / 016 spec.md:46,66,245 / 016 analyze.round2:27 / 016 arch design-gate.round2:182,193 / round3:73 | 拒否の後の「編集して再試行」を O-10 に送った記録 | **受ける** — US-4 / FR-015 (R-09)。016 の記録そのものは履歴で変えない |
 | 7 | roadmap.md:379 (O-5 の行) / 015 quickstart.md:23 / 015 quickstart-results:46 | O-5 V-3 の `AskUserQuestion` を許可したときの tool_result の中身 (O-10 の材料) | **受ける** — quickstart V-3 #1〜#3 (回答を送ったときの中身として記録する)。O-5 の行の記録は変えない |
 | 8 | roadmap.md:390 / :381 (O-8 の行の (c) には未ヒットだが同じ義務) | O-10 の登録の経緯 / O-8 の観測点の基準の変化 | :390 は **当たらない** (履歴)。O-8 の (c) は **受ける** — `elicitation_complete` の行は数え、`elicitation-request` は数えないと並べて書く (FR-017) |
-| 9 | ui-coverage.md:56,72,78,139,225,226,259,276,318 (9) | `後続: O-10` の 4 行と O-10 を名指す備考 | **受ける** — data-model §6 の書き換え先。:171 (D permission-request。015 ui-coverage pr-gate M の推奨で「O-10 で注記を外す」と書く予定だった行) と :240 (F Approval card) にも備考を足す |
-| 10 | glossary.md:713,717,719 | Question from Claude Code の O-10 の範囲と Counterexample | **受ける** — O-10 の結論に書き換える。:676-678 (PermissionRequest / PermissionDecision の Counterexample。未ヒット) も AD-052 の読み替えに直す (FR-017) |
-| 11 | session charter:300-302 | Related Specs の O-10 (未着手) | **受ける** — Related Specs を結論に、Related ADRs に AD-052 / AD-053、`SessionEvent` (9)・`SessionControl` (`respond-elicitation`)・`PermissionDecision.answers` の拡張を記録する (FR-017) |
-| 12 | ui charter:56,245,251 | slash commands の候補の持ち主は O-10・O-10 は session で表示の部品は ui | **受ける** — :56 に結論 (trigger popover の primitive・IME はライブラリのガード・部品は ui の `features/chat`)。015 arch design-gate L-102 の推奨 (O-10 の中で候補の部品と IME の扱いは ui が持つ) もここで書く。:245 / :251 は **当たらない** (分担の記録のまま正しい) |
+| 9 | ui-coverage.md:57,73,79,140,226,227,260,278,320 (9) | `後続: O-10` の 4 行と O-10 を名指す備考 | **受ける** — data-model §6 の書き換え先。:172 (D permission-request。015 ui-coverage pr-gate M の推奨で「O-10 で注記を外す」と書く予定だった行) と :241 (F Approval card) にも備考を足す |
+| 10 | glossary.md:741,745,747 | Question from Claude Code の O-10 の範囲と Counterexample | **受ける** — O-10 の結論に書き換える。:704-706 (PermissionRequest / PermissionDecision の Counterexample。未ヒット) も AD-052 の読み替えに直す (FR-017) |
+| 11 | session charter:307-309 | Related Specs の O-10 (未着手) | **受ける** — Related Specs を結論に、Related ADRs に AD-052 / AD-053、`SessionEvent` (9)・`SessionControl` (`respond-elicitation`)・`PermissionDecision.answers` の拡張を記録する (FR-017) |
+| 12 | ui charter:58,247,258 | slash commands の候補の持ち主は O-10・O-10 は session で表示の部品は ui | **受ける** — :58 に結論 (trigger popover の primitive・IME はライブラリのガード・部品は ui の `features/chat`)。015 arch design-gate L-102 の推奨 (O-10 の中で候補の部品と IME の扱いは ui が持つ) もここで書く。:247 / :258 は **当たらない** (分担の記録のまま正しい) |
 | 13 | _overview.md:69,110 | Feature 帰属の表と帰属の根拠 | **受ける** — :69 の題はそのまま、O-10 の結論を根拠の節 (:110) に 1 行足す (FR-017)。:115 は O-11 の記述で **当たらない** |
-| 14 | prompts.md:32,299,301,305 | O-10 のプロンプトと「未使用のものは着手のときにこの形に書き直す」 | **受ける** — 着手したので :299-305 を書き直し済みの形 (1〜3 文 + roadmap の行への参照) にする (FR-017) |
+| 14 | prompts.md:32,300,302,306 | O-10 のプロンプトと「未使用のものは着手のときにこの形に書き直す」 | **受ける** — 着手したので :300-306 を書き直し済みの形 (1〜3 文 + roadmap の行への参照) にする (FR-017) |
 | 15 | ai-workflow/PLAN.md:41,84,108,121,259 | ワークフローの見直しの計画 (O-10 のプロンプトの義務の運び方の指摘を含む) | **当たらない** — :108 の「義務の文が roadmap に移っていることを確かめてから削る」は #14 で満たす。計画の文書は変えない |
 | 16 | 0048:11,34,43,46,58 | O-10 に分けた決定と Confirmation | **注記** — accepted で変えない。Confirmation (O-10 の行と対応表の 4 行) は本 feature の完了で閉じる。:34 の「domain は利用者が決める」は 015 U-1 で決まった (015 arch pr-gate の M。既知) |
 | 17 | 0052:24 / 0053:26,34 | 本 feature の ADR | **注記** |
-| 18 | 015 spec / plan / research / data-model / tasks / quickstart(-results) / analyze / design-gate / 各 reviewer の出力 (約 100 件) | O-10 を登録した feature の記録 | **当たらない** (履歴) — ただし次の 2 つは **受ける**: (a) ui-coverage pr-gate R1/R2 の「O-10 で注記を外すときに D 節を直し忘れるおそれ」→ #9 の :171 (b) arch design-gate L-101 / L-102 → #13 / #12 |
+| 18 | 015 spec / plan / research / data-model / tasks / quickstart(-results) / analyze / design-gate / 各 reviewer の出力 (約 100 件) | O-10 を登録した feature の記録 | **当たらない** (履歴) — ただし次の 2 つは **受ける**: (a) ui-coverage pr-gate R1/R2 の「O-10 で注記を外すときに D 節を直し忘れるおそれ」→ #9 の :172 (b) arch design-gate L-101 / L-102 → #13 / #12 |
 | 19 | 016 quickstart-results:29,32 / 016 ui-coverage pr-gate R1:11,38,40 / 016 po design-gate R3:91 / 016 tasks:89 / 016 arch design-gate:188 / 016 analyze.round3:5 | O-10 の件数 (`O-10(M3) 4 [Tier A 3]`) と分割の記録 | **当たらない** (履歴)。SC-009 で件数が 0 になる |
+
+**O-9 の後の main に載せ直して増えたヒット (2026-10-17)**: 017 の 4 件 (plan:160 / spec:73 / ui-coverage-reviewer.pr-gate:35,65)。plan:160・spec:73・pr-gate:35 は **当たらない** (履歴)。pr-gate:65 (O-10 の「編集して再試行」が、O-9 で地図にも出るようになった拒否の行を壊しうる) は **受ける** — 地図の拒否の印は category `refusal` で決まり (`features/chat/turns.ts` の `TURN_MARK_CATEGORIES`)、status (`no-fallback-retry` を足す) に依らないので変わらない。ui-coverage の A `:57` は「「編集して再試行」は O-10」の句だけを書き換え、`ConversationMapTab` と O-9 の注記を残す (data-model §6)。同じく O-9 で、agents の行の `createdAt` は受信時刻 (`live-signals.ts` の `rowEvent`。AD-051) になった。`elicitation_complete` の行も同じ `rowEvent` で組む (data-model §5)
 
 ### 3. 名前の一覧のファイル (9 件)
 
@@ -204,8 +206,8 @@ Grep pattern="ask-user-question|elicitation|question-card|slash-command|respondE
 
 ## ADR
 
-- 新しい ADR は起こさない。AD-052 / AD-053 (proposed) が本 feature の決定の正本で、U-7 の結論を AD-053 の Consequences に、U-8 の結論 (`elicitation_id` は行の id にだけ使い、カードと照合しない) を AD-053 Decision 6 に足した。accepted にするのは利用者の承認の後 (未承認の判断の一覧)
-- **実装の着手の条件は、AD-052 / AD-053 が accepted (日付つき) であること。** proposed のまま実装に進むと、accepted の AD-036 Decision 4 P2 と AD-041 (g) に反するコードが入る。tasks.md の「着手の条件」が実装の前に frontmatter を改めることを求め、SH-013 が `/cl-done` の前に `status: accepted` を確かめる
+- 新しい ADR は起こさない。AD-052 / AD-053 が本 feature の決定の正本で、proposed のうちに U-7 の結論を AD-053 の Consequences に、U-8 の結論 (`elicitation_id` は行の id にだけ使い、カードと照合しない) を AD-053 Decision 6 に足した。2026-10-17 の利用者の承認 (spec「承認の記録」) で 2 つとも accepted (`date: 2026-10-17`) にした
+- **実装の着手の条件は、AD-052 / AD-053 が accepted (日付つき) であること** (2026-10-17 に満たした)。proposed のまま実装に進むと、accepted の AD-036 Decision 4 P2 と AD-041 (g) に反するコードが入るためである。SH-013 は `/cl-done` の前に `status: accepted` をもう一度確かめる
 - 005 contracts C-4 と 005 data-model §5 には AD-052 / AD-053 と本 feature の contracts への pointer を置く (FR-017)
 
 ## Risks
@@ -273,7 +275,7 @@ tests/rule-fixtures/b-equivalent/sdk-updated-input.ts.fixture (新規) / expecte
 
 ## 設計後の見直し (Phase 1 の後)
 
-- NEEDS CLARIFICATION は残っていない。plan の段で見つけた食い違い (FR-008 と SC-010) は U-7 として spec に足し、AD-053 の Consequences を直した (main の仮採用。未承認)
+- NEEDS CLARIFICATION は残っていない。plan の段で見つけた食い違い (FR-008 と SC-010) は U-7 として spec に足し、AD-053 の Consequences を直した (main の仮採用。2026-10-17 に利用者が承認)
 - Constitution Check は Phase 1 の後も全項目が通る。Complexity Tracking に載せる違反は無い
 - after_plan の hook (`speckit.agent-context.update`) は optional で、自動では実行しない
 

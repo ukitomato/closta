@@ -92,7 +92,7 @@
 
 ## R-13. composer のボタンの日本語の名前
 
-- **Decision**: `COMPOSER_LABELS` (`features/chat/labels.ts:414`) に `send: '送信'`・`stop: '生成を止める'`・`scrollToBottom: '最下部へ'`・`startVoice: '音声入力を始める'`・`stopVoice: '音声入力を止める'` を足し、`thread.aui.tsx` の `ComposerAction` と `VirtualScrollToBottom` / `ThreadScrollToBottom` の tooltip / aria-label を表から取る。locator は `e2e/ime.spec.ts:105` (`'Send message'`) と `LivePane.o2.test.tsx:454` (`'Stop generating'`) を同じ PR で直す。perf/ に当たる文字列は無い (grep 0 件)
+- **Decision**: `COMPOSER_LABELS` (`features/chat/labels.ts:426`) に `send: '送信'`・`stop: '生成を止める'`・`scrollToBottom: '最下部へ'`・`startVoice: '音声入力を始める'`・`stopVoice: '音声入力を止める'` を足し、`thread.aui.tsx` の `ComposerAction` と `VirtualScrollToBottom` / `ThreadScrollToBottom` の tooltip / aria-label を表から取る。locator は `e2e/ime.spec.ts:105` (`'Send message'`) と `LivePane.o2.test.tsx:454` (`'Stop generating'`) を同じ PR で直す。perf/ に当たる文字列は無い (grep 0 件)
 - **Rationale**: AD-045 Decision 2 (文言の表)。spec の Clarifications の語
 - **Alternatives considered**: なし (ポジティブリストの UI ラベル)
 

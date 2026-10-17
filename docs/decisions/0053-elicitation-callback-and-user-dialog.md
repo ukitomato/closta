@@ -1,6 +1,6 @@
 ---
-status: proposed
-date: 2026-10-16
+status: accepted
+date: 2026-10-17
 id: AD-053
 deciders: ukitomato
 tags: [session, sdk, mcp, security, ipc, scope]
@@ -23,7 +23,7 @@ O-10 ([spec 018](../../specs/018-session-answer-ui-and-composer-commands/spec.md
 - agents → renderer の一方向のデータは `SessionEvent` (`SESSION_EVENT_KINDS` 8 種)、renderer → main → agents の制御は検証済みの IPC の `SessionControl` だけ (AD-036 Decision 2)
 - 外部の URL を OS に渡す最終の防御は main の `openExternalIfHttp` (`src/main/app/window.ts`。http(s) だけ) で、renderer の新しいウィンドウの要求 (`setWindowOpenHandler`) と遷移 (`will-navigate`) から呼ばれる
 
-本 ADR は O-10 が夜間の自走で起こした (未承認)。
+本 ADR は O-10 が夜間の自走で起こした (spec 018 の U-2 / U-3 / U-7 / U-8)。本 ADR と spec 018 の U-1〜U-10 は 2026-10-17 に利用者が承認した。
 
 ## 読み替える箇所
 
