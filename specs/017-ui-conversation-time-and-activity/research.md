@@ -2,7 +2,7 @@
 
 **Date**: 2026-10-16 (夜間の自走。利用者は不在) | **Spec**: [spec.md](./spec.md) | **Plan**: [plan.md](./plan.md)
 
-`/speckit.plan` は調べものを research agents に出す形だが、designer は Agent ツールを持たないので、自分で SDK の型と実装・assistant-ui の core・main のソース (1761c32) を読んで書いた。規則の正本は [data-model.md](./data-model.md) で、ここには判断と理由だけを書く。spec の U-1〜U-8 は未承認の仮採用で、本 research の判断はその上に載る (承認されなかった項目は spec と合わせて直す)。
+`/speckit.plan` は調べものを research agents に出す形だが、designer は Agent ツールを持たないので、自分で SDK の型と実装・assistant-ui の core・main のソース (1761c32) を読んで書いた。規則の正本は [data-model.md](./data-model.md) で、ここには判断と理由だけを書く。spec の U-1〜U-8 は夜間の仮採用で 2026-10-17 に利用者が承認済み。本 research の判断はその上に載る。
 
 ## R-01 過去ログの時刻の出所 (U-2)
 

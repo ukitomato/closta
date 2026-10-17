@@ -25,7 +25,7 @@
 - 固定テスト `TRANSCRIPT_MESSAGE_FIELDS` / `TRANSCRIPT_PART_FIELDS` / `METER_UPDATE_TYPES` の期待値を変えていない (SC-005)
 - `src/agents/` の Agent SDK の呼び出しの許可リスト (`scripts/constitution/allowlists.mjs`) と query の options のキーに差分が無い (FR-005)
 - `docs/ui-coverage.md`: F 節の Message timing / Heat graph / Conversation map の使い道が `A SDKAssistantMessage / A SDKUserMessage`、Activity graph / Trace waterfall が `未使用` と理由。備考の割当先が O-9 の行が 0 (SC-006)。A 節の 2 行と「SDK を上げたときの手順」の 4 (data-model §7)
-- `docs/decisions/0051-message-time-source-and-display-only.md` が `status: proposed` で存在する (SC-006)
+- `docs/decisions/0051-message-time-source-and-display-only.md` が `status: accepted` で存在する (SC-006)
 - glossary・ui charter・session charter・`_overview.md`・`prompts.md`・roadmap が data-model §7 のとおり
 - PR の説明に registry の照合の結果 (候補名と不適合の理由。research R-10) がある (Principle XIII)
 - E2E の基準画像 (`composer-fullwidth.png`・`sidebar-past-sessions.png`) は時刻と右のペインを写さないので変わらない。CI の e2e job で差分が出たら、原因を確かめてから CI の artifact で取り直す

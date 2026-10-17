@@ -2,7 +2,7 @@
 
 **Branch**: `017-ui-conversation-time-and-activity` (main 1761c32 の上) | **Date**: 2026-10-16 (夜間の自走。利用者は不在) | **Spec**: [spec.md](./spec.md)
 
-**Input**: [spec.md](./spec.md) (U-1〜U-8 は夜間の仮採用で**未承認**。U-8 は design-gate H-001 の修正で足した。AD-051 は本 plan で proposed として起こした)
+**Input**: [spec.md](./spec.md) (U-1〜U-8 は夜間の仮採用で、2026-10-17 に利用者が**承認済み**。U-8 は design-gate H-001 の修正で足した。AD-051 は本 plan で proposed として起こし、2026-10-17 に accepted)
 
 本 plan は spec / [research.md](./research.md) / [data-model.md](./data-model.md) / [quickstart.md](./quickstart.md) を正本として参照し、規則を書き写さない。本 plan が足すのは、1761c32 のソースと突き合わせて決めた**置き場所と手順** (下の「実装方針」) と、上流からの申し送りの棚卸しである。
 
@@ -86,7 +86,7 @@
 
 - [x] 本 feature の domain (`ui`) の In scope (「Thread 検索、conversation map、observability 系の表示」`charter.md:61`・transcript の表示・右のペインのタブの表 `:77-84`) に収まっている
 - [x] 不変条件「長大スレッドは仮想化する」(`charter.md:162`) — 地図も仮想化する (FR-011)
-- [x] Out of scope (他 domain) には、session の契約の値 (`createdAt` を埋める変換) に触れる点で踏み込む。O-4 U-1 / O-6 U-6 と同じ形で spec U-1 (未承認) とし、session charter に記録する (FR-016)
+- [x] Out of scope (他 domain) には、session の契約の値 (`createdAt` を埋める変換) に触れる点で踏み込む。O-4 U-1 / O-6 U-6 と同じ形で spec U-1 (2026-10-17 承認) とし、session charter に記録する (FR-016)
 
 ## Domain Context
 
@@ -102,7 +102,7 @@
 
 ### Related ADRs
 
-- **AD-051** ([0051](../../docs/decisions/0051-message-time-source-and-display-only.md)) — メッセージの時刻の出所と、表示だけに使うこと: **proposed** (本 plan で起こした。U-2 / U-3 と合わせて利用者の承認を待つ)
+- **AD-051** ([0051](../../docs/decisions/0051-message-time-source-and-display-only.md)) — メッセージの時刻の出所と、表示だけに使うこと: **accepted** (本 plan で起こした。U-2 / U-3 と合わせて 2026-10-17 に利用者が承認)
 - [AD-046](../../docs/decisions/0046-app-shell-layout.md) — シェルと右のペインのタブの表 (Decision 4)・置き場所の語 (Decision 6): accepted (O-7)
 - [AD-045](../../docs/decisions/0045-ui-labels-no-i18n-resources.md) — UI の文言を `labels.ts` に置く: accepted (O-3)
 - [AD-044](../../docs/decisions/0044-ui-coverage-assignment.md) — 対応表の割当の書式と項目 21: accepted
@@ -236,13 +236,13 @@ spec の「義務の扱い」の表の最後の 2 行が正本 (直近の活動�
 
 ## ADR
 
-AD-051 (proposed) を本 plan で起こした (FR-015)。spec の U-2 / U-3 と合わせて利用者の承認を待つ。承認されなかったら、spec の U-2 / U-3 と本 plan の「時刻の値」を直してから進める。ほかの accepted の ADR の本文は変えない。session charter の Related ADRs に AD-051 を足すのは FR-016 の記録の更新。
+AD-051 を本 plan で起こした (FR-015)。spec の U-2 / U-3 と合わせて 2026-10-17 に利用者が承認し、accepted にした。ほかの accepted の ADR の本文は変えない。session charter の Related ADRs に AD-051 を足すのは FR-016 の記録の更新。
 
 ## Risks / 未確定
 
 | ID | リスク | 手当て |
 |---|---|---|
-| RK-01 | 未承認の判断 (U-1〜U-8・AD-051) が承認で覆る | 承認されなかった項目は spec・plan・tasks を直してから実装する。実装の途中で覆ったら止めて利用者に返す |
+| RK-01 | 夜間に仮採用した判断 (U-1〜U-8・AD-051) が承認で覆る | 2026-10-17 に利用者がすべてそのまま承認した (解消)。実装の途中で前提が覆ったら止めて利用者に返す |
 | RK-02 | 実機の過去ログが `timestamp` を返さない (SDK の実装と記録の違い) | `null` に倒れて今の表示に戻る。quickstart V-3 の 1 で確かめ、出なければ AD-051 の Confirmation に従って見直す |
 | RK-03 | ランタイム (WSL ディストロ・docker endpoint のコンテナ) の時計 (SDK の値) とホストの時計 (受信時刻・送信時刻) がずれる | 所要時間は 1 つの時計どうしで引く (実行中は renderer の受信時刻。data-model §1「renderer の受信時刻」/ §2。U-8 / AD-051 Decision 7) ので、ずれは所要時間に乗らない。表示の時刻と活動の帯は補正しない (AD-051 Decision 5)。V-3 の 4 を WSL ランタイムで行い (docker endpoint があればそれでも)、実行中と過去ログの所要時間の差を記録する。`deriveTurns` の時計が 2 つの固定テストで守る |
 | RK-04 | registry の `conversation-map` が合い、U-5 (行の一覧の形) と食い違う | 実装の順の 4 で確かめる。合うなら実装を止め、`.needs-input` の形で利用者に返す (U-5 の見直し) |
@@ -265,7 +265,7 @@ specs/017-ui-conversation-time-and-activity/
 ├── data-model.md
 ├── quickstart.md
 └── tasks.md             # /cl-tasks で作る
-docs/decisions/0051-message-time-source-and-display-only.md   # AD-051 (proposed)
+docs/decisions/0051-message-time-source-and-display-only.md   # AD-051 (accepted)
 ```
 
 contracts/ は作らない (IPC・preload・port の契約を変えない。FR-005)。

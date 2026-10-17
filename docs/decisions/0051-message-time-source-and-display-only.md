@@ -1,6 +1,6 @@
 ---
-status: proposed
-date: 2026-10-16
+status: accepted
+date: 2026-10-17
 id: AD-051
 deciders: ukitomato
 tags: [ui, session, sdk]
@@ -22,7 +22,7 @@ O-9 ([spec 017](../../specs/017-ui-conversation-time-and-activity/spec.md)) は�
 - **利用者の入力**: SDK は本文を返さない。renderer の稼働中のストアが楽観的に出している
 - **assistant-ui**: `createdAt` を渡さないメッセージを「今」にする (`@assistant-ui/core` `thread-message-like.ts:115`)
 
-本 ADR は O-9 が夜間の自走で起こした (spec 017 の U-2 / U-3 / U-8。未承認)。`TranscriptMessageDTO` の形・`TRANSCRIPT_MESSAGE_FIELDS`・`SessionEvent` の種類は変えない (値を埋めるだけ)。持ち主の判断 (U-1) は spec と session charter に書く。
+本 ADR は O-9 が夜間の自走で起こした (spec 017 の U-2 / U-3 / U-8)。本 ADR と spec 017 の U-1〜U-8 は 2026-10-17 に利用者が承認した。`TranscriptMessageDTO` の形・`TRANSCRIPT_MESSAGE_FIELDS`・`SessionEvent` の種類は変えない (値を埋めるだけ)。持ち主の判断 (U-1) は spec と session charter に書く。
 
 ## Decision
 
