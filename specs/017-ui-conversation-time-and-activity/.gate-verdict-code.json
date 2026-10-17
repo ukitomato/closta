@@ -1,0 +1,125 @@
+{
+    "gate": "code",
+    "run": "2026-10-17T13:28:47Z",
+    "spec_dir": "specs/017-ui-conversation-time-and-activity",
+    "spec_id": "017-ui-conversation-time-and-activity",
+    "iter": 3,
+    "severity_counts": {
+        "critical": 0,
+        "high": 0,
+        "medium": 0,
+        "low": 1,
+        "must_fix": 0
+    },
+    "must_fix_findings": [],
+    "touched_files": [
+        {
+            "path": "docs/roadmap.md",
+            "sha": "948d03ca87c6ec614d180844963f662c64c17dba"
+        },
+        {
+            "path": "docs/ui-coverage.md",
+            "sha": "9f39ada8b2c618d4c15301855bc84d563d816037"
+        },
+        {
+            "path": "specs/017-ui-conversation-time-and-activity/quickstart-results.md",
+            "sha": "0bfe0f70b7467a6d0f5486b7aa8b3aa88a1d43bf"
+        },
+        {
+            "path": "src/renderer/src/features/chat/ConversationSearch.test.tsx",
+            "sha": "1bc517773076d07ad5813c3d55253f74569264d4"
+        },
+        {
+            "path": "src/renderer/src/features/chat/ConversationTimeProvider.tsx",
+            "sha": "6d4d3d393ba57736f7b2f35f73cb2fe0d59d9c2f"
+        },
+        {
+            "path": "src/renderer/src/features/chat/MessageTimeLabel.test.tsx",
+            "sha": "9c746394aab2ac905de075ec40b0eecef9a1bae0"
+        },
+        {
+            "path": "src/renderer/src/features/shell/CenterPane.tsx",
+            "sha": "a6ac354a34dc3f4c1368a2c5ae8316db6701e754"
+        },
+        {
+            "path": "src/renderer/src/features/shell/ConversationMapTab.test.tsx",
+            "sha": "ec5df4adbf390bcf43e931e05a51206db50a703a"
+        },
+        {
+            "path": "src/renderer/src/features/shell/ConversationMapTab.tsx",
+            "sha": "33ba2e0263a5b1fa9d65a0829c592b5a298449ed"
+        }
+    ],
+    "fr_coverage": [],
+    "viewpoint_coverage": {
+        "A": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+        "B": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+        "C": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+        "D": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+        "E": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+        "F": "Low:1",
+        "G": "\u8a72\u5f53\u306a\u3057: optional reviewer \u306a\u3057",
+        "H": "Critical:0 High:0 Medium:0 Low:0"
+    },
+    "tracks": {
+        "lint-agent": {
+            "violations": 0,
+            "exit_code": 0,
+            "detectors": [
+                "eslint",
+                "typecheck"
+            ]
+        },
+        "test-agent": {
+            "passed": 3144,
+            "failed": 0,
+            "exit_code": 0,
+            "scope": "full"
+        },
+        "convention-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "lint_input": "lint-agent"
+        }
+    },
+    "skipped_reviewers": [
+        {
+            "name": "a11y-reviewer",
+            "reason": "gates=['pr-gate'] \u306b code-gate \u304c\u7121\u3044"
+        },
+        {
+            "name": "ux-reviewer",
+            "reason": "gates=['pr-gate'] \u306b code-gate \u304c\u7121\u3044"
+        },
+        {
+            "name": "database-reviewer",
+            "reason": "auto_invoke_patterns \u306b\u4e00\u81f4\u3059\u308b\u5909\u66f4\u30d5\u30a1\u30a4\u30eb\u304c\u7121\u3044"
+        },
+        {
+            "name": "platform-boundary-reviewer",
+            "reason": "auto_invoke_patterns \u306b\u4e00\u81f4\u3059\u308b\u5909\u66f4\u30d5\u30a1\u30a4\u30eb\u304c\u7121\u3044"
+        }
+    ],
+    "cascade_demotions": 0,
+    "iter_history": [
+        {
+            "iter": 1,
+            "must_fix": 0,
+            "skipped": 0,
+            "error": 0
+        },
+        {
+            "iter": 2,
+            "must_fix": 1,
+            "skipped": 0,
+            "error": 0
+        },
+        {
+            "iter": 3,
+            "must_fix": 0,
+            "skipped": 0,
+            "error": 0
+        }
+    ],
+    "verdict": "PASS"
+}

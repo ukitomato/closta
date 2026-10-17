@@ -65,7 +65,7 @@ spec_id（`001-runtime-...`）とは独立させる。差し込み作業で番�
 | O-5 | MCP・プラグイン・コマンドの表示 (MCP の tool・`AskUserQuestion` の読み取り専用の表示・右のペインの「構成」のタブ・認証とプラグインの行。操作画面と問いに答える UI は含めない。[spec 015](../../specs/015-ui-mcp-elicitation-commands/spec.md)) | `ui` | M3 |
 | O-6 | 会話の境界と tool の専用表示の第 2 弾 (圧縮・会話の作り直し・モデルの拒否・止まった知らせの境界の行、`Read` / `Glob` / `Grep` / `WebFetch` / `WebSearch` / `TaskCreate` などの専用表示、Agent plan の markdown、tool の結果待ち・結果不明の印と読み上げ。Hook・背景の task・subagent の入れ子と知らせの類は O-11 に分けた。[spec 016](../../specs/016-ui-boundaries-and-tool-displays/spec.md) / [AD-049](../decisions/0049-boundaries-retraction-and-o11-split.md)) | `ui` | M3 |
 | O-8 | 並列時の滑らかさの実機計測 (session charter KPI。O-1 から O-3 に繰り越した宿題を O-3 の design で移した) | `session` | M3 |
-| O-9 | 会話の時間と活動の可視化 (conversation map・message timing・活動の heat graph。本文の横断検索の要否。O-3 の design で分けた) | `ui` | M3 |
+| O-9 | 会話の時間と活動の可視化 (メッセージの時刻・ターンの所要時間・右のペインのタブ「会話の地図」・活動の帯。本文の横断検索はしないと決めた (017 U-7)。O-3 の design で分けた) | `ui` | M3 |
 | O-10 | Claude Code からの問いに答える UI と composer のコマンドの候補 (`AskUserQuestion` の回答・Elicitation・`request_user_dialog`・composer のスラッシュコマンドの候補。O-5 の design で分けた。[AD-048](../decisions/0048-session-config-display-and-answer-ui-split.md)) | `session` | M3 |
 | O-11 | Hook・背景の task・実行中の subagent と知らせの類の表示 (一般の Hook と `includeHookEvents`・Background task の一覧の要否・実行中の subagent の入れ子・Tier B の知らせの類・Checkpoints の表示。O-6 の design で分けた。[AD-049](../decisions/0049-boundaries-retraction-and-o11-split.md) Decision 1) | `ui` | M3 |
 | I-1 | `DockerRuntime` と endpoint 抽象 + `sessionStore` ミラー | `isolation` | M4 |

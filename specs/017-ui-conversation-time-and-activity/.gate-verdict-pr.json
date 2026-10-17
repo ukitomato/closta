@@ -1,0 +1,459 @@
+{
+    "gate": "pr",
+    "run": "2026-10-17T14:00:00Z",
+    "spec_dir": "specs/017-ui-conversation-time-and-activity",
+    "spec_id": "017-ui-conversation-time-and-activity",
+    "round": 1,
+    "base_branch": "main",
+    "diff_stat": {
+        "files": 76,
+        "additions": 5474,
+        "deletions": 182
+    },
+    "severity_counts": {
+        "critical": 0,
+        "high": 5,
+        "medium": 12,
+        "low": 13
+    },
+    "convergence": {
+        "resolved_from_prev": 0,
+        "new_in_round": 5,
+        "unresolved": 0
+    },
+    "inheritance": "none (round 1)",
+    "round_history": [
+        {
+            "round": 1,
+            "head": "459b359ae37d31201d890dca5d7f069a1553ba20",
+            "critical": 0,
+            "high": 5,
+            "convergence": {
+                "resolved_from_prev": 0,
+                "new_in_round": 5,
+                "unresolved": 0
+            }
+        }
+    ],
+    "high_findings": [
+        {
+            "id": "H-001",
+            "origin": "ux",
+            "where": "src/renderer/src/features/shell/CenterPane.tsx:189",
+            "title": "past transcript loading/failed publishes empty turns; map shows wrong empty reason"
+        },
+        {
+            "id": "H-002",
+            "origin": "a11y",
+            "where": "src/renderer/src/features/shell/ConversationMapTab.tsx:396",
+            "title": "muted-foreground on bg-accent below 4.5:1 in light"
+        },
+        {
+            "id": "H-003",
+            "origin": "po",
+            "where": "src/renderer/src/features/shell/ConversationMapTab.test.tsx",
+            "title": "SC-003 US-2 AC3 focus/scroll not stolen has no test; SC-002 AC6 missing component test"
+        },
+        {
+            "id": "H-004",
+            "origin": "ui-coverage",
+            "where": "docs/ui-coverage.md:52",
+            "title": "ConversationMapTab missing from boundary/refusal/tool rows"
+        },
+        {
+            "id": "H-005",
+            "origin": "architecture",
+            "where": "docs/roadmap.md:382",
+            "title": "AD-051 Confirmation (V-3 #1) omitted from unconfirmed list"
+        }
+    ],
+    "suppressed_by_code_gate": [],
+    "touched_files": [
+        {
+            "path": "docs/decisions/0051-message-time-source-and-display-only.md",
+            "sha": "f644e9f2cdef901a49c8922dd3a416ff8f05b57e"
+        },
+        {
+            "path": "docs/domains/_overview.md",
+            "sha": "c6c583a7c8f925653e22497e0dd1deccd08985fb"
+        },
+        {
+            "path": "docs/domains/session/charter.md",
+            "sha": "4256c62a9911e1d5ead963dff8e58e6b2c947f1e"
+        },
+        {
+            "path": "docs/domains/ui/charter.md",
+            "sha": "6083f628cea27e30a400fd20d5ee62b489863e55"
+        },
+        {
+            "path": "docs/glossary.md",
+            "sha": "91a2206c339305f6e77596a3094e3e2b9747ab73"
+        },
+        {
+            "path": "docs/prompts.md",
+            "sha": "97d4b3c94e522bf56421ea84c151b641222d75d5"
+        },
+        {
+            "path": "docs/roadmap.md",
+            "sha": "52da4355594c038ed79529df7d8092d22e7d8bf7"
+        },
+        {
+            "path": "docs/ui-coverage.md",
+            "sha": "cc0eb8c3a914fbb725a8f55f0917f2fdc3e5c097"
+        },
+        {
+            "path": "specs/017-ui-conversation-time-and-activity/.gate-verdict-code.json",
+            "sha": "31dfaa0902f88057d2283f1a23fcd4835d65d98b"
+        },
+        {
+            "path": "specs/017-ui-conversation-time-and-activity/.gate-verdict-design.json",
+            "sha": "e9af2325814acce6a88af7b703b0ce66e8562b59"
+        },
+        {
+            "path": "specs/017-ui-conversation-time-and-activity/analyze.md",
+            "sha": "3afc3a3bda1e45ac8f820857052646d7144d3c6c"
+        },
+        {
+            "path": "specs/017-ui-conversation-time-and-activity/architecture-reviewer.design-gate.md",
+            "sha": "2758d7bdbbaded798a9550cff5c5096745b03a12"
+        },
+        {
+            "path": "specs/017-ui-conversation-time-and-activity/code-gate.md",
+            "sha": "34c1964b6d0ca2745a83a8b8117ae1b832a201dc"
+        },
+        {
+            "path": "specs/017-ui-conversation-time-and-activity/convention-reviewer.code-gate.md",
+            "sha": "72651ddffa6b726c9160a2ca0330865f5eac79b1"
+        },
+        {
+            "path": "specs/017-ui-conversation-time-and-activity/data-model.md",
+            "sha": "9f79fda1fd382725b53c7f64d896217c4b35de45"
+        },
+        {
+            "path": "specs/017-ui-conversation-time-and-activity/design-gate.md",
+            "sha": "9ea999cfbf7c3cd454bda354b554ce8d6e8b216a"
+        },
+        {
+            "path": "specs/017-ui-conversation-time-and-activity/plan.md",
+            "sha": "fbff9c1071f58b5781ef290192f781658af370f3"
+        },
+        {
+            "path": "specs/017-ui-conversation-time-and-activity/platform-boundary-reviewer.code-gate.md",
+            "sha": "b11aaeb36b69e8ad59f7fa2d228e5cddb0e21ea0"
+        },
+        {
+            "path": "specs/017-ui-conversation-time-and-activity/platform-boundary-reviewer.design-gate.md",
+            "sha": "97d48c7ecabadee5dba4c9bfeaccd558dc86ac56"
+        },
+        {
+            "path": "specs/017-ui-conversation-time-and-activity/po-reviewer.design-gate.md",
+            "sha": "97d7c0401b5c09b500789a7666646a040a0b00d0"
+        },
+        {
+            "path": "specs/017-ui-conversation-time-and-activity/quickstart-results.md",
+            "sha": "a2ac9a46f48beedc0d2cad8f95768969cd20aa6f"
+        },
+        {
+            "path": "specs/017-ui-conversation-time-and-activity/quickstart.md",
+            "sha": "404a483b0a5610da16c984ad7e9dd015b844c2e7"
+        },
+        {
+            "path": "specs/017-ui-conversation-time-and-activity/research.md",
+            "sha": "c24f1088b93fb026b929736fceeed9c9c5216361"
+        },
+        {
+            "path": "specs/017-ui-conversation-time-and-activity/security-reviewer.design-gate.md",
+            "sha": "a7f2a6693ecbeb980282332f0a59c87916b0989a"
+        },
+        {
+            "path": "specs/017-ui-conversation-time-and-activity/spec.md",
+            "sha": "3cd260e86b5629e968e9b3eb20d551021d2e84a1"
+        },
+        {
+            "path": "specs/017-ui-conversation-time-and-activity/tasks.md",
+            "sha": "b94e584defbfeaf9364eb6794e8546bda8ec9085"
+        },
+        {
+            "path": "specs/017-ui-conversation-time-and-activity/touched-files.txt",
+            "sha": "a1b6dc0712d74e1a62cfe6037d01247e9d3db91e"
+        },
+        {
+            "path": "src/agents/live-signals.test.ts",
+            "sha": "0cac5c087bf14d1e3d6c77f4bb1810a925dbb625"
+        },
+        {
+            "path": "src/agents/live-signals.ts",
+            "sha": "1684a857f0bd60674e69eba8a9e967be6b9210e7"
+        },
+        {
+            "path": "src/agents/live-tool-results.test.ts",
+            "sha": "ce4f9b7f3f218f46499e08b83e93efb6f5dd771a"
+        },
+        {
+            "path": "src/agents/live-tool-results.ts",
+            "sha": "0209dcebfe301c1a8b7e6157199f5deb1497ce48"
+        },
+        {
+            "path": "src/agents/read-transcript.ts",
+            "sha": "cb801b98a20531932e35516619ae09a5f7ff7e5c"
+        },
+        {
+            "path": "src/agents/sdk-agent-session.test.ts",
+            "sha": "934308e710e93d49c5dfcfbf210dcab4ceeb8194"
+        },
+        {
+            "path": "src/agents/sdk-agent-session.ts",
+            "sha": "0972b69e3ebf4d2c568851e2656b8351a68ef804"
+        },
+        {
+            "path": "src/domain/session/live-message.test.ts",
+            "sha": "977891649aab1e686371746d2a543ca9823f655b"
+        },
+        {
+            "path": "src/domain/session/live-message.ts",
+            "sha": "eaed701c2e9408f0243b5c488d5d5b40132f55fc"
+        },
+        {
+            "path": "src/domain/session/tool-result.test.ts",
+            "sha": "57ae05c4715b6b646fd2d429a913c55f8845abfc"
+        },
+        {
+            "path": "src/domain/session/transcript-dto.ts",
+            "sha": "54913427a600779d5b19760ce549f581ebe2b1cc"
+        },
+        {
+            "path": "src/domain/session/transcript-time.test.ts",
+            "sha": "8139a0953afb67cefbb1b21aeee2e413cb14aeb1"
+        },
+        {
+            "path": "src/domain/session/transcript-time.ts",
+            "sha": "dc6976b7b0bca845d8abb61c178fbb2a9e457cda"
+        },
+        {
+            "path": "src/domain/session/transcript.system-event.test.ts",
+            "sha": "4c09e78ac58336107ce91f217ce1365c9da441f1"
+        },
+        {
+            "path": "src/domain/session/transcript.test.ts",
+            "sha": "f5312f130571588452b7b043eba346757bf9281c"
+        },
+        {
+            "path": "src/domain/session/transcript.ts",
+            "sha": "b420df1b6466e1bbf65cfaf9e114d2544738cc3f"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/thread.aui.tsx",
+            "sha": "1488177c462dd30fcc9538cda1b456761c1cb83a"
+        },
+        {
+            "path": "src/renderer/src/features/chat/ConversationSearch.test.tsx",
+            "sha": "3bb525b0877019152c9abac0865bfb536aec9455"
+        },
+        {
+            "path": "src/renderer/src/features/chat/ConversationSearchProvider.tsx",
+            "sha": "1af9ce834520e8e5dcc7495c3abbbaa699a1d307"
+        },
+        {
+            "path": "src/renderer/src/features/chat/ConversationTimeProvider.tsx",
+            "sha": "a1eb47a5297f97d5fc4d76e655b1e7df99d50b37"
+        },
+        {
+            "path": "src/renderer/src/features/chat/MessageTimeLabel.test.tsx",
+            "sha": "4223fcb0574ef10576205e6d25bb7609800da48c"
+        },
+        {
+            "path": "src/renderer/src/features/chat/MessageTimeLabel.tsx",
+            "sha": "70069c7f555127f8b7af420b2ff48ec47d3ed451"
+        },
+        {
+            "path": "src/renderer/src/features/chat/activity-bins.test.ts",
+            "sha": "5f7d16b0d5edde62fd1ad9d61ca1cf274f7a2b94"
+        },
+        {
+            "path": "src/renderer/src/features/chat/activity-bins.ts",
+            "sha": "4a3dcbaa51d890ad6d86799b170e423af4bcf760"
+        },
+        {
+            "path": "src/renderer/src/features/chat/center-conversation.test.ts",
+            "sha": "0e0bb60fb7985cd5ec1db55700c702a40f3addc8"
+        },
+        {
+            "path": "src/renderer/src/features/chat/center-conversation.ts",
+            "sha": "61848c99f209b0912e588d57db226877dbf0a375"
+        },
+        {
+            "path": "src/renderer/src/features/chat/conversation-time-context.ts",
+            "sha": "a655d474327403f8cdc954889d5a43a6046242f4"
+        },
+        {
+            "path": "src/renderer/src/features/chat/convert.ts",
+            "sha": "7195003ac8f414721445109ce91dab177cb38841"
+        },
+        {
+            "path": "src/renderer/src/features/chat/labels.ts",
+            "sha": "b9e5bfca610fbda9689bf31f792f4559c933e13c"
+        },
+        {
+            "path": "src/renderer/src/features/chat/message-time.test.ts",
+            "sha": "ab801da1cf9c283123023fd3b154835c35984c6a"
+        },
+        {
+            "path": "src/renderer/src/features/chat/message-time.ts",
+            "sha": "a7de698838a5686df6240b7eb3df9cd78928e999"
+        },
+        {
+            "path": "src/renderer/src/features/chat/turns.test.ts",
+            "sha": "f806dbc97ecbfe9c472deb3d08c49cc7f1712fc7"
+        },
+        {
+            "path": "src/renderer/src/features/chat/turns.ts",
+            "sha": "4637a1e9539458809a0cdc5a93608e8784c794d4"
+        },
+        {
+            "path": "src/renderer/src/features/session/RunningSessionsProvider.tsx",
+            "sha": "dd8404e7520906f29ca8c91f7fac1b3feaa68f68"
+        },
+        {
+            "path": "src/renderer/src/features/session/composer-queue.ts",
+            "sha": "2d0967bcd6e86357b7fe5725dc2a4caf49b21f9d"
+        },
+        {
+            "path": "src/renderer/src/features/session/running-session-store.time.test.ts",
+            "sha": "947da83b000adc31397ab87f4f2208c8ac95b430"
+        },
+        {
+            "path": "src/renderer/src/features/session/running-session-store.ts",
+            "sha": "2a49ff208d9f49957a1bf302ae6ae7fca430d4d0"
+        },
+        {
+            "path": "src/renderer/src/features/shell/AppShell.test.tsx",
+            "sha": "924162928badcc67c32d8292e35259e10ec5b665"
+        },
+        {
+            "path": "src/renderer/src/features/shell/AppShell.tsx",
+            "sha": "2963a8b4a219c7ea8b2b4d200b84f99b5be1ad58"
+        },
+        {
+            "path": "src/renderer/src/features/shell/CenterPane.tsx",
+            "sha": "fff31ead4414ab223896782f091d5b066a64ca31"
+        },
+        {
+            "path": "src/renderer/src/features/shell/ConversationMapTab.test.tsx",
+            "sha": "58f6af7d292a1181f4a3ad0e3f96b19fbf26b9b7"
+        },
+        {
+            "path": "src/renderer/src/features/shell/ConversationMapTab.tsx",
+            "sha": "887ee96a90d66ad9a9980c12dbb3012fc32c5896"
+        },
+        {
+            "path": "src/renderer/src/features/shell/RightPanel.tabs.test.tsx",
+            "sha": "a9502236c03d19a713fd4e0e7a465dd4c1b5aa9e"
+        },
+        {
+            "path": "src/renderer/src/features/shell/labels.ts",
+            "sha": "10f6414e6153814490f728cb7decb3f095169968"
+        },
+        {
+            "path": "src/renderer/src/features/shell/panel-tabs.test.ts",
+            "sha": "310b0dd44f74cced2f59813ee668dac572b97949"
+        },
+        {
+            "path": "src/renderer/src/features/shell/panel-tabs.ts",
+            "sha": "d38d4215e1ce80cf66388e985e9c902e16512771"
+        },
+        {
+            "path": "src/renderer/src/features/shell/useThrottledConversation.ts",
+            "sha": "c6c7f549bf4f92584d054388ac583600975c36f5"
+        },
+        {
+            "path": "src/renderer/src/stores/ui.ts",
+            "sha": "d97cb9136adb7bc720cffb000308cce8c7226cf6"
+        },
+        {
+            "path": "tests/meter/meter-through.test.tsx",
+            "sha": "980ff3a4e43f988e1181d855a7255c62e998d27e"
+        }
+    ],
+    "viewpoint_coverage": {
+        "A": "\u8a72\u5f53\u306a\u3057: \u5909\u66f4\u306a\u3057 (security)",
+        "B": "Critical:0 High:0 Medium:0 Low:1",
+        "C": "Critical:0 High:0 Medium:2 Low:1",
+        "D": "Critical:0 High:1 Medium:0 Low:1",
+        "E": "Critical:0 High:1 Medium:1 Low:0",
+        "F": "Critical:0 High:0 Medium:0 Low:0",
+        "G": "Critical:0 High:3 Medium:9 Low:13",
+        "H": "Critical:0 High:0 Medium:1 Low:3"
+    },
+    "fr_coverage": [],
+    "rule_verification": {
+        "ran": true,
+        "round": 1,
+        "reason": "Round 1",
+        "result": "69 matched, exit 0"
+    },
+    "skipped_reviewers": [
+        {
+            "name": "database-reviewer",
+            "reason": "auto_invoke_patterns \u306b\u4e00\u81f4\u3059\u308b\u5909\u66f4\u30d5\u30a1\u30a4\u30eb\u304c\u7121\u3044 (\u5909\u66f4 76 \u4ef6 / pattern 5 \u4ef6)"
+        }
+    ],
+    "tracks": {
+        "security-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 0,
+            "low": 1
+        },
+        "architecture-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 1,
+            "medium": 2,
+            "low": 2
+        },
+        "po-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 1,
+            "medium": 1,
+            "low": 1
+        },
+        "ux-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 1,
+            "medium": 4,
+            "low": 6
+        },
+        "a11y-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 1,
+            "medium": 5,
+            "low": 3
+        },
+        "platform-boundary-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 0,
+            "low": 1
+        },
+        "ui-coverage-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 1,
+            "medium": 1,
+            "low": 3
+        }
+    },
+    "verdict": "PASS"
+}

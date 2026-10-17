@@ -98,9 +98,10 @@ function isMainLoop(message: Record<string, unknown>): boolean {
 
 /**
  * O-4 のシステムイベントの行 (014 data-model §3)。過去ログと共有の `toSystemEventMessage` には足さない (経路は実行中だけ)。
- * `name` は常に ''。`createdAt` は O-2 の実行中の行 (`toSystemEventMessage(message, null)`) と同じく null。
+ * `name` は常に ''。`createdAt` は受信時刻 (`clock.now()`。O-9 / AD-051)。
  */
-function rowEvent(
+function buildRowEvent(
+  createdAt: number,
   id: string,
   category: SystemEventCategory,
   opens: boolean,
@@ -114,7 +115,7 @@ function rowEvent(
       id,
       role: 'system',
       parts: [{ type: 'system-event', category, opens, name, detail, status }],
-      createdAt: null
+      createdAt
     }
   }
 }
@@ -316,6 +317,15 @@ export function createLiveSignals(deps: LiveSignalsDeps): LiveSignals {
    * 通すので、`dispose()` の後は何も届かない。
    */
   const throttle = createMeterThrottle<SessionEvent>({ clock: deps.clock, send })
+  /** 行の時刻は受信時刻 (signals の時計。O-9 / AD-051)。 */
+  const rowEvent = (
+    id: string,
+    category: SystemEventCategory,
+    opens: boolean,
+    detail: string,
+    status: SystemEventStatus | null,
+    name = ''
+  ): SessionEvent => buildRowEvent(deps.clock.now(), id, category, opens, detail, status, name)
   /**
    * 構成の合流 (015 data-model §2。種類ごとに独立)。`meter-throttle` の上限を使わない (AD-048 Decision 3)。送るのは
    * `send` を通すので、`dispose()` の後は何も届かない。

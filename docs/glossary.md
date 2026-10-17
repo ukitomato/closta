@@ -1,8 +1,8 @@
 ---
 status: needs-human-review
-last_updated: 2026-10-10
+last_updated: 2026-10-17
 generated_by: human (PLAN.md 付録A + §3〜§7 を素材に起草。X-1 で AgentSession 系 8 語を追記。O-2 で 5 語を追記。O-7 で Shell を追記。O-3 で 5 語を追記。O-4 で 4 語を追記。O-5 で 3 語を追記)
-total_terms: 99
+total_terms: 104
 ---
 
 # Glossary (Ubiquitous Language)
@@ -75,6 +75,15 @@ total_terms: 99
 - **日本語表記**: 依存解決
 - **Domain**: `session`
 - **Ref**: [008 spec](../specs/008-session-launch-settings-dialog-and-presets/spec.md) FR-006 / FR-007
+
+#### **Activity bar（活動の帯）**
+
+- **Definition**: 会話の地図のタブの上端に出す、開いている会話 1 つの時間を区間に分けた 1 行の帯 (O-9)。区間ごとの活動の多さを 4 段の濃さと棒の高さで示し、
+  区間を選ぶと中央がその区間の最初のメッセージへ移る。element 名は Heat graph の使い道に当たる
+- **日本語表記**: 活動の帯
+- **Domain**: `ui`
+- **Counterexamples**: **セッションを横断した暦 (カレンダー型の活動の図) ではない** (U-4)。Activity graph / Trace waterfall は使わない (U-6)。独自のカラートークンを足さない
+- **Ref**: [017 data-model](../specs/017-ui-conversation-time-and-activity/data-model.md) §4 / §5
 
 ### B
 
@@ -214,9 +223,19 @@ total_terms: 99
   - 強調は CSS Custom Highlight API で、描かれた DOM を書き換えずに掛ける。
 - **日本語表記**: 会話内検索
 - **Domain**: `ui`
+  - 会話の地図 (Conversation map) と活動の帯 (Activity bar) が、同じ移動の経路を使う (O-9)。
 - **Counterexamples**: **セッションの検索 (Thread search) とは別** — あちらは一覧の要約行を絞り込み、transcript の本文を読まない。
   tool の入力・結果・Reasoning・システムイベントの行は対象にしない。ブラウザの検索 (`findInPage`) ではない (仮想化の外に届かない)
 - **Ref**: [012 spec](../specs/012-ui-thread-search/spec.md) FR-003〜FR-005 / [data-model](../specs/012-ui-thread-search/data-model.md) §2
+
+#### **Conversation map（会話の地図）**
+
+- **Definition**: 右のペインのタブ。中央に出している会話のターンごとに 1 行 (時刻・入力の先頭・所要時間・tool の数・エラーの数・境界の印) を並べ、
+  選ぶと中央をそのターンへ移す (O-9)。一覧は仮想化する。移動は会話内検索と同じ経路を使う
+- **日本語表記**: 会話の地図
+- **Domain**: `ui`
+- **Counterexamples**: 本文の横断検索ではない (対象は開いている会話 1 つ)。過去ログを取得し直さない (中央の `messages` を読むだけ)
+- **Ref**: [017 data-model](../specs/017-ui-conversation-time-and-activity/data-model.md) §3 / §6
 
 #### **Context usage estimate（コンテキストの使用量の推定）**
 
@@ -567,6 +586,15 @@ total_terms: 99
   MCP サーバーを操作する画面ではない — アプリは MCP・プラグイン・スキルを操作しない (再接続・有効化・再読み込み・tool の呼び出し。AD-048 Decision 2)。
   結果を Tier C の Data table / Chart などに写さない (AD-048 Decision 4)。画像・resource の印は出さない
 - **Ref**: [AD-048](decisions/0048-session-config-display-and-answer-ui-split.md) / [015 data-model](../specs/015-ui-mcp-elicitation-commands/data-model.md) §1
+
+#### **Message time（メッセージの時刻）**
+
+- **Definition**: メッセージの `createdAt`。Claude Code の記録の値 (`timestamp`) を検査して使い、無い・壊れている・範囲外ならメッセージを受信・送信した時刻 (O-9)。
+  **表示だけに使い、並べ替えに使わない。永続化しない** (記録の順がメッセージの順の正本)
+- **日本語表記**: メッセージの時刻
+- **Domain**: `ui` (値を埋める変換は `session` の契約の値を広げたもの。DTO の形は同じ)
+- **Counterexamples**: 並べ替え・集計の鍵ではない。時刻が無いメッセージに「今」を出さない (assistant-ui の既定値を拾わない)
+- **Ref**: [AD-051](decisions/0051-message-time-source-and-display-only.md) / [017 data-model](../specs/017-ui-conversation-time-and-activity/data-model.md) §1
 
 #### **message mapping（メッセージ変換）**
 
@@ -1080,7 +1108,7 @@ total_terms: 99
   - 所在・フォルダの絞り込みと AND で組み合わせる。読み込み済みの行だけを探す。
 - **日本語表記**: セッションの検索
 - **Domain**: `ui` (session の一覧の上に ui が載せる例外。[ui charter](domains/ui/charter.md))
-- **Counterexamples**: **transcript の本文を横断して読まない** (本文の横断検索は O-9 で要否を判断する)。会話内検索 (Conversation search) とは別。
+- **Counterexamples**: **transcript の本文を横断して読まない** (本文の横断検索はしない。O-9 の U-7)。会話内検索 (Conversation search) とは別。
   パス (`cwd.value`) を直接の対象にしない。検索語から `RegExp` を組まない (字面の部分一致だけ)。registry の `elements-thread-search` (時刻のまとまりと pinned を前提にする) は使わない
 - **Ref**: [012 spec](../specs/012-ui-thread-search/spec.md) FR-001 / FR-002 / [data-model](../specs/012-ui-thread-search/data-model.md) §1
 
@@ -1151,6 +1179,26 @@ total_terms: 99
 - **Counterexamples**: **transcript（本文の永続実体）とは別**。あちらは `session` domain の会話ログ、
   こちらはそれを描画する `ui` の状態
 - **Ref**: [AD-034](decisions/0034-transcript-read-path-and-process-boundary.md) / [AD-033](decisions/0033-assistant-ui-elements-introduction-cost.md)
+
+#### **Turn（ターン）**
+
+- **Definition**: 利用者の入力 1 つから次の入力の直前までのメッセージのまとまり (O-9)。会話の地図の 1 行と、所要時間の単位になる。
+  始まりは user のメッセージで、システムイベントの行でなく、tool-call でない part (text・image・file) を持つもの。
+  最初の入力より前のメッセージはどのターンにも入れない
+- **日本語表記**: ターン
+- **Domain**: `ui`
+- **Counterexamples**: **過去ログの孤児の tool の結果 (user の記録に tool-call の part だけ) はターンの始まりにしない** — 直前のターンに入る。
+  Claude Code の API 呼び出し 1 回 (assistant のメッセージ 1 つ) でもない
+- **Ref**: [017 data-model](../specs/017-ui-conversation-time-and-activity/data-model.md) §2
+
+#### **Turn duration（ターンの所要時間）**
+
+- **Definition**: 終わったターンの、始まりの時刻から最後のメッセージの時刻までの長さ (O-9)。中央の利用者のメッセージの下に出す。
+  実行中は renderer の受信時刻どうしで引き、過去ログは `createdAt` どうしで引く。実行中のターン (runtime が busy) には出さない
+- **日本語表記**: ターンの所要時間
+- **Domain**: `ui`
+- **Counterexamples**: 課金・使用量の計測値ではない (O-4 の Meter とは別)。時刻が無い・負になる場合は出さない
+- **Ref**: [017 data-model](../specs/017-ui-conversation-time-and-activity/data-model.md) §1 / §2
 
 ### U
 

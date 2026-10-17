@@ -29,6 +29,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SYSTEM_EVENT_DATA_NAME } from "@/features/chat/convert";
+import { MessageTimeLabel } from "@/features/chat/MessageTimeLabel";
 import {
   authRowText,
   COMPOSER_LABELS,
@@ -948,6 +949,8 @@ const AssistantMessage: FC = () => {
           }}
         </MessagePrimitive.GroupedParts>
         <MessageError />
+        {/* 時刻 (O-9 / FR-006)。ActionBar の autohide の外で常に出す。data part だけのメッセージ (境界) には出ない。 */}
+        <MessageTimeLabel className="mt-1" />
       </div>
 
       <div
@@ -1302,6 +1305,10 @@ const UserMessage: FC = () => {
               Image: UserImagePart,
             }}
           />
+        </div>
+        {/* 時刻と所要時間 (O-9 / FR-006 / FR-007)。吹き出しの下の右寄せ。 */}
+        <div className="mt-1 flex justify-end">
+          <MessageTimeLabel withDuration />
         </div>
         <div className="aui-user-action-bar-wrapper absolute start-0 top-1/2 -translate-x-full -translate-y-1/2 pe-2 peer-empty:hidden rtl:translate-x-full">
           <UserActionBar />

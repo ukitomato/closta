@@ -22,6 +22,7 @@ import { useSessionsStore } from '@/stores/sessions'
 import { useUiStore } from '@/stores/ui'
 import { installCapability } from '@/test-support/capability'
 
+import { CenterConversationContext, createCenterConversationStore } from './center-conversation'
 import { toThreadMessage } from './convert'
 import { COMPOSER_LABELS, CONVERSATION_SEARCH_LABELS } from './labels'
 import { SEARCH_HIGHLIGHT, SEARCH_HIGHLIGHT_CURRENT } from './search-highlight'
@@ -195,13 +196,18 @@ function capability(overrides: Partial<ClostaCapability> = {}): ClostaCapability
   return installCapability({ listFolders: () => never, listRuntimes: () => never, ...overrides })
 }
 
+/** 中央の会話の公開口 (O-9)。地図と同じ移動の経路 (`navigateTo`) をここから呼ぶ。 */
+const centerStore = createCenterConversationStore()
+
 function renderCenter(store: RunningSessionStore): HTMLElement {
   const { container } = render(
-    <RunningSessionStoreContext.Provider value={store}>
-      <RunningSessionsProvider>
-        <CenterPane />
-      </RunningSessionsProvider>
-    </RunningSessionStoreContext.Provider>
+    <CenterConversationContext.Provider value={centerStore}>
+      <RunningSessionStoreContext.Provider value={store}>
+        <RunningSessionsProvider>
+          <CenterPane />
+        </RunningSessionsProvider>
+      </RunningSessionStoreContext.Provider>
+    </CenterConversationContext.Provider>
   )
   return container
 }
@@ -312,7 +318,7 @@ describe('件数・位置・移動・強調 (US-2 AC1 / AC2)', () => {
     await waitFor(() =>
       expect(position()).toHaveTextContent(CONVERSATION_SEARCH_LABELS.searchPosition(1, 4))
     )
-    expect(scrolledIds(spy).at(-1)).toBe('p0')
+    await waitFor(() => expect(scrolledIds(spy).at(-1)).toBe('p0'))
     await waitFor(() => expect(highlights.get(SEARCH_HIGHLIGHT_CURRENT)?.ranges).toHaveLength(1))
     const current = currentRange(highlights)
     expect(findMessageElement(container, 'p0')!.contains(current.startContainer)).toBe(true)
@@ -531,6 +537,30 @@ describe('稼働中の会話 (US-2 AC3 / AC5 / research R-03)', () => {
     await waitFor(() => expect(screen.queryByTestId('older-messages')).toBeNull())
     await waitFor(() => expect(findMessageElement(container, 'm0')).not.toBeNull())
     await waitFor(() => expect(scrolledIds(spy)).toContain('m0'))
+  })
+
+  it('公開口の navigateTo (会話の地図の経路) で、窓の外のメッセージへも移る (O-9 FE-020)', async () => {
+    stubVirtualLayout()
+    const spy = vi.spyOn(Element.prototype, 'scrollIntoView')
+    const messages = Array.from({ length: MESSAGE_WINDOW + 5 }, (_, i) =>
+      text(`m${i}`, `本文 ${i}`)
+    )
+    const { container } = await setupRunning({ [A]: messages })
+    expect(screen.getByTestId('older-messages')).toBeInTheDocument()
+    await waitFor(() => expect(centerStore.current()?.conversationKey).toBe(A))
+
+    act(() => centerStore.current()!.navigateTo('m0'))
+    await waitFor(() => expect(screen.queryByTestId('older-messages')).toBeNull())
+    await waitFor(() => expect(findMessageElement(container, 'm0')).not.toBeNull())
+    await waitFor(() => expect(scrolledIds(spy)).toContain('m0'))
+  })
+
+  it('公開口の navigateTo は過去ログの仮想化の外のメッセージへも移る (O-9 FE-020)', async () => {
+    const spy = vi.spyOn(Element.prototype, 'scrollIntoView')
+    setupPast(PAST_MESSAGES)
+    await waitFor(() => expect(centerStore.current()?.messages).toHaveLength(PAST_MESSAGES.length))
+    act(() => centerStore.current()!.navigateTo('p2'))
+    await waitFor(() => expect(scrolledIds(spy).at(-1)).toBe('p2'))
   })
 
   it('composer にフォーカスがあっても、変換中でなければ Ctrl+F で開いて入力欄へ移る', async () => {

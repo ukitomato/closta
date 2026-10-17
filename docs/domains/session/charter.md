@@ -156,6 +156,7 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
   システムイベントの行の経路 (`message`) で運び、`SessionEvent` の種類・`TRANSCRIPT_PART_FIELDS` は変えない。`informational` などの本文は
   伏せ字 (`redactSecrets`。domain) を通し、読まないフィールドは運ばない (許可リストの正本は 016 data-model §1)。`conversation_reset` の
   `new_conversation_id` は読まない (アプリは SDK の会話の id を追っていない。/clear の後の id の扱いは X-6 に申し送り)
+- **メッセージの時刻の値を埋めた** (O-9 / [AD-051](../../decisions/0051-message-time-source-and-display-only.md)。DTO の形は同じ): `TranscriptMessageDto.createdAt` を、過去ログは `getSessionMessages` の返りの `timestamp` (型に無い値。`parseMessageTime` が未信頼として検査する。無ければ `null`)、実行中は SDK の `timestamp` (無ければセッションスレッドの受信時刻)、利用者の入力は renderer の送信時刻で埋める。表示だけに使い、並べ替えにも永続化にも使わない
 
 詳細は [docs/glossary.md](../../glossary.md) を参照。
 
@@ -236,6 +237,7 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
 - [AD-043](../../decisions/0043-single-supervisor-session-threads-and-session-limit.md) — 単一 supervisor・セッションスレッド・同時実行数の上限 (X-5)
 - [AD-047](../../decisions/0047-session-meter-and-failure-reasons.md) — 計量 (`meter`) と失敗の理由のキーを session の契約に足す (O-4。ui の feature が本 domain の契約を広げた。U-1)
 - [AD-049](../../decisions/0049-boundaries-retraction-and-o11-split.md) — 拒否の取り消し (`meter` の `retraction`)・`informational` の本文の伏せ字・項目 16 の `readFile`・O-11 への分割 (O-6。ui の feature が本 domain の契約を広げた。U-6)
+- [AD-051](../../decisions/0051-message-time-source-and-display-only.md) — メッセージの時刻 (`createdAt`) の出所と表示だけの用途 (O-9。ui の feature が本 domain の契約の値を広げた。U-1)
 
 ## Related Specs
 
@@ -293,6 +295,11 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
   システムイベントの行の category の追加。Constitution 検証の項目 16 の `QUERY_MUTATION_METHODS` に `readFile` を足し (21 → 22)、
   `sdk-agent-session.ts` の `queryHandle` の型を `interrupt` と非同期の反復だけに絞った。承認の応答 (`toPermissionResult`) と
   `PermissionRequest` は変えない）
+- **O-9 (ui)** — [会話の時間と活動の可視化](../../../specs/017-ui-conversation-time-and-activity/spec.md)
+  （本 domain の feature ではない。U-1 (2026-10-17 に利用者が承認。[AD-051](../../decisions/0051-message-time-source-and-display-only.md)) で、
+  本 domain の契約の値を広げた: `createdAt` を埋める変換 (`src/domain/session/transcript.ts` / `live-message.ts` / `system-event.ts` と
+  agents のセッションスレッド) を O-9 が直した。DTO の形・フィールドの集合 (`TRANSCRIPT_MESSAGE_FIELDS` など)・`METER_UPDATE_TYPES`・
+  IPC・preload は変えない。過去ログの時刻は `getSessionMessages` の返りの型に無い `timestamp` から読む）
 - **O-11 (ui)** — Hook・背景の task・実行中の subagent と知らせの類の表示 ([roadmap の O-11 の行](../../roadmap.md))。O-6 の design で
   分けた ui の feature。**ADR の義務は本 domain の境界にある** (`includeHookEvents` = query の options の追加・`getSubagentMessages` = Agent SDK の
   呼び出しの許可リストの追加・`get_hooks_listing`。[AD-049](../../decisions/0049-boundaries-retraction-and-o11-split.md) Decision 1) ので、

@@ -621,6 +621,8 @@ async function run(
      */
     queryHandle = query({ prompt: promptQueue.iterate(), options: options as unknown as Options })
     for await (const message of queryHandle) {
+      // 受信時刻は 1 件につき 1 回だけ取る (同じ SDK のメッセージから作る DTO は同じ値。O-9 / AD-051)。
+      const receivedAt = Date.now()
       if (!sawFirstMessage && promptSent) {
         sawFirstMessage = true
         transition({ kind: 'ready' }) // launching → running (他状態では no-op)
@@ -629,7 +631,7 @@ async function run(
         case 'assistant': {
           // 拒否で置き換えられた応答の取り消しは、代わりのメッセージを送る前に送る (O-6 / 016 data-model §1)。
           if (message.supersedes !== undefined) signals.onRetraction(message.supersedes)
-          const dto = toLiveAssistantMessage(message)
+          const dto = toLiveAssistantMessage(message, receivedAt)
           // 結果待ちの tool_use を覚える (結果は後の user メッセージで同じ id に埋めて送り直す。O-2 / FR-007)。
           toolResults.trackAssistant(dto)
           // 取り消した id の assistant を後から受けても送らない。
@@ -640,7 +642,7 @@ async function run(
         case 'user':
           // **tool_result ブロックだけを読み、user の本文は送らない** (data-model §3)。
           // 影響を受けたメッセージは user メッセージ 1 つにつき 1 回だけ、同じ id で送り直す。
-          for (const dto of toolResults.applyUserMessage(message))
+          for (const dto of toolResults.applyUserMessage(message, receivedAt))
             emit({ kind: 'message', message: dto })
           signals.onUser(message)
           break
@@ -675,7 +677,7 @@ async function run(
           }
           {
             // Hook / Background task の行 (O-2 / FR-008)。後続は同じ id で送り、renderer が合成する (FR-009)。
-            const event = toSystemEventMessage(message, null)
+            const event = toSystemEventMessage(message, receivedAt)
             if (event !== null) emit({ kind: 'message', message: event })
           }
           signals.onSystem(message)

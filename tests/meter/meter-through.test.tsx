@@ -149,7 +149,7 @@ function sessionThread(h: Harness, sessionId: string): SessionThread {
         case 'assistant':
           emit({
             kind: 'message',
-            message: toLiveAssistantMessage(message as unknown as LiveAssistantMessage)
+            message: toLiveAssistantMessage(message as unknown as LiveAssistantMessage, now)
           })
           signals.onAssistant(message)
           break

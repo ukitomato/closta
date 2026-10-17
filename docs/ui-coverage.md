@@ -35,6 +35,7 @@ SDK: `@anthropic-ai/claude-agent-sdk` 0.3.270
 1. `node scripts/constitution/check.mjs` の項目 21 の失敗の出力を読む (足りない行・消えた行・版の違い)
 2. 足りない行を足して割当を書き、消えた行を消し、冒頭の `SDK:` の版を書き換える。**SDK が型を正当に減らしたとき** (「SDK から読めた名前が極端に少ない」で落ちる) は、`scripts/ui-coverage/coverage.mjs` の `LOWER_BOUNDS` (parse の取りこぼしを捕まえる下限。今は実数と同じ) も新しい数に直す
 3. 項目 21 が ok になることを確かめる。`ui-coverage-reviewer` が pr-gate で割当の妥当性を見る
+4. 過去ログの fixture と実機の 1 件で、`getSessionMessages` の返りの `timestamp` から `createdAt` が埋まることを確かめる (型に無い値。AD-051)。消えていれば AD-051 の Confirmation に従う
 
 ## A メッセージ型
 
@@ -42,18 +43,18 @@ SDK: `@anthropic-ai/claude-agent-sdk` 0.3.270
 
 | 識別子 | 判別子 | Tier | 割当 | 経路 | 備考 |
 |---|---|---|---|---|---|
-| SDKAssistantMessage | `assistant` | A | 実装済み: Thread / MarkdownText / Reasoning / ToolGroup (両方) | 両方 | 中身のブロックは B 節。実行中はメッセージ単位で更新 (X-1) |
-| SDKUserMessage | `user` | A | 実装済み: UserMessage / tool の結果は各 tool の表示 (両方) | 両方 | 実行中の利用者の本文は送信時に楽観的に出す。tool_result は O-2 から実行中も呼び出しの表示に埋める (FR-007) |
+| SDKAssistantMessage | `assistant` | A | 実装済み: Thread / MarkdownText / Reasoning / ToolGroup / MessageTimeLabel / ConversationMapTab (両方) | 両方 | 中身のブロックは B 節。実行中はメッセージ単位で更新 (X-1)。O-9: 時刻 (`timestamp`。無ければ受信時刻。過去ログは `getSessionMessages` の返りの `timestamp`。AD-051) を中央の本体に出し、右のペインのタブ『会話の地図』の行と活動の帯に使う |
+| SDKUserMessage | `user` | A | 実装済み: UserMessage / tool の結果は各 tool の表示 / MessageTimeLabel / ConversationMapTab (両方) | 両方 | 実行中の利用者の本文は送信時に楽観的に出す。tool_result は O-2 から実行中も呼び出しの表示に埋める (FR-007)。O-9: 実行中の入力の時刻は SDK に渡した時刻 (renderer)、過去ログは記録の `timestamp`。ターン (入力 1 つ) を地図の行にし、所要時間を出す |
 | SDKUserMessageReplay | `user` (replay) | B | 表示不要: resume 時の再送。元の user メッセージを表示している | なし | |
 | SDKResultMessage | `result` | A | 実装済み: FailureBanner / UsageTab / ContextCostMeter (実行中) | 実行中 | O-4。成功・失敗はセッションの状態。失敗は理由のキー (`subtype`・`api_error_status`・同じターンの主ループの assistant の `error` から `classifyResultFailure` が決める。AD-047 Decision 1 / 014 data-model §1) で区別し、中央の FailureBanner・監視ビューの行の短い理由・読み上げに出す。費用 (`total_cost_usd`。推定)・モデルごとのトークン (`modelUsage`)・ターン数 (セッションスレッドが result を数える)・拒否の件数は `meter` の `turn` で運び、右のペインの使用量のタブ (UsageTab) と中央のヘッダの目盛り (ContextCostMeter) に出す。**`errors` は出さない (U-5)**。**`num_turns` (1 ターンの往復の数) は出さない**。**`permission_denials` は件数** (tool の名前と入力は運ばない) |
 | SDKSystemMessage | `system` / `init` | B | 実装済み: 構成のタブ (実行中) | 実行中 | O-5。`model`・`mcp_servers` の名前と状態・`tools`・`skills`・`plugins` の名前と版・`slash_commands` を `meter` の `init-report` で運び、右のペインの「構成」のタブ (`InitReportTab`) に出す。MCP サーバーの `failed` / `needs-auth` は畳んだ帯のアイコンにも注意の印を付ける (015 data-model §2 / §3)。`cwd`・`plugins` の `path`・`apiKeySource` などは出さない。Tier B: 起動の設定は起動のダイアログ (X-4) で利用者が選んでいる。`permissionMode` は O-4 が権限モードの比較に使う (表示は権限モードの行と警告の帯。他のフィールドは読まない。014 data-model §2) |
 | SDKPartialAssistantMessage | `stream_event` | B | 表示不要: 部分メッセージを要求しない (X-1 はメッセージ単位で更新する) | なし | `includePartialMessages` を渡していない |
-| SDKCompactBoundaryMessage | `system` / `compact_boundary` | A | 実装済み: TranscriptBoundary (両方) | 両方 | O-6。実行中は agents が `compact_boundary` から行を作り (`live-signals.ts` の `onSystem`)、過去ログは今の `divider` の part を同じ element に写す。手動 / 自動と前後のトークン数は実行中だけで、過去ログは数を省いた文言 (DTO が数を運ばない)。O-4 の圧縮の行 (`status` の `compact_result`) とは並べて出す (行が先、境界が後。失敗は行だけ。016 data-model §1) |
+| SDKCompactBoundaryMessage | `system` / `compact_boundary` | A | 実装済み: TranscriptBoundary / ConversationMapTab (両方) | 両方 | O-6。O-9: 地図の行に境界の印として出す。実行中は agents が `compact_boundary` から行を作り (`live-signals.ts` の `onSystem`)、過去ログは今の `divider` の part を同じ element に写す。手動 / 自動と前後のトークン数は実行中だけで、過去ログは数を省いた文言 (DTO が数を運ばない)。O-4 の圧縮の行 (`status` の `compact_result`) とは並べて出す (行が先、境界が後。失敗は行だけ。016 data-model §1) |
 | SDKStatusMessage | `system` / `status` | A | 実装済み: SystemEventRow / UnsafeModeBanner / OverviewTab (実行中) | 実行中 | O-4。権限モードの変化 (`permissionMode`。ExitPlanMode の後など) は権限モードの行 (SystemEventRow)・「概要」の「現在の権限モード」(OverviewTab)・安全 3 値の外のときの警告の帯 (中央のヘッダの下。`CenterBanners.tsx` の UnsafeModeBanner。U-6)。圧縮中と圧縮の結果 (`compact_result`) はコンテキストの圧縮の行。`compact_error` は出さない。`status` の `requesting` は表示しない。承認とコンテキストに直結するので Tier A |
 | SDKAPIRetryMessage | `system` / `api_retry` | A | 実装済み: SystemEventRow (実行中) | 実行中 | O-4。API の再試行の行 (回数・最大回数・HTTP の状態・待ち時間)。同じターンの再試行は同じ行に合成し、次の主ループの assistant か result で成功 / 失敗に閉じる。`error`・`no_response` は出さない (014 data-model §3) |
 | SDKControlRequestProgressMessage | `system` / `control_request_progress` | B | 表示不要: アプリが送った制御要求の進捗の内部通知 | なし | |
-| SDKModelRefusalFallbackMessage | `system` / `model_refusal_fallback` | A | 実装済み: SystemEventRow (実行中) | 実行中 | O-6。拒否の行 (fallback のモデルと scope・分類・拒否の説明を伏せ字つきで)。置き換えられた応答は `meter` の `retraction` で稼働中のストアから外す (AD-049 Decision 2)。過去ログは記録に残れば伏せ字つきの system の本文 (行は O-11) |
-| SDKModelRefusalNoFallbackMessage | `system` / `model_refusal_no_fallback` | A | 実装済み: SystemEventRow (実行中) | 実行中 | O-6。拒否の行 (言い直して送り直せる旨・`content`・拒否の説明を伏せ字つきで)。過去ログは記録に残れば伏せ字つきの system の本文 (行は O-11)。「編集して再試行」は O-10 |
+| SDKModelRefusalFallbackMessage | `system` / `model_refusal_fallback` | A | 実装済み: SystemEventRow / ConversationMapTab (実行中) | 実行中 | O-6。O-9: 地図の行に拒否の印として出す。拒否の行 (fallback のモデルと scope・分類・拒否の説明を伏せ字つきで)。置き換えられた応答は `meter` の `retraction` で稼働中のストアから外す (AD-049 Decision 2)。過去ログは記録に残れば伏せ字つきの system の本文 (行は O-11) |
+| SDKModelRefusalNoFallbackMessage | `system` / `model_refusal_no_fallback` | A | 実装済み: SystemEventRow / ConversationMapTab (実行中) | 実行中 | O-6。O-9: 地図の行に拒否の印として出す。拒否の行 (言い直して送り直せる旨・`content`・拒否の説明を伏せ字つきで)。過去ログは記録に残れば伏せ字つきの system の本文 (行は O-11)。「編集して再試行」は O-10 |
 | SDKLocalCommandOutputMessage | `system` / `local_command_output` | B | 後続: O-11 | なし | 過去ログは伏せ字つきの system の本文 (O-6) |
 | SDKHookStartedMessage | `system` / `hook_started` | A | 実装済み: SystemEventRow (実行中) | 実行中 | SDK は既定で SessionStart / Setup の Hook だけを出す。一般の Hook (`includeHookEvents`) は O-11 (D 節)。過去ログの変換は実装済み (`transcript.ts`)。実データに残るかは O-2 quickstart V-4 で確かめ、残れば経路を「両方」に直す |
 | SDKHookProgressMessage | `system` / `hook_progress` | B | 表示不要: 開始と結果の行で足りる。出力本文 (stdout / stderr) は出さない | なし | |
@@ -80,7 +81,7 @@ SDK: `@anthropic-ai/claude-agent-sdk` 0.3.270
 | SDKPromptSuggestionMessage | `prompt_suggestion` | B | 後続: O-11 | なし | |
 | SDKMirrorErrorMessage | `system` / `mirror_error` | B | 後続: O-11 | なし | |
 | SDKInformationalMessage | `system` / `informational` | A | 実装済み: SystemEventRow (実行中) | 実行中 | O-6。「知らせ」の行に `content` を伏せ字 (`redactSecrets`) と O-2 の切り詰めを通して出す (O-2 の「Hook の出力本文を出さない」の例外。AD-049 Decision 3)。同じ `tool_use_id` の知らせは 1 行にまとめ、`prevent_continuation` と `level` で見た目を分ける。過去ログは記録に残れば伏せ字つきの system の本文 (行は O-11)。UserPromptSubmit の Hook が prompt を止めた理由・Stop の Hook が続行を止めたこと (`prevent_continuation`)・slash command の出力の文言。止まった理由が分からないと判断を誤るので Tier A (中断) |
-| SDKConversationResetMessage | `conversation_reset` | A | 実装済み: TranscriptBoundary (実行中) | 実行中 | O-6。「ここから新しい会話です」の境界 (上の内容がコンテキストに無いとは断定しない)。`new_conversation_id` は読まない (X-6 に申し送り)。/clear・plan モードの終了などで会話が新しくなる。古い transcript がコンテキストに残っているように見えるので Tier A (セッションの境界) |
+| SDKConversationResetMessage | `conversation_reset` | A | 実装済み: TranscriptBoundary / ConversationMapTab (実行中) | 実行中 | O-6。O-9: 地図の行に境界の印として出す。「ここから新しい会話です」の境界 (上の内容がコンテキストに無いとは断定しない)。`new_conversation_id` は読まない (X-6 に申し送り)。/clear・plan モードの終了などで会話が新しくなる。古い transcript がコンテキストに残っているように見えるので Tier A (セッションの境界) |
 
 ### A' union の外
 
@@ -102,11 +103,11 @@ assistant / user のメッセージの content block。型は `@anthropic-ai/sdk
 | assistant/text | `text` | A | 実装済み: MarkdownText (両方) | 両方 | |
 | assistant/thinking | `thinking` | A | 実装済み: Reasoning (両方) | 両方 | |
 | assistant/redacted_thinking | `redacted_thinking` | B | 実装済み: Reasoning (両方) | 両方 | 文言 `[redacted thinking]`。O-2 で実行中もそろえた |
-| assistant/tool_use | `tool_use` | A | 実装済み: ToolGroup / 各 tool の表示 (両方) | 両方 | tool ごとの割当は C 節 |
+| assistant/tool_use | `tool_use` | A | 実装済み: ToolGroup / 各 tool の表示 (両方) | 両方 | tool ごとの割当は C 節。O-9: 地図の行の tool の数 (`ConversationMapTab`) |
 | assistant/server_tool_use | `server_tool_use` | B | 後続: O-11 | なし | 知らないブロックとして捨てている |
 | assistant/web_search_tool_result | `web_search_tool_result` | B | 後続: O-11 | なし | |
 | user/text | `text` | A | 実装済み: UserMessage (両方) | 両方 | |
-| user/tool_result | `tool_result` | A | 実装済み: 各 tool の表示 (両方) | 両方 | O-2 で実行中も呼び出しの表示に埋める (FR-007)。エラーと切り詰めは Terminal block・Code diff・ToolFallback・Subagent などの各表示に印を出す (O-2 pr-gate R1)。結果待ち・結果不明の印と読み上げは実装済み (O-6。`ToolResultMarks` の印と `TranscriptAnnouncer`。016 data-model §3 / §4)。対応の無い結果は結果だけの表示 |
+| user/tool_result | `tool_result` | A | 実装済み: 各 tool の表示 (両方) | 両方 | O-2 で実行中も呼び出しの表示に埋める (FR-007)。エラーと切り詰めは Terminal block・Code diff・ToolFallback・Subagent などの各表示に印を出す (O-2 pr-gate R1)。結果待ち・結果不明の印と読み上げは実装済み (O-6。`ToolResultMarks` の印と `TranscriptAnnouncer`。016 data-model §3 / §4)。対応の無い結果は結果だけの表示。O-9: 地図の行のエラーの数 (`ConversationMapTab`) |
 | user/image | `image` | B | 実装済み: Image (過去ログ) | 過去ログ | 安全な data 画像の MIME だけ (svg を除く) |
 | user/document | `document` | B | 後続: O-11 | 過去ログ | 今はファイル名の文字列だけ。File element は O-11 |
 
@@ -228,11 +229,11 @@ SDK のメッセージではなく、アプリが SDK の callback・制御・�
 
 ## F element の分類
 
-assistant-ui の element の一覧 (https://www.assistant-ui.com/elements。**2026-10-03 確認で 127** (一覧の名前を数えた数)。AD-019 の 2026-09-13 の数え方 (202) とは registry のページの構成が違い、未分類の 59 要素の一覧は残っていなかったので、今の一覧から引き直した)。Tier A の 35 (AD-019) と PLAN.md §4.3 / §4.4 の名前を当て、残りを分類した。使い道の書式は凡例の「使い道」が正本である。
+assistant-ui の element の一覧 (https://www.assistant-ui.com/elements。**2026-10-03 確認で 127** (一覧の名前を数えた数。2026-10-16 に `Conversation map` を足した (128))。AD-019 の 2026-09-13 の数え方 (202) とは registry のページの構成が違い、未分類の 59 要素の一覧は残っていなかったので、今の一覧から引き直した)。Tier A の 35 (AD-019) と PLAN.md §4.3 / §4.4 の名前を当て、残りを分類した。使い道の書式は凡例の「使い道」が正本である。
 
 | element | Tier | 使い道 | 備考 |
 |---|---|---|---|
-| Activity graph | B | 未使用 | O-9 (活動の heat graph と合わせて判断。O-3 の design で O-3 から O-9 に移した) |
+| Activity graph | B | 未使用 | O-9 で使わないと決めた (U-6)。暦の形は複数日の活動を前提にし、1 つの会話の時間に合わない |
 | Agent card | B | 未使用 | |
 | Agent handoff | A | 未使用 | subagent の受け渡し (PLAN §4.2)。O-11 の入れ子と合わせる |
 | Agent plan | A | C ExitPlanModeInput | AgentPlan |
@@ -264,6 +265,7 @@ assistant-ui の element の一覧 (https://www.assistant-ui.com/elements。**20
 | Connection state | B | 未使用 | |
 | Context breakdown | A | 未使用 | O-4 で使わないと決めた (014 research R-09)。取り込んでいない。カテゴリ別のコンテキストの内訳を出さない (E get_context_usage を呼ばない。AD-047 Decision 4 / U-3)。内訳は Claude Code の `/context` で見られる |
 | Context display | A | A SDKAssistantMessage / A SDKResultMessage | O-4。中央のヘッダの行の右の目盛り (`features/shell/ContextCostMeter.tsx`)。主ループの最後の assistant の入力側の usage を、result の `modelUsage` の主モデルの `contextWindow` で割った推定 (014 data-model §4)。registry の `context-display` は採らず、文字の体裁で作った (SH-002 の照合の写し。正本は O-4 の PR の説明。014 research R-09): AUI 接続の版は新しい npm の依存 (`@assistant-ui/ai-sdk`) を要し、standalone の版は文言が英語の直書き・100% で止める・色の閾値 (65% / 85%) が 80% と違う・推定であることが出ない |
+| Conversation map | B | A SDKAssistantMessage / A SDKUserMessage | O-9 で registry に増えた名前を足した (Principle XIII の Exceptions)。右のペインのタブ『会話の地図』 (`features/shell/ConversationMapTab.tsx`) をターンごとの行で自作した (SH-002 の照合の写し。正本は O-9 の PR の説明。017 research R-10): registry の `conversation-map` は AUI 接続で中央の runtime を読むので中央の外 (右のペイン) に置けず、行に時刻・所要時間・数を持たせる形とも違う |
 | Conversation search | B | SDK の外: 中央のヘッダの会話内検索のバー (`features/chat/ConversationSearchBar.tsx` が `conversation-search.tsx` を組み込む。Ctrl+F) | O-3 で registry の `elements-conversation-search` を採った (SH-003 の照合の写し。正本は O-3 の PR の説明。012 research R-04)。DOM の id を作らない。取り込んだ中で、スクロールバーの一致の印 (唯一の `style`。仮想化で描かれていない範囲の高さを知らないので印の位置を決められない) と一致の前後の文を外し、英語の文言と件数の書式を文言の表で受け、閉じるボタンと入力欄へフォーカスを移す口を足して、eslint の手書きの element の一覧に足した。Enter / Shift+Enter / Esc と IME のガード・走査・強調 (CSS Custom Highlight API) は外側 (`features/chat`) |
 | Cost meter | A | A SDKResultMessage | O-4。右のペインの使用量のタブ (`features/shell/UsageTab.tsx`。費用・トークン・ターン数・モデルごとの内訳・拒否の件数) と中央のヘッダの費用の目盛り (`ContextCostMeter`)。registry の `elements-cost-meter` は採らず、`dl` と文字の体裁で作った (SH-002 の照合の写し。正本は O-4 の PR の説明。014 research R-09): 構造が `dl` / `table` でない・文言が英語の直書き・「この実行」とセッションの 2 つの費用を取るが届くのはセッションの累計の推定だけ・モデルの行がキャッシュのトークンを持たない |
 | Data table | C | 未使用 | MCP の結果に転用しない (AD-048 Decision 4) |
@@ -284,7 +286,7 @@ assistant-ui の element の一覧 (https://www.assistant-ui.com/elements。**20
 | Generative UI | C | 未使用 | Generative |
 | Geo map | C | 未使用 | |
 | Guardrail notice | B | 未使用 | |
-| Heat graph | B | 未使用 | O-9 (O-3 の design で O-3 から O-9 に移した) |
+| Heat graph | B | A SDKAssistantMessage / A SDKUserMessage | O-9。右のペインのタブ『会話の地図』の活動の帯 (`features/shell/ConversationMapTab.tsx`)。registry の `heat-graph` は採らず、テーマのトークンだけで塗る帯を自作した (SH-002 の照合の写し。正本は O-9 の PR の説明。017 research R-10): 月と曜日の暦の格子で、日単位の `DataPoint` が前提。1 つの会話の分単位の区間を 1 行の帯にする形と合わない |
 | Image | B | B user/image | |
 | Image gallery | C | 未使用 | |
 | Image generation | C | 未使用 | PLAN §4.4 |
@@ -306,7 +308,7 @@ assistant-ui の element の一覧 (https://www.assistant-ui.com/elements。**20
 | Message branches | A | 未使用 | fork / resume (X-6) |
 | Message pair | B | 未使用 | |
 | Message queue | A | D message-queue | X-2 |
-| Message timing | B | 未使用 | O-9 (メッセージの時刻 `createdAt` は今は過去ログ・実行中とも `null` で、変換で埋める必要がある。O-3 の design で O-3 から O-9 に移した) |
+| Message timing | B | A SDKAssistantMessage / A SDKUserMessage | O-9。中央の本体の各メッセージの時刻とターンの所要時間 (`features/chat/MessageTimeLabel.tsx`)。registry の `message-timing` / `elements-message-timing` は採らず、文字の体裁で作った (SH-002 の照合の写し。正本は O-9 の PR の説明。017 research R-10): `message-timing` はストリームの統計 (`metadata.timing`) を読むが本アプリはメッセージ単位で更新する (X-1)。standalone の版は文言が英語の直書きで、メッセージの時刻と所要時間を出す形と合わない |
 | Mobile composer | C | 未使用 | PLAN §4.4 |
 | Model selector | A | 未使用 | 起動設定ダイアログ (X-4) は session の操作 UI |
 | Number ticker | C | 未使用 | |
@@ -354,7 +356,7 @@ assistant-ui の element の一覧 (https://www.assistant-ui.com/elements。**20
 | Tool group | A | B assistant/tool_use | ToolGroup。O-2 で transcript の密度 comfortable のとき既定で開く |
 | Tool timeline | B | 未使用 | PLAN §4.3 |
 | Tooltip icon button | B | SDK の外: 中央の本体の Thread の操作ボタン (`components/tooltip-icon-button.tsx`。コピー・編集・送信・下端へなど) | 表示の部品ではなく操作のボタンの部品 (O-7 pr-gate R2 ui-coverage M-005 の残り) |
-| Trace waterfall | B | 未使用 | O-9 (O-3 の design で O-3 から O-9 に移した) |
+| Trace waterfall | B | 未使用 | O-9 で使わないと決めた (U-6)。tool の開始と終わりの時刻の組を運ばない。並列の tool と実行中の subagent の入れ子は O-11。再検討は O-11 の入れ子の後 |
 | Typing indicator | B | 未使用 | |
 | Voice conversation | C | 未使用 | Voice 系 |
 | Web preview | B | 未使用 | |

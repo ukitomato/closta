@@ -12,6 +12,7 @@ import type { ThreadMessageLike } from '@assistant-ui/react'
 
 import { useUiStore } from '@/stores/ui'
 
+import { ConversationNavigateContext } from './center-conversation'
 import {
   applySearchHighlights,
   clearSearchHighlights,
@@ -91,14 +92,19 @@ export function ConversationSearchProvider({
 
   /* ── 移動 ───────────────────────────────────────────────────────────── */
 
-  const goTo = useEffectEvent((messageId: string) => {
-    pendingRevealRef.current = null
-    if (registry.current()?.scrollToMessage(messageId) === true) return
-    if (reveal === undefined) return
-    // 稼働中で窓の外: 窓を広げ、transcript が navigator を登録し直したら (広げた後の描画) もう一度移る。
-    pendingRevealRef.current = messageId
-    reveal(messageId)
-  })
+  // 移動の経路。会話内検索・会話の地図 (O-9) の両方がこれを使う (context で出す。research R-07)。
+  const navigateTo = useCallback(
+    (messageId: string): void => {
+      pendingRevealRef.current = null
+      if (registry.current()?.scrollToMessage(messageId) === true) return
+      if (reveal === undefined) return
+      // 稼働中で窓の外: 窓を広げ、transcript が navigator を登録し直したら (広げた後の描画) もう一度移る。
+      pendingRevealRef.current = messageId
+      reveal(messageId)
+    },
+    [registry, reveal]
+  )
+  const goTo = useEffectEvent((messageId: string) => navigateTo(messageId))
   const navigation = search.navigation
   useEffect(() => {
     if (navigation !== null) goTo(navigation.key.messageId)
@@ -222,9 +228,11 @@ export function ConversationSearchProvider({
 
   return (
     <TranscriptNavigatorContext.Provider value={registry}>
-      <ConversationSearchContext.Provider value={value}>
-        {children}
-      </ConversationSearchContext.Provider>
+      <ConversationNavigateContext.Provider value={navigateTo}>
+        <ConversationSearchContext.Provider value={value}>
+          {children}
+        </ConversationSearchContext.Provider>
+      </ConversationNavigateContext.Provider>
     </TranscriptNavigatorContext.Provider>
   )
 }

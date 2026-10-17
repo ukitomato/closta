@@ -1,0 +1,248 @@
+{
+    "gate": "design",
+    "run": "2026-10-16T00:00:00+09:00",
+    "spec_dir": "specs/017-ui-conversation-time-and-activity",
+    "spec_id": "017-ui-conversation-time-and-activity",
+    "tracks": {
+        "analyze": {
+            "status": "ok",
+            "raw_out": "analyze.md",
+            "viewpoint_missing": null,
+            "cascade_demotions": null
+        },
+        "po-reviewer": {
+            "status": "ok",
+            "raw_out": "po-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "architecture-reviewer": {
+            "status": "ok",
+            "raw_out": "architecture-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "security-reviewer": {
+            "status": "ok",
+            "raw_out": "security-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "platform-boundary-reviewer": {
+            "status": "ok",
+            "raw_out": "platform-boundary-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        }
+    },
+    "severity_counts": {
+        "critical": 0,
+        "high": 1,
+        "medium": 14,
+        "low": 14
+    },
+    "fr_coverage": [
+        {
+            "fr": "FR-001",
+            "covered": true,
+            "by": [
+                "BE-001",
+                "BE-010"
+            ]
+        },
+        {
+            "fr": "FR-002",
+            "covered": true,
+            "by": [
+                "BE-011",
+                "BE-012"
+            ]
+        },
+        {
+            "fr": "FR-003",
+            "covered": true,
+            "by": [
+                "FE-010"
+            ]
+        },
+        {
+            "fr": "FR-004",
+            "covered": true,
+            "by": [
+                "BE-001",
+                "BE-010"
+            ]
+        },
+        {
+            "fr": "FR-005",
+            "covered": true,
+            "by": [
+                "BE-010",
+                "BE-011",
+                "SH-013"
+            ]
+        },
+        {
+            "fr": "FR-006",
+            "covered": true,
+            "by": [
+                "FE-010",
+                "FE-012"
+            ]
+        },
+        {
+            "fr": "FR-007",
+            "covered": true,
+            "by": [
+                "FE-011",
+                "FE-012"
+            ]
+        },
+        {
+            "fr": "FR-008",
+            "covered": true,
+            "by": [
+                "FE-022"
+            ]
+        },
+        {
+            "fr": "FR-009",
+            "covered": true,
+            "by": [
+                "FE-011",
+                "FE-022"
+            ]
+        },
+        {
+            "fr": "FR-010",
+            "covered": true,
+            "by": [
+                "FE-020",
+                "FE-021",
+                "FE-022"
+            ]
+        },
+        {
+            "fr": "FR-011",
+            "covered": true,
+            "by": [
+                "FE-022"
+            ]
+        },
+        {
+            "fr": "FR-012",
+            "covered": true,
+            "by": [
+                "FE-030",
+                "FE-031"
+            ]
+        },
+        {
+            "fr": "FR-013",
+            "covered": true,
+            "by": [
+                "FE-031"
+            ]
+        },
+        {
+            "fr": "FR-014",
+            "covered": true,
+            "by": [
+                "SH-002",
+                "SH-011"
+            ]
+        },
+        {
+            "fr": "FR-015",
+            "covered": true,
+            "by": [
+                "SH-010"
+            ]
+        },
+        {
+            "fr": "FR-016",
+            "covered": true,
+            "by": [
+                "SH-001",
+                "SH-010"
+            ]
+        }
+    ],
+    "viewpoint_coverage": {
+        "A": "Critical:0 High:0",
+        "B": "Critical:0 High:0",
+        "C": "Critical:0 High:0",
+        "D": "Critical:0 High:0",
+        "E": "Critical:0 High:1",
+        "F": "Critical:0 High:0",
+        "G": "\u8a72\u5f53\u306a\u3057: optional reviewer",
+        "H": "Critical:0 High:0"
+    },
+    "dedup_log": [
+        {
+            "merged": [
+                "po-H-001",
+                "pb-M-001",
+                "pb-M-002"
+            ],
+            "key": "data-model.md:48/53/87 (clock mix)"
+        },
+        {
+            "merged": [
+                "analyze-I1",
+                "arch-M-005"
+            ],
+            "key": "spec.md:130"
+        },
+        {
+            "merged": [
+                "analyze-T2",
+                "arch-M-004"
+            ],
+            "key": "spec.md:160"
+        },
+        {
+            "merged": [
+                "po-M-003",
+                "arch-M-003"
+            ],
+            "key": "tasks.md:34 BE-010"
+        },
+        {
+            "merged": [
+                "po-M-002",
+                "arch-M-006"
+            ],
+            "key": "plan.md:248 RK-05"
+        },
+        {
+            "merged": [
+                "analyze-C1",
+                "arch-L-002"
+            ],
+            "key": "glossary.md:867-874"
+        },
+        {
+            "merged": [
+                "analyze-C2",
+                "arch-L-003"
+            ],
+            "key": "ui/charter.md:146"
+        },
+        {
+            "merged": [
+                "analyze-T3",
+                "arch-L-001"
+            ],
+            "key": "glossary.md:738"
+        },
+        {
+            "merged": [
+                "analyze-U2",
+                "po-L-002"
+            ],
+            "key": "spec.md:165"
+        }
+    ],
+    "verdict": "PASS"
+}

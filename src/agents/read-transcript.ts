@@ -71,7 +71,9 @@ async function run(request: TranscriptRequest, port: TranscriptPortLike): Promis
     frame = {
       kind: 'messages',
       requestToken: request.requestToken,
-      messages: toTranscriptMessages(messages as readonly SessionMessageLike[])
+      messages: toTranscriptMessages(messages as readonly SessionMessageLike[], {
+        now: Date.now()
+      })
     }
   } catch {
     frame = {

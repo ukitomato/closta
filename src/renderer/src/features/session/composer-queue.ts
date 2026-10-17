@@ -35,6 +35,14 @@ export function isBusyRunState(runState: SessionRunState): boolean {
   return runState === 'running' || runState === 'awaiting_permission'
 }
 
+/**
+ * 稼働中のセッションが **turn の in-flight (busy)** か。終端では busy にしない。
+ * `RunningSessionsProvider` の `isRunning` と、地図・所要時間の `lastTurnOpen` (O-9 data-model §2) が同じ判定を使う。
+ */
+export function isRunBusy(runState: SessionRunState, terminal: boolean): boolean {
+  return !terminal && isBusyRunState(runState)
+}
+
 /** 入力を送信/enqueue できるかの判定結果。拒否理由は UI の理由提示に使う (R2-M-001)。 */
 export type EnqueueVerdict = 'ok' | 'invalid' | 'full'
 

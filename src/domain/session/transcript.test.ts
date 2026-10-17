@@ -427,3 +427,73 @@ describe('toTranscriptMessages', () => {
     expect(out.length).toBeGreaterThan(1)
   })
 })
+
+describe('toTranscriptMessages の時刻 (O-9 BE-010 / data-model §1。AD-051)', () => {
+  const NOW = Date.parse('2026-10-16T12:00:00Z')
+  const at = (timestamp: unknown, m: SessionMessageLike): SessionMessageLike => ({
+    ...m,
+    timestamp
+  })
+
+  it('timestamp があれば createdAt に入り、無い・壊れ・範囲外は null', () => {
+    const out = toTranscriptMessages(
+      [
+        at('2026-10-16T01:23:45.678Z', msg('user', 'u1', 'a')),
+        msg('assistant', 'a1', 'b'),
+        at(1_760_000_000_000, msg('user', 'u2', 'c')),
+        at('', msg('user', 'u3', 'd')),
+        at('2026-10-16T01:23:45', msg('user', 'u4', 'e')),
+        at('2019-12-31T23:59:59Z', msg('user', 'u5', 'f')),
+        at('2026-10-18T00:00:00Z', msg('user', 'u6', 'g'))
+      ],
+      { now: NOW }
+    )
+    expect(out.map((m) => m.createdAt)).toEqual([
+      Date.parse('2026-10-16T01:23:45.678Z'),
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ])
+  })
+
+  it('時計が戻っても記録の順のまま (並べ替えない)', () => {
+    const out = toTranscriptMessages(
+      [
+        at('2026-10-16T10:10:00Z', msg('user', 'u1', 'a')),
+        at('2026-10-16T10:00:00Z', msg('assistant', 'a1', 'b')),
+        at('2026-10-16T10:20:00Z', msg('user', 'u2', 'c'))
+      ],
+      { now: NOW }
+    )
+    expect(out.map((m) => m.id)).toEqual(['u1', 'a1', 'u2'])
+  })
+
+  it('subagent の入れ子の中のメッセージも時刻を持つ', () => {
+    const out = toTranscriptMessages(
+      [
+        at(
+          '2026-10-16T10:00:00Z',
+          msg('assistant', 'a1', [{ type: 'tool_use', id: 'task1', name: 'Task', input: {} }])
+        ),
+        {
+          ...at('2026-10-16T10:01:00Z', msg('assistant', 'c1', 'child')),
+          parent_tool_use_id: 'task1'
+        }
+      ],
+      { now: NOW }
+    )
+    const part = out[0]?.parts[0]
+    expect(part?.type).toBe('tool-call')
+    if (part?.type === 'tool-call') {
+      expect(part.children[0]?.createdAt).toBe(Date.parse('2026-10-16T10:01:00Z'))
+    }
+  })
+
+  it('now を省略しても動く (既定は Date.now())', () => {
+    const out = toTranscriptMessages([at('2026-10-16T01:23:45Z', msg('user', 'u1', 'a'))])
+    expect(out[0]?.createdAt).toBe(Date.parse('2026-10-16T01:23:45Z'))
+  })
+})

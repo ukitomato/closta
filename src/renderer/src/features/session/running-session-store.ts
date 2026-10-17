@@ -11,6 +11,7 @@ import { mergeSystemEvent, systemEventPartOf } from '@domain/session/system-even
 import type { TranscriptMessageDTO } from '@domain/session/transcript-dto'
 
 import { fromSystemEventData, toThreadMessage } from '@/features/chat/convert'
+import { readMessageTime, withMessageTime, withReceivedAt } from '@/features/chat/message-time'
 
 import { isBusyRunState, isSendableText } from './composer-queue'
 import { createCappedAdapter } from './composer-queue-adapter'
@@ -124,7 +125,11 @@ function upsertMessage(
   const index = prev.findIndex((m) => m.id !== undefined && m.id === next.id)
   if (index === -1) return [...prev, next]
   const copy = [...prev]
-  copy[index] = next
+  // 送り直しの保険: 前のメッセージが時刻を持ち、新しいメッセージが持たなければ前の値を残す (O-9 / AD-051)。
+  const before = prev[index]
+  const keptTime =
+    before !== undefined && readMessageTime(next) === null ? readMessageTime(before) : null
+  copy[index] = keptTime === null ? next : withMessageTime(next, keptTime)
   return copy
 }
 
@@ -136,15 +141,20 @@ function upsertMessage(
  */
 function applyMessage(
   prev: readonly ThreadMessageLike[],
-  dto: TranscriptMessageDTO
+  dto: TranscriptMessageDTO,
+  receivedAt: number
 ): ThreadMessageLike[] | null {
-  if (systemEventPartOf(dto) === null) return upsertMessage(prev, toThreadMessage(dto))
+  // 受信時刻 (所要時間の時計。差し替えでは新しい値で上書き。O-9 U-8) は renderer の中だけで持つ。
+  if (systemEventPartOf(dto) === null)
+    return upsertMessage(prev, withReceivedAt(toThreadMessage(dto), receivedAt))
   const existing = prev.find((m) => m.id !== undefined && m.id === dto.id)
   const merged = mergeSystemEvent(
     existing === undefined ? undefined : fromSystemEventData(existing),
     dto
   )
-  return merged === null ? null : upsertMessage(prev, toThreadMessage(merged))
+  return merged === null
+    ? null
+    : upsertMessage(prev, withReceivedAt(toThreadMessage(merged), receivedAt))
 }
 
 /** tool の経過時間を書く。その id を末尾へ移し、上限を超えたら先頭 (更新の古いもの) から落とす (014 data-model §2)。 */
@@ -408,7 +418,7 @@ export function createRunningSessionStore(
         store.setState((s) => {
           const current = s.sessions[sessionId]
           if (current === undefined) return s
-          const messages = applyMessage(current.messages, event.message)
+          const messages = applyMessage(current.messages, event.message, now())
           // 主ループの assistant の応答で思考の印を消す (同じ `setState` で。O-4 / 014 data-model §2)。
           const meters = clearThinkingOnAssistant(s.meters, sessionId, event.message)
           return {
@@ -621,11 +631,16 @@ export function createRunningSessionStore(
       const session = store.getState().sessions[sessionId]
       if (session === undefined) return
       userSeq += 1
-      const message: ThreadMessageLike = {
-        role: 'user',
-        content: [{ type: 'text', text }],
-        id: `user-${userSeq}`
-      }
+      // 利用者の入力の時刻は SDK に渡す時点のストアの時計 (積まれた入力は送る直前に入る。O-9 / AD-051)。
+      // 受信時刻 (所要時間の時計) も同じ値。
+      const at = now()
+      const message = withReceivedAt(
+        withMessageTime(
+          { role: 'user', content: [{ type: 'text', text }], id: `user-${userSeq}` },
+          at
+        ),
+        at
+      )
       patch(sessionId, { messages: upsertMessage(session.messages, message) })
     },
 

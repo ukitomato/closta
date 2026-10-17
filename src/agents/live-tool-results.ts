@@ -30,7 +30,7 @@ export interface LiveToolResultTracker {
   /** 送った assistant メッセージを覚える (結果待ちの tool_use が無ければ何もしない)。 */
   trackAssistant(message: TranscriptMessageDTO): void
   /** SDK の `user` メッセージ (未信頼) から、送り直すメッセージ (同じ id) と結果だけのメッセージを返す。 */
-  applyUserMessage(raw: unknown): readonly TranscriptMessageDTO[]
+  applyUserMessage(raw: unknown, receivedAt: number): readonly TranscriptMessageDTO[]
   /** 覚えているメッセージの数 (テスト用の観測点)。 */
   pendingMessageCount(): number
   /**
@@ -71,12 +71,12 @@ function toolResultsOf(raw: unknown): readonly ToolResult[] {
   })
 }
 
-function orphanMessage(result: ToolResult): TranscriptMessageDTO {
+function orphanMessage(result: ToolResult, receivedAt: number): TranscriptMessageDTO {
   return {
     id: `result:${result.toolUseId}`,
     role: 'assistant',
     parts: [orphanResultPart(result)],
-    createdAt: null
+    createdAt: receivedAt
   }
 }
 
@@ -119,7 +119,7 @@ export function createLiveToolResultTracker(): LiveToolResultTracker {
       }
     },
 
-    applyUserMessage(raw) {
+    applyUserMessage(raw, receivedAt) {
       // 取り消したメッセージの tool の結果は捨てる (送り直しにも結果だけのメッセージにもしない)。
       const results = toolResultsOf(raw).filter((r) => !retractedToolCalls.has(r.toolUseId))
       if (results.length === 0) return []
@@ -153,7 +153,7 @@ export function createLiveToolResultTracker(): LiveToolResultTracker {
         else lastMessages.set(messageId, filled.message)
         out.push(filled.message)
       }
-      for (const result of orphans) out.push(orphanMessage(result))
+      for (const result of orphans) out.push(orphanMessage(result, receivedAt))
       return out
     },
 
