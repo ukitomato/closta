@@ -72,8 +72,13 @@ function metersWith(statuses: readonly McpStatusKey[] | null): SessionMeters {
 }
 
 describe('PANEL_TABS (O-5)', () => {
-  it('並びは 概要 → 使用量 → 構成。構成の id は init-report (config を使わない) で、どの中央の状態でも出す', () => {
-    expect(PANEL_TABS.map((t) => t.id)).toEqual(['overview', 'usage', 'init-report'])
+  it('並びは 概要 → 使用量 → 構成 → 会話の地図。構成の id は init-report (config を使わない) で、どの中央の状態でも出す', () => {
+    expect(PANEL_TABS.map((t) => t.id)).toEqual([
+      'overview',
+      'usage',
+      'init-report',
+      'conversation-map'
+    ])
     const report = PANEL_TABS[2]!
     expect(report.label).toBe(SHELL_LABELS.initReportTab)
     expect(report.availableFor).toEqual(['none', 'running', 'past'])

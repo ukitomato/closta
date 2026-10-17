@@ -15,6 +15,7 @@ import type { LaunchOrigin } from '@domain/session/launch-usage'
 import { useRuntimes } from '@/features/runtime-list/useRuntimes'
 import { useFolders } from '@/features/workspace-folders/useFolders'
 
+import { isRunBusy } from './composer-queue'
 import { SESSION_NAME_FALLBACKS } from './labels'
 import { useRunningSessionStore, useRunningSessionStoreApi } from './running-session-context'
 import { RunningSessionsViewContext, type RunningSessionsView } from './running-sessions-view'
@@ -180,10 +181,7 @@ function useLiveRuntime(
   )
 
   // **turn が in-flight な間 = busy** (`running` / `awaiting_permission`)。終端では busy にしない。
-  const busy =
-    session !== null &&
-    !session.terminal &&
-    (session.runState === 'running' || session.runState === 'awaiting_permission')
+  const busy = session !== null && isRunBusy(session.runState, session.terminal)
 
   const runtime = useExternalStoreRuntime({
     messages: windowed as ThreadMessageLike[],

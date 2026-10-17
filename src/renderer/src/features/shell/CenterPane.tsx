@@ -4,6 +4,7 @@ import { EmptyState, EmptyStateGreeting } from '@/components/assistant-ui/elemen
 import { Button } from '@/components/ui/button'
 import { ChatScreenBody } from '@/features/chat/ChatScreen'
 import { ConversationSearchProvider } from '@/features/chat/ConversationSearchProvider'
+import { ConversationTimeProvider } from '@/features/chat/ConversationTimeProvider'
 import { useTranscript } from '@/features/chat/useTranscript'
 import { groupLabelOf } from '@/features/session-list/group-label'
 import {
@@ -14,6 +15,7 @@ import {
 } from '@/features/session-list/rows'
 import { useFolderLabels } from '@/features/session-list/useFolderLabels'
 import { formatStartedAt, SESSION_ROW_STATUS_LABELS } from '@/features/session/labels'
+import { isRunBusy } from '@/features/session/composer-queue'
 import { LivePane } from '@/features/session/LivePane'
 import { useRunningSessionsView } from '@/features/session/running-sessions-view'
 import { rowStatus } from '@/features/session/session-view'
@@ -95,23 +97,29 @@ export function RunningCenter(): React.JSX.Element | null {
       messages={live.state.messages}
       reveal={view.revealMessage}
     >
-      <div className="flex h-full min-h-0 flex-col">
-        <CenterHeader
-          title={view.folderName(live.state.config.folderId)}
-          detail={detail}
-          status={SESSION_ROW_STATUS_LABELS[rowStatus(live)]}
-          titleTestId="session-title"
-          live={{
-            sessionId: live.sessionId,
-            runtimeId: live.state.config.runtimeId,
-            modelId: live.state.config.modelId,
-            terminal: live.terminal
-          }}
-        />
-        <div className="min-h-0 flex-1">
-          <LivePane />
+      <ConversationTimeProvider
+        conversationKey={live.sessionId}
+        messages={live.state.messages}
+        lastTurnOpen={isRunBusy(live.state.runState, live.terminal)}
+      >
+        <div className="flex h-full min-h-0 flex-col">
+          <CenterHeader
+            title={view.folderName(live.state.config.folderId)}
+            detail={detail}
+            status={SESSION_ROW_STATUS_LABELS[rowStatus(live)]}
+            titleTestId="session-title"
+            live={{
+              sessionId: live.sessionId,
+              runtimeId: live.state.config.runtimeId,
+              modelId: live.state.config.modelId,
+              terminal: live.terminal
+            }}
+          />
+          <div className="min-h-0 flex-1">
+            <LivePane />
+          </div>
         </div>
-      </div>
+      </ConversationTimeProvider>
     </ConversationSearchProvider>
   )
 }
@@ -179,17 +187,23 @@ function PastCenter(): React.JSX.Element {
   return (
     // 選んだ行を切り替えると `key` で作り直して検索を閉じる (spec FR-003)。
     <ConversationSearchProvider key={selectedRowKey ?? ''} messages={transcript.messages}>
-      <div className="flex h-full min-h-0 flex-col">
-        <CenterHeader
-          title={title}
-          detail={group}
-          status={SHELL_LABELS.pastReadOnly}
-          titleTestId="past-title"
-        />
-        <div className="min-h-0 flex-1">
-          <ChatScreenBody transcript={transcript} densityToggle={false} />
+      <ConversationTimeProvider
+        conversationKey={selectedRowKey ?? ''}
+        messages={transcript.messages}
+        lastTurnOpen={false}
+      >
+        <div className="flex h-full min-h-0 flex-col">
+          <CenterHeader
+            title={title}
+            detail={group}
+            status={SHELL_LABELS.pastReadOnly}
+            titleTestId="past-title"
+          />
+          <div className="min-h-0 flex-1">
+            <ChatScreenBody transcript={transcript} densityToggle={false} />
+          </div>
         </div>
-      </div>
+      </ConversationTimeProvider>
     </ConversationSearchProvider>
   )
 }

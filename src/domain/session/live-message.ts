@@ -1,5 +1,6 @@
 import { sanitizeBody } from './sanitize-body'
 import type { TranscriptMessageDTO, TranscriptPartDTO } from './transcript-dto'
+import { parseMessageTime } from './transcript-time'
 
 /**
  * live stream の `SDKAssistantMessage` → `TranscriptMessageDTO` の**純粋変換** (X-1 / FR-008・FR-009)。
@@ -19,6 +20,8 @@ export interface LiveAssistantMessage {
   readonly type: 'assistant'
   readonly uuid: string
   readonly message: { readonly content?: unknown }
+  /** SDK の時刻 (ISO 8601。未信頼。O-9 / AD-051)。無い・壊れ・範囲外は受信時刻にする。 */
+  readonly timestamp?: unknown
 }
 
 function safeJsonString(input: unknown): string {
@@ -35,7 +38,10 @@ function safeJsonString(input: unknown): string {
  * tool の結果は後から届く `user` メッセージで `withToolResults` が埋める (`tool-result.ts`。O-2 / FR-007)。
  * content が配列でない / ブロックが object でない場合も例外を投げず空 parts に倒す (行を落とさない)。
  */
-export function toLiveAssistantMessage(msg: LiveAssistantMessage): TranscriptMessageDTO {
+export function toLiveAssistantMessage(
+  msg: LiveAssistantMessage,
+  receivedAt: number
+): TranscriptMessageDTO {
   const content = Array.isArray(msg.message.content) ? msg.message.content : []
   const parts: TranscriptPartDTO[] = []
 
@@ -73,5 +79,10 @@ export function toLiveAssistantMessage(msg: LiveAssistantMessage): TranscriptMes
     }
   }
 
-  return { id: msg.uuid, role: 'assistant', parts, createdAt: null }
+  return {
+    id: msg.uuid,
+    role: 'assistant',
+    parts,
+    createdAt: parseMessageTime(msg.timestamp, receivedAt) ?? receivedAt
+  }
 }

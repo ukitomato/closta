@@ -291,6 +291,7 @@ CI スクリプトの担当とし、reviewer に複製しない。
 ### O-9 — 会話の時間と活動の可視化
 
 > O-3 の design で O-3 から分けた (spec 012 の U-1)。範囲の正本は [roadmap の O-9 の行](roadmap.md)。
+> **完了の注記**: O-9 は [017 spec](../specs/017-ui-conversation-time-and-activity/spec.md) として実装した ([AD-051](decisions/0051-message-time-source-and-display-only.md))。下のプロンプトは当時の記録。
 
 ```
 /cl-design "[ui] O-9 (roadmap M3、domain: ui、依存: O-3): 会話の時間と活動を見えるようにする。conversation map、message timing、活動の heat graph と、docs/ui-coverage.md の F 節で O-9 に預けた Activity graph / Heat graph / Message timing / Trace waterfall の判断。message timing はメッセージの時刻 (createdAt。今は過去ログ・実行中とも null) を変換で埋める必要があり、session の契約の拡張を伴うので、持ち主を session charter と合わせて確かめる。transcript の本文を横断する検索の要否 (列挙と取得の負荷) もあわせて判断する。"
@@ -314,8 +315,8 @@ CI スクリプトの担当とし、reviewer に複製しない。
 /cl-design "[ui] O-11 (roadmap M3、domain: ui、依存: O-6): Hook・背景の task・実行中の subagent と知らせの類の表示。roadmap の O-11 の行の範囲に従う: 一般の Hook の表示 (includeHookEvents。hook_name にコマンドの文字列が入るかを確かめ、入るなら hook_event だけを出す)・実行中の Background task の一覧の要否 (要るなら持ち主の domain を人間に諮る。右のペインのタブの要否も判断する)・後から背景に移った task の行・シェルの Background task を秘密を出さずに見分ける手がかり・実行中の subagent の入れ子 (getSubagentMessages・parent_tool_use_id) と Agent handoff・Tier B の知らせの類 (notification / local_command_output / memory_recall / prompt_suggestion / mirror_error / tool_use_summary / active_goal)・Checkpoints の表示 (files_persisted。巻き戻しはしない)・File element・server_tool_use / web_search_tool_result・対応表の B 節の機械照合・過去ログへの O-6 の行と Hook / task の行の変換 (O-6 の quickstart V-3 と O-2 の V-4 の記録による)。design の前に includeHookEvents (AD-041 (g) の読み替え)・getSubagentMessages (AD-035 Decision 3 の読み替えと Agent SDK の呼び出しの許可リストの追加)・get_hooks_listing を呼ぶなら AD-036 §4 P3 の読み替えの ADR を起こす。完了の PR で docs/ui-coverage.md の「後続: O-11」の行を書き換える (Constitution XII / AD-044)。" --targets both
 ```
 
-**注**: O-8 / O-9 の `--targets` はまだ決めていない (`_overview.md` の帰属に targets の記録が無い)。O-8 は src のグラフの外の `perf/` が中心で、
-O-9 は変換 (agents / domain) に触れうる。着手のときに決めて上の 2 つに書き足す。
+**注**: O-8 の `--targets` はまだ決めていない (`_overview.md` の帰属に targets の記録が無い)。O-8 は src のグラフの外の `perf/` が中心で、
+着手のときに決めて書き足す。O-9 は変換 (agents / domain) と renderer の両方に触れるので `both` で決めた (017 の design)。
 
 ---
 

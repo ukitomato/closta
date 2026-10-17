@@ -44,6 +44,8 @@ export const SHELL_LABELS = {
   usageTab: '使用量',
   /** 右のペインの「構成」のタブ (O-5 / 015 data-model §6)。 */
   initReportTab: '構成',
+  /** 右のペインの「会話の地図」のタブ (O-9 / 017 data-model §5)。 */
+  conversationMapTab: '会話の地図',
   /** 畳んだ帯のタブのアイコンの注意の印の名前 (O-5 / 015 data-model §3 / §6)。 */
   attention: '注意',
   collapseSidebar: 'サイドバーを畳む',
@@ -179,6 +181,42 @@ const COUNT_FORMAT = new Intl.NumberFormat('ja-JP', { maximumFractionDigits: 0 }
 
 export function formatCount(n: number): string {
   return COUNT_FORMAT.format(n)
+}
+
+/**
+ * 右のペインの「会話の地図」のタブ (O-9 / 017 data-model §3 / §5)。行は `turnRowName` の順で、時刻・入力の先頭・
+ * 所要時間・tool の数・エラーの数・境界の印を並べる。数は `formatCount` (`ja-JP`)。
+ */
+export const CONVERSATION_MAP_LABELS = {
+  list: 'ターンの一覧',
+  emptyNoConversation: '中央に会話を開くと、ターンの一覧が出ます',
+  emptyNoTurns: 'まだターンがありません',
+  toolCount: (n: number): string => `tool ${formatCount(n)}`,
+  errorCount: (n: number): string => `エラー ${formatCount(n)}`,
+  /** 活動の帯 (US-3。data-model §5)。 */
+  band: '活動の帯',
+  bandEmpty: '時刻の記録が無いため、活動の帯を出せません',
+  /** `from` / `to` は `formatMessageTime` の値。 */
+  binName: (from: string, to: string, n: number): string => `${from}〜${to}、活動 ${formatCount(n)}`
+} as const
+
+/** 地図の行のボタンの名前 (data-model §3 の列を順に並べた文)。出さない列は省く。 */
+export function turnRowName(parts: {
+  readonly time: string | null
+  readonly head: string
+  readonly duration: string | null
+  readonly toolCount: number
+  readonly errorCount: number
+  readonly marks: readonly string[]
+}): string {
+  return [
+    ...(parts.time === null ? [] : [parts.time]),
+    parts.head,
+    ...(parts.duration === null ? [] : [parts.duration]),
+    ...(parts.toolCount > 0 ? [CONVERSATION_MAP_LABELS.toolCount(parts.toolCount)] : []),
+    ...(parts.errorCount > 0 ? [CONVERSATION_MAP_LABELS.errorCount(parts.errorCount)] : []),
+    ...parts.marks
+  ].join('、')
 }
 
 /**

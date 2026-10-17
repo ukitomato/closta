@@ -2,6 +2,7 @@ import { sanitizeBody, TOOL_RESULT_MAX_BYTES } from './sanitize-body'
 import { redactSecrets } from './secret-redaction'
 import { mergeSystemEvent, systemEventPartOf, toSystemEventMessage } from './system-event'
 import { orphanResultPart, readToolResult } from './tool-result'
+import { parseMessageTime } from './transcript-time'
 import type {
   TranscriptMessageDTO,
   TranscriptMessageRole,
@@ -28,6 +29,17 @@ export interface SessionMessageLike {
   readonly parent_tool_use_id?: string | null
   /** この subagent を起動した subagent の agentId (多段。depth-1 / main では null。research R-02)。 */
   readonly parent_agent_id?: string | null
+  /**
+   * 記録の時刻 (ISO 8601。型には無いが SDK の返りに入る。O-9 / AD-051)。未信頼として `parseMessageTime` で検査する。
+   * 記録の最上位にあり、`message` の中ではない。
+   */
+  readonly timestamp?: unknown
+}
+
+/** `toTranscriptMessages` の options。 */
+export interface ToTranscriptMessagesOptions {
+  /** 時刻の検査の「今」(epoch ms。取得の時点)。省略時は `Date.now()` (O-9)。 */
+  readonly now?: number
 }
 
 /**
@@ -159,8 +171,10 @@ function toDtoPart(part: BuildPart): TranscriptPartDTO {
  * I/O を持たず、モックなしでテストできる (AD-023 Consequences)。
  */
 export function toTranscriptMessages(
-  records: readonly SessionMessageLike[]
+  records: readonly SessionMessageLike[],
+  options?: ToTranscriptMessagesOptions
 ): readonly TranscriptMessageDTO[] {
+  const now = options?.now ?? Date.now()
   const topLevel: MutableMessage[] = []
   /** toolCallId → tool-call part。**最初の一致を保持** (二重 attach 防止。design-gate L-4)。 */
   const toolCallById = new Map<string, MutableToolCall>()
@@ -176,11 +190,12 @@ export function toTranscriptMessages(
     const parts: BuildPart[] = []
     const orphanResults: BuildPart[] = []
     const ownToolCalls: MutableToolCall[] = []
+    const createdAt = parseMessageTime(rec.timestamp, now)
 
     // Hook / Background task のシステムメッセージは 1 つの Hook / task を 1 行に合成する (O-2 / FR-009)。
     // 規則は実行中の経路と同じ `system-event.ts`。行の無い id への更新は捨てる。
     if (role === 'system') {
-      const event = toSystemEventMessage({ ...asRecord(rec.message), type: 'system' })
+      const event = toSystemEventMessage({ ...asRecord(rec.message), type: 'system' }, createdAt)
       if (event) {
         const index = systemEventIndex.get(event.id)
         const merged = mergeSystemEvent(
@@ -192,7 +207,12 @@ export function toTranscriptMessages(
           if (index === undefined) {
             systemEventIndex.set(event.id, systemEvents.length)
             systemEvents.push(merged)
-            topLevel.push({ id: merged.id, role: 'system', parts: [mergedPart], createdAt: null })
+            topLevel.push({
+              id: merged.id,
+              role: 'system',
+              parts: [mergedPart],
+              createdAt: merged.createdAt
+            })
           } else {
             systemEvents[index] = merged
             const row = topLevel.find((m) => m.id === merged.id)
@@ -283,7 +303,7 @@ export function toTranscriptMessages(
     for (const orphan of orphanResults) parts.push(orphan)
     if (parts.length === 0) continue
 
-    const msg: MutableMessage = { id: rec.uuid, role, parts, createdAt: null }
+    const msg: MutableMessage = { id: rec.uuid, role, parts, createdAt }
 
     // ---- subagent 入れ子の対応づけ (R-4 / US-2 / data-model §4) ----
     const parentId =

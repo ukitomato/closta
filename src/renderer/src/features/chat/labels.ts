@@ -14,6 +14,18 @@ import type { SystemEventCategory, SystemEventStatus } from '@domain/session/tra
 /** 数 (トークン・回数・秒) の表記 (`ja-JP` の桁区切り)。 */
 const COUNT_FORMAT = new Intl.NumberFormat('ja-JP', { maximumFractionDigits: 0 })
 
+/** ターンの所要時間の接頭辞 (O-9 data-model §5。`所要 0:05`)。 */
+export const TURN_DURATION_LABEL = '所要'
+
+/** 入力の先頭が空のターンの表示 (O-9 data-model §3)。 */
+export const TURN_HEAD_EMPTY_LABEL = '(本文なし)'
+
+/** メッセージの時刻の文言 (O-9 data-model §5 / §6)。 */
+export const MESSAGE_TIME_LABELS = {
+  /** 支援技術の名前。全体の書式の前に付ける (短い書式を二重に読ませない)。 */
+  fullPrefix: '時刻'
+} as const
+
 /** システムイベントの行の種類 (行の先頭に出す)。 */
 export const SYSTEM_EVENT_CATEGORY_LABELS: Readonly<Record<SystemEventCategory, string>> = {
   hook: 'Hook',

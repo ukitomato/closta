@@ -157,3 +157,42 @@ describe('過去ログの system の本文の伏せ字 (O-6 BE-010 / data-model 
     expect(types.filter((t) => t === 'divider')).toHaveLength(1)
   })
 })
+
+describe('過去ログのシステムイベントの行の時刻 (O-9 BE-010 / data-model §1)', () => {
+  it('Hook / task の行は最初の記録の時刻を持ち、2 つ目の記録の時刻に替わらない', () => {
+    const out = toTranscriptMessages(
+      [
+        {
+          ...system('s1', {
+            subtype: 'task_started',
+            task_id: 't1',
+            description: 'ビルド',
+            task_type: 'local_agent',
+            is_backgrounded: true
+          }),
+          timestamp: '2026-10-16T10:00:00Z'
+        },
+        {
+          ...system('s2', { subtype: 'task_notification', task_id: 't1', status: 'completed' }),
+          timestamp: '2026-10-16T10:30:00Z'
+        }
+      ],
+      { now: Date.parse('2026-10-16T12:00:00Z') }
+    )
+    expect(out).toHaveLength(1)
+    expect(out[0]?.createdAt).toBe(Date.parse('2026-10-16T10:00:00Z'))
+  })
+
+  it('timestamp が無ければ null', () => {
+    const out = toTranscriptMessages([
+      system('s1', {
+        subtype: 'task_started',
+        task_id: 't1',
+        description: 'x',
+        task_type: 'local_agent',
+        is_backgrounded: true
+      })
+    ])
+    expect(out[0]?.createdAt).toBeNull()
+  })
+})

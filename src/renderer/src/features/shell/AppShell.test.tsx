@@ -411,6 +411,61 @@ describe('右のペイン (US-4 AC1〜AC5 / FR-014 / FR-015)', () => {
     expect(screen.getByTestId('right-panel')).toHaveAttribute('data-collapsed', 'true')
   })
 
+  it('「会話の地図」のタブは中央の会話のターンを出し、中央を切り替えると公開口の会話が替わる (O-9 FE-021 / FE-022)', async () => {
+    transcript.messages = [
+      { role: 'user', id: 'past-u1', content: [{ type: 'text', text: '過去の質問' }] }
+    ]
+    transcript.status = 'ready'
+    // jsdom にレイアウトは無い。仮想化の窓 (行が載る高さ) だけ、観測の時に固定の大きさを通知する RO で補う。
+    class SizedResizeObserver implements ResizeObserver {
+      constructor(private readonly cb: ResizeObserverCallback) {}
+      observe(target: Element): void {
+        const box = [{ blockSize: 400, inlineSize: 300 }]
+        this.cb(
+          [
+            {
+              target,
+              contentRect: { height: 400, width: 300 } as DOMRectReadOnly,
+              borderBoxSize: box,
+              contentBoxSize: box,
+              devicePixelContentBoxSize: box
+            } as unknown as ResizeObserverEntry
+          ],
+          this
+        )
+      }
+      unobserve(): void {
+        // 固定の大きさ
+      }
+      disconnect(): void {
+        // 同上
+      }
+    }
+    const h = await setup({ ids: [A] })
+    await selectRunning(0)
+    await userEvent.click(screen.getByRole('button', { name: SHELL_LABELS.expandPanel }))
+    const panel = screen.getByTestId('right-panel')
+    await userEvent.click(within(panel).getByRole('tab', { name: SHELL_LABELS.conversationMapTab }))
+    // 地図の一覧が出る前に補う (サイドバーの一覧には掛けない)。
+    const originalObserver = globalThis.ResizeObserver
+    vi.stubGlobal('ResizeObserver', SizedResizeObserver)
+    h.emit(A, {
+      kind: 'message',
+      message: {
+        id: 'u1',
+        role: 'user',
+        parts: [{ type: 'text', text: '稼働中の質問' }],
+        createdAt: 1_760_000_000_000
+      }
+    })
+    expect(await within(panel).findByText('稼働中の質問')).toBeInTheDocument()
+    vi.stubGlobal('ResizeObserver', originalObserver)
+
+    await selectPast(0)
+    expect(await within(panel).findByText('過去の質問')).toBeInTheDocument()
+    expect(within(panel).queryByText('稼働中の質問')).toBeNull()
+  })
+
   it('過去の行では登録フォルダの配下でもフォルダと所在が出る。値の無い項目は出さない', async () => {
     await setup({ index: pastIndex([pastSession({ gitBranch: null })]) })
     await selectPast(0)

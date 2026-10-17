@@ -16,6 +16,7 @@ related_adrs:
   - docs/decisions/0047-session-meter-and-failure-reasons.md
   - docs/decisions/0048-session-config-display-and-answer-ui-split.md
   - docs/decisions/0049-boundaries-retraction-and-o11-split.md
+  - docs/decisions/0051-message-time-source-and-display-only.md
 related_specs:
   - specs/003-ui-transcript-rendering/spec.md
   - specs/004-ui-tier-a-tool-display/spec.md
@@ -23,6 +24,7 @@ related_specs:
   - specs/011-ui-coverage/spec.md
   - specs/013-ui-app-shell/spec.md
   - specs/012-ui-thread-search/spec.md
+  - specs/017-ui-conversation-time-and-activity/spec.md
   - specs/014-ui-metering-and-limits/spec.md
   - specs/015-ui-mcp-elicitation-commands/spec.md
   - specs/016-ui-boundaries-and-tool-displays/spec.md
@@ -62,7 +64,7 @@ UI は本来 delivery mechanism であり domain ではない。それでも独�
   — **O-3 の例外 (U-5。2026-10-05 に利用者が承認。[012 spec](../../../specs/012-ui-thread-search/spec.md))**: Thread search は
   session の操作 UI (サイドバーの過去のセッションの区画。下の Out of scope「他 domain の操作 UI」) の上に ui が載せる。一致の規則
   (`features/search/`) と検索欄・絞り込みは本 domain が持ち、一覧の中身・行の形・取得は session のまま。**transcript の本文を
-  横断して検索しない** (読み込み済みの要約行のフィールドだけを探す。本文の横断検索の要否は O-9)。同じ U-5 で、O-3 は起動ダイアログの
+  横断して検索しない** (読み込み済みの要約行のフィールドだけを探す。本文の横断検索は O-9 の U-7 でしないと決めた)。同じ U-5 で、O-3 は起動ダイアログの
   プリセットの欄 (再利用率の表示) と、起動の利用記録の domain / main のモジュールにも手を入れた (置き場は session の永続化層。
   session charter の KPI「再利用率」)
 - Electron 特有の配線（preload / IPC 越しのストリーミングブリッジ）
@@ -248,7 +250,12 @@ O-1 で読み替えた: 監視ビューはサイドバーの稼働中の区画 (
   `TaskCreate` などの専用表示、Agent plan の markdown、tool の結果待ち・結果不明の印と読み上げ。session の契約 (`meter` の種類
   `retraction`・稼働中のストアからのメッセージの削除) を広げる ([AD-049](../../decisions/0049-boundaries-retraction-and-o11-split.md))。
   Hook・背景の task・subagent の入れ子と知らせの類は O-11 に分けた
-- （残り。O-6 / O-9 / O-11 / OPT-pty / OPT-panel が本 domain に属する。O-10 は `session` で、表示の部品を本 domain が持つ）
+- [O-9: 会話の時間と活動の可視化](../../../specs/017-ui-conversation-time-and-activity/spec.md) — **実装中**。メッセージの時刻と
+  ターンの所要時間を中央の本体に出し、右のペインの新しいタブ「会話の地図」にターンごとの行と活動の帯 (開いている会話 1 つの
+  時間の区間) を置く。`createdAt` を埋める変換の変更は session の契約の値の拡張で、O-9 (ui) が持つ
+  ([AD-051](../../decisions/0051-message-time-source-and-display-only.md))。transcript の本文の横断検索・過去の一覧の仮想化は
+  しない (U-7)
+- （残り。O-6 / O-11 / OPT-pty / OPT-panel が本 domain に属する。O-10 は `session` で、表示の部品を本 domain が持つ）
 
 ## Open Questions
 

@@ -462,6 +462,27 @@ describe('sdk-agent-session: tool の結果と Hook / task の行 (O-2 / BE-024)
     expect(JSON.stringify(rows)).not.toContain('SECRET')
   })
 
+  it('時刻 (O-9 / AD-051): assistant は SDK の timestamp、結果だけと Hook の行は受信時刻、送り直しは最初の値', async () => {
+    const stamp = '2026-10-16T01:23:45.678Z'
+    const before = Date.now()
+    await runTurn([
+      { ...assistantWithTools('m1', 'a'), timestamp: stamp },
+      { ...assistantWithTools('m2', 'b') },
+      userWith({ type: 'tool_result', tool_use_id: 'a', content: 'ok' }),
+      userWith({ type: 'tool_result', tool_use_id: 'ghost', content: 'r' }),
+      { type: 'system', subtype: 'hook_started', hook_id: 'h1', hook_name: 'n', hook_event: 'e' }
+    ])
+    const after = Date.now()
+    const rows = messages() as unknown as { id: string; createdAt: number | null }[]
+    const m1 = rows.filter((m) => m.id === 'm1')
+    expect(m1.map((m) => m.createdAt)).toEqual([Date.parse(stamp), Date.parse(stamp)])
+    for (const id of ['m2', 'result:ghost', 'hook:h1']) {
+      const row = rows.find((m) => m.id === id)
+      expect(row?.createdAt).toBeGreaterThanOrEqual(before)
+      expect(row?.createdAt).toBeLessThanOrEqual(after)
+    }
+  })
+
   it('task_started / task_updated / task_notification は同じ id (task:<id>) の message', async () => {
     await runTurn([
       {
@@ -507,7 +528,8 @@ describe('sdk-agent-session: tool の結果と Hook / task の行 (O-2 / BE-024)
             status: null
           }
         ],
-        createdAt: null
+        // 行の時刻は受信時刻 (signals の時計。O-9 / AD-051)。
+        createdAt: expect.any(Number)
       }
     ])
     expect(JSON.stringify(posted)).not.toMatch(/TASK-DESCRIPTION|TASK-SUMMARY/)

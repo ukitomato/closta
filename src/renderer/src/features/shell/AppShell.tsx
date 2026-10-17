@@ -1,5 +1,9 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 
+import {
+  CenterConversationContext,
+  createCenterConversationStore
+} from '@/features/chat/center-conversation'
 import { RunningSessionsProvider } from '@/features/session/RunningSessionsProvider'
 
 import { CenterPane } from './CenterPane'
@@ -50,28 +54,32 @@ function ShellLayout({
   useShellFocus()
   const rootRef = useRef<HTMLDivElement>(null)
   useAutoCollapse(rootRef)
+  // 中央の会話の公開口 (O-9 data-model §6)。中央が publish し、右のペインの「会話の地図」が読む。
+  const [centerConversation] = useState(createCenterConversationStore)
   return (
-    <div ref={rootRef} className="flex h-full min-h-0 w-full" data-testid="app-shell">
-      <a
-        href={`#${CENTER_ID}`}
-        // `not-sr-only` は padding を 0 にするので、フォーカスの間の余白は `focus:` で付け直す (pr-gate R2 a11y L-103)。
-        className="bg-background text-foreground ring-ring sr-only z-50 rounded-md text-sm focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:px-3 focus:py-2 focus:ring-2"
-        onClick={(event) => {
-          // ハッシュの遷移はしない (アプリの URL を変えない)。中央へフォーカスを移すだけ。
-          event.preventDefault()
-          focusCenter()
-        }}
-      >
-        {SHELL_LABELS.skipToCenter}
-      </a>
-      <Sidebar />
-      <CenterPane />
-      <RightPanel tabs={panelTabs} />
-      <LaunchDialogHost />
-      <SettingsDialog />
-      {/* Command palette (O-3)。稼働中の候補に `RunningSessionsProvider` が要るので、その内側に置く。 */}
-      <CommandPalette focusCenter={focusCenter} />
-    </div>
+    <CenterConversationContext.Provider value={centerConversation}>
+      <div ref={rootRef} className="flex h-full min-h-0 w-full" data-testid="app-shell">
+        <a
+          href={`#${CENTER_ID}`}
+          // `not-sr-only` は padding を 0 にするので、フォーカスの間の余白は `focus:` で付け直す (pr-gate R2 a11y L-103)。
+          className="bg-background text-foreground ring-ring sr-only z-50 rounded-md text-sm focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:px-3 focus:py-2 focus:ring-2"
+          onClick={(event) => {
+            // ハッシュの遷移はしない (アプリの URL を変えない)。中央へフォーカスを移すだけ。
+            event.preventDefault()
+            focusCenter()
+          }}
+        >
+          {SHELL_LABELS.skipToCenter}
+        </a>
+        <Sidebar />
+        <CenterPane />
+        <RightPanel tabs={panelTabs} />
+        <LaunchDialogHost />
+        <SettingsDialog />
+        {/* Command palette (O-3)。稼働中の候補に `RunningSessionsProvider` が要るので、その内側に置く。 */}
+        <CommandPalette focusCenter={focusCenter} />
+      </div>
+    </CenterConversationContext.Provider>
   )
 }
 

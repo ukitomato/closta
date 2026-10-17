@@ -11,16 +11,19 @@ import {
 
 /** O-2 BE-020 — tool の結果の取り出しと書き込み (data-model §3)。 */
 
-const assistant = toLiveAssistantMessage({
-  type: 'assistant',
-  uuid: 'a1',
-  message: {
-    content: [
-      { type: 'tool_use', id: 'u1', name: 'Bash', input: { command: 'ls' } },
-      { type: 'tool_use', id: 'u2', name: 'Read', input: { file_path: '/x' } }
-    ]
-  }
-})
+const assistant = toLiveAssistantMessage(
+  {
+    type: 'assistant',
+    uuid: 'a1',
+    message: {
+      content: [
+        { type: 'tool_use', id: 'u1', name: 'Bash', input: { command: 'ls' } },
+        { type: 'tool_use', id: 'u2', name: 'Read', input: { file_path: '/x' } }
+      ]
+    }
+  },
+  1_760_000_000_000
+)
 
 describe('readToolResult', () => {
   it('文字列・text ブロックの配列から本文を取り、エラーを読む。無害化する', () => {

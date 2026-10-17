@@ -118,7 +118,7 @@ export interface TranscriptMessageDTO {
   readonly id: string
   readonly role: TranscriptMessageRole
   readonly parts: readonly TranscriptPartDTO[]
-  /** epoch ms。取得できないときは `null`。 */
+  /** epoch ms。取得できないときは `null`。出所と検査は AD-051 (O-9)。表示だけに使い、並べ替えに使わない。 */
   readonly createdAt: number | null
 }
 

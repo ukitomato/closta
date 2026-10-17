@@ -1767,3 +1767,21 @@ describe('createLiveSignals — 認証とプラグインの行 (O-5 / 015 tasks 
     expect(emitted).toEqual([])
   })
 })
+
+describe('行の時刻 (O-9 BE-012 / data-model §1。AD-051)', () => {
+  it('行の createdAt は signals の時計の値 (受信時刻)。合流の最初の値の保持は renderer の合成 (mergeSystemEvent) に任せる', () => {
+    let now = 1_760_000_000_000
+    const emitted: SessionEvent[] = []
+    const signals = createLiveSignals({
+      launchPermissionMode: 'default',
+      emit: (event) => emitted.push(event),
+      clock: { now: () => now, setTimer: vi.fn(), clearTimer: vi.fn() }
+    })
+    const apiRetry = { type: 'system', subtype: 'api_retry', attempt: 1, max_retries: 3 }
+    signals.onSystem(apiRetry)
+    now += 5_000
+    signals.onSystem({ ...apiRetry, attempt: 2 })
+    const times = emitted.flatMap((e) => (e.kind === 'message' ? [e.message.createdAt] : []))
+    expect(times).toEqual([1_760_000_000_000, 1_760_000_005_000])
+  })
+})

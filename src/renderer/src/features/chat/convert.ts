@@ -2,6 +2,7 @@ import type { ThreadMessageLike } from '@assistant-ui/react'
 
 import type { TranscriptMessageDTO, TranscriptPartDTO } from '@domain/session/transcript-dto'
 
+import { readMessageTime, withMessageTime } from './message-time'
 import { isSystemEventFields } from './transcript-guard'
 
 /**
@@ -140,7 +141,7 @@ export function fromSystemEventData(message: ThreadMessageLike): TranscriptMessa
         status: data.status
       }
     ],
-    createdAt: message.createdAt?.getTime() ?? null
+    createdAt: readMessageTime(message)
   }
 }
 
@@ -164,11 +165,14 @@ export function toThreadMessage(dto: TranscriptMessageDTO): ThreadMessageLike {
   // システムイベントの行は DTO では `system` (意味として) のまま、assistant-ui には data part 1 つの assistant で渡す
   // (research R-04 / design-gate R1 architecture H-001)。text 1 つでない system も同じ理由で assistant に倒す。
   const role = dto.role === 'system' && !isPlainSystemContent(content) ? 'assistant' : dto.role
-  return {
+  const like: ThreadMessageLike = {
     role,
     content,
     id: dto.id,
-    ...(dto.createdAt !== null ? { createdAt: new Date(dto.createdAt) } : {}),
     ...(systemEvent ? { metadata: { custom: { systemEvent: true } } } : {})
   }
+  // 時刻は `createdAt` と `metadata.custom.createdAt` の両方に入れる (表示は後者だけを読む。O-9 / AD-051)。
+  return dto.createdAt !== null && Number.isFinite(dto.createdAt)
+    ? withMessageTime(like, dto.createdAt)
+    : like
 }
