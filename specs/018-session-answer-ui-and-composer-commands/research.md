@@ -102,6 +102,16 @@
 - **Rationale**: 承認カードと同じ場所・同じ操作の形 (FR-007) にすると、フォーカスの規則 (`focus-handoff.ts`) と読み上げをそのまま当てられる
 - **Alternatives considered**: registry の element をそのまま使う — 照合の前に決めない (SH で判断し、採れるなら差し替える)
 
+## SH-002 の結論 (registry の取り込みなし。`.claude/skills/elements/references` と取り込み済みの `elements/` で照合)
+
+`npx assistant-ui@latest add` は権限で拒否されたため実行していない。O-9 (017) の SH-002 と同じく、references と取り込み済みの実装で照合した。取り込みが要る結論にはならなかった。
+
+- **Composer slash commands (`elements-composer` の `ComposerCommandItem`) / Composer trigger popover (`composer-trigger-popover.aui`)**: 前者は項目の見た目 (`name` / `description` / `active`) だけの props で、候補の出し分け・キー処理を持たない。後者は `Unstable_TriggerAdapter` を `ComposerPrimitive.Input` に結ぶ薄い層で、挙動の本体はインストール済みの `@assistant-ui/react` 0.15.19 (`dist/primitives/composer/trigger/*`、`unstable/useSlashCommandAdapter`) にある。R-11 の決定のとおり、ライブラリの primitive (`Unstable_TriggerPopoverRoot` / `Unstable_TriggerPopover`) を直接使い、候補の見た目だけ `features/chat` の部品として自作する (components/ui の既存の見た目。`char="/"`・日本語の文言は props・IME のガードはライブラリ側・新しい npm 依存なし・回答の配線なし)。registry の `.aui` のラッパーは取り込まない。取り込むと `elements/` に置いて `eslint.config.mjs:624-627` の block に足す必要が出るが、足さずに FR を満たせる。
+- **Elicitation form (A)**: props が `server` / `message` / `fields` / `onAccept` / `onDecline` で、文言は英語の既定、項目の種類と `requestedSchema` (enum / 複数選択 / 数値の範囲) の対応・無害化・フォーカスの引き渡し (`focus-handoff.ts`) が承認カード (`ApprovalCard.tsx`) と別系統になる。R-14 のとおり `features/session/ElicitationCard.tsx` に自作 (取り込まない)。
+- **Question flow (C)**: 015 research R-03 / `ask-user-question.aui.tsx` の記述のとおり `header` のチップと `multiSelect` の印を持たない。`AskUserQuestionAnswer.tsx` を自作 (取り込まない)。
+- **F 節 (SH-011) の写し**: 4 つとも「registry の element は取り込まず、primitive 直接 + 自作」。SH-012: `eslint.config.mjs` は変えない。
+- **未検証**: registry の実ソースは見ていない (取り込めないため)。依存・CSP の項は references の記述とインストール済みの primitive から判断した。
+
 ## R-15. 「編集して再試行」の下書きの置き換えの確かめ
 
 - **Decision**: components/ui の `dialog` (`alert-dialog` は無い) で「入力中の文を置き換えますか」を出す。ボタンは「置き換える」「取り消す」で、既定のフォーカスは「取り消す」。置き換えたら `aui.composer.setText(text)` (LivePane の `DraftBridge` と同じ口) と `setDraft`、フォーカスを composer へ

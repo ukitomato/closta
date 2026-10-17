@@ -58,6 +58,26 @@ describe('decodeSessionEvent', () => {
     ).toBeNull()
   })
 
+  it('permission-request: answerable は ask-user-question のときだけ写し、他の値は捨てて要求は受ける (O-10)', () => {
+    const request = { requestId: 'r', toolName: 'AskUserQuestion', input: '{}', scope: 'once' }
+    expect(
+      decodeSessionEvent(
+        enc({
+          kind: 'permission-request',
+          request: { ...request, answerable: 'ask-user-question' }
+        })
+      )
+    ).toEqual({
+      kind: 'permission-request',
+      request: { ...request, answerable: 'ask-user-question' }
+    })
+    for (const answerable of ['other', 1, null, true]) {
+      expect(
+        decodeSessionEvent(enc({ kind: 'permission-request', request: { ...request, answerable } }))
+      ).toEqual({ kind: 'permission-request', request })
+    }
+  })
+
   it('permission-denied: 余分なフィールドを落とし、toolName / reason が文字列でなければ破棄する', () => {
     expect(
       decodeSessionEvent(
@@ -292,5 +312,43 @@ describe('decodeSessionEvent の meter の構成 (O-5 FE-001 / 015 data-model §
         omitted: 0
       }
     })
+  })
+})
+
+describe('decodeSessionEvent の elicitation-request (O-10 / 018 FE-020)', () => {
+  const REQ = '11111111-1111-4111-8111-111111111111'
+  const form = {
+    requestId: REQ,
+    serverName: 'github',
+    title: 't',
+    message: 'm',
+    mode: 'form',
+    url: null,
+    fields: [{ key: 'a', label: 'a', description: '', required: true, type: 'string' }]
+  }
+  const dec = (request: unknown): unknown =>
+    decodeSessionEvent(enc({ kind: 'elicitation-request', request }))
+
+  it('正例: form と URL。余分なキー (elicitationId) は運ばない', () => {
+    expect(dec({ ...form, elicitationId: 'x' })).toEqual({ kind: 'elicitation-request', request: form })
+    const url = {
+      requestId: REQ,
+      serverName: '',
+      title: '',
+      message: '',
+      mode: 'url',
+      url: { openUrl: 'https://example.com/x', displayUrl: 'https://example.com/x', host: 'example.com' },
+      fields: null
+    }
+    expect(dec(url)).toEqual({ kind: 'elicitation-request', request: url })
+  })
+
+  it('負例: 未知の mode・fields の型違い・33 項目・UUID でない id・開けない URL を破棄する', () => {
+    expect(dec({ ...form, mode: 'dialog' })).toBeNull()
+    expect(dec({ ...form, fields: 'x' })).toBeNull()
+    expect(dec({ ...form, fields: Array.from({ length: 33 }, (_, i) => ({ ...form.fields[0], key: `k${i}` })) })).toBeNull()
+    expect(dec({ ...form, requestId: 'req-1' })).toBeNull()
+    expect(dec({ ...form, mode: 'url', fields: null, url: { openUrl: 'javascript:alert(1)', displayUrl: '', host: '' } })).toBeNull()
+    expect(dec('x')).toBeNull()
   })
 })

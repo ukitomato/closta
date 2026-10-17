@@ -53,7 +53,8 @@ total_terms: 104
 
 #### **Approval card**
 
-- **Definition**: `canUseTool` の permission 要求に応答する UI。単発承認と capability 付与を区別する
+- **Definition**: `canUseTool` の permission 要求に応答する UI。単発承認と capability 付与を区別する。
+  `AskUserQuestion` の要求 (`answerable`) では答える部品 (ラジオ / チェック / その他) を出し、「回答を送る」で答える (O-10)
 - **日本語表記**: 承認カード
 - **Domain**: `ui`（状態は `session` が持つ）
 
@@ -161,7 +162,7 @@ total_terms: 104
 
 - **Definition**: メッセージ入力欄。assistant-ui の `ComposerPrimitive.Input` を用い、変換確定の Enter を送信に
   しない (IME の二重ガードは assistant-ui 側。**自前ガードを新設しない**)。実行中の入力積み (Message queue) と
-  下書き (Draft) を持つ (X-2)
+  下書き (Draft) を持つ (X-2)。先頭の `/` のコマンドの候補 (Slash command candidates) も同じ `ComposerPrimitive.Input` の上に載せる (O-10)
 - **日本語表記**: コンポーザ / 入力欄
 - **Domain**: `ui`
 - **Counterexamples**: `ComposerPrimitive.Input` を独自 `<textarea>` に差し替えない (既存 IME ガードを殺すため。AD-037 D1)
@@ -698,12 +699,14 @@ total_terms: 104
 
 - **Definition**: `canUseTool` の権限往復 (X-1)。`PermissionRequest` は `requestId` / サニタイズ済み `toolName` /
   サニタイズ済み `input` / `scope` (`once` | `capability`)。`PermissionDecision` は `requestId` / `outcome`
-  (`allow` | `deny`) / `scope` / 任意 `message`。main が明示述語で enum 検証する (`as` 禁止)
+  (`allow` | `deny`) / `scope` / 任意 `message` / 任意 `answers`。`PermissionRequest` には agents が付ける印 `answerable`
+  (`AskUserQuestion` のときだけ)。main が明示述語で enum 検証する (`as` 禁止)
 - **日本語表記**: 権限要求 / 権限決定
 - **Domain**: `session`
 - **Counterexamples**: **`PermissionResult` (SDK 型) と混ぜない。** `PermissionDecision → PermissionResult` の写像は
   純関数 `toPermissionResult` に切り出し、出力を `{behavior, message}` に固定する — `updatedPermissions` /
-  `updatedInput` を出さない (正の構成 P2。承認カードが唯一の承認経路)
+  `updatedInput` を出さない (正の構成 P2。承認カードが唯一の承認経路)。AD-052 の読み替え: `AskUserQuestion` の許可だけは
+  `toAskUserQuestionResult` が元の入力 + `answers` の `updatedInput` を返す (`updatedPermissions` は出さない)
 - **Ref**: [AD-036](decisions/0036-single-session-launch-process-and-live-stream.md) §4 / [AD-020](decisions/0020-sdk-emitted-message-inventory.md)
 
 #### **Preset**
@@ -736,16 +739,34 @@ total_terms: 104
 #### **Question from Claude Code（Claude Code からの問い）**
 
 - **Definition**: Claude Code が利用者に答えを求めるもの。tool の `AskUserQuestion` (問いと選択肢)・Elicitation (MCP サーバーが求める form / URL)・
-  `request_user_dialog` の 3 つ。O-5 は `AskUserQuestion` の問い・選択肢 (過去ログに回答があれば回答) を読み取り専用で描き、承認カードに
-  「このアプリからは回答を送れない」注記を出すだけで、回答を送らない
-  - **O-10 の範囲**: 問いに答える UI (`AskUserQuestion` の回答・Elicitation の form / URL・`request_user_dialog`・`elicitation_complete` の表示) と、
-    composer のスラッシュコマンドの候補。domain は `session`。design の前に AD-036 Decision 4 (承認の応答の形) と AD-041 (g) (query の options のキー) の
-    読み替えの ADR を起こす
+  `request_user_dialog` の 3 つ。O-5 は `AskUserQuestion` の問い・選択肢 (過去ログに回答があれば回答) を読み取り専用で描いた
+  - **O-10 の結論**: アプリが答えるのは `AskUserQuestion` (承認カードの答える部品。AD-052) と Elicitation (問いのカード。`onElicitation`。AD-053) の 2 つ。
+    `request_user_dialog` は受けない (`onUserDialog` / `supportedDialogKinds` を渡さない。AD-053 Decision 4)。`elicitation_complete` は
+    システムイベントの行 (category `elicitation`) で示す。あわせて composer のコマンドの候補を足した。domain は `session`
 - **日本語表記**: Claude Code からの問い
-- **Domain**: `session` (応答の経路。O-10) / 表示は `ui`
-- **Counterexamples**: 承認 (PermissionRequest) の応答ではない — `AskUserQuestion` は承認の要求としても届くが、今の承認の応答 (`toPermissionResult`) は
-  `updatedInput` を持たないので、許可しても選択は Claude に届かない (O-10 まで)。今の Elicitation は自動で断られる
-- **Ref**: [AD-048](decisions/0048-session-config-display-and-answer-ui-split.md) Decision 1 / [015 spec](../specs/015-ui-mcp-elicitation-commands/spec.md) FR-013
+- **Domain**: `session` (応答の経路) / 表示は `ui`
+- **Counterexamples**: 承認 (PermissionRequest) の応答そのものではない — `AskUserQuestion` は承認の要求として届くが、回答は `PermissionDecision.answers`
+  に載せ、agents が元の入力 + `answers` の `updatedInput` を組んで許可を返す (AD-052)。`request_user_dialog` は答えない
+- **Ref**: [AD-048](decisions/0048-session-config-display-and-answer-ui-split.md) Decision 1 / [AD-052](decisions/0052-ask-user-question-answer-projection.md) /
+  [AD-053](decisions/0053-elicitation-callback-and-user-dialog.md) / [018 spec](../specs/018-session-answer-ui-and-composer-commands/spec.md) FR-001〜FR-011
+
+#### **Elicitation card（問いのカード）**
+
+- **Definition**: MCP サーバーの Elicitation (form / URL) に答える UI。承認カードの直後に先頭の 1 枚と残りの数を出す。form は入力欄、URL は
+  ブラウザで開くリンクと「断る」「取り消す」。入力の値は component の state だけに持ち、どこにも残さない (O-10)
+- **日本語表記**: 問いのカード
+- **Domain**: `ui` (状態の列は `session`)
+- **Counterexamples**: 承認カード (Approval card) とは別 — あちらは `canUseTool` の許可の要求。過去ログには出さない
+- **Ref**: [AD-053](decisions/0053-elicitation-callback-and-user-dialog.md) / [018 spec](../specs/018-session-answer-ui-and-composer-commands/spec.md) FR-007
+
+#### **Slash command candidates（コマンドの候補）**
+
+- **Definition**: composer の先頭の `/` で出す、表示中のセッションのコマンドの候補 (名前・説明・引数の形)。選ぶと `/{name} ` が入り、送らない。
+  同じ `ComposerPrimitive.Input` の上に載せ、変換中は出ない (O-10)
+- **日本語表記**: コマンドの候補
+- **Domain**: `ui`
+- **Counterexamples**: 自前の keydown ガードで IME を扱うものではない (AD-037)。過去ログでは出さない
+- **Ref**: [018 spec](../specs/018-session-answer-ui-and-composer-commands/spec.md) FR-012
 
 #### **Quota banner**
 
@@ -1068,6 +1089,8 @@ total_terms: 104
   - O-6 で、実行中のセッションだけの category を 4 つ足した (category 7 → 11): 圧縮の境界 (`compact-boundary`)・会話の作り直し
     (`conversation-reset`) — この 2 つは TranscriptBoundary で描く — と、モデルの拒否 (`refusal`。fallback / no fallback)・
     知らせ (`informational`)。本 feature の status (`marked` / `fallback` / `no-fallback` / `prevented` / `warning` / `notice`) はすべて 1 回の出来事で終わりを表す
+  - O-10 で、category `elicitation` (MCP の手続き。`elicitation_complete` を 1 行で示す。category 11 → 12) と、
+    拒否の行の status `no-fallback-retry` (`refused_user_message_uuid` があるとき。「編集して再試行」を出す。status 21 → 22。値は運ばない) を足した
 - **日本語表記**: システムイベントの行
 - **Domain**: `ui` (表示)。経路 (agents での変換) は session
 - **Counterexamples**: assistant の発話ではない — コピーなどの操作や応答中の印を付けない。状態の一覧 (task の表) ではない —

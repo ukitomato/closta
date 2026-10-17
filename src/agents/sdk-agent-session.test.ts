@@ -68,7 +68,12 @@ const h = vi.hoisted(() => ({
   child: null as null | FakeChild,
   /** テストから stream に流すメッセージ。 */
   feed: [] as Record<string, unknown>[],
-  wakeFeed: null as null | (() => void)
+  wakeFeed: null as null | (() => void),
+  /** query() に渡った options (`canUseTool` / `onElicitation` をテストから呼ぶ。O-10 BE-022)。 */
+  options: null as null | Record<string, unknown>,
+  /** あれば、init と feed の後でターンをこの promise が解決するまで開けておく。 */
+  holdTurn: null as null | Promise<void>,
+  interrupts: 0
 }))
 
 vi.mock('node:worker_threads', () => ({
@@ -105,6 +110,7 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
     }
   }) => {
     const signal = options.abortController.signal
+    h.options = options as unknown as Record<string, unknown>
     async function* stream(): AsyncGenerator<Record<string, unknown>> {
       if (h.mode === 'spawn-after-abort') {
         // abort を受けた後で spawn コールバックを呼ぶ SDK (pr-gate R2 platform-boundary L-102)。
@@ -135,6 +141,7 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
         h.prompts.push(next.value.message.content)
         yield { type: 'system', subtype: 'init' }
         for (const m of h.feed) yield m
+        if (h.holdTurn !== null) await h.holdTurn
         if (h.mode === 'crash-midstream') {
           // wsl.exe だけが異常終了し、stream が壊れる。
           h.child?.emit('exit', 1, null)
@@ -143,7 +150,12 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
         yield { type: 'result', subtype: 'success', is_error: false }
       }
     }
-    return Object.assign(stream(), { interrupt: async () => ({}) })
+    return Object.assign(stream(), {
+      interrupt: async () => {
+        h.interrupts += 1
+        return {}
+      }
+    })
   }
 }))
 
@@ -174,6 +186,9 @@ async function boot(
   h.preMessageConsumed = false
   h.prompts = []
   h.child = null
+  h.options = null
+  h.holdTurn = null
+  h.interrupts = 0
   posted = []
   listener = null
   h.port = {
@@ -1007,5 +1022,160 @@ describe('sdk-agent-session: live-signals の配線 (O-4 / 014 tasks BE-004 / BE
       )
       .map((e) => e.kind)
     expect(order).toEqual(['message', 'failure', 'state'])
+  })
+})
+
+describe('sdk-agent-session: Elicitation の待ちと状態の遷移 (O-10 / 018 tasks BE-022)', () => {
+  type Ask = (
+    request: Record<string, unknown>,
+    options: { signal: AbortSignal }
+  ) => Promise<unknown>
+  type UseTool = (
+    name: string,
+    input: Record<string, unknown>,
+    options: { signal: AbortSignal }
+  ) => Promise<unknown>
+
+  const MARKER = 'O10-MARKER-xyz'
+  const formRequest = {
+    serverName: 'github',
+    message: 'm',
+    mode: 'form',
+    requestedSchema: { type: 'object', properties: { a: { type: 'string' } } }
+  }
+  const ask = (signal: AbortSignal = new AbortController().signal): Promise<unknown> =>
+    (h.options?.onElicitation as Ask)(formRequest, { signal })
+  const useTool = (): Promise<unknown> =>
+    (h.options?.canUseTool as UseTool)(
+      'Bash',
+      { command: 'ls' },
+      { signal: new AbortController().signal }
+    )
+  const requestIds = (kind: string): string[] =>
+    posted
+      .filter((p) => p.kind === 'event')
+      .map(
+        (p) => JSON.parse(p.payload as string) as { kind: string; request?: { requestId: string } }
+      )
+      .filter((e) => e.kind === kind)
+      .map((e) => e.request?.requestId ?? '')
+  const lastState = (): string | undefined => states().at(-1)
+
+  /** 1 ターンを開けたままにする (`holdTurn`)。 */
+  async function openTurn(): Promise<{ send: (data: unknown) => void; release: () => void }> {
+    let release: () => void = () => undefined
+    const hold = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const send = await boot()
+    h.holdTurn = hold
+    send(launch)
+    await vi.waitFor(() => expect(h.preMessageConsumed).toBe(true))
+    send(control({ kind: 'send-prompt', text: 'go' }))
+    await vi.waitFor(() => expect(states()).toContain('running'))
+    await vi.waitFor(() => expect(h.options).not.toBeNull())
+    return { send, release }
+  }
+  const respondElicitation = (
+    send: (data: unknown) => void,
+    requestId: string,
+    action: string,
+    content?: unknown
+  ): void =>
+    send(
+      control({
+        kind: 'respond-elicitation',
+        response: { requestId, action, ...(content !== undefined ? { content } : {}) }
+      })
+    )
+  const respondPermission = (send: (data: unknown) => void, requestId: string): void =>
+    send(
+      control({
+        kind: 'respond-permission',
+        decision: { requestId, outcome: 'allow', scope: 'once' }
+      })
+    )
+
+  it('Elicitation だけの待ちは awaiting_permission になり、応答で running に戻る', async () => {
+    const { send, release } = await openTurn()
+    const pending = ask()
+    await vi.waitFor(() => expect(lastState()).toBe('awaiting_permission'))
+    const [id] = requestIds('elicitation-request')
+    respondElicitation(send, id ?? '', 'accept', {})
+    await expect(pending).resolves.toEqual({ action: 'accept', content: {} })
+    await vi.waitFor(() => expect(lastState()).toBe('running'))
+    expect(h.interrupts).toBe(0)
+    release()
+  })
+
+  it('承認が 2 件重なっても、1 件目の応答では awaiting_permission のまま、2 件目で running に戻る', async () => {
+    const { send, release } = await openTurn()
+    const first = useTool()
+    const second = useTool()
+    await vi.waitFor(() => expect(requestIds('permission-request')).toHaveLength(2))
+    const [a, b] = requestIds('permission-request')
+    respondPermission(send, a ?? '')
+    await first
+    expect(lastState()).toBe('awaiting_permission')
+    respondPermission(send, b ?? '')
+    await second
+    await vi.waitFor(() => expect(lastState()).toBe('running'))
+    release()
+  })
+
+  it('承認と Elicitation が重なると、両方が済むまで awaiting_permission のまま', async () => {
+    const { send, release } = await openTurn()
+    const tool = useTool()
+    const pending = ask()
+    await vi.waitFor(() => expect(requestIds('elicitation-request')).toHaveLength(1))
+    respondPermission(send, requestIds('permission-request')[0] ?? '')
+    await tool
+    expect(lastState()).toBe('awaiting_permission')
+    respondElicitation(send, requestIds('elicitation-request')[0] ?? '', 'decline')
+    await expect(pending).resolves.toEqual({ action: 'decline' })
+    await vi.waitFor(() => expect(lastState()).toBe('running'))
+    release()
+  })
+
+  it('signal の abort は cancel で解決し、最後の待ちなら running に戻る。後から届いた応答は何も起こさない', async () => {
+    const { send, release } = await openTurn()
+    const controller = new AbortController()
+    const pending = ask(controller.signal)
+    await vi.waitFor(() => expect(lastState()).toBe('awaiting_permission'))
+    const id = requestIds('elicitation-request')[0] ?? ''
+    controller.abort()
+    await expect(pending).resolves.toEqual({ action: 'cancel' })
+    await vi.waitFor(() => expect(lastState()).toBe('running'))
+    const before = posted.length
+    respondElicitation(send, id, 'accept', { a: MARKER })
+    await new Promise((r) => setTimeout(r, 20))
+    expect(posted).toHaveLength(before)
+    release()
+  })
+
+  it('kill で残りの待ちは cancel で解決する', async () => {
+    const { send, release } = await openTurn()
+    const pending = ask()
+    await vi.waitFor(() => expect(requestIds('elicitation-request')).toHaveLength(1))
+    send(control({ kind: 'kill' }))
+    await expect(pending).resolves.toEqual({ action: 'cancel' })
+    // 偽の stream は abort を見ないので、ターンを開けたままにしている分を解放する。
+    release()
+    await vi.waitFor(() => expect(kinds()).toContain('ended'))
+  })
+
+  it('入力の値 (content) は SDK への戻り値にだけ届き、イベント・状態通知・console に出ない', async () => {
+    const consoles = (['log', 'info', 'warn', 'error', 'debug'] as const).map((m) =>
+      vi.spyOn(console, m).mockImplementation(() => undefined)
+    )
+    const { send, release } = await openTurn()
+    const pending = ask()
+    await vi.waitFor(() => expect(requestIds('elicitation-request')).toHaveLength(1))
+    respondElicitation(send, requestIds('elicitation-request')[0] ?? '', 'accept', { a: MARKER })
+    await expect(pending).resolves.toEqual({ action: 'accept', content: { a: MARKER } })
+    expect(JSON.stringify(posted)).not.toContain(MARKER)
+    for (const spy of consoles) expect(JSON.stringify(spy.mock.calls)).not.toContain(MARKER)
+    vi.restoreAllMocks()
+    release()
   })
 })

@@ -346,6 +346,10 @@ function createE2eSupervisorConnection(): SupervisorConnection {
         case 'respond-permission':
           setState(sessionId, s, 'running')
           break
+        case 'respond-elicitation':
+          // 応答を受けたら待ちを外すだけ (本物のセッションスレッドは SDK の callback を解決する。O-10)。
+          setState(sessionId, s, 'running')
+          break
         case 'interrupt':
           emit(s, { kind: 'interrupt-receipt', stillQueued: [], cancelled: [] })
           setState(sessionId, s, 'interrupted')

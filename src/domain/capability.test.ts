@@ -28,6 +28,8 @@ const EXPECTED_CHANNELS = {
   launchSession: 'closta:launchSession',
   sendPrompt: 'closta:sendPrompt',
   respondPermission: 'closta:respondPermission',
+  // O-10: Elicitation の応答 (URL を開くチャネルは足さない。AD-053 Decision 5)。
+  respondElicitation: 'closta:respondElicitation',
   interruptSession: 'closta:interruptSession',
   endSession: 'closta:endSession',
   killSession: 'closta:killSession',

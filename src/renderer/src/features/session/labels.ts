@@ -182,14 +182,46 @@ export const SESSION_END_NOTICES = {
   ended: 'このセッションは終了しました。入力はできません。「閉じる」で一覧から外せます。'
 } as const
 
-/** 承認カード (O-5 / 015 data-model §4・§6 の session の行)。 */
+/** 承認カード (O-5 / 015 data-model §4・§6 の session の行。O-10 / 018 data-model §5「文言」)。 */
 export const APPROVAL_CARD_LABELS = {
-  /**
-   * `AskUserQuestion` の承認待ちの暫定の注記 (015 spec US-1 AC8)。承認の応答は `answers` を返さないので、許可しても選択は
-   * Claude に届かない (回答の UI は O-10)。
-   */
-  askUserQuestionNotice:
-    'このアプリからは回答を送れません。許可しても選択は Claude に届きません。拒否して、本文で答えてください。'
+  allow: '許可',
+  deny: '拒否',
+  /** `AskUserQuestion` の答える部品の送信ボタン (O-10 / AD-052)。 */
+  sendAnswers: '回答を送る',
+  /** 選択肢の最後の「その他」(自由に書く)。 */
+  other: 'その他',
+  otherPlaceholder: '自由に書く',
+  /** 未回答の問いがあるとき (ボタンは `aria-disabled`。U-6 (a))。 */
+  unanswered: '未回答の問いがあります',
+  /** 読めない・重なる問いの文・件数の外のとき。「拒否」だけを出す。 */
+  cannotAnswer: 'この問いにはアプリから答えられません。拒否して本文で答えてください。',
+  /** 送る前の確かめ (`isPermissionAnswers`) で外れたとき。カードは外れない (U-6 (e) / U-9)。 */
+  answerInvalid: '回答を確かめてください (各回答は 1,000 文字まで)。'
+} as const
+
+const ELICITATION_UNKNOWN_SERVER = 'MCP サーバー'
+
+/** MCP サーバーの問い (Elicitation) のカード (O-10 / 018 data-model §5「文言」)。 */
+export const ELICITATION_LABELS = {
+  /** 見出し。サーバー名が空 (形の検査を通らない) なら `unknownServer`。 */
+  heading: (serverName: string): string =>
+    `${serverName === '' ? ELICITATION_UNKNOWN_SERVER : serverName} からの問い`,
+  unknownServer: ELICITATION_UNKNOWN_SERVER,
+  /** form だけ。 */
+  submit: '送る',
+  decline: '断る',
+  cancel: '取り消す',
+  /** URL のリンク。押すと開いて `accept` を返す (U-8)。 */
+  openUrl: 'ブラウザで手続きをする',
+  openUrlNote: '開くと、手続きに進むことがサーバーに伝わります',
+  cannotOpenUrl: 'この URL はアプリから開けません',
+  unsupported: 'このアプリでは答えられない形式の問いです。断るか取り消してください',
+  required: '必須',
+  /** 先頭の 1 枚の後ろに待っている問いの数。 */
+  remaining: (n: number): string => `ほか ${n} 件の問い`,
+  invalid: '入力を確かめてください',
+  /** 列挙の「未選択」(任意の項目は選ばずに送れる)。 */
+  unselected: '選択しない'
 } as const
 
 /** 表示中セッションで古いメッセージを省略しているときの行 (X-5 / SC-003。本文は保持したまま、窓を広げて辿れる)。 */

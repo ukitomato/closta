@@ -99,9 +99,33 @@ describe('ApprovalCard', () => {
     expect(container.querySelector('[data-slot="approval-mcp-inferred"]')).not.toBeNull()
   })
 
-  it('AskUserQuestion で暫定の注記が出る (US-1 AC8)', () => {
-    render(<ApprovalCard request={req({ toolName: 'AskUserQuestion' })} onDecision={() => {}} />)
-    expect(screen.getByText(APPROVAL_CARD_LABELS.askUserQuestionNotice)).toBeInTheDocument()
+  it('answerable の AskUserQuestion は答える部品を出し、O-5 の暫定の注記を出さない (O-10 US-1 AC1)', () => {
+    const input = JSON.stringify({
+      questions: [{ question: '色は?', header: '色', options: [{ label: '赤', description: '' }] }]
+    })
+    const onDecision = vi.fn()
+    const { container } = render(
+      <ApprovalCard
+        request={req({ toolName: 'AskUserQuestion', input, answerable: 'ask-user-question' })}
+        onDecision={onDecision}
+      />
+    )
+    expect(container.querySelector('[data-slot="approval-ask-user-question-notice"]')).toBeNull()
+    expect(screen.getByText(APPROVAL_CARD_LABELS.sendAnswers)).toBeInTheDocument()
+    expect(screen.queryByText(APPROVAL_CARD_LABELS.allow)).toBeNull()
+    fireEvent.click(screen.getByLabelText('赤'))
+    fireEvent.click(screen.getByText(APPROVAL_CARD_LABELS.sendAnswers))
+    expect(onDecision).toHaveBeenCalledWith('allow', ['赤'])
+    fireEvent.click(screen.getByText(APPROVAL_CARD_LABELS.deny))
+    expect(onDecision).toHaveBeenLastCalledWith('deny')
+  })
+
+  it('answerable の無い要求 (mcp__x__AskUserQuestion を含む) は今の承認カードのまま', () => {
+    render(
+      <ApprovalCard request={req({ toolName: 'mcp__x__AskUserQuestion' })} onDecision={() => {}} />
+    )
+    expect(screen.getByText('許可')).toBeInTheDocument()
+    expect(screen.queryByText(APPROVAL_CARD_LABELS.sendAnswers)).toBeNull()
   })
 
   it('MCP でない tool (Bash) のカードは今のまま (生の名前の等幅・補助の見出し・注記を出さない)', () => {

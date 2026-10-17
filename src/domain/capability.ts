@@ -137,7 +137,20 @@ export interface ClostaCapability {
     sessionId: string,
     requestId: string,
     outcome: 'allow' | 'deny',
-    scope: 'once' | 'capability'
+    scope: 'once' | 'capability',
+    /** `AskUserQuestion` の問いの位置ごとの回答 (O-10 / AD-052。省略可)。main が `isPermissionAnswers` で検証する。 */
+    answers?: readonly string[]
+  ): Promise<void>
+  /**
+   * MCP サーバーの問い (Elicitation) への応答を返す (O-10 / AD-053 Decision 3。contracts C-1')。
+   * main が UUID ×2・`action`・`accept` のときの `content` (省略可・0〜32 キー) を domain の述語で検証する
+   * (外れたら制御を送らない。戻り値は `respondPermission` と同じく失敗を返さない)。`accept` でないとき `content` は捨てる。
+   */
+  respondElicitation(
+    sessionId: string,
+    requestId: string,
+    action: 'accept' | 'decline' | 'cancel',
+    content?: Readonly<Record<string, string | number | boolean>>
   ): Promise<void>
   /** 実行中の応答を中断する (FR-015)。途中出力は保持され同一セッションで継続できる。 */
   interruptSession(sessionId: string): Promise<void>
@@ -231,6 +244,8 @@ export const IPC_CHANNELS = {
   launchSession: 'closta:launchSession',
   sendPrompt: 'closta:sendPrompt',
   respondPermission: 'closta:respondPermission',
+  /** Elicitation (MCP サーバーの問い) への応答 (O-10 / AD-053 Decision 3)。URL を開くチャネルは作らない。 */
+  respondElicitation: 'closta:respondElicitation',
   interruptSession: 'closta:interruptSession',
   endSession: 'closta:endSession',
   killSession: 'closta:killSession',

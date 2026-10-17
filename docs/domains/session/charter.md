@@ -304,9 +304,15 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
   分けた ui の feature。**ADR の義務は本 domain の境界にある** (`includeHookEvents` = query の options の追加・`getSubagentMessages` = Agent SDK の
   呼び出しの許可リストの追加・`get_hooks_listing`。[AD-049](../../decisions/0049-boundaries-retraction-and-o11-split.md) Decision 1) ので、
   O-11 の ADR は本 charter にも記録する。未着手
-- **O-10** — Claude Code からの問いに答える UI と composer のコマンドの候補 ([roadmap の O-10 の行](../../roadmap.md))。O-5 の design で
-  分けた本 domain の feature (015 spec U-1 / [AD-048](../../decisions/0048-session-config-display-and-answer-ui-split.md) Decision 1)。
-  design の前に AD-036 Decision 4 と AD-041 (g) の読み替えの ADR を起こす。未着手
+- **O-10** — [Claude Code からの問いに答える UI と composer のコマンドの候補](../../../specs/018-session-answer-ui-and-composer-commands/spec.md)
+  ([roadmap の O-10 の行](../../roadmap.md))。O-5 の design で分けた本 domain の feature (015 spec U-1 /
+  [AD-048](../../decisions/0048-session-config-display-and-answer-ui-split.md) Decision 1)。結論 (2026-10-17 に利用者が U-1〜U-10 と
+  AD-052 / AD-053 を承認): `AskUserQuestion` の回答は `PermissionDecision.answers` (回答の文字列の列) で運び、agents の
+  `toAskUserQuestionResult` が元の入力に `answers` だけを足した `updatedInput` を組む。Elicitation は `onElicitation` を渡し、
+  `SessionEvent` に `elicitation-request` (9 種類)、`SessionControl` に `respond-elicitation`、IPC に `respondElicitation` を足した。
+  どちらも `canUseTool` と同じ配管 (登録簿 + 制御の経路) の拡張で、入力の値は永続化せずログに出さない。`request_user_dialog` は
+  allowlist を空のまま `onUserDialog` を渡さない。system event に category `elicitation` と status `no-fallback-retry` を足した。
+  表示の部品は `ui` が持つ。完了
 - **O-8** — 並列時の滑らかさの実機計測 ([roadmap の O-8 の行](../../roadmap.md#o3-kpi-smoothness))。未着手
 
 X-6 は未着手。

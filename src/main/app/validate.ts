@@ -14,6 +14,8 @@ import {
   type ExtraEnvPredicates
 } from '@domain/provider/forward-env'
 import { isValidModelCatalog } from '@domain/provider/model-catalog'
+import { isPermissionAnswers } from '@domain/session/agent-session'
+import { isElicitationAction, isElicitationContent } from '@domain/session/elicitation'
 import type { RuntimeDescriptor } from '@domain/runtime/descriptor'
 import {
   isValidLaunchConfig,
@@ -395,6 +397,32 @@ export function isPermissionOutcome(value: unknown): value is 'allow' | 'deny' {
  */
 export function isPermissionScope(value: unknown): value is 'once' | 'capability' {
   return value === 'once' || value === 'capability'
+}
+
+/**
+ * **`respondPermission` の `answers`** (O-10 / AD-052。省略可)。形の規則は domain の `isPermissionAnswers`
+ * (renderer の送る前の確かめ・agents の decode と同じ関数。main に別の規則を書かない。U-9)。
+ */
+export function isValidPermissionAnswers(value: unknown): value is readonly string[] {
+  return isPermissionAnswers(value)
+}
+
+/**
+ * **`respondElicitation` の `action`** (O-10 / AD-053)。形の規則は domain の `isElicitationAction`
+ * (renderer の送る前の確かめ・agents の decode と同じ関数。main に別の規則を書かない。U-9)。
+ */
+export function isValidElicitationAction(value: unknown): value is 'accept' | 'decline' | 'cancel' {
+  return isElicitationAction(value)
+}
+
+/**
+ * **`respondElicitation` の `content`** (`accept` のときだけ読む。省略可。0〜32 キー)。形の規則は domain の
+ * `isElicitationContent`。
+ */
+export function isValidElicitationContent(
+  value: unknown
+): value is Readonly<Record<string, string | number | boolean>> {
+  return isElicitationContent(value)
 }
 
 /* ── 起動設定 / プリセット (X-4 / FR-005 / FR-009) ─────────────────── */

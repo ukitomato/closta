@@ -56,6 +56,7 @@ export function stubCapability(overrides: Partial<ClostaCapability> = {}): Clost
     launchSession: notStubbed('launchSession'),
     sendPrompt: notStubbed('sendPrompt'),
     respondPermission: notStubbed('respondPermission'),
+    respondElicitation: notStubbed('respondElicitation'),
     interruptSession: notStubbed('interruptSession'),
     killSession: notStubbed('killSession'),
     endSession: notStubbed('endSession'),

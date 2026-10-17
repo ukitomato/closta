@@ -86,6 +86,10 @@ stream-json の自前 `JSON.parse` も禁止 (Principle IV/IX)。
 - 構成した `query()` options の**キー集合 ⊆ P1 の allowlist** (余分なキーがあれば fail)。
 - `toPermissionResult` の出力**キー集合 ⊆ {behavior, message}** (`updatedPermissions`/`updatedInput` が現れれば fail。
   全 variant を列挙せずに閉じる)。
+  - **後続の読み替え (本文は変えない)**: O-10 で `AskUserQuestion` の許可だけ、元の入力 + `answers` の `updatedInput` を返す
+    ([AD-052](../../../docs/decisions/0052-ask-user-question-answer-projection.md))。`onElicitation` を渡す
+    ([AD-053](../../../docs/decisions/0053-elicitation-callback-and-user-dialog.md))。形は
+    [018 contracts](../../018-session-answer-ui-and-composer-commands/contracts/session-answer-boundary.md) が正。
 - 静的検査: `sdk-agent-session.ts` (Query を保持する唯一のモジュール) で `interrupt` 以外の Query メソッド呼び出しと
   `query(` に上記 allowlist 外のキーを持つ options リテラルが**現れないこと**。項目 14 は named import の
   呼び出し形のみで `.method()` を見ないため、この allowlist 検査 + fixture が唯一の機械的歯止め。

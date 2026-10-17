@@ -222,6 +222,10 @@ reviewers:
       # D 節の状態・失敗の文言の正本 (session/labels.ts・session-view.ts の rowStatus) は監視ビューと共有で、文言だけの
       # 変更でも起動してしまうので入れない (ファイルの側に「変えるときは対応表の行を見る」と書いた)
       - "src/renderer/src/features/session/ApprovalCard.tsx"
+      # 問いに答える部品と Elicitation (E 節 elicitation・C 節 AskUserQuestionInput。O-10)
+      - "src/renderer/src/features/session/ElicitationCard.tsx"
+      - "src/renderer/src/features/session/AskUserQuestionAnswer.tsx"
+      - "src/domain/session/elicitation*.ts"
       # シェルの中央のヘッダ (D 節の session-state を描く)・右のペインのタブの表・「概要」の見出し (起動時の値)。後続の表示
       # feature (O-4〜O-6・OPT-panel) はここだけで完結しうるので明示で入れる (elements/** と同じ理由。O-7 pr-gate R1
       # ui-coverage M-003 / architecture M-004・R2 ui-coverage L-102)

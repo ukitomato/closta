@@ -451,7 +451,7 @@ describe('実行中のシステムイベントの行 (FR-009 / US-2 AC3・AC4・
     expect(row.querySelector('.aui-assistant-action-bar-root')).toBeNull()
     expect(row.querySelector('.aui-branch-picker-root')).toBeNull()
     // 実行中の印は composer 側の既存の表示 (停止ボタン)。
-    expect(screen.getByRole('button', { name: 'Stop generating' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '生成を止める' })).toBeInTheDocument()
   })
 })
 
@@ -1066,6 +1066,46 @@ describe('会話の境界と拒否・知らせの行 (O-6 FE-011 / 016 spec US-1
   })
 })
 
+describe('MCP の手続きの行 (O-10 FE-022 / 018 data-model §5)', () => {
+  it('サーバー名つきの文を出し、名前を別の「」で重ねない・名前が空なら「MCP サーバー」・axe', async () => {
+    const h = await setup()
+    h.emit(
+      A,
+      eventMessage('elicitation:e1', {
+        category: 'elicitation',
+        opens: true,
+        name: 'github',
+        detail: '',
+        status: 'completed'
+      })
+    )
+    h.emit(
+      A,
+      eventMessage('elicitation:e2', {
+        category: 'elicitation',
+        opens: true,
+        name: '',
+        detail: '',
+        status: 'completed'
+      })
+    )
+    h.emit(
+      A,
+      eventMessage('hook:e3', { category: 'hook', opens: true, name: 'h', detail: 'Stop', status: 'succeeded' })
+    )
+    await waitFor(() => expect(rows()).toHaveLength(3))
+    const text0 = rows()[0]?.textContent ?? ''
+    expect(text0).toContain('MCP の手続き')
+    expect(text0).toContain('github の URL での手続きが終わりました')
+    expect(text0).not.toContain('「github」')
+    expect(rows()[1]?.textContent ?? '').toContain('MCP サーバー の URL での手続きが終わりました')
+    // 既存の種類の行は変わらない (回帰)。
+    expect(rows()[2]?.textContent ?? '').toContain('「h」')
+    const viewport = h.container.querySelector<HTMLElement>('[data-slot="aui_thread-viewport"]')
+    expect((await axe(viewport!, AXE_RULES)).violations).toEqual([])
+  })
+})
+
 describe('transcript の密度と監視ビューの密度 (FR-012 / FR-013 / US-3 AC3・AC5)', () => {
   it('切り替えの group 名とボタン名が監視ビューの密度と区別でき、値は互いに独立', async () => {
     const h = await setup()
@@ -1123,5 +1163,71 @@ describe('transcript の密度と監視ビューの密度 (FR-012 / FR-013 / US-
       within(group).getByRole('button', { name: TRANSCRIPT_DENSITY_LABELS.compact })
     ).toHaveAttribute('aria-pressed', 'true')
     expect(document.querySelector('[data-density="compact"]')).not.toBeNull()
+  })
+})
+
+describe('拒否の行の「編集して再試行」 (O-10 FE-040 / 018 spec US-4 / SC-008)', () => {
+  const refusal = (status: 'no-fallback' | 'no-fallback-retry'): SessionEvent =>
+    eventMessage('refusal:r1', {
+      category: 'refusal',
+      opens: true,
+      name: 'bio',
+      detail: '本文です',
+      status
+    })
+  const composer = (): HTMLTextAreaElement =>
+    screen.getByRole('textbox', { name: 'メッセージ' }) as HTMLTextAreaElement
+
+  it('no-fallback-retry で出て、空の composer に文が入り、フォーカスが移り、送られない', async () => {
+    const h = await setup()
+    act(() => h.store.appendUser(A, '拒否された文'))
+    h.emit(A, refusal('no-fallback-retry'))
+    const button = await screen.findByRole('button', { name: '編集して再試行' })
+    await userEvent.click(button)
+    await waitFor(() => expect(composer().value).toBe('拒否された文'))
+    expect(document.activeElement).toBe(composer())
+    expect(document.body.textContent).not.toContain('refused_user_message_uuid')
+  })
+
+  it('no-fallback・前に入力が無いときは出さない', async () => {
+    const h = await setup()
+    h.emit(A, refusal('no-fallback'))
+    await waitFor(() => expect(rows()).toHaveLength(1))
+    expect(screen.queryByRole('button', { name: '編集して再試行' })).toBeNull()
+    h.emit(
+      A,
+      eventMessage('refusal:r2', {
+        category: 'refusal',
+        opens: true,
+        name: '',
+        detail: '',
+        status: 'no-fallback-retry'
+      })
+    )
+    await waitFor(() => expect(rows()).toHaveLength(2))
+    expect(screen.queryByRole('button', { name: '編集して再試行' })).toBeNull()
+  })
+
+  it('下書きがあると dialog。既定のフォーカスは「取り消す」で、取り消すと下書きがそのまま', async () => {
+    const h = await setup()
+    act(() => h.store.appendUser(A, '拒否された文'))
+    h.emit(A, refusal('no-fallback-retry'))
+    await userEvent.type(composer(), '書きかけ')
+    await userEvent.click(await screen.findByRole('button', { name: '編集して再試行' }))
+    const cancel = await screen.findByRole('button', { name: '取り消す' })
+    await waitFor(() => expect(document.activeElement).toBe(cancel))
+    await userEvent.click(cancel)
+    await waitFor(() => expect(screen.queryByRole('button', { name: '取り消す' })).toBeNull())
+    expect(composer().value).toBe('書きかけ')
+  })
+
+  it('下書きがあって「置き換える」で文が入る', async () => {
+    const h = await setup()
+    act(() => h.store.appendUser(A, '拒否された文'))
+    h.emit(A, refusal('no-fallback-retry'))
+    await userEvent.type(composer(), '書きかけ')
+    await userEvent.click(await screen.findByRole('button', { name: '編集して再試行' }))
+    await userEvent.click(await screen.findByRole('button', { name: '置き換える' }))
+    await waitFor(() => expect(composer().value).toBe('拒否された文'))
   })
 })

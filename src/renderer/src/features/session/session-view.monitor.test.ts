@@ -216,6 +216,7 @@ function session(id: string, over: Partial<LiveSessionState> = {}): LiveSessionS
     runState: 'running',
     messages: [],
     pending: null,
+    elicitations: [],
     denied: [],
     failureReason: null,
     killed: false,

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import type {
+  CanUseToolResult,
   LaunchFailureReason,
   PermissionDecision,
   RuntimeLaunchSpec
@@ -15,15 +16,19 @@ import {
   composeClaudeSpawn,
   createCanUseTool,
   createPermissionRegistry,
+  decodeDecision,
+  decodeSessionControl,
   QUERY_OPTION_KEYS,
   RESULT_ERROR_SUBTYPES,
   resultAction,
   type AgentSpawnOptions,
+  type ElicitationResultLike,
   type ResultFailureInput,
   type SpawnedLike
 } from './session-core'
 
 const noopSpawn = (): SpawnedLike => ({ kill: () => true })
+const noopElicitation = async (): Promise<ElicitationResultLike> => ({ action: 'decline' })
 
 describe('createPermissionRegistry (承認往復の照合。X-5 FR-007 / SC-005)', () => {
   const decision = (requestId: string): PermissionDecision => ({
@@ -125,7 +130,8 @@ describe('buildQueryOptions (正の構成 P1)', () => {
       canUseTool: async () => ({ behavior: 'deny', message: 'x' }),
       pathToClaudeCodeExecutable: '/usr/bin/claude',
       spawnClaudeCodeProcess: noopSpawn,
-      abortController: new AbortController()
+      abortController: new AbortController(),
+      onElicitation: noopElicitation
     })
     const keys = Object.keys(options)
     // **キー集合 ⊆ allowlist** — settings/extraArgs/allowedTools 等の昇格 option が現れない (C-201)。
@@ -141,7 +147,8 @@ describe('buildQueryOptions (正の構成 P1)', () => {
       canUseTool: async () => ({ behavior: 'allow' }),
       pathToClaudeCodeExecutable: '/usr/bin/claude',
       spawnClaudeCodeProcess: noopSpawn,
-      abortController: new AbortController()
+      abortController: new AbortController(),
+      onElicitation: noopElicitation
     })
     // `settings` は X-3/AD-040 で制約付き射影に限り許すため forbidden から外す (下の 2 test が制約を守る)。
     const forbidden = [
@@ -166,6 +173,7 @@ describe('buildQueryOptions (正の構成 P1)', () => {
       pathToClaudeCodeExecutable: '/usr/bin/claude',
       spawnClaudeCodeProcess: noopSpawn,
       abortController: new AbortController(),
+      onElicitation: noopElicitation,
       settings: { apiKeyHelper: '/opt/helper.sh' }
     })
     expect(options.settings).toEqual({ apiKeyHelper: '/opt/helper.sh' })
@@ -181,6 +189,7 @@ describe('buildQueryOptions (正の構成 P1)', () => {
         pathToClaudeCodeExecutable: '/usr/bin/claude',
         spawnClaudeCodeProcess: noopSpawn,
         abortController: new AbortController(),
+        onElicitation: noopElicitation,
         settings: { apiKeyHelper: '/a', permissionMode: 'bypassPermissions' } as never
       })
     ).toThrow(/AD-040/)
@@ -192,16 +201,22 @@ describe('buildQueryOptions (X-4 / AD-041)', () => {
     canUseTool: async () => ({ behavior: 'allow' as const }),
     pathToClaudeCodeExecutable: '/usr/bin/claude',
     spawnClaudeCodeProcess: noopSpawn,
-    abortController: new AbortController()
+    abortController: new AbortController(),
+    onElicitation: noopElicitation
   }
 
-  it('QUERY_OPTION_KEYS は AD-041 (g) の集合に固定される (集合を変えるには ADR が要る)', () => {
+  it('QUERY_OPTION_KEYS は AD-041 (g) + AD-053 (onElicitation) の 9 キーに固定される (集合を変えるには ADR が要る)', () => {
+    expect(QUERY_OPTION_KEYS).toHaveLength(9)
+    // onUserDialog / supportedDialogKinds は載せない (AD-053 Decision 4)。
+    expect(QUERY_OPTION_KEYS as readonly string[]).not.toContain('onUserDialog')
+    expect(QUERY_OPTION_KEYS as readonly string[]).not.toContain('supportedDialogKinds')
     expect([...QUERY_OPTION_KEYS].sort()).toEqual(
       [
         'abortController',
         'canUseTool',
         'effort',
         'model',
+        'onElicitation',
         'pathToClaudeCodeExecutable',
         'permissionMode',
         'settings',
@@ -319,6 +334,111 @@ describe('createCanUseTool (正の構成 P2)', () => {
     // 双方向制御文字を含む偽装 tool 名を渡してもサニタイズ済みが emit される。
     await canUseTool('Read\u202eBash', {}, { signal: new AbortController().signal })
     expect(emitRequest).toHaveBeenCalledWith(expect.objectContaining({ toolName: 'Bash' }))
+  })
+})
+
+describe('createCanUseTool \u306e AskUserQuestion \u306e\u5206\u5c90 (O-10 / AD-052)', () => {
+  const rawInput = {
+    questions: [{ question: '\u8272\u306f?', options: [{ label: '\u8d64' }, { label: '\u9752' }] }]
+  }
+  const run = async (
+    toolName: string,
+    decision: Omit<PermissionDecision, 'requestId'>,
+    input: Record<string, unknown> = rawInput,
+    sanitizeToolName: (n: string) => string = (n) => n
+  ): Promise<{ result: CanUseToolResult; emitRequest: ReturnType<typeof vi.fn> }> => {
+    const emitRequest = vi.fn()
+    const canUseTool = createCanUseTool({
+      nextRequestId: () => 'rq',
+      sanitizeInput: () => '{}',
+      sanitizeToolName,
+      emitRequest,
+      awaitDecision: async () => ({ requestId: 'rq', ...decision })
+    })
+    const result = await canUseTool(toolName, input, { signal: new AbortController().signal })
+    return { result, emitRequest }
+  }
+
+  it('AskUserQuestion \u306e\u8a31\u53ef\u306f {behavior, updatedInput} \u3067\u3001answerable \u304c\u4ed8\u304f', async () => {
+    const { result, emitRequest } = await run('AskUserQuestion', {
+      outcome: 'allow',
+      scope: 'once',
+      answers: ['\u8d64']
+    })
+    expect(Object.keys(result).sort()).toEqual(['behavior', 'updatedInput'])
+    expect(result).toEqual({
+      behavior: 'allow',
+      updatedInput: { ...rawInput, answers: { '\u8272\u306f?': '\u8d64' } }
+    })
+    expect(emitRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ answerable: 'ask-user-question' })
+    )
+  })
+
+  it.each(['mcp__x__AskUserQuestion', 'AskUserQuestion ', 'askuserquestion', 'Bash'])(
+    '%s \u306f answerable \u304c\u4ed8\u304b\u305a\u3001answers \u304c\u3042\u3063\u3066\u3082 {behavior:allow} \u306e\u307f',
+    async (name) => {
+      const { result, emitRequest } = await run(name, {
+        outcome: 'allow',
+        scope: 'once',
+        answers: ['\u8d64']
+      })
+      expect(result).toEqual({ behavior: 'allow' })
+      const emitted: unknown = emitRequest.mock.calls[0]?.[0]
+      expect(Object.prototype.hasOwnProperty.call(emitted, 'answerable')).toBe(false)
+    }
+  )
+
+  it('sanitizeToolName \u304c AskUserQuestion \u3092\u8fd4\u3059\u5225\u306e\u540d\u524d\u3067\u3082\u4ed8\u304b\u305a updatedInput \u3082\u51fa\u306a\u3044', async () => {
+    const { result, emitRequest } = await run(
+      'Ask\u202eUserQuestion',
+      { outcome: 'allow', scope: 'once', answers: ['\u8d64'] },
+      rawInput,
+      () => 'AskUserQuestion'
+    )
+    expect(result).toEqual({ behavior: 'allow' })
+    const emitted: unknown = emitRequest.mock.calls[0]?.[0]
+    expect(Object.prototype.hasOwnProperty.call(emitted, 'answerable')).toBe(false)
+  })
+
+  it('deny \u306f\u4eca\u3068\u540c\u3058 {behavior, message}', async () => {
+    const { result } = await run('AskUserQuestion', {
+      outcome: 'deny',
+      scope: 'once',
+      message: '\u65ad\u308b'
+    })
+    expect(result).toEqual({ behavior: 'deny', message: '\u65ad\u308b' })
+  })
+
+  it('\u5c04\u5f71\u306e\u5931\u6557\u306f deny (\u56de\u7b54\u3092\u843d\u3068\u3057\u3066\u8a31\u53ef\u3057\u306a\u3044)', async () => {
+    const { result } = await run('AskUserQuestion', {
+      outcome: 'allow',
+      scope: 'once',
+      answers: ['\u8d64', '\u9752']
+    })
+    expect(result.behavior).toBe('deny')
+    expect(Object.prototype.hasOwnProperty.call(result, 'updatedInput')).toBe(false)
+  })
+})
+
+describe('decodeDecision \u306e answers (O-10)', () => {
+  const base = { requestId: 'r', outcome: 'allow', scope: 'once' }
+  it('answers \u3092\u7701\u3044\u305f\u4eca\u306e\u5f62\u3068\u3001\u6b63\u3057\u3044 answers \u3092\u53d7\u3051\u308b', () => {
+    expect(decodeDecision(base)).toEqual(base)
+    expect(decodeDecision({ ...base, answers: ['a'] })).toEqual({ ...base, answers: ['a'] })
+  })
+  it.each([
+    ['\u914d\u5217\u3067\u306a\u3044', 'a'],
+    ['5 \u4ef6', ['a', 'b', 'c', 'd', 'e']],
+    ['\u6570\u3092\u542b\u3080', ['a', 1]],
+    ['1,001 \u30b3\u30fc\u30c9\u30dd\u30a4\u30f3\u30c8', ['a'.repeat(1001)]],
+    ['\u7a7a\u6587\u5b57', ['']],
+    ['\u7a7a\u767d\u3060\u3051', ['  \n']]
+  ])('%s \u306f\u5236\u5fa1\u3054\u3068 null', (_name, answers) => {
+    expect(decodeDecision({ ...base, answers })).toBeNull()
+    expect(
+      decodeSessionControl({ kind: 'respond-permission', decision: { ...base, answers } })
+    ).toBeNull()
   })
 })
 

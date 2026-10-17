@@ -138,6 +138,9 @@ export interface PermissionDecision {
   removeDirectories) と `updatedInput` を一切出力しない** — これらは `canUseTool` 応答からモード昇格・ルール書換・
   承認済み入力の書換を行う経路であり、`setPermissionMode` を呼ばなくても Principle III / FR-012 を破る
   (C-101 / H-201 / L-201 を一括で閉じる。変数を列挙せず「behavior/message 以外を出さない」で締め出す)。
+- **後続の読み替え (本文は変えない)**: O-10 で `AskUserQuestion` の許可だけ `updatedInput` (元の入力 + `answers`) を返す
+  ([AD-052](../../docs/decisions/0052-ask-user-question-answer-projection.md) / [AD-053](../../docs/decisions/0053-elicitation-callback-and-user-dialog.md))。
+  形は [018 data-model §1〜§3](../018-session-answer-ui-and-composer-commands/data-model.md) が正。
 - **`capability` 付与は当該セッション寿命の in-memory 状態**として実現する (同種要求の再問い合わせ抑止をアプリ側で行う)。
   **SDK の `updatedPermissions` には載せない**。永続化・プリセット反映をしない (それは X-4。M-04 / SC-004。**読み替え**: [AD-041](../../docs/decisions/0041-x4-launch-config-on-x1-launch-gate.md) (c) により宛先は I-3)。
 - `PermissionDeniedInfo` は `SDKPermissionDeniedMessage` 由来 (聞かれずに拒否)。何が拒否されたかを保持 (FR-014)。

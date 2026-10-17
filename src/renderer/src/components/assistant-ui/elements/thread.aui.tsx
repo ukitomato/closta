@@ -6,6 +6,10 @@ import {
   UserMessageAttachments,
 } from "@/components/assistant-ui/elements/attachment.aui";
 import { File } from "@/components/file";
+import {
+  ComposerCommandPopover,
+  ComposerCommandRoot,
+} from "@/features/chat/composer-extensions";
 import { ThreadFollowupSuggestions } from "@/components/assistant-ui/elements/follow-up-suggestions.aui";
 import { Image } from "@/components/image";
 import { MarkdownText } from "@/components/markdown-text";
@@ -27,6 +31,14 @@ import { TooltipIconButton } from "@/components/tooltip-icon-button";
 import { TranscriptBoundary } from "@/components/assistant-ui/elements/transcript-boundary";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { useComposerExtensions } from "@/features/chat/composer-extensions-context";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SYSTEM_EVENT_DATA_NAME } from "@/features/chat/convert";
 import { MessageTimeLabel } from "@/features/chat/MessageTimeLabel";
@@ -79,6 +91,7 @@ import {
   type ImageMessagePartComponent,
   type TextMessagePartComponent,
   type ToolCallMessagePartComponent,
+  useAui,
   useAuiState,
 } from "@assistant-ui/react";
 import {
@@ -90,6 +103,7 @@ import {
   CopyIcon,
   DownloadIcon,
   BanIcon,
+  MessageCircleQuestionIcon,
   FoldVerticalIcon,
   InfoIcon,
   KeyRoundIcon,
@@ -599,11 +613,11 @@ const LiveThinkingIndicator: FC = () => {
 
 const VirtualScrollToBottom: FC<{ onClick: () => void }> = ({ onClick }) => (
   <TooltipIconButton
-    tooltip="Scroll to bottom"
+    tooltip={COMPOSER_LABELS.scrollToBottom}
     variant="outline"
     type="button"
     onClick={onClick}
-    aria-label="Scroll to bottom"
+    aria-label={COMPOSER_LABELS.scrollToBottom}
     className="aui-thread-scroll-to-bottom dark:border-border dark:bg-background dark:hover:bg-accent absolute -top-12 left-1/2 z-10 -translate-x-1/2 rounded-full p-4"
   >
     <ArrowDownIcon />
@@ -650,7 +664,7 @@ const ThreadScrollToBottom: FC = () => {
   return (
     <ThreadPrimitive.ScrollToBottom asChild>
       <TooltipIconButton
-        tooltip="Scroll to bottom"
+        tooltip={COMPOSER_LABELS.scrollToBottom}
         variant="outline"
         className="aui-thread-scroll-to-bottom dark:border-border dark:bg-background dark:hover:bg-accent absolute -top-12 z-10 self-center rounded-full p-4 disabled:invisible"
       >
@@ -702,7 +716,9 @@ const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
   // 守らない (E2E で検出) ため、AD-037 D1(d) が認める最小処理をここだけに足す (keydown ガードは新設しない)。
   const composingRef = useRef(false);
   return (
+    <ComposerCommandRoot>
     <ComposerPrimitive.Root className="aui-composer-root relative flex w-full flex-col">
+      <ComposerCommandPopover />
       <ComposerPrimitive.AttachmentDropzone asChild>
         <div
           data-slot="aui_composer-shell"
@@ -719,6 +735,12 @@ const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
             data-composer-input=""
             rows={1}
             autoFocus={autoFocus}
+            /*
+             * ターンの開始 (`thread.runStart`) で入力にフォーカスを移さない (O-10 FR-014 / research R-12)。サイドバーの行などに
+             * あるフォーカスを奪わない。スレッドの切り替え (`unstable_focusOnThreadSwitched`) は既定のまま
+             * (行の選択の直後に打てる今の挙動を保つ。spec U-6 (c))。
+             */
+            unstable_focusOnRunStart={false}
             enterKeyHint="send"
             aria-label={COMPOSER_LABELS.composerInput}
             onCompositionStart={() => {
@@ -732,6 +754,7 @@ const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
         </div>
       </ComposerPrimitive.AttachmentDropzone>
     </ComposerPrimitive.Root>
+    </ComposerCommandRoot>
   );
 };
 
@@ -744,13 +767,13 @@ const ComposerAction: FC<{ composing: RefObject<boolean> }> = ({ composing }) =>
           <AuiIf condition={(s) => s.composer.dictation == null}>
             <ComposerPrimitive.Dictate asChild>
               <TooltipIconButton
-                tooltip="Voice input"
+                tooltip={COMPOSER_LABELS.startVoice}
                 side="bottom"
                 type="button"
                 variant="ghost"
                 size="icon"
                 className="aui-composer-dictate text-muted-foreground hover:text-foreground size-7 rounded-full"
-                aria-label="Start voice input"
+                aria-label={COMPOSER_LABELS.startVoice}
               >
                 <MicIcon className="aui-composer-dictate-icon size-4" />
               </TooltipIconButton>
@@ -759,13 +782,13 @@ const ComposerAction: FC<{ composing: RefObject<boolean> }> = ({ composing }) =>
           <AuiIf condition={(s) => s.composer.dictation != null}>
             <ComposerPrimitive.StopDictation asChild>
               <TooltipIconButton
-                tooltip="Stop dictation"
+                tooltip={COMPOSER_LABELS.stopVoice}
                 side="bottom"
                 type="button"
                 variant="ghost"
                 size="icon"
                 className="aui-composer-stop-dictation text-destructive size-7 rounded-full"
-                aria-label="Stop voice input"
+                aria-label={COMPOSER_LABELS.stopVoice}
               >
                 <SquareIcon className="aui-composer-stop-dictation-icon size-3.5 animate-pulse fill-current" />
               </TooltipIconButton>
@@ -775,13 +798,13 @@ const ComposerAction: FC<{ composing: RefObject<boolean> }> = ({ composing }) =>
         <AuiIf condition={(s) => !s.thread.isRunning}>
           <ComposerPrimitive.Send asChild>
             <TooltipIconButton
-              tooltip="Send message"
+              tooltip={COMPOSER_LABELS.send}
               side="bottom"
               type="button"
               variant="default"
               size="icon"
               className="aui-composer-send size-7 rounded-full"
-              aria-label="Send message"
+              aria-label={COMPOSER_LABELS.send}
               onMouseDownCapture={(e) => {
                 // 変換中は blur による確定を止める (未確定のまま保持し、下の click ガードで送信を塞ぐ)。
                 if (composing.current) e.preventDefault();
@@ -805,7 +828,7 @@ const ComposerAction: FC<{ composing: RefObject<boolean> }> = ({ composing }) =>
               variant="default"
               size="icon"
               className="aui-composer-cancel size-7 rounded-full"
-              aria-label="Stop generating"
+              aria-label={COMPOSER_LABELS.stop}
             >
               <SquareIcon className="aui-composer-cancel-icon size-3.5 fill-current" />
             </Button>
@@ -1100,6 +1123,8 @@ function systemEventDetailText(
       return refusalRowText(status, name, detail).text;
     case "informational":
       return detail;
+    case "elicitation":
+      return SYSTEM_EVENT_LABELS.elicitationComplete(name);
     case "compact-boundary":
     case "conversation-reset":
       return "";
@@ -1108,7 +1133,9 @@ function systemEventDetailText(
 
 /** 本文を折り返して全文を出す行 (`truncate` しない。拒否の説明・知らせの本文は 120 コードポイントで切れている。U-3)。 */
 const isWrappedCategory = (category: SystemEventCategory): boolean =>
-  category === "refusal" || category === "informational";
+  category === "refusal" ||
+  category === "informational" ||
+  category === "elicitation";
 
 /** task の行の進み具合の文言 (O-4 / 014 data-model §4「進み具合」)。task でない・進み具合が無い・復号できなければ null。 */
 function taskProgressText(
@@ -1133,6 +1160,7 @@ const SYSTEM_EVENT_ICONS: Readonly<Record<SystemEventCategory, LucideIcon>> = {
   "conversation-reset": RotateCcwIcon,
   refusal: BanIcon,
   informational: InfoIcon,
+  elicitation: MessageCircleQuestionIcon,
 };
 
 /**
@@ -1254,7 +1282,7 @@ const SystemEventRow: FC = () => {
             {statusText}
           </Badge>
         ) : null}
-        {name !== "" && category !== "refusal" ? (
+        {name !== "" && category !== "refusal" && category !== "elicitation" ? (
           <span
             data-slot="system-event-name"
             className="text-muted-foreground min-w-0 truncate"
@@ -1263,6 +1291,9 @@ const SystemEventRow: FC = () => {
             「{name}」
           </span>
         ) : null}
+        {category === "refusal" && status === "no-fallback-retry" ? (
+          <RetryRefusedButton />
+        ) : null}
       </div>
       {guidance !== null ? (
         <p data-slot="system-event-guidance" className="text-muted-foreground mt-1 ps-5.5 text-xs">
@@ -1270,6 +1301,97 @@ const SystemEventRow: FC = () => {
         </p>
       ) : null}
     </MessagePrimitive.Root>
+  );
+};
+
+/**
+ * 拒否の行の「編集して再試行」(O-10 / US-4 / data-model §5)。拒否された文 (稼働中のストアの、拒否の行より前の最も近い
+ * 利用者の入力) を composer に戻す。**送らない・巻き戻さない**。文を返せない (過去ログ・前に入力が無い) ときは出さない。
+ * composer に下書きがあれば dialog で確かめる (既定のフォーカスは「取り消す」)。
+ */
+const RetryRefusedButton: FC = () => {
+  const aui = useAui();
+  const messageId = useAuiState((s) => s.message.id);
+  const { retryTextFor } = useComposerExtensions();
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const replacedRef = useRef(false);
+  const [confirming, setConfirming] = useState(false);
+  const text = retryTextFor?.(messageId) ?? null;
+  if (text === null) return null;
+
+  const focusComposer = (): void => {
+    buttonRef.current
+      ?.closest<HTMLElement>("[data-live-pane]")
+      ?.querySelector<HTMLElement>("[data-composer-input]:not(:disabled)")
+      ?.focus();
+  };
+  const place = (): void => {
+    // 下書きの保持は `DraftBridge` が composer の text の変化を写す。
+    aui.thread().composer().setText(text);
+  };
+
+  return (
+    <>
+      <Button
+        ref={buttonRef}
+        type="button"
+        size="sm"
+        variant="outline"
+        className="h-6 shrink-0 px-2 text-xs"
+        data-slot="system-event-retry"
+        onClick={() => {
+          if (aui.thread().composer().getState().text === "") {
+            place();
+            focusComposer();
+          } else {
+            setConfirming(true);
+          }
+        }}
+      >
+        {SYSTEM_EVENT_LABELS.retry}
+      </Button>
+      <Dialog open={confirming} onOpenChange={setConfirming}>
+        <DialogContent
+          showCloseButton={false}
+          aria-describedby={undefined}
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            cancelRef.current?.focus();
+          }}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            if (replacedRef.current) focusComposer();
+            else buttonRef.current?.focus();
+            replacedRef.current = false;
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>{COMPOSER_LABELS.retryReplaceTitle}</DialogTitle>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              ref={cancelRef}
+              type="button"
+              variant="outline"
+              onClick={() => setConfirming(false)}
+            >
+              {COMPOSER_LABELS.retryCancel}
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                place();
+                replacedRef.current = true;
+                setConfirming(false);
+              }}
+            >
+              {COMPOSER_LABELS.retryReplace}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 

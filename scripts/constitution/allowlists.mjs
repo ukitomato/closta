@@ -382,7 +382,8 @@ export const AGENT_SDK_ALLOWED_CALLS = ['listSessions', 'getSessionMessages', 'q
  * 権限ゲートの正の構成 (P1-P3) の **backstop** 検査対象 (contracts C-4 / SH-010 / AD-036 §4)。
  *
  * 正の構成そのものは `agents/session-core.ts` の `buildQueryOptions` (allowlist キーのみ) と
- * `toPermissionResult` ({behavior, message} のみ) が構造的に保証し unit test が守る。
+ * `toPermissionResult` ({behavior, message} のみ。`AskUserQuestion` の許可は domain の
+ * `toAskUserQuestionResult` だけが `updatedInput` を組む。AD-052) が構造的に保証し unit test が守る。
  * 項目 16 は **SDK を保持するファイル (`AGENT_SDK_IMPORT_DIRECTORIES`) に昇格レバーが直に現れないこと**を見る。
  * 項目 14 が見ない「options リテラルのキー」と「`Query` の `.method()` 呼び出し」を捕まえる歯止めであり、
  * ここに挙げるのは「現れてはならない綴り」であって正の構成の代替ではない (正本は contracts C-4)。

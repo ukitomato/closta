@@ -3,16 +3,31 @@ import { assertHelperSettings, type HelperSettings } from '@domain/provider/sett
 import type { EffortLevel } from '@domain/provider/types'
 import { assertSafePermissionMode, type SafePermissionMode } from '@domain/session/launch-config'
 import {
+  ASK_USER_QUESTION_TOOL_NAME,
   boundDecisionScope,
+  isPermissionAnswers,
+  toAskUserQuestionResult,
   toPermissionResult,
+  type CanUseToolResult,
   type LaunchFailureReason,
   type PermissionDecision,
   type PermissionRequest,
-  type PermissionResultLike,
   type RuntimeLaunchSpec,
   type SessionControl
 } from '@domain/session/agent-session'
+import {
+  ELICITATION_MAX_PENDING,
+  isElicitationAction,
+  isElicitationContent,
+  matchesElicitationSchema,
+  toElicitationPrompt,
+  type ElicitationContent,
+  type ElicitationField,
+  type ElicitationPrompt,
+  type ElicitationResponse
+} from '@domain/session/elicitation'
 import type { AssistantErrorKey } from '@domain/session/meter'
+import { isValidSessionId } from '@domain/validation'
 
 /**
  * X-1 の agents 層の**検証可能な核** (SDK を import しない・注入式)。
@@ -53,7 +68,9 @@ export const QUERY_OPTION_KEYS = [
   'abortController',
   'settings',
   'model',
-  'effort'
+  'effort',
+  // MCP サーバーの問い (Elicitation) への応答 (O-10 / AD-053 Decision 1)。権限面・tool 集合を変えない。
+  'onElicitation'
 ] as const
 
 /** SDK の `SpawnOptions` の構造だけ (SDK を import しない)。 */
@@ -82,7 +99,21 @@ export type CanUseToolLike = (
   toolName: string,
   input: Record<string, unknown>,
   options: { signal: AbortSignal }
-) => Promise<PermissionResultLike>
+) => Promise<CanUseToolResult>
+
+/**
+ * `onElicitation` の戻り値 (SDK の `ElicitationResult` を満たす構造。SDK 非 import)。`cancel` / `decline` は `content` を持たない。
+ */
+export type ElicitationResultLike =
+  | { readonly action: 'accept'; readonly content?: ElicitationContent }
+  | { readonly action: 'decline' }
+  | { readonly action: 'cancel' }
+
+/** `query()` の `onElicitation` コールバック型 (構造。SDK 非 import)。要求は未信頼なので `unknown` で受ける。 */
+export type OnElicitationLike = (
+  request: unknown,
+  options: { signal: AbortSignal }
+) => Promise<ElicitationResultLike | null>
 
 /**
  * 正の構成で組んだ query() options。**キーは `QUERY_OPTION_KEYS` の完全部分集合**である。
@@ -100,6 +131,8 @@ export interface BuiltQueryOptions {
   readonly model?: string
   /** effort (X-4。AD-041 (g))。無指定なら既定。 */
   readonly effort?: EffortLevel
+  /** MCP サーバーの問いへの応答 (O-10。AD-053)。 */
+  readonly onElicitation: OnElicitationLike
 }
 
 export interface BuildQueryOptionsDeps {
@@ -113,6 +146,7 @@ export interface BuildQueryOptionsDeps {
   readonly settings?: HelperSettings
   readonly model?: string
   readonly effort?: EffortLevel
+  readonly onElicitation: OnElicitationLike
 }
 
 /**
@@ -143,7 +177,8 @@ export function buildQueryOptions(deps: BuildQueryOptionsDeps): BuiltQueryOption
     abortController: deps.abortController,
     settings: assertHelperSettings(deps.settings),
     model: deps.model,
-    effort: deps.effort
+    effort: deps.effort,
+    onElicitation: deps.onElicitation
   }
 }
 
@@ -165,24 +200,29 @@ export interface CanUseToolDeps {
 /**
  * `canUseTool` を生成する (P2)。
  *
- * **全 return を `toPermissionResult` に通す** — インラインで `PermissionResult` を組まない
- * (`updatedPermissions` / `updatedInput` を構造的に出さない。H-401)。
+ * **全 return を `toPermissionResult` か `toAskUserQuestionResult` に通す** — インラインで
+ * `PermissionResult` を組まない (H-401)。後者は `AskUserQuestion` の許可だけで、元の入力 + `answers` を
+ * 運ぶ (AD-052)。`updatedPermissions` は構造的に出さない。
  */
 export function createCanUseTool(deps: CanUseToolDeps): CanUseToolLike {
-  return async (toolName, input, options): Promise<PermissionResultLike> => {
+  return async (toolName, input, options): Promise<CanUseToolResult> => {
     const requestId = deps.nextRequestId()
     // 要求 scope は `once` 固定 (capability 付与は I-3。AD-041 (c))。
     const requestScope = 'once' as const
+    // 無害化の前・完全一致で判定する (`mcp__x__AskUserQuestion` や末尾の空白では答えられない)。
+    const isAskUserQuestion = toolName === ASK_USER_QUESTION_TOOL_NAME
     deps.emitRequest({
       requestId,
       toolName: deps.sanitizeToolName(toolName),
       input: deps.sanitizeInput(input),
-      scope: requestScope
+      scope: requestScope,
+      ...(isAskUserQuestion ? { answerable: 'ask-user-question' as const } : {})
     })
     const decision = await deps.awaitDecision(requestId, options.signal)
     // **scope 上限を強制する** — 決定 scope が要求 scope を超えないよう bound してから写像する
     // (`once` 要求に `capability` を受理しない。FR-012 / H-04 / SC-004)。要求 scope を知る唯一の場所。
-    return toPermissionResult(boundDecisionScope(decision, requestScope))
+    const bounded = boundDecisionScope(decision, requestScope)
+    return isAskUserQuestion ? toAskUserQuestionResult(bounded, input) : toPermissionResult(bounded)
   }
 }
 
@@ -202,6 +242,8 @@ export interface PermissionRegistry {
   drop(requestId: string): boolean
   /** 残っている受け口をすべて拒否で解決する (kill / end の後始末)。 */
   denyAll(): void
+  /** 待っている数 (承認と Elicitation の両方が 0 になったときだけ `running` に戻す。O-10 / RK-07)。 */
+  size(): number
 }
 
 /**
@@ -229,7 +271,128 @@ export function createPermissionRegistry(nextRequestId: () => string): Permissio
       for (const [requestId, resolve] of pending)
         resolve({ requestId, outcome: 'deny', scope: 'once' })
       pending.clear()
+    },
+    size() {
+      return pending.size
     }
+  }
+}
+
+/* ── Elicitation (MCP サーバーの問い) の往復 (O-10 / AD-053。data-model §3 / §4) ──── */
+
+/** 要求の形 (registry が持つのはこれと resolve だけ。入力の値は持たない)。 */
+export type ElicitationShape =
+  | { readonly mode: 'url'; readonly openable: boolean }
+  | { readonly mode: 'form'; readonly fields: readonly ElicitationField[] | null }
+
+/**
+ * 利用者の応答を SDK への戻り値にする (data-model §3 の表)。`decline` / `cancel` はそのまま (`content` 無し)。
+ * `accept`: URL で開ける → `content` を捨てて accept / 開けない → decline / form で `fields: null` → decline /
+ * form は `content` が無ければ `{}` として照合し、通れば accept、外れれば decline。
+ */
+export function toElicitationResult(
+  shape: ElicitationShape,
+  response: ElicitationResponse
+): ElicitationResultLike {
+  if (response.action === 'decline') return { action: 'decline' }
+  if (response.action === 'cancel') return { action: 'cancel' }
+  if (shape.mode === 'url') return shape.openable ? { action: 'accept' } : { action: 'decline' }
+  if (shape.fields === null) return { action: 'decline' }
+  const content = response.content ?? {}
+  return matchesElicitationSchema(shape.fields, content)
+    ? { action: 'accept', content }
+    : { action: 'decline' }
+}
+
+export interface ElicitationRegistry {
+  /** 新しい requestId を採番する。 */
+  issue(): string
+  /** requestId に応答の受け口と要求の形を登録する。 */
+  register(
+    requestId: string,
+    resolve: (result: ElicitationResultLike) => void,
+    shape: ElicitationShape
+  ): void
+  /** 応答を該当の受け口へ渡す。pending に無い requestId (中断済み・応答済み・未知) は何もせず `false`。 */
+  settle(response: ElicitationResponse): boolean
+  /** 受け口を外す (中断の signal)。外したときだけ `true`。 */
+  drop(requestId: string): boolean
+  /** 残っている受け口をすべて `cancel` で解決する (kill / end / 終了の後始末)。 */
+  cancelAll(): void
+  /** 待っている数。 */
+  size(): number
+}
+
+export function createElicitationRegistry(nextRequestId: () => string): ElicitationRegistry {
+  const pending = new Map<
+    string,
+    { resolve: (result: ElicitationResultLike) => void; shape: ElicitationShape }
+  >()
+  return {
+    issue: nextRequestId,
+    register(requestId, resolve, shape) {
+      pending.set(requestId, { resolve, shape })
+    },
+    settle(response) {
+      const entry = pending.get(response.requestId)
+      if (entry === undefined) return false
+      pending.delete(response.requestId)
+      entry.resolve(toElicitationResult(entry.shape, response))
+      return true
+    },
+    drop(requestId) {
+      return pending.delete(requestId)
+    },
+    cancelAll() {
+      const entries = [...pending.values()]
+      pending.clear()
+      for (const entry of entries) entry.resolve({ action: 'cancel' })
+    },
+    size() {
+      return pending.size
+    }
+  }
+}
+
+export interface OnElicitationDeps {
+  readonly registry: ElicitationRegistry
+  /** `elicitation-request` を renderer へ発行する (状態の遷移も呼び出し側)。 */
+  readonly emitRequest: (prompt: ElicitationPrompt) => void
+  /** `signal` の abort で待ちを外したとき (`cancel` を返した後)。最後の待ちなら状態を戻すのは呼び出し側 (U-10)。 */
+  readonly onAborted?: () => void
+}
+
+/**
+ * `onElicitation` を生成する (SDK を import しない。AD-053 Decision 1)。要求を domain の `toElicitationPrompt` で写し、
+ * 上限を超えたら送らず `decline`、そうでなければ registry に登録して renderer に送る。`signal` の abort で `cancel`。
+ * **`content` を記録・出力しない。**
+ */
+export function createOnElicitation(deps: OnElicitationDeps): OnElicitationLike {
+  return (request, options) => {
+    if (options.signal.aborted) return Promise.resolve({ action: 'cancel' })
+    if (deps.registry.size() >= ELICITATION_MAX_PENDING) {
+      return Promise.resolve({ action: 'decline' })
+    }
+    const requestId = deps.registry.issue()
+    const prompt = toElicitationPrompt(request, requestId)
+    const shape: ElicitationShape =
+      prompt.mode === 'url'
+        ? { mode: 'url', openable: prompt.url !== null && prompt.url.openUrl !== null }
+        : { mode: 'form', fields: prompt.fields }
+    return new Promise<ElicitationResultLike>((resolve) => {
+      deps.registry.register(requestId, resolve, shape)
+      options.signal.addEventListener(
+        'abort',
+        () => {
+          if (deps.registry.drop(requestId)) {
+            resolve({ action: 'cancel' })
+            deps.onAborted?.()
+          }
+        },
+        { once: true }
+      )
+      deps.emitRequest(prompt)
+    })
   }
 }
 
@@ -249,12 +412,29 @@ export function decodeDecision(value: unknown): PermissionDecision | null {
   if (typeof requestId !== 'string') return null
   if (outcome !== 'allow' && outcome !== 'deny') return null
   if (scope !== 'once' && scope !== 'capability') return null
+  const { answers } = record
+  // answers は domain の述語で形をやり直す。外れたら制御ごと null (別の規則を書かない)。
+  if (answers !== undefined && !isPermissionAnswers(answers)) return null
   return {
     requestId,
     outcome,
     scope,
-    ...(typeof message === 'string' ? { message } : {})
+    ...(typeof message === 'string' ? { message } : {}),
+    ...(answers !== undefined ? { answers } : {})
   }
+}
+
+/** Elicitation の応答を復元する。形は domain の述語で確かめ直す (別の規則を書かない)。外れたら `null`。 */
+export function decodeElicitationResponse(value: unknown): ElicitationResponse | null {
+  const record = asRecord(value)
+  if (record === null) return null
+  const { requestId, action, content } = record
+  if (!isValidSessionId(requestId)) return null
+  if (!isElicitationAction(action)) return null
+  // `accept` 以外の `content` は捨てる (どの形でも SDK に渡さない)。
+  if (action !== 'accept' || content === undefined) return { requestId, action }
+  if (!isElicitationContent(content)) return null
+  return { requestId, action, content }
 }
 
 /** `SessionControl` を復元する。未知の kind・形の崩れは `null`。 */
@@ -274,6 +454,10 @@ export function decodeSessionControl(value: unknown): SessionControl | null {
       const decision = decodeDecision(control.decision)
       return decision === null ? null : { kind: 'respond-permission', decision }
     }
+    case 'respond-elicitation': {
+      const response = decodeElicitationResponse(control.response)
+      return response === null ? null : { kind: 'respond-elicitation', response }
+    }
     default:
       return null
   }
@@ -288,7 +472,7 @@ export { canEnd } from '@domain/session/run-state'
  * 終了処理中 (kill / `end` を受けた後、`ended` を送るまで) に受け付ける制御か。
  *
  * **終了処理中は `kill` だけを受け付ける** (穏当な終了の途中で強制終了へ切り替えられるようにする)。
- * `send-prompt` / `respond-permission` / `interrupt` / `end` は無視する — `done` で受けた送信が `running` に
+ * `send-prompt` / `respond-permission` / `respond-elicitation` / `interrupt` / `end` は無視する — `done` で受けた送信が `running` に
  * 戻して run-state を巻き戻し、閉じたキューに入って消えるのを防ぐ (R3-H-04)。
  */
 export function acceptsWhileClosing(control: SessionControl): boolean {

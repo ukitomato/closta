@@ -365,6 +365,16 @@ export const FIXTURES = [
     rules: ['#16']
   },
   {
+    file: 'b-equivalent/sdk-updated-input.ts.fixture',
+    target: 'src/agents/__rulecheck__/sdk-updated-input.ts',
+    group: 'b',
+    what:
+      'agents の非テストのコードに入力の書き換えのキー (updatedInput) を直に綴る ' +
+      '(AskUserQuestion の許可は domain の toAskUserQuestionResult だけが組む。AD-052。他の #16 の綴りを含めない。O-10 BE-012)',
+    detectors: ['constitution'],
+    rules: ['#16']
+  },
+  {
     file: 'b-equivalent/sdk-query-read-file.ts.fixture',
     target: 'src/agents/__rulecheck__/sdk-query-read-file.ts',
     group: 'b',

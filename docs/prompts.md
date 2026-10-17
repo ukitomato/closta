@@ -303,7 +303,7 @@ CI スクリプトの担当とし、reviewer に複製しない。
 > 回答は agents の `canUseTool` と SDK の callback で返し、表示の部品は renderer に置くので targets は both。**design の前に 2 つの ADR を起こす**。
 
 ```
-/cl-design "[session] O-10 (roadmap M3、domain: session、依存: O-5): Claude Code からの問いに答える UI と composer のスラッシュコマンドの候補。roadmap の O-10 の行の範囲と義務に従う: (1) AskUserQuestion の回答 — 承認の応答の updatedInput は agents の canUseTool の中で SDK が渡した元の input に answers だけを足して組む。renderer から受けるのは回答だけで、キーは元の問いの文と照合し、値の長さを制限する。tool 名は SDK の値で判定し、射影の関数は toPermissionResult の隣に置いてキーの集合を pin テストで固定する (2) Elicitation の form / URL (onElicitation) と request_user_dialog (onUserDialog。supportedDialogKinds は allowlist)。Elicitation の入力は永続化しない・ログに出さない。URL は openExternalIfHttp だけを通す (3) elicitation_complete の表示と、composer のスラッシュコマンドの候補 (IME の変換中は出さない。一覧は O-5 の meter の commands と init-report)。design の前に AD-036 Decision 4 と AD-041 (g) の読み替えの ADR を起こす。system-scope の composer の 2 項目 (英語の名前の残り・ターンの開始のフォーカスの奪取) は持ち主が O-10 と X-6 の早いほうなので、先に着手するなら扱う。完了の PR で docs/ui-coverage.md の「後続: O-10」の行を書き換える (Constitution XII / AD-044)。" --targets both
+/cl-design "[session] O-10 (roadmap M3、domain: session、依存: O-5): Claude Code からの問いに答える UI (AskUserQuestion の回答・Elicitation・request_user_dialog) と composer のスラッシュコマンドの候補。範囲と義務の正本は roadmap の O-10 の行。" --targets both
 ```
 
 ### O-11 — Hook・背景の task・実行中の subagent と知らせの類の表示

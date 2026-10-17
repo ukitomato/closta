@@ -61,6 +61,8 @@ import {
   classifyResult,
   composeClaudeSpawn,
   createCanUseTool,
+  createElicitationRegistry,
+  createOnElicitation,
   createPermissionRegistry,
   decodeSessionControl,
   resultAction,
@@ -366,6 +368,8 @@ async function run(
   const promptQueue = new PromptQueue()
   const abortController = new AbortController()
   const permissions = createPermissionRegistry(() => globalThis.crypto.randomUUID())
+  // MCP サーバーの問い (Elicitation) の待ち (O-10 / AD-053。保持するのは resolve と要求の形だけで、入力の値は持たない)。
+  const elicitations = createElicitationRegistry(() => globalThis.crypto.randomUUID())
   // 実行中の tool の結果の対応 (data-model §3。closure に置く — module スコープに置かない)。
   const toolResults = createLiveToolResultTracker()
   let state: SessionRunState = 'idle'
@@ -458,6 +462,7 @@ async function run(
     // 間引きの保留と timer を最初に捨てる (`ended` の後に `event` を送らない。014 spec SC-004)。
     signals.dispose()
     permissions.denyAll()
+    elicitations.cancelAll()
     promptQueue.close()
     if (!childExited && ending) {
       // 穏当な終了の途中: 期限まで正常終了を待ち、だめなら強制終了に落としてその旨を示す。
@@ -498,6 +503,22 @@ async function run(
           { once: true }
         )
       })
+  })
+
+  // 承認と Elicitation の待ちが両方とも無くなったときだけ `running` に戻す (RK-07)。
+  const resumeIfIdle = (): void => {
+    if (permissions.size() + elicitations.size() === 0) transition({ kind: 'permission-respond' })
+  }
+
+  // MCP サーバーの問い。要求を出すときは承認と同じ `permission-request` の遷移 (RK-07)。応答は `elicitations.settle` が決める。
+  const onElicitation = createOnElicitation({
+    registry: elicitations,
+    emitRequest: (prompt) => {
+      transition({ kind: 'permission-request' })
+      emit({ kind: 'elicitation-request', request: prompt })
+    },
+    // SDK の側の中断 (U-10)。renderer には知らせず、最後の待ちなら `running` に戻す。
+    onAborted: () => resumeIfIdle()
   })
 
   const spawnClaudeCodeProcess = (options: AgentSpawnOptions): SpawnedLike => {
@@ -542,7 +563,11 @@ async function run(
         transition({ kind: 'send-prompt' })
         break
       case 'respond-permission':
-        if (permissions.settle(control.decision)) transition({ kind: 'permission-respond' })
+        if (permissions.settle(control.decision)) resumeIfIdle()
+        break
+      case 'respond-elicitation':
+        // 中断済み・応答済み・未知の requestId は `settle` が false を返し、何も起こさない (U-10)。
+        if (elicitations.settle(control.response)) resumeIfIdle()
         break
       case 'interrupt':
         transition({ kind: 'interrupt' })
@@ -572,6 +597,7 @@ async function run(
           transition({ kind: 'kill' })
           killSpawnedChild()
           permissions.denyAll()
+          elicitations.cancelAll()
           abortController.abort()
           promptQueue.close()
           if (spawnedChild === null) void finish()
@@ -591,6 +617,7 @@ async function run(
         // Windows の親 kill は孫 (WSL) に伝播しないため、保持した子プロセスを直接 kill する (C-6)。
         killSpawnedChild()
         permissions.denyAll()
+        elicitations.cancelAll()
         abortController.abort()
         promptQueue.close()
         // spawn 前 (launching) の kill は query の stream が終わらないことがあるので、ここからも出口を通す。
@@ -610,7 +637,8 @@ async function run(
       abortController,
       settings: assertHelperSettings(launchOptions.settings),
       model: launchOptions.model,
-      effort: launchOptions.effort
+      effort: launchOptions.effort,
+      onElicitation
     })
 
     transition({ kind: 'launch' })

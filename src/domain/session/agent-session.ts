@@ -4,6 +4,7 @@ import type { WslRuntimeDescriptor } from '@domain/runtime/descriptor'
 import type { VerifiedRunning } from '@domain/runtime/verified-running'
 import type { WorkspaceFolder } from '@domain/workspace/folder'
 
+import type { ElicitationPrompt, ElicitationResponse } from './elicitation'
 import type { SafePermissionMode } from './launch-config'
 import type { MeterUpdate } from './meter'
 import type { SessionRunState } from './run-state'
@@ -174,6 +175,8 @@ export interface PermissionRequest {
   readonly input: string
   /** 単発承認と capability 付与の区別 (glossary Approval card)。 */
   readonly scope: 'once' | 'capability'
+  /** agents が `toolName === 'AskUserQuestion'` (無害化の前・完全一致) のときだけ付ける (AD-052)。 */
+  readonly answerable?: 'ask-user-question'
 }
 
 /** 利用者の許可 / 拒否の決定 (data-model §5)。main が enum 検証する。 */
@@ -183,6 +186,8 @@ export interface PermissionDecision {
   readonly scope: 'once' | 'capability'
   /** 任意の拒否理由 (表示用)。 */
   readonly message?: string
+  /** `AskUserQuestion` の問いの位置ごとの回答 (AD-052)。`outcome: 'allow'` のときだけ意味を持つ。 */
+  readonly answers?: readonly string[]
 }
 
 /** 聞かれずに拒否された操作 (`SDKPermissionDeniedMessage` 由来。FR-014)。 */
@@ -213,6 +218,8 @@ export type SessionEvent =
    * 数・真偽・列挙・モデルの id・形を検証した tool の id だけを運ぶ。状態通知 (`SessionStatusUpdate`) には載せない。
    */
   | { readonly kind: 'meter'; readonly meter: MeterUpdate }
+  /** MCP サーバーの問い (Elicitation) の要求 (O-10 / AD-053 Decision 2。形と上限は `./elicitation.ts`)。 */
+  | { readonly kind: 'elicitation-request'; readonly request: ElicitationPrompt }
 
 export const SESSION_EVENT_KINDS = [
   'message',
@@ -222,7 +229,8 @@ export const SESSION_EVENT_KINDS = [
   'interrupt-receipt',
   'failure',
   'end-forced',
-  'meter'
+  'meter',
+  'elicitation-request'
 ] as const satisfies readonly SessionEvent['kind'][]
 
 /**
@@ -235,6 +243,7 @@ export const SESSION_EVENT_KINDS = [
 export type SessionControl =
   | { readonly kind: 'send-prompt'; readonly text: string }
   | { readonly kind: 'respond-permission'; readonly decision: PermissionDecision }
+  | { readonly kind: 'respond-elicitation'; readonly response: ElicitationResponse }
   | { readonly kind: 'interrupt' }
   | { readonly kind: 'end' }
   | { readonly kind: 'kill' }
@@ -253,6 +262,8 @@ export interface AgentSession {
   start(input: LaunchInput): AsyncIterable<SessionEvent>
   /** canUseTool の応答を稼働中セッションへ反映する (`respond-permission`)。 */
   respondPermission(decision: PermissionDecision): void
+  /** Elicitation (MCP サーバーの問い) への応答を稼働中セッションへ反映する (`respond-elicitation`。O-10)。 */
+  respondElicitation(response: ElicitationResponse): void
   /** AsyncIterable prompt へ push (stdin を開いたまま保つ。FR-011。`send-prompt`)。 */
   sendPrompt(text: string): void
   /** SDK interrupt (stdin 越し control_request。FR-015。`interrupt`)。 */
@@ -284,6 +295,99 @@ export function toPermissionResult(decision: PermissionDecision): PermissionResu
   return decision.outcome === 'allow'
     ? { behavior: 'allow' }
     : { behavior: 'deny', message: decision.message ?? '拒否しました' }
+}
+
+/** `AskUserQuestion` の許可の戻り値 (AD-052。元の入力 + `answers` だけを `updatedInput` に載せる)。 */
+export interface AskUserQuestionResult {
+  readonly behavior: 'allow'
+  readonly updatedInput: Readonly<Record<string, unknown>>
+}
+
+/** `canUseTool` が返しうる戻り値 (`toPermissionResult` か `toAskUserQuestionResult` の出力)。 */
+export type CanUseToolResult = PermissionResultLike | AskUserQuestionResult
+
+/** SDK の tool 名 (無害化の前・完全一致で比較する)。 */
+export const ASK_USER_QUESTION_TOOL_NAME = 'AskUserQuestion'
+/** 回答の件数の上限 (SDK の問いの数の上限)。 */
+export const ANSWER_MAX_COUNT = 4
+/** 1 つの回答・Elicitation の文字列の値の上限 (コードポイント)。 */
+export const ANSWER_MAX_CODE_POINTS = 1000
+
+function codePointLength(value: string): number {
+  return Array.from(value).length
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  const proto: unknown = Object.getPrototypeOf(value)
+  return proto === Object.prototype || proto === null
+}
+
+/**
+ * 回答の検証の述語 (data-model §1。renderer の送る前・main・agents が同じ関数を呼ぶ)。
+ * 1〜`ANSWER_MAX_COUNT` 件・全部が文字列・各値が前後の空白を除いて 1 コードポイント以上かつ
+ * (除く前で) `ANSWER_MAX_CODE_POINTS` 以下。
+ */
+export function isPermissionAnswers(value: unknown): value is readonly string[] {
+  if (!Array.isArray(value)) return false
+  if (value.length < 1 || value.length > ANSWER_MAX_COUNT) return false
+  for (const item of value as readonly unknown[]) {
+    if (typeof item !== 'string') return false
+    if (item.trim().length === 0) return false
+    if (codePointLength(item) > ANSWER_MAX_CODE_POINTS) return false
+  }
+  return true
+}
+
+/**
+ * `AskUserQuestion` の入力に回答を載せた `updatedInput` を組む純関数 (AD-052)。
+ * 形が外れたら `null` (= 拒否として返す)。元の入力の他のキーは変えない (浅い複製)。
+ */
+export function projectAskUserQuestionAnswer(
+  rawInput: unknown,
+  answers: readonly string[]
+): Record<string, unknown> | null {
+  if (!isPlainRecord(rawInput)) return null
+  const questions = rawInput.questions
+  if (!Array.isArray(questions)) return null
+  if (questions.length < 1 || questions.length > ANSWER_MAX_COUNT) return null
+  const texts: string[] = []
+  for (const q of questions as readonly unknown[]) {
+    if (typeof q !== 'object' || q === null) return null
+    const text: unknown = (q as { readonly question?: unknown }).question
+    if (typeof text !== 'string' || text.length === 0) return null
+    texts.push(text)
+  }
+  if (new Set(texts).size !== texts.length) return null
+  if (answers.length !== texts.length) return null
+  if (!isPermissionAnswers(answers)) return null
+  return {
+    ...rawInput,
+    answers: Object.fromEntries(texts.map((text, i) => [text, answers[i]]))
+  }
+}
+
+/**
+ * `AskUserQuestion` の決定 → 戻り値の写像 (AD-052)。許可で射影が成功したときだけ `updatedInput` を出す。
+ * それ以外は `toPermissionResult` を通る (回答の無い許可・射影の失敗は拒否)。
+ */
+export function toAskUserQuestionResult(
+  decision: PermissionDecision,
+  rawInput: unknown
+): CanUseToolResult {
+  if (decision.outcome === 'deny') return toPermissionResult(decision)
+  if (decision.answers === undefined) {
+    return toPermissionResult({ ...decision, outcome: 'deny', message: '回答がありません' })
+  }
+  const updatedInput = projectAskUserQuestionAnswer(rawInput, decision.answers)
+  if (updatedInput === null) {
+    return toPermissionResult({
+      ...decision,
+      outcome: 'deny',
+      message: '回答を Claude に渡せませんでした。本文で答えてください'
+    })
+  }
+  return { behavior: 'allow', updatedInput }
 }
 
 /**

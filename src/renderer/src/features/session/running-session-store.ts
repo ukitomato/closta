@@ -3,6 +3,7 @@ import { createStore, type StoreApi } from 'zustand/vanilla'
 
 import { SESSION_PORT_MESSAGE, type ClostaCapability } from '@domain/capability'
 import type { SessionEvent } from '@domain/session/agent-session'
+import type { ElicitationContent } from '@domain/session/elicitation'
 import type { SessionLaunchConfig } from '@domain/session/launch-config'
 import type { LaunchOrigin } from '@domain/session/launch-usage'
 import type { MeterUpdate } from '@domain/session/meter'
@@ -96,7 +97,22 @@ export interface SessionActions {
   appendUser(sessionId: string, text: string): void
   send(sessionId: string, text: string): void
   interrupt(sessionId: string): void
-  respond(sessionId: string, requestId: string, outcome: 'allow' | 'deny'): void
+  respond(
+    sessionId: string,
+    requestId: string,
+    outcome: 'allow' | 'deny',
+    answers?: readonly string[]
+  ): void
+  /**
+   * Elicitation (MCP サーバーの問い) に答える (O-10 / AD-053)。待ちの列から**外してから** capability に渡す
+   * (`respond` と同じ)。`content` は保持せず渡すだけ。
+   */
+  respondElicitation(
+    sessionId: string,
+    requestId: string,
+    action: 'accept' | 'decline' | 'cancel',
+    content?: ElicitationContent
+  ): void
   end(sessionId: string): void
   kill(sessionId: string): void
   /** 行と保持を消す。表示中なら選択を外す (FR-011)。 */
@@ -405,6 +421,11 @@ export function createRunningSessionStore(
          */
         patch(sessionId, {
           runState: event.state,
+          // ターンが走っていない状態では SDK の callback の待ちは残っていない。残ったカードを外す (data-model §4)。
+          ...(session.elicitations.length > 0 &&
+          (event.state === 'interrupted' || event.state === 'error' || event.state === 'done')
+            ? { elicitations: [] }
+            : {}),
           ...(session.ending && (event.state === 'running' || event.state === 'awaiting_permission')
             ? { ending: false }
             : {})
@@ -438,16 +459,24 @@ export function createRunningSessionStore(
             requestId: event.request.requestId,
             toolName: event.request.toolName,
             input: event.request.input,
-            scope: event.request.scope
+            scope: event.request.scope,
+            ...(event.request.answerable !== undefined
+              ? { answerable: event.request.answerable }
+              : {})
           }
         })
+        break
+      case 'elicitation-request':
+        // 同じ requestId は足さない (届いた順。受け口の 4 件の上限は agents が持つ)。
+        if (session.elicitations.some((e) => e.requestId === event.request.requestId)) break
+        patch(sessionId, { elicitations: [...session.elicitations, event.request] })
         break
       case 'permission-denied':
         patch(sessionId, { denied: [...session.denied, event.denied] })
         break
       case 'failure':
-        // 承認待ちを畳む (X-1 pr-gate po M-401。FailureBanner と ApprovalCard を競合表示しない)。
-        patch(sessionId, { failureReason: event.reasonKey, pending: null })
+        // 承認待ちを畳む (X-1 pr-gate po M-401。FailureBanner と ApprovalCard を競合表示しない)。問いの待ちも同じ。
+        patch(sessionId, { failureReason: event.reasonKey, pending: null, elicitations: [] })
         break
       case 'end-forced':
         patch(sessionId, { endForced: true })
@@ -550,6 +579,7 @@ export function createRunningSessionStore(
         runState: 'launching',
         messages: [],
         pending: null,
+        elicitations: [],
         denied: [],
         failureReason: null,
         killed: false,
@@ -657,10 +687,27 @@ export function createRunningSessionStore(
       void capability().interruptSession(sessionId)
     },
 
-    respond(sessionId, requestId, outcome) {
-      // 要求 scope は常に `once` (capability 付与は I-3。AD-041 (c))。
-      void capability().respondPermission(sessionId, requestId, outcome, 'once')
+    respond(sessionId, requestId, outcome, answers) {
+      // 要求 scope は常に `once` (capability 付与は I-3。AD-041 (c))。回答は保持せず渡すだけ (O-10)。
+      if (answers === undefined) {
+        void capability().respondPermission(sessionId, requestId, outcome, 'once')
+      } else {
+        void capability().respondPermission(sessionId, requestId, outcome, 'once', answers)
+      }
       patch(sessionId, { pending: null })
+    },
+
+    respondElicitation(sessionId, requestId, action, content) {
+      // 外してから渡す。入力の値はここでも保持しない (SC-004)。
+      const session = store.getState().sessions[sessionId]
+      if (session !== undefined && session.elicitations.some((e) => e.requestId === requestId)) {
+        patch(sessionId, { elicitations: session.elicitations.filter((e) => e.requestId !== requestId) })
+      }
+      if (content === undefined) {
+        void capability().respondElicitation(sessionId, requestId, action)
+      } else {
+        void capability().respondElicitation(sessionId, requestId, action, content)
+      }
     },
 
     end(sessionId) {
@@ -675,7 +722,7 @@ export function createRunningSessionStore(
       if (session === undefined) return
       void capability().killSession(sessionId)
       // port は閉じない — 終了の通知 (`claudeAlive: false`) と終わりまでの本文を受け取るため (FR-008)。
-      patch(sessionId, { killed: true, pending: null })
+      patch(sessionId, { killed: true, pending: null, elicitations: [] })
     },
 
     close(sessionId) {
