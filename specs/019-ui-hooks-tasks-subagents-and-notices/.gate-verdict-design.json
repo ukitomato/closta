@@ -1,0 +1,247 @@
+{
+    "gate": "design",
+    "run": "2026-10-17T00:00:00+09:00",
+    "spec_dir": "specs/019-ui-hooks-tasks-subagents-and-notices",
+    "spec_id": "019-ui-hooks-tasks-subagents-and-notices",
+    "tracks": {
+        "analyze": {
+            "status": "ok",
+            "raw_out": "analyze.md",
+            "viewpoint_missing": null,
+            "cascade_demotions": null
+        },
+        "po-reviewer": {
+            "status": "ok",
+            "raw_out": "po-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "architecture-reviewer": {
+            "status": "ok",
+            "raw_out": "architecture-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "security-reviewer": {
+            "status": "ok",
+            "raw_out": "security-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "platform-boundary-reviewer": {
+            "status": "ok",
+            "raw_out": "platform-boundary-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        }
+    },
+    "severity_counts": {
+        "critical": 0,
+        "high": 10,
+        "medium": 12,
+        "low": 11
+    },
+    "fr_coverage": [
+        {
+            "fr": "FR-001",
+            "covered": true,
+            "by": [
+                "tasks.md BE-002"
+            ]
+        },
+        {
+            "fr": "FR-002",
+            "covered": true,
+            "by": [
+                "BE-010",
+                "FE-010"
+            ]
+        },
+        {
+            "fr": "FR-003",
+            "covered": true,
+            "by": [
+                "FE-011"
+            ]
+        },
+        {
+            "fr": "FR-004",
+            "covered": true,
+            "by": [
+                "BE-020",
+                "BE-022",
+                "BE-023",
+                "FE-021"
+            ]
+        },
+        {
+            "fr": "FR-005",
+            "covered": true,
+            "by": [
+                "BE-001",
+                "BE-020",
+                "FE-022"
+            ]
+        },
+        {
+            "fr": "FR-006",
+            "covered": true,
+            "by": [
+                "BE-021",
+                "BE-023",
+                "FE-020",
+                "FE-022"
+            ]
+        },
+        {
+            "fr": "FR-007",
+            "covered": true,
+            "by": [
+                "BE-002"
+            ]
+        },
+        {
+            "fr": "FR-008",
+            "covered": true,
+            "by": [
+                "BE-030",
+                "BE-031"
+            ]
+        },
+        {
+            "fr": "FR-009",
+            "covered": true,
+            "by": [
+                "BE-031",
+                "FE-001",
+                "FE-031"
+            ]
+        },
+        {
+            "fr": "FR-010",
+            "covered": true,
+            "by": [
+                "BE-032",
+                "BE-033"
+            ]
+        },
+        {
+            "fr": "FR-011",
+            "covered": true,
+            "by": [
+                "BE-032",
+                "FE-030",
+                "FE-031"
+            ]
+        },
+        {
+            "fr": "FR-012",
+            "covered": true,
+            "by": [
+                "SH-011"
+            ]
+        },
+        {
+            "fr": "FR-013",
+            "covered": true,
+            "by": [
+                "BE-002",
+                "BE-021",
+                "BE-040"
+            ]
+        },
+        {
+            "fr": "FR-014",
+            "covered": true,
+            "by": [
+                "SH-010"
+            ]
+        },
+        {
+            "fr": "FR-015",
+            "covered": true,
+            "by": [
+                "SH-002"
+            ]
+        },
+        {
+            "fr": "FR-016",
+            "covered": true,
+            "by": [
+                "SH-001",
+                "SH-010",
+                "SH-012"
+            ]
+        }
+    ],
+    "viewpoint_coverage": {
+        "A": "Critical:0 High:1",
+        "B": "Critical:0 High:0",
+        "C": "Critical:0 High:1",
+        "D": "Critical:0 High:3",
+        "E": "Critical:0 High:3",
+        "F": "Critical:0 High:1",
+        "G": "\u8a72\u5f53\u306a\u3057",
+        "H": "Critical:0 High:0"
+    },
+    "dedup_log": [
+        {
+            "merged": [
+                "analyze-I1",
+                "arch-H-003"
+            ],
+            "key": "AD-056 Decision 2 / FR-005"
+        },
+        {
+            "merged": [
+                "po-H-002",
+                "analyze-C1"
+            ],
+            "key": "data-model.md \u00a73.1 (resend cap)"
+        },
+        {
+            "merged": [
+                "po-H-003",
+                "analyze-C2"
+            ],
+            "key": "SC-005"
+        },
+        {
+            "merged": [
+                "analyze-T1",
+                "analyze-T2",
+                "arch-M-001"
+            ],
+            "key": "Principle XIV / glossary.md:85"
+        },
+        {
+            "merged": [
+                "po-M-001",
+                "analyze-U1"
+            ],
+            "key": "data-model.md \u00a72.5 / US-2 AC4"
+        },
+        {
+            "merged": [
+                "po-M-004",
+                "arch-M-005"
+            ],
+            "key": "data-model.md:166-167"
+        },
+        {
+            "merged": [
+                "po-L-001",
+                "analyze-T3"
+            ],
+            "key": "spec.md US-2 AC2"
+        },
+        {
+            "merged": [
+                "analyze-D1",
+                "arch-L-001"
+            ],
+            "key": "Principle IV"
+        }
+    ],
+    "verdict": "PASS"
+}
