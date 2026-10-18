@@ -87,6 +87,7 @@ type AssistantErrorKey = SDK の SDKAssistantMessageError の 13 値
 | `models` の件数 | 16 まで | 17 件目以降を落とす |
 | 列挙 (`type`・`status`・`limitType`・`mode`・`AssistantErrorKey`) | `Object.create(null)` の表と `Object.hasOwn` (`transcript-guard.ts:29-40` の方式) | `mode` は `unknown`、他は null / 送らない |
 | `messageIds` (`retraction`。O-6 が足した。[AD-049](../../docs/decisions/0049-boundaries-retraction-and-o11-split.md) Decision 2 による AD-047 Decision 2 の読み替え。正本は [016 data-model §1](../016-ui-boundaries-and-tool-displays/data-model.md)) | 配列で、1〜128 件。各要素は `toolUseId` と同じ述語 (`^[A-Za-z0-9_-]{1,128}$`)。128 件を超えたら分けて全部送る。O-4 の上限・間引き・`finish()` の破棄に掛けない | 配列でない・0 件・129 件以上なら `meter` ごと捨てる。形の合わない id は 1 件ずつ捨てる |
+| `tasks` (`background-tasks`。O-11 が足した。[AD-056](../../docs/decisions/0056-o11-scope-background-task-list-and-o12-split.md) Decision 2 による [AD-047](../../docs/decisions/0047-session-meter-and-failure-reasons.md) Decision 2 の読み替え。正本は [019 data-model §2.4](../019-ui-hooks-tasks-subagents-and-notices/data-model.md)) | 配列。各要素は `taskId` (`toolUseId` と同じ述語) と `taskType` (4 つの列挙。外れたら `other`) だけ。64 件まで。0 件は正しい値 (全部終わった)。O-4 の間引きに掛けず即時に送る。`receivedMessages` には数えない | 配列でなければ `meter` ごと捨てる。形の外れた要素は 1 件ずつ捨てる。65 件以上は捨てる |
 
 - decoder は検証を通した値だけで新しい object を組む (余分なキーを運ばない)。`resetsAt: 1e300`・`__proto__` のキー・長い id・URL の資格情報の形の `modelId` で例外を出さない (SC-002)
 - 文言の表も `Object.hasOwn` で引く。外部由来の id をキーにする保持は `Map` に限る

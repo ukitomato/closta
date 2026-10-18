@@ -50,7 +50,7 @@ import type {
   PluginInstallInput,
   SessionInitReportInput
 } from '@domain/session/session-init-report'
-import { toSystemEventMessage } from '@domain/session/system-event'
+import { createForegroundTaskMemory, createTaskRowBuilder } from '@domain/session/foreground-tasks'
 
 import { createLiveSignals } from './live-signals'
 import { createLiveToolResultTracker } from './live-tool-results'
@@ -372,6 +372,8 @@ async function run(
   const elicitations = createElicitationRegistry(() => globalThis.crypto.randomUUID())
   // 実行中の tool の結果の対応 (data-model §3。closure に置く — module スコープに置かない)。
   const toolResults = createLiveToolResultTracker()
+  // 前景で始まった task の記憶と行の包み (O-11 / AD-056。1 つのセッションスレッドに 1 つ。永続化しない)。
+  const taskRows = createTaskRowBuilder(createForegroundTaskMemory())
   let state: SessionRunState = 'idle'
   let reasonKey: LaunchFailureReason | null = null
   let queryHandle: (Pick<Query, 'interrupt'> & AsyncIterable<SDKMessage>) | null = null
@@ -660,10 +662,19 @@ async function run(
           // 拒否で置き換えられた応答の取り消しは、代わりのメッセージを送る前に送る (O-6 / 016 data-model §1)。
           if (message.supersedes !== undefined) signals.onRetraction(message.supersedes)
           const dto = toLiveAssistantMessage(message, receivedAt)
-          // 結果待ちの tool_use を覚える (結果は後の user メッセージで同じ id に埋めて送り直す。O-2 / FR-007)。
-          toolResults.trackAssistant(dto)
-          // 取り消した id の assistant を後から受けても送らない。
-          if (!toolResults.isRetracted(dto.id)) emit({ kind: 'message', message: dto })
+          // subagent の中のメッセージ (`parent_tool_use_id` が文字列) は親の tool-call の `children` に入れて、根を送り直す
+          // (O-11 / AD-055)。親が分からない・形が外れたものは主ループの位置に平らに送る (孤児)。
+          const parentToolUseId: unknown = message.parent_tool_use_id
+          const nested =
+            typeof parentToolUseId === 'string' ? toolResults.nest(dto, parentToolUseId) : null
+          if (nested === null || nested.kind === 'orphan') {
+            // 結果待ちの tool_use を覚える (結果は後の user メッセージで同じ id に埋めて送り直す。O-2 / FR-007)。
+            toolResults.trackAssistant(dto)
+            // 取り消した id の assistant を後から受けても送らない。
+            if (!toolResults.isRetracted(dto.id)) emit({ kind: 'message', message: dto })
+          } else if (nested.kind === 'resend') {
+            emit({ kind: 'message', message: nested.message })
+          }
           signals.onAssistant(message)
           break
         }
@@ -704,8 +715,28 @@ async function run(
             })
           }
           {
+            // subagent の中の圧縮の境界は主ループの行にせず、親の `children` に区切りとして足す (O-11 / U-9)。
+            // 他の subtype は帰属があっても今どおりの経路 (主ループの行)。親が分からなければ何も出さない。
+            const record = asRecord(message)
+            const parentToolUseId = record?.parent_tool_use_id
+            if (message.subtype === 'compact_boundary' && typeof parentToolUseId === 'string') {
+              const uuid = record?.uuid
+              const nested = toolResults.nest(
+                {
+                  id: `divider:${typeof uuid === 'string' ? uuid : parentToolUseId}`,
+                  role: 'system',
+                  parts: [{ type: 'divider', label: 'コンテキストを圧縮' }],
+                  createdAt: receivedAt
+                },
+                parentToolUseId
+              )
+              if (nested.kind === 'resend') emit({ kind: 'message', message: nested.message })
+              break
+            }
+          }
+          {
             // Hook / Background task の行 (O-2 / FR-008)。後続は同じ id で送り、renderer が合成する (FR-009)。
-            const event = toSystemEventMessage(message, receivedAt)
+            const event = taskRows.build(message, receivedAt, (id) => toolResults.toolCallArgs(id))
             if (event !== null) emit({ kind: 'message', message: event })
           }
           signals.onSystem(message)

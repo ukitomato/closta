@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { ThreadMessageLike } from '@assistant-ui/react'
 
 import { activityBins } from './activity-bins'
-import { SYSTEM_EVENT_DATA_NAME } from './convert'
+import { SYSTEM_EVENT_DATA_NAME, toThreadMessage } from './convert'
 import { withMessageTime } from './message-time'
 
 /** O-9 FE-030 — 区間の分け方 (data-model §4 の表 11 行。SC-004)。 */
@@ -138,5 +138,48 @@ describe('activityBins (O-9 FE-030)', () => {
       T0 + MIN
     )
     expect(activityBins([event, divider, event, divider])).toEqual([])
+  })
+})
+
+describe('activityBins: 入れ子の tool を数えない (O-11 BE-032 / data-model §3.3)', () => {
+  it('Agent の呼び出しの children の tool は重みに入らない (主ループの tool-call の part だけ)', () => {
+    const nested = toThreadMessage({
+      id: 'a',
+      role: 'assistant',
+      createdAt: T0,
+      parts: [
+        {
+          type: 'tool-call',
+          toolCallId: 'agent1',
+          toolName: 'Agent',
+          argsText: '{}',
+          result: null,
+          isError: false,
+          truncated: false,
+          children: [
+            {
+              id: 'c1',
+              role: 'assistant',
+              createdAt: T0,
+              parts: [
+                {
+                  type: 'tool-call',
+                  toolCallId: 'r1',
+                  toolName: 'Read',
+                  argsText: '{}',
+                  result: null,
+                  isError: false,
+                  truncated: false,
+                  children: []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    })
+    const bins = activityBins([user('u', 0), withMessageTime(nested, T0 + MIN)])
+    // user 1 + assistant (1 + 主ループの tool 1)
+    expect(bins.reduce((sum, b) => sum + b.activity, 0)).toBe(3)
   })
 })

@@ -1,12 +1,12 @@
 import type { ThreadMessageLike } from '@assistant-ui/react'
 
 import type { LaunchFailureReason } from '@domain/session/agent-session'
+import { bashCommandName, safeName } from '@domain/session/command-name'
 import { countOccupying, MAX_CONCURRENT_SESSIONS } from '@domain/session/concurrency'
+import { pathTail } from '@domain/session/path-tail'
 import { canEnd, type SessionRunState } from '@domain/session/run-state'
 import { sanitizeBody } from '@domain/session/sanitize-body'
 import type { SessionStatusUpdate } from '@domain/session/status-update'
-
-import { pathTail } from '@/features/chat/path-tail'
 
 import type {
   Activity,
@@ -240,29 +240,7 @@ function firstTextLine(message: ThreadMessageLike): string {
 
 /* ── 直近の活動の tool ごとの要点 (O-2 / FR-014 / data-model §4) ─────────────────── */
 
-/** コマンド名・subagent の種類として出してよい文字の形。 */
-const SAFE_NAME = /^[A-Za-z0-9._+-]{1,64}$/
-/** 既知の秘密の接頭辞 (これで始まる名前は出さない)。 */
-const SECRET_PREFIX = /^(sk-|ghp_|gho_|glpat-|AIza|xox)/
-/** コマンドの文字列にあれば何も出さない文字 (クォート・バックスラッシュ・`$`・backtick・`(`。design-gate R2 security L-102)。 */
-const UNSAFE_COMMAND_CHARS = /["'\\$`(]/
-/** 先頭の環境変数の代入 (`NAME=...`)。 */
-const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/
-
 const FILE_PATH_TOOLS: ReadonlySet<string> = new Set(['Read', 'Edit', 'Write', 'MultiEdit'])
-
-function safeName(value: string): string {
-  return SAFE_NAME.test(value) && !SECRET_PREFIX.test(value) ? value : ''
-}
-
-function bashCommandName(command: string): string {
-  if (UNSAFE_COMMAND_CHARS.test(command)) return ''
-  const words = command.trim().split(/\s+/)
-  let index = 0
-  while (index < words.length && ASSIGNMENT.test(words[index] ?? '')) index += 1
-  const first = words[index]
-  return first === undefined || first === '' ? '' : safeName(pathTail(first))
-}
 
 function parseInput(raw: unknown): Record<string, unknown> | null {
   if (typeof raw !== 'string' || raw.length === 0) return null

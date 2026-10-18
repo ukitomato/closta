@@ -1,0 +1,6 @@
+// 違反サンプル: 制限付きの API を、許可名 (`getSessionMessages`) に alias して呼ぶ (AD-055)。
+import { getSubagentMessages as getSessionMessages } from '@anthropic-ai/claude-agent-sdk'
+
+export async function aliasToAllowed(sessionId: string, agentId: string): Promise<unknown> {
+  return getSessionMessages(sessionId, agentId)
+}

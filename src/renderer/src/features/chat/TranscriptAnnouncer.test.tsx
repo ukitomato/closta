@@ -133,11 +133,26 @@ describe('TranscriptAnnouncer (US-3 AC3)', () => {
     expect(text(view.container)).toBe('')
   })
 
-  it('Hook の行が終わりの状態に変わったときに読む', () => {
+  it('SessionStart の Hook の行が終わりの状態に変わったときに読む', () => {
     const view = render(<TranscriptAnnouncer />)
-    update(view, [{ id: 'u', content: [] }, row('h1', 'hook', 'started')])
-    update(view, [{ id: 'u', content: [] }, row('h1', 'hook', 'succeeded')])
+    update(view, [{ id: 'u', content: [] }, row('h1', 'hook', 'started', 'SessionStart')])
+    update(view, [{ id: 'u', content: [] }, row('h1', 'hook', 'succeeded', 'SessionStart')])
     expect(text(view.container)).toBe('Hook が成功')
+  })
+
+  it('一般の Hook (O-11) は失敗・取り消しだけを読み、成功は読まない。10 件成功しても 0 件', () => {
+    const view = render(<TranscriptAnnouncer />)
+    update(view, [{ id: 'u', content: [] }])
+    const ok = Array.from({ length: 10 }, (_, i) =>
+      row(`ok${i}`, 'hook', 'succeeded', 'PreToolUse')
+    )
+    update(view, [...thread.messages, ...ok], 1500)
+    expect(text(view.container)).toBe('')
+    update(view, [...thread.messages, row('bad', 'hook', 'failed', 'PreToolUse')], 1500)
+    expect(text(view.container)).toBe('Hook が失敗')
+    update(view, [...thread.messages, row('can', 'hook', 'cancelled', 'Stop')], 1500)
+    expect(text(view.container)).toBe('Hook が取り消し')
+    expect(text(view.container)).not.toMatch(/SECRET|PreToolUse|Stop/)
   })
 
   it('「さらに表示」で先頭に足された古いメッセージは読まない', () => {

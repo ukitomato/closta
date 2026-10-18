@@ -376,7 +376,27 @@ export const AGENT_SDK_IMPORT_DIRECTORIES = ['src/agents/']
  * **判定は呼び出し形で行う。** import しただけの名前や型注釈を違反にすると、
  * これらを正当に使う後続 feature (X-1 / O-1 / I-1) で検証が破綻する (research R-07)。
  */
-export const AGENT_SDK_ALLOWED_CALLS = ['listSessions', 'getSessionMessages', 'query']
+export const AGENT_SDK_ALLOWED_CALLS = [
+  'listSessions',
+  'getSessionMessages',
+  'query',
+  // AD-055: subagent の入れ子の読み取り (読み取り専用)。呼べるファイルは AGENT_SDK_CALL_FILES で縛る
+  'listSubagents',
+  'getSubagentMessages'
+]
+
+/**
+ * 呼べるファイルの表 (AD-055 Decision 1)。
+ *
+ * 置き場 (`AGENT_SDK_IMPORT_DIRECTORIES`)・呼べる名前 (`AGENT_SDK_ALLOWED_CALLS`) と別の、
+ * 呼べるファイルの表。載っている名前は、列のファイル以外で呼び出し形が現れると違反になる。
+ * 既存の 3 つの API (`listSessions` / `getSessionMessages` / `query`) は制限を持たない
+ * (AD-034 / AD-036 を読み替えない)。
+ */
+export const AGENT_SDK_CALL_FILES = {
+  listSubagents: ['src/agents/read-transcript.ts'],
+  getSubagentMessages: ['src/agents/read-transcript.ts']
+}
 
 /**
  * 権限ゲートの正の構成 (P1-P3) の **backstop** 検査対象 (contracts C-4 / SH-010 / AD-036 §4)。

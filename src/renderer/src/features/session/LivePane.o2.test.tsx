@@ -659,6 +659,48 @@ describe('権限モード・コンテキストの圧縮・task の進み具合�
     expect(rows()).toHaveLength(1)
   })
 
+  it('後から背景に移した task の行 (backgrounded-task): 「背景に移した」の印・コマンドの名前・進み具合・名前が空なら種類だけ (O-11 FE-021)', async () => {
+    const h = await setup()
+    h.emit(
+      A,
+      eventMessage('task:b1', {
+        category: 'backgrounded-task',
+        opens: true,
+        name: 'npm',
+        detail: 'local_bash',
+        status: 'running'
+      })
+    )
+    h.emit(
+      A,
+      eventMessage('task:b2', {
+        category: 'backgrounded-task',
+        opens: true,
+        name: '',
+        detail: 'local_bash',
+        status: 'running'
+      })
+    )
+    await waitFor(() => expect(rows()).toHaveLength(2))
+    const [first, second] = rows()
+    expect(first).toHaveAttribute('data-category', 'backgrounded-task')
+    expect(first).toHaveTextContent('Background task')
+    expect(first?.querySelector('[data-slot="system-event-backgrounded"]')).toHaveTextContent(
+      '背景に移した'
+    )
+    expect(detailOf(first)).toBe('シェルのコマンド')
+    expect(first?.querySelector('[data-slot="system-event-name"]')).toHaveTextContent('「npm」')
+    // 名前が空なら種類のラベルだけ
+    expect(second?.querySelector('[data-slot="system-event-name"]')).toBeNull()
+    expect(detailOf(second)).toBe('シェルのコマンド')
+
+    // 進み具合 (category task の更新) が backgrounded-task の行に入る。
+    h.emit(A, eventMessage('task:b1', { category: 'task', detail: '\n100/2/3000' }))
+    await waitFor(() => expect(progressOf(rows()[0])).toBe('約 100 トークン・tool 2 回・3 秒'))
+    expect(rows()[0]).toHaveAttribute('data-category', 'backgrounded-task')
+    expect(rows()).toHaveLength(2)
+  })
+
   it('種類ごとにアイコンを分ける (Hook・task・再試行・圧縮・権限モード・認証・プラグイン)', async () => {
     const h = await setup()
     const categories = [
@@ -1091,7 +1133,13 @@ describe('MCP の手続きの行 (O-10 FE-022 / 018 data-model §5)', () => {
     )
     h.emit(
       A,
-      eventMessage('hook:e3', { category: 'hook', opens: true, name: 'h', detail: 'Stop', status: 'succeeded' })
+      eventMessage('hook:e3', {
+        category: 'hook',
+        opens: true,
+        name: 'h',
+        detail: 'Stop',
+        status: 'succeeded'
+      })
     )
     await waitFor(() => expect(rows()).toHaveLength(3))
     const text0 = rows()[0]?.textContent ?? ''

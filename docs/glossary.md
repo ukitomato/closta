@@ -93,10 +93,33 @@ total_terms: 104
 - **Definition**: Claude Code が背景で走らせる task (SDK の `task_started` で `is_backgrounded: true`)。O-2 は
   transcript に **task ごとに 1 行**のシステムイベントの行として出し、状態 (実行中・完了・失敗など) を同じ行で書き換える
 - **日本語表記**: バックグラウンドタスク
-- **Domain**: 外部概念 (SDK)。表示は `ui`。**状態の一覧は持たない** (session も ui も task の状態の表を保持しない。
-  1 行の状態は transcript のメッセージの中にだけある。O-2 USER 決定 2026-10-03)
-- **Counterexamples**: 前景の task (`is_backgrounded` が true でない。subagent の呼び出しなど) は行にしない — 既存の表示
-  (Subagent・tool の結果) がある。実行中の task の一覧 (`background_tasks_changed`) は O-11 で要否を判断する
+- **Domain**: 外部概念 (SDK)。表示は `ui`。**task の状態の遷移の表は持たない** (session も ui も task の状態の表を保持しない。
+  1 行の状態は transcript のメッセージの中にだけある。O-2 USER 決定 2026-10-03)。O-11 で、今動いている背景の task の一覧
+  (下の「背景の task の一覧」。持ち主は `ui`。TodoList のタブは作らない) を足した
+- **Counterexamples**: 前景の task (`is_backgrounded` が true でない。subagent の呼び出しなど) は、始まったときは行にしない — 既存の表示
+  (Subagent・tool の結果) がある。後から背景に移ったものは行にする (下の「後から背景に移った task」)。
+  実行中の task の一覧 (`background_tasks_changed`) は O-11 で「一覧を作る」と判断した (下の「背景の task の一覧」)
+
+#### **Background tasks list（背景の task の一覧）**
+
+- **Definition**: SDK の `background_tasks_changed` が運ぶ、今動いている背景の task の最新の 1 つの一覧 (O-11)。
+  `meter` の種類 `background-tasks` (task の id と種類の列。最新の値の置き換え) で agents から renderer に届き、稼働中のストアの
+  `meters` に持ち、右のペインのタブ「背景の task」に出す。操作 (止める・前面に戻す) を持たない
+- **日本語表記**: 背景の task の一覧
+- **Domain**: `ui` (表示と持ち主。AD-056 Decision 2)。契約と保持は session
+- **Counterexamples**: Background runs (assistant-ui の registry の element。実行の履歴と操作の一覧) ではない。
+  transcript の task の行の一覧でも、task の状態の遷移の表でもない。永続化しない
+- **Ref**: [AD-056](decisions/0056-o11-scope-background-task-list-and-o12-split.md)
+
+#### **Late-backgrounded task（後から背景に移った task）**
+
+- **Definition**: 前景で始まり、`task_updated` の `patch.is_backgrounded` が true になって背景に移った task (O-11)。
+  システムイベントの行の category `backgrounded-task` で 1 行にする (実行中と過去ログ)。行を作るために前景の task の記憶
+  (上限 256・永続化しない) だけを持つ
+- **日本語表記**: 後から背景に移った task
+- **Domain**: `ui` (表示)。行の組み立ては session (agents) と domain
+- **Counterexamples**: 最初から背景で始まった task (category `task`) とは別の category。task の状態の遷移は持たない
+- **Ref**: [AD-056](decisions/0056-o11-scope-background-task-list-and-o12-split.md)
 - **Ref**: [011 spec](../specs/011-ui-coverage/spec.md) FR-008 / FR-009
 
 #### **Browse session**
@@ -439,10 +462,21 @@ total_terms: 104
 - **日本語表記**: フック
 - **Domain**: 外部概念 (SDK)。表示は `ui`
 - **Counterexamples**: SDK は既定では SessionStart / Setup の Hook だけを emit する。PreToolUse などの Hook を出すには
-  query の options (`includeHookEvents`) が要り、そのキー集合は AD-041 (g) で固定されている (一般の Hook の表示は O-11)。
+  query の options (`includeHookEvents`) が要り、そのキー集合は AD-041 (g) で固定されている。O-11 が AD-054 でこのキーを足し、
+  一般の Hook を同じ行で出す (下の「一般の Hook」)。
   知らせ (`informational`。下の Informational notice) の本文には Hook の feedback が入りうる。O-2 の「出力本文を出さない」
   規則の**例外**として、伏せ字・1 行・切り詰めを通して出す (U-3)。出所 (Hook か SDK 自身か) は見分けない
 - **Ref**: [011 spec](../specs/011-ui-coverage/spec.md) FR-008
+
+#### **General hook（一般の Hook）**
+
+- **Definition**: SessionStart / Setup 以外の Hook (PreToolUse・PostToolUse・Stop・UserPromptSubmit など)。query の options
+  `includeHookEvents` で SDK が emit し (O-11)、SessionStart の Hook と同じシステムイベントの行 (category `hook`) で出す。
+  **出力本文は出さない**。名前を伏せた行は「Hook ({hook_event}) {n}」の通し番号で見分ける。失敗・取り消しだけを注意の見た目にして読み上げる
+- **日本語表記**: 一般の Hook
+- **Domain**: `ui` (表示)。経路は session (agents)
+- **Counterexamples**: Hook の一覧 (`get_hooks_listing`) ではない (作らない。AD-056)。Hook の出力本文の表示ではない
+- **Ref**: [AD-054](decisions/0054-query-options-hook-events-and-subagent-text.md)
 
 #### **HostPath**
 
@@ -469,7 +503,7 @@ total_terms: 104
   行の見た目の段階は status で表す: `prevented` (続行を止めた。「ここで止まりました」) / `warning` / `notice`
 - **日本語表記**: 知らせ
 - **Domain**: `ui` (表示)。行の組み立ては session (agents)
-- **Counterexamples**: Hook の出力本文の表示ではない (Hook の本文は出さない。一般の Hook の表示は O-11)。本文は伏せ字と
+- **Counterexamples**: Hook の出力本文の表示ではない (Hook の本文は出さない。一般の Hook の表示は O-11 で足した)。本文は伏せ字と
   長さの規則を通した 1 行で、全文ではない (U-3 の例外。data-model §1「本文の規則」)
 - **Ref**: [016 data-model](../specs/016-ui-boundaries-and-tool-displays/data-model.md) §1
 
@@ -624,7 +658,9 @@ total_terms: 104
 
 - **Definition**: 実行中のセッションの「どれだけ使ったか・何に止められたか・今何をしているか」の最新の値 (O-4)。
   `SessionEvent` の種類 `meter` でセッションスレッドから renderer に届き、稼働中のストアの `meters` にセッションごとの最新の値として持つ。
-  - 種類 (`type`) は 9 つ (O-6 が `retraction` を足した。下の項): `turn` (費用の累計・ターン数・モデルごとのトークン・拒否の件数) / `context` (コンテキストの使用量の推定の材料) /
+  - O-11 で種類 `background-tasks` (今動いている背景の task の id と種類の列。最新の値の置き換え。`description` を運ばない。
+    最大 64 件。間引きに掛けず即時に送る。種類は 9 → 10。AD-056) を足した
+  - 種類 (`type`) は O-11 の前は 9 つ (O-6 が `retraction` を足した。下の項): `turn` (費用の累計・ターン数・モデルごとのトークン・拒否の件数) / `context` (コンテキストの使用量の推定の材料) /
     `rate-limit` / `permission-mode` / `thinking` (思考のトークン数) / `tool-elapsed` (tool の経過時間) /
     `init-report` (セッションの構成。SessionInitReport。O-5) / `commands` (スラッシュコマンドの名前・説明・引数の形。O-5) /
     `retraction` (message の id の列。O-6)
@@ -668,11 +704,19 @@ total_terms: 104
 
 #### **O-11**
 
-- **Definition**: roadmap の feature「Hook・背景の task・実行中の subagent と知らせの類の表示」(M3・domain `ui`。O-6 の後に登録)。
-  O-6 が送った一般の Hook の表示・実行中の task の一覧・`tool_progress` などを扱う (範囲の正本は roadmap と
-  [016 spec](../specs/016-ui-boundaries-and-tool-displays/spec.md) の「本 feature の位置づけ」)
+- **Definition**: roadmap の feature「Hook・背景の task・実行中の subagent の表示」(M3・domain `ui`。O-6 の後に登録)。
+  範囲は一般の Hook・後から背景に移った task と背景の task の一覧・実行中と過去ログの subagent の入れ子 (範囲の正本は
+  [019 spec](../specs/019-ui-hooks-tasks-subagents-and-notices/spec.md) の「本 feature の位置づけ」と roadmap)。
+  知らせの類・Checkpoints・中身のブロックの表示は O-12 に送った
 - **Domain**: `ui`
 - **Ref**: [roadmap](roadmap.md)
+
+#### **O-12**
+
+- **Definition**: roadmap の feature「知らせの類・Checkpoints・中身のブロックの表示」(M3・domain `ui`。O-11 の後に登録。
+  Tier B だけで M3 の完了の条件に数えない。AD-056 Decision 1)。O-11 から分けた残りの表示を扱う
+- **Domain**: `ui`
+- **Ref**: [roadmap](roadmap.md) / [AD-056](decisions/0056-o11-scope-background-task-list-and-o12-split.md)
 
 ### P
 
@@ -1091,10 +1135,12 @@ total_terms: 104
     知らせ (`informational`)。本 feature の status (`marked` / `fallback` / `no-fallback` / `prevented` / `warning` / `notice`) はすべて 1 回の出来事で終わりを表す
   - O-10 で、category `elicitation` (MCP の手続き。`elicitation_complete` を 1 行で示す。category 11 → 12) と、
     拒否の行の status `no-fallback-retry` (`refused_user_message_uuid` があるとき。「編集して再試行」を出す。status 21 → 22。値は運ばない) を足した
+  - O-11 で、category `backgrounded-task` (後から背景に移った task。実行中と過去ログ。category 12 → 13) を足した
 - **日本語表記**: システムイベントの行
 - **Domain**: `ui` (表示)。経路 (agents での変換) は session
 - **Counterexamples**: assistant の発話ではない — コピーなどの操作や応答中の印を付けない。状態の一覧 (task の表) ではない —
-  task の進み具合も行の更新で、task の状態を持たない (AD-044 Decision 6)。
+  task の進み具合も行の更新で、行を作るための前景の task の記憶 (上限 256・永続化しない。AD-056 の読み替え) だけを持ち、
+  task の状態の遷移は持たない (AD-044 Decision 6)。
   agents の `post` の kind `event` (セッションスレッドの通知の種類) とも別物。計量 (Meter) とも別 — あちらは行ではなく最新の値
 - **Ref**: [011 spec](../specs/011-ui-coverage/spec.md) FR-009 / [data-model](../specs/011-ui-coverage/data-model.md) §2 / [014 data-model](../specs/014-ui-metering-and-limits/data-model.md) §3 /
   [015 data-model](../specs/015-ui-mcp-elicitation-commands/data-model.md) §4

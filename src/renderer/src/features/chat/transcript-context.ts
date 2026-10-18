@@ -45,6 +45,12 @@ export const ToolResultThreadContext = createContext<ToolResultThreadContext>({
 })
 
 /**
+ * **名前を伏せた Hook の番号** (O-11 / 019 data-model §1.3。メッセージの id → 番号)。`Thread` が thread のメッセージから
+ * `maskedHookOrdinals` で作って渡す。provider の外は空 (番号なし)。
+ */
+export const MaskedHookOrdinalsContext = createContext<ReadonlyMap<string, number>>(new Map())
+
+/**
  * tool の part 1 つの結果の状態・状態のアイコンの入力・O-4 の `ToolResultMarks` の `pending` (結果待ちのときだけ真) を返す。
  * 並列の tool は part ごとに判定する。
  */

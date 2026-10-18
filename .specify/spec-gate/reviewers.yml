@@ -73,6 +73,7 @@ reviewers:
       - "src/renderer/src/components/assistant-ui/elements/web-tool.aui.tsx"
       - "src/renderer/src/components/assistant-ui/elements/task-tool.aui.tsx"
       - "src/renderer/src/components/assistant-ui/elements/tool-display-frame.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/markdown-body.tsx"
       - "src/renderer/src/features/chat/TranscriptAnnouncer.tsx"
       # - "src/renderer/src/features/runtime-list/**/*.tsx"              # 仮実装
       # - "src/renderer/src/features/workspace-folders/**/*.tsx"         # 仮実装
@@ -137,6 +138,7 @@ reviewers:
       - "src/renderer/src/components/assistant-ui/elements/web-tool.aui.tsx"
       - "src/renderer/src/components/assistant-ui/elements/task-tool.aui.tsx"
       - "src/renderer/src/components/assistant-ui/elements/tool-display-frame.tsx"
+      - "src/renderer/src/components/assistant-ui/elements/markdown-body.tsx"
       - "src/renderer/src/features/chat/TranscriptAnnouncer.tsx"
       # - "src/renderer/src/features/runtime-list/**/*.tsx"              # 仮実装
       # - "src/renderer/src/features/workspace-folders/**/*.tsx"         # 仮実装

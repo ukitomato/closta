@@ -25,10 +25,11 @@ export type SettingsSection = (typeof SETTINGS_SECTIONS)[number]
 /**
  * 右のペインのタブの id (`features/shell/panel-tabs.ts`)。O-4 が `usage` (使用量) を、O-5 が `init-report` (構成。
  * 識別子に `config` を使わない — `RunningSession.config` は起動の設定。015 data-model §3) を、O-9 が `conversation-map`
- * (会話の地図。017 data-model §6) を足した (4 つ目の行)。後続 feature
- * (O-11・OPT-panel) が足す。
+ * (会話の地図。017 data-model §6) を、O-11 が `background-tasks` (背景の task。019 data-model §2.5。TodoList は作らない:
+ * AD-056 Decision 3) を足した (5 つ目の行)。後続 feature (OPT-panel) が足す。
  */
-export type PanelTabId = 'overview' | 'usage' | 'init-report' | 'conversation-map'
+export type PanelTabId =
+  'overview' | 'usage' | 'init-report' | 'conversation-map' | 'background-tasks'
 
 /**
  * 登録操作へ渡す初期値 (FE-051)。

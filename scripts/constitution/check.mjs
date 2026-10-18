@@ -45,6 +45,7 @@ import {
   PROTOCOL_ASSOCIATION_APIS,
   SELF_DEFINITION_FILES,
   AGENT_SDK_ALLOWED_CALLS,
+  AGENT_SDK_CALL_FILES,
   AGENT_SDK_IMPORT_DIRECTORIES,
   AGENT_SDK_PACKAGE,
   QUERY_ESCALATION_OPTION_KEYS,
@@ -684,27 +685,40 @@ function hasPackagedGate() {
       continue
     }
 
-    const named = new RegExp(
-      String.raw`import\s*\{([^}]*)\}\s*from\s*['"]` + AGENT_SDK_PACKAGE + String.raw`['"]`
-    ).exec(src.code)
-    const bindings = (named?.[1] ?? '')
-      .split(',')
-      .map(
-        (part) =>
-          part
-            .replace(/^\s*type\s+/, '')
-            .split(/\s+as\s+/)
-            .pop()
-            ?.trim() ?? ''
-      )
-      .filter((name) => name.length > 0)
+    // ファイル中のすべての名前付き import 文を集める (import 文が複数あっても漏らさない)。
+    const namedAll = new RegExp(
+      String.raw`import\s*\{([^}]*)\}\s*from\s*['"]` + AGENT_SDK_PACKAGE + String.raw`['"]`,
+      'g'
+    )
+    // (import した名前, ローカル名) の組
+    const bindings = [...src.code.matchAll(namedAll)]
+      .flatMap((m) => m[1].split(','))
+      .map((part) => {
+        const pieces = part
+          .replace(/^\s*type\s+/, '')
+          .split(/\s+as\s+/)
+          .map((s) => s.trim())
+        const imported = pieces[0] ?? ''
+        const local = pieces[pieces.length - 1] ?? ''
+        return { imported, local }
+      })
+      .filter((b) => b.imported.length > 0 && b.local.length > 0)
 
-    for (const name of bindings) {
-      if (AGENT_SDK_ALLOWED_CALLS.includes(name)) continue
+    for (const { imported, local } of bindings) {
       // **呼び出し形だけを違反にする。** 型としての利用は許す。
-      const call = new RegExp(String.raw`(?<![.\w])` + name + String.raw`\s*\(`)
+      const call = new RegExp(String.raw`(?<![.\w])` + local + String.raw`\s*\(`)
+      if (AGENT_SDK_ALLOWED_CALLS.includes(imported)) {
+        // AD-055: 呼べるファイルの表に載る名前は、列のファイル以外で呼べない
+        const files = AGENT_SDK_CALL_FILES[imported]
+        if (files && !files.includes(src.file) && call.test(src.code)) {
+          found.push(
+            `${src.file}  SDK API "${imported}" を許可されたファイル以外で呼んでいる (許可: ${files.join(', ')})`
+          )
+        }
+        continue
+      }
       if (call.test(src.code)) {
-        found.push(`${src.file}  許可外の SDK API を呼んでいる "${name}"`)
+        found.push(`${src.file}  許可外の SDK API を呼んでいる "${local}"`)
       }
     }
   }

@@ -1,0 +1,8 @@
+// 違反サンプル: 1 つ目の import 文は許可の `query`、2 つ目の import 文で制限付きの API を呼ぶ (AD-055)。
+import { query } from '@anthropic-ai/claude-agent-sdk'
+import { getSubagentMessages } from '@anthropic-ai/claude-agent-sdk'
+
+export async function secondStatement(sessionId: string, agentId: string): Promise<unknown> {
+  void query
+  return getSubagentMessages(sessionId, agentId)
+}

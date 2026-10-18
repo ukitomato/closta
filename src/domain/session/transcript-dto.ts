@@ -78,7 +78,9 @@ export const SYSTEM_EVENT_CATEGORIES = [
   'refusal',
   'informational',
   /** MCP の URL での手続きの完了 (O-10 / AD-053。`elicitation_complete`)。 */
-  'elicitation'
+  'elicitation',
+  /** 前景で始まって後から背景に移った task (O-11 / AD-056。`task_updated` の `patch.is_backgrounded`)。 */
+  'backgrounded-task'
 ] as const
 export type SystemEventCategory = (typeof SYSTEM_EVENT_CATEGORIES)[number]
 

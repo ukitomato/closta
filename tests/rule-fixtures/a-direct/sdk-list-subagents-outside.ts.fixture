@@ -1,0 +1,6 @@
+// 違反サンプル: `listSubagents` を read-transcript.ts 以外で呼ぶ (AD-055 Decision 1)。
+import { listSubagents } from '@anthropic-ai/claude-agent-sdk'
+
+export async function listOutside(sessionId: string): Promise<unknown> {
+  return listSubagents(sessionId)
+}

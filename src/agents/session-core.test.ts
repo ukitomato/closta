@@ -205,8 +205,8 @@ describe('buildQueryOptions (X-4 / AD-041)', () => {
     onElicitation: noopElicitation
   }
 
-  it('QUERY_OPTION_KEYS は AD-041 (g) + AD-053 (onElicitation) の 9 キーに固定される (集合を変えるには ADR が要る)', () => {
-    expect(QUERY_OPTION_KEYS).toHaveLength(9)
+  it('QUERY_OPTION_KEYS は AD-041 (g) + AD-053 + AD-054 の 11 キーに固定される (集合を変えるには ADR が要る: AD-041 / AD-054)', () => {
+    expect(QUERY_OPTION_KEYS).toHaveLength(11)
     // onUserDialog / supportedDialogKinds は載せない (AD-053 Decision 4)。
     expect(QUERY_OPTION_KEYS as readonly string[]).not.toContain('onUserDialog')
     expect(QUERY_OPTION_KEYS as readonly string[]).not.toContain('supportedDialogKinds')
@@ -215,6 +215,8 @@ describe('buildQueryOptions (X-4 / AD-041)', () => {
         'abortController',
         'canUseTool',
         'effort',
+        'forwardSubagentText',
+        'includeHookEvents',
         'model',
         'onElicitation',
         'pathToClaudeCodeExecutable',
@@ -223,6 +225,19 @@ describe('buildQueryOptions (X-4 / AD-041)', () => {
         'spawnClaudeCodeProcess'
       ].sort()
     )
+  })
+
+  it('includeHookEvents / forwardSubagentText はどの起動の入力でも true (O-11 / AD-054 Decision 4)', () => {
+    for (const mode of ['default', 'plan', 'dontAsk'] as const) {
+      const options = buildQueryOptions({
+        ...base,
+        permissionMode: mode,
+        model: 'claude-sonnet-4-5',
+        effort: 'high'
+      })
+      expect(options.includeHookEvents).toBe(true)
+      expect(options.forwardSubagentText).toBe(true)
+    }
   })
 
   it.each(['default', 'plan', 'dontAsk'] as const)('安全 3 値 %s はそのまま載る', (mode) => {

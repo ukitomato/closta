@@ -1,8 +1,16 @@
-import { GaugeIcon, InfoIcon, MapIcon, ServerIcon, type LucideIcon } from 'lucide-react'
+import {
+  GaugeIcon,
+  InfoIcon,
+  ListChecksIcon,
+  MapIcon,
+  ServerIcon,
+  type LucideIcon
+} from 'lucide-react'
 
 import type { SessionMeters } from '@/features/session/useSessionMeters'
 import type { CenterFocus, PanelTabId } from '@/stores/ui'
 
+import { BackgroundTasksTab } from './BackgroundTasksTab'
 import { ConversationMapTab } from './ConversationMapTab'
 import { initReportNeedsAttention } from './init-report-attention'
 import { InitReportTab } from './InitReportTab'
@@ -13,7 +21,7 @@ import { UsageTab } from './UsageTab'
 /**
  * **右のペインのタブの表** (O-7 / FR-014 / data-model §4。1 か所の表)。O-4 は「使用量」(Cost meter の置き場。Context display
  * は中央のヘッダの目盛り。014 data-model §4) を、O-5 は「構成」(roadmap の O-5 の行の Server panel の置き場。015 data-model
- * §3) と注意の印 (`attention`) を、O-9 は「会話の地図」(4 つ目の行。017 data-model §6) を足した。後続 feature (O-11 の TodoList / Background task の要否の判断・OPT-panel) はこの表に行を足す。
+ * §3) と注意の印 (`attention`) を、O-9 は「会話の地図」(4 つ目の行。017 data-model §6) を、O-11 は「背景の task」(5 つ目の行。019 data-model §2.5。TodoList のタブは作らない: AD-056 Decision 3) を足した。後続 feature (OPT-panel) はこの表に行を足す。
  *
  * **`Content` は renderer の DOM の中に描くものに限る。** 外部コンテンツ (Browser / PR の Webview) のタブはこの形で
  * 表さない (AD-046 Decision 4。OPT-panel で種別を足し、main が管理する `WebContentsView` の境界に従う)。
@@ -65,6 +73,14 @@ export const PANEL_TABS: readonly PanelTab[] = [
     // 中央に出している会話から導く (O-9 / 017 data-model §6)。会話が無ければタブは空の状態を言う。
     availableFor: ['none', 'running', 'past'],
     Content: ConversationMapTab
+  },
+  {
+    id: 'background-tasks',
+    label: SHELL_LABELS.backgroundTasksTab,
+    icon: ListChecksIcon,
+    // 値は稼働中だけで出す。過去と未選択はタブを出して「動いていません」を言う (O-11 / 019 data-model §2.5)。
+    availableFor: ['none', 'running', 'past'],
+    Content: BackgroundTasksTab
   }
 ]
 

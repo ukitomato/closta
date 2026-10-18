@@ -7,8 +7,10 @@ import {
   isMeterModelId,
   isValidTaskId,
   isValidToolUseId,
+  MAX_BACKGROUND_TASKS,
   MAX_METER_MODELS,
   METER_UPDATE_TYPES,
+  toBackgroundTaskEntries,
   PERMISSION_MODE_KEYS,
   RATE_LIMIT_STATUSES,
   RATE_LIMIT_TYPES,
@@ -160,8 +162,8 @@ describe('列挙の照合 (Object.create(null) + Object.hasOwn)', () => {
     expect(ASSISTANT_ERROR_KEYS).toHaveLength(13)
   })
 
-  it('METER_UPDATE_TYPES の集合は 9 つ (O-4 の 6 + O-5 の 2 + O-6 の retraction)。集合を変えるには ADR が要る (AD-047 / AD-048 / AD-049)', () => {
-    expect(METER_UPDATE_TYPES).toHaveLength(9)
+  it('METER_UPDATE_TYPES の集合は 10 (O-4 の 6 + O-5 の 2 + O-6 の retraction + O-11 の background-tasks)。集合を変えるには ADR が要る (AD-047 / AD-049 / AD-056)', () => {
+    expect(METER_UPDATE_TYPES).toHaveLength(10)
     expect(new Set(METER_UPDATE_TYPES)).toEqual(
       new Set([
         'turn',
@@ -172,9 +174,86 @@ describe('列挙の照合 (Object.create(null) + Object.hasOwn)', () => {
         'tool-elapsed',
         'init-report',
         'commands',
-        'retraction'
+        'retraction',
+        'background-tasks'
       ])
     )
+  })
+})
+
+describe('background-tasks (O-11 / AD-056 Decision 2)', () => {
+  it('写し: ambient・形の外れた id・description・未知のフィールドを運ばない。知らない種類は other', () => {
+    const tasks = toBackgroundTaskEntries([
+      { task_id: 'a1', task_type: 'local_bash', description: 'SECRET-DESC', extra: 1 },
+      { task_id: 'a2', task_type: 'local_agent', ambient: true },
+      { task_id: 'bad id!', task_type: 'local_bash' },
+      { task_id: 'a3', task_type: '__proto__' },
+      { task_id: 'a4', task_type: 'mcp_task' },
+      null
+    ])
+    expect(tasks).toEqual([
+      { taskId: 'a1', taskType: 'local_bash' },
+      { taskId: 'a3', taskType: 'other' },
+      { taskId: 'a4', taskType: 'mcp_task' }
+    ])
+    expect(JSON.stringify(tasks)).not.toContain('SECRET-DESC')
+    for (const t of tasks) expect(Object.keys(t).sort()).toEqual(['taskId', 'taskType'])
+  })
+
+  it('配列でない値は空。64 件は通り 65 件目が落ちる', () => {
+    expect(toBackgroundTaskEntries('x')).toEqual([])
+    expect(toBackgroundTaskEntries(undefined)).toEqual([])
+    const many = Array.from({ length: 65 }, (_, i) => ({
+      task_id: `t${i}`,
+      task_type: 'local_bash'
+    }))
+    expect(toBackgroundTaskEntries(many)).toHaveLength(MAX_BACKGROUND_TASKS)
+  })
+
+  it('decoder: 正例 (余分なキーを運ばない)・0 件・要素を 1 件ずつ捨てる', () => {
+    expect(
+      decodeMeterUpdate({
+        type: 'background-tasks',
+        tasks: [
+          { taskId: 'a', taskType: 'local_bash', description: 'x' },
+          { taskId: 'bad id', taskType: 'local_bash' },
+          { taskId: 'b', taskType: '__proto__' },
+          { taskId: 'c', taskType: 'other' }
+        ],
+        extra: 1
+      })
+    ).toEqual({
+      type: 'background-tasks',
+      tasks: [
+        { taskId: 'a', taskType: 'local_bash' },
+        { taskId: 'c', taskType: 'other' }
+      ]
+    })
+    expect(decodeMeterUpdate({ type: 'background-tasks', tasks: [] })).toEqual({
+      type: 'background-tasks',
+      tasks: []
+    })
+  })
+
+  it('decoder: 配列でない・65 件以上は捨てる。64 件は通る', () => {
+    expect(decodeMeterUpdate({ type: 'background-tasks', tasks: 'a' })).toBeNull()
+    expect(decodeMeterUpdate({ type: 'background-tasks' })).toBeNull()
+    const entry = (i: number): { taskId: string; taskType: string } => ({
+      taskId: `t${i}`,
+      taskType: 'local_bash'
+    })
+    expect(
+      decodeMeterUpdate({
+        type: 'background-tasks',
+        tasks: Array.from({ length: 64 }, (_, i) => entry(i))
+      })
+    ).not.toBeNull()
+    expect(
+      decodeMeterUpdate({
+        type: 'background-tasks',
+        tasks: Array.from({ length: 65 }, (_, i) => entry(i))
+      })
+    ).toBeNull()
   })
 })
 

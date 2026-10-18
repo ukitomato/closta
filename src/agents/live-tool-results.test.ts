@@ -266,6 +266,24 @@ describe('live-tool-results: 結果を同じ id のメッセージに埋めて�
   })
 })
 
+describe('live-tool-results: toolCallArgs (O-11 BE-023)', () => {
+  it('覚えている Bash の tool-call の argsText を返す。忘れた・知らない id は undefined', () => {
+    const t = createLiveToolResultTracker()
+    const msg = assistant('m1', 'tu1')
+    const withArgs: TranscriptMessageDTO = {
+      ...msg,
+      parts: msg.parts.map((p) =>
+        p.type === 'tool-call' ? { ...p, argsText: '{"command":"npm x"}' } : p
+      )
+    }
+    t.trackAssistant(withArgs)
+    expect(t.toolCallArgs('tu1')).toBe('{"command":"npm x"}')
+    expect(t.toolCallArgs('nope')).toBeUndefined()
+    t.retract(['m1'])
+    expect(t.toolCallArgs('tu1')).toBeUndefined()
+  })
+})
+
 describe('live-tool-results: 取り消し (O-6 BE-012 / 016 data-model §1)', () => {
   it('取り消した後に結果が届いても、送り直しにも結果だけのメッセージにもしない', () => {
     const t = createTracker()
@@ -306,5 +324,157 @@ describe('live-tool-results: 取り消し (O-6 BE-012 / 016 data-model §1)', ()
     t.retract(Array.from({ length: 513 }, (_, i) => `m${i}`))
     expect(t.isRetracted('m0')).toBe(false)
     expect(t.isRetracted('m512')).toBe(true)
+  })
+})
+
+describe('live-tool-results: subagent の入れ子 (O-11 BE-030 / AD-055)', () => {
+  const NO_BYTES = 1_000_000
+
+  function setup(): {
+    t: ReturnType<typeof createLiveToolResultTracker>
+    track: (m: TranscriptMessageDTO) => void
+    user: (...content: unknown[]) => readonly TranscriptMessageDTO[]
+  } {
+    const t = createLiveToolResultTracker()
+    return {
+      t,
+      track: (m: TranscriptMessageDTO): void => t.trackAssistant(m),
+      user: (...content: unknown[]): readonly TranscriptMessageDTO[] =>
+        t.applyUserMessage(user(...content), RECEIVED_AT)
+    }
+  }
+  /** 子のメッセージ。tool-call を持つときは結果待ち。 */
+  const child = (id: string, ...toolIds: string[]): TranscriptMessageDTO =>
+    assistant(id, ...toolIds)
+  const firstCall = (m: TranscriptMessageDTO): ToolCallPart => calls(m)[0] as ToolCallPart
+  const sizeOf = (m: TranscriptMessageDTO): number =>
+    new TextEncoder().encode(JSON.stringify(m)).length
+
+  it('親の children に入り、同じ id で根が出直す (根の createdAt は変わらない。元の DTO は書き換えない)', () => {
+    const { t, track } = setup()
+    const root = assistant('m1', 'agent1')
+    track(root)
+    const out = t.nest(child('c1'), 'agent1')
+    expect(out.kind).toBe('resend')
+    if (out.kind !== 'resend') return
+    expect(out.message.id).toBe('m1')
+    expect(firstCall(out.message).children.map((c) => c.id)).toEqual(['c1'])
+    expect(firstCall(root).children).toEqual([]) // 写し直し
+  })
+
+  it('多段: 2 段で入り、8 段で入り、9 段で平ら (孤児)', () => {
+    const { t, track } = setup()
+    track(assistant('m1', 'a0'))
+    let parent = 'a0'
+    for (let depth = 1; depth <= 8; depth++) {
+      const next = `a${depth}`
+      const out = t.nest(child(`c${depth}`, next), parent)
+      expect(out.kind).toBe('resend')
+      parent = next
+    }
+    expect(t.nest(child('c9'), parent).kind).toBe('orphan')
+  })
+
+  it('孤児の 3 つの形: 親が表に無い・形が外れた id・自分の tool-call', () => {
+    const { t, track } = setup()
+    track(assistant('m1', 'agent1'))
+    expect(t.nest(child('c1'), 'unknown').kind).toBe('orphan')
+    expect(t.nest(child('c2'), 'bad id with space').kind).toBe('orphan')
+    expect(t.nest(child('c3'), 42).kind).toBe('orphan')
+    expect(t.nest(child('c4', 'agent1'), 'agent1').kind).toBe('orphan')
+  })
+
+  it(`${500} 件で親が truncated になり、立てた親を 1 回だけ送り直す`, () => {
+    const { t, track } = setup()
+    track(assistant('m1', 'agent1'))
+    for (let i = 0; i < 500; i++) expect(t.nest(child(`c${i}`), 'agent1').kind).toBe('resend')
+    const over = t.nest(child('c500'), 'agent1')
+    expect(over.kind).toBe('resend')
+    if (over.kind !== 'resend') return
+    expect(firstCall(over.message).truncated).toBe(true)
+    expect(firstCall(over.message).children).toHaveLength(500)
+    // 以後は送り直さない
+    expect(t.nest(child('c501'), 'agent1').kind).toBe('none')
+    expect(t.nest(child('c502'), 'agent1').kind).toBe('none')
+  })
+
+  it('送り直しの量: 子 1 件につき 1 回、各回 1,000,000 バイト以下、truncated の後は 0 回。親の結果は後から埋まる (RK-04)', () => {
+    const { t, track, user: applyUser } = setup()
+    track(assistant('m1', 'agent1'))
+    let resends = 0
+    let truncatedAt = -1
+    const big = (id: string): TranscriptMessageDTO => ({
+      id,
+      role: 'assistant',
+      parts: [{ type: 'text', text: 'x'.repeat(300_000) }],
+      createdAt: null
+    })
+    for (let i = 0; i < 6; i++) {
+      const out = t.nest(big(`c${i}`), 'agent1')
+      if (out.kind === 'resend') {
+        resends += 1
+        expect(sizeOf(out.message)).toBeLessThanOrEqual(NO_BYTES)
+        if (firstCall(out.message).truncated && truncatedAt < 0) truncatedAt = i
+      }
+    }
+    // 300KB の子は 3 件入り、4 件目で truncated の印を 1 回、以後は送り直し 0 回。
+    expect(truncatedAt).toBe(3)
+    expect(resends).toBe(4)
+    const filled = applyUser(result('agent1', 'done'))
+    expect(filled).toHaveLength(1)
+    expect(firstCall(filled[0] as TranscriptMessageDTO)).toMatchObject({
+      result: 'done',
+      truncated: true
+    })
+  })
+
+  it('深い位置の結果が埋まり、根が 1 回送り直される (主ループと同じ規則)', () => {
+    const { t, track, user: applyUser } = setup()
+    track(assistant('m1', 'agent1'))
+    t.nest(child('c1', 'inner1', 'inner2'), 'agent1')
+    const out = applyUser(result('inner1', 'r1'), result('inner2', 'r2', true))
+    expect(out.map((m) => m.id)).toEqual(['m1'])
+    const kids = firstCall(out[0] as TranscriptMessageDTO).children
+    expect(calls(kids[0] as TranscriptMessageDTO)).toMatchObject([
+      { toolCallId: 'inner1', result: 'r1', isError: false },
+      { toolCallId: 'inner2', result: 'r2', isError: true }
+    ])
+    // 根の直下の呼び出しは結果待ちのまま。
+    expect(t.pendingMessageCount()).toBe(1)
+    const last = applyUser(result('agent1', 'done'))
+    expect(last.map((m) => m.id)).toEqual(['m1'])
+    expect(t.pendingMessageCount()).toBe(0)
+  })
+
+  it('取り消した根の子は送られず、結果も捨てる', () => {
+    const { t, track, user: applyUser } = setup()
+    track(assistant('m1', 'agent1'))
+    t.nest(child('c1', 'inner1'), 'agent1')
+    t.retract(['m1'])
+    expect(t.nest(child('c2'), 'agent1').kind).toBe('none')
+    expect(t.nest(child('c3'), 'inner1').kind).toBe('none')
+    expect(applyUser(result('inner1', 'late'))).toEqual([])
+  })
+
+  it('根の LRU で忘れた後の子は孤児', () => {
+    const { t, track } = setup()
+    for (let i = 0; i <= MAX_PENDING_TOOL_MESSAGES; i++) track(assistant(`m${i}`, `t${i}`))
+    expect(t.nest(child('c0'), 't0').kind).toBe('orphan')
+    expect(t.nest(child('cN'), `t${MAX_PENDING_TOOL_MESSAGES}`).kind).toBe('resend')
+  })
+
+  it('toolCallArgs は深い位置の tool-call も引く', () => {
+    const { t, track } = setup()
+    track(assistant('m1', 'agent1'))
+    t.nest(
+      {
+        id: 'c1',
+        role: 'assistant',
+        parts: [{ ...toolCall('inner1'), argsText: '{"command":"npm test"}' }],
+        createdAt: null
+      },
+      'agent1'
+    )
+    expect(t.toolCallArgs('inner1')).toBe('{"command":"npm test"}')
   })
 })

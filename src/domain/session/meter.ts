@@ -81,7 +81,9 @@ export const METER_UPDATE_TYPES = [
   'tool-elapsed',
   'init-report',
   'commands',
-  'retraction'
+  'retraction',
+  /** 今動いている背景の task の一覧 (O-11 / AD-056 Decision 2。最新の値の置き換え)。 */
+  'background-tasks'
 ] as const
 export type MeterUpdateType = (typeof METER_UPDATE_TYPES)[number]
 
@@ -122,6 +124,27 @@ export type MeterUpdate =
   | CommandsMeter
   /** 取り消し (O-6 / AD-049 Decision 2)。最新の値ではなく 1 回限りの指示 (message の id の列)。 */
   | { readonly type: 'retraction'; readonly messageIds: readonly string[] }
+  /** 今動いている背景の task の一覧 (O-11 / AD-056 Decision 2)。最新の値で置き換える。 */
+  | { readonly type: 'background-tasks'; readonly tasks: readonly BackgroundTaskEntry[] }
+
+/** 背景の task の種類 (SDK の `task_type` の 4 つの列挙と、知らない値の `other`)。 */
+export const BACKGROUND_TASK_TYPES = [
+  'local_bash',
+  'local_agent',
+  'local_workflow',
+  'mcp_task',
+  'other'
+] as const
+export type BackgroundTaskType = (typeof BACKGROUND_TASK_TYPES)[number]
+
+/** 背景の task の 1 件 (`description` と未知のフィールドを運ばない)。 */
+export interface BackgroundTaskEntry {
+  readonly taskId: string
+  readonly taskType: BackgroundTaskType
+}
+
+/** 一覧の件数の上限 (65 件目以降を落とす)。 */
+export const MAX_BACKGROUND_TASKS = 64
 
 /** `retraction` の 1 件の `meter` が運ぶ id の件数の上限 (超えたら agents が分けて送る)。 */
 export const MAX_RETRACTION_IDS = 128
@@ -194,6 +217,13 @@ export function toRateLimitStatus(raw: unknown): RateLimitStatus | null {
 /** `rate_limit_info.rateLimitType`。無い・知らない値は null (文言は「利用枠」)。 */
 export function toRateLimitType(raw: unknown): RateLimitType | null {
   return inEnum(RATE_LIMIT_TYPE_TABLE, raw) ? (raw as RateLimitType) : null
+}
+
+const BACKGROUND_TASK_TYPE_TABLE = enumTable(BACKGROUND_TASK_TYPES)
+
+/** 背景の task の種類。知らない値・文字列でない値は `other`。 */
+export function toBackgroundTaskType(raw: unknown): BackgroundTaskType {
+  return inEnum(BACKGROUND_TASK_TYPE_TABLE, raw) ? (raw as BackgroundTaskType) : 'other'
 }
 
 /* ── 数の正規化 ───────────────────────────────────────────────────── */
@@ -304,6 +334,22 @@ export function contextTokensOf(usage: unknown): number | null {
   return Number.isSafeInteger(sum) ? sum : null
 }
 
+/**
+ * SDK の `background_tasks_changed` の `tasks` (未信頼) → 一覧。配列でない値は空。`ambient === true` と形の外れた
+ * `task_id` を除き、知らない `task_type` は `other`、`MAX_BACKGROUND_TASKS` 件まで。`description` と未知のフィールドは運ばない。
+ */
+export function toBackgroundTaskEntries(raw: unknown): readonly BackgroundTaskEntry[] {
+  if (!Array.isArray(raw)) return []
+  const out: BackgroundTaskEntry[] = []
+  for (const item of raw as readonly unknown[]) {
+    if (out.length >= MAX_BACKGROUND_TASKS) break
+    const t = asRecord(item)
+    if (t === null || t.ambient === true || !isValidTaskId(t.task_id)) continue
+    out.push({ taskId: t.task_id, taskType: toBackgroundTaskType(t.task_type) })
+  }
+  return out
+}
+
 /* ── decoder (renderer が port から受けた値を検証する) ─────────────────── */
 
 /** 送られた割合 (正規化の後の 0〜100)。 */
@@ -399,6 +445,25 @@ export function decodeMeterUpdate(raw: unknown): MeterUpdate | null {
       if (list.length === 0 || list.length > MAX_RETRACTION_IDS) return null
       const messageIds = list.filter(isValidToolUseId)
       return { type: 'retraction', messageIds }
+    }
+    // 背景の task の一覧 (O-11 / AD-056 Decision 2)。配列でない・65 件以上は捨て、形の外れた要素は 1 件ずつ捨てる。
+    case 'background-tasks': {
+      const tasks = m.tasks
+      if (!Array.isArray(tasks)) return null
+      const list = tasks as readonly unknown[]
+      if (list.length > MAX_BACKGROUND_TASKS) return null
+      const entries: BackgroundTaskEntry[] = []
+      for (const item of list) {
+        const t = asRecord(item)
+        if (
+          t === null ||
+          !isValidTaskId(t.taskId) ||
+          !inEnum(BACKGROUND_TASK_TYPE_TABLE, t.taskType)
+        )
+          continue
+        entries.push({ taskId: t.taskId, taskType: t.taskType as BackgroundTaskType })
+      }
+      return { type: 'background-tasks', tasks: entries }
     }
   }
 }

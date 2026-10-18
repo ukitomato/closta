@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { axe } from 'vitest-axe'
 
 import type { ThreadMessageLike } from '@assistant-ui/react'
 
@@ -135,6 +136,62 @@ describe('過去ログの圧縮の境界 (O-6 FE-011 / 016 spec US-1)', () => {
   })
 })
 
+describe('一般の Hook の行 (O-11 FE-010 / FE-011。US-1 AC1〜AC4)', () => {
+  const hookRow = (id: string, over: Partial<EventPart>): TranscriptMessageDTO =>
+    eventDto(id, { detail: 'PreToolUse', status: 'succeeded', ...over })
+
+  it('伏せた行は「Hook (<hook_event>) <n>」の見出し、名前のある行は名前。hook_id は出ない', () => {
+    show([
+      { id: 'u1', role: 'user', parts: [{ type: 'text', text: 'go' }], createdAt: null },
+      hookRow('hook:SECRETID-1', { name: '' }),
+      hookRow('hook:SECRETID-2', { name: '' }),
+      hookRow('hook:SECRETID-3', { name: 'PreToolUse:Bash' })
+    ])
+    const { container } = render(<ChatScreen />)
+    const [a, b, c] = rowsOf(container)
+    expect(a).toHaveTextContent('Hook (PreToolUse) 1')
+    expect(b).toHaveTextContent('Hook (PreToolUse) 2')
+    expect(c).not.toHaveTextContent('Hook (PreToolUse)')
+    expect(nameOf(c!)).toHaveTextContent('PreToolUse:Bash')
+    expect(container.textContent).not.toContain('SECRETID')
+  })
+
+  it('失敗・取り消しは注意の見た目、成功は控えめ (SessionStart の Hook の失敗も注意)', () => {
+    show([
+      hookRow('hook:a', { status: 'failed' }),
+      hookRow('hook:b', { status: 'cancelled' }),
+      hookRow('hook:c', { status: 'succeeded' }),
+      hookRow('hook:d', { status: 'failed', detail: 'SessionStart' })
+    ])
+    const { container } = render(<ChatScreen />)
+    expect(rowsOf(container).map((row) => row.dataset.tone)).toEqual([
+      'attention',
+      'attention',
+      'quiet',
+      'attention'
+    ])
+  })
+
+  it('vitest-axe の違反 0。Hook の出力本文の目印が DOM に 0 件', async () => {
+    const dto = toSystemEventMessage({
+      type: 'system',
+      subtype: 'hook_response',
+      hook_id: 'h1',
+      hook_name: 'PreToolUse:Bash',
+      hook_event: 'PreToolUse',
+      outcome: 'error',
+      output: 'MARK-OUTPUT',
+      stdout: 'MARK-STDOUT',
+      stderr: 'MARK-STDERR',
+      exit_code: 987654
+    })
+    show([dto!])
+    const { container } = render(<ChatScreen />)
+    expect(container.textContent).not.toMatch(/MARK-|987654/)
+    expect((await axe(container)).violations).toEqual([])
+  })
+})
+
 describe('過去ログのシステムイベントの行 (FR-009 / SC-003)', () => {
   it('Hook の名前と結果、task の説明と状態を 1 行ずつ描く。assistant-ui の変換が例外を投げない', () => {
     show([
@@ -260,6 +317,32 @@ describe('過去ログのシステムイベントの行 (FR-009 / SC-003)', () =
     const [killed, completed] = rowsOf(container)
     expect(killed).toHaveTextContent(SYSTEM_EVENT_LABELS.taskFailedGuidance)
     expect(completed).not.toHaveTextContent(SYSTEM_EVENT_LABELS.taskFailedGuidance)
+  })
+
+  it('後から背景に移した task の行 (過去ログ。O-11): 印・コマンドの名前・種類のラベル・案内・未知の種類は other のラベル', () => {
+    show([
+      eventDto('task:a', {
+        category: 'backgrounded-task',
+        name: 'npm',
+        detail: 'local_bash',
+        status: 'killed'
+      }),
+      eventDto('task:b', { category: 'backgrounded-task', name: '', detail: 'local_bash' }),
+      eventDto('task:c', { category: 'backgrounded-task', detail: 'other', status: 'completed' })
+    ])
+    const { container } = render(<ChatScreen />)
+    const [a, b, c] = rowsOf(container)
+    for (const row of [a, b, c])
+      expect(row!.querySelector('[data-slot="system-event-backgrounded"]')).toHaveTextContent(
+        '背景に移した'
+      )
+    expect(nameOf(a!)).toHaveTextContent('「npm」')
+    expect(a).toHaveTextContent(SYSTEM_EVENT_LABELS.taskFailedGuidance)
+    expect(nameOf(b!)).toBeNull()
+    expect(b!.querySelector('[data-slot="system-event-detail"]')).toHaveTextContent(
+      'シェルのコマンド'
+    )
+    expect(c!.querySelector('[data-slot="system-event-detail"]')).toHaveTextContent('その他の task')
   })
 
   it('切り詰めた名前と detail は title で全文を見られ、名前は透明度を足さない (pr-gate R2 a11y M-001 / M-002)', () => {

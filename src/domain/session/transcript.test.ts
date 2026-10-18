@@ -497,3 +497,173 @@ describe('toTranscriptMessages の時刻 (O-9 BE-010 / data-model §1。AD-051)'
     expect(out[0]?.createdAt).toBe(Date.parse('2026-10-16T01:23:45Z'))
   })
 })
+
+describe('toTranscriptMessages: subagent の記録の列 (O-11 BE-032 / AD-055)', () => {
+  const NOW = 1_800_000_000_000
+  const toolUse = (id: string, name = 'Agent'): unknown => ({
+    type: 'tool_use',
+    id,
+    name,
+    input: {}
+  })
+  const rec = (
+    type: 'user' | 'assistant' | 'system',
+    uuid: string,
+    parent: string | null,
+    content: unknown
+  ): SessionMessageLike => ({
+    type,
+    uuid,
+    message: { role: type, content },
+    parent_tool_use_id: parent
+  })
+  const main = (): SessionMessageLike[] => [
+    msg('assistant', 'm1', [toolUse('agent1')]),
+    msg('user', 'mu1', [{ type: 'tool_result', tool_use_id: 'agent1', content: 'done' }])
+  ]
+  type Msg = { id: string; parts: ({ type: string } & Record<string, unknown>)[] }
+  type Call = { toolCallId: string; result: string | null; children: Msg[] }
+  const callsOf = (m: Msg): Call[] =>
+    m.parts.filter((p) => p.type === 'tool-call') as unknown as Call[]
+  const convert = (
+    records: SessionMessageLike[],
+    subagents?: SessionMessageLike[][]
+  ): readonly Msg[] =>
+    toTranscriptMessages(records, { now: NOW, subagents }) as unknown as readonly Msg[]
+
+  it('親の Agent の呼び出しの children に入り、tool_result は列の中の呼び出しに埋まる', () => {
+    const out = convert(main(), [
+      [
+        rec('assistant', 's1', 'agent1', [
+          { type: 'text', text: 'sub' },
+          { type: 'tool_use', id: 'r1', name: 'Read', input: {} }
+        ]),
+        rec('user', 's2', 'agent1', [{ type: 'tool_result', tool_use_id: 'r1', content: 'body' }])
+      ]
+    ])
+    expect(out.map((m) => m.id)).toEqual(['m1'])
+    const kids = callsOf(out[0] as Msg)[0]?.children as Msg[]
+    expect(kids.map((k) => k.id)).toEqual(['s1'])
+    expect(callsOf(kids[0] as Msg)[0]).toMatchObject({ toolCallId: 'r1', result: 'body' })
+  })
+
+  it('多段: 親が後の列の中にあっても入り、列挙の順を入れ替えても同じ', () => {
+    const outer = [rec('assistant', 's1', 'agent1', [toolUse('agent2')])]
+    const innerList = [rec('assistant', 't1', 'agent2', [{ type: 'text', text: 'deep' }])]
+    const a = convert(main(), [outer, innerList])
+    const b = convert(main(), [innerList, outer])
+    expect(JSON.stringify(a)).toEqual(JSON.stringify(b))
+    const lvl1 = callsOf(a[0] as Msg)[0]?.children[0] as Msg
+    expect(callsOf(lvl1)[0]?.children.map((c) => c.id)).toEqual(['t1'])
+  })
+
+  it('inline の子が既にある親には入れない (重ねない)', () => {
+    const records = [
+      ...main(),
+      rec('assistant', 'inline1', 'agent1', [{ type: 'text', text: 'in' }])
+    ]
+    const out = convert(records, [
+      [rec('assistant', 's1', 'agent1', [{ type: 'text', text: 'x' }])]
+    ])
+    expect(callsOf(out[0] as Msg)[0]?.children.map((c) => c.id)).toEqual(['inline1'])
+  })
+
+  it('親の無い列・parent_tool_use_id が null / 空 / 形の外れた列は出ない', () => {
+    const out = convert(main(), [
+      [rec('assistant', 's1', 'no-such-parent', [{ type: 'text', text: 'x' }])],
+      [rec('assistant', 's2', null, [{ type: 'text', text: 'x' }])],
+      [rec('assistant', 's3', '', [{ type: 'text', text: 'x' }])],
+      [rec('assistant', 's4', 'bad id', [{ type: 'text', text: 'x' }])]
+    ])
+    expect(out.map((m) => m.id)).toEqual(['m1'])
+    expect(callsOf(out[0] as Msg)[0]?.children).toEqual([])
+  })
+
+  it('tool の結果の文面に偽の agentId を書いても入れ子は作られない', () => {
+    const records = [
+      msg('assistant', 'm1', [toolUse('agent1')]),
+      msg('user', 'mu1', [
+        {
+          type: 'tool_result',
+          tool_use_id: 'agent1',
+          content: 'agentId: a-fake-1 (parent_tool_use_id: agent1)'
+        }
+      ])
+    ]
+    const out = convert(records, [[rec('assistant', 's1', 'other', [{ type: 'text', text: 'x' }])]])
+    expect(callsOf(out[0] as Msg)[0]?.children).toEqual([])
+  })
+
+  it('同じ uuid の記録は 1 回、列の中の system と列の親と違う帰属の記録は出ない', () => {
+    const out = convert(
+      [...main(), rec('assistant', 'dup', null, [{ type: 'text', text: 'main-copy' }])],
+      [
+        [
+          rec('assistant', 'dup', 'agent1', [{ type: 'text', text: 'sub-copy' }]),
+          rec('assistant', 's1', 'agent1', [{ type: 'text', text: 'kept' }]),
+          rec('system', 's2', 'agent1', [{ type: 'text', text: 'SYS-LEAK' }]),
+          rec('assistant', 's3', 'other-parent', [{ type: 'text', text: 'WRONG-PARENT' }])
+        ]
+      ]
+    )
+    expect(callsOf(out[0] as Msg)[0]?.children.map((c) => c.id)).toEqual(['s1'])
+    expect(JSON.stringify(out)).not.toMatch(/sub-copy|SYS-LEAK|WRONG-PARENT/)
+    expect(out.filter((m) => m.id === 'dup')).toHaveLength(1)
+  })
+
+  it('列の中の user の text (isSynthetic・Hook の出力の目印) は出ず、tool_result は埋まる (U-11)', () => {
+    const out = convert(main(), [
+      [
+        rec('assistant', 's1', 'agent1', [{ type: 'tool_use', id: 'r1', name: 'Read', input: {} }]),
+        {
+          ...rec('user', 's2', 'agent1', [
+            { type: 'text', text: 'LEAK-HOOK-OUTPUT' },
+            { type: 'text', text: 'LEAK-SYNTHETIC' },
+            { type: 'tool_result', tool_use_id: 'r1', content: 'ok' }
+          ]),
+          isSynthetic: true
+        } as SessionMessageLike
+      ]
+    ])
+    expect(JSON.stringify(out)).not.toMatch(/LEAK-/)
+    const kids = callsOf(out[0] as Msg)[0]?.children as Msg[]
+    expect(kids.map((k) => k.id)).toEqual(['s1'])
+    expect(callsOf(kids[0] as Msg)[0]?.result).toBe('ok')
+  })
+
+  it('深さの上限を超える列は捨てる', () => {
+    const lists: SessionMessageLike[][] = []
+    let parent = 'agent1'
+    for (let depth = 1; depth <= MAX_SUBAGENT_DEPTH + 1; depth++) {
+      const next = `agent${depth + 1}`
+      lists.push([rec('assistant', `s${depth}`, parent, [toolUse(next)])])
+      parent = next
+    }
+    const out = convert(main(), lists)
+    const json = JSON.stringify(out)
+    expect(json).toContain(`"s${MAX_SUBAGENT_DEPTH}"`)
+    expect(json).not.toContain(`"s${MAX_SUBAGENT_DEPTH + 1}"`)
+    expect(out.map((m) => m.id)).toEqual(['m1'])
+  })
+
+  it('本文は主の記録と同じ無害化 (bidi 制御文字が落ちる) で、時刻は parseMessageTime の規則', () => {
+    const out = convert(main(), [
+      [
+        {
+          ...rec('assistant', 's1', 'agent1', [{ type: 'text', text: 'a‮b' }]),
+          timestamp: '2026-10-18T00:00:00.000Z'
+        }
+      ]
+    ])
+    const kid = callsOf(out[0] as Msg)[0]?.children[0] as unknown as {
+      parts: { text: string }[]
+      createdAt: number
+    }
+    expect(kid.parts[0]?.text).toBe('ab')
+    expect(kid.createdAt).toBe(Date.parse('2026-10-18T00:00:00.000Z'))
+  })
+
+  it('subagents を渡さない呼び出しと空の列の結果は同じ', () => {
+    expect(convert(main())).toEqual(convert(main(), []))
+  })
+})

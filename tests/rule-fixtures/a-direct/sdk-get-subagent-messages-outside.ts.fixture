@@ -1,0 +1,6 @@
+// 違反サンプル: `getSubagentMessages` を read-transcript.ts 以外で呼ぶ (AD-055 Decision 1)。
+import { getSubagentMessages } from '@anthropic-ai/claude-agent-sdk'
+
+export async function messagesOutside(sessionId: string, agentId: string): Promise<unknown> {
+  return getSubagentMessages(sessionId, agentId)
+}

@@ -1,0 +1,389 @@
+{
+    "gate": "code",
+    "run": "2026-10-18T23:06:54.980Z",
+    "spec_dir": "specs/019-ui-hooks-tasks-subagents-and-notices",
+    "spec_id": "019-ui-hooks-tasks-subagents-and-notices",
+    "iter": 1,
+    "severity_counts": {
+        "critical": 0,
+        "high": 3,
+        "medium": 7,
+        "low": 9,
+        "must_fix": 0
+    },
+    "must_fix_findings": [],
+    "touched_files": [
+        {
+            "path": ".specify/spec-gate/reviewers.yml",
+            "sha": "8693a32e9ae61552589f2cd2ed4abda91b7d2621"
+        },
+        {
+            "path": "docs/domains/_overview.md",
+            "sha": "c3edede78664b6c4da1a4b8f60d22d0c63ad28bd"
+        },
+        {
+            "path": "docs/domains/session/charter.md",
+            "sha": "5661cdb2b5b32db3a811fe43e6cc12ff6cfd9bdb"
+        },
+        {
+            "path": "docs/domains/ui/charter.md",
+            "sha": "760b01eefcf034d3f48bffa9f84146fe00d8f3fd"
+        },
+        {
+            "path": "docs/glossary.md",
+            "sha": "55bf6fc89fd09970e82f8de8f04b21b44b8ad533"
+        },
+        {
+            "path": "docs/prompts.md",
+            "sha": "587e0e8957147738fb394fef055faa8c6956ffb8"
+        },
+        {
+            "path": "docs/roadmap.md",
+            "sha": "bc0dab05ee67c8761ad43a881f682b6aabcb7754"
+        },
+        {
+            "path": "docs/ui-coverage.md",
+            "sha": "3ed32541df11160a0e94a8be29aa2a5d10e04ec5"
+        },
+        {
+            "path": "eslint.config.mjs",
+            "sha": "647d5d8fea47013208664839e0d8165a135bebd6"
+        },
+        {
+            "path": "scripts/constitution/allowlists.mjs",
+            "sha": "88414fd77632bef2932d6cb24363872225b159ae"
+        },
+        {
+            "path": "scripts/constitution/check.mjs",
+            "sha": "7623c3b847a0d796501d2cec48b2891663bca189"
+        },
+        {
+            "path": "specs/014-ui-metering-and-limits/data-model.md",
+            "sha": "87e0592de2e55580f552065913d7cab3df04137e"
+        },
+        {
+            "path": "src/agents/live-signals.test.ts",
+            "sha": "a6fa20775b6c728e1ad6e67a76ebfc5300e07a56"
+        },
+        {
+            "path": "src/agents/live-signals.ts",
+            "sha": "b86d4d0308e6b750787f71c05582ce9f917406a9"
+        },
+        {
+            "path": "src/agents/live-tool-results.test.ts",
+            "sha": "609194a5e8e5a8a7dc0eb2a100a70d7533d8ee46"
+        },
+        {
+            "path": "src/agents/live-tool-results.ts",
+            "sha": "8946390d51ab3f585db323a1e911ae1693145a7a"
+        },
+        {
+            "path": "src/agents/read-transcript.test.ts",
+            "sha": "025a8c269db67c7f8ac149273ec5f571fc737b36"
+        },
+        {
+            "path": "src/agents/read-transcript.ts",
+            "sha": "e2004621f7f571626eabba89c2dfb0cc97e977d9"
+        },
+        {
+            "path": "src/agents/sdk-agent-session.test.ts",
+            "sha": "735840b6f3adf75058e0716e1f3eb8d4a0a9b339"
+        },
+        {
+            "path": "src/agents/sdk-agent-session.ts",
+            "sha": "20dbd068a0521b7ed78d15d6da94713fbaefe33e"
+        },
+        {
+            "path": "src/agents/session-core.test.ts",
+            "sha": "e3bbd4931fe056438f7cb64768fdfd8c973ec4f7"
+        },
+        {
+            "path": "src/agents/session-core.ts",
+            "sha": "9d44ede5226ba74ee81d2cda785d3ddccd595e62"
+        },
+        {
+            "path": "src/domain/session/command-name.test.ts",
+            "sha": "ff7a473ef909a0c005df0181f11bec41b51a43da"
+        },
+        {
+            "path": "src/domain/session/command-name.ts",
+            "sha": "df6d7782952eb9a07e6c267cb2bf7910beec9b7f"
+        },
+        {
+            "path": "src/domain/session/foreground-tasks.test.ts",
+            "sha": "81dfb950fb384c4ee36ae4a03bb54aeee9116af8"
+        },
+        {
+            "path": "src/domain/session/foreground-tasks.ts",
+            "sha": "ec6a8ed9165754019289f3d6a875ab61b8dde221"
+        },
+        {
+            "path": "src/domain/session/live-message.ts",
+            "sha": "520ff05e4647395fa6b31ed6d78ad9935083b9ff"
+        },
+        {
+            "path": "src/domain/session/meter.test.ts",
+            "sha": "cadfe3c6c2ab50612e99eae76f185c97423d4255"
+        },
+        {
+            "path": "src/domain/session/meter.ts",
+            "sha": "f0166c484bc9b34119fb15ef3ae38e8aa24b1be7"
+        },
+        {
+            "path": "src/domain/session/path-tail.test.ts",
+            "sha": "d78dce566fa138798fa45e0a095a82bcd44d4352"
+        },
+        {
+            "path": "src/domain/session/path-tail.ts",
+            "sha": "a6fc654f70d52ebc06e6627cb36b24b70d25364e"
+        },
+        {
+            "path": "src/domain/session/system-event.test.ts",
+            "sha": "21a617d95c251599a347ec505cf642daa0d432fc"
+        },
+        {
+            "path": "src/domain/session/system-event.ts",
+            "sha": "022c9339d51a89e8cc920ab5181e393b3462bed2"
+        },
+        {
+            "path": "src/domain/session/tool-result.ts",
+            "sha": "b417a0c9178f0ee07dba050a859f989d2cfda282"
+        },
+        {
+            "path": "src/domain/session/transcript.system-event.test.ts",
+            "sha": "b60b4897bd7cb54d0f1dcb1a313cc471da2eb506"
+        },
+        {
+            "path": "src/domain/session/transcript.test.ts",
+            "sha": "1f817003c31d48f0cd3bbb6d0a561eeeec8bebb8"
+        },
+        {
+            "path": "src/domain/session/transcript.ts",
+            "sha": "6e7de9a20023265f82b8aa431c67876f72902044"
+        },
+        {
+            "path": "src/domain/session/transcript-dto.ts",
+            "sha": "bcee5d81f299ca64017f942a5ff3dc302d8be1d3"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/agent-plan.aui.test.tsx",
+            "sha": "19aa73da28fd4eb99afff961c7b875bfba31f260"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/agent-plan.aui.tsx",
+            "sha": "f077a8dbdc9a22331308a664d69a9fa552d1c5b6"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/markdown-body.test.tsx",
+            "sha": "dcae68ec2b4c2a94dbc5811453ea061de9d97ca7"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/markdown-body.tsx",
+            "sha": "35607c124f93f1e38e6cfd6498737c93254a3867"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/nested-render.fe001.test.tsx",
+            "sha": "6e3174b81221dae0606818d445d7d37905cd480f"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/nested-tool-context.ts",
+            "sha": "148785be26a555a12a81cac2158cae15ca58a057"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/subagent.aui.test.tsx",
+            "sha": "f80c6fd20368827e0ff1adcfc506ad7215d8ecc0"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/subagent.aui.tsx",
+            "sha": "eb817ed3078838277eec6499bebf756cb5f7174a"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/thread.aui.tsx",
+            "sha": "9d4627a45372c0976c74fbcf3fd31d98b0ed11ca"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/tool-registry.aui.tsx",
+            "sha": "81471eb02173afedb88259ed06ee8b09cb460743"
+        },
+        {
+            "path": "src/renderer/src/features/chat/activity-bins.test.ts",
+            "sha": "ee7974d39b0e6efdad6dd1720ca489ee3971e698"
+        },
+        {
+            "path": "src/renderer/src/features/chat/ChatScreen.o2.test.tsx",
+            "sha": "dd768fc1e633da446fce4a7a13f5ae70f381201f"
+        },
+        {
+            "path": "src/renderer/src/features/chat/ChatScreen.test.tsx",
+            "sha": "a82a3d0f72b0ba97542e378d5fe5c03e7afe4e50"
+        },
+        {
+            "path": "src/renderer/src/features/chat/convert.ts",
+            "sha": "e5038765f54c063ad9a94a5e2c48797344ea4e15"
+        },
+        {
+            "path": "src/renderer/src/features/chat/labels.ts",
+            "sha": "77c9d0c818e540eac657b3de8bff9145ac9e7d86"
+        },
+        {
+            "path": "src/renderer/src/features/chat/masked-hook-ordinals.test.ts",
+            "sha": "5bf872c4c1b5af7d5cf2f63a54bc1ef792157ddd"
+        },
+        {
+            "path": "src/renderer/src/features/chat/masked-hook-ordinals.ts",
+            "sha": "e424cbb572c55cfdca229db7872f9632f454d7c6"
+        },
+        {
+            "path": "src/renderer/src/features/chat/path-tail.ts",
+            "sha": "a3badc07623ca49f511b2c724b1b47701badf94f"
+        },
+        {
+            "path": "src/renderer/src/features/chat/transcript-announcements.ts",
+            "sha": "edfcaf4af94742eff027470f48627eea0ce075e2"
+        },
+        {
+            "path": "src/renderer/src/features/chat/TranscriptAnnouncer.test.tsx",
+            "sha": "d897484551c9c5ddceea03ef9cd13ca9b0c67a62"
+        },
+        {
+            "path": "src/renderer/src/features/chat/transcript-context.ts",
+            "sha": "7d17882792ce13820ee236fad42259dc4174a15a"
+        },
+        {
+            "path": "src/renderer/src/features/session/LivePane.o2.test.tsx",
+            "sha": "69d9e6e1b0416304320649bca8a4cff08d25476a"
+        },
+        {
+            "path": "src/renderer/src/features/session/running-session-store.test.ts",
+            "sha": "e518cdfa015509a4c1fb5c8e933defd2619eee1b"
+        },
+        {
+            "path": "src/renderer/src/features/session/running-session-store.ts",
+            "sha": "654fe3da1c7594c46f570d2c1a193016e3e579f0"
+        },
+        {
+            "path": "src/renderer/src/features/session/running-session-types.ts",
+            "sha": "ea7e0c658c7d25c50fe106d86f0c748c351a25ea"
+        },
+        {
+            "path": "src/renderer/src/features/session/session-view.ts",
+            "sha": "41eb0fb805335bcd662b350b844413afdf35df7e"
+        },
+        {
+            "path": "src/renderer/src/features/shell/BackgroundTasksTab.test.tsx",
+            "sha": "e1cbc43800a865694016a4f32a225a4ee405a5af"
+        },
+        {
+            "path": "src/renderer/src/features/shell/BackgroundTasksTab.tsx",
+            "sha": "062a13fb05b049a5dac41f73b5ee2017258a447d"
+        },
+        {
+            "path": "src/renderer/src/features/shell/labels.ts",
+            "sha": "1fa183951d25dcf18a4365dd6c2ee75fe2953eba"
+        },
+        {
+            "path": "src/renderer/src/features/shell/panel-tabs.test.ts",
+            "sha": "f6a55e0cc396b87a646af6791bebb1f9fa7437e7"
+        },
+        {
+            "path": "src/renderer/src/features/shell/panel-tabs.ts",
+            "sha": "5a8fc2348d742e83cf29038d952c2762c243adc8"
+        },
+        {
+            "path": "src/renderer/src/features/shell/RightPanel.tabs.test.tsx",
+            "sha": "86553b982cff2fc90e382bc2470d1e2c447b1e8e"
+        },
+        {
+            "path": "src/renderer/src/stores/ui.ts",
+            "sha": "057e9aa21cdcd86e7843a36d114afbad14f812ae"
+        },
+        {
+            "path": "tests/rule-fixtures/a-direct/sdk-alias-to-allowed-name.ts.fixture",
+            "sha": "9161e41dcf4f6d5e751d067d5c160705e7c838da"
+        },
+        {
+            "path": "tests/rule-fixtures/a-direct/sdk-get-subagent-messages-outside.ts.fixture",
+            "sha": "ddfc1d4456b99a62f46144f343bebc3fc47dcffd"
+        },
+        {
+            "path": "tests/rule-fixtures/a-direct/sdk-list-subagents-outside.ts.fixture",
+            "sha": "5d079e11aabefba51aba93061dbfa18c4106605c"
+        },
+        {
+            "path": "tests/rule-fixtures/a-direct/sdk-second-import-statement.ts.fixture",
+            "sha": "251d212f5c0f5192f00baa216018d26999c95a59"
+        },
+        {
+            "path": "tests/rule-fixtures/expected.mjs",
+            "sha": "f65948aff2b7b778e06e9c96608b5e58f9bc351d"
+        }
+    ],
+    "fr_coverage": [],
+    "viewpoint_coverage": {
+        "A": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+        "B": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+        "C": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+        "D": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb (platform-boundary-reviewer \u3082 drift \u306a\u3057)",
+        "E": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+        "F": "High:3 (lint prettier warning) Medium:6 Low:9",
+        "G": "platform-boundary-reviewer: Critical:0 High:0 Medium:2 Low:1",
+        "H": "Medium:1 Low:2"
+    },
+    "tracks": {
+        "lint-agent": {
+            "violations": 3,
+            "exit_code": 0,
+            "detectors": [
+                "lint",
+                "typecheck",
+                "depcruise",
+                "check:constitution"
+            ]
+        },
+        "test-agent": {
+            "passed": 3449,
+            "failed": 0,
+            "exit_code": 0,
+            "scope": "full"
+        },
+        "convention-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "lint_input": "lint-agent"
+        },
+        "platform-boundary-reviewer": {
+            "critical": 0,
+            "high": 0,
+            "medium": 2,
+            "low": 1
+        }
+    },
+    "skipped_reviewers": [
+        {
+            "name": "a11y-reviewer",
+            "reason": "gates=['pr-gate'] \u306b code-gate \u304c\u7121\u3044"
+        },
+        {
+            "name": "database-reviewer",
+            "reason": "auto_invoke_patterns \u306b\u4e00\u81f4\u3059\u308b\u5909\u66f4\u30d5\u30a1\u30a4\u30eb\u304c\u7121\u3044 (\u5909\u66f4 76 \u4ef6 / pattern 5 \u4ef6)"
+        },
+        {
+            "name": "ux-reviewer",
+            "reason": "gates=['pr-gate'] \u306b code-gate \u304c\u7121\u3044"
+        },
+        {
+            "name": "ui-coverage-reviewer",
+            "reason": "gates=['pr-gate'] \u306b code-gate \u304c\u7121\u3044"
+        }
+    ],
+    "cascade_demotions": 0,
+    "iter_history": [
+        {
+            "iter": 1,
+            "must_fix": 0,
+            "skipped": 0,
+            "error": 0
+        }
+    ],
+    "verdict": "PASS"
+}

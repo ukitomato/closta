@@ -8,7 +8,7 @@ import type {
 import type { ElicitationPrompt } from '@domain/session/elicitation'
 import type { SessionLaunchConfig } from '@domain/session/launch-config'
 import type { LaunchOrigin } from '@domain/session/launch-usage'
-import type { MeterUpdate, PermissionModeKey } from '@domain/session/meter'
+import type { BackgroundTaskEntry, MeterUpdate, PermissionModeKey } from '@domain/session/meter'
 import type { CommandsMeter, InitReportMeter } from '@domain/session/session-init-report'
 import type { SessionRunState } from '@domain/session/run-state'
 import type { SessionStatusUpdate } from '@domain/session/status-update'
@@ -125,6 +125,11 @@ export interface SessionMeters {
   readonly commands: CommandsMeter | null
   /** スラッシュコマンドの名前の集合の出所 (合流の規則。015 data-model §2)。どちらもまだ無ければ null。 */
   readonly slashCommandSource: 'init-report' | 'commands' | null
+  /**
+   * 今動いている背景の task の一覧 (`background-tasks`。O-11 / AD-056 Decision 2。最新の値で置き換える)。まだ届いていなければ
+   * null (0 件は空の配列)。セッションのプロセスの起動で null に戻る。永続化しない。
+   */
+  readonly backgroundTasks: readonly BackgroundTaskEntry[] | null
 }
 
 /** スラッシュコマンドの一覧の 1 行 (構成のタブが出す。`description` / `argumentHint` は `commands` に無ければ null)。 */
@@ -151,7 +156,8 @@ export const EMPTY_SESSION_METERS: SessionMeters = {
   toolElapsed: new Map(),
   initReport: null,
   commands: null,
-  slashCommandSource: null
+  slashCommandSource: null,
+  backgroundTasks: null
 }
 
 /** 行の状態に入った時刻 (O-1 / FR-005。glossary Status since)。 */

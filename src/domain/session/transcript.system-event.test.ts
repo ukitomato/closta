@@ -196,3 +196,52 @@ describe('過去ログのシステムイベントの行の時刻 (O-9 BE-010 / d
     expect(out[0]?.createdAt).toBeNull()
   })
 })
+
+describe('過去ログの後から背景に移った task (O-11 BE-022)', () => {
+  const bashCall = (command: string): SessionMessageLike => ({
+    type: 'assistant',
+    uuid: 'a1',
+    message: {
+      role: 'assistant',
+      content: [{ type: 'tool_use', id: 'toolu_1', name: 'Bash', input: { command } }]
+    }
+  })
+  const fgStart = (extra: Record<string, unknown> = {}): SessionMessageLike =>
+    system('s1', {
+      subtype: 'task_started',
+      task_id: 't1',
+      description: 'SECRET-DESC',
+      task_type: 'local_bash',
+      tool_use_id: 'toolu_1',
+      ...extra
+    })
+  const bgMove = system('s2', {
+    subtype: 'task_updated',
+    task_id: 't1',
+    patch: { is_backgrounded: true }
+  })
+
+  it('前景で始まり task_updated で背景に移った task が backgrounded-task の 1 行になり、名前は Bash のコマンドの名前', () => {
+    const out = toTranscriptMessages([bashCall('npm run build'), fgStart(), bgMove])
+    const rows = out.filter((m) => m.id === 'task:t1')
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.parts[0]).toMatchObject({
+      category: 'backgrounded-task',
+      opens: true,
+      name: 'npm',
+      detail: 'local_bash',
+      status: 'running'
+    })
+    expect(JSON.stringify(out)).not.toContain('SECRET-DESC')
+  })
+
+  it('tool_use_id が過去ログに無いと名前は空', () => {
+    const out = toTranscriptMessages([fgStart(), bgMove])
+    expect(out.find((m) => m.id === 'task:t1')?.parts[0]).toMatchObject({ name: '' })
+  })
+
+  it('背景に移さなかった前景の task は行にならない', () => {
+    const out = toTranscriptMessages([bashCall('npm x'), fgStart()])
+    expect(out.find((m) => m.id === 'task:t1')).toBeUndefined()
+  })
+})
