@@ -17,6 +17,9 @@ related_adrs:
   - docs/decisions/0044-ui-coverage-assignment.md
   - docs/decisions/0047-session-meter-and-failure-reasons.md
   - docs/decisions/0049-boundaries-retraction-and-o11-split.md
+  - docs/decisions/0052-ask-user-question-answer-projection.md
+  - docs/decisions/0053-elicitation-callback-and-user-dialog.md
+  - docs/decisions/0057-elicitation-sdk-side-cancel-known-limit.md
 related_specs:
   - specs/002-session-cross-folder-session-enumeration/spec.md
   - specs/005-session-launch-and-streaming/spec.md
@@ -29,6 +32,7 @@ related_specs:
   - specs/014-ui-metering-and-limits/spec.md
   - specs/015-ui-mcp-elicitation-commands/spec.md
   - specs/016-ui-boundaries-and-tool-displays/spec.md
+  - specs/018-session-answer-ui-and-composer-commands/spec.md
 ---
 
 # Domain Charter: session
@@ -238,6 +242,9 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
 - [AD-047](../../decisions/0047-session-meter-and-failure-reasons.md) — 計量 (`meter`) と失敗の理由のキーを session の契約に足す (O-4。ui の feature が本 domain の契約を広げた。U-1)
 - [AD-049](../../decisions/0049-boundaries-retraction-and-o11-split.md) — 拒否の取り消し (`meter` の `retraction`)・`informational` の本文の伏せ字・項目 16 の `readFile`・O-11 への分割 (O-6。ui の feature が本 domain の契約を広げた。U-6)
 - [AD-051](../../decisions/0051-message-time-source-and-display-only.md) — メッセージの時刻 (`createdAt`) の出所と表示だけの用途 (O-9。ui の feature が本 domain の契約の値を広げた。U-1)
+- [AD-052](../../decisions/0052-ask-user-question-answer-projection.md) — `AskUserQuestion` の回答の制約付き射影 (`PermissionDecision.answers`。O-10。ui の feature が本 domain の契約を広げた)
+- [AD-053](../../decisions/0053-elicitation-callback-and-user-dialog.md) — `onElicitation` を足し `onUserDialog` / `supportedDialogKinds` は渡さない (`SessionEvent` の `elicitation-request`・`SessionControl` の `respond-elicitation`。O-10)
+- [AD-057](../../decisions/0057-elicitation-sdk-side-cancel-known-limit.md) — SDK の側で中断された Elicitation のカードが残る既知の限界 (AD-053 Decision 3 の読み替え。O-10 U-10)
 
 ## Related Specs
 

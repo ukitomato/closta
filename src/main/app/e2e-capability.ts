@@ -304,6 +304,15 @@ function createE2eSupervisorConnection(): SupervisorConnection {
       }
       sessions.set(sessionId, s)
       setState(sessionId, s, 'launching')
+      // コマンドの候補の一覧 (O-10 SC-006 の E2E が popover の正の対照を取れるように流す)。
+      emit(s, {
+        kind: 'meter',
+        meter: {
+          type: 'commands',
+          commands: [{ name: 'review', description: 'E2E stub のコマンド', argumentHint: '' }],
+          omitted: 0
+        }
+      })
       return { ok: true, port: channel.port2, generation: 1 }
     },
     control(sessionId, control: SessionControl) {

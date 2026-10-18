@@ -19,6 +19,7 @@ related_adrs:
   - docs/decisions/0051-message-time-source-and-display-only.md
   - docs/decisions/0052-ask-user-question-answer-projection.md
   - docs/decisions/0053-elicitation-callback-and-user-dialog.md
+  - docs/decisions/0057-elicitation-sdk-side-cancel-known-limit.md
 related_specs:
   - specs/003-ui-transcript-rendering/spec.md
   - specs/004-ui-tier-a-tool-display/spec.md
@@ -30,6 +31,7 @@ related_specs:
   - specs/014-ui-metering-and-limits/spec.md
   - specs/015-ui-mcp-elicitation-commands/spec.md
   - specs/016-ui-boundaries-and-tool-displays/spec.md
+  - specs/018-session-answer-ui-and-composer-commands/spec.md
 ---
 
 # Domain Charter: ui

@@ -108,6 +108,14 @@ function QuestionGroup({
           </span>
         ) : null}
         <span className="text-foreground font-medium">{question.question}</span>
+        {unanswered ? (
+          <span
+            data-slot="ask-user-question-unanswered-mark"
+            className="text-destructive text-xs font-medium"
+          >
+            ({APPROVAL_CARD_LABELS.unansweredMark})
+          </span>
+        ) : null}
       </legend>
       {question.options.map((option, i) => (
         <label key={i} className="flex cursor-pointer items-start gap-2 text-sm">
@@ -196,7 +204,10 @@ export function AskUserQuestionAnswer({
 
   return (
     <>
-      <div className="mt-2 flex flex-col gap-2" data-slot="ask-user-question-answer">
+      <div
+        className="mt-2 flex max-h-[50dvh] flex-col gap-2 overflow-y-auto"
+        data-slot="ask-user-question-answer"
+      >
         {questions.map((question, i) => (
           <QuestionGroup
             key={i}

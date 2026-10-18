@@ -1,79 +1,81 @@
-# convention-reviewer Review: Claude Code からの問いに答える UI と composer のコマンドの候補 (O-10)
+# convention-reviewer Review: O-10 Claude Code からの問いに答える UI と composer のコマンドの候補 (018)
 
 **Run**: 2026-10-18
 **Reviewer**: convention-reviewer
 **Spec**: specs/018-session-answer-ui-and-composer-commands/spec.md
-**Gate**: code-gate iteration 1
+**Round**: code-gate iter 2
 
 ## 初回読了 viewpoint
 
-- FR/SC: FR-012 / FR-013 (labels 表に集約)、FR-005 / FR-006 / FR-008 (`elicitation.ts` 新設)、FR-001 / FR-003 (`agent-session.ts`)、FR-016 / FR-017 (`reviewers.yml`)、SC-009 / SC-010 (lint / depcruise)
-- touched files に該当する charter / Confirmation: session charter (domain は SDK を import しない / agents は Electron を import しない — depcruise exit 0)、ui charter (composer 部品は `features/chat`)、AD-045 (labels 表)、AD-037 (自前 keydown ガードなし)
-- A. 認可 / 認証 / secret 管理: 該当なし: security-reviewer の担当
-- B. 入力検証 / injection / CSP / 暗号: 該当なし: security-reviewer の担当
-- C. 業務不変条件 / Charter drift: 該当なし: architecture-reviewer の担当
-- D. Constitution / ADR drift: 該当なし: architecture-reviewer の担当
-- E. User Story / SC / AC / UX: 該当なし: po-reviewer の担当
-- F. 命名 / module / lint hookup: Critical:0 High:0 Medium:3 Low:3
-- G. optional reviewer 範囲: 該当なし: convention-reviewer の範囲外
-- H. テスト / coverage / observability / regression: High:0 Medium:1 Low:0 (M-001 の重複定数の同値を固定するテストが無い)
+- FR/SC: この diff が触るのは次の 4 件。Elicitation カードの項目ごとの理由 (data-model §3, U-6(e)/U-9)、AskUserQuestion の「未回答」の印、composer の候補が 0 件のときに popover を開かない matcher (SC-006 / US-3)、E2E の候補の正の対照 (SC-001 / SC-006)。
+- touched files に該当する charter / Confirmation: session charter と ui charter (関連 ADR と spec の追記のみ)。AD-052 / AD-053 / AD-057 (proposed) は charter への追記が済んでいる。
+- lint-agent JSON は受領した。exit_code は 0 で、5 コマンドとも 0 だった (eslint / tsc node / tsc web / depcruise / check:constitution)。非ゼロのコマンドは無いので、exit code 由来の Critical は 0 件。
+- A. 認可 / 認証 / secret 管理: 該当なし: convention-reviewer の owner 外
+- B. 入力検証 / injection / CSP / 暗号: 該当なし: convention-reviewer の owner 外
+- C. 業務不変条件 / Charter drift: 該当なし: convention-reviewer の owner 外
+- D. Constitution / ADR drift: 該当なし: convention-reviewer の owner 外 (check:constitution は 20 ok / 0 violations)
+- E. User Story / SC / AC / UX: 該当なし: convention-reviewer の owner 外
+- F. 命名 / module / lint hookup: Critical:0 High:0 Medium:1 Low:4
+- G. optional reviewer 範囲: 該当なし: convention-reviewer の owner 外
+- H. テスト / coverage / observability / regression: Critical:0 High:0 Medium:0 Low:0
+
+H の内訳:
+- F の指摘を検出する仕組みは lint (prettier/prettier) と depcruise。どちらも CI の lint で走る。
+- `createSlashMatcher` は `LivePane.composer.test.tsx` の 0 件ケースと e2e/ime.spec.ts の正の対照で検証されている。
+- `slashMatcher` は既存の `slash-commands.test.ts` が従来どおり検証している。
+- 既存の振る舞いは壊れていない。`slashMatcher` の export と呼び出しは残っている (`createSlashMatcher` が内部で呼ぶ)。`slashFormatter` と `searchSlashCommands` も変更されていない。
 
 ## スコープ要約
 
-lint-agent の JSON 受領済み。6 コマンドすべて exit_code 0 で exit_code 起因の Critical は 0 件。warning 9,920 件はすべて `prettier/prettier` で、9,891 件は CRLF の `Delete ␍`、実質 28 件。`__rulecheck__` の no-orphans は `.gitignore:71` で除外済み。plan の識別子名と実装は一致。新規 export で呼び元なしは `SUPPORTED_DIALOG_KINDS` (FR-005 の pin 用、意図どおり)。`console` / `eslint-disable` / `as any` / TODO は新規本番コードに 0 件。
+touched files は 11 本で、docs 3 本、E2E 1 本、main の E2E stub 1 本、renderer 5 本、テスト 1 本。lint / typecheck / depcruise / constitution check はすべて exit 0 で、error は 0 件。warning は prettier/prettier の 712 件だけだった。構造面では、新規の module や配置の変更は無い。命名は既存の規則に従っている (`createSlashMatcher` は `createSlashCommandAdapter` と対、`unansweredMark` / `fieldRequired` / `fieldInvalid` は labels.ts の既存形)。dead code も無い。
 
 ## Findings
 
-### [Medium] 同じ定数とヘルパーが domain の 2 ファイルに複製され、同値を固定するテストが無い (M-001) (scope: feature)
-- **観察**: `elicitation.ts:18` の `ANSWER_MAX_CODE_POINTS = 1000` は `agent-session.ts:314` の複製。`codePointLength` (elicitation.ts:113 / agent-session.ts:316)、`isPlainRecord` (:117 / :320) も重複
-- **同種事象探索**: `ANSWER_MAX_CODE_POINTS` 2 定義、`codePointLength|isPlainRecord` 各 2 件
-- **リスク/影響**: spec U-9 の「同じ述語を使う」が静かに割れうる
-- **推奨アクション**: 共通の小モジュールに 1 つだけ置くか、`agent-session.ts` が `elicitation.ts` から import する (循環にならない)。または同値 pin テスト
-- **根拠**: CONV-3 / CONV-5 / spec U-9
+### [Medium] ElicitationCard.tsx で新しい `<div elicitation-body>` の中身が再インデントされていない (M-001) (scope: feature)
 
-### [Medium] 500 行を超えたモジュールが 3 つ (M-002) (scope: feature)
-- **観察**: `session-core.ts` 430→614、`elicitation.ts` 新規 542、`LivePane.tsx` 501→567。既存超過も伸長 (`thread.aui.tsx` 1524, `running-session-store.ts` 852, `live-signals.ts` 857, `sdk-agent-session.ts` 782)
-- **同種事象探索**: 500 行超 12 ファイル、本 diff で新たに超過 3 件
-- **推奨アクション**: `createElicitationRegistry` / `createOnElicitation` の切り出し等。AD-050 によりマイルストーン末の棚卸しでよい
-- **根拠**: CONV-3
+- **観察**: `src/renderer/src/features/session/ElicitationCard.tsx:257` で `<div className="max-h-[50dvh] overflow-y-auto" data-slot="elicitation-body">` を足した。その内側の 258〜338 行は元のインデント (6 スペース) のままで、`</div>` は 339 行にある。prettier は内側を 8 スペースにするので、prettier/prettier に違反する。
+- lint-agent JSON はこのファイルに prettier/prettier の warning を 80 件挙げ、メッセージは「Delete `␍`」だった。しかし `git ls-files --eol` では作業コピーは `w/lf` で CR は 0 件だった。80 件の実体は CRLF ではなく、上記のインデントと、既存の 100 桁超の行 (235, 247, 273) と考えられる。
+- **同種事象探索**: `\r$` を `src` の touched files に Grep して 1 件 (e2e-capability.ts のみ)。ElicitationCard.tsx は CR 0 件。
+- **リスク/影響**: prettier/prettier は warning 扱いのため gate は止まらない。ただし format を走らせると差分が一気に出る。
+- **推奨アクション**: `node node_modules/prettier/bin/prettier.cjs --write src/renderer/src/features/session/ElicitationCard.tsx`。
+- **根拠**: `.prettierrc.yaml` (printWidth: 100)、eslint.config.mjs の prettier 設定。
+- **scope 根拠**: touched file の新規追加行が起点。
 
-### [Medium] 実質の prettier 違反 28 件が CRLF の 9,891 件に埋もれている (M-003) (scope: feature)
-- **観察**: elicitation.ts:278,345 / elicitation.test.ts (8) / ElicitationCard.tsx:162,193,203,227 / ElicitationCard.test.tsx (4) / session-core.elicitation.test.ts:226 / LivePane.tsx:289 / LivePane.o2.test.tsx:1094 / running-session-store.ts:704 / session-event-decoder.test.ts (4) / useLiveSession.ts:39 / elicitation-through.test.tsx:85。CRLF 22 ファイルは index が `i/lf`、`eol=lf` でコミット時に正規化
-- **同種事象探索**: CRLF 以外の `prettier/prettier` 28 件
-- **推奨アクション**: 対象ファイルに `prettier --write`
-- **根拠**: CONV-1 (warning は Medium)
+### [Low] src/main/app/e2e-capability.ts の作業コピーが CRLF (L-001) (scope: feature)
 
-### [Low] `agent-session.ts:277-282` の旧設計コメントが AD-052 の現状と矛盾 (L-001) (scope: feature)
-- **観察**: 「`updatedInput` を型として持たない」と書くが `:300-304` の `AskUserQuestionResult` は持つ。`:288-292` の「全 return はこの関数を通す」も同様
-- **同種事象探索**: `updatedInput` in src/domain で旧コメント 1 件
-- **推奨アクション**: 注記を AD-052 に合わせる
-- **根拠**: CONV-6
+- **観察**: `git ls-files --eol` の結果は `i/lf w/crlf attr/text=auto eol=lf`。632 行すべてが CR 付きで、lint の warning 632 件はこれ。`.gitattributes` が `eol=lf` を固定しているため、コミットと CI の checkout では LF になる。
+- **リスク/影響**: ローカルの lint の warning 件数が膨らむだけで、CI への影響は無い。
+- **推奨アクション**: 任意。LF に戻す。
+- **同種事象探索**: 他の touched src に CR は 0 件。
 
-### [Low] `composer-extensions.tsx` が kebab-case で React component を export (L-002) (scope: feature)
-- **観察**: `features/chat` の component .tsx は PascalCase。`ask-user-question-args.ts` / `composer-extensions-context.ts` は plan の Project Structure に無い
-- **同種事象探索**: kebab-case の非テスト .tsx 1 件
-- **推奨アクション**: リネームか plan への追記
-- **根拠**: CONV-2 / CONV-6
+### [Low] 未追跡の `.vitest/` が .gitignore に無い (L-002) (scope: feature)
 
-### [Low] `.vitest/` が未追跡かつ未 ignore (L-003) (scope: system)
-- **観察**: `.vitest/json/output.json`。`.gitignore` に記載 0 件
-- **推奨アクション**: `.gitignore` に `.vitest/` を足す
-- **根拠**: CONV-3
+- **観察**: git status の `?? .vitest/`。`git check-ignore -v .vitest` もマッチしなかった。
+- **リスク/影響**: `git add -A` でキャッシュの類が混入しうる。
+- **推奨アクション**: `.gitignore` に `.vitest/` を足すか、コミット時に除外する。
+
+### [Low] ADR 番号が 0053 から 0057 に飛んでいる (L-003) (scope: out-of-scope)
+
+- **観察**: `docs/decisions/` は 0053 の次が 0057。`AD-054` 〜 `AD-056` の参照は 0 件。019 ブランチ側の予約番号の可能性がある。
+- **推奨アクション**: 019 側の予約であれば対応不要。そうでなければ AD-057 に理由を 1 行足す。
+
+### [Low] src/main/app/e2e-capability.ts が 500 行を超えている (L-004) (scope: feature)
+
+- **観察**: 632 行 (CONV-3 の warning 閾値は 500 行)。今回の diff は +9 行で、元から超過していた。
+- **推奨アクション**: 今回の対象外。分割は別の spec で扱う。
 
 ## 同種事象探索 cascade summary
 
+Critical は 0 件のため、cascade summary の対象行は無い。
+
 | 指摘 ID | Grep query | 該当件数 | path:line |
 |---|---|---|---|
-| M-001 | `ANSWER_MAX_CODE_POINTS` | 2 | agent-session.ts:314 / elicitation.ts:18 |
-| M-002 | 行数 count | 3 | session-core.ts / elicitation.ts / LivePane.tsx |
-| M-003 | prettier (CRLF 以外) | 28 | 上記 |
-| L-001 | `updatedInput` (domain) | 1 | agent-session.ts:279 |
-| L-002 | kebab-case .tsx | 1 | composer-extensions.tsx |
-| L-003 | `\.vitest` (.gitignore) | 0 | - |
+| (M-001 参考) | `\r$` を touched src に | 1 | src/main/app/e2e-capability.ts |
 
 ## Verdict
 
 - Critical: 0
 - High: 0
-- Medium: 3
-- Low: 3
+- Medium: 1
+- Low: 4
+- 補足: 循環依存の検査は lint-agent の depcruise (exit 0) に依拠した。

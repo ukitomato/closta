@@ -1,36 +1,44 @@
-# lint-agent: code-gate iteration 1
+# lint-agent — code-gate iter 2
 
-Detectors: lint (ESLint, by lint-agent) + typecheck / depcruise / check:constitution (run by the code-gate invoker, because lint-agent ran only ESLint).
+**Run**: 2026-10-18 (re-run from status reviewing after pr-gate fixes)
+**Scope**: .code-gate-scope.txt (11 files)
 
 ```json
 {
+  "detectors": [
+    {"name": "lint", "exit_code": 0, "note": "ESLint 0 errors project-wide; warnings only"},
+    {"name": "typecheck", "exit_code": 0, "note": "tsconfig.node.json and tsconfig.web.json clean"},
+    {"name": "depcruise", "exit_code": 0, "note": "no violations (483 modules, 2522 dependencies)"},
+    {"name": "check:constitution", "exit_code": 0, "note": "20 ok / 0 violations / 1 not-applicable"}
+  ],
   "exit_code": 0,
-  "detectors": ["lint", "typecheck", "depcruise", "check:constitution"],
-  "commands": [
-    {"command": "node node_modules/eslint/bin/eslint.js --format json <55 touched .ts/.tsx/.mjs>", "exit_code": 0},
-    {"command": "node node_modules/typescript/bin/tsc --noEmit -p tsconfig.node.json --composite false", "exit_code": 0},
-    {"command": "node node_modules/typescript/bin/tsc --noEmit -p tsconfig.web.json --composite false", "exit_code": 0},
-    {"command": "node node_modules/typescript/bin/tsc --noEmit -p e2e/tsconfig.json", "exit_code": 0},
-    {"command": "node node_modules/dependency-cruiser/bin/dependency-cruise.mjs src", "exit_code": 0,
-     "note": "0 errors, 1 warning: no-orphans src/agents/__rulecheck__/coordinator-helper-json-parse.ts (scope 外。ルール検証の展開残りと見られる)"},
-    {"command": "node scripts/constitution/check.mjs", "exit_code": 0, "note": "21 項目 ok 20 / 違反 0 / 検査対象なし 1"}
+  "scope": "touched-files",
+  "touched_count": 11,
+  "violations": [
+    {"path": "src/main/app/e2e-capability.ts", "rule": "prettier/prettier", "severity": "warning", "count": 632, "message": "Delete CR (CRLF line endings in working copy)"},
+    {"path": "src/renderer/src/features/session/ElicitationCard.tsx", "rule": "prettier/prettier", "severity": "warning", "count": 80, "message": "Delete CR (CRLF line endings in working copy)"}
   ],
-  "violation_count_by_severity": {"error": 0, "warning": 9920, "info": 0},
-  "crlf_only_total": 9891,
-  "non_crlf_prettier_warnings": 28,
-  "non_crlf_files": [
-    "src/agents/session-core.elicitation.test.ts:226",
-    "src/domain/session/elicitation.test.ts:100,145,185,188,207,208,245,332",
-    "src/domain/session/elicitation.ts:278,345",
-    "src/renderer/src/features/session/ElicitationCard.test.tsx:49,108,186,219",
-    "src/renderer/src/features/session/ElicitationCard.tsx:162,193,203,227",
-    "src/renderer/src/features/session/LivePane.o2.test.tsx:1094",
-    "src/renderer/src/features/session/LivePane.tsx:289",
-    "src/renderer/src/features/session/running-session-store.ts:704",
-    "src/renderer/src/features/session/session-event-decoder.test.ts:333,340,349,351",
-    "src/renderer/src/features/session/useLiveSession.ts:39",
-    "tests/elicitation/elicitation-through.test.tsx:85"
-  ],
-  "other": ["e2e/ime.spec.ts: File ignored because of a matching ignore pattern"]
+  "violation_count_by_severity": {"error": 0, "warning": 712, "info": 0}
 }
 ```
+
+test:rules not run (code-gate does not run rule verification).
+
+## Severity translation (Phase 4)
+
+| Severity | Count | Note |
+|---|---|---|
+| Critical | 0 | lint exit_code 0 |
+| MUST_FIX | 0 | no lint errors |
+| High | 2 | prettier/prettier warning (CRLF), aggregated per file |
+
+## 初回読了 viewpoint
+
+- A. 該当なし: pr-gate 専任
+- B. 該当なし: pr-gate 専任
+- C. 該当なし: pr-gate 専任
+- D. 該当なし: pr-gate 専任
+- E. 該当なし: pr-gate 専任
+- F. High:2 (CRLF line endings)
+- G. 該当なし: lint-agent は stack 別 reviewer ではない
+- H. Critical:0 High:0 Medium:0 Low:0 (0 件確認: lint error / typecheck / depcruise / constitution 違反なし)

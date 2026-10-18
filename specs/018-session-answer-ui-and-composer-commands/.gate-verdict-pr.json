@@ -1,0 +1,575 @@
+{
+    "gate": "pr",
+    "run": "2026-10-18",
+    "spec_dir": "specs/018-session-answer-ui-and-composer-commands",
+    "spec_id": "018-session-answer-ui-and-composer-commands",
+    "round": 1,
+    "base_branch": "main",
+    "head": "9fb6c5441d0f430f42435f14c8ae118ea278df74",
+    "diff_stat": {
+        "files": 93,
+        "additions": 8209,
+        "deletions": 216
+    },
+    "severity_counts": {
+        "critical": 0,
+        "high": 8,
+        "medium": 14,
+        "low": 15
+    },
+    "raw_severity_counts": {
+        "critical": 0,
+        "high": 10,
+        "medium": 17,
+        "low": 15
+    },
+    "convergence": {
+        "resolved_from_prev": 0,
+        "new_in_round": 8,
+        "unresolved": 0
+    },
+    "inheritance": "none (round 1)",
+    "round_history": [
+        {
+            "round": 1,
+            "head": "9fb6c5441d0f430f42435f14c8ae118ea278df74",
+            "critical": 0,
+            "high": 8,
+            "convergence": {
+                "resolved_from_prev": 0,
+                "new_in_round": 8,
+                "unresolved": 0
+            }
+        }
+    ],
+    "high_findings": [
+        {
+            "id": "H-001",
+            "origin": [
+                "ux-reviewer:H-001",
+                "po-reviewer:H-001",
+                "ux-reviewer:H-003",
+                "po-reviewer:M-004"
+            ],
+            "where": "src/renderer/src/features/chat/slash-commands.ts:79",
+            "title": "0 \u4ef6\u4e00\u81f4\u3067 popover \u304c Enter \u3092\u596a\u3044\u9001\u4fe1\u3067\u304d\u306a\u3044"
+        },
+        {
+            "id": "H-002",
+            "origin": [
+                "ux-reviewer:H-002"
+            ],
+            "where": "src/renderer/src/features/session/LivePane.tsx:211",
+            "title": "\u554f\u3044\u306e\u30ab\u30fc\u30c9\u306b\u9ad8\u3055\u4e0a\u9650\u30fb\u30b9\u30af\u30ed\u30fc\u30eb\u304c\u7121\u3044"
+        },
+        {
+            "id": "H-003",
+            "origin": [
+                "po-reviewer:H-002"
+            ],
+            "where": "e2e/ime.spec.ts:93",
+            "title": "SC-006 \u306e E2E \u304c\u4e2d\u8eab\u306e\u7121\u3044\u691c\u67fb"
+        },
+        {
+            "id": "H-004",
+            "origin": [
+                "architecture-reviewer:H-001"
+            ],
+            "where": "docs/decisions/0053-elicitation-callback-and-user-dialog.md:40",
+            "title": "AD-053 Decision 3 \u3068 U-10 \u306e drift"
+        },
+        {
+            "id": "H-005",
+            "origin": [
+                "architecture-reviewer:H-002"
+            ],
+            "where": "docs/domains/session/charter.md:227",
+            "title": "charter \u306e Related ADRs / related_specs \u306e\u8ffd\u968f\u6f0f\u308c"
+        },
+        {
+            "id": "H-006",
+            "origin": [
+                "ui-coverage-reviewer:H-001"
+            ],
+            "where": "docs/ui-coverage.md:79",
+            "title": "elicitation_complete \u306e\u904e\u53bb\u30ed\u30b0\u304c\u6301\u3061\u4e3b\u306e\u3044\u306a\u3044\u5ef6\u671f"
+        },
+        {
+            "id": "H-007",
+            "origin": [
+                "a11y-reviewer:H-001"
+            ],
+            "where": "src/renderer/src/features/session/AskUserQuestionAnswer.tsx:90",
+            "title": "\u672a\u56de\u7b54\u306e\u7279\u5b9a\u304c\u8272\u3060\u3051"
+        },
+        {
+            "id": "H-008",
+            "origin": [
+                "a11y-reviewer:H-002",
+                "ux-reviewer:M-002",
+                "po-reviewer:M-001"
+            ],
+            "where": "src/renderer/src/features/session/ElicitationCard.tsx:284",
+            "title": "form \u306e\u5165\u529b\u30a8\u30e9\u30fc\u304c\u9805\u76ee\u3092\u7279\u5b9a\u3057\u306a\u3044"
+        }
+    ],
+    "suppressed_by_code_gate": [],
+    "touched_files": [
+        {
+            "path": ".specify/spec-gate/reviewers.yml",
+            "sha": "dce7d033eb8d6c39a1715880e39634e209c0bfd0"
+        },
+        {
+            "path": "docs/decisions/0052-ask-user-question-answer-projection.md",
+            "sha": "e162a76a27b91cb935543fb0a857a0cccaad11b4"
+        },
+        {
+            "path": "docs/decisions/0053-elicitation-callback-and-user-dialog.md",
+            "sha": "ada7ee333ec1abe70c7a0f0303dffa9aa85b8e01"
+        },
+        {
+            "path": "docs/domains/_overview.md",
+            "sha": "f937543fe2164202f52900e91897136ef136eac1"
+        },
+        {
+            "path": "docs/domains/session/charter.md",
+            "sha": "b6a4e29f1ce2a87544b01f8bd8e5cde6f0dd206c"
+        },
+        {
+            "path": "docs/domains/ui/charter.md",
+            "sha": "bfa07895019a712f052e7cb62f38cbb0fd0be5ae"
+        },
+        {
+            "path": "docs/glossary.md",
+            "sha": "d4c299d1db79663af21ae207fe3f5779c1eb7704"
+        },
+        {
+            "path": "docs/prompts.md",
+            "sha": "170661fc6fdae92617447452fbd4f402484fac5f"
+        },
+        {
+            "path": "docs/roadmap.md",
+            "sha": "ee80753a4dc4d563b1f14cb6db4f918ce0b77448"
+        },
+        {
+            "path": "docs/ui-coverage.md",
+            "sha": "3851136201f8435a22b48ccdf9fe93eb6cd88658"
+        },
+        {
+            "path": "e2e/ime.spec.ts",
+            "sha": "6b454ccdba7eaf060dc12e573c1f4c58c37fabec"
+        },
+        {
+            "path": "scripts/constitution/allowlists.mjs",
+            "sha": "1bcda2b46ac60273a023517ca6893199a958d193"
+        },
+        {
+            "path": "scripts/constitution/check.mjs",
+            "sha": "b2397d11dd80af8f21d1bace1e10392e2311c2fd"
+        },
+        {
+            "path": "specs/005-session-launch-and-streaming/contracts/session-launch.md",
+            "sha": "fa5fc01eeb316117ad0890bca020df77d828f6fd"
+        },
+        {
+            "path": "specs/005-session-launch-and-streaming/data-model.md",
+            "sha": "6736b12345d7fdeadfd5411d2c24dcf2a21a5b5f"
+        },
+        {
+            "path": "specs/018-session-answer-ui-and-composer-commands/.gate-verdict-code.json",
+            "sha": "0af6693575029d663519e7557a6141d2747f6542"
+        },
+        {
+            "path": "specs/018-session-answer-ui-and-composer-commands/.gate-verdict-design.json",
+            "sha": "f77d0a7b6bcc5a9733426a09264a404c332a16dc"
+        },
+        {
+            "path": "specs/018-session-answer-ui-and-composer-commands/.gate-verdict-design.json.20261017T102721",
+            "sha": "46dc129f717feb40b6113966779d2d42ce74ae93"
+        },
+        {
+            "path": "specs/018-session-answer-ui-and-composer-commands/analyze.md",
+            "sha": "ea95cdb3c823aae8d3a38d414058d31bdc5ea05d"
+        },
+        {
+            "path": "specs/018-session-answer-ui-and-composer-commands/analyze.md.20261017T102721",
+            "sha": "f8d6ff793760aaed15b7e36792dac246a52a40e2"
+        },
+        {
+            "path": "specs/018-session-answer-ui-and-composer-commands/architecture-reviewer.design-gate.md",
+            "sha": "38f5004d4cb5b18f019e5faca66f42d93857c89f"
+        },
+        {
+            "path": "specs/018-session-answer-ui-and-composer-commands/code-gate.md",
+            "sha": "7d8d5e773003566284bb222dfb236d988a05724c"
+        },
+        {
+            "path": "specs/018-session-answer-ui-and-composer-commands/contracts/session-answer-boundary.md",
+            "sha": "e332a8b80913ff44a596571d76ea71469657245c"
+        },
+        {
+            "path": "specs/018-session-answer-ui-and-composer-commands/convention-reviewer.code-gate.md",
+            "sha": "2334bfc99cf93bba2a736a73c8a0f3cfb89addb2"
+        },
+        {
+            "path": "specs/018-session-answer-ui-and-composer-commands/data-model.md",
+            "sha": "6e37d7ee05893d354379d0a4fe81c81ab2275982"
+        },
+        {
+            "path": "specs/018-session-answer-ui-and-composer-commands/design-gate.md",
+            "sha": "65875c96703f5b28397577cb261fcc69a542c46c"
+        },
+        {
+            "path": "specs/018-session-answer-ui-and-composer-commands/lint-agent.code-gate.md",
+            "sha": "f7f64d8eb9d0d436493aadd8575d8f26f652f2ed"
+        },
+        {
+            "path": "specs/018-session-answer-ui-and-composer-commands/plan.md",
+            "sha": "010534e5bb98f25bb78183d97d8580c33e673ac2"
+        },
+        {
+            "path": "specs/018-session-answer-ui-and-composer-commands/platform-boundary-reviewer.code-gate.md",
+            "sha": "fdf9f3a70c52dc67d528910963fd57b34af9fbc1"
+        },
+        {
+            "path": "specs/018-session-answer-ui-and-composer-commands/platform-boundary-reviewer.design-gate.md",
+            "sha": "9bda60d1dc5d9224276ccc8310ffdc7f3cd1c89f"
+        },
+        {
+            "path": "specs/018-session-answer-ui-and-composer-commands/po-reviewer.design-gate.md",
+            "sha": "cfc3d752045322cb12ea7f1458d4c42cade514ff"
+        },
+        {
+            "path": "specs/018-session-answer-ui-and-composer-commands/quickstart-results.md",
+            "sha": "f454abeeb17918c730d1394f1bcbb01f5825366b"
+        },
+        {
+            "path": "specs/018-session-answer-ui-and-composer-commands/quickstart.md",
+            "sha": "0d6e6f47dc1540cd59ab6aac7c28a06d795403f8"
+        },
+        {
+            "path": "specs/018-session-answer-ui-and-composer-commands/research.md",
+            "sha": "cabf3df31ec9ed144f272aecb89f8f06acb6e10c"
+        },
+        {
+            "path": "specs/018-session-answer-ui-and-composer-commands/security-reviewer.design-gate.md",
+            "sha": "f5d6b06061b9de2f5e4e7c98ca5464371f55581e"
+        },
+        {
+            "path": "specs/018-session-answer-ui-and-composer-commands/spec.md",
+            "sha": "2cdef2b6c5ec409a31f86520343a5b759925ea9a"
+        },
+        {
+            "path": "specs/018-session-answer-ui-and-composer-commands/tasks.md",
+            "sha": "32ddce35be0babb68c0ddd0aa1f5506ff83ab343"
+        },
+        {
+            "path": "specs/018-session-answer-ui-and-composer-commands/test-agent.code-gate.md",
+            "sha": "f92b10f9b478af52fa883171bd9fd04cd175885e"
+        },
+        {
+            "path": "specs/018-session-answer-ui-and-composer-commands/touched-files.txt",
+            "sha": "a1c2c90a00252a9a6a9adae5ba0c73013a1a06f7"
+        },
+        {
+            "path": "src/agents/live-signals.elicitation.test.ts",
+            "sha": "19ba51d2488f9001ec7998743b9517e473e0da38"
+        },
+        {
+            "path": "src/agents/live-signals.o6.test.ts",
+            "sha": "8fd78a3675dc69917d1c26c95479bf1d03bbb3fa"
+        },
+        {
+            "path": "src/agents/live-signals.ts",
+            "sha": "65935435c2528579046e4291b72b2e154977aad0"
+        },
+        {
+            "path": "src/agents/sdk-agent-session.test.ts",
+            "sha": "55554df265e6432d564970ab226a485235c74400"
+        },
+        {
+            "path": "src/agents/sdk-agent-session.ts",
+            "sha": "ab338e81e0471e533a67d51155d1343aa15a2c28"
+        },
+        {
+            "path": "src/agents/session-core.elicitation.test.ts",
+            "sha": "d8ef32c0b1863745b8edd95743e907aa79ef4ecb"
+        },
+        {
+            "path": "src/agents/session-core.test.ts",
+            "sha": "8049db472f6da5d00d2604c7fa33f4b834650dbd"
+        },
+        {
+            "path": "src/agents/session-core.ts",
+            "sha": "beda43b5b0fbd8aba167d98c7df64dd90dbc4e92"
+        },
+        {
+            "path": "src/domain/capability.test.ts",
+            "sha": "9487593903dc3ba990c1f59fb68fab99d79836a3"
+        },
+        {
+            "path": "src/domain/capability.ts",
+            "sha": "7cf089d9eac399c9b4231b20fd3539dbfb9791e3"
+        },
+        {
+            "path": "src/domain/session/agent-session.kinds.test.ts",
+            "sha": "b8bdb17cdae450037fe08ca4b5c426ebbfb496fe"
+        },
+        {
+            "path": "src/domain/session/agent-session.test.ts",
+            "sha": "3ec83cb32986649303e5c17860875e8905fa0402"
+        },
+        {
+            "path": "src/domain/session/agent-session.ts",
+            "sha": "72063c0de744d157d98a8c13e117597e43791ec3"
+        },
+        {
+            "path": "src/domain/session/elicitation.test.ts",
+            "sha": "97d8af582b853a8d70cc8b7617b1425b8e4c8eab"
+        },
+        {
+            "path": "src/domain/session/elicitation.ts",
+            "sha": "eaa739043238791fc533293624f58660e26b72ad"
+        },
+        {
+            "path": "src/domain/session/system-event.test.ts",
+            "sha": "8520df7e1f2c5ad3f3fe50b1abcbcf410074f5a3"
+        },
+        {
+            "path": "src/domain/session/system-event.ts",
+            "sha": "10560340062d2e62ce7092c28af5b2c8d8582969"
+        },
+        {
+            "path": "src/domain/session/transcript-dto.ts",
+            "sha": "b2905ab6bbec9262bc033ebb7fe1084748f5fd04"
+        },
+        {
+            "path": "src/main/app/e2e-capability.ts",
+            "sha": "55eada067e977fc5f4e6a97a5c123b78dd2fadc1"
+        },
+        {
+            "path": "src/main/app/ipc.ts",
+            "sha": "81cff03549d840f68fe5c4edf972380284def036"
+        },
+        {
+            "path": "src/main/app/session-ipc.test.ts",
+            "sha": "536117b8df4bb728065ae2042fe50398b494f083"
+        },
+        {
+            "path": "src/main/app/session-ipc.ts",
+            "sha": "b747d8f2781652ad375e17a9e75573df95ce7ad6"
+        },
+        {
+            "path": "src/main/app/validate.ts",
+            "sha": "7ded6473bfe2e9a069e344eae91c73cf022e63ca"
+        },
+        {
+            "path": "src/preload/index.ts",
+            "sha": "cde07d94dd8a39e2e08f1378456ec3f950a6ca1a"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/ask-user-question.aui.tsx",
+            "sha": "6bbca7156cd4db316c0c650ef3288fc99b6338de"
+        },
+        {
+            "path": "src/renderer/src/components/assistant-ui/elements/thread.aui.tsx",
+            "sha": "c867bb0a440fd29bd63fd36f091cc961cf73622e"
+        },
+        {
+            "path": "src/renderer/src/features/chat/ask-user-question-args.ts",
+            "sha": "64a2a055efe6dc0ed48c54c115f2d871b48450ca"
+        },
+        {
+            "path": "src/renderer/src/features/chat/composer-extensions-context.ts",
+            "sha": "ff3f5e9c5826bc10470db8c4f2c44a23adc07982"
+        },
+        {
+            "path": "src/renderer/src/features/chat/composer-extensions.tsx",
+            "sha": "0fc4c9c8c194c72ee0ebb79868d96781b467a40c"
+        },
+        {
+            "path": "src/renderer/src/features/chat/labels.ts",
+            "sha": "41692753cc1235f7193682e53fe2e809c07fa463"
+        },
+        {
+            "path": "src/renderer/src/features/chat/slash-commands.test.ts",
+            "sha": "80ce4e9c1f6930ca4437932f70f11871bdc9d6f9"
+        },
+        {
+            "path": "src/renderer/src/features/chat/slash-commands.ts",
+            "sha": "e96b59b0c5d7804fcf7f29d9866d288220ac4e55"
+        },
+        {
+            "path": "src/renderer/src/features/session/ApprovalCard.test.tsx",
+            "sha": "4b77c7db557d0266821dec2c954d5141a9733878"
+        },
+        {
+            "path": "src/renderer/src/features/session/ApprovalCard.tsx",
+            "sha": "b9b6e40aabdb9d04b8d511bc0a0f14730828f03d"
+        },
+        {
+            "path": "src/renderer/src/features/session/AskUserQuestionAnswer.test.tsx",
+            "sha": "4c15e7358e55aadd86998aefc291c3af3cff96ea"
+        },
+        {
+            "path": "src/renderer/src/features/session/AskUserQuestionAnswer.tsx",
+            "sha": "eb230003b6559cc1597ea99ffc8279e1af585f85"
+        },
+        {
+            "path": "src/renderer/src/features/session/ElicitationCard.test.tsx",
+            "sha": "3a5e3816e61036e8df10674d27833475a06425af"
+        },
+        {
+            "path": "src/renderer/src/features/session/ElicitationCard.tsx",
+            "sha": "192bd913abdc08546c869710fa608de64ab90e9a"
+        },
+        {
+            "path": "src/renderer/src/features/session/LivePane.composer.test.tsx",
+            "sha": "ef10181888e6412fbc4694fe940bd7054d78749e"
+        },
+        {
+            "path": "src/renderer/src/features/session/LivePane.o2.test.tsx",
+            "sha": "9e6a97e3fe1a4219217919e5cadec9371d40200c"
+        },
+        {
+            "path": "src/renderer/src/features/session/LivePane.tsx",
+            "sha": "321f7e79449cf6fc0eb70f8b4cca4cca5c11de17"
+        },
+        {
+            "path": "src/renderer/src/features/session/focus-handoff.ts",
+            "sha": "2db1f89383205333ec1979fcbdd6fbfa944026b4"
+        },
+        {
+            "path": "src/renderer/src/features/session/labels.ts",
+            "sha": "00a65aafafe4e1885bc59473a94ad7e1512ba56a"
+        },
+        {
+            "path": "src/renderer/src/features/session/running-session-store.test.ts",
+            "sha": "d0e58b00c96e8d88d7e54f6b6eed6d7c6f700268"
+        },
+        {
+            "path": "src/renderer/src/features/session/running-session-store.ts",
+            "sha": "bd8fe706dc7e3a1e92dc92f79fa3b2139a653ebe"
+        },
+        {
+            "path": "src/renderer/src/features/session/running-session-types.ts",
+            "sha": "244e9bbf089daa16c2dfa09db87de02bff296a96"
+        },
+        {
+            "path": "src/renderer/src/features/session/session-event-decoder.test.ts",
+            "sha": "f14138f72e9bff68bb4454b3d5fd3d67d8ddfbaf"
+        },
+        {
+            "path": "src/renderer/src/features/session/session-event-decoder.ts",
+            "sha": "78bed6935141e0a336bcaf24657333c2da5dc90d"
+        },
+        {
+            "path": "src/renderer/src/features/session/session-view.monitor.test.ts",
+            "sha": "345e878d4d908c763ec80155ef58299256689c5b"
+        },
+        {
+            "path": "src/renderer/src/features/session/useLiveSession.ts",
+            "sha": "205c5222160cbfe403bfac7960e3f7cbcfd00c3a"
+        },
+        {
+            "path": "src/renderer/src/test-support/capability.ts",
+            "sha": "bf5baad42ad8abe7bb5c5a4c66546c9c7c8ee678"
+        },
+        {
+            "path": "tests/elicitation/elicitation-through.test.tsx",
+            "sha": "e9f00cc0143d60601e2e6ccc5da10a743c05d49b"
+        },
+        {
+            "path": "tests/rule-fixtures/b-equivalent/sdk-updated-input.ts.fixture",
+            "sha": "68e00e7caf681d246551bf84f8a9410cc186b546"
+        },
+        {
+            "path": "tests/rule-fixtures/expected.mjs",
+            "sha": "8e2b3a83381105bdc279764478474d15d8fe9b9e"
+        }
+    ],
+    "viewpoint_coverage": {
+        "A": "Critical:0 High:0",
+        "B": "Critical:0 High:0",
+        "C": "Critical:0 High:1",
+        "D": "Critical:0 High:1",
+        "E": "Critical:0 High:1",
+        "F": "Critical:0 High:0",
+        "G": "Critical:0 High:5",
+        "H": "Critical:0 High:2"
+    },
+    "fr_coverage": [],
+    "rule_verification": {
+        "ran": true,
+        "round": 1,
+        "reason": "Round 1",
+        "exit": 0,
+        "matched": 70,
+        "undetected_known": 9
+    },
+    "skipped_reviewers": [
+        {
+            "name": "database-reviewer",
+            "reason": "auto_invoke_patterns \u306b\u4e00\u81f4\u3059\u308b\u5909\u66f4\u30d5\u30a1\u30a4\u30eb\u304c\u7121\u3044"
+        }
+    ],
+    "tracks": {
+        "security-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 0,
+            "low": 2
+        },
+        "architecture-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 2,
+            "medium": 2,
+            "low": 3
+        },
+        "po-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 2,
+            "medium": 4,
+            "low": 1
+        },
+        "ux-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 3,
+            "medium": 3,
+            "low": 4
+        },
+        "a11y-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 2,
+            "medium": 4,
+            "low": 3
+        },
+        "platform-boundary-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 2,
+            "low": 1
+        },
+        "ui-coverage-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 1,
+            "medium": 2,
+            "low": 1
+        }
+    },
+    "verdict": "PASS"
+}

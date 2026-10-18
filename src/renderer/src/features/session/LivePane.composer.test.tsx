@@ -192,6 +192,19 @@ describe('コマンドの候補 (FE-031 / US-3 AC1〜AC4・SC-006)', () => {
     expect(list).toHaveTextContent(COMPOSER_LABELS.moreCommands(1))
   })
 
+  it('一致する候補が 0 件なら枠は出ず、Enter は候補を入れずに送る (H-001)', async () => {
+    const user = userEvent.setup()
+    const h = await setup()
+    h.emit(commandsEvent([{ name: 'review' }]))
+    await waitFor(() => expect(input()).toBeInTheDocument())
+    await user.click(input())
+    await user.keyboard('/zzz')
+    expect(screen.queryByRole('listbox')).toBeNull()
+    await user.keyboard('{Enter}')
+    expect(input()).not.toHaveValue('/zzz ')
+    expect(input()).not.toHaveValue('/review ')
+  })
+
   it('構成が届いていない (一覧が無い) ときは出ない', async () => {
     const user = userEvent.setup()
     await setup()

@@ -65,3 +65,4 @@ src/renderer/src/test-support/capability.ts
 tests/elicitation/elicitation-through.test.tsx
 tests/rule-fixtures/b-equivalent/sdk-updated-input.ts.fixture
 tests/rule-fixtures/expected.mjs
+docs/decisions/0057-elicitation-sdk-side-cancel-known-limit.md

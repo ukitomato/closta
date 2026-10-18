@@ -1,90 +1,81 @@
 # platform-boundary-reviewer Review: Claude Code からの問いに答える UI と composer のコマンドの候補 (O-10)
 
-**Run**: 2026-10-18T00:00:00+09:00
+**Run**: 2026-10-18T23:30:00+09:00
 **Reviewer**: platform-boundary-reviewer
 **Spec**: specs/018-session-answer-ui-and-composer-commands/spec.md
-**Gate**: code-gate iteration 1
+**Round**: 2 (code-gate iter 2, pr-gate の round で直したあとに reviewing から再実行)
 
 ## 初回読了 viewpoint
 
-- FR/SC:
-  - 影響あり: FR-003 / FR-004 / SC-002。承認の応答の境界 (`toAskUserQuestionResult`) と、項目 16 の新しい P2 backstop が対象
-  - 影響あり: FR-005 / SC-010。`QUERY_OPTION_KEYS` の 9 キーと、`onUserDialog` / `supportedDialogKinds` を載せないことが対象
-  - 影響あり: FR-007 / FR-008。URL をホストで開く経路と、新しい IPC `respondElicitation` のセッションの振り分けが対象
-  - 範囲外: FR-001 / FR-002 / FR-006 / FR-009〜FR-017 と SC-001 / SC-003〜SC-009
-- touched files に該当する charter / Confirmation:
-  - runtime / isolation の charter は該当なし
-  - Principle III の判定 (`autoModeSafe` / `isAutoModeAllowed`) は diff に無い
-  - Principle VII: agents が新しく import するのは `@domain/session/elicitation` と `@domain/validation` だけ
-  - Principle II: diff の追加行に `process.platform`・`os.platform`・`navigator.`・`userAgent`・`platform-ok` は 0 件
-  - AD-052 / AD-053 Confirmation は PB-7 として F で見た
+- FR/SC: 今回の diff が触れるのは FR-009 (composer のコマンドの候補) と SC-006 (`createSlashMatcher` / e2e の正の対照)、および Elicitation と AskUserQuestion のカードの表示 (項目ごとのエラー、スクロール、未回答の印)。FR-003 / FR-004 / FR-005 / FR-007 / FR-008 (権限の応答と IPC の境界) はこの iter で変わっていない。
+- touched files に該当する charter / Confirmation: runtime / isolation の charter は touched files に入っていない。Principle III の権限ゲート (`autoModeSafe`)、AD-003 / AD-004 / AD-012 の領域にも diff は無い。`src/main/app/e2e-capability.ts` は E2E のスタブで、追加は `meter`/`commands` の emit 1 件だけ (src/main/app/e2e-capability.ts:307-315)。
 - A. 認可 / 認証 / secret 管理: 該当なし: security-reviewer の範囲
 - B. 入力検証 / injection / CSP / 暗号: 該当なし: security-reviewer の範囲
-- C. 業務不変条件 / Charter drift: 該当なし: runtime / isolation の charter の Out of scope に踏み込む変更が diff に無い
-- D. Constitution / ADR drift: Critical:0 High:0 Medium:0 Low:1
+- C. 業務不変条件 / Charter drift: Critical:0 High:0 Medium:0 Low:1
+- D. Constitution / ADR drift: Critical:0 High:0 Medium:0 Low:0
 - E. User Story / SC / AC / UX: 該当なし: po-reviewer の範囲
-- F. 命名 / module / lint hookup: Critical:0 High:0 Medium:2 Low:2
+- F. 命名 / module / lint hookup: Critical:0 High:0 Medium:2 Low:0
 - G. optional reviewer 範囲: 該当なし: optional reviewer の範囲
 - H. テスト / coverage / observability / regression: Critical:0 High:0 Medium:0 Low:0
 
 ## スコープ要約
 
-- 項目 16 に P2 の綴りの検査 (scripts/constitution/check.mjs:918-926)
-- 違反の fixture `tests/rule-fixtures/b-equivalent/sdk-updated-input.ts.fixture`
-- `updatedInput` は domain で組む (`src/domain/session/agent-session.ts:346-390`)。agents は無害化前の tool 名で振り分け (`src/agents/session-core.ts:213` / `:225`)
-- Elicitation の registry と `onElicitation` は `run()` の closure (`src/agents/sdk-agent-session.ts:368-372`)
+今回の diff は次のとおり。
+- renderer の UI: slash の matcher を一覧と照合する `createSlashMatcher`、Elicitation の項目ごとのエラーと `aria-invalid`、カード本体のスクロール、AskUserQuestion の未回答の印
+- E2E のスタブ: `commands` の meter を 1 件流す。合わせて e2e/ime.spec.ts に正の対照を足した
+- charter と roadmap の追記: ADR の参照 (AD-052 / AD-053 / AD-057)
 
-PB-1 該当なし / PB-2 該当なし (`handleRespondElicitation` は sessionId で振り分け) / PB-3 該当なし / PB-4 経路の増加なし (負の単体テスト session-core.test.ts:378-402) / PB-5 L-002 / PB-6 該当なし / PB-7 M-001 / M-003 / L-001 / L-003
-
-design-gate R2 の 5 件は実装後も残る (AD-050 により Medium / Low は gate で直さない)。
+観点ごとの結果:
+- PB-1: 該当なし。パス (`HostPath` / `RuntimePath`) は新しい IPC にも永続化にも流れていない。stub の emit は `JSON.stringify` した SessionEvent で、中身はコマンド名の文字列だけ。
+- PB-2: 該当なし。stub の `sessions` / `emit` は `createE2eSupervisorConnection()` の closure の中にあり (e2e-capability.ts:268-305)、sessionId ごとに分かれている。`createSlashMatcher` は commands ごとに `useMemo` で作るので、module スコープの状態は持たない。
+- PB-3: 該当なし。`capabilities` を表明する箇所は diff に無い。
+- PB-4: 該当なし。権限モード・`respondPermission`・`respondElicitation` の経路は変わっていない。matcher の変更で、一致しない `/xxx` は候補を奪わずにそのまま送られる。ただし送信は既存の send-prompt の経路で、権限の入口は増えていない。
+- PB-5: 該当なし。パス変換を変えていない。
+- PB-6: 該当なし。volume / `--restart` / commit / ホストへの書き込みは diff に無い。
+- PB-7: 新しい import や新しいディレクトリは無く、lint の取りこぼしは増えていない。前回 round の F の 2 件は check.mjs と fixtures が変わっていないので持ち越す。
 
 ## Findings
 
-### [Medium] 項目 16 の新しい P2 の検査は `src/agents/` しか見ていない。`updatedInput` を組む domain は検査の外 (M-001) (scope: feature) — unresolved from design-gate
-- **観察**: `sdkScope` は `AGENT_SDK_IMPORT_DIRECTORIES` (allowlists.mjs:363) に限られる (check.mjs:812-815, 920-926)。戻り値の組み立ては agent-session.ts:390。domain が `updatedPermissions` を返すように変わっても項目 16 は発火しない。現時点のコードには 0 件で実害なし
-- **同種事象探索**: `\bupdated(Input|Permissions)\b` in src 非テスト 9 件 (コード agent-session.ts:303/:382/:383/:390、注記 session-core.ts:205、agent-session.ts:279/:300/:343/:371)
-- **推奨アクション**: P2 の範囲に `src/domain/` を足し、`updatedInput` は agent-session.ts の 1 ファイルだけを実名で許す
-- **根拠**: AD-052 Decision 4 (d) / Constitution Principle III
+### [Medium] 項目 16 の P2 の検査は `AGENT_SDK_IMPORT_DIRECTORIES` しか走査しない。`updatedInput` を組む domain の関数が検査の外にある (M-001) (scope: feature) — 前 round から未解決
+- **観察**: `scripts/constitution/check.mjs:918-926` は今回も変わっていない。`for (const key of ['updatedInput', 'updatedPermissions'])` が走査するのは `sdkScope` のファイルだけで、組み立ての本体は `src/domain/session/agent-session.ts` にある。
+- **同種事象探索**: check.mjs で `updatedInput` を検索して 2 件 (:780 のコメント、:919-920 の P2)。前 round と同じ。
+- **リスク/影響**: AD-052 の「`updatedPermissions` は 0」を機械で守っているのは、単体の pin テストだけになっている。
+- **推奨アクション**: P2 の走査対象に `src/domain/` を足す。`updatedInput` は `agent-session.ts` の 1 ファイルだけを実名で許す。
+- **根拠**: AD-052 Decision 4 (c)(d) / Principle III
+- **scope 根拠**: touched files (check.mjs) の中で直せる。AD-050 により Medium は gate では直さない。
 
-### [Medium] 新しい P2 の fixture は `updatedInput` の 1 つだけ。`updatedPermissions` の発火確認も迂回形の UNDETECTED_NOTES も無い (M-003) (scope: feature) — unresolved from design-gate
-- **観察**: 期待表追加は 1 行 (expected.mjs:367-376)。`['updated' + 'Input']` 等の組み立て形は拾えず UNDETECTED_NOTES に記載なし
-- **同種事象探索**: `updated` in tests/rule-fixtures 3 件 (expected.mjs:368/:369/:372)、fixture 本体 2 件、`updatedPermissions` 0 件
-- **推奨アクション**: `b-equivalent/sdk-updated-permissions.ts.fixture` を足し、組み立て形を UNDETECTED_NOTES に記載
-- **根拠**: AD-052 Decision 4 (d) / expected.mjs:236
+### [Medium] P2 の `updatedPermissions` の側に違反 fixture が無い (M-002) (scope: feature) — 前 round から未解決
+- **観察**: tests/rule-fixtures で `updatedPermissions` を検索して 0 件。
+- **同種事象探索**: 上記のとおり 0 件。
+- **リスク/影響**: ループの 2 つ目のキーが実際に発火するかを CI が確かめていない。文字列を組み立てて迂回する形 (`obj['updated' + 'Input']`) が検出されないことも、UNDETECTED_NOTES に書かれていない。
+- **推奨アクション**: `tests/rule-fixtures/b-equivalent/sdk-updated-permissions.ts.fixture` と、`expected.mjs` の対応する行を足す。
+- **根拠**: AD-052 Decision 4 (d) / AD-024
+- **scope 根拠**: touched files の中で直せる。
 
-### [Low] `toAskUserQuestionResult` が tool 名を受け取らない。FR-004 は存在しない「静的な検査」を直す対象として書いたまま (M-002 から降格) (scope: feature)
-- **観察**: agent-session.ts:374。負の単体テストあり (session-core.test.ts:378-402)。spec.md:221 / data-model.md:76 の記述が実物 (実行時のキー検査 session-core.test.ts:263) とずれる
-- **同種事象探索**: `toPermissionResult` in scripts/ tests/rule-fixtures/ eslint.config.mjs 3 件 (注記のみ)
-- **推奨アクション**: FR-004 / data-model.md:76 を実行時の pin に揃える
-
-### [Low] `onUserDialog` / `supportedDialogKinds` を options に載せないことを CI で守るのは単体の pin だけ (L-001) (scope: feature)
-- **観察**: session-core.test.ts:210-212、agent-session.kinds.test.ts:28、elicitation.test.ts:298。`QUERY_ESCALATION_OPTION_KEYS` に 2 キーなし (scripts で 0 件)
-- **推奨アクション**: 2 キーを `QUERY_ESCALATION_OPTION_KEYS` に足す
-- **根拠**: AD-053 Decision 4
-
-### [Low] URL の Elicitation はランタイム名前空間の URL をホストのブラウザで開く。越境が未記録 (L-002) (scope: system)
-- **観察**: elicitation.ts:188 / :421-422、window.ts:31 `openExternalIfHttp`。ADR-0053 / isolation charter に記載 0 件
-- **推奨アクション**: isolation charter の Open Questions に 1 行
+### [Low] ランタイムの名前空間の Elicitation の URL をホストのブラウザで開くことが、isolation charter に書かれていない (L-001) (scope: system) — 前 round から未解決
+- **観察**: `docs/domains/isolation/charter.md` で `Elicitation|openExternal|loopback` を検索して 0 件。今回の charter の追記は session / ui の charter だけ。
+- **同種事象探索**: 上記のとおり 0 件。
+- **推奨アクション**: isolation charter の Open Questions に、loopback の URL はランタイムによってはホストから届かないことを 1 行書く。
 - **根拠**: AD-003 / AD-012
+- **scope 根拠**: touched files の外の charter への追記。
 
-### [Low] P2 の検査の注記が検査範囲を超えて言い切っている (L-003) (scope: feature)
-- **観察**: check.mjs:918-919、allowlists.mjs:385-386
-- **推奨アクション**: M-001 を直さないなら注記に「domain 側は pin テスト (agent-session.test.ts:170) が守る」と追記
-- **根拠**: AD-024
+## H (テスト / regression) の補足
+
+- 今回の diff にプラットフォーム境界の振る舞いの変更は無く、壊れうる既存の境界も無い。根拠は 3 つ。e2e-capability.ts の追加は stub の emit だけ。`launch` の戻り値 (`{ ok, port, generation }`) は変わっていない (e2e-capability.ts:316)。追加された SessionEvent は既存の `meter`/`commands` の型をそのまま使っていて、型は tsc が守る。
+- M-001 / M-002 を検出するテスト (fixture) はまだ無い。M-002 そのものがその欠落の指摘なので、H には重ねて数えない。
 
 ## 同種事象探索 cascade summary
 
 | 指摘 ID | Grep query | 該当件数 | path:line |
 |---|---|---|---|
-| M-001 | `\bupdated(Input\|Permissions)\b` in src (非テスト) | 9 | agent-session.ts:279, :300, :303, :343, :371, :382, :383, :390 / session-core.ts:205 |
-| M-003 | `updated` in tests/rule-fixtures | 5 | expected.mjs:368, :369, :372 / sdk-updated-input.ts.fixture:5, :9 |
-| M-002→Low | `toPermissionResult` in scripts/tests/eslint | 3 | allowlists.mjs:385 / check.mjs:779, :948 |
-| L-001 | `onUserDialog\|supportedDialogKinds\|SUPPORTED_DIALOG_KINDS` | scripts 0 / src 9 | session-core.test.ts:210-212 他 |
-| L-002 | `localhost\|名前空間\|I-3` in ADR-0053; `Elicitation` in isolation charter | 0 / 0 | — |
+| M-001 | `updatedInput` in scripts/constitution/check.mjs | 2 | check.mjs:780, :919-920 |
+| M-002 | `updatedPermissions` in tests/rule-fixtures | 0 | — |
+| L-001 | `Elicitation\|openExternal\|loopback` in docs/domains/isolation/charter.md | 0 | — |
 
 ## Verdict
 
 - Critical: 0
 - High: 0
 - Medium: 2
-- Low: 4
+- Low: 1
+- Round inheritance: resolved from 1: 0 / unresolved: 3 (M-001, M-002, L-001) / new: 0

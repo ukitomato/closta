@@ -193,6 +193,8 @@ export const APPROVAL_CARD_LABELS = {
   otherPlaceholder: '自由に書く',
   /** 未回答の問いがあるとき (ボタンは `aria-disabled`。U-6 (a))。 */
   unanswered: '未回答の問いがあります',
+  /** 未回答の問いの見出しに付ける印 (色だけに頼らない。WCAG 1.4.1)。 */
+  unansweredMark: '未回答',
   /** 読めない・重なる問いの文・件数の外のとき。「拒否」だけを出す。 */
   cannotAnswer: 'この問いにはアプリから答えられません。拒否して本文で答えてください。',
   /** 送る前の確かめ (`isPermissionAnswers`) で外れたとき。カードは外れない (U-6 (e) / U-9)。 */
@@ -220,6 +222,9 @@ export const ELICITATION_LABELS = {
   /** 先頭の 1 枚の後ろに待っている問いの数。 */
   remaining: (n: number): string => `ほか ${n} 件の問い`,
   invalid: '入力を確かめてください',
+  /** 項目ごとの理由 (項目に `aria-invalid` / `aria-describedby` で結ぶ。WCAG 3.3.1)。 */
+  fieldRequired: 'この項目は必須です',
+  fieldInvalid: 'この項目の値を確かめてください',
   /** 列挙の「未選択」(任意の項目は選ばずに送れる)。 */
   unselected: '選択しない'
 } as const

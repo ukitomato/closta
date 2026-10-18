@@ -6,9 +6,9 @@ import { useComposerExtensions } from './composer-extensions-context'
 import { COMPOSER_LABELS } from './labels'
 import {
   createSlashCommandAdapter,
+  createSlashMatcher,
   searchSlashCommands,
   slashFormatter,
-  slashMatcher,
   type SlashCommandSource
 } from './slash-commands'
 
@@ -36,12 +36,17 @@ export function ComposerCommandPopover(): ReactNode {
     () => (commands === null ? null : createSlashCommandAdapter(commands)),
     [commands]
   )
-  if (commands === null || commands.length === 0 || adapter === null) return null
+  const matcher = useMemo(
+    () => (commands === null ? null : createSlashMatcher(commands)),
+    [commands]
+  )
+  if (commands === null || commands.length === 0 || adapter === null || matcher === null)
+    return null
   return (
     <ComposerPrimitive.Unstable_TriggerPopover
       char="/"
       adapter={adapter}
-      matcher={slashMatcher}
+      matcher={matcher}
       role="listbox"
       aria-label={COMPOSER_LABELS.commandCandidates}
       data-slot="composer-command-popover"

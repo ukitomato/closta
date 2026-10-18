@@ -95,6 +95,11 @@ test.describe('IME 変換確定 Enter が送信にならない (SC-001)', () => 
     try {
       const composer = await reachActiveComposer(page)
       await composer.focus()
+      // 正の対照: 変換していない `/` では候補が出る (出ないままだと下の「出ない」が中身の無い検査になる)。
+      await page.keyboard.type('/re')
+      await expect(page.locator('[data-slot="composer-command-popover"]')).toBeVisible()
+      await page.keyboard.press('Escape')
+      await composer.fill('')
       await composeAndPressEnter(page, '/にほんご')
       // コマンドの候補は出ず (ライブラリの isComposing のガード)、Enter は送信にも候補の選択にも使われない。
       await expect(page.locator('[data-slot="composer-command-popover"]')).toHaveCount(0)

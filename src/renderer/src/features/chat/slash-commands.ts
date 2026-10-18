@@ -88,6 +88,23 @@ export function slashMatcher(
   return { query: text.slice(1, end), offset: 0, endOffset: end }
 }
 
+/**
+ * 一覧と照合する matcher。一致が 0 件なら null を返し、popover を開かない (Enter / Tab を奪わず `/xxx` をそのまま送れる)。
+ */
+export function createSlashMatcher(
+  entries: readonly SlashCommandSource[]
+): (
+  text: string,
+  triggerChar: string,
+  cursorPosition: number
+) => { readonly query: string; readonly offset: number; readonly endOffset: number } | null {
+  return (text, triggerChar, cursorPosition) => {
+    const match = slashMatcher(text, triggerChar, cursorPosition)
+    if (match === null) return null
+    return searchSlashCommands(entries, match.query).items.length === 0 ? null : match
+  }
+}
+
 /** 選んだ候補の入れ方 (`/{name}`)。`parse` は候補の表示に使わないので、全体を 1 つの text として返す。 */
 export const slashFormatter = {
   serialize: (item: { readonly id: string }): string => `/${item.id}`,
