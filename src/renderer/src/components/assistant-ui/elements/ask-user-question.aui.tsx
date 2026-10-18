@@ -5,6 +5,11 @@ import { CheckIcon } from "lucide-react";
 import type { ToolCallMessagePartComponent } from "@assistant-ui/react";
 
 import { Badge } from "@/components/ui/badge";
+import {
+  parseAskUserQuestionArgs,
+  type Question,
+  type QuestionOption,
+} from "@/features/chat/ask-user-question-args";
 import { ASK_USER_QUESTION_LABELS } from "@/features/chat/labels";
 import { useToolResultState } from "@/features/chat/transcript-context";
 import { cn } from "@/lib/utils";
@@ -35,86 +40,6 @@ import { isTruncatedArgs, ToolResultMarks } from "./tool-result-marks";
  * チップ・`multiSelect` の印を持たず、選ばれなかった選択肢を消すので採らない。
  */
 
-interface QuestionOption {
-  readonly label: string;
-  readonly description: string;
-}
-
-interface Question {
-  readonly question: string;
-  readonly header: string;
-  readonly options: readonly QuestionOption[];
-  readonly multiSelect: boolean;
-}
-
-interface AskUserQuestionArgs {
-  readonly questions: readonly Question[];
-  /** 問いの文 → 回答 (過去ログ。`Map` で引く)。 */
-  readonly answers: ReadonlyMap<string, string>;
-}
-
-type Rec = Record<string, unknown>;
-
-function asRecord(value: unknown): Rec | null {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Rec)
-    : null;
-}
-
-function parseOption(raw: unknown): QuestionOption | null {
-  const o = asRecord(raw);
-  if (o === null || typeof o.label !== "string") return null;
-  return {
-    label: o.label,
-    description: typeof o.description === "string" ? o.description : "",
-  };
-}
-
-function parseQuestion(raw: unknown): Question | null {
-  const q = asRecord(raw);
-  if (q === null || typeof q.question !== "string" || !Array.isArray(q.options))
-    return null;
-  const options: QuestionOption[] = [];
-  for (const item of q.options as readonly unknown[]) {
-    const option = parseOption(item);
-    if (option === null) return null;
-    options.push(option);
-  }
-  if (options.length === 0) return null;
-  return {
-    question: q.question,
-    header: typeof q.header === "string" ? q.header : "",
-    options,
-    multiSelect: q.multiSelect === true,
-  };
-}
-
-/** `argsText` (無害化済みの JSON) を読む。形が合わなければ null (ToolFallback に倒す)。 */
-function parseAskUserQuestionArgs(argsText: string): AskUserQuestionArgs | null {
-  let value: unknown;
-  try {
-    value = JSON.parse(argsText);
-  } catch {
-    return null;
-  }
-  const o = asRecord(value);
-  if (o === null || !Array.isArray(o.questions)) return null;
-  const questions: Question[] = [];
-  for (const item of o.questions as readonly unknown[]) {
-    const question = parseQuestion(item);
-    if (question === null) return null;
-    questions.push(question);
-  }
-  if (questions.length === 0) return null;
-  const answers = new Map<string, string>();
-  const rawAnswers = asRecord(o.answers);
-  if (rawAnswers !== null) {
-    for (const [key, answer] of Object.entries(rawAnswers)) {
-      if (typeof answer === "string") answers.set(key, answer);
-    }
-  }
-  return { questions, answers };
-}
 
 /** 選択肢が回答で選ばれたか。複数選択の回答は `,` で区切った label の並びとしても照合する。 */
 function isSelected(

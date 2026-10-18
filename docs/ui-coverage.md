@@ -54,7 +54,7 @@ SDK: `@anthropic-ai/claude-agent-sdk` 0.3.270
 | SDKAPIRetryMessage | `system` / `api_retry` | A | 実装済み: SystemEventRow (実行中) | 実行中 | O-4。API の再試行の行 (回数・最大回数・HTTP の状態・待ち時間)。同じターンの再試行は同じ行に合成し、次の主ループの assistant か result で成功 / 失敗に閉じる。`error`・`no_response` は出さない (014 data-model §3) |
 | SDKControlRequestProgressMessage | `system` / `control_request_progress` | B | 表示不要: アプリが送った制御要求の進捗の内部通知 | なし | |
 | SDKModelRefusalFallbackMessage | `system` / `model_refusal_fallback` | A | 実装済み: SystemEventRow / ConversationMapTab (実行中) | 実行中 | O-6。O-9: 地図の行に拒否の印として出す。拒否の行 (fallback のモデルと scope・分類・拒否の説明を伏せ字つきで)。置き換えられた応答は `meter` の `retraction` で稼働中のストアから外す (AD-049 Decision 2)。過去ログは記録に残れば伏せ字つきの system の本文 (行は O-11) |
-| SDKModelRefusalNoFallbackMessage | `system` / `model_refusal_no_fallback` | A | 実装済み: SystemEventRow / ConversationMapTab (実行中) | 実行中 | O-6。O-9: 地図の行に拒否の印として出す。拒否の行 (言い直して送り直せる旨・`content`・拒否の説明を伏せ字つきで)。過去ログは記録に残れば伏せ字つきの system の本文 (行は O-11)。「編集して再試行」は O-10 |
+| SDKModelRefusalNoFallbackMessage | `system` / `model_refusal_no_fallback` | A | 実装済み: SystemEventRow / ConversationMapTab (実行中) | 実行中 | O-6。O-9: 地図の行に拒否の印として出す。拒否の行 (言い直して送り直せる旨・`content`・拒否の説明を伏せ字つきで)。過去ログは記録に残れば伏せ字つきの system の本文 (行は O-11)。O-10: `refused_user_message_uuid` があれば「編集して再試行」(composer に戻すだけ。巻き戻さない) |
 | SDKLocalCommandOutputMessage | `system` / `local_command_output` | B | 後続: O-11 | なし | 過去ログは伏せ字つきの system の本文 (O-6) |
 | SDKHookStartedMessage | `system` / `hook_started` | A | 実装済み: SystemEventRow (実行中) | 実行中 | SDK は既定で SessionStart / Setup の Hook だけを出す。一般の Hook (`includeHookEvents`) は O-11 (D 節)。過去ログの変換は実装済み (`transcript.ts`)。実データに残るかは O-2 quickstart V-4 で確かめ、残れば経路を「両方」に直す |
 | SDKHookProgressMessage | `system` / `hook_progress` | B | 表示不要: 開始と結果の行で足りる。出力本文 (stdout / stderr) は出さない | なし | |
@@ -70,13 +70,13 @@ SDK: `@anthropic-ai/claude-agent-sdk` 0.3.270
 | SDKThinkingTokensMessage | `system` / `thinking_tokens` | B | 実装済み: ThinkingIndicator (実行中) | 実行中 | O-4。実行中の transcript の末尾 (composer の上) に「思考中 約 N トークン」(推定)。次の主ループの assistant と result で消える。1 秒に 1 回まで間引く (014 data-model §2 / research R-07) |
 | SDKSessionStateChangedMessage | `system` / `session_state_changed` | B | 表示不要: セッションの状態は状態通知 (SessionStatusUpdate) から一覧と表示中のセッションに出ている | なし | |
 | SDKWorkerShuttingDownMessage | `system` / `worker_shutting_down` | B | 表示不要: 内部制御。supervisor の終了は `supervisor-exited` の失敗として出る | なし | |
-| SDKCommandsChangedMessage | `system` / `commands_changed` | B | 実装済み: 構成のタブ (実行中) | 実行中 | O-5。slash command の一覧 (`name`・`description`・`argumentHint`) を `meter` の `commands` で運び、構成のタブのスラッシュコマンドの節に平文で出す (015 data-model §2)。`aliases` は出さない。composer の候補は O-10 |
+| SDKCommandsChangedMessage | `system` / `commands_changed` | B | 実装済み: 構成のタブ (実行中) | 実行中 | O-5。slash command の一覧 (`name`・`description`・`argumentHint`) を `meter` の `commands` で運び、構成のタブのスラッシュコマンドの節に平文で出す (015 data-model §2)。`aliases` は出さない。composer の候補 (O-10): 先頭の `/` で表示中のセッションの一覧を前方一致で出し、同じ `ComposerPrimitive.Input` に載せる |
 | SDKNotificationMessage | `system` / `notification` | B | 後続: O-11 | なし | |
 | SDKFilesPersistedEvent | `system` / `files_persisted` | B | 後続: O-11 | なし | Checkpoints (表示だけ。巻き戻しはしない) |
 | SDKToolUseSummaryMessage | `tool_use_summary` | B | 後続: O-11 | なし | |
 | SDKMemoryRecallMessage | `system` / `memory_recall` | B | 後続: O-11 | なし | |
 | SDKRateLimitEvent | `rate_limit_event` | A | 実装済み: QuotaBanner (実行中) | 実行中 | O-4。中央のヘッダの下の帯 (`CenterBanners.tsx` の QuotaBanner。F 節の Quota banner)。`status` が `allowed_warning` / `rejected` のとき、制限の種類・使用率・解除の時刻を出し、`allowed` が届くか解除の時刻を過ぎたら消す (014 data-model §4)。`overage*`・`limitScope`・`errorCode`・`surpassedThreshold` は出さない。claude.ai のサブスクリプションの Provider でだけ届く |
-| SDKElicitationCompleteMessage | `system` / `elicitation_complete` | A | 後続: O-10 | なし | Elicitation form。問いに答える UI と合わせて O-10 (AD-048 Decision 1) |
+| SDKElicitationCompleteMessage | `system` / `elicitation_complete` | A | 実装済み: SystemEventRow (実行中) | 実行中 | O-10。`elicitation` の行 (サーバー名は形の検査を通したものだけ)。過去ログは O-11 の変換に従う |
 | SDKPermissionDeniedMessage | `system` / `permission_denied` | A | 実装済み: DeniedNotice (実行中) | 実行中 | X-1 からの申し送り (聞かれずに拒否された操作) |
 | SDKPromptSuggestionMessage | `prompt_suggestion` | B | 後続: O-11 | なし | |
 | SDKMirrorErrorMessage | `system` / `mirror_error` | B | 後続: O-11 | なし | |
@@ -137,7 +137,7 @@ assistant / user のメッセージの content block。型は `@anthropic-ai/sdk
 | TodoWriteInput | `TodoWrite` | A | 実装済み: TodoList (両方) | 両方 | |
 | WebFetchInput | `WebFetch` | A | 実装済み: WebTool (両方) | 両方 | O-6。見出しは http(s) の host だけ (パス・クエリ・資格情報・フラグメントを出さない)。畳んだ中身に伏せ字を通した URL・`prompt`・結果 |
 | WebSearchInput | `WebSearch` | A | 実装済み: WebTool (両方) | 両方 | O-6。見出しに検索語とドメインの制限の件数、畳んだ中身に結果の text。Sources / Inline citation は組まない (U-5) |
-| AskUserQuestionInput | `AskUserQuestion` | A | 後続: O-10 | 両方 | 問いの読み取り専用の表示 (`AskUserQuestion` の部品。問い・見出し・選択肢・複数選択の印・過去ログの選ばれた回答) と承認カードの注記 (許可しても回答は届かない) は O-5 で実装。回答の UI は O-10 (AD-048 Decision 1) |
+| AskUserQuestionInput | `AskUserQuestion` | A | 実装済み: AskUserQuestion + ApprovalCard (両方 / 回答は実行中) | 両方 | 問いの読み取り専用の表示 (`AskUserQuestion` の部品。問い・見出し・選択肢・複数選択の印・過去ログの選ばれた回答) は O-5 で実装。O-10。回答は `updatedInput` の制約付き射影 (AD-052) |
 | SendFeedbackInput | `SendFeedback` | B | 実装済み: ToolFallback (両方) | 両方 | |
 | ClaudeDesignInput | `ClaudeDesign` | B | 実装済み: ToolFallback (両方) | 両方 | |
 | ProjectsInput | `Projects` | B | 実装済み: ToolFallback (両方) | 両方 | |
@@ -169,7 +169,7 @@ SDK のメッセージではなく、アプリが SDK の callback・制御・�
 
 | 識別子 | 判別子 | Tier | 割当 | 経路 | 備考 |
 |---|---|---|---|---|---|
-| permission-request | `canUseTool` (単発) | A | 実装済み: ApprovalCard (実行中) | 実行中 | X-1 からの申し送り (承認カード) |
+| permission-request | `canUseTool` (単発) | A | 実装済み: ApprovalCard (実行中) | 実行中 | X-1 からの申し送り (承認カード)。O-10: `AskUserQuestion` (SDK の tool 名の完全一致) は答える部品と「回答を送る」(AD-052) |
 | permission-request-capability | `canUseTool` (capability 付与) | A | 後続: I-3 | なし | Permission grant。M4 なので M3 の完了の条件には数えない (AD-044) |
 | permission-denied | `permission_denied` (A 節) の一覧 | A | 実装済み: DeniedNotice (実行中) | 実行中 | X-1 からの申し送り (聞かれずに拒否された操作) |
 | session-state | `SessionStatusUpdate` | A | 実装済み: CenterHeader の状態 (実行中) | 実行中 | O-7 で中央のヘッダ (シェルの `CenterHeader`。`RunningCenter` から) に移した。一覧の行の状態 (監視ビュー) は session の操作 UI |
@@ -223,8 +223,8 @@ SDK のメッセージではなく、アプリが SDK の callback・制御・�
 | get_settings | `get_settings` | B | 表示不要: 内部制御 | なし | |
 | get_hooks_listing | `get_hooks_listing` | B | 後続: O-11 | なし | 一般の Hook の表示と合わせる。呼ぶなら AD-036 §4 P3 の読み替えの ADR |
 | update_settings | `update_settings` | B | 表示不要: 内部制御 | なし | |
-| elicitation | `elicitation` | A | 後続: O-10 | なし | Elicitation form。問いに答える UI (AD-048 Decision 1) |
-| request_user_dialog | `request_user_dialog` | B | 後続: O-10 | なし | 問いに答える UI と合わせて判断する (AD-048 Decision 1) |
+| elicitation | `elicitation` | A | 実装済み: ElicitationCard (実行中) | なし | O-10。`onElicitation` (AD-053)。form は部分集合だけ、URL は `openExternalIfHttp` |
+| request_user_dialog | `request_user_dialog` | B | 表示不要: 宣言する種類が無い (payload の形が SDK に無い。AD-053 Decision 4) | なし | O-10 で判断 |
 | list_permission_rules | `list_permission_rules` | B | 後続: I-3 | なし | |
 
 ## F element の分類
@@ -238,7 +238,7 @@ assistant-ui の element の一覧 (https://www.assistant-ui.com/elements。**20
 | Agent handoff | A | 未使用 | subagent の受け渡し (PLAN §4.2)。O-11 の入れ子と合わせる |
 | Agent plan | A | C ExitPlanModeInput | AgentPlan |
 | Agent status | A | 未使用 | セッションの状態は一覧と表示中のセッションで出ている (D session-state) |
-| Approval card | A | D permission-request | アプリは ApprovalCard を自作 (assistant-ui の版に ApprovalPrimitive が無い。X-1) |
+| Approval card | A | D permission-request | アプリは ApprovalCard を自作 (assistant-ui の版に ApprovalPrimitive が無い。X-1)。O-10: `AskUserQuestion` の答える部品 |
 | Artifact card | B | 未使用 | |
 | Assistant modal | C | 未使用 | PLAN §4.4 |
 | Assistant sidebar | C | 未使用 | アプリの画面構成と合わない。O-7 のシェルの左右の面 (サイドバー・右のペイン) は copilot 型の会話の横置きとは役割が違う (AD-046) |
@@ -257,8 +257,8 @@ assistant-ui の element の一覧 (https://www.assistant-ui.com/elements。**20
 | Composer context | B | 未使用 | |
 | Composer mentions | B | 未使用 | E file_suggestions |
 | Composer model picker | B | 未使用 | 起動設定ダイアログで選ぶ (X-4) |
-| Composer slash commands | A | 未使用 | O-10 (composer の候補) |
-| Composer trigger popover | B | 未使用 | |
+| Composer slash commands | A | D composer (候補) | O-10。registry の element は取り込まず、primitive 直接 + 自作 (候補の見た目は `features/chat`。IME のガードはライブラリ側) |
+| Composer trigger popover | B | 未使用 | O-10 の照合: `Unstable_TriggerPopoverRoot` / `Unstable_TriggerPopover` の primitive を直接使い、registry の `.aui` のラッパーは取り込まない |
 | Composer voice | C | 未使用 | Voice 系 |
 | Computer use | C | 未使用 | |
 | Confidence | C | 未使用 | Generative |
@@ -275,7 +275,7 @@ assistant-ui の element の一覧 (https://www.assistant-ui.com/elements。**20
 | Document reference | B | B user/document | O-11 |
 | Draft restore | B | D message-queue | X-2 (下書きの復元) |
 | Edit message | B | SDK の外: 中央の本体の Thread の利用者のメッセージの操作 (`thread.aui.tsx` が `ActionBarPrimitive.Edit` と `EditComposer` を組み込み済み) | runtime が `onEdit` を渡さないので編集は効かない。fork / resume と合わせて X-6 で照合する (O-7 pr-gate R3 ui-coverage L-201) |
-| Elicitation form | A | A SDKElicitationCompleteMessage / E elicitation | O-10 |
+| Elicitation form | A | A SDKElicitationCompleteMessage / E elicitation | O-10 の照合: 取り込まず `features/session/ElicitationCard.tsx` に自作 (文言が英語の既定・項目の種類と `requestedSchema` の対応・フォーカスの引き渡しが承認カードと別系統) |
 | Empty state | B | SDK の外: 中央の本体 (空の状態・実行中の Thread の Welcome・過去ログ)・サイドバーの過去のセッションの区画 (Thread search の一致 0 を含む)・中央のヘッダの会話内検索のバー (一致 0)・アプリ全体のダイアログの Command palette (候補 0)・起動ダイアログのプリセットの欄 (`PresetPanel`。起動の利用記録が無い / 読めない)・設定のダイアログ | O-3 で 4 つの空の状態 (Thread search・会話内検索・palette・起動の利用記録) に同じ element を使った (012 spec FR-008。文言は 012 data-model §5) |
 | Error state | A | D launch-failure / SDK の外: 設定のダイアログ (4 画面の取得の失敗)・サイドバーの過去のセッションの区画・中央の本体の過去ログの取得の失敗 | D launch-failure は element ではなくアプリが自作した `FailureBanner` (`LivePane.tsx`) が描く。`ErrorState` を使うのは SDK の外の 6 か所 (設定の 4 画面・`SessionListScreen`・`ChatScreen`) (O-7 pr-gate R2 ui-coverage L-101) |
 | Feedback dialog | B | 未使用 | |
@@ -317,7 +317,7 @@ assistant-ui の element の一覧 (https://www.assistant-ui.com/elements。**20
 | Orb | C | 未使用 | Voice 系 |
 | Permission grant | A | D permission-request-capability | I-3 |
 | Prompt library | B | 未使用 | |
-| Question flow | C | 未使用 | O-10 (`AskUserQuestion` の応答 UI の候補)。O-5 の読み取り専用の表示には採らなかった (015 research R-03): 回答の操作が中心で、`header` のチップ・`multiSelect` の印を持たず、文言が英語の直書き |
+| Question flow | C | 未使用 | O-10 の照合: 応答 UI にも採らず、承認カードの答える部品 `AskUserQuestionAnswer.tsx` を自作 (`header` のチップと `multiSelect` の印を持たない)。O-5 の読み取り専用の表示には採らなかった (015 research R-03): 回答の操作が中心で、`header` のチップ・`multiSelect` の印を持たず、文言が英語の直書き |
 | Quota banner | A | A SDKRateLimitEvent | O-4。中央のヘッダの下の帯 (`features/shell/CenterBanners.tsx` の `QuotaBanner`。注意は `role="status"`、送れるセッションの上限は `role="alert"`)。registry の `elements-quota-banner` は採らず、文字の体裁と `role` で作った (SH-002 の照合の写し。正本は O-4 の PR の説明。014 research R-09): 「もっと得る」の button を常に描く・文言が英語の直書き・材料 (使用量と上限の数・解除までの相対時間) が届く値 (割合と解除の時刻。どちらも null がありうる) と合わない・見た目の強弱を `status` でなく割合で決める |
 | Quote | B | 未使用 | PLAN §4.3 |
 | Read aloud | C | 未使用 | Voice 系 |

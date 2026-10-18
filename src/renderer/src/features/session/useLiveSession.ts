@@ -1,6 +1,8 @@
 import { useCallback, useMemo } from 'react'
 import { useStore } from 'zustand'
 
+import type { ElicitationAction, ElicitationContent } from '@domain/session/elicitation'
+
 import { useRunningSessionStoreApi } from './running-session-context'
 import type { LiveSessionState, SessionQueue } from './running-session-store'
 import { deriveSessionView, type SessionView } from './session-view'
@@ -32,7 +34,9 @@ export interface LiveSession extends SessionView {
   appendUser(text: string): void
   send(text: string): void
   interrupt(): void
-  respond(requestId: string, outcome: 'allow' | 'deny'): void
+  respond(requestId: string, outcome: 'allow' | 'deny', answers?: readonly string[]): void
+  /** MCP サーバーの問い (Elicitation) への応答 (O-10)。`content` は `accept` のときだけ (ストアに残さない)。 */
+  respondElicitation(requestId: string, action: ElicitationAction, content?: ElicitationContent): void
   end(): void
   kill(): void
   close(): void
@@ -57,7 +61,13 @@ export function useLiveSession(sessionId: string): LiveSession | null {
   const send = useCallback((text: string) => store.send(sessionId, text), [store, sessionId])
   const interrupt = useCallback(() => store.interrupt(sessionId), [store, sessionId])
   const respond = useCallback(
-    (requestId: string, outcome: 'allow' | 'deny') => store.respond(sessionId, requestId, outcome),
+    (requestId: string, outcome: 'allow' | 'deny', answers?: readonly string[]) =>
+      store.respond(sessionId, requestId, outcome, answers),
+    [store, sessionId]
+  )
+  const respondElicitation = useCallback(
+    (requestId: string, action: ElicitationAction, content?: ElicitationContent) =>
+      store.respondElicitation(sessionId, requestId, action, content),
     [store, sessionId]
   )
   const end = useCallback(() => store.end(sessionId), [store, sessionId])
@@ -82,6 +92,7 @@ export function useLiveSession(sessionId: string): LiveSession | null {
       send,
       interrupt,
       respond,
+      respondElicitation,
       end,
       kill,
       close,
@@ -98,6 +109,7 @@ export function useLiveSession(sessionId: string): LiveSession | null {
     send,
     interrupt,
     respond,
+    respondElicitation,
     end,
     kill,
     close,

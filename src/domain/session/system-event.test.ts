@@ -295,13 +295,14 @@ const row = (
 })
 
 describe('category と status の集合 (固定テスト)', () => {
-  it('category は 11 (O-5 が auth / plugin、O-6 が 4 つを足した。015 / 016 data-model §1)', () => {
+  it('category は 12 (O-5 が auth / plugin、O-6 が 4 つ、O-10 が elicitation を足した。集合を変えるには ADR が要る: AD-053)', () => {
     expect([...SYSTEM_EVENT_CATEGORIES].sort()).toEqual([
       'api-retry',
       'auth',
       'compact-boundary',
       'compaction',
       'conversation-reset',
+      'elicitation',
       'hook',
       'informational',
       'permission-mode',
@@ -311,7 +312,7 @@ describe('category と status の集合 (固定テスト)', () => {
     ])
   })
 
-  it('status は 21 (O-5 が authenticating、O-6 が 6 つを足した)', () => {
+  it('status は 22 (O-5 が authenticating、O-6 が 6 つ、O-10 が no-fallback-retry を足した)', () => {
     expect([...SYSTEM_EVENT_STATUSES].sort()).toEqual([
       'authenticating',
       'cancelled',
@@ -323,6 +324,7 @@ describe('category と status の集合 (固定テスト)', () => {
       'killed',
       'marked',
       'no-fallback',
+      'no-fallback-retry',
       'notice',
       'paused',
       'pending',
@@ -342,6 +344,7 @@ describe('category と status の集合 (固定テスト)', () => {
       'marked',
       'fallback',
       'no-fallback',
+      'no-fallback-retry',
       'prevented',
       'warning',
       'notice'

@@ -110,7 +110,9 @@ spec_id（`001-runtime-...`）とは独立させる。差し込み作業で番�
 - **O-10 (問いに答える UI) は `session`** — 回答を承認の応答 (`canUseTool` の `updatedInput`) と SDK の callback
   (`onElicitation` / `onUserDialog`) で Claude Code に返すので、権限ゲートの例外と制御の経路を持つ session が境界の ADR
   (AD-036 Decision 4 と AD-041 (g) の読み替え) の持ち主になる。表示の部品は `ui` が持つ (015 spec U-1。2026-10-05 に利用者が承認。
-  [AD-048](../decisions/0048-session-config-display-and-answer-ui-split.md) Decision 1)
+  [AD-048](../decisions/0048-session-config-display-and-answer-ui-split.md) Decision 1)。O-10 の結論 (018 spec): 回答は `updatedInput` の制約付き射影
+  ([AD-052](../decisions/0052-ask-user-question-answer-projection.md))、Elicitation は `onElicitation` と専用の応答チャネル
+  ([AD-053](../decisions/0053-elicitation-callback-and-user-dialog.md)) で、どちらも session の制御の経路の拡張として持つ
 - **O-11 (Hook・背景の task・subagent の入れ子と知らせの類の表示) は `ui`** — 表示が主で、SDK が emit する情報の表示 (Principle XII の判定対象)。
   O-10 と違い権限ゲートの例外を持たないので `session` にしない。ただし design の前に起こす ADR (`includeHookEvents`・`getSubagentMessages`・
   `get_hooks_listing`) は session の境界 (agents の呼び出しの許可リストと query の options) に触れるので、O-11 の ADR は session charter にも

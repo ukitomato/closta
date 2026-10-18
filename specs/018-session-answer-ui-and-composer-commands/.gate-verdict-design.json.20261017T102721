@@ -1,0 +1,179 @@
+{
+    "gate": "design",
+    "run": "2026-10-17T00:00:00+09:00",
+    "spec_dir": "specs/018-session-answer-ui-and-composer-commands",
+    "spec_id": "018-session-answer-ui-and-composer-commands",
+    "round": 1,
+    "tracks": {
+        "analyze": {
+            "status": "ok",
+            "raw_out": "analyze.md",
+            "viewpoint_missing": null,
+            "cascade_demotions": null,
+            "counts": {
+                "critical": 0,
+                "high": 2,
+                "medium": 8,
+                "low": 8
+            }
+        },
+        "po-reviewer": {
+            "status": "ok",
+            "raw_out": "po-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "counts": {
+                "critical": 1,
+                "high": 4,
+                "medium": 5,
+                "low": 2
+            }
+        },
+        "architecture-reviewer": {
+            "status": "ok",
+            "raw_out": "architecture-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "counts": {
+                "critical": 1,
+                "high": 1,
+                "medium": 4,
+                "low": 4
+            }
+        },
+        "security-reviewer": {
+            "status": "ok",
+            "raw_out": "security-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "counts": {
+                "critical": 0,
+                "high": 2,
+                "medium": 4,
+                "low": 2
+            }
+        },
+        "platform-boundary-reviewer": {
+            "status": "ok",
+            "raw_out": "platform-boundary-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "counts": {
+                "critical": 0,
+                "high": 0,
+                "medium": 3,
+                "low": 2
+            }
+        }
+    },
+    "severity_counts": {
+        "critical": 1,
+        "high": 5,
+        "medium": 18,
+        "low": 15
+    },
+    "fr_coverage": [
+        {
+            "fr": "FR-007",
+            "covered": true,
+            "by": [
+                "tasks.md FE-021"
+            ]
+        },
+        {
+            "fr": "FR-008",
+            "covered": true,
+            "by": [
+                "tasks.md BE-021",
+                "tasks.md BE-024"
+            ]
+        }
+    ],
+    "viewpoint_coverage": {
+        "A": "Critical:0 High:0 (security Low:2)",
+        "B": "Critical:0 High:2 (security)",
+        "C": "Critical:1 High:0 (architecture)",
+        "D": "Critical:0 High:1 (architecture)",
+        "E": "Critical:1 High:3 (po)",
+        "F": "Critical:0 High:0 (platform-boundary Medium:2)",
+        "G": "\u8a72\u5f53\u306a\u3057",
+        "H": "Critical:0 High:1 (po)"
+    },
+    "dedup_log": [
+        {
+            "merged": [
+                "po-C-001",
+                "arch-C-001",
+                "sec-H-001",
+                "analyze-F1",
+                "analyze-F3",
+                "po-H-002"
+            ],
+            "key": "data-model.md:120"
+        },
+        {
+            "merged": [
+                "analyze-F2",
+                "sec-H-002"
+            ],
+            "key": "data-model.md:117"
+        },
+        {
+            "merged": [
+                "po-H-004",
+                "arch-M-004"
+            ],
+            "key": "tasks.md:59"
+        },
+        {
+            "merged": [
+                "po-M-001",
+                "analyze-F4"
+            ],
+            "key": "data-model.md:143"
+        },
+        {
+            "merged": [
+                "po-M-004",
+                "analyze-F6"
+            ],
+            "key": "FR-015"
+        },
+        {
+            "merged": [
+                "analyze-F8",
+                "sec-M-002"
+            ],
+            "key": "data-model.md:107"
+        },
+        {
+            "merged": [
+                "analyze-F9",
+                "pb-M-002"
+            ],
+            "key": "FR-004"
+        },
+        {
+            "merged": [
+                "analyze-F10",
+                "arch-L-003"
+            ],
+            "key": "FR-007"
+        },
+        {
+            "merged": [
+                "arch-M-001",
+                "analyze-F12"
+            ],
+            "key": "data-model.md:86"
+        },
+        {
+            "merged": [
+                "analyze-F11",
+                "arch-L-004"
+            ],
+            "key": "AD-052 Decision 4"
+        }
+    ],
+    "verdict": "FIX_REQUIRED"
+}

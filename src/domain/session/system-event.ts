@@ -237,6 +237,7 @@ export function isTerminalSystemEventStatus(status: SystemEventStatus | null): b
     status === 'marked' ||
     status === 'fallback' ||
     status === 'no-fallback' ||
+    status === 'no-fallback-retry' ||
     status === 'prevented' ||
     status === 'warning' ||
     status === 'notice'

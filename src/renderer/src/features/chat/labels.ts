@@ -41,7 +41,9 @@ export const SYSTEM_EVENT_CATEGORY_LABELS: Readonly<Record<SystemEventCategory, 
   'compact-boundary': 'コンテキストの圧縮の境界',
   'conversation-reset': '会話の作り直し',
   refusal: 'モデルの拒否',
-  informational: '知らせ'
+  informational: '知らせ',
+  // O-10 の行 (018 data-model §5)。URL での手続きの完了。
+  elicitation: 'MCP の手続き'
 }
 
 /** 状態の理由キー → 文言。 */
@@ -69,6 +71,7 @@ export const SYSTEM_EVENT_STATUS_LABELS: Readonly<Record<SystemEventStatus, stri
   marked: '区切り',
   fallback: 'モデルを切り替え',
   'no-fallback': '拒否',
+  'no-fallback-retry': '拒否',
   prevented: 'ここで止まりました',
   warning: '注意',
   notice: '知らせ'
@@ -225,7 +228,12 @@ export const SYSTEM_EVENT_LABELS = {
   /** プラグインの行の進み具合 (O-5 / 015 data-model §6・spec US-3 AC5)。数は `ja-JP` の桁区切り。 */
   pluginInstalling: 'プラグインのマーケットプレイスを導入中',
   pluginInstalled: (n: number): string => `導入しました (${COUNT_FORMAT.format(n)} 件)`,
-  pluginFailed: (n: number): string => `導入に失敗しました (${COUNT_FORMAT.format(n)} 件)`
+  pluginFailed: (n: number): string => `導入に失敗しました (${COUNT_FORMAT.format(n)} 件)`,
+  /** MCP サーバーの URL での手続きの完了の行 (O-10 / 018 data-model §5)。名前が空なら「MCP サーバー」。 */
+  elicitationComplete: (serverName: string): string =>
+    `${serverName === '' ? 'MCP サーバー' : serverName} の URL での手続きが終わりました`,
+  /** 拒否の行のボタン (O-10 / US-4)。拒否された文を composer に戻す。送らない。 */
+  retry: '編集して再試行'
 } as const
 
 /** 認証の行の文 (状態ごと)。終わりの来ない行 (「結果不明」) と知らない状態では null。 */
@@ -425,7 +433,20 @@ export const THINKING_LABELS = {
  */
 export const COMPOSER_LABELS = {
   composerInput: 'メッセージ',
-  composerPlaceholder: 'メッセージを入力'
+  composerPlaceholder: 'メッセージを入力',
+  // ボタンの名前と tooltip (O-10 FR-013。018 data-model §5「文言」)。
+  send: '送信',
+  stop: '生成を止める',
+  scrollToBottom: '最下部へ',
+  startVoice: '音声入力を始める',
+  stopVoice: '音声入力を止める',
+  // スラッシュコマンドの候補 (O-10 FR-012)。
+  commandCandidates: 'コマンドの候補',
+  moreCommands: (n: number): string => `ほか ${n} 件`,
+  // 「編集して再試行」で入力中の文を置き換える確認 (O-10 US-4 AC3)。
+  retryReplaceTitle: '入力中の文を置き換えますか',
+  retryReplace: '置き換える',
+  retryCancel: '取り消す'
 } as const
 
 /**

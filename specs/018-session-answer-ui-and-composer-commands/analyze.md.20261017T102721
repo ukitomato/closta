@@ -1,0 +1,83 @@
+## Specification Analysis Report
+
+Feature: `specs/018-session-answer-ui-and-composer-commands` (spec / plan / tasks / data-model / research / quickstart / contracts). I checked it against the constitution, the session charter, the glossary, AD-052 / AD-053 (proposed, untracked) and the current source (`agent-session.ts`, `session-core.ts`, `session-core.test.ts`, `running-session-store.ts`, `transcript-dto.ts`, `docs/ui-coverage.md`). No files were modified. There are no extension hooks (`.specify/extensions.yml` has no analyze hooks).
+
+| ID | Category | Severity | Location(s) | Summary | Recommendation |
+|----|----------|----------|-------------|---------|----------------|
+| F1 | Inconsistency | HIGH | data-model.md §3 (main `content` 1〜32 keys; agents "`fields: null` の要求への `accept` も外れ"), §2 (`fields` only when `mode === 'form'`), contracts C-1' ("`accept` なら `isElicitationContent`"), tasks FE-021 ("URL のときの「送る」は `accept` (content なし)"), spec US-2 AC5 | As written, URL-mode accept is rejected twice. Main requires `isElicitationContent` (at least 1 key) on every `accept`, and URL requests carry `fields: null`, which the agents' matching turns into `decline`. US-2 AC5 ("手続きに進む (accept)") cannot be done. | Split the rules by mode. URL `accept` takes no `content`: main skips `isElicitationContent` and agents return `{action:'accept'}` without matching. Add positive and negative fixtures for this to BE-021 / BE-024. |
+| F2 | Inconsistency | HIGH | spec Edge Cases (last bullet: "main の検証で落ちる → … カードはそのまま (U-6 (e))"), US-1 AC5, data-model §4 renderer ("送る前に外す。`respond` と同じ"), current `running-session-store.ts:645-649` (`void capability().respondPermission(...)`, then `pending: null`) | The store sends and forgets: it clears the card before the IPC returns and ignores the `false` result. If main rejects a reply, the card is already gone. The agents' registry keeps waiting, so the session stays `awaiting_permission` (FR-011) with nothing to answer. "カードはそのまま" cannot be built on the stated store rules. | Pick one: (a) the store awaits the IPC boolean and restores or keeps the card with a reason on `false`, or (b) drop "カードはそのまま" and rely only on the renderer's pre-check (U-6 (e)), stating that main rejection is a should-not-happen path. Add a matching test to FE-010 / FE-020. |
+| F3 | Underspecification | MEDIUM | data-model §3 main (`content` keys 1〜32), spec US-2 AC2 | A form whose fields are all optional, submitted blank, gives `content: {}`. Main then rejects it, and the user cannot accept a valid empty answer. | Allow 0 keys for `accept` in form mode (agents still check `required`), or state that empty optional forms must be declined. |
+| F4 | Coverage / Underspecification | MEDIUM | data-model §4 (`ELICITATION_MAX_PENDING = 4`, 5th auto-`decline`), plan Scale/Scope; absent from spec Clarifications / Assumptions / U-6 (b) | A numeric default and a user-visible behaviour (a silent decline past 4 pending) exist only in plan/data-model. The spec lists the other limits (1,000 / 4 / 32) but not this one, and the user is never told. | Add it to spec Clarifications as [ASSUMED] and decide whether the card shows anything when a request is auto-declined. |
+| F5 | Inconsistency | MEDIUM | plan RK-07, tasks BE-022 (overlap test), FR-011; current store keeps one `pending` slot (`running-session-store.ts:425-433` overwrites) | Agents now stay `awaiting_permission` while any request is pending. The renderer holds only one pending approval, so a second `permission-request` overwrites the first. The first one can then never be answered and the session shows "承認待ち" with no card. Before this feature, the transition back to running at least happened. | Make `pending` a queue like `elicitations`, or explicitly accept the gap in Risks with a test that documents it. |
+| F6 | Underspecification | MEDIUM | spec FR-015 / US-4 AC2, research R-09, data-model §5 「編集して再試行」, tasks FE-040 | The retry text is "the nearest `user-*` before the refusal row". With the message queue (X-2), a later queued input can sit between the refused message and the refusal row, so the wrong text goes back into the composer. No edge case covers this. | Add an edge case for queued messages. Either restrict the button to the case where exactly one app-sent input belongs to the refused turn, or document the heuristic and test it in FE-040. |
+| F7 | Ambiguity | MEDIUM | data-model §4 renderer, "外す" row ("終端の `state` (`error` / `done` で終わったセッションではなく、`closed` など送れない終端)") | It is unclear which `SessionRunState` values clear the elicitation queue (FE-020 tests "送れない終端の state"). | List the exact state values. |
+| F8 | Underspecification | MEDIUM | data-model §2 (`key` regex `^[A-Za-z0-9_.-]{1,64}$`), BE-020 / BE-024 tests mention `__proto__` / `constructor` | `__proto__` and `constructor` match the key regex. The tests name them, but no rule says whether they are rejected (fields → `null`) or kept, or how `matchesElicitationSchema` / `isElicitationContent` treat them. | State the rule (for example, reject these names in `ElicitationField` and in main / agents content checks) so the tests have an oracle. |
+| F9 | Inconsistency | MEDIUM | spec FR-004 ("「全 return は `toPermissionResult` を通す」の静的な検査"), data-model §1 pin row ("静的な検査を…直す"), plan 機械強制の変更; actual `session-core.test.ts:248-270` is a runtime key check; tasks BE-011 says "今のまま通し" | No static check of the return sites exists. FR-004 and data-model describe a change to something that does not exist, and they contradict BE-011. | Reword FR-004 and data-model to "runtime key-set test". If a static check is wanted, add a task for it. |
+| F10 | Terminology | MEDIUM | spec (問いのカード = Elicitation only), glossary Question from Claude Code (問い = AskUserQuestion + Elicitation + request_user_dialog), plan Glossary 抜粋 | "問い" covers all three kinds, but "問いのカード" means only the Elicitation card, while AskUserQuestion is answered inside the approval card. This invites drift in code and UI names. | In SH-001, define "問いのカード (Elicitation card)" explicitly as MCP-only, or rename it (for example "MCP の問いのカード"). |
+| F11 | Inconsistency | LOW | AD-052 Decision 4 (d) (backstop flags `updatedInput` only "射影の関数の呼び出しの外"), plan / research R-10 / BE-012 (any `updatedInput` / `updatedPermissions` in `src/agents/` non-test code) | The implementation is stricter than the ADR (fine), but the ADR text differs from what is built. | Align AD-052 Decision 4 (d) with R-10 while it is still proposed. |
+| F12 | Inconsistency | LOW | AD-053 Decision 6 ("`elicitation_id` (照合だけ)"), data-model §2 ("agents の中で `elicitation_complete` との照合にも使わない"), §5 (id used only for the row id) | The ADR says the id is used for matching; the data-model says it never is. | Fix AD-053 Decision 6 to say "used only for the row id". |
+| F13 | Underspecification | LOW | plan 層ごとの変更 (session-core.ts), BE-011; `session-core.ts:81-85` `CanUseToolLike` returns `Promise<PermissionResultLike>` | Changing the `CanUseToolLike` return type to `CanUseToolResult` is not listed. Without it, BE-011 fails type checking or needs a cast. | Add it to the BE-011 description and the plan table. |
+| F14 | Ambiguity | LOW | quickstart V-1 ("`updatedInput` の綴りは agent-session.ts とそのテストだけ"); existing comments in `session-core.ts:169` and `agent-session.ts:268` already spell it | The V-1 check fails literally unless comments are excluded. The "(コメントを除く)" qualifier is attached only to the `updatedPermissions` clause. | Apply "(コメントを除く)" to both clauses, matching item 16, which uses `src.code`. |
+| F15 | Constitution (VIII) / Coverage | LOW | FE-011 (AskUserQuestion「その他」free-text), plan Constitution Check VIII (mentions only the Elicitation card) | The new free-text inputs (「その他」 and the Elicitation `textarea`) are not covered by the IME rule "Enter を送信に結ばない" for AskUserQuestion, and there is no IME test for them. | In FE-011, state that "その他" does not bind Enter to send, and add a component test that a composing Enter does not submit. |
+| F16 | Underspecification | LOW | tasks SH-002 (`npx assistant-ui@latest add`), plan Technical Context (`@assistant-ui/react` 0.15.19 pinned) | `@latest` registry items may not match the installed 0.15.19, which skews the Principle XIII comparison. CLAUDE.md also says to avoid `npx` on this machine. | Pin the CLI / registry to the installed version, or record the version compared in the PR description. |
+| F17 | Coverage | LOW | spec SC-004 (marker test only for Elicitation), AD-052 Consequences ("永続化もログへの出力もしない" for answers) | The no-log / no-persist rule for AskUserQuestion answers has no SC. Only FE-010 checks the store. | Extend the FE-023-style marker check (or BE-011 / BE-013 tests) to answers in the agents / main logs. |
+| F18 | Terminology | LOW | spec Key Entities ("問いの要求 (ElicitationRequest の写し)"), data-model / contracts (`ElicitationPrompt`) | The entity is named differently in the spec and in the data-model. | Mention `ElicitationPrompt` in the spec's Key Entities. |
+
+**Coverage Summary Table:**
+
+| Requirement Key | Has Task? | Task IDs | Notes |
+|-----------------|-----------|----------|-------|
+| FR-001 answer UI in approval card | Yes | FE-011, BE-011 (answerable), FE-010 | |
+| FR-002 answers via respondPermission + main validation | Yes | BE-013, FE-010 | F2 (failure path) |
+| FR-003 projection in agents | Yes | BE-010, BE-011 | |
+| FR-004 boundary pins + item 16 backstop | Yes | BE-010, BE-011, BE-012 | F9, F11 |
+| FR-005 onElicitation / no onUserDialog | Yes | BE-020, BE-021, BE-022 | |
+| FR-006 elicitation-request shape + store queue | Yes | BE-020, BE-021, FE-020 | F8 |
+| FR-007 question card (form / URL / unsupported) | Yes | FE-021 | F1 |
+| FR-008 respond-elicitation validation | Yes | BE-021, BE-024 | F1, F3 |
+| FR-009 no persistence / log, discard on abort | Yes | BE-021, BE-022, FE-020, FE-023 | F7 |
+| FR-010 elicitation_complete row | Yes | BE-020, BE-023, FE-022 | |
+| FR-011 awaiting_permission aggregation | Yes | BE-022 | F5 |
+| FR-012 slash command candidates / IME | Yes | FE-031, SH-002 | |
+| FR-013 Japanese composer labels | Yes | FE-030 | |
+| FR-014 focusOnRunStart=false | Yes | FE-030 | |
+| FR-015 edit-and-retry | Yes | BE-040, FE-040 | F6 |
+| FR-016 ui-coverage rewrite | Yes | SH-011 | |
+| FR-017 records (glossary / charter / roadmap / etc.) | Yes | SH-001, SH-010, SH-012 | |
+| SC-001 | Yes | BE-010, BE-011, FE-011, SH-013 (V-3 left to the user) | |
+| SC-002 | Yes | BE-010, BE-011, BE-012 | |
+| SC-003 | Yes | BE-020, BE-021, BE-024, FE-021 | F1 |
+| SC-004 | Yes | BE-022, FE-023 | F17 (answers not covered) |
+| SC-005 | Yes | BE-023, FE-022 | |
+| SC-006 | Yes | FE-031 (component + E2E) | |
+| SC-007 | Yes | FE-030 | |
+| SC-008 | Yes | BE-040, FE-040 | |
+| SC-009 | Yes | SH-011, SH-013 | |
+| SC-010 | Yes | BE-020, BE-021, BE-024, SH-013 (V-1) | |
+
+**Constitution Alignment Issues:**
+- No CRITICAL violation of a NON-NEGOTIABLE principle (I–VIII).
+  - Principle III: the escalation surface is closed by exact tool-name match, the domain-only projection, no `updatedPermissions`, and the item 16 backstop.
+  - Principle IV: SDK callbacks only.
+  - Principle V: no persistence or logging of elicitation input, and URLs are redacted for display.
+  - Principle VII: `createOnElicitation` lives in `session-core.ts` and does not import the SDK.
+- Principle VIII has one LOW gap: the IME / Enter rule is not stated for the AskUserQuestion「その他」field (F15).
+- Principle XIII: the comparison against registry candidates is planned (SH-002), and the PR description is the source of record. Version pinning is a LOW concern (F16).
+- Principle XIV: SH-001 is ordered before any code. The term overlap is F10.
+- Governance: AD-052 / AD-053 are proposed and U-1〜U-7 are unapproved. tasks.md correctly makes user approval a precondition for starting implementation.
+
+**Unmapped Tasks:** None. SH-002 (Principle XIII comparison) and SH-013 (verification) are support tasks tied to FR-012 / FR-016 and to all SCs.
+
+**Metrics:**
+- Total Requirements: 27 (FR 17 + SC 10)
+- Total Tasks: 25 (SH 6, BE 10, FE 9)
+- Coverage: 100% (27 of 27 requirements have at least one task)
+- Ambiguity Count: 2 (F7, F14)
+- Duplication Count: 0
+- Critical Issues Count: 0 (HIGH: 2, MEDIUM: 8, LOW: 8)
+
+### Next Actions
+- No CRITICAL issues, but fix F1 (URL-mode accept rejected by both main and agents, which breaks US-2 AC5) and F2 (the "card stays" rule contradicts the fire-and-forget store) before `/cl-implement`.
+- Worth folding into the same designer pass: F3, F4, F5, F6, F8, F9.
+- While AD-052 / AD-053 are still proposed, align them on F11 / F12.
+- The LOW items (F13–F18) can be left in the gate output per AD-050.

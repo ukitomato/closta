@@ -76,7 +76,9 @@ export const SYSTEM_EVENT_CATEGORIES = [
   'compact-boundary',
   'conversation-reset',
   'refusal',
-  'informational'
+  'informational',
+  /** MCP の URL での手続きの完了 (O-10 / AD-053。`elicitation_complete`)。 */
+  'elicitation'
 ] as const
 export type SystemEventCategory = (typeof SYSTEM_EVENT_CATEGORIES)[number]
 
@@ -100,6 +102,8 @@ export const SYSTEM_EVENT_STATUSES = [
   'marked',
   'fallback',
   'no-fallback',
+  /** 拒否の行のうち、拒否された利用者の入力が分かるもの (O-10 / US-4。「編集して再試行」を出す印。表示は `no-fallback` と同じ)。 */
+  'no-fallback-retry',
   'prevented',
   'warning',
   'notice'

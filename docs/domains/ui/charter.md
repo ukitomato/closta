@@ -17,6 +17,9 @@ related_adrs:
   - docs/decisions/0048-session-config-display-and-answer-ui-split.md
   - docs/decisions/0049-boundaries-retraction-and-o11-split.md
   - docs/decisions/0051-message-time-source-and-display-only.md
+  - docs/decisions/0052-ask-user-question-answer-projection.md
+  - docs/decisions/0053-elicitation-callback-and-user-dialog.md
+  - docs/decisions/0057-elicitation-sdk-side-cancel-known-limit.md
 related_specs:
   - specs/003-ui-transcript-rendering/spec.md
   - specs/004-ui-tier-a-tool-display/spec.md
@@ -28,6 +31,7 @@ related_specs:
   - specs/014-ui-metering-and-limits/spec.md
   - specs/015-ui-mcp-elicitation-commands/spec.md
   - specs/016-ui-boundaries-and-tool-displays/spec.md
+  - specs/018-session-answer-ui-and-composer-commands/spec.md
 ---
 
 # Domain Charter: ui
@@ -56,7 +60,10 @@ UI は本来 delivery mechanism であり domain ではない。それでも独�
 - tool 出力の専用表示（Terminal block / Code diff / Todo / Subagent / Agent plan / Reasoning ほか）
 - composer（日本語 IME、message queue、draft restore、slash commands、mentions、attachments）
   — slash commands の候補の持ち主は O-10 (O-5 の design で分けた。015 spec U-6 / [AD-048](../../decisions/0048-session-config-display-and-answer-ui-split.md) Decision 1)。
-  O-5 は一覧を右のペインの「構成」のタブに出すだけで、composer を変えない
+  O-5 は一覧を右のペインの「構成」のタブに出すだけで、composer を変えない。**O-10 の結論** (018 spec FR-012): 先頭の `/` の候補は
+  assistant-ui の trigger popover の primitive (`Unstable_TriggerPopoverRoot` / `Unstable_TriggerPopover`) を直接使い (registry の element は
+  取り込まない)、IME の変換中のガードはライブラリ側のものを外さない。候補の部品は ui の `features/chat` に置き、一覧は session の
+  `meter` の `commands` を稼働中のセッションから渡す
 - `docs/ui-coverage.md`（SDK のメッセージ型・tool 名・システムイベントと表示実装の対応表）の維持
 - 情報密度の切替（compact / comfortable）— **transcript の密度** (O-2)。稼働中セッション一覧 (監視ビュー) の行の密度は
   session の操作 UI として O-1 が持つ (下の Out of scope「他 domain の操作 UI」。O-1 USER 決定 2026-10-02)

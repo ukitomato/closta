@@ -1,0 +1,10 @@
+/**
+ * 違反サンプル (O-10 / AD-052 / 項目 16 の backstop)。
+ *
+ * **agents の非テストのコードが戻り値のオブジェクトに入力の書き換えのキーを直に綴る。**
+ * `AskUserQuestion` の許可の `updatedInput` を組んでよいのは domain の
+ * `toAskUserQuestionResult` だけである。他の #16 の綴り (options のキー・Query のメソッド) は含めない。
+ */
+export function bad(input: Record<string, unknown>): { behavior: 'allow' } {
+  return { behavior: 'allow', updatedInput: input }
+}

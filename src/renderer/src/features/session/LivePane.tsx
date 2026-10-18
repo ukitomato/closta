@@ -8,6 +8,10 @@ import { EmptyState, EmptyStateGreeting } from '@/components/assistant-ui/elemen
 import { GenerationLoader } from '@/components/assistant-ui/elements/loading-state'
 import { Thread } from '@/components/assistant-ui/elements/thread.aui'
 import { Button } from '@/components/ui/button'
+import {
+  ComposerExtensionsContext,
+  type ComposerExtensions
+} from '@/features/chat/composer-extensions-context'
 import { TranscriptAnnouncer } from '@/features/chat/TranscriptAnnouncer'
 import {
   createMcpServerNamesReader,
@@ -20,6 +24,7 @@ import {
 
 import { ApprovalCard } from './ApprovalCard'
 import { DEFAULT_MAX_QUEUE_ITEMS, type EnqueueVerdict } from './composer-queue'
+import { ElicitationCard } from './ElicitationCard'
 import { handOffFocusToComposer } from './focus-handoff'
 import {
   isReloginFailure,
@@ -31,7 +36,7 @@ import {
 } from './labels'
 import { LaunchDialog, type LaunchSource } from './LaunchDialog'
 import { useRunningSessionStore, useRunningSessionStoreApi } from './running-session-context'
-import type { SessionQueue } from './running-session-store'
+import { slashCommandEntries, type SessionQueue } from './running-session-store'
 import { useRunningSessionsView } from './running-sessions-view'
 import { MESSAGE_WINDOW } from './session-view'
 import type { LiveSession } from './useLiveSession'
@@ -150,8 +155,21 @@ function LiveSessionPane({
   )
   // 承認カードの MCP の tool の補助の見出しは transcript と同じサーバー名の一覧で分ける (O-5 / 015 data-model §1)。
   const mcpServerNames = useMcpServerNamesOf(progress)
+  const sessionMeters = useRunningSessionStore((s) => s.meters[session.sessionId])
+  const runningStore = useRunningSessionStoreApi()
+  const sessionId = session.sessionId
+  const composerExtensions = useMemo<ComposerExtensions>(
+    () => ({
+      commands: sessionMeters === undefined ? null : slashCommandEntries(sessionMeters),
+      retryTextFor: (messageId) =>
+        refusedUserText(runningStore.getState().sessions[sessionId]?.messages ?? [], messageId)
+    }),
+    [sessionMeters, runningStore, sessionId]
+  )
   // 承認カードは応答すると消える。押したボタンがカードの中にあれば、消す前に composer へ移す (O-4 FR-019)。
   const approvalRef = useRef<HTMLDivElement>(null)
+  const elicitationRef = useRef<HTMLDivElement>(null)
+  const firstElicitation = state.elicitations[0]
 
   return (
     // `data-live-pane`: 消えるボタンのフォーカスの行き先 (この中の composer) を探す根 (O-4 FR-019。`focus-handoff.ts`)。
@@ -194,9 +212,23 @@ function LiveSessionPane({
           <ApprovalCard
             request={pending}
             mcpServerNames={mcpServerNames}
-            onDecision={(outcome) => {
+            onDecision={(outcome, answers) => {
               handOffFocusToComposer(approvalRef.current)
-              session.respond(pending.requestId, outcome)
+              session.respond(pending.requestId, outcome, answers)
+            }}
+          />
+        </div>
+      )}
+      {firstElicitation !== undefined && (
+        // MCP サーバーの問い (O-10 / AD-053)。先頭の 1 枚と、残りの数。応答するとカードごと消えるので、消す前に composer へ移す。
+        <div className="px-4 pt-3" ref={elicitationRef}>
+          <ElicitationCard
+            key={firstElicitation.requestId}
+            prompt={firstElicitation}
+            remaining={state.elicitations.length - 1}
+            onRespond={(action, content) => {
+              handOffFocusToComposer(elicitationRef.current)
+              session.respondElicitation(firstElicitation.requestId, action, content)
             }}
           />
         </div>
@@ -237,13 +269,47 @@ function LiveSessionPane({
           <LiveProgressContext.Provider value={progress}>
             {/* tool の結果の状態 (結果待ち / 結果不明。O-6 / 016 data-model §3) の前提。 */}
             <ToolResultThreadContext.Provider value={toolResultThread}>
-              <Thread components={{ Welcome: SessionWelcome }} />
+              {/* composer のコマンドの候補 (O-10 / 018 data-model §5)。表示中のセッションの一覧だけを渡す (過去ログは渡さない)。 */}
+              <ComposerExtensionsContext.Provider value={composerExtensions}>
+                <Thread components={{ Welcome: SessionWelcome }} />
+              </ComposerExtensionsContext.Provider>
             </ToolResultThreadContext.Provider>
           </LiveProgressContext.Provider>
         </TranscriptSettledContext.Provider>
       </div>
     </div>
   )
+}
+
+/**
+ * 拒否の行 (`rowId`) より前の最も近い利用者の入力 (`user-*`) の本文 (O-10 US-4)。行が無い・前に利用者の入力が無い・
+ * 本文が空なら null。
+ */
+function refusedUserText(
+  messages: readonly { readonly id?: string | undefined; readonly role: string; readonly content: unknown }[],
+  rowId: string
+): string | null {
+  const at = messages.findIndex((m) => m.id === rowId)
+  if (at < 0) return null
+  for (let i = at - 1; i >= 0; i -= 1) {
+    const m = messages[i]
+    if (m === undefined || m.role !== 'user' || !(m.id ?? '').startsWith('user-')) continue
+    const content = m.content
+    const text =
+      typeof content === 'string'
+        ? content
+        : Array.isArray(content)
+          ? content
+              .map((p: unknown) =>
+                typeof p === 'object' && p !== null && (p as { type?: unknown }).type === 'text'
+                  ? String((p as { text?: unknown }).text ?? '')
+                  : ''
+              )
+              .join('')
+          : ''
+    return text === '' ? null : text
+  }
+  return null
 }
 
 /**

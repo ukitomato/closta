@@ -58,8 +58,17 @@ const capability: ClostaCapability = {
   // 起動元 (O-3) はそのまま 2 つめの引数で渡す。検証は main の `handleLaunchSession` (未知・欠落は記録しないだけ)。
   launchSession: (config, origin) => ipcRenderer.invoke(IPC_CHANNELS.launchSession, config, origin),
   sendPrompt: (sessionId, text) => ipcRenderer.invoke(IPC_CHANNELS.sendPrompt, sessionId, text),
-  respondPermission: (sessionId, requestId, outcome, scope) =>
-    ipcRenderer.invoke(IPC_CHANNELS.respondPermission, sessionId, requestId, outcome, scope),
+  respondPermission: (sessionId, requestId, outcome, scope, answers) =>
+    ipcRenderer.invoke(
+      IPC_CHANNELS.respondPermission,
+      sessionId,
+      requestId,
+      outcome,
+      scope,
+      answers
+    ),
+  respondElicitation: (sessionId, requestId, action, content) =>
+    ipcRenderer.invoke(IPC_CHANNELS.respondElicitation, sessionId, requestId, action, content),
   interruptSession: (sessionId) => ipcRenderer.invoke(IPC_CHANNELS.interruptSession, sessionId),
   endSession: (sessionId) => ipcRenderer.invoke(IPC_CHANNELS.endSession, sessionId),
   killSession: (sessionId) => ipcRenderer.invoke(IPC_CHANNELS.killSession, sessionId),

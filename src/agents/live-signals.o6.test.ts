@@ -248,6 +248,34 @@ describe('model_refusal_* (BE-011)', () => {
     )
     expect(rowOf(emitted[0])).toMatchObject({ name: '', detail: '本文' })
   })
+
+  it('no fallback: refused_user_message_uuid が文字列なら no-fallback-retry。値は運ばない (O-10 BE-040)', () => {
+    const { signals, emitted } = setup()
+    signals.onSystem(
+      system('model_refusal_no_fallback', {
+        uuid: 'n1',
+        content: '本文',
+        refused_user_message_uuid: MARK
+      })
+    )
+    expect(rowOf(emitted[0])).toMatchObject({ status: 'no-fallback-retry' })
+    expect(JSON.stringify(emitted)).not.toContain(MARK)
+  })
+
+  it('no fallback: refused_user_message_uuid が null・無い・空文字・数なら no-fallback', () => {
+    const { signals, emitted } = setup()
+    const values: readonly unknown[] = [null, undefined, '', 7]
+    values.forEach((v, i) => {
+      signals.onSystem(
+        system('model_refusal_no_fallback', {
+          uuid: `n${i}`,
+          content: '本文',
+          refused_user_message_uuid: v
+        })
+      )
+    })
+    expect(emitted.map((e) => rowOf(e).status)).toEqual(Array(4).fill('no-fallback'))
+  })
 })
 
 describe('informational (BE-011)', () => {

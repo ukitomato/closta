@@ -3,6 +3,7 @@ import {
   SESSION_EVENT_KINDS,
   type SessionEvent
 } from '@domain/session/agent-session'
+import { decodeElicitationPrompt } from '@domain/session/elicitation'
 import { decodeMeterUpdate } from '@domain/session/meter'
 import { isSessionRunState } from '@domain/session/run-state'
 
@@ -62,8 +63,23 @@ export function decodeSessionEvent(raw: unknown): SessionEvent | null {
     }
     case 'state':
       return isSessionRunState(value.state) ? { kind: 'state', state: value.state } : null
-    case 'permission-request':
-      return isPermissionRequest(value.request) ? (value as unknown as SessionEvent) : null
+    case 'permission-request': {
+      const request = value.request
+      if (!isPermissionRequest(request) || !isRecord(request)) return null
+      // `answerable` は 'ask-user-question' のときだけ写す (他の値は捨てて要求は受ける。O-10 / AD-052)。
+      return {
+        kind: 'permission-request',
+        request: {
+          requestId: String(request.requestId),
+          toolName: String(request.toolName),
+          input: String(request.input),
+          scope: request.scope === 'capability' ? 'capability' : 'once',
+          ...(request.answerable === 'ask-user-question'
+            ? { answerable: 'ask-user-question' as const }
+            : {})
+        }
+      }
+    }
     case 'permission-denied': {
       const denied = value.denied
       return isRecord(denied) &&
@@ -89,6 +105,11 @@ export function decodeSessionEvent(raw: unknown): SessionEvent | null {
       // 知らない `type`・形の外れた id は破棄する。余分なキーは運ばない (O-4 / 014 data-model §2)。
       const meter = decodeMeterUpdate(value.meter)
       return meter === null ? null : { kind: 'meter', meter }
+    }
+    case 'elicitation-request': {
+      // 形と上限を確かめ直し、検証を通した値だけで組み直す (外れたら破棄。O-10 / AD-053 Decision 2)。
+      const request = decodeElicitationPrompt(value.request)
+      return request === null ? null : { kind: 'elicitation-request', request }
     }
     default:
       return null

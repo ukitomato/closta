@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button'
 import { MCP_TOOL_LABELS } from '@/features/chat/labels'
 import { parseMcpToolName } from '@/features/chat/mcp-tool-name'
 
+import { AskUserQuestionAnswer } from './AskUserQuestionAnswer'
 import { APPROVAL_CARD_LABELS } from './labels'
 import type { PendingPermission } from './useLiveSession'
 
@@ -18,7 +19,10 @@ import type { PendingPermission } from './useLiveSession'
  *
  * O-5 (015 data-model §1「承認カード」/ §4): MCP の tool は**生の `toolName` を切り詰めずに**等幅・`break-all` で出し
  * (承認の判断の正本の識別子)、補助としてサーバー名 › tool 名の見出し (分け方を確かめられなければ「サーバー名は推定」) を
- * 出す。`AskUserQuestion` は暫定の注記を出す。それ以外の tool は今のまま。承認の応答は変えない。
+ * 出す。それ以外の tool は今のまま。承認の応答は変えない。
+ *
+ * O-10 (018 / AD-052): agents が `answerable: 'ask-user-question'` を付けた要求だけ、答える部品
+ * (`AskUserQuestionAnswer`) を出す (O-5 の暫定の注記は削った)。回答は `onDecision('allow', answers)` で渡す。
  */
 export function ApprovalCard({
   request,
@@ -26,7 +30,8 @@ export function ApprovalCard({
   mcpServerNames = []
 }: {
   readonly request: PendingPermission
-  readonly onDecision: (outcome: 'allow' | 'deny') => void
+  /** `answers` は `AskUserQuestion` の答える部品が「回答を送る」で許可するときだけ付く (O-10)。 */
+  readonly onDecision: (outcome: 'allow' | 'deny', answers?: readonly string[]) => void
   /** 表示中のセッションの構成が報告した MCP サーバーの名前 (`LivePane` が transcript と同じ一覧を渡す)。 */
   readonly mcpServerNames?: readonly string[]
 }): React.JSX.Element {
@@ -58,14 +63,6 @@ export function ApprovalCard({
           </p>
         </>
       )}
-      {request.toolName === 'AskUserQuestion' ? (
-        <p
-          data-slot="approval-ask-user-question-notice"
-          className="border-border bg-muted text-foreground mt-2 rounded-md border px-2.5 py-1.5 text-xs"
-        >
-          {APPROVAL_CARD_LABELS.askUserQuestionNotice}
-        </p>
-      ) : null}
       {request.scope === 'capability' ? (
         <p className="text-muted-foreground mt-1 text-xs">
           今後このセッション中は同種の要求を再確認しません (capability 付与)。
@@ -73,19 +70,30 @@ export function ApprovalCard({
       ) : (
         <p className="text-muted-foreground mt-1 text-xs">この 1 回だけの許可です。</p>
       )}
-      {request.input.length > 0 && (
-        <pre className="bg-muted text-foreground mt-2 max-h-48 overflow-auto rounded-md p-2 text-xs whitespace-pre-wrap">
-          {request.input}
-        </pre>
+      {request.answerable === 'ask-user-question' ? (
+        // 答える部品 (O-10 / AD-052)。agents が付けた印のときだけ。`mcp__x__AskUserQuestion` などは今のカード。
+        <AskUserQuestionAnswer
+          input={request.input}
+          onSubmit={(answers) => onDecision('allow', answers)}
+          onDeny={() => onDecision('deny')}
+        />
+      ) : (
+        <>
+          {request.input.length > 0 && (
+            <pre className="bg-muted text-foreground mt-2 max-h-48 overflow-auto rounded-md p-2 text-xs whitespace-pre-wrap">
+              {request.input}
+            </pre>
+          )}
+          <div className="mt-3 flex justify-end gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => onDecision('deny')}>
+              {APPROVAL_CARD_LABELS.deny}
+            </Button>
+            <Button type="button" size="sm" onClick={() => onDecision('allow')}>
+              {APPROVAL_CARD_LABELS.allow}
+            </Button>
+          </div>
+        </>
       )}
-      <div className="mt-3 flex justify-end gap-2">
-        <Button type="button" variant="outline" size="sm" onClick={() => onDecision('deny')}>
-          拒否
-        </Button>
-        <Button type="button" size="sm" onClick={() => onDecision('allow')}>
-          許可
-        </Button>
-      </div>
     </div>
   )
 }

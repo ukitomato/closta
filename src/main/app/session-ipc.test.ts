@@ -19,6 +19,7 @@ import {
   handleListSessions,
   handleRefreshSessions,
   handleRemovePreset,
+  handleRespondElicitation,
   handleRespondPermission,
   handleSavePreset,
   handleSendPrompt,
@@ -401,6 +402,113 @@ describe('X-1 起動 + 制御ハンドラ — main 直接呼び (SC-004 / SC-007
     ])('不正入力では制御を発火しない (%s)', async (_l, args) => {
       const { deps: d, calls } = deps()
       await handleRespondPermission(d, args as readonly unknown[])
+      expect(calls.controls).toEqual([])
+    })
+
+    it('answers つきの正例は decision.answers に載る (O-10)', async () => {
+      const { deps: d, calls } = deps()
+      await handleRespondPermission(d, [UUID, REQUEST_ID, 'allow', 'once', ['赤', 'a, b']])
+      expect(calls.controls).toEqual([
+        {
+          sessionId: UUID,
+          control: {
+            kind: 'respond-permission',
+            decision: {
+              requestId: REQUEST_ID,
+              outcome: 'allow',
+              scope: 'once',
+              answers: ['赤', 'a, b']
+            }
+          }
+        }
+      ])
+    })
+
+    it.each([
+      ['空白だけの回答', ['   ']],
+      ['5 件', ['a', 'b', 'c', 'd', 'e']],
+      ['数を含む', ['a', 1]],
+      ['0 件', []],
+      ['配列でない', 'a'],
+      ['null', null]
+    ])('answers が不正 (%s) なら制御を送らない', async (_l, answers) => {
+      const { deps: d, calls } = deps()
+      await handleRespondPermission(d, [UUID, REQUEST_ID, 'allow', 'once', answers])
+      expect(calls.controls).toEqual([])
+    })
+
+    it('answers を省いた 4 引数の呼び出しは変わらない (answers のキーが無い)', async () => {
+      const { deps: d, calls } = deps()
+      await handleRespondPermission(d, [UUID, REQUEST_ID, 'deny', 'once', undefined])
+      expect(calls.controls).toEqual([
+        {
+          sessionId: UUID,
+          control: {
+            kind: 'respond-permission',
+            decision: { requestId: REQUEST_ID, outcome: 'deny', scope: 'once' }
+          }
+        }
+      ])
+    })
+  })
+
+  describe('handleRespondElicitation (O-10 / contracts C-1 prime)', () => {
+    const control = (response: Record<string, unknown>): unknown => ({
+      sessionId: UUID,
+      control: { kind: 'respond-elicitation', response }
+    })
+
+    it('content なしの accept (URL のリンクを押した) は {requestId, action} で届く', async () => {
+      const { deps: d, calls } = deps()
+      await handleRespondElicitation(d, [UUID, REQUEST_ID, 'accept'])
+      expect(calls.controls).toEqual([control({ requestId: REQUEST_ID, action: 'accept' })])
+      await handleRespondElicitation(d, [UUID, REQUEST_ID, 'accept', undefined])
+      expect(calls.controls[1]).toEqual(control({ requestId: REQUEST_ID, action: 'accept' }))
+    })
+
+    it('content: {} の accept と値つきの accept が届く', async () => {
+      const { deps: d, calls } = deps()
+      await handleRespondElicitation(d, [UUID, REQUEST_ID, 'accept', {}])
+      await handleRespondElicitation(d, [UUID, REQUEST_ID, 'accept', { a: 'x', n: 1, b: false }])
+      expect(calls.controls).toEqual([
+        control({ requestId: REQUEST_ID, action: 'accept', content: {} }),
+        control({ requestId: REQUEST_ID, action: 'accept', content: { a: 'x', n: 1, b: false } })
+      ])
+    })
+
+    it('decline / cancel の content は捨てる (制御に載らない)', async () => {
+      const { deps: d, calls } = deps()
+      await handleRespondElicitation(d, [UUID, REQUEST_ID, 'decline', { a: 'MARK' }])
+      await handleRespondElicitation(d, [UUID, REQUEST_ID, 'cancel', { a: 'MARK' }])
+      expect(calls.controls).toEqual([
+        control({ requestId: REQUEST_ID, action: 'decline' }),
+        control({ requestId: REQUEST_ID, action: 'cancel' })
+      ])
+      expect(JSON.stringify(calls.controls)).not.toContain('MARK')
+    })
+
+    it.each([
+      ['33 キー', Object.fromEntries(Array.from({ length: 33 }, (_, i) => [`k${i}`, 1]))],
+      ['__proto__ のキー', JSON.parse('{"__proto__": 1}')],
+      ['値が object', { a: {} }],
+      ['配列', []],
+      ['null', null],
+      ['NaN', { a: Number.NaN }],
+      ['1,001 コードポイント', { a: 'x'.repeat(1001) }]
+    ])('accept の content が不正 (%s) なら制御を送らない', async (_l, content) => {
+      const { deps: d, calls } = deps()
+      await handleRespondElicitation(d, [UUID, REQUEST_ID, 'accept', content])
+      expect(calls.controls).toEqual([])
+    })
+
+    it.each([
+      ['sessionId 非 UUID', ['nope', REQUEST_ID, 'accept']],
+      ['requestId 非 UUID', [UUID, 'req-1', 'accept']],
+      ['action が列挙の外', [UUID, REQUEST_ID, 'ok']],
+      ['action が数', [UUID, REQUEST_ID, 1]]
+    ])('不正入力では制御を送らない (%s)', async (_l, args) => {
+      const { deps: d, calls } = deps()
+      await handleRespondElicitation(d, args as readonly unknown[])
       expect(calls.controls).toEqual([])
     })
   })

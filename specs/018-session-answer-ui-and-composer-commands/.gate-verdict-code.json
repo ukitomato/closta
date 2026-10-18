@@ -1,0 +1,131 @@
+{
+    "gate": "code",
+    "run": "2026-10-18T14:19:44.083227Z",
+    "spec_dir": "specs/018-session-answer-ui-and-composer-commands",
+    "spec_id": "018-session-answer-ui-and-composer-commands",
+    "iter": 2,
+    "severity_counts": {
+        "critical": 0,
+        "high": 2,
+        "medium": 3,
+        "low": 5,
+        "must_fix": 0
+    },
+    "must_fix_findings": [],
+    "touched_files": [
+        {
+            "path": "docs/domains/session/charter.md",
+            "sha": "562d79d6f1ae630682b12351d81feb67a7900d18"
+        },
+        {
+            "path": "docs/domains/ui/charter.md",
+            "sha": "e1b0dfe00ad1e177b47cb0bf6eb0426a85053930"
+        },
+        {
+            "path": "docs/roadmap.md",
+            "sha": "6b2bb9f19e1156242da74fb8595e4cc36def0822"
+        },
+        {
+            "path": "e2e/ime.spec.ts",
+            "sha": "b37e44934f5c9ca0c5990b740ed01d5292da250e"
+        },
+        {
+            "path": "src/main/app/e2e-capability.ts",
+            "sha": "c399b6c1dab49e031d0090cde3155d5cd96ff61a"
+        },
+        {
+            "path": "src/renderer/src/features/chat/composer-extensions.tsx",
+            "sha": "bf5ffa0c4d34d785d793fa53fd97163065bad620"
+        },
+        {
+            "path": "src/renderer/src/features/chat/slash-commands.ts",
+            "sha": "1ac684a5a3124d047c7c69a55ac9a597c53833fa"
+        },
+        {
+            "path": "src/renderer/src/features/session/AskUserQuestionAnswer.tsx",
+            "sha": "ce07c2430954e1b2f648e13a591f2311c5465cd4"
+        },
+        {
+            "path": "src/renderer/src/features/session/ElicitationCard.tsx",
+            "sha": "21736d422b6f461af3ba727558a77343b885802f"
+        },
+        {
+            "path": "src/renderer/src/features/session/labels.ts",
+            "sha": "0b40cababd68adb6ad3978ccc6cad5b7484d5941"
+        },
+        {
+            "path": "src/renderer/src/features/session/LivePane.composer.test.tsx",
+            "sha": "40777503f893eb77414b0be62d9f0c5b3de2ed18"
+        }
+    ],
+    "fr_coverage": [],
+    "viewpoint_coverage": {
+        "A": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+        "B": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+        "C": "Low:1 (platform-boundary L-001)",
+        "D": "0 \u4ef6\u78ba\u8a8d: check:constitution 20 ok / 0 violations",
+        "E": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+        "F": "High:2 (lint prettier warnings) Medium:3 Low:4",
+        "G": "platform-boundary-reviewer: Critical:0 High:0",
+        "H": "0 \u4ef6\u78ba\u8a8d: 3341/3341 passed"
+    },
+    "tracks": {
+        "lint-agent": {
+            "violations": 712,
+            "exit_code": 0,
+            "detectors": [
+                "lint",
+                "typecheck",
+                "depcruise",
+                "check:constitution"
+            ]
+        },
+        "test-agent": {
+            "passed": 3341,
+            "failed": 0,
+            "exit_code": 0,
+            "scope": "full"
+        },
+        "convention-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "lint_input": "lint-agent"
+        },
+        "platform-boundary-reviewer": {
+            "critical": 0,
+            "high": 0,
+            "medium": 2,
+            "low": 1
+        }
+    },
+    "skipped_reviewers": [
+        {
+            "name": "a11y-reviewer",
+            "reason": "gates=['pr-gate'] \u306b code-gate \u304c\u7121\u3044"
+        },
+        {
+            "name": "ux-reviewer",
+            "reason": "gates=['pr-gate'] \u306b code-gate \u304c\u7121\u3044"
+        },
+        {
+            "name": "database-reviewer",
+            "reason": "auto_invoke_patterns \u306b\u4e00\u81f4\u3059\u308b\u5909\u66f4\u30d5\u30a1\u30a4\u30eb\u304c\u7121\u3044"
+        }
+    ],
+    "cascade_demotions": 0,
+    "iter_history": [
+        {
+            "iter": 1,
+            "must_fix": 0,
+            "skipped": 0,
+            "error": 0
+        },
+        {
+            "iter": 2,
+            "must_fix": 0,
+            "skipped": 0,
+            "error": 0
+        }
+    ],
+    "verdict": "PASS"
+}

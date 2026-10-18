@@ -22,6 +22,7 @@ import {
 } from '@domain/session/meter'
 import {
   encodePluginDetail,
+  isMcpName,
   isReportName,
   stableSerialize,
   toCommands,
@@ -651,13 +652,17 @@ export function createLiveSignals(deps: LiveSignalsDeps): LiveSignals {
       (v): v is string => typeof v === 'string' && v !== ''
     )
     const detail = redactedBodyLine(texts.join('\n'))
+    // 拒否された入力の uuid は値を運ばず、有無だけを status に写す (O-10 / US-4)。
+    const refused = record.refused_user_message_uuid
+    const status: SystemEventStatus =
+      typeof refused === 'string' && refused !== '' ? 'no-fallback-retry' : 'no-fallback'
     send(
       rowEvent(
         `refusal:${uuid}`,
         'refusal',
         true,
         detail,
-        'no-fallback',
+        status,
         refusalCategory(record.api_refusal_category)
       )
     )
@@ -679,6 +684,19 @@ export function createLiveSignals(deps: LiveSignalsDeps): LiveSignals {
           ? 'warning'
           : 'notice'
     send(rowEvent(id, 'informational', true, redactedBodyLine(record.content), status))
+  }
+
+  /**
+   * `system` / `elicitation_complete` → MCP の URL での手続きの完了の行 (O-10 / AD-053 Decision 6。`mcp_server_name` と
+   * `elicitation_id` だけを読む)。対応する要求が無くても行は出し、カードは外さない (行は届いた事実だけを出す)。
+   */
+  const onElicitationComplete = (record: Record<string, unknown>): void => {
+    const elicitationId = record.elicitation_id
+    const id = isValidToolUseId(elicitationId)
+      ? `elicitation:${elicitationId}`
+      : `elicitation:${globalThis.crypto.randomUUID()}`
+    const name = isMcpName(record.mcp_server_name) ? record.mcp_server_name : ''
+    send(rowEvent(id, 'elicitation', true, '', 'completed', name))
   }
 
   /** `user` の `tool_result` ブロックの `tool_use_id` だけを読み、その tool の経過時間の保留を取り消す (本文は読まない)。 */
@@ -771,6 +789,9 @@ export function createLiveSignals(deps: LiveSignalsDeps): LiveSignals {
           break
         case 'informational':
           onInformational(record)
+          break
+        case 'elicitation_complete':
+          onElicitationComplete(record)
           break
       }
     },

@@ -47,6 +47,7 @@ import {
   handleListSessions,
   handleRefreshSessions,
   handleRemovePreset,
+  handleRespondElicitation,
   handleRespondPermission,
   handleSavePreset,
   handleSendPrompt
@@ -304,6 +305,10 @@ export function registerIpcHandlers(deps: IpcDependencies): void {
 
   handle(IPC_CHANNELS.respondPermission, async (_event, ...args): Promise<void> =>
     handleRespondPermission(deps, args)
+  )
+
+  handle(IPC_CHANNELS.respondElicitation, async (_event, ...args): Promise<void> =>
+    handleRespondElicitation(deps, args)
   )
 
   handle(IPC_CHANNELS.interruptSession, async (_event, ...args): Promise<void> =>

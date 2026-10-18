@@ -5,6 +5,7 @@ import type {
   PermissionDeniedInfo,
   SessionLaunchRejectReason
 } from '@domain/session/agent-session'
+import type { ElicitationPrompt } from '@domain/session/elicitation'
 import type { SessionLaunchConfig } from '@domain/session/launch-config'
 import type { LaunchOrigin } from '@domain/session/launch-usage'
 import type { MeterUpdate, PermissionModeKey } from '@domain/session/meter'
@@ -51,6 +52,8 @@ export interface PendingPermission {
   readonly toolName: string
   readonly input: string
   readonly scope: 'once' | 'capability'
+  /** agents が付ける印。'ask-user-question' のときだけ承認カードに答える部品を出す (O-10 / AD-052)。 */
+  readonly answerable?: 'ask-user-question'
 }
 
 /** セッション 1 本分の表示状態 (X-1 の `LiveSession` の中身 + X-5 の追加)。 */
@@ -62,6 +65,11 @@ export interface LiveSessionState {
   readonly runState: SessionRunState
   readonly messages: readonly ThreadMessageLike[]
   readonly pending: PendingPermission | null
+  /**
+   * MCP サーバーの問い (Elicitation) の待ち (届いた順。O-10 / data-model §4)。先頭の 1 枚を描き、残りの数を添える。
+   * 入力の値は持たない (カードの component の state だけ)。
+   */
+  readonly elicitations: readonly ElicitationPrompt[]
   readonly denied: readonly PermissionDeniedInfo[]
   /** 実行時失敗の理由キー (`failure` SessionEvent 由来)。 */
   readonly failureReason: LaunchFailureReason | null

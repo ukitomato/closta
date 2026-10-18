@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest'
 import {
   boundDecisionScope,
   isLaunchFailureReason,
+  isPermissionAnswers,
   LAUNCH_FAILURE_REASONS,
+  projectAskUserQuestionAnswer,
+  toAskUserQuestionResult,
   toPermissionResult,
   type PermissionDecision,
   type PermissionRequest
@@ -48,14 +51,150 @@ describe('toPermissionResult (正の構成 P2)', () => {
 })
 
 describe('PermissionRequest のフィールドの集合 (O-6 SC-005。足すと session の契約が変わる)', () => {
-  it('requestId / toolName / input / scope の 4 つだけ (toolUseId を足さない)', () => {
+  it('requestId / toolName / input / scope と任意の answerable (O-10) だけ (toolUseId を足さない)', () => {
     const req: Record<keyof PermissionRequest, true> = {
       requestId: true,
       toolName: true,
       input: true,
-      scope: true
+      scope: true,
+      answerable: true
     }
-    expect(Object.keys(req).sort()).toEqual(['input', 'requestId', 'scope', 'toolName'])
+    expect(Object.keys(req).sort()).toEqual([
+      'answerable',
+      'input',
+      'requestId',
+      'scope',
+      'toolName'
+    ])
+  })
+})
+
+describe('isPermissionAnswers (O-10 / data-model §1)', () => {
+  it('正例: 1〜4 件・前後に空白のある有効な回答・1,000 コードポイント', () => {
+    expect(isPermissionAnswers(['a'])).toBe(true)
+    expect(isPermissionAnswers(['a', 'b', 'c', 'd'])).toBe(true)
+    expect(isPermissionAnswers([' a '])).toBe(true)
+    expect(isPermissionAnswers(['a'.repeat(1000)])).toBe(true)
+    // サロゲートペアは 1 コードポイント (1,000 個で通り、1,001 個で落ちる)。
+    expect(isPermissionAnswers(['😀'.repeat(1000)])).toBe(true)
+    expect(isPermissionAnswers(['😀'.repeat(1001)])).toBe(false)
+  })
+  it.each([
+    ['0 件', []],
+    ['5 件', ['a', 'b', 'c', 'd', 'e']],
+    ['数', [1]],
+    ['null を含む', ['a', null]],
+    ['1,001 コードポイント', ['a'.repeat(1001)]],
+    ['空文字', ['']],
+    ['空白だけ', ['   ']],
+    ['改行だけ', ['\n']],
+    ['全角の空白だけ', ['　']],
+    ['配列でない', 'a'],
+    ['object', { 0: 'a' }]
+  ])('負例: %s', (_name, value) => {
+    expect(isPermissionAnswers(value)).toBe(false)
+  })
+})
+
+describe('projectAskUserQuestionAnswer / toAskUserQuestionResult (O-10 / AD-052。SC-001 / SC-002)', () => {
+  const q = (question: string, extra: Record<string, unknown> = {}): Record<string, unknown> => ({
+    question,
+    header: 'h',
+    options: [{ label: 'x' }],
+    ...extra
+  })
+  const decision = (answers?: readonly string[]): PermissionDecision => ({
+    requestId: 'r',
+    outcome: 'allow',
+    scope: 'once',
+    ...(answers !== undefined ? { answers } : {})
+  })
+
+  it('問い 1 件・4 件・multiSelect・その他の自由記述で元の入力 + answers になる', () => {
+    const one = { questions: [q('A?')] }
+    expect(projectAskUserQuestionAnswer(one, ['x'])).toEqual({ ...one, answers: { 'A?': 'x' } })
+    const four = { questions: [q('1'), q('2'), q('3'), q('4', { multiSelect: true })] }
+    expect(projectAskUserQuestionAnswer(four, ['a', 'b', 'c', 'x, 自由記述'])).toEqual({
+      ...four,
+      answers: { '1': 'a', '2': 'b', '3': 'c', '4': 'x, 自由記述' }
+    })
+  })
+
+  it('元の入力の他のキーを変えず (浅い複製)、既にある answers を置き換え、annotations を足さない', () => {
+    const input = { questions: [q('A?')], metadata: { s: 1 }, answers: { old: 'o' } }
+    const out = projectAskUserQuestionAnswer(input, ['x'])
+    expect(out).not.toBeNull()
+    if (out === null) return
+    expect(Object.keys(out).sort()).toEqual(['answers', 'metadata', 'questions'])
+    expect(out.metadata).toBe(input.metadata)
+    expect(out.answers).toEqual({ 'A?': 'x' })
+    expect(input.answers).toEqual({ old: 'o' })
+    expect(Object.prototype.hasOwnProperty.call(out, 'annotations')).toBe(false)
+  })
+
+  it.each([
+    ['questions が配列でない', { questions: 'x' }, ['a']],
+    ['問いが 0 件', { questions: [] }, ['a']],
+    ['問いが 5 件', { questions: [q('1'), q('2'), q('3'), q('4'), q('5')] }, ['a', 'b', 'c', 'd']],
+    ['件数違い', { questions: [q('A?'), q('B?')] }, ['a']],
+    ['1,001 コードポイント', { questions: [q('A?')] }, ['a'.repeat(1001)]],
+    ['空の回答', { questions: [q('A?')] }, ['']],
+    ['空白だけ', { questions: [q('A?')] }, ['   ']],
+    ['改行だけ', { questions: [q('A?')] }, ['\n']],
+    ['重なる問いの文', { questions: [q('A?'), q('A?')] }, ['a', 'b']],
+    ['問いが object でない', { questions: ['A?'] }, ['a']],
+    ['question が空', { questions: [q('')] }, ['a']],
+    ['入力が object でない', 'x', ['a']],
+    ['入力が配列', [], ['a']]
+  ])('負例 %s は null', (_name, input, answers) => {
+    expect(projectAskUserQuestionAnswer(input, answers)).toBeNull()
+  })
+
+  it('answers が object (renderer が問いの文を送った形) は null', () => {
+    const bad: unknown = { 'A?': 'x' }
+    // @ts-expect-error 型の外の値を渡す負例
+    expect(projectAskUserQuestionAnswer({ questions: [q('A?')] }, bad)).toBeNull()
+  })
+
+  it('__proto__ の問いの文で原型を書き換えない', () => {
+    const out = projectAskUserQuestionAnswer({ questions: [q('__proto__')] }, ['x'])
+    expect(out).not.toBeNull()
+    expect(({} as Record<string, unknown>).x).toBeUndefined()
+    if (out === null) return
+    const answers = out.answers as Record<string, unknown>
+    expect(Object.getPrototypeOf(answers)).toBe(Object.prototype)
+    expect(Object.keys(answers)).toEqual(['__proto__'])
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined()
+  })
+
+  it('許可の出力のキーは {behavior, updatedInput}、updatedInput のキーは元のキー ∪ {answers}、updatedPermissions は無い', () => {
+    const input = { questions: [q('A?')], extra: 1 }
+    const result = toAskUserQuestionResult(decision(['x']), input)
+    expect(Object.keys(result).sort()).toEqual(['behavior', 'updatedInput'])
+    if (!('updatedInput' in result)) throw new Error('updatedInput が無い')
+    expect(Object.keys(result.updatedInput).sort()).toEqual(['answers', 'extra', 'questions'])
+    expect(Object.prototype.hasOwnProperty.call(result, 'updatedPermissions')).toBe(false)
+  })
+
+  it('deny は toPermissionResult と同じ。allow で answers が無い・射影の失敗は deny', () => {
+    const input = { questions: [q('A?')] }
+    expect(
+      toAskUserQuestionResult(
+        { requestId: 'r', outcome: 'deny', scope: 'once', message: 'm' },
+        input
+      )
+    ).toEqual({ behavior: 'deny', message: 'm' })
+    const noAnswers = toAskUserQuestionResult(decision(), input)
+    expect(noAnswers.behavior).toBe('deny')
+    expect(Object.keys(noAnswers).every((k) => ['behavior', 'message'].includes(k))).toBe(true)
+    const failed = toAskUserQuestionResult(decision(['a', 'b']), input)
+    expect(failed.behavior).toBe('deny')
+    expect('updatedInput' in failed).toBe(false)
+  })
+
+  it('toPermissionResult は answers があっても {behavior, message} のキーだけ', () => {
+    const r = toPermissionResult(decision(['x']))
+    expect(Object.keys(r)).toEqual(['behavior'])
   })
 })
 

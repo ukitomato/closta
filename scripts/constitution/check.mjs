@@ -776,7 +776,8 @@ function hasPackagedGate() {
    * contracts C-4 P1-P3 の backstop (SH-010 / AD-036 §4)。
    *
    * **正の構成そのものは `session-core.ts` の `buildQueryOptions` (allowlist キーのみ) と
-   * `toPermissionResult` ({behavior, message} のみ) が保証し unit test が守る。**
+   * `toPermissionResult` ({behavior, message} のみ。`AskUserQuestion` の許可だけ domain の
+   * `toAskUserQuestionResult` が `updatedInput` を組む。AD-052) が保証し unit test が守る。**
    * ここは SDK を保持するファイル (`AGENT_SDK_IMPORT_DIRECTORIES`) に昇格レバーが**直に現れないこと**を見る。
    * 項目 14 は named import の呼び出し形だけを見るため、**options リテラルのキー**と
    * **`Query` の `.method()` 呼び出し**を捕まえられない (contracts C-4 SC-006(a) が名指す穴)。
@@ -914,6 +915,15 @@ function hasPackagedGate() {
         )
       }
     }
+    // (P2) 入力の書き換え・権限の書き換えのキーの綴り (コメントを除いたコード)。`AskUserQuestion` の許可の
+    //      `updatedInput` を組むのは domain の `toAskUserQuestionResult` だけ (AD-052。O-10)。agents には現れない。
+    for (const key of ['updatedInput', 'updatedPermissions']) {
+      if (new RegExp(String.raw`\b` + key + String.raw`\b`).test(src.code)) {
+        found.push(
+          `${src.file}  "${key}" が現れている (P2。AskUserQuestion の許可は domain の toAskUserQuestionResult だけが組む。AD-052)`
+        )
+      }
+    }
     // (P3) Query の mutation メソッド呼び出し (interrupt 以外)。
     //      ドット呼び出し (`.m(` / `?.m(`) と計算キー (`q['m'](` / `q["m"](` / q[`m`](。括弧の内側と前後の空白を許す)。
     //      分割代入 (`const { m } = q`)・`.m.call(` / `.m.apply(`・変数のキー (`q[k](`) は追わない
@@ -935,7 +945,7 @@ function hasPackagedGate() {
     '権限ゲートの正の構成 (query options のキー / Query メソッドの backstop)',
     'III / contracts C-4',
     found,
-    `対象: ${AGENT_SDK_IMPORT_DIRECTORIES.join(', ')} / 正本は buildQueryOptions + toPermissionResult`
+    `対象: ${AGENT_SDK_IMPORT_DIRECTORIES.join(', ')} / 正本は buildQueryOptions + toPermissionResult + toAskUserQuestionResult`
   )
 }
 

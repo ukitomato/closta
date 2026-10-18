@@ -19,6 +19,9 @@ import {
   isKnownTargetKey,
   isPermissionOutcome,
   isPermissionScope,
+  isValidElicitationAction,
+  isValidElicitationContent,
+  isValidPermissionAnswers,
   isValidSessionOffset
 } from './validate'
 
@@ -260,9 +263,51 @@ export async function handleRespondPermission(
   if (!isValidSessionId(args[1])) return
   if (!isPermissionOutcome(args[2])) return
   if (!isPermissionScope(args[3])) return
+  // `answers` (O-10 / AD-052) は省略可。あれば domain の述語で検証し、外れたら制御を送らない。
+  const answers: unknown = args[4]
+  if (answers !== undefined && !isValidPermissionAnswers(answers)) return
   deps.controlSession(args[0], {
     kind: 'respond-permission',
-    decision: { requestId: args[1], outcome: args[2], scope: args[3] }
+    decision: {
+      requestId: args[1],
+      outcome: args[2],
+      scope: args[3],
+      ...(answers !== undefined ? { answers } : {})
+    }
+  })
+}
+
+/**
+ * `respondElicitation(sessionId, requestId, action, content?)` (O-10 / AD-053 Decision 3。contracts C-1')。
+ *
+ * UUID ×2・`action`・(`accept` のときだけ) `content` を domain の述語で検証する。外れたら制御を送らず、renderer に
+ * 失敗も返さない (`respondPermission` と同じ。renderer は送る前に同じ述語で確かめる)。`content` は省略できる
+ * (URL の `accept`)。`accept` でないときは `content` を捨てる。URL を開く処理はここに無い (AD-053 Decision 5)。
+ */
+export async function handleRespondElicitation(
+  deps: SessionIpcDeps,
+  args: readonly unknown[]
+): Promise<void> {
+  if (!isValidSessionId(args[0])) return
+  if (!isValidSessionId(args[1])) return
+  const action: unknown = args[2]
+  if (!isValidElicitationAction(action)) return
+  if (action !== 'accept') {
+    deps.controlSession(args[0], {
+      kind: 'respond-elicitation',
+      response: { requestId: args[1], action }
+    })
+    return
+  }
+  const content: unknown = args[3]
+  if (content !== undefined && !isValidElicitationContent(content)) return
+  deps.controlSession(args[0], {
+    kind: 'respond-elicitation',
+    response: {
+      requestId: args[1],
+      action,
+      ...(content !== undefined ? { content } : {})
+    }
   })
 }
 

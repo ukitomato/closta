@@ -4,6 +4,7 @@ import type { AppendMessage, ThreadMessageLike } from '@assistant-ui/react'
 
 import { SESSION_PORT_MESSAGE, type ClostaCapability } from '@domain/capability'
 import type { SessionEvent } from '@domain/session/agent-session'
+import type { ElicitationPrompt } from '@domain/session/elicitation'
 import type { TranscriptPartDTO } from '@domain/session/transcript-dto'
 import type { SessionLaunchConfig } from '@domain/session/launch-config'
 import type { MeterUpdate } from '@domain/session/meter'
@@ -95,6 +96,7 @@ function harness(over: Partial<ClostaCapability> = {}): Harness {
     sendPrompt: vi.fn(async () => {}),
     interruptSession: vi.fn(async () => {}),
     respondPermission: vi.fn(async () => {}),
+    respondElicitation: vi.fn(async () => {}),
     killSession: vi.fn(async () => {}),
     endSession: vi.fn(async () => {}),
     onSessionStatus: (l) => {
@@ -392,6 +394,16 @@ describe('running-session-store — 制御の宛先と終わらせ方 (FR-010 / 
     expect(h.cap.sendPrompt).toHaveBeenCalledTimes(1)
     expect(h.cap.interruptSession).toHaveBeenCalledWith(A)
     expect(h.cap.respondPermission).toHaveBeenCalledWith(B, 'perm-1', 'allow', 'once')
+  })
+
+  it('respond は answers を第 5 引数で渡し、ストアのどこにも回答の値が残らない (O-10)', async () => {
+    const h = harness()
+    await launched(h, A)
+    h.store.respond(A, 'perm-1', 'allow', ['O10-MARKER-xyz'])
+    expect(h.cap.respondPermission).toHaveBeenCalledWith(A, 'perm-1', 'allow', 'once', [
+      'O10-MARKER-xyz'
+    ])
+    expect(JSON.stringify(h.store.getState())).not.toContain('O10-MARKER-xyz')
   })
 
   it('下書きはセッションごとに保たれ、書き込みは state を変えない (打鍵で再描画させない。SC-003)', async () => {
@@ -1056,5 +1068,70 @@ describe('running-session-store — 取り消し (O-6 FE-010 / 016 data-model §
     for (let i = 0; i < 3; i++) emit(port, textMessage(`m${i}`))
     emit(port, retraction('m0', 'm1'))
     expect(idsOf(h)).toEqual(['m2'])
+  })
+})
+
+describe('running-session-store — MCP サーバーの問い (O-10 FE-020 / 018 data-model §4)', () => {
+  const E1 = '33333333-3333-4333-8333-333333333333'
+  const E2 = '44444444-4444-4444-8444-444444444444'
+  const prompt = (requestId: string): ElicitationPrompt => ({
+    requestId,
+    serverName: 's',
+    title: '',
+    message: 'm',
+    mode: 'form',
+    url: null,
+    fields: [{ key: 'a', label: 'a', description: '', required: false, type: 'string' }]
+  })
+  const idsOfCards = (h: Harness, id = A): string[] =>
+    (h.store.getState().sessions[id]?.elicitations ?? []).map((e) => e.requestId)
+
+  it('届いた順に足し、同じ requestId は足さず、receivedMessages に数えない', async () => {
+    const h = harness()
+    const port = await launched(h)
+    emit(port, { kind: 'elicitation-request', request: prompt(E1) })
+    emit(port, { kind: 'elicitation-request', request: prompt(E2) })
+    emit(port, { kind: 'elicitation-request', request: prompt(E1) })
+    expect(idsOfCards(h)).toEqual([E1, E2])
+    expect(h.store.getState().receivedMessages).toBe(0)
+  })
+
+  it('respondElicitation はカードを外してから capability に届け、値をストアに残さない', async () => {
+    const h = harness()
+    const port = await launched(h)
+    emit(port, { kind: 'elicitation-request', request: prompt(E1) })
+    h.store.respondElicitation(A, E1, 'accept', { a: 'O10-MARKER-xyz' })
+    expect(idsOfCards(h)).toEqual([])
+    expect(h.cap.respondElicitation).toHaveBeenCalledWith(A, E1, 'accept', {
+      a: 'O10-MARKER-xyz'
+    })
+    expect(JSON.stringify(h.store.getState())).not.toContain('O10-MARKER-xyz')
+  })
+
+  it('failure・kill・close・interrupted / error / done で外れ、running / awaiting_permission では残る', async () => {
+    const h = harness()
+    const port = await launched(h)
+    emit(port, { kind: 'elicitation-request', request: prompt(E1) })
+    emit(port, { kind: 'state', state: 'running' })
+    emit(port, { kind: 'state', state: 'awaiting_permission' })
+    expect(idsOfCards(h)).toEqual([E1])
+    for (const state of ['interrupted', 'error', 'done'] as const) {
+      emit(port, { kind: 'elicitation-request', request: prompt(E1) })
+      emit(port, { kind: 'state', state })
+      expect(idsOfCards(h)).toEqual([])
+    }
+    emit(port, { kind: 'elicitation-request', request: prompt(E1) })
+    emit(port, { kind: 'failure', reasonKey: 'supervisor-exited' })
+    expect(idsOfCards(h)).toEqual([])
+    h.store.close(A)
+    expect(h.store.getState().sessions[A]).toBeUndefined()
+  })
+
+  it('kill で外れる', async () => {
+    const h = harness()
+    const port = await launched(h)
+    emit(port, { kind: 'elicitation-request', request: prompt(E1) })
+    h.store.kill(A)
+    expect(idsOfCards(h)).toEqual([])
   })
 })

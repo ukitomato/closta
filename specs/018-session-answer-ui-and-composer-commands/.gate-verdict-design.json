@@ -1,0 +1,266 @@
+{
+    "gate": "design",
+    "run": "2026-10-17T10:45:00+09:00",
+    "round": 2,
+    "spec_dir": "specs/018-session-answer-ui-and-composer-commands",
+    "spec_id": "018-session-answer-ui-and-composer-commands",
+    "tracks": {
+        "analyze": {
+            "status": "ok",
+            "raw_out": "analyze.md",
+            "viewpoint_missing": null,
+            "cascade_demotions": null
+        },
+        "po-reviewer": {
+            "status": "ok",
+            "raw_out": "po-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "architecture-reviewer": {
+            "status": "ok",
+            "raw_out": "architecture-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "security-reviewer": {
+            "status": "ok",
+            "raw_out": "security-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "platform-boundary-reviewer": {
+            "status": "ok",
+            "raw_out": "platform-boundary-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        }
+    },
+    "severity_counts": {
+        "critical": 0,
+        "high": 1,
+        "medium": 18,
+        "low": 18
+    },
+    "prev_comparison": {
+        "critical": {
+            "resolved": 1,
+            "unresolved": 0,
+            "new": 0
+        },
+        "high": {
+            "resolved": 5,
+            "unresolved": 0,
+            "new": 1
+        }
+    },
+    "fr_coverage": [
+        {
+            "fr": "FR-001",
+            "covered": true,
+            "by": [
+                "FE-011",
+                "BE-011",
+                "FE-010"
+            ]
+        },
+        {
+            "fr": "FR-002",
+            "covered": true,
+            "by": [
+                "BE-010",
+                "BE-013",
+                "FE-010",
+                "FE-011"
+            ]
+        },
+        {
+            "fr": "FR-003",
+            "covered": true,
+            "by": [
+                "BE-010",
+                "BE-011"
+            ]
+        },
+        {
+            "fr": "FR-004",
+            "covered": true,
+            "by": [
+                "BE-010",
+                "BE-011",
+                "BE-012"
+            ]
+        },
+        {
+            "fr": "FR-005",
+            "covered": true,
+            "by": [
+                "BE-020",
+                "BE-021",
+                "BE-022"
+            ]
+        },
+        {
+            "fr": "FR-006",
+            "covered": true,
+            "by": [
+                "BE-020",
+                "BE-021",
+                "FE-020"
+            ]
+        },
+        {
+            "fr": "FR-007",
+            "covered": true,
+            "by": [
+                "FE-021"
+            ]
+        },
+        {
+            "fr": "FR-008",
+            "covered": true,
+            "by": [
+                "BE-020",
+                "BE-021",
+                "BE-024"
+            ]
+        },
+        {
+            "fr": "FR-009",
+            "covered": true,
+            "by": [
+                "BE-021",
+                "BE-022",
+                "FE-020",
+                "FE-023"
+            ]
+        },
+        {
+            "fr": "FR-010",
+            "covered": true,
+            "by": [
+                "BE-020",
+                "BE-023",
+                "FE-022"
+            ]
+        },
+        {
+            "fr": "FR-011",
+            "covered": true,
+            "by": [
+                "BE-022"
+            ]
+        },
+        {
+            "fr": "FR-012",
+            "covered": true,
+            "by": [
+                "FE-031",
+                "SH-002"
+            ]
+        },
+        {
+            "fr": "FR-013",
+            "covered": true,
+            "by": [
+                "FE-030"
+            ]
+        },
+        {
+            "fr": "FR-014",
+            "covered": true,
+            "by": [
+                "FE-030"
+            ]
+        },
+        {
+            "fr": "FR-015",
+            "covered": true,
+            "by": [
+                "BE-040",
+                "FE-040"
+            ]
+        },
+        {
+            "fr": "FR-016",
+            "covered": true,
+            "by": [
+                "SH-011"
+            ]
+        },
+        {
+            "fr": "FR-017",
+            "covered": true,
+            "by": [
+                "SH-001",
+                "SH-010",
+                "SH-012"
+            ]
+        }
+    ],
+    "viewpoint_coverage": {
+        "A": "Critical:0 High:0 (security Low:2)",
+        "B": "Critical:0 High:0 (security Medium:3)",
+        "C": "Critical:0 High:0 (architecture Medium:1 Low:2)",
+        "D": "Critical:0 High:0 (architecture Medium:2 Low:2; platform-boundary Low:1)",
+        "E": "Critical:0 High:0 (po Medium:5 Low:3)",
+        "F": "Critical:0 High:0 (platform-boundary Medium:2 Low:1)",
+        "G": "\u8a72\u5f53\u306a\u3057: optional reviewer \u306e\u7bc4\u56f2",
+        "H": "Critical:0 High:0 (po Medium:1; security Medium:1; platform-boundary Medium:1)"
+    },
+    "dedup_log": [
+        {
+            "merged": [
+                "analyze-F8",
+                "security-M-002"
+            ],
+            "key": "data-model.md \u00a72/\u00a73 key rule (__proto__)"
+        },
+        {
+            "merged": [
+                "analyze-F4",
+                "po-M-001"
+            ],
+            "key": "ELICITATION_MAX_PENDING (data-model.md \u00a74)"
+        },
+        {
+            "merged": [
+                "analyze-F6",
+                "po-M-004"
+            ],
+            "key": "FR-015"
+        },
+        {
+            "merged": [
+                "analyze-F9",
+                "platform-boundary-M-002"
+            ],
+            "key": "FR-004"
+        },
+        {
+            "merged": [
+                "po-M-006",
+                "security-M-004"
+            ],
+            "key": "plan.md RK-08 / FE-021 openExternalIfHttp"
+        },
+        {
+            "merged": [
+                "analyze-F11",
+                "architecture-L-004"
+            ],
+            "key": "AD-052 Decision 4 (d)"
+        },
+        {
+            "merged": [
+                "analyze-N3",
+                "po-L-003"
+            ],
+            "key": "FE-021 auxclick"
+        }
+    ],
+    "notes": [
+        "analyze.md Metrics states Low 8 but its table lists 9 LOW rows; 9 used"
+    ],
+    "verdict": "PASS"
+}
