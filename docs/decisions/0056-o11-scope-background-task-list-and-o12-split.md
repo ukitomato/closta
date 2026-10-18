@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2026-10-17
 id: AD-056
 deciders: ukitomato
@@ -10,9 +10,7 @@ superseded-by: []
 
 # AD-056: 背景の task の一覧・Hook の一覧と計画の一覧を作らないこと・O-12 への分割
 
-> **status: proposed。** O-11 ([spec 019](../../specs/019-ui-hooks-tasks-subagents-and-notices/spec.md)) が夜間の自走で起こした。
-> 利用者の承認はまだ無い (spec 019 の U-1 / U-3 / U-4 / U-6 / U-7)。
-> design-gate (round 1) の H-01 / H-07 / H-08 で Decision 2 の括弧書き・持ち主と保持の書き分け・AD-044 Decision 6 の読み替え 2 行を直した (proposed なので本文を直した)。
+本 ADR は O-11 ([spec 019](../../specs/019-ui-hooks-tasks-subagents-and-notices/spec.md)) が夜間の自走で起こした (spec 019 の U-1 / U-3 / U-4 / U-6 / U-7)。design-gate (round 1) の H-01 / H-07 / H-08 で Decision 2 の括弧書き・持ち主と保持の書き分け・AD-044 Decision 6 の読み替え 2 行を直した。本 ADR と spec 019 の U-1〜U-11 は 2026-10-17 に利用者が承認した。承認の記録の前に、main にマージされた O-9 / O-10 との突き合わせで、Decision 1 に O-10 の `elicitation_complete` の行の過去ログの変換 (roadmap の O-11 の行に O-10 が足した義務) を、Consequences にタブの数を足した。
 
 ## Context
 
@@ -34,7 +32,7 @@ superseded-by: []
 
 ## Decision
 
-1. **O-12 に分ける。** Tier B の知らせの類 (`notification` / `local_command_output` / `memory_recall` / `prompt_suggestion` / `mirror_error` / `tool_use_summary` / `active_goal`)、Checkpoints の表示 (`files_persisted`。巻き戻しはしない)、`user/document` の File element、`server_tool_use` / `web_search_tool_result`、対応表の B 節の機械照合、過去ログへの O-6 の行 (`informational`・拒否・会話の作り直し) の変換を、新しい feature O-12 (M3・`ui`・依存 O-11) にする。どれも Tier B の行なので、M3 の完了の条件に数えない (AD-044 Decision 3)。O-11 の完了の PR で対応表のこれらの行を `後続: O-12` に書き換え、roadmap に O-12 の行を足す
+1. **O-12 に分ける。** Tier B の知らせの類 (`notification` / `local_command_output` / `memory_recall` / `prompt_suggestion` / `mirror_error` / `tool_use_summary` / `active_goal`)、Checkpoints の表示 (`files_persisted`。巻き戻しはしない)、`user/document` の File element、`server_tool_use` / `web_search_tool_result`、対応表の B 節の機械照合、過去ログへの O-6 の行 (`informational`・拒否・会話の作り直し) と O-10 の行 (`elicitation_complete`。category `elicitation`) の変換を、新しい feature O-12 (M3・`ui`・依存 O-11) にする。どれも Tier B の行なので、M3 の完了の条件に数えない (AD-044 Decision 3)。O-11 の完了の PR で対応表のこれらの行を `後続: O-12` に書き換え、roadmap に O-12 の行を足す
 2. **背景の task の一覧を作る。表示と feature の持ち主は `ui`、保持は session の契約。** 一覧は右のペインのタブで、`background_tasks_changed` の最新の 1 つを稼働中のストアの `meters` に置き換えで持つ (ambient の task を除く。セッションのプロセスが起動したら空に戻す)。agents は `meter` の種類 `background-tasks` で task の id と種類だけを送る。説明・コマンドは送らず、一覧の各行の名前は同じ id の transcript の task の行 (O-2 の規則で無害化済み。`local_bash` は説明を出さず、起動した `Bash` の呼び出しのコマンドの名前 (O-1 の直近の活動と同じ、秘密の形を弾く規則。spec 019 FR-005) だけを出す) から引く。session の契約 (`METER_UPDATE_TYPES` に 1 つ) を広げるのは O-4 / O-5 / O-6 と同じく ui の feature が持ち、session charter に記録する。一覧から task を止める・前面に戻す操作は付けない (AD-049 Decision 6)
 3. **計画の一覧 (TodoList のタブ) は作らない。** `TaskCreate` / `TaskUpdate` は呼び出しごとに TodoList の 1 項目で描き (O-6)、全体は `TaskList` の結果で読める。右のペインのタブの候補の TodoList (O-7 から) は足さない
 4. **`get_hooks_listing` を呼ばない。** Hook は実行されたときに transcript の行で出る。設定の一覧は Claude Code の `/hooks` で見られ、アプリの範囲 (表示) の外である。AD-036 §4 P3 は読み替えない。対応表の行は `表示不要` にする
@@ -43,7 +41,7 @@ superseded-by: []
 ## Consequences
 
 - M3 の完了は O-11 だけを待つ (O-12 は待たない)。roadmap の M4 / M5 の順を 1 つずつ振り直す
-- `METER_UPDATE_TYPES` が O-6 の後の 9 から 1 つ増える。右のペインのタブが 1 つ増える (O-4 のタブのキーボード操作に従う)
+- `METER_UPDATE_TYPES` が O-6 の後の 9 から 1 つ増える。右のペインのタブが 1 つ増える (概要・使用量・構成・会話の地図 (O-9) の 4 つから 5 つ。O-4 のタブのキーボード操作に従う)
 - 一覧 (置き換えの最新) と transcript の task の行 (開始と終わりの出来事) は、届く順が決まっていないので一時的に食い違いうる。一覧は「今動いているもの」、行は「起きたこと」として別に描く
 
 ## Alternatives

@@ -2,11 +2,11 @@
 
 **Spec**: [spec.md](./spec.md) | **Research**: [research.md](./research.md) | **Date**: 2026-10-17
 
-規則の正本はこのファイル。spec の FR は本ファイルの節を参照する。SDK の行番号は 0.3.270。
+規則の正本はこのファイル。spec の FR は本ファイルの節を参照する。SDK の行番号は 0.3.270。ソースの行番号と集合の数は main 6fa08c2 (O-9 / O-10 のマージ後) で確かめた (2026-10-18)。
 
-**未承認**: 本ファイルの規則は spec の U-1〜U-11 (未承認。夜間の仮採用) と AD-054 / AD-055 / AD-056 (proposed) の上にある。承認で覆ったときの手当ては plan の RK-01。
+**前提**: 本ファイルの規則は spec の U-1〜U-11 と AD-054 / AD-055 / AD-056 の上にある。どれも 2026-10-17 に利用者が承認した (accepted)。
 
-**変えないもの** (SC-004): `SessionEvent` の種類・`TRANSCRIPT_PART_FIELDS`・`TRANSCRIPT_MESSAGE_FIELDS`・`PermissionRequest`・`toPermissionResult`・IPC・preload・main・`Query` の呼び出し (`interrupt` だけ)・`QUERY_ESCALATION_OPTION_KEYS`・`QUERY_MUTATION_METHODS`。
+**変えないもの** (SC-004): `SessionEvent` の種類 (O-10 の後の 9)・`SessionControl` の種類・`TRANSCRIPT_PART_FIELDS`・`TRANSCRIPT_MESSAGE_FIELDS`・`PermissionRequest`・`toPermissionResult`・IPC・preload・main・`Query` の呼び出し (`interrupt` だけ)・`QUERY_ESCALATION_OPTION_KEYS`・`QUERY_MUTATION_METHODS`。
 
 ---
 
@@ -19,7 +19,7 @@
 | `includeHookEvents` | `true` | `true` (リテラル) | `buildQueryOptions` だけが組む。起動の入力・IPC・プリセット・Provider の設定から渡さない (AD-054 Decision 1) |
 | `forwardSubagentText` | `true` | `true` (リテラル) | 同上 (§3 で使う) |
 
-`QUERY_OPTION_KEYS` は 8 → 10 キー (O-10 が先にマージされたらその和集合。AD-054 Decision 4)。
+`QUERY_OPTION_KEYS` (`src/agents/session-core.ts:63-74`) は 9 → 11 キー。O-10 が先にマージされ AD-053 の `onElicitation` を足しているので、その和集合 (AD-041 (g) の 8・`onElicitation`・本 feature の 2) にする (AD-054 Decision 4)。
 
 ### 1.2 行の作り方
 
@@ -72,13 +72,13 @@ O-2 の `toSystemEventMessage` (011 data-model §2) をそのまま通す。本 
 
 | 入力 | 行 |
 |---|---|
-| `task_updated` で `patch.is_backgrounded === true`、記憶にある task | 行 `task:<task_id>` を開く (`opens: true`)。category **`backgrounded-task`** (新設)。`name` と `detail` は `task_started` から作る行と同じ規則 (`local_bash` は §2.3)。`status` は `patch.status` を `toStatus` に通した値、無ければ `running` |
+| `task_updated` で `patch.is_backgrounded === true`、記憶にある task | 行 `task:<task_id>` を開く (`opens: true`)。category **`backgrounded-task`** (新設)。`name` と `detail` は `task_started` から作る行と同じ規則 (`local_bash` は §2.3)。`status` は `patch.status` を `toStatus` に通した値、無ければ `running`。`createdAt` は `toSystemEventMessage(raw, createdAt)` と同じく呼び出し元が渡す値 (実行中は受信時刻、過去ログはその `task_updated` の記録の時刻。AD-051 Decision 1 / 2) |
 | 同上、記憶に無い task | 行を作らない (spec Edge Cases。一覧には出る) |
 | 以後の `task_updated` / `task_notification` / O-4 の `task_progress` | O-2 の合成 (`mergeSystemEvent`) で同じ行に入る。category は前の行のまま |
 
-- `SYSTEM_EVENT_CATEGORIES` は 11 → 12。`mergedDetail` の task の進み具合の分岐は `task` と `backgrounded-task` の両方に当てる
+- `SYSTEM_EVENT_CATEGORIES` (`transcript-dto.ts:68-82`) は 12 → 13 (O-10 の `elicitation` の後に足す)。`mergedDetail` の task の進み具合の分岐は `task` と `backgrounded-task` の両方に当てる
 - renderer: `backgrounded-task` の行は task の行と同じ表示に「背景に移した」を添える ([ASSUMED] の UI ラベル)。`SYSTEM_EVENT_ICONS`・`systemEventDetailText`・`rowAnnouncement` (task と同じ扱い) に足す
-- 実行中と過去ログで同じ関数 (`toSystemEventMessage` に記憶を渡す形、または記憶を持つ薄い包み) を使う。規則を 2 か所に書かない
+- 実行中と過去ログで同じ関数 (記憶を持つ薄い包み。引数は `toSystemEventMessage` と同じ `raw` と `createdAt` に、§2.3 の `argsText` を足した形) を使う。規則を 2 か所に書かない
 
 ### 2.3 シェルの task のコマンドの名前
 
@@ -122,8 +122,8 @@ interface BackgroundTaskEntry { readonly taskId: string; readonly taskType: Back
 | 置き場所 | `SessionMeters.backgroundTasks: readonly BackgroundTaskEntry[] \| null` (`EMPTY_SESSION_METERS` では `null`)。`applyMeter` の `case 'background-tasks'` で置き換える |
 | 空に戻す | セッションのプロセスの起動 (今 `EMPTY_SESSION_METERS` で `meters` を作る箇所) |
 | 永続化 | しない |
-| タブ | `PANEL_TABS` に `{ id: 'background-tasks', label: '背景の task', ... }`。見出しに件数 (`null` のときは件数を出さない)。`availableFor` は他の稼働中のタブと同じ |
-| 行 | 届いた順 (SDK の順のまま)。名前は同じセッションの transcript の `task:<taskId>` の行の `name`、無い・空なら種類のラベル (`taskTypeLabel`) だけ。`TASK_TYPE_LABELS` (`labels.ts:280-285`) に `other: 'その他の task'` を足す (今の `taskTypeLabel` は表に無い値をそのまま返すので、`other` が英語のまま出ないようにする) |
+| タブ | `PANEL_TABS` (`features/shell/panel-tabs.ts:35-69`) の末尾 (概要・使用量・構成・会話の地図 (O-9) の後の 5 つ目) に `{ id: 'background-tasks', label: '背景の task', ... }`。`PanelTabId` (`stores/ui.ts:31`) に `'background-tasks'` を足す。見出しに件数 (`null` のときは件数を出さない)。`availableFor` は他の 4 つと同じ `['none', 'running', 'past']` (過去・未選択ではタブを出して下の「動いていないセッション」の旨を出す)。`attention` は付けない (注意の印は出さない) |
+| 行 | 届いた順 (SDK の順のまま)。名前は同じセッションの transcript の `task:<taskId>` の行の `name`、無い・空なら種類のラベル (`taskTypeLabel`) だけ。`TASK_TYPE_LABELS` (`labels.ts:300-305`) に `other: 'その他の task'` を足す (今の `taskTypeLabel` は表に無い値をそのまま返すので、`other` が英語のまま出ないようにする) |
 | 動いていないセッション | 一覧を出さず「セッションは動いていません」の旨 |
 | 操作 | 付けない (止める・前面に戻すは無い) |
 | キーボード操作 | O-4 / O-7 のタブの表のまま (AD-046) |
@@ -157,6 +157,7 @@ interface BackgroundTaskEntry { readonly taskId: string; readonly taskType: Back
 | system で `parent_tool_use_id` が文字列 | `compact_boundary` だけ親の `children` に divider (`{ type: 'divider', label: 'コンテキストを圧縮' }`。過去ログと同じ値) を足す。**他は帰属の無い system と同じ経路** (主ループの行。Hook・task・知らせの行は今どおり。捨てない。U-9)。`permission_denied` はこの判定より前で今どおり扱う |
 | system で帰属の無いもの | 今どおり (主ループ) |
 
+- 子の assistant の DTO の `createdAt` は主ループと同じく `toLiveAssistantMessage(message, receivedAt)` が埋める (SDK の `timestamp`、無ければ受信時刻。AD-051 Decision 2)。根を送り直しても根の `createdAt` は最初の値のまま (同じ id の送り直しは最初の時刻を保つ)。tool_result だけの user は子のメッセージを作らないので時刻を持たない
 - 入れ子の tool の経過時間は出さない (`onToolProgress` は主ループだけのまま)
 - 本文の無害化は主ループと同じ (`sanitizeBody`・tool 名の `sanitizeBody`・`argsText` の上限)
 - `parent_tool_use_id` は会話外の値として扱い、形が外れた (`isValidToolUseId` が偽) ら孤児
@@ -168,9 +169,9 @@ interface BackgroundTaskEntry { readonly taskId: string; readonly taskType: Back
 1. `getSessionMessages(sessionId, { includeSystemMessages: true })` (今どおり。失敗は今どおり `transcript-read-failed`)
 2. `listSubagents(sessionId)`。失敗・配列でない → subagent は 0 件
 3. 先頭から 32 件 ([ASSUMED]) の agentId (文字列で、空でないもの) について `getSubagentMessages(sessionId, agentId, { limit: 500 })` ([ASSUMED])。1 件ごとに失敗を捕まえ、失敗した subagent は捨てる
-4. `toTranscriptMessages(messages, subagents)` で変換して frame にする
+4. `toTranscriptMessages(messages, { now, subagents })` で変換して frame にする (今の第 2 引数 `ToTranscriptMessagesOptions` (`transcript.ts:40-43`。O-9 の `now`) に `subagents` を足す)
 
-`toTranscriptMessages(records, subagents = [])` (domain):
+`toTranscriptMessages(records, options)` の `options.subagents?: readonly (readonly SessionMessageLike[])[]` (domain。省略時は空。`now` は今どおり):
 
 | 段 | 規則 |
 |---|---|
@@ -180,7 +181,7 @@ interface BackgroundTaskEntry { readonly taskId: string; readonly taskType: Back
 | 入れる順 | 親が `toolCallById` にある列から入れる。入れたら列の中の tool-call が `toolCallById` に入るので、残りの列をもう一度見る。進まなくなったら止める。列挙の順番に結果が依存しない (同じ親の列が複数あるときは列挙の順で入るが、どの親に入るかは変わらない) |
 | inline の子 | 親の tool-call の `children` が既に空でなければ、その列を入れない |
 | 親の見つからない列 | 捨てる (top-level に出さない) |
-| 列の記録の変換 | 主の記録と同じ本文の規則 (`sanitizeBody`・`redactSecrets` は system だけ・tool 名・`argsText` の上限・`readToolResult`)。各記録は列の親の `children` に入れる。ただし記録の `parent_tool_use_id` が列の親と違う記録は捨てる |
+| 列の記録の変換 | 主の記録と同じ本文の規則 (`sanitizeBody`・`redactSecrets` は system だけ・tool 名・`argsText` の上限・`readToolResult`)。時刻も同じ規則 (`parseMessageTime(rec.timestamp, now)`。AD-051 Decision 1・4)。各記録は列の親の `children` に入れる。ただし記録の `parent_tool_use_id` が列の親と違う記録は捨てる |
 | 深さ | 親の tool-call の深さ + 1。`MAX_SUBAGENT_DEPTH` を超えたら列を捨てる |
 | system の行 | `getSubagentMessages` は返さない (`sdk.mjs:202`)。来ても列の中の system の行は捨てる |
 | user の記録 | tool_result のブロックだけを読み、同じ `tool_use_id` の tool-call (列の中で入れたもの) の `result` / `isError` を主の記録と同じ規則 (`readToolResult`) で埋める。text・画像などのブロックは読まない (実行中の §3.1 と同じ。U-11)。tool_result の無い user の記録は子のメッセージを作らない |
@@ -202,32 +203,35 @@ agentId・`parent_agent_id` は入れ子の決定に使わない (多段は `par
 | 結果待ち・結果不明 | O-6 の `toolResultState` (thread の context。主ループと同じ) |
 | 既定の開閉 | 今の Subagent の表示の既定 (畳む) のまま ([ASSUMED]) |
 | `TRANSCRIPT_PART_FIELDS` | 変えない (`children` は R-4 からある) |
+| 時刻 (O-9) | 入れ子の子のメッセージの時刻は表示しない (今の Subagent の表示のまま。O-9 の時刻と所要時間は主ループのメッセージだけ)。O-9 の活動の帯 (`activity-bins.ts`) は主ループのメッセージの tool-call の part だけを数えるので、入れ子の tool は数えない。実行中に今まで平らに並んでいた subagent の tool が入れ子に移る分、実行中の帯の重みが下がり、過去ログ (前から入れ子) と同じになる |
 
 ---
 
 ## §4 対応表の書き換え (FR-012)
 
-完了の PR で `docs/ui-coverage.md` をこの表のとおりに書き換える (行番号は 2026-10-17)。
+完了の PR で `docs/ui-coverage.md` をこの表のとおりに書き換える (行番号は main 6fa08c2。O-9 / O-10 が行と備考を足した後。ずれていたら要素名で引き直す)。`O-11` を含む行は 39 (O-10 の `SDKElicitationCompleteMessage` と O-9 の `Trace waterfall` の 2 行が 2026-10-17 の 37 から増えた)。
 
 | 行 | 要素 | 書き換え |
 |---|---|---|
-| `:180` | general-hooks | `実装済み: SystemEventRow (実行中)`。経路は V-2 の記録による (残れば「両方」) |
-| `:181` | late-backgrounded-task | `実装済み: SystemEventRow (実行中)`。経路は V-2 の記録による |
-| `:182` | subagent-nesting-live | `実装済み: Subagent (両方)`。備考に `listSubagents` / `getSubagentMessages` (AD-055) |
-| `:68` | SDKBackgroundTasksChangedMessage | `実装済み: 背景の task のタブ (実行中)`。備考に AD-056 Decision 2 |
-| `:223` | get_hooks_listing | `表示不要: 設定の一覧は Claude Code の /hooks で見られる (AD-056 Decision 4)` |
-| `:57`, `:73`, `:74`, `:75`, `:76`, `:80`, `:81`, `:91`, `:106`, `:107`, `:111` | Tier B の知らせの類・Checkpoints・server_tool_use・web_search_tool_result・user/document | `後続: O-12` |
-| `:55`, `:56`, `:82` | 拒否・知らせの備考の「(行は O-11)」 | 「(行は O-12)」 |
-| `:58`, `:65` | hook_started / task_started の備考 | 一般の Hook・後から背景に移った task は実装済み (O-11)。過去ログの経路は V-2 の記録による |
-| `:62` | SDKToolProgressMessage の備考 | 入れ子の tool は経過時間を出さない (O-11 の入れ子は結果の状態の印だけ) |
-| `:98` | B 節の前書き | 照合は O-12 へ送った (AD-056 Decision 1) |
-| `:119` | AgentInput の備考 | 実行中の入れ子と `getSubagentMessages` は実装済み (O-11) |
-| `:144` | TaskCreateInput の備考 | 計画の一覧は作らない (AD-056 Decision 3) |
-| `:208`, `:219` | rewind_files / stop_task の備考 | `:208` は O-12、`:219` は「実行中の task の一覧は O-11 で実装 (操作は付けない)」 |
-| `:237` | Agent handoff | `未使用` のまま。備考: subagent は主導権を渡さない。入れ子は Subagent (AD-056 Decision 5) |
-| `:245` | Background runs | `未使用` のまま。備考: 一覧は右のペインのタブ (registry の element を使わない理由は plan の Constitution Check XIII) |
-| `:249`, `:273`, `:280`, `:283`, `:291`, `:303`, `:335` | Checkpoints・Document reference・File・Follow-up suggestions・Inline citation・Memory・Sources | 割当の O-11 を O-12 に |
-| `:342` | Task card | 備考: 背景の task の行 (SystemEventRow) と一覧のタブで描く (O-11) |
+| `:181` | general-hooks | `実装済み: SystemEventRow (実行中)`。経路は V-2 の記録による (残れば「両方」) |
+| `:182` | late-backgrounded-task | `実装済み: SystemEventRow (実行中)`。経路は V-2 の記録による |
+| `:183` | subagent-nesting-live | `実装済み: Subagent (両方)`。備考に `listSubagents` / `getSubagentMessages` (AD-055) |
+| `:69` | SDKBackgroundTasksChangedMessage | `実装済み: 背景の task のタブ (実行中)`。備考に AD-056 Decision 2 |
+| `:224` | get_hooks_listing | `表示不要: 設定の一覧は Claude Code の /hooks で見られる (AD-056 Decision 4)` |
+| `:58`, `:74`, `:75`, `:76`, `:77`, `:81`, `:82`, `:92`, `:107`, `:108`, `:112` | Tier B の知らせの類・Checkpoints・server_tool_use・web_search_tool_result・user/document | `後続: O-12` |
+| `:56`, `:57`, `:83` | 拒否・知らせの備考の「(行は O-11)」 | 「(行は O-12)」(O-9 / O-10 が足した備考はそのまま) |
+| `:79` | SDKElicitationCompleteMessage の備考 (O-10 が足した「過去ログは O-11 の変換に従う」) | 「過去ログは O-12 の変換に従う」(AD-056 Decision 1) |
+| `:59`, `:66` | hook_started / task_started の備考 | 一般の Hook・後から背景に移った task は実装済み (O-11)。過去ログの経路は V-2 の記録による |
+| `:63` | SDKToolProgressMessage の備考 | 入れ子の tool は経過時間を出さない (O-11 の入れ子は結果の状態の印だけ) |
+| `:99` | B 節の前書き | 照合は O-12 へ送った (AD-056 Decision 1) |
+| `:120` | AgentInput の備考 | 実行中の入れ子と `getSubagentMessages` は実装済み (O-11) |
+| `:145` | TaskCreateInput の備考 | 計画の一覧は作らない (AD-056 Decision 3) |
+| `:209`, `:220` | rewind_files / stop_task の備考 | `:209` は O-12、`:220` は「実行中の task の一覧は O-11 で実装 (操作は付けない)」 |
+| `:238` | Agent handoff | `未使用` のまま。備考: subagent は主導権を渡さない。入れ子は Subagent (AD-056 Decision 5) |
+| `:246` | Background runs | `未使用` のまま。備考: 一覧は右のペインのタブ (registry の element を使わない理由は plan の Constitution Check XIII) |
+| `:250`, `:275`, `:282`, `:285`, `:293`, `:305`, `:337` | Checkpoints・Document reference・File・Follow-up suggestions・Inline citation・Memory・Sources | 割当の O-11 を O-12 に |
+| `:344` | Task card | 備考: 背景の task の行 (SystemEventRow) と一覧のタブで描く (O-11) |
+| `:359` | Trace waterfall (O-9 が足した「再検討は O-11 の入れ子の後」) | `未使用` のまま。備考の O-11 の部分を「実行中の subagent の入れ子は O-11 で Subagent の入れ子として実装した。O-11 は tool の開始と終わりの時刻の組を運ばないので、O-9 U-6 の判断の前提は変わらない」に直す |
 
 項目 21 の出力で割当先が O-11 の行が 0 になること (SC-005)。
 
@@ -237,13 +241,14 @@ agentId・`parent_agent_id` は入れ子の決定に使わない (多段は `par
 
 | 対象 | 値 | テスト |
 |---|---|---|
-| `QUERY_OPTION_KEYS` | 今の 8 + `includeHookEvents` / `forwardSubagentText` (O-10 と和集合) | `session-core.test.ts:198-211` |
-| `buildQueryOptions` の 2 キー | どちらも `true` | `session-core.test.ts` |
+| `QUERY_OPTION_KEYS` | 今の 9 (AD-041 (g) の 8 + AD-053 の `onElicitation`) + `includeHookEvents` / `forwardSubagentText` = 11 | `src/agents/session-core.test.ts:208-226` (長さ 11・`onUserDialog` / `supportedDialogKinds` を含まない今の検査は残す) |
+| `buildQueryOptions` の 2 キー | どちらも `true` | `src/agents/session-core.test.ts` |
 | `AGENT_SDK_ALLOWED_CALLS` | `listSessions` / `getSessionMessages` / `query` / `listSubagents` / `getSubagentMessages` | 項目 14 と fixture |
 | `AGENT_SDK_CALL_FILES` | `listSubagents` / `getSubagentMessages` → `src/agents/read-transcript.ts` | 項目 14 の fixture 4 本 (`src/agents/__rulecheck__/` で呼ぶと発火。2 つの API を外で呼ぶもの 2 本・2 つ目の import 文・許可の名前の別名。照合は import した名前で、すべての名前付き import を読む) |
 | `METER_UPDATE_TYPES` | 今の 9 + `background-tasks` | `meter.test.ts:163` (長さ 10) |
-| `SYSTEM_EVENT_CATEGORIES` | 今の 11 + `backgrounded-task` | `system-event.test.ts` |
-| `SYSTEM_EVENT_STATUSES` | 変えない (21) | 同上 |
+| `SYSTEM_EVENT_CATEGORIES` | 今の 12 (O-10 の `elicitation` を含む) + `backgrounded-task` = 13 | `system-event.test.ts` |
+| `SYSTEM_EVENT_STATUSES` | 変えない (22。O-10 の `no-fallback-retry` を含む) | 同上 |
+| `PANEL_TABS` の id の並び | `overview` / `usage` / `init-report` / `conversation-map` / `background-tasks` | `panel-tabs.test.ts:74-80` |
 | `background-tasks` の要素のフィールド | `taskId` / `taskType` だけ | `meter.test.ts` (キーの集合) |
 | `TextMessagePartProvider` の import | `markdown-body.tsx` だけ | `agent-plan.aui.test.tsx:134` を移す |
 | `@assistant-ui/react-markdown` の import | `markdown-text.tsx` だけ (変えない) | 既存 |

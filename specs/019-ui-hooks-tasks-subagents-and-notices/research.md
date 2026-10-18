@@ -2,10 +2,10 @@
 
 **Spec**: [spec.md](./spec.md) | **Date**: 2026-10-17 (`/cl-plan`。夜間の自走。利用者は不在)
 
-SDK の行番号は `node_modules/@anthropic-ai/claude-agent-sdk/` の 0.3.270 (`sdk.d.ts` / `sdk.mjs` / `sdk-tools.d.ts`)。ソースの行番号は 2026-10-17 の作業ツリー (main 1761c32 の上) で確かめた。
+SDK の行番号は `node_modules/@anthropic-ai/claude-agent-sdk/` の 0.3.270 (`sdk.d.ts` / `sdk.mjs` / `sdk-tools.d.ts`)。ソースの行番号は 2026-10-17 の作業ツリー (main 1761c32 の上) で確かめ、集合の数と O-9 / O-10 が変えた箇所 (R-04 / R-07 / R-11 / R-13) は 2026-10-18 に main 6fa08c2 で確かめ直した。
 designer は Agent ツールを持たないので、`/speckit.plan` の research agents の分の調査はここに直接書いた。
 
-**未承認の前提**: R-01〜R-15 はどれも spec の U-1〜U-11 (未承認。夜間の仮採用) と AD-054 / AD-055 / AD-056 (proposed) の上に立つ。承認で覆ったときの手当ては plan の RK-01。
+**前提**: R-01〜R-15 はどれも spec の U-1〜U-11 と AD-054 / AD-055 / AD-056 の上に立つ。どれも 2026-10-17 に利用者が承認した (accepted)。
 
 ---
 
@@ -31,7 +31,7 @@ designer は Agent ツールを持たないので、`/speckit.plan` の research
 
 - **Decision**: domain に「前景で始まった task の記憶」(`createForegroundTaskMemory`。上限 256・古いものから忘れる) を置き、実行中 (agents) と過去ログ (`transcript.ts`) が同じものを使う。`task_started` で `is_backgrounded !== true` (かつ ambient・`skip_transcript` でない) なら記憶し、`task_updated` の `patch.is_backgrounded === true` で記憶にある task なら、`task_started` から作るのと同じ中身の行を category `backgrounded-task` で開く (`opens: true`。状態は `patch.status` があればそれ、無ければ `running`)。以後の `task_updated` / `task_notification` は O-2 の合成 (`mergeSystemEvent`) で同じ行に入る
 - **Rationale**: `task_started` (`sdk.d.ts:5596-5630`) は `is_backgrounded?` を持ち、O-2 は true のものだけを行にする (`system-event.ts:150`)。`task_updated` (`sdk.d.ts:5632-5649`) の `patch.is_backgrounded` が後から true になる経路は今は捨てている (`mergeSystemEvent` は行の無い id への `opens: false` を捨てる。`:213`)。行を開くには説明・種類が要るが `task_updated` は持たないので、`task_started` の時点の値を覚えるしかない。印を status で持つと次の `task_updated` の `status` で上書きされる (`:219`) ので、合成で保たれる category で持つ (`mergeSystemEvent` は前の part の category を残す)
-- **影響**: `SYSTEM_EVENT_CATEGORIES` が 11 → 12。`TRANSCRIPT_PART_FIELDS` は変えない (part の形は同じ)。`mergedDetail` の task の進み具合の分岐 (`:193`) は `backgrounded-task` にも当てる。renderer の網羅の表 (`SYSTEM_EVENT_ICONS`・`systemEventDetailText`・読み上げ・ラベル) は型で落ちるので全部に足す
+- **影響**: `SYSTEM_EVENT_CATEGORIES` が 12 → 13 (O-10 が `elicitation` を足して 12)。行の `createdAt` は `toSystemEventMessage(raw, createdAt)` (O-9 が足した第 2 引数) と同じく呼び出し元が渡す。`TRANSCRIPT_PART_FIELDS` は変えない (part の形は同じ)。`mergedDetail` の task の進み具合の分岐 (`:193`) は `backgrounded-task` にも当てる。renderer の網羅の表 (`SYSTEM_EVENT_ICONS`・`systemEventDetailText`・読み上げ・ラベル) は型で落ちるので全部に足す
 - **Alternatives**: `task_updated` で記憶なしに名前の無い行を開く (種類が分からず、`local_bash` を見分けられない) / 印を `detail` に符号化する (task の `detail` は種類と進み具合を既に持ち、O-4 の `splitTaskDetail` の形が崩れる)
 
 ## R-05 シェルの背景の task の手がかり (FR-005)
@@ -50,14 +50,14 @@ designer は Agent ツールを持たないので、`/speckit.plan` の research
 
 ## R-07 右のペインのタブ「背景の task」(US-2 AC3〜AC5)
 
-- **Decision**: renderer の `SessionMeters` に `backgroundTasks: readonly BackgroundTaskEntry[] | null` (null = まだ届いていない) を足し、`applyMeter` の `case 'background-tasks'` で置き換える。セッションのプロセスの起動 (今 `EMPTY_SESSION_METERS` で `meters` を初期化する箇所) で空に戻る。`PANEL_TABS` に `background-tasks` (label「背景の task」) を足し、見出しに件数を出す。各行の名前は同じセッションの transcript の `task:<taskId>` の行の `name` (R-05 の後の値) から引き、無ければ種類のラベルだけ。終了・失敗したセッションでは「セッションは動いていません」の旨を出し一覧を出さない
-- **Rationale**: O-4 / O-5 のタブ (usage / init-report) と同じ経路 (`meters` → タブの `Content`)。`running-session-store.ts` の `case 'meter'` は `meters` の枝だけを書く (`retraction` の例外は O-6 の 1 種類だけのまま)。タブのキーボード操作は O-4 / O-7 のタブの表のまま (AD-046)
+- **Decision**: renderer の `SessionMeters` に `backgroundTasks: readonly BackgroundTaskEntry[] | null` (null = まだ届いていない) を足し、`applyMeter` の `case 'background-tasks'` で置き換える。セッションのプロセスの起動 (今 `EMPTY_SESSION_METERS` で `meters` を初期化する箇所) で空に戻る。`PANEL_TABS` の末尾 (概要・使用量・構成・O-9 の会話の地図の後) に `background-tasks` (label「背景の task」) を足し、見出しに件数を出す。各行の名前は同じセッションの transcript の `task:<taskId>` の行の `name` (R-05 の後の値) から引き、無ければ種類のラベルだけ。終了・失敗したセッションでは「セッションは動いていません」の旨を出し一覧を出さない
+- **Rationale**: O-4 / O-5 のタブ (usage / init-report) と同じ経路 (`meters` → タブの `Content`)。O-9 の会話の地図は `meters` を読まない (会話から導く) ので経路の手本にしない。`running-session-store.ts` の `case 'meter'` は `meters` の枝だけを書く (`retraction` の例外は O-6 の 1 種類だけのまま)。タブのキーボード操作は O-4 / O-7 のタブの表のまま (AD-046)
 - **Alternatives**: 中央のヘッダの件数だけ (何が動いているか分からない。AD-056 Alternatives)
 
 ## R-08 実行中の subagent の入れ子 (FR-008 / US-3 AC1・AC2・AC5)
 
 - **Decision**: `forwardSubagentText: true` を足し (AD-054)、`live-tool-results.ts` の追跡を「主ループのメッセージ (根) の最新の DTO と、`toolUseId` → 根の id の表」に広げる。`parent_tool_use_id` が null でない assistant / user のメッセージは、表で親の tool-call を引き、その `children` (深い位置も含む) に入れて根を同じ id で送り直す。入れ子の中の tool の結果も同じ表で引いて深い位置に埋める
-- **Rationale**: 今は `case 'assistant'` (`sdk-agent-session.ts:628-702` の switch) が `parent_tool_use_id` を見ずに主ループに平らに emit する。DTO は `children` を既に持ち (R-4 / AD-035 Decision 4)、renderer の `convert.ts` は tool-call の args に `__subagentChildren` を載せて Subagent の表示が描く。O-2 の tool の結果の送り直し (同じ id で根を出し直し、ストアが置き換える) と同じ形にすれば、ストア・IPC・`SessionEvent` は変えずに済む
+- **Rationale**: 今は `case 'assistant'` (`sdk-agent-session.ts:658-728` の switch。main 6fa08c2) が `parent_tool_use_id` を見ずに主ループに平らに emit する。DTO は `children` を既に持ち (R-4 / AD-035 Decision 4)、renderer の `convert.ts` は tool-call の args に `__subagentChildren` を載せて Subagent の表示が描く。O-2 の tool の結果の送り直し (同じ id で根を出し直し、ストアが置き換える) と同じ形にすれば、ストア・IPC・`SessionEvent` は変えずに済む
 - **根の保持の上限**: 今の `MAX_PENDING_TOOL_MESSAGES = 256` (`live-tool-results.ts:27`) を根の LRU の上限にする。子の数は 1 つの tool-call で 500 (過去ログの `getSubagentMessages` の上限と同じ値。[ASSUMED] の数値の既定値)、超えたら親の `truncated` を立てて足さない。深さは `MAX_SUBAGENT_DEPTH = 8` (`transcript.ts:40`)。超えたら主ループに平らに出す (AD-035 Decision 5)
 - **孤児**: 親の id が表に無い (親より先に届いた・忘れた) メッセージは主ループに平らに出す (spec Edge Cases)。自分の tool-call を親に指すものも同じ
 - **取り消し**: O-6 の `retract` で根を忘れたら、その子への後のメッセージは表に親が無いので孤児になる。**取り消した根の配下に属する `toolUseId` は取り消しの記憶 (上限 512) に入れ、子のメッセージを孤児としても出さない** (spec Edge Cases「親と一緒に外れる」)
@@ -81,7 +81,7 @@ designer は Agent ツールを持たないので、`/speckit.plan` の research
 
 ## R-11 過去ログの subagent の本文 (FR-010 / U-8 / AD-055)
 
-- **Decision**: `read-transcript.ts` は `getSessionMessages` の後に `listSubagents(sessionId)` を呼び、先頭から 32 件の agentId について `getSubagentMessages(sessionId, agentId, { limit: 500 })` を呼ぶ。読んだ記録の列を domain の `toTranscriptMessages(records, subagents)` に渡し、domain が各 subagent の記録の `parent_tool_use_id` で親の `Agent` の呼び出しに入れ子にする。1 つの subagent の失敗はその subagent を捨てるだけで、過去ログ全体の frame は `messages` のまま。`listSubagents` 自体の失敗は subagent を 0 件として扱う
+- **Decision**: `read-transcript.ts` は `getSessionMessages` の後に `listSubagents(sessionId)` を呼び、先頭から 32 件の agentId について `getSubagentMessages(sessionId, agentId, { limit: 500 })` を呼ぶ。読んだ記録の列を domain の `toTranscriptMessages(records, { now, subagents })` (第 2 引数は O-9 が足した `ToTranscriptMessagesOptions`。`subagents` を足す) に渡し、domain が各 subagent の記録の `parent_tool_use_id` で親の `Agent` の呼び出しに入れ子にする。1 つの subagent の失敗はその subagent を捨てるだけで、過去ログ全体の frame は `messages` のまま。`listSubagents` 自体の失敗は subagent を 0 件として扱う
 - **SDK の事実** (`.needs-input.md` の Q1 の調査。回答 A で採用):
   - `getSessionMessages` の `SessionMessage` (`sdk.d.ts:5903-5916`) は agentId を持たない。主のセッションの経路は sidechain の行を落とす。agentId を構造で持つ `AgentOutput.agentId` (`sdk-tools.d.ts:103-105`) は実行中の `SDKUserMessage.tool_use_result` (`sdk.d.ts:5709`) だけ
   - `listSubagents(sessionId, { dir })` (`sdk.d.ts:1057`) は `string[]` (agentId の列)
@@ -98,13 +98,13 @@ designer は Agent ツールを持たないので、`/speckit.plan` の research
 
 ## R-13 `QUERY_OPTION_KEYS` の固定と O-10 との合流 (FR-001 / FR-007 / FR-013)
 
-- **Decision**: `QUERY_OPTION_KEYS` (`session-core.ts:48-57`。8 キー) に `includeHookEvents` / `forwardSubagentText` を足し 10 キーに。pin テスト (`session-core.test.ts:198-211`) を 10 キーに。`BuiltQueryOptions` に `readonly includeHookEvents: true` / `readonly forwardSubagentText: true`。項目 16 は禁止のキーの表 (`QUERY_ESCALATION_OPTION_KEYS`) なので変えない (2 キーは escalation-neutral。AD-054 Decision 2)
-- **Rationale**: O-10 (未マージの枝) も AD-041 (g) を読み替えてキーを足す。AD-054 Decision 4 のとおり、後にマージする PR が和集合で pin テストを直す
+- **Decision**: `QUERY_OPTION_KEYS` (`src/agents/session-core.ts:63-74`。O-10 の後で 9 キー) に `includeHookEvents` / `forwardSubagentText` を足し 11 キーに。pin テスト (`src/agents/session-core.test.ts:208-226`。今は「AD-041 (g) + AD-053 の 9 キー」) を 11 キーに。`onUserDialog` / `supportedDialogKinds` を含まない検査 (AD-053 Decision 4) は残す。`BuiltQueryOptions` に `readonly includeHookEvents: true` / `readonly forwardSubagentText: true`。項目 16 は禁止のキーの表 (`QUERY_ESCALATION_OPTION_KEYS`) なので変えない (2 キーは escalation-neutral。AD-054 Decision 2)
+- **Rationale**: O-10 も AD-041 (g) を読み替えて `onElicitation` を足し (AD-053)、先にマージされた (#23)。AD-054 Decision 4 のとおり、後にマージする本 feature の PR が和集合で pin テストを直す
 - **Alternatives**: なし (ADR の決定のとおり)
 
 ## R-14 対応表の書き換えと O-12 (FR-012 / FR-014 / U-1)
 
-- **Decision**: data-model §4 の表のとおり。D 節の 3 行 (`docs/ui-coverage.md:180-182`) を `実装済み`、`get_hooks_listing` (`:223`) を `表示不要`、`background_tasks_changed` (`:68`) を `実装済み`、Tier B の `後続: O-11` の行を `後続: O-12`、F 節の Background runs / Agent handoff / Task card の備考を直す
+- **Decision**: data-model §4 の表のとおり。D 節の 3 行 (`docs/ui-coverage.md:181-183`) を `実装済み`、`get_hooks_listing` (`:224`) を `表示不要`、`background_tasks_changed` (`:69`) を `実装済み`、O-10 の `elicitation_complete` の備考の過去ログの変換を O-12 に、Tier B の `後続: O-11` の行を `後続: O-12`、F 節の Background runs / Agent handoff / Task card の備考を直す
 - **Rationale**: 項目 21 (`check.mjs`) は割当先の feature が roadmap にあることを見るので、O-12 の行を roadmap に足す PR と同じ PR で書き換える (AD-044)
 
 ## R-15 過去ログの Hook / task の行 (V-4 の残り。義務の扱いの表)

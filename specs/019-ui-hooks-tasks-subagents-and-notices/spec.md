@@ -15,7 +15,9 @@ linear: null
 
 **Feature Branch**: `019-ui-hooks-tasks-subagents-and-notices`
 
-**Created**: 2026-10-17 (夜間の自走で起案。利用者は不在。人間の承認が要る判断は推奨案で仮採用した — 下の「未承認の判断の一覧」)
+**Created**: 2026-10-17 (夜間の自走で起案。人間の承認が要る判断は推奨案で仮採用し、2026-10-17 に利用者が U-1〜U-11 と AD-054〜056 を承認した — 下の「判断の一覧」)
+
+**main との突き合わせ**: 2026-10-18 に main 6fa08c2 (O-9 #20 / O-10 #23 のマージ後) に rebase し、O-9 / O-10 が足した型・タブ・対応表の行に合わせて直した (`QUERY_OPTION_KEYS` は AD-053 の `onElicitation` との和集合、`SYSTEM_EVENT_CATEGORIES` は O-10 の `elicitation` を含む数、右のペインのタブは O-9 の「会話の地図」を含む数、`createdAt` (AD-051) の扱い、O-10 の `elicitation_complete` の過去ログの変換の送り先)
 
 **Status**: frontmatter の `status:` を正とする
 
@@ -31,9 +33,9 @@ transcript と右のペインで、Claude Code が実行した Hook、背景で�
 
 完了の PR で対応表の `後続: O-11` の行を、本 feature の表示 (`実装済み`)・`表示不要`・新しい後続 **O-12** のどれかに書き換える。**D 節の Tier A 3 行 (一般の Hook・後から背景に移った task・実行中の subagent の入れ子) は本 feature で `実装済み` になり、M3 の完了の条件の残りが 0 になる。**
 
-## 未承認の判断の一覧
+## 判断の一覧 (2026-10-17 に利用者が承認)
 
-夜間の自走で推奨案を仮採用した。**どれも利用者の承認が無い。** U-9〜U-11 は design-gate の修正で足した。実装 (`/cl-implement`) の前に承認を得る (夜間の自走の方針で design-gate までは仮採用のまま進めた。plan の「未承認の判断」と RK-01)。
+夜間の自走で推奨案を仮採用し、**2026-10-17 に利用者が U-1〜U-11 と AD-054 / AD-055 / AD-056 を承認した** (design-gate H-02 の解消)。U-9〜U-11 は design-gate (round 1) の修正で足したもので、同じ承認に含まれる。gated 確定事項の U-3 (一覧の持ち主の domain) と U-7 (Principle XIII の Agent handoff) も承認済み。
 
 | 判断 | 1 行の要約 | 記録 |
 |---|---|---|
@@ -45,16 +47,16 @@ transcript と右のペインで、Claude Code が実行した Hook、背景で�
 | U-6 | ui の feature が session の契約 (agents の入れ子・`meter` の種類・query の options・SDK の許可リスト) を広げる | AD-054 / AD-055 / AD-056 Decision 2 |
 | U-7 | Agent handoff の element は使わない | AD-056 Decision 5 |
 | U-8 | 過去ログの subagent の agentId を `listSubagents` で列挙し、`getSubagentMessages` が返す `parent_tool_use_id` で親の呼び出しと結ぶ (design で SDK 0.3.270 を確かめた結果。許可リストは 5 つ) | AD-055 Decision 1 / 2 |
-| U-9 | 帰属つき (`parent_tool_use_id`) の system のメッセージは、`compact_boundary` (入れ子の divider) 以外を帰属の無いものと同じく主ループの行にする (入れ子に Hook の行を描かない。捨てない) (design-gate H-03。未承認 (夜間の仮採用。推奨案)) | data-model §3.1 |
-| U-10 | 実行中の入れ子が上限 (子 500 件・根の送り直し 1 MB) に当たったら、以後の子を足さず切り詰めの印を出す。最新の子を残す方式は採らない (design-gate H-04。未承認 (夜間の仮採用。推奨案)) | data-model §3.1 |
-| U-11 | 入れ子の user のメッセージは tool_result だけを読み、user の text を描かない (実行中と過去ログ。O-2 の「user の本文は送らない」を継ぐ) (design-gate H-09。未承認 (夜間の仮採用。推奨案)) | data-model §3.1 / §3.2 |
-| ADR | [AD-054](../../docs/decisions/0054-query-options-hook-events-and-subagent-text.md) / [AD-055](../../docs/decisions/0055-subagent-messages-for-past-transcripts.md) / [AD-056](../../docs/decisions/0056-o11-scope-background-task-list-and-o12-split.md) (いずれも proposed) | `docs/decisions/` |
+| U-9 | 帰属つき (`parent_tool_use_id`) の system のメッセージは、`compact_boundary` (入れ子の divider) 以外を帰属の無いものと同じく主ループの行にする (入れ子に Hook の行を描かない。捨てない) (design-gate H-03) | data-model §3.1 |
+| U-10 | 実行中の入れ子が上限 (子 500 件・根の送り直し 1 MB) に当たったら、以後の子を足さず切り詰めの印を出す。最新の子を残す方式は採らない (design-gate H-04) | data-model §3.1 |
+| U-11 | 入れ子の user のメッセージは tool_result だけを読み、user の text を描かない (実行中と過去ログ。O-2 の「user の本文は送らない」を継ぐ) (design-gate H-09) | data-model §3.1 / §3.2 |
+| ADR | [AD-054](../../docs/decisions/0054-query-options-hook-events-and-subagent-text.md) / [AD-055](../../docs/decisions/0055-subagent-messages-for-past-transcripts.md) / [AD-056](../../docs/decisions/0056-o11-scope-background-task-list-and-o12-split.md) (いずれも accepted。2026-10-17) | `docs/decisions/` |
 
 ## 本 feature の位置づけ
 
-- **範囲を分ける (U-1。未承認 (夜間の仮採用。推奨案))。** roadmap の O-11 の行は Tier A 3 行と Tier B 14 行の表示・3 つの ADR・過去ログの変換・機械照合を持ち、1 つの spec では FR が 20 を超える。単体で確かめられる機能が 2 つ入っている (Tier A 3 行を出す Hook・task・subagent の表示と、Tier B の知らせ・ブロックの表示)。本 feature は前者に絞り、後者を新しい O-12 に送る
+- **範囲を分ける (U-1)。** roadmap の O-11 の行は Tier A 3 行と Tier B 14 行の表示・3 つの ADR・過去ログの変換・機械照合を持ち、1 つの spec では FR が 20 を超える。単体で確かめられる機能が 2 つ入っている (Tier A 3 行を出す Hook・task・subagent の表示と、Tier B の知らせ・ブロックの表示)。本 feature は前者に絞り、後者を新しい O-12 に送る
 - **roadmap の更新案** (この段では roadmap を編集しない。完了の PR で書く。FR-014):
-  - 新しい行 **O-12「知らせの類・Checkpoints・中身のブロックの表示」**(M3・順 21・`ui`・依存 O-11)。範囲: Tier B の知らせの類 (`notification` / `local_command_output` / `memory_recall` / `prompt_suggestion` / `mirror_error` / `tool_use_summary` / `active_goal`)・Checkpoints の表示 (`files_persisted`。巻き戻しはしない)・`user/document` の File element・`server_tool_use` / `web_search_tool_result` (Sources / Inline citation の判断し直しを含む。O-6 U-5)・対応表の B 節の機械照合・過去ログへの O-6 の行 (`informational`・拒否・会話の作り直し) の変換 (O-6 の quickstart V-3 の記録による)。Tier B だけなので M3 の完了の条件に数えない。M4 / M5 の順を 1 つずつ振り直す (I-1 が 22 から)
+  - 新しい行 **O-12「知らせの類・Checkpoints・中身のブロックの表示」**(M3・順 21・`ui`・依存 O-11)。範囲: Tier B の知らせの類 (`notification` / `local_command_output` / `memory_recall` / `prompt_suggestion` / `mirror_error` / `tool_use_summary` / `active_goal`)・Checkpoints の表示 (`files_persisted`。巻き戻しはしない)・`user/document` の File element・`server_tool_use` / `web_search_tool_result` (Sources / Inline citation の判断し直しを含む。O-6 U-5)・対応表の B 節の機械照合・過去ログへの O-6 の行 (`informational`・拒否・会話の作り直し) と O-10 の行 (`elicitation_complete`。category `elicitation`) の変換 (O-6 の quickstart V-3 と O-10 の quickstart V-3 の記録による)。Tier B と、実行中の経路で `実装済み` の行の過去ログの経路だけなので M3 の完了の条件に数えない。M4 / M5 の順を 1 つずつ振り直す (I-1 が 22 から)
   - O-11 の行の範囲を本 spec の範囲に直し、O-12 に送った項目と結論を書く
 - **ADR を design の前に起こした** (AD-049 Decision 1。roadmap の行の義務): `includeHookEvents` (AD-041 (g) の読み替え) は AD-054、`getSubagentMessages` (AD-035 Decision 3 の読み替えと許可リストの追加。design で `listSubagents` も足した。U-8) は AD-055。`get_hooks_listing` は呼ばない (U-2) ので AD-036 §4 P3 の読み替えは起こさず、呼ばない判断を AD-056 Decision 4 に書いた。AD-054 は roadmap の行が名指していない `forwardSubagentText` も足す (U-5。実行中の入れ子に subagent の本文を出すため)
 - **session の境界に触れるもの (O-2 pr-gate arch L-201 の答え)**: query の options のキー (AD-054)・Agent SDK の呼び出しの許可リスト (AD-055)・agents のセッションスレッドの subagent のメッセージの扱い (入れ子にして送り直す)・`meter` の種類 `background-tasks` (AD-056)。`SessionEvent` の種類・承認の要求と応答・IPC・preload・main は変えない。3 つの ADR は session charter にも記録する (FR-015)
@@ -70,7 +72,7 @@ roadmap の O-11 の行が預けた範囲と義務の扱いの正本はこの表
 | `get_hooks_listing` (呼ぶなら AD-036 §4 P3 の ADR) | 扱う (呼ばない。U-2) | AD-056 Decision 4、FR-012 |
 | `hook_name` にコマンドの文字列が入るかの確認 (V-4 の未記録の項目) | 扱う (quickstart で記録。それまで O-2 の allowlist の形の規則を一般の Hook にも当てる) | FR-002、SC-005 |
 | 伏せた Hook 名の見分け (O-2 pr-gate ux L-102) | 扱う | FR-002 |
-| 実行中の Background task の一覧の要否 (要るなら持ち主の domain を人間に諮る)・右のペインのタブ (TodoList・Background task) の要否 | 扱う (一覧を作る・表示と feature の持ち主は `ui`、保持は session の契約・TodoList のタブは作らない。U-3 / U-4。**未承認**) | US-2 / FR-006、AD-056 Decision 2 / 3 |
+| 実行中の Background task の一覧の要否 (要るなら持ち主の domain を人間に諮る)・右のペインのタブ (TodoList・Background task) の要否 | 扱う (一覧を作る・表示と feature の持ち主は `ui`、保持は session の契約・TodoList のタブは作らない。U-3 / U-4) | US-2 / FR-006、AD-056 Decision 2 / 3 |
 | 後から背景に移った task の行 | 扱う | US-2 / FR-004 |
 | シェルの Background task を秘密を出さずに見分ける手がかり | 扱う | US-2 / FR-005 |
 | 実行中の subagent の入れ子 (`parent_tool_use_id`・`getSubagentMessages`・入れ子の中の divider) と Agent handoff | 扱う (Agent handoff は使わない。U-7) | US-3 / FR-007〜FR-011、AD-054 / AD-055 |
@@ -80,12 +82,13 @@ roadmap の O-11 の行が預けた範囲と義務の扱いの正本はこの表
 | Tier B の知らせの類・Checkpoints の表示・`user/document` の File element・`server_tool_use` / `web_search_tool_result` | 送る (O-12。U-1) | 上の roadmap の更新案 |
 | 対応表の B 節の機械照合 | 送る (O-12。U-1。B 節の行と同じ feature で照合する) | 同上 |
 | 過去ログへの O-6 の行 (`informational`・拒否・会話の作り直し) の変換 (O-6 の V-3 の記録による) | 送る (O-12。U-1) | 同上 |
+| 過去ログへの O-10 の `elicitation_complete` の行 (category `elicitation`) の変換 (O-10 が roadmap の O-11 の行に足した。対応表 A 節の `SDKElicitationCompleteMessage` の備考) | 送る (O-12。U-1 の「過去ログへの O-6 の行の変換」と同じ扱い。AD-056 Decision 1) | 同上、data-model §4 |
 | O-11 の完了の PR で対応表の対象の行を書き換える | 扱う | FR-012 |
 | O-8 の行の (c): 観測点 `receivedMessages` の基準の変化を並べて書く | 扱う (記録だけ) | FR-016 |
 
-## 判断 (2026-10-17 の夜間の自走で仮採用。いずれも未承認)
+## 判断 (2026-10-17 の夜間の自走で仮採用し、同日に利用者が承認)
 
-| # | 判断 | 仮採用した案 (未承認 (夜間の仮採用。推奨案)) | 代わりの案 |
+| # | 判断 | 採った案 (2026-10-17 に承認) | 代わりの案 |
 |---|---|---|---|
 | U-1 | O-11 の範囲を分けるか (roadmap の範囲の変更・新しい feature の登録) | 分ける。Hook・task・subagent (Tier A 3 行とその義務) を O-11 に、Tier B の表示の類・B 節の照合・O-6 の行の過去ログの変換を O-12 (M3・`ui`・依存 O-11) に。O-12 は M3 の完了の条件に数えない | 分けない (FR が 20 を超え、Tier B の判断が Tier A 3 行の完了を遅らせる) / O-12 を Optional scope に置く (Tier B の行の持ち主が M3 の外になり、`後続` の ID の範囲が広がる) |
 | U-2 | 一般の Hook を出すか。出すなら `includeHookEvents` を渡すか、`get_hooks_listing` を呼ぶか | 出す。`includeHookEvents: true` をリテラルで渡す (AD-054)。`get_hooks_listing` は呼ばない (設定の一覧は `/hooks` で見られる。AD-056 Decision 4) | 起動のダイアログで切り替える (起動の入力・プリセットが広がる) / `get_hooks_listing` で右のペインに設定の一覧を出す (`Query` の呼び出しを広げる) |
@@ -103,7 +106,7 @@ roadmap の O-11 の行が預けた範囲と義務の扱いの正本はこの表
 
 ### Session 2026-10-17 (夜間の自走。利用者は不在)
 
-ポジティブリストの項目だけを `[ASSUMED]` で埋めた。それ以外の判断は上の U-n (未承認)。
+ポジティブリストの項目だけを `[ASSUMED]` で埋めた。それ以外の判断は上の U-n (2026-10-17 に承認)。
 
 - Q: 一般の Hook の行の既定の見た目 → A: 成功した Hook は控えめの見た目、失敗・取り消しは注意の見た目 [ASSUMED: デフォルト表示状態]
 - Q: 一般の Hook の読み上げ → A: 失敗・取り消しになった Hook だけを読む (成功は読まない。tool ごとに Hook が走ると読み上げが溢れる)。O-6 の「Hook / task の行の終わり」の読み上げのうち、SessionStart / Setup の Hook は今どおり [ASSUMED: 読み上げの量 (O-6 と同じくポジティブリストの文言・既定の振る舞いとして扱う)]
@@ -200,12 +203,12 @@ roadmap の O-11 の行が預けた範囲と義務の扱いの正本はこの表
 
 - **FR-004**: agents は前景で始まった task を覚え (上限は data-model §2)、`task_updated` の `patch.is_backgrounded` が true になったときに task の行を開かなければならない。過去ログの変換 (`transcript.ts`) も同じ規則で行を作る。行の中身は背景で始まった task の行と同じ規則 (`local_bash` は説明を出さない)
 - **FR-005**: シェルの背景の task の行と一覧の行に、起動した `Bash` の呼び出し (`task_started` の `tool_use_id`) のコマンドの名前を出さなければならない。名前の規則は O-1 の直近の活動 (`summarizeToolInput`) をそのまま使い、説明・引数を出さない。正本は data-model §2
-- **FR-006**: agents は `background_tasks_changed` を `meter` の種類 `background-tasks` (task の id と種類の列。説明を運ばない。ambient を除く) で送り、renderer は稼働中のストアの `meters` に最新の 1 つを置き換えで持ち、右のペインのタブ「背景の task」に描かなければならない (U-3。AD-056 Decision 2)。セッションのプロセスの起動で空に戻し、永続化しない。O-4 の `meter` の上限と間引きの扱い・タブのキーボード操作の正本は data-model §2
+- **FR-006**: agents は `background_tasks_changed` を `meter` の種類 `background-tasks` (task の id と種類の列。説明を運ばない。ambient を除く) で送り、renderer は稼働中のストアの `meters` に最新の 1 つを置き換えで持ち、右のペインのタブ「背景の task」(概要・使用量・構成・会話の地図の後の 5 つ目) に描かなければならない (U-3。AD-056 Decision 2)。セッションのプロセスの起動で空に戻し、永続化しない。O-4 の `meter` の上限と間引きの扱い・タブのキーボード操作の正本は data-model §2
 
 #### 実行中の subagent の入れ子 (US-3)
 
 - **FR-007**: セッションの起動で query の options に `forwardSubagentText: true` を渡さなければならない (AD-054)
-- **FR-008**: agents は `parent_tool_use_id` が null でない assistant / user のメッセージを主ループのメッセージとして送らず、親の `Agent` の呼び出しの `children` に入れて、親のメッセージを同じ id で送り直さなければならない (O-2 の tool の結果の送り直しと同じ形)。入れ子の user のメッセージは tool_result だけを読み、user の text を送らない (O-2 の「user の本文は送らない」のまま。U-11)。上限に当たったら以後の子を足さず親の `truncated` を立てる (U-10)。本文の無害化・入れ子の健全性 (id・孤児・自己参照・深さの上限)・送り直しの上限は AD-035 Decision 4 / 5 / 6 と O-2 の規則を継ぐ。正本は data-model §3
+- **FR-008**: agents は `parent_tool_use_id` が null でない assistant / user のメッセージを主ループのメッセージとして送らず、親の `Agent` の呼び出しの `children` に入れて、親のメッセージを同じ id で送り直さなければならない (O-2 の tool の結果の送り直しと同じ形)。入れ子の user のメッセージは tool_result だけを読み、user の text を送らない (O-2 の「user の本文は送らない」のまま。U-11)。上限に当たったら以後の子を足さず親の `truncated` を立てる (U-10)。本文の無害化・入れ子の健全性 (id・孤児・自己参照・深さの上限)・送り直しの上限は AD-035 Decision 4 / 5 / 6 と O-2 の規則を継ぐ。子のメッセージの `createdAt` は主ループと同じ AD-051 の規則で埋める (表示はしない)。正本は data-model §3
 - **FR-009**: 入れ子の中の tool の結果・圧縮の境界・結果待ちと結果不明の印を、主ループと同じ表示で描かなければならない。`parent_tool_use_id` を持つ system のメッセージは、`compact_boundary` だけを入れ子の divider にし、他は帰属の無いものと同じく主ループの行にする (U-9。data-model §3)
 - **FR-010**: 過去ログの取得 (`read-transcript.ts`) は、`listSubagents` で agentId を列挙し、`getSubagentMessages` で読んだ本文を、各メッセージの `parent_tool_use_id` が指す親の `Agent` の呼び出しに、過去ログの変換と同じ規則で入れ子にしなければならない (AD-055 / U-8。上限は data-model §3)。列挙の順番で結ばず、tool の結果の文面を解析しない。親の呼び出しに inline の子が既にある subagent は重ねない。subagent の user の記録は tool_result だけを読む (FR-008 と同じ。U-11)
 - **FR-011**: Subagent の表示は、実行中と過去ログで同じ入れ子の形 (DTO の `children`) を描かなければならない。`TRANSCRIPT_PART_FIELDS` は変えない
@@ -213,9 +216,9 @@ roadmap の O-11 の行が預けた範囲と義務の扱いの正本はこの表
 #### 境界の検査・対応表と記録
 
 - **FR-012**: 完了の PR で `docs/ui-coverage.md` を data-model §4 のとおりに書き換えなければならない: D 節の 3 行を `実装済み` (**ただし各行は quickstart の実機の記録が「届いた」であることを条件にする**: general-hooks は V-1 (一般の Hook の行が出た)、late-backgrounded-task は V-3 (`patch.is_backgrounded` が届き「背景に移した」の行が出た)、subagent-nesting-live は V-4 (subagent のメッセージが `parent_tool_use_id` 付きで届き入れ子に出た)。記録が無い・「届かない」の行は `実装済み` にせず、`後続: O-11` のまま完了の PR を出さずに利用者に返す (plan RK-06))、`get_hooks_listing` を `表示不要` (AD-056 Decision 4)、`background_tasks_changed` を `実装済み`、Tier B の `後続: O-11` の行を `後続: O-12`、F 節の Background runs / Agent handoff / Task card の備考を直す。quickstart で過去ログに Hook / task の行が残ると確かめた行は経路を「両方」に直す。項目 21 の出力で割当先が O-11 の行が 0
-- **FR-013**: `QUERY_OPTION_KEYS` の pin テストを AD-054 の集合に、`AGENT_SDK_ALLOWED_CALLS` を AD-055 の集合 (5 つ) に直し、`getSubagentMessages` を `read-transcript.ts` の外で呼ぶ fixture と `listSubagents` を `read-transcript.ts` の外で呼ぶ fixture、SDK を import したファイルの 2 つ目の import 文で呼ぶ fixture、許可の名前の別名 (`getSubagentMessages as getSessionMessages`) で呼ぶ fixture で項目 14 が発火することを固定しなければならない (項目 14 はファイル中のすべての名前付き import を、import した名前で照合する。design-gate H-10)。`METER_UPDATE_TYPES` の固定テストを 1 つ増えた集合にする
+- **FR-013**: `QUERY_OPTION_KEYS` の pin テスト (`src/agents/session-core.test.ts`) を AD-054 の集合 (AD-053 の `onElicitation` を含む 11 キー) に、`AGENT_SDK_ALLOWED_CALLS` を AD-055 の集合 (5 つ) に直し、`getSubagentMessages` を `read-transcript.ts` の外で呼ぶ fixture と `listSubagents` を `read-transcript.ts` の外で呼ぶ fixture、SDK を import したファイルの 2 つ目の import 文で呼ぶ fixture、許可の名前の別名 (`getSubagentMessages as getSessionMessages`) で呼ぶ fixture で項目 14 が発火することを固定しなければならない (項目 14 はファイル中のすべての名前付き import を、import した名前で照合する。design-gate H-10)。`METER_UPDATE_TYPES` の固定テストを 1 つ増えた集合にする
 - **FR-014**: 完了の PR で roadmap に **O-12「知らせの類・Checkpoints・中身のブロックの表示」**(M3・順 21・`ui`・依存 O-11) を登録し (範囲は「本 feature の位置づけ」の更新案)、M4 / M5 の順を振り直し、O-11 の行を本 feature の範囲と結論に直さなければならない (U-1。AD-044 の「後続 feature は roadmap に登録する」)
-- **FR-015**: AD-054 / AD-055 / AD-056 は実装の前に利用者の承認を得て accepted にし、session charter (O-11 の項) と ui charter に記録しなければならない
+- **FR-015**: AD-054 / AD-055 / AD-056 (2026-10-17 に利用者が承認し accepted) を、session charter (O-11 の項) と ui charter に記録しなければならない
 - **FR-016**: 導入した用語と判断を記録に反映しなければならない (Principle XIV): glossary (一般の Hook・背景の task の一覧・後から背景に移った task)・`_overview.md` (O-12 の帰属)・`docs/prompts.md` (O-12 の起動文)・roadmap の O-8 の行の (c) (一般の Hook と subagent の本文で `receivedMessages` の基準が変わる。`background-tasks` は `meter` なので数えない)
 
 ### Key Entities
@@ -226,9 +229,9 @@ roadmap の O-11 の行が預けた範囲と義務の扱いの正本はこの表
 
 ### Assumptions / Clarifications
 
-- **[未承認 U-1〜U-11]** 上の「判断」の表。AD-054 / AD-055 / AD-056 (proposed)。U-9〜U-11 は design-gate (round 1) の H-03 / H-04 / H-09 の修正で足した (夜間の仮採用。推奨案)
+- **[承認済み U-1〜U-11 (2026-10-17)]** 上の「判断」の表。AD-054 / AD-055 / AD-056 (accepted)。U-9〜U-11 は design-gate (round 1) の H-03 / H-04 / H-09 の修正で足した
 - **[ASSUMED]** 8 件 (Clarifications の Session 2026-10-17): 一般の Hook の見た目・一般の Hook の読み上げの量・伏せた Hook 名のラベル・後から背景に移った task のラベル・タブの名前と並び・前景の task を覚える数・`getSubagentMessages` で読む数・入れ子の既定の開閉
-- **design の回答 (2026-10-17。`.needs-input.md` の Q1 / Q2。どちらも夜間の仮採用)**: Q1 → U-8。Q2 → U-1〜U-8 と 3 つの ADR は未承認のまま design-gate まで進め、実装には入らない (FR-015 の承認は実装の前)
+- **design の回答 (2026-10-17。`.needs-input.md` の Q1 / Q2)**: Q1 → U-8。Q2 → U-1〜U-8 と 3 つの ADR は仮採用のまま design-gate まで進め、実装には入らない (FR-015 の承認は実装の前)。承認は 2026-10-17 に得た (上の「判断の一覧」)
 - V-4 の未記録の項目 (`hook_name` の形・過去ログに Hook / task の行が残るか) は未確認として扱い、quickstart で記録する。それまで両方の形に耐える規則にする (O-2 の名前の allowlist・過去ログの変換は実装済み)
 - SDK 0.3.270 の過去ログの経路 (`getSessionMessages`) は agentId を構造で渡さない (design で確かめた。`sdk.d.ts:5903-5916`)。agentId は `listSubagents` で取り、親とは `getSubagentMessages` の `parent_tool_use_id` (`sdk.mjs:202`) で結ぶ (U-8)。subagent の system の行 (圧縮の境界) は `getSubagentMessages` が返さないので、過去ログの入れ子に出ない
 
@@ -237,7 +240,7 @@ roadmap の O-11 の行が預けた範囲と義務の扱いの正本はこの表
 - **SC-001**: **一般の Hook が出る。** US-1 の AC1〜AC4 のとおりになり、Hook の出力本文・終了コードの目印の値が `SessionEvent` と DOM に 0 件。計測経路: agents の変換の単体 + 行と読み上げの component テスト
 - **SC-002**: **背景の task が見える。** US-2 の AC1〜AC5 のとおりになり、`local_bash` の説明の目印の値が行・一覧・`meter` に 0 件。`background-tasks` の `meter` のフィールドが id と種類だけ。計測経路: agents の単体 + 稼働中のストアの単体 + タブの component テスト (vitest-axe の違反 0)
 - **SC-003**: **実行中と過去ログで subagent が入れ子になる。** US-3 の AC1〜AC7 のとおりになり、`parent_tool_use_id` を持つ assistant / user のメッセージが主ループの transcript に 0 件 (孤児を除く)。入れ子の user の text (`isSynthetic` のもの・Hook の出力の目印を持つものを含む) の目印が `SessionEvent` と DOM に 0 件。tool の結果の文面の偽の agentId で入れ子が作られず、`listSubagents` の列挙の順番を入れ替えても入れ子が変わらない。計測経路: agents の入れ子の単体 + `read-transcript.ts` / `transcript.ts` の単体 (偽の SDK) + Subagent の表示の component テスト
-- **SC-004**: **境界の広がりが ADR の範囲に収まる。** `QUERY_OPTION_KEYS` が AD-054 の集合、`AGENT_SDK_ALLOWED_CALLS` が AD-055 の 5 つ (うち 2 つは `read-transcript.ts` でだけ)、`METER_UPDATE_TYPES` が 1 つ増えた集合で、固定テストと項目 14 / 16 の fixture が通る。`SessionEvent` の種類・`TRANSCRIPT_PART_FIELDS`・`PermissionRequest`・`toPermissionResult`・IPC・preload・main の差分が 0、`Query` の呼び出しは `interrupt` だけ。計測経路: 固定テスト + `node scripts/constitution/check.mjs` + `git diff` (quickstart)
+- **SC-004**: **境界の広がりが ADR の範囲に収まる。** `QUERY_OPTION_KEYS` が AD-054 の集合 (11 キー)、`AGENT_SDK_ALLOWED_CALLS` が AD-055 の 5 つ (うち 2 つは `read-transcript.ts` でだけ)、`METER_UPDATE_TYPES` が 1 つ増えた集合で、固定テストと項目 14 / 16 の fixture が通る。`SessionEvent` の種類・`TRANSCRIPT_PART_FIELDS`・`PermissionRequest`・`toPermissionResult`・IPC・preload・main の差分が 0、`Query` の呼び出しは `interrupt` だけ。計測経路: 固定テスト + `node scripts/constitution/check.mjs` + `git diff` (quickstart)
 - **SC-005**: **対応表の O-11 の行が無くなり、M3 の Tier A の残りが 0。** 2 つの部分に分ける:
   - (自動) 項目 21 が通り、出力で割当先が O-11 の行が 0、M3 の完了の条件の行が 0、O-12 の行が数えられている。計測経路: `node scripts/constitution/check.mjs`
   - (手で記録) D 節の 3 行を `実装済み` にした根拠として、quickstart の V-1 / V-3 / V-4 の記録が「届いた」である (FR-012 の条件。未記録・「届かない」の行があれば自動の部分は成り立たないまま利用者に返す)。あわせて `hook_name` の実際の形・過去ログの Hook / task の行の有無・subagent の system の帰属 (V-5)・`listSubagents` が入れ子の subagent のファイルを列挙するか (V-6) を記録する。計測経路: `quickstart-results.md`
@@ -249,12 +252,15 @@ roadmap の O-11 の行が預けた範囲と義務の扱いの正本はこの表
 - **O-6** ([016](../016-ui-boundaries-and-tool-displays/spec.md)): 結果待ち・結果不明の印と読み上げ (`TranscriptAnnouncer`)・取り消し・圧縮の境界 (AD-049)
 - **O-1** ([010](../010-session-monitoring-view/spec.md)): 直近の活動のコマンドの名前の規則 (`summarizeToolInput`。FR-005 はこれを継ぐ)
 - **O-7** ([013](../013-ui-app-shell/spec.md)): 右のペインのタブの表 (AD-046)
+- **O-9** ([017](../017-ui-conversation-time-and-activity/spec.md)): メッセージの時刻 `createdAt` (AD-051。入れ子の子のメッセージも埋める)・右のペインのタブ「会話の地図」(本 feature のタブはその後に並ぶ)・活動の帯 (主ループのメッセージの tool-call だけを数える。入れ子の tool は数えない)
+- **O-10** ([018](../018-session-answer-ui-and-composer-commands/spec.md)): `QUERY_OPTION_KEYS` の `onElicitation` (AD-053。本 feature はその和集合で pin を直す)・category `elicitation` (`SYSTEM_EVENT_CATEGORIES` の数の起点)・`SessionEvent` の種類 9 (本 feature は変えない)
 - **R-4** (004): Subagent の表示・DTO の `children`・入れ子の健全性 (AD-035)
 - **X-1 / X-4** (005 / 008): query の options の正の構成 (AD-036 §4 / AD-041 (g))
 
 ## Out of Scope
 
-- O-12 に送ったもの (Tier B の知らせの類・Checkpoints の表示・File element・`server_tool_use` / `web_search_tool_result`・B 節の機械照合・過去ログへの O-6 の行の変換)
+- O-12 に送ったもの (Tier B の知らせの類・Checkpoints の表示・File element・`server_tool_use` / `web_search_tool_result`・B 節の機械照合・過去ログへの O-6 / O-10 の行の変換)
+- 入れ子の中のメッセージの時刻の表示と、入れ子の tool を O-9 の活動の帯に数えること
 - task・チェックポイントの操作 (止める・前面に戻す・巻き戻し。AD-049 Decision 6)
 - Hook の設定の一覧 (`get_hooks_listing`。U-2) と Hook の出力本文
 - 計画の一覧 (TodoList のタブ。U-4)

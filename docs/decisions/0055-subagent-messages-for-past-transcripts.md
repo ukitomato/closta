@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2026-10-17
 id: AD-055
 deciders: ukitomato
@@ -10,8 +10,7 @@ superseded-by: []
 
 # AD-055: 過去ログの subagent の本文を `getSubagentMessages` で読む (AD-035 Decision 3 の読み替えと許可リストの追加)
 
-> **status: proposed。** O-11 ([spec 019](../../specs/019-ui-hooks-tasks-subagents-and-notices/spec.md)) が夜間の自走で起こした。
-> 利用者の承認はまだ無い (spec 019 の U-5 / U-8)。U-8 (agentId を `listSubagents` で列挙する) は design (`/cl-plan`) で SDK 0.3.270 を確かめた結果による書き直しで、夜間の仮採用 (推奨案) である。
+本 ADR は O-11 ([spec 019](../../specs/019-ui-hooks-tasks-subagents-and-notices/spec.md)) が夜間の自走で起こした (spec 019 の U-5 / U-8)。U-8 (agentId を `listSubagents` で列挙する) は design (`/cl-plan`) で SDK 0.3.270 を確かめた結果による書き直しである。本 ADR と spec 019 の U-1〜U-11 は 2026-10-17 に利用者が承認した。
 
 ## Context
 

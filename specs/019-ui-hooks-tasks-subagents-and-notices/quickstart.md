@@ -2,14 +2,14 @@
 
 自動の検証は `docs/discovery.md` の "Build / Test / Lint" 表の agent 用の列で流す。以下は自動で見ない確認。
 
-**前提**: 実装は spec の U-1〜U-11 と AD-054 / AD-055 / AD-056 の承認の後に始める (FR-015。plan の RK-01)。
+**前提**: spec の U-1〜U-11 と AD-054 / AD-055 / AD-056 は 2026-10-17 に利用者が承認した (FR-015)。
 
 ## V-0 境界の差分 (SC-004)
 
-- `SESSION_EVENT_KINDS`・`TRANSCRIPT_PART_FIELDS`・`TRANSCRIPT_MESSAGE_FIELDS`・`PermissionRequest` のフィールド・`toPermissionResult` の出力の差分が 0。IPC・preload・main の差分が 0 (`git diff --stat main -- src/main src/preload` と型の固定テスト)
-- `QUERY_OPTION_KEYS` が `includeHookEvents` / `forwardSubagentText` の 2 つだけ増えている (O-10 が先にマージされていればその和集合)
+- `SESSION_EVENT_KINDS` (O-10 の後の 9)・`SessionControl` の種類・`TRANSCRIPT_PART_FIELDS`・`TRANSCRIPT_MESSAGE_FIELDS`・`PermissionRequest` のフィールド・`toPermissionResult` の出力の差分が 0。IPC・preload・main の差分が 0 (`git diff --stat main -- src/main src/preload` と型の固定テスト)
+- `QUERY_OPTION_KEYS` が `includeHookEvents` / `forwardSubagentText` の 2 つだけ増えている (main の 9 キー (AD-053 の `onElicitation` を含む) から 11 キー)
 - `AGENT_SDK_ALLOWED_CALLS` が `listSubagents` / `getSubagentMessages` の 2 つだけ増え、`AGENT_SDK_CALL_FILES` の fixture 4 本 (2 つの API を外で呼ぶもの・2 つ目の import 文・許可の名前の別名) で項目 14 が発火する。`read-transcript.ts` の外に 2 つの呼び出しが無い
-- `MeterUpdate` の種類が `background-tasks` の 1 つだけ、`SYSTEM_EVENT_CATEGORIES` が `backgrounded-task` の 1 つだけ増えている
+- `MeterUpdate` の種類が `background-tasks` の 1 つだけ (9 → 10)、`SYSTEM_EVENT_CATEGORIES` が `backgrounded-task` の 1 つだけ (12 → 13)、`PANEL_TABS` が `background-tasks` の 1 つだけ (4 → 5) 増えている
 - `sdk-agent-session.ts` の `Query` のメソッドの呼び出しが `interrupt` だけ (項目 16 が ok)
 
 ## V-0b 対応表 (SC-005)
@@ -49,6 +49,7 @@
 - subagent の中で subagent を起動させ、入れ子が 2 段になること
 - subagent の中の tool の前後で Hook が走ったとき、Hook の行が主ループに出ること (US-1 AC5)
 - **長い subagent (大きなファイルを何度も Read させる) で、入れ子が上限に当たるか・切り詰めの印が出るか・送り直しの回数と体感 (重さ) を記録する** (US-3 AC6 / plan RK-04。重ければ完了の PR の前に利用者に返す)
+- 「会話の地図」のタブの活動の帯が、subagent の tool を数えないこと (実行中と過去ログで同じ重み。data-model §3.3 の時刻の行)
 - **subagent の user のメッセージに合成のもの (Hook の追加の文脈・system reminder など) が届くかを記録する** (表示には出ないこと。US-3 AC7 / U-11)
 
 ### V-5 subagent の中の圧縮の境界 (US-3 AC3)
