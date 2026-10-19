@@ -1,6 +1,6 @@
 ---
 status: needs-human-review
-last_updated: 2026-10-07
+last_updated: 2026-10-19
 generated_by: human (PLAN.md を素案として再導出)
 ---
 
@@ -55,7 +55,7 @@ spec_id（`001-runtime-...`）とは独立させる。差し込み作業で番�
 | X-3 | Provider 登録と到達可能性判定 | `provider` | M2 |
 | X-4 | 起動設定ダイアログとプリセット（軸の依存解決） | `session` | M2 |
 | X-5 | supervisor 分離とマルチセッション（10 並列） | `session` | M2 |
-| X-6 | 起動設定の拡張軸とセッション操作（追加ディレクトリ / 上限 / セッション名 / Win32 直接起動 / fork・resume 等） | `session` | M2 後続 |
+| X-6 | 起動設定の拡張軸とセッション操作（追加ディレクトリ / 上限 / セッション名 / fork・rename 等。Win32 直接起動は X-8、resume は X-9 に切り出した） | `session` | M2 後続 |
 | X-7 | aws-assume-role helper の生成と CloudTrail 追跡 | `provider` | M2 後続 |
 | O-1 | セッション監視ビュー（状態一覧、密度切替、承認待ちの強調） | `session` | M3 |
 | O-2 | `docs/ui-coverage.md` の確立 (SDK の型と機械照合・割当の確定)、実行中の tool の結果と Hook / Background task の行、transcript の情報密度 | `ui` | M3 |
@@ -69,6 +69,8 @@ spec_id（`001-runtime-...`）とは独立させる。差し込み作業で番�
 | O-10 | Claude Code からの問いに答える UI と composer のコマンドの候補 (`AskUserQuestion` の回答・Elicitation・`request_user_dialog`・composer のスラッシュコマンドの候補。O-5 の design で分けた。[AD-048](../decisions/0048-session-config-display-and-answer-ui-split.md)) | `session` | M3 |
 | O-11 | Hook・背景の task・実行中の subagent の表示 (一般の Hook と `includeHookEvents`・背景の task の一覧・後から背景に移った task・実行中の subagent の入れ子と過去ログの subagent。O-6 の design で分け、O-11 の design で Tier B を O-12 に送った。[AD-049](../decisions/0049-boundaries-retraction-and-o11-split.md) Decision 1 / [AD-056](../decisions/0056-o11-scope-background-task-list-and-o12-split.md) Decision 1) | `ui` | M3 |
 | O-12 | 知らせの類・Checkpoints・中身のブロックの表示 (Tier B の知らせの類・`files_persisted`・`user/document` の File element・`server_tool_use` / `web_search_tool_result`・対応表の B 節の機械照合・過去ログへの O-6 / O-10 の行の変換。O-11 の design で分けた。[AD-056](../decisions/0056-o11-scope-background-task-list-and-o12-split.md) Decision 1) | `ui` | M3 (完了の条件に数えない) |
+| X-8 | Win32Runtime の直接起動 (Windows の作業フォルダでホストの `claude` を起動する。X-6 から切り出した。2026-10-19 に利用者が承認) | `session` | M3 (O-12 の前。完了の条件に数えない) |
+| X-9 | セッションの再開 (resume と失敗したセッションの再開。fork は X-6 に残す。X-6 から切り出した。2026-10-19 に利用者が承認) | `session` | M3 (O-12 の前。完了の条件に数えない) |
 | I-1 | `DockerRuntime` と endpoint 抽象 + `sessionStore` ミラー | `isolation` | M4 |
 | I-2 | コンテナライフサイクルと隔離可視化 | `isolation` | M4 |
 | I-3 | sandbox capability 判定と権限モードのゲート | `isolation` | M4 |
@@ -136,7 +138,7 @@ spec_id（`001-runtime-...`）とは独立させる。差し込み作業で番�
 |---|---|---|---|
 | **M1** | **読める** | R-1〜R-4 | WSL 内の過去セッションを Windows の assistant-ui で読める。**ここで §4 の方針を確定する** |
 | **M2** | **走らせられる** | X-1〜X-5 | 起動条件を選んで複数セッションを回せる。日本語で誤送信しない |
-| **M3** | **差配できる** | O-1〜O-12 (O-12 は完了の条件に数えない) | 10 セッションを俯瞰でき、未表示情報がゼロ。**「未表示ゼロ」は [AD-044](../decisions/0044-ui-coverage-assignment.md) の M3 の完了の条件 (Tier A の後続のうち割当先が M3 の feature の行が 0) で判定する** |
+| **M3** | **差配できる** | O-1〜O-12 と X-8 / X-9 (O-12・X-8・X-9 は完了の条件に数えない) | 10 セッションを俯瞰でき、未表示情報がゼロ。**「未表示ゼロ」は [AD-044](../decisions/0044-ui-coverage-assignment.md) の M3 の完了の条件 (Tier A の後続のうち割当先が M3 の feature の行が 0) で判定する** |
 | **M4** | **任せられる** | I-1〜I-3 | Auto / bypassPermissions を隔離内で安全に回せる |
 | **M5** | **配れる** | D-1 | 自分以外が使える |
 

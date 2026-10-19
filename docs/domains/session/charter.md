@@ -118,6 +118,8 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
 
 ### Journey 4: 中断と再開
 
+（手順 1〜2 の再開は X-9、手順 3 の分岐は X-6 が扱う）
+
 1. ユーザは実行中のセッションを中断する。途中出力は残る
 2. 後で再開する。フォルダ / ランタイム / Provider は引き継がれ、
    モデル / effort / 権限モード / 上限は選び直せる
@@ -331,6 +333,13 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
 - **O-8** — 並列時の滑らかさの実機計測 ([roadmap の O-8 の行](../../roadmap.md#o3-kpi-smoothness))。未着手
 
 X-6 は未着手。
+
+- **X-8** — Win32Runtime の直接起動 ([roadmap の X-8 の行](../../roadmap.md))。X-6 から切り出して前に出した
+  (2026-10-19 に利用者が承認。Closta で Closta を開発できるのは O-11 と X-8 / X-9 の後)。AD-041 (h) が X-6 に指名した
+  「Win32Runtime の直接起動」の持ち主。未着手
+- **X-9** — セッションの再開 ([roadmap の X-9 の行](../../roadmap.md))。X-6 から切り出した (同上)。AD-041 (h) の
+  「fork / resume / rename / tag / delete」のうち resume と、失敗したセッションの再開 (X-5 FR-013) と Journey 4 の手順 1〜2 を持つ。
+  分岐 (手順 3。`forkSession`) は X-6 に残す。未着手
 
 ## Open Questions
 

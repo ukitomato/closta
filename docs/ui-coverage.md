@@ -305,7 +305,7 @@ assistant-ui の element の一覧 (https://www.assistant-ui.com/elements。**20
 | Memory | B | A SDKMemoryRecallMessage | O-12 |
 | Mermaid diagram | A | B assistant/text | markdown の中の図。未導入 |
 | Message actions | B | SDK の外: 中央の本体の Thread の応答の操作のバー (`thread.aui.tsx` が `ActionBarPrimitive.Copy` / `Reload` と More の Export as Markdown を組み込み済み) | コピーと Markdown の書き出しは効く。再生成は runtime が `onReload` を渡さないので効かない (O-7 pr-gate R3 ui-coverage L-201) |
-| Message branches | A | 未使用 | fork / resume (X-6) |
+| Message branches | A | 未使用 | fork (X-6) / resume (X-9) |
 | Message pair | B | 未使用 | |
 | Message queue | A | D message-queue | X-2 |
 | Message timing | B | A SDKAssistantMessage / A SDKUserMessage | O-9。中央の本体の各メッセージの時刻とターンの所要時間 (`features/chat/MessageTimeLabel.tsx`)。registry の `message-timing` / `elements-message-timing` は採らず、文字の体裁で作った (SH-002 の照合の写し。正本は O-9 の PR の説明。017 research R-10): `message-timing` はストリームの統計 (`metadata.timing`) を読むが本アプリはメッセージ単位で更新する (X-1)。standalone の版は文言が英語の直書きで、メッセージの時刻と所要時間を出す形と合わない |
