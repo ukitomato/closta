@@ -56,14 +56,14 @@ SDK: `@anthropic-ai/claude-agent-sdk` 0.3.270
 | SDKModelRefusalFallbackMessage | `system` / `model_refusal_fallback` | A | 実装済み: SystemEventRow / ConversationMapTab (実行中) | 実行中 | O-6。O-9: 地図の行に拒否の印として出す。拒否の行 (fallback のモデルと scope・分類・拒否の説明を伏せ字つきで)。置き換えられた応答は `meter` の `retraction` で稼働中のストアから外す (AD-049 Decision 2)。過去ログは記録に残れば伏せ字つきの system の本文 (行は O-12) |
 | SDKModelRefusalNoFallbackMessage | `system` / `model_refusal_no_fallback` | A | 実装済み: SystemEventRow / ConversationMapTab (実行中) | 実行中 | O-6。O-9: 地図の行に拒否の印として出す。拒否の行 (言い直して送り直せる旨・`content`・拒否の説明を伏せ字つきで)。過去ログは記録に残れば伏せ字つきの system の本文 (行は O-12)。O-10: `refused_user_message_uuid` があれば「編集して再試行」(composer に戻すだけ。巻き戻さない) |
 | SDKLocalCommandOutputMessage | `system` / `local_command_output` | B | 後続: O-12 | なし | 過去ログは伏せ字つきの system の本文 (O-6) |
-| SDKHookStartedMessage | `system` / `hook_started` | A | 実装済み: SystemEventRow (実行中) | 実行中 | SDK は既定で SessionStart / Setup の Hook だけを出す。一般の Hook (`includeHookEvents: true`) の行は O-11 で実装した (AD-054。D 節の general-hooks は実機の記録待ち)。過去ログの変換は実装済み (`transcript.ts`)。実データに残るかは O-2 quickstart V-4 で確かめ、残れば経路を「両方」に直す |
+| SDKHookStartedMessage | `system` / `hook_started` | A | 実装済み: SystemEventRow (実行中) | 実行中 | SDK は既定で SessionStart / Setup の Hook だけを出す。一般の Hook (`includeHookEvents: true`) の行は O-11 で実装した (AD-054。D 節の general-hooks は V-1 で確認済み)。過去ログの変換は実装済み (`transcript.ts`)。実データに残るかは O-2 quickstart V-4 で確かめ、残れば経路を「両方」に直す |
 | SDKHookProgressMessage | `system` / `hook_progress` | B | 表示不要: 開始と結果の行で足りる。出力本文 (stdout / stderr) は出さない | なし | |
 | SDKHookResponseMessage | `system` / `hook_response` | A | 実装済み: SystemEventRow (実行中) | 実行中 | 開始と同じ行を結果で書き換える。出力本文と終了コードは出さない。過去ログの変換は実装済み (`transcript.ts`)。実データに残るかは O-2 quickstart V-4 で確かめ、残れば経路を「両方」に直す |
 | SDKPluginInstallMessage | `system` / `plugin_install` | B | 実装済み: SystemEventRow (実行中) | 実行中 | O-5。プラグインのマーケットプレイスの導入の行 (category `plugin`。導入・失敗の数と最後のマーケットプレイスの名前。015 data-model §4)。`error` は出さない。アプリの起動では `CLAUDE_CODE_SYNC_PLUGIN_INSTALL` を渡さない (AD-041 (e)) ので通常は届かない。`started` を経ない結果でも行を 1 つ作る (015 data-model §4) |
 | SDKToolProgressMessage | `tool_progress` | B | 実装済み: ToolResultMarks (実行中) | 実行中 | O-4。tool の経過時間 (結果待ちの間だけ、tool の表示の見出しの右端に出す)。主ループの tool だけ (入れ子の tool は経過時間を出さない。O-11 の入れ子は結果の状態の印だけ)。セッションスレッドで tool ごとに 1 秒に 1 回まで間引く (014 data-model §2)。`tool_name`・`heartbeat`・`subagent_*` は運ばない |
 | SDKAuthStatusMessage | `auth_status` | A | 実装済み: SystemEventRow (実行中) | 実行中 | O-5。認証の行 (category `auth`。認証中 → 成功 / 失敗に同じ行を書き換える。015 data-model §4)。`output` / `error` は出さない (U-4)。「認証中」を経ない失敗でも失敗の行を作る。始まりの見えない成功は行にしない |
 | SDKTaskNotificationMessage | `system` / `task_notification` | A | 実装済み: SystemEventRow (実行中) | 実行中 | task の行の状態を完了・失敗・停止に書き換える。要約・出力ファイルは出さない。過去ログの変換は実装済み (`transcript.ts`)。実データに残るかは O-2 quickstart V-4 で確かめ、残れば経路を「両方」に直す |
-| SDKTaskStartedMessage | `system` / `task_started` | A | 実装済み: SystemEventRow (実行中) | 実行中 | 背景で始まった task (`is_backgrounded`) だけ。前景の task は Subagent・tool の結果で出る。後から背景に移った task の行は O-11 で実装した (D 節の late-backgrounded-task は実機の記録待ち)。過去ログの変換は実装済み (`transcript.ts`)。実データに残るかは O-2 quickstart V-4 で確かめ、残れば経路を「両方」に直す |
+| SDKTaskStartedMessage | `system` / `task_started` | A | 実装済み: SystemEventRow (実行中) | 実行中 | 背景で始まった task (`is_backgrounded`) だけ。前景の task は Subagent・tool の結果で出る。後から背景に移った task の行は O-11 で実装した (D 節の late-backgrounded-task は V-3 で確認済み)。過去ログの変換は実装済み (`transcript.ts`)。実データに残るかは O-2 quickstart V-4 で確かめ、残れば経路を「両方」に直す |
 | SDKTaskUpdatedMessage | `system` / `task_updated` | A | 実装済み: SystemEventRow (実行中) | 実行中 | 行の状態だけを書き換える (説明の変更は読まない)。過去ログの変換は実装済み (`transcript.ts`)。実データに残るかは O-2 quickstart V-4 で確かめ、残れば経路を「両方」に直す |
 | SDKTaskProgressMessage | `system` / `task_progress` | B | 実装済み: SystemEventRow (実行中) | 実行中 | O-4。背景の task の行の種類の後ろに、使ったトークン・tool の回数・経過時間を並べる (行の更新。行の無い task への進み具合は捨てる。014 data-model §3)。要約 (`summary`)・説明・最後の tool 名は出さない。task の状態を持たない (AD-044 Decision 6)。task ごとに 1 秒に 1 回まで間引く |
 | SDKBackgroundTasksChangedMessage | `system` / `background_tasks_changed` | B | 実装済み: 背景の task のタブ (実行中) | 実行中 | O-11。`meter` の種類 `background-tasks` で運び、右のペインのタブに最新の一覧を置き換えで出す (AD-056 Decision 2)。過去ログの経路は未確認 (019 quickstart V-2) |
@@ -117,7 +117,7 @@ assistant / user のメッセージの content block。型は `@anthropic-ai/sdk
 
 | 識別子 | 判別子 | Tier | 割当 | 経路 | 備考 |
 |---|---|---|---|---|---|
-| AgentInput | `Agent` (旧 `Task`) | A | 実装済み: Subagent (両方) | 両方 | 両方の名前に当てる (O-2 FR-010)。実行中の入れ子と `getSubagentMessages` は O-11 で実装した (AD-055。D 節の subagent-nesting-live は実機の記録待ち) |
+| AgentInput | `Agent` (旧 `Task`) | A | 実装済み: Subagent (両方) | 両方 | 両方の名前に当てる (O-2 FR-010)。実行中の入れ子と `getSubagentMessages` は O-11 で実装した (AD-055。D 節の subagent-nesting-live は V-4 で確認済み) |
 | BashInput | `Bash` | A | 実装済み: TerminalBlock (両方) | 両方 | |
 | TaskOutputInput | `TaskOutput` | B | 実装済み: ToolFallback (両方) | 両方 | |
 | ExitPlanModeInput | `ExitPlanMode` | A | 実装済み: AgentPlan (両方) | 両方 | plan の markdown の描画は実装済み (O-6。AD-049 Decision 4 による AD-035 D6 の読み替え。「原文」の切り替えつき) |
@@ -178,9 +178,9 @@ SDK のメッセージではなく、アプリが SDK の callback・制御・�
 | interrupt-receipt | `interrupt-receipt` | B | 表示不要: 中断の受領。途中出力は transcript に残る | なし | |
 | meter | `meter` (計量) | A | 実装済み: UsageTab / ContextCostMeter / QuotaBanner / UnsafeModeBanner / OverviewTab / ToolResultMarks / ThinkingIndicator (実行中) | 実行中 | O-4 (AD-047 Decision 2)。セッションスレッドが A 節の result・assistant・rate_limit_event・status / init・thinking_tokens・tool_progress から、数・真偽・列挙・モデルの id・形を検証した tool の id だけを運ぶ (許可リストの正本は 014 data-model §2)。稼働中のストアの `meters` に最新の値だけを持ち、永続化しない。状態通知には載せない。transcript の行になる出来事 (API の再試行・圧縮・権限モード・task の進み具合) は `meter` ではなく `message` の経路 (SystemEventRow) |
 | message-queue | 実行中に積んだ入力 | A | 実装済み: MessageQueue (実行中) | 実行中 | X-2 |
-| general-hooks | `includeHookEvents` の Hook の行 | A | 後続: O-11 | なし | 一般の Hook の表示 (A 節の `hook_started` / `hook_response` の既定外の Hook)。O-2 pr-gate M-201。O-6 で D 節に立てた。コードは実装済み (019)。**`実装済み` にするのは 019 quickstart V-1 の記録が「届いた」のとき** (未記録) |
-| late-backgrounded-task | `task_started` の後から背景に移った task | A | 後続: O-11 | なし | 後から背景に移った task の行。O-2 pr-gate M-201。O-6 で D 節に立てた。コードは実装済み (019)。**`実装済み` にするのは quickstart V-3 の記録が「届いた」のとき** (未記録。plan RK-06) |
-| subagent-nesting-live | `parent_tool_use_id` の実行中の入れ子 | A | 後続: O-11 | なし | 実行中の subagent の入れ子 (`getSubagentMessages`)。O-2 pr-gate M-201。O-6 で D 節に立てた。コードは実装済み (019。`listSubagents` / `getSubagentMessages` は AD-055)。**`実装済み` にするのは quickstart V-4 の記録が「届いた」のとき** (未記録) |
+| general-hooks | `includeHookEvents` の Hook の行 | A | 実装済み: SystemEventRow (実行中) | 実行中 | 一般の Hook の表示 (A 節の `hook_started` / `hook_response` の既定外の Hook)。O-2 pr-gate M-201。O-6 で D 節に立てた。O-11 (019) で実装。quickstart V-1 の実機で届いた (2026-10-19)。過去ログの経路は未確認 (V-2) |
+| late-backgrounded-task | `task_started` の後から背景に移った task | A | 実装済み: SystemEventRow (実行中) | 実行中 | 後から背景に移った task の行。O-2 pr-gate M-201。O-6 で D 節に立てた。O-11 (019) で実装。quickstart V-3 の実機で届いた (2026-10-19)。過去ログの経路は未確認 (V-2) |
+| subagent-nesting-live | `parent_tool_use_id` の実行中の入れ子 | A | 実装済み: Subagent (両方) | 両方 | 実行中の subagent の入れ子 (`getSubagentMessages`)。O-2 pr-gate M-201。O-6 で D 節に立てた。O-11 (019) で実装 (`listSubagents` / `getSubagentMessages` は AD-055)。quickstart V-4 の実機で届いた (2026-10-19) |
 
 ## E 制御要求
 

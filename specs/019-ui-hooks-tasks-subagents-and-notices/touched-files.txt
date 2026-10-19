@@ -78,3 +78,6 @@ src/renderer/src/features/chat/ChatScreen.o2.test.tsx
 src/renderer/src/features/session/LivePane.o2.test.tsx
 src/renderer/src/features/session/running-session-store.ts
 specs/019-ui-hooks-tasks-subagents-and-notices/data-model.md
+docs/ui-coverage.md
+specs/019-ui-hooks-tasks-subagents-and-notices/quickstart-results.md
+specs/019-ui-hooks-tasks-subagents-and-notices/tasks.md
