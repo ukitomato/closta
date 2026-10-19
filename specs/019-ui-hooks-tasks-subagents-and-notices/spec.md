@@ -5,7 +5,7 @@ domain: ui
 domain_selected_by: user
 targets: both
 targets_selected_by: auto
-status: reviewing
+status: completed
 bf_ids: []
 sf_ids: []
 linear: null
