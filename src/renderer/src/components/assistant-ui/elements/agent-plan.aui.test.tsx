@@ -131,11 +131,11 @@ describe('markdown の描画口 (固定テスト)', () => {
     ])
   })
 
-  it('TextMessagePartProvider は agent-plan.aui.tsx だけが import する', () => {
+  it('TextMessagePartProvider は markdown-body.tsx だけが import する (O-11 FE-030)', () => {
     expect(
       importers(
         /import\s*\{[^}]*\bTextMessagePartProvider\b[^}]*\}\s*from\s*['"]@assistant-ui\/react['"]/
       )
-    ).toEqual(['agent-plan.aui.tsx'])
+    ).toEqual(['markdown-body.tsx'])
   })
 })

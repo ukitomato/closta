@@ -40,6 +40,9 @@ const ENDED_STATUSES: ReadonlySet<string> = new Set([
   'cancelled'
 ])
 
+/** セッションの始まりの Hook (O-6 のまま、終わりの状態をすべて読む)。他は一般の Hook (O-11)。 */
+const SESSION_LEVEL_HOOK_EVENTS: ReadonlySet<string> = new Set(['SessionStart', 'Setup'])
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
@@ -67,8 +70,17 @@ function rowAnnouncement(messageId: string, data: RowFields | null): Announcemen
     case 'informational':
       return status === 'prevented' ? make('prevented', 'other', ANNOUNCER_LABELS.prevented) : null
     case 'hook':
-    case 'task': {
+    case 'task':
+    case 'backgrounded-task': {
       if (status === null || !ENDED_STATUSES.has(status)) return null
+      // 一般の Hook (SessionStart / Setup 以外。O-11) は 1 ターンに何件も出るので、失敗・取り消しだけを読む。
+      if (
+        category === 'hook' &&
+        !SESSION_LEVEL_HOOK_EVENTS.has(data.detail) &&
+        status !== 'failed' &&
+        status !== 'cancelled'
+      )
+        return null
       const label = SYSTEM_EVENT_STATUS_LABELS[status]
       return category === 'hook'
         ? make(`hook:${status}`, 'hook-end', ANNOUNCER_LABELS.hookEnded(label))

@@ -74,7 +74,7 @@ export function toLiveAssistantMessage(
         break
       }
       default:
-        // server_tool_use など専用表示を持たないブロックは落とす (割当は docs/ui-coverage.md の B 節。O-11)。
+        // server_tool_use など専用表示を持たないブロックは落とす (割当は docs/ui-coverage.md の B 節。O-12)。
         break
     }
   }

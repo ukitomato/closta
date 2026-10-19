@@ -1,0 +1,111 @@
+{
+    "gate": "code",
+    "run": "2026-10-19T13:03:26Z",
+    "spec_dir": "specs/019-ui-hooks-tasks-subagents-and-notices",
+    "spec_id": "019-ui-hooks-tasks-subagents-and-notices",
+    "iter": 2,
+    "severity_counts": {
+        "critical": 0,
+        "high": 0,
+        "medium": 1,
+        "low": 1,
+        "must_fix": 0
+    },
+    "must_fix_findings": [],
+    "touched_files": [
+        {
+            "path": "specs/019-ui-hooks-tasks-subagents-and-notices/data-model.md",
+            "sha": "1046bb26e8787d685b9fb4af65c606edcc4943b9"
+        },
+        {
+            "path": "src/renderer/src/features/session/running-session-store.test.ts",
+            "sha": "4ea964d3172a16e871d779ad9c4cf01d41e012a5"
+        },
+        {
+            "path": "src/renderer/src/features/session/running-session-types.ts",
+            "sha": "e7b8065f4dd729bbd33598c40d63f88d9568f321"
+        },
+        {
+            "path": "src/renderer/src/features/shell/BackgroundTasksTab.test.tsx",
+            "sha": "8c1f940178ae1cd901ded9c6cf7c327f89a0e896"
+        }
+    ],
+    "fr_coverage": [
+        {
+            "fr": "FR-006",
+            "covered": true,
+            "by": [
+                "src/renderer/src/features/session/running-session-types.ts",
+                "src/renderer/src/features/shell/BackgroundTasksTab.test.tsx",
+                "src/renderer/src/features/session/running-session-store.test.ts"
+            ]
+        }
+    ],
+    "viewpoint_coverage": {
+        "A": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+        "B": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+        "C": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+        "D": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+        "E": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+        "F": "Medium:1 Low:1",
+        "G": "\u8a72\u5f53\u306a\u3057: optional reviewer \u306a\u3057",
+        "H": "Critical:0 High:0 Medium:0 Low:0"
+    },
+    "tracks": {
+        "lint-agent": {
+            "violations": 0,
+            "exit_code": 0,
+            "detectors": [
+                "lint",
+                "typecheck",
+                "depcruise",
+                "check:constitution"
+            ]
+        },
+        "test-agent": {
+            "passed": 3449,
+            "failed": 0,
+            "exit_code": 0,
+            "scope": "full"
+        },
+        "convention-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "lint_input": "lint-agent"
+        }
+    },
+    "skipped_reviewers": [
+        {
+            "name": "a11y-reviewer",
+            "reason": "gates=['pr-gate'] \u306b code-gate \u304c\u7121\u3044"
+        },
+        {
+            "name": "ux-reviewer",
+            "reason": "gates=['pr-gate'] \u306b code-gate \u304c\u7121\u3044"
+        },
+        {
+            "name": "database-reviewer",
+            "reason": "auto_invoke_patterns \u306b\u4e00\u81f4\u3059\u308b\u5909\u66f4\u30d5\u30a1\u30a4\u30eb\u304c\u7121\u3044 (\u5909\u66f4 4 \u4ef6 / pattern 5 \u4ef6)"
+        },
+        {
+            "name": "platform-boundary-reviewer",
+            "reason": "auto_invoke_patterns \u306b\u4e00\u81f4\u3059\u308b\u5909\u66f4\u30d5\u30a1\u30a4\u30eb\u304c\u7121\u3044 (\u5909\u66f4 4 \u4ef6 / pattern 9 \u4ef6)"
+        }
+    ],
+    "cascade_demotions": 0,
+    "iter_history": [
+        {
+            "iter": 1,
+            "must_fix": 0,
+            "skipped": 0,
+            "error": 0
+        },
+        {
+            "iter": 2,
+            "must_fix": 0,
+            "skipped": 0,
+            "error": 0
+        }
+    ],
+    "verdict": "PASS"
+}

@@ -55,8 +55,10 @@ import {
   taskTypeLabel,
   THINKING_LABELS,
 } from "@/features/chat/labels";
+import { maskedHookOrdinals } from "@/features/chat/masked-hook-ordinals";
 import {
   findMessageElement,
+  MaskedHookOrdinalsContext,
   useLiveThinkingTokens,
   useRegisterTranscriptNavigator,
   useTranscriptDensity,
@@ -221,14 +223,22 @@ export const Thread: FC<ThreadProps> = ({
 }) => {
   const isEmpty = useAuiState(isNewChatView);
   const messageCount = useAuiState((s) => s.thread.messages.length);
+  // 名前を伏せた Hook の番号 (O-11 / 019 data-model §1.3)。メッセージの列が変わったときだけ作り直す。
+  const threadMessages = useAuiState((s) => s.thread.messages);
+  const hookOrdinals = useMemo(
+    () => maskedHookOrdinals(threadMessages),
+    [threadMessages],
+  );
 
   return (
     <ThreadComponentsContext.Provider value={components}>
-      {messageCount > VIRTUALIZE_THRESHOLD ? (
-        <VirtualThreadRoot autoFocus={autoFocus} />
-      ) : (
-        <ThreadRoot isEmpty={isEmpty} autoFocus={autoFocus} />
-      )}
+      <MaskedHookOrdinalsContext.Provider value={hookOrdinals}>
+        {messageCount > VIRTUALIZE_THRESHOLD ? (
+          <VirtualThreadRoot autoFocus={autoFocus} />
+        ) : (
+          <ThreadRoot isEmpty={isEmpty} autoFocus={autoFocus} />
+        )}
+      </MaskedHookOrdinalsContext.Provider>
     </ThreadComponentsContext.Provider>
   );
 };
@@ -1100,6 +1110,7 @@ function systemEventDetailText(
 ): string {
   switch (category) {
     case "task":
+    case "backgrounded-task":
       return taskTypeLabel(splitTaskDetail(detail).taskType);
     case "api-retry": {
       const retry = decodeRetryDetail(detail);
@@ -1142,7 +1153,7 @@ function taskProgressText(
   category: SystemEventCategory,
   detail: string,
 ): string | null {
-  if (category !== "task") return null;
+  if (category !== "task" && category !== "backgrounded-task") return null;
   const { progress } = splitTaskDetail(detail);
   return progress === null ? null : SYSTEM_EVENT_LABELS.taskProgress(progress);
 }
@@ -1151,6 +1162,7 @@ function taskProgressText(
 const SYSTEM_EVENT_ICONS: Readonly<Record<SystemEventCategory, LucideIcon>> = {
   hook: WebhookIcon,
   task: TimerIcon,
+  "backgrounded-task": TimerIcon,
   "api-retry": RefreshCwIcon,
   compaction: FoldVerticalIcon,
   "permission-mode": ShieldIcon,
@@ -1184,7 +1196,9 @@ const SYSTEM_EVENT_ICONS: Readonly<Record<SystemEventCategory, LucideIcon>> = {
  */
 const SystemEventRow: FC = () => {
   const raw = useAuiState(systemEventDataOf);
+  const messageId = useAuiState((s) => s.message.id);
   const settled = useTranscriptSettled();
+  const maskedOrdinal = useContext(MaskedHookOrdinalsContext).get(messageId);
   if (!isSystemEventFields(raw)) return null;
 
   const { category, name, detail, status } = raw;
@@ -1203,21 +1217,32 @@ const SystemEventRow: FC = () => {
   const attention =
     category === "refusal" ||
     (category === "informational" &&
-      (status === "prevented" || status === "warning"));
+      (status === "prevented" || status === "warning")) ||
+    // Hook の失敗・取り消し (O-11 / 019 data-model §1.4。SessionStart / Setup の Hook にも当てる)。
+    (category === "hook" && (status === "failed" || status === "cancelled"));
   const failed = status === "failed";
+  // 名前を伏せた Hook は「Hook (<hook_event>) <n>」の見出しで見分ける (O-11 / data-model §1.3)。
+  const maskedHeading =
+    category === "hook" && name === "" && maskedOrdinal !== undefined
+      ? SYSTEM_EVENT_LABELS.maskedHookHeading(detail, maskedOrdinal)
+      : null;
   const Icon = SYSTEM_EVENT_ICONS[category];
   // 失敗した Hook には設定とログ、失敗・強制停止した task には起動した tool の呼び出しの表示を案内する (pr-gate R2 ux L-004)
   const guidance =
     category === "hook" && failed
       ? SYSTEM_EVENT_LABELS.hookFailedGuidance
-      : category === "task" && (failed || status === "killed")
+      : (category === "task" || category === "backgrounded-task") &&
+          (failed || status === "killed")
         ? SYSTEM_EVENT_LABELS.taskFailedGuidance
         : category === "auth"
           ? authRowText(status, unresolved)
           : category === "refusal"
             ? refusalRowText(status, name, detail).body || null
             : null;
-  const detailText = systemEventDetailText(category, name, detail, status);
+  const detailText =
+    maskedHeading !== null
+      ? ""
+      : systemEventDetailText(category, name, detail, status);
   const progressText = taskProgressText(category, detail);
 
   return (
@@ -1238,8 +1263,14 @@ const SystemEventRow: FC = () => {
       >
         <Icon aria-hidden className="size-3.5 shrink-0" />
         <span className="shrink-0 font-medium">
-          {SYSTEM_EVENT_CATEGORY_LABELS[category]}
+          {maskedHeading ?? SYSTEM_EVENT_CATEGORY_LABELS[category]}
         </span>
+        {category === "backgrounded-task" ? (
+          // 前景で始まって後から背景に移した task の印 (O-11 / 019 data-model §2.2)。
+          <span data-slot="system-event-backgrounded" className="shrink-0">
+            {SYSTEM_EVENT_LABELS.backgroundedMark}
+          </span>
+        ) : null}
         {detailText !== "" ? (
           // 切り詰めた全文は title で見られるようにする (pr-gate R2 a11y M-002)
           <span

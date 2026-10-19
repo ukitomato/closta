@@ -601,7 +601,9 @@ describe('R-4 巨大入力と edge case (PR-M-3 / PR-M-2 / PR-L-1)', () => {
         parent_tool_use_id: `task${i - 1}`,
         message: {
           role: 'assistant',
-          content: [{ type: 'tool_use', id: `task${i}`, name: 'Task', input: {} }]
+          content: [
+            { type: 'tool_use', id: `task${i}`, name: 'Task', input: { subagent_type: 's' } }
+          ]
         }
       })
     }

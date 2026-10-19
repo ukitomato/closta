@@ -1,7 +1,10 @@
 "use client";
 
 import { memo } from "react";
-import type { ToolCallMessagePartComponent } from "@assistant-ui/react";
+import type {
+  ToolCallMessagePartComponent,
+  ToolCallMessagePartProps,
+} from "@assistant-ui/react";
 
 import { parseMcpToolName } from "@/features/chat/mcp-tool-name";
 import { AgentPlan } from "./agent-plan.aui";
@@ -9,6 +12,7 @@ import { AskUserQuestion } from "./ask-user-question.aui";
 import { CodeDiff } from "./code-diff.aui";
 import { FileTool } from "./file-tool.aui";
 import { McpToolCall } from "./mcp-tool-call.aui";
+import { NestedToolRendererContext } from "./nested-tool-context";
 import { Subagent } from "./subagent.aui";
 import { TaskTool } from "./task-tool.aui";
 import { TerminalBlock } from "./terminal-block.aui";
@@ -30,6 +34,22 @@ import { WebTool } from "./web-tool.aui";
  * → (2) `parseMcpToolName` が `mcp` (`mcp__` で始まる名前) なら `McpToolCall` → (3) `ToolFallback`。
  * **(1)(2) のどちらにも当たらない toolName は必ず `ToolFallback` に落ちる** (AD-035 Decision 1)。
  */
+/**
+ * Agent / Task の表示の包み (O-11 / FE-031)。入れ子の tool-call を主ループと同じ振り分け (`ToolDisplay`) で描けるように、
+ * `NestedToolRendererContext` (`nested-tool-context.ts`) の Provider を置く。`subagent.aui.tsx` は本ファイルを import しない
+ * (依存の向きは本ファイル → `subagent.aui.tsx` の 1 方向。値は context で注入する)。
+ */
+function renderNestedTool(props: ToolCallMessagePartProps): React.JSX.Element {
+  return <ToolDisplay key={props.toolCallId} {...props} />;
+}
+
+const SubagentWithNestedDisplay: ToolCallMessagePartComponent = (props) => (
+  <NestedToolRendererContext.Provider value={renderNestedTool}>
+    <Subagent {...props} />
+  </NestedToolRendererContext.Provider>
+);
+SubagentWithNestedDisplay.displayName = "SubagentWithNestedDisplay";
+
 const TOOL_DISPLAY: Readonly<Record<string, ToolCallMessagePartComponent>> = {
   Bash: TerminalBlock,
   Edit: CodeDiff,
@@ -38,8 +58,8 @@ const TOOL_DISPLAY: Readonly<Record<string, ToolCallMessagePartComponent>> = {
   TodoWrite: TodoList,
   // subagent の実行時の名前は SDK 0.3.270 で `Agent` (入力型 `AgentInput`)。旧名 `Task` も同じ表示に当てる
   // (O-2 / FR-010 / research R-05)。
-  Task: Subagent,
-  Agent: Subagent,
+  Task: SubagentWithNestedDisplay,
+  Agent: SubagentWithNestedDisplay,
   ExitPlanMode: AgentPlan,
   // MCP の組み込みの 4 tool (O-5 / 015 data-model §1)。`mcp__` の接頭辞を持たないので完全一致で振り分ける。
   ListMcpResourcesTool: McpToolCall,

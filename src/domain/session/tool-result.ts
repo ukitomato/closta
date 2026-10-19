@@ -92,7 +92,7 @@ function byteLength(value: string): number {
 }
 
 /** 文字列を UTF-8 で `maxBytes` 以下に、コードポイント境界で切る。 */
-function truncateBytes(value: string, maxBytes: number): string {
+export function truncateBytes(value: string, maxBytes: number): string {
   if (maxBytes <= 0) return ''
   let used = 0
   let out = ''

@@ -19,6 +19,9 @@ related_adrs:
   - docs/decisions/0051-message-time-source-and-display-only.md
   - docs/decisions/0052-ask-user-question-answer-projection.md
   - docs/decisions/0053-elicitation-callback-and-user-dialog.md
+  - docs/decisions/0054-query-options-hook-events-and-subagent-text.md
+  - docs/decisions/0055-subagent-messages-for-past-transcripts.md
+  - docs/decisions/0056-o11-scope-background-task-list-and-o12-split.md
   - docs/decisions/0057-elicitation-sdk-side-cancel-known-limit.md
 related_specs:
   - specs/003-ui-transcript-rendering/spec.md
@@ -32,6 +35,7 @@ related_specs:
   - specs/015-ui-mcp-elicitation-commands/spec.md
   - specs/016-ui-boundaries-and-tool-displays/spec.md
   - specs/018-session-answer-ui-and-composer-commands/spec.md
+  - specs/019-ui-hooks-tasks-subagents-and-notices/spec.md
 ---
 
 # Domain Charter: ui
@@ -262,7 +266,7 @@ O-1 で読み替えた: 監視ビューはサイドバーの稼働中の区画 (
   時間の区間) を置く。`createdAt` を埋める変換の変更は session の契約の値の拡張で、O-9 (ui) が持つ
   ([AD-051](../../decisions/0051-message-time-source-and-display-only.md))。transcript の本文の横断検索・過去の一覧の仮想化は
   しない (U-7)
-- （残り。O-6 / O-11 / OPT-pty / OPT-panel が本 domain に属する。O-10 は `session` で、表示の部品を本 domain が持つ）
+- （残り。O-6 / O-11 / O-12 / OPT-pty / OPT-panel が本 domain に属する。O-10 は `session` で、表示の部品を本 domain が持つ）
 
 ## Open Questions
 
@@ -273,7 +277,8 @@ O-1 で読み替えた: 監視ビューはサイドバーの稼働中の区画 (
 - [x] ~~§4.2 の Tier A 表は暫定~~ → O-2。`docs/ui-coverage.md` が SDK の型から導いた正本になった (PLAN.md §4.2 は参照)
 - [x] ~~Hook / Background task の表示の割当と、状態の保持が要る場合の持ち主 domain~~ → O-2 (USER 決定 2026-10-03)。
       状態は保持せず、transcript の 1 行 (システムイベントの行) として本 domain が描く。持ち主の domain は要らない。
-      実行中の task の一覧の要否は O-11 で判断し (O-6 から送った。AD-049 Decision 1)、要るなら持ち主の domain を人間に諮る
+      実行中の task の一覧は O-11 で作ると決めた (USER 決定 2026-10-17)。表示と feature の持ち主は本 domain、保持は session の契約
+      (`meter` の種類 `background-tasks`。[AD-056](../../decisions/0056-o11-scope-background-task-list-and-o12-split.md) Decision 2)
 - [ ] SPIKE-2: assistant-ui Elements の導入コスト実測。element のインストール単位、
       カスタマイズ範囲、design system の拘束度、Claude Code の tool_result 形式との変換コスト。
       **結果次第では本 charter の Scope を見直す**

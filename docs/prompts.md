@@ -225,7 +225,7 @@ AD-018 が本 feature の設計を直接縛る。
 > **O-2 の design で範囲を改めた (USER 決定 2026-10-03。[spec 011](../specs/011-ui-coverage/spec.md))。** O-2 は対応表・SDK の型との
 > 機械照合 (Constitution 検証の項目 21)・割当の確定・`ui-coverage-reviewer` と、実行中の tool の結果・Hook / Background task の行・
 > transcript の情報密度に絞った。下のプロンプトの 8 つの表示は、対応表の割当として後続に回した: Permission grant → I-3、
-> Cost meter / Quota banner / Context display → O-4、Elicitation form / Server panel → O-5、Web search → O-6、Checkpoints → O-11 (O-6 の design で O-6 から分けた)。
+> Cost meter / Quota banner / Context display → O-4、Elicitation form / Server panel → O-5、Web search → O-6、Checkpoints → O-12 (O-6 の design で O-11 に分け、O-11 の design で O-12 に送った)。
 > 下は当初のプロンプトの記録として残す。
 
 ```
@@ -313,6 +313,15 @@ CI スクリプトの担当とし、reviewer に複製しない。
 
 ```
 /cl-design "[ui] O-11 (roadmap M3、domain: ui、依存: O-6): Hook・背景の task・実行中の subagent と知らせの類の表示。roadmap の O-11 の行の範囲に従う: 一般の Hook の表示 (includeHookEvents。hook_name にコマンドの文字列が入るかを確かめ、入るなら hook_event だけを出す)・実行中の Background task の一覧の要否 (要るなら持ち主の domain を人間に諮る。右のペインのタブの要否も判断する)・後から背景に移った task の行・シェルの Background task を秘密を出さずに見分ける手がかり・実行中の subagent の入れ子 (getSubagentMessages・parent_tool_use_id) と Agent handoff・Tier B の知らせの類 (notification / local_command_output / memory_recall / prompt_suggestion / mirror_error / tool_use_summary / active_goal)・Checkpoints の表示 (files_persisted。巻き戻しはしない)・File element・server_tool_use / web_search_tool_result・対応表の B 節の機械照合・過去ログへの O-6 の行と Hook / task の行の変換 (O-6 の quickstart V-3 と O-2 の V-4 の記録による)。design の前に includeHookEvents (AD-041 (g) の読み替え)・getSubagentMessages (AD-035 Decision 3 の読み替えと Agent SDK の呼び出しの許可リストの追加)・get_hooks_listing を呼ぶなら AD-036 §4 P3 の読み替えの ADR を起こす。完了の PR で docs/ui-coverage.md の「後続: O-11」の行を書き換える (Constitution XII / AD-044)。" --targets both
+```
+
+### O-12 — 知らせの類・Checkpoints・中身のブロックの表示
+
+> O-11 の design で O-11 から分けた (spec 019 の U-1。[AD-056](decisions/0056-o11-scope-background-task-list-and-o12-split.md) Decision 1)。範囲の正本は [roadmap の O-12 の行](roadmap.md)。
+> Tier B と過去ログの経路だけなので M3 の完了の条件に数えない。表示が主なので domain は `ui`。過去ログの変換 (agents / domain) と renderer の両方に触れるので targets は both。
+
+```
+/cl-design "[ui] O-12 (roadmap M3、domain: ui、依存: O-11): 知らせの類・Checkpoints・中身のブロックの表示。roadmap の O-12 の行の範囲に従う: Tier B の知らせの類 (notification / local_command_output / memory_recall / prompt_suggestion / mirror_error / tool_use_summary / active_goal)・Checkpoints の表示 (files_persisted。巻き戻しはしない)・user/document の File element・server_tool_use / web_search_tool_result (Sources / Inline citation の判断し直しを含む)・対応表の B 節の機械照合・過去ログへの O-6 の行 (informational・拒否・会話の作り直し) と O-10 の elicitation_complete の行の変換 (O-6 の quickstart V-3 と O-10 の quickstart V-3 の記録による)。完了の PR で docs/ui-coverage.md の「後続: O-12」の行を書き換える (Constitution XII / AD-044)。" --targets both
 ```
 
 **注**: O-8 の `--targets` はまだ決めていない (`_overview.md` の帰属に targets の記録が無い)。O-8 は src のグラフの外の `perf/` が中心で、

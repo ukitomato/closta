@@ -8,6 +8,7 @@ import {
   MAX_METER_PERMISSION_DENIALS,
   MAX_RETRACTION_IDS,
   toAssistantErrorKey,
+  toBackgroundTaskEntries,
   toCostUsd,
   toCount,
   toModelMeters,
@@ -699,6 +700,18 @@ export function createLiveSignals(deps: LiveSignalsDeps): LiveSignals {
     send(rowEvent(id, 'elicitation', true, '', 'completed', name))
   }
 
+  /**
+   * `system` / `background_tasks_changed` → `background-tasks` の `meter` (O-11 / AD-056 Decision 2)。`tasks` の
+   * `task_id` と `task_type` だけを読む (`description`・`ambient` ほかは運ばない)。最新の値の置き換えなので間引かず即時に送る
+   * (`meter-throttle` を通さない)。`Query.backgroundTasks` は呼ばず、stream のメッセージだけを読む。
+   */
+  const onBackgroundTasks = (record: Record<string, unknown>): void => {
+    send({
+      kind: 'meter',
+      meter: { type: 'background-tasks', tasks: toBackgroundTaskEntries(record.tasks) }
+    })
+  }
+
   /** `user` の `tool_result` ブロックの `tool_use_id` だけを読み、その tool の経過時間の保留を取り消す (本文は読まない)。 */
   const cancelToolsWithResults = (record: Record<string, unknown>): void => {
     const content = asRecord(record.message)?.content
@@ -793,6 +806,9 @@ export function createLiveSignals(deps: LiveSignalsDeps): LiveSignals {
         case 'elicitation_complete':
           onElicitationComplete(record)
           break
+        case 'background_tasks_changed':
+          onBackgroundTasks(record)
+          break
       }
     },
     onRateLimit: (message) => {
@@ -833,7 +849,7 @@ export function createLiveSignals(deps: LiveSignalsDeps): LiveSignals {
     },
     onToolProgress: (message) => {
       const record = asRecord(message)
-      // 主ループの tool だけ (subagent の中の tool の入れ子は O-11)。読むのは `tool_use_id` と `elapsed_time_seconds` だけ
+      // 主ループの tool だけ (入れ子は実装済み (O-11)。経過時間は主ループだけ)。読むのは `tool_use_id` と `elapsed_time_seconds` だけ
       // (`tool_name`・`heartbeat`・`subagent_*`・`task_id` は読まない。014 data-model §2)。
       if (record === null || record.type !== 'tool_progress' || !isMainLoop(record)) return
       const toolUseId = record.tool_use_id

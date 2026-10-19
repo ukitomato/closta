@@ -43,7 +43,9 @@ export const SYSTEM_EVENT_CATEGORY_LABELS: Readonly<Record<SystemEventCategory, 
   refusal: 'モデルの拒否',
   informational: '知らせ',
   // O-10 の行 (018 data-model §5)。URL での手続きの完了。
-  elicitation: 'MCP の手続き'
+  elicitation: 'MCP の手続き',
+  // O-11 の行 (019 data-model §2.2)。task の行と同じ見出しに `SYSTEM_EVENT_LABELS.backgroundedMark` を添える。
+  'backgrounded-task': 'Background task'
 }
 
 /** 状態の理由キー → 文言。 */
@@ -183,6 +185,14 @@ export function refusalRowText(
 
 export const SYSTEM_EVENT_LABELS = {
   /**
+   * 名前を伏せた Hook の行の見出し (O-11 / 019 data-model §1.3)。同じターン・同じ `hook_event` の中の出現順の番号で見分ける。
+   * `hookEvent` は会話由来の 1 行 (テキストノードで描く)。空なら「Hook {n}」。
+   */
+  maskedHookHeading: (hookEvent: string, ordinal: number): string =>
+    hookEvent === '' ? `Hook ${ordinal}` : `Hook (${hookEvent}) ${ordinal}`,
+  /** 前景で始まって後から背景に移した task の行に添える印 (O-11 / 019 data-model §2.2 [ASSUMED])。 */
+  backgroundedMark: '背景に移した',
+  /**
    * 終わりの来ない行 (セッションの終了・失敗の後と過去ログ。FR-009 / US-2 AC6)。括弧の中は実行中のペインと
    * 過去ログのどちらにも通じる言い方にする (pr-gate R2 ux L-005)。
    */
@@ -301,7 +311,8 @@ const TASK_TYPE_LABELS: Readonly<Record<string, string>> = {
   local_bash: 'シェルのコマンド',
   local_agent: 'サブエージェント',
   local_workflow: 'ワークフロー',
-  mcp_task: 'MCP のタスク'
+  mcp_task: 'MCP のタスク',
+  other: 'その他の task'
 }
 
 /** task の種類の文言。表に無い値 (`toString` などの prototype のキーを含む) はそのまま返す。 */

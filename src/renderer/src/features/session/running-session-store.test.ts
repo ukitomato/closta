@@ -788,6 +788,41 @@ describe('running-session-store — 計量の受け口 (O-4 FE-004 / 014 data-mo
     expect(metersOf(h, A)?.toolElapsed.size).toBe(0)
   })
 
+  it('background-tasks は最新の値で置き換わり (0 件は空の配列)、起動直後は空、receivedMessages を増やさない (O-11 FE-020)', async () => {
+    const h = harness()
+    const port = await launched(h)
+    expect(metersOf(h)?.backgroundTasks ?? []).toEqual([])
+    const sessions = h.store.getState().sessions
+    emit(
+      port,
+      meter({ type: 'background-tasks', tasks: [{ taskId: 'a', taskType: 'local_bash' }] })
+    )
+    expect(metersOf(h)?.backgroundTasks).toEqual([{ taskId: 'a', taskType: 'local_bash' }])
+    emit(
+      port,
+      meter({ type: 'background-tasks', tasks: [{ taskId: 'b', taskType: 'local_agent' }] })
+    )
+    expect(metersOf(h)?.backgroundTasks).toEqual([{ taskId: 'b', taskType: 'local_agent' }])
+    emit(port, meter({ type: 'background-tasks', tasks: [] }))
+    expect(metersOf(h)?.backgroundTasks).toEqual([])
+    emit(port, meter({ type: 'context', usedTokens: 5 }))
+    expect(metersOf(h)?.backgroundTasks).toEqual([])
+    expect(h.store.getState().sessions).toBe(sessions)
+    expect(h.store.getState().receivedMessages).toBe(0)
+  })
+
+  it('background-tasks は閉じたセッションに書かない', async () => {
+    const h = harness()
+    const port = await launched(h)
+    emit(port, meter({ type: 'background-tasks', tasks: [] }))
+    h.store.close(A)
+    emit(
+      port,
+      meter({ type: 'background-tasks', tasks: [{ taskId: 'a', taskType: 'local_bash' }] })
+    )
+    expect(h.store.getState().meters).toEqual({})
+  })
+
   it('失敗の後も close までは最後の値が残り、閉じた後は meters[id] が undefined で、届いた meter は捨てる', async () => {
     const h = harness()
     const port = await launched(h)

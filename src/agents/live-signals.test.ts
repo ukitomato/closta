@@ -84,7 +84,6 @@ describe('createLiveSignals (土台)', () => {
       { type: 'system', subtype: 'status', status: null, compact_result: 'partial' },
       // O-4 が読まない system
       { type: 'system', subtype: 'hook_progress', hook_id: 'h1', stdout: 'x' },
-      { type: 'system', subtype: 'background_tasks_changed', tasks: [] },
       // subagent の中の tool の経過時間
       {
         type: 'tool_progress',
@@ -107,6 +106,40 @@ describe('createLiveSignals (土台)', () => {
       signals.onResult(message)
     }
     expect(emitted).toEqual([])
+  })
+
+  it('background_tasks_changed は background-tasks の meter を即時に 1 つ送る (O-11 / AD-056)。ambient・形の外れた id を除き 64 件で切る', () => {
+    const { signals, emitted } = setup()
+    signals.onSystem({
+      type: 'system',
+      subtype: 'background_tasks_changed',
+      tasks: [
+        { task_id: 'a', task_type: 'local_bash', description: 'SECRET-DESC' },
+        { task_id: 'b', task_type: 'local_agent', ambient: true },
+        { task_id: 'bad id', task_type: 'local_bash' }
+      ]
+    })
+    expect(emitted).toEqual([
+      {
+        kind: 'meter',
+        meter: { type: 'background-tasks', tasks: [{ taskId: 'a', taskType: 'local_bash' }] }
+      }
+    ])
+    expect(JSON.stringify(emitted)).not.toContain('SECRET-DESC')
+    signals.onSystem({
+      type: 'system',
+      subtype: 'background_tasks_changed',
+      tasks: Array.from({ length: 65 }, (_, i) => ({ task_id: `t${i}`, task_type: 'local_bash' }))
+    })
+    const last = emitted.at(-1)
+    expect(
+      last?.kind === 'meter' && last.meter.type === 'background-tasks' && last.meter.tasks.length
+    ).toBe(64)
+    signals.onSystem({ type: 'system', subtype: 'background_tasks_changed', tasks: [] })
+    expect(emitted.at(-1)).toEqual({
+      kind: 'meter',
+      meter: { type: 'background-tasks', tasks: [] }
+    })
   })
 
   it('onResult は result の subtype と api_error_status から理由を返す (014 data-model §1)', () => {

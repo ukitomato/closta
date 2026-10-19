@@ -244,6 +244,38 @@ export const FIXTURES = [
     rules: ['#14']
   },
   {
+    file: 'a-direct/sdk-list-subagents-outside.ts.fixture',
+    target: 'src/agents/__rulecheck__/sdk-list-subagents-outside.ts',
+    group: 'a',
+    what: '`listSubagents` を read-transcript.ts 以外で呼ぶ (AD-055 Decision 1)',
+    detectors: ['constitution'],
+    rules: ['#14']
+  },
+  {
+    file: 'a-direct/sdk-get-subagent-messages-outside.ts.fixture',
+    target: 'src/agents/__rulecheck__/sdk-get-subagent-messages-outside.ts',
+    group: 'a',
+    what: '`getSubagentMessages` を read-transcript.ts 以外で呼ぶ (AD-055 Decision 1)',
+    detectors: ['constitution'],
+    rules: ['#14']
+  },
+  {
+    file: 'a-direct/sdk-second-import-statement.ts.fixture',
+    target: 'src/agents/__rulecheck__/sdk-second-import-statement.ts',
+    group: 'a',
+    what: '2 つ目の import 文で `getSubagentMessages` を import して呼ぶ (1 つ目は許可の `query`)',
+    detectors: ['constitution'],
+    rules: ['#14']
+  },
+  {
+    file: 'a-direct/sdk-alias-to-allowed-name.ts.fixture',
+    target: 'src/agents/__rulecheck__/sdk-alias-to-allowed-name.ts',
+    group: 'a',
+    what: '`getSubagentMessages as getSessionMessages` と許可名に alias して呼ぶ',
+    detectors: ['constitution'],
+    rules: ['#14']
+  },
+  {
     file: 'a-direct/sdk-query-escalation-options.ts.fixture',
     target: 'src/agents/__rulecheck__/sdk-query-escalation-options.ts',
     group: 'a',
@@ -707,7 +739,8 @@ export const UNDETECTED_NOTES = {
       '項目14 (check.mjs) は `AGENT_SDK_ALLOWED_CALLS` に無い binding の**呼び出し形正規表現** ' +
       '(`(?<![.\\w])renameSession\\s*\\(`) だけを見る。`const r = renameSession; r()` の再束縛や ' +
       '`(await import(...)).renameSession()` の動的 import は、`renameSession(` の形にならないため素通しする ' +
-      '(AD-034 §3 が明記した限界)。',
+      '(AD-034 §3 が明記した限界)。**同じ形は `listSubagents` / `getSubagentMessages` ' +
+      '(呼べるファイルの表 `AGENT_SDK_CALL_FILES`。AD-055) も塞がない — 許可名 5 件のうち表に載る 2 件の再束縛・動的 import も素通しする。**',
     mitigatedBy:
       '第一防御は**書き込みを起こす IPC が存在しないこと** (FR-001。renderer から到達できる SDK 書き込み経路が無い)。' +
       '第二防御 (allowlist) の直接呼び出し形は `sdk-forbidden-call` サンプルで発火を維持している。' +
@@ -719,7 +752,7 @@ export const UNDETECTED_NOTES = {
       '**X-1 で確認 (SH-010): 本 alias サンプルは X-1 では塞がない。** X-1 が広げたのは起動 (`query`) と ' +
       '権限往復の呼び出し面であり、項目 16 (正の構成の backstop) で **query() options のキー**と ' +
       '**`Query` の `.method()` 昇格**という別クラスを塞いだ。書き込み系 API (`renameSession` 等) は X-1 では ' +
-      '**一切 import も呼び出しもしない** (正の構成: 許可は `query`/`listSessions`/`getSessionMessages` の 3 件のみ) ため、' +
+      '**一切 import も呼び出しもしない** (正の構成: X-1 時点の許可は `query`/`listSessions`/`getSessionMessages` の 3 件のみ。O-11 (AD-055) で 5 件 = `listSubagents` / `getSubagentMessages` を足した) ため、' +
       'binding 追跡の denylist は不要のまま残った。**X-1 時点では「書き込み系 API を実際に使う feature (改名/削除 = X-4 以降)」の時点で ' +
       '項目14 に binding レベル denylist を足し (`const alias = renameSession` の再束縛と `import()` 経由を検出)、' +
       '本 alias サンプルが `constitution` で発火するよう `detectors` を更新すると見込んでいた。' +

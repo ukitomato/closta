@@ -1,4 +1,8 @@
-import { getSessionMessages } from '@anthropic-ai/claude-agent-sdk'
+import {
+  getSessionMessages,
+  getSubagentMessages,
+  listSubagents
+} from '@anthropic-ai/claude-agent-sdk'
 
 import { toTranscriptMessages, type SessionMessageLike } from '@domain/session/transcript'
 import type { TranscriptFrameDTO } from '@domain/session/transcript-dto'
@@ -8,7 +12,7 @@ import type { TranscriptFrameDTO } from '@domain/session/transcript-dto'
  *
  * | 規則 | 根拠 |
  * |---|---|
- * | **Agent SDK を呼ぶ場所。`getSessionMessages()` のみ** (読み取り専用) | Principle IV / FR-002 / C-1 |
+ * | **Agent SDK を呼ぶ場所。`getSessionMessages()` と、subagent の記録の `listSubagents()` / `getSubagentMessages()` のみ** (読み取り専用。後ろの 2 つを呼べるのは本ファイルだけ) | Principle IV / FR-002 / C-1 / [AD-055](../../docs/decisions/0055-subagent-messages-for-past-transcripts.md) |
  * | `CLAUDE_CONFIG_DIR` は **spawn 時に env で固定**される。ここでは読まない | AD-034 決定 2 / C-2 |
  * | **本文は転送された `MessagePort` で renderer へ直送**。main は本文を持たない | Principle IX / AD-034 決定 1 / C-3 |
  * | **`electron` / ネイティブモジュールを import しない**。`parentPort` は構造的に取り出す | Principle VII / AD-010 |
@@ -59,20 +63,56 @@ function decodeRequest(data: unknown): TranscriptRequest | null {
   return { sessionId: record.sessionId, requestToken: record.requestToken }
 }
 
+/** 過去ログで読む subagent の数・1 つの subagent から読むメッセージの数の上限 (data-model §3.2 [ASSUMED])。 */
+const MAX_SUBAGENTS = 32
+const SUBAGENT_MESSAGE_LIMIT = 500
+
+/**
+ * subagent の記録の列を読む (O-11 / AD-055)。`listSubagents` の失敗・配列でない値は 0 件、先頭から 32 件の agentId
+ * (空でない文字列) を直列に読み、1 件ごとに失敗を捕まえて捨てる (過去ログ全体を失敗にしない)。`dir` は渡さない。
+ */
+async function readSubagentRecords(sessionId: string): Promise<SessionMessageLike[][]> {
+  let agentIds: unknown
+  try {
+    agentIds = await listSubagents(sessionId)
+  } catch {
+    return []
+  }
+  if (!Array.isArray(agentIds)) return []
+  const ids = (agentIds as unknown[])
+    .filter((id): id is string => typeof id === 'string' && id.length > 0)
+    .slice(0, MAX_SUBAGENTS)
+  const lists: SessionMessageLike[][] = []
+  for (const agentId of ids) {
+    try {
+      const records: unknown = await getSubagentMessages(sessionId, agentId, {
+        limit: SUBAGENT_MESSAGE_LIMIT
+      })
+      if (Array.isArray(records) && records.length > 0) lists.push(records as SessionMessageLike[])
+    } catch {
+      // この subagent だけ捨てる (inline の分は主の記録に残る)。
+    }
+  }
+  return lists
+}
+
 /**
  * 1 セッション分を取得し、変換して port に流す。
  *
  * **失敗は理由キーの frame にする** — 例外に本文断片を載せない (C-7 / CWE-532)。
  */
-async function run(request: TranscriptRequest, port: TranscriptPortLike): Promise<void> {
+export async function run(request: TranscriptRequest, port: TranscriptPortLike): Promise<void> {
   let frame: TranscriptFrameDTO
   try {
     const messages = await getSessionMessages(request.sessionId, { includeSystemMessages: true })
+    // `getSessionMessages` が成功した後だけ subagent を読む (読めなくても過去ログは今どおり出す)。
+    const subagents = await readSubagentRecords(request.sessionId)
     frame = {
       kind: 'messages',
       requestToken: request.requestToken,
       messages: toTranscriptMessages(messages as readonly SessionMessageLike[], {
-        now: Date.now()
+        now: Date.now(),
+        subagents
       })
     }
   } catch {

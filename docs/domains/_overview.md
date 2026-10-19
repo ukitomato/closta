@@ -67,7 +67,8 @@ spec_id（`001-runtime-...`）とは独立させる。差し込み作業で番�
 | O-8 | 並列時の滑らかさの実機計測 (session charter KPI。O-1 から O-3 に繰り越した宿題を O-3 の design で移した) | `session` | M3 |
 | O-9 | 会話の時間と活動の可視化 (メッセージの時刻・ターンの所要時間・右のペインのタブ「会話の地図」・活動の帯。本文の横断検索はしないと決めた (017 U-7)。O-3 の design で分けた) | `ui` | M3 |
 | O-10 | Claude Code からの問いに答える UI と composer のコマンドの候補 (`AskUserQuestion` の回答・Elicitation・`request_user_dialog`・composer のスラッシュコマンドの候補。O-5 の design で分けた。[AD-048](../decisions/0048-session-config-display-and-answer-ui-split.md)) | `session` | M3 |
-| O-11 | Hook・背景の task・実行中の subagent と知らせの類の表示 (一般の Hook と `includeHookEvents`・Background task の一覧の要否・実行中の subagent の入れ子・Tier B の知らせの類・Checkpoints の表示。O-6 の design で分けた。[AD-049](../decisions/0049-boundaries-retraction-and-o11-split.md) Decision 1) | `ui` | M3 |
+| O-11 | Hook・背景の task・実行中の subagent の表示 (一般の Hook と `includeHookEvents`・背景の task の一覧・後から背景に移った task・実行中の subagent の入れ子と過去ログの subagent。O-6 の design で分け、O-11 の design で Tier B を O-12 に送った。[AD-049](../decisions/0049-boundaries-retraction-and-o11-split.md) Decision 1 / [AD-056](../decisions/0056-o11-scope-background-task-list-and-o12-split.md) Decision 1) | `ui` | M3 |
+| O-12 | 知らせの類・Checkpoints・中身のブロックの表示 (Tier B の知らせの類・`files_persisted`・`user/document` の File element・`server_tool_use` / `web_search_tool_result`・対応表の B 節の機械照合・過去ログへの O-6 / O-10 の行の変換。O-11 の design で分けた。[AD-056](../decisions/0056-o11-scope-background-task-list-and-o12-split.md) Decision 1) | `ui` | M3 (完了の条件に数えない) |
 | I-1 | `DockerRuntime` と endpoint 抽象 + `sessionStore` ミラー | `isolation` | M4 |
 | I-2 | コンテナライフサイクルと隔離可視化 | `isolation` | M4 |
 | I-3 | sandbox capability 判定と権限モードのゲート | `isolation` | M4 |
@@ -97,7 +98,8 @@ spec_id（`001-runtime-...`）とは独立させる。差し込み作業で番�
 - **Hook / Background task の状態管理は `session` に含めない** — AD-020 Consequences の問いへの O-1 の回答
   （USER 決定 2026-10-02）。**O-2 の結論 (USER 決定 2026-10-03)**: 状態は保持しないので持ち主の domain は要らない。
   session は agents で無害化して既存の `message` の経路で通すだけ、ui が transcript の 1 行 (システムイベントの行) として
-  描き、同じ Hook / task の行を合成する。実行中の task の一覧の要否は O-11 で判断し (O-6 から送った。AD-049 Decision 1)、要るなら持ち主の domain を人間に諮る
+  描き、同じ Hook / task の行を合成する。**O-11 の結論 (USER 決定 2026-10-17)**: 実行中の背景の task の一覧を作る。持ち主は `ui` (表示と feature)、
+  保持は session の契約 (`meter` の種類 `background-tasks`。[AD-056](../decisions/0056-o11-scope-background-task-list-and-o12-split.md) Decision 2)
   ([AD-044](../decisions/0044-ui-coverage-assignment.md))
 - **O-4 / O-5 / O-6 / O-11 は `ui`** — いずれも SDK が emit する情報の表示 (Principle XII の判定対象) であり、MCP サーバーの
   追加・削除などの操作画面は含めない (USER 決定 2026-10-03)
@@ -134,7 +136,7 @@ spec_id（`001-runtime-...`）とは独立させる。差し込み作業で番�
 |---|---|---|---|
 | **M1** | **読める** | R-1〜R-4 | WSL 内の過去セッションを Windows の assistant-ui で読める。**ここで §4 の方針を確定する** |
 | **M2** | **走らせられる** | X-1〜X-5 | 起動条件を選んで複数セッションを回せる。日本語で誤送信しない |
-| **M3** | **差配できる** | O-1〜O-11 | 10 セッションを俯瞰でき、未表示情報がゼロ。**「未表示ゼロ」は [AD-044](../decisions/0044-ui-coverage-assignment.md) の M3 の完了の条件 (Tier A の後続のうち割当先が M3 の feature の行が 0) で判定する** |
+| **M3** | **差配できる** | O-1〜O-12 (O-12 は完了の条件に数えない) | 10 セッションを俯瞰でき、未表示情報がゼロ。**「未表示ゼロ」は [AD-044](../decisions/0044-ui-coverage-assignment.md) の M3 の完了の条件 (Tier A の後続のうち割当先が M3 の feature の行が 0) で判定する** |
 | **M4** | **任せられる** | I-1〜I-3 | Auto / bypassPermissions を隔離内で安全に回せる |
 | **M5** | **配れる** | D-1 | 自分以外が使える |
 

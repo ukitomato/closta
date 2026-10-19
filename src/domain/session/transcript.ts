@@ -1,6 +1,8 @@
 import { sanitizeBody, TOOL_RESULT_MAX_BYTES } from './sanitize-body'
 import { redactSecrets } from './secret-redaction'
-import { mergeSystemEvent, systemEventPartOf, toSystemEventMessage } from './system-event'
+import { createForegroundTaskMemory, createTaskRowBuilder } from './foreground-tasks'
+import { isValidToolUseId } from './meter'
+import { mergeSystemEvent, systemEventPartOf } from './system-event'
 import { orphanResultPart, readToolResult } from './tool-result'
 import { parseMessageTime } from './transcript-time'
 import type {
@@ -40,6 +42,11 @@ export interface SessionMessageLike {
 export interface ToTranscriptMessagesOptions {
   /** 時刻の検査の「今」(epoch ms。取得の時点)。省略時は `Date.now()` (O-9)。 */
   readonly now?: number
+  /**
+   * subagent ごとの記録の列 (`getSubagentMessages` の返り。O-11 / AD-055)。省略時は空。各列の親 (`parent_tool_use_id`) の
+   * tool-call の `children` に、親が `toolCallById` にある列から入れる。親の見つからない列は捨てる。
+   */
+  readonly subagents?: readonly (readonly SessionMessageLike[])[]
 }
 
 /**
@@ -155,6 +162,97 @@ function toDtoPart(part: BuildPart): TranscriptPartDTO {
 }
 
 /**
+ * 1 件の記録の content のブロックを part にする (主の記録と subagent の記録で共有する。O-11)。
+ * `toolCallById` は親の検索に使う全体の表、`resultTargets` は tool_result を埋める先の表 (主の記録では同じ表。subagent の列では
+ * 列の中の tool-call だけ)。`subagent` が真なら、user の記録は tool_result だけを読み、対応の無い結果は出さない。
+ */
+function convertBlocks(
+  rec: SessionMessageLike,
+  role: TranscriptMessageRole,
+  toolCallById: Map<string, MutableToolCall>,
+  subagent: boolean,
+  parts: BuildPart[],
+  ownToolCalls: MutableToolCall[],
+  orphanResults: BuildPart[],
+  resultTargets: Map<string, MutableToolCall> = toolCallById
+): void {
+  for (const raw of contentBlocks(rec.message)) {
+    const b = asRecord(raw)
+    if (!b) continue
+    // subagent の user の記録は tool_result だけを読む (text・画像などは読まない。O-11 U-11)。
+    if (subagent && role === 'user' && b.type !== 'tool_result') continue
+    switch (b.type) {
+      case 'text': {
+        // `system` の記録の本文 (informational / local_command_output / 拒否) は伏せ字を当てる (O-6 data-model §1)。
+        // assistant / user の本文は今のまま。行は足さない。
+        const body = sanitizeBody(b.text).value
+        parts.push({ type: 'text', text: role === 'system' ? redactSecrets(body) : body })
+        break
+      }
+      case 'thinking': {
+        parts.push({ type: 'reasoning', text: sanitizeBody(b.thinking).value })
+        break
+      }
+      case 'redacted_thinking': {
+        parts.push({ type: 'reasoning', text: '[redacted thinking]' })
+        break
+      }
+      case 'tool_use': {
+        const id = typeof b.id === 'string' ? b.id : ''
+        // **argsText も sanitizeBody + byte 上限を通す** (R-4 / design-gate H-1/H-2)。
+        const args = sanitizeBody(safeStringify(b.input), TOOL_RESULT_MAX_BYTES)
+        // tool 名は実行中 (`live-message.ts`) と同じ `sanitizeBody` を通す (O-5 FR-001)。
+        // MCP のサーバー名・tool 名は外部由来なので、双方向制御で見出しを偽装させない。
+        const name = sanitizeBody(b.name).value
+        const toolCall: MutableToolCall = {
+          type: 'tool-call',
+          toolCallId: id,
+          toolName: name.length > 0 ? name : '(unknown tool)',
+          argsText: args.value,
+          result: null,
+          isError: false,
+          truncated: args.truncated,
+          children: []
+        }
+        parts.push(toolCall)
+        ownToolCalls.push(toolCall)
+        // **最初の一致を保持** (同一 id が複数現れても上書きしない。design-gate L-4)。
+        if (id.length > 0 && !toolCallById.has(id)) toolCallById.set(id, toolCall)
+        if (id.length > 0 && !resultTargets.has(id)) resultTargets.set(id, toolCall)
+        break
+      }
+      case 'tool_result': {
+        // 取り出しと無害化は実行中の経路と共有する (`tool-result.ts`。O-2 / FR-007)。
+        const res = readToolResult(b)
+        if (!res) break
+        const target = res.toolUseId.length > 0 ? resultTargets.get(res.toolUseId) : undefined
+        if (target) {
+          target.result = res.text
+          target.isError = res.isError
+          if (res.truncated) target.truncated = true
+        } else if (!subagent) {
+          // 孤児 tool_result: 対応する tool_use が無い。**欠落させず単独表示** (data-model §4)。
+          orphanResults.push({ ...(orphanResultPart(res) as MutableToolCall), children: [] })
+        }
+        break
+      }
+      case 'image': {
+        const url = imageUrl(b)
+        if (url) parts.push({ type: 'image', url })
+        break
+      }
+      case 'document': {
+        parts.push({ type: 'file', filename: documentName(b), text: '' })
+        break
+      }
+      default:
+        // 未知の content block: 欠落させないが専用表示は持たない。無害に skip する。
+        break
+    }
+  }
+}
+
+/**
  * `SessionMessage[]` → transcript の表示メッセージ列へ変換する **純粋関数** (FR-004 / FR-010)。
  *
  * - text → markdown / thinking → reasoning / tool_use → tool-call / image → image / document → file
@@ -183,9 +281,14 @@ export function toTranscriptMessages(
   /** Hook / task の行 (合成済み) と、その行の id → 位置。 */
   const systemEvents: TranscriptMessageDTO[] = []
   const systemEventIndex = new Map<string, number>()
+  /** 前景で始まった task の記憶と行の包み (O-11。1 回の変換に 1 つ。実行中の経路と同じ関数)。 */
+  const taskRows = createTaskRowBuilder(createForegroundTaskMemory())
+  /** 主の記録と入れた subagent の記録の uuid (同じ uuid を 2 度出さない。O-11)。 */
+  const seenUuids = new Set<string>()
 
   for (const rec of records) {
     if (!rec || typeof rec.uuid !== 'string' || rec.uuid.length === 0) continue
+    seenUuids.add(rec.uuid)
     const role: TranscriptMessageRole = rec.type
     const parts: BuildPart[] = []
     const orphanResults: BuildPart[] = []
@@ -195,7 +298,14 @@ export function toTranscriptMessages(
     // Hook / Background task のシステムメッセージは 1 つの Hook / task を 1 行に合成する (O-2 / FR-009)。
     // 規則は実行中の経路と同じ `system-event.ts`。行の無い id への更新は捨てる。
     if (role === 'system') {
-      const event = toSystemEventMessage({ ...asRecord(rec.message), type: 'system' }, createdAt)
+      const event = taskRows.build(
+        { ...asRecord(rec.message), type: 'system' },
+        createdAt,
+        (toolUseId) => {
+          const call = toolCallById.get(toolUseId)
+          return call?.toolName === 'Bash' ? call.argsText : undefined
+        }
+      )
       if (event) {
         const index = systemEventIndex.get(event.id)
         const merged = mergeSystemEvent(
@@ -228,77 +338,7 @@ export function toTranscriptMessages(
       parts.push({ type: 'divider', label: 'コンテキストを圧縮' })
     }
 
-    for (const raw of contentBlocks(rec.message)) {
-      const b = asRecord(raw)
-      if (!b) continue
-      switch (b.type) {
-        case 'text': {
-          // `system` の記録の本文 (informational / local_command_output / 拒否) は伏せ字を当てる (O-6 data-model §1)。
-          // assistant / user の本文は今のまま。行は足さない。
-          const body = sanitizeBody(b.text).value
-          parts.push({ type: 'text', text: role === 'system' ? redactSecrets(body) : body })
-          break
-        }
-        case 'thinking': {
-          parts.push({ type: 'reasoning', text: sanitizeBody(b.thinking).value })
-          break
-        }
-        case 'redacted_thinking': {
-          parts.push({ type: 'reasoning', text: '[redacted thinking]' })
-          break
-        }
-        case 'tool_use': {
-          const id = typeof b.id === 'string' ? b.id : ''
-          // **argsText も sanitizeBody + byte 上限を通す** (R-4 / design-gate H-1/H-2)。
-          const args = sanitizeBody(safeStringify(b.input), TOOL_RESULT_MAX_BYTES)
-          // tool 名は実行中 (`live-message.ts`) と同じ `sanitizeBody` を通す (O-5 FR-001)。
-          // MCP のサーバー名・tool 名は外部由来なので、双方向制御で見出しを偽装させない。
-          const name = sanitizeBody(b.name).value
-          const toolCall: MutableToolCall = {
-            type: 'tool-call',
-            toolCallId: id,
-            toolName: name.length > 0 ? name : '(unknown tool)',
-            argsText: args.value,
-            result: null,
-            isError: false,
-            truncated: args.truncated,
-            children: []
-          }
-          parts.push(toolCall)
-          ownToolCalls.push(toolCall)
-          // **最初の一致を保持** (同一 id が複数現れても上書きしない。design-gate L-4)。
-          if (id.length > 0 && !toolCallById.has(id)) toolCallById.set(id, toolCall)
-          break
-        }
-        case 'tool_result': {
-          // 取り出しと無害化は実行中の経路と共有する (`tool-result.ts`。O-2 / FR-007)。
-          const res = readToolResult(b)
-          if (!res) break
-          const target = res.toolUseId.length > 0 ? toolCallById.get(res.toolUseId) : undefined
-          if (target) {
-            target.result = res.text
-            target.isError = res.isError
-            if (res.truncated) target.truncated = true
-          } else {
-            // 孤児 tool_result: 対応する tool_use が無い。**欠落させず単独表示** (data-model §4)。
-            orphanResults.push({ ...(orphanResultPart(res) as MutableToolCall), children: [] })
-          }
-          break
-        }
-        case 'image': {
-          const url = imageUrl(b)
-          if (url) parts.push({ type: 'image', url })
-          break
-        }
-        case 'document': {
-          parts.push({ type: 'file', filename: documentName(b), text: '' })
-          break
-        }
-        default:
-          // 未知の content block: 欠落させないが専用表示は持たない。無害に skip する。
-          break
-      }
-    }
+    convertBlocks(rec, role, toolCallById, false, parts, ownToolCalls, orphanResults)
 
     for (const orphan of orphanResults) parts.push(orphan)
     if (parts.length === 0) continue
@@ -327,6 +367,65 @@ export function toTranscriptMessages(
       topLevel.push(msg)
       for (const tc of ownToolCalls) ownerDepth.set(tc, 0)
     }
+  }
+
+  // ---- subagent の記録の列 (O-11 / AD-055 / data-model §3.2) ----
+  /** 列の親 = 列の中で最初の文字列の `parent_tool_use_id`。空・形が外れた・無いときは列を捨てる (`null`)。 */
+  const listParentOf = (list: readonly SessionMessageLike[]): string | null => {
+    for (const rec of list) {
+      const value: unknown = rec?.parent_tool_use_id
+      if (typeof value !== 'string') continue
+      return isValidToolUseId(value) ? value : null
+    }
+    return null
+  }
+
+  /** 列を親の tool-call の `children` に入れる。列の記録は tool_result だけを読む user と、本文の assistant だけ。 */
+  const insertSubagentList = (
+    list: readonly SessionMessageLike[],
+    listParent: string,
+    parentTc: MutableToolCall
+  ): void => {
+    // inline の子が既にあれば入れない。
+    if (parentTc.children.length > 0) return
+    const depth = (ownerDepth.get(parentTc) ?? 0) + 1
+    if (depth > MAX_SUBAGENT_DEPTH) return
+    const localCalls = new Map<string, MutableToolCall>()
+    for (const rec of list) {
+      if (!rec || typeof rec.uuid !== 'string' || rec.uuid.length === 0) continue
+      // system の記録と、列の親と違う帰属の記録は捨てる。
+      if (rec.type === 'system' || rec.parent_tool_use_id !== listParent) continue
+      if (seenUuids.has(rec.uuid)) continue
+      seenUuids.add(rec.uuid)
+      const role: TranscriptMessageRole = rec.type
+      const parts: BuildPart[] = []
+      const ownToolCalls: MutableToolCall[] = []
+      convertBlocks(rec, role, toolCallById, true, parts, ownToolCalls, [], localCalls)
+      if (parts.length === 0) continue
+      parentTc.children.push({
+        id: rec.uuid,
+        role,
+        parts,
+        createdAt: parseMessageTime(rec.timestamp, now)
+      })
+      for (const tc of ownToolCalls) ownerDepth.set(tc, depth)
+    }
+  }
+
+  // 親が `toolCallById` にある列から入れる。入れると列の中の tool-call が表に入るので、進まなくなるまで繰り返す。
+  let pending = (options?.subagents ?? []).flatMap((list) => {
+    const listParent = listParentOf(list)
+    return listParent === null ? [] : [{ list, listParent }]
+  })
+  while (pending.length > 0) {
+    const waiting: typeof pending = []
+    for (const entry of pending) {
+      const parentTc = toolCallById.get(entry.listParent)
+      if (parentTc === undefined) waiting.push(entry)
+      else insertSubagentList(entry.list, entry.listParent, parentTc)
+    }
+    if (waiting.length === pending.length) break
+    pending = waiting
   }
 
   return topLevel.map(toDtoMessage)

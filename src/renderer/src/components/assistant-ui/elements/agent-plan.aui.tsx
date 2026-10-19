@@ -2,26 +2,23 @@
 
 import { memo, useState } from "react";
 import { ClipboardListIcon } from "lucide-react";
-import {
-  TextMessagePartProvider,
-  type ToolCallMessagePartComponent,
-} from "@assistant-ui/react";
+import type { ToolCallMessagePartComponent } from "@assistant-ui/react";
 
 import { Button } from "@/components/ui/button";
-import { MarkdownText } from "@/components/markdown-text";
 import { TOOL_DISPLAY_LABELS } from "@/features/chat/labels";
 import { parsePlanArgs } from "@/features/chat/tool-args";
 import { planHasUnrenderedMarkup } from "@/features/chat/tool-display";
 import { useToolResultState } from "@/features/chat/transcript-context";
+import { MarkdownBody } from "./markdown-body";
 import { ToolFallback } from "./tool-fallback.aui";
 import { isTruncatedArgs, ToolErrorResult, ToolResultMarks } from "./tool-result-marks";
 
 /**
  * ExitPlanMode の計画を Agent plan 表示にする (R-4 / FR-006 / Tier A: Agent plan)。
  *
- * plan は会話由来の untrusted markdown。**既存の `MarkdownText` で描く** (O-6 / FE-023 / 016 data-model §2「Agent plan」。
- * AD-049 Decision 4): `TextMessagePartProvider` (`isRunning={false}`) で plan の文字列を包む。新しい markdown の描画口は作らない
- * (`@assistant-ui/react-markdown` の import は `markdown-text.tsx` だけ、`TextMessagePartProvider` の import はここだけ)。
+ * plan は会話由来の untrusted markdown。**共有の部品 `MarkdownBody` (既存の `MarkdownText` の包み) で描く** (O-6 / FE-023 /
+ * 016 data-model §2「Agent plan」。AD-049 Decision 4。O-11 / FE-030 で部品に切り出した)。新しい markdown の描画口は作らない
+ * (`@assistant-ui/react-markdown` の import は `markdown-text.tsx` だけ、`TextMessagePartProvider` の import は `markdown-body.tsx` だけ)。
  * 生 HTML は描画されず (rehype-raw 無し)、リンクは `safeUrlTransform` の allowlist (http(s) か相対) を通る。
  * 「原文」の切り替えで plain text (whitespace-pre-wrap) を出す。生 HTML・コメントがあるときは「表示されない部分が
  * あります。原文で確かめてください」の印を出す。
@@ -90,9 +87,7 @@ const AgentPlanImpl: ToolCallMessagePartComponent = (props) => {
             data-slot="agent-plan-markdown"
             className="text-foreground/90 wrap-break-word"
           >
-            <TextMessagePartProvider text={args.plan} isRunning={false}>
-              <MarkdownText />
-            </TextMessagePartProvider>
+            <MarkdownBody text={args.plan} />
           </div>
         )}
       </div>

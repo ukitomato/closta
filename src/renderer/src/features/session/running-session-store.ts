@@ -227,6 +227,9 @@ function applyMeter(prev: SessionMeters, update: MeterUpdate): SessionMeters {
     }
     case 'commands':
       return { ...prev, commands: update, slashCommandSource: 'commands' }
+    case 'background-tasks':
+      // 最新の値で置き換える (前の一覧を残さない。0 件は空の配列。O-11 / AD-056 Decision 2)。
+      return { ...prev, backgroundTasks: update.tasks }
     case 'retraction':
       // 取り消しは最新の値ではなく 1 回限りの指示。`applyEvent` が先に分けて処理するので、ここへは来ない。
       return prev
@@ -701,7 +704,9 @@ export function createRunningSessionStore(
       // 外してから渡す。入力の値はここでも保持しない (SC-004)。
       const session = store.getState().sessions[sessionId]
       if (session !== undefined && session.elicitations.some((e) => e.requestId === requestId)) {
-        patch(sessionId, { elicitations: session.elicitations.filter((e) => e.requestId !== requestId) })
+        patch(sessionId, {
+          elicitations: session.elicitations.filter((e) => e.requestId !== requestId)
+        })
       }
       if (content === undefined) {
         void capability().respondElicitation(sessionId, requestId, action)

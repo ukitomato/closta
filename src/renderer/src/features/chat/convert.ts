@@ -1,4 +1,4 @@
-import type { ThreadMessageLike } from '@assistant-ui/react'
+import type { ThreadMessageLike, ToolCallMessagePartProps } from '@assistant-ui/react'
 
 import type { TranscriptMessageDTO, TranscriptPartDTO } from '@domain/session/transcript-dto'
 
@@ -88,6 +88,29 @@ function convertPart(part: TranscriptPartDTO): MessagePart {
     case 'system-event':
       return systemEventDataPart(part)
   }
+}
+
+/**
+ * tool-call の part を、registry の専用表示 (`ToolCallMessagePartComponent`) の props に写す (O-11 / FE-031。入れ子の tool-call を
+ * message の part の context の外で、主ループと同じ表示で描くため)。`convertPart` と同じ写しを使う (args の `__` のキーの除去も同じ)。
+ * 結果の状態の印は表示の中の `useToolResultState` が thread の context から引くので、`status` は常に `complete` (操作は持たない)。
+ */
+export function toToolCallPartProps(
+  part: Extract<TranscriptPartDTO, { type: 'tool-call' }>
+): ToolCallMessagePartProps {
+  const converted = convertPart(part) as Extract<MessagePart, { type: 'tool-call' }>
+  return {
+    type: 'tool-call',
+    toolCallId: converted.toolCallId,
+    toolName: converted.toolName,
+    args: converted.args,
+    argsText: converted.argsText ?? part.argsText,
+    result: converted.result,
+    isError: converted.isError ?? false,
+    status: { type: 'complete' },
+    addResult: () => {},
+    resume: () => {}
+  } as unknown as ToolCallMessagePartProps
 }
 
 /* ── システムイベントの行 (O-2 / data-model §2「assistant-ui への写し」) ─────────────── */

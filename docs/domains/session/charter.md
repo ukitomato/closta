@@ -33,6 +33,7 @@ related_specs:
   - specs/015-ui-mcp-elicitation-commands/spec.md
   - specs/016-ui-boundaries-and-tool-displays/spec.md
   - specs/018-session-answer-ui-and-composer-commands/spec.md
+  - specs/019-ui-hooks-tasks-subagents-and-notices/spec.md
 ---
 
 # Domain Charter: session
@@ -307,10 +308,17 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
   本 domain の契約の値を広げた: `createdAt` を埋める変換 (`src/domain/session/transcript.ts` / `live-message.ts` / `system-event.ts` と
   agents のセッションスレッド) を O-9 が直した。DTO の形・フィールドの集合 (`TRANSCRIPT_MESSAGE_FIELDS` など)・`METER_UPDATE_TYPES`・
   IPC・preload は変えない。過去ログの時刻は `getSessionMessages` の返りの型に無い `timestamp` から読む）
-- **O-11 (ui)** — Hook・背景の task・実行中の subagent と知らせの類の表示 ([roadmap の O-11 の行](../../roadmap.md))。O-6 の design で
-  分けた ui の feature。**ADR の義務は本 domain の境界にある** (`includeHookEvents` = query の options の追加・`getSubagentMessages` = Agent SDK の
-  呼び出しの許可リストの追加・`get_hooks_listing`。[AD-049](../../decisions/0049-boundaries-retraction-and-o11-split.md) Decision 1) ので、
-  O-11 の ADR は本 charter にも記録する。未着手
+- **O-11 (ui)** — [Hook・背景の task・実行中の subagent の表示](../../../specs/019-ui-hooks-tasks-subagents-and-notices/spec.md)
+  ([roadmap の O-11 の行](../../roadmap.md))。O-6 の design で分けた ui の feature。**ADR の義務は本 domain の境界にある**
+  ([AD-049](../../decisions/0049-boundaries-retraction-and-o11-split.md) Decision 1) ので本 charter にも記録する。
+  U-6 (2026-10-17 に利用者が承認。[AD-054](../../decisions/0054-query-options-hook-events-and-subagent-text.md) /
+  [AD-055](../../decisions/0055-subagent-messages-for-past-transcripts.md) /
+  [AD-056](../../decisions/0056-o11-scope-background-task-list-and-o12-split.md)) で、本 domain の契約を広げた:
+  query の options の 2 キー (`includeHookEvents` / `forwardSubagentText`。`QUERY_OPTION_KEYS` 9 → 11)・
+  Agent SDK の呼び出しの許可リストの 2 つ (`listSubagents` / `getSubagentMessages`。3 → 5。呼べるファイルは `read-transcript.ts` だけ)・
+  agents の入れ子の送り直し (根と位置の表。`parent_tool_use_id` 付きのメッセージを親の `Agent` の呼び出しの `children` に入れる)・
+  `meter` の種類 `background-tasks` (`METER_UPDATE_TYPES` 9 → 10。`SessionEvent` の種類は変えない)。
+  `Query` の呼び出しは `interrupt` だけのまま。Related Specs に O-11 (ui)
 - **O-10** — [Claude Code からの問いに答える UI と composer のコマンドの候補](../../../specs/018-session-answer-ui-and-composer-commands/spec.md)
   ([roadmap の O-10 の行](../../roadmap.md))。O-5 の design で分けた本 domain の feature (015 spec U-1 /
   [AD-048](../../decisions/0048-session-config-display-and-answer-ui-split.md) Decision 1)。結論 (2026-10-17 に利用者が U-1〜U-10 と

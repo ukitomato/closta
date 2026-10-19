@@ -190,7 +190,10 @@ export function systemEventPartOf(msg: TranscriptMessageDTO | undefined): System
  * それ以外は空でなければ次の値 (O-2 のまま)。`oneLine` は空白を畳むので、開始の行と過去ログの `detail` は改行を含まない。
  */
 function mergedDetail(prev: SystemEventPart, next: SystemEventPart): string {
-  if (prev.category === 'task' && next.detail.startsWith('\n')) {
+  if (
+    (prev.category === 'task' || prev.category === 'backgrounded-task') &&
+    next.detail.startsWith('\n')
+  ) {
     const taskType = prev.detail.split('\n', 1)[0] ?? ''
     return `${taskType}\n${next.detail.slice(1)}`
   }

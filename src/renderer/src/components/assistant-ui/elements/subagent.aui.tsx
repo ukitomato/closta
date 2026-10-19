@@ -1,6 +1,6 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useContext } from "react";
 import { BotIcon, WrenchIcon } from "lucide-react";
 import type { ToolCallMessagePartComponent } from "@assistant-ui/react";
 
@@ -9,11 +9,16 @@ import {
   SYSTEM_EVENT_CATEGORY_LABELS,
   SYSTEM_EVENT_STATUS_LABELS,
 } from "@/features/chat/labels";
+import { toToolCallPartProps } from "@/features/chat/convert";
 import { parseAgentArgs, parseTaskArgs } from "@/features/chat/tool-args";
 import { useToolResultState } from "@/features/chat/transcript-context";
 import { cn } from "@/lib/utils";
+import { MarkdownBody } from "./markdown-body";
+import { NestedDepthContext, NestedToolRendererContext } from "./nested-tool-context";
+import { ReasoningContent, ReasoningRoot, ReasoningText, ReasoningTrigger } from "./reasoning.aui";
 import { ToolFallback } from "./tool-fallback.aui";
 import { isTruncatedArgs, ToolResultMarks } from "./tool-result-marks";
+import { TranscriptBoundary } from "./transcript-boundary";
 
 /**
  * Task (subagent) を Subagent 表示にする (R-4 / FR-004 / FR-005 / US-2 / Tier A: Subagent list)。
@@ -23,6 +28,13 @@ import { isTruncatedArgs, ToolResultMarks } from "./tool-result-marks";
  * 積み、`convert.ts` が `args.__subagentChildren` として渡す (research R-02 / data-model §4)。
  * 会話由来文字列は **plain text** で描画 (React escape。argsText は domain で sanitizeBody 済み)。
  * narrowing 失敗時は `ToolFallback` に退避 (FR-009 / SC-005)。
+ *
+ * **入れ子の中の描画** (O-11 / FE-031 / data-model §3.3): tool-call は主ループと同じ振り分け (完全一致の表 → MCP →
+ * ToolFallback) で描く。振り分けは `nested-tool-context.ts` の `NestedToolRendererContext` で注入される — `tool-registry.aui.tsx` が Agent / Task の表示の
+ * 包みで Provider を置く (**依存の向きは `tool-registry.aui.tsx` → 本ファイルの 1 方向のまま。本ファイルは `tool-registry.aui.tsx`
+ * と `thread.aui.tsx` を import しない**。循環の禁止 / AD-023 §7)。値が `null` (registry の外で描いたとき) と、深さが
+ * `VISUAL_MAX_DEPTH` を超えるときは今の簡易な描画 (tool 名・`ToolResultMarks`・結果の `pre`)。text は markdown (`MarkdownBody`)、
+ * thinking は Reasoning、divider は `TranscriptBoundary`。
  *
  * registry 照合 (Principle XIII / FR-013): assistant-ui `elements-subagent-list` (`SubagentList`) /
  * `agent-handoff`。入れ子 transcript の再帰描画は registry 版に無いため補完自作した (ADR 参照)。
@@ -61,11 +73,21 @@ function SubagentToolCall({
   part: Extract<TranscriptPartDTO, { type: "tool-call" }>;
   depth: number;
 }): React.JSX.Element {
+  const renderNested = useContext(NestedToolRendererContext);
   const resultState = useToolResultState({
     toolCallId: part.toolCallId,
     result: part.result === null ? undefined : part.result,
     isError: part.isError,
   });
+  if (renderNested !== null && depth <= VISUAL_MAX_DEPTH) {
+    return (
+      <div data-slot="subagent-nested-tool" className="flex flex-col gap-1">
+        <NestedDepthContext.Provider value={depth}>
+          {renderNested(toToolCallPartProps(part))}
+        </NestedDepthContext.Provider>
+      </div>
+    );
+  }
   const result = typeof part.result === "string" && part.result.length > 0 ? part.result : null;
   return (
     <div className="border-border/40 flex flex-col gap-1 rounded-md border px-2 py-1">
@@ -103,15 +125,20 @@ function SubagentPart({
   switch (part.type) {
     case "text":
       return (
-        <p className="text-foreground/85 whitespace-pre-wrap wrap-break-word leading-relaxed">
-          {part.text}
-        </p>
+        <div data-slot="subagent-text" className="text-foreground/85 wrap-break-word">
+          <MarkdownBody text={part.text} />
+        </div>
       );
     case "reasoning":
       return (
-        <p className="text-muted-foreground whitespace-pre-wrap wrap-break-word text-xs italic">
-          {part.text}
-        </p>
+        <ReasoningRoot>
+          <ReasoningTrigger />
+          <ReasoningContent>
+            <ReasoningText>
+              <MarkdownBody text={part.text} />
+            </ReasoningText>
+          </ReasoningContent>
+        </ReasoningRoot>
       );
     case "tool-call": {
       return <SubagentToolCall part={part} depth={depth} />;
@@ -121,7 +148,8 @@ function SubagentPart({
     case "file":
       return <p className="text-muted-foreground text-xs">📎 {part.filename}</p>;
     case "divider":
-      return <p className="text-muted-foreground text-center text-xs">── {part.label} ──</p>;
+      // 圧縮の境界 (O-6 の TranscriptBoundary。数を省いた文言。`label` は読まない)。
+      return <TranscriptBoundary category="compact-boundary" detail="" />;
     case "system-event":
       // 入れ子の中のシステムイベントは最小の 1 行 (種類と状態。O-2)。行の合成と「結果不明」は transcript の行が担う。
       return (
@@ -172,6 +200,7 @@ function SubagentBody({
 const SubagentImpl: ToolCallMessagePartComponent = (props) => {
   // 実行時の名前は `Agent` (SDK 0.3.270) と旧名 `Task` のどちらも来る (O-2 / FR-010)。
   const resultState = useToolResultState(props);
+  const baseDepth = useContext(NestedDepthContext);
   const args =
     props.toolName === "Agent"
       ? parseAgentArgs(props.argsText)
@@ -213,7 +242,7 @@ const SubagentImpl: ToolCallMessagePartComponent = (props) => {
             {args.prompt}
           </pre>
         ) : null}
-        {children.length > 0 ? <SubagentBody messages={children} depth={1} /> : null}
+        {children.length > 0 ? <SubagentBody messages={children} depth={baseDepth + 1} /> : null}
         {result ? (
           <div className="border-border/30 border-t pt-2">
             <p className="text-muted-foreground mb-1 text-xs font-medium">結果</p>

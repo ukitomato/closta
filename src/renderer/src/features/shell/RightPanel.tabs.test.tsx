@@ -162,9 +162,10 @@ describe('本物のタブの表 (概要・使用量・構成。O-4 FE-031 / O-5 
       SHELL_LABELS.overviewTab,
       SHELL_LABELS.usageTab,
       SHELL_LABELS.initReportTab,
-      SHELL_LABELS.conversationMapTab
+      SHELL_LABELS.conversationMapTab,
+      SHELL_LABELS.backgroundTasksTab
     ])
-    expect(tabs.map((el) => el.getAttribute('tabindex'))).toEqual(['0', '-1', '-1', '-1'])
+    expect(tabs.map((el) => el.getAttribute('tabindex'))).toEqual(['0', '-1', '-1', '-1', '-1'])
     act(() => tabNamed(SHELL_LABELS.overviewTab).focus())
     await userEvent.keyboard('{ArrowRight}')
     expect(tabNamed(SHELL_LABELS.usageTab)).toHaveFocus()
@@ -175,7 +176,7 @@ describe('本物のタブの表 (概要・使用量・構成。O-4 FE-031 / O-5 
       within(tabList())
         .getAllByRole('tab')
         .map((el) => el.getAttribute('tabindex'))
-    ).toEqual(['-1', '0', '-1', '-1'])
+    ).toEqual(['-1', '0', '-1', '-1', '-1'])
     await userEvent.keyboard('{ArrowRight}')
     expect(tabNamed(SHELL_LABELS.initReportTab)).toHaveFocus()
     expect(within(tabPanel()).getByTestId('init-report-empty')).toBeInTheDocument()
@@ -185,8 +186,14 @@ describe('本物のタブの表 (概要・使用量・構成。O-4 FE-031 / O-5 
     expect(within(tabPanel()).getByTestId('conversation-map-empty')).toBeInTheDocument()
     expect(useUiStore.getState().panel.tab).toBe('conversation-map')
     await userEvent.keyboard('{ArrowRight}')
+    expect(tabNamed(SHELL_LABELS.backgroundTasksTab)).toHaveFocus()
+    expect(within(tabPanel()).getByTestId('background-tasks-not-running')).toBeInTheDocument()
+    expect(useUiStore.getState().panel.tab).toBe('background-tasks')
+    await userEvent.keyboard('{ArrowRight}')
     expect(tabNamed(SHELL_LABELS.overviewTab)).toHaveFocus()
     expect(within(tabPanel()).getByTestId('overview-empty')).toBeInTheDocument()
+    await userEvent.keyboard('{ArrowLeft}')
+    expect(tabNamed(SHELL_LABELS.backgroundTasksTab)).toHaveFocus()
     await userEvent.keyboard('{ArrowLeft}')
     expect(tabNamed(SHELL_LABELS.conversationMapTab)).toHaveFocus()
     await userEvent.keyboard('{ArrowLeft}')
@@ -194,8 +201,8 @@ describe('本物のタブの表 (概要・使用量・構成。O-4 FE-031 / O-5 
     await userEvent.keyboard('{Home}')
     expect(tabNamed(SHELL_LABELS.overviewTab)).toHaveFocus()
     await userEvent.keyboard('{End}')
-    expect(tabNamed(SHELL_LABELS.conversationMapTab)).toHaveFocus()
-    expect(useUiStore.getState().panel.tab).toBe('conversation-map')
+    expect(tabNamed(SHELL_LABELS.backgroundTasksTab)).toHaveFocus()
+    expect(useUiStore.getState().panel.tab).toBe('background-tasks')
   })
 
   it('vitest-axe の違反 0 (使用量・構成のタブを選んだ後も)', async () => {

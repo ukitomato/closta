@@ -477,6 +477,51 @@ describe('sdk-agent-session: tool の結果と Hook / task の行 (O-2 / BE-024)
     expect(JSON.stringify(rows)).not.toContain('SECRET')
   })
 
+  it('一般の Hook (PreToolUse / Stop) も同じ行になり、出力本文を持たず、hook_progress は送らない (O-11 US-1 / SC-001)', async () => {
+    await runTurn([
+      {
+        type: 'system',
+        subtype: 'hook_started',
+        hook_id: 'g1',
+        hook_name: 'PreToolUse:Bash',
+        hook_event: 'PreToolUse'
+      },
+      { type: 'system', subtype: 'hook_progress', hook_id: 'g1', stdout: 'PROGRESS-OUT' },
+      {
+        type: 'system',
+        subtype: 'hook_response',
+        hook_id: 'g1',
+        hook_name: 'PreToolUse:Bash',
+        hook_event: 'PreToolUse',
+        outcome: 'error',
+        output: 'HOOK-OUTPUT',
+        stdout: 'HOOK-STDOUT',
+        stderr: 'HOOK-STDERR',
+        exit_code: 7777
+      },
+      {
+        type: 'system',
+        subtype: 'hook_response',
+        hook_id: 'g2',
+        hook_name: 'Bearer x',
+        hook_event: 'Stop',
+        outcome: 'cancelled'
+      }
+    ])
+    const rows = messages()
+    expect(rows.map((m) => m.id)).toEqual(['hook:g1', 'hook:g1', 'hook:g2'])
+    expect(rows[0]?.parts[0]).toMatchObject({
+      category: 'hook',
+      name: 'PreToolUse:Bash',
+      detail: 'PreToolUse',
+      status: 'started'
+    })
+    expect(rows[1]?.parts[0]).toMatchObject({ status: 'failed' })
+    expect(rows[2]?.parts[0]).toMatchObject({ name: '', detail: 'Stop', status: 'cancelled' })
+    const text = JSON.stringify(rows)
+    expect(text).not.toMatch(/HOOK-OUTPUT|HOOK-STDOUT|HOOK-STDERR|PROGRESS-OUT|7777|Bearer/)
+  })
+
   it('時刻 (O-9 / AD-051): assistant は SDK の timestamp、結果だけと Hook の行は受信時刻、送り直しは最初の値', async () => {
     const stamp = '2026-10-16T01:23:45.678Z'
     const before = Date.now()
@@ -515,7 +560,66 @@ describe('sdk-agent-session: tool の結果と Hook / task の行 (O-2 / BE-024)
     expect(messages()[2]?.parts[0]).toMatchObject({ status: 'completed' })
   })
 
-  it('hook_progress / background_tasks_changed は送らない。task_progress は task の行の進み具合の更新だけを送る (O-4)', async () => {
+  it('前景で始まり patch.is_backgrounded が true になった task の行が開き、以後の更新が同じ行に入る。名前は直前の Bash のコマンドの名前 (O-11 US-2 AC1 / AC2)', async () => {
+    await runTurn([
+      {
+        type: 'assistant',
+        uuid: 'm1',
+        message: {
+          content: [
+            { type: 'tool_use', id: 'toolu_b', name: 'Bash', input: { command: 'npm run build' } }
+          ]
+        }
+      },
+      {
+        type: 'system',
+        subtype: 'task_started',
+        task_id: 't1',
+        task_type: 'local_bash',
+        description: 'LEAK-DESCRIPTION',
+        tool_use_id: 'toolu_b'
+      },
+      {
+        type: 'system',
+        subtype: 'task_updated',
+        task_id: 't1',
+        patch: { is_backgrounded: true }
+      },
+      { type: 'system', subtype: 'task_notification', task_id: 't1', status: 'completed' }
+    ])
+    const rows = messages().filter((m) => m.id === 'task:t1')
+    expect(rows).toHaveLength(2)
+    expect(rows[0]?.parts[0]).toMatchObject({
+      category: 'backgrounded-task',
+      opens: true,
+      name: 'npm',
+      detail: 'local_bash',
+      status: 'running'
+    })
+    expect(rows[1]?.parts[0]).toMatchObject({ opens: false, status: 'completed' })
+    expect(JSON.stringify(posted)).not.toContain('LEAK-DESCRIPTION')
+  })
+
+  it('background_tasks_changed は background-tasks の meter を受けるたびに 1 つ送る (O-11 US-2 AC3)', async () => {
+    await runTurn([
+      {
+        type: 'system',
+        subtype: 'background_tasks_changed',
+        tasks: [
+          { task_id: 'a', task_type: 'local_bash', description: 'LEAK-DESC' },
+          { task_id: 'b', task_type: 'local_agent', ambient: true }
+        ]
+      },
+      { type: 'system', subtype: 'background_tasks_changed', tasks: [] }
+    ])
+    const meters = (events() as { kind: string; meter?: { type: string; tasks?: unknown[] } }[])
+      .filter((e) => e.kind === 'meter' && e.meter?.type === 'background-tasks')
+      .map((e) => e.meter?.tasks)
+    expect(meters).toEqual([[{ taskId: 'a', taskType: 'local_bash' }], []])
+    expect(JSON.stringify(posted)).not.toContain('LEAK-DESC')
+  })
+
+  it('hook_progress は送らない。task_progress は task の行の進み具合の更新だけを送る (O-4)', async () => {
     await runTurn([
       { type: 'system', subtype: 'hook_progress', hook_id: 'h1', stdout: 'x' },
       {
@@ -525,8 +629,7 @@ describe('sdk-agent-session: tool の結果と Hook / task の行 (O-2 / BE-024)
         description: 'TASK-DESCRIPTION',
         summary: 'TASK-SUMMARY',
         usage: { total_tokens: 10, tool_uses: 2, duration_ms: 3000 }
-      },
-      { type: 'system', subtype: 'background_tasks_changed', tasks: [] }
+      }
     ])
     // 行の無い task への更新は renderer の合成が捨てる (O-4 / 014 data-model §3。セッションスレッドは task の状態を持たない)。
     expect(messages()).toEqual([
@@ -548,6 +651,131 @@ describe('sdk-agent-session: tool の結果と Hook / task の行 (O-2 / BE-024)
       }
     ])
     expect(JSON.stringify(posted)).not.toMatch(/TASK-DESCRIPTION|TASK-SUMMARY/)
+  })
+
+  describe('subagent の入れ子 (O-11 BE-031 / AD-055)', () => {
+    const inner = (
+      uuid: string,
+      parent: string | null | undefined,
+      content: unknown[]
+    ): Record<string, unknown> => ({
+      type: 'assistant',
+      uuid,
+      ...(parent === undefined ? {} : { parent_tool_use_id: parent }),
+      message: { content }
+    })
+    const toolUse = (id: string): Record<string, unknown> => ({
+      type: 'tool_use',
+      id,
+      name: 'Read',
+      input: {}
+    })
+    const rootWithAgent = (uuid: string, id: string): Record<string, unknown> => ({
+      ...assistantWithTools(uuid, id),
+      parent_tool_use_id: null
+    })
+    type Call = { toolCallId: string; result: string | null; children: { parts: unknown[] }[] }
+    const rootCalls = (m: { parts: Record<string, unknown>[] }): Call[] =>
+      m.parts.filter((p) => p.type === 'tool-call') as unknown as Call[]
+
+    it('parent_tool_use_id を持つ assistant / user は主ループの message にならず、親の children に入る (結果も深い位置に埋まる)', async () => {
+      await runTurn([
+        rootWithAgent('m1', 'agent1'),
+        inner('s1', 'agent1', [{ type: 'text', text: 'SUB-TEXT' }, toolUse('r1')]),
+        {
+          type: 'user',
+          parent_tool_use_id: 'agent1',
+          message: {
+            role: 'user',
+            content: [
+              { type: 'text', text: 'LEAK-USER-TEXT' },
+              { type: 'tool_result', tool_use_id: 'r1', content: 'file-body' }
+            ]
+          },
+          isSynthetic: true
+        }
+      ])
+      // 主ループの message は根 (m1) だけ。送り直しの分だけ同じ id で出る。
+      expect(new Set(messages().map((m) => m.id))).toEqual(new Set(['m1']))
+      const last = messages().at(-1) as NonNullable<ReturnType<typeof messages>[number]>
+      const agent = rootCalls(last)[0] as Call
+      expect(agent.children).toHaveLength(1)
+      const nested = rootCalls(agent.children[0] as { parts: Record<string, unknown>[] })[0]
+      expect(nested).toMatchObject({ toolCallId: 'r1', result: 'file-body' })
+      expect(JSON.stringify(posted)).not.toContain('LEAK-USER-TEXT')
+    })
+
+    it('親より先に届いた子は平らに出る (孤児)', async () => {
+      await runTurn([inner('s1', 'agent-later', [{ type: 'text', text: 'early' }])])
+      expect(messages().map((m) => m.id)).toEqual(['s1'])
+    })
+
+    it('取り消した応答の配下の子は出ない', async () => {
+      await runTurn([
+        assistantWithTools('old1', 'agent1'),
+        { ...assistantWithTools('new1'), supersedes: ['old1'] },
+        inner('s1', 'agent1', [{ type: 'text', text: 'late' }])
+      ])
+      expect(messages().map((m) => m.id)).toEqual(['old1', 'new1'])
+    })
+
+    it('帰属つきの compact_boundary は親の children の区切りになり、主ループの行にならない', async () => {
+      await runTurn([
+        rootWithAgent('m1', 'agent1'),
+        {
+          type: 'system',
+          subtype: 'compact_boundary',
+          uuid: 'c1',
+          parent_tool_use_id: 'agent1',
+          compact_metadata: { trigger: 'auto', pre_tokens: 1, post_tokens: 1 }
+        }
+      ])
+      expect(new Set(messages().map((m) => m.id))).toEqual(new Set(['m1']))
+      const last = messages().at(-1) as NonNullable<ReturnType<typeof messages>[number]>
+      const agent = rootCalls(last)[0] as Call
+      expect(agent.children[0]?.parts).toEqual([{ type: 'divider', label: 'コンテキストを圧縮' }])
+    })
+
+    it('帰属つきの Hook / task / informational は帰属の無いものと同じ主ループの行になる (U-9)', async () => {
+      await runTurn([
+        rootWithAgent('m1', 'agent1'),
+        {
+          type: 'system',
+          subtype: 'hook_started',
+          hook_id: 'h1',
+          hook_name: 'PreToolUse:Bash',
+          hook_event: 'PreToolUse',
+          parent_tool_use_id: 'agent1'
+        },
+        {
+          type: 'system',
+          subtype: 'informational',
+          uuid: 'i1',
+          content: 'note',
+          parent_tool_use_id: 'agent1'
+        }
+      ])
+      const ids = messages().map((m) => m.id)
+      expect(ids).toContain('hook:h1')
+      expect(ids).toContain('info:i1')
+    })
+
+    it('入れ子の tool に tool_progress の経過時間の meter が出ない', async () => {
+      await runTurn([
+        rootWithAgent('m1', 'agent1'),
+        {
+          type: 'tool_progress',
+          tool_use_id: 'r1',
+          parent_tool_use_id: 'agent1',
+          elapsed_time_seconds: 9
+        }
+      ])
+      expect(
+        (events() as { kind: string; meter?: { type: string } }[]).filter(
+          (e) => e.meter?.type === 'tool-elapsed'
+        )
+      ).toEqual([])
+    })
   })
 
   it('permission_denied の扱いは変わらない', async () => {

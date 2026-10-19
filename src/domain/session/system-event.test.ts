@@ -237,6 +237,84 @@ describe('toSystemEventMessage', () => {
   })
 })
 
+describe('一般の Hook (O-11 US-1 / SC-001。変換は O-2 のまま)', () => {
+  const general = (
+    subtype: string,
+    event: string,
+    extra: Record<string, unknown> = {}
+  ): Record<string, unknown> => ({
+    type: 'system',
+    subtype,
+    hook_id: 'g1',
+    hook_name: `${event}:Bash`,
+    hook_event: event,
+    ...extra
+  })
+
+  it.each(['PreToolUse', 'PostToolUse', 'Stop', 'UserPromptSubmit'])(
+    '%s の開始と応答が同じ行 hook:<id> を開き書き換える',
+    (event) => {
+      const started = systemEventPartOf(
+        toSystemEventMessage(general('hook_started', event)) ?? undefined
+      )
+      expect(started).toMatchObject({
+        category: 'hook',
+        opens: true,
+        name: `${event}:Bash`,
+        detail: event,
+        status: 'started'
+      })
+      for (const [outcome, status] of [
+        ['success', 'succeeded'],
+        ['error', 'failed'],
+        ['cancelled', 'cancelled'],
+        ['mystery', 'unknown']
+      ] as const) {
+        const msg = toSystemEventMessage(general('hook_response', event, { outcome }))
+        expect(msg?.id).toBe('hook:g1')
+        expect(systemEventPartOf(msg ?? undefined)?.status).toBe(status)
+      }
+    }
+  )
+
+  it('hook_response が先に届いても行ができ、後から届いた応答が開始の行を書き換える', () => {
+    const response = toSystemEventMessage(
+      general('hook_response', 'PreToolUse', { outcome: 'error' })
+    )
+    expect(response).not.toBeNull()
+    expect(mergeSystemEvent(undefined, response as TranscriptMessageDTO)).toEqual(response)
+    const started = toSystemEventMessage(general('hook_started', 'PreToolUse'))
+    const merged = mergeSystemEvent(started ?? undefined, response as TranscriptMessageDTO)
+    expect(systemEventPartOf(merged ?? undefined)?.status).toBe('failed')
+  })
+
+  it('秘密を含みうる・形の外れた hook_name は名前が空 (見出しは hook_event と番号になる)', () => {
+    for (const hookName of ['Bearer x', 'sk-abcdef', 'npm run build', './a/b.sh', 'FOO=1 cmd']) {
+      const part = systemEventPartOf(
+        toSystemEventMessage(general('hook_started', 'PreToolUse', { hook_name: hookName })) ??
+          undefined
+      )
+      expect(part).toMatchObject({ name: '', detail: 'PreToolUse' })
+    }
+  })
+
+  it('output / stdout / stderr / exit_code の目印が行に 0 件、hook_progress は行にならない', () => {
+    const msg = toSystemEventMessage(
+      general('hook_response', 'PostToolUse', {
+        outcome: 'success',
+        output: 'MARK-OUTPUT',
+        stdout: 'MARK-STDOUT',
+        stderr: 'MARK-STDERR',
+        exit_code: 987654
+      })
+    )
+    expect(JSON.stringify(msg)).not.toMatch(/MARK-|987654/)
+    expect(
+      toSystemEventMessage(general('hook_progress', 'PostToolUse', { stdout: 'x' }))
+    ).toBeNull()
+  })
+})
+
 describe('mergeSystemEvent', () => {
   const started = toSystemEventMessage(taskStarted)!
   const update = (patch: Record<string, unknown>): TranscriptMessageDTO =>
@@ -295,10 +373,11 @@ const row = (
 })
 
 describe('category と status の集合 (固定テスト)', () => {
-  it('category は 12 (O-5 が auth / plugin、O-6 が 4 つ、O-10 が elicitation を足した。集合を変えるには ADR が要る: AD-053)', () => {
+  it('category は 13 (O-5 が auth / plugin、O-6 が 4 つ、O-10 が elicitation、O-11 が backgrounded-task を足した。集合を変えるには ADR が要る: AD-053 / AD-056)', () => {
     expect([...SYSTEM_EVENT_CATEGORIES].sort()).toEqual([
       'api-retry',
       'auth',
+      'backgrounded-task',
       'compact-boundary',
       'compaction',
       'conversation-reset',

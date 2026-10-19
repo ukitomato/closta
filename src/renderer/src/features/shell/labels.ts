@@ -46,6 +46,8 @@ export const SHELL_LABELS = {
   initReportTab: '構成',
   /** 右のペインの「会話の地図」のタブ (O-9 / 017 data-model §5)。 */
   conversationMapTab: '会話の地図',
+  /** 右のペインの「背景の task」のタブ (O-11 / 019 data-model §2.5)。 */
+  backgroundTasksTab: '背景の task',
   /** 畳んだ帯のタブのアイコンの注意の印の名前 (O-5 / 015 data-model §3 / §6)。 */
   attention: '注意',
   collapseSidebar: 'サイドバーを畳む',
@@ -245,6 +247,22 @@ export const USAGE_LABELS = {
   countValue: (n: string): string => `${n} 件`,
   /** 上限 (`MAX_METER_PERMISSION_DENIALS`) に達した件数。 */
   countAtLeast: (n: string): string => `${n} 件以上`
+} as const
+
+/**
+ * 右のペインの「背景の task」のタブ (O-11 / 019 data-model §2.5)。今動いている背景の task の一覧で、操作 (止める・前面に戻す)
+ * は持たない。
+ */
+export const BACKGROUND_TASKS_LABELS = {
+  /** 見出し。`count` は `formatCount` の値 (一覧がまだ届いていなければ件数を付けない)。 */
+  heading: (count: string | null): string =>
+    count === null ? '背景の task' : `背景の task (${count} 件)`,
+  /** 一覧が届いて 0 件。 */
+  empty: '今動いている背景の task はありません。',
+  /** まだ一覧が届いていない (稼働中)。 */
+  awaiting: '背景の task の一覧はまだ届いていません。',
+  /** 動いていない・過去・未選択のセッション。 */
+  notRunning: 'セッションは動いていません。'
 } as const
 
 /**

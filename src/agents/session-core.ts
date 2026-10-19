@@ -70,7 +70,10 @@ export const QUERY_OPTION_KEYS = [
   'model',
   'effort',
   // MCP サーバーの問い (Elicitation) への応答 (O-10 / AD-053 Decision 1)。権限面・tool 集合を変えない。
-  'onElicitation'
+  'onElicitation',
+  // 一般の Hook の開始・結果と subagent の発言の転送 (O-11 / AD-054 Decision 4)。常に true。escalation-neutral。
+  'includeHookEvents',
+  'forwardSubagentText'
 ] as const
 
 /** SDK の `SpawnOptions` の構造だけ (SDK を import しない)。 */
@@ -133,6 +136,10 @@ export interface BuiltQueryOptions {
   readonly effort?: EffortLevel
   /** MCP サーバーの問いへの応答 (O-10。AD-053)。 */
   readonly onElicitation: OnElicitationLike
+  /** 一般の Hook の出力 (O-11。AD-054)。常に true。 */
+  readonly includeHookEvents: true
+  /** subagent の発言の転送 (O-11。AD-054)。常に true。 */
+  readonly forwardSubagentText: true
 }
 
 export interface BuildQueryOptionsDeps {
@@ -178,7 +185,9 @@ export function buildQueryOptions(deps: BuildQueryOptionsDeps): BuiltQueryOption
     settings: assertHelperSettings(deps.settings),
     model: deps.model,
     effort: deps.effort,
-    onElicitation: deps.onElicitation
+    onElicitation: deps.onElicitation,
+    includeHookEvents: true,
+    forwardSubagentText: true
   }
 }
 
