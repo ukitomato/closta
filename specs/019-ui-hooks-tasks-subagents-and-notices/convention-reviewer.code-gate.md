@@ -3,106 +3,82 @@
 **Run**: 2026-10-19
 **Reviewer**: convention-reviewer
 **Spec**: specs/019-ui-hooks-tasks-subagents-and-notices/spec.md
-**Round**: code-gate iter 1
+**Round**: code-gate iter 2
 
 ## 初回読了 viewpoint
 
-- FR/SC のうち F に関係するもの:
-  - FR-013 / SC-004: 項目 14 の fixture と `QUERY_OPTION_KEYS` / `AGENT_SDK_ALLOWED_CALLS` / `METER_UPDATE_TYPES` の固定。
-  - FR-016 / SH-012: `eslint.config.mjs` と `reviewers.yml` の手書き element 一覧、src の O-11 注記。
-  - FR-011 / FR-005: 新設モジュールの置き場所 (domain / agents / renderer)。
-  - FR-004 / FR-006 / FR-008 / FR-010: spec・plan の識別子と実装名の突き合わせ。
-- touched files に該当する charter / Confirmation:
-  - ui charter (Subagent、右のペインのタブ、`docs/ui-coverage.md`)。
-  - session charter の O-11 項 (query options、SDK 許可リスト、`meter`)。
-  - Constitution VII (agents は domain と SDK だけを import) は新設 import で守られている。
-  - AD-023 §7 の `no-circular` は depcruise が exit 0。
-- lint-agent の JSON は受領した。`exit_code` は 0 で、5 コマンドすべて 0。lint を自分では実行していない。
-- A. 認可 / 認証 / secret 管理: 該当なし: convention-reviewer の範囲外 (security-reviewer が owner)
-- B. 入力検証 / injection / CSP / 暗号: 該当なし: convention-reviewer の範囲外 (security-reviewer が owner)
-- C. 業務不変条件 / Charter drift: 該当なし: convention-reviewer の範囲外 (architecture-reviewer が owner)
-- D. Constitution / ADR drift: 該当なし: convention-reviewer の範囲外 (architecture-reviewer が owner)
-- E. User Story / SC / AC / UX: 該当なし: convention-reviewer の範囲外 (po-reviewer が owner)
-- F. 命名 / module / lint hookup: Critical:0 High:0 Medium:5 Low:8
-- G. optional reviewer 範囲: 該当なし: convention-reviewer の範囲外
-- H. テスト / coverage / observability / regression: High:0 Medium:0 Low:2。F の指摘を検出するテストは、後述の 2 点を除いてある。
-  - 項目 14 の fixture 4 本と固定テストは追加済みで、既存テストは書き換えずに通る (quickstart-results V-0)。
-  - `.vitest/` の混入と `nested-tool-context.ts` の lint 緩和を検出するテストやルールは無い (M-005、L-002)。
-  - `ForegroundTaskMemory.size` はテスト専用で、本番側の観測点ではない (L-005)。
+- FR/SC: FR-006 / SC-002 (背景の task の一覧とタブ)、US-2 AC3〜AC4 (起動で一覧は空から始まる)。今回の diff はこの 1 点だけ。
+  - 変更内容: `EMPTY_SESSION_METERS.backgroundTasks` を `null` から `[]` に変更。data-model §2.5、`running-session-store.test.ts`、`BackgroundTasksTab.test.tsx` の期待値を合わせた。
+  - 出所は pr-gate round1 の po-reviewer H-002。
+- touched files に該当する charter / Confirmation: ui charter (feature の持ち主は `ui`)。AD-056 Decision 2 (保持は session の契約)。
+  - 命名と配置の変更はない。既存ファイルの値と期待値だけの変更。
+- lint-agent JSON: `exit_code: 0`。detectors の `lint` / `typecheck-node` / `typecheck-web` / `depcruise` / `check:constitution` はすべて 0。
+  - `violations[]` は空。
+  - scope 外の warning 22 件は prettier のみ (scope 外なので finding にしない)。
+  - CONV-1 の finding は 0 件、`exit_code` 非ゼロの Critical も 0 件。
+- A. 認可 / 認証 / secret 管理: 該当なし: owner は security-reviewer
+- B. 入力検証 / injection / CSP / 暗号: 該当なし: owner は security-reviewer
+- C. 業務不変条件 / Charter drift: 該当なし: owner は architecture-reviewer
+- D. Constitution / ADR drift: 該当なし: owner は architecture-reviewer
+- E. User Story / SC / AC / UX: 該当なし: owner は po-reviewer
+- F. 命名 / module / lint hookup: Critical:0 High:0 Medium:1 Low:1
+- G. optional reviewer 範囲: 該当なし: 本 reviewer の範囲外
+- H. テスト / coverage / observability / regression: Critical:0 High:0 Medium:0 Low:0
+  - F の dead code 指摘を検出するテストはない。lint の `unused-vars` は到達不能な分岐を検出しない。これは lint の仕様で、指摘は M-001 に載せた。
+  - 既存の振る舞いへの影響は次の根拠で壊していないと言える。
+    - `useSessionMeters` は meters が無いとき `EMPTY_SESSION_METERS` を返す (`useSessionMeters.ts:23`)。
+    - 更新後のテスト 2 件は `[]` と 0 件の表示を固定している (`running-session-store.test.ts:794`、`BackgroundTasksTab.test.tsx:84-93`)。
+    - typecheck と lint は 0。
 
 ## スコープ要約
 
-scope は 76 ファイルで、src は 63 ファイル + 新設を含む。一般の Hook の番号・読み上げ、前景 task の記憶と `backgrounded-task` 行、`background-tasks` meter とタブ、実行中の subagent 入れ子 (`live-tool-results.ts` の根と位置の表)、過去ログの `listSubagents` / `getSubagentMessages` 合成、項目 14 の呼び出しファイル制限を含む。
+scope は 4 ファイル。data-model.md (§2.5 の初期値の記述)、`running-session-types.ts` (初期値 `[]` と doc コメント)、`running-session-store.test.ts` と `BackgroundTasksTab.test.tsx` (期待値)。
 
-- CONV-1: lint は error 0、warning 4。うち 1 件は ESLint の ignore 通知で、コード違反ではない。
-- CONV-2 (ファイル名): 新設ファイルは kebab-case と既存の PascalCase `*Tab.tsx` に従っており、一貫している。
-- CONV-3 (配置): 新設はすべて plan どおりのレイヤに置かれている。
-- CONV-4: `no-circular` は exit 0。import 順は lint で強制されておらず、乱れが 3 ファイルある (L-001)。
-- CONV-5: 未解決の `O-11` 注記は `src` に 0 件 (Grep で確認)。
-- CONV-6: spec・plan・tasks の識別子は実装と一致した (リネーム漏れなし)。
+命名・ファイル配置・import 順序に問題は見つからなかった。`running-session-types.ts` は 500 行未満。
+
+問題は、初期値を `[]` にしたのに `null` を前提にした実装と記述が残っていることだった。
 
 ## Findings
 
-### [Medium] prettier 警告: ChatScreen.o2.test.tsx (M-001) (scope: feature)
-- **観察**: `src/renderer/src/features/chat/ChatScreen.o2.test.tsx:345:85` に `prettier/prettier`。本 feature の追加行。
-- **同種事象探索**: lint-agent の `violations[]` に prettier/prettier が 3 件 (M-001〜M-003)。
-- **推奨アクション**: `prettier --write` で整形。
-- **根拠**: CONV-1 (warning は Medium)。
+### [Medium] 初期値を `[]` にしたため、`backgroundTasks === null` の分岐と `awaiting` 表示が到達不能の dead code になった (M-001) (scope: feature)
 
-### [Medium] prettier 警告: LivePane.o2.test.tsx:1136 (M-002) (scope: feature、本 diff の行ではない)
-- **観察**: `src/renderer/src/features/session/LivePane.o2.test.tsx:1136:32`。先行 feature 由来だが touched file。
-- **推奨アクション**: 同じ整形で直す。直さないなら棚卸し。
+- **観察**: `backgroundTasks` の値の出所は 2 つだけで、どちらも `null` を返さない。
+  - 初期値 `src/renderer/src/features/session/running-session-types.ts:160` が `[]`。
+  - 更新 `running-session-store.ts:232` は `update.tasks` (配列) で置き換える。
+  - `useSessionMeters` は meters が無いとき `EMPTY_SESSION_METERS` を返す (`useSessionMeters.ts:23`)。
+  - 型 `running-session-types.ts:132` は `readonly BackgroundTaskEntry[] | null` のまま。
+  - 次の箇所が `null` を前提に残っている。
+    - `src/renderer/src/features/shell/BackgroundTasksTab.tsx:70` の `tasks === null ? null : ...`
+    - 同 `:72-75` の `tasks === null` 分岐と `data-testid="background-tasks-awaiting"`
+    - `src/renderer/src/features/shell/labels.ts:262-263` の `BACKGROUND_TASKS_LABELS.awaiting` (「一覧はまだ届いていません」)
+  - 更新後のテストは `awaiting` が出ないことだけを確認する (`BackgroundTasksTab.test.tsx:91`)。分岐そのものは検査されず、残り続ける。
+  - `labels.ts:257` の `heading(count: string | null)` の `null` は `NotRunning` (`BackgroundTasksTab.tsx:36`) が使うので dead ではない。
+- **同種事象探索**: `background-tasks-awaiting|\.awaiting|backgroundTasks.*null` を `src` と specs で検索した。`awaiting` は上記 2 箇所 (`BackgroundTasksTab.tsx:73-74`、`labels.ts:263`) と test の `:91`。`SessionNavBadge` など `counts.awaiting` は別概念で無関係。
+- **リスク/影響**: 到達しない UI 文言と分岐が残る。将来 `null` を再導入したと誤読される。型が「まだ届いていない」を表せるように見えて契約が曖昧になる。
+- **推奨アクション**: 次のどちらかに揃える。
+  - (a) 型を `readonly BackgroundTaskEntry[]` にし、`BackgroundTasksTab.tsx` の `null` 分岐・`awaiting` 文言・`heading` の件数側の `null` を外す。
+  - (b) 「まだ届いていない」を残す設計ならそれを spec に書き、初期値を `null` に戻す。ただし po-reviewer H-002 (SDK は起動時に何も emit しない) と矛盾する。
+- **根拠**: CONV-5 (dead code の cascade 検証)。AD-050 により Medium は gate で直さず、マイルストーン終わりの棚卸しに回す。
+- **scope 根拠**: `BackgroundTasksTab.tsx` / `labels.ts` は 019 の touched files。今回の iter の `.code-gate-scope.txt` には入っていない。
 
-### [Medium] prettier 警告: running-session-store.ts:707 (M-003) (scope: feature、本 diff の行ではない)
-- **観察**: `src/renderer/src/features/session/running-session-store.ts:707:27`。O-10 由来の行。
-- **推奨アクション**: M-002 と同じ。
+### [Low] research.md の Decision が旧仕様 (`null` = まだ届いていない) のまま (L-001) (scope: feature)
 
-### [Medium] 500 行超のファイルが本 feature でさらに伸びた (M-004) (scope: feature)
-- **観察**: `thread.aui.tsx` 1555 行 (約 +110)、`running-session-store.ts` 855 行、`live-signals.ts` 873 行、`sdk-agent-session.ts` 813 行 (約 +30)。
-- **同種事象探索**: touched src の 500 行超は上の 4 件。新設は最大 `foreground-tasks.ts` 173 行。
-- **推奨アクション**: `thread.aui.tsx` の system-event 行の切り出しを棚卸し候補に。本 gate では直さない。
-- **根拠**: CONV-3、AD-050。
-
-### [Medium] `.vitest/` が未追跡のまま .gitignore に無く、code-gate の diff に混入 (M-005) (scope: feature)
-- **観察**: `.gitignore` に `.vitest/` が無い。`.code-gate.diff` が `.vitest/json/output.json` を含み、diff 全体の Read が失敗した。
-- **同種事象探索**: 018 L-002 に同じ指摘があり未対応。
-- **推奨アクション**: `.gitignore` に `.vitest/` を足す。gate の diff 生成で untracked な生成物を除く。
-
-### [Low] import 順の乱れ (L-001)
-- `src/agents/sdk-agent-session.ts:53`、`src/domain/session/transcript.ts`、`src/agents/live-tool-results.ts`。強制する lint rule は無い。
-
-### [Low] 手書きの `nested-tool-context.ts` が CLI 生成物の緩和ゾーンに入ったまま (L-002)
-- `eslint.config.mjs:590-609` の手書き element 一覧に無いため prettier / explicit-function-return-type が off。
-
-### [Low] `pathTail` のテストが renderer と domain の 2 か所に重複 (L-003)
-- `src/renderer/src/features/chat/path-tail.test.ts` と `src/domain/session/path-tail.test.ts`。
-
-### [Low] テストファイル名にタスク ID `fe001` (L-004)
-- `src/renderer/src/components/assistant-ui/elements/nested-render.fe001.test.tsx`。
-
-### [Low] `ForegroundTaskMemory.size` はテスト専用の公開メンバ (L-005)
-- `src/domain/session/foreground-tasks.ts:35` / `:70`。
-
-### [Low] `tool-registry.aui.tsx` で `TOOL_DISPLAY` の docblock が押し出された (L-006)
-
-### [Low] `convertBlocks` の引数が 8 個 (L-007)
-- `src/domain/session/transcript.ts`。
-
-### [Low] `read-transcript.ts` の `run` を export した (L-008)
-- `src/agents/read-transcript.ts:104`。Worker エントリでテストの都合で公開。
+- **観察**: `specs/019-ui-hooks-tasks-subagents-and-notices/research.md:53` に「`backgroundTasks: ... | null` (null = まだ届いていない)」と書かれている。data-model.md:122 は今回 `[]` に直った。
+- **同種事象探索**: `null = まだ届いていない|まだ届いていな|届くまで` を spec_dir の spec / plan / tasks / data-model / quickstart で検索した。`backgroundTasks` を含む記述は data-model.md:122 のみ (更新済み)。`research.md:53` 以外の stale は見つからなかった。`tasks.md:64,66,70` は長い行で省略されたので未確認。
+- **リスク/影響**: CONV-6 の spec と実装の記述のずれ。research は決定の経緯の記録なので影響は小さい。
+- **推奨アクション**: 直すなら `research.md:53` に「起動で `[]` から始まる (pr-gate R1 H-002)」と追記する。tasks.md の該当行も確認する。
+- **根拠**: CONV-6。Low のため直さなくてよい。
 
 ## 同種事象探索 cascade summary
 
-Critical は 0 件のため、cascade の対象なし。
-
 | 指摘 ID | Grep query | 該当件数 | path:line |
 |---|---|---|---|
-| (なし) | — | 0 | — |
+| M-001 | `background-tasks-awaiting\|\.awaiting\|backgroundTasks.*null` | 3 (関連) | `BackgroundTasksTab.tsx:73-74`、`labels.ts:263`、`BackgroundTasksTab.test.tsx:91` |
+| L-001 | `null = まだ届いていない\|まだ届いていな\|届くまで` | 1 (+ tasks.md 3 行が省略で未確認) | `research.md:53`、`tasks.md:64,66,70` |
 
 ## Verdict
 
 - Critical: 0
 - High: 0
-- Medium: 5 (M-001〜M-005)
-- Low: 8 (L-001〜L-008)
-- lint-agent: 5 コマンドすべて `exit_code` 0 (lint / tsc node / tsc web / depcruise / check:constitution)。exit code 由来の Critical は 0。
+- Medium: 1
+- Low: 1

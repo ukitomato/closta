@@ -77,3 +77,4 @@ tests/rule-fixtures/expected.mjs
 src/renderer/src/features/chat/ChatScreen.o2.test.tsx
 src/renderer/src/features/session/LivePane.o2.test.tsx
 src/renderer/src/features/session/running-session-store.ts
+specs/019-ui-hooks-tasks-subagents-and-notices/data-model.md

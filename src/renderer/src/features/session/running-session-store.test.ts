@@ -788,10 +788,10 @@ describe('running-session-store — 計量の受け口 (O-4 FE-004 / 014 data-mo
     expect(metersOf(h, A)?.toolElapsed.size).toBe(0)
   })
 
-  it('background-tasks は最新の値で置き換わり (0 件は空の配列)、起動直後は null、receivedMessages を増やさない (O-11 FE-020)', async () => {
+  it('background-tasks は最新の値で置き換わり (0 件は空の配列)、起動直後は空、receivedMessages を増やさない (O-11 FE-020)', async () => {
     const h = harness()
     const port = await launched(h)
-    expect(metersOf(h)?.backgroundTasks ?? null).toBeNull()
+    expect(metersOf(h)?.backgroundTasks ?? []).toEqual([])
     const sessions = h.store.getState().sessions
     emit(
       port,

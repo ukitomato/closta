@@ -119,7 +119,7 @@ interface BackgroundTaskEntry { readonly taskId: string; readonly taskType: Back
 | 項目 | 規則 |
 |---|---|
 | 持ち主 | 表示 (タブ) と feature の持ち主は `ui`。値の契約 (`meter` の種類) と保持 (稼働中のストアの `meters`) は session の契約 (O-4〜O-6 の `meter` と同じ形。AD-056 Decision 2 と「読み替える箇所」) |
-| 置き場所 | `SessionMeters.backgroundTasks: readonly BackgroundTaskEntry[] \| null` (`EMPTY_SESSION_METERS` では `null`)。`applyMeter` の `case 'background-tasks'` で置き換える |
+| 置き場所 | `SessionMeters.backgroundTasks: readonly BackgroundTaskEntry[] \| null` (`EMPTY_SESSION_METERS` では `[]`。SDK は起動のとき何も emit しないので、空から始める。US-2 AC4)。`applyMeter` の `case 'background-tasks'` で置き換える |
 | 空に戻す | セッションのプロセスの起動 (今 `EMPTY_SESSION_METERS` で `meters` を作る箇所) |
 | 永続化 | しない |
 | タブ | `PANEL_TABS` (`features/shell/panel-tabs.ts:35-69`) の末尾 (概要・使用量・構成・会話の地図 (O-9) の後の 5 つ目) に `{ id: 'background-tasks', label: '背景の task', ... }`。`PanelTabId` (`stores/ui.ts:31`) に `'background-tasks'` を足す。見出しに件数 (`null` のときは件数を出さない)。`availableFor` は他の 4 つと同じ `['none', 'running', 'past']` (過去・未選択ではタブを出して下の「動いていないセッション」の旨を出す)。`attention` は付けない (注意の印は出さない) |

@@ -1,18 +1,22 @@
-# lint-agent: code-gate iter 1
+# lint-agent — code-gate iter 2
 
-- overall exit_code: 0
-- detectors: lint, typecheck, depcruise, check:constitution
-
-| command | exit_code |
-|---|---|
-| node node_modules/eslint/bin/eslint.js --format json <63 touched files> | 0 |
-| node node_modules/typescript/bin/tsc --noEmit -p tsconfig.node.json --composite false | 0 |
-| node node_modules/typescript/bin/tsc --noEmit -p tsconfig.web.json --composite false | 0 |
-| node node_modules/dependency-cruiser/bin/dependency-cruise.mjs src | 0 |
-| node scripts/constitution/check.mjs | 0 (ok 20 / violations 0 / pending 1: #5) |
-
-violations (warning):
-- src/renderer/src/features/chat/ChatScreen.o2.test.tsx:345:85 prettier/prettier
-- src/renderer/src/features/session/LivePane.o2.test.tsx:1136:32 prettier/prettier
-- src/renderer/src/features/session/running-session-store.ts:707:27 prettier/prettier
-- tests/rule-fixtures/expected.mjs: ESLint ignore notice (not a violation)
+```json
+{
+  "exit_code": 0,
+  "detectors": [
+    {"name": "lint", "command": "node node_modules/eslint/bin/eslint.js --format json .", "exit_code": 0, "errors": 0, "warnings": 22, "touched_violations": 0},
+    {"name": "typecheck-node", "command": "node node_modules/typescript/bin/tsc --noEmit -p tsconfig.node.json --composite false", "exit_code": 0, "errors": 0},
+    {"name": "typecheck-web", "command": "node node_modules/typescript/bin/tsc --noEmit -p tsconfig.web.json --composite false", "exit_code": 0, "errors": 0},
+    {"name": "depcruise", "command": "node node_modules/dependency-cruiser/bin/dependency-cruise.mjs src", "exit_code": 0, "violations": 0},
+    {"name": "check:constitution", "command": "node scripts/constitution/check.mjs", "exit_code": 0, "result": "21 items: ok 20 / violations 0 / no target 1"}
+  ],
+  "scope": "touched-files (4 files; data-model.md is not lintable)",
+  "violations": [],
+  "violation_count_by_severity": {"error": 0, "warning": 0, "info": 0},
+  "out_of_scope_violation_count_by_severity": {"error": 0, "warning": 22, "info": 0},
+  "notes": [
+    "The 22 out-of-scope warnings are all prettier/prettier in files outside the scope.",
+    "test:rules was not run (code-gate does not run it)."
+  ]
+}
+```

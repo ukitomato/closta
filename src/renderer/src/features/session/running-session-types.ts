@@ -126,8 +126,8 @@ export interface SessionMeters {
   /** スラッシュコマンドの名前の集合の出所 (合流の規則。015 data-model §2)。どちらもまだ無ければ null。 */
   readonly slashCommandSource: 'init-report' | 'commands' | null
   /**
-   * 今動いている背景の task の一覧 (`background-tasks`。O-11 / AD-056 Decision 2。最新の値で置き換える)。まだ届いていなければ
-   * null (0 件は空の配列)。セッションのプロセスの起動で null に戻る。永続化しない。
+   * 今動いている背景の task の一覧 (`background-tasks`。O-11 / AD-056 Decision 2。最新の値で置き換える)。SDK は起動のとき何も emit
+   * しないので、空の配列から始まる (0 件は空の配列)。セッションのプロセスの起動で空に戻る。永続化しない。
    */
   readonly backgroundTasks: readonly BackgroundTaskEntry[] | null
 }
@@ -157,7 +157,7 @@ export const EMPTY_SESSION_METERS: SessionMeters = {
   initReport: null,
   commands: null,
   slashCommandSource: null,
-  backgroundTasks: null
+  backgroundTasks: []
 }
 
 /** 行の状態に入った時刻 (O-1 / FR-005。glossary Status since)。 */

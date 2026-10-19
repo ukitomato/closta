@@ -81,14 +81,15 @@ describe('背景の task のタブ (US-2 AC3〜AC5)', () => {
     )
   })
 
-  it('一覧が届くまでは件数なし、0 件は空の旨', async () => {
+  it('起動直後は空から始まり (US-2 AC4)、0 件は空の旨', async () => {
     const h = await setup({ ids: [A] })
     await selectRunning(0)
     const panel = await openTab()
     expect(within(panel).getByTestId('background-tasks-heading')).toHaveTextContent(
-      BACKGROUND_TASKS_LABELS.heading(null)
+      BACKGROUND_TASKS_LABELS.heading('0')
     )
-    expect(within(panel).getByTestId('background-tasks-awaiting')).toBeInTheDocument()
+    expect(within(panel).queryByTestId('background-tasks-awaiting')).toBeNull()
+    expect(within(panel).getByTestId('background-tasks-empty')).toBeInTheDocument()
     h.emit(A, tasks())
     expect(within(panel).getByTestId('background-tasks-empty')).toHaveTextContent(
       BACKGROUND_TASKS_LABELS.empty
