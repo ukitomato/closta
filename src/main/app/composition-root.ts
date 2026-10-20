@@ -124,12 +124,14 @@ export function createComposition(): Composition {
           for (const reasonKey of loadedSettings.reasonKeys) {
             console.warn(`[runtime-settings] ${reasonKey}`)
           }
+          // 壊れた設定は指定なしにしない (FR-006)。locator が override-invalid にする。
+          if (loadedSettings.reasonKeys.length > 0) throw new Error('runtime-settings unreadable')
           return loadedSettings.win32ClaudePath
         }
         console.warn(
           `[runtime-settings] ${loadedSettings.kind === 'newer-version' ? 'newer-version' : loadedSettings.reasonKey}`
         )
-        return null
+        throw new Error('runtime-settings unreadable')
       }
     })
   })

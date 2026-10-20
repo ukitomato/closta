@@ -96,10 +96,13 @@ export function createWin32ClaudeLocator(deps: Win32ClaudeLocatorDeps): () => Pr
 | 読み込み | 結果 |
 |---|---|
 | 未作成 (ENOENT) | 指定なし |
-| 最上位がオブジェクトでない・JSON でない・版が欠ける / 1 未満 / 非数値 | `.bak` に退避して指定なし (`parse-failed`) |
-| 将来版 (`schemaVersion` > 1) | 退避して指定なし (`newer-version`。書き込まない) |
-| `win32ClaudePath` が文字列でも null でもない・長さ > `MAX_PATH_VALUE_LENGTH`・制御文字 | 退避して指定なし (`parse-failed`) |
-| 読めない (ENOENT 以外) | 指定なし (`read-failed`。退避しない) |
+| 最上位がオブジェクトでない・JSON でない・版が欠ける / 1 未満 / 非数値 | `.bak` に退避して**読めない** (`parse-failed`) |
+| 将来版 (`schemaVersion` > 1) | 退避して**読めない** (`newer-version`。書き込まない) |
+| `win32ClaudePath` が文字列でも null でもない・長さ > `MAX_PATH_VALUE_LENGTH`・制御文字 | 退避して**読めない** (`parse-failed`) |
+| 読めない (ENOENT 以外) | **読めない** (`read-failed`。退避しない) |
+
+- **「読めない」は指定なしではない (FR-006)。** 利用者の指定を黙って捨てて自動の探索に倒さず、locator は `override-invalid` (claude を使えない理由: 設定を読めない) を返して起動を拒否する。自動の探索に戻るのは未作成 (ENOENT) だけ
+- 保存は、現在のファイルが将来版 (`schemaVersion` > 1) なら書き込まず失敗する (`save-failed`)。破損したファイルは保存で置き換わる (復旧経路)
 
 - 書き込みは一時ファイル + rename (`launch-usage-store.ts` と同じ)。中身は版と 1 つのパスだけで、資格情報を持たない (Principle V)
 - 結果は理由のキーと errno のコードだけを返し、ログは結線 (composition-root) が理由のキーだけを出す

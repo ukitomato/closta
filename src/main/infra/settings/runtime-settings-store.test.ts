@@ -96,6 +96,22 @@ describe('runtime-settings-store save', () => {
     expect(await store.load()).toEqual({ kind: 'loaded', win32ClaudePath: null, reasonKeys: [] })
   })
 
+  it('将来版のファイルは上書きせず throw する', async () => {
+    const raw = '{"schemaVersion":2,"win32ClaudePath":null,"future":true}'
+    await writeRaw(raw)
+    const store = createRuntimeSettingsStore(dir, now)
+    await expect(store.saveWin32ClaudePath(CLAUDE)).rejects.toThrow()
+    await expect(store.saveWin32ClaudePath(null)).rejects.toThrow()
+    expect(await readFile(file(), 'utf8')).toBe(raw)
+  })
+
+  it('壊れたファイルは保存で置き換わる', async () => {
+    await writeRaw('not json')
+    const store = createRuntimeSettingsStore(dir, now)
+    await store.saveWin32ClaudePath(CLAUDE)
+    expect((await store.load()).kind).toBe('loaded')
+  })
+
   it('書き込みの失敗は throw し一時ファイルを残さない', async () => {
     const store = createRuntimeSettingsStore(dir, now, {
       rename: async () => {

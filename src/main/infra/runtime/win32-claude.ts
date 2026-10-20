@@ -20,7 +20,7 @@ export interface Win32ClaudeLocatorDeps {
   readonly isFile: (path: HostPath) => Promise<boolean>
   /** 親の env の読み取り (`USERPROFILE` と `PATH` だけを読む)。 */
   readonly env: () => Readonly<Record<string, string | undefined>>
-  /** 設定の上書き (§3)。無ければ null。 */
+  /** 設定の上書き (§3)。無ければ null。設定を読めないときは throw (override-invalid になる。FR-006)。 */
   readonly override: () => Promise<string | null>
 }
 
@@ -41,7 +41,13 @@ export function createWin32ClaudeLocator(
   deps: Win32ClaudeLocatorDeps
 ): () => Promise<Win32ClaudeLocation> {
   return async () => {
-    const override = await deps.override()
+    let override: string | null
+    try {
+      override = await deps.override()
+    } catch {
+      // 設定を読めない: 指定を黙って捨てて自動の探索に倒さない (FR-006)。
+      return { status: 'override-invalid', overridden: true }
+    }
     if (override !== null) {
       if (classifyClaudeExecutable(override) === 'exe') {
         const made = makeHostPath(override)

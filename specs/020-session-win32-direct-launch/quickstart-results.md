@@ -10,9 +10,10 @@
 | 依存グラフ | 違反 0 (516 modules) |
 | Constitution 検証 | 21 項目: ok 20 / 違反 0 / 検査対象なし 1 (項目 3 の違反 2 件は `WSL_LAUNCH_KIND` の導入で解消) |
 | Vitest 全件 | 201 files / 3660 tests passed |
-| rule fixture の照合 (`test:rules`) | 未実施 (agent は実行しない。pr-gate / CI に任せる) |
-| E2E (要ビルド) | 未実施 (agent はビルドを実行しない。メインでの実行が要る) |
-| 基準画像の差 | 未確認 (E2E 未実施のため) |
+| rule fixture の照合 (`test:rules`) | exit 0 (main で実行。2026-10-21) |
+| ビルド (`pnpm build`) | exit 0 (main で実行) |
+| E2E (要ビルド) | 1 回目: 18 件中 15 passed / 3 failed。`multi-session.spec.ts:97` (session-limit) は本 feature の退行 (起動ダイアログが一覧の読み込み中に `folder-missing` / `runtime-missing` を出していた) で、`LaunchDialog.tsx` を直した。2 回目 (3 spec): `multi-session.spec.ts` は全件 passed |
+| 基準画像の差 | `composer-screenshot.spec.ts:28` (幅 641px → 673px) と `sidebar-screenshot.spec.ts:52` (ウィンドウ 1000×640 → 1001×642) が落ちる。**main (79babdf〜0ba52bd のビルド) でも同じ 2 件が同じ寸法で落ちる**ことを確かめた (2026-10-21) ので、本 feature の原因ではなく本機の画面の揺れ。基準画像は更新しない (CI が直ったら CI の artifact から取り直す) |
 
 ## 実機 (quickstart V-0〜V-9)
 

@@ -146,6 +146,28 @@ export function createRuntimeSettingsStore(
 
     async saveWin32ClaudePath(path) {
       await fs.mkdir(userDataDir.value, { recursive: true })
+      // 新しい版が書いたファイルは上書きしない (将来のキーを失わせない)。
+      let existing: string | null = null
+      try {
+        existing = await fs.readFile(pathFor(FILE_NAME).value, 'utf8')
+      } catch (error) {
+        if (errnoCode(error) !== 'ENOENT') throw error
+      }
+      if (existing !== null) {
+        let parsed: unknown
+        try {
+          parsed = JSON.parse(existing)
+        } catch {
+          parsed = null
+        }
+        if (
+          isPlainObject(parsed) &&
+          typeof parsed.schemaVersion === 'number' &&
+          parsed.schemaVersion > RUNTIME_SETTINGS_SCHEMA_VERSION
+        ) {
+          throw new Error('ランタイムの設定は新しい版が書いたため上書きしない')
+        }
+      }
       const payload = JSON.stringify(
         { schemaVersion: RUNTIME_SETTINGS_SCHEMA_VERSION, win32ClaudePath: path },
         null,

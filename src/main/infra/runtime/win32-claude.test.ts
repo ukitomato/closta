@@ -73,8 +73,24 @@ describe('createWin32ClaudeLocator', () => {
     if (r.status === 'found') expect(r.overridden).toBe(true)
   })
 
+  it('設定を読めない (override が throw) ときは override-invalid で自動の探索に倒さない', async () => {
+    const calls: string[] = []
+    const locate = createWin32ClaudeLocator({
+      isFile: async (path: HostPath) => {
+        calls.push(path.value)
+        return true
+      },
+      env: () => ENV,
+      override: async () => {
+        throw new Error('unreadable')
+      }
+    })
+    expect(await locate()).toEqual({ status: 'override-invalid', overridden: true })
+    expect(calls).toEqual([])
+  })
+
   it.each([
-    ['在らない', 'E:\\tools\\claude.exe', []],
+    ['在らない','E:\\tools\\claude.exe', []],
     ['.cmd', 'E:\\tools\\claude.cmd', ['E:\\tools\\claude.cmd']],
     ['UNC (wsl$)', '\\\\wsl$\\Ubuntu\\usr\\bin\\claude', ['\\\\wsl$\\Ubuntu\\usr\\bin\\claude']],
     ['相対', 'claude.exe', []]
