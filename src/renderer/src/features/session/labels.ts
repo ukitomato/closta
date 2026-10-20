@@ -29,7 +29,7 @@ const LAUNCH_REJECT_LABELS: Record<SessionLaunchRejectReason, string> = {
   'distro-mismatch':
     '作業フォルダの所在と選んだランタイムのディストロが一致しません。組み合わせを見直してください。',
   'claude-not-found':
-    'ディストロ内に claude が見つかりませんでした。WSL 内に Claude Code を導入してください。',
+    'claude が見つかりませんでした。ランタイム一覧で claude の状態を確かめ、導入するか場所を指定してから再検出してください。',
   'launch-failed': '起動に失敗しました。もう一度お試しください。',
   'process-crashed': 'セッションのプロセスが異常終了しました。',
   'stream-protocol-error': '応答ストリームが壊れました。セッションを開き直してください。',
@@ -386,11 +386,20 @@ export const PERMISSION_MODE_DESCRIPTIONS: Record<SafePermissionMode, string> = 
 /** 起動設定ダイアログの軸ラベル (select の見出しと aria-label を兼ねる。FE-004)。 */
 export const LAUNCH_AXIS_LABELS = {
   folder: '作業フォルダ',
-  runtime: 'ランタイム (WSL)',
+  runtime: 'ランタイム',
   provider: 'Provider',
   model: 'モデル',
   effort: 'effort',
   permissionMode: '権限モード'
+} as const
+
+/**
+ * Provider の「既定」の選択肢の文言を、選んだランタイムの種類で替える (X-8 data-model §10.1)。
+ * 既定 = Provider を重ねずに、そのランタイム側の claude の設定で動かす。ランタイム未選択は WSL と同じ今の文言。
+ */
+export const PROVIDER_DEFAULT_LABELS = {
+  wsl: '既定 (ディストロ内の claude の設定)',
+  win32: '既定 (Windows の claude の設定)'
 } as const
 
 /**

@@ -3,16 +3,19 @@ import { describe, expect, it, vi } from 'vitest'
 import { assessReachability } from '@domain/provider/reachability'
 import type { DerivedLaunchEnv, ProviderProfile } from '@domain/provider/types'
 import { fixedCapabilities } from '@domain/runtime/capabilities'
-import type { WslRuntimeDescriptor } from '@domain/runtime/descriptor'
+import type { Win32RuntimeDescriptor, WslRuntimeDescriptor } from '@domain/runtime/descriptor'
 import { wslNamespace } from '@domain/runtime/namespace'
-import { makeRuntimePath } from '@domain/runtime/path-types'
+import { makeHostPath, makeRuntimePath } from '@domain/runtime/path-types'
 import { createVerifiedRunning } from '@domain/runtime/verified-running'
+import { isWin32LaunchSpec } from '@domain/session/agent-session'
 import type { SessionLaunchConfig } from '@domain/session/launch-config'
 import type * as launchResolution from '@domain/session/launch-resolution'
 import type { LaunchBlocker, ProviderFact } from '@domain/session/launch-resolution'
 import type { WorkspaceFolder } from '@domain/workspace/folder'
+import { createWin32 } from '@domain/workspace/__fixtures__/runtime'
 
 import { buildRuntimeLaunchSpec, composeLaunchEnv } from '../infra/runtime/launch-spec'
+import { buildWin32LaunchSpec, composeWin32LaunchEnv } from '../infra/runtime/win32-launch'
 import { createPrepareLaunch, type LaunchPreparationDeps } from './launch-preparation'
 
 /**
@@ -94,6 +97,10 @@ function deps(over: Partial<LaunchPreparationDeps> = {}): LaunchPreparationDeps 
     resolveCwd: (f) => f.path.value,
     composeLaunchEnv,
     buildRuntimeLaunchSpec,
+    win32BaseEnv: () => ({ SystemRoot: 'C:\\Windows' }),
+    composeWin32LaunchEnv,
+    buildWin32LaunchSpec,
+    win32ClaudeIsFile: async () => true,
     now: () => NOW,
     logRejection: vi.fn(),
     ...over
@@ -114,6 +121,7 @@ describe('createPrepareLaunch', () => {
   it('有効な設定で X-1 の launch 入力を組む (--exec 形 / WSLENV / Bedrock は inference profile ID で pin)', async () => {
     const prep = await createPrepareLaunch(deps())(config())
     if (prep === null || !prep.ok) throw new Error('expected ok')
+    if (isWin32LaunchSpec(prep.spec)) throw new Error('expected wsl spec')
     expect(prep.spec.prefixArgs.at(-1)).toBe('--exec')
     expect(prep.spec.env.WSLENV).toBe('ANTHROPIC_API_KEY/u')
     expect(prep.spec.env.ANTHROPIC_API_KEY).toBe('sk-test')
@@ -260,7 +268,7 @@ describe('createPrepareLaunch', () => {
     const providerFacts = async (): Promise<readonly ProviderFact[]> => [
       {
         id: helperProfile.id,
-        reachable: assessReachability(helperProfile, stopped) === 'reachable',
+        reachable: assessReachability(helperProfile, stopped, () => false) === 'reachable',
         models: helperProfile.models.models
       }
     ]
@@ -289,5 +297,262 @@ describe('createPrepareLaunch', () => {
     await createPrepareLaunch(deps({ logRejection, deriveEnv: async () => null }))(config())
     expect(logRejection).toHaveBeenCalledWith('provider-unavailable')
     expect(JSON.stringify(logRejection.mock.calls)).not.toContain('sonnet')
+  })
+})
+
+/** X-8 (data-model §7): Win32Runtime の起動前段。 */
+describe('createPrepareLaunch (Win32Runtime)', () => {
+  const CLAUDE = 'C:\\Users\\u\\.local\\bin\\claude.exe'
+  const hostBase = { SystemRoot: 'C:\\WINDOWS', windir: 'C:\\WINDOWS', PATH: 'C:\\WINDOWS\\system32' }
+  const win32 = (over: Partial<Win32RuntimeDescriptor> = {}): Win32RuntimeDescriptor => ({
+    ...createWin32(NOW, { claudePath: CLAUDE, claudeStatus: 'found', claudeOverridden: false }),
+    ...over
+  })
+  const windowsFolder = (value = 'C:\\dev\\closta'): WorkspaceFolder => {
+    const hp = makeHostPath(value)
+    if (!hp.ok) throw new Error('bad path')
+    return {
+      id: 'f1',
+      location: { kind: 'windows' },
+      path: hp.path,
+      displayName: 'proj',
+      registeredAt: NOW
+    }
+  }
+  const win32Config = (over: Partial<SessionLaunchConfig> = {}): SessionLaunchConfig =>
+    config({ runtimeId: 'host', providerId: null, modelId: null, effort: null, ...over })
+  const win32Deps = (over: Partial<LaunchPreparationDeps> = {}): LaunchPreparationDeps =>
+    deps({
+      folders: () => [windowsFolder()],
+      runtimes: () => [win32()],
+      win32BaseEnv: () => hostBase,
+      win32ClaudeIsFile: async () => true,
+      ...over
+    })
+
+  it('Windows の作業フォルダ × found で Win32LaunchSpec を組む (cwd・command・prefixArgs なし)', async () => {
+    const prep = await createPrepareLaunch(win32Deps())(win32Config())
+    if (prep === null || !prep.ok) throw new Error('expected ok')
+    if (!isWin32LaunchSpec(prep.spec)) throw new Error('expected win32 spec')
+    expect(prep.spec.cwd).toBe('C:\\dev\\closta')
+    expect(prep.spec.command).toBe(CLAUDE)
+    expect(prep.spec.pathToClaudeCodeExecutable).toBe(CLAUDE)
+    expect('prefixArgs' in prep.spec).toBe(false)
+    expect(prep.spec.windowsHide).toBe(true)
+    expect('WSLENV' in prep.spec.env).toBe(false)
+    expect(prep.input.runtime.kind).toBe('win32')
+    expect('verified' in prep.input).toBe(false)
+    expect(prep.input.options).toEqual({ permissionMode: 'plan' })
+  })
+
+  it('別のドライブの作業フォルダでも組める', async () => {
+    const prep = await createPrepareLaunch(
+      win32Deps({ folders: () => [windowsFolder('D:\\work\\p')] })
+    )(win32Config())
+    if (prep === null || !prep.ok || !isWin32LaunchSpec(prep.spec)) throw new Error('expected ok')
+    expect(prep.spec.cwd).toBe('D:\\work\\p')
+  })
+
+  it('所在 WSL の作業フォルダ × Win32 は invalid-config (U-3)', async () => {
+    const prep = await createPrepareLaunch(win32Deps({ folders: () => [folder()] }))(win32Config())
+    expect(prep).toEqual({ ok: false, reason: 'invalid-config' })
+  })
+
+  it.each(['not-found', 'shim-only', 'override-invalid'] as const)(
+    'claudeStatus が %s なら claude-not-found',
+    async (claudeStatus) => {
+      const prep = await createPrepareLaunch(
+        win32Deps({
+          runtimes: () => [
+            win32({ claudeStatus, claudePath: null, claudeOverridden: claudeStatus === 'override-invalid' })
+          ]
+        })
+      )(win32Config())
+      expect(prep).toEqual({ ok: false, reason: 'claude-not-found' })
+    }
+  )
+
+  it('found でも起動の時点でファイルが無ければ claude-not-found', async () => {
+    const prep = await createPrepareLaunch(win32Deps({ win32ClaudeIsFile: async () => false }))(
+      win32Config()
+    )
+    expect(prep).toEqual({ ok: false, reason: 'claude-not-found' })
+  })
+
+  it('依存解決の blocker (未知のフォルダ指定) は invalid-config', async () => {
+    axesOverride.blockers = ['runtime-missing']
+    try {
+      expect(await createPrepareLaunch(win32Deps())(win32Config())).toEqual({
+        ok: false,
+        reason: 'invalid-config'
+      })
+    } finally {
+      axesOverride.blockers = null
+    }
+  })
+
+  it('deriveEnv が null / throw で provider-unavailable', async () => {
+    const withProvider = win32Config({ providerId: 'p1', modelId: 'sonnet', effort: 'high' })
+    expect(
+      await createPrepareLaunch(win32Deps({ deriveEnv: async () => null }))(withProvider)
+    ).toEqual({ ok: false, reason: 'provider-unavailable' })
+    expect(
+      await createPrepareLaunch(
+        win32Deps({
+          deriveEnv: async () => {
+            throw new Error('boom')
+          }
+        })
+      )(withProvider)
+    ).toEqual({ ok: false, reason: 'provider-unavailable' })
+  })
+
+  it('env 合成の throw は invalid-config、起動の値の組み立ての throw は launch-failed', async () => {
+    const withProvider = win32Config({ providerId: 'p1', modelId: 'sonnet', effort: 'high' })
+    expect(
+      await createPrepareLaunch(
+        win32Deps({
+          composeWin32LaunchEnv: () => {
+            throw new Error('x')
+          }
+        })
+      )(withProvider)
+    ).toEqual({ ok: false, reason: 'invalid-config' })
+    expect(
+      await createPrepareLaunch(win32Deps({ win32BaseEnv: () => ({}) }))(win32Config())
+    ).toEqual({ ok: false, reason: 'launch-failed' })
+  })
+
+  it('Provider の forwardKeys の値が起動の env に届く (WSL の curated base は入らない)', async () => {
+    const d: DerivedLaunchEnv = {
+      env: { ...baseEnv, ANTHROPIC_API_KEY: 'sk-test' },
+      forwardKeys: ['ANTHROPIC_API_KEY']
+    }
+    const prep = await createPrepareLaunch(win32Deps({ deriveEnv: async () => d }))(
+      win32Config({ providerId: 'p1', modelId: 'sonnet', effort: 'high' })
+    )
+    if (prep === null || !prep.ok) throw new Error('expected ok')
+    expect(prep.spec.env.ANTHROPIC_API_KEY).toBe('sk-test')
+    expect('WSL_UTF8' in prep.spec.env).toBe(false)
+    expect('WSLENV' in prep.spec.env).toBe(false)
+  })
+
+  describe('Provider の行 (US-4 / data-model §6.2 / §6.4)', () => {
+    const withProvider = (): SessionLaunchConfig =>
+      win32Config({ providerId: 'p1', modelId: 'sonnet', effort: 'high' })
+    const prepareWith = (
+      d: DerivedLaunchEnv,
+      host: Record<string, string> = hostBase
+    ): ReturnType<ReturnType<typeof createPrepareLaunch>> =>
+      createPrepareLaunch(win32Deps({ deriveEnv: async () => d, win32BaseEnv: () => host }))(
+        withProvider()
+      )
+
+    it('ホストの configDir の Provider は CLAUDE_CONFIG_DIR にその HostPath が入る', async () => {
+      const dir = 'C:\\Users\\u\\.claude-alt'
+      const prep = await prepareWith({
+        env: { ...baseEnv, CLAUDE_CONFIG_DIR: dir },
+        forwardKeys: ['CLAUDE_CONFIG_DIR']
+      })
+      if (prep === null || !prep.ok) throw new Error('expected ok')
+      expect(prep.spec.env.CLAUDE_CONFIG_DIR).toBe(dir)
+    })
+
+    it('環境変数の方式の Provider は forwardKeys の値が届く', async () => {
+      const prep = await prepareWith({
+        env: { ...baseEnv, ANTHROPIC_API_KEY: 'sk-from-env' },
+        forwardKeys: ['ANTHROPIC_API_KEY']
+      })
+      if (prep === null || !prep.ok) throw new Error('expected ok')
+      expect(prep.spec.env.ANTHROPIC_API_KEY).toBe('sk-from-env')
+    })
+
+    it('extraEnv の HTTPS_PROXY は Provider の値がホストの値に勝つ', async () => {
+      const prep = await prepareWith(
+        { env: { ...baseEnv, HTTPS_PROXY: 'http://provider:1' }, forwardKeys: ['HTTPS_PROXY'] },
+        { ...hostBase, HTTPS_PROXY: 'http://host:2' }
+      )
+      if (prep === null || !prep.ok) throw new Error('expected ok')
+      expect(prep.spec.env.HTTPS_PROXY).toBe('http://provider:1')
+    })
+
+    it.each(['USERNAME', 'NUMBER_OF_PROCESSORS', 'NODE_EXTRA_CA_CERTS'])(
+      'extraEnv の %s (Win32 の transport のキー) は invalid-config',
+      async (key) => {
+        const prep = await prepareWith(
+          { env: { ...baseEnv, [key]: 'x' }, forwardKeys: [key] },
+          { ...hostBase, [key]: 'host-value' }
+        )
+        expect(prep).toEqual({ ok: false, reason: 'invalid-config' })
+      }
+    )
+
+    it('値に制御文字があれば invalid-config', async () => {
+      const prep = await prepareWith({
+        env: { ...baseEnv, FOO_BAR: 'a\u0001b' },
+        forwardKeys: ['FOO_BAR']
+      })
+      expect(prep).toEqual({ ok: false, reason: 'invalid-config' })
+    })
+
+    it('env に WSLENV / WSL_UTF8 と許可リストの外のキーが無い', async () => {
+      const prep = await prepareWith(
+        {
+          env: { ...baseEnv, ANTHROPIC_API_KEY: 'sk-x', WSLENV: 'A/u' },
+          forwardKeys: ['ANTHROPIC_API_KEY']
+        },
+        { ...hostBase }
+      )
+      if (prep === null || !prep.ok) throw new Error('expected ok')
+      expect(Object.keys(prep.spec.env).sort()).toEqual(
+        ['ANTHROPIC_API_KEY', 'PATH', 'SystemRoot', 'windir'].sort()
+      )
+    })
+  })
+
+  it('拒否理由の記録にパス・env の値を含めない', async () => {
+    const logRejection = vi.fn()
+    await createPrepareLaunch(win32Deps({ logRejection, win32ClaudeIsFile: async () => false }))(
+      win32Config()
+    )
+    expect(logRejection).toHaveBeenCalledWith('claude-not-found')
+    expect(JSON.stringify(logRejection.mock.calls)).not.toContain('claude.exe')
+  })
+
+  it('WSL の起動は Win32 の依存を呼ばない (既存の経路が変わらない)', async () => {
+    const win32ClaudeIsFile = vi.fn(async () => true)
+    const prep = await createPrepareLaunch(deps({ win32ClaudeIsFile }))(config())
+    expect(prep !== null && prep.ok).toBe(true)
+    expect(win32ClaudeIsFile).not.toHaveBeenCalled()
+  })
+})
+
+describe('resolveLaunchAxes の distro-mismatch (X-8 / data-model §7)', () => {
+  const draft = {
+    folderId: 'f1',
+    runtimeId: 'r',
+    providerId: null,
+    modelId: null,
+    effort: null,
+    permissionMode: 'plan' as const
+  }
+  it('distroName が null のランタイムの facts では出ない', async () => {
+    const actual = await vi.importActual<typeof launchResolution>('@domain/session/launch-resolution')
+    const result = actual.resolveLaunchAxes(draft, {
+      folders: [{ id: 'f1', distroName: 'Ubuntu' }],
+      runtimes: [{ id: 'r', distroName: null, running: true }],
+      providers: []
+    })
+    expect(result.blockers).not.toContain('distro-mismatch')
+  })
+
+  it('WSL の facts では今どおり出る', async () => {
+    const actual = await vi.importActual<typeof launchResolution>('@domain/session/launch-resolution')
+    const result = actual.resolveLaunchAxes(draft, {
+      folders: [{ id: 'f1', distroName: 'Ubuntu' }],
+      runtimes: [{ id: 'r', distroName: 'Debian', running: true }],
+      providers: []
+    })
+    expect(result.blockers).toContain('distro-mismatch')
   })
 })

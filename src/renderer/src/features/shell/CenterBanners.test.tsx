@@ -436,7 +436,9 @@ function runtimeList(autoModeStatus: AutoModeStatus): RuntimeListDTO {
           autoModeStatus
         },
         hasPathMapping: true,
-        detectedAt: NOW_DETECTED
+        detectedAt: NOW_DETECTED,
+        claudeStatus: null,
+        claudeOverridden: false
       }
     ]
   }

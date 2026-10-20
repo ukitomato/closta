@@ -241,6 +241,7 @@ export const PROCESS_SPAWN_MODULES = [
    * SDK の `spawnClaudeCodeProcess` コールバックで WSL 起動 spawn を行う唯一の場所であり、子 (`claude`) を
    * 保持して kill するのもこのスレッドである (AD-036 §3 / AD-043 Decision 5 の主たる経路)。
    * (`pathToClaudeCodeExecutable` だけでは wsl.exe 前置を注入できないため child spawn が要る)。
+   * Win32 では `claude.exe` と停止の `taskkill.exe` を起こす (AD-058)。
    * **`wsl.exe` のリテラルは持たない** (WSL_FREE_DIRECTORIES / 値で受ける)。ESLint 側の spawn 例外も
    * この 1 ファイルに限定して開ける (eslint.config.mjs の `agent-session-spawn` category)。
    *
@@ -288,6 +289,9 @@ export const COORDINATOR_THREAD_DECODER_MODULES = ['src/agents/supervisor-protoc
  * (`supervisor.ts` / `reap-wsl-launchers.ts` の実名登録は行わない)。子の kill はセッションスレッドが保持する
  * `ChildProcess` に対する `child.kill()` (AD-036 §3 の主たる経路) であり、`process.kill(pid)` ではないので
  * この許可リストには掛からない。
+ *
+ * Win32 の木の停止 (`taskkill /T /F /PID`) は handle を持つセッションスレッドが自分の子の pid で行い、
+ * reaper ではない (AD-058)。`process.kill` は使わないので、この 0 件の登録は変わらない。
  *
  * 回収経路を後から作る場合は、AD-043 Decision 5 の条件 (`isAcceptablePid` / 即時の `child-exited` /
  * 世代の照合) を満たす実名をここに足す — **追加には ADR を要する**。

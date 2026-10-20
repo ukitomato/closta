@@ -12,6 +12,7 @@ import {
   type LaunchFailureReason,
   type PermissionDecision,
   type PermissionRequest,
+  isWin32LaunchSpec,
   type RuntimeLaunchSpec,
   type SessionControl
 } from '@domain/session/agent-session'
@@ -494,10 +495,15 @@ export interface ClaudeSpawnPlan {
   readonly command: string
   readonly args: readonly string[]
   readonly env: Record<string, string>
+  /** Win32 だけ (作業フォルダの HostPath)。WSL は cwd を `prefixArgs` で渡すので付けない。 */
+  readonly cwd?: string
+  /** Win32 だけ (spec の値を写す)。WSL は付けない。 */
+  readonly windowsHide?: boolean
 }
 
 /**
- * WSL 起動の spawn 計画を組む (data-model §8 / AD-036 §3)。
+ * 起動の spawn 計画を組む (WSL: data-model §8 / AD-036 §3。Win32: X-8 data-model §5.3)。
+ * 以下は WSL の行の規則 (data-model §8 / AD-036 §3)。
  *
  * - **env は `spec.env` のみ**から構成する — SDK 提供の `options.env` や `process.env` を spread/マージしない
  *   (WSLENV/資格情報の透過を防ぐ。H-01/H-102)。
@@ -509,6 +515,16 @@ export function composeClaudeSpawn(
   spec: RuntimeLaunchSpec,
   options: AgentSpawnOptions
 ): ClaudeSpawnPlan {
+  // Win32 (X-8 / data-model §5.3): 実行ファイルを直接起こす。SDK が足す引数だけを渡し、cwd / windowsHide は spec の値を写す。
+  if (isWin32LaunchSpec(spec)) {
+    return {
+      command: spec.pathToClaudeCodeExecutable,
+      args: [...options.args],
+      env: { ...spec.env },
+      cwd: spec.cwd,
+      windowsHide: spec.windowsHide
+    }
+  }
   return {
     command: spec.command,
     args: [...spec.prefixArgs, spec.pathToClaudeCodeExecutable, ...options.args],

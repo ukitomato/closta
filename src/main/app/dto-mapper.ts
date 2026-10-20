@@ -49,7 +49,10 @@ export function toRuntimeDescriptorDTO(descriptor: RuntimeDescriptor): RuntimeDe
     isDefault: descriptor.isDefault,
     capabilities: toCapabilitiesDTO(descriptor),
     hasPathMapping: descriptor.kind === 'wsl' ? descriptor.pathMapping !== null : false,
-    detectedAt: descriptor.detectedAt
+    detectedAt: descriptor.detectedAt,
+    // `claudePath` は写さない (WSL と同じ。パスは main の起動詳細)。
+    claudeStatus: descriptor.kind === 'win32' ? descriptor.claudeStatus : null,
+    claudeOverridden: descriptor.kind === 'win32' ? descriptor.claudeOverridden : false
   }
 }
 

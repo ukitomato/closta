@@ -64,7 +64,10 @@ const runtimes: readonly RuntimeDescriptor[] = [
     state: 'running',
     isDefault: false,
     capabilities: fixedCapabilities(NOW),
-    detectedAt: NOW
+    detectedAt: NOW,
+    claudePath: null,
+    claudeStatus: 'not-found',
+    claudeOverridden: false
   },
   {
     id: UBUNTU,

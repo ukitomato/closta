@@ -104,6 +104,8 @@ const RUNTIME_INFRA_FILES = ['src/main/infra/runtime/**/*.ts']
  * `spawnClaudeCodeProcess` コールバックで WSL 起動を行う agents の session worker (X-1 / AD-036 §3)。
  * **spawn 主体は infra/runtime だけでなく、本 ADR がゲートするこの 1 ファイルも許す** (プロセス起動 API を
  * 実名で数える FR-036 の趣旨は保つ)。`wsl.exe` のリテラルは持たず (WSL_FREE_DIRECTORIES / 値で受ける) spawn のみ。
+ * Win32 では `claude.exe` と停止の `taskkill.exe` を起こす。木の停止は handle を持つセッションスレッドが自分の子の
+ * pid で行い、reaper ではない (AD-058)。
  */
 const AGENT_SESSION_SPAWN_FILE = 'src/agents/sdk-agent-session.ts'
 

@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { WIN32_LAUNCH_SPEC_FIXTURE } from '@domain/session/__fixtures__/win32-launch-spec'
+
 /**
  * セッションスレッド (`sdk-agent-session.ts`) の実配線のテスト (X-5 / BE-002)。
  *
@@ -66,6 +68,8 @@ const h = vi.hoisted(() => ({
   preMessageConsumed: false,
   prompts: [] as string[],
   child: null as null | FakeChild,
+  /** spawn の呼び出しの記録 (X-8: cwd / windowsHide / shell を確かめる)。 */
+  spawnCalls: [] as { command: string; args: string[]; options: Record<string, unknown> }[],
   /** テストから stream に流すメッセージ。 */
   feed: [] as Record<string, unknown>[],
   wakeFeed: null as null | (() => void),
@@ -73,7 +77,15 @@ const h = vi.hoisted(() => ({
   options: null as null | Record<string, unknown>,
   /** あれば、init と feed の後でターンをこの promise が解決するまで開けておく。 */
   holdTurn: null as null | Promise<void>,
-  interrupts: 0
+  interrupts: 0,
+  /** Win32 の停止のコマンドの呼び出しの記録 (stdio: 'ignore' の spawn を停止のコマンドとみなす。X-8 / BE-030)。 */
+  stopCalls: [] as { command: string; args: string[]; options: Record<string, unknown> }[],
+  /** 停止のコマンドの振る舞い: ok = 子を終わらせて 0 / nonzero / error / hang。 */
+  stopMode: 'ok' as 'ok' | 'nonzero' | 'error' | 'hang',
+  /** true なら claude の子の pid を未設定にする。 */
+  pidless: false,
+  /** 出来事の順番の記録 (stop / child-exit / kill / abort)。 */
+  order: [] as string[]
 }))
 
 vi.mock('node:worker_threads', () => ({
@@ -83,13 +95,35 @@ vi.mock('node:worker_threads', () => ({
 }))
 
 vi.mock('node:child_process', () => ({
-  spawn: vi.fn(() => {
+  spawn: vi.fn((command: string, args: string[], options: Record<string, unknown>) => {
+    if (options.stdio === 'ignore') {
+      h.stopCalls.push({ command, args, options })
+      h.order.push('stop')
+      const stop = h.createEmitter() as FakeChild
+      queueMicrotask(() => {
+        if (h.stopMode === 'hang') return
+        if (h.stopMode === 'error') {
+          stop.emit('error', new Error('spawn failed'))
+          return
+        }
+        if (h.stopMode === 'nonzero') {
+          stop.emit('exit', 128, null)
+          return
+        }
+        h.order.push('child-exit')
+        h.child?.emit('exit', null, 'SIGKILL')
+        stop.emit('exit', 0, null)
+      })
+      return stop
+    }
+    h.spawnCalls.push({ command, args, options })
     const child = h.createEmitter() as FakeChild
-    child.pid = 4242
+    child.pid = h.pidless ? (undefined as unknown as number) : 4242
     child.killed = false
     child.exitOnKill = h.mode !== 'stuck-on-close'
     child.kill = () => {
       child.killed = true
+      h.order.push('kill')
       if (child.exitOnKill) queueMicrotask(() => child.emit('exit', null, 'SIGTERM'))
       return true
     }
@@ -110,6 +144,7 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
     }
   }) => {
     const signal = options.abortController.signal
+    signal.addEventListener('abort', () => h.order.push('abort'), { once: true })
     h.options = options as unknown as Record<string, unknown>
     async function* stream(): AsyncGenerator<Record<string, unknown>> {
       if (h.mode === 'spawn-after-abort') {
@@ -186,6 +221,11 @@ async function boot(
   h.preMessageConsumed = false
   h.prompts = []
   h.child = null
+  h.spawnCalls = []
+  h.stopCalls = []
+  h.stopMode = 'ok'
+  h.pidless = false
+  h.order = []
   h.options = null
   h.holdTurn = null
   h.interrupts = 0
@@ -394,6 +434,311 @@ describe('sdk-agent-session: 調停役スレッドとのメッセージ (X-5 / B
     })
     expect(kinds()).toEqual(['status', 'ended'])
     expect(posted[0]).toMatchObject({ state: 'error', reasonKey: 'launch-failed' })
+  })
+})
+
+describe('sdk-agent-session: Win32 の起動の値の検査と起動 (X-8 / BE-010)', () => {
+  const win32Launch = (spec: unknown): unknown => ({
+    kind: 'launch',
+    spec,
+    options: { permissionMode: 'default' }
+  })
+  const fixture = WIN32_LAUNCH_SPEC_FIXTURE as unknown as Record<string, unknown>
+  const stopOf = (patch: Record<string, unknown>): Record<string, unknown> => ({
+    ...WIN32_LAUNCH_SPEC_FIXTURE.stop,
+    ...patch
+  })
+
+  it('正規の fixture (contracts C-4) が通り、cwd と windowsHide つき・シェルなしで起動する', async () => {
+    const send = await boot()
+    send(win32Launch(WIN32_LAUNCH_SPEC_FIXTURE))
+    await vi.waitFor(() => expect(h.preMessageConsumed).toBe(true))
+    expect(states()).not.toContain('error')
+    expect(h.spawnCalls).toHaveLength(1)
+    const { command, args, options } = h.spawnCalls[0]!
+    expect(command).toBe(WIN32_LAUNCH_SPEC_FIXTURE.pathToClaudeCodeExecutable)
+    expect(args).toEqual([])
+    expect(options.cwd).toBe(WIN32_LAUNCH_SPEC_FIXTURE.cwd)
+    expect(options.windowsHide).toBe(true)
+    expect(options.shell).toBe(false)
+    expect(options.env).toEqual(WIN32_LAUNCH_SPEC_FIXTURE.env)
+  })
+
+  it('WSL の起動の呼び出しに cwd / windowsHide のキーが無い', async () => {
+    const send = await boot()
+    send(launch)
+    await vi.waitFor(() => expect(h.preMessageConsumed).toBe(true))
+    const options = h.spawnCalls[0]?.options ?? {}
+    expect('cwd' in options).toBe(false)
+    expect('windowsHide' in options).toBe(false)
+  })
+
+  it('stop.command の末尾の名前の大文字は通る', async () => {
+    const send = await boot()
+    send(
+      win32Launch({ ...fixture, stop: stopOf({ command: 'C:\\WINDOWS\\System32\\TASKKILL.EXE' }) })
+    )
+    await vi.waitFor(() => expect(h.preMessageConsumed).toBe(true))
+    expect(states()).not.toContain('error')
+  })
+
+  const withoutKey = (key: string): Record<string, unknown> => {
+    const copy = { ...fixture }
+    delete copy[key]
+    return copy
+  }
+  const rejected: [string, unknown][] = [
+    [
+      '.exe でない',
+      { ...fixture, pathToClaudeCodeExecutable: 'C:\\a\\claude.cmd', command: 'C:\\a\\claude.cmd' }
+    ],
+    ['相対', { ...fixture, pathToClaudeCodeExecutable: 'claude.exe', command: 'claude.exe' }],
+    [
+      'UNC',
+      {
+        ...fixture,
+        pathToClaudeCodeExecutable: '\\\\wsl$\\U\\claude.exe',
+        command: '\\\\wsl$\\U\\claude.exe'
+      }
+    ],
+    ['command が違う', { ...fixture, command: 'C:\\other\\claude.exe' }],
+    ['prefixArgs のキーがある', { ...fixture, prefixArgs: [] }],
+    ['cwd が無い', withoutKey('cwd')],
+    ['cwd が相対', { ...fixture, cwd: 'dev' }],
+    ['WSLENV', { ...fixture, env: { WSLENV: 'x' } }],
+    ['wslenv', { ...fixture, env: { wslenv: 'x' } }],
+    ['WSL_UTF8', { ...fixture, env: { WSL_UTF8: '1' } }],
+    ['windowsHide が無い', withoutKey('windowsHide')],
+    ['windowsHide が false', { ...fixture, windowsHide: false }],
+    ['windowsHide が文字列', { ...fixture, windowsHide: 'true' }],
+    ['stop が無い', withoutKey('stop')],
+    ['stop が null', { ...fixture, stop: null }],
+    ['stop が配列', { ...fixture, stop: [] }],
+    ['argsBeforePid が /IM', { ...fixture, stop: stopOf({ argsBeforePid: ['/T', '/F', '/IM'] }) }],
+    [
+      'argsBeforePid が /PID の重複',
+      { ...fixture, stop: stopOf({ argsBeforePid: ['/T', '/F', '/PID', '/PID'] }) }
+    ],
+    ['argsBeforePid が /X', { ...fixture, stop: stopOf({ argsBeforePid: ['/X'] }) }],
+    ['argsBeforePid の /PID の欠落', { ...fixture, stop: stopOf({ argsBeforePid: ['/T', '/F'] }) }],
+    [
+      'argsBeforePid が小文字',
+      { ...fixture, stop: stopOf({ argsBeforePid: ['/t', '/f', '/pid'] }) }
+    ],
+    ['argsBeforePid が配列でない', { ...fixture, stop: stopOf({ argsBeforePid: '/T /F /PID' }) }],
+    [
+      'stop.command が cmd.exe',
+      { ...fixture, stop: stopOf({ command: 'C:\\WINDOWS\\System32\\cmd.exe' }) }
+    ],
+    [
+      'stop.command が .cmd',
+      { ...fixture, stop: stopOf({ command: 'C:\\WINDOWS\\System32\\taskkill.cmd' }) }
+    ],
+    [
+      'stop.command が拡張子なし',
+      { ...fixture, stop: stopOf({ command: 'C:\\WINDOWS\\System32\\taskkill' }) }
+    ],
+    ['stop.command が相対', { ...fixture, stop: stopOf({ command: 'taskkill.exe' }) }],
+    ['stop.command が UNC', { ...fixture, stop: stopOf({ command: '\\\\h\\s\\taskkill.exe' }) }],
+    ['知らない kind', { ...fixture, kind: 'posix' }]
+  ]
+
+  it.each(rejected)('%s は launch-failed で終わり、子を起こさない', async (_name, spec) => {
+    const send = await boot()
+    send(win32Launch(spec))
+    expect(kinds()).toEqual(['status', 'ended'])
+    expect(posted[0]).toMatchObject({ state: 'error', reasonKey: 'launch-failed' })
+    expect(h.spawnCalls).toHaveLength(0)
+  })
+
+  it('値が文字列でない env のキーは捨てる', async () => {
+    const send = await boot()
+    send(win32Launch({ ...fixture, env: { PATH: 'C:\\x', BAD: 1 } }))
+    await vi.waitFor(() => expect(h.preMessageConsumed).toBe(true))
+    const options = h.spawnCalls[0]?.options
+    expect(options?.env).toEqual({ PATH: 'C:\\x' })
+  })
+})
+
+describe('sdk-agent-session: Win32 のプロセス木の停止と順番 (X-8 / BE-030)', () => {
+  const win32Launch = {
+    kind: 'launch',
+    spec: WIN32_LAUNCH_SPEC_FIXTURE,
+    options: { permissionMode: 'default' }
+  }
+  const stderrLines = (spy: { mock: { calls: unknown[][] } }): string =>
+    spy.mock.calls.map((c) => String(c[0])).join('')
+
+  async function bootWin32(prompt = true): Promise<(data: unknown) => void> {
+    const send = await boot()
+    send(win32Launch)
+    await vi.waitFor(() => expect(h.preMessageConsumed).toBe(true))
+    if (prompt) {
+      send(control({ kind: 'send-prompt', text: 'go' }))
+      await vi.waitFor(() => expect(states()).toContain('done'))
+    }
+    return send
+  }
+
+  const spies: { mockRestore: () => void }[] = []
+  const quietStderr = (): ReturnType<typeof vi.spyOn> => {
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    spies.push(spy)
+    return spy
+  }
+
+  afterEach(() => {
+    vi.useRealTimers()
+    for (const spy of spies.splice(0)) spy.mockRestore()
+  })
+
+  it('強制終了: 停止の起動 → 子の exit → abort の順で、その後に ended を送る', async () => {
+    const send = await bootWin32()
+    send(control({ kind: 'kill' }))
+    await vi.waitFor(() => expect(kinds()).toContain('ended'))
+    expect(h.order).toEqual(['stop', 'child-exit', 'abort'])
+    expect(kinds().indexOf('ended')).toBeGreaterThan(kinds().indexOf('child-exited'))
+  })
+
+  it('停止のコマンドは spec の値だけで起こす (引数 = [...argsBeforePid, pid]・shell なし・windowsHide・stdio ignore・stop.env)', async () => {
+    const send = await bootWin32()
+    send(control({ kind: 'kill' }))
+    await vi.waitFor(() => expect(kinds()).toContain('ended'))
+    expect(h.stopCalls).toHaveLength(1)
+    const { command, args, options } = h.stopCalls[0]!
+    expect(command).toBe(WIN32_LAUNCH_SPEC_FIXTURE.stop.command)
+    expect(args).toEqual([...WIN32_LAUNCH_SPEC_FIXTURE.stop.argsBeforePid, '4242'])
+    expect(options.shell).toBe(false)
+    expect(options.windowsHide).toBe(WIN32_LAUNCH_SPEC_FIXTURE.windowsHide)
+    expect(options.stdio).toBe('ignore')
+    expect(options.env).toEqual(WIN32_LAUNCH_SPEC_FIXTURE.stop.env)
+  })
+
+  it('2 回目の kill や重なった kill でも停止のコマンドは 1 回', async () => {
+    const send = await bootWin32()
+    send(control({ kind: 'kill' }))
+    send(control({ kind: 'kill' }))
+    await vi.waitFor(() => expect(kinds()).toContain('ended'))
+    expect(h.stopCalls).toHaveLength(1)
+  })
+
+  it('子が自然に終わった後は停止のコマンドを起こさない', async () => {
+    const send = await bootWin32()
+    h.child?.emit('exit', 0, null)
+    send(control({ kind: 'kill' }))
+    await vi.waitFor(() => expect(kinds()).toContain('ended'))
+    expect(h.stopCalls).toHaveLength(0)
+  })
+
+  it('穏当な終了 (end) では停止のコマンドを起こさず、claude の自分からの終了で終わる', async () => {
+    const send = await bootWin32()
+    send(control({ kind: 'end' }))
+    await vi.waitFor(() => expect(kinds()).toContain('ended'))
+    expect(h.stopCalls).toHaveLength(0)
+    expect(h.child?.killed).toBe(false)
+  })
+
+  it('最初のプロンプトの前の end は強制終了と同じ順番 (end-forced は出さない)', async () => {
+    const send = await bootWin32(false)
+    send(control({ kind: 'end' }))
+    await vi.waitFor(() => expect(kinds()).toContain('ended'))
+    expect(h.order).toEqual(['stop', 'child-exit', 'abort'])
+    expect(events().some((e) => e.kind === 'end-forced')).toBe(false)
+  })
+
+  it('セッションスレッドの例外 (fatalSink) でも、キューを閉じる前に木ごと止めてから ended を送る', async () => {
+    await bootWin32()
+    const fatal = process
+      .listeners('uncaughtException')
+      .filter((l) => !baseline.uncaught.includes(l))
+    expect(fatal.length).toBeGreaterThan(0)
+    ;(fatal[0] as (error: Error, origin: string) => void)(new Error('boom'), 'uncaughtException')
+    await vi.waitFor(() => expect(kinds()).toContain('ended'))
+    expect(h.stopCalls).toHaveLength(1)
+    expect(h.order.indexOf('stop')).toBeLessThan(h.order.indexOf('child-exit'))
+  })
+
+  it('起動前 (spawn 前) の kill は停止のコマンドを起こさず今と同じ (ended が出る)', async () => {
+    const send = await boot('no-spawn')
+    send(win32Launch)
+    await new Promise((r) => setTimeout(r, 20))
+    send(control({ kind: 'kill' }))
+    await vi.waitFor(() => expect(kinds()).toContain('ended'))
+    expect(h.stopCalls).toHaveLength(0)
+  })
+
+  it('停止のコマンドが非 0 で終わって子が生きていれば child.kill() に落とし、fallback を記録する', async () => {
+    const spy = quietStderr()
+    const send = await boot()
+    h.stopMode = 'nonzero'
+    send(win32Launch)
+    await vi.waitFor(() => expect(h.preMessageConsumed).toBe(true))
+    send(control({ kind: 'send-prompt', text: 'go' }))
+    await vi.waitFor(() => expect(states()).toContain('done'))
+    send(control({ kind: 'kill' }))
+    await vi.waitFor(() => expect(kinds()).toContain('ended'))
+    expect(h.child?.killed).toBe(true)
+    expect(stderrLines(spy)).toContain('[tree-stop] fallback')
+  })
+
+  it('停止のコマンドの起動の失敗でも child.kill() に落とす', async () => {
+    const spy = quietStderr()
+    const send = await boot()
+    h.stopMode = 'error'
+    send(win32Launch)
+    await vi.waitFor(() => expect(h.preMessageConsumed).toBe(true))
+    send(control({ kind: 'kill' }))
+    await vi.waitFor(() => expect(kinds()).toContain('ended'))
+    expect(h.child?.killed).toBe(true)
+    expect(stderrLines(spy)).toContain('[tree-stop] fallback')
+  })
+
+  it('pid が無ければ停止のコマンドを起こさず child.kill() に落とす', async () => {
+    quietStderr()
+    const send = await boot()
+    h.pidless = true
+    send(win32Launch)
+    await vi.waitFor(() => expect(h.preMessageConsumed).toBe(true))
+    send(control({ kind: 'kill' }))
+    await vi.waitFor(() => expect(kinds()).toContain('ended'))
+    expect(h.stopCalls).toHaveLength(0)
+    expect(h.child?.killed).toBe(true)
+  })
+
+  it('期限 (5,000 ms) を過ぎたら timeout を記録して先へ進み、閉じる操作が終わる (パス・pid・env を記録しない)', async () => {
+    const spy = quietStderr()
+    const send = await boot()
+    h.stopMode = 'hang'
+    send(win32Launch)
+    await vi.waitFor(() => expect(h.preMessageConsumed).toBe(true))
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    send(control({ kind: 'kill' }))
+    await vi.advanceTimersByTimeAsync(4999)
+    expect(kinds()).not.toContain('ended')
+    await vi.advanceTimersByTimeAsync(1)
+    await vi.waitFor(() => expect(kinds()).toContain('ended'))
+    const written = stderrLines(spy)
+    expect(written).toContain('[tree-stop] timeout')
+    expect(written).not.toContain('4242')
+    expect(written).not.toContain('C:\\')
+  })
+
+  it('interrupt ではプロセスを止めない (FR-010)', async () => {
+    const send = await bootWin32()
+    send(control({ kind: 'interrupt' }))
+    await vi.waitFor(() => expect(h.interrupts).toBe(1))
+    expect(h.stopCalls).toHaveLength(0)
+    expect(h.order).not.toContain('kill')
+  })
+
+  it('WSL の spec では停止のコマンドを起こさず、今の順番 (child.kill → abort) のまま', async () => {
+    const send = await boot()
+    send(launch)
+    await vi.waitFor(() => expect(h.preMessageConsumed).toBe(true))
+    send(control({ kind: 'kill' }))
+    await vi.waitFor(() => expect(kinds()).toContain('ended'))
+    expect(h.stopCalls).toHaveLength(0)
+    expect(h.order.slice(0, 2)).toEqual(['kill', 'abort'])
   })
 })
 

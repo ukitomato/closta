@@ -45,7 +45,9 @@ const HOST: RuntimeDescriptorDTO = {
     autoModeStatus: 'unavailable'
   },
   hasPathMapping: false,
-  detectedAt: NOW
+  detectedAt: NOW,
+  claudeStatus: 'not-found',
+  claudeOverridden: false
 }
 
 const UBUNTU: RuntimeDescriptorDTO = {
@@ -54,6 +56,7 @@ const UBUNTU: RuntimeDescriptorDTO = {
   kind: 'wsl',
   distroName: 'Ubuntu',
   wslVersion: 2,
+  claudeStatus: null,
   isDefault: true,
   capabilities: {
     ...HOST.capabilities,

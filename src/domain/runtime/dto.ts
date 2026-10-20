@@ -10,6 +10,7 @@ import type {
   EnumerationIssueReason,
   RuntimeKind,
   RunState,
+  Win32ClaudeStatus,
   WslVersion
 } from './descriptor'
 import type { NamespaceId } from './namespace'
@@ -68,6 +69,10 @@ export interface RuntimeDescriptorDTO {
   /** `PathMapping` の中身は渡さない。変換は main 側の `domain` 純粋関数で行う。 */
   readonly hasPathMapping: boolean
   readonly detectedAt: number
+  /** Win32Runtime の claude の状態。WslRuntime は null (WSL の claudePath の判定は X-6)。パス自体は出さない。 */
+  readonly claudeStatus: Win32ClaudeStatus | null
+  /** 設定で場所を指定しているか。WslRuntime は false。 */
+  readonly claudeOverridden: boolean
 }
 
 /**

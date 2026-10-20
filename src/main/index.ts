@@ -20,8 +20,11 @@ import { createMainWindow } from './app/window'
 // カスタムプロトコルの特権登録は `whenReady()` より前に行う必要がある。
 registerAppScheme()
 
-/** 終了処理全体の期限 (spec Assumptions [ASSUMED] 5 秒)。過ぎたら残りを待たずに終える (FR-014)。 */
-const QUIT_TIMEOUT_MS = 5000
+/**
+ * 終了処理全体の期限 (spec Assumptions [ASSUMED] 5 秒 → X-8 で 7 秒。AD-058 Decision 4)。過ぎたら残りを待たずに終える (FR-014)。
+ * Win32 の木の停止 (5 秒) を含む supervisor の終了の待ち (6 秒) より長くする。
+ */
+const QUIT_TIMEOUT_MS = 7000
 
 /**
  * `before-quit` で非同期の後始末を **1 回だけ** 走らせる (X-5 / FR-014 / design-gate R1 M-02)。

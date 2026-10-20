@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi, type Mock } from 'vitest'
+import { axe } from 'vitest-axe'
 
 import type { ClostaCapability } from '@domain/capability'
 import type { ProviderSummaryDTO } from '@domain/provider/dto'
@@ -47,7 +48,9 @@ function runtimeDto(
       autoModeStatus: 'unavailable'
     },
     hasPathMapping: true,
-    detectedAt: NOW
+    detectedAt: NOW,
+    claudeStatus: null,
+    claudeOverridden: false
   }
 }
 
@@ -1373,5 +1376,186 @@ describe('LaunchDialog — 起動元 (O-3)', () => {
       await launchAndClose(h, view, 2)
       expect(origins(h)).toEqual(['preset', 'preset'])
     })
+  })
+})
+
+/** X-8 (data-model §10.1): Win32Runtime の選択肢と、claude.exe が使えないときの案内。 */
+describe('LaunchDialog — Win32Runtime (X-8)', () => {
+  const AXE_RULES = { rules: { 'color-contrast': { enabled: false } } }
+
+  function win32Dto(
+    claudeStatus: NonNullable<RuntimeDescriptorDTO['claudeStatus']>
+  ): RuntimeDescriptorDTO {
+    return {
+      ...runtimeDto('x'),
+      id: 'host',
+      kind: 'win32',
+      distroName: null,
+      wslVersion: null,
+      hasPathMapping: false,
+      claudeStatus,
+      claudeOverridden: claudeStatus === 'override-invalid'
+    }
+  }
+
+  function installWin32(
+    claudeStatus: NonNullable<RuntimeDescriptorDTO['claudeStatus']>,
+    over: Parameters<typeof installCapability>[0] = {}
+  ): void {
+    install({
+      listRuntimes: async () => ({
+        ...runtimes,
+        runtimes: [runtimeDto('Ubuntu'), win32Dto(claudeStatus)]
+      }),
+      ...over
+    })
+  }
+
+  const runtimeSelect = (): HTMLSelectElement =>
+    screen.getByRole('combobox', { name: 'ランタイム' }) as HTMLSelectElement
+
+  it('found の Win32Runtime を選ぶと runtimeId が host の起動設定で起動する。Win32 が先頭に並ぶ', async () => {
+    installWin32('found')
+    const session = fakeSession()
+    render(<LaunchDialog session={session} />)
+    await choose(0, 'win-proj')
+    await choose(1, 'host')
+    expect([...runtimeSelect().options].map((o) => o.value)).toEqual(['', 'host', 'wsl:Ubuntu'])
+    expect(within(runtimeSelect()).getByRole('option', { name: 'Windows (ホスト)' })).toBeEnabled()
+    expect(screen.queryByTestId('win32-claude-guidance')).toBeNull()
+    await waitFor(() => expect(screen.getByRole('button', { name: '起動' })).toBeEnabled())
+    fireEvent.click(screen.getByRole('button', { name: '起動' }))
+    expect(session.launch).toHaveBeenCalledWith(
+      expect.objectContaining({ folderId: 'win-proj', runtimeId: 'host' }),
+      'manual'
+    )
+  })
+
+  it.each([
+    ['shim-only', 'npm 版のみ', 'npm 版 (claude.cmd) からは起動できません'],
+    ['not-found', 'claude.exe なし', 'native 版を入れるか、claude.exe の場所を指定してください'],
+    ['override-invalid', '指定が無効', '指定した場所に claude.exe がありません']
+  ] as const)(
+    '%s は選択肢を無効にして短いラベルを添え、プリセットなしでも理由と直し方を選択欄の下に出す',
+    async (status, shortLabel, reason) => {
+      installWin32(status)
+      const { container } = render(<LaunchDialog session={fakeSession()} />)
+      await waitFor(() => expect(screen.getByTestId('win32-claude-guidance')).toBeInTheDocument())
+      const option = within(runtimeSelect()).getByRole('option', {
+        name: `Windows (ホスト) (${shortLabel})`
+      })
+      expect(option).toBeDisabled()
+      const guidance = screen.getByTestId('win32-claude-guidance')
+      expect(guidance.textContent).toContain(reason)
+      expect(guidance.textContent).toContain('ランタイム一覧の「Windows (ホスト)」のカード')
+      expect(runtimeSelect().getAttribute('aria-describedby')).toBe(guidance.id)
+      expect((await axe(container, AXE_RULES)).violations).toEqual([])
+      // パスの目印を DOM に出さない。
+      expect(container.innerHTML).not.toMatch(/[A-Z]:\\/)
+    }
+  )
+
+  it('使えない Win32Runtime をプリセットが指していると runtime-missing で止まり、起動できない', async () => {
+    installWin32('shim-only')
+    const session = fakeSession({
+      lastConfig: {
+        folderId: 'win-proj',
+        runtimeId: 'host',
+        providerId: null,
+        modelId: null,
+        effort: null,
+        permissionMode: 'default'
+      }
+    })
+    render(<LaunchDialog session={session} />)
+    await waitFor(() => expect(screen.getByTestId('win32-claude-guidance')).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: '起動' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: '起動' }))
+    expect(session.launch).not.toHaveBeenCalled()
+  })
+
+  it('Win32Runtime を選んでも権限モードは default / plan / dontAsk の 3 つだけ (Principle III)', async () => {
+    installWin32('found')
+    render(<LaunchDialog session={fakeSession()} />)
+    await choose(0, 'win-proj')
+    await choose(1, 'host')
+    const permission = screen.getByRole('combobox', { name: '権限モード' }) as HTMLSelectElement
+    expect([...permission.options].map((o) => o.value)).toEqual(['default', 'plan', 'dontAsk'])
+    expect([...permission.options].some((o) => /auto|bypass/i.test(o.value + o.textContent))).toBe(
+      false
+    )
+  })
+
+  it('Provider の既定のラベルは選んだランタイムで替わる (US-4 AC2 / FE-040)', async () => {
+    installWin32('found')
+    const { container } = render(<LaunchDialog session={fakeSession()} />)
+    const providerSelect = (): HTMLSelectElement =>
+      screen.getByRole('combobox', { name: 'Provider' }) as HTMLSelectElement
+    const defaultLabel = (): string | null => providerSelect().options[0].textContent
+    await choose(0, 'win-proj')
+    await choose(1, 'host')
+    expect(defaultLabel()).toBe('既定 (Windows の claude の設定)')
+    await choose(1, 'wsl:Ubuntu')
+    expect(defaultLabel()).toBe('既定 (ディストロ内の claude の設定)')
+    await choose(1, 'host')
+    expect(defaultLabel()).toBe('既定 (Windows の claude の設定)')
+    expect((await axe(container, AXE_RULES)).violations).toEqual([])
+  })
+
+  it('Win32 で到達不可な Provider (UNC の configDir・helper の方式・transport のキーの extraEnv) は選べず、今の到達不可の理由で出る。ホストの configDir と HTTPS_PROXY の Provider は選べる', async () => {
+    const provider = (id: string, displayName: string): ProviderSummaryDTO => ({
+      id,
+      displayName,
+      backend: 'anthropic',
+      source: 'config-dir',
+      modelCount: 0,
+      models: []
+    })
+    const hostDir = provider('p-host-dir', 'ホストの configDir')
+    const proxy = provider('p-proxy', 'HTTPS_PROXY を持つ')
+    const unc = provider('p-unc', 'UNC の configDir')
+    const helper = provider('p-helper', 'helper の方式')
+    const username = provider('p-username', 'USERNAME を持つ')
+    const caCerts = provider('p-ca', 'NODE_EXTRA_CA_CERTS を持つ')
+    installWin32('found', {
+      listProviders: async () => [hostDir, proxy, unc, helper, username, caCerts],
+      listReachableProviders: async (runtimeId) =>
+        runtimeId === 'host'
+          ? {
+              reachable: [hostDir, proxy],
+              excluded: [unc, helper, username, caCerts].map((p) => ({
+                provider: p,
+                reason: 'unreachable' as const
+              }))
+            }
+          : { reachable: [], excluded: [] }
+    })
+    render(<LaunchDialog session={fakeSession()} />)
+    await choose(0, 'win-proj')
+    await choose(1, 'host')
+    const providerSelect = screen.getByRole('combobox', { name: 'Provider' }) as HTMLSelectElement
+    await waitFor(() =>
+      expect([...providerSelect.options].map((o) => o.value)).toEqual(['', 'p-host-dir', 'p-proxy'])
+    )
+    const excluded = screen.getByRole('list', { name: '選べない Provider' })
+    for (const name of ['UNC の configDir', 'helper の方式', 'USERNAME を持つ', 'NODE_EXTRA_CA_CERTS を持つ']) {
+      expect(excluded.textContent).toContain(name)
+    }
+    expect(excluded.textContent).toContain('このランタイムからは到達できません')
+    expect(excluded.textContent).not.toContain('ホストの configDir')
+    expect(excluded.textContent).not.toContain('HTTPS_PROXY を持つ')
+  })
+
+  it('所在 WSL のフォルダで Win32Runtime を選ぶと、到達不可の表示で止まる (US-1 AC6)', async () => {
+    installWin32('found', {
+      resolveFolderRuntime: async () => unreachableDto('unc-cwd-unsupported')
+    })
+    render(<LaunchDialog session={fakeSession()} />)
+    await choose(0, 'ubuntu-proj')
+    await choose(1, 'host')
+    await waitFor(() =>
+      expect(screen.getByTestId('folder-runtime-unreachable')).toBeInTheDocument()
+    )
+    expect(screen.getByRole('button', { name: '起動' })).toBeDisabled()
   })
 })

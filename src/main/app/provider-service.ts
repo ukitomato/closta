@@ -11,7 +11,11 @@ import type {
   UpdateProviderResult
 } from '@domain/provider/dto'
 import { classifyHelperPath, resolveConfigDirPath } from '@domain/provider/helper-path'
-import { assessReachability, splitByReachability } from '@domain/provider/reachability'
+import {
+  assessReachability,
+  splitByReachability,
+  type IsTransportForbiddenKey
+} from '@domain/provider/reachability'
 import { scanExtraEnvForSecrets } from '@domain/provider/secret-scan'
 import type {
   CredentialRef,
@@ -21,7 +25,12 @@ import type {
 } from '@domain/provider/types'
 import type { RuntimeDescriptor } from '@domain/runtime/descriptor'
 import { isValidDistroName, uncNamespace } from '@domain/runtime/namespace'
-import { makeHostPath, makeWslUncPath, type RuntimePath } from '@domain/runtime/path-types'
+import {
+  makeHostPath,
+  makeWslUncPath,
+  type HostPath,
+  type RuntimePath
+} from '@domain/runtime/path-types'
 import type { ProviderFact } from '@domain/session/launch-resolution'
 
 import type { ProviderStore } from '../infra/settings/provider-store'
@@ -48,6 +57,11 @@ export interface ProviderServiceDeps {
   readonly isDeniedEnvKey: (key: string) => boolean
   /** 転送禁止キーの述語 (infra の transport キーを注入済み。X-4 / AD-041 (e))。 */
   readonly isForbiddenForwardKey: (key: string) => boolean
+  /**
+   * ランタイムの種類ごとの transport の禁止キーの述語 (到達可能性の判定に使う。X-8 §6.4)。
+   * `wsl` → `isForbiddenForwardKey`、`win32` → Win32 の transport のキー。composition が結線する。
+   */
+  readonly isTransportForbiddenKey: IsTransportForbiddenKey
   /**
    * env-passthrough の値の出所 (アプリ自身の親 env。composition が `process.env` を渡す)。
    * **varNames の実名 allowlist に載った名前だけを読む** (X-4 / AD-041 (e) 4)。
@@ -107,6 +121,7 @@ export function createProviderService(deps: ProviderServiceDeps): ProviderServic
     curatedBaseEnv,
     isDeniedEnvKey,
     isForbiddenForwardKey,
+    isTransportForbiddenKey,
     parentEnv,
     newId
   } = deps
@@ -262,7 +277,7 @@ export function createProviderService(deps: ProviderServiceDeps): ProviderServic
       await ensureLoaded()
       const runtime = runtimes().find((r) => r.id === runtimeId)
       if (runtime === undefined) return { reachable: [], excluded: [] }
-      const split = splitByReachability(profiles, runtime)
+      const split = splitByReachability(profiles, runtime, isTransportForbiddenKey)
       return {
         reachable: split.reachable.map(toSummary),
         excluded: split.excluded
@@ -283,14 +298,14 @@ export function createProviderService(deps: ProviderServiceDeps): ProviderServic
       // **到達不可な Provider へは env を導出しない** (contracts C-1 / interface doc「到達不可は null」。PB-H-002)。
       // listReachable が一次ゲートだが、deriveEnv 自身も到達可能性を強制して config-dir の沈黙フォールバックを塞ぐ
       // (到達不可で CLAUDE_CONFIG_DIR 欠落 → ランタイム既定 config-dir を掴む経路を断つ。SC-004 / charter Journey 2)。
-      if (assessReachability(profile, runtime) !== 'reachable') return null
+      if (assessReachability(profile, runtime, isTransportForbiddenKey) !== 'reachable') return null
 
       // infra が解決した値を組み立てて純粋関数へ渡す (seam。H-03)。
       const cred = profile.credential
 
       // **config-dir の RuntimePath は到達可能性判定と同じ domain 関数で解決する** (X-4 FR-012 / PB-M-101)。
       // 変換できないなら fail-closed (CLAUDE_CONFIG_DIR を欠くと WSL 内 claude が既定 config dir を黙って掴む。PB-P-M01)。
-      let configDirRuntimePath: RuntimePath | undefined
+      let configDirRuntimePath: HostPath | RuntimePath | undefined
       if (
         (cred.source === 'config-dir' || cred.source === 'in-app-login') &&
         profile.configDir !== undefined
@@ -347,7 +362,7 @@ export function createProviderService(deps: ProviderServiceDeps): ProviderServic
       if (runtime === undefined) return []
       return profiles.map((p) => ({
         id: p.id,
-        reachable: assessReachability(p, runtime) === 'reachable',
+        reachable: assessReachability(p, runtime, isTransportForbiddenKey) === 'reachable',
         models: p.models.models
       }))
     }

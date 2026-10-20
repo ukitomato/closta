@@ -50,7 +50,9 @@ const UBUNTU: RuntimeDescriptorDTO = {
     autoModeStatus: 'allowed'
   },
   hasPathMapping: true,
-  detectedAt: NOW
+  detectedAt: NOW,
+  claudeStatus: null,
+  claudeOverridden: false
 }
 
 function folder(id: string, displayName: string): WorkspaceFolderDTO {

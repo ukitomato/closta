@@ -4,7 +4,7 @@ import { MessageChannelMain, type MessagePortMain } from 'electron'
 
 import type { ProviderSummaryDTO } from '@domain/provider/dto'
 import { fixedCapabilities } from '@domain/runtime/capabilities'
-import type { WslRuntimeDescriptor } from '@domain/runtime/descriptor'
+import type { RuntimeDescriptor, WslRuntimeDescriptor } from '@domain/runtime/descriptor'
 import type { RuntimeDescriptorDTO, RuntimeListDTO } from '@domain/runtime/dto'
 import { wslNamespace } from '@domain/runtime/namespace'
 import type { LaunchInput, SessionControl, SessionEvent } from '@domain/session/agent-session'
@@ -431,18 +431,42 @@ export function createE2eCapability(): E2eCapability {
       autoModeStatus: 'unavailable'
     },
     hasPathMapping: false,
-    detectedAt: now
+    detectedAt: now,
+    claudeStatus: null,
+    claudeOverridden: false
   })
   const fakeRuntimeDto = runtimeDtoFor(runtimeId, distro, true)
+  // X-8 (FE-011): Principle III の E2E 用に `claudeStatus: 'found'` の Win32Runtime を足す。パスは持たず、実機の
+  // `claude.exe` は要らない (起動はしない)。**後ろに並べる** (ランタイム一覧の先頭のカードを変えない)。
+  const fakeWin32Dto: RuntimeDescriptorDTO = {
+    ...runtimeDtoFor(runtimeId, distro, false),
+    id: 'host',
+    kind: 'win32',
+    distroName: null,
+    wslVersion: null,
+    claudeStatus: 'found',
+    claudeOverridden: false
+  }
   const fakeRuntimes: RuntimeListDTO = {
     wslAvailability: 'available',
-    runtimes: [fakeRuntimeDto, runtimeDtoFor(otherRuntimeId, otherDistro, false)],
+    runtimes: [fakeRuntimeDto, runtimeDtoFor(otherRuntimeId, otherDistro, false), fakeWin32Dto],
     enumerationIssues: []
   }
   /** IPC の未信頼入力照合 (`findRuntime`) に使う descriptor。表示用の合成値で `wsl.exe` は呼ばない。 */
-  const snapshot: WslRuntimeDescriptor[] = [
+  const snapshot: RuntimeDescriptor[] = [
     { ...descriptorBase(now), id: runtimeId, distroName: distro, isDefault: true },
-    { ...descriptorBase(now), id: otherRuntimeId, distroName: otherDistro, isDefault: false }
+    { ...descriptorBase(now), id: otherRuntimeId, distroName: otherDistro, isDefault: false },
+    {
+      id: 'host',
+      kind: 'win32',
+      state: 'running',
+      isDefault: false,
+      capabilities: fixedCapabilities(now),
+      detectedAt: now,
+      claudePath: null,
+      claudeStatus: 'found',
+      claudeOverridden: false
+    }
   ]
 
   // X-4: Provider (カタログ付き) と到達可能性の合成値。e2e-far は E2E-Debian からだけ到達できる。
@@ -561,6 +585,9 @@ export function createE2eCapability(): E2eCapability {
     folderIds: () => [folderId, winFolderId],
     resolveFolderRuntime: async () => null,
     pickHostFolder: async () => null,
+    // X-8: E2E は実機の claude.exe を要らない。ダイアログを出さず、現状の一覧をそのまま返す。
+    pickWin32ClaudePath: async () => ({ status: 'cancelled' }),
+    clearWin32ClaudePath: async () => ({ status: 'updated', runtimes: fakeRuntimes.runtimes }),
 
     // 過去の一覧は固定の索引 (O-3 / 012 data-model §7)。打ち切りが無いので「続きを取る」は出ない。
     listSessions: async () => pastIndex,

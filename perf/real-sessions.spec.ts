@@ -104,9 +104,9 @@ async function launchOne(
   // 本物の composition であること: 指定した作業フォルダ・ランタイムが選べる (E2E stub の seed では見つからない)。
   const f = await optionIndex(page, '作業フォルダ', folder, 'folder-not-found')
   await page.getByRole('combobox', { name: '作業フォルダ' }).selectOption({ index: f.index })
-  const r = await optionIndex(page, 'ランタイム (WSL)', runtime, 'runtime-not-found')
+  const r = await optionIndex(page, 'ランタイム', runtime, 'runtime-not-found')
   if (r.text.includes('停止中')) throw new Error('runtime-stopped')
-  await page.getByRole('combobox', { name: 'ランタイム (WSL)' }).selectOption({ index: r.index })
+  await page.getByRole('combobox', { name: 'ランタイム', exact: true }).selectOption({ index: r.index })
   // モデルの選択肢は Provider のモデルカタログから出る (既定の Provider にはカタログが無い)。
   if (provider !== undefined && provider !== '') {
     const p = await optionIndex(page, 'Provider', provider, 'provider-not-found')

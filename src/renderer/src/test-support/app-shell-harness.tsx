@@ -66,7 +66,9 @@ export const UBUNTU: RuntimeDescriptorDTO = {
     autoModeStatus: 'allowed'
   },
   hasPathMapping: true,
-  detectedAt: NOW
+  detectedAt: NOW,
+  claudeStatus: null,
+  claudeOverridden: false
 }
 
 export function folder(displayName = '案件フォルダ'): WorkspaceFolderDTO {

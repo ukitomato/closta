@@ -2,6 +2,7 @@ import type { RuntimeDescriptor } from '@domain/runtime/descriptor'
 import { namespaceDistroName } from '@domain/runtime/namespace'
 import type { Reachability } from '@domain/workspace/folder'
 
+import { isDerivationForwardKey } from './forward-env'
 import { classifyHelperPath, resolveConfigDirPath } from './helper-path'
 import type { ProviderProfile } from './types'
 
@@ -20,11 +21,27 @@ import type { ProviderProfile } from './types'
 /** config dir の到達可否に依存する方式 (`CLAUDE_CONFIG_DIR` を使う)。 */
 const CONFIG_DIR_SOURCES: ReadonlySet<string> = new Set(['config-dir', 'in-app-login'])
 
+/**
+ * ランタイムの種類ごとの transport の禁止キーの述語 (infra のキーを composition が注入する。domain に複製しない)。
+ * 起動の env の合成 (`composeLaunchEnv` / `composeWin32LaunchEnv`) が拒否するキーと同じ述語で決める (X-8 §6.4)。
+ */
+export type IsTransportForbiddenKey = (kind: RuntimeDescriptor['kind'], key: string) => boolean
+
 export function assessReachability(
   profile: ProviderProfile,
-  runtime: RuntimeDescriptor
+  runtime: RuntimeDescriptor,
+  isTransportForbiddenKey: IsTransportForbiddenKey
 ): Reachability {
   const cred = profile.credential
+
+  // extraEnv が選択ランタイムの transport のキーに当たる Provider は、起動の合成で拒否されるので到達不可 (X-8 §6.4)。
+  if (profile.extraEnv !== undefined) {
+    for (const key of Object.keys(profile.extraEnv)) {
+      if (isTransportForbiddenKey(runtime.kind, key) && !isDerivationForwardKey(key)) {
+        return 'unreachable'
+      }
+    }
+  }
 
   // helper 系は helper パスを選択ランタイムの名前空間で解決できるときだけ到達可能 (X-4 FR-014)。
   if (
@@ -43,13 +60,9 @@ export function assessReachability(
   const configDir = profile.configDir
   if (configDir === undefined) return 'reachable'
 
-  if (configDir.namespace === 'host') {
-    // win32 ランタイムはホストの config dir をそのまま見られる。
-    if (runtime.kind === 'win32') return 'reachable'
-  } else {
-    // opaque-unc → fail-closed。win32 は WSL 内部の config dir に到達できない。
-    if (namespaceDistroName(configDir.namespace) === null) return 'unreachable'
-    if (runtime.kind === 'win32') return 'unreachable'
+  // opaque-unc → fail-closed。win32 の扱い (ホストは到達可・UNC は不可) は `resolveConfigDirPath` が決める (X-8 §8)。
+  if (configDir.namespace !== 'host' && namespaceDistroName(configDir.namespace) === null) {
+    return 'unreachable'
   }
 
   const r = resolveConfigDirPath(configDir, runtime)
@@ -66,12 +79,13 @@ export interface ReachableSplit {
 
 export function splitByReachability(
   profiles: readonly ProviderProfile[],
-  runtime: RuntimeDescriptor
+  runtime: RuntimeDescriptor,
+  isTransportForbiddenKey: IsTransportForbiddenKey
 ): ReachableSplit {
   const reachable: ProviderProfile[] = []
   const excluded: { profile: ProviderProfile; reason: Reachability }[] = []
   for (const profile of profiles) {
-    const reason = assessReachability(profile, runtime)
+    const reason = assessReachability(profile, runtime, isTransportForbiddenKey)
     if (reason === 'reachable') reachable.push(profile)
     else excluded.push({ profile, reason })
   }

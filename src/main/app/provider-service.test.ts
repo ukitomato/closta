@@ -13,6 +13,11 @@ import { describe, expect, it, vi } from 'vitest'
 
 import type { SecretStore } from '../infra/secrets/safe-storage'
 import type { ProviderStore } from '../infra/settings/provider-store'
+import {
+  buildWin32LaunchEnv,
+  composeWin32LaunchEnv,
+  isWin32ForbiddenKey
+} from '../infra/runtime/win32-launch'
 import { createProviderService, type ProviderServiceDeps } from './provider-service'
 
 const win32: Win32RuntimeDescriptor = {
@@ -21,8 +26,20 @@ const win32: Win32RuntimeDescriptor = {
   state: 'running',
   isDefault: true,
   capabilities: fixedCapabilities(0),
-  detectedAt: 0
+  detectedAt: 0,
+  claudePath: null,
+  claudeStatus: 'not-found',
+  claudeOverridden: false
 }
+
+const testWslForbidden = makeForbiddenForwardKey([
+  'SystemRoot',
+  'windir',
+  'TEMP',
+  'TMP',
+  'WSL_UTF8',
+  'WSLENV'
+])
 
 function fakeStore(initial: ProviderProfile[] = []): ProviderStore & { saved: ProviderProfile[] } {
   let profiles = [...initial]
@@ -54,14 +71,9 @@ function deps(over: Partial<ProviderServiceDeps> = {}): ProviderServiceDeps {
     runtimes: () => [win32 as RuntimeDescriptor],
     curatedBaseEnv: () => ({ PATH: '/usr/bin' }),
     isDeniedEnvKey: (k) => /^(WSLENV|.*(API_?KEY|TOKEN|SECRET)|AWS_.*)$/i.test(k),
-    isForbiddenForwardKey: makeForbiddenForwardKey([
-      'SystemRoot',
-      'windir',
-      'TEMP',
-      'TMP',
-      'WSL_UTF8',
-      'WSLENV'
-    ]),
+    isForbiddenForwardKey: testWslForbidden,
+    isTransportForbiddenKey: (kind, key) =>
+      kind === 'win32' ? isWin32ForbiddenKey(key) : testWslForbidden(key),
     parentEnv: () => ({}),
     newId: () => 'id-1',
     ...over
@@ -157,7 +169,7 @@ describe('createProviderService', () => {
     expect(await svc.deriveEnv('p1', 'host')).toBeNull()
   })
 
-  it('config-dir 方式で RuntimePath 未解決なら deriveEnv は fail-closed で null (PB-P-M01)', async () => {
+  it('win32 のホストの config-dir は到達可能で、導出は CLAUDE_CONFIG_DIR を HostPath の文字列で注入する (X-8)', async () => {
     const hostCfg = makeHostPath('C:\\Users\\y\\.claude')
     if (!hostCfg.ok) throw new Error('bad host path')
     const store = fakeStore([
@@ -170,10 +182,11 @@ describe('createProviderService', () => {
         models
       }
     ])
-    // host configDir は win32 で reachable。だが X-4 の起動は WSL 限定で、resolveConfigDirPath は win32 を解決しない。
-    // reachable でも変換不能 → CLAUDE_CONFIG_DIR を欠く env を作らず null に倒す。
+    // X-8: host configDir は win32 で reachable で、resolveConfigDirPath も HostPath のまま解決する (判定と導出が同じ関数)。
     const svc = createProviderService(deps({ store }))
-    expect(await svc.deriveEnv('p1', 'host')).toBeNull()
+    const derived = await svc.deriveEnv('p1', 'host')
+    expect(derived?.env.CLAUDE_CONFIG_DIR).toBe('C:\\Users\\y\\.claude')
+    expect(derived?.forwardKeys).toEqual(['CLAUDE_CONFIG_DIR'])
   })
 
   it('update は表示名/モデルを差し替える (認証方式は変えない)', async () => {
@@ -465,5 +478,172 @@ describe('provider-service の X-4 配線 (FR-012 / FR-013 / FR-014)', () => {
     ])
     expect(await svc.providerFacts('wsl:Unknown')).toEqual([])
     expect((await svc.list())[0].models).toEqual(catalog.models)
+  })
+})
+
+describe('判定と導出の一致 (SC-005 / data-model §8)', () => {
+  function wslRt(opts: {
+    state?: 'running' | 'stopped'
+    mapping?: 'c' | 'd-only' | null
+    distro?: string
+  }): WslRuntimeDescriptor {
+    const distro = opts.distro ?? 'Ubuntu'
+    let pathMapping: WslRuntimeDescriptor['pathMapping'] = null
+    if (opts.mapping !== null) {
+      const prefix = opts.mapping === 'd-only' ? { f: 'D:\\', t: '/mnt/d' } : { f: 'C:\\', t: '/mnt/c' }
+      const m = makePathMapping(
+        'host',
+        wslNamespace(distro),
+        [{ fromPrefix: prefix.f, toPrefix: prefix.t }],
+        0
+      )
+      if (!m.ok) throw new Error('bad mapping')
+      pathMapping = m.mapping
+    }
+    return {
+      id: wslNamespace(distro),
+      kind: 'wsl',
+      distroName: distro,
+      state: opts.state ?? 'running',
+      wslVersion: 2,
+      pathMapping,
+      isDefault: false,
+      capabilities: fixedCapabilities(0),
+      detectedAt: 0
+    }
+  }
+
+  const hostDir = makeHostPath('C:\\Users\\y\\.claude')
+  const uncDir = (distro: string): ReturnType<typeof makeWslUncPath> =>
+    makeWslUncPath(uncNamespace(distro), `\\\\wsl.localhost\\${distro}\\home\\y\\.claude`)
+  if (!hostDir.ok) throw new Error('bad host')
+  const ubuntuUnc = uncDir('Ubuntu')
+  const debianUnc = uncDir('Debian')
+  if (!ubuntuUnc.ok || !debianUnc.ok) throw new Error('bad unc')
+
+  const base = { id: 'p1', displayName: 'P', backend: 'anthropic' as const, models: { models: [] } }
+
+  const configDirRows: readonly {
+    name: string
+    rt: RuntimeDescriptor
+    dir: ProviderProfile['configDir']
+    expected: 'reachable' | 'blocked' | 'unreachable'
+  }[] = [
+    { name: 'win32 × host', rt: win32, dir: hostDir.path, expected: 'reachable' },
+    { name: 'win32 × UNC', rt: win32, dir: ubuntuUnc.path, expected: 'unreachable' },
+    { name: 'wsl × host × stopped', rt: wslRt({ state: 'stopped' }), dir: hostDir.path, expected: 'blocked' },
+    { name: 'wsl × host × mapping 未取得', rt: wslRt({ mapping: null }), dir: hostDir.path, expected: 'blocked' },
+    { name: 'wsl × host × mapping の外', rt: wslRt({ mapping: 'd-only' }), dir: hostDir.path, expected: 'unreachable' },
+    { name: 'wsl × host × mapping の内', rt: wslRt({}), dir: hostDir.path, expected: 'reachable' },
+    { name: 'wsl × UNC (同じ distro)', rt: wslRt({}), dir: ubuntuUnc.path, expected: 'reachable' },
+    { name: 'wsl × UNC (別の distro)', rt: wslRt({}), dir: debianUnc.path, expected: 'unreachable' },
+    { name: 'wsl × UNC × stopped', rt: wslRt({ state: 'stopped' }), dir: ubuntuUnc.path, expected: 'blocked' }
+  ]
+
+  it.each(configDirRows)(
+    'config-dir: $name で reachable ⇔ deriveEnv が非 null',
+    async ({ rt, dir, expected }) => {
+      const svc = createProviderService(
+        deps({
+          store: fakeStore([{ ...base, credential: { source: 'config-dir' }, configDir: dir }]),
+          runtimes: () => [rt]
+        })
+      )
+      const split = await svc.listReachable(rt.id)
+      const derived = await svc.deriveEnv('p1', rt.id)
+      expect(split.reachable.length === 1).toBe(expected === 'reachable')
+      expect(derived !== null).toBe(expected === 'reachable')
+      if (expected !== 'reachable') expect(split.excluded[0]?.reason).toBe(expected)
+      if (expected === 'reachable' && rt.kind === 'win32' && derived !== null) {
+        const env = composeWin32LaunchEnv(buildWin32LaunchEnv({}), derived)
+        expect(env.CLAUDE_CONFIG_DIR).toBe('C:\\Users\\y\\.claude')
+      }
+    }
+  )
+
+  it('in-app-login も config-dir と同じ判定と導出 (win32 × host)', async () => {
+    const svc = createProviderService(
+      deps({
+        store: fakeStore([
+          { ...base, credential: { source: 'in-app-login' }, configDir: hostDir.path }
+        ]),
+        runtimes: () => [win32]
+      })
+    )
+    expect((await svc.listReachable('host')).reachable).toHaveLength(1)
+    expect((await svc.deriveEnv('p1', 'host'))?.env.CLAUDE_CONFIG_DIR).toBe('C:\\Users\\y\\.claude')
+  })
+
+  it.each([
+    ['apiKeyHelper', { source: 'api-key-helper', helperPath: 'C:\\tools\\h.sh' }],
+    ['awsCredentialExport', { source: 'aws-credential-export', helperPath: 'C:\\tools\\h.sh' }]
+  ] as const)('helper の方式 (%s) × win32 は判定も導出も到達不可のまま', async (_n, credential) => {
+    const svc = createProviderService(
+      deps({ store: fakeStore([{ ...base, credential }]), runtimes: () => [win32] })
+    )
+    expect((await svc.listReachable('host')).reachable).toHaveLength(0)
+    expect(await svc.deriveEnv('p1', 'host')).toBeNull()
+  })
+
+  describe('extraEnv の行 (§6.4)', () => {
+    const withEnv = (extraEnv: Record<string, string>): ProviderProfile => ({
+      ...base,
+      credential: { source: 'aws-profile', profileName: 'prod' },
+      extraEnv
+    })
+
+    it.each([['HTTPS_PROXY'], ['NO_PROXY']])(
+      'win32 × %s (上書きしてよいキー) は両方が通り、Provider の値がホストの値に勝つ',
+      async (key) => {
+        const svc = createProviderService(
+          deps({
+            store: fakeStore([withEnv({ [key]: 'provider-value' })]),
+            runtimes: () => [win32]
+          })
+        )
+        expect((await svc.listReachable('host')).reachable).toHaveLength(1)
+        const derived = await svc.deriveEnv('p1', 'host')
+        expect(derived).not.toBeNull()
+        const env = composeWin32LaunchEnv(buildWin32LaunchEnv({ [key]: 'host-value' }), derived!)
+        expect(env[key]).toBe('provider-value')
+      }
+    )
+
+    it.each([['USERNAME'], ['NUMBER_OF_PROCESSORS'], ['NODE_EXTRA_CA_CERTS']])(
+      'win32 × %s (transport のキー) は判定が unreachable で、合成も throw する',
+      async (key) => {
+        const svc = createProviderService(
+          deps({ store: fakeStore([withEnv({ [key]: 'x' })]), runtimes: () => [win32] })
+        )
+        expect((await svc.listReachable('host')).reachable).toHaveLength(0)
+        expect(await svc.deriveEnv('p1', 'host')).toBeNull()
+        // 多重の防御: 判定を通り抜けても起動の合成が拒否する。
+        expect(() =>
+          composeWin32LaunchEnv(buildWin32LaunchEnv({}), { env: { [key]: 'x' }, forwardKeys: [key] })
+        ).toThrow()
+      }
+    )
+
+    it('win32 × 許可リストの外のキーは両方が通る', async () => {
+      const svc = createProviderService(
+        deps({ store: fakeStore([withEnv({ FOO_BAR: '1' })]), runtimes: () => [win32] })
+      )
+      expect((await svc.listReachable('host')).reachable).toHaveLength(1)
+      const derived = await svc.deriveEnv('p1', 'host')
+      expect(derived).not.toBeNull()
+      expect(() => composeWin32LaunchEnv(buildWin32LaunchEnv({}), derived!)).not.toThrow()
+    })
+
+    it.each([['HTTPS_PROXY'], ['USERNAME']])(
+      'wsl × %s は今のまま通る',
+      async (key) => {
+        const rt = wslRt({})
+        const svc = createProviderService(
+          deps({ store: fakeStore([withEnv({ [key]: 'x' })]), runtimes: () => [rt] })
+        )
+        expect((await svc.listReachable(rt.id)).reachable).toHaveLength(1)
+        expect(await svc.deriveEnv('p1', rt.id)).not.toBeNull()
+      }
+    )
   })
 })

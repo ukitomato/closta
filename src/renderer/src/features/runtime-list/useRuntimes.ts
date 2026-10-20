@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 
-import { CAPABILITY_KEY } from '@domain/capability'
+import { CAPABILITY_KEY, type Win32ClaudePathResult } from '@domain/capability'
 import type { RuntimeListDTO } from '@domain/runtime/dto'
 
 /**
@@ -26,6 +26,12 @@ export interface RuntimesView {
    */
   refresh(): Promise<void>
   reprobe(runtimeId: string): void
+  /**
+   * Win32 の claude.exe の場所を選ぶ / 指定を解除する (X-8 / contracts C-1・C-2)。`updated` は一覧を置き換える。
+   * 結果はそのまま返す (`rejected` / `save-failed` の理由はカードが出す)。ipc の失敗は `save-failed` として返す。
+   */
+  pickWin32Claude(): Promise<Win32ClaudePathResult>
+  clearWin32Claude(): Promise<Win32ClaudePathResult>
 }
 
 /**
@@ -98,5 +104,31 @@ export function useRuntimes(): RuntimesView {
       .catch(() => setLoadState('failed'))
   }, [])
 
-  return { list, loadState, refreshing, refresh, reprobe }
+  const applyClaudeResult = useCallback((result: Win32ClaudePathResult) => {
+    if (result.status === 'updated') {
+      // 結果は descriptor の配列だけ。WSL の利用可否と列挙不能は今の値を残す。
+      setList((current) => (current === null ? current : { ...current, runtimes: result.runtimes }))
+    }
+    return result
+  }, [])
+
+  const pickWin32Claude = useCallback(
+    (): Promise<Win32ClaudePathResult> =>
+      capability()
+        .pickWin32ClaudePath()
+        .then(applyClaudeResult)
+        .catch((): Win32ClaudePathResult => ({ status: 'save-failed' })),
+    [applyClaudeResult]
+  )
+
+  const clearWin32Claude = useCallback(
+    (): Promise<Win32ClaudePathResult> =>
+      capability()
+        .clearWin32ClaudePath()
+        .then(applyClaudeResult)
+        .catch((): Win32ClaudePathResult => ({ status: 'save-failed' })),
+    [applyClaudeResult]
+  )
+
+  return { list, loadState, refreshing, refresh, reprobe, pickWin32Claude, clearWin32Claude }
 }

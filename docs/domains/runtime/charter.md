@@ -159,6 +159,8 @@ related_specs:
 - [AD-025](../../decisions/0025-workspace-folder-carries-location.md) — 作業フォルダは所在を伴う。
   パス型モデルを 3 名前空間に一般化する
 - [AD-026](../../decisions/0026-packaging-first-pass.md) — インストーラ生成の第 1 段階
+- [AD-058](../../decisions/0058-win32-direct-launch-contract-and-process-tree-stop.md) — Win32Runtime の
+  descriptor に claude の状態 (`found` / `not-found` / `shim-only` / `override-invalid`) を持たせ、検出と設定で決める
 
 ## Related Specs
 
@@ -168,6 +170,9 @@ related_specs:
   — 所属は `session`。起動契約（`buildRuntimeLaunchSpec`）を `wsl.exe --exec` 形にし、導出 env を `WSLENV` で配送する。
   AD-015 §2 / §5 / §7 を [AD-041](../../decisions/0041-x4-launch-config-on-x1-launch-gate.md) (f) で読み替えた。
   claudePath は native ELF であることを前提とする（AD-041 記録 2）
+- [X-8 Win32Runtime の直接起動](../../../specs/020-session-win32-direct-launch/spec.md)
+  — 所属は `session`。`Win32Runtime` の descriptor に claude の状態を足し、検出のときに `claude.exe` を 1 回探す。
+  場所は設定で指定・解除できる ([AD-058](../../decisions/0058-win32-direct-launch-contract-and-process-tree-stop.md))
 
 D-1 / OPT-mac は未着手。
 

@@ -3,14 +3,21 @@ import { describe, expect, it } from 'vitest'
 import {
   boundDecisionScope,
   isLaunchFailureReason,
+  isWin32LaunchSpec,
   isPermissionAnswers,
   LAUNCH_FAILURE_REASONS,
   projectAskUserQuestionAnswer,
   toAskUserQuestionResult,
   toPermissionResult,
+  WIN32_TREE_STOP_ARGS,
+  WIN32_TREE_STOP_COMMAND_NAME,
+  WSL_LAUNCH_KIND,
   type PermissionDecision,
-  type PermissionRequest
+  type PermissionRequest,
+  type RuntimeLaunchSpec,
+  type WslLaunchSpec
 } from './agent-session'
+import { WIN32_LAUNCH_SPEC_FIXTURE } from './__fixtures__/win32-launch-spec'
 
 describe('toPermissionResult (正の構成 P2)', () => {
   it('allow は {behavior} のみ、deny は {behavior, message} のみ (updatedPermissions/updatedInput を出さない)', () => {
@@ -271,5 +278,35 @@ describe('isLaunchFailureReason', () => {
 
   it('PermissionDecision の形 (型の健全性の最小確認)', () => {
     assertPermissionDecisionShape({ requestId: 'r', outcome: 'allow', scope: 'once' })
+  })
+})
+
+describe('Win32 の起動の値と定数 (X-8 / AD-058)', () => {
+  it('停止の引数と停止のコマンドの名前の正本 (集合を変えるには ADR が要る。AD-058)', () => {
+    expect([...WIN32_TREE_STOP_ARGS]).toEqual(['/T', '/F', '/PID'])
+    expect(WIN32_TREE_STOP_COMMAND_NAME).toBe('taskkill.exe')
+  })
+
+  it('kind の無い値は WSL として絞られ、kind: win32 は Win32 として絞られる', () => {
+    const wsl: WslLaunchSpec = {
+      pathToClaudeCodeExecutable: '/usr/bin/claude',
+      command: 'C:\\launcher\\value',
+      prefixArgs: ['--exec'],
+      env: {}
+    }
+    const specs: RuntimeLaunchSpec[] = [
+      wsl,
+      { ...wsl, kind: WSL_LAUNCH_KIND },
+      WIN32_LAUNCH_SPEC_FIXTURE
+    ]
+    expect(specs.map(isWin32LaunchSpec)).toEqual([false, false, true])
+  })
+
+  it('正規の fixture は固定の形 (windowsHide は true・argsBeforePid は WIN32_TREE_STOP_ARGS と一致)', () => {
+    expect(WIN32_LAUNCH_SPEC_FIXTURE.windowsHide).toBe(true)
+    expect(WIN32_LAUNCH_SPEC_FIXTURE.stop.argsBeforePid).toEqual([...WIN32_TREE_STOP_ARGS])
+    expect(WIN32_LAUNCH_SPEC_FIXTURE.command).toBe(
+      WIN32_LAUNCH_SPEC_FIXTURE.pathToClaudeCodeExecutable
+    )
   })
 })

@@ -1,5 +1,5 @@
 import { fixedCapabilities } from '@domain/runtime/capabilities'
-import type { WslRuntimeDescriptor } from '@domain/runtime/descriptor'
+import type { Win32RuntimeDescriptor, WslRuntimeDescriptor } from '@domain/runtime/descriptor'
 import { uncNamespace, wslNamespace } from '@domain/runtime/namespace'
 import { makePathMapping, type PathMapping } from '@domain/runtime/path-mapping'
 import { makeHostPath, makeWslUncPath } from '@domain/runtime/path-types'
@@ -16,6 +16,18 @@ function mapping(distro: string): PathMapping {
   )
   if (!r.ok) throw new Error('bad mapping')
   return r.mapping
+}
+
+const win32: Win32RuntimeDescriptor = {
+  id: 'host',
+  kind: 'win32',
+  state: 'running',
+  isDefault: true,
+  capabilities: fixedCapabilities(0),
+  detectedAt: 0,
+  claudePath: null,
+  claudeStatus: 'not-found',
+  claudeOverridden: false
 }
 
 function wsl(
@@ -98,6 +110,20 @@ describe('resolveConfigDirPath (FR-012)', () => {
       ok: false,
       reason: 'unreachable'
     })
+  })
+
+  it('win32 はホストの configDir を HostPath のまま ok にし、UNC は unreachable (X-8 §8)', () => {
+    const host = makeHostPath('C:\\Users\\y\\.claude')
+    if (!host.ok) throw new Error('bad host')
+    const ok = resolveConfigDirPath(host.path, win32)
+    expect(ok.ok && ok.path.value).toBe('C:\\Users\\y\\.claude')
+    expect(ok.ok && ok.path.namespace).toBe('host')
+    const unc = makeWslUncPath(
+      uncNamespace('Ubuntu'),
+      '\\\\wsl.localhost\\Ubuntu\\home\\y\\.claude'
+    )
+    if (!unc.ok) throw new Error('bad unc')
+    expect(resolveConfigDirPath(unc.path, win32)).toEqual({ ok: false, reason: 'unreachable' })
   })
 
   it('停止中は blocked、mapping 未取得の host は blocked', () => {

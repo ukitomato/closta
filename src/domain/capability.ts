@@ -27,6 +27,13 @@ import type {
   WorkspaceFolderDraftDTO
 } from './workspace/dto'
 
+/** Win32 の claude の場所の指定の結果 (X-8 / contracts C-1・C-2)。パスを持たない。 */
+export type Win32ClaudePathResult =
+  | { readonly status: 'updated'; readonly runtimes: readonly RuntimeDescriptorDTO[] }
+  | { readonly status: 'cancelled' }
+  | { readonly status: 'rejected'; readonly reason: 'not-exe' }
+  | { readonly status: 'save-failed' }
+
 /**
  * preload が公開する**単一 capability** の形 (FR-039 / contracts/ipc-capability.md)。
  *
@@ -50,6 +57,13 @@ export interface ClostaCapability {
   probeRuntime(
     runtimeId: string
   ): Promise<RuntimeDescriptorDTO | { readonly error: 'distro-not-running' }>
+  /**
+   * Win32 の claude.exe の場所を利用者が選ぶ (X-8 / contracts C-1)。renderer はパスを渡さない
+   * (ダイアログも検査も保存も main が行う)。保存したら再検出した一覧を返す。戻り値にパスを含めない。
+   */
+  pickWin32ClaudePath(): Promise<Win32ClaudePathResult>
+  /** Win32 の claude.exe の場所の指定を解除して再検出する (X-8 / contracts C-2)。`cancelled` / `rejected` は返さない。 */
+  clearWin32ClaudePath(): Promise<Win32ClaudePathResult>
 
   // --- 作業フォルダ ---
 
@@ -228,6 +242,9 @@ export const IPC_CHANNELS = {
   listRuntimes: 'closta:listRuntimes',
   refreshRuntimes: 'closta:refreshRuntimes',
   probeRuntime: 'closta:probeRuntime',
+  /** Win32 の claude.exe の場所の指定・解除 (X-8 / AD-058。contracts C-1 / C-2)。 */
+  pickWin32ClaudePath: 'closta:pickWin32ClaudePath',
+  clearWin32ClaudePath: 'closta:clearWin32ClaudePath',
   listFolders: 'closta:listFolders',
   beginBrowse: 'closta:beginBrowse',
   browseDirectory: 'closta:browseDirectory',

@@ -8,7 +8,7 @@ import type { PathMapping } from '@domain/runtime/path-mapping'
 import { applyEntry, findLongestMatch } from '@domain/workspace/prefix-match'
 import { isWslFolder, type WorkspaceFolder } from '@domain/workspace/folder'
 
-import { createHostFileSystem } from '../infra/fs/host-fs'
+import { createHostFileSystem, isHostFile } from '../infra/fs/host-fs'
 import { createWslFileSystem } from '../infra/fs/wsl-fs'
 import { createProviderDetector } from '../infra/provider/detector'
 import {
@@ -18,6 +18,13 @@ import {
   isDeniedEnvKey,
   isForbiddenForwardKey
 } from '../infra/runtime/launch-spec'
+import {
+  buildWin32LaunchEnv,
+  buildWin32LaunchSpec,
+  composeWin32LaunchEnv,
+  isWin32ForbiddenKey
+} from '../infra/runtime/win32-launch'
+import { createWin32ClaudeLocator } from '../infra/runtime/win32-claude'
 import { createRuntimeDetector } from '../infra/runtime/wsl-detector'
 import { createWslCli } from '../infra/runtime/wsl-cli'
 import { createSecretStore } from '../infra/secrets/safe-storage'
@@ -25,6 +32,7 @@ import { createFolderStore } from '../infra/settings/folder-store'
 import { createLaunchUsageStore } from '../infra/settings/launch-usage-store'
 import { createPresetStore } from '../infra/settings/preset-store'
 import { createProviderStore } from '../infra/settings/provider-store'
+import { createRuntimeSettingsStore } from '../infra/settings/runtime-settings-store'
 import { buildTranscriptEnv } from '../infra/session/config-dir'
 import { createEnumerationTargetFinder } from '../infra/session/target-finder'
 import { createUtilityProcessLauncher } from './enumerator-spawner'
@@ -42,6 +50,7 @@ import { createSessionLaunchService } from './session-launch-service'
 import { createSessionService, type SessionService } from './session-service'
 import { createSupervisorConnection } from './session-spawner'
 import { createSessionStatusRelay, type SessionStatusRelay } from './session-status-relay'
+import { createWin32ClaudePathService } from './win32-claude-path-service'
 import { createTranscriptService } from './transcript-service'
 import { createTranscriptSpawner } from './transcript-spawner'
 
@@ -89,11 +98,41 @@ export function createComposition(): Composition {
   const now = (): number => Date.now()
 
   /*
+   * **ユーザデータディレクトリを解決して渡す。**
+   * `infra/settings` は `electron` を import できない (AD-023 §8)。
+   */
+  const userDataResult = makeHostPath(app.getPath('userData'))
+  if (!userDataResult.ok) {
+    throw new Error('ユーザデータディレクトリのパスを解釈できない')
+  }
+  const runtimeSettings = createRuntimeSettingsStore(userDataResult.path, now)
+
+  /*
    * プロセス起動レイヤ (`wsl-cli`) を注入する。
    * 差し替えれば WSL 未搭載ホストの挙動も出力の解釈も Vitest で検証できる
    * (`wsl-detector.test.ts`)。
    */
-  const detector = createRuntimeDetector({ cli: createWslCli(), now })
+  const detector = createRuntimeDetector({
+    cli: createWslCli(),
+    now,
+    locateWin32Claude: createWin32ClaudeLocator({
+      isFile: isHostFile,
+      env: () => process.env,
+      override: async () => {
+        const loadedSettings = await runtimeSettings.load()
+        if (loadedSettings.kind === 'loaded') {
+          for (const reasonKey of loadedSettings.reasonKeys) {
+            console.warn(`[runtime-settings] ${reasonKey}`)
+          }
+          return loadedSettings.win32ClaudePath
+        }
+        console.warn(
+          `[runtime-settings] ${loadedSettings.kind === 'newer-version' ? 'newer-version' : loadedSettings.reasonKey}`
+        )
+        return null
+      }
+    })
+  })
 
   /*
    * **開発ビルド判定はここで解決する。** `measure` に `electron` を持ち込まないため
@@ -102,14 +141,6 @@ export function createComposition(): Composition {
   const measure = createMeasure(isDevBuild())
   const runtimes = createRuntimeStore(detector, measure)
 
-  /*
-   * **ユーザデータディレクトリを解決して渡す。**
-   * `infra/settings` は `electron` を import できない (AD-023 §8)。
-   */
-  const userDataResult = makeHostPath(app.getPath('userData'))
-  if (!userDataResult.ok) {
-    throw new Error('ユーザデータディレクトリのパスを解釈できない')
-  }
   const store = createFolderStore(userDataResult.path, now)
 
   const folders = createFolderService({
@@ -244,6 +275,9 @@ export function createComposition(): Composition {
     isDeniedEnvKey,
     // 転送禁止キー (transport キーは infra から注入済み。X-4 / AD-041 (e))。
     isForbiddenForwardKey,
+    // 到達可能性の判定は、起動の合成が拒否するのと同じ述語で決める (wsl → WSL の transport、win32 → Win32 の transport。X-8 §6.4)。
+    isTransportForbiddenKey: (kind, key) =>
+      kind === 'win32' ? isWin32ForbiddenKey(key) : isForbiddenForwardKey(key),
     // platform-ok: env-passthrough の値の出所 (varNames の実名 allowlist だけを読む。AD-041 (e) 4)。OS 分岐ではない。
     parentEnv: () => process.env,
     newId: () => randomUUID().replace(/-/g, '')
@@ -288,6 +322,11 @@ export function createComposition(): Composition {
       resolveCwd: (folder, runtime) => resolveCwd(folder, runtime.pathMapping),
       composeLaunchEnv,
       buildRuntimeLaunchSpec,
+      // Win32Runtime の起動 (X-8)。許可リストのホスト env・合成・起動の値・起動の時点の実在確認。
+      win32BaseEnv: () => buildWin32LaunchEnv(process.env),
+      composeWin32LaunchEnv,
+      buildWin32LaunchSpec,
+      win32ClaudeIsFile: isHostFile,
       now,
       // 拒否理由キーだけを記録する (値・パス・モデル ID を出さない。Principle V / CWE-532)。
       logRejection: (reasonKey) => console.warn(`[launch] rejected: ${reasonKey}`)
@@ -309,6 +348,27 @@ export function createComposition(): Composition {
     store: createLaunchUsageStore(userDataResult.path, now),
     now,
     localOffsetMinutes: (epochMs) => -new Date(epochMs).getTimezoneOffset()
+  })
+
+  /*
+   * **Win32 の claude.exe の場所の指定** (X-8 / contracts C-1・C-2)。ダイアログはここ (`app` レイヤ) に置く。
+   * 保存の後の再検出は `refreshRuntimes` と同じ手順 (判定バッチは待たずに回す)。
+   */
+  const win32ClaudePath = createWin32ClaudePathService({
+    chooseFile: async () => {
+      const result = await dialog.showOpenDialog({
+        properties: ['openFile'],
+        title: 'claude.exe を選ぶ',
+        filters: [{ name: 'claude.exe', extensions: ['exe'] }]
+      })
+      return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0]
+    },
+    save: (path) => runtimeSettings.saveWin32ClaudePath(path),
+    refresh: async () => {
+      const list = await runtimes.refresh()
+      void runtimes.probeAll()
+      return list
+    }
   })
 
   const ipc: IpcDependencies = {
@@ -361,6 +421,9 @@ export function createComposition(): Composition {
     listReachableProviders: (runtimeId) => providers.listReachable(runtimeId),
     providerLoadIssues: () => providers.loadIssues(),
     extraEnvPredicates,
+
+    pickWin32ClaudePath: () => win32ClaudePath.pick(),
+    clearWin32ClaudePath: () => win32ClaudePath.clear(),
 
     async pickHostFolder() {
       /*

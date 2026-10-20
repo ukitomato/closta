@@ -411,4 +411,28 @@ describe('runSupervisor: 単独起動 (標準入出力経路。BE-012 / SC-009)'
     workers[1]?.emit('exit', 0)
     expect(exit).toHaveBeenCalledWith(0)
   })
+
+  it('shutdownTimeoutMs の既定は 6,000 ms (X-8 / AD-058 Decision 4。Win32 の木の停止 5 秒を含める)', () => {
+    vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+    const delays: number[] = []
+    const timer: TimerLike = {
+      setTimeout(_fn, ms) {
+        delays.push(ms)
+        return delays.length
+      },
+      clearTimeout: () => undefined
+    }
+    runSupervisor({
+      transport: stdioTransport(),
+      createWorker: () => new FakeWorker(),
+      timer,
+      exit: vi.fn()
+    })
+    const C = '33333333-3333-4333-8333-333333333333'
+    process.stdin.emit('data', `${JSON.stringify(launchMsg(C))}\n`)
+    delays.length = 0
+    process.stdin.emit('end')
+    expect(delays).toContain(6000)
+    expect(delays).not.toContain(3000)
+  })
 })

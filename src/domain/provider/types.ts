@@ -149,8 +149,9 @@ export interface ResolvedCredential {
    * `config-dir` の configDir を選択ランタイムの `RuntimePath` へ変換した値 (infra/runtime。H-02/H-101)。
    * **branded 型で持つ** — 素の `string` にすると HostPath.value (Windows 形式) の取り違えを tsc が検出できない
    * (PB-M-001 / data-model §4 / AD-004)。生成は `makeRuntimePath` 経由を強制する。
+   * 名前は変えないが「選んだランタイムから見たパス」で、win32 ではホストの configDir の `HostPath` のまま (X-8 / AD-058)。
    */
-  readonly configDirRuntimePath?: RuntimePath
+  readonly configDirRuntimePath?: HostPath | RuntimePath
 }
 
 /** `deriveLaunchEnv` の戻り (data-model §4)。`settings` は 2 キー限定射影 (C-001 / AD-040)。 */
