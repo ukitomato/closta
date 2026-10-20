@@ -1,0 +1,642 @@
+{
+    "gate": "pr",
+    "run": "2026-10-21T00:00:00+09:00",
+    "spec_dir": "specs/020-session-win32-direct-launch",
+    "spec_id": "020-session-win32-direct-launch",
+    "round": 1,
+    "base_branch": "main",
+    "base_commit": "0ba52bdf4368a15e55331f4f13f145ef039b19c0",
+    "head": "7e5e1ba4776d95b109aeb34b6cccd534ae00d466",
+    "diff_stat": {
+        "files": 106,
+        "additions": 7280,
+        "deletions": 161
+    },
+    "severity_counts": {
+        "critical": 0,
+        "high": 3,
+        "medium": 13,
+        "low": 16
+    },
+    "severity_counts_before_dedup": {
+        "critical": 0,
+        "high": 5,
+        "medium": 15,
+        "low": 18
+    },
+    "convergence": {
+        "resolved_from_prev": 0,
+        "new_in_round": 3,
+        "unresolved": 0
+    },
+    "inheritance": "none (round 1)",
+    "round_history": [
+        {
+            "round": 1,
+            "head": "7e5e1ba4776d95b109aeb34b6cccd534ae00d466",
+            "critical": 0,
+            "high": 3,
+            "convergence": {
+                "resolved_from_prev": 0,
+                "new_in_round": 3,
+                "unresolved": 0
+            }
+        }
+    ],
+    "high_findings": [
+        {
+            "id": "H-001",
+            "origin": [
+                "architecture-reviewer:H-001",
+                "po-reviewer:H-001"
+            ],
+            "title": "AD-058 Confirmation / SC-001 / SC-004 require V-1/V-3 before completion but roadmap/_overview say completed",
+            "where": [
+                "docs/roadmap.md:385",
+                "docs/domains/_overview.md:72",
+                "docs/decisions/0058-win32-direct-launch-contract-and-process-tree-stop.md:68",
+                "specs/020-session-win32-direct-launch/spec.md:204",
+                "specs/020-session-win32-direct-launch/spec.md:207"
+            ],
+            "needs_user_decision": true
+        },
+        {
+            "id": "H-002",
+            "origin": [
+                "ux-reviewer:H-002",
+                "po-reviewer:H-002"
+            ],
+            "title": "Default-provider confirmation text says 'distro claude' credentials/billing on Win32",
+            "where": [
+                "src/renderer/src/features/session/labels.ts:529",
+                "src/renderer/src/features/session/labels.ts:536",
+                "src/renderer/src/features/session/LaunchDialog.tsx:759"
+            ]
+        },
+        {
+            "id": "H-003",
+            "origin": [
+                "ux-reviewer:H-001"
+            ],
+            "title": "Win32 session runtime name falls back to 'missing runtime' in rows/header/palette/search",
+            "where": [
+                "src/renderer/src/features/session/RunningSessionsProvider.tsx:61"
+            ]
+        }
+    ],
+    "dedup": [
+        {
+            "kept": "architecture-reviewer:H-001",
+            "merged": [
+                "po-reviewer:H-001"
+            ]
+        },
+        {
+            "kept": "ux-reviewer:H-002",
+            "merged": [
+                "po-reviewer:H-002"
+            ]
+        },
+        {
+            "kept": "platform-boundary-reviewer:M-001",
+            "merged": [
+                "architecture-reviewer:M-002"
+            ]
+        },
+        {
+            "kept": "po-reviewer:M-002",
+            "merged": [
+                "ux-reviewer:M-001"
+            ]
+        },
+        {
+            "kept": "platform-boundary-reviewer:L-004",
+            "merged": [
+                "architecture-reviewer:L-001"
+            ]
+        },
+        {
+            "kept": "platform-boundary-reviewer:L-001",
+            "merged": [
+                "security-reviewer:L-002"
+            ]
+        }
+    ],
+    "suppressed_by_code_gate": [],
+    "touched_files": [
+        {
+            "path": "docs/decisions/0058-win32-direct-launch-contract-and-process-tree-stop.md",
+            "sha": "c31445d7358722ba6ce6775a5a93e1858007c996"
+        },
+        {
+            "path": "docs/domains/_overview.md",
+            "sha": "de6ed1af3bf0b5285670a21fe806a8d55db9c2f0"
+        },
+        {
+            "path": "docs/domains/runtime/charter.md",
+            "sha": "1fbad9f0208128266b15377d66ba102dc6dcc6e7"
+        },
+        {
+            "path": "docs/domains/session/charter.md",
+            "sha": "f5a7d7d48f49d45fda6f126c22316219748818e4"
+        },
+        {
+            "path": "docs/glossary.md",
+            "sha": "f596c4ff19beecd89cc04590c54269be2308aba3"
+        },
+        {
+            "path": "docs/roadmap.md",
+            "sha": "1b1d36f5a438361d492c7eafab9cc914df0ec71c"
+        },
+        {
+            "path": "e2e/launch-dialog.spec.ts",
+            "sha": "ed5fd34c4aee323783d04b47d3c66907e9e0e9bb"
+        },
+        {
+            "path": "e2e/multi-session.spec.ts",
+            "sha": "7f4b5b0ae00152ea42176fb3705ebc6e0fc4a3a7"
+        },
+        {
+            "path": "e2e/sidebar-screenshot.spec.ts",
+            "sha": "8d498c454f938818407d134b1a285d9fa28c12d8"
+        },
+        {
+            "path": "e2e/support/launch.ts",
+            "sha": "f0204b9e6ef93c06679e31605eedb07c1303fd36"
+        },
+        {
+            "path": "eslint.config.mjs",
+            "sha": "dd7298b2d0f34c82d19cef80e3560adfb0cfcf26"
+        },
+        {
+            "path": "perf/real-sessions.spec.ts",
+            "sha": "c38b60fbdc90bec1d8f1347acd3ffd58e2f0874d"
+        },
+        {
+            "path": "scripts/constitution/allowlists.mjs",
+            "sha": "198739f6183ef52274c69e17dd11cbff046d17ec"
+        },
+        {
+            "path": "specs/020-session-win32-direct-launch/.gate-verdict-code.json",
+            "sha": "782675bc12d02e47fe8887a8ad62a5b5a51a80eb"
+        },
+        {
+            "path": "specs/020-session-win32-direct-launch/.gate-verdict-design.json",
+            "sha": "e3e1ab3367cd96829cda5a3c7e42ce67e8cb5be3"
+        },
+        {
+            "path": "specs/020-session-win32-direct-launch/.gate-verdict-design.json.20261020T080329",
+            "sha": "2e3950fd9b8391605a7fcd43a7de2e2a76175ef7"
+        },
+        {
+            "path": "specs/020-session-win32-direct-launch/analyze.md",
+            "sha": "c4e8372e6925d9bcbdbc9469139cd85732a06bf9"
+        },
+        {
+            "path": "specs/020-session-win32-direct-launch/analyze.md.20261020T080329",
+            "sha": "209de1ac999e179bc9e40faab42bb05d2580cd1e"
+        },
+        {
+            "path": "specs/020-session-win32-direct-launch/architecture-reviewer.design-gate.md",
+            "sha": "752f5fa737ccbfdf1190e347f89d97205f7e3895"
+        },
+        {
+            "path": "specs/020-session-win32-direct-launch/code-gate.md",
+            "sha": "29e52908ba466d630a11696638e34cfca9c2ba73"
+        },
+        {
+            "path": "specs/020-session-win32-direct-launch/contracts/ipc-win32-claude.md",
+            "sha": "104bf5fea38f98b4719512b46561908537bd7ff5"
+        },
+        {
+            "path": "specs/020-session-win32-direct-launch/convention-reviewer.code-gate.md",
+            "sha": "56eb3da72667b4bcd968a8b92df8111d95658c9e"
+        },
+        {
+            "path": "specs/020-session-win32-direct-launch/data-model.md",
+            "sha": "e7eb37a42f3b6d3e21a63757d20927a0c3268157"
+        },
+        {
+            "path": "specs/020-session-win32-direct-launch/database-reviewer.code-gate.md",
+            "sha": "ab9065464613793c799687e0cc3ad93eb90f56d4"
+        },
+        {
+            "path": "specs/020-session-win32-direct-launch/design-gate.md",
+            "sha": "d9b0eda6853b028517c7332ac7404f05fbcff6f4"
+        },
+        {
+            "path": "specs/020-session-win32-direct-launch/plan.md",
+            "sha": "ab34b093f8a854145c0c2c42ffcbfc7405bb9b1a"
+        },
+        {
+            "path": "specs/020-session-win32-direct-launch/platform-boundary-reviewer.code-gate.md",
+            "sha": "aa1941e58c8a1fa42989d605e09d24c8c7fa38c4"
+        },
+        {
+            "path": "specs/020-session-win32-direct-launch/platform-boundary-reviewer.design-gate.md",
+            "sha": "0d09fec61aebe4fa75fc8969aaea9cfce567ffef"
+        },
+        {
+            "path": "specs/020-session-win32-direct-launch/po-reviewer.design-gate.md",
+            "sha": "09aaa737c480ae4f515795ffdbeea3db3a08c8a1"
+        },
+        {
+            "path": "specs/020-session-win32-direct-launch/quickstart-results.md",
+            "sha": "dde1c5ecc2d92883c22ec93f946eede6d6ec0c67"
+        },
+        {
+            "path": "specs/020-session-win32-direct-launch/quickstart.md",
+            "sha": "a0898ae10418afd6565d3e83652f4bebbf8a528b"
+        },
+        {
+            "path": "specs/020-session-win32-direct-launch/research.md",
+            "sha": "85dee470fd2b8ec166f7fc5b3475988f32e72bd1"
+        },
+        {
+            "path": "specs/020-session-win32-direct-launch/security-reviewer.design-gate.md",
+            "sha": "f1bc6550800640e7adcd45310d9758563a9aedee"
+        },
+        {
+            "path": "specs/020-session-win32-direct-launch/spec.md",
+            "sha": "e71ce97eaac2b97d01793ffe2d495d8e4703425c"
+        },
+        {
+            "path": "specs/020-session-win32-direct-launch/tasks.md",
+            "sha": "e925595832a66fb6b65904b40bb4fc68f00d1261"
+        },
+        {
+            "path": "specs/020-session-win32-direct-launch/touched-files.txt",
+            "sha": "15411e67359bdac61f43ae80b4d12c1280176046"
+        },
+        {
+            "path": "src/agents/sdk-agent-session.test.ts",
+            "sha": "80c665c354962c30e914a4f005141230d6e21e7a"
+        },
+        {
+            "path": "src/agents/sdk-agent-session.ts",
+            "sha": "7870fdd582093195feb554cbb9cd77a8d0e0e257"
+        },
+        {
+            "path": "src/agents/session-core.test.ts",
+            "sha": "3ed4049d9fc3f174c7168a4ca0f19d799678a32b"
+        },
+        {
+            "path": "src/agents/session-core.ts",
+            "sha": "5c353c1f3295a7a23fea4915082e8630d2e7e1d0"
+        },
+        {
+            "path": "src/agents/supervisor-core.test.ts",
+            "sha": "50265875e6ec794957c15c5b85537afaed963d7e"
+        },
+        {
+            "path": "src/agents/supervisor-core.ts",
+            "sha": "03a44a4d94d8be5a6c4e3e626e33855bd3b62623"
+        },
+        {
+            "path": "src/domain/capability.test.ts",
+            "sha": "ba04a13c27f78f56909515e43fc94dff35dda88e"
+        },
+        {
+            "path": "src/domain/capability.ts",
+            "sha": "48d7f71126e4d84c3d870a1bf5254e2b18f0db4b"
+        },
+        {
+            "path": "src/domain/provider/helper-path.test.ts",
+            "sha": "7eb066922e3f37f1852f1264a24dd7d2e03f5d5e"
+        },
+        {
+            "path": "src/domain/provider/helper-path.ts",
+            "sha": "3903e9784e38db7c522d83c3b0b2196acc7f7c1a"
+        },
+        {
+            "path": "src/domain/provider/reachability.test.ts",
+            "sha": "ebb068fee17a2769d5e4c543b979aa9c6303c8af"
+        },
+        {
+            "path": "src/domain/provider/reachability.ts",
+            "sha": "4430e38f61d301d2e7df990e5071856f170776e2"
+        },
+        {
+            "path": "src/domain/provider/types.ts",
+            "sha": "7b231ff56ef88b8943e28bf3bd2c1b7898892fbc"
+        },
+        {
+            "path": "src/domain/runtime/claude-executable.test.ts",
+            "sha": "bd0de44ea3b6d6998d7568ad4cc244d86c512e37"
+        },
+        {
+            "path": "src/domain/runtime/claude-executable.ts",
+            "sha": "ffe46f55a1b158c456f4fbb02d30e71a4f6a3dbd"
+        },
+        {
+            "path": "src/domain/runtime/descriptor.test.ts",
+            "sha": "4ccc2037efa897d77ac5b3de4f069076435ab280"
+        },
+        {
+            "path": "src/domain/runtime/descriptor.ts",
+            "sha": "ed2d7d769e5d7038d1cf28ab2bb1075739c96176"
+        },
+        {
+            "path": "src/domain/runtime/dto.ts",
+            "sha": "20655021d6cc86243ad2ab5efc2baf886e41f4a5"
+        },
+        {
+            "path": "src/domain/session/__fixtures__/win32-launch-spec.ts",
+            "sha": "4a1e6176def85a2846beec49d987efff4fb9e1bb"
+        },
+        {
+            "path": "src/domain/session/agent-session.test.ts",
+            "sha": "5afee71dd1515d2f0582c55fb181c0db9e92a4b7"
+        },
+        {
+            "path": "src/domain/session/agent-session.ts",
+            "sha": "921baeffb761b3824f5883a056fb3cc24bb18ca8"
+        },
+        {
+            "path": "src/domain/session/launch-resolution.ts",
+            "sha": "a8d5ab13e19992a8e52ce98bd8b72fcea916f985"
+        },
+        {
+            "path": "src/domain/workspace/__fixtures__/runtime.ts",
+            "sha": "cb6d54d06ddca3b3c4323af0c8210ae13b6f1f86"
+        },
+        {
+            "path": "src/domain/workspace/resolution.ts",
+            "sha": "8c6df723bcde2280be3c1e26099d7b52ddf491cd"
+        },
+        {
+            "path": "src/main/app/composition-root.ts",
+            "sha": "d2ef21006de0b50e6a7932e6ed5badbf8f889660"
+        },
+        {
+            "path": "src/main/app/dto-mapper.ts",
+            "sha": "100d5c8acfecd575d3bd7a8f5e408d6103b35a0c"
+        },
+        {
+            "path": "src/main/app/e2e-capability.ts",
+            "sha": "2bd007e0f90f899accf4dd630025d77c7a95e3eb"
+        },
+        {
+            "path": "src/main/app/ipc.ts",
+            "sha": "fc9e127ab8785dd0da0003d06b7c219d560702e7"
+        },
+        {
+            "path": "src/main/app/launch-preparation.test.ts",
+            "sha": "6a576c080a3250d8bcee7938d27949110012fd49"
+        },
+        {
+            "path": "src/main/app/launch-preparation.ts",
+            "sha": "26053add4307d4c2590330769e0ce4bf1977d5bc"
+        },
+        {
+            "path": "src/main/app/provider-service.test.ts",
+            "sha": "cf905c74db99acd554521f734fef1c80fc109a85"
+        },
+        {
+            "path": "src/main/app/provider-service.ts",
+            "sha": "fe4dcf1496f8a6633ada0e33bcdd3c6161682d01"
+        },
+        {
+            "path": "src/main/app/runtime-descriptor-dto.test.ts",
+            "sha": "82ebfea4fd06fe90536cea6a58c575122d7d0269"
+        },
+        {
+            "path": "src/main/app/runtime-store.test.ts",
+            "sha": "0e5503c6c0368169843e431bbd1e504171231715"
+        },
+        {
+            "path": "src/main/app/session-launch-service.test.ts",
+            "sha": "94d10dcdc463ef917b14e909ed31cabcce2ddd8a"
+        },
+        {
+            "path": "src/main/app/session-launch-service.ts",
+            "sha": "707f55c7ad25a20a2d49b532d29ea5c527fb6154"
+        },
+        {
+            "path": "src/main/app/validate.test.ts",
+            "sha": "13dab3731b0ec0599ed97a9bafabea3516e31fa0"
+        },
+        {
+            "path": "src/main/app/win32-claude-path-service.test.ts",
+            "sha": "9e8070d4d880535de81221de93e0de6d88d3db8c"
+        },
+        {
+            "path": "src/main/app/win32-claude-path-service.ts",
+            "sha": "c43864e6a93f28f0b77b9b8ec49a171f060f0d95"
+        },
+        {
+            "path": "src/main/index.ts",
+            "sha": "d3e68f8d5cdcb504b97b822b8eefdd2cc0c8b036"
+        },
+        {
+            "path": "src/main/infra/fs/host-fs.ts",
+            "sha": "aba23c84e5648e256df6915ff50aa7045e9a6825"
+        },
+        {
+            "path": "src/main/infra/runtime/launch-spec.ts",
+            "sha": "44bcf9b9ea766a7e58bf068087e50fc11a0ac983"
+        },
+        {
+            "path": "src/main/infra/runtime/win32-claude.test.ts",
+            "sha": "ee761b91ccb75800ef236833f2dc844ed7ebebb5"
+        },
+        {
+            "path": "src/main/infra/runtime/win32-claude.ts",
+            "sha": "b64e06443a4756af8b8809ab3a3daea3c065480a"
+        },
+        {
+            "path": "src/main/infra/runtime/win32-launch.test.ts",
+            "sha": "6e7a2850bf0959a30e29dad18ef9941079125dda"
+        },
+        {
+            "path": "src/main/infra/runtime/win32-launch.ts",
+            "sha": "ee17893c958e6e0a0a406739fd08ed198468c635"
+        },
+        {
+            "path": "src/main/infra/runtime/win32.test.ts",
+            "sha": "40a1343cfe475c0c7b6de99b5ea37828df68f4df"
+        },
+        {
+            "path": "src/main/infra/runtime/win32.ts",
+            "sha": "51ad8b65e9ac949f188d555c540a07d81ee23c44"
+        },
+        {
+            "path": "src/main/infra/runtime/wsl-detector.test.ts",
+            "sha": "d91fc1c2304fd344023cc15f3c0e2b3977e673a1"
+        },
+        {
+            "path": "src/main/infra/runtime/wsl-detector.ts",
+            "sha": "6ddf634f25b638321855bbf9d74be078c635e1c2"
+        },
+        {
+            "path": "src/main/infra/settings/runtime-settings-store.test.ts",
+            "sha": "20ca9bb21b4388721669c87edded2a0ff0a9dc76"
+        },
+        {
+            "path": "src/main/infra/settings/runtime-settings-store.ts",
+            "sha": "afa67867ecfff9eae73a390320a662dce24c120f"
+        },
+        {
+            "path": "src/preload/index.ts",
+            "sha": "0651bde2f5cebfa13de0639a7a3f10c535f1364b"
+        },
+        {
+            "path": "src/renderer/src/features/folder-runtime-resolution/ResolutionScreen.test.tsx",
+            "sha": "610f652009832f58b14a1b0e0b67d680ecf20e8d"
+        },
+        {
+            "path": "src/renderer/src/features/runtime-list/RuntimeListScreen.test.tsx",
+            "sha": "3cdc27514a2db985e2fc8953c64c67ae642635bc"
+        },
+        {
+            "path": "src/renderer/src/features/runtime-list/RuntimeListScreen.tsx",
+            "sha": "561bd962ce530bcc8a53899cca50674705fa651d"
+        },
+        {
+            "path": "src/renderer/src/features/runtime-list/labels.ts",
+            "sha": "a8dd858ef4320a33a40ea211257cd6228ab83ee0"
+        },
+        {
+            "path": "src/renderer/src/features/runtime-list/useRuntimes.ts",
+            "sha": "6c1b827cc15029be8d88fed2778a748cea0cdc32"
+        },
+        {
+            "path": "src/renderer/src/features/session/LaunchDialog.test.tsx",
+            "sha": "8748118de909bfe23dcef184ee4bb95b79392eca"
+        },
+        {
+            "path": "src/renderer/src/features/session/LaunchDialog.tsx",
+            "sha": "42fdad4c7cce52ab77a6bd19eb07d86ac6c7007f"
+        },
+        {
+            "path": "src/renderer/src/features/session/LivePane.failure.test.tsx",
+            "sha": "4cc2e77cf48806ac0e0e5e34b20e27ce45ab5502"
+        },
+        {
+            "path": "src/renderer/src/features/session/LivePane.test.tsx",
+            "sha": "ab7288e13a978e3c54d92c7372e6594e34bcb841"
+        },
+        {
+            "path": "src/renderer/src/features/session/labels.ts",
+            "sha": "b202259d7e011fb811fc21523a7cabb863c4b41e"
+        },
+        {
+            "path": "src/renderer/src/features/session/launch-runtime-options.test.ts",
+            "sha": "fc2d479b55653490289a0cce120af0435df143b2"
+        },
+        {
+            "path": "src/renderer/src/features/session/launch-runtime-options.ts",
+            "sha": "ae18a47f69092da4c5a5ff24ee15974706c79f19"
+        },
+        {
+            "path": "src/renderer/src/features/shell/CenterBanners.test.tsx",
+            "sha": "95a2922685a4116b9712291464b251ab0979248f"
+        },
+        {
+            "path": "src/renderer/src/features/shell/CommandPalette.test.tsx",
+            "sha": "d7b8571bb23752f0c52c73ce173076c87e83ccf3"
+        },
+        {
+            "path": "src/renderer/src/test-support/app-shell-harness.tsx",
+            "sha": "dcd1eee5e4912dfa9bd72250f4d35e86466a540f"
+        },
+        {
+            "path": "src/renderer/src/test-support/capability.ts",
+            "sha": "70563101557750ead02423ac32447db2ec759f37"
+        },
+        {
+            "path": "tests/win32/agents-literals.test.ts",
+            "sha": "c87ed64db15e7993637a508f8a3c98319e1f50f2"
+        }
+    ],
+    "viewpoint_coverage": {
+        "A": "Critical:0 High:0 Medium:1 Low:2 (security)",
+        "B": "Critical:0 High:0 Medium:1 Low:1 (security)",
+        "C": "Critical:0 High:0 Medium:1 Low:1 (architecture)",
+        "D": "Critical:0 High:1 Medium:2 Low:4 (architecture, platform-boundary)",
+        "E": "Critical:0 High:2 Medium:1 Low:1 (po)",
+        "F": "Critical:0 High:0 Medium:1 Low:1 (platform-boundary)",
+        "G": "Critical:0 High:2 Medium:3 Low:6 (ux, a11y, database)",
+        "H": "Critical:0 High:0 Medium:4 Low:1 (po, ux, a11y, database, security)"
+    },
+    "fr_coverage": [],
+    "rule_verification": {
+        "ran": true,
+        "round": 1,
+        "reason": "Round 1",
+        "command": "node scripts/rules/run.mjs",
+        "exit_code": 0,
+        "matched": 74,
+        "known_uncatchable": 9,
+        "mismatches": 0
+    },
+    "skipped_reviewers": [],
+    "tracks": {
+        "security-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 2,
+            "low": 4
+        },
+        "architecture-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 1,
+            "medium": 2,
+            "low": 2,
+            "mode": "default+adr-drift"
+        },
+        "po-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 2,
+            "medium": 2,
+            "low": 1
+        },
+        "database-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 2,
+            "low": 2
+        },
+        "ux-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 2,
+            "medium": 2,
+            "low": 4
+        },
+        "a11y-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 3,
+            "low": 1
+        },
+        "platform-boundary-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 2,
+            "low": 4
+        },
+        "ui-coverage-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 0,
+            "low": 0
+        }
+    },
+    "verdict": "PASS"
+}

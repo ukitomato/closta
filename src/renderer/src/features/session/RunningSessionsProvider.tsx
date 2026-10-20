@@ -12,6 +12,7 @@ import type { AutoModeStatus } from '@domain/runtime/capabilities'
 import type { SessionLaunchConfig } from '@domain/session/launch-config'
 import type { LaunchOrigin } from '@domain/session/launch-usage'
 
+import { runtimeTitle } from '@/features/runtime-list/labels'
 import { useRuntimes } from '@/features/runtime-list/useRuntimes'
 import { useFolders } from '@/features/workspace-folders/useFolders'
 
@@ -55,11 +56,11 @@ export function RunningSessionsProvider({
     [folders.list]
   )
   const runtimeName = useCallback(
-    (id: string) =>
-      runtimes.list === null
-        ? ''
-        : (runtimes.list.runtimes.find((r) => r.id === id)?.distroName ??
-          SESSION_NAME_FALLBACKS.runtime),
+    (id: string) => {
+      if (runtimes.list === null) return ''
+      const r = runtimes.list.runtimes.find((x) => x.id === id)
+      return r === undefined ? SESSION_NAME_FALLBACKS.runtime : runtimeTitle(r.kind, r.distroName)
+    },
     [runtimes.list]
   )
   // 表示用の 3 値だけを返す。一覧が無い・引けないときは `undetermined` (O-4 / 014 data-model §4「権限モード」)。

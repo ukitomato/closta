@@ -525,15 +525,21 @@ export function previousFailureLabel(reason: LaunchFailureReason): string {
 }
 
 /** Provider が既定に戻った状態で起動するときの確認文言 (US-2 AC3)。 */
-export const PROVIDER_RESET_CONFIRMATION =
-  '選んでいた Provider が使えないため、既定 Provider で起動します。既定 Provider ではディストロ内の claude の既定の資格情報と課金先が使われます。よろしいですか？'
+export const PROVIDER_RESET_CONFIRMATION = {
+  wsl: '選んでいた Provider が使えないため、既定 Provider で起動します。既定 Provider ではディストロ内の claude の既定の資格情報と課金先が使われます。よろしいですか？',
+  win32:
+    '選んでいた Provider が使えないため、既定 Provider で起動します。既定 Provider ではホストの claude の既定の資格情報と課金先が使われます。よろしいですか？'
+} as const
 
 /**
  * 到達可能性の取得に失敗した状態で起動するときの確認文言 (po M-101)。使えないと断定せず、
  * 先に「再試行」できることを示す (確認ダイアログの中に再試行を置く)。
  */
-export const PROVIDER_RESET_CONFIRMATION_UNVERIFIED =
-  '選んでいた Provider に到達できるかを確認できなかったため、このまま起動すると既定 Provider で起動します。既定 Provider ではディストロ内の claude の既定の資格情報と課金先が使われます。先に「再試行」で確認し直すこともできます。'
+export const PROVIDER_RESET_CONFIRMATION_UNVERIFIED = {
+  wsl: '選んでいた Provider に到達できるかを確認できなかったため、このまま起動すると既定 Provider で起動します。既定 Provider ではディストロ内の claude の既定の資格情報と課金先が使われます。先に「再試行」で確認し直すこともできます。',
+  win32:
+    '選んでいた Provider に到達できるかを確認できなかったため、このまま起動すると既定 Provider で起動します。既定 Provider ではホストの claude の既定の資格情報と課金先が使われます。先に「再試行」で確認し直すこともできます。'
+} as const
 
 export const PRESET_SAVE_FAILURE_LABELS: Record<
   Extract<SavePresetResult, { ok: false }>['reason'],

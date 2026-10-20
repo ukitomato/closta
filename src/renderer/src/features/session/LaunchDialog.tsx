@@ -757,9 +757,11 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
           className="flex flex-col gap-2 rounded-md border p-3 text-sm"
         >
           <p>
-            {reachabilityUnverified
-              ? PROVIDER_RESET_CONFIRMATION_UNVERIFIED
-              : PROVIDER_RESET_CONFIRMATION}
+            {
+              (reachabilityUnverified
+                ? PROVIDER_RESET_CONFIRMATION_UNVERIFIED
+                : PROVIDER_RESET_CONFIRMATION)[selectedRuntime?.kind === 'win32' ? 'win32' : 'wsl']
+            }
           </p>
           <div className="flex gap-2">
             {/* 確認できなかっただけなら、既定で起動する前に確認し直せるようにする (po M-101)。 */}

@@ -81,3 +81,11 @@ src/renderer/src/test-support/app-shell-harness.tsx
 src/renderer/src/test-support/capability.ts
 tests/win32/agents-literals.test.ts
 specs/020-session-win32-direct-launch/data-model.md
+src/renderer/src/features/session/RunningSessionsProvider.tsx
+src/renderer/src/features/session/RunningSessionsProvider.test.tsx
+src/renderer/src/features/session/labels.ts
+src/renderer/src/features/session/LaunchDialog.tsx
+src/renderer/src/features/session/LaunchDialog.test.tsx
+docs/roadmap.md
+docs/domains/_overview.md
+docs/domains/session/charter.md

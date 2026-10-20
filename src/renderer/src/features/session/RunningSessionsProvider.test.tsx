@@ -74,6 +74,50 @@ async function setup(count: number): Promise<void> {
   )
 }
 
+describe('RunningSessionsView.runtimeName (X-8 H-003)', () => {
+  it('Win32 のランタイムは「見つからない」ではなく「Windows (ホスト)」と出し、WSL は distro 名つき', async () => {
+    sink.view = null
+    const base = {
+      state: 'running',
+      isDefault: false,
+      capabilities: {
+        probeState: 'done',
+        sandboxKind: 'none',
+        seccompStatus: 'unknown',
+        missingDependencies: [],
+        probedAt: '2026-10-21T00:00:00.000Z',
+        autoModeAllowed: false,
+        autoModeStatus: 'unavailable'
+      },
+      detectedAt: '2026-10-21T00:00:00.000Z',
+      claudeStatus: null,
+      claudeOverridden: false
+    }
+    const cap = installCapability({
+      listFolders: () => new Promise<never>(() => undefined),
+      listRuntimes: async () =>
+        ({
+          wslAvailability: 'available',
+          enumerationIssues: [],
+          runtimes: [
+            { ...base, id: 'host', kind: 'win32', distroName: null, wslVersion: null, hasPathMapping: false },
+            { ...base, id: 'wsl:Ubuntu', kind: 'wsl', distroName: 'Ubuntu', wslVersion: 2, hasPathMapping: true }
+          ]
+        }) as never
+    })
+    const store = createRunningSessionStore(() => cap)
+    render(
+      <RunningSessionStoreContext.Provider value={store}>
+        <RunningSessionsProvider>
+          <Probe />
+        </RunningSessionsProvider>
+      </RunningSessionStoreContext.Provider>
+    )
+    await vi.waitFor(() => expect(view().runtimeName('host')).toBe('Windows (ホスト)'))
+    expect(view().runtimeName('wsl:Ubuntu')).toBe('WSL: Ubuntu')
+  })
+})
+
 describe('RunningSessionsView.revealMessage (O-3 FE-023)', () => {
   it('窓の外の id で、そのメッセージが入るところまで窓を広げる', async () => {
     await setup(MESSAGE_WINDOW * 2 + 5)

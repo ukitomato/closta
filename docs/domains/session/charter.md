@@ -340,7 +340,7 @@ X-6 は未着手。
   (2026-10-19 に利用者が承認。Closta で Closta を開発できるのは O-11 と X-8 / X-9 の後)。AD-041 (h) が X-6 に指名した
   「Win32Runtime の直接起動」の持ち主。実装は [020](../../../specs/020-session-win32-direct-launch/spec.md)
   (契約と木の停止は [AD-058](../../decisions/0058-win32-direct-launch-contract-and-process-tree-stop.md))。
-  実機の確認は利用者に残る
+  マージ済み。V-1 / V-3 (AD-058 の Confirmation・SC-001 / SC-004 の実機の計測) は未実施で、利用者の実機に残る
 - **X-9** — セッションの再開 ([roadmap の X-9 の行](../../roadmap.md))。X-6 から切り出した (同上)。AD-041 (h) の
   「fork / resume / rename / tag / delete」のうち resume と、失敗したセッションの再開 (X-5 FR-013) と Journey 4 の手順 1〜2 を持つ。
   分岐 (手順 3。`forkSession`) は X-6 に残す。未着手

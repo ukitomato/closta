@@ -1455,6 +1455,31 @@ describe('LaunchDialog — Win32Runtime (X-8)', () => {
     }
   )
 
+  it('Win32 で既定 Provider へ戻る確認は「ホストの claude」と言い、ディストロとは言わない (H-002)', async () => {
+    installWin32('found', {
+      listReachableProviders: async () => ({
+        reachable: [bedrock],
+        excluded: [{ provider: far, reason: 'unreachable' }]
+      })
+    })
+    const session = fakeSession({
+      lastConfig: {
+        folderId: 'win-proj',
+        runtimeId: 'host',
+        providerId: 'p-far',
+        modelId: null,
+        effort: null,
+        permissionMode: 'default'
+      }
+    })
+    render(<LaunchDialog session={session} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: '起動' })).toBeEnabled())
+    fireEvent.click(screen.getByRole('button', { name: '起動' }))
+    const dialog = await screen.findByRole('alertdialog', { name: '既定 Provider での起動の確認' })
+    expect(dialog.textContent).toContain('ホストの claude の既定の資格情報と課金先')
+    expect(dialog.textContent).not.toContain('ディストロ')
+  })
+
   it('使えない Win32Runtime をプリセットが指していると runtime-missing で止まり、起動できない', async () => {
     installWin32('shim-only')
     const session = fakeSession({
