@@ -80,7 +80,7 @@ export interface SupervisorHandle {
 export function runSupervisor(deps: SupervisorDeps): SupervisorHandle {
   const { transport, timer } = deps
   const windowMs = deps.batchWindowMs ?? 100
-  const shutdownMs = deps.shutdownTimeoutMs ?? 3000
+  const shutdownMs = deps.shutdownTimeoutMs ?? 6000 // X-8 / AD-058 Decision 4: 3,000 → 6,000 (Win32 の木の停止 5 秒を含める)
   const sessions = new Map<string, SessionSlot>()
   let pending: SessionStatusUpdate[] = []
   let flushHandle: unknown = null

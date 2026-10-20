@@ -26,6 +26,12 @@ interface RuntimeDescriptorBase {
   readonly detectedAt: number
 }
 
+/**
+ * Win32Runtime の claude の状態 (X-8 / AD-058 / data-model §1.2)。
+ * 値の集合を変えるには ADR が要る (AD-058)。
+ */
+export type Win32ClaudeStatus = 'found' | 'not-found' | 'shim-only' | 'override-invalid'
+
 export interface Win32RuntimeDescriptor extends RuntimeDescriptorBase {
   readonly id: 'host'
   readonly kind: 'win32'
@@ -33,6 +39,11 @@ export interface Win32RuntimeDescriptor extends RuntimeDescriptorBase {
   readonly pathMapping?: undefined
   readonly distroName?: undefined
   readonly wslVersion?: undefined
+  /** ホストの claude.exe の絶対パス (HostPath の文字列)。`found` のときだけ非 null。**IPC/DTO に出さない。** */
+  readonly claudePath: string | null
+  readonly claudeStatus: Win32ClaudeStatus
+  /** 設定で場所を指定しているか (ランタイム一覧の「指定を解除」を出すため)。 */
+  readonly claudeOverridden: boolean
 }
 
 export interface WslRuntimeDescriptor extends RuntimeDescriptorBase {

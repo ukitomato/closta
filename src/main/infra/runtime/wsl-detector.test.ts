@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { autoModeStatus, isAutoModeAllowed } from '@domain/runtime/capabilities'
 import type { WslRuntimeDescriptor } from '@domain/runtime/descriptor'
 import { wslNamespace } from '@domain/runtime/namespace'
+import { makeHostPath } from '@domain/runtime/path-types'
 import type { VerifiedRunning } from '@domain/runtime/verified-running'
 
 import { createRuntimeDetector } from './wsl-detector'
@@ -189,6 +190,52 @@ describe('list()', () => {
     expect(
       result.runtimes.filter((r) => r.kind === 'wsl').every((r) => r.state === 'stopped')
     ).toBe(true)
+  })
+})
+
+describe('list() の Win32 claude の探索 (X-8 BE-022)', () => {
+  const FOUND_PATH = makeHostPath('C:\\Users\\u\\.local\\bin\\claude.exe')
+
+  it('locator なしは not-found (fail-closed)', async () => {
+    const { cli } = stubCli()
+    const [win32] = (await detectorAt(cli).list()).runtimes
+    expect(win32).toMatchObject({ kind: 'win32', claudeStatus: 'not-found', claudePath: null })
+  })
+
+  it('locator の結果が descriptor に写り、1 回だけ呼ばれ、wsl.exe は 3 回のまま', async () => {
+    if (!FOUND_PATH.ok) throw new Error('fixture')
+    const { cli, calls } = stubCli()
+    let located = 0
+    const detector = createRuntimeDetector({
+      cli,
+      now: () => NOW,
+      locateWin32Claude: async () => {
+        located += 1
+        return { status: 'found', path: FOUND_PATH.path, overridden: true }
+      }
+    })
+    const [win32] = (await detector.list()).runtimes
+    expect(win32).toMatchObject({
+      claudeStatus: 'found',
+      claudePath: 'C:\\Users\\u\\.local\\bin\\claude.exe',
+      claudeOverridden: true
+    })
+    expect(located).toBe(1)
+    expect(calls).toMatchObject({ listNames: 1, listRunning: 1, listVerbose: 1 })
+  })
+
+  it('locator が throw したら not-found で WSL は今どおり', async () => {
+    const { cli } = stubCli()
+    const detector = createRuntimeDetector({
+      cli,
+      now: () => NOW,
+      locateWin32Claude: async () => {
+        throw new Error('boom')
+      }
+    })
+    const result = await detector.list()
+    expect(result.runtimes.map((r) => r.id)).toEqual(['host', 'wsl:Ubuntu-26.04', 'wsl:Debian'])
+    expect(result.runtimes[0]).toMatchObject({ claudeStatus: 'not-found' })
   })
 })
 

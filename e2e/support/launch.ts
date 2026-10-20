@@ -51,9 +51,9 @@ export async function reachActiveComposer(page: Page): Promise<import('@playwrig
   // Provider / モデル / effort / 権限モードは既定のまま (既定 Provider は X-1 と同じ curated base で起動する)。
   // **select は位置でなく label で拾う** (X-5 SH-011。2 ペイン化で画面に並ぶ要素が増えても壊れない)。
   const folderSelect = page.getByRole('combobox', { name: '作業フォルダ' })
-  const runtimeSelect = page.getByRole('combobox', { name: 'ランタイム (WSL)' })
+  const runtimeSelect = page.getByRole('combobox', { name: 'ランタイム', exact: true })
   await folderSelect.selectOption({ index: 1 }) // index 0 は「選択してください」
-  await runtimeSelect.selectOption({ index: 1 })
+  await runtimeSelect.selectOption({ label: 'E2E-Ubuntu' })
   // exact 一致にする — 「新規起動」なども「起動」を部分一致で拾うため (strict mode 回避)。
   await page.getByRole('button', { name: '起動', exact: true }).click()
 

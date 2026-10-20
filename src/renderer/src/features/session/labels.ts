@@ -29,7 +29,7 @@ const LAUNCH_REJECT_LABELS: Record<SessionLaunchRejectReason, string> = {
   'distro-mismatch':
     '作業フォルダの所在と選んだランタイムのディストロが一致しません。組み合わせを見直してください。',
   'claude-not-found':
-    'ディストロ内に claude が見つかりませんでした。WSL 内に Claude Code を導入してください。',
+    'claude が見つかりませんでした。ランタイム一覧で claude の状態を確かめ、導入するか場所を指定してから再検出してください。',
   'launch-failed': '起動に失敗しました。もう一度お試しください。',
   'process-crashed': 'セッションのプロセスが異常終了しました。',
   'stream-protocol-error': '応答ストリームが壊れました。セッションを開き直してください。',
@@ -386,11 +386,20 @@ export const PERMISSION_MODE_DESCRIPTIONS: Record<SafePermissionMode, string> = 
 /** 起動設定ダイアログの軸ラベル (select の見出しと aria-label を兼ねる。FE-004)。 */
 export const LAUNCH_AXIS_LABELS = {
   folder: '作業フォルダ',
-  runtime: 'ランタイム (WSL)',
+  runtime: 'ランタイム',
   provider: 'Provider',
   model: 'モデル',
   effort: 'effort',
   permissionMode: '権限モード'
+} as const
+
+/**
+ * Provider の「既定」の選択肢の文言を、選んだランタイムの種類で替える (X-8 data-model §10.1)。
+ * 既定 = Provider を重ねずに、そのランタイム側の claude の設定で動かす。ランタイム未選択は WSL と同じ今の文言。
+ */
+export const PROVIDER_DEFAULT_LABELS = {
+  wsl: '既定 (ディストロ内の claude の設定)',
+  win32: '既定 (Windows の claude の設定)'
 } as const
 
 /**
@@ -516,15 +525,21 @@ export function previousFailureLabel(reason: LaunchFailureReason): string {
 }
 
 /** Provider が既定に戻った状態で起動するときの確認文言 (US-2 AC3)。 */
-export const PROVIDER_RESET_CONFIRMATION =
-  '選んでいた Provider が使えないため、既定 Provider で起動します。既定 Provider ではディストロ内の claude の既定の資格情報と課金先が使われます。よろしいですか？'
+export const PROVIDER_RESET_CONFIRMATION = {
+  wsl: '選んでいた Provider が使えないため、既定 Provider で起動します。既定 Provider ではディストロ内の claude の既定の資格情報と課金先が使われます。よろしいですか？',
+  win32:
+    '選んでいた Provider が使えないため、既定 Provider で起動します。既定 Provider ではホストの claude の既定の資格情報と課金先が使われます。よろしいですか？'
+} as const
 
 /**
  * 到達可能性の取得に失敗した状態で起動するときの確認文言 (po M-101)。使えないと断定せず、
  * 先に「再試行」できることを示す (確認ダイアログの中に再試行を置く)。
  */
-export const PROVIDER_RESET_CONFIRMATION_UNVERIFIED =
-  '選んでいた Provider に到達できるかを確認できなかったため、このまま起動すると既定 Provider で起動します。既定 Provider ではディストロ内の claude の既定の資格情報と課金先が使われます。先に「再試行」で確認し直すこともできます。'
+export const PROVIDER_RESET_CONFIRMATION_UNVERIFIED = {
+  wsl: '選んでいた Provider に到達できるかを確認できなかったため、このまま起動すると既定 Provider で起動します。既定 Provider ではディストロ内の claude の既定の資格情報と課金先が使われます。先に「再試行」で確認し直すこともできます。',
+  win32:
+    '選んでいた Provider に到達できるかを確認できなかったため、このまま起動すると既定 Provider で起動します。既定 Provider ではホストの claude の既定の資格情報と課金先が使われます。先に「再試行」で確認し直すこともできます。'
+} as const
 
 export const PRESET_SAVE_FAILURE_LABELS: Record<
   Extract<SavePresetResult, { ok: false }>['reason'],

@@ -1,0 +1,179 @@
+{
+    "gate": "design",
+    "run": "2026-10-20T00:00:00+09:00",
+    "spec_dir": "specs/020-session-win32-direct-launch",
+    "spec_id": "020-session-win32-direct-launch",
+    "warnings": [],
+    "tracks": {
+        "analyze": {
+            "status": "ok",
+            "raw_out": "analyze.md",
+            "viewpoint_missing": null,
+            "cascade_demotions": null
+        },
+        "po-reviewer": {
+            "status": "ok",
+            "raw_out": "po-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "architecture-reviewer": {
+            "status": "ok",
+            "raw_out": "architecture-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "security-reviewer": {
+            "status": "ok",
+            "raw_out": "security-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 1
+        },
+        "platform-boundary-reviewer": {
+            "status": "ok",
+            "raw_out": "platform-boundary-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        }
+    },
+    "severity_counts": {
+        "critical": 1,
+        "high": 6,
+        "medium": 13,
+        "low": 12
+    },
+    "fr_coverage": [
+        {
+            "fr": "FR-002",
+            "covered": true,
+            "by": [
+                "tasks.md BE-003",
+                "BE-010",
+                "BE-011",
+                "BE-012"
+            ],
+            "note": "blocked by C-001"
+        },
+        {
+            "fr": "FR-007",
+            "covered": true,
+            "by": [
+                "FE-010",
+                "FE-020",
+                "BE-012"
+            ],
+            "note": "dialog path incomplete (H-002)"
+        },
+        {
+            "fr": "FR-009",
+            "covered": true,
+            "by": [
+                "BE-011",
+                "BE-040",
+                "BE-041",
+                "FE-040"
+            ],
+            "note": "reachability vs launch mismatch (H-004)"
+        },
+        {
+            "fr": "FR-011",
+            "covered": true,
+            "by": [
+                "BE-030",
+                "BE-031"
+            ],
+            "note": "spec vs ADR (H-001)"
+        },
+        {
+            "fr": "FR-013",
+            "covered": false,
+            "by": [
+                "BE-010",
+                "BE-012"
+            ],
+            "note": "partial: monitor rows (M-012)"
+        },
+        {
+            "fr": "FR-014",
+            "covered": true,
+            "by": [
+                "BE-011",
+                "BE-020",
+                "SH-011"
+            ],
+            "note": "wording vs placement (H-006)"
+        }
+    ],
+    "viewpoint_coverage": {
+        "A": "Critical:0 High:0 (security Medium:1 Low:1)",
+        "B": "Critical:1 (security C-001 demoted to High; analyze C1 Critical)",
+        "C": "Critical:0 High:2",
+        "D": "Critical:0 High:0",
+        "E": "Critical:0 High:3",
+        "F": "Critical:0 High:0",
+        "G": "\u8a72\u5f53\u306a\u3057",
+        "H": "Critical:0 High:1"
+    },
+    "dedup_log": [
+        {
+            "merged": [
+                "analyze-C1",
+                "security-C-001",
+                "platform-boundary-M-003"
+            ],
+            "key": "data-model.md:184"
+        },
+        {
+            "merged": [
+                "po-H-001",
+                "analyze-F1"
+            ],
+            "key": "FR-011"
+        },
+        {
+            "merged": [
+                "po-H-003",
+                "analyze-F6"
+            ],
+            "key": "SC-004"
+        },
+        {
+            "merged": [
+                "architecture-H-001",
+                "platform-boundary-H-001",
+                "architecture-M-003",
+                "platform-boundary-M-004"
+            ],
+            "key": "tasks.md:81 / SC-005"
+        },
+        {
+            "merged": [
+                "analyze-F2",
+                "platform-boundary-L-002"
+            ],
+            "key": "FR-014 / Principle II"
+        },
+        {
+            "merged": [
+                "po-M-004",
+                "analyze-F3"
+            ],
+            "key": "plan.md:258 (RK-07)"
+        },
+        {
+            "merged": [
+                "architecture-M-001",
+                "platform-boundary-M-001"
+            ],
+            "key": "data-model.md:274"
+        },
+        {
+            "merged": [
+                "architecture-L-001",
+                "platform-boundary-L-001"
+            ],
+            "key": "tasks.md:89"
+        }
+    ],
+    "verdict": "FIX_REQUIRED"
+}

@@ -21,13 +21,20 @@ import {
 import { isEffortLevel, isValidModelId } from '@domain/provider/model-catalog'
 import { assertHelperSettings, isHelperSettings } from '@domain/provider/settings'
 import type { EffortLevel } from '@domain/provider/types'
-import type {
-  LaunchFailureReason,
-  LaunchQueryOptions,
-  PermissionDecision,
-  RuntimeLaunchSpec,
-  SessionControl,
-  SessionEvent
+import { classifyClaudeExecutable } from '@domain/runtime/claude-executable'
+import { hostPathOps } from '@domain/runtime/path-api'
+import { makeHostPath } from '@domain/runtime/path-types'
+import {
+  WIN32_TREE_STOP_ARGS,
+  WIN32_TREE_STOP_COMMAND_NAME,
+  WSL_LAUNCH_KIND,
+  type LaunchFailureReason,
+  type LaunchQueryOptions,
+  type PermissionDecision,
+  type RuntimeLaunchSpec,
+  type SessionControl,
+  type SessionEvent,
+  type Win32LaunchSpec
 } from '@domain/session/agent-session'
 import {
   assertSafePermissionMode,
@@ -182,6 +189,9 @@ void queryClassifiedMethodsExist
 /** 子 (`wsl.exe`) の exit を待つ期限 (kill / `end` / 終了時。spec Assumptions [ASSUMED])。 */
 const CHILD_EXIT_TIMEOUT_MS = 3000
 
+/** Win32 のプロセス木の停止 (停止のコマンドの実行 + 子の exit) の期限 (X-8 / data-model §9.3)。過ぎたら記録して先へ進む。 */
+const TREE_STOP_TIMEOUT_MS = 5000
+
 /* ── 調停役スレッドとの経路 (worker_threads の parentPort。構造だけで受ける) ── */
 
 interface CoordinatorPort {
@@ -326,9 +336,72 @@ function decodeLaunch(data: unknown): DecodedLaunch | null {
   return { spec, options }
 }
 
+/** `kind` で分ける。`kind` が無い・WSL の値 (`WSL_LAUNCH_KIND`) は今の WSL の規則 (返す値に `kind` を付けない)。`'win32'` は別の関数。それ以外は null。 */
 function decodeLaunchSpec(value: unknown): RuntimeLaunchSpec | null {
   const spec = asRecord(value)
   if (spec === null) return null
+  if (spec.kind === 'win32') return decodeWin32LaunchSpec(spec)
+  if (spec.kind !== undefined && spec.kind !== WSL_LAUNCH_KIND) return null
+  return decodeWslLaunchSpec(spec)
+}
+
+/** 文字列の値だけを写す env。 */
+function copyStringEnv(value: unknown): Record<string, string> | null {
+  const record = asRecord(value)
+  if (record === null || Array.isArray(record)) return null
+  const out: Record<string, string> = {}
+  for (const [key, val] of Object.entries(record)) {
+    if (typeof val === 'string') out[key] = val
+  }
+  return out
+}
+
+/** Win32 の起動の値の検査 (data-model §5.2)。値の判定は domain の定数と述語だけを使う (FR-014)。 */
+function decodeWin32LaunchSpec(spec: Record<string, unknown>): Win32LaunchSpec | null {
+  const { pathToClaudeCodeExecutable, command, cwd, windowsHide, stop } = spec
+  if (typeof pathToClaudeCodeExecutable !== 'string') return null
+  if (classifyClaudeExecutable(pathToClaudeCodeExecutable) !== 'exe') return null
+  if (command !== pathToClaudeCodeExecutable) return null
+  if (typeof cwd !== 'string' || !makeHostPath(cwd).ok) return null
+  if ('prefixArgs' in spec) return null
+  if (windowsHide !== true) return null
+
+  const env = copyStringEnv(spec.env)
+  if (env === null || Object.keys(env).some((k) => /^(WSLENV|WSL_UTF8)$/i.test(k))) return null
+
+  const stopRecord = asRecord(stop)
+  if (stopRecord === null || Array.isArray(stopRecord)) return null
+  const { command: stopCommand, argsBeforePid } = stopRecord
+  if (typeof stopCommand !== 'string') return null
+  const stopPath = makeHostPath(stopCommand)
+  if (!stopPath.ok) return null
+  if (
+    hostPathOps.basename(stopPath.path).toLowerCase() !== WIN32_TREE_STOP_COMMAND_NAME.toLowerCase()
+  ) {
+    return null
+  }
+  if (
+    !Array.isArray(argsBeforePid) ||
+    argsBeforePid.length !== WIN32_TREE_STOP_ARGS.length ||
+    !WIN32_TREE_STOP_ARGS.every((arg, i) => argsBeforePid[i] === arg)
+  ) {
+    return null
+  }
+  const stopEnv = copyStringEnv(stopRecord.env)
+  if (stopEnv === null) return null
+
+  return {
+    kind: 'win32',
+    pathToClaudeCodeExecutable,
+    command: pathToClaudeCodeExecutable,
+    cwd,
+    env,
+    windowsHide: true,
+    stop: { command: stopCommand, argsBeforePid: [...WIN32_TREE_STOP_ARGS], env: stopEnv }
+  }
+}
+
+function decodeWslLaunchSpec(spec: Record<string, unknown>): RuntimeLaunchSpec | null {
   const { pathToClaudeCodeExecutable, command, prefixArgs, env } = spec
   if (typeof pathToClaudeCodeExecutable !== 'string' || typeof command !== 'string') return null
   if (!Array.isArray(prefixArgs) || !prefixArgs.every((a) => typeof a === 'string')) return null
@@ -377,8 +450,11 @@ async function run(
   let state: SessionRunState = 'idle'
   let reasonKey: LaunchFailureReason | null = null
   let queryHandle: (Pick<Query, 'interrupt'> & AsyncIterable<SDKMessage>) | null = null
-  let spawnedChild: (SpawnedLike & { exitCode?: number | null }) | null = null
+  let spawnedChild: (SpawnedLike & { exitCode?: number | null; pid?: number }) | null = null
   let childExited = false
+  // Win32 の起動のときだけ非 null。停止の手続き (§9.1) の対象かどうかを決める。
+  const win32Spec: Win32LaunchSpec | null = spec.kind === 'win32' ? spec : null
+  let treeStop: Promise<void> | null = null
   const childExitWaiters: (() => void)[] = []
   // 初 stream/ready を受けたか (launching → running を 1 回だけ発火する)。
   let sawFirstMessage = false
@@ -455,6 +531,65 @@ async function run(
   }
 
   /**
+   * Win32 のプロセス木の停止 (data-model §9.1)。claude が生きている間に、spec の停止の指示で木ごと止める。
+   * 2 回目以降は同じ待ちを返す。停止のコマンドの起動の失敗・非 0 では子を直接 kill に落とす。
+   * 全体の期限は `TREE_STOP_TIMEOUT_MS`。過ぎたら記録して先へ進む (閉じる操作を止めない)。
+   * 記録は固定の語と終了コードの数だけ (パス・pid・env を出さない)。
+   */
+  const stopTree = (win: Win32LaunchSpec): Promise<void> => {
+    if (treeStop !== null) return treeStop
+    const child = spawnedChild
+    if (child === null || childExited) return Promise.resolve()
+    treeStop = (async (): Promise<void> => {
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const deadline = new Promise<'timeout'>((resolve) => {
+        timer = setTimeout(() => resolve('timeout'), TREE_STOP_TIMEOUT_MS)
+      })
+      const childGone = (): Promise<'exited'> =>
+        childExited
+          ? Promise.resolve('exited')
+          : new Promise((resolve) => childExitWaiters.push(() => resolve('exited')))
+      try {
+        const pid = child.pid
+        if (pid === undefined) {
+          process.stderr.write('[tree-stop] fallback exit=-1\n')
+          child.kill('SIGTERM')
+        } else {
+          const stopRun = new Promise<number>((resolve) => {
+            try {
+              const stopChild = spawn(win.stop.command, [...win.stop.argsBeforePid, String(pid)], {
+                env: { ...win.stop.env },
+                shell: false,
+                windowsHide: win.windowsHide,
+                stdio: 'ignore'
+              })
+              stopChild.once('error', () => resolve(-1))
+              stopChild.once('exit', (code) => resolve(code ?? -1))
+            } catch {
+              resolve(-1)
+            }
+          })
+          const result = await Promise.race([stopRun, deadline])
+          if (result === 'timeout') {
+            process.stderr.write('[tree-stop] timeout\n')
+            return
+          }
+          if (result !== 0 && !childExited) {
+            process.stderr.write(`[tree-stop] fallback exit=${result}\n`)
+            child.kill('SIGTERM')
+          }
+        }
+        if ((await Promise.race([childGone(), deadline])) === 'timeout') {
+          process.stderr.write('[tree-stop] timeout\n')
+        }
+      } finally {
+        clearTimeout(timer)
+      }
+    })()
+    return treeStop
+  }
+
+  /**
    * 終わり方を問わず 1 回だけ通る出口。子が生きていれば止めて exit を待ち、`ended` を送る (R3-H-03)。
    * 調停役スレッドは `ended` を受けて Worker を terminate する。
    */
@@ -465,14 +600,21 @@ async function run(
     signals.dispose()
     permissions.denyAll()
     elicitations.cancelAll()
+    // Win32: 子が生きていて穏当な終了の途中でなければ、キューを閉じる前に木ごと止める (§9.2)。
+    if (win32Spec !== null && !ending) await stopTree(win32Spec)
     promptQueue.close()
     if (!childExited && ending) {
       // 穏当な終了の途中: 期限まで正常終了を待ち、だめなら強制終了に落としてその旨を示す。
       if (!(await waitChildExit(CHILD_EXIT_TIMEOUT_MS))) forceEnd()
     }
     if (!childExited) {
-      killSpawnedChild()
-      await waitChildExit(CHILD_EXIT_TIMEOUT_MS)
+      if (win32Spec !== null) {
+        // stopTree が自分の期限で待つ (ここで更に待たない)。
+        await stopTree(win32Spec)
+      } else {
+        killSpawnedChild()
+        await waitChildExit(CHILD_EXIT_TIMEOUT_MS)
+      }
     }
     post({ kind: 'ended' })
   }
@@ -482,8 +624,34 @@ async function run(
     if (endForced || childExited) return
     endForced = true
     emit({ kind: 'end-forced' })
+    if (win32Spec !== null) {
+      // 木ごと止めてから abort する (§9.2)。
+      void stopTree(win32Spec).then(() => abortController.abort())
+      return
+    }
     killSpawnedChild()
     abortController.abort()
+  }
+
+  /**
+   * 強制終了の共通の手順 (kill / 最初のプロンプトの前の end)。WSL は kill → deny → abort → close (同期)、
+   * Win32 は deny → 木の停止を待つ → abort → close (§9.2)。
+   */
+  const terminateNow = (): void => {
+    if (win32Spec === null) killSpawnedChild()
+    permissions.denyAll()
+    elicitations.cancelAll()
+    if (win32Spec !== null && spawnedChild !== null && !childExited) {
+      void stopTree(win32Spec).then(() => {
+        abortController.abort()
+        promptQueue.close()
+      })
+    } else {
+      abortController.abort()
+      promptQueue.close()
+    }
+    // spawn 前 (launching) の kill は query の stream が終わらないことがあるので、ここからも出口を通す。
+    if (spawnedChild === null) void finish()
   }
 
   const canUseTool = createCanUseTool({
@@ -532,7 +700,12 @@ async function run(
     if (closing || finished) throw new Error('session is closing')
     // env は `spec.env` のみ・argv は配列 (composeClaudeSpawn が合成)。SDK 提供 env / process.env を混ぜない (H-01)。
     const plan = composeClaudeSpawn(spec, options)
-    const child = spawn(plan.command, [...plan.args], { env: plan.env, shell: false })
+    const child = spawn(plan.command, [...plan.args], {
+      env: plan.env,
+      shell: false,
+      ...(plan.cwd !== undefined ? { cwd: plan.cwd } : {}),
+      ...(plan.windowsHide !== undefined ? { windowsHide: plan.windowsHide } : {})
+    })
     spawnedChild = child
     child.once('exit', () => {
       childExited = true
@@ -597,12 +770,7 @@ async function run(
            * 期限を待たずに止め、破損の警告 (`end-forced`) は出さない (pr-gate R1 po H-001)。
            */
           transition({ kind: 'kill' })
-          killSpawnedChild()
-          permissions.denyAll()
-          elicitations.cancelAll()
-          abortController.abort()
-          promptQueue.close()
-          if (spawnedChild === null) void finish()
+          terminateNow()
           break
         }
         ending = true
@@ -617,13 +785,8 @@ async function run(
         closing = true
         transition({ kind: 'kill' })
         // Windows の親 kill は孫 (WSL) に伝播しないため、保持した子プロセスを直接 kill する (C-6)。
-        killSpawnedChild()
-        permissions.denyAll()
-        elicitations.cancelAll()
-        abortController.abort()
-        promptQueue.close()
-        // spawn 前 (launching) の kill は query の stream が終わらないことがあるので、ここからも出口を通す。
-        if (spawnedChild === null) void finish()
+        // Win32 は木ごと止めてから abort / close (terminateNow。§9.2)。
+        terminateNow()
         break
     }
   }

@@ -25,6 +25,7 @@ import {
 } from '@domain/runtime/verified-running'
 
 import { createWin32Descriptor } from './win32'
+import type { Win32ClaudeLocation } from './win32-claude'
 import type { WslCli } from './wsl-cli'
 import {
   parseMountEntries,
@@ -52,7 +53,14 @@ export interface DetectorDeps {
   readonly cli: WslCli
   /** 時刻。注入するのは capabilities の `probedAt` と確認済みの値の期限を試験可能にするため。 */
   readonly now: () => number
+  /**
+   * Win32 の claude の探索 (X-8 / data-model §2)。`list()` の 1 回だけ呼ぶ (起動のたびには呼ばない。AD-018 §4)。
+   * 省略時は fail-closed の `not-found`。throw したら `not-found` (検出全体を失敗にしない)。
+   */
+  readonly locateWin32Claude?: () => Promise<Win32ClaudeLocation>
 }
+
+const CLAUDE_NOT_FOUND: Win32ClaudeLocation = { status: 'not-found', overridden: false }
 
 /**
  * `probe` の期限。`VerifiedRunning` の既定 TTL (30 秒) をそのまま使う。
@@ -62,18 +70,20 @@ const PROBE_VERIFICATION_TTL_MS = 30_000
 
 export function createRuntimeDetector(deps: DetectorDeps): RuntimeDetector {
   const { cli, now } = deps
+  const locateWin32Claude = deps.locateWin32Claude ?? (async () => CLAUDE_NOT_FOUND)
 
   return {
     async list(): Promise<RuntimeEnumeration> {
       const detectedAt = now()
-      const win32 = createWin32Descriptor(detectedAt)
 
-      // **3 系統を並列に 1 回ずつ。** 直列にすると固定コスト 1.5 秒が 3 倍になる。
-      const [names, running, verbose] = await Promise.all([
+      // **3 系統を並列に 1 回ずつ。** 直列にすると固定コスト 1.5 秒が 3 倍になる。claude の探索も同じ並列に 1 回。
+      const [names, running, verbose, claude] = await Promise.all([
         cli.listNames(),
         cli.listRunning(),
-        cli.listVerbose()
+        cli.listVerbose(),
+        locateWin32Claude().catch((): Win32ClaudeLocation => CLAUDE_NOT_FOUND)
       ])
+      const win32 = createWin32Descriptor(detectedAt, claude)
 
       /*
        * **名前の列挙が失敗したら `Win32Runtime` のみを返す。例外を投げない**

@@ -25,6 +25,10 @@ import type { FolderRuntimeResolutionDTO } from '@domain/workspace/dto'
 import { Button } from '@/components/ui/button'
 import { EFFORT_LABELS } from '@/features/provider/labels'
 import { useProviders } from '@/features/provider/useProviders'
+import {
+  WIN32_CLAUDE_STATUS_REASONS,
+  WIN32_CLAUDE_WHERE_TO_FIX_LABEL
+} from '@/features/runtime-list/labels'
 import { useRuntimes } from '@/features/runtime-list/useRuntimes'
 import { useFolders } from '@/features/workspace-folders/useFolders'
 
@@ -39,6 +43,7 @@ import {
   PERMISSION_MODE_DESCRIPTIONS,
   PERMISSION_MODE_LABELS,
   previousFailureLabel,
+  PROVIDER_DEFAULT_LABELS,
   PROVIDER_RESET_CONFIRMATION,
   PROVIDER_RESET_CONFIRMATION_UNVERIFIED,
   PROVIDER_RESET_UNVERIFIED_LABEL,
@@ -47,6 +52,12 @@ import {
   REEVALUATE_LABELS,
   sameFolderWarning
 } from './labels'
+import {
+  buildLaunchRuntimeFacts,
+  buildLaunchRuntimeOptions,
+  orderLaunchRuntimes,
+  unusableWin32Status
+} from './launch-runtime-options'
 import { PresetPanel } from './PresetPanel'
 import { usePresets } from './usePresets'
 
@@ -206,13 +217,19 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
   const [reevaluateFailed, setReevaluateFailed] = useState(false)
 
   const folderList = useMemo(() => folders.list?.folders ?? [], [folders.list])
-  // 起動できるのは WslRuntime に限る (FR-001)。
+  // 起動できるのは WslRuntime と Win32Runtime (X-8)。Win32 が先頭、続けて WSL (FR-001)。
   const wslRuntimes = useMemo(
     () => (runtimes.list?.runtimes ?? []).filter((r) => r.kind === 'wsl'),
     [runtimes.list]
   )
+  const launchRuntimes = useMemo(
+    () => orderLaunchRuntimes(runtimes.list?.runtimes ?? []),
+    [runtimes.list]
+  )
+  const runtimeOptions = useMemo(() => buildLaunchRuntimeOptions(launchRuntimes), [launchRuntimes])
+  const unusableWin32 = useMemo(() => unusableWin32Status(launchRuntimes), [launchRuntimes])
   const providerList = useMemo(() => providers.providers ?? [], [providers.providers])
-  const selectedRuntime = wslRuntimes.find((r) => r.id === draft.runtimeId) ?? null
+  const selectedRuntime = launchRuntimes.find((r) => r.id === draft.runtimeId) ?? null
   const selectedRuntimeState = selectedRuntime?.state ?? null
   const selectedProbeState = selectedRuntime?.capabilities.probeState ?? null
   /** 選択ランタイムの版。到達可能性と解決結果の取得キーで共有する (R3 platform-boundary M-501)。 */
@@ -232,19 +249,15 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
         distroName: f.location.kind === 'wsl' ? f.location.distroName : null
       })),
       // distro 名が分からない WSL ランタイムは facts に入れない (NamespaceId を distro 名に代用しない。
-      // 選んでいれば runtime-missing に倒れる。namespace.ts / pb L-001)。
-      runtimes: wslRuntimes.flatMap((r) =>
-        r.distroName === null
-          ? []
-          : [{ id: r.id, distroName: r.distroName, running: r.state === 'running' }]
-      ),
+      // 選んでいれば runtime-missing に倒れる。namespace.ts / pb L-001)。Win32 は claude.exe が found のときだけ入る。
+      runtimes: buildLaunchRuntimeFacts(launchRuntimes),
       providers: providerList.map((p) => ({
         id: p.id,
         reachable: reachableIds.has(p.id),
         models: p.models
       }))
     }
-  }, [folderList, wslRuntimes, providerList, reachable])
+  }, [folderList, launchRuntimes, providerList, reachable])
 
   const resolution = resolveLaunchAxes(draft, facts)
   const effective = resolution.draft
@@ -399,8 +412,14 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
       ? 0
       : (session.activeFolderIds ?? []).filter((id) => id === effective.folderId).length
 
+  // 一覧をまだ持たない (読み込み中・失敗) 間は「解除された / 見つからない」と断定しない。ダイアログの作り直し
+  // (拒否後の再表示など) の直後に、前回の設定の folder / runtime が一覧に無いと誤って出る (一覧の失敗は別に案内する)。
   const shownBlockers = resolution.blockers.filter(
-    (b) => b !== 'folder-unselected' && b !== 'runtime-unselected'
+    (b) =>
+      b !== 'folder-unselected' &&
+      b !== 'runtime-unselected' &&
+      !(b === 'folder-missing' && folders.list === null) &&
+      !(b === 'runtime-missing' && runtimes.list === null)
   )
   const allRuntimesStopped =
     wslRuntimes.length > 0 && wslRuntimes.every((r) => r.state !== 'running')
@@ -506,16 +525,26 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
           value={effective.runtimeId ?? ''}
           onChange={(e) => update({ runtimeId: e.target.value === '' ? null : e.target.value })}
           className={selectClass}
+          aria-describedby={unusableWin32 !== null ? 'win32-claude-guidance' : undefined}
         >
           <option value="">選択してください</option>
-          {wslRuntimes.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.distroName ?? r.id}
-              {r.state === 'running' ? '' : '（停止中）'}
+          {runtimeOptions.map((o) => (
+            <option key={o.id} value={o.id} disabled={o.disabled}>
+              {o.label}
             </option>
           ))}
         </select>
       </label>
+      {unusableWin32 !== null && (
+        <div
+          id="win32-claude-guidance"
+          className="text-muted-foreground -mt-2 text-xs"
+          data-testid="win32-claude-guidance"
+        >
+          <p>{WIN32_CLAUDE_STATUS_REASONS[unusableWin32]}</p>
+          <p>{WIN32_CLAUDE_WHERE_TO_FIX_LABEL}</p>
+        </div>
+      )}
 
       <label className="flex flex-col gap-1 text-sm">
         <span className="font-medium">{LAUNCH_AXIS_LABELS.provider}</span>
@@ -525,7 +554,11 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
           className={selectClass}
           aria-label={LAUNCH_AXIS_LABELS.provider}
         >
-          <option value="">既定 (ディストロ内の claude の設定)</option>
+          <option value="">
+            {selectedRuntime?.kind === 'win32'
+              ? PROVIDER_DEFAULT_LABELS.win32
+              : PROVIDER_DEFAULT_LABELS.wsl}
+          </option>
           {selectableProviders.map((p) => (
             <option key={p.id} value={p.id}>
               {p.displayName}
@@ -724,9 +757,11 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
           className="flex flex-col gap-2 rounded-md border p-3 text-sm"
         >
           <p>
-            {reachabilityUnverified
-              ? PROVIDER_RESET_CONFIRMATION_UNVERIFIED
-              : PROVIDER_RESET_CONFIRMATION}
+            {
+              (reachabilityUnverified
+                ? PROVIDER_RESET_CONFIRMATION_UNVERIFIED
+                : PROVIDER_RESET_CONFIRMATION)[selectedRuntime?.kind === 'win32' ? 'win32' : 'wsl']
+            }
           </p>
           <div className="flex gap-2">
             {/* 確認できなかっただけなら、既定で起動する前に確認し直せるようにする (po M-101)。 */}

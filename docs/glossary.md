@@ -408,7 +408,8 @@ total_terms: 104
   - 起動と実行の失敗 (X-1): `distro-not-running` / `not-verified-running` / `distro-mismatch` / `claude-not-found` /
     `launch-failed` / `process-crashed` / `stream-protocol-error` / `provider-error` / `interrupt-unavailable` /
     `supervisor-exited`。`supervisor-exited` は X-5 で追加 (supervisor の異常終了でその supervisor の全セッションに付く)。
-    セッションスレッドの例外とメモリ上限超過は `process-crashed`
+    セッションスレッドの例外とメモリ上限超過は `process-crashed`。
+    `claude-not-found` には Win32 の claude の状態 (`not-found` / `shim-only` / `override-invalid`) もここに落ちる (X-8)
   - ターンの失敗 (O-4): SDK のエラーの result を agents の `classifyResultFailure` が次の 8 つに分ける。どれにも当たらない失敗
     (状態が無い・知らない subtype) は今の `provider-error` (汎用)。条件と評価の順の正本は 014 data-model §1
     - `auth-failed` (認証または権限のエラー) / `billing` (請求またはアカウントの問題) / `rate-limited` (レート制限) /
@@ -434,6 +435,7 @@ total_terms: 104
 - **Counterexamples**:
   - 「env のキー全部」ではない。
   - 列挙されないキーは wsl.exe の env にあっても WSL に届かない。
+  - Win32 では `WSLENV` を使わず、`forwardKeys` の値だけを許可リストのホストの env に重ねる (data-model §6.2)。
 - **Ref**: [AD-041](decisions/0041-x4-launch-config-on-x1-launch-gate.md) (e)
 
 #### **Forbidden forward key（転送禁止キー）**
@@ -443,6 +445,9 @@ total_terms: 104
     - 実行を乗っ取るもの: `PATH` / `NODE_OPTIONS` / `LD_*` / `TMPDIR` / `GIT_*` / `PAGER` / `EDITOR` / `PYTHON*` / `SSH_ASKPASS` / `NPM_CONFIG_*` など。既知の代表例を塞ぐ denylist であり、クラスを原理的に閉じるものではない
     - transport の制御キー: `WSLENV` / `WSL_UTF8` / curated base
     - 導出が制御するキー: `CLAUDE_CONFIG_DIR` / `CLAUDE_CODE_*` / `ANTHROPIC_*`。例外は `ANTHROPIC_BASE_URL`
+  - Win32 の transport のキー (Win32 の起動の env の許可リストから上書きしてよいキーを除いたもの) との衝突は、
+    到達可能性の判定で到達不可にし、起動の時点でも拒否する。proxy の 3 キーは Provider が上書きしてよいが、
+    `NODE_EXTRA_CA_CERTS` は上書きさせない。登録時の検証は広げない (data-model §6.1 / §6.3 / §6.4)
   - 照合は大文字小文字を区別しない。
   - env-passthrough の varNames はこの集合では縛らず、別の実名 allowlist で縛る。
   - 起動時の最終検査 (`composeLaunchEnv`) では、導出が正当に出す方式固有の実名キーと passthrough allowlist をこの集合から除く。
@@ -555,7 +560,8 @@ total_terms: 104
 
 #### **LaunchInput**
 
-- **Definition**: セッション起動の検証済み入力 (X-1 / X-4)。次の要素を持つ。
+- **Definition**: セッション起動の検証済み入力 (X-1 / X-4)。`WslLaunchInput | Win32LaunchInput` の和 (X-8。
+  `Win32LaunchInput` は `VerifiedRunning` を持たない)。WSL 側は次の要素を持つ。
   - 作業フォルダ / 実行中確認済みの `WslRuntime` / `VerifiedRunning`
   - `options: LaunchQueryOptions`。中身は `permissionMode: SafePermissionMode` と、任意の `model` / `effort` / `settings`
   - 依存解決と main の再検証を通った `SessionLaunchConfig` から作る。
@@ -753,6 +759,16 @@ total_terms: 104
   `toAskUserQuestionResult` が元の入力 + `answers` の `updatedInput` を返す (`updatedPermissions` は出さない)
 - **Ref**: [AD-036](decisions/0036-single-session-launch-process-and-live-stream.md) §4 / [AD-020](decisions/0020-sdk-emitted-message-inventory.md)
 
+#### **プロセス木の停止**
+
+- **Definition**: Win32Runtime のセッションを止めるとき、`claude.exe` が生きている間にその pid を根に子孫ごと止めること
+  (`taskkill /T /F /PID`)。stdin を閉じる・abort・キューの close より前に行う。期限は 5 秒で、過ぎたら記録して先へ進む。
+  handle を持つセッションスレッドが自分の子の pid で行う (AD-058 Decision 3)
+- **日本語表記**: プロセス木の停止
+- **Domain**: `session` / `agents`
+- **Counterexamples**: reaper (他のセッションや過去のプロセスを pid で探して殺す仕組み) ではない
+- **Ref**: [AD-058](decisions/0058-win32-direct-launch-contract-and-process-tree-stop.md) Decision 3 / 4
+
 #### **Preset**
 
 - **Definition**: 名前付きで保存された `SessionLaunchConfig`。**資格情報の値は含まない** (Provider は id 参照)。
@@ -854,14 +870,18 @@ total_terms: 104
 #### **RuntimeDescriptor**
 
 - **Definition**: 検出で得られた**ランタイムの事実**を表す値。識別子 / 表示名 /
-  種別 / 実行状態 / `capabilities` / `PathMapping` / 検出時刻を持つ
+  種別 / 実行状態 / `capabilities` / `PathMapping` / 検出時刻を持つ。
+  Win32Runtime の descriptor は claude の状態 (`found` / `not-found` / `shim-only` / `override-invalid`) も持つ (X-8)
 - **日本語表記**: ランタイム記述子
 - **Domain**: `runtime`
 - **Counterexamples**: `AgentRuntime` はインタフェースであり、これはその `descriptor` にあたる値である
 
 #### **RuntimeLaunchSpec**
 
-- **Definition**: agents を WSL-free に保つための**起動指示の値** (X-1)。WSL 内 claude の実行パス /
+- **Definition**: `WslLaunchSpec | Win32LaunchSpec` の和 (X-8)。`Win32LaunchSpec` は `kind: 'win32'` で、
+  `claude.exe` の実行パス・`cwd`・env・`windowsHide`・停止の指示 (`stop`) を持つ (シェルを経由しない)。
+  以下は WSL 側 (`WslLaunchSpec`) の定義。
+  agents を WSL-free に保つための**起動指示の値** (X-1)。WSL 内 claude の実行パス /
   起動コマンド (`WSL_BINARY`) / 接頭引数 (X-4 以降は `['--cd', cwd, '-d', distro, '--exec']`。シェルを経由しない) /
   env (`composeLaunchEnv` の結果。X-4) を持つ。
   `wsl.exe` の argv/リテラルは `infra/runtime` に閉じ、agents は**値**として受け取る
@@ -1053,10 +1073,12 @@ total_terms: 104
 
 - **Definition**: supervisor の中で 1 セッションを受け持つ `worker_threads` の Worker (X-5)。SDK `query()` の実行・
   stream のパース・`wsl.exe` の spawn ハンドルを持ち、本文を文字列化して調停役スレッドへ送る。
-  実体は `src/agents/sdk-agent-session.ts`
+  実体は `src/agents/sdk-agent-session.ts`。
+  Win32Runtime のセッションでは、停止のとき stdin を閉じる前に `claude.exe` のプロセス木を止める (AD-058 Decision 3)。
+  停止の保証の範囲の正本は AD-058 Decision 3
 - **日本語表記**: セッションスレッド (実装語として Worker を括弧で添えてよい)
 - **Domain**: `session` / `agents`
-- **Ref**: [AD-043](decisions/0043-single-supervisor-session-threads-and-session-limit.md)
+- **Ref**: [AD-043](decisions/0043-single-supervisor-session-threads-and-session-limit.md) / [AD-058](decisions/0058-win32-direct-launch-contract-and-process-tree-stop.md) Decision 3
 
 #### **SessionStatusUpdate（状態通知）**
 
@@ -1320,6 +1342,15 @@ total_terms: 104
 - **Ref**: Constitution Principle XII / AD-044 / [011 spec](../specs/011-ui-coverage/spec.md)
 
 ### W
+
+#### **Win32 の起動の env の許可リスト**
+
+- **Definition**: Win32Runtime の `claude.exe` の起動 env に、ホストの env から通してよいキーの固定集合。
+  正本は data-model §6.1 と `WIN32_LAUNCH_ENV_ALLOWLIST` (表を写さない)。集合を変えるには ADR が要る (AD-058)
+- **日本語表記**: Win32 の起動の env の許可リスト
+- **Domain**: `runtime` (`infra/runtime/win32-launch.ts`)
+- **Counterexamples**: WSL の `LAUNCH_ENV_ALLOWLIST` (4 キー) とは別の集合。許可リストの外のキーは、ホストの env にあっても届かない
+- **Ref**: [AD-058](decisions/0058-win32-direct-launch-contract-and-process-tree-stop.md) / [020 data-model](../specs/020-session-win32-direct-launch/data-model.md) §6.1
 
 #### **WorkspaceFolder**
 

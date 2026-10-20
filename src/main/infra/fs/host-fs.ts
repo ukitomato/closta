@@ -23,6 +23,19 @@ export interface HostFileSystem {
   exists(path: HostPath): Promise<boolean>
 }
 
+/**
+ * 実在する通常のファイルか (`stat` の `isFile()`。リンクはたどる。失敗は false)。X-8 (data-model §2 / §7)。
+ * `HostFileSystem` とは別に置く (その窓の形を変えない)。呼び出し元は main が持つ claude の実行ファイルのパスだけで、
+ * renderer から任意のパスを渡せる経路は増えない。
+ */
+export async function isHostFile(path: HostPath): Promise<boolean> {
+  try {
+    return (await stat(path.value)).isFile()
+  } catch {
+    return false
+  }
+}
+
 export function createHostFileSystem(): HostFileSystem {
   return {
     async exists(path) {

@@ -44,7 +44,9 @@ const UBUNTU: RuntimeDescriptorDTO = {
     autoModeStatus: 'allowed'
   },
   hasPathMapping: true,
-  detectedAt: NOW
+  detectedAt: NOW,
+  claudeStatus: null,
+  claudeOverridden: false
 }
 
 const FOLDER: WorkspaceFolderDTO = {

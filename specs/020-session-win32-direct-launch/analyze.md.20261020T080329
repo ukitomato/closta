@@ -1,0 +1,71 @@
+## Specification Analysis Report
+
+**Feature**: `specs/020-session-win32-direct-launch` (X-8). I read spec.md, plan.md, tasks.md, data-model.md, research.md, contracts/ipc-win32-claude.md, quickstart.md and AD-058 (proposed, untracked). I checked them against the constitution, the session charter and the glossary, and spot-checked `LaunchDialog.tsx`, `runtime-store.ts`, `launch-preparation.ts` and `win32.ts`. Nothing was modified. The prerequisite script was not run (Bash avoided as instructed). The paths were taken from the caller. No `before_analyze` / `after_analyze` hooks are registered in `.specify/extensions.yml`.
+
+| ID | Category | Severity | Location(s) | Summary | Recommendation |
+|----|----------|----------|-------------|---------|----------------|
+| C1 | Inconsistency | CRITICAL | data-model.md:L184 (§5.2) vs data-model.md:L149, L366 (§11); contracts C-4 L58; tasks.md:L37, L39 | The agents decoder rule says every element of `stop.argsBeforePid` must match `/^\/[A-Z]$/`. The pinned value is `['/T', '/F', '/PID']`, and `/PID` fails that regex. If the rule is built as written, every `Win32LaunchSpec` is rejected and the launch ends as `launch-failed`, so US-1 cannot work at all. The rule is also looser than BE-010 expects: BE-010 wants "anything other than `/T /F`" rejected, but `/X` passes the regex. | Replace the regex in §5.2 with an exact match on the pinned array `['/T','/F','/PID']`. Align the BE-010 negative cases (`/IM`, `-T`, `/t x`, `/X`, missing `/PID`). |
+| F1 | Inconsistency | HIGH | spec.md:L179 (FR-011) vs AD-058 Decision 3 table (L35-41), data-model.md §9.4 (L318-325), glossary.md:L1054 | FR-011 says the process tree MUST NOT remain on app exit, explicitly including "abnormal end of the session thread". The glossary defines the session thread as the Worker. AD-058 and §9.4 do not guarantee "Worker abnormal termination (`terminate()` / OOM)" for claude.exe or its descendants, and do not guarantee descendants after a supervisor abnormal exit. FR-011's second sentence lets the ADR state which endings are not guaranteed, so the requirement contradicts itself. | Reword FR-011: the guarantee covers forced stop, close, normal app exit, renderer reload and a JS exception in the session thread. Worker or supervisor abnormal termination is best-effort, per AD-058 Decision 3. |
+| F2 | Inconsistency | HIGH | spec.md:L184 (FR-014) vs plan.md:L54-55, L80; tasks.md BE-010 (L36), BE-030 (L68) | FR-014 says the Windows launch and stop *implementation* must stay inside `src/main/infra/runtime/`. The plan puts `stopTree()`, the Win32 decoder (`.exe` checks, the `/X` args rule), `windowsHide: true` and the Win32 `composeClaudeSpawn` row in `src/agents/`. Principle II (no `process.platform` outside runtime/) is not broken, but the literal wording of FR-014 is, and platform-boundary-reviewer will likely flag it. | Narrow FR-014 to "platform branching, plus building the Windows launch and stop values (paths, args, env)". Alternatively, record in AD-058 that agents run the data-driven `stop` / `cwd` / `windowsHide` without knowing the platform. |
+| D1 | Constitution (verification gap) | HIGH | constitution.md:L458-459 (Principle III Verification); tasks.md:L106 ("E2E は足さない"), FE-010 (L42-43) | Principle III's automated check is an E2E test that Auto / bypass are disabled when `Win32Runtime` is selected. This feature makes Win32 selectable for the first time, yet no E2E or component test asserts the permission-mode options under Win32. The rule itself is met by design (only `SAFE_PERMISSION_MODES` are rendered) and no such E2E exists today. That is why this is HIGH rather than CRITICAL. | Add to FE-010 a component assertion that, with Win32 selected, the permission-mode `<select>` holds only the 3 safe modes. Note in plan or tasks how the E2E obligation is met (or deferred, with a reason). |
+| E1 | Coverage gap | MEDIUM | LaunchDialog.tsx:L405-406 (`allRuntimesStopped`), L488-490 (`noWslRuntimes`); data-model.md §10.1; tasks.md FE-010 | Two existing launch-dialog states still read only `wslRuntimes` and are not in §10.1 or FE-010. (1) A host with no WSL but a found Win32 would show "no WSL runtimes". (2) With all distros stopped, the dialog would say every runtime is stopped even though Win32 can launch. | Add both states to §10.1 and FE-010: base them on the new launchable-runtime list, with tests. |
+| E2 | Coverage gap | MEDIUM | spec.md:L162 (FR-013), L150 (Edge Case: monitor view) | FR-013 requires status notifications and monitor-view rows to follow the same path as WSL, and the edge case says Win32 rows are told apart by the runtime display name. No task checks the monitor view, or that the "Windows (ホスト)" display name shows there. Streaming and approval are covered only by quickstart V-1. | Add a small test, or a quickstart step, that a Win32 session's row shows the runtime display name. Otherwise state that the monitor rows need no change. |
+| B1 | Ambiguity | MEDIUM | spec.md:L69-71 (Clarifications) | Three answers carry `[ASSUMED: …]` tags and are not covered by the U-1..U-4 approval: the shim error text, the runtime order and label, and the 5 s timeout. FR-012, §10.1, §10.3 and the `TREE_STOP_TIMEOUT_MS` pin depend on them. | Get explicit user confirmation, or record them as provisional (RK) in plan. |
+| F3 | Inconsistency / Risk | MEDIUM | data-model.md §9.3 (L310-316); plan.md RK-07 (L258); CLAUDE.md (process spawn 400-2,400 ms) | The dispose wait (6,000 ms) is only 1 s more than `TREE_STOP_TIMEOUT_MS` (5,000 ms). That 1 s must cover abort, SDK close and the `ended` round trip. At quit, up to 10 Win32 sessions start `taskkill` at the same time on a host where each process spawn already costs up to 2.4 s. RK-07 assumes "hundreds of ms". | Extend quickstart V-3 to time a quit with several (ideally 10) Win32 sessions. Alternatively, justify the 1 s margin in R-11. |
+| F4 | Inconsistency | LOW | contracts/ipc-win32-claude.md:L15, L20 vs runtime-store.ts:L31 | C-1 / C-2 return `runtimes: readonly RuntimeDescriptorDTO[]`, but `runtimes.refresh()` returns `RuntimeListDTO`. | Say which one is returned (`.runtimes` or the whole DTO). |
+| F5 | Inconsistency | LOW | data-model.md:L86 vs L71; tasks.md BE-022 (L55) | The §2 fail-closed default is written `{ status: 'not-found' }`, which is missing `overridden: false` that the type requires (tasks has it right). | Fix the §2 text. |
+| U1 | Underspecification | LOW | plan.md:L40, L42-69, L280-304 | The plan's layer table and structure leave out `src/main/app/provider-service.ts` (BE-040), `runtime-list/useRuntimes.ts` (FE-020) and the new `features/session/launch-runtime-options.ts` (FE-010). "4 new modules (domain 1, infra 3)" misses that renderer module. | Add the three files and correct the count. |
+| U2 | Underspecification | LOW | tasks.md:L56 (BE-022); research.md R-06 | `contracts/runtime-detection.md C-1` is cited, but that file is not in this feature's `contracts/`. | Give the full path to the owning spec's contract. |
+| E3 | Coverage gap | LOW | spec.md:L148 (Edge Case: network drive) | `D:\` is tested in BE-012, but no test or quickstart step covers a mapped network drive. | Add a resolver test row for a mapped drive letter, or drop that part of the edge case. |
+| F6 | Terminology / Measurement | LOW | spec.md:L207 (SC-004) vs tasks.md BE-030 (L68-69) | SC-004 names a "fake process tree" unit test, but BE-030 uses a fake child and fake spawn. Descendants are counted only in quickstart V-3. | Reword SC-004's measurement as "ordering test with a fake child + quickstart V-3". |
+
+**Coverage Summary Table:**
+
+| Requirement Key | Has Task? | Task IDs | Notes |
+|-----------------|-----------|----------|-------|
+| FR-001 Win32 option in launch dialog | Yes | FE-010 | See E1 (empty and stopped states) |
+| FR-002 direct launch, no wsl.exe, launch spec split by kind | Yes | BE-003, BE-010, BE-011, BE-012 | Blocked by C1 if the decoder is built as written |
+| FR-003 resolution table / U-3 | Yes | BE-012, FE-010 | |
+| FR-004 resolve once at detection; override → known location → PATH | Yes | BE-002, BE-020, BE-022 | |
+| FR-005 .exe only, shim told apart | Yes | BE-001, BE-020 | |
+| FR-006 set / clear override, persisted, no silent fallback | Yes | BE-021, BE-023, FE-020 | |
+| FR-007 reason and fix shown in list and dialog | Yes | FE-010, FE-020, BE-012 | |
+| FR-008 Win32 env allowlist + denylist | Yes | BE-011 | 30 keys, a superset of FR-008's minimum |
+| FR-009 Provider env layered on top; judgment and derivation agree | Yes | BE-011, BE-040, BE-041, FE-040 | |
+| FR-010 tree stop on kill / close; interrupt does not stop | Yes | BE-030 | |
+| FR-011 no tree left on app exit | Yes | BE-030, BE-031 | See F1 (spec vs ADR) |
+| FR-012 5 s timeout, logged without paths or env | Yes | BE-030 | |
+| FR-013 same path for streaming, approval, limit, monitor rows | Partial | BE-010, BE-012 | See E2 |
+| FR-014 boundary in infra/runtime; spawn allowlist notes | Yes | BE-011, BE-020, SH-011 | See F2 |
+| FR-015 ADR + charter + roadmap records | Yes | SH-010 | AD-058 exists (proposed) |
+| FR-016 WSL behavior unchanged | Yes | BE-003, BE-010, SH-012 | |
+| SC-001 launch / turn / approve / interrupt / close | Yes | BE-010, BE-012, FE-010 (+V-1) | |
+| SC-002 4 claude states | Yes | BE-020, FE-010, FE-020 | |
+| SC-003 env contents pinned | Yes | BE-011, BE-041 | |
+| SC-004 0 processes after the 3 stop paths | Yes | BE-030, BE-031 (+V-3) | See F6 |
+| SC-005 reachability = derivation table | Yes | BE-040 | |
+| SC-006 WSL tests and constitution check pass | Yes | SH-012 | |
+
+**Constitution Alignment Issues:**
+- No statement of a NON-NEGOTIABLE principle (I-VIII) is broken.
+  - Principle I: paths go through `makeHostPath` / `hostPathOps`.
+  - Principle II: no `process.platform` outside runtime/.
+  - Principle V: the settings file holds a version and one path.
+  - Principle VI: the allowlist contents are unchanged.
+  - Principle VII: no native addon.
+- Principle III's mandated automated check (an E2E test that Auto / bypass are disabled for Win32) is not planned while Win32 becomes selectable (D1, HIGH).
+- FR-014's wording conflicts with the agents-side placement, which the platform-boundary review will likely flag (F2).
+- Principle XIV is handled by SH-001.
+
+**Unmapped Tasks:** None. SH-001 maps to Principle XIV; SH-011 and SH-012 map to FR-014 and FR-016 / SC-006.
+
+**Metrics:**
+- Total requirements: 22 (FR 16 + SC 6)
+- Total tasks: 21 (SH 4, BE 14, FE 3)
+- Coverage: 100% of requirements have at least one task (FR-013 only partly)
+- Ambiguity count: 1 (B1, covering 3 `[ASSUMED]` items)
+- Duplication count: 0
+- Critical issues: 1 (C1)
+- Findings: 14 (CRITICAL 1, HIGH 3, MEDIUM 4, LOW 6)
+
+**Next Actions:** Fix C1 in data-model §5.2 and the BE-010 tests before implementation. Settle F1 and F2 (spec wording for FR-011 / FR-014, or a note in AD-058) and D1 (add a test to FE-010) in this design round. The MEDIUM and LOW items stay in the gate output (AD-050).

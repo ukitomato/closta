@@ -35,6 +35,8 @@ const capability: ClostaCapability = {
   listRuntimes: () => ipcRenderer.invoke(IPC_CHANNELS.listRuntimes),
   refreshRuntimes: () => ipcRenderer.invoke(IPC_CHANNELS.refreshRuntimes),
   probeRuntime: (runtimeId) => ipcRenderer.invoke(IPC_CHANNELS.probeRuntime, runtimeId),
+  pickWin32ClaudePath: () => ipcRenderer.invoke(IPC_CHANNELS.pickWin32ClaudePath),
+  clearWin32ClaudePath: () => ipcRenderer.invoke(IPC_CHANNELS.clearWin32ClaudePath),
 
   listFolders: () => ipcRenderer.invoke(IPC_CHANNELS.listFolders),
   beginBrowse: (location) => ipcRenderer.invoke(IPC_CHANNELS.beginBrowse, location),

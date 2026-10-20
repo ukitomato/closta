@@ -1,6 +1,6 @@
 import { ipcMain, type IpcMainInvokeEvent } from 'electron'
 
-import { IPC_CHANNELS } from '@domain/capability'
+import { IPC_CHANNELS, type Win32ClaudePathResult } from '@domain/capability'
 import type {
   ProviderDraft,
   ProviderLoadIssuesDTO,
@@ -102,6 +102,11 @@ export interface IpcDependencies {
   /** 所在 `windows` のネイティブフォルダピッカー。 */
   pickHostFolder(): Promise<WorkspaceFolderDraftDTO | null>
 
+  /** Win32 の claude.exe の場所の指定 (ダイアログ → 検査 → 保存 → 再検出。X-8 contracts C-1)。 */
+  pickWin32ClaudePath(): Promise<Win32ClaudePathResult>
+  /** 指定の解除 (X-8 contracts C-2)。 */
+  clearWin32ClaudePath(): Promise<Win32ClaudePathResult>
+
   /* ── セッション一覧 (R-2。**読み取り専用**) ── */
 
   listSessions(): Promise<SessionIndexDTO>
@@ -186,6 +191,15 @@ export function registerIpcHandlers(deps: IpcDependencies): void {
   handle(IPC_CHANNELS.listRuntimes, async (): Promise<RuntimeListDTO> => deps.listRuntimes())
 
   handle(IPC_CHANNELS.refreshRuntimes, async (): Promise<RuntimeListDTO> => deps.refreshRuntimes())
+
+  // 引数を受け取らない (renderer はパスを渡さない。X-8 contracts C-1 / C-2)。
+  handle(IPC_CHANNELS.pickWin32ClaudePath, async (): Promise<Win32ClaudePathResult> =>
+    deps.pickWin32ClaudePath()
+  )
+
+  handle(IPC_CHANNELS.clearWin32ClaudePath, async (): Promise<Win32ClaudePathResult> =>
+    deps.clearWin32ClaudePath()
+  )
 
   handle(IPC_CHANNELS.probeRuntime, async (_event, ...args): Promise<ProbeRuntimeResult> => {
     /*

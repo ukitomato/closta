@@ -1,6 +1,8 @@
 import { fixedCapabilities } from '@domain/runtime/capabilities'
 import type { Win32RuntimeDescriptor } from '@domain/runtime/descriptor'
 
+import type { Win32ClaudeLocation } from './win32-claude'
+
 /**
  * `Win32Runtime` の descriptor を生成する (BE-024 / FR-004)。
  *
@@ -11,14 +13,22 @@ import type { Win32RuntimeDescriptor } from '@domain/runtime/descriptor'
  *
  * **パス変換ロジックを持たない。** 恒等変換であり `PathMapping` も持たない (data-model §2)。
  * 変換はパス API に委ねる。
+ *
+ * claude の状態 (X-8 / data-model §1.2) は `claude` (探索の結果) から埋める。`found` 以外は `claudePath: null`。
  */
-export function createWin32Descriptor(now: number): Win32RuntimeDescriptor {
+export function createWin32Descriptor(
+  now: number,
+  claude: Win32ClaudeLocation
+): Win32RuntimeDescriptor {
   return {
     id: 'host',
     kind: 'win32',
     state: 'running',
     isDefault: false,
     capabilities: fixedCapabilities(now),
-    detectedAt: now
+    detectedAt: now,
+    claudePath: claude.status === 'found' ? claude.path.value : null,
+    claudeStatus: claude.status,
+    claudeOverridden: claude.overridden
   }
 }

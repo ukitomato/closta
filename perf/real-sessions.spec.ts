@@ -1,6 +1,12 @@
 import { resolve } from 'node:path'
 
-import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test'
+import {
+  _electron as electron,
+  expect,
+  test,
+  type ElectronApplication,
+  type Page
+} from '@playwright/test'
 
 import {
   collectInputProbe,
@@ -40,7 +46,9 @@ const DEFAULT_PROMPT =
 let app: ElectronApplication | null = null
 
 /** 一覧の状態と受信の累計 (会話由来の値を含まない)。 */
-async function snapshot(page: Page): Promise<{ readonly statuses: string[]; readonly received: number }> {
+async function snapshot(
+  page: Page
+): Promise<{ readonly statuses: string[]; readonly received: number }> {
   return page.evaluate(() => ({
     statuses: [...document.querySelectorAll('[data-row-status]')].map(
       (el) => el.getAttribute('data-row-status') ?? ''
@@ -104,9 +112,11 @@ async function launchOne(
   // 本物の composition であること: 指定した作業フォルダ・ランタイムが選べる (E2E stub の seed では見つからない)。
   const f = await optionIndex(page, '作業フォルダ', folder, 'folder-not-found')
   await page.getByRole('combobox', { name: '作業フォルダ' }).selectOption({ index: f.index })
-  const r = await optionIndex(page, 'ランタイム (WSL)', runtime, 'runtime-not-found')
+  const r = await optionIndex(page, 'ランタイム', runtime, 'runtime-not-found')
   if (r.text.includes('停止中')) throw new Error('runtime-stopped')
-  await page.getByRole('combobox', { name: 'ランタイム (WSL)' }).selectOption({ index: r.index })
+  await page
+    .getByRole('combobox', { name: 'ランタイム', exact: true })
+    .selectOption({ index: r.index })
   // モデルの選択肢は Provider のモデルカタログから出る (既定の Provider にはカタログが無い)。
   if (provider !== undefined && provider !== '') {
     const p = await optionIndex(page, 'Provider', provider, 'provider-not-found')
@@ -169,7 +179,9 @@ test('実 claude 10 本が応答を流す中で、表示中のセッションの
   if (folder === undefined || folder === '' || runtime === undefined || runtime === '')
     throw new Error('refused: CLOSTA_PERF_FOLDER / CLOSTA_PERF_RUNTIME are required')
   // 有効な回の下限 (窓の中のメッセージ数)。既定は 30 (当初の 100 は実 claude では届かなかった。利用者判断 2026-10-02)。
-  const { minMessages, thresholdOverridden } = parseMinMessages(process.env.CLOSTA_PERF_MIN_MESSAGES)
+  const { minMessages, thresholdOverridden } = parseMinMessages(
+    process.env.CLOSTA_PERF_MIN_MESSAGES
+  )
   const prompt = process.env.CLOSTA_PERF_PROMPT ?? DEFAULT_PROMPT
   const promptId = process.env.CLOSTA_PERF_PROMPT === undefined ? 'default' : 'custom'
   // モデルの表示名の一部 (大文字小文字を区別しない)。未指定なら既定のモデル (Provider のカタログが要る。既定の Provider には無い)。
@@ -192,7 +204,13 @@ test('実 claude 10 本が応答を流す中で、表示中のセッションの
   // 起動の受け付けでダイアログは閉じるので、毎回開き直す。
   for (let i = 0; i < SESSIONS; i += 1) {
     await openLaunchDialog(page)
-    modelName = await launchOne(page, folder, runtime, process.env.CLOSTA_PERF_PROVIDER, modelWanted)
+    modelName = await launchOne(
+      page,
+      folder,
+      runtime,
+      process.env.CLOSTA_PERF_PROVIDER,
+      modelWanted
+    )
   }
 
   // 続けて 10 本にプロンプトを送る (行の選択はクリックを evaluate で送る。locator に本文を含む要素を掴ませない)。

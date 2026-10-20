@@ -10,8 +10,22 @@ import {
 } from '@domain/runtime/path-types'
 import { describe, expect, it } from 'vitest'
 
-import { assessReachability } from './reachability'
+import { makeForbiddenForwardKey } from './forward-env'
+import { assessReachability as assess, type IsTransportForbiddenKey } from './reachability'
 import type { CredentialRef, ProviderProfile } from './types'
+
+// transport のキーの実体は infra にある (domain に複製しない)。ここでは判定の配線を見るための最小の集合。
+const wslForbidden = makeForbiddenForwardKey(['WSLENV', 'WSL_UTF8'])
+const win32Forbidden = makeForbiddenForwardKey(['USERNAME', 'NODE_EXTRA_CA_CERTS'])
+const isTransport: IsTransportForbiddenKey = (kind, key) =>
+  kind === 'win32' ? win32Forbidden(key) : wslForbidden(key)
+
+function assessReachability(
+  p: ProviderProfile,
+  r: Parameters<typeof assess>[1]
+): ReturnType<typeof assess> {
+  return assess(p, r, isTransport)
+}
 
 const win32: Win32RuntimeDescriptor = {
   id: 'host',
@@ -19,7 +33,10 @@ const win32: Win32RuntimeDescriptor = {
   state: 'running',
   isDefault: true,
   capabilities: fixedCapabilities(0),
-  detectedAt: 0
+  detectedAt: 0,
+  claudePath: null,
+  claudeStatus: 'not-found',
+  claudeOverridden: false
 }
 
 function wsl(
@@ -147,5 +164,25 @@ describe('assessReachability', () => {
       helperPath: '\\\\wsl.localhost\\Ubuntu\\opt\\h.sh'
     })
     expect(assessReachability(unc, wsl('Ubuntu'))).toBe('unreachable')
+  })
+
+  it('extraEnv が選択ランタイムの transport のキーに当たると unreachable (X-8 §6.4)', () => {
+    const withEnv = (extraEnv: Record<string, string>): ProviderProfile => ({
+      ...profile({ source: 'aws-profile', profileName: 'prod' }),
+      extraEnv
+    })
+    // win32 の transport のキー (上書きさせない)
+    expect(assessReachability(withEnv({ USERNAME: 'x' }), win32)).toBe('unreachable')
+    expect(assessReachability(withEnv({ NODE_EXTRA_CA_CERTS: '/etc/ca.pem' }), win32)).toBe(
+      'unreachable'
+    )
+    // 上書きしてよいキー・許可リストの外のキーは通る
+    expect(assessReachability(withEnv({ HTTPS_PROXY: 'http://p:8080' }), win32)).toBe('reachable')
+    expect(assessReachability(withEnv({ FOO_BAR: '1' }), win32)).toBe('reachable')
+    // wsl は win32 の transport のキーで落ちない (今のまま)
+    expect(assessReachability(withEnv({ USERNAME: 'x' }), wsl('Ubuntu'))).toBe('reachable')
+    expect(assessReachability(withEnv({ HTTPS_PROXY: 'http://p:8080' }), wsl('Ubuntu'))).toBe(
+      'reachable'
+    )
   })
 })

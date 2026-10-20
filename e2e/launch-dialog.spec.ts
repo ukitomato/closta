@@ -21,7 +21,7 @@ function openDialog(page: Page): Promise<void> {
 
 // select は位置でなく label で拾う (X-5 SH-011)。
 const folder = (page: Page) => page.getByRole('combobox', { name: '作業フォルダ' })
-const runtime = (page: Page) => page.getByRole('combobox', { name: 'ランタイム (WSL)' })
+const runtime = (page: Page) => page.getByRole('combobox', { name: 'ランタイム', exact: true })
 const provider = (page: Page) => page.getByRole('combobox', { name: 'Provider' })
 const model = (page: Page) => page.getByRole('combobox', { name: 'モデル' })
 
@@ -70,6 +70,24 @@ test.describe('起動設定ダイアログ (X-4)', () => {
       ).toBeVisible()
       await page.getByRole('button', { name: '戻って選び直す' }).click()
       await expect(page.getByRole('alertdialog')).toHaveCount(0)
+    } finally {
+      await app.close()
+    }
+  })
+
+  test('Windows (ホスト) を選んでも権限モードは default / plan / dontAsk の 3 つだけ (Principle III / X-8)', async () => {
+    const { app, page } = await launchApp()
+    try {
+      await openDialog(page)
+      await folder(page).selectOption({ label: 'E2E Windows Project' })
+      await runtime(page).selectOption({ label: 'Windows (ホスト)' })
+      const modes = page.getByRole('combobox', { name: '権限モード' })
+      await expect(modes.locator('option')).toHaveCount(3)
+      await expect(modes.locator('option[value="default"]')).toHaveCount(1)
+      await expect(modes.locator('option[value="plan"]')).toHaveCount(1)
+      await expect(modes.locator('option[value="dontAsk"]')).toHaveCount(1)
+      await expect(modes.locator('option[value="auto"]')).toHaveCount(0)
+      await expect(modes.locator('option[value="bypassPermissions"]')).toHaveCount(0)
     } finally {
       await app.close()
     }

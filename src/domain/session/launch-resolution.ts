@@ -32,10 +32,10 @@ export interface FolderFact {
   readonly distroName: string | null
 }
 
-/** WSL ランタイムの事実。 */
+/** ランタイムの事実。`distroName` は WSL ランタイムの distro 名 (Win32Runtime は `null`。X-8 / data-model §7)。 */
 export interface RuntimeFact {
   readonly id: string
-  readonly distroName: string
+  readonly distroName: string | null
   readonly running: boolean
 }
 
@@ -106,6 +106,7 @@ export function resolveLaunchAxes(draft: LaunchDraft, facts: LaunchFacts): Launc
     folder !== null &&
     runtime !== null &&
     folder.distroName !== null &&
+    runtime.distroName !== null &&
     folder.distroName !== runtime.distroName
   ) {
     blockers.push('distro-mismatch')

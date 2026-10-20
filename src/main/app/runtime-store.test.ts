@@ -43,7 +43,10 @@ function enumeration(): RuntimeEnumeration {
       state: 'running',
       isDefault: false,
       capabilities: fixedCapabilities(NOW),
-      detectedAt: NOW
+      detectedAt: NOW,
+      claudePath: null,
+      claudeStatus: 'not-found',
+      claudeOverridden: false
     },
     { ...base, id: UBUNTU, distroName: 'Ubuntu', state: 'running' },
     { ...base, id: DEBIAN, distroName: 'Debian', state: 'stopped' }

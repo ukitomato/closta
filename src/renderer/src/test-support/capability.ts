@@ -41,6 +41,8 @@ export function stubCapability(overrides: Partial<ClostaCapability> = {}): Clost
   const base: ClostaCapability = {
     listRuntimes: notStubbed('listRuntimes'),
     refreshRuntimes: notStubbed('refreshRuntimes'),
+    pickWin32ClaudePath: notStubbed('pickWin32ClaudePath'),
+    clearWin32ClaudePath: notStubbed('clearWin32ClaudePath'),
     probeRuntime: notStubbed('probeRuntime'),
     listFolders: notStubbed('listFolders'),
     beginBrowse: notStubbed('beginBrowse'),

@@ -1,0 +1,144 @@
+{
+    "gate": "design",
+    "run": "2026-10-20T08:03:37+09:00",
+    "round": 2,
+    "spec_dir": "specs/020-session-win32-direct-launch",
+    "spec_id": "020-session-win32-direct-launch",
+    "tracks": {
+        "analyze": {
+            "status": "ok",
+            "raw_out": "analyze.md",
+            "viewpoint_missing": null,
+            "cascade_demotions": null
+        },
+        "po-reviewer": {
+            "status": "ok",
+            "raw_out": "po-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "architecture-reviewer": {
+            "status": "ok",
+            "raw_out": "architecture-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "security-reviewer": {
+            "status": "ok",
+            "raw_out": "security-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "platform-boundary-reviewer": {
+            "status": "ok",
+            "raw_out": "platform-boundary-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        }
+    },
+    "severity_counts": {
+        "critical": 0,
+        "high": 2,
+        "medium": 14,
+        "low": 15
+    },
+    "prev_comparison": {
+        "critical": {
+            "resolved": 1,
+            "unresolved": 0,
+            "new": 0
+        },
+        "high": {
+            "resolved": 6,
+            "unresolved": 0,
+            "new": 2
+        }
+    },
+    "fr_coverage": [
+        {
+            "fr": "FR-013",
+            "covered": "partial",
+            "by": [
+                "tasks.md BE-010",
+                "tasks.md BE-012"
+            ]
+        },
+        {
+            "fr": "FR-001..FR-016 (others)",
+            "covered": true,
+            "by": [
+                "analyze.md coverage table"
+            ]
+        }
+    ],
+    "viewpoint_coverage": {
+        "A": "Critical:0 High:0",
+        "B": "Critical:0 High:0",
+        "C": "Critical:0 High:1",
+        "D": "Critical:0 High:1",
+        "E": "Critical:0 High:0",
+        "F": "Critical:0 High:0",
+        "G": "\u8a72\u5f53\u306a\u3057",
+        "H": "Critical:0 High:0"
+    },
+    "dedup_log": [
+        {
+            "merged": [
+                "arch-H-102",
+                "analyze-F7"
+            ],
+            "key": "FR-014"
+        },
+        {
+            "merged": [
+                "arch-L-004",
+                "arch-H-102"
+            ],
+            "key": "data-model.md:197"
+        },
+        {
+            "merged": [
+                "po-M-001",
+                "analyze-F9"
+            ],
+            "key": "FR-006"
+        },
+        {
+            "merged": [
+                "po-M-004",
+                "analyze-F3"
+            ],
+            "key": "plan.md:261"
+        },
+        {
+            "merged": [
+                "sec-M-002",
+                "analyze-S1"
+            ],
+            "key": "data-model.md:256"
+        },
+        {
+            "merged": [
+                "pbr-M-001",
+                "arch-M-001"
+            ],
+            "key": "data-model.md:317"
+        },
+        {
+            "merged": [
+                "pbr-L-001",
+                "arch-L-001",
+                "analyze-L1"
+            ],
+            "key": "tasks.md:91"
+        },
+        {
+            "merged": [
+                "arch-L-003",
+                "analyze-L2"
+            ],
+            "key": "FR-008"
+        }
+    ],
+    "verdict": "PASS"
+}

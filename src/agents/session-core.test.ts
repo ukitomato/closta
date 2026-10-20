@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { WIN32_LAUNCH_SPEC_FIXTURE } from '@domain/session/__fixtures__/win32-launch-spec'
 import type {
   CanUseToolResult,
   LaunchFailureReason,
@@ -454,6 +455,46 @@ describe('decodeDecision \u306e answers (O-10)', () => {
     expect(
       decodeSessionControl({ kind: 'respond-permission', decision: { ...base, answers } })
     ).toBeNull()
+  })
+})
+
+describe('composeClaudeSpawn の Win32 の行 (X-8 / data-model §5.3)', () => {
+  it('command は実行ファイル、args は options.args だけ、env は spec.env、cwd と windowsHide は spec の値', () => {
+    const options: AgentSpawnOptions = {
+      command: 'node',
+      args: ['--print', '--verbose'],
+      env: { ANTHROPIC_API_KEY: 'secret' }
+    }
+    const plan = composeClaudeSpawn(WIN32_LAUNCH_SPEC_FIXTURE, options)
+    expect(plan.command).toBe(WIN32_LAUNCH_SPEC_FIXTURE.pathToClaudeCodeExecutable)
+    // options.args の前にパスを足さない。
+    expect(plan.args).toEqual(['--print', '--verbose'])
+    expect(plan.env).toEqual(WIN32_LAUNCH_SPEC_FIXTURE.env)
+    expect(plan.cwd).toBe(WIN32_LAUNCH_SPEC_FIXTURE.cwd)
+    expect(plan.windowsHide).toBe(true)
+  })
+
+  it('空白と日本語を含む cwd がそのまま渡る', () => {
+    const cwd = 'C:\\Users\\山田 太郎\\my project'
+    const plan = composeClaudeSpawn(
+      { ...WIN32_LAUNCH_SPEC_FIXTURE, cwd },
+      { command: 'node', args: [] }
+    )
+    expect(plan.cwd).toBe(cwd)
+  })
+
+  it('WSL の行に cwd / windowsHide のキーが無い', () => {
+    const plan = composeClaudeSpawn(
+      {
+        pathToClaudeCodeExecutable: '/home/u/.local/bin/claude',
+        command: 'launcher-bin',
+        prefixArgs: ['--exec'],
+        env: {}
+      },
+      { command: 'node', args: [] }
+    )
+    expect('cwd' in plan).toBe(false)
+    expect('windowsHide' in plan).toBe(false)
   })
 })
 

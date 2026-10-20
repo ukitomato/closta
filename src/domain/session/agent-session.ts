@@ -1,6 +1,6 @@
 import type { HelperSettings } from '@domain/provider/settings'
 import type { EffortLevel } from '@domain/provider/types'
-import type { WslRuntimeDescriptor } from '@domain/runtime/descriptor'
+import type { Win32RuntimeDescriptor, WslRuntimeDescriptor } from '@domain/runtime/descriptor'
 import type { VerifiedRunning } from '@domain/runtime/verified-running'
 import type { WorkspaceFolder } from '@domain/workspace/folder'
 
@@ -136,7 +136,7 @@ export interface LaunchQueryOptions {
  * **`permissionMode` は `SafePermissionMode`** — 6 値ユニオンにしない。昇格 3 値を型で渡せなくする
  * (正の構成 P1。AD-041 (a))。
  */
-export interface LaunchInput {
+export interface WslLaunchInput {
   readonly folder: WorkspaceFolder
   /** 実行中確認済みの WslRuntime に限る (FR-003)。 */
   readonly runtime: WslRuntimeDescriptor
@@ -144,11 +144,29 @@ export interface LaunchInput {
   readonly options: LaunchQueryOptions
 }
 
+/** Win32Runtime の起動の検証済み入力 (X-8 / data-model §7)。`VerifiedRunning` を持たない (ホストは常に実行中)。 */
+export interface Win32LaunchInput {
+  readonly folder: WorkspaceFolder
+  readonly runtime: Win32RuntimeDescriptor
+  readonly options: LaunchQueryOptions
+}
+
+/** 起動の検証済み入力。WSL / Win32 の和 (X-8)。 */
+export type LaunchInput = WslLaunchInput | Win32LaunchInput
+
+/**
+ * `WslLaunchSpec.kind` の値。agents が `'wsl'` の文字列リテラルを持たないための正本
+ * (Constitution 検証項目 3。agents は `kind` の照合にこの定数を使う)。
+ */
+export const WSL_LAUNCH_KIND = 'wsl'
+
 /**
  * agents を WSL-free に保つための起動指示の値 (data-model §8)。
  * WSL 起動コマンドの argv / リテラルは `infra/runtime` (WSL_CALLER_MODULES) に閉じ、agents は値で受ける。
  */
-export interface RuntimeLaunchSpec {
+export interface WslLaunchSpec {
+  /** 省略は WSL (X-4 の形のまま。X-8 で Win32 と区別するために足した)。 */
+  readonly kind?: typeof WSL_LAUNCH_KIND
   /** WSL 内 claude の実行パス (RuntimePath)。起動時に 1 回解決 (AD-018 §4)。 */
   readonly pathToClaudeCodeExecutable: string
   /** 起動コマンド (WSL ランチャの絶対パス。`WSL_BINARY`)。値。agents はこの文字列リテラルを持たない。 */
@@ -163,6 +181,52 @@ export interface RuntimeLaunchSpec {
    * 導出 env と、転送キー (`forwardKeys`) から生成した `WSLENV`。agents はこれ以外の env を混ぜない。
    */
   readonly env: Record<string, string>
+}
+
+/**
+ * プロセス木の停止の、pid の前に置く引数の正本 (AD-058 Decision 3)。
+ * main の組み立てと agents の検査の両方がこれを使う (値を 2 箇所に書かない)。
+ * 集合を変えるには ADR が要る (AD-058)。
+ */
+export const WIN32_TREE_STOP_ARGS = ['/T', '/F', '/PID'] as const
+
+/**
+ * プロセス木の停止のコマンドの末尾の名前の正本 (AD-058 Decision 1)。
+ * main の組み立てと agents の検査の両方がこれを使う。
+ */
+export const WIN32_TREE_STOP_COMMAND_NAME = 'taskkill.exe'
+
+/** Win32 の起動の値 (X-8 / AD-058 Decision 1。data-model §5)。 */
+export interface Win32LaunchSpec {
+  readonly kind: 'win32'
+  /** claude.exe の絶対パス (HostPath の文字列)。 */
+  readonly pathToClaudeCodeExecutable: string
+  /** 実行ファイル。`pathToClaudeCodeExecutable` と同じ値。 */
+  readonly command: string
+  /** 作業フォルダの HostPath の文字列。ホストの spawn の cwd に渡す。 */
+  readonly cwd: string
+  readonly env: Record<string, string>
+  /** コンソール窓を出さない指示。claude.exe と停止のコマンドの両方の spawn に渡す (agents は値を写すだけ。FR-014)。 */
+  readonly windowsHide: true
+  /** プロセス木の停止の指示 (data-model §9)。 */
+  readonly stop: {
+    /** `%SystemRoot%\System32\taskkill.exe` の絶対パス。 */
+    readonly command: string
+    /** pid の前に置く固定の引数。値は `WIN32_TREE_STOP_ARGS` と完全に一致する。 */
+    readonly argsBeforePid: readonly string[]
+    /** 停止のコマンドの env (`SystemRoot` / `windir` だけ)。資格情報を含めない。 */
+    readonly env: Record<string, string>
+  }
+}
+
+export type RuntimeLaunchSpec = WslLaunchSpec | Win32LaunchSpec
+
+export function isWin32LaunchSpec(spec: RuntimeLaunchSpec): spec is Win32LaunchSpec {
+  return spec.kind === 'win32'
+}
+
+export function isWin32LaunchInput(input: LaunchInput): input is Win32LaunchInput {
+  return input.runtime.kind === 'win32'
 }
 
 /** `canUseTool` 由来の permission 要求 (data-model §5)。 */

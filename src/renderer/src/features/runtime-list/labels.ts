@@ -5,7 +5,12 @@ import type {
   SandboxKind,
   SeccompFilterState
 } from '@domain/runtime/capabilities'
-import type { EnumerationIssueReason, RunState, WslAvailability } from '@domain/runtime/descriptor'
+import type {
+  EnumerationIssueReason,
+  RunState,
+  Win32ClaudeStatus,
+  WslAvailability
+} from '@domain/runtime/descriptor'
 
 /**
  * 参照キーの訳出 (FR-047)。
@@ -78,6 +83,40 @@ export const DEPENDENCY_LABELS: Record<DependencyName, string> = {
 
 /** 導入手順文書の位置。**アンカーは DTO が運ぶ** (FR-009 / FR-048)。 */
 export const DEPENDENCY_DOC_PATH = 'docs/runtime/wsl-sandbox-dependencies.md'
+
+/**
+ * Win32Runtime の claude の状態の短いラベル (X-8 / data-model §10.3)。`Record` で網羅する (Principle XV)。
+ * 起動ダイアログの選択肢の後ろとランタイム一覧のカードで使う。
+ */
+export const WIN32_CLAUDE_STATUS_SHORT_LABELS: Record<Win32ClaudeStatus, string> = {
+  found: 'claude.exe あり',
+  'not-found': 'claude.exe なし',
+  'shim-only': 'npm 版のみ',
+  'override-invalid': '指定が無効'
+}
+
+/** 状態ごとの理由と直し方。`found` は理由を持たない (null)。 */
+export const WIN32_CLAUDE_STATUS_REASONS: Record<Win32ClaudeStatus, string | null> = {
+  found: null,
+  'not-found':
+    'Claude Code の native 版 (claude.exe) が見つかりません。native 版を入れるか、claude.exe の場所を指定してください。',
+  'shim-only':
+    'Claude Code の native 版 (claude.exe) が見つかりません。npm 版 (claude.cmd) からは起動できません。native 版を入れるか、設定で claude.exe の場所を指定してください。',
+  'override-invalid':
+    '指定した場所に claude.exe がありません。claude.exe を選び直すか、指定を解除してください。'
+}
+
+/** claude.exe の場所の選択が拒否された理由 (contracts C-1)。 */
+export const WIN32_CLAUDE_PICK_REJECTED_LABELS = {
+  'not-exe': 'claude.exe (拡張子 .exe のファイル) を選んでください。'
+} as const
+
+/** claude.exe の場所の保存の失敗 (contracts C-1 / C-2)。 */
+export const WIN32_CLAUDE_SAVE_FAILED_LABEL = '指定を保存できませんでした。もう一度お試しください。'
+
+/** 直す場所の案内 (起動ダイアログだけ)。 */
+export const WIN32_CLAUDE_WHERE_TO_FIX_LABEL =
+  'ランタイム一覧の「Windows (ホスト)」のカードで、claude.exe の場所の指定と再検出ができます。'
 
 /** 種別の表示名。`kind` をそのまま出さない。 */
 export function runtimeTitle(kind: string, distroName: string | null): string {

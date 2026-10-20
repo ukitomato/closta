@@ -108,7 +108,8 @@ interface Entry extends RegistryStatus {
   readonly threadAlive: boolean
 }
 
-const DEFAULT_DISPOSE_WAIT_MS = 3000
+/** dispose の待ちの既定の上限 (X-8 / AD-058 Decision 4 で 3,000 → 6,000。全部が終われば待たない)。 */
+const DEFAULT_DISPOSE_WAIT_MS = 6000
 
 export function createSessionLaunchService(deps: SessionLaunchServiceDeps): SessionLaunchService {
   /** sessionId → 状態。**枠を占める = claudeAlive: true** (FR-005)。 */

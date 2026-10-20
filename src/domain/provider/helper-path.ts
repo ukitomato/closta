@@ -69,14 +69,20 @@ export function classifyHelperPath(
  * - UNC: `runtimePathOps.fromUnc` + 選択ランタイムとの**同一 distro 照合** (`isSameDistro`)
  */
 export type ConfigDirResolution =
-  | { readonly ok: true; readonly path: RuntimePath }
+  /** `path` は選んだランタイムから見たパス (win32 のホストの configDir は `HostPath` のまま。X-8 / AD-058)。 */
+  | { readonly ok: true; readonly path: HostPath | RuntimePath }
   | { readonly ok: false; readonly reason: 'blocked' | 'unreachable' }
 
 export function resolveConfigDirPath(
   configDir: HostPath | WslUncPath,
   runtime: RuntimeDescriptor
 ): ConfigDirResolution {
-  if (runtime.kind !== 'wsl') return { ok: false, reason: 'unreachable' }
+  if (runtime.kind === 'win32') {
+    // win32 はホストの config dir をそのまま見られる。WSL 内 (UNC) の config dir は扱わない (X-8 §8)。
+    return configDir.namespace === 'host'
+      ? { ok: true, path: configDir }
+      : { ok: false, reason: 'unreachable' }
+  }
   if (runtime.state === 'stopped') return { ok: false, reason: 'blocked' }
 
   if (configDir.namespace === 'host') {

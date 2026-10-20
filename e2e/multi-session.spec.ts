@@ -30,7 +30,9 @@ async function launchAnother(page: Page): Promise<void> {
   const folder = page.getByRole('combobox', { name: '作業フォルダ' })
   if ((await folder.inputValue()) === '') {
     await folder.selectOption({ index: 1 })
-    await page.getByRole('combobox', { name: 'ランタイム (WSL)' }).selectOption({ index: 1 })
+    await page
+      .getByRole('combobox', { name: 'ランタイム', exact: true })
+      .selectOption({ label: 'E2E-Ubuntu' })
   }
   await page.getByRole('button', { name: '起動', exact: true }).click()
 }
@@ -143,7 +145,10 @@ test.describe('マルチセッション (X-5)', () => {
 
       // O-1 SC-004: 監視ビューの経過時間と直近の活動 (本文の分岐) を出した comfortable の状態で流す
       // (強調は含めない — E2E の偽 supervisor は承認待ち・失敗を流さない。USER 決定 2026-10-02 design-gate H-03)。
-      await expect(page.getByRole('button', { name: '詳しく' })).toHaveAttribute('aria-pressed', 'true')
+      await expect(page.getByRole('button', { name: '詳しく' })).toHaveAttribute(
+        'aria-pressed',
+        'true'
+      )
       for (let i = 0; i < 10; i += 1) {
         await expect(rows(page).nth(i).getByTestId('session-row-elapsed')).toBeVisible()
         await expect(rows(page).nth(i).getByTestId('session-row-activity')).toBeVisible()
@@ -233,7 +238,9 @@ test.describe('マルチセッション (X-5)', () => {
           scrolls: list.scrollHeight > list.clientHeight,
           rows: items.map((row) => {
             const box = row.getBoundingClientRect()
-            const buttons = [...row.querySelectorAll('[data-slot="aui_thread-list-item-actions"] button')]
+            const buttons = [
+              ...row.querySelectorAll('[data-slot="aui_thread-list-item-actions"] button')
+            ]
             return {
               inside: box.top >= listBox.top - 1 && box.bottom <= listBox.bottom + 1,
               overflows: row.scrollWidth > row.clientWidth,

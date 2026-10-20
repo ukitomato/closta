@@ -1,6 +1,7 @@
 import type { MessagePortMain } from 'electron'
 import { describe, expect, it } from 'vitest'
 
+import { WIN32_LAUNCH_SPEC_FIXTURE } from '@domain/session/__fixtures__/win32-launch-spec'
 import type { LaunchInput, RuntimeLaunchSpec, SessionControl } from '@domain/session/agent-session'
 import type { SessionLaunchConfig } from '@domain/session/launch-config'
 import type { SessionStatusUpdate } from '@domain/session/status-update'
@@ -84,11 +85,14 @@ function fakeConnection(): SupervisorConnection & {
   return conn
 }
 
-function manualTimer(): TimerLike & { fire: () => void } {
+function manualTimer(): TimerLike & { fire: () => void; delays: number[] } {
   let fn: (() => void) | null = null
+  const delays: number[] = []
   return {
-    setTimeout(f) {
+    delays,
+    setTimeout(f, ms) {
       fn = f
+      delays.push(ms)
       return 1
     },
     clearTimeout() {
@@ -160,6 +164,19 @@ describe('起動と同時実行数の上限 (SC-001)', () => {
     await launchN(service, 10)
     const eleventh = await service.launch(cfg())
     expect(eleventh).toEqual({ status: 'rejected', reason: 'session-limit' })
+    expect(connection.launches).toHaveLength(10)
+  })
+
+  it('Win32 の起動を混ぜても 10 本で 11 本目は session-limit (X-8 / US-1 AC5)', async () => {
+    let n = 0
+    const { service, connection } = setup(async () => {
+      n += 1
+      return n % 2 === 0
+        ? { ok: true, input: fakeInput, spec: WIN32_LAUNCH_SPEC_FIXTURE }
+        : okPrep()
+    })
+    await launchN(service, 10)
+    expect(await service.launch(cfg())).toEqual({ status: 'rejected', reason: 'session-limit' })
     expect(connection.launches).toHaveLength(10)
   })
 
@@ -353,6 +370,13 @@ describe('killAll と終了処理 (SC-008 / FR-014)', () => {
     timer.fire()
     expect(await first).toBe(2)
     expect(connection.killed).toBe(1)
+  })
+
+  it('dispose の待ちの既定の上限は 6,000 ms (X-8 / AD-058 Decision 4)', async () => {
+    const { service, timer } = setup()
+    await launchN(service, 1)
+    void service.dispose()
+    expect(timer.delays).toContain(6000)
   })
 
   it('終了処理中の起動要求は shutting-down で拒否する', async () => {

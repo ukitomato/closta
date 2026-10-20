@@ -13,6 +13,9 @@ const EXPECTED_CHANNELS = {
   listRuntimes: 'closta:listRuntimes',
   refreshRuntimes: 'closta:refreshRuntimes',
   probeRuntime: 'closta:probeRuntime',
+  // X-8: Win32 の claude.exe の場所の指定・解除の 2 つ (AD-058)。
+  pickWin32ClaudePath: 'closta:pickWin32ClaudePath',
+  clearWin32ClaudePath: 'closta:clearWin32ClaudePath',
   listFolders: 'closta:listFolders',
   beginBrowse: 'closta:beginBrowse',
   browseDirectory: 'closta:browseDirectory',

@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 import { EmptyState } from '@/components/assistant-ui/elements/empty-state'
 import { ErrorState } from '@/components/assistant-ui/elements/error-state'
 import { GenerationLoader } from '@/components/assistant-ui/elements/loading-state'
@@ -5,6 +7,7 @@ import { mono, paper } from '@/components/assistant-ui/elements/surfaces'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
+import type { Win32ClaudePathResult } from '@domain/capability'
 import type { RuntimeDescriptorDTO } from '@domain/runtime/dto'
 
 import {
@@ -17,6 +20,10 @@ import {
   RUN_STATE_LABELS,
   SANDBOX_LABELS,
   SECCOMP_LABELS,
+  WIN32_CLAUDE_PICK_REJECTED_LABELS,
+  WIN32_CLAUDE_SAVE_FAILED_LABEL,
+  WIN32_CLAUDE_STATUS_REASONS,
+  WIN32_CLAUDE_STATUS_SHORT_LABELS,
   runtimeTitle
 } from './labels'
 import { useRuntimes } from './useRuntimes'
@@ -91,12 +98,70 @@ function MissingDependencies({
   )
 }
 
+/**
+ * Win32Runtime の claude の状態 (X-8 / data-model §10.2)。状態の短いラベルと理由・直し方、場所の指定のボタン。
+ * パスは DTO に無いので表示しない。ボタンの結果は `updated` なら一覧が置き換わり、`rejected` / `save-failed` は
+ * カードの中に理由を出し、`cancelled` では何もしない。
+ */
+function Win32ClaudeSection({
+  runtime,
+  onPick,
+  onClear
+}: {
+  runtime: RuntimeDescriptorDTO
+  onPick: () => Promise<Win32ClaudePathResult>
+  onClear: () => Promise<Win32ClaudePathResult>
+}): React.JSX.Element | null {
+  const [notice, setNotice] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  if (runtime.claudeStatus === null) return null
+  const reason = WIN32_CLAUDE_STATUS_REASONS[runtime.claudeStatus]
+
+  const run = async (action: () => Promise<Win32ClaudePathResult>): Promise<void> => {
+    setBusy(true)
+    try {
+      const result = await action()
+      if (result.status === 'rejected') setNotice(WIN32_CLAUDE_PICK_REJECTED_LABELS[result.reason])
+      else if (result.status === 'save-failed') setNotice(WIN32_CLAUDE_SAVE_FAILED_LABEL)
+      else setNotice(null)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="border-border/60 mt-3 border-t pt-3">
+      <Field label="claude">{WIN32_CLAUDE_STATUS_SHORT_LABELS[runtime.claudeStatus]}</Field>
+      {reason !== null ? <p className="mt-1 text-sm">{reason}</p> : null}
+      <div className="mt-2 flex gap-2">
+        <Button variant="outline" size="sm" disabled={busy} onClick={() => void run(onPick)}>
+          claude.exe を選ぶ
+        </Button>
+        {runtime.claudeOverridden ? (
+          <Button variant="outline" size="sm" disabled={busy} onClick={() => void run(onClear)}>
+            指定を解除
+          </Button>
+        ) : null}
+      </div>
+      {notice !== null ? (
+        <p className="mt-2 text-sm" role="alert">
+          {notice}
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
 function RuntimeCard({
   runtime,
-  onReprobe
+  onReprobe,
+  onPickClaude,
+  onClearClaude
 }: {
   runtime: RuntimeDescriptorDTO
   onReprobe: (id: string) => void
+  onPickClaude: () => Promise<Win32ClaudePathResult>
+  onClearClaude: () => Promise<Win32ClaudePathResult>
 }): React.JSX.Element {
   const { capabilities } = runtime
   const isProbing = capabilities.probeState === 'probing'
@@ -152,13 +217,18 @@ function RuntimeCard({
         </p>
       ) : null}
 
+      {runtime.kind === 'win32' ? (
+        <Win32ClaudeSection runtime={runtime} onPick={onPickClaude} onClear={onClearClaude} />
+      ) : null}
+
       <MissingDependencies runtime={runtime} />
     </li>
   )
 }
 
 export function RuntimeListScreen(): React.JSX.Element {
-  const { list, loadState, refreshing, refresh, reprobe } = useRuntimes()
+  const { list, loadState, refreshing, refresh, reprobe, pickWin32Claude, clearWin32Claude } =
+    useRuntimes()
 
   if (loadState === 'failed') {
     return (
@@ -214,7 +284,13 @@ export function RuntimeListScreen(): React.JSX.Element {
       ) : (
         <ul className="flex flex-col gap-3">
           {list.runtimes.map((runtime) => (
-            <RuntimeCard key={runtime.id} runtime={runtime} onReprobe={reprobe} />
+            <RuntimeCard
+              key={runtime.id}
+              runtime={runtime}
+              onReprobe={reprobe}
+              onPickClaude={pickWin32Claude}
+              onClearClaude={clearWin32Claude}
+            />
           ))}
         </ul>
       )}

@@ -120,7 +120,7 @@ function stage1(input: ResolveInput): FolderRuntimeResolutionDTO | null {
     /*
      * **未検証を根拠にした安全側の既定である** (spec `## Assumptions`)。
      * UNC パスを cwd とするネイティブ Windows プロセスの起動は AD-015 で検証されていない。
-     * 起動契約を持つ X-1 が検証し、可能ならこのセルを改める。
+     * X-8 (U-3) で到達不可のまま (AD-058)。
      */
     return unreachable('unc-cwd-unsupported')
   }

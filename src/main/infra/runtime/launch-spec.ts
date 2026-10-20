@@ -4,7 +4,7 @@ import {
   makeForbiddenForwardKey
 } from '@domain/provider/forward-env'
 import type { DerivedLaunchEnv } from '@domain/provider/types'
-import type { RuntimeLaunchSpec } from '@domain/session/agent-session'
+import type { WslLaunchSpec } from '@domain/session/agent-session'
 import { hasControlCharacter } from '@domain/validation'
 
 import { resolveWslBinary } from './wsl-cli'
@@ -177,7 +177,7 @@ export interface RuntimeLaunchSpecParams {
  *   `$(...)` が展開された (design-gate R1 実測)。`--exec` は argv を原文のまま渡す。claude は検出時に解決済みの
  *   絶対パスで起動するので login shell の PATH は要らない (SH-000 実測: native ELF)。
  */
-export function buildRuntimeLaunchSpec(params: RuntimeLaunchSpecParams): RuntimeLaunchSpec {
+export function buildRuntimeLaunchSpec(params: RuntimeLaunchSpecParams): WslLaunchSpec {
   const prefixArgs = ['--cd', params.cwd, '-d', params.distroName, '--exec']
   assertNoBackslash([...prefixArgs, params.claudePath])
   return {
