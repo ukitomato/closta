@@ -14,6 +14,7 @@
 | ビルド (`pnpm build`) | exit 0 (main で実行) |
 | E2E (要ビルド) | 1 回目: 18 件中 15 passed / 3 failed。`multi-session.spec.ts:97` (session-limit) は本 feature の退行 (起動ダイアログが一覧の読み込み中に `folder-missing` / `runtime-missing` を出していた) で、`LaunchDialog.tsx` を直した。2 回目 (3 spec): `multi-session.spec.ts` は全件 passed |
 | 基準画像の差 | `composer-screenshot.spec.ts:28` (幅 641px → 673px) と `sidebar-screenshot.spec.ts:52` (ウィンドウ 1000×640 → 1001×642) が落ちる。**main (79babdf〜0ba52bd のビルド) でも同じ 2 件が同じ寸法で落ちる**ことを確かめた (2026-10-21) ので、本 feature の原因ではなく本機の画面の揺れ。基準画像は更新しない (CI が直ったら CI の artifact から取り直す) |
+| 最終 verify (pr-gate の修正 c49190c の後、本枝でビルドし直して E2E 全件) | ビルド exit 0。E2E 18 件中 16 passed / 2 failed (上の基準画像 2 件だけ) |
 
 ## 実機 (quickstart V-0〜V-9)
 

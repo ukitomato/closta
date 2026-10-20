@@ -3,65 +3,59 @@
 **Run**: 2026-10-21
 **Reviewer**: convention-reviewer
 **Spec**: specs/020-session-win32-direct-launch/spec.md
-**Round**: code-gate iter 1
+**Round**: code-gate iter 2
 
 ## 初回読了 viewpoint
 
-- FR/SC: FR-014 (Windows 固有の値を `src/main/infra/runtime/` に閉じる)、FR-015 (記録)、FR-001〜FR-013、SC-001〜SC-006。convention 観点に効くのは命名・配置・記録の整合。
-- charter / Confirmation: session charter X-8 の項、runtime charter の Related Specs。glossary は更新済み (`docs/glossary.md:563`, `:762`, `:874`, `:881`, `:1346`)。
-- lint-agent JSON は受領済み。自分では lint を実行していない (CONV-1)。全 command の exit_code は 0 (eslint / tsc x3 / depcruise / constitution)。error 0、warning 24 (すべて `prettier/prettier`)。
-- A. 認可 / 認証 / secret 管理: 該当なし: convention-reviewer の owner 外
-- B. 入力検証 / injection / CSP / 暗号: 該当なし: convention-reviewer の owner 外
-- C. 業務不変条件 / Charter drift: 該当なし: convention-reviewer の owner 外 (glossary の identifier 反映は F の CONV-6 として確認し、問題なし)
-- D. Constitution / ADR drift: 該当なし: convention-reviewer の owner 外。constitution 検査は lint-agent 側で違反 0。
-- E. User Story / SC / AC / UX: 該当なし: convention-reviewer の owner 外
-- F. 命名 / module / lint hookup: Critical:0 High:0 Medium:2 Low:2
+- FR/SC: FR-014, FR-015, FR-001〜FR-013, SC-001〜SC-006
+- lint-agent JSON 受領済み (自分では lint を実行していない / CONV-1)。全 6 command exit_code 0 (eslint / tsc x3 / depcruise / constitution)。error 0 / warning 27 (prettier/prettier)。CONV-1 Critical 0 件
+- iter 1 からの差分は c49190c の 5 ファイル
+- A. 認可 / 認証 / secret 管理: 該当なし: owner 外
+- B. 入力検証 / injection / CSP / 暗号: 該当なし: owner 外
+- C. 業務不変条件 / Charter drift: 該当なし: owner 外
+- D. Constitution / ADR drift: 該当なし: owner 外 (constitution 検査は違反 0 / 検査対象なし 1)
+- E. User Story / SC / AC / UX: 該当なし: owner 外
+- F. 命名 / module / lint hookup: Critical:0 High:0 Medium:2 Low:3
 - G. optional reviewer 範囲: 該当なし: owner 外
 - H. テスト / coverage / observability / regression: Critical:0 High:0 Medium:0 Low:0
 
 ## スコープ要約
 
-新設は 4 モジュール (`claude-executable.ts`、`win32-claude.ts`、`win32-launch.ts`、`runtime-settings-store.ts`) と 2 サービス (`win32-claude-path-service.ts`、`launch-runtime-options.ts`)。配置は plan.md のレイヤ表どおり。ファイル名は既存と一貫、spec / plan の識別子と実装名は一致。depcruise 0 violations (`no-circular` 有効)。`no-unused-vars` 有効。`import/order` 系 rule は未設定。
+c49190c は確認文言の wsl / win32 分割 (`labels.ts:528-543`) と `RunningSessionsProvider.tsx:59-64` の `runtimeTitle` 利用。import 前例と一貫、重複定義なし、取り残された旧参照なし。新設モジュールの配置は plan.md のレイヤ表どおり。
 
 ## Findings
 
-### [Medium] prettier/prettier の warning が 24 件、6 ファイルに残っている (M-001) (scope: feature)
+### [Medium] prettier/prettier warning 27 件 / 8 ファイル (M-001)
+- launch-preparation.test.ts, provider-service.test.ts, win32-claude-path-service.ts, win32-claude.test.ts, win32-claude.ts, runtime-settings-store.ts, LaunchDialog.test.tsx, RunningSessionsProvider.test.tsx。iter 1 は 24 件 / 6 ファイル
+- exit_code 0 で gate は阻害しない。AD-050 により棚卸しで扱う
 
-- **観察**: `launch-preparation.test.ts` (306, 367, 540, 550)、`provider-service.test.ts` (493, 534-536, 539-540, 622, 637, 640-646)、`win32-claude-path-service.ts` (26, 42)、`win32-claude.ts` (73)、`runtime-settings-store.ts` (82)、`LaunchDialog.test.tsx` (1541)。
-- **リスク/影響**: exit_code 0 なので gate は阻害しない。新規ファイル 3 つの整形が未適用。
-- **推奨アクション**: 該当 6 ファイルに prettier の write を 1 回かける。
-- **根拠**: CONV-1 (warning は Medium)。
+### [Medium] 500 行超ファイルの肥大 (M-002)
+- `sdk-agent-session.ts` 813→976 行、`session-core.ts` 639、`LaunchDialog.tsx` 790、`labels.ts` 597 (全て既存超過)
 
-### [Medium] `sdk-agent-session.ts` が 500 行超の状態でさらに肥大した (M-002) (scope: feature)
+### [Low] `isWin32LaunchInput` が export されて未使用 (L-001)
+- `src/domain/session/agent-session.ts:228`
 
-- **観察**: 813 行から 976 行 (+163)。他に既存超過 4 件 (session-core.ts 639、e2e-capability.ts 659、LaunchDialog.tsx 788、labels.ts 591) の増分は小さい。
-- **推奨アクション**: 今回は対応不要。棚卸しで分離候補にする。
-- **根拠**: CONV-3。AD-050。
+### [Low] 確認文言選択が JSX 内の入れ子三項 (L-003)
+- `LaunchDialog.tsx:760-764`
 
-### [Low] `isWin32LaunchInput` が export されているが未使用 (L-001) (scope: feature)
-
-- **観察**: `src/domain/session/agent-session.ts:228` で定義、参照は定義のみ。
-- **推奨アクション**: 削除するか `launch-preparation.ts:200` で使う。
-- **根拠**: CONV-5。
-
-### [Low] `.vitest/` が untracked のまま残っていて、`.gitignore` にも無い (L-002) (scope: out-of-scope)
-
-- **推奨アクション**: 別 spec / chore で `.gitignore` に追加。
+### [Low] `.vitest/` が untracked かつ .gitignore に無い (L-002) (scope: out-of-scope)
 
 ## 同種事象探索 cascade summary
 
+Critical は 0 件のため該当なし。
+
 | 指摘 ID | Grep query | 該当件数 | path:line |
 |---|---|---|---|
-| M-001 | lint-agent violations[] (全数) | 24 warnings / 6 files | 上記 |
-| M-002 | 500 行超ファイルの増分比較 | 4 files (全て既存超過) | 上記 |
-| L-001 | `isWin32LaunchInput` | 1 (定義のみ) | `src/domain/session/agent-session.ts:228` |
-| L-002 | `.vitest` / `cacheDir` | 0 | - |
-
-Critical は 0 件なので、cascade_enforce による降格は発生しない。
+| M-001 | lint-agent violations[] | 27 / 8 files | 上記 |
+| M-002 | 500 行超ファイル増分 | 4 | sdk-agent-session.ts, session-core.ts, LaunchDialog.tsx, labels.ts |
+| L-001 | `isWin32LaunchInput\|isWslLaunchInput` | 1 | agent-session.ts:228 |
+| L-003 | `PROVIDER_RESET_CONFIRMATION` | 1 | LaunchDialog.tsx:760-764 |
+| L-002 | `.vitest` (git status) | 1 | `.vitest/` |
 
 ## Verdict
 
 - Critical: 0
 - High: 0
 - Medium: 2
-- Low: 2
+- Low: 3
+- Round inheritance: resolved 0 / unresolved 4 / new 1 (L-003)

@@ -1,22 +1,22 @@
 {
     "gate": "code",
-    "run": "2026-10-21T00:00:00+09:00",
+    "run": "2026-10-21T03:40:18+09:00",
     "spec_dir": "specs/020-session-win32-direct-launch",
     "spec_id": "020-session-win32-direct-launch",
-    "iter": 1,
+    "iter": 2,
     "base_commit": "0ba52bdf4368a15e55331f4f13f145ef039b19c0",
     "severity_counts": {
         "critical": 0,
-        "high": 26,
-        "medium": 7,
-        "low": 5,
+        "high": 27,
+        "medium": 6,
+        "low": 9,
         "must_fix": 0
     },
     "must_fix_findings": [],
     "touched_files": [
         {
             "path": "docs/domains/_overview.md",
-            "sha": "de6ed1af3bf0b5285670a21fe806a8d55db9c2f0"
+            "sha": "dc719bf690c2cb2b322709fd9c9122676a2af310"
         },
         {
             "path": "docs/domains/runtime/charter.md",
@@ -24,7 +24,7 @@
         },
         {
             "path": "docs/domains/session/charter.md",
-            "sha": "f5a7d7d48f49d45fda6f126c22316219748818e4"
+            "sha": "de48085697ed977267f53cc55135642960ae349c"
         },
         {
             "path": "docs/glossary.md",
@@ -32,7 +32,7 @@
         },
         {
             "path": "docs/roadmap.md",
-            "sha": "1b1d36f5a438361d492c7eafab9cc914df0ec71c"
+            "sha": "cf21597036da7dadbab89a38387967582912b05e"
         },
         {
             "path": "e2e/launch-dialog.spec.ts",
@@ -61,6 +61,10 @@
         {
             "path": "scripts/constitution/allowlists.mjs",
             "sha": "198739f6183ef52274c69e17dd11cbff046d17ec"
+        },
+        {
+            "path": "specs/020-session-win32-direct-launch/data-model.md",
+            "sha": "e7eb37a42f3b6d3e21a63757d20927a0c3268157"
         },
         {
             "path": "src/agents/sdk-agent-session.test.ts",
@@ -160,7 +164,7 @@
         },
         {
             "path": "src/main/app/composition-root.ts",
-            "sha": "f8ffd601b1eab6eadad5deb3cd4c519029db80d7"
+            "sha": "d2ef21006de0b50e6a7932e6ed5badbf8f889660"
         },
         {
             "path": "src/main/app/dto-mapper.ts",
@@ -231,20 +235,12 @@
             "sha": "44bcf9b9ea766a7e58bf068087e50fc11a0ac983"
         },
         {
-            "path": "src/main/infra/runtime/win32.test.ts",
-            "sha": "40a1343cfe475c0c7b6de99b5ea37828df68f4df"
-        },
-        {
-            "path": "src/main/infra/runtime/win32.ts",
-            "sha": "51ad8b65e9ac949f188d555c540a07d81ee23c44"
-        },
-        {
             "path": "src/main/infra/runtime/win32-claude.test.ts",
-            "sha": "b3c58370c541619575bbfc2112ec4ab41fe8d517"
+            "sha": "ee761b91ccb75800ef236833f2dc844ed7ebebb5"
         },
         {
             "path": "src/main/infra/runtime/win32-claude.ts",
-            "sha": "40bb32473f75e7e109958127a9b2afd4b368fc17"
+            "sha": "b64e06443a4756af8b8809ab3a3daea3c065480a"
         },
         {
             "path": "src/main/infra/runtime/win32-launch.test.ts",
@@ -253,6 +249,14 @@
         {
             "path": "src/main/infra/runtime/win32-launch.ts",
             "sha": "ee17893c958e6e0a0a406739fd08ed198468c635"
+        },
+        {
+            "path": "src/main/infra/runtime/win32.test.ts",
+            "sha": "40a1343cfe475c0c7b6de99b5ea37828df68f4df"
+        },
+        {
+            "path": "src/main/infra/runtime/win32.ts",
+            "sha": "51ad8b65e9ac949f188d555c540a07d81ee23c44"
         },
         {
             "path": "src/main/infra/runtime/wsl-detector.test.ts",
@@ -264,11 +268,11 @@
         },
         {
             "path": "src/main/infra/settings/runtime-settings-store.test.ts",
-            "sha": "b430933f7299e857cc5b1016c345496f9ef622f4"
+            "sha": "20ca9bb21b4388721669c87edded2a0ff0a9dc76"
         },
         {
             "path": "src/main/infra/settings/runtime-settings-store.ts",
-            "sha": "10ed215202152ac1609c7cf5b493e45d6d3bd6ab"
+            "sha": "afa67867ecfff9eae73a390320a662dce24c120f"
         },
         {
             "path": "src/preload/index.ts",
@@ -279,10 +283,6 @@
             "sha": "610f652009832f58b14a1b0e0b67d680ecf20e8d"
         },
         {
-            "path": "src/renderer/src/features/runtime-list/labels.ts",
-            "sha": "a8dd858ef4320a33a40ea211257cd6228ab83ee0"
-        },
-        {
             "path": "src/renderer/src/features/runtime-list/RuntimeListScreen.test.tsx",
             "sha": "3cdc27514a2db985e2fc8953c64c67ae642635bc"
         },
@@ -291,28 +291,20 @@
             "sha": "561bd962ce530bcc8a53899cca50674705fa651d"
         },
         {
+            "path": "src/renderer/src/features/runtime-list/labels.ts",
+            "sha": "a8dd858ef4320a33a40ea211257cd6228ab83ee0"
+        },
+        {
             "path": "src/renderer/src/features/runtime-list/useRuntimes.ts",
             "sha": "6c1b827cc15029be8d88fed2778a748cea0cdc32"
         },
         {
-            "path": "src/renderer/src/features/session/labels.ts",
-            "sha": "b202259d7e011fb811fc21523a7cabb863c4b41e"
-        },
-        {
             "path": "src/renderer/src/features/session/LaunchDialog.test.tsx",
-            "sha": "8748118de909bfe23dcef184ee4bb95b79392eca"
+            "sha": "1d49ca0715c2f7dd39ddce81566b9708937a8843"
         },
         {
             "path": "src/renderer/src/features/session/LaunchDialog.tsx",
-            "sha": "42fdad4c7cce52ab77a6bd19eb07d86ac6c7007f"
-        },
-        {
-            "path": "src/renderer/src/features/session/launch-runtime-options.test.ts",
-            "sha": "fc2d479b55653490289a0cce120af0435df143b2"
-        },
-        {
-            "path": "src/renderer/src/features/session/launch-runtime-options.ts",
-            "sha": "ae18a47f69092da4c5a5ff24ee15974706c79f19"
+            "sha": "9251b6c447c7bc16fdf07377ce1ee8e3e781afed"
         },
         {
             "path": "src/renderer/src/features/session/LivePane.failure.test.tsx",
@@ -321,6 +313,26 @@
         {
             "path": "src/renderer/src/features/session/LivePane.test.tsx",
             "sha": "ab7288e13a978e3c54d92c7372e6594e34bcb841"
+        },
+        {
+            "path": "src/renderer/src/features/session/RunningSessionsProvider.test.tsx",
+            "sha": "4d691258172de1ac1be2a613300f038b115d63e4"
+        },
+        {
+            "path": "src/renderer/src/features/session/RunningSessionsProvider.tsx",
+            "sha": "3a0c1e7fce0a61328a7e2160bf4063827609f91a"
+        },
+        {
+            "path": "src/renderer/src/features/session/labels.ts",
+            "sha": "8bb58448677ce1753f3d238ed02d220a235632d2"
+        },
+        {
+            "path": "src/renderer/src/features/session/launch-runtime-options.test.ts",
+            "sha": "fc2d479b55653490289a0cce120af0435df143b2"
+        },
+        {
+            "path": "src/renderer/src/features/session/launch-runtime-options.ts",
+            "sha": "ae18a47f69092da4c5a5ff24ee15974706c79f19"
         },
         {
             "path": "src/renderer/src/features/shell/CenterBanners.test.tsx",
@@ -348,15 +360,15 @@
         "A": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
         "B": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
         "C": "Critical:0 High:0 Medium:0 Low:0 (platform-boundary)",
-        "D": "Critical:0 High:0 Medium:1 Low:1 (platform-boundary)",
+        "D": "Critical:0 High:0 Medium:1 Low:3 (platform-boundary)",
         "E": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
-        "F": "lint warning:24 / convention Medium:2 Low:2 / platform-boundary Medium:1 Low:1",
-        "G": "database-reviewer High:2 Medium:1 Low:0",
-        "H": "database Medium:1 / platform-boundary Medium:1"
+        "F": "lint warning:27 / convention Medium:2 Low:3 / platform-boundary Medium:1 Low:1",
+        "G": "database-reviewer Critical:0 High:0 Medium:2 Low:2",
+        "H": "database Medium:1 / convention 0 / platform-boundary 0"
     },
     "tracks": {
         "lint-agent": {
-            "violations": 24,
+            "violations": 27,
             "exit_code": 0,
             "detectors": [
                 "eslint",
@@ -368,7 +380,7 @@
             ]
         },
         "test-agent": {
-            "passed": 3660,
+            "passed": 3665,
             "failed": 0,
             "exit_code": 0,
             "scope": "full"
@@ -380,15 +392,15 @@
         },
         "database-reviewer": {
             "critical": 0,
-            "high": 2,
+            "high": 0,
             "medium": 2,
-            "low": 1
+            "low": 2
         },
         "platform-boundary-reviewer": {
             "critical": 0,
             "high": 0,
-            "medium": 3,
-            "low": 2
+            "medium": 2,
+            "low": 4
         }
     },
     "skipped_reviewers": [
@@ -405,6 +417,12 @@
     "iter_history": [
         {
             "iter": 1,
+            "must_fix": 0,
+            "skipped": 0,
+            "error": 0
+        },
+        {
+            "iter": 2,
             "must_fix": 0,
             "skipped": 0,
             "error": 0
