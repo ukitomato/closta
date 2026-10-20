@@ -76,7 +76,10 @@ export function createWin32ClaudeLocator(
     if (pathValue !== undefined) {
       const elements = pathValue.split(';').slice(0, MAX_PATH_ELEMENTS)
       for (const rawElement of elements) {
-        const trimmed = rawElement.trim().replace(/^"+|"+$/g, '').trim()
+        const trimmed = rawElement
+          .trim()
+          .replace(/^"+|"+$/g, '')
+          .trim()
         if (trimmed.length === 0) continue
         const dir = makeHostPath(trimmed)
         if (!dir.ok) continue

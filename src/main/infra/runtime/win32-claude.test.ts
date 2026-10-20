@@ -90,7 +90,7 @@ describe('createWin32ClaudeLocator', () => {
   })
 
   it.each([
-    ['在らない','E:\\tools\\claude.exe', []],
+    ['在らない', 'E:\\tools\\claude.exe', []],
     ['.cmd', 'E:\\tools\\claude.cmd', ['E:\\tools\\claude.cmd']],
     ['UNC (wsl$)', '\\\\wsl$\\Ubuntu\\usr\\bin\\claude', ['\\\\wsl$\\Ubuntu\\usr\\bin\\claude']],
     ['相対', 'claude.exe', []]

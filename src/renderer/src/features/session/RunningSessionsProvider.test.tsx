@@ -100,8 +100,22 @@ describe('RunningSessionsView.runtimeName (X-8 H-003)', () => {
           wslAvailability: 'available',
           enumerationIssues: [],
           runtimes: [
-            { ...base, id: 'host', kind: 'win32', distroName: null, wslVersion: null, hasPathMapping: false },
-            { ...base, id: 'wsl:Ubuntu', kind: 'wsl', distroName: 'Ubuntu', wslVersion: 2, hasPathMapping: true }
+            {
+              ...base,
+              id: 'host',
+              kind: 'win32',
+              distroName: null,
+              wslVersion: null,
+              hasPathMapping: false
+            },
+            {
+              ...base,
+              id: 'wsl:Ubuntu',
+              kind: 'wsl',
+              distroName: 'Ubuntu',
+              wslVersion: 2,
+              hasPathMapping: true
+            }
           ]
         }) as never
     })

@@ -23,7 +23,9 @@ export interface Win32ClaudePathService {
   clear(): Promise<Win32ClaudePathResult>
 }
 
-export function createWin32ClaudePathService(deps: Win32ClaudePathServiceDeps): Win32ClaudePathService {
+export function createWin32ClaudePathService(
+  deps: Win32ClaudePathServiceDeps
+): Win32ClaudePathService {
   async function saveAndRefresh(path: string | null): Promise<Win32ClaudePathResult> {
     try {
       await deps.save(path)
@@ -39,7 +41,8 @@ export function createWin32ClaudePathService(deps: Win32ClaudePathServiceDeps): 
     async pick() {
       const chosen = await deps.chooseFile()
       if (chosen === null) return { status: 'cancelled' }
-      if (classifyClaudeExecutable(chosen) !== 'exe') return { status: 'rejected', reason: 'not-exe' }
+      if (classifyClaudeExecutable(chosen) !== 'exe')
+        return { status: 'rejected', reason: 'not-exe' }
       return saveAndRefresh(chosen)
     },
     clear() {

@@ -490,7 +490,8 @@ describe('判定と導出の一致 (SC-005 / data-model §8)', () => {
     const distro = opts.distro ?? 'Ubuntu'
     let pathMapping: WslRuntimeDescriptor['pathMapping'] = null
     if (opts.mapping !== null) {
-      const prefix = opts.mapping === 'd-only' ? { f: 'D:\\', t: '/mnt/d' } : { f: 'C:\\', t: '/mnt/c' }
+      const prefix =
+        opts.mapping === 'd-only' ? { f: 'D:\\', t: '/mnt/d' } : { f: 'C:\\', t: '/mnt/c' }
       const m = makePathMapping(
         'host',
         wslNamespace(distro),
@@ -531,13 +532,38 @@ describe('判定と導出の一致 (SC-005 / data-model §8)', () => {
   }[] = [
     { name: 'win32 × host', rt: win32, dir: hostDir.path, expected: 'reachable' },
     { name: 'win32 × UNC', rt: win32, dir: ubuntuUnc.path, expected: 'unreachable' },
-    { name: 'wsl × host × stopped', rt: wslRt({ state: 'stopped' }), dir: hostDir.path, expected: 'blocked' },
-    { name: 'wsl × host × mapping 未取得', rt: wslRt({ mapping: null }), dir: hostDir.path, expected: 'blocked' },
-    { name: 'wsl × host × mapping の外', rt: wslRt({ mapping: 'd-only' }), dir: hostDir.path, expected: 'unreachable' },
+    {
+      name: 'wsl × host × stopped',
+      rt: wslRt({ state: 'stopped' }),
+      dir: hostDir.path,
+      expected: 'blocked'
+    },
+    {
+      name: 'wsl × host × mapping 未取得',
+      rt: wslRt({ mapping: null }),
+      dir: hostDir.path,
+      expected: 'blocked'
+    },
+    {
+      name: 'wsl × host × mapping の外',
+      rt: wslRt({ mapping: 'd-only' }),
+      dir: hostDir.path,
+      expected: 'unreachable'
+    },
     { name: 'wsl × host × mapping の内', rt: wslRt({}), dir: hostDir.path, expected: 'reachable' },
     { name: 'wsl × UNC (同じ distro)', rt: wslRt({}), dir: ubuntuUnc.path, expected: 'reachable' },
-    { name: 'wsl × UNC (別の distro)', rt: wslRt({}), dir: debianUnc.path, expected: 'unreachable' },
-    { name: 'wsl × UNC × stopped', rt: wslRt({ state: 'stopped' }), dir: ubuntuUnc.path, expected: 'blocked' }
+    {
+      name: 'wsl × UNC (別の distro)',
+      rt: wslRt({}),
+      dir: debianUnc.path,
+      expected: 'unreachable'
+    },
+    {
+      name: 'wsl × UNC × stopped',
+      rt: wslRt({ state: 'stopped' }),
+      dir: ubuntuUnc.path,
+      expected: 'blocked'
+    }
   ]
 
   it.each(configDirRows)(
@@ -619,7 +645,10 @@ describe('判定と導出の一致 (SC-005 / data-model §8)', () => {
         expect(await svc.deriveEnv('p1', 'host')).toBeNull()
         // 多重の防御: 判定を通り抜けても起動の合成が拒否する。
         expect(() =>
-          composeWin32LaunchEnv(buildWin32LaunchEnv({}), { env: { [key]: 'x' }, forwardKeys: [key] })
+          composeWin32LaunchEnv(buildWin32LaunchEnv({}), {
+            env: { [key]: 'x' },
+            forwardKeys: [key]
+          })
         ).toThrow()
       }
     )
@@ -634,16 +663,13 @@ describe('判定と導出の一致 (SC-005 / data-model §8)', () => {
       expect(() => composeWin32LaunchEnv(buildWin32LaunchEnv({}), derived!)).not.toThrow()
     })
 
-    it.each([['HTTPS_PROXY'], ['USERNAME']])(
-      'wsl × %s は今のまま通る',
-      async (key) => {
-        const rt = wslRt({})
-        const svc = createProviderService(
-          deps({ store: fakeStore([withEnv({ [key]: 'x' })]), runtimes: () => [rt] })
-        )
-        expect((await svc.listReachable(rt.id)).reachable).toHaveLength(1)
-        expect(await svc.deriveEnv('p1', rt.id)).not.toBeNull()
-      }
-    )
+    it.each([['HTTPS_PROXY'], ['USERNAME']])('wsl × %s は今のまま通る', async (key) => {
+      const rt = wslRt({})
+      const svc = createProviderService(
+        deps({ store: fakeStore([withEnv({ [key]: 'x' })]), runtimes: () => [rt] })
+      )
+      expect((await svc.listReachable(rt.id)).reachable).toHaveLength(1)
+      expect(await svc.deriveEnv('p1', rt.id)).not.toBeNull()
+    })
   })
 })

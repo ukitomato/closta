@@ -1563,7 +1563,12 @@ describe('LaunchDialog — Win32Runtime (X-8)', () => {
       expect([...providerSelect.options].map((o) => o.value)).toEqual(['', 'p-host-dir', 'p-proxy'])
     )
     const excluded = screen.getByRole('list', { name: '選べない Provider' })
-    for (const name of ['UNC の configDir', 'helper の方式', 'USERNAME を持つ', 'NODE_EXTRA_CA_CERTS を持つ']) {
+    for (const name of [
+      'UNC の configDir',
+      'helper の方式',
+      'USERNAME を持つ',
+      'NODE_EXTRA_CA_CERTS を持つ'
+    ]) {
       expect(excluded.textContent).toContain(name)
     }
     expect(excluded.textContent).toContain('このランタイムからは到達できません')

@@ -79,7 +79,8 @@ export function createRuntimeSettingsStore(
 
   function pathFor(name: string): HostPath {
     const result = hostPathOps.join(userDataDir, name)
-    if (!result.ok) throw new Error('ユーザデータのパスが不正 (ランタイムの設定の保存先を組み立てられない)')
+    if (!result.ok)
+      throw new Error('ユーザデータのパスが不正 (ランタイムの設定の保存先を組み立てられない)')
     return result.path
   }
 

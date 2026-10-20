@@ -30,7 +30,9 @@ async function launchAnother(page: Page): Promise<void> {
   const folder = page.getByRole('combobox', { name: '作業フォルダ' })
   if ((await folder.inputValue()) === '') {
     await folder.selectOption({ index: 1 })
-    await page.getByRole('combobox', { name: 'ランタイム', exact: true }).selectOption({ label: 'E2E-Ubuntu' })
+    await page
+      .getByRole('combobox', { name: 'ランタイム', exact: true })
+      .selectOption({ label: 'E2E-Ubuntu' })
   }
   await page.getByRole('button', { name: '起動', exact: true }).click()
 }

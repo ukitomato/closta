@@ -303,7 +303,11 @@ describe('createPrepareLaunch', () => {
 /** X-8 (data-model §7): Win32Runtime の起動前段。 */
 describe('createPrepareLaunch (Win32Runtime)', () => {
   const CLAUDE = 'C:\\Users\\u\\.local\\bin\\claude.exe'
-  const hostBase = { SystemRoot: 'C:\\WINDOWS', windir: 'C:\\WINDOWS', PATH: 'C:\\WINDOWS\\system32' }
+  const hostBase = {
+    SystemRoot: 'C:\\WINDOWS',
+    windir: 'C:\\WINDOWS',
+    PATH: 'C:\\WINDOWS\\system32'
+  }
   const win32 = (over: Partial<Win32RuntimeDescriptor> = {}): Win32RuntimeDescriptor => ({
     ...createWin32(NOW, { claudePath: CLAUDE, claudeStatus: 'found', claudeOverridden: false }),
     ...over
@@ -364,7 +368,11 @@ describe('createPrepareLaunch (Win32Runtime)', () => {
       const prep = await createPrepareLaunch(
         win32Deps({
           runtimes: () => [
-            win32({ claudeStatus, claudePath: null, claudeOverridden: claudeStatus === 'override-invalid' })
+            win32({
+              claudeStatus,
+              claudePath: null,
+              claudeOverridden: claudeStatus === 'override-invalid'
+            })
           ]
         })
       )(win32Config())
@@ -537,7 +545,9 @@ describe('resolveLaunchAxes の distro-mismatch (X-8 / data-model §7)', () => {
     permissionMode: 'plan' as const
   }
   it('distroName が null のランタイムの facts では出ない', async () => {
-    const actual = await vi.importActual<typeof launchResolution>('@domain/session/launch-resolution')
+    const actual = await vi.importActual<typeof launchResolution>(
+      '@domain/session/launch-resolution'
+    )
     const result = actual.resolveLaunchAxes(draft, {
       folders: [{ id: 'f1', distroName: 'Ubuntu' }],
       runtimes: [{ id: 'r', distroName: null, running: true }],
@@ -547,7 +557,9 @@ describe('resolveLaunchAxes の distro-mismatch (X-8 / data-model §7)', () => {
   })
 
   it('WSL の facts では今どおり出る', async () => {
-    const actual = await vi.importActual<typeof launchResolution>('@domain/session/launch-resolution')
+    const actual = await vi.importActual<typeof launchResolution>(
+      '@domain/session/launch-resolution'
+    )
     const result = actual.resolveLaunchAxes(draft, {
       folders: [{ id: 'f1', distroName: 'Ubuntu' }],
       runtimes: [{ id: 'r', distroName: 'Debian', running: true }],
