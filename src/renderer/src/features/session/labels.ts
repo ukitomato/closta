@@ -2,6 +2,7 @@ import type { LaunchFailureReason, SessionLaunchRejectReason } from '@domain/ses
 import { MAX_CONCURRENT_SESSIONS } from '@domain/session/concurrency'
 import { MAX_PRESETS, type SafePermissionMode } from '@domain/session/launch-config'
 import type { AxisResetReason, LaunchBlocker } from '@domain/session/launch-resolution'
+import type { ResumeUnavailableReason } from '@domain/session/resume'
 import type { SavePresetResult } from '@domain/session/preset'
 import type { SessionRunState } from '@domain/session/run-state'
 
@@ -54,6 +55,9 @@ const LAUNCH_REJECT_LABELS: Record<SessionLaunchRejectReason, string> = {
   'rate-limited': 'レート制限のため止まりました。しばらく待ってから起動し直してください。',
   'api-error':
     'API がエラーを返しました。ログイン状態を確かめ、しばらく待ってから起動し直してください。',
+  // X-9 (data-model §7): 再開の起動の失敗。会話の id・パスは文言に入れない。
+  'resume-failed':
+    '会話を再開できませんでした。会話の記録が見つからない・読めない、または再開した会話が安全でない権限モードで起きました。',
   // X-5: 上限超過 (FR-006)。停止処理中の枠も数えるため「終了を待つ」も含める。上限値は domain の定数から組む。
   // 枠を空ける操作を、一覧に実際に出る操作どおりに案内する (pr-gate R1 po M-004)。中断だけでは枠は空かない (FR-011)。
   'session-limit': `同時に動かせるセッションは ${MAX_CONCURRENT_SESSIONS} 件までです。プロンプト待ち・応答待ち・中断のセッションは「終了」、起動中・応答中・承認待ちのセッションは「強制終了」で枠が空きます (中断だけでは空きません)。停止処理中のセッションも数えるため、終わるまで少し待つ場合があります。`,
@@ -68,7 +72,56 @@ const LAUNCH_REJECT_LABELS: Record<SessionLaunchRejectReason, string> = {
     '選んだ Provider が使えなくなっていたため起動を止めました。Provider を選び直すか、既定 Provider での起動を確認してください。'
 }
 
-export function launchRejectLabel(reason: SessionLaunchRejectReason): string {
+/**
+ * 再開できない理由の文言 (X-9 / data-model §10。[ASSUMED: エラーメッセージ文言])。
+ * 過去の行の帯 (`resolvePastResume` の理由) と、再開の起動の拒否の両方が使う。
+ */
+export const RESUME_UNAVAILABLE_LABELS: Record<ResumeUnavailableReason, string> = {
+  'folder-unregistered':
+    'この会話の作業フォルダは登録されていません。フォルダを登録してから再開してください',
+  'cwd-mismatch':
+    'この会話の作業ディレクトリは、登録フォルダの下の別のディレクトリです。そのディレクトリを作業フォルダとして登録してから再開してください',
+  'folder-pending': 'この会話の所在の確認が終わっていません。しばらくしてから再開してください',
+  'location-unknown': 'この会話の作業ディレクトリの所在が分からないため、再開できません',
+  'runtime-missing':
+    'この会話のランタイムが見つかりません。ランタイムを再検出してから再開してください',
+  'location-mismatch':
+    'この会話は、記録のある環境と別の環境の作業ディレクトリで動いていたため、Closta からは再開できません',
+  'provider-missing':
+    'この会話の config ディレクトリに対応する Provider がありません。Provider を登録してから再開してください',
+  'provider-ambiguous':
+    'この会話の config ディレクトリに対応する Provider が複数あります。1 つにしてから再開してください',
+  'source-unknown': 'この会話を再開できません。一覧を再取得してから試してください'
+}
+
+/** 再開の操作・ダイアログの文言 (X-9 / data-model §9.3・§10。[ASSUMED: UI ラベル・ボタン文言])。 */
+export const RESUME_LABELS = {
+  /** 稼働中の行・過去の行の帯の操作。 */
+  action: '再開',
+  retry: 'やり直す',
+  /** 再開の形の起動ダイアログ。 */
+  heading: 'セッションを再開',
+  description:
+    '前の会話の続きから再開します。作業フォルダ・ランタイム・Provider は引き継ぎます。モデル・effort・権限モードは選び直せます。',
+  submit: '再開する',
+  deleted: '(削除済み)',
+  conversationRunning: 'この会話はすでに実行中です',
+  /** 過去の行の帯の名前 (region)。 */
+  barLabel: '会話の再開',
+  /** 再開した行の中央の先頭 (それまでの会話の後ろの区切り・読み取りの失敗の 1 行。data-model §8.2)。 */
+  resumedDivider: 'ここから再開',
+  resumedLoadFailed: 'それまでの会話を読み込めませんでした'
+} as const
+
+function isResumeUnavailable(reason: string): reason is ResumeUnavailableReason {
+  return Object.hasOwn(RESUME_UNAVAILABLE_LABELS, reason)
+}
+
+export function launchRejectLabel(
+  reason: SessionLaunchRejectReason | ResumeUnavailableReason | 'conversation-running'
+): string {
+  if (reason === 'conversation-running') return RESUME_LABELS.conversationRunning
+  if (isResumeUnavailable(reason)) return RESUME_UNAVAILABLE_LABELS[reason]
   return LAUNCH_REJECT_LABELS[reason]
 }
 
@@ -98,7 +151,8 @@ const LAUNCH_FAILURE_SHORT_LABELS: Record<LaunchFailureReason, string> = {
   'auth-failed': '認証エラー',
   billing: '請求エラー',
   'rate-limited': 'レート制限',
-  'api-error': 'API エラー'
+  'api-error': 'API エラー',
+  'resume-failed': '再開できませんでした'
 }
 
 export function launchFailureShortLabel(reason: LaunchFailureReason): string {

@@ -9,11 +9,15 @@ import type {
 } from './provider/dto'
 import type { DetectedCandidate } from './provider/types'
 import type { RuntimeDescriptorDTO, RuntimeListDTO } from './runtime/dto'
-import type { SessionLaunchHandshakeDTO } from './session/agent-session'
+import type {
+  SessionLaunchHandshakeDTO,
+  SessionLaunchRejectReason
+} from './session/agent-session'
 import type { SessionIndexDTO } from './session/dto'
 import type { SessionLaunchConfig } from './session/launch-config'
 import type { LaunchOrigin, LaunchUsageSummaryDTO } from './session/launch-usage'
 import type { PresetDTO, SavePresetResult } from './session/preset'
+import type { ResumeUnavailableReason, SessionResumeRequest } from './session/resume'
 import type { SessionStatusUpdate } from './session/status-update'
 import type { TranscriptHandshakeDTO } from './session/transcript-dto'
 import type {
@@ -33,6 +37,26 @@ export type Win32ClaudePathResult =
   | { readonly status: 'cancelled' }
   | { readonly status: 'rejected'; readonly reason: 'not-exe' }
   | { readonly status: 'save-failed' }
+
+/** 過去の行の再開の軸の解決の結果 (X-9 / contracts C-1)。3 つの不透明な id と理由のキーだけ (パスを持たない)。 */
+export type PastResumeDTO =
+  | {
+      readonly ok: true
+      readonly folderId: string
+      readonly runtimeId: string
+      readonly providerId: string | null
+    }
+  | { readonly ok: false; readonly reason: ResumeUnavailableReason }
+
+/** `resumeSession` の handshake (X-9 / contracts C-2)。本文を含まない。 */
+export type SessionResumeHandshakeDTO =
+  | Extract<SessionLaunchHandshakeDTO, { readonly status: 'launching' }>
+  | { readonly status: 'already-running'; readonly sessionId: string }
+  | {
+      readonly status: 'rejected'
+      readonly reasonKey:
+        SessionLaunchRejectReason | ResumeUnavailableReason | 'conversation-running'
+    }
 
 /**
  * preload が公開する**単一 capability** の形 (FR-039 / contracts/ipc-capability.md)。
@@ -141,6 +165,24 @@ export interface ClostaCapability {
     config: SessionLaunchConfig,
     origin: LaunchOrigin
   ): Promise<SessionLaunchHandshakeDTO>
+  /**
+   * 過去の行の再開の軸を解く (X-9 / contracts C-1)。列挙のキャッシュだけを見る (列挙・`wsl.exe` を起こさない)。
+   * 戻り値は 3 つの不透明な id か理由のキーだけ。外れた入力は `source-unknown`。
+   */
+  resolvePastResume(targetKey: string, conversationId: string): Promise<PastResumeDTO>
+  /**
+   * 会話を再開する (X-9 / contracts C-2)。引き継ぐ 3 軸は main が source から解いた値と照合する。
+   * 受け付けたら `launchSession` と同じく port で本文が届く (`sessionId` で照合)。`origin` は計測にだけ使う。
+   */
+  resumeSession(
+    request: SessionResumeRequest,
+    origin: LaunchOrigin
+  ): Promise<SessionResumeHandshakeDTO>
+  /**
+   * 再開した行のそれまでの会話の読み取りを開始する (X-9 / contracts C-3)。経路は `getTranscript` と同じ
+   * (本文は port・`requestToken` で照合)。会話の id は renderer に渡らない。
+   */
+  getResumedTranscript(sessionId: string, requestToken: string): Promise<TranscriptHandshakeDTO>
   /** 稼働セッションへプロンプトを送る (FR-011 / FR-018)。main が空/空白拒否 + 長さ上限を検証する。 */
   sendPrompt(sessionId: string, text: string): Promise<void>
   /**
@@ -232,6 +274,11 @@ export interface ClostaCapability {
    * 会話由来の文字列を含まない (sessionId / run-state / 理由キー / `claude` の生存フラグだけ)。
    */
   onSessionStatus(listener: (updates: readonly SessionStatusUpdate[]) => void): () => void
+  /**
+   * 稼働中の行が会話の id を初めて持った通知 (X-9 / contracts C-4)。値は Closta の `sessionId` の列だけ
+   * (会話の id を含まない)。
+   */
+  onSessionResumable(listener: (sessionIds: readonly string[]) => void): () => void
 }
 
 /** `contextBridge.exposeInMainWorld` で公開する名前。 */
@@ -259,6 +306,10 @@ export const IPC_CHANNELS = {
   /** main → preload: 取得プロセスに繋がった port2 を transfer する専用チャネル (R-3 / AD-034)。 */
   transcriptPort: 'closta:transcriptPort',
   launchSession: 'closta:launchSession',
+  /** 再開 (X-9 / AD-059。contracts C-1〜C-4)。 */
+  resolvePastResume: 'closta:resolvePastResume',
+  resumeSession: 'closta:resumeSession',
+  getResumedTranscript: 'closta:getResumedTranscript',
   sendPrompt: 'closta:sendPrompt',
   respondPermission: 'closta:respondPermission',
   /** Elicitation (MCP サーバーの問い) への応答 (O-10 / AD-053 Decision 3)。URL を開くチャネルは作らない。 */
@@ -270,6 +321,8 @@ export const IPC_CHANNELS = {
   sessionPort: 'closta:sessionPort',
   /** main → renderer: 状態通知のバッチ (X-5 / FR-004)。 */
   sessionStatus: 'closta:sessionStatus',
+  /** main → renderer: 稼働中の行が会話の id を持った通知 (X-9 / contracts C-4)。値は Closta の sessionId だけ。 */
+  sessionResumable: 'closta:sessionResumable',
   listProviders: 'closta:listProviders',
   detectProviders: 'closta:detectProviders',
   registerProvider: 'closta:registerProvider',

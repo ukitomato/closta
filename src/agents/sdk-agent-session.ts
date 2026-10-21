@@ -24,6 +24,7 @@ import type { EffortLevel } from '@domain/provider/types'
 import { classifyClaudeExecutable } from '@domain/runtime/claude-executable'
 import { hostPathOps } from '@domain/runtime/path-api'
 import { makeHostPath } from '@domain/runtime/path-types'
+import { isValidSessionId } from '@domain/validation'
 import {
   WIN32_TREE_STOP_ARGS,
   WIN32_TREE_STOP_COMMAND_NAME,
@@ -309,6 +310,8 @@ function decodeLaunchOptions(value: unknown): LaunchQueryOptions | null {
   if (!isSafePermissionMode(o.permissionMode)) return null
   if (o.model !== undefined && !isValidModelId(o.model)) return null
   if (o.effort !== undefined && !isEffortLevel(o.effort)) return null
+  // 再開する会話の id (X-9 / AD-059)。UUID の形でなければ起動しない。
+  if (o.resume !== undefined && !isValidSessionId(o.resume)) return null
   if (o.settings !== undefined) {
     if (!isHelperSettings(o.settings)) return null
     if (Object.values(o.settings).some((v) => typeof v === 'string' && v.includes('\\')))
@@ -318,7 +321,8 @@ function decodeLaunchOptions(value: unknown): LaunchQueryOptions | null {
     permissionMode: assertSafePermissionMode(o.permissionMode),
     ...(o.model !== undefined ? { model: o.model } : {}),
     ...(o.effort !== undefined ? { effort: o.effort } : {}),
-    ...(o.settings !== undefined ? { settings: assertHelperSettings(o.settings) } : {})
+    ...(o.settings !== undefined ? { settings: assertHelperSettings(o.settings) } : {}),
+    ...(o.resume !== undefined ? { resume: o.resume } : {})
   }
 }
 
@@ -469,6 +473,8 @@ async function run(
   // terminal error (provider-error / stream-protocol-error) に達したか。
   let terminated = false
   let finished = false
+  // 再開 (X-9 / AD-059): 最初の `system/init` を受けたか。会話の id の送出・権限モードの検査・`resume-failed` の分岐の鍵。
+  let sawInit = false
 
   const post = (message: unknown): void => coordinator.postMessage(message)
   const postStatus = (): void => post({ kind: 'status', state, reasonKey, claudeAlive: true })
@@ -513,6 +519,13 @@ async function run(
     transition({ kind: 'fail' })
     postStatus()
   }
+
+  /**
+   * 子 (claude) の終わり・stream の終わりを失敗にするときの理由 (X-9 / data-model §6.4)。
+   * 再開の起動で最初の `init` の前なら `resume-failed` (会話の記録が見つからない・読めない)、それ以外は今の理由。
+   */
+  const crashReason = (fallback: LaunchFailureReason): LaunchFailureReason =>
+    launchOptions.resume !== undefined && !sawInit ? 'resume-failed' : fallback
 
   // 孫 (wsl.exe) を kill する。**closure に閉じる** (spawnedChild は closure でしか代入されないため)。
   const killSpawnedChild = (): void => {
@@ -714,7 +727,7 @@ async function run(
        * finish) か kill したときだけである。応答待ち (`done`) の間に `wsl.exe` が落ちると SDK の stream は例外なく
        * 終わるため、ここで拾わないと失敗ではなく「終了済み」に見える (SH-022 の実機で確認)。
        */
-      if (!closing && !finished && !isErrored()) fail('process-crashed')
+      if (!closing && !finished && !isErrored()) fail(crashReason('process-crashed'))
       // **子の exit は即時に知らせる** — 枠の解放 (claudeAlive: false) は調停役スレッドが行う (FR-005)。
       post({ kind: 'child-exited' })
       for (const resolve of childExitWaiters.splice(0)) resolve()
@@ -803,7 +816,8 @@ async function run(
       settings: assertHelperSettings(launchOptions.settings),
       model: launchOptions.model,
       effort: launchOptions.effort,
-      onElicitation
+      onElicitation,
+      resume: launchOptions.resume
     })
 
     transition({ kind: 'launch' })
@@ -868,6 +882,27 @@ async function run(
           break
         }
         case 'system':
+          if (message.subtype === 'init') {
+            const initRecord = asRecord(message)
+            const firstInit = !sawInit
+            // 再開の最初の `init` の権限モードが安全 3 値の外 (無いときも) なら fail closed (X-9 / FR-017 / data-model §6.3)。
+            // 昇格の値の綴りを書かない。`resume-failed` で止め、会話の id は運ばない。
+            if (
+              firstInit &&
+              launchOptions.resume !== undefined &&
+              !isSafePermissionMode(initRecord?.permissionMode)
+            ) {
+              fail('resume-failed')
+              terminated = true
+              break
+            }
+            sawInit = true
+            // 会話の id は最初の `init` の `session_id` だけを UUID の形で検査して 1 回送る (調停役が即座に main へ中継する)。
+            const conversationId = initRecord?.session_id
+            if (firstInit && isValidSessionId(conversationId)) {
+              post({ kind: 'conversation', conversationId })
+            }
+          }
           if (message.subtype === 'permission_denied') {
             emit({
               kind: 'permission-denied',
@@ -926,10 +961,20 @@ async function run(
       }
       if (terminated) break
     }
+    // 再開の起動で `init` の前に stream が例外なく終わった (経路 C。data-model §6.4)。新しい起動の終わり方は変えない。
+    if (
+      launchOptions.resume !== undefined &&
+      !sawInit &&
+      !terminated &&
+      !closing &&
+      !isErrored()
+    ) {
+      fail('resume-failed')
+    }
   } catch {
     // 終了処理中の abort による例外は失敗ではない。それ以外は理由キーだけを流す (本文断片を載せない。C-3 / CWE-532)。
     // 子の異常終了で先に `process-crashed` を付けていれば上書きしない (原因は stream ではなく子の終了)。
-    if (!closing && !isErrored()) fail('stream-protocol-error')
+    if (!closing && !isErrored()) fail(crashReason('stream-protocol-error'))
   } finally {
     // **終わり方を問わず出口を通す** — 子を止めて exit を待ち、`ended` を送る (R3-H-03 / design-gate R3 A2)。
     abortController.abort()

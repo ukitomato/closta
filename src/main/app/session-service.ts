@@ -14,6 +14,7 @@ import type {
   SessionEnumerator
 } from '@domain/session/interfaces'
 import { matchFolder } from '@domain/session/match'
+import type { CwdOrigin } from '@domain/session/origin'
 import type { SessionSummary } from '@domain/session/summary'
 import {
   enumerationTargetKey,
@@ -90,6 +91,20 @@ export interface SessionService {
    * (renderer は未信頼。AD-023)。**列挙も起動もしない** — 値の解決とゲートだけを行う。
    */
   transcriptTarget(targetKey: string): Promise<TranscriptTargetResolution>
+  /**
+   * 過去の行の再開の元 (X-9 / data-model §3.2)。列挙のキャッシュの参照だけで、
+   * 列挙をやり直さない・`wsl.exe` を起こさない。どちらかが無ければ `null`。
+   */
+  pastResumeSource(
+    targetKey: string,
+    conversationId: string
+  ): { readonly target: EnumerationTarget; readonly origin: CwdOrigin } | null
+  /** 今の列挙対象 (参照だけ。稼働中の行の再開で読む対象を決める。data-model §8.1)。 */
+  enumerationTargets(): readonly EnumerationTarget[]
+  /** 対応づけの解決 (メモ化つき)。`resume-service` が `resolvePastResumeAxes` に渡す。 */
+  readonly resolve: (
+    input: Parameters<typeof resolveFolderRuntime>[0]
+  ) => ReturnType<typeof resolveFolderRuntime>
   /** 登録フォルダが変わった。**再列挙せず対応づけだけをやり直す。** */
   onFoldersChanged(): SessionIndexDTO
   /** ランタイムが変わった。対応づけのメモ化を破棄してやり直す。 */
@@ -763,6 +778,22 @@ export function createSessionService(deps: SessionServiceDeps): SessionService {
 
       return { ok: true, configDirEnv: envValue.path }
     },
+
+    pastResumeSource(targetKey: string, conversationId: string) {
+      const target = targets.find((candidate) => candidate.key === targetKey)
+      if (target === undefined) return null
+      const row = (sessionsByTarget.get(targetKey) ?? []).find(
+        (session) => session.sessionId === conversationId
+      )
+      if (row === undefined) return null
+      return { target, origin: row.origin }
+    },
+
+    enumerationTargets(): readonly EnumerationTarget[] {
+      return targets
+    },
+
+    resolve,
 
     onFoldersChanged(): SessionIndexDTO {
       // **再列挙しない** (data-model §7)。対応づけだけをやり直す。

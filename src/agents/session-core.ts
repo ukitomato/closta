@@ -74,7 +74,9 @@ export const QUERY_OPTION_KEYS = [
   'onElicitation',
   // 一般の Hook の開始・結果と subagent の発言の転送 (O-11 / AD-054 Decision 4)。常に true。escalation-neutral。
   'includeHookEvents',
-  'forwardSubagentText'
+  'forwardSubagentText',
+  // 会話の再開 (X-9 / AD-059 Decision 1)。会話の続きを読み込むだけで権限面・tool 集合・env を変えない (escalation-neutral)。
+  'resume'
 ] as const
 
 /** SDK の `SpawnOptions` の構造だけ (SDK を import しない)。 */
@@ -141,6 +143,8 @@ export interface BuiltQueryOptions {
   readonly includeHookEvents: true
   /** subagent の発言の転送 (O-11。AD-054)。常に true。 */
   readonly forwardSubagentText: true
+  /** 再開する会話の id (X-9。AD-059)。再開の起動だけが持つ。 */
+  readonly resume?: string
 }
 
 export interface BuildQueryOptionsDeps {
@@ -155,6 +159,8 @@ export interface BuildQueryOptionsDeps {
   readonly model?: string
   readonly effort?: EffortLevel
   readonly onElicitation: OnElicitationLike
+  /** 再開する会話の id (X-9。AD-059)。境界を越えて来るため下で UUID の形を assert し直す。 */
+  readonly resume?: string
 }
 
 /**
@@ -177,6 +183,10 @@ export function buildQueryOptions(deps: BuildQueryOptionsDeps): BuiltQueryOption
   if (deps.effort !== undefined && !isEffortLevel(deps.effort)) {
     throw new Error('buildQueryOptions: effort が EffortLevel の外です (AD-041 (g))')
   }
+  if (deps.resume !== undefined && !isValidSessionId(deps.resume)) {
+    // 値をメッセージに入れない (会話の id をログに出さない。AD-059)。
+    throw new Error('buildQueryOptions: resume が会話の id の形ではありません (AD-059)')
+  }
   return {
     permissionMode: assertSafePermissionMode(deps.permissionMode),
     canUseTool: deps.canUseTool,
@@ -188,7 +198,8 @@ export function buildQueryOptions(deps: BuildQueryOptionsDeps): BuiltQueryOption
     effort: deps.effort,
     onElicitation: deps.onElicitation,
     includeHookEvents: true,
-    forwardSubagentText: true
+    forwardSubagentText: true,
+    ...(deps.resume !== undefined ? { resume: deps.resume } : {})
   }
 }
 

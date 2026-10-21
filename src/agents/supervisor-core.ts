@@ -192,6 +192,16 @@ export function runSupervisor(deps: SupervisorDeps): SupervisorHandle {
           slot.ended = true
           void worker.terminate()
           break
+        case 'conversation':
+          // 会話の id は窓 (status-batch) に入れず即座に main へ (X-9 / AD-059)。解釈せず、記録しない。
+          transport.write(
+            encodeSupervisorEvent({
+              kind: 'conversation',
+              sessionId,
+              conversationId: message.conversationId
+            })
+          )
+          break
       }
     })
     // 例外の中身は記録しない (理由キーだけ。Principle V)。

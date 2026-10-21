@@ -294,7 +294,7 @@ interface LaunchQueryOptions {
 ### §8.2 renderer の表示
 
 - 再開の起動を受け付けたら、新しい行のストアの状態に `resumed: { phase: 'loading' }` を持ち、`getResumedTranscript` を 1 回呼ぶ (`useTranscript` の port の受け取り方と同じ。`requestToken` で照合)
-- 届いた `TranscriptMessageDTO[]` を過去ログと同じ変換 (`toThreadMessage`) で `ThreadMessageLike` にし、id に `resumed:` の接頭辞を付け、`messages` の先頭に入れる。その後ろに区切りの行 (`{ id: 'resumed:divider', role: 'system', parts: [{ type: 'divider', label: 'ここから再開' }] }`) を 1 つ入れる
+- 届いた `TranscriptMessageDTO[]` を過去ログと同じ変換 (`toThreadMessage`) で `ThreadMessageLike` にし、id に `resumed:` の接頭辞を付け、`messages` の先頭に入れる。その後ろに区切りの行を 1 つ入れる。区切りの行は既存のシステムイベントの行 (`{ id: 'resumed:divider', role: 'system', parts: [{ type: 'system-event', category: 'informational', opens: true, name: '', detail: 'ここから再開', status: 'notice' }] }`) にする。`divider` の part は圧縮の境界として描かれ `label` を読まないため使わない。`notice` は終わった行で状態の文言を出さない
 - 届く前に新しいメッセージが来ていても、それまでの会話は先頭に入れる (並びは記録の順。新しいやり取りが後)
 - 失敗したら `messages` の先頭に失敗の 1 行 (システムイベントの行。「それまでの会話を読み込めませんでした」) を入れる。composer は使えるまま (FR-013)。再取得の操作は出さない (過去の区画の行から読める)
 - 読み取り専用 (US-4 AC2) の扱いは research R-09。`retryTextFor` は `resumed:` の id に `null` を返す

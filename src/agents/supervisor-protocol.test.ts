@@ -10,6 +10,7 @@ import {
 } from './supervisor-protocol'
 
 const ID = '11111111-1111-4111-8111-111111111111'
+const CONV = '22222222-2222-4222-8222-222222222222'
 
 describe('decodeSupervisorRequest (制御行。X-5 BE-004)', () => {
   it('launch と control だけを受け付ける', () => {
@@ -116,5 +117,35 @@ describe('encodeSupervisorEvent / decodeSupervisorEventForMain', () => {
     ).toBeNull()
     expect(decodeSupervisorEventForMain('{"kind":"thread-ended","sessionId":"x"}')).toBeNull()
     expect(decodeSupervisorEventForMain('nope')).toBeNull()
+  })
+
+  it('main は conversation を受け付け、sessionId か conversationId が UUID でなければ捨てる (X-9 / C-5)', () => {
+    expect(
+      decodeSupervisorEventForMain(
+        encodeSupervisorEvent({ kind: 'conversation', sessionId: ID, conversationId: CONV })
+      )
+    ).toEqual({ kind: 'conversation', sessionId: ID, conversationId: CONV })
+    for (const bad of [
+      { sessionId: 'x', conversationId: CONV },
+      { sessionId: ID, conversationId: 'x' },
+      { sessionId: ID, conversationId: '--resume' },
+      { sessionId: ID, conversationId: 42 },
+      { sessionId: ID }
+    ]) {
+      expect(decodeSupervisorEventForMain(JSON.stringify({ kind: 'conversation', ...bad }))).toBeNull()
+    }
+  })
+})
+
+describe('decodeWorkerMessage の conversation (X-9 / C-5)', () => {
+  it('UUID の形の conversationId だけを受け付ける', () => {
+    expect(decodeWorkerMessage({ kind: 'conversation', conversationId: CONV })).toEqual({
+      kind: 'conversation',
+      conversationId: CONV
+    })
+    for (const bad of ['x', '', 42, null, undefined, ['a']]) {
+      expect(decodeWorkerMessage({ kind: 'conversation', conversationId: bad })).toBeNull()
+    }
+    expect(decodeWorkerMessage({ kind: 'conversation' })).toBeNull()
   })
 })

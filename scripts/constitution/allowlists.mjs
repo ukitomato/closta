@@ -557,7 +557,9 @@ export const WSL_FREE_DIRECTORIES = [
   // X-5: 稼働中セッションの状態通知の中継 (受理済みバッチを renderer へ送るだけ。wsl.exe を名指さない。SH-010)。
   'src/main/app/session-status-relay.ts',
   // O-3: 起動の利用記録の取り回し (日ごとの回数を store に書くだけ。wsl.exe を名指さない。012 BE-042)。
-  'src/main/app/launch-usage-service.ts'
+  'src/main/app/launch-usage-service.ts',
+  // X-9: 再開の調停 (状態を持たない。I/O は注入で受ける。wsl.exe を名指さない。021 BE-012)。
+  'src/main/app/resume-service.ts'
 ]
 
 export const UNC_API_NAMES = [

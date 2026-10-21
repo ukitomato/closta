@@ -1,28 +1,37 @@
 import { createMessageQueue, type ThreadMessageLike } from '@assistant-ui/react'
 import { createStore, type StoreApi } from 'zustand/vanilla'
 
-import { SESSION_PORT_MESSAGE, type ClostaCapability } from '@domain/capability'
+import {
+  SESSION_PORT_MESSAGE,
+  TRANSCRIPT_PORT_MESSAGE,
+  type ClostaCapability
+} from '@domain/capability'
 import type { SessionEvent } from '@domain/session/agent-session'
 import type { ElicitationContent } from '@domain/session/elicitation'
 import type { SessionLaunchConfig } from '@domain/session/launch-config'
 import type { LaunchOrigin } from '@domain/session/launch-usage'
 import type { MeterUpdate } from '@domain/session/meter'
+import type { SessionResumeRequest } from '@domain/session/resume'
 import { normalizeSlashCommandName } from '@domain/session/session-init-report'
 import { mergeSystemEvent, systemEventPartOf } from '@domain/session/system-event'
 import type { TranscriptMessageDTO } from '@domain/session/transcript-dto'
 
 import { fromSystemEventData, toThreadMessage } from '@/features/chat/convert'
 import { readMessageTime, withMessageTime, withReceivedAt } from '@/features/chat/message-time'
+import { decodeTranscriptMessage } from '@/features/chat/transcript-guard'
 
 import { isBusyRunState, isSendableText } from './composer-queue'
 import { createCappedAdapter } from './composer-queue-adapter'
+import { RESUME_LABELS } from './labels'
 import { createRunningSessionMonitor } from './running-session-monitor'
 import {
   EMPTY_SESSION_METERS,
   MAX_TOOL_ELAPSED_ENTRIES,
   type Density,
+  type LaunchRejectReason,
   type LaunchState,
   type LiveSessionState,
+  type ResumeDialogState,
   type RunningSessionStoreState,
   type SessionMeters,
   type SessionQueue,
@@ -36,6 +45,7 @@ export type {
   LaunchState,
   LiveSessionState,
   PendingPermission,
+  ResumeDialogState,
   RunningSessionStoreState,
   SessionMeters,
   SessionQueue,
@@ -73,6 +83,24 @@ export interface SessionActions {
     folderLabel?: string | null,
     origin?: LaunchOrigin
   ): Promise<void>
+  /**
+   * 会話を再開する (X-9 / data-model §9.4)。`launching` は新しい行を作って選ぶ (`resumable: true`・`resumed: loading`。
+   * 起動ダイアログの `replaces` があれば `replace` で元の行を消す)。`already-running` はその行を選ぶ (元の行は残す)。
+   * `rejected` は理由を起動の状態に置く (ダイアログは開いたまま)。答えの種類を返す (`already-running` は
+   * 受け付けと違い `selectedId` の行が前から在るので、シェルがダイアログを閉じられない。呼び手が閉じる)。
+   */
+  resume(
+    request: SessionResumeRequest,
+    folderLabel?: string | null,
+    origin?: LaunchOrigin
+  ): Promise<'accepted' | 'already-running' | 'rejected'>
+  /** 起動ダイアログを再開の形にする (開くのは呼び手。`dismissLaunchNotice` で新規起動の形に戻る)。 */
+  openResume(state: ResumeDialogState): void
+  /**
+   * 元の行を消して新しい行をその位置に置き、選ぶ (X-9 / research R-11)。`close` と違い `previousFailure` を立てず、
+   * `order` を減らさない (シェルが「失敗した close」と読まない)。
+   */
+  replace(oldSessionId: string, newSessionId: string): void
   select(sessionId: string | null): void
   /**
    * 起動の拒否と前回の失敗の告知を消す (O-7。起動ダイアログを起動せずに閉じたとき・失敗したセッションを中央に出さずに
@@ -128,9 +156,75 @@ export type RunningSessionStore = StoreApi<RunningSessionStoreState> & SessionAc
 const INITIAL_LAUNCH: LaunchState = {
   phase: 'entry',
   rejectReason: null,
+  resume: null,
   lastConfig: null,
   lastOrigin: null,
   previousFailure: null
+}
+
+/** 行より先に届いた `sessionResumable` の通知を覚える上限 (同時実行数の上限と同じ。data-model §9.6)。 */
+const MAX_EARLY_RESUMABLE = 10
+
+/**
+ * 再開した行のそれまでの会話のメッセージの id の接頭辞 (X-9 / data-model §8.2)。新しいメッセージの id (取り消し・tool の結果の
+ * 送り直しの対象) と衝突させず、`LivePane` が「それまでの会話」を見分けて再送の操作を出さないためにも使う。
+ */
+export const RESUMED_ID_PREFIX = 'resumed:'
+
+/** 区切りの行の id (それまでの会話の後ろ)。 */
+const RESUMED_DIVIDER_ID = `${RESUMED_ID_PREFIX}divider`
+
+/** それまでの会話の読み取りの port の frame (未信頼。検証してから使う)。 */
+type UntrustedResumedFrame = Readonly<
+  Partial<Record<'kind' | 'requestToken' | 'messages', unknown>>
+>
+
+/**
+ * 再開した行の `messages` の先頭に入れる行を作る (純関数。data-model §8.2)。`transcript` が `null` なら読み取りの失敗の 1 行、
+ * 配列なら id に接頭辞を付けた会話と区切りの行 (0 件は区切りの行だけ)。
+ */
+function resumedPrefix(
+  transcript: readonly TranscriptMessageDTO[] | null
+): readonly ThreadMessageLike[] {
+  if (transcript === null) {
+    return [
+      toThreadMessage({
+        id: `${RESUMED_ID_PREFIX}load-failed`,
+        role: 'system',
+        parts: [
+          {
+            type: 'system-event',
+            category: 'informational',
+            opens: true,
+            name: '',
+            detail: RESUME_LABELS.resumedLoadFailed,
+            status: 'warning'
+          }
+        ],
+        createdAt: null
+      })
+    ]
+  }
+  return [
+    ...transcript.map((dto) => toThreadMessage({ ...dto, id: `${RESUMED_ID_PREFIX}${dto.id}` })),
+    toThreadMessage({
+      id: RESUMED_DIVIDER_ID,
+      role: 'system',
+      // `divider` の part は圧縮の境界として描かれ (`label` は読まれない)、「ここから再開」が出ない。既存のシステムイベントの行
+      // (知らせ。`notice` は終わった行で状態の文言を出さない) に置く。
+      parts: [
+        {
+          type: 'system-event',
+          category: 'informational',
+          opens: true,
+          name: '',
+          detail: RESUME_LABELS.resumedDivider,
+          status: 'notice'
+        }
+      ],
+      createdAt: null
+    })
+  ]
 }
 
 /** 同 id は差し替え、新規は末尾へ (逐次生成のメッセージ単位更新。AD-020 / H-06)。 */
@@ -542,6 +636,132 @@ export function createRunningSessionStore(
     queues.set(sessionId, { controller, adapter, prevBusy: false })
   }
 
+  /** 行より先に届いた `sessionResumable` の通知 (Closta の sessionId。古いものから捨てる。data-model §9.6)。 */
+  const earlyResumable: string[] = []
+
+  /** requestToken → 再開した行の sessionId (それまでの会話の読み取りの照合。1 回の読み取りにつき 1 つ。data-model §8.2)。 */
+  const resumedLoads = new Map<string, string>()
+  let resumedSeq = 0
+
+  const forgetResumedLoads = (sessionId: string): void => {
+    for (const [token, id] of resumedLoads) if (id === sessionId) resumedLoads.delete(token)
+  }
+
+  /**
+   * 読み取りの結果 (`null` は失敗) を再開した行の `messages` の先頭に入れる。token が合わない・行が無い・もう読み終えた
+   * ときは何もしない。新しいメッセージが先に届いていても先頭に入れる (並びは記録の順)。
+   */
+  const applyResumed = (token: string, transcript: readonly TranscriptMessageDTO[] | null): void => {
+    const sessionId = resumedLoads.get(token)
+    if (sessionId === undefined) return
+    resumedLoads.delete(token)
+    const current = store.getState().sessions[sessionId]
+    if (current === undefined || current.resumed?.phase !== 'loading') return
+    const prefix = resumedPrefix(transcript)
+    store.setState((s) => {
+      const row = s.sessions[sessionId]
+      if (row === undefined) return s
+      return {
+        sessions: {
+          ...s.sessions,
+          [sessionId]: {
+            ...row,
+            messages: [...prefix, ...row.messages],
+            resumed: { phase: transcript === null ? 'failed' : 'loaded' }
+          }
+        }
+      }
+    })
+    monitor.track([sessionId])
+  }
+
+  /** それまでの会話を 1 回読む (本文は `MessageChannelMain` の port で届く。invoke の戻りは handshake だけ)。 */
+  const loadResumed = async (sessionId: string): Promise<void> => {
+    resumedSeq += 1
+    const token = `resumed-${resumedSeq}-${now()}`
+    resumedLoads.set(token, sessionId)
+    try {
+      const handshake = await capability().getResumedTranscript(sessionId, token)
+      if (handshake.status === 'failed') applyResumed(token, null)
+      else if (handshake.status === 'empty') applyResumed(token, [])
+      // 'streaming' は port の frame を待つ。
+    } catch {
+      applyResumed(token, null)
+    }
+  }
+
+  /** それまでの会話の port を受ける (token が合わなければ捨てる)。frame は 1 つで、受けたら閉じる。 */
+  const wireResumedPort = (token: string, port: MessagePort): void => {
+    port.onmessage = (ev: MessageEvent): void => {
+      const frame = ev.data as UntrustedResumedFrame | null
+      port.close()
+      if (frame === null || typeof frame !== 'object' || frame.requestToken !== token) return
+      if (frame.kind !== 'messages' || !Array.isArray(frame.messages)) {
+        applyResumed(token, null)
+        return
+      }
+      applyResumed(
+        token,
+        frame.messages.flatMap((m: unknown) => {
+          const dto = decodeTranscriptMessage(m)
+          return dto === null ? [] : [dto]
+        })
+      )
+    }
+    port.start()
+  }
+
+  /**
+   * 受け付けた起動 (新規・再開) の行を作って選ぶ。`resumed` は再開の受け付けだけ (`resumable` も立てる)。
+   * 行より先に届いていた `sessionResumable` の通知はここで当てる。
+   */
+  const admit = (
+    sessionId: string,
+    config: SessionLaunchConfig,
+    folderLabel: string | null,
+    origin: LaunchOrigin,
+    resumedRow: boolean
+  ): void => {
+    const early = earlyResumable.indexOf(sessionId)
+    if (early !== -1) earlyResumable.splice(early, 1)
+    const session: LiveSessionState = {
+      sessionId,
+      config,
+      startedAt: now(),
+      runState: 'launching',
+      messages: [],
+      pending: null,
+      elicitations: [],
+      denied: [],
+      failureReason: null,
+      killed: false,
+      ending: false,
+      endForced: false,
+      promptSent: false,
+      queueRejection: null,
+      folderLabel,
+      launchOrigin: origin,
+      resumable: resumedRow || early !== -1,
+      resumed: resumedRow ? { phase: 'loading' } : null
+    }
+    createQueue(sessionId)
+    store.setState((s) => ({
+      order: [...s.order, sessionId],
+      sessions: { ...s.sessions, [sessionId]: session },
+      selectedId: sessionId,
+      selectionSeq: s.selectionSeq + 1,
+      launch: { ...s.launch, phase: 'entry', rejectReason: null, resume: null }
+    }))
+    // 固定値ではなく、その時点の行の状態を入れる (handshake より先に状態通知が届いていても行と食い違わない)。
+    monitor.track([sessionId])
+    const port = buffered.get(sessionId)
+    if (port !== undefined) {
+      buffered.delete(sessionId)
+      wirePort(sessionId, port)
+    }
+    dropOrphanPorts()
+  }
+
   const actions: SessionActions = {
     async launch(config, folderLabel = null, origin = 'manual') {
       inFlight += 1
@@ -549,6 +769,7 @@ export function createRunningSessionStore(
         launch: {
           phase: 'launching',
           rejectReason: null,
+          resume: null,
           lastConfig: config,
           // 起動元は前回の設定と組で残す (拒否・受け付け・告知を消した後も。012 data-model §4「renderer の起動元」)。
           lastOrigin: origin,
@@ -574,41 +795,96 @@ export function createRunningSessionStore(
         }))
         return
       }
-      const sessionId = handshake.sessionId
-      const session: LiveSessionState = {
-        sessionId,
-        config,
-        startedAt: now(),
-        runState: 'launching',
-        messages: [],
-        pending: null,
-        elicitations: [],
-        denied: [],
-        failureReason: null,
-        killed: false,
-        ending: false,
-        endForced: false,
-        promptSent: false,
-        queueRejection: null,
-        folderLabel,
-        launchOrigin: origin
-      }
-      createQueue(sessionId)
+      admit(handshake.sessionId, config, folderLabel, origin, false)
+    },
+
+    async resume(request, folderLabel = null, origin = 'manual') {
+      const replaces = store.getState().launch.resume?.replaces ?? null
+      inFlight += 1
       store.setState((s) => ({
-        order: [...s.order, sessionId],
-        sessions: { ...s.sessions, [sessionId]: session },
-        selectedId: sessionId,
-        selectionSeq: s.selectionSeq + 1,
-        launch: { ...s.launch, phase: 'entry', rejectReason: null }
+        launch: {
+          ...s.launch,
+          phase: 'launching',
+          rejectReason: null,
+          lastConfig: request.config,
+          lastOrigin: origin,
+          previousFailure: null
+        }
       }))
-      // 固定値ではなく、その時点の行の状態を入れる (handshake より先に状態通知が届いていても行と食い違わない)。
-      monitor.track([sessionId])
-      const port = buffered.get(sessionId)
-      if (port !== undefined) {
-        buffered.delete(sessionId)
-        wirePort(sessionId, port)
+      const reject = (reason: LaunchRejectReason): 'rejected' => {
+        dropOrphanPorts()
+        store.setState((s) => ({ launch: { ...s.launch, phase: 'rejected', rejectReason: reason } }))
+        return 'rejected'
       }
-      dropOrphanPorts()
+      let handshake: Awaited<ReturnType<ClostaCapability['resumeSession']>>
+      try {
+        handshake = await capability().resumeSession(request, origin)
+      } catch {
+        inFlight -= 1
+        return reject('launch-failed')
+      }
+      inFlight -= 1
+      if (handshake.status === 'rejected') return reject(handshake.reasonKey)
+      if (handshake.status === 'already-running') {
+        const existing = handshake.sessionId
+        if (store.getState().sessions[existing] === undefined) return reject('conversation-running')
+        dropOrphanPorts()
+        store.setState((s) => ({
+          selectedId: existing,
+          selectionSeq: s.selectionSeq + 1,
+          launch: { ...s.launch, phase: 'entry', rejectReason: null, resume: null }
+        }))
+        return 'already-running'
+      }
+      admit(handshake.sessionId, request.config, folderLabel, origin, true)
+      if (replaces !== null) actions.replace(replaces, handshake.sessionId)
+      void loadResumed(handshake.sessionId)
+      return 'accepted'
+    },
+
+    openResume(resume) {
+      store.setState((s) => ({
+        launch: { ...s.launch, phase: 'entry', rejectReason: null, previousFailure: null, resume }
+      }))
+    },
+
+    replace(oldSessionId, newSessionId) {
+      const state = store.getState()
+      if (oldSessionId === newSessionId) return
+      if (state.sessions[oldSessionId] === undefined || state.sessions[newSessionId] === undefined)
+        return
+      if (!viewOf(state, oldSessionId).ended) void capability().killSession(oldSessionId)
+      ports.get(oldSessionId)?.close()
+      ports.delete(oldSessionId)
+      queues.delete(oldSessionId)
+      drafts.delete(oldSessionId)
+      retractedIds.delete(oldSessionId)
+      forgetResumedLoads(oldSessionId)
+      closed.add(oldSessionId)
+      monitor.forget(oldSessionId)
+      // `launch` は触らない (`previousFailure` を立てない)。`order` は新しい行を元の行の位置へ移すので減らない。
+      store.setState((s) => {
+        const sessions = { ...s.sessions }
+        const statuses = { ...s.statuses }
+        const statusSince = { ...s.statusSince }
+        const activity = { ...s.activity }
+        const meters = { ...s.meters }
+        delete sessions[oldSessionId]
+        delete statuses[oldSessionId]
+        delete statusSince[oldSessionId]
+        delete activity[oldSessionId]
+        delete meters[oldSessionId]
+        return {
+          order: s.order.filter((id) => id !== newSessionId).map((id) => (id === oldSessionId ? newSessionId : id)),
+          sessions,
+          statuses,
+          statusSince,
+          activity,
+          meters,
+          selectedId: newSessionId,
+          selectionSeq: s.selectionSeq + 1
+        }
+      })
     },
 
     select(sessionId) {
@@ -633,11 +909,13 @@ export function createRunningSessionStore(
       if (
         launch.phase === 'entry' &&
         launch.rejectReason === null &&
-        launch.previousFailure === null
+        launch.previousFailure === null &&
+        launch.resume === null
       )
         return
+      // 起動せずに閉じたら、再開の形も戻す (次に開くときは新規起動の形)。
       store.setState({
-        launch: { ...launch, phase: 'entry', rejectReason: null, previousFailure: null }
+        launch: { ...launch, phase: 'entry', rejectReason: null, previousFailure: null, resume: null }
       })
     },
 
@@ -741,6 +1019,7 @@ export function createRunningSessionStore(
       queues.delete(sessionId)
       drafts.delete(sessionId)
       retractedIds.delete(sessionId)
+      forgetResumedLoads(sessionId)
       closed.add(sessionId)
       monitor.forget(sessionId)
       const failure = view.failureReason
@@ -803,7 +1082,20 @@ export function createRunningSessionStore(
           rejectAll()
           return
         }
-        const data = event.data as PortData | null
+        const data = event.data as (PortData & { readonly requestToken?: unknown }) | null
+        // それまでの会話 (再開した行。X-9): 自分が出した token の port だけ受ける。
+        if (data?.marker === TRANSCRIPT_PORT_MESSAGE) {
+          const port = event.ports[0]
+          for (const extra of event.ports.slice(1)) extra.close()
+          if (
+            port !== undefined &&
+            typeof data.requestToken === 'string' &&
+            resumedLoads.has(data.requestToken)
+          )
+            wireResumedPort(data.requestToken, port)
+          else port?.close()
+          return
+        }
         if (data?.marker !== SESSION_PORT_MESSAGE || typeof data.sessionId !== 'string') {
           rejectAll()
           return
@@ -846,9 +1138,38 @@ export function createRunningSessionStore(
         monitor.track(touched)
       })
 
+      // 稼働中の行が会話の id を持った通知 (X-9 / contracts C-4。値は Closta の sessionId)。行が在れば `resumable` を立て、
+      // 無ければ起動要求が在る間だけ覚える (受け付けの handshake より先に届く。上限 10・古いものから捨てる)。
+      const unsubscribeResumable = capability().onSessionResumable((sessionIds) => {
+        const known = new Set<string>()
+        const state = store.getState()
+        for (const id of sessionIds) {
+          if (closed.has(id)) continue
+          if (state.sessions[id] !== undefined) {
+            known.add(id)
+          } else if (inFlight > 0) {
+            const at = earlyResumable.indexOf(id)
+            if (at !== -1) earlyResumable.splice(at, 1)
+            earlyResumable.push(id)
+            while (earlyResumable.length > MAX_EARLY_RESUMABLE) earlyResumable.shift()
+          }
+        }
+        const stale = [...known].filter((id) => state.sessions[id]?.resumable === false)
+        if (stale.length === 0) return
+        store.setState((s) => {
+          const sessions = { ...s.sessions }
+          for (const id of stale) {
+            const current = sessions[id]
+            if (current !== undefined) sessions[id] = { ...current, resumable: true }
+          }
+          return { sessions }
+        })
+      })
+
       return () => {
         target.removeEventListener('message', onWindowMessage)
         unsubscribe()
+        unsubscribeResumable()
       }
     }
   }

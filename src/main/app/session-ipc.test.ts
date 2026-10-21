@@ -4,12 +4,16 @@ import { describe, expect, it, vi, type Mock } from 'vitest'
 import type { SessionControl } from '@domain/session/agent-session'
 import type { SessionIndexDTO } from '@domain/session/dto'
 import type { LaunchOrigin, LaunchUsageSummaryDTO } from '@domain/session/launch-usage'
+import type { SessionResumeRequest } from '@domain/session/resume'
 import { MAX_PROMPT_BYTES, MAX_SESSION_OFFSET } from '@domain/validation'
 
 import type { LaunchOutcome } from './session-launch-service'
 import {
   handleFetchMoreSessions,
   handleGetLaunchUsage,
+  handleGetResumedTranscript,
+  handleResolvePastResume,
+  handleResumeSession,
   handleGetTranscript,
   handleInterruptSession,
   handleEndSession,
@@ -47,6 +51,9 @@ interface Calls {
   readonly presetSaves: unknown[]
   readonly presetRemoves: string[]
   readonly usageRecords: LaunchOrigin[]
+  readonly resolves: { targetKey: string; conversationId: string }[]
+  readonly resumes: SessionResumeRequest[]
+  readonly resumedTranscripts: { sessionId: string; requestToken: string }[]
 }
 
 function deps(
@@ -65,7 +72,10 @@ function deps(
     controls: [],
     presetSaves: [],
     presetRemoves: [],
-    usageRecords: []
+    usageRecords: [],
+    resolves: [],
+    resumes: [],
+    resumedTranscripts: []
   }
   return {
     calls,
@@ -98,6 +108,24 @@ function deps(
       controlSession(sessionId, control) {
         calls.controls.push({ sessionId, control })
         return true
+      },
+      // X-9 の再開。呼び出しを記録する (負例で「発火しない」を検証)。
+      async resolvePastResume(targetKey, conversationId) {
+        calls.resolves.push({ targetKey, conversationId })
+        return {
+          ok: true as const,
+          folderId: 'f1',
+          runtimeId: 'host',
+          providerId: null
+        }
+      },
+      async resumeSession(request) {
+        calls.resumes.push(request)
+        return { status: 'rejected' as const, reason: 'source-unknown' as const }
+      },
+      async getResumedTranscript(sessionId, requestToken) {
+        calls.resumedTranscripts.push({ sessionId, requestToken })
+        return { handshake: { status: 'streaming' as const, requestToken }, port: null }
       },
       // X-4 のプリセット。
       async listPresets() {
@@ -683,6 +711,109 @@ describe('起動元と起動の利用記録 — main 直接呼び (O-3 BE-043 / 
         getLaunchUsage: () => Promise.reject(new Error('boom'))
       })
       expect(await handleGetLaunchUsage(throwing.deps)).toEqual({ status: 'unreadable' })
+    })
+  })
+})
+
+describe('再開の handler (X-9 / contracts C-1〜C-3)', () => {
+  const ID = '11111111-2222-4333-8444-555555555555'
+  const REQUEST = {
+    source: { kind: 'past', targetKey: 'host#0', conversationId: ID },
+    config: CONFIG
+  }
+  const LAUNCHING = { status: 'launching', sessionId: 'sid', port: {} as MessagePortMain } as const
+
+  describe('handleResolvePastResume', () => {
+    it('既知の対象と UUID なら 3 つの id だけを返す', async () => {
+      const { deps: d, calls } = deps()
+      const out = await handleResolvePastResume(d, ['host#0', ID])
+      expect(out).toEqual({ ok: true, folderId: 'f1', runtimeId: 'host', providerId: null })
+      expect(calls.resolves).toEqual([{ targetKey: 'host#0', conversationId: ID }])
+    })
+
+    it.each([
+      ['未知の targetKey', ['nope#0', ID]],
+      ['UUID でない', ['host#0', '--resume']],
+      ['欠落', []]
+    ])('%s は source-unknown で、解決を呼ばない', async (_l, args) => {
+      const { deps: d, calls } = deps()
+      expect(await handleResolvePastResume(d, args as readonly unknown[])).toEqual({
+        ok: false,
+        reason: 'source-unknown'
+      })
+      expect(calls.resolves).toEqual([])
+    })
+
+    it('決まらない行の理由のキーだけを返す', async () => {
+      const { deps: d } = deps(undefined, {
+        resolvePastResume: async () => ({ ok: false, reason: 'cwd-mismatch' })
+      })
+      expect(await handleResolvePastResume(d, ['host#0', ID])).toEqual({
+        ok: false,
+        reason: 'cwd-mismatch'
+      })
+    })
+  })
+
+  describe('handleResumeSession', () => {
+    it('形の不正な要求は invalid-config で、起動も記録もしない', async () => {
+      const { deps: d, calls } = deps()
+      for (const bad of [
+        null,
+        { ...REQUEST, extra: 1 },
+        { ...REQUEST, source: { kind: 'past', targetKey: 'nope#0', conversationId: ID } },
+        { ...REQUEST, source: { kind: 'live', sessionId: 'x' } },
+        { ...REQUEST, config: { ...CONFIG, folderId: '' } }
+      ]) {
+        expect(await handleResumeSession(d, [bad, 'manual'])).toEqual({
+          status: 'rejected',
+          reason: 'invalid-config'
+        })
+      }
+      expect(calls.resumes).toEqual([])
+      expect(calls.usageRecords).toEqual([])
+    })
+
+    it('受け付けたときだけ起動元を 1 回記録する。拒否・already-running は記録しない', async () => {
+      const accepted = deps(undefined, { resumeSession: async () => LAUNCHING })
+      await handleResumeSession(accepted.deps, [REQUEST, 'preset'])
+      expect(accepted.calls.usageRecords).toEqual(['preset'])
+
+      const dup = deps(undefined, {
+        resumeSession: async () => ({ status: 'already-running', sessionId: 'sid' })
+      })
+      await handleResumeSession(dup.deps, [REQUEST, 'manual'])
+      const rejected = deps()
+      await handleResumeSession(rejected.deps, [REQUEST, 'manual'])
+      expect(dup.calls.usageRecords).toEqual([])
+      expect(rejected.calls.usageRecords).toEqual([])
+    })
+
+    it('起動元が未知でも拒否せず、記録だけを行わない', async () => {
+      const { deps: d, calls } = deps(undefined, { resumeSession: async () => LAUNCHING })
+      const out = await handleResumeSession(d, [REQUEST, 'Preset'])
+      expect(out.status).toBe('launching')
+      expect(calls.usageRecords).toEqual([])
+    })
+  })
+
+  describe('handleGetResumedTranscript', () => {
+    it('妥当な sessionId と requestToken で service を呼ぶ', async () => {
+      const { deps: d, calls } = deps()
+      const out = await handleGetResumedTranscript(d, [ID, 'tok'])
+      expect(out.handshake.status).toBe('streaming')
+      expect(calls.resumedTranscripts).toEqual([{ sessionId: ID, requestToken: 'tok' }])
+    })
+
+    it.each([
+      ['sessionId が UUID でない', ['nope', 'tok']],
+      ['requestToken が無い', [ID]]
+    ])('%s は失敗の handshake で service を呼ばない', async (_l, args) => {
+      const { deps: d, calls } = deps()
+      const out = await handleGetResumedTranscript(d, args as readonly unknown[])
+      expect(out.handshake.status).toBe('failed')
+      expect(out.port).toBeNull()
+      expect(calls.resumedTranscripts).toEqual([])
     })
   })
 })

@@ -6,8 +6,10 @@ import {
   isValidDisplayName,
   MAX_PATH_VALUE_LENGTH,
   MAX_SECRET_PLAINTEXT_BYTES,
-  MAX_SESSION_OFFSET
+  MAX_SESSION_OFFSET,
+  isValidSessionId
 } from '@domain/validation'
+import type { SessionResumeRequest } from '@domain/session/resume'
 import {
   isValidExtraEnv as isValidExtraEnvShared,
   isValidPassthroughVarNames,
@@ -433,6 +435,50 @@ export function isValidElicitationContent(
  */
 export function checkLaunchConfig(value: unknown): value is SessionLaunchConfig {
   return isValidLaunchConfig(value)
+}
+
+/* ── セッションの再開 (X-9 / data-model §2.1) ─────────────────── */
+
+function hasOnlyKeys(value: object, allowed: readonly string[]): boolean {
+  return Object.keys(value).every((key) => allowed.includes(key))
+}
+
+/**
+ * **`resumeSession(request, origin)` の要求の形。** キーの許可リストは厳密 (余分なキーで拒否)。
+ * 外れたら呼び出し側が `{ status: 'rejected', reasonKey: 'invalid-config' }` を返す。
+ */
+export function checkResumeRequest(
+  value: unknown,
+  knownTargetKeys: readonly string[]
+): value is SessionResumeRequest {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  if (!hasOnlyKeys(value, ['source', 'config'])) return false
+  const { source, config } = value as { source?: unknown; config?: unknown }
+  if (!checkLaunchConfig(config)) return false
+  if (typeof source !== 'object' || source === null || Array.isArray(source)) return false
+  const record = source as Record<string, unknown>
+  if (record.kind === 'live') {
+    return hasOnlyKeys(source, ['kind', 'sessionId']) && isValidSessionId(record.sessionId)
+  }
+  if (record.kind === 'past') {
+    return (
+      hasOnlyKeys(source, ['kind', 'targetKey', 'conversationId']) &&
+      isKnownTargetKey(knownTargetKeys, record.targetKey) &&
+      isValidSessionId(record.conversationId)
+    )
+  }
+  return false
+}
+
+/** **`resolvePastResume(targetKey, conversationId)` の引数。** 外れたら `source-unknown`。 */
+export function checkPastResumeQuery(
+  targetKey: unknown,
+  conversationId: unknown,
+  knownTargetKeys: readonly string[]
+): { readonly ok: true } | { readonly ok: false; readonly reason: 'source-unknown' } {
+  return isKnownTargetKey(knownTargetKeys, targetKey) && isValidSessionId(conversationId)
+    ? { ok: true }
+    : { ok: false, reason: 'source-unknown' }
 }
 
 /** **`savePreset(name, config)`。** 名前は表示名と同じ規則 (正規化後)、config は起動設定と同じ述語。 */

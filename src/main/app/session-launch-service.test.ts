@@ -2,13 +2,19 @@ import type { MessagePortMain } from 'electron'
 import { describe, expect, it } from 'vitest'
 
 import { WIN32_LAUNCH_SPEC_FIXTURE } from '@domain/session/__fixtures__/win32-launch-spec'
-import type { LaunchInput, RuntimeLaunchSpec, SessionControl } from '@domain/session/agent-session'
+import type {
+  LaunchInput,
+  LaunchQueryOptions,
+  RuntimeLaunchSpec,
+  SessionControl
+} from '@domain/session/agent-session'
 import type { SessionLaunchConfig } from '@domain/session/launch-config'
 import type { SessionStatusUpdate } from '@domain/session/status-update'
 
 import {
   createSessionLaunchService,
   type LaunchPreparation,
+  type ResolvedResume,
   type SupervisorConnection,
   type TimerLike
 } from './session-launch-service'
@@ -40,29 +46,34 @@ function okPrep(): LaunchPreparation {
 /** fake の supervisor 接続。launch・control・kill を記録し、supervisor からの通知を手で流す。 */
 function fakeConnection(): SupervisorConnection & {
   launches: string[]
+  launchOptions: LaunchQueryOptions[]
   controls: [string, SessionControl][]
   generation: number
   killed: number
   failNextLaunch: boolean
   status: (updates: unknown[], generation?: number) => void
   threadEnded: (sessionId: string, generation?: number) => void
+  conversation: (sessionId: string, conversationId: string, generation?: number) => void
   exit: (code: number | null, generation?: number) => void
 } {
   const statusL: ((g: number, u: readonly unknown[]) => void)[] = []
   const threadL: ((g: number, id: string) => void)[] = []
   const exitL: ((g: number, c: number | null) => void)[] = []
+  const convL: ((g: number, id: string, conv: string) => void)[] = []
   const conn = {
     launches: [] as string[],
+    launchOptions: [] as LaunchQueryOptions[],
     controls: [] as [string, SessionControl][],
     generation: 1,
     killed: 0,
     failNextLaunch: false,
-    launch(sessionId: string) {
+    launch(sessionId: string, _spec?: unknown, options?: LaunchQueryOptions) {
       if (conn.failNextLaunch) {
         conn.failNextLaunch = false
         return { ok: false as const }
       }
       conn.launches.push(sessionId)
+      if (options !== undefined) conn.launchOptions.push(options)
       return { ok: true as const, port: fakePort, generation: conn.generation }
     },
     control(sessionId: string, control: SessionControl) {
@@ -74,7 +85,10 @@ function fakeConnection(): SupervisorConnection & {
     },
     onStatusBatch: (l: (g: number, u: readonly unknown[]) => void) => statusL.push(l),
     onThreadEnded: (l: (g: number, id: string) => void) => threadL.push(l),
+    onConversation: (l: (g: number, id: string, conv: string) => void) => convL.push(l),
     onExit: (l: (g: number, c: number | null) => void) => exitL.push(l),
+    conversation: (id: string, conv: string, generation = conn.generation) =>
+      convL.forEach((l) => l(generation, id, conv)),
     status: (updates: unknown[], generation = conn.generation) =>
       statusL.forEach((l) => l(generation, updates)),
     threadEnded: (id: string, generation = conn.generation) =>
@@ -110,12 +124,14 @@ interface Setup {
   readonly statuses: SessionStatusUpdate[][]
   readonly logs: string[]
   readonly timer: ReturnType<typeof manualTimer>
+  readonly resumable: string[]
 }
 
 function setup(prepareLaunch: () => Promise<LaunchPreparation> = async () => okPrep()): Setup {
   const connection = fakeConnection()
   const statuses: SessionStatusUpdate[][] = []
   const logs: string[] = []
+  const resumable: string[] = []
   const timer = manualTimer()
   let seq = 0
   const service = createSessionLaunchService({
@@ -127,9 +143,10 @@ function setup(prepareLaunch: () => Promise<LaunchPreparation> = async () => okP
     },
     onStatus: (u) => statuses.push([...u]),
     timer,
-    log: (l) => logs.push(l)
+    log: (l) => logs.push(l),
+    onResumable: (id) => resumable.push(id)
   })
-  return { connection, service, statuses, logs, timer }
+  return { connection, service, statuses, logs, timer, resumable }
 }
 
 const upd = (sessionId: string, over: Partial<SessionStatusUpdate> = {}): SessionStatusUpdate => ({
@@ -384,4 +401,314 @@ describe('killAll と終了処理 (SC-008 / FR-014)', () => {
     void service.dispose()
     expect(await service.launch(cfg())).toEqual({ status: 'rejected', reason: 'shutting-down' })
   })
+})
+
+describe('会話の id の保持 (X-9 / BE-006 / AD-059)', () => {
+  const CONV = '22222222-2222-4222-8222-222222222222'
+  const CONV2 = '33333333-3333-4333-8333-333333333333'
+
+  async function launched(s: Setup, config = cfg('fA', 'rA')): Promise<string> {
+    const o = await s.service.launch(config)
+    if (o.status !== 'launching') throw new Error('launch failed')
+    return o.sessionId
+  }
+
+  it('届いた会話の id と起動設定の 3 軸を退避し、通知を 1 回だけ呼ぶ', async () => {
+    const s = setup()
+    const id = await launched(s)
+    expect(s.service.conversationRecord(id)).toBeNull()
+    s.connection.conversation(id, CONV)
+    expect(s.service.conversationRecord(id)).toEqual({
+      conversationId: CONV,
+      folderId: 'fA',
+      runtimeId: 'rA',
+      providerId: null,
+      targetKey: null
+    })
+    s.connection.conversation(id, CONV)
+    expect(s.resumable).toEqual([id])
+  })
+
+  it('世代の違う・知らない sessionId の通知は捨てる', async () => {
+    const s = setup()
+    const id = await launched(s)
+    s.connection.conversation(id, CONV, s.connection.generation + 1)
+    s.connection.conversation('00000000-0000-4000-8000-0000000000ff', CONV)
+    expect(s.service.conversationRecord(id)).toBeNull()
+    expect(s.resumable).toEqual([])
+  })
+
+  it('状態通知で行を更新しても会話の id を失わない', async () => {
+    const s = setup()
+    const id = await launched(s)
+    s.connection.conversation(id, CONV)
+    s.connection.status([upd(id)])
+    s.connection.conversation(id, CONV2)
+    expect(s.service.conversationRecord(id)?.conversationId).toBe(CONV2)
+    expect(s.resumable).toEqual([id])
+  })
+
+  it('行が消えても退避は残る', async () => {
+    const s = setup()
+    const id = await launched(s)
+    s.connection.conversation(id, CONV)
+    s.connection.status([upd(id, { state: 'done', claudeAlive: false })])
+    s.connection.threadEnded(id)
+    expect(s.service.conversationRecord(id)?.conversationId).toBe(CONV)
+  })
+
+  it('別の id に変わったら事実だけをログに残し、値は出さない', async () => {
+    const s = setup()
+    const id = await launched(s)
+    s.connection.conversation(id, CONV)
+    s.connection.conversation(id, CONV2)
+    expect(s.logs).toContain('[session] conversation-id-changed')
+    expect(s.logs.join('\n')).not.toContain(CONV)
+    expect(s.logs.join('\n')).not.toContain(CONV2)
+  })
+
+  it('257 件目で最も古い退避を捨てる', async () => {
+    const s = setup()
+    const ids: string[] = []
+    for (let i = 0; i < 257; i += 1) {
+      const id = await launched(s)
+      ids.push(id)
+      s.connection.conversation(id, CONV)
+      // 枠を空ける (上限 10 を超えないように)
+      s.connection.status([upd(id, { state: 'done', claudeAlive: false })])
+      s.connection.threadEnded(id)
+    }
+    expect(s.service.conversationRecord(ids[0] as string)).toBeNull()
+    expect(s.service.conversationRecord(ids[1] as string)).not.toBeNull()
+    expect(s.service.conversationRecord(ids[256] as string)).not.toBeNull()
+  })
+
+  it('killAll と dispose で退避を空にする', async () => {
+    const s = setup()
+    const id = await launched(s)
+    s.connection.conversation(id, CONV)
+    s.service.killAll()
+    expect(s.service.conversationRecord(id)).toBeNull()
+
+    const t = setup()
+    const id2 = await launched(t)
+    t.connection.conversation(id2, CONV)
+    void t.service.dispose()
+    expect(t.service.conversationRecord(id2)).toBeNull()
+  })
+})
+
+describe('再開の起動 (X-9 / BE-013 / data-model §5)', () => {
+  const CONV = '22222222-2222-4222-8222-222222222222'
+  const CONV2 = '33333333-3333-4333-8333-333333333333'
+  const resolved = (conversationId = CONV, targetKey: string | null = 'host#0'): ResolvedResume => ({
+    conversationId,
+    folderId: 'f1',
+    runtimeId: 'r1',
+    providerId: null,
+    targetKey
+  })
+
+  it('受け付けで options に resume が載り、registry と退避に会話の id が入る。通知は呼ばない', async () => {
+    const s = setup()
+    const o = await s.service.resume(cfg(), resolved())
+    expect(o.status).toBe('launching')
+    expect(s.connection.launchOptions[0]).toEqual({ permissionMode: 'default', resume: CONV })
+    if (o.status !== 'launching') return
+    expect(s.service.conversationRecord(o.sessionId)).toEqual({
+      conversationId: CONV,
+      folderId: 'f1',
+      runtimeId: 'r1',
+      providerId: null,
+      targetKey: 'host#0'
+    })
+    s.connection.conversation(o.sessionId, CONV)
+    expect(s.resumable).toEqual([])
+    expect(s.logs).toEqual([])
+  })
+
+  it('新しい起動の options に resume は載らない', async () => {
+    const s = setup()
+    await s.service.launch(cfg())
+    expect('resume' in (s.connection.launchOptions[0] as object)).toBe(false)
+  })
+
+  it('claudeAlive の同じ会話は already-running (上限いっぱいでも。起動しない)', async () => {
+    const s = setup()
+    const first = await s.service.resume(cfg(), resolved())
+    if (first.status !== 'launching') throw new Error('x')
+    await launchN(s.service, 9)
+    const again = await s.service.resume(cfg(), resolved())
+    expect(again).toEqual({ status: 'already-running', sessionId: first.sessionId })
+    expect(s.connection.launches).toHaveLength(10)
+  })
+
+  it('claudeAlive が false の同じ会話は数えず、再開できる', async () => {
+    const s = setup()
+    const first = await s.service.resume(cfg(), resolved())
+    if (first.status !== 'launching') throw new Error('x')
+    s.connection.status([upd(first.sessionId, { state: 'done', claudeAlive: false })])
+    expect((await s.service.resume(cfg(), resolved())).status).toBe('launching')
+  })
+
+  it('準備の途中の 2 本目は conversation-running (連打)', async () => {
+    let release: () => void = () => undefined
+    const gate = new Promise<void>((r) => {
+      release = r
+    })
+    const s = setup(async () => {
+      await gate
+      return okPrep()
+    })
+    const a = s.service.resume(cfg(), resolved())
+    const b = await s.service.resume(cfg(), resolved())
+    expect(b).toEqual({ status: 'rejected', reason: 'conversation-running' })
+    release()
+    expect((await a).status).toBe('launching')
+    expect(s.connection.launches).toHaveLength(1)
+  })
+
+  it('上限 10 で session-limit。拒否で予約と Set が戻る', async () => {
+    const s = setup()
+    await launchN(s.service, 10)
+    expect(await s.service.resume(cfg(), resolved())).toEqual({
+      status: 'rejected',
+      reason: 'session-limit'
+    })
+    const t = setup(async () => ({ ok: false, reason: 'provider-unavailable' }))
+    expect(await t.service.resume(cfg(), resolved())).toEqual({
+      status: 'rejected',
+      reason: 'provider-unavailable'
+    })
+    // Set が戻っているので同じ会話を再び試せる (conversation-running にならない)。
+    expect((await t.service.resume(cfg(), resolved())).status).toBe('rejected')
+    expect(await t.service.resume(cfg(), resolved())).toEqual({
+      status: 'rejected',
+      reason: 'provider-unavailable'
+    })
+  })
+
+  it('killAll をまたいだ要求は登録しない', async () => {
+    let release: () => void = () => undefined
+    const gate = new Promise<void>((r) => {
+      release = r
+    })
+    const s = setup(async () => {
+      await gate
+      return okPrep()
+    })
+    const a = s.service.resume(cfg(), resolved())
+    s.service.killAll()
+    release()
+    expect(await a).toEqual({ status: 'rejected', reason: 'launch-failed' })
+    expect(s.connection.launches).toHaveLength(0)
+  })
+
+  it('init が別の id を出すと上書きされ、conversation-id-changed の 1 行だけが出る (値は出ない)', async () => {
+    const s = setup()
+    const o = await s.service.resume(cfg(), resolved())
+    if (o.status !== 'launching') throw new Error('x')
+    s.connection.conversation(o.sessionId, CONV2)
+    expect(s.service.conversationRecord(o.sessionId)?.conversationId).toBe(CONV2)
+    expect(s.service.conversationRecord(o.sessionId)?.targetKey).toBe('host#0')
+    expect(s.logs).toEqual(['[session] conversation-id-changed'])
+  })
+
+  it('WSL と Win32 の prepareLaunch の結果のどちらでも resume が足される', async () => {
+    let n = 0
+    const s = setup(async () => {
+      n += 1
+      return n === 1
+        ? okPrep()
+        : { ok: true, input: fakeInput, spec: WIN32_LAUNCH_SPEC_FIXTURE }
+    })
+    await s.service.resume(cfg(), resolved(CONV))
+    await s.service.resume(cfg(), resolved(CONV2))
+    expect(s.connection.launchOptions.map((o) => o.resume)).toEqual([CONV, CONV2])
+  })
+})
+
+describe('稼働中の行からの再開 (X-9 / BE-020 / data-model §1.5)', () => {
+  const CONV = '22222222-2222-4222-8222-222222222222'
+  const fromLive = (replacesSessionId: string): ResolvedResume => ({
+    conversationId: CONV,
+    folderId: 'f1',
+    runtimeId: 'r1',
+    providerId: null,
+    targetKey: 'host#0',
+    replacesSessionId
+  })
+
+  it('受け付けで元の行のレコードが消え、新しい行のレコードが入る。2 回目の引き当ては null', async () => {
+    const s = setup()
+    const first = await s.service.launch(cfg())
+    if (first.status !== 'launching') throw new Error('x')
+    s.connection.conversation(first.sessionId, CONV)
+    s.connection.status([upd(first.sessionId, { state: 'done', claudeAlive: false })])
+    expect(s.service.conversationRecord(first.sessionId)).not.toBeNull()
+    const o = await s.service.resume(cfg(), fromLive(first.sessionId))
+    if (o.status !== 'launching') throw new Error('x')
+    expect(s.service.conversationRecord(first.sessionId)).toBeNull()
+    expect(s.service.conversationRecord(o.sessionId)?.targetKey).toBe('host#0')
+  })
+
+  it('拒否 (上限・prepareLaunch の拒否) では元の行のレコードが残る', async () => {
+    const s = setup(async () => ({ ok: false, reason: 'provider-unavailable' }))
+    const ok = setup()
+    const first = await ok.service.launch(cfg())
+    if (first.status !== 'launching') throw new Error('x')
+    ok.connection.conversation(first.sessionId, CONV)
+    ok.connection.status([upd(first.sessionId, { state: 'done', claudeAlive: false })])
+    await launchN(ok.service, 10)
+    expect((await ok.service.resume(cfg(), fromLive(first.sessionId))).status).toBe('rejected')
+    expect(ok.service.conversationRecord(first.sessionId)).not.toBeNull()
+    expect((await s.service.resume(cfg(), fromLive('x'))).status).toBe('rejected')
+  })
+})
+
+describe('引き継ぐ軸が消えたときの拒否 (X-9 / BE-030 / FR-008)', () => {
+  const CONV = '22222222-2222-4222-8222-222222222222'
+  const resolvedFrom = (replacesSessionId?: string): ResolvedResume => ({
+    conversationId: CONV,
+    folderId: 'f1',
+    runtimeId: 'r1',
+    providerId: null,
+    targetKey: 'host#0',
+    ...(replacesSessionId !== undefined ? { replacesSessionId } : {})
+  })
+  /** フォルダの登録解除 (null)・Provider の削除・WSL のディストロ停止・Win32 の claude が無い。 */
+  const GONE: readonly [string, LaunchPreparation][] = [
+    ['フォルダの登録解除', null],
+    ['Provider の削除', { ok: false, reason: 'provider-unavailable' }],
+    ['ディストロ停止', { ok: false, reason: 'distro-not-running' }],
+    ['Win32 の claude 不在', { ok: false, reason: 'claude-not-found' }]
+  ]
+  const EXPECTED = ['unknown-target', 'provider-unavailable', 'distro-not-running', 'claude-not-found']
+
+  it.each(GONE.map((g, i) => [g[0], g[1], EXPECTED[i]] as const))(
+    '稼働中の行: %s は今の理由で拒否され、元の行のレコードが残る。答えに別の軸の候補が無い',
+    async (_name, prep, reason) => {
+      let current: LaunchPreparation = okPrep()
+      const s = setup(async () => current)
+      const first = await s.service.launch(cfg())
+      if (first.status !== 'launching') throw new Error('x')
+      s.connection.conversation(first.sessionId, CONV)
+      s.connection.status([upd(first.sessionId, { state: 'done', claudeAlive: false })])
+      current = prep
+      const o = await s.service.resume(cfg(), resolvedFrom(first.sessionId))
+      expect(o).toEqual({ status: 'rejected', reason })
+      expect(s.service.conversationRecord(first.sessionId)).not.toBeNull()
+      expect(s.connection.launches).toHaveLength(1)
+    }
+  )
+
+  it.each(GONE.map((g, i) => [g[0], g[1], EXPECTED[i]] as const))(
+    '過去の行: %s は今の理由で拒否され、レコードも起動も増えない',
+    async (_name, prep, reason) => {
+      const s = setup(async () => prep)
+      const o = await s.service.resume(cfg(), resolvedFrom())
+      expect(o).toEqual({ status: 'rejected', reason })
+      expect(s.connection.launches).toHaveLength(0)
+    }
+  )
 })

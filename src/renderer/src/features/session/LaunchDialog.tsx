@@ -4,7 +4,7 @@ import { CAPABILITY_KEY } from '@domain/capability'
 import type { ReachableProvidersDTO } from '@domain/provider/dto'
 import { isEffortLevel } from '@domain/provider/model-catalog'
 import type { EffortLevel } from '@domain/provider/types'
-import type { LaunchFailureReason, SessionLaunchRejectReason } from '@domain/session/agent-session'
+import type { LaunchFailureReason } from '@domain/session/agent-session'
 import {
   isSafePermissionMode,
   SAFE_PERMISSION_MODES,
@@ -12,6 +12,7 @@ import {
   type SessionLaunchConfig
 } from '@domain/session/launch-config'
 import type { LaunchOrigin } from '@domain/session/launch-usage'
+import type { SessionResumeRequest } from '@domain/session/resume'
 import {
   resolveLaunchAxes,
   toLaunchConfig,
@@ -50,6 +51,7 @@ import {
   REACHABILITY_EXCLUDED_LABELS,
   REACHABILITY_STATUS_LABELS,
   REEVALUATE_LABELS,
+  RESUME_LABELS,
   sameFolderWarning
 } from './labels'
 import {
@@ -59,12 +61,19 @@ import {
   unusableWin32Status
 } from './launch-runtime-options'
 import { PresetPanel } from './PresetPanel'
+import type { LaunchRejectReason, ResumeDialogState } from './running-session-types'
 import { usePresets } from './usePresets'
 
 /** 起動設定ダイアログが読む起動の状態と、起動の発火口 (X-5: セッションストアの `launch` から組む)。 */
 export interface LaunchSource {
   readonly phase: 'entry' | 'launching' | 'rejected'
-  readonly rejectReason: SessionLaunchRejectReason | null
+  readonly rejectReason: LaunchRejectReason | null
+  /**
+   * 再開の形で開くときの状態 (X-9 / data-model §9.3)。null・省略は新規起動の形 (既存の呼び出しは変えない)。
+   * 再開の形では引き継ぐ 3 軸 (フォルダ / ランタイム / Provider) の選択の部品を出さず、起動は `resumeSession` を通る。
+   */
+  readonly resume?: ResumeDialogState | null
+  resumeSession?(request: SessionResumeRequest, origin: LaunchOrigin): Promise<void>
   readonly lastConfig: SessionLaunchConfig | null
   /** `lastConfig` と組の起動元 (O-3)。初期値の設定のまま起動したときだけ引き継ぐ。 */
   readonly lastOrigin: LaunchOrigin | null
@@ -191,16 +200,30 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
   const providers = useProviders()
   const presets = usePresets()
 
-  const [draft, setDraft] = useState<LaunchDraft>(() =>
-    session.lastConfig !== null ? toLaunchDraft(session.lastConfig) : EMPTY_DRAFT
-  )
+  /** 再開の形 (X-9)。null なら新規起動の形で、以下の再開の分岐は何も変えない。 */
+  const resume = session.resume ?? null
+  const [draft, setDraft] = useState<LaunchDraft>(() => {
+    if (resume === null)
+      return session.lastConfig !== null ? toLaunchDraft(session.lastConfig) : EMPTY_DRAFT
+    // 再開: 拒否で戻ったときは直前の選びを、そうでなければ `initial` (null は既定) を出す。引き継ぐ 3 軸は `fixed`。
+    const base =
+      session.phase === 'rejected' && session.lastConfig !== null
+        ? toLaunchDraft(session.lastConfig)
+        : { ...EMPTY_DRAFT, ...resume.initial }
+    return { ...base, ...resume.fixed }
+  })
   /**
    * 初期値の設定と組の起動元 (O-3)。下書きの初期値と同じ時点で 1 回だけ決める — 前回の設定を初期値に出すなら、経路
    * (拒否・失敗・受け付けの後・起動せずに閉じた後) を問わずその起動元、出さないなら `manual`。
+   * 再開の形は `initialOrigin` (拒否で戻ったときは直前の起動元。X-9 §9.3)。
    */
-  const [initialOrigin] = useState<LaunchOrigin>(() =>
-    session.lastConfig !== null ? (session.lastOrigin ?? 'manual') : 'manual'
-  )
+  const [initialOrigin] = useState<LaunchOrigin>(() => {
+    if (resume !== null)
+      return session.phase === 'rejected' && session.lastOrigin !== null
+        ? session.lastOrigin
+        : resume.initialOrigin
+    return session.lastConfig !== null ? (session.lastOrigin ?? 'manual') : 'manual'
+  })
   /** このダイアログでプリセットを適用したか (O-3)。作り直したダイアログでは初めから。 */
   const [presetApplied, setPresetApplied] = useState(false)
   /** このダイアログで軸を手で変えたか (`update` を通ったか。変えてから戻しても立ったまま。O-3)。 */
@@ -265,8 +288,23 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
   // 既定に落ちて見えるが、下書きは消さず、通知も起動も保留する (取得後に同じ下書きを解決し直す)。
   const holdResets =
     (reachable.status === 'idle' || reachable.status === 'loading') && draft.providerId !== null
-  const resets = holdResets ? [] : resolution.resets
-  const config = holdResets ? null : toLaunchConfig(resolution)
+  // 再開では引き継ぐ Provider を既定へ落とさない (別の資格情報で黙って再開しない)。到達できなければ main の起動ゲートが
+  // 理由つきで拒否する (X-9 FR-008)。確認も出さない。フォルダ / ランタイムの欠落も main が拒否するので blocker では止めない。
+  const resets = holdResets
+    ? []
+    : resume !== null
+      ? resolution.resets.filter((r) => r.axis !== 'provider')
+      : resolution.resets
+  const config: SessionLaunchConfig | null = holdResets
+    ? null
+    : resume !== null
+      ? {
+          ...resume.fixed,
+          modelId: effective.modelId,
+          effort: effective.effort,
+          permissionMode: effective.permissionMode
+        }
+      : toLaunchConfig(resolution)
   const needsConfirmation = resets.some((r) => r.requiresConfirmation)
   // 書き戻した下流の通知 (1 回) と、いまの解決の reset を重複なく並べる。
   const shownResets = [
@@ -357,7 +395,17 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
     setConfirming(false)
     setNotices([])
     setPresetApplied(true)
-    setDraft(next)
+    // 再開では選び直せる 3 軸だけに当てる (引き継ぐ 3 軸は変えない。spec Edge Cases)。
+    setDraft(
+      resume === null
+        ? next
+        : {
+            ...draft,
+            modelId: next.modelId,
+            effort: next.effort,
+            permissionMode: next.permissionMode
+          }
+    )
   }
 
   /** 到達可能性と解決結果を取り直す。確認中の判断は取り直した結果で出し直す。 */
@@ -386,6 +434,11 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
     }
     setConfirming(false)
     const origin: LaunchOrigin = presetApplied ? 'preset' : axisEdited ? 'manual' : initialOrigin
+    if (resume !== null) {
+      // 再開: `config` の引き継ぐ 3 軸は `fixed` (main が source から解いた値と照合する)。
+      void session.resumeSession?.({ source: resume.source, config: launchConfig }, origin)
+      return
+    }
     void session.launch(launchConfig, origin)
   }
 
@@ -407,31 +460,81 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
   )
 
   // 同じ登録フォルダで動いているセッションの数 (警告のみ。起動はブロックしない。X-5 FE-003)。
+  const warnFolderId = resume !== null ? resume.fixed.folderId : effective.folderId
   const sameFolderCount =
-    effective.folderId === null
+    warnFolderId === null
       ? 0
-      : (session.activeFolderIds ?? []).filter((id) => id === effective.folderId).length
+      : (session.activeFolderIds ?? []).filter((id) => id === warnFolderId).length
 
   // 一覧をまだ持たない (読み込み中・失敗) 間は「解除された / 見つからない」と断定しない。ダイアログの作り直し
   // (拒否後の再表示など) の直後に、前回の設定の folder / runtime が一覧に無いと誤って出る (一覧の失敗は別に案内する)。
+  // 再開では引き継ぐ軸の欠落を blocker で止めない (main が理由つきで拒否する。X-9 FR-008)。
   const shownBlockers = resolution.blockers.filter(
     (b) =>
+      resume === null &&
       b !== 'folder-unselected' &&
       b !== 'runtime-unselected' &&
       !(b === 'folder-missing' && folders.list === null) &&
       !(b === 'runtime-missing' && runtimes.list === null)
   )
   const allRuntimesStopped =
-    wslRuntimes.length > 0 && wslRuntimes.every((r) => r.state !== 'running')
+    resume === null && wslRuntimes.length > 0 && wslRuntimes.every((r) => r.state !== 'running')
+
+  // 再開の形の引き継ぐ 3 軸の表示名 (一覧を読み込み中は空。一覧があって引けなければ「(削除済み)」)。
+  const fixedNames =
+    resume === null
+      ? null
+      : {
+          folder:
+            folders.list === null
+              ? ''
+              : (folderList.find((f) => f.id === resume.fixed.folderId)?.displayName ??
+                RESUME_LABELS.deleted),
+          runtime:
+            runtimes.list === null
+              ? ''
+              : (runtimeOptions.find((o) => o.id === resume.fixed.runtimeId)?.label ??
+                RESUME_LABELS.deleted),
+          provider:
+            resume.fixed.providerId === null
+              ? selectedRuntime?.kind === 'win32'
+                ? PROVIDER_DEFAULT_LABELS.win32
+                : PROVIDER_DEFAULT_LABELS.wsl
+              : providers.providers === null
+                ? ''
+                : (providerList.find((p) => p.id === resume.fixed.providerId)?.displayName ??
+                  RESUME_LABELS.deleted)
+        }
 
   return (
     <div className="mx-auto flex max-w-xl flex-col gap-4">
       <div>
-        <h2 className="text-lg font-semibold">セッションを起動</h2>
+        <h2 className="text-lg font-semibold">
+          {resume === null ? 'セッションを起動' : RESUME_LABELS.heading}
+        </h2>
         <p className="text-muted-foreground mt-1 text-sm">
-          作業フォルダ・ランタイム・Provider・モデル・effort・権限モードを選んで起動します。
+          {resume === null
+            ? '作業フォルダ・ランタイム・Provider・モデル・effort・権限モードを選んで起動します。'
+            : RESUME_LABELS.description}
         </p>
       </div>
+
+      {fixedNames !== null && (
+        <dl className="flex flex-col gap-2 text-sm" data-testid="resume-fixed-axes">
+          <div className="flex flex-col gap-0.5">
+            <dt className="font-medium">{LAUNCH_AXIS_LABELS.folder}</dt>
+            <dd>{fixedNames.folder}</dd>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <dt className="font-medium">{LAUNCH_AXIS_LABELS.runtime}</dt>
+            <dd>{fixedNames.runtime}</dd>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <dt className="font-medium">{LAUNCH_AXIS_LABELS.provider}</dt>
+            <dd>{fixedNames.provider}</dd>
+          </div>
+        </dl>
+      )}
 
       <PresetPanel
         view={presets}
@@ -462,24 +565,26 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
           </Button>
         </div>
       )}
-      {folders.list !== null && folderList.length === 0 && (
+      {resume === null && folders.list !== null && folderList.length === 0 && (
         <p className="text-muted-foreground text-sm">{LAUNCH_EMPTY_STATE_LABELS.noFolders}</p>
       )}
-      <label className="flex flex-col gap-1 text-sm">
-        <span className="font-medium">{LAUNCH_AXIS_LABELS.folder}</span>
-        <select
-          value={effective.folderId ?? ''}
-          onChange={(e) => update({ folderId: e.target.value === '' ? null : e.target.value })}
-          className={selectClass}
-        >
-          <option value="">選択してください</option>
-          {folderList.map((f) => (
-            <option key={f.id} value={f.id}>
-              {f.displayName}
-            </option>
-          ))}
-        </select>
-      </label>
+      {resume === null && (
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium">{LAUNCH_AXIS_LABELS.folder}</span>
+          <select
+            value={effective.folderId ?? ''}
+            onChange={(e) => update({ folderId: e.target.value === '' ? null : e.target.value })}
+            className={selectClass}
+          >
+            <option value="">選択してください</option>
+            {folderList.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.displayName}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
 
       {runtimesLoading && (
         <p className="text-muted-foreground text-sm" data-testid="runtimes-status">
@@ -504,7 +609,7 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
           </Button>
         </div>
       )}
-      {runtimes.list !== null && wslRuntimes.length === 0 && (
+      {resume === null && runtimes.list !== null && wslRuntimes.length === 0 && (
         <p className="text-muted-foreground text-sm">{LAUNCH_EMPTY_STATE_LABELS.noWslRuntimes}</p>
       )}
       {allRuntimesStopped && (
@@ -519,23 +624,25 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
           {REEVALUATE_LABELS.failed}
         </p>
       )}
-      <label className="flex flex-col gap-1 text-sm">
-        <span className="font-medium">{LAUNCH_AXIS_LABELS.runtime}</span>
-        <select
-          value={effective.runtimeId ?? ''}
-          onChange={(e) => update({ runtimeId: e.target.value === '' ? null : e.target.value })}
-          className={selectClass}
-          aria-describedby={unusableWin32 !== null ? 'win32-claude-guidance' : undefined}
-        >
-          <option value="">選択してください</option>
-          {runtimeOptions.map((o) => (
-            <option key={o.id} value={o.id} disabled={o.disabled}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      {unusableWin32 !== null && (
+      {resume === null && (
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium">{LAUNCH_AXIS_LABELS.runtime}</span>
+          <select
+            value={effective.runtimeId ?? ''}
+            onChange={(e) => update({ runtimeId: e.target.value === '' ? null : e.target.value })}
+            className={selectClass}
+            aria-describedby={unusableWin32 !== null ? 'win32-claude-guidance' : undefined}
+          >
+            <option value="">選択してください</option>
+            {runtimeOptions.map((o) => (
+              <option key={o.id} value={o.id} disabled={o.disabled}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {resume === null && unusableWin32 !== null && (
         <div
           id="win32-claude-guidance"
           className="text-muted-foreground -mt-2 text-xs"
@@ -546,27 +653,29 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
         </div>
       )}
 
-      <label className="flex flex-col gap-1 text-sm">
-        <span className="font-medium">{LAUNCH_AXIS_LABELS.provider}</span>
-        <select
-          value={effective.providerId ?? ''}
-          onChange={(e) => update({ providerId: e.target.value === '' ? null : e.target.value })}
-          className={selectClass}
-          aria-label={LAUNCH_AXIS_LABELS.provider}
-        >
-          <option value="">
-            {selectedRuntime?.kind === 'win32'
-              ? PROVIDER_DEFAULT_LABELS.win32
-              : PROVIDER_DEFAULT_LABELS.wsl}
-          </option>
-          {selectableProviders.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.displayName}
+      {resume === null && (
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium">{LAUNCH_AXIS_LABELS.provider}</span>
+          <select
+            value={effective.providerId ?? ''}
+            onChange={(e) => update({ providerId: e.target.value === '' ? null : e.target.value })}
+            className={selectClass}
+            aria-label={LAUNCH_AXIS_LABELS.provider}
+          >
+            <option value="">
+              {selectedRuntime?.kind === 'win32'
+                ? PROVIDER_DEFAULT_LABELS.win32
+                : PROVIDER_DEFAULT_LABELS.wsl}
             </option>
-          ))}
-        </select>
-      </label>
-      {providers.providers !== null && providerList.length === 0 && (
+            {selectableProviders.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.displayName}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {resume === null && providers.providers !== null && providerList.length === 0 && (
         <p className="text-muted-foreground -mt-2 text-xs">
           {LAUNCH_EMPTY_STATE_LABELS.noProviders}
         </p>
@@ -782,7 +891,7 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
 
       <div>
         <Button type="button" disabled={launchConfig === null || confirming} onClick={launch}>
-          起動
+          {resume === null ? '起動' : RESUME_LABELS.submit}
         </Button>
       </div>
     </div>

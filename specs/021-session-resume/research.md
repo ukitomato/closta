@@ -128,7 +128,7 @@
 
 **調べたこと**: 中央の実行中の Chat は `useExternalStoreRuntime` に稼働中のストアの `messages` の末尾の窓を渡す (`RunningSessionsProvider.tsx:133-219`)。tool の結果の状態 (`toolResultState`。`src/renderer/src/features/chat/tool-result-state.ts:35-46`) は、実行中でも「最新のターン (最後の利用者のメッセージより後)」でない tool を「結果不明」にする。過去ログの変換は `toThreadMessage` (`features/chat/convert.ts:179`)。
 
-**決定 (P-8)**: それまでの会話を、新しいセッションのストアの `messages` の先頭に入れ、その後ろに区切りの行 (`divider`。「ここから再開」) を 1 つ入れる (data-model §9.3)。
+**決定 (P-8)**: それまでの会話を、新しいセッションのストアの `messages` の先頭に入れ、その後ろに区切りの行 (既存のシステムイベントの行。`informational`・`notice`・「ここから再開」) を 1 つ入れる (data-model §8.2)。`divider` の part は圧縮の境界として描かれ `label` を読まないため使わない。
 
 - id の衝突を避けるため、それまでの会話のメッセージの id に接頭辞 (`resumed:`) を付ける。取り消し (`retraction`)・tool の結果の送り直し (同じ id での上書き) は新しいメッセージの id にだけ当たる
 - 「読み取り専用」(US-4 AC2): 今の実行中の Chat の利用者のメッセージの操作は、編集 (`onEdit` を渡さないので効かない)・再生成 (`onReload` を渡さないので効かない)・コピーで、それまでの会話にも新しい操作は生じない。拒否で戻した入力の再送 (`retryTextFor`) は接頭辞つきの id に `null` を返す。承認のカード・Elicitation のカードは `pending` から出るので、それまでの会話からは出ない

@@ -1,3 +1,4 @@
+import type { PastResumeDTO } from '@domain/capability'
 import type { SessionControl } from '@domain/session/agent-session'
 import type { SessionIndexDTO } from '@domain/session/dto'
 import type { SessionLaunchConfig } from '@domain/session/launch-config'
@@ -7,15 +8,19 @@ import {
   type LaunchUsageSummaryDTO
 } from '@domain/session/launch-usage'
 import type { PresetDTO, SavePresetResult } from '@domain/session/preset'
+import type { SessionResumeRequest } from '@domain/session/resume'
+import type { PastResumeAxes } from '@domain/session/resume-axes'
 import type { FailureReason } from '@domain/session/target'
 import { isValidPromptText, isValidRequestToken, isValidSessionId } from '@domain/validation'
 
 import type { SavePresetInput } from './preset-service'
-import type { LaunchOutcome } from './session-launch-service'
+import type { LaunchOutcome, ResumeOutcome } from './session-launch-service'
 import type { TranscriptResult } from './transcript-service'
 import {
   checkLaunchConfig,
+  checkPastResumeQuery,
   checkPreset,
+  checkResumeRequest,
   isKnownTargetKey,
   isPermissionOutcome,
   isPermissionScope,
@@ -62,6 +67,15 @@ export interface SessionIpcDeps {
   launchSession(config: SessionLaunchConfig): Promise<LaunchOutcome>
   /** 制御を該当セッションへ送る。未知 / セッションスレッドが終わった sessionId なら `false`。 */
   controlSession(sessionId: string, control: SessionControl): boolean
+
+  /* ── セッションの再開 (X-9 / contracts C-1〜C-3) ── */
+
+  /** 過去の行の軸を決める (列挙のキャッシュだけを見る)。 */
+  resolvePastResume(targetKey: string, conversationId: string): Promise<PastResumeAxes>
+  /** 再開の要求を解いて起動する。本文は port。 */
+  resumeSession(request: SessionResumeRequest): Promise<ResumeOutcome>
+  /** それまでの会話の読み取り。本文は port、戻り値の handshake は本文を含まない。 */
+  getResumedTranscript(sessionId: string, requestToken: string): Promise<TranscriptResult>
 
   /* ── プリセット (X-4 / FR-009) ── */
 
@@ -165,6 +179,63 @@ export async function handleLaunchSession(
   const outcome = await deps.launchSession(config)
   if (outcome.status === 'launching' && origin !== null) recordWithoutWaiting(deps, origin)
   return outcome
+}
+
+/**
+ * `resolvePastResume(targetKey, conversationId)` (X-9 / contracts C-1)。
+ * 外れた入力は `source-unknown` (どの `targetKey` が既知かを応答の差で数えさせない)。戻り値は 3 つの id か理由のキーだけ。
+ */
+export async function handleResolvePastResume(
+  deps: SessionIpcDeps,
+  args: readonly unknown[]
+): Promise<PastResumeDTO> {
+  const targetKey: unknown = args[0]
+  const conversationId: unknown = args[1]
+  const check = checkPastResumeQuery(targetKey, conversationId, deps.sessionTargetKeys())
+  if (!check.ok || typeof targetKey !== 'string' || typeof conversationId !== 'string') {
+    return { ok: false, reason: 'source-unknown' }
+  }
+  const axes = await deps.resolvePastResume(targetKey, conversationId)
+  if (!axes.ok) return { ok: false, reason: axes.reason }
+  return {
+    ok: true,
+    folderId: axes.folderId,
+    runtimeId: axes.runtimeId,
+    providerId: axes.providerId
+  }
+}
+
+/**
+ * `resumeSession(request, origin)` (X-9 / contracts C-2)。形の検証は `checkResumeRequest` (外れたら `invalid-config`)。
+ * 起動元は `launchSession` と同じ扱い (厳密比較。外れても起動は通常どおりで記録だけを行わない。受け付けたときだけ 1 回記録。R-12)。
+ * `already-running` は起動しないので記録しない。**戻り値の `port` の transfer は `ipc.ts`。**
+ */
+export async function handleResumeSession(
+  deps: SessionIpcDeps,
+  args: readonly unknown[]
+): Promise<ResumeOutcome> {
+  const request = args[0]
+  if (!checkResumeRequest(request, deps.sessionTargetKeys())) {
+    return { status: 'rejected', reason: 'invalid-config' }
+  }
+  const origin = checkLaunchOrigin(args[1])
+  const outcome = await deps.resumeSession(request)
+  if (outcome.status === 'launching' && origin !== null) recordWithoutWaiting(deps, origin)
+  return outcome
+}
+
+/**
+ * `getResumedTranscript(sessionId, requestToken)` (X-9 / contracts C-3)。`sessionId` は Closta の行の id。
+ * 決まらない・知らない行は取得プロセスを起こさず `transcript-read-failed` の失敗 handshake。
+ */
+export async function handleGetResumedTranscript(
+  deps: SessionIpcDeps,
+  args: readonly unknown[]
+): Promise<TranscriptResult> {
+  const requestToken = args[1]
+  if (!isValidRequestToken(requestToken)) return failedTranscript('', 'transcript-read-failed')
+  if (!isValidSessionId(args[0])) return failedTranscript(requestToken, 'transcript-read-failed')
+  return deps.getResumedTranscript(args[0], requestToken)
 }
 
 /** 記録を待たずに発火する。記録の失敗 (reject・同期の例外) は起動の応答に届かせない (spec FR-012)。 */

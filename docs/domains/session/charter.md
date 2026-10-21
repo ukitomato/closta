@@ -21,6 +21,7 @@ related_adrs:
   - docs/decisions/0053-elicitation-callback-and-user-dialog.md
   - docs/decisions/0057-elicitation-sdk-side-cancel-known-limit.md
   - docs/decisions/0058-win32-direct-launch-contract-and-process-tree-stop.md
+  - docs/decisions/0059-session-resume-query-option-and-conversation-id.md
 related_specs:
   - specs/002-session-cross-folder-session-enumeration/spec.md
   - specs/005-session-launch-and-streaming/spec.md
@@ -36,6 +37,7 @@ related_specs:
   - specs/018-session-answer-ui-and-composer-commands/spec.md
   - specs/019-ui-hooks-tasks-subagents-and-notices/spec.md
   - specs/020-session-win32-direct-launch/spec.md
+  - specs/021-session-resume/spec.md
 ---
 
 # Domain Charter: session
@@ -120,7 +122,7 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
 
 ### Journey 4: 中断と再開
 
-（手順 1〜2 の再開は X-9、手順 3 の分岐は X-6 が扱う）
+（手順 1〜2 の再開は X-9 ([021](../../../specs/021-session-resume/spec.md) / [AD-059](../../decisions/0059-session-resume-query-option-and-conversation-id.md))、手順 3 の分岐は X-6 が扱う）
 
 1. ユーザは実行中のセッションを中断する。途中出力は残る
 2. 後で再開する。フォルダ / ランタイム / Provider は引き継がれ、
@@ -138,7 +140,7 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
   Electron 非依存で、worker のパスを引数で渡せば `node` で単独起動できる（X-5 / AD-043）
 - **同時実行数の上限**: 枠を占めるセッションは 10 本まで。11 本目は `session-limit` で拒否する（X-5）
 - **transcript**: セッションの会話ログ
-- **失敗の理由のキー (`LaunchFailureReason`)**: 起動とターンの失敗の理由 (18 種)。O-4 ([AD-047](../../decisions/0047-session-meter-and-failure-reasons.md)
+- **失敗の理由のキー (`LaunchFailureReason`)**: 起動とターンの失敗の理由 (19 種。X-9 が `resume-failed` を足した。AD-059)。O-4 ([AD-047](../../decisions/0047-session-meter-and-failure-reasons.md)
   Decision 1) で、ターンの失敗 (エラーの result) を認証・請求・レート制限・API のエラー・実行中のエラー・3 つの上限に分けた。
   理由の条件と、再ログインの導線を出す理由 (`auth-failed` と汎用の `provider-error` だけ) の正本は
   [014 data-model §1](../../../specs/014-ui-metering-and-limits/data-model.md)。監視ビューの行の短い理由・読み上げ・中央の失敗の表示は
@@ -250,6 +252,7 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
 - [AD-052](../../decisions/0052-ask-user-question-answer-projection.md) — `AskUserQuestion` の回答の制約付き射影 (`PermissionDecision.answers`。O-10。ui の feature が本 domain の契約を広げた)
 - [AD-053](../../decisions/0053-elicitation-callback-and-user-dialog.md) — `onElicitation` を足し `onUserDialog` / `supportedDialogKinds` は渡さない (`SessionEvent` の `elicitation-request`・`SessionControl` の `respond-elicitation`。O-10)
 - [AD-057](../../decisions/0057-elicitation-sdk-side-cancel-known-limit.md) — SDK の側で中断された Elicitation のカードが残る既知の限界 (AD-053 Decision 3 の読み替え。O-10 U-10)
+- [AD-059](../../decisions/0059-session-resume-query-option-and-conversation-id.md) — 起動の options の `resume` と会話の id の保持・失敗の理由 `resume-failed` (X-9)
 
 ## Related Specs
 
@@ -343,7 +346,8 @@ X-6 は未着手。
   マージ済み。V-1 / V-3 (AD-058 の Confirmation・SC-001 / SC-004 の実機の計測) は未実施で、利用者の実機に残る
 - **X-9** — セッションの再開 ([roadmap の X-9 の行](../../roadmap.md))。X-6 から切り出した (同上)。AD-041 (h) の
   「fork / resume / rename / tag / delete」のうち resume と、失敗したセッションの再開 (X-5 FR-013) と Journey 4 の手順 1〜2 を持つ。
-  分岐 (手順 3。`forkSession`) は X-6 に残す。未着手
+  分岐 (手順 3。`forkSession`) は X-6 に残す。実装は [021](../../../specs/021-session-resume/spec.md)
+  (契約は [AD-059](../../decisions/0059-session-resume-query-option-and-conversation-id.md))
 
 ## Open Questions
 

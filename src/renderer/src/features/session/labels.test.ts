@@ -31,7 +31,7 @@ describe('labels — V-11 provider-error の理由表示と再ログイン導線
     expect(label).toContain('認証')
   })
 
-  it('全 LaunchFailureReason (18 種) に非空の全文と短い理由がある (黙って空表示にならない)', () => {
+  it('全 LaunchFailureReason (19 種) に非空の全文と短い理由がある (黙って空表示にならない)', () => {
     const reasons: LaunchFailureReason[] = [
       'distro-not-running',
       'not-verified-running',
@@ -50,8 +50,10 @@ describe('labels — V-11 provider-error の理由表示と再ログイン導線
       'auth-failed',
       'billing',
       'rate-limited',
-      'api-error'
+      'api-error',
+      'resume-failed'
     ]
+    expect(reasons).toHaveLength(19)
     expect([...reasons].sort()).toEqual([...LAUNCH_FAILURE_REASONS].sort())
     for (const r of reasons) {
       expect(launchFailureLabel(r).length).toBeGreaterThan(0)
@@ -74,7 +76,15 @@ describe('labels — V-11 provider-error の理由表示と再ログイン導線
  * O-4 FE-010 — ターンの失敗の理由の文言と再ログインの導線 (014 data-model §1 / §5。spec FR-002 / SC-001)。
  */
 describe('labels — ターンの失敗の理由 (O-4)', () => {
-  it('再ログインの導線は auth-failed と provider-error だけ (18 理由の真偽)', () => {
+  it('resume-failed は再ログインの導線を出さず、文言は data-model §7 のとおり (X-9)', () => {
+    expect(isReloginFailure('resume-failed')).toBe(false)
+    expect(launchFailureShortLabel('resume-failed')).toBe('再開できませんでした')
+    expect(launchFailureLabel('resume-failed')).toBe(
+      '会話を再開できませんでした。会話の記録が見つからない・読めない、または再開した会話が安全でない権限モードで起きました。'
+    )
+  })
+
+  it('再ログインの導線は auth-failed と provider-error だけ (19 理由の真偽)', () => {
     const relogin = new Set<LaunchFailureReason>(['auth-failed', 'provider-error'])
     for (const reason of LAUNCH_FAILURE_REASONS) {
       expect(isReloginFailure(reason)).toBe(relogin.has(reason))

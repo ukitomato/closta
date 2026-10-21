@@ -6,6 +6,8 @@ import {
   CircleStopIcon,
   OctagonXIcon,
   PauseIcon,
+  PlayIcon,
+  RotateCcwIcon,
   ShieldAlertIcon,
   XIcon
 } from 'lucide-react'
@@ -23,10 +25,12 @@ import {
   formatStartedAt,
   launchFailureLabel,
   launchFailureShortLabel,
+  RESUME_LABELS,
   SESSION_ACTION_LABELS,
   SESSION_END_NOTICES,
   SESSION_ROW_STATUS_LABELS
 } from './labels'
+import { resumeActionFor, useRowActionRunner } from './resume-action'
 import { useRunningSessionStore, useRunningSessionStoreApi } from './running-session-context'
 import type { Density, SessionRowStatus } from './running-session-types'
 import { availableActions, deriveSessionView, formatElapsed, rowStatus } from './session-view'
@@ -51,6 +55,7 @@ function useRowFacts(sessionId: string): {
         readonly ending: boolean
         readonly endForced: boolean
         readonly promptSent: boolean
+        readonly resumable: boolean
       }
     | undefined
   readonly view: ReturnType<typeof deriveSessionView>
@@ -70,7 +75,8 @@ function useRowFacts(sessionId: string): {
             killed: v.killed,
             ending: v.ending,
             endForced: v.endForced,
-            promptSent: v.promptSent
+            promptSent: v.promptSent,
+            resumable: v.resumable
           }
     })
   )
@@ -275,9 +281,22 @@ export function SessionRowActions({
 }): React.JSX.Element | null {
   const store = useRunningSessionStoreApi()
   const { session, view } = useRowFacts(sessionId)
+  const runAction = useRowActionRunner()
   if (session === undefined) return null
   const actions = availableActions(view, session)
-  if (!actions.end && !actions.interrupt && !actions.kill && !actions.close) return null
+  const resumeAction = resumeActionFor({
+    runState: view.runState,
+    ended: view.ended,
+    resumable: session.resumable
+  })
+  if (
+    !actions.end &&
+    !actions.interrupt &&
+    !actions.kill &&
+    !actions.close &&
+    resumeAction === null
+  )
+    return null
   const compact = density === 'compact'
   const size = compact ? 'icon-xs' : 'sm'
   return (
@@ -329,6 +348,34 @@ export function SessionRowActions({
           onClick={() => store.kill(sessionId)}
         >
           {compact ? <OctagonXIcon aria-hidden /> : SESSION_ACTION_LABELS.kill}
+        </Button>
+      )}
+      {resumeAction !== null && (
+        <Button
+          type="button"
+          size={size}
+          variant="outline"
+          title={compact ? RESUME_LABELS[resumeAction === 'resume' ? 'action' : 'retry'] : undefined}
+          aria-label={compact ? RESUME_LABELS[resumeAction === 'resume' ? 'action' : 'retry'] : undefined}
+          data-testid="session-row-resume-action"
+          data-resume-action={resumeAction}
+          onClick={(event) => {
+            // 「やり直す」は行ごと消えるので、消す前にフォーカスを移す (「閉じる」と同じ。O-4 FR-019)。
+            if (resumeAction === 'retry') handOffFocusFromClosingRow(event.currentTarget)
+            runAction(sessionId, resumeAction)
+          }}
+        >
+          {compact ? (
+            resumeAction === 'resume' ? (
+              <PlayIcon aria-hidden />
+            ) : (
+              <RotateCcwIcon aria-hidden />
+            )
+          ) : resumeAction === 'resume' ? (
+            RESUME_LABELS.action
+          ) : (
+            RESUME_LABELS.retry
+          )}
         </Button>
       )}
       {actions.close && (

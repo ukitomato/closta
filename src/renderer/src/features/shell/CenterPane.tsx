@@ -13,7 +13,9 @@ import {
   formatSessionTime,
   rowTitleText
 } from '@/features/session-list/rows'
+import { registerSeedOf } from '@/features/session-list/register-seed'
 import { useFolderLabels } from '@/features/session-list/useFolderLabels'
+import { PastResumeBar } from '@/features/session/PastResumeBar'
 import { formatStartedAt, SESSION_ROW_STATUS_LABELS } from '@/features/session/labels'
 import { isRunBusy } from '@/features/session/composer-queue'
 import { LivePane } from '@/features/session/LivePane'
@@ -203,6 +205,14 @@ function PastCenter(): React.JSX.Element {
           <div className="min-h-0 flex-1">
             <ChatScreenBody transcript={transcript} densityToggle={false} />
           </div>
+          {/* 本文の下の「再開」の帯 (X-9 FE-012)。ヘッダには置かない。 */}
+          {found !== null && (
+            <PastResumeBar
+              targetKey={found.row.session.targetKey}
+              conversationId={found.row.session.sessionId}
+              registerSeed={registerSeedOf(found.section.group)}
+            />
+          )}
         </div>
       </ConversationTimeProvider>
     </ConversationSearchProvider>

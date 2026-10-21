@@ -29,6 +29,10 @@ const EXPECTED_CHANNELS = {
   getTranscript: 'closta:getTranscript',
   transcriptPort: 'closta:transcriptPort',
   launchSession: 'closta:launchSession',
+  // X-9: 再開の 4 つ (AD-059。resolvePastResume / resumeSession / getResumedTranscript / sessionResumable)。
+  resolvePastResume: 'closta:resolvePastResume',
+  resumeSession: 'closta:resumeSession',
+  getResumedTranscript: 'closta:getResumedTranscript',
   sendPrompt: 'closta:sendPrompt',
   respondPermission: 'closta:respondPermission',
   // O-10: Elicitation の応答 (URL を開くチャネルは足さない。AD-053 Decision 5)。
@@ -38,6 +42,7 @@ const EXPECTED_CHANNELS = {
   killSession: 'closta:killSession',
   sessionPort: 'closta:sessionPort',
   sessionStatus: 'closta:sessionStatus',
+  sessionResumable: 'closta:sessionResumable',
   listProviders: 'closta:listProviders',
   detectProviders: 'closta:detectProviders',
   registerProvider: 'closta:registerProvider',

@@ -1089,6 +1089,28 @@ describe('createSessionService — fetchMore', () => {
   })
 })
 
+describe('createSessionService — pastResumeSource (X-9 / data-model §3.2)', () => {
+  it('既知の対象と行で { target, origin }、知らないものは null。列挙も spawn もしない', async () => {
+    const target = hostTarget()
+    const enumerator = fakeEnumerator({
+      [target.key]: { ok: true, sessions: [record('a')], truncated: false }
+    })
+    const service = createSessionService(
+      deps({ finder: fakeFinder(discovery([target])), enumerator })
+    )
+    await service.list()
+    await settle()
+    const before = enumerator.requests.length
+
+    const hit = service.pastResumeSource(target.key, 'a')
+    expect(hit?.target.key).toBe(target.key)
+    expect(hit?.origin.kind).toBe('host')
+    expect(service.pastResumeSource('unknown-target', 'a')).toBeNull()
+    expect(service.pastResumeSource(target.key, 'no-such-row')).toBeNull()
+    expect(enumerator.requests.length).toBe(before)
+  })
+})
+
 describe('createSessionService — 境界に出す値', () => {
   it('config ディレクトリの実体パスを行に載せない (FR-042)', async () => {
     const target = wslTarget()

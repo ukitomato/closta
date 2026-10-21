@@ -10,6 +10,7 @@ import {
 import type { RuntimeListDTO } from '@domain/runtime/dto'
 import type { SessionIndexDTO } from '@domain/session/dto'
 import type { SessionStatusUpdate } from '@domain/session/status-update'
+import { isValidSessionId } from '@domain/validation'
 import type { FolderListDTO } from '@domain/workspace/dto'
 
 /**
@@ -59,6 +60,13 @@ const capability: ClostaCapability = {
 
   // 起動元 (O-3) はそのまま 2 つめの引数で渡す。検証は main の `handleLaunchSession` (未知・欠落は記録しないだけ)。
   launchSession: (config, origin) => ipcRenderer.invoke(IPC_CHANNELS.launchSession, config, origin),
+  resolvePastResume: (targetKey, conversationId) =>
+    ipcRenderer.invoke(IPC_CHANNELS.resolvePastResume, targetKey, conversationId),
+  // 起動元 (O-3) は `launchSession` と同じくそのまま渡す。要求の検証は main の `handleResumeSession`。
+  resumeSession: (request, origin) =>
+    ipcRenderer.invoke(IPC_CHANNELS.resumeSession, request, origin),
+  getResumedTranscript: (sessionId, requestToken) =>
+    ipcRenderer.invoke(IPC_CHANNELS.getResumedTranscript, sessionId, requestToken),
   sendPrompt: (sessionId, text) => ipcRenderer.invoke(IPC_CHANNELS.sendPrompt, sessionId, text),
   respondPermission: (sessionId, requestId, outcome, scope, answers) =>
     ipcRenderer.invoke(
@@ -97,7 +105,14 @@ const capability: ClostaCapability = {
   onSessionsChanged: (listener) =>
     subscribe<SessionIndexDTO>(IPC_CHANNELS.sessionsChanged, listener),
   onSessionStatus: (listener) =>
-    subscribe<readonly SessionStatusUpdate[]>(IPC_CHANNELS.sessionStatus, listener)
+    subscribe<readonly SessionStatusUpdate[]>(IPC_CHANNELS.sessionStatus, listener),
+  // 配列で、各要素が UUID の形のものだけを渡す (会話の id を含まない。X-9 / contracts C-4)。
+  onSessionResumable: (listener) =>
+    subscribe<unknown>(IPC_CHANNELS.sessionResumable, (payload) => {
+      if (!Array.isArray(payload)) return
+      if (!payload.every((id) => isValidSessionId(id))) return
+      listener(payload as readonly string[])
+    })
 }
 
 /*

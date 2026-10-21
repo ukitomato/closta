@@ -274,7 +274,7 @@ assistant-ui の element の一覧 (https://www.assistant-ui.com/elements。**20
 | Directive text | C | 未使用 | |
 | Document reference | B | B user/document | O-12 |
 | Draft restore | B | D message-queue | X-2 (下書きの復元) |
-| Edit message | B | SDK の外: 中央の本体の Thread の利用者のメッセージの操作 (`thread.aui.tsx` が `ActionBarPrimitive.Edit` と `EditComposer` を組み込み済み) | runtime が `onEdit` を渡さないので編集は効かない。fork / resume と合わせて X-6 で照合する (O-7 pr-gate R3 ui-coverage L-201) |
+| Edit message | B | SDK の外: 中央の本体の Thread の利用者のメッセージの操作 (`thread.aui.tsx` が `ActionBarPrimitive.Edit` と `EditComposer` を組み込み済み) | runtime が `onEdit` を渡さないので編集は効かない。fork と合わせて X-6 で照合する (O-7 pr-gate R3 ui-coverage L-201) |
 | Elicitation form | A | A SDKElicitationCompleteMessage / E elicitation | O-10 の照合: 取り込まず `features/session/ElicitationCard.tsx` に自作 (文言が英語の既定・項目の種類と `requestedSchema` の対応・フォーカスの引き渡しが承認カードと別系統) |
 | Empty state | B | SDK の外: 中央の本体 (空の状態・実行中の Thread の Welcome・過去ログ)・サイドバーの過去のセッションの区画 (Thread search の一致 0 を含む)・中央のヘッダの会話内検索のバー (一致 0)・アプリ全体のダイアログの Command palette (候補 0)・起動ダイアログのプリセットの欄 (`PresetPanel`。起動の利用記録が無い / 読めない)・設定のダイアログ | O-3 で 4 つの空の状態 (Thread search・会話内検索・palette・起動の利用記録) に同じ element を使った (012 spec FR-008。文言は 012 data-model §5) |
 | Error state | A | D launch-failure / SDK の外: 設定のダイアログ (4 画面の取得の失敗)・サイドバーの過去のセッションの区画・中央の本体の過去ログの取得の失敗 | D launch-failure は element ではなくアプリが自作した `FailureBanner` (`LivePane.tsx`) が描く。`ErrorState` を使うのは SDK の外の 6 か所 (設定の 4 画面・`SessionListScreen`・`ChatScreen`) (O-7 pr-gate R2 ui-coverage L-101) |
@@ -305,7 +305,7 @@ assistant-ui の element の一覧 (https://www.assistant-ui.com/elements。**20
 | Memory | B | A SDKMemoryRecallMessage | O-12 |
 | Mermaid diagram | A | B assistant/text | markdown の中の図。未導入 |
 | Message actions | B | SDK の外: 中央の本体の Thread の応答の操作のバー (`thread.aui.tsx` が `ActionBarPrimitive.Copy` / `Reload` と More の Export as Markdown を組み込み済み) | コピーと Markdown の書き出しは効く。再生成は runtime が `onReload` を渡さないので効かない (O-7 pr-gate R3 ui-coverage L-201) |
-| Message branches | A | 未使用 | fork (X-6) / resume (X-9) |
+| Message branches | A | 未使用 | fork (X-6) |
 | Message pair | B | 未使用 | |
 | Message queue | A | D message-queue | X-2 |
 | Message timing | B | A SDKAssistantMessage / A SDKUserMessage | O-9。中央の本体の各メッセージの時刻とターンの所要時間 (`features/chat/MessageTimeLabel.tsx`)。registry の `message-timing` / `elements-message-timing` は採らず、文字の体裁で作った (SH-002 の照合の写し。正本は O-9 の PR の説明。017 research R-10): `message-timing` はストリームの統計 (`metadata.timing`) を読むが本アプリはメッセージ単位で更新する (X-1)。standalone の版は文言が英語の直書きで、メッセージの時刻と所要時間を出す形と合わない |

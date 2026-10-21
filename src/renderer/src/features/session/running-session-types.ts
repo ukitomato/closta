@@ -8,6 +8,7 @@ import type {
 import type { ElicitationPrompt } from '@domain/session/elicitation'
 import type { SessionLaunchConfig } from '@domain/session/launch-config'
 import type { LaunchOrigin } from '@domain/session/launch-usage'
+import type { ResumeSource, ResumeUnavailableReason } from '@domain/session/resume'
 import type { BackgroundTaskEntry, MeterUpdate, PermissionModeKey } from '@domain/session/meter'
 import type { CommandsMeter, InitReportMeter } from '@domain/session/session-init-report'
 import type { SessionRunState } from '@domain/session/run-state'
@@ -93,6 +94,13 @@ export interface LiveSessionState {
    * `config` と一緒に起動の状態の `lastOrigin` へ戻す (`lastConfig` と同じ規則)。計測にだけ使う。
    */
   readonly launchOrigin: LaunchOrigin
+  /**
+   * 会話の id を main が持っているか (X-9 / data-model §9.6)。`sessionResumable` の通知と再開の受け付けで立つ。
+   * id の値は renderer に渡らない (真偽だけ)。
+   */
+  readonly resumable: boolean
+  /** 再開した行のそれまでの会話の読み取りの状態 (再開の受け付けで `loading`。読み取りは FE-040)。再開した行でなければ null。 */
+  readonly resumed: { readonly phase: 'loading' | 'loaded' | 'failed' } | null
 }
 
 /** 監視ビューの情報密度 (O-1 / FR-008)。renderer の表示状態であり永続化しない。 */
@@ -176,10 +184,33 @@ export interface Activity {
   readonly detail: string
 }
 
+/** 起動ダイアログが再開の形で開くときの状態 (X-9 / data-model §9.3)。 */
+export interface ResumeDialogState {
+  readonly source: ResumeSource
+  /** 引き継ぐ 3 軸 (表示だけ)。 */
+  readonly fixed: {
+    readonly folderId: string
+    readonly runtimeId: string
+    readonly providerId: string | null
+  }
+  /** 選び直せる 3 軸の初期値。稼働中の行は元の起動設定の値、過去の行は null (ダイアログの既定)。 */
+  readonly initial: Pick<SessionLaunchConfig, 'modelId' | 'effort' | 'permissionMode'> | null
+  /** 初期値の組の起動元。稼働中の行はその行の `launchOrigin`、過去の行は `'manual'`。 */
+  readonly initialOrigin: LaunchOrigin
+  /** 稼働中の行から開いたときの元の行 (受け付けで `replace` する)。 */
+  readonly replaces: string | null
+}
+
+/** 起動の拒否の理由 (再開の拒否を含む。X-9 §10)。 */
+export type LaunchRejectReason =
+  SessionLaunchRejectReason | ResumeUnavailableReason | 'conversation-running'
+
 /** 起動ダイアログの状態 (直近の起動要求)。 */
 export interface LaunchState {
   readonly phase: 'entry' | 'launching' | 'rejected'
-  readonly rejectReason: SessionLaunchRejectReason | null
+  readonly rejectReason: LaunchRejectReason | null
+  /** 再開の形で開くときの状態 (X-9)。null なら新規起動の形。 */
+  readonly resume: ResumeDialogState | null
   /** 最後に起動を試みた設定 (失敗・拒否で戻ったときの復元。X-4 US-1 AC7)。 */
   readonly lastConfig: SessionLaunchConfig | null
   /**
