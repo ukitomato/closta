@@ -1,0 +1,238 @@
+{
+    "gate": "design",
+    "run": "2026-10-21T00:20:10Z",
+    "spec_dir": "specs/021-session-resume",
+    "spec_id": "021-session-resume",
+    "round": 1,
+    "tracks": {
+        "analyze": {
+            "status": "ok",
+            "raw_out": "analyze.md",
+            "viewpoint_missing": null,
+            "cascade_demotions": null
+        },
+        "po-reviewer": {
+            "status": "ok",
+            "raw_out": "po-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "architecture-reviewer": {
+            "status": "ok",
+            "raw_out": "architecture-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "security-reviewer": {
+            "status": "ok",
+            "raw_out": "security-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "platform-boundary-reviewer": {
+            "status": "ok",
+            "raw_out": "platform-boundary-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        }
+    },
+    "severity_counts": {
+        "critical": 0,
+        "high": 5,
+        "medium": 16,
+        "low": 17
+    },
+    "fr_coverage": [
+        {
+            "fr": "FR-001",
+            "covered": true,
+            "by": [
+                "FE-012",
+                "BE-012",
+                "BE-014"
+            ]
+        },
+        {
+            "fr": "FR-002",
+            "covered": true,
+            "by": [
+                "FE-020",
+                "FE-010",
+                "BE-006",
+                "BE-014"
+            ]
+        },
+        {
+            "fr": "FR-003",
+            "covered": true,
+            "by": [
+                "BE-004",
+                "BE-005",
+                "BE-006"
+            ]
+        },
+        {
+            "fr": "FR-004",
+            "covered": true,
+            "by": [
+                "BE-003",
+                "BE-011",
+                "BE-013"
+            ]
+        },
+        {
+            "fr": "FR-005",
+            "covered": true,
+            "by": [
+                "BE-001",
+                "BE-010",
+                "BE-012"
+            ]
+        },
+        {
+            "fr": "FR-006",
+            "covered": true,
+            "by": [
+                "FE-011",
+                "BE-012"
+            ]
+        },
+        {
+            "fr": "FR-007",
+            "covered": true,
+            "by": [
+                "FE-030",
+                "FE-020"
+            ]
+        },
+        {
+            "fr": "FR-008",
+            "covered": true,
+            "by": [
+                "BE-030",
+                "BE-012"
+            ]
+        },
+        {
+            "fr": "FR-009",
+            "covered": true,
+            "by": [
+                "FE-020"
+            ]
+        },
+        {
+            "fr": "FR-010",
+            "covered": true,
+            "by": [
+                "FE-010",
+                "FE-011",
+                "BE-020",
+                "FE-021"
+            ]
+        },
+        {
+            "fr": "FR-011",
+            "covered": true,
+            "by": [
+                "BE-013",
+                "FE-011",
+                "FE-021"
+            ]
+        },
+        {
+            "fr": "FR-012",
+            "covered": true,
+            "by": [
+                "FE-040",
+                "BE-014",
+                "BE-020"
+            ]
+        },
+        {
+            "fr": "FR-013",
+            "covered": true,
+            "by": [
+                "FE-040",
+                "BE-014"
+            ]
+        },
+        {
+            "fr": "FR-014",
+            "covered": true,
+            "by": [
+                "BE-013"
+            ]
+        },
+        {
+            "fr": "FR-015",
+            "covered": true,
+            "by": [
+                "SH-010"
+            ]
+        },
+        {
+            "fr": "FR-016",
+            "covered": true,
+            "by": [
+                "SH-001",
+                "SH-010"
+            ]
+        }
+    ],
+    "viewpoint_coverage": {
+        "A": "Critical:0 High:1 (security)",
+        "B": "Critical:0 High:0 (security Low:2)",
+        "C": "Critical:0 High:1 (architecture)",
+        "D": "Critical:0 High:1 (platform-boundary)",
+        "E": "Critical:0 High:2 (po)",
+        "F": "Critical:0 High:0 (platform-boundary Medium:1)",
+        "G": "\u8a72\u5f53\u306a\u3057: optional reviewer \u7bc4\u56f2",
+        "H": "Critical:0 High:1 (security)"
+    },
+    "dedup_log": [
+        {
+            "merged": [
+                "arch-H-001",
+                "pb-H-001",
+                "pb-M-003"
+            ],
+            "key": "data-model.md:147 / FR-005"
+        },
+        {
+            "merged": [
+                "po-H-002",
+                "arch-M-004"
+            ],
+            "key": "data-model.md:346"
+        },
+        {
+            "merged": [
+                "arch-M-001",
+                "pb-M-001"
+            ],
+            "key": "data-model.md \u00a72 resume.ts"
+        },
+        {
+            "merged": [
+                "arch-L-001",
+                "pb-L-002"
+            ],
+            "key": "data-model.md:147 locationNamespace"
+        },
+        {
+            "merged": [
+                "po-M-002",
+                "analyze-U2"
+            ],
+            "key": "data-model.md cwd-mismatch"
+        },
+        {
+            "merged": [
+                "po-M-004",
+                "analyze-U1"
+            ],
+            "key": "FR-010 / U-4"
+        }
+    ],
+    "verdict": "PASS"
+}
