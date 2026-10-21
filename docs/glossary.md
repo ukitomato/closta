@@ -239,6 +239,15 @@ total_terms: 104
   稼働中の id はアプリが振る値で、過去の行の `sessionId` (Claude Code のセッションの id) とは名前空間が違う
 - **Ref**: [012 spec](../specs/012-ui-thread-search/spec.md) FR-006 / FR-007 / [data-model](../specs/012-ui-thread-search/data-model.md) §3
 
+#### **Conversation id（会話の id）**
+
+- **Definition**: Claude Code の会話の UUID (**Session** の UUID)。再開の `resume` に渡す値 (X-9)。
+  最初の `system/init` から取り、main のメモリだけに持つ。永続化しない・ログに出さない・renderer に値を渡さない (renderer には「再開できるか」の真偽だけ)
+- **日本語表記**: 会話の id
+- **Domain**: `session`
+- **Counterexamples**: 稼働中の行の `sessionId` (Closta が振る値) とは別の値・別の名前空間
+- **Ref**: [AD-059](decisions/0059-session-resume-query-option-and-conversation-id.md) Decision 2 / [021 data-model](../specs/021-session-resume/data-model.md) §1
+
 #### **Conversation search（会話内検索）**
 
 - **Definition**: 中央に出している会話 (過去ログ・実行中) の transcript の本文を語で検索し、一致した箇所へ移る機能 (O-3)。
@@ -403,7 +412,8 @@ total_terms: 104
 
 #### **FailureReason (起動とターンの失敗)**
 
-- **Definition**: セッションの起動・実行と、実行中のターンの失敗の**理由キー**。18 種 (X-1 の 10 種に O-4 が 8 種を足した)。
+- **Definition**: セッションの起動・実行と、実行中のターンの失敗の**理由キー**。19 種 (X-1 の 10 種に O-4 が 8 種、X-9 が `resume-failed` 1 種を足した)。
+  `resume-failed` は再開の起動で `init` の前に終わった場合と、再開の最初の `init` の権限モードが安全 3 値の外だった場合 (AD-059 Decision 3。再ログインの対象に入れない)。
   参照キーであり**訳出は `ui`** (Principle XV)。起動の拒否理由には別に `session-limit` / `shutting-down` (X-5) がある
   - 起動と実行の失敗 (X-1): `distro-not-running` / `not-verified-running` / `distro-mismatch` / `claude-not-found` /
     `launch-failed` / `process-crashed` / `stream-protocol-error` / `provider-error` / `interrupt-unavailable` /
@@ -899,6 +909,26 @@ total_terms: 104
 - **Domain**: `runtime`
 - **Ref**: [AD-004](decisions/0004-branded-path-types.md)
 
+#### **Resume（再開）**
+
+- **Definition**: 終了・失敗した、または過去の区画にあるセッションの続きを、同じ会話の id を query の options の `resume` に渡して起こし直す操作 (X-9)。
+  利用者の操作でだけ行い、自動では再開しない。フォルダ / ランタイム / Provider は引き継ぎ、モデル / effort / 権限モードは選び直せる。
+  要求は `SessionResumeRequest` (`{ source, config }`)。拒否・失敗の理由に `resume-failed` がある
+- **日本語表記**: 再開
+- **Domain**: `session` (起動と調停) / 表示は `ui`
+- **Counterexamples**: 分岐 (fork) は別 (X-6)。別のフォルダ / ランタイム / Provider で続けるのは再開ではなく分岐として扱う。
+  中断した後に次のプロンプトで続けることは再開ではない
+- **Ref**: [AD-059](decisions/0059-session-resume-query-option-and-conversation-id.md) / [021 spec](../specs/021-session-resume/spec.md)
+
+#### **Resume dialog（再開の形の起動ダイアログ）**
+
+- **Definition**: 起動ダイアログの再開の形 (X-9)。見出しは「セッションを再開」、ボタンは「再開する」。
+  引き継ぐ 3 軸 (フォルダ / ランタイム / Provider) は選択の部品を出さず**表示だけ**。モデル / effort / 権限モードは今の部品と依存解決のまま
+- **日本語表記**: 再開の形の起動ダイアログ
+- **Domain**: `ui` (表示) / `session` (軸の引き継ぎの規則)
+- **Counterexamples**: 引き継ぐ 3 軸を差し替える経路は出さない (差し替えたいときは分岐。X-6)
+- **Ref**: [AD-059](decisions/0059-session-resume-query-option-and-conversation-id.md) / [021 data-model](../specs/021-session-resume/data-model.md) §9.3
+
 #### **Retraction（取り消し）**
 
 - **Definition**: 実行中の transcript から、後で別の応答に置き換えられた assistant メッセージを外す指示 (O-6)。
@@ -937,6 +967,7 @@ total_terms: 104
 - **日本語表記**: セッション
 - **Domain**: `session`
 - **Ref**: [AD-007](decisions/0007-session-source-of-truth-is-claude-code.md)
+- **Note**: この UUID が **Conversation id (会話の id)** である (Closta の稼働中の行の `sessionId` とは別の値。相互参照: **Conversation id** / **Resume**)
 - **Note**: **一覧（R-2）が扱うのは要約とメタデータのみ**。本文の取得は **R-3 で追加済み**
   （`getSessionMessages` 経由。変換は **message mapping**、表示状態は **TranscriptView** を参照）
 
@@ -1032,7 +1063,8 @@ total_terms: 104
   モデル / effort / 権限モード / sandbox / 追加ディレクトリ / 上限 / セッション名。
   三本の軸が交わる点であり日常操作の入口。
   **X-4 は前 6 軸を実装する。** folder / runtime は必須で、provider / model / effort は `null` = 既定、権限モードは `SafePermissionMode`。
-  sandbox は I-3、追加ディレクトリ / 上限 / セッション名は X-6 が扱う
+  sandbox は I-3、追加ディレクトリ / 上限 / セッション名は X-6 が扱う。
+  **再開 (Resume) の要求は別の型 (`SessionResumeRequest`) で包み、この 6 軸の形は変えない** (X-9)
 - **Domain**: `session`
 - **Ref**: [008 spec](../specs/008-session-launch-settings-dialog-and-presets/spec.md) / [AD-041](decisions/0041-x4-launch-config-on-x1-launch-gate.md)
 
@@ -1075,7 +1107,8 @@ total_terms: 104
   stream のパース・`wsl.exe` の spawn ハンドルを持ち、本文を文字列化して調停役スレッドへ送る。
   実体は `src/agents/sdk-agent-session.ts`。
   Win32Runtime のセッションでは、停止のとき stdin を閉じる前に `claude.exe` のプロセス木を止める (AD-058 Decision 3)。
-  停止の保証の範囲の正本は AD-058 Decision 3
+  停止の保証の範囲の正本は AD-058 Decision 3。
+  最初の `system/init` の `session_id` を UUID の形で検査して 1 回だけ **Conversation id** として送る (`conversation`。X-9。2 回目以降の `init` は送らない)
 - **日本語表記**: セッションスレッド (実装語として Worker を括弧で添えてよい)
 - **Domain**: `session` / `agents`
 - **Ref**: [AD-043](decisions/0043-single-supervisor-session-threads-and-session-limit.md) / [AD-058](decisions/0058-win32-direct-launch-contract-and-process-tree-stop.md) Decision 3

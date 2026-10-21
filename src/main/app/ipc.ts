@@ -1,6 +1,11 @@
 import { ipcMain, type IpcMainInvokeEvent } from 'electron'
 
-import { IPC_CHANNELS, type Win32ClaudePathResult } from '@domain/capability'
+import {
+  IPC_CHANNELS,
+  type PastResumeDTO,
+  type SessionResumeHandshakeDTO,
+  type Win32ClaudePathResult
+} from '@domain/capability'
 import type {
   ProviderDraft,
   ProviderLoadIssuesDTO,
@@ -17,6 +22,8 @@ import type { SessionIndexDTO } from '@domain/session/dto'
 import type { SessionLaunchConfig } from '@domain/session/launch-config'
 import type { LaunchOrigin, LaunchUsageSummaryDTO } from '@domain/session/launch-usage'
 import type { PresetDTO, SavePresetResult } from '@domain/session/preset'
+import type { SessionResumeRequest } from '@domain/session/resume'
+import type { PastResumeAxes } from '@domain/session/resume-axes'
 import type { RuntimeDescriptor } from '@domain/runtime/descriptor'
 import type { RuntimeDescriptorDTO, RuntimeListDTO } from '@domain/runtime/dto'
 import type { NamespaceId } from '@domain/runtime/namespace'
@@ -34,11 +41,14 @@ import type { TranscriptHandshakeDTO } from '@domain/session/transcript-dto'
 
 import type { Measure } from './measure'
 import type { SavePresetInput } from './preset-service'
-import type { LaunchOutcome } from './session-launch-service'
+import type { LaunchOutcome, ResumeOutcome } from './session-launch-service'
 import {
   handleFetchMoreSessions,
   handleGetLaunchUsage,
+  handleGetResumedTranscript,
   handleGetTranscript,
+  handleResolvePastResume,
+  handleResumeSession,
   handleEndSession,
   handleInterruptSession,
   handleKillSession,
@@ -135,6 +145,15 @@ export interface IpcDependencies {
   launchSession(config: SessionLaunchConfig): Promise<LaunchOutcome>
   /** 制御を該当セッションへ送る。未知 / 終了済み sessionId なら `false`。 */
   controlSession(sessionId: string, control: SessionControl): boolean
+
+  /* ── セッションの再開 (X-9 / contracts C-1〜C-3) ── */
+
+  /** 過去の行の軸を決める (列挙のキャッシュだけを見る)。 */
+  resolvePastResume(targetKey: string, conversationId: string): Promise<PastResumeAxes>
+  /** 再開の要求を解いて起動する。**本文は port**、戻り値は handshake + transfer 用 port。 */
+  resumeSession(request: SessionResumeRequest): Promise<ResumeOutcome>
+  /** それまでの会話の読み取り。**本文は port** (`getTranscript` と同じ経路)。 */
+  getResumedTranscript(sessionId: string, requestToken: string): Promise<TranscriptResult>
 
   /* ── プリセット (X-4) ── */
 
@@ -312,6 +331,43 @@ export function registerIpcHandlers(deps: IpcDependencies): void {
     }
     return { status: 'rejected', reasonKey: outcome.reason }
   })
+
+  /* ── セッションの再開 (X-9 / AD-059) ──────────────────────────────── */
+
+  handle(IPC_CHANNELS.resolvePastResume, async (_event, ...args): Promise<PastResumeDTO> =>
+    handleResolvePastResume(deps, args)
+  )
+
+  // `launchSession` と同じ形: port の transfer だけここ、検証と service 呼び出しは `session-ipc.ts`。
+  handle(IPC_CHANNELS.resumeSession, async (event, ...args): Promise<SessionResumeHandshakeDTO> => {
+    const outcome = await handleResumeSession(deps, args)
+    if (outcome.status === 'launching') {
+      event.sender.postMessage(IPC_CHANNELS.sessionPort, { sessionId: outcome.sessionId }, [
+        outcome.port
+      ])
+      return { status: 'launching', sessionId: outcome.sessionId }
+    }
+    if (outcome.status === 'already-running') {
+      return { status: 'already-running', sessionId: outcome.sessionId }
+    }
+    return { status: 'rejected', reasonKey: outcome.reason }
+  })
+
+  // `getTranscript` と同じ port のチャネル (`transcriptPort`)。renderer は `requestToken` で照合する。
+  handle(
+    IPC_CHANNELS.getResumedTranscript,
+    async (event, ...args): Promise<TranscriptHandshakeDTO> => {
+      const result = await handleGetResumedTranscript(deps, args)
+      if (result.port !== null) {
+        event.sender.postMessage(
+          IPC_CHANNELS.transcriptPort,
+          { requestToken: result.handshake.requestToken },
+          [result.port]
+        )
+      }
+      return result.handshake
+    }
+  )
 
   handle(IPC_CHANNELS.sendPrompt, async (_event, ...args): Promise<void> =>
     handleSendPrompt(deps, args)

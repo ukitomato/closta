@@ -85,7 +85,11 @@ const h = vi.hoisted(() => ({
   /** true なら claude の子の pid を未設定にする。 */
   pidless: false,
   /** 出来事の順番の記録 (stop / child-exit / kill / abort)。 */
-  order: [] as string[]
+  order: [] as string[],
+  /** 最初のプロンプトの後に流す `init` (既定は素の init。再開のテストで session_id と権限モードを足す。X-9)。 */
+  initMessage: null as null | Record<string, unknown>,
+  /** spawn の直後 (init の前) の終わり方: exit = 子だけ異常終了 / throw = stream が例外 / end = 例外なく終わる (X-9 の経路 A / B / C)。 */
+  preInit: null as null | 'exit' | 'throw' | 'end'
 }))
 
 vi.mock('node:worker_threads', () => ({
@@ -156,6 +160,9 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
       } else if (h.mode !== 'no-spawn')
         options.spawnClaudeCodeProcess({ command: 'claude', args: [] })
       else await new Promise(() => undefined) // spawn しないまま止まる
+      if (h.preInit === 'exit') h.child?.emit('exit', 1, null)
+      if (h.preInit === 'throw') throw new Error('stream broke before init')
+      if (h.preInit === 'end') return
       // 初回 user メッセージの前に届く通知 (実測の再現)。
       yield { type: 'system', subtype: 'commands_changed' }
       h.preMessageConsumed = true
@@ -174,7 +181,7 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
           return
         }
         h.prompts.push(next.value.message.content)
-        yield { type: 'system', subtype: 'init' }
+        yield h.initMessage ?? { type: 'system', subtype: 'init' }
         for (const m of h.feed) yield m
         if (h.holdTurn !== null) await h.holdTurn
         if (h.mode === 'crash-midstream') {
@@ -229,6 +236,8 @@ async function boot(
   h.options = null
   h.holdTurn = null
   h.interrupts = 0
+  h.initMessage = null
+  h.preInit = null
   posted = []
   listener = null
   h.port = {
@@ -1750,5 +1759,214 @@ describe('sdk-agent-session: Elicitation の待ちと状態の遷移 (O-10 / 018
     for (const spy of consoles) expect(JSON.stringify(spy.mock.calls)).not.toContain(MARKER)
     vi.restoreAllMocks()
     release()
+  })
+})
+
+describe('sdk-agent-session: 再開 (X-9 / AD-059 / data-model §6)', () => {
+  const CONV = '55555555-5555-4555-8555-555555555555'
+  const OTHER = '66666666-6666-4666-8666-666666666666'
+  const resumeLaunch = {
+    kind: 'launch',
+    spec: SPEC,
+    options: { permissionMode: 'default', resume: CONV }
+  }
+  const init = (over: Record<string, unknown> = {}): Record<string, unknown> => ({
+    type: 'system',
+    subtype: 'init',
+    session_id: CONV,
+    permissionMode: 'default',
+    ...over
+  })
+  const conversations = (): Posted[] => posted.filter((p) => p.kind === 'conversation')
+  const lastStatus = (): Posted | undefined => posted.filter((p) => p.kind === 'status').at(-1)
+
+  async function runPrompt(
+    launchMessage: unknown,
+    initMessage: Record<string, unknown> | null,
+    feed: Record<string, unknown>[] = [],
+    mode: Mode = 'normal'
+  ): Promise<void> {
+    const send = await boot(mode, feed)
+    h.initMessage = initMessage
+    send(launchMessage)
+    await vi.waitFor(() => expect(h.preMessageConsumed).toBe(true))
+    send(control({ kind: 'send-prompt', text: 'go' }))
+  }
+
+  async function runPreInit(
+    launchMessage: unknown,
+    preInit: 'exit' | 'throw' | 'end'
+  ): Promise<void> {
+    const send = await boot()
+    h.preInit = preInit
+    send(launchMessage)
+  }
+
+  describe('options の resume (§6.1 / §6.2)', () => {
+    it('再開の起動で query() の options に resume が載る。新しい起動では resume のキーが無い', async () => {
+      const send = await boot()
+      send(resumeLaunch)
+      await vi.waitFor(() => expect(h.options).not.toBeNull())
+      expect(h.options?.resume).toBe(CONV)
+
+      const send2 = await boot()
+      send2(launch)
+      await vi.waitFor(() => expect(h.options).not.toBeNull())
+      expect(Object.prototype.hasOwnProperty.call(h.options, 'resume')).toBe(false)
+    })
+
+    it.each([['x'], [''], ['--resume'], [42], [null], [['a']]])(
+      'resume が UUID の形でない (%j) 起動は起動しない (error を通知して ended)',
+      async (bad) => {
+        const send = await boot()
+        send({ kind: 'launch', spec: SPEC, options: { permissionMode: 'default', resume: bad } })
+        expect(kinds()).toEqual(['status', 'ended'])
+        expect(h.options).toBeNull()
+      }
+    )
+  })
+
+  describe('会話の id の送出 (§6.3)', () => {
+    it('最初の init で conversation を 1 回送る。2 回目の init (/clear の後) では送らない', async () => {
+      await runPrompt(launch, init(), [init({ session_id: OTHER })])
+      await vi.waitFor(() => expect(states()).toContain('done'))
+      expect(conversations()).toEqual([{ kind: 'conversation', conversationId: CONV }])
+    })
+
+    it('最初の init の session_id が UUID でなければ送らず、その後の正しい init でも送らない', async () => {
+      await runPrompt(launch, init({ session_id: 'nope' }), [init()])
+      await vi.waitFor(() => expect(states()).toContain('done'))
+      expect(conversations()).toEqual([])
+    })
+
+    it('構成の報告 (init-report の meter) は今と同じ 1 回で、状態通知に会話の id を載せない', async () => {
+      await runPrompt(
+        launch,
+        init({
+          model: 'claude-opus-4',
+          mcp_servers: [],
+          tools: ['Bash'],
+          skills: [],
+          plugins: [],
+          slash_commands: []
+        })
+      )
+      await vi.waitFor(() => expect(states()).toContain('done'))
+      const reports = events().filter(
+        (e) =>
+          e.kind === 'meter' && (e as { meter?: { type?: string } }).meter?.type === 'init-report'
+      )
+      expect(reports).toHaveLength(1)
+      for (const s of posted.filter((p) => p.kind === 'status')) {
+        expect(JSON.stringify(s)).not.toContain(CONV)
+      }
+    })
+
+    it('会話の id を stderr に出さない', async () => {
+      const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+      await runPrompt(resumeLaunch, init())
+      await vi.waitFor(() => expect(states()).toContain('done'))
+      for (const call of err.mock.calls) expect(String(call[0])).not.toContain(CONV)
+      err.mockRestore()
+    })
+  })
+
+  describe('resume-failed の分岐 (§6.4)', () => {
+    it('新しい起動は今どおり: A は process-crashed、B は stream-protocol-error、C は失敗にしない', async () => {
+      await runPreInit(launch, 'exit')
+      await vi.waitFor(() => expect(lastStatus()).toMatchObject({ reasonKey: 'process-crashed' }))
+
+      await runPreInit(launch, 'throw')
+      await vi.waitFor(() => expect(kinds()).toContain('ended'))
+      expect(lastStatus()).toMatchObject({ state: 'error', reasonKey: 'stream-protocol-error' })
+
+      await runPreInit(launch, 'end')
+      await vi.waitFor(() => expect(kinds()).toContain('ended'))
+      expect(states()).not.toContain('error')
+    })
+
+    it('再開で init の前は A〜C のどの終わり方でも resume-failed', async () => {
+      await runPreInit(resumeLaunch, 'exit')
+      await vi.waitFor(() => expect(lastStatus()).toMatchObject({ reasonKey: 'resume-failed' }))
+
+      await runPreInit(resumeLaunch, 'throw')
+      await vi.waitFor(() => expect(kinds()).toContain('ended'))
+      expect(lastStatus()).toMatchObject({ state: 'error', reasonKey: 'resume-failed' })
+      expect(events().filter((e) => e.kind === 'failure')).toEqual([
+        { kind: 'failure', reasonKey: 'resume-failed' }
+      ])
+
+      await runPreInit(resumeLaunch, 'end')
+      await vi.waitFor(() => expect(kinds()).toContain('ended'))
+      expect(lastStatus()).toMatchObject({ state: 'error', reasonKey: 'resume-failed' })
+    })
+
+    it('再開で init の後は今どおり (process-crashed)', async () => {
+      await runPrompt(resumeLaunch, init(), [], 'crash-midstream')
+      await vi.waitFor(() => expect(kinds()).toContain('ended'))
+      expect(lastStatus()).toMatchObject({ state: 'error', reasonKey: 'process-crashed' })
+    })
+
+    it('fatalSink は再開で init の前でも process-crashed のまま', async () => {
+      const send = await boot()
+      send(resumeLaunch)
+      await vi.waitFor(() => expect(h.preMessageConsumed).toBe(true))
+      const fatal = process
+        .listeners('uncaughtException')
+        .filter((l) => !baseline.uncaught.includes(l))
+      ;(fatal[0] as (error: Error, origin: string) => void)(new Error('boom'), 'uncaughtException')
+      await vi.waitFor(() => expect(kinds()).toContain('ended'))
+      expect(lastStatus()).toMatchObject({ state: 'error', reasonKey: 'process-crashed' })
+    })
+
+    it('終了処理の中 (kill の後) は再開でも A〜C のどれも失敗にしない', async () => {
+      const send = await boot()
+      send(resumeLaunch)
+      await vi.waitFor(() => expect(h.preMessageConsumed).toBe(true))
+      send(control({ kind: 'kill' }))
+      await vi.waitFor(() => expect(kinds()).toContain('ended'))
+      expect(states()).not.toContain('error')
+    })
+  })
+
+  describe('権限モードの fail closed (§6.3 の 1 / SC-009)', () => {
+    it.each(['default', 'plan', 'dontAsk'])(
+      '再開の最初の init の権限モードが安全な値 (%s) なら失敗しない',
+      async (mode) => {
+        await runPrompt(resumeLaunch, init({ permissionMode: mode }))
+        await vi.waitFor(() => expect(states()).toContain('done'))
+        expect(states()).not.toContain('error')
+        expect(conversations()).toHaveLength(1)
+      }
+    )
+
+    it.each([
+      ['知らない値', { permissionMode: 'weird' }],
+      ['昇格の値', { permissionMode: 'bypass' + 'Permissions' }],
+      ['別の昇格の値', { permissionMode: 'acceptEdits' }],
+      ['数', { permissionMode: 42 }],
+      ['無い', { permissionMode: undefined }]
+    ])(
+      '再開の最初の init が %s なら resume-failed で止まり、会話の id を送らない',
+      async (_n, over) => {
+        await runPrompt(resumeLaunch, init(over))
+        await vi.waitFor(() => expect(kinds()).toContain('ended'))
+        expect(lastStatus()).toMatchObject({ state: 'error', reasonKey: 'resume-failed' })
+        expect(conversations()).toEqual([])
+        expect(h.child?.killed).toBe(true)
+      }
+    )
+
+    it('新しい起動では同じ init で失敗しない (表示だけ。今どおり)', async () => {
+      await runPrompt(launch, init({ permissionMode: 'acceptEdits' }))
+      await vi.waitFor(() => expect(states()).toContain('done'))
+      expect(states()).not.toContain('error')
+    })
+
+    it('2 回目以降の init は検査しない', async () => {
+      await runPrompt(resumeLaunch, init(), [init({ permissionMode: 'acceptEdits' })])
+      await vi.waitFor(() => expect(states()).toContain('done'))
+      expect(states()).not.toContain('error')
+    })
   })
 })

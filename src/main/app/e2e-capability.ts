@@ -29,6 +29,7 @@ import type { FolderListDTO, WorkspaceFolderDTO } from '@domain/workspace/dto'
 
 import type { IpcDependencies, ProbeRuntimeResult } from './ipc'
 import { noMeasure } from './measure'
+import { createResumeService } from './resume-service'
 import {
   createSessionLaunchService,
   type LaunchOutcome,
@@ -213,6 +214,14 @@ function e2eSessionIndex(input: {
   }
 }
 
+/**
+ * 会話の id を持った行を作る合成プロンプト (X-9 / FE-021)。送ると fake の supervisor 接続が固定の会話の id を 1 回送る
+ * (本物のセッションスレッドの最初の `init` の代わり。本番では本コードに到達しない)。
+ */
+export const E2E_CONVERSATION_PROMPT = '__e2e_conversation__'
+/** 合成の会話の id (実際の会話ではない。UUID の形だけを満たす)。 */
+const E2E_CONVERSATION_ID = 'e2e00000-0000-4000-8000-0000000000c1'
+
 /** E2E の負荷経路 (SC-003 / FE-020) を起こす合成プロンプト。本番では本コードに到達しない。 */
 export const E2E_LOAD_PROMPT = '__e2e_load__'
 /** 1 件 1KB の本文を何件/秒流すか (SC-003 の負荷)。 */
@@ -248,6 +257,7 @@ function createE2eSupervisorConnection(): SupervisorConnection {
   const sessions = new Map<string, StubSession>()
   const statusL: ((g: number, u: readonly unknown[]) => void)[] = []
   const threadL: ((g: number, id: string) => void)[] = []
+  const conversationL: ((g: number, id: string, conversationId: string) => void)[] = []
   let pending: SessionStatusUpdate[] = []
   let flushTimer: ReturnType<typeof setTimeout> | null = null
   let seq = 0
@@ -323,6 +333,9 @@ function createE2eSupervisorConnection(): SupervisorConnection {
           // turn を in-flight にして (running) 暫く保ち、合成応答 1 通で完了する。
           // running を挟むことで IME E2E の「running + queue 有効」分岐 (AD-037 §4) を踏める。
           s.promptSent = true
+          if (control.text === E2E_CONVERSATION_PROMPT) {
+            for (const l of conversationL) l(1, sessionId, E2E_CONVERSATION_ID)
+          }
           setState(sessionId, s, 'running')
           if (control.text === E2E_LOAD_PROMPT) {
             const chunk = 'あ'.repeat(340) // 約 1KB (UTF-8)
@@ -381,6 +394,8 @@ function createE2eSupervisorConnection(): SupervisorConnection {
     },
     onStatusBatch: (l) => statusL.push(l),
     onThreadEnded: (l) => threadL.push(l),
+    // 会話の id は合成プロンプト (`E2E_CONVERSATION_PROMPT`) を送った行にだけ送る (X-9 / FE-021)。
+    onConversation: (l) => conversationL.push(l),
     onExit: () => undefined
   }
 }
@@ -389,6 +404,8 @@ export interface E2eCapability {
   readonly ipc: IpcDependencies
   /** 状態通知の中継 (real の `Composition.sessionStatus` と同型)。 */
   readonly sessionStatus: SessionStatusRelay
+  /** 稼働中の行が会話の id を持った通知 (real の `Composition.onSessionResumable` と同型。X-9)。 */
+  onSessionResumable(listener: (sessionIds: readonly string[]) => void): void
   /** renderer の再読み込みで全セッションを止める (real と同型)。 */
   killAllSessions(): number
   /** アプリ終了時に in-flight を片付ける。real の `Composition.dispose` と同型。 */
@@ -546,7 +563,11 @@ export function createE2eCapability(): E2eCapability {
    */
   const sessionStatus = createSessionStatusRelay()
   const knownRuntimes = new Map(snapshot.map((d) => [d.id as string, d]))
+  const resumableListeners: ((sessionIds: readonly string[]) => void)[] = []
   const launchService = createSessionLaunchService({
+    onResumable: (sessionId) => {
+      for (const listener of resumableListeners) listener([sessionId])
+    },
     connection: createE2eSupervisorConnection(),
     prepareLaunch: async (config): Promise<LaunchPreparation> => {
       const runtime = knownRuntimes.get(config.runtimeId)
@@ -569,6 +590,27 @@ export function createE2eCapability(): E2eCapability {
       clearTimeout: (h) => clearTimeout(h as never)
     },
     log: () => undefined
+  })
+
+  /*
+   * **本物の再開の調停** (稼働中の行の source。X-9 / FE-021)。上限・同じ会話の判定・行のレコードは本番と共有する。
+   * 過去の行の列挙は固定の索引に会話の行を持たないので、過去の行の source は常に `source-unknown` にする。
+   */
+  const resumeService = createResumeService({
+    pastResumeSource: () => null,
+    folders: () => [],
+    runtimes: () => snapshot,
+    providers: async () => [],
+    resolve: () => {
+      throw new Error('E2E の再開は過去の行の対応づけを使わない')
+    },
+    enumerationTargets: () => [],
+    launchResume: (config, resolved) => launchService.resume(config, resolved),
+    conversationRecord: (sessionId) => launchService.conversationRecord(sessionId),
+    getTranscript: async (_conversationId, _targetKey, requestToken) => ({
+      handshake: { status: 'empty', requestToken },
+      port: null
+    })
   })
 
   const ipc: IpcDependencies = {
@@ -639,6 +681,14 @@ export function createE2eCapability(): E2eCapability {
     launchSession: (config): Promise<LaunchOutcome> => launchService.launch(config),
     controlSession: (sessionId, control) => launchService.control(sessionId, control),
 
+    // 再開 (X-9): 稼働中の行は本物の調停を通る。過去の行は列挙の索引に会話の行が無いので常に再開できない。
+    resolvePastResume: async () => ({ ok: false, reason: 'source-unknown' }),
+    resumeSession: (request) => resumeService.resume(request),
+    getResumedTranscript: async (_sessionId, requestToken) => ({
+      handshake: { status: 'failed', requestToken, reasonKey: 'transcript-read-failed' },
+      port: null
+    }),
+
     // pr-gate R1 M-03 / M-302: 退避 0 件。registerProvider は常に拒否なので述語は fail-closed で足りる。
     providerLoadIssues: async () => ({
       skippedOnLoad: 0,
@@ -653,6 +703,9 @@ export function createE2eCapability(): E2eCapability {
   return {
     ipc,
     sessionStatus,
+    onSessionResumable: (listener) => {
+      resumableListeners.push(listener)
+    },
     killAllSessions: () => launchService.killAll(),
     dispose: () => launchService.dispose()
   }

@@ -46,6 +46,7 @@ import { createPresetService } from './preset-service'
 import { createProviderService } from './provider-service'
 import { createRuntimeStore, type RuntimeStore } from './runtime-store'
 import { createSessionEnumerator } from './session-enumerator'
+import { createResumeService } from './resume-service'
 import { createSessionLaunchService } from './session-launch-service'
 import { createSessionService, type SessionService } from './session-service'
 import { createSupervisorConnection } from './session-spawner'
@@ -81,6 +82,8 @@ export interface Composition {
   readonly sessions: SessionService
   /** 稼働中セッションの状態通知の中継 (X-5)。送り先 (主ウィンドウ) は `index.ts` が登録する。 */
   readonly sessionStatus: SessionStatusRelay
+  /** 稼働中の行が会話の id を持った通知 (X-9 / contracts C-4)。送り先 (主ウィンドウ) は `index.ts` が登録する。 */
+  readonly onSessionResumable: (listener: (sessionIds: readonly string[]) => void) => void
   readonly ipc: IpcDependencies
   /** renderer の再読み込み・クラッシュで全セッションを止める (X-5 FR-014)。送った数を返す。 */
   readonly killAllSessions: () => number
@@ -295,7 +298,12 @@ export function createComposition(): Composition {
    * 起動前段 (依存解決の再評価・起動ゲート・env 導出・WSLENV 合成) は `launch-preparation.ts` が持つ。
    */
   const sessionStatus = createSessionStatusRelay()
+  /** 稼働中の行が会話の id を持った通知の送り先 (主ウィンドウ。`index.ts` が登録する)。値は Closta の sessionId だけ。 */
+  const resumableListeners: ((sessionIds: readonly string[]) => void)[] = []
   const launchService = createSessionLaunchService({
+    onResumable: (sessionId) => {
+      for (const listener of resumableListeners) listener([sessionId])
+    },
     // fork env はランタイムに依存しない curated base (pr-gate R1 platform-boundary L-001)。
     connection: createSupervisorConnection(() => buildLaunchEnv(process.env)),
     newSessionId: () => randomUUID(),
@@ -333,6 +341,23 @@ export function createComposition(): Composition {
       // 拒否理由キーだけを記録する (値・パス・モデル ID を出さない。Principle V / CWE-532)。
       logRejection: (reasonKey) => console.warn(`[launch] rejected: ${reasonKey}`)
     })
+  })
+
+  /**
+   * 再開の調停 (X-9 / AD-059)。状態を持たない。I/O (列挙のキャッシュ・登録の一覧・起動・transcript 取得) は注入で受ける。
+   */
+  const resumeService = createResumeService({
+    pastResumeSource: (targetKey, conversationId) =>
+      sessions.pastResumeSource(targetKey, conversationId),
+    folders: () => folders.folders(),
+    runtimes: () => runtimes.snapshot(),
+    providers: () => providers.snapshotProfiles(),
+    resolve: sessions.resolve,
+    enumerationTargets: () => sessions.enumerationTargets(),
+    launchResume: (config, resolved) => launchService.resume(config, resolved),
+    conversationRecord: (sessionId) => launchService.conversationRecord(sessionId),
+    getTranscript: (conversationId, targetKey, requestToken) =>
+      transcripts.getTranscript(conversationId, targetKey, requestToken)
   })
 
   /** プリセット (X-4 / FR-009)。Provider は id 参照で持ち、資格情報を含めない (Principle V)。 */
@@ -407,6 +432,12 @@ export function createComposition(): Composition {
     launchSession: (config) => launchService.launch(config),
     controlSession: (sessionId, control) => launchService.control(sessionId, control),
 
+    resolvePastResume: (targetKey, conversationId) =>
+      resumeService.resolvePast(targetKey, conversationId),
+    resumeSession: (request) => resumeService.resume(request),
+    getResumedTranscript: (sessionId, requestToken) =>
+      resumeService.getResumedTranscript(sessionId, requestToken),
+
     listPresets: () => presets.list(),
     savePreset: (input) => presets.save(input),
     removePreset: (id) => presets.remove(id),
@@ -463,6 +494,9 @@ export function createComposition(): Composition {
     folders,
     sessions,
     sessionStatus,
+    onSessionResumable: (listener) => {
+      resumableListeners.push(listener)
+    },
     ipc,
     // renderer の再読み込み・クラッシュで全セッションを止める (supervisor は止めない。X-5 FR-014)。
     killAllSessions: () => launchService.killAll(),

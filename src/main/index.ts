@@ -113,6 +113,11 @@ if (!gotTheLock) {
         if (target === null || target.isDestroyed()) return
         target.webContents.send(IPC_CHANNELS.sessionStatus, updates)
       })
+      stub.onSessionResumable((sessionIds) => {
+        const target = mainWindow
+        if (target === null || target.isDestroyed()) return
+        target.webContents.send(IPC_CHANNELS.sessionResumable, sessionIds)
+      })
       watchRendererLifetime(mainWindow, () => stub.killAllSessions())
       onBeforeQuitOnce(async () => {
         await stub.dispose()
@@ -163,6 +168,13 @@ if (!gotTheLock) {
       const target = mainWindow
       if (target === null || target.isDestroyed()) return
       target.webContents.send(IPC_CHANNELS.sessionStatus, updates)
+    })
+
+    // 稼働中の行が会話の id を持った通知 (X-9 / contracts C-4)。値は Closta の sessionId だけ。
+    composition.onSessionResumable((sessionIds) => {
+      const target = mainWindow
+      if (target === null || target.isDestroyed()) return
+      target.webContents.send(IPC_CHANNELS.sessionResumable, sessionIds)
     })
 
     watchRendererLifetime(mainWindow, () => composition.killAllSessions())

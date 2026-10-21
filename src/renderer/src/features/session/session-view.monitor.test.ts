@@ -226,6 +226,8 @@ function session(id: string, over: Partial<LiveSessionState> = {}): LiveSessionS
     queueRejection: null,
     folderLabel: null,
     launchOrigin: 'manual',
+    resumable: false,
+    resumed: null,
     ...over
   }
 }
@@ -253,6 +255,7 @@ function state(
     launch: {
       phase: 'entry',
       rejectReason: null,
+      resume: null,
       lastConfig: null,
       lastOrigin: null,
       previousFailure: null
@@ -287,6 +290,7 @@ describe('slotUsage (FR-007)', () => {
       launch: {
         phase: 'launching',
         rejectReason: null,
+        resume: null,
         lastConfig: null,
         lastOrigin: null,
         previousFailure: null

@@ -2,6 +2,7 @@ import { XIcon } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { RESUME_LABELS } from '@/features/session/labels'
 import { LaunchDialogContent } from '@/features/session/LivePane'
 import {
   useRunningSessionStore,
@@ -30,6 +31,7 @@ export function LaunchDialogHost(): React.JSX.Element {
   const setOpen = useUiStore((s) => s.setLaunchOpen)
   const store = useRunningSessionStoreApi()
   const launching = useRunningSessionStore((s) => s.launch.phase === 'launching')
+  const resuming = useRunningSessionStore((s) => s.launch.resume !== null)
   const returnFocus = useDialogReturnFocus(isLaunchOpen, 'new-session')
 
   return (
@@ -57,7 +59,9 @@ export function LaunchDialogHost(): React.JSX.Element {
          * 2 つ並ばないように (pr-gate R1 a11y L-002 / ux L-001)。
          */}
         <DialogTitle asChild>
-          <span className="sr-only">{SHELL_LABELS.launchDialogTitle}</span>
+          <span className="sr-only">
+            {resuming ? RESUME_LABELS.heading : SHELL_LABELS.launchDialogTitle}
+          </span>
         </DialogTitle>
         {/*
          * 起動中になったことを読み上げる live region。開いている間ずっとマウントして中身だけ替える (中身ごと差し込むと

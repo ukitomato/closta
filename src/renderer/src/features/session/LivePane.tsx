@@ -31,12 +31,14 @@ import {
   launchFailureLabel,
   OLDER_MESSAGES_LABELS,
   olderMessagesLabel,
+  RESUME_LABELS,
   SESSION_ACTION_LABELS,
   SESSION_END_NOTICES
 } from './labels'
 import { LaunchDialog, type LaunchSource } from './LaunchDialog'
+import { resumeActionFor, useRowActionRunner, type RowResumeAction } from './resume-action'
 import { useRunningSessionStore, useRunningSessionStoreApi } from './running-session-context'
-import { slashCommandEntries, type SessionQueue } from './running-session-store'
+import { RESUMED_ID_PREFIX, slashCommandEntries, type SessionQueue } from './running-session-store'
 import { useRunningSessionsView } from './running-sessions-view'
 import { MESSAGE_WINDOW } from './session-view'
 import type { LiveSession } from './useLiveSession'
@@ -71,14 +73,20 @@ export function LivePane(): React.JSX.Element | null {
 export function LaunchDialogContent(): React.JSX.Element {
   const view = useRunningSessionsView()
   const launch = useRunningSessionStore((s) => s.launch)
-  return launch.phase === 'launching' ? <Launching /> : <NewSessionDialog onLaunch={view.launch} />
+  return launch.phase === 'launching' ? (
+    <Launching />
+  ) : (
+    <NewSessionDialog onLaunch={view.launch} onResume={view.resume} />
+  )
 }
 
-/** 起動設定ダイアログに渡す面 (起動状態と、終わっていないセッションのフォルダ)。 */
+/** 起動設定ダイアログに渡す面 (起動状態と、終わっていないセッションのフォルダ)。再開の形は `launch.resume` (X-9)。 */
 function NewSessionDialog({
-  onLaunch
+  onLaunch,
+  onResume
 }: {
   readonly onLaunch: LaunchSource['launch']
+  readonly onResume: NonNullable<LaunchSource['resumeSession']>
 }): React.JSX.Element {
   const launch = useRunningSessionStore((s) => s.launch)
   const order = useRunningSessionStore((s) => s.order)
@@ -97,6 +105,8 @@ function NewSessionDialog({
   const source: LaunchSource = {
     phase: launch.phase,
     rejectReason: launch.rejectReason,
+    resume: launch.resume,
+    resumeSession: onResume,
     lastConfig: launch.lastConfig,
     lastOrigin: launch.lastOrigin,
     previousFailure: launch.previousFailure,
@@ -161,8 +171,11 @@ function LiveSessionPane({
   const composerExtensions = useMemo<ComposerExtensions>(
     () => ({
       commands: sessionMeters === undefined ? null : slashCommandEntries(sessionMeters),
+      // それまでの会話 (`resumed:`) は読み取り専用。再送の入力を戻さない (X-9 / data-model §8.2)。
       retryTextFor: (messageId) =>
-        refusedUserText(runningStore.getState().sessions[sessionId]?.messages ?? [], messageId)
+        messageId.startsWith(RESUMED_ID_PREFIX)
+          ? null
+          : refusedUserText(runningStore.getState().sessions[sessionId]?.messages ?? [], messageId)
     }),
     [sessionMeters, runningStore, sessionId]
   )
@@ -170,12 +183,27 @@ function LiveSessionPane({
   const approvalRef = useRef<HTMLDivElement>(null)
   const elicitationRef = useRef<HTMLDivElement>(null)
   const firstElicitation = state.elicitations[0]
+  // 「再開」「やり直す」(X-9)。行と同じ純関数で出し分け、利用者が押したときだけ動く (自動で再開しない。FR-009)。
+  const resumeAction = resumeActionFor({
+    runState: session.runState,
+    ended: session.ended,
+    resumable: state.resumable
+  })
+  const runRowAction = useRowActionRunner()
+  const onResumeAction = resumeAction === null ? null : () => runRowAction(sessionId, resumeAction)
 
   return (
     // `data-live-pane`: 消えるボタンのフォーカスの行き先 (この中の composer) を探す根 (O-4 FR-019。`focus-handoff.ts`)。
     <div className="flex h-full min-h-0 flex-col" data-live-pane="">
       {/* error 状態は必ず理由と次操作を出す。failure イベントが理由を伴わず来た場合も汎用表示に倒す (X-1 US-4 AC-8)。 */}
-      {errored && <FailureBanner reason={session.failureReason} onClose={session.close} />}
+      {errored && (
+        <FailureBanner
+          reason={session.failureReason}
+          onClose={session.close}
+          action={resumeAction}
+          onAction={onResumeAction}
+        />
+      )}
       {/* 終わり方の通知 (FR-011): 終了が強制終了に落ちた / 強制終了 / 正常に終了した。 */}
       {!errored && (state.endForced || state.killed || session.ended) && (
         <EndNotice
@@ -187,6 +215,8 @@ function LiveSessionPane({
                 : SESSION_END_NOTICES.ended
           }
           onClose={session.ended ? session.close : null}
+          action={resumeAction}
+          onAction={onResumeAction}
         />
       )}
       {state.denied.length > 0 && <DeniedNotice denied={state.denied} />}
@@ -286,7 +316,11 @@ function LiveSessionPane({
  * 本文が空なら null。
  */
 function refusedUserText(
-  messages: readonly { readonly id?: string | undefined; readonly role: string; readonly content: unknown }[],
+  messages: readonly {
+    readonly id?: string | undefined
+    readonly role: string
+    readonly content: unknown
+  }[],
   rowId: string
 ): string | null {
   const at = messages.findIndex((m) => m.id === rowId)
@@ -396,10 +430,14 @@ function SessionWelcome(): React.JSX.Element {
  */
 function FailureBanner({
   reason,
-  onClose
+  onClose,
+  action,
+  onAction
 }: {
   readonly reason: LaunchFailureReason | null
   readonly onClose: () => void
+  readonly action: RowResumeAction | null
+  readonly onAction: (() => void) | null
 }): React.JSX.Element {
   // 理由キーがあれば訳出、無ければ汎用文 (error 状態は必ず理由と次操作を出す。US-4 AC-8)。
   const detail = reason !== null ? launchFailureLabel(reason) : 'セッションでエラーが発生しました。'
@@ -409,6 +447,11 @@ function FailureBanner({
       className="border-destructive/40 bg-destructive/10 text-destructive flex items-center gap-3 border-b px-4 py-2 text-sm"
     >
       <span className="flex-1">{detail}</span>
+      {action !== null && onAction !== null && (
+        <Button type="button" variant="outline" size="sm" onClick={onAction}>
+          {RESUME_LABELS[action === 'resume' ? 'action' : 'retry']}
+        </Button>
+      )}
       <Button type="button" variant="outline" size="sm" onClick={onClose}>
         {isReloginFailure(reason) ? '閉じて起動し直す' : '閉じて再起動'}
       </Button>
@@ -419,10 +462,14 @@ function FailureBanner({
 /** 終わり方の通知 (FR-011)。error ではないので FailureBanner とは別の軽い表示。transcript はそのまま読める。 */
 function EndNotice({
   message,
-  onClose
+  onClose,
+  action,
+  onAction
 }: {
   readonly message: string
   readonly onClose: (() => void) | null
+  readonly action: RowResumeAction | null
+  readonly onAction: (() => void) | null
 }): React.JSX.Element {
   return (
     <div
@@ -430,6 +477,11 @@ function EndNotice({
       className="border-border text-muted-foreground flex items-center gap-3 border-b px-4 py-2 text-sm"
     >
       <span className="flex-1">{message}</span>
+      {action !== null && onAction !== null && (
+        <Button type="button" variant="outline" size="sm" onClick={onAction}>
+          {RESUME_LABELS[action === 'resume' ? 'action' : 'retry']}
+        </Button>
+      )}
       {onClose !== null && (
         <Button type="button" variant="outline" size="sm" onClick={onClose}>
           {SESSION_ACTION_LABELS.close}

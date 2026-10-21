@@ -436,3 +436,41 @@ describe('runSupervisor: 単独起動 (標準入出力経路。BE-012 / SC-009)'
     expect(delays).not.toContain(3000)
   })
 })
+
+describe('runSupervisor: 会話の id の中継 (X-9 / AD-059 / contracts C-5)', () => {
+  const CONV = '44444444-4444-4444-8444-444444444444'
+
+  it('conversation を窓の満了を待たずに 1 回だけ main へ送る (sessionId は割り当てたもの)', () => {
+    const h = electronHarness()
+    h.send(launchMsg(A), [bodyPort()])
+    h.workers[0]?.send({ kind: 'conversation', conversationId: CONV })
+    // 偽の時計は進めていない — 窓の満了の前に届いている。
+    expect(h.timer.pending()).toBe(0)
+    const sent = h.lines().filter((l) => l.kind === 'conversation')
+    expect(sent).toEqual([{ kind: 'conversation', sessionId: A, conversationId: CONV }])
+  })
+
+  it('status-batch に会話の id が入らず、UUID でない conversation は捨てる', () => {
+    const h = electronHarness()
+    h.send(launchMsg(A), [bodyPort()])
+    h.workers[0]?.send({ kind: 'conversation', conversationId: 'not-a-uuid' })
+    h.workers[0]?.send({ kind: 'conversation', conversationId: CONV })
+    h.workers[0]?.send({ kind: 'status', state: 'running', reasonKey: null, claudeAlive: true })
+    h.timer.runAll()
+    expect(h.lines().filter((l) => l.kind === 'conversation')).toHaveLength(1)
+    const batches = h.toMain.filter((l) => JSON.parse(l).kind === 'status-batch')
+    expect(batches.length).toBeGreaterThan(0)
+    for (const line of batches) expect(line).not.toContain(CONV)
+  })
+
+  it('値をログ (標準出力・標準エラー) に出さない', () => {
+    const out = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+    const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    const h = electronHarness()
+    h.send(launchMsg(A), [bodyPort()])
+    h.workers[0]?.send({ kind: 'conversation', conversationId: CONV })
+    for (const call of [...out.mock.calls, ...err.mock.calls]) {
+      expect(String(call[0])).not.toContain(CONV)
+    }
+  })
+})

@@ -25,13 +25,14 @@ import {
 } from '@/features/search/session-search'
 import { toTerms } from '@/features/search/text-search'
 import { useSessionThreadListAdapter } from '@/runtime/thread-list-adapter'
-import { useUiStore, type FolderDraftSeed } from '@/stores/ui'
+import { useUiStore } from '@/stores/ui'
 
 import type { EnumerationOutcomeDTO, SessionGroupDTO, SessionSummaryDTO } from '@domain/session/dto'
 import { sessionRowKey } from '@domain/session/summary'
 import type { FailureReason } from '@domain/session/target'
 
 import { locationIndexOf, locationLabelOf } from './group-label'
+import { registerSeedOf } from './register-seed'
 import {
   BOUNDARY_LABELS,
   CWD_ORIGIN_LABELS,
@@ -161,22 +162,6 @@ function SectionHeading({
         </div>
       )
   }
-}
-
-/**
- * 登録の初期値を取り出す (FE-051 / FR-026)。
- *
- * **3 つが揃わないグループには導線を出さない。** 所在が決まらないものは登録できない
- * (登録には所在が要る。AD-025)。
- * 揃っているかを**値で確かめる** — 非 null アサーションで押し通すと、
- * DTO 側の `null` の意味 (所在不明) が画面で消える。
- */
-function registerSeedOf(group: SessionGroupDTO): FolderDraftSeed | null {
-  if (group.kind !== 'unregistered') return null
-  const { location, cwd, suggestedDisplayName } = group
-  if (location === null || cwd === null || suggestedDisplayName === null) return null
-  // **main が返した値をそのまま運ぶ。** renderer で組み立てない (FR-025)。
-  return { location, path: cwd, suggestedDisplayName }
 }
 
 /**

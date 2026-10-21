@@ -82,6 +82,8 @@ export type WorkerMessage =
     }
   | { readonly kind: 'child-exited' }
   | { readonly kind: 'ended' }
+  /** 会話の id (X-9 / AD-059)。最初の `system/init` の `session_id` を UUID の形で検査した値。 */
+  | { readonly kind: 'conversation'; readonly conversationId: string }
 
 /**
  * セッションスレッドからの構造化メッセージを検証する。未知の kind・形の崩れは `null`。
@@ -110,6 +112,10 @@ export function decodeWorkerMessage(value: unknown): WorkerMessage | null {
       return { kind: 'child-exited' }
     case 'ended':
       return { kind: 'ended' }
+    case 'conversation':
+      return isValidSessionId(record.conversationId)
+        ? { kind: 'conversation', conversationId: record.conversationId }
+        : null
     default:
       return null
   }
@@ -120,6 +126,12 @@ export function decodeWorkerMessage(value: unknown): WorkerMessage | null {
 export type SupervisorEvent =
   | { readonly kind: 'status-batch'; readonly updates: readonly SessionStatusUpdate[] }
   | { readonly kind: 'thread-ended'; readonly sessionId: string }
+  /** 会話の id (X-9 / AD-059)。窓で束ねず即座に送る。値を解釈・記録しない。 */
+  | {
+      readonly kind: 'conversation'
+      readonly sessionId: string
+      readonly conversationId: string
+    }
   /** 標準入出力経路だけで使う本文の行。Electron 経路では本文は port へ送り、この行を作らない。 */
   | { readonly kind: 'event'; readonly sessionId: string; readonly payload: OpaqueBody }
 
@@ -132,11 +144,14 @@ export function encodeSupervisorEvent(event: SupervisorEvent): string {
  * `event` (標準入出力経路の本文行) は main では受け付けない — Electron 経路では作られない行であり、来たら捨てる。
  * 状態通知の形の検証は main の受信規則 (`acceptBatch`) が行うので、ここでは配列であることだけを確かめる。
  */
-export function decodeSupervisorEventForMain(
-  line: string
-):
+export function decodeSupervisorEventForMain(line: string):
   | { readonly kind: 'status-batch'; readonly updates: readonly unknown[] }
   | { readonly kind: 'thread-ended'; readonly sessionId: string }
+  | {
+      readonly kind: 'conversation'
+      readonly sessionId: string
+      readonly conversationId: string
+    }
   | null {
   let parsed: unknown
   try {
@@ -151,6 +166,17 @@ export function decodeSupervisorEventForMain(
   }
   if (record.kind === 'thread-ended' && isValidSessionId(record.sessionId)) {
     return { kind: 'thread-ended', sessionId: record.sessionId }
+  }
+  if (
+    record.kind === 'conversation' &&
+    isValidSessionId(record.sessionId) &&
+    isValidSessionId(record.conversationId)
+  ) {
+    return {
+      kind: 'conversation',
+      sessionId: record.sessionId,
+      conversationId: record.conversationId
+    }
   }
   return null
 }

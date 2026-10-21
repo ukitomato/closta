@@ -11,10 +11,12 @@ import {
 import type { AutoModeStatus } from '@domain/runtime/capabilities'
 import type { SessionLaunchConfig } from '@domain/session/launch-config'
 import type { LaunchOrigin } from '@domain/session/launch-usage'
+import type { SessionResumeRequest } from '@domain/session/resume'
 
 import { runtimeTitle } from '@/features/runtime-list/labels'
 import { useRuntimes } from '@/features/runtime-list/useRuntimes'
 import { useFolders } from '@/features/workspace-folders/useFolders'
+import { useUiStore } from '@/stores/ui'
 
 import { isRunBusy } from './composer-queue'
 import { SESSION_NAME_FALLBACKS } from './labels'
@@ -82,6 +84,19 @@ export function RunningSessionsProvider({
     [store, folders.list, folderName]
   )
 
+  const resume = useCallback(
+    async (request: SessionResumeRequest, origin: LaunchOrigin) => {
+      const outcome = await store.resume(
+        request,
+        folders.list === null ? null : folderName(request.config.folderId),
+        origin
+      )
+      // 既に動いている行を選ぶだけのとき、シェルは「起動の受け付け」と読まない (行が前から在る) ので、ここで閉じる。
+      if (outcome === 'already-running') useUiStore.getState().setLaunchOpen(false)
+    },
+    [store, folders.list, folderName]
+  )
+
   const view = useMemo<RunningSessionsView>(
     () => ({
       live,
@@ -92,7 +107,8 @@ export function RunningSessionsProvider({
       runtimeName,
       runtimeAutoMode,
       folders: folders.list,
-      launch
+      launch,
+      resume
     }),
     [
       live,
@@ -103,7 +119,8 @@ export function RunningSessionsProvider({
       runtimeName,
       runtimeAutoMode,
       folders.list,
-      launch
+      launch,
+      resume
     ]
   )
 

@@ -206,8 +206,8 @@ describe('buildQueryOptions (X-4 / AD-041)', () => {
     onElicitation: noopElicitation
   }
 
-  it('QUERY_OPTION_KEYS は AD-041 (g) + AD-053 + AD-054 の 11 キーに固定される (集合を変えるには ADR が要る: AD-041 / AD-054)', () => {
-    expect(QUERY_OPTION_KEYS).toHaveLength(11)
+  it('QUERY_OPTION_KEYS は AD-041 (g) + AD-053 + AD-054 + AD-059 の 12 キーに固定される (集合を変えるには ADR が要る: AD-041 / AD-054 / AD-059)', () => {
+    expect(QUERY_OPTION_KEYS).toHaveLength(12)
     // onUserDialog / supportedDialogKinds は載せない (AD-053 Decision 4)。
     expect(QUERY_OPTION_KEYS as readonly string[]).not.toContain('onUserDialog')
     expect(QUERY_OPTION_KEYS as readonly string[]).not.toContain('supportedDialogKinds')
@@ -222,10 +222,58 @@ describe('buildQueryOptions (X-4 / AD-041)', () => {
         'onElicitation',
         'pathToClaudeCodeExecutable',
         'permissionMode',
+        'resume',
         'settings',
         'spawnClaudeCodeProcess'
       ].sort()
     )
+    // forkSession / sessionId / resumeSessionAt / continue は足さない (AD-059 Decision 1)。
+    for (const key of ['forkSession', 'sessionId', 'resumeSessionAt', 'continue']) {
+      expect(QUERY_OPTION_KEYS as readonly string[]).not.toContain(key)
+    }
+  })
+
+  const CONVERSATION_ID = '123e4567-e89b-42d3-a456-426614174000'
+
+  it('resume を持たない起動では options に resume のキーが無い', () => {
+    const options = buildQueryOptions({ ...base, permissionMode: 'default' })
+    expect(Object.prototype.hasOwnProperty.call(options, 'resume')).toBe(false)
+  })
+
+  it('正しい UUID の resume は options に載り、キーは許可リストの中に収まる', () => {
+    const options = buildQueryOptions({
+      ...base,
+      permissionMode: 'default',
+      resume: CONVERSATION_ID
+    })
+    expect(options.resume).toBe(CONVERSATION_ID)
+    for (const key of Object.keys(options)) {
+      expect(QUERY_OPTION_KEYS as readonly string[]).toContain(key)
+    }
+  })
+
+  it.each(['', '-x', 'a b', `x${CONVERSATION_ID}`, `${CONVERSATION_ID}x`, '--resume'])(
+    'UUID の形でない resume (%j) は throw する (値はメッセージに入らない)',
+    (bad) => {
+      let message = ''
+      try {
+        buildQueryOptions({ ...base, permissionMode: 'default', resume: bad })
+      } catch (e) {
+        message = (e as Error).message
+      }
+      expect(message).toMatch(/AD-059/)
+      if (bad.length > 2) expect(message).not.toContain(bad)
+    }
+  )
+
+  it('安全 3 値の assert は resume の有無で変わらない', () => {
+    for (const resume of [undefined, CONVERSATION_ID]) {
+      for (const mode of ['acceptEdits', 'auto', 'bypass' + 'Permissions']) {
+        expect(() => buildQueryOptions({ ...base, permissionMode: mode as never, resume })).toThrow(
+          /AD-041/
+        )
+      }
+    }
   })
 
   it('includeHookEvents / forwardSubagentText はどの起動の入力でも true (O-11 / AD-054 Decision 4)', () => {

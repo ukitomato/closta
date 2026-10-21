@@ -240,8 +240,8 @@ describe('boundDecisionScope (scope 上限。FR-012 / H-04 / SC-004)', () => {
 })
 
 describe('isLaunchFailureReason', () => {
-  it('18 種の起動とターンの失敗理由を受理し、それ以外を拒否 (X-5 で supervisor-exited、O-4 で 8 種)', () => {
-    expect(LAUNCH_FAILURE_REASONS).toHaveLength(18)
+  it('19 種の起動とターンの失敗理由を受理し、それ以外を拒否 (X-5 で supervisor-exited、O-4 で 8 種、X-9 で resume-failed。集合を変えるには ADR が要る: AD-059)', () => {
+    expect(LAUNCH_FAILURE_REASONS).toHaveLength(19)
     expect([...LAUNCH_FAILURE_REASONS].sort()).toEqual(
       [
         'distro-not-running',
@@ -261,7 +261,8 @@ describe('isLaunchFailureReason', () => {
         'auth-failed',
         'billing',
         'rate-limited',
-        'api-error'
+        'api-error',
+        'resume-failed'
       ].sort()
     )
     for (const reason of LAUNCH_FAILURE_REASONS) {

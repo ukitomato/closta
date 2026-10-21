@@ -70,7 +70,7 @@ spec_id（`001-runtime-...`）とは独立させる。差し込み作業で番�
 | O-11 | Hook・背景の task・実行中の subagent の表示 (一般の Hook と `includeHookEvents`・背景の task の一覧・後から背景に移った task・実行中の subagent の入れ子と過去ログの subagent。O-6 の design で分け、O-11 の design で Tier B を O-12 に送った。[AD-049](../decisions/0049-boundaries-retraction-and-o11-split.md) Decision 1 / [AD-056](../decisions/0056-o11-scope-background-task-list-and-o12-split.md) Decision 1) | `ui` | M3 |
 | O-12 | 知らせの類・Checkpoints・中身のブロックの表示 (Tier B の知らせの類・`files_persisted`・`user/document` の File element・`server_tool_use` / `web_search_tool_result`・対応表の B 節の機械照合・過去ログへの O-6 / O-10 の行の変換。O-11 の design で分けた。[AD-056](../decisions/0056-o11-scope-background-task-list-and-o12-split.md) Decision 1) | `ui` | M3 (完了の条件に数えない) |
 | X-8 | Win32Runtime の直接起動 (Windows の作業フォルダでホストの `claude` を起動する。X-6 から切り出した。2026-10-19 に利用者が承認。マージ済み: 020 / [AD-058](../decisions/0058-win32-direct-launch-contract-and-process-tree-stop.md)。V-1 / V-3 (AD-058 の Confirmation・SC-001 / SC-004 の実機の計測) は未実施で、利用者の実機に残る) | `session` | M3 (O-12 の前。完了の条件に数えない) |
-| X-9 | セッションの再開 (resume と失敗したセッションの再開。fork は X-6 に残す。X-6 から切り出した。2026-10-19 に利用者が承認) | `session` | M3 (O-12 の前。完了の条件に数えない) |
+| X-9 | セッションの再開 (resume と失敗したセッションの再開。fork は X-6 に残す。X-6 から切り出した。2026-10-19 に利用者が承認。完了: 021 / [AD-059](../decisions/0059-session-resume-query-option-and-conversation-id.md)) | `session` | M3 (O-12 の前。完了の条件に数えない) |
 | I-1 | `DockerRuntime` と endpoint 抽象 + `sessionStore` ミラー | `isolation` | M4 |
 | I-2 | コンテナライフサイクルと隔離可視化 | `isolation` | M4 |
 | I-3 | sandbox capability 判定と権限モードのゲート | `isolation` | M4 |

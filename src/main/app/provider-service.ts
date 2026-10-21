@@ -110,6 +110,8 @@ export interface ProviderService {
   deriveEnv(providerId: string, runtimeId: string): Promise<DerivedLaunchEnv | null>
   /** 選択ランタイムから見た Provider の事実 (依存解決の facts。X-4 FR-006)。未知ランタイムは空。 */
   providerFacts(runtimeId: string): Promise<readonly ProviderFact[]>
+  /** 登録済み Provider の現在値 (再開が過去の行の config ディレクトリから Provider を引くのに使う。X-9)。 */
+  snapshotProfiles(): Promise<readonly ProviderProfile[]>
 }
 
 export function createProviderService(deps: ProviderServiceDeps): ProviderService {
@@ -365,6 +367,11 @@ export function createProviderService(deps: ProviderServiceDeps): ProviderServic
         reachable: assessReachability(p, runtime, isTransportForbiddenKey) === 'reachable',
         models: p.models.models
       }))
+    },
+
+    async snapshotProfiles() {
+      await ensureLoaded()
+      return profiles
     }
   }
 }

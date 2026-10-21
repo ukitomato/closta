@@ -59,6 +59,8 @@ export type LaunchFailureReason =
   | 'rate-limited'
   /** API がエラーを返した (上のどれにも当たらない HTTP の状態。O-4)。 */
   | 'api-error'
+  /** 再開の起動で最初の `init` の前に終わった、または再開した会話の権限モードが安全 3 値の外 (X-9 / AD-059 Decision 3)。 */
+  | 'resume-failed'
 
 export const LAUNCH_FAILURE_REASONS = [
   'distro-not-running',
@@ -78,7 +80,8 @@ export const LAUNCH_FAILURE_REASONS = [
   'auth-failed',
   'billing',
   'rate-limited',
-  'api-error'
+  'api-error',
+  'resume-failed'
 ] as const satisfies readonly LaunchFailureReason[]
 
 export function isLaunchFailureReason(value: unknown): value is LaunchFailureReason {
@@ -128,6 +131,8 @@ export interface LaunchQueryOptions {
   readonly effort?: EffortLevel
   /** helper 委譲の 2 キー射影 (AD-040)。 */
   readonly settings?: HelperSettings
+  /** 再開する会話の id (X-9 / AD-059)。新しい起動では持たない。UUID の形は境界で検査する。 */
+  readonly resume?: string
 }
 
 /**

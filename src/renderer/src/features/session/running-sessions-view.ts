@@ -3,6 +3,7 @@ import { createContext, useContext } from 'react'
 import type { AutoModeStatus } from '@domain/runtime/capabilities'
 import type { SessionLaunchConfig } from '@domain/session/launch-config'
 import type { LaunchOrigin } from '@domain/session/launch-usage'
+import type { SessionResumeRequest } from '@domain/session/resume'
 import type { FolderListDTO } from '@domain/workspace/dto'
 
 import type { LiveSession } from './useLiveSession'
@@ -39,6 +40,11 @@ export interface RunningSessionsView {
    * 起動元 (O-3 / 012 data-model §4「renderer の起動元」) で、ストアの `launch` を通って capability に届く。
    */
   readonly launch: (config: SessionLaunchConfig, origin: LaunchOrigin) => Promise<void>
+  /**
+   * 再開の形の起動ダイアログの起動 (X-9 / data-model §9.4)。受け付けは新しい行を選んでダイアログを閉じ (シェル)、
+   * `already-running` はその行を選んでダイアログを閉じ、`rejected` は理由を出して開いたままにする。
+   */
+  readonly resume: (request: SessionResumeRequest, origin: LaunchOrigin) => Promise<void>
 }
 
 export const RunningSessionsViewContext = createContext<RunningSessionsView | null>(null)

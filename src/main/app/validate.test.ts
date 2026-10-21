@@ -20,6 +20,8 @@ import {
   MAX_PATH_VALUE_LENGTH,
   checkBeginBrowseLocation,
   checkFolderDraft,
+  checkPastResumeQuery,
+  checkResumeRequest,
   checkProviderDraft as checkProviderDraftWith,
   checkProviderPatch as checkProviderPatchWith,
   findRuntime,
@@ -397,6 +399,66 @@ describe('isKnownTargetKey — 節 A 「targetKey」の行', () => {
 
   it('既知の集合が空なら何も通さない', () => {
     expect(isKnownTargetKey([], 'host#0')).toBe(false)
+  })
+})
+
+describe('checkResumeRequest / checkPastResumeQuery (X-9 / data-model §2.1)', () => {
+  const keys = ['host#0', 'wsl:Ubuntu#0']
+  const ID = '11111111-2222-4333-8444-555555555555'
+  const config = {
+    folderId: 'f1',
+    runtimeId: 'host',
+    providerId: null,
+    modelId: null,
+    effort: null,
+    permissionMode: 'default'
+  }
+  const live = { kind: 'live', sessionId: ID }
+  const past = { kind: 'past', targetKey: 'host#0', conversationId: ID }
+
+  it('live / past の正例を通す', () => {
+    expect(checkResumeRequest({ source: live, config }, keys)).toBe(true)
+    expect(checkResumeRequest({ source: past, config }, keys)).toBe(true)
+  })
+
+  it('不正な形をすべて拒否する', () => {
+    const bad: unknown[] = [
+      null,
+      [],
+      'x',
+      { config },
+      { source: null, config },
+      { source: {}, config },
+      { source: { kind: 'other' }, config },
+      { source: { ...live, sessionId: 'not-a-uuid' }, config },
+      { source: { ...live, extra: 1 }, config },
+      { source: { ...past, targetKey: 'unknown#9' }, config },
+      { source: { ...past, conversationId: '' }, config },
+      { source: { ...past, conversationId: '--resume' }, config },
+      { source: { ...past, conversationId: `${ID} x` }, config },
+      { source: { ...past, conversationId: `x${ID}` }, config },
+      { source: { ...past, conversationId: `${ID}x` }, config },
+      { source: { ...past, extra: 1 }, config },
+      { source: live, config, extra: 1 },
+      { source: live, config: { ...config, permissionMode: 'bypassPermissions' } },
+      { source: live, config: { ...config, extra: 1 } }
+    ]
+    for (const value of bad) expect(checkResumeRequest(value, keys)).toBe(false)
+  })
+
+  it('checkPastResumeQuery は外れで source-unknown', () => {
+    expect(checkPastResumeQuery('host#0', ID, keys)).toEqual({ ok: true })
+    for (const [targetKey, id] of [
+      ['unknown#9', ID],
+      ['host#0', 'nope'],
+      [1, ID],
+      ['host#0', null]
+    ] as const) {
+      expect(checkPastResumeQuery(targetKey, id, keys)).toEqual({
+        ok: false,
+        reason: 'source-unknown'
+      })
+    }
   })
 })
 
