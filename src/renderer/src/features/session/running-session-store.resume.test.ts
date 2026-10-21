@@ -124,7 +124,9 @@ describe('running-session-store — 再開 (FE-010)', () => {
   it('replaces があれば元の行が消え、previousFailure が立たず、order の長さが変わらない', async () => {
     const h = harness()
     await h.store.launch(cfg())
-    h.pushStatus([{ sessionId: A, state: 'error', reasonKey: 'process-crashed', claudeAlive: false }])
+    h.pushStatus([
+      { sessionId: A, state: 'error', reasonKey: 'process-crashed', claudeAlive: false }
+    ])
     h.store.openResume({
       source: { kind: 'live', sessionId: A },
       fixed: { folderId: 'f1', runtimeId: 'wsl:Ubuntu', providerId: null },
@@ -153,7 +155,9 @@ describe('running-session-store — 再開 (FE-010)', () => {
     await h.store.launch(cfg('f2'))
     vi.mocked(h.cap.launchSession).mockResolvedValueOnce({ status: 'launching', sessionId: B })
     await h.store.launch(cfg('f3'))
-    h.pushStatus([{ sessionId: A, state: 'error', reasonKey: 'process-crashed', claudeAlive: false }])
+    h.pushStatus([
+      { sessionId: A, state: 'error', reasonKey: 'process-crashed', claudeAlive: false }
+    ])
     const seq = h.store.getState().selectionSeq
     h.store.replace(A, B)
     const state = h.store.getState()
@@ -166,7 +170,10 @@ describe('running-session-store — 再開 (FE-010)', () => {
   it('already-running は返った行を選び、元の行を残す', async () => {
     const h = harness()
     await h.store.launch(cfg())
-    vi.mocked(h.cap.resumeSession).mockResolvedValueOnce({ status: 'already-running', sessionId: A })
+    vi.mocked(h.cap.resumeSession).mockResolvedValueOnce({
+      status: 'already-running',
+      sessionId: A
+    })
     const outcome = await h.store.resume(request(), null, 'manual')
     expect(outcome).toBe('already-running')
     expect(h.store.getState().selectedId).toBe(A)

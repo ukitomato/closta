@@ -132,7 +132,9 @@ describe('encodeSupervisorEvent / decodeSupervisorEventForMain', () => {
       { sessionId: ID, conversationId: 42 },
       { sessionId: ID }
     ]) {
-      expect(decodeSupervisorEventForMain(JSON.stringify({ kind: 'conversation', ...bad }))).toBeNull()
+      expect(
+        decodeSupervisorEventForMain(JSON.stringify({ kind: 'conversation', ...bad }))
+      ).toBeNull()
     }
   })
 })

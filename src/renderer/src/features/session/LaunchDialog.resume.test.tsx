@@ -197,7 +197,9 @@ describe('LaunchDialog — 再開の形 (X-9 FE-011)', () => {
   it('rejected は理由を出し、ダイアログは開いたまま (再開するが押せる)', async () => {
     install()
     render(
-      <LaunchDialog session={fakeSession({ phase: 'rejected', rejectReason: 'provider-missing' })} />
+      <LaunchDialog
+        session={fakeSession({ phase: 'rejected', rejectReason: 'provider-missing' })}
+      />
     )
     expect((await screen.findByRole('alert')).textContent).toContain(
       RESUME_UNAVAILABLE_LABELS['provider-missing']
@@ -224,9 +226,9 @@ describe('LaunchDialog — 再開の形 (X-9 FE-011)', () => {
     expect(container.innerHTML).not.toContain(CONVERSATION_ID)
     expect(container.innerHTML).not.toContain('target-1')
     expect(container.innerHTML).not.toContain('/home/u')
-    expect((await axe(container, { rules: { 'color-contrast': { enabled: false } } })).violations).toEqual(
-      []
-    )
+    expect(
+      (await axe(container, { rules: { 'color-contrast': { enabled: false } } })).violations
+    ).toEqual([])
   })
 })
 
@@ -313,7 +315,9 @@ describe('LaunchDialog — 再開の形の初期値とプリセット (X-9 FE-03
     install()
     const session = fakeSession()
     render(<LaunchDialog session={session} />)
-    await waitFor(() => expect(within(model()).getByRole('option', { name: 'Sonnet' })).toBeTruthy())
+    await waitFor(() =>
+      expect(within(model()).getByRole('option', { name: 'Sonnet' })).toBeTruthy()
+    )
     fireEvent.change(model(), { target: { value: 'sonnet' } })
     await clickResume()
     expect(session.resumeSession).toHaveBeenCalledWith(
@@ -351,7 +355,9 @@ describe('LaunchDialog — 再開の形の初期値とプリセット (X-9 FE-03
     render(<LaunchDialog session={fakeSession()} />)
     fireEvent.change(await screen.findByTestId('preset-name'), { target: { value: '保存' } })
     await waitFor(() =>
-      expect((screen.getByRole('button', { name: '保存' }) as HTMLButtonElement).disabled).toBe(false)
+      expect((screen.getByRole('button', { name: '保存' }) as HTMLButtonElement).disabled).toBe(
+        false
+      )
     )
     fireEvent.click(screen.getByRole('button', { name: '保存' }))
     await waitFor(() => expect(savePreset).toHaveBeenCalledTimes(1))
@@ -403,10 +409,15 @@ describe('LaunchDialog — 再開の形の初期値とプリセット (X-9 FE-03
     it('依存解決の自動の reset だけでは手で変えたに数えない (初期値の起動元のまま)', async () => {
       install()
       const session = fakeSession({
-        resume: liveState({ modelId: 'removed-model', effort: null, permissionMode: 'default' }, 'preset')
+        resume: liveState(
+          { modelId: 'removed-model', effort: null, permissionMode: 'default' },
+          'preset'
+        )
       })
       render(<LaunchDialog session={session} />)
-      await waitFor(() => expect(screen.getByRole('status', { name: '既定に戻した軸' })).toBeTruthy())
+      await waitFor(() =>
+        expect(screen.getByRole('status', { name: '既定に戻した軸' })).toBeTruthy()
+      )
       await clickResume()
       expect(session.resumeSession).toHaveBeenCalledWith(expect.anything(), 'preset')
     })

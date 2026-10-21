@@ -4,7 +4,12 @@ import { fixedCapabilities } from '@domain/runtime/capabilities'
 import type { RuntimeDescriptor, WslRuntimeDescriptor } from '@domain/runtime/descriptor'
 import { wslNamespace, type WslNamespaceId } from '@domain/runtime/namespace'
 import { makePathMapping } from '@domain/runtime/path-mapping'
-import { makeHostPath, makeRuntimePath, type HostPath, type RuntimePath } from '@domain/runtime/path-types'
+import {
+  makeHostPath,
+  makeRuntimePath,
+  type HostPath,
+  type RuntimePath
+} from '@domain/runtime/path-types'
 import type { ProviderProfile } from '@domain/provider/types'
 import type { FolderRuntimeResolutionDTO } from '@domain/workspace/dto'
 import { createWin32 } from '@domain/workspace/__fixtures__/runtime'
@@ -125,7 +130,10 @@ function resolverOf(table: Record<string, FolderRuntimeResolutionDTO>): ResolveF
   return (input: ResolveInput) => table[input.folder.id] ?? UNREACHABLE
 }
 
-function targetOf(location: Location, configDir: EnumerationTarget['configDir']): EnumerationTarget {
+function targetOf(
+  location: Location,
+  configDir: EnumerationTarget['configDir']
+): EnumerationTarget {
   return { key: 'k#0', location, configDir, origin: 'default', label: 'u' }
 }
 
@@ -324,10 +332,7 @@ describe('resolvePastResumeAxes: 段 1b (出自の一致)', () => {
   it.each<[string, CwdOrigin]>([
     ['absent', { kind: 'absent' }],
     ['unknown-location', { kind: 'unknown-location', display: '/x' }],
-    [
-      'undetected-distro',
-      { kind: 'undetected-distro', distroName: 'Fedora', display: 'Fedora:/x' }
-    ]
+    ['undetected-distro', { kind: 'undetected-distro', distroName: 'Fedora', display: 'Fedora:/x' }]
   ])('出自が %s は段 1b を素通りして段 2 の理由 (location-unknown) になる', (_k, origin) => {
     expect(resolvePastResumeAxes(input({ origin }))).toEqual({
       ok: false,
@@ -369,7 +374,9 @@ describe('resolvePastResumeAxes: 段 3 (Provider)', () => {
   it('候補が 2 つなら provider-ambiguous', () => {
     expect(
       resolvePastResumeAxes(
-        input({ providers: [provider('p1', HOST_CONFIG), provider('p2', HOST_CONFIG, 'in-app-login')] })
+        input({
+          providers: [provider('p1', HOST_CONFIG), provider('p2', HOST_CONFIG, 'in-app-login')]
+        })
       )
     ).toEqual({ ok: false, reason: 'provider-ambiguous' })
   })

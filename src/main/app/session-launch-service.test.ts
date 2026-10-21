@@ -501,7 +501,10 @@ describe('会話の id の保持 (X-9 / BE-006 / AD-059)', () => {
 describe('再開の起動 (X-9 / BE-013 / data-model §5)', () => {
   const CONV = '22222222-2222-4222-8222-222222222222'
   const CONV2 = '33333333-3333-4333-8333-333333333333'
-  const resolved = (conversationId = CONV, targetKey: string | null = 'host#0'): ResolvedResume => ({
+  const resolved = (
+    conversationId = CONV,
+    targetKey: string | null = 'host#0'
+  ): ResolvedResume => ({
     conversationId,
     folderId: 'f1',
     runtimeId: 'r1',
@@ -618,9 +621,7 @@ describe('再開の起動 (X-9 / BE-013 / data-model §5)', () => {
     let n = 0
     const s = setup(async () => {
       n += 1
-      return n === 1
-        ? okPrep()
-        : { ok: true, input: fakeInput, spec: WIN32_LAUNCH_SPEC_FIXTURE }
+      return n === 1 ? okPrep() : { ok: true, input: fakeInput, spec: WIN32_LAUNCH_SPEC_FIXTURE }
     })
     await s.service.resume(cfg(), resolved(CONV))
     await s.service.resume(cfg(), resolved(CONV2))
@@ -683,7 +684,12 @@ describe('引き継ぐ軸が消えたときの拒否 (X-9 / BE-030 / FR-008)', (
     ['ディストロ停止', { ok: false, reason: 'distro-not-running' }],
     ['Win32 の claude 不在', { ok: false, reason: 'claude-not-found' }]
   ]
-  const EXPECTED = ['unknown-target', 'provider-unavailable', 'distro-not-running', 'claude-not-found']
+  const EXPECTED = [
+    'unknown-target',
+    'provider-unavailable',
+    'distro-not-running',
+    'claude-not-found'
+  ]
 
   it.each(GONE.map((g, i) => [g[0], g[1], EXPECTED[i]] as const))(
     '稼働中の行: %s は今の理由で拒否され、元の行のレコードが残る。答えに別の軸の候補が無い',

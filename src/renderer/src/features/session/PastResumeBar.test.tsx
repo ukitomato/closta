@@ -87,13 +87,16 @@ describe('PastResumeBar (X-9 FE-012)', () => {
     })
   })
 
-  it.each(RESUME_UNAVAILABLE_REASONS)('%s: 押せない「再開」と理由の文言が aria-describedby で結ばれる', async (reason) => {
-    mount(async () => ({ ok: false, reason }))
-    const text = await screen.findByTestId('past-resume-reason')
-    expect(text.textContent).toBe(RESUME_UNAVAILABLE_LABELS[reason])
-    expect(resumeButton().disabled).toBe(true)
-    expect(resumeButton().getAttribute('aria-describedby')).toBe(text.id)
-  })
+  it.each(RESUME_UNAVAILABLE_REASONS)(
+    '%s: 押せない「再開」と理由の文言が aria-describedby で結ばれる',
+    async (reason) => {
+      mount(async () => ({ ok: false, reason }))
+      const text = await screen.findByTestId('past-resume-reason')
+      expect(text.textContent).toBe(RESUME_UNAVAILABLE_LABELS[reason])
+      expect(resumeButton().disabled).toBe(true)
+      expect(resumeButton().getAttribute('aria-describedby')).toBe(text.id)
+    }
+  )
 
   it('folder-unregistered だけ登録の導線を出し、押すと登録の初期値を積む', async () => {
     mount(async () => ({ ok: false, reason: 'folder-unregistered' }), { registerSeed: SEED })
@@ -152,8 +155,8 @@ describe('PastResumeBar (X-9 FE-012)', () => {
     })
     await screen.findByTestId('past-resume-reason')
     expect(container.innerHTML).not.toContain(CONVERSATION_A)
-    expect((await axe(container, { rules: { 'color-contrast': { enabled: false } } })).violations).toEqual(
-      []
-    )
+    expect(
+      (await axe(container, { rules: { 'color-contrast': { enabled: false } } })).violations
+    ).toEqual([])
   })
 })

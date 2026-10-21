@@ -36,7 +36,13 @@ describe('resumeActionFor (§9.1 の稼働中の区画の表)', () => {
   ): Parameters<typeof resumeActionFor>[0] => ({ runState, ended, resumable })
 
   it('動いている・中断済み・承認待ち・応答待ち (claudeAlive) は何も出さない', () => {
-    for (const state of ['launching', 'running', 'interrupted', 'awaiting_permission', 'done'] as const) {
+    for (const state of [
+      'launching',
+      'running',
+      'interrupted',
+      'awaiting_permission',
+      'done'
+    ] as const) {
       expect(resumeActionFor(row(state, false, true))).toBeNull()
       expect(resumeActionFor(row(state, false, false))).toBeNull()
     }
@@ -227,7 +233,9 @@ describe('稼働中の行の「再開」「やり直す」 (US-2 AC1〜AC4)', ()
     const row = await rowA()
     expect(within(row).queryByRole('button', { name: RESUME_LABELS.action })).toBeNull()
     expect(within(row).queryByRole('button', { name: RESUME_LABELS.retry })).toBeNull()
-    expect(within(screen.getByRole('status')).queryByRole('button', { name: RESUME_LABELS.retry })).toBeNull()
+    expect(
+      within(screen.getByRole('status')).queryByRole('button', { name: RESUME_LABELS.retry })
+    ).toBeNull()
     expect(useUiStore.getState().launchOpen).toBe(false)
   })
 
@@ -258,9 +266,11 @@ describe('稼働中の行の「再開」「やり直す」 (US-2 AC1〜AC4)', ()
 
   it('失敗で会話の id あり: 「再開」が出る (「やり直す」は出ない)', async () => {
     const h = await setup()
-    act(() => h.store.setState((s) => ({
-      sessions: { ...s.sessions, [A]: { ...s.sessions[A]!, resumable: true } }
-    })))
+    act(() =>
+      h.store.setState((s) => ({
+        sessions: { ...s.sessions, [A]: { ...s.sessions[A]!, resumable: true } }
+      }))
+    )
     h.push([status({ state: 'error', reasonKey: 'resume-failed' })])
     const row = await rowA()
     expect(within(row).getByRole('button', { name: RESUME_LABELS.action })).toBeInTheDocument()
@@ -277,9 +287,11 @@ describe('稼働中の行の「再開」「やり直す」 (US-2 AC1〜AC4)', ()
 
   it('vitest-axe: 操作を出した状態で違反 0', async () => {
     const h = await setup()
-    act(() => h.store.setState((s) => ({
-      sessions: { ...s.sessions, [A]: { ...s.sessions[A]!, resumable: true } }
-    })))
+    act(() =>
+      h.store.setState((s) => ({
+        sessions: { ...s.sessions, [A]: { ...s.sessions[A]!, resumable: true } }
+      }))
+    )
     h.push([status({})])
     await rowA()
     expect((await axe(h.container, AXE_RULES)).violations).toEqual([])

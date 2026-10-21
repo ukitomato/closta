@@ -962,13 +962,7 @@ async function run(
       if (terminated) break
     }
     // 再開の起動で `init` の前に stream が例外なく終わった (経路 C。data-model §6.4)。新しい起動の終わり方は変えない。
-    if (
-      launchOptions.resume !== undefined &&
-      !sawInit &&
-      !terminated &&
-      !closing &&
-      !isErrored()
-    ) {
+    if (launchOptions.resume !== undefined && !sawInit && !terminated && !closing && !isErrored()) {
       fail('resume-failed')
     }
   } catch {

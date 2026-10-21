@@ -269,9 +269,9 @@ describe('buildQueryOptions (X-4 / AD-041)', () => {
   it('安全 3 値の assert は resume の有無で変わらない', () => {
     for (const resume of [undefined, CONVERSATION_ID]) {
       for (const mode of ['acceptEdits', 'auto', 'bypass' + 'Permissions']) {
-        expect(() =>
-          buildQueryOptions({ ...base, permissionMode: mode as never, resume })
-        ).toThrow(/AD-041/)
+        expect(() => buildQueryOptions({ ...base, permissionMode: mode as never, resume })).toThrow(
+          /AD-041/
+        )
       }
     }
   })

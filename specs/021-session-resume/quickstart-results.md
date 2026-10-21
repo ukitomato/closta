@@ -15,6 +15,7 @@
 | rule fixture の照合 (`scripts/rules/run.mjs`) | exit 0 (main が 2026-10-21 に実行) |
 | ビルド (`pnpm build`) | exit 0 (main) |
 | E2E 全件 (main が実行) | 21 tests: 20 passed / 1 failed。落ちたのは `e2e/composer-screenshot.spec.ts:28` のみ (基準画像の本機の揺れ。main でも同じく落ちる既知の状態で、020 の quickstart-results に記録済み。基準画像はこの PR では更新しない)。`e2e/session-resume.spec.ts` は通過 |
+| E2E 全件 (pr-gate 後に枝で再ビルドして実行、2026-10-22) | 21 tests: 19 passed / 2 failed。落ちたのは `e2e/composer-screenshot.spec.ts:28` と `e2e/sidebar-screenshot.spec.ts:54` (ウィンドウ寸法が 1000x640 でなく 1001x642 になる本機の揺れ。020 で記録済みの既知の 2 件)。`e2e/session-resume.spec.ts` は通過 |
 | 境界の差分 | `QUERY_OPTION_KEYS` 12 / `LAUNCH_FAILURE_REASONS` 19 をテストが固定。ログに会話の id の値を出す箇所は無い (新設の 4 ファイルに log 呼び出し 0。変更側は固定文字列 `conversation-id-changed` のみ) |
 
 ## 実機の確認

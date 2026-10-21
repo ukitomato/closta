@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { SESSION_PORT_MESSAGE, TRANSCRIPT_PORT_MESSAGE, type ClostaCapability } from '@domain/capability'
+import {
+  SESSION_PORT_MESSAGE,
+  TRANSCRIPT_PORT_MESSAGE,
+  type ClostaCapability
+} from '@domain/capability'
 import type { SessionEvent } from '@domain/session/agent-session'
 import type { SessionLaunchConfig } from '@domain/session/launch-config'
 import type { SessionResumeRequest } from '@domain/session/resume'
@@ -132,13 +136,19 @@ describe('running-session-store — それまでの会話 (FE-040)', () => {
   it('0 件 (handshake empty) は区切りの行だけ', async () => {
     const h = harness((token) => Promise.resolve({ status: 'empty', requestToken: token }))
     await h.store.resume(REQUEST, null, 'manual')
-    await vi.waitFor(() => expect(h.store.getState().sessions[B]?.resumed).toEqual({ phase: 'loaded' }))
+    await vi.waitFor(() =>
+      expect(h.store.getState().sessions[B]?.resumed).toEqual({ phase: 'loaded' })
+    )
     expect(textsOf(h.store)).toEqual(['resumed:divider'])
   })
 
   it('読み取りの失敗 (handshake failed・reject・port の error) で失敗の 1 行が先頭に入り、再開は止まらない', async () => {
     const failed = harness((token) =>
-      Promise.resolve({ status: 'failed', requestToken: token, reasonKey: 'transcript-read-failed' })
+      Promise.resolve({
+        status: 'failed',
+        requestToken: token,
+        reasonKey: 'transcript-read-failed'
+      })
     )
     await failed.store.resume(REQUEST, null, 'manual')
     await vi.waitFor(() =>
@@ -155,12 +165,18 @@ describe('running-session-store — それまでの会話 (FE-040)', () => {
     )
     detach?.()
 
-    const streaming = harness((token) => Promise.resolve({ status: 'streaming', requestToken: token }))
+    const streaming = harness((token) =>
+      Promise.resolve({ status: 'streaming', requestToken: token })
+    )
     await streaming.store.resume(REQUEST, null, 'manual')
     const port = fakePort()
     deliver({ marker: TRANSCRIPT_PORT_MESSAGE, requestToken: streaming.tokenOf() }, port)
     port.onmessage?.({
-      data: { kind: 'error', requestToken: streaming.tokenOf(), reasonKey: 'transcript-read-failed' }
+      data: {
+        kind: 'error',
+        requestToken: streaming.tokenOf(),
+        reasonKey: 'transcript-read-failed'
+      }
     })
     expect(streaming.store.getState().sessions[B]?.resumed).toEqual({ phase: 'failed' })
   })

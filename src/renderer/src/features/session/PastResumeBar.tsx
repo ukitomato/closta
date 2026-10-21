@@ -21,8 +21,7 @@ import { useRunningSessionStoreApi } from './running-session-context'
  */
 
 type Answer =
-  | { readonly status: 'loading' }
-  | { readonly status: 'ready'; readonly result: PastResumeDTO }
+  { readonly status: 'loading' } | { readonly status: 'ready'; readonly result: PastResumeDTO }
 
 export function PastResumeBar({
   targetKey,
@@ -45,8 +44,7 @@ export function PastResumeBar({
 
   useEffect(() => {
     let cancelled = false
-    window[CAPABILITY_KEY]
-      .resolvePastResume(targetKey, conversationId)
+    window[CAPABILITY_KEY].resolvePastResume(targetKey, conversationId)
       .then((result) => {
         if (!cancelled) setAnswer({ key, value: { status: 'ready', result } })
       })
@@ -63,7 +61,8 @@ export function PastResumeBar({
   }, [key, targetKey, conversationId])
 
   // 選び直した直後は、前の行の答えを出さず取得中として描く。
-  const current: Answer = answer !== null && answer.key === key ? answer.value : { status: 'loading' }
+  const current: Answer =
+    answer !== null && answer.key === key ? answer.value : { status: 'loading' }
   const result = current.status === 'ready' ? current.result : null
   const reason = result !== null && !result.ok ? result.reason : null
 
@@ -100,12 +99,21 @@ export function PastResumeBar({
         {RESUME_LABELS.action}
       </Button>
       {reason !== null && (
-        <p id={reasonId} className="text-muted-foreground flex-1 text-sm" data-testid="past-resume-reason">
+        <p
+          id={reasonId}
+          className="text-muted-foreground flex-1 text-sm"
+          data-testid="past-resume-reason"
+        >
           {RESUME_UNAVAILABLE_LABELS[reason]}
         </p>
       )}
       {reason === 'folder-unregistered' && registerSeed !== null && (
-        <Button type="button" variant="outline" size="sm" onClick={() => seedFolderDraft(registerSeed)}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => seedFolderDraft(registerSeed)}
+        >
           作業フォルダとして登録
         </Button>
       )}

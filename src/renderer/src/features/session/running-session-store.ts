@@ -651,7 +651,10 @@ export function createRunningSessionStore(
    * 読み取りの結果 (`null` は失敗) を再開した行の `messages` の先頭に入れる。token が合わない・行が無い・もう読み終えた
    * ときは何もしない。新しいメッセージが先に届いていても先頭に入れる (並びは記録の順)。
    */
-  const applyResumed = (token: string, transcript: readonly TranscriptMessageDTO[] | null): void => {
+  const applyResumed = (
+    token: string,
+    transcript: readonly TranscriptMessageDTO[] | null
+  ): void => {
     const sessionId = resumedLoads.get(token)
     if (sessionId === undefined) return
     resumedLoads.delete(token)
@@ -813,7 +816,9 @@ export function createRunningSessionStore(
       }))
       const reject = (reason: LaunchRejectReason): 'rejected' => {
         dropOrphanPorts()
-        store.setState((s) => ({ launch: { ...s.launch, phase: 'rejected', rejectReason: reason } }))
+        store.setState((s) => ({
+          launch: { ...s.launch, phase: 'rejected', rejectReason: reason }
+        }))
         return 'rejected'
       }
       let handshake: Awaited<ReturnType<ClostaCapability['resumeSession']>>
@@ -875,7 +880,9 @@ export function createRunningSessionStore(
         delete activity[oldSessionId]
         delete meters[oldSessionId]
         return {
-          order: s.order.filter((id) => id !== newSessionId).map((id) => (id === oldSessionId ? newSessionId : id)),
+          order: s.order
+            .filter((id) => id !== newSessionId)
+            .map((id) => (id === oldSessionId ? newSessionId : id)),
           sessions,
           statuses,
           statusSince,
@@ -915,7 +922,13 @@ export function createRunningSessionStore(
         return
       // 起動せずに閉じたら、再開の形も戻す (次に開くときは新規起動の形)。
       store.setState({
-        launch: { ...launch, phase: 'entry', rejectReason: null, previousFailure: null, resume: null }
+        launch: {
+          ...launch,
+          phase: 'entry',
+          rejectReason: null,
+          previousFailure: null,
+          resume: null
+        }
       })
     },
 

@@ -144,9 +144,7 @@ export function encodeSupervisorEvent(event: SupervisorEvent): string {
  * `event` (標準入出力経路の本文行) は main では受け付けない — Electron 経路では作られない行であり、来たら捨てる。
  * 状態通知の形の検証は main の受信規則 (`acceptBatch`) が行うので、ここでは配列であることだけを確かめる。
  */
-export function decodeSupervisorEventForMain(
-  line: string
-):
+export function decodeSupervisorEventForMain(line: string):
   | { readonly kind: 'status-batch'; readonly updates: readonly unknown[] }
   | { readonly kind: 'thread-ended'; readonly sessionId: string }
   | {

@@ -38,11 +38,7 @@ import {
 import { LaunchDialog, type LaunchSource } from './LaunchDialog'
 import { resumeActionFor, useRowActionRunner, type RowResumeAction } from './resume-action'
 import { useRunningSessionStore, useRunningSessionStoreApi } from './running-session-context'
-import {
-  RESUMED_ID_PREFIX,
-  slashCommandEntries,
-  type SessionQueue
-} from './running-session-store'
+import { RESUMED_ID_PREFIX, slashCommandEntries, type SessionQueue } from './running-session-store'
 import { useRunningSessionsView } from './running-sessions-view'
 import { MESSAGE_WINDOW } from './session-view'
 import type { LiveSession } from './useLiveSession'
@@ -320,7 +316,11 @@ function LiveSessionPane({
  * 本文が空なら null。
  */
 function refusedUserText(
-  messages: readonly { readonly id?: string | undefined; readonly role: string; readonly content: unknown }[],
+  messages: readonly {
+    readonly id?: string | undefined
+    readonly role: string
+    readonly content: unknown
+  }[],
   rowId: string
 ): string | null {
   const at = messages.findIndex((m) => m.id === rowId)

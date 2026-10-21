@@ -11,11 +11,7 @@ import { locationNamespace, type WorkspaceFolder } from '@domain/workspace/folde
 
 import type { SessionLaunchConfig } from '@domain/session/launch-config'
 
-import type {
-  ConversationRecord,
-  ResolvedResume,
-  ResumeOutcome
-} from './session-launch-service'
+import type { ConversationRecord, ResolvedResume, ResumeOutcome } from './session-launch-service'
 import type { TranscriptResult } from './transcript-service'
 
 /**
@@ -119,8 +115,7 @@ export function createResumeService(deps: ResumeServiceDeps): ResumeService {
       return { ok: false, reason: 'invalid-config' }
     }
     // 再開した行をさらに再開したときは決めた値を引き継ぐ。無ければ §8.1 で決める (読むたびに決め直さない)。
-    const targetKey =
-      record.targetKey ?? (await liveTranscriptTargetKey(record))
+    const targetKey = record.targetKey ?? (await liveTranscriptTargetKey(record))
     return {
       ok: true,
       resolved: {
@@ -140,7 +135,9 @@ export function createResumeService(deps: ResumeServiceDeps): ResumeService {
    */
   async function liveTranscriptTargetKey(record: ConversationRecord): Promise<string | null> {
     const runtimes = deps.runtimes()
-    const runtime = runtimes.find((r) => isSameNamespace(r.id, record.runtimeId as RuntimeNamespaceId))
+    const runtime = runtimes.find((r) =>
+      isSameNamespace(r.id, record.runtimeId as RuntimeNamespaceId)
+    )
     if (runtime === undefined) return null
     const inLocation = deps
       .enumerationTargets()

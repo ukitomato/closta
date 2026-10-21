@@ -71,9 +71,10 @@ function setup(over: Partial<ResumeServiceDeps> = {}): Setup {
     targetKey === 'host#0' && conversationId === CONV ? { target: TARGET, origin: ORIGIN } : null
   )
   const resolve = vi.fn(() => REACHABLE)
-  const launchResume = vi.fn(
-    async (): Promise<ResumeOutcome> => ({ status: 'already-running', sessionId: 'sid' })
-  )
+  const launchResume = vi.fn(async (): Promise<ResumeOutcome> => ({
+    status: 'already-running',
+    sessionId: 'sid'
+  }))
   const getTranscript = vi.fn(
     async (_c: string, _t: string, requestToken: string): Promise<TranscriptResult> => ({
       handshake: { status: 'empty', requestToken },
@@ -179,7 +180,6 @@ describe('resolveResumeSource', () => {
       reason: 'source-unknown'
     })
   })
-
 })
 
 describe('resolveResumeSource (稼働中の行 / BE-020)', () => {
@@ -314,9 +314,10 @@ describe('resume / getResumedTranscript', () => {
       'distro-not-running',
       'claude-not-found'
     ] as const) {
-      const launchResume = vi.fn(
-        async (): Promise<ResumeOutcome> => ({ status: 'rejected', reason })
-      )
+      const launchResume = vi.fn(async (): Promise<ResumeOutcome> => ({
+        status: 'rejected',
+        reason
+      }))
       const live = setup({ conversationRecord: () => record, launchResume })
       const SID = '00000000-0000-4000-8000-000000000001'
       expect(

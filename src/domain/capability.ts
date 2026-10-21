@@ -9,10 +9,7 @@ import type {
 } from './provider/dto'
 import type { DetectedCandidate } from './provider/types'
 import type { RuntimeDescriptorDTO, RuntimeListDTO } from './runtime/dto'
-import type {
-  SessionLaunchHandshakeDTO,
-  SessionLaunchRejectReason
-} from './session/agent-session'
+import type { SessionLaunchHandshakeDTO, SessionLaunchRejectReason } from './session/agent-session'
 import type { SessionIndexDTO } from './session/dto'
 import type { SessionLaunchConfig } from './session/launch-config'
 import type { LaunchOrigin, LaunchUsageSummaryDTO } from './session/launch-usage'

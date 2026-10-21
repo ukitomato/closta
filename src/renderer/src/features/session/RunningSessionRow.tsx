@@ -355,8 +355,12 @@ export function SessionRowActions({
           type="button"
           size={size}
           variant="outline"
-          title={compact ? RESUME_LABELS[resumeAction === 'resume' ? 'action' : 'retry'] : undefined}
-          aria-label={compact ? RESUME_LABELS[resumeAction === 'resume' ? 'action' : 'retry'] : undefined}
+          title={
+            compact ? RESUME_LABELS[resumeAction === 'resume' ? 'action' : 'retry'] : undefined
+          }
+          aria-label={
+            compact ? RESUME_LABELS[resumeAction === 'resume' ? 'action' : 'retry'] : undefined
+          }
           data-testid="session-row-resume-action"
           data-resume-action={resumeAction}
           onClick={(event) => {
