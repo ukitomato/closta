@@ -1,3 +1,4 @@
+import { convertServerOrUnsupported, type ServerCallTable } from './content-blocks'
 import { sanitizeBody } from './sanitize-body'
 import type { TranscriptMessageDTO, TranscriptPartDTO } from './transcript-dto'
 import { parseMessageTime } from './transcript-time'
@@ -34,7 +35,8 @@ function safeJsonString(input: unknown): string {
 }
 
 /**
- * assistant メッセージを表示 DTO に変換する。**未知のブロック型は落とす** (割当は docs/ui-coverage.md の B 節)。
+ * assistant メッセージを表示 DTO に変換する。サーバー側の tool は `server-tool-call`、専用表示の無いブロックは種類の名前だけの印にする
+ * (割当は docs/ui-coverage.md の B 節。O-12 / data-model §2.2)。
  * tool の結果は後から届く `user` メッセージで `withToolResults` が埋める (`tool-result.ts`。O-2 / FR-007)。
  * content が配列でない / ブロックが object でない場合も例外を投げず空 parts に倒す (行を落とさない)。
  */
@@ -44,6 +46,8 @@ export function toLiveAssistantMessage(
 ): TranscriptMessageDTO {
   const content = Array.isArray(msg.message.content) ? msg.message.content : []
   const parts: TranscriptPartDTO[] = []
+  // 同じメッセージの中の `server_tool_use` と結果のブロックの対応づけ (別のメッセージの結果は `live-tool-results.ts`)。
+  const serverCalls: ServerCallTable = new Map()
 
   for (const block of content) {
     if (typeof block !== 'object' || block === null) continue
@@ -73,9 +77,12 @@ export function toLiveAssistantMessage(
         })
         break
       }
-      default:
-        // server_tool_use など専用表示を持たないブロックは落とす (割当は docs/ui-coverage.md の B 節。O-12)。
+      default: {
+        // server_tool_use・結果のブロックは 1 つの part に、専用表示を持たないブロックは種類の名前だけの印にする (O-12)。
+        const part = convertServerOrUnsupported(b, serverCalls)
+        if (part) parts.push(part)
         break
+      }
     }
   }
 

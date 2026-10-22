@@ -50,10 +50,14 @@ describe('toLiveAssistantMessage', () => {
     if (part.type === 'tool-call') expect(part.toolName).toBe('ReadBash')
   })
 
-  it('content が配列でない / 未知ブロックは例外を投げず落とす (行を落とさない)', () => {
+  it('content が配列でない / object でないブロックは例外を投げず落とす (行を落とさない)', () => {
     expect(toLive(assistant(undefined)).parts).toEqual([])
     expect(toLive(assistant('not-array')).parts).toEqual([])
-    expect(toLive(assistant([{ type: 'server_tool_use', id: 's' }, null, 42])).parts).toEqual([])
+    expect(toLive(assistant([null, 42])).parts).toEqual([])
+    // 専用表示の無いブロックは種類の名前だけの印にする (O-12 / FR-011)。
+    expect(toLive(assistant([{ type: 'some_future_block' }])).parts).toEqual([
+      { type: 'unsupported-block', blockType: 'some_future_block' }
+    ])
   })
 
   it('redacted_thinking は過去ログと同じ Reasoning の文言にそろえる (O-2 / FR-007)', () => {

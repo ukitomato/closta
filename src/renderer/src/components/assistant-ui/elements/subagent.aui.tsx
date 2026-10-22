@@ -6,6 +6,9 @@ import type { ToolCallMessagePartComponent } from "@assistant-ui/react";
 
 import type { TranscriptMessageDTO, TranscriptPartDTO } from "@domain/session/transcript-dto";
 import {
+  DOCUMENT_LABELS,
+  documentKindLabel,
+  SERVER_TOOL_LABELS,
   SYSTEM_EVENT_CATEGORY_LABELS,
   SYSTEM_EVENT_STATUS_LABELS,
 } from "@/features/chat/labels";
@@ -19,6 +22,7 @@ import { ReasoningContent, ReasoningRoot, ReasoningText, ReasoningTrigger } from
 import { ToolFallback } from "./tool-fallback.aui";
 import { isTruncatedArgs, ToolResultMarks } from "./tool-result-marks";
 import { TranscriptBoundary } from "./transcript-boundary";
+import { UnsupportedBlockMark } from "./unsupported-block-mark";
 
 /**
  * Task (subagent) を Subagent 表示にする (R-4 / FR-004 / FR-005 / US-2 / Tier A: Subagent list)。
@@ -115,6 +119,37 @@ function SubagentToolCall({
   );
 }
 
+/**
+ * 入れ子のサーバー側の tool (O-12 / FR-008)。主ループと同じ振り分け (`NestedToolRendererContext` → ServerToolCall) で描く。
+ * 振り分けの外 (`null`) では tool 名の 1 行 (結果の中身は出さない)。
+ */
+function SubagentServerToolCall({
+  part,
+  depth,
+}: {
+  part: Extract<TranscriptPartDTO, { type: "server-tool-call" }>;
+  depth: number;
+}): React.JSX.Element {
+  const renderNested = useContext(NestedToolRendererContext);
+  if (renderNested !== null && depth <= VISUAL_MAX_DEPTH) {
+    return (
+      <div data-slot="subagent-nested-tool" className="flex flex-col gap-1">
+        <NestedDepthContext.Provider value={depth}>
+          {renderNested(toToolCallPartProps(part))}
+        </NestedDepthContext.Provider>
+      </div>
+    );
+  }
+  return (
+    <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
+      <WrenchIcon className="size-3 shrink-0" />
+      <span className="font-medium">
+        {part.toolName.length > 0 ? part.toolName : SERVER_TOOL_LABELS.defaultName}
+      </span>
+    </p>
+  );
+}
+
 function SubagentPart({
   part,
   depth,
@@ -143,10 +178,19 @@ function SubagentPart({
     case "tool-call": {
       return <SubagentToolCall part={part} depth={depth} />;
     }
+    case "server-tool-call":
+      return <SubagentServerToolCall part={part} depth={depth} />;
+    case "unsupported-block":
+      return <UnsupportedBlockMark blockType={part.blockType} />;
     case "image":
       return <p className="text-muted-foreground text-xs">🖼 画像</p>;
     case "file":
-      return <p className="text-muted-foreground text-xs">📎 {part.filename}</p>;
+      return (
+        <p data-slot="subagent-file" className="text-muted-foreground text-xs">
+          📎 {part.filename.length > 0 ? part.filename : DOCUMENT_LABELS.unnamed}
+          {" "}({documentKindLabel(part.mediaType)})
+        </p>
+      );
     case "divider":
       // 圧縮の境界 (O-6 の TranscriptBoundary。数を省いた文言。`label` は読まない)。
       return <TranscriptBoundary category="compact-boundary" detail="" />;

@@ -39,7 +39,21 @@ export type TranscriptPartDTO =
       readonly children: readonly TranscriptMessageDTO[]
     }
   | { readonly type: 'image'; readonly url: string }
-  | { readonly type: 'file'; readonly filename: string; readonly text: string }
+  | { readonly type: 'file'; readonly filename: string; readonly mediaType: DocumentMediaType }
+  /**
+   * サーバー側の tool (`server_tool_use` とその結果のブロック。O-12 / FR-008。data-model §2.1)。
+   * `result` は同じ id の結果のブロックで埋める (§2.3)。対応の無い結果だけのときは `toolName` / `argsText` が空。
+   */
+  | {
+      readonly type: 'server-tool-call'
+      readonly toolCallId: string
+      readonly toolName: string
+      readonly argsText: string
+      readonly truncated: boolean
+      readonly result: ServerToolResultDTO | null
+    }
+  /** 専用の表示を持たない content block の種類の名前だけの印 (O-12 / FR-011。中身は運ばない)。 */
+  | { readonly type: 'unsupported-block'; readonly blockType: string }
   /** コンパクション境界などの最小の区切り (FR-018)。 */
   | { readonly type: 'divider'; readonly label: string }
   /**
@@ -80,7 +94,15 @@ export const SYSTEM_EVENT_CATEGORIES = [
   /** MCP の URL での手続きの完了 (O-10 / AD-053。`elicitation_complete`)。 */
   'elicitation',
   /** 前景で始まって後から背景に移った task (O-11 / AD-056。`task_updated` の `patch.is_backgrounded`)。 */
-  'backgrounded-task'
+  'backgrounded-task',
+  /** 知らせの類 (O-12 / AD-060。`notice-rows.ts` の `toNoticeRow`)。 */
+  'notification',
+  'local-command-output',
+  'tool-use-summary',
+  'active-goal',
+  'mirror-error',
+  'memory-recall',
+  'files-persisted'
 ] as const
 export type SystemEventCategory = (typeof SYSTEM_EVENT_CATEGORIES)[number]
 
@@ -147,6 +169,25 @@ export type TranscriptFrameDTO =
     }
   | { readonly kind: 'error'; readonly requestToken: string; readonly reasonKey: FailureReason }
 
+/** 添付の文書の種類 (`source.type` から決める。data-model §2.1。不明は '')。 */
+export type DocumentMediaType = 'application/pdf' | 'text/plain' | ''
+
+/** サーバー側の tool の結果 (data-model §2.1)。 */
+export type ServerToolResultDTO =
+  | {
+      readonly kind: 'web-search'
+      readonly sources: readonly WebSourceDTO[]
+      readonly omitted: number
+    }
+  | { readonly kind: 'error'; readonly errorCode: string }
+  | { readonly kind: 'unsupported'; readonly blockType: string }
+
+/** サーバー側の検索の結果の 1 項目 (タイトルと URL だけ。`url` は http(s) の形だけ。外れたら '')。 */
+export interface WebSourceDTO {
+  readonly title: string
+  readonly url: string
+}
+
 /**
  * `TranscriptPartDTO` の各 variant の許可フィールド (SC-009 の割り当て台帳の機械検証)。
  * **表示する生の逐語を運ぶフィールドを固定する** — 増えたらスキーマ検査が落ちる。
@@ -165,7 +206,9 @@ export const TRANSCRIPT_PART_FIELDS = {
     'children'
   ],
   image: ['type', 'url'],
-  file: ['type', 'filename', 'text'],
+  file: ['type', 'filename', 'mediaType'],
+  'server-tool-call': ['type', 'toolCallId', 'toolName', 'argsText', 'truncated', 'result'],
+  'unsupported-block': ['type', 'blockType'],
   divider: ['type', 'label'],
   'system-event': ['type', 'category', 'opens', 'name', 'detail', 'status']
 } as const satisfies {

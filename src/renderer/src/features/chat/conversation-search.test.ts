@@ -224,7 +224,7 @@ describe('createConversationScanner (走査 / SC-002)', () => {
       dto({
         id: 'u',
         role: 'user',
-        parts: [{ type: 'file', filename: 'report.pdf', text: '' }],
+        parts: [{ type: 'file', filename: 'report.pdf', mediaType: 'application/pdf' }],
         createdAt: null
       }),
       dto({

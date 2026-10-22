@@ -166,7 +166,8 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
   `informational` / `model_refusal_fallback` / `model_refusal_no_fallback`) と、最上位の `conversation_reset` の分岐を足した。どれも
   システムイベントの行の経路 (`message`) で運び、`SessionEvent` の種類・`TRANSCRIPT_PART_FIELDS` は変えない。`informational` などの本文は
   伏せ字 (`redactSecrets`。domain) を通し、読まないフィールドは運ばない (許可リストの正本は 016 data-model §1)。`conversation_reset` の
-  `new_conversation_id` は読まない (アプリは SDK の会話の id を追っていない。/clear の後の id の扱いは X-6 に申し送り)
+  `new_conversation_id` は読まない (アプリは SDK の会話の id を追っていない。/clear の後の id の扱いは X-6 に申し送り)。
+  **O-6 の時点の記述として残す。O-12 で広げた**: agents の `system` の分岐は 9 つの subtype (O-6 / O-10 の 4 つと O-12 の 5 つ) と最上位の `tool_use_summary` / `active_goal` になり、行の組み立ては domain の `toNoticeRow` (`notice-rows.ts`) の 1 つに寄せた。`TRANSCRIPT_PART_FIELDS` は O-12 で part 2 つと `file` の形が変わった (下の Related Specs の O-12)
 - **メッセージの時刻の値を埋めた** (O-9 / [AD-051](../../decisions/0051-message-time-source-and-display-only.md)。DTO の形は同じ): `TranscriptMessageDto.createdAt` を、過去ログは `getSessionMessages` の返りの `timestamp` (型に無い値。`parseMessageTime` が未信頼として検査する。無ければ `null`)、実行中は SDK の `timestamp` (無ければセッションスレッドの受信時刻)、利用者の入力は renderer の送信時刻で埋める。表示だけに使い、並べ替えにも永続化にも使わない
 
 詳細は [docs/glossary.md](../../glossary.md) を参照。
@@ -253,6 +254,7 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
 - [AD-053](../../decisions/0053-elicitation-callback-and-user-dialog.md) — `onElicitation` を足し `onUserDialog` / `supportedDialogKinds` は渡さない (`SessionEvent` の `elicitation-request`・`SessionControl` の `respond-elicitation`。O-10)
 - [AD-057](../../decisions/0057-elicitation-sdk-side-cancel-known-limit.md) — SDK の側で中断された Elicitation のカードが残る既知の限界 (AD-053 Decision 3 の読み替え。O-10 U-10)
 - [AD-059](../../decisions/0059-session-resume-query-option-and-conversation-id.md) — 起動の options の `resume` と会話の id の保持・失敗の理由 `resume-failed` (X-9)
+- [AD-060](../../decisions/0060-content-block-verification-and-unsupported-block-mark.md) — 対応表の B 節 (中身のブロック) の機械照合と知らないブロックの印 (O-12。ui の feature が本 domain の契約を広げた)
 
 ## Related Specs
 
@@ -326,6 +328,9 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
   agents の入れ子の送り直し (根と位置の表。`parent_tool_use_id` 付きのメッセージを親の `Agent` の呼び出しの `children` に入れる)・
   `meter` の種類 `background-tasks` (`METER_UPDATE_TYPES` 9 → 10。`SessionEvent` の種類は変えない)。
   `Query` の呼び出しは `interrupt` だけのまま。Related Specs に O-11 (ui)
+- **O-12 (ui)** — [知らせの類・Checkpoints・中身のブロックの表示](../../../specs/022-ui-notices-checkpoints-and-content-blocks/spec.md)
+  ([roadmap の O-12 の行](../../roadmap.md))。O-11 の design で分けた ui の feature。本 domain の feature ではない。夜間の規則で推奨案を採用した
+  U-1〜U-13 / [AD-060](../../decisions/0060-content-block-verification-and-unsupported-block-mark.md) で、本 domain の契約を広げた: システムイベントの行の category 7 つ (`SYSTEM_EVENT_CATEGORIES` 13 → 20。`notification` / `local-command-output` / `tool-use-summary` / `active-goal` / `mirror-error` / `memory-recall` / `files-persisted`)・`TRANSCRIPT_PART_FIELDS` の part 2 つ (`server-tool-call` / `unsupported-block`。種類 7 → 9) と `file` の part の形 (`text` を消して `mediaType`)・agents の `system` の 5 つの subtype (`notification` / `local_command_output` / `memory_recall` / `mirror_error` / `files_persisted`) と最上位の `tool_use_summary` / `active_goal` の分岐・実行中の `server-tool-call` の対応づけ (主ループのメッセージの記憶 256 件と送り直し)。`SessionEvent` の種類・`METER_UPDATE_TYPES`・`QUERY_OPTION_KEYS`・`AGENT_SDK_ALLOWED_CALLS` は変えない。承認の応答と `Query` の呼び出しは変えない。Related Specs に O-12 (ui)
 - **O-10** — [Claude Code からの問いに答える UI と composer のコマンドの候補](../../../specs/018-session-answer-ui-and-composer-commands/spec.md)
   ([roadmap の O-10 の行](../../roadmap.md))。O-5 の design で分けた本 domain の feature (015 spec U-1 /
   [AD-048](../../decisions/0048-session-config-display-and-answer-ui-split.md) Decision 1)。結論 (2026-10-17 に利用者が U-1〜U-10 と

@@ -2,7 +2,7 @@ import type { ThreadMessageLike } from '@assistant-ui/react'
 
 import type { SystemEventCategory } from '@domain/session/transcript-dto'
 
-import { isSystemEventMessage, SYSTEM_EVENT_DATA_NAME } from './convert'
+import { isServerToolCallPart, isSystemEventMessage, SYSTEM_EVENT_DATA_NAME } from './convert'
 import { TURN_HEAD_EMPTY_LABEL } from './labels'
 import { readMessageTime, readReceivedAt } from './message-time'
 
@@ -81,6 +81,8 @@ function isMark(value: unknown): value is TurnMark {
 function absorb(b: Builder, message: ThreadMessageLike, isStart: boolean): void {
   for (const part of partsOf(message)) {
     if (part.type === 'tool-call') {
+      // サーバー側の tool は数えない (O-12)。
+      if (isServerToolCallPart(part)) continue
       b.toolCount += 1
       if (part.isError === true) b.errorCount += 1
     } else if (part.type === 'data' && part.name === SYSTEM_EVENT_DATA_NAME) {

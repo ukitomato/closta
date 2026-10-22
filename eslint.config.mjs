@@ -607,6 +607,9 @@ export default defineConfig(
       'src/renderer/src/components/assistant-ui/elements/web-tool.aui.tsx',
       'src/renderer/src/components/assistant-ui/elements/task-tool.aui.tsx',
       'src/renderer/src/components/assistant-ui/elements/tool-display-frame.tsx',
+      // O-12 の手書きの element (022 tasks SH-012)
+      'src/renderer/src/components/assistant-ui/elements/server-tool-call.aui.tsx',
+      'src/renderer/src/components/assistant-ui/elements/unsupported-block-mark.tsx',
       // O-11 の markdown の本文の共有の部品 (019 tasks SH-012。agent-plan.aui.tsx から切り出した)
       'src/renderer/src/components/assistant-ui/elements/markdown-body.tsx'
     ],

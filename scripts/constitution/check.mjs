@@ -1332,7 +1332,7 @@ function splitTopLevel(text) {
    * O-2 / FR-003 / SC-001 / SC-002。照合の本体は `scripts/ui-coverage/coverage.mjs` の純関数で、
    * ここはファイルを読んで渡し、失敗を 1 行ずつ流すだけ。書式の正本は `docs/ui-coverage.md` の凡例、決定の正本は AD-044。
    *
-   * **pending を持たない。** 5 つの入力のどれかが無ければファイル名を示して違反にする。
+   * **pending を持たない。** 8 つの入力のどれかが無ければファイル名を示して違反にする。
    * SDK は直接の依存で CI は必ず install するので、入力の欠けは「検査が届かなくなった」ことを意味する
    * (research R-02 / design-gate R1 platform-boundary M-003)。
    *
@@ -1345,6 +1345,9 @@ function splitTopLevel(text) {
     sdkDts: `${SDK_DIR}/sdk.d.ts`,
     toolsDts: `${SDK_DIR}/sdk-tools.d.ts`,
     sdkPackage: `${SDK_DIR}/package.json`,
+    betaMessagesDts: 'node_modules/@anthropic-ai/sdk/resources/beta/messages/messages.d.mts',
+    messagesDts: 'node_modules/@anthropic-ai/sdk/resources/messages/messages.d.mts',
+    anthropicSdkPackage: 'node_modules/@anthropic-ai/sdk/package.json',
     table: 'docs/ui-coverage.md',
     roadmap: 'docs/roadmap.md'
   }
@@ -1369,6 +1372,10 @@ function splitTopLevel(text) {
         messageTypes: parseSdkMessageUnion(text.sdkDts),
         toolInputs: parseToolInputs(text.toolsDts),
         controlSubtypes: parseControlRequestSubtypes(text.sdkDts),
+        sdkDts: text.sdkDts,
+        betaMessagesDts: text.betaMessagesDts,
+        messagesDts: text.messagesDts,
+        anthropicSdkPackage: text.anthropicSdkPackage,
         table: parseCoverage(text.table),
         roadmap: parseRoadmapFeatures(text.roadmap)
       })

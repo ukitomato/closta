@@ -121,14 +121,17 @@ describe('toTranscriptMessages', () => {
     expect(out[0].parts[0]).toMatchObject({ isError: true, result: 'boom' })
   })
 
-  it('未知の content block を欠落として扱わず、クラッシュせず skip する', () => {
+  it('未知の content block を欠落させず、種類の名前だけの印にする (O-12 / FR-011)', () => {
     const out = toTranscriptMessages([
       msg('assistant', 'a1', [
         { type: 'text', text: 'ok' },
         { type: 'some_future_block', payload: 42 }
       ])
     ])
-    expect(out[0].parts).toEqual([{ type: 'text', text: 'ok' }])
+    expect(out[0].parts).toEqual([
+      { type: 'text', text: 'ok' },
+      { type: 'unsupported-block', blockType: 'some_future_block' }
+    ])
   })
 
   it('会話由来本文の双方向制御文字を除去する (サニタイザ経由)', () => {

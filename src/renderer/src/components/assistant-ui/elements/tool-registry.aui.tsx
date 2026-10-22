@@ -13,6 +13,7 @@ import { CodeDiff } from "./code-diff.aui";
 import { FileTool } from "./file-tool.aui";
 import { McpToolCall } from "./mcp-tool-call.aui";
 import { NestedToolRendererContext } from "./nested-tool-context";
+import { ServerToolCall } from "./server-tool-call.aui";
 import { Subagent } from "./subagent.aui";
 import { TaskTool } from "./task-tool.aui";
 import { TerminalBlock } from "./terminal-block.aui";
@@ -80,7 +81,19 @@ const TOOL_DISPLAY: Readonly<Record<string, ToolCallMessagePartComponent>> = {
   TaskList: TaskTool,
 };
 
+/**
+ * `convert.ts` が付けた信頼の印か (O-12 / data-model §2.4)。`args.__serverTool` が record のときだけ真。argsText 由来の
+ * `__` のキーは `convert.ts` が剥がすので、会話由来の値ではここに来ない (PR-H-1)。
+ */
+function isServerToolCallArgs(args: unknown): boolean {
+  if (typeof args !== "object" || args === null) return false;
+  const marker = (args as Record<string, unknown>).__serverTool;
+  return typeof marker === "object" && marker !== null;
+}
+
 const ToolDisplayImpl: ToolCallMessagePartComponent = (props) => {
+  // (0) サーバー側の tool (`server_tool_use`)。名前の表より先に送る (`TOOL_DISPLAY` に `web_search` などを入れない)。
+  if (isServerToolCallArgs(props.args)) return <ServerToolCall {...props} />;
   // (1) 完全一致の表
   const Exact = Object.hasOwn(TOOL_DISPLAY, props.toolName)
     ? TOOL_DISPLAY[props.toolName]

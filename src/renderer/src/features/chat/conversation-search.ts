@@ -64,6 +64,8 @@ export function toSearchableMessage(message: ThreadMessageLike): SearchableMessa
       ? [content]
       : content.flatMap((part) => {
           if (part.type === 'text') return [part.text]
+          // 添付の文書は file の part に写る (O-12 / FE-020)。名前だけを本文の 1 つとして取る (今までの検索の結果を保つ)。
+          if (part.type === 'file') return [part.filename ?? '']
           // 過去ログの圧縮の境界 (data part)。描かれる見出し (TranscriptBoundary と同じ関数) を本文の 1 つとして取る。
           // 実行中の境界の行は `isSystemEventMessage` で上で除かれ、他の data part は対象外 (O-3 の範囲を保つ)。
           if (part.type === 'data' && part.name === SYSTEM_EVENT_DATA_NAME) {

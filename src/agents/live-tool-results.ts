@@ -63,6 +63,17 @@ export interface LiveToolResultTracker {
    * そのまま送る) / `none`: 送らない (取り消した根の配下・切り詰めの後)。
    */
   nest(child: TranscriptMessageDTO, parentToolUseId: unknown): NestResult
+  /**
+   * 届いた主ループの assistant メッセージの、対応の無い結果だけの `server-tool-call` (孤児) を、覚えている同じ id の
+   * `server-tool-call` に埋める (O-12 / data-model §2.3)。`resend`: 送り直す覚えていたメッセージ / `message`: 孤児を除いた
+   * 届いたメッセージ (part が残らなければ `null` で送らない)。取り消した根の結果は捨てる。subagent の中は呼ばない。
+   */
+  applyServerResults(message: TranscriptMessageDTO): ServerResultsApplied
+}
+
+export interface ServerResultsApplied {
+  readonly resend: readonly TranscriptMessageDTO[]
+  readonly message: TranscriptMessageDTO | null
 }
 
 export type NestResult =
@@ -71,6 +82,50 @@ export type NestResult =
   | { readonly kind: 'none' }
 
 type ToolCallPart = Extract<TranscriptPartDTO, { type: 'tool-call' }>
+type ServerCallPart = Extract<TranscriptPartDTO, { type: 'server-tool-call' }>
+
+/** 結果の位置に出た、対応の無い結果だけの `server-tool-call` か (名前と入力が空で結果がある)。 */
+function isOrphanServerCall(part: TranscriptPartDTO): part is ServerCallPart {
+  return (
+    part.type === 'server-tool-call' &&
+    part.result !== null &&
+    part.toolName === '' &&
+    part.argsText === '' &&
+    part.toolCallId !== ''
+  )
+}
+
+/** 結果の合計を `budget` バイトに収める (`sources` を後ろから減らして `omitted` に足す)。 */
+function fitServerResult(
+  result: NonNullable<ServerCallPart['result']>,
+  budget: number
+): NonNullable<ServerCallPart['result']> {
+  if (result.kind !== 'web-search') return result
+  let sources = result.sources
+  let omitted = result.omitted
+  const size = (): number => byteLength(JSON.stringify({ ...result, sources, omitted }))
+  while (sources.length > 0 && size() > budget) {
+    sources = sources.slice(0, -1)
+    omitted += 1
+  }
+  return { ...result, sources, omitted }
+}
+
+function serverResultBytes(message: TranscriptMessageDTO): number {
+  let total = 0
+  for (const part of message.parts) {
+    if (part.type === 'server-tool-call' && part.result !== null) {
+      total += byteLength(JSON.stringify(part.result))
+    }
+  }
+  return total
+}
+
+function hasPendingServerCall(message: TranscriptMessageDTO): boolean {
+  return message.parts.some(
+    (part) => part.type === 'server-tool-call' && part.result === null && part.toolCallId !== ''
+  )
+}
 
 /** 結果待ちの tool-call の位置。`path` は根の tool-call から数えた tool-call の id の列 (根の直下の呼び出しは 1 つ)。 */
 interface Position {
@@ -207,6 +262,39 @@ export function createLiveToolResultTracker(): LiveToolResultTracker {
   const sentAssistants = new Set<string>()
   // 子の数・大きさの上限で `truncated` を立てた親の tool-call (立てた後は子を送り直さない。U-10)。
   const truncatedParents = new Set<string>()
+  // 結果待ちの `server-tool-call` を持つ主ループのメッセージ (messageId → 最新の DTO。挿入順 = 古い順。上限 256) と、
+  // その id → messageId。取り消した根の `server-tool-call` の id は以後の結果を捨てる (O-12)。
+  const serverMessages = new Map<string, TranscriptMessageDTO>()
+  const serverCallOwner = new Map<string, string>()
+  const retractedServerCalls = new Set<string>()
+
+  const forgetServer = (messageId: string): TranscriptMessageDTO | undefined => {
+    const message = serverMessages.get(messageId)
+    if (message === undefined) return undefined
+    serverMessages.delete(messageId)
+    for (const part of message.parts) {
+      if (part.type === 'server-tool-call' && serverCallOwner.get(part.toolCallId) === messageId) {
+        serverCallOwner.delete(part.toolCallId)
+      }
+    }
+    return message
+  }
+
+  const rememberServer = (message: TranscriptMessageDTO): void => {
+    forgetServer(message.id)
+    if (!hasPendingServerCall(message)) return
+    serverMessages.set(message.id, message)
+    for (const part of message.parts) {
+      if (part.type === 'server-tool-call' && part.result === null && part.toolCallId !== '') {
+        if (!serverCallOwner.has(part.toolCallId)) serverCallOwner.set(part.toolCallId, message.id)
+      }
+    }
+    while (serverMessages.size > MAX_PENDING_TOOL_MESSAGES) {
+      const oldest = serverMessages.keys().next().value
+      if (oldest === undefined) break
+      forgetServer(oldest)
+    }
+  }
 
   const forget = (messageId: string): void => {
     const message = lastMessages.get(messageId)
@@ -251,6 +339,7 @@ export function createLiveToolResultTracker(): LiveToolResultTracker {
         return
       }
       addBounded(sentAssistants, message.id)
+      rememberServer(message)
       if (ids.length === 0) return
       forget(message.id)
       remember(message)
@@ -341,6 +430,14 @@ export function createLiveToolResultTracker(): LiveToolResultTracker {
           })
         }
         forget(messageId)
+        const server = forgetServer(messageId)
+        if (server !== undefined) {
+          for (const part of server.parts) {
+            if (part.type === 'server-tool-call' && part.result === null) {
+              addBounded(retractedServerCalls, part.toolCallId)
+            }
+          }
+        }
       }
       return { unmatched }
     },
@@ -355,6 +452,56 @@ export function createLiveToolResultTracker(): LiveToolResultTracker {
       if (position === undefined || root === undefined) return undefined
       const part = findToolCall(root, position.path)
       return part?.toolName === 'Bash' ? part.argsText : undefined
+    },
+
+    applyServerResults(message) {
+      const orphans = message.parts.filter(isOrphanServerCall)
+      if (orphans.length === 0) return { resend: [], message }
+      const resend: TranscriptMessageDTO[] = []
+      const consumed = new Set<ServerCallPart>()
+      // 対象のメッセージごとにまとめる (送り直しを 1 メッセージ 1 回にする)。
+      const groups = new Map<string, ServerCallPart[]>()
+      for (const orphan of orphans) {
+        const owner = serverCallOwner.get(orphan.toolCallId)
+        if (owner === undefined) {
+          // 取り消した根の結果は捨てる。
+          if (retractedServerCalls.has(orphan.toolCallId)) consumed.add(orphan)
+          continue
+        }
+        const group = groups.get(owner)
+        if (group === undefined) groups.set(owner, [orphan])
+        else group.push(orphan)
+      }
+      for (const [ownerId, group] of groups) {
+        const current = serverMessages.get(ownerId)
+        if (current === undefined) continue
+        const filledIds = new Set<string>()
+        let budget = RESEND_RESULT_MAX_BYTES - serverResultBytes(current)
+        const parts = current.parts.map((part): TranscriptPartDTO => {
+          if (part.type !== 'server-tool-call' || part.result !== null) return part
+          const source = group.find((g) => g.toolCallId === part.toolCallId && !consumed.has(g))
+          if (source?.result == null || filledIds.has(part.toolCallId)) return part
+          const result = fitServerResult(source.result, Math.max(0, budget))
+          budget -= byteLength(JSON.stringify(result))
+          filledIds.add(part.toolCallId)
+          consumed.add(source)
+          return { ...part, result }
+        })
+        if (filledIds.size === 0) continue
+        const next: TranscriptMessageDTO = { ...current, parts }
+        for (const id of filledIds) {
+          if (serverCallOwner.get(id) === ownerId) serverCallOwner.delete(id)
+        }
+        serverMessages.delete(ownerId)
+        if (hasPendingServerCall(next)) {
+          serverMessages.set(ownerId, next)
+          // 残りの結果待ちの id の持ち主は同じメッセージのまま。
+        }
+        resend.push(next)
+      }
+      if (consumed.size === 0) return { resend, message }
+      const rest = message.parts.filter((part) => !(isOrphanServerCall(part) && consumed.has(part)))
+      return { resend, message: rest.length === 0 ? null : { ...message, parts: rest } }
     },
 
     nest(child, parentToolUseId) {

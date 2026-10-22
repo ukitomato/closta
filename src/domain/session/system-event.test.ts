@@ -373,8 +373,9 @@ const row = (
 })
 
 describe('category と status の集合 (固定テスト)', () => {
-  it('category は 13 (O-5 が auth / plugin、O-6 が 4 つ、O-10 が elicitation、O-11 が backgrounded-task を足した。集合を変えるには ADR が要る: AD-053 / AD-056)', () => {
+  it('category は 20 (O-5 が auth / plugin、O-6 が 4 つ、O-10 が elicitation、O-11 が backgrounded-task、O-12 が 7 つを足した。集合を変えるには ADR が要る: AD-053 / AD-056 / AD-060)', () => {
     expect([...SYSTEM_EVENT_CATEGORIES].sort()).toEqual([
+      'active-goal',
       'api-retry',
       'auth',
       'backgrounded-task',
@@ -382,12 +383,18 @@ describe('category と status の集合 (固定テスト)', () => {
       'compaction',
       'conversation-reset',
       'elicitation',
+      'files-persisted',
       'hook',
       'informational',
+      'local-command-output',
+      'memory-recall',
+      'mirror-error',
+      'notification',
       'permission-mode',
       'plugin',
       'refusal',
-      'task'
+      'task',
+      'tool-use-summary'
     ])
   })
 

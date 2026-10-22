@@ -26,6 +26,9 @@
  * ## SDK の集合 (機械照合する節)
  *
  * - A: `sdk.d.ts` の `SDKMessage` の union のメンバーの型名
+ * - B: Agent SDK の `SDKAssistantMessage.message` (`BetaMessage`) と `SDKUserMessage.message` (`MessageParam`) の
+ *   `content` の要素の union のメンバーの `type` (`assistant/<type>` / `user/<type>`)。`@anthropic-ai/sdk` の
+ *   `.d.mts` を読み、対応表の冒頭の `SDK: @anthropic-ai/sdk <版>` の行と版を照合する (AD-060。AD-044 Decision 4 の読み替え)
  * - C: `sdk-tools.d.ts` の `ToolInputSchemas` の union のメンバーの型名。**`ToolOutputSchemas` は除く** —
  *   SDK 0.3.270 は入力の union の末尾に出力の union を混ぜている (入力型ではない)
  * - E: `sdk.d.ts` の `SDKControlRequest` の `request` フィールドの型 (union) の各メンバーの `subtype` の文字列リテラル。
@@ -34,7 +37,7 @@
  */
 
 /** 節ごとの下限 (data-model §1「照合の歯止め」)。下回れば parse の取りこぼしとみなす。 */
-export const LOWER_BOUNDS = Object.freeze({ A: 39, C: 45, E: 38 })
+export const LOWER_BOUNDS = Object.freeze({ A: 39, B: 33, C: 45, E: 38 })
 
 /** A〜E (と A') の列。 */
 const ROW_COLUMNS = Object.freeze(['識別子', '判別子', 'Tier', '割当', '経路', '備考'])
@@ -253,6 +256,130 @@ export function parseControlRequestSubtypes(dts) {
   return subtypes
 }
 
+/**
+ * interface `name` の本体 (`{` から対応する `}` まで)。無ければ null。
+ * `extends` がある interface は例外 (読み方の前提 — 継承したフィールドを辿らない — が崩れたことを知らせる)。
+ */
+function interfaceBody(dts, name) {
+  const code = strippedOf(dts)
+  const head = new RegExp(
+    String.raw`(?:^|[\s;])(?:export\s+)?(?:declare\s+)?interface\s+${escapeRegExp(name)}\b([^{;]*)\{`,
+    'm'
+  ).exec(code)
+  if (head === null) return null
+  if (/\bextends\b/.test(head[1])) {
+    throw new Error(`interface ${name} が extends を持つ (継承したフィールドは読まない)`)
+  }
+  const open = head.index + head[0].length - 1
+  let depth = 0
+  for (let i = open; i < code.length; i += 1) {
+    const c = code[i]
+    if (c === "'" || c === '"' || c === '`') {
+      let j = i + 1
+      while (j < code.length && code[j] !== c) j += code[j] === '\\' ? 2 : 1
+      i = j
+      continue
+    }
+    if (c === '{') depth += 1
+    else if (c === '}') {
+      depth -= 1
+      if (depth === 0) return code.slice(open, i + 1)
+    }
+  }
+  throw new Error(`interface ${name} の閉じ括弧が無い`)
+}
+
+/** オブジェクト型の深さ 0 のフィールド `name` の型 (`;` の前まで)。無ければ null。 */
+function fieldTypeOf(top, name) {
+  const match = new RegExp(String.raw`(?:^|[;\s{])${escapeRegExp(name)}\s*:\s*([^;]+);`).exec(top)
+  return match === null ? null : match[1].trim()
+}
+
+/** B 節の 2 つの側 (assistant / user)。specifier は Agent SDK の型が参照するもの (AD-060)。 */
+const CONTENT_SIDES = Object.freeze([
+  Object.freeze({
+    prefix: 'assistant',
+    owner: 'SDKAssistantMessage',
+    typeName: 'BetaMessage',
+    specifiers: ['@anthropic-ai/sdk/resources/beta/messages/messages.mjs'],
+    dts: 'betaMessagesDts',
+    allowString: false
+  }),
+  Object.freeze({
+    prefix: 'user',
+    owner: 'SDKUserMessage',
+    typeName: 'MessageParam',
+    specifiers: [
+      '@anthropic-ai/sdk/resources',
+      '@anthropic-ai/sdk/resources/messages/messages.mjs'
+    ],
+    dts: 'messagesDts',
+    allowString: true
+  })
+])
+
+/**
+ * B 節の集合: Agent SDK の `SDKAssistantMessage.message` (`BetaMessage`) と `SDKUserMessage.message` (`MessageParam`) の
+ * `content` の配列の要素の union のメンバーの `type`。識別子は `assistant/<type>` / `user/<type>` (data-model §3.2)。
+ * 読めないものがあれば例外 (取りこぼしを黙って通さない)。
+ */
+export function parseContentBlockTypes(sdkDts, betaMessagesDts, messagesDts) {
+  const dtsOf = { betaMessagesDts, messagesDts }
+  const unions = []
+  for (const side of CONTENT_SIDES) {
+    const imported = new RegExp(
+      String.raw`import\s+type\s*\{[^}]*\b${side.typeName}\b[^}]*\}\s*from\s*(['"])([^'"]+)\1`
+    ).exec(strippedOf(sdkDts))
+    if (imported === null) {
+      throw new Error(`sdk.d.ts に ${side.typeName} の import が無い (SDK の型の参照が変わった)`)
+    }
+    if (!side.specifiers.includes(imported[2])) {
+      throw new Error(
+        `SDK の型の参照が変わった: ${side.typeName} の import が ${imported[2]} (期待 ${side.specifiers.join(' / ')})`
+      )
+    }
+    const owner = typeAliasBody(sdkDts, side.owner)
+    const ownerTop = owner === null ? null : objectTopLevelText(owner)
+    const messageType = ownerTop === null ? null : fieldTypeOf(ownerTop, 'message')
+    if (messageType !== side.typeName) {
+      throw new Error(
+        `${side.owner} の message が ${side.typeName} でない (${messageType ?? '読めない'})`
+      )
+    }
+    unions.push(side)
+  }
+
+  const ids = []
+  for (const side of unions) {
+    const dts = dtsOf[side.dts]
+    const body = interfaceBody(dts, side.typeName)
+    const top = body === null ? null : objectTopLevelText(body)
+    if (top === null) throw new Error(`${side.typeName} の interface が読めない`)
+    const content = fieldTypeOf(top, 'content')
+    if (content === null) throw new Error(`${side.typeName} に content が無い`)
+    const parts = splitTopLevel(content, '|')
+      .map((part) => part.trim())
+      .filter((part) => !(side.allowString && part === 'string'))
+    const array = parts.length === 1 ? /^Array<([A-Za-z_$][\w$]*)>$/.exec(parts[0]) : null
+    if (array === null) {
+      throw new Error(
+        `${side.typeName} の content が Array<union> の形でない: ${content.slice(0, 80)}`
+      )
+    }
+    const unionBody = typeAliasBody(dts, array[1])
+    if (unionBody === null) throw new Error(`${array[1]} の型定義が無い`)
+    for (const member of unionMemberNames(unionBody, array[1])) {
+      const memberBody = interfaceBody(dts, member)
+      const memberTop = memberBody === null ? null : objectTopLevelText(memberBody)
+      const typeField = memberTop === null ? null : fieldTypeOf(memberTop, 'type')
+      const literal = typeField === null ? null : /^(['"])([^'"]+)\1$/.exec(typeField)
+      if (literal === null) throw new Error(`${member} の type が文字列リテラルとして読めない`)
+      ids.push(`${side.prefix}/${literal[2]}`)
+    }
+  }
+  return ids
+}
+
 /** SDK の `package.json` の版。 */
 export function parsePackageVersion(packageJson) {
   const version = JSON.parse(packageJson).version
@@ -386,6 +513,9 @@ export function parseCoverage(markdown) {
   const version = /^SDK:\s*`?@anthropic-ai\/claude-agent-sdk`?\s+`?v?([0-9][^\s`]*)`?\s*$/m.exec(
     markdown
   )
+  const anthropicVersion = /^SDK:\s*`?@anthropic-ai\/sdk`?\s+`?v?([0-9][^\s`]*)`?\s*$/m.exec(
+    markdown
+  )
   const sections = { A: [], "A'": [], B: [], C: [], D: [], E: [], F: [] }
   const present = new Set()
   const errors = []
@@ -436,6 +566,7 @@ export function parseCoverage(markdown) {
 
   return {
     sdkVersion: version === null ? null : version[1],
+    anthropicSdkVersion: anthropicVersion === null ? null : anthropicVersion[1],
     sections,
     present: [...present],
     errors
@@ -525,7 +656,11 @@ export function checkCoverage(input) {
     'toolInputs',
     'controlSubtypes',
     'table',
-    'roadmap'
+    'roadmap',
+    'sdkDts',
+    'betaMessagesDts',
+    'messagesDts',
+    'anthropicSdkPackage'
   ]
   const missing = required.filter((key) => input?.[key] === undefined || input?.[key] === null)
   if (missing.length > 0) {
@@ -535,6 +670,42 @@ export function checkCoverage(input) {
 
   const { sdkVersion, messageTypes, toolInputs, controlSubtypes, table, roadmap } = input
   const tableSdkVersion = input.tableSdkVersion ?? table.sdkVersion
+
+  // B 節の集合 (Agent SDK の型が参照する @anthropic-ai/sdk の union。AD-060)
+  let contentBlocks = null
+  try {
+    contentBlocks = parseContentBlockTypes(input.sdkDts, input.betaMessagesDts, input.messagesDts)
+  } catch (error) {
+    fail('B', '(SDK)', error instanceof Error ? error.message : String(error))
+  }
+
+  // @anthropic-ai/sdk の版
+  let anthropicSdkVersion = null
+  try {
+    anthropicSdkVersion = parsePackageVersion(input.anthropicSdkPackage)
+  } catch (error) {
+    fail(
+      '冒頭',
+      'SDK',
+      `@anthropic-ai/sdk の版を読めない: ${error instanceof Error ? error.message : String(error)}`
+    )
+  }
+  if (anthropicSdkVersion !== null) {
+    const tableAnthropic = table.anthropicSdkVersion
+    if (tableAnthropic === null || tableAnthropic === undefined) {
+      fail(
+        '冒頭',
+        'SDK',
+        '対応表に @anthropic-ai/sdk の版の行が無い (`SDK: `@anthropic-ai/sdk` <version>`)'
+      )
+    } else if (tableAnthropic !== anthropicSdkVersion) {
+      fail(
+        '冒頭',
+        'SDK',
+        `対応表の @anthropic-ai/sdk の版 ${tableAnthropic} が入っている版 ${anthropicSdkVersion} と違う`
+      )
+    }
+  }
 
   // 版
   if (tableSdkVersion === null || tableSdkVersion === undefined) {
@@ -549,6 +720,7 @@ export function checkCoverage(input) {
 
   // 下限 (parse の取りこぼし)
   const sdkSets = { A: messageTypes, C: toolInputs, E: controlSubtypes }
+  if (contentBlocks !== null) sdkSets.B = contentBlocks
   for (const [section, names] of Object.entries(sdkSets)) {
     if (names.length < LOWER_BOUNDS[section]) {
       fail(
@@ -686,7 +858,7 @@ export function formatCounts(counts) {
       )
       .join(', ') || 'なし'
   return (
-    `行: ${rows} | 割当 × Tier: ${kinds} | 後続: ${followUps} | ` +
+    `行: ${rows} (照合済み: A B C E) | 割当 × Tier: ${kinds} | 後続: ${followUps} | ` +
     `M3 の完了の条件の残り (Tier A の後続で割当先が M3): ${counts.m3Remaining}`
   )
 }

@@ -225,7 +225,7 @@ AD-018 が本 feature の設計を直接縛る。
 > **O-2 の design で範囲を改めた (USER 決定 2026-10-03。[spec 011](../specs/011-ui-coverage/spec.md))。** O-2 は対応表・SDK の型との
 > 機械照合 (Constitution 検証の項目 21)・割当の確定・`ui-coverage-reviewer` と、実行中の tool の結果・Hook / Background task の行・
 > transcript の情報密度に絞った。下のプロンプトの 8 つの表示は、対応表の割当として後続に回した: Permission grant → I-3、
-> Cost meter / Quota banner / Context display → O-4、Elicitation form / Server panel → O-5、Web search → O-6、Checkpoints → O-12 (O-6 の design で O-11 に分け、O-11 の design で O-12 に送った)。
+> Cost meter / Quota banner / Context display → O-4、Elicitation form / Server panel → O-5、Web search → O-6、Checkpoints → O-12 (O-6 の design で O-11 に分け、O-11 の design で O-12 に送った。O-12 で実装した: `files_persisted` のシステムイベントの行。巻き戻しはしない)。
 > 下は当初のプロンプトの記録として残す。
 
 ```

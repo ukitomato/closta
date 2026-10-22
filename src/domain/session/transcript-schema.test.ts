@@ -31,7 +31,16 @@ const SAMPLE_PARTS: { [K in TranscriptPartDTO['type']]: Extract<TranscriptPartDT
       children: []
     },
     image: { type: 'image', url: 'data:image/png;base64,AA' },
-    file: { type: 'file', filename: 'f', text: '' },
+    file: { type: 'file', filename: 'f', mediaType: '' },
+    'server-tool-call': {
+      type: 'server-tool-call',
+      toolCallId: 'c',
+      toolName: 'web_search',
+      argsText: '{}',
+      truncated: false,
+      result: null
+    },
+    'unsupported-block': { type: 'unsupported-block', blockType: 'x' },
     divider: { type: 'divider', label: 'l' },
     'system-event': {
       type: 'system-event',
@@ -110,7 +119,17 @@ describe('transcript DTO schema', () => {
     // data-model §3 の割り当て表に対応する part 種別が DTO に存在すること (O-2 で system-event。正本は docs/ui-coverage.md)。
     const covered = Object.keys(TRANSCRIPT_PART_FIELDS).sort()
     expect(covered).toEqual(
-      ['divider', 'file', 'image', 'reasoning', 'system-event', 'text', 'tool-call'].sort()
+      [
+        'divider',
+        'file',
+        'image',
+        'reasoning',
+        'server-tool-call',
+        'system-event',
+        'text',
+        'tool-call',
+        'unsupported-block'
+      ].sort()
     )
   })
 })

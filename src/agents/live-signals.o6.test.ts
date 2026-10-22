@@ -364,3 +364,58 @@ describe('取り消し (BE-012)', () => {
     expect(retracted).toEqual([{ ids: [], instructed: 1, dropped: 1 }])
   })
 })
+
+describe('O-12 の知らせの類 (BE-012)', () => {
+  it('system の 5 つの subtype と onNotice が message を 1 つ出し、meter を増やさない', () => {
+    const { signals, emitted } = setup()
+    signals.onSystem(system('notification', { uuid: 'a1', key: 'k', text: 'hi', color: MARK }))
+    signals.onSystem(system('local_command_output', { uuid: 'a2', content: 'out' }))
+    signals.onSystem(system('memory_recall', { uuid: 'a3', mode: 'select', memories: [] }))
+    signals.onSystem(system('mirror_error', { uuid: 'a4', error: 'e', key: { projectKey: MARK } }))
+    signals.onSystem(
+      system('files_persisted', { uuid: 'a5', files: [{ filename: 'f', file_id: MARK }] })
+    )
+    signals.onNotice({
+      type: 'tool_use_summary',
+      uuid: 'a6',
+      summary: 's',
+      preceding_tool_use_ids: [MARK]
+    })
+    signals.onNotice({ type: 'active_goal', uuid: 'a7', value: null })
+    expect(emitted.map((e) => e.kind)).toEqual(Array(7).fill('message'))
+    expect(emitted.map((e) => rowOf(e).category)).toEqual([
+      'notification',
+      'local-command-output',
+      'memory-recall',
+      'mirror-error',
+      'files-persisted',
+      'tool-use-summary',
+      'active-goal'
+    ])
+    expect(JSON.stringify(emitted)).not.toContain(MARK)
+  })
+
+  it('同じ key の notification は同じ id で出る。親 tool 付きでも主ループの行になる', () => {
+    const { signals, emitted } = setup()
+    signals.onSystem(
+      system('notification', { uuid: 'b1', key: 'k', text: 'one', parent_tool_use_id: 'toolu_x' })
+    )
+    signals.onSystem(system('notification', { uuid: 'b2', key: 'k', text: 'two' }))
+    expect(emitted.map((e) => rowOf(e).id)).toEqual(['notification:k', 'notification:k'])
+  })
+
+  it('知らない種類・record でないものは何も出さない', () => {
+    const { signals, emitted } = setup()
+    signals.onNotice({ type: 'prompt_suggestion', suggestion: MARK })
+    signals.onNotice('x')
+    signals.onNotice(null)
+    expect(emitted).toEqual([])
+  })
+
+  it('dispose の後は何も送らない', () => {
+    const { signals, emitted } = setup()
+    signals.dispose()
+    signals.onNotice({ type: 'tool_use_summary', uuid: 'c1', summary: 's' })
+    expect(emitted).toEqual([])
+  })
+})

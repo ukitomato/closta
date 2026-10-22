@@ -846,9 +846,18 @@ async function run(
             typeof parentToolUseId === 'string' ? toolResults.nest(dto, parentToolUseId) : null
           if (nested === null || nested.kind === 'orphan') {
             // 結果待ちの tool_use を覚える (結果は後の user メッセージで同じ id に埋めて送り直す。O-2 / FR-007)。
-            toolResults.trackAssistant(dto)
-            // 取り消した id の assistant を後から受けても送らない。
-            if (!toolResults.isRetracted(dto.id)) emit({ kind: 'message', message: dto })
+            // 結果だけの `server-tool-call` (別のメッセージの `server_tool_use` の結果) は、覚えている同じ id の part に
+            // 埋めて送り直し、届いたメッセージからは外す (O-12 / data-model §2.3)。取り消した根は送り直さない。
+            const retracted = toolResults.isRetracted(dto.id)
+            const served = retracted
+              ? { resend: [], message: dto }
+              : toolResults.applyServerResults(dto)
+            for (const resent of served.resend) emit({ kind: 'message', message: resent })
+            if (served.message !== null) {
+              toolResults.trackAssistant(served.message)
+              // 取り消した id の assistant を後から受けても送らない。
+              if (!retracted) emit({ kind: 'message', message: served.message })
+            }
           } else if (nested.kind === 'resend') {
             emit({ kind: 'message', message: nested.message })
           }
@@ -955,8 +964,15 @@ async function run(
           // 会話の作り直しの行 (O-6 / 016 data-model §1。`uuid` だけを読み、`new_conversation_id` は読まない)。
           signals.onConversationReset(message)
           break
+        case 'tool_use_summary':
+          // tool の要約の行 (O-12 / AD-060。`summary` だけを読み、`preceding_tool_use_ids` は読まない)。
+          signals.onNotice(message)
+          break
         default:
+          // `active_goal` は `SDKMessage` の union の外 (`StdoutMessage` にだけある。TS2678 で case を書けない) ので
+          // ここで型を確かめて渡す (O-12 / spec U-13)。`prompt_suggestion` は届かないので足さない (U-1)。
           // stream_event / partial 等の扱いは docs/ui-coverage.md の対応表が正本 (AD-020 / H-06)。
+          if (asRecord(message)?.type === 'active_goal') signals.onNotice(message)
           break
       }
       if (terminated) break

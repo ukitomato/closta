@@ -69,6 +69,16 @@ function rowAnnouncement(messageId: string, data: RowFields | null): Announcemen
       return make('refusal', 'other', ANNOUNCER_LABELS.refusal)
     case 'informational':
       return status === 'prevented' ? make('prevented', 'other', ANNOUNCER_LABELS.prevented) : null
+    case 'notification':
+      return status === 'warning'
+        ? make('notification', 'other', ANNOUNCER_LABELS.notificationWarning)
+        : null
+    case 'mirror-error':
+      return make('mirror-error', 'other', ANNOUNCER_LABELS.mirrorError)
+    case 'files-persisted':
+      return status === 'failed'
+        ? make('files-failed', 'other', ANNOUNCER_LABELS.filesPersistedFailed)
+        : null
     case 'hook':
     case 'task':
     case 'backgrounded-task': {

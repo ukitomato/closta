@@ -2,6 +2,7 @@ import type { ThreadMessageLike, ToolCallMessagePartProps } from '@assistant-ui/
 
 import type { TranscriptMessageDTO, TranscriptPartDTO } from '@domain/session/transcript-dto'
 
+import { DOCUMENT_LABELS, SERVER_TOOL_LABELS } from './labels'
 import { readMessageTime, withMessageTime } from './message-time'
 import { isSystemEventFields } from './transcript-guard'
 
@@ -41,6 +42,20 @@ function stripInternalKeys(args: ToolCallArgs): Record<string, unknown> {
   return out
 }
 
+/**
+ * assistant-ui の tool-call の part がサーバー側の tool (`server-tool-call` から写したもの) か (O-12)。信頼の印 `args.__serverTool`
+ * で見る。O-9 の会話の地図の tool の数・エラーの数には数えない (範囲を広げない。data-model §2.5 の下の注記)。
+ */
+export function isServerToolCallPart(part: { readonly args?: unknown }): boolean {
+  const args = part.args
+  if (typeof args !== 'object' || args === null) return false
+  const marker = (args as Record<string, unknown>).__serverTool
+  return typeof marker === 'object' && marker !== null
+}
+
+/** 知らないブロックの印の data part の名前 (O-12 / FR-011)。 */
+export const UNSUPPORTED_BLOCK_DATA_NAME = 'unsupported-block'
+
 function convertPart(part: TranscriptPartDTO): MessagePart {
   switch (part.type) {
     case 'text':
@@ -69,11 +84,42 @@ function convertPart(part: TranscriptPartDTO): MessagePart {
         isError: part.isError
       }
     }
+    case 'server-tool-call': {
+      // サーバー側の tool (O-12 / FR-008。data-model §2.4)。信頼の印 `__serverTool` は domain が付す値で、argsText 由来の
+      // `__` のキーは剥がしたうえで明示設定する (PR-H-1)。tool-registry がこの印で ServerToolCall に振り分ける。
+      const args = {
+        ...stripInternalKeys(parseArgs(part.argsText)),
+        __serverTool: { result: part.result },
+        __truncated: part.truncated
+      } as unknown as ToolCallArgs
+      return {
+        type: 'tool-call',
+        toolCallId: part.toolCallId,
+        toolName: part.toolName.length > 0 ? part.toolName : SERVER_TOOL_LABELS.defaultName,
+        args,
+        argsText: part.argsText,
+        result: part.result === null ? undefined : part.result,
+        isError: part.result?.kind === 'error'
+      }
+    }
+    case 'unsupported-block':
+      // 種類の名前だけの印 (O-12 / FR-011)。assistant と user のメッセージの中だけに現れる。
+      return {
+        type: 'data',
+        name: UNSUPPORTED_BLOCK_DATA_NAME,
+        data: { blockType: part.blockType }
+      }
     case 'image':
       return { type: 'image', image: part.url }
     case 'file':
-      // R-3 は最小表示。File element への完全対応は R-4 / O-2 に譲り、ファイル名を text で示す。
-      return { type: 'text', text: `📎 ${part.filename}` }
+      // 名前と種類だけ (O-12 / FR-010)。`sourceType: 'id'` と `data: ''` でダウンロードのリンクと大きさを出さない。
+      return {
+        type: 'file',
+        filename: part.filename.length > 0 ? part.filename : DOCUMENT_LABELS.unnamed,
+        data: '',
+        mimeType: part.mediaType.length > 0 ? part.mediaType : 'application/octet-stream',
+        sourceType: 'id'
+      }
     case 'divider':
       // コンパクション境界 (FR-018 / [USER] 確定)。実行中の行と同じ TranscriptBoundary で描くため、`compact-boundary` の
       // data part に写す (数は出さない。`label` は読まない。O-6 / 016 data-model §1「過去ログの圧縮」)。
@@ -96,7 +142,7 @@ function convertPart(part: TranscriptPartDTO): MessagePart {
  * 結果の状態の印は表示の中の `useToolResultState` が thread の context から引くので、`status` は常に `complete` (操作は持たない)。
  */
 export function toToolCallPartProps(
-  part: Extract<TranscriptPartDTO, { type: 'tool-call' }>
+  part: Extract<TranscriptPartDTO, { type: 'tool-call' | 'server-tool-call' }>
 ): ToolCallMessagePartProps {
   const converted = convertPart(part) as Extract<MessagePart, { type: 'tool-call' }>
   return {
