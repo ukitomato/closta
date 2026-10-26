@@ -42,3 +42,4 @@ V-1〜V-5 の全部 (実機で届くか・残るか)。Constitution Principle XI
 - 実機の確認 (V-1〜V-5) は未実施
 - Constitution v1.5.0 (Principle XII の Verification を「A・B・C・E 節」に) は持ち越し (U-12)
 - E2E (要ビルド) と基準画像は CI の e2e job で通す。composer / sidebar の基準画像 2 件は本機の揺れで落ちる既知の状態
+- 2026-10-27 (pr-gate round 1 の修正後、197e715): 枝でビルドし直して E2E を全件実行。19 passed / 2 failed (composer / sidebar の基準画像の既知 2 件だけ)
