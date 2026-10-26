@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { toNoticeRow } from './notice-rows'
 import { toTranscriptMessages, type SessionMessageLike } from './transcript'
 
 /** O-2 BE-022 — 過去ログの Hook / Background task のシステムメッセージ (実行中と同じ合成の規則)。 */
@@ -243,5 +244,85 @@ describe('過去ログの後から背景に移った task (O-11 BE-022)', () => 
   it('背景に移さなかった前景の task は行にならない', () => {
     const out = toTranscriptMessages([bashCall('npm x'), fgStart()])
     expect(out.find((m) => m.id === 'task:t1')).toBeUndefined()
+  })
+})
+
+/** O-12 BE-040 / SC-005 — 過去ログの知らせの類は実行中と同じ `toNoticeRow` で行になる。 */
+const TS = Date.parse('2026-01-01T00:00:01.000Z')
+
+describe('toTranscriptMessages の知らせの類 (O-12)', () => {
+  const live: Record<string, unknown>[] = [
+    { type: 'system', subtype: 'informational', uuid: 'inf-1', content: '知らせ', level: 'info' },
+    { type: 'system', subtype: 'local_command_output', content: 'out SECRET-NOT' },
+    { type: 'system', subtype: 'mirror_error', error: 'mirror failed', key: 'KEYMARK' },
+    { type: 'system', subtype: 'notification', key: 'n1', text: 'hello', priority: 'high' },
+    {
+      type: 'system',
+      subtype: 'files_persisted',
+      files: [{ filename: 'a.txt', file_id: 'FID' }],
+      failed: []
+    }
+  ]
+
+  it('判別子のある記録が実行中と同じ DTO の行になる', () => {
+    for (const [i, raw] of live.entries()) {
+      const expected = toNoticeRow(raw, TS, `u${i}`)
+      expect(expected).not.toBeNull()
+      const out = toTranscriptMessages(
+        [{ type: 'system', uuid: `u${i}`, timestamp: '2026-01-01T00:00:01.000Z', message: raw }],
+        { now: TS }
+      )
+      expect(out).toHaveLength(1)
+      expect(out[0]).toEqual(expected)
+    }
+  })
+
+  it('message.type に残る種類 (conversation_reset / tool_use_summary / active_goal) が読める', () => {
+    const cases: Record<string, unknown>[] = [
+      { type: 'conversation_reset', uuid: 'rst-1' },
+      { type: 'tool_use_summary', summary: 'did things' },
+      { type: 'active_goal', value: null }
+    ]
+    for (const [i, message] of cases.entries()) {
+      const expected = toNoticeRow({ type: 'system', ...message }, TS, `r${i}`)
+      expect(expected).not.toBeNull()
+      const out = toTranscriptMessages(
+        [{ type: 'system', uuid: `r${i}`, timestamp: '2026-01-01T00:00:01.000Z', message }],
+        { now: TS }
+      )
+      expect(out[0]).toEqual(expected)
+    }
+  })
+
+  it('判別子が無い・知らない subtype の記録は今どおり伏せ字つきの本文で欠落しない', () => {
+    const out = toTranscriptMessages([
+      system('x1', { content: 'plain body' }),
+      system('x2', { subtype: 'unknown_kind', content: 'other body' })
+    ])
+    expect(out.map((m) => m.id)).toEqual(['x1', 'x2'])
+    expect(JSON.stringify(out)).toMatch(/plain body/)
+  })
+
+  it('同じ key の notification は 1 行に合成され、読まないフィールドは DTO に出ない', () => {
+    const out = toTranscriptMessages([
+      system('a', { subtype: 'notification', key: 'n1', text: 'one' }),
+      system('b', { subtype: 'notification', key: 'n1', text: 'two' }),
+      system('c', { subtype: 'mirror_error', error: 'e', key: 'KEYMARK' }),
+      system('d', {
+        subtype: 'files_persisted',
+        files: [{ filename: 'a.txt', file_id: 'FID' }],
+        failed: []
+      })
+    ])
+    expect(out.filter((m) => m.parts[0]?.type === 'system-event')).toHaveLength(3)
+    expect(JSON.stringify(out)).not.toMatch(/KEYMARK|FID/)
+  })
+
+  it('model_refusal_fallback の retracted_message_uuids は読まない', () => {
+    const out = toTranscriptMessages([
+      { type: 'user', uuid: 'u1', message: { role: 'user', content: 'hi' } },
+      system('s1', { subtype: 'model_refusal_fallback', retracted_message_uuids: ['u1'] })
+    ])
+    expect(out.some((m) => m.id === 'u1')).toBe(true)
   })
 })

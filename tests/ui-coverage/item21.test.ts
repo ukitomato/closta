@@ -9,11 +9,12 @@ import {
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import {
+  parseContentBlockTypes,
   parseControlRequestSubtypes,
   parsePackageVersion,
   parseSdkMessageUnion,
@@ -35,6 +36,13 @@ import {
 
 const SDK_DIR = 'node_modules/@anthropic-ai/claude-agent-sdk'
 const SDK_FILES = ['sdk.d.ts', 'sdk-tools.d.ts', 'package.json']
+const ANTHROPIC_DIR = 'node_modules/@anthropic-ai/sdk'
+/** B 節の照合の入力 (`@anthropic-ai/sdk`。AD-060)。 */
+const ANTHROPIC_FILES = [
+  'resources/beta/messages/messages.d.mts',
+  'resources/messages/messages.d.mts',
+  'package.json'
+]
 /** scan.mjs の SCAN_FILES。無いものは飛ばす。 */
 const SCAN_FILES = [
   'package.json',
@@ -49,14 +57,24 @@ let root = ''
 function validTable(): string {
   const sdkDts = readFileSync(`${SDK_DIR}/sdk.d.ts`, 'utf8')
   const version = parsePackageVersion(readFileSync(`${SDK_DIR}/package.json`, 'utf8'))
+  const anthropicVersion = parsePackageVersion(
+    readFileSync(`${ANTHROPIC_DIR}/package.json`, 'utf8')
+  )
+  const blocks = parseContentBlockTypes(
+    sdkDts,
+    readFileSync(`${ANTHROPIC_DIR}/${ANTHROPIC_FILES[0]}`, 'utf8'),
+    readFileSync(`${ANTHROPIC_DIR}/${ANTHROPIC_FILES[1]}`, 'utf8')
+  )
   const header = '| 識別子 | 判別子 | Tier | 割当 | 経路 | 備考 |\n|---|---|---|---|---|---|'
   const rows = (ids: string[]): string =>
     ids.map((id) => `| \`${id}\` | — | B | 表示不要: 発火のテスト | なし |  |`).join('\n')
   return [
     `SDK: @anthropic-ai/claude-agent-sdk ${version}`,
     '',
+    `SDK: \`@anthropic-ai/sdk\` ${anthropicVersion}`,
+    '',
     `## A メッセージ型\n\n${header}\n${rows(parseSdkMessageUnion(sdkDts))}\n`,
-    `## B 中身のブロック\n\n${header}\n${rows(['assistant/text'])}\n`,
+    `## B 中身のブロック\n\n${header}\n${rows(blocks)}\n`,
     `## C tool\n\n${header}\n${rows(parseToolInputs(readFileSync(`${SDK_DIR}/sdk-tools.d.ts`, 'utf8')))}\n`,
     `## D アプリが作る経路\n\n${header}\n${rows(['permission-request'])}\n`,
     `## E 制御要求\n\n${header}\n${rows(parseControlRequestSubtypes(sdkDts))}\n`,
@@ -87,6 +105,10 @@ beforeAll(() => {
   }
   mkdirSync(join(root, SDK_DIR), { recursive: true })
   for (const file of SDK_FILES) cpSync(`${SDK_DIR}/${file}`, join(root, SDK_DIR, file))
+  for (const file of ANTHROPIC_FILES) {
+    mkdirSync(dirname(join(root, ANTHROPIC_DIR, file)), { recursive: true })
+    cpSync(`${ANTHROPIC_DIR}/${file}`, join(root, ANTHROPIC_DIR, file))
+  }
   mkdirSync(join(root, 'docs'), { recursive: true })
   cpSync('docs/roadmap.md', join(root, 'docs/roadmap.md'))
 })
@@ -123,10 +145,15 @@ describe('Constitution 検証の項目 21 (Principle XII)', () => {
     // 1 回の起動で両方を確かめる (プロセスの起動が重いため)。SDK だけを特別扱いする退行も拾う。
     rmSync(join(root, 'docs/ui-coverage.md'), { force: true })
     rmSync(join(root, SDK_DIR, 'sdk.d.ts'), { force: true })
+    // B 節の入力 (@anthropic-ai/sdk) も 1 つ消す。
+    rmSync(join(root, ANTHROPIC_DIR, 'resources/messages/messages.d.mts'), { force: true })
     const result = runCheck()
     expect(result.output).toMatch(/^\[VIOLATE\] #21 /m)
     expect(result.output).toContain('docs/ui-coverage.md  検査の入力が無い')
     expect(result.output).toContain(`${SDK_DIR}/sdk.d.ts  検査の入力が無い`)
+    expect(result.output).toContain(
+      `${ANTHROPIC_DIR}/resources/messages/messages.d.mts  検査の入力が無い`
+    )
     expect(result.output).not.toMatch(/^\[pending\] #21 /m)
     expect(result.status).not.toBe(0)
   }, 60_000)

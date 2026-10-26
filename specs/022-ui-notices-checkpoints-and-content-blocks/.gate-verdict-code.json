@@ -1,0 +1,121 @@
+{
+  "gate": "code",
+  "run": "2026-10-26T15:11:13Z",
+  "spec_dir": "specs/022-ui-notices-checkpoints-and-content-blocks",
+  "spec_id": "022-ui-notices-checkpoints-and-content-blocks",
+  "iter": 2,
+  "base_commit": "e79a694c0f81620a884c1be54975b3c38ee0d1c2",
+  "severity_counts": {
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "low": 1,
+    "must_fix": 0
+  },
+  "must_fix_findings": [],
+  "touched_files": [
+    {
+      "path": "docs/domains/_overview.md",
+      "sha": "09f2ae34118c5cc019bd8280a5a6ea0aabcf88a5"
+    },
+    {
+      "path": "docs/domains/session/charter.md",
+      "sha": "7959735e4e70ffcc1630a8b189ef7e528fc0e6f9"
+    },
+    {
+      "path": "docs/domains/ui/charter.md",
+      "sha": "8d2becf5feba524040adf5550bd6fd3083e956fc"
+    },
+    {
+      "path": "src/agents/sdk-agent-session.ts",
+      "sha": "9a8c883a0a655410bb2ad31c3196ec76ec5221e4"
+    },
+    {
+      "path": "src/domain/session/notice-rows.ts",
+      "sha": "c72cd4b47b5fe8f93667216280c9d6745b607b78"
+    },
+    {
+      "path": "src/domain/session/system-event.test.ts",
+      "sha": "5f16590fdc281b3e5860bb1702a4ac71d534dfd6"
+    },
+    {
+      "path": "src/domain/session/transcript-dto.ts",
+      "sha": "f8c8f13a368526d70a7c9db39f182678d8ddd2c2"
+    },
+    {
+      "path": "src/renderer/src/features/chat/transcript-announcements.ts",
+      "sha": "808e8b5e11d97eccf54a694327f9513ac6973af3"
+    },
+    {
+      "path": "src/renderer/src/features/chat/TranscriptAnnouncer.test.tsx",
+      "sha": "03def460557942c8f23cde958464a3bde8ce3770"
+    }
+  ],
+  "fr_coverage": [],
+  "viewpoint_coverage": {
+    "A": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+    "B": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+    "C": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+    "D": "Critical:0 High:0 Medium:0 Low:0 (platform-boundary-reviewer)",
+    "E": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+    "F": "High:0 Medium:0 Low:1",
+    "G": "\u8a72\u5f53\u306a\u3057: a11y/ux \u306f pr-gate \u5c02\u4efb",
+    "H": "Critical:0 High:0 Medium:0 Low:0"
+  },
+  "tracks": {
+    "lint-agent": {
+      "violations": 0,
+      "exit_code": 0,
+      "detectors": ["eslint", "typecheck-node", "typecheck-web", "depcruise", "check:constitution"],
+      "note": "eslint by lint-agent on 6 touched ts/tsx; typecheck/depcruise/check:constitution run by invoker (whole project), all exit 0"
+    },
+    "test-agent": {
+      "passed": 3954,
+      "failed": 0,
+      "exit_code": 0,
+      "scope": "full"
+    },
+    "convention-reviewer": {
+      "viewpoint_missing": [],
+      "cascade_demotions": 0,
+      "lint_input": "lint-agent"
+    },
+    "platform-boundary-reviewer": {
+      "critical": 0,
+      "high": 0,
+      "medium": 0,
+      "low": 0
+    }
+  },
+  "skipped_reviewers": [
+    {
+      "name": "a11y-reviewer",
+      "reason": "gates=['pr-gate'] \u306b code-gate \u304c\u7121\u3044"
+    },
+    {
+      "name": "ux-reviewer",
+      "reason": "gates=['pr-gate'] \u306b code-gate \u304c\u7121\u3044"
+    },
+    {
+      "name": "database-reviewer",
+      "reason": "auto_invoke_patterns \u306b\u4e00\u81f4\u3059\u308b\u5909\u66f4\u30d5\u30a1\u30a4\u30eb\u304c\u7121\u3044 (\u5909\u66f4 9 \u4ef6 / pattern 5 \u4ef6)"
+    }
+  ],
+  "cascade_demotions": 0,
+  "iter_history": [
+    {
+      "iter": 1,
+      "must_fix": 0,
+      "skipped": 0,
+      "error": 0
+    },
+    {
+      "iter": 2,
+      "must_fix": 0,
+      "skipped": 0,
+      "error": 0
+    }
+  ],
+  "verdict": "PASS",
+  "diff_range": "HEAD (uncommitted fixes after pr-gate round 1)"
+}

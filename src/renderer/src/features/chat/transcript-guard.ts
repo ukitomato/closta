@@ -73,6 +73,44 @@ function isToolCallShape(value: Rec): boolean {
   )
 }
 
+/** サーバー側の検索の結果の項目の上限 (domain の `WEB_SOURCES_MAX` と同じ。data-model §2.1)。 */
+const SERVER_SOURCES_MAX = 20
+
+function isWebSource(value: unknown): boolean {
+  return isRecord(value) && typeof value.title === 'string' && typeof value.url === 'string'
+}
+
+/** `server-tool-call` の結果の形か (`kind` は 3 つのどれか。`sources` は 20 件まで)。 */
+function isServerToolResult(value: unknown): boolean {
+  if (!isRecord(value)) return false
+  switch (value.kind) {
+    case 'web-search':
+      return (
+        Array.isArray(value.sources) &&
+        value.sources.length <= SERVER_SOURCES_MAX &&
+        value.sources.every(isWebSource) &&
+        typeof value.omitted === 'number' &&
+        Number.isFinite(value.omitted)
+      )
+    case 'error':
+      return typeof value.errorCode === 'string'
+    case 'unsupported':
+      return typeof value.blockType === 'string'
+    default:
+      return false
+  }
+}
+
+function isServerToolCallShape(value: Rec): boolean {
+  return (
+    typeof value.toolCallId === 'string' &&
+    typeof value.toolName === 'string' &&
+    typeof value.argsText === 'string' &&
+    typeof value.truncated === 'boolean' &&
+    (value.result === null || isServerToolResult(value.result))
+  )
+}
+
 const ROLES: ReadonlySet<unknown> = new Set(['user', 'assistant', 'system'])
 
 function filterPart(part: Rec, depth: number): TranscriptPartDTO | null {
@@ -90,6 +128,10 @@ function filterPart(part: Rec, depth: number): TranscriptPartDTO | null {
       }
       return { ...(part as unknown as ToolCallPart), children }
     }
+    case 'server-tool-call':
+      return isServerToolCallShape(part) ? (part as unknown as TranscriptPartDTO) : null
+    case 'unsupported-block':
+      return typeof part.blockType === 'string' ? (part as unknown as TranscriptPartDTO) : null
     default:
       // 他の part は従来どおり (本文の無害化は agents / domain 済み。表示は assistant-ui の変換が形を見る)。
       return part as unknown as TranscriptPartDTO

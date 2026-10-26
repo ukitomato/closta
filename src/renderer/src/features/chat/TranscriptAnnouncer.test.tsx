@@ -133,6 +133,48 @@ describe('TranscriptAnnouncer (US-3 AC3)', () => {
     expect(text(view.container)).toBe('')
   })
 
+  it('O-12: notification の warning・mirror-error・files-persisted の failed だけ読み、他の新しい行は読まない', () => {
+    const cases: readonly [AnnounceableMessage, string][] = [
+      [row('n1', 'notification', 'warning'), 'Claude Code からの通知があります'],
+      [row('n2', 'mirror-error', 'failed'), '記録の同期に失敗しました'],
+      [row('n3', 'files-persisted', 'failed'), 'ファイルの保存に失敗しました']
+    ]
+    const view = render(<TranscriptAnnouncer />)
+    update(view, [{ id: 'u', content: [] }])
+    for (const [message, expected] of cases) {
+      update(view, [...thread.messages, message], 1500)
+      expect(text(view.container)).toBe(expected)
+      expect(text(view.container)).not.toMatch(/SECRET/)
+    }
+    const quiet = render(<TranscriptAnnouncer />)
+    update(quiet, [{ id: 'u', content: [] }])
+    update(quiet, [
+      { id: 'u', content: [] },
+      row('q1', 'notification', 'notice'),
+      row('q2', 'local-command-output', 'notice'),
+      row('q3', 'memory-recall', 'notice'),
+      row('q4', 'tool-use-summary', 'notice'),
+      row('q5', 'active-goal', 'completed'),
+      row('q6', 'files-persisted', 'completed')
+    ])
+    expect(text(quiet.container)).toBe('')
+  })
+
+  it('O-12: 同じ行の notification が high で書き換わって 2 回届くと 2 回読む。warning の後の同じ本文の notice は読まない', () => {
+    const view = render(<TranscriptAnnouncer />)
+    update(view, [{ id: 'u', content: [] }])
+    update(view, [{ id: 'u', content: [] }, row('n', 'notification', 'warning', 'first')], 1500)
+    expect(text(view.container)).toBe('Claude Code からの通知があります')
+    const firstNode = view.container.querySelector('[data-slot="transcript-announcer"] span')
+    update(view, [{ id: 'u', content: [] }, row('n', 'notification', 'warning', 'second')], 1500)
+    const secondNode = view.container.querySelector('[data-slot="transcript-announcer"] span')
+    expect(text(view.container)).toBe('Claude Code からの通知があります')
+    expect(secondNode).not.toBe(firstNode)
+    // 同じ本文の low (notice) に戻っても読まない
+    update(view, [{ id: 'u', content: [] }, row('n', 'notification', 'notice', 'second')], 1500)
+    expect(view.container.querySelector('[data-slot="transcript-announcer"] span')).toBe(secondNode)
+  })
+
   it('SessionStart の Hook の行が終わりの状態に変わったときに読む', () => {
     const view = render(<TranscriptAnnouncer />)
     update(view, [{ id: 'u', content: [] }, row('h1', 'hook', 'started', 'SessionStart')])

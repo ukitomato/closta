@@ -68,7 +68,7 @@ spec_id（`001-runtime-...`）とは独立させる。差し込み作業で番�
 | O-9 | 会話の時間と活動の可視化 (メッセージの時刻・ターンの所要時間・右のペインのタブ「会話の地図」・活動の帯。本文の横断検索はしないと決めた (017 U-7)。O-3 の design で分けた) | `ui` | M3 |
 | O-10 | Claude Code からの問いに答える UI と composer のコマンドの候補 (`AskUserQuestion` の回答・Elicitation・`request_user_dialog`・composer のスラッシュコマンドの候補。O-5 の design で分けた。[AD-048](../decisions/0048-session-config-display-and-answer-ui-split.md)) | `session` | M3 |
 | O-11 | Hook・背景の task・実行中の subagent の表示 (一般の Hook と `includeHookEvents`・背景の task の一覧・後から背景に移った task・実行中の subagent の入れ子と過去ログの subagent。O-6 の design で分け、O-11 の design で Tier B を O-12 に送った。[AD-049](../decisions/0049-boundaries-retraction-and-o11-split.md) Decision 1 / [AD-056](../decisions/0056-o11-scope-background-task-list-and-o12-split.md) Decision 1) | `ui` | M3 |
-| O-12 | 知らせの類・Checkpoints・中身のブロックの表示 (Tier B の知らせの類・`files_persisted`・`user/document` の File element・`server_tool_use` / `web_search_tool_result`・対応表の B 節の機械照合・過去ログへの O-6 / O-10 の行の変換。O-11 の design で分けた。[AD-056](../decisions/0056-o11-scope-background-task-list-and-o12-split.md) Decision 1) | `ui` | M3 (完了の条件に数えない) |
+| O-12 | 知らせの類・Checkpoints・中身のブロックの表示 (Tier B の知らせの類・`files_persisted`・`user/document` の File element・`server_tool_use` / `web_search_tool_result`・対応表の B 節の機械照合・過去ログへの O-6 / O-10 の行の変換。O-11 の design で分けた。[AD-056](../decisions/0056-o11-scope-background-task-list-and-o12-split.md) Decision 1。実装: 022 / [AD-060](../decisions/0060-content-block-verification-and-unsupported-block-mark.md)。実機の確認 (V-1〜V-5) は未実施) | `ui` | M3 (完了の条件に数えない) |
 | X-8 | Win32Runtime の直接起動 (Windows の作業フォルダでホストの `claude` を起動する。X-6 から切り出した。2026-10-19 に利用者が承認。マージ済み: 020 / [AD-058](../decisions/0058-win32-direct-launch-contract-and-process-tree-stop.md)。V-1 / V-3 (AD-058 の Confirmation・SC-001 / SC-004 の実機の計測) は未実施で、利用者の実機に残る) | `session` | M3 (O-12 の前。完了の条件に数えない) |
 | X-9 | セッションの再開 (resume と失敗したセッションの再開。fork は X-6 に残す。X-6 から切り出した。2026-10-19 に利用者が承認。完了: 021 / [AD-059](../decisions/0059-session-resume-query-option-and-conversation-id.md)) | `session` | M3 (O-12 の前。完了の条件に数えない) |
 | I-1 | `DockerRuntime` と endpoint 抽象 + `sessionStore` ミラー | `isolation` | M4 |
@@ -124,6 +124,7 @@ spec_id（`001-runtime-...`）とは独立させる。差し込み作業で番�
 - **O-6 は `ui` のまま、session の契約を広げる** — agents の `system` の 4 つの subtype と最上位の `conversation_reset` の分岐、`meter` の種類
   `retraction`、稼働中のストアからのメッセージの削除を O-6 が足す (U-6。2026-10-05 に利用者が承認。AD-049)。O-4 / O-5 と同じ形の例外で、
   記録は session charter
+- **O-12 は `ui` のまま、session の契約を広げる** — システムイベントの行の category 7 つ (13 → 20)・`TRANSCRIPT_PART_FIELDS` の part 2 つ (`server-tool-call` / `unsupported-block`) と `file` の形・agents の `system` の 5 つの subtype と最上位の `tool_use_summary` / `active_goal` の分岐・実行中の `server-tool-call` の対応づけを O-12 が足す (022 の U-1〜U-13。夜間の規則で推奨案を採用した。[AD-060](../decisions/0060-content-block-verification-and-unsupported-block-mark.md) / [AD-061](../decisions/0061-o12-contract-extensions-categories-parts-and-agents-branches.md))。`SessionEvent` の種類・`QUERY_OPTION_KEYS`・`METER_UPDATE_TYPES` は変えない。O-4 / O-5 / O-6 と同じ形の例外で、記録は session charter
 - **O-7（アプリのシェル）は `ui`** — 面の配置と遷移はどの domain の操作でもなく、R-1 から App と面の状態 (`stores/ui.ts`) を
   ui が持ってきた。SDK の emit の表示ではないので Principle XII の判定の対象外。サイドバーの 2 つの一覧の中身・行の形は今どおり
   session が持ち、シェルは置き場所と選択に応じた中央の切り替えだけを持つ ([AD-046](../decisions/0046-app-shell-layout.md)。

@@ -2,7 +2,6 @@ import type { LaunchFailureReason, SessionEvent } from '@domain/session/agent-se
 import type { SafePermissionMode } from '@domain/session/launch-config'
 import {
   contextTokensOf,
-  isMeterModelId,
   isValidTaskId,
   isValidToolUseId,
   MAX_METER_PERMISSION_DENIALS,
@@ -23,7 +22,6 @@ import {
 } from '@domain/session/meter'
 import {
   encodePluginDetail,
-  isMcpName,
   isReportName,
   stableSerialize,
   toCommands,
@@ -33,12 +31,8 @@ import {
   type InitReportMeter,
   type SessionInitReportInput
 } from '@domain/session/session-init-report'
-import {
-  encodeRetryDetail,
-  encodeTaskProgress,
-  redactedBodyLine,
-  SYSTEM_EVENT_NAME_MAX_CODE_POINTS
-} from '@domain/session/system-event'
+import { countToken, pickKey, toNoticeRow } from '@domain/session/notice-rows'
+import { encodeRetryDetail, encodeTaskProgress } from '@domain/session/system-event'
 import type { SystemEventCategory, SystemEventStatus } from '@domain/session/transcript-dto'
 
 import {
@@ -125,25 +119,6 @@ function buildRowEvent(
 /* ── O-6 の行の値の照合 (016 data-model §1。`Object.hasOwn` の表で引き、外れたら `-`) ───── */
 
 const TRIGGERS: Readonly<Record<string, true>> = { manual: true, auto: true }
-const DIRECTIONS: Readonly<Record<string, true>> = { retry: true, revert: true, sticky: true }
-const SCOPES: Readonly<Record<string, true>> = { session: true, local: true }
-const WARNING_LEVELS: Readonly<Record<string, true>> = { warning: true, suggestion: true }
-const REFUSAL_CATEGORY_SHAPE = /^[a-z_-]{1,32}$/
-
-/** 表の鍵に合う文字列ならそれ、そうでなければ `-` (`constructor` / `__proto__` / 空白を含む値を通さない)。 */
-function pickKey(table: Readonly<Record<string, true>>, raw: unknown): string {
-  return typeof raw === 'string' && Object.hasOwn(table, raw) ? raw : '-'
-}
-
-/** 0 以上の安全な整数なら文字列、そうでなければ `-`。 */
-function countToken(raw: unknown): string {
-  return typeof raw === 'number' && Number.isSafeInteger(raw) && raw >= 0 ? String(raw) : '-'
-}
-
-/** 拒否の分類。形の検査を通ったときだけ (外れたら '')。 */
-function refusalCategory(raw: unknown): string {
-  return typeof raw === 'string' && REFUSAL_CATEGORY_SHAPE.test(raw) ? raw : ''
-}
 
 /** 取り消しの指示 1 回で見る id の件数の上限 (巨大な配列の走査を縛る)。 */
 const MAX_RETRACTION_SCAN = 4096
@@ -257,6 +232,8 @@ export interface LiveSignals {
   onAuthStatus(message: unknown): void
   /** 最上位の `conversation_reset` (`uuid` だけを読む。`new_conversation_id` は読まない。016 data-model §1)。 */
   onConversationReset(message: unknown): void
+  /** トップレベルの知らせ (`tool_use_summary` / `active_goal`。未信頼。O-12)。 */
+  onNotice(message: unknown): void
   /** assistant の `supersedes` (未信頼)。`retraction` の `meter` を即時に送る。代わりのメッセージを送る前に呼ぶ。 */
   onRetraction(rawIds: unknown): void
   /** `tool_progress`。 */
@@ -622,82 +599,12 @@ export function createLiveSignals(deps: LiveSignalsDeps): LiveSignals {
   }
 
   /**
-   * `system` / `model_refusal_fallback` → 取り消しと拒否の行 (016 data-model §1)。読むのは `direction`・`scope`・
-   * `fallback_model`・`api_refusal_category`・`api_refusal_explanation` と、取り消しに使う `retracted_message_uuids` だけ。
+   * `system` の知らせの類 (O-6 / O-10 / O-12。12 の種類の行の組み立ては domain の `toNoticeRow` の 1 つ。FR-012)。
+   * 行にならなければ (`null`) 何も送らない。
    */
-  const onRefusalFallback = (record: Record<string, unknown>): void => {
-    retractIds(record.retracted_message_uuids)
-    const uuid = record.uuid
-    if (!isValidToolUseId(uuid)) return
-    const scope =
-      record.scope === undefined || record.scope === null
-        ? 'session'
-        : pickKey(SCOPES, record.scope)
-    const category = refusalCategory(record.api_refusal_category)
-    const head = `${pickKey(DIRECTIONS, record.direction)} ${scope} ${category === '' ? '-' : category}`
-    // 説明は先頭の 3 トークンと空白 1 つを除いた残りの長さで切り詰める (`detail` 全体が 120 コードポイントを超えない)。
-    const explanation = redactedBodyLine(
-      record.api_refusal_explanation,
-      SYSTEM_EVENT_NAME_MAX_CODE_POINTS - head.length - 1
-    )
-    const detail = explanation === '' ? head : `${head} ${explanation}`
-    const model = isMeterModelId(record.fallback_model) ? record.fallback_model : ''
-    send(rowEvent(`refusal:${uuid}`, 'refusal', true, detail, 'fallback', model))
-  }
-
-  /** `system` / `model_refusal_no_fallback` → 拒否の行 (`content`・`api_refusal_category`・`api_refusal_explanation` だけを読む)。 */
-  const onRefusalNoFallback = (record: Record<string, unknown>): void => {
-    const uuid = record.uuid
-    if (!isValidToolUseId(uuid)) return
-    const texts = [record.content, record.api_refusal_explanation].filter(
-      (v): v is string => typeof v === 'string' && v !== ''
-    )
-    const detail = redactedBodyLine(texts.join('\n'))
-    // 拒否された入力の uuid は値を運ばず、有無だけを status に写す (O-10 / US-4)。
-    const refused = record.refused_user_message_uuid
-    const status: SystemEventStatus =
-      typeof refused === 'string' && refused !== '' ? 'no-fallback-retry' : 'no-fallback'
-    send(
-      rowEvent(
-        `refusal:${uuid}`,
-        'refusal',
-        true,
-        detail,
-        status,
-        refusalCategory(record.api_refusal_category)
-      )
-    )
-  }
-
-  /**
-   * `system` / `informational` → 知らせの行 (`content`・`level`・`prevent_continuation`・`tool_use_id` を読む)。同じ
-   * `tool_use_id` は同じ行の id にして renderer の合成で 1 行にまとめる。
-   */
-  const onInformational = (record: Record<string, unknown>): void => {
-    const uuid = record.uuid
-    if (!isValidToolUseId(uuid)) return
-    const toolUseId = record.tool_use_id
-    const id = isValidToolUseId(toolUseId) ? `info:${toolUseId}` : `info:${uuid}`
-    const status: SystemEventStatus =
-      record.prevent_continuation === true
-        ? 'prevented'
-        : typeof record.level === 'string' && Object.hasOwn(WARNING_LEVELS, record.level)
-          ? 'warning'
-          : 'notice'
-    send(rowEvent(id, 'informational', true, redactedBodyLine(record.content), status))
-  }
-
-  /**
-   * `system` / `elicitation_complete` → MCP の URL での手続きの完了の行 (O-10 / AD-053 Decision 6。`mcp_server_name` と
-   * `elicitation_id` だけを読む)。対応する要求が無くても行は出し、カードは外さない (行は届いた事実だけを出す)。
-   */
-  const onElicitationComplete = (record: Record<string, unknown>): void => {
-    const elicitationId = record.elicitation_id
-    const id = isValidToolUseId(elicitationId)
-      ? `elicitation:${elicitationId}`
-      : `elicitation:${globalThis.crypto.randomUUID()}`
-    const name = isMcpName(record.mcp_server_name) ? record.mcp_server_name : ''
-    send(rowEvent(id, 'elicitation', true, '', 'completed', name))
+  const sendNotice = (raw: unknown): void => {
+    const message = toNoticeRow(raw, deps.clock.now(), globalThis.crypto.randomUUID())
+    if (message !== null) send({ kind: 'message', message })
   }
 
   /**
@@ -795,16 +702,19 @@ export function createLiveSignals(deps: LiveSignalsDeps): LiveSignals {
           onCompactBoundary(record)
           break
         case 'model_refusal_fallback':
-          onRefusalFallback(record)
+          // 取り消し (副作用) は agents に残す。行の組み立ては domain。
+          retractIds(record.retracted_message_uuids)
+          sendNotice(record)
           break
         case 'model_refusal_no_fallback':
-          onRefusalNoFallback(record)
-          break
         case 'informational':
-          onInformational(record)
-          break
         case 'elicitation_complete':
-          onElicitationComplete(record)
+        case 'notification':
+        case 'local_command_output':
+        case 'memory_recall':
+        case 'mirror_error':
+        case 'files_persisted':
+          sendNotice(record)
           break
         case 'background_tasks_changed':
           onBackgroundTasks(record)
@@ -839,10 +749,11 @@ export function createLiveSignals(deps: LiveSignalsDeps): LiveSignals {
     onConversationReset: (message) => {
       const record = asRecord(message)
       if (record === null || record.type !== 'conversation_reset') return
-      // 読むのは `uuid` だけ (`new_conversation_id` は読まない。016 data-model §1)。
-      const uuid = record.uuid
-      if (!isValidToolUseId(uuid)) return
-      send(rowEvent(`reset:${uuid}`, 'conversation-reset', true, '', 'marked'))
+      sendNotice(record)
+    },
+    onNotice: (message) => {
+      // トップレベルの知らせ (`tool_use_summary` / `active_goal`。引数は未信頼なので型の確認は toNoticeRow が行う)。
+      sendNotice(message)
     },
     onRetraction: (rawIds) => {
       retractIds(rawIds)

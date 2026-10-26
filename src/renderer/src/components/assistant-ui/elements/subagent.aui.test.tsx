@@ -127,6 +127,28 @@ describe('Subagent の入れ子 (O-11 FE-031)', () => {
     expect(slots(subagent, 'tool-fallback-root').length).toBeGreaterThan(0)
   })
 
+  it('入れ子の server-tool-call と知らないブロックの印が主ループと同じ DOM になる (O-12 FE-031)', async () => {
+    const { container, subagent } = await renderAgent([
+      message(
+        'c1',
+        {
+          type: 'server-tool-call',
+          toolCallId: 'srv_1',
+          toolName: 'web_search',
+          argsText: JSON.stringify({ query: 'q' }),
+          truncated: false,
+          result: { kind: 'web-search', sources: [{ title: 'T', url: 'https://e.com/a' }], omitted: 0 }
+        },
+        { type: 'unsupported-block', blockType: 'mcp_tool_use' }
+      )
+    ])
+    expect(slots(subagent, 'aui_server-tool-call')).toHaveLength(1)
+    expect(slots(subagent, 'unsupported-block-mark')[0]?.textContent).toBe(
+      '表示に対応していないブロック (mcp_tool_use)'
+    )
+    expect((await axe(container, AXE_RULES)).violations).toEqual([])
+  })
+
   it('入れ子の text は markdown で描かれ、XSS の fixture は無害', async () => {
     const { container, subagent } = await renderAgent([
       message(

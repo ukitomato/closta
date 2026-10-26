@@ -9,6 +9,7 @@ import {
   formatFailure,
   LOWER_BOUNDS,
   parseAssignment,
+  parseContentBlockTypes,
   parseControlRequestSubtypes,
   parseCoverage,
   parsePackageVersion,
@@ -33,6 +34,16 @@ const sdkDts = readFileSync(`${SDK_DIR}/sdk.d.ts`, 'utf8')
 const toolsDts = readFileSync(`${SDK_DIR}/sdk-tools.d.ts`, 'utf8')
 const sdkVersion = parsePackageVersion(readFileSync(`${SDK_DIR}/package.json`, 'utf8'))
 
+const ANTHROPIC_DIR = 'node_modules/@anthropic-ai/sdk'
+const betaMessagesDts = readFileSync(
+  `${ANTHROPIC_DIR}/resources/beta/messages/messages.d.mts`,
+  'utf8'
+)
+const messagesDts = readFileSync(`${ANTHROPIC_DIR}/resources/messages/messages.d.mts`, 'utf8')
+const anthropicSdkPackage = readFileSync(`${ANTHROPIC_DIR}/package.json`, 'utf8')
+const anthropicVersion = parsePackageVersion(anthropicSdkPackage)
+
+const contentBlocks: string[] = parseContentBlockTypes(sdkDts, betaMessagesDts, messagesDts)
 const messageTypes: string[] = parseSdkMessageUnion(sdkDts)
 const toolInputs: string[] = parseToolInputs(toolsDts)
 const controlSubtypes: string[] = parseControlRequestSubtypes(sdkDts)
@@ -181,6 +192,7 @@ function section(heading: string, rows: Row[]): string {
 
 type TableSpec = {
   version?: string | null
+  anthropicVersion?: string | null
   A?: Row[]
   Aprime?: Row[]
   B?: Row[]
@@ -195,6 +207,8 @@ function buildTable(spec: TableSpec = {}): string {
   const version = spec.version === undefined ? sdkVersion : spec.version
   const parts = ['# ui-coverage 対応表', '']
   if (version !== null) parts.push(`SDK: \`@anthropic-ai/claude-agent-sdk\` ${version}`, '')
+  const anthropic = spec.anthropicVersion === undefined ? anthropicVersion : spec.anthropicVersion
+  if (anthropic !== null) parts.push(`SDK: \`@anthropic-ai/sdk\` ${anthropic}`, '')
   // 凡例の表は節の外なので読まない (A〜F 以外の `## ` 見出しが節を閉じる)。
   parts.push('## 凡例', '', '| 割当 | 意味 |', '|---|---|', '| 未割当 | 例 |', '')
   const omit = new Set(spec.omit ?? [])
@@ -211,9 +225,10 @@ function buildTable(spec: TableSpec = {}): string {
     parts.push(
       section(
         '## B 中身のブロック',
-        spec.B ?? [
-          { id: 'assistant/text', assignment: '実装済み: Markdown text (両方)', path: '両方' }
-        ]
+        spec.B ??
+          contentBlocks.map((id, i) =>
+            i === 0 ? { id, assignment: '実装済み: Markdown text (両方)', path: '両方' } : { id }
+          )
       )
     )
   }
@@ -318,6 +333,10 @@ function run(
     messageTypes,
     toolInputs,
     controlSubtypes,
+    sdkDts,
+    betaMessagesDts,
+    messagesDts,
+    anthropicSdkPackage,
     table: parseCoverage(buildTable(spec)),
     roadmap,
     ...overrides
@@ -340,7 +359,7 @@ describe('checkCoverage — 基準の対応表', () => {
     expect(result.counts?.rows).toEqual({
       A: messageTypes.length,
       "A'": 2,
-      B: 1,
+      B: contentBlocks.length,
       C: toolInputs.length,
       D: 1,
       E: controlSubtypes.length,
@@ -503,6 +522,10 @@ describe('checkCoverage — 割当', () => {
       messageTypes,
       toolInputs,
       controlSubtypes,
+      sdkDts,
+      betaMessagesDts,
+      messagesDts,
+      anthropicSdkPackage,
       table: parseCoverage(table),
       roadmap
     })
@@ -522,14 +545,22 @@ describe('checkCoverage — 版・入力・下限', () => {
     expect(reasonsFor(run({ version: null }), '冒頭', 'SDK')).toHaveLength(1)
   })
 
-  it.each(['sdkVersion', 'messageTypes', 'toolInputs', 'controlSubtypes', 'table', 'roadmap'])(
-    '入力 %s が無いと落ちる',
-    (key) => {
-      const result = run({}, { [key]: null })
-      expect(result.failures).toEqual([{ section: '入力', id: key, reason: '検査の入力が無い' }])
-      expect(result.counts).toBeNull()
-    }
-  )
+  it.each([
+    'sdkVersion',
+    'messageTypes',
+    'toolInputs',
+    'controlSubtypes',
+    'table',
+    'roadmap',
+    'sdkDts',
+    'betaMessagesDts',
+    'messagesDts',
+    'anthropicSdkPackage'
+  ])('入力 %s が無いと落ちる', (key) => {
+    const result = run({}, { [key]: null })
+    expect(result.failures).toEqual([{ section: '入力', id: key, reason: '検査の入力が無い' }])
+    expect(result.counts).toBeNull()
+  })
 
   it('SDK から読めた名前が下限を下回ると落ちる (対応表が同じだけ欠けていても)', () => {
     const fewMessages = messageTypes.slice(0, 5)
@@ -548,6 +579,56 @@ describe('checkCoverage — 版・入力・下限', () => {
       'C (SDK)',
       'E (SDK)'
     ])
+  })
+})
+
+describe('checkCoverage — B 節 (@anthropic-ai/sdk の content block。AD-060)', () => {
+  it('今の node_modules の形で assistant 17・user 16 を読み、下限と一致する', () => {
+    expect(contentBlocks.filter((id) => id.startsWith('assistant/'))).toHaveLength(17)
+    expect(contentBlocks.filter((id) => id.startsWith('user/'))).toHaveLength(16)
+    expect(contentBlocks).toHaveLength(LOWER_BOUNDS.B)
+    expect(run().failures).toEqual([])
+  })
+
+  it('B の行が足りないと、その識別子を示して落ちる', () => {
+    const result = run({ B: contentBlocks.slice(1).map((id) => ({ id })) })
+    expect(reasonsFor(result, 'B', contentBlocks[0])[0]).toContain('行が無い')
+  })
+
+  it('B の行が余ると落ちる', () => {
+    const result = run({ B: [...contentBlocks, 'assistant/new_block'].map((id) => ({ id })) })
+    expect(reasonsFor(result, 'B', 'assistant/new_block')[0]).toContain('型定義に無い')
+  })
+
+  it('@anthropic-ai/sdk の版が違う・版の行が無いと落ちる', () => {
+    expect(reasonsFor(run({ anthropicVersion: '0.1.0' }), '冒頭', 'SDK')[0]).toContain('0.1.0')
+    expect(reasonsFor(run({ anthropicVersion: null }), '冒頭', 'SDK')[0]).toContain('版の行が無い')
+  })
+
+  it('メンバーの type が文字列リテラルとして読めないと落ちる', () => {
+    const broken = betaMessagesDts.replace("type: 'compaction';", 'type: string;')
+    expect(broken).not.toBe(betaMessagesDts)
+    const result = run({}, { betaMessagesDts: broken })
+    expect(reasonsFor(result, 'B', '(SDK)')[0]).toContain('BetaCompactionBlock')
+  })
+
+  it('Agent SDK の型の参照 (specifier) が変わると落ちる', () => {
+    const changed = sdkDts.replace(
+      "import type { BetaMessage } from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'",
+      "import type { BetaMessage } from '@anthropic-ai/sdk/resources/beta/other.mjs'"
+    )
+    expect(changed).not.toBe(sdkDts)
+    const result = run({}, { sdkDts: changed })
+    expect(reasonsFor(result, 'B', '(SDK)')[0]).toContain('参照が変わった')
+  })
+
+  it('extends を持つ interface は読まずに落ちる', () => {
+    const broken = betaMessagesDts.replace(
+      'export interface BetaCompactionBlock {',
+      'export interface BetaCompactionBlock extends Base {'
+    )
+    const result = run({}, { betaMessagesDts: broken })
+    expect(reasonsFor(result, 'B', '(SDK)')[0]).toContain('extends')
   })
 })
 
@@ -604,7 +685,13 @@ describe('件数の集計', () => {
     expect(counts?.m3Remaining).toBe(2)
     expect(counts?.byKindTier['後続']).toEqual({ A: 3, B: 1, C: 0 })
     expect(counts?.byKindTier['実装済み']).toEqual({ A: 2, B: 1, C: 0 })
-    const notNeededB = messageTypes.length - 6 + 2 + toolInputs.length + controlSubtypes.length
+    const notNeededB =
+      messageTypes.length -
+      6 +
+      2 +
+      (contentBlocks.length - 1) +
+      toolInputs.length +
+      controlSubtypes.length
     expect(counts?.byKindTier['表示不要']).toEqual({ A: 0, B: notNeededB, C: 1 })
 
     const note = formatCounts(counts)

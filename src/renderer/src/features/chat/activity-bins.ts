@@ -1,6 +1,6 @@
 import type { ThreadMessageLike } from '@assistant-ui/react'
 
-import { isSystemEventMessage } from './convert'
+import { isServerToolCallPart, isSystemEventMessage } from './convert'
 import { readMessageTime } from './message-time'
 
 /**
@@ -37,7 +37,10 @@ function weightOf(message: ThreadMessageLike): number | null {
   if (typeof message.content === 'string') return 1
   if (message.role === 'assistant' && message.content.every((p) => p.type === 'data')) return null
   let tools = 0
-  for (const part of message.content) if (part.type === 'tool-call') tools += 1
+  for (const part of message.content) {
+    // サーバー側の tool は数えない (O-12)。
+    if (part.type === 'tool-call' && !isServerToolCallPart(part)) tools += 1
+  }
   return 1 + tools
 }
 

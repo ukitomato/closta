@@ -29,6 +29,7 @@ import {
 } from "@/components/assistant-ui/elements/tool-group.aui";
 import { TooltipIconButton } from "@/components/tooltip-icon-button";
 import { TranscriptBoundary } from "@/components/assistant-ui/elements/transcript-boundary";
+import { UnsupportedBlockData } from "@/components/assistant-ui/elements/unsupported-block-mark";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,16 +41,21 @@ import {
 } from "@/components/ui/dialog";
 import { useComposerExtensions } from "@/features/chat/composer-extensions-context";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SYSTEM_EVENT_DATA_NAME } from "@/features/chat/convert";
+import { SYSTEM_EVENT_DATA_NAME, UNSUPPORTED_BLOCK_DATA_NAME } from "@/features/chat/convert";
 import { MessageTimeLabel } from "@/features/chat/MessageTimeLabel";
 import {
   authRowText,
   COMPOSER_LABELS,
+  documentKindLabel,
+  filesPersistedText,
+  memoryRecallText,
+  noticeHeading,
+  noticeNameList,
+  NOTICE_ROW_LABELS,
   permissionModeName,
   pluginRowText,
   QUIET_SYSTEM_EVENT_STATUSES,
   refusalRowText,
-  SYSTEM_EVENT_CATEGORY_LABELS,
   SYSTEM_EVENT_LABELS,
   SYSTEM_EVENT_STATUS_LABELS,
   taskTypeLabel,
@@ -99,12 +105,19 @@ import {
 import {
   ArrowDownIcon,
   ArrowUpIcon,
+  BellIcon,
+  BrainIcon,
   CheckIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  CloudAlertIcon,
   CopyIcon,
   DownloadIcon,
   BanIcon,
+  FileCheckIcon,
+  ListChecksIcon,
+  TargetIcon,
+  TerminalIcon,
   MessageCircleQuestionIcon,
   FoldVerticalIcon,
   InfoIcon,
@@ -953,11 +966,15 @@ const AssistantMessage: FC = () => {
               case "tool-call":
                 return part.toolUI ?? <ToolFallbackComponent {...part} />;
               case "data":
+                // 知らないブロックの印 (O-12 / FR-011)。他の data part は登録された描画 (無ければ何も出さない)。
+                if (part.name === UNSUPPORTED_BLOCK_DATA_NAME) {
+                  return <UnsupportedBlockData {...part} />;
+                }
                 return part.dataRendererUI;
               case "file":
                 return (
                   <div data-slot="aui_assistant-message-file" className="py-1">
-                    <File {...part} />
+                    <DocumentFile {...part} />
                   </div>
                 );
               case "image":
@@ -1046,9 +1063,19 @@ const AssistantActionBar: FC = () => {
   );
 };
 
+/** 添付の文書: 名前 (File element) と種類を並べる。ダウンロードと大きさは出さない (O-12 / FR-010)。 */
+export const DocumentFile: FileMessagePartComponent = (part) => (
+  <div className="flex items-center gap-2">
+    <File {...part} />
+    <span data-slot="file-kind" className="text-muted-foreground shrink-0 text-xs">
+      {documentKindLabel(part.mimeType)}
+    </span>
+  </div>
+);
+
 const UserFilePart: FileMessagePartComponent = (part) => (
   <div data-slot="aui_user-message-file" className="py-1">
-    <File {...part} />
+    <DocumentFile {...part} />
   </div>
 );
 
@@ -1136,17 +1163,38 @@ function systemEventDetailText(
       return detail;
     case "elicitation":
       return SYSTEM_EVENT_LABELS.elicitationComplete(name);
+    case "notification":
+    case "local-command-output":
+    case "tool-use-summary":
+    case "active-goal":
+    case "mirror-error":
+      return detail;
+    case "memory-recall":
+      return memoryRecallText(detail);
+    case "files-persisted":
+      return filesPersistedText(detail);
     case "compact-boundary":
     case "conversation-reset":
       return "";
   }
 }
 
+/** 名前を「ほか N 件」つきの列で出す行 (`memory-recall` / `files-persisted`。O-12)。 */
+const isNameListCategory = (category: SystemEventCategory): boolean =>
+  category === "memory-recall" || category === "files-persisted";
+
 /** 本文を折り返して全文を出す行 (`truncate` しない。拒否の説明・知らせの本文は 120 コードポイントで切れている。U-3)。 */
 const isWrappedCategory = (category: SystemEventCategory): boolean =>
   category === "refusal" ||
   category === "informational" ||
-  category === "elicitation";
+  category === "elicitation" ||
+  category === "notification" ||
+  category === "local-command-output" ||
+  category === "tool-use-summary" ||
+  category === "active-goal" ||
+  category === "mirror-error" ||
+  category === "memory-recall" ||
+  category === "files-persisted";
 
 /** task の行の進み具合の文言 (O-4 / 014 data-model §4「進み具合」)。task でない・進み具合が無い・復号できなければ null。 */
 function taskProgressText(
@@ -1173,6 +1221,13 @@ const SYSTEM_EVENT_ICONS: Readonly<Record<SystemEventCategory, LucideIcon>> = {
   refusal: BanIcon,
   informational: InfoIcon,
   elicitation: MessageCircleQuestionIcon,
+  notification: BellIcon,
+  "local-command-output": TerminalIcon,
+  "tool-use-summary": ListChecksIcon,
+  "active-goal": TargetIcon,
+  "mirror-error": CloudAlertIcon,
+  "memory-recall": BrainIcon,
+  "files-persisted": FileCheckIcon,
 };
 
 /**
@@ -1209,7 +1264,11 @@ const SystemEventRow: FC = () => {
   const unresolved = settled && !isTerminalSystemEventStatus(status);
   const statusText = unresolved
     ? SYSTEM_EVENT_LABELS.outcomeUnknown
-    : status === null || QUIET_SYSTEM_EVENT_STATUSES.has(status)
+    : status === null ||
+        QUIET_SYSTEM_EVENT_STATUSES.has(status) ||
+        // 見出しが状態を伝える行 (目標の解除・保存の成功)。
+        (category === "active-goal" && status === "completed") ||
+        (category === "files-persisted" && status === "completed")
       ? null
       : SYSTEM_EVENT_STATUS_LABELS[status];
   const wrapped = isWrappedCategory(category);
@@ -1219,7 +1278,11 @@ const SystemEventRow: FC = () => {
     (category === "informational" &&
       (status === "prevented" || status === "warning")) ||
     // Hook の失敗・取り消し (O-11 / 019 data-model §1.4。SessionStart / Setup の Hook にも当てる)。
-    (category === "hook" && (status === "failed" || status === "cancelled"));
+    (category === "hook" && (status === "failed" || status === "cancelled")) ||
+    // O-12 (022 data-model §1.6): 注意の通知・記録の同期の失敗・保存の失敗。
+    (category === "notification" && status === "warning") ||
+    category === "mirror-error" ||
+    (category === "files-persisted" && status === "failed");
   const failed = status === "failed";
   // 名前を伏せた Hook は「Hook (<hook_event>) <n>」の見出しで見分ける (O-11 / data-model §1.3)。
   const maskedHeading =
@@ -1263,7 +1326,7 @@ const SystemEventRow: FC = () => {
       >
         <Icon aria-hidden className="size-3.5 shrink-0" />
         <span className="shrink-0 font-medium">
-          {maskedHeading ?? SYSTEM_EVENT_CATEGORY_LABELS[category]}
+          {maskedHeading ?? noticeHeading(category, status)}
         </span>
         {category === "backgrounded-task" ? (
           // 前景で始まって後から背景に移した task の印 (O-11 / 019 data-model §2.2)。
@@ -1313,7 +1376,10 @@ const SystemEventRow: FC = () => {
             {statusText}
           </Badge>
         ) : null}
-        {name !== "" && category !== "refusal" && category !== "elicitation" ? (
+        {name !== "" &&
+        category !== "refusal" &&
+        category !== "elicitation" &&
+        !isNameListCategory(category) ? (
           <span
             data-slot="system-event-name"
             className="text-muted-foreground min-w-0 truncate"
@@ -1326,12 +1392,33 @@ const SystemEventRow: FC = () => {
           <RetryRefusedButton />
         ) : null}
       </div>
+      {isNameListCategory(category) && name !== "" ? (
+        <NoticeNameList name={name} />
+      ) : null}
       {guidance !== null ? (
         <p data-slot="system-event-guidance" className="text-muted-foreground mt-1 ps-5.5 text-xs">
           {guidance}
         </p>
       ) : null}
     </MessagePrimitive.Root>
+  );
+};
+
+/** 名前の列 (保存・読み込んだファイルの名前。会話由来なのでテキストノードだけ。操作は置かない。O-12 FR-006)。 */
+const NoticeNameList: FC<{ name: string }> = ({ name }) => {
+  const { items, more } = noticeNameList(name);
+  return (
+    <ul
+      data-slot="system-event-names"
+      className="text-muted-foreground mt-1 flex min-w-0 flex-wrap gap-x-3 gap-y-0.5 ps-5.5 text-xs"
+    >
+      {items.map((item, i) => (
+        <li key={i} className="min-w-0 wrap-break-word" title={item}>
+          {item}
+        </li>
+      ))}
+      {more > 0 ? <li>{NOTICE_ROW_LABELS.more(more)}</li> : null}
+    </ul>
   );
 };
 
@@ -1456,6 +1543,8 @@ const UserMessage: FC = () => {
               Text: UserTextPart,
               File: UserFilePart,
               Image: UserImagePart,
+              // 知らないブロックの印 (過去ログの user の記録。O-12 / FR-011)。
+              data: { by_name: { [UNSUPPORTED_BLOCK_DATA_NAME]: UnsupportedBlockData } },
             }}
           />
         </div>

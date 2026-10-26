@@ -45,7 +45,15 @@ export const SYSTEM_EVENT_CATEGORY_LABELS: Readonly<Record<SystemEventCategory, 
   // O-10 の行 (018 data-model §5)。URL での手続きの完了。
   elicitation: 'MCP の手続き',
   // O-11 の行 (019 data-model §2.2)。task の行と同じ見出しに `SYSTEM_EVENT_LABELS.backgroundedMark` を添える。
-  'backgrounded-task': 'Background task'
+  'backgrounded-task': 'Background task',
+  // O-12 の知らせの類 (022 data-model §1.6)。`active-goal` の解除の見出しは `noticeHeading`。
+  notification: '通知',
+  'local-command-output': 'コマンドの出力',
+  'tool-use-summary': 'tool の要約',
+  'active-goal': '目標',
+  'mirror-error': '記録の同期に失敗しました',
+  'memory-recall': 'メモリを読み込みました',
+  'files-persisted': 'ファイルを保存しました'
 }
 
 /** 状態の理由キー → 文言。 */
@@ -120,7 +128,11 @@ export const ANNOUNCER_LABELS = {
   compactBoundary: 'ここでコンテキストを圧縮しました',
   conversationReset: 'ここから新しい会話です',
   refusal: 'モデルが応答を拒否しました',
-  prevented: 'ここで止まりました'
+  prevented: 'ここで止まりました',
+  // O-12 (022 data-model §1.6)。固定の文言だけ (本文・名前・理由を入れない)。
+  notificationWarning: 'Claude Code からの通知があります',
+  mirrorError: '記録の同期に失敗しました',
+  filesPersistedFailed: 'ファイルの保存に失敗しました'
 } as const
 
 /** 圧縮の境界の `detail` (`<trigger> <pre> <post>`。`-` は読めなかった値。空は過去ログ) から見出しの文言を作る。 */
@@ -246,6 +258,81 @@ export const SYSTEM_EVENT_LABELS = {
   retry: '編集して再試行'
 } as const
 
+/** 知らせの類 (O-12) の行の文言 (022 data-model §1.6)。名前・detail は会話由来なのでテキストノードで描く。 */
+export const NOTICE_ROW_LABELS = {
+  goalCleared: '目標を解除しました',
+  /** 名前の列の「ほか N 件」。 */
+  more: (n: number): string => `ほか ${COUNT_FORMAT.format(n)} 件`
+} as const
+
+/** 知らせの類の行の見出し (`active-goal` の解除だけ見出しが変わる)。 */
+export function noticeHeading(
+  category: SystemEventCategory,
+  status: SystemEventStatus | null
+): string {
+  return category === 'active-goal' && status === 'completed'
+    ? NOTICE_ROW_LABELS.goalCleared
+    : SYSTEM_EVENT_CATEGORY_LABELS[category]
+}
+
+const COUNT_TOKEN = /^\d{1,16}$/
+
+/** 空白区切りのトークンのうち、件数として読めるもの (読めなければ null)。 */
+function countOf(token: string | undefined): number | null {
+  return token !== undefined && COUNT_TOKEN.test(token) ? Number(token) : null
+}
+
+/**
+ * `memory-recall` の `detail` (`<mode> <件数> <personal> <team> <organization> <要約>`。022 data-model §1.4) → 件数と
+ * scope ごとの数の文。読めなければ ''。0 件の scope は出さない。
+ */
+export function memoryRecallText(detail: string): string {
+  const [, total, personal, team, organization, syntheses] = detail.split(' ')
+  const n = countOf(total)
+  if (n === null) return ''
+  const scopes: string[] = []
+  const add = (label: string, token: string | undefined): void => {
+    const c = countOf(token)
+    if (c !== null && c > 0) scopes.push(`${label} ${COUNT_FORMAT.format(c)}`)
+  }
+  add('個人', personal)
+  add('チーム', team)
+  add('組織', organization)
+  add('要約', syntheses)
+  const head = `${COUNT_FORMAT.format(n)} 件`
+  return scopes.length === 0 ? head : `${head} (${scopes.join('・')})`
+}
+
+/**
+ * `files-persisted` の `detail` (`<保存> <失敗>` + 失敗の理由。022 data-model §1.5) → 保存・失敗の件数と最初の失敗の理由の文。
+ * 読めなければ ''。理由は会話由来 (テキストノードで描く)。
+ */
+export function filesPersistedText(detail: string): string {
+  const tokens = detail.split(' ')
+  const saved = countOf(tokens[0])
+  const failed = countOf(tokens[1])
+  if (saved === null || failed === null) return ''
+  const reason = tokens.slice(2).join(' ')
+  const parts = [`保存 ${COUNT_FORMAT.format(saved)} 件`]
+  if (failed > 0) {
+    parts.push(`失敗 ${COUNT_FORMAT.format(failed)} 件${reason === '' ? '' : ` (${reason})`}`)
+  }
+  return parts.join('・')
+}
+
+/** 名前の列 (改行区切り。21 行目が `+<N>` なら「ほか N 件」) → 項目と残りの件数。 */
+export function noticeNameList(name: string): {
+  readonly items: readonly string[]
+  readonly more: number
+} {
+  const lines = name === '' ? [] : name.split('\n')
+  const last = lines[20]
+  if (lines.length === 21 && last !== undefined && /^\+\d{1,16}$/.test(last)) {
+    return { items: lines.slice(0, 20), more: Number(last.slice(1)) }
+  }
+  return { items: lines, more: 0 }
+}
+
 /** 認証の行の文 (状態ごと)。終わりの来ない行 (「結果不明」) と知らない状態では null。 */
 export function authRowText(status: SystemEventStatus | null, unresolved: boolean): string | null {
   if (unresolved) return null
@@ -313,6 +400,43 @@ const TASK_TYPE_LABELS: Readonly<Record<string, string>> = {
   local_workflow: 'ワークフロー',
   mcp_task: 'MCP のタスク',
   other: 'その他の task'
+}
+
+/** 添付の文書 (File element。O-12 / FE-020)。英語の既定 ("Unnamed file") を出さないための補い。 */
+export const DOCUMENT_LABELS = {
+  unnamed: '名前のない文書',
+  pdf: 'PDF',
+  text: 'テキスト',
+  other: '文書'
+} as const
+
+/**
+ * サーバー側の tool (`server_tool_use`) の表示 (O-12 / FR-008 / FR-009)。見出しの tool 名・検索語・Sources のタイトルは
+ * 会話由来の値で、ここに置くのは固定の文言だけ。
+ */
+export const SERVER_TOOL_LABELS = {
+  /** 名前が無い (結果だけの) とき。 */
+  defaultName: 'サーバー側の tool',
+  sources: 'Sources',
+  noSources: '検索結果は 0 件です',
+  searchFailed: (errorCode: string): string =>
+    errorCode.length > 0 ? `検索に失敗しました (${errorCode})` : '検索に失敗しました',
+  more: (n: number): string => `ほか ${n} 件`
+} as const
+
+/** 専用の表示を持たない content block の印 (O-12 / FR-011)。種類の名前だけを出し、中身は出さない。 */
+export const UNSUPPORTED_BLOCK_LABELS = {
+  text: (blockType: string): string =>
+    blockType.length > 0
+      ? `表示に対応していないブロック (${blockType})`
+      : '表示に対応していないブロック'
+} as const
+
+/** `mimeType` から文書の種類の文言を引く。 */
+export function documentKindLabel(mimeType: string): string {
+  if (mimeType === 'application/pdf') return DOCUMENT_LABELS.pdf
+  if (mimeType === 'text/plain') return DOCUMENT_LABELS.text
+  return DOCUMENT_LABELS.other
 }
 
 /** task の種類の文言。表に無い値 (`toString` などの prototype のキーを含む) はそのまま返す。 */

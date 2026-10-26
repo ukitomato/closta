@@ -1279,3 +1279,109 @@ describe('拒否の行の「編集して再試行」 (O-10 FE-040 / 018 spec US-
     await waitFor(() => expect(composer().value).toBe('拒否された文'))
   })
 })
+
+describe('O-12 知らせの類の行 (FE-010)', () => {
+  const detailOf = (row: HTMLElement | undefined): string | null =>
+    row?.querySelector('[data-slot="system-event-detail"]')?.textContent ?? null
+  const headingOf = (row: HTMLElement | undefined): string =>
+    row?.querySelector('span.font-medium')?.textContent ?? ''
+  const tone = (row: HTMLElement | undefined): string | null | undefined =>
+    row?.getAttribute('data-tone')
+
+  it('7 つの見出し・tone・状態の文言', async () => {
+    const h = await setup()
+    const emit = (id: string, part: Partial<EventPart>): void =>
+      h.emit(A, eventMessage(id, { opens: true, name: '', ...part }))
+    emit('notification:a', { category: 'notification', detail: '注意の通知', status: 'warning' })
+    emit('notification:b', { category: 'notification', detail: '通常の通知', status: 'notice' })
+    emit('local-command:1', { category: 'local-command-output', detail: '出力', status: 'notice' })
+    emit('memory:1', {
+      category: 'memory-recall',
+      detail: 'select 4 2 1 1 1',
+      status: 'notice',
+      name: 'a.md\nb.md'
+    })
+    emit('mirror-error:1', { category: 'mirror-error', detail: 'boom', status: 'failed' })
+    emit('summary:1', { category: 'tool-use-summary', detail: '要約', status: 'notice' })
+    emit('goal:1', { category: 'active-goal', detail: 'ship', status: 'notice' })
+    emit('goal:2', { category: 'active-goal', detail: '', status: 'completed' })
+    emit('files-persisted:1', {
+      category: 'files-persisted',
+      detail: '1 1 no space',
+      status: 'failed',
+      name: 'a\nb'
+    })
+    emit('files-persisted:2', {
+      category: 'files-persisted',
+      detail: '2 0',
+      status: 'completed',
+      name: 'c'
+    })
+    await waitFor(() => expect(rows()).toHaveLength(10))
+    const r = rows()
+    expect(r.map(headingOf)).toEqual([
+      '通知',
+      '通知',
+      'コマンドの出力',
+      'メモリを読み込みました',
+      '記録の同期に失敗しました',
+      'tool の要約',
+      '目標',
+      '目標を解除しました',
+      'ファイルを保存しました',
+      'ファイルを保存しました'
+    ])
+    expect(tone(r[0])).toBe('attention')
+    expect(statusOf(r[0])).toBe('注意')
+    expect(tone(r[1])).toBe('quiet')
+    expect(statusOf(r[1])).toBe('')
+    expect(detailOf(r[3])).toBe('4 件 (個人 2・チーム 1・組織 1・要約 1)')
+    expect(r[3]?.querySelectorAll('[data-slot="system-event-names"] li')).toHaveLength(2)
+    expect(tone(r[4])).toBe('attention')
+    expect(statusOf(r[7])).toBe('')
+    expect(detailOf(r[8])).toBe('保存 1 件・失敗 1 件 (no space)')
+    expect(tone(r[8])).toBe('attention')
+    expect(tone(r[9])).toBe('quiet')
+    expect(statusOf(r[9])).toBe('')
+    // files-persisted に操作 (ボタン・リンク) を置かない (FR-006)。
+    for (const row of [r[8], r[9]]) {
+      expect(row?.querySelectorAll('button, a')).toHaveLength(0)
+    }
+  })
+
+  it('名前の列の「ほか N 件」と、同じ key の通知が 1 行に書き換わる。a11y の違反が無い', async () => {
+    const h = await setup()
+    const names = [...Array.from({ length: 20 }, (_, i) => `f${i}`), '+3'].join('\n')
+    h.emit(
+      A,
+      eventMessage('files-persisted:many', {
+        category: 'files-persisted',
+        opens: true,
+        detail: '23 0',
+        status: 'completed',
+        name: names
+      })
+    )
+    h.emit(
+      A,
+      eventMessage('notification:k', {
+        category: 'notification',
+        opens: true,
+        detail: '最初',
+        status: 'notice'
+      })
+    )
+    await waitFor(() => expect(rows()).toHaveLength(2))
+    h.emit(
+      A,
+      eventMessage('notification:k', { category: 'notification', detail: '次', status: 'warning' })
+    )
+    await waitFor(() => expect(statusOf(rows()[1])).toBe('注意'))
+    expect(rows()).toHaveLength(2)
+    expect(rows()[0]?.textContent).toContain('ほか 3 件')
+    expect(rows()[0]?.querySelectorAll('[data-slot="system-event-names"] li')).toHaveLength(21)
+    const viewport = h.container.querySelector<HTMLElement>('[data-slot="aui_thread-viewport"]')
+    expect(viewport).not.toBeNull()
+    expect((await axe(viewport!, AXE_RULES)).violations).toEqual([])
+  })
+})

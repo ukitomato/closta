@@ -23,6 +23,8 @@ related_adrs:
   - docs/decisions/0055-subagent-messages-for-past-transcripts.md
   - docs/decisions/0056-o11-scope-background-task-list-and-o12-split.md
   - docs/decisions/0057-elicitation-sdk-side-cancel-known-limit.md
+  - docs/decisions/0060-content-block-verification-and-unsupported-block-mark.md
+  - docs/decisions/0061-o12-contract-extensions-categories-parts-and-agents-branches.md
 related_specs:
   - specs/003-ui-transcript-rendering/spec.md
   - specs/004-ui-tier-a-tool-display/spec.md
@@ -36,6 +38,7 @@ related_specs:
   - specs/016-ui-boundaries-and-tool-displays/spec.md
   - specs/018-session-answer-ui-and-composer-commands/spec.md
   - specs/019-ui-hooks-tasks-subagents-and-notices/spec.md
+  - specs/022-ui-notices-checkpoints-and-content-blocks/spec.md
 ---
 
 # Domain Charter: ui
@@ -266,7 +269,8 @@ O-1 で読み替えた: 監視ビューはサイドバーの稼働中の区画 (
   時間の区間) を置く。`createdAt` を埋める変換の変更は session の契約の値の拡張で、O-9 (ui) が持つ
   ([AD-051](../../decisions/0051-message-time-source-and-display-only.md))。transcript の本文の横断検索・過去の一覧の仮想化は
   しない (U-7)
-- （残り。O-6 / O-11 / O-12 / OPT-pty / OPT-panel が本 domain に属する。O-10 は `session` で、表示の部品を本 domain が持つ）
+- （O-12 は [022](../../../specs/022-ui-notices-checkpoints-and-content-blocks/spec.md) で実装した: 知らせの類 (Tier B) と Checkpoints (`files_persisted`。表示だけ) のシステムイベントの行・`user/document` の File element・サーバー側の tool (`server_tool_use` と結果のブロック) の ServerToolCall と Sources・専用の表示を持たないブロックの印 (UnsupportedBlockMark)・対応表の B 節の機械照合 ([AD-060](../../decisions/0060-content-block-verification-and-unsupported-block-mark.md))・過去ログへの O-6 / O-10 の行の変換。実機の確認 (quickstart V-1〜V-5) は未実施）
+- （残り。O-6 / O-11 / OPT-pty / OPT-panel が本 domain に属する。O-10 は `session` で、表示の部品を本 domain が持つ）
 
 ## Open Questions
 

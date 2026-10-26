@@ -808,6 +808,63 @@ describe('sdk-agent-session: tool の結果と Hook / task の行 (O-2 / BE-024)
     expect(posted.some((p) => (p.payload ?? '').includes('USER-BODY-TEXT'))).toBe(false)
   })
 
+  it('別のメッセージの server_tool_use の結果を同じ id に埋めて 1 回送り直し、届いたメッセージから孤児を外す (O-12 BE-032)', async () => {
+    await runTurn([
+      {
+        type: 'assistant',
+        uuid: 's1',
+        message: {
+          content: [
+            { type: 'server_tool_use', id: 'srv_1', name: 'web_search', input: { query: 'q' } }
+          ]
+        }
+      },
+      {
+        type: 'assistant',
+        uuid: 's2',
+        message: {
+          content: [
+            { type: 'text', text: 'found' },
+            {
+              type: 'web_search_tool_result',
+              tool_use_id: 'srv_1',
+              content: [{ type: 'web_search_result', title: 'T', url: 'https://e.com' }]
+            }
+          ]
+        }
+      },
+      {
+        type: 'assistant',
+        uuid: 's3',
+        message: {
+          content: [{ type: 'web_fetch_tool_result', tool_use_id: 'srv_1', content: 'x' }]
+        }
+      }
+    ])
+    const rows = messages()
+    expect(rows.map((m) => m.id)).toEqual(['s1', 's1', 's2', 's3'])
+    expect(rows[0]?.parts[0]).toMatchObject({ type: 'server-tool-call', result: null })
+    expect(rows[1]?.parts[0]).toMatchObject({
+      type: 'server-tool-call',
+      toolName: 'web_search',
+      result: { kind: 'web-search' }
+    })
+    // 届いたメッセージからは孤児が外れ、他の part は残る。2 つ目の結果 (s3) は孤児のまま出る。
+    expect(rows[2]?.parts.map((p) => p.type)).toEqual(['text'])
+    expect(rows[3]?.parts[0]).toMatchObject({ type: 'server-tool-call', toolName: '' })
+  })
+
+  it('実行中の user のメッセージの server_tool_use や未知のブロックは何も出さない (O-12 U-10)', async () => {
+    await runTurn([
+      userWith(
+        { type: 'server_tool_use', id: 'srv_1', name: 'x', input: {} },
+        { type: 'search_result', content: 'USER-BLOCK-MARK' }
+      )
+    ])
+    expect(messages()).toEqual([])
+    expect(posted.some((p) => (p.payload ?? '').includes('USER-BLOCK-MARK'))).toBe(false)
+  })
+
   it('hook_started / hook_response は同じ id (hook:<id>) の message', async () => {
     await runTurn([
       {
@@ -1204,6 +1261,35 @@ describe('sdk-agent-session: 会話の境界・拒否・取り消しの配線 (O
       .map((e) => e.message?.id)
     expect(ids).toEqual(['reset:r1', 'compact-boundary:c1'])
     expect(posted.some((p) => (p.payload ?? '').includes('LEAK-'))).toBe(false)
+  })
+
+  it('O-12: tool_use_summary / active_goal / notification は行になり、prompt_suggestion は何も出さない', async () => {
+    await runTurn([
+      {
+        type: 'tool_use_summary',
+        uuid: 's1',
+        summary: 'did things',
+        preceding_tool_use_ids: ['LEAK-pre']
+      },
+      { type: 'active_goal', uuid: 'g1', value: { condition: 'ship', iterations: 4242 } },
+      { type: 'active_goal', uuid: 'g2', value: null },
+      { type: 'prompt_suggestion', suggestion: 'LEAK-suggest', uuid: 'p1' },
+      {
+        type: 'system',
+        subtype: 'notification',
+        uuid: 'n1',
+        key: 'k',
+        text: 'hello',
+        color: 'LEAK-c'
+      },
+      { type: 'system', subtype: 'notification', uuid: 'n2', key: 'k', text: 'again' }
+    ])
+    const ids = evs()
+      .filter((e) => e.kind === 'message')
+      .map((e) => e.message?.id)
+    expect(ids).toEqual(['summary:s1', 'goal:g1', 'goal:g2', 'notification:k', 'notification:k'])
+    expect(posted.some((p) => (p.payload ?? '').includes('LEAK-'))).toBe(false)
+    expect(posted.some((p) => (p.payload ?? '').includes('4242'))).toBe(false)
   })
 
   it('supersedes の retraction は代わりのメッセージの message より前に届く', async () => {

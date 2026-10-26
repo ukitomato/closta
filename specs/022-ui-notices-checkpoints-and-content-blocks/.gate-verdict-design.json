@@ -1,0 +1,89 @@
+{
+  "gate": "design",
+  "run": "2026-10-22T00:00:00+09:00",
+  "spec_dir": "specs/022-ui-notices-checkpoints-and-content-blocks",
+  "spec_id": "022-ui-notices-checkpoints-and-content-blocks",
+  "tracks": {
+    "analyze": {
+      "status": "ok",
+      "raw_out": "analyze.md",
+      "viewpoint_missing": null,
+      "cascade_demotions": null
+    },
+    "po-reviewer": {
+      "status": "ok",
+      "raw_out": "po-reviewer.design-gate.md",
+      "viewpoint_missing": [],
+      "cascade_demotions": 0
+    },
+    "architecture-reviewer": {
+      "status": "ok",
+      "raw_out": "architecture-reviewer.design-gate.md",
+      "viewpoint_missing": [],
+      "cascade_demotions": 0
+    },
+    "security-reviewer": {
+      "status": "ok",
+      "raw_out": "security-reviewer.design-gate.md",
+      "viewpoint_missing": [],
+      "cascade_demotions": 0
+    },
+    "platform-boundary-reviewer": {
+      "status": "ok",
+      "raw_out": "platform-boundary-reviewer.design-gate.md",
+      "viewpoint_missing": [],
+      "cascade_demotions": 0
+    }
+  },
+  "severity_counts": {
+    "critical": 0,
+    "high": 7,
+    "medium": 10,
+    "low": 13
+  },
+  "fr_coverage": [
+    {
+      "fr": "FR-001..FR-017",
+      "covered": true,
+      "by": ["tasks.md"]
+    },
+    {
+      "fr": "SC-009",
+      "covered": true,
+      "by": ["tasks.md SH-013 (partial, real-machine by user)"]
+    }
+  ],
+  "viewpoint_coverage": {
+    "A": "Critical:0 High:0",
+    "B": "Critical:0 High:0",
+    "C": "Critical:0 High:2",
+    "D": "Critical:0 High:3",
+    "E": "Critical:0 High:1",
+    "F": "Critical:0 High:0",
+    "G": "\u8a72\u5f53\u306a\u3057",
+    "H": "Critical:0 High:0"
+  },
+  "dedup_log": [
+    {
+      "merged": ["po-H-001", "arch-H-002", "analyze-U2"],
+      "key": "FR-011"
+    },
+    {
+      "merged": ["po-M-004", "analyze-T1", "arch-M-003"],
+      "key": "docs/glossary.md:514"
+    },
+    {
+      "merged": ["po-M-003", "analyze-U3"],
+      "key": "FR-004"
+    },
+    {
+      "merged": ["arch-H-005", "analyze-C2"],
+      "key": "Principle XIII"
+    },
+    {
+      "merged": ["po-M-006", "arch-H-T1"],
+      "key": "SC-004"
+    }
+  ],
+  "verdict": "PASS"
+}

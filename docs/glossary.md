@@ -519,7 +519,8 @@ total_terms: 104
 - **日本語表記**: 知らせ
 - **Domain**: `ui` (表示)。行の組み立ては session (agents)
 - **Counterexamples**: Hook の出力本文の表示ではない (Hook の本文は出さない。一般の Hook の表示は O-11 で足した)。本文は伏せ字と
-  長さの規則を通した 1 行で、全文ではない (U-3 の例外。data-model §1「本文の規則」)
+  長さの規則を通した 1 行で、全文ではない (U-3 の例外。data-model §1「本文の規則」)。過去ログの変換は O-12 で足した
+  (判別子が読めれば実行中と同じ行、読めなければ今の伏せ字つきの本文)
 - **Ref**: [016 data-model](../specs/016-ui-boundaries-and-tool-displays/data-model.md) §1
 
 #### **Isolation badge**
@@ -716,6 +717,20 @@ total_terms: 104
 - **Domain**: `provider`
 - **Ref**: [AD-042](decisions/0042-provider-type-refinement-and-d4-lapse.md) Decision 1
 
+### N
+
+#### **Notice row（知らせの類）**
+
+- **Definition**: 知らせ (`informational`) を含む、Claude Code からのモデルの応答ではない通知のシステムイベントの行の総称 (O-12)。
+  12 の種類: `informational`・拒否 2 つ・`elicitation_complete`・`conversation_reset` (O-6 / O-10) と、`notification`・
+  `local_command_output`・`memory_recall`・`mirror_error`・`tool_use_summary`・`active_goal`・`files_persisted` (O-12)。
+  行の変換は domain の `toNoticeRow` 1 つで、実行中と過去ログが共有する
+- **日本語表記**: 知らせの類
+- **Domain**: `ui` (表示)。変換は session (domain の `notice-rows.ts`)
+- **Counterexamples**: 知らせ (`informational` の 1 種) とは別 — あちらは類の一員。Hook の出力・task の行 (`taskRows`) は含まない。
+  操作を持たない (Checkpoints の行にも巻き戻しの操作を置かない)
+- **Ref**: [022 data-model](../specs/022-ui-notices-checkpoints-and-content-blocks/data-model.md) §1
+
 ### O
 
 #### **O-11**
@@ -723,14 +738,16 @@ total_terms: 104
 - **Definition**: roadmap の feature「Hook・背景の task・実行中の subagent の表示」(M3・domain `ui`。O-6 の後に登録)。
   範囲は一般の Hook・後から背景に移った task と背景の task の一覧・実行中と過去ログの subagent の入れ子 (範囲の正本は
   [019 spec](../specs/019-ui-hooks-tasks-subagents-and-notices/spec.md) の「本 feature の位置づけ」と roadmap)。
-  知らせの類・Checkpoints・中身のブロックの表示は O-12 に送った
+  知らせの類・Checkpoints・中身のブロックの表示は O-12 で扱った (spec 022)
 - **Domain**: `ui`
 - **Ref**: [roadmap](roadmap.md)
 
 #### **O-12**
 
 - **Definition**: roadmap の feature「知らせの類・Checkpoints・中身のブロックの表示」(M3・domain `ui`。O-11 の後に登録。
-  Tier B だけで M3 の完了の条件に数えない。AD-056 Decision 1)。O-11 から分けた残りの表示を扱う
+  Tier B だけで M3 の完了の条件に数えない。AD-056 Decision 1)。O-11 から分けた残りの表示を扱う。結論 (spec 022): 知らせの類 12 種と
+  Checkpoints の行 (category 13 → 20)、`user/document` の File 表示、`server_tool_use` と結果の ServerToolCall (Sources)、知らないブロックの印、
+  過去ログの知らせの行の変換、対応表 B 節の機械照合 (AD-060)
 - **Domain**: `ui`
 - **Ref**: [roadmap](roadmap.md) / [AD-056](decisions/0056-o11-scope-background-task-list-and-o12-split.md)
 
@@ -1191,6 +1208,9 @@ total_terms: 104
   - O-10 で、category `elicitation` (MCP の手続き。`elicitation_complete` を 1 行で示す。category 11 → 12) と、
     拒否の行の status `no-fallback-retry` (`refused_user_message_uuid` があるとき。「編集して再試行」を出す。status 21 → 22。値は運ばない) を足した
   - O-11 で、category `backgrounded-task` (後から背景に移った task。実行中と過去ログ。category 12 → 13) を足した
+  - O-12 で、知らせの類 (Notice row) の category を 7 つ足した (category 13 → 20): `notification`・`local-command-output`・
+    `memory-recall`・`mirror-error`・`tool-use-summary`・`active-goal`・`files-persisted` (Checkpoints)。status は 22 のまま。
+    O-6 / O-10 の行 (知らせ・拒否 2 つ・`conversation_reset`・`elicitation_complete`) も含め、過去ログの system の記録を実行中と同じ行に変換する
 - **日本語表記**: システムイベントの行
 - **Domain**: `ui` (表示)。経路 (agents での変換) は session
 - **Counterexamples**: assistant の発話ではない — コピーなどの操作や応答中の印を付けない。状態の一覧 (task の表) ではない —
@@ -1349,6 +1369,15 @@ total_terms: 104
   埋め込まれている場合）である。利用者に示すべき次の操作が違う。
   **所在不明を推測で埋めない** — 同じ `/home/y/p` は複数のディストロに存在しうる
 - **Ref**: [AD-029](decisions/0029-session-cwd-origin-classification.md)
+
+#### **Unsupported block mark（知らないブロックの印）**
+
+- **Definition**: 専用の表示を持たない content block (assistant の `default:` の種類、user の許可一覧の外の種類) を、捨てずに
+  種類の名前だけの 1 行で出す表示 (O-12。DTO の part `unsupported-block`、表示は UnsupportedBlockMark。AD-060)
+- **日本語表記**: 知らないブロックの印
+- **Domain**: `ui` (表示)。変換は session (domain の `content-blocks.ts`)
+- **Counterexamples**: ブロックの中身は出さない (種類の名前 `blockType` だけ。形に合わなければ空)。エラーの表示ではない
+- **Ref**: [AD-060](decisions/0060-content-block-verification-and-unsupported-block-mark.md) / [022 data-model](../specs/022-ui-notices-checkpoints-and-content-blocks/data-model.md) §2.2
 
 #### **Unsafe permission mode banner（権限モードの警告の帯）**
 

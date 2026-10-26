@@ -1,7 +1,16 @@
+import {
+  convertServerOrUnsupported,
+  documentPart,
+  safeStringify,
+  unsupportedBlockPart,
+  type MutableServerToolCall,
+  type ServerCallTable
+} from './content-blocks'
 import { sanitizeBody, TOOL_RESULT_MAX_BYTES } from './sanitize-body'
 import { redactSecrets } from './secret-redaction'
 import { createForegroundTaskMemory, createTaskRowBuilder } from './foreground-tasks'
 import { isValidToolUseId } from './meter'
+import { toNoticeRow } from './notice-rows'
 import { mergeSystemEvent, systemEventPartOf } from './system-event'
 import { orphanResultPart, readToolResult } from './tool-result'
 import { parseMessageTime } from './transcript-time'
@@ -72,7 +81,10 @@ interface MutableToolCall {
 }
 
 /** 変換中の part。tool-call は必ず `MutableToolCall` として作るため DTO の tool-call 変種は除く。 */
-type BuildPart = Exclude<TranscriptPartDTO, { type: 'tool-call' }> | MutableToolCall
+type BuildPart =
+  | Exclude<TranscriptPartDTO, { type: 'tool-call' | 'server-tool-call' }>
+  | MutableToolCall
+  | MutableServerToolCall
 
 interface MutableMessage {
   id: string
@@ -95,17 +107,6 @@ function contentBlocks(message: unknown): readonly unknown[] {
   return []
 }
 
-/** tool_use.input を fallback 表示用の文字列にする。 */
-function safeStringify(v: unknown): string {
-  if (typeof v === 'string') return v
-  if (v === undefined) return ''
-  try {
-    return JSON.stringify(v, null, 2) ?? ''
-  } catch {
-    return String(v)
-  }
-}
-
 /**
  * `<img>` 経由でも安全な data 画像 MIME。**`ui` の `safe-url.ts` の `SAFE_DATA_IMAGE` と揃える** —
  * `image/svg+xml` は script 面が残るため除外する (pr-gate security M-001。CSP `img-src 'self' data:` と同方針)。
@@ -124,13 +125,6 @@ function imageUrl(block: Record<string, unknown>): string | null {
     return `data:${src.media_type};base64,${src.data}`
   }
   return null
-}
-
-function documentName(block: Record<string, unknown>): string {
-  if (typeof block.title === 'string' && block.title.length > 0) return block.title
-  const src = asRecord(block.source)
-  if (src && typeof src.filename === 'string' && src.filename.length > 0) return src.filename
-  return 'document'
 }
 
 /**
@@ -166,6 +160,14 @@ function toDtoPart(part: BuildPart): TranscriptPartDTO {
  * `toolCallById` は親の検索に使う全体の表、`resultTargets` は tool_result を埋める先の表 (主の記録では同じ表。subagent の列では
  * 列の中の tool-call だけ)。`subagent` が真なら、user の記録は tool_result だけを読み、対応の無い結果は出さない。
  */
+/** 過去ログの主ループの user の記録で読むブロックの種類 (data-model §2.2)。 */
+const USER_ALLOWED_BLOCK_TYPES: ReadonlySet<string> = new Set([
+  'text',
+  'image',
+  'document',
+  'tool_result'
+])
+
 function convertBlocks(
   rec: SessionMessageLike,
   role: TranscriptMessageRole,
@@ -174,6 +176,7 @@ function convertBlocks(
   parts: BuildPart[],
   ownToolCalls: MutableToolCall[],
   orphanResults: BuildPart[],
+  serverCalls: ServerCallTable,
   resultTargets: Map<string, MutableToolCall> = toolCallById
 ): void {
   for (const raw of contentBlocks(rec.message)) {
@@ -181,6 +184,12 @@ function convertBlocks(
     if (!b) continue
     // subagent の user の記録は tool_result だけを読む (text・画像などは読まない。O-11 U-11)。
     if (subagent && role === 'user' && b.type !== 'tool_result') continue
+    // 主ループの user の記録の許可一覧は text / image / document / tool_result の 4 つ。外のすべては印にする
+    // (data-model §2.2。thinking・tool_use・サーバー側の tool などは user のメッセージに現れない組み合わせ。O-12 U-11)。
+    if (role === 'user' && !USER_ALLOWED_BLOCK_TYPES.has(String(b.type))) {
+      parts.push(unsupportedBlockPart(b.type))
+      continue
+    }
     switch (b.type) {
       case 'text': {
         // `system` の記録の本文 (informational / local_command_output / 拒否) は伏せ字を当てる (O-6 data-model §1)。
@@ -242,12 +251,17 @@ function convertBlocks(
         break
       }
       case 'document': {
-        parts.push({ type: 'file', filename: documentName(b), text: '' })
+        parts.push(documentPart(b))
         break
       }
-      default:
-        // 未知の content block: 欠落させないが専用表示は持たない。無害に skip する。
+      default: {
+        // system の記録は text だけを本文にし、他は印を出さずに飛ばす (data-model §2.2)。
+        if (role === 'system') break
+        // サーバー側の tool は 1 つの part (結果は同じ id で埋める)、知らないブロックは種類の名前だけの印 (O-12 / FR-008 / FR-011)。
+        const part = convertServerOrUnsupported(b, serverCalls)
+        if (part) parts.push(part)
         break
+      }
     }
   }
 }
@@ -276,6 +290,8 @@ export function toTranscriptMessages(
   const topLevel: MutableMessage[] = []
   /** toolCallId → tool-call part。**最初の一致を保持** (二重 attach 防止。design-gate L-4)。 */
   const toolCallById = new Map<string, MutableToolCall>()
+  /** `server_tool_use` の id → part (最初の一致。`toolCallById` と別の表。後の記録の結果のブロックも埋める。O-12 / data-model §2.3)。 */
+  const serverCalls: ServerCallTable = new Map()
   /** tool-call → その tool-call を持つメッセージの深さ (ネスト深さの計算に使う)。 */
   const ownerDepth = new Map<MutableToolCall, number>()
   /** Hook / task の行 (合成済み) と、その行の id → 位置。 */
@@ -298,14 +314,13 @@ export function toTranscriptMessages(
     // Hook / Background task のシステムメッセージは 1 つの Hook / task を 1 行に合成する (O-2 / FR-009)。
     // 規則は実行中の経路と同じ `system-event.ts`。行の無い id への更新は捨てる。
     if (role === 'system') {
-      const event = taskRows.build(
-        { ...asRecord(rec.message), type: 'system' },
-        createdAt,
-        (toolUseId) => {
+      // 知らせの類 (O-12 / FR-012) は Hook / task の行でなければ実行中と同じ `toNoticeRow` で行にする。
+      // どちらでもなければ今の経路 (伏せ字つきの本文)。
+      const event =
+        taskRows.build({ ...asRecord(rec.message), type: 'system' }, createdAt, (toolUseId) => {
           const call = toolCallById.get(toolUseId)
           return call?.toolName === 'Bash' ? call.argsText : undefined
-        }
-      )
+        }) ?? toNoticeRow({ type: 'system', ...asRecord(rec.message) }, createdAt, rec.uuid)
       if (event) {
         const index = systemEventIndex.get(event.id)
         const merged = mergeSystemEvent(
@@ -338,7 +353,7 @@ export function toTranscriptMessages(
       parts.push({ type: 'divider', label: 'コンテキストを圧縮' })
     }
 
-    convertBlocks(rec, role, toolCallById, false, parts, ownToolCalls, orphanResults)
+    convertBlocks(rec, role, toolCallById, false, parts, ownToolCalls, orphanResults, serverCalls)
 
     for (const orphan of orphanResults) parts.push(orphan)
     if (parts.length === 0) continue
@@ -400,7 +415,7 @@ export function toTranscriptMessages(
       const role: TranscriptMessageRole = rec.type
       const parts: BuildPart[] = []
       const ownToolCalls: MutableToolCall[] = []
-      convertBlocks(rec, role, toolCallById, true, parts, ownToolCalls, [], localCalls)
+      convertBlocks(rec, role, toolCallById, true, parts, ownToolCalls, [], serverCalls, localCalls)
       if (parts.length === 0) continue
       parentTc.children.push({
         id: rec.uuid,
