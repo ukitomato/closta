@@ -51,3 +51,13 @@ src/renderer/src/features/chat/turns.ts
 src/renderer/src/features/session/LivePane.o2.test.tsx
 tests/ui-coverage/coverage.test.ts
 tests/ui-coverage/item21.test.ts
+src/renderer/src/features/chat/transcript-announcements.ts
+src/renderer/src/features/chat/TranscriptAnnouncer.test.tsx
+src/domain/session/system-event.test.ts
+src/domain/session/transcript-dto.ts
+src/domain/session/notice-rows.ts
+src/agents/sdk-agent-session.ts
+docs/domains/_overview.md
+docs/domains/session/charter.md
+docs/domains/ui/charter.md
+docs/decisions/0061-o12-contract-extensions-categories-parts-and-agents-branches.md

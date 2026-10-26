@@ -124,7 +124,7 @@ spec_id（`001-runtime-...`）とは独立させる。差し込み作業で番�
 - **O-6 は `ui` のまま、session の契約を広げる** — agents の `system` の 4 つの subtype と最上位の `conversation_reset` の分岐、`meter` の種類
   `retraction`、稼働中のストアからのメッセージの削除を O-6 が足す (U-6。2026-10-05 に利用者が承認。AD-049)。O-4 / O-5 と同じ形の例外で、
   記録は session charter
-- **O-12 は `ui` のまま、session の契約を広げる** — システムイベントの行の category 7 つ (13 → 20)・`TRANSCRIPT_PART_FIELDS` の part 2 つ (`server-tool-call` / `unsupported-block`) と `file` の形・agents の `system` の 5 つの subtype と最上位の `tool_use_summary` / `active_goal` の分岐・実行中の `server-tool-call` の対応づけを O-12 が足す (022 の U-1〜U-13。夜間の規則で推奨案を採用した。[AD-060](../decisions/0060-content-block-verification-and-unsupported-block-mark.md))。`SessionEvent` の種類・`QUERY_OPTION_KEYS`・`METER_UPDATE_TYPES` は変えない。O-4 / O-5 / O-6 と同じ形の例外で、記録は session charter
+- **O-12 は `ui` のまま、session の契約を広げる** — システムイベントの行の category 7 つ (13 → 20)・`TRANSCRIPT_PART_FIELDS` の part 2 つ (`server-tool-call` / `unsupported-block`) と `file` の形・agents の `system` の 5 つの subtype と最上位の `tool_use_summary` / `active_goal` の分岐・実行中の `server-tool-call` の対応づけを O-12 が足す (022 の U-1〜U-13。夜間の規則で推奨案を採用した。[AD-060](../decisions/0060-content-block-verification-and-unsupported-block-mark.md) / [AD-061](../decisions/0061-o12-contract-extensions-categories-parts-and-agents-branches.md))。`SessionEvent` の種類・`QUERY_OPTION_KEYS`・`METER_UPDATE_TYPES` は変えない。O-4 / O-5 / O-6 と同じ形の例外で、記録は session charter
 - **O-7（アプリのシェル）は `ui`** — 面の配置と遷移はどの domain の操作でもなく、R-1 から App と面の状態 (`stores/ui.ts`) を
   ui が持ってきた。SDK の emit の表示ではないので Principle XII の判定の対象外。サイドバーの 2 つの一覧の中身・行の形は今どおり
   session が持ち、シェルは置き場所と選択に応じた中央の切り替えだけを持つ ([AD-046](../decisions/0046-app-shell-layout.md)。

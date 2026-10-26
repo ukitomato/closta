@@ -1,295 +1,121 @@
 {
-    "gate": "code",
-    "run": "2026-10-22T23:12:22Z",
-    "spec_dir": "specs/022-ui-notices-checkpoints-and-content-blocks",
-    "spec_id": "022-ui-notices-checkpoints-and-content-blocks",
-    "iter": 1,
-    "base_commit": "e79a694c0f81620a884c1be54975b3c38ee0d1c2",
-    "severity_counts": {
-        "critical": 0,
-        "high": 0,
-        "medium": 1,
-        "low": 5,
-        "must_fix": 0
+  "gate": "code",
+  "run": "2026-10-26T15:11:13Z",
+  "spec_dir": "specs/022-ui-notices-checkpoints-and-content-blocks",
+  "spec_id": "022-ui-notices-checkpoints-and-content-blocks",
+  "iter": 2,
+  "base_commit": "e79a694c0f81620a884c1be54975b3c38ee0d1c2",
+  "severity_counts": {
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "low": 1,
+    "must_fix": 0
+  },
+  "must_fix_findings": [],
+  "touched_files": [
+    {
+      "path": "docs/domains/_overview.md",
+      "sha": "09f2ae34118c5cc019bd8280a5a6ea0aabcf88a5"
     },
-    "must_fix_findings": [],
-    "touched_files": [
-        {
-            "path": ".specify/spec-gate/reviewers.yml",
-            "sha": "ef25778565c17111fe45386cc06f17e8eaabf4ae"
-        },
-        {
-            "path": "docs/domains/_overview.md",
-            "sha": "c01c4dc97387728c68c1fd939f06ff8dabd0c433"
-        },
-        {
-            "path": "docs/domains/session/charter.md",
-            "sha": "59446ec8d251d13ff0ad00bc92fba2451494680a"
-        },
-        {
-            "path": "docs/domains/ui/charter.md",
-            "sha": "46198cb2449cdd9058e52b00661525093625fb1d"
-        },
-        {
-            "path": "docs/glossary.md",
-            "sha": "d0914e96c73b5e6fe4ba26da544ba78ec7d75504"
-        },
-        {
-            "path": "docs/prompts.md",
-            "sha": "a3ee7f24b96a1542b6a81fb789482a003c0dcba2"
-        },
-        {
-            "path": "docs/roadmap.md",
-            "sha": "c7bad967aa850968cc739cc6a1e62b01f648e7cf"
-        },
-        {
-            "path": "docs/ui-coverage.md",
-            "sha": "dee1dd2d728a59a237e20407844fa2718931c186"
-        },
-        {
-            "path": "eslint.config.mjs",
-            "sha": "e32386a5191dc8e3a8f3d0f987dc7393daa52391"
-        },
-        {
-            "path": "scripts/constitution/check.mjs",
-            "sha": "bba669028b4dde4a6ea16a0045d612599911f303"
-        },
-        {
-            "path": "scripts/ui-coverage/coverage.mjs",
-            "sha": "5aee68c1efff8090b8eeac33815e4d3bbf62023a"
-        },
-        {
-            "path": "src/agents/live-signals.o6.test.ts",
-            "sha": "716ffa642c0b2d8cf166242b128a75a3d5724ecb"
-        },
-        {
-            "path": "src/agents/live-signals.ts",
-            "sha": "bb7548a76868cbc6e071ce073ecabad364c5cc62"
-        },
-        {
-            "path": "src/agents/live-tool-results.server.test.ts",
-            "sha": "323b4fd7f455095a51d1788df3101d3f38c96cbc"
-        },
-        {
-            "path": "src/agents/live-tool-results.ts",
-            "sha": "d7f0fa01468ccbaede3cac82bbf414fd948a8ea9"
-        },
-        {
-            "path": "src/agents/sdk-agent-session.test.ts",
-            "sha": "18ca2021829f7ee4996e62bf0ba8153b352cac90"
-        },
-        {
-            "path": "src/agents/sdk-agent-session.ts",
-            "sha": "defdd09428e2d577c3920d42ce250d9e51489f09"
-        },
-        {
-            "path": "src/domain/session/content-blocks.server.test.ts",
-            "sha": "8af7963f3a0c99001e146f0d1db83c33fc1db964"
-        },
-        {
-            "path": "src/domain/session/content-blocks.test.ts",
-            "sha": "da30943e2ad6836942bb5ac03a0cce935230e0be"
-        },
-        {
-            "path": "src/domain/session/content-blocks.ts",
-            "sha": "01c72682179a3c965a1542382a4adf0fbe049c5d"
-        },
-        {
-            "path": "src/domain/session/live-message.test.ts",
-            "sha": "ea5b9adc83456cf09ba79497095ad7c8eb0da73f"
-        },
-        {
-            "path": "src/domain/session/live-message.ts",
-            "sha": "260b98fbc4cddda3d462894ab1162db17c5c6043"
-        },
-        {
-            "path": "src/domain/session/notice-rows.test.ts",
-            "sha": "c25445e69deb5343b84520c94ebf8441c0846df1"
-        },
-        {
-            "path": "src/domain/session/notice-rows.ts",
-            "sha": "3735cf39c535604667540fde6a5f55c84e679f0b"
-        },
-        {
-            "path": "src/domain/session/system-event.test.ts",
-            "sha": "ac10d72cdf5d37b4b372441f6925958d83f98bf0"
-        },
-        {
-            "path": "src/domain/session/transcript.server-blocks.test.ts",
-            "sha": "3e5550dfaeafeeee7dc2d55e478e25cba964f38c"
-        },
-        {
-            "path": "src/domain/session/transcript.system-event.test.ts",
-            "sha": "ff6a90611644a59899576d1f3642db68947c9607"
-        },
-        {
-            "path": "src/domain/session/transcript.test.ts",
-            "sha": "14079f3cb2cb12fea9cd90521415f8fdd00b0bdc"
-        },
-        {
-            "path": "src/domain/session/transcript.ts",
-            "sha": "7a159963217838c4527a2966eb5800ceb0b96705"
-        },
-        {
-            "path": "src/domain/session/transcript-dto.ts",
-            "sha": "f2ea2a8e56f0ec2fe70a445c5b57b2110f0a29ce"
-        },
-        {
-            "path": "src/domain/session/transcript-schema.test.ts",
-            "sha": "6d307aacb60ceb9dace1b1c41d80498d0068b21b"
-        },
-        {
-            "path": "src/renderer/src/components/assistant-ui/elements/document-file.fe020.test.tsx",
-            "sha": "bd4ed4e9e088f346d19aa6c68c5641d0675c6563"
-        },
-        {
-            "path": "src/renderer/src/components/assistant-ui/elements/server-tool-call.aui.test.tsx",
-            "sha": "5f21df5b8175d3be2f15af75ed9b0d776f0bc1dc"
-        },
-        {
-            "path": "src/renderer/src/components/assistant-ui/elements/server-tool-call.aui.tsx",
-            "sha": "bf462246f99573776a0673a04f8e82685dd07ab1"
-        },
-        {
-            "path": "src/renderer/src/components/assistant-ui/elements/subagent.aui.test.tsx",
-            "sha": "145472dd1d0bbbec132807df589ccdd4c9249ad2"
-        },
-        {
-            "path": "src/renderer/src/components/assistant-ui/elements/subagent.aui.tsx",
-            "sha": "2cd9dc7926763bc70a2e1219b9b1fa7e042f6bcc"
-        },
-        {
-            "path": "src/renderer/src/components/assistant-ui/elements/thread.aui.tsx",
-            "sha": "a4d4093b774c96fb05b07419193498c184df0c2a"
-        },
-        {
-            "path": "src/renderer/src/components/assistant-ui/elements/tool-registry.aui.tsx",
-            "sha": "c756a4d64c0253db419cd132fc75852b01692313"
-        },
-        {
-            "path": "src/renderer/src/components/assistant-ui/elements/unsupported-block-mark.test.tsx",
-            "sha": "c2cce6a3532035d48cf77e6929b85008a2c6a374"
-        },
-        {
-            "path": "src/renderer/src/components/assistant-ui/elements/unsupported-block-mark.tsx",
-            "sha": "1e207031343eec0a1ea4825189a2914d59781906"
-        },
-        {
-            "path": "src/renderer/src/components/assistant-ui/elements/user-data-part.fe002.test.tsx",
-            "sha": "6f1a8ed9b80fa0a5900aa2f53037b7d8ff7fffb5"
-        },
-        {
-            "path": "src/renderer/src/features/chat/activity-bins.ts",
-            "sha": "d1daeb903b8c7b6d704c786bf78902c135a30bd6"
-        },
-        {
-            "path": "src/renderer/src/features/chat/conversation-search.test.ts",
-            "sha": "b10a46242962c7e9104f3ed421cfd9a349ff8c95"
-        },
-        {
-            "path": "src/renderer/src/features/chat/conversation-search.ts",
-            "sha": "1e700d19b7ee12b77ce6e0766aa4d2374d94b2af"
-        },
-        {
-            "path": "src/renderer/src/features/chat/convert.ts",
-            "sha": "3c4a0bd4b09fd6702cb03caea4472f4e5486a40a"
-        },
-        {
-            "path": "src/renderer/src/features/chat/labels.ts",
-            "sha": "7f44cd130033719d9c2ef759d152bae2468a92d1"
-        },
-        {
-            "path": "src/renderer/src/features/chat/transcript-announcements.ts",
-            "sha": "4b35b91e8d36cde7733766fe34f5a26ba6fdf1ed"
-        },
-        {
-            "path": "src/renderer/src/features/chat/TranscriptAnnouncer.test.tsx",
-            "sha": "056c9e8988df480cc45b87806c4e17f9adf4cc58"
-        },
-        {
-            "path": "src/renderer/src/features/chat/transcript-guard.ts",
-            "sha": "4d3d81f618708daf77475bf8c6dc0f3e06f66adf"
-        },
-        {
-            "path": "src/renderer/src/features/chat/turns.ts",
-            "sha": "9491d271e75a77a6769b961a581ebec355c59895"
-        },
-        {
-            "path": "src/renderer/src/features/session/LivePane.o2.test.tsx",
-            "sha": "604c2189641d410ebd4f5938836a9f2cde44d80f"
-        },
-        {
-            "path": "tests/ui-coverage/coverage.test.ts",
-            "sha": "636938b46ed5f60575c6da700dbbd7c2c3368e60"
-        },
-        {
-            "path": "tests/ui-coverage/item21.test.ts",
-            "sha": "5f5ce40c37a3f1ea1506dc2167f30ea711dcedf2"
-        }
-    ],
-    "fr_coverage": [],
-    "viewpoint_coverage": {
-        "A": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
-        "B": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
-        "C": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
-        "D": "Critical:0 High:0 Medium:0 Low:0 (platform-boundary-reviewer)",
-        "E": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
-        "F": "Critical:0 High:0 Medium:1 Low:4",
-        "G": "Critical:0 High:0 Medium:0 Low:0 (platform-boundary-reviewer)",
-        "H": "Critical:0 High:0 Medium:0 Low:1"
+    {
+      "path": "docs/domains/session/charter.md",
+      "sha": "7959735e4e70ffcc1630a8b189ef7e528fc0e6f9"
     },
-    "tracks": {
-        "lint-agent": {
-            "violations": 0,
-            "exit_code": 0,
-            "detectors": [
-                "eslint",
-                "typecheck-node",
-                "typecheck-web",
-                "depcruise",
-                "check:constitution"
-            ]
-        },
-        "test-agent": {
-            "passed": 3953,
-            "failed": 0,
-            "exit_code": 0,
-            "scope": "full"
-        },
-        "convention-reviewer": {
-            "viewpoint_missing": [],
-            "cascade_demotions": 0,
-            "lint_input": "lint-agent"
-        },
-        "platform-boundary-reviewer": {
-            "critical": 0,
-            "high": 0,
-            "medium": 0,
-            "low": 0
-        }
+    {
+      "path": "docs/domains/ui/charter.md",
+      "sha": "8d2becf5feba524040adf5550bd6fd3083e956fc"
     },
-    "skipped_reviewers": [
-        {
-            "name": "a11y-reviewer",
-            "reason": "gates=['pr-gate'] \u306b code-gate \u304c\u7121\u3044"
-        },
-        {
-            "name": "ux-reviewer",
-            "reason": "gates=['pr-gate'] \u306b code-gate \u304c\u7121\u3044"
-        },
-        {
-            "name": "database-reviewer",
-            "reason": "auto_invoke_patterns \u306b\u4e00\u81f4\u3059\u308b\u5909\u66f4\u30d5\u30a1\u30a4\u30eb\u304c\u7121\u3044 (\u5909\u66f4 53 \u4ef6 / pattern 5 \u4ef6)"
-        }
-    ],
-    "cascade_demotions": 0,
-    "iter_history": [
-        {
-            "iter": 1,
-            "must_fix": 0,
-            "skipped": 0,
-            "error": 0
-        }
-    ],
-    "verdict": "PASS"
+    {
+      "path": "src/agents/sdk-agent-session.ts",
+      "sha": "9a8c883a0a655410bb2ad31c3196ec76ec5221e4"
+    },
+    {
+      "path": "src/domain/session/notice-rows.ts",
+      "sha": "c72cd4b47b5fe8f93667216280c9d6745b607b78"
+    },
+    {
+      "path": "src/domain/session/system-event.test.ts",
+      "sha": "5f16590fdc281b3e5860bb1702a4ac71d534dfd6"
+    },
+    {
+      "path": "src/domain/session/transcript-dto.ts",
+      "sha": "f8c8f13a368526d70a7c9db39f182678d8ddd2c2"
+    },
+    {
+      "path": "src/renderer/src/features/chat/transcript-announcements.ts",
+      "sha": "808e8b5e11d97eccf54a694327f9513ac6973af3"
+    },
+    {
+      "path": "src/renderer/src/features/chat/TranscriptAnnouncer.test.tsx",
+      "sha": "03def460557942c8f23cde958464a3bde8ce3770"
+    }
+  ],
+  "fr_coverage": [],
+  "viewpoint_coverage": {
+    "A": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+    "B": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+    "C": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+    "D": "Critical:0 High:0 Medium:0 Low:0 (platform-boundary-reviewer)",
+    "E": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+    "F": "High:0 Medium:0 Low:1",
+    "G": "\u8a72\u5f53\u306a\u3057: a11y/ux \u306f pr-gate \u5c02\u4efb",
+    "H": "Critical:0 High:0 Medium:0 Low:0"
+  },
+  "tracks": {
+    "lint-agent": {
+      "violations": 0,
+      "exit_code": 0,
+      "detectors": ["eslint", "typecheck-node", "typecheck-web", "depcruise", "check:constitution"],
+      "note": "eslint by lint-agent on 6 touched ts/tsx; typecheck/depcruise/check:constitution run by invoker (whole project), all exit 0"
+    },
+    "test-agent": {
+      "passed": 3954,
+      "failed": 0,
+      "exit_code": 0,
+      "scope": "full"
+    },
+    "convention-reviewer": {
+      "viewpoint_missing": [],
+      "cascade_demotions": 0,
+      "lint_input": "lint-agent"
+    },
+    "platform-boundary-reviewer": {
+      "critical": 0,
+      "high": 0,
+      "medium": 0,
+      "low": 0
+    }
+  },
+  "skipped_reviewers": [
+    {
+      "name": "a11y-reviewer",
+      "reason": "gates=['pr-gate'] \u306b code-gate \u304c\u7121\u3044"
+    },
+    {
+      "name": "ux-reviewer",
+      "reason": "gates=['pr-gate'] \u306b code-gate \u304c\u7121\u3044"
+    },
+    {
+      "name": "database-reviewer",
+      "reason": "auto_invoke_patterns \u306b\u4e00\u81f4\u3059\u308b\u5909\u66f4\u30d5\u30a1\u30a4\u30eb\u304c\u7121\u3044 (\u5909\u66f4 9 \u4ef6 / pattern 5 \u4ef6)"
+    }
+  ],
+  "cascade_demotions": 0,
+  "iter_history": [
+    {
+      "iter": 1,
+      "must_fix": 0,
+      "skipped": 0,
+      "error": 0
+    },
+    {
+      "iter": 2,
+      "must_fix": 0,
+      "skipped": 0,
+      "error": 0
+    }
+  ],
+  "verdict": "PASS",
+  "diff_range": "HEAD (uncommitted fixes after pr-gate round 1)"
 }

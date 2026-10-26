@@ -5,7 +5,7 @@ import { redactedBodyLine, SYSTEM_EVENT_NAME_MAX_CODE_POINTS } from './system-ev
 import type { SystemEventCategory, SystemEventStatus, TranscriptMessageDTO } from './transcript-dto'
 
 /**
- * 知らせの類の行 (O-12 / AD-060。規則の正本は
+ * 知らせの類の行 (O-12 / AD-061。規則の正本は
  * [data-model](../../../specs/022-ui-notices-checkpoints-and-content-blocks/data-model.md) §1)。**純粋関数**で、
  * 実行中 (`agents/live-signals.ts`) と過去ログ (`transcript.ts`) の両方が呼ぶ (変換の関数は 1 つ。FR-012)。
  * SDK も Electron も agents も import しない (Principle VII)。乱数を持たない (`fallbackId` は呼び出し元が渡す)。

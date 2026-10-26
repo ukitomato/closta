@@ -24,6 +24,7 @@ related_adrs:
   - docs/decisions/0056-o11-scope-background-task-list-and-o12-split.md
   - docs/decisions/0057-elicitation-sdk-side-cancel-known-limit.md
   - docs/decisions/0060-content-block-verification-and-unsupported-block-mark.md
+  - docs/decisions/0061-o12-contract-extensions-categories-parts-and-agents-branches.md
 related_specs:
   - specs/003-ui-transcript-rendering/spec.md
   - specs/004-ui-tier-a-tool-display/spec.md

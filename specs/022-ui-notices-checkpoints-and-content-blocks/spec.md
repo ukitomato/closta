@@ -49,6 +49,7 @@ Claude Code が送ってくるのに Closta が捨てている知らせとブロ
 | U-12 | Constitution Principle XII の Verification の字面の改定は本 feature の PR に入れない。版は v1.5.0 (MINOR)。利用者のレビューの後に別の PR で行う (design-gate H-003 / H-004) | plan「ADR」、AD-060 |
 | U-13 | `active_goal` は `SDKMessage` の外なので、stream の switch の `default:` の中の型ガードで受ける (cast しない)。届くかは quickstart V-1 で記録する (design-gate H-006) | FR-002、plan RK-11 |
 | ADR | AD-060 (design で起こし、夜間の規則で推奨案を採用して accepted にする): 対応表の B 節の機械照合の基準 (AD-044 Decision 4 の読み替え。U-7) と、知らないブロックの印 (U-8) | `docs/decisions/` |
+| ADR | AD-061 (pr-gate round 1 の H-002 で起こし、夜間の規則で推奨案を採用して 2026-10-27 に accepted にした): O-12 が広げた session の契約 (システムイベントの行の category 13 → 20・part `server-tool-call`・`file` の part の形・agents の `system` の 5 つの subtype とトップレベルの `tool_use_summary` / `active_goal` の分岐) | `docs/decisions/` |
 
 各 U-n の検討した案・採った案は「Clarifications」の節に置く。
 

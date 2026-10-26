@@ -95,7 +95,7 @@ export const SYSTEM_EVENT_CATEGORIES = [
   'elicitation',
   /** 前景で始まって後から背景に移った task (O-11 / AD-056。`task_updated` の `patch.is_backgrounded`)。 */
   'backgrounded-task',
-  /** 知らせの類 (O-12 / AD-060。`notice-rows.ts` の `toNoticeRow`)。 */
+  /** 知らせの類 (O-12 / AD-061。`notice-rows.ts` の `toNoticeRow`)。 */
   'notification',
   'local-command-output',
   'tool-use-summary',

@@ -1,0 +1,444 @@
+{
+  "gate": "pr",
+  "run": "2026-10-26T00:00:00+09:00",
+  "spec_dir": "specs/022-ui-notices-checkpoints-and-content-blocks",
+  "spec_id": "022-ui-notices-checkpoints-and-content-blocks",
+  "round": 1,
+  "base_branch": "main",
+  "head": "4a16540a76276ce9ac1340470a333236ef576637",
+  "diff_stat": {
+    "files": 73,
+    "additions": 6213,
+    "deletions": 238
+  },
+  "severity_counts": {
+    "critical": 0,
+    "high": 2,
+    "medium": 12,
+    "low": 17
+  },
+  "convergence": {
+    "resolved_from_prev": 0,
+    "new_in_round": 2,
+    "unresolved": 0
+  },
+  "inheritance": "none (round 1)",
+  "round_history": [
+    {
+      "round": 1,
+      "head": "4a16540a76276ce9ac1340470a333236ef576637",
+      "critical": 0,
+      "high": 2,
+      "convergence": {
+        "resolved_from_prev": 0,
+        "new_in_round": 2,
+        "unresolved": 0
+      }
+    }
+  ],
+  "high_findings": [
+    {
+      "id": "H-001",
+      "origin": "po",
+      "where": "src/renderer/src/features/chat/transcript-announcements.ts:57-75",
+      "title": "same-key notification re-announce missing (US-1 AC5)"
+    },
+    {
+      "id": "H-002",
+      "origin": "architecture",
+      "where": "src/domain/session/system-event.test.ts:376",
+      "title": "category set expansion cites AD-060 which lacks the decision; needs follow-up ADR"
+    }
+  ],
+  "critical_findings": [],
+  "suppressed_by_code_gate": [],
+  "touched_files": [
+    {
+      "path": ".specify/spec-gate/reviewers.yml",
+      "sha": "ef25778565c17111fe45386cc06f17e8eaabf4ae"
+    },
+    {
+      "path": "docs/decisions/0060-content-block-verification-and-unsupported-block-mark.md",
+      "sha": "5a47f4fb51e774ffe20dcc53758676103a59b37e"
+    },
+    {
+      "path": "docs/domains/_overview.md",
+      "sha": "c01c4dc97387728c68c1fd939f06ff8dabd0c433"
+    },
+    {
+      "path": "docs/domains/session/charter.md",
+      "sha": "59446ec8d251d13ff0ad00bc92fba2451494680a"
+    },
+    {
+      "path": "docs/domains/ui/charter.md",
+      "sha": "46198cb2449cdd9058e52b00661525093625fb1d"
+    },
+    {
+      "path": "docs/glossary.md",
+      "sha": "d0914e96c73b5e6fe4ba26da544ba78ec7d75504"
+    },
+    {
+      "path": "docs/prompts.md",
+      "sha": "a3ee7f24b96a1542b6a81fb789482a003c0dcba2"
+    },
+    {
+      "path": "docs/roadmap.md",
+      "sha": "c7bad967aa850968cc739cc6a1e62b01f648e7cf"
+    },
+    {
+      "path": "docs/ui-coverage.md",
+      "sha": "dee1dd2d728a59a237e20407844fa2718931c186"
+    },
+    {
+      "path": "eslint.config.mjs",
+      "sha": "e32386a5191dc8e3a8f3d0f987dc7393daa52391"
+    },
+    {
+      "path": "scripts/constitution/check.mjs",
+      "sha": "bba669028b4dde4a6ea16a0045d612599911f303"
+    },
+    {
+      "path": "scripts/ui-coverage/coverage.mjs",
+      "sha": "5aee68c1efff8090b8eeac33815e4d3bbf62023a"
+    },
+    {
+      "path": "specs/022-ui-notices-checkpoints-and-content-blocks/.gate-verdict-code.json",
+      "sha": "9f4a09c42e0aec51ccc5c431c1510ddbddd92807"
+    },
+    {
+      "path": "specs/022-ui-notices-checkpoints-and-content-blocks/.gate-verdict-design.json",
+      "sha": "450ba9628b32bd7df20291d84901a4eb8926116d"
+    },
+    {
+      "path": "specs/022-ui-notices-checkpoints-and-content-blocks/analyze.md",
+      "sha": "8d3b802f4118569c9ee647344728608fd5dc6de3"
+    },
+    {
+      "path": "specs/022-ui-notices-checkpoints-and-content-blocks/architecture-reviewer.design-gate.md",
+      "sha": "ba5ef5c74129d92450427a7f9d6a784898f27593"
+    },
+    {
+      "path": "specs/022-ui-notices-checkpoints-and-content-blocks/code-gate.md",
+      "sha": "679cc5573d8af9e6a3b3f48e590a63199aedd5df"
+    },
+    {
+      "path": "specs/022-ui-notices-checkpoints-and-content-blocks/convention-reviewer.code-gate.md",
+      "sha": "5323f2934a7a2d08956600ca2d50966c64b35ecb"
+    },
+    {
+      "path": "specs/022-ui-notices-checkpoints-and-content-blocks/data-model.md",
+      "sha": "77803b1055a62fa6897306bda5549f7600748393"
+    },
+    {
+      "path": "specs/022-ui-notices-checkpoints-and-content-blocks/design-gate.md",
+      "sha": "ef06cd757b1be7ddacb5f9142602d41ebba9abb0"
+    },
+    {
+      "path": "specs/022-ui-notices-checkpoints-and-content-blocks/plan.md",
+      "sha": "16136e67be8483c27cc876f409178d64e2d1f9a3"
+    },
+    {
+      "path": "specs/022-ui-notices-checkpoints-and-content-blocks/platform-boundary-reviewer.code-gate.md",
+      "sha": "49df9ff9a728ced4e1116680fd1f1f1e4d3ba0cf"
+    },
+    {
+      "path": "specs/022-ui-notices-checkpoints-and-content-blocks/platform-boundary-reviewer.design-gate.md",
+      "sha": "113476fb6959a9a4e5a82491c93e25cac24d9b2b"
+    },
+    {
+      "path": "specs/022-ui-notices-checkpoints-and-content-blocks/po-reviewer.design-gate.md",
+      "sha": "b997c4fb72ca902d90907f1f231b28a8d4a65899"
+    },
+    {
+      "path": "specs/022-ui-notices-checkpoints-and-content-blocks/quickstart-results.md",
+      "sha": "40cca8e72b9b7a03d56012086d608b9785d0874f"
+    },
+    {
+      "path": "specs/022-ui-notices-checkpoints-and-content-blocks/quickstart.md",
+      "sha": "62d222845789418263b9aa999f8e50665b9b5897"
+    },
+    {
+      "path": "specs/022-ui-notices-checkpoints-and-content-blocks/research.md",
+      "sha": "2fb0f6309854de2d938f840611960a9ced4ee8e2"
+    },
+    {
+      "path": "specs/022-ui-notices-checkpoints-and-content-blocks/security-reviewer.design-gate.md",
+      "sha": "7f3c36574094a19a3e3ff5fba520452dc7ce473c"
+    },
+    {
+      "path": "specs/022-ui-notices-checkpoints-and-content-blocks/spec.md",
+      "sha": "f701b8628b004b2c064bb863a33702d1553f6c57"
+    },
+    {
+      "path": "specs/022-ui-notices-checkpoints-and-content-blocks/tasks.md",
+      "sha": "4cedb9e0594ab663c2699ee7a72858d4033a388d"
+    },
+    {
+      "path": "specs/022-ui-notices-checkpoints-and-content-blocks/touched-files.txt",
+      "sha": "a32e11182416a20208f74a7d6683a9c4f79327e7"
+    },
+    {
+      "path": "src/agents/live-signals.o6.test.ts",
+      "sha": "716ffa642c0b2d8cf166242b128a75a3d5724ecb"
+    },
+    {
+      "path": "src/agents/live-signals.ts",
+      "sha": "bb7548a76868cbc6e071ce073ecabad364c5cc62"
+    },
+    {
+      "path": "src/agents/live-tool-results.server.test.ts",
+      "sha": "323b4fd7f455095a51d1788df3101d3f38c96cbc"
+    },
+    {
+      "path": "src/agents/live-tool-results.ts",
+      "sha": "d7f0fa01468ccbaede3cac82bbf414fd948a8ea9"
+    },
+    {
+      "path": "src/agents/sdk-agent-session.test.ts",
+      "sha": "18ca2021829f7ee4996e62bf0ba8153b352cac90"
+    },
+    {
+      "path": "src/agents/sdk-agent-session.ts",
+      "sha": "defdd09428e2d577c3920d42ce250d9e51489f09"
+    },
+    {
+      "path": "src/domain/session/content-blocks.server.test.ts",
+      "sha": "8af7963f3a0c99001e146f0d1db83c33fc1db964"
+    },
+    {
+      "path": "src/domain/session/content-blocks.test.ts",
+      "sha": "da30943e2ad6836942bb5ac03a0cce935230e0be"
+    },
+    {
+      "path": "src/domain/session/content-blocks.ts",
+      "sha": "01c72682179a3c965a1542382a4adf0fbe049c5d"
+    },
+    {
+      "path": "src/domain/session/live-message.test.ts",
+      "sha": "ea5b9adc83456cf09ba79497095ad7c8eb0da73f"
+    },
+    {
+      "path": "src/domain/session/live-message.ts",
+      "sha": "260b98fbc4cddda3d462894ab1162db17c5c6043"
+    },
+    {
+      "path": "src/domain/session/notice-rows.test.ts",
+      "sha": "c25445e69deb5343b84520c94ebf8441c0846df1"
+    },
+    {
+      "path": "src/domain/session/notice-rows.ts",
+      "sha": "3735cf39c535604667540fde6a5f55c84e679f0b"
+    },
+    {
+      "path": "src/domain/session/system-event.test.ts",
+      "sha": "ac10d72cdf5d37b4b372441f6925958d83f98bf0"
+    },
+    {
+      "path": "src/domain/session/transcript-dto.ts",
+      "sha": "f2ea2a8e56f0ec2fe70a445c5b57b2110f0a29ce"
+    },
+    {
+      "path": "src/domain/session/transcript-schema.test.ts",
+      "sha": "6d307aacb60ceb9dace1b1c41d80498d0068b21b"
+    },
+    {
+      "path": "src/domain/session/transcript.server-blocks.test.ts",
+      "sha": "3e5550dfaeafeeee7dc2d55e478e25cba964f38c"
+    },
+    {
+      "path": "src/domain/session/transcript.system-event.test.ts",
+      "sha": "ff6a90611644a59899576d1f3642db68947c9607"
+    },
+    {
+      "path": "src/domain/session/transcript.test.ts",
+      "sha": "14079f3cb2cb12fea9cd90521415f8fdd00b0bdc"
+    },
+    {
+      "path": "src/domain/session/transcript.ts",
+      "sha": "7a159963217838c4527a2966eb5800ceb0b96705"
+    },
+    {
+      "path": "src/renderer/src/components/assistant-ui/elements/document-file.fe020.test.tsx",
+      "sha": "bd4ed4e9e088f346d19aa6c68c5641d0675c6563"
+    },
+    {
+      "path": "src/renderer/src/components/assistant-ui/elements/server-tool-call.aui.test.tsx",
+      "sha": "5f21df5b8175d3be2f15af75ed9b0d776f0bc1dc"
+    },
+    {
+      "path": "src/renderer/src/components/assistant-ui/elements/server-tool-call.aui.tsx",
+      "sha": "bf462246f99573776a0673a04f8e82685dd07ab1"
+    },
+    {
+      "path": "src/renderer/src/components/assistant-ui/elements/subagent.aui.test.tsx",
+      "sha": "145472dd1d0bbbec132807df589ccdd4c9249ad2"
+    },
+    {
+      "path": "src/renderer/src/components/assistant-ui/elements/subagent.aui.tsx",
+      "sha": "2cd9dc7926763bc70a2e1219b9b1fa7e042f6bcc"
+    },
+    {
+      "path": "src/renderer/src/components/assistant-ui/elements/thread.aui.tsx",
+      "sha": "a4d4093b774c96fb05b07419193498c184df0c2a"
+    },
+    {
+      "path": "src/renderer/src/components/assistant-ui/elements/tool-registry.aui.tsx",
+      "sha": "c756a4d64c0253db419cd132fc75852b01692313"
+    },
+    {
+      "path": "src/renderer/src/components/assistant-ui/elements/unsupported-block-mark.test.tsx",
+      "sha": "c2cce6a3532035d48cf77e6929b85008a2c6a374"
+    },
+    {
+      "path": "src/renderer/src/components/assistant-ui/elements/unsupported-block-mark.tsx",
+      "sha": "1e207031343eec0a1ea4825189a2914d59781906"
+    },
+    {
+      "path": "src/renderer/src/components/assistant-ui/elements/user-data-part.fe002.test.tsx",
+      "sha": "6f1a8ed9b80fa0a5900aa2f53037b7d8ff7fffb5"
+    },
+    {
+      "path": "src/renderer/src/features/chat/TranscriptAnnouncer.test.tsx",
+      "sha": "056c9e8988df480cc45b87806c4e17f9adf4cc58"
+    },
+    {
+      "path": "src/renderer/src/features/chat/activity-bins.ts",
+      "sha": "d1daeb903b8c7b6d704c786bf78902c135a30bd6"
+    },
+    {
+      "path": "src/renderer/src/features/chat/conversation-search.test.ts",
+      "sha": "b10a46242962c7e9104f3ed421cfd9a349ff8c95"
+    },
+    {
+      "path": "src/renderer/src/features/chat/conversation-search.ts",
+      "sha": "1e700d19b7ee12b77ce6e0766aa4d2374d94b2af"
+    },
+    {
+      "path": "src/renderer/src/features/chat/convert.ts",
+      "sha": "3c4a0bd4b09fd6702cb03caea4472f4e5486a40a"
+    },
+    {
+      "path": "src/renderer/src/features/chat/labels.ts",
+      "sha": "7f44cd130033719d9c2ef759d152bae2468a92d1"
+    },
+    {
+      "path": "src/renderer/src/features/chat/transcript-announcements.ts",
+      "sha": "4b35b91e8d36cde7733766fe34f5a26ba6fdf1ed"
+    },
+    {
+      "path": "src/renderer/src/features/chat/transcript-guard.ts",
+      "sha": "4d3d81f618708daf77475bf8c6dc0f3e06f66adf"
+    },
+    {
+      "path": "src/renderer/src/features/chat/turns.ts",
+      "sha": "9491d271e75a77a6769b961a581ebec355c59895"
+    },
+    {
+      "path": "src/renderer/src/features/session/LivePane.o2.test.tsx",
+      "sha": "604c2189641d410ebd4f5938836a9f2cde44d80f"
+    },
+    {
+      "path": "tests/ui-coverage/coverage.test.ts",
+      "sha": "636938b46ed5f60575c6da700dbbd7c2c3368e60"
+    },
+    {
+      "path": "tests/ui-coverage/item21.test.ts",
+      "sha": "5f5ce40c37a3f1ea1506dc2167f30ea711dcedf2"
+    }
+  ],
+  "viewpoint_coverage": {
+    "A": "Critical:0 High:0",
+    "B": "Critical:0 High:0",
+    "C": "Critical:0 High:0",
+    "D": "Critical:0 High:1",
+    "E": "Critical:0 High:1",
+    "F": "Critical:0 High:0",
+    "G": "Critical:0 High:0",
+    "H": "Critical:0 High:0"
+  },
+  "fr_coverage": [
+    {
+      "fr": "FR-001..FR-017",
+      "covered": true,
+      "by": ["po-reviewer: all FR mapped; SC-009 manual V-1..V-5 not run (not a merge condition)"]
+    }
+  ],
+  "rule_verification": {
+    "ran": true,
+    "round": 1,
+    "reason": "Round 1",
+    "result": "74 match, exit 0"
+  },
+  "skipped_reviewers": [
+    {
+      "name": "database-reviewer",
+      "reason": "no auto_invoke_patterns match (73 files / 5 patterns)"
+    }
+  ],
+  "tracks": {
+    "security-reviewer": {
+      "viewpoint_missing": [],
+      "cascade_demotions": 0,
+      "critical": 0,
+      "high": 0,
+      "medium": 1,
+      "low": 2,
+      "status": "ok"
+    },
+    "architecture-reviewer": {
+      "viewpoint_missing": [],
+      "cascade_demotions": 0,
+      "critical": 0,
+      "high": 1,
+      "medium": 2,
+      "low": 5,
+      "status": "ok"
+    },
+    "po-reviewer": {
+      "viewpoint_missing": [],
+      "cascade_demotions": 0,
+      "critical": 0,
+      "high": 1,
+      "medium": 3,
+      "low": 2,
+      "status": "ok"
+    },
+    "ux-reviewer": {
+      "viewpoint_missing": [],
+      "cascade_demotions": 0,
+      "critical": 0,
+      "high": 0,
+      "medium": 3,
+      "low": 5,
+      "status": "ok"
+    },
+    "a11y-reviewer": {
+      "viewpoint_missing": [],
+      "cascade_demotions": 0,
+      "critical": 0,
+      "high": 0,
+      "medium": 2,
+      "low": 4,
+      "status": "ok"
+    },
+    "platform-boundary-reviewer": {
+      "viewpoint_missing": [],
+      "cascade_demotions": 0,
+      "critical": 0,
+      "high": 0,
+      "medium": 0,
+      "low": 0,
+      "status": "ok"
+    },
+    "ui-coverage-reviewer": {
+      "viewpoint_missing": [],
+      "cascade_demotions": 0,
+      "critical": 0,
+      "high": 0,
+      "medium": 4,
+      "low": 3,
+      "status": "ok"
+    }
+  },
+  "verdict": "PASS"
+}

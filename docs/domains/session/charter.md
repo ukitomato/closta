@@ -22,6 +22,8 @@ related_adrs:
   - docs/decisions/0057-elicitation-sdk-side-cancel-known-limit.md
   - docs/decisions/0058-win32-direct-launch-contract-and-process-tree-stop.md
   - docs/decisions/0059-session-resume-query-option-and-conversation-id.md
+  - docs/decisions/0060-content-block-verification-and-unsupported-block-mark.md
+  - docs/decisions/0061-o12-contract-extensions-categories-parts-and-agents-branches.md
 related_specs:
   - specs/002-session-cross-folder-session-enumeration/spec.md
   - specs/005-session-launch-and-streaming/spec.md
@@ -330,7 +332,7 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
   `Query` の呼び出しは `interrupt` だけのまま。Related Specs に O-11 (ui)
 - **O-12 (ui)** — [知らせの類・Checkpoints・中身のブロックの表示](../../../specs/022-ui-notices-checkpoints-and-content-blocks/spec.md)
   ([roadmap の O-12 の行](../../roadmap.md))。O-11 の design で分けた ui の feature。本 domain の feature ではない。夜間の規則で推奨案を採用した
-  U-1〜U-13 / [AD-060](../../decisions/0060-content-block-verification-and-unsupported-block-mark.md) で、本 domain の契約を広げた: システムイベントの行の category 7 つ (`SYSTEM_EVENT_CATEGORIES` 13 → 20。`notification` / `local-command-output` / `tool-use-summary` / `active-goal` / `mirror-error` / `memory-recall` / `files-persisted`)・`TRANSCRIPT_PART_FIELDS` の part 2 つ (`server-tool-call` / `unsupported-block`。種類 7 → 9) と `file` の part の形 (`text` を消して `mediaType`)・agents の `system` の 5 つの subtype (`notification` / `local_command_output` / `memory_recall` / `mirror_error` / `files_persisted`) と最上位の `tool_use_summary` / `active_goal` の分岐・実行中の `server-tool-call` の対応づけ (主ループのメッセージの記憶 256 件と送り直し)。`SessionEvent` の種類・`METER_UPDATE_TYPES`・`QUERY_OPTION_KEYS`・`AGENT_SDK_ALLOWED_CALLS` は変えない。承認の応答と `Query` の呼び出しは変えない。Related Specs に O-12 (ui)
+  U-1〜U-13 / [AD-060](../../decisions/0060-content-block-verification-and-unsupported-block-mark.md) / [AD-061](../../decisions/0061-o12-contract-extensions-categories-parts-and-agents-branches.md) で、本 domain の契約を広げた: システムイベントの行の category 7 つ (`SYSTEM_EVENT_CATEGORIES` 13 → 20。`notification` / `local-command-output` / `tool-use-summary` / `active-goal` / `mirror-error` / `memory-recall` / `files-persisted`)・`TRANSCRIPT_PART_FIELDS` の part 2 つ (`server-tool-call` / `unsupported-block`。種類 7 → 9) と `file` の part の形 (`text` を消して `mediaType`)・agents の `system` の 5 つの subtype (`notification` / `local_command_output` / `memory_recall` / `mirror_error` / `files_persisted`) と最上位の `tool_use_summary` / `active_goal` の分岐・実行中の `server-tool-call` の対応づけ (主ループのメッセージの記憶 256 件と送り直し)。`SessionEvent` の種類・`METER_UPDATE_TYPES`・`QUERY_OPTION_KEYS`・`AGENT_SDK_ALLOWED_CALLS` は変えない。承認の応答と `Query` の呼び出しは変えない。Related Specs に O-12 (ui)
 - **O-10** — [Claude Code からの問いに答える UI と composer のコマンドの候補](../../../specs/018-session-answer-ui-and-composer-commands/spec.md)
   ([roadmap の O-10 の行](../../roadmap.md))。O-5 の design で分けた本 domain の feature (015 spec U-1 /
   [AD-048](../../decisions/0048-session-config-display-and-answer-ui-split.md) Decision 1)。結論 (2026-10-17 に利用者が U-1〜U-10 と

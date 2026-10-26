@@ -965,7 +965,7 @@ async function run(
           signals.onConversationReset(message)
           break
         case 'tool_use_summary':
-          // tool の要約の行 (O-12 / AD-060。`summary` だけを読み、`preceding_tool_use_ids` は読まない)。
+          // tool の要約の行 (O-12 / AD-061。`summary` だけを読み、`preceding_tool_use_ids` は読まない)。
           signals.onNotice(message)
           break
         default:

@@ -71,7 +71,8 @@ function rowAnnouncement(messageId: string, data: RowFields | null): Announcemen
       return status === 'prevented' ? make('prevented', 'other', ANNOUNCER_LABELS.prevented) : null
     case 'notification':
       return status === 'warning'
-        ? make('notification', 'other', ANNOUNCER_LABELS.notificationWarning)
+        ? // 同じ key の通知は行が書き換わる (本文が変わる)。本文を鍵に含めて 2 回目以降も読む (鍵は読み上げず、文には入れない)。
+          make(`notification:${data.detail}`, 'other', ANNOUNCER_LABELS.notificationWarning)
         : null
     case 'mirror-error':
       return make('mirror-error', 'other', ANNOUNCER_LABELS.mirrorError)
