@@ -1,0 +1,101 @@
+{
+    "gate": "design",
+    "run": "2026-10-27T21:58:40+09:00",
+    "spec_dir": "specs/023-session-launch-axes-and-operations",
+    "spec_id": "023-session-launch-axes-and-operations",
+    "tracks": {
+        "analyze": {
+            "status": "ok",
+            "raw_out": "analyze.md",
+            "viewpoint_missing": null,
+            "cascade_demotions": null
+        },
+        "po-reviewer": {
+            "status": "ok",
+            "raw_out": "po-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "architecture-reviewer": {
+            "status": "ok",
+            "raw_out": "architecture-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "security-reviewer": {
+            "status": "ok",
+            "raw_out": "security-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "platform-boundary-reviewer": {
+            "status": "ok",
+            "raw_out": "platform-boundary-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        }
+    },
+    "severity_counts": {
+        "critical": 0,
+        "high": 5,
+        "medium": 20,
+        "low": 19
+    },
+    "fr_coverage": [
+        {
+            "fr": "FR-001..FR-018, SC-001..SC-009",
+            "covered": true,
+            "by": [
+                "analyze.md coverage table (27/27)"
+            ]
+        }
+    ],
+    "viewpoint_coverage": {
+        "A": "Critical:0 High:1",
+        "B": "Critical:0 High:0",
+        "C": "Critical:0 High:1",
+        "D": "Critical:0 High:1",
+        "E": "Critical:0 High:2",
+        "F": "Critical:0 High:0",
+        "G": "\u8a72\u5f53\u306a\u3057",
+        "H": "Critical:0 High:0"
+    },
+    "dedup_log": [
+        {
+            "merged": [
+                "arch-H-002",
+                "sec-M-002"
+            ],
+            "key": "FR-010"
+        },
+        {
+            "merged": [
+                "analyze-U3",
+                "po-M-002"
+            ],
+            "key": "data-model.md \u00a74.2 timeout"
+        },
+        {
+            "merged": [
+                "po-M-004",
+                "sec-M-001"
+            ],
+            "key": "data-model.md:56 live-setting log"
+        },
+        {
+            "merged": [
+                "arch-M-006",
+                "pb-L-001"
+            ],
+            "key": "data-model.md:145 rename failed"
+        },
+        {
+            "merged": [
+                "analyze-U1",
+                "arch-L-002"
+            ],
+            "key": "tasks.md BE-031"
+        }
+    ],
+    "verdict": "PASS"
+}
