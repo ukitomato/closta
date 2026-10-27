@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-/** 改名の子の起動 (023 BE-033 / contracts C-5 / data-model §6.3)。`utilityProcess` は偽物。 */
+/** 改名の子の起動 (023 BE-033 / contracts C-5 / data-model §6.3)。electron の子プロセス API は偽物 (実プロセスは起こさない)。 */
 
 type Listener = (...args: unknown[]) => void
 

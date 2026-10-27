@@ -5,7 +5,7 @@ domain: session
 domain_selected_by: auto
 targets: both
 targets_selected_by: auto
-status: implementing
+status: reviewing
 bf_ids: []
 sf_ids: []
 linear: null
@@ -45,6 +45,7 @@ linear: null
 | U-9 | 改名を受け付けてから結果が出るまで (`changing` が名前) の間に届いたプロンプトの送信は、main が保留し、改名の結果 (成否・期限を問わない) の後に届いた順で送る。拒否はしない (composer に触れずにプロンプトを失わないため)。design-gate H-005 | FR-010 / Edge Cases |
 | U-10 | モデルの切り替えは、モデルのカタログを持つ Provider のセッションだけが対象。Provider が既定 (null)・Provider が消えた・起動の effort を満たすモデルが 0 のセッションでは、選択を理由つきで押せない形で出す (既定の Provider のモデルの切り替えは X-6 の後続)。design-gate H-002 | US-2 AC6 / Out of Scope |
 | ADR | AD-062 (plan で起こし、夜間の規則で推奨案を採用して accepted にする): AD-036 §4 P3 / §5 の読み替え (`setPermissionMode` / `setModel` を許す。`QUERY_MUTATION_METHODS` 22 → 20)・`AGENT_SDK_ALLOWED_CALLS` に `renameSession` を足す (5 → 6。`AGENT_SDK_CALL_FILES` で 1 ファイルに縛る)・AD-034 と R-3 (003) FR-001 の「transcript は読み取り専用」の読み替え (custom-title の追記だけ)・X-1 SC-006(a) の「実行時の昇格面」の読み替え (安全 3 値の中の遷移は昇格でない) | `docs/decisions/` |
+| ADR | AD-063 (code-gate platform-boundary H-001 で起こし、2026-10-28 夜間の規則で推奨案を採用して accepted にする): 改名の子の起動の単体テスト `rename-spawner.test.ts` を `PROCESS_SPAWN_MODULES` に実名で足す (項目 7 だけ。1 ファイルに限り、走査範囲は変えない) | `docs/decisions/` |
 
 各 U-n の検討した案・採った案は「Clarifications」の節に置く。
 

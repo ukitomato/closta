@@ -260,8 +260,8 @@ export const PROCESS_SPAWN_MODULES = [
    */
   'src/main/app/rename-spawner.ts',
   /*
-   * 上の単体テスト。偽の子で `electron` を差し替える (`vi.mock`) ため、API の名前が文字列として現れる。実プロセスは起こさない。
-   * 項目 3 / 15 は `wsl.exe` を綴らないことで引き続き掛かる。
+   * 上の単体テスト (AD-063)。偽の子で `electron` を差し替える (`vi.mock`) ため、API の名前が文字列として現れる。実プロセスは起こさない。
+   * 項目 3 / 15 は `wsl.exe` を綴らないことで引き続き掛かる。許可はこの 1 ファイルに限る (テストの suffix で許可しない)。
    */
   'src/main/app/rename-spawner.test.ts'
 ]

@@ -1,4 +1,5 @@
 .dependency-cruiser.js
+docs/decisions/0063-rename-spawner-test-in-process-spawn-modules.md
 docs/domains/_overview.md
 docs/domains/session/charter.md
 docs/glossary.md

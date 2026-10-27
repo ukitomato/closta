@@ -25,6 +25,7 @@ related_adrs:
   - docs/decisions/0060-content-block-verification-and-unsupported-block-mark.md
   - docs/decisions/0061-o12-contract-extensions-categories-parts-and-agents-branches.md
   - docs/decisions/0062-live-session-permission-mode-model-and-rename.md
+  - docs/decisions/0063-rename-spawner-test-in-process-spawn-modules.md
 related_specs:
   - specs/002-session-cross-folder-session-enumeration/spec.md
   - specs/005-session-launch-and-streaming/spec.md
@@ -260,6 +261,7 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
 - [AD-059](../../decisions/0059-session-resume-query-option-and-conversation-id.md) — 起動の options の `resume` と会話の id の保持・失敗の理由 `resume-failed` (X-9)
 - [AD-060](../../decisions/0060-content-block-verification-and-unsupported-block-mark.md) — 対応表の B 節 (中身のブロック) の機械照合と知らないブロックの印 (O-12。ui の feature が本 domain の契約を広げた)
 - [AD-062](../../decisions/0062-live-session-permission-mode-model-and-rename.md) — 実行中のセッションの権限モード・モデル・名前の変更 (X-6 の最初の分割 023)
+- [AD-063](../../decisions/0063-rename-spawner-test-in-process-spawn-modules.md) — 改名の子の起動の単体テストを `PROCESS_SPAWN_MODULES` に足す (023 code-gate H-001)
 
 ## Related Specs
 
