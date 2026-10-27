@@ -3,13 +3,13 @@ import { query } from '@anthropic-ai/claude-agent-sdk'
 /**
  * 違反サンプル (X-1 / SH-010 / contracts C-4 P3)。
  *
- * **`Query` の mutation メソッドを呼ぶ。** 許可されるのは `interrupt()` のみだが、
- * `setPermissionMode(...)` でモードを変える形。
+ * **`Query` の mutation メソッドを呼ぶ。** 許可されるのは `interrupt()` と実行中の設定の切り替え
+ * (権限モード・モデル。AD-062) だけだが、`setMaxThinkingTokens(...)` で思考の予算を変える形。
  * 項目 14 は `.method()` 呼び出しを見ないため素通しする。
- * **引数は安全値 `'default'` にしてある** — 昇格値のリテラル検査 (P1) では発火せず、
- * 項目 16 の P3 (mutation メソッドの呼び出し) だけで発火することを確かめる (O-5 / 015 research R-06 (4))。
+ * 昇格値のリテラル検査 (P1) では発火せず、項目 16 の P3 (mutation メソッドの呼び出し) だけで発火することを確かめる
+ * (O-5 / 015 research R-06 (4)。023 で `setPermissionMode` から差し替え。AD-062 Decision 1)。
  */
 export async function bad(): Promise<void> {
   const q = query({ prompt: 'hi' })
-  await q.setPermissionMode('default')
+  await q.setMaxThinkingTokens(null)
 }

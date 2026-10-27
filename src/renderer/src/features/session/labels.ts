@@ -2,6 +2,7 @@ import type { LaunchFailureReason, SessionLaunchRejectReason } from '@domain/ses
 import { MAX_CONCURRENT_SESSIONS } from '@domain/session/concurrency'
 import { MAX_PRESETS, type SafePermissionMode } from '@domain/session/launch-config'
 import type { AxisResetReason, LaunchBlocker } from '@domain/session/launch-resolution'
+import type { LiveSettingBlocker, LiveSettingKind } from '@domain/session/live-settings'
 import type { ResumeUnavailableReason } from '@domain/session/resume'
 import type { SavePresetResult } from '@domain/session/preset'
 import type { SessionRunState } from '@domain/session/run-state'
@@ -428,6 +429,33 @@ export const PERMISSION_MODE_LABELS: Record<SafePermissionMode, string> = {
   plan: PERMISSION_MODE_NAMES.plan,
   dontAsk: PERMISSION_MODE_NAMES.dontAsk
 }
+
+/* ── 実行中の設定の変更 (023 / data-model §8.4 / Principle XV) ── */
+
+export const LIVE_SETTING_LABELS = {
+  permissionMode: '権限モード',
+  model: 'モデル',
+  currentModel: '現在のモデル',
+  rename: '名前を変更',
+  nameField: '名前',
+  save: '保存',
+  cancel: 'キャンセル',
+  defaultModel: '既定',
+  nameRule: '1〜100 文字で、改行を含めずに入力してください',
+  noModelList: 'この Provider にはモデルの一覧がありません',
+  failure: {
+    'permission-mode': '権限モードを変更できませんでした',
+    model: 'モデルを変更できませんでした',
+    name: '名前を変更できませんでした'
+  } satisfies Record<LiveSettingKind, string>,
+  blocker: {
+    'not-running': 'Claude Code が動いていません',
+    'not-ready': '最初の応答の後に変更できます',
+    busy: '変更中です',
+    'no-conversation': '最初の応答の後に名前を付けられます',
+    'turn-running': '応答の実行中は名前を変更できません'
+  } satisfies Record<LiveSettingBlocker, string>
+} as const
 
 /** 権限モードの意味の説明 (`dontAsk` は承認カードが出ず、事前承認の無い操作は拒否される。plan R-03)。 */
 export const PERMISSION_MODE_DESCRIPTIONS: Record<SafePermissionMode, string> = {

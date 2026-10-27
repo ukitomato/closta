@@ -1,4 +1,5 @@
-import type { DerivedLaunchEnv, ModelEntry } from '@domain/provider/types'
+import { sdkModelOf } from '@domain/provider/model-catalog'
+import type { DerivedLaunchEnv } from '@domain/provider/types'
 import type {
   RuntimeDescriptor,
   Win32RuntimeDescriptor,
@@ -89,11 +90,6 @@ export interface LaunchPreparationDeps {
 
 function folderFact(folder: WorkspaceFolder): FolderFact {
   return { id: folder.id, distroName: isWslFolder(folder) ? folder.location.distroName : null }
-}
-
-/** Bedrock は inference profile ID で pin する (X-3 FR-010)。無ければモデル ID。 */
-function sdkModelOf(entry: ModelEntry): string {
-  return entry.inferenceProfileId ?? entry.id
 }
 
 export function createPrepareLaunch(

@@ -1,0 +1,7 @@
+// 違反サンプル (023 / AD-062 Decision 4): `renameSession` を `src/agents/rename-session.ts` 以外で呼ぶ。
+// `AGENT_SDK_ALLOWED_CALLS` には載るが、呼べるファイルの表 (`AGENT_SDK_CALL_FILES`) の外なので項目 14 が発火する。
+import { renameSession } from '@anthropic-ai/claude-agent-sdk'
+
+export async function renameOutside(conversationId: string): Promise<void> {
+  await renameSession(conversationId, 'name')
+}

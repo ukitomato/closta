@@ -249,7 +249,21 @@ export const PROCESS_SPAWN_MODULES = [
    * 子プロセスは起こさない。`worker_threads` の Worker は `SPAWN_CALL_PATTERNS` に含めない (プロセスではない) —
    * その env の扱いは項目 20 が別に縛る。**X-5 で新しい登録はしていない** (Principle VI)。
    */
-  'src/agents/sdk-agent-session.ts'
+  'src/agents/sdk-agent-session.ts',
+  /*
+   * セッションの改名の専用短命プロセスを起こす (023 / AD-062 Decision 4 / data-model §6.3)。
+   *
+   * **`transcript-spawner.ts` と別モジュールにする。** あちらは本文の port を子へ transfer する 1 要求 1 子で、
+   * こちらは `{ conversationId, name }` の 1 通を送り `{ ok }` の 1 通を受けるだけで port を使わず、
+   * 動いている子の追跡と上限と `dispose` を自分で持つ (寿命と受け渡しが違う)。
+   * **`wsl.exe` のリテラルは持たない** (WSL_FREE_DIRECTORIES / env は呼び出し側が値で渡す)。
+   */
+  'src/main/app/rename-spawner.ts',
+  /*
+   * 上の単体テスト。偽の子で `electron` を差し替える (`vi.mock`) ため、API の名前が文字列として現れる。実プロセスは起こさない。
+   * 項目 3 / 15 は `wsl.exe` を綴らないことで引き続き掛かる。
+   */
+  'src/main/app/rename-spawner.test.ts'
 ]
 
 /* ── 項目 18: 調停役スレッドの本文非解釈 (SC-002 / AD-031 §2 / AD-043 Decision 2) ── */
@@ -372,10 +386,12 @@ export const AGENT_SDK_IMPORT_DIRECTORIES = ['src/agents/']
  * - `listSessions` — R-2 の列挙 (読み取り)
  * - `getSessionMessages` — R-3 の transcript 取得 (読み取り。AD-034)。呼ぶのは `src/agents/read-transcript.ts`
  * - `query` — X-1 のセッション起動 + stream + interrupt (AD-002 V1 / AD-036)。呼ぶのは `src/agents/sdk-agent-session.ts`
+ * - `renameSession` — 023 の名前の変更 (AD-062 Decision 4)。**custom-title の追記だけ**で、呼ぶのは `src/agents/rename-session.ts`
  *
  * **許可以外を禁じる形で検査する。** 禁止側を列挙すると必ず漏れる。
- * **書き込み系 API (`renameSession` / `tagSession` / `deleteSession` / `forkSession` /
- * `importSessionToStore`) は許可しない** — transcript は読み取り専用である (FR-001)。
+ * **書き込み系 API のうち `tagSession` / `deleteSession` / `forkSession` /
+ * `importSessionToStore` は許可しない** — transcript は読み取り専用である (FR-001)。
+ * `renameSession` は AD-062 が読み替えた (custom-title の追記だけを許す)。
  *
  * **判定は呼び出し形で行う。** import しただけの名前や型注釈を違反にすると、
  * これらを正当に使う後続 feature (X-1 / O-1 / I-1) で検証が破綻する (research R-07)。
@@ -386,7 +402,9 @@ export const AGENT_SDK_ALLOWED_CALLS = [
   'query',
   // AD-055: subagent の入れ子の読み取り (読み取り専用)。呼べるファイルは AGENT_SDK_CALL_FILES で縛る
   'listSubagents',
-  'getSubagentMessages'
+  'getSubagentMessages',
+  // AD-062 Decision 4: 名前の変更 (transcript の custom-title の追記だけ)。呼べるファイルは AGENT_SDK_CALL_FILES で縛る
+  'renameSession'
 ]
 
 /**
@@ -399,7 +417,9 @@ export const AGENT_SDK_ALLOWED_CALLS = [
  */
 export const AGENT_SDK_CALL_FILES = {
   listSubagents: ['src/agents/read-transcript.ts'],
-  getSubagentMessages: ['src/agents/read-transcript.ts']
+  getSubagentMessages: ['src/agents/read-transcript.ts'],
+  // AD-062 Decision 4: 改名の短命の子だけが呼ぶ
+  renameSession: ['src/agents/rename-session.ts']
 }
 
 /**
@@ -457,13 +477,16 @@ export const SANCTIONED_SETTINGS_WRAPPER = 'assertHelperSettings'
  *
  * 集合は `tests/docs/query-mutation-methods.test.ts` が固定し、`src/agents/sdk-agent-session.ts` の
  * `QueryMutationMethod` (型の union) と一致させる。**外すには ADR が要る** (足すのは P3 の範囲内で ADR 不要)。
+ *
+ * **023 (X-6) で `setPermissionMode` / `setModel` を外した (22 → 20)。** [AD-062](../../docs/decisions/0062-live-session-permission-mode-model-and-rename.md)
+ * Decision 1 / 3 が、安全 3 値の権限モードとカタログのモデルの切り替えだけを呼んでよいと決めた。外した 2 つのうち
+ * `.setPermissionMode(` は項目 16 が別の検査で縛る (引数が `assertSafePermissionMode(` で始まり、その呼び出しで閉じること)。
+ * `setMaxThinkingTokens` は残す (spec U-4 / FR-008)。
  */
 export const QUERY_MUTATION_METHODS = [
-  'setPermissionMode',
   'setMcpPermissionModeOverride',
   'applyFlagSettings',
   'updateSettings',
-  'setModel',
   'setMaxThinkingTokens',
   'mcpServerStatus',
   'reconnectMcpServer',
@@ -559,7 +582,12 @@ export const WSL_FREE_DIRECTORIES = [
   // O-3: 起動の利用記録の取り回し (日ごとの回数を store に書くだけ。wsl.exe を名指さない。012 BE-042)。
   'src/main/app/launch-usage-service.ts',
   // X-9: 再開の調停 (状態を持たない。I/O は注入で受ける。wsl.exe を名指さない。021 BE-012)。
-  'src/main/app/resume-service.ts'
+  'src/main/app/resume-service.ts',
+  // X-6 (023): 稼働中の行の列挙対象の決め方 (resume-service から切り出し。純粋な関数。wsl.exe を名指さない。BE-031)。
+  'src/main/app/live-transcript-target.ts',
+  // X-6 (023): 改名の子の起動と調停。wsl.exe を名指さない (env と列挙対象は注入で受ける。BE-033 / BE-034)。
+  'src/main/app/rename-spawner.ts',
+  'src/main/app/session-rename-service.ts'
 ]
 
 export const UNC_API_NAMES = [

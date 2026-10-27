@@ -1,0 +1,13 @@
+import { query } from '@anthropic-ai/claude-agent-sdk'
+
+/**
+ * 違反サンプル (023 / AD-062 Decision 1)。
+ *
+ * **実行中の権限モードの切り替えを `assertSafePermissionMode` の包みなしで呼ぶ。** 引数は呼び出し側が持つ値で、
+ * 安全 3 値の検査を通っていない。項目 16 の `.setPermissionMode(` の検査だけで発火する形
+ * (昇格値のリテラルも `permissionMode:` も含めない)。
+ */
+export async function bad(mode: 'default' | 'plan' | 'dontAsk'): Promise<void> {
+  const q = query({ prompt: 'hi' })
+  await q.setPermissionMode(mode)
+}

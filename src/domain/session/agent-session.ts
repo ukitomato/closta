@@ -308,6 +308,8 @@ export const SESSION_EVENT_KINDS = [
  *
  * - `end` (X-5 / FR-011): 応答待ち (`done`) か中断済み (`interrupted`) のセッションの `claude` を、プロンプトの入力を
  *   閉じて正常終了させる穏当な「終了」。破損の警告は出さない。期限内に終わらなければ強制終了に落ち、`end-forced` を流す
+ * - `set-permission-mode` / `set-model` (023 / AD-062): 実行中の権限モード (安全 3 値の中)・モデル (カタログの値) の切り替え。
+ *   結果は `requestId` つきの `control-result` で返る。名前の変更はセッションスレッドを通らないので含めない
  */
 export type SessionControl =
   | { readonly kind: 'send-prompt'; readonly text: string }
@@ -316,6 +318,8 @@ export type SessionControl =
   | { readonly kind: 'interrupt' }
   | { readonly kind: 'end' }
   | { readonly kind: 'kill' }
+  | { readonly kind: 'set-permission-mode'; readonly requestId: string; readonly mode: SafePermissionMode }
+  | { readonly kind: 'set-model'; readonly requestId: string; readonly model: string }
 
 /**
  * 稼働セッションの**操作面の概念契約** (data-model §1)。操作語彙は `SessionControl` と一致させる
@@ -337,6 +341,10 @@ export interface AgentSession {
   sendPrompt(text: string): void
   /** SDK interrupt (stdin 越し control_request。FR-015。`interrupt`)。 */
   interrupt(): Promise<void>
+  /** 実行中の権限モードの切り替え (`set-permission-mode`。安全 3 値の中。AD-062)。結果は `control-result`。 */
+  setPermissionMode(requestId: string, mode: SafePermissionMode): void
+  /** 実行中のモデルの切り替え (`set-model`。AD-062)。結果は `control-result`。 */
+  setModel(requestId: string, model: string): void
   /** 穏当な終了 (`end`)。プロンプトの入力を閉じて `claude` を正常終了させる。 */
   end(): Promise<void>
   /** 強制終了 (`kill`)。保持している子 (`wsl.exe`) を kill する。 */

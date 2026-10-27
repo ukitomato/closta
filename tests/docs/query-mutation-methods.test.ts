@@ -17,12 +17,10 @@ import { QUERY_MUTATION_METHODS } from '../../scripts/constitution/allowlists.mj
  */
 
 const EXPECTED = [
-  // X-1 (AD-036 §4 P3)
-  'setPermissionMode',
+  // X-1 (AD-036 §4 P3)。`setPermissionMode` / `setModel` は X-6 の 023 (AD-062 Decision 1) で外した
   'setMcpPermissionModeOverride',
   'applyFlagSettings',
   'updateSettings',
-  'setModel',
   'setMaxThinkingTokens',
   // O-5 (AD-048 Decision 2)
   'mcpServerStatus',
@@ -63,9 +61,9 @@ function unionLiterals(source: string): string[] {
 }
 
 describe('検証項目 16 の P3 の集合', () => {
-  it('`QUERY_MUTATION_METHODS` は 22 個で、並びを問わず固定した集合に一致する', () => {
-    expect(QUERY_MUTATION_METHODS).toHaveLength(22)
-    expect(new Set(QUERY_MUTATION_METHODS).size).toBe(22)
+  it('`QUERY_MUTATION_METHODS` は 20 個で、並びを問わず固定した集合に一致する', () => {
+    expect(QUERY_MUTATION_METHODS).toHaveLength(20)
+    expect(new Set(QUERY_MUTATION_METHODS).size).toBe(20)
     expect([...QUERY_MUTATION_METHODS].sort()).toEqual([...EXPECTED].sort())
   })
 

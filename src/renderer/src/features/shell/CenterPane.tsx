@@ -106,7 +106,7 @@ export function RunningCenter(): React.JSX.Element | null {
       >
         <div className="flex h-full min-h-0 flex-col">
           <CenterHeader
-            title={view.folderName(live.state.config.folderId)}
+            title={live.state.name ?? view.folderName(live.state.config.folderId)}
             detail={detail}
             status={SESSION_ROW_STATUS_LABELS[rowStatus(live)]}
             titleTestId="session-title"
@@ -114,7 +114,22 @@ export function RunningCenter(): React.JSX.Element | null {
               sessionId: live.sessionId,
               runtimeId: live.state.config.runtimeId,
               modelId: live.state.config.modelId,
-              terminal: live.terminal
+              terminal: live.terminal,
+              configPermissionMode: live.state.config.permissionMode,
+              settingRow: {
+                state: live.runState,
+                claudeAlive: !live.ended,
+                hasConversation: live.state.resumable,
+                changing: live.state.changing !== null
+              },
+              settingError: live.state.settingError,
+              onSelectPermissionMode: live.setPermissionMode,
+              providerId: live.state.config.providerId,
+              effort: live.state.config.effort,
+              currentModelId: live.state.currentModelId,
+              onSelectModel: live.setModel,
+              name: live.state.name,
+              onRename: live.rename
             }}
           />
           <div className="min-h-0 flex-1">

@@ -90,7 +90,7 @@ import {
  *
  * | 規則 | 根拠 |
  * |---|---|
- * | **Agent SDK を呼ぶ場所。`query()` のみ** (戻り値 `Query` のメソッドは `interrupt()` だけ。P3) | Principle IV / contracts C-4 |
+ * | **Agent SDK を呼ぶ場所。`query()` のみ** (戻り値 `Query` のメソッドは `interrupt()` と、安全 3 値の権限モード・カタログのモデルの切り替え (AD-062)。P3) | Principle IV / contracts C-4 |
  * | **spawn 主体は本ファイル。** `spawnClaudeCodeProcess` コールバックで `child_process.spawn` する | AD-036 §3 / C-7 (`PROCESS_SPAWN_MODULES`) |
  * | **起動コマンド・接頭引数・claude パス・cwd・env は値 (`RuntimeLaunchSpec`) で受ける。リテラルを持たない** | `WSL_FREE_DIRECTORIES` / 検証項目 3 |
  * | **`electron` を import しない** | Principle VII / AD-010 |
@@ -143,7 +143,7 @@ void authInputFromSdk
 void pluginInputFromSdk
 void mcpStatusMatchesSdk
 // `Query` の自前のメソッドの網羅 (O-5 / 015 research R-06 (2) / AD-036 §4 P3 / AD-048 Decision 2)。
-// 呼ぶのは `interrupt` だけ。残りを項目 16 の denylist (`QueryMutationMethod`。変更系と、accepted の ADR が呼ばないと
+// 呼ぶのは `interrupt` と、実行中の設定の切り替え (`QueryLiveSettingMethod`。AD-062) だけ。残りを項目 16 の denylist (`QueryMutationMethod`。変更系と、accepted の ADR が呼ばないと
 // 決めた読み取り = AD-047 Decision 4 の `getContextUsage` / `usage_EXPERIMENTAL…`) と、それ以外の呼ばないメソッド
 // (`QueryUnusedReadMethod`) に分ける。`QueryUnusedReadMethod` の分類は呼び出しを禁じない (項目 16 の検査の対象外)。
 // `close` は後始末で、`promptQueue.close()` と綴りが衝突するため denylist に足せない。
@@ -152,11 +152,9 @@ void mcpStatusMatchesSdk
 // `QueryMutationMethod` は 1 行に 1 つのリテラルで書く (pin テストがソースから抜き出す)。
 type QueryOwnMethod = Exclude<keyof Query, keyof AsyncGenerator<SDKMessage, void>>
 type QueryMutationMethod =
-  | 'setPermissionMode'
   | 'setMcpPermissionModeOverride'
   | 'applyFlagSettings'
   | 'updateSettings'
-  | 'setModel'
   | 'setMaxThinkingTokens'
   | 'mcpServerStatus'
   | 'reconnectMcpServer'
@@ -174,6 +172,9 @@ type QueryMutationMethod =
   | 'getContextUsage'
   | 'usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET'
   | 'readFile'
+// 実行中の設定の切り替え (023 / AD-062 Decision 1)。権限モードは `assertSafePermissionMode` を通した安全 3 値だけ、
+// モデルはカタログの値だけを main が検証して送る。項目 16 が `.setPermissionMode(` の引数の包みを見る。
+type QueryLiveSettingMethod = 'setPermissionMode' | 'setModel'
 type QueryUnusedReadMethod =
   | 'initializationResult'
   | 'supportedCommands'
@@ -181,7 +182,11 @@ type QueryUnusedReadMethod =
   | 'supportedAgents'
   | 'accountInfo'
   | 'close'
-type QueryClassifiedMethod = 'interrupt' | QueryMutationMethod | QueryUnusedReadMethod
+type QueryClassifiedMethod =
+  | 'interrupt'
+  | QueryLiveSettingMethod
+  | QueryMutationMethod
+  | QueryUnusedReadMethod
 const queryMethodsAreClassified: Equal<Exclude<QueryOwnMethod, QueryClassifiedMethod>, never> = true
 const queryClassifiedMethodsExist: QueryClassifiedMethod extends keyof Query ? true : false = true
 void queryMethodsAreClassified
@@ -453,7 +458,9 @@ async function run(
   const taskRows = createTaskRowBuilder(createForegroundTaskMemory())
   let state: SessionRunState = 'idle'
   let reasonKey: LaunchFailureReason | null = null
-  let queryHandle: (Pick<Query, 'interrupt'> & AsyncIterable<SDKMessage>) | null = null
+  let queryHandle:
+    | (Pick<Query, 'interrupt' | 'setPermissionMode' | 'setModel'> & AsyncIterable<SDKMessage>)
+    | null = null
   let spawnedChild: (SpawnedLike & { exitCode?: number | null; pid?: number }) | null = null
   let childExited = false
   // Win32 の起動のときだけ非 null。停止の手続き (§9.1) の対象かどうかを決める。
@@ -743,6 +750,33 @@ async function run(
 
   // 制御シンク: 検証済みの control をセッション状態へ反映する。
   controlSink = (control) => {
+    // 実行中の設定の切り替え (023 / AD-062)。終了処理の中・`query` の前でも結果は必ず返す (main の待ちを残さない)。
+    // 状態 (running / done …) では拒否しない — 受け付ける状態の判定は main が行い、SDK が拒否したらそれを返す。
+    // 状態機械の遷移はしない。reject の理由は送らない・記録しない (会話由来の文字列を出さない)。
+    if (control.kind === 'set-permission-mode' || control.kind === 'set-model') {
+      const { requestId } = control
+      const handle = queryHandle
+      if (closing || handle === null) {
+        post({ kind: 'control-result', requestId, ok: false })
+        return
+      }
+      if (control.kind === 'set-permission-mode') {
+        const { mode } = control
+        void handle
+          .setPermissionMode(assertSafePermissionMode(mode))
+          .then(() => {
+            signals.onPermissionModeApplied(mode)
+            post({ kind: 'control-result', requestId, ok: true })
+          })
+          .catch(() => post({ kind: 'control-result', requestId, ok: false }))
+      } else {
+        void handle
+          .setModel(control.model)
+          .then(() => post({ kind: 'control-result', requestId, ok: true }))
+          .catch(() => post({ kind: 'control-result', requestId, ok: false }))
+      }
+      return
+    }
     if (closing && !acceptsWhileClosing(control)) return
     switch (control.kind) {
       case 'send-prompt':

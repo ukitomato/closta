@@ -22,6 +22,9 @@ import {
   checkFolderDraft,
   checkPastResumeQuery,
   checkResumeRequest,
+  checkRenameArgs,
+  checkSetModelArgs,
+  checkSetPermissionModeArgs,
   checkProviderDraft as checkProviderDraftWith,
   checkProviderPatch as checkProviderPatchWith,
   findRuntime,
@@ -502,6 +505,78 @@ describe('isPermissionOutcome / isPermissionScope (X-1 承認決定の enum 検�
     for (const bad of ['forever', 'always', '', 0, null, undefined]) {
       expect(isPermissionScope(bad)).toBe(false)
     }
+  })
+})
+
+describe('checkSetPermissionModeArgs (023 / contracts C-1)', () => {
+  const ID = '11111111-1111-4111-8111-111111111111'
+  it('UUID と安全 3 値だけを通す', () => {
+    for (const mode of ['default', 'plan', 'dontAsk']) {
+      expect(checkSetPermissionModeArgs([ID, mode])).toBe(true)
+    }
+  })
+  it('知らない値・昇格・数・null・配列・非 UUID・引数の過不足を通さない', () => {
+    const bad: (readonly unknown[])[] = [
+      [ID, 'bypassPermissions'],
+      [ID, 'auto'],
+      [ID, 1],
+      [ID, null],
+      [ID, ['plan']],
+      ['not-uuid', 'plan'],
+      [ID],
+      [ID, 'plan', 'extra']
+    ]
+    for (const args of bad) expect(checkSetPermissionModeArgs(args)).toBe(false)
+  })
+})
+
+describe('checkSetModelArgs (023 / contracts C-2)', () => {
+  const ID = '11111111-1111-4111-8111-111111111111'
+  it('UUID と文字種の通るモデルの id を通す', () => {
+    for (const model of ['claude-opus-4-1', 'sonnet[1m]', 'arn:aws:bedrock:us:1:inference-profile/x']) {
+      expect(checkSetModelArgs([ID, model])).toBe(true)
+    }
+  })
+  it('文字種の外・数・null・空・非 UUID・引数の過不足を通さない', () => {
+    const bad: (readonly unknown[])[] = [
+      [ID, 'a b'],
+      [ID, '-x'],
+      [ID, ''],
+      [ID, 1],
+      [ID, null],
+      [ID],
+      ['not-uuid', 'sonnet'],
+      [ID, 'sonnet', 'extra']
+    ]
+    for (const args of bad) expect(checkSetModelArgs(args)).toBe(false)
+  })
+})
+
+describe('checkRenameArgs (023 / contracts C-3)', () => {
+  const ID = '11111111-1111-4111-8111-111111111111'
+  it('名前の規則を通る値を trim して返す', () => {
+    expect(checkRenameArgs([ID, '  調査  '])).toEqual([ID, '調査'])
+    expect(checkRenameArgs([ID, 'a'])).toEqual([ID, 'a'])
+    expect(checkRenameArgs([ID, 'a'.repeat(100)])).toEqual([ID, 'a'.repeat(100)])
+  })
+  it('空・空白だけ・101 文字・改行・制御文字・行と段落の区切り・数・非 UUID・引数の過不足は null', () => {
+    const bad: (readonly unknown[])[] = [
+      [ID, ''],
+      [ID, '  '],
+      [ID, 'a'.repeat(101)],
+      [ID, 'a\nb'],
+      [ID, 'a\rb'],
+      [ID, 'a\u0000b'],
+      [ID, 'a\u007fb'],
+      [ID, 'a b'],
+      [ID, 'a b'],
+      [ID, 1],
+      [ID, null],
+      [ID],
+      ['not-uuid', 'a'],
+      [ID, 'a', 'extra']
+    ]
+    for (const args of bad) expect(checkRenameArgs(args)).toBeNull()
   })
 })
 

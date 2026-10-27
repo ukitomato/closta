@@ -437,6 +437,32 @@ describe('runSupervisor: 単独起動 (標準入出力経路。BE-012 / SC-009)'
   })
 })
 
+describe('runSupervisor: 制御の結果の中継 (023 / contracts C-4)', () => {
+  const REQ = '55555555-5555-4555-8555-555555555555'
+
+  it('control-result を窓の満了を待たずに 1 回だけ main へ送る (sessionId は割り当てたもの)', () => {
+    const h = electronHarness()
+    h.send(launchMsg(A), [bodyPort()])
+    h.workers[0]?.send({ kind: 'control-result', requestId: REQ, ok: true })
+    // 偽の時計は進めていない — 窓の満了の前に届いている。
+    expect(h.timer.pending()).toBe(0)
+    const sent = h.lines().filter((l) => l.kind === 'control-result')
+    expect(sent).toEqual([{ kind: 'control-result', sessionId: A, requestId: REQ, ok: true }])
+  })
+
+  it('status-batch に入らず、requestId が UUID でない control-result は捨てる', () => {
+    const h = electronHarness()
+    h.send(launchMsg(A), [bodyPort()])
+    h.workers[0]?.send({ kind: 'control-result', requestId: 'nope', ok: true })
+    h.workers[0]?.send({ kind: 'control-result', requestId: REQ, ok: false })
+    h.workers[0]?.send({ kind: 'status', state: 'running', reasonKey: null, claudeAlive: true })
+    h.timer.runAll()
+    expect(h.lines().filter((l) => l.kind === 'control-result')).toHaveLength(1)
+    const batches = h.toMain.filter((l) => JSON.parse(l).kind === 'status-batch')
+    for (const line of batches) expect(line).not.toContain(REQ)
+  })
+})
+
 describe('runSupervisor: 会話の id の中継 (X-9 / AD-059 / contracts C-5)', () => {
   const CONV = '44444444-4444-4444-8444-444444444444'
 

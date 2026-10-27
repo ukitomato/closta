@@ -1818,3 +1818,36 @@ describe('行の時刻 (O-9 BE-012 / data-model §1。AD-051)', () => {
     expect(times).toEqual([1_760_000_000_000, 1_760_000_005_000])
   })
 })
+
+describe('createLiveSignals — 実行中の権限モードの切り替え (023 / AD-062 / data-model §3.3)', () => {
+  const permissionMeters = (emitted: readonly SessionEvent[]): unknown[] =>
+    emitted.flatMap((e) =>
+      e.kind === 'meter' && e.meter.type === 'permission-mode' ? [e.meter.mode] : []
+    )
+  const modeRows = (emitted: readonly SessionEvent[]): number =>
+    emitted.filter((e) => e.kind === 'message' && e.message.id.startsWith('mode:')).length
+
+  it('onPermissionModeApplied で meter と権限モードの行が 1 回ずつ出る', () => {
+    const { signals, emitted } = setup('default')
+    signals.onPermissionModeApplied('plan')
+    expect(permissionMeters(emitted)).toEqual(['plan'])
+    expect(modeRows(emitted)).toBe(1)
+  })
+
+  it('その後に同じ値の status / init が来ても二重に出ない', () => {
+    const { signals, emitted } = setup('default')
+    signals.onPermissionModeApplied('plan')
+    signals.onSystem({ type: 'system', subtype: 'status', status: null, permissionMode: 'plan' })
+    signals.onSystem({ type: 'system', subtype: 'init', permissionMode: 'plan' })
+    expect(permissionMeters(emitted)).toEqual(['plan'])
+    expect(modeRows(emitted)).toBe(1)
+  })
+
+  it('別の値の報告はそれを出す', () => {
+    const { signals, emitted } = setup('default')
+    signals.onPermissionModeApplied('plan')
+    signals.onSystem({ type: 'system', subtype: 'status', status: null, permissionMode: 'dontAsk' })
+    expect(permissionMeters(emitted)).toEqual(['plan', 'dontAsk'])
+    expect(modeRows(emitted)).toBe(2)
+  })
+})

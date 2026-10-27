@@ -40,6 +40,10 @@ const EXPECTED_CHANNELS = {
   interruptSession: 'closta:interruptSession',
   endSession: 'closta:endSession',
   killSession: 'closta:killSession',
+  // 023: 実行中の設定の変更 (AD-062)。
+  setSessionPermissionMode: 'closta:setSessionPermissionMode',
+  setSessionModel: 'closta:setSessionModel',
+  renameSession: 'closta:renameSession',
   sessionPort: 'closta:sessionPort',
   sessionStatus: 'closta:sessionStatus',
   sessionResumable: 'closta:sessionResumable',

@@ -30,14 +30,17 @@ export function useRunningThreadList(
     useShallow((s) => s.order.map((id) => s.sessions[id]?.config.folderId ?? ''))
   )
 
+  // 付けた名前 (023 / FR-012)。無ければフォルダの表示名。名前の変更でだけ変わる値を選ぶ。
+  const names = useRunningSessionStore(useShallow((s) => s.order.map((id) => s.sessions[id]?.name ?? null)))
+
   const threads = useMemo(
     () =>
       order.map((id, i) => ({
         status: 'regular' as const,
         id,
-        title: folderName(folderIds[i] ?? '')
+        title: names[i] ?? folderName(folderIds[i] ?? '')
       })),
-    [order, folderIds, folderName]
+    [order, folderIds, names, folderName]
   )
 
   return useMemo(

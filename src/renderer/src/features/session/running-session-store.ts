@@ -8,8 +8,9 @@ import {
 } from '@domain/capability'
 import type { SessionEvent } from '@domain/session/agent-session'
 import type { ElicitationContent } from '@domain/session/elicitation'
-import type { SessionLaunchConfig } from '@domain/session/launch-config'
+import type { SafePermissionMode, SessionLaunchConfig } from '@domain/session/launch-config'
 import type { LaunchOrigin } from '@domain/session/launch-usage'
+import type { LiveSettingKind } from '@domain/session/live-settings'
 import type { MeterUpdate } from '@domain/session/meter'
 import type { SessionResumeRequest } from '@domain/session/resume'
 import { normalizeSlashCommandName } from '@domain/session/session-init-report'
@@ -109,6 +110,30 @@ export interface SessionActions {
   dismissLaunchNotice(): void
   /** 監視ビューの情報密度 (O-1 / FR-008。永続化しない)。 */
   setDensity(density: Density): void
+  /**
+   * 実行中の設定の変更を始める (023 / data-model §8.1)。`changing` を立て、前の失敗の表示を消す。`config` は書き換えない (FR-014)。
+   */
+  beginSetting(sessionId: string, kind: LiveSettingKind): void
+  /**
+   * 変更の結果を受ける。`changing` を戻し、失敗なら `settingError` を立てる。行が無い・終わった行への結果は捨てる
+   * (結果の前に終わった行)。
+   */
+  endSetting(sessionId: string, kind: LiveSettingKind, ok: boolean): void
+  /**
+   * 実行中の権限モードを切り替える (023 / contracts C-1)。`beginSetting` → capability → `endSetting` の順。
+   * 表示は `meters.permissionMode` から読む (ここでは書き戻さない。FR-014)。
+   */
+  setPermissionMode(sessionId: string, mode: SafePermissionMode): void
+  /**
+   * 実行中のモデルを切り替える (023 / contracts C-2)。成功したら `currentModelId` を `modelId` にする
+   * (`config.modelId` は書き換えない。FR-014)。
+   */
+  setModel(sessionId: string, modelId: string): void
+  /**
+   * セッションに名前を付ける (023 / contracts C-3)。成功したら main が返した名前を `name` に入れる
+   * (`config` は書き換えない。FR-014)。成功なら `true`、失敗・結果の前に終わった行は `false`。
+   */
+  rename(sessionId: string, name: string): Promise<boolean>
   /**
    * 見ているセッション (`watchedId`。省略時は選択中) を除く承認待ちのうち、承認待ちになったのが最も早いものへ切り替える
    * (O-1 / FR-002・O-7 / FR-006)。無ければ何もしない。
@@ -745,7 +770,11 @@ export function createRunningSessionStore(
       folderLabel,
       launchOrigin: origin,
       resumable: resumedRow || early !== -1,
-      resumed: resumedRow ? { phase: 'loading' } : null
+      resumed: resumedRow ? { phase: 'loading' } : null,
+      currentModelId: null,
+      name: null,
+      changing: null,
+      settingError: null
     }
     createQueue(sessionId)
     store.setState((s) => ({
@@ -934,6 +963,88 @@ export function createRunningSessionStore(
 
     setDensity(density) {
       if (store.getState().density !== density) store.setState({ density })
+    },
+
+    beginSetting(sessionId, kind) {
+      const current = store.getState().sessions[sessionId]
+      if (current === undefined) return
+      store.setState((s) => ({
+        sessions: { ...s.sessions, [sessionId]: { ...current, changing: kind, settingError: null } }
+      }))
+    },
+
+    endSetting(sessionId, kind, ok) {
+      const state = store.getState()
+      const current = state.sessions[sessionId]
+      if (current === undefined || viewOf(state, sessionId).ended) return
+      if (current.changing !== kind) return
+      store.setState((s) => ({
+        sessions: {
+          ...s.sessions,
+          [sessionId]: { ...current, changing: null, settingError: ok ? null : kind }
+        }
+      }))
+    },
+
+    setPermissionMode(sessionId, mode) {
+      if (store.getState().sessions[sessionId] === undefined) return
+      actions.beginSetting(sessionId, 'permission-mode')
+      capability()
+        .setSessionPermissionMode(sessionId, mode)
+        .then(
+          (result) => actions.endSetting(sessionId, 'permission-mode', result.ok),
+          () => actions.endSetting(sessionId, 'permission-mode', false)
+        )
+        .catch(() => undefined)
+    },
+
+    setModel(sessionId, modelId) {
+      if (store.getState().sessions[sessionId] === undefined) return
+      actions.beginSetting(sessionId, 'model')
+      capability()
+        .setSessionModel(sessionId, modelId)
+        .then(
+          (result) => {
+            if (result.ok) {
+              // 成功したら今のモデルを覚える (`config.modelId` は書き換えない。FR-014)。結果の前に終わった行は捨てる。
+              const current = store.getState().sessions[sessionId]
+              if (current !== undefined && current.changing === 'model') {
+                store.setState((s) => ({
+                  sessions: { ...s.sessions, [sessionId]: { ...current, currentModelId: modelId } }
+                }))
+              }
+            }
+            actions.endSetting(sessionId, 'model', result.ok)
+          },
+          () => actions.endSetting(sessionId, 'model', false)
+        )
+        .catch(() => undefined)
+    },
+
+    rename(sessionId, name) {
+      if (store.getState().sessions[sessionId] === undefined) return Promise.resolve(false)
+      actions.beginSetting(sessionId, 'name')
+      return capability()
+        .renameSession(sessionId, name)
+        .then(
+          (result) => {
+            if (result.ok) {
+              // main が trim した名前を覚える。結果の前に終わった行は捨てる。
+              const current = store.getState().sessions[sessionId]
+              if (current !== undefined && current.changing === 'name') {
+                store.setState((s) => ({
+                  sessions: { ...s.sessions, [sessionId]: { ...current, name: result.name } }
+                }))
+              }
+            }
+            actions.endSetting(sessionId, 'name', result.ok)
+            return result.ok
+          },
+          () => {
+            actions.endSetting(sessionId, 'name', false)
+            return false
+          }
+        )
     },
 
     selectNextAwaiting(watchedId) {

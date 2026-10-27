@@ -238,6 +238,12 @@ export interface LiveSignals {
   onRetraction(rawIds: unknown): void
   /** `tool_progress`。 */
   onToolProgress(message: unknown): void
+  /**
+   * 実行中の権限モードの切り替えが成功した (023 / AD-062。`setPermissionMode` の Promise が解けた)。
+   * 基準と違えば基準を更新し、`meter` の `permission-mode` と権限モードの行を 1 回出す。その後に Claude Code が同じ値を
+   * `status` / `init` で報告しても基準と同じなので二重に出ない。
+   */
+  onPermissionModeApplied(mode: SafePermissionMode): void
   /** 間引きの保留と timer を捨て、以後は何も送らない。何度呼んでもよい。 */
   dispose(): void
 }
@@ -757,6 +763,9 @@ export function createLiveSignals(deps: LiveSignalsDeps): LiveSignals {
     },
     onRetraction: (rawIds) => {
       retractIds(rawIds)
+    },
+    onPermissionModeApplied: (mode) => {
+      observePermissionMode(mode)
     },
     onToolProgress: (message) => {
       const record = asRecord(message)

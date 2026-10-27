@@ -89,7 +89,11 @@ const h = vi.hoisted(() => ({
   /** 最初のプロンプトの後に流す `init` (既定は素の init。再開のテストで session_id と権限モードを足す。X-9)。 */
   initMessage: null as null | Record<string, unknown>,
   /** spawn の直後 (init の前) の終わり方: exit = 子だけ異常終了 / throw = stream が例外 / end = 例外なく終わる (X-9 の経路 A / B / C)。 */
-  preInit: null as null | 'exit' | 'throw' | 'end'
+  preInit: null as null | 'exit' | 'throw' | 'end',
+  /** 実行中の設定の切り替え (023): SDK の `setPermissionMode` / `setModel` の呼び出しの記録と reject の指定。 */
+  setModeCalls: [] as unknown[][],
+  setModelCalls: [] as unknown[][],
+  liveSettingReject: false
 }))
 
 vi.mock('node:worker_threads', () => ({
@@ -196,6 +200,14 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
       interrupt: async () => {
         h.interrupts += 1
         return {}
+      },
+      setPermissionMode: async (...args: unknown[]) => {
+        h.setModeCalls.push(args)
+        if (h.liveSettingReject) throw new Error('secret reject reason')
+      },
+      setModel: async (...args: unknown[]) => {
+        h.setModelCalls.push(args)
+        if (h.liveSettingReject) throw new Error('secret reject reason')
       }
     })
   }
@@ -238,6 +250,9 @@ async function boot(
   h.interrupts = 0
   h.initMessage = null
   h.preInit = null
+  h.setModeCalls = []
+  h.setModelCalls = []
+  h.liveSettingReject = false
   posted = []
   listener = null
   h.port = {
@@ -2054,5 +2069,76 @@ describe('sdk-agent-session: 再開 (X-9 / AD-059 / data-model §6)', () => {
       await vi.waitFor(() => expect(states()).toContain('done'))
       expect(states()).not.toContain('error')
     })
+  })
+})
+
+describe('sdk-agent-session: 実行中の設定の切り替え (023 / AD-062 / data-model §3.2)', () => {
+  const REQ = '123e4567-e89b-42d3-a456-426614174000'
+  const results = (): { requestId: string; ok: boolean }[] =>
+    posted
+      .filter((p) => p.kind === 'control-result')
+      .map((p) => p as unknown as { requestId: string; ok: boolean })
+  const modeMeters = (): unknown[] =>
+    events().filter(
+      (e) => e.kind === 'meter' && (e as { meter?: { type?: string } }).meter?.type === 'permission-mode'
+    )
+
+  it('set-permission-mode は要求の値で setPermissionMode を 1 回呼び、control-result ok:true と meter が出る', async () => {
+    const send = await boot()
+    send(launch)
+    await vi.waitFor(() => expect(h.preMessageConsumed).toBe(true))
+    send(control({ kind: 'send-prompt', text: 'go' }))
+    await vi.waitFor(() => expect(states()).toContain('done'))
+    send(control({ kind: 'set-permission-mode', requestId: REQ, mode: 'plan' }))
+    await vi.waitFor(() => expect(results()).toEqual([{ kind: 'control-result', requestId: REQ, ok: true }]))
+    expect(h.setModeCalls).toEqual([['plan']])
+    expect(modeMeters()).toHaveLength(1)
+    // 状態は変わらない (done のまま。ターンも止めない)。
+    expect(states().at(-1)).toBe('done')
+  })
+
+  it('running の最中でも SDK を呼ぶ (受け付ける状態の判定は main の仕事)', async () => {
+    const send = await boot()
+    let release: () => void = () => undefined
+    send(launch)
+    await vi.waitFor(() => expect(h.preMessageConsumed).toBe(true))
+    h.holdTurn = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    send(control({ kind: 'send-prompt', text: 'go' }))
+    await vi.waitFor(() => expect(states()).toContain('running'))
+    send(control({ kind: 'set-model', requestId: REQ, model: 'claude-opus-4-1' }))
+    await vi.waitFor(() => expect(results()).toHaveLength(1))
+    expect(h.setModelCalls).toEqual([['claude-opus-4-1']])
+    expect(states().at(-1)).toBe('running')
+    release()
+  })
+
+  it('reject は ok:false で返し、状態は変わらず、理由の文字列をどこにも出さない', async () => {
+    const send = await boot()
+    send(launch)
+    await vi.waitFor(() => expect(h.preMessageConsumed).toBe(true))
+    send(control({ kind: 'send-prompt', text: 'go' }))
+    await vi.waitFor(() => expect(states()).toContain('done'))
+    h.liveSettingReject = true
+    send(control({ kind: 'set-permission-mode', requestId: REQ, mode: 'dontAsk' }))
+    await vi.waitFor(() => expect(results()).toHaveLength(1))
+    expect(results()[0]).toEqual({ kind: 'control-result', requestId: REQ, ok: false })
+    expect(modeMeters()).toHaveLength(0)
+    expect(states().at(-1)).toBe('done')
+    expect(JSON.stringify(posted)).not.toContain('secret reject reason')
+  })
+
+  it('終了処理の中 (end の後) は SDK を呼ばずに ok:false', async () => {
+    const send = await boot()
+    send(launch)
+    await vi.waitFor(() => expect(h.preMessageConsumed).toBe(true))
+    send(control({ kind: 'send-prompt', text: 'go' }))
+    await vi.waitFor(() => expect(states()).toContain('done'))
+    send(control({ kind: 'end' }))
+    send(control({ kind: 'set-permission-mode', requestId: REQ, mode: 'plan' }))
+    await vi.waitFor(() => expect(results()).toHaveLength(1))
+    expect(results()[0]).toMatchObject({ ok: false })
+    expect(h.setModeCalls).toEqual([])
   })
 })

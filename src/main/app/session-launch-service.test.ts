@@ -8,10 +8,12 @@ import type {
   RuntimeLaunchSpec,
   SessionControl
 } from '@domain/session/agent-session'
+import type { EffortLevel, ModelEntry } from '@domain/provider/types'
 import type { SessionLaunchConfig } from '@domain/session/launch-config'
 import type { SessionStatusUpdate } from '@domain/session/status-update'
 
 import {
+  CONTROL_RESULT_TIMEOUT_MS,
   createSessionLaunchService,
   type LaunchPreparation,
   type ResolvedResume,
@@ -54,12 +56,14 @@ function fakeConnection(): SupervisorConnection & {
   status: (updates: unknown[], generation?: number) => void
   threadEnded: (sessionId: string, generation?: number) => void
   conversation: (sessionId: string, conversationId: string, generation?: number) => void
+  controlResult: (sessionId: string, requestId: string, ok: boolean, generation?: number) => void
   exit: (code: number | null, generation?: number) => void
 } {
   const statusL: ((g: number, u: readonly unknown[]) => void)[] = []
   const threadL: ((g: number, id: string) => void)[] = []
   const exitL: ((g: number, c: number | null) => void)[] = []
   const convL: ((g: number, id: string, conv: string) => void)[] = []
+  const resultL: ((g: number, id: string, requestId: string, ok: boolean) => void)[] = []
   const conn = {
     launches: [] as string[],
     launchOptions: [] as LaunchQueryOptions[],
@@ -86,7 +90,11 @@ function fakeConnection(): SupervisorConnection & {
     onStatusBatch: (l: (g: number, u: readonly unknown[]) => void) => statusL.push(l),
     onThreadEnded: (l: (g: number, id: string) => void) => threadL.push(l),
     onConversation: (l: (g: number, id: string, conv: string) => void) => convL.push(l),
+    onControlResult: (l: (g: number, id: string, requestId: string, ok: boolean) => void) =>
+      resultL.push(l),
     onExit: (l: (g: number, c: number | null) => void) => exitL.push(l),
+    controlResult: (id: string, requestId: string, ok: boolean, generation = conn.generation) =>
+      resultL.forEach((l) => l(generation, id, requestId, ok)),
     conversation: (id: string, conv: string, generation = conn.generation) =>
       convL.forEach((l) => l(generation, id, conv)),
     status: (updates: unknown[], generation = conn.generation) =>
@@ -717,4 +725,447 @@ describe('引き継ぐ軸が消えたときの拒否 (X-9 / BE-030 / FR-008)', (
       expect(s.connection.launches).toHaveLength(0)
     }
   )
+})
+
+/* ── 実行中の設定の結果の待ちと、改名の間のプロンプトの保留 (023 / BE-008 / data-model §4) ── */
+
+interface LiveTimer {
+  readonly fn: () => void
+  readonly ms: number
+  cleared: boolean
+}
+
+function liveSetup(
+  providerModels?: (providerId: string) => Promise<readonly ModelEntry[] | null>
+): Setup & { timers: LiveTimer[] } {
+  const connection = fakeConnection()
+  const statuses: SessionStatusUpdate[][] = []
+  const logs: string[] = []
+  const timers: LiveTimer[] = []
+  const timer: TimerLike = {
+    setTimeout(fn, ms) {
+      const t: LiveTimer = { fn, ms, cleared: false }
+      timers.push(t)
+      return t
+    },
+    clearTimeout(handle) {
+      const t = handle as LiveTimer
+      t.cleared = true
+    }
+  }
+  let seq = 0
+  let req = 0
+  const service = createSessionLaunchService({
+    connection,
+    prepareLaunch: async () => okPrep(),
+    newSessionId: () => {
+      seq += 1
+      return `00000000-0000-4000-8000-${String(seq).padStart(12, '0')}`
+    },
+    newRequestId: () => {
+      req += 1
+      return `99999999-0000-4000-8000-${String(req).padStart(12, '0')}`
+    },
+    ...(providerModels !== undefined ? { providerModels } : {}),
+    onStatus: (u) => statuses.push([...u]),
+    timer,
+    log: (l) => logs.push(l)
+  })
+  return {
+    connection,
+    service,
+    statuses,
+    logs,
+    timers,
+    timer: manualTimer(),
+    resumable: []
+  }
+}
+
+const REQ1 = '99999999-0000-4000-8000-000000000001'
+const REQ2 = '99999999-0000-4000-8000-000000000002'
+
+async function liveSession(s: ReturnType<typeof liveSetup>): Promise<string> {
+  const o = await s.service.launch(cfg())
+  if (o.status !== 'launching') throw new Error('launch failed')
+  s.connection.status([upd(o.sessionId, { state: 'done' })])
+  return o.sessionId
+}
+
+describe('制御の結果の待ち (023 / data-model §4.2)', () => {
+  it('結果の一致で解ける (ok は { ok: true }、!ok は rejected)。解いたら changing が戻る', async () => {
+    const s = liveSetup()
+    const id = await liveSession(s)
+    const p = s.service.requestControl(id, { kind: 'set-permission-mode', mode: 'plan' })
+    expect(s.service.liveSettingRow(id)?.changing).toBe(true)
+    expect(s.connection.controls).toContainEqual([
+      id,
+      { kind: 'set-permission-mode', requestId: REQ1, mode: 'plan' }
+    ])
+    s.connection.controlResult(id, REQ1, true)
+    await expect(p).resolves.toEqual({ ok: true })
+    expect(s.service.liveSettingRow(id)?.changing).toBe(false)
+
+    const q = s.service.requestControl(id, { kind: 'set-model', model: 'm1' })
+    s.connection.controlResult(id, REQ2, false)
+    await expect(q).resolves.toEqual({ ok: false, reason: 'rejected' })
+    expect(s.service.liveSettingRow(id)?.changing).toBe(false)
+  })
+
+  it('結果を待つ間の 2 本目 (種類を問わない) は busy で、制御を送らない', async () => {
+    const s = liveSetup()
+    const id = await liveSession(s)
+    void s.service.requestControl(id, { kind: 'set-model', model: 'm1' })
+    const before = s.connection.controls.length
+    await expect(
+      s.service.requestControl(id, { kind: 'set-permission-mode', mode: 'plan' })
+    ).resolves.toEqual({ ok: false, reason: 'busy' })
+    expect(s.connection.controls).toHaveLength(before)
+  })
+
+  it('2 回目の解きを無視し、知らない requestId・別の世代の結果を捨てる', async () => {
+    const s = liveSetup()
+    const id = await liveSession(s)
+    const p = s.service.requestControl(id, { kind: 'set-model', model: 'm1' })
+    s.connection.controlResult(id, REQ2, true) // 知らない requestId
+    s.connection.controlResult(id, REQ1, true, 99) // 世代が違う
+    expect(s.service.liveSettingRow(id)?.changing).toBe(true)
+    s.connection.controlResult(id, REQ1, true)
+    s.connection.controlResult(id, REQ1, false) // 2 回目
+    await expect(p).resolves.toEqual({ ok: true })
+  })
+
+  it('期限 (10 秒) で timeout になる', async () => {
+    const s = liveSetup()
+    const id = await liveSession(s)
+    const p = s.service.requestControl(id, { kind: 'set-model', model: 'm1' })
+    const t = s.timers.find((x) => x.ms === CONTROL_RESULT_TIMEOUT_MS)
+    expect(t).toBeDefined()
+    t?.fn()
+    await expect(p).resolves.toEqual({ ok: false, reason: 'timeout' })
+    expect(s.service.liveSettingRow(id)?.changing).toBe(false)
+  })
+
+  it('そのセッションの世代の終わり (onThreadEnded) で session-ended', async () => {
+    const s = liveSetup()
+    const id = await liveSession(s)
+    const p = s.service.requestControl(id, { kind: 'set-model', model: 'm1' })
+    s.connection.threadEnded(id)
+    await expect(p).resolves.toEqual({ ok: false, reason: 'session-ended' })
+  })
+
+  it('supervisor の終わり (onExit) で session-ended', async () => {
+    const s = liveSetup()
+    const id = await liveSession(s)
+    const p = s.service.requestControl(id, { kind: 'set-model', model: 'm1' })
+    s.connection.exit(1)
+    await expect(p).resolves.toEqual({ ok: false, reason: 'session-ended' })
+  })
+
+  it('killAll で session-ended', async () => {
+    const s = liveSetup()
+    const id = await liveSession(s)
+    const p = s.service.requestControl(id, { kind: 'set-model', model: 'm1' })
+    s.service.killAll()
+    await expect(p).resolves.toEqual({ ok: false, reason: 'session-ended' })
+  })
+
+  it('dispose で session-ended', async () => {
+    const s = liveSetup()
+    const id = await liveSession(s)
+    const p = s.service.requestControl(id, { kind: 'set-model', model: 'm1' })
+    void s.service.dispose()
+    await expect(p).resolves.toEqual({ ok: false, reason: 'session-ended' })
+  })
+
+  it('未知の sessionId は unknown-session', async () => {
+    const s = liveSetup()
+    await expect(
+      s.service.requestControl('nope', { kind: 'set-model', model: 'm1' })
+    ).resolves.toEqual({ ok: false, reason: 'unknown-session' })
+    expect(s.service.liveSettingRow('nope')).toBeNull()
+  })
+
+  it('liveSettingRow は状態・claudeAlive・会話の id の有無・changing を返す', async () => {
+    const s = liveSetup()
+    const id = await liveSession(s)
+    expect(s.service.liveSettingRow(id)).toEqual({
+      state: 'done',
+      claudeAlive: true,
+      hasConversation: false,
+      changing: false
+    })
+    s.connection.conversation(id, '33333333-3333-4333-8333-333333333333')
+    expect(s.service.liveSettingRow(id)?.hasConversation).toBe(true)
+  })
+})
+
+describe('setName (023 / BE-034)', () => {
+  it('名前を行に覚え、状態通知の値には名前のキーが出ない。未知の行は何もしない', async () => {
+    const s = liveSetup()
+    const id = await liveSession(s)
+    s.service.setName(id, '調査')
+    s.service.setName('nope', 'x')
+    s.connection.status([upd(id, { state: 'interrupted' })])
+    for (const batch of s.statuses) {
+      for (const u of batch) expect(Object.keys(u)).not.toContain('name')
+    }
+    expect(JSON.stringify(s.logs)).not.toContain('調査')
+  })
+})
+
+describe('setPermissionMode (023 / contracts C-1)', () => {
+  it('未知の sessionId は unknown-session で、制御を送らない', async () => {
+    const s = liveSetup()
+    await expect(s.service.setPermissionMode('nope', 'plan')).resolves.toEqual({
+      ok: false,
+      reason: 'unknown-session'
+    })
+    expect(s.connection.controls).toHaveLength(0)
+  })
+
+  it('launching は not-ready・claudeAlive: false は not-running で、制御を送らない', async () => {
+    const s = liveSetup()
+    const o = await s.service.launch(cfg())
+    if (o.status !== 'launching') throw new Error('launch failed')
+    await expect(s.service.setPermissionMode(o.sessionId, 'plan')).resolves.toEqual({
+      ok: false,
+      reason: 'not-ready'
+    })
+    s.connection.status([upd(o.sessionId, { state: 'done', claudeAlive: false })])
+    await expect(s.service.setPermissionMode(o.sessionId, 'plan')).resolves.toEqual({
+      ok: false,
+      reason: 'not-running'
+    })
+    expect(s.connection.controls).toHaveLength(0)
+  })
+
+  it.each(['running', 'awaiting_permission', 'done'] as const)(
+    '%s で受け、結果の ok で { ok: true } になる',
+    async (state) => {
+      const s = liveSetup()
+      const id = await liveSession(s)
+      s.connection.status([upd(id, { state })])
+      const p = s.service.setPermissionMode(id, 'plan')
+      expect(s.connection.controls).toContainEqual([
+        id,
+        { kind: 'set-permission-mode', requestId: REQ1, mode: 'plan' }
+      ])
+      s.connection.controlResult(id, REQ1, true)
+      await expect(p).resolves.toEqual({ ok: true })
+    }
+  )
+
+  it('結果を待つ間の 2 本目 (種類を問わない) は busy で、制御を送らない', async () => {
+    const s = liveSetup()
+    const id = await liveSession(s)
+    void s.service.setPermissionMode(id, 'plan')
+    const before = s.connection.controls.length
+    await expect(s.service.setPermissionMode(id, 'default')).resolves.toEqual({
+      ok: false,
+      reason: 'busy'
+    })
+    await expect(s.service.requestControl(id, { kind: 'set-model', model: 'm1' })).resolves.toEqual(
+      { ok: false, reason: 'busy' }
+    )
+    expect(s.connection.controls).toHaveLength(before)
+  })
+
+  it('失敗の結果は rejected', async () => {
+    const s = liveSetup()
+    const id = await liveSession(s)
+    const p = s.service.setPermissionMode(id, 'plan')
+    s.connection.controlResult(id, REQ1, false)
+    await expect(p).resolves.toEqual({ ok: false, reason: 'rejected' })
+  })
+})
+
+describe('setModel (023 / contracts C-2)', () => {
+  const CATALOG: readonly ModelEntry[] = [
+    { id: 'sonnet', displayName: 'Sonnet', supportedEffortLevels: ['low', 'high'] },
+    {
+      id: 'opus',
+      displayName: 'Opus',
+      inferenceProfileId: 'profile/opus',
+      supportedEffortLevels: ['high']
+    },
+    { id: 'haiku', displayName: 'Haiku' }
+  ]
+
+  async function modelSession(
+    s: ReturnType<typeof liveSetup>,
+    providerId: string | null,
+    effort: EffortLevel | null
+  ): Promise<string> {
+    const o = await s.service.launch({ ...cfg(), providerId, effort })
+    if (o.status !== 'launching') throw new Error('launch failed')
+    s.connection.status([upd(o.sessionId, { state: 'done' })])
+    return o.sessionId
+  }
+
+  it('カタログにある値は id で送り、inferenceProfileId があればそれを送る。effort のキーは無い', async () => {
+    const s = liveSetup(async () => CATALOG)
+    const id = await modelSession(s, 'p1', 'high')
+    const p = s.service.setModel(id, 'opus')
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(s.connection.controls).toContainEqual([
+      id,
+      { kind: 'set-model', requestId: REQ1, model: 'profile/opus' }
+    ])
+    s.connection.controlResult(id, REQ1, true)
+    await expect(p).resolves.toEqual({ ok: true })
+
+    const q = s.service.setModel(id, 'sonnet')
+    await Promise.resolve()
+    await Promise.resolve()
+    const sent = s.connection.controls.at(-1)?.[1]
+    expect(sent).toEqual({ kind: 'set-model', requestId: REQ2, model: 'sonnet' })
+    expect(Object.keys(sent ?? {})).not.toContain('effort')
+    s.connection.controlResult(id, REQ2, false)
+    await expect(q).resolves.toEqual({ ok: false, reason: 'rejected' })
+  })
+
+  it('effort が null ならカタログの全部を受ける', async () => {
+    const s = liveSetup(async () => CATALOG)
+    const id = await modelSession(s, 'p1', null)
+    const p = s.service.setModel(id, 'haiku')
+    await Promise.resolve()
+    await Promise.resolve()
+    s.connection.controlResult(id, REQ1, true)
+    await expect(p).resolves.toEqual({ ok: true })
+  })
+
+  it.each([
+    ['カタログに無い値', 'p1', 'high', 'nope', async () => CATALOG],
+    ['起動の effort が効かないモデル', 'p1', 'low', 'opus', async () => CATALOG],
+    ['対応 effort を持たないモデル (effort あり)', 'p1', 'high', 'haiku', async () => CATALOG],
+    ['Provider が null (既定)', null, null, 'sonnet', async () => CATALOG],
+    ['Provider が起動の後に消えた', 'p1', null, 'sonnet', async () => null],
+    ['カタログが編集されてその値が消えた', 'p1', null, 'sonnet', async () => [CATALOG[2]]]
+  ] as const)('%s は invalid-value で制御を送らない', async (_l, providerId, effort, model, models) => {
+    const s = liveSetup(models)
+    const id = await modelSession(s, providerId, effort)
+    await expect(s.service.setModel(id, model)).resolves.toEqual({
+      ok: false,
+      reason: 'invalid-value'
+    })
+    expect(s.connection.controls).toHaveLength(0)
+  })
+
+  it('Provider の一覧を注入していなければ invalid-value', async () => {
+    const s = liveSetup()
+    const id = await modelSession(s, 'p1', null)
+    await expect(s.service.setModel(id, 'sonnet')).resolves.toEqual({
+      ok: false,
+      reason: 'invalid-value'
+    })
+  })
+
+  it('未知の sessionId は unknown-session、launching は not-ready、claudeAlive: false は not-running', async () => {
+    const s = liveSetup(async () => CATALOG)
+    await expect(s.service.setModel('nope', 'sonnet')).resolves.toEqual({
+      ok: false,
+      reason: 'unknown-session'
+    })
+    const o = await s.service.launch({ ...cfg(), providerId: 'p1' })
+    if (o.status !== 'launching') throw new Error('launch failed')
+    await expect(s.service.setModel(o.sessionId, 'sonnet')).resolves.toEqual({
+      ok: false,
+      reason: 'not-ready'
+    })
+    s.connection.status([upd(o.sessionId, { state: 'done', claudeAlive: false })])
+    await expect(s.service.setModel(o.sessionId, 'sonnet')).resolves.toEqual({
+      ok: false,
+      reason: 'not-running'
+    })
+    expect(s.connection.controls).toHaveLength(0)
+  })
+
+  it('結果を待つ間の 2 本目は busy で、制御を送らない', async () => {
+    const s = liveSetup(async () => CATALOG)
+    const id = await modelSession(s, 'p1', null)
+    void s.service.setPermissionMode(id, 'plan')
+    const before = s.connection.controls.length
+    await expect(s.service.setModel(id, 'sonnet')).resolves.toEqual({
+      ok: false,
+      reason: 'busy'
+    })
+    expect(s.connection.controls).toHaveLength(before)
+  })
+})
+
+describe('改名の間のプロンプトの保留 (023 / data-model §4.3 / spec U-9)', () => {
+  const prompt = (text: string): SessionControl => ({ kind: 'send-prompt', text })
+  const sent = (s: ReturnType<typeof liveSetup>): SessionControl[] =>
+    s.connection.controls.map(([, c]) => c)
+
+  it('changing === name の間の send-prompt は送らず、endChange の後に届いた順で 1 回ずつ送る', async () => {
+    const s = liveSetup()
+    const id = await liveSession(s)
+    expect(s.service.beginChange(id, 'name')).toBe(true)
+    expect(s.service.control(id, prompt('one'))).toBe(true)
+    expect(s.service.control(id, prompt('two'))).toBe(true)
+    expect(sent(s)).toEqual([])
+    s.service.endChange(id, 'name')
+    expect(sent(s)).toEqual([prompt('one'), prompt('two')])
+    expect(s.logs).toContain('[session] prompts held n=2')
+    expect(s.logs).toContain('[session] prompts released n=2')
+    expect(s.logs.join('\n')).not.toContain('one')
+  })
+
+  it('権限モード・モデルの変更中の send-prompt はすぐ送られる', async () => {
+    const s = liveSetup()
+    const id = await liveSession(s)
+    void s.service.requestControl(id, { kind: 'set-model', model: 'm1' })
+    s.service.control(id, prompt('now'))
+    expect(sent(s)).toContainEqual(prompt('now'))
+  })
+
+  it('interrupt / end / kill は名前の変更中でもすぐ送られる', async () => {
+    const s = liveSetup()
+    const id = await liveSession(s)
+    s.service.beginChange(id, 'name')
+    s.service.control(id, { kind: 'interrupt' })
+    s.service.control(id, { kind: 'end' })
+    s.service.control(id, { kind: 'kill' })
+    expect(sent(s)).toEqual([{ kind: 'interrupt' }, { kind: 'end' }, { kind: 'kill' }])
+  })
+
+  it('保留の後にセッションが終わったら送られない (onThreadEnded / killAll)', async () => {
+    const s = liveSetup()
+    const id = await liveSession(s)
+    s.service.beginChange(id, 'name')
+    s.service.control(id, prompt('lost'))
+    s.connection.threadEnded(id)
+    s.service.endChange(id, 'name')
+    expect(sent(s)).toEqual([])
+
+    const s2 = liveSetup()
+    const id2 = await liveSession(s2)
+    s2.service.beginChange(id2, 'name')
+    s2.service.control(id2, prompt('lost'))
+    s2.service.killAll()
+    s2.service.endChange(id2, 'name')
+    expect(sent(s2)).not.toContainEqual(prompt('lost'))
+  })
+
+  it('commit の後も changing / heldPrompts / conversationId が引き継がれ、状態通知に載らない', async () => {
+    const s = liveSetup()
+    const id = await liveSession(s)
+    s.connection.conversation(id, '33333333-3333-4333-8333-333333333333')
+    s.service.beginChange(id, 'name')
+    s.service.control(id, prompt('held'))
+    s.connection.status([upd(id, { state: 'done' })])
+    expect(s.service.liveSettingRow(id)).toMatchObject({ hasConversation: true, changing: true })
+    s.service.endChange(id, 'name')
+    expect(sent(s)).toEqual([prompt('held')])
+    for (const batch of s.statuses) {
+      for (const u of batch) {
+        for (const key of ['name', 'effort', 'changing', 'heldPrompts']) {
+          expect(u).not.toHaveProperty(key)
+        }
+      }
+    }
+  })
 })

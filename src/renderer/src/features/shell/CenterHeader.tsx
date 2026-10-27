@@ -1,11 +1,23 @@
+import { switchableModels } from '@domain/provider/model-catalog'
+import type { EffortLevel } from '@domain/provider/types'
+import type { SafePermissionMode } from '@domain/session/launch-config'
+import type { LiveSettingKind, LiveSettingRow } from '@domain/session/live-settings'
+
 import {
   ConversationSearchBar,
   ConversationSearchButton
 } from '@/features/chat/ConversationSearchBar'
 import { TranscriptDensityToggle } from '@/features/chat/TranscriptDensityToggle'
+import { useProviders } from '@/features/provider/useProviders'
+import { useSessionMeters } from '@/features/session/useSessionMeters'
 
 import { CenterBanners } from './CenterBanners'
 import { ContextCostMeter } from './ContextCostMeter'
+import {
+  EditableSessionTitle,
+  LiveSettingError,
+  LiveSettingsControls
+} from './LiveSettingsControls'
 
 /** 中央のヘッダに稼働中のセッションだけが渡す値 (O-4 / 014 data-model §4 の冒頭)。 */
 export interface CenterHeaderLive {
@@ -16,6 +28,26 @@ export interface CenterHeaderLive {
   readonly modelId: string | null
   /** 送信できない終端か (`LiveSession.terminal`)。Quota banner が待つ案内と `role` を決める (014 data-model §4)。 */
   readonly terminal: boolean
+  /** 起動の設定の権限モード (報告がまだ無いときの今の値。023)。 */
+  readonly configPermissionMode: SafePermissionMode
+  /** 実行中の設定の受け付けの判定の入力 (`liveSettingBlocker`。023 data-model §5.1)。 */
+  readonly settingRow: LiveSettingRow
+  /** 直前の変更の失敗 (1 行の表示。023)。 */
+  readonly settingError: LiveSettingKind | null
+  /** 権限モードの変更の操作 (023)。 */
+  readonly onSelectPermissionMode: (mode: SafePermissionMode) => void
+  /** 起動の Provider (既定なら null)。モデルの選択肢を引く (023)。 */
+  readonly providerId: string | null
+  /** 起動の effort (モデルの選択肢の絞り込み。変えない。023)。 */
+  readonly effort: EffortLevel | null
+  /** 成功したモデルの変更の値 (無ければ null で `modelId` を出す。023)。 */
+  readonly currentModelId: string | null
+  /** モデルの変更の操作 (023)。 */
+  readonly onSelectModel: (modelId: string) => void
+  /** 付けた名前 (見出しの編集の初期値。無ければ null。023)。 */
+  readonly name: string | null
+  /** 名前の変更の操作 (成功なら `true`。023)。 */
+  readonly onRename: (name: string) => Promise<boolean>
 }
 
 /**
@@ -25,7 +57,7 @@ export interface CenterHeaderLive {
  * |---|---|
  * | 題・補足・状態と、transcript の密度の切り替えを 1 行に並べる。長い題と補足は 1 行に切り詰める | FR-005 / Principle VIII |
  * | 値は DTO・ストアの時点で正規化済みの表示用の値を**テキストとして**描く (HTML として解釈しない) | US-1 / US-4 AC5 |
- * | 操作 (停止・閉じる) は置かない。一覧の行に一本化する — 同名のボタンを 2 か所に出さない | X-5 / O-1 |
+ * | 停止・閉じるは置かない。実行中の設定の変更 (権限モード) は置く (023)。一覧の行に一本化する操作と同名のボタンを 2 か所に出さない | X-5 / O-1 / 023 |
  * | 後続 feature がヘッダに表示を足すときはここに足す (稼働中と過去で別々に直さない) | code-gate convention M-003 |
  * | 会話内検索のボタンを行に置き、開くとヘッダの下に検索のバーを出す (会話内検索の provider の内側でだけ描く) | O-3 / 012 spec FR-003 |
  * | 稼働中だけの表示 (行の右の目盛り、行と会話内検索のバーの間の帯) は `live` があるときだけ描く。`live` は `RunningCenter` だけが渡す (過去の会話は渡さない) | O-4 / 014 data-model §4 |
@@ -59,6 +91,8 @@ export function CenterHeader({
         titleTestId={titleTestId}
         live={live}
       />
+      {/* 実行中の設定の変更の失敗の 1 行 (023)。稼働中だけ。 */}
+      {live !== undefined && <LiveSettingError settingError={live.settingError} />}
       {/* 稼働中だけの帯 (O-4 / 014 data-model §4)。ヘッダの行と会話内検索のバーの間に置く。 */}
       {live !== undefined && (
         <CenterBanners
@@ -70,6 +104,31 @@ export function CenterHeader({
       {/* 会話内検索のバー (O-3 / 012 data-model §2)。閉じている間は描かない。 */}
       <ConversationSearchBar />
     </>
+  )
+}
+
+/** 今の値は `meters.permissionMode ?? 起動の値` (表示は `meters` から読む。023 contracts C-1)。 */
+function LiveSettingsSlot({ live }: { readonly live: CenterHeaderLive }): React.JSX.Element {
+  const reported = useSessionMeters(live.sessionId, (meters) => meters.permissionMode)
+  const providers = useProviders()
+  // 選択肢はそのセッションの Provider のカタログのうち起動の effort が効くもの (main と同じ `switchableModels`)。
+  const provider =
+    live.providerId === null
+      ? null
+      : (providers.providers?.find((p) => p.id === live.providerId) ?? null)
+  const options = provider === null ? [] : switchableModels(provider.models, live.effort)
+  return (
+    <LiveSettingsControls
+      permissionMode={reported ?? live.configPermissionMode}
+      row={live.settingRow}
+      onSelectPermissionMode={live.onSelectPermissionMode}
+      model={{
+        value: live.currentModelId ?? live.modelId,
+        options: options.map((m) => ({ id: m.id, displayName: m.displayName })),
+        available: provider !== null,
+        onSelect: live.onSelectModel
+      }}
+    />
   )
 }
 
@@ -95,17 +154,31 @@ function CenterHeaderRow({
        * 1 行に切り詰めた全文は title で出す (pr-gate R1 a11y M-006)。題は中央 (`main`) の見出し — 見出しで移動する
        * 支援技術の利用者が中央に何を出しているかを読める (pr-gate R3 a11y L-001)。
        */}
-      <h2 className="min-w-0 truncate text-xs font-medium" title={title} data-testid={titleTestId}>
-        {title}
-      </h2>
+      {live !== undefined ? (
+        <EditableSessionTitle
+          title={title}
+          name={live.name}
+          titleTestId={titleTestId}
+          row={live.settingRow}
+          onRename={live.onRename}
+        />
+      ) : (
+        <h2 className="min-w-0 truncate text-xs font-medium" title={title} data-testid={titleTestId}>
+          {title}
+        </h2>
+      )}
       {detail !== null && detail !== '' && (
         <span className="text-muted-foreground min-w-0 truncate text-xs" title={detail}>
           {detail}
         </span>
       )}
       <span className="text-muted-foreground ms-auto shrink-0 text-xs">{status}</span>
+      {/* 実行中の設定の選択 (023)。稼働中だけ。 */}
+      {live !== undefined && <LiveSettingsSlot live={live} />}
       {/* コンテキストと費用の目盛り (O-4 / 014 data-model §4)。稼働中だけ。右のペインを畳んでいても見える。 */}
-      {live !== undefined && <ContextCostMeter sessionId={live.sessionId} modelId={live.modelId} />}
+      {live !== undefined && (
+        <ContextCostMeter sessionId={live.sessionId} modelId={live.currentModelId ?? live.modelId} />
+      )}
       {/* 会話内検索を開く (O-3 / 012 spec FR-003。Ctrl+F でも開く)。 */}
       <ConversationSearchButton />
       {/* transcript の密度 (O-2 / FR-012)。監視ビューの行の密度 (一覧の見出し) とは別の位置・文言。 */}

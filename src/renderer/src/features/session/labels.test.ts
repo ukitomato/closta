@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { LAUNCH_FAILURE_REASONS, type LaunchFailureReason } from '@domain/session/agent-session'
+import type { LiveSettingBlocker } from '@domain/session/live-settings'
 
 import {
   attentionAnnouncement,
@@ -9,7 +10,8 @@ import {
   launchFailureShortLabel,
   launchRejectLabel,
   previousFailureLabel,
-  runStateLabel
+  runStateLabel,
+  LIVE_SETTING_LABELS
 } from './labels'
 
 /**
@@ -216,5 +218,23 @@ describe('attentionAnnouncement (O-1 FR-004)', () => {
     ).toBe(
       '案件C: 承認待ちになりました。 案件A、案件D: 失敗しました (レート制限)。 案件B: 失敗しました (認証エラー)。 案件E、名前を取得できないセッション: 失敗しました。'
     )
+  })
+})
+
+describe('LIVE_SETTING_LABELS (023 FE-001)', () => {
+  it('blocker の理由が LiveSettingBlocker の全値を網羅する', () => {
+    const blockers: LiveSettingBlocker[] = [
+      'not-running',
+      'not-ready',
+      'busy',
+      'no-conversation',
+      'turn-running'
+    ]
+    expect(Object.keys(LIVE_SETTING_LABELS.blocker).sort()).toEqual([...blockers].sort())
+    for (const b of blockers) expect(LIVE_SETTING_LABELS.blocker[b].length).toBeGreaterThan(0)
+  })
+
+  it('失敗の文言は 3 種類の kind を網羅する', () => {
+    expect(Object.keys(LIVE_SETTING_LABELS.failure).sort()).toEqual(['model', 'name', 'permission-mode'])
   })
 })

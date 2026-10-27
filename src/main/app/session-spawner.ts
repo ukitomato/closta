@@ -57,6 +57,7 @@ export function createSupervisorConnection(
   const statusListeners: Listener<[number, readonly unknown[]]>[] = []
   const threadEndedListeners: Listener<[number, string]>[] = []
   const conversationListeners: Listener<[number, string, string]>[] = []
+  const controlResultListeners: Listener<[number, string, string, boolean]>[] = []
   const exitListeners: Listener<[number, number | null]>[] = []
 
   const ensureSupervisor = (): { proc: UtilityProcess; gen: number } => {
@@ -101,6 +102,8 @@ export function createSupervisorConnection(
       if (event.kind === 'status-batch') for (const cb of statusListeners) cb(gen, event.updates)
       else if (event.kind === 'conversation')
         for (const cb of conversationListeners) cb(gen, event.sessionId, event.conversationId)
+      else if (event.kind === 'control-result')
+        for (const cb of controlResultListeners) cb(gen, event.sessionId, event.requestId, event.ok)
       else for (const cb of threadEndedListeners) cb(gen, event.sessionId)
     })
     return { proc, gen }
@@ -156,6 +159,9 @@ export function createSupervisorConnection(
     },
     onConversation(listener) {
       conversationListeners.push(listener)
+    },
+    onControlResult(listener) {
+      controlResultListeners.push(listener)
     },
     onExit(listener) {
       exitListeners.push(listener)

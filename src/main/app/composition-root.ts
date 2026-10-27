@@ -46,7 +46,10 @@ import { createPresetService } from './preset-service'
 import { createProviderService } from './provider-service'
 import { createRuntimeStore, type RuntimeStore } from './runtime-store'
 import { createSessionEnumerator } from './session-enumerator'
+import { resolveLiveTranscriptTarget } from './live-transcript-target'
+import { createRenameSpawner } from './rename-spawner'
 import { createResumeService } from './resume-service'
+import { createSessionRenameService } from './session-rename-service'
 import { createSessionLaunchService } from './session-launch-service'
 import { createSessionService, type SessionService } from './session-service'
 import { createSupervisorConnection } from './session-spawner'
@@ -307,6 +310,9 @@ export function createComposition(): Composition {
     // fork env はランタイムに依存しない curated base (pr-gate R1 platform-boundary L-001)。
     connection: createSupervisorConnection(() => buildLaunchEnv(process.env)),
     newSessionId: () => randomUUID(),
+    // 実行中のモデルの切り替えの検証に使う今のカタログ (起動の依存解決と同じ store。Provider が無ければ null)。
+    providerModels: async (providerId) =>
+      (await providers.snapshotProfiles()).find((p) => p.id === providerId)?.models.models ?? null,
     onStatus: (updates) => sessionStatus.forward(updates),
     timer: {
       setTimeout: (fn, ms) => setTimeout(fn, ms),
@@ -358,6 +364,32 @@ export function createComposition(): Composition {
     conversationRecord: (sessionId) => launchService.conversationRecord(sessionId),
     getTranscript: (conversationId, targetKey, requestToken) =>
       transcripts.getTranscript(conversationId, targetKey, requestToken)
+  })
+
+  /**
+   * 実行中のセッションの改名 (023 / AD-062 Decision 4)。状態を持たない。env を固定した短命の子が `renameSession()` で
+   * transcript に書く。`transcriptTarget` と `buildTranscriptEnv` は transcript の取得と同じ結線を渡す。
+   */
+  const renames = createRenameSpawner()
+  const sessionRenames = createSessionRenameService({
+    liveSettingRow: (sessionId) => launchService.liveSettingRow(sessionId),
+    beginChange: (sessionId, kind) => launchService.beginChange(sessionId, kind),
+    endChange: (sessionId, kind) => launchService.endChange(sessionId, kind),
+    setName: (sessionId, name) => launchService.setName(sessionId, name),
+    conversationRecord: (sessionId) => launchService.conversationRecord(sessionId),
+    resolveTarget: (record) =>
+      resolveLiveTranscriptTarget(record, {
+        runtimes: () => runtimes.snapshot(),
+        enumerationTargets: () => sessions.enumerationTargets(),
+        pastResumeSource: (targetKey, conversationId) =>
+          sessions.pastResumeSource(targetKey, conversationId),
+        providers: () => providers.snapshotProfiles()
+      }),
+    transcriptTarget: (targetKey) => sessions.transcriptTarget(targetKey),
+    buildEnv: (configDirEnv) => buildTranscriptEnv(process.env, configDirEnv),
+    spawnRename: (env, request) => renames.run(env, request),
+    // 成功か失敗かだけを記録する (名前・会話の id・config ディレクトリを出さない)。
+    log: (line) => console.warn(line)
   })
 
   /** プリセット (X-4 / FR-009)。Provider は id 参照で持ち、資格情報を含めない (Principle V)。 */
@@ -431,6 +463,9 @@ export function createComposition(): Composition {
 
     launchSession: (config) => launchService.launch(config),
     controlSession: (sessionId, control) => launchService.control(sessionId, control),
+    setSessionPermissionMode: (sessionId, mode) => launchService.setPermissionMode(sessionId, mode),
+    setSessionModel: (sessionId, modelId) => launchService.setModel(sessionId, modelId),
+    renameSession: (sessionId, name) => sessionRenames.rename(sessionId, name),
 
     resolvePastResume: (targetKey, conversationId) =>
       resumeService.resolvePast(targetKey, conversationId),
@@ -506,7 +541,7 @@ export function createComposition(): Composition {
      */
     dispose: async (): Promise<number> => {
       const sessionsUnconfirmed = await launchService.dispose()
-      return sessionsUnconfirmed + enumerator.dispose() + transcripts.dispose()
+      return sessionsUnconfirmed + enumerator.dispose() + transcripts.dispose() + renames.dispose()
     }
   }
 }

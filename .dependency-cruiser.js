@@ -251,7 +251,7 @@ module.exports = {
        */
       from: {
         path:
-          '^src/main/app/(folder-service|runtime-store|session-service|session-launch-service|provider-service|preset-service|launch-usage-service|resume-service)[.]ts$' +
+          '^src/main/app/(folder-service|runtime-store|session-service|session-launch-service|provider-service|preset-service|launch-usage-service|resume-service|session-rename-service)[.]ts$' +
           '|^src/main/app/__rulecheck__/service-io-import[.]ts$'
       },
       to: {
@@ -297,6 +297,19 @@ module.exports = {
       severity: 'error',
       from: { pathNot: '^src/agents/(supervisor|sdk-agent-session)[.]ts$' },
       to: { dependencyTypes: ['core'], path: coreRe(['worker_threads']) }
+    },
+    {
+      name: 'agents-not-to-core',
+      comment:
+        'agents から Node 標準モジュールへの**直接**依存を、プロセス起動と `worker_threads` 以外は禁じる (023 / AD-062)。' +
+        '`process.getBuiltinModule()` の形は `detectProcessBuiltinModuleCalls` で依存として見える。' +
+        'プロセス起動と `worker_threads` は検証項目 7 / 20 と `worker-threads-only-from-entry` が実名で縛る。',
+      severity: 'error',
+      from: { path: '^src/agents/', pathNot: '[.]test[.]ts$' },
+      to: {
+        dependencyTypes: ['core'],
+        path: coreRe(ALL_CORE.filter((name) => !['child_process', 'worker_threads'].includes(name)))
+      }
     },
     {
       name: 'ui-not-to-core',

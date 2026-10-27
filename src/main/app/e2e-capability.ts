@@ -11,6 +11,11 @@ import type { LaunchInput, SessionControl, SessionEvent } from '@domain/session/
 import type { SessionIndexDTO, SessionSummaryDTO } from '@domain/session/dto'
 import { normalizePresetName } from '@domain/session/launch-config'
 import {
+  liveSettingBlocker,
+  normalizeSessionName,
+  type RenameResult
+} from '@domain/session/live-settings'
+import {
   addLaunch,
   EMPTY_LAUNCH_USAGE,
   prune,
@@ -258,6 +263,7 @@ function createE2eSupervisorConnection(): SupervisorConnection {
   const statusL: ((g: number, u: readonly unknown[]) => void)[] = []
   const threadL: ((g: number, id: string) => void)[] = []
   const conversationL: ((g: number, id: string, conversationId: string) => void)[] = []
+  const controlResultL: ((g: number, id: string, requestId: string, ok: boolean) => void)[] = []
   let pending: SessionStatusUpdate[] = []
   let flushTimer: ReturnType<typeof setTimeout> | null = null
   let seq = 0
@@ -386,6 +392,14 @@ function createE2eSupervisorConnection(): SupervisorConnection {
           setState(sessionId, s, 'done')
           end(sessionId, s)
           break
+        // 実行中の設定の切り替え (023 / contracts C-6)。受けた値で成功し、権限モードは本文の port へ `meter` を流す。
+        case 'set-permission-mode':
+          emit(s, { kind: 'meter', meter: { type: 'permission-mode', mode: control.mode } })
+          for (const l of controlResultL) l(1, sessionId, control.requestId, true)
+          break
+        case 'set-model':
+          for (const l of controlResultL) l(1, sessionId, control.requestId, true)
+          break
       }
     },
     kill() {
@@ -396,6 +410,7 @@ function createE2eSupervisorConnection(): SupervisorConnection {
     onThreadEnded: (l) => threadL.push(l),
     // 会話の id は合成プロンプト (`E2E_CONVERSATION_PROMPT`) を送った行にだけ送る (X-9 / FE-021)。
     onConversation: (l) => conversationL.push(l),
+    onControlResult: (l) => controlResultL.push(l),
     onExit: () => undefined
   }
 }
@@ -584,6 +599,9 @@ export function createE2eCapability(): E2eCapability {
       }
     },
     newSessionId: () => randomUUID(),
+    // 実行中のモデルの切り替えの検証に使う合成のカタログ (listProviders と同じ値)。
+    providerModels: async (providerId) =>
+      [bedrock, far].find((p) => p.id === providerId)?.models ?? null,
     onStatus: (updates) => sessionStatus.forward(updates),
     timer: {
       setTimeout: (fn, ms) => setTimeout(fn, ms),
@@ -680,6 +698,19 @@ export function createE2eCapability(): E2eCapability {
 
     launchSession: (config): Promise<LaunchOutcome> => launchService.launch(config),
     controlSession: (sessionId, control) => launchService.control(sessionId, control),
+    setSessionPermissionMode: (sessionId, mode) => launchService.setPermissionMode(sessionId, mode),
+    setSessionModel: (sessionId, modelId) => launchService.setModel(sessionId, modelId),
+    // 改名: 子と transcript の書き込みは起こさず、受け付けの判定と名前の規則だけを本物と同じ関数で通す (C-6)。
+    renameSession: async (sessionId, name): Promise<RenameResult> => {
+      const normalized = normalizeSessionName(name)
+      if (normalized === null) return { ok: false, reason: 'invalid-value' }
+      const row = launchService.liveSettingRow(sessionId)
+      if (row === null) return { ok: false, reason: 'unknown-session' }
+      const blocker = liveSettingBlocker('name', row)
+      if (blocker !== null) return { ok: false, reason: blocker }
+      launchService.setName(sessionId, normalized)
+      return { ok: true, name: normalized }
+    },
 
     // 再開 (X-9): 稼働中の行は本物の調停を通る。過去の行は列挙の索引に会話の行が無いので常に再開できない。
     resolvePastResume: async () => ({ ok: false, reason: 'source-unknown' }),

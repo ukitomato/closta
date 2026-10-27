@@ -82,6 +82,12 @@ const capability: ClostaCapability = {
   interruptSession: (sessionId) => ipcRenderer.invoke(IPC_CHANNELS.interruptSession, sessionId),
   endSession: (sessionId) => ipcRenderer.invoke(IPC_CHANNELS.endSession, sessionId),
   killSession: (sessionId) => ipcRenderer.invoke(IPC_CHANNELS.killSession, sessionId),
+  setSessionPermissionMode: (sessionId, mode) =>
+    ipcRenderer.invoke(IPC_CHANNELS.setSessionPermissionMode, sessionId, mode),
+  setSessionModel: (sessionId, modelId) =>
+    ipcRenderer.invoke(IPC_CHANNELS.setSessionModel, sessionId, modelId),
+  renameSession: (sessionId, name) =>
+    ipcRenderer.invoke(IPC_CHANNELS.renameSession, sessionId, name),
 
   listProviders: () => ipcRenderer.invoke(IPC_CHANNELS.listProviders),
   detectProviders: () => ipcRenderer.invoke(IPC_CHANNELS.detectProviders),

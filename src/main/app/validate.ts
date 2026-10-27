@@ -15,13 +15,16 @@ import {
   isValidPassthroughVarNames,
   type ExtraEnvPredicates
 } from '@domain/provider/forward-env'
-import { isValidModelCatalog } from '@domain/provider/model-catalog'
+import { isValidModelCatalog, isValidModelId } from '@domain/provider/model-catalog'
 import { isPermissionAnswers } from '@domain/session/agent-session'
+import { normalizeSessionName } from '@domain/session/live-settings'
 import { isElicitationAction, isElicitationContent } from '@domain/session/elicitation'
 import type { RuntimeDescriptor } from '@domain/runtime/descriptor'
 import {
+  isSafePermissionMode,
   isValidLaunchConfig,
   isValidPresetName,
+  type SafePermissionMode,
   type SessionLaunchConfig
 } from '@domain/session/launch-config'
 import type { PathDTO } from '@domain/runtime/dto'
@@ -425,6 +428,35 @@ export function isValidElicitationContent(
   value: unknown
 ): value is Readonly<Record<string, string | number | boolean>> {
   return isElicitationContent(value)
+}
+
+/**
+ * **`setSessionPermissionMode(sessionId, mode)`** (023 / contracts C-1)。引数はちょうど 2 つで、
+ * `sessionId` は UUID・`mode` は安全 3 値。外れたら `invalid-value` (service を呼ばない)。
+ */
+export function checkSetPermissionModeArgs(
+  args: readonly unknown[]
+): args is readonly [string, SafePermissionMode] {
+  return args.length === 2 && isValidSessionId(args[0]) && isSafePermissionMode(args[1])
+}
+
+/**
+ * **`setSessionModel(sessionId, modelId)`** (023 / contracts C-2)。引数はちょうど 2 つで、
+ * `sessionId` は UUID・`modelId` は文字種の検証 (`isValidModelId`)。カタログとの照合は service が行う。
+ */
+export function checkSetModelArgs(args: readonly unknown[]): args is readonly [string, string] {
+  return args.length === 2 && isValidSessionId(args[0]) && isValidModelId(args[1])
+}
+
+/**
+ * **`renameSession(sessionId, name)`** (023 / contracts C-3)。引数はちょうど 2 つで、`sessionId` は UUID・
+ * `name` は名前の規則 (`normalizeSessionName`) を通ること。通れば trim した値を返す (service には trim 済みを渡す)。
+ * 外れたら `null`。名前をログに出さない。
+ */
+export function checkRenameArgs(args: readonly unknown[]): readonly [string, string] | null {
+  if (args.length !== 2 || !isValidSessionId(args[0])) return null
+  const name = normalizeSessionName(args[1])
+  return name === null ? null : [args[0], name]
 }
 
 /* ── 起動設定 / プリセット (X-4 / FR-005 / FR-009) ─────────────────── */

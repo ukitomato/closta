@@ -151,3 +151,43 @@ describe('decodeWorkerMessage の conversation (X-9 / C-5)', () => {
     expect(decodeWorkerMessage({ kind: 'conversation' })).toBeNull()
   })
 })
+
+describe('control-result (023 / contracts C-4)', () => {
+  it('decodeWorkerMessage: requestId が UUID・ok が真偽のときだけ受け付ける', () => {
+    expect(decodeWorkerMessage({ kind: 'control-result', requestId: CONV, ok: true })).toEqual({
+      kind: 'control-result',
+      requestId: CONV,
+      ok: true
+    })
+    expect(decodeWorkerMessage({ kind: 'control-result', requestId: CONV, ok: false })).toEqual({
+      kind: 'control-result',
+      requestId: CONV,
+      ok: false
+    })
+    for (const bad of ['x', '', 42, null, undefined]) {
+      expect(decodeWorkerMessage({ kind: 'control-result', requestId: bad, ok: true })).toBeNull()
+    }
+    for (const bad of ['true', 1, null, undefined]) {
+      expect(decodeWorkerMessage({ kind: 'control-result', requestId: CONV, ok: bad })).toBeNull()
+    }
+    expect(decodeWorkerMessage({ kind: 'control-result', ok: true })).toBeNull()
+  })
+
+  it('decodeSupervisorEventForMain: sessionId / requestId が UUID・ok が真偽のときだけ受け付ける', () => {
+    expect(
+      decodeSupervisorEventForMain(
+        encodeSupervisorEvent({ kind: 'control-result', sessionId: ID, requestId: CONV, ok: false })
+      )
+    ).toEqual({ kind: 'control-result', sessionId: ID, requestId: CONV, ok: false })
+    for (const bad of [
+      { sessionId: 'x', requestId: CONV, ok: true },
+      { sessionId: ID, requestId: 'x', ok: true },
+      { sessionId: ID, requestId: CONV, ok: 'yes' },
+      { sessionId: ID, requestId: CONV }
+    ]) {
+      expect(
+        decodeSupervisorEventForMain(JSON.stringify({ kind: 'control-result', ...bad }))
+      ).toBeNull()
+    }
+  })
+})

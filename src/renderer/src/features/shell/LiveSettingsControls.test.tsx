@@ -1,0 +1,360 @@
+import { act, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { axe } from 'vitest-axe'
+
+import type { ProviderSummaryDTO } from '@domain/provider/dto'
+import type { SafePermissionMode } from '@domain/session/launch-config'
+import type { LiveSettingRow } from '@domain/session/live-settings'
+import type { PermissionModeKey } from '@domain/session/meter'
+
+import { RunningSessionStoreContext } from '@/features/session/running-session-context'
+import { createRunningSessionStore } from '@/features/session/running-session-store'
+import { EMPTY_SESSION_METERS } from '@/features/session/running-session-types'
+import { LIVE_SETTING_LABELS } from '@/features/session/labels'
+import { installCapability, stubCapability } from '@/test-support/capability'
+
+import { CenterHeader, type CenterHeaderLive } from './CenterHeader'
+import { LiveSettingsControls } from './LiveSettingsControls'
+
+/**
+ * 023 FE-011 — ヘッダの権限モードの選択 (spec US-1 AC1 / AC2 / AC4 / AC5 / Edge Cases。SC-005 の権限モードの部分)。
+ */
+
+const A = '11111111-1111-4111-8111-111111111111'
+const AXE_RULES = { rules: { 'color-contrast': { enabled: false } } }
+
+const READY: LiveSettingRow = {
+  state: 'done',
+  claudeAlive: true,
+  hasConversation: true,
+  changing: false
+}
+
+const select = (): HTMLSelectElement => screen.getByRole('combobox', { name: '権限モード' })
+const optionValues = (): string[] =>
+  Array.from(select().querySelectorAll('option')).map((o) => o.value)
+
+function renderControls(over: { mode?: PermissionModeKey; row?: Partial<LiveSettingRow> } = {}): {
+  onSelect: ReturnType<typeof vi.fn>
+  container: HTMLElement
+} {
+  const onSelect = vi.fn<(mode: SafePermissionMode) => void>()
+  const utils = render(
+    <LiveSettingsControls
+      permissionMode={over.mode ?? 'default'}
+      row={{ ...READY, ...over.row }}
+      onSelectPermissionMode={onSelect}
+    />
+  )
+  return { onSelect, container: utils.container }
+}
+
+describe('LiveSettingsControls (権限モード)', () => {
+  it('選択肢は安全 3 値の 3 つだけで、今の値が選ばれている。axe 違反 0', async () => {
+    const { container } = renderControls({ mode: 'plan' })
+    expect(optionValues()).toEqual(['default', 'plan', 'dontAsk'])
+    expect(select().value).toBe('plan')
+    expect((await axe(container, AXE_RULES)).violations).toEqual([])
+  })
+
+  it('今の値が安全 3 値の外なら先頭に選べない項目として出す', () => {
+    renderControls({ mode: 'bypassPermissions' })
+    const options = Array.from(select().querySelectorAll('option'))
+    expect(options).toHaveLength(4)
+    expect(options[0]?.value).toBe('bypassPermissions')
+    expect(options[0]).toBeDisabled()
+    expect(select().value).toBe('bypassPermissions')
+  })
+
+  it('選ぶと操作が 1 回呼ばれる', async () => {
+    const { onSelect } = renderControls()
+    await userEvent.selectOptions(select(), 'plan')
+    expect(onSelect).toHaveBeenCalledExactlyOnceWith('plan')
+  })
+
+  it('changing の間は押せない (aria-disabled と理由。操作は呼ばれない)', async () => {
+    const { onSelect } = renderControls({ row: { changing: true } })
+    expect(select()).toHaveAttribute('aria-disabled', 'true')
+    expect(select()).toHaveAccessibleDescription(LIVE_SETTING_LABELS.blocker.busy)
+    await userEvent.selectOptions(select(), 'plan')
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['idle', {}, 'not-running'],
+    ['error', {}, 'not-running'],
+    ['launching', {}, 'not-ready'],
+    ['done', { claudeAlive: false }, 'not-running']
+  ] as const)('%s で押せない形と理由の文言', (state, extra, blocker) => {
+    renderControls({ row: { state, ...extra } })
+    expect(select()).toHaveAttribute('aria-disabled', 'true')
+    expect(select()).toHaveAccessibleDescription(LIVE_SETTING_LABELS.blocker[blocker])
+  })
+
+  it.each(['running', 'awaiting_permission', 'interrupted', 'done'] as const)(
+    '%s では受け付ける',
+    (state) => {
+      renderControls({ row: { state } })
+      expect(select()).not.toHaveAttribute('aria-disabled')
+    }
+  )
+})
+
+describe('CenterHeader の権限モード (meters・失敗の 1 行)', () => {
+  function live(over: Partial<CenterHeaderLive> = {}): CenterHeaderLive {
+    return {
+      sessionId: A,
+      runtimeId: 'wsl:Ubuntu',
+      modelId: null,
+      terminal: false,
+      configPermissionMode: 'plan',
+      settingRow: READY,
+      settingError: null,
+      onSelectPermissionMode: () => undefined,
+      providerId: null,
+      effort: null,
+      currentModelId: null,
+      onSelectModel: () => undefined,
+      name: null,
+      onRename: async () => true,
+      ...over
+    }
+  }
+
+  beforeEach(() => {
+    installCapability()
+  })
+
+  function renderHeader(l: CenterHeaderLive): {
+    store: ReturnType<typeof createRunningSessionStore>
+    container: HTMLElement
+    rerender: (next: CenterHeaderLive) => void
+  } {
+    const store = createRunningSessionStore(() => stubCapability())
+    const tree = (props: CenterHeaderLive): React.JSX.Element => (
+      <RunningSessionStoreContext.Provider value={store}>
+        <CenterHeader
+          title="t"
+          detail={null}
+          status="応答待ち"
+          titleTestId="session-title"
+          live={props}
+        />
+      </RunningSessionStoreContext.Provider>
+    )
+    const utils = render(tree(l))
+    return {
+      store,
+      container: utils.container,
+      rerender: (next: CenterHeaderLive) => utils.rerender(tree(next))
+    }
+  }
+
+  it('meters の報告が無ければ起動の値を出し、報告が届けば表示が変わる', () => {
+    const { store } = renderHeader(live())
+    expect(select().value).toBe('plan')
+    act(() =>
+      store.setState((s) => ({
+        meters: { ...s.meters, [A]: { ...EMPTY_SESSION_METERS, permissionMode: 'dontAsk' } }
+      }))
+    )
+    expect(select().value).toBe('dontAsk')
+  })
+
+  it('失敗の 1 行が出て、表示は元の値のまま。次の変更の開始 (settingError が null) で消える', () => {
+    const { rerender } = renderHeader(live({ settingError: 'permission-mode' }))
+    expect(screen.getByTestId('live-setting-error')).toHaveTextContent(
+      LIVE_SETTING_LABELS.failure['permission-mode']
+    )
+    expect(select().value).toBe('plan')
+    rerender(live({ settingError: null, settingRow: { ...READY, changing: true } }))
+    expect(screen.queryByTestId('live-setting-error')).toBeNull()
+  })
+
+  it('過去の会話 (live なし) には出さない', () => {
+    render(<CenterHeader title="t" detail={null} status="読み取り専用" titleTestId="past-title" />)
+    expect(screen.queryByTestId('live-permission-mode')).toBeNull()
+    expect(screen.queryByTestId('live-model')).toBeNull()
+    expect(screen.queryByTestId('live-setting-error')).toBeNull()
+  })
+
+  describe('名前の変更 (023 FE-030)', () => {
+    const renameButton = (): HTMLElement => screen.getByRole('button', { name: '名前を変更' })
+    const input = (): HTMLInputElement => screen.getByRole('textbox', { name: '名前' })
+    const save = (): HTMLElement => screen.getByRole('button', { name: '保存' })
+
+    it('見出しが題を出し、ボタンで入力に変わる。初期値は今の名前。axe 違反 0', async () => {
+      const { container } = renderHeader(live({ name: '調査' }))
+      expect(screen.getByTestId('session-title')).toHaveTextContent('t')
+      expect((await axe(container, AXE_RULES)).violations).toEqual([])
+      await userEvent.click(renameButton())
+      expect(input()).toHaveValue('調査')
+      expect((await axe(container, AXE_RULES)).violations).toEqual([])
+    })
+
+    it('名前が無ければ初期値は空で、保存は押せない', async () => {
+      renderHeader(live())
+      await userEvent.click(renameButton())
+      expect(input()).toHaveValue('')
+      expect(save()).toBeDisabled()
+    })
+
+    it('保存で操作が trim 済みで 1 回呼ばれ、成功で見出しに戻る', async () => {
+      const onRename = vi.fn(async () => true)
+      renderHeader(live({ onRename }))
+      await userEvent.click(renameButton())
+      await userEvent.type(input(), '  新しい名前  ')
+      await userEvent.click(save())
+      expect(onRename).toHaveBeenCalledExactlyOnceWith('新しい名前')
+      await waitFor(() => expect(screen.queryByRole('textbox')).toBeNull())
+    })
+
+    it('失敗なら入力は開いたまま (失敗の 1 行は settingError が出す)', async () => {
+      const onRename = vi.fn(async () => false)
+      renderHeader(live({ onRename }))
+      await userEvent.click(renameButton())
+      await userEvent.type(input(), 'a')
+      await userEvent.click(save())
+      await waitFor(() => expect(onRename).toHaveBeenCalled())
+      expect(input()).toBeInTheDocument()
+    })
+
+    it('IME の変換中の Enter は保存せず、変換の後の Enter で保存する', async () => {
+      const { fireEvent } = await import('@testing-library/react')
+      const onRename = vi.fn(async () => true)
+      renderHeader(live({ onRename }))
+      await userEvent.click(renameButton())
+      fireEvent.change(input(), { target: { value: 'あ' } })
+      fireEvent.keyDown(input(), { key: 'Enter', isComposing: true, keyCode: 229 })
+      expect(onRename).not.toHaveBeenCalled()
+      fireEvent.keyDown(input(), { key: 'Enter' })
+      expect(onRename).toHaveBeenCalledExactlyOnceWith('あ')
+    })
+
+    it('Escape で元の見出しに戻り、操作は呼ばれない', async () => {
+      const onRename = vi.fn(async () => true)
+      renderHeader(live({ onRename }))
+      await userEvent.click(renameButton())
+      await userEvent.type(input(), 'x{Escape}')
+      expect(screen.queryByRole('textbox')).toBeNull()
+      expect(onRename).not.toHaveBeenCalled()
+    })
+
+    it('規則の外 (空白だけ・101 文字・改行) では保存が押せず文言が出る', async () => {
+      const { fireEvent } = await import('@testing-library/react')
+      renderHeader(live())
+      await userEvent.click(renameButton())
+      for (const value of ['   ', 'a'.repeat(101), 'a b']) {
+        fireEvent.change(input(), { target: { value } })
+        expect(save()).toBeDisabled()
+        expect(screen.getByText(LIVE_SETTING_LABELS.nameRule)).toBeInTheDocument()
+      }
+    })
+
+    it.each([
+      ['turn-running', { state: 'running' as const }],
+      ['turn-running', { state: 'awaiting_permission' as const }],
+      ['no-conversation', { hasConversation: false }],
+      ['not-running', { claudeAlive: false }],
+      ['not-running', { state: 'error' as const }],
+      ['busy', { changing: true }]
+    ] as const)('%s で押せない形と理由の文言 (操作は呼ばれない)', async (blocker, over) => {
+      renderHeader(live({ settingRow: { ...READY, ...over } }))
+      expect(renameButton()).toHaveAttribute('aria-disabled', 'true')
+      expect(renameButton()).toHaveAccessibleDescription(LIVE_SETTING_LABELS.blocker[blocker])
+      await userEvent.click(renameButton())
+      expect(screen.queryByRole('textbox')).toBeNull()
+    })
+
+    it.each(['done', 'interrupted'] as const)('%s では押せる', (state) => {
+      renderHeader(live({ settingRow: { ...READY, state } }))
+      expect(renameButton()).not.toHaveAttribute('aria-disabled')
+    })
+
+    it('過去の会話には「名前を変更」を出さない', () => {
+      render(<CenterHeader title="t" detail={null} status="読み取り専用" titleTestId="past-title" />)
+      expect(screen.queryByRole('button', { name: '名前を変更' })).toBeNull()
+    })
+  })
+
+  describe('モデルの選択 (Provider のカタログ)', () => {
+    const PROVIDER: ProviderSummaryDTO = {
+      id: 'p1',
+      displayName: 'P1',
+      backend: 'bedrock',
+      source: 'aws-profile',
+      modelCount: 3,
+      models: [
+        { id: 'sonnet', displayName: 'Sonnet', supportedEffortLevels: ['low', 'high'] },
+        { id: 'opus', displayName: 'Opus', supportedEffortLevels: ['high'] },
+        { id: 'haiku', displayName: 'Haiku' }
+      ]
+    }
+    const modelSelect = (): HTMLSelectElement => screen.getByRole('combobox', { name: 'モデル' })
+    const modelOptions = (): string[] =>
+      Array.from(modelSelect().querySelectorAll('option')).map((o) => o.value)
+
+    it('選択肢は起動の effort が効くモデルだけで、今の値が選ばれる', async () => {
+      installCapability({ listProviders: async () => [PROVIDER] })
+      renderHeader(live({ providerId: 'p1', effort: 'low', modelId: 'sonnet' }))
+      await waitFor(() => expect(modelOptions()).toEqual(['sonnet']))
+      expect(modelSelect().value).toBe('sonnet')
+    })
+
+    it('effort が null ならカタログの全部。選ぶと操作が呼ばれる。currentModelId が今の値になる', async () => {
+      installCapability({ listProviders: async () => [PROVIDER] })
+      const onSelectModel = vi.fn()
+      const { container } = renderHeader(
+        live({ providerId: 'p1', modelId: 'sonnet', currentModelId: 'opus', onSelectModel })
+      )
+      await waitFor(() => expect(modelOptions()).toEqual(['sonnet', 'opus', 'haiku']))
+      expect(modelSelect().value).toBe('opus')
+      expect((await axe(container, AXE_RULES)).violations).toEqual([])
+      await userEvent.selectOptions(modelSelect(), 'haiku')
+      expect(onSelectModel).toHaveBeenCalledExactlyOnceWith('haiku')
+    })
+
+    it('起動の model が null なら「既定」が選べない項目で出る', async () => {
+      installCapability({ listProviders: async () => [PROVIDER] })
+      renderHeader(live({ providerId: 'p1', modelId: null }))
+      await waitFor(() => expect(modelOptions()).toContain(''))
+      const first = modelSelect().querySelectorAll('option')[0]
+      expect(first).toHaveTextContent(LIVE_SETTING_LABELS.defaultModel)
+      expect(first).toBeDisabled()
+    })
+
+    it('Provider が null (既定) なら押せず理由が出る', async () => {
+      installCapability({ listProviders: async () => [PROVIDER] })
+      renderHeader(live({ providerId: null }))
+      expect(modelSelect()).toHaveAttribute('aria-disabled', 'true')
+      expect(modelSelect()).toHaveAccessibleDescription(LIVE_SETTING_LABELS.noModelList)
+    })
+
+    it('Provider が一覧に無い・選択肢が 0 のときも押せない', async () => {
+      installCapability({ listProviders: async () => [{ ...PROVIDER, models: [] }] })
+      renderHeader(live({ providerId: 'p1' }))
+      await waitFor(() => expect(modelSelect()).toHaveAttribute('aria-disabled', 'true'))
+      expect(modelSelect()).toHaveAccessibleDescription(LIVE_SETTING_LABELS.noModelList)
+    })
+
+    it('changing の間は権限モードもモデルも押せない', async () => {
+      installCapability({ listProviders: async () => [PROVIDER] })
+      renderHeader(live({ providerId: 'p1', settingRow: { ...READY, changing: true } }))
+      await waitFor(() => expect(modelOptions().length).toBeGreaterThan(0))
+      expect(modelSelect()).toHaveAttribute('aria-disabled', 'true')
+      expect(modelSelect()).toHaveAccessibleDescription(LIVE_SETTING_LABELS.blocker.busy)
+      expect(select()).toHaveAttribute('aria-disabled', 'true')
+    })
+
+    it('失敗の 1 行が出ても、表示は元のモデルのまま', async () => {
+      installCapability({ listProviders: async () => [PROVIDER] })
+      renderHeader(live({ providerId: 'p1', modelId: 'sonnet', settingError: 'model' }))
+      await waitFor(() => expect(modelOptions().length).toBeGreaterThan(0))
+      expect(screen.getByTestId('live-setting-error')).toHaveTextContent(
+        LIVE_SETTING_LABELS.failure.model
+      )
+      expect(modelSelect().value).toBe('sonnet')
+    })
+  })
+})

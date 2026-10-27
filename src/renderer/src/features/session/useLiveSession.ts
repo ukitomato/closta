@@ -2,6 +2,7 @@ import { useCallback, useMemo } from 'react'
 import { useStore } from 'zustand'
 
 import type { ElicitationAction, ElicitationContent } from '@domain/session/elicitation'
+import type { SafePermissionMode } from '@domain/session/launch-config'
 
 import { useRunningSessionStoreApi } from './running-session-context'
 import type { LiveSessionState, SessionQueue } from './running-session-store'
@@ -41,6 +42,12 @@ export interface LiveSession extends SessionView {
   kill(): void
   close(): void
   clearQueueRejection(): void
+  /** 実行中の権限モードの切り替え (023)。 */
+  setPermissionMode(mode: SafePermissionMode): void
+  /** 実行中のモデルの切り替え (023)。 */
+  setModel(modelId: string): void
+  /** セッションの名前の変更 (023)。成功なら `true`。 */
+  rename(name: string): Promise<boolean>
 }
 
 export function useLiveSession(sessionId: string): LiveSession | null {
@@ -78,6 +85,21 @@ export function useLiveSession(sessionId: string): LiveSession | null {
     [store, sessionId]
   )
 
+  const setPermissionMode = useCallback(
+    (mode: SafePermissionMode) => store.setPermissionMode(sessionId, mode),
+    [store, sessionId]
+  )
+
+  const setModel = useCallback(
+    (modelId: string) => store.setModel(sessionId, modelId),
+    [store, sessionId]
+  )
+
+  const rename = useCallback(
+    (name: string) => store.rename(sessionId, name),
+    [store, sessionId]
+  )
+
   return useMemo(() => {
     if (state === undefined) return null
     // 導出は store の純関数に一本化する (一覧と表示中セッションで判定を分けない)。
@@ -96,7 +118,10 @@ export function useLiveSession(sessionId: string): LiveSession | null {
       end,
       kill,
       close,
-      clearQueueRejection
+      clearQueueRejection,
+      setPermissionMode,
+      setModel,
+      rename
     }
   }, [
     state,
@@ -113,6 +138,9 @@ export function useLiveSession(sessionId: string): LiveSession | null {
     end,
     kill,
     close,
-    clearQueueRejection
+    clearQueueRejection,
+    setPermissionMode,
+    setModel,
+    rename
   ])
 }

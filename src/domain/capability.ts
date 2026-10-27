@@ -11,7 +11,8 @@ import type { DetectedCandidate } from './provider/types'
 import type { RuntimeDescriptorDTO, RuntimeListDTO } from './runtime/dto'
 import type { SessionLaunchHandshakeDTO, SessionLaunchRejectReason } from './session/agent-session'
 import type { SessionIndexDTO } from './session/dto'
-import type { SessionLaunchConfig } from './session/launch-config'
+import type { SafePermissionMode, SessionLaunchConfig } from './session/launch-config'
+import type { LiveSettingResult, RenameResult } from './session/live-settings'
 import type { LaunchOrigin, LaunchUsageSummaryDTO } from './session/launch-usage'
 import type { PresetDTO, SavePresetResult } from './session/preset'
 import type { ResumeUnavailableReason, SessionResumeRequest } from './session/resume'
@@ -106,7 +107,7 @@ export interface ClostaCapability {
   /**
    * キャッシュを返す。未取得なら**先頭ページ**を取る (FR-031 / R-06)。
    *
-   * **起動・改名・削除の経路は無い** (FR-002)。R-2 は読み取り専用である。
+   * **起動と、過去の行の改名・削除の経路は無い** (FR-002)。R-2 は読み取り専用である。稼働中の行の改名は `renameSession` (023)。
    */
   listSessions(): Promise<SessionIndexDTO>
   /** 再取得は**利用者の明示操作に限る** (FR-033)。**置き換える** (FR-035)。 */
@@ -215,6 +216,15 @@ export interface ClostaCapability {
   endSession(sessionId: string): Promise<void>
   /** 強制終了する (FR-016)。**中断とは別経路** — 途中出力保全・JSONL 非破損を保証しない。 */
   killSession(sessionId: string): Promise<void>
+  /**
+   * 実行中のセッションの権限モードを安全 3 値の中で切り替える (023 / AD-062 / contracts C-1)。
+   * 値の検証・状態の判定は main が行う。成功のあとの表示は本文の port の `meter` で更新される。
+   */
+  setSessionPermissionMode(sessionId: string, mode: SafePermissionMode): Promise<LiveSettingResult>
+  /** 実行中のセッションのモデルをカタログの中で切り替える (023 / contracts C-2)。effort は変えない。 */
+  setSessionModel(sessionId: string, modelId: string): Promise<LiveSettingResult>
+  /** 実行中のセッションに名前を付ける (023 / contracts C-3)。成功なら trim した名前を返す。 */
+  renameSession(sessionId: string, name: string): Promise<RenameResult>
 
   // --- Provider (X-3) ---
 
@@ -314,6 +324,10 @@ export const IPC_CHANNELS = {
   interruptSession: 'closta:interruptSession',
   endSession: 'closta:endSession',
   killSession: 'closta:killSession',
+  /** 実行中の設定の変更 (023 / AD-062。contracts C-1〜C-3)。 */
+  setSessionPermissionMode: 'closta:setSessionPermissionMode',
+  setSessionModel: 'closta:setSessionModel',
+  renameSession: 'closta:renameSession',
   /** main → preload: supervisor に繋がった port2 を transfer する専用チャネル (X-1 / AD-036 §2)。 */
   sessionPort: 'closta:sessionPort',
   /** main → renderer: 状態通知のバッチ (X-5 / FR-004)。 */

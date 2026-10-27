@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { act, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { axe } from 'vitest-axe'
@@ -7,7 +7,7 @@ import type { SessionEvent } from '@domain/session/agent-session'
 import type { PermissionModeKey } from '@domain/session/meter'
 
 import { PERMISSION_MODE_NAMES } from '@/features/chat/labels'
-import { PERMISSION_MODE_LABELS } from '@/features/session/labels'
+import { LIVE_SETTING_LABELS, PERMISSION_MODE_LABELS } from '@/features/session/labels'
 import {
   A,
   B,
@@ -47,6 +47,36 @@ function ddOf(overview: HTMLElement, label: string): HTMLElement | null {
   const dt = Array.from(overview.querySelectorAll('dt')).find((el) => el.textContent === label)
   return (dt?.nextElementSibling as HTMLElement | null | undefined) ?? null
 }
+
+describe('「概要」の現在のモデル (023 / FR-006)', () => {
+  const setCurrentModel = (
+    h: Awaited<ReturnType<typeof setup>>,
+    currentModelId: string | null
+  ): void => {
+    act(() =>
+      h.store.setState((s) => {
+        const current = s.sessions[A]
+        if (current === undefined) return s
+        return { sessions: { ...s.sessions, [A]: { ...current, currentModelId } } }
+      })
+    )
+  }
+
+  it('切り替えるまでは出さない。切り替えたら起動時の行の下に今のモデルを出し、起動時の行はそのまま', async () => {
+    const h = await setup({ ids: [A], launchConfig: { modelId: 'm1', effort: 'low' } })
+    await selectRunning(0)
+    const overview = await openOverview()
+    expect(labelsOf(overview)).not.toContain(LIVE_SETTING_LABELS.currentModel)
+    setCurrentModel(h, 'm2')
+    expect(ddOf(overview, LIVE_SETTING_LABELS.currentModel)).toHaveTextContent('m2')
+    expect(ddOf(overview, OVERVIEW_LABELS.model)).toHaveTextContent('m1')
+    // effort の表示は起動の値のまま
+    expect(ddOf(overview, OVERVIEW_LABELS.effort)).not.toBeNull()
+    // 起動時と同じ値に戻したら行を外す
+    setCurrentModel(h, 'm1')
+    expect(labelsOf(overview)).not.toContain(LIVE_SETTING_LABELS.currentModel)
+  })
+})
 
 describe('「概要」の現在の権限モード (US-4 AC1 / FR-010)', () => {
   it('起動時と同じモードなら「現在の権限モード」の行を出さない', async () => {
