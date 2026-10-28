@@ -427,8 +427,7 @@ export const FIXTURES = [
     file: 'b-equivalent/sdk-query-read-file.ts.fixture',
     target: 'src/agents/__rulecheck__/sdk-query-read-file.ts',
     group: 'b',
-    what:
-      'Query の readFile を呼ぶ (AD-049 Decision 6 で P3 の列挙に足した名前。他の #16 の綴りを含めない。016 BE-040)',
+    what: 'Query の readFile を呼ぶ (AD-049 Decision 6 で P3 の列挙に足した名前。他の #16 の綴りを含めない。016 BE-040)',
     detectors: ['constitution'],
     rules: ['#16']
   },

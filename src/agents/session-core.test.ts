@@ -754,7 +754,9 @@ describe('decodeSessionControl: 実行中の設定の切り替え (023 / AD-062)
   })
 
   it('set-model の正例', () => {
-    expect(decodeSessionControl({ kind: 'set-model', requestId, model: 'claude-opus-4-1' })).toEqual({
+    expect(
+      decodeSessionControl({ kind: 'set-model', requestId, model: 'claude-opus-4-1' })
+    ).toEqual({
       kind: 'set-model',
       requestId,
       model: 'claude-opus-4-1'
@@ -783,9 +785,9 @@ describe('decodeSessionControl: 実行中の設定の切り替え (023 / AD-062)
   })
 
   it('終了処理中は 2 種類とも受け付けない', () => {
-    expect(
-      acceptsWhileClosing({ kind: 'set-permission-mode', requestId, mode: 'plan' })
-    ).toBe(false)
+    expect(acceptsWhileClosing({ kind: 'set-permission-mode', requestId, mode: 'plan' })).toBe(
+      false
+    )
     expect(acceptsWhileClosing({ kind: 'set-model', requestId, model: 'm' })).toBe(false)
   })
 })

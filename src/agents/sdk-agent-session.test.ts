@@ -2080,7 +2080,8 @@ describe('sdk-agent-session: 実行中の設定の切り替え (023 / AD-062 / d
       .map((p) => p as unknown as { requestId: string; ok: boolean })
   const modeMeters = (): unknown[] =>
     events().filter(
-      (e) => e.kind === 'meter' && (e as { meter?: { type?: string } }).meter?.type === 'permission-mode'
+      (e) =>
+        e.kind === 'meter' && (e as { meter?: { type?: string } }).meter?.type === 'permission-mode'
     )
 
   it('set-permission-mode は要求の値で setPermissionMode を 1 回呼び、control-result ok:true と meter が出る', async () => {
@@ -2090,7 +2091,9 @@ describe('sdk-agent-session: 実行中の設定の切り替え (023 / AD-062 / d
     send(control({ kind: 'send-prompt', text: 'go' }))
     await vi.waitFor(() => expect(states()).toContain('done'))
     send(control({ kind: 'set-permission-mode', requestId: REQ, mode: 'plan' }))
-    await vi.waitFor(() => expect(results()).toEqual([{ kind: 'control-result', requestId: REQ, ok: true }]))
+    await vi.waitFor(() =>
+      expect(results()).toEqual([{ kind: 'control-result', requestId: REQ, ok: true }])
+    )
     expect(h.setModeCalls).toEqual([['plan']])
     expect(modeMeters()).toHaveLength(1)
     // 状態は変わらない (done のまま。ターンも止めない)。

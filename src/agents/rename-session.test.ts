@@ -57,7 +57,7 @@ describe('decodeRenameRequest', () => {
       conversationId: CONV,
       name: 'a'
     })
-    expect(decodeRenameRequest({ conversationId: CONV, name: 'a '})).toBeNull()
+    expect(decodeRenameRequest({ conversationId: CONV, name: 'a ' })).toBeNull()
   })
 })
 

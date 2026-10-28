@@ -183,10 +183,7 @@ type QueryUnusedReadMethod =
   | 'accountInfo'
   | 'close'
 type QueryClassifiedMethod =
-  | 'interrupt'
-  | QueryLiveSettingMethod
-  | QueryMutationMethod
-  | QueryUnusedReadMethod
+  'interrupt' | QueryLiveSettingMethod | QueryMutationMethod | QueryUnusedReadMethod
 const queryMethodsAreClassified: Equal<Exclude<QueryOwnMethod, QueryClassifiedMethod>, never> = true
 const queryClassifiedMethodsExist: QueryClassifiedMethod extends keyof Query ? true : false = true
 void queryMethodsAreClassified

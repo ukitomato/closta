@@ -4,10 +4,7 @@ import type { LiveSettingRow } from '@domain/session/live-settings'
 import type { SessionRunState } from '@domain/session/run-state'
 
 import type { RenameSpawnResult } from './rename-spawner'
-import {
-  createSessionRenameService,
-  type SessionRenameServiceDeps
-} from './session-rename-service'
+import { createSessionRenameService, type SessionRenameServiceDeps } from './session-rename-service'
 import type { ConversationRecord } from './session-launch-service'
 import type { TranscriptTargetResolution } from './transcript-service'
 

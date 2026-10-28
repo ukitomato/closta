@@ -1177,7 +1177,12 @@ describe('running-session-store — 実行中の設定の変更 (023 FE-001 / da
     const h = harness()
     await launched(h, A)
     const s = h.store.getState().sessions[A]
-    expect(s).toMatchObject({ currentModelId: null, name: null, changing: null, settingError: null })
+    expect(s).toMatchObject({
+      currentModelId: null,
+      name: null,
+      changing: null,
+      settingError: null
+    })
   })
 
   it('beginSetting / endSetting の遷移。失敗で settingError が立ち、次の beginSetting で消える', async () => {
@@ -1274,7 +1279,10 @@ describe('running-session-store — 実行中の設定の変更 (023 FE-001 / da
     const config = h.store.getState().sessions[A]?.config
     h.store.setModel(A, 'm2')
     expect(setSessionModel).toHaveBeenCalledExactlyOnceWith(A, 'm2')
-    expect(h.store.getState().sessions[A]).toMatchObject({ changing: 'model', currentModelId: null })
+    expect(h.store.getState().sessions[A]).toMatchObject({
+      changing: 'model',
+      currentModelId: null
+    })
     resolve({ ok: true })
     await vi.waitFor(() => expect(h.store.getState().sessions[A]?.changing).toBeNull())
     expect(h.store.getState().sessions[A]).toMatchObject({
@@ -1293,7 +1301,10 @@ describe('running-session-store — 実行中の設定の変更 (023 FE-001 / da
     await launched(h, A)
     h.store.setModel(A, 'm2')
     await vi.waitFor(() =>
-      expect(h.store.getState().sessions[A]).toMatchObject({ changing: null, settingError: 'model' })
+      expect(h.store.getState().sessions[A]).toMatchObject({
+        changing: null,
+        settingError: 'model'
+      })
     )
     h.store.setModel(A, 'm3')
     await vi.waitFor(() => expect(h.store.getState().sessions[A]?.changing).toBeNull())

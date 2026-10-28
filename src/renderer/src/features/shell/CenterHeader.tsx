@@ -163,7 +163,11 @@ function CenterHeaderRow({
           onRename={live.onRename}
         />
       ) : (
-        <h2 className="min-w-0 truncate text-xs font-medium" title={title} data-testid={titleTestId}>
+        <h2
+          className="min-w-0 truncate text-xs font-medium"
+          title={title}
+          data-testid={titleTestId}
+        >
           {title}
         </h2>
       )}
@@ -177,7 +181,10 @@ function CenterHeaderRow({
       {live !== undefined && <LiveSettingsSlot live={live} />}
       {/* コンテキストと費用の目盛り (O-4 / 014 data-model §4)。稼働中だけ。右のペインを畳んでいても見える。 */}
       {live !== undefined && (
-        <ContextCostMeter sessionId={live.sessionId} modelId={live.currentModelId ?? live.modelId} />
+        <ContextCostMeter
+          sessionId={live.sessionId}
+          modelId={live.currentModelId ?? live.modelId}
+        />
       )}
       {/* 会話内検索を開く (O-3 / 012 spec FR-003。Ctrl+F でも開く)。 */}
       <ConversationSearchButton />

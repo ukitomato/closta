@@ -77,9 +77,7 @@ describe('liveSettingBlocker', () => {
   it('changing は busy で、名前の no-conversation / turn-running より先', () => {
     expect(liveSettingBlocker('permission-mode', row({ changing: true }))).toBe('busy')
     expect(liveSettingBlocker('model', row({ state: 'running', changing: true }))).toBe('busy')
-    expect(liveSettingBlocker('name', row({ hasConversation: false, changing: true }))).toBe(
-      'busy'
-    )
+    expect(liveSettingBlocker('name', row({ hasConversation: false, changing: true }))).toBe('busy')
     expect(liveSettingBlocker('name', row({ state: 'running', changing: true }))).toBe('busy')
   })
 

@@ -29,6 +29,14 @@
 - E2E 全件: 1 回目は 19 passed / 5 failed。落ちたのは基準画像の既知の 2 件 (`composer-screenshot.spec.ts` 641→673px、`sidebar-screenshot.spec.ts`。main でも本機で落ちる) と `live-session-settings.spec.ts` の 3 本。3 本は implementer fix で直した (名前: 保存ボタンが「応答待ち」の span の下に重なる実装の不具合 → `LiveSettingsControls.tsx` の form を `shrink-0` に / モデル・権限モード: 右のペインが畳まれていて「概要」が tab でなく button になる、spec の手順の誤り)。ビルドし直して `live-session-settings.spec.ts` は 3 passed。基準画像はこの PR では更新しない (CI の artifact から取り直す)
 - 境界の差分 (`git diff b7d0dad`): `src/renderer/src/features/chat` と `src/main/infra/settings` の差分 0。`QUERY_OPTION_KEYS` / `LAUNCH_FAILURE_REASONS` / `METER_UPDATE_TYPES` の定義行に変更なし。`SessionControl` に `set-permission-mode` / `set-model` の 2 種類、`IPC_CHANNELS` に 3 つ。件数の照合は Constitution 検証の項目 14 / 16 と単体テストに依る
 
+## pr-gate R1 の修正後 (2026-10-29、head 4428b06)
+
+- rule fixture の照合: exit 0 (新設の `sdk-reexport` / `sdk-nonliteral-specifier` を含む)
+- ビルド: 成功
+- E2E 全件: 22 passed / 2 failed (基準画像の既知の 2 件 `composer-screenshot.spec.ts` / `sidebar-screenshot.spec.ts` だけ)
+
 ## 未実施 (利用者の環境に残す)
+
+- H-002 (ヘッダの折り返し) の実際の窓での確認 (jsdom に layout が無く単体テストで確かめられない)
 
 - quickstart V-0〜V-6 (SC-009。本番ビルド・実機の `claude`): 未実施 (利用者の実機に残す)

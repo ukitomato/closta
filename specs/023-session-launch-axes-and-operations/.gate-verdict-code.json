@@ -1,14 +1,14 @@
 {
     "gate": "code",
-    "run": "2026-10-27T23:07:15.900Z",
+    "run": "2026-10-28T15:15:45.451Z",
     "spec_dir": "specs/023-session-launch-axes-and-operations",
     "spec_id": "023-session-launch-axes-and-operations",
-    "iter": 1,
+    "iter": 2,
     "severity_counts": {
         "critical": 0,
-        "high": 43,
-        "medium": 4,
-        "low": 4,
+        "high": 445,
+        "medium": 5,
+        "low": 3,
         "must_fix": 0
     },
     "must_fix_findings": [],
@@ -18,12 +18,16 @@
             "sha": "0432ca3d982696157512d1ea633a13545e97131b"
         },
         {
+            "path": "docs/decisions/0063-rename-spawner-test-in-process-spawn-modules.md",
+            "sha": "491b043e49ec14ace86175a5c8624d639178f211"
+        },
+        {
             "path": "docs/domains/_overview.md",
             "sha": "f5b36ba1c451707395008774dbcf2ac8cafa94dc"
         },
         {
             "path": "docs/domains/session/charter.md",
-            "sha": "a2ba29b5f527d4ea29e51d18833c78da102c32e2"
+            "sha": "b2871601f0a96a2cdf462d3e5270935adc899952"
         },
         {
             "path": "docs/glossary.md",
@@ -43,11 +47,11 @@
         },
         {
             "path": "scripts/constitution/allowlists.mjs",
-            "sha": "6b8c48679f48e6ac1e865f3aa323287787bf44b5"
+            "sha": "3282b177cbd016fac7dd028e3792b917c9fc3367"
         },
         {
             "path": "scripts/constitution/check.mjs",
-            "sha": "9ae01b028f14b726ab8d7fa1971855c32cd82fe5"
+            "sha": "eba2f0b47ea3764caf2e3223f149046827bfce92"
         },
         {
             "path": "src/agents/live-signals.test.ts",
@@ -151,7 +155,7 @@
         },
         {
             "path": "src/main/app/rename-spawner.test.ts",
-            "sha": "b3302b69a4c0b95bd80213084ade5bed5f1cf291"
+            "sha": "bc299b7920b5cdf756ed3a53e895a55b9228e31f"
         },
         {
             "path": "src/main/app/rename-spawner.ts",
@@ -202,16 +206,16 @@
             "sha": "812661ed0aa4b8a38a6c16f412dec55c5a7dd22f"
         },
         {
+            "path": "src/renderer/src/features/session/RunningSessionList.test.tsx",
+            "sha": "27526ede37695fb08fe44cb6d68cb3398cf4dab5"
+        },
+        {
             "path": "src/renderer/src/features/session/labels.test.ts",
             "sha": "c7ff9844ee41bdd836db89de60126d4144d23fdb"
         },
         {
             "path": "src/renderer/src/features/session/labels.ts",
             "sha": "88674581a9cfab6a1c4f0c27dfc1419468529789"
-        },
-        {
-            "path": "src/renderer/src/features/session/RunningSessionList.test.tsx",
-            "sha": "27526ede37695fb08fe44cb6d68cb3398cf4dab5"
         },
         {
             "path": "src/renderer/src/features/session/running-session-store.test.ts",
@@ -239,7 +243,7 @@
         },
         {
             "path": "src/renderer/src/features/shell/CenterHeader.tsx",
-            "sha": "d983e90dd7f95f4408fdbd42361e5799001c243a"
+            "sha": "140fac5e0a6f364e461dfef100397d4a64511a6f"
         },
         {
             "path": "src/renderer/src/features/shell/CenterPane.tsx",
@@ -247,11 +251,11 @@
         },
         {
             "path": "src/renderer/src/features/shell/LiveSettingsControls.test.tsx",
-            "sha": "2a02fe7c74af3456f41c433a11eb3c57df8f58d2"
+            "sha": "0fa89ab14e4af51774a9be4b554a83ed4bfe8df3"
         },
         {
             "path": "src/renderer/src/features/shell/LiveSettingsControls.tsx",
-            "sha": "30b6443a5d658dee51ecbfb7ab6595c53f514842"
+            "sha": "5ec012cda638dcb3ad128f3bb6b1bcbb88039280"
         },
         {
             "path": "src/renderer/src/features/shell/OverviewTab.test.tsx",
@@ -274,12 +278,16 @@
             "sha": "79da0462da6cabe1d9b143d1dc4270e9f3d141de"
         },
         {
+            "path": "tests/rule-fixtures/a-direct/sdk-forbidden-call-alias.ts.fixture",
+            "sha": "e7c1295f7c496db74f66daaa09c11b81c1d97ad6"
+        },
+        {
             "path": "tests/rule-fixtures/a-direct/sdk-forbidden-call.ts.fixture",
             "sha": "4bcaa0da6ca59956d2736bceab06198de094f821"
         },
         {
-            "path": "tests/rule-fixtures/a-direct/sdk-forbidden-call-alias.ts.fixture",
-            "sha": "e7c1295f7c496db74f66daaa09c11b81c1d97ad6"
+            "path": "tests/rule-fixtures/a-direct/sdk-reexport.ts.fixture",
+            "sha": "12095aaa8533ab66cfaf0cf628fb027fd9a6f748"
         },
         {
             "path": "tests/rule-fixtures/a-direct/sdk-rename-session-outside.ts.fixture",
@@ -288,6 +296,10 @@
         {
             "path": "tests/rule-fixtures/b-equivalent/agents-builtin-via-get-builtin-module.ts.fixture",
             "sha": "a677c302eb3ad064d66de0a609fb411143de9b4b"
+        },
+        {
+            "path": "tests/rule-fixtures/b-equivalent/sdk-nonliteral-specifier.ts.fixture",
+            "sha": "35f934f9ef559b4ce51ce1a54d9e89a066d1080e"
         },
         {
             "path": "tests/rule-fixtures/b-equivalent/sdk-query-mutation-method.ts.fixture",
@@ -303,7 +315,7 @@
         },
         {
             "path": "tests/rule-fixtures/expected.mjs",
-            "sha": "1579c6b45edb07d876be7aaf798f22ddcab87afc"
+            "sha": "8342a5a305b825325c1917b4375426c50eb84c74"
         }
     ],
     "fr_coverage": [],
@@ -311,15 +323,15 @@
         "A": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
         "B": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
         "C": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
-        "D": "High:1 Medium:1 Low:1 (platform-boundary)",
+        "D": "Medium:1 (platform-boundary)",
         "E": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
         "F": "Medium:3 Low:3 (convention 2/3, platform-boundary 1/0)",
         "G": "\u8a72\u5f53\u306a\u3057: optional reviewer \u306a\u3057",
-        "H": "Low:1 (platform-boundary)"
+        "H": "Medium:1 (platform-boundary)"
     },
     "tracks": {
         "lint-agent": {
-            "violations": 42,
+            "violations": 445,
             "exit_code": 0,
             "detectors": [
                 "lint",
@@ -329,7 +341,7 @@
             ]
         },
         "test-agent": {
-            "passed": 4158,
+            "passed": 4162,
             "failed": 0,
             "exit_code": 0,
             "scope": "full"
@@ -341,9 +353,9 @@
         },
         "platform-boundary-reviewer": {
             "critical": 0,
-            "high": 1,
-            "medium": 2,
-            "low": 1
+            "high": 0,
+            "medium": 3,
+            "low": 0
         }
     },
     "skipped_reviewers": [
@@ -357,7 +369,7 @@
         },
         {
             "name": "database-reviewer",
-            "reason": "auto_invoke_patterns \u306b\u4e00\u81f4\u3059\u308b\u5909\u66f4\u30d5\u30a1\u30a4\u30eb\u304c\u7121\u3044 (\u5909\u66f4 73 \u4ef6 / pattern 5 \u4ef6)"
+            "reason": "auto_invoke_patterns \u306b\u4e00\u81f4\u3059\u308b\u5909\u66f4\u30d5\u30a1\u30a4\u30eb\u304c\u7121\u3044 (\u5909\u66f4 76 \u4ef6 / pattern 5 \u4ef6)"
         }
     ],
     "cascade_demotions": 0,
@@ -367,7 +379,15 @@
             "must_fix": 0,
             "skipped": 0,
             "error": 0
+        },
+        {
+            "iter": 2,
+            "must_fix": 0,
+            "skipped": 0,
+            "error": 0
         }
     ],
+    "base_commit": "1a7d8b45d76346cf4ce1fd65f74234997fb8f475",
+    "entry_status": "reviewing",
     "verdict": "PASS"
 }

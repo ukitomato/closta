@@ -37,7 +37,11 @@ export interface LiveSession extends SessionView {
   interrupt(): void
   respond(requestId: string, outcome: 'allow' | 'deny', answers?: readonly string[]): void
   /** MCP サーバーの問い (Elicitation) への応答 (O-10)。`content` は `accept` のときだけ (ストアに残さない)。 */
-  respondElicitation(requestId: string, action: ElicitationAction, content?: ElicitationContent): void
+  respondElicitation(
+    requestId: string,
+    action: ElicitationAction,
+    content?: ElicitationContent
+  ): void
   end(): void
   kill(): void
   close(): void
@@ -95,10 +99,7 @@ export function useLiveSession(sessionId: string): LiveSession | null {
     [store, sessionId]
   )
 
-  const rename = useCallback(
-    (name: string) => store.rename(sessionId, name),
-    [store, sessionId]
-  )
+  const rename = useCallback((name: string) => store.rename(sessionId, name), [store, sessionId])
 
   return useMemo(() => {
     if (state === undefined) return null

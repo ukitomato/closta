@@ -105,6 +105,8 @@ describe('resolveLiveTranscriptTarget', () => {
 
   it('ランタイムが無い・所在の対象が無ければ null', async () => {
     expect(await resolveLiveTranscriptTarget(rec(), deps({ runtimes: () => [] }))).toBeNull()
-    expect(await resolveLiveTranscriptTarget(rec(), deps({ enumerationTargets: () => [] }))).toBeNull()
+    expect(
+      await resolveLiveTranscriptTarget(rec(), deps({ enumerationTargets: () => [] }))
+    ).toBeNull()
   })
 })

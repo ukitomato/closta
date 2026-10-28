@@ -12,11 +12,7 @@ export type LiveSettingKind = 'permission-mode' | 'model' | 'name'
 
 /** 受け付けない理由 (data-model §5.1 の blocker)。 */
 export type LiveSettingBlocker =
-  | 'not-running'
-  | 'not-ready'
-  | 'busy'
-  | 'no-conversation'
-  | 'turn-running'
+  'not-running' | 'not-ready' | 'busy' | 'no-conversation' | 'turn-running'
 
 /** `liveSettingBlocker` の入力 (行の状態)。`changing` は真偽 (結果を待っている変更があるか)。 */
 export interface LiveSettingRow {
@@ -68,8 +64,7 @@ export const LIVE_SETTING_FAILURES = [
 export type LiveSettingFailure = (typeof LIVE_SETTING_FAILURES)[number]
 
 export type LiveSettingResult =
-  | { readonly ok: true }
-  | { readonly ok: false; readonly reason: LiveSettingFailure }
+  { readonly ok: true } | { readonly ok: false; readonly reason: LiveSettingFailure }
 
 export type RenameResult =
   | { readonly ok: true; readonly name: string }

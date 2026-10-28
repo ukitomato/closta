@@ -400,14 +400,12 @@ export function registerIpcHandlers(deps: IpcDependencies): void {
       handleSetSessionPermissionMode(deps, args)
   )
 
-  handle(
-    IPC_CHANNELS.setSessionModel,
-    async (_event, ...args): Promise<LiveSettingResult> => handleSetSessionModel(deps, args)
+  handle(IPC_CHANNELS.setSessionModel, async (_event, ...args): Promise<LiveSettingResult> =>
+    handleSetSessionModel(deps, args)
   )
 
-  handle(
-    IPC_CHANNELS.renameSession,
-    async (_event, ...args): Promise<RenameResult> => handleRenameSession(deps, args)
+  handle(IPC_CHANNELS.renameSession, async (_event, ...args): Promise<RenameResult> =>
+    handleRenameSession(deps, args)
   )
 
   handle(IPC_CHANNELS.endSession, async (_event, ...args): Promise<void> =>

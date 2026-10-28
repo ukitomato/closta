@@ -319,7 +319,9 @@ describe('CenterHeader の権限モード (meters・失敗の 1 行)', () => {
     })
 
     it('過去の会話には「名前を変更」を出さない', () => {
-      render(<CenterHeader title="t" detail={null} status="読み取り専用" titleTestId="past-title" />)
+      render(
+        <CenterHeader title="t" detail={null} status="読み取り専用" titleTestId="past-title" />
+      )
       expect(screen.queryByRole('button', { name: '名前を変更' })).toBeNull()
     })
   })

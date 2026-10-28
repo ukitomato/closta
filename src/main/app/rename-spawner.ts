@@ -27,7 +27,8 @@ export const RENAME_TIMEOUT_MS = 10_000
 /** 同時に動く改名の子の上限。 */
 export const MAX_CONCURRENT_RENAMES = 10
 
-export type RenameSpawnResult = { readonly ok: true } | { readonly ok: false; readonly reason: 'write-failed' }
+export type RenameSpawnResult =
+  { readonly ok: true } | { readonly ok: false; readonly reason: 'write-failed' }
 
 export interface RenameSpawnRequest {
   readonly conversationId: string

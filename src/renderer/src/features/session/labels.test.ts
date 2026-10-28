@@ -235,6 +235,10 @@ describe('LIVE_SETTING_LABELS (023 FE-001)', () => {
   })
 
   it('失敗の文言は 3 種類の kind を網羅する', () => {
-    expect(Object.keys(LIVE_SETTING_LABELS.failure).sort()).toEqual(['model', 'name', 'permission-mode'])
+    expect(Object.keys(LIVE_SETTING_LABELS.failure).sort()).toEqual([
+      'model',
+      'name',
+      'permission-mode'
+    ])
   })
 })

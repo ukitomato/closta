@@ -318,7 +318,11 @@ export type SessionControl =
   | { readonly kind: 'interrupt' }
   | { readonly kind: 'end' }
   | { readonly kind: 'kill' }
-  | { readonly kind: 'set-permission-mode'; readonly requestId: string; readonly mode: SafePermissionMode }
+  | {
+      readonly kind: 'set-permission-mode'
+      readonly requestId: string
+      readonly mode: SafePermissionMode
+    }
   | { readonly kind: 'set-model'; readonly requestId: string; readonly model: string }
 
 /**

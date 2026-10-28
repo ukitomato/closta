@@ -533,7 +533,11 @@ describe('checkSetPermissionModeArgs (023 / contracts C-1)', () => {
 describe('checkSetModelArgs (023 / contracts C-2)', () => {
   const ID = '11111111-1111-4111-8111-111111111111'
   it('UUID と文字種の通るモデルの id を通す', () => {
-    for (const model of ['claude-opus-4-1', 'sonnet[1m]', 'arn:aws:bedrock:us:1:inference-profile/x']) {
+    for (const model of [
+      'claude-opus-4-1',
+      'sonnet[1m]',
+      'arn:aws:bedrock:us:1:inference-profile/x'
+    ]) {
       expect(checkSetModelArgs([ID, model])).toBe(true)
     }
   })

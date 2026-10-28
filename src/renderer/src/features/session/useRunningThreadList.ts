@@ -31,7 +31,9 @@ export function useRunningThreadList(
   )
 
   // 付けた名前 (023 / FR-012)。無ければフォルダの表示名。名前の変更でだけ変わる値を選ぶ。
-  const names = useRunningSessionStore(useShallow((s) => s.order.map((id) => s.sessions[id]?.name ?? null)))
+  const names = useRunningSessionStore(
+    useShallow((s) => s.order.map((id) => s.sessions[id]?.name ?? null))
+  )
 
   const threads = useMemo(
     () =>

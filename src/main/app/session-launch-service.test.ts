@@ -1043,15 +1043,18 @@ describe('setModel (023 / contracts C-2)', () => {
     ['Provider が null (既定)', null, null, 'sonnet', async () => CATALOG],
     ['Provider が起動の後に消えた', 'p1', null, 'sonnet', async () => null],
     ['カタログが編集されてその値が消えた', 'p1', null, 'sonnet', async () => [CATALOG[2]]]
-  ] as const)('%s は invalid-value で制御を送らない', async (_l, providerId, effort, model, models) => {
-    const s = liveSetup(models)
-    const id = await modelSession(s, providerId, effort)
-    await expect(s.service.setModel(id, model)).resolves.toEqual({
-      ok: false,
-      reason: 'invalid-value'
-    })
-    expect(s.connection.controls).toHaveLength(0)
-  })
+  ] as const)(
+    '%s は invalid-value で制御を送らない',
+    async (_l, providerId, effort, model, models) => {
+      const s = liveSetup(models)
+      const id = await modelSession(s, providerId, effort)
+      await expect(s.service.setModel(id, model)).resolves.toEqual({
+        ok: false,
+        reason: 'invalid-value'
+      })
+      expect(s.connection.controls).toHaveLength(0)
+    }
+  )
 
   it('Provider の一覧を注入していなければ invalid-value', async () => {
     const s = liveSetup()

@@ -707,9 +707,9 @@ function hasPackagedGate() {
 
     // 動的 import / require (AD-062 Decision 5)。静的な名前付き import の検査を迂回できてしまう。
     if (
-      new RegExp(
-        String.raw`\b(?:import|require)\s*\(\s*['"\x60]` + AGENT_SDK_PACKAGE
-      ).test(src.code)
+      new RegExp(String.raw`\b(?:import|require)\s*\(\s*['"\x60]` + AGENT_SDK_PACKAGE).test(
+        src.code
+      )
     ) {
       found.push(`${src.file}  SDK を動的 import / require している (許可しない。AD-062)`)
     }
@@ -722,7 +722,9 @@ function hasPackagedGate() {
         String.raw`['"]`
     )
     if (reExport.test(src.code)) {
-      found.push(`${src.file}  SDK を再 export している (値の再 export は許可しない。pr-gate R1 H-005)`)
+      found.push(
+        `${src.file}  SDK を再 export している (値の再 export は許可しない。pr-gate R1 H-005)`
+      )
     }
 
     for (const { imported, local, isType } of bindings) {

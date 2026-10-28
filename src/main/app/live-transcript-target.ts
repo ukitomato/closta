@@ -34,12 +34,16 @@ export async function resolveLiveTranscriptTarget(
   deps: LiveTranscriptTargetDeps
 ): Promise<string | null> {
   const runtimes = deps.runtimes()
-  const runtime = runtimes.find((r) => isSameNamespace(r.id, record.runtimeId as RuntimeNamespaceId))
+  const runtime = runtimes.find((r) =>
+    isSameNamespace(r.id, record.runtimeId as RuntimeNamespaceId)
+  )
   if (runtime === undefined) return null
   const inLocation = deps
     .enumerationTargets()
     .filter((t) => isSameNamespace(locationNamespace(t.location), runtime.id))
-  const cached = inLocation.find((t) => deps.pastResumeSource(t.key, record.conversationId) !== null)
+  const cached = inLocation.find(
+    (t) => deps.pastResumeSource(t.key, record.conversationId) !== null
+  )
   if (cached !== undefined) return cached.key
 
   const provider =
