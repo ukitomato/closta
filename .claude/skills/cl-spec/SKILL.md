@@ -24,6 +24,7 @@ feature spec.md を起案する。`/speckit.specify` (spec 起草) と `/speckit
 - `--linear <PRJID>-NNN` (optional): チケットツール連携。Issue title から domain と feature を抽出
 - `--domain <name>` (optional): domain 確定 elicitation を skip
 - `--targets frontend|backend|both` (optional): targets elicitation を skip
+- `--night` (optional): 夜間の自走から呼ばれたとき。本 skill の AskUserQuestion の分岐はすべて推奨案 (domain なら最上位の候補、roadmap の行の追加なら yes、`/speckit-clarify` の質問なら推奨の選択肢) を採り、台帳の「判断」に 1 行ずつ書く。規則の正本は `docs/ai-workflow/night-run.md`
 
 `<description>` と `--linear` の同時指定は禁止 (halt)。
 

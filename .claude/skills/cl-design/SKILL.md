@@ -2,7 +2,7 @@
 name: cl-design
 description: Design フェーズ全体を 1 コマンドで完走する。`/cl-spec` → `/cl-plan` → `/cl-tasks` → `/cl-design-gate` を自動チェーンし、design-gate PASS で status を implementing に昇格する。
 argument-hint: <description>
-allowed-tools: Read Write Edit Bash Glob Grep Agent AskUserQuestion
+allowed-tools: Read Write Edit Bash Glob Grep Agent SendMessage AskUserQuestion
 ---
 
 # cl-design
@@ -24,6 +24,7 @@ Design フェーズ (spec → plan → tasks → design-gate) を **1 コマン�
 - `--targets frontend|backend|both` (optional): targets 確定を skip
 - `--spec-dir <dir>` (optional): 既存 spec を再利用して plan 以降から開始
 - `--from plan|tasks|gate` (optional): チェーンの開始ステップを指定 (`--spec-dir` 必須)
+- `--night` (optional): 夜間の自走 (`/cl-night`) から呼ばれたとき。人に聞く分岐を推奨案で進める (下の各段の「night モード」)。規則の正本は `docs/ai-workflow/night-run.md`
 
 `<description>` と `--spec-dir` の同時指定は禁止 (halt)。
 
@@ -46,13 +47,17 @@ Design フェーズ (spec → plan → tasks → design-gate) を **1 コマン�
 2. 回答を同じファイルの `回答:` 欄に書く
 3. その段から連鎖を再開する (`--from <段>` と同じ)。designer は回答を反映し終えたらファイルを消す
 
+**night モード**: 1 を飛ばし、各 Q の推奨案 (選択肢の先頭、または `(推奨)` の付いたもの) を `回答:` に書く。推奨案が無い Q があれば halt する (`/cl-night` が夜を止める)。採った回答は台帳の「判断」に `NEEDS_INPUT <段> Q<n>: <回答>` で書く。Phase 0 step 4 の確認も同様に yes (両方再生成) で進む
+
 ### Phase 1: /cl-spec (description 指定時のみ)
 
 `--spec-dir` 指定時はこのフェーズをスキップ。
 
 ```
-/cl-spec <description> [--domain <name>] [--targets <enum>]
+/cl-spec <description> [--domain <name>] [--targets <enum>] [--night]
 ```
+
+`--night` は本 skill が night モードのときだけ渡す。
 
 - 完了後、`spec_dir` を取得 (完了通知の "spec dir:" 行から抽出)
 - `[auto-domain:]`, `[auto-targets:]`, `[ASSUMED:]` ラベルを収集してサマリに転記
@@ -100,6 +105,8 @@ design-gate は background の fork で走る。起動したらターンを終�
   Critical ID は design-gate.md の `### C-NNN` 見出しを Grep で拾う (本文は読まない)
 - design-gate が **ERROR** → 同様に halt
 
+**night モード**: FIX_REQUIRED でも halt しない。`Agent(designer)` に `<spec_dir>/design-gate.md` と Critical の ID を渡して直させ、`--from gate` で design-gate を再実行する。round の上限は AGENTS.md の gate の原則 (3 round)。3 round で Critical が残れば halt する。designer が NEEDS_INPUT を返したら「各段の共通処理」の night モードで回答し、`SendMessage` で同じ designer に再開を頼む。PASS で High が残るときも designer に High の ID を渡して直させる (High を確かめるための round は回さない)
+
 ### Phase 5: 完了通知
 
 ```
@@ -114,6 +121,8 @@ design-gate は background の fork で走る。起動したらターンを終�
 ```
 
 実装は新しい context で始める (設計の対話を実装に持ち込まない)。引き継ぎはすべて spec_dir のファイルで足りる。
+
+night モードでは「次のアクション」行を出さない (`/clear` は呼べない。続きは `/cl-night` が決める)。
 
 ## Idempotency
 

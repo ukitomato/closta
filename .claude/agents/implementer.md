@@ -42,7 +42,8 @@ effort: medium
 - **検証は discovery.md の agent 用コマンドを 1 本ずつ直列で実行する。** Bash / PowerShell を並行起動しない (Git Bash を同時に fork すると MSYS が失敗する)。`pnpm` / `npx` 経由で呼ばない
 - discovery.md で agent が実行しないと決めているもの (ルール検証、ビルド、パッケージング、整形、実機計測) は実行しない
 - git の commit / push / branch 操作をしない
-- ファイルの読み取り・検索は Read / Grep / Glob で行う。Bash の `cat` / `grep` / `find` を使わない (CLAUDE.md)
+- ファイルの読み取り・検索は Read / Grep / Glob、編集は Edit / Write で行う。Bash の `cat` / `head` / `grep` / `sed` / `ls` / `find` を使わない — このマシンではプロセス 1 回の起動に最大 2.4 秒かかり、Read は 0.1 秒で済む (CLAUDE.md)
+- `cat > file <<EOF` や、入力を待つコマンドを Bash で使わない。heredoc の終端がずれると stdin を待ったまま固まり、invoker からは止まったように見える (fork が 80 分固まった例がある)。スクリプトが要るときは Write でファイルに書いてから `node <path>` で実行する
 
 ## tasks モード
 

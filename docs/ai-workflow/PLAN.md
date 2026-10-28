@@ -134,7 +134,7 @@
 
 - 途中で気づいたこと: spec の範囲内なら tasks.md に追記して implementer に任せる。範囲外なら Out of Scope に 1 行書き、roadmap に載せる
 - ツール・CI・ワークフローの修正: spec を切らない。通常のセッションで直し、`/code-review` を 1 回
-- 夜間の自律作業: 上のサイクルの中だけで動く。依存先が main に入っていない feature の design は起こさない [要判断: §8 #4]
+- 夜間の自律作業: 正本は [night-run.md](night-run.md)（`/cl-night` / `/cl-land`）
 
 ### 5.3 マイルストーンの終わりの棚卸し
 
@@ -195,7 +195,7 @@
 | 1 | FR が 20 を超えたら spec を分けるか | **合図として残す。** 分けるのは、単体で確かめられる機能が 2 つ以上入っているときだけ | cl-spec Phase 8.5、memory |
 | 2 | 補助の reviewer を Sonnet にするか | **po-reviewer は Opus に残し、他の 5 件（ux / a11y / database / ui-coverage / convention）を Sonnet に** | agent の frontmatter |
 | 3 | マイルストーンの終わりの棚卸し | **扱う。** M3 の完了のときに 1 回目 | roadmap の原則、AGENTS.md、AD-050 |
-| 4 | 夜間に、依存先が main に入っていない feature の design を禁じるか | **禁じる** | memory（夜間の方針） |
+| 4 | 夜間に、依存先が main に入っていない feature の design を禁じるか | **禁じる**。2026-10-29 改訂: 夜間の枝に直列で積み、依存先が同じ枝で pr-gate PASS 済みなら満たされたとみなす | [night-run.md](night-run.md) |
 | 5 | 古いブランチの削除（§3） | 未決。既定案は「012 / 014 の分は消す。015 / 016 の分はそれぞれ main に入ってから」 | — |
 
 ---
