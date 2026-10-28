@@ -2,6 +2,8 @@
 name: po-reviewer
 description: User Story 価値・Success Criteria 計測可能性・Acceptance Criteria testability・UX negative cases・優先度妥当性を Product Owner 観点で敵対的にレビューする read-only subagent。design-gate / pr-gate から起動される。
 tools: Read, Grep, Glob, mcp__serena__find_symbol, mcp__serena__find_referencing_symbols, mcp__serena__find_declaration, mcp__serena__find_implementations, mcp__serena__get_symbols_overview, mcp__serena__get_diagnostics_for_file
+model: opus
+effort: high
 ---
 
 # po-reviewer

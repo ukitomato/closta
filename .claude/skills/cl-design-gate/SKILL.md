@@ -6,6 +6,7 @@ allowed-tools: Read Write Edit Bash Glob Grep Agent
 context: fork
 agent: general-purpose
 background: true
+effort: high
 ---
 
 # cl-design-gate

@@ -210,11 +210,11 @@
 | auto memory | `~/.claude/projects/c--dev-closta/memory/MEMORY.md` | 18 行 | 常時読み込み [確認済] |
 | skill (project) | `.claude/skills/` 37 件 | `cl-*` 10 件、`speckit-*` 10 件、assistant-ui 系 17 件 | description が常時読み込み [確認済] |
 | skill (user) | `~/.claude/skills/` 4 件 | acnpptx、mainframe-docs など | description が常時読み込み |
-| subagent | `.claude/agents/` 14 件 | reviewer 9 件、reviewer-base、implementer、designer、lint-agent、test-agent。調査の時点では、どれも `model` / `effort` を指定していなかった（全件 inherit）[確認済] | description が常時読み込み |
+| subagent | `.claude/agents/` 14 件 | reviewer 9 件、reviewer-base、implementer、designer、lint-agent、test-agent。調査の時点では、どれも `model` / `effort` を指定していなかった（全件 inherit）[確認済]。2026-10-29 時点: designer・security / architecture / po / platform-boundary → `opus` / `high`、implementer → `sonnet` / `medium`、他の reviewer → `sonnet` / `high`、lint / test → `haiku` / `low`。gate の fork（design / code / pr）は skill の frontmatter で `effort: high` | description が常時読み込み |
 | hook (project) | `.claude/settings.json` | `UserPromptSubmit` → `codegraph.cmd prompt-hook`（プロンプトごとにプロセスを起こす）[確認済] | 要見直し（6.13） |
 | hook (出所不明) | 不明 | `PostToolUse` の npm-audit hook。jq がなく、Bash のたびに blocking error [確認済] | 要修正（6.12） |
 | MCP | `.mcp.json` / `~/.claude.json` | `codegraph`（`alwaysLoad: true`）、`serena`（user スコープ。本セッションでは接続がタイムアウト）。期間内の使用は 0 回 [確認済] | 要見直し（6.13） |
-| model / effort | user settings | `model: claude-opus-5-5`、opus-5-5 は `medium` | — |
+| model / effort | user settings | `model: claude-opus-5-5`、opus-5-5 は `medium`（main と、model / effort を指定しない agent に効く。判断の要る agent は frontmatter で `high` に上げている） | — |
 | statusLine | user settings | `ccusage statusline` | 維持 |
 | env (project) | `.claude/settings.json` | `PYTHONUTF8` / `LANG` / `WINELOADERNOEXEC`（Git Bash の起動を短絡させる。消さない） | 維持 |
 

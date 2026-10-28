@@ -2,6 +2,8 @@
 name: designer
 description: 設計文書を書く actor agent。/cl-plan と /cl-tasks の fork 先として plan.md / tasks.md と付随ファイルを書き、/cl-design から design-gate の指摘修正を受ける。入力は spec_dir のファイルだけ。人間の判断が要る点は .needs-input.md に書いて NEEDS_INPUT で返す。reviewer ではないため reviewer-base.md は読まない。
 tools: Read, Write, Edit, Bash, PowerShell, Glob, Grep, Skill
+model: opus
+effort: high
 ---
 
 # designer
