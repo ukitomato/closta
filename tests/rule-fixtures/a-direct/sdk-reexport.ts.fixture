@@ -1,0 +1,3 @@
+// 違反サンプル: 許可外の Agent SDK の書き込み系 API を **再 export** する。
+// 項目14 は値の再 export (`export { X } from '<sdk>'` / `export * from '<sdk>'`) を違反にする (pr-gate R1 H-005)。
+export { tagSession } from '@anthropic-ai/claude-agent-sdk'

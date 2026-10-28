@@ -239,7 +239,7 @@ export const FIXTURES = [
     file: 'a-direct/sdk-forbidden-call.ts.fixture',
     target: 'src/agents/__rulecheck__/sdk-forbidden-call.ts',
     group: 'a',
-    what: '許可されていない Agent SDK の書き込み系 API を呼ぶ (`renameSession`。R-3 で getSessionMessages を許可に追加したため差し替え。AD-034 / SH-061)',
+    what: '許可されていない Agent SDK の書き込み系 API を呼ぶ (`tagSession`。R-3 で getSessionMessages を、023 で renameSession を許可に追加したため差し替え。AD-034 / AD-062 / SH-061)',
     detectors: ['constitution'],
     rules: ['#14']
   },
@@ -381,8 +381,25 @@ export const FIXTURES = [
     target: 'src/agents/__rulecheck__/sdk-query-mutation-method.ts',
     group: 'b',
     what:
-      "Query の mutation メソッド (setPermissionMode) を安全値 'default' で呼ぶ " +
-      '(正の構成 P3 を破る。昇格値を含めず P3 だけで発火する形。項目14 は .method() を見ない。X-1 / SH-010 / O-5 BE-040)',
+      'Query の mutation メソッド (setMaxThinkingTokens) を呼ぶ ' +
+      '(正の構成 P3 を破る。昇格値を含めず P3 だけで発火する形。項目14 は .method() を見ない。' +
+      'X-1 / SH-010 / O-5 BE-040。023 で setPermissionMode から差し替え。AD-062 Decision 1)',
+    detectors: ['constitution'],
+    rules: ['#16']
+  },
+  {
+    file: 'b-equivalent/sdk-set-permission-mode-unwrapped.ts.fixture',
+    target: 'src/agents/__rulecheck__/sdk-set-permission-mode-unwrapped.ts',
+    group: 'b',
+    what: '`q.setPermissionMode(mode)` を `assertSafePermissionMode` の包みなしで呼ぶ (AD-062 Decision 1)',
+    detectors: ['constitution'],
+    rules: ['#16']
+  },
+  {
+    file: 'b-equivalent/sdk-set-permission-mode-wrapper-escape.ts.fixture',
+    target: 'src/agents/__rulecheck__/sdk-set-permission-mode-wrapper-escape.ts',
+    group: 'b',
+    what: '`q.setPermissionMode(assertSafePermissionMode(a) || b)` — 包みが閉じてから別の値が続く (AD-062 Decision 1)',
     detectors: ['constitution'],
     rules: ['#16']
   },
@@ -410,8 +427,7 @@ export const FIXTURES = [
     file: 'b-equivalent/sdk-query-read-file.ts.fixture',
     target: 'src/agents/__rulecheck__/sdk-query-read-file.ts',
     group: 'b',
-    what:
-      'Query の readFile を呼ぶ (AD-049 Decision 6 で P3 の列挙に足した名前。他の #16 の綴りを含めない。016 BE-040)',
+    what: 'Query の readFile を呼ぶ (AD-049 Decision 6 で P3 の列挙に足した名前。他の #16 の綴りを含めない。016 BE-040)',
     detectors: ['constitution'],
     rules: ['#16']
   },
@@ -456,13 +472,35 @@ export const FIXTURES = [
     target: 'src/agents/__rulecheck__/sdk-forbidden-call-alias.ts',
     group: 'b',
     /*
-     * **defense-in-depth (AD-034 §3 / contracts C-4 M-008 / SH-061)。**
-     * 項目14 は許可外 binding の呼び出し形正規表現 (`renameSession(`) のみを見るため、
-     * `const r = renameSession; r()` の再束縛は**捕まえない**。これは AD-034 §3 が明記した
-     * 既知の限界であり、`detectors: ['none']` として列挙し UNDETECTED_NOTES に代替と塞ぐ feature を書く。
+     * **023 (AD-062 Decision 5) で塞いだ。** 項目14 が許可外の名前の**値の import** を違反にするので、
+     * `const r = tagSession; r()` の再束縛は import の時点で発火する (AD-034 §3 が明記した限界を閉じた)。
      */
-    what: '許可外の Agent SDK 書き込み系 API を alias 経由で呼ぶ (`const r = renameSession; r()`。項目14 の呼び出し形検査を迂回)',
+    what: '許可外の Agent SDK 書き込み系 API (`tagSession`) を alias 経由で呼ぶ (`const r = tagSession; r()`。値の import の検査で発火)',
+    detectors: ['constitution'],
+    rules: ['#14']
+  },
+  {
+    file: 'a-direct/sdk-reexport.ts.fixture',
+    target: 'src/agents/__rulecheck__/sdk-reexport.ts',
+    group: 'a',
+    what: '許可外の Agent SDK API (`tagSession`) を `export { … } from` で再 export する (pr-gate R1 H-005)',
+    detectors: ['constitution'],
+    rules: ['#14']
+  },
+  {
+    file: 'b-equivalent/sdk-nonliteral-specifier.ts.fixture',
+    target: 'src/agents/__rulecheck__/sdk-nonliteral-specifier.ts',
+    group: 'b',
+    what: 'SDK のパッケージ名を非リテラルで組んで動的 import し、許可外の API を呼ぶ (綴りが現れない。項目 14 の grep では捕まらない)',
     detectors: ['none']
+  },
+  {
+    file: 'a-direct/sdk-rename-session-outside.ts.fixture',
+    target: 'src/agents/__rulecheck__/sdk-rename-session-outside.ts',
+    group: 'a',
+    what: '`renameSession` を `rename-session.ts` 以外で呼ぶ (AD-062 Decision 4。呼べるファイルの表の外)',
+    detectors: ['constitution'],
+    rules: ['#14']
   },
   {
     file: 'a-direct/wsl-cli-in-session-layer.ts.fixture',
@@ -714,8 +752,9 @@ export const FIXTURES = [
     file: 'b-equivalent/agents-builtin-via-get-builtin-module.ts.fixture',
     target: 'src/agents/__rulecheck__/agents-builtin-via-get-builtin-module.ts',
     group: 'b',
-    what: 'agents が `process.getBuiltinModule()` で Node 標準モジュールを取る (agents の標準モジュール禁止は import の層だけ。既存の穴)',
-    detectors: ['none']
+    what: 'agents が `process.getBuiltinModule()` で Node 標準モジュールを取る (023 で `agents-not-to-core` を足して依存グラフが捕まえる。BE-030)',
+    detectors: ['depcruise'],
+    rules: ['agents-not-to-core']
   }
 ]
 
@@ -734,30 +773,6 @@ export const FIXTURES = [
  * AC-1 〜 AC-11 が名指す経路は SC-008 の全数検出対象であり、ここには入らない。
  */
 export const UNDETECTED_NOTES = {
-  'sdk-forbidden-call-alias': {
-    why:
-      '項目14 (check.mjs) は `AGENT_SDK_ALLOWED_CALLS` に無い binding の**呼び出し形正規表現** ' +
-      '(`(?<![.\\w])renameSession\\s*\\(`) だけを見る。`const r = renameSession; r()` の再束縛や ' +
-      '`(await import(...)).renameSession()` の動的 import は、`renameSession(` の形にならないため素通しする ' +
-      '(AD-034 §3 が明記した限界)。**同じ形は `listSubagents` / `getSubagentMessages` ' +
-      '(呼べるファイルの表 `AGENT_SDK_CALL_FILES`。AD-055) も塞がない — 許可名 5 件のうち表に載る 2 件の再束縛・動的 import も素通しする。**',
-    mitigatedBy:
-      '第一防御は**書き込みを起こす IPC が存在しないこと** (FR-001。renderer から到達できる SDK 書き込み経路が無い)。' +
-      '第二防御 (allowlist) の直接呼び出し形は `sdk-forbidden-call` サンプルで発火を維持している。' +
-      'alias/dynamic-import の迂回はこの第二防御では捕まらないが、第一防御で実害経路は塞がれている。',
-    nextFeature: 'X-6',
-    howToClose:
-      '**X-4 で確認 (SH-012): X-4 も書き込み系 API を使わない** (起動設定・プリセットは SDK の rename/delete を呼ばない) ため ' +
-      '発火しない。書き込み系 API を実際に使う X-6 (fork / resume / rename / tag / delete) へ付け替える (AD-041 (h))。' +
-      '**X-1 で確認 (SH-010): 本 alias サンプルは X-1 では塞がない。** X-1 が広げたのは起動 (`query`) と ' +
-      '権限往復の呼び出し面であり、項目 16 (正の構成の backstop) で **query() options のキー**と ' +
-      '**`Query` の `.method()` 昇格**という別クラスを塞いだ。書き込み系 API (`renameSession` 等) は X-1 では ' +
-      '**一切 import も呼び出しもしない** (正の構成: X-1 時点の許可は `query`/`listSessions`/`getSessionMessages` の 3 件のみ。O-11 (AD-055) で 5 件 = `listSubagents` / `getSubagentMessages` を足した) ため、' +
-      'binding 追跡の denylist は不要のまま残った。**X-1 時点では「書き込み系 API を実際に使う feature (改名/削除 = X-4 以降)」の時点で ' +
-      '項目14 に binding レベル denylist を足し (`const alias = renameSession` の再束縛と `import()` 経由を検出)、' +
-      '本 alias サンプルが `constitution` で発火するよう `detectors` を更新すると見込んでいた。' +
-      'X-4 は書き込み系 API を使わなかったため、この作業は冒頭のとおり X-6 へ付け替えた。**'
-  },
   'ui-path-concat': {
     why: 'パス文字列の連結は import を伴わないので、import を見る lint も依存グラフも掛からない。',
     mitigatedBy:
@@ -785,7 +800,8 @@ export const UNDETECTED_NOTES = {
       '(`composition-root` の `resolveCwd` / domain の `prefix-match`) が capability 戻り値の `PathDTO` から行う。' +
       'したがって繰り越す。**X-1 時点では X-4 (起動設定ダイアログ) で追加ディレクトリのパス入力が renderer に生じると見込み、' +
       'その時点で「IPC へ渡す `PathDTO` は capability 戻り値由来の参照に限る」を型 (branded な不透明型) で強制するとしていた。' +
-      'X-4 は追加ディレクトリ軸を X-6 に繰り越したため、この強制も冒頭のとおり X-6 へ付け替えた。**'
+      'X-4 は追加ディレクトリ軸を X-6 に繰り越したため、この強制も冒頭のとおり X-6 へ付け替えた。**' +
+      '023 で確かめた: 当たらない (名前はパスではなく、パスの入力を足さない。X-6 の後続のまま)。'
   },
   'principle-v-unknown-shape-secret': {
     why:
@@ -810,6 +826,19 @@ export const UNDETECTED_NOTES = {
       'X-4 ではこれを足していない — service 層のスキャン (`provider-service` の register / update と `provider-record` の read 側が ' +
       '`scanExtraEnvForSecrets` を呼び、`secret-in-extraenv` を理由キーで UI に返す) が X-3 (H-09) から既に在るため。' +
       'ソース側の固定プレフィクス grep はそのままでも十分 (直書き事故の一点しか担っていない)。**'
+  },
+  'sdk-nonliteral-specifier': {
+    why:
+      '項目 14 (check.mjs) は `@anthropic-ai/claude-agent-sdk` の**綴りがソースに現れるファイル**だけを走査する。' +
+      'パッケージ名を連結・変数で組んで `import(PACKAGE)` する形は綴りが現れず、走査の対象にならない (pr-gate R1 H-005)。',
+    mitigatedBy:
+      '`agents` の他のコードで SDK を使う入口は `read-transcript.ts` / `rename-session.ts` などの許可ファイルに集め、' +
+      'レビュー (architecture-reviewer / platform-boundary-reviewer) が新規の動的 import を見る。' +
+      '静的な再 export (`export … from`) と静的・動的リテラルの import は項目 14 が塞いでいる。',
+    nextFeature: 'X-6',
+    howToClose:
+      '動的 import の specifier が非リテラルのとき (`import(` の引数が文字列リテラルでない) を `src/` で一律に違反とする検査を ' +
+      '項目 14 の隣に足す。SDK の呼び出しを増やす X-6 の後続の分割で再訪する。'
   },
   'reuse-verified-other-distro': {
     why:
@@ -843,7 +872,8 @@ export const UNDETECTED_NOTES = {
       'fork / resume 等の制御行を足して調停役スレッドの import が増える X-6 の時点で、項目 18 の対象を ' +
       '「置き場の形」から「`supervisor.ts` から静的に到達するモジュール集合 (dependency-cruiser の到達判定) のうち ' +
       '`supervisor-protocol.ts` 以外」に広げ、本サンプルが `constitution` で発火するよう `detectors` を更新する。' +
-      '**X-5 で到達判定にしないのは、調停役スレッドの import が少なく、置き場の検査と目視が等価なためである。**'
+      '**X-5 で到達判定にしないのは、調停役スレッドの import が少なく、置き場の検査と目視が等価なためである。**' +
+      '023 で確かめた: 当たらない (`control-result` の decoder は `supervisor-protocol.ts` に置き、調停役スレッドの import は増えない)。'
   },
   'supervisor-json-parse-multi-alias': {
     why:
@@ -859,7 +889,8 @@ export const UNDETECTED_NOTES = {
       'X-6 で調停役スレッドの import が増える時点で、項目 18 に「調停役スレッドのモジュールで `JSON` を値として ' +
       '(メンバアクセス以外の位置で) 参照することを違反にする」規則を足し、本サンプルが `constitution` で発火するよう ' +
       '`detectors` を更新する。**X-5 で足さないのは、別名を追う規則はデータフローを追わないと誤検出と見逃しの両方が残り、' +
-      '`OpaqueBody` 型 + 単体テストと等価にならないためである。**'
+      '`OpaqueBody` 型 + 単体テストと等価にならないためである。**' +
+      '023 で確かめた: 当たらない (decoder は `supervisor-protocol.ts` に置き、調停役スレッドの import は増えない)。'
   },
   'worker-env-via-expression': {
     why:
@@ -884,29 +915,8 @@ export const UNDETECTED_NOTES = {
       'Win32Runtime の直接起動を足す X-6 で Worker の起こし方が増える場合は、その時点で ' +
       '「`new Worker(` の第 2 引数はオブジェクトリテラルに限る (式は違反)」を項目 20 に足し、本サンプルが ' +
       '`constitution` で発火するよう `detectors` を更新する。**X-5 で足さないのは、起こす箇所が 1 つでリテラルで書かれており、' +
-      '式を禁じる規則が目視と等価なためである。**'
-  },
-  'agents-builtin-via-get-builtin-module': {
-    why:
-      'agents の Node 標準モジュール禁止は **ESLint にしか無い** — 全標準モジュールを禁じるのは `boundaries/dependencies` だけで、' +
-      '`no-restricted-imports` が見るのはパス操作・プロセス起動・プラットフォーム判定・`worker_threads` の綴りに限る (`fs` は含まない)。' +
-      'どちらも import 文 (と `require()`) を依存として見るだけである。`process.getBuiltinModule()` は依存として見えない。' +
-      'dependency-cruiser は `detectProcessBuiltinModuleCalls` で `getBuiltinModule` を依存として**検出する**が、' +
-      '`.dependency-cruiser.js` に agents → 標準モジュールの規則が無いので発火しない ' +
-      '(**X-5 以前からの既存の穴**。scope: system / design-gate R1 platform-boundary L-003)。' +
-      "項目 7 は `getBuiltinModule('child_process')` だけを見るので、プロセス起動以外の標準モジュールは素通しする。",
-    mitigatedBy:
-      'プロセス起動 (`child_process`) は項目 7 が `getBuiltinModule` / `require` の形も含めて許可リストで縛る。' +
-      'agents が electron に届かないことは `agents-not-to-electron` (推移的到達) とビルド出力の検査 (SH-022。supervisor と ' +
-      'worker のチャンクの `require` / `import` を数える) が守る。それ以外の標準モジュール (`fs` 等) の取得は ' +
-      'code-gate の platform-boundary-reviewer が agents の差分で確認する。',
-    nextFeature: 'X-6',
-    howToClose:
-      'agents にセッション操作 (fork / resume / rename 等) のモジュールが増える X-6 の時点で、`.dependency-cruiser.js` に ' +
-      '`agents-not-to-core` (`from: ^src/agents/`、`to: 標準モジュール`、`child_process` / `worker_threads` は実名の許可ファイルに限る) ' +
-      'を足し、本サンプルが `depcruise` で発火するよう `detectors` を更新する。' +
-      '**X-5 で足さないのは plan「機械強制の変更」が `.dependency-cruiser.js` を変更しないと決めたためである** ' +
-      '(X-5 の範囲では agents の標準モジュール利用は ESLint の許可表どおりで、`getBuiltinModule` の使用は 0 件)。'
+      '式を禁じる規則が目視と等価なためである。**' +
+      '023 で確かめた: 当たらない (Worker を起こす箇所を足さない。改名は Worker ではなく短命の `utilityProcess`)。'
   },
   'sdk-permission-mode-reflective': {
     why:
@@ -936,8 +946,8 @@ export const UNDETECTED_NOTES = {
       '分割代入 (`const { reconnectMcpServer } = q`)・`.reconnectMcpServer.call(` / `.apply(`・変数のキー (`q[k](`) は ' +
       '`.m(` の形にならず、束縛を追うにはデータフロー解析が要るため grep backstop の射程外である。',
     mitigatedBy:
-      '`Query` を持つのは `src/agents/sdk-agent-session.ts` の `queryHandle` 1 つで、呼ぶのは `interrupt()` だけ ' +
-      '(AD-036 §4 P3)。`Query` の自前のメソッドは同ファイルの型の網羅で `interrupt`・変更系 (`QueryMutationMethod`)・' +
+      '`Query` を持つのは `src/agents/sdk-agent-session.ts` の `queryHandle` 1 つで、呼ぶのは `interrupt()` と実行中の設定の 2 つ ' +
+      '(`setPermissionMode` / `setModel`。AD-062。AD-036 §4 P3 の読み替え)。`Query` の自前のメソッドは同ファイルの型の網羅で `interrupt`・変更系 (`QueryMutationMethod`)・' +
       '呼ばない読み取り (`QueryUnusedReadMethod`) に分類され、SDK の版上げでの増減は tsc が落とす。' +
       '**この分類は呼び出しを禁じない** — `QueryUnusedReadMethod` の 7 個の呼び出しは項目 16 の検査の対象外で、' +
       '`close` は `promptQueue.close()` と綴りが衝突するため denylist に足せない。AD-047 Decision 4 が呼ばないと決めた ' +

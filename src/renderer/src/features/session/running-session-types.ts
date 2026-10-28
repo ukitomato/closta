@@ -8,6 +8,7 @@ import type {
 import type { ElicitationPrompt } from '@domain/session/elicitation'
 import type { SessionLaunchConfig } from '@domain/session/launch-config'
 import type { LaunchOrigin } from '@domain/session/launch-usage'
+import type { LiveSettingKind } from '@domain/session/live-settings'
 import type { ResumeSource, ResumeUnavailableReason } from '@domain/session/resume'
 import type { BackgroundTaskEntry, MeterUpdate, PermissionModeKey } from '@domain/session/meter'
 import type { CommandsMeter, InitReportMeter } from '@domain/session/session-init-report'
@@ -101,6 +102,14 @@ export interface LiveSessionState {
   readonly resumable: boolean
   /** 再開した行のそれまでの会話の読み取りの状態 (再開の受け付けで `loading`。読み取りは FE-040)。再開した行でなければ null。 */
   readonly resumed: { readonly phase: 'loading' | 'loaded' | 'failed' } | null
+  /** 成功したモデルの変更の値 (カタログの `id`。023 / data-model §8.1)。無ければ null (起動の `config.modelId` を出す)。 */
+  readonly currentModelId: string | null
+  /** main が返した名前 (023)。永続化しない。 */
+  readonly name: string | null
+  /** 結果を待っている実行中の設定の変更の種類 (023)。 */
+  readonly changing: LiveSettingKind | null
+  /** 直前の変更の失敗 (1 行の表示。次の変更の開始で消す。023)。 */
+  readonly settingError: LiveSettingKind | null
 }
 
 /** 監視ビューの情報密度 (O-1 / FR-008)。renderer の表示状態であり永続化しない。 */

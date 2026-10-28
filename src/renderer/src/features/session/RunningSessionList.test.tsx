@@ -104,6 +104,18 @@ describe('RunningSessionList', () => {
     expect(screen.getByTestId('session-list-empty')).toBeInTheDocument()
   })
 
+  it('名前を付けた行は題が名前になり、付けていない行はフォルダ名のまま (023 FR-012)', async () => {
+    const { store } = await setup([A, B])
+    act(() =>
+      store.setState((s) => ({
+        sessions: { ...s.sessions, [A]: { ...s.sessions[A]!, name: '調査メモ' } }
+      }))
+    )
+    const rows = await rowsOf()
+    expect(within(rows[0]!).getByText('調査メモ')).toBeInTheDocument()
+    expect(within(rows[1]!).getByText('案件フォルダ')).toBeInTheDocument()
+  })
+
   it('行はフォルダ名・ランタイム・状態を示し、表示中の行が分かる。選ぶと切り替わる', async () => {
     const { store } = await setup([A, B])
     const rows = await rowsOf()

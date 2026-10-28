@@ -739,3 +739,55 @@ describe('classifyResultFailure (O-4 / 014 data-model §1 / SC-001)', () => {
     }
   })
 })
+
+describe('decodeSessionControl: 実行中の設定の切り替え (023 / AD-062)', () => {
+  const requestId = '123e4567-e89b-42d3-a456-426614174000'
+
+  it('set-permission-mode の正例 (安全 3 値)', () => {
+    for (const mode of ['default', 'plan', 'dontAsk']) {
+      expect(decodeSessionControl({ kind: 'set-permission-mode', requestId, mode })).toEqual({
+        kind: 'set-permission-mode',
+        requestId,
+        mode
+      })
+    }
+  })
+
+  it('set-model の正例', () => {
+    expect(
+      decodeSessionControl({ kind: 'set-model', requestId, model: 'claude-opus-4-1' })
+    ).toEqual({
+      kind: 'set-model',
+      requestId,
+      model: 'claude-opus-4-1'
+    })
+  })
+
+  it.each(['', 'abc', 123, null, undefined, `x${requestId}`, `${requestId}x`])(
+    'requestId が UUID でない (%j) は null',
+    (bad) => {
+      expect(
+        decodeSessionControl({ kind: 'set-permission-mode', requestId: bad, mode: 'plan' })
+      ).toBeNull()
+      expect(decodeSessionControl({ kind: 'set-model', requestId: bad, model: 'm' })).toBeNull()
+    }
+  )
+
+  it.each(['bypassPermissions', 'acceptEdits', 'auto', 'unknown', '', 1, null, undefined])(
+    'mode が安全 3 値の外 (%j) は null',
+    (mode) => {
+      expect(decodeSessionControl({ kind: 'set-permission-mode', requestId, mode })).toBeNull()
+    }
+  )
+
+  it.each(['a b', '-x', '', 1, null, undefined])('model が文字種の外 (%j) は null', (model) => {
+    expect(decodeSessionControl({ kind: 'set-model', requestId, model })).toBeNull()
+  })
+
+  it('終了処理中は 2 種類とも受け付けない', () => {
+    expect(acceptsWhileClosing({ kind: 'set-permission-mode', requestId, mode: 'plan' })).toBe(
+      false
+    )
+    expect(acceptsWhileClosing({ kind: 'set-model', requestId, model: 'm' })).toBe(false)
+  })
+})

@@ -1,7 +1,8 @@
 import type { PastResumeDTO } from '@domain/capability'
 import type { SessionControl } from '@domain/session/agent-session'
 import type { SessionIndexDTO } from '@domain/session/dto'
-import type { SessionLaunchConfig } from '@domain/session/launch-config'
+import type { SafePermissionMode, SessionLaunchConfig } from '@domain/session/launch-config'
+import type { LiveSettingResult, RenameResult } from '@domain/session/live-settings'
 import {
   checkLaunchOrigin,
   type LaunchOrigin,
@@ -18,6 +19,9 @@ import type { LaunchOutcome, ResumeOutcome } from './session-launch-service'
 import type { TranscriptResult } from './transcript-service'
 import {
   checkLaunchConfig,
+  checkRenameArgs,
+  checkSetModelArgs,
+  checkSetPermissionModeArgs,
   checkPastResumeQuery,
   checkPreset,
   checkResumeRequest,
@@ -67,6 +71,12 @@ export interface SessionIpcDeps {
   launchSession(config: SessionLaunchConfig): Promise<LaunchOutcome>
   /** 制御を該当セッションへ送る。未知 / セッションスレッドが終わった sessionId なら `false`。 */
   controlSession(sessionId: string, control: SessionControl): boolean
+  /** 実行中の権限モードの切り替え (023 / contracts C-1)。検証済みの値で呼ぶ。 */
+  setSessionPermissionMode(sessionId: string, mode: SafePermissionMode): Promise<LiveSettingResult>
+  /** 実行中のモデルの切り替え (023 / contracts C-2)。検証済みの形で呼ぶ。カタログとの照合は service。 */
+  setSessionModel(sessionId: string, modelId: string): Promise<LiveSettingResult>
+  /** 実行中のセッションの改名 (023 / contracts C-3)。検証済み・trim 済みの名前で呼ぶ。 */
+  renameSession(sessionId: string, name: string): Promise<RenameResult>
 
   /* ── セッションの再開 (X-9 / contracts C-1〜C-3) ── */
 
@@ -380,6 +390,43 @@ export async function handleRespondElicitation(
       ...(content !== undefined ? { content } : {})
     }
   })
+}
+
+/**
+ * `setSessionPermissionMode(sessionId, mode)` (023 / contracts C-1)。述語 (`checkSetPermissionModeArgs`) を通らない入力は
+ * service を呼ばず `invalid-value`。受け付けの判定と結果の待ちは service が行う。
+ */
+export async function handleSetSessionPermissionMode(
+  deps: SessionIpcDeps,
+  args: readonly unknown[]
+): Promise<LiveSettingResult> {
+  if (!checkSetPermissionModeArgs(args)) return { ok: false, reason: 'invalid-value' }
+  return deps.setSessionPermissionMode(args[0], args[1])
+}
+
+/**
+ * `setSessionModel(sessionId, modelId)` (023 / contracts C-2)。述語 (`checkSetModelArgs`) を通らない入力は
+ * service を呼ばず `invalid-value`。カタログとの照合・受け付けの判定・結果の待ちは service が行う。
+ */
+export async function handleSetSessionModel(
+  deps: SessionIpcDeps,
+  args: readonly unknown[]
+): Promise<LiveSettingResult> {
+  if (!checkSetModelArgs(args)) return { ok: false, reason: 'invalid-value' }
+  return deps.setSessionModel(args[0], args[1])
+}
+
+/**
+ * `renameSession(sessionId, name)` (023 / contracts C-3)。述語 (`checkRenameArgs`) を通らない入力は service を
+ * 呼ばず `invalid-value`。通れば trim 済みの名前で改名の service を呼び、結果をそのまま返す。名前をログに出さない。
+ */
+export async function handleRenameSession(
+  deps: SessionIpcDeps,
+  args: readonly unknown[]
+): Promise<RenameResult> {
+  const checked = checkRenameArgs(args)
+  if (checked === null) return { ok: false, reason: 'invalid-value' }
+  return deps.renameSession(checked[0], checked[1])
 }
 
 /** `interruptSession(sessionId)` (BE-021)。中断は kill とは別経路 (FR-015/016)。 */

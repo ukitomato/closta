@@ -19,7 +19,8 @@ import type { ExtraEnvPredicates } from '@domain/provider/forward-env'
 import type { DetectedCandidate } from '@domain/provider/types'
 import type { SessionControl, SessionLaunchHandshakeDTO } from '@domain/session/agent-session'
 import type { SessionIndexDTO } from '@domain/session/dto'
-import type { SessionLaunchConfig } from '@domain/session/launch-config'
+import type { SafePermissionMode, SessionLaunchConfig } from '@domain/session/launch-config'
+import type { LiveSettingResult, RenameResult } from '@domain/session/live-settings'
 import type { LaunchOrigin, LaunchUsageSummaryDTO } from '@domain/session/launch-usage'
 import type { PresetDTO, SavePresetResult } from '@domain/session/preset'
 import type { SessionResumeRequest } from '@domain/session/resume'
@@ -51,6 +52,9 @@ import {
   handleResumeSession,
   handleEndSession,
   handleInterruptSession,
+  handleSetSessionPermissionMode,
+  handleSetSessionModel,
+  handleRenameSession,
   handleKillSession,
   handleLaunchSession,
   handleListPresets,
@@ -145,6 +149,11 @@ export interface IpcDependencies {
   launchSession(config: SessionLaunchConfig): Promise<LaunchOutcome>
   /** 制御を該当セッションへ送る。未知 / 終了済み sessionId なら `false`。 */
   controlSession(sessionId: string, control: SessionControl): boolean
+  /** 実行中の権限モードの切り替え (023)。結果は `LiveSettingResult`。 */
+  setSessionPermissionMode(sessionId: string, mode: SafePermissionMode): Promise<LiveSettingResult>
+  setSessionModel(sessionId: string, modelId: string): Promise<LiveSettingResult>
+  /** 実行中のセッションの改名 (023)。結果は `RenameResult` (成功なら trim した名前)。 */
+  renameSession(sessionId: string, name: string): Promise<RenameResult>
 
   /* ── セッションの再開 (X-9 / contracts C-1〜C-3) ── */
 
@@ -383,6 +392,20 @@ export function registerIpcHandlers(deps: IpcDependencies): void {
 
   handle(IPC_CHANNELS.interruptSession, async (_event, ...args): Promise<void> =>
     handleInterruptSession(deps, args)
+  )
+
+  handle(
+    IPC_CHANNELS.setSessionPermissionMode,
+    async (_event, ...args): Promise<LiveSettingResult> =>
+      handleSetSessionPermissionMode(deps, args)
+  )
+
+  handle(IPC_CHANNELS.setSessionModel, async (_event, ...args): Promise<LiveSettingResult> =>
+    handleSetSessionModel(deps, args)
+  )
+
+  handle(IPC_CHANNELS.renameSession, async (_event, ...args): Promise<RenameResult> =>
+    handleRenameSession(deps, args)
   )
 
   handle(IPC_CHANNELS.endSession, async (_event, ...args): Promise<void> =>

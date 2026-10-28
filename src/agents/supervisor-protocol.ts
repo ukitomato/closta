@@ -84,6 +84,8 @@ export type WorkerMessage =
   | { readonly kind: 'ended' }
   /** 会話の id (X-9 / AD-059)。最初の `system/init` の `session_id` を UUID の形で検査した値。 */
   | { readonly kind: 'conversation'; readonly conversationId: string }
+  /** 実行中の設定の切り替えの結果 (023 / AD-062)。requestId は main が振った UUID。理由は運ばない。 */
+  | { readonly kind: 'control-result'; readonly requestId: string; readonly ok: boolean }
 
 /**
  * セッションスレッドからの構造化メッセージを検証する。未知の kind・形の崩れは `null`。
@@ -116,6 +118,10 @@ export function decodeWorkerMessage(value: unknown): WorkerMessage | null {
       return isValidSessionId(record.conversationId)
         ? { kind: 'conversation', conversationId: record.conversationId }
         : null
+    case 'control-result':
+      return isValidSessionId(record.requestId) && typeof record.ok === 'boolean'
+        ? { kind: 'control-result', requestId: record.requestId, ok: record.ok }
+        : null
     default:
       return null
   }
@@ -131,6 +137,13 @@ export type SupervisorEvent =
       readonly kind: 'conversation'
       readonly sessionId: string
       readonly conversationId: string
+    }
+  /** 実行中の設定の切り替えの結果 (023)。窓で束ねず即座に送る。 */
+  | {
+      readonly kind: 'control-result'
+      readonly sessionId: string
+      readonly requestId: string
+      readonly ok: boolean
     }
   /** 標準入出力経路だけで使う本文の行。Electron 経路では本文は port へ送り、この行を作らない。 */
   | { readonly kind: 'event'; readonly sessionId: string; readonly payload: OpaqueBody }
@@ -151,6 +164,12 @@ export function decodeSupervisorEventForMain(line: string):
       readonly kind: 'conversation'
       readonly sessionId: string
       readonly conversationId: string
+    }
+  | {
+      readonly kind: 'control-result'
+      readonly sessionId: string
+      readonly requestId: string
+      readonly ok: boolean
     }
   | null {
   let parsed: unknown
@@ -176,6 +195,19 @@ export function decodeSupervisorEventForMain(line: string):
       kind: 'conversation',
       sessionId: record.sessionId,
       conversationId: record.conversationId
+    }
+  }
+  if (
+    record.kind === 'control-result' &&
+    isValidSessionId(record.sessionId) &&
+    isValidSessionId(record.requestId) &&
+    typeof record.ok === 'boolean'
+  ) {
+    return {
+      kind: 'control-result',
+      sessionId: record.sessionId,
+      requestId: record.requestId,
+      ok: record.ok
     }
   }
   return null

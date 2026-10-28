@@ -27,6 +27,9 @@ import {
   handleRespondPermission,
   handleSavePreset,
   handleSendPrompt,
+  handleSetSessionModel,
+  handleRenameSession,
+  handleSetSessionPermissionMode,
   type SessionIpcDeps
 } from './session-ipc'
 
@@ -54,6 +57,9 @@ interface Calls {
   readonly resolves: { targetKey: string; conversationId: string }[]
   readonly resumes: SessionResumeRequest[]
   readonly resumedTranscripts: { sessionId: string; requestToken: string }[]
+  readonly permissionModes: { sessionId: string; mode: string }[]
+  readonly models: { sessionId: string; modelId: string }[]
+  readonly renames: { sessionId: string; name: string }[]
 }
 
 function deps(
@@ -75,7 +81,10 @@ function deps(
     usageRecords: [],
     resolves: [],
     resumes: [],
-    resumedTranscripts: []
+    resumedTranscripts: [],
+    permissionModes: [],
+    models: [],
+    renames: []
   }
   return {
     calls,
@@ -108,6 +117,19 @@ function deps(
       controlSession(sessionId, control) {
         calls.controls.push({ sessionId, control })
         return true
+      },
+      // 023 の権限モードの切り替え。呼び出しを記録する (負例で「発火しない」を検証)。
+      async setSessionPermissionMode(sessionId, mode) {
+        calls.permissionModes.push({ sessionId, mode })
+        return { ok: true as const }
+      },
+      async setSessionModel(sessionId, modelId) {
+        calls.models.push({ sessionId, modelId })
+        return { ok: true as const }
+      },
+      async renameSession(sessionId, name) {
+        calls.renames.push({ sessionId, name })
+        return { ok: true as const, name }
       },
       // X-9 の再開。呼び出しを記録する (負例で「発火しない」を検証)。
       async resolvePastResume(targetKey, conversationId) {
@@ -586,6 +608,93 @@ describe('X-1 起動 + 制御ハンドラ — main 直接呼び (SC-004 / SC-007
       await handleEndSession(d, args as readonly unknown[])
       await handleKillSession(d, args as readonly unknown[])
       expect(calls.controls).toEqual([])
+    })
+  })
+
+  describe('handleSetSessionPermissionMode (023 / contracts C-1)', () => {
+    it.each(['default', 'plan', 'dontAsk'])(
+      '安全 3 値 %s は service に渡して結果を返す',
+      async (mode) => {
+        const { deps: d, calls } = deps()
+        await expect(handleSetSessionPermissionMode(d, [UUID, mode])).resolves.toEqual({ ok: true })
+        expect(calls.permissionModes).toEqual([{ sessionId: UUID, mode }])
+      }
+    )
+
+    it.each([
+      ['昇格の値', [UUID, 'bypassPermissions']],
+      ['知らない値', [UUID, 'nope']],
+      ['数', [UUID, 1]],
+      ['null', [UUID, null]],
+      ['配列', [UUID, ['plan']]],
+      ['非 UUID', ['not-uuid', 'plan']],
+      ['欠落', [UUID]],
+      ['余分な引数', [UUID, 'plan', 'extra']]
+    ])('不正入力は invalid-value で service を呼ばない (%s)', async (_l, args) => {
+      const { deps: d, calls } = deps()
+      await expect(handleSetSessionPermissionMode(d, args as readonly unknown[])).resolves.toEqual({
+        ok: false,
+        reason: 'invalid-value'
+      })
+      expect(calls.permissionModes).toEqual([])
+    })
+  })
+
+  describe('handleSetSessionModel (023 / contracts C-2)', () => {
+    it('文字種の通る値は service に渡して結果を返す', async () => {
+      const { deps: d, calls } = deps()
+      await expect(handleSetSessionModel(d, [UUID, 'claude-opus-4-1'])).resolves.toEqual({
+        ok: true
+      })
+      expect(calls.models).toEqual([{ sessionId: UUID, modelId: 'claude-opus-4-1' }])
+    })
+
+    it.each([
+      ['空白入り', [UUID, 'a b']],
+      ['先頭が -', [UUID, '-x']],
+      ['空', [UUID, '']],
+      ['数', [UUID, 1]],
+      ['非 UUID', ['not-uuid', 'sonnet']],
+      ['欠落', [UUID]],
+      ['余分な引数', [UUID, 'sonnet', 'extra']]
+    ])('不正入力は invalid-value で service を呼ばない (%s)', async (_l, args) => {
+      const { deps: d, calls } = deps()
+      await expect(handleSetSessionModel(d, args as readonly unknown[])).resolves.toEqual({
+        ok: false,
+        reason: 'invalid-value'
+      })
+      expect(calls.models).toEqual([])
+    })
+  })
+
+  describe('handleRenameSession (023 / contracts C-3)', () => {
+    it('trim した名前を service に渡して結果をそのまま返す', async () => {
+      const { deps: d, calls } = deps()
+      await expect(handleRenameSession(d, [UUID, '  調査  '])).resolves.toEqual({
+        ok: true,
+        name: '調査'
+      })
+      expect(calls.renames).toEqual([{ sessionId: UUID, name: '調査' }])
+    })
+
+    it.each([
+      ['空', [UUID, '']],
+      ['空白だけ', [UUID, '   ']],
+      ['101 文字', [UUID, 'a'.repeat(101)]],
+      ['改行', [UUID, 'a\nb']],
+      ['制御文字', [UUID, 'a\u0000b']],
+      ['行の区切り', [UUID, 'a b']],
+      ['数', [UUID, 1]],
+      ['非 UUID', ['not-uuid', 'a']],
+      ['欠落', [UUID]],
+      ['余分な引数', [UUID, 'a', 'extra']]
+    ])('不正入力は invalid-value で service を呼ばない (%s)', async (_l, args) => {
+      const { deps: d, calls } = deps()
+      await expect(handleRenameSession(d, args as readonly unknown[])).resolves.toEqual({
+        ok: false,
+        reason: 'invalid-value'
+      })
+      expect(calls.renames).toEqual([])
     })
   })
 })

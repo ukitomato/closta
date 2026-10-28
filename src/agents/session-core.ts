@@ -1,7 +1,11 @@
 import { isEffortLevel, isValidModelId } from '@domain/provider/model-catalog'
 import { assertHelperSettings, type HelperSettings } from '@domain/provider/settings'
 import type { EffortLevel } from '@domain/provider/types'
-import { assertSafePermissionMode, type SafePermissionMode } from '@domain/session/launch-config'
+import {
+  assertSafePermissionMode,
+  isSafePermissionMode,
+  type SafePermissionMode
+} from '@domain/session/launch-config'
 import {
   ASK_USER_QUESTION_TOOL_NAME,
   boundDecisionScope,
@@ -478,6 +482,17 @@ export function decodeSessionControl(value: unknown): SessionControl | null {
     case 'respond-elicitation': {
       const response = decodeElicitationResponse(control.response)
       return response === null ? null : { kind: 'respond-elicitation', response }
+    }
+    // 実行中の設定の切り替え (023 / AD-062)。値は domain の述語で確かめ直す (別の規則を書かない)。
+    case 'set-permission-mode': {
+      const { requestId, mode } = control
+      if (!isValidSessionId(requestId) || !isSafePermissionMode(mode)) return null
+      return { kind: 'set-permission-mode', requestId, mode }
+    }
+    case 'set-model': {
+      const { requestId, model } = control
+      if (!isValidSessionId(requestId) || !isValidModelId(model)) return null
+      return { kind: 'set-model', requestId, model }
     }
     default:
       return null

@@ -1,8 +1,10 @@
 // 違反サンプル: 許可されていない Agent SDK の API を呼ぶ。
 // R-3 で `getSessionMessages` が許可に加わった (AD-034 / C-4) ため、**書き込み系 API** を禁止例にする。
-// transcript は読み取り専用であり (FR-001)、rename / tag / delete / fork / import は決して呼ばない。
-import { renameSession } from '@anthropic-ai/claude-agent-sdk'
+// 023 (AD-062 Decision 4) で `renameSession` が許可 (`src/agents/rename-session.ts` だけ) に加わったため、
+// 許可されない書き込み系 API の `tagSession` に差し替えた。transcript は読み取り専用で、
+// custom-title の追記以外 (tag / delete / fork / import) は決して呼ばない。
+import { tagSession } from '@anthropic-ai/claude-agent-sdk'
 
 export async function forbiddenWrite(sessionId: string): Promise<unknown> {
-  return renameSession(sessionId, 'renamed')
+  return tagSession(sessionId, 'tag')
 }

@@ -6,7 +6,7 @@ import { useProviders } from '@/features/provider/useProviders'
 import { groupLabelOf, locationIndexOf, locationLabelOf } from '@/features/session-list/group-label'
 import { buildSessionRows, findRow, formatSessionTime } from '@/features/session-list/rows'
 import { useFolderLabels } from '@/features/session-list/useFolderLabels'
-import { PERMISSION_MODE_LABELS } from '@/features/session/labels'
+import { LIVE_SETTING_LABELS, PERMISSION_MODE_LABELS } from '@/features/session/labels'
 import { useRunningSessionsView } from '@/features/session/running-sessions-view'
 import { useSessionMeters } from '@/features/session/useSessionMeters'
 import { useSessionsStore } from '@/stores/sessions'
@@ -110,6 +110,14 @@ function RunningOverview(): React.JSX.Element {
     items.push({
       label: OVERVIEW_LABELS.currentPermissionMode,
       value: PERMISSION_MODE_NAMES[currentMode]
+    })
+  }
+  // 成功したモデルの変更 (023)。起動時のモデルと違うときだけ「現在のモデル」の行を足す (「起動時の」の見出しはそのまま)。
+  const currentModelId = live.state.currentModelId
+  if (!providersLoading && currentModelId !== null && currentModelId !== config.modelId) {
+    items.push({
+      label: LIVE_SETTING_LABELS.currentModel,
+      value: provider?.models.find((m) => m.id === currentModelId)?.displayName ?? currentModelId
     })
   }
   // 所在は登録フォルダの一覧から引く。読み込み中・引けないとき (登録の解除) は行ごと出さない (所在の欄にフォルダの

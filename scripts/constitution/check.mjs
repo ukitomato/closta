@@ -694,23 +694,51 @@ function hasPackagedGate() {
     const bindings = [...src.code.matchAll(namedAll)]
       .flatMap((m) => m[1].split(','))
       .map((part) => {
+        const isType = /^\s*type\s+/.test(part)
         const pieces = part
           .replace(/^\s*type\s+/, '')
           .split(/\s+as\s+/)
           .map((s) => s.trim())
         const imported = pieces[0] ?? ''
         const local = pieces[pieces.length - 1] ?? ''
-        return { imported, local }
+        return { imported, local, isType }
       })
       .filter((b) => b.imported.length > 0 && b.local.length > 0)
 
-    for (const { imported, local } of bindings) {
-      // **呼び出し形だけを違反にする。** 型としての利用は許す。
+    // 動的 import / require (AD-062 Decision 5)。静的な名前付き import の検査を迂回できてしまう。
+    if (
+      new RegExp(String.raw`\b(?:import|require)\s*\(\s*['"\x60]` + AGENT_SDK_PACKAGE).test(
+        src.code
+      )
+    ) {
+      found.push(`${src.file}  SDK を動的 import / require している (許可しない。AD-062)`)
+    }
+
+    // 再 export (`export { tagSession } from '<sdk>'` / `export * from '<sdk>'`)。名前付き import の検査を迂回し、
+    // 呼び出しが別のファイルに移る (pr-gate R1 H-005)。型だけの再 export (`export type …`) は許す。
+    const reExport = new RegExp(
+      String.raw`export\s+(?!type\b)(?:\*(?:\s+as\s+\w+)?|\{[^}]*\})\s*from\s*['"]` +
+        AGENT_SDK_PACKAGE +
+        String.raw`['"]`
+    )
+    if (reExport.test(src.code)) {
+      found.push(
+        `${src.file}  SDK を再 export している (値の再 export は許可しない。pr-gate R1 H-005)`
+      )
+    }
+
+    for (const { imported, local, isType } of bindings) {
+      // **型としての利用は許す。** 値の import は許可の名前だけ (AD-062 Decision 5。再束縛・別名での呼び出しを
+      // import の時点で止める)。許可の名前でも、呼べるファイルの表に載るものは列のファイル以外で値として import できない。
       const call = new RegExp(String.raw`(?<![.\w])` + local + String.raw`\s*\(`)
+      if (!isType && !AGENT_SDK_ALLOWED_CALLS.includes(imported)) {
+        found.push(`${src.file}  許可外の SDK API を値として import している "${imported}"`)
+        continue
+      }
       if (AGENT_SDK_ALLOWED_CALLS.includes(imported)) {
         // AD-055: 呼べるファイルの表に載る名前は、列のファイル以外で呼べない
         const files = AGENT_SDK_CALL_FILES[imported]
-        if (files && !files.includes(src.file) && call.test(src.code)) {
+        if (files && !files.includes(src.file) && (!isType || call.test(src.code))) {
           found.push(
             `${src.file}  SDK API "${imported}" を許可されたファイル以外で呼んでいる (許可: ${files.join(', ')})`
           )
@@ -949,8 +977,28 @@ function hasPackagedGate() {
       )
       if (dotCall.test(src.code) || computedKeyCall.test(src.code)) {
         found.push(
-          `${src.file}  Query の mutation メソッド ".${method}()" を呼んでいる (P3。interrupt のみ許可)`
+          `${src.file}  Query の mutation メソッド ".${method}()" を呼んでいる (P3。interrupt と実行中の設定の切り替えのみ許可)`
         )
+      }
+    }
+    // (P3) 実行中の権限モードの切り替え (023 / AD-062 Decision 1)。`.setPermissionMode(` (`?.` と計算キーの形を含む) の
+    //      引数は `assertSafePermissionMode(...)` で始まり、その呼び出しで閉じること (`permissionMode:` の値の検査と同じ関数)。
+    //      `assertSafePermissionMode(a) || b` のように包みが閉じてから続く形は違反にする。
+    {
+      const callRe = /(?:\.\s*setPermissionMode|\[\s*(['"`])setPermissionMode\1\s*\])\s*\(/g
+      let m
+      while ((m = callRe.exec(src.code)) !== null) {
+        const argStart = m.index + m[0].length
+        const opening = new RegExp(
+          String.raw`^\s*` + SANCTIONED_PERMISSION_MODE_WRAPPER + String.raw`\s*\(`
+        ).exec(src.code.slice(argStart))
+        const sanctioned =
+          opening !== null && wrapperCallCompletes(src.code, argStart + opening[0].length - 1)
+        if (!sanctioned) {
+          found.push(
+            `${src.file}  ".setPermissionMode()" の引数が ${SANCTIONED_PERMISSION_MODE_WRAPPER}() で始まり閉じていない (AD-062 Decision 1)`
+          )
+        }
       }
     }
   }

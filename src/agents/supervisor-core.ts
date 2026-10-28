@@ -202,6 +202,17 @@ export function runSupervisor(deps: SupervisorDeps): SupervisorHandle {
             })
           )
           break
+        case 'control-result':
+          // 実行中の設定の切り替えの結果も窓に入れず即座に main へ (023 / AD-062)。理由は運ばない。
+          transport.write(
+            encodeSupervisorEvent({
+              kind: 'control-result',
+              sessionId,
+              requestId: message.requestId,
+              ok: message.ok
+            })
+          )
+          break
       }
     })
     // 例外の中身は記録しない (理由キーだけ。Principle V)。

@@ -610,6 +610,14 @@ total_terms: 104
   再利用率そのものではなく、その判定の材料である
 - **Ref**: [012 spec](../specs/012-ui-thread-search/spec.md) FR-011〜FR-013 / [data-model](../specs/012-ui-thread-search/data-model.md) §4
 
+#### **Live session setting（実行中の設定の変更）**
+
+- **Definition**: 動いているセッションの権限モード・モデル・名前を、止めずに変える操作 (023)。永続化しない (プリセット・`launch-usage.json` に書かない)。権限モードは安全 3 値 (`SafePermissionMode`) の中の遷移だけ。モデルはそのセッションの Provider のカタログのうち起動の effort が効くもの。名前は transcript の custom-title に追記する (**Session name**)
+- **日本語表記**: 実行中の設定の変更
+- **Domain**: `session`
+- **Counterexamples**: 起動ダイアログで選ぶ `SessionLaunchConfig` の軸とは別 — あちらは起動の前に選ぶ値で、本語は起動の後の変更。effort は実行中に変えない
+- **Ref**: [AD-062](decisions/0062-live-session-permission-mode-model-and-rename.md)
+
 #### **Location**
 
 - **Definition**: 作業フォルダが**どのファイルシステムにあるか**。
@@ -971,7 +979,7 @@ total_terms: 104
 
 #### **SafePermissionMode**
 
-- **Definition**: 起動で選べる権限モード。`default` / `plan` / `dontAsk` の 3 値 (AD-020 の危険度表で「安全」のもの)。`assertSafePermissionMode` が実行時に閉じる
+- **Definition**: 起動で選べる権限モード。`default` / `plan` / `dontAsk` の 3 値 (AD-020 の危険度表で「安全」のもの)。`assertSafePermissionMode` が実行時に閉じる。**実行中の切り替えも同じ 3 値** (023。AD-062)
 - **Domain**: `session`
 - **Counterexamples**: 昇格 3 値 (`acceptEdits` / `auto` / `bypassPermissions`) は含まない。capability 連動は I-3
 - **Ref**: [AD-041](decisions/0041-x4-launch-config-on-x1-launch-gate.md) (a)
@@ -1005,8 +1013,8 @@ total_terms: 104
 #### **SessionControl**
 
 - **Definition**: `renderer → main` の**制御要求** (control plane。X-1)。`send-prompt` / `respond-permission` /
-  `interrupt` / `end` / `kill` の判別 union (`end` は X-5。応答待ち・中断済み・最初のプロンプト待ちのセッションの `claude` を
-  終わらせる穏当な「終了」。最初のプロンプト待ちは期限を待たずに止める)。**renderer → main の検証済み IPC のみが発行できる** (data plane から発行しない)。起動 (launch) は含まない
+  `interrupt` / `end` / `kill` / `set-permission-mode` / `set-model` の判別 union (8 種類。`end` は X-5。応答待ち・中断済み・最初のプロンプト待ちのセッションの `claude` を
+  終わらせる穏当な「終了」。最初のプロンプト待ちは期限を待たずに止める。`set-permission-mode` / `set-model` は 023 で足した実行中の設定の変更。名前の変更は含まない — 別の IPC と短命のプロセス)。**renderer → main の検証済み IPC のみが発行できる** (data plane から発行しない)。起動 (launch) は含まない
 - **日本語表記**: セッション制御
 - **Domain**: `session`
 - **Ref**: [AD-036](decisions/0036-single-session-launch-process-and-live-stream.md) / contracts C-1
@@ -1024,6 +1032,14 @@ total_terms: 104
   (X-5 / FR-012)。X-1 の単一セッション不変は X-5 で廃止し、同時実行数の上限
   (registry の生存フラグで数える) に置き換えた (AD-043)
 - **Ref**: [AD-036](decisions/0036-single-session-launch-process-and-live-stream.md)
+
+#### **Session name（セッションの名前）**
+
+- **Definition**: Claude Code の transcript の custom-title。実行中のセッションに利用者が付ける名前 (023。`renameSession()` が追記する)。`SessionSummary.customTitle` と同じもの。名前の正本は transcript で、main のメモリは稼働中の行の表示のためのキャッシュ
+- **日本語表記**: セッションの名前
+- **Domain**: `session`
+- **Counterexamples**: **`SessionLaunchConfig` の「セッション名」の軸 (起動のときに名前を付ける。X-6 の後続) とは別** — こちらは起動の後に付ける名前。起動のときの名前の軸は 023 では扱わない
+- **Ref**: [AD-062](decisions/0062-live-session-permission-mode-model-and-rename.md)
 
 #### **SessionMessage（セッションメッセージ）**
 

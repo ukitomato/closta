@@ -7,6 +7,7 @@ import type { SessionEvent } from '@domain/session/agent-session'
 import type { ElicitationPrompt } from '@domain/session/elicitation'
 import type { TranscriptPartDTO } from '@domain/session/transcript-dto'
 import type { SessionLaunchConfig } from '@domain/session/launch-config'
+import type { LiveSettingResult, RenameResult } from '@domain/session/live-settings'
 import type { MeterUpdate } from '@domain/session/meter'
 import type { InitReportMeter } from '@domain/session/session-init-report'
 import type { SessionStatusUpdate } from '@domain/session/status-update'
@@ -1168,5 +1169,198 @@ describe('running-session-store — MCP サーバーの問い (O-10 FE-020 / 018
     emit(port, { kind: 'elicitation-request', request: prompt(E1) })
     h.store.kill(A)
     expect(idsOfCards(h)).toEqual([])
+  })
+})
+
+describe('running-session-store — 実行中の設定の変更 (023 FE-001 / data-model §8.1)', () => {
+  it('4 つのフィールドの初期値は null', async () => {
+    const h = harness()
+    await launched(h, A)
+    const s = h.store.getState().sessions[A]
+    expect(s).toMatchObject({
+      currentModelId: null,
+      name: null,
+      changing: null,
+      settingError: null
+    })
+  })
+
+  it('beginSetting / endSetting の遷移。失敗で settingError が立ち、次の beginSetting で消える', async () => {
+    const h = harness()
+    await launched(h, A)
+    h.store.beginSetting(A, 'permission-mode')
+    expect(h.store.getState().sessions[A]?.changing).toBe('permission-mode')
+    h.store.endSetting(A, 'permission-mode', false)
+    expect(h.store.getState().sessions[A]).toMatchObject({
+      changing: null,
+      settingError: 'permission-mode'
+    })
+    h.store.beginSetting(A, 'model')
+    expect(h.store.getState().sessions[A]).toMatchObject({ changing: 'model', settingError: null })
+    h.store.endSetting(A, 'model', true)
+    expect(h.store.getState().sessions[A]).toMatchObject({ changing: null, settingError: null })
+  })
+
+  it('知らない行・終わった行への endSetting を無視する', async () => {
+    const h = harness()
+    await launched(h, A)
+    h.store.beginSetting(A, 'name')
+    h.pushStatus([status(A, { state: 'done', claudeAlive: false })])
+    const before = h.store.getState()
+    h.store.endSetting(A, 'name', false)
+    h.store.endSetting(B, 'name', false)
+    h.store.beginSetting(B, 'name')
+    expect(h.store.getState()).toBe(before)
+  })
+
+  it('どの操作でも config が同じ参照のまま', async () => {
+    const h = harness()
+    await launched(h, A)
+    const config = h.store.getState().sessions[A]?.config
+    h.store.beginSetting(A, 'model')
+    h.store.endSetting(A, 'model', false)
+    h.store.beginSetting(A, 'permission-mode')
+    h.store.endSetting(A, 'permission-mode', true)
+    expect(h.store.getState().sessions[A]?.config).toBe(config)
+  })
+
+  it('setPermissionMode は capability を 1 回呼び、結果までは changing で、成功で戻る。config は同じ参照', async () => {
+    let resolve: (r: LiveSettingResult) => void = () => undefined
+    const setSessionPermissionMode = vi.fn(
+      () => new Promise<LiveSettingResult>((r) => (resolve = r))
+    )
+    const h = harness({ setSessionPermissionMode })
+    await launched(h, A)
+    const config = h.store.getState().sessions[A]?.config
+    h.store.setPermissionMode(A, 'plan')
+    expect(setSessionPermissionMode).toHaveBeenCalledExactlyOnceWith(A, 'plan')
+    expect(h.store.getState().sessions[A]?.changing).toBe('permission-mode')
+    resolve({ ok: true })
+    await vi.waitFor(() => expect(h.store.getState().sessions[A]?.changing).toBeNull())
+    expect(h.store.getState().sessions[A]).toMatchObject({ settingError: null })
+    expect(h.store.getState().sessions[A]?.config).toBe(config)
+  })
+
+  it('setPermissionMode の失敗 (ok: false / reject) で settingError が立つ', async () => {
+    const setSessionPermissionMode = vi
+      .fn<ClostaCapability['setSessionPermissionMode']>()
+      .mockResolvedValueOnce({ ok: false, reason: 'rejected' })
+      .mockRejectedValueOnce(new Error('ipc'))
+    const h = harness({ setSessionPermissionMode })
+    await launched(h, A)
+    h.store.setPermissionMode(A, 'plan')
+    await vi.waitFor(() =>
+      expect(h.store.getState().sessions[A]).toMatchObject({
+        changing: null,
+        settingError: 'permission-mode'
+      })
+    )
+    h.store.setPermissionMode(A, 'default')
+    expect(h.store.getState().sessions[A]).toMatchObject({
+      changing: 'permission-mode',
+      settingError: null
+    })
+    await vi.waitFor(() => expect(h.store.getState().sessions[A]?.changing).toBeNull())
+    expect(h.store.getState().sessions[A]?.settingError).toBe('permission-mode')
+  })
+
+  it('知らない行への setPermissionMode は capability を呼ばない', () => {
+    const setSessionPermissionMode = vi.fn(async () => ({ ok: true as const }))
+    const h = harness({ setSessionPermissionMode })
+    h.store.setPermissionMode(B, 'plan')
+    expect(setSessionPermissionMode).not.toHaveBeenCalled()
+  })
+
+  it('setModel は結果までは changing で、成功で currentModelId になる。config は同じ参照', async () => {
+    let resolve: (r: LiveSettingResult) => void = () => undefined
+    const setSessionModel = vi.fn(() => new Promise<LiveSettingResult>((r) => (resolve = r)))
+    const h = harness({ setSessionModel })
+    await launched(h, A)
+    const config = h.store.getState().sessions[A]?.config
+    h.store.setModel(A, 'm2')
+    expect(setSessionModel).toHaveBeenCalledExactlyOnceWith(A, 'm2')
+    expect(h.store.getState().sessions[A]).toMatchObject({
+      changing: 'model',
+      currentModelId: null
+    })
+    resolve({ ok: true })
+    await vi.waitFor(() => expect(h.store.getState().sessions[A]?.changing).toBeNull())
+    expect(h.store.getState().sessions[A]).toMatchObject({
+      currentModelId: 'm2',
+      settingError: null
+    })
+    expect(h.store.getState().sessions[A]?.config).toBe(config)
+  })
+
+  it('setModel の失敗 (ok: false / reject) で settingError が立ち、currentModelId は元のまま', async () => {
+    const setSessionModel = vi
+      .fn<ClostaCapability['setSessionModel']>()
+      .mockResolvedValueOnce({ ok: false, reason: 'rejected' })
+      .mockRejectedValueOnce(new Error('ipc'))
+    const h = harness({ setSessionModel })
+    await launched(h, A)
+    h.store.setModel(A, 'm2')
+    await vi.waitFor(() =>
+      expect(h.store.getState().sessions[A]).toMatchObject({
+        changing: null,
+        settingError: 'model'
+      })
+    )
+    h.store.setModel(A, 'm3')
+    await vi.waitFor(() => expect(h.store.getState().sessions[A]?.changing).toBeNull())
+    expect(h.store.getState().sessions[A]).toMatchObject({
+      settingError: 'model',
+      currentModelId: null
+    })
+  })
+
+  it('知らない行への setModel は capability を呼ばない', () => {
+    const setSessionModel = vi.fn(async () => ({ ok: true as const }))
+    const h = harness({ setSessionModel })
+    h.store.setModel(B, 'm2')
+    expect(setSessionModel).not.toHaveBeenCalled()
+  })
+
+  it('rename は結果までは changing で、成功で main が返した名前が name になる。config は同じ参照', async () => {
+    let resolve: (r: RenameResult) => void = () => undefined
+    const renameSession = vi.fn(() => new Promise<RenameResult>((r) => (resolve = r)))
+    const h = harness({ renameSession })
+    await launched(h, A)
+    const config = h.store.getState().sessions[A]?.config
+    const done = h.store.rename(A, ' 調査 ')
+    expect(renameSession).toHaveBeenCalledExactlyOnceWith(A, ' 調査 ')
+    expect(h.store.getState().sessions[A]).toMatchObject({ changing: 'name', name: null })
+    resolve({ ok: true, name: '調査' })
+    await expect(done).resolves.toBe(true)
+    expect(h.store.getState().sessions[A]).toMatchObject({
+      changing: null,
+      name: '調査',
+      settingError: null
+    })
+    expect(h.store.getState().sessions[A]?.config).toBe(config)
+  })
+
+  it('rename の失敗 (ok: false / reject) で settingError が立ち、name は元のまま', async () => {
+    const renameSession = vi
+      .fn<ClostaCapability['renameSession']>()
+      .mockResolvedValueOnce({ ok: false, reason: 'write-failed' })
+      .mockRejectedValueOnce(new Error('ipc'))
+    const h = harness({ renameSession })
+    await launched(h, A)
+    await expect(h.store.rename(A, 'x')).resolves.toBe(false)
+    expect(h.store.getState().sessions[A]).toMatchObject({
+      changing: null,
+      settingError: 'name',
+      name: null
+    })
+    await expect(h.store.rename(A, 'y')).resolves.toBe(false)
+    expect(h.store.getState().sessions[A]).toMatchObject({ settingError: 'name', name: null })
+  })
+
+  it('知らない行への rename は capability を呼ばず false', async () => {
+    const renameSession = vi.fn(async () => ({ ok: true as const, name: 'x' }))
+    const h = harness({ renameSession })
+    await expect(h.store.rename(B, 'x')).resolves.toBe(false)
+    expect(renameSession).not.toHaveBeenCalled()
   })
 })

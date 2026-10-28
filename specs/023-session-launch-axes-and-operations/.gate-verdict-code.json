@@ -1,0 +1,393 @@
+{
+    "gate": "code",
+    "run": "2026-10-28T15:15:45.451Z",
+    "spec_dir": "specs/023-session-launch-axes-and-operations",
+    "spec_id": "023-session-launch-axes-and-operations",
+    "iter": 2,
+    "severity_counts": {
+        "critical": 0,
+        "high": 445,
+        "medium": 5,
+        "low": 3,
+        "must_fix": 0
+    },
+    "must_fix_findings": [],
+    "touched_files": [
+        {
+            "path": ".dependency-cruiser.js",
+            "sha": "0432ca3d982696157512d1ea633a13545e97131b"
+        },
+        {
+            "path": "docs/decisions/0063-rename-spawner-test-in-process-spawn-modules.md",
+            "sha": "491b043e49ec14ace86175a5c8624d639178f211"
+        },
+        {
+            "path": "docs/domains/_overview.md",
+            "sha": "f5b36ba1c451707395008774dbcf2ac8cafa94dc"
+        },
+        {
+            "path": "docs/domains/session/charter.md",
+            "sha": "b2871601f0a96a2cdf462d3e5270935adc899952"
+        },
+        {
+            "path": "docs/glossary.md",
+            "sha": "e5a08dc5bfaf01d19ad35de83b604e376eba556e"
+        },
+        {
+            "path": "docs/roadmap.md",
+            "sha": "b52959e4169013200d76525bc6385491b7d5df54"
+        },
+        {
+            "path": "docs/ui-coverage.md",
+            "sha": "42447ae1276734a9a4975173f88bb22b8250d0a6"
+        },
+        {
+            "path": "e2e/live-session-settings.spec.ts",
+            "sha": "a262effd70052871faeca21a398c6a57646182a5"
+        },
+        {
+            "path": "scripts/constitution/allowlists.mjs",
+            "sha": "3282b177cbd016fac7dd028e3792b917c9fc3367"
+        },
+        {
+            "path": "scripts/constitution/check.mjs",
+            "sha": "eba2f0b47ea3764caf2e3223f149046827bfce92"
+        },
+        {
+            "path": "src/agents/live-signals.test.ts",
+            "sha": "328df376aeeca87df5c3b7ef3a03989f7c9dde12"
+        },
+        {
+            "path": "src/agents/live-signals.ts",
+            "sha": "2ffb6dd46f8f9f25918fcce08934cf3cc056ac3d"
+        },
+        {
+            "path": "src/agents/rename-session.test.ts",
+            "sha": "bd2717ac4b3168dc8dbbe99c8ef1296e65d841e3"
+        },
+        {
+            "path": "src/agents/rename-session.ts",
+            "sha": "a95ed3fa832396b660e7a74f0d7f8137b0f52380"
+        },
+        {
+            "path": "src/agents/sdk-agent-session.test.ts",
+            "sha": "f6a5d91ea3aacd73d7227da0577201993ddeed3e"
+        },
+        {
+            "path": "src/agents/sdk-agent-session.ts",
+            "sha": "0b693c77ff27a0f99b78668970d7673fb5503b66"
+        },
+        {
+            "path": "src/agents/session-core.test.ts",
+            "sha": "65585be22ee827541d997337f2db74c1f82936e6"
+        },
+        {
+            "path": "src/agents/session-core.ts",
+            "sha": "5740b234684ce02b62be06f4b04a61d1160f2e4c"
+        },
+        {
+            "path": "src/agents/supervisor-core.test.ts",
+            "sha": "df867e46a4101e87963840baf4a46625111c9ff2"
+        },
+        {
+            "path": "src/agents/supervisor-core.ts",
+            "sha": "40b036d5a6d5f75e487d15be821ecaf6450e21d7"
+        },
+        {
+            "path": "src/agents/supervisor-protocol.test.ts",
+            "sha": "d15043f4fba79967558a202ec8c5e2e2a9191dd7"
+        },
+        {
+            "path": "src/agents/supervisor-protocol.ts",
+            "sha": "af54a8d9b95a16bb4cb5eb61a75cee3d569a53e2"
+        },
+        {
+            "path": "src/domain/capability.test.ts",
+            "sha": "68e740e1cc0f37ab6730ad9195cb8508d7ce7bd9"
+        },
+        {
+            "path": "src/domain/capability.ts",
+            "sha": "59ab7ccbf25b043ce4fc96e341b53463dcd24d35"
+        },
+        {
+            "path": "src/domain/provider/model-catalog.test.ts",
+            "sha": "fd8ab9ee844256bcfb70eb5439c1d2db541ed2a4"
+        },
+        {
+            "path": "src/domain/provider/model-catalog.ts",
+            "sha": "3e4b4795c1f17f50f168c9397459abcc8b14a3ac"
+        },
+        {
+            "path": "src/domain/session/agent-session.ts",
+            "sha": "07d226a563a74a51a4c77c00c7536bd6c75c84db"
+        },
+        {
+            "path": "src/domain/session/live-settings.test.ts",
+            "sha": "57d3ce252ac22e93492a4a90de541520b4966c72"
+        },
+        {
+            "path": "src/domain/session/live-settings.ts",
+            "sha": "49bdec4e474d97c5127853a85dae576aa7953bd1"
+        },
+        {
+            "path": "src/main/app/composition-root.ts",
+            "sha": "91e1c807b10e05af46cd9455f33ea21acde29228"
+        },
+        {
+            "path": "src/main/app/e2e-capability.ts",
+            "sha": "f1b09b6d152b2f061622c16d65e80de4f090c3ea"
+        },
+        {
+            "path": "src/main/app/ipc.ts",
+            "sha": "c563282bae950c3e7097a564cb04fd8f449df6c0"
+        },
+        {
+            "path": "src/main/app/launch-preparation.ts",
+            "sha": "efb2c76f88dd8f4b55c8145712de6647ef42ed9d"
+        },
+        {
+            "path": "src/main/app/live-transcript-target.test.ts",
+            "sha": "068445e348a335eea96f10b8d18f5df8b3b97e65"
+        },
+        {
+            "path": "src/main/app/live-transcript-target.ts",
+            "sha": "718ce52415752d208d91cfb072cedbae18c08687"
+        },
+        {
+            "path": "src/main/app/rename-spawner.test.ts",
+            "sha": "bc299b7920b5cdf756ed3a53e895a55b9228e31f"
+        },
+        {
+            "path": "src/main/app/rename-spawner.ts",
+            "sha": "da0dfbd9c8dda6481b2c6b50c7c6f2b41d447006"
+        },
+        {
+            "path": "src/main/app/resume-service.ts",
+            "sha": "625350c1de7d409edbc62b6167522fc2d306b03b"
+        },
+        {
+            "path": "src/main/app/session-ipc.test.ts",
+            "sha": "a2fba4a4a6a784511cebf319339da9d6badea2fa"
+        },
+        {
+            "path": "src/main/app/session-ipc.ts",
+            "sha": "aacf04ec90aaf2d9fd56e03bf56958bc8e1300a5"
+        },
+        {
+            "path": "src/main/app/session-launch-service.test.ts",
+            "sha": "1f1cacf6bc49aceffc15196b3ac78ad910359d52"
+        },
+        {
+            "path": "src/main/app/session-launch-service.ts",
+            "sha": "83b37b27c4299a8ef50f4ab4e850e0acdc523f65"
+        },
+        {
+            "path": "src/main/app/session-rename-service.test.ts",
+            "sha": "20d38191e87c4fdd905d7c111f505bf8d6234861"
+        },
+        {
+            "path": "src/main/app/session-rename-service.ts",
+            "sha": "d1668108e7689e44333183027965bd7f31052c98"
+        },
+        {
+            "path": "src/main/app/session-spawner.ts",
+            "sha": "18acc233e1b292444475b6511cda86d358cb106b"
+        },
+        {
+            "path": "src/main/app/validate.test.ts",
+            "sha": "420ac76c36675d5a8971b07fe74b03c6d16e4522"
+        },
+        {
+            "path": "src/main/app/validate.ts",
+            "sha": "4b2062158581e101daf59f560b763075002c6c45"
+        },
+        {
+            "path": "src/preload/index.ts",
+            "sha": "812661ed0aa4b8a38a6c16f412dec55c5a7dd22f"
+        },
+        {
+            "path": "src/renderer/src/features/session/RunningSessionList.test.tsx",
+            "sha": "27526ede37695fb08fe44cb6d68cb3398cf4dab5"
+        },
+        {
+            "path": "src/renderer/src/features/session/labels.test.ts",
+            "sha": "c7ff9844ee41bdd836db89de60126d4144d23fdb"
+        },
+        {
+            "path": "src/renderer/src/features/session/labels.ts",
+            "sha": "88674581a9cfab6a1c4f0c27dfc1419468529789"
+        },
+        {
+            "path": "src/renderer/src/features/session/running-session-store.test.ts",
+            "sha": "6b0454ed67a04dc52395e8b0e6bcc0dfd0f92830"
+        },
+        {
+            "path": "src/renderer/src/features/session/running-session-store.ts",
+            "sha": "65779a94902dfa9806803e4d6c36968ff3029c08"
+        },
+        {
+            "path": "src/renderer/src/features/session/running-session-types.ts",
+            "sha": "79b433ae9d37a1a27270cc35699a781d6711ca98"
+        },
+        {
+            "path": "src/renderer/src/features/session/session-view.monitor.test.ts",
+            "sha": "715918acee3e49994ec663b6b311ade5155830e5"
+        },
+        {
+            "path": "src/renderer/src/features/session/useLiveSession.ts",
+            "sha": "490e837e5f29185986a915f60a4164a3992048d0"
+        },
+        {
+            "path": "src/renderer/src/features/session/useRunningThreadList.ts",
+            "sha": "a0289ce293a69da60cb6410d03bbcb28e4ca182e"
+        },
+        {
+            "path": "src/renderer/src/features/shell/CenterHeader.tsx",
+            "sha": "140fac5e0a6f364e461dfef100397d4a64511a6f"
+        },
+        {
+            "path": "src/renderer/src/features/shell/CenterPane.tsx",
+            "sha": "156a7e8568bd559506b402ad17b4536ad019b3cd"
+        },
+        {
+            "path": "src/renderer/src/features/shell/LiveSettingsControls.test.tsx",
+            "sha": "0fa89ab14e4af51774a9be4b554a83ed4bfe8df3"
+        },
+        {
+            "path": "src/renderer/src/features/shell/LiveSettingsControls.tsx",
+            "sha": "5ec012cda638dcb3ad128f3bb6b1bcbb88039280"
+        },
+        {
+            "path": "src/renderer/src/features/shell/OverviewTab.test.tsx",
+            "sha": "a022f58c6c482e64933b637430711236d8c2c4fb"
+        },
+        {
+            "path": "src/renderer/src/features/shell/OverviewTab.tsx",
+            "sha": "db1e4e1896d614a167a6014317192adf84b7cb31"
+        },
+        {
+            "path": "src/renderer/src/test-support/app-shell-harness.tsx",
+            "sha": "02e000add5729f562ac2fbbbfad053fccd0b724e"
+        },
+        {
+            "path": "src/renderer/src/test-support/capability.ts",
+            "sha": "eb82b8d518bee1b56bd353a595cf50ce32b029ed"
+        },
+        {
+            "path": "tests/docs/query-mutation-methods.test.ts",
+            "sha": "79da0462da6cabe1d9b143d1dc4270e9f3d141de"
+        },
+        {
+            "path": "tests/rule-fixtures/a-direct/sdk-forbidden-call-alias.ts.fixture",
+            "sha": "e7c1295f7c496db74f66daaa09c11b81c1d97ad6"
+        },
+        {
+            "path": "tests/rule-fixtures/a-direct/sdk-forbidden-call.ts.fixture",
+            "sha": "4bcaa0da6ca59956d2736bceab06198de094f821"
+        },
+        {
+            "path": "tests/rule-fixtures/a-direct/sdk-reexport.ts.fixture",
+            "sha": "12095aaa8533ab66cfaf0cf628fb027fd9a6f748"
+        },
+        {
+            "path": "tests/rule-fixtures/a-direct/sdk-rename-session-outside.ts.fixture",
+            "sha": "a016fe222c7fd1ddea95fb0437f6b05fb4d12337"
+        },
+        {
+            "path": "tests/rule-fixtures/b-equivalent/agents-builtin-via-get-builtin-module.ts.fixture",
+            "sha": "a677c302eb3ad064d66de0a609fb411143de9b4b"
+        },
+        {
+            "path": "tests/rule-fixtures/b-equivalent/sdk-nonliteral-specifier.ts.fixture",
+            "sha": "35f934f9ef559b4ce51ce1a54d9e89a066d1080e"
+        },
+        {
+            "path": "tests/rule-fixtures/b-equivalent/sdk-query-mutation-method.ts.fixture",
+            "sha": "fdad8a4c2890d1d965dda5488d7bfb21f6667e98"
+        },
+        {
+            "path": "tests/rule-fixtures/b-equivalent/sdk-set-permission-mode-unwrapped.ts.fixture",
+            "sha": "296f663861649df0f37688cc9d9e26f3c86a5edd"
+        },
+        {
+            "path": "tests/rule-fixtures/b-equivalent/sdk-set-permission-mode-wrapper-escape.ts.fixture",
+            "sha": "006bd764bdc3da511d3fc1a3170ac096f40494f9"
+        },
+        {
+            "path": "tests/rule-fixtures/expected.mjs",
+            "sha": "8342a5a305b825325c1917b4375426c50eb84c74"
+        }
+    ],
+    "fr_coverage": [],
+    "viewpoint_coverage": {
+        "A": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+        "B": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+        "C": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+        "D": "Medium:1 (platform-boundary)",
+        "E": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
+        "F": "Medium:3 Low:3 (convention 2/3, platform-boundary 1/0)",
+        "G": "\u8a72\u5f53\u306a\u3057: optional reviewer \u306a\u3057",
+        "H": "Medium:1 (platform-boundary)"
+    },
+    "tracks": {
+        "lint-agent": {
+            "violations": 445,
+            "exit_code": 0,
+            "detectors": [
+                "lint",
+                "typecheck",
+                "depcruise",
+                "check:constitution"
+            ]
+        },
+        "test-agent": {
+            "passed": 4162,
+            "failed": 0,
+            "exit_code": 0,
+            "scope": "full"
+        },
+        "convention-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "lint_input": "lint-agent"
+        },
+        "platform-boundary-reviewer": {
+            "critical": 0,
+            "high": 0,
+            "medium": 3,
+            "low": 0
+        }
+    },
+    "skipped_reviewers": [
+        {
+            "name": "a11y-reviewer",
+            "reason": "gates=['pr-gate'] \u306b code-gate \u304c\u7121\u3044"
+        },
+        {
+            "name": "ux-reviewer",
+            "reason": "gates=['pr-gate'] \u306b code-gate \u304c\u7121\u3044"
+        },
+        {
+            "name": "database-reviewer",
+            "reason": "auto_invoke_patterns \u306b\u4e00\u81f4\u3059\u308b\u5909\u66f4\u30d5\u30a1\u30a4\u30eb\u304c\u7121\u3044 (\u5909\u66f4 76 \u4ef6 / pattern 5 \u4ef6)"
+        }
+    ],
+    "cascade_demotions": 0,
+    "iter_history": [
+        {
+            "iter": 1,
+            "must_fix": 0,
+            "skipped": 0,
+            "error": 0
+        },
+        {
+            "iter": 2,
+            "must_fix": 0,
+            "skipped": 0,
+            "error": 0
+        }
+    ],
+    "base_commit": "1a7d8b45d76346cf4ce1fd65f74234997fb8f475",
+    "entry_status": "reviewing",
+    "verdict": "PASS"
+}

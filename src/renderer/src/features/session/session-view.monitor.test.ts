@@ -228,6 +228,10 @@ function session(id: string, over: Partial<LiveSessionState> = {}): LiveSessionS
     launchOrigin: 'manual',
     resumable: false,
     resumed: null,
+    currentModelId: null,
+    name: null,
+    changing: null,
+    settingError: null,
     ...over
   }
 }

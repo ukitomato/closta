@@ -83,3 +83,24 @@ export function isValidModelCatalog(value: unknown): value is ModelCatalogRef {
   // 同一 id の重複は選択を曖昧にする。
   return new Set(m.models.map((e: ModelEntry) => e.id)).size === m.models.length
 }
+
+/**
+ * 実行中のセッションで切り替えられるモデル (023 / data-model §2)。
+ *
+ * - `effort === null` ならカタログの全部 (並びはカタログの順)
+ * - `effort !== null` なら `supportedEffortLevels` にその effort を含むものだけ (対応 effort が無いモデルは除く)
+ *
+ * renderer の選択肢と main の検証の両方がこの関数を使う。
+ */
+export function switchableModels(
+  models: readonly ModelEntry[],
+  effort: EffortLevel | null
+): readonly ModelEntry[] {
+  if (effort === null) return models
+  return models.filter((m) => (m.supportedEffortLevels ?? []).includes(effort))
+}
+
+/** Bedrock は inference profile ID で pin する (X-3 FR-010)。無ければモデル ID。起動と実行中の切り替えの両方が使う。 */
+export function sdkModelOf(entry: ModelEntry): string {
+  return entry.inferenceProfileId ?? entry.id
+}

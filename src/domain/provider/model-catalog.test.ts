@@ -5,7 +5,8 @@ import {
   isValidModelCatalog,
   isValidModelEntry,
   isValidModelId,
-  MAX_CATALOG_MODELS
+  MAX_CATALOG_MODELS,
+  switchableModels
 } from './model-catalog'
 
 describe('isValidModelId (文字種 allowlist。FR-017)', () => {
@@ -78,5 +79,27 @@ describe('isValidModelEntry / isValidModelCatalog', () => {
     expect(isValidModelCatalog({ models: [], note: 'x' })).toBe(false)
     expect(isValidModelCatalog({ models: [{ id: 'm', displayName: 'M' }], extra: 1 })).toBe(false)
     expect(isValidModelCatalog([])).toBe(false)
+  })
+})
+
+describe('switchableModels (実行中のモデルの切り替え。023 / data-model §2)', () => {
+  const models = [
+    { id: 'a', displayName: 'A', supportedEffortLevels: ['low', 'high'] },
+    { id: 'b', displayName: 'B' },
+    { id: 'c', displayName: 'C', supportedEffortLevels: ['high'] }
+  ] as const
+
+  it('effort が null ならカタログの全部を、カタログの順で返す', () => {
+    expect(switchableModels(models, null).map((m) => m.id)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('effort があれば supportedEffortLevels に含むものだけ (無いモデルは除く)', () => {
+    expect(switchableModels(models, 'high').map((m) => m.id)).toEqual(['a', 'c'])
+    expect(switchableModels(models, 'low').map((m) => m.id)).toEqual(['a'])
+  })
+
+  it('空のカタログで空', () => {
+    expect(switchableModels([], null)).toEqual([])
+    expect(switchableModels([], 'high')).toEqual([])
   })
 })

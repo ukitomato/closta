@@ -1,0 +1,13 @@
+/**
+ * 等価経路サンプル (pr-gate R1 H-005)。
+ *
+ * **SDK の specifier を非リテラルで組んで動的 import する形。** パッケージ名の綴りがソースに現れないので、
+ * 項目 14 (綴りで SDK を使うファイルを選ぶ grep) では捕まらない。**この経路はどの機械検証も捕まえない** — `detectors: ['none']`。
+ * 理由と代替は expected.mjs の UNDETECTED_NOTES['sdk-nonliteral-specifier'] に記録する (SC-017)。
+ */
+const PACKAGE = '@anthropic-ai/' + 'claude-agent-sdk'
+
+export async function bypass(sessionId: string): Promise<unknown> {
+  const sdk = (await import(PACKAGE)) as Record<string, (...args: unknown[]) => Promise<unknown>>
+  return sdk['tagSession']?.(sessionId, 'tag')
+}

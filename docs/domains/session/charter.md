@@ -24,6 +24,8 @@ related_adrs:
   - docs/decisions/0059-session-resume-query-option-and-conversation-id.md
   - docs/decisions/0060-content-block-verification-and-unsupported-block-mark.md
   - docs/decisions/0061-o12-contract-extensions-categories-parts-and-agents-branches.md
+  - docs/decisions/0062-live-session-permission-mode-model-and-rename.md
+  - docs/decisions/0063-rename-spawner-test-in-process-spawn-modules.md
 related_specs:
   - specs/002-session-cross-folder-session-enumeration/spec.md
   - specs/005-session-launch-and-streaming/spec.md
@@ -40,6 +42,7 @@ related_specs:
   - specs/019-ui-hooks-tasks-subagents-and-notices/spec.md
   - specs/020-session-win32-direct-launch/spec.md
   - specs/021-session-resume/spec.md
+  - specs/023-session-launch-axes-and-operations/spec.md
 ---
 
 # Domain Charter: session
@@ -235,7 +238,7 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
   使い、起動の可否・`SessionLaunchConfig`・権限モードに影響させない。main (`session-ipc.ts` の `handleLaunchSession`) は厳密比較で
   検証し、欠けている・未知の値でも起動は通常どおり扱って記録だけを行わない
 - 依存される domain: `ui`, `isolation`
-- 共有 invariant: Principle III / IV / V / VII / IX / X / XII (X-6 は `docs/ui-coverage.md` の `後続: X-6` の行を完了の PR で書き換える。SDK の版を上げる PR は対応表を同じ PR で直す)。詳細は [docs/domains/_overview.md](../_overview.md)
+- 共有 invariant: Principle III / IV / V / VII / IX / X / XII (X-6 は `docs/ui-coverage.md` の `後続: X-6` の行を完了の PR で書き換える (023 で書き換えた)。SDK の版を上げる PR は対応表を同じ PR で直す)。詳細は [docs/domains/_overview.md](../_overview.md)
   (VII = supervisor は Electron 非依存で単独起動できる。R-2 で `agents` を持つ feature が実装され実体を持った)
 
 ## Related ADRs
@@ -257,6 +260,8 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
 - [AD-057](../../decisions/0057-elicitation-sdk-side-cancel-known-limit.md) — SDK の側で中断された Elicitation のカードが残る既知の限界 (AD-053 Decision 3 の読み替え。O-10 U-10)
 - [AD-059](../../decisions/0059-session-resume-query-option-and-conversation-id.md) — 起動の options の `resume` と会話の id の保持・失敗の理由 `resume-failed` (X-9)
 - [AD-060](../../decisions/0060-content-block-verification-and-unsupported-block-mark.md) — 対応表の B 節 (中身のブロック) の機械照合と知らないブロックの印 (O-12。ui の feature が本 domain の契約を広げた)
+- [AD-062](../../decisions/0062-live-session-permission-mode-model-and-rename.md) — 実行中のセッションの権限モード・モデル・名前の変更 (X-6 の最初の分割 023)
+- [AD-063](../../decisions/0063-rename-spawner-test-in-process-spawn-modules.md) — 改名の子の起動の単体テストを `PROCESS_SPAWN_MODULES` に足す (023 code-gate H-001)
 
 ## Related Specs
 
@@ -344,7 +349,9 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
   表示の部品は `ui` が持つ。完了
 - **O-8** — 並列時の滑らかさの実機計測 ([roadmap の O-8 の行](../../roadmap.md#o3-kpi-smoothness))。未着手
 
-X-6 は未着手。
+- **X-6 (最初の分割)** — [実行中のセッションの操作](../../../specs/023-session-launch-axes-and-operations/spec.md)
+  ([AD-062](../../decisions/0062-live-session-permission-mode-model-and-rename.md))。権限モード (安全 3 値の中)・モデル・名前を
+  実行中に変えられる (`SessionControl` 6 → 8 種類・IPC 3 つ・改名は短命の `utilityProcess`)。残りは [roadmap の X-6 の行](../../roadmap.md)
 
 - **X-8** — Win32Runtime の直接起動 ([roadmap の X-8 の行](../../roadmap.md))。X-6 から切り出して前に出した
   (2026-10-19 に利用者が承認。Closta で Closta を開発できるのは O-11 と X-8 / X-9 の後)。AD-041 (h) が X-6 に指名した
