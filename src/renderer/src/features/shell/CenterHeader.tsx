@@ -147,7 +147,7 @@ function CenterHeaderRow({
 }): React.JSX.Element {
   return (
     <div
-      className="border-border flex shrink-0 items-center gap-3 border-b px-4 py-2"
+      className="border-border flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b px-4 py-2"
       data-testid="center-header"
     >
       {/*

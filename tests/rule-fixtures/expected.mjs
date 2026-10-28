@@ -481,6 +481,21 @@ export const FIXTURES = [
     rules: ['#14']
   },
   {
+    file: 'a-direct/sdk-reexport.ts.fixture',
+    target: 'src/agents/__rulecheck__/sdk-reexport.ts',
+    group: 'a',
+    what: '許可外の Agent SDK API (`tagSession`) を `export { … } from` で再 export する (pr-gate R1 H-005)',
+    detectors: ['constitution'],
+    rules: ['#14']
+  },
+  {
+    file: 'b-equivalent/sdk-nonliteral-specifier.ts.fixture',
+    target: 'src/agents/__rulecheck__/sdk-nonliteral-specifier.ts',
+    group: 'b',
+    what: 'SDK のパッケージ名を非リテラルで組んで動的 import し、許可外の API を呼ぶ (綴りが現れない。項目 14 の grep では捕まらない)',
+    detectors: ['none']
+  },
+  {
     file: 'a-direct/sdk-rename-session-outside.ts.fixture',
     target: 'src/agents/__rulecheck__/sdk-rename-session-outside.ts',
     group: 'a',
@@ -812,6 +827,19 @@ export const UNDETECTED_NOTES = {
       'X-4 ではこれを足していない — service 層のスキャン (`provider-service` の register / update と `provider-record` の read 側が ' +
       '`scanExtraEnvForSecrets` を呼び、`secret-in-extraenv` を理由キーで UI に返す) が X-3 (H-09) から既に在るため。' +
       'ソース側の固定プレフィクス grep はそのままでも十分 (直書き事故の一点しか担っていない)。**'
+  },
+  'sdk-nonliteral-specifier': {
+    why:
+      '項目 14 (check.mjs) は `@anthropic-ai/claude-agent-sdk` の**綴りがソースに現れるファイル**だけを走査する。' +
+      'パッケージ名を連結・変数で組んで `import(PACKAGE)` する形は綴りが現れず、走査の対象にならない (pr-gate R1 H-005)。',
+    mitigatedBy:
+      '`agents` の他のコードで SDK を使う入口は `read-transcript.ts` / `rename-session.ts` などの許可ファイルに集め、' +
+      'レビュー (architecture-reviewer / platform-boundary-reviewer) が新規の動的 import を見る。' +
+      '静的な再 export (`export … from`) と静的・動的リテラルの import は項目 14 が塞いでいる。',
+    nextFeature: 'X-6',
+    howToClose:
+      '動的 import の specifier が非リテラルのとき (`import(` の引数が文字列リテラルでない) を `src/` で一律に違反とする検査を ' +
+      '項目 14 の隣に足す。SDK の呼び出しを増やす X-6 の後続の分割で再訪する。'
   },
   'reuse-verified-other-distro': {
     why:

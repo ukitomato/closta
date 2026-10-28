@@ -50,6 +50,60 @@ export interface LiveModelSelect {
 
 const DEFAULT_MODEL_VALUE = ''
 
+/** 押せない select の見た目 (pr-gate R1 H-001。`aria-disabled` だけでは見た目が変わらない)。 */
+const DISABLED_SELECT_CLASS = 'aria-disabled:cursor-not-allowed aria-disabled:opacity-50'
+
+/**
+ * 閉じた native `<select>` の矢印キーは通過した値ごとに `onChange` が走る。実セッションの設定を通過した値ごとに
+ * 変えないため、キー操作の変更は保留し、Enter か blur で 1 回だけ確定する (pr-gate R1 H-003 / WCAG 3.2.2)。
+ * マウスの選択 (キー操作を伴わない変更) はその場で確定する。
+ */
+function useConfirmedSelect(
+  current: string,
+  commit: (value: string) => void
+): {
+  readonly value: string
+  readonly onChange: (value: string) => void
+  readonly onKeyDown: (event: React.KeyboardEvent) => void
+  readonly onKeyUp: (event: React.KeyboardEvent) => void
+  readonly onBlur: () => void
+} {
+  const [pending, setPending] = useState<string | null>(null)
+  const byKeyboard = useRef(false)
+  const flush = (): void => {
+    byKeyboard.current = false
+    if (pending !== null && pending !== current) commit(pending)
+    setPending(null)
+  }
+  return {
+    value: pending ?? current,
+    onChange: (value) => {
+      if (byKeyboard.current) {
+        setPending(value)
+        return
+      }
+      setPending(null)
+      commit(value)
+    },
+    onKeyDown: (event) => {
+      if (event.key === 'Enter') flush()
+      else if (
+        !event.ctrlKey &&
+        !event.metaKey &&
+        (event.key.startsWith('Arrow') ||
+          ['Home', 'End', 'PageUp', 'PageDown'].includes(event.key) ||
+          event.key.length === 1)
+      )
+        byKeyboard.current = true
+    },
+    onKeyUp: (event) => {
+      // 開いた選択肢の一覧で Enter を押すと、change は keydown の後に届く。
+      if (event.key === 'Enter') flush()
+    },
+    onBlur: flush
+  }
+}
+
 function ModelSelect({
   row,
   model
@@ -67,21 +121,26 @@ function ModelSelect({
         ? LIVE_SETTING_LABELS.noModelList
         : null
   const known = model.value !== null && model.options.some((o) => o.id === model.value)
+  const confirmed = useConfirmedSelect(model.value ?? DEFAULT_MODEL_VALUE, (id) => {
+    if (model.options.some((o) => o.id === id)) model.onSelect(id)
+  })
   return (
     <label className="flex shrink-0 items-center gap-1 text-xs">
       <span className="text-muted-foreground">{LIVE_SETTING_LABELS.model}</span>
       <select
-        value={model.value ?? DEFAULT_MODEL_VALUE}
+        value={confirmed.value}
         aria-label={LIVE_SETTING_LABELS.model}
         aria-disabled={reason !== null || undefined}
         aria-describedby={reason !== null ? reasonId : undefined}
         title={reason ?? undefined}
         onChange={(e) => {
           if (reason !== null) return
-          const id = e.target.value
-          if (model.options.some((o) => o.id === id)) model.onSelect(id)
+          confirmed.onChange(e.target.value)
         }}
-        className="border-border bg-background max-w-48 rounded-md border px-1.5 py-0.5 text-xs"
+        onKeyDown={confirmed.onKeyDown}
+        onKeyUp={confirmed.onKeyUp}
+        onBlur={confirmed.onBlur}
+        className={`border-border bg-background max-w-48 rounded-md border px-1.5 py-0.5 text-xs ${DISABLED_SELECT_CLASS}`}
         data-testid="live-model"
       >
         {model.value === null && (
@@ -101,7 +160,7 @@ function ModelSelect({
         ))}
       </select>
       {reason !== null && (
-        <span id={reasonId} className="sr-only">
+        <span id={reasonId} className="text-muted-foreground text-xs">
           {reason}
         </span>
       )}
@@ -145,21 +204,27 @@ function PermissionModeSelect({
   readonly reasonId: string
   readonly onSelectPermissionMode: (mode: SafePermissionMode) => void
 }): React.JSX.Element {
+  const confirmed = useConfirmedSelect(permissionMode, (value) => {
+    const mode: unknown = value
+    if (isSafePermissionMode(mode)) onSelectPermissionMode(mode)
+  })
   return (
     <label className="flex shrink-0 items-center gap-1 text-xs">
       <span className="text-muted-foreground">{LIVE_SETTING_LABELS.permissionMode}</span>
       <select
-        value={permissionMode}
+        value={confirmed.value}
         aria-label={LIVE_SETTING_LABELS.permissionMode}
         aria-disabled={blocker !== null || undefined}
         aria-describedby={blocker !== null ? reasonId : undefined}
         title={blocker !== null ? LIVE_SETTING_LABELS.blocker[blocker] : undefined}
         onChange={(e) => {
           if (blocker !== null) return
-          const mode: unknown = e.target.value
-          if (isSafePermissionMode(mode)) onSelectPermissionMode(mode)
+          confirmed.onChange(e.target.value)
         }}
-        className="border-border bg-background rounded-md border px-1.5 py-0.5 text-xs"
+        onKeyDown={confirmed.onKeyDown}
+        onKeyUp={confirmed.onKeyUp}
+        onBlur={confirmed.onBlur}
+        className={`border-border bg-background rounded-md border px-1.5 py-0.5 text-xs ${DISABLED_SELECT_CLASS}`}
         data-testid="live-permission-mode"
       >
         {unsafe && (
@@ -174,7 +239,7 @@ function PermissionModeSelect({
         ))}
       </select>
       {blocker !== null && (
-        <span id={reasonId} className="sr-only">
+        <span id={reasonId} className="text-muted-foreground text-xs">
           {LIVE_SETTING_LABELS.blocker[blocker]}
         </span>
       )}
@@ -220,6 +285,7 @@ export function EditableSessionTitle({
   const ruleId = useId()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
+  const [touched, setTouched] = useState(false)
   const renameButton = useRef<HTMLButtonElement>(null)
   const wasEditing = useRef(false)
 
@@ -227,6 +293,8 @@ export function EditableSessionTitle({
   const normalized = normalizeSessionName(draft)
   const invalid = normalized === null
   const canSave = !invalid && blocker === null
+  // 入力を 1 度でも変えたら、空でも規則の文言を出す (US-3 AC4 / pr-gate R1 H-004)。
+  const showRule = invalid && touched
 
   useEffect(() => {
     // 編集を閉じたら開いたボタンへフォーカスを戻す。
@@ -237,6 +305,7 @@ export function EditableSessionTitle({
   const open = (): void => {
     if (blocker !== null) return
     setDraft(name ?? '')
+    setTouched(false)
     setEditing(true)
   }
   const save = (): void => {
@@ -263,13 +332,13 @@ export function EditableSessionTitle({
           aria-disabled={blocker !== null || undefined}
           aria-describedby={blocker !== null ? reasonId : undefined}
           title={blocker !== null ? LIVE_SETTING_LABELS.blocker[blocker] : undefined}
-          className="text-muted-foreground hover:text-foreground shrink-0 text-xs underline-offset-2 hover:underline"
+          className="text-muted-foreground hover:text-foreground aria-disabled:hover:text-muted-foreground shrink-0 text-xs underline-offset-2 hover:underline aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:no-underline"
           data-testid="live-rename"
         >
           {LIVE_SETTING_LABELS.rename}
         </button>
         {blocker !== null && (
-          <span id={reasonId} className="sr-only">
+          <span id={reasonId} className="text-muted-foreground text-xs">
             {LIVE_SETTING_LABELS.blocker[blocker]}
           </span>
         )}
@@ -289,11 +358,16 @@ export function EditableSessionTitle({
         value={draft}
         autoFocus
         aria-label={LIVE_SETTING_LABELS.nameField}
-        aria-invalid={invalid && draft !== '' ? true : undefined}
-        aria-describedby={[invalid && draft !== '' ? ruleId : null, blocker !== null ? reasonId : null]
-          .filter((id): id is string => id !== null)
-          .join(' ') || undefined}
-        onChange={(e) => setDraft(e.target.value)}
+        aria-invalid={showRule ? true : undefined}
+        aria-describedby={
+          [showRule ? ruleId : null, blocker !== null ? reasonId : null]
+            .filter((id): id is string => id !== null)
+            .join(' ') || undefined
+        }
+        onChange={(e) => {
+          setTouched(true)
+          setDraft(e.target.value)
+        }}
         onKeyDown={(e) => {
           // 変換中の Enter / Escape は確定・取り消しに任せる (`preventDefault` もしない)。
           if (isComposingKey(e)) return
@@ -325,7 +399,7 @@ export function EditableSessionTitle({
       >
         {LIVE_SETTING_LABELS.cancel}
       </button>
-      {invalid && draft !== '' && (
+      {showRule && (
         <span id={ruleId} className="text-destructive shrink-0 text-xs">
           {LIVE_SETTING_LABELS.nameRule}
         </span>

@@ -66,8 +66,10 @@ src/renderer/src/test-support/capability.ts
 tests/docs/query-mutation-methods.test.ts
 tests/rule-fixtures/a-direct/sdk-forbidden-call.ts.fixture
 tests/rule-fixtures/a-direct/sdk-forbidden-call-alias.ts.fixture
+tests/rule-fixtures/a-direct/sdk-reexport.ts.fixture
 tests/rule-fixtures/a-direct/sdk-rename-session-outside.ts.fixture
 tests/rule-fixtures/b-equivalent/agents-builtin-via-get-builtin-module.ts.fixture
+tests/rule-fixtures/b-equivalent/sdk-nonliteral-specifier.ts.fixture
 tests/rule-fixtures/b-equivalent/sdk-query-mutation-method.ts.fixture
 tests/rule-fixtures/b-equivalent/sdk-set-permission-mode-unwrapped.ts.fixture
 tests/rule-fixtures/b-equivalent/sdk-set-permission-mode-wrapper-escape.ts.fixture

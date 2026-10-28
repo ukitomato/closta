@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { axe } from 'vitest-axe'
@@ -90,6 +90,40 @@ describe('LiveSettingsControls (権限モード)', () => {
     renderControls({ row: { state, ...extra } })
     expect(select()).toHaveAttribute('aria-disabled', 'true')
     expect(select()).toHaveAccessibleDescription(LIVE_SETTING_LABELS.blocker[blocker])
+  })
+
+  it('押せない状態は見た目が変わり (aria-disabled の class)、理由が見える文字で出る (pr-gate R1 H-001)', () => {
+    renderControls({ row: { changing: true } })
+    expect(select().className).toContain('aria-disabled:opacity-50')
+    expect(select().className).toContain('aria-disabled:cursor-not-allowed')
+    const reason = screen.getByText(LIVE_SETTING_LABELS.blocker.busy)
+    expect(reason.className).not.toContain('sr-only')
+  })
+
+  // jsdom は矢印キーで select を変えない。ブラウザの「keydown → change」の順を再現する。
+  function arrow(value: string): void {
+    fireEvent.keyDown(select(), { key: 'ArrowDown' })
+    fireEvent.change(select(), { target: { value } })
+  }
+
+  it('矢印キーで通過した値は確定せず、blur で最後の値を 1 回だけ確定する (pr-gate R1 H-003)', () => {
+    const { onSelect } = renderControls()
+    select().focus()
+    arrow('plan')
+    arrow('dontAsk')
+    expect(onSelect).not.toHaveBeenCalled()
+    expect(select().value).toBe('dontAsk')
+    fireEvent.blur(select())
+    expect(onSelect).toHaveBeenCalledExactlyOnceWith('dontAsk')
+  })
+
+  it('矢印キーの後の Enter で確定する', () => {
+    const { onSelect } = renderControls()
+    select().focus()
+    arrow('plan')
+    expect(onSelect).not.toHaveBeenCalled()
+    fireEvent.keyDown(select(), { key: 'Enter' })
+    expect(onSelect).toHaveBeenCalledExactlyOnceWith('plan')
   })
 
   it.each(['running', 'awaiting_permission', 'interrupted', 'done'] as const)(
@@ -250,6 +284,18 @@ describe('CenterHeader の権限モード (meters・失敗の 1 行)', () => {
         expect(save()).toBeDisabled()
         expect(screen.getByText(LIVE_SETTING_LABELS.nameRule)).toBeInTheDocument()
       }
+    })
+
+    it('入力を空に戻すと保存は押せず、規則の文言が出る (US-3 AC4)。開いた直後は出さない', async () => {
+      renderHeader(live())
+      await userEvent.click(renameButton())
+      expect(screen.queryByText(LIVE_SETTING_LABELS.nameRule)).toBeNull()
+      await userEvent.type(input(), 'a')
+      await userEvent.clear(input())
+      expect(input()).toHaveValue('')
+      expect(save()).toBeDisabled()
+      expect(screen.getByText(LIVE_SETTING_LABELS.nameRule)).toBeInTheDocument()
+      expect(input()).toHaveAttribute('aria-invalid', 'true')
     })
 
     it.each([

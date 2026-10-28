@@ -714,6 +714,17 @@ function hasPackagedGate() {
       found.push(`${src.file}  SDK を動的 import / require している (許可しない。AD-062)`)
     }
 
+    // 再 export (`export { tagSession } from '<sdk>'` / `export * from '<sdk>'`)。名前付き import の検査を迂回し、
+    // 呼び出しが別のファイルに移る (pr-gate R1 H-005)。型だけの再 export (`export type …`) は許す。
+    const reExport = new RegExp(
+      String.raw`export\s+(?!type\b)(?:\*(?:\s+as\s+\w+)?|\{[^}]*\})\s*from\s*['"]` +
+        AGENT_SDK_PACKAGE +
+        String.raw`['"]`
+    )
+    if (reExport.test(src.code)) {
+      found.push(`${src.file}  SDK を再 export している (値の再 export は許可しない。pr-gate R1 H-005)`)
+    }
+
     for (const { imported, local, isType } of bindings) {
       // **型としての利用は許す。** 値の import は許可の名前だけ (AD-062 Decision 5。再束縛・別名での呼び出しを
       // import の時点で止める)。許可の名前でも、呼べるファイルの表に載るものは列のファイル以外で値として import できない。
