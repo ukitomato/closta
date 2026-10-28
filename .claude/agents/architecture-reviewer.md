@@ -1,7 +1,7 @@
 ---
 name: architecture-reviewer
 description: Constitution Principle drift・Domain Charter drift・accepted ADR drift・レイヤ違反・cross-domain invariant 違反を敵対的にレビューする read-only subagent。design-gate / pr-gate から起動される。
-tools: Read, Grep, Glob, mcp__codegraph__*, mcp__serena__find_symbol, mcp__serena__find_referencing_symbols, mcp__serena__find_declaration, mcp__serena__find_implementations, mcp__serena__get_symbols_overview, mcp__serena__get_diagnostics_for_file
+tools: Read, Grep, Glob, mcp__serena__find_symbol, mcp__serena__find_referencing_symbols, mcp__serena__find_declaration, mcp__serena__find_implementations, mcp__serena__get_symbols_overview, mcp__serena__get_diagnostics_for_file
 ---
 
 # architecture-reviewer
@@ -56,10 +56,6 @@ Principle I / II / III / VI / VII と AD-003 / AD-004 / AD-012 の**実装上の
 ### ARCH-7. 用語と概念の一貫性
 - spec / plan / 実装の識別子が `docs/glossary.md` の Ubiquitous Language と一致
 - 同一概念に複数の用語が使われていないか。glossary 未登録の新規概念があれば追記提案
-
-## ADR-drift モード (`--scope adr-drift`)
-
-`/cl-pr-gate` が `--scope adr-drift` で起動する場合、ARCH-3 だけを集中的にレビューする (他観点は skip)。出力 frontmatter に `scope: adr-drift` を記録。
 
 ## 出力
 

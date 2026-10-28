@@ -1,18 +1,18 @@
 ---
 name: cl-spec
-description: feature spec.md を起案する。spec_id の採番・domain 確定・frontmatter 注入を行い、`/speckit.specify` と `/speckit.clarify` を内部委譲する。
+description: feature spec.md を起案する。spec_id の採番・domain 確定・frontmatter 注入を行い、`/speckit-specify` と `/speckit-clarify` を内部委譲する。
 argument-hint: <description>
 allowed-tools: Read Write Edit Bash Glob Grep AskUserQuestion
 ---
 
 # cl-spec
 
-feature spec.md を起案する。`/speckit.specify` (spec 起草) と `/speckit.clarify` (曖昧さの対話的解消) を内部委譲しつつ、本 wrapper は以下を担当する:
+feature spec.md を起案する。`/speckit-specify` (spec 起草) と `/speckit-clarify` (曖昧さの対話的解消) を内部委譲しつつ、本 wrapper は以下を担当する:
 
 - **`spec_id` 採番** — リポジトリ設定に応じて連番 `NNN-<domain>-<slug>` (`--spec-id-format seq`) または時刻ベース `YYYY-MM-DD-HHMM-<DOMSHORT>-<slug>` (`--spec-id-format ts`)
 - **`domain` 確定** — description プレフィックス or 既存 Domain Charter 一覧から AskUserQuestion で選択
 - **frontmatter 注入** — `spec_id`, `domain`, `status: drafting`, `targets`, `bf_ids: []`, `sf_ids: []`
-- **`/speckit.clarify` auto chain** — `[NEEDS CLARIFICATION]` を LLM が assumption で埋めることは禁止
+- **`/speckit-clarify` auto chain** — `[NEEDS CLARIFICATION]` を LLM が assumption で埋めることは禁止
 
 ## When to invoke
 
@@ -71,11 +71,11 @@ description と `docs/roadmap.md` を照らし、次のどれかに当たった�
 
 spec は「単体で確かめられる機能」で切る。
 
-**範囲と義務は roadmap の行から読む。** description の `<ID>` (例: `O-10`) で `docs/roadmap.md` の行を引き、範囲・義務・依存・前提 SPIKE を `/speckit.specify` への入力に足す。spec の「義務の扱い」の節には、各義務を「この spec で扱う / 扱わない (理由)」で 1 行ずつ書く。プロンプトに義務が書かれていても、正本は roadmap の行である (食い違えば roadmap に合わせ、食い違いを利用者に報告する)。
+**範囲と義務は roadmap の行から読む。** description の `<ID>` (例: `O-10`) で `docs/roadmap.md` の行を引き、範囲・義務・依存・前提 SPIKE を `/speckit-specify` への入力に足す。spec の「義務の扱い」の節には、各義務を「この spec で扱う / 扱わない (理由)」で 1 行ずつ書く。プロンプトに義務が書かれていても、正本は roadmap の行である (食い違えば roadmap に合わせ、食い違いを利用者に報告する)。
 
 ### Phase 2: External ticket fetch (`--linear` 指定時のみ)
 
-1. `mcp__linear-server__get_issue identifier=<PRJID>-NNN` (MCP 利用可能時)
+1. Linear の MCP (`linear`) の issue 取得 tool で `<PRJID>-NNN` を引く (MCP 利用可能時)
 2. 失敗時: `gh issue view` / `glab issue show` 等の CLI (リポジトリの remote 種別から判定)
 3. 失敗時: ユーザに Issue 本文をコピー貼り付けを依頼
 4. fetch した title / description / labels を以降の Phase で使用
@@ -122,9 +122,9 @@ rc=$?
 
 **採番は `specs/<SPEC_ID>/` を作成して番号を予約する。** 以降の Phase が失敗しても空ディレクトリが残るので、中断したときは手で消すこと (残っていると次の採番がその番号を使用済みとして飛ばす)。
 
-### Phase 6: `/speckit.specify` delegation
+### Phase 6: `/speckit-specify` delegation
 
-1. `/speckit.specify` を bash 経由で起動し、description を input として渡す
+1. `/speckit-specify` を bash 経由で起動し、description を input として渡す
 2. SpecKit が `specs/<SPEC_ID>/spec.md` を自動生成する (ディレクトリは Phase 5 で予約済み)
 3. 生成完了を待機
 
@@ -146,11 +146,11 @@ linear: <"<PRJID>-NNN" or null>
 ---
 ```
 
-注入後 `head -20 spec.md` で確認 (frontmatter が壊れていないか)。
+注入後、spec.md の先頭 20 行を Read ツール (`limit: 20`) で確かめる (frontmatter が壊れていないか)。
 
-### Phase 8: `/speckit.clarify` auto chain
+### Phase 8: `/speckit-clarify` auto chain
 
-`/speckit.clarify specs/<SPEC_ID>/` を起動し、各 `[NEEDS CLARIFICATION]` 項目を以下の基準で処理する:
+`/speckit-clarify specs/<SPEC_ID>/` を起動し、各 `[NEEDS CLARIFICATION]` 項目を以下の基準で処理する:
 
 **AskUserQuestion を使う条件 (どちらかを満たす場合)**:
 - アーキテクチャ選択・ドメイン境界・コア価値提案に直接影響する
@@ -216,14 +216,14 @@ Constitution / ADR の改定を主目的とする feature はこの限りでな�
 - domain charter が存在しない → "`docs/domains/<name>/charter.md` を作成してから再実行" を案内
 - SPEC_ID atomic 採番の lock 取得 timeout (gate_common::spec_id_allocate_* が exit 75) → 自動リトライ 3 回 → 3 回失敗で AskUserQuestion
 - SPEC_ID 衝突 (ts モード、60 分超 +N 失敗) → AskUserQuestion で手動 slot 指定
-- `/speckit.specify` の delegation 失敗 → エラーメッセージを表示、frontmatter 注入は skip して halt
-- `/speckit.clarify` でユーザが完全 skip → `status: drafting` のままで完了 (`[NEEDS CLARIFICATION]` が残ることをユーザに警告)
+- `/speckit-specify` の delegation 失敗 → エラーメッセージを表示、frontmatter 注入は skip して halt
+- `/speckit-clarify` でユーザが完全 skip → `status: drafting` のままで完了 (`[NEEDS CLARIFICATION]` が残ることをユーザに警告)
 
 ## Acceptance criteria (LLM が自己検証する項目)
 
 1. `specs/<SPEC_ID>/spec.md` が存在
 2. spec.md の frontmatter に `spec_id`, `domain`, `targets`, `status: drafting`, `bf_ids: []`, `sf_ids: []` がすべて含まれる
 3. `domain` 値が `docs/domains/<domain>/charter.md` で実在する
-4. `/speckit.clarify` が起動された (ユーザ対話の有無は問わない)
+4. `/speckit-clarify` が起動された (ユーザ対話の有無は問わない)
 5. body 部分に `[NEEDS CLARIFICATION]` が残っていれば warning として表示
 6. seq モード並列起動時に SPEC_ID 衝突が発生しない。**保証の実体は lock ではなく「critical section 内で `specs/<SPEC_ID>/` を作って番号を予約する」こと** — 番号を返すだけなら lock があっても全員が同じ番号を得る

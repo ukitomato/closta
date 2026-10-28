@@ -10,7 +10,7 @@ background: false
 
 # cl-tasks
 
-plan.md から tasks.md を起草する。`/speckit.tasks` を内部委譲しつつ、本 wrapper は以下を担当する:
+plan.md から tasks.md を起草する。`/speckit-tasks` を内部委譲しつつ、本 wrapper は以下を担当する:
 
 - **User Story 単位の section 構造化** — tasks.md が `## US-N` 見出しでグルーピングされていることを検証
 - **`[P]` 並列マーカー** — 同 phase 内で並列実行可能なタスクに `[P]` を付与する慣習が守られているか検証
@@ -41,9 +41,9 @@ plan.md から tasks.md を起草する。`/speckit.tasks` を内部委譲しつ
 2. `plan.md` が存在し、frontmatter `status: planning` であることを確認
 3. `status: tasking` 以降ならば tasks.md を **自動上書き** し、完了通知に `[warn: status was <old_status>, tasks.md overwritten]` を記録する
 
-### Phase 1: `/speckit.tasks` delegation
+### Phase 1: `/speckit-tasks` delegation
 
-`/speckit.tasks <spec_dir>` を起動。SpecKit が `<spec_dir>/tasks.md` を生成する。
+`/speckit-tasks <spec_dir>` を起動。SpecKit が `<spec_dir>/tasks.md` を生成する。
 
 ### Phase 2: User Story section の検証
 
@@ -55,11 +55,7 @@ plan.md から tasks.md を起草する。`/speckit.tasks` を内部委譲しつ
 
 ### Phase 3: `[P]` 並列マーカーの検証 (informational)
 
-`[P]` マーカーがタスク行末尾に付与されているか確認:
-
-```bash
-grep -cE '\[P\]\s*$' "$spec_dir/tasks.md"
-```
+`[P]` マーカーがタスク行末尾に付与されているかを Grep ツール (pattern `\[P\]\s*$`、`output_mode: count`) で数える。
 
 - `[P]` ゼロ → "完全に直列なタスク構成です。本当に並列化可能なタスクが無いか確認推奨" の warning
 - `[P]` 多すぎ (タスク全体の 80% 超) → "並列化想定が楽観的な可能性。依存関係を再確認" の warning
@@ -84,7 +80,7 @@ spec.md frontmatter `targets: both` の場合、tasks.md を以下 3 section に
 - ...
 ```
 
-`/speckit.tasks` 出力が既にこの構造を持っていれば skip。持っていなければ Edit で分割。判断基準:
+`/speckit-tasks` 出力が既にこの構造を持っていれば skip。持っていなければ Edit で分割。判断基準:
 
 - task description に `frontend`, `FE`, `client`, `UI` を含む → Frontend
 - `backend`, `BE`, `server`, `API`, `endpoint`, `database`, `migration` → Backend or Shared
@@ -128,7 +124,7 @@ spec.md frontmatter `targets: both` の場合、tasks.md を以下 3 section に
 ## Failure modes
 
 - plan.md が存在しない → halt
-- `/speckit.tasks` delegation 失敗 → エラー + status 据置
+- `/speckit-tasks` delegation 失敗 → エラー + status 据置
 - targets=both で分類不能なタスク → Shared に自動分類 (`[auto-classified]` ラベル付き)
 
 ## Acceptance criteria

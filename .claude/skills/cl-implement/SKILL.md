@@ -39,9 +39,7 @@ gate_common::phase0_check_repo || exit 1
 spec_dir=$(gate_common::phase0_resolve_spec_dir "${1:-}") || exit 2
 gate_common::phase0_check_status "$spec_dir" "implementing" || exit 1
 gate_common::phase0_check_charter "$spec_dir" || exit 1
-# design-gate verdict が PASS であること
-# **verdict_validate ではなく verdict_require_pass。** 前者は FIX_REQUIRED を
-# 正当な verdict として exit 0 で通すので、gate を通っていない spec で実装が始まる。
+# design-gate verdict が PASS であること (verdict_validate ではない。AGENTS.md の gate の原則)
 gate_common::verdict_require_pass "$spec_dir/.gate-verdict-design.json" \
   || halt "/cl-design-gate が PASS していません"
 # checklist の未完了項目をファイルごとに数える (step 5)
@@ -70,7 +68,7 @@ impl_base=$(cat "$spec_dir/.implement-base")
 
 ### Phase 2: section ごとに `implementer` を起動
 
-`/speckit.implement` には委譲しない。実装はすべて subagent で行い、main はソースを読まない。
+`/speckit-implement` には委譲しない。実装はすべて subagent で行い、main はソースを読まない。
 
 1. tasks.md の `## ` 見出しを上から列挙し、未完了タスク (`- [ ]`) を含む section だけを対象にする。targets=both のときは Phase 1 の順 (Backend → Shared → Frontend) に並べる
 2. 対象 section ごとに `Agent(subagent_type: implementer)` を **1 つずつ直列で**起動する。渡すのは `mode: tasks` / `spec_dir` / `impl_base` / section 見出しだけで、本文も規則も貼らない (規則と報告の形は `implementer.md` が正本)

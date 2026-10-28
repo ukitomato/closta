@@ -36,6 +36,8 @@ design-gate が FIX_REQUIRED なら status は `tasking` に留まる。`Agent(d
   - `/cl-plan` / `/cl-tasks` — `agent: designer` の同期 fork
   - `/cl-design-gate` / `/cl-code-gate` / `/cl-pr-gate` — `agent: general-purpose` の background fork。同期の fork では、中で起動した reviewer の結果を受け取れない (fork が先に終わり、報告が main に流れる)。main は gate の完了通知が届いてから次の段に進む
 - **戻り値は完了通知だけ。** fork と subagent は、最終メッセージに生出力・diff・findings 本文を含めない
+- **reviewer にはパスだけを渡す。** spec・diff・前 round の findings の本文を prompt に貼らない。reviewer は自分で Read する定義で (`reviewer-base.md` の Tier-0)、貼ると並列の reviewer の数だけ同じ本文が重複する。diff は gate がファイルに書き出してパスで渡す (reviewer の多くは Bash を持たない)
+- **段の間で確認を求めない。** 連鎖の途中で「進めてよければ…」と turn を終えず、次の段を呼ぶ。止まるのは人の判断が要るとき (AskUserQuestion) と、background の完了通知を待つときだけ
 - **`AskUserQuestion` は main でしか使えない。** fork / subagent で判断が要るときは halt する。designer は `<spec_dir>/.needs-input.md` に質問を書いて `NEEDS_INPUT` を返し、`/cl-design` が main で聞く
 - **actor は直列に動かす。** 同じ作業ツリーで implementer / designer を並列に起動しない (lint / test のキャッシュが互いに無効化される)。並列にしてよいのは read-only の reviewer だけ
 - **作業は委譲し、規則は agent 側に置く。** 実装 → `implementer` の tasks モード、code-gate / pr-gate の指摘 → `implementer` の fix モード、design-gate の指摘 → `designer`。invoker が渡すのはモード名と入力だけで、規則や出力の形を prompt に書かない (正本は各 agent ファイル)

@@ -28,7 +28,7 @@ allowed-tools: Read Write Edit Bash Glob Grep Agent AskUserQuestion
 
 ## When to invoke
 
-- 既存 reviewer (security / architecture / po / convention / platform-boundary + optional 3) では足りないと判明した時
+- 既存 reviewer (`.claude/agents/*-reviewer.md`) と同梱の optional 2 種では足りないと判明した時
 - 特定 tech stack や regulatory 要件で project 固有の観点を追加したい時
 
 ## Inputs
@@ -116,7 +116,6 @@ body を別の場所へ複製してはならない (`.agents/` / `.cursor/` 等)
 
 - "常駐 (毎 code-gate / pr-gate で必ず起動)"
 - "system scope のみ (file pattern にマッチする時のみ起動)" + pattern 入力
-- "manual only (`--scope <name>` で明示起動した時のみ)"
 
 選択に応じて `.specify/spec-gate/reviewers.yml` に entry を追加:
 
@@ -129,7 +128,7 @@ reviewers:
     gates: [code-gate, pr-gate]              # どの gate で起動するか
 ```
 
-**reviewers.yml への登録だけでは起動しない。4 箇所すべてを直す。**
+**reviewers.yml への登録だけでは起動しない。1〜3 の 3 箇所を直し、design-gate でも走らせるなら 4 も直す。**
 `gate_common::reviewers_filter` は **引数で渡された候補しか絞らない** ので、候補リストに名前が無い reviewer は yml に載っていても永久に起動しない。
 
 1. `.specify/spec-gate/reviewers.yml` — **code-gate / pr-gate の**発火条件の正本
@@ -162,7 +161,7 @@ AskUserQuestion で「即座に dry-run しますか?」を提示し、yes な�
   - name: <name>
   - mode: <A 同梱 | B 新規>
   - 配置: .claude/agents/<name>.md
-  - 登録: reviewers.yml / .agents-registry.yaml / <gate> skill の候補リスト (3/3)
+  - 登録: reviewers.yml / .agents-registry.yaml / <gate> skill の候補リスト (3/3)[ / invoked_by の design-gate (4/4)]
   - 次のアクション: /cl-code-gate または /cl-pr-gate を実行して動作確認
 ```
 

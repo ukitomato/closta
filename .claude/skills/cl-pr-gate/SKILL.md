@@ -53,10 +53,7 @@ gate_common::phase0_check_repo || exit 1
 spec_dir=$(gate_common::phase0_resolve_spec_dir "${1:-}") || exit 2
 gate_common::phase0_check_status "$spec_dir" "reviewing" || exit 1
 gate_common::phase0_check_charter "$spec_dir" || exit 1
-# code-gate verdict 必須 (overlap 排除 contract)
-# **verdict_validate ではなく verdict_require_pass を使う。**
-# 前者は FIX_REQUIRED を正当な verdict として exit 0 で通すため、
-# code-gate を通っていない spec でも pr-gate が始まってしまう。
+# code-gate verdict 必須 (overlap 排除 contract。verdict_validate ではない。AGENTS.md の gate の原則)
 [ -f "$spec_dir/.gate-verdict-code.json" ] || halt "/cl-code-gate を先に PASS させてください"
 gate_common::verdict_require_pass "$spec_dir/.gate-verdict-code.json" \
   || halt "code-gate が PASS していません。/cl-code-gate を通してから再実行してください"
@@ -104,7 +101,7 @@ halt 時のメッセージ: "Convergence failure: Round N-1 と Round N の両�
 
 ### Phase 3: Reviewer 選定 (feature scope + system scope)
 
-**feature scope reviewer (常駐)**: `security-reviewer` / `architecture-reviewer` (default mode + ADR-drift mode) / `po-reviewer`
+**feature scope reviewer (常駐)**: `security-reviewer` / `architecture-reviewer` (ADR drift は ARCH-3 として通常の 1 回で見る) / `po-reviewer`
 
 **system scope reviewer**: **pattern をここに書かない。正本は `.specify/spec-gate/reviewers.yml` である。**
 
@@ -121,7 +118,7 @@ active=$(gate_common::reviewers_filter pr-gate "$spec_dir/.pr-gate-scope.txt" \
 
 **起動数に固定上限はない。`reviewers_filter` が返した集合がそのまま並列起動の対象である。**
 
-**上の候補リストは `reviewers.yml` で `gates` に `pr-gate` を含む全 reviewer を網羅していなければならない。** `reviewers_filter` は渡された候補しか絞らないため、ここに名前が無い reviewer は yml に載っていても永久に起動せず、`skipped_reviewers[]` にも現れない。reviewer を増やしたら `/cl-add-reviewer` の Phase 3 のとおりここも直す。
+上の候補リストは `reviewers.yml` で `gates` に `pr-gate` を含む全 reviewer を含める (`reviewers_filter` は渡された候補しか絞らない。登録する箇所の一覧は `/cl-add-reviewer` の Phase 3)。
 
 **`registry_filter_agents` を直接呼んではならない。** あちらは agent ファイルの存在しか見ないため、`**/migrations/**` を 1 件も含まない diff でも `database-reviewer` が、UI を 1 行も触らない diff でも `a11y-reviewer` / `ux-reviewer` が起動する。
 
@@ -141,7 +138,7 @@ Round N-1 の head は `.gate-verdict-pr.json` の `round_history[]` の直前 e
 
 ### Phase 4: 並列起動 + code-gate verdict 受け渡し
 
-1 message 内で全 active reviewer を並列 Agent 起動 (clean-context isolation)。各 subagent に渡す素材は **パスだけ** である。**本文を prompt に貼ってはならない** — reviewer は自分で Read する定義になっており (`reviewer-base.md` の Tier-0)、貼ると並列 reviewer の数だけ同じ本文が重複する。
+1 message 内で全 active reviewer を並列 Agent 起動 (clean-context isolation)。各 subagent に渡すのはパスだけ (AGENTS.md の実行モデル):
 
 - `<spec_dir>` — `{spec,plan,tasks,design-gate,code-gate}.md` (前段の判断材料) を reviewer が Read する
 - `<spec_dir>/.gate-verdict-code.json` — **重複 suppress 用**。reviewer はこの JSON の `must_fix_findings[].where` に列挙された `file:line` を **再指摘してはならない**

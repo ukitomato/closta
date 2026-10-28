@@ -10,7 +10,7 @@ background: false
 
 # cl-plan
 
-spec.md から plan.md を起草する。`/speckit.plan` を内部委譲しつつ、本 wrapper は以下を担当する:
+spec.md から plan.md を起草する。`/speckit-plan` を内部委譲しつつ、本 wrapper は以下を担当する:
 
 - **spec_dir 解決** — 引数 or 現在 branch 名から spec ディレクトリを特定
 - **Domain Context auto-fill** — `docs/domains/<domain>/charter.md` の Mission/Scope/業務ルール、関連 ADR (`docs/decisions/`)、`docs/glossary.md` の関連用語を plan.md の "Domain Context" section に注入
@@ -57,17 +57,12 @@ spec.md から plan.md を起草する。`/speckit.plan` を内部委譲しつ�
    - Title, status (accepted/proposed/superseded), 1 文サマリを収集
 3. **Glossary**: `docs/glossary.md` を Read し、spec.md 本文中に出現する用語に絞って抜粋
 4. **上流からの申し送りの棚卸し (必須)**: 本 feature を名指している上流の記述を
-   **grep で機械的に洗い出す**。人手の棚卸しは漏れる。
+   **Grep ツールで機械的に洗い出す**。人手の棚卸しは漏れる。
 
-   ```bash
-   # **`spec_id` である。`feature_id` という frontmatter key は存在しない。**
-   # 空文字のまま grep すると全行がヒットし、棚卸しをしたつもりで何も見ていない状態になる。
-   spec_id=$(awk '/^spec_id:/{print $2}' "<spec_dir>/spec.md")
-   [ -n "$spec_id" ] || { echo "spec_id を frontmatter から取得できません"; exit 2; }
-   grep -rn "$spec_id" docs/ .specify/ tests/ specs/ --include='*.md' --include='*.mjs' --include='*.js' --include='*.yaml' --include='*.yml'
-   ```
+   - 検索語は spec.md frontmatter の `spec_id` (`feature_id` という key は無い。空のまま検索すると全行が当たり、棚卸しをしたつもりで何も見ていない状態になるので、取れなければ halt)
+   - 範囲: `docs/` / `.specify/` / `tests/` / `specs/`、glob `*.{md,mjs,js,yaml,yml}`、`output_mode: content`
 
-   加えて、本 feature が**新設する主要モジュール名**でも grep する。
+   加えて、本 feature が**新設する主要モジュール名**でも Grep する。
    `.dependency-cruiser.js` / `eslint.config.mjs` / `scripts/constitution/allowlists.mjs` は
    **実名リスト方式のルールを持ち、新しいモジュールを作る feature に追加義務を課している**
    ことがあるため、必ず対象に含める。
@@ -77,9 +72,9 @@ spec.md から plan.md を起草する。`/speckit.plan` を内部委譲しつ�
 
 step 1-3 はすべて missing でも続行可能 (warning 表示)。**step 4 は skip しない。**
 
-### Phase 2: `/speckit.plan` delegation
+### Phase 2: `/speckit-plan` delegation
 
-`/speckit.plan <spec_dir>` を起動。SpecKit が `<spec_dir>/plan.md` を生成する。
+`/speckit-plan <spec_dir>` を起動。SpecKit が `<spec_dir>/plan.md` を生成する。
 
 ### Phase 3: Domain Context section の auto-fill
 
@@ -134,7 +129,7 @@ placeholder section が存在しない場合は、生成 plan.md の冒頭 (`# P
 - spec.md が存在しない → halt with "`/cl-spec` を先に実行してください"
 - Charter missing → warning 表示後 placeholder のみで続行
 - ADR fetch 失敗 → "Related ADRs" を空セクションで埋めて続行
-- `/speckit.plan` delegation 失敗 → エラーメッセージ + status は変更しない
+- `/speckit-plan` delegation 失敗 → エラーメッセージ + status は変更しない
 
 ## Acceptance criteria
 

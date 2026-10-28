@@ -44,20 +44,7 @@
       "Bash(mkdir -p specs/*)",
       "Bash(mkdir -p .specify/*)",
       "Bash(mv specs/*)",
-      "Bash(mv .specify/*)",
-      "mcp__codegraph__*"
-    ]
-  },
-  "hooks": {
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "codegraph.cmd prompt-hook"
-          }
-        ]
-      }
+      "Bash(mv .specify/*)"
     ]
   }
 }

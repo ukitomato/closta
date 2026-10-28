@@ -142,7 +142,7 @@ active=$(gate_common::reviewers_filter code-gate "$spec_dir/.code-gate-scope.txt
   a11y-reviewer database-reviewer ux-reviewer platform-boundary-reviewer)
 ```
 
-**上の候補リストは `reviewers.yml` で `gates` に `code-gate` を含む全 reviewer を網羅していなければならない。** `reviewers_filter` は渡された候補しか絞らないため、ここに名前が無い reviewer は yml に載っていても永久に起動せず、`skipped_reviewers[]` にも現れない。reviewer を増やしたら `/cl-add-reviewer` の Phase 3 のとおりここも直す。
+上の候補リストは `reviewers.yml` で `gates` に `code-gate` を含む全 reviewer を含める (`reviewers_filter` は渡された候補しか絞らない。登録する箇所の一覧は `/cl-add-reviewer` の Phase 3)。
 
 絞った理由は stderr に 1 行ずつ出る。**Phase 4 の集約に「起動しなかった reviewer とその理由」を必ず転記する** — 黙って絞ると「起動しなかった」と「起動して 0 件だった」を区別できない。
 
@@ -165,7 +165,7 @@ active=$(gate_common::reviewers_filter code-gate "$spec_dir/.code-gate-scope.txt
 
 **`convention-reviewer` は `lint-agent` の後に起動し、その stdout JSON を context でそのまま渡す。** `convention-reviewer` は自分で lint を実行しないため、渡さないと lint 観点が空になる。**`exit_code` を落とさずに渡すこと** — `convention-reviewer` は「lint が非ゼロ exit で終わったこと自体を Critical とする」判定をこの値で行い、それが `gate-common.sh` の機械 gate (`PASS` かつ `critical>0` は exit 5) に直結する。
 
-各 reviewer に渡す素材は **パスだけ** である。**本文を prompt に貼ってはならない** — reviewer は自分で Read する定義になっており (`reviewer-base.md` の Tier-0)、貼ると並列 reviewer の数だけ同じ本文が重複する。
+各 reviewer に渡すのはパスだけ (AGENTS.md の実行モデル。例外は下の lint-agent の JSON):
 
 - `<spec_dir>` — `{spec,plan,tasks}.md` を reviewer が Read する
 - `<spec_dir>/.code-gate-scope.txt` (touched files の絞り込み結果)
@@ -275,7 +275,7 @@ active=$(gate_common::reviewers_filter code-gate "$spec_dir/.code-gate-scope.txt
 }
 ```
 
-**`iter_history[]` の各要素は `{iter: int, must_fix: int}` を必ず持つ** (`skipped` / `error` は任意)。ここに `must_fix_after_promotion` のような場当たりキーを足してはならない — cascade exhaustion 判定が `must_fix` を読めなくなり、収束判定が黙って壊れる。`gate_common::verdict_validate` がこの形を検査して warning を出す。
+**`iter_history[]` の各要素は `{iter: int, must_fix: int}` を必ず持つ** (`skipped` / `error` は任意)。ここに `must_fix_after_promotion` のような場当たりキーを足さない — 再実行時の iter の復元と完了通知が `must_fix` を読めなくなる。`gate_common::verdict_validate` がこの形を検査して warning を出す。
 
 **`tracks` の 3 フィールドは後から検証するために必ず埋める:**
 
@@ -303,21 +303,14 @@ for iter in 1..max_iter:
   invoke_implementer(verdict.json)
   rerun_reviewers()                     # ← test-agent には「収束見込み」を渡す
   if verdict.severity_counts.must_fix == 0: break PASS
-  if cascade_exhausted(iter_history): break HALT
+# max_iter に達したら FIX_REQUIRED で終える
 ```
 
 **収束した回は test を全件で走らせる。** `must_fix == 0` を見てから break すると、その回の test は subset で走り終わっている。したがって TAIL の Phase 3 では **直前の iter の `must_fix` が 0 に近いか、`--max-iter` 最終回か**を `test-agent` に渡し、`test-agent` 側が全件に切り替える。break 時点で `tracks.test-agent.scope != "full"` なら、**全件で 1 回だけ再実行してから PASS にする**。
 
 これを守らないと Phase 4b の「`verdict: PASS` の iteration は必ず `full`」という自らの規則を満たせない。
 
-**Cascade exhaustion の定義**:
-
-- 条件: `iter_history[N].must_fix >= iter_history[N-1].must_fix AND iter_history[N-1].must_fix >= iter_history[N-2].must_fix`
-- すなわち **N, N-1, N-2 の 3 連続で MUST_FIX が単調非減少**
-- 最小発火 iter = 3。iter ∈ {1, 2} では data 不足で発火しない
-- `iter_history` は verdict JSON の配列で永続化、再実行時に復元
-
-Cascade exhaustion 時は halt with "Manual intervention required" + 直前 verdict をそのまま最終扱い。
+loop の上限は `--max-iter` だけで決まる。以前あった「3 連続で MUST_FIX が減らなければ halt」(cascade exhaustion) は、最小発火 iter が 3 で既定の `--max-iter 3` と同じ所で止まるため実質何もしておらず、削除した。`iter_history` は verdict JSON の配列で永続化し、再実行時に復元する (完了通知と収束の確認に使う)。
 
 ### Phase 6: Status 遷移判定
 
@@ -379,7 +372,7 @@ fi
   ```
 - 必須 agent が registry に無い → halt with "`.claude/agents/<name>.md` の存在と `.specify/.agents-registry.yaml` の entry を確認してください"
 - implementer の auto-fix が partial → 次 iter で残りに再挑戦
-- cascade exhaustion (3 連続単調非減少) → halt + 直前 iter の verdict / code-gate.md を最終とみなして表示
+- `--max-iter` に達しても MUST_FIX が残る → FIX_REQUIRED で終え、最終 iter の verdict / code-gate.md を表示
 - git diff が空 → halt
 
 ## Acceptance criteria
@@ -390,6 +383,6 @@ fi
 4. **PASS の場合のみ** `status:` が `reviewing` に遷移する (`reviewing` から再実行したときは据置)
 5. 各 reviewer の raw output が `<spec_dir>/<reviewer>.code-gate.md` に保存され、それに対して `cascade_enforce` と `viewpoint_coverage_check` が実行されている
 6. `verdict: PASS` の iteration の `tracks.test-agent.scope` が `full` である
-7. cascade exhaustion 時は halt 理由と iter_history の 3 値が明示されている
+7. FIX_REQUIRED で終えたときは iter_history の各 iter の must_fix が完了通知に出ている
 8. security / architecture / po reviewer が起動されていない (`origin` field に存在しない)
 9. implementer の `skipped` / `error` 件数が完了通知に出ている

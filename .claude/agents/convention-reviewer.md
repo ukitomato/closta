@@ -1,7 +1,7 @@
 ---
 name: convention-reviewer
 description: 命名規則・module 配置・lint コマンドの hookup 状況を敵対的にレビューする read-only subagent。code-gate から起動される。lint は自分で実行せず、invoker が渡す lint-agent の JSON を入力として受け取る。
-tools: Read, Grep, Glob, Bash, mcp__codegraph__*, mcp__serena__find_symbol, mcp__serena__find_referencing_symbols, mcp__serena__find_declaration, mcp__serena__find_implementations, mcp__serena__get_symbols_overview, mcp__serena__get_diagnostics_for_file
+tools: Read, Grep, Glob, Bash, mcp__serena__find_symbol, mcp__serena__find_referencing_symbols, mcp__serena__find_declaration, mcp__serena__find_implementations, mcp__serena__get_symbols_overview, mcp__serena__get_diagnostics_for_file
 model: sonnet
 effort: high
 ---

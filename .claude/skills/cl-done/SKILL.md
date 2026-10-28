@@ -63,7 +63,7 @@ rc=$?  # 0 = PASS / 5 = gate hard-stop / 3 = missing / 2 = schema NG
 [ "$rc" -eq 0 ] || halt "code-gate が PASS していません"
 ```
 
-**`verdict_validate` を使ってはならない。** あれは schema 検査であり、`FIX_REQUIRED` を正当な verdict として exit 0 で通す。「gate を通ったか」の判定は `verdict_require_pass` だけが行う。
+判定は `verdict_require_pass` で行う (`verdict_validate` ではない。理由は AGENTS.md の gate の原則)。
 
 ### Stage 3: pr-gate verdict 確認 (hard gate)
 
