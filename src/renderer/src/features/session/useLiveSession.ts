@@ -50,6 +50,8 @@ export interface LiveSession extends SessionView {
   setPermissionMode(mode: SafePermissionMode): void
   /** 実行中のモデルの切り替え (023)。 */
   setModel(modelId: string): void
+  /** 既定の Provider のモデルの一覧を聞く (025)。`idle` / `failed` からだけ動く。 */
+  loadLiveModels(): void
   /** セッションの名前の変更 (023)。成功なら `true`。 */
   rename(name: string): Promise<boolean>
 }
@@ -99,6 +101,8 @@ export function useLiveSession(sessionId: string): LiveSession | null {
     [store, sessionId]
   )
 
+  const loadLiveModels = useCallback(() => store.loadLiveModels(sessionId), [store, sessionId])
+
   const rename = useCallback((name: string) => store.rename(sessionId, name), [store, sessionId])
 
   return useMemo(() => {
@@ -122,6 +126,7 @@ export function useLiveSession(sessionId: string): LiveSession | null {
       clearQueueRejection,
       setPermissionMode,
       setModel,
+      loadLiveModels,
       rename
     }
   }, [
@@ -142,6 +147,7 @@ export function useLiveSession(sessionId: string): LiveSession | null {
     clearQueueRejection,
     setPermissionMode,
     setModel,
+    loadLiveModels,
     rename
   ])
 }

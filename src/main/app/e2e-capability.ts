@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { MessageChannelMain, type MessagePortMain } from 'electron'
 
 import type { ProviderSummaryDTO } from '@domain/provider/dto'
+import type { ModelEntry } from '@domain/provider/types'
 import { fixedCapabilities } from '@domain/runtime/capabilities'
 import type { RuntimeDescriptor, WslRuntimeDescriptor } from '@domain/runtime/descriptor'
 import type { RuntimeDescriptorDTO, RuntimeListDTO } from '@domain/runtime/dto'
@@ -227,6 +228,12 @@ export const E2E_CONVERSATION_PROMPT = '__e2e_conversation__'
 /** 合成の会話の id (実際の会話ではない。UUID の形だけを満たす)。 */
 const E2E_CONVERSATION_ID = 'e2e00000-0000-4000-8000-0000000000c1'
 
+/** 既定の Provider のモデルの一覧の固定の 2 件 (025 / FE-021。実際の Claude Code の答えではない)。 */
+const E2E_LIVE_MODELS: readonly ModelEntry[] = [
+  { id: 'e2e-model-a', displayName: 'E2E モデル A' },
+  { id: 'e2e-model-b', displayName: 'E2E モデル B' }
+]
+
 /** E2E の負荷経路 (SC-003 / FE-020) を起こす合成プロンプト。本番では本コードに到達しない。 */
 export const E2E_LOAD_PROMPT = '__e2e_load__'
 /** 1 件 1KB の本文を何件/秒流すか (SC-003 の負荷)。 */
@@ -264,6 +271,13 @@ function createE2eSupervisorConnection(): SupervisorConnection {
   const threadL: ((g: number, id: string) => void)[] = []
   const conversationL: ((g: number, id: string, conversationId: string) => void)[] = []
   const controlResultL: ((g: number, id: string, requestId: string, ok: boolean) => void)[] = []
+  const modelsResultL: ((
+    g: number,
+    id: string,
+    requestId: string,
+    models: readonly ModelEntry[] | null,
+    dropped: number
+  ) => void)[] = []
   let pending: SessionStatusUpdate[] = []
   let flushTimer: ReturnType<typeof setTimeout> | null = null
   let seq = 0
@@ -400,6 +414,10 @@ function createE2eSupervisorConnection(): SupervisorConnection {
         case 'set-model':
           for (const l of controlResultL) l(1, sessionId, control.requestId, true)
           break
+        // 既定の Provider のモデルの一覧 (025 / AD-065)。固定の 2 件を返す (実機の Claude Code は V-1 で確かめる)。
+        case 'list-models':
+          for (const l of modelsResultL) l(1, sessionId, control.requestId, E2E_LIVE_MODELS, 0)
+          break
       }
     },
     kill() {
@@ -411,6 +429,7 @@ function createE2eSupervisorConnection(): SupervisorConnection {
     // 会話の id は合成プロンプト (`E2E_CONVERSATION_PROMPT`) を送った行にだけ送る (X-9 / FE-021)。
     onConversation: (l) => conversationL.push(l),
     onControlResult: (l) => controlResultL.push(l),
+    onModelsResult: (l) => modelsResultL.push(l),
     onExit: () => undefined
   }
 }
@@ -700,6 +719,7 @@ export function createE2eCapability(): E2eCapability {
     controlSession: (sessionId, control) => launchService.control(sessionId, control),
     setSessionPermissionMode: (sessionId, mode) => launchService.setPermissionMode(sessionId, mode),
     setSessionModel: (sessionId, modelId) => launchService.setModel(sessionId, modelId),
+    listSessionModels: (sessionId) => launchService.listModels(sessionId),
     // 改名: 子と transcript の書き込みは起こさず、受け付けの判定と名前の規則だけを本物と同じ関数で通す (C-6)。
     renameSession: async (sessionId, name): Promise<RenameResult> => {
       const normalized = normalizeSessionName(name)

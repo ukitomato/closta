@@ -70,6 +70,24 @@ export type RenameResult =
   | { readonly ok: true; readonly name: string }
   | { readonly ok: false; readonly reason: LiveSettingFailure }
 
+/** 既定の Provider のモデルの一覧の 1 項目 (025 / contracts C-7)。 */
+export interface LiveModelOption {
+  readonly id: string
+  readonly displayName: string
+}
+
+/**
+ * `listSessionModels` の戻り値 (025 / AD-065)。`models` は起動の effort で絞った後の値。空の配列は `ok: true`。
+ * `reportedCount` は effort で絞る前の件数で、`models` が空の理由を分ける (data-model §3.2)。
+ */
+export type LiveModelsResult =
+  | {
+      readonly ok: true
+      readonly models: readonly LiveModelOption[]
+      readonly reportedCount: number
+    }
+  | { readonly ok: false; readonly reason: LiveSettingFailure }
+
 /** 名前の長さの上限 (UTF-16 のコード単位ではなくコードポイント数)。[ASSUMED: 数値デフォルト値] */
 export const SESSION_NAME_MAX_LENGTH = 100
 

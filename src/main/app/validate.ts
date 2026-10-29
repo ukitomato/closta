@@ -449,6 +449,14 @@ export function checkSetModelArgs(args: readonly unknown[]): args is readonly [s
 }
 
 /**
+ * **`listSessionModels(sessionId)`** (025 / contracts C-7)。引数はちょうど 1 つで、`sessionId` は UUID。
+ * 外れたら service を呼ばず `unknown-session`。
+ */
+export function checkListModelsArgs(args: readonly unknown[]): args is readonly [string] {
+  return args.length === 1 && isValidSessionId(args[0])
+}
+
+/**
  * **`renameSession(sessionId, name)`** (023 / contracts C-3)。引数はちょうど 2 つで、`sessionId` は UUID・
  * `name` は名前の規則 (`normalizeSessionName`) を通ること。通れば trim した値を返す (service には trim 済みを渡す)。
  * 外れたら `null`。名前をログに出さない。

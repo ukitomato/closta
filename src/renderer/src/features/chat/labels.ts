@@ -374,16 +374,20 @@ export const APP_COMMAND_LABELS = {
  * 知らない値の `unknown`)。**権限モードの名前の表はここ 1 つ** — 起動ダイアログの安全 3 値 (`session/labels.ts` の
  * `PERMISSION_MODE_LABELS`) はここから取り、transcript の権限モードの行・「概要」の現在の権限モード・中央の警告の帯が
  * 同じ名前を出す (Principle XIV)。昇格値の綴りは domain と renderer の文言の表にだけ置く (`src/agents/` に置かない。項目 16)。
+ * 025 / AD-065 Decision 3: 名前は Claude Code の CLI の表記をそのまま使い、説明を付けない。
  */
 export const PERMISSION_MODE_NAMES: Readonly<Record<PermissionModeKey, string>> = {
-  default: '通常 (操作ごとに承認)',
-  plan: '計画のみ (実行しない)',
-  dontAsk: '事前承認のみ (承認カードを出さない)',
-  acceptEdits: '編集を自動で許可',
-  bypassPermissions: 'すべて許可',
-  auto: '自動で判断',
+  default: 'Manual',
+  plan: 'Plan',
+  dontAsk: "Don't Ask",
+  acceptEdits: 'Accept edits',
+  bypassPermissions: 'Bypass Permissions',
+  auto: 'Auto',
   unknown: '不明なモード'
 }
+
+/** 照合した Claude Code の版 (AD-065 Decision 3)。版を上げたら docs/ui-coverage.md の手順で見直す。 */
+export const CLAUDE_CODE_PERMISSION_MODE_NAMES_VERSION = '2.1.312'
 
 /**
  * 権限モードの鍵 (未信頼の文字列。transcript の行の `detail` など) → 表示名。表に無い鍵 (`toString` などの prototype の

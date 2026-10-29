@@ -791,3 +791,22 @@ describe('decodeSessionControl: 実行中の設定の切り替え (023 / AD-062)
     expect(acceptsWhileClosing({ kind: 'set-model', requestId, model: 'm' })).toBe(false)
   })
 })
+
+describe('decodeSessionControl: list-models (025 / AD-065)', () => {
+  const requestId = '123e4567-e89b-42d3-a456-426614174000'
+
+  it('正例', () => {
+    expect(decodeSessionControl({ kind: 'list-models', requestId })).toEqual({
+      kind: 'list-models',
+      requestId
+    })
+  })
+
+  it.each(['', 123, null, undefined])('requestId が不正 (%j) は null', (bad) => {
+    expect(decodeSessionControl({ kind: 'list-models', requestId: bad })).toBeNull()
+  })
+
+  it('終了処理中は受け付けない', () => {
+    expect(acceptsWhileClosing({ kind: 'list-models', requestId })).toBe(false)
+  })
+})

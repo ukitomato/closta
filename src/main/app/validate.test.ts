@@ -23,6 +23,7 @@ import {
   checkPastResumeQuery,
   checkResumeRequest,
   checkRenameArgs,
+  checkListModelsArgs,
   checkSetModelArgs,
   checkSetPermissionModeArgs,
   checkProviderDraft as checkProviderDraftWith,
@@ -553,6 +554,17 @@ describe('checkSetModelArgs (023 / contracts C-2)', () => {
       [ID, 'sonnet', 'extra']
     ]
     for (const args of bad) expect(checkSetModelArgs(args)).toBe(false)
+  })
+})
+
+describe('checkListModelsArgs (025 / contracts C-7)', () => {
+  const ID = '11111111-1111-4111-8111-111111111111'
+  it('UUID ちょうど 1 つを通す', () => {
+    expect(checkListModelsArgs([ID])).toBe(true)
+  })
+  it('引数 0・2・非 UUID・数・null を通さない', () => {
+    const bad: (readonly unknown[])[] = [[], [ID, ID], ['not-uuid'], [1], [null]]
+    for (const args of bad) expect(checkListModelsArgs(args)).toBe(false)
   })
 })
 

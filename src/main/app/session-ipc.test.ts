@@ -20,6 +20,7 @@ import {
   handleKillSession,
   handleLaunchSession,
   handleListPresets,
+  handleListSessionModels,
   handleListSessions,
   handleRefreshSessions,
   handleRemovePreset,
@@ -59,6 +60,7 @@ interface Calls {
   readonly resumedTranscripts: { sessionId: string; requestToken: string }[]
   readonly permissionModes: { sessionId: string; mode: string }[]
   readonly models: { sessionId: string; modelId: string }[]
+  readonly listModels: string[]
   readonly renames: { sessionId: string; name: string }[]
 }
 
@@ -84,6 +86,7 @@ function deps(
     resumedTranscripts: [],
     permissionModes: [],
     models: [],
+    listModels: [],
     renames: []
   }
   return {
@@ -126,6 +129,10 @@ function deps(
       async setSessionModel(sessionId, modelId) {
         calls.models.push({ sessionId, modelId })
         return { ok: true as const }
+      },
+      async listSessionModels(sessionId) {
+        calls.listModels.push(sessionId)
+        return { ok: true as const, models: [{ id: 'm', displayName: 'M' }], reportedCount: 1 }
       },
       async renameSession(sessionId, name) {
         calls.renames.push({ sessionId, name })
@@ -664,6 +671,33 @@ describe('X-1 起動 + 制御ハンドラ — main 直接呼び (SC-004 / SC-007
         reason: 'invalid-value'
       })
       expect(calls.models).toEqual([])
+    })
+  })
+
+  describe('handleListSessionModels (025 / contracts C-7)', () => {
+    it('UUID は service に渡して戻り値をそのまま返す', async () => {
+      const { deps: d, calls } = deps()
+      await expect(handleListSessionModels(d, [UUID])).resolves.toEqual({
+        ok: true,
+        models: [{ id: 'm', displayName: 'M' }],
+        reportedCount: 1
+      })
+      expect(calls.listModels).toEqual([UUID])
+    })
+
+    it.each([
+      ['引数 0', []],
+      ['引数 2', [UUID, UUID]],
+      ['非 UUID', ['not-uuid']],
+      ['数', [1]],
+      ['null', [null]]
+    ])('不正入力は unknown-session で service を呼ばない (%s)', async (_l, args) => {
+      const { deps: d, calls } = deps()
+      await expect(handleListSessionModels(d, args as readonly unknown[])).resolves.toEqual({
+        ok: false,
+        reason: 'unknown-session'
+      })
+      expect(calls.listModels).toEqual([])
     })
   })
 

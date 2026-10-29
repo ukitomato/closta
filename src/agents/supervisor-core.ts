@@ -213,6 +213,17 @@ export function runSupervisor(deps: SupervisorDeps): SupervisorHandle {
             })
           )
           break
+        case 'models-result':
+          // モデルの一覧の結果も窓に入れず即座に main へ (025 / AD-065)。中身を解釈しない。
+          transport.write(
+            encodeSupervisorEvent({
+              kind: 'models-result',
+              sessionId,
+              requestId: message.requestId,
+              models: message.models
+            })
+          )
+          break
       }
     })
     // 例外の中身は記録しない (理由キーだけ。Principle V)。

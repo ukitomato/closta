@@ -15,6 +15,8 @@ import type { EffortLevel, ModelEntry } from '@domain/provider/types'
 import type { SafePermissionMode, SessionLaunchConfig } from '@domain/session/launch-config'
 import {
   liveSettingBlocker,
+  type LiveModelOption,
+  type LiveModelsResult,
   type LiveSettingKind,
   type LiveSettingResult,
   type LiveSettingRow
@@ -69,6 +71,19 @@ export interface SupervisorConnection {
   /** 実行中の設定の切り替えの結果 (023 / AD-062)。`requestId` で待ちと照合する。理由は運ばない。 */
   onControlResult(
     listener: (generation: number, sessionId: string, requestId: string, ok: boolean) => void
+  ): void
+  /**
+   * 既定の Provider のモデルの一覧の結果 (025 / AD-065)。`models` は main の再検査の後の値で、`null` は失敗。
+   * `dropped` は再検査で捨てた件数 (ログ用)。`requestId` で待ちと照合する。
+   */
+  onModelsResult(
+    listener: (
+      generation: number,
+      sessionId: string,
+      requestId: string,
+      models: readonly ModelEntry[] | null,
+      dropped: number
+    ) => void
   ): void
   onExit(listener: (generation: number, code: number | null) => void): void
 }
@@ -194,6 +209,11 @@ export interface SessionLaunchService {
    * 起動の effort が効くモデルだけを受ける (外れたら `invalid-value`)。effort は変えない・どこにも書き戻さない。
    */
   setModel(sessionId: string, modelId: string): Promise<LiveSettingResult>
+  /**
+   * 既定の Provider のモデルの一覧を Claude Code に聞く (025 / contracts C-7)。判定は data-model §3.1、結果は §3.2。
+   * `changing` は立てない。同じセッションの待ちには相乗りする。
+   */
+  listModels(sessionId: string): Promise<LiveModelsResult>
   /** 改名の成功を行に覚える (023 / FR-012)。永続化しない・状態通知に出さない。未知の行は何もしない。 */
   setName(sessionId: string, name: string): void
   /** 退避の表の引き当て (X-9)。レコードが無い (会話の id を持たない・上限で捨てた・`killAll` の後) なら `null`。 */
@@ -224,6 +244,17 @@ interface Entry extends RegistryStatus {
   readonly changing: LiveSettingKind | null
   /** 改名の間に保留した `send-prompt` (届いた順。data-model §4.3)。 */
   readonly heldPrompts: readonly SessionControl[]
+  /** 既定の Provider のモデルの一覧 (025 / data-model §2)。まだ受け取っていなければ `null`。永続化しない・値をログに出さない。 */
+  readonly liveModels: readonly ModelEntry[] | null
+}
+
+/** 一覧の結果を待っている要求 (025 / data-model §2.1)。`PendingControl` と別の表に持つ (`changing` を立てない)。 */
+interface PendingModels {
+  readonly sessionId: string
+  readonly generation: number
+  readonly promise: Promise<LiveModelsResult>
+  readonly resolve: (result: LiveModelsResult) => void
+  readonly timer: unknown
 }
 
 /** 結果を待っている制御 (data-model §4.2)。 */
@@ -315,6 +346,23 @@ export function createSessionLaunchService(deps: SessionLaunchServiceDeps): Sess
     }
   }
 
+  /* ── 一覧の結果の待ち (025 / data-model §2.1) ── */
+  const pendingModels = new Map<string, PendingModels>()
+
+  const settleModels = (requestId: string, result: LiveModelsResult): void => {
+    const p = pendingModels.get(requestId)
+    if (p === undefined) return
+    pendingModels.delete(requestId)
+    deps.timer.clearTimeout(p.timer)
+    p.resolve(result)
+  }
+
+  const settleModelsEnded = (match: (p: PendingModels) => boolean): void => {
+    for (const [requestId, p] of [...pendingModels]) {
+      if (match(p)) settleModels(requestId, { ok: false, reason: 'session-ended' })
+    }
+  }
+
   /** 退避の表に入れる。挿入順を保つため既存でも入れ直し (最も新しい扱い)、256 を超えたら最も古いものを捨てる。 */
   const putRecord = (sessionId: string, record: ConversationRecord): void => {
     conversations.delete(sessionId)
@@ -339,7 +387,34 @@ export function createSessionLaunchService(deps: SessionLaunchServiceDeps): Sess
       registry.set(sessionId, { ...entry, threadAlive: false, heldPrompts: [] })
     } else registry.delete(sessionId)
     settleEnded((p) => p.sessionId === sessionId && p.generation === generation)
+    settleModelsEnded((p) => p.sessionId === sessionId && p.generation === generation)
     if (onAllEnded !== null && occupying() === 0) onAllEnded()
+  })
+
+  deps.connection.onModelsResult((generation, sessionId, requestId, models, dropped) => {
+    // 知らない requestId・別のセッション・世代の違う結果は捨てる (`onControlResult` と同じ)。
+    const p = pendingModels.get(requestId)
+    if (p === undefined || p.sessionId !== sessionId || p.generation !== generation) return
+    if (models === null) {
+      settleModels(requestId, { ok: false, reason: 'rejected' })
+      return
+    }
+    const entry = registry.get(sessionId)
+    if (entry === undefined) {
+      settleModels(requestId, { ok: false, reason: 'session-ended' })
+      return
+    }
+    registry.set(sessionId, { ...entry, liveModels: models })
+    // 件数と捨てた数だけを記録する (モデルの値を出さない)。
+    deps.log(`[session] live-models count=${models.length} dropped=${dropped}`)
+    settleModels(requestId, {
+      ok: true,
+      models: switchableModels(models, entry.effort).map((m): LiveModelOption => ({
+        id: m.id,
+        displayName: m.displayName
+      })),
+      reportedCount: models.length
+    })
   })
 
   deps.connection.onControlResult((generation, sessionId, requestId, ok) => {
@@ -390,6 +465,7 @@ export function createSessionLaunchService(deps: SessionLaunchServiceDeps): Sess
     }
     commit(next)
     settleEnded((p) => p.generation === generation)
+    settleModelsEnded((p) => p.generation === generation)
     deps.onStatus(accepted)
   })
 
@@ -399,6 +475,7 @@ export function createSessionLaunchService(deps: SessionLaunchServiceDeps): Sess
     // 保留したプロンプトは送らずに捨て、待っている結果を `session-ended` で解く。
     for (const [id, entry] of registry) registry.set(id, { ...entry, heldPrompts: [] })
     settleEnded(() => true)
+    settleModelsEnded(() => true)
     let sent = 0
     for (const [id, entry] of registry) {
       if (!entry.threadAlive) continue
@@ -453,7 +530,8 @@ export function createSessionLaunchService(deps: SessionLaunchServiceDeps): Sess
         effort: config.effort,
         name: null,
         changing: null,
-        heldPrompts: []
+        heldPrompts: [],
+        liveModels: null
       })
       if (resumeOf !== null) {
         putRecord(sessionId, {
@@ -553,11 +631,16 @@ export function createSessionLaunchService(deps: SessionLaunchServiceDeps): Sess
       const blocker = liveSettingBlocker('model', row)
       if (blocker !== null) return { ok: false, reason: blocker }
       const entry = registry.get(sessionId)
-      const providerId = entry?.axes.providerId ?? null
-      // 既定 (Provider 無し) では切り替えられるモデルの一覧が無い。
-      if (entry === undefined || providerId === null || deps.providerModels === undefined) {
-        return { ok: false, reason: 'invalid-value' }
+      if (entry === undefined) return { ok: false, reason: 'invalid-value' }
+      const providerId = entry.axes.providerId
+      // 既定 (Provider 無し) は Claude Code が答えた一覧 (`liveModels`) と照合する (025 / data-model §3.3)。
+      if (providerId === null) {
+        if (entry.liveModels === null) return { ok: false, reason: 'invalid-value' }
+        const live = switchableModels(entry.liveModels, entry.effort).find((m) => m.id === modelId)
+        if (live === undefined) return { ok: false, reason: 'invalid-value' }
+        return this.requestControl(sessionId, { kind: 'set-model', model: live.id })
       }
+      if (deps.providerModels === undefined) return { ok: false, reason: 'invalid-value' }
       const models = await deps.providerModels(providerId)
       if (models === null) return { ok: false, reason: 'invalid-value' }
       const target = switchableModels(models, entry.effort).find((m) => m.id === modelId)
@@ -567,6 +650,45 @@ export function createSessionLaunchService(deps: SessionLaunchServiceDeps): Sess
         kind: 'set-model',
         model: sdkModelOf(target)
       })
+    },
+
+    listModels(sessionId): Promise<LiveModelsResult> {
+      const entry = registry.get(sessionId)
+      if (entry === undefined) return Promise.resolve({ ok: false, reason: 'unknown-session' })
+      if (entry.axes.providerId !== null) {
+        return Promise.resolve({ ok: false, reason: 'invalid-value' })
+      }
+      // 取得は設定を変えないので `changing` は見ない (`busy` にしない)。
+      const blocker = liveSettingBlocker('model', {
+        state: entry.state,
+        claudeAlive: entry.claudeAlive,
+        hasConversation: entry.conversationId !== null,
+        changing: false
+      })
+      if (blocker !== null) return Promise.resolve({ ok: false, reason: blocker })
+      if (!entry.threadAlive) return Promise.resolve({ ok: false, reason: 'session-ended' })
+      // 待ちがあれば相乗りする (制御は 1 回だけ送る)。
+      for (const p of pendingModels.values()) {
+        if (p.sessionId === sessionId && p.generation === entry.generation) return p.promise
+      }
+      const requestId = (deps.newRequestId ?? (() => globalThis.crypto.randomUUID()))()
+      let resolve: (result: LiveModelsResult) => void = () => undefined
+      const promise = new Promise<LiveModelsResult>((r) => {
+        resolve = r
+      })
+      const timer = deps.timer.setTimeout(
+        () => settleModels(requestId, { ok: false, reason: 'timeout' }),
+        CONTROL_RESULT_TIMEOUT_MS
+      )
+      pendingModels.set(requestId, {
+        sessionId,
+        generation: entry.generation,
+        promise,
+        resolve,
+        timer
+      })
+      deps.connection.control(sessionId, { kind: 'list-models', requestId })
+      return promise
     },
 
     setName(sessionId, name): void {

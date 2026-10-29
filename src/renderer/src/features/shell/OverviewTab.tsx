@@ -105,7 +105,7 @@ function RunningOverview(): React.JSX.Element {
     value: PERMISSION_MODE_LABELS[config.permissionMode]
   })
   // 「起動時の権限モード」の行は起動時の値のまま。今のモードが起動時と違うときだけ、その下に足す (014 spec FR-010)。
-  // 名前は transcript の権限モードの行・警告の帯と同じ表 (`PERMISSION_MODE_NAMES`)。中央のヘッダには常設しない。
+  // 名前は transcript の権限モードの行・警告の帯と同じ表 (`PERMISSION_MODE_NAMES`)。composer の周りに選択がある (025)。
   if (currentMode !== null && currentMode !== config.permissionMode) {
     items.push({
       label: OVERVIEW_LABELS.currentPermissionMode,

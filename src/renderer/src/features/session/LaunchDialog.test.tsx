@@ -216,15 +216,14 @@ describe('LaunchDialog', () => {
     expect([...permission.options].map((o) => o.value)).toEqual(['default', 'plan', 'dontAsk'])
   })
 
-  it('dontAsk を選ぶと承認カードが出ないことを説明する (US-1 AC6)', async () => {
+  it('権限モードの説明の段落を出さない (025 FR-008)', async () => {
     install()
     render(<LaunchDialog session={fakeSession()} />)
     fireEvent.change(screen.getByRole('combobox', { name: '権限モード' }), {
       target: { value: 'dontAsk' }
     })
-    expect(screen.getByTestId('permission-mode-description').textContent).toContain(
-      '承認カードは出ません'
-    )
+    expect(screen.queryByTestId('permission-mode-description')).toBeNull()
+    expect(screen.queryByText(/承認カードは出ません/)).toBeNull()
   })
 
   it('到達できない Provider は選択肢に出ず、除外理由を示す (SC-001)', async () => {

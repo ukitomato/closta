@@ -63,11 +63,11 @@ function Items({
   readonly testId?: string
 }): React.JSX.Element {
   return (
-    <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5" data-testid={testId}>
+    <dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1.5" data-testid={testId}>
       {items.map((item) => (
         <div key={item.label} className="contents">
-          <dt className="text-muted-foreground">{item.label}</dt>
-          <dd className="min-w-0 break-words">{item.value}</dd>
+          <dt className="text-muted-foreground min-w-0 break-words">{item.label}</dt>
+          <dd className="text-end whitespace-nowrap tabular-nums">{item.value}</dd>
         </div>
       ))}
     </dl>
@@ -119,12 +119,8 @@ function UsageOf({
     lastTurn.permissionDenials >= MAX_METER_PERMISSION_DENIALS
       ? USAGE_LABELS.countAtLeast(formatCount(MAX_METER_PERMISSION_DENIALS))
       : USAGE_LABELS.countValue(formatCount(lastTurn.permissionDenials))
+  const beforeTokens: Item[] = [{ label: USAGE_LABELS.usageCost, value: costText(lastTurn.costUsd) }]
   const items: Item[] = [
-    { label: USAGE_LABELS.usageCost, value: costText(lastTurn.costUsd) },
-    {
-      label: USAGE_LABELS.usageTokens,
-      value: <Items items={tokenItems(totalsOf(lastTurn.models))} testId="usage-tokens" />
-    },
     { label: USAGE_LABELS.usageTurns, value: formatCount(lastTurn.turns) },
     {
       label: USAGE_LABELS.usageDeniedAuto,
@@ -134,6 +130,14 @@ function UsageOf({
   ]
   return (
     <div className="space-y-3 p-3 text-xs" data-testid="usage">
+      <Items items={beforeTokens} />
+      {/* トークンの内訳は値の dd の中に入れ子にせず、親の格子の外の行に字下げで置く (025 data-model §8) */}
+      <div className="space-y-1.5">
+        <p className="text-muted-foreground">{USAGE_LABELS.usageTokens}</p>
+        <div className="ps-3">
+          <Items items={tokenItems(totalsOf(lastTurn.models))} testId="usage-tokens" />
+        </div>
+      </div>
       <Items items={items} />
       <p className="text-muted-foreground" data-testid="usage-estimate-note">
         {USAGE_LABELS.usageEstimateNote}

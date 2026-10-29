@@ -1,4 +1,4 @@
-import { createContext, useContext } from 'react'
+import { createContext, useContext, type ReactNode } from 'react'
 
 import type { SlashCommandSource } from './slash-commands'
 
@@ -16,6 +16,11 @@ import type { SlashCommandSource } from './slash-commands'
 export interface ComposerExtensions {
   readonly commands: readonly SlashCommandSource[] | null
   readonly retryTextFor?: ((messageId: string) => string | null) | null
+  /**
+   * `ComposerAction` の左の群 (添付の右) に描く実行中の設定の選択 (025 data-model §6.1)。無ければ描かない
+   * (過去の会話・テストの harness)。`ComposerPrimitive.Input` と `onKeyDown` には触れない (AD-037)。
+   */
+  readonly settings?: ReactNode
 }
 
 const NO_EXTENSIONS: ComposerExtensions = { commands: null }

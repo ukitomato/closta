@@ -31,6 +31,7 @@ import {
   type Density,
   type LaunchRejectReason,
   type LaunchState,
+  type LiveModelsState,
   type LiveSessionState,
   type ResumeDialogState,
   type RunningSessionStoreState,
@@ -44,6 +45,7 @@ import { nextAwaiting, viewOf } from './session-view'
 export { ACTIVITY_THROTTLE_MS } from './running-session-monitor'
 export type {
   LaunchState,
+  LiveModelsState,
   LiveSessionState,
   PendingPermission,
   ResumeDialogState,
@@ -129,6 +131,11 @@ export interface SessionActions {
    * (`config.modelId` は書き換えない。FR-014)。
    */
   setModel(sessionId: string, modelId: string): void
+  /**
+   * 既定の Provider のモデルの一覧を Claude Code に聞く (025 / contracts C-7)。`idle` と `failed` からだけ始め
+   * (`loading` / `ready` では何もしない。重複して聞かない)、結果で `ready` / `failed` にする。`config` は書き換えない。
+   */
+  loadLiveModels(sessionId: string): void
   /**
    * セッションに名前を付ける (023 / contracts C-3)。成功したら main が返した名前を `name` に入れる
    * (`config` は書き換えない。FR-014)。成功なら `true`、失敗・結果の前に終わった行は `false`。
@@ -774,7 +781,8 @@ export function createRunningSessionStore(
       currentModelId: null,
       name: null,
       changing: null,
-      settingError: null
+      settingError: null,
+      liveModels: { phase: 'idle' }
     }
     createQueue(sessionId)
     store.setState((s) => ({
@@ -1017,6 +1025,33 @@ export function createRunningSessionStore(
             actions.endSetting(sessionId, 'model', result.ok)
           },
           () => actions.endSetting(sessionId, 'model', false)
+        )
+        .catch(() => undefined)
+    },
+
+    loadLiveModels(sessionId) {
+      const current = store.getState().sessions[sessionId]
+      if (current === undefined) return
+      if (current.liveModels.phase !== 'idle' && current.liveModels.phase !== 'failed') return
+      const settle = (liveModels: LiveModelsState): void => {
+        // 結果の前に消えた行は捨てる。
+        const row = store.getState().sessions[sessionId]
+        if (row === undefined) return
+        store.setState((s) => ({
+          sessions: { ...s.sessions, [sessionId]: { ...row, liveModels } }
+        }))
+      }
+      settle({ phase: 'loading' })
+      capability()
+        .listSessionModels(sessionId)
+        .then(
+          (result) =>
+            settle(
+              result.ok
+                ? { phase: 'ready', options: result.models, reportedCount: result.reportedCount }
+                : { phase: 'failed', reason: result.reason }
+            ),
+          () => settle({ phase: 'failed', reason: 'rejected' })
         )
         .catch(() => undefined)
     },

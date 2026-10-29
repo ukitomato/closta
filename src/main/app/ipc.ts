@@ -20,7 +20,11 @@ import type { DetectedCandidate } from '@domain/provider/types'
 import type { SessionControl, SessionLaunchHandshakeDTO } from '@domain/session/agent-session'
 import type { SessionIndexDTO } from '@domain/session/dto'
 import type { SafePermissionMode, SessionLaunchConfig } from '@domain/session/launch-config'
-import type { LiveSettingResult, RenameResult } from '@domain/session/live-settings'
+import type {
+  LiveModelsResult,
+  LiveSettingResult,
+  RenameResult
+} from '@domain/session/live-settings'
 import type { LaunchOrigin, LaunchUsageSummaryDTO } from '@domain/session/launch-usage'
 import type { PresetDTO, SavePresetResult } from '@domain/session/preset'
 import type { SessionResumeRequest } from '@domain/session/resume'
@@ -53,6 +57,7 @@ import {
   handleEndSession,
   handleInterruptSession,
   handleSetSessionPermissionMode,
+  handleListSessionModels,
   handleSetSessionModel,
   handleRenameSession,
   handleKillSession,
@@ -152,6 +157,8 @@ export interface IpcDependencies {
   /** 実行中の権限モードの切り替え (023)。結果は `LiveSettingResult`。 */
   setSessionPermissionMode(sessionId: string, mode: SafePermissionMode): Promise<LiveSettingResult>
   setSessionModel(sessionId: string, modelId: string): Promise<LiveSettingResult>
+  /** 既定の Provider のモデルの一覧 (025)。結果は `LiveModelsResult`。 */
+  listSessionModels(sessionId: string): Promise<LiveModelsResult>
   /** 実行中のセッションの改名 (023)。結果は `RenameResult` (成功なら trim した名前)。 */
   renameSession(sessionId: string, name: string): Promise<RenameResult>
 
@@ -402,6 +409,10 @@ export function registerIpcHandlers(deps: IpcDependencies): void {
 
   handle(IPC_CHANNELS.setSessionModel, async (_event, ...args): Promise<LiveSettingResult> =>
     handleSetSessionModel(deps, args)
+  )
+
+  handle(IPC_CHANNELS.listSessionModels, async (_event, ...args): Promise<LiveModelsResult> =>
+    handleListSessionModels(deps, args)
   )
 
   handle(IPC_CHANNELS.renameSession, async (_event, ...args): Promise<RenameResult> =>

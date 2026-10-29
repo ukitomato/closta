@@ -1,3 +1,4 @@
+import type { ModelEntry } from '@domain/provider/types'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -187,6 +188,79 @@ describe('control-result (023 / contracts C-4)', () => {
     ]) {
       expect(
         decodeSupervisorEventForMain(JSON.stringify({ kind: 'control-result', ...bad }))
+      ).toBeNull()
+    }
+  })
+})
+
+describe('models-result (025 / contracts C-9)', () => {
+  const entries: readonly ModelEntry[] = [
+    { id: 'a', displayName: 'A' },
+    { id: 'b', displayName: 'B', supportedEffortLevels: ['high'] }
+  ]
+
+  it('decodeWorkerMessage: requestId が UUID・models が null か配列のときだけ受け付ける', () => {
+    expect(decodeWorkerMessage({ kind: 'models-result', requestId: CONV, models: null })).toEqual({
+      kind: 'models-result',
+      requestId: CONV,
+      models: null
+    })
+    expect(decodeWorkerMessage({ kind: 'models-result', requestId: CONV, models: entries })).toEqual(
+      { kind: 'models-result', requestId: CONV, models: entries }
+    )
+    for (const bad of ['x', '', 42, null, undefined]) {
+      expect(decodeWorkerMessage({ kind: 'models-result', requestId: bad, models: [] })).toBeNull()
+    }
+    for (const bad of ['x', {}, 1, undefined]) {
+      expect(decodeWorkerMessage({ kind: 'models-result', requestId: CONV, models: bad })).toBeNull()
+    }
+  })
+
+  it('decodeSupervisorEventForMain: ModelEntry の形の配列が件数どおり通る', () => {
+    expect(
+      decodeSupervisorEventForMain(
+        encodeSupervisorEvent({
+          kind: 'models-result',
+          sessionId: ID,
+          requestId: CONV,
+          models: entries
+        })
+      )
+    ).toEqual({
+      kind: 'models-result',
+      sessionId: ID,
+      requestId: CONV,
+      models: entries,
+      dropped: 0
+    })
+  })
+
+  it('decodeSupervisorEventForMain: 形の外の要素が落ち、件数の差が dropped になる', () => {
+    const decoded = decodeSupervisorEventForMain(
+      JSON.stringify({
+        kind: 'models-result',
+        sessionId: ID,
+        requestId: CONV,
+        models: [entries[0], { id: '-bad', displayName: 'x' }, 7]
+      })
+    )
+    expect(decoded).toMatchObject({ models: [entries[0]], dropped: 2 })
+  })
+
+  it('decodeSupervisorEventForMain: null は失敗のまま・不正な形は null', () => {
+    expect(
+      decodeSupervisorEventForMain(
+        JSON.stringify({ kind: 'models-result', sessionId: ID, requestId: CONV, models: null })
+      )
+    ).toMatchObject({ models: null, dropped: 0 })
+    for (const bad of [
+      { sessionId: 'x', requestId: CONV, models: [] },
+      { sessionId: ID, requestId: 'x', models: [] },
+      { sessionId: ID, requestId: CONV, models: 'x' },
+      { sessionId: ID, requestId: CONV }
+    ]) {
+      expect(
+        decodeSupervisorEventForMain(JSON.stringify({ kind: 'models-result', ...bad }))
       ).toBeNull()
     }
   })

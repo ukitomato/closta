@@ -66,12 +66,15 @@ test.describe('動いているセッションの名前 (023)', () => {
 })
 
 test.describe('動いているセッションのモデル (023)', () => {
-  test('ヘッダの「モデル」を 2 つ目にすると、ヘッダの値と概要のタブの現在のモデルが変わる (SC-006)', async () => {
+  test('composer の周りの「モデル」を 2 つ目にすると、選択の値と概要のタブの現在のモデルが変わる (SC-006 / 025 SC-001)', async () => {
     const { app, page } = await launchApp()
     try {
       await reachSettledRowOnBedrock(page)
 
-      const select = page.getByTestId('center-header').getByRole('combobox', { name: 'モデル' })
+      const select = page
+        .getByTestId('composer-live-settings')
+        .getByRole('combobox', { name: 'モデル' })
+      await expect(page.getByTestId('center-header').getByRole('combobox')).toHaveCount(0)
       await expect(select.locator('option')).toHaveText(['E2E Sonnet', 'E2E Haiku'])
       await expect(select).toHaveValue('e2e-sonnet')
       await select.selectOption({ label: 'E2E Haiku' })
@@ -89,22 +92,58 @@ test.describe('動いているセッションのモデル (023)', () => {
   })
 })
 
+test.describe('既定の Provider のモデルの一覧 (025 / AD-065)', () => {
+  test('既定の Provider の行で、固定の 2 件が並び、2 つ目を選ぶと選択の値と概要のタブの現在のモデル (値) が変わる (SC-002)', async () => {
+    const { app, page } = await launchApp()
+    try {
+      // 既定の Provider (起動ダイアログの初期値) で最初の応答まで進める。
+      await reachSettledRow(page)
+
+      const select = page
+        .getByTestId('composer-live-settings')
+        .getByRole('combobox', { name: 'モデル' })
+      await expect(select.locator('option:not([disabled])')).toHaveText([
+        'E2E モデル A',
+        'E2E モデル B'
+      ])
+      await select.selectOption({ label: 'E2E モデル B' })
+
+      await expect(select).toHaveValue('e2e-model-b')
+      await page.getByRole('button', { name: '概要', exact: true }).click()
+      const overview = page.getByRole('tabpanel')
+      await expect(overview).toContainText('現在のモデル')
+      // 既定の Provider にはカタログが無いので、概要は選んだモデルの値 (id) を出す。
+      await expect(overview).toContainText('e2e-model-b')
+      await expect(page.getByTestId('live-setting-error')).toHaveCount(0)
+    } finally {
+      await app.close()
+    }
+  })
+})
+
 test.describe('動いているセッションの権限モード (023)', () => {
-  test('ヘッダの「権限モード」を plan にすると、ヘッダと概要のタブの現在の値が plan になる (SC-006)', async () => {
+  test('composer の周りの「権限モード」を plan にすると、選択と概要のタブの現在の値が plan になる (SC-006 / 025 SC-001・SC-003)', async () => {
     const { app, page } = await launchApp()
     try {
       await reachSettledRow(page)
 
-      const select = page.getByTestId('center-header').getByRole('combobox', { name: '権限モード' })
+      const select = page
+        .getByTestId('composer-live-settings')
+        .getByRole('combobox', { name: '権限モード' })
+      await expect(page.getByTestId('center-header').getByRole('combobox')).toHaveCount(0)
+      await expect(page.getByRole('button', { name: '名前を変更' })).toBeVisible()
       await expect(select).toHaveValue('default')
       await select.selectOption('plan')
+      // 表記は直に書かず、選択から読んだ文字列を「概要」と照合する (権限モードの名前の表は 1 か所。RK-08)。
+      const planName = (await select.locator('option[value="plan"]').textContent()) ?? ''
+      expect(planName).not.toBe('')
 
       await expect(select).toHaveValue('plan')
       // 右のペインは既定で畳んでいる。帯の「概要」のアイコンから開く。
       await page.getByRole('button', { name: '概要', exact: true }).click()
       const overview = page.getByRole('tabpanel')
       await expect(overview).toContainText('現在の権限モード')
-      await expect(overview).toContainText('計画のみ (実行しない)')
+      await expect(overview).toContainText(planName)
       await expect(page.getByTestId('live-setting-error')).toHaveCount(0)
     } finally {
       await app.close()

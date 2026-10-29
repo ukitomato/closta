@@ -426,7 +426,7 @@ export function sameFolderWarning(count: number): string {
 /**
  * 起動ダイアログの権限モードの名前 (安全 3 値)。文字列は transcript と共有の権限モードの名前の表
  * (`features/chat/labels.ts` の `PERMISSION_MODE_NAMES`) から取る — 同じモードの名前を 2 か所に分けない
- * (O-4 / 014 research R-15 / Principle XIV)。
+ * (O-4 / 014 research R-15 / Principle XIV)。名前は Claude Code の表記で、説明は付けない (025 / AD-065 Decision 3)。
  */
 export const PERMISSION_MODE_LABELS: Record<SafePermissionMode, string> = {
   default: PERMISSION_MODE_NAMES.default,
@@ -487,14 +487,6 @@ export const RESUME_PICKER_LABELS = {
   loading: '読み込み中',
   close: '閉じる'
 } as const
-
-/** 権限モードの意味の説明 (`dontAsk` は承認カードが出ず、事前承認の無い操作は拒否される。plan R-03)。 */
-export const PERMISSION_MODE_DESCRIPTIONS: Record<SafePermissionMode, string> = {
-  default: 'ファイル編集やコマンド実行のたびに承認カードで確認します。',
-  plan: '変更を加えずに計画だけを立てます。',
-  dontAsk:
-    '承認カードは出ません。事前に許可した操作だけが実行され、それ以外は自動的に拒否されて理由が表示されます。'
-}
 
 /** 起動設定ダイアログの軸ラベル (select の見出しと aria-label を兼ねる。FE-004)。 */
 export const LAUNCH_AXIS_LABELS = {

@@ -2,7 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { useAui, useAuiState, type QueueItemState } from '@assistant-ui/react'
 
+import { switchableModels } from '@domain/provider/model-catalog'
+import type { EffortLevel } from '@domain/provider/types'
 import type { LaunchFailureReason, PermissionDeniedInfo } from '@domain/session/agent-session'
+import type { SafePermissionMode } from '@domain/session/launch-config'
+import { liveSettingBlocker, type LiveSettingRow } from '@domain/session/live-settings'
 
 import { EmptyState, EmptyStateGreeting } from '@/components/assistant-ui/elements/empty-state'
 import { GenerationLoader } from '@/components/assistant-ui/elements/loading-state'
@@ -12,6 +16,7 @@ import {
   ComposerExtensionsContext,
   type ComposerExtensions
 } from '@/features/chat/composer-extensions-context'
+import { useProviders } from '@/features/provider/useProviders'
 import { TranscriptAnnouncer } from '@/features/chat/TranscriptAnnouncer'
 import {
   createMcpServerNamesReader,
@@ -29,6 +34,8 @@ import { handOffFocusToComposer } from './focus-handoff'
 import {
   isReloginFailure,
   launchFailureLabel,
+  LIVE_MODEL_LIST_FAILURE_LABELS,
+  LIVE_SETTING_LABELS,
   OLDER_MESSAGES_LABELS,
   olderMessagesLabel,
   RESUME_LABELS,
@@ -36,12 +43,19 @@ import {
   SESSION_END_NOTICES
 } from './labels'
 import { LaunchDialog, type LaunchSource } from './LaunchDialog'
+import { LiveSettingsControls } from './LiveSettingsControls'
 import { resumeActionFor, useRowActionRunner, type RowResumeAction } from './resume-action'
 import { useRunningSessionStore, useRunningSessionStoreApi } from './running-session-context'
-import { RESUMED_ID_PREFIX, slashCommandEntries, type SessionQueue } from './running-session-store'
+import {
+  RESUMED_ID_PREFIX,
+  slashCommandEntries,
+  type LiveModelsState,
+  type SessionQueue
+} from './running-session-store'
 import { useRunningSessionsView } from './running-sessions-view'
 import { MESSAGE_WINDOW } from './session-view'
 import type { LiveSession } from './useLiveSession'
+import { useSessionMeters } from './useSessionMeters'
 
 /**
  * **中央の本体の実行中の Chat と、起動ダイアログの中身** (O-7 / FE-002。X-5 の `SessionScreen` から移した)。
@@ -168,6 +182,47 @@ function LiveSessionPane({
   const sessionMeters = useRunningSessionStore((s) => s.meters[session.sessionId])
   const runningStore = useRunningSessionStoreApi()
   const sessionId = session.sessionId
+  // 実行中の設定の選択は composer の左の群に描く (025 FR-001 / data-model §6.2)。
+  const settingsRow = useMemo<LiveSettingRow>(
+    () => ({
+      state: session.runState,
+      claudeAlive: !session.ended,
+      hasConversation: state.resumable,
+      changing: state.changing !== null
+    }),
+    [session.runState, session.ended, state.resumable, state.changing]
+  )
+  const { setPermissionMode, setModel, loadLiveModels } = session
+  const settings = useMemo(
+    () => (
+      <LiveComposerSettings
+        sessionId={sessionId}
+        configPermissionMode={state.config.permissionMode}
+        providerId={state.config.providerId}
+        effort={state.config.effort}
+        modelId={state.config.modelId}
+        currentModelId={state.currentModelId}
+        row={settingsRow}
+        liveModels={state.liveModels}
+        onLoadLiveModels={loadLiveModels}
+        onSelectPermissionMode={setPermissionMode}
+        onSelectModel={setModel}
+      />
+    ),
+    [
+      sessionId,
+      state.config.permissionMode,
+      state.config.providerId,
+      state.config.effort,
+      state.config.modelId,
+      state.currentModelId,
+      state.liveModels,
+      settingsRow,
+      loadLiveModels,
+      setPermissionMode,
+      setModel
+    ]
+  )
   const composerExtensions = useMemo<ComposerExtensions>(
     () => ({
       commands: sessionMeters === undefined ? null : slashCommandEntries(sessionMeters),
@@ -175,9 +230,10 @@ function LiveSessionPane({
       retryTextFor: (messageId) =>
         messageId.startsWith(RESUMED_ID_PREFIX)
           ? null
-          : refusedUserText(runningStore.getState().sessions[sessionId]?.messages ?? [], messageId)
+          : refusedUserText(runningStore.getState().sessions[sessionId]?.messages ?? [], messageId),
+      settings
     }),
-    [sessionMeters, runningStore, sessionId]
+    [sessionMeters, runningStore, sessionId, settings]
   )
   // 承認カードは応答すると消える。押したボタンがカードの中にあれば、消す前に composer へ移す (O-4 FR-019)。
   const approvalRef = useRef<HTMLDivElement>(null)
@@ -307,6 +363,96 @@ function LiveSessionPane({
           </LiveProgressContext.Provider>
         </TranscriptSettledContext.Provider>
       </div>
+    </div>
+  )
+}
+
+/** 既定の Provider の一覧が選べない理由の文言 (025 data-model §6.3)。選べるとき・Provider のあるセッションは null。 */
+function liveModelsUnavailableReason(liveModels: LiveModelsState): string | null {
+  switch (liveModels.phase) {
+    case 'idle':
+    case 'loading':
+      return LIVE_SETTING_LABELS.loadingModelList
+    case 'failed':
+      return LIVE_MODEL_LIST_FAILURE_LABELS[liveModels.reason]
+    case 'ready':
+      if (liveModels.options.length > 0) return null
+      return liveModels.reportedCount === 0
+        ? LIVE_SETTING_LABELS.emptyModelList
+        : LIVE_SETTING_LABELS.noModelForEffort
+  }
+}
+
+/**
+ * composer の左の群の実行中の設定の選択 (025 data-model §6.2)。今の権限モードは `meters.permissionMode ?? 起動の値`
+ * (表示は `meters` から読む。023 contracts C-1)。モデルの選択肢はそのセッションの Provider のカタログのうち起動の effort が
+ * 効くもの (main と同じ `switchableModels`)。確定 (マウス・Enter) の後は composer の入力へフォーカスを戻す。
+ */
+export function LiveComposerSettings({
+  sessionId,
+  configPermissionMode,
+  providerId,
+  effort,
+  modelId,
+  currentModelId,
+  row,
+  liveModels,
+  onLoadLiveModels,
+  onSelectPermissionMode,
+  onSelectModel
+}: {
+  readonly sessionId: string
+  readonly configPermissionMode: SafePermissionMode
+  readonly providerId: string | null
+  readonly effort: EffortLevel | null
+  readonly modelId: string | null
+  readonly currentModelId: string | null
+  readonly row: LiveSettingRow
+  /** 既定の Provider のモデルの一覧の状態 (025 / data-model §6.3)。Provider のあるセッションでは使わない。 */
+  readonly liveModels: LiveModelsState
+  readonly onLoadLiveModels: () => void
+  readonly onSelectPermissionMode: (mode: SafePermissionMode) => void
+  readonly onSelectModel: (modelId: string) => void
+}): React.JSX.Element {
+  const reported = useSessionMeters(sessionId, (meters) => meters.permissionMode)
+  const providers = useProviders()
+  const provider =
+    providerId === null ? null : (providers.providers?.find((p) => p.id === providerId) ?? null)
+  const isLive = providerId === null
+  // 取得は設定を変えないので `changing` は見ない (main の判定と同じ。data-model §3.1)。
+  const canAsk = liveSettingBlocker('model', { ...row, changing: false }) === null
+  const phase = liveModels.phase
+  useEffect(() => {
+    // 選択が描かれていて聞ける状態になったら 1 回だけ聞く (`ready` の後は聞き直さない)。
+    if (isLive && canAsk && phase === 'idle') onLoadLiveModels()
+  }, [isLive, canAsk, phase, onLoadLiveModels])
+  const options = isLive
+    ? liveModels.phase === 'ready'
+      ? liveModels.options
+      : []
+    : provider === null
+      ? []
+      : switchableModels(provider.models, effort)
+  const unavailableReason = isLive ? liveModelsUnavailableReason(liveModels) : null
+  // フォーカスがこの中にあるときだけ composer へ移す (別の場所で入力している利用者のフォーカスを奪わない)。
+  const scope = useRef<HTMLDivElement>(null)
+  return (
+    <div ref={scope} className="flex min-w-0 items-center" data-testid="composer-live-settings">
+      <LiveSettingsControls
+        permissionMode={reported ?? configPermissionMode}
+        row={row}
+        onSelectPermissionMode={onSelectPermissionMode}
+        model={{
+          value: currentModelId ?? modelId,
+          options: options.map((m) => ({ id: m.id, displayName: m.displayName })),
+          available: isLive ? options.length > 0 : provider !== null,
+          unavailableReason,
+          onSelect: onSelectModel,
+          // 失敗した一覧は、選択にフォーカスが入ったときに 1 回だけ聞き直す (data-model §6.3)。
+          onFocus: isLive && canAsk && phase === 'failed' ? onLoadLiveModels : undefined
+        }}
+        onConfirmed={() => handOffFocusToComposer(scope.current)}
+      />
     </div>
   )
 }

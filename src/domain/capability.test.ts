@@ -43,6 +43,8 @@ const EXPECTED_CHANNELS = {
   // 023: 実行中の設定の変更 (AD-062)。
   setSessionPermissionMode: 'closta:setSessionPermissionMode',
   setSessionModel: 'closta:setSessionModel',
+  // 025: 既定の Provider のモデルの一覧 (AD-065)。
+  listSessionModels: 'closta:listSessionModels',
   renameSession: 'closta:renameSession',
   sessionPort: 'closta:sessionPort',
   sessionStatus: 'closta:sessionStatus',

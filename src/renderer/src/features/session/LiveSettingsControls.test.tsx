@@ -1,16 +1,14 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { axe } from 'vitest-axe'
 
-import type { ProviderSummaryDTO } from '@domain/provider/dto'
 import type { SafePermissionMode } from '@domain/session/launch-config'
 import type { LiveSettingRow } from '@domain/session/live-settings'
 import type { PermissionModeKey } from '@domain/session/meter'
 
 import { RunningSessionStoreContext } from '@/features/session/running-session-context'
 import { createRunningSessionStore } from '@/features/session/running-session-store'
-import { EMPTY_SESSION_METERS } from '@/features/session/running-session-types'
 import { LIVE_SETTING_LABELS } from '@/features/session/labels'
 import { installCapability, stubCapability } from '@/test-support/capability'
 
@@ -142,14 +140,9 @@ describe('CenterHeader の権限モード (meters・失敗の 1 行)', () => {
       runtimeId: 'wsl:Ubuntu',
       modelId: null,
       terminal: false,
-      configPermissionMode: 'plan',
       settingRow: READY,
       settingError: null,
-      onSelectPermissionMode: () => undefined,
-      providerId: null,
-      effort: null,
       currentModelId: null,
-      onSelectModel: () => undefined,
       name: null,
       onRename: async () => true,
       ...over
@@ -185,23 +178,18 @@ describe('CenterHeader の権限モード (meters・失敗の 1 行)', () => {
     }
   }
 
-  it('meters の報告が無ければ起動の値を出し、報告が届けば表示が変わる', () => {
-    const { store } = renderHeader(live())
-    expect(select().value).toBe('plan')
-    act(() =>
-      store.setState((s) => ({
-        meters: { ...s.meters, [A]: { ...EMPTY_SESSION_METERS, permissionMode: 'dontAsk' } }
-      }))
-    )
-    expect(select().value).toBe('dontAsk')
+  it('中央のヘッダに権限モード・モデルの選択を描かない (025 FR-001。composer の周りへ移った)', () => {
+    renderHeader(live())
+    expect(screen.queryByRole('combobox', { name: '権限モード' })).toBeNull()
+    expect(screen.queryByRole('combobox', { name: 'モデル' })).toBeNull()
+    expect(screen.getByRole('button', { name: '名前を変更' })).toBeInTheDocument()
   })
 
-  it('失敗の 1 行が出て、表示は元の値のまま。次の変更の開始 (settingError が null) で消える', () => {
+  it('失敗の 1 行がヘッダの下に出る。次の変更の開始 (settingError が null) で消える', () => {
     const { rerender } = renderHeader(live({ settingError: 'permission-mode' }))
     expect(screen.getByTestId('live-setting-error')).toHaveTextContent(
       LIVE_SETTING_LABELS.failure['permission-mode']
     )
-    expect(select().value).toBe('plan')
     rerender(live({ settingError: null, settingRow: { ...READY, changing: true } }))
     expect(screen.queryByTestId('live-setting-error')).toBeNull()
   })
@@ -323,86 +311,6 @@ describe('CenterHeader の権限モード (meters・失敗の 1 行)', () => {
         <CenterHeader title="t" detail={null} status="読み取り専用" titleTestId="past-title" />
       )
       expect(screen.queryByRole('button', { name: '名前を変更' })).toBeNull()
-    })
-  })
-
-  describe('モデルの選択 (Provider のカタログ)', () => {
-    const PROVIDER: ProviderSummaryDTO = {
-      id: 'p1',
-      displayName: 'P1',
-      backend: 'bedrock',
-      source: 'aws-profile',
-      modelCount: 3,
-      models: [
-        { id: 'sonnet', displayName: 'Sonnet', supportedEffortLevels: ['low', 'high'] },
-        { id: 'opus', displayName: 'Opus', supportedEffortLevels: ['high'] },
-        { id: 'haiku', displayName: 'Haiku' }
-      ]
-    }
-    const modelSelect = (): HTMLSelectElement => screen.getByRole('combobox', { name: 'モデル' })
-    const modelOptions = (): string[] =>
-      Array.from(modelSelect().querySelectorAll('option')).map((o) => o.value)
-
-    it('選択肢は起動の effort が効くモデルだけで、今の値が選ばれる', async () => {
-      installCapability({ listProviders: async () => [PROVIDER] })
-      renderHeader(live({ providerId: 'p1', effort: 'low', modelId: 'sonnet' }))
-      await waitFor(() => expect(modelOptions()).toEqual(['sonnet']))
-      expect(modelSelect().value).toBe('sonnet')
-    })
-
-    it('effort が null ならカタログの全部。選ぶと操作が呼ばれる。currentModelId が今の値になる', async () => {
-      installCapability({ listProviders: async () => [PROVIDER] })
-      const onSelectModel = vi.fn()
-      const { container } = renderHeader(
-        live({ providerId: 'p1', modelId: 'sonnet', currentModelId: 'opus', onSelectModel })
-      )
-      await waitFor(() => expect(modelOptions()).toEqual(['sonnet', 'opus', 'haiku']))
-      expect(modelSelect().value).toBe('opus')
-      expect((await axe(container, AXE_RULES)).violations).toEqual([])
-      await userEvent.selectOptions(modelSelect(), 'haiku')
-      expect(onSelectModel).toHaveBeenCalledExactlyOnceWith('haiku')
-    })
-
-    it('起動の model が null なら「既定」が選べない項目で出る', async () => {
-      installCapability({ listProviders: async () => [PROVIDER] })
-      renderHeader(live({ providerId: 'p1', modelId: null }))
-      await waitFor(() => expect(modelOptions()).toContain(''))
-      const first = modelSelect().querySelectorAll('option')[0]
-      expect(first).toHaveTextContent(LIVE_SETTING_LABELS.defaultModel)
-      expect(first).toBeDisabled()
-    })
-
-    it('Provider が null (既定) なら押せず理由が出る', async () => {
-      installCapability({ listProviders: async () => [PROVIDER] })
-      renderHeader(live({ providerId: null }))
-      expect(modelSelect()).toHaveAttribute('aria-disabled', 'true')
-      expect(modelSelect()).toHaveAccessibleDescription(LIVE_SETTING_LABELS.noModelList)
-    })
-
-    it('Provider が一覧に無い・選択肢が 0 のときも押せない', async () => {
-      installCapability({ listProviders: async () => [{ ...PROVIDER, models: [] }] })
-      renderHeader(live({ providerId: 'p1' }))
-      await waitFor(() => expect(modelSelect()).toHaveAttribute('aria-disabled', 'true'))
-      expect(modelSelect()).toHaveAccessibleDescription(LIVE_SETTING_LABELS.noModelList)
-    })
-
-    it('changing の間は権限モードもモデルも押せない', async () => {
-      installCapability({ listProviders: async () => [PROVIDER] })
-      renderHeader(live({ providerId: 'p1', settingRow: { ...READY, changing: true } }))
-      await waitFor(() => expect(modelOptions().length).toBeGreaterThan(0))
-      expect(modelSelect()).toHaveAttribute('aria-disabled', 'true')
-      expect(modelSelect()).toHaveAccessibleDescription(LIVE_SETTING_LABELS.blocker.busy)
-      expect(select()).toHaveAttribute('aria-disabled', 'true')
-    })
-
-    it('失敗の 1 行が出ても、表示は元のモデルのまま', async () => {
-      installCapability({ listProviders: async () => [PROVIDER] })
-      renderHeader(live({ providerId: 'p1', modelId: 'sonnet', settingError: 'model' }))
-      await waitFor(() => expect(modelOptions().length).toBeGreaterThan(0))
-      expect(screen.getByTestId('live-setting-error')).toHaveTextContent(
-        LIVE_SETTING_LABELS.failure.model
-      )
-      expect(modelSelect().value).toBe('sonnet')
     })
   })
 })

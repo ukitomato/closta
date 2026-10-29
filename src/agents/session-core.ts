@@ -494,6 +494,12 @@ export function decodeSessionControl(value: unknown): SessionControl | null {
       if (!isValidSessionId(requestId) || !isValidModelId(model)) return null
       return { kind: 'set-model', requestId, model }
     }
+    // 既定の Provider のモデルの一覧の取得 (025 / AD-065)。requestId が空でない文字列であることだけを見る。
+    case 'list-models': {
+      const { requestId } = control
+      if (!isValidSessionId(requestId)) return null
+      return { kind: 'list-models', requestId }
+    }
     default:
       return null
   }

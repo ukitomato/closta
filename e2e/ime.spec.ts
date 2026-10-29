@@ -194,7 +194,55 @@ test.describe('会話内検索のバーの IME (012 SC-002)', () => {
 })
 
 /**
- * O-3 / 012 SC-003 / US-3 AC5 — **composer で変換中に Ctrl+K を押しても Command palette が開かない**。
+ * 025 / SC-004 / US-3 — **生成中に composer で Esc を押すと止まる。ただし変換中の Esc は止めない**。
+ * 止まった = 「生成を止める」ボタンが消える (`interrupt` で状態が `interrupted` になる)。
+ * 生成を長く保つため負荷用の合図 (`__e2e_load__`。30 秒 running) を使う。
+ */
+test.describe('composer の Esc による停止 (025 SC-004)', () => {
+  test('変換中の Esc では止まらず、確定の後の Esc で止まる', async () => {
+    const { app, page } = await launchApp()
+    try {
+      const composer = await reachActiveComposer(page)
+      await composer.fill('__e2e_load__')
+      await page.keyboard.press('Enter')
+      const stop = page.getByRole('button', { name: '生成を止める', exact: true })
+      await expect(stop).toBeVisible()
+
+      await composer.focus()
+      const cdp = await page.context().newCDPSession(page)
+      await cdp.send('Input.imeSetComposition', {
+        text: 'にほんご',
+        selectionStart: 4,
+        selectionEnd: 4
+      })
+      // 変換中の Esc (isComposing=true / keyCode 229)。止まらない。
+      await cdp.send('Input.dispatchKeyEvent', {
+        type: 'rawKeyDown',
+        windowsVirtualKeyCode: 229,
+        key: 'Process'
+      })
+      await cdp.send('Input.dispatchKeyEvent', {
+        type: 'keyUp',
+        windowsVirtualKeyCode: 229,
+        key: 'Process'
+      })
+      // 止まらないことの確認なので、中断の反映を待てるだけ待ってから見る。
+      await page.waitForTimeout(400)
+      await expect(stop).toBeVisible()
+
+      // 確定の後の Esc (変換していない) で止まる。
+      await cdp.send('Input.insertText', { text: 'にほんご' })
+      await expect(composer).toHaveValue('にほんご')
+      await page.keyboard.press('Escape')
+      await expect(stop).toHaveCount(0)
+    } finally {
+      await app.close()
+    }
+  })
+})
+
+/**
+ * O-3 / 012 SC-003 / US-3 AC5— **composer で変換中に Ctrl+K を押しても Command palette が開かない**。
  * palette の Ctrl+K は `window` の keydown (capture) で受け、`isComposing` / 229 のときは何もしない (`preventDefault` も
  * しない。`CommandPalette`)。jsdom はキーの発火順を再現しないので、実描画の Chromium で確かめる (plan RK-06)。
  */

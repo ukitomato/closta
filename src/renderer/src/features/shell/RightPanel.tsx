@@ -72,7 +72,9 @@ export function RightPanel({
     if (tab === undefined) return
     event.preventDefault()
     setTab(tab.id)
-    document.getElementById(`panel-tab-${tab.id}`)?.focus()
+    const el = document.getElementById(`panel-tab-${tab.id}`)
+    el?.focus()
+    el?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
   }
 
   return (
@@ -142,7 +144,7 @@ export function RightPanel({
           <div
             role="tablist"
             aria-label={SHELL_LABELS.panelTabs}
-            className="flex flex-1 gap-1"
+            className="flex min-w-0 flex-1 gap-1 overflow-x-auto [scrollbar-width:thin]"
             onKeyDown={onTabListKeyDown}
           >
             {visible.map((tab) => {
@@ -160,13 +162,16 @@ export function RightPanel({
                   tabIndex={isCurrent ? 0 : -1}
                   data-attention={attention ? 'true' : undefined}
                   className={cn(
-                    'rounded-md px-2 py-1 text-xs',
+                    'shrink-0 rounded-md px-2 py-1 text-xs whitespace-nowrap',
                     attention && 'inline-flex items-center gap-1',
                     isCurrent
                       ? 'bg-accent text-accent-foreground font-semibold'
                       : 'text-muted-foreground hover:text-foreground'
                   )}
-                  onClick={() => setTab(tab.id)}
+                  onClick={(event) => {
+                    setTab(tab.id)
+                    event.currentTarget.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+                  }}
                 >
                   {tab.label}
                   {attention && (
