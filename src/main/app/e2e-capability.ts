@@ -702,7 +702,8 @@ export function createE2eCapability(): E2eCapability {
     listSessions: async () => pastIndex,
     refreshSessions: async () => pastIndex,
     fetchMoreSessions: async () => emptySessionIndex(Date.now()),
-    sessionTargetKeys: () => [],
+    // 固定の索引の WSL の所在だけ既知にする (025 `/resume` の `resolvePastResume` が既知の `targetKey` を要る)。
+    sessionTargetKeys: () => [`${runtimeId}#0`],
     getTranscript: async (_sessionId, _targetKey, requestToken) => ({
       handshake: { status: 'empty', requestToken },
       port: null

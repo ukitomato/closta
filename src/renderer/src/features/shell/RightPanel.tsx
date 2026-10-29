@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useLayoutEffect, useRef } from 'react'
 
 import { PanelRightCloseIcon, PanelRightOpenIcon, TriangleAlertIcon } from 'lucide-react'
 
@@ -63,6 +63,19 @@ export function RightPanel({
     return toggleRef.current
   })
 
+  // 選んだタブの描き直し (太字で幅が少し広がる) の後にも見える範囲へ入れる。選ぶ前の幅で 1 度だけ寄せると、
+  // 端のタブが 1〜2px はみ出す (025 SC-005)。
+  const currentId = current?.id ?? null
+  const scrolledId = useRef(currentId)
+  useLayoutEffect(() => {
+    if (scrolledId.current === currentId) return
+    scrolledId.current = currentId
+    if (collapsed || currentId === null) return
+    document
+      .getElementById(`panel-tab-${currentId}`)
+      ?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+  }, [collapsed, currentId])
+
   /** tablist のキー操作 (014 data-model §6)。移った先を選び、そのタブの button にフォーカスを移す。 */
   const onTabListKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
     const index = visible.findIndex((tab) => tab.id === current?.id)
@@ -72,9 +85,7 @@ export function RightPanel({
     if (tab === undefined) return
     event.preventDefault()
     setTab(tab.id)
-    const el = document.getElementById(`panel-tab-${tab.id}`)
-    el?.focus()
-    el?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+    document.getElementById(`panel-tab-${tab.id}`)?.focus()
   }
 
   return (
@@ -168,10 +179,7 @@ export function RightPanel({
                       ? 'bg-accent text-accent-foreground font-semibold'
                       : 'text-muted-foreground hover:text-foreground'
                   )}
-                  onClick={(event) => {
-                    setTab(tab.id)
-                    event.currentTarget.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
-                  }}
+                  onClick={() => setTab(tab.id)}
                 >
                   {tab.label}
                   {attention && (

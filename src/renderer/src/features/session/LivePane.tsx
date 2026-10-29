@@ -437,10 +437,23 @@ export function LiveComposerSettings({
   // 取得は設定を変えないので `changing` は見ない (main の判定と同じ。data-model §3.1)。
   const canAsk = liveSettingBlocker('model', { ...row, changing: false }) === null
   const phase = liveModels.phase
+  const failedReason = liveModels.phase === 'failed' ? liveModels.reason : null
+  const askedAtState = useRef<string | null>(null)
   useEffect(() => {
-    // 選択が描かれていて聞ける状態になったら 1 回だけ聞く (`ready` の後は聞き直さない)。
-    if (isLive && canAsk && phase === 'idle') onLoadLiveModels()
-  }, [isLive, canAsk, phase, onLoadLiveModels])
+    if (!isLive || !canAsk) return
+    // 選択が描かれていて聞ける状態になったら聞く (`ready` の後は聞き直さない)。
+    if (phase === 'idle') {
+      askedAtState.current = row.state
+      onLoadLiveModels()
+      return
+    }
+    // main の状態の反映は画面の状態より遅れうる (状態通知はまとめて届く)。そのため `not-ready` で断られた一覧は、
+    // 状態が変わったときに 1 回だけ聞き直す (同じ状態では聞き直さない = 繰り返さない)。
+    if (phase === 'failed' && failedReason === 'not-ready' && askedAtState.current !== row.state) {
+      askedAtState.current = row.state
+      onLoadLiveModels()
+    }
+  }, [isLive, canAsk, phase, failedReason, row.state, onLoadLiveModels])
   const options = isLive
     ? liveModels.phase === 'ready'
       ? liveModels.options

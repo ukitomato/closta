@@ -80,3 +80,6 @@ src/renderer/src/features/shell/UsageTab.tsx
 src/renderer/src/test-support/app-shell-harness.tsx
 src/renderer/src/test-support/capability.ts
 tests/rule-fixtures/expected.mjs
+src/main/app/e2e-capability.ts
+src/renderer/src/features/session/LivePane.tsx
+src/renderer/src/features/shell/RightPanel.tsx
