@@ -12,7 +12,7 @@ Sync Impact Report (v1.5.0)
 - Last amended: 2026-10-29
 - Bump rationale: MINOR。Principle XV の Exceptions に、権限モードの名前を Claude Code の CLI の表記のまま使い説明を付けない
   項を足した (AD-065 Decision 3 / 4。指針の実質的な拡張)。MAJOR に当たらない理由: 既存の文言を違反に変えない
-- 改定手順: 1 = AD-065 (accepted) / 2 = 名前の表 (`PERMISSION_MODE_NAMES`) の差分と同じ別の PR で人間のレビューを受ける
+- 改定手順: 1 = AD-065 (accepted) / 2 = 名前の表 (`PERMISSION_MODE_NAMES`) の差分と同じ O-13 の PR の中で人間のレビューを受ける (マージ後に利用者が行い、覆すときは別の PR で直す)
   (025 RK-08) / 3 = MINOR / 4 = Amendment trail / 5 = 下記の enumeration
 
 Modified sections:
@@ -1104,7 +1104,7 @@ v1.2.4 は改定手順に新しい規則 (ADR の in-place 訂正) を足した�
 | 1.2.9 | 2026-10-02 | [AD-043](../../docs/decisions/0043-single-supervisor-session-threads-and-session-limit.md) Decision 2 (X-5 pr-gate R1〜R3 architecture H-001)。事実の追随 (PATCH)。Principle IX の Automated の字面「`src/agents/` の外に stream の `JSON.parse` 処理が存在しないこと」を「main process と調停役スレッドに存在しないこと」に改めた。X-5 では renderer が中継された本文 (`BODY_MAX_BYTES` で有界) を復元し、同じ節の Good example (X-5) と字面が食い違っていた。禁じる対象 (main を固めない) と Statement は不変 |
 | 1.3.0 | 2026-10-03 | [AD-044](../../docs/decisions/0044-ui-coverage-assignment.md) (O-2)。指針の実質的な拡張 (MINOR)。**Principle XII の割当を 3 種類 (実装済み / 後続 / 表示不要) にし、`後続: <未完了の feature ID>` を割当済みとみなした**。ToolFallback だけの `実装済み` は Tier B / C に限る。**M3 の完了の条件を「Tier A の後続の行のうち割当先が M3 の feature の行が 0」と定めた**。Automated を Constitution 検証の項目 21 (SDK の型定義との名前の集合の照合・割当の書式・SDK の版) に移し、`bad_pattern_grep` を割当の列に限った。Manual の `ui-coverage-reviewer` を配置済みにした。Principle XIII の element の数を registry の 127 名に、未分類 59 を F 節での解消に追随させた。Statement も「割当を持たせる」に改めた。既存違反 0 (項目 21 ok、M3 の残り 24) |
 | 1.4.0 | 2026-10-07 | [AD-045](../../docs/decisions/0045-ui-labels-no-i18n-resources.md) (O-3)。指針の実質的な拡張 (MINOR)。**Principle XV の UI labels の「i18n リソース化の要否は M3 (O-1〜O-3) までに判断する」を確定の判断に置き換えた** — リソース化しない。UI の文言は feature ごとの文言の表に置き、コンポーネントへの直書きを新たに増やさない (AD-045 Decision 2)。再検討の条件 (AD-045 Decision 4)、`target-finder.ts` の 2 本の例外 (Decision 3)、Verification (機械強制なし・`ux-reviewer` が基準線 331 行 (AD-045 Confirmation) から見る) を足した。既存の直書きは違反に数えない (「新たに増やさない」の規則)。改定手順 2 (architecture-reviewer を交えた人間のレビュー) は O-3 の PR で受ける |
-| 1.5.0 | 2026-10-29 | [AD-065](../../docs/decisions/0065-live-model-list-and-claude-code-permission-mode-names.md) Decision 3 / 4 (O-13 / 025)。指針の実質的な拡張 (MINOR)。**Principle XV の Exceptions に、権限モードの名前は Claude Code の CLI の表記をそのまま使い説明を付けない項を足した**。名前の表は `features/chat/labels.ts` の `PERMISSION_MODE_NAMES` の 1 か所で、照合の版は同じファイルの定数。版を上げるときは `docs/ui-coverage.md` の手順で見直す。既存違反は 0 件 (英語の名前は文言の表の中で、直書きを増やさない)。改定手順 2 (人間のレビュー) は名前の表の差分と同じ別の PR で受ける (RK-08) |
+| 1.5.0 | 2026-10-29 | [AD-065](../../docs/decisions/0065-live-model-list-and-claude-code-permission-mode-names.md) Decision 3 / 4 (O-13 / 025)。指針の実質的な拡張 (MINOR)。**Principle XV の Exceptions に、権限モードの名前は Claude Code の CLI の表記をそのまま使い説明を付けない項を足した**。名前の表は `features/chat/labels.ts` の `PERMISSION_MODE_NAMES` の 1 か所で、照合の版は同じファイルの定数。版を上げるときは `docs/ui-coverage.md` の手順で見直す。既存違反は 0 件 (英語の名前は文言の表の中で、直書きを増やさない)。改定手順 2 (人間のレビュー) は名前の表の差分と同じ O-13 の PR に含め、マージ後に利用者が行う (覆すときは別の PR で直す。名前の表を Constitution の改定より先に main に入れない、という RK-08 は同じ PR なので満たす) |
 
 ## References
 

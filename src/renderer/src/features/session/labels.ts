@@ -484,6 +484,7 @@ export const RESUME_PICKER_LABELS = {
   title: '過去のセッションを再開',
   search: 'セッションを検索',
   empty: 'このフォルダに過去のセッションはありません',
+  noMatch: (query: string): string => `「${query}」に合うセッションがありません`,
   loading: '読み込み中',
   close: '閉じる'
 } as const

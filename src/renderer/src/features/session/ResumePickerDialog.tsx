@@ -144,7 +144,11 @@ function ResumePickerBody({
             data-testid="resume-picker-empty"
           >
             <p className="text-sm">
-              {loading ? RESUME_PICKER_LABELS.loading : RESUME_PICKER_LABELS.empty}
+              {loading
+                ? RESUME_PICKER_LABELS.loading
+                : all.length > 0
+                  ? RESUME_PICKER_LABELS.noMatch(query.trim())
+                  : RESUME_PICKER_LABELS.empty}
             </p>
           </EmptyState>
         }

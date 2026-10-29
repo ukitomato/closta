@@ -148,6 +148,14 @@ describe('ResumePickerDialog', () => {
     )
   })
 
+  it('検索で 0 件なら「合うセッションがありません」で、全件 0 件の文言は出さない', async () => {
+    mount(async () => OK)
+    fireEvent.change(await screen.findByRole('combobox'), { target: { value: 'zzz' } })
+    expect((await screen.findByTestId('resume-picker-empty')).textContent).toBe(
+      RESUME_PICKER_LABELS.noMatch('zzz')
+    )
+  })
+
   it('Esc で閉じると onClose と composer への戻しが呼ばれ、interruptSession は呼ばれない', async () => {
     const interruptSession = vi.fn()
     const onClose = vi.fn()

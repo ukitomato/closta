@@ -858,7 +858,7 @@ const ComposerAction: FC<{ composing: RefObject<boolean> }> = ({ composing }) =>
               type="button"
               variant="outline"
               size="icon"
-              className="aui-composer-cancelsize-7 rounded-full"
+              className="aui-composer-cancel size-7 rounded-full"
               aria-label={COMPOSER_LABELS.stop}
             >
               <SquareIcon className="aui-composer-cancel-icon size-3.5 fill-current" />

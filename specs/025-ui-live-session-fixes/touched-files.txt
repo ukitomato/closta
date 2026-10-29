@@ -83,3 +83,12 @@ tests/rule-fixtures/expected.mjs
 src/main/app/e2e-capability.ts
 src/renderer/src/features/session/LivePane.tsx
 src/renderer/src/features/shell/RightPanel.tsx
+src/renderer/src/components/assistant-ui/elements/thread.aui.tsx
+src/renderer/src/features/session/ResumePickerDialog.tsx
+src/renderer/src/features/session/ResumePickerDialog.test.tsx
+src/renderer/src/features/session/labels.ts
+src/renderer/src/features/chat/composer-escape.test.tsx
+.specify/memory/constitution.md
+docs/roadmap.md
+specs/025-ui-live-session-fixes/tasks.md
+specs/025-ui-live-session-fixes/plan.md

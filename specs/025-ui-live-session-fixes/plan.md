@@ -388,7 +388,7 @@
 | RK-05 | composer の左の群に選択が入って、狭い幅で送信ボタンや入力欄が崩れる | 右の群を `shrink-0` に、選択を `min-w-0` / `truncate` にする。基準画像と E2E の狭い幅 (CI の画面) で確かめる |
 | RK-06 | 基準画像 (`composer-screenshot.spec.ts`) が変わる | 理由を PR に書き、CI の artifact から取る (SC-007。memory「CI red on main」) |
 | RK-07 | O-12 が持ち越した Principle XII の改定 (v1.5.0) と版が衝突する | 先にマージされた方が 1.5.0 で、後の方が 1.6.0 にする。Amendment trail の行の順で読む |
-| RK-08 | 夜間の規則で PR をマージすると、改定手順 2 (人間のレビュー) を満たせない | 分けるときは、Constitution の差分 (SH-011) と**それに依る名前の表の変更 (FE-010)** を同じ別の PR に入れ、人間のレビューを待つ。夜間にマージする本体の PR は権限モードの名前を今の表のまま残す (Governance「Constitution を正とする」と AD-065 Decision 4 の改定手順 2 より先に例外を main に入れない)。本体の PR のテストは名前を文字列で書かずに `PERMISSION_MODE_NAMES` を参照し、どちらの PR が先にマージされても通る形にする |
+| RK-08 | 夜間の規則で PR をマージすると、改定手順 2 (人間のレビュー) を満たせない | 利用者の決定 (2026-10-29 の夜間の指示) で、Constitution の差分 (SH-011) と**それに依る名前の表の変更 (FE-010)** は分けず、この PR に含めてマージする。人間のレビューはマージ後に利用者が朝に行い、覆すときは別の PR で直す。RK-08 の本質 (Governance「Constitution を正とする」により、名前の表を Constitution の改定より先に main に入れない) は同じ PR なので満たす。テストは名前を文字列で書かずに `PERMISSION_MODE_NAMES` を参照する |
 | RK-09 | `/resume` の選ぶ画面に今のセッション自身が出る | renderer は会話の id を持たないので除けない (AD-059)。選べば `resolvePastResume` の判定に任せる。V-7 で記録し、紛らわしければ後続で main に除外の問い合わせを足す |
 
 ## Project Structure

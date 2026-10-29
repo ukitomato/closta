@@ -103,5 +103,7 @@ describe('composer の Esc による停止 (FE-030)', () => {
     render(<Harness isRunning onCancel={() => {}} />)
     const stop = screen.getByRole('button', { name: COMPOSER_LABELS.stop })
     expect(stop.getAttribute('data-variant')).toBe('outline')
+    expect(stop.classList.contains('size-7')).toBe(true)
+    expect(stop.classList.contains('aui-composer-cancel')).toBe(true)
   })
 })
