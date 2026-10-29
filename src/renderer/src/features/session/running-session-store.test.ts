@@ -570,6 +570,24 @@ describe('running-session-store — 送信待ちキュー (X-2 をセッショ�
     emit(port, { kind: 'state', state: 'done' })
     expect(h.cap.sendPrompt).not.toHaveBeenCalled()
   })
+
+  it('/resume は実行中でも待機中でも送らず、拒否も出さず、選ぶ画面を開く (025 FR-017)', async () => {
+    const h = harness()
+    const port = await launched(h, A)
+    expect(h.store.getState().sessions[A]?.resumePicker).toBe(false)
+    emit(port, { kind: 'state', state: 'running' })
+    h.store.queueOf(A)?.adapter.steer(appendMessage('/resume abc'))
+    expect(h.store.getState().sessions[A]).toMatchObject({
+      resumePicker: true,
+      queueRejection: null
+    })
+    h.store.closeResumePicker(A)
+    expect(h.store.getState().sessions[A]?.resumePicker).toBe(false)
+    expect(h.store.interceptAppCommand(A, '/resume')).toBe(true)
+    expect(h.store.getState().sessions[A]?.resumePicker).toBe(true)
+    expect(h.store.interceptAppCommand(A, 'hello')).toBe(false)
+    expect(h.cap.sendPrompt).not.toHaveBeenCalled()
+  })
 })
 
 describe('running-session-store — tool の結果とシステムイベントの行 (O-2 FE-010)', () => {

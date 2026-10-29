@@ -217,6 +217,7 @@ function useLiveRuntime(
     // queue 提供時 runtime は送信を queue に回すため onNew は呼ばれない (append 実装)。queue 非提供時の fallback。
     onNew: (message) => {
       const text = extractText(message)
+      if (session !== null && session.interceptAppCommand(text)) return Promise.resolve()
       if (session !== null && text.length > 0) {
         session.appendUser(text)
         session.send(text)

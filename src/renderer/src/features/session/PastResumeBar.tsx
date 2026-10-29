@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { useUiStore, type FolderDraftSeed } from '@/stores/ui'
 
 import { RESUME_LABELS, RESUME_UNAVAILABLE_LABELS } from './labels'
+import { startPastResume } from './past-resume'
 import { useRunningSessionStoreApi } from './running-session-context'
 
 /**
@@ -68,18 +69,7 @@ export function PastResumeBar({
 
   const open = (): void => {
     if (result === null || !result.ok) return
-    store.openResume({
-      source: { kind: 'past', targetKey, conversationId },
-      fixed: {
-        folderId: result.folderId,
-        runtimeId: result.runtimeId,
-        providerId: result.providerId
-      },
-      initial: null,
-      initialOrigin: 'manual',
-      replaces: null
-    })
-    setLaunchOpen(true)
+    startPastResume({ store, setLaunchOpen }, targetKey, conversationId, result)
   }
 
   return (

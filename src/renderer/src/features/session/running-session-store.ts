@@ -17,6 +17,7 @@ import { normalizeSlashCommandName } from '@domain/session/session-init-report'
 import { mergeSystemEvent, systemEventPartOf } from '@domain/session/system-event'
 import type { TranscriptMessageDTO } from '@domain/session/transcript-dto'
 
+import { parseAppCommand } from '@/features/chat/app-commands'
 import { fromSystemEventData, toThreadMessage } from '@/features/chat/convert'
 import { readMessageTime, withMessageTime, withReceivedAt } from '@/features/chat/message-time'
 import { decodeTranscriptMessage } from '@/features/chat/transcript-guard'
@@ -178,6 +179,13 @@ export interface SessionActions {
   /** 行と保持を消す。表示中なら選択を外す (FR-011)。 */
   close(sessionId: string): void
   clearQueueRejection(sessionId: string): void
+  /**
+   * 送信された入力がアプリのコマンドなら処理して true を返す (025 / data-model §7.1。今は `/resume` だけ。
+   * 選ぶ画面を開く)。true のときは Claude Code に送らず、拒否の表示も出さない。
+   */
+  interceptAppCommand(sessionId: string, text: string): boolean
+  /** `/resume` の選ぶ画面を閉じる (025)。 */
+  closeResumePicker(sessionId: string): void
   queueOf(sessionId: string): SessionQueue | null
   /** `window` の port 受け渡しと状態通知の購読を張る。解除関数を返す。 */
   attach(target: Window): () => void
@@ -649,6 +657,13 @@ export function createRunningSessionStore(
     buffered.clear()
   }
 
+  /** アプリのコマンドの横取り (data-model §7.1)。実行中の送信 (queue) と待機中の送信 (`onNew`) が共有する。 */
+  const interceptAppCommand = (sessionId: string, text: string): boolean => {
+    if (parseAppCommand(text) !== 'resume') return false
+    patch(sessionId, { resumePicker: true })
+    return true
+  }
+
   const createQueue = (sessionId: string): void => {
     const controller = createMessageQueue({
       run: (message) => {
@@ -662,8 +677,11 @@ export function createRunningSessionStore(
         actions.send(sessionId, text)
       }
     })
-    const adapter = createCappedAdapter(controller.adapter, (verdict) =>
-      patch(sessionId, { queueRejection: verdict === 'ok' ? null : verdict })
+    const adapter = createCappedAdapter(
+      controller.adapter,
+      (verdict) => patch(sessionId, { queueRejection: verdict === 'ok' ? null : verdict }),
+      undefined,
+      (text) => interceptAppCommand(sessionId, text)
     )
     queues.set(sessionId, { controller, adapter, prevBusy: false })
   }
@@ -782,7 +800,8 @@ export function createRunningSessionStore(
       name: null,
       changing: null,
       settingError: null,
-      liveModels: { phase: 'idle' }
+      liveModels: { phase: 'idle' },
+      resumePicker: false
     }
     createQueue(sessionId)
     store.setState((s) => ({
@@ -1223,6 +1242,14 @@ export function createRunningSessionStore(
 
     clearQueueRejection(sessionId) {
       patch(sessionId, { queueRejection: null })
+    },
+
+    interceptAppCommand(sessionId, text) {
+      return interceptAppCommand(sessionId, text)
+    },
+
+    closeResumePicker(sessionId) {
+      patch(sessionId, { resumePicker: false })
     },
 
     queueOf(sessionId) {

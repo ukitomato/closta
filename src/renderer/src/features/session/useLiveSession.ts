@@ -46,6 +46,10 @@ export interface LiveSession extends SessionView {
   kill(): void
   close(): void
   clearQueueRejection(): void
+  /** 入力がアプリのコマンドなら処理して true (025。`onNew` の入口が使う)。 */
+  interceptAppCommand(text: string): boolean
+  /** `/resume` の選ぶ画面を閉じる (025)。 */
+  closeResumePicker(): void
   /** 実行中の権限モードの切り替え (023)。 */
   setPermissionMode(mode: SafePermissionMode): void
   /** 実行中のモデルの切り替え (023)。 */
@@ -91,6 +95,15 @@ export function useLiveSession(sessionId: string): LiveSession | null {
     [store, sessionId]
   )
 
+  const interceptAppCommand = useCallback(
+    (text: string) => store.interceptAppCommand(sessionId, text),
+    [store, sessionId]
+  )
+  const closeResumePicker = useCallback(
+    () => store.closeResumePicker(sessionId),
+    [store, sessionId]
+  )
+
   const setPermissionMode = useCallback(
     (mode: SafePermissionMode) => store.setPermissionMode(sessionId, mode),
     [store, sessionId]
@@ -124,6 +137,8 @@ export function useLiveSession(sessionId: string): LiveSession | null {
       kill,
       close,
       clearQueueRejection,
+      interceptAppCommand,
+      closeResumePicker,
       setPermissionMode,
       setModel,
       loadLiveModels,
@@ -145,6 +160,8 @@ export function useLiveSession(sessionId: string): LiveSession | null {
     kill,
     close,
     clearQueueRejection,
+    interceptAppCommand,
+    closeResumePicker,
     setPermissionMode,
     setModel,
     loadLiveModels,

@@ -58,6 +58,10 @@ export function handOffFocusFromClosingRow(origin: Element): void {
  * 中央の本体の部品が自分ごと消える**前**に呼ぶ (`scope` は押した要素かその部品)。フォーカスが `scope` の中にあれば、表示中の
  * ペインの composer へ移す。composer が無効なら移さない。
  */
+export function focusComposerIn(pane: Element | null): void {
+  pane?.querySelector<HTMLElement>(ENABLED_COMPOSER_INPUT)?.focus()
+}
+
 export function handOffFocusToComposer(scope: Element | null): void {
   if (scope === null || !hasFocusWithin(scope)) return
   scope.closest(LIVE_PANE)?.querySelector<HTMLElement>(ENABLED_COMPOSER_INPUT)?.focus()

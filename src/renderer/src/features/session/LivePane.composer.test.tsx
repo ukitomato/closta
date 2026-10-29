@@ -144,7 +144,7 @@ describe('コマンドの候補 (FE-031 / US-3 AC1〜AC4・SC-006)', () => {
     )
     await waitFor(() => expect(input()).toBeInTheDocument())
     await user.click(input())
-    await user.keyboard('/re')
+    await user.keyboard('/rev')
     const list = await screen.findByRole('listbox', { name: COMPOSER_LABELS.commandCandidates })
     expect(list).toHaveTextContent('/review')
     expect(list).toHaveTextContent('<pr>')
@@ -176,7 +176,7 @@ describe('コマンドの候補 (FE-031 / US-3 AC1〜AC4・SC-006)', () => {
     await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull())
   })
 
-  it('21 件で 20 件と「ほか 1 件」', async () => {
+  it('21 件 + アプリのコマンド 1 件で 20 件と「ほか 2 件」', async () => {
     const user = userEvent.setup()
     const h = await setup()
     h.emit(
@@ -189,7 +189,7 @@ describe('コマンドの候補 (FE-031 / US-3 AC1〜AC4・SC-006)', () => {
     await user.keyboard('/')
     const list = await screen.findByRole('listbox')
     expect(list.querySelectorAll('[role="option"]')).toHaveLength(20)
-    expect(list).toHaveTextContent(COMPOSER_LABELS.moreCommands(1))
+    expect(list).toHaveTextContent(COMPOSER_LABELS.moreCommands(2))
   })
 
   it('一致する候補が 0 件なら枠は出ず、Enter は候補を入れずに送る (H-001)', async () => {
@@ -205,12 +205,15 @@ describe('コマンドの候補 (FE-031 / US-3 AC1〜AC4・SC-006)', () => {
     expect(input()).not.toHaveValue('/review ')
   })
 
-  it('構成が届いていない (一覧が無い) ときは出ない', async () => {
+  it('構成が届いていない (一覧が無い) ときは Claude Code の候補が無く、アプリのコマンドだけが出る', async () => {
     const user = userEvent.setup()
     await setup()
     await waitFor(() => expect(input()).toBeInTheDocument())
     await user.click(input())
     await user.keyboard('/re')
-    expect(screen.queryByRole('listbox')).toBeNull()
+    const list = await screen.findByRole('listbox')
+    const options = list.querySelectorAll('[role="option"]')
+    expect(options).toHaveLength(1)
+    expect(options[0]).toHaveTextContent('/resume')
   })
 })

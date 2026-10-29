@@ -16,6 +16,7 @@ import {
   ComposerExtensionsContext,
   type ComposerExtensions
 } from '@/features/chat/composer-extensions-context'
+import { mergeCommandCandidates } from '@/features/chat/app-commands'
 import { useProviders } from '@/features/provider/useProviders'
 import { TranscriptAnnouncer } from '@/features/chat/TranscriptAnnouncer'
 import {
@@ -30,7 +31,7 @@ import {
 import { ApprovalCard } from './ApprovalCard'
 import { DEFAULT_MAX_QUEUE_ITEMS, type EnqueueVerdict } from './composer-queue'
 import { ElicitationCard } from './ElicitationCard'
-import { handOffFocusToComposer } from './focus-handoff'
+import { focusComposerIn, handOffFocusToComposer } from './focus-handoff'
 import {
   isReloginFailure,
   launchFailureLabel,
@@ -44,6 +45,7 @@ import {
 } from './labels'
 import { LaunchDialog, type LaunchSource } from './LaunchDialog'
 import { LiveSettingsControls } from './LiveSettingsControls'
+import { ResumePickerDialog } from './ResumePickerDialog'
 import { resumeActionFor, useRowActionRunner, type RowResumeAction } from './resume-action'
 import { useRunningSessionStore, useRunningSessionStoreApi } from './running-session-context'
 import {
@@ -225,7 +227,10 @@ function LiveSessionPane({
   )
   const composerExtensions = useMemo<ComposerExtensions>(
     () => ({
-      commands: sessionMeters === undefined ? null : slashCommandEntries(sessionMeters),
+      // アプリのコマンド (`/resume`) を先に並べる。meters が無くてもアプリのコマンドは渡す (025 data-model §7)。
+      commands: mergeCommandCandidates(
+        sessionMeters === undefined ? null : slashCommandEntries(sessionMeters)
+      ),
       // それまでの会話 (`resumed:`) は読み取り専用。再送の入力を戻さない (X-9 / data-model §8.2)。
       retryTextFor: (messageId) =>
         messageId.startsWith(RESUMED_ID_PREFIX)
@@ -236,6 +241,8 @@ function LiveSessionPane({
     [sessionMeters, runningStore, sessionId, settings]
   )
   // 承認カードは応答すると消える。押したボタンがカードの中にあれば、消す前に composer へ移す (O-4 FR-019)。
+  const paneRef = useRef<HTMLDivElement>(null)
+  const { closeResumePicker } = session
   const approvalRef = useRef<HTMLDivElement>(null)
   const elicitationRef = useRef<HTMLDivElement>(null)
   const firstElicitation = state.elicitations[0]
@@ -250,7 +257,15 @@ function LiveSessionPane({
 
   return (
     // `data-live-pane`: 消えるボタンのフォーカスの行き先 (この中の composer) を探す根 (O-4 FR-019。`focus-handoff.ts`)。
-    <div className="flex h-full min-h-0 flex-col" data-live-pane="">
+    <div ref={paneRef} className="flex h-full min-h-0 flex-col" data-live-pane="">
+      {/* `/resume` の選ぶ画面 (025 FR-016)。選ばずに閉じたら composer の入力へ戻す。 */}
+      {state.resumePicker && (
+        <ResumePickerDialog
+          folderId={state.config.folderId}
+          onClose={closeResumePicker}
+          returnFocus={() => focusComposerIn(paneRef.current)}
+        />
+      )}
       {/* error 状態は必ず理由と次操作を出す。failure イベントが理由を伴わず来た場合も汎用表示に倒す (X-1 US-4 AC-8)。 */}
       {errored && (
         <FailureBanner

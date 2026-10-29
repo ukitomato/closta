@@ -38,6 +38,7 @@ SDK: `@anthropic-ai/sdk` 0.125.0
 2. 足りない行を足して割当を書き、消えた行を消し、冒頭の `SDK:` の版を書き換える (B 節は `@anthropic-ai/sdk` の版の行も書き換える。Agent SDK を上げると peer の版が変わりうる)。**SDK が型を正当に減らしたとき** (「SDK から読めた名前が極端に少ない」で落ちる) は、`scripts/ui-coverage/coverage.mjs` の `LOWER_BOUNDS` (parse の取りこぼしを捕まえる下限。今は実数と同じ) も新しい数に直す
 3. 項目 21 が ok になることを確かめる。`ui-coverage-reviewer` が pr-gate で割当の妥当性を見る
 4. 過去ログの fixture と実機の 1 件で、`getSessionMessages` の返りの `timestamp` から `createdAt` が埋まることを確かめる (型に無い値。AD-051)。消えていれば AD-051 の Confirmation に従う
+5. 権限モードの名前の表 (`PERMISSION_MODE_NAMES`) と照合の版 (`CLAUDE_CODE_PERMISSION_MODE_NAMES_VERSION`) を、上げた Claude Code の表記と照合する (AD-065 Decision 3 / Constitution Principle XV の Exceptions)
 
 ## A メッセージ型
 
@@ -216,15 +217,15 @@ SDK のメッセージではなく、アプリが SDK の callback・制御・�
 | interrupt | `interrupt` | A | 実装済み: 中断の操作と Stopped の表示 (実行中) | 実行中 | |
 | can_use_tool | `can_use_tool` | A | 実装済み: ApprovalCard (実行中) | 実行中 | D 節の permission-request |
 | initialize | `initialize` | B | 表示不要: 内部制御 | なし | |
-| set_permission_mode | `set_permission_mode` | B | 実装済み: 中央のヘッダの権限モードの選択 (実行中) | なし | 起動時の選択は X-4 のダイアログ。実行中の切り替えは X-6 (023) |
-| set_model | `set_model` | B | 実装済み: 中央のヘッダのモデルの選択 (実行中) | なし | X-6 (023) |
+| set_permission_mode | `set_permission_mode` | B | 実装済み: composer の周りの権限モードの選択 (実行中) | なし | 起動時の選択は X-4 のダイアログ。実行中の切り替えは X-6 (023) |
+| set_model | `set_model` | B | 実装済み: composer の周りのモデルの選択 (実行中) | なし | X-6 (023) |
 | set_max_thinking_tokens | `set_max_thinking_tokens` | B | 表示不要: SDK が deprecated。思考量は起動時の effort の軸 (AD-041 (g)) | なし | |
 | rename_session | `rename_session` | B | 実装済み: 中央のヘッダの「名前を変更」(実行中) | なし | セッション名。SDK の `renameSession()` で書く (X-6 / 023) |
 | set_color | `set_color` | B | 表示不要: CLI の表示色でアプリに当たる設定が無い | なし | |
 | mcp_status | `mcp_status` | B | 表示不要: init の mcp_servers で足りる (AD-048) | なし | O-5。MCP サーバーの名前と状態は構成のタブ (A SDKSystemMessage)。制御要求を呼ばない (AD-048 Decision 2) |
 | get_context_usage | `get_context_usage` | A | 表示不要: 制御要求を呼ばない。コンテキストの使用量は主ループの assistant の usage と result の contextWindow から推定する (U-3) | なし | Context display は assistant の usage と result の contextWindow の推定で実装済み (経路: 実行中。中央のヘッダの ContextCostMeter)。カテゴリ別の内訳は出さない (Claude Code の `/context` で見られる)。AD-047 Decision 4 |
 | get_session_cost | `get_session_cost` | B | 表示不要: 制御要求を呼ばない。費用は毎ターンの result の total_cost_usd (推定) で足りる (U-3) | なし | 費用は使用量のタブ (UsageTab) と中央のヘッダの目盛り (ContextCostMeter) に出る。AD-047 Decision 4 |
-| list_models | `list_models` | B | 表示不要: モデルの一覧は Provider のモデルカタログから出す (X-3 / X-4) | なし | |
+| list_models | `list_models` | B | 実装済み: 既定の Provider のセッションのモデルの一覧を `supportedModels` から読み、composer の周りの選択に出す (AD-065)。他の Provider は Provider のモデルカタログ (X-3 / X-4) | なし | 025 |
 | get_usage | `get_usage` | B | 表示不要: 制御要求を呼ばない。トークンとモデルごとの内訳は毎ターンの result の modelUsage で足りる (U-3) | なし | プランの全窓の利用率の一覧は出さない (レート制限に近づいたこと・超えたことは rate_limit_event の Quota banner)。AD-047 Decision 4 |
 | get_binary_version | `get_binary_version` | B | 表示不要: 内部制御 | なし | |
 | mcp_call | `mcp_call` | B | 表示不要: アプリは MCP・プラグイン・スキルを操作しない (AD-048) | なし | |
@@ -281,8 +282,8 @@ assistant-ui の element の一覧 (https://www.assistant-ui.com/elements。**20
 | Composer attachments | B | SDK の外: 中央の本体の composer (`thread.aui.tsx` の `ComposerAttachments` / `ComposerAddAttachment`) | adapter を設定していないので、添付は受け付けない (O-7 pr-gate R2 ui-coverage M-005 の残り) |
 | Composer context | B | 未使用 | |
 | Composer mentions | B | 未使用 | E file_suggestions |
-| Composer model picker | B | 未使用 | 起動設定ダイアログで選ぶ (X-4)。X-6 (023) で照合した: 実行中のモデルの切り替えは中央のヘッダの選択で実装し、element は取り込まない (023 U-7) |
-| Composer slash commands | A | D composer (候補) | O-10。registry の element は取り込まず、primitive 直接 + 自作 (候補の見た目は `features/chat`。IME のガードはライブラリ側) |
+| Composer model picker | B | 未使用 | 起動設定ダイアログで選ぶ (X-4)。X-6 (023) で照合した: 実行中のモデルの切り替えは composer の周りの選択で実装し (023 では中央のヘッダ。025 で移した)、element は取り込まない (023 U-7 / 025 R-11) |
+| Composer slash commands | A | D composer (候補) | O-10。registry の element は取り込まず、primitive 直接 + 自作 (候補の見た目は `features/chat`。IME のガードはライブラリ側)。025 でアプリのコマンド `/resume` を Claude Code の候補に合成して先頭に出す (`features/chat/app-commands.ts`)。送信は横取りして過去のセッションを選ぶ画面を開く |
 | Composer trigger popover | B | 未使用 | O-10 の照合: `Unstable_TriggerPopoverRoot` / `Unstable_TriggerPopover` の primitive を直接使い、registry の `.aui` のラッパーは取り込まない |
 | Composer voice | C | 未使用 | Voice 系 |
 | Computer use | C | 未使用 | |
@@ -335,7 +336,7 @@ assistant-ui の element の一覧 (https://www.assistant-ui.com/elements。**20
 | Message queue | A | D message-queue | X-2 |
 | Message timing | B | A SDKAssistantMessage / A SDKUserMessage | O-9。中央の本体の各メッセージの時刻とターンの所要時間 (`features/chat/MessageTimeLabel.tsx`)。registry の `message-timing` / `elements-message-timing` は採らず、文字の体裁で作った (SH-002 の照合の写し。正本は O-9 の PR の説明。017 research R-10): `message-timing` はストリームの統計 (`metadata.timing`) を読むが本アプリはメッセージ単位で更新する (X-1)。standalone の版は文言が英語の直書きで、メッセージの時刻と所要時間を出す形と合わない |
 | Mobile composer | C | 未使用 | PLAN §4.4 |
-| Model selector | A | 未使用 | 起動設定ダイアログ (X-4) は session の操作 UI。X-6 (023) で照合した: 実行中のモデルの切り替えは中央のヘッダの選択で実装し、element は取り込まない (023 U-7) |
+| Model selector | A | 未使用 | 起動設定ダイアログ (X-4) は session の操作 UI。X-6 (023) で照合した: 実行中のモデルの切り替えは composer の周りの選択で実装し (023 では中央のヘッダ。025 で移した)、element は取り込まない (023 U-7 / 025 R-11) |
 | Number ticker | C | 未使用 | |
 | Onboarding | B | 未使用 | |
 | Option list | C | 未使用 | Generative |
@@ -356,7 +357,7 @@ assistant-ui の element の一覧 (https://www.assistant-ui.com/elements。**20
 | Schedule card | C | 未使用 | Generative |
 | Score breakdown | C | 未使用 | Generative |
 | Scroll anchor | A | A SDKAssistantMessage | R-3 |
-| Settings | B | 未使用 | registry の `elements-settings-panel` はモデル・system prompt・temperature の設定の部品で、アプリの設定 (ランタイム・作業フォルダ・Provider・組み合わせ) と合わない。O-7 の設定のダイアログは既存の Dialog で組んだ (O-7 research R-04)。実行中のモデル・thinking の切り替え (E set_model / set_max_thinking_tokens。X-6) の候補 — X-6 で Model selector / Composer model picker と合わせて照合する (pr-gate R1 ui-coverage L-001)。X-6 (023) で照合した: 実行中のモデルの切り替えは中央のヘッダの選択で実装し、element は取り込まない (023 U-7) |
+| Settings | B | 未使用 | registry の `elements-settings-panel` はモデル・system prompt・temperature の設定の部品で、アプリの設定 (ランタイム・作業フォルダ・Provider・組み合わせ) と合わない。O-7 の設定のダイアログは既存の Dialog で組んだ (O-7 research R-04)。実行中のモデル・thinking の切り替え (E set_model / set_max_thinking_tokens。X-6) の候補 — X-6 で Model selector / Composer model picker と合わせて照合する (pr-gate R1 ui-coverage L-001)。X-6 (023) で照合した: 実行中のモデルの切り替えは composer の周りの選択で実装し (023 では中央のヘッダ。025 で移した)、element は取り込まない (023 U-7 / 025 R-11) |
 | Shared conversation | C | 未使用 | |
 | Shiki highlighter | A | B assistant/text | markdown のコード |
 | Sources | B | B assistant/web_search_tool_result | 未取り込み (O-12 FE-001): registry の source が repo に無く、リンクの開き方・http(s) 以外の除外・英語の既定の文言の 3 条件を読んで確かめられないため、ServerToolCall の中の一覧を自作した。WebSearch (クライアントの tool) の結果の文からはリンクを推測しない (O-6 U-5) |

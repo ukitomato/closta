@@ -355,6 +355,36 @@ function createE2eSupervisorConnection(): SupervisorConnection {
           s.promptSent = true
           if (control.text === E2E_CONVERSATION_PROMPT) {
             for (const l of conversationL) l(1, sessionId, E2E_CONVERSATION_ID)
+            // 右のパネルの「使用量」の E2E 用 (025 FE-042): 7 桁以上のトークンとモデル別の内訳 2 件。
+            emit(s, {
+              kind: 'meter',
+              meter: {
+                type: 'turn',
+                costUsd: 12.3456,
+                turns: 3,
+                permissionDenials: 0,
+                models: [
+                  {
+                    modelId: 'e2e-model-a',
+                    input: 1234567,
+                    output: 2345678,
+                    cacheRead: 12345678,
+                    cacheCreation: 3456789,
+                    costUsd: 8.1234,
+                    contextWindow: 200000
+                  },
+                  {
+                    modelId: 'e2e-model-b',
+                    input: 1111111,
+                    output: 2222222,
+                    cacheRead: 3333333,
+                    cacheCreation: 4444444,
+                    costUsd: 4.2222,
+                    contextWindow: 200000
+                  }
+                ]
+              }
+            })
           }
           setState(sessionId, s, 'running')
           if (control.text === E2E_LOAD_PROMPT) {
@@ -732,8 +762,12 @@ export function createE2eCapability(): E2eCapability {
       return { ok: true, name: normalized }
     },
 
-    // 再開 (X-9): 稼働中の行は本物の調停を通る。過去の行は列挙の索引に会話の行が無いので常に再開できない。
-    resolvePastResume: async () => ({ ok: false, reason: 'source-unknown' }),
+    // 再開 (X-9): 稼働中の行は本物の調停を通る。過去の行は、登録フォルダ (e2e-folder) の固定の索引の行 (WSL の所在) だけ
+    // 軸が解ける (025 FE-054 `/resume` の E2E。ダイアログを開くところまで。起動はしない)。ほかは再開できない。
+    resolvePastResume: async (targetKey) =>
+      targetKey === `${runtimeId}#0`
+        ? { ok: true, folderId, runtimeId, providerId: null }
+        : { ok: false, reason: 'source-unknown' },
     resumeSession: (request) => resumeService.resume(request),
     getResumedTranscript: async (_sessionId, requestToken) => ({
       handshake: { status: 'failed', requestToken, reasonKey: 'transcript-read-failed' },

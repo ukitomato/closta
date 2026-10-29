@@ -116,6 +116,8 @@ export interface LiveSessionState {
   readonly settingError: LiveSettingKind | null
   /** 既定の Provider のモデルの一覧の状態 (025 / data-model §6.3)。Provider のあるセッションでは使わない。 */
   readonly liveModels: LiveModelsState
+  /** `/resume` の選ぶ画面を開いているか (025 / data-model §7.2)。 */
+  readonly resumePicker: boolean
 }
 
 /** 既定の Provider のモデルの一覧の状態 (025 / data-model §6.3)。永続化しない。 */

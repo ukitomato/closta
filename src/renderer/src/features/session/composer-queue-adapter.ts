@@ -23,9 +23,12 @@ function appendText(message: AppendMessage): string {
 export function createCappedAdapter(
   base: QueueAdapter,
   onResult: (verdict: EnqueueVerdict) => void,
-  maxItems: number = DEFAULT_MAX_QUEUE_ITEMS
+  maxItems: number = DEFAULT_MAX_QUEUE_ITEMS,
+  /** アプリのコマンドの横取り (025)。true なら base も `onResult` も呼ばない (拒否の表示も出さない)。 */
+  intercept?: (text: string) => boolean
 ): QueueAdapter {
   const guard = (lane: 'steer' | 'enqueue', message: AppendMessage): void => {
+    if (intercept?.(appendText(message).trim()) === true) return
     // 上限は「積まれている総件数」で見る (両 lane 合計。lane 分割は native の実行状態依存で利用者には 1 つのキュー)。
     const pending = base.items.length + base.steerItems.length
     const verdict = classifyEnqueue(appendText(message), pending, maxItems)
