@@ -41,7 +41,6 @@ import {
   LAUNCH_BLOCKER_LABELS,
   LAUNCH_EMPTY_STATE_LABELS,
   launchRejectLabel,
-  PERMISSION_MODE_DESCRIPTIONS,
   PERMISSION_MODE_LABELS,
   previousFailureLabel,
   PROVIDER_DEFAULT_LABELS,
@@ -761,9 +760,6 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
             </option>
           ))}
         </select>
-        <span className="text-muted-foreground text-xs" data-testid="permission-mode-description">
-          {PERMISSION_MODE_DESCRIPTIONS[effective.permissionMode]}
-        </span>
       </label>
 
       {shownResets.length > 0 && (

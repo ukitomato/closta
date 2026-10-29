@@ -18,7 +18,8 @@ import { PERMISSION_MODE_NAMES } from '@/features/chat/labels'
 import { LIVE_SETTING_LABELS, PERMISSION_MODE_LABELS } from '@/features/session/labels'
 
 /**
- * **中央のヘッダの実行中の設定の選択** (023 / data-model §8.1 / §8.2)。稼働中のセッションだけで描く。
+ * **実行中の設定の選択** (023 / data-model §8.1 / §8.2)。稼働中のセッションだけで描く。025 から置き場所は composer の左の群
+ * (`ComposerExtensions.settings`。中央のヘッダには置かない。名前の変更 `EditableSessionTitle` と失敗の 1 行はヘッダに残る)。
  *
  * | 規則 | 根拠 |
  * |---|---|
@@ -36,6 +37,11 @@ export interface LiveSettingsControlsProps {
   readonly onSelectPermissionMode: (mode: SafePermissionMode) => void
   /** モデルの選択 (023 / data-model §8.2)。無ければモデルの選択を描かない。 */
   readonly model?: LiveModelSelect
+  /**
+   * マウスの選択と Enter で確定した後に呼ぶ (LivePane が composer の入力へフォーカスを戻す。025 data-model §6.2)。
+   * blur での確定では呼ばない。
+   */
+  readonly onConfirmed?: (() => void) | undefined
 }
 
 /** 切り替えられるモデルの選択肢と今の値 (選択肢は `switchableModels` の結果。表示は `displayName`)。 */
@@ -45,7 +51,14 @@ export interface LiveModelSelect {
   readonly options: readonly { readonly id: string; readonly displayName: string }[]
   /** Provider が null・一覧に無い・一覧の読み込み中・選択肢 0 のとき false (押せない。理由は「モデルの一覧がありません」)。 */
   readonly available: boolean
+  /**
+   * 既定の Provider の一覧が使えないときの理由の文言 (025 / data-model §6.3。読み込み中・空・失敗)。
+   * 受け付けの判定 (`liveSettingBlocker`) の理由が先に出る。無ければ `available` / 選択肢 0 で `noModelList`。
+   */
+  readonly unavailableReason?: string | null
   readonly onSelect: (modelId: string) => void
+  /** 選択にフォーカスが入ったとき (失敗した一覧の聞き直し。025 data-model §6.3)。 */
+  readonly onFocus?: (() => void) | undefined
 }
 
 const DEFAULT_MODEL_VALUE = ''
@@ -60,7 +73,8 @@ const DISABLED_SELECT_CLASS = 'aria-disabled:cursor-not-allowed aria-disabled:op
  */
 function useConfirmedSelect(
   current: string,
-  commit: (value: string) => void
+  commit: (value: string) => void,
+  onConfirmed?: () => void
 ): {
   readonly value: string
   readonly onChange: (value: string) => void
@@ -70,9 +84,15 @@ function useConfirmedSelect(
 } {
   const [pending, setPending] = useState<string | null>(null)
   const byKeyboard = useRef(false)
-  const flush = (): void => {
+  // 確定の後の `onConfirmed` (フォーカスを composer に戻す。025 data-model §6.2) はマウスの選択と Enter の確定だけ。
+  // blur の確定ではフォーカスがすでに別の要素に移っているので呼ばない (利用者が移した先を奪わない)。
+  const flush = (confirm: boolean): void => {
     byKeyboard.current = false
-    if (pending !== null && pending !== current) commit(pending)
+    if (pending !== null && pending !== current) {
+      commit(pending)
+      // Enter の keydown の中で移すと、続く keypress が移した先の入力欄に届いて改行・送信になりうる。次の tick に回す。
+      if (confirm && onConfirmed !== undefined) setTimeout(onConfirmed, 0)
+    }
     setPending(null)
   }
   return {
@@ -84,9 +104,10 @@ function useConfirmedSelect(
       }
       setPending(null)
       commit(value)
+      onConfirmed?.()
     },
     onKeyDown: (event) => {
-      if (event.key === 'Enter') flush()
+      if (event.key === 'Enter') flush(true)
       else if (
         !event.ctrlKey &&
         !event.metaKey &&
@@ -98,18 +119,20 @@ function useConfirmedSelect(
     },
     onKeyUp: (event) => {
       // 開いた選択肢の一覧で Enter を押すと、change は keydown の後に届く。
-      if (event.key === 'Enter') flush()
+      if (event.key === 'Enter') flush(true)
     },
-    onBlur: flush
+    onBlur: () => flush(false)
   }
 }
 
 function ModelSelect({
   row,
-  model
+  model,
+  onConfirmed
 }: {
   readonly row: LiveSettingRow
   readonly model: LiveModelSelect
+  readonly onConfirmed?: (() => void) | undefined
 }): React.JSX.Element {
   const reasonId = useId()
   const blocker = liveSettingBlocker('model', row)
@@ -117,15 +140,21 @@ function ModelSelect({
   const reason =
     blocker !== null
       ? LIVE_SETTING_LABELS.blocker[blocker]
-      : noList
-        ? LIVE_SETTING_LABELS.noModelList
-        : null
+      : (model.unavailableReason ?? null) !== null
+        ? (model.unavailableReason ?? null)
+        : noList
+          ? LIVE_SETTING_LABELS.noModelList
+          : null
   const known = model.value !== null && model.options.some((o) => o.id === model.value)
-  const confirmed = useConfirmedSelect(model.value ?? DEFAULT_MODEL_VALUE, (id) => {
-    if (model.options.some((o) => o.id === id)) model.onSelect(id)
-  })
+  const confirmed = useConfirmedSelect(
+    model.value ?? DEFAULT_MODEL_VALUE,
+    (id) => {
+      if (model.options.some((o) => o.id === id)) model.onSelect(id)
+    },
+    onConfirmed
+  )
   return (
-    <label className="flex shrink-0 items-center gap-1 text-xs">
+    <label className="flex min-w-0 flex-wrap items-center gap-x-1 text-xs">
       <span className="text-muted-foreground">{LIVE_SETTING_LABELS.model}</span>
       <select
         value={confirmed.value}
@@ -137,10 +166,11 @@ function ModelSelect({
           if (reason !== null) return
           confirmed.onChange(e.target.value)
         }}
+        onFocus={model.onFocus}
         onKeyDown={confirmed.onKeyDown}
         onKeyUp={confirmed.onKeyUp}
         onBlur={confirmed.onBlur}
-        className={`border-border bg-background max-w-48 rounded-md border px-1.5 py-0.5 text-xs ${DISABLED_SELECT_CLASS}`}
+        className={`border-border bg-background max-w-36 min-w-0 truncate rounded-md border px-1.5 py-0.5 text-xs ${DISABLED_SELECT_CLASS}`}
         data-testid="live-model"
       >
         {model.value === null && (
@@ -160,7 +190,7 @@ function ModelSelect({
         ))}
       </select>
       {reason !== null && (
-        <span id={reasonId} className="text-muted-foreground text-xs">
+        <span id={reasonId} className="text-muted-foreground basis-full text-xs">
           {reason}
         </span>
       )}
@@ -172,22 +202,27 @@ export function LiveSettingsControls({
   permissionMode,
   row,
   onSelectPermissionMode,
-  model
+  model,
+  onConfirmed
 }: LiveSettingsControlsProps): React.JSX.Element {
   const reasonId = useId()
   const blocker = liveSettingBlocker('permission-mode', row)
   const unsafe = !isSafePermissionMode(permissionMode)
   return (
-    <>
+    <div
+      className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5"
+      data-testid="live-settings"
+    >
       <PermissionModeSelect
         permissionMode={permissionMode}
         blocker={blocker}
         unsafe={unsafe}
         reasonId={reasonId}
         onSelectPermissionMode={onSelectPermissionMode}
+        onConfirmed={onConfirmed}
       />
-      {model !== undefined && <ModelSelect row={row} model={model} />}
-    </>
+      {model !== undefined && <ModelSelect row={row} model={model} onConfirmed={onConfirmed} />}
+    </div>
   )
 }
 
@@ -196,20 +231,26 @@ function PermissionModeSelect({
   blocker,
   unsafe,
   reasonId,
-  onSelectPermissionMode
+  onSelectPermissionMode,
+  onConfirmed
 }: {
   readonly permissionMode: PermissionModeKey
   readonly blocker: LiveSettingBlocker | null
   readonly unsafe: boolean
   readonly reasonId: string
   readonly onSelectPermissionMode: (mode: SafePermissionMode) => void
+  readonly onConfirmed?: (() => void) | undefined
 }): React.JSX.Element {
-  const confirmed = useConfirmedSelect(permissionMode, (value) => {
-    const mode: unknown = value
-    if (isSafePermissionMode(mode)) onSelectPermissionMode(mode)
-  })
+  const confirmed = useConfirmedSelect(
+    permissionMode,
+    (value) => {
+      const mode: unknown = value
+      if (isSafePermissionMode(mode)) onSelectPermissionMode(mode)
+    },
+    onConfirmed
+  )
   return (
-    <label className="flex shrink-0 items-center gap-1 text-xs">
+    <label className="flex min-w-0 flex-wrap items-center gap-x-1 text-xs">
       <span className="text-muted-foreground">{LIVE_SETTING_LABELS.permissionMode}</span>
       <select
         value={confirmed.value}
@@ -239,7 +280,7 @@ function PermissionModeSelect({
         ))}
       </select>
       {blocker !== null && (
-        <span id={reasonId} className="text-muted-foreground text-xs">
+        <span id={reasonId} className="text-muted-foreground basis-full text-xs">
           {LIVE_SETTING_LABELS.blocker[blocker]}
         </span>
       )}

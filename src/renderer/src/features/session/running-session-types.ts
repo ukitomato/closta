@@ -8,7 +8,11 @@ import type {
 import type { ElicitationPrompt } from '@domain/session/elicitation'
 import type { SessionLaunchConfig } from '@domain/session/launch-config'
 import type { LaunchOrigin } from '@domain/session/launch-usage'
-import type { LiveSettingKind } from '@domain/session/live-settings'
+import type {
+  LiveModelOption,
+  LiveSettingFailure,
+  LiveSettingKind
+} from '@domain/session/live-settings'
 import type { ResumeSource, ResumeUnavailableReason } from '@domain/session/resume'
 import type { BackgroundTaskEntry, MeterUpdate, PermissionModeKey } from '@domain/session/meter'
 import type { CommandsMeter, InitReportMeter } from '@domain/session/session-init-report'
@@ -110,7 +114,23 @@ export interface LiveSessionState {
   readonly changing: LiveSettingKind | null
   /** 直前の変更の失敗 (1 行の表示。次の変更の開始で消す。023)。 */
   readonly settingError: LiveSettingKind | null
+  /** 既定の Provider のモデルの一覧の状態 (025 / data-model §6.3)。Provider のあるセッションでは使わない。 */
+  readonly liveModels: LiveModelsState
+  /** `/resume` の選ぶ画面を開いているか (025 / data-model §7.2)。 */
+  readonly resumePicker: boolean
 }
+
+/** 既定の Provider のモデルの一覧の状態 (025 / data-model §6.3)。永続化しない。 */
+export type LiveModelsState =
+  | { readonly phase: 'idle' }
+  | { readonly phase: 'loading' }
+  | {
+      readonly phase: 'ready'
+      readonly options: readonly LiveModelOption[]
+      /** effort で絞る前の件数 (空の理由を分ける。data-model §3.2)。 */
+      readonly reportedCount: number
+    }
+  | { readonly phase: 'failed'; readonly reason: LiveSettingFailure }
 
 /** 監視ビューの情報密度 (O-1 / FR-008)。renderer の表示状態であり永続化しない。 */
 export type Density = 'comfortable' | 'compact'

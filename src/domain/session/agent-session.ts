@@ -324,6 +324,8 @@ export type SessionControl =
       readonly mode: SafePermissionMode
     }
   | { readonly kind: 'set-model'; readonly requestId: string; readonly model: string }
+  /** 既定の Provider のモデルの一覧の取得 (025 / AD-065)。結果は `requestId` つきの `models-result`。 */
+  | { readonly kind: 'list-models'; readonly requestId: string }
 
 /**
  * 稼働セッションの**操作面の概念契約** (data-model §1)。操作語彙は `SessionControl` と一致させる

@@ -1,6 +1,6 @@
 import { act, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { axe } from 'vitest-axe'
 
 import { InfoIcon } from 'lucide-react'
@@ -146,6 +146,44 @@ describe('右のペインの tablist のキー操作 (FR-017 / data-model §6)',
     act(() => tabNamed('一つ目').focus())
     await userEvent.keyboard('{End}')
     expect((await axe(panel, rules)).violations).toEqual([])
+  })
+})
+
+describe('タブの横スクロール (025 FR-014 / data-model §8)', () => {
+  const scrollSpy = vi.fn()
+  const original = Element.prototype.scrollIntoView
+  beforeEach(() => {
+    scrollSpy.mockClear()
+    Element.prototype.scrollIntoView = scrollSpy
+  })
+  afterEach(() => {
+    Element.prototype.scrollIntoView = original
+  })
+  const nearest = { block: 'nearest', inline: 'nearest' }
+
+  it('矢印・Home / End・クリックで移った先のタブを見える範囲に入れる (1 回ずつ)', async () => {
+    await openPanel()
+    act(() => tabNamed('一つ目').focus())
+    await userEvent.keyboard('{ArrowRight}')
+    expect(scrollSpy).toHaveBeenCalledTimes(1)
+    expect(scrollSpy).toHaveBeenLastCalledWith(nearest)
+    expect(scrollSpy.mock.contexts[0]).toBe(tabNamed('二つ目'))
+    await userEvent.keyboard('{End}')
+    expect(scrollSpy).toHaveBeenCalledTimes(2)
+    expect(scrollSpy.mock.contexts[1]).toBe(tabNamed('三つ目'))
+    await userEvent.keyboard('{Home}')
+    expect(scrollSpy).toHaveBeenCalledTimes(3)
+    await userEvent.click(tabNamed('三つ目'))
+    expect(scrollSpy).toHaveBeenCalledTimes(4)
+    expect(scrollSpy).toHaveBeenLastCalledWith(nearest)
+  })
+
+  it('タブの名前は省略されず、折り返さない・縮まない', async () => {
+    await openPanel()
+    const el = tabNamed('一つ目')
+    expect(el.textContent).toBe('一つ目')
+    expect(el).toHaveClass('whitespace-nowrap', 'shrink-0')
+    expect(tabList()).toHaveClass('overflow-x-auto', 'min-w-0')
   })
 })
 

@@ -946,10 +946,10 @@ export const UNDETECTED_NOTES = {
       '分割代入 (`const { reconnectMcpServer } = q`)・`.reconnectMcpServer.call(` / `.apply(`・変数のキー (`q[k](`) は ' +
       '`.m(` の形にならず、束縛を追うにはデータフロー解析が要るため grep backstop の射程外である。',
     mitigatedBy:
-      '`Query` を持つのは `src/agents/sdk-agent-session.ts` の `queryHandle` 1 つで、呼ぶのは `interrupt()` と実行中の設定の 2 つ ' +
-      '(`setPermissionMode` / `setModel`。AD-062。AD-036 §4 P3 の読み替え)。`Query` の自前のメソッドは同ファイルの型の網羅で `interrupt`・変更系 (`QueryMutationMethod`)・' +
+      '`Query` を持つのは `src/agents/sdk-agent-session.ts` の `queryHandle` 1 つで、呼ぶのは `interrupt()`・実行中の設定の 2 つ ' +
+      '(`setPermissionMode` / `setModel`。AD-062。AD-036 §4 P3 の読み替え)・一覧の読み取り `supportedModels` (AD-065)。`Query` の自前のメソッドは同ファイルの型の網羅で `interrupt`・変更系 (`QueryMutationMethod`)・' +
       '呼ばない読み取り (`QueryUnusedReadMethod`) に分類され、SDK の版上げでの増減は tsc が落とす。' +
-      '**この分類は呼び出しを禁じない** — `QueryUnusedReadMethod` の 7 個の呼び出しは項目 16 の検査の対象外で、' +
+      '**この分類は呼び出しを禁じない** — `QueryUnusedReadMethod` の 5 個の呼び出しは項目 16 の検査の対象外で、' +
       '`close` は `promptQueue.close()` と綴りが衝突するため denylist に足せない。AD-047 Decision 4 が呼ばないと決めた ' +
       '`getContextUsage` / `usage_EXPERIMENTAL…` は変更系と同じ denylist に入れた。denylist の集合は ' +
       '`tests/docs/query-mutation-methods.test.ts` が `QUERY_MUTATION_METHODS` と union の一致で固定する。' +

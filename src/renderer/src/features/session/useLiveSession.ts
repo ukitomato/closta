@@ -46,10 +46,16 @@ export interface LiveSession extends SessionView {
   kill(): void
   close(): void
   clearQueueRejection(): void
+  /** 入力がアプリのコマンドなら処理して true (025。`onNew` の入口が使う)。 */
+  interceptAppCommand(text: string): boolean
+  /** `/resume` の選ぶ画面を閉じる (025)。 */
+  closeResumePicker(): void
   /** 実行中の権限モードの切り替え (023)。 */
   setPermissionMode(mode: SafePermissionMode): void
   /** 実行中のモデルの切り替え (023)。 */
   setModel(modelId: string): void
+  /** 既定の Provider のモデルの一覧を聞く (025)。`idle` / `failed` からだけ動く。 */
+  loadLiveModels(): void
   /** セッションの名前の変更 (023)。成功なら `true`。 */
   rename(name: string): Promise<boolean>
 }
@@ -89,6 +95,15 @@ export function useLiveSession(sessionId: string): LiveSession | null {
     [store, sessionId]
   )
 
+  const interceptAppCommand = useCallback(
+    (text: string) => store.interceptAppCommand(sessionId, text),
+    [store, sessionId]
+  )
+  const closeResumePicker = useCallback(
+    () => store.closeResumePicker(sessionId),
+    [store, sessionId]
+  )
+
   const setPermissionMode = useCallback(
     (mode: SafePermissionMode) => store.setPermissionMode(sessionId, mode),
     [store, sessionId]
@@ -98,6 +113,8 @@ export function useLiveSession(sessionId: string): LiveSession | null {
     (modelId: string) => store.setModel(sessionId, modelId),
     [store, sessionId]
   )
+
+  const loadLiveModels = useCallback(() => store.loadLiveModels(sessionId), [store, sessionId])
 
   const rename = useCallback((name: string) => store.rename(sessionId, name), [store, sessionId])
 
@@ -120,8 +137,11 @@ export function useLiveSession(sessionId: string): LiveSession | null {
       kill,
       close,
       clearQueueRejection,
+      interceptAppCommand,
+      closeResumePicker,
       setPermissionMode,
       setModel,
+      loadLiveModels,
       rename
     }
   }, [
@@ -140,8 +160,11 @@ export function useLiveSession(sessionId: string): LiveSession | null {
     kill,
     close,
     clearQueueRejection,
+    interceptAppCommand,
+    closeResumePicker,
     setPermissionMode,
     setModel,
+    loadLiveModels,
     rename
   ])
 }

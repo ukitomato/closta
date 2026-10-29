@@ -113,6 +113,25 @@ describe('使用量のタブの項目 (US-3 AC1)', () => {
     expect(within(usage).getByRole('heading', { name: USAGE_LABELS.usageModels })).toBeVisible()
   })
 
+  it('値は折り返さず、トークンの内訳の dl は値の dd の中に入れ子にならない (025 US-4 AC2)', async () => {
+    const h = await setup({ ids: [A] })
+    await selectRunning(0)
+    h.emit(A, {
+      kind: 'meter',
+      meter: turn({ costUsd: 1.5, turns: 3, models: [SONNET, HAIKU] })
+    })
+    const usage = within(await openUsage()).getByTestId('usage')
+    const dds = usage.querySelectorAll('dd')
+    expect(dds.length).toBeGreaterThan(0)
+    for (const dd of dds) {
+      expect(dd).toHaveClass('whitespace-nowrap')
+      expect(dd.querySelector('dl')).toBeNull()
+    }
+    const tokens = within(usage).getByTestId('usage-tokens')
+    expect(tokens.closest('dd')).toBeNull()
+    expect(ddOf(tokens, '入力')).toHaveTextContent('2,000')
+  })
+
   it('値は最新の turn で書き換わる。費用は ja-JP の書式で小数 4 桁まで', async () => {
     const h = await setup({ ids: [A] })
     await selectRunning(0)

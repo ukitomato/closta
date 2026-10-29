@@ -1,3 +1,5 @@
+import { normalizeLiveModelEntries } from '@domain/provider/model-catalog'
+import type { ModelEntry } from '@domain/provider/types'
 import {
   isLaunchFailureReason,
   type LaunchFailureReason,
@@ -86,6 +88,15 @@ export type WorkerMessage =
   | { readonly kind: 'conversation'; readonly conversationId: string }
   /** 実行中の設定の切り替えの結果 (023 / AD-062)。requestId は main が振った UUID。理由は運ばない。 */
   | { readonly kind: 'control-result'; readonly requestId: string; readonly ok: boolean }
+  /**
+   * 既定の Provider のモデルの一覧の結果 (025 / AD-065 / contracts C-9)。`null` は呼べなかった・例外・形の外。
+   * 調停役スレッドは中身を解釈しない (形の再検査は main の `decodeSupervisorEventForMain` が行う)。
+   */
+  | {
+      readonly kind: 'models-result'
+      readonly requestId: string
+      readonly models: readonly ModelEntry[] | null
+    }
 
 /**
  * セッションスレッドからの構造化メッセージを検証する。未知の kind・形の崩れは `null`。
@@ -122,6 +133,16 @@ export function decodeWorkerMessage(value: unknown): WorkerMessage | null {
       return isValidSessionId(record.requestId) && typeof record.ok === 'boolean'
         ? { kind: 'control-result', requestId: record.requestId, ok: record.ok }
         : null
+    case 'models-result':
+      // 中身は解釈しない (配列か null であることだけ)。要素の検査は main の側で行う。
+      return isValidSessionId(record.requestId) &&
+        (record.models === null || Array.isArray(record.models))
+        ? {
+            kind: 'models-result',
+            requestId: record.requestId,
+            models: record.models as readonly ModelEntry[] | null
+          }
+        : null
     default:
       return null
   }
@@ -144,6 +165,13 @@ export type SupervisorEvent =
       readonly sessionId: string
       readonly requestId: string
       readonly ok: boolean
+    }
+  /** 既定の Provider のモデルの一覧の結果 (025)。窓で束ねず即座に送る。 */
+  | {
+      readonly kind: 'models-result'
+      readonly sessionId: string
+      readonly requestId: string
+      readonly models: readonly ModelEntry[] | null
     }
   /** 標準入出力経路だけで使う本文の行。Electron 経路では本文は port へ送り、この行を作らない。 */
   | { readonly kind: 'event'; readonly sessionId: string; readonly payload: OpaqueBody }
@@ -170,6 +198,15 @@ export function decodeSupervisorEventForMain(line: string):
       readonly sessionId: string
       readonly requestId: string
       readonly ok: boolean
+    }
+  | {
+      readonly kind: 'models-result'
+      readonly sessionId: string
+      readonly requestId: string
+      /** `normalizeLiveModelEntries` を通した値。`null` は失敗 (呼べなかった・形の外)。 */
+      readonly models: readonly ModelEntry[] | null
+      /** 再検査で捨てた件数 (ログ用。値は出さない)。 */
+      readonly dropped: number
     }
   | null {
   let parsed: unknown
@@ -208,6 +245,32 @@ export function decodeSupervisorEventForMain(line: string):
       sessionId: record.sessionId,
       requestId: record.requestId,
       ok: record.ok
+    }
+  }
+  if (
+    record.kind === 'models-result' &&
+    isValidSessionId(record.sessionId) &&
+    isValidSessionId(record.requestId) &&
+    (record.models === null || Array.isArray(record.models))
+  ) {
+    if (record.models === null) {
+      return {
+        kind: 'models-result',
+        sessionId: record.sessionId,
+        requestId: record.requestId,
+        models: null,
+        dropped: 0
+      }
+    }
+    const original = record.models as readonly unknown[]
+    // ModelEntry の形を再検査する。ModelInfo の形 (normalizeLiveModels) は当てない (H-004)。
+    const models = normalizeLiveModelEntries(original) ?? []
+    return {
+      kind: 'models-result',
+      sessionId: record.sessionId,
+      requestId: record.requestId,
+      models,
+      dropped: Math.max(0, original.length - models.length)
     }
   }
   return null

@@ -8,7 +8,11 @@ import { InfoIcon } from 'lucide-react'
 
 import type { SessionIndexDTO } from '@domain/session/dto'
 
-import { COMPOSER_LABELS, TRANSCRIPT_DENSITY_LABELS } from '@/features/chat/labels'
+import {
+  COMPOSER_LABELS,
+  PERMISSION_MODE_NAMES,
+  TRANSCRIPT_DENSITY_LABELS
+} from '@/features/chat/labels'
 import { PAST_SESSIONS_LABELS } from '@/features/session-list/labels'
 import { useSessionsStore } from '@/stores/sessions'
 import { useUiStore } from '@/stores/ui'
@@ -405,7 +409,7 @@ describe('右のペイン (US-4 AC1〜AC5 / FR-014 / FR-015)', () => {
     const overview = await within(panel).findByTestId('overview')
     expect(overview).toHaveTextContent('Provider')
     expect(overview).toHaveTextContent('既定')
-    expect(overview).toHaveTextContent('通常 (操作ごとに承認)')
+    expect(overview).toHaveTextContent(PERMISSION_MODE_NAMES.default)
     expect(overview).toHaveTextContent('Ubuntu')
     await userEvent.click(within(panel).getByRole('button', { name: SHELL_LABELS.collapsePanel }))
     expect(screen.getByTestId('right-panel')).toHaveAttribute('data-collapsed', 'true')

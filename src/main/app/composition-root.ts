@@ -465,6 +465,7 @@ export function createComposition(): Composition {
     controlSession: (sessionId, control) => launchService.control(sessionId, control),
     setSessionPermissionMode: (sessionId, mode) => launchService.setPermissionMode(sessionId, mode),
     setSessionModel: (sessionId, modelId) => launchService.setModel(sessionId, modelId),
+    listSessionModels: (sessionId) => launchService.listModels(sessionId),
     renameSession: (sessionId, name) => sessionRenames.rename(sessionId, name),
 
     resolvePastResume: (targetKey, conversationId) =>

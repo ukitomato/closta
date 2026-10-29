@@ -463,6 +463,41 @@ describe('runSupervisor: 制御の結果の中継 (023 / contracts C-4)', () => 
   })
 })
 
+describe('runSupervisor: モデルの一覧の中継 (025 / contracts C-9)', () => {
+  const REQ = '55555555-5555-4555-8555-555555555555'
+
+  it('models-result を窓の満了を待たずに 1 回だけ main へ送り、status-batch に入らない', () => {
+    const h = electronHarness()
+    h.send(launchMsg(A), [bodyPort()])
+    h.workers[0]?.send({
+      kind: 'models-result',
+      requestId: REQ,
+      models: [{ id: 'm', displayName: 'M' }]
+    })
+    expect(h.timer.pending()).toBe(0)
+    const sent = h.lines().filter((l) => l.kind === 'models-result')
+    expect(sent).toEqual([
+      {
+        kind: 'models-result',
+        sessionId: A,
+        requestId: REQ,
+        models: [{ id: 'm', displayName: 'M' }]
+      }
+    ])
+    h.timer.runAll()
+    for (const line of h.toMain.filter((l) => JSON.parse(l).kind === 'status-batch'))
+      expect(line).not.toContain(REQ)
+  })
+
+  it('requestId が UUID でない・models が配列でも null でないものは捨てる', () => {
+    const h = electronHarness()
+    h.send(launchMsg(A), [bodyPort()])
+    h.workers[0]?.send({ kind: 'models-result', requestId: 'nope', models: null })
+    h.workers[0]?.send({ kind: 'models-result', requestId: REQ, models: 'x' })
+    expect(h.lines().filter((l) => l.kind === 'models-result')).toHaveLength(0)
+  })
+})
+
 describe('runSupervisor: 会話の id の中継 (X-9 / AD-059 / contracts C-5)', () => {
   const CONV = '44444444-4444-4444-8444-444444444444'
 

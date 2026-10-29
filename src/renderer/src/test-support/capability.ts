@@ -66,6 +66,7 @@ export function stubCapability(overrides: Partial<ClostaCapability> = {}): Clost
     killSession: notStubbed('killSession'),
     setSessionPermissionMode: notStubbed('setSessionPermissionMode'),
     setSessionModel: notStubbed('setSessionModel'),
+    listSessionModels: notStubbed('listSessionModels'),
     renameSession: notStubbed('renameSession'),
     endSession: notStubbed('endSession'),
     listProviders: notStubbed('listProviders'),

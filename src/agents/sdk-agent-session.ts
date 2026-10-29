@@ -18,7 +18,7 @@ import {
   type SDKSystemMessage
 } from '@anthropic-ai/claude-agent-sdk'
 
-import { isEffortLevel, isValidModelId } from '@domain/provider/model-catalog'
+import { isEffortLevel, isValidModelId, normalizeLiveModels } from '@domain/provider/model-catalog'
 import { assertHelperSettings, isHelperSettings } from '@domain/provider/settings'
 import type { EffortLevel } from '@domain/provider/types'
 import { classifyClaudeExecutable } from '@domain/runtime/claude-executable'
@@ -175,15 +175,16 @@ type QueryMutationMethod =
 // 実行中の設定の切り替え (023 / AD-062 Decision 1)。権限モードは `assertSafePermissionMode` を通した安全 3 値だけ、
 // モデルはカタログの値だけを main が検証して送る。項目 16 が `.setPermissionMode(` の引数の包みを見る。
 type QueryLiveSettingMethod = 'setPermissionMode' | 'setModel'
+// 一覧の読み取り (025 / AD-065 Decision 1)。既定の Provider のモデルの一覧を `supportedModels()` で聞く。引数も副作用も無い。
+type QueryLiveReadMethod = 'supportedModels'
 type QueryUnusedReadMethod =
-  | 'initializationResult'
-  | 'supportedCommands'
-  | 'supportedModels'
-  | 'supportedAgents'
-  | 'accountInfo'
-  | 'close'
+  'initializationResult' | 'supportedCommands' | 'supportedAgents' | 'accountInfo' | 'close'
 type QueryClassifiedMethod =
-  'interrupt' | QueryLiveSettingMethod | QueryMutationMethod | QueryUnusedReadMethod
+  | 'interrupt'
+  | QueryLiveSettingMethod
+  | QueryLiveReadMethod
+  | QueryMutationMethod
+  | QueryUnusedReadMethod
 const queryMethodsAreClassified: Equal<Exclude<QueryOwnMethod, QueryClassifiedMethod>, never> = true
 const queryClassifiedMethodsExist: QueryClassifiedMethod extends keyof Query ? true : false = true
 void queryMethodsAreClassified
@@ -456,7 +457,8 @@ async function run(
   let state: SessionRunState = 'idle'
   let reasonKey: LaunchFailureReason | null = null
   let queryHandle:
-    | (Pick<Query, 'interrupt' | 'setPermissionMode' | 'setModel'> & AsyncIterable<SDKMessage>)
+    | (Pick<Query, 'interrupt' | 'setPermissionMode' | 'setModel' | 'supportedModels'> &
+        AsyncIterable<SDKMessage>)
     | null = null
   let spawnedChild: (SpawnedLike & { exitCode?: number | null; pid?: number }) | null = null
   let childExited = false
@@ -772,6 +774,20 @@ async function run(
           .then(() => post({ kind: 'control-result', requestId, ok: true }))
           .catch(() => post({ kind: 'control-result', requestId, ok: false }))
       }
+      return
+    }
+    // 既定の Provider のモデルの一覧 (025 / AD-065)。結果は必ず返す。例外の文言は運ばない・記録しない。
+    if (control.kind === 'list-models') {
+      const { requestId } = control
+      const handle = queryHandle
+      if (closing || handle === null) {
+        post({ kind: 'models-result', requestId, models: null })
+        return
+      }
+      void handle
+        .supportedModels()
+        .then((raw) => post({ kind: 'models-result', requestId, models: normalizeLiveModels(raw) }))
+        .catch(() => post({ kind: 'models-result', requestId, models: null }))
       return
     }
     if (closing && !acceptsWhileClosing(control)) return

@@ -17,6 +17,7 @@ import { normalizeSlashCommandName } from '@domain/session/session-init-report'
 import { mergeSystemEvent, systemEventPartOf } from '@domain/session/system-event'
 import type { TranscriptMessageDTO } from '@domain/session/transcript-dto'
 
+import { parseAppCommand } from '@/features/chat/app-commands'
 import { fromSystemEventData, toThreadMessage } from '@/features/chat/convert'
 import { readMessageTime, withMessageTime, withReceivedAt } from '@/features/chat/message-time'
 import { decodeTranscriptMessage } from '@/features/chat/transcript-guard'
@@ -31,6 +32,7 @@ import {
   type Density,
   type LaunchRejectReason,
   type LaunchState,
+  type LiveModelsState,
   type LiveSessionState,
   type ResumeDialogState,
   type RunningSessionStoreState,
@@ -44,6 +46,7 @@ import { nextAwaiting, viewOf } from './session-view'
 export { ACTIVITY_THROTTLE_MS } from './running-session-monitor'
 export type {
   LaunchState,
+  LiveModelsState,
   LiveSessionState,
   PendingPermission,
   ResumeDialogState,
@@ -130,6 +133,11 @@ export interface SessionActions {
    */
   setModel(sessionId: string, modelId: string): void
   /**
+   * 既定の Provider のモデルの一覧を Claude Code に聞く (025 / contracts C-7)。`idle` と `failed` からだけ始め
+   * (`loading` / `ready` では何もしない。重複して聞かない)、結果で `ready` / `failed` にする。`config` は書き換えない。
+   */
+  loadLiveModels(sessionId: string): void
+  /**
    * セッションに名前を付ける (023 / contracts C-3)。成功したら main が返した名前を `name` に入れる
    * (`config` は書き換えない。FR-014)。成功なら `true`、失敗・結果の前に終わった行は `false`。
    */
@@ -171,6 +179,13 @@ export interface SessionActions {
   /** 行と保持を消す。表示中なら選択を外す (FR-011)。 */
   close(sessionId: string): void
   clearQueueRejection(sessionId: string): void
+  /**
+   * 送信された入力がアプリのコマンドなら処理して true を返す (025 / data-model §7.1。今は `/resume` だけ。
+   * 選ぶ画面を開く)。true のときは Claude Code に送らず、拒否の表示も出さない。
+   */
+  interceptAppCommand(sessionId: string, text: string): boolean
+  /** `/resume` の選ぶ画面を閉じる (025)。 */
+  closeResumePicker(sessionId: string): void
   queueOf(sessionId: string): SessionQueue | null
   /** `window` の port 受け渡しと状態通知の購読を張る。解除関数を返す。 */
   attach(target: Window): () => void
@@ -642,6 +657,13 @@ export function createRunningSessionStore(
     buffered.clear()
   }
 
+  /** アプリのコマンドの横取り (data-model §7.1)。実行中の送信 (queue) と待機中の送信 (`onNew`) が共有する。 */
+  const interceptAppCommand = (sessionId: string, text: string): boolean => {
+    if (parseAppCommand(text) !== 'resume') return false
+    patch(sessionId, { resumePicker: true })
+    return true
+  }
+
   const createQueue = (sessionId: string): void => {
     const controller = createMessageQueue({
       run: (message) => {
@@ -655,8 +677,11 @@ export function createRunningSessionStore(
         actions.send(sessionId, text)
       }
     })
-    const adapter = createCappedAdapter(controller.adapter, (verdict) =>
-      patch(sessionId, { queueRejection: verdict === 'ok' ? null : verdict })
+    const adapter = createCappedAdapter(
+      controller.adapter,
+      (verdict) => patch(sessionId, { queueRejection: verdict === 'ok' ? null : verdict }),
+      undefined,
+      (text) => interceptAppCommand(sessionId, text)
     )
     queues.set(sessionId, { controller, adapter, prevBusy: false })
   }
@@ -774,7 +799,9 @@ export function createRunningSessionStore(
       currentModelId: null,
       name: null,
       changing: null,
-      settingError: null
+      settingError: null,
+      liveModels: { phase: 'idle' },
+      resumePicker: false
     }
     createQueue(sessionId)
     store.setState((s) => ({
@@ -1021,6 +1048,33 @@ export function createRunningSessionStore(
         .catch(() => undefined)
     },
 
+    loadLiveModels(sessionId) {
+      const current = store.getState().sessions[sessionId]
+      if (current === undefined) return
+      if (current.liveModels.phase !== 'idle' && current.liveModels.phase !== 'failed') return
+      const settle = (liveModels: LiveModelsState): void => {
+        // 結果の前に消えた行は捨てる。
+        const row = store.getState().sessions[sessionId]
+        if (row === undefined) return
+        store.setState((s) => ({
+          sessions: { ...s.sessions, [sessionId]: { ...row, liveModels } }
+        }))
+      }
+      settle({ phase: 'loading' })
+      capability()
+        .listSessionModels(sessionId)
+        .then(
+          (result) =>
+            settle(
+              result.ok
+                ? { phase: 'ready', options: result.models, reportedCount: result.reportedCount }
+                : { phase: 'failed', reason: result.reason }
+            ),
+          () => settle({ phase: 'failed', reason: 'rejected' })
+        )
+        .catch(() => undefined)
+    },
+
     rename(sessionId, name) {
       if (store.getState().sessions[sessionId] === undefined) return Promise.resolve(false)
       actions.beginSetting(sessionId, 'name')
@@ -1188,6 +1242,14 @@ export function createRunningSessionStore(
 
     clearQueueRejection(sessionId) {
       patch(sessionId, { queueRejection: null })
+    },
+
+    interceptAppCommand(sessionId, text) {
+      return interceptAppCommand(sessionId, text)
+    },
+
+    closeResumePicker(sessionId) {
+      patch(sessionId, { resumePicker: false })
     },
 
     queueOf(sessionId) {

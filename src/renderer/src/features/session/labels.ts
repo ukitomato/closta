@@ -2,7 +2,11 @@ import type { LaunchFailureReason, SessionLaunchRejectReason } from '@domain/ses
 import { MAX_CONCURRENT_SESSIONS } from '@domain/session/concurrency'
 import { MAX_PRESETS, type SafePermissionMode } from '@domain/session/launch-config'
 import type { AxisResetReason, LaunchBlocker } from '@domain/session/launch-resolution'
-import type { LiveSettingBlocker, LiveSettingKind } from '@domain/session/live-settings'
+import type {
+  LiveSettingBlocker,
+  LiveSettingFailure,
+  LiveSettingKind
+} from '@domain/session/live-settings'
 import type { ResumeUnavailableReason } from '@domain/session/resume'
 import type { SavePresetResult } from '@domain/session/preset'
 import type { SessionRunState } from '@domain/session/run-state'
@@ -422,7 +426,7 @@ export function sameFolderWarning(count: number): string {
 /**
  * 起動ダイアログの権限モードの名前 (安全 3 値)。文字列は transcript と共有の権限モードの名前の表
  * (`features/chat/labels.ts` の `PERMISSION_MODE_NAMES`) から取る — 同じモードの名前を 2 か所に分けない
- * (O-4 / 014 research R-15 / Principle XIV)。
+ * (O-4 / 014 research R-15 / Principle XIV)。名前は Claude Code の表記で、説明は付けない (025 / AD-065 Decision 3)。
  */
 export const PERMISSION_MODE_LABELS: Record<SafePermissionMode, string> = {
   default: PERMISSION_MODE_NAMES.default,
@@ -443,6 +447,9 @@ export const LIVE_SETTING_LABELS = {
   defaultModel: '既定',
   nameRule: '1〜100 文字で、改行を含めずに入力してください',
   noModelList: 'この Provider にはモデルの一覧がありません',
+  loadingModelList: 'モデルの一覧を読み込み中',
+  emptyModelList: 'Claude Code がモデルの一覧を返しませんでした',
+  noModelForEffort: '起動の effort が効くモデルが Claude Code の一覧にありません',
   failure: {
     'permission-mode': '権限モードを変更できませんでした',
     model: 'モデルを変更できませんでした',
@@ -457,13 +464,30 @@ export const LIVE_SETTING_LABELS = {
   } satisfies Record<LiveSettingBlocker, string>
 } as const
 
-/** 権限モードの意味の説明 (`dontAsk` は承認カードが出ず、事前承認の無い操作は拒否される。plan R-03)。 */
-export const PERMISSION_MODE_DESCRIPTIONS: Record<SafePermissionMode, string> = {
-  default: 'ファイル編集やコマンド実行のたびに承認カードで確認します。',
-  plan: '変更を加えずに計画だけを立てます。',
-  dontAsk:
-    '承認カードは出ません。事前に許可した操作だけが実行され、それ以外は自動的に拒否されて理由が表示されます。'
-}
+/** 既定の Provider のモデルの一覧を読み込めなかった理由の文言 (025 data-model §9)。 */
+export const LIVE_MODEL_LIST_FAILURE_LABELS = {
+  'unknown-session': 'セッションが見つからないため、モデルの一覧を読み込めませんでした',
+  'invalid-value': 'このセッションでは Claude Code にモデルの一覧を聞けません',
+  'not-running': 'Claude Code が動いていないため、モデルの一覧を読み込めませんでした',
+  'not-ready': '最初の応答の後にモデルの一覧を読み込みます',
+  busy: '変更中のため、モデルの一覧を読み込めませんでした',
+  'no-conversation': '最初の応答の後にモデルの一覧を読み込みます',
+  'turn-running': '応答の実行中のため、モデルの一覧を読み込めませんでした',
+  rejected: 'Claude Code がモデルの一覧に答えませんでした',
+  'session-ended': 'セッションが終わったため、モデルの一覧を読み込めませんでした',
+  timeout: 'モデルの一覧の読み込みが時間内に終わりませんでした',
+  'write-failed': 'モデルの一覧を読み込めませんでした'
+} satisfies Record<LiveSettingFailure, string>
+
+/** `/resume` の選ぶ画面の文言 (025 data-model §9)。 */
+export const RESUME_PICKER_LABELS = {
+  title: '過去のセッションを再開',
+  search: 'セッションを検索',
+  empty: 'このフォルダに過去のセッションはありません',
+  noMatch: (query: string): string => `「${query}」に合うセッションがありません`,
+  loading: '読み込み中',
+  close: '閉じる'
+} as const
 
 /** 起動設定ダイアログの軸ラベル (select の見出しと aria-label を兼ねる。FE-004)。 */
 export const LAUNCH_AXIS_LABELS = {

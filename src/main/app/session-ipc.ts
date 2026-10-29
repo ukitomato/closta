@@ -2,7 +2,11 @@ import type { PastResumeDTO } from '@domain/capability'
 import type { SessionControl } from '@domain/session/agent-session'
 import type { SessionIndexDTO } from '@domain/session/dto'
 import type { SafePermissionMode, SessionLaunchConfig } from '@domain/session/launch-config'
-import type { LiveSettingResult, RenameResult } from '@domain/session/live-settings'
+import type {
+  LiveModelsResult,
+  LiveSettingResult,
+  RenameResult
+} from '@domain/session/live-settings'
 import {
   checkLaunchOrigin,
   type LaunchOrigin,
@@ -20,6 +24,7 @@ import type { TranscriptResult } from './transcript-service'
 import {
   checkLaunchConfig,
   checkRenameArgs,
+  checkListModelsArgs,
   checkSetModelArgs,
   checkSetPermissionModeArgs,
   checkPastResumeQuery,
@@ -75,6 +80,8 @@ export interface SessionIpcDeps {
   setSessionPermissionMode(sessionId: string, mode: SafePermissionMode): Promise<LiveSettingResult>
   /** 実行中のモデルの切り替え (023 / contracts C-2)。検証済みの形で呼ぶ。カタログとの照合は service。 */
   setSessionModel(sessionId: string, modelId: string): Promise<LiveSettingResult>
+  /** 既定の Provider のモデルの一覧 (025 / contracts C-7)。検証済みの sessionId で呼ぶ。 */
+  listSessionModels(sessionId: string): Promise<LiveModelsResult>
   /** 実行中のセッションの改名 (023 / contracts C-3)。検証済み・trim 済みの名前で呼ぶ。 */
   renameSession(sessionId: string, name: string): Promise<RenameResult>
 
@@ -414,6 +421,18 @@ export async function handleSetSessionModel(
 ): Promise<LiveSettingResult> {
   if (!checkSetModelArgs(args)) return { ok: false, reason: 'invalid-value' }
   return deps.setSessionModel(args[0], args[1])
+}
+
+/**
+ * `listSessionModels(sessionId)` (025 / contracts C-7)。述語 (`checkListModelsArgs`) を通らない入力は service を呼ばず
+ * `unknown-session`。受け付けの判定・待ち・絞り込みは service が行う。
+ */
+export async function handleListSessionModels(
+  deps: SessionIpcDeps,
+  args: readonly unknown[]
+): Promise<LiveModelsResult> {
+  if (!checkListModelsArgs(args)) return { ok: false, reason: 'unknown-session' }
+  return deps.listSessionModels(args[0])
 }
 
 /**

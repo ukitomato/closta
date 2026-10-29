@@ -228,6 +228,11 @@ export async function setup(
     killSession: vi.fn(async () => {}),
     setSessionPermissionMode: vi.fn(async () => ({ ok: true as const })),
     setSessionModel: vi.fn(async () => ({ ok: true as const })),
+    listSessionModels: vi.fn(async () => ({
+      ok: true as const,
+      models: [] as readonly { id: string; displayName: string }[],
+      reportedCount: 0
+    })),
     renameSession: vi.fn(async (_sessionId: string, name: string) => ({ ok: true as const, name })),
     endSession: vi.fn(async () => {}),
     interruptSession: vi.fn(async () => {}),

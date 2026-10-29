@@ -782,10 +782,18 @@ const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
 };
 
 const ComposerAction: FC<{ composing: RefObject<boolean> }> = ({ composing }) => {
+  // 025 / FR-001: 実行中の設定の選択 (`settings`) は左の群 (添付の右) に描く。中身は知らない (data-model §6.1)。
+  const { settings } = useComposerExtensions();
   return (
-    <div className="aui-composer-action-wrapper relative flex items-center justify-between">
-      <ComposerAddAttachment />
-      <div className="flex items-center gap-1.5">
+    <div className="aui-composer-action-wrapper relative flex items-center justify-between gap-2">
+      <div
+        className="aui-composer-action-left flex min-w-0 items-center gap-1"
+        data-testid="composer-settings-group"
+      >
+        <ComposerAddAttachment />
+        {settings}
+      </div>
+      <div className="flex shrink-0 items-center gap-1.5">
         <AuiIf condition={(s) => s.thread.capabilities.dictation}>
           <AuiIf condition={(s) => s.composer.dictation == null}>
             <ComposerPrimitive.Dictate asChild>
@@ -848,7 +856,7 @@ const ComposerAction: FC<{ composing: RefObject<boolean> }> = ({ composing }) =>
           <ComposerPrimitive.Cancel asChild>
             <Button
               type="button"
-              variant="default"
+              variant="outline"
               size="icon"
               className="aui-composer-cancel size-7 rounded-full"
               aria-label={COMPOSER_LABELS.stop}

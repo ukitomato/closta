@@ -93,7 +93,11 @@ const h = vi.hoisted(() => ({
   /** 実行中の設定の切り替え (023): SDK の `setPermissionMode` / `setModel` の呼び出しの記録と reject の指定。 */
   setModeCalls: [] as unknown[][],
   setModelCalls: [] as unknown[][],
-  liveSettingReject: false
+  liveSettingReject: false,
+  /** 一覧の読み取り (025): `supportedModels` の呼び出し回数・返り値・reject の指定。 */
+  supportedModelsCalls: 0,
+  supportedModelsResult: [] as unknown,
+  supportedModelsReject: false
 }))
 
 vi.mock('node:worker_threads', () => ({
@@ -208,6 +212,11 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
       setModel: async (...args: unknown[]) => {
         h.setModelCalls.push(args)
         if (h.liveSettingReject) throw new Error('secret reject reason')
+      },
+      supportedModels: async () => {
+        h.supportedModelsCalls += 1
+        if (h.supportedModelsReject) throw new Error('secret models reason')
+        return h.supportedModelsResult
       }
     })
   }
@@ -253,6 +262,9 @@ async function boot(
   h.setModeCalls = []
   h.setModelCalls = []
   h.liveSettingReject = false
+  h.supportedModelsCalls = 0
+  h.supportedModelsResult = []
+  h.supportedModelsReject = false
   posted = []
   listener = null
   h.port = {
@@ -2143,5 +2155,67 @@ describe('sdk-agent-session: 実行中の設定の切り替え (023 / AD-062 / d
     await vi.waitFor(() => expect(results()).toHaveLength(1))
     expect(results()[0]).toMatchObject({ ok: false })
     expect(h.setModeCalls).toEqual([])
+  })
+})
+
+describe('sdk-agent-session: モデルの一覧 (025 / AD-065 / data-model §4)', () => {
+  const REQ = '123e4567-e89b-42d3-a456-426614174000'
+  const modelResults = (): { requestId: string; models: unknown }[] =>
+    posted
+      .filter((p) => p.kind === 'models-result')
+      .map((p) => p as unknown as { requestId: string; models: unknown })
+
+  const bootToDone = async (result: unknown = []): Promise<(data: unknown) => void> => {
+    const send = await boot()
+    h.supportedModelsResult = result
+    send(launch)
+    await vi.waitFor(() => expect(h.preMessageConsumed).toBe(true))
+    send(control({ kind: 'send-prompt', text: 'go' }))
+    await vi.waitFor(() => expect(states()).toContain('done'))
+    return send
+  }
+
+  it('list-models 1 回につき supportedModels を 1 回呼び、正規化した値を models-result で返す', async () => {
+    const send = await bootToDone([
+      { value: 'sonnet[1m]', displayName: 'Sonnet', description: 'x' },
+      { value: 'opus', displayName: 'Opus', supportedEffortLevels: ['high'] },
+      { value: 3 }
+    ])
+    send(control({ kind: 'list-models', requestId: REQ }))
+    await vi.waitFor(() => expect(modelResults()).toHaveLength(1))
+    expect(h.supportedModelsCalls).toBe(1)
+    expect(modelResults()[0]).toEqual({
+      kind: 'models-result',
+      requestId: REQ,
+      models: [
+        { id: 'sonnet[1m]', displayName: 'Sonnet' },
+        { id: 'opus', displayName: 'Opus', supportedEffortLevels: ['high'] }
+      ]
+    })
+  })
+
+  it('reject は models: null で、例外の文字列とモデルの値をどこにも出さない', async () => {
+    const send = await bootToDone([{ value: 'secret-model', displayName: 'S' }])
+    h.supportedModelsReject = true
+    send(control({ kind: 'list-models', requestId: REQ }))
+    await vi.waitFor(() => expect(modelResults()).toHaveLength(1))
+    expect(modelResults()[0]?.models).toBeNull()
+    expect(JSON.stringify(posted)).not.toContain('secret models reason')
+  })
+
+  it('配列でない返り値は models: null', async () => {
+    const send = await bootToDone({ not: 'array' })
+    send(control({ kind: 'list-models', requestId: REQ }))
+    await vi.waitFor(() => expect(modelResults()).toHaveLength(1))
+    expect(modelResults()[0]?.models).toBeNull()
+  })
+
+  it('終了処理の中 (end の後) は SDK を呼ばずに models: null', async () => {
+    const send = await bootToDone()
+    send(control({ kind: 'end' }))
+    send(control({ kind: 'list-models', requestId: REQ }))
+    await vi.waitFor(() => expect(modelResults()).toHaveLength(1))
+    expect(modelResults()[0]?.models).toBeNull()
+    expect(h.supportedModelsCalls).toBe(0)
   })
 })

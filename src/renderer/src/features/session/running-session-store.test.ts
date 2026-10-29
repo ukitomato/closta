@@ -570,6 +570,24 @@ describe('running-session-store — 送信待ちキュー (X-2 をセッショ�
     emit(port, { kind: 'state', state: 'done' })
     expect(h.cap.sendPrompt).not.toHaveBeenCalled()
   })
+
+  it('/resume は実行中でも待機中でも送らず、拒否も出さず、選ぶ画面を開く (025 FR-017)', async () => {
+    const h = harness()
+    const port = await launched(h, A)
+    expect(h.store.getState().sessions[A]?.resumePicker).toBe(false)
+    emit(port, { kind: 'state', state: 'running' })
+    h.store.queueOf(A)?.adapter.steer(appendMessage('/resume abc'))
+    expect(h.store.getState().sessions[A]).toMatchObject({
+      resumePicker: true,
+      queueRejection: null
+    })
+    h.store.closeResumePicker(A)
+    expect(h.store.getState().sessions[A]?.resumePicker).toBe(false)
+    expect(h.store.interceptAppCommand(A, '/resume')).toBe(true)
+    expect(h.store.getState().sessions[A]?.resumePicker).toBe(true)
+    expect(h.store.interceptAppCommand(A, 'hello')).toBe(false)
+    expect(h.cap.sendPrompt).not.toHaveBeenCalled()
+  })
 })
 
 describe('running-session-store — tool の結果とシステムイベントの行 (O-2 FE-010)', () => {
@@ -1319,6 +1337,61 @@ describe('running-session-store — 実行中の設定の変更 (023 FE-001 / da
     const h = harness({ setSessionModel })
     h.store.setModel(B, 'm2')
     expect(setSessionModel).not.toHaveBeenCalled()
+  })
+
+  it('loadLiveModels: idle → loading → ready。要求は 1 回で、ready の後は聞き直さない。config は同じ参照 (025)', async () => {
+    let resolve: (r: Awaited<ReturnType<ClostaCapability['listSessionModels']>>) => void = () =>
+      undefined
+    const listSessionModels = vi.fn(
+      () =>
+        new Promise<Awaited<ReturnType<ClostaCapability['listSessionModels']>>>(
+          (r) => (resolve = r)
+        )
+    )
+    const h = harness({ listSessionModels })
+    await launched(h, A)
+    const config = h.store.getState().sessions[A]?.config
+    expect(h.store.getState().sessions[A]?.liveModels).toEqual({ phase: 'idle' })
+    h.store.loadLiveModels(A)
+    h.store.loadLiveModels(A)
+    expect(listSessionModels).toHaveBeenCalledExactlyOnceWith(A)
+    expect(h.store.getState().sessions[A]?.liveModels).toEqual({ phase: 'loading' })
+    resolve({ ok: true, models: [{ id: 'm', displayName: 'M' }], reportedCount: 2 })
+    await vi.waitFor(() => expect(h.store.getState().sessions[A]?.liveModels.phase).toBe('ready'))
+    expect(h.store.getState().sessions[A]?.liveModels).toEqual({
+      phase: 'ready',
+      options: [{ id: 'm', displayName: 'M' }],
+      reportedCount: 2
+    })
+    h.store.loadLiveModels(A)
+    expect(listSessionModels).toHaveBeenCalledTimes(1)
+    expect(h.store.getState().sessions[A]?.config).toBe(config)
+  })
+
+  it('loadLiveModels: 失敗 (ok: false / reject) は failed で、failed からは聞き直せる。知らない行は呼ばない', async () => {
+    const listSessionModels = vi
+      .fn<ClostaCapability['listSessionModels']>()
+      .mockResolvedValueOnce({ ok: false, reason: 'timeout' })
+      .mockRejectedValueOnce(new Error('ipc'))
+    const h = harness({ listSessionModels })
+    await launched(h, A)
+    h.store.loadLiveModels(A)
+    await vi.waitFor(() =>
+      expect(h.store.getState().sessions[A]?.liveModels).toEqual({
+        phase: 'failed',
+        reason: 'timeout'
+      })
+    )
+    h.store.loadLiveModels(A)
+    await vi.waitFor(() =>
+      expect(h.store.getState().sessions[A]?.liveModels).toEqual({
+        phase: 'failed',
+        reason: 'rejected'
+      })
+    )
+    expect(listSessionModels).toHaveBeenCalledTimes(2)
+    h.store.loadLiveModels(B)
+    expect(listSessionModels).toHaveBeenCalledTimes(2)
   })
 
   it('rename は結果までは changing で、成功で main が返した名前が name になる。config は同じ参照', async () => {

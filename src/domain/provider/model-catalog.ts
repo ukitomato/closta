@@ -100,6 +100,55 @@ export function switchableModels(
   return models.filter((m) => (m.supportedEffortLevels ?? []).includes(effort))
 }
 
+/** 同じ `id` は先を残し、先頭から `MAX_CATALOG_MODELS` 件で切る (一覧の正規化の共通の後段)。 */
+function dedupeAndCap(entries: readonly ModelEntry[]): readonly ModelEntry[] {
+  const seen = new Set<string>()
+  const out: ModelEntry[] = []
+  for (const e of entries) {
+    if (seen.has(e.id)) continue
+    seen.add(e.id)
+    out.push(e)
+    if (out.length >= MAX_CATALOG_MODELS) break
+  }
+  return out
+}
+
+/**
+ * Claude Code の `supportedModels()` の答え (`ModelInfo[]`) を `ModelEntry` の形に正規化する (025 / data-model §1.2)。
+ * **セッションスレッドだけが使う** (入力は `value` を持つ SDK の形)。配列でなければ `null`。空の配列は `[]` (失敗と分ける)。
+ * `description` / `resolvedModel` / `supports*` は写さない。
+ */
+export function normalizeLiveModels(raw: unknown): readonly ModelEntry[] | null {
+  if (!Array.isArray(raw)) return null
+  const mapped: ModelEntry[] = []
+  for (const item of raw as unknown[]) {
+    if (typeof item !== 'object' || item === null) continue
+    const r = item as Record<string, unknown>
+    if (typeof r.value !== 'string') continue
+    const candidate: Record<string, unknown> = { id: r.value, displayName: r.displayName }
+    if (r.supportedEffortLevels !== undefined) {
+      candidate.supportedEffortLevels = r.supportedEffortLevels
+    }
+    if (isValidModelEntry(candidate)) mapped.push(candidate)
+  }
+  return dedupeAndCap(mapped)
+}
+
+/**
+ * main の境界の再検査 (025 / data-model §1.3)。入力はセッションスレッドが送った `ModelEntry` の形。
+ * `isValidModelEntry` を通らない要素と `inferenceProfileId` を持つ要素を捨てる。配列でなければ `null`。
+ */
+export function normalizeLiveModelEntries(raw: unknown): readonly ModelEntry[] | null {
+  if (!Array.isArray(raw)) return null
+  const kept: ModelEntry[] = []
+  for (const item of raw as unknown[]) {
+    if (!isValidModelEntry(item)) continue
+    if (item.inferenceProfileId !== undefined) continue
+    kept.push(item)
+  }
+  return dedupeAndCap(kept)
+}
+
 /** Bedrock は inference profile ID で pin する (X-3 FR-010)。無ければモデル ID。起動と実行中の切り替えの両方が使う。 */
 export function sdkModelOf(entry: ModelEntry): string {
   return entry.inferenceProfileId ?? entry.id

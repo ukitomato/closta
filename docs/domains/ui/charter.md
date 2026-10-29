@@ -25,6 +25,7 @@ related_adrs:
   - docs/decisions/0057-elicitation-sdk-side-cancel-known-limit.md
   - docs/decisions/0060-content-block-verification-and-unsupported-block-mark.md
   - docs/decisions/0061-o12-contract-extensions-categories-parts-and-agents-branches.md
+  - docs/decisions/0065-live-model-list-and-claude-code-permission-mode-names.md
 related_specs:
   - specs/003-ui-transcript-rendering/spec.md
   - specs/004-ui-tier-a-tool-display/spec.md
@@ -39,6 +40,7 @@ related_specs:
   - specs/018-session-answer-ui-and-composer-commands/spec.md
   - specs/019-ui-hooks-tasks-subagents-and-notices/spec.md
   - specs/022-ui-notices-checkpoints-and-content-blocks/spec.md
+  - specs/025-ui-live-session-fixes/spec.md
 ---
 
 # Domain Charter: ui
@@ -219,6 +221,7 @@ O-1 で読み替えた: 監視ビューはサイドバーの稼働中の区画 (
 - [AD-037](../../decisions/0037-japanese-ime-composer-behavior.md) — 日本語 IME の composer 挙動（SPIKE-4）。二重ガードで自前ガード不要 / 実行中積み・下書きは runtime capability / Principle VIII Automated の持ち主は X-2
 - [AD-038](../../decisions/0038-e2e-screenshot-harness.md) — E2E / スクリーンショット検証ハーネス（Playwright + Electron。credential-free・フォント同梱・e2e を src グラフ外に分離）
 - [AD-046](../../decisions/0046-app-shell-layout.md) — アプリのシェル（サイドバー・中央・右のペインの 3 面。設定と起動はダイアログ。右のペインのタブの表と外部コンテンツの境界）
+- [AD-065](../../decisions/0065-live-model-list-and-claude-code-permission-mode-names.md) — 既定の Provider のモデルの一覧 (`supportedModels` の許可) と権限モードの名前 (Claude Code の CLI の表記をそのまま使う。Principle XV の Exceptions)
 
 ## Related Specs
 
@@ -270,6 +273,7 @@ O-1 で読み替えた: 監視ビューはサイドバーの稼働中の区画 (
   ([AD-051](../../decisions/0051-message-time-source-and-display-only.md))。transcript の本文の横断検索・過去の一覧の仮想化は
   しない (U-7)
 - （O-12 は [022](../../../specs/022-ui-notices-checkpoints-and-content-blocks/spec.md) で実装した: 知らせの類 (Tier B) と Checkpoints (`files_persisted`。表示だけ) のシステムイベントの行・`user/document` の File element・サーバー側の tool (`server_tool_use` と結果のブロック) の ServerToolCall と Sources・専用の表示を持たないブロックの印 (UnsupportedBlockMark)・対応表の B 節の機械照合 ([AD-060](../../decisions/0060-content-block-verification-and-unsupported-block-mark.md))・過去ログへの O-6 / O-10 の行の変換。実機の確認 (quickstart V-1〜V-5) は未実施）
+- （O-13 は [025](../../../specs/025-ui-live-session-fixes/spec.md) で実装した: モデルと権限モードの選択を composer の周りへ移動・既定の Provider のセッションのモデルの一覧 (`supportedModels`。[AD-065](../../decisions/0065-live-model-list-and-claude-code-permission-mode-names.md))・停止の控えめな表示と Esc での停止・右のパネルのタブと使用量の崩れの修正・`/resume` (アプリのコマンド) での過去のセッションの再開）
 - （残り。O-6 / O-11 / OPT-pty / OPT-panel が本 domain に属する。O-10 は `session` で、表示の部品を本 domain が持つ）
 
 ## Open Questions

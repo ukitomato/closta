@@ -1,0 +1,149 @@
+{
+  "gate": "pr",
+  "run": "2026-10-30T00:00:00+09:00",
+  "spec_dir": "specs/025-ui-live-session-fixes",
+  "spec_id": "025-ui-live-session-fixes",
+  "round": 1,
+  "base_branch": "main",
+  "diff_stat": {
+    "files": 100,
+    "additions": 6464,
+    "deletions": 305
+  },
+  "severity_counts": {
+    "critical": 0,
+    "high": 3,
+    "medium": 7,
+    "low": 14
+  },
+  "convergence": {
+    "resolved_from_prev": 0,
+    "new_in_round": 3,
+    "unresolved": 0
+  },
+  "inheritance": "none (round 1)",
+  "round_history": [
+    {
+      "round": 1,
+      "head": "8c9f442570b4bac3df41f49b57db3da8bc89e1f0",
+      "critical": 0,
+      "high": 3,
+      "open_findings_by_reviewer": {
+        "ux-reviewer": ["H-001", "H-002"],
+        "a11y-reviewer": ["H-001"],
+        "po-reviewer": ["H-001"],
+        "architecture-reviewer": ["H-003"]
+      },
+      "convergence": {
+        "resolved_from_prev": 0,
+        "new_in_round": 3,
+        "unresolved": 0
+      }
+    }
+  ],
+  "high_findings": [
+    {
+      "id": "H-001",
+      "origin": ["ux", "a11y", "po"],
+      "where": "src/renderer/src/components/assistant-ui/elements/thread.aui.tsx:861",
+      "title": "stop button className typo drops size-7"
+    },
+    {
+      "id": "H-002",
+      "origin": ["ux"],
+      "where": "src/renderer/src/features/session/ResumePickerDialog.tsx:111,147",
+      "title": "resume picker shows no-sessions text on filtered-empty"
+    },
+    {
+      "id": "H-003",
+      "origin": ["architecture"],
+      "where": ".specify/memory/constitution.md:15-16,1107; docs/roadmap.md:388; specs/025-ui-live-session-fixes/tasks.md:126,154",
+      "title": "constitution amendment step 2 recorded as separate PR; needs human approval before merge"
+    }
+  ],
+  "suppressed_by_code_gate": [],
+  "touched_files_source": "specs/025-ui-live-session-fixes/.pr-gate-scope.txt",
+  "viewpoint_coverage": {
+    "A": "Critical:0 High:0 Medium:0 Low:0",
+    "B": "Critical:0 High:0 Medium:0 Low:1",
+    "C": "Critical:0 High:0 Medium:1 Low:1",
+    "D": "Critical:0 High:1 Medium:0 Low:0",
+    "E": "Critical:0 High:1 Medium:1 Low:3",
+    "F": "Critical:0 High:0 Medium:0 Low:1",
+    "G": "Critical:0 High:3 Medium:4 Low:8",
+    "H": "Critical:0 High:0 Medium:3 Low:1"
+  },
+  "fr_coverage": [],
+  "rule_verification": {
+    "ran": true,
+    "round": 1,
+    "reason": "Round 1 (tests/rule-fixtures/expected.mjs also changed)",
+    "result": "expected table matched: 79",
+    "exit_code": 0
+  },
+  "skipped_reviewers": [
+    {
+      "name": "database-reviewer",
+      "reason": "auto_invoke_patterns \u306b\u4e00\u81f4\u3059\u308b\u5909\u66f4\u30d5\u30a1\u30a4\u30eb\u304c\u7121\u3044 (\u5909\u66f4 100 \u4ef6 / pattern 5 \u4ef6)"
+    }
+  ],
+  "tracks": {
+    "security-reviewer": {
+      "viewpoint_missing": [],
+      "cascade_demotions": 0,
+      "critical": 0,
+      "high": 0,
+      "medium": 0,
+      "low": 1
+    },
+    "architecture-reviewer": {
+      "viewpoint_missing": [],
+      "cascade_demotions": 0,
+      "critical": 0,
+      "high": 1,
+      "medium": 1,
+      "low": 1
+    },
+    "po-reviewer": {
+      "viewpoint_missing": [],
+      "cascade_demotions": 0,
+      "critical": 0,
+      "high": 1,
+      "medium": 2,
+      "low": 3
+    },
+    "ux-reviewer": {
+      "viewpoint_missing": [],
+      "cascade_demotions": 0,
+      "critical": 0,
+      "high": 2,
+      "medium": 3,
+      "low": 4
+    },
+    "a11y-reviewer": {
+      "viewpoint_missing": [],
+      "cascade_demotions": 0,
+      "critical": 0,
+      "high": 1,
+      "medium": 2,
+      "low": 2
+    },
+    "platform-boundary-reviewer": {
+      "viewpoint_missing": [],
+      "cascade_demotions": 0,
+      "critical": 0,
+      "high": 0,
+      "medium": 0,
+      "low": 1
+    },
+    "ui-coverage-reviewer": {
+      "viewpoint_missing": [],
+      "cascade_demotions": 0,
+      "critical": 0,
+      "high": 0,
+      "medium": 0,
+      "low": 3
+    }
+  },
+  "verdict": "PASS"
+}

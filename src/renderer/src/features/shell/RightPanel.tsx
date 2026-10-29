@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useLayoutEffect, useRef } from 'react'
 
 import { PanelRightCloseIcon, PanelRightOpenIcon, TriangleAlertIcon } from 'lucide-react'
 
@@ -62,6 +62,19 @@ export function RightPanel({
     if (tab !== null) return document.getElementById(`panel-tab-${tab}`) ?? toggleRef.current
     return toggleRef.current
   })
+
+  // 選んだタブの描き直し (太字で幅が少し広がる) の後にも見える範囲へ入れる。選ぶ前の幅で 1 度だけ寄せると、
+  // 端のタブが 1〜2px はみ出す (025 SC-005)。
+  const currentId = current?.id ?? null
+  const scrolledId = useRef(currentId)
+  useLayoutEffect(() => {
+    if (scrolledId.current === currentId) return
+    scrolledId.current = currentId
+    if (collapsed || currentId === null) return
+    document
+      .getElementById(`panel-tab-${currentId}`)
+      ?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+  }, [collapsed, currentId])
 
   /** tablist のキー操作 (014 data-model §6)。移った先を選び、そのタブの button にフォーカスを移す。 */
   const onTabListKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
@@ -142,7 +155,7 @@ export function RightPanel({
           <div
             role="tablist"
             aria-label={SHELL_LABELS.panelTabs}
-            className="flex flex-1 gap-1"
+            className="flex min-w-0 flex-1 gap-1 overflow-x-auto [scrollbar-width:thin]"
             onKeyDown={onTabListKeyDown}
           >
             {visible.map((tab) => {
@@ -160,7 +173,7 @@ export function RightPanel({
                   tabIndex={isCurrent ? 0 : -1}
                   data-attention={attention ? 'true' : undefined}
                   className={cn(
-                    'rounded-md px-2 py-1 text-xs',
+                    'shrink-0 rounded-md px-2 py-1 text-xs whitespace-nowrap',
                     attention && 'inline-flex items-center gap-1',
                     isCurrent
                       ? 'bg-accent text-accent-foreground font-semibold'

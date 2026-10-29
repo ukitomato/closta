@@ -12,7 +12,7 @@ import type { RuntimeDescriptorDTO, RuntimeListDTO } from './runtime/dto'
 import type { SessionLaunchHandshakeDTO, SessionLaunchRejectReason } from './session/agent-session'
 import type { SessionIndexDTO } from './session/dto'
 import type { SafePermissionMode, SessionLaunchConfig } from './session/launch-config'
-import type { LiveSettingResult, RenameResult } from './session/live-settings'
+import type { LiveModelsResult, LiveSettingResult, RenameResult } from './session/live-settings'
 import type { LaunchOrigin, LaunchUsageSummaryDTO } from './session/launch-usage'
 import type { PresetDTO, SavePresetResult } from './session/preset'
 import type { ResumeUnavailableReason, SessionResumeRequest } from './session/resume'
@@ -223,6 +223,11 @@ export interface ClostaCapability {
   setSessionPermissionMode(sessionId: string, mode: SafePermissionMode): Promise<LiveSettingResult>
   /** 実行中のセッションのモデルをカタログの中で切り替える (023 / contracts C-2)。effort は変えない。 */
   setSessionModel(sessionId: string, modelId: string): Promise<LiveSettingResult>
+  /**
+   * 既定の Provider の実行中のセッションで、Claude Code が答えるモデルの一覧を聞く (025 / AD-065 / contracts C-7)。
+   * 起動の effort で絞った後の値と、絞る前の件数 (`reportedCount`) を返す。
+   */
+  listSessionModels(sessionId: string): Promise<LiveModelsResult>
   /** 実行中のセッションに名前を付ける (023 / contracts C-3)。成功なら trim した名前を返す。 */
   renameSession(sessionId: string, name: string): Promise<RenameResult>
 
@@ -327,6 +332,8 @@ export const IPC_CHANNELS = {
   /** 実行中の設定の変更 (023 / AD-062。contracts C-1〜C-3)。 */
   setSessionPermissionMode: 'closta:setSessionPermissionMode',
   setSessionModel: 'closta:setSessionModel',
+  /** 既定の Provider のモデルの一覧 (025 / AD-065 / contracts C-7)。 */
+  listSessionModels: 'closta:listSessionModels',
   renameSession: 'closta:renameSession',
   /** main → preload: supervisor に繋がった port2 を transfer する専用チャネル (X-1 / AD-036 §2)。 */
   sessionPort: 'closta:sessionPort',

@@ -51,6 +51,14 @@ total_terms: 104
   こちらは稼働中プロセスの操作面。プロセス実体は **supervisor** を参照
 - **Ref**: [AD-036](decisions/0036-single-session-launch-process-and-live-stream.md) / [AD-023](decisions/0023-application-architecture.md) §3
 
+#### **App command（アプリのコマンド）**
+
+- **Definition**: composer に打つ `/` のコマンドのうち、Claude Code に送らずアプリが処理するもの。送信を横取りして処理する (入力欄と `onKeyDown` に触れない)。025 では `/resume` (同じフォルダの過去のセッションを選んで再開) だけ
+- **日本語表記**: アプリのコマンド
+- **Domain**: `ui`
+- **Counterexamples**: Claude Code が報告するスラッシュコマンド (**Slash command candidates** の報告分) はアプリのコマンドではない — あちらは Claude Code に送る
+- **Ref**: [025 spec](../specs/025-ui-live-session-fixes/spec.md) FR-016
+
 #### **Approval card**
 
 - **Definition**: `canUseTool` の permission 要求に応答する UI。単発承認と capability 付与を区別する。
@@ -185,7 +193,8 @@ total_terms: 104
 
 - **Definition**: メッセージ入力欄。assistant-ui の `ComposerPrimitive.Input` を用い、変換確定の Enter を送信に
   しない (IME の二重ガードは assistant-ui 側。**自前ガードを新設しない**)。実行中の入力積み (Message queue) と
-  下書き (Draft) を持つ (X-2)。先頭の `/` のコマンドの候補 (Slash command candidates) も同じ `ComposerPrimitive.Input` の上に載せる (O-10)
+  下書き (Draft) を持つ (X-2)。先頭の `/` のコマンドの候補 (Slash command candidates) も同じ `ComposerPrimitive.Input` の上に載せる (O-10)。
+  左の群に実行中の設定の選択を置く (025)。アプリのコマンドは送信の後に横取りする (入力欄と `onKeyDown` に触れない)
 - **日本語表記**: コンポーザ / 入力欄
 - **Domain**: `ui`
 - **Counterexamples**: `ComposerPrimitive.Input` を独自 `<textarea>` に差し替えない (既存 IME ガードを殺すため。AD-037 D1)
@@ -612,7 +621,7 @@ total_terms: 104
 
 #### **Live session setting（実行中の設定の変更）**
 
-- **Definition**: 動いているセッションの権限モード・モデル・名前を、止めずに変える操作 (023)。永続化しない (プリセット・`launch-usage.json` に書かない)。権限モードは安全 3 値 (`SafePermissionMode`) の中の遷移だけ。モデルはそのセッションの Provider のカタログのうち起動の effort が効くもの。名前は transcript の custom-title に追記する (**Session name**)
+- **Definition**: 動いているセッションの権限モード・モデル・名前を、止めずに変える操作 (023)。永続化しない (プリセット・`launch-usage.json` に書かない)。権限モードは安全 3 値 (`SafePermissionMode`) の中の遷移だけ。モデルはそのセッションの Provider のカタログのうち起動の effort が効くもの (既定の Provider では、Claude Code が `supportedModels()` で答えた一覧のうち起動の effort が効くもの。025)。名前は transcript の custom-title に追記する (**Session name**)
 - **日本語表記**: 実行中の設定の変更
 - **Domain**: `session`
 - **Counterexamples**: 起動ダイアログで選ぶ `SessionLaunchConfig` の軸とは別 — あちらは起動の前に選ぶ値で、本語は起動の後の変更。effort は実行中に変えない
@@ -857,7 +866,7 @@ total_terms: 104
 #### **Slash command candidates（コマンドの候補）**
 
 - **Definition**: composer の先頭の `/` で出す、表示中のセッションのコマンドの候補 (名前・説明・引数の形)。選ぶと `/{name} ` が入り、送らない。
-  同じ `ComposerPrimitive.Input` の上に載せ、変換中は出ない (O-10)
+  同じ `ComposerPrimitive.Input` の上に載せ、変換中は出ない (O-10)。アプリのコマンド (**App command**。`/resume`) が先に並び、同名の Claude Code のコマンドは候補から落とす (025)
 - **日本語表記**: コマンドの候補
 - **Domain**: `ui`
 - **Counterexamples**: 自前の keydown ガードで IME を扱うものではない (AD-037)。過去ログでは出さない
@@ -1013,8 +1022,8 @@ total_terms: 104
 #### **SessionControl**
 
 - **Definition**: `renderer → main` の**制御要求** (control plane。X-1)。`send-prompt` / `respond-permission` /
-  `interrupt` / `end` / `kill` / `set-permission-mode` / `set-model` の判別 union (8 種類。`end` は X-5。応答待ち・中断済み・最初のプロンプト待ちのセッションの `claude` を
-  終わらせる穏当な「終了」。最初のプロンプト待ちは期限を待たずに止める。`set-permission-mode` / `set-model` は 023 で足した実行中の設定の変更。名前の変更は含まない — 別の IPC と短命のプロセス)。**renderer → main の検証済み IPC のみが発行できる** (data plane から発行しない)。起動 (launch) は含まない
+  `interrupt` / `end` / `kill` / `set-permission-mode` / `set-model` / `list-models` の判別 union (9 種類。`end` は X-5。応答待ち・中断済み・最初のプロンプト待ちのセッションの `claude` を
+  終わらせる穏当な「終了」。最初のプロンプト待ちは期限を待たずに止める。`set-permission-mode` / `set-model` は 023 で足した実行中の設定の変更。名前の変更は含まない — 別の IPC と短命のプロセス。`list-models` は 025 で足した、既定の Provider のセッションに Claude Code のモデルの一覧 (`supportedModels()`) を聞く読み取り)。**renderer → main の検証済み IPC のみが発行できる** (data plane から発行しない)。起動 (launch) は含まない
 - **日本語表記**: セッション制御
 - **Domain**: `session`
 - **Ref**: [AD-036](decisions/0036-single-session-launch-process-and-live-stream.md) / contracts C-1

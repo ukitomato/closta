@@ -83,6 +83,27 @@ describe('createCappedAdapter (FR-003 / FR-004 / R2-M-001)', () => {
     expect(onResult).toHaveBeenCalledWith('ok')
   })
 
+  it('intercept が true なら base も onResult も呼ばない (025)', () => {
+    const { base, steered, enqueued } = fakeAdapter()
+    const onResult = vi.fn()
+    const intercept = vi.fn(() => true)
+    const capped = createCappedAdapter(base, onResult, undefined, intercept)
+    capped.steer(msg('/resume'))
+    capped.enqueue(msg('/resume abc'))
+    expect(intercept).toHaveBeenCalledTimes(2)
+    expect(steered).toEqual([])
+    expect(enqueued).toEqual([])
+    expect(onResult).not.toHaveBeenCalled()
+  })
+
+  it('intercept が false なら今どおり積む (025)', () => {
+    const { base, steered } = fakeAdapter()
+    const onResult = vi.fn()
+    createCappedAdapter(base, onResult, undefined, () => false).steer(msg('次'))
+    expect(steered).toEqual(['次'])
+    expect(onResult).toHaveBeenCalledWith('ok')
+  })
+
   it('getter (items/steerItems) と remove は base に委譲する', () => {
     const removed: string[] = []
     const base = {

@@ -4,6 +4,7 @@ import sdkAgentSessionModulePath from '@agents/sdk-agent-session?modulePath'
 import { decodeSupervisorEventForMain, encodeSupervisorRequest } from '@agents/supervisor-protocol'
 import supervisorModulePath from '@agents/supervisor?modulePath'
 
+import type { ModelEntry } from '@domain/provider/types'
 import type {
   LaunchQueryOptions,
   RuntimeLaunchSpec,
@@ -58,6 +59,9 @@ export function createSupervisorConnection(
   const threadEndedListeners: Listener<[number, string]>[] = []
   const conversationListeners: Listener<[number, string, string]>[] = []
   const controlResultListeners: Listener<[number, string, string, boolean]>[] = []
+  const modelsResultListeners: Listener<
+    [number, string, string, readonly ModelEntry[] | null, number]
+  >[] = []
   const exitListeners: Listener<[number, number | null]>[] = []
 
   const ensureSupervisor = (): { proc: UtilityProcess; gen: number } => {
@@ -104,6 +108,9 @@ export function createSupervisorConnection(
         for (const cb of conversationListeners) cb(gen, event.sessionId, event.conversationId)
       else if (event.kind === 'control-result')
         for (const cb of controlResultListeners) cb(gen, event.sessionId, event.requestId, event.ok)
+      else if (event.kind === 'models-result')
+        for (const cb of modelsResultListeners)
+          cb(gen, event.sessionId, event.requestId, event.models, event.dropped)
       else for (const cb of threadEndedListeners) cb(gen, event.sessionId)
     })
     return { proc, gen }
@@ -162,6 +169,9 @@ export function createSupervisorConnection(
     },
     onControlResult(listener) {
       controlResultListeners.push(listener)
+    },
+    onModelsResult(listener) {
+      modelsResultListeners.push(listener)
     },
     onExit(listener) {
       exitListeners.push(listener)
