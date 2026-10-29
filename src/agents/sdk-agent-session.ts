@@ -18,11 +18,7 @@ import {
   type SDKSystemMessage
 } from '@anthropic-ai/claude-agent-sdk'
 
-import {
-  isEffortLevel,
-  isValidModelId,
-  normalizeLiveModels
-} from '@domain/provider/model-catalog'
+import { isEffortLevel, isValidModelId, normalizeLiveModels } from '@domain/provider/model-catalog'
 import { assertHelperSettings, isHelperSettings } from '@domain/provider/settings'
 import type { EffortLevel } from '@domain/provider/types'
 import { classifyClaudeExecutable } from '@domain/runtime/claude-executable'

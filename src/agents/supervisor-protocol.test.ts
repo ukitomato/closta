@@ -205,14 +205,16 @@ describe('models-result (025 / contracts C-9)', () => {
       requestId: CONV,
       models: null
     })
-    expect(decodeWorkerMessage({ kind: 'models-result', requestId: CONV, models: entries })).toEqual(
-      { kind: 'models-result', requestId: CONV, models: entries }
-    )
+    expect(
+      decodeWorkerMessage({ kind: 'models-result', requestId: CONV, models: entries })
+    ).toEqual({ kind: 'models-result', requestId: CONV, models: entries })
     for (const bad of ['x', '', 42, null, undefined]) {
       expect(decodeWorkerMessage({ kind: 'models-result', requestId: bad, models: [] })).toBeNull()
     }
     for (const bad of ['x', {}, 1, undefined]) {
-      expect(decodeWorkerMessage({ kind: 'models-result', requestId: CONV, models: bad })).toBeNull()
+      expect(
+        decodeWorkerMessage({ kind: 'models-result', requestId: CONV, models: bad })
+      ).toBeNull()
     }
   })
 

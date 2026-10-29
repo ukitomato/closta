@@ -35,8 +35,11 @@ test.describe('右のパネル (025)', () => {
         const ok = await tabs.nth(i).evaluate((el) => {
           const style = getComputedStyle(el)
           const lineHeight = Number.parseFloat(style.lineHeight)
-          const padding = Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom)
-          const line = Number.isFinite(lineHeight) ? lineHeight : Number.parseFloat(style.fontSize) * 1.5
+          const padding =
+            Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom)
+          const line = Number.isFinite(lineHeight)
+            ? lineHeight
+            : Number.parseFloat(style.fontSize) * 1.5
           return (el.getBoundingClientRect().height - padding) / line < 1.5
         })
         expect(ok).toBe(true)
@@ -70,7 +73,9 @@ test.describe('右のパネル (025)', () => {
         const ok = await values.nth(i).evaluate((el) => {
           const style = getComputedStyle(el)
           const lineHeight = Number.parseFloat(style.lineHeight)
-          const line = Number.isFinite(lineHeight) ? lineHeight : Number.parseFloat(style.fontSize) * 1.5
+          const line = Number.isFinite(lineHeight)
+            ? lineHeight
+            : Number.parseFloat(style.fontSize) * 1.5
           return el.getBoundingClientRect().height / line < 1.5
         })
         expect(ok).toBe(true)

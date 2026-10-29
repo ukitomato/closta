@@ -19,6 +19,7 @@
 | rule fixture の照合 (`node scripts/rules/run.mjs`) | exit 0 |
 | ビルド (`electron-vite build`) | exit 0 |
 | E2E 全件 (1 回目) | 24 pass / 5 fail。025 の 3 本 (live-session-settings:96 / resume-command:23 / right-panel:14) は implementer fix で原因を直し、ビルドし直して通過 (E2E の fake の `sessionTargetKeys` / モデル一覧の `not-ready` の聞き直し / タブ選択後の `scrollIntoView`) |
+| E2E 全件 (pr-gate R1 の修正 + code-gate 再実行の後、068a553 をビルドし直して) | 27 pass / 2 fail (下の既知 2 件だけ) |
 | 基準画像の差 (本機の揺れ、既知) | `composer-screenshot.spec.ts` / `sidebar-screenshot.spec.ts` (ウィンドウ 1001×642 で 1000×640 にならない)。基準画像は本機で更新しない (RK-06) |
 
 ## 実行しなかったもの

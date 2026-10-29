@@ -119,7 +119,9 @@ function UsageOf({
     lastTurn.permissionDenials >= MAX_METER_PERMISSION_DENIALS
       ? USAGE_LABELS.countAtLeast(formatCount(MAX_METER_PERMISSION_DENIALS))
       : USAGE_LABELS.countValue(formatCount(lastTurn.permissionDenials))
-  const beforeTokens: Item[] = [{ label: USAGE_LABELS.usageCost, value: costText(lastTurn.costUsd) }]
+  const beforeTokens: Item[] = [
+    { label: USAGE_LABELS.usageCost, value: costText(lastTurn.costUsd) }
+  ]
   const items: Item[] = [
     { label: USAGE_LABELS.usageTurns, value: formatCount(lastTurn.turns) },
     {
