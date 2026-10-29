@@ -74,7 +74,7 @@
 
 - [x] **I. パス操作は `domain` のパス API 経由** — 追加ディレクトリのパスは main が `resolveFolderRuntime` (domain/workspace) で作る。agents の形の検査は `makeHostPath` (domain) と POSIX の値の規則 (data-model §5.2)。renderer はパスを作らない (FR-001)
 - [x] **II. プラットフォーム分岐は `src/main/infra/runtime/` の内側** — WSL / Win32 の違いはランタイムの種類 (DTO) と launch spec の種類で分かれる。`process.platform` の分岐を足さない
-- [x] **III. 権限モードは capability に従う** — 権限モードは安全 3 値のまま。追加ディレクトリは読み取りの範囲を広げるが、登録フォルダの main の変換値に限る (AD-064 Decision 2・research R-02)。書き込みは今どおり権限モードと `canUseTool`
+- [x] **III. 権限モードは capability に従う** — 権限モードは安全 3 値のまま。追加ディレクトリは読み取りの範囲を広げ、そのフォルダの skills を読み込ませるが、登録フォルダの main の変換値に限る (登録フォルダの設定一式を作業フォルダと同じく信頼する。AD-064 Decision 2 と訂正節・research R-02 / R-02a・spec U-10)。書き込みは今どおり権限モードと `canUseTool`
 - [x] **IV. 通信は Agent SDK 経由** — `query()` の options の 4 キーだけ。CLI の引数を自前で組まない (SDK が `--add-dir` などに変える)
 - [x] **V. 長期資格情報を永続化しない** — プリセットに足すのは folder id と数だけ
 - [x] **VI. 永続環境を構築・変更しない** — 利用者の環境を変えない。`presets.json` (アプリのデータ) の版を上げるだけ
@@ -236,6 +236,7 @@ rg -n "launch-preparation|preset-record|preset-store|preset-service|launch-confi
 - 追加ディレクトリの DTO は今の `useFolderRuntimeResolution` を配列に広げた hook で取り、`unreachable` / `probe-failed` の id を facts の `unreachableFolderIds` に、取得中と `capabilities-not-probed` を起動の保留に使う
 - プリセットの保存は `toPresetConfig(config)` を通す。適用は `toLaunchDraft(preset.config)` のまま (名前の入力の state に触れない)
 - 再開の形の `initial` の 6 つは、上限の入力の文字列の初期値にも写す (数を文字列にする)
+- 入力の文字列 3 つの初期値は、下書きの初期値と同じ時点・同じ元 (`lastConfig` / `resume.initial` / 既定) から 1 回だけ決める。拒否・失敗・「やり直す」で開き直したときに上限が黙って「上限なし」に戻らない (data-model §9.2.1。2026-10-30 design-gate H-003)
 
 ### 実装の順
 
@@ -268,7 +269,7 @@ rg -n "launch-preparation|preset-record|preset-store|preset-service|launch-confi
 | ID | リスク | 手当て |
 |---|---|---|
 | RK-01 | 夜間の規則で採用した U-1〜U-9・P-1〜P-11・AD-064 を利用者が後で覆す | 覆ったときの範囲: U-2 / AD-064 Decision 2 (追加ディレクトリ) → data-model §2 の段・§4.2・§5.2・`QUERY_OPTION_KEYS` を 15 に。U-7 (版 2) → §6 だけ。R-03 (名前を config に) → §1 の `sessionName` と §3 / §7 / §8 を別の欄に。design-gate の結果を捨てて `/cl-design --from plan` から回し直す |
-| RK-02 | 追加ディレクトリの中の読み取りでも承認カードが出る・逆に書き込みが承認なしで通る | 前者は契約を変えない (V-1 の 2 で記録)。後者は Principle III に当たるので利用者に返し、`additionalDirectories` を外す (RK-01 の範囲) |
+| RK-02 | 追加ディレクトリの中の読み取りでも承認カードが出る・逆に書き込みが承認なしで通る・追加ディレクトリの hooks / `.mcp.json` が読み込まれる (research R-02a と違う) | 前者は契約を変えない (V-1 の 2 で記録)。後の 2 つは Principle III に当たるので利用者に返し、`additionalDirectories` を外す (RK-01 の範囲)。skills の読み込みは契約どおり (spec U-10。V-1 の 8 / 9 で記録) |
 | RK-03 | `maxTurns` / `maxBudgetUsd` がプロンプトごとに数えられ、セッションを通した上限にならない・再開で前の費用を含む | 表示は「上限」とだけ言い数え方を約束しない (spec Assumptions)。V-2 / V-4 / V-5 で記録し、数え方の注記を足すかを利用者に返す |
 | RK-04 | `title` が `system/init` の前に効かない・過去の一覧に出ない (023 RK-06 と同じ) | registry の名前は起動の値で出る (§8)。過去の一覧に出なければ V-3 の 2 で記録し利用者に返す |
 | RK-05 | 日本語・空白を含むパスの `--add-dir` が `wsl.exe --exec` で割れる | cwd の `--cd` と同じ経路で実績がある (research R-01)。V-1 の 5 で確かめ、割れたら利用者に返す |

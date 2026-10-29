@@ -19,6 +19,13 @@
 5. Win32 でも `app-win` / `lib-win` で 1〜4 を行う。日本語と空白を含むパスで読めることを確かめる (`--add-dir` の argv の経路。research R-01)
 6. WSL のランタイムで Windows のフォルダを追加ディレクトリに選び、越境の警告が出ることを確かめる (US-1 AC4)
 7. WSL のフォルダを追加ディレクトリに選んでからランタイムを Win32 にし、項目が外れて通知が出ることを確かめる (US-1 AC3)
+8. 追加ディレクトリから読み込まれる設定を記録する (research R-02a / AD-064 訂正 / spec U-10)。`lib` に次を置いてから 1 と同じく起動する (`default`)
+   - `lib/.claude/skills/probe-skill/SKILL.md` (説明に合言葉、frontmatter に `allowed-tools: Bash(echo:*)`)
+   - `lib/.claude/settings.json` に `UserPromptSubmit` の hook (`echo hook-fired >> /tmp/closta-024-hook.log` 相当。Win32 は `%TEMP%` に書く)
+   - `lib/.mcp.json` に存在しない MCP サーバーの定義を 1 つ
+   - `lib/CLAUDE.md` に「返答の最後に LIB-MEMO と書く」
+   記録すること: skill が一覧に出るか (「使える skill を挙げて」)・その skill を呼ぶと `echo` が承認カードなしで通るか・hook のログが書かれるか・MCP サーバーの接続の試み (稼働中の行の MCP の表示) があるか・返答に LIB-MEMO が付くか
+9. 8 の結果を research R-02a の表と照らす。skills だけが読み込まれ、hooks・MCP・CLAUDE.md (環境変数なし) が読み込まれなければ契約どおり。hooks か MCP が読み込まれる、または skill を経ずに書き込みが承認なしで通れば plan RK-02 と同じく利用者に返す
 
 ## V-2 ターン数の上限 (WSL / Win32)
 

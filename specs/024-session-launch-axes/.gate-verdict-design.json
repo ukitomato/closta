@@ -1,0 +1,114 @@
+{
+    "gate": "design",
+    "run": "2026-10-30T00:00:00+09:00",
+    "spec_dir": "specs/024-session-launch-axes",
+    "spec_id": "024-session-launch-axes",
+    "tracks": {
+        "analyze": {
+            "status": "ok",
+            "raw_out": "analyze.md",
+            "viewpoint_missing": null,
+            "cascade_demotions": null
+        },
+        "po-reviewer": {
+            "status": "ok",
+            "raw_out": "po-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "architecture-reviewer": {
+            "status": "ok",
+            "raw_out": "architecture-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "security-reviewer": {
+            "status": "ok",
+            "raw_out": "security-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "platform-boundary-reviewer": {
+            "status": "ok",
+            "raw_out": "platform-boundary-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        }
+    },
+    "severity_counts": {
+        "critical": 0,
+        "high": 5,
+        "medium": 14,
+        "low": 14
+    },
+    "fr_coverage": [
+        {
+            "fr": "FR-006",
+            "covered": true,
+            "by": [
+                "FE-020",
+                "SH-011"
+            ],
+            "note": "indirect by design"
+        }
+    ],
+    "viewpoint_coverage": {
+        "A": "Critical:0 High:1",
+        "B": "Critical:0 High:0",
+        "C": "Critical:0 High:1",
+        "D": "Critical:0 High:2",
+        "E": "Critical:0 High:1",
+        "F": "\u8a72\u5f53\u306a\u3057",
+        "G": "\u8a72\u5f53\u306a\u3057",
+        "H": "Critical:0 High:0"
+    },
+    "dedup_log": [
+        {
+            "merged": [
+                "analyze-F1",
+                "arch-H-002"
+            ],
+            "key": "FR-003"
+        },
+        {
+            "merged": [
+                "po-M-009",
+                "sec-M-002",
+                "arch-L-004"
+            ],
+            "key": "src/main/app/launch-preparation.ts:99-101"
+        },
+        {
+            "merged": [
+                "analyze-F3",
+                "arch-M-001",
+                "pb-L-002"
+            ],
+            "key": "data-model.md:161"
+        },
+        {
+            "merged": [
+                "analyze-F4",
+                "pb-M-001",
+                "arch-M-002",
+                "sec-L-001"
+            ],
+            "key": "data-model.md \u00a75.2 posix"
+        },
+        {
+            "merged": [
+                "po-M-008",
+                "arch-M-003"
+            ],
+            "key": "charter.md:214"
+        },
+        {
+            "merged": [
+                "analyze-F8",
+                "po-L-001"
+            ],
+            "key": "data-model.md:306"
+        }
+    ],
+    "verdict": "PASS"
+}

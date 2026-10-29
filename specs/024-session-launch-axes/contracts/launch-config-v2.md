@@ -24,7 +24,7 @@
 | 受けた値 | main の応答 |
 |---|---|
 | キーの欠け・未知のキー・形の外 (data-model §1.2) | `invalid-config` (`query()` を呼ばない) |
-| 追加ディレクトリの id が未登録・このランタイムで変換できない (§4) | `invalid-config` |
+| 依存解決の再評価で外れる追加ディレクトリが 1 つでもある (未登録・作業フォルダと同じ・ランタイムと合わない)、またはこのランタイムで変換できない項目がある (§4) | `invalid-config` (黙って外して起動を続けない) |
 | 上の全部を通る | 今の起動の流れ |
 
 ## C-2 renderer → main: `resumeSession(request)`
@@ -44,7 +44,7 @@
 | `maxBudgetUsd` | 0.01〜1000・小数 2 桁まで | 上限あり |
 | `title` | 023 の名前の規則を通った文字列 | 名前あり (再開では載らない) |
 
-- パスの形: WSL の起動は POSIX の絶対パス、Win32 の起動は `makeHostPath` が正規化したドライブ付きのパス (data-model §5.2)
+- パスの形: WSL の起動は POSIX の絶対パス、Win32 の起動は `makeHostPath` が正規化したドライブ付きのパス (data-model §5.2)。decoder と `buildQueryOptions` の両方が起動の種類 (`launchDirectoryKindOf(spec)`) に合う形だけを通す。もう一方の形は通さない (data-model §5.3 / §5.4)
 - agents は受けた値を再検査し、外れれば起動しない (decode の失敗 / `buildQueryOptions` の throw)。エラーのメッセージに値を入れない
 
 ## C-5 agents → SDK: `query({ options })`

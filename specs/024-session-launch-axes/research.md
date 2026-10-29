@@ -25,11 +25,30 @@
 ## R-02 `additionalDirectories` は何を広げるか (escalation の評価)
 
 - `additionalDirectories` は「作業ディレクトリの外で Claude が扱える範囲」を広げる。Claude Code の権限の判定では、作業ディレクトリ (と追加ディレクトリ) の中の読み取りは承認なしで通り、外は承認を求める。したがって追加ディレクトリは **承認なしで読める範囲**を広げる
-- 書き込み (Edit / Write / Bash) は今どおり権限モードと `canUseTool` で決まる。安全 3 値 (`default` / `plan` / `dontAsk`) のどれでも、追加ディレクトリの中の書き込みが承認なしで通るようにはならない (`acceptEdits` は安全 3 値の外)。tool の集合・env・MCP サーバーも変わらない
+- 書き込み (Edit / Write / Bash) は今どおり権限モードと `canUseTool` で決まる。安全 3 値 (`default` / `plan` / `dontAsk`) のどれでも、追加ディレクトリの中の書き込みが承認なしで通るようにはならない (`acceptEdits` は安全 3 値の外)。tool の集合・env・MCP サーバーも変わらない。ただし追加ディレクトリの skills (`allowed-tools` を含む) は読み込まれる (R-02a)
 - したがって AD-041 (g) の「escalation-neutral (権限面・tool 集合・env を変えない)」には厳密には当たらない。読み取りの範囲が広がる分を、次の 2 つの条件で閉じる (AD-064 Decision 2):
   1. 値は **登録済みの作業フォルダ** (R-1 / R-2 で利用者が明示的に登録した場所) に限る。renderer は folder id だけを送る
   2. パスは **main が** 選択ランタイムの名前空間に変換した値だけ。agents は形を再検査し、renderer 由来の文字列は通らない
 - 登録済みのフォルダは作業フォルダに選べば同じ範囲を承認なしで読めるので、追加ディレクトリは「利用者が既に Closta に見せてよいと決めた場所」の外へ範囲を広げない
+
+### R-02a `--add-dir` で読み込まれる設定 (2026-10-30 design-gate H-004 の修正)
+
+読み取りの範囲だけが広がるのではない。`--add-dir` (SDK の `additionalDirectories`) のディレクトリから、Claude Code は次を読み込む / 読み込まない。
+
+| もの | 読み込むか | 出典 |
+|---|---|---|
+| `.claude/skills/` (skills) | **読み込む** (作業ディレクトリと同じく自動で発見する) | Claude Code の文書 (skills の「additional directories」の節: `--add-dir` は設定の発見ではなくファイルの扱いを許すが、skills は例外) |
+| CLAUDE.md (と `.claude/rules/`) | 既定では読み込まない。環境変数 `CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1` のときだけ読み込む | Claude Code の文書 (memory)。Closta はこの環境変数を設定しない (`src` に出現 0 件) が、利用者の環境から継がれうる |
+| `.claude/settings.json` / `settings.local.json` (hooks・permissions・env・MCP を含む) | 読み込まない (設定は作業ディレクトリと user / managed からだけ) | Claude Code の文書 (settings)。sdk.d.ts の `settingSources` (`:2087-2096`) も project / local を cwd に対して解く |
+| `.mcp.json` (project の MCP サーバー) | 読み込まない (project の MCP は作業ディレクトリから) | Claude Code の文書 (MCP) |
+| plugins | 追加ディレクトリからの発見は無い (plugins は settings の `enabledPlugins` で決まる) | 同上 |
+| `DirectoryAdded` hooks (sdk.d.ts `:580-589`) | 追加ディレクトリの側の hooks ではない。作業ディレクトリ・user の設定にある `DirectoryAdded` の hook が、ディレクトリが足されたときに動く (`source` は `/add-dir` か `register_repo_root`) | sdk.d.ts `:580-589` |
+| `register_repo_root` (sdk.d.ts `:4509`) の CLAUDE.md・skills・plugins の再読み込み | Closta は送らない (SDK の control request で、`--add-dir` の起動とは別の経路) | sdk.d.ts `:4509` |
+
+- Closta は `settingSources` を渡さない (`src` に出現 0 件。CLI と同じく全部を読む) ので、上の振る舞いは CLI の既定どおりになる
+- したがって `additionalDirectories` は「承認なしで読める範囲」に加えて「追加ディレクトリの skills (と、環境変数のときの CLAUDE.md) をモデルの文脈に入れる」。skills は指示の文だが、frontmatter の `allowed-tools` はその skill が動いている間の承認を省く (作業フォルダの skills と同じ)。hooks (コマンドの実行)・MCP サーバーは追加ディレクトリからは読み込まれない
+- 同じフォルダを作業フォルダに選べば、skills・CLAUDE.md に加えて settings・hooks まで読み込まれる。追加ディレクトリで読み込まれるものはその部分集合である。Decision 2 の根拠は「読み取りの範囲だけが広がる」ではなく「**登録フォルダの設定一式を、作業フォルダに選んだときと同じく信頼する**」とする (AD-064 の訂正節。spec U-10)
+- 上の表は文書の記述で、0.3.270 の実機では quickstart V-1 の手順 8 / 9 で記録する。hooks が読み込まれるなど表と違えば利用者に返す (plan RK-02 と同じ扱い)
 
 **決定 (P-1)**: AD-041 (g) を AD-064 で読み替える。読み替えの範囲は `additionalDirectories` の 1 キーで、`maxTurns` / `maxBudgetUsd` (止めるだけ) と `title` (表示の値) は escalation-neutral のまま足す。
 
@@ -95,7 +114,8 @@ spec Key Entities が plan に預けた点。
 - `LaunchQueryOptions` に `additionalDirectories?` / `maxTurns?` / `maxBudgetUsd?` / `title?` を足す
 - パスの形の述語 `isLaunchDirectoryValue(kind, value)` を domain (`agent-session.ts`。`LaunchQueryOptions` の隣) に置く。`posix` (WSL): `/` で始まる・バックスラッシュなし・`.` / `..` の成分なし・制御文字なし・4096 文字以下 (`makeRuntimePath` の規則。namespace を agents は持たないので値の規則だけを写す)。`windows` (Win32): `makeHostPath(value)` が通り正規化した値が同じ (ドライブ付きの絶対パス)
 - `decodeLaunch` は spec の種類 (`isWin32LaunchSpec`) に合わせて `kind` を選んで全件を検査する (WSL の起動に Windows のパスが混ざらない)。配列でない・0 件・11 件以上・重複は拒否 (起動しない)
-- `buildQueryOptions` は件数・重複・どちらかの形・上限の範囲・名前の規則を assert し直し、外れれば throw する。値はメッセージに入れない (パスと名前をログに出さない)。4 キーは値があるときだけ載せる (`resume` と同じ条件つきの spread)
+- `buildQueryOptions` は件数・重複・**`kind` に合う形** (「どちらかの形」では WSL の起動に Windows のパスが混ざっても通るので採らない)・上限の範囲・名前の規則を assert し直し、外れれば throw する。値はメッセージに入れない (パスと名前をログに出さない)。4 キーは値があるときだけ載せる (`resume` と同じ条件つきの spread)
+- `kind` は `buildQueryOptions` の引数だけでは決まらない (今の `BuildQueryOptionsDeps` (`session-core.ts:154-168`) はランタイムの種類を持たない)。`BuildQueryOptionsDeps` に必須の `launchDirectoryKind: LaunchDirectoryKind` を足し、呼び出し側 (`sdk-agent-session.ts`) が decoder と同じ `launchDirectoryKindOf(spec)` (`isWin32LaunchSpec(spec)` から決める) で渡す。query の options には載せない (data-model §5.4。2026-10-30 design-gate H-005)
 - `QUERY_OPTION_KEYS` は 12 → 16。pin テスト (`session-core.test.ts:209-234`) をリテラルで直す
 
 ## R-08 プリセットの版 2

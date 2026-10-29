@@ -139,7 +139,7 @@ export function toLaunchConfig(resolution: LaunchResolution, sessionName: string
 ### §4.1 再評価
 
 - `resolveLaunchAxes` に main が持つ facts (folders / runtimes / providers) を渡す。`unreachableFolderIds` は渡さない
-- `directoryResets.length > 0` → `invalid-config` (理由のキーだけをログに出す)
+- `directoryResets.length > 0` → `invalid-config` (理由のキーだけをログに出す)。外す項目が 1 つでもあれば起動全体を拒否し、main は黙って外して続けない (spec FR-003 / AD-064 Decision 2)。全件が通ったときだけ §4.2 の変換に進む
 
 ### §4.2 変換 (WSL / Win32 の両方から呼ぶ 1 つの関数)
 
@@ -204,7 +204,7 @@ export function isLaunchDirectoryValue(kind: LaunchDirectoryKind, value: unknown
 ### §5.3 `decodeLaunchOptions`
 
 - 4 キーは **キーが無い** か、次を満たすときだけ通す。外れれば decode の失敗 (起動しない。今の未知の値の扱い)
-  - `additionalDirectories`: 配列・1〜10 件・重複なし・全件が `isLaunchDirectoryValue(kind, v)` (`kind` は spec が Win32 なら `windows`、それ以外は `posix`)
+  - `additionalDirectories`: 配列・1〜10 件・重複なし・全件が `isLaunchDirectoryValue(kind, v)` (`kind` は `launchDirectoryKindOf(spec)` = spec が `isWin32LaunchSpec` なら `windows`、それ以外は `posix`)
   - `maxTurns`: `isValidMaxTurns` かつ非 null
   - `maxBudgetUsd`: `isValidMaxBudgetUsd` かつ非 null
   - `title`: `isValidLaunchSessionName` かつ非 null
@@ -213,6 +213,23 @@ export function isLaunchDirectoryValue(kind: LaunchDirectoryKind, value: unknown
 ### §5.4 `buildQueryOptions`
 
 - §5.3 と同じ規則を assert し、外れれば `Error` を throw する。メッセージにはキーの名前だけを入れ、値 (パス・名前・数) を入れない
+- 追加ディレクトリの形は **`kind` に合う形** だけを通す (「`posix` か `windows` のどちらかの形」では通さない)。そのため `BuildQueryOptionsDeps` に次の欄を足す:
+
+```ts
+export interface BuildQueryOptionsDeps {
+  ...今のまま
+  readonly additionalDirectories?: readonly string[];
+  readonly maxTurns?: number;
+  readonly maxBudgetUsd?: number;
+  readonly title?: string;
+  /** 追加ディレクトリの形を決めるランタイムの種類。呼び出し側が `launchDirectoryKindOf(spec)` (`isWin32LaunchSpec(spec)` なら `windows`、それ以外は `posix`) で決める。必須 */
+  readonly launchDirectoryKind: LaunchDirectoryKind;
+}
+```
+
+- `launchDirectoryKindOf(spec: RuntimeLaunchSpec): LaunchDirectoryKind` は `agent-session.ts` の `isWin32LaunchSpec` の隣に置き、decoder (§5.3) と `buildQueryOptions` の呼び出し (`sdk-agent-session.ts`) の両方が同じ関数で `kind` を決める
+- `launchDirectoryKind` は query の options に載せない (deps だけの欄。`QUERY_OPTION_KEYS` は 16 のまま)。`additionalDirectories` が無いときも渡す (必須にして渡し忘れを型で落とす)
+- 負例: WSL の起動 (`launchDirectoryKind: 'posix'`) に Windows のパス、Win32 の起動 (`'windows'`) に POSIX のパスを渡すと throw する
 - 4 キーは値があるときだけ spread する
 - `QUERY_OPTION_KEYS` (12 → 16):
 
@@ -258,7 +275,9 @@ initial: Pick<SessionLaunchConfig,
 |---|---|
 | 稼働中の行の「再開」 | その行の `config` の 6 つの値 |
 | 過去の区画の行の「再開」 | `null` (既定: 追加ディレクトリ `[]`・上限 `null`。前 3 軸は今のまま) |
-| 「やり直す」 | 再開の形ではない (新規の起動。`lastConfig` の全部の軸。名前を含む) |
+| 「やり直す」 | 再開の形ではない (新規の起動。`lastConfig` の全部の軸。名前を含む。入力の文字列の初期値は §9.2.1) |
+
+- `initial` の上限は、下書きの数の値と同時に入力の文字列の初期値にも写す (§9.2.1)
 
 ### §7.2 再開の形のダイアログ
 
@@ -295,6 +314,27 @@ initial: Pick<SessionLaunchConfig,
 | 費用 | `null` (上限なし) | `/^\d+(\.\d{1,2})?$/` で `Number(...)` が `isValidMaxBudgetUsd` | 同上 |
 | 名前 | `null` (名前なし) | `normalizeSessionName(raw)` が非 null | 同上 (023 の制限の文言) |
 
+### §9.2.1 入力の文字列の初期化
+
+`LaunchDialog` の `maxTurnsInput` / `maxBudgetInput` / `sessionNameInput` は、下書きの初期値 (`LaunchDialog.tsx` の `useState<LaunchDraft>` の初期化) と **同じ時点・同じ元** から 1 回だけ決める。元の値を `source` と呼ぶ。
+
+| 開き方 | `source` (下書きと同じ) | 名前の元 |
+|---|---|---|
+| 新規の起動で `lastConfig` が null | 既定 (`DEFAULT_EXTRA_AXES`) | なし |
+| 新規の起動で `lastConfig` がある (拒否・失敗・受け付けの後・起動せずに閉じた後・「やり直す」) | `lastConfig` | `lastConfig.sessionName` |
+| 再開の形で拒否から戻った (`phase === 'rejected'` かつ `lastConfig` がある) | `lastConfig` | なし (再開の形は名前を出さない。`lastConfig.sessionName` は §3 により `null`) |
+| 再開の形 (それ以外) | `resume.initial` (null は既定) | なし |
+
+| 入力 | 初期値 |
+|---|---|
+| `maxTurnsInput` | `source.maxTurns === null` なら `''`、それ以外は `String(source.maxTurns)` |
+| `maxBudgetInput` | `source.maxBudgetUsd === null` なら `''`、それ以外は `String(source.maxBudgetUsd)` (§1.2 により小数 2 桁以内なので、§9.2 の正規表現と述語を通り同じ数に戻る) |
+| `sessionNameInput` | 名前の元が `null` かなしなら `''`、それ以外はその値 |
+
+- 初期値は §9.2 の解釈を通すと `source` と同じ値に戻る (往復で変わらない)。上限が黙って「上限なし」に戻る経路を作らない
+- プリセットの適用 (FE-040) は上限の 2 つの入力を同じ規則でプリセットの値に置き換え、名前の入力に触れない
+- 下書きと入力の文字列を別々の時点で初期化しない (片方だけが `lastConfig` を見ると、送る値と画面の値が食い違う)
+
 ### §9.3 文言
 
 | キー | 文言 |
@@ -322,6 +362,11 @@ initial: Pick<SessionLaunchConfig,
 | 同 | Preset (`:807-813`) | 版 2・名前を持たない |
 | 同 | Session name (`:1036-1042`) | Counterexample (`:1041`) の X-6 の記述を「起動のときの名前は 024」に |
 | 同 | Concurrency limit (`:211-218`) | Counterexample (`:217`) の「上限 (ターン数・費用) は X-6」を 024 に |
+| 同 | Launch axis (`:546`) | 「6 つ (X-4)」→ 9 つ (追加ディレクトリ・ターン数の上限・費用の上限・セッション名を足す。024)。Ref に 024 spec |
+| 同 | LaunchInput (`:586`) | `options: LaunchQueryOptions` の中身に任意の `additionalDirectories` / `maxTurns` / `maxBudgetUsd` / `title` (024) と `resume` (X-9) を足す |
+| 同 | Resume (`:949`) | 「モデル / effort / 権限モードは選び直せる」→ 選び直せる軸は 6 つ (モデル / effort / 権限モード / 追加ディレクトリ / ターン数の上限 / 費用の上限。024)。名前は再開で渡さない |
+| 同 | Resume dialog (`:960`) | 「モデル / effort / 権限モードは今の部品と依存解決のまま」→ 選び直せる 6 軸は今の部品と依存解決 (追加ディレクトリは `directoryResets`)。名前の部品は出さない (024) |
 | `docs/domains/session/charter.md` | Journey 2 手順 3 (`:110`)・Journey 4 手順 2 (`:133-134`)・Related ADRs (`:263`)・X-6 の節 (`:352-354`)・frontmatter | 実装済みに・AD-064 と 024 を足す |
+| 同 | Key concepts のプリセット (`:142`) | 「名前付きで保存された `SessionLaunchConfig`」→「名前付きで保存された `PresetLaunchConfig` (`SessionLaunchConfig` からセッション名を除いたもの。`presets.json` 版 2。024)」。資格情報の値を含まない記述は残す |
 | `docs/roadmap.md` | X-6 の行 (`:355`) | 024 の結論と未確認の項目 |
 | `tests/rule-fixtures/expected.mjs` | `ui-path-concat` の `howToClose` | 「024 で確かめた: 当たらない ...」(P-11) |

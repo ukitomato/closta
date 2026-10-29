@@ -47,6 +47,15 @@ superseded-by: []
 - 上限の数え方 (プロンプトごとか、セッションを通してか・再開の前を含むか) は SDK に任せ、Closta は値を渡して O-4 の理由を出すだけ
 - `title` は stdin の初期化の要求で届き、argv を通らない。`--add-dir` / `--max-turns` / `--max-budget-usd` は CLI の引数で、作業フォルダの `--cd` と同じく `wsl.exe --exec` (シェルを通らない) か `claude.exe` の直接の起動に渡る
 
+## 訂正 (2026-10-30 / 024 design-gate H-004)
+
+AD-031 の訂正節である。決定 (Decision 1〜5) は変えず、Context の 2 つ目と Decision 2 の根拠の事実誤認を正す。
+
+- **誤り**: Context と Decision 2 は、`additionalDirectories` が広げるのは「承認なしで読める範囲」だけとしていた
+- **事実** (Claude Code の文書と sdk.d.ts。詳細は [research R-02a](../../specs/024-session-launch-axes/research.md)): `--add-dir` のディレクトリから Claude Code は `.claude/skills/` を読み込む。CLAUDE.md は環境変数 `CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1` のときだけ読み込む。`.claude/settings.json` (hooks・permissions・env)・`.mcp.json`・plugins は追加ディレクトリからは読み込まない。skills の `allowed-tools` は、その skill が動いている間の承認を省く
+- **正した根拠**: Decision 2 の条件 (登録フォルダの main の変換値に限る) の根拠は「**登録フォルダの設定一式を、作業フォルダに選んだときと同じく信頼する**」である。同じフォルダを作業フォルダに選べば skills・CLAUDE.md に加えて settings・hooks・`.mcp.json` まで読み込まれるので、追加ディレクトリで読み込まれるものはその部分集合で、登録した場所の外の設定は入らない (spec U-10)
+- **Consequences に足すこと**: 追加ディレクトリの skills (と、環境変数のときの CLAUDE.md) がモデルの文脈に入る。利用者が望まないときは追加ディレクトリを選ばない。実機で読み込まれるものは 024 quickstart V-1 の手順 8 / 9 で記録し、hooks・`.mcp.json` が読み込まれるなど上の事実と違えば利用者に返す (024 plan RK-02 と同じ扱い)
+
 ## Alternatives
 
 - **任意のパスを入力させる・参照のダイアログで選ばせる** — renderer にパスの値が生じ、`ui-path-concat` の未検出の経路 (DTO を spread して `value` を差し替える) を開く。登録していない場所に読み取りの範囲が広がる

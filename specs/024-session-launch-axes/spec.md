@@ -5,7 +5,7 @@ domain: session
 domain_selected_by: user
 targets: both
 targets_selected_by: auto
-status: planning
+status: implementing
 bf_ids: []
 sf_ids: []
 linear: null
@@ -43,6 +43,7 @@ linear: null
 | U-7 | プリセットは追加ディレクトリと上限を保存し、セッション名は保存しない。`presets.json` の版を 2 に上げ、版 1 は新しい軸を既定として読む | FR-009〜FR-011 |
 | U-8 | X-9 の再開では、追加ディレクトリと上限は選び直せる軸 (会話の所在を決めない)。稼働中の行からは元の起動設定の値、過去の行からは既定を初期値にする。名前の軸は再開の形では出さない (SDK は再開で記録済みの名前を優先する) | FR-012 |
 | U-9 | `launch-usage.json` は変えない (起動元の 2 つの回数だけで、新しい軸を記録しない) | FR-014 |
+| U-10 | 追加ディレクトリの `.claude/skills/` が Claude Code に読み込まれる (と、利用者が環境変数で有効にしたときの CLAUDE.md) ことを受け入れ、登録フォルダの設定一式を作業フォルダに選んだときと同じく信頼する。`settingSources` を絞る・skills を止める手当ては足さない (2026-10-30 design-gate H-004 の修正で夜間の規則により推奨案を採用) | AD-064 訂正 / research R-02 |
 | ADR | AD-064 (plan で起こし、夜間の規則で推奨案を採用して accepted にする): AD-041 (g) の「escalation-neutral のキーだけを足す」の読み替え — `QUERY_OPTION_KEYS` に `additionalDirectories` / `maxTurns` / `maxBudgetUsd` / `title` を足す (12 → 16)。`additionalDirectories` は権限モード・tool の集合・env を変えないが、Claude が扱えるディレクトリを広げるので、「登録済みの作業フォルダに限り、main がランタイムのパスに変換した値だけ」を条件に許す。`SessionLaunchConfig` の形を 6 軸から広げる (glossary の SessionLaunchConfig の「前 6 軸」「6 軸の形は変えない」と `resume.ts` のコメントの読み替え。後者は AD-059 の本文ではなく X-9 が glossary に書いた記述。plan「設計後の見直し」2) | `docs/decisions/` |
 
 各 U-n の検討した案・採った案は「Clarifications」の節に置く。
@@ -87,6 +88,7 @@ roadmap の X-6 の行が預けた範囲と義務のうち、本 spec の扱い�
 - **U-7** Q: プリセットに何を残し、版をどうするか → 検討した案: (a) 追加ディレクトリと上限を保存し、名前は保存しない。`presets.json` の版を 2 に上げ、版 1 は新しい軸を既定 (追加ディレクトリ 0 件・上限なし) として読む (b) 名前も保存する (c) 版を 1 のまま、新しいキーを任意にする → **採った案: (a)**。名前はセッションごとの値で、プリセットから起動したすべてのセッションが同じ名前になる。(c) は旧版のアプリが新しいキーを持つプリセットをキーの allowlist で黙って読み飛ばす。(a) なら旧版は今の store の規則 (将来版は退避) で扱い、黙って欠けない。採用 (2026-10-29 夜間の規則で推奨案を仮採用)
 - **U-8** Q: X-9 の再開で新しい軸をどう扱うか → 検討した案: (a) 追加ディレクトリと上限は選び直せる軸にし、稼働中の行からは元の起動設定の値、過去の行からは既定を初期値にする。名前の軸は再開の形で出さない (b) 追加ディレクトリを引き継ぐ軸にする → **採った案: (a)**。`claude` が会話を探す組は作業フォルダ × config ディレクトリ × ランタイム (021) で、追加ディレクトリと上限はこれに入らない。過去の行には元の起動設定が無い (列挙対象から解くのは 3 軸だけ)。sdk.d.ts は再開のとき記録済みの題を優先するとし、`title` を渡しても効かないので出さない (名前を変えたいときは起動の後に 023 の改名を使う)。「やり直す」(021 FR-009。新規の起動) は名前を含めて元の起動設定を初期値にする。採用 (2026-10-29 夜間の規則で推奨案を仮採用)
 - **U-9** Q: 起動の記録 (`launch-usage.json`) に新しい軸を足すか → 検討した案: (a) 足さない (b) 上限を付けた起動の回数を足す → **採った案: (a)**。O-3 の記録は「起動元の 2 つの回数だけ」と決めている (012 FR-011)。採用 (2026-10-29 夜間の規則で推奨案を仮採用)
+- **U-10** (2026-10-30 design-gate H-004 の修正) Q: `--add-dir` で渡したディレクトリから Claude Code が設定を読み込む (Claude Code の文書では `.claude/skills/` は読み込まれ、CLAUDE.md は環境変数 `CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1` のときだけ、`.claude/settings.json` (hooks・permissions を含む) は読み込まれない。research R-02) ことをどう扱うか → 検討した案: (a) 受け入れる。追加ディレクトリは登録フォルダに限り、そのフォルダを作業フォルダに選べば skills・CLAUDE.md・settings・hooks まで読み込まれるので、追加ディレクトリで読み込まれるものはその部分集合である。AD-064 Decision 2 の根拠を「登録フォルダの設定一式を信頼する」に直す (b) `settingSources` や環境変数で追加ディレクトリの skills を止める (c) 追加ディレクトリをやめる → **採った案: (a)**。(b) は作業フォルダの側の設定まで変わるか、Closta に無い env の経路を足すことになり範囲の外。(a) なら決定 (登録フォルダの変換値に限る) は変わらず、根拠の事実誤認の訂正で閉じる (AD-031 の訂正節)。読み込まれるものは quickstart V-1 で実機に記録する。採用 (2026-10-30 夜間の規則で推奨案を採用)
 - Q: 軸の文言 → A: 「追加ディレクトリ」「ターン数の上限」「費用の上限 (USD)」「セッション名」。上限の未設定の表示は「上限なし」、名前の未入力のプレースホルダは「自動で付ける」、追加ディレクトリの追加のボタンは「フォルダを追加」、外すボタンは「外す」 [ASSUMED: UI ラベル・ボタン文言・プレースホルダーテキスト]
 - Q: 値の範囲 → A: ターン数は 1〜1000 の整数。費用は 0.01〜1000 USD で小数 2 桁まで。外れれば起動を押せず「ターン数は 1〜1000 の整数で入力してください」「費用は 0.01〜1000 の範囲で入力してください」と出す [ASSUMED: 数値デフォルト値・入力フォームのバリデーションメッセージ文言]
 - Q: 追加ディレクトリを外したときの通知 → A: 「追加ディレクトリ <フォルダの表示名> はこのランタイムから使えないため外しました」「追加ディレクトリ <フォルダの表示名> は登録が解除されたため外しました」を軸の reset の通知の並びに出す [ASSUMED: エラーメッセージ文言]
@@ -128,6 +130,7 @@ roadmap の X-6 の行が預けた範囲と義務のうち、本 spec の扱い�
 3. **Given** 上限を付けずに起動した、**When** query の options を見る、**Then** `maxTurns` / `maxBudgetUsd` のキーは載っていない
 4. **Given** ターン数に 0・小数・1001、費用に 0・負・1000.01・小数 3 桁を入れた、**When** 起動しようとする、**Then** 起動は押せず、範囲の文言が出る
 5. **Given** renderer から範囲外・NaN・Infinity・文字列の上限を送った (改ざん)、**When** main と agents が受ける、**Then** どちらかで拒否され、`query()` は呼ばれない
+6. **Given** 上限 (と名前) を付けた起動が拒否された・失敗した、または「やり直す」を押した、**When** 起動ダイアログが前回の起動設定 (`lastConfig`) から開き直る、**Then** 「ターン数の上限」「費用の上限 (USD)」の入力欄には前回の値が入っており (黙って「上限なし」に戻らない)、名前の入力欄にも前回の名前が入る (data-model §9.2.1)
 
 ---
 
@@ -185,7 +188,7 @@ roadmap の X-6 の行が預けた範囲と義務のうち、本 spec の扱い�
 
 - **FR-001**: 起動ダイアログに「追加ディレクトリ」の軸を足し、登録済みのフォルダから 0〜10 個を選べなければならない (作業フォルダ自身と重複は選べない)。renderer は folder id だけを持ち・送り、パスの値を組み立てない・入力させない (U-2)
 - **FR-002**: 依存解決 (`resolveLaunchAxes`) は、追加ディレクトリの各項目に作業フォルダと同じ「フォルダ ↔ ランタイム」の判定を通し、通らない項目・登録が解除された項目・作業フォルダと同じになった項目を外して軸の reset として通知しなければならない。起動は止めない。越境する項目には作業フォルダと同じ警告 (AD-016) を出す (U-3)
-- **FR-003**: main は起動ゲートで FR-002 を再評価し、残った folder id を作業フォルダ (cwd) と同じ経路で選択ランタイムのパスに変換して agents に渡さなければならない。agents は件数・絶対パスの形・制御文字なしを再検査し、外れれば throw する。0 件なら `additionalDirectories` のキーを載せない
+- **FR-003**: main は起動ゲートで FR-002 を再評価し、外れる項目が 1 つでもあれば起動を `invalid-config` で拒否しなければならない (main は黙って外さない。renderer は FR-002 で既に外しているので、ここに来るのは改ざんか、ダイアログの後の登録解除・ランタイムの変化)。全件が通れば、各 folder id を選択ランタイム (`RuntimeDescriptor`。WSL は自分の PathMapping を持つ) に対する `resolveFolderRuntime` で選択ランタイムのパスに変換して agents に渡す。変換できない項目 (到達できない・変換の材料が無い・名前空間が違う) があれば同じく `invalid-config` で拒否する。agents は件数・ランタイムの種類 (WSL / Win32) に合う絶対パスの形・制御文字なしを再検査し、外れれば throw する。0 件なら `additionalDirectories` のキーを載せない
 
 #### 上限 (US-2)
 
@@ -211,7 +214,7 @@ roadmap の X-6 の行が預けた範囲と義務のうち、本 spec の扱い�
 - **FR-014**: 新しい軸を `launch-usage.json` に記録してはならない (U-9)。023 FR-014 (実行中の変更を書き戻さない) を継ぐ
 - **FR-015**: AD-041 (g) の読み替え・`QUERY_OPTION_KEYS` に 4 キーを足すこと (12 → 16)・`SessionLaunchConfig` の形を広げることは ADR (AD-064) に書き、`session-core.test.ts` の pin テスト・`LAUNCH_CONFIG_KEYS` と `isValidLaunchConfig`・`resume.ts` の「6 軸」の記述を同じ PR で直さなければならない
 - **FR-016**: `tests/rule-fixtures/expected.mjs` の `ui-path-concat` の `howToClose` に 024 の確認の結果 (追加ディレクトリはフォルダの id で選び、パスの入力を足さない) を書かなければならない。`nextFeature` の付け替え先は plan で決める
-- **FR-017**: session charter の Related Specs / Related ADRs、glossary の SessionLaunchConfig (「前 6 軸」と「X-6 が扱う」の記述) と Concurrency limit / 023 の名前の項の Counterexamples を直し、完了の PR で roadmap の X-6 の行に 024 の結論を書かなければならない (Principle XII / XIV)
+- **FR-017**: session charter の Related Specs / Related ADRs、glossary の SessionLaunchConfig (「前 6 軸」と「X-6 が扱う」の記述)・Launch axis (軸の数)・Resume / Resume dialog (選び直せる軸)・LaunchInput (`options` の中身) と Concurrency limit / 023 の名前の項の Counterexamples、charter の Key concepts のプリセット (型は `PresetLaunchConfig`) を直し (一覧の正本は data-model §10)、完了の PR で roadmap の X-6 の行に 024 の結論を書かなければならない (Principle XII / XIV)
 
 ### Key Entities
 
@@ -251,6 +254,7 @@ roadmap の X-6 の行が預けた範囲と義務のうち、本 spec の扱い�
 ## Assumptions
 
 - `additionalDirectories` は WSL のランタイムではディストロの POSIX のパス、Win32 のランタイムでは Windows のパスで効く (作業フォルダと同じ変換で足りる)。実機で quickstart で確かめる
+- `--add-dir` のディレクトリから Claude Code が読み込むのは `.claude/skills/` (と、環境変数で有効にしたときの CLAUDE.md) で、`.claude/settings.json` の hooks・permissions は読み込まれない (Claude Code の文書。research R-02)。登録フォルダの設定として受け入れる (U-10)。読み込まれるものは quickstart V-1 で実機に記録する
 - `maxTurns` / `maxBudgetUsd` はストリーミング入力のセッション (Closta の起動の形) で効く。数え方 (プロンプトごとか、セッションを通してか・再開の前の費用を含むか) は SDK の扱いに任せ、quickstart で記録する。表示は「上限」とだけ言い、数え方を約束しない
 - `title` は SDK が stdin の初期化の要求 (control request) で渡し、起動の引数を通らない (sdk.mjs。plan「設計後の見直し」1)。起動の引数を通るのは `--add-dir` / `--max-turns` / `--max-budget-usd` で、日本語・空白を含む追加ディレクトリのパスが WSL の起動 (`wsl.exe --exec`) と Win32 の直接の起動で割れないことを実機で quickstart で確かめる
 - 上限に達した結果は既存の分類 (`error_max_turns` / `error_max_budget_usd`) で届く (sdk.d.ts の `SDKResultError`)
