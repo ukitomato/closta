@@ -261,15 +261,18 @@ describe('labels — 025 で足す文言 (data-model §9)', () => {
     expect(emptyModelList).not.toBe(noModelForEffort)
   })
 
-  it('RESUME_PICKER_LABELS は 5 キーを網羅する', () => {
+  it('RESUME_PICKER_LABELS は 6 キーを網羅する', () => {
     expect(Object.keys(RESUME_PICKER_LABELS).sort()).toEqual([
       'close',
       'empty',
       'loading',
+      'noMatch',
       'search',
       'title'
     ])
-    for (const s of Object.values(RESUME_PICKER_LABELS)) expect(s.length).toBeGreaterThan(0)
+    const { noMatch, ...strings } = RESUME_PICKER_LABELS
+    for (const s of Object.values(strings)) expect(s.length).toBeGreaterThan(0)
+    expect(noMatch('abc')).toContain('abc')
   })
 
   it('LIVE_MODEL_LIST_FAILURE_LABELS のキーは LIVE_SETTING_FAILURES の 11 値と一致する', () => {

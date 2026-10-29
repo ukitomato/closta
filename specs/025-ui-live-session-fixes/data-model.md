@@ -289,6 +289,6 @@ export function mergeCommandCandidates(
 | 同上 | `timeout` | モデルの一覧の読み込みが時間内に終わりませんでした |
 | 同上 | `write-failed` | モデルの一覧を読み込めませんでした |
 | `features/chat/labels.ts` `APP_COMMAND_LABELS` | `resume` | 同じフォルダの過去のセッションを選んで再開する (アプリのコマンド) |
-| `features/session/labels.ts` `RESUME_PICKER_LABELS` | `title` / `search` / `empty` / `loading` / `close` | 過去のセッションを再開 / セッションを検索 / このフォルダに過去のセッションはありません / 読み込み中 / 閉じる |
+| `features/session/labels.ts` `RESUME_PICKER_LABELS` | `title` / `search` / `empty` / `noMatch` / `loading` / `close` | 過去のセッションを再開 / セッションを検索 / このフォルダに過去のセッションはありません / 「{query}」に合うセッションがありません (関数) / 読み込み中 / 閉じる |
 
 `noModelList` (「この Provider にはモデルの一覧がありません」) は、Provider のカタログが見つからないときの表示として残す。

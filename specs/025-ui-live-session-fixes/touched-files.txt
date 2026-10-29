@@ -92,3 +92,5 @@ src/renderer/src/features/chat/composer-escape.test.tsx
 docs/roadmap.md
 specs/025-ui-live-session-fixes/tasks.md
 specs/025-ui-live-session-fixes/plan.md
+src/renderer/src/features/session/labels.test.ts
+specs/025-ui-live-session-fixes/data-model.md

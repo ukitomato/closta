@@ -1,21 +1,21 @@
 {
     "gate": "code",
-    "run": "2026-10-30T00:00:00+09:00",
+    "run": "2026-10-30T01:04:37+09:00",
     "spec_dir": "specs/025-ui-live-session-fixes",
     "spec_id": "025-ui-live-session-fixes",
-    "iter": 1,
+    "iter": 3,
     "severity_counts": {
         "critical": 0,
         "high": 4,
-        "medium": 1,
-        "low": 5,
+        "medium": 2,
+        "low": 3,
         "must_fix": 0
     },
     "must_fix_findings": [],
     "touched_files": [
         {
             "path": ".specify/memory/constitution.md",
-            "sha": "26c4501e6d7989dfbb5a5fe5b96f9de94386503b"
+            "sha": "ef0b90135e1797eac9c77579c04aa81c68ab7766"
         },
         {
             "path": "docs/decisions/0065-live-model-list-and-claude-code-permission-mode-names.md",
@@ -31,7 +31,7 @@
         },
         {
             "path": "docs/roadmap.md",
-            "sha": "fceecfedfa0627253681ed4dc5a84e05495834a6"
+            "sha": "fa4a039bcdab62e669706ce56ee35f7beaeff296"
         },
         {
             "path": "docs/ui-coverage.md",
@@ -52,6 +52,18 @@
         {
             "path": "e2e/right-panel.spec.ts",
             "sha": "43e07ef24399d38b79c21d85499f0456f53aaab6"
+        },
+        {
+            "path": "specs/025-ui-live-session-fixes/data-model.md",
+            "sha": "68eb7bbea9314b385457971799c193400e63fa9c"
+        },
+        {
+            "path": "specs/025-ui-live-session-fixes/plan.md",
+            "sha": "8ba1d22ee15ea2c6cef7896fd63cb6c3fa219ec6"
+        },
+        {
+            "path": "specs/025-ui-live-session-fixes/tasks.md",
+            "sha": "6999fe5c4d8ff9d6dbec4a91cc237729027004b3"
         },
         {
             "path": "src/agents/live-models-path.test.ts",
@@ -159,7 +171,7 @@
         },
         {
             "path": "src/renderer/src/components/assistant-ui/elements/thread.aui.tsx",
-            "sha": "2cb9e909d98bc019e0ffb40998ee8528c7838323"
+            "sha": "79e00aa656e6512b1cc06939193ba142000ce0e2"
         },
         {
             "path": "src/renderer/src/features/chat/app-commands.test.ts",
@@ -171,7 +183,7 @@
         },
         {
             "path": "src/renderer/src/features/chat/composer-escape.test.tsx",
-            "sha": "6efb26e6cc8e35befc15aeb4d05f9b307c3c7577"
+            "sha": "fbe4080f8017c551e7557f8626e22e03e135ab6d"
         },
         {
             "path": "src/renderer/src/features/chat/composer-extensions-context.ts",
@@ -203,11 +215,11 @@
         },
         {
             "path": "src/renderer/src/features/session/labels.test.ts",
-            "sha": "d303d6683ae857806e6d8c39819ce93ad41ad44b"
+            "sha": "f8a3385ab65ffa6671473815e065fcc955b110ff"
         },
         {
             "path": "src/renderer/src/features/session/labels.ts",
-            "sha": "bc9d07b63db630c71ae35afd8fb4ae13903a4f70"
+            "sha": "bfcc5578a227a3e8a993b77f53a6a853212940bf"
         },
         {
             "path": "src/renderer/src/features/session/LaunchDialog.test.tsx",
@@ -255,11 +267,11 @@
         },
         {
             "path": "src/renderer/src/features/session/ResumePickerDialog.test.tsx",
-            "sha": "581fab94623c45ea51c57e6279e7c942fbe2e1af"
+            "sha": "d01d7b738eedbb00b527cfc1d0a63aa09999ef71"
         },
         {
             "path": "src/renderer/src/features/session/ResumePickerDialog.tsx",
-            "sha": "33f5ebfc22db5394bdb59dc7ff3f1d6fe2abb8b9"
+            "sha": "6d5d7455ab5a360391c4f8a4a1c08356844a6ea7"
         },
         {
             "path": "src/renderer/src/features/session/resume-picker-rows.ts",
@@ -341,9 +353,9 @@
         "C": "Critical:0 High:0 Medium:0 Low:0",
         "D": "Critical:0 High:0 Medium:0 Low:0",
         "E": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
-        "F": "High:4 Medium:1 Low:4",
+        "F": "High:4 Medium:2 Low:3",
         "G": "\u8a72\u5f53\u306a\u3057: optional reviewer \u306a\u3057",
-        "H": "Low:1"
+        "H": "Medium:1"
     },
     "tracks": {
         "lint-agent": {
@@ -357,7 +369,7 @@
             ]
         },
         "test-agent": {
-            "passed": 4269,
+            "passed": 4270,
             "failed": 0,
             "exit_code": 0,
             "scope": "full"
@@ -396,6 +408,18 @@
     "iter_history": [
         {
             "iter": 1,
+            "must_fix": 0,
+            "skipped": 0,
+            "error": 0
+        },
+        {
+            "iter": 2,
+            "must_fix": 1,
+            "skipped": 0,
+            "error": 0
+        },
+        {
+            "iter": 3,
             "must_fix": 0,
             "skipped": 0,
             "error": 0
