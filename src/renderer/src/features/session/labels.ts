@@ -2,7 +2,11 @@ import type { LaunchFailureReason, SessionLaunchRejectReason } from '@domain/ses
 import { MAX_CONCURRENT_SESSIONS } from '@domain/session/concurrency'
 import { MAX_PRESETS, type SafePermissionMode } from '@domain/session/launch-config'
 import type { AxisResetReason, LaunchBlocker } from '@domain/session/launch-resolution'
-import type { LiveSettingBlocker, LiveSettingKind } from '@domain/session/live-settings'
+import type {
+  LiveSettingBlocker,
+  LiveSettingFailure,
+  LiveSettingKind
+} from '@domain/session/live-settings'
 import type { ResumeUnavailableReason } from '@domain/session/resume'
 import type { SavePresetResult } from '@domain/session/preset'
 import type { SessionRunState } from '@domain/session/run-state'
@@ -443,6 +447,9 @@ export const LIVE_SETTING_LABELS = {
   defaultModel: '既定',
   nameRule: '1〜100 文字で、改行を含めずに入力してください',
   noModelList: 'この Provider にはモデルの一覧がありません',
+  loadingModelList: 'モデルの一覧を読み込み中',
+  emptyModelList: 'Claude Code がモデルの一覧を返しませんでした',
+  noModelForEffort: '起動の effort が効くモデルが Claude Code の一覧にありません',
   failure: {
     'permission-mode': '権限モードを変更できませんでした',
     model: 'モデルを変更できませんでした',
@@ -455,6 +462,30 @@ export const LIVE_SETTING_LABELS = {
     'no-conversation': '最初の応答の後に名前を付けられます',
     'turn-running': '応答の実行中は名前を変更できません'
   } satisfies Record<LiveSettingBlocker, string>
+} as const
+
+/** 既定の Provider のモデルの一覧を読み込めなかった理由の文言 (025 data-model §9)。 */
+export const LIVE_MODEL_LIST_FAILURE_LABELS = {
+  'unknown-session': 'セッションが見つからないため、モデルの一覧を読み込めませんでした',
+  'invalid-value': 'このセッションでは Claude Code にモデルの一覧を聞けません',
+  'not-running': 'Claude Code が動いていないため、モデルの一覧を読み込めませんでした',
+  'not-ready': '最初の応答の後にモデルの一覧を読み込みます',
+  busy: '変更中のため、モデルの一覧を読み込めませんでした',
+  'no-conversation': '最初の応答の後にモデルの一覧を読み込みます',
+  'turn-running': '応答の実行中のため、モデルの一覧を読み込めませんでした',
+  rejected: 'Claude Code がモデルの一覧に答えませんでした',
+  'session-ended': 'セッションが終わったため、モデルの一覧を読み込めませんでした',
+  timeout: 'モデルの一覧の読み込みが時間内に終わりませんでした',
+  'write-failed': 'モデルの一覧を読み込めませんでした'
+} satisfies Record<LiveSettingFailure, string>
+
+/** `/resume` の選ぶ画面の文言 (025 data-model §9)。 */
+export const RESUME_PICKER_LABELS = {
+  title: '過去のセッションを再開',
+  search: 'セッションを検索',
+  empty: 'このフォルダに過去のセッションはありません',
+  loading: '読み込み中',
+  close: '閉じる'
 } as const
 
 /** 権限モードの意味の説明 (`dontAsk` は承認カードが出ず、事前承認の無い操作は拒否される。plan R-03)。 */

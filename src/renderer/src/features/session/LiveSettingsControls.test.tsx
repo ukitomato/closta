@@ -14,7 +14,7 @@ import { EMPTY_SESSION_METERS } from '@/features/session/running-session-types'
 import { LIVE_SETTING_LABELS } from '@/features/session/labels'
 import { installCapability, stubCapability } from '@/test-support/capability'
 
-import { CenterHeader, type CenterHeaderLive } from './CenterHeader'
+import { CenterHeader, type CenterHeaderLive } from '@/features/shell/CenterHeader'
 import { LiveSettingsControls } from './LiveSettingsControls'
 
 /**

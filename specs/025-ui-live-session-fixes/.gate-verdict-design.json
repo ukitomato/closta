@@ -1,0 +1,101 @@
+{
+    "gate": "design",
+    "run": "2026-10-29T00:00:00+09:00",
+    "spec_dir": "specs/025-ui-live-session-fixes",
+    "spec_id": "025-ui-live-session-fixes",
+    "tracks": {
+        "analyze": {
+            "status": "ok",
+            "raw_out": "analyze.md",
+            "viewpoint_missing": null,
+            "cascade_demotions": null
+        },
+        "po-reviewer": {
+            "status": "ok",
+            "raw_out": "po-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "architecture-reviewer": {
+            "status": "ok",
+            "raw_out": "architecture-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "security-reviewer": {
+            "status": "ok",
+            "raw_out": "security-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "platform-boundary-reviewer": {
+            "status": "ok",
+            "raw_out": "platform-boundary-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        }
+    },
+    "severity_counts": {
+        "critical": 0,
+        "high": 5,
+        "medium": 15,
+        "low": 13
+    },
+    "fr_coverage": [
+        {
+            "fr": "FR-001..FR-018",
+            "covered": true,
+            "by": [
+                "analyze.md Coverage Summary Table"
+            ]
+        },
+        {
+            "fr": "SC-001..SC-007",
+            "covered": true,
+            "by": [
+                "analyze.md Coverage Summary Table"
+            ]
+        }
+    ],
+    "viewpoint_coverage": {
+        "A": "Critical:0 High:0",
+        "B": "Critical:0 High:1",
+        "C": "Critical:0 High:0",
+        "D": "Critical:0 High:1",
+        "E": "Critical:0 High:2",
+        "F": "Critical:0 High:0",
+        "G": "\u8a72\u5f53\u306a\u3057",
+        "H": "Critical:0 High:1"
+    },
+    "dedup_log": [
+        {
+            "merged": [
+                "analyze-U1",
+                "po-M-005"
+            ],
+            "key": "spec.md Edge Case :170 / plan RK-05"
+        },
+        {
+            "merged": [
+                "analyze-U2",
+                "arch-M-003"
+            ],
+            "key": "tasks.md FE-053 useDialogReturnFocus / data-model \u00a77.4"
+        },
+        {
+            "merged": [
+                "analyze-I7",
+                "arch-L-001"
+            ],
+            "key": "docs/glossary.md:1016"
+        },
+        {
+            "merged": [
+                "analyze-U4",
+                "po-L-002"
+            ],
+            "key": "spec.md US-4 AC3"
+        }
+    ],
+    "verdict": "PASS"
+}

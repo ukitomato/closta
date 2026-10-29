@@ -1,0 +1,9 @@
+docs/glossary.md
+src/renderer/src/features/shell/LiveSettingsControls.tsx
+src/renderer/src/features/shell/LiveSettingsControls.test.tsx
+src/renderer/src/features/session/LiveSettingsControls.tsx
+src/renderer/src/features/session/LiveSettingsControls.test.tsx
+src/renderer/src/features/shell/CenterHeader.tsx
+src/renderer/src/features/session/labels.ts
+src/renderer/src/features/session/labels.test.ts
+src/renderer/src/features/chat/labels.ts

@@ -364,6 +364,11 @@ export function pluginRowText(plugin: PluginDetail, status: SystemEventStatus | 
   ].join('・')
 }
 
+/** アプリのコマンド (Claude Code に送らずアプリが処理する composer のコマンド。025 data-model §9)。 */
+export const APP_COMMAND_LABELS = {
+  resume: '同じフォルダの過去のセッションを選んで再開する (アプリのコマンド)'
+} as const
+
 /**
  * 権限モードの表示名 (O-4 / 014 data-model §5 / research R-15)。鍵は domain の `PermissionModeKey` (SDK の 6 値と
  * 知らない値の `unknown`)。**権限モードの名前の表はここ 1 つ** — 起動ダイアログの安全 3 値 (`session/labels.ts` の

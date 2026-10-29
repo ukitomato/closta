@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
 import { LAUNCH_FAILURE_REASONS, type LaunchFailureReason } from '@domain/session/agent-session'
-import type { LiveSettingBlocker } from '@domain/session/live-settings'
+import { LIVE_SETTING_FAILURES, type LiveSettingBlocker } from '@domain/session/live-settings'
+
+import { APP_COMMAND_LABELS } from '@/features/chat/labels'
 
 import {
+  LIVE_MODEL_LIST_FAILURE_LABELS,
+  RESUME_PICKER_LABELS,
   attentionAnnouncement,
   isReloginFailure,
   launchFailureLabel,
@@ -240,5 +244,41 @@ describe('LIVE_SETTING_LABELS (023 FE-001)', () => {
       'name',
       'permission-mode'
     ])
+  })
+})
+
+describe('labels — 025 で足す文言 (data-model §9)', () => {
+  it('足したキーはすべて空でない文字列で、emptyModelList と noModelForEffort は違う文言', () => {
+    const { loadingModelList, emptyModelList, noModelForEffort } = LIVE_SETTING_LABELS
+    for (const s of [
+      loadingModelList,
+      emptyModelList,
+      noModelForEffort,
+      APP_COMMAND_LABELS.resume
+    ]) {
+      expect(s.length).toBeGreaterThan(0)
+    }
+    expect(emptyModelList).not.toBe(noModelForEffort)
+  })
+
+  it('RESUME_PICKER_LABELS は 5 キーを網羅する', () => {
+    expect(Object.keys(RESUME_PICKER_LABELS).sort()).toEqual([
+      'close',
+      'empty',
+      'loading',
+      'search',
+      'title'
+    ])
+    for (const s of Object.values(RESUME_PICKER_LABELS)) expect(s.length).toBeGreaterThan(0)
+  })
+
+  it('LIVE_MODEL_LIST_FAILURE_LABELS のキーは LIVE_SETTING_FAILURES の 11 値と一致する', () => {
+    expect(Object.keys(LIVE_MODEL_LIST_FAILURE_LABELS).sort()).toEqual(
+      [...LIVE_SETTING_FAILURES].sort()
+    )
+    expect(LIVE_SETTING_FAILURES).toHaveLength(11)
+    for (const s of Object.values(LIVE_MODEL_LIST_FAILURE_LABELS)) {
+      expect(s.length).toBeGreaterThan(0)
+    }
   })
 })
