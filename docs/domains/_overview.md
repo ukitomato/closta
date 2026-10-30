@@ -55,7 +55,7 @@ spec_id（`001-runtime-...`）とは独立させる。差し込み作業で番�
 | X-3 | Provider 登録と到達可能性判定 | `provider` | M2 |
 | X-4 | 起動設定ダイアログとプリセット（軸の依存解決） | `session` | M2 |
 | X-5 | supervisor 分離とマルチセッション（10 並列） | `session` | M2 |
-| X-6 | 起動設定の拡張軸とセッション操作（追加ディレクトリ / 上限 / セッション名 / fork・rename 等。Win32 直接起動は X-8、resume は X-9 に切り出した。最初の分割 023 で実行中の権限モード・モデル・名前の変更を実装: [AD-062](../decisions/0062-live-session-permission-mode-model-and-rename.md)。残りは roadmap の X-6 の行） | `session` | M2 後続 |
+| X-6 | 起動設定の拡張軸とセッション操作（追加ディレクトリ / 上限 / セッション名 / fork・rename 等。Win32 直接起動は X-8、resume は X-9 に切り出した。最初の分割 023 で実行中の権限モード・モデル・名前の変更を実装: [AD-062](../decisions/0062-live-session-permission-mode-model-and-rename.md)。2 つ目の分割 024 で追加ディレクトリ・ターン数と費用の上限・起動時のセッション名を起動・プリセット・再開で選べるようにした: [AD-064](../decisions/0064-launch-config-additional-directories-limits-and-title.md)。残りは roadmap の X-6 の行） | `session` | M2 後続 |
 | X-7 | aws-assume-role helper の生成と CloudTrail 追跡 | `provider` | M2 後続 |
 | O-1 | セッション監視ビュー（状態一覧、密度切替、承認待ちの強調） | `session` | M3 |
 | O-2 | `docs/ui-coverage.md` の確立 (SDK の型と機械照合・割当の確定)、実行中の tool の結果と Hook / Background task の行、transcript の情報密度 | `ui` | M3 |

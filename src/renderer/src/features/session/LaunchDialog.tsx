@@ -286,7 +286,7 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
   const [maxBudgetInput, setMaxBudgetInput] = useState(() => limitInputOf(draft.maxBudgetUsd))
   const maxTurnsParsed = parseMaxTurnsInput(maxTurnsInput)
   const maxBudgetParsed = parseMaxBudgetInput(maxBudgetInput)
-  /** 新規起動の形でだけ入力欄を出すので、再開の形では入力の不正で止めない (FE-041 で再開の形に出す)。 */
+  /** 上限の入力欄は新規起動の形・再開の形のどちらにも出る (再開は元の値が初期値。024 FR-012)。 */
   const limitsInvalid = !maxTurnsParsed.ok || !maxBudgetParsed.ok
   /**
    * セッション名の入力の文字列 (data-model §9.2.1)。下書きに入れない。新規の起動の形で `lastConfig` があれば
@@ -447,7 +447,8 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
     folderRuntimeProbeFailed ||
     directoriesChecking ||
     directoriesWaitingProbe ||
-    (resume === null && (limitsInvalid || !sessionNameParsed.ok))
+    limitsInvalid ||
+    (resume === null && !sessionNameParsed.ok)
       ? null
       : config
 
@@ -507,17 +508,23 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
     setConfirming(false)
     setNotices([])
     setPresetApplied(true)
-    // 再開では選び直せる 3 軸だけに当てる (引き継ぐ 3 軸は変えない。spec Edge Cases)。
-    setDraft(
+    // 再開では選び直せる 6 軸だけに当てる (引き継ぐ 3 軸は変えない。spec Edge Cases / 024 FR-009)。
+    const applied: LaunchDraft =
       resume === null
         ? next
         : {
             ...draft,
             modelId: next.modelId,
             effort: next.effort,
-            permissionMode: next.permissionMode
+            permissionMode: next.permissionMode,
+            additionalDirectoryIds: next.additionalDirectoryIds,
+            maxTurns: next.maxTurns,
+            maxBudgetUsd: next.maxBudgetUsd
           }
-    )
+    setDraft(applied)
+    // 上限の入力の文字列もプリセットの値で置き換える。名前の入力には触れない (プリセットは名前を持たない)。
+    setMaxTurnsInput(limitInputOf(applied.maxTurns))
+    setMaxBudgetInput(limitInputOf(applied.maxBudgetUsd))
   }
 
   /** 到達可能性と解決結果を取り直す。確認中の判断は取り直した結果で出し直す。 */
@@ -875,8 +882,9 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
         </select>
       </label>
 
-      {resume === null && (
-        <LaunchExtraAxes
+      {/* 再開の形でも出す (名前の部品だけ出さない) */}
+      <LaunchExtraAxes
+          showSessionName={resume === null}
           choices={additionalDirectoryChoices(
             folderList,
             effective.folderId,
@@ -921,7 +929,6 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
             else setConfirming(false)
           }}
         />
-      )}
 
       {resolution.directoryResets.length > 0 && (
         <ul role="status" className="text-muted-foreground text-xs" aria-label="外した追加ディレクトリ">

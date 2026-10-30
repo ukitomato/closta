@@ -173,6 +173,7 @@ async function setup(): Promise<Harness> {
       effort: 'high',
       permissionMode: 'plan',
       ...DEFAULT_EXTRA_AXES,
+      maxTurns: 30,
       sessionName: null
     },
     '案件A',
@@ -222,7 +223,13 @@ describe('稼働中の行の「再開」「やり直す」 (US-2 AC1〜AC4)', ()
     expect(h.store.getState().launch.resume).toEqual({
       source: { kind: 'live', sessionId: A },
       fixed: { folderId: FOLDER_A, runtimeId: UBUNTU.id, providerId: null },
-      initial: { modelId: 'm1', effort: 'high', permissionMode: 'plan' },
+      initial: {
+        modelId: 'm1',
+        effort: 'high',
+        permissionMode: 'plan',
+        ...DEFAULT_EXTRA_AXES,
+        maxTurns: 30
+      },
       initialOrigin: 'preset',
       replaces: A
     })

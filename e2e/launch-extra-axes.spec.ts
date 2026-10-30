@@ -100,4 +100,41 @@ test.describe('起動設定の残りの軸 (024)', () => {
       await app.close()
     }
   })
+
+  test('追加ディレクトリ・費用の上限・名前を入れてプリセットに保存し、適用すると名前以外が戻る (US-4 / SC-007)', async () => {
+    const { app, page } = await launchApp()
+    try {
+      await openLaunchDialog(page)
+      await folder(page).selectOption({ label: 'E2E Project' })
+      await runtime(page).selectOption({ label: 'E2E-Ubuntu' })
+      await page
+        .getByRole('combobox', { name: 'フォルダを追加' })
+        .selectOption({ label: 'E2E Windows Project' })
+      await page.getByRole('textbox', { name: '費用の上限 (USD)' }).fill('2')
+      await page.getByRole('textbox', { name: 'セッション名' }).fill('保存されない名前')
+
+      await page.getByTestId('preset-name').fill('E2E 追加軸プリセット')
+      await page.getByRole('button', { name: '保存', exact: true }).click()
+      await expect(page.getByTestId('preset-list')).toContainText('E2E 追加軸プリセット')
+
+      // 軸を崩してから適用する。名前の入力は適用で変わらないので、先に空にしておく。
+      await page.getByRole('button', { name: /^外す/ }).click()
+      await page.getByRole('textbox', { name: '費用の上限 (USD)' }).fill('')
+      await page.getByRole('textbox', { name: 'セッション名' }).fill('')
+      await page
+        .getByTestId('preset-list')
+        .getByRole('listitem')
+        .filter({ hasText: 'E2E 追加軸プリセット' })
+        .getByRole('button', { name: '適用' })
+        .click()
+
+      await expect(page.getByRole('list', { name: '追加ディレクトリ' })).toContainText(
+        'E2E Windows Project'
+      )
+      await expect(page.getByRole('textbox', { name: '費用の上限 (USD)' })).toHaveValue('2')
+      await expect(page.getByRole('textbox', { name: 'セッション名' })).toHaveValue('')
+    } finally {
+      await app.close()
+    }
+  })
 })

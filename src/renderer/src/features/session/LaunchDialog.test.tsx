@@ -1787,6 +1787,40 @@ describe('LaunchDialog — 追加ディレクトリ (024)', () => {
     )
   })
 
+  it('プリセットの適用で上限の入力欄が置き換わり、名前の入力は変わらない (US-4 AC1)', async () => {
+    install({
+      listPresets: async () => [
+        {
+          id: 'p1',
+          name: '上限つき',
+          config: {
+            folderId: 'ubuntu-proj',
+            runtimeId: 'wsl:Ubuntu',
+            providerId: null,
+            modelId: null,
+            effort: null,
+            permissionMode: 'default',
+            ...DEFAULT_EXTRA_AXES,
+            maxTurns: 12,
+            maxBudgetUsd: 0.07
+          },
+          updatedAt: NOW
+        }
+      ]
+    })
+    render(<LaunchDialog session={fakeSession()} />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'セッション名' }), {
+      target: { value: '残る名前' }
+    })
+    await waitFor(() => expect(screen.getByRole('button', { name: '適用' })).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: '適用' }))
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: 'ターン数の上限' })).toHaveValue('12')
+    )
+    expect(screen.getByRole('textbox', { name: '費用の上限 (USD)' })).toHaveValue('0.07')
+    expect(screen.getByRole('textbox', { name: 'セッション名' })).toHaveValue('残る名前')
+  })
+
   it('登録解除の項目は「(削除されたフォルダ)」で通知する', async () => {
     install({
       listPresets: async () => [

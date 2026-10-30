@@ -40,6 +40,8 @@ export interface LaunchExtraAxesProps {
   readonly onSessionNameChange: (raw: string) => void
   /** 名前の入力で Enter (IME の変換中を除く) を押した */
   readonly onSessionNameSubmit: () => void
+  /** false なら名前の部品を出さない (再開の形。名前は渡さない。024 FR-012)。省略は出す。 */
+  readonly showSessionName?: boolean
 }
 
 const inputClass = 'border-border bg-background rounded-md border px-2 py-1.5 text-sm'
@@ -88,6 +90,7 @@ export function LaunchExtraAxes(props: LaunchExtraAxesProps): React.JSX.Element 
           </span>
         )}
       </div>
+      {props.showSessionName !== false && (
       <div className="flex flex-col gap-1 text-sm">
         <label className="flex flex-col gap-1">
           <span className="font-medium">{EXTRA_AXES_LABELS.sessionName}</span>
@@ -115,6 +118,7 @@ export function LaunchExtraAxes(props: LaunchExtraAxesProps): React.JSX.Element 
           </span>
         )}
       </div>
+      )}
     </>
   )
 }
