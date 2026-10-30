@@ -4,6 +4,10 @@ import type { EffortLevel } from '@domain/provider/types'
 import {
   assertSafePermissionMode,
   isSafePermissionMode,
+  isValidLaunchSessionName,
+  isValidMaxBudgetUsd,
+  isValidMaxTurns,
+  MAX_ADDITIONAL_DIRECTORIES,
   type SafePermissionMode
 } from '@domain/session/launch-config'
 import {
@@ -16,7 +20,9 @@ import {
   type LaunchFailureReason,
   type PermissionDecision,
   type PermissionRequest,
+  isLaunchDirectoryValue,
   isWin32LaunchSpec,
+  type LaunchDirectoryKind,
   type RuntimeLaunchSpec,
   type SessionControl
 } from '@domain/session/agent-session'
@@ -80,7 +86,13 @@ export const QUERY_OPTION_KEYS = [
   'includeHookEvents',
   'forwardSubagentText',
   // 会話の再開 (X-9 / AD-059 Decision 1)。会話の続きを読み込むだけで権限面・tool 集合・env を変えない (escalation-neutral)。
-  'resume'
+  'resume',
+  // 起動設定の残りの軸 (024 / AD-064)。additionalDirectories は Decision 2 (登録フォルダの main の変換値に限る条件つき)、
+  // 残り 3 つは Decision 1 (上限と名前。権限面・tool 集合・env を変えない)。
+  'additionalDirectories',
+  'maxTurns',
+  'maxBudgetUsd',
+  'title'
 ] as const
 
 /** SDK の `SpawnOptions` の構造だけ (SDK を import しない)。 */
@@ -149,6 +161,14 @@ export interface BuiltQueryOptions {
   readonly forwardSubagentText: true
   /** 再開する会話の id (X-9。AD-059)。再開の起動だけが持つ。 */
   readonly resume?: string
+  /** 追加ディレクトリ (024。AD-064 Decision 2)。main が登録フォルダから変換したランタイムのパス。 */
+  readonly additionalDirectories?: readonly string[]
+  /** ターン数の上限 (024。AD-064 Decision 1)。 */
+  readonly maxTurns?: number
+  /** 費用の上限 USD (024。AD-064 Decision 1)。 */
+  readonly maxBudgetUsd?: number
+  /** 起動のときのセッション名 (024。AD-064 Decision 1)。 */
+  readonly title?: string
 }
 
 export interface BuildQueryOptionsDeps {
@@ -165,6 +185,29 @@ export interface BuildQueryOptionsDeps {
   readonly onElicitation: OnElicitationLike
   /** 再開する会話の id (X-9。AD-059)。境界を越えて来るため下で UUID の形を assert し直す。 */
   readonly resume?: string
+  readonly additionalDirectories?: readonly string[]
+  readonly maxTurns?: number
+  readonly maxBudgetUsd?: number
+  readonly title?: string
+  /**
+   * 追加ディレクトリの形を決めるランタイムの種類。呼び出し側が `launchDirectoryKindOf(spec)` で決める (必須)。
+   * deps だけの欄で query の options には載せない (`QUERY_OPTION_KEYS` は 16 のまま。024 data-model §5.4)。
+   */
+  readonly launchDirectoryKind: LaunchDirectoryKind
+}
+
+/**
+ * 追加ディレクトリの列の形 (024 data-model §5.3 / §5.4)。1〜10 件・重複なし・全件が `kind` に合う形。
+ * decoder と `buildQueryOptions` が同じ関数を呼ぶ。
+ */
+export function isValidAdditionalDirectories(
+  kind: LaunchDirectoryKind,
+  value: unknown
+): value is readonly string[] {
+  if (!Array.isArray(value)) return false
+  if (value.length < 1 || value.length > MAX_ADDITIONAL_DIRECTORIES) return false
+  if (new Set(value).size !== value.length) return false
+  return value.every((v) => isLaunchDirectoryValue(kind, v))
 }
 
 /**
@@ -191,6 +234,25 @@ export function buildQueryOptions(deps: BuildQueryOptionsDeps): BuiltQueryOption
     // 値をメッセージに入れない (会話の id をログに出さない。AD-059)。
     throw new Error('buildQueryOptions: resume が会話の id の形ではありません (AD-059)')
   }
+  // 024 の 4 キー。メッセージにはキーの名前だけを入れ、値 (パス・名前・数) を入れない (AD-064)。
+  if (
+    deps.additionalDirectories !== undefined &&
+    !isValidAdditionalDirectories(deps.launchDirectoryKind, deps.additionalDirectories)
+  ) {
+    throw new Error('buildQueryOptions: additionalDirectories が起動の形に合いません (AD-064)')
+  }
+  if (deps.maxTurns !== undefined && (deps.maxTurns === null || !isValidMaxTurns(deps.maxTurns))) {
+    throw new Error('buildQueryOptions: maxTurns が範囲の外です (AD-064)')
+  }
+  if (
+    deps.maxBudgetUsd !== undefined &&
+    (deps.maxBudgetUsd === null || !isValidMaxBudgetUsd(deps.maxBudgetUsd))
+  ) {
+    throw new Error('buildQueryOptions: maxBudgetUsd が範囲の外です (AD-064)')
+  }
+  if (deps.title !== undefined && (deps.title === null || !isValidLaunchSessionName(deps.title))) {
+    throw new Error('buildQueryOptions: title が名前の規則の外です (AD-064)')
+  }
   return {
     permissionMode: assertSafePermissionMode(deps.permissionMode),
     canUseTool: deps.canUseTool,
@@ -203,7 +265,13 @@ export function buildQueryOptions(deps: BuildQueryOptionsDeps): BuiltQueryOption
     onElicitation: deps.onElicitation,
     includeHookEvents: true,
     forwardSubagentText: true,
-    ...(deps.resume !== undefined ? { resume: deps.resume } : {})
+    ...(deps.resume !== undefined ? { resume: deps.resume } : {}),
+    ...(deps.additionalDirectories !== undefined
+      ? { additionalDirectories: deps.additionalDirectories }
+      : {}),
+    ...(deps.maxTurns !== undefined ? { maxTurns: deps.maxTurns } : {}),
+    ...(deps.maxBudgetUsd !== undefined ? { maxBudgetUsd: deps.maxBudgetUsd } : {}),
+    ...(deps.title !== undefined ? { title: deps.title } : {})
   }
 }
 

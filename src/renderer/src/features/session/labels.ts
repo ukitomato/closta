@@ -1,7 +1,11 @@
 import type { LaunchFailureReason, SessionLaunchRejectReason } from '@domain/session/agent-session'
 import { MAX_CONCURRENT_SESSIONS } from '@domain/session/concurrency'
 import { MAX_PRESETS, type SafePermissionMode } from '@domain/session/launch-config'
-import type { AxisResetReason, LaunchBlocker } from '@domain/session/launch-resolution'
+import type {
+  AxisResetReason,
+  DirectoryResetReason,
+  LaunchBlocker
+} from '@domain/session/launch-resolution'
 import type {
   LiveSettingBlocker,
   LiveSettingFailure,
@@ -541,6 +545,44 @@ export const AXIS_RESET_LABELS: Record<AxisResetReason, string> = {
     'このランタイムからは選んでいた Provider に到達できないため、既定に戻しました。',
   'model-not-in-catalog': 'Provider のモデルカタログに無いモデルだったため、既定に戻しました。',
   'effort-unsupported': 'このモデルが対応しない effort だったため、既定に戻しました。'
+}
+
+/**
+ * 起動設定の残りの軸 (024 data-model §9.3。Principle XV)。追加ディレクトリ・ターン数の上限・費用の上限・セッション名。
+ * 概要のタブの「なし」「上限なし」もここに置く (起動ダイアログと同じ言葉)。
+ */
+export const EXTRA_AXES_LABELS = {
+  additionalDirectories: '追加ディレクトリ',
+  maxTurns: 'ターン数の上限',
+  maxBudgetUsd: '費用の上限 (USD)',
+  sessionName: 'セッション名',
+  addFolder: 'フォルダを追加',
+  removeFolder: '外す',
+  unlimitedPlaceholder: '上限なし',
+  namePlaceholder: '自動で付ける',
+  maxTurnsRange: 'ターン数は 1〜1000 の整数で入力してください',
+  maxBudgetRange: '費用は 0.01〜1000 の範囲で入力してください',
+  /** 登録が解除されて表示名が引けない項目 (起動ダイアログの通知と概要のタブで共通) */
+  deletedFolder: '(削除されたフォルダ)',
+  /** 概要のタブ: 追加ディレクトリが 0 件のとき */
+  overviewNone: 'なし',
+  /** 概要のタブ: 上限が無いとき */
+  overviewUnlimited: '上限なし'
+} as const
+
+/**
+ * 追加ディレクトリの項目を外した通知 (024 data-model §9.3)。`name` は項目の表示名
+ * (引けなければ `EXTRA_AXES_LABELS.deletedFolder`)。理由の全値を網羅する (型で漏れを落とす)。
+ */
+export const DIRECTORY_RESET_LABELS: Record<DirectoryResetReason, (name: string) => string> = {
+  unreachable: (name) => `追加ディレクトリ ${name} はこのランタイムから使えないため外しました`,
+  'same-as-folder': (name) => `追加ディレクトリ ${name} は作業フォルダと同じため外しました`,
+  unregistered: (name) => `追加ディレクトリ ${name} は登録が解除されたため外しました`
+}
+
+/** 追加ディレクトリの越境の警告は、作業フォルダと同じ `CROSS_BOUNDARY_LABELS` の文言に項目の表示名を前置する。 */
+export function directoryCrossBoundaryLabel(name: string, body: string): string {
+  return `追加ディレクトリ ${name}: ${body}`
 }
 
 /**

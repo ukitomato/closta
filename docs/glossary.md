@@ -80,6 +80,7 @@ total_terms: 104
 - **Definition**: 起動軸の上流 (folder ↔ runtime → provider → model → effort) を変えたときに、無効になった下流を再計算する処理。
   - 無効な provider / model / effort は既定に戻して通知する。provider の reset は起動前に確認する。
   - folder / runtime の不備は blocker にする。
+  - 追加ディレクトリは項目ごとに外す (`directoryResets`。登録解除・作業フォルダと同じ・届かない) 。起動は止めず通知する (024)。
   - 純粋関数 `resolveLaunchAxes` を renderer と main の起動ゲートの両方が呼ぶ。
 - **日本語表記**: 依存解決
 - **Domain**: `session`
@@ -223,7 +224,7 @@ total_terms: 104
   終わるまで占め続ける (応答待ちの `done` と中断済みも数える)。超過した起動は `session-limit` で拒否する
 - **日本語表記**: 同時実行数の上限
 - **Domain**: `session`
-- **Counterexamples**: **SessionLaunchConfig の「上限」軸 (コスト・ターン数。X-6) とは別物**
+- **Counterexamples**: **SessionLaunchConfig の「上限」軸 (コスト・ターン数。024) とは別物**
 - **Ref**: [AD-043](decisions/0043-single-supervisor-session-threads-and-session-limit.md) Decision 3
 
 #### **Coordinator thread（調停役スレッド）**
@@ -543,7 +544,7 @@ total_terms: 104
 
 #### **Launch axis（起動軸）**
 
-- **Definition**: 起動設定ダイアログで選ぶ軸。作業フォルダ / ランタイム / Provider / モデル / effort / 権限モードの 6 つ (X-4)
+- **Definition**: 起動設定ダイアログで選ぶ軸。作業フォルダ / ランタイム / Provider / モデル / effort / 権限モード / 追加ディレクトリ / ターン数の上限 / 費用の上限の 9 つ (X-4 の 6 つ + 024。セッション名は軸ではなく起動のときの入力)
 - **日本語表記**: 起動軸
 - **Domain**: `session`
 - **Ref**: [008 spec](../specs/008-session-launch-settings-dialog-and-presets/spec.md) FR-001
@@ -583,7 +584,7 @@ total_terms: 104
 - **Definition**: セッション起動の検証済み入力 (X-1 / X-4)。`WslLaunchInput | Win32LaunchInput` の和 (X-8。
   `Win32LaunchInput` は `VerifiedRunning` を持たない)。WSL 側は次の要素を持つ。
   - 作業フォルダ / 実行中確認済みの `WslRuntime` / `VerifiedRunning`
-  - `options: LaunchQueryOptions`。中身は `permissionMode: SafePermissionMode` と、任意の `model` / `effort` / `settings`
+  - `options: LaunchQueryOptions`。中身は `permissionMode: SafePermissionMode` と、任意の `model` / `effort` / `settings` / `additionalDirectories` / `maxTurns` / `maxBudgetUsd` / `title` (と既にある `resume`)
   - 依存解決と main の再検証を通った `SessionLaunchConfig` から作る。
 - **日本語表記**: 起動入力 (型名は原語のまま)
 - **Domain**: `session`
@@ -815,7 +816,7 @@ total_terms: 104
 
 #### **Preset**
 
-- **Definition**: 名前付きで保存された `SessionLaunchConfig`。**資格情報の値は含まない** (Provider は id 参照)。
+- **Definition**: 名前付きで保存された起動設定 (`PresetLaunchConfig` = セッション名を除いた 9 キー。**名前を持たない**。`presets.json` 版 2、版 1 は読める)。**資格情報の値は含まない** (Provider は id 参照)。
   名前は trim + NFC で同名を判定する。上限は 100 件。適用後の無効な軸は依存解決で扱う
 - **日本語表記**: プリセット
 - **Domain**: `session`
@@ -946,7 +947,7 @@ total_terms: 104
 #### **Resume（再開）**
 
 - **Definition**: 終了・失敗した、または過去の区画にあるセッションの続きを、同じ会話の id を query の options の `resume` に渡して起こし直す操作 (X-9)。
-  利用者の操作でだけ行い、自動では再開しない。フォルダ / ランタイム / Provider は引き継ぎ、モデル / effort / 権限モードは選び直せる。
+  利用者の操作でだけ行い、自動では再開しない。フォルダ / ランタイム / Provider は引き継ぎ、モデル / effort / 権限モード / 追加ディレクトリ / 上限 (ターン数・費用) の 6 軸は選び直せる。セッション名は渡さない (024)。
   要求は `SessionResumeRequest` (`{ source, config }`)。拒否・失敗の理由に `resume-failed` がある
 - **日本語表記**: 再開
 - **Domain**: `session` (起動と調停) / 表示は `ui`
@@ -957,7 +958,7 @@ total_terms: 104
 #### **Resume dialog（再開の形の起動ダイアログ）**
 
 - **Definition**: 起動ダイアログの再開の形 (X-9)。見出しは「セッションを再開」、ボタンは「再開する」。
-  引き継ぐ 3 軸 (フォルダ / ランタイム / Provider) は選択の部品を出さず**表示だけ**。モデル / effort / 権限モードは今の部品と依存解決のまま
+  引き継ぐ 3 軸 (フォルダ / ランタイム / Provider) は選択の部品を出さず**表示だけ**。選び直せる軸は 6 つ (モデル / effort / 権限モード / 追加ディレクトリ / ターン数の上限 / 費用の上限) で、今の部品と依存解決のまま。セッション名の部品は出さない (024)
 - **日本語表記**: 再開の形の起動ダイアログ
 - **Domain**: `ui` (表示) / `session` (軸の引き継ぎの規則)
 - **Counterexamples**: 引き継ぐ 3 軸を差し替える経路は出さない (差し替えたいときは分岐。X-6)
@@ -1047,7 +1048,8 @@ total_terms: 104
 - **Definition**: Claude Code の transcript の custom-title。実行中のセッションに利用者が付ける名前 (023。`renameSession()` が追記する)。`SessionSummary.customTitle` と同じもの。名前の正本は transcript で、main のメモリは稼働中の行の表示のためのキャッシュ
 - **日本語表記**: セッションの名前
 - **Domain**: `session`
-- **Counterexamples**: **`SessionLaunchConfig` の「セッション名」の軸 (起動のときに名前を付ける。X-6 の後続) とは別** — こちらは起動の後に付ける名前。起動のときの名前の軸は 023 では扱わない
+- **起動のときの名前 (024)**: `SessionLaunchConfig.sessionName` を SDK の `title` として渡し、稼働中の行の名前を最初のプロンプトの前から初期化する。後から 023 の改名で上書きできる。再開では渡さない (`null`)
+- **Counterexamples**: **`SessionLaunchConfig` の「セッション名」の軸 (起動のときに名前を付ける。024) は起動のときの入力** — 名前の正本は同じ transcript の custom-title だが、こちら (023 の改名) は起動の後に付ける操作
 - **Ref**: [AD-062](decisions/0062-live-session-permission-mode-model-and-rename.md)
 
 #### **SessionMessage（セッションメッセージ）**
@@ -1104,9 +1106,12 @@ total_terms: 104
 - **Definition**: セッション起動時に選択される設定の組。作業フォルダ / ランタイム / Provider /
   モデル / effort / 権限モード / sandbox / 追加ディレクトリ / 上限 / セッション名。
   三本の軸が交わる点であり日常操作の入口。
-  **X-4 は前 6 軸を実装する。** folder / runtime は必須で、provider / model / effort は `null` = 既定、権限モードは `SafePermissionMode`。
-  sandbox は I-3、追加ディレクトリ / 上限 / セッション名は X-6 が扱う。
-  **再開 (Resume) の要求は別の型 (`SessionResumeRequest`) で包み、この 6 軸の形は変えない** (X-9)
+  **実装済みの 10 キー** (X-4 の 6 軸 + 024): `folderId` / `runtimeId` / `providerId` / `modelId` / `effort` / `permissionMode` /
+  `additionalDirectoryIds` / `maxTurns` / `maxBudgetUsd` / `sessionName`。
+  folder / runtime は必須で、provider / model / effort は `null` = 既定、権限モードは `SafePermissionMode`。
+  追加ディレクトリは登録フォルダの id の配列 (0〜10 件。既定 `[]`)、上限 (ターン数・費用) とセッション名は `null` = なし。
+  sandbox は I-3 が扱う。
+  **再開 (Resume) の要求は別の型 (`SessionResumeRequest`) で包み、再開は引き継ぐ 3 軸 (フォルダ / ランタイム / Provider) を変えない** (X-9 / 024)
 - **Domain**: `session`
 - **Ref**: [008 spec](../specs/008-session-launch-settings-dialog-and-presets/spec.md) / [AD-041](decisions/0041-x4-launch-config-on-x1-launch-gate.md)
 

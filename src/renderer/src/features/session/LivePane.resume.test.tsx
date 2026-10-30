@@ -11,6 +11,7 @@ import { RunningSessionsHarness } from '@/test-support/running-sessions-harness'
 
 import { RunningSessionStoreContext } from './running-session-context'
 import { createRunningSessionStore } from './running-session-store'
+import { DEFAULT_EXTRA_AXES } from '@domain/session/launch-config'
 
 /**
  * 025 FE-053 — `/resume` の候補と横取り (spec US-5 AC1 / AC2 / FR-017)。
@@ -57,7 +58,9 @@ async function setup(): Promise<{
     providerId: null,
     modelId: null,
     effort: null,
-    permissionMode: 'default'
+    permissionMode: 'default',
+    ...DEFAULT_EXTRA_AXES,
+    sessionName: null
   })
   const port: FakePort = { onmessage: null, start: vi.fn(), close: vi.fn() }
   const event = new Event('message') as Event & { data: unknown; ports: unknown[] }

@@ -26,6 +26,7 @@ import { RunningSessionsHarness } from '@/test-support/running-sessions-harness'
 import { CenterBanners } from './CenterBanners'
 import { CenterHeader } from './CenterHeader'
 import { MAX_TIMER_DELAY_MS } from './quota-banner'
+import { DEFAULT_EXTRA_AXES } from '@domain/session/launch-config'
 
 /**
  * O-4 FE-020 — Quota banner (014 spec US-2 AC1〜AC3 / AC5 / FR-006。data-model §4「Quota banner」/ §5)。
@@ -337,7 +338,9 @@ async function setupLive({
       providerId: null,
       modelId: null,
       effort: null,
-      permissionMode: 'default'
+      permissionMode: 'default',
+      ...DEFAULT_EXTRA_AXES,
+      sessionName: null
     })
     const port: FakePort = { onmessage: null, start: vi.fn(), close: vi.fn() }
     deliverPort(id, port)

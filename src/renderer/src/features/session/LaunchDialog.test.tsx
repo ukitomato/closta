@@ -18,6 +18,7 @@ import { installCapability } from '@/test-support/capability'
 import { launchFailureLabel } from './labels'
 import { LaunchDialog, type LaunchSource } from './LaunchDialog'
 import { createRunningSessionStore, type RunningSessionStore } from './running-session-store'
+import { DEFAULT_EXTRA_AXES } from '@domain/session/launch-config'
 
 /**
  * 起動設定ダイアログの renderer 単体 (X-4 FE-005 / FE-020 / SC-001 / SC-002 / SC-005 / SC-008 / US-1 AC6-7 / US-2 AC3)。
@@ -281,7 +282,9 @@ describe('LaunchDialog', () => {
         providerId: 'p-bedrock',
         modelId: 'sonnet',
         effort: 'high',
-        permissionMode: 'default'
+        permissionMode: 'default',
+        ...DEFAULT_EXTRA_AXES,
+        sessionName: null
       },
       'manual'
     )
@@ -296,7 +299,9 @@ describe('LaunchDialog', () => {
         providerId: 'p-far',
         modelId: null,
         effort: null,
-        permissionMode: 'default'
+        permissionMode: 'default',
+        ...DEFAULT_EXTRA_AXES,
+        sessionName: null
       }
     })
     render(<LaunchDialog session={session} />)
@@ -327,7 +332,9 @@ describe('LaunchDialog', () => {
         providerId: 'p-removed',
         modelId: null,
         effort: null,
-        permissionMode: 'default'
+        permissionMode: 'default',
+        ...DEFAULT_EXTRA_AXES,
+        sessionName: null
       }
     })
     render(<LaunchDialog session={session} />)
@@ -580,7 +587,9 @@ describe('LaunchDialog', () => {
         providerId: 'p-bedrock',
         modelId: 'sonnet',
         effort: 'high',
-        permissionMode: 'default'
+        permissionMode: 'default',
+        ...DEFAULT_EXTRA_AXES,
+        sessionName: null
       }
     })
     render(<LaunchDialog session={session} />)
@@ -637,7 +646,9 @@ describe('LaunchDialog', () => {
         providerId: 'p-bedrock',
         modelId: null,
         effort: null,
-        permissionMode: 'default'
+        permissionMode: 'default',
+        ...DEFAULT_EXTRA_AXES,
+        sessionName: null
       }
     })
     render(<LaunchDialog session={session} />)
@@ -681,7 +692,9 @@ describe('LaunchDialog', () => {
       providerId: 'p-bedrock',
       modelId: null,
       effort: null,
-      permissionMode: 'default'
+      permissionMode: 'default',
+      ...DEFAULT_EXTRA_AXES,
+      sessionName: null
     }
 
     it('取得中は Provider を「既定」だけにし、選んでいた Provider の reset は通知も起動もせず保留する', async () => {
@@ -864,7 +877,8 @@ describe('LaunchDialog', () => {
               providerId: 'p-removed',
               modelId: 'sonnet',
               effort: null,
-              permissionMode: 'default'
+              permissionMode: 'default',
+              ...DEFAULT_EXTRA_AXES
             },
             updatedAt: NOW
           }
@@ -924,7 +938,9 @@ describe('LaunchDialog', () => {
       providerId: null,
       modelId: null,
       effort: null,
-      permissionMode: 'plan'
+      permissionMode: 'plan',
+      ...DEFAULT_EXTRA_AXES,
+      sessionName: null
     }
     render(
       <LaunchDialog
@@ -946,7 +962,9 @@ describe('LaunchDialog', () => {
       providerId: null,
       modelId: null,
       effort: null,
-      permissionMode: 'default'
+      permissionMode: 'default',
+      ...DEFAULT_EXTRA_AXES,
+      sessionName: null
     }
     render(
       <LaunchDialog
@@ -1115,7 +1133,9 @@ describe('LaunchDialog — 起動元 (O-3)', () => {
     providerId: null,
     modelId: null,
     effort: null,
-    permissionMode: 'plan'
+    permissionMode: 'plan',
+    ...DEFAULT_EXTRA_AXES,
+    sessionName: null
   }
   const preset: PresetDTO = { id: 'preset-1', name: '業務用', config: presetConfig, updatedAt: NOW }
 
@@ -1301,11 +1321,22 @@ describe('LaunchDialog — 起動元 (O-3)', () => {
       view = h.open()
       await launchAndClose(h, view, 2)
       expect(origins(h)).toEqual(['preset', 'preset'])
-      // capability に渡る設定は 6 軸だけで、起動元を含まない。
+      // capability に渡る設定は 10 キー (024) で、起動元を含まない。
       for (const [config] of h.launchSession.mock.calls) {
         expect(config).toEqual(presetConfig)
         expect(Object.keys(config).sort()).toEqual(
-          ['effort', 'folderId', 'modelId', 'permissionMode', 'providerId', 'runtimeId'].sort()
+          [
+            'additionalDirectoryIds',
+            'effort',
+            'folderId',
+            'maxBudgetUsd',
+            'maxTurns',
+            'modelId',
+            'permissionMode',
+            'providerId',
+            'runtimeId',
+            'sessionName'
+          ].sort()
         )
       }
     })
@@ -1468,7 +1499,9 @@ describe('LaunchDialog — Win32Runtime (X-8)', () => {
         providerId: 'p-far',
         modelId: null,
         effort: null,
-        permissionMode: 'default'
+        permissionMode: 'default',
+        ...DEFAULT_EXTRA_AXES,
+        sessionName: null
       }
     })
     render(<LaunchDialog session={session} />)
@@ -1488,7 +1521,9 @@ describe('LaunchDialog — Win32Runtime (X-8)', () => {
         providerId: null,
         modelId: null,
         effort: null,
-        permissionMode: 'default'
+        permissionMode: 'default',
+        ...DEFAULT_EXTRA_AXES,
+        sessionName: null
       }
     })
     render(<LaunchDialog session={session} />)

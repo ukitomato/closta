@@ -29,6 +29,8 @@ import {
   WIN32_TREE_STOP_ARGS,
   WIN32_TREE_STOP_COMMAND_NAME,
   WSL_LAUNCH_KIND,
+  launchDirectoryKindOf,
+  type LaunchDirectoryKind,
   type LaunchFailureReason,
   type LaunchQueryOptions,
   type PermissionDecision,
@@ -40,6 +42,9 @@ import {
 import {
   assertSafePermissionMode,
   isSafePermissionMode,
+  isValidLaunchSessionName,
+  isValidMaxBudgetUsd,
+  isValidMaxTurns,
   type SafePermissionMode
 } from '@domain/session/launch-config'
 import { toLiveAssistantMessage } from '@domain/session/live-message'
@@ -73,6 +78,7 @@ import {
   createOnElicitation,
   createPermissionRegistry,
   decodeSessionControl,
+  isValidAdditionalDirectories,
   resultAction,
   type AgentSpawnOptions,
   type ResultErrorSubtype,
@@ -307,7 +313,10 @@ function asRecord(value: unknown): Record<string, unknown> | null {
  * permissionMode は既定値を補わない — 欠けていれば拒否する (昇格の余地を作らない)。
  * settings の値にバックスラッシュが無いこと (HostPath / UNC の漏出でない) も確かめる (AD-036 §3)。
  */
-function decodeLaunchOptions(value: unknown): LaunchQueryOptions | null {
+function decodeLaunchOptions(
+  value: unknown,
+  directoryKind: LaunchDirectoryKind
+): LaunchQueryOptions | null {
   const o = asRecord(value)
   if (o === null) return null
   if (!isSafePermissionMode(o.permissionMode)) return null
@@ -315,6 +324,21 @@ function decodeLaunchOptions(value: unknown): LaunchQueryOptions | null {
   if (o.effort !== undefined && !isEffortLevel(o.effort)) return null
   // 再開する会話の id (X-9 / AD-059)。UUID の形でなければ起動しない。
   if (o.resume !== undefined && !isValidSessionId(o.resume)) return null
+  // 起動設定の残りの軸 (024 / AD-064)。キーが無いか、規則を満たすときだけ通す (null は通さない)。
+  if (
+    o.additionalDirectories !== undefined &&
+    !isValidAdditionalDirectories(directoryKind, o.additionalDirectories)
+  ) {
+    return null
+  }
+  if (o.maxTurns !== undefined && (o.maxTurns === null || !isValidMaxTurns(o.maxTurns))) return null
+  if (
+    o.maxBudgetUsd !== undefined &&
+    (o.maxBudgetUsd === null || !isValidMaxBudgetUsd(o.maxBudgetUsd))
+  ) {
+    return null
+  }
+  if (o.title !== undefined && (o.title === null || !isValidLaunchSessionName(o.title))) return null
   if (o.settings !== undefined) {
     if (!isHelperSettings(o.settings)) return null
     if (Object.values(o.settings).some((v) => typeof v === 'string' && v.includes('\\')))
@@ -325,7 +349,13 @@ function decodeLaunchOptions(value: unknown): LaunchQueryOptions | null {
     ...(o.model !== undefined ? { model: o.model } : {}),
     ...(o.effort !== undefined ? { effort: o.effort } : {}),
     ...(o.settings !== undefined ? { settings: assertHelperSettings(o.settings) } : {}),
-    ...(o.resume !== undefined ? { resume: o.resume } : {})
+    ...(o.resume !== undefined ? { resume: o.resume } : {}),
+    ...(o.additionalDirectories !== undefined
+      ? { additionalDirectories: o.additionalDirectories as readonly string[] }
+      : {}),
+    ...(o.maxTurns !== undefined ? { maxTurns: o.maxTurns as number } : {}),
+    ...(o.maxBudgetUsd !== undefined ? { maxBudgetUsd: o.maxBudgetUsd as number } : {}),
+    ...(o.title !== undefined ? { title: o.title as string } : {})
   }
 }
 
@@ -338,8 +368,10 @@ function decodeLaunch(data: unknown): DecodedLaunch | null {
   const record = asRecord(data)
   if (record === null || record.kind !== 'launch') return null
   const spec = decodeLaunchSpec(record.spec)
-  const options = decodeLaunchOptions(record.options)
-  if (spec === null || options === null) return null
+  if (spec === null) return null
+  // 追加ディレクトリの形は spec を decode した後に launchDirectoryKindOf(spec) で決める (data-model §5.3)。
+  const options = decodeLaunchOptions(record.options, launchDirectoryKindOf(spec))
+  if (options === null) return null
   return { spec, options }
 }
 
@@ -864,7 +896,12 @@ async function run(
       model: launchOptions.model,
       effort: launchOptions.effort,
       onElicitation,
-      resume: launchOptions.resume
+      resume: launchOptions.resume,
+      additionalDirectories: launchOptions.additionalDirectories,
+      maxTurns: launchOptions.maxTurns,
+      maxBudgetUsd: launchOptions.maxBudgetUsd,
+      title: launchOptions.title,
+      launchDirectoryKind: launchDirectoryKindOf(spec)
     })
 
     transition({ kind: 'launch' })

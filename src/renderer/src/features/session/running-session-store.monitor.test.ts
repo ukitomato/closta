@@ -12,6 +12,7 @@ import {
   createRunningSessionStore,
   type RunningSessionStore
 } from './running-session-store'
+import { DEFAULT_EXTRA_AXES } from '@domain/session/launch-config'
 
 /**
  * O-1 SH-004 — 監視ビューの派生値 (状態に入った時刻・直近の活動の間引き・受信件数・密度・承認待ちへの移動)。
@@ -27,7 +28,9 @@ const cfg: SessionLaunchConfig = {
   providerId: null,
   modelId: null,
   effort: null,
-  permissionMode: 'default'
+  permissionMode: 'default',
+  ...DEFAULT_EXTRA_AXES,
+  sessionName: null
 }
 
 interface FakePort {

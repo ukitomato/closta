@@ -16,6 +16,7 @@ import { installCapability } from '@/test-support/capability'
 import { RESUME_UNAVAILABLE_LABELS } from './labels'
 import { LaunchDialog, type LaunchSource } from './LaunchDialog'
 import type { ResumeDialogState } from './running-session-types'
+import { DEFAULT_EXTRA_AXES } from '@domain/session/launch-config'
 
 /**
  * X-9 FE-011 — 再開の形の起動ダイアログ (data-model §9.3 / §9.4)。新規起動の既存のテスト
@@ -186,7 +187,9 @@ describe('LaunchDialog — 再開の形 (X-9 FE-011)', () => {
           providerId: 'p-bedrock',
           modelId: null,
           effort: null,
-          permissionMode: 'default'
+          permissionMode: 'default',
+          ...DEFAULT_EXTRA_AXES,
+          sessionName: null
         }
       },
       'manual'
@@ -256,7 +259,8 @@ describe('LaunchDialog — 再開の形の初期値とプリセット (X-9 FE-03
       providerId: 'p-other',
       modelId: 'sonnet',
       effort: 'high',
-      permissionMode: 'plan'
+      permissionMode: 'plan',
+      ...DEFAULT_EXTRA_AXES
     },
     updatedAt: 0
   }
@@ -322,7 +326,14 @@ describe('LaunchDialog — 再開の形の初期値とプリセット (X-9 FE-03
     await clickResume()
     expect(session.resumeSession).toHaveBeenCalledWith(
       expect.objectContaining({
-        config: { ...FIXED, modelId: 'sonnet', effort: null, permissionMode: 'default' }
+        config: {
+          ...FIXED,
+          modelId: 'sonnet',
+          effort: null,
+          permissionMode: 'default',
+          ...DEFAULT_EXTRA_AXES,
+          sessionName: null
+        }
       }),
       'manual'
     )
@@ -338,7 +349,14 @@ describe('LaunchDialog — 再開の形の初期値とプリセット (X-9 FE-03
     await clickResume()
     expect(session.resumeSession).toHaveBeenCalledWith(
       expect.objectContaining({
-        config: { ...FIXED, modelId: 'sonnet', effort: 'high', permissionMode: 'plan' }
+        config: {
+          ...FIXED,
+          modelId: 'sonnet',
+          effort: 'high',
+          permissionMode: 'plan',
+          ...DEFAULT_EXTRA_AXES,
+          sessionName: null
+        }
       }),
       'preset'
     )
@@ -365,7 +383,8 @@ describe('LaunchDialog — 再開の形の初期値とプリセット (X-9 FE-03
       ...FIXED,
       modelId: null,
       effort: null,
-      permissionMode: 'default'
+      permissionMode: 'default',
+      ...DEFAULT_EXTRA_AXES
     })
   })
 

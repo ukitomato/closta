@@ -1,4 +1,4 @@
-import type { SessionLaunchConfig } from './launch-config'
+import type { PresetLaunchConfig } from './launch-config'
 
 /**
  * 名前付きで保存された起動設定 (X-4 FR-009〜011 / glossary Preset)。**I/O を持たない。**
@@ -9,7 +9,8 @@ import type { SessionLaunchConfig } from './launch-config'
 export interface Preset {
   readonly id: string
   readonly name: string
-  readonly config: SessionLaunchConfig
+  /** セッション名を持たない (024 FR-010。`presets.json` 版 2)。 */
+  readonly config: PresetLaunchConfig
   /** 最終保存時刻 (ms)。一覧は降順に並べる。 */
   readonly updatedAt: number
 }

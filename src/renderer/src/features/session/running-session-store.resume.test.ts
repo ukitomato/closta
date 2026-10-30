@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { ClostaCapability } from '@domain/capability'
 import type { SessionLaunchHandshakeDTO } from '@domain/session/agent-session'
-import type { SessionLaunchConfig } from '@domain/session/launch-config'
+import { DEFAULT_EXTRA_AXES, type SessionLaunchConfig } from '@domain/session/launch-config'
 import type { SessionResumeRequest } from '@domain/session/resume'
 import type { SessionStatusUpdate } from '@domain/session/status-update'
 
@@ -26,7 +26,9 @@ function cfg(folderId = 'f1'): SessionLaunchConfig {
     providerId: null,
     modelId: null,
     effort: null,
-    permissionMode: 'default'
+    permissionMode: 'default',
+    ...DEFAULT_EXTRA_AXES,
+    sessionName: null
   }
 }
 

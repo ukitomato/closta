@@ -23,6 +23,7 @@ import {
 } from './running-session-store'
 import { EMPTY_SESSION_METERS } from './running-session-types'
 import { availableActions, rowStatus, viewOf } from './session-view'
+import { DEFAULT_EXTRA_AXES } from '@domain/session/launch-config'
 
 /**
  * X-5 FE-001 / FE-010 / FE-013 — セッションストアの規則 (SC-006)。
@@ -40,7 +41,9 @@ function cfg(folderId = 'f1'): SessionLaunchConfig {
     providerId: null,
     modelId: null,
     effort: null,
-    permissionMode: 'default'
+    permissionMode: 'default',
+    ...DEFAULT_EXTRA_AXES,
+    sessionName: null
   }
 }
 

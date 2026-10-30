@@ -1,7 +1,7 @@
 import {
   MAX_PRESETS,
   normalizePresetName,
-  type SessionLaunchConfig
+  type PresetLaunchConfig
 } from '@domain/session/launch-config'
 import {
   sortPresets,
@@ -30,7 +30,7 @@ export interface PresetServiceDeps {
 
 export interface SavePresetInput {
   readonly name: string
-  readonly config: SessionLaunchConfig
+  readonly config: PresetLaunchConfig
   /** 同名があれば上書きする (renderer が利用者の確認を取った後にだけ true)。 */
   readonly overwrite: boolean
 }

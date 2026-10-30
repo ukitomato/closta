@@ -3,13 +3,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { axe } from 'vitest-axe'
 
 import type { ClostaCapability } from '@domain/capability'
-import type { SessionLaunchConfig } from '@domain/session/launch-config'
+import { toPresetConfig, type SessionLaunchConfig } from '@domain/session/launch-config'
 import type { PresetDTO } from '@domain/session/preset'
 
 import { installCapability } from '@/test-support/capability'
 
 import { PresetPanel } from './PresetPanel'
 import type { PresetsView } from './usePresets'
+import { DEFAULT_EXTRA_AXES } from '@domain/session/launch-config'
 
 /** プリセットパネルの renderer 単体 (X-4 FE-010 / FR-009。O-3 FE-041 の起動の利用記録)。 */
 
@@ -26,7 +27,9 @@ const config: SessionLaunchConfig = {
   providerId: null,
   modelId: null,
   effort: null,
-  permissionMode: 'default'
+  permissionMode: 'default',
+  ...DEFAULT_EXTRA_AXES,
+  sessionName: null
 }
 const preset: PresetDTO = { id: 'p1', name: '業務用', config, updatedAt: 1 }
 
@@ -74,7 +77,20 @@ describe('PresetPanel', () => {
       expect(screen.getByRole('alertdialog', { name: '上書きの確認' })).toBeInTheDocument()
     )
     fireEvent.click(screen.getByRole('button', { name: '上書き' }))
-    await waitFor(() => expect(save).toHaveBeenLastCalledWith(' 業務用 ', config, true))
+    await waitFor(() =>
+      expect(save).toHaveBeenLastCalledWith(' 業務用 ', toPresetConfig(config), true)
+    )
+  })
+
+  it('保存する設定は 9 キーで sessionName を含まない (024 FR-010)', async () => {
+    const save = vi.fn(async () => ({ ok: true as const, preset }))
+    render(<PresetPanel view={view({ save })} current={config} onApply={() => {}} />)
+    fireEvent.change(screen.getByTestId('preset-name'), { target: { value: 'x' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1))
+    const saved = (save.mock.calls[0] as unknown as [string, object, boolean])[1]
+    expect(Object.keys(saved)).toHaveLength(9)
+    expect(saved).not.toHaveProperty('sessionName')
   })
 
   it('上限到達は理由を示す', async () => {

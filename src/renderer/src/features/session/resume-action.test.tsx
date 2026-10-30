@@ -17,6 +17,7 @@ import { RESUME_LABELS } from './labels'
 import { resumeActionFor } from './resume-action'
 import { RunningSessionStoreContext } from './running-session-context'
 import { createRunningSessionStore, type RunningSessionStore } from './running-session-store'
+import { DEFAULT_EXTRA_AXES } from '@domain/session/launch-config'
 
 /**
  * X-9 / FE-020 — 稼働中の行の「再開」「やり直す」の出し分けと実行 (data-model §9.1・§9.2・§9.5 / SC-004)。
@@ -170,7 +171,9 @@ async function setup(): Promise<Harness> {
       providerId: null,
       modelId: 'm1',
       effort: 'high',
-      permissionMode: 'plan'
+      permissionMode: 'plan',
+      ...DEFAULT_EXTRA_AXES,
+      sessionName: null
     },
     '案件A',
     'preset'

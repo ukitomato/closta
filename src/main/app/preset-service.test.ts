@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { makeHostPath } from '@domain/runtime/path-types'
-import { MAX_PRESETS, type SessionLaunchConfig } from '@domain/session/launch-config'
+import {
+  DEFAULT_EXTRA_AXES,
+  MAX_PRESETS,
+  type PresetLaunchConfig
+} from '@domain/session/launch-config'
 import type { Preset } from '@domain/session/preset'
 
 import type { PresetLoadIssue, PresetStore } from '../infra/settings/preset-store'
@@ -13,13 +17,14 @@ afterEach(() => {
 
 /** X-4 BE-012 / FR-009 — 同名上書き確認・件数上限・削除。 */
 
-const config: SessionLaunchConfig = {
+const config: PresetLaunchConfig = {
   folderId: 'f1',
   runtimeId: 'wsl:Ubuntu',
   providerId: null,
   modelId: null,
   effort: null,
-  permissionMode: 'default'
+  permissionMode: 'default',
+  ...DEFAULT_EXTRA_AXES
 }
 
 function fakeStore(

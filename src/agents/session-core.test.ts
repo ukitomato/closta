@@ -132,7 +132,8 @@ describe('buildQueryOptions (正の構成 P1)', () => {
       pathToClaudeCodeExecutable: '/usr/bin/claude',
       spawnClaudeCodeProcess: noopSpawn,
       abortController: new AbortController(),
-      onElicitation: noopElicitation
+      onElicitation: noopElicitation,
+      launchDirectoryKind: 'posix'
     })
     const keys = Object.keys(options)
     // **キー集合 ⊆ allowlist** — settings/extraArgs/allowedTools 等の昇格 option が現れない (C-201)。
@@ -149,7 +150,8 @@ describe('buildQueryOptions (正の構成 P1)', () => {
       pathToClaudeCodeExecutable: '/usr/bin/claude',
       spawnClaudeCodeProcess: noopSpawn,
       abortController: new AbortController(),
-      onElicitation: noopElicitation
+      onElicitation: noopElicitation,
+      launchDirectoryKind: 'posix'
     })
     // `settings` は X-3/AD-040 で制約付き射影に限り許すため forbidden から外す (下の 2 test が制約を守る)。
     const forbidden = [
@@ -175,6 +177,7 @@ describe('buildQueryOptions (正の構成 P1)', () => {
       spawnClaudeCodeProcess: noopSpawn,
       abortController: new AbortController(),
       onElicitation: noopElicitation,
+      launchDirectoryKind: 'posix',
       settings: { apiKeyHelper: '/opt/helper.sh' }
     })
     expect(options.settings).toEqual({ apiKeyHelper: '/opt/helper.sh' })
@@ -191,6 +194,7 @@ describe('buildQueryOptions (正の構成 P1)', () => {
         spawnClaudeCodeProcess: noopSpawn,
         abortController: new AbortController(),
         onElicitation: noopElicitation,
+        launchDirectoryKind: 'posix',
         settings: { apiKeyHelper: '/a', permissionMode: 'bypassPermissions' } as never
       })
     ).toThrow(/AD-040/)
@@ -203,28 +207,33 @@ describe('buildQueryOptions (X-4 / AD-041)', () => {
     pathToClaudeCodeExecutable: '/usr/bin/claude',
     spawnClaudeCodeProcess: noopSpawn,
     abortController: new AbortController(),
-    onElicitation: noopElicitation
+    onElicitation: noopElicitation,
+    launchDirectoryKind: 'posix' as const
   }
 
-  it('QUERY_OPTION_KEYS は AD-041 (g) + AD-053 + AD-054 + AD-059 の 12 キーに固定される (集合を変えるには ADR が要る: AD-041 / AD-054 / AD-059)', () => {
-    expect(QUERY_OPTION_KEYS).toHaveLength(12)
+  it('QUERY_OPTION_KEYS は AD-041 (g) + AD-053 + AD-054 + AD-059 + AD-064 の 16 キーに固定される (集合を変えるには ADR が要る: AD-041 / AD-054 / AD-059 / AD-064)', () => {
+    expect(QUERY_OPTION_KEYS).toHaveLength(16)
     // onUserDialog / supportedDialogKinds は載せない (AD-053 Decision 4)。
     expect(QUERY_OPTION_KEYS as readonly string[]).not.toContain('onUserDialog')
     expect(QUERY_OPTION_KEYS as readonly string[]).not.toContain('supportedDialogKinds')
     expect([...QUERY_OPTION_KEYS].sort()).toEqual(
       [
         'abortController',
+        'additionalDirectories', // AD-064 Decision 2
         'canUseTool',
         'effort',
         'forwardSubagentText',
         'includeHookEvents',
+        'maxBudgetUsd', // AD-064 Decision 1
+        'maxTurns', // AD-064 Decision 1
         'model',
         'onElicitation',
         'pathToClaudeCodeExecutable',
         'permissionMode',
         'resume',
         'settings',
-        'spawnClaudeCodeProcess'
+        'spawnClaudeCodeProcess',
+        'title' // AD-064 Decision 1
       ].sort()
     )
     // forkSession / sessionId / resumeSessionAt / continue は足さない (AD-059 Decision 1)。
@@ -808,5 +817,92 @@ describe('decodeSessionControl: list-models (025 / AD-065)', () => {
 
   it('終了処理中は受け付けない', () => {
     expect(acceptsWhileClosing({ kind: 'list-models', requestId })).toBe(false)
+  })
+})
+
+describe('buildQueryOptions (024 / AD-064 の 4 キー。SC-003 の agents の部分)', () => {
+  const base = {
+    canUseTool: async () => ({ behavior: 'allow' as const }),
+    pathToClaudeCodeExecutable: '/usr/bin/claude',
+    spawnClaudeCodeProcess: noopSpawn,
+    abortController: new AbortController(),
+    onElicitation: noopElicitation,
+    permissionMode: 'default' as const
+  }
+  const posix = { ...base, launchDirectoryKind: 'posix' as const }
+  const windows = { ...base, launchDirectoryKind: 'windows' as const }
+
+  it('4 キーが無い options は今の部分集合のまま (4 キーのキーが無い)', () => {
+    const options = buildQueryOptions(posix)
+    for (const key of ['additionalDirectories', 'maxTurns', 'maxBudgetUsd', 'title']) {
+      expect(Object.prototype.hasOwnProperty.call(options, key)).toBe(false)
+    }
+  })
+
+  it('値があるときだけ同名で載り、launchDirectoryKind は options に載らない', () => {
+    const options = buildQueryOptions({
+      ...posix,
+      additionalDirectories: ['/home/u/lib', '/home/ユーザー/my lib'],
+      maxTurns: 30,
+      maxBudgetUsd: 2.5,
+      title: 'ログインの API 修正'
+    })
+    expect(options.additionalDirectories).toEqual(['/home/u/lib', '/home/ユーザー/my lib'])
+    expect(options.maxTurns).toBe(30)
+    expect(options.maxBudgetUsd).toBe(2.5)
+    expect(options.title).toBe('ログインの API 修正')
+    expect(Object.prototype.hasOwnProperty.call(options, 'launchDirectoryKind')).toBe(false)
+    for (const key of Object.keys(options)) {
+      expect(QUERY_OPTION_KEYS as readonly string[]).toContain(key)
+    }
+    const win = buildQueryOptions({ ...windows, additionalDirectories: ['C:\\work\\lib'] })
+    expect(win.additionalDirectories).toEqual(['C:\\work\\lib'])
+  })
+
+  const eleven = Array.from({ length: 11 }, (_, i) => `/d${i}`)
+  it.each([
+    ['配列でない', { additionalDirectories: '/a' as never }, posix, 'additionalDirectories'],
+    ['0 件', { additionalDirectories: [] }, posix, 'additionalDirectories'],
+    ['11 件', { additionalDirectories: eleven }, posix, 'additionalDirectories'],
+    ['重複', { additionalDirectories: ['/a', '/a'] }, posix, 'additionalDirectories'],
+    ['相対', { additionalDirectories: ['a/b'] }, posix, 'additionalDirectories'],
+    [
+      'WSL の起動に Windows のパス',
+      { additionalDirectories: ['C:\\secret\\lib'] },
+      posix,
+      'additionalDirectories'
+    ],
+    [
+      'Win32 の起動に POSIX のパス',
+      { additionalDirectories: ['/home/secret/lib'] },
+      windows,
+      'additionalDirectories'
+    ],
+    ['maxTurns 0', { maxTurns: 0 }, posix, 'maxTurns'],
+    ['maxTurns 1001', { maxTurns: 1001 }, posix, 'maxTurns'],
+    ['maxTurns 小数', { maxTurns: 1.5 }, posix, 'maxTurns'],
+    ['maxTurns null', { maxTurns: null as never }, posix, 'maxTurns'],
+    ['maxTurns 文字列', { maxTurns: '30' as never }, posix, 'maxTurns'],
+    ['maxBudgetUsd 0', { maxBudgetUsd: 0 }, posix, 'maxBudgetUsd'],
+    ['maxBudgetUsd 1000.01', { maxBudgetUsd: 1000.01 }, posix, 'maxBudgetUsd'],
+    ['maxBudgetUsd 小数 3 桁', { maxBudgetUsd: 1.234 }, posix, 'maxBudgetUsd'],
+    ['maxBudgetUsd NaN', { maxBudgetUsd: NaN }, posix, 'maxBudgetUsd'],
+    ['maxBudgetUsd null', { maxBudgetUsd: null as never }, posix, 'maxBudgetUsd'],
+    ['title 空', { title: '' }, posix, 'title'],
+    ['title 前後に空白', { title: ' a ' }, posix, 'title'],
+    ['title 101 文字', { title: 'あ'.repeat(101) }, posix, 'title'],
+    ['title 改行', { title: 'a\nb' }, posix, 'title'],
+    ['title null', { title: null as never }, posix, 'title']
+  ])('負例 %s は throw し、メッセージにキーの名前だけが入る', (_n, extra, baseDeps, key) => {
+    let message = ''
+    try {
+      buildQueryOptions({ ...baseDeps, ...extra })
+    } catch (e) {
+      message = (e as Error).message
+    }
+    expect(message).toContain(key)
+    expect(message).not.toContain('secret')
+    expect(message).not.toContain('C:\\')
+    expect(message).not.toContain('1.234')
   })
 })

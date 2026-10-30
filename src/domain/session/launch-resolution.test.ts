@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
+import { DEFAULT_EXTRA_AXES } from './launch-config'
 import {
   resolveLaunchAxes,
   toLaunchConfig,
+  toLaunchDraft,
   type LaunchDraft,
   type LaunchFacts
 } from './launch-resolution'
@@ -39,6 +41,7 @@ const draft = (over: Partial<LaunchDraft> = {}): LaunchDraft => ({
   modelId: 'm-effort',
   effort: 'high',
   permissionMode: 'default',
+  ...DEFAULT_EXTRA_AXES,
   ...over
 })
 
@@ -47,7 +50,8 @@ describe('resolveLaunchAxes', () => {
     const r = resolveLaunchAxes(draft(), facts)
     expect(r.resets).toEqual([])
     expect(r.blockers).toEqual([])
-    expect(toLaunchConfig(r)).toEqual(draft())
+    expect(r.directoryResets).toEqual([])
+    expect(toLaunchConfig(r, null)).toEqual({ ...draft(), sessionName: null })
   })
 
   it('ランタイム変更で到達不可になった Provider は既定へ戻り、確認を要する (US-2 AC3)', () => {
@@ -113,7 +117,7 @@ describe('resolveLaunchAxes', () => {
   it('folder↔runtime の distro 不一致は blocker (起動時の distro-mismatch に初めて出会わない)', () => {
     const r = resolveLaunchAxes(draft({ runtimeId: 'wsl:Debian' }), facts)
     expect(r.blockers).toContain('distro-mismatch')
-    expect(toLaunchConfig(r)).toBeNull()
+    expect(toLaunchConfig(r, null)).toBeNull()
   })
 
   it('停止中ランタイムは blocker (既定に戻さない)', () => {
@@ -126,7 +130,7 @@ describe('resolveLaunchAxes', () => {
     const r = resolveLaunchAxes(draft({ folderId: 'gone', runtimeId: null }), facts)
     expect(r.blockers).toEqual(['folder-missing', 'runtime-unselected'])
     expect(r.draft.folderId).toBeNull()
-    expect(toLaunchConfig(r)).toBeNull()
+    expect(toLaunchConfig(r, null)).toBeNull()
   })
 
   it('Windows フォルダ + WSL ランタイムは blocker にしない (越境の判定は DTO の boundary。AD-016 / FR-008)', () => {
@@ -140,5 +144,32 @@ describe('resolveLaunchAxes', () => {
     expect(
       resolveLaunchAxes(draft({ permissionMode: 'dontAsk' }), facts).draft.permissionMode
     ).toBe('dontAsk')
+  })
+})
+
+describe('toLaunchConfig / toLaunchDraft (024 data-model §2.4)', () => {
+  it('上限と名前を写し、ready でなければ null', () => {
+    const r = resolveLaunchAxes(draft({ maxTurns: 30, maxBudgetUsd: 2.5 }), facts)
+    expect(toLaunchConfig(r, 'ログインの API 修正')).toEqual({
+      ...draft(),
+      maxTurns: 30,
+      maxBudgetUsd: 2.5,
+      sessionName: 'ログインの API 修正'
+    })
+    const blocked = resolveLaunchAxes(draft({ runtimeId: 'wsl:Debian' }), facts)
+    expect(toLaunchConfig(blocked, 'x')).toBeNull()
+  })
+
+  it('依存解決は上限を見ず、下書きの値をそのまま保つ', () => {
+    const r = resolveLaunchAxes(draft({ maxTurns: 7, maxBudgetUsd: 0.07 }), facts)
+    expect(r.draft.maxTurns).toBe(7)
+    expect(r.draft.maxBudgetUsd).toBe(0.07)
+  })
+
+  it('toLaunchDraft は sessionName を持たない下書きを返す', () => {
+    const config = { ...draft(), sessionName: 'n' } as Parameters<typeof toLaunchDraft>[0]
+    const out = toLaunchDraft(config)
+    expect('sessionName' in out).toBe(false)
+    expect(out).toEqual(draft())
   })
 })

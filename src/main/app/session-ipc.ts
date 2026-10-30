@@ -301,7 +301,6 @@ export async function handleSavePreset(
   const [name, config, overwrite] = args
   if (
     typeof name !== 'string' ||
-    !checkLaunchConfig(config) ||
     !checkPreset(name, config) ||
     typeof overwrite !== 'boolean'
   ) {

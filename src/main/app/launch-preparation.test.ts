@@ -8,7 +8,7 @@ import { wslNamespace } from '@domain/runtime/namespace'
 import { makeHostPath, makeRuntimePath } from '@domain/runtime/path-types'
 import { createVerifiedRunning } from '@domain/runtime/verified-running'
 import { isWin32LaunchSpec } from '@domain/session/agent-session'
-import type { SessionLaunchConfig } from '@domain/session/launch-config'
+import { DEFAULT_EXTRA_AXES, type SessionLaunchConfig } from '@domain/session/launch-config'
 import type * as launchResolution from '@domain/session/launch-resolution'
 import type { LaunchBlocker, ProviderFact } from '@domain/session/launch-resolution'
 import type { WorkspaceFolder } from '@domain/workspace/folder'
@@ -114,6 +114,8 @@ const config = (over: Partial<SessionLaunchConfig> = {}): SessionLaunchConfig =>
   modelId: 'sonnet',
   effort: 'high',
   permissionMode: 'plan',
+  ...DEFAULT_EXTRA_AXES,
+  sessionName: null,
   ...over
 })
 
@@ -542,7 +544,8 @@ describe('resolveLaunchAxes の distro-mismatch (X-8 / data-model §7)', () => {
     providerId: null,
     modelId: null,
     effort: null,
-    permissionMode: 'plan' as const
+    permissionMode: 'plan' as const,
+    ...DEFAULT_EXTRA_AXES
   }
   it('distroName が null のランタイムの facts では出ない', async () => {
     const actual = await vi.importActual<typeof launchResolution>(
@@ -566,5 +569,85 @@ describe('resolveLaunchAxes の distro-mismatch (X-8 / data-model §7)', () => {
       providers: []
     })
     expect(result.blockers).toContain('distro-mismatch')
+  })
+})
+
+/** 024 data-model §4.3 (SC-003 の main の部分): 上限と名前の options。WSL と Win32 の両方。 */
+describe('createPrepareLaunch (上限と名前の options。024)', () => {
+  const CLAUDE = 'C:\\Users\\u\\.local\\bin\\claude.exe'
+  const hostBase = {
+    SystemRoot: 'C:\\WINDOWS',
+    windir: 'C:\\WINDOWS',
+    PATH: 'C:\\WINDOWS\\system32'
+  }
+  const winFolder = (): WorkspaceFolder => {
+    const hp = makeHostPath('C:\\dev\\closta')
+    if (!hp.ok) throw new Error('bad path')
+    return {
+      id: 'f1',
+      location: { kind: 'windows' },
+      path: hp.path,
+      displayName: 'proj',
+      registeredAt: NOW
+    }
+  }
+  const win32Deps = (): LaunchPreparationDeps =>
+    deps({
+      folders: () => [winFolder()],
+      runtimes: () => [
+        createWin32(NOW, { claudePath: CLAUDE, claudeStatus: 'found', claudeOverridden: false })
+      ],
+      win32BaseEnv: () => hostBase,
+      win32ClaudeIsFile: async () => true
+    })
+  const winConfig = (over: Partial<SessionLaunchConfig> = {}): SessionLaunchConfig =>
+    config({ runtimeId: 'host', providerId: null, modelId: null, effort: null, ...over })
+
+  const extraKeys = ['maxTurns', 'maxBudgetUsd', 'title']
+
+  it('WSL: 上限と名前が null なら 3 キーが options に無い', async () => {
+    const prep = await createPrepareLaunch(deps())(config())
+    if (prep === null || !prep.ok) throw new Error('expected ok')
+    for (const key of extraKeys) expect(key in prep.input.options).toBe(false)
+  })
+
+  it('WSL: 値があれば同じ値で載る', async () => {
+    const prep = await createPrepareLaunch(deps())(
+      config({ maxTurns: 30, maxBudgetUsd: 2.5, sessionName: 'ログインの API 修正' })
+    )
+    if (prep === null || !prep.ok) throw new Error('expected ok')
+    expect(prep.input.options).toMatchObject({
+      maxTurns: 30,
+      maxBudgetUsd: 2.5,
+      title: 'ログインの API 修正'
+    })
+  })
+
+  it('Win32: 上限と名前が null なら 3 キーが options に無い', async () => {
+    const prep = await createPrepareLaunch(win32Deps())(winConfig())
+    if (prep === null || !prep.ok) throw new Error('expected ok')
+    for (const key of extraKeys) expect(key in prep.input.options).toBe(false)
+  })
+
+  it('Win32: 値があれば同じ値で載る', async () => {
+    const prep = await createPrepareLaunch(win32Deps())(
+      winConfig({ maxTurns: 1, maxBudgetUsd: 0.01, sessionName: 'name' })
+    )
+    if (prep === null || !prep.ok) throw new Error('expected ok')
+    expect(prep.input.options).toMatchObject({ maxTurns: 1, maxBudgetUsd: 0.01, title: 'name' })
+  })
+
+  it('名前も上限もログ (logRejection) に出ない', async () => {
+    const logRejection = vi.fn()
+    await createPrepareLaunch(deps({ logRejection, runtimes: () => [] }))(
+      config({ sessionName: 'ひみつの名前', maxTurns: 777 })
+    )
+    await createPrepareLaunch(deps({ logRejection, verifyRunning: async () => null }))(
+      config({ sessionName: 'ひみつの名前', maxTurns: 777 })
+    )
+    for (const call of logRejection.mock.calls) {
+      expect(JSON.stringify(call)).not.toContain('ひみつ')
+      expect(JSON.stringify(call)).not.toContain('777')
+    }
   })
 })

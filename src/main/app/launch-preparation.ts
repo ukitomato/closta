@@ -92,6 +92,22 @@ function folderFact(folder: WorkspaceFolder): FolderFact {
   return { id: folder.id, distroName: isWslFolder(folder) ? folder.location.distroName : null }
 }
 
+/**
+ * 起動設定の残りの軸を query() の options に写す (024 data-model §4.3)。WSL と Win32 の 2 つの段が同じ関数を呼ぶ。
+ * 上限と名前は `null` (= 上限なし・名前なし) ならキーを載せない。再開の要求は `checkResumeRequest` が
+ * `sessionName === null` を要求するので、再開の起動では `title` が載らない。値 (名前・パス) はログに出さない。
+ * 追加ディレクトリの変換と spread は US-1 でこの関数に足す。
+ */
+function extraAxisOptions(
+  config: SessionLaunchConfig
+): Pick<LaunchQueryOptions, 'maxTurns' | 'maxBudgetUsd' | 'title'> {
+  return {
+    ...(config.maxTurns !== null ? { maxTurns: config.maxTurns } : {}),
+    ...(config.maxBudgetUsd !== null ? { maxBudgetUsd: config.maxBudgetUsd } : {}),
+    ...(config.sessionName !== null ? { title: config.sessionName } : {})
+  }
+}
+
 export function createPrepareLaunch(
   deps: LaunchPreparationDeps
 ): (config: SessionLaunchConfig) => Promise<LaunchPreparation> {
@@ -181,7 +197,8 @@ export function createPrepareLaunch(
       permissionMode: config.permissionMode,
       ...(entry !== null ? { model: sdkModelOf(entry) } : {}),
       ...(config.effort !== null ? { effort: config.effort } : {}),
-      ...(derived.settings !== undefined ? { settings: derived.settings } : {})
+      ...(derived.settings !== undefined ? { settings: derived.settings } : {}),
+      ...extraAxisOptions(config)
     }
     const input: LaunchInput = { folder, runtime: win32, options }
     return { ok: true, input, spec }
@@ -282,7 +299,8 @@ export function createPrepareLaunch(
       permissionMode: config.permissionMode,
       ...(entry !== null ? { model: sdkModelOf(entry) } : {}),
       ...(config.effort !== null ? { effort: config.effort } : {}),
-      ...(derived.settings !== undefined ? { settings: derived.settings } : {})
+      ...(derived.settings !== undefined ? { settings: derived.settings } : {}),
+      ...extraAxisOptions(config)
     }
     const input: LaunchInput = { folder, runtime: wsl, verified, options }
 

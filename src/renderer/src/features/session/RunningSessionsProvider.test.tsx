@@ -11,6 +11,7 @@ import { createRunningSessionStore } from './running-session-store'
 import { useRunningSessionsView, type RunningSessionsView } from './running-sessions-view'
 import { RunningSessionsProvider } from './RunningSessionsProvider'
 import { MESSAGE_WINDOW } from './session-view'
+import { DEFAULT_EXTRA_AXES } from '@domain/session/launch-config'
 
 /**
  * O-3 FE-023 — `RunningSessionsView.revealMessage` (012 data-model §2「移動」/ research R-03 / plan RK-04)。
@@ -59,7 +60,9 @@ async function setup(count: number): Promise<void> {
     providerId: null,
     modelId: null,
     effort: null,
-    permissionMode: 'default'
+    permissionMode: 'default',
+    ...DEFAULT_EXTRA_AXES,
+    sessionName: null
   })
   store.setState((s) => ({
     sessions: { ...s.sessions, [A]: { ...s.sessions[A]!, messages: messages(count) } },

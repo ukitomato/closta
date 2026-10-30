@@ -10,7 +10,7 @@ import type { RuntimeDescriptorDTO, RuntimeListDTO } from '@domain/runtime/dto'
 import { wslNamespace } from '@domain/runtime/namespace'
 import type { LaunchInput, SessionControl, SessionEvent } from '@domain/session/agent-session'
 import type { SessionIndexDTO, SessionSummaryDTO } from '@domain/session/dto'
-import { normalizePresetName } from '@domain/session/launch-config'
+import { DEFAULT_EXTRA_AXES, normalizePresetName } from '@domain/session/launch-config'
 import {
   liveSettingBlocker,
   normalizeSessionName,
@@ -583,7 +583,8 @@ export function createE2eCapability(): E2eCapability {
       providerId: 'e2e-removed',
       modelId: null,
       effort: null,
-      permissionMode: 'default'
+      permissionMode: 'default',
+      ...DEFAULT_EXTRA_AXES
     },
     updatedAt: now - 1
   }

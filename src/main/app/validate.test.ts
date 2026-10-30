@@ -20,7 +20,9 @@ import {
   MAX_PATH_VALUE_LENGTH,
   checkBeginBrowseLocation,
   checkFolderDraft,
+  checkLaunchConfig,
   checkPastResumeQuery,
+  checkPreset,
   checkResumeRequest,
   checkRenameArgs,
   checkListModelsArgs,
@@ -415,7 +417,11 @@ describe('checkResumeRequest / checkPastResumeQuery (X-9 / data-model §2.1)', (
     providerId: null,
     modelId: null,
     effort: null,
-    permissionMode: 'default'
+    permissionMode: 'default',
+    additionalDirectoryIds: [],
+    maxTurns: null,
+    maxBudgetUsd: null,
+    sessionName: null
   }
   const live = { kind: 'live', sessionId: ID }
   const past = { kind: 'past', targetKey: 'host#0', conversationId: ID }
@@ -445,7 +451,10 @@ describe('checkResumeRequest / checkPastResumeQuery (X-9 / data-model §2.1)', (
       { source: { ...past, extra: 1 }, config },
       { source: live, config, extra: 1 },
       { source: live, config: { ...config, permissionMode: 'bypassPermissions' } },
-      { source: live, config: { ...config, extra: 1 } }
+      { source: live, config: { ...config, extra: 1 } },
+      // 再開は名前を渡さない (024 FR-012)
+      { source: live, config: { ...config, sessionName: 'x' } },
+      { source: live, config: { ...config, maxTurns: 0 } }
     ]
     for (const value of bad) expect(checkResumeRequest(value, keys)).toBe(false)
   })
@@ -463,6 +472,53 @@ describe('checkResumeRequest / checkPastResumeQuery (X-9 / data-model §2.1)', (
         reason: 'source-unknown'
       })
     }
+  })
+})
+
+describe('checkLaunchConfig / checkPreset (024 data-model §3。SC-001 の main の部分)', () => {
+  const full = {
+    folderId: 'f1',
+    runtimeId: 'wsl:Ubuntu',
+    providerId: null,
+    modelId: null,
+    effort: null,
+    permissionMode: 'default',
+    additionalDirectoryIds: ['f2', 'f3'],
+    maxTurns: 30,
+    maxBudgetUsd: 2.5,
+    sessionName: 'ログインの API 修正'
+  }
+  const { sessionName: _name, ...nine } = full
+  void _name
+
+  it('10 キーの正例 (上限・名前は null でも通る)', () => {
+    expect(checkLaunchConfig(full)).toBe(true)
+    expect(
+      checkLaunchConfig({ ...full, maxTurns: null, maxBudgetUsd: null, sessionName: null })
+    ).toBe(true)
+  })
+
+  it.each([
+    ['キーの欠け (sessionName)', { ...nine }],
+    ['キーの欠け (maxTurns)', { ...full, maxTurns: undefined }],
+    ['未知のキー', { ...full, extra: 1 }],
+    ['追加ディレクトリが 11 件', { ...full, additionalDirectoryIds: Array.from({ length: 11 }, (_, i) => 'd' + i) }],
+    ['追加ディレクトリが作業フォルダと同じ', { ...full, additionalDirectoryIds: ['f1'] }],
+    ['追加ディレクトリが重複', { ...full, additionalDirectoryIds: ['f2', 'f2'] }],
+    ['ターン数が範囲外', { ...full, maxTurns: 1001 }],
+    ['費用が範囲外', { ...full, maxBudgetUsd: 0.005 }],
+    ['名前の前後に空白', { ...full, sessionName: ' a ' }],
+    ['名前が 101 文字', { ...full, sessionName: 'a'.repeat(101) }]
+  ])('%s は invalid-config', (_l, value) => {
+    expect(checkLaunchConfig(value)).toBe(false)
+  })
+
+  it('checkPreset は 9 キーで通り、sessionName を持つ config を拒否する', () => {
+    expect(checkPreset('業務用', nine)).toBe(true)
+    expect(checkPreset('業務用', full)).toBe(false)
+    expect(checkPreset('業務用', { ...nine, sessionName: null })).toBe(false)
+    expect(checkPreset('', nine)).toBe(false)
+    expect(checkPreset('業務用', { ...nine, maxTurns: 0 })).toBe(false)
   })
 })
 

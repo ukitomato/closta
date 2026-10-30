@@ -3,6 +3,7 @@ import { describe, expect, it, vi, type Mock } from 'vitest'
 
 import type { SessionControl } from '@domain/session/agent-session'
 import type { SessionIndexDTO } from '@domain/session/dto'
+import { DEFAULT_EXTRA_AXES } from '@domain/session/launch-config'
 import type { LaunchOrigin, LaunchUsageSummaryDTO } from '@domain/session/launch-usage'
 import type { SessionResumeRequest } from '@domain/session/resume'
 import { MAX_PROMPT_BYTES, MAX_SESSION_OFFSET } from '@domain/validation'
@@ -192,8 +193,12 @@ const CONFIG = {
   providerId: null,
   modelId: null,
   effort: null,
-  permissionMode: 'default'
+  permissionMode: 'default',
+  ...DEFAULT_EXTRA_AXES,
+  sessionName: null
 }
+// プリセットは名前を持たない 9 キー (024 FR-010)
+const { sessionName: _omitted, ...PRESET_CONFIG } = CONFIG
 
 describe('handleFetchMoreSessions — 節 A の各行', () => {
   it('既知の `targetKey` と妥当な `offset` なら取得する', async () => {
@@ -401,7 +406,7 @@ describe('X-1 起動 + 制御ハンドラ — main 直接呼び (SC-004 / SC-007
   describe('プリセット IPC (X-4 BE-013)', () => {
     it('savePreset は checkPreset を通った値だけを service へ渡す', async () => {
       const { deps: d, calls } = deps()
-      const ok = await handleSavePreset(d, ['  日本語の名前  ', CONFIG, false])
+      const ok = await handleSavePreset(d, ['  日本語の名前  ', PRESET_CONFIG, false])
       expect(ok.ok).toBe(true)
       expect(calls.presetSaves).toHaveLength(1)
     })

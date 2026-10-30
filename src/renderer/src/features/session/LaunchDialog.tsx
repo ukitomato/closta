@@ -6,6 +6,7 @@ import { isEffortLevel } from '@domain/provider/model-catalog'
 import type { EffortLevel } from '@domain/provider/types'
 import type { LaunchFailureReason } from '@domain/session/agent-session'
 import {
+  DEFAULT_EXTRA_AXES,
   isSafePermissionMode,
   SAFE_PERMISSION_MODES,
   type SafePermissionMode,
@@ -109,7 +110,9 @@ const EMPTY_DRAFT: LaunchDraft = {
   providerId: null,
   modelId: null,
   effort: null,
-  permissionMode: 'default'
+  permissionMode: 'default',
+  // 024: 新しい 3 軸は既定のまま (起動ダイアログの部品は US-1〜US-3 で足す)。名前は下書きに入れない。
+  ...DEFAULT_EXTRA_AXES
 }
 
 /** 非同期に取得する値の状態。`idle` は取得の前提 (選択) が揃っていない。 */
@@ -301,9 +304,15 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
           ...resume.fixed,
           modelId: effective.modelId,
           effort: effective.effort,
-          permissionMode: effective.permissionMode
+          permissionMode: effective.permissionMode,
+          additionalDirectoryIds: effective.additionalDirectoryIds,
+          maxTurns: effective.maxTurns,
+          maxBudgetUsd: effective.maxBudgetUsd,
+          // 再開は名前を渡さない (024 FR-012 / AD-064 Decision 5)
+          sessionName: null
         }
-      : toLaunchConfig(resolution)
+      : // 名前の入力は US-3 (FE-030)。それまでは名前なしで起動する。
+        toLaunchConfig(resolution, null)
   const needsConfirmation = resets.some((r) => r.requiresConfirmation)
   // 書き戻した下流の通知 (1 回) と、いまの解決の reset を重複なく並べる。
   const shownResets = [

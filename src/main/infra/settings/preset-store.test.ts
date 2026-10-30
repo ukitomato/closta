@@ -42,7 +42,10 @@ function preset(over: Partial<Preset> = {}): Preset {
       providerId: 'p1',
       modelId: 'claude-sonnet-4-5',
       effort: 'high',
-      permissionMode: 'default'
+      permissionMode: 'default',
+      additionalDirectoryIds: ['f2'],
+      maxTurns: 30,
+      maxBudgetUsd: 2
     },
     updatedAt: 1000,
     ...over
@@ -194,6 +197,92 @@ describe('createPresetStore', () => {
     expect(saved.schemaVersion).toBe(PRESET_SCHEMA_VERSION)
     expect((await store.load()).presets.map((p) => p.name)).toEqual(['別名'])
     expect((await readdir(dir.value)).filter((n) => n.endsWith('.tmp'))).toEqual([])
+  })
+
+  describe('版 1 / 版 2 / それ以外 (024 data-model §6.1。SC-004)', () => {
+    const v1Record = {
+      id: 'old',
+      name: '旧',
+      config: {
+        folderId: 'f1',
+        runtimeId: 'wsl:Ubuntu',
+        providerId: null,
+        modelId: null,
+        effort: null,
+        permissionMode: 'default'
+      },
+      updatedAt: 5
+    }
+
+    it('PRESET_SCHEMA_VERSION は 2', () => {
+      expect(PRESET_SCHEMA_VERSION).toBe(2)
+    })
+
+    it('版 1 のファイルを新しい軸の既定で読み、退避せず、読んだだけでは書き込まない', async () => {
+      const raw = JSON.stringify({ schemaVersion: 1, presets: [v1Record] })
+      await writeRaw(raw)
+      const result = await createPresetStore(dir, now).load()
+      expect(result.reasonKeys).toEqual([])
+      expect(result.backupPath).toBeNull()
+      expect(result.presets).toHaveLength(1)
+      expect(result.presets[0]?.config).toEqual({
+        ...v1Record.config,
+        additionalDirectoryIds: [],
+        maxTurns: null,
+        maxBudgetUsd: null
+      })
+      // 読んだだけでは書き戻さない (原文のまま。退避ファイルも無い)。
+      expect(await readFile(file(), 'utf8')).toBe(raw)
+      expect((await readdir(dir.value)).filter((n) => n.endsWith('.bak'))).toEqual([])
+    })
+
+    it('版 1 を読んだ後の最初の save で版 2 の全件を書く', async () => {
+      await writeRaw(JSON.stringify({ schemaVersion: 1, presets: [v1Record] }))
+      const store = createPresetStore(dir, now)
+      const loaded = await store.load()
+      await store.save([...loaded.presets, preset({ id: 'new', name: '新' })])
+      const saved = JSON.parse(await readFile(file(), 'utf8')) as {
+        schemaVersion: number
+        presets: { id: string; config: Record<string, unknown> }[]
+      }
+      expect(saved.schemaVersion).toBe(2)
+      expect(saved.presets.map((p) => p.id)).toEqual(['old', 'new'])
+      for (const p of saved.presets) expect(Object.keys(p.config)).toHaveLength(9)
+    })
+
+    it('版 2 の往復で 9 キーを失わない', async () => {
+      const store = createPresetStore(dir, now)
+      const p = preset({
+        config: {
+          ...preset().config,
+          additionalDirectoryIds: ['f2', 'f3'],
+          maxTurns: 1000,
+          maxBudgetUsd: 0.01
+        }
+      })
+      await store.save([p])
+      expect((await store.load()).presets).toEqual([p])
+    })
+
+    it('sessionName を持つ版 2 のレコードは invalid-record として読まず退避する', async () => {
+      const bad = {
+        ...fromPresetRecord(preset({ id: 'bad', name: '悪' })),
+        config: { ...preset().config, sessionName: null }
+      }
+      await writeRaw(
+        JSON.stringify({ schemaVersion: 2, presets: [fromPresetRecord(preset()), bad] })
+      )
+      const result = await createPresetStore(dir, now).load()
+      expect(result.presets.map((p) => p.id)).toEqual(['preset-1'])
+      expect(result.reasonKeys).toEqual(['invalid-record'])
+    })
+
+    it('版 3 は schema-version-unknown で退避する', async () => {
+      await writeRaw(JSON.stringify({ schemaVersion: 3, presets: [] }))
+      const result = await createPresetStore(dir, now).load()
+      expect(result.reasonKeys).toEqual(['schema-version-unknown'])
+      expect(result.backupPath).not.toBeNull()
+    })
   })
 
   it('rename が失敗したら一時ファイルを消してから失敗を返す (DB L-102)', async () => {

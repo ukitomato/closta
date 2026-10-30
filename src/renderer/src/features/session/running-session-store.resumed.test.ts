@@ -13,6 +13,7 @@ import type { TranscriptHandshakeDTO, TranscriptMessageDTO } from '@domain/sessi
 import { stubCapability } from '@/test-support/capability'
 
 import { createRunningSessionStore, type RunningSessionStore } from './running-session-store'
+import { DEFAULT_EXTRA_AXES } from '@domain/session/launch-config'
 
 /**
  * X-9 FE-040 — それまでの会話の読み取りと表示 (data-model §8.2 / research R-09)。
@@ -28,7 +29,9 @@ const CFG: SessionLaunchConfig = {
   providerId: null,
   modelId: null,
   effort: null,
-  permissionMode: 'default'
+  permissionMode: 'default',
+  ...DEFAULT_EXTRA_AXES,
+  sessionName: null
 }
 
 const REQUEST: SessionResumeRequest = {

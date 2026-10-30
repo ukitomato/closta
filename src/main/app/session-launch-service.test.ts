@@ -9,7 +9,7 @@ import type {
   SessionControl
 } from '@domain/session/agent-session'
 import type { EffortLevel, ModelEntry } from '@domain/provider/types'
-import type { SessionLaunchConfig } from '@domain/session/launch-config'
+import { DEFAULT_EXTRA_AXES, type SessionLaunchConfig } from '@domain/session/launch-config'
 import type { SessionStatusUpdate } from '@domain/session/status-update'
 
 import {
@@ -37,7 +37,9 @@ function cfg(folderId = 'f1', runtimeId = 'r1'): SessionLaunchConfig {
     providerId: null,
     modelId: null,
     effort: null,
-    permissionMode: 'default'
+    permissionMode: 'default',
+    ...DEFAULT_EXTRA_AXES,
+    sessionName: null
   }
 }
 

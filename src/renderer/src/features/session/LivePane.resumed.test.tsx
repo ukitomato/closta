@@ -15,6 +15,7 @@ import { RunningSessionsHarness } from '@/test-support/running-sessions-harness'
 import { APPROVAL_CARD_LABELS, OLDER_MESSAGES_LABELS, RESUME_LABELS } from './labels'
 import { RunningSessionStoreContext } from './running-session-context'
 import { createRunningSessionStore, type RunningSessionStore } from './running-session-store'
+import { DEFAULT_EXTRA_AXES } from '@domain/session/launch-config'
 
 /**
  * X-9 FE-040 — それまでの会話の表示 (spec SC-007 / US-4 AC1〜AC3。data-model §8.2 / research R-09)。
@@ -33,7 +34,9 @@ const REQUEST: SessionResumeRequest = {
     providerId: null,
     modelId: null,
     effort: null,
-    permissionMode: 'default'
+    permissionMode: 'default',
+    ...DEFAULT_EXTRA_AXES,
+    sessionName: null
   }
 }
 

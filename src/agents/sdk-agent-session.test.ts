@@ -2219,3 +2219,74 @@ describe('sdk-agent-session: モデルの一覧 (025 / AD-065 / data-model §4)'
     expect(h.supportedModelsCalls).toBe(0)
   })
 })
+
+describe('sdk-agent-session: options の 4 キー (024 / AD-064。SC-003 の agents の部分)', () => {
+  const wslLaunch = (options: Record<string, unknown>): unknown => ({
+    kind: 'launch',
+    spec: SPEC,
+    options: { permissionMode: 'default', ...options }
+  })
+  const win32Launch = (options: Record<string, unknown>): unknown => ({
+    kind: 'launch',
+    spec: WIN32_LAUNCH_SPEC_FIXTURE,
+    options: { permissionMode: 'default', ...options }
+  })
+
+  it('4 キーが無い起動では query() の options に 4 キーが無い', async () => {
+    const send = await boot()
+    send(launch)
+    await vi.waitFor(() => expect(h.options).not.toBeNull())
+    for (const key of ['additionalDirectories', 'maxTurns', 'maxBudgetUsd', 'title']) {
+      expect(Object.prototype.hasOwnProperty.call(h.options, key)).toBe(false)
+    }
+    expect(Object.prototype.hasOwnProperty.call(h.options, 'launchDirectoryKind')).toBe(false)
+  })
+
+  it('WSL の起動: 値があれば同名で query() の options に載る', async () => {
+    const send = await boot()
+    send(
+      wslLaunch({
+        additionalDirectories: ['/home/u/lib', '/mnt/c/work/日本語 の lib'],
+        maxTurns: 30,
+        maxBudgetUsd: 2.5,
+        title: 'ログインの API 修正'
+      })
+    )
+    await vi.waitFor(() => expect(h.options).not.toBeNull())
+    expect(h.options?.additionalDirectories).toEqual(['/home/u/lib', '/mnt/c/work/日本語 の lib'])
+    expect(h.options?.maxTurns).toBe(30)
+    expect(h.options?.maxBudgetUsd).toBe(2.5)
+    expect(h.options?.title).toBe('ログインの API 修正')
+  })
+
+  it('Win32 の起動: ドライブ付きのパスが載る', async () => {
+    const send = await boot()
+    send(win32Launch({ additionalDirectories: ['C:\\work\\lib'] }))
+    await vi.waitFor(() => expect(h.options).not.toBeNull())
+    expect(h.options?.additionalDirectories).toEqual(['C:\\work\\lib'])
+  })
+
+  const many = Array.from({ length: 11 }, (_, i) => `/d${i}`)
+  it.each([
+    ['additionalDirectories が配列でない', wslLaunch, { additionalDirectories: '/a' }],
+    ['additionalDirectories が 0 件', wslLaunch, { additionalDirectories: [] }],
+    ['additionalDirectories が 11 件', wslLaunch, { additionalDirectories: many }],
+    ['additionalDirectories が重複', wslLaunch, { additionalDirectories: ['/a', '/a'] }],
+    ['WSL の起動に Windows のパス', wslLaunch, { additionalDirectories: ['C:\\work\\lib'] }],
+    ['Win32 の起動に POSIX のパス', win32Launch, { additionalDirectories: ['/home/u/lib'] }],
+    ['maxTurns が範囲外', wslLaunch, { maxTurns: 0 }],
+    ['maxTurns が 1001', wslLaunch, { maxTurns: 1001 }],
+    ['maxTurns が null', wslLaunch, { maxTurns: null }],
+    ['maxTurns が文字列', wslLaunch, { maxTurns: '30' }],
+    ['maxBudgetUsd が範囲外', wslLaunch, { maxBudgetUsd: 0 }],
+    ['maxBudgetUsd が null', wslLaunch, { maxBudgetUsd: null }],
+    ['maxBudgetUsd が文字列', wslLaunch, { maxBudgetUsd: '2' }],
+    ['title が規則の外', wslLaunch, { title: ' a ' }],
+    ['title が null', wslLaunch, { title: null }]
+  ])('%s の起動は起動しない (error を通知して ended)', async (_name, make, options) => {
+    const send = await boot()
+    send(make(options))
+    expect(kinds()).toEqual(['status', 'ended'])
+    expect(h.options).toBeNull()
+  })
+})
