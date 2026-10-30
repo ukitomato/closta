@@ -12,8 +12,9 @@
 | 依存グラフ | 違反 0 (572 modules) |
 | Constitution 検証 | 違反 0 (ok 20 / 検査対象なし 1) |
 | Vitest 全件 | 235 files / 4485 tests passed |
-| rule fixture の照合 (`node scripts/rules/run.mjs`) | 未実施 (main が回す) |
-| E2E (要ビルド) | 未実施 (main が回す) |
+| rule fixture の照合 (`node scripts/rules/run.mjs`) | exit 0 (main、b604dc7) |
+| ビルド (`electron-vite build`) | exit 0 (main、b604dc7) |
+| E2E (要ビルド) | 31 pass / 2 fail (main、b604dc7)。落ちたのは既知の基準画像 2 件 (`composer-screenshot.spec.ts` / `sidebar-screenshot.spec.ts`、本機の揺れ)。基準画像は本機で更新しない |
 
 ## 境界の確認 (Grep)
 
