@@ -134,10 +134,7 @@ function isIdString(value: unknown): value is string {
 export function isValidMaxTurns(value: unknown): value is number | null {
   if (value === null) return true
   return (
-    typeof value === 'number' &&
-    Number.isInteger(value) &&
-    value >= 1 &&
-    value <= MAX_TURNS_LIMIT
+    typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= MAX_TURNS_LIMIT
   )
 }
 

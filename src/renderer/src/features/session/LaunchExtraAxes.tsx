@@ -91,33 +91,33 @@ export function LaunchExtraAxes(props: LaunchExtraAxesProps): React.JSX.Element 
         )}
       </div>
       {props.showSessionName !== false && (
-      <div className="flex flex-col gap-1 text-sm">
-        <label className="flex flex-col gap-1">
-          <span className="font-medium">{EXTRA_AXES_LABELS.sessionName}</span>
-          <input
-            type="text"
-            value={props.sessionNameInput}
-            placeholder={EXTRA_AXES_LABELS.namePlaceholder}
-            onChange={(e) => props.onSessionNameChange(e.target.value)}
-            onKeyDown={(e) => {
-              // IME の変換中の Enter は確定に任せる (起動しない。Principle VIII / AD-037)。
-              if (e.nativeEvent.isComposing || e.keyCode === 229) return
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                props.onSessionNameSubmit()
-              }
-            }}
-            className={inputClass}
-            aria-invalid={props.sessionNameInvalid ? true : undefined}
-            aria-describedby={props.sessionNameInvalid ? 'session-name-rule' : undefined}
-          />
-        </label>
-        {props.sessionNameInvalid && (
-          <span id="session-name-rule" role="alert" className="text-destructive text-xs">
-            {LIVE_SETTING_LABELS.nameRule}
-          </span>
-        )}
-      </div>
+        <div className="flex flex-col gap-1 text-sm">
+          <label className="flex flex-col gap-1">
+            <span className="font-medium">{EXTRA_AXES_LABELS.sessionName}</span>
+            <input
+              type="text"
+              value={props.sessionNameInput}
+              placeholder={EXTRA_AXES_LABELS.namePlaceholder}
+              onChange={(e) => props.onSessionNameChange(e.target.value)}
+              onKeyDown={(e) => {
+                // IME の変換中の Enter は確定に任せる (起動しない。Principle VIII / AD-037)。
+                if (e.nativeEvent.isComposing || e.keyCode === 229) return
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  props.onSessionNameSubmit()
+                }
+              }}
+              className={inputClass}
+              aria-invalid={props.sessionNameInvalid ? true : undefined}
+              aria-describedby={props.sessionNameInvalid ? 'session-name-rule' : undefined}
+            />
+          </label>
+          {props.sessionNameInvalid && (
+            <span id="session-name-rule" role="alert" className="text-destructive text-xs">
+              {LIVE_SETTING_LABELS.nameRule}
+            </span>
+          )}
+        </div>
       )}
     </>
   )

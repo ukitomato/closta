@@ -1933,7 +1933,9 @@ describe('LaunchDialog — 上限 (024)', () => {
     expect(turnsInput()).toHaveValue('')
     expect(turnsInput()).toHaveAttribute('placeholder', '上限なし')
     expect(budgetInput()).toHaveAttribute('inputmode', 'decimal')
-    expect((await axe(container, { rules: { 'color-contrast': { enabled: false } } })).violations).toEqual([])
+    expect(
+      (await axe(container, { rules: { 'color-contrast': { enabled: false } } })).violations
+    ).toEqual([])
     fireEvent.click(startBtn())
     expect(session.launch).toHaveBeenCalledWith(
       expect.objectContaining({ maxTurns: null, maxBudgetUsd: null }),
@@ -2030,7 +2032,9 @@ describe('LaunchDialog — セッション名 (024)', () => {
     await pickWork()
     expect(nameInput()).toHaveValue('')
     expect(nameInput()).toHaveAttribute('placeholder', '自動で付ける')
-    expect((await axe(container, { rules: { 'color-contrast': { enabled: false } } })).violations).toEqual([])
+    expect(
+      (await axe(container, { rules: { 'color-contrast': { enabled: false } } })).violations
+    ).toEqual([])
     fireEvent.change(nameInput(), { target: { value: '  ログインの API 修正 ' } })
     fireEvent.click(startBtn())
     expect(session.launch).toHaveBeenCalledWith(

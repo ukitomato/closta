@@ -138,7 +138,8 @@ function RunningOverview(): React.JSX.Element {
       label: EXTRA_AXES_LABELS.additionalDirectories,
       value: config.additionalDirectoryIds
         .map(
-          (id) => registered.find((f) => f.id === id)?.displayName ?? EXTRA_AXES_LABELS.deletedFolder
+          (id) =>
+            registered.find((f) => f.id === id)?.displayName ?? EXTRA_AXES_LABELS.deletedFolder
         )
         .join('、')
     })

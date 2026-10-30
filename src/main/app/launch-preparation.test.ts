@@ -677,11 +677,7 @@ describe('createPrepareLaunch (上限と名前の options。024)', () => {
 
     it('WSL: WSL のフォルダは POSIX のパス、Windows のフォルダは PathMapping の変換値', async () => {
       const prep = await createPrepareLaunch(
-        wslDeps([
-          folder(),
-          wslFolder('d1', '/home/u/lib'),
-          hostFolder('d2', 'C:\\work\\あ 空白')
-        ])
+        wslDeps([folder(), wslFolder('d1', '/home/u/lib'), hostFolder('d2', 'C:\\work\\あ 空白')])
       )(config({ additionalDirectoryIds: ['d1', 'd2'] }))
       if (prep === null || !prep.ok) throw new Error('expected ok')
       expect(prep.input.options.additionalDirectories).toEqual([
@@ -732,15 +728,15 @@ describe('createPrepareLaunch (上限と名前の options。024)', () => {
           win32BaseEnv: () => hostBase,
           win32ClaudeIsFile: async () => true
         })
-      const ok = await createPrepareLaunch(
-        mk([winFolder(), hostFolder('d1', 'D:\\work\\lib')])
-      )(winConfig({ additionalDirectoryIds: ['d1'] }))
+      const ok = await createPrepareLaunch(mk([winFolder(), hostFolder('d1', 'D:\\work\\lib')]))(
+        winConfig({ additionalDirectoryIds: ['d1'] })
+      )
       if (ok === null || !ok.ok) throw new Error('expected ok')
       expect(ok.input.options.additionalDirectories).toEqual(['D:\\work\\lib'])
       for (const ids of [['nope'], ['w1'], ['f1']]) {
-        const bad = await createPrepareLaunch(
-          mk([winFolder(), wslFolder('w1', '/home/u/lib')])
-        )(winConfig({ additionalDirectoryIds: ids }))
+        const bad = await createPrepareLaunch(mk([winFolder(), wslFolder('w1', '/home/u/lib')]))(
+          winConfig({ additionalDirectoryIds: ids })
+        )
         expect(bad).toEqual({ ok: false, reason: 'invalid-config' })
       }
     })

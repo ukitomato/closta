@@ -299,11 +299,7 @@ export async function handleSavePreset(
   args: readonly unknown[]
 ): Promise<SavePresetResult> {
   const [name, config, overwrite] = args
-  if (
-    typeof name !== 'string' ||
-    !checkPreset(name, config) ||
-    typeof overwrite !== 'boolean'
-  ) {
+  if (typeof name !== 'string' || !checkPreset(name, config) || typeof overwrite !== 'boolean') {
     return { ok: false, reason: 'invalid-preset' }
   }
   return deps.savePreset({ name, config, overwrite })

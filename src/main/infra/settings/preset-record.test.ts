@@ -59,7 +59,10 @@ describe('preset-record', () => {
     ['未知キー (settings)', { ...preset.config, settings: { permissions: {} } }],
     ['モデル ID のメタ文字', { ...preset.config, modelId: 'x$(id)' }],
     ['sessionName を持つ版 2 の config', { ...preset.config, sessionName: null }],
-    ['追加ディレクトリが 11 件', { ...preset.config, additionalDirectoryIds: Array.from({ length: 11 }, (_, i) => 'd' + i) }],
+    [
+      '追加ディレクトリが 11 件',
+      { ...preset.config, additionalDirectoryIds: Array.from({ length: 11 }, (_, i) => 'd' + i) }
+    ],
     ['ターン数が範囲外', { ...preset.config, maxTurns: 0 }],
     ['費用が範囲外', { ...preset.config, maxBudgetUsd: 1000.01 }],
     ['新しい軸のキーが欠けた版 2', { ...preset.config, maxTurns: undefined }]

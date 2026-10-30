@@ -502,7 +502,10 @@ describe('checkLaunchConfig / checkPreset (024 data-model §3。SC-001 の main 
     ['キーの欠け (sessionName)', { ...nine }],
     ['キーの欠け (maxTurns)', { ...full, maxTurns: undefined }],
     ['未知のキー', { ...full, extra: 1 }],
-    ['追加ディレクトリが 11 件', { ...full, additionalDirectoryIds: Array.from({ length: 11 }, (_, i) => 'd' + i) }],
+    [
+      '追加ディレクトリが 11 件',
+      { ...full, additionalDirectoryIds: Array.from({ length: 11 }, (_, i) => 'd' + i) }
+    ],
     ['追加ディレクトリが作業フォルダと同じ', { ...full, additionalDirectoryIds: ['f1'] }],
     ['追加ディレクトリが重複', { ...full, additionalDirectoryIds: ['f2', 'f2'] }],
     ['ターン数が範囲外', { ...full, maxTurns: 1001 }],

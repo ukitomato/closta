@@ -291,7 +291,11 @@ describe('labels — 025 で足す文言 (data-model §9)', () => {
 
 describe('labels — 024 で足す文言 (data-model §9.3)', () => {
   it('追加ディレクトリを外した通知は理由の全値を網羅し、表示名を含む', () => {
-    const reasons: readonly DirectoryResetReason[] = ['unregistered', 'unreachable', 'same-as-folder']
+    const reasons: readonly DirectoryResetReason[] = [
+      'unregistered',
+      'unreachable',
+      'same-as-folder'
+    ]
     expect(Object.keys(DIRECTORY_RESET_LABELS).sort()).toEqual([...reasons].sort())
     for (const r of reasons) expect(DIRECTORY_RESET_LABELS[r]('proj')).toContain('proj')
   })

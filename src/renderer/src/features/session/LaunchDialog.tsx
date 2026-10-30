@@ -436,7 +436,9 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
   }))
   const directoriesChecking = directoryItems.some((i) => i.entry === undefined)
   const directoriesWaitingProbe = directoryItems.some(
-    (i) => i.entry?.dto?.reachability === 'blocked' && i.entry.dto.blockedReason === 'capabilities-not-probed'
+    (i) =>
+      i.entry?.dto?.reachability === 'blocked' &&
+      i.entry.dto.blockedReason === 'capabilities-not-probed'
   )
   const directoryCrossItems = directoryItems.filter((i) => i.entry?.dto?.boundary === 'cross')
   const directoryUnknownItems = directoryItems.filter((i) => i.entry?.failed === true)
@@ -884,54 +886,58 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
 
       {/* 再開の形でも出す (名前の部品だけ出さない) */}
       <LaunchExtraAxes
-          showSessionName={resume === null}
-          choices={additionalDirectoryChoices(
-            folderList,
-            effective.folderId,
-            effective.additionalDirectoryIds
-          )}
-          items={directoryItems}
-          full={effective.additionalDirectoryIds.length >= MAX_ADDITIONAL_DIRECTORIES}
-          onAdd={(id) =>
-            update({
-              additionalDirectoryIds: draft.additionalDirectoryIds.includes(id)
-                ? draft.additionalDirectoryIds
-                : [...draft.additionalDirectoryIds, id]
-            })
-          }
-          onRemove={(id) =>
-            update({
-              additionalDirectoryIds: draft.additionalDirectoryIds.filter((x) => x !== id)
-            })
-          }
-          sessionNameInput={sessionNameInput}
-          sessionNameInvalid={!sessionNameParsed.ok}
-          onSessionNameChange={(raw) => {
-            setConfirming(false)
-            setSessionNameInput(raw)
-          }}
-          onSessionNameSubmit={launch}
-          maxTurnsInput={maxTurnsInput}
-          maxBudgetInput={maxBudgetInput}
-          maxTurnsInvalid={!maxTurnsParsed.ok}
-          maxBudgetInvalid={!maxBudgetParsed.ok}
-          onMaxTurnsChange={(raw) => {
-            setMaxTurnsInput(raw)
-            const parsed = parseMaxTurnsInput(raw)
-            // 不正な間は下書きを変えない (起動は押せない)。直すと下書きが追いつく。
-            if (parsed.ok) update({ maxTurns: parsed.value })
-            else setConfirming(false)
-          }}
-          onMaxBudgetChange={(raw) => {
-            setMaxBudgetInput(raw)
-            const parsed = parseMaxBudgetInput(raw)
-            if (parsed.ok) update({ maxBudgetUsd: parsed.value })
-            else setConfirming(false)
-          }}
-        />
+        showSessionName={resume === null}
+        choices={additionalDirectoryChoices(
+          folderList,
+          effective.folderId,
+          effective.additionalDirectoryIds
+        )}
+        items={directoryItems}
+        full={effective.additionalDirectoryIds.length >= MAX_ADDITIONAL_DIRECTORIES}
+        onAdd={(id) =>
+          update({
+            additionalDirectoryIds: draft.additionalDirectoryIds.includes(id)
+              ? draft.additionalDirectoryIds
+              : [...draft.additionalDirectoryIds, id]
+          })
+        }
+        onRemove={(id) =>
+          update({
+            additionalDirectoryIds: draft.additionalDirectoryIds.filter((x) => x !== id)
+          })
+        }
+        sessionNameInput={sessionNameInput}
+        sessionNameInvalid={!sessionNameParsed.ok}
+        onSessionNameChange={(raw) => {
+          setConfirming(false)
+          setSessionNameInput(raw)
+        }}
+        onSessionNameSubmit={launch}
+        maxTurnsInput={maxTurnsInput}
+        maxBudgetInput={maxBudgetInput}
+        maxTurnsInvalid={!maxTurnsParsed.ok}
+        maxBudgetInvalid={!maxBudgetParsed.ok}
+        onMaxTurnsChange={(raw) => {
+          setMaxTurnsInput(raw)
+          const parsed = parseMaxTurnsInput(raw)
+          // 不正な間は下書きを変えない (起動は押せない)。直すと下書きが追いつく。
+          if (parsed.ok) update({ maxTurns: parsed.value })
+          else setConfirming(false)
+        }}
+        onMaxBudgetChange={(raw) => {
+          setMaxBudgetInput(raw)
+          const parsed = parseMaxBudgetInput(raw)
+          if (parsed.ok) update({ maxBudgetUsd: parsed.value })
+          else setConfirming(false)
+        }}
+      />
 
       {resolution.directoryResets.length > 0 && (
-        <ul role="status" className="text-muted-foreground text-xs" aria-label="外した追加ディレクトリ">
+        <ul
+          role="status"
+          className="text-muted-foreground text-xs"
+          aria-label="外した追加ディレクトリ"
+        >
           {resolution.directoryResets.map((r) => (
             <li key={`${r.folderId}-${r.reason}`}>
               {DIRECTORY_RESET_LABELS[r.reason](directoryName(r.folderId))}

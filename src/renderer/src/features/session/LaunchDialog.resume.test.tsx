@@ -396,7 +396,9 @@ describe('LaunchDialog — 再開の形の初期値とプリセット (X-9 FE-03
   it('過去の行は上限なしが初期値 (US-4 AC4)', () => {
     install()
     render(<LaunchDialog session={fakeSession()} />)
-    expect((screen.getByRole('textbox', { name: 'ターン数の上限' }) as HTMLInputElement).value).toBe('')
+    expect(
+      (screen.getByRole('textbox', { name: 'ターン数の上限' }) as HTMLInputElement).value
+    ).toBe('')
     expect(
       (screen.getByRole('textbox', { name: '費用の上限 (USD)' }) as HTMLInputElement).value
     ).toBe('')
@@ -410,9 +412,9 @@ describe('LaunchDialog — 再開の形の初期値とプリセット (X-9 FE-03
     await waitFor(() => expect(screen.getByRole('button', { name: '適用' })).toBeTruthy())
     fireEvent.click(screen.getByRole('button', { name: '適用' }))
     await waitFor(() =>
-      expect((screen.getByRole('textbox', { name: 'ターン数の上限' }) as HTMLInputElement).value).toBe(
-        '7'
-      )
+      expect(
+        (screen.getByRole('textbox', { name: 'ターン数の上限' }) as HTMLInputElement).value
+      ).toBe('7')
     )
     expect(screen.getByTestId('resume-fixed-axes').textContent).toContain('ubuntu-proj')
   })
