@@ -14,6 +14,7 @@
 | Vitest 全件 | 235 files / 4485 tests passed |
 | rule fixture の照合 (`node scripts/rules/run.mjs`) | exit 0 (main、b604dc7) |
 | ビルド (`electron-vite build`) | exit 0 (main、b604dc7) |
+| E2E (pr-gate R1 の修正 + code-gate 再実行の後、ビルドし直して) | 31 pass / 2 fail (既知の基準画像 2 件だけ) |
 | E2E (要ビルド) | 31 pass / 2 fail (main、b604dc7)。落ちたのは既知の基準画像 2 件 (`composer-screenshot.spec.ts` / `sidebar-screenshot.spec.ts`、本機の揺れ)。基準画像は本機で更新しない |
 
 ## 境界の確認 (Grep)
