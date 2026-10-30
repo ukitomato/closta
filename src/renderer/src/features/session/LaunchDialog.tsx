@@ -442,6 +442,8 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
   )
   const directoryCrossItems = directoryItems.filter((i) => i.entry?.dto?.boundary === 'cross')
   const directoryUnknownItems = directoryItems.filter((i) => i.entry?.failed === true)
+  // 依存解決で外した項目が往復で戻ると、見える件数が上限を超えうる。超えたまま起動させない (H-002)。
+  const directoriesOverLimit = effective.additionalDirectoryIds.length > MAX_ADDITIONAL_DIRECTORIES
   const launchConfig =
     folderRuntimeChecking ||
     folderRuntimeWaitingProbe ||
@@ -450,6 +452,7 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
     directoriesChecking ||
     directoriesWaitingProbe ||
     limitsInvalid ||
+    directoriesOverLimit ||
     (resume === null && !sessionNameParsed.ok)
       ? null
       : config
@@ -659,9 +662,14 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
 
       <PresetPanel
         view={presets}
-        current={config}
+        current={limitsInvalid ? null : config}
         onApply={(preset) => applyPreset(toLaunchDraft(preset.config))}
       />
+      {limitsInvalid && (
+        <p className="text-muted-foreground text-xs" data-testid="preset-limits-invalid">
+          {EXTRA_AXES_LABELS.presetSaveLimitsInvalid}
+        </p>
+      )}
 
       {session.phase === 'entry' && session.previousFailure !== null && (
         <p role="alert" className="text-destructive text-sm" data-testid="previous-failure">
@@ -896,14 +904,15 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
         full={effective.additionalDirectoryIds.length >= MAX_ADDITIONAL_DIRECTORIES}
         onAdd={(id) =>
           update({
-            additionalDirectoryIds: draft.additionalDirectoryIds.includes(id)
-              ? draft.additionalDirectoryIds
-              : [...draft.additionalDirectoryIds, id]
+            // 見えている項目 (effective) を基準にする。外して通知した項目が下書きから黙って戻らない (H-002)。
+            additionalDirectoryIds: effective.additionalDirectoryIds.includes(id)
+              ? effective.additionalDirectoryIds
+              : [...effective.additionalDirectoryIds, id]
           })
         }
         onRemove={(id) =>
           update({
-            additionalDirectoryIds: draft.additionalDirectoryIds.filter((x) => x !== id)
+            additionalDirectoryIds: effective.additionalDirectoryIds.filter((x) => x !== id)
           })
         }
         sessionNameInput={sessionNameInput}
@@ -912,7 +921,10 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
           setConfirming(false)
           setSessionNameInput(raw)
         }}
-        onSessionNameSubmit={launch}
+        onSessionNameSubmit={() => {
+          // 確認中の Enter で確認のボタンを飛ばして起動しない (H-004)。
+          if (!confirming) launch()
+        }}
         maxTurnsInput={maxTurnsInput}
         maxBudgetInput={maxBudgetInput}
         maxTurnsInvalid={!maxTurnsParsed.ok}
@@ -931,6 +943,12 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
           else setConfirming(false)
         }}
       />
+
+      {directoriesOverLimit && (
+        <p role="alert" className="text-destructive text-xs" data-testid="directories-over-limit">
+          {EXTRA_AXES_LABELS.directoriesOverLimit}
+        </p>
+      )}
 
       {resolution.directoryResets.length > 0 && (
         <ul

@@ -25,7 +25,7 @@
 ## R-02 `additionalDirectories` は何を広げるか (escalation の評価)
 
 - `additionalDirectories` は「作業ディレクトリの外で Claude が扱える範囲」を広げる。Claude Code の権限の判定では、作業ディレクトリ (と追加ディレクトリ) の中の読み取りは承認なしで通り、外は承認を求める。したがって追加ディレクトリは **承認なしで読める範囲**を広げる
-- 書き込み (Edit / Write / Bash) は今どおり権限モードと `canUseTool` で決まる。安全 3 値 (`default` / `plan` / `dontAsk`) のどれでも、追加ディレクトリの中の書き込みが承認なしで通るようにはならない (`acceptEdits` は安全 3 値の外)。tool の集合・env・MCP サーバーも変わらない。ただし追加ディレクトリの skills (`allowed-tools` を含む) は読み込まれる (R-02a)
+- 書き込み (Edit / Write / Bash) は今どおり権限モードと `canUseTool` で決まる。安全 3 値 (`default` / `plan` / `dontAsk`) のどれでも、追加ディレクトリの中の書き込みが承認なしで通るようにはならない (`acceptEdits` は安全 3 値の外)。tool の集合・env・MCP サーバーも変わらない。ただし追加ディレクトリの skills は読み込まれ、その `allowed-tools` は skill が動く間の承認を省く (R-02a・spec U-11。上の「承認なしで通るようにならない」は skill 実行中を除く)
 - したがって AD-041 (g) の「escalation-neutral (権限面・tool 集合・env を変えない)」には厳密には当たらない。読み取りの範囲が広がる分を、次の 2 つの条件で閉じる (AD-064 Decision 2):
   1. 値は **登録済みの作業フォルダ** (R-1 / R-2 で利用者が明示的に登録した場所) に限る。renderer は folder id だけを送る
   2. パスは **main が** 選択ランタイムの名前空間に変換した値だけ。agents は形を再検査し、renderer 由来の文字列は通らない

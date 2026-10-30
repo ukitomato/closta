@@ -323,6 +323,30 @@ describe('LaunchDialog', () => {
     )
   })
 
+  it('既定 Provider での起動の確認中に名前欄で Enter を押しても起動しない (pr-gate H-004)', async () => {
+    install()
+    const session = fakeSession({
+      lastConfig: {
+        folderId: 'win-proj',
+        runtimeId: 'wsl:Debian',
+        providerId: 'p-far',
+        modelId: null,
+        effort: null,
+        permissionMode: 'default',
+        ...DEFAULT_EXTRA_AXES,
+        sessionName: null
+      }
+    })
+    render(<LaunchDialog session={session} />)
+    await choose(1, 'wsl:Ubuntu')
+    await waitFor(() => expect(screen.getByRole('status', { name: '既定に戻した軸' })).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: '起動' }))
+    screen.getByRole('alertdialog', { name: '既定 Provider での起動の確認' })
+    const name = screen.getByRole('textbox', { name: 'セッション名' })
+    fireEvent.keyDown(name, { key: 'Enter' })
+    expect(session.launch).not.toHaveBeenCalled()
+  })
+
   it('確認を拒否するとダイアログに戻り、起動しない', async () => {
     install()
     const session = fakeSession({
@@ -1708,6 +1732,42 @@ describe('LaunchDialog — 追加ディレクトリ (024)', () => {
     await waitFor(() => expect(addSelect()).toBeDisabled())
   })
 
+  it('外した項目が往復で戻って 10 件を超えたら起動できない。追加は見えている項目が基準 (pr-gate H-002)', async () => {
+    const ids = Array.from({ length: 12 }, (_, i) => `f${i}`)
+    install({
+      listFolders: async () => ({
+        ...folders,
+        folders: ids.map((id) => folderDto(id, { kind: 'wsl', distroName: 'Ubuntu' }))
+      })
+    })
+    // 下書きの初期値に 11 件 (往復で戻った状態と同じ) を入れる。
+    const session = fakeSession({
+      lastConfig: {
+        folderId: 'f0',
+        runtimeId: 'wsl:Ubuntu',
+        providerId: null,
+        modelId: null,
+        effort: null,
+        permissionMode: 'default',
+        ...DEFAULT_EXTRA_AXES,
+        additionalDirectoryIds: ids.slice(1, 12),
+        sessionName: null
+      }
+    })
+    render(<LaunchDialog session={session} />)
+    await waitFor(() => expect(screen.getByTestId('directories-over-limit')).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: '起動' })).toBeDisabled()
+    expect(addSelect()).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: '外す: f1' }))
+    await waitFor(() => expect(screen.queryByTestId('directories-over-limit')).toBeNull())
+    await waitFor(() => expect(screen.getByRole('button', { name: '起動' })).toBeEnabled())
+    fireEvent.click(screen.getByRole('button', { name: '起動' }))
+    expect(session.launch).toHaveBeenCalledWith(
+      expect.objectContaining({ additionalDirectoryIds: ids.slice(2, 12) }),
+      expect.anything()
+    )
+  })
+
   it('Win32 にすると WSL のフォルダが外れて通知が出て、起動は押せる。ランタイムを戻すと戻る', async () => {
     install({ listFolders: async () => many, listRuntimes: async () => withWin32 })
     const session = fakeSession()
@@ -1973,6 +2033,21 @@ describe('LaunchDialog — 上限 (024)', () => {
     expect(screen.getByText('費用は 0.01〜1000 の範囲で入力してください')).toBeInTheDocument()
     fireEvent.change(budgetInput(), { target: { value: '' } })
     expect(startBtn()).toBeEnabled()
+  })
+
+  it('上限の入力が不正な間はプリセットを保存できず、理由を示す (pr-gate H-003)', async () => {
+    install()
+    render(<LaunchDialog session={fakeSession()} />)
+    await pickWork()
+    fireEvent.change(screen.getByRole('textbox', { name: '名前を付けて保存' }), {
+      target: { value: 'p1' }
+    })
+    expect(screen.getByRole('button', { name: '保存' })).toBeEnabled()
+    fireEvent.change(turnsInput(), { target: { value: '0' } })
+    expect(screen.getByRole('button', { name: '保存' })).toBeDisabled()
+    expect(screen.getByTestId('preset-limits-invalid')).toBeInTheDocument()
+    fireEvent.change(turnsInput(), { target: { value: '5' } })
+    expect(screen.getByRole('button', { name: '保存' })).toBeEnabled()
   })
 
   it.each([

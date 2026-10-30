@@ -74,7 +74,7 @@
 
 - [x] **I. パス操作は `domain` のパス API 経由** — 追加ディレクトリのパスは main が `resolveFolderRuntime` (domain/workspace) で作る。agents の形の検査は `makeHostPath` (domain) と POSIX の値の規則 (data-model §5.2)。renderer はパスを作らない (FR-001)
 - [x] **II. プラットフォーム分岐は `src/main/infra/runtime/` の内側** — WSL / Win32 の違いはランタイムの種類 (DTO) と launch spec の種類で分かれる。`process.platform` の分岐を足さない
-- [x] **III. 権限モードは capability に従う** — 権限モードは安全 3 値のまま。追加ディレクトリは読み取りの範囲を広げ、そのフォルダの skills を読み込ませるが、登録フォルダの main の変換値に限る (登録フォルダの設定一式を作業フォルダと同じく信頼する。AD-064 Decision 2 と訂正節・research R-02 / R-02a・spec U-10)。書き込みは今どおり権限モードと `canUseTool`
+- [x] **III. 権限モードは capability に従う** — 権限モードは安全 3 値のまま。追加ディレクトリは読み取りの範囲を広げ、そのフォルダの skills を読み込ませるが、登録フォルダの main の変換値に限る (登録フォルダの設定一式を作業フォルダと同じく信頼する。AD-064 Decision 2 と訂正節・research R-02 / R-02a・spec U-10)。書き込みは今どおり権限モードと `canUseTool` (追加ディレクトリの skill の `allowed-tools` が動作中に省く承認を除く。spec U-11)
 - [x] **IV. 通信は Agent SDK 経由** — `query()` の options の 4 キーだけ。CLI の引数を自前で組まない (SDK が `--add-dir` などに変える)
 - [x] **V. 長期資格情報を永続化しない** — プリセットに足すのは folder id と数だけ
 - [x] **VI. 永続環境を構築・変更しない** — 利用者の環境を変えない。`presets.json` (アプリのデータ) の版を上げるだけ

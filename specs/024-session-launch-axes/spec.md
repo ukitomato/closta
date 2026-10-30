@@ -44,6 +44,7 @@ linear: null
 | U-8 | X-9 の再開では、追加ディレクトリと上限は選び直せる軸 (会話の所在を決めない)。稼働中の行からは元の起動設定の値、過去の行からは既定を初期値にする。名前の軸は再開の形では出さない (SDK は再開で記録済みの名前を優先する) | FR-012 |
 | U-9 | `launch-usage.json` は変えない (起動元の 2 つの回数だけで、新しい軸を記録しない) | FR-014 |
 | U-10 | 追加ディレクトリの `.claude/skills/` が Claude Code に読み込まれる (と、利用者が環境変数で有効にしたときの CLAUDE.md) ことを受け入れ、登録フォルダの設定一式を作業フォルダに選んだときと同じく信頼する。`settingSources` を絞る・skills を止める手当ては足さない (2026-10-30 design-gate H-004 の修正で夜間の規則により推奨案を採用) | AD-064 訂正 / research R-02 |
+| U-11 | 追加ディレクトリの skills の `allowed-tools` は、その skill が動く間の承認を省く。「書き込みは今どおり権限モードと承認で決まる」は skill 実行中を除く、と正す。登録フォルダを信頼する U-10 の範囲として受け入れ、手当ては足さない (2026-10-30 pr-gate H-001 の修正で夜間の規則により推奨案を採用) | AD-064 訂正 / research R-02a |
 | ADR | AD-064 (plan で起こし、夜間の規則で推奨案を採用して accepted にする): AD-041 (g) の「escalation-neutral のキーだけを足す」の読み替え — `QUERY_OPTION_KEYS` に `additionalDirectories` / `maxTurns` / `maxBudgetUsd` / `title` を足す (12 → 16)。`additionalDirectories` は権限モード・tool の集合・env を変えないが、Claude が扱えるディレクトリを広げるので、「登録済みの作業フォルダに限り、main がランタイムのパスに変換した値だけ」を条件に許す。`SessionLaunchConfig` の形を 6 軸から広げる (glossary の SessionLaunchConfig の「前 6 軸」「6 軸の形は変えない」と `resume.ts` のコメントの読み替え。後者は AD-059 の本文ではなく X-9 が glossary に書いた記述。plan「設計後の見直し」2) | `docs/decisions/` |
 
 各 U-n の検討した案・採った案は「Clarifications」の節に置く。
@@ -51,7 +52,7 @@ linear: null
 ## 本 feature の位置づけ
 
 - **session の feature で、domain (起動設定の形と依存解決)・main (検証・起動ゲート・registry・プリセットの store)・agents (query の options)・renderer (起動ダイアログ・プリセット・概要のタブ) に触れる** (targets は both)。`QUERY_OPTION_KEYS` を 12 から 16 に増やす (AD-064)
-- **権限モードは安全 3 値のまま。** 追加ディレクトリは扱える範囲を広げるが、権限モード・承認の経路 (`canUseTool`)・tool の集合を変えない。書き込みは今どおり権限モードと承認で決まる
+- **権限モードは安全 3 値のまま。** 追加ディレクトリは扱える範囲を広げるが、権限モード・承認の経路 (`canUseTool`)・tool の集合を変えない。書き込みは今どおり権限モードと承認で決まる (追加ディレクトリの skill が `allowed-tools` で省く承認を除く。U-11)
 - **パスを renderer で組み立てない。** 追加ディレクトリはフォルダの id で選ぶので、AD-041 (h) が X-6 に預けた「パスの入力を renderer に足す」(`tests/rule-fixtures/expected.mjs` の `ui-path-concat`) は生じない (U-2)
 - **Principle X のまま。** 名前の正本は Claude Code の transcript (custom-title)。Closta は起動の名前を registry (メモリ) に持つだけで、永続化しない
 

@@ -74,3 +74,10 @@ src/renderer/src/features/shell/OverviewTab.test.tsx
 src/renderer/src/features/shell/OverviewTab.tsx
 src/renderer/src/test-support/app-shell-harness.tsx
 tests/rule-fixtures/expected.mjs
+docs/decisions/0064-launch-config-additional-directories-limits-and-title.md
+specs/024-session-launch-axes/spec.md
+specs/024-session-launch-axes/plan.md
+specs/024-session-launch-axes/research.md
+src/renderer/src/features/session/LaunchDialog.tsx
+src/renderer/src/features/session/LaunchDialog.test.tsx
+src/renderer/src/features/session/labels.ts
