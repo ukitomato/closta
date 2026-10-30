@@ -257,9 +257,9 @@ export async function setup(
         modelId: null,
         effort: null,
         permissionMode: 'default',
-        ...options.launchConfig,
         ...DEFAULT_EXTRA_AXES,
-        sessionName: null
+        sessionName: null,
+        ...options.launchConfig
       },
       '案件フォルダ'
     )

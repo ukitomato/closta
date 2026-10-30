@@ -1623,3 +1623,442 @@ describe('LaunchDialog — Win32Runtime (X-8)', () => {
     expect(screen.getByRole('button', { name: '起動' })).toBeDisabled()
   })
 })
+
+/** 024 US-1 / FE-010: 追加ディレクトリの軸 (SC-005 の追加ディレクトリの部分)。 */
+describe('LaunchDialog — 追加ディレクトリ (024)', () => {
+  const AXE_RULES = { rules: { 'color-contrast': { enabled: false } } }
+  const many: FolderListDTO = {
+    ...folders,
+    folders: [
+      ...folders.folders,
+      folderDto('ubuntu-lib', { kind: 'wsl', distroName: 'Ubuntu' }),
+      folderDto('win-lib', { kind: 'windows' })
+    ]
+  }
+  const win32 = (): RuntimeDescriptorDTO => ({
+    ...runtimeDto('x'),
+    id: 'host',
+    kind: 'win32',
+    distroName: null,
+    wslVersion: null,
+    hasPathMapping: false,
+    claudeStatus: 'found',
+    claudeOverridden: false
+  })
+  const withWin32: RuntimeListDTO = {
+    ...runtimes,
+    runtimes: [runtimeDto('Ubuntu'), win32()]
+  }
+  const addSelect = (): HTMLSelectElement =>
+    screen.getByRole('combobox', { name: 'フォルダを追加' }) as HTMLSelectElement
+  const optionValues = (): string[] => [...addSelect().options].map((o) => o.value)
+
+  async function pickWork(id: string, runtime = 'wsl:Ubuntu'): Promise<void> {
+    await choose(0, id)
+    await choose(1, runtime)
+  }
+  async function add(id: string): Promise<void> {
+    await waitFor(() => expect(optionValues()).toContain(id))
+    fireEvent.change(addSelect(), { target: { value: id } })
+  }
+
+  it('選択肢に作業フォルダ自身と選択済みが出ず、パスの入力欄が無い。違反 0', async () => {
+    install({ listFolders: async () => many })
+    const { container } = render(<LaunchDialog session={fakeSession()} />)
+    await pickWork('ubuntu-proj')
+    await waitFor(() => expect(optionValues()).toContain('ubuntu-lib'))
+    expect(optionValues()).toEqual(['', 'win-proj', 'ubuntu-lib', 'win-lib'])
+    await add('ubuntu-lib')
+    await waitFor(() => expect(optionValues()).not.toContain('ubuntu-lib'))
+    expect(screen.getByRole('list', { name: '追加ディレクトリ' })).toHaveTextContent('ubuntu-lib')
+    // 追加ディレクトリの部品にパスの入力欄が無い (上限の入力は別の部品)
+    expect(
+      screen.getByTestId('additional-directories').querySelectorAll('input[type=text]')
+    ).toHaveLength(0)
+    expect((await axe(container, AXE_RULES)).violations).toEqual([])
+  })
+
+  it('送る config の additionalDirectoryIds は選んだ項目。外すと消える', async () => {
+    install({ listFolders: async () => many })
+    const session = fakeSession()
+    render(<LaunchDialog session={session} />)
+    await pickWork('ubuntu-proj')
+    await add('ubuntu-lib')
+    await add('win-lib')
+    fireEvent.click(screen.getByRole('button', { name: '外す: ubuntu-lib' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: '起動' })).toBeEnabled())
+    fireEvent.click(screen.getByRole('button', { name: '起動' }))
+    expect(session.launch).toHaveBeenCalledWith(
+      expect.objectContaining({ additionalDirectoryIds: ['win-lib'] }),
+      'manual'
+    )
+  })
+
+  it('10 件で「フォルダを追加」が押せない', async () => {
+    const ids = Array.from({ length: 12 }, (_, i) => `f${i}`)
+    install({
+      listFolders: async () => ({
+        ...folders,
+        folders: ids.map((id) => folderDto(id, { kind: 'wsl', distroName: 'Ubuntu' }))
+      })
+    })
+    render(<LaunchDialog session={fakeSession()} />)
+    await pickWork('f0')
+    for (const id of ids.slice(1, 11)) await add(id)
+    await waitFor(() => expect(addSelect()).toBeDisabled())
+  })
+
+  it('Win32 にすると WSL のフォルダが外れて通知が出て、起動は押せる。ランタイムを戻すと戻る', async () => {
+    install({ listFolders: async () => many, listRuntimes: async () => withWin32 })
+    const session = fakeSession()
+    render(<LaunchDialog session={session} />)
+    await pickWork('win-proj', 'wsl:Ubuntu')
+    await add('ubuntu-lib')
+    await add('win-lib')
+    fireEvent.change(screen.getByRole('combobox', { name: 'ランタイム' }), {
+      target: { value: 'host' }
+    })
+    await waitFor(() =>
+      expect(screen.getByRole('status', { name: '外した追加ディレクトリ' })).toHaveTextContent(
+        '追加ディレクトリ ubuntu-lib はこのランタイムから使えないため外しました'
+      )
+    )
+    expect(screen.queryByRole('button', { name: '外す: ubuntu-lib' })).toBeNull()
+    await waitFor(() => expect(screen.getByRole('button', { name: '起動' })).toBeEnabled())
+    fireEvent.click(screen.getByRole('button', { name: '起動' }))
+    expect(session.launch).toHaveBeenCalledWith(
+      expect.objectContaining({ runtimeId: 'host', additionalDirectoryIds: ['win-lib'] }),
+      'manual'
+    )
+    fireEvent.change(screen.getByRole('combobox', { name: 'ランタイム' }), {
+      target: { value: 'wsl:Ubuntu' }
+    })
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '外す: ubuntu-lib' })).toBeInTheDocument()
+    )
+    expect(screen.queryByRole('status', { name: '外した追加ディレクトリ' })).toBeNull()
+  })
+
+  it('DTO が unreachable の項目も外して通知する (起動は止めない)', async () => {
+    install({
+      listFolders: async () => many,
+      resolveFolderRuntime: async (folderId) =>
+        folderId === 'win-lib' ? unreachableDto('path-not-mapped') : resolutionDto('native')
+    })
+    render(<LaunchDialog session={fakeSession()} />)
+    await pickWork('ubuntu-proj')
+    await add('win-lib')
+    await waitFor(() =>
+      expect(screen.getByRole('status', { name: '外した追加ディレクトリ' })).toHaveTextContent(
+        'win-lib'
+      )
+    )
+    await waitFor(() => expect(screen.getByRole('button', { name: '起動' })).toBeEnabled())
+  })
+
+  it('プリセットの適用で作業フォルダと同じになった項目は same-as-folder の通知', async () => {
+    install({
+      listFolders: async () => many,
+      listPresets: async () => [
+        {
+          id: 'p1',
+          name: '同じ',
+          config: {
+            folderId: 'ubuntu-lib',
+            runtimeId: 'wsl:Ubuntu',
+            providerId: null,
+            modelId: null,
+            effort: null,
+            permissionMode: 'default',
+            ...DEFAULT_EXTRA_AXES,
+            additionalDirectoryIds: ['ubuntu-lib']
+          },
+          updatedAt: NOW
+        }
+      ]
+    })
+    render(<LaunchDialog session={fakeSession()} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: '適用' })).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: '適用' }))
+    await waitFor(() =>
+      expect(screen.getByRole('status', { name: '外した追加ディレクトリ' })).toHaveTextContent(
+        '追加ディレクトリ ubuntu-lib は作業フォルダと同じため外しました'
+      )
+    )
+  })
+
+  it('登録解除の項目は「(削除されたフォルダ)」で通知する', async () => {
+    install({
+      listPresets: async () => [
+        {
+          id: 'p1',
+          name: '消えた',
+          config: {
+            folderId: 'ubuntu-proj',
+            runtimeId: 'wsl:Ubuntu',
+            providerId: null,
+            modelId: null,
+            effort: null,
+            permissionMode: 'default',
+            ...DEFAULT_EXTRA_AXES,
+            additionalDirectoryIds: ['gone']
+          },
+          updatedAt: NOW
+        }
+      ]
+    })
+    render(<LaunchDialog session={fakeSession()} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: '適用' })).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: '適用' }))
+    await waitFor(() =>
+      expect(screen.getByRole('status', { name: '外した追加ディレクトリ' })).toHaveTextContent(
+        '追加ディレクトリ (削除されたフォルダ) は登録が解除されたため外しました'
+      )
+    )
+  })
+
+  it('WSL のランタイムで越境する項目に警告を出す。起動は押せる', async () => {
+    install({
+      listFolders: async () => many,
+      resolveFolderRuntime: async (folderId) =>
+        folderId === 'win-lib'
+          ? resolutionDto('cross', 'Windows 側を経由するため遅くなります。')
+          : resolutionDto('native')
+    })
+    render(<LaunchDialog session={fakeSession()} />)
+    await pickWork('ubuntu-proj')
+    await add('win-lib')
+    await waitFor(() =>
+      expect(screen.getByTestId('directory-cross-boundary-warning')).toHaveTextContent(
+        '追加ディレクトリ win-lib: '
+      )
+    )
+    expect(screen.getByRole('button', { name: '起動' })).toBeEnabled()
+  })
+
+  it('DTO の取得中は起動を押せない。IPC の失敗は注記だけで起動できる', async () => {
+    install({
+      listFolders: async () => many,
+      resolveFolderRuntime: async (folderId) =>
+        folderId === 'win-lib' ? never<FolderRuntimeResolutionDTO>() : resolutionDto('native')
+    })
+    render(<LaunchDialog session={fakeSession()} />)
+    await pickWork('ubuntu-proj')
+    await waitFor(() => expect(screen.getByRole('button', { name: '起動' })).toBeEnabled())
+    await add('win-lib')
+    await waitFor(() => expect(screen.getByRole('button', { name: '起動' })).toBeDisabled())
+  })
+
+  it('IPC の失敗で「判定できません」の注記が出て起動は押せる', async () => {
+    install({
+      listFolders: async () => many,
+      resolveFolderRuntime: async (folderId) => {
+        if (folderId === 'win-lib') throw new Error('ipc')
+        return resolutionDto('native')
+      }
+    })
+    render(<LaunchDialog session={fakeSession()} />)
+    await pickWork('ubuntu-proj')
+    await add('win-lib')
+    await waitFor(() =>
+      expect(screen.getByTestId('directory-cross-boundary-unknown')).toBeInTheDocument()
+    )
+    expect(screen.getByRole('button', { name: '起動' })).toBeEnabled()
+  })
+})
+
+/** 024 US-2 / FE-020: ターン数と費用の上限 (SC-005 の上限の部分)。 */
+describe('LaunchDialog — 上限 (024)', () => {
+  const turnsInput = (): HTMLInputElement =>
+    screen.getByRole('textbox', { name: 'ターン数の上限' }) as HTMLInputElement
+  const budgetInput = (): HTMLInputElement =>
+    screen.getByRole('textbox', { name: '費用の上限 (USD)' }) as HTMLInputElement
+  const startBtn = (): HTMLElement => screen.getByRole('button', { name: '起動' })
+  const baseConfig: SessionLaunchConfig = {
+    folderId: 'ubuntu-proj',
+    runtimeId: 'wsl:Ubuntu',
+    providerId: null,
+    modelId: null,
+    effort: null,
+    permissionMode: 'default',
+    ...DEFAULT_EXTRA_AXES,
+    sessionName: null
+  }
+
+  async function pickWork(): Promise<void> {
+    await choose(0, 'ubuntu-proj')
+    await choose(1, 'wsl:Ubuntu')
+    await waitFor(() => expect(startBtn()).toBeEnabled())
+  }
+
+  it('既定はどちらも「上限なし」(空) で、送る config の 2 キーが null。違反 0', async () => {
+    install()
+    const session = fakeSession()
+    const { container } = render(<LaunchDialog session={session} />)
+    await pickWork()
+    expect(turnsInput()).toHaveValue('')
+    expect(turnsInput()).toHaveAttribute('placeholder', '上限なし')
+    expect(budgetInput()).toHaveAttribute('inputmode', 'decimal')
+    expect((await axe(container, { rules: { 'color-contrast': { enabled: false } } })).violations).toEqual([])
+    fireEvent.click(startBtn())
+    expect(session.launch).toHaveBeenCalledWith(
+      expect.objectContaining({ maxTurns: null, maxBudgetUsd: null }),
+      'manual'
+    )
+  })
+
+  it('入力した数で起動する', async () => {
+    install()
+    const session = fakeSession()
+    render(<LaunchDialog session={session} />)
+    await pickWork()
+    fireEvent.change(turnsInput(), { target: { value: ' 30 ' } })
+    fireEvent.change(budgetInput(), { target: { value: '2.5' } })
+    await waitFor(() => expect(startBtn()).toBeEnabled())
+    fireEvent.click(startBtn())
+    expect(session.launch).toHaveBeenCalledWith(
+      expect.objectContaining({ maxTurns: 30, maxBudgetUsd: 2.5 }),
+      'manual'
+    )
+  })
+
+  it('不正な入力で起動が押せず文言が出る。直すと押せる', async () => {
+    install()
+    render(<LaunchDialog session={fakeSession()} />)
+    await pickWork()
+    fireEvent.change(turnsInput(), { target: { value: '1001' } })
+    expect(startBtn()).toBeDisabled()
+    expect(turnsInput()).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByText('ターン数は 1〜1000 の整数で入力してください')).toBeInTheDocument()
+    fireEvent.change(turnsInput(), { target: { value: '1000' } })
+    expect(startBtn()).toBeEnabled()
+    fireEvent.change(budgetInput(), { target: { value: '0.005' } })
+    expect(startBtn()).toBeDisabled()
+    expect(screen.getByText('費用は 0.01〜1000 の範囲で入力してください')).toBeInTheDocument()
+    fireEvent.change(budgetInput(), { target: { value: '' } })
+    expect(startBtn()).toBeEnabled()
+  })
+
+  it.each([
+    ['拒否の後', { phase: 'rejected', rejectReason: 'launch-failed' }],
+    ['失敗の後', { phase: 'entry' }]
+  ] as const)('%s に開き直すと lastConfig の上限が入力欄に入り、送る値も同じ', async (_n, over) => {
+    install()
+    const session = fakeSession({
+      ...over,
+      lastConfig: { ...baseConfig, maxTurns: 30, maxBudgetUsd: 0.07 }
+    })
+    render(<LaunchDialog session={session} />)
+    await waitFor(() => expect(turnsInput()).toHaveValue('30'))
+    expect(budgetInput()).toHaveValue('0.07')
+    await waitFor(() => expect(startBtn()).toBeEnabled())
+    fireEvent.click(startBtn())
+    expect(session.launch).toHaveBeenCalledWith(
+      expect.objectContaining({ maxTurns: 30, maxBudgetUsd: 0.07 }),
+      expect.anything()
+    )
+  })
+
+  it('lastConfig が null なら空', async () => {
+    install()
+    render(<LaunchDialog session={fakeSession()} />)
+    await waitFor(() => expect(turnsInput()).toHaveValue(''))
+    expect(budgetInput()).toHaveValue('')
+  })
+})
+
+/** 024 US-3 / FE-030: 起動のときのセッション名 (SC-005 の名前の部分)。 */
+describe('LaunchDialog — セッション名 (024)', () => {
+  const nameInput = (): HTMLInputElement =>
+    screen.getByRole('textbox', { name: 'セッション名' }) as HTMLInputElement
+  const startBtn = (): HTMLElement => screen.getByRole('button', { name: '起動' })
+  const baseConfig: SessionLaunchConfig = {
+    folderId: 'ubuntu-proj',
+    runtimeId: 'wsl:Ubuntu',
+    providerId: null,
+    modelId: null,
+    effort: null,
+    permissionMode: 'default',
+    ...DEFAULT_EXTRA_AXES,
+    sessionName: null
+  }
+
+  async function pickWork(): Promise<void> {
+    await choose(0, 'ubuntu-proj')
+    await choose(1, 'wsl:Ubuntu')
+    await waitFor(() => expect(startBtn()).toBeEnabled())
+  }
+
+  it('既定は空 (プレースホルダ「自動で付ける」)。名前を入れて起動すると trim した値を送る。違反 0', async () => {
+    install()
+    const session = fakeSession()
+    const { container } = render(<LaunchDialog session={session} />)
+    await pickWork()
+    expect(nameInput()).toHaveValue('')
+    expect(nameInput()).toHaveAttribute('placeholder', '自動で付ける')
+    expect((await axe(container, { rules: { 'color-contrast': { enabled: false } } })).violations).toEqual([])
+    fireEvent.change(nameInput(), { target: { value: '  ログインの API 修正 ' } })
+    fireEvent.click(startBtn())
+    expect(session.launch).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionName: 'ログインの API 修正' }),
+      'manual'
+    )
+  })
+
+  it('空なら null で送る', async () => {
+    install()
+    const session = fakeSession()
+    render(<LaunchDialog session={session} />)
+    await pickWork()
+    fireEvent.change(nameInput(), { target: { value: '   ' } })
+    fireEvent.click(startBtn())
+    expect(session.launch).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionName: null }),
+      'manual'
+    )
+  })
+
+  it('IME の変換中の Enter では起動せず、変換外の Enter で起動する', async () => {
+    install()
+    const session = fakeSession()
+    render(<LaunchDialog session={session} />)
+    await pickWork()
+    fireEvent.change(nameInput(), { target: { value: '調査' } })
+    fireEvent.keyDown(nameInput(), { key: 'Enter', isComposing: true })
+    fireEvent.keyDown(nameInput(), { key: 'Enter', keyCode: 229 })
+    expect(session.launch).not.toHaveBeenCalled()
+    fireEvent.keyDown(nameInput(), { key: 'Enter' })
+    expect(session.launch).toHaveBeenCalledTimes(1)
+  })
+
+  it('不正な名前で起動が押せず 023 の文言が出る。直すと押せる', async () => {
+    install()
+    render(<LaunchDialog session={fakeSession()} />)
+    await pickWork()
+    fireEvent.change(nameInput(), { target: { value: 'a'.repeat(101) } })
+    expect(startBtn()).toBeDisabled()
+    expect(nameInput()).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByText('1〜100 文字で、改行を含めずに入力してください')).toBeInTheDocument()
+    fireEvent.change(nameInput(), { target: { value: 'a'.repeat(100) } })
+    expect(startBtn()).toBeEnabled()
+  })
+
+  it.each([
+    ['拒否の後', { phase: 'rejected', rejectReason: 'launch-failed' }],
+    ['失敗の後', { phase: 'entry' }]
+  ] as const)('%s に開き直すと名前の入力に前回の名前が入る', async (_n, over) => {
+    install()
+    const session = fakeSession({
+      ...over,
+      lastConfig: { ...baseConfig, sessionName: '前回の名前' }
+    })
+    render(<LaunchDialog session={session} />)
+    await waitFor(() => expect(nameInput()).toHaveValue('前回の名前'))
+    await waitFor(() => expect(startBtn()).toBeEnabled())
+    fireEvent.click(startBtn())
+    expect(session.launch).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionName: '前回の名前' }),
+      expect.anything()
+    )
+  })
+})

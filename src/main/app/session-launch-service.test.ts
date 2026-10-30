@@ -946,6 +946,29 @@ describe('setName (023 / BE-034)', () => {
   })
 })
 
+describe('起動の名前 (024 / BE-030)', () => {
+  it('名前つきの起動は受け付けられ、改名 (setName) で上書きできる。名前をログに出さない', async () => {
+    const s = liveSetup()
+    const o = await s.service.launch({ ...cfg(), sessionName: 'ログインの API 修正' })
+    expect(o.status).toBe('launching')
+    if (o.status !== 'launching') return
+    s.connection.status([upd(o.sessionId, { state: 'done' })])
+    s.service.setName(o.sessionId, '別の名前')
+    // 名前は状態通知の値に出ない (023)。
+    for (const batch of s.statuses) {
+      for (const u of batch) expect(Object.keys(u)).not.toContain('name')
+    }
+    expect(JSON.stringify(s.logs)).not.toContain('ログインの API 修正')
+    expect(JSON.stringify(s.logs)).not.toContain('別の名前')
+  })
+
+  it('名前なしの起動も通る (名前は null)', async () => {
+    const s = liveSetup()
+    const o = await s.service.launch(cfg())
+    expect(o.status).toBe('launching')
+  })
+})
+
 describe('setPermissionMode (023 / contracts C-1)', () => {
   it('未知の sessionId は unknown-session で、制御を送らない', async () => {
     const s = liveSetup()

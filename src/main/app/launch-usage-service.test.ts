@@ -88,6 +88,13 @@ describe('launch-usage-service — 書き込み', () => {
     expect(await svc.summary()).toEqual({ status: 'ok', preset: 1, manual: 0, days: 30 })
   })
 
+  it('書き出す値のキーは起動元の 2 つの回数だけ (024 FR-014。新しい軸・名前・上限で変わらない)', async () => {
+    const store = fakeStore()
+    await service(store).record('manual')
+    const counts = store.saved.at(-1)?.days.get(key('2026-10-04'))
+    expect(Object.keys(counts ?? {}).sort()).toEqual(['manual', 'preset'])
+  })
+
   it('並行の 2 回で 2 増える (直列化)', async () => {
     const store = fakeStore({
       // 書き込みに時間がかかる間に次の record が割り込まないことを見る。

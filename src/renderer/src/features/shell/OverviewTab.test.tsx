@@ -5,12 +5,18 @@ import { axe } from 'vitest-axe'
 
 import type { SessionEvent } from '@domain/session/agent-session'
 import type { PermissionModeKey } from '@domain/session/meter'
+import type { WorkspaceFolderDTO } from '@domain/workspace/dto'
 
 import { PERMISSION_MODE_NAMES } from '@/features/chat/labels'
-import { LIVE_SETTING_LABELS, PERMISSION_MODE_LABELS } from '@/features/session/labels'
+import {
+  EXTRA_AXES_LABELS,
+  LIVE_SETTING_LABELS,
+  PERMISSION_MODE_LABELS
+} from '@/features/session/labels'
 import {
   A,
   B,
+  folder,
   registerAppShellHooks,
   selectPast,
   selectRunning,
@@ -47,6 +53,69 @@ function ddOf(overview: HTMLElement, label: string): HTMLElement | null {
   const dt = Array.from(overview.querySelectorAll('dt')).find((el) => el.textContent === label)
   return (dt?.nextElementSibling as HTMLElement | null | undefined) ?? null
 }
+
+describe('「概要」の追加ディレクトリと上限の行 (024 FR-013 / SC-006)', () => {
+  const second = (): WorkspaceFolderDTO => ({
+    ...folder('資料'),
+    id: 'folder-2'
+  })
+
+  it('既定は「なし」「上限なし」', async () => {
+    await setup({ ids: [A] })
+    await selectRunning(0)
+    const overview = await openOverview()
+    expect(ddOf(overview, EXTRA_AXES_LABELS.additionalDirectories)).toHaveTextContent(
+      EXTRA_AXES_LABELS.overviewNone
+    )
+    expect(ddOf(overview, EXTRA_AXES_LABELS.maxTurns)).toHaveTextContent(
+      EXTRA_AXES_LABELS.overviewUnlimited
+    )
+    expect(ddOf(overview, EXTRA_AXES_LABELS.maxBudgetUsd)).toHaveTextContent(
+      EXTRA_AXES_LABELS.overviewUnlimited
+    )
+    expect((await axe(overview, AXE_RULES)).violations).toEqual([])
+  })
+
+  it('1 件・2 件は表示名を「、」で並べ、登録解除の id は「(削除されたフォルダ)」', async () => {
+    await setup({
+      ids: [A],
+      folders: [folder(), second()],
+      launchConfig: { additionalDirectoryIds: ['folder-2'] }
+    })
+    await selectRunning(0)
+    const one = await openOverview()
+    expect(ddOf(one, EXTRA_AXES_LABELS.additionalDirectories)).toHaveTextContent('資料')
+  })
+
+  it('2 件と登録解除の id', async () => {
+    await setup({
+      ids: [A],
+      folders: [folder(), second()],
+      launchConfig: { additionalDirectoryIds: ['folder-2', 'gone'] }
+    })
+    await selectRunning(0)
+    const overview = await openOverview()
+    expect(ddOf(overview, EXTRA_AXES_LABELS.additionalDirectories)).toHaveTextContent(
+      `資料、${EXTRA_AXES_LABELS.deletedFolder}`
+    )
+    expect((await axe(overview, AXE_RULES)).violations).toEqual([])
+  })
+
+  it('上限の数は toFixed(2) か数', async () => {
+    await setup({ ids: [A], launchConfig: { maxTurns: 30, maxBudgetUsd: 2 } })
+    await selectRunning(0)
+    const overview = await openOverview()
+    expect(ddOf(overview, EXTRA_AXES_LABELS.maxTurns)).toHaveTextContent('30')
+    expect(ddOf(overview, EXTRA_AXES_LABELS.maxBudgetUsd)).toHaveTextContent('2.00')
+  })
+
+  it('0.07 は 0.07', async () => {
+    await setup({ ids: [A], launchConfig: { maxBudgetUsd: 0.07 } })
+    await selectRunning(0)
+    const overview = await openOverview()
+    expect(ddOf(overview, EXTRA_AXES_LABELS.maxBudgetUsd)).toHaveTextContent('0.07')
+  })
+})
 
 describe('「概要」の現在のモデル (023 / FR-006)', () => {
   const setCurrentModel = (

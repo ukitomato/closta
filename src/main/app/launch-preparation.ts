@@ -96,16 +96,46 @@ function folderFact(folder: WorkspaceFolder): FolderFact {
  * 起動設定の残りの軸を query() の options に写す (024 data-model §4.3)。WSL と Win32 の 2 つの段が同じ関数を呼ぶ。
  * 上限と名前は `null` (= 上限なし・名前なし) ならキーを載せない。再開の要求は `checkResumeRequest` が
  * `sessionName === null` を要求するので、再開の起動では `title` が載らない。値 (名前・パス) はログに出さない。
- * 追加ディレクトリの変換と spread は US-1 でこの関数に足す。
+ * 追加ディレクトリは変換後 (`resolveAdditionalDirectories`) が 1 件以上のときだけキーを載せる。
  */
 function extraAxisOptions(
-  config: SessionLaunchConfig
-): Pick<LaunchQueryOptions, 'maxTurns' | 'maxBudgetUsd' | 'title'> {
+  config: SessionLaunchConfig,
+  additionalDirectories: readonly string[]
+): Pick<LaunchQueryOptions, 'additionalDirectories' | 'maxTurns' | 'maxBudgetUsd' | 'title'> {
   return {
+    ...(additionalDirectories.length > 0 ? { additionalDirectories } : {}),
     ...(config.maxTurns !== null ? { maxTurns: config.maxTurns } : {}),
     ...(config.maxBudgetUsd !== null ? { maxBudgetUsd: config.maxBudgetUsd } : {}),
     ...(config.sessionName !== null ? { title: config.sessionName } : {})
   }
+}
+
+/**
+ * 追加ディレクトリの folder id を選択ランタイムのパスに変換する (024 data-model §4.2)。
+ * WSL (`expectedNamespace` = ランタイムの id) と Win32 (`'host'`) の 2 つの段が同じ関数を呼ぶ。
+ * 1 件でも変換できなければ `null` (→ invalid-config)。パスは作業フォルダの cwd と同じ値の形 (Principle I)。
+ */
+function resolveAdditionalDirectories(
+  ids: readonly string[],
+  folders: readonly WorkspaceFolder[],
+  runtime: RuntimeDescriptor,
+  expectedNamespace: string
+): readonly string[] | null {
+  const out: string[] = []
+  for (const id of ids) {
+    const item = folders.find((f) => f.id === id)
+    if (item === undefined) return null
+    const resolved = resolveFolderRuntime({ folder: item, runtime })
+    if (
+      resolved.reachability !== 'reachable' ||
+      resolved.runtimePath === null ||
+      resolved.runtimePath.namespace !== expectedNamespace
+    ) {
+      return null
+    }
+    out.push(resolved.runtimePath.value)
+  }
+  return out
 }
 
 export function createPrepareLaunch(
@@ -137,6 +167,8 @@ export function createPrepareLaunch(
     if (resolution.blockers.length > 0) return reject('invalid-config')
     if (resolution.resets.some((r) => r.requiresConfirmation)) return reject('needs-confirmation')
     if (resolution.resets.length > 0) return reject('invalid-config')
+    // 外す項目が 1 つでもあれば起動全体を拒否する (黙って外して続けない。024 FR-003)。
+    if (resolution.directoryResets.length > 0) return reject('invalid-config')
 
     // 2. 作業フォルダとランタイム。所在 WSL は U-3 でここに落ちる (到達不可)。
     const resolved = resolveFolderRuntime({ folder, runtime: win32 })
@@ -148,6 +180,13 @@ export function createPrepareLaunch(
       return reject('invalid-config')
     }
     const cwd = resolved.runtimePath.value
+    const additionalDirectories = resolveAdditionalDirectories(
+      resolution.draft.additionalDirectoryIds,
+      folders,
+      win32,
+      'host'
+    )
+    if (additionalDirectories === null) return reject('invalid-config')
 
     // 3. claude。検出の後に変わった場合も拒否する (起動の時点で在るかを取り直す)。
     const claudePath = win32.claudePath
@@ -198,7 +237,7 @@ export function createPrepareLaunch(
       ...(entry !== null ? { model: sdkModelOf(entry) } : {}),
       ...(config.effort !== null ? { effort: config.effort } : {}),
       ...(derived.settings !== undefined ? { settings: derived.settings } : {}),
-      ...extraAxisOptions(config)
+      ...extraAxisOptions(config, additionalDirectories)
     }
     const input: LaunchInput = { folder, runtime: win32, options }
     return { ok: true, input, spec }
@@ -239,6 +278,8 @@ export function createPrepareLaunch(
     }
     if (resolution.resets.some((r) => r.requiresConfirmation)) return reject('needs-confirmation')
     if (resolution.resets.length > 0) return reject('invalid-config')
+    // 外す項目が 1 つでもあれば起動全体を拒否する (黙って外して続けない。024 FR-003)。
+    if (resolution.directoryResets.length > 0) return reject('invalid-config')
 
     // 2. 起動ゲート (X-1)。
     const verified = await deps.verifyRunning(wsl.id)
@@ -250,6 +291,13 @@ export function createPrepareLaunch(
     if (cwd === null) return reject('launch-failed')
     const claudePath = wsl.claudePath ?? null
     if (claudePath === null) return reject('claude-not-found')
+    const additionalDirectories = resolveAdditionalDirectories(
+      resolution.draft.additionalDirectoryIds,
+      folders,
+      wsl,
+      wsl.id
+    )
+    if (additionalDirectories === null) return reject('invalid-config')
 
     // 3. env 導出。既定 Provider は X-1 の curated base だけで起動する (US-2 AC3 の確認を経た後)。
     const baseEnv = deps.baseEnv()
@@ -300,7 +348,7 @@ export function createPrepareLaunch(
       ...(entry !== null ? { model: sdkModelOf(entry) } : {}),
       ...(config.effort !== null ? { effort: config.effort } : {}),
       ...(derived.settings !== undefined ? { settings: derived.settings } : {}),
-      ...extraAxisOptions(config)
+      ...extraAxisOptions(config, additionalDirectories)
     }
     const input: LaunchInput = { folder, runtime: wsl, verified, options }
 

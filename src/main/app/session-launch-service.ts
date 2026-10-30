@@ -528,7 +528,7 @@ export function createSessionLaunchService(deps: SessionLaunchServiceDeps): Sess
         conversationId: resumeOf === null ? null : resumeOf.conversationId,
         axes,
         effort: config.effort,
-        name: null,
+        name: config.sessionName,
         changing: null,
         heldPrompts: [],
         liveModels: null

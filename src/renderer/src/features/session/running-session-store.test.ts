@@ -249,6 +249,16 @@ describe('running-session-store — 起動元 (O-3 FE-040 / 012 data-model §4�
     expect(h.store.getState().sessions[A]?.launchOrigin).toBe('preset')
   })
 
+  it('admit は起動の名前で name を初期化する。名前なしは null (024 FE-030)', async () => {
+    const h = harness()
+    await h.store.launch({ ...cfg(), sessionName: 'ログインの API 修正' }, null, 'manual')
+    expect(h.store.getState().sessions[A]?.name).toBe('ログインの API 修正')
+    detach?.() // 先のストアの window listener を外す (残すと後続の test の port を横取りして close する)
+    const h2 = harness()
+    await h2.store.launch(cfg(), null, 'manual')
+    expect(h2.store.getState().sessions[A]?.name).toBeNull()
+  })
+
   it('起動元の省略は manual (起動ダイアログを通らない呼び出し)', async () => {
     const h = harness()
     await h.store.launch(cfg())

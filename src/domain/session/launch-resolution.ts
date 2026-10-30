@@ -164,6 +164,29 @@ export function resolveLaunchAxes(draft: LaunchDraft, facts: LaunchFacts): Launc
     }
   }
 
+  // ── 追加ディレクトリ (項目ごと。024 data-model §2.3。順に評価し最初に当たった理由で外す) ──
+  const directoryResets: DirectoryReset[] = []
+  const additionalDirectoryIds: string[] = []
+  const seen = new Set<string>()
+  const unreachableIds = facts.unreachableFolderIds ?? []
+  for (const id of draft.additionalDirectoryIds) {
+    if (seen.has(id)) continue // 重複の後ろは黙って捨てる
+    seen.add(id)
+    const item = facts.folders.find((f) => f.id === id) ?? null
+    let reason: DirectoryResetReason | null = null
+    if (item === null) reason = 'unregistered'
+    else if (draft.folderId !== null && id === draft.folderId) reason = 'same-as-folder'
+    else if (
+      item.distroName !== null &&
+      runtime !== null &&
+      runtime.distroName !== item.distroName
+    ) {
+      reason = 'unreachable'
+    } else if (unreachableIds.includes(id)) reason = 'unreachable'
+    if (reason === null) additionalDirectoryIds.push(id)
+    else directoryResets.push({ folderId: id, reason })
+  }
+
   return {
     draft: {
       folderId,
@@ -172,12 +195,12 @@ export function resolveLaunchAxes(draft: LaunchDraft, facts: LaunchFacts): Launc
       modelId,
       effort,
       permissionMode: draft.permissionMode,
-      additionalDirectoryIds: draft.additionalDirectoryIds,
+      additionalDirectoryIds,
       maxTurns: draft.maxTurns,
       maxBudgetUsd: draft.maxBudgetUsd
     },
     resets,
-    directoryResets: [],
+    directoryResets,
     blockers
   }
 }

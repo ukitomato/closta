@@ -198,7 +198,7 @@ const CONFIG = {
   sessionName: null
 }
 // プリセットは名前を持たない 9 キー (024 FR-010)
-const { sessionName: _omitted, ...PRESET_CONFIG } = CONFIG
+const PRESET_CONFIG = (({ sessionName, ...rest }) => (void sessionName, rest))(CONFIG)
 
 describe('handleFetchMoreSessions — 節 A の各行', () => {
   it('既知の `targetKey` と妥当な `offset` なら取得する', async () => {
