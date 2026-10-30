@@ -1,19 +1,24 @@
 {
     "gate": "code",
-    "run": "2026-10-30T00:00:00+09:00",
+    "run": "2026-10-30T02:52:08.528Z",
     "spec_dir": "specs/024-session-launch-axes",
     "spec_id": "024-session-launch-axes",
-    "iter": 1,
+    "iter": 2,
     "base_commit": "2bba8f840c16d67c67c0fe87f2e73d9168757def",
+    "entry_status": "reviewing",
     "severity_counts": {
         "critical": 0,
-        "high": 333,
+        "high": 0,
         "medium": 3,
-        "low": 8,
+        "low": 5,
         "must_fix": 0
     },
     "must_fix_findings": [],
     "touched_files": [
+        {
+            "path": "docs/decisions/0064-launch-config-additional-directories-limits-and-title.md",
+            "sha": "4793a5207dbdcaa8efc96fb765c8ddde02dfafa8"
+        },
         {
             "path": "docs/domains/_overview.md",
             "sha": "3e53fa98f62bced7fa7d07790b426b39bd302533"
@@ -33,6 +38,18 @@
         {
             "path": "e2e/launch-extra-axes.spec.ts",
             "sha": "98fdae41790db89cc4b8cabb37966323c158880d"
+        },
+        {
+            "path": "specs/024-session-launch-axes/plan.md",
+            "sha": "09732e81456eee4e8d0c6779b51827c8f3d46b2b"
+        },
+        {
+            "path": "specs/024-session-launch-axes/research.md",
+            "sha": "a91d1ac84addcd5047065bc5a7dc38b2d9f6372e"
+        },
+        {
+            "path": "specs/024-session-launch-axes/spec.md",
+            "sha": "45932d2668fe75066aa41f54db4200d5a9b32618"
         },
         {
             "path": "src/agents/sdk-agent-session.test.ts",
@@ -68,7 +85,7 @@
         },
         {
             "path": "src/domain/session/launch-config.ts",
-            "sha": "9fbbe7c969f1dea07b2772b9cba1cb514a6cfc04"
+            "sha": "68eb042e9da09e420ceab6fd68b33f8f16a88d85"
         },
         {
             "path": "src/domain/session/launch-resolution.test.ts",
@@ -92,7 +109,7 @@
         },
         {
             "path": "src/main/app/launch-preparation.test.ts",
-            "sha": "7ce21c452a417ac4010b63dc5b80a55accb9ab4e"
+            "sha": "8e30382fdc8a2679d643b195d7b5866628c53452"
         },
         {
             "path": "src/main/app/launch-preparation.ts",
@@ -120,7 +137,7 @@
         },
         {
             "path": "src/main/app/session-ipc.ts",
-            "sha": "57e28a88b52c0ebed5ad8f762f774f9899a06e24"
+            "sha": "ae1c2ba7587ca75dfc00a76ec0b818231746c8a3"
         },
         {
             "path": "src/main/app/session-launch-service.test.ts",
@@ -132,7 +149,7 @@
         },
         {
             "path": "src/main/app/validate.test.ts",
-            "sha": "540f6a7fe1d084cb8107e916c7a214c74cccc829"
+            "sha": "e0daa3c1f06e6518d488a2c1ccf56c3599c25f63"
         },
         {
             "path": "src/main/app/validate.ts",
@@ -140,7 +157,7 @@
         },
         {
             "path": "src/main/infra/settings/preset-record.test.ts",
-            "sha": "28ece31848ace646fd8c9cf22994a9d2d406ad2d"
+            "sha": "3912e9f0f50f3d3df0431971d333cd857f410aaa"
         },
         {
             "path": "src/main/infra/settings/preset-record.ts",
@@ -159,20 +176,36 @@
             "sha": "d44bfcc25ff20e3d5c8be43ccc7c34021f4b7c1d"
         },
         {
+            "path": "src/renderer/src/features/session/labels.test.ts",
+            "sha": "5b54958a4203914fceb2f00e64973204440ae860"
+        },
+        {
+            "path": "src/renderer/src/features/session/labels.ts",
+            "sha": "baa6aa84440df92770698d40fa66eb498204b598"
+        },
+        {
             "path": "src/renderer/src/features/session/LaunchDialog.resume.test.tsx",
-            "sha": "a2ae3e910cd3e29841293e1accffdc0fb2ac8e73"
+            "sha": "ea363a0adf72bc4ac2aa0a1ab367b12e320a19d4"
         },
         {
             "path": "src/renderer/src/features/session/LaunchDialog.test.tsx",
-            "sha": "370ac6e58b24c9ca886aa1691a4f6bf49ab17a88"
+            "sha": "72bf2d13209e6b8173b758b4f7ace7f9e4c48306"
         },
         {
             "path": "src/renderer/src/features/session/LaunchDialog.tsx",
-            "sha": "3233af70d415570efeeedd7bae4ce1a72d4d9125"
+            "sha": "248d43721f41c39bdf0d96e948a414ae749448f3"
+        },
+        {
+            "path": "src/renderer/src/features/session/launch-extra-axes.test.ts",
+            "sha": "a8b32fb81d57689ade5f5a8b7d7f62f76b4a506d"
+        },
+        {
+            "path": "src/renderer/src/features/session/launch-extra-axes.ts",
+            "sha": "8093ccbfdf045baecb0bee7abf65fe2741ae680f"
         },
         {
             "path": "src/renderer/src/features/session/LaunchExtraAxes.tsx",
-            "sha": "9b9d61c9889809aac06600b6f9fc5b20c1a27e65"
+            "sha": "46bf181948348cbaf5c08807bed7ebf93807c196"
         },
         {
             "path": "src/renderer/src/features/session/LivePane.composer.test.tsx",
@@ -215,6 +248,14 @@
             "sha": "8eb4e493312cfb12faab79bc579224156673dbd7"
         },
         {
+            "path": "src/renderer/src/features/session/resume-action.test.tsx",
+            "sha": "4a279980072e41a53b97c3564790ffc001e4a272"
+        },
+        {
+            "path": "src/renderer/src/features/session/resume-action.ts",
+            "sha": "ce0900a4b25f4a66dccc63208fe49ecb183948f6"
+        },
+        {
             "path": "src/renderer/src/features/session/RunningSessionList.monitor.test.tsx",
             "sha": "f5b6f70a2ea56b16a5c7c18c2f88803ed250f031"
         },
@@ -225,30 +266,6 @@
         {
             "path": "src/renderer/src/features/session/RunningSessionsProvider.test.tsx",
             "sha": "08cbb1a602cdd8dfa4ab9095c223783f35ec5622"
-        },
-        {
-            "path": "src/renderer/src/features/session/labels.test.ts",
-            "sha": "3337d4a4454bf3073fee3471ab1933843dd1c263"
-        },
-        {
-            "path": "src/renderer/src/features/session/labels.ts",
-            "sha": "afc70c8c9c9930de0644cf516ff425215351910b"
-        },
-        {
-            "path": "src/renderer/src/features/session/launch-extra-axes.test.ts",
-            "sha": "a8b32fb81d57689ade5f5a8b7d7f62f76b4a506d"
-        },
-        {
-            "path": "src/renderer/src/features/session/launch-extra-axes.ts",
-            "sha": "8093ccbfdf045baecb0bee7abf65fe2741ae680f"
-        },
-        {
-            "path": "src/renderer/src/features/session/resume-action.test.tsx",
-            "sha": "4a279980072e41a53b97c3564790ffc001e4a272"
-        },
-        {
-            "path": "src/renderer/src/features/session/resume-action.ts",
-            "sha": "ce0900a4b25f4a66dccc63208fe49ecb183948f6"
         },
         {
             "path": "src/renderer/src/features/session/running-session-store.monitor.test.ts",
@@ -276,7 +293,7 @@
         },
         {
             "path": "src/renderer/src/features/session/running-session-types.ts",
-            "sha": "d6bc7c34e4d0d88edaa33726b6680dc3a116f968"
+            "sha": "c1ffd837a9d0001d21db1f4b765c694fc62de2e6"
         },
         {
             "path": "src/renderer/src/features/session/session-view.monitor.test.ts",
@@ -308,7 +325,7 @@
         },
         {
             "path": "src/renderer/src/features/shell/OverviewTab.tsx",
-            "sha": "96945405e60489f382d82ee6804f42adf0dadff7"
+            "sha": "e3d3c8d2bae47a68bdc6dc910855816673efad99"
         },
         {
             "path": "src/renderer/src/test-support/app-shell-harness.tsx",
@@ -324,15 +341,15 @@
         "A": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
         "B": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
         "C": "Critical:0 High:0 Medium:0 Low:0 (platform-boundary)",
-        "D": "Medium:1 (platform-boundary M-001)",
+        "D": "Medium:2 (platform-boundary M-001/M-002)",
         "E": "\u8a72\u5f53\u306a\u3057: pr-gate \u5c02\u4efb",
-        "F": "High:333 (lint warning) Medium:2 Low:4",
-        "G": "Low:2 (database)",
-        "H": "Low:2"
+        "F": "Medium:1 Low:3 (convention)",
+        "G": "Critical:0 High:0 Medium:0 Low:0 (database)",
+        "H": "Low:2 (platform-boundary L-001/L-002)"
     },
     "tracks": {
         "lint-agent": {
-            "violations": 333,
+            "violations": 0,
             "exit_code": 0,
             "detectors": [
                 "lint",
@@ -342,7 +359,7 @@
             ]
         },
         "test-agent": {
-            "passed": 4485,
+            "passed": 4488,
             "failed": 0,
             "exit_code": 0,
             "scope": "full"
@@ -356,29 +373,35 @@
             "critical": 0,
             "high": 0,
             "medium": 0,
-            "low": 2
+            "low": 0
         },
         "platform-boundary-reviewer": {
             "critical": 0,
             "high": 0,
-            "medium": 1,
-            "low": 1
+            "medium": 2,
+            "low": 2
         }
     },
     "skipped_reviewers": [
         {
             "name": "a11y-reviewer",
-            "reason": "gates=[pr-gate] \u306b code-gate \u304c\u7121\u3044"
+            "reason": "gates=['pr-gate'] \u306b code-gate \u304c\u7121\u3044"
         },
         {
             "name": "ux-reviewer",
-            "reason": "gates=[pr-gate] \u306b code-gate \u304c\u7121\u3044"
+            "reason": "gates=['pr-gate'] \u306b code-gate \u304c\u7121\u3044"
         }
     ],
     "cascade_demotions": 0,
     "iter_history": [
         {
             "iter": 1,
+            "must_fix": 0,
+            "skipped": 0,
+            "error": 0
+        },
+        {
+            "iter": 2,
             "must_fix": 0,
             "skipped": 0,
             "error": 0

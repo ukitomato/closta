@@ -1,46 +1,42 @@
-# Code Gate Iteration 1: 起動設定の残りの軸 — 追加ディレクトリ・上限・セッション名 (024)
+# Code Gate Iteration 2: 起動設定の残りの軸 — 追加ディレクトリ・上限・セッション名 (X-6 の 2 本目)
 
 **Run**: 2026-10-30
 **Spec**: specs/024-session-launch-axes/
-**Diff scope**: 76 files (base 2bba8f8..HEAD; 79 files changed, +3271/-214。spec dir の 3 ファイルは touched-files.txt 外のため除外)
-**Tracks**: lint-agent, test-agent, convention-reviewer, database-reviewer, platform-boundary-reviewer
+**Entry status**: reviewing (pr-gate round 1 の High 修正 5c15180 後の再実行。status は動かさない)
+**Diff scope**: 80 files (base 2bba8f84..HEAD: 98 files, +5447/-224。spec_dir の gate 出力 18 件は touched-files 外)
+**Tracks**: lint-agent, test-agent (full), convention-reviewer, database-reviewer, platform-boundary-reviewer
+**起動しなかった reviewer**: a11y-reviewer / ux-reviewer — gates=['pr-gate'] に code-gate が無い
 
 ## Verdict
 
 | Severity | Count | Where |
 |---|---|---|
 | MUST_FIX | 0 | - |
-| SHOULD_FIX | 333 | prettier/prettier warning (launch-config.ts 244 のうち 243 は作業ツリーの CRLF、LaunchDialog.tsx 48、LaunchExtraAxes.tsx 28、ほか 9 ファイル 13) |
-| CONSIDER | 11 | reviewer の Medium 3 / Low 8 (下記) |
+| SHOULD_FIX | 0 | - |
+| CONSIDER | 8 | Medium 3 / Low 5 (下記) |
 
 **Status**: PASS
 
 ## Tracks
 
-- lint-agent: exit 0。detectors = eslint / typecheck (node + web) / depcruise / check:constitution。error 0 / warning 333 / info 0。test:rules は code-gate の規則で実行していない
-- test-agent: scope full、exit 0。passed 4485 / failed 0 / error 0 / unhandled 0
-- convention-reviewer: Critical 0 / High 0 / Medium 2 / Low 5 (`convention-reviewer.code-gate.md`)
-- database-reviewer: Critical 0 / High 0 / Medium 0 / Low 2 (`database-reviewer.code-gate.md`)
-- platform-boundary-reviewer: Critical 0 / High 0 / Medium 1 / Low 1 (`platform-boundary-reviewer.code-gate.md`)
-
-## 起動しなかった reviewer
-
-- a11y-reviewer: gates=['pr-gate'] に code-gate が無い
-- ux-reviewer: gates=['pr-gate'] に code-gate が無い
-- security-reviewer / architecture-reviewer / po-reviewer: pr-gate 専任 (候補に入れていない)
+- lint-agent: exit 0。eslint / tsc (node, web) / dependency-cruiser / check:constitution すべて 0。scope 内違反 0 (prettier warning 20 件は scope 外の elicitation 関連)
+- test-agent: scope=full、exit 0、passed 4488 / failed 0 / errors 0
+- convention-reviewer: Critical 0 / High 0 / Medium 1 / Low 3
+- database-reviewer: 全 0
+- platform-boundary-reviewer: Critical 0 / High 0 / Medium 2 / Low 2 (すべて持ち越し)
 
 ## MUST_FIX findings (0)
 
 なし。
 
-## SHOULD_FIX / CONSIDER (AD-050 により本 gate では直さない)
+## CONSIDER (直さない — AD-050、棚卸しで扱う)
 
-- convention M-001: prettier の整形違反 (約 90 件、CRLF 分を除く)
-- convention M-002: 500 行超のファイルが膨らんだ (LaunchDialog.tsx +206 行ほか)
-- platform-boundary M-001: 追加ディレクトリの POSIX 検査が `makeRuntimePath` の規則を重複定義
-- Low 8 件は各 reviewer のファイルを参照
+- convention M-001: `LaunchDialog.tsx` 1125 行 (+230)
+- convention L-001: `LaunchExtraAxes.tsx:6` の古い doc コメント
+- convention L-002: `session-ipc.ts:178` の「6 軸」
+- convention L-003: `LaunchExtraAxes.tsx:12/:47` の重複 class 定数
+- platform-boundary M-001: `resolveAdditionalDirectories` が変換後の重複を見ない (pr-gate M-003 持ち越し)
+- platform-boundary M-002: `isLaunchDirectoryValue` の POSIX 規則の重複実装 (code-gate iter 1 M-001 持ち越し)
+- platform-boundary L-001 / L-002: 拒否理由のログ区別、main/agents 述語の突き合わせテスト
 
-## Notes
-
-- 作業ツリーには untracked の `.vitest/` しか無いため、diff は `.implement-base` (2bba8f8) から HEAD までのコミット差分を使った
-- auto-fix loop は MUST_FIX 0 のため起動していない
+raw output: `convention-reviewer.code-gate.md` / `database-reviewer.code-gate.md` / `platform-boundary-reviewer.code-gate.md`
