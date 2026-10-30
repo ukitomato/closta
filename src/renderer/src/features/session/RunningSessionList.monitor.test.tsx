@@ -22,6 +22,7 @@ import { RunningSessionList } from './RunningSessionList'
 import { RunningSessionStoreContext } from './running-session-context'
 import { SessionAttentionAnnouncer } from './SessionAttentionAnnouncer'
 import { deriveSessionView } from './session-view'
+import { DEFAULT_EXTRA_AXES } from '@domain/session/launch-config'
 
 // 行ごとの再描画を数えるため、行が描画のたびに呼ぶ導出を素通しの spy にする (SC-006 / pr-gate R1 po M-005)。
 vi.mock('./session-view', async (importOriginal) => {
@@ -114,7 +115,9 @@ async function setup(ids: readonly string[], extra?: React.ReactNode): Promise<S
         providerId: null,
         modelId: null,
         effort: null,
-        permissionMode: 'default'
+        permissionMode: 'default',
+        ...DEFAULT_EXTRA_AXES,
+        sessionName: null
       },
       i === 1 ? '案件B' : '案件A'
     )

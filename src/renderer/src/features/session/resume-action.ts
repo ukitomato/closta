@@ -55,7 +55,10 @@ export function useRowActionRunner(): (sessionId: string, action: RowResumeActio
           initial: {
             modelId: config.modelId,
             effort: config.effort,
-            permissionMode: config.permissionMode
+            permissionMode: config.permissionMode,
+            additionalDirectoryIds: config.additionalDirectoryIds,
+            maxTurns: config.maxTurns,
+            maxBudgetUsd: config.maxBudgetUsd
           },
           initialOrigin: session.launchOrigin,
           replaces: sessionId

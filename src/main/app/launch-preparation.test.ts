@@ -5,10 +5,11 @@ import type { DerivedLaunchEnv, ProviderProfile } from '@domain/provider/types'
 import { fixedCapabilities } from '@domain/runtime/capabilities'
 import type { Win32RuntimeDescriptor, WslRuntimeDescriptor } from '@domain/runtime/descriptor'
 import { wslNamespace } from '@domain/runtime/namespace'
+import { makePathMapping } from '@domain/runtime/path-mapping'
 import { makeHostPath, makeRuntimePath } from '@domain/runtime/path-types'
 import { createVerifiedRunning } from '@domain/runtime/verified-running'
 import { isWin32LaunchSpec } from '@domain/session/agent-session'
-import type { SessionLaunchConfig } from '@domain/session/launch-config'
+import { DEFAULT_EXTRA_AXES, type SessionLaunchConfig } from '@domain/session/launch-config'
 import type * as launchResolution from '@domain/session/launch-resolution'
 import type { LaunchBlocker, ProviderFact } from '@domain/session/launch-resolution'
 import type { WorkspaceFolder } from '@domain/workspace/folder'
@@ -114,6 +115,8 @@ const config = (over: Partial<SessionLaunchConfig> = {}): SessionLaunchConfig =>
   modelId: 'sonnet',
   effort: 'high',
   permissionMode: 'plan',
+  ...DEFAULT_EXTRA_AXES,
+  sessionName: null,
   ...over
 })
 
@@ -542,7 +545,8 @@ describe('resolveLaunchAxes の distro-mismatch (X-8 / data-model §7)', () => {
     providerId: null,
     modelId: null,
     effort: null,
-    permissionMode: 'plan' as const
+    permissionMode: 'plan' as const,
+    ...DEFAULT_EXTRA_AXES
   }
   it('distroName が null のランタイムの facts では出ない', async () => {
     const actual = await vi.importActual<typeof launchResolution>(
@@ -566,5 +570,189 @@ describe('resolveLaunchAxes の distro-mismatch (X-8 / data-model §7)', () => {
       providers: []
     })
     expect(result.blockers).toContain('distro-mismatch')
+  })
+})
+
+/** 024 data-model §4.3 (SC-003 の main の部分): 上限と名前の options。WSL と Win32 の両方。 */
+describe('createPrepareLaunch (上限と名前の options。024)', () => {
+  const CLAUDE = 'C:\\Users\\u\\.local\\bin\\claude.exe'
+  const hostBase = {
+    SystemRoot: 'C:\\WINDOWS',
+    windir: 'C:\\WINDOWS',
+    PATH: 'C:\\WINDOWS\\system32'
+  }
+  const winFolder = (): WorkspaceFolder => {
+    const hp = makeHostPath('C:\\dev\\closta')
+    if (!hp.ok) throw new Error('bad path')
+    return {
+      id: 'f1',
+      location: { kind: 'windows' },
+      path: hp.path,
+      displayName: 'proj',
+      registeredAt: NOW
+    }
+  }
+  const win32Deps = (): LaunchPreparationDeps =>
+    deps({
+      folders: () => [winFolder()],
+      runtimes: () => [
+        createWin32(NOW, { claudePath: CLAUDE, claudeStatus: 'found', claudeOverridden: false })
+      ],
+      win32BaseEnv: () => hostBase,
+      win32ClaudeIsFile: async () => true
+    })
+  const winConfig = (over: Partial<SessionLaunchConfig> = {}): SessionLaunchConfig =>
+    config({ runtimeId: 'host', providerId: null, modelId: null, effort: null, ...over })
+
+  const extraKeys = ['maxTurns', 'maxBudgetUsd', 'title']
+
+  it('WSL: 上限と名前が null なら 3 キーが options に無い', async () => {
+    const prep = await createPrepareLaunch(deps())(config())
+    if (prep === null || !prep.ok) throw new Error('expected ok')
+    for (const key of extraKeys) expect(key in prep.input.options).toBe(false)
+  })
+
+  it('WSL: 値があれば同じ値で載る', async () => {
+    const prep = await createPrepareLaunch(deps())(
+      config({ maxTurns: 30, maxBudgetUsd: 2.5, sessionName: 'ログインの API 修正' })
+    )
+    if (prep === null || !prep.ok) throw new Error('expected ok')
+    expect(prep.input.options).toMatchObject({
+      maxTurns: 30,
+      maxBudgetUsd: 2.5,
+      title: 'ログインの API 修正'
+    })
+  })
+
+  it('Win32: 上限と名前が null なら 3 キーが options に無い', async () => {
+    const prep = await createPrepareLaunch(win32Deps())(winConfig())
+    if (prep === null || !prep.ok) throw new Error('expected ok')
+    for (const key of extraKeys) expect(key in prep.input.options).toBe(false)
+  })
+
+  it('Win32: 値があれば同じ値で載る', async () => {
+    const prep = await createPrepareLaunch(win32Deps())(
+      winConfig({ maxTurns: 1, maxBudgetUsd: 0.01, sessionName: 'name' })
+    )
+    if (prep === null || !prep.ok) throw new Error('expected ok')
+    expect(prep.input.options).toMatchObject({ maxTurns: 1, maxBudgetUsd: 0.01, title: 'name' })
+  })
+
+  describe('追加ディレクトリの変換 (US-1 / data-model §4.2)', () => {
+    const mapped = makePathMapping(
+      'host',
+      wslNamespace('Ubuntu'),
+      [{ fromPrefix: 'C:\\', toPrefix: '/mnt/c' }],
+      NOW
+    )
+    if (!mapped.ok) throw new Error('bad mapping')
+    const wslRuntime: WslRuntimeDescriptor = { ...runtime, pathMapping: mapped.mapping }
+    const wslFolder = (id: string, value: string, distro = 'Ubuntu'): WorkspaceFolder => {
+      const rp = makeRuntimePath(wslNamespace(distro), value)
+      if (!rp.ok) throw new Error('bad path')
+      return {
+        id,
+        location: { kind: 'wsl', distroName: distro },
+        path: rp.path,
+        displayName: id,
+        registeredAt: NOW
+      }
+    }
+    const hostFolder = (id: string, value: string): WorkspaceFolder => {
+      const hp = makeHostPath(value)
+      if (!hp.ok) throw new Error('bad path')
+      return {
+        id,
+        location: { kind: 'windows' },
+        path: hp.path,
+        displayName: id,
+        registeredAt: NOW
+      }
+    }
+    const wslDeps = (
+      folders: WorkspaceFolder[],
+      over: Partial<LaunchPreparationDeps> = {}
+    ): LaunchPreparationDeps =>
+      deps({ folders: () => folders, runtimes: () => [wslRuntime], ...over })
+
+    it('WSL: WSL のフォルダは POSIX のパス、Windows のフォルダは PathMapping の変換値', async () => {
+      const prep = await createPrepareLaunch(
+        wslDeps([folder(), wslFolder('d1', '/home/u/lib'), hostFolder('d2', 'C:\\work\\あ 空白')])
+      )(config({ additionalDirectoryIds: ['d1', 'd2'] }))
+      if (prep === null || !prep.ok) throw new Error('expected ok')
+      expect(prep.input.options.additionalDirectories).toEqual([
+        '/home/u/lib',
+        '/mnt/c/work/あ 空白'
+      ])
+    })
+
+    it('0 件ならキーが無い', async () => {
+      const prep = await createPrepareLaunch(wslDeps([folder()]))(config())
+      if (prep === null || !prep.ok) throw new Error('expected ok')
+      expect('additionalDirectories' in prep.input.options).toBe(false)
+    })
+
+    it('WSL: 未登録・別のディストロ・作業フォルダと同じ・PathMapping に当たらない値は invalid-config で起動しない', async () => {
+      const logRejection = vi.fn()
+      const folders = [
+        folder(),
+        wslFolder('deb', '/home/u/x', 'Debian'),
+        hostFolder('outside', 'D:\\other')
+      ]
+      for (const ids of [['nope'], ['deb'], ['f1'], ['outside']]) {
+        const prep = await createPrepareLaunch(wslDeps(folders, { logRejection }))(
+          config({ additionalDirectoryIds: ids })
+        )
+        expect(prep).toEqual({ ok: false, reason: 'invalid-config' })
+      }
+      expect(JSON.stringify(logRejection.mock.calls)).not.toContain('other')
+    })
+
+    it('WSL: PathMapping が未取得なら追加ディレクトリは invalid-config', async () => {
+      const prep = await createPrepareLaunch(
+        deps({ folders: () => [folder(), wslFolder('d1', '/home/u/lib')] })
+      )(config({ additionalDirectoryIds: ['d1'] }))
+      expect(prep).toEqual({ ok: false, reason: 'invalid-config' })
+    })
+
+    it('Win32: Windows のフォルダはドライブ付きのパス。WSL のフォルダは invalid-config', async () => {
+      const win32 = createWin32(NOW, {
+        claudePath: CLAUDE,
+        claudeStatus: 'found',
+        claudeOverridden: false
+      })
+      const mk = (folders: WorkspaceFolder[]): LaunchPreparationDeps =>
+        deps({
+          folders: () => folders,
+          runtimes: () => [win32],
+          win32BaseEnv: () => hostBase,
+          win32ClaudeIsFile: async () => true
+        })
+      const ok = await createPrepareLaunch(mk([winFolder(), hostFolder('d1', 'D:\\work\\lib')]))(
+        winConfig({ additionalDirectoryIds: ['d1'] })
+      )
+      if (ok === null || !ok.ok) throw new Error('expected ok')
+      expect(ok.input.options.additionalDirectories).toEqual(['D:\\work\\lib'])
+      for (const ids of [['nope'], ['w1'], ['f1']]) {
+        const bad = await createPrepareLaunch(mk([winFolder(), wslFolder('w1', '/home/u/lib')]))(
+          winConfig({ additionalDirectoryIds: ids })
+        )
+        expect(bad).toEqual({ ok: false, reason: 'invalid-config' })
+      }
+    })
+  })
+
+  it('名前も上限もログ (logRejection) に出ない', async () => {
+    const logRejection = vi.fn()
+    await createPrepareLaunch(deps({ logRejection, runtimes: () => [] }))(
+      config({ sessionName: 'ひみつの名前', maxTurns: 777 })
+    )
+    await createPrepareLaunch(deps({ logRejection, verifyRunning: async () => null }))(
+      config({ sessionName: 'ひみつの名前', maxTurns: 777 })
+    )
+    for (const call of logRejection.mock.calls) {
+      expect(JSON.stringify(call)).not.toContain('ひみつ')
+      expect(JSON.stringify(call)).not.toContain('777')
+    }
   })
 })

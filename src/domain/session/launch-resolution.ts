@@ -1,6 +1,6 @@
 import type { EffortLevel, ModelEntry } from '@domain/provider/types'
 
-import type { SafePermissionMode, SessionLaunchConfig } from './launch-config'
+import type { PresetLaunchConfig, SafePermissionMode, SessionLaunchConfig } from './launch-config'
 
 /**
  * **起動軸の依存解決** (X-4 FR-006 / FR-007 / glossary Axis resolution)。**純粋関数。I/O を持たない。**
@@ -24,6 +24,10 @@ export interface LaunchDraft {
   readonly modelId: string | null
   readonly effort: EffortLevel | null
   readonly permissionMode: SafePermissionMode
+  // 024 (data-model §2.1)。名前は下書きに入れない (依存解決の対象ではない。ダイアログの state に別に持つ)
+  readonly additionalDirectoryIds: readonly string[]
+  readonly maxTurns: number | null
+  readonly maxBudgetUsd: number | null
 }
 
 /** folder の事実。`distroName` は WSL フォルダの所在 distro (Windows フォルダは `null`)。 */
@@ -51,6 +55,8 @@ export interface LaunchFacts {
   readonly runtimes: readonly RuntimeFact[]
   /** 選択ランタイムに対して評価した Provider (登録済み全件)。 */
   readonly providers: readonly ProviderFact[]
+  /** 解決結果 DTO が unreachable / probe-failed だった folder id。renderer だけが渡す (024 data-model §2.3)。省略は空。 */
+  readonly unreachableFolderIds?: readonly string[]
 }
 
 export type AxisResetReason =
@@ -71,9 +77,19 @@ export type LaunchBlocker =
   | 'runtime-stopped'
   | 'distro-mismatch'
 
+/** 追加ディレクトリの項目を外した理由 (024 data-model §2.2)。 */
+export type DirectoryResetReason = 'unregistered' | 'unreachable' | 'same-as-folder'
+
+export interface DirectoryReset {
+  readonly folderId: string
+  readonly reason: DirectoryResetReason
+}
+
 export interface LaunchResolution {
   readonly draft: LaunchDraft
   readonly resets: readonly AxisReset[]
+  /** 外した追加ディレクトリの項目 (draft は外した後の値を持つ)。判定は US-1 (BE-010)。 */
+  readonly directoryResets: readonly DirectoryReset[]
   readonly blockers: readonly LaunchBlocker[]
   // 越境はここで判定しない — 正本は既存の解決結果 DTO の `boundary` (domain/workspace/resolution.ts。
   // FR-008「規則を再定義しない」/ AD-016)。警告は renderer が DTO の `boundary === 'cross'` で出す (pr-gate C-001)。
@@ -148,6 +164,29 @@ export function resolveLaunchAxes(draft: LaunchDraft, facts: LaunchFacts): Launc
     }
   }
 
+  // ── 追加ディレクトリ (項目ごと。024 data-model §2.3。順に評価し最初に当たった理由で外す) ──
+  const directoryResets: DirectoryReset[] = []
+  const additionalDirectoryIds: string[] = []
+  const seen = new Set<string>()
+  const unreachableIds = facts.unreachableFolderIds ?? []
+  for (const id of draft.additionalDirectoryIds) {
+    if (seen.has(id)) continue // 重複の後ろは黙って捨てる
+    seen.add(id)
+    const item = facts.folders.find((f) => f.id === id) ?? null
+    let reason: DirectoryResetReason | null = null
+    if (item === null) reason = 'unregistered'
+    else if (draft.folderId !== null && id === draft.folderId) reason = 'same-as-folder'
+    else if (
+      item.distroName !== null &&
+      runtime !== null &&
+      runtime.distroName !== item.distroName
+    ) {
+      reason = 'unreachable'
+    } else if (unreachableIds.includes(id)) reason = 'unreachable'
+    if (reason === null) additionalDirectoryIds.push(id)
+    else directoryResets.push({ folderId: id, reason })
+  }
+
   return {
     draft: {
       folderId,
@@ -155,15 +194,22 @@ export function resolveLaunchAxes(draft: LaunchDraft, facts: LaunchFacts): Launc
       providerId,
       modelId,
       effort,
-      permissionMode: draft.permissionMode
+      permissionMode: draft.permissionMode,
+      additionalDirectoryIds,
+      maxTurns: draft.maxTurns,
+      maxBudgetUsd: draft.maxBudgetUsd
     },
     resets,
+    directoryResets,
     blockers
   }
 }
 
 /** blocker が無い解決結果を検証済みの起動設定にする (folder / runtime が揃っていること)。 */
-export function toLaunchConfig(resolution: LaunchResolution): SessionLaunchConfig | null {
+export function toLaunchConfig(
+  resolution: LaunchResolution,
+  sessionName: string | null
+): SessionLaunchConfig | null {
   const { draft, blockers } = resolution
   if (blockers.length > 0 || draft.folderId === null || draft.runtimeId === null) return null
   return {
@@ -172,11 +218,25 @@ export function toLaunchConfig(resolution: LaunchResolution): SessionLaunchConfi
     providerId: draft.providerId,
     modelId: draft.modelId,
     effort: draft.effort,
-    permissionMode: draft.permissionMode
+    permissionMode: draft.permissionMode,
+    additionalDirectoryIds: draft.additionalDirectoryIds,
+    maxTurns: draft.maxTurns,
+    maxBudgetUsd: draft.maxBudgetUsd,
+    sessionName
   }
 }
 
-/** 起動設定を下書きへ戻す (プリセット適用・main の再評価に使う)。 */
-export function toLaunchDraft(config: SessionLaunchConfig): LaunchDraft {
-  return { ...config }
+/** 起動設定 (またはプリセットの config) を下書きへ戻す (プリセット適用・main の再評価に使う)。`sessionName` は持たない。 */
+export function toLaunchDraft(config: SessionLaunchConfig | PresetLaunchConfig): LaunchDraft {
+  return {
+    folderId: config.folderId,
+    runtimeId: config.runtimeId,
+    providerId: config.providerId,
+    modelId: config.modelId,
+    effort: config.effort,
+    permissionMode: config.permissionMode,
+    additionalDirectoryIds: config.additionalDirectoryIds,
+    maxTurns: config.maxTurns,
+    maxBudgetUsd: config.maxBudgetUsd
+  }
 }

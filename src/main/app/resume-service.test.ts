@@ -4,7 +4,7 @@ import type { ProviderProfile } from '@domain/provider/types'
 import type { RuntimeDescriptor } from '@domain/runtime/descriptor'
 import { makeHostPath, type HostPath } from '@domain/runtime/path-types'
 import type { CwdOrigin } from '@domain/session/origin'
-import type { SessionLaunchConfig } from '@domain/session/launch-config'
+import { DEFAULT_EXTRA_AXES, type SessionLaunchConfig } from '@domain/session/launch-config'
 import type { EnumerationTarget } from '@domain/session/target'
 import type { FolderRuntimeResolutionDTO } from '@domain/workspace/dto'
 import { createWin32 } from '@domain/workspace/__fixtures__/runtime'
@@ -104,6 +104,8 @@ function config(over: Partial<SessionLaunchConfig> = {}): SessionLaunchConfig {
     modelId: null,
     effort: null,
     permissionMode: 'default',
+    ...DEFAULT_EXTRA_AXES,
+    sessionName: null,
     ...over
   }
 }

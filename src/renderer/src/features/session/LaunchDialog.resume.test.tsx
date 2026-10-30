@@ -16,6 +16,7 @@ import { installCapability } from '@/test-support/capability'
 import { RESUME_UNAVAILABLE_LABELS } from './labels'
 import { LaunchDialog, type LaunchSource } from './LaunchDialog'
 import type { ResumeDialogState } from './running-session-types'
+import { DEFAULT_EXTRA_AXES } from '@domain/session/launch-config'
 
 /**
  * X-9 FE-011 — 再開の形の起動ダイアログ (data-model §9.3 / §9.4)。新規起動の既存のテスト
@@ -137,9 +138,11 @@ describe('LaunchDialog — 再開の形 (X-9 FE-011)', () => {
       expect(fixed.textContent).toContain('ubuntu-proj')
       expect(fixed.textContent).toContain('業務用 Bedrock')
     })
-    // 選択の部品はモデル・effort・権限モードの 3 つだけ。
+    // 選択の部品はモデル・effort・権限モードと追加ディレクトリの「フォルダを追加」だけ (024)。
     const names = screen.getAllByRole('combobox').map((el) => el.getAttribute('aria-label'))
-    expect(names).toEqual(['モデル', 'effort', '権限モード'])
+    expect(names).toEqual(['モデル', 'effort', '権限モード', 'フォルダを追加'])
+    // 名前の部品は出さない (FR-012)。
+    expect(screen.queryByRole('textbox', { name: 'セッション名' })).toBeNull()
   })
 
   it('権限モードの選択肢は安全 3 値だけ (Principle III)', () => {
@@ -186,7 +189,9 @@ describe('LaunchDialog — 再開の形 (X-9 FE-011)', () => {
           providerId: 'p-bedrock',
           modelId: null,
           effort: null,
-          permissionMode: 'default'
+          permissionMode: 'default',
+          ...DEFAULT_EXTRA_AXES,
+          sessionName: null
         }
       },
       'manual'
@@ -238,12 +243,18 @@ describe('LaunchDialog — 再開の形 (X-9 FE-011)', () => {
 describe('LaunchDialog — 再開の形の初期値とプリセット (X-9 FE-030)', () => {
   const FIXED = { folderId: 'ubuntu-proj', runtimeId: 'wsl:Ubuntu', providerId: 'p-bedrock' }
   const liveState = (
-    initial: NonNullable<ResumeDialogState['initial']>,
+    initial: Partial<NonNullable<ResumeDialogState['initial']>>,
     initialOrigin: ResumeDialogState['initialOrigin'] = 'manual'
   ): ResumeDialogState => ({
     source: { kind: 'live', sessionId: '00000000-0000-4000-8000-000000000001' },
     fixed: FIXED,
-    initial,
+    initial: {
+      modelId: null,
+      effort: null,
+      permissionMode: 'default',
+      ...DEFAULT_EXTRA_AXES,
+      ...initial
+    },
     initialOrigin,
     replaces: '00000000-0000-4000-8000-000000000001'
   })
@@ -256,7 +267,8 @@ describe('LaunchDialog — 再開の形の初期値とプリセット (X-9 FE-03
       providerId: 'p-other',
       modelId: 'sonnet',
       effort: 'high',
-      permissionMode: 'plan'
+      permissionMode: 'plan',
+      ...DEFAULT_EXTRA_AXES
     },
     updatedAt: 0
   }
@@ -322,7 +334,14 @@ describe('LaunchDialog — 再開の形の初期値とプリセット (X-9 FE-03
     await clickResume()
     expect(session.resumeSession).toHaveBeenCalledWith(
       expect.objectContaining({
-        config: { ...FIXED, modelId: 'sonnet', effort: null, permissionMode: 'default' }
+        config: {
+          ...FIXED,
+          modelId: 'sonnet',
+          effort: null,
+          permissionMode: 'default',
+          ...DEFAULT_EXTRA_AXES,
+          sessionName: null
+        }
       }),
       'manual'
     )
@@ -338,12 +357,66 @@ describe('LaunchDialog — 再開の形の初期値とプリセット (X-9 FE-03
     await clickResume()
     expect(session.resumeSession).toHaveBeenCalledWith(
       expect.objectContaining({
-        config: { ...FIXED, modelId: 'sonnet', effort: 'high', permissionMode: 'plan' }
+        config: {
+          ...FIXED,
+          modelId: 'sonnet',
+          effort: 'high',
+          permissionMode: 'plan',
+          ...DEFAULT_EXTRA_AXES,
+          sessionName: null
+        }
       }),
       'preset'
     )
     // 引き継ぐ 3 軸の選択の部品は出ないまま (差し替える経路が無い)。
-    expect(screen.getAllByRole('combobox')).toHaveLength(3)
+    expect(screen.getAllByRole('combobox')).toHaveLength(4)
+  })
+
+  it('稼働中の行の上限が初期値で選び直せ、名前の入力は無く送る sessionName は null (US-4 AC4 / AC5)', async () => {
+    install()
+    const session = fakeSession({
+      resume: liveState({ maxTurns: 30, maxBudgetUsd: 2.5 })
+    })
+    render(<LaunchDialog session={session} />)
+    const turns = screen.getByRole('textbox', { name: 'ターン数の上限' }) as HTMLInputElement
+    const budget = screen.getByRole('textbox', { name: '費用の上限 (USD)' }) as HTMLInputElement
+    expect(turns.value).toBe('30')
+    expect(budget.value).toBe('2.5')
+    expect(screen.queryByRole('textbox', { name: 'セッション名' })).toBeNull()
+    fireEvent.change(turns, { target: { value: '50' } })
+    await clickResume()
+    expect(session.resumeSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: expect.objectContaining({ maxTurns: 50, maxBudgetUsd: 2.5, sessionName: null })
+      }),
+      'manual'
+    )
+  })
+
+  it('過去の行は上限なしが初期値 (US-4 AC4)', () => {
+    install()
+    render(<LaunchDialog session={fakeSession()} />)
+    expect(
+      (screen.getByRole('textbox', { name: 'ターン数の上限' }) as HTMLInputElement).value
+    ).toBe('')
+    expect(
+      (screen.getByRole('textbox', { name: '費用の上限 (USD)' }) as HTMLInputElement).value
+    ).toBe('')
+  })
+
+  it('再開の形でプリセットを適用すると上限の入力欄も置き換わり、fixed は変わらない (US-4 AC6)', async () => {
+    install({
+      listPresets: async () => [{ ...preset, config: { ...preset.config, maxTurns: 7 } }]
+    })
+    render(<LaunchDialog session={fakeSession()} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: '適用' })).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: '適用' }))
+    await waitFor(() =>
+      expect(
+        (screen.getByRole('textbox', { name: 'ターン数の上限' }) as HTMLInputElement).value
+      ).toBe('7')
+    )
+    expect(screen.getByTestId('resume-fixed-axes').textContent).toContain('ubuntu-proj')
   })
 
   it('プリセットの保存の値の 3 軸は fixed (6 軸の形のまま)', async () => {
@@ -365,7 +438,8 @@ describe('LaunchDialog — 再開の形の初期値とプリセット (X-9 FE-03
       ...FIXED,
       modelId: null,
       effort: null,
-      permissionMode: 'default'
+      permissionMode: 'default',
+      ...DEFAULT_EXTRA_AXES
     })
   })
 

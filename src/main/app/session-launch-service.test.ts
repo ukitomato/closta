@@ -9,7 +9,7 @@ import type {
   SessionControl
 } from '@domain/session/agent-session'
 import type { EffortLevel, ModelEntry } from '@domain/provider/types'
-import type { SessionLaunchConfig } from '@domain/session/launch-config'
+import { DEFAULT_EXTRA_AXES, type SessionLaunchConfig } from '@domain/session/launch-config'
 import type { SessionStatusUpdate } from '@domain/session/status-update'
 
 import {
@@ -37,7 +37,9 @@ function cfg(folderId = 'f1', runtimeId = 'r1'): SessionLaunchConfig {
     providerId: null,
     modelId: null,
     effort: null,
-    permissionMode: 'default'
+    permissionMode: 'default',
+    ...DEFAULT_EXTRA_AXES,
+    sessionName: null
   }
 }
 
@@ -941,6 +943,29 @@ describe('setName (023 / BE-034)', () => {
       for (const u of batch) expect(Object.keys(u)).not.toContain('name')
     }
     expect(JSON.stringify(s.logs)).not.toContain('調査')
+  })
+})
+
+describe('起動の名前 (024 / BE-030)', () => {
+  it('名前つきの起動は受け付けられ、改名 (setName) で上書きできる。名前をログに出さない', async () => {
+    const s = liveSetup()
+    const o = await s.service.launch({ ...cfg(), sessionName: 'ログインの API 修正' })
+    expect(o.status).toBe('launching')
+    if (o.status !== 'launching') return
+    s.connection.status([upd(o.sessionId, { state: 'done' })])
+    s.service.setName(o.sessionId, '別の名前')
+    // 名前は状態通知の値に出ない (023)。
+    for (const batch of s.statuses) {
+      for (const u of batch) expect(Object.keys(u)).not.toContain('name')
+    }
+    expect(JSON.stringify(s.logs)).not.toContain('ログインの API 修正')
+    expect(JSON.stringify(s.logs)).not.toContain('別の名前')
+  })
+
+  it('名前なしの起動も通る (名前は null)', async () => {
+    const s = liveSetup()
+    const o = await s.service.launch(cfg())
+    expect(o.status).toBe('launching')
   })
 })
 

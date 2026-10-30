@@ -797,7 +797,7 @@ export function createRunningSessionStore(
       resumable: resumedRow || early !== -1,
       resumed: resumedRow ? { phase: 'loading' } : null,
       currentModelId: null,
-      name: null,
+      name: config.sessionName,
       changing: null,
       settingError: null,
       liveModels: { phase: 'idle' },

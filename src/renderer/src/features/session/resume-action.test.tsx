@@ -17,6 +17,7 @@ import { RESUME_LABELS } from './labels'
 import { resumeActionFor } from './resume-action'
 import { RunningSessionStoreContext } from './running-session-context'
 import { createRunningSessionStore, type RunningSessionStore } from './running-session-store'
+import { DEFAULT_EXTRA_AXES } from '@domain/session/launch-config'
 
 /**
  * X-9 / FE-020 — 稼働中の行の「再開」「やり直す」の出し分けと実行 (data-model §9.1・§9.2・§9.5 / SC-004)。
@@ -170,7 +171,10 @@ async function setup(): Promise<Harness> {
       providerId: null,
       modelId: 'm1',
       effort: 'high',
-      permissionMode: 'plan'
+      permissionMode: 'plan',
+      ...DEFAULT_EXTRA_AXES,
+      maxTurns: 30,
+      sessionName: null
     },
     '案件A',
     'preset'
@@ -219,7 +223,13 @@ describe('稼働中の行の「再開」「やり直す」 (US-2 AC1〜AC4)', ()
     expect(h.store.getState().launch.resume).toEqual({
       source: { kind: 'live', sessionId: A },
       fixed: { folderId: FOLDER_A, runtimeId: UBUNTU.id, providerId: null },
-      initial: { modelId: 'm1', effort: 'high', permissionMode: 'plan' },
+      initial: {
+        modelId: 'm1',
+        effort: 'high',
+        permissionMode: 'plan',
+        ...DEFAULT_EXTRA_AXES,
+        maxTurns: 30
+      },
       initialOrigin: 'preset',
       replaces: A
     })

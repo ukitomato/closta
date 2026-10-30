@@ -1,6 +1,7 @@
 import type { HelperSettings } from '@domain/provider/settings'
 import type { EffortLevel } from '@domain/provider/types'
 import type { Win32RuntimeDescriptor, WslRuntimeDescriptor } from '@domain/runtime/descriptor'
+import { makeHostPath } from '@domain/runtime/path-types'
 import type { VerifiedRunning } from '@domain/runtime/verified-running'
 import type { WorkspaceFolder } from '@domain/workspace/folder'
 
@@ -133,6 +134,14 @@ export interface LaunchQueryOptions {
   readonly settings?: HelperSettings
   /** 再開する会話の id (X-9 / AD-059)。新しい起動では持たない。UUID の形は境界で検査する。 */
   readonly resume?: string
+  /** 追加ディレクトリ (024 / AD-064 Decision 2)。main が登録フォルダの id から変換したランタイムのパス。 */
+  readonly additionalDirectories?: readonly string[]
+  /** ターン数の上限 (024 / AD-064 Decision 1)。1〜1000 の整数。 */
+  readonly maxTurns?: number
+  /** 費用の上限 USD (024 / AD-064 Decision 1)。0.01〜1000・小数 2 桁まで。 */
+  readonly maxBudgetUsd?: number
+  /** 起動のときのセッション名 (024 / AD-064 Decision 1)。023 の名前の規則を通った値。 */
+  readonly title?: string
 }
 
 /**
@@ -228,6 +237,33 @@ export type RuntimeLaunchSpec = WslLaunchSpec | Win32LaunchSpec
 
 export function isWin32LaunchSpec(spec: RuntimeLaunchSpec): spec is Win32LaunchSpec {
   return spec.kind === 'win32'
+}
+
+/** 追加ディレクトリのパスの形 (024 data-model §5.2)。WSL の起動は `posix`、Win32 の起動は `windows`。 */
+export type LaunchDirectoryKind = 'posix' | 'windows'
+
+/** 起動指示から追加ディレクトリの形を決める。decoder と `buildQueryOptions` の呼び出しが同じ関数を使う (§5.4)。 */
+export function launchDirectoryKindOf(spec: RuntimeLaunchSpec): LaunchDirectoryKind {
+  return isWin32LaunchSpec(spec) ? 'windows' : 'posix'
+}
+
+const MAX_POSIX_DIRECTORY_LENGTH = 4096
+
+/**
+ * 追加ディレクトリのパスの値の形 (024 data-model §5.2)。
+ * `posix`: `/` で始まる・`\` なし・`.` / `..` の成分なし・制御文字なし・4096 文字以下。
+ * `windows`: `makeHostPath` が通り、正規化した値が同じ。
+ */
+export function isLaunchDirectoryValue(kind: LaunchDirectoryKind, value: unknown): value is string {
+  if (typeof value !== 'string') return false
+  if (kind === 'windows') {
+    const made = makeHostPath(value)
+    return made.ok && made.path.value === value
+  }
+  if (value.length === 0 || value.length > MAX_POSIX_DIRECTORY_LENGTH) return false
+  if (!value.startsWith('/') || value.includes('\\')) return false
+  if (/\p{Cc}/u.test(value)) return false
+  return !value.split('/').some((part) => part === '.' || part === '..')
 }
 
 export function isWin32LaunchInput(input: LaunchInput): input is Win32LaunchInput {

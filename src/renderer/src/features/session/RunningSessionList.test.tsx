@@ -16,6 +16,7 @@ import { useRunningThreadList } from './useRunningThreadList'
 import { createRunningSessionStore, type RunningSessionStore } from './running-session-store'
 import { RunningSessionList } from './RunningSessionList'
 import { RunningSessionStoreContext } from './running-session-context'
+import { DEFAULT_EXTRA_AXES } from '@domain/session/launch-config'
 
 /**
  * X-5 FE-011 / FE-013 — 一覧の行・選択・操作の出し分け・空状態 (FR-009 / FR-011 / SC-006)。
@@ -71,7 +72,9 @@ async function setup(ids: readonly string[]): Promise<{
       providerId: null,
       modelId: null,
       effort: null,
-      permissionMode: 'default'
+      permissionMode: 'default',
+      ...DEFAULT_EXTRA_AXES,
+      sessionName: null
     })
   }
   render(

@@ -17,6 +17,7 @@ import { launchFailureLabel, launchFailureShortLabel } from './labels'
 import { RunningSessionStoreContext } from './running-session-context'
 import { createRunningSessionStore, type RunningSessionStore } from './running-session-store'
 import { SessionAttentionAnnouncer } from './SessionAttentionAnnouncer'
+import { DEFAULT_EXTRA_AXES } from '@domain/session/launch-config'
 
 /**
  * O-4 FE-011 — ターンの失敗の理由の表示 (014 spec US-1 AC1〜AC6 / AC3a / SC-001。data-model §1 / §5)。
@@ -140,7 +141,9 @@ async function setup(): Promise<Harness> {
         providerId: null,
         modelId: null,
         effort: null,
-        permissionMode: 'default'
+        permissionMode: 'default',
+        ...DEFAULT_EXTRA_AXES,
+        sessionName: null
       },
       label
     )

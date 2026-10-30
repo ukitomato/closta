@@ -26,6 +26,7 @@ related_adrs:
   - docs/decisions/0061-o12-contract-extensions-categories-parts-and-agents-branches.md
   - docs/decisions/0062-live-session-permission-mode-model-and-rename.md
   - docs/decisions/0063-rename-spawner-test-in-process-spawn-modules.md
+  - docs/decisions/0064-launch-config-additional-directories-limits-and-title.md
 related_specs:
   - specs/002-session-cross-folder-session-enumeration/spec.md
   - specs/005-session-launch-and-streaming/spec.md
@@ -43,6 +44,7 @@ related_specs:
   - specs/020-session-win32-direct-launch/spec.md
   - specs/021-session-resume/spec.md
   - specs/023-session-launch-axes-and-operations/spec.md
+  - specs/024-session-launch-axes/spec.md
 ---
 
 # Domain Charter: session
@@ -107,7 +109,7 @@ Closta の出発点にある課題「並行して走らせたセッションの�
 
 1. ユーザは作業フォルダを選ぶ
 2. ランタイムを選ぶ。以降の選択肢が capability に応じて絞られる
-3. Provider・モデル・effort・権限モード・上限を選ぶ（X-4 時点で上限は未対応。X-6 が扱う）
+3. Provider・モデル・effort・権限モード・上限を選ぶ（上限 = ターン数と費用は 024 (X-6) で実装済み。追加ディレクトリと起動時のセッション名も選べる）
 4. 起動する。応答がストリーミングで表示され、permission 要求には承認で応じる
 5. 同じ組み合わせを名前付きプリセットとして保存する
 
@@ -131,7 +133,7 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
 
 1. ユーザは実行中のセッションを中断する。途中出力は残る
 2. 後で再開する。フォルダ / ランタイム / Provider は引き継がれ、
-   モデル / effort / 権限モード / 上限は選び直せる
+   モデル / effort / 権限モード / 上限 (ターン数と費用。024 で実装済み) は選び直せる
 3. 引き継ぐ軸を変えたい場合は分岐（`forkSession`）として扱う
 
 ## Key concepts
@@ -139,7 +141,7 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
 - **セッション**: Claude Code の 1 会話。UUID で識別され
   `<config-dir>/projects/<encoded-cwd>/<uuid>.jsonl` に永続化される
 - **SessionLaunchConfig**: セッション起動時に選択される設定の組
-- **プリセット**: 名前付きで保存された `SessionLaunchConfig`。資格情報の値は含まない
+- **プリセット**: 名前付きで保存された `PresetLaunchConfig` (`SessionLaunchConfig` からセッション名を除いた形。`presets.json` 版 2)。資格情報の値は含まない
 - **supervisor**: 全セッションのプロセスとストリームを持つ**単一の** `utilityProcess`。調停役スレッドが
   セッションスレッド (`worker_threads`。1 セッション 1 本) を束ね、本文は文字列のまま renderer へ中継する。
   Electron 非依存で、worker のパスを引数で渡せば `node` で単独起動できる（X-5 / AD-043）
@@ -262,6 +264,7 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
 - [AD-060](../../decisions/0060-content-block-verification-and-unsupported-block-mark.md) — 対応表の B 節 (中身のブロック) の機械照合と知らないブロックの印 (O-12。ui の feature が本 domain の契約を広げた)
 - [AD-062](../../decisions/0062-live-session-permission-mode-model-and-rename.md) — 実行中のセッションの権限モード・モデル・名前の変更 (X-6 の最初の分割 023)
 - [AD-063](../../decisions/0063-rename-spawner-test-in-process-spawn-modules.md) — 改名の子の起動の単体テストを `PROCESS_SPAWN_MODULES` に足す (023 code-gate H-001)
+- [AD-064](../../decisions/0064-launch-config-additional-directories-limits-and-title.md) — 起動の軸の追加: 追加ディレクトリ・ターン数と費用の上限・起動時のセッション名 (X-6 の 2 つ目の分割 024)
 
 ## Related Specs
 
@@ -352,6 +355,10 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
 - **X-6 (最初の分割)** — [実行中のセッションの操作](../../../specs/023-session-launch-axes-and-operations/spec.md)
   ([AD-062](../../decisions/0062-live-session-permission-mode-model-and-rename.md))。権限モード (安全 3 値の中)・モデル・名前を
   実行中に変えられる (`SessionControl` 6 → 8 種類・IPC 3 つ・改名は短命の `utilityProcess`)。残りは [roadmap の X-6 の行](../../roadmap.md)
+
+- **X-6 (2 つ目の分割)** — [起動の軸の追加](../../../specs/024-session-launch-axes/spec.md)
+  ([AD-064](../../decisions/0064-launch-config-additional-directories-limits-and-title.md))。追加ディレクトリ・ターン数と費用の上限・
+  起動時のセッション名を起動で選べる (`SessionLaunchConfig` 6 → 10 キー・プリセットは版 2)
 
 - **X-8** — Win32Runtime の直接起動 ([roadmap の X-8 の行](../../roadmap.md))。X-6 から切り出して前に出した
   (2026-10-19 に利用者が承認。Closta で Closta を開発できるのは O-11 と X-8 / X-9 の後)。AD-041 (h) が X-6 に指名した

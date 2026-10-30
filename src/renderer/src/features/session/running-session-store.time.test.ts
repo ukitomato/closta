@@ -11,6 +11,7 @@ import { readMessageTime, readReceivedAt } from '@/features/chat/message-time'
 import { stubCapability } from '@/test-support/capability'
 
 import { createRunningSessionStore } from './running-session-store'
+import { DEFAULT_EXTRA_AXES } from '@domain/session/launch-config'
 
 /**
  * O-9 FE-010 — 稼働中のストアのメッセージの時刻 (SC-001)。利用者の入力はストアの時計、応答は DTO の値、
@@ -24,7 +25,9 @@ const CONFIG: SessionLaunchConfig = {
   providerId: null,
   modelId: null,
   effort: null,
-  permissionMode: 'default'
+  permissionMode: 'default',
+  ...DEFAULT_EXTRA_AXES,
+  sessionName: null
 }
 
 interface FakePort {

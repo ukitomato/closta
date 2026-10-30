@@ -23,7 +23,9 @@ import type { RuntimeDescriptor } from '@domain/runtime/descriptor'
 import {
   isSafePermissionMode,
   isValidLaunchConfig,
+  isValidPresetConfig,
   isValidPresetName,
+  type PresetLaunchConfig,
   type SafePermissionMode,
   type SessionLaunchConfig
 } from '@domain/session/launch-config'
@@ -470,7 +472,7 @@ export function checkRenameArgs(args: readonly unknown[]): readonly [string, str
 /* ── 起動設定 / プリセット (X-4 / FR-005 / FR-009) ─────────────────── */
 
 /**
- * **`launchSession(config)`。** 起動設定の形 (6 軸・安全 3 値・文字種) を検証する。
+ * **`launchSession(config)`。** 起動設定の形 (10 キー・安全 3 値・文字種・上限の範囲・名前の規則) を検証する。
  * 意味 (登録済み・到達可能・カタログ・対応 effort) は main の起動ゲートが facts で再評価する (FR-006)。
  */
 export function checkLaunchConfig(value: unknown): value is SessionLaunchConfig {
@@ -495,6 +497,8 @@ export function checkResumeRequest(
   if (!hasOnlyKeys(value, ['source', 'config'])) return false
   const { source, config } = value as { source?: unknown; config?: unknown }
   if (!checkLaunchConfig(config)) return false
+  // 再開は名前を渡さない (024 FR-012 / AD-064 Decision 5)。
+  if (config.sessionName !== null) return false
   if (typeof source !== 'object' || source === null || Array.isArray(source)) return false
   const record = source as Record<string, unknown>
   if (record.kind === 'live') {
@@ -521,7 +525,10 @@ export function checkPastResumeQuery(
     : { ok: false, reason: 'source-unknown' }
 }
 
-/** **`savePreset(name, config)`。** 名前は表示名と同じ規則 (正規化後)、config は起動設定と同じ述語。 */
-export function checkPreset(name: unknown, config: unknown): boolean {
-  return isValidPresetName(name) && isValidLaunchConfig(config)
+/**
+ * **`savePreset(name, config)`。** 名前は表示名と同じ規則 (正規化後)、config は名前を除いた 9 キーの述語
+ * (`isValidPresetConfig`。preset-record の read 側と同じ。`sessionName` のキーを持つ値は拒否する)。
+ */
+export function checkPreset(name: unknown, config: unknown): config is PresetLaunchConfig {
+  return isValidPresetName(name) && isValidPresetConfig(config)
 }

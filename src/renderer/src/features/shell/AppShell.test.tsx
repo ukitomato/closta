@@ -7,6 +7,7 @@ import type { ThreadMessageLike } from '@assistant-ui/react'
 import { InfoIcon } from 'lucide-react'
 
 import type { SessionIndexDTO } from '@domain/session/dto'
+import { DEFAULT_EXTRA_AXES } from '@domain/session/launch-config'
 
 import {
   COMPOSER_LABELS,
@@ -302,7 +303,9 @@ describe('起動ダイアログ (US-2 AC1〜AC5 / FR-007)', () => {
         providerId: null,
         modelId: null,
         effort: null,
-        permissionMode: 'default'
+        permissionMode: 'default',
+        ...DEFAULT_EXTRA_AXES,
+        sessionName: null
       })
     )
     await waitFor(() => expect(screen.queryByTestId('launch-dialog-host')).toBeNull())
@@ -782,7 +785,9 @@ describe('pr-gate R1 の負の経路 (O-7)', () => {
         providerId: null,
         modelId: 'claude-custom',
         effort: 'high',
-        permissionMode: 'default'
+        permissionMode: 'default',
+        ...DEFAULT_EXTRA_AXES,
+        sessionName: null
       })
     )
     await userEvent.click(screen.getByRole('button', { name: SHELL_LABELS.expandPanel }))
@@ -1044,7 +1049,9 @@ async function openOverviewWithProvider(h: Harness): Promise<HTMLElement> {
       providerId: 'provider-1',
       modelId: 'claude-custom',
       effort: null,
-      permissionMode: 'default'
+      permissionMode: 'default',
+      ...DEFAULT_EXTRA_AXES,
+      sessionName: null
     })
   )
   await userEvent.click(screen.getByRole('button', { name: SHELL_LABELS.expandPanel }))

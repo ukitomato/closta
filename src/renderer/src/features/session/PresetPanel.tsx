@@ -1,6 +1,10 @@
 import { useState } from 'react'
 
-import { normalizePresetName, type SessionLaunchConfig } from '@domain/session/launch-config'
+import {
+  normalizePresetName,
+  toPresetConfig,
+  type SessionLaunchConfig
+} from '@domain/session/launch-config'
 import type { PresetDTO } from '@domain/session/preset'
 
 import { EmptyState } from '@/components/assistant-ui/elements/empty-state'
@@ -49,7 +53,8 @@ export function PresetPanel({
     if (current === null) return
     let result
     try {
-      result = await view.save(name, current, overwrite)
+      // プリセットは名前を持たない (024 FR-010)。main の `checkPreset` は `sessionName` のキーを拒否する。
+      result = await view.save(name, toPresetConfig(current), overwrite)
     } catch {
       // 理由キーの無い失敗 (ディスク満杯・権限など)。黙らない (pr-gate M-08)。
       setConfirmOverwrite(false)

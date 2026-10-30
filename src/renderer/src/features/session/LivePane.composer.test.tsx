@@ -12,6 +12,7 @@ import { RunningSessionsHarness } from '@/test-support/running-sessions-harness'
 
 import { RunningSessionStoreContext } from './running-session-context'
 import { createRunningSessionStore } from './running-session-store'
+import { DEFAULT_EXTRA_AXES } from '@domain/session/launch-config'
 
 /**
  * O-10 FE-030 / FE-031 — composer のボタンの名前・フォーカス・コマンドの候補 (spec US-3 AC1〜AC6 / SC-006 / SC-007)。
@@ -56,7 +57,9 @@ async function setup(): Promise<{
     providerId: null,
     modelId: null,
     effort: null,
-    permissionMode: 'default'
+    permissionMode: 'default',
+    ...DEFAULT_EXTRA_AXES,
+    sessionName: null
   })
   const port: FakePort = { onmessage: null, start: vi.fn(), close: vi.fn() }
   const event = new Event('message') as Event & { data: unknown; ports: unknown[] }

@@ -4,6 +4,7 @@ import type { ThreadMessageLike } from '@assistant-ui/react'
 
 import type { LaunchFailureReason } from '@domain/session/agent-session'
 import { countOccupying } from '@domain/session/concurrency'
+import { DEFAULT_EXTRA_AXES } from '@domain/session/launch-config'
 import type { SessionStatusUpdate } from '@domain/session/status-update'
 
 import type {
@@ -210,7 +211,9 @@ function session(id: string, over: Partial<LiveSessionState> = {}): LiveSessionS
       providerId: null,
       modelId: null,
       effort: null,
-      permissionMode: 'default'
+      permissionMode: 'default',
+      ...DEFAULT_EXTRA_AXES,
+      sessionName: null
     },
     startedAt: 0,
     runState: 'running',

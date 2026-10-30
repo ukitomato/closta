@@ -222,8 +222,11 @@ export interface ResumeDialogState {
     readonly runtimeId: string
     readonly providerId: string | null
   }
-  /** 選び直せる 3 軸の初期値。稼働中の行は元の起動設定の値、過去の行は null (ダイアログの既定)。 */
-  readonly initial: Pick<SessionLaunchConfig, 'modelId' | 'effort' | 'permissionMode'> | null
+  /** 選び直せる 6 軸の初期値 (024)。稼働中の行は元の起動設定の値、過去の行は null (ダイアログの既定)。 */
+  readonly initial: Pick<
+    SessionLaunchConfig,
+    'modelId' | 'effort' | 'permissionMode' | 'additionalDirectoryIds' | 'maxTurns' | 'maxBudgetUsd'
+  > | null
   /** 初期値の組の起動元。稼働中の行はその行の `launchOrigin`、過去の行は `'manual'`。 */
   readonly initialOrigin: LaunchOrigin
   /** 稼働中の行から開いたときの元の行 (受け付けで `replace` する)。 */

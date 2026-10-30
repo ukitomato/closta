@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
+import { DEFAULT_EXTRA_AXES } from './launch-config'
 import {
   resolveLaunchAxes,
   toLaunchConfig,
+  toLaunchDraft,
   type LaunchDraft,
   type LaunchFacts
 } from './launch-resolution'
@@ -39,6 +41,7 @@ const draft = (over: Partial<LaunchDraft> = {}): LaunchDraft => ({
   modelId: 'm-effort',
   effort: 'high',
   permissionMode: 'default',
+  ...DEFAULT_EXTRA_AXES,
   ...over
 })
 
@@ -47,7 +50,8 @@ describe('resolveLaunchAxes', () => {
     const r = resolveLaunchAxes(draft(), facts)
     expect(r.resets).toEqual([])
     expect(r.blockers).toEqual([])
-    expect(toLaunchConfig(r)).toEqual(draft())
+    expect(r.directoryResets).toEqual([])
+    expect(toLaunchConfig(r, null)).toEqual({ ...draft(), sessionName: null })
   })
 
   it('ランタイム変更で到達不可になった Provider は既定へ戻り、確認を要する (US-2 AC3)', () => {
@@ -113,7 +117,7 @@ describe('resolveLaunchAxes', () => {
   it('folder↔runtime の distro 不一致は blocker (起動時の distro-mismatch に初めて出会わない)', () => {
     const r = resolveLaunchAxes(draft({ runtimeId: 'wsl:Debian' }), facts)
     expect(r.blockers).toContain('distro-mismatch')
-    expect(toLaunchConfig(r)).toBeNull()
+    expect(toLaunchConfig(r, null)).toBeNull()
   })
 
   it('停止中ランタイムは blocker (既定に戻さない)', () => {
@@ -126,7 +130,7 @@ describe('resolveLaunchAxes', () => {
     const r = resolveLaunchAxes(draft({ folderId: 'gone', runtimeId: null }), facts)
     expect(r.blockers).toEqual(['folder-missing', 'runtime-unselected'])
     expect(r.draft.folderId).toBeNull()
-    expect(toLaunchConfig(r)).toBeNull()
+    expect(toLaunchConfig(r, null)).toBeNull()
   })
 
   it('Windows フォルダ + WSL ランタイムは blocker にしない (越境の判定は DTO の boundary。AD-016 / FR-008)', () => {
@@ -140,5 +144,128 @@ describe('resolveLaunchAxes', () => {
     expect(
       resolveLaunchAxes(draft({ permissionMode: 'dontAsk' }), facts).draft.permissionMode
     ).toBe('dontAsk')
+  })
+})
+
+describe('追加ディレクトリの段 (024 data-model §2.3 / SC-002)', () => {
+  const dirFacts: LaunchFacts = {
+    ...facts,
+    folders: [
+      ...facts.folders,
+      { id: 'ubu2', distroName: 'Ubuntu' },
+      { id: 'deb', distroName: 'Debian' },
+      { id: 'win2', distroName: null }
+    ]
+  }
+  const run = (
+    ids: string[],
+    over: Partial<LaunchDraft> = {},
+    f: LaunchFacts = dirFacts
+  ): ReturnType<typeof resolveLaunchAxes> =>
+    resolveLaunchAxes(draft({ additionalDirectoryIds: ids, ...over }), f)
+
+  it('同じディストロの項目は残り、Windows のフォルダは 3 に当たらない', () => {
+    const r = run(['ubu2', 'win2'])
+    expect(r.draft.additionalDirectoryIds).toEqual(['ubu2', 'win2'])
+    expect(r.directoryResets).toEqual([])
+  })
+
+  it('別のディストロのフォルダは unreachable', () => {
+    const r = run(['deb', 'ubu2'])
+    expect(r.draft.additionalDirectoryIds).toEqual(['ubu2'])
+    expect(r.directoryResets).toEqual([{ folderId: 'deb', reason: 'unreachable' }])
+  })
+
+  it('Win32 ランタイムでは WSL のフォルダが unreachable', () => {
+    const f: LaunchFacts = {
+      ...dirFacts,
+      runtimes: [...dirFacts.runtimes, { id: 'win32', distroName: null, running: true }]
+    }
+    const r = run(['ubu2', 'win2'], { folderId: 'win', runtimeId: 'win32' }, f)
+    expect(r.draft.additionalDirectoryIds).toEqual(['win2'])
+    expect(r.directoryResets).toEqual([{ folderId: 'ubu2', reason: 'unreachable' }])
+  })
+
+  it('登録解除は unregistered、作業フォルダと同じは same-as-folder', () => {
+    const r = run(['gone', 'ubu', 'ubu2'])
+    expect(r.draft.additionalDirectoryIds).toEqual(['ubu2'])
+    expect(r.directoryResets).toEqual([
+      { folderId: 'gone', reason: 'unregistered' },
+      { folderId: 'ubu', reason: 'same-as-folder' }
+    ])
+  })
+
+  it('unreachableFolderIds で unreachable', () => {
+    const r = run(['ubu2'], {}, { ...dirFacts, unreachableFolderIds: ['ubu2'] })
+    expect(r.draft.additionalDirectoryIds).toEqual([])
+    expect(r.directoryResets).toEqual([{ folderId: 'ubu2', reason: 'unreachable' }])
+  })
+
+  it('複数の理由に当たる項目は最初の理由 (登録解除が先)', () => {
+    const r = run(['gone'], {}, { ...dirFacts, unreachableFolderIds: ['gone'] })
+    expect(r.directoryResets).toEqual([{ folderId: 'gone', reason: 'unregistered' }])
+    // same-as-folder が unreachable より先
+    const r2 = run(['ubu'], {}, { ...dirFacts, unreachableFolderIds: ['ubu'] })
+    expect(r2.directoryResets).toEqual([{ folderId: 'ubu', reason: 'same-as-folder' }])
+  })
+
+  it('ランタイム未選択は 3 を評価せず、unregistered だけ見る', () => {
+    const r = run(['gone', 'deb'], { runtimeId: null })
+    expect(r.draft.additionalDirectoryIds).toEqual(['deb'])
+    expect(r.directoryResets).toEqual([{ folderId: 'gone', reason: 'unregistered' }])
+  })
+
+  it('作業フォルダ未選択は same-as-folder を見ない', () => {
+    const r = run(['ubu'], { folderId: null })
+    expect(r.draft.additionalDirectoryIds).toEqual(['ubu'])
+    expect(r.directoryResets).toEqual([])
+  })
+
+  it('重複の後ろは黙って捨てる。順序は保つ', () => {
+    const r = run(['win2', 'ubu2', 'win2'])
+    expect(r.draft.additionalDirectoryIds).toEqual(['win2', 'ubu2'])
+    expect(r.directoryResets).toEqual([])
+  })
+
+  it('下書きは変えず、ランタイムを戻すと項目が戻る。ready は変わらない', () => {
+    const d = draft({ additionalDirectoryIds: ['deb', 'ubu2'] })
+    const bad = resolveLaunchAxes({ ...d, runtimeId: 'wsl:Debian', folderId: 'deb' }, dirFacts)
+    expect(bad.draft.additionalDirectoryIds).toEqual([])
+    expect(bad.directoryResets).toEqual([
+      { folderId: 'deb', reason: 'same-as-folder' },
+      { folderId: 'ubu2', reason: 'unreachable' }
+    ])
+    expect(d.additionalDirectoryIds).toEqual(['deb', 'ubu2'])
+    const back = resolveLaunchAxes(d, dirFacts)
+    expect(back.draft.additionalDirectoryIds).toEqual(['ubu2'])
+    expect(back.blockers).toEqual([])
+    expect(toLaunchConfig(back, null)).not.toBeNull()
+  })
+})
+
+describe('toLaunchConfig / toLaunchDraft (024 data-model §2.4)', () => {
+  it('上限と名前を写し、ready でなければ null', () => {
+    const r = resolveLaunchAxes(draft({ maxTurns: 30, maxBudgetUsd: 2.5 }), facts)
+    expect(toLaunchConfig(r, 'ログインの API 修正')).toEqual({
+      ...draft(),
+      maxTurns: 30,
+      maxBudgetUsd: 2.5,
+      sessionName: 'ログインの API 修正'
+    })
+    const blocked = resolveLaunchAxes(draft({ runtimeId: 'wsl:Debian' }), facts)
+    expect(toLaunchConfig(blocked, 'x')).toBeNull()
+  })
+
+  it('依存解決は上限を見ず、下書きの値をそのまま保つ', () => {
+    const r = resolveLaunchAxes(draft({ maxTurns: 7, maxBudgetUsd: 0.07 }), facts)
+    expect(r.draft.maxTurns).toBe(7)
+    expect(r.draft.maxBudgetUsd).toBe(0.07)
+  })
+
+  it('toLaunchDraft は sessionName を持たない下書きを返す', () => {
+    const config = { ...draft(), sessionName: 'n' } as Parameters<typeof toLaunchDraft>[0]
+    const out = toLaunchDraft(config)
+    expect('sessionName' in out).toBe(false)
+    expect(out).toEqual(draft())
   })
 })

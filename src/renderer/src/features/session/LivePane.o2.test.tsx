@@ -21,6 +21,7 @@ import { RunningSessionsHarness } from '@/test-support/running-sessions-harness'
 import { MONITOR_LABELS } from './labels'
 import { RunningSessionStoreContext } from './running-session-context'
 import { createRunningSessionStore, type RunningSessionStore } from './running-session-store'
+import { DEFAULT_EXTRA_AXES } from '@domain/session/launch-config'
 
 /**
  * O-2 FE-012 / FE-022 — 実行中のセッションの transcript (SC-003 / SC-005)。
@@ -95,7 +96,9 @@ async function setup(ids: readonly string[] = [A]): Promise<Harness> {
       providerId: null,
       modelId: null,
       effort: null,
-      permissionMode: 'default'
+      permissionMode: 'default',
+      ...DEFAULT_EXTRA_AXES,
+      sessionName: null
     })
     const port: FakePort = { onmessage: null, start: vi.fn(), close: vi.fn() }
     deliverPort(id, port)

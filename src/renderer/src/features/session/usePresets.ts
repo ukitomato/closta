@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import { CAPABILITY_KEY } from '@domain/capability'
-import type { SessionLaunchConfig } from '@domain/session/launch-config'
+import type { PresetLaunchConfig } from '@domain/session/launch-config'
 import type { PresetDTO, SavePresetResult } from '@domain/session/preset'
 
 /**
@@ -16,7 +16,7 @@ function capability(): typeof window.closta {
 export interface PresetsView {
   readonly presets: readonly PresetDTO[] | null
   readonly failed: boolean
-  save(name: string, config: SessionLaunchConfig, overwrite: boolean): Promise<SavePresetResult>
+  save(name: string, config: PresetLaunchConfig, overwrite: boolean): Promise<SavePresetResult>
   remove(id: string): Promise<boolean>
 }
 
@@ -41,7 +41,7 @@ export function usePresets(): PresetsView {
   // **結果に関わらず一覧を取り直す** (db L-202)。失敗 (read-failed / name-conflict / 例外) の後も、
   // 画面の一覧が保存ファイルの実態とずれたまま残らないようにする。例外は呼び出し側 (PresetPanel) が表示する。
   const save = useCallback(
-    async (name: string, config: SessionLaunchConfig, overwrite: boolean) => {
+    async (name: string, config: PresetLaunchConfig, overwrite: boolean) => {
       try {
         return await capability().savePreset(name, config, overwrite)
       } finally {

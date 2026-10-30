@@ -6,7 +6,11 @@ import { useProviders } from '@/features/provider/useProviders'
 import { groupLabelOf, locationIndexOf, locationLabelOf } from '@/features/session-list/group-label'
 import { buildSessionRows, findRow, formatSessionTime } from '@/features/session-list/rows'
 import { useFolderLabels } from '@/features/session-list/useFolderLabels'
-import { LIVE_SETTING_LABELS, PERMISSION_MODE_LABELS } from '@/features/session/labels'
+import {
+  EXTRA_AXES_LABELS,
+  LIVE_SETTING_LABELS,
+  PERMISSION_MODE_LABELS
+} from '@/features/session/labels'
 import { useRunningSessionsView } from '@/features/session/running-sessions-view'
 import { useSessionMeters } from '@/features/session/useSessionMeters'
 import { useSessionsStore } from '@/stores/sessions'
@@ -120,6 +124,37 @@ function RunningOverview(): React.JSX.Element {
       value: provider?.models.find((m) => m.id === currentModelId)?.displayName ?? currentModelId
     })
   }
+  // 起動の値の 3 行 (024 data-model §9.4)。値は起動の `config` から読み、実行中に変わらない。
+  // 追加ディレクトリの表示名は登録フォルダの一覧から引く。一覧の読み込み中は断定しないので行を出さず、
+  // 引けない id (登録の解除) は「(削除されたフォルダ)」と言う。
+  if (config.additionalDirectoryIds.length === 0) {
+    items.push({
+      label: EXTRA_AXES_LABELS.additionalDirectories,
+      value: EXTRA_AXES_LABELS.overviewNone
+    })
+  } else if (view.folders !== null && view.folders !== undefined) {
+    const registered = view.folders.folders
+    items.push({
+      label: EXTRA_AXES_LABELS.additionalDirectories,
+      value: config.additionalDirectoryIds
+        .map(
+          (id) =>
+            registered.find((f) => f.id === id)?.displayName ?? EXTRA_AXES_LABELS.deletedFolder
+        )
+        .join('、')
+    })
+  }
+  items.push({
+    label: EXTRA_AXES_LABELS.maxTurns,
+    value: config.maxTurns === null ? EXTRA_AXES_LABELS.overviewUnlimited : String(config.maxTurns)
+  })
+  items.push({
+    label: EXTRA_AXES_LABELS.maxBudgetUsd,
+    value:
+      config.maxBudgetUsd === null
+        ? EXTRA_AXES_LABELS.overviewUnlimited
+        : config.maxBudgetUsd.toFixed(2)
+  })
   // 所在は登録フォルダの一覧から引く。読み込み中・引けないとき (登録の解除) は行ごと出さない (所在の欄にフォルダの
   // 状態の文を入れない。pr-gate R1 ux M-006)。
   const folder = view.folders?.folders.find((f) => f.id === config.folderId)

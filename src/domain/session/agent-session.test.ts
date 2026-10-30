@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 
 import {
   boundDecisionScope,
+  isLaunchDirectoryValue,
   isLaunchFailureReason,
   isWin32LaunchSpec,
+  launchDirectoryKindOf,
   isPermissionAnswers,
   LAUNCH_FAILURE_REASONS,
   projectAskUserQuestionAnswer,
@@ -309,5 +311,66 @@ describe('Win32 の起動の値と定数 (X-8 / AD-058)', () => {
     expect(WIN32_LAUNCH_SPEC_FIXTURE.command).toBe(
       WIN32_LAUNCH_SPEC_FIXTURE.pathToClaudeCodeExecutable
     )
+  })
+})
+
+describe('launchDirectoryKindOf / isLaunchDirectoryValue (024 data-model §5.2)', () => {
+  it('WSL の起動指示は posix・Win32 の起動指示は windows', () => {
+    const wsl: WslLaunchSpec = {
+      pathToClaudeCodeExecutable: '/usr/bin/claude',
+      command: 'C:\\launcher\\value',
+      prefixArgs: ['--exec'],
+      env: {}
+    }
+    expect(launchDirectoryKindOf(wsl)).toBe('posix')
+    expect(launchDirectoryKindOf(WIN32_LAUNCH_SPEC_FIXTURE)).toBe('windows')
+  })
+
+  it('posix: 絶対パス (日本語・空白を含む) を通す', () => {
+    for (const v of ['/home/u/lib', '/home/ユーザー/ライブラリ', '/home/u/my lib', '/']) {
+      expect(isLaunchDirectoryValue('posix', v)).toBe(true)
+    }
+  })
+
+  it('posix: 相対・バックスラッシュ・. / .. の成分・制御文字・4097 文字・数を拒否する', () => {
+    const long = '/' + 'a'.repeat(4096)
+    for (const v of [
+      'lib',
+      'C:\\work',
+      '/a\\b',
+      '/a/../b',
+      '/a/./b',
+      '/a/..',
+      '/a\u0000b',
+      '/a\nb',
+      long,
+      '',
+      1,
+      null
+    ]) {
+      expect(isLaunchDirectoryValue('posix', v)).toBe(false)
+    }
+    expect(isLaunchDirectoryValue('posix', '/' + 'a'.repeat(4095))).toBe(true)
+  })
+
+  it('windows: ドライブ付きの正規化済みのパス (日本語・空白を含む) を通す', () => {
+    for (const v of ['C:\\work\\lib', 'D:\\ユーザー\\ライブラリ', 'C:\\my lib', 'C:\\']) {
+      expect(isLaunchDirectoryValue('windows', v)).toBe(true)
+    }
+  })
+
+  it('windows: ドライブなし・正規化で変わる値・UNC・POSIX のパス・数を拒否する', () => {
+    for (const v of [
+      'work\\lib',
+      'C:/work/lib',
+      'c:\\work',
+      'C:\\work\\',
+      '\\\\wsl$\\Ubuntu\\home',
+      '/home/u/lib',
+      '',
+      1
+    ]) {
+      expect(isLaunchDirectoryValue('windows', v)).toBe(false)
+    }
   })
 })

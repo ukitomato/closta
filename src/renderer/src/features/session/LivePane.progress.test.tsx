@@ -24,6 +24,7 @@ import { RunningSessionsHarness } from '@/test-support/running-sessions-harness'
 import { RunningSessionStoreContext } from './running-session-context'
 import { createRunningSessionStore, type RunningSessionStore } from './running-session-store'
 import { EMPTY_SESSION_METERS, type SessionMeters } from './running-session-types'
+import { DEFAULT_EXTRA_AXES } from '@domain/session/launch-config'
 
 /**
  * O-4 FE-043 — tool の経過時間 (014 spec FR-012 / US-4 AC3。data-model §4「進み具合」)。
@@ -90,7 +91,9 @@ async function setup(ids: readonly string[] = [A]): Promise<Harness> {
       providerId: null,
       modelId: null,
       effort: null,
-      permissionMode: 'default'
+      permissionMode: 'default',
+      ...DEFAULT_EXTRA_AXES,
+      sessionName: null
     })
     const port: FakePort = { onmessage: null, start: vi.fn(), close: vi.fn() }
     deliverPort(id, port)

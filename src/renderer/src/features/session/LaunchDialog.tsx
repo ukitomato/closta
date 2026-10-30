@@ -6,7 +6,9 @@ import { isEffortLevel } from '@domain/provider/model-catalog'
 import type { EffortLevel } from '@domain/provider/types'
 import type { LaunchFailureReason } from '@domain/session/agent-session'
 import {
+  DEFAULT_EXTRA_AXES,
   isSafePermissionMode,
+  MAX_ADDITIONAL_DIRECTORIES,
   SAFE_PERMISSION_MODES,
   type SafePermissionMode,
   type SessionLaunchConfig
@@ -36,6 +38,9 @@ import { useFolders } from '@/features/workspace-folders/useFolders'
 import {
   AXIS_RESET_LABELS,
   CROSS_BOUNDARY_LABELS,
+  DIRECTORY_RESET_LABELS,
+  directoryCrossBoundaryLabel,
+  EXTRA_AXES_LABELS,
   FOLDER_RUNTIME_BLOCKED_LABELS,
   LAUNCH_AXIS_LABELS,
   LAUNCH_BLOCKER_LABELS,
@@ -53,6 +58,14 @@ import {
   RESUME_LABELS,
   sameFolderWarning
 } from './labels'
+import { LaunchExtraAxes } from './LaunchExtraAxes'
+import {
+  additionalDirectoryChoices,
+  limitInputOf,
+  parseMaxBudgetInput,
+  parseMaxTurnsInput,
+  parseSessionNameInput
+} from './launch-extra-axes'
 import {
   buildLaunchRuntimeFacts,
   buildLaunchRuntimeOptions,
@@ -109,7 +122,9 @@ const EMPTY_DRAFT: LaunchDraft = {
   providerId: null,
   modelId: null,
   effort: null,
-  permissionMode: 'default'
+  permissionMode: 'default',
+  // 024: 新しい 3 軸は既定のまま (起動ダイアログの部品は US-1〜US-3 で足す)。名前は下書きに入れない。
+  ...DEFAULT_EXTRA_AXES
 }
 
 /** 非同期に取得する値の状態。`idle` は取得の前提 (選択) が揃っていない。 */
@@ -191,6 +206,46 @@ function useFolderRuntimeResolution(
   return state.failed ? { status: 'failed' } : { status: 'ready', value: state.value }
 }
 
+/** 追加ディレクトリ 1 件の解決結果 DTO の取得結果。`failed` は IPC の失敗 (判定できないだけ。起動は許す)。 */
+interface DirectoryEntry {
+  readonly dto: FolderRuntimeResolutionDTO | null
+  readonly failed: boolean
+}
+
+/**
+ * 追加ディレクトリの解決結果 DTO (024 research R-11)。今の `useFolderRuntimeResolution` を複数の id に広げたもの。
+ * 同じ `runtimeRevision` をキーに含め、取得結果は項目ごとにキャッシュする (項目の追加・削除で他の項目の結果を
+ * 捨てず、「取得中」に戻して通知を瞬間的に消さない)。`entryOf(id)` が `undefined` の間は取得中。
+ */
+function useAdditionalDirectoryResolutions(
+  ids: readonly string[],
+  runtimeId: string | null,
+  revision: string
+): (id: string) => DirectoryEntry | undefined {
+  const [cache, setCache] = useState<Readonly<Record<string, DirectoryEntry>>>({})
+  const idsKey = ids.join('\u0000')
+  useEffect(() => {
+    if (runtimeId === null || idsKey === '') return
+    let cancelled = false
+    for (const id of idsKey.split('\u0000')) {
+      const key = `${id}|${runtimeId}|${revision}`
+      const store = (entry: DirectoryEntry): void => {
+        if (!cancelled) setCache((prev) => ({ ...prev, [key]: entry }))
+      }
+      capability()
+        .resolveFolderRuntime(id, runtimeId)
+        .then(
+          (dto) => store({ dto, failed: false }),
+          () => store({ dto: null, failed: true })
+        )
+    }
+    return () => {
+      cancelled = true
+    }
+  }, [idsKey, runtimeId, revision])
+  return (id) => (runtimeId === null ? undefined : cache[`${id}|${runtimeId}|${revision}`])
+}
+
 const selectClass = 'border-border bg-background rounded-md border px-2 py-1.5 text-sm'
 
 export function LaunchDialog({ session }: { readonly session: LaunchSource }): React.JSX.Element {
@@ -223,6 +278,24 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
         : resume.initialOrigin
     return session.lastConfig !== null ? (session.lastOrigin ?? 'manual') : 'manual'
   })
+  /**
+   * 上限の入力の文字列 (024 data-model §9.2.1)。下書きの初期値と同じ時点・同じ元から 1 回だけ決める
+   * (拒否・失敗・「やり直す」の後に黙って「上限なし」に戻さない)。
+   */
+  const [maxTurnsInput, setMaxTurnsInput] = useState(() => limitInputOf(draft.maxTurns))
+  const [maxBudgetInput, setMaxBudgetInput] = useState(() => limitInputOf(draft.maxBudgetUsd))
+  const maxTurnsParsed = parseMaxTurnsInput(maxTurnsInput)
+  const maxBudgetParsed = parseMaxBudgetInput(maxBudgetInput)
+  /** 上限の入力欄は新規起動の形・再開の形のどちらにも出る (再開は元の値が初期値。024 FR-012)。 */
+  const limitsInvalid = !maxTurnsParsed.ok || !maxBudgetParsed.ok
+  /**
+   * セッション名の入力の文字列 (data-model §9.2.1)。下書きに入れない。新規の起動の形で `lastConfig` があれば
+   * その名前、それ以外は空 (再開の形は名前の部品を出さない)。
+   */
+  const [sessionNameInput, setSessionNameInput] = useState(() =>
+    resume === null && session.lastConfig !== null ? (session.lastConfig.sessionName ?? '') : ''
+  )
+  const sessionNameParsed = parseSessionNameInput(sessionNameInput)
   /** このダイアログでプリセットを適用したか (O-3)。作り直したダイアログでは初めから。 */
   const [presetApplied, setPresetApplied] = useState(false)
   /** このダイアログで軸を手で変えたか (`update` を通ったか。変えてから戻しても立ったまま。O-3)。 */
@@ -258,6 +331,20 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
   const runtimeRevision = `${selectedRuntimeState ?? ''}|${selectedProbeState ?? ''}|${nonce}`
   const reachable = useReachable(draft.runtimeId, runtimeRevision)
   const folderRuntime = useFolderRuntimeResolution(draft.folderId, draft.runtimeId, runtimeRevision)
+  const directoryEntryOf = useAdditionalDirectoryResolutions(
+    draft.additionalDirectoryIds,
+    draft.runtimeId,
+    runtimeRevision
+  )
+  // DTO が unreachable / probe-failed の項目は依存解決が外す (`unreachableFolderIds`。data-model §2.3)。
+  const unreachableFolderIds = draft.additionalDirectoryIds.filter((id) => {
+    const dto = directoryEntryOf(id)?.dto
+    return (
+      dto?.reachability === 'unreachable' ||
+      (dto?.reachability === 'blocked' && dto.blockedReason === 'probe-failed')
+    )
+  })
+  const unreachableKey = unreachableFolderIds.join('\u0000')
 
   const facts: LaunchFacts = useMemo(() => {
     // 取得中・失敗の間は到達不可として扱う (fail-open にしない。pr-gate H-004 / SC-001)。
@@ -277,9 +364,10 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
         id: p.id,
         reachable: reachableIds.has(p.id),
         models: p.models
-      }))
+      })),
+      unreachableFolderIds: unreachableKey === '' ? [] : unreachableKey.split('\u0000')
     }
-  }, [folderList, launchRuntimes, providerList, reachable])
+  }, [folderList, launchRuntimes, providerList, reachable, unreachableKey])
 
   const resolution = resolveLaunchAxes(draft, facts)
   const effective = resolution.draft
@@ -301,9 +389,15 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
           ...resume.fixed,
           modelId: effective.modelId,
           effort: effective.effort,
-          permissionMode: effective.permissionMode
+          permissionMode: effective.permissionMode,
+          additionalDirectoryIds: effective.additionalDirectoryIds,
+          maxTurns: effective.maxTurns,
+          maxBudgetUsd: effective.maxBudgetUsd,
+          // 再開は名前を渡さない (024 FR-012 / AD-064 Decision 5)
+          sessionName: null
         }
-      : toLaunchConfig(resolution)
+      : // 名前は入力の解釈の結果 (不正なら起動を止めるので、ここでは null に倒す)。
+        toLaunchConfig(resolution, sessionNameParsed.ok ? sessionNameParsed.value : null)
   const needsConfirmation = resets.some((r) => r.requiresConfirmation)
   // 書き戻した下流の通知 (1 回) と、いまの解決の reset を重複なく並べる。
   const shownResets = [
@@ -330,11 +424,36 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
     folderRuntimeDto?.reachability === 'blocked' ? folderRuntimeDto.blockedReason : null
   const folderRuntimeWaitingProbe = folderRuntimeBlockedReason === 'capabilities-not-probed'
   const folderRuntimeProbeFailed = folderRuntimeBlockedReason === 'probe-failed'
+  // 追加ディレクトリ (024)。残った項目 (`effective`) の DTO を見る: 取得中と `capabilities-not-probed` は起動を保留、
+  // 越境は警告だけ、IPC の失敗は「判定できません」の注記だけで起動は許す。unreachable / probe-failed の項目は
+  // 依存解決が外して通知する (起動は止めない)。
+  const directoryName = (id: string): string =>
+    folderList.find((f) => f.id === id)?.displayName ?? EXTRA_AXES_LABELS.deletedFolder
+  const directoryItems = effective.additionalDirectoryIds.map((id) => ({
+    id,
+    name: directoryName(id),
+    entry: directoryEntryOf(id)
+  }))
+  const directoriesChecking = directoryItems.some((i) => i.entry === undefined)
+  const directoriesWaitingProbe = directoryItems.some(
+    (i) =>
+      i.entry?.dto?.reachability === 'blocked' &&
+      i.entry.dto.blockedReason === 'capabilities-not-probed'
+  )
+  const directoryCrossItems = directoryItems.filter((i) => i.entry?.dto?.boundary === 'cross')
+  const directoryUnknownItems = directoryItems.filter((i) => i.entry?.failed === true)
+  // 依存解決で外した項目が往復で戻ると、見える件数が上限を超えうる。超えたまま起動させない (H-002)。
+  const directoriesOverLimit = effective.additionalDirectoryIds.length > MAX_ADDITIONAL_DIRECTORIES
   const launchConfig =
     folderRuntimeChecking ||
     folderRuntimeWaitingProbe ||
     folderRuntimeUnreachable ||
-    folderRuntimeProbeFailed
+    folderRuntimeProbeFailed ||
+    directoriesChecking ||
+    directoriesWaitingProbe ||
+    limitsInvalid ||
+    directoriesOverLimit ||
+    (resume === null && !sessionNameParsed.ok)
       ? null
       : config
 
@@ -394,17 +513,23 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
     setConfirming(false)
     setNotices([])
     setPresetApplied(true)
-    // 再開では選び直せる 3 軸だけに当てる (引き継ぐ 3 軸は変えない。spec Edge Cases)。
-    setDraft(
+    // 再開では選び直せる 6 軸だけに当てる (引き継ぐ 3 軸は変えない。spec Edge Cases / 024 FR-009)。
+    const applied: LaunchDraft =
       resume === null
         ? next
         : {
             ...draft,
             modelId: next.modelId,
             effort: next.effort,
-            permissionMode: next.permissionMode
+            permissionMode: next.permissionMode,
+            additionalDirectoryIds: next.additionalDirectoryIds,
+            maxTurns: next.maxTurns,
+            maxBudgetUsd: next.maxBudgetUsd
           }
-    )
+    setDraft(applied)
+    // 上限の入力の文字列もプリセットの値で置き換える。名前の入力には触れない (プリセットは名前を持たない)。
+    setMaxTurnsInput(limitInputOf(applied.maxTurns))
+    setMaxBudgetInput(limitInputOf(applied.maxBudgetUsd))
   }
 
   /** 到達可能性と解決結果を取り直す。確認中の判断は取り直した結果で出し直す。 */
@@ -537,9 +662,14 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
 
       <PresetPanel
         view={presets}
-        current={config}
+        current={limitsInvalid ? null : config}
         onApply={(preset) => applyPreset(toLaunchDraft(preset.config))}
       />
+      {limitsInvalid && (
+        <p className="text-muted-foreground text-xs" data-testid="preset-limits-invalid">
+          {EXTRA_AXES_LABELS.presetSaveLimitsInvalid}
+        </p>
+      )}
 
       {session.phase === 'entry' && session.previousFailure !== null && (
         <p role="alert" className="text-destructive text-sm" data-testid="previous-failure">
@@ -762,6 +892,78 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
         </select>
       </label>
 
+      {/* 再開の形でも出す (名前の部品だけ出さない) */}
+      <LaunchExtraAxes
+        showSessionName={resume === null}
+        choices={additionalDirectoryChoices(
+          folderList,
+          effective.folderId,
+          effective.additionalDirectoryIds
+        )}
+        items={directoryItems}
+        full={effective.additionalDirectoryIds.length >= MAX_ADDITIONAL_DIRECTORIES}
+        onAdd={(id) =>
+          update({
+            // 見えている項目 (effective) を基準にする。外して通知した項目が下書きから黙って戻らない (H-002)。
+            additionalDirectoryIds: effective.additionalDirectoryIds.includes(id)
+              ? effective.additionalDirectoryIds
+              : [...effective.additionalDirectoryIds, id]
+          })
+        }
+        onRemove={(id) =>
+          update({
+            additionalDirectoryIds: effective.additionalDirectoryIds.filter((x) => x !== id)
+          })
+        }
+        sessionNameInput={sessionNameInput}
+        sessionNameInvalid={!sessionNameParsed.ok}
+        onSessionNameChange={(raw) => {
+          setConfirming(false)
+          setSessionNameInput(raw)
+        }}
+        onSessionNameSubmit={() => {
+          // 確認中の Enter で確認のボタンを飛ばして起動しない (H-004)。
+          if (!confirming) launch()
+        }}
+        maxTurnsInput={maxTurnsInput}
+        maxBudgetInput={maxBudgetInput}
+        maxTurnsInvalid={!maxTurnsParsed.ok}
+        maxBudgetInvalid={!maxBudgetParsed.ok}
+        onMaxTurnsChange={(raw) => {
+          setMaxTurnsInput(raw)
+          const parsed = parseMaxTurnsInput(raw)
+          // 不正な間は下書きを変えない (起動は押せない)。直すと下書きが追いつく。
+          if (parsed.ok) update({ maxTurns: parsed.value })
+          else setConfirming(false)
+        }}
+        onMaxBudgetChange={(raw) => {
+          setMaxBudgetInput(raw)
+          const parsed = parseMaxBudgetInput(raw)
+          if (parsed.ok) update({ maxBudgetUsd: parsed.value })
+          else setConfirming(false)
+        }}
+      />
+
+      {directoriesOverLimit && (
+        <p role="alert" className="text-destructive text-xs" data-testid="directories-over-limit">
+          {EXTRA_AXES_LABELS.directoriesOverLimit}
+        </p>
+      )}
+
+      {resolution.directoryResets.length > 0 && (
+        <ul
+          role="status"
+          className="text-muted-foreground text-xs"
+          aria-label="外した追加ディレクトリ"
+        >
+          {resolution.directoryResets.map((r) => (
+            <li key={`${r.folderId}-${r.reason}`}>
+              {DIRECTORY_RESET_LABELS[r.reason](directoryName(r.folderId))}
+            </li>
+          ))}
+        </ul>
+      )}
+
       {shownResets.length > 0 && (
         <ul role="status" className="text-muted-foreground text-xs" aria-label="既定に戻した軸">
           {shownResets.map((r) => (
@@ -793,6 +995,34 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
           {CROSS_BOUNDARY_LABELS.lead}
           {crossBoundary.impact ?? CROSS_BOUNDARY_LABELS.fallbackImpact}{' '}
           {CROSS_BOUNDARY_LABELS.launchable}
+        </p>
+      )}
+      {directoryCrossItems.map((i) => (
+        <p
+          key={`cross-${i.id}`}
+          role="note"
+          className="text-sm text-amber-700 dark:text-amber-400"
+          data-testid="directory-cross-boundary-warning"
+        >
+          {directoryCrossBoundaryLabel(
+            i.name,
+            `${CROSS_BOUNDARY_LABELS.lead}${i.entry?.dto?.recommendation?.impact ?? CROSS_BOUNDARY_LABELS.fallbackImpact} ${CROSS_BOUNDARY_LABELS.launchable}`
+          )}
+        </p>
+      ))}
+      {directoryUnknownItems.map((i) => (
+        <p
+          key={`unknown-${i.id}`}
+          role="note"
+          className="text-muted-foreground text-sm"
+          data-testid="directory-cross-boundary-unknown"
+        >
+          {directoryCrossBoundaryLabel(i.name, CROSS_BOUNDARY_LABELS.unknown)}
+        </p>
+      ))}
+      {directoriesChecking && config !== null && directoryItems[0] !== undefined && (
+        <p className="text-muted-foreground text-sm" data-testid="directory-checking">
+          {directoryCrossBoundaryLabel(directoryItems[0].name, CROSS_BOUNDARY_LABELS.checking)}
         </p>
       )}
       {/* 「判定できなかった」は取得 (IPC) の失敗だけ。`blocked` の DTO は下の行で扱う (R3 po M-201)。 */}

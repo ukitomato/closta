@@ -11,7 +11,11 @@ import type { DetectedCandidate } from './provider/types'
 import type { RuntimeDescriptorDTO, RuntimeListDTO } from './runtime/dto'
 import type { SessionLaunchHandshakeDTO, SessionLaunchRejectReason } from './session/agent-session'
 import type { SessionIndexDTO } from './session/dto'
-import type { SafePermissionMode, SessionLaunchConfig } from './session/launch-config'
+import type {
+  PresetLaunchConfig,
+  SafePermissionMode,
+  SessionLaunchConfig
+} from './session/launch-config'
 import type { LiveModelsResult, LiveSettingResult, RenameResult } from './session/live-settings'
 import type { LaunchOrigin, LaunchUsageSummaryDTO } from './session/launch-usage'
 import type { PresetDTO, SavePresetResult } from './session/preset'
@@ -261,7 +265,7 @@ export interface ClostaCapability {
    */
   savePreset(
     name: string,
-    config: SessionLaunchConfig,
+    config: PresetLaunchConfig,
     overwrite: boolean
   ): Promise<SavePresetResult>
   /** プリセットを削除する。未知 id は `{ ok: false }`。 */

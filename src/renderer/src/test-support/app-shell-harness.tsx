@@ -27,6 +27,7 @@ import type { PanelTab } from '@/features/shell/panel-tabs'
 import { useSessionsStore } from '@/stores/sessions'
 import { useUiStore } from '@/stores/ui'
 import { installCapability } from '@/test-support/capability'
+import { DEFAULT_EXTRA_AXES } from '@domain/session/launch-config'
 
 /**
  * シェル全体 (`AppShell`) を描くテストの共通の setup (O-4 FE-030 / 014 research R-12。O-7 の `AppShell.test.tsx` から移した)。
@@ -256,6 +257,8 @@ export async function setup(
         modelId: null,
         effort: null,
         permissionMode: 'default',
+        ...DEFAULT_EXTRA_AXES,
+        sessionName: null,
         ...options.launchConfig
       },
       '案件フォルダ'

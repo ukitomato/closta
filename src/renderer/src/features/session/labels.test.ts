@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
 import { LAUNCH_FAILURE_REASONS, type LaunchFailureReason } from '@domain/session/agent-session'
+import type { DirectoryResetReason } from '@domain/session/launch-resolution'
 import { LIVE_SETTING_FAILURES, type LiveSettingBlocker } from '@domain/session/live-settings'
 
 import { APP_COMMAND_LABELS } from '@/features/chat/labels'
 
 import {
+  DIRECTORY_RESET_LABELS,
+  EXTRA_AXES_LABELS,
   LIVE_MODEL_LIST_FAILURE_LABELS,
   RESUME_PICKER_LABELS,
   attentionAnnouncement,
@@ -283,5 +286,23 @@ describe('labels — 025 で足す文言 (data-model §9)', () => {
     for (const s of Object.values(LIVE_MODEL_LIST_FAILURE_LABELS)) {
       expect(s.length).toBeGreaterThan(0)
     }
+  })
+})
+
+describe('labels — 024 で足す文言 (data-model §9.3)', () => {
+  it('追加ディレクトリを外した通知は理由の全値を網羅し、表示名を含む', () => {
+    const reasons: readonly DirectoryResetReason[] = [
+      'unregistered',
+      'unreachable',
+      'same-as-folder'
+    ]
+    expect(Object.keys(DIRECTORY_RESET_LABELS).sort()).toEqual([...reasons].sort())
+    for (const r of reasons) expect(DIRECTORY_RESET_LABELS[r]('proj')).toContain('proj')
+  })
+
+  it('軸の見出しと範囲外の文言', () => {
+    expect(EXTRA_AXES_LABELS.additionalDirectories).toBe('追加ディレクトリ')
+    expect(EXTRA_AXES_LABELS.maxTurnsRange).toContain('1〜1000')
+    expect(EXTRA_AXES_LABELS.maxBudgetRange).toContain('0.01〜1000')
   })
 })

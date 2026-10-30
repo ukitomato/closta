@@ -15,6 +15,7 @@ import { LIVE_MODEL_LIST_FAILURE_LABELS, LIVE_SETTING_LABELS } from './labels'
 import { RunningSessionStoreContext } from './running-session-context'
 import { createRunningSessionStore } from './running-session-store'
 import { EMPTY_SESSION_METERS } from './running-session-types'
+import { DEFAULT_EXTRA_AXES } from '@domain/session/launch-config'
 
 /**
  * 025 FE-012 — composer の周りの実行中の設定の選択 (spec US-1 AC1〜AC5 / SC-001 の component 版)。
@@ -95,7 +96,9 @@ async function setup(
     providerId: over.providerId ?? null,
     modelId: over.modelId ?? null,
     effort: over.effort ?? null,
-    permissionMode: 'default'
+    permissionMode: 'default',
+    ...DEFAULT_EXTRA_AXES,
+    sessionName: null
   })
   const port: FakePort = { onmessage: null, start: vi.fn(), close: vi.fn() }
   const event = new Event('message') as Event & { data: unknown; ports: unknown[] }

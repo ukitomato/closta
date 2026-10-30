@@ -15,6 +15,7 @@ import { olderMessagesLabel } from './labels'
 import { createRunningSessionStore, type RunningSessionStore } from './running-session-store'
 import { RunningSessionStoreContext } from './running-session-context'
 import { MESSAGE_WINDOW } from './session-view'
+import { DEFAULT_EXTRA_AXES } from '@domain/session/launch-config'
 
 /**
  * X-5 / SC-003 — 表示中セッションの本文の窓と、中央のヘッダの表示名 (pr-gate R2 po L-102 / L-101)。
@@ -105,7 +106,9 @@ async function setup(options: {
       providerId: null,
       modelId: null,
       effort: null,
-      permissionMode: 'default'
+      permissionMode: 'default',
+      ...DEFAULT_EXTRA_AXES,
+      sessionName: null
     })
   }
   store.setState((s) => ({

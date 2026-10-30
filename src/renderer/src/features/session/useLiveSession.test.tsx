@@ -8,6 +8,7 @@ import { stubCapability } from '@/test-support/capability'
 import { createRunningSessionStore } from './running-session-store'
 import { RunningSessionStoreContext } from './running-session-context'
 import { useLiveSession } from './useLiveSession'
+import { DEFAULT_EXTRA_AXES } from '@domain/session/launch-config'
 
 /**
  * X-5 FE-002 — `useLiveSession(sessionId)` は 1 セッション分を読み、制御を引数のセッションに向ける。
@@ -25,7 +26,9 @@ const config: SessionLaunchConfig = {
   providerId: null,
   modelId: null,
   effort: null,
-  permissionMode: 'default'
+  permissionMode: 'default',
+  ...DEFAULT_EXTRA_AXES,
+  sessionName: null
 }
 
 async function setup(): Promise<{

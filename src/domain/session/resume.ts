@@ -13,7 +13,7 @@ export type ResumeSource =
 
 export interface SessionResumeRequest {
   readonly source: ResumeSource
-  /** 6 軸。引き継ぐ 3 軸は source から解いた値と一致しなければならない (data-model §4)。 */
+  /** 起動設定。引き継ぐ 3 軸は source から解いた値と一致しなければならない (data-model §4)。選び直せる軸は 6 つ (024)。`sessionName` は `null`。 */
   readonly config: SessionLaunchConfig
 }
 

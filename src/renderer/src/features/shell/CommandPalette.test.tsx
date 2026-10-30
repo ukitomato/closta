@@ -27,6 +27,7 @@ import { installCapability } from '@/test-support/capability'
 
 import { AppShell } from './AppShell'
 import { PALETTE_LABELS, SETTINGS_SECTION_LABELS, SHELL_LABELS } from './labels'
+import { DEFAULT_EXTRA_AXES } from '@domain/session/launch-config'
 
 /*
  * 過去ログの取得 (`useTranscript`) だけを差し替える (AppShell.test.tsx と同じ)。既定は「読み込み中」。
@@ -222,7 +223,9 @@ async function setup(
         providerId: null,
         modelId: null,
         effort: null,
-        permissionMode: 'default'
+        permissionMode: 'default',
+        ...DEFAULT_EXTRA_AXES,
+        sessionName: null
       },
       FOLDER.displayName
     )

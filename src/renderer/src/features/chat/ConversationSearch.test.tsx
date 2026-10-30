@@ -28,6 +28,7 @@ import { COMPOSER_LABELS, CONVERSATION_SEARCH_LABELS } from './labels'
 import { SEARCH_HIGHLIGHT, SEARCH_HIGHLIGHT_CURRENT } from './search-highlight'
 import { findMessageElement } from './transcript-context'
 import type { TranscriptView } from './useTranscript'
+import { DEFAULT_EXTRA_AXES } from '@domain/session/launch-config'
 
 /**
  * O-3 FE-026 — 会話内検索を中央に描いた形で確かめる (spec US-2 AC1〜AC7 / SC-002 / Edge Cases / 012 data-model §2)。
@@ -249,7 +250,9 @@ async function setupRunning(
       providerId: null,
       modelId: null,
       effort: null,
-      permissionMode: 'default'
+      permissionMode: 'default',
+      ...DEFAULT_EXTRA_AXES,
+      sessionName: null
     })
   }
   store.setState((s) => {
