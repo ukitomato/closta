@@ -53,7 +53,12 @@ preload / `Capability.launchSession` の型: `launchSession(config: SessionLaunc
 
 ## C-6 e2e の capability の写し (`src/main/app/e2e-capability.ts`)
 
-- 3 つの口に 3 つ目の引数を通し、起動の service に `autoModeAllowed` (`knownRuntimes` の記述子から `isAutoModeAllowed`) を渡す。偽のランタイムはすべて `autoModeAllowed: false` のまま
-- 偽の supervisor の起動は、起動の options の `permissionMode` を `meter` の `permission-mode` として 1 回流す (実機の `init` の代わり)
-- 偽の `set-permission-mode` は今のまま (`meter` を流して成功)
+- 3 つの口に 3 つ目の引数を通し、起動の service に `autoModeAllowed` (`knownRuntimes` の記述子から `isAutoModeAllowed`) を渡す。偽のランタイムはすべて `autoModeAllowed: false` のまま (`:511` 付近)
+- 偽の supervisor の起動 (`:324`) は、起動の options の `permissionMode` を `meter` の `permission-mode` として 1 回流す (実機の `init` の代わり)
+- 偽の `set-permission-mode` は今のまま (`:440-441`。`meter` を流して成功)
 - `src/renderer/src/test-support/capability.ts` の写しも同じ引数を受ける
+
+## C-7 renderer の通り道
+
+- `Capability` (`src/domain/capability.ts:166`, `:179`, `:227`)・preload・`ipc.ts` (`:154`, `:158`, `:170`)・`session-ipc.ts` の deps (`:76`, `:80`, `:93`) の 3 つの口の型に 3 つ目の引数を足す
+- renderer の呼び出しはストアの 3 か所 (`running-session-store.ts:840`, `:882`, `:1020`) だけ。経路は data-model §6.3 / §6.4

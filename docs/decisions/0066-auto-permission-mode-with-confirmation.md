@@ -4,13 +4,14 @@ date: 2026-10-29
 id: AD-066
 deciders: ukitomato
 tags: [session, permission, isolation, constitution, constitution-check]
+affected_domains: [session, ui]
 supersedes: []
 superseded-by: []
 ---
 
 # AD-066: 権限モードの Auto を起動と実行中で選べるようにする — 隔離の無いランタイムでは確認を挟み、main が確認の印を必須にする
 
-本 ADR は X-10 ([spec 026](../../specs/026-session-live-auto-permission-mode/spec.md)) の plan で起こした。spec の U-1〜U-5 は 2026-10-29 に利用者が承認した。plan の P-1〜P-12 ([research.md](../../specs/026-session-live-auto-permission-mode/research.md)) は本 ADR の決定の実装の選択である。規則の正本は [data-model.md](../../specs/026-session-live-auto-permission-mode/data-model.md) で、本 ADR は決定と読み替えだけを書く。**Constitution Principle III の改定を伴う** (1.4.0 → 1.5.0。MINOR)。改定手順 2 (architecture-reviewer を交えた人間のレビュー) を 026 の PR で受けてから accepted にする。
+本 ADR は X-10 ([spec 026](../../specs/026-session-live-auto-permission-mode/spec.md)) の plan で起こした。spec の U-1〜U-5 は 2026-10-29 に利用者が承認した。plan の P-1〜P-12 ([research.md](../../specs/026-session-live-auto-permission-mode/research.md)) は本 ADR の決定の実装の選択である。規則の正本は [data-model.md](../../specs/026-session-live-auto-permission-mode/data-model.md) で、本 ADR は決定と読み替えだけを書く。**Constitution Principle III の改定を伴う** (1.5.0 → 1.6.0。MINOR。2026-10-30 に 025 (AD-065) の 1.5.0 のマージを受けて版を振り直した)。改定手順 2 (architecture-reviewer を交えた人間のレビュー) を 026 の PR で受けてから accepted にする。
 
 ## Context
 
@@ -29,8 +30,10 @@ superseded-by: []
 | AD-041 (a) (起動の権限モードを安全 3 値の allowlist にし、`assertSafePermissionMode` で閉じる) | allowlist を許可の 4 値 (安全 3 値と `auto`) にし、包みを `assertSelectablePermissionMode` に替える (Decision 1 / 3)。capability に連動する昇格モードの提示 (AD-041 (c)) は I-3 のまま |
 | AD-020 の危険度表 (`auto` = 危険) | 表は変えない。`auto` は危険な値のまま、確認と帯 (Decision 2 / 4) を条件に選べる値にする。「拒否が黙って起きる」は既存の拒否の表示で足りる (spec Assumptions) |
 | [AD-059](0059-session-resume-query-option-and-conversation-id.md) Decision 3 (再開の最初の `init` が安全 3 値の外なら `resume-failed`) | 「安全 3 値、または起動で頼んだ値と同じ」なら通す。頼んでいない昇格は今どおり失敗 (Decision 5) |
-| [AD-042](0042-provider-type-refinement-and-d4-lapse.md) の `schemaVersion` の規則 (列挙値を広げる store は版を上げる。例に I-3 の権限モードの拡張) | プリセットの `schemaVersion` を 1 → 2 にする (Decision 6) |
+| [AD-042](0042-provider-type-refinement-and-d4-lapse.md) の `schemaVersion` の規則 (列挙値を広げる store は版を上げる。例に I-3 の権限モードの拡張) | プリセットの `schemaVersion` を 2 → 3 にする (版 2 は [AD-064](0064-launch-config-additional-directories-limits-and-title.md) Decision 4。Decision 6) |
 | AD-062 の `LIVE_SETTING_FAILURES` (集合を変えるには ADR が要る) | `auto-mode-unconfirmed` を足して 12 にする (Decision 2) |
+| [AD-065](0065-live-model-list-and-claude-code-permission-mode-names.md) Decision 3 の「選べる値は変えない: AD-062 の安全 3 値のまま。昇格の値の名前は帯と transcript の行で読むためだけにある」 | `auto` の名前 (`Auto`) は選択肢・確認・Auto の帯でも使う。名前の表 (`PERMISSION_MODE_NAMES`) の 1 か所から取り、説明を付けない規則は変えない (Decision 1 / 4) |
+| [AD-047](0047-session-meter-and-failure-reasons.md) Decision 5 (権限モードの昇格を観測したら原因を断定しない警告の帯で知らせる) | 利用者が Closta から選んだ `auto` を観測したときは Auto の帯にする。選んでいないのに安全 3 値の外を観測したときは今の帯のまま。強制の要否の持ち主 (I-3) は変えない (Decision 4) |
 
 ## Decision
 
@@ -39,12 +42,12 @@ superseded-by: []
 3. **項目 16 の強さを保つ。** 許可の包み (`SANCTIONED_PERMISSION_MODE_WRAPPER`) を `assertSelectablePermissionMode` に替える。昇格の値の文字列リテラルの禁止 (`PERMISSION_MODE_ESCALATION_VALUES`) は `auto` を含む 3 値のまま残し、agents に `'auto'` を直書きさせない (値は main から届く)。`.setPermissionMode(assertSelectablePermissionMode('bypassPermissions'))` が発火する rule fixture を足す
 4. **利用者が選んだ `auto` で動いている間は、中央のヘッダの下に Auto の帯を出す。** 「選んだ `auto`」と隔離の状態 (`autoModeStatus` の今の文言の規則) を書き、`role="note"` にして読み上げは切り替えのときの 1 回だけにする。利用者が選んでいないのに安全 3 値の外を観測したときは、今の権限モードの警告の帯 (原因を断定しない。`role="alert"`) のまま
 5. **再開の init の検査を、起動で頼んだ値との比較に広げる。** 頼んだ `auto` が `auto` で戻るのは通し、頼んでいない昇格は `resume-failed` のまま。再開の初期値は `auto` を起動の既定に戻す (spec Edge Cases)
-6. **プリセットの `schemaVersion` を 2 にする。** 読み込みは 1 と 2 を同じ述語で受け、書き出しは 2。古い版は 2 を `schema-version-unknown` として読まない
+6. **プリセットの `schemaVersion` を 3 にする。** 版 1 の読み替え (AD-064) と版 2 は今のまま受け、版 3 は版 2 と同じ形 (権限モードの述語だけが許可の 4 値)。書き出しは 3。版 2 までしか知らない Closta は 3 を `schema-version-unknown` として読まない
 
 ## Consequences
 
 - 隔離の無いランタイムで、分類器が許可した操作はホストでそのまま実行される。Closta が手当てするのは「選ぶ前の確認」「動いている間の帯」「拒否の表示」の 3 つで、操作そのものは止めない (Principle III の改定の範囲)
-- `IPC_CHANNELS`・`SessionControl` の種類・`QUERY_MUTATION_METHODS`・`SessionLaunchConfig` のキーは変わらない。3 つの IPC の引数が 1 つ増え、拒否の理由が 2 つの集合で 1 つずつ増える (起動の拒否の理由は 25)
+- `IPC_CHANNELS`・`SessionControl` の種類 (9)・`QUERY_MUTATION_METHODS`・`SessionLaunchConfig` のキー (10) は変わらない。3 つの IPC の引数が 1 つ増え、拒否の理由が 2 つの集合で 1 つずつ増える (起動の拒否の理由は 25)
 - プリセットに `auto` を保存した後に古い版の Closta に戻すと、プリセットのファイル全体を読めない (`schema-version-unknown`)
 - `auto` が使えない (アカウント・モデル・`disableAutoMode`) ときは、Claude Code が返す失敗を今の経路で出す。Closta は事前に判定しない
 - I-3 は `acceptEdits` / `bypassPermissions`、sandbox の capability 判定、隔離が分かったランタイムでの確認の扱いを持ち続ける

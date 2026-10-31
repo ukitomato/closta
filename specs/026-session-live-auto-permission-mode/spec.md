@@ -22,7 +22,7 @@ linear: null
 
 ## 本 feature の位置づけ
 
-roadmap の **X-10** (2026-10-29 に利用者が承認して足した行)。M4 の I-3 から `auto` だけを隔離 (I-1 / I-2) より先に出す。主目的に ADR (AD-066) と Constitution Principle III の改定を含むので、規模の目安の例外に当たる (Phase 8.5)。025 (未マージ。権限モードの選択を composer の周りに移し、表記を Claude Code に揃える) には依存しない。026 は main の上の今の置き場所と表記に `auto` を 1 つ足すだけで、025 が後でマージされるときに置き場所が移る。
+roadmap の **X-10** (2026-10-29 に利用者が承認して足した行)。M4 の I-3 から `auto` だけを隔離 (I-1 / I-2) より先に出す。主目的に ADR (AD-066) と Constitution Principle III の改定を含むので、規模の目安の例外に当たる (Phase 8.5)。025 (権限モードの選択を composer の周りに移し、表記を Claude Code に揃えた。AD-065) と 024 (`presets.json` を版 2 にした。AD-064) は 2026-10-29 に main にマージ済み (#32 / #33)。026 はその上の今の置き場所 (composer の左の群) と表記 (`Auto`) に `auto` を 1 つ足す (2026-10-30 の plan で載せ直した。plan の「設計後の見直し」)。
 
 ## 決定済みの事項
 
