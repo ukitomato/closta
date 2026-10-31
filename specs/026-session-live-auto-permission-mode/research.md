@@ -89,11 +89,11 @@
 - 起動の設定は Radix の Dialog の中 (`LaunchDialogHost`)。既存の確認 (既定 Provider での起動) は入れ子の modal を避けて、ダイアログの中に `role="alertdialog"` の枠と 2 つのボタンを出す (`LaunchDialog.tsx:1088-1116`)。権限モードの選択は `:877-890`
 - **実行中の権限モードの選択は 025 で composer の左の群に移った**: `LivePane.tsx` の `LiveComposerSettings` (`:406-486`) が `LiveSettingsControls` (`useConfirmedSelect`。キーボードは Enter / blur で確定) を描き、`onSelectPermissionMode` は `LivePane` (`:197`, `:210`) から渡る `session.setPermissionMode`。中央のヘッダ (`CenterHeader.tsx:76`) に残るのは失敗の 1 行 (`LiveSettingError`) だけ
 - 承認カード・問いのカードは `LivePane` の列の上側 (`:311-336`。`px-4 pt-3` の枠) に出る
-- SC-001: 隔離の無いランタイムで 2 操作 (選ぶ・承諾する)、あるランタイムで 1 操作
+- SC-001: `isAutoModeAllowed` が false のランタイムで 2 操作 (選ぶ・承諾する)、true のランタイム (sandbox を使えるが Closta は有効にしていない。spec U-6) で 1 操作
 
 **決定 P-8**: 確認は 1 つの部品 `AutoModeConfirmation` (`features/session/`) にし、起動の設定とヘッダの両方で使う。既存の Provider の確認と同じく入れ子の modal にせず、その場に `role="alertdialog"` の枠 (見出しの `aria-labelledby`・文の `aria-describedby`・2 つのボタン) を出し、開いたら承諾のボタンではなく**取り消しのボタンに焦点を置く** (Enter の連打で承諾しない)。Escape は取り消し。文言は data-model §6
 
-- 起動の設定: 権限モードの選択で `auto` を選び確認が要るなら、下書きを変えずに確認を開く。承諾で `auto` にし、承諾したランタイムの id を持つ。起動を押した時点で確認が要るのに持っている id が今のランタイムと違う (プリセット・`lastConfig`・ランタイムの変更で `auto` が入った) なら、起動の前に同じ確認を出す。Provider の確認と重なるときは Provider の確認が先
+- 起動の設定: 権限モードの選択で `auto` を選び確認が要るなら、下書きを変えずに確認を開く。承諾で `auto` にし、承諾したランタイムの id を持つ。持っている id はプリセットの適用・権限モードを `auto` 以外にしたこと・ランタイムの変更で消し、ダイアログの mount ごとに空から始める (design-gate H-001。消さないと、承諾 → `default` → `auto` のプリセットで確認が省かれる)。起動を押した時点で確認が要るのに持っている id が今のランタイムと違う (プリセット・`lastConfig`・ランタイムの変更で `auto` が入った) なら、起動の前に同じ確認を出す。Provider の確認と重なるときは Provider の確認が先
 - 実行中 (composer の左の群): `auto` を選び確認が要るなら、要求を送らずに確認を開く。確認の状態は `LivePane` が持ち、**承認カードと同じ列の上側の枠** (`px-4 pt-3`) に出す (composer の行は 1 行の flex で、枠の大きさの部品を置けない)。取り消しでは何も送らず、composer の入力へ焦点を戻す。確認の間に受け付けの条件が外れた (`liveSettingBlocker` が非 null。セッションの終了を含む) ら確認を閉じ、送らない (spec Edge Cases の 1 つ目)。`LivePane` はセッションごとに描き直すので、切り替えで閉じる
 
 - 退けた案 A: Radix の `AlertDialog` を入れ子にする — 起動の設定の Dialog の中で焦点の罠が 2 重になる (既存の Provider の確認が同じ理由で入れ子にしていない)
@@ -113,7 +113,9 @@
 | 安全 3 値の外 (`auto` を含む) | それ以外 | 今の `UnsafeModeBanner` のまま (原因を断定しない。`role="alert"`) |
 | null・安全 3 値 | — | 出さない |
 
-読み上げ: Auto の帯は視覚の帯 (`role="note"`) と別に `sr-only` の `role="status"` を持ち、**帯を描いている間に観測の値が `auto` 以外から `auto` に変わったときだけ** 文を入れる (前の値は `useRef`)。描いた時点で既に `auto` のとき (別のセッションから切り替えて戻った・再 mount) は読み上げない。1 回の切り替えにつき 1 回 (SC-004)
+読み上げ: 視覚の帯 (`role="note"`) と別の `sr-only` の `role="status"` で読む。**design-gate H-002 で置き場所を直した**: 帯の中に置くと mount の時点で既に `auto` なので 0 回になり、key の無い `CenterBanners` に置くとセッションの切り替えで読んでしまい、live region を中身と同時に挿入するとスクリーンリーダーは読まないことが多い。そこで live region と前の値の `useRef` は、`CenterBanners` の中の `key={sessionId}` の `PermissionModeBanners` が**常に mount する** `AutoModeAnnouncer` に置き、ref は mount 時の今の値で初期化する。同じセッションの中で観測の値が `auto` 以外 (`null` を含む。Auto で起動した直後の最初の `meter`) から `auto` に変わったときだけ文を入れる。別のセッションへ切り替えて戻った (mount の時点で `auto`) ときは読まない。1 回の切り替えにつき 1 回 (SC-004。規則は data-model §5.3)
+
+帯の隔離の文 (spec U-6 / design-gate C-001): `autoModeStatus` が `allowed` (sandbox が使える) でも Closta は I-3 まで sandbox を有効にしないので、Auto の帯は今の `UnsafeModeBanner` の隔離の文 (`allowed` は「確かめていません」) を共有せず、どの値でも「このセッションは隔離されていません」と読める文を持つ (data-model §9)
 
 - 退けた案 A: Auto の帯も `role="alert"` — 利用者が自分で選んだ状態の表示で、セッションを開き直すたびに割り込んで読み上げる (U-5「読み上げは切り替えたときの 1 回だけ」)
 - 退けた案 B: 成功の結果を待って `chosenPermissionMode` を変える — 上の一瞬の `UnsafeModeBanner` が出る
@@ -131,7 +133,7 @@
 - 偽の supervisor の `set-permission-mode` は `meter` の `permission-mode` を流して成功を返す (`:440-441`)。起動 (`:324` の `launch(sessionId)`) は起動の権限モードを流さない
 - `e2e/launch-dialog.spec.ts:78-94` は「3 つだけ・`auto` は 0」を確かめている (Principle III の E2E)。Constitution III の Verification の正本
 
-**決定 P-11**: 偽の起動は起動の options の `permissionMode` を `meter` の `permission-mode` として 1 回流す (実機の `init` の代わり)。e2e の起動の service に `autoModeAllowed` (`knownRuntimes` から `isAutoModeAllowed`) を渡す。`launch-dialog.spec.ts` の Principle III の E2E を「4 つ (`acceptEdits` / `bypassPermissions` が無い)・`auto` を選ぶと確認が出て、取り消すと前の値」に書き直す (Constitution III の新しい Verification)。隔離のあるランタイムで確認が出ない (1 操作) ことは renderer の単体テストで確かめる (E2E の偽のランタイムに隔離のあるものが無い)
+**決定 P-11**: 偽の起動は起動の options の `permissionMode` を `meter` の `permission-mode` として 1 回流す (実機の `init` の代わり)。e2e の起動の service に `autoModeAllowed` (`knownRuntimes` から `isAutoModeAllowed`) を渡す。`launch-dialog.spec.ts` の Principle III の E2E を「4 つ (`acceptEdits` / `bypassPermissions` が無い)・`auto` を選ぶと確認が出て、取り消すと前の値」に書き直す (Constitution III の新しい Verification)。`autoModeAllowed` が true のランタイムで確認が出ない (1 操作) ことは renderer の単体テストで確かめる (E2E の偽のランタイムに true のものが無い)
 
 ## R-12 Constitution の改定と ADR の番号
 

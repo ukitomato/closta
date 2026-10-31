@@ -6,7 +6,7 @@
 
 ## 共通
 
-- **`autoModeAcknowledged`** (3 つ目の引数): renderer が「隔離の無いランタイムで `auto` を選ぶ確認を承諾した」ことを載せる。main は `=== true` だけを承諾とみなし、他の値 (欠け・`false`・型の違う値) は承諾なし。承諾なしでも、確認が要らない要求 (安全 3 値・`isAutoModeAllowed` が true のランタイムの `auto`) は今どおり通る
+- **`autoModeAcknowledged`** (3 つ目の引数): renderer が「隔離の無いランタイムで `auto` を選ぶ確認を承諾した」ことを載せる。main は `=== true` だけを承諾とみなし、他の値 (欠け・`false`・型の違う値) は承諾なし。承諾なしでも、確認が要らない要求 (安全 3 値・`isAutoModeAllowed` が true のランタイムの `auto`) は今どおり通る (true は sandbox を使えるという意味で、隔離の中で動くという意味ではない。spec U-6)
 - 確認が要るか: `requiresAutoModeConfirmation(mode, isAutoModeAllowed(ランタイムの capabilities))` (data-model §1)。ランタイムが見つからなければ要る
 - 値の集合: `SelectablePermissionMode` (`default` / `plan` / `dontAsk` / `auto`)。`acceptEdits` / `bypassPermissions` / 不明な値は今どおり形の検査で落ちる
 
@@ -61,4 +61,4 @@ preload / `Capability.launchSession` の型: `launchSession(config: SessionLaunc
 ## C-7 renderer の通り道
 
 - `Capability` (`src/domain/capability.ts:166`, `:179`, `:227`)・preload・`ipc.ts` (`:154`, `:158`, `:170`)・`session-ipc.ts` の deps (`:76`, `:80`, `:93`) の 3 つの口の型に 3 つ目の引数を足す
-- renderer の呼び出しはストアの 3 か所 (`running-session-store.ts:840`, `:882`, `:1020`) だけ。経路は data-model §6.3 / §6.4
+- renderer の呼び出しはストアの 3 か所 (`running-session-store.ts:840`, `:882`, `:1020`) だけ。経路は data-model §6.3 / §6.4 (`LaunchDialog` の `LaunchSource` → `LivePane` の `NewSessionDialog` → `RunningSessionsProvider` → ストア)。IPC の口の型では省略可能、renderer の中の型 (ストア・view・`LaunchSource`・`useLiveSession`) では必須の `boolean` にする (段が引数を落としたら tsc が落とす)
