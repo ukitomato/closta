@@ -55,15 +55,12 @@ gate_common::phase0_check_charter "$spec_dir" || exit 1
 5. agent registry validate: `gate_common::registry_assert_agent po-reviewer && gate_common::registry_assert_agent architecture-reviewer`
 6. **追加 reviewer の解決**: `.specify/.agents-registry.yaml` で `invoked_by` に `design-gate` を含むエントリを列挙し、`gate_common::registry_filter_agents` で実在するものだけを追加トラックとする。registry が SSoT であり、本 SKILL にトラック数を焼き込まない。
 
-   **Track B / C で既に固定している reviewer を二重に数えないこと。** `invoked_by` に `design-gate` を含むのは現状 `po-reviewer` / `architecture-reviewer` / `security-reviewer` / `platform-boundary-reviewer` であり、前 2 つは Track B / C そのものである。**列挙結果から Track B / C の分を差し引いた残り**を追加トラックとする:
+   Track B〜D で固定している reviewer (`po-reviewer` / `architecture-reviewer` / `security-reviewer`) は列挙結果から差し引き、残りを追加トラックとする。差し引かないと同じ reviewer が 2 トラック走り、コストが倍になるうえ dedup 前の Critical が二重に数えられる。現状の残りは `platform-boundary-reviewer` だけである:
 
    ```bash
-   fixed="po-reviewer architecture-reviewer"
-   extra=$(gate_common::registry_filter_agents \
-             security-reviewer platform-boundary-reviewer)
+   fixed="po-reviewer architecture-reviewer security-reviewer"
+   extra=$(gate_common::registry_filter_agents platform-boundary-reviewer)
    ```
-
-   差し引かずに起動すると po / architecture が 2 トラック走り、生成コストが倍になるうえ dedup 前の Critical が二重計上される。
 
    **本 gate は `reviewers.yml` を読まない。** design-gate の時点では diff が存在せず、`auto_invoke_patterns` (変更ファイルへの glob) が判定材料にならないため。したがって design-gate の reviewer 集合を変えるには **registry の `invoked_by`** を直す — `reviewers.yml` の `gates` に `design-gate` を書いても効かない。
 
@@ -80,7 +77,7 @@ gate_common::phase0_check_charter "$spec_dir" || exit 1
 | **D. `security-reviewer`** | Agent ツール (`subagent_type: security-reviewer`) | **secrets / 認可 / プロセス境界 hardening**: spec / plan が秘密の扱いや権限境界をどう定めているか |
 | **E+. registry 由来の追加 reviewer** | Agent ツール (`subagent_type: <name>`) | 各 reviewer の担当スライスに従う。Phase 0 step 6 で解決した分だけトラックを増やす (Track B-D と重複させない) |
 
-各 subagent に渡す素材は **パスだけ** である。**本文を prompt に貼ってはならない** — reviewer は自分で Read する定義になっており (`reviewer-base.md` の Tier-0)、貼ると並列トラックの数だけ同じ本文が重複する。
+各 subagent に渡すのはパスだけ (AGENTS.md の実行モデル):
 
 - `<spec_dir>` — `spec.md` (必須) と `{plan.md, tasks.md, data-model.md, research.md, contracts/, quickstart.md, checklists/}` (存在分すべて) を reviewer が Read する
 - `docs/domains/<domain>/charter.md`
@@ -110,7 +107,7 @@ verdict の `tracks.<name>.status: error` を記録する。**他トラックが
 **Spec**: specs/<spec_dir>/spec.md
 **Domain**: <domain>
 **Charter**: docs/domains/<domain>/charter.md
-**Tracks**: analyze, po-reviewer, architecture-reviewer[, optional reviewers] (parallel clean-context subagents)
+**Tracks**: analyze, po-reviewer, architecture-reviewer, security-reviewer[, 追加 reviewer] (parallel clean-context subagents)
 
 ## Verdict
 
@@ -119,6 +116,8 @@ verdict の `tracks.<name>.status: error` を記録する。**他トラックが
 | analyze               | <n>      | <n>  | <n>    | <n> |
 | po-reviewer           | <n>      | <n>  | <n>    | <n> |
 | architecture-reviewer | <n>      | <n>  | <n>    | <n> |
+| security-reviewer     | <n>      | <n>  | <n>    | <n> |
+| <追加 reviewer>        | <n>      | <n>  | <n>    | <n> |
 | **Total (dedup)**     | **<N>**  | <n>  | <n>    | <n> |
 
 _(前回 gate が存在する場合のみ表示)_

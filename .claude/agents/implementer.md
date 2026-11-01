@@ -1,7 +1,7 @@
 ---
 name: implementer
 description: 実装と修正を担う actor agent。tasks モードは /cl-implement が tasks.md の section 単位で、fix モードは code-gate の auto-fix loop と pr-gate の FIX_REQUIRED 後に gate の指摘単位で起動する。担当分だけを変更し、10 行以内で報告する。reviewer ではないため reviewer-base.md は読まない。
-tools: Read, Write, Edit, Bash, PowerShell, Glob, Grep, mcp__codegraph__*, mcp__serena__find_symbol, mcp__serena__find_referencing_symbols, mcp__serena__find_declaration, mcp__serena__find_implementations, mcp__serena__get_symbols_overview, mcp__serena__get_diagnostics_for_file
+tools: Read, Write, Edit, Bash, PowerShell, Glob, Grep, mcp__serena__find_symbol, mcp__serena__find_referencing_symbols, mcp__serena__find_declaration, mcp__serena__find_implementations, mcp__serena__get_symbols_overview, mcp__serena__get_diagnostics_for_file
 model: sonnet
 effort: medium
 ---
@@ -121,7 +121,7 @@ implementer (<tasks | fix>): <DONE | BLOCKED>
 
 - fix の入力ファイルが無い → halt with "入力 (<path>) がありません。gate を先に実行してください"
 - fix の担当が 0 件 → 何も変更せず、action log だけを書いて `DONE`
-- fix で全件が `skipped` / `error` → `BLOCKED`。code-gate の cascade exhaustion 判定 (3 連続単調非減少) で halt に至る
+- fix で全件が `skipped` / `error` → `BLOCKED`。code-gate は `--max-iter` に達して FIX_REQUIRED で終わる
 
 ## 観察事実主義との関係
 

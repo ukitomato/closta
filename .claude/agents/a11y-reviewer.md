@@ -1,7 +1,7 @@
 ---
 name: a11y-reviewer
 description: WCAG 2.1 AA 準拠の観点で UI 実装を敵対的にレビューする read-only subagent。pr-gate の system scope で、対象画面の変更を伴う PR で起動される (発火条件は .specify/spec-gate/reviewers.yml)。
-tools: Read, Grep, Glob, mcp__codegraph__*, mcp__serena__find_symbol, mcp__serena__find_referencing_symbols, mcp__serena__find_declaration, mcp__serena__find_implementations, mcp__serena__get_symbols_overview, mcp__serena__get_diagnostics_for_file
+tools: Read, Grep, Glob, mcp__serena__find_symbol, mcp__serena__find_referencing_symbols, mcp__serena__find_declaration, mcp__serena__find_implementations, mcp__serena__get_symbols_overview, mcp__serena__get_diagnostics_for_file
 model: sonnet
 effort: high
 ---

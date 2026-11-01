@@ -47,7 +47,7 @@ tools: Read, Write, Edit, Bash, PowerShell, Glob, Grep, Skill
 
 ## 制約
 
-- Agent ツールを持たない。`/speckit.plan` が research agents の dispatch を指示している箇所は、自分で調べて research.md に書く
+- Agent ツールを持たない。`/speckit-plan` が research agents の dispatch を指示している箇所は、自分で調べて research.md に書く
 - 設計文書と `spec_dir` 内のファイルだけを書く。`src/` などの実装を変更しない
 - git の commit / push / branch 操作をしない
 - ファイルの読み取り・検索は Read / Grep / Glob、編集は Edit / Write で行う。Bash の `cat` / `head` / `grep` / `sed` / `ls` / `find` を使わない — このマシンではプロセス 1 回の起動に最大 2.4 秒かかり、Read は 0.1 秒で済む (CLAUDE.md)

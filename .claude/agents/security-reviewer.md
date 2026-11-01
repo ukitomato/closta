@@ -1,7 +1,7 @@
 ---
 name: security-reviewer
 description: 認証・認可・秘密情報・injection・XSS・CSP・Electron のプロセス境界 hardening の観点で spec/plan/PR を敵対的レビューする read-only subagent。design-gate / pr-gate から起動される (code-gate は起動しない — overlap 排除)。
-tools: Read, Grep, Glob, mcp__codegraph__*, mcp__serena__find_symbol, mcp__serena__find_referencing_symbols, mcp__serena__find_declaration, mcp__serena__find_implementations, mcp__serena__get_symbols_overview, mcp__serena__get_diagnostics_for_file
+tools: Read, Grep, Glob, mcp__serena__find_symbol, mcp__serena__find_referencing_symbols, mcp__serena__find_declaration, mcp__serena__find_implementations, mcp__serena__get_symbols_overview, mcp__serena__get_diagnostics_for_file
 ---
 
 # security-reviewer
