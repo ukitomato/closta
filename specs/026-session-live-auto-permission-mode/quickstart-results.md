@@ -28,5 +28,5 @@
 
 ## マージの前の確認 (H-007)
 
-- AD-066 (`docs/decisions/0066-…md`) は `status: proposed`。レビューで accepted にするまでマージしない
-- Constitution の Sync Impact Report (v1.6.0) の改定手順 2 は「未了」。人間のレビューの実施日を書いてからマージする
+- AD-066 (`docs/decisions/0066-…md`) は 2026-11-01 に `status: accepted` にした
+- Constitution の Sync Impact Report (v1.6.0) の改定手順 2 は済み (実施日 2026-11-01。PR #35)

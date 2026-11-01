@@ -12,7 +12,7 @@ Sync Impact Report (v1.6.0)
 - Last amended: 2026-11-01
 - Bump rationale: MINOR。Principle III を、`bypassPermissions` の選択不可は残し、Auto (`auto`) は確認つきで選べるように改めた
   (適合と判定される状態を広げる。今まで適合していた状態が違反になることは無い)
-- 改定手順: 1 = AD-066 / 2 = 未了。026 の PR で architecture-reviewer を交えた人間のレビューを受ける (実施日: 未記入。マージ前に済んでいること。RK-01) /
+- 改定手順: 1 = AD-066 / 2 = 済み。026 の PR (#35) で architecture-reviewer (pr-gate Round 1) を交えた人間のレビューを受けた (実施日: 2026-11-01。RK-01) /
   3 = MINOR / 4 = Amendment trail / 5 = 下記の enumeration
 
 Modified sections:
@@ -1134,7 +1134,7 @@ v1.2.4 は改定手順に新しい規則 (ADR の in-place 訂正) を足した�
 | 1.3.0 | 2026-10-03 | [AD-044](../../docs/decisions/0044-ui-coverage-assignment.md) (O-2)。指針の実質的な拡張 (MINOR)。**Principle XII の割当を 3 種類 (実装済み / 後続 / 表示不要) にし、`後続: <未完了の feature ID>` を割当済みとみなした**。ToolFallback だけの `実装済み` は Tier B / C に限る。**M3 の完了の条件を「Tier A の後続の行のうち割当先が M3 の feature の行が 0」と定めた**。Automated を Constitution 検証の項目 21 (SDK の型定義との名前の集合の照合・割当の書式・SDK の版) に移し、`bad_pattern_grep` を割当の列に限った。Manual の `ui-coverage-reviewer` を配置済みにした。Principle XIII の element の数を registry の 127 名に、未分類 59 を F 節での解消に追随させた。Statement も「割当を持たせる」に改めた。既存違反 0 (項目 21 ok、M3 の残り 24) |
 | 1.4.0 | 2026-10-07 | [AD-045](../../docs/decisions/0045-ui-labels-no-i18n-resources.md) (O-3)。指針の実質的な拡張 (MINOR)。**Principle XV の UI labels の「i18n リソース化の要否は M3 (O-1〜O-3) までに判断する」を確定の判断に置き換えた** — リソース化しない。UI の文言は feature ごとの文言の表に置き、コンポーネントへの直書きを新たに増やさない (AD-045 Decision 2)。再検討の条件 (AD-045 Decision 4)、`target-finder.ts` の 2 本の例外 (Decision 3)、Verification (機械強制なし・`ux-reviewer` が基準線 331 行 (AD-045 Confirmation) から見る) を足した。既存の直書きは違反に数えない (「新たに増やさない」の規則)。改定手順 2 (architecture-reviewer を交えた人間のレビュー) は O-3 の PR で受ける |
 | 1.5.0 | 2026-10-29 | [AD-065](../../docs/decisions/0065-live-model-list-and-claude-code-permission-mode-names.md) Decision 3 / 4 (O-13 / 025)。指針の実質的な拡張 (MINOR)。**Principle XV の Exceptions に、権限モードの名前は Claude Code の CLI の表記をそのまま使い説明を付けない項を足した**。名前の表は `features/chat/labels.ts` の `PERMISSION_MODE_NAMES` の 1 か所で、照合の版は同じファイルの定数。版を上げるときは `docs/ui-coverage.md` の手順で見直す。既存違反は 0 件 (英語の名前は文言の表の中で、直書きを増やさない)。改定手順 2 (人間のレビュー) は名前の表の差分と同じ O-13 の PR に含め、マージ後に利用者が行う (覆すときは別の PR で直す。名前の表を Constitution の改定より先に main に入れない、という RK-08 は同じ PR なので満たす) |
-| 1.6.0 | 2026-11-01 | [AD-066](../../docs/decisions/0066-auto-permission-mode-with-confirmation.md) (X-10 / 026)。適合と判定される状態を広げる改定 (MINOR)。**Principle III の Statement を、`autoModeSafe !== true` で選択可能にしてはならないのは `bypassPermissions` とし、Auto (`auto`) は起動・実行中とも毎回、隔離が無いことを書いた明示の確認を挟み、main は確認の印の無い要求を拒否する、に改めた**。Why の 2 文目を `bypassPermissions` に限る文に置き換え、暫定の受け入れ (`autoModeSafe === true` で確認を省いた Auto も隔離されずに動く。I-3 で判断し直す。026 U-6) を足した。Examples / Verification も追随。今まで適合していた状態が違反になることは無い。既存違反は 0 件 (項目 16 ok)。改定手順 2 (architecture-reviewer を交えた人間のレビュー) は未了。026 の PR で人間のレビューを受ける |
+| 1.6.0 | 2026-11-01 | [AD-066](../../docs/decisions/0066-auto-permission-mode-with-confirmation.md) (X-10 / 026)。適合と判定される状態を広げる改定 (MINOR)。**Principle III の Statement を、`autoModeSafe !== true` で選択可能にしてはならないのは `bypassPermissions` とし、Auto (`auto`) は起動・実行中とも毎回、隔離が無いことを書いた明示の確認を挟み、main は確認の印の無い要求を拒否する、に改めた**。Why の 2 文目を `bypassPermissions` に限る文に置き換え、暫定の受け入れ (`autoModeSafe === true` で確認を省いた Auto も隔離されずに動く。I-3 で判断し直す。026 U-6) を足した。Examples / Verification も追随。今まで適合していた状態が違反になることは無い。既存違反は 0 件 (項目 16 ok)。改定手順 2 (architecture-reviewer を交えた人間のレビュー) は 026 の PR (#35) で 2026-11-01 に済んだ |
 
 ## References
 
