@@ -641,7 +641,8 @@ describe('X-1 起動 + 制御ハンドラ — main 直接呼び (SC-004 / SC-007
       ['配列', [UUID, ['plan']]],
       ['非 UUID', ['not-uuid', 'plan']],
       ['欠落', [UUID]],
-      ['余分な引数', [UUID, 'plan', 'extra']]
+      ['余分な引数', [UUID, 'plan', true, 'extra']],
+      ['許可の 4 値の外 (acceptEdits)', [UUID, 'acceptEdits', true]]
     ])('不正入力は invalid-value で service を呼ばない (%s)', async (_l, args) => {
       const { deps: d, calls } = deps()
       await expect(handleSetSessionPermissionMode(d, args as readonly unknown[])).resolves.toEqual({
@@ -649,6 +650,21 @@ describe('X-1 起動 + 制御ハンドラ — main 直接呼び (SC-004 / SC-007
         reason: 'invalid-value'
       })
       expect(calls.permissionModes).toEqual([])
+    })
+
+    it('auto を通し、3 つ目は === true だけを承諾として service に渡す (026)', async () => {
+      const seen: unknown[] = []
+      const { deps: d } = deps(undefined, {
+        setSessionPermissionMode: async (_id, _mode, ack) => {
+          seen.push(ack)
+          return { ok: false as const, reason: 'auto-mode-unconfirmed' as const }
+        }
+      })
+      const out = await handleSetSessionPermissionMode(d, [UUID, 'auto', true])
+      await handleSetSessionPermissionMode(d, [UUID, 'auto', 'true'])
+      await handleSetSessionPermissionMode(d, [UUID, 'auto'])
+      expect(out).toEqual({ ok: false, reason: 'auto-mode-unconfirmed' })
+      expect(seen).toEqual([true, false, false])
     })
   })
 
@@ -767,13 +783,13 @@ describe('起動元と起動の利用記録 — main 直接呼び (O-3 BE-043 / 
     ['未知 (null)', [null]],
     ['未知 (オブジェクト)', [{ origin: 'preset' }]]
   ])(
-    '起動元が %s でも、起動の service は config だけで 1 回呼ばれ、拒否されない',
+    '起動元が %s でも、起動の service は config と確認の印 false で 1 回呼ばれ、拒否されない',
     async (_l, originArgs) => {
       const { deps: d, launch } = launchingDeps()
       const outcome = await handleLaunchSession(d, [CONFIG, ...originArgs])
       expect(outcome).toBe(LAUNCHING)
       expect(launch).toHaveBeenCalledTimes(1)
-      expect(launch.mock.calls[0]).toEqual([CONFIG])
+      expect(launch.mock.calls[0]).toEqual([CONFIG, false])
     }
   )
 
@@ -935,6 +951,26 @@ describe('再開の handler (X-9 / contracts C-1〜C-3)', () => {
       await handleResumeSession(rejected.deps, [REQUEST, 'manual'])
       expect(dup.calls.usageRecords).toEqual([])
       expect(rejected.calls.usageRecords).toEqual([])
+    })
+
+    it('3 つ目は === true だけを承諾として service に渡し、結果はそのまま返す (026)', async () => {
+      const seen: unknown[] = []
+      const reject = { status: 'rejected', reason: 'auto-mode-unconfirmed' } as const
+      const { deps: d } = deps(undefined, {
+        resumeSession: async (_r, ack) => {
+          seen.push(ack)
+          return reject
+        },
+        launchSession: async (_c, ack) => {
+          seen.push(ack)
+          return reject
+        }
+      })
+      expect(await handleResumeSession(d, [REQUEST, 'manual', true])).toEqual(reject)
+      await handleResumeSession(d, [REQUEST, 'manual', 1])
+      await handleLaunchSession(d, [CONFIG, 'manual', true])
+      await handleLaunchSession(d, [CONFIG, 'manual'])
+      expect(seen).toEqual([true, false, true, false])
     })
 
     it('起動元が未知でも拒否せず、記録だけを行わない', async () => {

@@ -44,7 +44,7 @@ export function liveSettingBlocker(
 }
 
 /**
- * 失敗の理由の固定の表 (contracts の共通の戻り値)。**集合を変えるには ADR が要る (AD-062)。**
+ * 失敗の理由の固定の表 (contracts の共通の戻り値)。**集合を変えるには ADR が要る (AD-062 / AD-066)。**
  * 並びは `live-settings.test.ts` が pin する。
  */
 export const LIVE_SETTING_FAILURES = [
@@ -58,7 +58,8 @@ export const LIVE_SETTING_FAILURES = [
   'rejected',
   'session-ended',
   'timeout',
-  'write-failed'
+  'write-failed',
+  'auto-mode-unconfirmed'
 ] as const
 
 export type LiveSettingFailure = (typeof LIVE_SETTING_FAILURES)[number]

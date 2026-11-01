@@ -75,19 +75,59 @@ test.describe('起動設定ダイアログ (X-4)', () => {
     }
   })
 
-  test('Windows (ホスト) を選んでも権限モードは default / plan / dontAsk の 3 つだけ (Principle III / X-8)', async () => {
+  test('Windows (ホスト) を選んでも権限モードは default / plan / dontAsk / auto の 4 つだけで、acceptEdits / bypassPermissions は無い (Principle III / X-8 / 026 SC-004)', async () => {
     const { app, page } = await launchApp()
     try {
       await openDialog(page)
       await folder(page).selectOption({ label: 'E2E Windows Project' })
       await runtime(page).selectOption({ label: 'Windows (ホスト)' })
       const modes = page.getByRole('combobox', { name: '権限モード' })
-      await expect(modes.locator('option')).toHaveCount(3)
+      await expect(modes.locator('option')).toHaveCount(4)
       await expect(modes.locator('option[value="default"]')).toHaveCount(1)
       await expect(modes.locator('option[value="plan"]')).toHaveCount(1)
       await expect(modes.locator('option[value="dontAsk"]')).toHaveCount(1)
-      await expect(modes.locator('option[value="auto"]')).toHaveCount(0)
+      await expect(modes.locator('option[value="auto"]')).toHaveCount(1)
+      await expect(modes.locator('option[value="acceptEdits"]')).toHaveCount(0)
       await expect(modes.locator('option[value="bypassPermissions"]')).toHaveCount(0)
+    } finally {
+      await app.close()
+    }
+  })
+
+  test('Windows (ホスト) で Auto を選ぶと確認が出て、取り消すと前の値のまま。承諾して起動すると Auto の帯が出る (026 SC-001 / SC-004)', async () => {
+    const { app, page } = await launchApp()
+    try {
+      await openDialog(page)
+      await folder(page).selectOption({ label: 'E2E Windows Project' })
+      await runtime(page).selectOption({ label: 'Windows (ホスト)' })
+      const modes = page.getByRole('combobox', { name: '権限モード' })
+      // 表記は直に書かず、選択から読む (権限モードの名前の表は 1 か所)。
+      const autoName = (await modes.locator('option[value="auto"]').textContent()) ?? ''
+      expect(autoName).not.toBe('')
+      const confirmation = page.getByTestId('auto-mode-confirmation')
+
+      // 取り消すと前の値のまま (確認の 2 つ目のボタンが取り消し)。
+      await modes.selectOption('auto')
+      await expect(confirmation).toBeVisible()
+      await expect(confirmation).toContainText(autoName)
+      await expect(modes).toHaveValue('default')
+      await confirmation.getByRole('button').nth(1).click()
+      await expect(confirmation).toHaveCount(0)
+      await expect(modes).toHaveValue('default')
+
+      // 承諾すると値が Auto になり、起動の確認は重ねて出ない。
+      await modes.selectOption('auto')
+      await confirmation.getByRole('button', { name: autoName }).click()
+      await expect(confirmation).toHaveCount(0)
+      await expect(modes).toHaveValue('auto')
+      await page.getByRole('button', { name: '起動', exact: true }).click()
+      await expect(confirmation).toHaveCount(0)
+
+      // 起動した行の最初の観測 (偽の supervisor が頼んだ権限モードを流す) で Auto の帯が中央のヘッダの下に出る。
+      const banner = page.getByTestId('auto-mode-banner')
+      await expect(banner).toBeVisible({ timeout: 30_000 })
+      await expect(banner).toHaveAttribute('role', 'note')
+      await expect(page.getByTestId('unsafe-mode-banner')).toHaveCount(0)
     } finally {
       await app.close()
     }

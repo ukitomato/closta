@@ -13,7 +13,9 @@ import type {
 
 import { installCapability } from '@/test-support/capability'
 
-import { RESUME_UNAVAILABLE_LABELS } from './labels'
+import { PERMISSION_MODE_NAMES } from '@/features/chat/labels'
+
+import { AUTO_MODE_CONFIRMATION_LABELS, RESUME_UNAVAILABLE_LABELS } from './labels'
 import { LaunchDialog, type LaunchSource } from './LaunchDialog'
 import type { ResumeDialogState } from './running-session-types'
 import { DEFAULT_EXTRA_AXES } from '@domain/session/launch-config'
@@ -145,11 +147,11 @@ describe('LaunchDialog — 再開の形 (X-9 FE-011)', () => {
     expect(screen.queryByRole('textbox', { name: 'セッション名' })).toBeNull()
   })
 
-  it('権限モードの選択肢は安全 3 値だけ (Principle III)', () => {
+  it('権限モードの選択肢は許可の 4 値だけ (Principle III / 026)', () => {
     install()
     render(<LaunchDialog session={fakeSession()} />)
     const permission = screen.getByRole('combobox', { name: '権限モード' }) as HTMLSelectElement
-    expect([...permission.options].map((o) => o.value)).toEqual(['default', 'plan', 'dontAsk'])
+    expect([...permission.options].map((o) => o.value)).toEqual(['default', 'plan', 'dontAsk', 'auto'])
   })
 
   it('引き継ぐ軸が一覧に無いと「(削除済み)」を出す。ボタンはそのまま', async () => {
@@ -194,7 +196,7 @@ describe('LaunchDialog — 再開の形 (X-9 FE-011)', () => {
           sessionName: null
         }
       },
-      'manual'
+      'manual', false
     )
     expect(session.launch).not.toHaveBeenCalled()
   })
@@ -288,6 +290,61 @@ describe('LaunchDialog — 再開の形の初期値とプリセット (X-9 FE-03
     fireEvent.click(screen.getByRole('button', { name: '再開する' }))
   }
 
+  it('再開で Auto を選ぶと確認が出て、承諾して再開すると確認の印 true で呼ぶ (026 FE-013)', async () => {
+    install()
+    const session = fakeSession()
+    render(<LaunchDialog session={session} />)
+    await waitFor(() => expect(permission().value).toBe('default'))
+    fireEvent.change(permission(), { target: { value: 'auto' } })
+    expect(screen.getByTestId('auto-mode-confirmation')).toBeTruthy()
+    expect(permission().value).toBe('default')
+    fireEvent.click(screen.getByRole('button', {
+        name: AUTO_MODE_CONFIRMATION_LABELS.accept(PERMISSION_MODE_NAMES.auto)
+      }))
+    expect(permission().value).toBe('auto')
+    await clickResume()
+    expect(session.resumeSession).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        config: expect.objectContaining({ permissionMode: 'auto' })
+      }),
+      'manual',
+      true
+    )
+  })
+
+  it('再開の確認を取り消すと resumeSession は呼ばれず、ダイアログに残る (026 FE-013)', async () => {
+    install()
+    const session = fakeSession()
+    render(<LaunchDialog session={session} />)
+    await waitFor(() => expect(permission().value).toBe('default'))
+    fireEvent.change(permission(), { target: { value: 'auto' } })
+    fireEvent.click(screen.getByRole('button', { name: AUTO_MODE_CONFIRMATION_LABELS.cancel }))
+    expect(screen.queryByTestId('auto-mode-confirmation')).toBeNull()
+    expect(permission().value).toBe('default')
+    expect(session.resumeSession).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: '再開する' })).toBeTruthy()
+  })
+
+  it.each(['plan', 'dontAsk'] as const)(
+    '安全 3 値 (%s) の再開は確認なしで印 false (026 FE-013)',
+    async (mode) => {
+      install()
+      const session = fakeSession()
+      render(<LaunchDialog session={session} />)
+      await waitFor(() => expect(permission().value).toBe('default'))
+      fireEvent.change(permission(), { target: { value: mode } })
+      expect(screen.queryByTestId('auto-mode-confirmation')).toBeNull()
+      await clickResume()
+      expect(session.resumeSession).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          config: expect.objectContaining({ permissionMode: mode })
+        }),
+        'manual',
+        false
+      )
+    }
+  )
+
   it('稼働中の行から開くと 3 軸の初期値は元の値。過去の行から開くと今の既定', async () => {
     install()
     const live = render(
@@ -319,7 +376,7 @@ describe('LaunchDialog — 再開の形の初期値とプリセット (X-9 FE-03
     await clickResume()
     expect(session.resumeSession).toHaveBeenCalledWith(
       expect.objectContaining({ config: expect.objectContaining({ modelId: null }) }),
-      'manual'
+      'manual', false
     )
   })
 
@@ -343,7 +400,7 @@ describe('LaunchDialog — 再開の形の初期値とプリセット (X-9 FE-03
           sessionName: null
         }
       }),
-      'manual'
+      'manual', false
     )
   })
 
@@ -366,7 +423,7 @@ describe('LaunchDialog — 再開の形の初期値とプリセット (X-9 FE-03
           sessionName: null
         }
       }),
-      'preset'
+      'preset', false
     )
     // 引き継ぐ 3 軸の選択の部品は出ないまま (差し替える経路が無い)。
     expect(screen.getAllByRole('combobox')).toHaveLength(4)
@@ -389,7 +446,7 @@ describe('LaunchDialog — 再開の形の初期値とプリセット (X-9 FE-03
       expect.objectContaining({
         config: expect.objectContaining({ maxTurns: 50, maxBudgetUsd: 2.5, sessionName: null })
       }),
-      'manual'
+      'manual', false
     )
   })
 
@@ -452,7 +509,7 @@ describe('LaunchDialog — 再開の形の初期値とプリセット (X-9 FE-03
       render(<LaunchDialog session={session} />)
       await waitFor(() => expect(model().value).toBe('sonnet'))
       await clickResume()
-      expect(session.resumeSession).toHaveBeenCalledWith(expect.anything(), 'preset')
+      expect(session.resumeSession).toHaveBeenCalledWith(expect.anything(), 'preset', false)
     })
 
     it('同じ行から初期値のモデルを手で変えて再開すると manual', async () => {
@@ -462,7 +519,7 @@ describe('LaunchDialog — 再開の形の初期値とプリセット (X-9 FE-03
       await waitFor(() => expect(model().value).toBe('sonnet'))
       fireEvent.change(permission(), { target: { value: 'plan' } })
       await clickResume()
-      expect(session.resumeSession).toHaveBeenCalledWith(expect.anything(), 'manual')
+      expect(session.resumeSession).toHaveBeenCalledWith(expect.anything(), 'manual', false)
     })
 
     it('稼働中の行 (manual) / 過去の行から初期値のまま再開すると manual', async () => {
@@ -471,13 +528,13 @@ describe('LaunchDialog — 再開の形の初期値とプリセット (X-9 FE-03
       const v1 = render(<LaunchDialog session={live} />)
       await waitFor(() => expect(model().value).toBe('sonnet'))
       await clickResume()
-      expect(live.resumeSession).toHaveBeenCalledWith(expect.anything(), 'manual')
+      expect(live.resumeSession).toHaveBeenCalledWith(expect.anything(), 'manual', false)
       v1.unmount()
 
       const past = fakeSession()
       render(<LaunchDialog session={past} />)
       await clickResume()
-      expect(past.resumeSession).toHaveBeenCalledWith(expect.anything(), 'manual')
+      expect(past.resumeSession).toHaveBeenCalledWith(expect.anything(), 'manual', false)
     })
 
     it('依存解決の自動の reset だけでは手で変えたに数えない (初期値の起動元のまま)', async () => {
@@ -493,7 +550,7 @@ describe('LaunchDialog — 再開の形の初期値とプリセット (X-9 FE-03
         expect(screen.getByRole('status', { name: '既定に戻した軸' })).toBeTruthy()
       )
       await clickResume()
-      expect(session.resumeSession).toHaveBeenCalledWith(expect.anything(), 'preset')
+      expect(session.resumeSession).toHaveBeenCalledWith(expect.anything(), 'preset', false)
     })
   })
 })

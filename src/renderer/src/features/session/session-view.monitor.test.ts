@@ -237,6 +237,7 @@ function session(id: string, over: Partial<LiveSessionState> = {}): LiveSessionS
     settingError: null,
     liveModels: { phase: 'idle' },
     resumePicker: false,
+    chosenPermissionMode: 'default',
     ...over
   }
 }

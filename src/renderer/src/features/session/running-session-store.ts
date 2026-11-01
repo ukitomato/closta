@@ -8,7 +8,7 @@ import {
 } from '@domain/capability'
 import type { SessionEvent } from '@domain/session/agent-session'
 import type { ElicitationContent } from '@domain/session/elicitation'
-import type { SafePermissionMode, SessionLaunchConfig } from '@domain/session/launch-config'
+import type { SelectablePermissionMode, SessionLaunchConfig } from '@domain/session/launch-config'
 import type { LaunchOrigin } from '@domain/session/launch-usage'
 import type { LiveSettingKind } from '@domain/session/live-settings'
 import type { MeterUpdate } from '@domain/session/meter'
@@ -85,7 +85,9 @@ export interface SessionActions {
   launch(
     config: SessionLaunchConfig,
     folderLabel?: string | null,
-    origin?: LaunchOrigin
+    origin?: LaunchOrigin,
+    /** Auto の確認を承諾したか (026 / AD-066)。そのまま capability の 3 つ目へ。省略は `false`。行の状態に残さない。 */
+    autoModeAcknowledged?: boolean
   ): Promise<void>
   /**
    * 会話を再開する (X-9 / data-model §9.4)。`launching` は新しい行を作って選ぶ (`resumable: true`・`resumed: loading`。
@@ -96,7 +98,8 @@ export interface SessionActions {
   resume(
     request: SessionResumeRequest,
     folderLabel?: string | null,
-    origin?: LaunchOrigin
+    origin?: LaunchOrigin,
+    autoModeAcknowledged?: boolean
   ): Promise<'accepted' | 'already-running' | 'rejected'>
   /** 起動ダイアログを再開の形にする (開くのは呼び手。`dismissLaunchNotice` で新規起動の形に戻る)。 */
   openResume(state: ResumeDialogState): void
@@ -126,7 +129,11 @@ export interface SessionActions {
    * 実行中の権限モードを切り替える (023 / contracts C-1)。`beginSetting` → capability → `endSetting` の順。
    * 表示は `meters.permissionMode` から読む (ここでは書き戻さない。FR-014)。
    */
-  setPermissionMode(sessionId: string, mode: SafePermissionMode): void
+  setPermissionMode(
+    sessionId: string,
+    mode: SelectablePermissionMode,
+    autoModeAcknowledged: boolean
+  ): void
   /**
    * 実行中のモデルを切り替える (023 / contracts C-2)。成功したら `currentModelId` を `modelId` にする
    * (`config.modelId` は書き換えない。FR-014)。
@@ -801,7 +808,8 @@ export function createRunningSessionStore(
       changing: null,
       settingError: null,
       liveModels: { phase: 'idle' },
-      resumePicker: false
+      resumePicker: false,
+      chosenPermissionMode: config.permissionMode
     }
     createQueue(sessionId)
     store.setState((s) => ({
@@ -822,7 +830,7 @@ export function createRunningSessionStore(
   }
 
   const actions: SessionActions = {
-    async launch(config, folderLabel = null, origin = 'manual') {
+    async launch(config, folderLabel = null, origin = 'manual', autoModeAcknowledged = false) {
       inFlight += 1
       store.setState({
         launch: {
@@ -837,7 +845,7 @@ export function createRunningSessionStore(
       })
       let handshake: Awaited<ReturnType<ClostaCapability['launchSession']>>
       try {
-        handshake = await capability().launchSession(config, origin)
+        handshake = await capability().launchSession(config, origin, autoModeAcknowledged)
       } catch {
         inFlight -= 1
         dropOrphanPorts()
@@ -857,7 +865,7 @@ export function createRunningSessionStore(
       admit(handshake.sessionId, config, folderLabel, origin, false)
     },
 
-    async resume(request, folderLabel = null, origin = 'manual') {
+    async resume(request, folderLabel = null, origin = 'manual', autoModeAcknowledged = false) {
       const replaces = store.getState().launch.resume?.replaces ?? null
       inFlight += 1
       store.setState((s) => ({
@@ -879,7 +887,7 @@ export function createRunningSessionStore(
       }
       let handshake: Awaited<ReturnType<ClostaCapability['resumeSession']>>
       try {
-        handshake = await capability().resumeSession(request, origin)
+        handshake = await capability().resumeSession(request, origin, autoModeAcknowledged)
       } catch {
         inFlight -= 1
         return reject('launch-failed')
@@ -1013,15 +1021,30 @@ export function createRunningSessionStore(
       }))
     },
 
-    setPermissionMode(sessionId, mode) {
-      if (store.getState().sessions[sessionId] === undefined) return
+    setPermissionMode(sessionId, mode, autoModeAcknowledged) {
+      const before = store.getState().sessions[sessionId]
+      if (before === undefined) return
+      const previous = before.chosenPermissionMode
       actions.beginSetting(sessionId, 'permission-mode')
+      // 選んだ値は要求を送るときに覚え、失敗したら送る前の値に戻す (`config` には書き戻さない。026 / data-model §5.1)。
+      const choose = (value: SelectablePermissionMode): void => {
+        const current = store.getState().sessions[sessionId]
+        if (current === undefined || current.chosenPermissionMode === value) return
+        store.setState((s) => ({
+          sessions: { ...s.sessions, [sessionId]: { ...current, chosenPermissionMode: value } }
+        }))
+      }
+      choose(mode)
+      const failed = (): void => {
+        choose(previous)
+        actions.endSetting(sessionId, 'permission-mode', false)
+      }
       capability()
-        .setSessionPermissionMode(sessionId, mode)
-        .then(
-          (result) => actions.endSetting(sessionId, 'permission-mode', result.ok),
-          () => actions.endSetting(sessionId, 'permission-mode', false)
-        )
+        .setSessionPermissionMode(sessionId, mode, autoModeAcknowledged)
+        .then((result) => {
+          if (result.ok) actions.endSetting(sessionId, 'permission-mode', true)
+          else failed()
+        }, failed)
         .catch(() => undefined)
     },
 

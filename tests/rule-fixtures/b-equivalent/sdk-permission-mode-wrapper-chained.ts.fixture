@@ -1,6 +1,6 @@
 import { query } from '@anthropic-ai/claude-agent-sdk'
 
-import { assertSafePermissionMode } from '@domain/session/launch-config'
+import { assertSelectablePermissionMode } from '@domain/session/launch-config'
 
 /**
  * 違反サンプル (X-4 / AD-041 (a) / code-gate platform-boundary L-101)。
@@ -12,6 +12,6 @@ import { assertSafePermissionMode } from '@domain/session/launch-config'
 export function bad(raw: unknown, mode: string): void {
   void query({
     prompt: 'hi',
-    options: { permissionMode: assertSafePermissionMode(raw) && mode }
+    options: { permissionMode: assertSelectablePermissionMode(raw) && mode }
   })
 }

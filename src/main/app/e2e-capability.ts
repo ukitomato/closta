@@ -4,7 +4,7 @@ import { MessageChannelMain, type MessagePortMain } from 'electron'
 
 import type { ProviderSummaryDTO } from '@domain/provider/dto'
 import type { ModelEntry } from '@domain/provider/types'
-import { fixedCapabilities } from '@domain/runtime/capabilities'
+import { fixedCapabilities, isAutoModeAllowed } from '@domain/runtime/capabilities'
 import type { RuntimeDescriptor, WslRuntimeDescriptor } from '@domain/runtime/descriptor'
 import type { RuntimeDescriptorDTO, RuntimeListDTO } from '@domain/runtime/dto'
 import { wslNamespace } from '@domain/runtime/namespace'
@@ -321,7 +321,7 @@ function createE2eSupervisorConnection(): SupervisorConnection {
   }
 
   return {
-    launch(sessionId) {
+    launch(sessionId, _spec, options) {
       const channel = new MessageChannelMain()
       channel.port1.start()
       const s: StubSession = {
@@ -334,6 +334,8 @@ function createE2eSupervisorConnection(): SupervisorConnection {
       }
       sessions.set(sessionId, s)
       setState(sessionId, s, 'launching')
+      // 実機の `init` の代わりに、起動の options の権限モードを 1 回流す (026 / contracts C-6)。
+      emit(s, { kind: 'meter', meter: { type: 'permission-mode', mode: options.permissionMode } })
       // コマンドの候補の一覧 (O-10 SC-006 の E2E が popover の正の対照を取れるように流す)。
       emit(s, {
         kind: 'meter',
@@ -649,6 +651,11 @@ export function createE2eCapability(): E2eCapability {
       }
     },
     newSessionId: () => randomUUID(),
+    // Auto の確認の判定の入力 (026 / AD-066)。偽のランタイムはすべて false (確認が要る側)。
+    autoModeAllowed: (runtimeId) => {
+      const descriptor = knownRuntimes.get(runtimeId)
+      return descriptor !== undefined && isAutoModeAllowed(descriptor.capabilities)
+    },
     // 実行中のモデルの切り替えの検証に使う合成のカタログ (listProviders と同じ値)。
     providerModels: async (providerId) =>
       [bedrock, far].find((p) => p.id === providerId)?.models ?? null,
@@ -673,7 +680,7 @@ export function createE2eCapability(): E2eCapability {
       throw new Error('E2E の再開は過去の行の対応づけを使わない')
     },
     enumerationTargets: () => [],
-    launchResume: (config, resolved) => launchService.resume(config, resolved),
+    launchResume: (config, resolved, ack) => launchService.resume(config, resolved, ack),
     conversationRecord: (sessionId) => launchService.conversationRecord(sessionId),
     getTranscript: async (_conversationId, _targetKey, requestToken) => ({
       handshake: { status: 'empty', requestToken },
@@ -747,9 +754,10 @@ export function createE2eCapability(): E2eCapability {
     },
     getLaunchUsage: async () => summarizeLaunchUsage(launchUsage, usageToday()),
 
-    launchSession: (config): Promise<LaunchOutcome> => launchService.launch(config),
+    launchSession: (config, ack): Promise<LaunchOutcome> => launchService.launch(config, ack),
     controlSession: (sessionId, control) => launchService.control(sessionId, control),
-    setSessionPermissionMode: (sessionId, mode) => launchService.setPermissionMode(sessionId, mode),
+    setSessionPermissionMode: (sessionId, mode, ack) =>
+      launchService.setPermissionMode(sessionId, mode, ack),
     setSessionModel: (sessionId, modelId) => launchService.setModel(sessionId, modelId),
     listSessionModels: (sessionId) => launchService.listModels(sessionId),
     // 改名: 子と transcript の書き込みは起こさず、受け付けの判定と名前の規則だけを本物と同じ関数で通す (C-6)。
@@ -770,7 +778,7 @@ export function createE2eCapability(): E2eCapability {
       targetKey === `${runtimeId}#0`
         ? { ok: true, folderId, runtimeId, providerId: null }
         : { ok: false, reason: 'source-unknown' },
-    resumeSession: (request) => resumeService.resume(request),
+    resumeSession: (request, ack) => resumeService.resume(request, ack),
     getResumedTranscript: async (_sessionId, requestToken) => ({
       handshake: { status: 'failed', requestToken, reasonKey: 'transcript-read-failed' },
       port: null

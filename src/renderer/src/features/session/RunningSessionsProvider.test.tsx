@@ -135,6 +135,92 @@ describe('RunningSessionsView.runtimeName (X-8 H-003)', () => {
   })
 })
 
+describe('RunningSessionsView の Auto の確認の印 (026 / data-model §6.3・§6.4)', () => {
+  const caps = (allowed: boolean): Record<string, unknown> => ({
+    probeState: 'done',
+    sandboxKind: 'none',
+    seccompStatus: 'unknown',
+    missingDependencies: [],
+    probedAt: '2026-10-21T00:00:00.000Z',
+    autoModeAllowed: allowed,
+    autoModeStatus: allowed ? 'allowed' : 'unavailable'
+  })
+
+  it('runtimeAutoModeAllowed は DTO の autoModeAllowed を返し、知らない id は false', async () => {
+    sink.view = null
+    const entry = (id: string, allowed: boolean): Record<string, unknown> => ({
+      id,
+      kind: 'wsl',
+      distroName: id,
+      wslVersion: 2,
+      hasPathMapping: true,
+      state: 'running',
+      isDefault: false,
+      capabilities: caps(allowed),
+      detectedAt: '2026-10-21T00:00:00.000Z',
+      claudeStatus: null,
+      claudeOverridden: false
+    })
+    const cap = installCapability({
+      listFolders: () => new Promise<never>(() => undefined),
+      listRuntimes: async () =>
+        ({
+          wslAvailability: 'available',
+          enumerationIssues: [],
+          runtimes: [entry('a', true), entry('b', false)]
+        }) as never
+    })
+    const store = createRunningSessionStore(() => cap)
+    render(
+      <RunningSessionStoreContext.Provider value={store}>
+        <RunningSessionsProvider>
+          <Probe />
+        </RunningSessionsProvider>
+      </RunningSessionStoreContext.Provider>
+    )
+    await vi.waitFor(() => expect(view().runtimeAutoModeAllowed('a')).toBe(true))
+    expect(view().runtimeAutoModeAllowed('b')).toBe(false)
+    expect(view().runtimeAutoModeAllowed('unknown')).toBe(false)
+  })
+
+  it('launch / resume の 3 つ目の印が capability の 3 つ目にそのまま渡る', async () => {
+    sink.view = null
+    const launchSession = vi.fn().mockResolvedValue({ status: 'rejected', reasonKey: 'launch-failed' })
+    const resumeSession = vi.fn().mockResolvedValue({ status: 'rejected', reasonKey: 'launch-failed' })
+    const cap = installCapability({
+      listFolders: () => new Promise<never>(() => undefined),
+      listRuntimes: () => new Promise<never>(() => undefined),
+      launchSession,
+      resumeSession
+    })
+    const store = createRunningSessionStore(() => cap)
+    render(
+      <RunningSessionStoreContext.Provider value={store}>
+        <RunningSessionsProvider>
+          <Probe />
+        </RunningSessionsProvider>
+      </RunningSessionStoreContext.Provider>
+    )
+    const config = {
+      folderId: 'wf_0123456789ab',
+      runtimeId: 'wsl:Ubuntu',
+      providerId: null,
+      modelId: null,
+      effort: null,
+      permissionMode: 'auto' as const,
+      ...DEFAULT_EXTRA_AXES,
+      sessionName: null
+    }
+    await act(() => view().launch(config, 'manual', true))
+    expect(launchSession).toHaveBeenLastCalledWith(config, 'manual', true)
+    await act(() => view().launch(config, 'manual', false))
+    expect(launchSession).toHaveBeenLastCalledWith(config, 'manual', false)
+    const request = { source: { kind: 'live' as const, sessionId: A }, config }
+    await act(() => view().resume(request, 'manual', true))
+    expect(resumeSession).toHaveBeenLastCalledWith(request, 'manual', true)
+  })
+})
+
 describe('RunningSessionsView.revealMessage (O-3 FE-023)', () => {
   it('窓の外の id で、そのメッセージが入るところまで窓を広げる', async () => {
     await setup(MESSAGE_WINDOW * 2 + 5)

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 
 import { app, dialog } from 'electron'
 
+import { isAutoModeAllowed } from '@domain/runtime/capabilities'
 import { makeHostPath } from '@domain/runtime/path-types'
 import { hostPathOps } from '@domain/runtime/path-api'
 import type { PathMapping } from '@domain/runtime/path-mapping'
@@ -310,6 +311,11 @@ export function createComposition(): Composition {
     // fork env はランタイムに依存しない curated base (pr-gate R1 platform-boundary L-001)。
     connection: createSupervisorConnection(() => buildLaunchEnv(process.env)),
     newSessionId: () => randomUUID(),
+    // Auto の確認の判定の入力 (026 / AD-066)。記述子が見つからなければ false (確認が要る側)。
+    autoModeAllowed: (runtimeId) => {
+      const descriptor = runtimes.snapshot().find((d) => d.id === runtimeId)
+      return descriptor !== undefined && isAutoModeAllowed(descriptor.capabilities)
+    },
     // 実行中のモデルの切り替えの検証に使う今のカタログ (起動の依存解決と同じ store。Provider が無ければ null)。
     providerModels: async (providerId) =>
       (await providers.snapshotProfiles()).find((p) => p.id === providerId)?.models.models ?? null,
@@ -360,7 +366,7 @@ export function createComposition(): Composition {
     providers: () => providers.snapshotProfiles(),
     resolve: sessions.resolve,
     enumerationTargets: () => sessions.enumerationTargets(),
-    launchResume: (config, resolved) => launchService.resume(config, resolved),
+    launchResume: (config, resolved, ack) => launchService.resume(config, resolved, ack),
     conversationRecord: (sessionId) => launchService.conversationRecord(sessionId),
     getTranscript: (conversationId, targetKey, requestToken) =>
       transcripts.getTranscript(conversationId, targetKey, requestToken)
@@ -461,16 +467,17 @@ export function createComposition(): Composition {
     getTranscript: (sessionId, targetKey, requestToken) =>
       transcripts.getTranscript(sessionId, targetKey, requestToken),
 
-    launchSession: (config) => launchService.launch(config),
+    launchSession: (config, ack) => launchService.launch(config, ack),
     controlSession: (sessionId, control) => launchService.control(sessionId, control),
-    setSessionPermissionMode: (sessionId, mode) => launchService.setPermissionMode(sessionId, mode),
+    setSessionPermissionMode: (sessionId, mode, ack) =>
+      launchService.setPermissionMode(sessionId, mode, ack),
     setSessionModel: (sessionId, modelId) => launchService.setModel(sessionId, modelId),
     listSessionModels: (sessionId) => launchService.listModels(sessionId),
     renameSession: (sessionId, name) => sessionRenames.rename(sessionId, name),
 
     resolvePastResume: (targetKey, conversationId) =>
       resumeService.resolvePast(targetKey, conversationId),
-    resumeSession: (request) => resumeService.resume(request),
+    resumeSession: (request, ack) => resumeService.resume(request, ack),
     getResumedTranscript: (sessionId, requestToken) =>
       resumeService.getResumedTranscript(sessionId, requestToken),
 

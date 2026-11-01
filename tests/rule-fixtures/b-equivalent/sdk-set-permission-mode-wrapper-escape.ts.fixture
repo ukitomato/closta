@@ -1,14 +1,14 @@
 import { query } from '@anthropic-ai/claude-agent-sdk'
 
-import { assertSafePermissionMode } from '@domain/session/launch-config'
+import { assertSelectablePermissionMode } from '@domain/session/launch-config'
 
 /**
  * 違反サンプル (023 / AD-062 Decision 1)。
  *
- * **`assertSafePermissionMode(...)` で始まるが、包みが閉じてから別の値が続く。** `a` が安全値でも `|| b` の `b` は
+ * **`assertSelectablePermissionMode(...)` で始まるが、包みが閉じてから別の値が続く。** `a` が安全値でも `|| b` の `b` は
  * 検査を通っていない (`wrapperCallCompletes` が偽になる形。`permissionMode:` の `wrapper-chained` と同じ考え方)。
  */
 export async function bad(a: string, b: 'plan'): Promise<void> {
   const q = query({ prompt: 'hi' })
-  await q.setPermissionMode(assertSafePermissionMode(a) || b)
+  await q.setPermissionMode(assertSelectablePermissionMode(a) || b)
 }

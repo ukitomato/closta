@@ -13,7 +13,7 @@ import type { SessionLaunchHandshakeDTO, SessionLaunchRejectReason } from './ses
 import type { SessionIndexDTO } from './session/dto'
 import type {
   PresetLaunchConfig,
-  SafePermissionMode,
+  SelectablePermissionMode,
   SessionLaunchConfig
 } from './session/launch-config'
 import type { LiveModelsResult, LiveSettingResult, RenameResult } from './session/live-settings'
@@ -165,7 +165,9 @@ export interface ClostaCapability {
    */
   launchSession(
     config: SessionLaunchConfig,
-    origin: LaunchOrigin
+    origin: LaunchOrigin,
+    /** Auto の確認を承諾したか (026 / AD-066)。main は `=== true` だけを承諾とみなす。 */
+    autoModeAcknowledged?: boolean
   ): Promise<SessionLaunchHandshakeDTO>
   /**
    * 過去の行の再開の軸を解く (X-9 / contracts C-1)。列挙のキャッシュだけを見る (列挙・`wsl.exe` を起こさない)。
@@ -178,7 +180,8 @@ export interface ClostaCapability {
    */
   resumeSession(
     request: SessionResumeRequest,
-    origin: LaunchOrigin
+    origin: LaunchOrigin,
+    autoModeAcknowledged?: boolean
   ): Promise<SessionResumeHandshakeDTO>
   /**
    * 再開した行のそれまでの会話の読み取りを開始する (X-9 / contracts C-3)。経路は `getTranscript` と同じ
@@ -224,7 +227,11 @@ export interface ClostaCapability {
    * 実行中のセッションの権限モードを安全 3 値の中で切り替える (023 / AD-062 / contracts C-1)。
    * 値の検証・状態の判定は main が行う。成功のあとの表示は本文の port の `meter` で更新される。
    */
-  setSessionPermissionMode(sessionId: string, mode: SafePermissionMode): Promise<LiveSettingResult>
+  setSessionPermissionMode(
+    sessionId: string,
+    mode: SelectablePermissionMode,
+    autoModeAcknowledged?: boolean
+  ): Promise<LiveSettingResult>
   /** 実行中のセッションのモデルをカタログの中で切り替える (023 / contracts C-2)。effort は変えない。 */
   setSessionModel(sessionId: string, modelId: string): Promise<LiveSettingResult>
   /**

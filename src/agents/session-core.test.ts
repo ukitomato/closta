@@ -275,11 +275,11 @@ describe('buildQueryOptions (X-4 / AD-041)', () => {
     }
   )
 
-  it('安全 3 値の assert は resume の有無で変わらない', () => {
+  it('許可の 4 値の assert は resume の有無で変わらない', () => {
     for (const resume of [undefined, CONVERSATION_ID]) {
-      for (const mode of ['acceptEdits', 'auto', 'bypass' + 'Permissions']) {
+      for (const mode of ['acceptEdits', 'bypass' + 'Permissions']) {
         expect(() => buildQueryOptions({ ...base, permissionMode: mode as never, resume })).toThrow(
-          /AD-041/
+          /AD-066/
         )
       }
     }
@@ -302,10 +302,14 @@ describe('buildQueryOptions (X-4 / AD-041)', () => {
     expect(buildQueryOptions({ ...base, permissionMode: mode }).permissionMode).toBe(mode)
   })
 
-  it('安全 3 値の外は throw する (X-1 の「default 固定」の assert を置き換えて残す)', () => {
-    for (const mode of ['acceptEdits', 'auto', 'bypass' + 'Permissions', '']) {
-      expect(() => buildQueryOptions({ ...base, permissionMode: mode as never })).toThrow(/AD-041/)
+  it('許可の 4 値の外は throw する (X-1 の「default 固定」の assert を置き換えて残す)', () => {
+    for (const mode of ['acceptEdits', 'bypass' + 'Permissions', '']) {
+      expect(() => buildQueryOptions({ ...base, permissionMode: mode as never })).toThrow(/AD-066/)
     }
+  })
+
+  it('auto は許可の 4 値としてそのまま載る (AD-066)', () => {
+    expect(buildQueryOptions({ ...base, permissionMode: 'auto' }).permissionMode).toBe('auto')
   })
 
   it('model / effort は検証済みの値だけが載る', () => {
@@ -752,8 +756,8 @@ describe('classifyResultFailure (O-4 / 014 data-model §1 / SC-001)', () => {
 describe('decodeSessionControl: 実行中の設定の切り替え (023 / AD-062)', () => {
   const requestId = '123e4567-e89b-42d3-a456-426614174000'
 
-  it('set-permission-mode の正例 (安全 3 値)', () => {
-    for (const mode of ['default', 'plan', 'dontAsk']) {
+  it('set-permission-mode の正例 (許可の 4 値。AD-066)', () => {
+    for (const mode of ['default', 'plan', 'dontAsk', 'auto']) {
       expect(decodeSessionControl({ kind: 'set-permission-mode', requestId, mode })).toEqual({
         kind: 'set-permission-mode',
         requestId,
@@ -782,8 +786,8 @@ describe('decodeSessionControl: 実行中の設定の切り替え (023 / AD-062)
     }
   )
 
-  it.each(['bypassPermissions', 'acceptEdits', 'auto', 'unknown', '', 1, null, undefined])(
-    'mode が安全 3 値の外 (%j) は null',
+  it.each(['bypassPermissions', 'acceptEdits', 'unknown', '', 1, null, undefined])(
+    'mode が許可の 4 値の外 (%j) は null',
     (mode) => {
       expect(decodeSessionControl({ kind: 'set-permission-mode', requestId, mode })).toBeNull()
     }

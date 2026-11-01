@@ -7,10 +7,12 @@ import type { EffortLevel } from '@domain/provider/types'
 import type { LaunchFailureReason } from '@domain/session/agent-session'
 import {
   DEFAULT_EXTRA_AXES,
-  isSafePermissionMode,
+  isAutoPermissionMode,
+  isSelectablePermissionMode,
   MAX_ADDITIONAL_DIRECTORIES,
-  SAFE_PERMISSION_MODES,
-  type SafePermissionMode,
+  requiresAutoModeConfirmation,
+  SELECTABLE_PERMISSION_MODES,
+  type SelectablePermissionMode,
   type SessionLaunchConfig
 } from '@domain/session/launch-config'
 import type { LaunchOrigin } from '@domain/session/launch-usage'
@@ -58,6 +60,7 @@ import {
   RESUME_LABELS,
   sameFolderWarning
 } from './labels'
+import { AutoModeConfirmation } from './AutoModeConfirmation'
 import { LaunchExtraAxes } from './LaunchExtraAxes'
 import {
   additionalDirectoryChoices,
@@ -85,7 +88,12 @@ export interface LaunchSource {
    * 再開の形では引き継ぐ 3 軸 (フォルダ / ランタイム / Provider) の選択の部品を出さず、起動は `resumeSession` を通る。
    */
   readonly resume?: ResumeDialogState | null
-  resumeSession?(request: SessionResumeRequest, origin: LaunchOrigin): Promise<void>
+  resumeSession?(
+    request: SessionResumeRequest,
+    origin: LaunchOrigin,
+    /** Auto の確認を承諾したか (026 / AD-066)。確認が要らないときは `false`。必須 (段が落としたら tsc が落とす)。 */
+    autoModeAcknowledged: boolean
+  ): Promise<void>
   readonly lastConfig: SessionLaunchConfig | null
   /** `lastConfig` と組の起動元 (O-3)。初期値の設定のまま起動したときだけ引き継ぐ。 */
   readonly lastOrigin: LaunchOrigin | null
@@ -93,7 +101,11 @@ export interface LaunchSource {
   /** 終わっていないセッションの作業フォルダ (同一フォルダの警告。X-5 FE-003)。重複を数える。 */
   readonly activeFolderIds?: readonly string[]
   /** `origin` は起動元 (O-3 / 012 data-model §4「renderer の起動元」。計測にだけ使い、`config` に影響させない)。 */
-  launch(config: SessionLaunchConfig, origin: LaunchOrigin): Promise<void>
+  launch(
+    config: SessionLaunchConfig,
+    origin: LaunchOrigin,
+    autoModeAcknowledged: boolean
+  ): Promise<void>
 }
 
 /**
@@ -301,6 +313,16 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
   /** このダイアログで軸を手で変えたか (`update` を通ったか。変えてから戻しても立ったまま。O-3)。 */
   const [axisEdited, setAxisEdited] = useState(false)
   const [confirming, setConfirming] = useState(false)
+  /**
+   * Auto の確認 (026 / data-model §6.2)。`'select'` は権限モードの選択、`'launch'` は起動を押した時点 (プリセットの `auto`)。
+   * Provider の確認 (`confirming`) と同時には出さない。
+   */
+  const [autoConfirm, setAutoConfirm] = useState<null | 'select' | 'launch'>(null)
+  /**
+   * このダイアログで今の `auto` の選択を承諾したランタイム (026)。ダイアログの mount ごとに `null` から始め、プリセットの適用・
+   * 権限モードを `auto` 以外にしたとき・ランタイムの変更で `null` に戻す (前の承諾が残らない)。
+   */
+  const [autoAckRuntimeId, setAutoAckRuntimeId] = useState<string | null>(null)
   /** 「再評価」/「再試行」の回数。到達可能性と解決結果の取得キーに含め、押すたびに取り直す (pr-gate H-003)。 */
   const [nonce, setNonce] = useState(0)
   /**
@@ -325,6 +347,9 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
   const unusableWin32 = useMemo(() => unusableWin32Status(launchRuntimes), [launchRuntimes])
   const providerList = useMemo(() => providers.providers ?? [], [providers.providers])
   const selectedRuntime = launchRuntimes.find((r) => r.id === draft.runtimeId) ?? null
+  // Auto の確認の入力 (026)。真偽はゲート用、文の選び分けは表示用の 3 値。
+  const autoModeAllowed = selectedRuntime?.capabilities.autoModeAllowed ?? false
+  const autoModeStatus = selectedRuntime?.capabilities.autoModeStatus ?? 'undetermined'
   const selectedRuntimeState = selectedRuntime?.state ?? null
   const selectedProbeState = selectedRuntime?.capabilities.probeState ?? null
   /** 選択ランタイムの版。到達可能性と解決結果の取得キーで共有する (R3 platform-boundary M-501)。 */
@@ -489,6 +514,11 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
    */
   const update = (patch: Partial<LaunchDraft>): void => {
     setConfirming(false)
+    setAutoConfirm(null)
+    if ('runtimeId' in patch) setAutoAckRuntimeId(null)
+    if ('permissionMode' in patch && !isAutoPermissionMode(patch.permissionMode)) {
+      setAutoAckRuntimeId(null)
+    }
     setAxisEdited(true)
     const next: LaunchDraft = { ...draft, ...patch }
     const changesCatalogAxis = 'providerId' in patch || 'modelId' in patch || 'effort' in patch
@@ -511,6 +541,9 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
    */
   const applyPreset = (next: LaunchDraft): void => {
     setConfirming(false)
+    // プリセットの `auto` は起動を押した時点で確認する (適用は確認を省かない。026 FR-012)。
+    setAutoConfirm(null)
+    setAutoAckRuntimeId(null)
     setNotices([])
     setPresetApplied(true)
     // 再開では選び直せる 6 軸だけに当てる (引き継ぐ 3 軸は変えない。spec Edge Cases / 024 FR-009)。
@@ -535,6 +568,7 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
   /** 到達可能性と解決結果を取り直す。確認中の判断は取り直した結果で出し直す。 */
   const refetch = (): void => {
     setConfirming(false)
+    setAutoConfirm(null)
     setNonce((n) => n + 1)
   }
 
@@ -550,6 +584,18 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
     })
   }
 
+  /** 起動の要求を送る。`ack` は確認が要るときだけ true (main は `=== true` だけを承諾とみなす。026)。 */
+  const send = (config: SessionLaunchConfig): void => {
+    const origin: LaunchOrigin = presetApplied ? 'preset' : axisEdited ? 'manual' : initialOrigin
+    const ack = requiresAutoModeConfirmation(config.permissionMode, autoModeAllowed)
+    if (resume !== null) {
+      // 再開: `config` の引き継ぐ 3 軸は `fixed` (main が source から解いた値と照合する)。
+      void session.resumeSession?.({ source: resume.source, config }, origin, ack)
+      return
+    }
+    void session.launch(config, origin, ack)
+  }
+
   const launch = (): void => {
     if (launchConfig === null) return
     if (needsConfirmation && !confirming) {
@@ -557,13 +603,27 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
       return
     }
     setConfirming(false)
-    const origin: LaunchOrigin = presetApplied ? 'preset' : axisEdited ? 'manual' : initialOrigin
-    if (resume !== null) {
-      // 再開: `config` の引き継ぐ 3 軸は `fixed` (main が source から解いた値と照合する)。
-      void session.resumeSession?.({ source: resume.source, config: launchConfig }, origin)
+    if (
+      requiresAutoModeConfirmation(launchConfig.permissionMode, autoModeAllowed) &&
+      autoAckRuntimeId !== launchConfig.runtimeId
+    ) {
+      setAutoConfirm('launch')
       return
     }
-    void session.launch(launchConfig, origin)
+    send(launchConfig)
+  }
+
+  /** Auto の確認の承諾。`'select'` は選択を反映し、`'launch'` は承諾を覚えて起動する。 */
+  const acceptAuto = (): void => {
+    const kind = autoConfirm
+    setAutoConfirm(null)
+    if (kind === 'select') {
+      update({ permissionMode: 'auto' })
+      setAutoAckRuntimeId(effective.runtimeId)
+    } else if (kind === 'launch' && launchConfig !== null) {
+      setAutoAckRuntimeId(launchConfig.runtimeId)
+      send(launchConfig)
+    }
   }
 
   const foldersLoading = folders.list === null && !folders.failed
@@ -879,12 +939,18 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
           value={effective.permissionMode}
           onChange={(e) => {
             const mode: unknown = e.target.value
-            if (isSafePermissionMode(mode)) update({ permissionMode: mode })
+            if (!isSelectablePermissionMode(mode)) return
+            // 確認が要る Auto は下書きを変えずに確認を開く (取り消せば選択は前の値のまま見える)。
+            if (requiresAutoModeConfirmation(mode, autoModeAllowed)) {
+              setAutoConfirm('select')
+              return
+            }
+            update({ permissionMode: mode })
           }}
           className={selectClass}
           aria-label={LAUNCH_AXIS_LABELS.permissionMode}
         >
-          {SAFE_PERMISSION_MODES.map((mode: SafePermissionMode) => (
+          {SELECTABLE_PERMISSION_MODES.map((mode: SelectablePermissionMode) => (
             <option key={mode} value={mode}>
               {PERMISSION_MODE_LABELS[mode]}
             </option>
@@ -1115,8 +1181,20 @@ export function LaunchDialog({ session }: { readonly session: LaunchSource }): R
         </div>
       )}
 
+      {autoConfirm !== null && !confirming && (
+        <AutoModeConfirmation
+          autoModeStatus={autoModeStatus}
+          onAccept={acceptAuto}
+          onCancel={() => setAutoConfirm(null)}
+        />
+      )}
+
       <div>
-        <Button type="button" disabled={launchConfig === null || confirming} onClick={launch}>
+        <Button
+          type="button"
+          disabled={launchConfig === null || confirming || autoConfirm !== null}
+          onClick={launch}
+        >
           {resume === null ? '起動' : RESUME_LABELS.submit}
         </Button>
       </div>

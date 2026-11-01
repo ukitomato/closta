@@ -1,11 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useAui, useAuiState, type QueueItemState } from '@assistant-ui/react'
 
 import { switchableModels } from '@domain/provider/model-catalog'
 import type { EffortLevel } from '@domain/provider/types'
 import type { LaunchFailureReason, PermissionDeniedInfo } from '@domain/session/agent-session'
-import type { SafePermissionMode } from '@domain/session/launch-config'
+import {
+  requiresAutoModeConfirmation,
+  type SelectablePermissionMode
+} from '@domain/session/launch-config'
 import { liveSettingBlocker, type LiveSettingRow } from '@domain/session/live-settings'
 
 import { EmptyState, EmptyStateGreeting } from '@/components/assistant-ui/elements/empty-state'
@@ -29,6 +32,7 @@ import {
 } from '@/features/chat/transcript-context'
 
 import { ApprovalCard } from './ApprovalCard'
+import { AutoModeConfirmation } from './AutoModeConfirmation'
 import { DEFAULT_MAX_QUEUE_ITEMS, type EnqueueVerdict } from './composer-queue'
 import { ElicitationCard } from './ElicitationCard'
 import { focusComposerIn, handOffFocusToComposer } from './focus-handoff'
@@ -195,6 +199,34 @@ function LiveSessionPane({
     [session.runState, session.ended, state.resumable, state.changing]
   )
   const { setPermissionMode, setModel, loadLiveModels } = session
+  // Auto の確認 (026 / data-model §6.3)。要求の値を覚えて承諾で送る。確認が要るかはゲート用の真偽で判定し、文は表示用の 3 値で選ぶ。
+  const view = useRunningSessionsView()
+  const autoModeAllowed = view.runtimeAutoModeAllowed(state.config.runtimeId)
+  const autoModeStatus = view.runtimeAutoMode(state.config.runtimeId)
+  const [autoConfirmFor, setAutoConfirmForState] = useState<SelectablePermissionMode | null>(null)
+  // 確認が開いている間は、選択の確定の後の「焦点を composer へ」を止める (取り消しの上の焦点を奪わない)。
+  const autoConfirmOpen = useRef(false)
+  const setAutoConfirmFor = useCallback((mode: SelectablePermissionMode | null): void => {
+    autoConfirmOpen.current = mode !== null
+    setAutoConfirmForState(mode)
+  }, [])
+  const onSelectPermissionMode = useCallback(
+    (mode: SelectablePermissionMode): void => {
+      if (requiresAutoModeConfirmation(mode, autoModeAllowed)) {
+        setAutoConfirmFor(mode)
+        return
+      }
+      setPermissionMode(mode, false)
+    },
+    [autoModeAllowed, setPermissionMode, setAutoConfirmFor]
+  )
+  // 確認の間に受け付けられなくなったら (終了・変更中など。`LivePane` はセッションごとに描くので切り替えでも閉じる) 閉じて送らない。
+  const permissionBlocked = liveSettingBlocker('permission-mode', settingsRow) !== null
+  useEffect(() => {
+    // 外部 (main の状態) に合わせて閉じるだけ。確認の状態は 1 つで、この effect だけが閉じる。
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (permissionBlocked) setAutoConfirmFor(null)
+  }, [permissionBlocked, setAutoConfirmFor])
   const settings = useMemo(
     () => (
       <LiveComposerSettings
@@ -207,8 +239,9 @@ function LiveSessionPane({
         row={settingsRow}
         liveModels={state.liveModels}
         onLoadLiveModels={loadLiveModels}
-        onSelectPermissionMode={setPermissionMode}
+        onSelectPermissionMode={onSelectPermissionMode}
         onSelectModel={setModel}
+        focusHold={autoConfirmOpen}
       />
     ),
     [
@@ -221,8 +254,9 @@ function LiveSessionPane({
       state.liveModels,
       settingsRow,
       loadLiveModels,
-      setPermissionMode,
-      setModel
+      onSelectPermissionMode,
+      setModel,
+      autoConfirmOpen
     ]
   )
   const composerExtensions = useMemo<ComposerExtensions>(
@@ -307,6 +341,23 @@ function LiveSessionPane({
             session.clearQueueRejection() // 空きができたので拒否理由を消す
           }}
         />
+      )}
+      {autoConfirmFor !== null && (
+        // Auto の確認 (026)。承認カードの列の上側。閉じたら composer の入力へ焦点を戻す。
+        <div className="px-4 pt-3">
+          <AutoModeConfirmation
+            autoModeStatus={autoModeStatus}
+            onAccept={() => {
+              setAutoConfirmFor(null)
+              focusComposerIn(paneRef.current)
+              setPermissionMode(autoConfirmFor, true)
+            }}
+            onCancel={() => {
+              setAutoConfirmFor(null)
+              focusComposerIn(paneRef.current)
+            }}
+          />
+        </div>
       )}
       {pending !== null && (
         <div className="px-4 pt-3" ref={approvalRef}>
@@ -414,10 +465,11 @@ export function LiveComposerSettings({
   liveModels,
   onLoadLiveModels,
   onSelectPermissionMode,
-  onSelectModel
+  onSelectModel,
+  focusHold
 }: {
   readonly sessionId: string
-  readonly configPermissionMode: SafePermissionMode
+  readonly configPermissionMode: SelectablePermissionMode
   readonly providerId: string | null
   readonly effort: EffortLevel | null
   readonly modelId: string | null
@@ -426,8 +478,10 @@ export function LiveComposerSettings({
   /** 既定の Provider のモデルの一覧の状態 (025 / data-model §6.3)。Provider のあるセッションでは使わない。 */
   readonly liveModels: LiveModelsState
   readonly onLoadLiveModels: () => void
-  readonly onSelectPermissionMode: (mode: SafePermissionMode) => void
+  readonly onSelectPermissionMode: (mode: SelectablePermissionMode) => void
   readonly onSelectModel: (modelId: string) => void
+  /** true の間は確定の後の焦点の移動をしない (Auto の確認が焦点を持つ。026)。 */
+  readonly focusHold?: React.RefObject<boolean> | undefined
 }): React.JSX.Element {
   const reported = useSessionMeters(sessionId, (meters) => meters.permissionMode)
   const providers = useProviders()
@@ -479,7 +533,9 @@ export function LiveComposerSettings({
           // 失敗した一覧は、選択にフォーカスが入ったときに 1 回だけ聞き直す (data-model §6.3)。
           onFocus: isLive && canAsk && phase === 'failed' ? onLoadLiveModels : undefined
         }}
-        onConfirmed={() => handOffFocusToComposer(scope.current)}
+        onConfirmed={() => {
+          if (focusHold?.current !== true) handOffFocusToComposer(scope.current)
+        }}
       />
     </div>
   )

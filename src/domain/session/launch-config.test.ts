@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  assertSafePermissionMode,
+  assertSelectablePermissionMode,
   DEFAULT_EXTRA_AXES,
+  isAutoPermissionMode,
   isSafePermissionMode,
+  isSelectablePermissionMode,
   isValidAdditionalDirectoryIds,
   isValidLaunchConfig,
   isValidLaunchSessionName,
@@ -16,6 +18,10 @@ import {
   normalizePresetName,
   PRESET_CONFIG_KEYS,
   PRESET_CONFIG_KEYS_V1,
+  requiresAutoModeConfirmation,
+  resumeInitialPermissionMode,
+  SAFE_PERMISSION_MODES,
+  SELECTABLE_PERMISSION_MODES,
   toPresetConfig
 } from './launch-config'
 
@@ -35,8 +41,53 @@ describe('SafePermissionMode (AD-041 (a))', () => {
     for (const m of ['default', 'plan', 'dontAsk']) expect(isSafePermissionMode(m)).toBe(true)
     for (const m of ['acceptEdits', 'auto', 'bypass' + 'Permissions', '', 'DEFAULT']) {
       expect(isSafePermissionMode(m)).toBe(false)
-      expect(() => assertSafePermissionMode(m)).toThrow(/AD-041/)
     }
+  })
+})
+
+describe('SelectablePermissionMode (許可の 4 値。AD-066)', () => {
+  it('4 値を通し、assert は値を返す', () => {
+    for (const m of ['default', 'plan', 'dontAsk', 'auto']) {
+      expect(isSelectablePermissionMode(m)).toBe(true)
+      expect(assertSelectablePermissionMode(m)).toBe(m)
+    }
+  })
+
+  it('acceptEdits / bypassPermissions / 不明な値 / 型違いで落ちる', () => {
+    for (const m of ['acceptEdits', 'bypass' + 'Permissions', 'AUTO', '', 1, null, undefined]) {
+      expect(isSelectablePermissionMode(m)).toBe(false)
+      expect(() => assertSelectablePermissionMode(m)).toThrow(/AD-066/)
+    }
+  })
+
+  it('選択肢の並びは安全 3 値の後に auto', () => {
+    expect([...SELECTABLE_PERMISSION_MODES]).toEqual(['default', 'plan', 'dontAsk', 'auto'])
+  })
+
+  it('isAutoPermissionMode は auto だけ', () => {
+    expect(isAutoPermissionMode('auto')).toBe(true)
+    for (const m of ['default', 'plan', 'dontAsk', null, 1]) {
+      expect(isAutoPermissionMode(m)).toBe(false)
+    }
+  })
+
+  it('requiresAutoModeConfirmation は auto かつ autoModeAllowed が false のときだけ true (U-6)', () => {
+    expect(requiresAutoModeConfirmation('auto', false)).toBe(true)
+    expect(requiresAutoModeConfirmation('auto', true)).toBe(false)
+    for (const m of SAFE_PERMISSION_MODES) {
+      expect(requiresAutoModeConfirmation(m, false)).toBe(false)
+      expect(requiresAutoModeConfirmation(m, true)).toBe(false)
+    }
+  })
+
+  it('resumeInitialPermissionMode は auto を default に戻す', () => {
+    expect(resumeInitialPermissionMode('auto')).toBe('default')
+    for (const m of SAFE_PERMISSION_MODES) expect(resumeInitialPermissionMode(m)).toBe(m)
+  })
+
+  it('起動の設定の述語が auto を通し、acceptEdits を通さない', () => {
+    expect(isValidLaunchConfig({ ...valid, permissionMode: 'auto' })).toBe(true)
+    expect(isValidLaunchConfig({ ...valid, permissionMode: 'acceptEdits' })).toBe(false)
   })
 })
 

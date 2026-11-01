@@ -30,8 +30,10 @@ describe('LIVE_SETTING_FAILURES (集合を変えるには ADR が要る: AD-062)
       'rejected',
       'session-ended',
       'timeout',
-      'write-failed'
+      'write-failed',
+      'auto-mode-unconfirmed'
     ])
+    expect(LIVE_SETTING_FAILURES).toHaveLength(12)
   })
 })
 

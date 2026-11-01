@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react'
+import { useStore } from 'zustand'
 
 import type { AutoModeStatus } from '@domain/runtime/capabilities'
-import { isSafePermissionMode } from '@domain/session/launch-config'
+import { isAutoPermissionMode, isSafePermissionMode } from '@domain/session/launch-config'
 import type { PermissionModeKey } from '@domain/session/meter'
 
 import { PERMISSION_MODE_NAMES } from '@/features/chat/labels'
+import { useRunningSessionStoreApi } from '@/features/session/running-session-context'
 import { useRunningSessionsView } from '@/features/session/running-sessions-view'
 import { useSessionMeters, type RateLimitMeter } from '@/features/session/useSessionMeters'
 import { cn } from '@/lib/utils'
 
-import { UNSAFE_MODE_BANNER_LABELS } from './labels'
+import { AUTO_MODE_BANNER_LABELS, UNSAFE_MODE_BANNER_LABELS } from './labels'
 import { MAX_TIMER_DELAY_MS, quotaBannerView } from './quota-banner'
 
 /** 中央のヘッダの下の帯が読む、稼働中のセッションの値 (`CenterHeader` の `live` から渡す)。 */
@@ -27,7 +29,7 @@ export interface CenterBannersProps {
  *
  * | 規則 | 根拠 |
  * |---|---|
- * | 並びは 権限モードの警告の帯 → Quota banner (どちらも兄弟として並べ、包む要素を置かない) | 014 data-model §4 |
+ * | 並びは 権限モードの帯 (Auto の帯 / 警告の帯。026) → Quota banner (どちらも兄弟として並べ、包む要素を置かない) | 014 data-model §4 |
  * | 帯はセッションごと。表示中のセッションの計量だけを読む | 014 spec US-2 AC5 |
  * | 判定と文の組み立ては `quotaBannerView` (純関数)。ここは描くだけ | 014 data-model §4 |
  * | 文はテキストとして描く (計量は数と列挙だけで、会話由来の文字列を含まない) | 014 spec FR-003 |
@@ -39,9 +41,107 @@ export function CenterBanners({
 }: CenterBannersProps): React.JSX.Element {
   return (
     <>
-      <UnsafeModeBanner sessionId={sessionId} runtimeId={runtimeId} />
+      <PermissionModeBanners key={sessionId} sessionId={sessionId} runtimeId={runtimeId} />
       <QuotaBanner sessionId={sessionId} terminal={terminal} />
     </>
+  )
+}
+
+/**
+ * **権限モードの帯** (026 / data-model §5.2・§5.3 / AD-066)。`key={sessionId}` で描く (セッションの切り替えで読み上げの前の値を持ち越さない)。
+ *
+ * | 条件 | 帯 |
+ * |---|---|
+ * | 観測した権限モードが Auto で、利用者が選んだ値も Auto | `AutoModeBanner` (視覚。live region を持たない) |
+ * | 上に当たらず、観測した値が安全 3 値の外 | `UnsafeModeBanner` |
+ * | それ以外 | 出さない |
+ *
+ * `AutoModeAnnouncer` (読み上げの置き場所) は中身が空でも**常に** mount する (live region を中身と同時に挿入しない)。
+ */
+function PermissionModeBanners({
+  sessionId,
+  runtimeId
+}: {
+  readonly sessionId: string
+  readonly runtimeId: string
+}): React.JSX.Element {
+  const mode = useSessionMeters(sessionId, (meters) => meters.permissionMode)
+  const chosen = useStore(
+    useRunningSessionStoreApi(),
+    (s) => s.sessions[sessionId]?.chosenPermissionMode ?? null
+  )
+  const autoShown = isAutoPermissionMode(mode) && isAutoPermissionMode(chosen)
+  return (
+    <>
+      {autoShown ? (
+        <AutoModeBanner runtimeId={runtimeId} />
+      ) : (
+        <UnsafeModeBanner sessionId={sessionId} runtimeId={runtimeId} />
+      )}
+      <AutoModeAnnouncer
+        mode={mode}
+        chosenIsAuto={isAutoPermissionMode(chosen)}
+        runtimeId={runtimeId}
+      />
+    </>
+  )
+}
+
+/** Auto の帯の文 (視覚の帯と読み上げで同じ文を使う)。隔離の文は表示用の `autoModeStatus` から選ぶ。 */
+function useAutoModeSentence(runtimeId: string): string {
+  const status = useRunningSessionsView().runtimeAutoMode(runtimeId)
+  return [
+    AUTO_MODE_BANNER_LABELS.autoModeBanner(PERMISSION_MODE_NAMES.auto),
+    AUTO_MODE_BANNER_LABELS.autoModeIsolation(status),
+    AUTO_MODE_BANNER_LABELS.autoModeRevert
+  ].join('')
+}
+
+/** 文だけを描く (一覧の読み取りは出すときだけ)。 */
+function AutoModeSentence({ runtimeId }: { readonly runtimeId: string }): React.JSX.Element {
+  return <>{useAutoModeSentence(runtimeId)}</>
+}
+
+/** 利用者が選んだ Auto の帯 (026)。警告ではなく注記 (`role="note"`)。赤にしない。 */
+function AutoModeBanner({ runtimeId }: { readonly runtimeId: string }): React.JSX.Element {
+  const sentence = useAutoModeSentence(runtimeId)
+  return (
+    <div
+      role="note"
+      data-testid="auto-mode-banner"
+      className="border-amber-500/40 bg-amber-500/10 flex shrink-0 items-center gap-3 border-b px-4 py-2 text-sm text-amber-700 dark:text-amber-400"
+    >
+      <p className="min-w-0 flex-1">{sentence}</p>
+    </div>
+  )
+}
+
+/**
+ * Auto への切り替えの読み上げ (026 / data-model §5.3)。同じセッションの中で、前の観測が Auto 以外 (`null` を含む) から
+ * Auto になり、選んだ値も Auto のときだけ文を入れる。Auto から外れたら空にする。mount 時に Auto なら読まない。
+ */
+function AutoModeAnnouncer({
+  mode,
+  chosenIsAuto,
+  runtimeId
+}: {
+  readonly mode: PermissionModeKey | null
+  readonly chosenIsAuto: boolean
+  readonly runtimeId: string
+}): React.JSX.Element {
+  // 前の観測の値は mount 時の今の値で初期化し、値が変わった描画の中で state を調整する (effect で setState しない)。
+  const [previous, setPrevious] = useState<PermissionModeKey | null>(mode)
+  const [announced, setAnnounced] = useState(false)
+  const isAuto = isAutoPermissionMode(mode)
+  if (previous !== mode) {
+    setPrevious(mode)
+    if (!isAuto) setAnnounced(false)
+    else if (!isAutoPermissionMode(previous) && chosenIsAuto) setAnnounced(true)
+  }
+  return (
+    <div role="status" aria-live="polite" data-testid="auto-mode-announcer" className="sr-only">
+      {announced && isAuto ? <AutoModeSentence runtimeId={runtimeId} /> : null}
+    </div>
   )
 }
 

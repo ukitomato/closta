@@ -346,7 +346,7 @@ CI スクリプトの担当とし、reviewer に複製しない。
 ### I-3 — sandbox capability 判定と権限モードのゲート
 
 ```
-/cl-design "[isolation] ランタイムごとの sandbox 利用可否を判定し、権限モードの選択肢をゲートする。autoModeSafe が false のランタイムで Auto と bypassPermissions を選択不可にし、bypass の選択には明示確認を要求する。許可ドメイン等の sandbox 設定を --settings で渡せること。" --targets both
+/cl-design "[isolation] ランタイムごとの sandbox 利用可否を判定し、権限モードの選択肢をゲートする。autoModeSafe が !== true のランタイムで bypassPermissions を選択不可にし (Auto は X-10 で確認つきで選べる。autoModeSafe === true のランタイムでは X-10 は確認を省いているが sandbox は有効でない。sandbox を有効にするか、確認を省き続けるかを判断し直す。026 U-6 / AD-066)、bypass の選択には明示確認を要求する。許可ドメイン等の sandbox 設定を --settings で渡せること。" --targets both
 ```
 
 ---

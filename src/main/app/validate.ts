@@ -21,12 +21,12 @@ import { normalizeSessionName } from '@domain/session/live-settings'
 import { isElicitationAction, isElicitationContent } from '@domain/session/elicitation'
 import type { RuntimeDescriptor } from '@domain/runtime/descriptor'
 import {
-  isSafePermissionMode,
+  isSelectablePermissionMode,
   isValidLaunchConfig,
   isValidPresetConfig,
   isValidPresetName,
   type PresetLaunchConfig,
-  type SafePermissionMode,
+  type SelectablePermissionMode,
   type SessionLaunchConfig
 } from '@domain/session/launch-config'
 import type { PathDTO } from '@domain/runtime/dto'
@@ -433,13 +433,18 @@ export function isValidElicitationContent(
 }
 
 /**
- * **`setSessionPermissionMode(sessionId, mode)`** (023 / contracts C-1)。引数はちょうど 2 つで、
- * `sessionId` は UUID・`mode` は安全 3 値。外れたら `invalid-value` (service を呼ばない)。
+ * **`setSessionPermissionMode(sessionId, mode, autoModeAcknowledged?)`** (023 / 026 contracts C-3)。引数は 2 または 3 つで、
+ * `sessionId` は UUID・`mode` は許可の 4 値。3 つ目 (確認の印) の型は問わない (service が `=== true` で見る)。
+ * 外れたら `invalid-value` (service を呼ばない)。
  */
 export function checkSetPermissionModeArgs(
   args: readonly unknown[]
-): args is readonly [string, SafePermissionMode] {
-  return args.length === 2 && isValidSessionId(args[0]) && isSafePermissionMode(args[1])
+): args is readonly [string, SelectablePermissionMode] | readonly [string, SelectablePermissionMode, unknown] {
+  return (
+    (args.length === 2 || args.length === 3) &&
+    isValidSessionId(args[0]) &&
+    isSelectablePermissionMode(args[1])
+  )
 }
 
 /**

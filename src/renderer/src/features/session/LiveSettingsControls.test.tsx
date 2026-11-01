@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { axe } from 'vitest-axe'
 
-import type { SafePermissionMode } from '@domain/session/launch-config'
+import type { SelectablePermissionMode } from '@domain/session/launch-config'
 import type { LiveSettingRow } from '@domain/session/live-settings'
 import type { PermissionModeKey } from '@domain/session/meter'
 
@@ -37,7 +37,7 @@ function renderControls(over: { mode?: PermissionModeKey; row?: Partial<LiveSett
   onSelect: ReturnType<typeof vi.fn>
   container: HTMLElement
 } {
-  const onSelect = vi.fn<(mode: SafePermissionMode) => void>()
+  const onSelect = vi.fn<(mode: SelectablePermissionMode) => void>()
   const utils = render(
     <LiveSettingsControls
       permissionMode={over.mode ?? 'default'}
@@ -49,9 +49,9 @@ function renderControls(over: { mode?: PermissionModeKey; row?: Partial<LiveSett
 }
 
 describe('LiveSettingsControls (権限モード)', () => {
-  it('選択肢は安全 3 値の 3 つだけで、今の値が選ばれている。axe 違反 0', async () => {
+  it('選択肢は許可の 4 値 (026 で auto が加わる) で、今の値が選ばれている。axe 違反 0', async () => {
     const { container } = renderControls({ mode: 'plan' })
-    expect(optionValues()).toEqual(['default', 'plan', 'dontAsk'])
+    expect(optionValues()).toEqual(['default', 'plan', 'dontAsk', 'auto'])
     expect(select().value).toBe('plan')
     expect((await axe(container, AXE_RULES)).violations).toEqual([])
   })
@@ -59,7 +59,7 @@ describe('LiveSettingsControls (権限モード)', () => {
   it('今の値が安全 3 値の外なら先頭に選べない項目として出す', () => {
     renderControls({ mode: 'bypassPermissions' })
     const options = Array.from(select().querySelectorAll('option'))
-    expect(options).toHaveLength(4)
+    expect(options).toHaveLength(5)
     expect(options[0]?.value).toBe('bypassPermissions')
     expect(options[0]).toBeDisabled()
     expect(select().value).toBe('bypassPermissions')

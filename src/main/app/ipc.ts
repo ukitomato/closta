@@ -19,7 +19,7 @@ import type { ExtraEnvPredicates } from '@domain/provider/forward-env'
 import type { DetectedCandidate } from '@domain/provider/types'
 import type { SessionControl, SessionLaunchHandshakeDTO } from '@domain/session/agent-session'
 import type { SessionIndexDTO } from '@domain/session/dto'
-import type { SafePermissionMode, SessionLaunchConfig } from '@domain/session/launch-config'
+import type { SelectablePermissionMode, SessionLaunchConfig } from '@domain/session/launch-config'
 import type {
   LiveModelsResult,
   LiveSettingResult,
@@ -151,11 +151,15 @@ export interface IpcDependencies {
   /* ── セッション起動 + 制御 (X-1) ── */
 
   /** 起動を調停する (X-4: 検証済みの起動設定)。**本文は port**、戻り値は handshake + transfer 用 port (AD-036 §2)。 */
-  launchSession(config: SessionLaunchConfig): Promise<LaunchOutcome>
+  launchSession(config: SessionLaunchConfig, autoModeAcknowledged?: boolean): Promise<LaunchOutcome>
   /** 制御を該当セッションへ送る。未知 / 終了済み sessionId なら `false`。 */
   controlSession(sessionId: string, control: SessionControl): boolean
   /** 実行中の権限モードの切り替え (023)。結果は `LiveSettingResult`。 */
-  setSessionPermissionMode(sessionId: string, mode: SafePermissionMode): Promise<LiveSettingResult>
+  setSessionPermissionMode(
+    sessionId: string,
+    mode: SelectablePermissionMode,
+    autoModeAcknowledged?: boolean
+  ): Promise<LiveSettingResult>
   setSessionModel(sessionId: string, modelId: string): Promise<LiveSettingResult>
   /** 既定の Provider のモデルの一覧 (025)。結果は `LiveModelsResult`。 */
   listSessionModels(sessionId: string): Promise<LiveModelsResult>
@@ -167,7 +171,10 @@ export interface IpcDependencies {
   /** 過去の行の軸を決める (列挙のキャッシュだけを見る)。 */
   resolvePastResume(targetKey: string, conversationId: string): Promise<PastResumeAxes>
   /** 再開の要求を解いて起動する。**本文は port**、戻り値は handshake + transfer 用 port。 */
-  resumeSession(request: SessionResumeRequest): Promise<ResumeOutcome>
+  resumeSession(
+    request: SessionResumeRequest,
+    autoModeAcknowledged?: boolean
+  ): Promise<ResumeOutcome>
   /** それまでの会話の読み取り。**本文は port** (`getTranscript` と同じ経路)。 */
   getResumedTranscript(sessionId: string, requestToken: string): Promise<TranscriptResult>
 

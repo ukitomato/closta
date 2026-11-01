@@ -25,6 +25,20 @@ const preset: Preset = {
   updatedAt: 1000
 }
 
+describe('preset-record 版 3 (026)', () => {
+  it('版 2 と同じ述語で読み、auto を通す。昇格モードは版を問わず落とす', () => {
+    const auto: Preset = { ...preset, config: { ...preset.config, permissionMode: 'auto' } }
+    const raw = JSON.parse(JSON.stringify(fromPresetRecord(auto))) as unknown
+    expect(toPresetRecord(raw, 3)).toEqual({ ok: true, preset: auto })
+    expect(toPresetRecord(raw, 2)).toEqual({ ok: true, preset: auto })
+    const esc = JSON.parse(JSON.stringify(fromPresetRecord(auto))) as {
+      config: Record<string, unknown>
+    }
+    esc.config.permissionMode = 'bypassPermissions'
+    expect(toPresetRecord(esc, 3).ok).toBe(false)
+  })
+})
+
 describe('preset-record', () => {
   it('ラウンドトリップで全軸が保たれる (SC-004)', () => {
     const r = toPresetRecord(JSON.parse(JSON.stringify(fromPresetRecord(preset))), 2)
@@ -123,7 +137,7 @@ describe('preset-record', () => {
     })
 
     it('未知の版は拒否する', () => {
-      expect(toPresetRecord(fromPresetRecord(preset), 3).ok).toBe(false)
+      expect(toPresetRecord(fromPresetRecord(preset), 4).ok).toBe(false)
     })
   })
 })

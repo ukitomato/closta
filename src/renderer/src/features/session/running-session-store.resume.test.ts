@@ -115,7 +115,7 @@ describe('running-session-store — 再開 (FE-010)', () => {
 
     const outcome = await h.store.resume(request(), null, 'manual')
     expect(outcome).toBe('accepted')
-    expect(h.cap.resumeSession).toHaveBeenCalledWith(request(), 'manual')
+    expect(h.cap.resumeSession).toHaveBeenCalledWith(request(), 'manual', false)
     const state = h.store.getState()
     expect(state.selectedId).toBe(B)
     expect(state.order).toEqual([A, B])

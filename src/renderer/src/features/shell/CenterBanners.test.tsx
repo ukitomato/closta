@@ -25,6 +25,7 @@ import { RunningSessionsHarness } from '@/test-support/running-sessions-harness'
 
 import { CenterBanners } from './CenterBanners'
 import { CenterHeader } from './CenterHeader'
+import { AUTO_MODE_BANNER_LABELS } from './labels'
 import { MAX_TIMER_DELAY_MS } from './quota-banner'
 import { DEFAULT_EXTRA_AXES } from '@domain/session/launch-config'
 
@@ -109,8 +110,8 @@ describe('Quota banner の描画 (US-2 AC1〜AC3)', () => {
 
   it('allowed_warning で注意 (role="status") と種類・割合・解除の時刻が出る', () => {
     renderDirect(rl())
-    const el = screen.getByRole('status')
-    expect(el).toBe(banner())
+    const el = screen.getByTestId('quota-banner')
+    expect(el).toHaveAttribute('role', 'status')
     expect(el).toHaveAttribute('data-tone', 'notice')
     expect(el).toHaveTextContent('5 時間の利用が 80% に達しました。14:05 にリセットされます。')
     expect(screen.queryByRole('alert')).toBeNull()
@@ -137,7 +138,10 @@ describe('Quota banner の描画 (US-2 AC1〜AC3)', () => {
     expect(banner()).toBeNull()
     d.setRate(null)
     expect(banner()).toBeNull()
-    expect(d.container).toBeEmptyDOMElement()
+    // 権限モードの読み上げの置き場所 (空の sr-only) だけが残る。
+    expect(d.container.children).toHaveLength(1)
+    expect(d.container.firstElementChild).toBe(screen.getByTestId('auto-mode-announcer'))
+    expect(d.container.firstElementChild).toBeEmptyDOMElement()
   })
 
   it('今日なら HH:mm、別の日なら M/d HH:mm', () => {
@@ -180,7 +184,8 @@ describe('Quota banner の描画 (US-2 AC1〜AC3)', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('待ってから送ってください')
     d.rerender({ terminal: true })
     expect(screen.queryByRole('alert')).toBeNull()
-    const el = screen.getByRole('status')
+    const el = screen.getByTestId('quota-banner')
+    expect(el).toHaveAttribute('role', 'status')
     expect(el).toHaveAttribute('data-tone', 'warning')
     expect(el).toHaveTextContent('5 時間の上限に達しました。14:05 にリセットされます。')
     expect(el.textContent).not.toContain('送ってください')
@@ -385,7 +390,9 @@ describe('中央のヘッダの帯 (US-2 AC5 / 014 data-model §4)', () => {
     await userEvent.click(screen.getByRole('button', { name: '会話内を検索' }))
     const search = await screen.findByTestId('conversation-search')
     const header = screen.getByTestId('center-header')
-    expect(header.nextElementSibling).toBe(quota)
+    // 権限モードの読み上げの置き場所 (sr-only) は帯の列の先頭に常にある。
+    expect(header.nextElementSibling).toBe(screen.getByTestId('auto-mode-announcer'))
+    expect(screen.getByTestId('auto-mode-announcer').nextElementSibling).toBe(quota)
     expect(quota.nextElementSibling).toBe(search)
   })
 
@@ -518,7 +525,8 @@ describe('権限モードの警告の帯 (US-4 AC1a / 014 data-model §4「権�
     const search = await screen.findByTestId('conversation-search')
     const header = screen.getByTestId('center-header')
     expect(header.nextElementSibling).toBe(unsafe)
-    expect(unsafe.nextElementSibling).toBe(quota)
+    expect(unsafe.nextElementSibling).toBe(screen.getByTestId('auto-mode-announcer'))
+    expect(screen.getByTestId('auto-mode-announcer').nextElementSibling).toBe(quota)
     expect(quota.nextElementSibling).toBe(search)
   })
 
@@ -580,5 +588,107 @@ describe('過去の会話には出さない', () => {
     expect(banner()).toBeNull()
     expect(unsafeBanner()).toBeNull()
     expect(screen.queryByRole('alert')).toBeNull()
+  })
+})
+
+/* ── Auto の帯と読み上げ (026 FE-015 / data-model §5.2・§5.3) ── */
+
+const autoBanner = (): HTMLElement | null => screen.queryByTestId('auto-mode-banner')
+const announcer = (): HTMLElement => screen.getByTestId('auto-mode-announcer')
+
+function choose(h: Harness, sessionId: string, mode: 'default' | 'auto'): void {
+  act(() =>
+    h.store.setState((s) => ({
+      sessions: {
+        ...s.sessions,
+        [sessionId]: { ...s.sessions[sessionId]!, chosenPermissionMode: mode }
+      }
+    }))
+  )
+}
+
+describe('Auto の帯と読み上げ (026 FE-015)', () => {
+  beforeEach(() => {
+    useUiStore.setState({ transcriptDensity: 'comfortable' })
+  })
+
+  it('観測も選んだ値も Auto なら Auto の帯 (role="note"・live region なし) で、警告の帯は出ない', async () => {
+    const h = await setupLive({ runtimes: runtimeList('unavailable') })
+    choose(h, A, 'auto')
+    h.emit(A, modeOf('auto'))
+    const el = await screen.findByTestId('auto-mode-banner')
+    expect(el).toHaveAttribute('role', 'note')
+    expect(el).not.toHaveAttribute('aria-live')
+    expect(el).toHaveTextContent(AUTO_MODE_BANNER_LABELS.autoModeBanner(PERMISSION_MODE_NAMES.auto))
+    expect(el).toHaveTextContent(AUTO_MODE_BANNER_LABELS.autoModeIsolation('unavailable'))
+    expect(el).toHaveTextContent(AUTO_MODE_BANNER_LABELS.autoModeRevert)
+    expect(unsafeBanner()).toBeNull()
+    expect((await axe(el, AXE_RULES)).violations).toEqual([])
+  })
+
+  it('隔離の文は autoModeStatus で変わる (allowed でも隔離されていると読める文にしない)', async () => {
+    const h = await setupLive({ runtimes: runtimeList('allowed') })
+    choose(h, A, 'auto')
+    h.emit(A, modeOf('auto'))
+    const el = await screen.findByTestId('auto-mode-banner')
+    expect(el).toHaveTextContent(AUTO_MODE_BANNER_LABELS.autoModeIsolation('allowed'))
+    expect(el).not.toHaveTextContent('隔離がありません')
+  })
+
+  it('観測が Auto でも選んだ値が Auto でなければ、Auto の帯でなく警告の帯が出る', async () => {
+    const h = await setupLive({ runtimes: runtimeList('unavailable') })
+    h.emit(A, modeOf('auto'))
+    expect(await screen.findByTestId('unsafe-mode-banner')).toBeInTheDocument()
+    expect(autoBanner()).toBeNull()
+  })
+
+  it('Auto から外れると帯が消える', async () => {
+    const h = await setupLive({ runtimes: runtimeList('unavailable') })
+    choose(h, A, 'auto')
+    h.emit(A, modeOf('auto'))
+    await screen.findByTestId('auto-mode-banner')
+    choose(h, A, 'default')
+    h.emit(A, modeOf('default'))
+    expect(autoBanner()).toBeNull()
+    expect(unsafeBanner()).toBeNull()
+  })
+
+  it('読み上げの置き場所は常にあり、空で始まる。null から Auto になると文が入り、外れると空に戻る', async () => {
+    const h = await setupLive({ runtimes: runtimeList('unavailable') })
+    expect(announcer()).toHaveAttribute('role', 'status')
+    expect(announcer()).toHaveAttribute('aria-live', 'polite')
+    expect(announcer()).toHaveTextContent('')
+    choose(h, A, 'auto')
+    h.emit(A, modeOf('auto'))
+    await vi.waitFor(() =>
+      expect(announcer()).toHaveTextContent(
+        AUTO_MODE_BANNER_LABELS.autoModeBanner(PERMISSION_MODE_NAMES.auto)
+      )
+    )
+    expect(announcer()).toHaveTextContent(AUTO_MODE_BANNER_LABELS.autoModeIsolation('unavailable'))
+    choose(h, A, 'default')
+    h.emit(A, modeOf('default'))
+    await vi.waitFor(() => expect(announcer()).toBeEmptyDOMElement())
+    // もう一度 Auto にすると、また読む。
+    choose(h, A, 'auto')
+    h.emit(A, modeOf('auto'))
+    await vi.waitFor(() => expect(announcer()).not.toBeEmptyDOMElement())
+  })
+
+  it('観測が Auto でも選んだ値が Auto でなければ読み上げない', async () => {
+    const h = await setupLive({ runtimes: runtimeList('unavailable') })
+    h.emit(A, modeOf('auto'))
+    await screen.findByTestId('unsafe-mode-banner')
+    expect(announcer()).toBeEmptyDOMElement()
+  })
+
+  it('既に Auto のセッションへ切り替えても読み上げない (mount 時に Auto で初期化)', async () => {
+    const h = await setupLive({ runtimes: runtimeList('unavailable') })
+    choose(h, B, 'auto')
+    h.emit(B, modeOf('auto'))
+    expect(announcer()).toBeEmptyDOMElement()
+    act(() => h.store.select(B))
+    expect(await screen.findByTestId('auto-mode-banner')).toBeInTheDocument()
+    expect(announcer()).toBeEmptyDOMElement()
   })
 })

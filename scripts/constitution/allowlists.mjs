@@ -479,8 +479,9 @@ export const SANCTIONED_SETTINGS_WRAPPER = 'assertHelperSettings'
  * `QueryMutationMethod` (型の union) と一致させる。**外すには ADR が要る** (足すのは P3 の範囲内で ADR 不要)。
  *
  * **023 (X-6) で `setPermissionMode` / `setModel` を外した (22 → 20)。** [AD-062](../../docs/decisions/0062-live-session-permission-mode-model-and-rename.md)
- * Decision 1 / 3 が、安全 3 値の権限モードとカタログのモデルの切り替えだけを呼んでよいと決めた。外した 2 つのうち
- * `.setPermissionMode(` は項目 16 が別の検査で縛る (引数が `assertSafePermissionMode(` で始まり、その呼び出しで閉じること)。
+ * Decision 1 / 3 が、許可の値の権限モードとカタログのモデルの切り替えだけを呼んでよいと決めた。外した 2 つのうち
+ * `.setPermissionMode(` は項目 16 が別の検査で縛る (引数が `assertSelectablePermissionMode(` で始まり、その呼び出しで閉じること)。
+ * 026 (AD-066) で許可の値が安全 3 値から許可の 4 値 (`auto` を足す) に広がった。
  * `setMaxThinkingTokens` は残す (spec U-4 / FR-008)。
  */
 export const QUERY_MUTATION_METHODS = [
@@ -507,19 +508,23 @@ export const QUERY_MUTATION_METHODS = [
 ]
 
 /**
- * `permissionMode` に現れてよいのは**安全 3 値** (`default` / `plan` / `dontAsk`。AD-041 (a))。
+ * `permissionMode` に現れてよいのは**許可の 4 値** (`default` / `plan` / `dontAsk` / `auto`。AD-041 (a) / AD-066)。
  * **danger mode の昇格値を締め出す** (FR-013 / SC-006(a) / X-4 SC-005)。
  * `bypassPermissions` / `acceptEdits` / `auto` (無人実行) を含める。`plan` / `dontAsk` は AD-020 の危険度表で
  * 「安全」であり昇格ではないため含めない。capability 連動の昇格モードは I-3。
+ *
+ * **値は 3 値のまま変えない (026 / AD-066)。** `auto` は agents のファイルに綴りを書かない (domain の
+ * `isSelectablePermissionMode` / `assertSelectablePermissionMode` が許す) ので、この検査は変えずに
+ * agents に `'auto'` の綴りを置かせない backstop として働く。
  */
 export const PERMISSION_MODE_ESCALATION_VALUES = ['bypassPermissions', 'acceptEdits', 'auto']
 
 /**
- * SDK 保持ファイルで値位置の `permissionMode:` を許す**唯一の形** = ドメインの実行時 assert (AD-041 (a))。
+ * SDK 保持ファイルで値位置の `permissionMode:` を許す**唯一の形** = ドメインの実行時 assert (AD-041 (a) / AD-066)。
  * これ以外 (リテラル / 別変数 / shorthand `{ permissionMode }`) は項目16 が違反にする。型位置
  * (`readonly permissionMode:` / 型名が続く宣言) は対象外。
  */
-export const SANCTIONED_PERMISSION_MODE_WRAPPER = 'assertSafePermissionMode'
+export const SANCTIONED_PERMISSION_MODE_WRAPPER = 'assertSelectablePermissionMode'
 
 /**
  * Principle V (資格情報を永続化しない) の**ソース側 backstop** (X-3 / SH-010 / security H-004)。

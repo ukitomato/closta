@@ -6,7 +6,7 @@ import type { VerifiedRunning } from '@domain/runtime/verified-running'
 import type { WorkspaceFolder } from '@domain/workspace/folder'
 
 import type { ElicitationPrompt, ElicitationResponse } from './elicitation'
-import type { SafePermissionMode } from './launch-config'
+import type { SelectablePermissionMode } from './launch-config'
 import type { MeterUpdate } from './meter'
 import type { SessionRunState } from './run-state'
 import type { TranscriptMessageDTO } from './transcript-dto'
@@ -94,17 +94,22 @@ export function isLaunchFailureReason(value: unknown): value is LaunchFailureRea
  * - `invalid-config`: 起動設定の形が不正、または main の再評価で blocker が残った / 転送キーが規則に反した
  * - `provider-unavailable`: Provider の env 導出が null (到達不可 / config-dir 変換不能 / 規則違反)
  * - `needs-confirmation`: 確認が要る reset (Provider が既定に戻った) を未確認のまま起動しようとした
+ * - `auto-mode-unconfirmed`: Auto の確認を経ずに `auto` で起動・再開しようとした (026 / AD-066)
+ *
+ * 集合を変えるには ADR が要る (AD-062 / AD-066)。
  */
-export type LaunchPreflightReason = 'invalid-config' | 'provider-unavailable' | 'needs-confirmation'
+export type LaunchPreflightReason =
+  'invalid-config' | 'provider-unavailable' | 'needs-confirmation' | 'auto-mode-unconfirmed'
 
 export const LAUNCH_PREFLIGHT_REASONS = [
   'invalid-config',
   'provider-unavailable',
-  'needs-confirmation'
+  'needs-confirmation',
+  'auto-mode-unconfirmed'
 ] as const satisfies readonly LaunchPreflightReason[]
 
 /**
- * launch invoke の拒否理由 (起動とターンの失敗 18 種 + 起動前段 3 種 + 調停由来の 3 種 = 24 種)。訳出は `ui`。
+ * launch invoke の拒否理由 (起動とターンの失敗 18 種 + 起動前段 4 種 + 調停由来の 3 種 = 25 種)。訳出は `ui`。
  *
  * 調停由来 (X-5 / FR-005):
  * - `session-limit`: 同時実行数の上限 (10) に達している。X-1 の `session-active` (単一セッション不変) は廃止した (AD-043)
@@ -127,7 +132,7 @@ export type SessionLaunchHandshakeDTO =
  * agents の decoder が同じ述語で再検証し、未知キーを捨てる (境界通過後に型保証を再確立する。AD-040 Decision 2)。
  */
 export interface LaunchQueryOptions {
-  readonly permissionMode: SafePermissionMode
+  readonly permissionMode: SelectablePermissionMode
   readonly model?: string
   readonly effort?: EffortLevel
   /** helper 委譲の 2 キー射影 (AD-040)。 */
@@ -147,8 +152,8 @@ export interface LaunchQueryOptions {
 /**
  * 起動の検証済み入力 (`SessionLaunchConfig` を依存解決 + main の再評価に通した結果。data-model §2 / X-4)。
  *
- * **`permissionMode` は `SafePermissionMode`** — 6 値ユニオンにしない。昇格 3 値を型で渡せなくする
- * (正の構成 P1。AD-041 (a))。
+ * **`permissionMode` は `SelectablePermissionMode` (許可の 4 値)** — 6 値ユニオンにしない。
+ * `acceptEdits` / `bypassPermissions` を型で渡せなくする (正の構成 P1。AD-041 (a) / AD-066)。
  */
 export interface WslLaunchInput {
   readonly folder: WorkspaceFolder
@@ -357,7 +362,7 @@ export type SessionControl =
   | {
       readonly kind: 'set-permission-mode'
       readonly requestId: string
-      readonly mode: SafePermissionMode
+      readonly mode: SelectablePermissionMode
     }
   | { readonly kind: 'set-model'; readonly requestId: string; readonly model: string }
   /** 既定の Provider のモデルの一覧の取得 (025 / AD-065)。結果は `requestId` つきの `models-result`。 */
@@ -383,8 +388,8 @@ export interface AgentSession {
   sendPrompt(text: string): void
   /** SDK interrupt (stdin 越し control_request。FR-015。`interrupt`)。 */
   interrupt(): Promise<void>
-  /** 実行中の権限モードの切り替え (`set-permission-mode`。安全 3 値の中。AD-062)。結果は `control-result`。 */
-  setPermissionMode(requestId: string, mode: SafePermissionMode): void
+  /** 実行中の権限モードの切り替え (`set-permission-mode`。許可の 4 値の中。AD-062 / AD-066)。結果は `control-result`。 */
+  setPermissionMode(requestId: string, mode: SelectablePermissionMode): void
   /** 実行中のモデルの切り替え (`set-model`。AD-062)。結果は `control-result`。 */
   setModel(requestId: string, model: string): void
   /** 穏当な終了 (`end`)。プロンプトの入力を閉じて `claude` を正常終了させる。 */

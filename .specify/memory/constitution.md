@@ -1,10 +1,34 @@
 ---
 status: active
-version: 1.5.0
+version: 1.6.0
 ratified: 2026-09-13
-last_amended: 2026-10-29
+last_amended: 2026-11-01
 generated_by: /speckit.constitution (素材: /spec-gate bootstrap Phase 6 の draft)
 ---
+
+<!--
+Sync Impact Report (v1.6.0)
+- Version change: 1.5.0 → 1.6.0
+- Last amended: 2026-11-01
+- Bump rationale: MINOR。Principle III を、`bypassPermissions` の選択不可は残し、Auto (`auto`) は確認つきで選べるように改めた
+  (適合と判定される状態を広げる。今まで適合していた状態が違反になることは無い)
+- 改定手順: 1 = AD-066 / 2 = 未了。026 の PR で architecture-reviewer を交えた人間のレビューを受ける (実施日: 未記入。マージ前に済んでいること。RK-01) /
+  3 = MINOR / 4 = Amendment trail / 5 = 下記の enumeration
+
+Modified sections:
+- Principle III (Statement・Why (2 文目の置き換えと暫定の受け入れ)・Examples・Verification)
+
+受け入れたリスク:
+- `autoModeSafe === true` のランタイムで確認を省いた Auto は、隔離されずに動く (sandbox は I-3 まで有効にしない)。I-3 で判断し直す (026 U-6)
+
+既存違反の enumeration (2026-11-01):
+- III: 0 件 (項目 16 ok)
+
+Templates requiring updates:
+- ✅ .specify/templates/plan-template.md (III の行)
+- ✅ docs/glossary.md / docs/prompts.md (I-3) / docs/domains/isolation/charter.md
+- ✅ docs/decisions/0066-auto-permission-mode-with-confirmation.md
+-->
 
 <!--
 Sync Impact Report (v1.5.0)
@@ -464,19 +488,24 @@ if (!isMac) { ... }
 - `violation_threshold`: 0
 - `bad_pattern_grep`: (grep での機械判定が困難。E2E で検証する。補助 grep: `grep -rn "permissionMode" src/ | grep -v "capabilities"`)
 - `adoption_date`: 2026-09-13
-- `amended`: 2026-09-15 (AD-024 #13)
+- `amended`: 2026-09-15 (AD-024 #13) / 2026-11-01 (AD-066)
 
 <!-- BOOTSTRAP_SECTION_START principle=III -->
-**Statement**: `capabilities.autoModeSafe !== true` のランタイムで Auto / `bypassPermissions` を選択可能にしてはならない。**`autoModeSafe` は 3 値 (`true` / `false` / `unknown`) であり、判定は単一の関数に集約する** (`isAutoModeAllowed`)。`=== false` と書くと判定中 (`unknown`) が素通りする (AD-024 #13)。`bypassPermissions` の選択には `allowDangerouslySkipPermissions: true` と明示確認を要求する。
+**Statement**: `capabilities.autoModeSafe !== true` のランタイムで `bypassPermissions` を選択可能にしてはならない。**同じランタイムで Auto (`auto`) を選ぶときは、起動・実行中とも毎回、隔離が無いことを書いた明示の確認を挟み、main は確認の印の無い要求を拒否する** (AD-066)。**`autoModeSafe` は 3 値 (`true` / `false` / `unknown`) であり、判定は単一の関数に集約する** (`isAutoModeAllowed`)。`=== false` と書くと判定中 (`unknown`) が素通りする (AD-024 #13)。`bypassPermissions` の選択には `allowDangerouslySkipPermissions: true` と明示確認を要求する。
 
-**Why**: 隔離境界のない環境で無人実行を許すと、ファイルツール・MCP サーバ・hook がホストに対して無制限に動作する。`Win32Runtime` は sandbox を持たないため (PLAN.md §2.1)、UI 上で選べてしまうこと自体が事故経路になる。軸 3 (Docker サンドボックス) が存在する理由でもある。
+**Why**: 隔離境界のない環境で無人実行を許すと、ファイルツール・MCP サーバ・hook がホストに対して無制限に動作する。`Win32Runtime` は sandbox を持たないため (PLAN.md §2.1)、`bypassPermissions` を UI 上で選べてしまうこと自体が事故経路になる。Auto は分類器が操作ごとに許可・拒否するので、隔離が無くても利用者が確認の上で選ぶことは許す。選んだことと隔離されていないことは、動いている間ずっと帯で示す (AD-066)。軸 3 (Docker サンドボックス) が存在する理由でもある。
+
+**暫定の受け入れ** (AD-066 / 026 U-6): `autoModeSafe === true` は、そのランタイムで sandbox が使えることを表し、Closta がそのセッションで sandbox を有効にしたことは表さない。Closta は I-3 まで sandbox を有効にしないので、`autoModeSafe === true` のランタイムで確認を省いた Auto のセッションも隔離されずに動く。利用者はこれを承知のうえで確認を省くことを選んだ (2026-10-31)。この間、Auto の帯は `autoModeSafe` の値によらず隔離されていると読める文を出さない。sandbox を有効にするか、確認を省き続けるかは I-3 で判断し直す。
 
 **Examples**:
-- ✓ Good: `Win32Runtime` 選択時、権限モードの Auto / bypass が `disabled` になる
-- ✗ Bad: 選択は可能にしておき、起動時にエラーを出す — 選べる時点で誤操作の余地が残る
+- ✓ Good: `Win32Runtime` 選択時、`bypassPermissions` は選択肢に無く、Auto は確認を承諾したときだけ選ばれる
+- ✓ Good: プリセット・前回の設定で入った Auto は、起動を押した時点で確認を出す。これは承諾なしに起動させないための確認で、エラーではない
+- ✗ Bad: `bypassPermissions` を選択可能にしておき、起動時にエラーを出す — 選べる時点で誤操作の余地が残る
+- ✗ Bad: Auto を確認なしで選べる (`autoModeSafe !== true` のランタイムで) / main が確認の印を見ない
+- ✗ Bad: `autoModeSafe === true` を「隔離の中で動いている」と表示する — sandbox を使えることと有効にしたことは別
 
 **Verification**:
-- Automated: E2E で `Win32Runtime` 選択時に Auto / bypass が disabled であることを確認する
+- Automated: E2E で `Win32Runtime` 選択時に `acceptEdits` / `bypassPermissions` が選択肢に無く、Auto を選ぶと確認が出て取り消すと前の値のままであること (`e2e/launch-dialog.spec.ts`)。main の単体テストで印の無い `auto` の要求が拒否されること。項目 16 が agents の昇格の値のリテラルを違反にすること
 - Manual: `security-reviewer` / `ux-reviewer` (隔離状態の可視性、PLAN.md §6.4)
 <!-- BOOTSTRAP_SECTION_END principle=III -->
 
@@ -1105,6 +1134,7 @@ v1.2.4 は改定手順に新しい規則 (ADR の in-place 訂正) を足した�
 | 1.3.0 | 2026-10-03 | [AD-044](../../docs/decisions/0044-ui-coverage-assignment.md) (O-2)。指針の実質的な拡張 (MINOR)。**Principle XII の割当を 3 種類 (実装済み / 後続 / 表示不要) にし、`後続: <未完了の feature ID>` を割当済みとみなした**。ToolFallback だけの `実装済み` は Tier B / C に限る。**M3 の完了の条件を「Tier A の後続の行のうち割当先が M3 の feature の行が 0」と定めた**。Automated を Constitution 検証の項目 21 (SDK の型定義との名前の集合の照合・割当の書式・SDK の版) に移し、`bad_pattern_grep` を割当の列に限った。Manual の `ui-coverage-reviewer` を配置済みにした。Principle XIII の element の数を registry の 127 名に、未分類 59 を F 節での解消に追随させた。Statement も「割当を持たせる」に改めた。既存違反 0 (項目 21 ok、M3 の残り 24) |
 | 1.4.0 | 2026-10-07 | [AD-045](../../docs/decisions/0045-ui-labels-no-i18n-resources.md) (O-3)。指針の実質的な拡張 (MINOR)。**Principle XV の UI labels の「i18n リソース化の要否は M3 (O-1〜O-3) までに判断する」を確定の判断に置き換えた** — リソース化しない。UI の文言は feature ごとの文言の表に置き、コンポーネントへの直書きを新たに増やさない (AD-045 Decision 2)。再検討の条件 (AD-045 Decision 4)、`target-finder.ts` の 2 本の例外 (Decision 3)、Verification (機械強制なし・`ux-reviewer` が基準線 331 行 (AD-045 Confirmation) から見る) を足した。既存の直書きは違反に数えない (「新たに増やさない」の規則)。改定手順 2 (architecture-reviewer を交えた人間のレビュー) は O-3 の PR で受ける |
 | 1.5.0 | 2026-10-29 | [AD-065](../../docs/decisions/0065-live-model-list-and-claude-code-permission-mode-names.md) Decision 3 / 4 (O-13 / 025)。指針の実質的な拡張 (MINOR)。**Principle XV の Exceptions に、権限モードの名前は Claude Code の CLI の表記をそのまま使い説明を付けない項を足した**。名前の表は `features/chat/labels.ts` の `PERMISSION_MODE_NAMES` の 1 か所で、照合の版は同じファイルの定数。版を上げるときは `docs/ui-coverage.md` の手順で見直す。既存違反は 0 件 (英語の名前は文言の表の中で、直書きを増やさない)。改定手順 2 (人間のレビュー) は名前の表の差分と同じ O-13 の PR に含め、マージ後に利用者が行う (覆すときは別の PR で直す。名前の表を Constitution の改定より先に main に入れない、という RK-08 は同じ PR なので満たす) |
+| 1.6.0 | 2026-11-01 | [AD-066](../../docs/decisions/0066-auto-permission-mode-with-confirmation.md) (X-10 / 026)。適合と判定される状態を広げる改定 (MINOR)。**Principle III の Statement を、`autoModeSafe !== true` で選択可能にしてはならないのは `bypassPermissions` とし、Auto (`auto`) は起動・実行中とも毎回、隔離が無いことを書いた明示の確認を挟み、main は確認の印の無い要求を拒否する、に改めた**。Why の 2 文目を `bypassPermissions` に限る文に置き換え、暫定の受け入れ (`autoModeSafe === true` で確認を省いた Auto も隔離されずに動く。I-3 で判断し直す。026 U-6) を足した。Examples / Verification も追随。今まで適合していた状態が違反になることは無い。既存違反は 0 件 (項目 16 ok)。改定手順 2 (architecture-reviewer を交えた人間のレビュー) は未了。026 の PR で人間のレビューを受ける |
 
 ## References
 
@@ -1116,4 +1146,4 @@ v1.2.4 は改定手順に新しい規則 (ADR の in-place 訂正) を足した�
 
 ---
 
-**Version**: 1.5.0 | **Ratified**: 2026-09-13 | **Last Amended**: 2026-10-29
+**Version**: 1.6.0 | **Ratified**: 2026-09-13 | **Last Amended**: 2026-11-01

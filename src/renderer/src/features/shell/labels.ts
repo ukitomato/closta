@@ -1,3 +1,4 @@
+import type { AutoModeStatus } from '@domain/runtime/capabilities'
 import type { RateLimitType } from '@domain/session/meter'
 import type { McpStatusKey } from '@domain/session/session-init-report'
 
@@ -163,6 +164,27 @@ export const UNSAFE_MODE_BANNER_LABELS = {
     `アプリが選んでいない権限モード (「${name}」) で動いています。承認なしで操作が走ることがあります。`,
   unsafeModeNoIsolation: 'このランタイムには隔離がありません。',
   unsafeModeIsolationUnverified: 'このセッションの隔離をアプリは確かめていません。'
+} as const
+
+/**
+ * Auto の帯の文 (026 / data-model §5.3・§9)。`name` は `PERMISSION_MODE_NAMES.auto`。隔離の文は `autoModeStatus` で選ぶ。
+ * どの値でも「隔離されている」「sandbox の中」と読める文にしない (spec U-6 / FR-008)。
+ * `UNSAFE_MODE_BANNER_LABELS` の隔離の文は共有しない (`allowed` を「確かめていません」とだけ書かない)。
+ */
+export const AUTO_MODE_BANNER_LABELS = {
+  autoModeBanner: (name: string): string =>
+    `選んだ権限モード「${name}」で動いています。分類器が許可した操作は承認カードなしで実行されます。`,
+  autoModeRevert: 'composer の左の権限モードからいつでも戻せます。',
+  autoModeIsolation: (status: AutoModeStatus): string => {
+    switch (status) {
+      case 'unavailable':
+        return 'このランタイムには隔離がありません。'
+      case 'allowed':
+        return 'このランタイムは sandbox を使えますが、アプリはまだ有効にしていないので、このセッションは隔離されていません。'
+      case 'undetermined':
+        return 'アプリはこのランタイムの隔離を確かめておらず、sandbox も有効にしていないので、このセッションは隔離されていません。'
+    }
+  }
 } as const
 
 /**

@@ -300,8 +300,18 @@ export const FIXTURES = [
     target: 'src/agents/__rulecheck__/sdk-permission-mode-unwrapped.ts',
     group: 'a',
     what:
-      '値位置の permissionMode を assertSafePermissionMode ラッパを通さず書く ' +
-      "(AD-041 (a)。値は安全値 'plan' で昇格値リテラル検査には掛からない — 新 backstop 単独で発火する証跡。X-4 / SH-010)",
+      '値位置の permissionMode を assertSelectablePermissionMode ラッパを通さず書く ' +
+      "(AD-041 (a) / AD-066。値は許可の値 'plan' で昇格値リテラル検査には掛からない — 新 backstop 単独で発火する証跡。X-4 / SH-010)",
+    detectors: ['constitution'],
+    rules: ['#16']
+  },
+  {
+    file: 'a-direct/sdk-set-permission-mode-escalation-literal.ts.fixture',
+    target: 'src/agents/__rulecheck__/sdk-set-permission-mode-escalation-literal.ts',
+    group: 'a',
+    what:
+      "`q.setPermissionMode(assertSelectablePermissionMode('bypassPermissions'))` — 包みを通しても昇格値の" +
+      'リテラルは項目 16 が発火する (AD-066。許可の 4 値に acceptEdits / bypassPermissions を足さない)',
     detectors: ['constitution'],
     rules: ['#16']
   },
@@ -320,6 +330,16 @@ export const FIXTURES = [
     what:
       'domain から import した大文字の定数で permissionMode を渡す ' +
       '(昇格値リテラルが現れない。旧版は大文字識別子を型位置とみなして素通しした。X-4 code-gate platform-boundary M-001)',
+    detectors: ['constitution'],
+    rules: ['#16']
+  },
+  {
+    file: 'b-equivalent/sdk-permission-mode-template-literal.ts.fixture',
+    target: 'src/agents/__rulecheck__/sdk-permission-mode-template-literal.ts',
+    group: 'b',
+    what:
+      "バッククォートのテンプレートリテラル `auto` を assertSelectablePermissionMode に通して渡す " +
+      '(`auto` は許可の値なので包みの検査・実行時 assert を通る。リテラル検査だけが止める。AD-066 / pr-gate 026 H-002)',
     detectors: ['constitution'],
     rules: ['#16']
   },
@@ -359,7 +379,7 @@ export const FIXTURES = [
     file: 'b-equivalent/sdk-permission-mode-wrapper-chained.ts.fixture',
     target: 'src/agents/__rulecheck__/sdk-permission-mode-wrapper-chained.ts',
     group: 'b',
-    what: 'ラッパの後ろに `&&` で別の値を連結する (`assertSafePermissionMode(x) && m`。旧版はラッパで始まるかしか見なかった。X-4 code-gate platform-boundary L-101)',
+    what: 'ラッパの後ろに `&&` で別の値を連結する (`assertSelectablePermissionMode(x) && m`。旧版はラッパで始まるかしか見なかった。X-4 code-gate platform-boundary L-101)',
     detectors: ['constitution'],
     rules: ['#16']
   },
@@ -391,7 +411,7 @@ export const FIXTURES = [
     file: 'b-equivalent/sdk-set-permission-mode-unwrapped.ts.fixture',
     target: 'src/agents/__rulecheck__/sdk-set-permission-mode-unwrapped.ts',
     group: 'b',
-    what: '`q.setPermissionMode(mode)` を `assertSafePermissionMode` の包みなしで呼ぶ (AD-062 Decision 1)',
+    what: '`q.setPermissionMode(mode)` を `assertSelectablePermissionMode` の包みなしで呼ぶ (AD-062 Decision 1)',
     detectors: ['constitution'],
     rules: ['#16']
   },
@@ -399,7 +419,7 @@ export const FIXTURES = [
     file: 'b-equivalent/sdk-set-permission-mode-wrapper-escape.ts.fixture',
     target: 'src/agents/__rulecheck__/sdk-set-permission-mode-wrapper-escape.ts',
     group: 'b',
-    what: '`q.setPermissionMode(assertSafePermissionMode(a) || b)` — 包みが閉じてから別の値が続く (AD-062 Decision 1)',
+    what: '`q.setPermissionMode(assertSelectablePermissionMode(a) || b)` — 包みが閉じてから別の値が続く (AD-062 Decision 1)',
     detectors: ['constitution'],
     rules: ['#16']
   },
@@ -927,9 +947,12 @@ export const UNDETECTED_NOTES = {
       '綴りの検査では見分けられない (データフローを追わない grep backstop の限界。code-gate X-4 platform-boundary L-101)。',
     mitigatedBy:
       'load-bearing gate は **`buildQueryOptions` (session-core.ts) の allowlist キーだけで options を組む正の構成**と、' +
-      '**`SafePermissionMode` 型 + `assertSafePermissionMode` の実行時 assert** である (AD-041 (a))。' +
+      '**`SelectablePermissionMode` 型 + `assertSelectablePermissionMode` の実行時 assert** である (AD-041 (a) / AD-066)。' +
       'query() に渡る permissionMode は必ずこの経路を通り、unit test (session-core.test.ts) が守る。' +
-      '起動 decoder 側も `isSafePermissionMode` で安全 3 値以外を拒否する。項目 16 は綴りの退行検出に過ぎない。',
+      '起動 decoder 側も `isSelectablePermissionMode` で許可の 4 値以外を拒否する。項目 16 は綴りの退行検出に過ぎない。' +
+      '**ただし `auto` は `assertSelectablePermissionMode` が通す許可の値なので、agents が `auto` を作らない担保は項目 16 の' +
+      'リテラル検査 (単引用符 / 二重引用符 / バッククォートの 3 形。`sdk-permission-mode-template-literal` サンプルが固定) だけである。' +
+      '`auto` をデータフローで組む形 (連結・変数経由) は実行時 assert も通るため、現時点では塞がない (実害 0 件。I-3 で再訪)。**',
     nextFeature: 'I-3',
     howToClose:
       'capability 連動の昇格モードを足す I-3 の時点で、項目 16 を綴りの grep から **options を組む経路の構造検査** ' +

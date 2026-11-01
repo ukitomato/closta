@@ -59,12 +59,13 @@ const capability: ClostaCapability = {
     ipcRenderer.invoke(IPC_CHANNELS.getTranscript, sessionId, targetKey, requestToken),
 
   // 起動元 (O-3) はそのまま 2 つめの引数で渡す。検証は main の `handleLaunchSession` (未知・欠落は記録しないだけ)。
-  launchSession: (config, origin) => ipcRenderer.invoke(IPC_CHANNELS.launchSession, config, origin),
+  launchSession: (config, origin, autoModeAcknowledged) =>
+    ipcRenderer.invoke(IPC_CHANNELS.launchSession, config, origin, autoModeAcknowledged),
   resolvePastResume: (targetKey, conversationId) =>
     ipcRenderer.invoke(IPC_CHANNELS.resolvePastResume, targetKey, conversationId),
   // 起動元 (O-3) は `launchSession` と同じくそのまま渡す。要求の検証は main の `handleResumeSession`。
-  resumeSession: (request, origin) =>
-    ipcRenderer.invoke(IPC_CHANNELS.resumeSession, request, origin),
+  resumeSession: (request, origin, autoModeAcknowledged) =>
+    ipcRenderer.invoke(IPC_CHANNELS.resumeSession, request, origin, autoModeAcknowledged),
   getResumedTranscript: (sessionId, requestToken) =>
     ipcRenderer.invoke(IPC_CHANNELS.getResumedTranscript, sessionId, requestToken),
   sendPrompt: (sessionId, text) => ipcRenderer.invoke(IPC_CHANNELS.sendPrompt, sessionId, text),
@@ -82,8 +83,8 @@ const capability: ClostaCapability = {
   interruptSession: (sessionId) => ipcRenderer.invoke(IPC_CHANNELS.interruptSession, sessionId),
   endSession: (sessionId) => ipcRenderer.invoke(IPC_CHANNELS.endSession, sessionId),
   killSession: (sessionId) => ipcRenderer.invoke(IPC_CHANNELS.killSession, sessionId),
-  setSessionPermissionMode: (sessionId, mode) =>
-    ipcRenderer.invoke(IPC_CHANNELS.setSessionPermissionMode, sessionId, mode),
+  setSessionPermissionMode: (sessionId, mode, autoModeAcknowledged) =>
+    ipcRenderer.invoke(IPC_CHANNELS.setSessionPermissionMode, sessionId, mode, autoModeAcknowledged),
   setSessionModel: (sessionId, modelId) =>
     ipcRenderer.invoke(IPC_CHANNELS.setSessionModel, sessionId, modelId),
   listSessionModels: (sessionId) => ipcRenderer.invoke(IPC_CHANNELS.listSessionModels, sessionId),

@@ -1,9 +1,9 @@
 import { useEffect, useId, useRef, useState } from 'react'
 
 import {
-  SAFE_PERMISSION_MODES,
-  isSafePermissionMode,
-  type SafePermissionMode
+  SELECTABLE_PERMISSION_MODES,
+  isSelectablePermissionMode,
+  type SelectablePermissionMode
 } from '@domain/session/launch-config'
 import {
   liveSettingBlocker,
@@ -23,10 +23,10 @@ import { LIVE_SETTING_LABELS, PERMISSION_MODE_LABELS } from '@/features/session/
  *
  * | 規則 | 根拠 |
  * |---|---|
- * | 権限モードは native の `<select>` (起動ダイアログと同じ部品)。選択肢は安全 3 値だけ | 起動ダイアログ / FR-001 |
+ * | 権限モードは native の `<select>` (起動ダイアログと同じ部品)。選択肢は許可の 4 値 (確認は `LivePane` が出す。026) | 起動ダイアログ / FR-001 / AD-066 |
  * | 押せるかは domain の `liveSettingBlocker` (main と同じ関数)。外れたら `aria-disabled` と理由を `aria-describedby` で結ぶ | data-model §5.1 |
  * | 変更中 (`changing`) は押せない | FR-013 |
- * | 今の値が安全 3 値の外なら先頭に選べない項目として出す (警告の帯は `UnsafeModeBanner` が出す) | 014 data-model §4 |
+ * | 今の値が許可の 4 値の外 (昇格の 2 値と不明) なら先頭に選べない項目として出す (警告の帯は `UnsafeModeBanner` が出す) | 014 data-model §4 |
  * | 表示は `meters` から読む。選んだ値をここでは保持しない (成功は `meter` の更新で変わる) | contracts C-1 / FR-014 |
  */
 export interface LiveSettingsControlsProps {
@@ -34,7 +34,7 @@ export interface LiveSettingsControlsProps {
   readonly permissionMode: PermissionModeKey
   /** 受け付けの判定の入力 (`changing` は結果を待つ変更があるか)。 */
   readonly row: LiveSettingRow
-  readonly onSelectPermissionMode: (mode: SafePermissionMode) => void
+  readonly onSelectPermissionMode: (mode: SelectablePermissionMode) => void
   /** モデルの選択 (023 / data-model §8.2)。無ければモデルの選択を描かない。 */
   readonly model?: LiveModelSelect
   /**
@@ -207,7 +207,7 @@ export function LiveSettingsControls({
 }: LiveSettingsControlsProps): React.JSX.Element {
   const reasonId = useId()
   const blocker = liveSettingBlocker('permission-mode', row)
-  const unsafe = !isSafePermissionMode(permissionMode)
+  const unsafe = !isSelectablePermissionMode(permissionMode)
   return (
     <div
       className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5"
@@ -238,14 +238,14 @@ function PermissionModeSelect({
   readonly blocker: LiveSettingBlocker | null
   readonly unsafe: boolean
   readonly reasonId: string
-  readonly onSelectPermissionMode: (mode: SafePermissionMode) => void
+  readonly onSelectPermissionMode: (mode: SelectablePermissionMode) => void
   readonly onConfirmed?: (() => void) | undefined
 }): React.JSX.Element {
   const confirmed = useConfirmedSelect(
     permissionMode,
     (value) => {
       const mode: unknown = value
-      if (isSafePermissionMode(mode)) onSelectPermissionMode(mode)
+      if (isSelectablePermissionMode(mode)) onSelectPermissionMode(mode)
     },
     onConfirmed
   )
@@ -273,7 +273,7 @@ function PermissionModeSelect({
             {PERMISSION_MODE_NAMES[permissionMode]}
           </option>
         )}
-        {SAFE_PERMISSION_MODES.map((mode) => (
+        {SELECTABLE_PERMISSION_MODES.map((mode) => (
           <option key={mode} value={mode}>
             {PERMISSION_MODE_LABELS[mode]}
           </option>

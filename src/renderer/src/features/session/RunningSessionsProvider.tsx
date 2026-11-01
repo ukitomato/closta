@@ -78,18 +78,35 @@ export function RunningSessionsProvider({
   const live = useLiveSession(selectedId ?? '')
   const runtime = useLiveRuntime(live, threadList)
 
+  // ゲート用の真偽 (026 / AD-066。Auto の確認が要るかの判定の入力)。一覧が無い・引けないときは false (確認が要る側)。
+  const runtimeAutoModeAllowed = useCallback(
+    (id: string): boolean =>
+      runtimes.list?.runtimes.find((r) => r.id === id)?.capabilities.autoModeAllowed ?? false,
+    [runtimes.list]
+  )
+
   const launch = useCallback(
-    (config: SessionLaunchConfig, origin: LaunchOrigin) =>
-      store.launch(config, folders.list === null ? null : folderName(config.folderId), origin),
+    (config: SessionLaunchConfig, origin: LaunchOrigin, autoModeAcknowledged: boolean) =>
+      store.launch(
+        config,
+        folders.list === null ? null : folderName(config.folderId),
+        origin,
+        autoModeAcknowledged
+      ),
     [store, folders.list, folderName]
   )
 
   const resume = useCallback(
-    async (request: SessionResumeRequest, origin: LaunchOrigin) => {
+    async (
+      request: SessionResumeRequest,
+      origin: LaunchOrigin,
+      autoModeAcknowledged: boolean
+    ) => {
       const outcome = await store.resume(
         request,
         folders.list === null ? null : folderName(request.config.folderId),
-        origin
+        origin,
+        autoModeAcknowledged
       )
       // 既に動いている行を選ぶだけのとき、シェルは「起動の受け付け」と読まない (行が前から在る) ので、ここで閉じる。
       if (outcome === 'already-running') useUiStore.getState().setLaunchOpen(false)
@@ -106,6 +123,7 @@ export function RunningSessionsProvider({
       folderName,
       runtimeName,
       runtimeAutoMode,
+      runtimeAutoModeAllowed,
       folders: folders.list,
       launch,
       resume
@@ -118,6 +136,7 @@ export function RunningSessionsProvider({
       folderName,
       runtimeName,
       runtimeAutoMode,
+      runtimeAutoModeAllowed,
       folders.list,
       launch,
       resume

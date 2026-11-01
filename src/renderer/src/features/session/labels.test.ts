@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vitest'
 
 import { LAUNCH_FAILURE_REASONS, type LaunchFailureReason } from '@domain/session/agent-session'
 import type { DirectoryResetReason } from '@domain/session/launch-resolution'
+import { SELECTABLE_PERMISSION_MODES } from '@domain/session/launch-config'
 import { LIVE_SETTING_FAILURES, type LiveSettingBlocker } from '@domain/session/live-settings'
 
-import { APP_COMMAND_LABELS } from '@/features/chat/labels'
+import { APP_COMMAND_LABELS, PERMISSION_MODE_NAMES } from '@/features/chat/labels'
 
 import {
+  AUTO_MODE_CONFIRMATION_LABELS,
+  PERMISSION_MODE_LABELS,
   DIRECTORY_RESET_LABELS,
   EXTRA_AXES_LABELS,
   LIVE_MODEL_LIST_FAILURE_LABELS,
@@ -278,14 +281,43 @@ describe('labels — 025 で足す文言 (data-model §9)', () => {
     expect(noMatch('abc')).toContain('abc')
   })
 
-  it('LIVE_MODEL_LIST_FAILURE_LABELS のキーは LIVE_SETTING_FAILURES の 11 値と一致する', () => {
+  it('LIVE_MODEL_LIST_FAILURE_LABELS のキーは LIVE_SETTING_FAILURES の 12 値と一致する', () => {
     expect(Object.keys(LIVE_MODEL_LIST_FAILURE_LABELS).sort()).toEqual(
       [...LIVE_SETTING_FAILURES].sort()
     )
-    expect(LIVE_SETTING_FAILURES).toHaveLength(11)
+    expect(LIVE_SETTING_FAILURES).toHaveLength(12)
     for (const s of Object.values(LIVE_MODEL_LIST_FAILURE_LABELS)) {
       expect(s.length).toBeGreaterThan(0)
     }
+  })
+})
+
+describe('labels — 026 で足す文言 (data-model §9)', () => {
+  it('PERMISSION_MODE_LABELS のキーは SELECTABLE_PERMISSION_MODES と一致し、auto は名前の表の値', () => {
+    expect(Object.keys(PERMISSION_MODE_LABELS).sort()).toEqual(
+      [...SELECTABLE_PERMISSION_MODES].sort()
+    )
+    expect(PERMISSION_MODE_LABELS.auto).toBe(PERMISSION_MODE_NAMES.auto)
+  })
+
+  it('auto-mode-unconfirmed の拒否の文言は空でない日本語で、名前を含む', () => {
+    expect(launchRejectLabel('auto-mode-unconfirmed')).toContain(PERMISSION_MODE_NAMES.auto)
+    expect(LIVE_SETTING_LABELS['auto-mode-unconfirmed']).toContain(PERMISSION_MODE_NAMES.auto)
+    expect(launchRejectLabel('auto-mode-unconfirmed')).toMatch(/確認/)
+    expect(LIVE_SETTING_LABELS['auto-mode-unconfirmed']).toMatch(/確認/)
+  })
+
+  it('確認の見出し・本文・承諾・取り消し (本文の 1 文目は unavailable とそれ以外で違う)', () => {
+    const name = PERMISSION_MODE_NAMES.auto
+    expect(AUTO_MODE_CONFIRMATION_LABELS.heading(name)).toContain(name)
+    expect(AUTO_MODE_CONFIRMATION_LABELS.accept(name)).toContain(name)
+    expect(AUTO_MODE_CONFIRMATION_LABELS.cancel.length).toBeGreaterThan(0)
+    const unavailable = AUTO_MODE_CONFIRMATION_LABELS.body('unavailable')
+    const other = AUTO_MODE_CONFIRMATION_LABELS.body('undetermined')
+    expect(unavailable).toContain('隔離がありません')
+    expect(other).toContain('隔離されずに動きます')
+    expect(unavailable).not.toBe(other)
+    expect(AUTO_MODE_CONFIRMATION_LABELS.body('allowed')).toBe(other)
   })
 })
 

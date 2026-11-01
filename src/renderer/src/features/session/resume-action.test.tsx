@@ -197,6 +197,15 @@ const status = (over: Partial<SessionStatusUpdate>): SessionStatusUpdate => ({
   ...over
 })
 
+/** 終わりの通知 (権限モードの読み上げの置き場所 (026) は除く)。 */
+function endNotice(): HTMLElement {
+  const found = screen
+    .getAllByRole('status')
+    .filter((el) => el.getAttribute('data-testid') !== 'auto-mode-announcer')
+  if (found.length !== 1) throw new Error(`終わりの通知が ${found.length} 件`)
+  return found[0]!
+}
+
 async function rowA(): Promise<HTMLElement> {
   const rows = await screen.findAllByRole('listitem')
   const row = rows.find((r) => within(r).queryByText('案件A') !== null)
@@ -215,7 +224,7 @@ describe('稼働中の行の「再開」「やり直す」 (US-2 AC1〜AC4)', ()
     h.push([status({})])
     const row = await rowA()
     const rowButton = within(row).getByRole('button', { name: RESUME_LABELS.action })
-    const notice = screen.getByRole('status')
+    const notice = endNotice()
     expect(within(notice).getByRole('button', { name: RESUME_LABELS.action })).toBeInTheDocument()
 
     await userEvent.click(rowButton)
@@ -237,6 +246,26 @@ describe('稼働中の行の「再開」「やり直す」 (US-2 AC1〜AC4)', ()
     expect(h.store.getState().sessions[A]).toBeDefined()
   })
 
+  it('Auto の行の再開の初期値は default に戻る (026 / FR-007)。安全 3 値の行は上のテストのとおりそのまま', async () => {
+    const h = await setup()
+    act(() =>
+      h.store.setState((s) => ({
+        sessions: {
+          ...s.sessions,
+          [A]: {
+            ...s.sessions[A]!,
+            resumable: true,
+            config: { ...s.sessions[A]!.config, permissionMode: 'auto' }
+          }
+        }
+      }))
+    )
+    h.push([status({})])
+    const row = await rowA()
+    await userEvent.click(within(row).getByRole('button', { name: RESUME_LABELS.action }))
+    expect(h.store.getState().launch.resume?.initial?.permissionMode).toBe('default')
+  })
+
   it('終了済みで会話の id なし: 何も出さず、ダイアログも開かない', async () => {
     const h = await setup()
     h.push([status({})])
@@ -244,7 +273,7 @@ describe('稼働中の行の「再開」「やり直す」 (US-2 AC1〜AC4)', ()
     expect(within(row).queryByRole('button', { name: RESUME_LABELS.action })).toBeNull()
     expect(within(row).queryByRole('button', { name: RESUME_LABELS.retry })).toBeNull()
     expect(
-      within(screen.getByRole('status')).queryByRole('button', { name: RESUME_LABELS.retry })
+      within(endNotice()).queryByRole('button', { name: RESUME_LABELS.retry })
     ).toBeNull()
     expect(useUiStore.getState().launchOpen).toBe(false)
   })

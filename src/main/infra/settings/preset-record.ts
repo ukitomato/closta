@@ -23,11 +23,15 @@ import { hasControlCharacter, MAX_ID_LENGTH } from '@domain/validation'
 
 const RECORD_KEYS = ['id', 'name', 'config', 'updatedAt'] as const
 
-/** プリセットストアのスキーマ版 (書く版)。版 2 = 追加ディレクトリと上限を持つ (024)。 */
-export const PRESET_SCHEMA_VERSION = 2
+/**
+ * プリセットストアのスキーマ版 (書く版)。版 2 = 追加ディレクトリと上限を持つ (024)。
+ * 版 3 = 権限モードに `auto` を持てる (026 / AD-066。キーは版 2 と同じ。確認の印は持たせない)。
+ * 旧版が `auto` の版 3 を読まないよう版を上げる (AD-042)。
+ */
+export const PRESET_SCHEMA_VERSION = 3
 
-/** 読める版。版 1 は新しい軸を既定で補って読み、書き戻さない。 */
-export const SUPPORTED_PRESET_SCHEMA_VERSIONS = [1, 2] as const
+/** 読める版。版 1 は新しい軸を既定で補って読み、書き戻さない。版 2 と 3 は同じ述語で読む。 */
+export const SUPPORTED_PRESET_SCHEMA_VERSIONS = [1, 2, 3] as const
 
 export type PresetRecordResult =
   | { readonly ok: true; readonly preset: Preset }
@@ -67,7 +71,7 @@ export function toPresetRecord(value: unknown, version: number): PresetRecordRes
       ...DEFAULT_EXTRA_AXES,
       additionalDirectoryIds: []
     }
-  } else if (version === 2) {
+  } else if (version === 2 || version === 3) {
     if (!isValidPresetConfig(r.config)) return invalid
     const c = r.config
     config = {

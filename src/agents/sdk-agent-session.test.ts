@@ -1928,6 +1928,23 @@ describe('sdk-agent-session: 再開 (X-9 / AD-059 / data-model §6)', () => {
       expect(Object.prototype.hasOwnProperty.call(h.options, 'resume')).toBe(false)
     })
 
+    it('起動の options の許可の 4 値 (auto を含む) は query() に渡る (AD-066)', async () => {
+      const send = await boot()
+      send({ kind: 'launch', spec: SPEC, options: { permissionMode: 'auto' } })
+      await vi.waitFor(() => expect(h.options).not.toBeNull())
+      expect(h.options?.permissionMode).toBe('auto')
+    })
+
+    it.each([['acceptEdits'], ['bypass' + 'Permissions'], ['weird'], [42], [null]])(
+      '起動の permissionMode が許可の 4 値の外 (%j) は起動しない (query() を呼ばない)',
+      async (bad) => {
+        const send = await boot()
+        send({ kind: 'launch', spec: SPEC, options: { permissionMode: bad } })
+        expect(kinds()).toEqual(['status', 'ended'])
+        expect(h.options).toBeNull()
+      }
+    )
+
     it.each([['x'], [''], ['--resume'], [42], [null], [['a']]])(
       'resume が UUID の形でない (%j) 起動は起動しない (error を通知して ended)',
       async (bad) => {
@@ -2070,6 +2087,29 @@ describe('sdk-agent-session: 再開 (X-9 / AD-059 / data-model §6)', () => {
       }
     )
 
+    it('再開を auto で頼んで init も auto なら失敗しない (AD-066 / data-model §3.2)', async () => {
+      await runPrompt(
+        { kind: 'launch', spec: SPEC, options: { permissionMode: 'auto', resume: CONV } },
+        init({ permissionMode: 'auto' })
+      )
+      await vi.waitFor(() => expect(states()).toContain('done'))
+      expect(states()).not.toContain('error')
+      expect(conversations()).toHaveLength(1)
+    })
+
+    it.each([
+      ['default で頼んで auto が戻る', 'default', 'auto'],
+      ['auto で頼んで昇格の値が戻る', 'auto', 'bypass' + 'Permissions']
+    ])('%s と resume-failed で止まる', async (_n, asked, got) => {
+      await runPrompt(
+        { kind: 'launch', spec: SPEC, options: { permissionMode: asked, resume: CONV } },
+        init({ permissionMode: got })
+      )
+      await vi.waitFor(() => expect(kinds()).toContain('ended'))
+      expect(lastStatus()).toMatchObject({ state: 'error', reasonKey: 'resume-failed' })
+      expect(conversations()).toEqual([])
+    })
+
     it('新しい起動では同じ init で失敗しない (表示だけ。今どおり)', async () => {
       await runPrompt(launch, init({ permissionMode: 'acceptEdits' }))
       await vi.waitFor(() => expect(states()).toContain('done'))
@@ -2111,6 +2151,33 @@ describe('sdk-agent-session: 実行中の設定の切り替え (023 / AD-062 / d
     // 状態は変わらない (done のまま。ターンも止めない)。
     expect(states().at(-1)).toBe('done')
   })
+
+  it('set-permission-mode は auto も Query.setPermissionMode に渡し、成功で meter が 1 回出る (AD-066)', async () => {
+    const send = await boot()
+    send(launch)
+    await vi.waitFor(() => expect(h.preMessageConsumed).toBe(true))
+    send(control({ kind: 'send-prompt', text: 'go' }))
+    await vi.waitFor(() => expect(states()).toContain('done'))
+    send(control({ kind: 'set-permission-mode', requestId: REQ, mode: 'auto' }))
+    await vi.waitFor(() =>
+      expect(results()).toEqual([{ kind: 'control-result', requestId: REQ, ok: true }])
+    )
+    expect(h.setModeCalls).toEqual([['auto']])
+    expect(modeMeters()).toHaveLength(1)
+  })
+
+  it.each(['acceptEdits', 'bypass' + 'Permissions', 'weird'])(
+    'set-permission-mode の値が許可の 4 値の外 (%s) は SDK を呼ばない',
+    async (mode) => {
+      const send = await boot()
+      send(launch)
+      await vi.waitFor(() => expect(h.preMessageConsumed).toBe(true))
+      send(control({ kind: 'send-prompt', text: 'go' }))
+      await vi.waitFor(() => expect(states()).toContain('done'))
+      send(control({ kind: 'set-permission-mode', requestId: REQ, mode }))
+      expect(h.setModeCalls).toEqual([])
+    }
+  )
 
   it('running の最中でも SDK を呼ぶ (受け付ける状態の判定は main の仕事)', async () => {
     const send = await boot()
