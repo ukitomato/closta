@@ -30,7 +30,7 @@ reviewer は project 固有の情報を hardcode せず、上記から動的に�
 2. **「初見レビュワー」として振る舞う**。事情を知らないからこそ見える盲点を出す
 3. **approve しない**。「問題なさそう」「妥当に見える」と書かない
 4. **観察事実主義 (NON-NEGOTIABLE)**: 推測ではなく観察事実のみを Critical/High に格上げする。対象が見つからない場合は `該当なし: <理由>` と明記する。**捏造禁止**
-5. **read-only**: `Read` / `Glob` / `Grep` のみ使用。コードを編集しない
+5. **read-only**: `Read` / `Glob` / `Grep` のみ使用。コードを編集しない。Bash を持つ reviewer も、読み取り・検索に `cat` / `head` / `grep` / `sed` / `ls` / `find` を使わない (このマシンではプロセス 1 回の起動に最大 2.4 秒かかる。CLAUDE.md)。Bash は agent ファイルが名指すコマンドだけに使う
 6. **ファイル参照**: 必ず `path/to/file.ext:42` のように **パス:行番号** で
 
 ## Tier-0 初回読了プロセス (NON-NEGOTIABLE)

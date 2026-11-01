@@ -2,7 +2,7 @@
 name: cl-implement
 description: tasks.md に従い実装を実行する。section ごとに implementer subagent (tasks モード) を直列で起動し、touched-files を確定し、tasks.md の checkbox 100% を検証して `/cl-code-gate` へ auto-chain する。
 argument-hint: [spec_dir]
-allowed-tools: Read Write Edit Bash Glob Grep Agent AskUserQuestion
+allowed-tools: Read Write Edit Bash Glob Grep Agent SendMessage AskUserQuestion
 ---
 
 # cl-implement
@@ -23,6 +23,11 @@ tasks.md に従って実装を実行する。**本 skill は main で動く指�
 ## Inputs
 
 - `<spec_dir>` (optional): 省略時 branch 名から推定
+- `--night` (optional): 夜間の自走 (`/cl-night`) から呼ばれたとき。規則の正本は `docs/ai-workflow/night-run.md`。本 skill で変わるのは次の 3 点:
+  - Phase 0 step 5 の checklist 未完了は確認せず続け、件数を台帳の「判断」に書く
+  - Phase 2 で `BLOCKED` が返ったら halt しない。`blocked` 行を台帳に書き、推奨案があれば採って同じ section の implementer を `SendMessage` で再開する。推奨案が無ければその section を残して次の section に進み、最後に残った section があれば halt する (`/cl-night` が夜を止める)
+  - Phase 2 step 6 の範囲外の作業は聞かず、Out of Scope に 1 行書いて台帳に記録する
+  - Phase 5 の code-gate に `--base "$impl_base"` を渡す (night の枝には前の spec の commit が積まれており、既定の merge-base では前の spec の差分まで含まれる)。Phase 6 の「/clear して」は出さない
 
 ## Steps
 
@@ -151,7 +156,7 @@ auto-chain 中の status 遷移は code-gate 側が担当。本 skill の責務�
 
 - 部分実装後の再開可能 (既に `[x]` のタスクは skip、未完了タスクを含む section から再開)
 - 再開時も `.implement-base` は作り直さない (差分の起点を実装開始時に固定する)
-- `--restart` フラグで全タスクを `[ ]` にリセットして最初から実装
+- 最初からやり直すときは tasks.md の `[x]` を手で `[ ]` に戻し、`.implement-base` を消してから再実行する
 
 ## Failure modes
 

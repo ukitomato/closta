@@ -20,6 +20,8 @@
 
 `[main]` = main の context で動く / `[fork]` = 同期の fork / `[fork:bg]` = background の fork / `[subagent]` = Agent ツールで起動する actor。規則は下の「実行モデル (context 管理)」。
 
+夜間に人がいない状態で複数の spec を進めるときは `/cl-night <queue>` (夜) と `/cl-land` (朝) を使う。spec を 1 本の枝 `night/<date>` に push なしで積み、朝に 1 回 push して PR を 1 本作る。規則の正本は [`docs/ai-workflow/night-run.md`](docs/ai-workflow/night-run.md)。
+
 個別に `/cl-spec` / `/cl-plan` / `/cl-tasks` / `/cl-design-gate` を叩くこともできる。
 design-gate が FIX_REQUIRED なら status は `tasking` に留まる。`Agent(designer)` で修正したあと `/cl-design --spec-dir <dir> --from gate` で再開する。
 
@@ -37,6 +39,7 @@ design-gate が FIX_REQUIRED なら status は `tasking` に留まる。`Agent(d
 - **`AskUserQuestion` は main でしか使えない。** fork / subagent で判断が要るときは halt する。designer は `<spec_dir>/.needs-input.md` に質問を書いて `NEEDS_INPUT` を返し、`/cl-design` が main で聞く
 - **actor は直列に動かす。** 同じ作業ツリーで implementer / designer を並列に起動しない (lint / test のキャッシュが互いに無効化される)。並列にしてよいのは read-only の reviewer だけ
 - **作業は委譲し、規則は agent 側に置く。** 実装 → `implementer` の tasks モード、code-gate / pr-gate の指摘 → `implementer` の fix モード、design-gate の指摘 → `designer`。invoker が渡すのはモード名と入力だけで、規則や出力の形を prompt に書かない (正本は各 agent ファイル)
+- **fork の中で入力を待つ Bash を書かない。** `cat > file <<EOF` は終端がずれると stdin を待って固まり、fork 内の停止は main から見えない。ファイルは Write で書く
 
 ## gate の原則
 
@@ -48,6 +51,7 @@ design-gate が FIX_REQUIRED なら status は `tasking` に留まる。`Agent(d
   `verdict_validate` は schema 検査であり、`FIX_REQUIRED` を正当な verdict として exit 0 で通す。
   「次の段に進んでよいか」を `verdict_validate` で判定してはならない
 - **AskUserQuestion gated 確定**: domain decomposition と Constitution Principle の採否は必ず人間が承認する
+- **night モードの例外**: `/cl-night` の中 (各 skill に `--night` が付いたとき) だけ、上の承認と、NEEDS_INPUT / BLOCKED / gate の FIX_REQUIRED での停止を推奨案で進める。採った判断は台帳に残し、朝の `/cl-land` で人が確かめる。Critical を残して進む経路と 3 round の上限は night モードでも変わらない。詳細は `docs/ai-workflow/night-run.md`
 - **自動推論の範囲**: `/cl-spec` は domain / targets を自動推論して自動採用する。domain が僅差のときだけ聞く。採用根拠は `domain_selected_by` / `targets_selected_by` として spec.md frontmatter に残る
 - **reviewer の発火条件を skill 側に焼き込まない。** ただし正本は gate で分かれる:
   - **code-gate / pr-gate** — `gate_common::reviewers_filter` が `.specify/spec-gate/reviewers.yml` の `enabled` / `gates` / `auto_invoke_patterns` を適用する

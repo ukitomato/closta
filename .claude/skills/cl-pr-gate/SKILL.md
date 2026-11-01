@@ -40,7 +40,7 @@ PR 提出前の **adversarial review gate**。`/cl-code-gate` PASS 後に手動�
 ## Inputs
 
 - `<spec_dir>` (optional): 省略時 branch 名から推定
-- `--base <branch>` (default: 下の Failure modes の fallback 順で解決): diff の基準
+- `--base <branch | commit>` (default: 下の Failure modes の fallback 順で解決): diff の基準。夜間の枝では `/cl-night` が台帳の `start` (その spec を始めた commit) を渡し、前の spec の差分を含めない
 - `--round <N>`: 明示的に round 番号を指定 (省略時は既存 pr-gate.md から推定 + 1)
 
 ## Steps
@@ -268,6 +268,8 @@ Round N-1 の head は `.gate-verdict-pr.json` の `round_history[]` の直前 e
 ```
 
 Status は変更しない (`reviewing` 据置)。`/cl-done` が完了時に `reviewing → completed` 遷移。
+
+`/cl-night` から起動されたときも完了通知の形は同じでよい。FIX_REQUIRED の後の implementer fix → code-gate → 次の round の連鎖は、main の `/cl-night` が Phase 3 で自動で行う (本 skill は fork なので連鎖しない)。
 
 ## Idempotency
 

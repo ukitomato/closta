@@ -93,3 +93,5 @@ specs/**/.*-gate.diff
 specs/**/.implement-base
 # designer が人間への質問を書き、/cl-design が回答を書き込む受け渡しファイル (反映後に消す)
 specs/**/.needs-input.md
+# /cl-night の台帳 (夜ごとの進捗と再開位置。手元の作業記録。docs/ai-workflow/night-run.md)
+.specify/night/

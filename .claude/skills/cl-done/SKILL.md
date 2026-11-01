@@ -17,6 +17,15 @@ PR 提出の最終 wrapper。`/cl-pr-gate` PASS 後に手動起動。以下の s
 
 - `<spec_dir>` (optional)
 - `--draft`: Draft PR として作成 (`gh pr create --draft` or `glab mr create --draft`)
+- `--night`: 夜間の自走 (`/cl-night`) から呼ばれたとき。Stage 0〜5 (format → commit) までを行い、Stage 6〜8 の代わりに台帳へ記録する (下の「night モード」)。規則の正本は `docs/ai-workflow/night-run.md`
+
+## night モード (`--night`)
+
+- Stage 4 で format の diff が出ても確認せず、そのまま commit に含める
+- Stage 5 の commit は単独のコマンドで行う (`git commit … && git push` のように連結しない)
+- **Stage 6 (push / PR)・Stage 7 (外部チケット)・Stage 8 (status 遷移) を行わない。** status は `reviewing` のまま (朝の `/cl-land` がマージ後に completed にする)
+- 代わりに、台帳 (`.specify/night/current` が指すファイル) の `## <spec_dir>` 節に `end: <git rev-parse HEAD>` と gate の結果 (各 verdict JSON の round / iter / severity_counts) を書く
+- 完了通知は `✓ /cl-done --night: <spec_dir> committed <sha>` の 1 行
 
 ## 6-Stage Gate
 
@@ -41,9 +50,10 @@ fi
 ### Stage 1: tasks.md 100% 検証
 
 ```bash
-unchecked=$(grep -cE '^\s*- \[ \]' "$spec_dir/tasks.md")
-[ "$unchecked" -eq 0 ] || halt with "未完了タスクあり: <list>"
+gate_common::tasks_complete_check "$spec_dir" || halt "未完了タスクあり (上の一覧を参照)"
 ```
+
+Stage 0〜3 は 1 回の bash で続けて実行する (プロセスを起こす回数を減らす。CLAUDE.md)。
 
 ### Stage 2: code-gate verdict 確認 (machine-checkable)
 
@@ -67,14 +77,14 @@ rc=$?
 
 ### Stage 4: Format
 
-プロジェクトの format コマンドを実行 (`docs/discovery.md` から取得):
+`docs/discovery.md` の "Build / Test / Lint" 表の「整形」行の agent 用コマンドを、`touched-files.txt` のうち存在するファイルだけに掛ける。全体に掛けない (他 spec の verdict JSON まで書き換わる)。`pnpm` / `npx` 経由で呼ばない。
 
-- TypeScript → `pnpm format` (prettier / biome)
-- Python → `ruff format` or `black .`
-- Flutter → `dart format .`
-- Go → `gofmt -w .`
+```bash
+tr -d '\r' < "$spec_dir/touched-files.txt" | while IFS= read -r f; do [ -f "$f" ] && printf '%s\n' "$f"; done \
+  | xargs -r node node_modules/prettier/bin/prettier.cjs --write --ignore-unknown
+```
 
-format 後に diff が出ていれば AskUserQuestion で「format 結果を含めて commit しますか?」を確認。
+format 後に diff が出ていれば AskUserQuestion で「format 結果を含めて commit しますか?」を確認する (night モードでは確認せず含める)。
 
 ### Stage 5: Commit
 
@@ -130,7 +140,7 @@ format 後に diff が出ていれば AskUserQuestion で「format 結果を含�
 
 spec.md frontmatter `linear:` 値が non-null なら:
 
-- Linear: `mcp__linear-server__create_comment` で PR URL + status を投稿
+- Linear: Linear の MCP (`linear`) の comment 作成 tool で PR URL + status を投稿
 - GitHub Issue: `gh issue comment` で同上
 - 失敗時は warning のみ (halt しない)
 
