@@ -6,7 +6,7 @@ import type {
   SessionLaunchRejectReason
 } from '@domain/session/agent-session'
 import type { ElicitationPrompt } from '@domain/session/elicitation'
-import type { SessionLaunchConfig } from '@domain/session/launch-config'
+import type { SelectablePermissionMode, SessionLaunchConfig } from '@domain/session/launch-config'
 import type { LaunchOrigin } from '@domain/session/launch-usage'
 import type {
   LiveModelOption,
@@ -118,6 +118,11 @@ export interface LiveSessionState {
   readonly liveModels: LiveModelsState
   /** `/resume` の選ぶ画面を開いているか (025 / data-model §7.2)。 */
   readonly resumePicker: boolean
+  /**
+   * 利用者が選んだ権限モード (026 / data-model §5.1)。起動・再開は `config.permissionMode`、変更の要求を送ると要求の値、
+   * 失敗で送る前の値に戻す。`config` には書き戻さない。Auto の帯 (観測と選択の両方が Auto のときだけ) の入力。永続化しない。
+   */
+  readonly chosenPermissionMode: SelectablePermissionMode
 }
 
 /** 既定の Provider のモデルの一覧の状態 (025 / data-model §6.3)。永続化しない。 */

@@ -1,5 +1,6 @@
 import { useCallback } from 'react'
 
+import { resumeInitialPermissionMode } from '@domain/session/launch-config'
 import type { SessionRunState } from '@domain/session/run-state'
 
 import { useUiStore } from '@/stores/ui'
@@ -55,7 +56,8 @@ export function useRowActionRunner(): (sessionId: string, action: RowResumeActio
           initial: {
             modelId: config.modelId,
             effort: config.effort,
-            permissionMode: config.permissionMode,
+            // Auto は再開の初期値に引き継がず `default` に戻す (026 / FR-007)。安全 3 値はそのまま。
+            permissionMode: resumeInitialPermissionMode(config.permissionMode),
             additionalDirectoryIds: config.additionalDirectoryIds,
             maxTurns: config.maxTurns,
             maxBudgetUsd: config.maxBudgetUsd

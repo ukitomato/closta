@@ -1,5 +1,5 @@
 import type { LaunchFailureReason, SessionEvent } from '@domain/session/agent-session'
-import type { SafePermissionMode } from '@domain/session/launch-config'
+import type { SelectablePermissionMode } from '@domain/session/launch-config'
 import {
   contextTokensOf,
   isValidTaskId,
@@ -198,7 +198,7 @@ export interface LiveSignalsClock {
 
 export interface LiveSignalsDeps {
   /** 起動の設定の権限モード (権限モードの比較の基準の初期値。data-model §2)。 */
-  readonly launchPermissionMode: SafePermissionMode
+  readonly launchPermissionMode: SelectablePermissionMode
   /** `sdk-agent-session.ts` の `emit` (文字列にして調停役スレッドへ送る)。 */
   readonly emit: (event: SessionEvent) => void
   readonly clock: LiveSignalsClock
@@ -243,7 +243,7 @@ export interface LiveSignals {
    * 基準と違えば基準を更新し、`meter` の `permission-mode` と権限モードの行を 1 回出す。その後に Claude Code が同じ値を
    * `status` / `init` で報告しても基準と同じなので二重に出ない。
    */
-  onPermissionModeApplied(mode: SafePermissionMode): void
+  onPermissionModeApplied(mode: SelectablePermissionMode): void
   /** 間引きの保留と timer を捨て、以後は何も送らない。何度呼んでもよい。 */
   dispose(): void
 }

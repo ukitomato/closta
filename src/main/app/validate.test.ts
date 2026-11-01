@@ -570,21 +570,26 @@ describe('isPermissionOutcome / isPermissionScope (X-1 承認決定の enum 検�
 
 describe('checkSetPermissionModeArgs (023 / contracts C-1)', () => {
   const ID = '11111111-1111-4111-8111-111111111111'
-  it('UUID と安全 3 値だけを通す', () => {
-    for (const mode of ['default', 'plan', 'dontAsk']) {
+  it('UUID と許可の 4 値だけを通す (AD-066)', () => {
+    for (const mode of ['default', 'plan', 'dontAsk', 'auto']) {
       expect(checkSetPermissionModeArgs([ID, mode])).toBe(true)
+    }
+  })
+  it('3 つ目 (確認の印) は型を問わず通す。判定は service が === true で行う (026)', () => {
+    for (const ack of [true, false, undefined, 'true', 1, null]) {
+      expect(checkSetPermissionModeArgs([ID, 'auto', ack])).toBe(true)
     }
   })
   it('知らない値・昇格・数・null・配列・非 UUID・引数の過不足を通さない', () => {
     const bad: (readonly unknown[])[] = [
       [ID, 'bypassPermissions'],
-      [ID, 'auto'],
+      [ID, 'acceptEdits'],
       [ID, 1],
       [ID, null],
       [ID, ['plan']],
       ['not-uuid', 'plan'],
       [ID],
-      [ID, 'plan', 'extra']
+      [ID, 'plan', true, 'extra']
     ]
     for (const args of bad) expect(checkSetPermissionModeArgs(args)).toBe(false)
   })

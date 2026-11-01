@@ -240,7 +240,7 @@ describe('running-session-store — 起動元 (O-3 FE-040 / 012 data-model §4�
   it('起動元を capability の launchSession に渡し、lastConfig と組で lastOrigin とセッションの launchOrigin に入れる', async () => {
     const h = harness()
     await h.store.launch(cfg(), null, 'preset')
-    expect(h.cap.launchSession).toHaveBeenCalledWith(cfg(), 'preset')
+    expect(h.cap.launchSession).toHaveBeenCalledWith(cfg(), 'preset', false)
     expect(h.store.getState().launch).toMatchObject({
       phase: 'entry',
       lastConfig: cfg(),
@@ -262,7 +262,7 @@ describe('running-session-store — 起動元 (O-3 FE-040 / 012 data-model §4�
   it('起動元の省略は manual (起動ダイアログを通らない呼び出し)', async () => {
     const h = harness()
     await h.store.launch(cfg())
-    expect(h.cap.launchSession).toHaveBeenCalledWith(cfg(), 'manual')
+    expect(h.cap.launchSession).toHaveBeenCalledWith(cfg(), 'manual', false)
     expect(h.store.getState().launch.lastOrigin).toBe('manual')
   })
 
@@ -1263,8 +1263,8 @@ describe('running-session-store — 実行中の設定の変更 (023 FE-001 / da
     const h = harness({ setSessionPermissionMode })
     await launched(h, A)
     const config = h.store.getState().sessions[A]?.config
-    h.store.setPermissionMode(A, 'plan')
-    expect(setSessionPermissionMode).toHaveBeenCalledExactlyOnceWith(A, 'plan')
+    h.store.setPermissionMode(A, 'plan', false)
+    expect(setSessionPermissionMode).toHaveBeenCalledExactlyOnceWith(A, 'plan', false)
     expect(h.store.getState().sessions[A]?.changing).toBe('permission-mode')
     resolve({ ok: true })
     await vi.waitFor(() => expect(h.store.getState().sessions[A]?.changing).toBeNull())
@@ -1279,14 +1279,14 @@ describe('running-session-store — 実行中の設定の変更 (023 FE-001 / da
       .mockRejectedValueOnce(new Error('ipc'))
     const h = harness({ setSessionPermissionMode })
     await launched(h, A)
-    h.store.setPermissionMode(A, 'plan')
+    h.store.setPermissionMode(A, 'plan', false)
     await vi.waitFor(() =>
       expect(h.store.getState().sessions[A]).toMatchObject({
         changing: null,
         settingError: 'permission-mode'
       })
     )
-    h.store.setPermissionMode(A, 'default')
+    h.store.setPermissionMode(A, 'default', false)
     expect(h.store.getState().sessions[A]).toMatchObject({
       changing: 'permission-mode',
       settingError: null
@@ -1298,8 +1298,42 @@ describe('running-session-store — 実行中の設定の変更 (023 FE-001 / da
   it('知らない行への setPermissionMode は capability を呼ばない', () => {
     const setSessionPermissionMode = vi.fn(async () => ({ ok: true as const }))
     const h = harness({ setSessionPermissionMode })
-    h.store.setPermissionMode(B, 'plan')
+    h.store.setPermissionMode(B, 'plan', false)
     expect(setSessionPermissionMode).not.toHaveBeenCalled()
+  })
+
+  it('chosenPermissionMode: 起動で config の値、要求で要求の値、失敗で戻り、成功でそのまま。config は変わらない (026 / §5.1)', async () => {
+    let resolve: (r: LiveSettingResult) => void = () => undefined
+    const setSessionPermissionMode = vi.fn(
+      () => new Promise<LiveSettingResult>((r) => (resolve = r))
+    )
+    const h = harness({ setSessionPermissionMode })
+    await launched(h, A)
+    const config = h.store.getState().sessions[A]?.config
+    expect(h.store.getState().sessions[A]?.chosenPermissionMode).toBe(config?.permissionMode)
+    h.store.setPermissionMode(A, 'auto', true)
+    expect(setSessionPermissionMode).toHaveBeenLastCalledWith(A, 'auto', true)
+    expect(h.store.getState().sessions[A]?.chosenPermissionMode).toBe('auto')
+    resolve({ ok: false, reason: 'rejected' })
+    await vi.waitFor(() => expect(h.store.getState().sessions[A]?.changing).toBeNull())
+    expect(h.store.getState().sessions[A]?.chosenPermissionMode).toBe(config?.permissionMode)
+    h.store.setPermissionMode(A, 'plan', false)
+    resolve({ ok: true })
+    await vi.waitFor(() => expect(h.store.getState().sessions[A]?.changing).toBeNull())
+    expect(h.store.getState().sessions[A]?.chosenPermissionMode).toBe('plan')
+    expect(h.store.getState().sessions[A]?.config).toBe(config)
+  })
+
+  it('launch / resume の 4 つ目 (確認の印) がそのまま capability の 3 つ目に渡る (026)', async () => {
+    const h = harness()
+    await h.store.launch(cfg(), null, 'manual', true)
+    expect(h.cap.launchSession).toHaveBeenLastCalledWith(cfg(), 'manual', true)
+    vi.mocked(h.cap.launchSession).mockResolvedValueOnce({
+      status: 'rejected',
+      reasonKey: 'session-limit'
+    })
+    await h.store.launch(cfg('f2'), null, 'manual', false)
+    expect(h.cap.launchSession).toHaveBeenLastCalledWith(cfg('f2'), 'manual', false)
   })
 
   it('setModel は結果までは changing で、成功で currentModelId になる。config は同じ参照', async () => {

@@ -1,0 +1,15 @@
+import { query } from '@anthropic-ai/claude-agent-sdk'
+
+import { assertSelectablePermissionMode } from '@domain/session/launch-config'
+
+/**
+ * 違反サンプル (026 / AD-066)。
+ *
+ * **包みを通しているが、昇格値のリテラルを引数に直に書く形。** 包みの名前は許可の包みだが、
+ * `bypassPermissions` は許可の 4 値の外で、項目 16 の昇格値のリテラルの検査 (P1) が発火する
+ * (包みの名前に頼らず、綴りの面でも昇格値を締め出す)。
+ */
+export async function bad(): Promise<void> {
+  const q = query({ prompt: 'hi' })
+  await q.setPermissionMode(assertSelectablePermissionMode('bypassPermissions'))
+}

@@ -214,8 +214,8 @@ describe('createPresetStore', () => {
       updatedAt: 5
     }
 
-    it('PRESET_SCHEMA_VERSION は 2', () => {
-      expect(PRESET_SCHEMA_VERSION).toBe(2)
+    it('PRESET_SCHEMA_VERSION は 3 (026)', () => {
+      expect(PRESET_SCHEMA_VERSION).toBe(3)
     })
 
     it('版 1 のファイルを新しい軸の既定で読み、退避せず、読んだだけでは書き込まない', async () => {
@@ -236,7 +236,7 @@ describe('createPresetStore', () => {
       expect((await readdir(dir.value)).filter((n) => n.endsWith('.bak'))).toEqual([])
     })
 
-    it('版 1 を読んだ後の最初の save で版 2 の全件を書く', async () => {
+    it('版 1 を読んだ後の最初の save で版 3 の全件を書く', async () => {
       await writeRaw(JSON.stringify({ schemaVersion: 1, presets: [v1Record] }))
       const store = createPresetStore(dir, now)
       const loaded = await store.load()
@@ -245,7 +245,7 @@ describe('createPresetStore', () => {
         schemaVersion: number
         presets: { id: string; config: Record<string, unknown> }[]
       }
-      expect(saved.schemaVersion).toBe(2)
+      expect(saved.schemaVersion).toBe(3)
       expect(saved.presets.map((p) => p.id)).toEqual(['old', 'new'])
       for (const p of saved.presets) expect(Object.keys(p.config)).toHaveLength(9)
     })
@@ -277,11 +277,41 @@ describe('createPresetStore', () => {
       expect(result.reasonKeys).toEqual(['invalid-record'])
     })
 
-    it('版 3 は schema-version-unknown で退避する', async () => {
-      await writeRaw(JSON.stringify({ schemaVersion: 3, presets: [] }))
+    it('版 4 は schema-version-unknown で退避する', async () => {
+      await writeRaw(JSON.stringify({ schemaVersion: 4, presets: [] }))
       const result = await createPresetStore(dir, now).load()
       expect(result.reasonKeys).toEqual(['schema-version-unknown'])
       expect(result.backupPath).not.toBeNull()
+    })
+
+    it('版 2 と版 3 のファイルを同じ述語で読み、auto の版 3 が往復する (026 / FR-012)', async () => {
+      const auto = preset({
+        id: 'auto-1',
+        name: 'Auto',
+        config: { ...preset().config, permissionMode: 'auto' }
+      })
+      const store = createPresetStore(dir, now)
+      await store.save([auto])
+      const saved = JSON.parse(await readFile(file(), 'utf8')) as { schemaVersion: number }
+      expect(saved.schemaVersion).toBe(3)
+      expect((await store.load()).presets).toEqual([auto])
+      await writeRaw(
+        JSON.stringify({ schemaVersion: 2, presets: [fromPresetRecord(preset({ id: 'v2' }))] })
+      )
+      const v2 = await createPresetStore(dir, now).load()
+      expect(v2.reasonKeys).toEqual([])
+      expect(v2.presets.map((p) => p.id)).toEqual(['v2'])
+    })
+
+    it('版 2 のファイルは次の save で版 3 になる', async () => {
+      await writeRaw(
+        JSON.stringify({ schemaVersion: 2, presets: [fromPresetRecord(preset({ id: 'v2' }))] })
+      )
+      const store = createPresetStore(dir, now)
+      const loaded = await store.load()
+      await store.save(loaded.presets)
+      const saved = JSON.parse(await readFile(file(), 'utf8')) as { schemaVersion: number }
+      expect(saved.schemaVersion).toBe(3)
     })
   })
 

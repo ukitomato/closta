@@ -46,7 +46,7 @@
 
 - [ ] **I. パス操作は `domain` のパス API 経由** — 標準モジュール (`node:path` / `path`) を直接 import してよいのは実装ファイル 1 つ (`src/domain/runtime/path-api.ts`) だけ
 - [ ] **II. プラットフォーム分岐は `src/main/infra/runtime/` の内側** — 外に漏れる場合は**同じ行**に `platform-ok:` 注記
-- [ ] **III. 権限モードは capability に従う** — `autoModeSafe !== true` で Auto / bypass を選ばせない (3 値。`=== false` では `unknown` が素通りする)
+- [ ] **III. 権限モードは capability に従う** — `autoModeSafe !== true` で bypass を選ばせない・Auto は確認と main の印の検査を挟む (3 値。`=== false` では `unknown` が素通りする)。`autoModeSafe === true` を隔離の中と表示しない (I-3 まで sandbox は有効でない)
 - [ ] **IV. 通信は Agent SDK 経由** — stream-json / JSONL の自前パースをしない
 - [ ] **V. 長期資格情報を永続化しない** — 秘密は `safeStorage`、保持するのは参照キーのみ。ログに `env` を出さない
 - [ ] **VI. 永続環境を構築・変更しない** — 使い捨てコンテナの起動・破棄のみ例外

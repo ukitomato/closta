@@ -309,6 +309,14 @@ describe('resume / getResumedTranscript', () => {
     expect(bad.launchResume).not.toHaveBeenCalled()
   })
 
+  it('Auto の確認の印 (ack) をそのまま launchResume の 3 つ目に渡す (026)', async () => {
+    const s = setup()
+    await s.service.resume({ source: PAST, config: config() }, true)
+    await s.service.resume({ source: PAST, config: config() })
+    expect(s.launchResume.mock.calls[0]?.[2]).toBe(true)
+    expect(s.launchResume.mock.calls[1]?.[2]).toBeUndefined()
+  })
+
   it('引き継ぐ軸が消えて起動ゲートが拒否したら、その理由だけを返す (稼働中 / 過去。別の軸の候補を含めない。FR-008)', async () => {
     for (const reason of [
       'unknown-target',

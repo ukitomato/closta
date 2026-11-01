@@ -27,6 +27,7 @@ related_adrs:
   - docs/decisions/0062-live-session-permission-mode-model-and-rename.md
   - docs/decisions/0063-rename-spawner-test-in-process-spawn-modules.md
   - docs/decisions/0064-launch-config-additional-directories-limits-and-title.md
+  - docs/decisions/0066-auto-permission-mode-with-confirmation.md
 related_specs:
   - specs/002-session-cross-folder-session-enumeration/spec.md
   - specs/005-session-launch-and-streaming/spec.md
@@ -45,6 +46,7 @@ related_specs:
   - specs/021-session-resume/spec.md
   - specs/023-session-launch-axes-and-operations/spec.md
   - specs/024-session-launch-axes/spec.md
+  - specs/026-session-live-auto-permission-mode/spec.md
 ---
 
 # Domain Charter: session
@@ -83,6 +85,7 @@ Closta の出発点にある課題「並行して走らせたセッションの�
   （ui charter の「他 domain の一覧・操作 UI は各 domain」に揃えた。O-1 USER 決定 2026-10-02）
 - Provider の登録と認証方式の管理 → `provider` domain
 - コンテナの起動・破棄と権限モードのゲート → `isolation` domain
+  (Auto の確認の要否の判定と main の印の検査は X-10 で session に暫定で置く。I-3 で isolation へ移す。AD-066)
 - ランタイムの検出とパス変換 → `runtime` domain
 - stream-json の自前パース → **禁止**（Principle IV）
 
@@ -186,7 +189,8 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
 - Claude Code との通信は Agent SDK 経由に限定する（Principle IV）
 - stream の逐次パースは supervisor で行い、main process をブロックしない（Principle IX）
 - 権限モードの選択肢はランタイムの capability に従う（Principle III。判定は `isolation`）。
-  **X-4 時点では安全 3 値（`default` / `plan` / `dontAsk`）だけを提示する**。capability に連動する昇格モードは I-3
+  **起動・実行中とも許可の 4 値（安全 3 値と `auto`）を提示する。`auto` は隔離の無いランタイムで確認つき（X-10 / AD-066）。
+  capability に連動する昇格モード（`acceptEdits` / `bypassPermissions`）は I-3**
   （[AD-041](../../decisions/0041-x4-launch-config-on-x1-launch-gate.md) (a)(c)）
 - プリセットに長期資格情報の値を含めない（Principle V）
 - 再開時、フォルダ / ランタイム / Provider は引き継ぐ。変更したい場合は分岐として扱う
@@ -265,6 +269,7 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
 - [AD-062](../../decisions/0062-live-session-permission-mode-model-and-rename.md) — 実行中のセッションの権限モード・モデル・名前の変更 (X-6 の最初の分割 023)
 - [AD-063](../../decisions/0063-rename-spawner-test-in-process-spawn-modules.md) — 改名の子の起動の単体テストを `PROCESS_SPAWN_MODULES` に足す (023 code-gate H-001)
 - [AD-064](../../decisions/0064-launch-config-additional-directories-limits-and-title.md) — 起動の軸の追加: 追加ディレクトリ・ターン数と費用の上限・起動時のセッション名 (X-6 の 2 つ目の分割 024)
+- [AD-066](../../decisions/0066-auto-permission-mode-with-confirmation.md) — Auto 権限モードを確認つきで選べる・確認の判定は X-10 では session に暫定で置く (X-10 / 026)
 
 ## Related Specs
 
@@ -369,6 +374,9 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
   「fork / resume / rename / tag / delete」のうち resume と、失敗したセッションの再開 (X-5 FR-013) と Journey 4 の手順 1〜2 を持つ。
   分岐 (手順 3。`forkSession`) は X-6 に残す。実装は [021](../../../specs/021-session-resume/spec.md)
   (契約は [AD-059](../../decisions/0059-session-resume-query-option-and-conversation-id.md))
+- **X-10** — [Auto 権限モード](../../../specs/026-session-live-auto-permission-mode/spec.md)
+  ([AD-066](../../decisions/0066-auto-permission-mode-with-confirmation.md))。起動・実行中とも許可の 4 値 (安全 3 値と `auto`) を選べる。
+  `auto` は隔離の無いランタイムで確認つき。確認の要否の判定と main の印の検査は X-10 で session に暫定で置く (I-3 で isolation へ移す)
 
 ## Open Questions
 
@@ -390,6 +398,7 @@ O-7 ([AD-046](../../decisions/0046-app-shell-layout.md)) でタブのビュー�
 - [x] ~~SPIKE-6: `PermissionMode` / `effort` の正確な列挙値と Auto モードの指定方法~~ →
       [AD-020](../../decisions/0020-sdk-emitted-message-inventory.md)。X-4 は安全 3 値と `EffortLevel` 5 値を使う
       （[AD-041](../../decisions/0041-x4-launch-config-on-x1-launch-gate.md)）。Auto モードの指定は I-3
+      → X-10 で `auto` を先に出した (AD-066)
 - [ ] transcript ミラーの保持期限と削除経路（AD-007 の blocking gap）を本 domain が持つか
 - [x] ~~Hook / Background task の状態管理を本 domain の責務に含めるか ([AD-020](../../decisions/0020-sdk-emitted-message-inventory.md) Consequences「O-1 着手時に判断する」)~~ →
       **含めない** (O-1 USER 決定 2026-10-02)。表示の割当と、状態の保持が要る場合の持ち主 domain の判断は O-2 に送った

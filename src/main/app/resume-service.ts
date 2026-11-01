@@ -34,7 +34,8 @@ export interface ResumeServiceDeps {
   /** 再開の起動 (`SessionLaunchService.resume`)。 */
   readonly launchResume: (
     config: SessionLaunchConfig,
-    resolved: ResolvedResume
+    resolved: ResolvedResume,
+    autoModeAcknowledged?: boolean
   ) => Promise<ResumeOutcome>
   /** 稼働中の行の退避の表の引き当て (`SessionLaunchService.conversationRecord`)。 */
   readonly conversationRecord: (sessionId: string) => ConversationRecord | null
@@ -58,7 +59,7 @@ export interface ResumeService {
   /** それまでの会話を読む列挙対象 (data-model §8.1)。決まらなければ `null`。 */
   resumedTranscriptTarget(record: ConversationRecord): string | null
   /** 再開の要求を解いて起動する (data-model §5 の 2〜3 と 4〜9)。 */
-  resume(request: SessionResumeRequest): Promise<ResumeOutcome>
+  resume(request: SessionResumeRequest, autoModeAcknowledged?: boolean): Promise<ResumeOutcome>
   /**
    * それまでの会話の読み取り (C-3)。知らない `sessionId`・会話の id を持たない行・対象が決まらない行は
    * `transcript-read-failed`。
@@ -152,10 +153,10 @@ export function createResumeService(deps: ResumeServiceDeps): ResumeService {
     resolveResumeSource,
     resumedTranscriptTarget,
 
-    async resume(request): Promise<ResumeOutcome> {
+    async resume(request, autoModeAcknowledged): Promise<ResumeOutcome> {
       const resolution = await resolveResumeSource(request)
       if (!resolution.ok) return { status: 'rejected', reason: resolution.reason }
-      return deps.launchResume(request.config, resolution.resolved)
+      return deps.launchResume(request.config, resolution.resolved, autoModeAcknowledged)
     },
 
     async getResumedTranscript(sessionId, requestToken): Promise<TranscriptResult> {

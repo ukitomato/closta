@@ -2,7 +2,7 @@ import { useCallback, useMemo } from 'react'
 import { useStore } from 'zustand'
 
 import type { ElicitationAction, ElicitationContent } from '@domain/session/elicitation'
-import type { SafePermissionMode } from '@domain/session/launch-config'
+import type { SelectablePermissionMode } from '@domain/session/launch-config'
 
 import { useRunningSessionStoreApi } from './running-session-context'
 import type { LiveSessionState, SessionQueue } from './running-session-store'
@@ -51,7 +51,7 @@ export interface LiveSession extends SessionView {
   /** `/resume` の選ぶ画面を閉じる (025)。 */
   closeResumePicker(): void
   /** 実行中の権限モードの切り替え (023)。 */
-  setPermissionMode(mode: SafePermissionMode): void
+  setPermissionMode(mode: SelectablePermissionMode, autoModeAcknowledged: boolean): void
   /** 実行中のモデルの切り替え (023)。 */
   setModel(modelId: string): void
   /** 既定の Provider のモデルの一覧を聞く (025)。`idle` / `failed` からだけ動く。 */
@@ -105,7 +105,8 @@ export function useLiveSession(sessionId: string): LiveSession | null {
   )
 
   const setPermissionMode = useCallback(
-    (mode: SafePermissionMode) => store.setPermissionMode(sessionId, mode),
+    (mode: SelectablePermissionMode, autoModeAcknowledged: boolean) =>
+      store.setPermissionMode(sessionId, mode, autoModeAcknowledged),
     [store, sessionId]
   )
 

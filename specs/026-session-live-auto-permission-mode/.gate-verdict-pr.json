@@ -1,0 +1,158 @@
+{
+    "gate": "pr",
+    "run": "2026-11-01T00:00:00Z",
+    "spec_dir": "specs/026-session-live-auto-permission-mode",
+    "spec_id": "026-session-live-auto-permission-mode",
+    "round": 1,
+    "base_branch": "main",
+    "diff_basis": "merge-base 4f23de4 to working tree (implementation uncommitted; 5 untracked new files included)",
+    "diff_stat": {
+        "files": 92,
+        "additions": 4178,
+        "deletions": 337
+    },
+    "severity_counts": {
+        "critical": 0,
+        "high": 4,
+        "medium": 10,
+        "low": 18
+    },
+    "convergence": {
+        "resolved_from_prev": 0,
+        "new_in_round": 4,
+        "unresolved": 0
+    },
+    "inheritance": "none (round 1)",
+    "round_history": [
+        {
+            "round": 1,
+            "head": "5c5de590dbe415edde396806efaef17a4bf5de6b",
+            "head_note": "working tree uncommitted on top of HEAD",
+            "critical": 0,
+            "high": 4,
+            "open_high_reviewers": [
+                "architecture-reviewer",
+                "platform-boundary-reviewer",
+                "po-reviewer"
+            ],
+            "convergence": {
+                "resolved_from_prev": 0,
+                "new_in_round": 4,
+                "unresolved": 0
+            }
+        }
+    ],
+    "high_findings": [
+        {
+            "id": "H-001",
+            "origin": "architecture",
+            "where": "docs/decisions/0066-auto-permission-mode-with-confirmation.md",
+            "title": "AD-066 proposed; Constitution review date unfilled (merge precondition, human)"
+        },
+        {
+            "id": "H-002",
+            "origin": "platform-boundary",
+            "where": "scripts/constitution/check.mjs:919",
+            "title": "item 16 literal check misses template-literal `auto`; UNDETECTED_NOTES mitigatedBy inaccurate"
+        },
+        {
+            "id": "H-003",
+            "origin": "po",
+            "where": "src/renderer/src/features/session/LaunchDialog.test.tsx:2179",
+            "title": "no renderer tests for preset auto / undetermined runtime / resume cancel (FE-013 marked done)"
+        },
+        {
+            "id": "H-004",
+            "origin": "po+architecture",
+            "where": "specs/026-session-live-auto-permission-mode/quickstart-results.md:18",
+            "title": "new E2E for SC-001/SC-004 never run (SH-012 marked done); rule fixtures verified in this gate"
+        }
+    ],
+    "suppressed_by_code_gate": [],
+    "touched_files_ref": "specs/026-session-live-auto-permission-mode/.pr-gate-scope.txt",
+    "viewpoint_coverage": {
+        "A": "Low:2",
+        "B": "Medium:1",
+        "C": "Medium:1 Low:2",
+        "D": "High:2 Medium:2 Low:1",
+        "E": "Medium:1 Low:2",
+        "F": "none",
+        "G": "Medium:3 Low:9",
+        "H": "High:2 Medium:3 Low:2"
+    },
+    "fr_coverage": [],
+    "rule_verification": {
+        "ran": true,
+        "round": 1,
+        "reason": "Round 1",
+        "result": "80 matched expected table, exit 0"
+    },
+    "skipped_reviewers": [],
+    "tracks": {
+        "security-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 1,
+            "low": 3
+        },
+        "architecture-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 1,
+            "medium": 4,
+            "low": 3
+        },
+        "po-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 2,
+            "medium": 1,
+            "low": 3
+        },
+        "database-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 0,
+            "low": 1
+        },
+        "ux-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 4,
+            "low": 6
+        },
+        "a11y-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 2,
+            "low": 2
+        },
+        "platform-boundary-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 1,
+            "medium": 1,
+            "low": 0
+        },
+        "ui-coverage-reviewer": {
+            "viewpoint_missing": [],
+            "cascade_demotions": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 0,
+            "low": 3
+        }
+    },
+    "verdict": "PASS"
+}

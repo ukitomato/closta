@@ -2,13 +2,13 @@ import { isEffortLevel, isValidModelId } from '@domain/provider/model-catalog'
 import { assertHelperSettings, type HelperSettings } from '@domain/provider/settings'
 import type { EffortLevel } from '@domain/provider/types'
 import {
-  assertSafePermissionMode,
-  isSafePermissionMode,
+  assertSelectablePermissionMode,
+  isSelectablePermissionMode,
   isValidLaunchSessionName,
   isValidMaxBudgetUsd,
   isValidMaxTurns,
   MAX_ADDITIONAL_DIRECTORIES,
-  type SafePermissionMode
+  type SelectablePermissionMode
 } from '@domain/session/launch-config'
 import {
   ASK_USER_QUESTION_TOOL_NAME,
@@ -139,10 +139,10 @@ export type OnElicitationLike = (
 
 /**
  * 正の構成で組んだ query() options。**キーは `QUERY_OPTION_KEYS` の完全部分集合**である。
- * `permissionMode` は安全 3 値 (`SafePermissionMode`。AD-041 (a))。
+ * `permissionMode` は許可の 4 値 (`SelectablePermissionMode`。AD-041 (a) / AD-066)。
  */
 export interface BuiltQueryOptions {
-  readonly permissionMode: SafePermissionMode
+  readonly permissionMode: SelectablePermissionMode
   readonly canUseTool: CanUseToolLike
   readonly pathToClaudeCodeExecutable: string
   readonly spawnClaudeCodeProcess: SpawnClaudeCodeProcess
@@ -172,8 +172,8 @@ export interface BuiltQueryOptions {
 }
 
 export interface BuildQueryOptionsDeps {
-  /** 起動設定の権限モード。境界を越えて来るため下で assert する (安全 3 値外は throw)。 */
-  readonly permissionMode: SafePermissionMode
+  /** 起動設定の権限モード。境界を越えて来るため下で assert する (許可の 4 値外は throw)。 */
+  readonly permissionMode: SelectablePermissionMode
   readonly canUseTool: CanUseToolLike
   readonly pathToClaudeCodeExecutable: string
   readonly spawnClaudeCodeProcess: SpawnClaudeCodeProcess
@@ -220,7 +220,7 @@ export function isValidAdditionalDirectories(
  * `{apiKeyHelper, awsCredentialExport}` を実行時に検証し、`permissions`/`permissionMode`/`env` の混入を throw で締め出す
  * (境界通過後に型保証が消えるため。load-bearing gate)。`settings` 無指定なら `undefined` を載せる (helper 委譲なし)。
  *
- * **`permissionMode` は `assertSafePermissionMode` を通す** (X-4 / AD-041 (a))。`model` / `effort` は文字種と enum を
+ * **`permissionMode` は `assertSelectablePermissionMode` を通す** (X-4 / AD-041 (a) / AD-066)。`model` / `effort` は文字種と enum を
  * 再検証し、外れれば throw する (agents は renderer 由来の値を二重に確かめる。defense-in-depth)。
  */
 export function buildQueryOptions(deps: BuildQueryOptionsDeps): BuiltQueryOptions {
@@ -254,7 +254,7 @@ export function buildQueryOptions(deps: BuildQueryOptionsDeps): BuiltQueryOption
     throw new Error('buildQueryOptions: title が名前の規則の外です (AD-064)')
   }
   return {
-    permissionMode: assertSafePermissionMode(deps.permissionMode),
+    permissionMode: assertSelectablePermissionMode(deps.permissionMode),
     canUseTool: deps.canUseTool,
     pathToClaudeCodeExecutable: deps.pathToClaudeCodeExecutable,
     spawnClaudeCodeProcess: deps.spawnClaudeCodeProcess,
@@ -554,7 +554,7 @@ export function decodeSessionControl(value: unknown): SessionControl | null {
     // 実行中の設定の切り替え (023 / AD-062)。値は domain の述語で確かめ直す (別の規則を書かない)。
     case 'set-permission-mode': {
       const { requestId, mode } = control
-      if (!isValidSessionId(requestId) || !isSafePermissionMode(mode)) return null
+      if (!isValidSessionId(requestId) || !isSelectablePermissionMode(mode)) return null
       return { kind: 'set-permission-mode', requestId, mode }
     }
     case 'set-model': {

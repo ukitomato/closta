@@ -1,6 +1,10 @@
 import type { EffortLevel, ModelEntry } from '@domain/provider/types'
 
-import type { PresetLaunchConfig, SafePermissionMode, SessionLaunchConfig } from './launch-config'
+import type {
+  PresetLaunchConfig,
+  SelectablePermissionMode,
+  SessionLaunchConfig
+} from './launch-config'
 
 /**
  * **起動軸の依存解決** (X-4 FR-006 / FR-007 / glossary Axis resolution)。**純粋関数。I/O を持たない。**
@@ -23,7 +27,7 @@ export interface LaunchDraft {
   readonly providerId: string | null
   readonly modelId: string | null
   readonly effort: EffortLevel | null
-  readonly permissionMode: SafePermissionMode
+  readonly permissionMode: SelectablePermissionMode
   // 024 (data-model §2.1)。名前は下書きに入れない (依存解決の対象ではない。ダイアログの state に別に持つ)
   readonly additionalDirectoryIds: readonly string[]
   readonly maxTurns: number | null

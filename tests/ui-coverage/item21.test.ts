@@ -111,7 +111,7 @@ beforeAll(() => {
   }
   mkdirSync(join(root, 'docs'), { recursive: true })
   cpSync('docs/roadmap.md', join(root, 'docs/roadmap.md'))
-})
+}, 120_000)
 
 afterAll(() => {
   if (root !== '') rmSync(root, { recursive: true, force: true })

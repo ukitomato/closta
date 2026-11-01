@@ -9,7 +9,9 @@ related_adrs:
   - docs/decisions/0012-docker-control-via-cli.md
   - docs/decisions/0007-session-source-of-truth-is-claude-code.md
   - docs/decisions/0044-ui-coverage-assignment.md
-related_specs: []
+  - docs/decisions/0066-auto-permission-mode-with-confirmation.md
+related_specs:
+  - specs/026-session-live-auto-permission-mode/spec.md
 ---
 
 # Domain Charter: isolation
@@ -28,7 +30,12 @@ sandbox capability の判定（Seatbelt / bubblewrap を含む）、権限モー
 ### In scope
 
 - **権限モードのゲート** — `capabilities.autoModeSafe !== true` のランタイムで
-  Auto / `bypassPermissions` を選択不可にする（Principle III の実行主体）。
+  `bypassPermissions` を選択不可にする。Auto は確認つきで選べ、確認の要否の判定
+  （`requiresAutoModeConfirmation`）と main の印の検査は X-10 では `session` に暫定で置く
+  （I-3 で本 domain へ移す。[AD-066](../../decisions/0066-auto-permission-mode-with-confirmation.md)）。
+  `autoModeSafe === true` で確認を省き続けるか、sandbox を有効にするかは I-3 で判断し直す
+  （026 U-6。true のランタイムで確認を省くのは、sandbox が有効でないことを承知のうえの暫定）
+  （Principle III の実行主体）。
   **`autoModeSafe` は 3 値である** — `=== false` で書くと `unknown`（判定中 / 判定不能）が
   素通りする（Constitution v1.2.0 / [AD-024](../../decisions/0024-constitution-verification-paths.md) #13）
 - **sandbox 設定** — ランタイムごとの sandbox 可否判定、許可ドメイン等を `--settings` で渡す
@@ -71,7 +78,7 @@ sandbox capability の判定（Seatbelt / bubblewrap を含む）、権限モー
 
 1. ユーザがセッション一覧を見る
 2. 隔離されているセッションにはバッジが付き、`bypassPermissions` のものは視覚的に区別される
-3. 隔離されていないランタイムでは、危険な権限モードがそもそも選べない
+3. 隔離されていないランタイムでは `bypassPermissions` が選べず、Auto は確認と帯つきで選べる
 
 ### Journey 3: 孤児コンテナの回収
 
@@ -98,7 +105,7 @@ sandbox capability の判定（Seatbelt / bubblewrap を含む）、権限モー
 
 ## 業務ルール / 不変条件
 
-- `autoModeSafe !== true` のランタイムで `auto` / `bypassPermissions` を選択可能にしてはならない（Principle III）。
+- `autoModeSafe !== true` のランタイムで `bypassPermissions` を選択可能にしてはならない。Auto は確認と main の印の検査を挟む（Principle III。AD-066）。
   判定は**単一の関数**（`isAutoModeAllowed`）に集約する。
   `=== false` と書くと `unknown` が素通りし、ゲートが機能しない
   （[AD-024](../../decisions/0024-constitution-verification-paths.md) #13 / [AD-025](../../decisions/0025-workspace-folder-carries-location.md) §5）。
@@ -124,7 +131,7 @@ sandbox capability の判定（Seatbelt / bubblewrap を含む）、権限モー
 - **孤児の残存**: アプリ管理下の停止済みコンテナ **と未使用 volume** が放置されない — 計測経路: 起動時スキャンの結果
 - **越境の回避率**: Windows 側フォルダで `bind` を選んだセッションの割合が低く保たれる — 計測経路: 起動設定の集計
 - **マウント逸脱**: 作業フォルダ以外がマウントされた回数が 0 — 計測経路: 静的検査 + security-reviewer
-- **権限ゲートの正しさ**: `Win32Runtime` 選択時に Auto / bypass が disabled — 計測経路: Playwright E2E
+- **権限ゲートの正しさ**: `Win32Runtime` 選択時に bypass が選択肢に無く、Auto を選ぶと確認が出る — 計測経路: Playwright E2E (`e2e/launch-dialog.spec.ts`。026 FE-017)
 - **隔離の可視性**: 隔離状態が表示されないセッションが 0 — 計測経路: ux-reviewer + E2E
 
 ## Cross-domain dependencies
@@ -139,10 +146,13 @@ sandbox capability の判定（Seatbelt / bubblewrap を含む）、権限モー
 - [AD-008](../../decisions/0008-no-persistent-environment-provisioning.md) — 永続環境は作らない / 使い捨てコンテナは管理する
 - [AD-012](../../decisions/0012-docker-control-via-cli.md) — Docker 制御は CLI 呼び出し、endpoint を値に持つ
 - [AD-007](../../decisions/0007-session-source-of-truth-is-claude-code.md) — `sessionStore` ミラーの位置づけ
+- [AD-066](../../decisions/0066-auto-permission-mode-with-confirmation.md) — Auto は確認つきで選べる / 判定は X-10 では session に暫定で置く
 
 ## Related Specs
 
 （未着手。I-1 / I-2 / I-3 が本 domain に属する）
+
+- X-10 / `specs/026-session-live-auto-permission-mode` — Auto の確認の暫定の持ち主は `session`（I-3 で本 domain へ移す）
 
 ## Open Questions
 

@@ -12,7 +12,11 @@ import type {
 import { canReserve, countOccupying } from '@domain/session/concurrency'
 import { sdkModelOf, switchableModels } from '@domain/provider/model-catalog'
 import type { EffortLevel, ModelEntry } from '@domain/provider/types'
-import type { SafePermissionMode, SessionLaunchConfig } from '@domain/session/launch-config'
+import {
+  requiresAutoModeConfirmation,
+  type SelectablePermissionMode,
+  type SessionLaunchConfig
+} from '@domain/session/launch-config'
 import {
   liveSettingBlocker,
   type LiveModelOption,
@@ -131,6 +135,11 @@ export interface SessionLaunchServiceDeps {
    * 起動の依存解決と同じ store を読む。
    */
   readonly providerModels?: (providerId: string) => Promise<readonly ModelEntry[] | null>
+  /**
+   * そのランタイムが `isAutoModeAllowed` か (026 / AD-066)。Auto の確認の判定の入力。省略可能にしない。
+   * 知らない `runtimeId` は `false`。
+   */
+  readonly autoModeAllowed: (runtimeId: string) => boolean
 }
 
 /** 制御の結果を待つ期限 (data-model §4.2。[ASSUMED: 数値デフォルト値])。 */
@@ -138,7 +147,7 @@ export const CONTROL_RESULT_TIMEOUT_MS = 10_000
 
 /** `requestControl` が送る実行中の設定の切り替え (`requestId` は service が振る)。 */
 export type LiveSettingRequest =
-  | { readonly kind: 'set-permission-mode'; readonly mode: SafePermissionMode }
+  | { readonly kind: 'set-permission-mode'; readonly mode: SelectablePermissionMode }
   | { readonly kind: 'set-model'; readonly model: string }
 
 /**
@@ -183,12 +192,16 @@ export type ResumeOutcome =
 
 export interface SessionLaunchService {
   /** 検証済みの起動設定で起動する (X-4 の起動前段を通る)。 */
-  launch(config: SessionLaunchConfig): Promise<LaunchOutcome>
+  launch(config: SessionLaunchConfig, autoModeAcknowledged?: boolean): Promise<LaunchOutcome>
   /**
    * 再開の起動 (X-9 / data-model §5 の 4〜9)。`config` の 3 軸は `resolved` と照合済みであること
    * (`resume-service`)。会話の id は `prepareLaunch` に渡さず、起動の options の `resume` に足す。
    */
-  resume(config: SessionLaunchConfig, resolved: ResolvedResume): Promise<ResumeOutcome>
+  resume(
+    config: SessionLaunchConfig,
+    resolved: ResolvedResume,
+    autoModeAcknowledged?: boolean
+  ): Promise<ResumeOutcome>
   /** 制御を該当セッションへ送る。未知 / セッションスレッドが終わった sessionId なら `false`。 */
   control(sessionId: string, control: SessionControl): boolean
   /** 実行中の設定の受け付けの判定の入力 (data-model §5.1)。未知の sessionId は `null`。 */
@@ -203,7 +216,11 @@ export interface SessionLaunchService {
    * 実行中の権限モードを切り替える (023 / contracts C-1)。`mode` は検証済みの安全 3 値。
    * 受け付けの判定 (`liveSettingBlocker`) を通ったら `requestControl` へ。値はどこにも書き戻さない (FR-014)。
    */
-  setPermissionMode(sessionId: string, mode: SafePermissionMode): Promise<LiveSettingResult>
+  setPermissionMode(
+    sessionId: string,
+    mode: SelectablePermissionMode,
+    autoModeAcknowledged?: boolean
+  ): Promise<LiveSettingResult>
   /**
    * 実行中のモデルを切り替える (023 / contracts C-2)。`modelId` は文字種の検証済み。起動の Provider のカタログのうち
    * 起動の effort が効くモデルだけを受ける (外れたら `invalid-value`)。effort は変えない・どこにも書き戻さない。
@@ -489,6 +506,10 @@ export function createSessionLaunchService(deps: SessionLaunchServiceDeps): Sess
    * 予約から登録までの本体 (`launch` と、再開の起動 (X-9) が共有する)。
    * 上限の判定と枠の予約は `await` の前に同期で行う (同時に届いた要求でも超えない。FR-005)。
    */
+  /** Auto の確認の印の検査 (AD-066)。承諾は `ack === true` だけ。 */
+  const autoUnconfirmed = (mode: unknown, runtimeId: string, ack: unknown): boolean =>
+    requiresAutoModeConfirmation(mode, deps.autoModeAllowed(runtimeId)) && ack !== true
+
   const startSession = async (
     config: SessionLaunchConfig,
     resumeOf: ResolvedResume | null = null
@@ -550,9 +571,14 @@ export function createSessionLaunchService(deps: SessionLaunchServiceDeps): Sess
   }
 
   return {
-    launch: (config): Promise<LaunchOutcome> => startSession(config),
+    launch(config, ack): Promise<LaunchOutcome> {
+      if (autoUnconfirmed(config.permissionMode, config.runtimeId, ack)) {
+        return Promise.resolve({ status: 'rejected', reason: 'auto-mode-unconfirmed' })
+      }
+      return startSession(config)
+    },
 
-    resume(config, resolved): Promise<ResumeOutcome> {
+    resume(config, resolved, ack): Promise<ResumeOutcome> {
       // 4〜6 は `await` の前に同期で行う。4 は上限の判定より前 (上限いっぱいでも動いている行を選ぶ答えは返せる)。
       for (const [id, entry] of registry) {
         if (entry.claudeAlive && entry.conversationId === resolved.conversationId) {
@@ -561,6 +587,9 @@ export function createSessionLaunchService(deps: SessionLaunchServiceDeps): Sess
       }
       if (inFlightConversations.has(resolved.conversationId)) {
         return Promise.resolve({ status: 'rejected', reason: 'conversation-running' })
+      }
+      if (autoUnconfirmed(config.permissionMode, config.runtimeId, ack)) {
+        return Promise.resolve({ status: 'rejected', reason: 'auto-mode-unconfirmed' })
       }
       return startSession(config, resolved)
     },
@@ -617,11 +646,15 @@ export function createSessionLaunchService(deps: SessionLaunchServiceDeps): Sess
       })
     },
 
-    setPermissionMode(sessionId, mode): Promise<LiveSettingResult> {
+    setPermissionMode(sessionId, mode, ack): Promise<LiveSettingResult> {
       const row = this.liveSettingRow(sessionId)
       if (row === null) return Promise.resolve({ ok: false, reason: 'unknown-session' })
       const blocker = liveSettingBlocker('permission-mode', row)
       if (blocker !== null) return Promise.resolve({ ok: false, reason: blocker })
+      const runtimeId = registry.get(sessionId)?.axes.runtimeId
+      if (runtimeId !== undefined && autoUnconfirmed(mode, runtimeId, ack)) {
+        return Promise.resolve({ ok: false, reason: 'auto-mode-unconfirmed' })
+      }
       return this.requestControl(sessionId, { kind: 'set-permission-mode', mode })
     },
 

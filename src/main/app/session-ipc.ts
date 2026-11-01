@@ -1,7 +1,7 @@
 import type { PastResumeDTO } from '@domain/capability'
 import type { SessionControl } from '@domain/session/agent-session'
 import type { SessionIndexDTO } from '@domain/session/dto'
-import type { SafePermissionMode, SessionLaunchConfig } from '@domain/session/launch-config'
+import type { SelectablePermissionMode, SessionLaunchConfig } from '@domain/session/launch-config'
 import type {
   LiveModelsResult,
   LiveSettingResult,
@@ -73,11 +73,15 @@ export interface SessionIpcDeps {
    * 起動を調停する (X-4: 依存解決の再評価 + env 導出 + VerifiedRunning + distro 一致 + 登録。X-5: 同時実行数の上限)。
    * 本文は port。
    */
-  launchSession(config: SessionLaunchConfig): Promise<LaunchOutcome>
+  launchSession(config: SessionLaunchConfig, autoModeAcknowledged?: boolean): Promise<LaunchOutcome>
   /** 制御を該当セッションへ送る。未知 / セッションスレッドが終わった sessionId なら `false`。 */
   controlSession(sessionId: string, control: SessionControl): boolean
   /** 実行中の権限モードの切り替え (023 / contracts C-1)。検証済みの値で呼ぶ。 */
-  setSessionPermissionMode(sessionId: string, mode: SafePermissionMode): Promise<LiveSettingResult>
+  setSessionPermissionMode(
+    sessionId: string,
+    mode: SelectablePermissionMode,
+    autoModeAcknowledged?: boolean
+  ): Promise<LiveSettingResult>
   /** 実行中のモデルの切り替え (023 / contracts C-2)。検証済みの形で呼ぶ。カタログとの照合は service。 */
   setSessionModel(sessionId: string, modelId: string): Promise<LiveSettingResult>
   /** 既定の Provider のモデルの一覧 (025 / contracts C-7)。検証済みの sessionId で呼ぶ。 */
@@ -90,7 +94,10 @@ export interface SessionIpcDeps {
   /** 過去の行の軸を決める (列挙のキャッシュだけを見る)。 */
   resolvePastResume(targetKey: string, conversationId: string): Promise<PastResumeAxes>
   /** 再開の要求を解いて起動する。本文は port。 */
-  resumeSession(request: SessionResumeRequest): Promise<ResumeOutcome>
+  resumeSession(
+    request: SessionResumeRequest,
+    autoModeAcknowledged?: boolean
+  ): Promise<ResumeOutcome>
   /** それまでの会話の読み取り。本文は port、戻り値の handshake は本文を含まない。 */
   getResumedTranscript(sessionId: string, requestToken: string): Promise<TranscriptResult>
 
@@ -193,7 +200,7 @@ export async function handleLaunchSession(
   const config = args[0]
   if (!checkLaunchConfig(config)) return { status: 'rejected', reason: 'invalid-config' }
   const origin = checkLaunchOrigin(args[1])
-  const outcome = await deps.launchSession(config)
+  const outcome = await deps.launchSession(config, args[2] === true)
   if (outcome.status === 'launching' && origin !== null) recordWithoutWaiting(deps, origin)
   return outcome
 }
@@ -236,7 +243,7 @@ export async function handleResumeSession(
     return { status: 'rejected', reason: 'invalid-config' }
   }
   const origin = checkLaunchOrigin(args[1])
-  const outcome = await deps.resumeSession(request)
+  const outcome = await deps.resumeSession(request, args[2] === true)
   if (outcome.status === 'launching' && origin !== null) recordWithoutWaiting(deps, origin)
   return outcome
 }
@@ -403,7 +410,8 @@ export async function handleSetSessionPermissionMode(
   args: readonly unknown[]
 ): Promise<LiveSettingResult> {
   if (!checkSetPermissionModeArgs(args)) return { ok: false, reason: 'invalid-value' }
-  return deps.setSessionPermissionMode(args[0], args[1])
+  // 3 つ目 (Auto の確認の印) は型を問わず、`=== true` だけを承諾として渡す (AD-066)。
+  return deps.setSessionPermissionMode(args[0], args[1], args[2] === true)
 }
 
 /**

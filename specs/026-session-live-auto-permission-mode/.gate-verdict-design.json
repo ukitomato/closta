@@ -1,0 +1,232 @@
+{
+    "gate": "design",
+    "run": "2026-11-01T00:00:00+09:00",
+    "spec_dir": "specs/026-session-live-auto-permission-mode",
+    "spec_id": "026-session-live-auto-permission-mode",
+    "tracks": {
+        "analyze": {
+            "status": "ok",
+            "raw_out": "analyze.md",
+            "viewpoint_missing": null,
+            "cascade_demotions": null
+        },
+        "po-reviewer": {
+            "status": "ok",
+            "raw_out": "po-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "architecture-reviewer": {
+            "status": "ok",
+            "raw_out": "architecture-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "security-reviewer": {
+            "status": "ok",
+            "raw_out": "security-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        },
+        "platform-boundary-reviewer": {
+            "status": "ok",
+            "raw_out": "platform-boundary-reviewer.design-gate.md",
+            "viewpoint_missing": [],
+            "cascade_demotions": 0
+        }
+    },
+    "severity_counts": {
+        "critical": 0,
+        "high": 1,
+        "medium": 15,
+        "low": 18
+    },
+    "fr_coverage": [
+        {
+            "fr": "FR-001",
+            "covered": true,
+            "by": [
+                "BE-001",
+                "FE-010",
+                "FE-013",
+                "FE-017"
+            ]
+        },
+        {
+            "fr": "FR-002",
+            "covered": true,
+            "by": [
+                "BE-001",
+                "BE-003",
+                "FE-014",
+                "FE-018"
+            ]
+        },
+        {
+            "fr": "FR-003",
+            "covered": true,
+            "by": [
+                "BE-001",
+                "BE-003",
+                "BE-012"
+            ]
+        },
+        {
+            "fr": "FR-004",
+            "covered": true,
+            "by": [
+                "BE-004",
+                "SH-012"
+            ]
+        },
+        {
+            "fr": "FR-005",
+            "covered": true,
+            "by": [
+                "FE-010",
+                "FE-012",
+                "FE-013",
+                "FE-014"
+            ]
+        },
+        {
+            "fr": "FR-006",
+            "covered": true,
+            "by": [
+                "BE-001",
+                "BE-012"
+            ]
+        },
+        {
+            "fr": "FR-007",
+            "covered": true,
+            "by": [
+                "BE-010",
+                "BE-011",
+                "BE-012",
+                "FE-011",
+                "FE-013",
+                "FE-014"
+            ]
+        },
+        {
+            "fr": "FR-008",
+            "covered": true,
+            "by": [
+                "FE-010",
+                "FE-011",
+                "FE-015"
+            ]
+        },
+        {
+            "fr": "FR-009",
+            "covered": true,
+            "by": [
+                "SH-012"
+            ]
+        },
+        {
+            "fr": "FR-010",
+            "covered": true,
+            "by": [
+                "SH-010",
+                "SH-012"
+            ]
+        },
+        {
+            "fr": "FR-011",
+            "covered": true,
+            "by": [
+                "SH-001",
+                "SH-011"
+            ]
+        },
+        {
+            "fr": "FR-012",
+            "covered": true,
+            "by": [
+                "BE-013",
+                "FE-013"
+            ]
+        }
+    ],
+    "viewpoint_coverage": {
+        "A": "Critical:0 High:0 (security M:1)",
+        "B": "Critical:0 High:0",
+        "C": "Critical:0 High:1 (architecture H-101)",
+        "D": "Critical:0 High:0",
+        "E": "Critical:0 High:0",
+        "F": "Critical:0 High:0",
+        "G": "\u8a72\u5f53\u306a\u3057: optional reviewer \u7bc4\u56f2",
+        "H": "Critical:0 High:0"
+    },
+    "dedup_log": [
+        {
+            "merged": [
+                "analyze-C1",
+                "po-M-003",
+                "pb-M-001"
+            ],
+            "key": "auto-mode-unconfirmed recovery (data-model \u00a76.2)"
+        },
+        {
+            "merged": [
+                "analyze-C2",
+                "po-M-007",
+                "sec-M-002"
+            ],
+            "key": "BE-010 main log"
+        },
+        {
+            "merged": [
+                "analyze-I2",
+                "arch-M-001"
+            ],
+            "key": "docs/domains/session/charter.md:144"
+        },
+        {
+            "merged": [
+                "analyze-I3",
+                "arch-M-002"
+            ],
+            "key": "spec.md:73"
+        },
+        {
+            "merged": [
+                "analyze-C4",
+                "pb-M-002"
+            ],
+            "key": "scripts/constitution/check.mjs:919"
+        },
+        {
+            "merged": [
+                "analyze-A1",
+                "po-M-002"
+            ],
+            "key": "SC-005"
+        },
+        {
+            "merged": [
+                "analyze-U1",
+                "po-M-005"
+            ],
+            "key": "spec.md Out of Scope (running list)"
+        },
+        {
+            "merged": [
+                "pb-M-004",
+                "arch-L-101",
+                "analyze-D1"
+            ],
+            "key": "docs/domains/isolation/charter.md:87"
+        },
+        {
+            "merged": [
+                "analyze-D6",
+                "po-L-003"
+            ],
+            "key": "spec.md:103"
+        }
+    ],
+    "verdict": "PASS"
+}

@@ -31,16 +31,57 @@ export function isSafePermissionMode(value: unknown): value is SafePermissionMod
 }
 
 /**
- * query() に渡す直前の**実行時 assert** (一次ゲート `buildQueryOptions` が呼ぶ)。
- * 境界 (main→agents の structured-clone) を越えると型保証が消えるため、値で再確立する。安全 3 値外は throw。
+ * 起動・実行中に選べる権限モード (許可の 4 値。AD-066)。安全 3 値に `auto` を足したもの。
+ * `acceptEdits` / `bypassPermissions` は型で持たない (正の構成)。
  */
-export function assertSafePermissionMode(value: unknown): SafePermissionMode {
-  if (!isSafePermissionMode(value)) {
+export type SelectablePermissionMode = SafePermissionMode | 'auto'
+
+/** 選択肢の並び (安全 3 値の後に `auto`)。 */
+export const SELECTABLE_PERMISSION_MODES = [
+  'default',
+  'plan',
+  'dontAsk',
+  'auto'
+] as const satisfies readonly SelectablePermissionMode[]
+
+export function isSelectablePermissionMode(value: unknown): value is SelectablePermissionMode {
+  return (
+    typeof value === 'string' && (SELECTABLE_PERMISSION_MODES as readonly string[]).includes(value)
+  )
+}
+
+/**
+ * query() に渡す直前の**実行時 assert** (一次ゲート `buildQueryOptions` が呼ぶ)。
+ * 境界 (main→agents の structured-clone) を越えると型保証が消えるため、値で再確立する。許可の 4 値外は throw。
+ */
+export function assertSelectablePermissionMode(value: unknown): SelectablePermissionMode {
+  if (!isSelectablePermissionMode(value)) {
     throw new Error(
-      'assertSafePermissionMode: 権限モードが安全 3 値 {default, plan, dontAsk} の外です (AD-041)'
+      'assertSelectablePermissionMode: 許可の 4 値の外の権限モード {default, plan, dontAsk, auto} (AD-066)'
     )
   }
   return value
+}
+
+export function isAutoPermissionMode(value: unknown): value is 'auto' {
+  return value === 'auto'
+}
+
+/**
+ * `auto` を選ぶときに確認を挟むべきか。`autoModeAllowed` が true 以外なら確認が要る。
+ *
+ * **`autoModeAllowed` が true の意味は「そのランタイムで sandbox が使える」であって、このセッションが
+ * 隔離の中で動いているという意味ではない** (Closta は I-3 まで sandbox を有効にしない)。
+ * true で確認を省くのは利用者が受け入れたリスク (spec U-6 / AD-066)。
+ * 置き場所は session の暫定で、I-3 で isolation の判定の隣へ移す (AD-066)。
+ */
+export function requiresAutoModeConfirmation(mode: unknown, autoModeAllowed: boolean): boolean {
+  return isAutoPermissionMode(mode) && autoModeAllowed !== true
+}
+
+/** 再開の初期値。`auto` は確認を経ずに再開できないので `default` に戻す。 */
+export function resumeInitialPermissionMode(mode: SelectablePermissionMode): SafePermissionMode {
+  return isAutoPermissionMode(mode) ? 'default' : mode
 }
 
 /* ── 起動設定 ──────────────────────────────────────────────────── */
@@ -57,7 +98,7 @@ export interface SessionLaunchConfig {
   readonly providerId: string | null
   readonly modelId: string | null
   readonly effort: EffortLevel | null
-  readonly permissionMode: SafePermissionMode
+  readonly permissionMode: SelectablePermissionMode
   // 024 (AD-064 Decision 3)
   readonly additionalDirectoryIds: readonly string[]
   readonly maxTurns: number | null
@@ -178,7 +219,7 @@ function hasValidBaseAxes(c: Record<string, unknown>): boolean {
   if (c.providerId !== null && !isIdString(c.providerId)) return false
   if (c.modelId !== null && !isValidModelId(c.modelId)) return false
   if (c.effort !== null && !isEffortLevel(c.effort)) return false
-  return isSafePermissionMode(c.permissionMode)
+  return isSelectablePermissionMode(c.permissionMode)
 }
 
 /** 9 キーの形 (`PRESET_CONFIG_KEYS` に当たる検査。`sessionName` を数えない)。 */

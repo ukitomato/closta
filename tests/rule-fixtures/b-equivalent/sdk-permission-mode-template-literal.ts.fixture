@@ -1,0 +1,17 @@
+import { query } from '@anthropic-ai/claude-agent-sdk'
+
+import { assertSelectablePermissionMode } from '@domain/session/launch-config'
+
+/**
+ * 違反サンプル (AD-066 / pr-gate 026 H-002)。
+ *
+ * **バッククォートのテンプレートリテラルで `auto` を渡す形。** `assertSelectablePermissionMode` は
+ * `auto` を許可の値として通すため、agents が `auto` を自前で作らない担保は項目 16 のリテラル検査だけである。
+ * 旧版は単引用符 / 二重引用符しか見ず、バッククォートの形は素通りした。
+ */
+export function bad(): void {
+  void query({
+    prompt: 'hi',
+    options: { permissionMode: assertSelectablePermissionMode(`auto`) }
+  })
+}

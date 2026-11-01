@@ -11,7 +11,11 @@ import { COMPOSER_LABELS, PERMISSION_MODE_NAMES } from '@/features/chat/labels'
 import { installCapability } from '@/test-support/capability'
 import { RunningSessionsHarness } from '@/test-support/running-sessions-harness'
 
-import { LIVE_MODEL_LIST_FAILURE_LABELS, LIVE_SETTING_LABELS } from './labels'
+import {
+  AUTO_MODE_CONFIRMATION_LABELS,
+  LIVE_MODEL_LIST_FAILURE_LABELS,
+  LIVE_SETTING_LABELS
+} from './labels'
 import { RunningSessionStoreContext } from './running-session-context'
 import { createRunningSessionStore } from './running-session-store'
 import { EMPTY_SESSION_METERS } from './running-session-types'
@@ -141,15 +145,16 @@ describe('composer の周りの選択 (FE-012 / US-1)', () => {
     expect((await axe(composer as HTMLElement, AXE_RULES)).violations).toEqual([])
   })
 
-  it('権限モードの選択肢は安全 3 値だけで、名前は名前の表の値', async () => {
+  it('権限モードの選択肢は許可の 4 値で、名前は名前の表の値', async () => {
     await setup()
     await waitFor(() => expect(composerInput()).toBeInTheDocument())
-    expect(optionValues(modeSelect())).toEqual(['default', 'plan', 'dontAsk'])
+    expect(optionValues(modeSelect())).toEqual(['default', 'plan', 'dontAsk', 'auto'])
     const labels = Array.from(modeSelect().querySelectorAll('option')).map((o) => o.textContent)
     expect(labels).toEqual([
       PERMISSION_MODE_NAMES.default,
       PERMISSION_MODE_NAMES.plan,
-      PERMISSION_MODE_NAMES.dontAsk
+      PERMISSION_MODE_NAMES.dontAsk,
+      PERMISSION_MODE_NAMES.auto
     ])
   })
 
@@ -158,7 +163,7 @@ describe('composer の周りの選択 (FE-012 / US-1)', () => {
     await waitFor(() => expect(optionValues(modelSelect())).toEqual(['sonnet', 'opus', 'haiku']))
     modeSelect().focus()
     await userEvent.selectOptions(modeSelect(), 'plan')
-    expect(h.cap.setSessionPermissionMode).toHaveBeenCalledExactlyOnceWith(A, 'plan')
+    expect(h.cap.setSessionPermissionMode).toHaveBeenCalledExactlyOnceWith(A, 'plan', false)
     expect(composerInput()).toHaveFocus()
 
     await waitFor(() => expect(modelSelect()).not.toHaveAttribute('aria-disabled'))
@@ -176,7 +181,7 @@ describe('composer の周りの選択 (FE-012 / US-1)', () => {
     fireEvent.keyDown(modeSelect(), { key: 'ArrowDown' })
     fireEvent.change(modeSelect(), { target: { value: 'plan' } })
     fireEvent.keyDown(modeSelect(), { key: 'Enter' })
-    expect(h.cap.setSessionPermissionMode).toHaveBeenCalledExactlyOnceWith(A, 'plan')
+    expect(h.cap.setSessionPermissionMode).toHaveBeenCalledExactlyOnceWith(A, 'plan', false)
     await waitFor(() => expect(composerInput()).toHaveFocus())
 
     // blur: 利用者が移した先 (別の要素) を奪わない。
@@ -327,5 +332,123 @@ describe('既定の Provider のモデルの一覧 (FE-020 / US-2)', () => {
     await setup({ providerId: 'p1', modelId: 'sonnet', caps: { listSessionModels } })
     await waitFor(() => expect(optionValues(modelSelect())).toEqual(['sonnet', 'opus', 'haiku']))
     expect(listSessionModels).not.toHaveBeenCalled()
+  })
+})
+
+/* ── Auto の確認 (026 FE-014 / US-1) ── */
+
+const confirmation = (): HTMLElement | null => screen.queryByTestId('auto-mode-confirmation')
+const acceptButton = (): HTMLElement =>
+  screen.getByRole('button', { name: AUTO_MODE_CONFIRMATION_LABELS.accept(PERMISSION_MODE_NAMES.auto) })
+const cancelButton = (): HTMLElement =>
+  screen.getByRole('button', { name: AUTO_MODE_CONFIRMATION_LABELS.cancel })
+
+const allowedRuntimes = (): ClostaCapability['listRuntimes'] =>
+  (async () =>
+    ({
+      wslAvailability: 'available',
+      enumerationIssues: [],
+      runtimes: [
+        {
+          id: 'wsl:Ubuntu',
+          kind: 'wsl',
+          distroName: 'Ubuntu',
+          wslVersion: 2,
+          hasPathMapping: true,
+          state: 'running',
+          isDefault: false,
+          capabilities: {
+            probeState: 'done',
+            sandboxKind: 'bubblewrap',
+            seccompStatus: 'ok',
+            missingDependencies: [],
+            probedAt: '2026-10-21T00:00:00.000Z',
+            autoModeAllowed: true,
+            autoModeStatus: 'allowed'
+          },
+          detectedAt: '2026-10-21T00:00:00.000Z',
+          claudeStatus: null,
+          claudeOverridden: false
+        }
+      ]
+    }) as never) as ClostaCapability['listRuntimes']
+
+describe('Auto の確認 (026 FE-014 / spec US-1)', () => {
+  it('Auto を選ぶと確認が出て、まだ送らない。選択は前の値のまま。焦点は取り消しにある', async () => {
+    const h = await setup()
+    await waitFor(() => expect(composerInput()).toBeInTheDocument())
+    modeSelect().focus()
+    await userEvent.selectOptions(modeSelect(), 'auto')
+    expect(confirmation()).not.toBeNull()
+    expect(h.cap.setSessionPermissionMode).not.toHaveBeenCalled()
+    expect(modeSelect().value).toBe('default')
+    await waitFor(() => expect(cancelButton()).toHaveFocus())
+  })
+
+  it('取り消すと送らず閉じ、焦点が composer に戻る', async () => {
+    const h = await setup()
+    await waitFor(() => expect(composerInput()).toBeInTheDocument())
+    await userEvent.selectOptions(modeSelect(), 'auto')
+    await userEvent.click(cancelButton())
+    expect(confirmation()).toBeNull()
+    expect(h.cap.setSessionPermissionMode).not.toHaveBeenCalled()
+    expect(modeSelect().value).toBe('default')
+    expect(composerInput()).toHaveFocus()
+  })
+
+  it('Escape でも取り消す', async () => {
+    const h = await setup()
+    await waitFor(() => expect(composerInput()).toBeInTheDocument())
+    await userEvent.selectOptions(modeSelect(), 'auto')
+    await userEvent.keyboard('{Escape}')
+    expect(confirmation()).toBeNull()
+    expect(h.cap.setSessionPermissionMode).not.toHaveBeenCalled()
+  })
+
+  it('承諾すると確認の印つきで 1 回送り、閉じて焦点が composer に戻る', async () => {
+    const h = await setup()
+    await waitFor(() => expect(composerInput()).toBeInTheDocument())
+    await userEvent.selectOptions(modeSelect(), 'auto')
+    await userEvent.click(acceptButton())
+    expect(h.cap.setSessionPermissionMode).toHaveBeenCalledExactlyOnceWith(A, 'auto', true)
+    expect(confirmation()).toBeNull()
+    expect(composerInput()).toHaveFocus()
+  })
+
+  it('隔離つきで確かめ済み (autoModeAllowed) のランタイムは確認なしで印 false で送る', async () => {
+    const h = await setup({ caps: { listRuntimes: allowedRuntimes() } })
+    await waitFor(() => expect(composerInput()).toBeInTheDocument())
+    // 一覧の到着を待つ (到着前は確認が要る側に倒れる)。
+    await waitFor(async () => {
+      await userEvent.selectOptions(modeSelect(), 'auto')
+      expect(h.cap.setSessionPermissionMode).toHaveBeenCalled()
+    })
+    expect(h.cap.setSessionPermissionMode).toHaveBeenLastCalledWith(A, 'auto', false)
+    expect(confirmation()).toBeNull()
+  })
+
+  it('安全 3 値は確認なしで印 false で送る', async () => {
+    const h = await setup()
+    await waitFor(() => expect(composerInput()).toBeInTheDocument())
+    await userEvent.selectOptions(modeSelect(), 'dontAsk')
+    expect(confirmation()).toBeNull()
+    expect(h.cap.setSessionPermissionMode).toHaveBeenCalledExactlyOnceWith(A, 'dontAsk', false)
+  })
+
+  it('確認の間にセッションが受け付けなくなると、送らずに閉じる', async () => {
+    const h = await setup()
+    await waitFor(() => expect(composerInput()).toBeInTheDocument())
+    await userEvent.selectOptions(modeSelect(), 'auto')
+    expect(confirmation()).not.toBeNull()
+    h.emit({ kind: 'state', state: 'launching' } as SessionEvent)
+    await waitFor(() => expect(confirmation()).toBeNull())
+    expect(h.cap.setSessionPermissionMode).not.toHaveBeenCalled()
+  })
+
+  it('確認の枠の axe 違反 0', async () => {
+    await setup()
+    await waitFor(() => expect(composerInput()).toBeInTheDocument())
+    await userEvent.selectOptions(modeSelect(), 'auto')
+    expect((await axe(confirmation() as HTMLElement, AXE_RULES)).violations).toEqual([])
   })
 })

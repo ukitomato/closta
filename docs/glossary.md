@@ -72,8 +72,17 @@ total_terms: 104
   `capabilities` の一項目。**3 値** (`true` / `false` / `unknown`) を取る
 - **判定の唯一の経路**: `isAutoModeAllowed()`。条件は `=== false` ではなく **`!== true`** である。
   `unknown` は JavaScript で truthy なので、生の値で真偽判定すると未確認のランタイムが安全側に倒れない
-- **Domain**: `runtime`（表明）/ `isolation`（ゲート）
-- **Ref**: Constitution Principle III / [AD-024](decisions/0024-constitution-verification-paths.md) #13
+  - Auto は false でも確認つきで選べる (AD-066)。true は sandbox を使えるという意味で、Closta が sandbox を有効にしたことではない (I-3 まで有効にしない。026 U-6)
+- **Domain**: `runtime`（表明）/ `isolation`（ゲート）。Auto の確認の要否の判定 (`requiresAutoModeConfirmation`) と main の印の検査は X-10 で `session` に暫定で置く (I-3 で `isolation` へ移す。AD-066)。`bypassPermissions` のゲートと、`autoModeSafe === true` で確認を省き続けるかの判断は `isolation` (I-3)
+- **Ref**: Constitution Principle III / [AD-024](decisions/0024-constitution-verification-paths.md) #13 / [AD-066](decisions/0066-auto-permission-mode-with-confirmation.md)
+
+#### **Auto mode confirmation（Auto の確認）**
+
+- **Definition**: `autoModeAllowed` が false のランタイムで権限モード `auto` を選ぶたびに挟む、その場の確認 (X-10)。起動の設定・composer の左の群・プリセットの適用後の起動・再開で出る。承諾は 3 つ目の引数 `autoModeAcknowledged: true` の印で main に渡り、main は印の無い `auto` の要求を `auto-mode-unconfirmed` で拒否する。`autoModeAllowed` が true のランタイムでは確認を省く (sandbox が有効という意味ではない。U-6 の受け入れたリスク)
+- **日本語表記**: Auto の確認
+- **Domain**: `session` (判定は暫定。I-3 で `isolation` へ移す) / `ui` (確認の部品と文言)
+- **Counterexamples**: 承諾を保存しない (プリセットに印を持たせない・前の承諾を次の選択に残さない)。`bypassPermissions` の選択不可とは別 (あちらは確認ではなく拒否)
+- **Ref**: [AD-066](decisions/0066-auto-permission-mode-with-confirmation.md)
 
 #### **Axis resolution（依存解決）**
 
@@ -423,7 +432,7 @@ total_terms: 104
 #### **FailureReason (起動とターンの失敗)**
 
 - **Definition**: セッションの起動・実行と、実行中のターンの失敗の**理由キー**。19 種 (X-1 の 10 種に O-4 が 8 種、X-9 が `resume-failed` 1 種を足した)。
-  `resume-failed` は再開の起動で `init` の前に終わった場合と、再開の最初の `init` の権限モードが安全 3 値の外だった場合 (AD-059 Decision 3。再ログインの対象に入れない)。
+  `resume-failed` は再開の起動で `init` の前に終わった場合と、再開の最初の `init` の権限モードが安全 3 値の外で、起動で頼んだ値とも違う場合 (AD-059 Decision 3 / AD-066 Decision 5。再ログインの対象に入れない)。
   参照キーであり**訳出は `ui`** (Principle XV)。起動の拒否理由には別に `session-limit` / `shutting-down` (X-5) がある
   - 起動と実行の失敗 (X-1): `distro-not-running` / `not-verified-running` / `distro-mismatch` / `claude-not-found` /
     `launch-failed` / `process-crashed` / `stream-protocol-error` / `provider-error` / `interrupt-unavailable` /
@@ -572,7 +581,7 @@ total_terms: 104
 #### **Launch preflight reason（起動前段の拒否理由）**
 
 - **Definition**: main の起動前段が起動を拒否するときの理由キー (`LaunchPreflightReason`)。
-  - 値は `invalid-config` / `provider-unavailable` / `needs-confirmation`。
+  - 値は `invalid-config` / `provider-unavailable` / `needs-confirmation` / `auto-mode-unconfirmed` (確認の印の無い `auto` の要求。X-10 / AD-066)。
   - X-1 の `LaunchFailureReason` と調停由来の理由とあわせて `SessionLaunchRejectReason` を成す。
   - 参照キーであり、訳出は `ui` が行う (Principle XV)。
 - **日本語表記**: 起動前段の拒否理由
@@ -584,7 +593,7 @@ total_terms: 104
 - **Definition**: セッション起動の検証済み入力 (X-1 / X-4)。`WslLaunchInput | Win32LaunchInput` の和 (X-8。
   `Win32LaunchInput` は `VerifiedRunning` を持たない)。WSL 側は次の要素を持つ。
   - 作業フォルダ / 実行中確認済みの `WslRuntime` / `VerifiedRunning`
-  - `options: LaunchQueryOptions`。中身は `permissionMode: SafePermissionMode` と、任意の `model` / `effort` / `settings` / `additionalDirectories` / `maxTurns` / `maxBudgetUsd` / `title` (と既にある `resume`)
+  - `options: LaunchQueryOptions`。中身は `permissionMode: SelectablePermissionMode` と、任意の `model` / `effort` / `settings` / `additionalDirectories` / `maxTurns` / `maxBudgetUsd` / `title` (と既にある `resume`)
   - 依存解決と main の再検証を通った `SessionLaunchConfig` から作る。
 - **日本語表記**: 起動入力 (型名は原語のまま)
 - **Domain**: `session`
@@ -622,7 +631,7 @@ total_terms: 104
 
 #### **Live session setting（実行中の設定の変更）**
 
-- **Definition**: 動いているセッションの権限モード・モデル・名前を、止めずに変える操作 (023)。永続化しない (プリセット・`launch-usage.json` に書かない)。権限モードは安全 3 値 (`SafePermissionMode`) の中の遷移だけ。モデルはそのセッションの Provider のカタログのうち起動の effort が効くもの (既定の Provider では、Claude Code が `supportedModels()` で答えた一覧のうち起動の effort が効くもの。025)。名前は transcript の custom-title に追記する (**Session name**)
+- **Definition**: 動いているセッションの権限モード・モデル・名前を、止めずに変える操作 (023)。永続化しない (プリセット・`launch-usage.json` に書かない)。権限モードは許可の 4 値 (`SelectablePermissionMode`) の中の遷移だけ (`auto` は確認つき。AD-066)。モデルはそのセッションの Provider のカタログのうち起動の effort が効くもの (既定の Provider では、Claude Code が `supportedModels()` で答えた一覧のうち起動の effort が効くもの。025)。名前は transcript の custom-title に追記する (**Session name**)
 - **日本語表記**: 実行中の設定の変更
 - **Domain**: `session`
 - **Counterexamples**: 起動ダイアログで選ぶ `SessionLaunchConfig` の軸とは別 — あちらは起動の前に選ぶ値で、本語は起動の後の変更。effort は実行中に変えない
@@ -989,10 +998,18 @@ total_terms: 104
 
 #### **SafePermissionMode**
 
-- **Definition**: 起動で選べる権限モード。`default` / `plan` / `dontAsk` の 3 値 (AD-020 の危険度表で「安全」のもの)。`assertSafePermissionMode` が実行時に閉じる。**実行中の切り替えも同じ 3 値** (023。AD-062)
+- **Definition**: `default` / `plan` / `dontAsk` の 3 値 (AD-020 の危険度表で「安全」のもの)。帯の条件に使う (`isSafePermissionMode`)。起動・実行中で選べるのは **Selectable permission mode** (X-10 / AD-066)
 - **Domain**: `session`
-- **Counterexamples**: 昇格 3 値 (`acceptEdits` / `auto` / `bypassPermissions`) は含まない。capability 連動は I-3
+- **Counterexamples**: 昇格 3 値 (`acceptEdits` / `auto` / `bypassPermissions`) は含まない。`auto` は Selectable permission mode に入る (X-10 / AD-066)。capability 連動の昇格は I-3
 - **Ref**: [AD-041](decisions/0041-x4-launch-config-on-x1-launch-gate.md) (a)
+
+#### **Selectable permission mode（許可の 4 値）**
+
+- **Definition**: 起動と実行中の切り替えで選べる権限モード。`default` / `plan` / `dontAsk` / `auto` の 4 値 (X-10)。`assertSelectablePermissionMode` が実行時に閉じ、`acceptEdits` / `bypassPermissions` の経路は 0 件のまま (Constitution 検証の項目 16)。`auto` は `autoModeAllowed` が false のランタイムで確認つき (**Auto mode confirmation**)
+- **日本語表記**: 許可の 4 値
+- **Domain**: `session`
+- **Counterexamples**: `SafePermissionMode` (安全 3 値) とは別。`acceptEdits` / `bypassPermissions` は含まない。プリセットは版 3 から `auto` を保存できるが、適用しても確認を省かない
+- **Ref**: [AD-066](decisions/0066-auto-permission-mode-with-confirmation.md)
 
 #### **Session**
 
@@ -1108,7 +1125,7 @@ total_terms: 104
   三本の軸が交わる点であり日常操作の入口。
   **実装済みの 10 キー** (X-4 の 6 軸 + 024): `folderId` / `runtimeId` / `providerId` / `modelId` / `effort` / `permissionMode` /
   `additionalDirectoryIds` / `maxTurns` / `maxBudgetUsd` / `sessionName`。
-  folder / runtime は必須で、provider / model / effort は `null` = 既定、権限モードは `SafePermissionMode`。
+  folder / runtime は必須で、provider / model / effort は `null` = 既定、権限モードは `SelectablePermissionMode`。
   追加ディレクトリは登録フォルダの id の配列 (0〜10 件。既定 `[]`)、上限 (ターン数・費用) とセッション名は `null` = なし。
   sandbox は I-3 が扱う。
   **再開 (Resume) の要求は別の型 (`SessionResumeRequest`) で包み、再開は引き継ぐ 3 軸 (フォルダ / ランタイム / Provider) を変えない** (X-9 / 024)
@@ -1416,8 +1433,9 @@ total_terms: 104
   `init` の `permissionMode`。原因を断定せず、強制 (中断・失敗にする) はしない (強制の要否の持ち主は I-3)。並びは警告の帯 → Quota banner →
   会話内検索のバー
   - 隔離の文言は暫定で、セッションの隔離状態ではなくランタイムの `autoModeStatus` から導く (`unavailable` は「隔離がありません」、それ以外は「このセッションの隔離をアプリは確かめていません」。Isolation badge (I-2) が定義されたら置き換える)
+  - 利用者が選んだ `auto` は Auto の帯 (`AutoModeBanner`) で、本帯は出さない (X-10 / AD-066)
 - **日本語表記**: 権限モードの警告の帯
-- **Domain**: `ui` (表示)。判定は `session` の `isSafePermissionMode`、ポリシーとゲートは `isolation` (I-3)
+- **Domain**: `ui` (表示)。判定は `session` の `isSafePermissionMode`、ポリシーとゲートは `isolation` (I-3)。Auto の確認の要否の判定 (`requiresAutoModeConfirmation`) と main の印の検査は X-10 で `session` に暫定で置く (I-3 で `isolation` へ移す。AD-066)。`bypassPermissions` のゲートと、`autoModeSafe === true` で確認を省き続けるかの判断は `isolation` (I-3)
 - **Counterexamples**: 起動の設定・プリセットの権限モードは変えない (書き戻さない)。`autoModeAllowed` (ゲート用) を表示に使わない。
   `allowed` のランタイムでも、隔離されていると読める文言にしない
 - **Ref**: [AD-047](decisions/0047-session-meter-and-failure-reasons.md) Decision 5 / [014 data-model](../specs/014-ui-metering-and-limits/data-model.md) §4

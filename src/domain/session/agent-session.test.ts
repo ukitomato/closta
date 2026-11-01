@@ -8,6 +8,7 @@ import {
   launchDirectoryKindOf,
   isPermissionAnswers,
   LAUNCH_FAILURE_REASONS,
+  LAUNCH_PREFLIGHT_REASONS,
   projectAskUserQuestionAnswer,
   toAskUserQuestionResult,
   toPermissionResult,
@@ -273,6 +274,15 @@ describe('isLaunchFailureReason', () => {
     expect(isLaunchFailureReason('enumeration-failed')).toBe(false)
     expect(isLaunchFailureReason(42)).toBe(false)
     expect(isLaunchFailureReason(null)).toBe(false)
+  })
+
+  it('LAUNCH_PREFLIGHT_REASONS は 4 種 (auto-mode-unconfirmed を含む。AD-066)', () => {
+    expect([...LAUNCH_PREFLIGHT_REASONS]).toEqual([
+      'invalid-config',
+      'provider-unavailable',
+      'needs-confirmation',
+      'auto-mode-unconfirmed'
+    ])
   })
 
   function assertPermissionDecisionShape(d: PermissionDecision): void {

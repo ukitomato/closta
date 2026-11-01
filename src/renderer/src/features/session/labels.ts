@@ -1,6 +1,7 @@
 import type { LaunchFailureReason, SessionLaunchRejectReason } from '@domain/session/agent-session'
 import { MAX_CONCURRENT_SESSIONS } from '@domain/session/concurrency'
-import { MAX_PRESETS, type SafePermissionMode } from '@domain/session/launch-config'
+import type { AutoModeStatus } from '@domain/runtime/capabilities'
+import { MAX_PRESETS, type SelectablePermissionMode } from '@domain/session/launch-config'
 import type {
   AxisResetReason,
   DirectoryResetReason,
@@ -78,7 +79,9 @@ const LAUNCH_REJECT_LABELS: Record<SessionLaunchRejectReason, string> = {
   'provider-unavailable':
     '選んだ Provider はこのランタイムから使えません (到達できない・設定を解決できない)。別の Provider を選んでください。',
   'needs-confirmation':
-    '選んだ Provider が使えなくなっていたため起動を止めました。Provider を選び直すか、既定 Provider での起動を確認してください。'
+    '選んだ Provider が使えなくなっていたため起動を止めました。Provider を選び直すか、既定 Provider での起動を確認してください。',
+  // 026 (data-model §9)。権限モードの名前は名前の表から引く。
+  'auto-mode-unconfirmed': `「${PERMISSION_MODE_NAMES.auto}」の確認が済んでいないので起動しませんでした。権限モードを選び直して確認してください。`
 }
 
 /**
@@ -432,15 +435,34 @@ export function sameFolderWarning(count: number): string {
  * (`features/chat/labels.ts` の `PERMISSION_MODE_NAMES`) から取る — 同じモードの名前を 2 か所に分けない
  * (O-4 / 014 research R-15 / Principle XIV)。名前は Claude Code の表記で、説明は付けない (025 / AD-065 Decision 3)。
  */
-export const PERMISSION_MODE_LABELS: Record<SafePermissionMode, string> = {
+export const PERMISSION_MODE_LABELS: Record<SelectablePermissionMode, string> = {
   default: PERMISSION_MODE_NAMES.default,
   plan: PERMISSION_MODE_NAMES.plan,
-  dontAsk: PERMISSION_MODE_NAMES.dontAsk
+  dontAsk: PERMISSION_MODE_NAMES.dontAsk,
+  auto: PERMISSION_MODE_NAMES.auto
 }
+
+/**
+ * Auto の確認の文 (026 / data-model §6.1・§9)。`status` は表示用の `autoModeStatus`。
+ * 1 文目は `unavailable` → 隔離なし、それ以外 → 隔離をアプリが確かめていない。
+ */
+export const AUTO_MODE_CONFIRMATION_LABELS = {
+  heading: (name: string): string => `権限モードを「${name}」にしますか`,
+  body: (status: AutoModeStatus): string =>
+    `${
+      status === 'unavailable'
+        ? 'このランタイムには隔離がありません。'
+        : 'このランタイムの隔離をアプリは確かめておらず、セッションは隔離されずに動きます。'
+    }分類器が許可した操作は、承認カードを出さずにホストでそのまま実行されます。権限モードはいつでも戻せます。`,
+  accept: (name: string): string => `${name} にする`,
+  cancel: '取り消す'
+} as const
 
 /* ── 実行中の設定の変更 (023 / data-model §8.4 / Principle XV) ── */
 
 export const LIVE_SETTING_LABELS = {
+  /** 026: 確認の印の無い Auto の変更の拒否 (名前は名前の表から引く)。 */
+  'auto-mode-unconfirmed': `「${PERMISSION_MODE_NAMES.auto}」の確認が済んでいないので変更しませんでした。`,
   permissionMode: '権限モード',
   model: 'モデル',
   currentModel: '現在のモデル',
@@ -480,7 +502,9 @@ export const LIVE_MODEL_LIST_FAILURE_LABELS = {
   rejected: 'Claude Code がモデルの一覧に答えませんでした',
   'session-ended': 'セッションが終わったため、モデルの一覧を読み込めませんでした',
   timeout: 'モデルの一覧の読み込みが時間内に終わりませんでした',
-  'write-failed': 'モデルの一覧を読み込めませんでした'
+  'write-failed': 'モデルの一覧を読み込めませんでした',
+  // モデルの一覧の要求では起きない (権限モードの変更だけが返す)。表を網羅させるための値。
+  'auto-mode-unconfirmed': 'モデルの一覧を読み込めませんでした'
 } satisfies Record<LiveSettingFailure, string>
 
 /** `/resume` の選ぶ画面の文言 (025 data-model §9)。 */

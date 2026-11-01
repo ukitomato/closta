@@ -914,15 +914,19 @@ function hasPackagedGate() {
         }
       }
     }
-    // (P1) permissionMode は安全 3 値 (AD-041 (a))。昇格値のリテラルを締め出す。
+    // (P1) permissionMode は許可の 4 値 (AD-041 (a) / AD-066)。昇格値のリテラルを締め出す。
     for (const value of PERMISSION_MODE_ESCALATION_VALUES) {
-      if (src.code.includes(`'${value}'`) || src.code.includes(`"${value}"`)) {
+      if (
+        src.code.includes(`'${value}'`) ||
+        src.code.includes(`"${value}"`) ||
+        src.code.includes(`\`${value}\``)
+      ) {
         found.push(
-          `${src.file}  permissionMode の昇格値 "${value}" が現れている (P1。安全 3 値 {default, plan, dontAsk} のみ。AD-041)`
+          `${src.file}  permissionMode の昇格値 "${value}" が現れている (P1。許可の 4 値 {default, plan, dontAsk, auto} のみ (acceptEdits / bypassPermissions は不可)。AD-066)`
         )
       }
     }
-    // (P1) 値位置の `permissionMode:` は `assertSafePermissionMode(...)` を通す (X-4 / AD-041 (a))。
+    // (P1) 値位置の `permissionMode:` は `assertSelectablePermissionMode(...)` を通す (X-4 / AD-041 (a) / AD-066)。
     //      `settings:` と同型の grep backstop。型位置は **`readonly` 付きのフィールド宣言に限って**除外する
     //      (src/agents の型はすべて readonly 付き)。右辺が大文字で始まる識別子でも除外しない —
     //      `permissionMode: ELEVATED` (定数) / `permissionMode: Modes.X` は値位置として違反にする
@@ -982,8 +986,8 @@ function hasPackagedGate() {
       }
     }
     // (P3) 実行中の権限モードの切り替え (023 / AD-062 Decision 1)。`.setPermissionMode(` (`?.` と計算キーの形を含む) の
-    //      引数は `assertSafePermissionMode(...)` で始まり、その呼び出しで閉じること (`permissionMode:` の値の検査と同じ関数)。
-    //      `assertSafePermissionMode(a) || b` のように包みが閉じてから続く形は違反にする。
+    //      引数は `assertSelectablePermissionMode(...)` で始まり、その呼び出しで閉じること (`permissionMode:` の値の検査と同じ関数)。
+    //      `assertSelectablePermissionMode(a) || b` のように包みが閉じてから続く形は違反にする。
     {
       const callRe = /(?:\.\s*setPermissionMode|\[\s*(['"`])setPermissionMode\1\s*\])\s*\(/g
       let m

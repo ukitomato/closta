@@ -15,7 +15,9 @@ import type {
 
 import { installCapability } from '@/test-support/capability'
 
-import { launchFailureLabel } from './labels'
+import { PERMISSION_MODE_NAMES } from '@/features/chat/labels'
+
+import { AUTO_MODE_CONFIRMATION_LABELS, launchFailureLabel } from './labels'
 import { LaunchDialog, type LaunchSource } from './LaunchDialog'
 import { createRunningSessionStore, type RunningSessionStore } from './running-session-store'
 import { DEFAULT_EXTRA_AXES } from '@domain/session/launch-config'
@@ -214,7 +216,7 @@ describe('LaunchDialog', () => {
     render(<LaunchDialog session={fakeSession()} />)
     await choose(0, 'ubuntu-proj')
     const permission = screen.getByRole('combobox', { name: '権限モード' }) as HTMLSelectElement
-    expect([...permission.options].map((o) => o.value)).toEqual(['default', 'plan', 'dontAsk'])
+    expect([...permission.options].map((o) => o.value)).toEqual(['default', 'plan', 'dontAsk', 'auto'])
   })
 
   it('権限モードの説明の段落を出さない (025 FR-008)', async () => {
@@ -286,7 +288,7 @@ describe('LaunchDialog', () => {
         ...DEFAULT_EXTRA_AXES,
         sessionName: null
       },
-      'manual'
+      'manual', false
     )
   })
 
@@ -319,7 +321,7 @@ describe('LaunchDialog', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: '既定 Provider で起動する' }))
     expect(session.launch).toHaveBeenCalledWith(
       expect.objectContaining({ providerId: null }),
-      'manual'
+      'manual', false
     )
   })
 
@@ -637,7 +639,7 @@ describe('LaunchDialog', () => {
     expect(screen.queryByRole('alertdialog')).toBeNull()
     expect(session.launch).toHaveBeenCalledWith(
       expect.objectContaining({ providerId: 'p-bedrock', modelId: 'sonnet', effort: 'high' }),
-      'manual'
+      'manual', false
     )
   })
 
@@ -705,7 +707,7 @@ describe('LaunchDialog', () => {
     expect(screen.queryByRole('alertdialog')).toBeNull()
     expect(session.launch).toHaveBeenCalledWith(
       expect.objectContaining({ providerId: 'p-bedrock' }),
-      'manual'
+      'manual', false
     )
   })
 
@@ -842,7 +844,7 @@ describe('LaunchDialog', () => {
       fireEvent.click(screen.getByRole('button', { name: '起動' }))
       expect(session.launch).toHaveBeenCalledWith(
         expect.objectContaining({ modelId: 'opus', effort: 'high' }),
-        'manual'
+        'manual', false
       )
     })
 
@@ -883,7 +885,7 @@ describe('LaunchDialog', () => {
       fireEvent.click(screen.getByRole('button', { name: '起動' }))
       expect(session.launch).toHaveBeenCalledWith(
         expect.objectContaining({ providerId: 'p-bedrock', modelId: null, effort: null }),
-        'manual'
+        'manual', false
       )
     })
 
@@ -1184,7 +1186,7 @@ describe('LaunchDialog — 起動元 (O-3)', () => {
       render(<LaunchDialog session={session} />)
       await applyPreset()
       await clickLaunch()
-      expect(session.launch).toHaveBeenCalledWith(presetConfig, 'preset')
+      expect(session.launch).toHaveBeenCalledWith(presetConfig, 'preset', false)
     })
 
     it('適用した後に軸を変えても preset', async () => {
@@ -1197,7 +1199,7 @@ describe('LaunchDialog — 起動元 (O-3)', () => {
       await clickLaunch()
       expect(session.launch).toHaveBeenCalledWith(
         { ...presetConfig, permissionMode: 'default' },
-        'preset'
+        'preset', false
       )
     })
 
@@ -1210,7 +1212,7 @@ describe('LaunchDialog — 起動元 (O-3)', () => {
       await clickLaunch()
       expect(session.launch).toHaveBeenCalledWith(
         expect.objectContaining({ folderId: 'ubuntu-proj' }),
-        'manual'
+        'manual', false
       )
     })
 
@@ -1229,7 +1231,7 @@ describe('LaunchDialog — 起動元 (O-3)', () => {
           const session = fakeSession({ ...over, lastConfig: presetConfig, lastOrigin })
           const view = render(<LaunchDialog session={session} />)
           await clickLaunch()
-          expect(session.launch).toHaveBeenCalledWith(presetConfig, lastOrigin)
+          expect(session.launch).toHaveBeenCalledWith(presetConfig, lastOrigin, false)
           view.unmount()
         }
       }
@@ -1240,7 +1242,7 @@ describe('LaunchDialog — 起動元 (O-3)', () => {
       const session = fakeSession({ lastConfig: presetConfig, lastOrigin: null })
       render(<LaunchDialog session={session} />)
       await clickLaunch()
-      expect(session.launch).toHaveBeenCalledWith(presetConfig, 'manual')
+      expect(session.launch).toHaveBeenCalledWith(presetConfig, 'manual', false)
     })
 
     it('前回の設定を初期値に出したダイアログで、適用せずに軸を手で変えて起動すると manual (US-4 AC8)', async () => {
@@ -1252,7 +1254,7 @@ describe('LaunchDialog — 起動元 (O-3)', () => {
       await clickLaunch()
       expect(session.launch).toHaveBeenCalledWith(
         { ...presetConfig, permissionMode: 'default' },
-        'manual'
+        'manual', false
       )
     })
 
@@ -1264,7 +1266,7 @@ describe('LaunchDialog — 起動元 (O-3)', () => {
       fireEvent.change(permissionMode(), { target: { value: 'default' } })
       fireEvent.change(permissionMode(), { target: { value: 'plan' } })
       await clickLaunch()
-      expect(session.launch).toHaveBeenCalledWith(presetConfig, 'manual')
+      expect(session.launch).toHaveBeenCalledWith(presetConfig, 'manual', false)
     })
 
     it('依存解決の自動の reset (削除された Provider が既定に戻る) だけでは manual にならない', async () => {
@@ -1284,7 +1286,7 @@ describe('LaunchDialog — 起動元 (O-3)', () => {
       fireEvent.click(within(dialog).getByRole('button', { name: '既定 Provider で起動する' }))
       expect(session.launch).toHaveBeenCalledWith(
         expect.objectContaining({ providerId: null }),
-        'preset'
+        'preset', false
       )
     })
   })
@@ -1313,7 +1315,7 @@ describe('LaunchDialog — 起動元 (O-3)', () => {
           lastConfig: launch.lastConfig,
           lastOrigin: launch.lastOrigin,
           previousFailure: launch.previousFailure,
-          launch: (config, origin) => store.launch(config, null, origin)
+          launch: (config, origin, ack) => store.launch(config, null, origin, ack)
         }
         return render(<LaunchDialog session={source} />)
       }
@@ -1481,7 +1483,7 @@ describe('LaunchDialog — Win32Runtime (X-8)', () => {
     fireEvent.click(screen.getByRole('button', { name: '起動' }))
     expect(session.launch).toHaveBeenCalledWith(
       expect.objectContaining({ folderId: 'win-proj', runtimeId: 'host' }),
-      'manual'
+      'manual', false
     )
   })
 
@@ -1557,16 +1559,14 @@ describe('LaunchDialog — Win32Runtime (X-8)', () => {
     expect(session.launch).not.toHaveBeenCalled()
   })
 
-  it('Win32Runtime を選んでも権限モードは default / plan / dontAsk の 3 つだけ (Principle III)', async () => {
+  it('Win32Runtime を選んでも権限モードは許可の 4 値だけで、acceptEdits / bypassPermissions は無い (Principle III)', async () => {
     installWin32('found')
     render(<LaunchDialog session={fakeSession()} />)
     await choose(0, 'win-proj')
     await choose(1, 'host')
     const permission = screen.getByRole('combobox', { name: '権限モード' }) as HTMLSelectElement
-    expect([...permission.options].map((o) => o.value)).toEqual(['default', 'plan', 'dontAsk'])
-    expect([...permission.options].some((o) => /auto|bypass/i.test(o.value + o.textContent))).toBe(
-      false
-    )
+    expect([...permission.options].map((o) => o.value)).toEqual(['default', 'plan', 'dontAsk', 'auto'])
+    expect([...permission.options].some((o) => /acceptEdits|bypass/i.test(o.value))).toBe(false)
   })
 
   it('Provider の既定のラベルは選んだランタイムで替わる (US-4 AC2 / FE-040)', async () => {
@@ -1714,7 +1714,7 @@ describe('LaunchDialog — 追加ディレクトリ (024)', () => {
     fireEvent.click(screen.getByRole('button', { name: '起動' }))
     expect(session.launch).toHaveBeenCalledWith(
       expect.objectContaining({ additionalDirectoryIds: ['win-lib'] }),
-      'manual'
+      'manual', false
     )
   })
 
@@ -1764,7 +1764,7 @@ describe('LaunchDialog — 追加ディレクトリ (024)', () => {
     fireEvent.click(screen.getByRole('button', { name: '起動' }))
     expect(session.launch).toHaveBeenCalledWith(
       expect.objectContaining({ additionalDirectoryIds: ids.slice(2, 12) }),
-      expect.anything()
+      expect.anything(), false
     )
   })
 
@@ -1788,7 +1788,7 @@ describe('LaunchDialog — 追加ディレクトリ (024)', () => {
     fireEvent.click(screen.getByRole('button', { name: '起動' }))
     expect(session.launch).toHaveBeenCalledWith(
       expect.objectContaining({ runtimeId: 'host', additionalDirectoryIds: ['win-lib'] }),
-      'manual'
+      'manual', false
     )
     fireEvent.change(screen.getByRole('combobox', { name: 'ランタイム' }), {
       target: { value: 'wsl:Ubuntu' }
@@ -1999,7 +1999,7 @@ describe('LaunchDialog — 上限 (024)', () => {
     fireEvent.click(startBtn())
     expect(session.launch).toHaveBeenCalledWith(
       expect.objectContaining({ maxTurns: null, maxBudgetUsd: null }),
-      'manual'
+      'manual', false
     )
   })
 
@@ -2014,7 +2014,7 @@ describe('LaunchDialog — 上限 (024)', () => {
     fireEvent.click(startBtn())
     expect(session.launch).toHaveBeenCalledWith(
       expect.objectContaining({ maxTurns: 30, maxBudgetUsd: 2.5 }),
-      'manual'
+      'manual', false
     )
   })
 
@@ -2066,7 +2066,7 @@ describe('LaunchDialog — 上限 (024)', () => {
     fireEvent.click(startBtn())
     expect(session.launch).toHaveBeenCalledWith(
       expect.objectContaining({ maxTurns: 30, maxBudgetUsd: 0.07 }),
-      expect.anything()
+      expect.anything(), false
     )
   })
 
@@ -2114,7 +2114,7 @@ describe('LaunchDialog — セッション名 (024)', () => {
     fireEvent.click(startBtn())
     expect(session.launch).toHaveBeenCalledWith(
       expect.objectContaining({ sessionName: 'ログインの API 修正' }),
-      'manual'
+      'manual', false
     )
   })
 
@@ -2127,7 +2127,7 @@ describe('LaunchDialog — セッション名 (024)', () => {
     fireEvent.click(startBtn())
     expect(session.launch).toHaveBeenCalledWith(
       expect.objectContaining({ sessionName: null }),
-      'manual'
+      'manual', false
     )
   })
 
@@ -2171,7 +2171,291 @@ describe('LaunchDialog — セッション名 (024)', () => {
     fireEvent.click(startBtn())
     expect(session.launch).toHaveBeenCalledWith(
       expect.objectContaining({ sessionName: '前回の名前' }),
-      expect.anything()
+      expect.anything(), false
     )
+  })
+})
+
+describe('LaunchDialog — Auto の確認 (026 FE-013 / spec US-1)', () => {
+  const auto = (): HTMLSelectElement =>
+    screen.getByRole('combobox', { name: '権限モード' }) as HTMLSelectElement
+  const confirmation = (): HTMLElement | null => screen.queryByTestId('auto-mode-confirmation')
+  const accept = (): HTMLElement =>
+    screen.getByRole('button', {
+      name: AUTO_MODE_CONFIRMATION_LABELS.accept(PERMISSION_MODE_NAMES.auto)
+    })
+  const cancel = (): HTMLElement =>
+    screen.getByRole('button', { name: AUTO_MODE_CONFIRMATION_LABELS.cancel })
+  const launchButton = (): HTMLElement => screen.getByRole('button', { name: '起動' })
+
+  async function ready(session: LaunchSource): Promise<void> {
+    render(<LaunchDialog session={session} />)
+    await choose(0, 'win-proj')
+    await choose(1, 'wsl:Ubuntu')
+    await waitFor(() => expect(launchButton()).toBeEnabled())
+  }
+
+  const allowedRuntimes: RuntimeListDTO = {
+    ...runtimes,
+    runtimes: runtimes.runtimes.map((r) => ({
+      ...r,
+      capabilities: { ...r.capabilities, autoModeAllowed: true, autoModeStatus: 'allowed' as const }
+    }))
+  }
+
+  it('Auto を選ぶと確認が出て、承諾までは値が変わらない。取り消すと前の値のまま', async () => {
+    install()
+    const session = fakeSession()
+    await ready(session)
+    fireEvent.change(auto(), { target: { value: 'auto' } })
+    expect(confirmation()).not.toBeNull()
+    expect(auto().value).toBe('default')
+    expect(launchButton()).toBeDisabled()
+    fireEvent.click(cancel())
+    expect(confirmation()).toBeNull()
+    expect(auto().value).toBe('default')
+    expect(launchButton()).toBeEnabled()
+    expect(session.launch).not.toHaveBeenCalled()
+  })
+
+  it('選択の確認を承諾すると値が auto になり、起動は確認の印 true で呼ぶ (確認は 1 回)', async () => {
+    install()
+    const session = fakeSession()
+    await ready(session)
+    fireEvent.change(auto(), { target: { value: 'auto' } })
+    fireEvent.click(accept())
+    expect(confirmation()).toBeNull()
+    expect(auto().value).toBe('auto')
+    fireEvent.click(launchButton())
+    expect(confirmation()).toBeNull()
+    expect(session.launch).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ permissionMode: 'auto', runtimeId: 'wsl:Ubuntu' }),
+      'manual',
+      true
+    )
+  })
+
+  it('ランタイムを変えると印が消え、起動のときに確認が出る。承諾で起動する', async () => {
+    install()
+    const session = fakeSession()
+    await ready(session)
+    fireEvent.change(auto(), { target: { value: 'auto' } })
+    fireEvent.click(accept())
+    await choose(1, 'wsl:Debian')
+    await waitFor(() => expect(launchButton()).toBeEnabled())
+    fireEvent.click(launchButton())
+    expect(session.launch).not.toHaveBeenCalled()
+    expect(confirmation()).not.toBeNull()
+    fireEvent.click(accept())
+    expect(session.launch).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ permissionMode: 'auto', runtimeId: 'wsl:Debian' }),
+      'manual',
+      true
+    )
+  })
+
+  it('起動の確認を取り消すと起動せず、ダイアログに残る', async () => {
+    install()
+    const session = fakeSession()
+    await ready(session)
+    fireEvent.change(auto(), { target: { value: 'auto' } })
+    fireEvent.click(accept())
+    await choose(1, 'wsl:Debian')
+    await waitFor(() => expect(launchButton()).toBeEnabled())
+    fireEvent.click(launchButton())
+    fireEvent.click(cancel())
+    expect(confirmation()).toBeNull()
+    expect(session.launch).not.toHaveBeenCalled()
+    expect(launchButton()).toBeEnabled()
+  })
+
+  it('auto 以外に戻してから auto に選び直すと、確認がもう一度出る', async () => {
+    install()
+    await ready(fakeSession())
+    fireEvent.change(auto(), { target: { value: 'auto' } })
+    fireEvent.click(accept())
+    fireEvent.change(auto(), { target: { value: 'plan' } })
+    fireEvent.change(auto(), { target: { value: 'auto' } })
+    expect(confirmation()).not.toBeNull()
+  })
+
+  it('隔離つきで確かめ済み (autoModeAllowed) のランタイムは確認なしで、印 false で起動する', async () => {
+    install({ listRuntimes: async () => allowedRuntimes })
+    const session = fakeSession()
+    await ready(session)
+    fireEvent.change(auto(), { target: { value: 'auto' } })
+    expect(confirmation()).toBeNull()
+    expect(auto().value).toBe('auto')
+    fireEvent.click(launchButton())
+    expect(session.launch).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ permissionMode: 'auto' }),
+      'manual',
+      false
+    )
+  })
+
+  it('安全 3 値の起動は印 false', async () => {
+    install()
+    const session = fakeSession()
+    await ready(session)
+    fireEvent.click(launchButton())
+    expect(session.launch).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ permissionMode: 'default' }),
+      'manual',
+      false
+    )
+  })
+
+  it('確認の枠の axe 違反 0 と、本文が隔離の状態で変わる (unavailable)', async () => {
+    install()
+    await ready(fakeSession())
+    fireEvent.change(auto(), { target: { value: 'auto' } })
+    const box = confirmation() as HTMLElement
+    expect(box).toHaveTextContent(AUTO_MODE_CONFIRMATION_LABELS.body('unavailable'))
+    expect((await axe(box, { rules: { 'color-contrast': { enabled: false } } })).violations).toEqual(
+      []
+    )
+  })
+
+  describe('プリセットの auto / Provider 確認との順序 / 判定中ランタイム (FR-012 / Edge Case 4・6)', () => {
+    const presetBase: SessionLaunchConfig = {
+      folderId: 'ubuntu-proj',
+      runtimeId: 'wsl:Ubuntu',
+      providerId: null,
+      modelId: null,
+      effort: null,
+      permissionMode: 'auto',
+      ...DEFAULT_EXTRA_AXES,
+      sessionName: null
+    }
+    const autoPreset: PresetDTO = { id: 'preset-auto', name: 'オート', config: presetBase, updatedAt: NOW }
+    const safePreset: PresetDTO = {
+      id: 'preset-safe',
+      name: '安全',
+      config: { ...presetBase, permissionMode: 'default' },
+      updatedAt: NOW
+    }
+    const applyButtons = async (): Promise<HTMLElement[]> => {
+      await waitFor(() => expect(screen.getAllByRole('button', { name: '適用' })).toHaveLength(2))
+      return screen.getAllByRole('button', { name: '適用' })
+    }
+    const clickLaunch = async (): Promise<void> => {
+      await waitFor(() => expect(launchButton()).toBeEnabled())
+      fireEvent.click(launchButton())
+    }
+
+    it('プリセットの auto は適用では確認せず、起動で確認が出る。承諾で印 true・preset で起動する', async () => {
+      install({ listPresets: async () => [autoPreset, safePreset] })
+      const session = fakeSession()
+      render(<LaunchDialog session={session} />)
+      fireEvent.click((await applyButtons())[0])
+      await waitFor(() => expect(auto().value).toBe('auto'))
+      expect(confirmation()).toBeNull()
+      await clickLaunch()
+      expect(confirmation()).not.toBeNull()
+      expect(session.launch).not.toHaveBeenCalled()
+      fireEvent.click(accept())
+      expect(session.launch).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ permissionMode: 'auto' }),
+        'preset',
+        true
+      )
+    })
+
+    it('承諾の後に default → auto のプリセットを適用し直すと、起動でもう一度確認が出る', async () => {
+      install({ listPresets: async () => [autoPreset, safePreset] })
+      const session = fakeSession()
+      render(<LaunchDialog session={session} />)
+      fireEvent.click((await applyButtons())[0])
+      await clickLaunch()
+      fireEvent.click(accept())
+      expect(session.launch).toHaveBeenCalledTimes(1)
+      fireEvent.click((await applyButtons())[1])
+      await waitFor(() => expect(auto().value).toBe('default'))
+      fireEvent.click((await applyButtons())[0])
+      await waitFor(() => expect(auto().value).toBe('auto'))
+      await clickLaunch()
+      expect(confirmation()).not.toBeNull()
+      expect(session.launch).toHaveBeenCalledTimes(1)
+    })
+
+    it('承諾の後に default へ戻して起動すると印 false', async () => {
+      install({ listPresets: async () => [autoPreset, safePreset] })
+      const session = fakeSession()
+      render(<LaunchDialog session={session} />)
+      fireEvent.click((await applyButtons())[0])
+      await clickLaunch()
+      fireEvent.click(accept())
+      fireEvent.change(auto(), { target: { value: 'default' } })
+      await clickLaunch()
+      expect(session.launch).toHaveBeenCalledTimes(2)
+      expect(session.launch).toHaveBeenLastCalledWith(
+        expect.objectContaining({ permissionMode: 'default' }),
+        'preset',
+        false
+      )
+    })
+
+    it('Provider の確認と Auto の確認は同時に描かれず、Provider の確認の後に Auto の確認が出る', async () => {
+      install()
+      const session = fakeSession({
+        lastConfig: {
+          folderId: 'ubuntu-proj',
+          runtimeId: 'wsl:Ubuntu',
+          providerId: 'p-far',
+          modelId: null,
+          effort: null,
+          permissionMode: 'auto',
+          ...DEFAULT_EXTRA_AXES,
+          sessionName: null
+        }
+      })
+      render(<LaunchDialog session={session} />)
+      await waitFor(() => expect(launchButton()).toBeEnabled())
+      fireEvent.click(launchButton())
+      const providerDialog = await screen.findByRole('alertdialog', {
+        name: '既定 Provider での起動の確認'
+      })
+      expect(providerDialog).toBeInTheDocument()
+      expect(confirmation()).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: '既定 Provider で起動する' }))
+      expect(screen.queryByRole('alertdialog', { name: '既定 Provider での起動の確認' })).toBeNull()
+      expect(confirmation()).not.toBeNull()
+      expect(session.launch).not.toHaveBeenCalled()
+      fireEvent.click(accept())
+      expect(session.launch).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ permissionMode: 'auto' }),
+        'manual',
+        true
+      )
+    })
+
+    it('隔離を判定中 (undetermined) のランタイムでも確認が出る (確認が要る)', async () => {
+      const undetermined: RuntimeListDTO = {
+        ...runtimes,
+        runtimes: runtimes.runtimes.map((r) => ({
+          ...r,
+          capabilities: {
+            ...r.capabilities,
+            autoModeAllowed: false,
+            autoModeStatus: 'undetermined' as const
+          }
+        }))
+      }
+      install({ listRuntimes: async () => undetermined })
+      const session = fakeSession()
+      await ready(session)
+      fireEvent.change(auto(), { target: { value: 'auto' } })
+      const box = confirmation() as HTMLElement
+      expect(box).not.toBeNull()
+      expect(box).toHaveTextContent(AUTO_MODE_CONFIRMATION_LABELS.body('undetermined'))
+      fireEvent.click(accept())
+      fireEvent.click(launchButton())
+      expect(session.launch).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ permissionMode: 'auto' }),
+        'manual',
+        true
+      )
+    })
   })
 })

@@ -184,7 +184,8 @@ function setup(prepareLaunch: () => Promise<LaunchPreparation> = async () => okP
     onStatus: (u) => statuses.push([...u]),
     timer,
     log: (l) => logs.push(l),
-    onResumable: (id) => resumable.push(id)
+    onResumable: (id) => resumable.push(id),
+    autoModeAllowed: () => false
   })
   return { connection, service, statuses, logs, timer, resumable }
 }
@@ -298,7 +299,8 @@ describe('起動と同時実行数の上限 (SC-001)', () => {
       newSessionId: () => crypto.randomUUID(),
       onStatus: () => undefined,
       timer: manualTimer(),
-      log: () => undefined
+      log: () => undefined,
+      autoModeAllowed: () => false
     })
     await svc.launch(cfg('f1', 'r1'))
     await svc.launch({ ...cfg('f2', 'r2'), modelId: 'claude-opus' })
@@ -768,7 +770,8 @@ interface LiveTimer {
 }
 
 function liveSetup(
-  providerModels?: (providerId: string) => Promise<readonly ModelEntry[] | null>
+  providerModels?: (providerId: string) => Promise<readonly ModelEntry[] | null>,
+  liveAutoAllowed: ReadonlySet<string> = new Set()
 ): Setup & { timers: LiveTimer[] } {
   const connection = fakeConnection()
   const statuses: SessionStatusUpdate[][] = []
@@ -801,7 +804,8 @@ function liveSetup(
     ...(providerModels !== undefined ? { providerModels } : {}),
     onStatus: (u) => statuses.push([...u]),
     timer,
-    log: (l) => logs.push(l)
+    log: (l) => logs.push(l),
+    autoModeAllowed: (runtimeId) => liveAutoAllowed.has(runtimeId)
   })
   return {
     connection,
@@ -1032,6 +1036,87 @@ describe('setPermissionMode (023 / contracts C-1)', () => {
     const p = s.service.setPermissionMode(id, 'plan')
     s.connection.controlResult(id, REQ1, false)
     await expect(p).resolves.toEqual({ ok: false, reason: 'rejected' })
+  })
+})
+
+describe('Auto の確認の印の検査 (026 / AD-066 / contracts C-1〜C-3)', () => {
+  const CONV = '22222222-2222-4222-8222-222222222222'
+  const resolvedAuto: ResolvedResume = {
+    conversationId: CONV,
+    folderId: 'f1',
+    runtimeId: 'r1',
+    providerId: null,
+    targetKey: 'host#0'
+  }
+  const autoCfg = (): SessionLaunchConfig => ({ ...cfg(), permissionMode: 'auto' })
+  const acks: readonly [string, unknown][] = [
+    ['欠け', undefined],
+    ['false', false],
+    ["'true'", 'true'],
+    ['1', 1]
+  ]
+
+  it.each(acks)('起動: autoModeAllowed false で印が %s なら拒否し、prepareLaunch を呼ばず枠も残さない', async (_n, ack) => {
+    let prepared = 0
+    const s = setup(async () => {
+      prepared += 1
+      return okPrep()
+    })
+    const o = await s.service.launch(autoCfg(), ack as boolean | undefined)
+    expect(o).toEqual({ status: 'rejected', reason: 'auto-mode-unconfirmed' })
+    expect(prepared).toBe(0)
+    expect(s.connection.launches).toHaveLength(0)
+  })
+
+  it('起動: 印が true なら通る。安全 3 値は印なしで通る', async () => {
+    const s = setup()
+    expect((await s.service.launch(autoCfg(), true)).status).toBe('launching')
+    expect((await s.service.launch(cfg())).status).toBe('launching')
+  })
+
+  it.each(acks)('再開: autoModeAllowed false で印が %s なら拒否し、起動しない', async (_n, ack) => {
+    const s = setup()
+    const o = await s.service.resume(autoCfg(), resolvedAuto, ack as boolean | undefined)
+    expect(o).toEqual({ status: 'rejected', reason: 'auto-mode-unconfirmed' })
+    expect(s.connection.launches).toHaveLength(0)
+    expect((await s.service.resume(autoCfg(), resolvedAuto, true)).status).toBe('launching')
+  })
+
+  it('再開: already-running は印の検査より先', async () => {
+    const s = setup()
+    const first = await s.service.resume(cfg(), resolvedAuto)
+    if (first.status !== 'launching') throw new Error('launch failed')
+    const o = await s.service.resume(autoCfg(), resolvedAuto)
+    expect(o).toEqual({ status: 'already-running', sessionId: first.sessionId })
+  })
+
+  it.each(acks)('実行中: autoModeAllowed false で印が %s なら拒否し、制御を送らず changing も立てない', async (_n, ack) => {
+    const s = liveSetup()
+    const id = await liveSession(s)
+    await expect(
+      s.service.setPermissionMode(id, 'auto', ack as boolean | undefined)
+    ).resolves.toEqual({ ok: false, reason: 'auto-mode-unconfirmed' })
+    expect(s.connection.controls).toHaveLength(0)
+    expect(s.service.liveSettingRow(id)?.changing).toBe(false)
+  })
+
+  it('実行中: 印が true なら制御を送る', async () => {
+    const s = liveSetup()
+    const id = await liveSession(s)
+    void s.service.setPermissionMode(id, 'auto', true)
+    expect(s.connection.controls).toContainEqual([
+      id,
+      { kind: 'set-permission-mode', requestId: REQ1, mode: 'auto' }
+    ])
+  })
+
+  it('U-6 (受け入れたリスク): autoModeAllowed true のランタイムでは印なしで起動・再開・実行中の Auto が通る', async () => {
+    const s = liveSetup(undefined, new Set(['r1']))
+    expect((await s.service.launch(autoCfg())).status).toBe('launching')
+    expect((await s.service.resume(autoCfg(), resolvedAuto)).status).toBe('launching')
+    const id = await liveSession(s)
+    void s.service.setPermissionMode(id, 'auto')
+    expect(s.connection.controls.some(([, c]) => c.kind === 'set-permission-mode')).toBe(true)
   })
 })
 

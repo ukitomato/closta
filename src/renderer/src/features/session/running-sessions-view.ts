@@ -33,18 +33,31 @@ export interface RunningSessionsView {
    * `autoModeAllowed` は返さない (表示に使わない。DTO の不変条件)。中央の権限モードの警告の帯の隔離の文言が使う。
    */
   readonly runtimeAutoMode: (runtimeId: string) => AutoModeStatus
+  /**
+   * runtimeId → Auto の確認が要るかの判定の入力 (`capabilities.autoModeAllowed`。026 / AD-066)。**ゲート用**で、表示には
+   * 使わない (文の選び分けは `runtimeAutoMode`)。一覧に無ければ `false` (確認が要る側)。
+   */
+  readonly runtimeAutoModeAllowed: (runtimeId: string) => boolean
   /** 登録フォルダの一覧 (読み込み中は null)。中央の空の状態と概要が使う。 */
   readonly folders: FolderListDTO | null
   /**
    * 起動ダイアログの起動。引けている作業フォルダの表示名を写す (O-1 FR-004)。`origin` は起動ダイアログが決めた
    * 起動元 (O-3 / 012 data-model §4「renderer の起動元」) で、ストアの `launch` を通って capability に届く。
    */
-  readonly launch: (config: SessionLaunchConfig, origin: LaunchOrigin) => Promise<void>
+  readonly launch: (
+    config: SessionLaunchConfig,
+    origin: LaunchOrigin,
+    autoModeAcknowledged: boolean
+  ) => Promise<void>
   /**
    * 再開の形の起動ダイアログの起動 (X-9 / data-model §9.4)。受け付けは新しい行を選んでダイアログを閉じ (シェル)、
    * `already-running` はその行を選んでダイアログを閉じ、`rejected` は理由を出して開いたままにする。
    */
-  readonly resume: (request: SessionResumeRequest, origin: LaunchOrigin) => Promise<void>
+  readonly resume: (
+    request: SessionResumeRequest,
+    origin: LaunchOrigin,
+    autoModeAcknowledged: boolean
+  ) => Promise<void>
 }
 
 export const RunningSessionsViewContext = createContext<RunningSessionsView | null>(null)

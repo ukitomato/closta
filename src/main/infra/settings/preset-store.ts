@@ -120,7 +120,7 @@ export function createPresetStore(
         const backupPath = await backup(raw)
         return { presets: [], skipped: 1, reasonKeys: ['schema-version-unknown'], backupPath }
       }
-      // 読める版は 1 と 2 (版 1 は新しい軸を既定で補って読み、読んだだけでは書き戻さない。024 / AD-064 Decision 4)。
+      // 読める版は 1・2・3 (版 1 は新しい軸を既定で補って読み、読んだだけでは書き戻さない。024 / AD-064 Decision 4)。
       const fileVersion = (SUPPORTED_PRESET_SCHEMA_VERSIONS as readonly unknown[]).includes(
         root.schemaVersion
       )

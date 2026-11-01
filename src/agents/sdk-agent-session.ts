@@ -40,12 +40,13 @@ import {
   type Win32LaunchSpec
 } from '@domain/session/agent-session'
 import {
-  assertSafePermissionMode,
+  assertSelectablePermissionMode,
   isSafePermissionMode,
+  isSelectablePermissionMode,
   isValidLaunchSessionName,
   isValidMaxBudgetUsd,
   isValidMaxTurns,
-  type SafePermissionMode
+  type SelectablePermissionMode
 } from '@domain/session/launch-config'
 import { toLiveAssistantMessage } from '@domain/session/live-message'
 import type {
@@ -96,7 +97,7 @@ import {
  *
  * | 規則 | 根拠 |
  * |---|---|
- * | **Agent SDK を呼ぶ場所。`query()` のみ** (戻り値 `Query` のメソッドは `interrupt()` と、安全 3 値の権限モード・カタログのモデルの切り替え (AD-062)。P3) | Principle IV / contracts C-4 |
+ * | **Agent SDK を呼ぶ場所。`query()` のみ** (戻り値 `Query` のメソッドは `interrupt()` と、許可の 4 値の権限モード・カタログのモデルの切り替え (AD-062)。P3) | Principle IV / contracts C-4 |
  * | **spawn 主体は本ファイル。** `spawnClaudeCodeProcess` コールバックで `child_process.spawn` する | AD-036 §3 / C-7 (`PROCESS_SPAWN_MODULES`) |
  * | **起動コマンド・接頭引数・claude パス・cwd・env は値 (`RuntimeLaunchSpec`) で受ける。リテラルを持たない** | `WSL_FREE_DIRECTORIES` / 検証項目 3 |
  * | **`electron` を import しない** | Principle VII / AD-010 |
@@ -114,14 +115,15 @@ import {
 
 /*
  * ── domain が手で持つ型と SDK 型の一致 (X-4 / AD-042 / design-gate R1 arch L-003) ──
- * domain は SDK を import できないため `EffortLevel` / `SafePermissionMode` を手書きしている。
+ * domain は SDK を import できないため `EffortLevel` / `SelectablePermissionMode` を手書きしている。
  * SDK を更新して値域が変わったら、ここが tsc で落ちる (AD-020 Consequences「版が上がれば型は増減する」)。
  */
 type Equal<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false
 const effortLevelMatchesSdk: Equal<EffortLevel, SdkEffortLevel> = true
-const safeModeIsSdkMode: SafePermissionMode extends SdkPermissionMode ? true : false = true
+const selectableModeIsSdkMode: SelectablePermissionMode extends SdkPermissionMode ? true : false =
+  true
 void effortLevelMatchesSdk
-void safeModeIsSdkMode
+void selectableModeIsSdkMode
 // 計量と失敗の理由の列挙 (O-4 / 014 data-model §2 / plan RK-05)。値域は domain の `meter.ts` と `session-core.ts` が持つ。
 type KnownPermissionModeKey = Exclude<PermissionModeKey, 'unknown'>
 type SdkRateLimitType = NonNullable<SDKRateLimitInfo['rateLimitType']>
@@ -178,7 +180,7 @@ type QueryMutationMethod =
   | 'getContextUsage'
   | 'usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET'
   | 'readFile'
-// 実行中の設定の切り替え (023 / AD-062 Decision 1)。権限モードは `assertSafePermissionMode` を通した安全 3 値だけ、
+// 実行中の設定の切り替え (023 / AD-062 Decision 1)。権限モードは `assertSelectablePermissionMode` を通した許可の 4 値だけ、
 // モデルはカタログの値だけを main が検証して送る。項目 16 が `.setPermissionMode(` の引数の包みを見る。
 type QueryLiveSettingMethod = 'setPermissionMode' | 'setModel'
 // 一覧の読み取り (025 / AD-065 Decision 1)。既定の Provider のモデルの一覧を `supportedModels()` で聞く。引数も副作用も無い。
@@ -319,7 +321,7 @@ function decodeLaunchOptions(
 ): LaunchQueryOptions | null {
   const o = asRecord(value)
   if (o === null) return null
-  if (!isSafePermissionMode(o.permissionMode)) return null
+  if (!isSelectablePermissionMode(o.permissionMode)) return null
   if (o.model !== undefined && !isValidModelId(o.model)) return null
   if (o.effort !== undefined && !isEffortLevel(o.effort)) return null
   // 再開する会話の id (X-9 / AD-059)。UUID の形でなければ起動しない。
@@ -345,7 +347,7 @@ function decodeLaunchOptions(
       return null
   }
   return {
-    permissionMode: assertSafePermissionMode(o.permissionMode),
+    permissionMode: assertSelectablePermissionMode(o.permissionMode),
     ...(o.model !== undefined ? { model: o.model } : {}),
     ...(o.effort !== undefined ? { effort: o.effort } : {}),
     ...(o.settings !== undefined ? { settings: assertHelperSettings(o.settings) } : {}),
@@ -794,7 +796,7 @@ async function run(
       if (control.kind === 'set-permission-mode') {
         const { mode } = control
         void handle
-          .setPermissionMode(assertSafePermissionMode(mode))
+          .setPermissionMode(assertSelectablePermissionMode(mode))
           .then(() => {
             signals.onPermissionModeApplied(mode)
             post({ kind: 'control-result', requestId, ok: true })
@@ -885,9 +887,9 @@ async function run(
 
   try {
     // 権限ゲートは正の構成 (allowlist) で組む。options のキー集合は buildQueryOptions が固定する (P1)。
-    // 各値は buildQueryOptions が assert し直す (安全 3 値・文字種・enum・2 キー射影)。
+    // 各値は buildQueryOptions が assert し直す (許可の 4 値・文字種・enum・2 キー射影)。
     const options = buildQueryOptions({
-      permissionMode: assertSafePermissionMode(launchOptions.permissionMode),
+      permissionMode: assertSelectablePermissionMode(launchOptions.permissionMode),
       canUseTool,
       pathToClaudeCodeExecutable: spec.pathToClaudeCodeExecutable,
       spawnClaudeCodeProcess,
@@ -978,12 +980,15 @@ async function run(
           if (message.subtype === 'init') {
             const initRecord = asRecord(message)
             const firstInit = !sawInit
-            // 再開の最初の `init` の権限モードが安全 3 値の外 (無いときも) なら fail closed (X-9 / FR-017 / data-model §6.3)。
+            // 再開の最初の `init` の権限モードが安全 3 値でも、起動で頼んだ値でもない (無いときも) なら fail closed (X-9 / FR-017 / data-model §6.3)。
             // 昇格の値の綴りを書かない。`resume-failed` で止め、会話の id は運ばない。
             if (
               firstInit &&
               launchOptions.resume !== undefined &&
-              !isSafePermissionMode(initRecord?.permissionMode)
+              !(
+                isSafePermissionMode(initRecord?.permissionMode) ||
+                initRecord?.permissionMode === launchOptions.permissionMode
+              )
             ) {
               fail('resume-failed')
               terminated = true

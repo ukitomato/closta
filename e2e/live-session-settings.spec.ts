@@ -150,3 +150,48 @@ test.describe('動いているセッションの権限モード (023)', () => {
     }
   })
 })
+
+test.describe('動いているセッションの Auto (026)', () => {
+  test('Auto を選ぶと確認が出て、取り消すと送らず選択が前のまま。承諾すると帯が出て、安全な値に戻すと確認なしで帯が消える (SC-001 / SC-004)', async () => {
+    const { app, page } = await launchApp()
+    try {
+      await reachSettledRow(page)
+
+      const select = page
+        .getByTestId('composer-live-settings')
+        .getByRole('combobox', { name: '権限モード' })
+      // 表記は直に書かず、選択から読む (権限モードの名前の表は 1 か所)。
+      const autoName = (await select.locator('option[value="auto"]').textContent()) ?? ''
+      expect(autoName).not.toBe('')
+      const confirmation = page.getByTestId('auto-mode-confirmation')
+      const banner = page.getByTestId('auto-mode-banner')
+
+      // 取り消す: 送られず (観測の値が変わらないので帯が出ない)、選択は前の値のまま。
+      await select.selectOption('auto')
+      await expect(confirmation).toBeVisible()
+      await expect(confirmation).toContainText(autoName)
+      await confirmation.getByRole('button').nth(1).click()
+      await expect(confirmation).toHaveCount(0)
+      await expect(select).toHaveValue('default')
+      await expect(banner).toHaveCount(0)
+
+      // 承諾する: 送られ、選択が Auto になり、帯が出る (警告の帯は出ない)。
+      await select.selectOption('auto')
+      await confirmation.getByRole('button', { name: autoName }).click()
+      await expect(confirmation).toHaveCount(0)
+      await expect(select).toHaveValue('auto')
+      await expect(banner).toBeVisible()
+      await expect(banner).toHaveAttribute('role', 'note')
+      await expect(page.getByTestId('unsafe-mode-banner')).toHaveCount(0)
+
+      // 安全 3 値に戻す: 確認なしで、帯が消える。
+      await select.selectOption('plan')
+      await expect(confirmation).toHaveCount(0)
+      await expect(select).toHaveValue('plan')
+      await expect(banner).toHaveCount(0)
+      await expect(page.getByTestId('live-setting-error')).toHaveCount(0)
+    } finally {
+      await app.close()
+    }
+  })
+})
