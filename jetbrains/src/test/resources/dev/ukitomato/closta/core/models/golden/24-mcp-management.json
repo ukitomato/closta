@@ -1,0 +1,18 @@
+{
+  "session": null,
+  "turns": [],
+  "usage": {
+    "sessionCostUsd": 0.0
+  },
+  "tasks": [],
+  "thinkingEstimate": null,
+  "notices": [
+    {
+      "kind": "CONTROL_ERROR",
+      "message": "Server not found: no-such-server",
+      "requestId": "24-mcp-management-req-9"
+    }
+  ],
+  "spontaneousResumeCount": 0,
+  "pendingApprovals": []
+}

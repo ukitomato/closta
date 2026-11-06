@@ -1,0 +1,195 @@
+package dev.ukitomato.closta.platforms.intellij.chat
+
+import com.intellij.icons.AllIcons
+import com.intellij.notification.Notification
+import com.intellij.notification.NotificationAction
+import com.intellij.notification.NotificationGroupManager
+import com.intellij.notification.NotificationType
+import com.intellij.openapi.Disposable
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.EDT
+import com.intellij.openapi.diagnostic.thisLogger
+import com.intellij.openapi.util.text.StringUtil
+import com.intellij.ui.SystemNotifications
+import dev.ukitomato.closta.core.models.ApprovalDecision
+import dev.ukitomato.closta.platforms.intellij.ClostaBundle
+import dev.ukitomato.closta.platforms.intellij.session.SessionView
+import dev.ukitomato.closta.platforms.intellij.sessions.showInSessions
+import dev.ukitomato.closta.platforms.intellij.thread.CardAnswer
+import dev.ukitomato.closta.platforms.intellij.thread.openEditDiff
+import dev.ukitomato.closta.presenter.view.AlertKind
+import dev.ukitomato.closta.presenter.view.FinishedAlert
+import dev.ukitomato.closta.presenter.view.OpenOnlyAlert
+import dev.ukitomato.closta.presenter.view.PermissionAlert
+import dev.ukitomato.closta.presenter.view.SessionAlert
+import dev.ukitomato.closta.presenter.view.allowPayload
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+/**
+ * The notifications about sessions the user does not see. What each session's changes raise is [AlertBook]'s: a
+ * session in view says nothing (its cards are in the conversation), and what still waits when it goes out of view
+ * ([hidden]) is raised then; one out of view raises a balloon in its project's window, and an IDE behind another
+ * application also tells the OS of what waits (not of a finished turn). What waits stays until it is answered
+ * ([WAITING], a sticky balloon); a finished turn is a balloon of its own group ([FINISHED]), so it can be turned off
+ * alone. A notification goes when what it was about is over (answered, or taken back by the CLI) or when it is used.
+ * Its words are escaped: a command's `<` or `&` is shown as written.
+ *
+ * Only a permission can be answered from its notification (Allow, Deny), through the same [ChatSource.respond] as its
+ * card, so the CLI is answered once whichever is pressed first. A plan, a question or an edit only opens the session.
+ *
+ * Owned by [ChatDirectory]; runs on the EDT.
+ */
+class SessionAlerts(
+    private val directory: ChatDirectory,
+    private val scope: CoroutineScope,
+    parent: Disposable,
+) {
+    private val book = AlertBook()
+    private val shown = HashMap<String, MutableMap<String, Notification>>()
+
+    private val failures =
+        CoroutineExceptionHandler { _, failure ->
+            thisLogger().warn("alerts: an answer failed (${failure.javaClass.name})")
+        }
+
+    init {
+        directory.onViewChanged(parent, ::changed)
+        scope.launch {
+            directory.entries.collect { entries ->
+                val open = entries.mapTo(HashSet()) { it.sessionId }
+                withContext(Dispatchers.EDT) { shown.keys.filter { it !in open }.forEach(::forget) }
+            }
+        }
+    }
+
+    private fun changed(
+        entry: ChatDirectory.Entry,
+        view: SessionView,
+    ) {
+        val id = entry.sessionId
+        val change = book.changed(id, view.conversation to view.transcript, directory.isVisible(id))
+        val mine = shown.getOrPut(id) { HashMap() }
+        change.expired.forEach { key -> mine.remove(key)?.expire() }
+        change.raised.forEach { alert -> raise(entry, alert, mine) }
+    }
+
+    /** The session [sessionId] went out of view: what still waits in it and was not notified is notified now. */
+    fun hidden(sessionId: String) {
+        val entry = directory.entries.value.firstOrNull { it.sessionId == sessionId } ?: return
+        val mine = shown.getOrPut(sessionId) { HashMap() }
+        book.hidden(sessionId).forEach { alert -> raise(entry, alert, mine) }
+    }
+
+    private fun raise(
+        entry: ChatDirectory.Entry,
+        alert: SessionAlert,
+        mine: MutableMap<String, Notification>,
+    ) {
+        val text = alertText(entry.title, alert)
+        val waits = alert !is FinishedAlert
+        val notification =
+            NotificationGroupManager
+                .getInstance()
+                .getNotificationGroup(if (waits) WAITING else FINISHED)
+                .createNotification(
+                    text.htmlTitle,
+                    text.htmlBody,
+                    if (waits) NotificationType.WARNING else NotificationType.INFORMATION,
+                ).setDisplayId(displayIdOf(alert))
+                .setIcon(if (waits) AllIcons.General.Warning else AllIcons.Status.Success)
+        if (waits) {
+            notification.setImportant(true)
+            notification.setSuggestionType(true)
+        }
+        if (alert is PermissionAlert && text.answerable) {
+            notification.addAction(answer(ClostaBundle.message("chat.alert.allow"), entry, alert, allow = true))
+            notification.addAction(answer(ClostaBundle.message("chat.alert.deny"), entry, alert, allow = false))
+        }
+        if (alert is OpenOnlyAlert && alert.what == AlertKind.EDIT) {
+            notification.addAction(
+                NotificationAction.createSimple(ClostaBundle.message("thread.permission.openDiff")) {
+                    entry.source.view.value.transcript.approvals[alert.requestId]
+                        ?.let { openEditDiff(entry.project, it) }
+                },
+            )
+        }
+        notification.addAction(
+            NotificationAction.createSimpleExpiring(OPEN_CONVERSATION) {
+                bringAndShow(entry.project, entry.sessionId)
+            },
+        )
+        mine.remove(alert.key)?.expire()
+        mine[alert.key] = notification
+        notification.whenExpired { mine.remove(alert.key, notification) }
+        notification.notify(entry.project)
+        if (wantsOsNotice(alert) && !ApplicationManager.getApplication().isActive) {
+            SystemNotifications.getInstance().notify(WAITING, text.title, text.body)
+        }
+    }
+
+    private fun answer(
+        label: String,
+        entry: ChatDirectory.Entry,
+        alert: PermissionAlert,
+        allow: Boolean,
+    ) = NotificationAction.createSimpleExpiring(label) {
+        val approval = entry.source.view.value.transcript.approvals[alert.requestId]
+        if (approval != null) {
+            val answer =
+                if (allow) {
+                    CardAnswer(alert.requestId, ApprovalDecision.Allow(alert.requestId), allowPayload(approval))
+                } else {
+                    CardAnswer(alert.requestId, ApprovalDecision.Deny(alert.requestId), "")
+                }
+            scope.launch(failures) { entry.source.respond(answer) }
+        }
+    }
+
+    /**
+     * The last screen of [entry]'s session closed while it runs: it goes on, and the Sessions window is where it is
+     * watched. A balloon, no modal.
+     */
+    fun keepsRunning(entry: ChatDirectory.Entry) {
+        NotificationGroupManager
+            .getInstance()
+            .getNotificationGroup(GENERAL)
+            .createNotification(
+                ClostaBundle.message("chat.alert.keepsRunning", StringUtil.escapeXmlEntities(entry.title)),
+                ClostaBundle.message("chat.alert.keepsRunning.body"),
+                NotificationType.INFORMATION,
+            ).setDisplayId("closta.alert.keepsRunning")
+            .addAction(
+                NotificationAction.createSimpleExpiring(ClostaBundle.message("chat.alert.showInSessions")) {
+                    showInSessions(entry.project, entry.sessionId)
+                },
+            ).notify(entry.project)
+    }
+
+    private fun forget(sessionId: String) {
+        book.forget(sessionId)
+        shown
+            .remove(sessionId)
+            ?.values
+            ?.toList()
+            ?.forEach(Notification::expire)
+    }
+
+    private companion object {
+        /** The groups of plugin.xml: what waits for an answer, and a finished turn. */
+        const val WAITING = "Closta.Waiting"
+        const val FINISHED = "Closta.Finished"
+        const val GENERAL = "Closta"
+        val OPEN_CONVERSATION: String get() = ClostaBundle.message("notify.openConversation")
+
+        fun displayIdOf(alert: SessionAlert): String =
+            when (alert) {
+                is PermissionAlert -> "closta.alert.permission"
+                is OpenOnlyAlert -> "closta.alert." + alert.what.name.lowercase()
+                is FinishedAlert -> "closta.alert.finished"
+            }
+    }
+}

@@ -1,0 +1,25 @@
+{
+  "session": {
+    "sessionId": "731a914e-65b8-41f4-adff-2e24312da8db",
+    "model": "claude-sonnet-4-6",
+    "permissionMode": "default",
+    "cwd": "/tmp/closta-rec-15-ask-afktimeout-updatedinput-4mzF7q/cwd",
+    "version": "2.1.282"
+  },
+  "turns": [
+    {
+      "commandUuid": "9a175bc6-2061-448e-bca8-11e14616c7d7",
+      "phase": "CLOSED",
+      "incompleteReason": null,
+      "lifecycleDone": false
+    }
+  ],
+  "usage": {
+    "sessionCostUsd": 0.06424
+  },
+  "tasks": [],
+  "thinkingEstimate": null,
+  "notices": [],
+  "spontaneousResumeCount": 0,
+  "pendingApprovals": []
+}

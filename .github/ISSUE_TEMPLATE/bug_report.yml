@@ -1,0 +1,53 @@
+name: Bug report
+description: Something does not work as expected
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: input
+    id: closta
+    attributes:
+      label: Closta version
+    validations:
+      required: true
+  - type: input
+    id: ide
+    attributes:
+      label: IDE and version
+      placeholder: IntelliJ IDEA 2026.2.4
+    validations:
+      required: true
+  - type: input
+    id: cli
+    attributes:
+      label: claude CLI version
+      description: The output of `claude --version`.
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      placeholder: macOS 26, Windows 11 (WSL Ubuntu 26.04), ...
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Provider
+      options:
+        - Anthropic
+        - Amazon Bedrock
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: The Closta lines of idea.log (Help | Show Log). Remove anything private first.
+      render: text

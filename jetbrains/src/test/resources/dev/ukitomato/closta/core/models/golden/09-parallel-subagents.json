@@ -1,0 +1,44 @@
+{
+  "session": {
+    "sessionId": "5c2f83e3-e0bd-4b2a-a2bd-cb433cadf08b",
+    "model": "claude-sonnet-4-6",
+    "permissionMode": "default",
+    "cwd": "/tmp/closta-rec-09-parallel-subagents-qTjxkC/cwd",
+    "version": "2.1.282"
+  },
+  "turns": [
+    {
+      "commandUuid": "9749ceb1-cba1-4b7a-bd66-b7c9869c5555",
+      "phase": "CLOSED",
+      "incompleteReason": null,
+      "lifecycleDone": false
+    }
+  ],
+  "usage": {
+    "sessionCostUsd": 0.11178389999999999
+  },
+  "tasks": [
+    {
+      "taskId": "a4619b729b9b896fd",
+      "parentToolUseId": "toolu_01Lb8Pj8ffuCwbUXBNu6tpZe",
+      "subagentType": "Explore",
+      "isBackgrounded": false,
+      "spawnDepth": 1,
+      "status": "COMPLETE",
+      "incompleteReason": null
+    },
+    {
+      "taskId": "a1d39379fe2f86ca9",
+      "parentToolUseId": "toolu_01AeVtuqRUaWjxrAn4eN4CtA",
+      "subagentType": "Explore",
+      "isBackgrounded": false,
+      "spawnDepth": 1,
+      "status": "COMPLETE",
+      "incompleteReason": null
+    }
+  ],
+  "thinkingEstimate": 135,
+  "notices": [],
+  "spontaneousResumeCount": 0,
+  "pendingApprovals": []
+}

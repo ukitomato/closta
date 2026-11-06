@@ -1,0 +1,42 @@
+{
+  "session": {
+    "sessionId": "c10dfa25-9bdb-4a95-9ec3-fbc5f52917f0",
+    "model": "claude-opus-5-5",
+    "permissionMode": "default",
+    "cwd": "/tmp/closta-rec-30-deny-empty-message-mAUl7z/cwd",
+    "version": "2.1.282"
+  },
+  "turns": [
+    {
+      "commandUuid": "8d732e9c-2fa1-4513-8fe3-97c112ee7c62",
+      "phase": "CLOSED",
+      "incompleteReason": "API Error: 400 messages.3.content.0.tool_result: content cannot be empty if `is_error` is true",
+      "lifecycleDone": false
+    },
+    {
+      "commandUuid": "066f127b-36a3-42b5-9d94-03e1ae03d357",
+      "phase": "CLOSED",
+      "incompleteReason": "API Error: 400 messages.3.content.0.tool_result: content cannot be empty if `is_error` is true",
+      "lifecycleDone": false
+    }
+  ],
+  "usage": {
+    "sessionCostUsd": 0.123972
+  },
+  "tasks": [],
+  "thinkingEstimate": null,
+  "notices": [
+    {
+      "kind": "ERROR",
+      "message": "API Error: 400 messages.3.content.0.tool_result: content cannot be empty if `is_error` is true",
+      "requestId": null
+    },
+    {
+      "kind": "ERROR",
+      "message": "API Error: 400 messages.3.content.0.tool_result: content cannot be empty if `is_error` is true",
+      "requestId": null
+    }
+  ],
+  "spontaneousResumeCount": 0,
+  "pendingApprovals": []
+}

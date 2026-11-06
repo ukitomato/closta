@@ -1,0 +1,10 @@
+.DS_Store
+.idea
+
+# Gradle / IntelliJ Platform (jetbrains/)
+.gradle
+.kotlin
+.intellijPlatform
+build
+
+node_modules/

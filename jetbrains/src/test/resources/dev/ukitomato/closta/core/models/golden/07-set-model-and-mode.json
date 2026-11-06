@@ -1,0 +1,18 @@
+{
+  "session": null,
+  "turns": [],
+  "usage": {
+    "sessionCostUsd": 0.0
+  },
+  "tasks": [],
+  "thinkingEstimate": null,
+  "notices": [
+    {
+      "kind": "CONTROL_ERROR",
+      "message": "Cannot set permission mode to bypassPermissions because it is disabled by settings or configuration",
+      "requestId": "07-set-model-and-mode-req-8"
+    }
+  ],
+  "spontaneousResumeCount": 0,
+  "pendingApprovals": []
+}

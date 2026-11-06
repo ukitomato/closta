@@ -1,0 +1,35 @@
+{
+  "session": {
+    "sessionId": "fce28e10-6bc6-4e04-857a-e494a7942f85",
+    "model": "claude-sonnet-4-6",
+    "permissionMode": "default",
+    "cwd": "/tmp/closta-rec-08-subagent-task-Daljzb/cwd",
+    "version": "2.1.282"
+  },
+  "turns": [
+    {
+      "commandUuid": "7bc9256d-6b9f-4dad-b58c-620568c6abaf",
+      "phase": "CLOSED",
+      "incompleteReason": null,
+      "lifecycleDone": false
+    }
+  ],
+  "usage": {
+    "sessionCostUsd": 0.10877099999999999
+  },
+  "tasks": [
+    {
+      "taskId": "a9647d7f101779f28",
+      "parentToolUseId": "toolu_016keAu5ZSgNCvYmxd6wGT6w",
+      "subagentType": "Explore",
+      "isBackgrounded": false,
+      "spawnDepth": 1,
+      "status": "COMPLETE",
+      "incompleteReason": null
+    }
+  ],
+  "thinkingEstimate": null,
+  "notices": [],
+  "spontaneousResumeCount": 0,
+  "pendingApprovals": []
+}

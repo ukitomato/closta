@@ -1,0 +1,342 @@
+{
+  "threads": {
+    "order": [
+      "thread-1"
+    ],
+    "byId": {
+      "thread-1": {
+        "id": "thread-1",
+        "isRunning": false,
+        "messages": {
+          "order": [
+            "send-1",
+            "40cc3c71-e383-4bc1-9bef-0c9c972479fb"
+          ],
+          "byId": {
+            "send-1": {
+              "id": "send-1",
+              "role": "user",
+              "parts": {
+                "order": [
+                  "send-1:0"
+                ],
+                "byId": {
+                  "send-1:0": {
+                    "type": "text",
+                    "text": "Run this exact bash command and report its output: echo hello-from-capture"
+                  }
+                }
+              }
+            },
+            "40cc3c71-e383-4bc1-9bef-0c9c972479fb": {
+              "id": "40cc3c71-e383-4bc1-9bef-0c9c972479fb",
+              "role": "assistant",
+              "status": {
+                "type": "complete",
+                "reason": "stop"
+              },
+              "parts": {
+                "order": [
+                  "msg_011CfPnzioEtUvyfNaD2b9NP:0",
+                  "msg_011CfPnzioEtUvyfNaD2b9NP:1",
+                  "toolu_01M1wzh6sucheWf2EB5A36Mq",
+                  "msg_011CfPnzw3hAfuADqGisTb9y:0"
+                ],
+                "byId": {
+                  "msg_011CfPnzioEtUvyfNaD2b9NP:0": {
+                    "type": "reasoning",
+                    "text": "",
+                    "status": {
+                      "type": "complete"
+                    }
+                  },
+                  "msg_011CfPnzioEtUvyfNaD2b9NP:1": {
+                    "type": "text",
+                    "text": "指定されたコマンドを実行します。",
+                    "status": {
+                      "type": "complete"
+                    }
+                  },
+                  "toolu_01M1wzh6sucheWf2EB5A36Mq": {
+                    "type": "tool-call",
+                    "toolCallId": "toolu_01M1wzh6sucheWf2EB5A36Mq",
+                    "toolName": "Bash",
+                    "argsText": "{\"command\": \"echo hello-from-capture\", \"description\": \"Run the specified echo command\"}",
+                    "args": {
+                      "command": "echo hello-from-capture",
+                      "description": "Run the specified echo command"
+                    },
+                    "result": "hello-from-capture",
+                    "isError": false,
+                    "status": {
+                      "type": "complete"
+                    }
+                  },
+                  "msg_011CfPnzw3hAfuADqGisTb9y:0": {
+                    "type": "text",
+                    "text": "コマンドの出力は以下の通りです：\n\n```\nhello-from-capture\n```",
+                    "status": {
+                      "type": "complete"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "session": {
+          "model": "claude-sonnet-4-6",
+          "permissionMode": "default",
+          "cwd": "/tmp/closta-rec-02-tool-bash-autorun-JRgrdU/cwd",
+          "version": "2.1.282"
+        },
+        "usage": {
+          "costUsd": 0.06119309999999999,
+          "inputTokens": 894,
+          "outputTokens": 167,
+          "cacheReadInputTokens": 32387,
+          "cacheCreationInputTokens": 8040
+        },
+        "commands": [
+          {
+            "name": "android-cli",
+            "description": ""
+          },
+          {
+            "name": "skill-creator",
+            "description": ""
+          },
+          {
+            "name": "design",
+            "description": ""
+          },
+          {
+            "name": "design-sync",
+            "description": ""
+          },
+          {
+            "name": "dataviz",
+            "description": ""
+          },
+          {
+            "name": "update-config",
+            "description": ""
+          },
+          {
+            "name": "verify",
+            "description": ""
+          },
+          {
+            "name": "debug",
+            "description": ""
+          },
+          {
+            "name": "code-review",
+            "description": ""
+          },
+          {
+            "name": "simplify",
+            "description": ""
+          },
+          {
+            "name": "batch",
+            "description": ""
+          },
+          {
+            "name": "fewer-permission-prompts",
+            "description": ""
+          },
+          {
+            "name": "doctor",
+            "description": ""
+          },
+          {
+            "name": "loop",
+            "description": ""
+          },
+          {
+            "name": "claude-api",
+            "description": ""
+          },
+          {
+            "name": "run",
+            "description": ""
+          },
+          {
+            "name": "run-skill-generator",
+            "description": ""
+          },
+          {
+            "name": "advisor",
+            "description": ""
+          },
+          {
+            "name": "agents",
+            "description": ""
+          },
+          {
+            "name": "auto-mode-setup",
+            "description": ""
+          },
+          {
+            "name": "autocompact",
+            "description": ""
+          },
+          {
+            "name": "clear",
+            "description": ""
+          },
+          {
+            "name": "color",
+            "description": ""
+          },
+          {
+            "name": "compact",
+            "description": ""
+          },
+          {
+            "name": "config",
+            "description": ""
+          },
+          {
+            "name": "output-style",
+            "description": ""
+          },
+          {
+            "name": "context",
+            "description": ""
+          },
+          {
+            "name": "effort",
+            "description": ""
+          },
+          {
+            "name": "fast",
+            "description": ""
+          },
+          {
+            "name": "focus",
+            "description": ""
+          },
+          {
+            "name": "heapdump",
+            "description": ""
+          },
+          {
+            "name": "init",
+            "description": ""
+          },
+          {
+            "name": "mcp",
+            "description": ""
+          },
+          {
+            "name": "import",
+            "description": ""
+          },
+          {
+            "name": "model",
+            "description": ""
+          },
+          {
+            "name": "__remote-workflow",
+            "description": ""
+          },
+          {
+            "name": "workflow-launch-exec",
+            "description": ""
+          },
+          {
+            "name": "reload-plugins",
+            "description": ""
+          },
+          {
+            "name": "reload-skills",
+            "description": ""
+          },
+          {
+            "name": "rename",
+            "description": ""
+          },
+          {
+            "name": "security-review",
+            "description": ""
+          },
+          {
+            "name": "usage-credits",
+            "description": ""
+          },
+          {
+            "name": "extra-usage",
+            "description": ""
+          },
+          {
+            "name": "usage",
+            "description": ""
+          },
+          {
+            "name": "insights",
+            "description": ""
+          },
+          {
+            "name": "recap",
+            "description": ""
+          },
+          {
+            "name": "skill-doctor",
+            "description": ""
+          },
+          {
+            "name": "goal",
+            "description": ""
+          },
+          {
+            "name": "design-consent",
+            "description": ""
+          },
+          {
+            "name": "design-revoke",
+            "description": ""
+          },
+          {
+            "name": "list-agents",
+            "description": ""
+          },
+          {
+            "name": "team-onboarding",
+            "description": ""
+          },
+          {
+            "name": "anthropic-skills:docx",
+            "description": ""
+          },
+          {
+            "name": "anthropic-skills:import-memory",
+            "description": ""
+          },
+          {
+            "name": "anthropic-skills:morning",
+            "description": ""
+          },
+          {
+            "name": "anthropic-skills:pdf",
+            "description": ""
+          },
+          {
+            "name": "anthropic-skills:pptx",
+            "description": ""
+          },
+          {
+            "name": "anthropic-skills:skill-creator",
+            "description": ""
+          },
+          {
+            "name": "anthropic-skills:xlsx",
+            "description": ""
+          }
+        ],
+        "compacting": false
+      }
+    }
+  }
+}

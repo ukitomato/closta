@@ -1,0 +1,25 @@
+{
+  "session": {
+    "sessionId": "fb9a9510-c675-4e89-83cb-4b428d00927a",
+    "model": "claude-sonnet-4-6",
+    "permissionMode": "default",
+    "cwd": "/tmp/closta-rec-02-tool-bash-autorun-JRgrdU/cwd",
+    "version": "2.1.282"
+  },
+  "turns": [
+    {
+      "commandUuid": "40cc3c71-e383-4bc1-9bef-0c9c972479fb",
+      "phase": "CLOSED",
+      "incompleteReason": null,
+      "lifecycleDone": false
+    }
+  ],
+  "usage": {
+    "sessionCostUsd": 0.06119309999999999
+  },
+  "tasks": [],
+  "thinkingEstimate": null,
+  "notices": [],
+  "spontaneousResumeCount": 0,
+  "pendingApprovals": []
+}

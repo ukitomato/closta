@@ -1,0 +1,50 @@
+{
+  "session": {
+    "sessionId": "eac4893e-ae9b-4a0a-a3ce-a0aa4dbce9b2",
+    "model": "claude-sonnet-4-6",
+    "permissionMode": "acceptEdits",
+    "cwd": "/tmp/closta-rec-11-background-followup-7dbFms/cwd",
+    "version": "2.1.282"
+  },
+  "turns": [
+    {
+      "commandUuid": "fd3865b0-030e-4f83-b5c7-f125be3a58e3",
+      "phase": "CLOSED",
+      "incompleteReason": null,
+      "lifecycleDone": false
+    },
+    {
+      "commandUuid": "461f6ba9-5e7c-40e6-a4a1-3f13ab7dfc93",
+      "phase": "CLOSED",
+      "incompleteReason": null,
+      "lifecycleDone": false
+    }
+  ],
+  "usage": {
+    "sessionCostUsd": 0.14246885
+  },
+  "tasks": [
+    {
+      "taskId": "afe8b12cd82dfe23d",
+      "parentToolUseId": "toolu_012ff2DtmxUVLBJ4Jx1jHcLL",
+      "subagentType": "general-purpose",
+      "isBackgrounded": true,
+      "spawnDepth": 1,
+      "status": "COMPLETE",
+      "incompleteReason": null
+    },
+    {
+      "taskId": "by9ss6515",
+      "parentToolUseId": "toolu_01CGQy26qg8WnmzLuMKpQs9L",
+      "subagentType": null,
+      "isBackgrounded": true,
+      "spawnDepth": null,
+      "status": "COMPLETE",
+      "incompleteReason": null
+    }
+  ],
+  "thinkingEstimate": null,
+  "notices": [],
+  "spontaneousResumeCount": 2,
+  "pendingApprovals": []
+}

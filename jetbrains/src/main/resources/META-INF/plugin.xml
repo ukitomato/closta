@@ -1,0 +1,73 @@
+<!-- id / name / version / description / vendor / idea-version are patched in from build.gradle.kts. -->
+<idea-plugin>
+    <resource-bundle>messages.ClostaBundle</resource-bundle>
+    <depends>com.intellij.modules.platform</depends>
+    <!-- The IDE's own commonmark (through Jewel's Markdown modules) for the thread's Markdown; none of it is packed. -->
+    <dependencies>
+        <module name="intellij.platform.jewel.markdown.core"/>
+        <module name="intellij.platform.jewel.markdown.extensions.gfmTables"/>
+        <!-- A turn's changes go to the IDE's combined diff as VCS changes. -->
+        <module name="intellij.platform.vcs.impl"/>
+    </dependencies>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <toolWindow id="Closta" anchor="right" icon="/icons/closta.svg"
+                    factoryClass="dev.ukitomato.closta.platforms.intellij.ui.ClostaToolWindowFactory"/>
+        <toolWindow id="Closta.Sessions" anchor="bottom" icon="/icons/closta.svg"
+                    factoryClass="dev.ukitomato.closta.platforms.intellij.sessions.SessionsToolWindowFactory"/>
+        <applicationConfigurable parentId="tools" id="dev.ukitomato.closta.providers" displayName="Closta"
+                                 instance="dev.ukitomato.closta.platforms.intellij.settings.ProvidersConfigurable"/>
+        <applicationConfigurable parentId="dev.ukitomato.closta.providers"
+                                 id="dev.ukitomato.closta.behaviour" key="settings.behaviour.displayName"
+                                 instance="dev.ukitomato.closta.platforms.intellij.settings.BehaviourConfigurable"/>
+        <!-- What waits for an answer stays until it is answered; a finished turn can be turned off alone. "Closta" is
+             the rest (a worktree's failure, a measurement's result): WorktreeChat.kt and IdeBridgeService.kt use it.
+             The settings name a group by its key in the bundle, else by its id: these have no key yet. -->
+        <notificationGroup id="Closta.Waiting" displayType="STICKY_BALLOON" hideFromSettings="true"/>
+        <notificationGroup id="Closta.Finished" displayType="BALLOON"/>
+        <notificationGroup id="Closta" displayType="BALLOON"/>
+        <fileEditorProvider implementation="dev.ukitomato.closta.platforms.intellij.chat.ChatFileEditorProvider"/>
+        <editorTabTitleProvider implementation="dev.ukitomato.closta.platforms.intellij.chat.ChatTabTitles"/>
+        <fileIconProvider implementation="dev.ukitomato.closta.platforms.intellij.chat.ChatTabIcons"/>
+        <fileEditorProvider implementation="dev.ukitomato.closta.platforms.intellij.bench.BaselineEditorProvider"/>
+        <!-- Does nothing unless the IDE is started with -Dclosta.gallery (a development aid: bench/Gallery.kt). -->
+        <postStartupActivity implementation="dev.ukitomato.closta.platforms.intellij.bench.Gallery"/>
+    </extensions>
+    <actions>
+        <!-- Text and description: the bundle's action.<id>.text and action.<id>.description. -->
+        <group id="Closta.Tools" popup="true" text="Closta" icon="/icons/closta.svg">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+            <action id="Closta.NewChat" class="dev.ukitomato.closta.platforms.intellij.chat.NewChatAction"
+                    icon="/icons/closta.svg">
+                <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt shift O"/>
+                <synonym text="Claude"/>
+                <synonym text="New Chat"/>
+                <synonym text="New Conversation"/>
+            </action>
+            <action id="Closta.NewSidebarChat" class="dev.ukitomato.closta.platforms.intellij.chat.NewSidebarChatAction"
+                    icon="AllIcons.General.Add">
+                <synonym text="Claude"/>
+                <synonym text="New Chat in Sidebar"/>
+            </action>
+            <action id="Closta.NewWorktreeChat" class="dev.ukitomato.closta.platforms.intellij.chat.NewWorktreeChatAction"
+                    icon="AllIcons.Vcs.Branch">
+                <synonym text="Claude"/>
+                <synonym text="New Worktree Chat"/>
+            </action>
+            <action id="Closta.ResumeChat" class="dev.ukitomato.closta.platforms.intellij.chat.ResumeChatAction"
+                    icon="AllIcons.Vcs.History">
+                <synonym text="Claude"/>
+                <synonym text="Resume"/>
+                <synonym text="Resume Chat"/>
+            </action>
+            <action id="Closta.NextWaiting" class="dev.ukitomato.closta.platforms.intellij.sessions.NextWaitingAction"
+                    icon="AllIcons.Actions.Forward">
+                <keyboard-shortcut keymap="$default" first-keystroke="control alt shift PERIOD"/>
+                <synonym text="Claude"/>
+                <synonym text="Next Waiting Session"/>
+            </action>
+            <!-- A development aid: BenchmarkAction.update shows it only in an internal IDE or with -Dclosta.dev=true. -->
+            <action id="Closta.Benchmark" class="dev.ukitomato.closta.platforms.intellij.bench.BenchmarkAction"/>
+        </group>
+    </actions>
+</idea-plugin>

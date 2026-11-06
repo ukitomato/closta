@@ -1,0 +1,44 @@
+{
+  "session": {
+    "sessionId": "76a6edd3-0a70-4ea1-bf26-b450e57ed9df",
+    "model": "claude-sonnet-4-6",
+    "permissionMode": "acceptEdits",
+    "cwd": "/tmp/closta-rec-19-interrupt-background-redNTo/cwd",
+    "version": "2.1.282"
+  },
+  "turns": [
+    {
+      "commandUuid": "8ad97fc5-1aa3-4d56-ae5a-94542ac5abb9",
+      "phase": "CLOSED",
+      "incompleteReason": null,
+      "lifecycleDone": false
+    }
+  ],
+  "usage": {
+    "sessionCostUsd": 0.0571566
+  },
+  "tasks": [
+    {
+      "taskId": "a93bceb6a3ac22e00",
+      "parentToolUseId": "toolu_01SrxdstgpuYFysF8YNmXBXQ",
+      "subagentType": "general-purpose",
+      "isBackgrounded": true,
+      "spawnDepth": 1,
+      "status": "INCOMPLETE",
+      "incompleteReason": "stopped"
+    },
+    {
+      "taskId": "bmbzape55",
+      "parentToolUseId": "toolu_01JQzJgds9jxAZS6KpB3yPYh",
+      "subagentType": null,
+      "isBackgrounded": true,
+      "spawnDepth": null,
+      "status": "INCOMPLETE",
+      "incompleteReason": "stopped"
+    }
+  ],
+  "thinkingEstimate": null,
+  "notices": [],
+  "spontaneousResumeCount": 0,
+  "pendingApprovals": []
+}

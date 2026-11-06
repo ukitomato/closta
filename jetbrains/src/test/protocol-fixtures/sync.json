@@ -1,0 +1,5254 @@
+{
+  "cases": [
+    {
+      "name": "a turn streams in after the first snapshot",
+      "steps": [
+        {
+          "input": {
+            "type": "capabilities",
+            "names": [
+              "interrupt",
+              "approvals"
+            ]
+          },
+          "expect": {
+            "outcome": "capabilities",
+            "mode": "awaiting",
+            "cursor": null
+          }
+        },
+        {
+          "input": {
+            "type": "theme",
+            "kind": "dark",
+            "tokens": {
+              "--background": "#1e1f22",
+              "--foreground": "#dfe1e5"
+            }
+          },
+          "expect": {
+            "outcome": "theme",
+            "mode": "awaiting",
+            "cursor": null
+          }
+        },
+        {
+          "input": {
+            "type": "snapshot",
+            "protocol": 1,
+            "epoch": "e1",
+            "seq": 0,
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "expect": {
+            "outcome": "replace",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 0
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "patch",
+            "epoch": "e1",
+            "seq": 1,
+            "ops": [
+              {
+                "type": "set",
+                "path": [
+                  "threads",
+                  "byId",
+                  "t1",
+                  "messages",
+                  "byId",
+                  "a1"
+                ],
+                "value": {
+                  "id": "a1",
+                  "role": "assistant",
+                  "parts": {
+                    "order": [
+                      "p1"
+                    ],
+                    "byId": {
+                      "p1": {
+                        "type": "text",
+                        "text": "The build ",
+                        "status": {
+                          "type": "running"
+                        }
+                      }
+                    }
+                  },
+                  "status": {
+                    "type": "running"
+                  }
+                }
+              },
+              {
+                "type": "set",
+                "path": [
+                  "threads",
+                  "byId",
+                  "t1",
+                  "messages",
+                  "order"
+                ],
+                "value": [
+                  "u1",
+                  "a1"
+                ]
+              },
+              {
+                "type": "set",
+                "path": [
+                  "threads",
+                  "byId",
+                  "t1",
+                  "isRunning"
+                ],
+                "value": true
+              }
+            ]
+          },
+          "expect": {
+            "outcome": "apply",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 1
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": true,
+                    "messages": {
+                      "order": [
+                        "u1",
+                        "a1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        },
+                        "a1": {
+                          "id": "a1",
+                          "role": "assistant",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "The build ",
+                                "status": {
+                                  "type": "running"
+                                }
+                              }
+                            }
+                          },
+                          "status": {
+                            "type": "running"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "patch",
+            "epoch": "e1",
+            "seq": 2,
+            "ops": [
+              {
+                "type": "append-text",
+                "path": [
+                  "threads",
+                  "byId",
+                  "t1",
+                  "messages",
+                  "byId",
+                  "a1",
+                  "parts",
+                  "byId",
+                  "p1",
+                  "text"
+                ],
+                "value": "runs Gradle."
+              }
+            ]
+          },
+          "expect": {
+            "outcome": "apply",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 2
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": true,
+                    "messages": {
+                      "order": [
+                        "u1",
+                        "a1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        },
+                        "a1": {
+                          "id": "a1",
+                          "role": "assistant",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "The build runs Gradle.",
+                                "status": {
+                                  "type": "running"
+                                }
+                              }
+                            }
+                          },
+                          "status": {
+                            "type": "running"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "patch",
+            "epoch": "e1",
+            "seq": 3,
+            "ops": [
+              {
+                "type": "set",
+                "path": [
+                  "threads",
+                  "byId",
+                  "t1",
+                  "messages",
+                  "byId",
+                  "a1",
+                  "parts",
+                  "byId",
+                  "p1",
+                  "status"
+                ],
+                "value": {
+                  "type": "complete"
+                }
+              },
+              {
+                "type": "set",
+                "path": [
+                  "threads",
+                  "byId",
+                  "t1",
+                  "messages",
+                  "byId",
+                  "a1",
+                  "status"
+                ],
+                "value": {
+                  "type": "complete",
+                  "reason": "stop"
+                }
+              },
+              {
+                "type": "set",
+                "path": [
+                  "threads",
+                  "byId",
+                  "t1",
+                  "isRunning"
+                ],
+                "value": false
+              }
+            ]
+          },
+          "expect": {
+            "outcome": "apply",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 3
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1",
+                        "a1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        },
+                        "a1": {
+                          "id": "a1",
+                          "role": "assistant",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "The build runs Gradle.",
+                                "status": {
+                                  "type": "complete"
+                                }
+                              }
+                            }
+                          },
+                          "status": {
+                            "type": "complete",
+                            "reason": "stop"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "dropped": {}
+    },
+    {
+      "name": "an approval sits on its tool call and is resolved there",
+      "steps": [
+        {
+          "input": {
+            "type": "snapshot",
+            "protocol": 1,
+            "epoch": "e1",
+            "seq": 7,
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": true,
+                    "messages": {
+                      "order": [
+                        "u1",
+                        "a2"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        },
+                        "a2": {
+                          "id": "a2",
+                          "role": "assistant",
+                          "parts": {
+                            "order": [
+                              "toolu_01"
+                            ],
+                            "byId": {
+                              "toolu_01": {
+                                "type": "tool-call",
+                                "toolCallId": "toolu_01",
+                                "toolName": "Bash",
+                                "argsText": "{\"command\":\"./gradlew check\"}",
+                                "args": {
+                                  "command": "./gradlew check"
+                                },
+                                "status": {
+                                  "type": "requires-action",
+                                  "reason": "interrupt"
+                                },
+                                "approval": {
+                                  "id": "req-1",
+                                  "display": "decision",
+                                  "options": [
+                                    {
+                                      "id": "allow",
+                                      "kind": "allow-once",
+                                      "grants": [
+                                        "Bash(./gradlew check)"
+                                      ]
+                                    },
+                                    {
+                                      "id": "deny",
+                                      "kind": "reject-once"
+                                    }
+                                  ]
+                                }
+                              }
+                            }
+                          },
+                          "status": {
+                            "type": "requires-action",
+                            "reason": "interrupt"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "expect": {
+            "outcome": "replace",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 7
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": true,
+                    "messages": {
+                      "order": [
+                        "u1",
+                        "a2"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        },
+                        "a2": {
+                          "id": "a2",
+                          "role": "assistant",
+                          "parts": {
+                            "order": [
+                              "toolu_01"
+                            ],
+                            "byId": {
+                              "toolu_01": {
+                                "type": "tool-call",
+                                "toolCallId": "toolu_01",
+                                "toolName": "Bash",
+                                "argsText": "{\"command\":\"./gradlew check\"}",
+                                "args": {
+                                  "command": "./gradlew check"
+                                },
+                                "status": {
+                                  "type": "requires-action",
+                                  "reason": "interrupt"
+                                },
+                                "approval": {
+                                  "id": "req-1",
+                                  "display": "decision",
+                                  "options": [
+                                    {
+                                      "id": "allow",
+                                      "kind": "allow-once",
+                                      "grants": [
+                                        "Bash(./gradlew check)"
+                                      ]
+                                    },
+                                    {
+                                      "id": "deny",
+                                      "kind": "reject-once"
+                                    }
+                                  ]
+                                }
+                              }
+                            }
+                          },
+                          "status": {
+                            "type": "requires-action",
+                            "reason": "interrupt"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "patch",
+            "epoch": "e1",
+            "seq": 8,
+            "ops": [
+              {
+                "type": "set",
+                "path": [
+                  "threads",
+                  "byId",
+                  "t1",
+                  "messages",
+                  "byId",
+                  "a2",
+                  "parts",
+                  "byId",
+                  "toolu_01",
+                  "approval",
+                  "approved"
+                ],
+                "value": true
+              },
+              {
+                "type": "set",
+                "path": [
+                  "threads",
+                  "byId",
+                  "t1",
+                  "messages",
+                  "byId",
+                  "a2",
+                  "parts",
+                  "byId",
+                  "toolu_01",
+                  "approval",
+                  "optionId"
+                ],
+                "value": "allow"
+              },
+              {
+                "type": "set",
+                "path": [
+                  "threads",
+                  "byId",
+                  "t1",
+                  "messages",
+                  "byId",
+                  "a2",
+                  "parts",
+                  "byId",
+                  "toolu_01",
+                  "status"
+                ],
+                "value": {
+                  "type": "running"
+                }
+              },
+              {
+                "type": "set",
+                "path": [
+                  "threads",
+                  "byId",
+                  "t1",
+                  "messages",
+                  "byId",
+                  "a2",
+                  "status"
+                ],
+                "value": {
+                  "type": "running"
+                }
+              }
+            ]
+          },
+          "expect": {
+            "outcome": "apply",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 8
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": true,
+                    "messages": {
+                      "order": [
+                        "u1",
+                        "a2"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        },
+                        "a2": {
+                          "id": "a2",
+                          "role": "assistant",
+                          "parts": {
+                            "order": [
+                              "toolu_01"
+                            ],
+                            "byId": {
+                              "toolu_01": {
+                                "type": "tool-call",
+                                "toolCallId": "toolu_01",
+                                "toolName": "Bash",
+                                "argsText": "{\"command\":\"./gradlew check\"}",
+                                "args": {
+                                  "command": "./gradlew check"
+                                },
+                                "status": {
+                                  "type": "running"
+                                },
+                                "approval": {
+                                  "id": "req-1",
+                                  "display": "decision",
+                                  "options": [
+                                    {
+                                      "id": "allow",
+                                      "kind": "allow-once",
+                                      "grants": [
+                                        "Bash(./gradlew check)"
+                                      ]
+                                    },
+                                    {
+                                      "id": "deny",
+                                      "kind": "reject-once"
+                                    }
+                                  ],
+                                  "approved": true,
+                                  "optionId": "allow"
+                                }
+                              }
+                            }
+                          },
+                          "status": {
+                            "type": "running"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "a sub-agent tool is inserted between two others without an index",
+      "steps": [
+        {
+          "input": {
+            "type": "snapshot",
+            "protocol": 1,
+            "epoch": "e1",
+            "seq": 0,
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1",
+                        "a3"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        },
+                        "a3": {
+                          "id": "a3",
+                          "role": "assistant",
+                          "parts": {
+                            "order": [
+                              "toolu_10"
+                            ],
+                            "byId": {
+                              "toolu_10": {
+                                "type": "tool-call",
+                                "toolCallId": "toolu_10",
+                                "toolName": "Agent",
+                                "argsText": "{}",
+                                "args": {},
+                                "status": {
+                                  "type": "running"
+                                },
+                                "messages": {
+                                  "order": [
+                                    "s1"
+                                  ],
+                                  "byId": {
+                                    "s1": {
+                                      "id": "s1",
+                                      "role": "assistant",
+                                      "parts": {
+                                        "order": [
+                                          "toolu_11",
+                                          "toolu_13"
+                                        ],
+                                        "byId": {
+                                          "toolu_11": {
+                                            "type": "tool-call",
+                                            "toolCallId": "toolu_11",
+                                            "toolName": "Read",
+                                            "argsText": "{}",
+                                            "args": {}
+                                          },
+                                          "toolu_13": {
+                                            "type": "tool-call",
+                                            "toolCallId": "toolu_13",
+                                            "toolName": "Grep",
+                                            "argsText": "{}",
+                                            "args": {}
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "status": {
+                            "type": "running"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "expect": {
+            "outcome": "replace",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 0
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1",
+                        "a3"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        },
+                        "a3": {
+                          "id": "a3",
+                          "role": "assistant",
+                          "parts": {
+                            "order": [
+                              "toolu_10"
+                            ],
+                            "byId": {
+                              "toolu_10": {
+                                "type": "tool-call",
+                                "toolCallId": "toolu_10",
+                                "toolName": "Agent",
+                                "argsText": "{}",
+                                "args": {},
+                                "status": {
+                                  "type": "running"
+                                },
+                                "messages": {
+                                  "order": [
+                                    "s1"
+                                  ],
+                                  "byId": {
+                                    "s1": {
+                                      "id": "s1",
+                                      "role": "assistant",
+                                      "parts": {
+                                        "order": [
+                                          "toolu_11",
+                                          "toolu_13"
+                                        ],
+                                        "byId": {
+                                          "toolu_11": {
+                                            "type": "tool-call",
+                                            "toolCallId": "toolu_11",
+                                            "toolName": "Read",
+                                            "argsText": "{}",
+                                            "args": {}
+                                          },
+                                          "toolu_13": {
+                                            "type": "tool-call",
+                                            "toolCallId": "toolu_13",
+                                            "toolName": "Grep",
+                                            "argsText": "{}",
+                                            "args": {}
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "status": {
+                            "type": "running"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "patch",
+            "epoch": "e1",
+            "seq": 1,
+            "ops": [
+              {
+                "type": "set",
+                "path": [
+                  "threads",
+                  "byId",
+                  "t1",
+                  "messages",
+                  "byId",
+                  "a3",
+                  "parts",
+                  "byId",
+                  "toolu_10",
+                  "messages",
+                  "byId",
+                  "s1",
+                  "parts",
+                  "byId",
+                  "toolu_12"
+                ],
+                "value": {
+                  "type": "tool-call",
+                  "toolCallId": "toolu_12",
+                  "toolName": "Bash",
+                  "argsText": "{}",
+                  "args": {}
+                }
+              },
+              {
+                "type": "set",
+                "path": [
+                  "threads",
+                  "byId",
+                  "t1",
+                  "messages",
+                  "byId",
+                  "a3",
+                  "parts",
+                  "byId",
+                  "toolu_10",
+                  "messages",
+                  "byId",
+                  "s1",
+                  "parts",
+                  "order"
+                ],
+                "value": [
+                  "toolu_11",
+                  "toolu_12",
+                  "toolu_13"
+                ]
+              }
+            ]
+          },
+          "expect": {
+            "outcome": "apply",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 1
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1",
+                        "a3"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        },
+                        "a3": {
+                          "id": "a3",
+                          "role": "assistant",
+                          "parts": {
+                            "order": [
+                              "toolu_10"
+                            ],
+                            "byId": {
+                              "toolu_10": {
+                                "type": "tool-call",
+                                "toolCallId": "toolu_10",
+                                "toolName": "Agent",
+                                "argsText": "{}",
+                                "args": {},
+                                "status": {
+                                  "type": "running"
+                                },
+                                "messages": {
+                                  "order": [
+                                    "s1"
+                                  ],
+                                  "byId": {
+                                    "s1": {
+                                      "id": "s1",
+                                      "role": "assistant",
+                                      "parts": {
+                                        "order": [
+                                          "toolu_11",
+                                          "toolu_12",
+                                          "toolu_13"
+                                        ],
+                                        "byId": {
+                                          "toolu_11": {
+                                            "type": "tool-call",
+                                            "toolCallId": "toolu_11",
+                                            "toolName": "Read",
+                                            "argsText": "{}",
+                                            "args": {}
+                                          },
+                                          "toolu_13": {
+                                            "type": "tool-call",
+                                            "toolCallId": "toolu_13",
+                                            "toolName": "Grep",
+                                            "argsText": "{}",
+                                            "args": {}
+                                          },
+                                          "toolu_12": {
+                                            "type": "tool-call",
+                                            "toolCallId": "toolu_12",
+                                            "toolName": "Bash",
+                                            "argsText": "{}",
+                                            "args": {}
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "status": {
+                            "type": "running"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "a patch before the first snapshot is dropped",
+      "steps": [
+        {
+          "input": {
+            "type": "patch",
+            "epoch": "e1",
+            "seq": 1,
+            "ops": [
+              {
+                "type": "set",
+                "path": [
+                  "threads",
+                  "byId",
+                  "t1",
+                  "isRunning"
+                ],
+                "value": true
+              }
+            ]
+          },
+          "expect": {
+            "outcome": "drop",
+            "mode": "awaiting",
+            "cursor": null,
+            "reason": "awaiting"
+          }
+        },
+        {
+          "input": {
+            "type": "snapshot",
+            "protocol": 1,
+            "epoch": "e1",
+            "seq": 1,
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "expect": {
+            "outcome": "replace",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 1
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "dropped": {
+        "awaiting": 1
+      }
+    },
+    {
+      "name": "an old seq is dropped and the next one applies",
+      "steps": [
+        {
+          "input": {
+            "type": "snapshot",
+            "protocol": 1,
+            "epoch": "e1",
+            "seq": 5,
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "expect": {
+            "outcome": "replace",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 5
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "patch",
+            "epoch": "e1",
+            "seq": 5,
+            "ops": [
+              {
+                "type": "set",
+                "path": [
+                  "threads",
+                  "byId",
+                  "t1",
+                  "isRunning"
+                ],
+                "value": true
+              }
+            ]
+          },
+          "expect": {
+            "outcome": "drop",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 5
+            },
+            "reason": "stale"
+          }
+        },
+        {
+          "input": {
+            "type": "patch",
+            "epoch": "e1",
+            "seq": 6,
+            "ops": [
+              {
+                "type": "set",
+                "path": [
+                  "threads",
+                  "byId",
+                  "t1",
+                  "isRunning"
+                ],
+                "value": true
+              }
+            ]
+          },
+          "expect": {
+            "outcome": "apply",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 6
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": true,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "dropped": {
+        "stale": 1
+      }
+    },
+    {
+      "name": "a gap asks for a resync and patches wait for the snapshot",
+      "steps": [
+        {
+          "input": {
+            "type": "snapshot",
+            "protocol": 1,
+            "epoch": "e1",
+            "seq": 0,
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "expect": {
+            "outcome": "replace",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 0
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "patch",
+            "epoch": "e1",
+            "seq": 2,
+            "ops": [
+              {
+                "type": "set",
+                "path": [
+                  "threads",
+                  "byId",
+                  "t1",
+                  "isRunning"
+                ],
+                "value": true
+              }
+            ]
+          },
+          "expect": {
+            "outcome": "resync",
+            "mode": "awaiting",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 0
+            },
+            "reason": "gap",
+            "resync": {
+              "type": "resync",
+              "have": {
+                "epoch": "e1",
+                "seq": 0
+              },
+              "reason": "gap"
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "patch",
+            "epoch": "e1",
+            "seq": 3,
+            "ops": []
+          },
+          "expect": {
+            "outcome": "drop",
+            "mode": "awaiting",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 0
+            },
+            "reason": "awaiting"
+          }
+        },
+        {
+          "input": {
+            "type": "snapshot",
+            "protocol": 1,
+            "epoch": "e1",
+            "seq": 3,
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": true,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "expect": {
+            "outcome": "replace",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 3
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": true,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "patch",
+            "epoch": "e1",
+            "seq": 4,
+            "ops": []
+          },
+          "expect": {
+            "outcome": "apply",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 4
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": true,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "dropped": {
+        "gap": 1,
+        "awaiting": 1
+      }
+    },
+    {
+      "name": "a new epoch asks for a resync",
+      "steps": [
+        {
+          "input": {
+            "type": "snapshot",
+            "protocol": 1,
+            "epoch": "e1",
+            "seq": 9,
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "expect": {
+            "outcome": "replace",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 9
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "patch",
+            "epoch": "e2",
+            "seq": 1,
+            "ops": [
+              {
+                "type": "set",
+                "path": [
+                  "threads",
+                  "byId",
+                  "t1",
+                  "isRunning"
+                ],
+                "value": true
+              }
+            ]
+          },
+          "expect": {
+            "outcome": "resync",
+            "mode": "awaiting",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 9
+            },
+            "reason": "epoch",
+            "resync": {
+              "type": "resync",
+              "have": {
+                "epoch": "e1",
+                "seq": 9
+              },
+              "reason": "epoch"
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "snapshot",
+            "protocol": 1,
+            "epoch": "e2",
+            "seq": 1,
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": true,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "expect": {
+            "outcome": "replace",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e2",
+              "seq": 1
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": true,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "dropped": {
+        "epoch": 1
+      }
+    },
+    {
+      "name": "an index path is refused before it reaches the applier",
+      "steps": [
+        {
+          "input": {
+            "type": "snapshot",
+            "protocol": 1,
+            "epoch": "e1",
+            "seq": 0,
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "expect": {
+            "outcome": "replace",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 0
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "patch",
+            "epoch": "e1",
+            "seq": 1,
+            "ops": [
+              {
+                "type": "set",
+                "path": [
+                  "threads",
+                  "byId",
+                  "t1",
+                  "messages",
+                  "order",
+                  "1"
+                ],
+                "value": "a1"
+              }
+            ]
+          },
+          "expect": {
+            "outcome": "resync",
+            "mode": "awaiting",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 0
+            },
+            "reason": "bad-patch",
+            "issue": {
+              "code": "index-segment",
+              "at": "patch.ops[0].path[5]"
+            },
+            "resync": {
+              "type": "resync",
+              "have": {
+                "epoch": "e1",
+                "seq": 0
+              },
+              "reason": "bad-patch"
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "patch",
+            "epoch": "e1",
+            "seq": 1,
+            "ops": [
+              {
+                "type": "delete",
+                "path": [
+                  "threads",
+                  "byId",
+                  "t1",
+                  "messages"
+                ]
+              }
+            ]
+          },
+          "expect": {
+            "outcome": "drop",
+            "mode": "awaiting",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 0
+            },
+            "reason": "awaiting"
+          }
+        }
+      ],
+      "dropped": {
+        "bad-patch": 1,
+        "awaiting": 1
+      }
+    },
+    {
+      "name": "a key into an array fails in the applier and leaves the tree as it was",
+      "steps": [
+        {
+          "input": {
+            "type": "snapshot",
+            "protocol": 1,
+            "epoch": "e1",
+            "seq": 0,
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "expect": {
+            "outcome": "replace",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 0
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "patch",
+            "epoch": "e1",
+            "seq": 1,
+            "ops": [
+              {
+                "type": "set",
+                "path": [
+                  "threads",
+                  "byId",
+                  "t1",
+                  "isRunning"
+                ],
+                "value": true
+              },
+              {
+                "type": "set",
+                "path": [
+                  "threads",
+                  "byId",
+                  "t1",
+                  "messages",
+                  "order",
+                  "next"
+                ],
+                "value": "a1"
+              }
+            ]
+          },
+          "expect": {
+            "outcome": "resync",
+            "mode": "awaiting",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 0
+            },
+            "reason": "apply-failed",
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "resync": {
+              "type": "resync",
+              "have": {
+                "epoch": "e1",
+                "seq": 0
+              },
+              "reason": "apply-failed"
+            }
+          }
+        }
+      ],
+      "dropped": {
+        "apply-failed": 1
+      }
+    },
+    {
+      "name": "appending to something that is not a string fails in the applier",
+      "steps": [
+        {
+          "input": {
+            "type": "snapshot",
+            "protocol": 1,
+            "epoch": "e1",
+            "seq": 0,
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "expect": {
+            "outcome": "replace",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 0
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "patch",
+            "epoch": "e1",
+            "seq": 1,
+            "ops": [
+              {
+                "type": "append-text",
+                "path": [
+                  "threads",
+                  "byId",
+                  "t1",
+                  "isRunning"
+                ],
+                "value": "x"
+              }
+            ]
+          },
+          "expect": {
+            "outcome": "resync",
+            "mode": "awaiting",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 0
+            },
+            "reason": "apply-failed",
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "resync": {
+              "type": "resync",
+              "have": {
+                "epoch": "e1",
+                "seq": 0
+              },
+              "reason": "apply-failed"
+            }
+          }
+        }
+      ],
+      "dropped": {
+        "apply-failed": 1
+      }
+    },
+    {
+      "name": "a broken snapshot or another protocol is fatal until a good snapshot",
+      "steps": [
+        {
+          "input": {
+            "type": "snapshot",
+            "protocol": 1,
+            "epoch": "e1",
+            "seq": 0,
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "expect": {
+            "outcome": "replace",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 0
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "snapshot",
+            "protocol": 1,
+            "epoch": "e1",
+            "seq": 1,
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1",
+                  "t2"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "expect": {
+            "outcome": "fatal",
+            "mode": "fatal",
+            "cursor": null,
+            "reason": "bad-snapshot",
+            "issue": {
+              "code": "bad-tree",
+              "at": "snapshot.tree.threads.order[1]"
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "patch",
+            "epoch": "e1",
+            "seq": 2,
+            "ops": []
+          },
+          "expect": {
+            "outcome": "drop",
+            "mode": "fatal",
+            "cursor": null,
+            "reason": "fatal"
+          }
+        },
+        {
+          "input": {
+            "type": "snapshot",
+            "protocol": 2,
+            "epoch": "e1",
+            "seq": 1,
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "expect": {
+            "outcome": "fatal",
+            "mode": "fatal",
+            "cursor": null,
+            "reason": "protocol-mismatch"
+          }
+        },
+        {
+          "input": {
+            "type": "snapshot",
+            "protocol": 1,
+            "epoch": "e3",
+            "seq": 0,
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": true,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "expect": {
+            "outcome": "replace",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e3",
+              "seq": 0
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": true,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "dropped": {
+        "bad-snapshot": 1,
+        "fatal": 1,
+        "protocol-mismatch": 1
+      }
+    },
+    {
+      "name": "what cannot be read is dropped and counted",
+      "steps": [
+        {
+          "input": {
+            "type": "hello",
+            "from": "a newer host"
+          },
+          "expect": {
+            "outcome": "drop",
+            "mode": "awaiting",
+            "cursor": null,
+            "reason": "unknown-type",
+            "issue": {
+              "code": "unknown-type",
+              "at": "message.type"
+            }
+          }
+        },
+        {
+          "input": 42,
+          "expect": {
+            "outcome": "drop",
+            "mode": "awaiting",
+            "cursor": null,
+            "reason": "malformed",
+            "issue": {
+              "code": "malformed",
+              "at": "message"
+            }
+          }
+        },
+        {
+          "input": {
+            "kind": "snapshot"
+          },
+          "expect": {
+            "outcome": "drop",
+            "mode": "awaiting",
+            "cursor": null,
+            "reason": "malformed",
+            "issue": {
+              "code": "malformed",
+              "at": "message"
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "theme",
+            "kind": "sepia",
+            "tokens": {}
+          },
+          "expect": {
+            "outcome": "drop",
+            "mode": "awaiting",
+            "cursor": null,
+            "reason": "malformed",
+            "issue": {
+              "code": "malformed",
+              "at": "theme.kind"
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "theme",
+            "kind": "dark",
+            "tokens": {
+              "--background": "url(https://example.invalid/x.png)"
+            }
+          },
+          "expect": {
+            "outcome": "drop",
+            "mode": "awaiting",
+            "cursor": null,
+            "reason": "malformed",
+            "issue": {
+              "code": "malformed",
+              "at": "theme.tokens.--background"
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "capabilities",
+            "names": [
+              "a",
+              "a"
+            ]
+          },
+          "expect": {
+            "outcome": "drop",
+            "mode": "awaiting",
+            "cursor": null,
+            "reason": "malformed",
+            "issue": {
+              "code": "malformed",
+              "at": "capabilities.names"
+            }
+          }
+        }
+      ],
+      "dropped": {
+        "unknown-type": 1,
+        "malformed": 5
+      }
+    },
+    {
+      "name": "unknown keys and part kinds stay in the tree",
+      "steps": [
+        {
+          "input": {
+            "type": "snapshot",
+            "protocol": 1,
+            "epoch": "e1",
+            "seq": 0,
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1",
+                              "src1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              },
+                              "src1": {
+                                "type": "source",
+                                "sourceType": "url",
+                                "url": "https://example.invalid/"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    },
+                    "costUsd": 0.25
+                  }
+                }
+              }
+            },
+            "sentAt": 1759400000000
+          },
+          "expect": {
+            "outcome": "replace",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 0
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1",
+                              "src1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              },
+                              "src1": {
+                                "type": "source",
+                                "sourceType": "url",
+                                "url": "https://example.invalid/"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    },
+                    "costUsd": 0.25
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "patch",
+            "epoch": "e1",
+            "seq": 1,
+            "ops": [
+              {
+                "type": "set",
+                "path": [
+                  "threads",
+                  "byId",
+                  "t1",
+                  "costUsd"
+                ],
+                "value": 0.5
+              }
+            ],
+            "compressed": false
+          },
+          "expect": {
+            "outcome": "apply",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 1
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1",
+                              "src1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              },
+                              "src1": {
+                                "type": "source",
+                                "sourceType": "url",
+                                "url": "https://example.invalid/"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    },
+                    "costUsd": 0.5
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "the first turn starts in an empty thread the host named",
+      "steps": [
+        {
+          "input": {
+            "type": "snapshot",
+            "protocol": 1,
+            "epoch": "e1",
+            "seq": 0,
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [],
+                      "byId": {}
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "expect": {
+            "outcome": "replace",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 0
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [],
+                      "byId": {}
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "patch",
+            "epoch": "e1",
+            "seq": 1,
+            "ops": [
+              {
+                "type": "set",
+                "path": [
+                  "threads",
+                  "byId",
+                  "t1",
+                  "messages",
+                  "byId",
+                  "u1"
+                ],
+                "value": {
+                  "id": "u1",
+                  "role": "user",
+                  "parts": {
+                    "order": [
+                      "p1"
+                    ],
+                    "byId": {
+                      "p1": {
+                        "type": "text",
+                        "text": "Explain the build"
+                      }
+                    }
+                  },
+                  "createdAt": 1759400000000
+                }
+              },
+              {
+                "type": "set",
+                "path": [
+                  "threads",
+                  "byId",
+                  "t1",
+                  "messages",
+                  "order"
+                ],
+                "value": [
+                  "u1"
+                ]
+              },
+              {
+                "type": "set",
+                "path": [
+                  "threads",
+                  "byId",
+                  "t1",
+                  "isRunning"
+                ],
+                "value": true
+              }
+            ]
+          },
+          "expect": {
+            "outcome": "apply",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 1
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": true,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "patch",
+            "epoch": "e1",
+            "seq": 2,
+            "ops": [
+              {
+                "type": "set",
+                "path": [
+                  "threads",
+                  "byId",
+                  "t1",
+                  "messages",
+                  "byId",
+                  "a1"
+                ],
+                "value": {
+                  "id": "a1",
+                  "role": "assistant",
+                  "parts": {
+                    "order": [
+                      "p1"
+                    ],
+                    "byId": {
+                      "p1": {
+                        "type": "text",
+                        "text": "The build",
+                        "status": {
+                          "type": "running"
+                        }
+                      }
+                    }
+                  },
+                  "status": {
+                    "type": "running"
+                  }
+                }
+              },
+              {
+                "type": "set",
+                "path": [
+                  "threads",
+                  "byId",
+                  "t1",
+                  "messages",
+                  "order"
+                ],
+                "value": [
+                  "u1",
+                  "a1"
+                ]
+              }
+            ]
+          },
+          "expect": {
+            "outcome": "apply",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 2
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": true,
+                    "messages": {
+                      "order": [
+                        "u1",
+                        "a1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        },
+                        "a1": {
+                          "id": "a1",
+                          "role": "assistant",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "The build",
+                                "status": {
+                                  "type": "running"
+                                }
+                              }
+                            }
+                          },
+                          "status": {
+                            "type": "running"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "patch",
+            "epoch": "e1",
+            "seq": 3,
+            "ops": [
+              {
+                "type": "append-text",
+                "path": [
+                  "threads",
+                  "byId",
+                  "t1",
+                  "messages",
+                  "byId",
+                  "a1",
+                  "parts",
+                  "byId",
+                  "p1",
+                  "text"
+                ],
+                "value": " runs Gradle."
+              },
+              {
+                "type": "set",
+                "path": [
+                  "threads",
+                  "byId",
+                  "t1",
+                  "messages",
+                  "byId",
+                  "a1",
+                  "parts",
+                  "byId",
+                  "p1",
+                  "status"
+                ],
+                "value": {
+                  "type": "complete"
+                }
+              },
+              {
+                "type": "set",
+                "path": [
+                  "threads",
+                  "byId",
+                  "t1",
+                  "messages",
+                  "byId",
+                  "a1",
+                  "status"
+                ],
+                "value": {
+                  "type": "complete",
+                  "reason": "stop"
+                }
+              },
+              {
+                "type": "set",
+                "path": [
+                  "threads",
+                  "byId",
+                  "t1",
+                  "isRunning"
+                ],
+                "value": false
+              }
+            ]
+          },
+          "expect": {
+            "outcome": "apply",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 3
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1",
+                        "a1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        },
+                        "a1": {
+                          "id": "a1",
+                          "role": "assistant",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "The build runs Gradle.",
+                                "status": {
+                                  "type": "complete"
+                                }
+                              }
+                            }
+                          },
+                          "status": {
+                            "type": "complete",
+                            "reason": "stop"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "dropped": {}
+    },
+    {
+      "name": "a patch that leaves the tree broken is taken back and a resync asked for",
+      "steps": [
+        {
+          "input": {
+            "type": "snapshot",
+            "protocol": 1,
+            "epoch": "e1",
+            "seq": 0,
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "expect": {
+            "outcome": "replace",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 0
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "patch",
+            "epoch": "e1",
+            "seq": 1,
+            "ops": [
+              {
+                "type": "set",
+                "path": [
+                  "threads",
+                  "byId",
+                  "t1",
+                  "messages"
+                ],
+                "value": 5
+              }
+            ]
+          },
+          "expect": {
+            "outcome": "resync",
+            "mode": "awaiting",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 0
+            },
+            "reason": "apply-failed",
+            "issue": {
+              "code": "bad-tree",
+              "at": "tree.threads.byId.t1.messages"
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "resync": {
+              "type": "resync",
+              "have": {
+                "epoch": "e1",
+                "seq": 0
+              },
+              "reason": "apply-failed"
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "snapshot",
+            "protocol": 1,
+            "epoch": "e1",
+            "seq": 1,
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": true,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "expect": {
+            "outcome": "replace",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 1
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": true,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "patch",
+            "epoch": "e1",
+            "seq": 2,
+            "ops": [
+              {
+                "type": "set",
+                "path": [
+                  "threads",
+                  "order"
+                ],
+                "value": [
+                  "t1",
+                  "t2"
+                ]
+              }
+            ]
+          },
+          "expect": {
+            "outcome": "resync",
+            "mode": "awaiting",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 1
+            },
+            "reason": "apply-failed",
+            "issue": {
+              "code": "bad-tree",
+              "at": "tree.threads.order[1]"
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": true,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "resync": {
+              "type": "resync",
+              "have": {
+                "epoch": "e1",
+                "seq": 1
+              },
+              "reason": "apply-failed"
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "snapshot",
+            "protocol": 1,
+            "epoch": "e1",
+            "seq": 2,
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": true,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "expect": {
+            "outcome": "replace",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 2
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": true,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "patch",
+            "epoch": "e1",
+            "seq": 3,
+            "ops": [
+              {
+                "type": "set",
+                "path": [
+                  "threads",
+                  "byId",
+                  "t1",
+                  "messages",
+                  "byId",
+                  "u1",
+                  "status"
+                ],
+                "value": {
+                  "type": "complete"
+                }
+              }
+            ]
+          },
+          "expect": {
+            "outcome": "resync",
+            "mode": "awaiting",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 2
+            },
+            "reason": "apply-failed",
+            "issue": {
+              "code": "bad-tree",
+              "at": "tree.threads.byId.t1.messages.byId.u1.status"
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": true,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "resync": {
+              "type": "resync",
+              "have": {
+                "epoch": "e1",
+                "seq": 2
+              },
+              "reason": "apply-failed"
+            }
+          }
+        }
+      ],
+      "dropped": {
+        "apply-failed": 3
+      }
+    },
+    {
+      "name": "the webview sends ready again to leave awaiting or fatal",
+      "steps": [
+        {
+          "input": {
+            "type": "snapshot",
+            "protocol": 1,
+            "epoch": "e1",
+            "seq": 0,
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "expect": {
+            "outcome": "replace",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 0
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "patch",
+            "epoch": "e1",
+            "seq": 2,
+            "ops": []
+          },
+          "expect": {
+            "outcome": "resync",
+            "mode": "awaiting",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 0
+            },
+            "reason": "gap",
+            "resync": {
+              "type": "resync",
+              "have": {
+                "epoch": "e1",
+                "seq": 0
+              },
+              "reason": "gap"
+            }
+          }
+        },
+        {
+          "restart": true,
+          "expect": {
+            "mode": "awaiting",
+            "cursor": null,
+            "send": {
+              "type": "ready",
+              "protocol": 1
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "snapshot",
+            "protocol": 1,
+            "epoch": "e1",
+            "seq": 2,
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": true,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "expect": {
+            "outcome": "replace",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 2
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": true,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "snapshot",
+            "protocol": 1,
+            "epoch": "e1",
+            "seq": 3,
+            "tree": {
+              "threads": {
+                "order": [],
+                "byId": {}
+              }
+            }
+          },
+          "expect": {
+            "outcome": "fatal",
+            "mode": "fatal",
+            "cursor": null,
+            "reason": "bad-snapshot",
+            "issue": {
+              "code": "bad-tree",
+              "at": "snapshot.tree.threads.order"
+            }
+          }
+        },
+        {
+          "restart": true,
+          "expect": {
+            "mode": "awaiting",
+            "cursor": null,
+            "send": {
+              "type": "ready",
+              "protocol": 1
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "snapshot",
+            "protocol": 1,
+            "epoch": "e2",
+            "seq": 0,
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "expect": {
+            "outcome": "replace",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e2",
+              "seq": 0
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "dropped": {
+        "gap": 1,
+        "bad-snapshot": 1
+      }
+    },
+    {
+      "name": "a snapshot of another protocol is fatal before its shape is read",
+      "steps": [
+        {
+          "input": {
+            "type": "snapshot",
+            "protocol": 2,
+            "epoch": "e1",
+            "seq": 0,
+            "tree": {
+              "conversations": [
+                {
+                  "id": "c1"
+                }
+              ]
+            }
+          },
+          "expect": {
+            "outcome": "fatal",
+            "mode": "fatal",
+            "cursor": null,
+            "reason": "protocol-mismatch"
+          }
+        },
+        {
+          "input": {
+            "type": "snapshot",
+            "protocol": 1,
+            "epoch": "e1",
+            "seq": 0,
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "expect": {
+            "outcome": "replace",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 0
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "u1"
+                      ],
+                      "byId": {
+                        "u1": {
+                          "id": "u1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          },
+                          "createdAt": 1759400000000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "dropped": {
+        "protocol-mismatch": 1
+      }
+    },
+    {
+      "name": "a snapshot exactly MAX_DEPTH deep is accepted and one level deeper is fatal",
+      "steps": [
+        {
+          "input": {
+            "type": "snapshot",
+            "protocol": 1,
+            "epoch": "e1",
+            "seq": 0,
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "m1"
+                      ],
+                      "byId": {
+                        "m1": {
+                          "id": "m1",
+                          "role": "assistant",
+                          "parts": {
+                            "order": [
+                              "toolu_1"
+                            ],
+                            "byId": {
+                              "toolu_1": {
+                                "type": "tool-call",
+                                "toolCallId": "toolu_1",
+                                "toolName": "Bash",
+                                "argsText": "",
+                                "args": {
+                                  "a": {
+                                    "a": {
+                                      "a": {
+                                        "a": {
+                                          "a": {
+                                            "a": {
+                                              "a": {
+                                                "a": {"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "expect": {
+            "outcome": "replace",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 0
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "m1"
+                      ],
+                      "byId": {
+                        "m1": {
+                          "id": "m1",
+                          "role": "assistant",
+                          "parts": {
+                            "order": [
+                              "toolu_1"
+                            ],
+                            "byId": {
+                              "toolu_1": {
+                                "type": "tool-call",
+                                "toolCallId": "toolu_1",
+                                "toolName": "Bash",
+                                "argsText": "",
+                                "args": {
+                                  "a": {
+                                    "a": {
+                                      "a": {
+                                        "a": {
+                                          "a": {
+                                            "a": {
+                                              "a": {
+                                                "a": {"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "snapshot",
+            "protocol": 1,
+            "epoch": "e1",
+            "seq": 1,
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "m1"
+                      ],
+                      "byId": {
+                        "m1": {
+                          "id": "m1",
+                          "role": "assistant",
+                          "parts": {
+                            "order": [
+                              "toolu_1"
+                            ],
+                            "byId": {
+                              "toolu_1": {
+                                "type": "tool-call",
+                                "toolCallId": "toolu_1",
+                                "toolName": "Bash",
+                                "argsText": "",
+                                "args": {
+                                  "a": {
+                                    "a": {
+                                      "a": {
+                                        "a": {
+                                          "a": {
+                                            "a": {
+                                              "a": {
+                                                "a": {"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "expect": {
+            "outcome": "fatal",
+            "mode": "fatal",
+            "cursor": null,
+            "reason": "bad-snapshot",
+            "issue": {
+              "code": "malformed",
+              "at": "snapshot.tree.threads.byId.t1.messages.byId.m1.parts.byId.toolu_1.args.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a"
+            }
+          }
+        }
+      ],
+      "dropped": {
+        "bad-snapshot": 1
+      }
+    },
+    {
+      "name": "a patch that sets a collection, a byId or an entity whole and breaks it is taken back",
+      "steps": [
+        {
+          "input": {
+            "type": "snapshot",
+            "protocol": 1,
+            "epoch": "e1",
+            "seq": 0,
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "m1"
+                      ],
+                      "byId": {
+                        "m1": {
+                          "id": "m1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "expect": {
+            "outcome": "replace",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 0
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "m1"
+                      ],
+                      "byId": {
+                        "m1": {
+                          "id": "m1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "patch",
+            "epoch": "e1",
+            "seq": 1,
+            "ops": [
+              {
+                "type": "set",
+                "path": [
+                  "threads",
+                  "byId",
+                  "t1",
+                  "messages"
+                ],
+                "value": {
+                  "order": [
+                    "m1"
+                  ],
+                  "byId": {}
+                }
+              }
+            ]
+          },
+          "expect": {
+            "outcome": "resync",
+            "mode": "awaiting",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 0
+            },
+            "reason": "apply-failed",
+            "issue": {
+              "code": "bad-tree",
+              "at": "tree.threads.byId.t1.messages.order[0]"
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "m1"
+                      ],
+                      "byId": {
+                        "m1": {
+                          "id": "m1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "resync": {
+              "type": "resync",
+              "have": {
+                "epoch": "e1",
+                "seq": 0
+              },
+              "reason": "apply-failed"
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "snapshot",
+            "protocol": 1,
+            "epoch": "e1",
+            "seq": 1,
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "m1"
+                      ],
+                      "byId": {
+                        "m1": {
+                          "id": "m1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "expect": {
+            "outcome": "replace",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 1
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "m1"
+                      ],
+                      "byId": {
+                        "m1": {
+                          "id": "m1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "patch",
+            "epoch": "e1",
+            "seq": 2,
+            "ops": [
+              {
+                "type": "set",
+                "path": [
+                  "threads",
+                  "byId",
+                  "t1",
+                  "messages",
+                  "byId"
+                ],
+                "value": {
+                  "m1": {
+                    "id": "m1",
+                    "role": "user",
+                    "parts": {
+                      "order": [
+                        "p1"
+                      ],
+                      "byId": {
+                        "p1": {
+                          "type": "text",
+                          "text": "Explain the build"
+                        }
+                      }
+                    }
+                  },
+                  "m2": {
+                    "id": "m2",
+                    "role": "user",
+                    "parts": {
+                      "order": [
+                        "p1"
+                      ],
+                      "byId": {
+                        "p1": {
+                          "type": "text",
+                          "text": "Explain the build"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "expect": {
+            "outcome": "resync",
+            "mode": "awaiting",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 1
+            },
+            "reason": "apply-failed",
+            "issue": {
+              "code": "bad-tree",
+              "at": "tree.threads.byId.t1.messages.byId.m2"
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "m1"
+                      ],
+                      "byId": {
+                        "m1": {
+                          "id": "m1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "resync": {
+              "type": "resync",
+              "have": {
+                "epoch": "e1",
+                "seq": 1
+              },
+              "reason": "apply-failed"
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "snapshot",
+            "protocol": 1,
+            "epoch": "e1",
+            "seq": 2,
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "m1"
+                      ],
+                      "byId": {
+                        "m1": {
+                          "id": "m1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "expect": {
+            "outcome": "replace",
+            "mode": "synced",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 2
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "m1"
+                      ],
+                      "byId": {
+                        "m1": {
+                          "id": "m1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "type": "patch",
+            "epoch": "e1",
+            "seq": 3,
+            "ops": [
+              {
+                "type": "set",
+                "path": [
+                  "threads",
+                  "byId",
+                  "t1",
+                  "messages",
+                  "byId",
+                  "m1"
+                ],
+                "value": {
+                  "id": "m1",
+                  "role": "robot",
+                  "parts": {
+                    "order": [
+                      "p1"
+                    ],
+                    "byId": {
+                      "p1": {
+                        "type": "text",
+                        "text": "Explain the build"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "expect": {
+            "outcome": "resync",
+            "mode": "awaiting",
+            "cursor": {
+              "epoch": "e1",
+              "seq": 2
+            },
+            "reason": "apply-failed",
+            "issue": {
+              "code": "bad-tree",
+              "at": "tree.threads.byId.t1.messages.byId.m1.role"
+            },
+            "tree": {
+              "threads": {
+                "order": [
+                  "t1"
+                ],
+                "byId": {
+                  "t1": {
+                    "id": "t1",
+                    "isRunning": false,
+                    "messages": {
+                      "order": [
+                        "m1"
+                      ],
+                      "byId": {
+                        "m1": {
+                          "id": "m1",
+                          "role": "user",
+                          "parts": {
+                            "order": [
+                              "p1"
+                            ],
+                            "byId": {
+                              "p1": {
+                                "type": "text",
+                                "text": "Explain the build"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "resync": {
+              "type": "resync",
+              "have": {
+                "epoch": "e1",
+                "seq": 2
+              },
+              "reason": "apply-failed"
+            }
+          }
+        }
+      ],
+      "dropped": {
+        "apply-failed": 3
+      }
+    }
+  ]
+}
