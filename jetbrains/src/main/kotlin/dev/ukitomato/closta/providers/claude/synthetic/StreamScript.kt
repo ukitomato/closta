@@ -10,6 +10,8 @@ import com.google.gson.JsonObject
 @Suppress("TooManyFunctions") // one function per kind of line the CLI prints
 class StreamScript(
     private val sessionId: String = "spike-replay",
+    /** The model the init line and every assistant message name. */
+    private val model: String = "claude-synthetic",
 ) {
     private val out = mutableListOf<JsonObject>()
     private var uuid = 0
@@ -43,7 +45,7 @@ class StreamScript(
             addProperty("cwd", "/spike")
             add("tools", JsonArray())
             add("mcp_servers", JsonArray())
-            addProperty("model", "claude-synthetic")
+            addProperty("model", model)
             addProperty("permissionMode", "default")
             add("slash_commands", JsonArray())
             addProperty("apiKeySource", "none")
@@ -215,7 +217,7 @@ class StreamScript(
         id: String,
         content: JsonArray,
     ) = JsonObject().apply {
-        addProperty("model", "claude-synthetic")
+        addProperty("model", model)
         addProperty("id", id)
         addProperty("type", "message")
         addProperty("role", "assistant")

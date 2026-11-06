@@ -726,8 +726,13 @@ tasks.named("check") {
 // `./gradlew runIde -Pclosta.gallery=<folder>` opens a made-up conversation with every kind of row and card in the
 // sidebar and in an editor tab, paints them into PNGs in <folder>, and closes the IDE (bench/Gallery.kt). Without the
 // property runIde is as it always is. -Pclosta.gallery.project=<folder> is the project it opens (an empty folder).
+// -Pclosta.gallery.theme=light|dark paints in the IDE's default light or dark theme, -Pclosta.gallery.scale=2 at twice
+// the size, and -Pclosta.gallery.only=showcase paints only the README's picture (taken with all three).
 val galleryOut = providers.gradleProperty("closta.gallery")
 val galleryProject = providers.gradleProperty("closta.gallery.project")
+val galleryTheme = providers.gradleProperty("closta.gallery.theme")
+val galleryScale = providers.gradleProperty("closta.gallery.scale")
+val galleryOnly = providers.gradleProperty("closta.gallery.only")
 
 tasks.named<org.jetbrains.intellij.platform.gradle.tasks.RunIdeTask>("runIde") {
     if (galleryOut.isPresent) {
@@ -740,7 +745,14 @@ tasks.named<org.jetbrains.intellij.platform.gradle.tasks.RunIdeTask>("runIde") {
                     "-Djb.consents.confirmation.enabled=false",
                     "-Djb.privacy.policy.text=<!--999.999-->",
                     "-Didea.initially.ask.config=never",
-                )
+                ) +
+                    listOfNotNull(
+                        galleryTheme.orNull?.let { "-Dclosta.gallery.theme=$it" },
+                        galleryScale.orNull?.let { "-Dclosta.gallery.scale=$it" },
+                        galleryOnly.orNull?.let { "-Dclosta.gallery.only=$it" },
+                        // Laid out at the scale it is painted at: text measured at 1x and painted at 2x overflows.
+                        galleryScale.orNull?.let { "-Dsun.java2d.uiScale=$it" },
+                    )
             }
         if (galleryProject.isPresent) argumentProviders += CommandLineArgumentProvider { listOf(galleryProject.get()) }
     }

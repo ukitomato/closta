@@ -24,6 +24,7 @@ import dev.ukitomato.closta.providers.claude.synthetic.StreamScript
 @Suppress("MagicNumber", "LongMethod", "CyclomaticComplexMethod") // a script, written out line by line
 internal object GallerySession {
     const val FIRST_ASK = "gallery-ask-1"
+    private const val SYNTHETIC_MODEL = "claude-synthetic"
     private const val SECOND_ASK = "gallery-ask-2"
     private const val ASK = "Retry up to 3 times when login fails. Fix AuthServiceTest.kt too"
     const val BASH_ID = "gallery-r2"
@@ -47,8 +48,9 @@ internal object GallerySession {
     fun view(
         waits: Waits = Waits.ALL,
         ask: String = ASK,
+        model: String = SYNTHETIC_MODEL,
     ): SessionView =
-        Builder(ask).run {
+        Builder(ask, model).run {
             firstTurn(done = true)
             secondTurn(waits)
             flush()
@@ -59,8 +61,9 @@ internal object GallerySession {
     fun firstTurn(
         done: Boolean,
         ask: String = ASK,
+        model: String = SYNTHETIC_MODEL,
     ): SessionView =
-        Builder(ask).run {
+        Builder(ask, model).run {
             firstTurn(done)
             flush()
             view
@@ -77,8 +80,9 @@ internal object GallerySession {
 
     private class Builder(
         private val ask: String,
+        model: String = SYNTHETIC_MODEL,
     ) {
-        val script = StreamScript("gallery")
+        val script = StreamScript("gallery", model)
         var view = SessionView()
         private var taken = 0
 

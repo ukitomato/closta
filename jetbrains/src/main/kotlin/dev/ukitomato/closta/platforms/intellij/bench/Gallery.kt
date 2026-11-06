@@ -1,6 +1,12 @@
 package dev.ukitomato.closta.platforms.intellij.bench
 
+import com.intellij.codeInsight.daemon.impl.analysis.FileHighlightingSetting.SKIP_INSPECTION
+import com.intellij.codeInsight.daemon.impl.analysis.HighlightingSettingsPerFile
+import com.intellij.diagnostic.MessagePool
+import com.intellij.ide.ui.LafManager
 import com.intellij.ide.ui.UISettings
+import com.intellij.notification.Notification
+import com.intellij.notification.NotificationsManager
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.components.service
@@ -14,8 +20,11 @@ import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.openapi.wm.WindowManager
 import com.intellij.openapi.wm.ex.ToolWindowEx
+import com.intellij.psi.PsiManager
+import com.intellij.testFramework.LightVirtualFile
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.util.ui.UIUtil
+import dev.ukitomato.closta.platforms.intellij.chat.ChatDirectory
 import dev.ukitomato.closta.platforms.intellij.chat.ChatPanel
 import dev.ukitomato.closta.platforms.intellij.chat.ChatSessions
 import dev.ukitomato.closta.platforms.intellij.chat.ChatSource
@@ -43,17 +52,21 @@ import java.awt.image.BufferedImage
 import java.nio.file.Files
 import java.nio.file.Path
 import javax.imageio.ImageIO
+import javax.swing.AbstractButton
 import javax.swing.JComponent
 import javax.swing.SwingUtilities
+import kotlin.math.roundToInt
 
 /**
  * A development aid, off unless the IDE is started with `-Dclosta.gallery=<folder>` (`./gradlew runIde
  * -Pclosta.gallery=<folder>`): paints into PNGs in the folder the window, [GallerySession] in the sidebar (420px, then
  * 300px) and in an editor tab (scrolled a screen at a time), the composer starting, failed, ended, in Bypass and ready
  * to send, its model, mode and attach popups, an editor tab whose session is gone, the MCP tab, and the bottom Closta
- * window with each kind of session chosen ([SessionsGallery]); then closes the IDE. Each scene is painted on its own:
- * one that fails is written to `done.txt` as `FAILED <file>` and the others still are (`FAILED stage:<step>` when a
- * step between them fails, which ends the run). No CLI is started.
+ * window with each kind of session chosen ([SessionsGallery]), and the README's picture (`showcase.png`); then closes
+ * the IDE. `-Dclosta.gallery.theme=light|dark` paints in the IDE's default light or dark theme,
+ * `-Dclosta.gallery.scale=2` at twice the size, and `-Dclosta.gallery.only=showcase` paints only `showcase.png`. Each
+ * scene is painted on its own: one that fails is written to `done.txt` as `FAILED <file>` and the others still are
+ * (`FAILED stage:<step>` when a step between them fails, which ends the run). No CLI is started.
  */
 class Gallery : ProjectActivity {
     override suspend fun execute(project: Project) {
@@ -111,6 +124,14 @@ private class GalleryRun(
 
     private suspend fun scenes() {
         delay(SETTLE_MS)
+        stage = "theme"
+        withContext(Dispatchers.EDT) { theme() }
+        delay(SETTLE_MS)
+        if (System.getProperty(ONLY) == "showcase") {
+            stage = "showcase"
+            showcase()
+            return
+        }
         val views =
             withContext(Dispatchers.Default) {
                 GalleryViews(
@@ -147,10 +168,158 @@ private class GalleryRun(
         editorEnded()
         stage = "mcp"
         mcp(views.idle)
+        stage = "showcase"
+        showcase()
         stage = "sessions window"
         sessionsWindow(views.waiting)
         stage = "end"
     }
+
+    /** Switches to the theme `closta.gallery.theme` names: `light`, `dark`, or a theme's name. None: the IDE's. EDT. */
+    private fun theme() {
+        val name = System.getProperty(THEME) ?: return
+        val lafs = LafManager.getInstance()
+        val laf =
+            when (name) {
+                "light" -> lafs.defaultLightLaf
+                "dark" -> lafs.defaultDarkLaf
+                else -> lafs.installedThemes.firstOrNull { it.name == name }
+            }
+        checkNotNull(laf) { "no theme $name in ${lafs.installedThemes.map { it.name }.toList()}" }
+        lafs.setCurrentLookAndFeel(laf, false)
+        lafs.updateUI()
+    }
+
+    /**
+     * The README's picture: the window [SHOWCASE_WIDTH] by [SHOWCASE_HEIGHT] without the tool window bars, only a
+     * Kotlin file in the editor (not inspected), the sidebar showing a conversation waiting on an edit of the file, and
+     * the bottom Closta window's Sessions listing it among others (waiting on a question, on a plan, running,
+     * finished), the question chosen. The IDE's offers to buy a product are hidden while it is painted.
+     */
+    private suspend fun showcase() =
+        scene("showcase.png") {
+            val all = withContext(Dispatchers.Default) { showcaseSources() }
+            val file = LightVirtualFile("AuthService.kt", SHOWCASE_CODE)
+            val probe = SessionsWindowProbe(project)
+            val frame = withContext(Dispatchers.EDT) { checkNotNull(WindowManager.getInstance().getFrame(project)) }
+            var hidden = emptyList<JComponent>()
+            try {
+                withContext(Dispatchers.EDT) { showcaseOpen(frame.rootPane, file, all, probe) }
+                delay(SETTLE_MS)
+                withContext(Dispatchers.EDT) {
+                    stretch(SHOWCASE_SIDEBAR)
+                    (probe.window() as? ToolWindowEx)?.let { it.stretchHeight(SHOWCASE_SESSIONS - it.component.height) }
+                    probe.panel()?.select(all[1].sessionId)
+                }
+                delay(PAGE_MS)
+                withContext(Dispatchers.EDT) { sidebarPanel(all[0].sessionId)?.let(::scrollToEnd) }
+                delay(ANALYSIS_MS)
+                withContext(Dispatchers.EDT) {
+                    hidden = quiet(frame.rootPane)
+                    shoot(frame.rootPane, "showcase.png")
+                }
+            } finally {
+                withContext(Dispatchers.EDT + NonCancellable) {
+                    hidden.forEach { it.isVisible = true }
+                    UISettings.getInstance().hideToolStripes = false
+                    UISettings.getInstance().fireUISettingsChanged()
+                    FileEditorManager.getInstance(project).closeFile(file)
+                    closeAll(all)
+                    probe.window()?.hide()
+                    frame.setBounds(0, 0, FRAME_WIDTH, FRAME_HEIGHT)
+                    stretch(SIDEBAR_WIDTH)
+                }
+            }
+        }
+
+    /** The showcase's sessions: the one in the sidebar (waiting on an edit) first, the one chosen in Sessions next. */
+    private fun showcaseSources(): List<ChatSource.Fixed> =
+        listOf(
+            ChatSource.Fixed("retry-login", GallerySession.view(GallerySession.Waits.EDIT, model = MODEL)),
+            showcaseSource("fix-ci", GallerySession.Waits.QUESTION, "Fix the CI cache"),
+            showcaseSource("billing-plan", GallerySession.Waits.PLAN, "Plan reissuing invoices from the API"),
+            showcaseSource("explore-api", GallerySession.Waits.NOTHING, "Find where the API routes are handled"),
+            ChatSource.Fixed(
+                "migrate-db",
+                GallerySession.firstTurn(true, "Write the migrations that split the users table", MODEL),
+            ),
+        )
+
+    private fun showcaseSource(
+        title: String,
+        waits: GallerySession.Waits,
+        ask: String,
+    ) = ChatSource.Fixed(title, GallerySession.view(waits, ask, MODEL))
+
+    /**
+     * Sizes the window of [root], leaves only [file] in the editor and only the sidebar open, lists [sources], opens
+     * the first in the sidebar and shows the bottom Closta window's Sessions. EDT.
+     */
+    private fun showcaseOpen(
+        root: JComponent,
+        file: LightVirtualFile,
+        sources: List<ChatSource.Fixed>,
+        probe: SessionsWindowProbe,
+    ) {
+        UISettings.getInstance().showToolWindowsNames = false
+        UISettings.getInstance().hideToolStripes = true
+        UISettings.getInstance().fireUISettingsChanged()
+        SwingUtilities.getWindowAncestor(root)?.setBounds(0, 0, SHOWCASE_WIDTH, SHOWCASE_HEIGHT)
+        val windows = ToolWindowManager.getInstance(project)
+        windows.toolWindowIds.filter { it != TOOL_WINDOW_ID }.forEach { windows.getToolWindow(it)?.hide() }
+        val editors = FileEditorManager.getInstance(project)
+        editors.openFiles.forEach(editors::closeFile)
+        // Its types are nowhere: the inspections would mark them.
+        PsiManager.getInstance(project).findFile(file)?.let {
+            HighlightingSettingsPerFile.getInstance(project).setHighlightingSettingForRoot(it, SKIP_INSPECTION)
+        }
+        check(editors.openFile(file, true).isNotEmpty()) { "not opened" }
+        val directory = service<ChatDirectory>()
+        sources.forEach {
+            sessions.adopt(it)
+            directory.register(project, it)
+        }
+        check(openChat(project, sources.first().sessionId, Placement.SIDEBAR)) { "not opened" }
+        val bottom = checkNotNull(probe.window()) { "no Closta window" }
+        bottom.show()
+        bottom.contentManager.contents
+            .firstOrNull()
+            ?.let(bottom.contentManager::setSelectedContent)
+    }
+
+    /**
+     * Clears what would cover the windows of [root] in a picture: the balloons saying the sessions wait, the IDE's
+     * error balloon (a window larger than the screen is an error under Wayland), and the offers to buy a product, which
+     * it hides and returns. EDT.
+     */
+    private fun quiet(root: JComponent): List<JComponent> {
+        NotificationsManager
+            .getNotificationsManager()
+            .getNotificationsOfType(Notification::class.java, project)
+            .forEach(Notification::expire)
+        MessagePool.getInstance().clearErrors()
+        val hidden = offers(root)
+        hidden.forEach { it.isVisible = false }
+        root.validate()
+        return hidden
+    }
+
+    /** Scrolls [panel]'s thread to its end. EDT. */
+    private fun scrollToEnd(panel: ChatPanel) {
+        val scroll = UIUtil.uiTraverser(panel.surfaceComponent()).filter(JBScrollPane::class.java).first() ?: return
+        val view = scroll.viewport.view
+        scroll.viewport.viewPosition = Point(0, (view.height - scroll.viewport.height).coerceAtLeast(0))
+    }
+
+    /** The buttons in [root] that offer to buy or try a product, such as "Unlock Ultimate". EDT. */
+    private fun offers(root: JComponent): List<JComponent> =
+        UIUtil
+            .uiTraverser(root)
+            .filter(JComponent::class.java)
+            .filter { component ->
+                val text = (component as? AbstractButton)?.text ?: component.accessibleContext?.accessibleName
+                text != null && OFFERS.any { it in text }
+            }.toList()
 
     /** Runs one scene; a failure is logged and written down, and the next scene still runs. */
     private suspend fun scene(
@@ -452,9 +621,13 @@ private class GalleryRun(
         component: Component,
         file: String,
     ) {
-        val image = BufferedImage(component.width.coerceAtLeast(1), component.height.coerceAtLeast(1), TYPE)
+        val scale = System.getProperty(SCALE)?.toDoubleOrNull() ?: 1.0
+        val width = (component.width.coerceAtLeast(1) * scale).roundToInt()
+        val height = (component.height.coerceAtLeast(1) * scale).roundToInt()
+        val image = BufferedImage(width, height, TYPE)
         val g = image.createGraphics()
         try {
+            g.scale(scale, scale)
             component.paint(g)
         } finally {
             g.dispose()
@@ -473,5 +646,43 @@ private class GalleryRun(
         const val OVERLAP = 40
         const val COMPOSER_BUTTONS = 3
         const val TYPE = BufferedImage.TYPE_INT_RGB
+        const val THEME = "closta.gallery.theme"
+        const val SCALE = "closta.gallery.scale"
+        const val ONLY = "closta.gallery.only"
+        const val SHOWCASE_WIDTH = 1680
+        const val SHOWCASE_HEIGHT = 1050
+        const val SHOWCASE_SIDEBAR = 660
+        const val SHOWCASE_SESSIONS = 330
+
+        /** Long enough for the editor to finish its analysis, whose label would be in the picture. */
+        const val ANALYSIS_MS = 9_000L
+        const val MODEL = "claude-opus-5-5"
+        val OFFERS = listOf("Ultimate", "Upgrade", "Trial")
+        val SHOWCASE_CODE =
+            """
+            |import java.io.IOException
+            |
+            |/** Signs users in and out. */
+            |class AuthService(
+            |    private val api: AuthApi,
+            |    private val tokens: TokenStore,
+            |) {
+            |    fun login(c: Credentials) = api.login(c)
+            |
+            |    fun refresh(token: Token): Token {
+            |        val fresh = api.refresh(token)
+            |        tokens.save(fresh)
+            |        return fresh
+            |    }
+            |
+            |    fun logout(token: Token) {
+            |        api.revoke(token)
+            |        tokens.clear()
+            |    }
+            |}
+            |
+            |class LoginFailed(cause: IOException) : Exception(cause)
+            |
+            """.trimMargin()
     }
 }
