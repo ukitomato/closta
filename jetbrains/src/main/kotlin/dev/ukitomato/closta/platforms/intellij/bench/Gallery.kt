@@ -2,7 +2,6 @@ package dev.ukitomato.closta.platforms.intellij.bench
 
 import com.intellij.codeInsight.daemon.impl.analysis.FileHighlightingSetting.SKIP_INSPECTION
 import com.intellij.codeInsight.daemon.impl.analysis.HighlightingSettingsPerFile
-import com.intellij.diagnostic.MessagePool
 import com.intellij.ide.ui.LafManager
 import com.intellij.ide.ui.UISettings
 import com.intellij.notification.Notification
@@ -54,6 +53,8 @@ import java.nio.file.Path
 import javax.imageio.ImageIO
 import javax.swing.AbstractButton
 import javax.swing.JComponent
+import javax.swing.JLabel
+import javax.swing.JLayeredPane
 import javax.swing.SwingUtilities
 import kotlin.math.roundToInt
 
@@ -175,7 +176,7 @@ private class GalleryRun(
         stage = "end"
     }
 
-    /** Switches to the theme `closta.gallery.theme` names: `light`, `dark`, or a theme's name. None: the IDE's. EDT. */
+    /** Switches to the IDE's default theme `closta.gallery.theme` names, `light` or `dark`. None: the IDE's. EDT. */
     private fun theme() {
         val name = System.getProperty(THEME) ?: return
         val lafs = LafManager.getInstance()
@@ -183,10 +184,9 @@ private class GalleryRun(
             when (name) {
                 "light" -> lafs.defaultLightLaf
                 "dark" -> lafs.defaultDarkLaf
-                else -> lafs.installedThemes.firstOrNull { it.name == name }
+                else -> error("closta.gallery.theme is light or dark, not $name")
             }
-        checkNotNull(laf) { "no theme $name in ${lafs.installedThemes.map { it.name }.toList()}" }
-        lafs.setCurrentLookAndFeel(laf, false)
+        lafs.setCurrentLookAndFeel(checkNotNull(laf) { "no default $name theme" }, false)
         lafs.updateUI()
     }
 
@@ -288,20 +288,34 @@ private class GalleryRun(
     }
 
     /**
-     * Clears what would cover the windows of [root] in a picture: the balloons saying the sessions wait, the IDE's
-     * error balloon (a window larger than the screen is an error under Wayland), and the offers to buy a product, which
-     * it hides and returns. EDT.
+     * Clears what would cover the windows of [root] in a picture: it expires the balloons saying the sessions wait, and
+     * hides and returns the offers to buy a product and the IDE's error balloon and icon (a window larger than the
+     * screen is an error under Wayland). EDT.
      */
     private fun quiet(root: JComponent): List<JComponent> {
         NotificationsManager
             .getNotificationsManager()
             .getNotificationsOfType(Notification::class.java, project)
             .forEach(Notification::expire)
-        MessagePool.getInstance().clearErrors()
-        val hidden = offers(root)
+        val hidden = offers(root) + ideErrors(root)
         hidden.forEach { it.isVisible = false }
         root.validate()
         return hidden
+    }
+
+    /**
+     * The IDE's error balloon (the layer holding the text "IDE error") and the status bar's error icon, found by its
+     * class name: the class is internal to the IDE. EDT.
+     */
+    private fun ideErrors(root: JComponent): List<JComponent> {
+        val all = UIUtil.uiTraverser(root).filter(JComponent::class.java).toList()
+        val balloons =
+            all
+                .filter { (it as? JLabel)?.text?.contains("IDE error") == true }
+                .mapNotNull { label ->
+                    generateSequence<Component>(label) { it.parent }.firstOrNull { it.parent is JLayeredPane }
+                }.filterIsInstance<JComponent>()
+        return balloons + all.filter { it.javaClass.simpleName == "IdeMessagePanel" }
     }
 
     /** Scrolls [panel]'s thread to its end. EDT. */
