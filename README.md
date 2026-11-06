@@ -1,28 +1,34 @@
 <div align="center">
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="jetbrains/src/main/resources/META-INF/pluginIcon_dark.svg">
+  <img src="jetbrains/src/main/resources/META-INF/pluginIcon.svg" width="88" alt="">
+</picture>
+
 # Closta
 
-**The Claude Code agent inside JetBrains IDEs, with the IDE's own editors, diffs and VCS changes.**
+**Claude Code as a native JetBrains IDE plugin, with Anthropic or Amazon Bedrock.**
 
-A Kotlin plugin that drives the `claude` command over its bidirectional stream-json protocol and draws the
-conversation in native Swing. No webview.
-
-[![IntelliJ](https://img.shields.io/badge/IntelliJ-2026.2%2B-000000?logo=intellijidea&logoColor=white)](https://www.jetbrains.com/idea/)
-[![Claude Code](https://img.shields.io/badge/Claude%20Code-CLI-D97757)](https://docs.claude.com/en/docs/claude-code)
-[![Amazon Bedrock](https://img.shields.io/badge/Amazon%20Bedrock-supported-FF9900)](https://aws.amazon.com/bedrock/)
-[![Kotlin](https://img.shields.io/badge/Kotlin-2.4-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org/)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
-[![Build](https://github.com/ukitomato/closta/actions/workflows/build.yml/badge.svg)](https://github.com/ukitomato/closta/actions/workflows/build.yml)
+[![IntelliJ IDEA 2026.2+](.github/assets/badges/intellij.svg)](https://www.jetbrains.com/idea/)
+[![Claude Code CLI](.github/assets/badges/claude.svg)](https://docs.claude.com/en/docs/claude-code)
+[![Amazon Bedrock](.github/assets/badges/bedrock.svg)](https://aws.amazon.com/bedrock/)
+[![Kotlin 2.4](.github/assets/badges/kotlin.svg)](https://kotlinlang.org/)
+[![JDK 21](.github/assets/badges/jdk.svg)](https://openjdk.org/)
+![Native Swing, no webview](.github/assets/badges/swing.svg)
+[![License: Apache-2.0](.github/assets/badges/license.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/ukitomato/closta)](https://github.com/ukitomato/closta/releases)
 
+English | [日本語](README.ja.md)
+
+Closta runs the Claude Code CLI you have installed and shows the conversation in the IDE's own Swing components:
+edits as diffs, a turn's changes as VCS changes, approvals as cards. No webview.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/screenshot-dark.png">
+  <img src=".github/assets/screenshot-light.png" alt="Closta in IntelliJ IDEA: a Kotlin file, a conversation waiting on an edit in the sidebar, and the Sessions window answering a question" width="900">
+</picture>
+
 </div>
-
----
-
-Running Claude Code in a terminal next to the IDE means reading its edits as text, approving them in a different
-window, and losing track of sessions that wait for you. **Closta** puts the agent in the IDE: edits arrive as diffs,
-a turn's changes as VCS changes, and every question the agent asks as a card you answer where it appears. A window at
-the bottom shows all your sessions, so the one that waits is never out of sight.
 
 <!-- Plugin description -->
 Use the Claude Code agent inside the IDE, with native editors, diffs and VCS changes.
@@ -37,8 +43,9 @@ Closta runs the `claude` command (the Claude Code CLI) and shows the conversatio
 - Rewind and fork from a message, resume saved conversations, and start a conversation in a new git worktree.
 - The `claude` command's own sign-in, or Amazon Bedrock with an MFA code. Secrets stay in the IDE's password safe.
 
-**Requirements:** the `claude` command on your `PATH` and signed in, or an Amazon Bedrock account with access to
-Claude models.
+**Requirements:** the [Claude Code](https://docs.claude.com/en/docs/claude-code/setup) CLI (`claude`) installed and on
+your `PATH`; Closta does not bundle it. Sign in with `claude`, or use an Amazon Bedrock account with access to Claude
+models.
 
 **Getting started:** open the **Closta** tool window on the right, or choose **Tools | Closta | Closta: New
 Conversation**. Amazon Bedrock is set up in **Settings | Tools | Closta**.
@@ -47,50 +54,51 @@ Conversation**. Amazon Bedrock is set up in **Settings | Tools | Closta**.
 [Ask a question](https://github.com/ukitomato/closta/discussions)
 <!-- Plugin description end -->
 
-## ✨ Features
+## More features
 
-- 💬 **Conversations in the sidebar or in editor tabs** — several at a time. The `+` of a window opens a new one in
-  that window; its ▾ menu chooses an editor tab, the sidebar or a new git worktree.
-- 🗂 **A Closta window at the bottom** — a **Sessions** tab groups every session by what waits, runs or finished, with
-  a detail pane that answers permissions, questions, plans and edits in place. An **MCP** tab lists the servers of the
-  conversation last in view; turn them on or off and reconnect them.
-- ⏭ **Jump to what waits** — **Ctrl+Alt+Shift+Period** goes to the next session that waits, from anywhere in the IDE;
-  **Alt+Shift+W** in the message box goes to the card waiting in the conversation.
-- 🃏 **Approvals as cards** — tool permissions, file edits shown as diffs, plans and questions.
-- 🔀 **A turn's changes as VCS changes**, opened in the IDE's combined diff; revert or keep them all.
-- ⏪ **Rewind and fork** — go back to before a message (the conversation only, or the files too), or continue from it
-  in a copy.
-- ⏹ **Stop and closed tabs** — Esc stops a reply. A session whose tab you close keeps running; a notification says
-  so, and Sessions stops it or opens it again.
-- 🔁 **Resume saved conversations**, and start a conversation in a new **git worktree**.
-- 🔌 **Provider switch** — next to the `+`, choose the provider new conversations start with: the `claude` command's
-  own sign-in, or **Amazon Bedrock** with an MFA code. A running conversation keeps its provider.
-- 🧠 **IDE context for the agent** — an in-process MCP server gives it the diagnostics the IDE has already found.
-- 🎛 **Model, effort and permission mode** switched while the conversation runs; image and PDF attachments.
-- 🐧 **WSL** — a project opened from `\\wsl$\…` runs `claude` inside that distribution.
-- 🌐 English UI, and Japanese when the IDE runs in Japanese.
+- The `+` of a window opens a new conversation in that window; its ▾ menu chooses an editor tab, the sidebar or a
+  new git worktree.
+- The **Sessions** tab answers permissions, questions, plans and edits in its detail pane. The **MCP** tab turns the
+  servers on or off and reconnects them.
+- A turn's changes can be reverted or kept all at once.
+- Rewind goes back to before a message: the conversation only, or the files too.
+- Esc stops a reply. A session whose tab you close keeps running; Sessions stops it or opens it again.
+- The provider switch next to the `+` chooses the provider new conversations start with. A running conversation keeps
+  its provider.
+- Model, effort and permission mode can be switched while the conversation runs. Images and PDFs can be attached.
+- A project opened from `\\wsl$\…` runs `claude` inside that distribution, where it must be installed.
+- The UI is in English, and in Japanese when the IDE runs in Japanese.
 
-## 📦 Install
+## How it works
 
-Requires IntelliJ IDEA 2026.2.4 or later (build 262+), or another IntelliJ-based IDE of the same version, and either
-the [Claude Code](https://docs.claude.com/en/docs/claude-code) CLI (`claude`) on your `PATH`, signed in, or an Amazon
-Bedrock account with access to Claude models.
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/architecture-dark.png">
+  <img src=".github/assets/architecture-light.png" alt="Closta in the JetBrains IDE talks to your claude CLI over stream-json; claude talks to Anthropic or Amazon Bedrock" width="900">
+</picture>
+
+</div>
+
+- Closta starts one `claude` process per conversation and talks to it only over stdin and stdout. What the agent may
+  do is decided by `claude` and its permission mode; Closta shows the requests and sends your answers.
+- The conversation goes from `claude` to Anthropic, or to Amazon Bedrock when that provider is chosen. Closta itself
+  calls only AWS STS, to get Bedrock's temporary credentials.
+- An in-process MCP server gives the agent the diagnostics the IDE has already found.
+
+## Install
+
+Requires IntelliJ IDEA 2026.2.4 or later (build 262+), or another IntelliJ-based IDE of the same version, and the
+[Claude Code](https://docs.claude.com/en/docs/claude-code/setup) CLI. Amazon Bedrock runs through the same `claude`
+command, so it is needed with either provider.
 
 1. Download `closta-<version>.zip` from [Releases](https://github.com/ukitomato/closta/releases).
 2. In the IDE, open **Settings | Plugins**, click the gear icon, choose **Install Plugin from Disk…**, and pick the zip.
 3. Restart the IDE.
 
-## 🚀 Usage
+## Keys
 
-| Where | What it does |
-| --- | --- |
-| **Closta** tool window (right) | A conversation in the sidebar. `+` starts a new one, ▾ chooses where, the history button resumes a saved one here, the provider switch sits next to them |
-| **Closta** tool window (bottom) | **Sessions**: every session and what it waits for, answered in place. **MCP**: the servers of the conversation last in view |
-| **Tools \| Closta \| Closta: New Conversation** | A new conversation in an editor tab |
-| **Tools \| Closta \| Closta: New Conversation in the Sidebar** | A new conversation in the Closta tool window |
-| **Tools \| Closta \| Closta: New Conversation in a Worktree** | Creates a git worktree and opens a conversation there |
-| **Tools \| Closta \| Closta: Resume a Saved Conversation** | Lists the conversations `claude` saved for the project |
-| **Tools \| Closta \| Closta: Next Waiting Session** | Goes to the next session that waits for you |
+All commands are under **Tools | Closta**.
 
 | Key | Where | What it does |
 | --- | --- | --- |
@@ -103,7 +111,7 @@ Bedrock account with access to Claude models.
 | Alt+Shift+W | Message box | Go to the card waiting for an answer |
 | `@` | Message box | Complete a file name |
 
-## ⚙️ Configuration
+## Configuration
 
 **Settings | Tools | Closta**
 
@@ -112,73 +120,16 @@ Bedrock account with access to Claude models.
   asks for an MFA code and gets temporary credentials from AWS STS; nothing needs the `aws` command or `~/.aws`.
   Model IDs for Sonnet and Haiku can be overridden.
 
-The active provider is used for new conversations; the provider switch next to a window's `+` changes the same
-choice. **Settings | Tools | Closta | Behaviour** sets whether unsaved files are saved before a message is sent,
-whether `@` file completion leaves out ignored files, and the permission mode new conversations start in.
+**Settings | Tools | Closta | Behaviour** sets whether unsaved files are saved before a message is sent, whether `@`
+file completion leaves out ignored files, and the permission mode new conversations start in.
 
-## 🔧 How it works
+## Contributing
 
-```
-   IntelliJ IDE
-     platforms/   Swing UI, tool windows, editors, diffs, settings   (the only layer that may use com.intellij)
-        │  shows
-        ▼
-     presenter/   what the screen shows, derived from the state
-        │  reads
-        ▼
-     core/        the conversation model: a pure fold of the CLI's events into state
-        ▲
-        │  events
-     providers/   the claude process, the stream-json codec, Anthropic / Bedrock / WSL launch, MCP
-        │  stdin / stdout (stream-json)
-        ▼
-   claude   (Claude Code CLI, one process per conversation)
-```
+Issues and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers building from source, the
+architecture and the performance budgets the tests hold. Security issues: see [SECURITY.md](SECURITY.md).
 
-The code is under `jetbrains/src/main/kotlin/dev/ukitomato/closta/`. `./gradlew check` runs `checkLayers`, which
-fails the build when a file breaks these rules. See [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## 📊 Performance budgets
-
-The tests hold these on a synthetic session the size of the largest one seen in use (200 requests, 2,000 tool calls,
-150 subagents):
-
-| | Budget |
-| --- | --- |
-| Folding the whole session into state | ≤ 150 ms |
-| Time per event | flat: the last 1,000 events of a 5,000+ event session cost no more than twice the first 1,000 (+20 ms) |
-| Building every row of the conversation | ≤ 300 ms |
-| One update while a reply streams in | ≤ 5 ms at p99, and only the last message's rows are rebuilt |
-
-## 🛠 Building from source
-
-JDK 21 is required; Gradle downloads the IDE it builds against (about 1 GB on the first run).
-
-```bash
-cd jetbrains
-./gradlew check buildPlugin      # tests, lint, layer and UI rules; the zip is in build/distributions/
-./gradlew runIde                 # a sandbox IDE with the plugin
-```
-
-The protocol captures the tests replay are recorded with the Node tool in [`recorder/`](recorder/README.md).
-
-## 📋 Notes
-
-- Closta starts one `claude` process per conversation and talks to it only over stdin and stdout. What the agent may
-  do is decided by `claude` and its permission mode; Closta shows the requests and sends your answers.
-- The conversation goes from `claude` to Anthropic, or to Amazon Bedrock when that provider is chosen. Closta itself
-  calls only AWS STS, to get Bedrock's temporary credentials.
-- A project opened from a WSL path needs `claude` installed inside that distribution.
-
-## 🤝 Contributing
-
-Issues and pull requests are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) first. Security issues:
-see [SECURITY.md](SECURITY.md).
-
-## 📄 License
+## License
 
 [Apache License 2.0](LICENSE). Third-party notices are in [NOTICE](NOTICE).
-
-### Disclaimer
 
 Not affiliated with or endorsed by Anthropic. Claude is a trademark of Anthropic.

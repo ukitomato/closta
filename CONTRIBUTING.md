@@ -34,9 +34,30 @@ Development aids, not shown to users:
 - **Tools | Closta: Measure Performance** appears in an internal IDE or one started with `-Dclosta.dev=true`
   (for `runIde`, add it to `jvmArgumentProviders` or the run configuration's VM options).
 - `./gradlew runIde -Pclosta.gallery=<folder>` opens a made-up conversation with every kind of row and card, saves
-  PNGs of it into `<folder>`, and closes the IDE.
+  PNGs of it into `<folder>`, and closes the IDE. The README's screenshots are its `showcase.png`, taken with
+  `-Pclosta.gallery.only=showcase -Pclosta.gallery.scale=2` once with `-Pclosta.gallery.theme=light` and once with
+  `-Pclosta.gallery.theme=dark`.
 
 The protocol recorder in `recorder/` has its own tests: `cd recorder && npm test` (Node 18+, no dependencies).
+
+## Architecture
+
+```
+   IntelliJ IDE
+     platforms/   Swing UI, tool windows, editors, diffs, settings   (the only layer that may use com.intellij)
+        │  shows
+        ▼
+     presenter/   what the screen shows, derived from the state
+        │  reads
+        ▼
+     core/        the conversation model: a pure fold of the CLI's events into state
+        ▲
+        │  events
+     providers/   the claude process, the stream-json codec, Anthropic / Bedrock / WSL launch, MCP
+        │  stdin / stdout (stream-json)
+        ▼
+   claude   (Claude Code CLI, one process per conversation)
+```
 
 ## Layer rules
 
@@ -50,6 +71,18 @@ The code lives in four layers under `jetbrains/src/main/kotlin/dev/ukitomato/clo
 
 Because of rule 1, `presenter/` cannot look up localized text: it hands the screen values (enums, sealed types), and
 `platforms/` turns them into words with `ClostaBundle`.
+
+## Performance budgets
+
+The tests hold these on a synthetic session the size of the largest one seen in use (200 requests, 2,000 tool calls,
+150 subagents). A change that breaks one fails `check`.
+
+| | Budget |
+| --- | --- |
+| Folding the whole session into state | ≤ 150 ms |
+| Time per event | flat: the last 1,000 events of a 5,000+ event session cost no more than twice the first 1,000 (+20 ms) |
+| Building every row of the conversation | ≤ 300 ms |
+| One update while a reply streams in | ≤ 5 ms at p99, and only the last message's rows are rebuilt |
 
 ## Conventions
 
