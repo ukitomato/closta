@@ -27,3 +27,5 @@ dependencyResolutionManagement {
         }
     }
 }
+
+include("dev")

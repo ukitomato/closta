@@ -1,0 +1,5 @@
+<!-- id / name / version / vendor / idea-version are patched in from build.gradle.kts. -->
+<idea-plugin>
+    <depends>com.intellij.modules.platform</depends>
+    <depends>dev.ukitomato.closta</depends>
+</idea-plugin>
