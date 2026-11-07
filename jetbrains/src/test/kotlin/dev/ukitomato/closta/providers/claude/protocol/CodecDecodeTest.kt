@@ -72,6 +72,23 @@ class CodecDecodeTest {
     }
 
     @Test
+    fun `an assistant message the CLI made itself has no request_id and says its error`() {
+        // sdk.d.ts SDKAssistantMessage: request_id and error are optional. Seen from 2.1.319 when logged out.
+        val line =
+            """{"type":"assistant","message":{"id":"m1","model":"<synthetic>","role":"assistant",""" +
+                """"type":"message","content":[{"type":"text","text":"Not logged in · Please run /login"}]},""" +
+                """"parent_tool_use_id":null,"session_id":"s","uuid":"u","timestamp":"t",""" +
+                """"user_message_uuid":"c1","error":"authentication_failed","is_api_error_message":true}"""
+
+        val assistant = assertInstanceOf(AgentEvent.Assistant::class.java, StreamJsonCodec.decode(line))
+        assertAll(
+            { assertNull(assistant.requestId) },
+            { assertEquals("authentication_failed", assistant.error) },
+            { assertEquals("c1", assistant.userMessageUuid) },
+        )
+    }
+
+    @Test
     fun `decode never throws, whatever the input`() {
         val inputs =
             listOf(

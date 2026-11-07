@@ -228,7 +228,7 @@ object StreamJsonCodec {
                     uuid = f.text("uuid"),
                     sessionId = f.text("session_id"),
                     timestamp = f.text("timestamp"),
-                    requestId = f.text("request_id"),
+                    requestId = f.textOrNull("request_id"),
                     message = f.raw("message"),
                     parentToolUseId = f.textOrNull("parent_tool_use_id"),
                     userMessageUuid = f.textOrNull("user_message_uuid"),
@@ -236,6 +236,7 @@ object StreamJsonCodec {
                     wireToolInputs = f.rawOrNull("wire_tool_inputs"),
                     subagentType = f.textOrNull("subagent_type"),
                     taskDescription = f.textOrNull("task_description"),
+                    error = f.textOrNull("error"),
                 )
             },
             AgentEventKind.COMMAND_LIFECYCLE to { f ->

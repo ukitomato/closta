@@ -72,6 +72,9 @@ dependencies {
         bundledModule("intellij.platform.jewel.markdown.extensions.gfmTables")
         // The changes of a turn are shown as VCS changes in the IDE's combined diff.
         bundledModule("intellij.platform.vcs.impl")
+        // Signing in opens the IDE's terminal: `claude auth login` needs a terminal of its own.
+        bundledPlugin("org.jetbrains.plugins.terminal")
+        bundledModule("intellij.terminal.frontend")
     }
 }
 

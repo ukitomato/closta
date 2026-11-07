@@ -61,6 +61,9 @@ interface ThreadSurface : Disposable {
     var onOpenAgent: (toolUseId: String) -> Unit
     var onReview: (askKey: String) -> Unit
 
+    /** The CLI said it is not signed in, and the user chose to sign in. */
+    var onSignIn: () -> Unit
+
     /** What an ask (or, at the end of its turn, the turn's end) offers now. */
     var askActions: (askKey: String, atEnd: Boolean) -> AskActions
 
@@ -90,6 +93,7 @@ class SwingThreadSurface(
     override var onLetGo: () -> Unit = {}
     override var onOpenAgent: (String) -> Unit = {}
     override var onReview: (String) -> Unit = {}
+    override var onSignIn: () -> Unit = {}
     override var askActions: (String, Boolean) -> AskActions = { _, _ -> AskActions(null, null, null, null) }
     override var onAskAction: (String, Boolean, AskAction) -> Unit = { _, _, _ -> }
     private var approvals: (String) -> ApprovalRecord? = { null }
@@ -103,6 +107,8 @@ class SwingThreadSurface(
             override fun openAgent(toolUseId: String) = onOpenAgent(toolUseId)
 
             override fun review(askKey: String) = onReview(askKey)
+
+            override fun signIn() = onSignIn()
 
             override fun askActions(
                 askKey: String,

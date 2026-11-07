@@ -47,6 +47,8 @@ data class Transcript(
     val turnEnds: Map<String, TurnEndRecord> = emptyMap(),
     /** What the host found each turn changed, by the key of the user message the turn answered. */
     val turnChanges: Map<String, TurnChangesRecord> = emptyMap(),
+    /** The key of the message whose reply said the CLI is not signed in, until the model's next reply. */
+    val signIn: String? = null,
 )
 
 enum class Role(

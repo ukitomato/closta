@@ -65,7 +65,7 @@ private fun foldEvent(
                 .let { it.withOperations(it.operations.resulted(event)) }
                 .let(::stopTaken)
         is AgentEvent.StreamEvent -> foldStream(transcript, event)
-        is AgentEvent.Assistant -> foldAssistant(transcript, event)
+        is AgentEvent.Assistant -> foldSignIn(foldAssistant(transcript, event), event)
         is AgentEvent.User -> foldUser(transcript, event)
         is AgentEvent.ControlRequest -> foldRequest(transcript, event, after)
         is AgentEvent.ControlResponse ->

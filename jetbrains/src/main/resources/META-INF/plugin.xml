@@ -8,6 +8,8 @@
         <module name="intellij.platform.jewel.markdown.extensions.gfmTables"/>
         <!-- A turn's changes go to the IDE's combined diff as VCS changes. -->
         <module name="intellij.platform.vcs.impl"/>
+        <!-- Signing in runs `claude auth login` in a tab of the IDE's terminal. -->
+        <module name="intellij.terminal.frontend"/>
     </dependencies>
 
     <extensions defaultExtensionNs="com.intellij">

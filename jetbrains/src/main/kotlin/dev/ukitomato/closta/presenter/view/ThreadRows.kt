@@ -95,6 +95,13 @@ data class TurnEndRow(
     override val opens: Boolean = false,
 ) : ThreadRow
 
+/** After the reply that said the CLI is not signed in: how to sign in, as the `/login` it names cannot run here. */
+data class SignInRow(
+    override val key: String,
+) : ThreadRow {
+    override val opens = false
+}
+
 /** The tools that only read; two or more in a row fold into one [ExploredRow]. */
 val READ_ONLY_TOOLS: Set<String> = setOf("Read", "Grep", "Glob", "LS")
 
@@ -123,6 +130,7 @@ class ThreadRows {
             val made = kept ?: rowsOf(message, nextParts)
             nextMessages[message] = made
             rows += made
+            if (message.key == transcript.signIn) rows += SignInRow("${message.key}/sign-in")
             byAnchor[message.key]?.forEach { rows += cardRow(it, nextCards) }
             turnEndRow(transcript, message.key, followed)?.let {
                 nextEnds[it.key] = it

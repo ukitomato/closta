@@ -26,6 +26,7 @@ import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
+import dev.ukitomato.closta.platforms.intellij.auth.SignInTerminal
 import dev.ukitomato.closta.platforms.intellij.composer.ComposerPanel
 import dev.ukitomato.closta.platforms.intellij.composer.SendBlock
 import dev.ukitomato.closta.platforms.intellij.composer.ToolbarButton
@@ -353,6 +354,7 @@ class ChatPanel(
             }
         }
         surface.onReview = { askKey -> changes.review(askKey) }
+        surface.onSignIn = { SignInTerminal.open(project, source.workingDirectory ?: project.basePath) }
         surface.askActions = { askKey, atEnd ->
             val view = source.view.value
             val running = threadIsRunning(view.conversation, view.transcript)

@@ -275,7 +275,7 @@ class ProjectTranscriptsTest {
         assertEquals("""{"stdout":"ok"}""", tool.toolUseResult?.text)
         val assistant = read.events[1] as AgentEvent.Assistant
         assertEquals(SESSION, assistant.sessionId)
-        assertTrue(assistant.requestId.startsWith("req_"))
+        assertTrue(assistant.requestId.orEmpty().startsWith("req_"))
         assertTrue(assistant.message.text.contains("msg_1"))
     }
 

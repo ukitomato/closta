@@ -93,12 +93,15 @@ sealed interface AgentEvent {
         override val kind: AgentEventKind get() = AgentEventKind.STREAM_EVENT
     }
 
-    /** A completed assistant message. */
+    /**
+     * A completed assistant message. One the CLI made itself in place of the model's (`model` `<synthetic>`, such as
+     * "Not logged in") has no [requestId] and names its failure in [error] (sdk.d.ts `SDKAssistantMessageError`).
+     */
     data class Assistant(
         val uuid: String,
         val sessionId: String,
         val timestamp: String,
-        val requestId: String,
+        val requestId: String?,
         val message: RawJson,
         val parentToolUseId: String? = null,
         val userMessageUuid: String? = null,
@@ -106,6 +109,7 @@ sealed interface AgentEvent {
         val wireToolInputs: RawJson? = null,
         val subagentType: String? = null,
         val taskDescription: String? = null,
+        val error: String? = null,
     ) : Known {
         override val kind: AgentEventKind get() = AgentEventKind.ASSISTANT
     }

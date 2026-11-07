@@ -1,5 +1,6 @@
 package dev.ukitomato.closta.presenter.view
 
+import com.google.gson.JsonParser
 import dev.ukitomato.closta.platforms.intellij.session.SessionView
 import dev.ukitomato.closta.providers.claude.protocol.StreamJsonCodec
 import dev.ukitomato.closta.providers.claude.synthetic.StreamScript
@@ -57,6 +58,57 @@ class ThreadRowsTest {
         assertEquals(sent.size, asks.size)
         assertEquals(sent, asks.map { it.attachments })
         assertTrue(asks.any { it.attachments.isNotEmpty() })
+    }
+
+    /**
+     * The lines 2.1.319 writes for send [command] when logged out: no stream events, an assistant line with no
+     * request_id that names its error, an error result, and the command cancelled.
+     */
+    private fun signedOut(
+        command: String,
+        from: SessionView = SessionView(),
+    ): SessionView {
+        fun lifecycle(state: String) =
+            """{"type":"command_lifecycle","uuid":"l-$state","session_id":"s","command_uuid":"$command",""" +
+                """"state":"$state"}"""
+        val lines =
+            listOf(
+                lifecycle("queued"),
+                lifecycle("started"),
+                """{"type":"assistant","message":{"id":"m-$command","model":"<synthetic>","role":"assistant",""" +
+                    """"type":"message","content":[{"type":"text","text":"$NOT_LOGGED_IN"}]},""" +
+                    """"parent_tool_use_id":null,"session_id":"s","uuid":"a-$command","timestamp":"t",""" +
+                    """"user_message_uuid":"$command","error":"authentication_failed","is_api_error_message":true}""",
+                StreamScript().apply { result(NOT_LOGGED_IN) }.lines.single().let {
+                    val result = JsonParser.parseString(it).asJsonObject
+                    result.addProperty("is_error", true)
+                    result.addProperty("user_message_uuid", command)
+                    result.toString()
+                },
+                lifecycle("cancelled"),
+            )
+        return lines.fold(from.sent(PresenterInput.UserSent("u-$command", "hi", uuid = command))) { view, line ->
+            view.event(PresenterInput.Event(StreamJsonCodec.decode(line)))
+        }
+    }
+
+    @Test
+    fun aReplyTheCliMadeItselfIsShownAsTextWithASignInRowAfterIt() {
+        val rows = ThreadRows().of(signedOut("c1").transcript)
+        assertEquals(listOf(NOT_LOGGED_IN), rows.filterIsInstance<TextRow>().map { it.markdown })
+        // Right after the reply that says so, and once: the `/login` it names cannot be run from here.
+        val signIn = rows.filterIsInstance<SignInRow>().single()
+        assertEquals(rows.indexOfFirst { it is TextRow } + 1, rows.indexOf(signIn))
+    }
+
+    @Test
+    fun theSignInRowGoesOnceAReplyComesFromTheModel() {
+        // 2.1.319 reads the credentials again on the next send, so the session goes on after signing in.
+        val twice = signedOut("c2", signedOut("c1"))
+        assertEquals(1, ThreadRows().of(twice.transcript).filterIsInstance<SignInRow>().size, "only the last")
+
+        val after = fold("again", StreamScript().apply { assistant("m2", listOf(StreamScript.text("ok"))) }, twice)
+        assertTrue(ThreadRows().of(after.transcript).none { it is SignInRow })
     }
 
     @Test
@@ -133,5 +185,9 @@ class ThreadRowsTest {
         val after = rows.of(grown.transcript)
         before.forEachIndexed { index, row -> assertSame(row, after[index]) }
         assertTrue(after.size > before.size)
+    }
+
+    private companion object {
+        const val NOT_LOGGED_IN = "Not logged in · Please run /login"
     }
 }

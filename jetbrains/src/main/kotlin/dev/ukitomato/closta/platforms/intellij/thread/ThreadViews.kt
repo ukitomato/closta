@@ -11,6 +11,8 @@ import com.intellij.openapi.ui.popup.Balloon
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.ui.AnimatedIcon
 import com.intellij.ui.ColorUtil
+import com.intellij.ui.EditorNotificationPanel
+import com.intellij.ui.InlineBanner
 import com.intellij.ui.InplaceButton
 import com.intellij.ui.PopupHandler
 import com.intellij.ui.SimpleColoredComponent
@@ -32,7 +34,9 @@ import dev.ukitomato.closta.presenter.view.AskRow
 import dev.ukitomato.closta.presenter.view.AttachmentRecord
 import dev.ukitomato.closta.presenter.view.CardRow
 import dev.ukitomato.closta.presenter.view.ExploredRow
+import dev.ukitomato.closta.presenter.view.SignInRow
 import dev.ukitomato.closta.presenter.view.ThinkingRow
+import dev.ukitomato.closta.presenter.view.ThreadRow
 import dev.ukitomato.closta.presenter.view.TodoRow
 import dev.ukitomato.closta.presenter.view.ToolDetail
 import dev.ukitomato.closta.presenter.view.ToolLine
@@ -99,6 +103,9 @@ interface RowActions {
 
     /** Opens the file at [path] (a sent file's, wherever it is) in the editor. */
     fun openFile(path: String)
+
+    /** Signs the CLI in, in a terminal: it said it is not signed in. */
+    fun signIn()
 }
 
 /**
@@ -122,18 +129,21 @@ class ThreadRowViews(
         when (row) {
             is ShownRow.Block -> block(row)
             is ShownRow.Typing -> JBLabel(AnimatedIcon.Default.INSTANCE).apply { horizontalAlignment = JBLabel.LEFT }
-            is ShownRow.Of ->
-                when (val r = row.row) {
-                    is AskRow -> ask(r)
-                    is ThinkingRow -> thinking(r)
-                    is ToolRow -> tool(r)
-                    is ExploredRow -> explored(r)
-                    is TodoRow -> todo(r)
-                    is CardRow -> cards.create(r.card)
-                    is TurnEndRow -> turnEnd(r)
-                    // A row this version does not draw takes no room.
-                    else -> JPanel().apply { preferredSize = Dimension(0, 0) }
-                }
+            is ShownRow.Of -> of(row.row)
+        }
+
+    private fun of(row: ThreadRow): JComponent =
+        when (row) {
+            is AskRow -> ask(row)
+            is ThinkingRow -> thinking(row)
+            is ToolRow -> tool(row)
+            is ExploredRow -> explored(row)
+            is TodoRow -> todo(row)
+            is CardRow -> cards.create(row.card)
+            is TurnEndRow -> turnEnd(row)
+            is SignInRow -> signIn()
+            // A row this version does not draw takes no room.
+            else -> JPanel().apply { preferredSize = Dimension(0, 0) }
         }
 
     override fun update(
@@ -318,6 +328,12 @@ class ThreadRowViews(
                 add(AskActionViews.turnEndRewind(row.askKey, actions))
             }
         }
+
+    // The IDE's own banner for "something to do before this can go on", with the one thing to do.
+    private fun signIn(): JComponent =
+        InlineBanner(ClostaBundle.message("thread.signIn.text"), EditorNotificationPanel.Status.Warning)
+            .showCloseButton(false)
+            .addAction(ClostaBundle.message("thread.signIn.action")) { actions.signIn() }
 
     private fun attachmentLabel(attachment: AttachmentRecord): JComponent {
         val icon =
