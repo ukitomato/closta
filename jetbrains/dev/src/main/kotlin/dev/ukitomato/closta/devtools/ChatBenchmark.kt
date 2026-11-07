@@ -11,7 +11,6 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.ui.scale.JBUIScale
 import dev.ukitomato.closta.platforms.intellij.chat.ChatPanel
 import dev.ukitomato.closta.platforms.intellij.chat.ChatSessions
-import dev.ukitomato.closta.platforms.intellij.chat.ChatSource
 import dev.ukitomato.closta.platforms.intellij.chat.ChatVirtualFile
 import dev.ukitomato.closta.platforms.intellij.session.SessionView
 import dev.ukitomato.closta.presenter.view.PresenterInput
@@ -85,7 +84,7 @@ class ChatBenchmark(
         try {
             settleHeap()
             val heapBefore = usedHeapMb()
-            val source = ChatSource.Fixed("benchmark", history)
+            val source = FixedChatSource("benchmark", history)
             val file: VirtualFile =
                 when (kind) {
                     Target.EDITOR -> BaselineVirtualFile(source)

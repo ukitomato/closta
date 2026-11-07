@@ -14,10 +14,8 @@ import dev.ukitomato.closta.platforms.intellij.thread.CardAnswer
 import dev.ukitomato.closta.presenter.view.RewindOutcome
 import dev.ukitomato.closta.presenter.view.RewindRecord
 import dev.ukitomato.closta.presenter.view.threadIsRunning
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -28,16 +26,19 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Where a conversation on screen comes from: a real session, or a fixed one the benchmark pushes to. Disposing it ends
+ * Where a conversation on screen comes from: a real session, or a fixed one the dev tools push to. Disposing it ends
  * it (a real session is closed). Never logs what is said.
  */
 @Suppress("TooManyFunctions") // one function per command the screen sends
-sealed interface ChatSource : Disposable {
+interface ChatSource : Disposable {
     val sessionId: String
     val title: String
     val view: StateFlow<SessionView>
     val notice: StateFlow<SessionNotice?>
     val canSend: StateFlow<Boolean>
+
+    /** Whether it is still starting: when it cannot send, that tells "starting" from "ended". */
+    val starting: Boolean
 
     /** Where its CLI runs (a worktree's folder, or the project's); null when it has none. */
     val workingDirectory: String?
@@ -99,6 +100,7 @@ sealed interface ChatSource : Disposable {
                 .stateIn(scope, SharingStarted.Eagerly, SessionNotice.of(runtime.status.value))
         override val canSend: StateFlow<Boolean> =
             runtime.status.map { it is SessionStatus.Running }.stateIn(scope, SharingStarted.Eagerly, false)
+        override val starting: Boolean get() = runtime.status.value is SessionStatus.Starting
 
         /** When each approval was first seen here: the answer tells the CLI how long the user took. */
         private val seen = ConcurrentHashMap<String, Instant>()
@@ -225,63 +227,6 @@ sealed interface ChatSource : Disposable {
             unlooked.forEach(changes::drop)
             project.service<ClaudeSessionService>().close(runtime.id)
         }
-    }
-
-    /**
-     * A conversation handed over whole and then pushed to by its owner (the benchmark, the gallery); sending does
-     * nothing. It shows [notice] and [canSend] as given, so the gallery can paint a starting, failed or ended session.
-     * Its answers go to [answered], where the owner may push what the CLI would show next.
-     */
-    @Suppress("TooManyFunctions") // one override per command
-    class Fixed(
-        override val title: String,
-        initial: SessionView,
-        override val sessionId: String = "fixed-${UUID.randomUUID()}",
-        notice: SessionNotice? = null,
-        canSend: Boolean = false,
-        private val answered: (CardAnswer) -> Unit = {},
-    ) : ChatSource {
-        private val state = MutableStateFlow(initial)
-        override val view: StateFlow<SessionView> = state.asStateFlow()
-        override val notice: StateFlow<SessionNotice?> = MutableStateFlow(notice)
-        override val canSend: StateFlow<Boolean> = MutableStateFlow(canSend)
-        override val opensWithContent = true
-
-        fun push(next: SessionView) {
-            state.value = next
-        }
-
-        override suspend fun send(
-            text: String,
-            attachments: List<Attachment>,
-        ) = Unit
-
-        override suspend fun switchModel(model: String) = Unit
-
-        override suspend fun switchEffort(effort: String) = Unit
-
-        override suspend fun switchMode(mode: String) = Unit
-
-        override suspend fun respond(answer: CardAnswer) = answered(answer)
-
-        override suspend fun interrupt() = Unit
-
-        override suspend fun stopTask(taskId: String) = Unit
-
-        override suspend fun requestMcpStatus() = Unit
-
-        override suspend fun setMcpServerEnabled(
-            name: String,
-            enabled: Boolean,
-        ) = Unit
-
-        override suspend fun reconnectMcpServer(name: String) = Unit
-
-        override val workingDirectory: String? = null
-
-        override suspend fun rewindFiles(messageId: String): RewindRecord? = null
-
-        override fun dispose() = Unit
     }
 }
 

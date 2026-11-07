@@ -14,7 +14,6 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.testFramework.LightVirtualFile
 import dev.ukitomato.closta.devtools.baseline.EditorSurface
 import dev.ukitomato.closta.platforms.intellij.chat.ChatPanel
-import dev.ukitomato.closta.platforms.intellij.chat.ChatSource
 import dev.ukitomato.closta.platforms.intellij.session.ClaudeSessionService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -24,7 +23,7 @@ import javax.swing.JComponent
 
 /** The benchmark's baseline: the whole conversation in one IDE editor, to weigh the chat against the editor itself. */
 class BaselineVirtualFile(
-    val source: ChatSource.Fixed,
+    val source: FixedChatSource,
 ) : LightVirtualFile("IDE editor (baseline)") {
     init {
         isWritable = false

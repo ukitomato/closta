@@ -10,7 +10,6 @@ import com.intellij.openapi.wm.WindowManager
 import com.intellij.openapi.wm.ex.ToolWindowEx
 import dev.ukitomato.closta.platforms.intellij.chat.ChatDirectory
 import dev.ukitomato.closta.platforms.intellij.chat.ChatSessions
-import dev.ukitomato.closta.platforms.intellij.chat.ChatSource
 import dev.ukitomato.closta.platforms.intellij.chat.WasRunningMark
 import dev.ukitomato.closta.platforms.intellij.chat.clearWasRunningMark
 import dev.ukitomato.closta.platforms.intellij.chat.markStopped
@@ -95,10 +94,10 @@ internal class SessionsGallery(
             kind: String,
             title: String,
             view: SessionView,
-            answered: (ChatSource.Fixed) -> Unit = {},
-        ): ChatSource.Fixed {
-            lateinit var source: ChatSource.Fixed
-            source = ChatSource.Fixed(title, view, answered = { answered(source) })
+            answered: (FixedChatSource) -> Unit = {},
+        ): FixedChatSource {
+            lateinit var source: FixedChatSource
+            source = FixedChatSource(title, view, answered = { answered(source) })
             sessions.adopt(source)
             directory.register(project, source)
             ids[kind] = source.sessionId

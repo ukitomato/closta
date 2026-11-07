@@ -30,12 +30,12 @@ import dev.ukitomato.closta.platforms.intellij.auth.SignInTerminal
 import dev.ukitomato.closta.platforms.intellij.composer.ComposerPanel
 import dev.ukitomato.closta.platforms.intellij.composer.SendBlock
 import dev.ukitomato.closta.platforms.intellij.composer.ToolbarButton
+import dev.ukitomato.closta.platforms.intellij.composer.sendBlockOf
 import dev.ukitomato.closta.platforms.intellij.composer.tip
 import dev.ukitomato.closta.platforms.intellij.ide.htmlEscaped
 import dev.ukitomato.closta.platforms.intellij.session.ClaudeSessionService
 import dev.ukitomato.closta.platforms.intellij.session.SessionNotice
 import dev.ukitomato.closta.platforms.intellij.session.SessionRelaunch
-import dev.ukitomato.closta.platforms.intellij.session.SessionStatus
 import dev.ukitomato.closta.platforms.intellij.session.SessionView
 import dev.ukitomato.closta.platforms.intellij.settings.ProvidersConfigurable
 import dev.ukitomato.closta.platforms.intellij.thread.SwingThreadSurface
@@ -400,7 +400,11 @@ class ChatPanel(
         scope.launch(Dispatchers.EDT) {
             source.canSend.collect { sendable ->
                 val view = source.view.value
-                composer.show(composerState(view.conversation, view.transcript), sendable, sendBlock(sendable))
+                composer.show(
+                    composerState(view.conversation, view.transcript),
+                    sendable,
+                    sendBlockOf(sendable, source.starting),
+                )
             }
         }
         scope.launch(Dispatchers.EDT) {
@@ -410,23 +414,14 @@ class ChatPanel(
                 // A start that fails keeps canSend false, so the composer learns it ended from the notice.
                 val view = source.view.value
                 val sendable = source.canSend.value
-                composer.show(composerState(view.conversation, view.transcript), sendable, sendBlock(sendable))
+                composer.show(
+                    composerState(view.conversation, view.transcript),
+                    sendable,
+                    sendBlockOf(sendable, source.starting),
+                )
             }
         }
     }
-
-    /**
-     * Why nothing can be sent: a live session is starting or has ended; a fixed one (the gallery) has ended when it
-     * shows a notice, and is starting when it shows none.
-     */
-    private fun sendBlock(sendable: Boolean): SendBlock =
-        when {
-            sendable -> SendBlock.NONE
-            source is ChatSource.Live ->
-                if (source.runtime.status.value is SessionStatus.Starting) SendBlock.STARTING else SendBlock.CLOSED
-            source.notice.value != null -> SendBlock.CLOSED
-            else -> SendBlock.STARTING
-        }
 
     /**
      * The session's failure or end as the IDE's error banner across the panel, its text wrapped to the panel's width,
@@ -511,13 +506,16 @@ class ChatPanel(
             val shown = rows.of(transcript)
             val sendable = source.canSend.value
             // A resume reads its earlier conversation before the CLI is up: until then the thread is loading.
-            surface.loading(
-                source.opensWithContent && sendBlock(sendable) == SendBlock.STARTING && transcript.messages.size == 0,
-            )
+            val starting = sendBlockOf(sendable, source.starting) == SendBlock.STARTING
+            surface.loading(source.opensWithContent && starting && transcript.messages.size == 0)
             surface.show(shown) { transcript.approvals[it] }
             composer.cardsWaiting(shown.count { it is CardRow && it.card.answered == null })
             changesBar.show(changesBar(shown, changes.settled))
-            composer.show(composerState(view.conversation, transcript), sendable, sendBlock(sendable))
+            composer.show(
+                composerState(view.conversation, transcript),
+                sendable,
+                sendBlockOf(sendable, source.starting),
+            )
             running.show(runningTasks(transcript))
             tabs.show(view)
             followTitleAndHead(view)

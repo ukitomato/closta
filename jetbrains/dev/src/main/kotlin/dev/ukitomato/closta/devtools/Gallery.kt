@@ -233,13 +233,13 @@ private class GalleryRun(
         }
 
     /** The showcase's sessions: the one in the sidebar (waiting on an edit) first, the one chosen in Sessions next. */
-    private fun showcaseSources(): List<ChatSource.Fixed> =
+    private fun showcaseSources(): List<FixedChatSource> =
         listOf(
-            ChatSource.Fixed("retry-login", GallerySession.view(GallerySession.Waits.EDIT, model = MODEL)),
+            FixedChatSource("retry-login", GallerySession.view(GallerySession.Waits.EDIT, model = MODEL)),
             showcaseSource("fix-ci", GallerySession.Waits.QUESTION, "Fix the CI cache"),
             showcaseSource("billing-plan", GallerySession.Waits.PLAN, "Plan reissuing invoices from the API"),
             showcaseSource("explore-api", GallerySession.Waits.NOTHING, "Find where the API routes are handled"),
-            ChatSource.Fixed(
+            FixedChatSource(
                 "migrate-db",
                 GallerySession.firstTurn(true, "Write the migrations that split the users table", MODEL),
             ),
@@ -249,7 +249,7 @@ private class GalleryRun(
         title: String,
         waits: GallerySession.Waits,
         ask: String,
-    ) = ChatSource.Fixed(title, GallerySession.view(waits, ask, MODEL))
+    ) = FixedChatSource(title, GallerySession.view(waits, ask, MODEL))
 
     /**
      * Sizes the window of [root], leaves only [file] in the editor and only the sidebar open, lists [sources], opens
@@ -258,7 +258,7 @@ private class GalleryRun(
     private fun showcaseOpen(
         root: JComponent,
         file: LightVirtualFile,
-        sources: List<ChatSource.Fixed>,
+        sources: List<FixedChatSource>,
         probe: SessionsWindowProbe,
     ) {
         UISettings.getInstance().showToolWindowsNames = false
@@ -359,7 +359,7 @@ private class GalleryRun(
      */
     private suspend fun conversation(view: SessionView): List<ChatSource> {
         val opened =
-            listOf(ChatSource.Fixed("Gallery (sidebar)", view), ChatSource.Fixed("Gallery (tab)", view))
+            listOf(FixedChatSource("Gallery (sidebar)", view), FixedChatSource("Gallery (tab)", view))
         withContext(Dispatchers.EDT) {
             opened.forEach { sessions.adopt(it) }
             openChat(project, opened[0].sessionId, Placement.SIDEBAR)
@@ -413,11 +413,11 @@ private class GalleryRun(
     private suspend fun states(views: GalleryViews) {
         sidebarScene(
             "state-starting.png",
-            ChatSource.Fixed("Gallery (starting)", SessionView(), notice = SessionNotice.of(SessionStatus.Starting)),
+            FixedChatSource("Gallery (starting)", SessionView(), notice = SessionNotice.of(SessionStatus.Starting)),
         )
         sidebarScene(
             "state-failed.png",
-            ChatSource.Fixed(
+            FixedChatSource(
                 "Gallery (failed)",
                 SessionView(),
                 notice = SessionNotice.of(SessionStatus.Failed(SessionFailure.CommandNotFound)),
@@ -425,11 +425,11 @@ private class GalleryRun(
         )
         sidebarScene(
             "state-ended.png",
-            ChatSource.Fixed("Gallery (ended)", views.idle, notice = SessionNotice.of(SessionStatus.Ended)),
+            FixedChatSource("Gallery (ended)", views.idle, notice = SessionNotice.of(SessionStatus.Ended)),
         )
         sidebarScene(
             "state-bypass.png",
-            ChatSource.Fixed(
+            FixedChatSource(
                 "Gallery (bypass)",
                 GallerySession.withMode(views.idle, "bypassPermissions"),
                 canSend = true,
@@ -437,7 +437,7 @@ private class GalleryRun(
         )
         sidebarScene(
             "state-ready.png",
-            ChatSource.Fixed("Gallery (ready)", views.idle, canSend = true),
+            FixedChatSource("Gallery (ready)", views.idle, canSend = true),
             listOf("popup-model.png", "popup-mode.png", "popup-attach.png"),
         ) { panel ->
             popup(panel, "popup-model.png") { it.getOrNull(2) }
@@ -452,7 +452,7 @@ private class GalleryRun(
      */
     private suspend fun sidebarScene(
         file: String,
-        source: ChatSource.Fixed,
+        source: FixedChatSource,
         dependents: List<String> = emptyList(),
         then: suspend (ChatPanel) -> Unit = {},
     ) {
@@ -538,7 +538,7 @@ private class GalleryRun(
     /** The MCP tab showing a conversation whose CLI listed three servers ([GallerySession.withMcp]). */
     private suspend fun mcp(idle: SessionView) =
         scene("mcp.png") {
-            val source = ChatSource.Fixed("Gallery (MCP)", GallerySession.withMcp(idle))
+            val source = FixedChatSource("Gallery (MCP)", GallerySession.withMcp(idle))
             try {
                 withContext(Dispatchers.EDT) {
                     sessions.adopt(source)

@@ -56,6 +56,17 @@ class StatusMessages {
 /** Why nothing can be sent now, or [NONE]. */
 enum class SendBlock { NONE, STARTING, CLOSED }
 
+/** Why nothing can be sent: [NONE] when [sendable], else the session is [starting] or has ended. */
+fun sendBlockOf(
+    sendable: Boolean,
+    starting: Boolean,
+): SendBlock =
+    when {
+        sendable -> SendBlock.NONE
+        starting -> SendBlock.STARTING
+        else -> SendBlock.CLOSED
+    }
+
 /** What the composer says when a message cannot be sent; null when it can. */
 fun sendBlockReason(block: SendBlock): String? =
     when (block) {
