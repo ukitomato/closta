@@ -73,14 +73,18 @@ class Gallery : ProjectActivity {
     override suspend fun execute(project: Project) {
         val out = System.getProperty(PROPERTY)?.let(Path::of) ?: return
         try {
-            withContext(Dispatchers.EDT) { Files.createDirectories(out) }
+            withContext(Dispatchers.IO) { Files.createDirectories(out) }
             GalleryRun(project, out).run()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (
             @Suppress("TooGenericExceptionCaught") failure: Exception,
         ) {
             thisLogger().warn("gallery failed", failure)
         } finally {
-            withContext(Dispatchers.EDT) { ApplicationManager.getApplication().exit(true, true, false) }
+            withContext(NonCancellable + Dispatchers.EDT) {
+                ApplicationManager.getApplication().exit(true, true, false)
+            }
         }
     }
 

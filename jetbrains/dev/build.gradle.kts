@@ -60,7 +60,40 @@ val galleryTheme = providers.gradleProperty("closta.gallery.theme")
 val galleryScale = providers.gradleProperty("closta.gallery.scale")
 val galleryOnly = providers.gradleProperty("closta.gallery.only")
 
+// `./gradlew gallery -Pclosta.gallery=<folder>` runs the same, opening build/gallery-project (made empty) unless
+// -Pclosta.gallery.project names one, and fails when done.txt is missing, empty or says FAILED.
+val gallery =
+    tasks.register("gallery") {
+        group = "verification"
+        description = "Paints the gallery into -Pclosta.gallery=<folder> and fails when a scene fails."
+        dependsOn(tasks.runIde)
+        val folder = galleryOut.map { file(it) }
+        doFirst { check(galleryOut.isPresent) { "pass -Pclosta.gallery=<folder>" } }
+        doLast {
+            val done = folder.get().resolve("done.txt")
+            val text = if (done.isFile) done.readText() else ""
+            check(text.isNotBlank()) { "gallery wrote no $done" }
+            check("FAILED" !in text) { "gallery failed:\n" + text.lines().filter { "FAILED" in it }.joinToString("\n") }
+        }
+    }
+val galleryDefaultProject = layout.buildDirectory.dir("gallery-project")
+
 tasks.runIde {
+    val viaGallery = provider { gradle.taskGraph.hasTask(gallery.get()) }
+    doFirst {
+        if (viaGallery.get() && galleryOut.isPresent) {
+            file(galleryOut.get()).apply {
+                mkdirs()
+                resolve("done.txt").delete()
+            }
+            if (!galleryProject.isPresent) {
+                galleryDefaultProject.get().asFile.apply {
+                    deleteRecursively()
+                    mkdirs()
+                }
+            }
+        }
+    }
     if (galleryOut.isPresent) {
         jvmArgumentProviders +=
             CommandLineArgumentProvider {
@@ -80,6 +113,13 @@ tasks.runIde {
                         galleryScale.orNull?.let { "-Dsun.java2d.uiScale=$it" },
                     )
             }
-        if (galleryProject.isPresent) argumentProviders += CommandLineArgumentProvider { listOf(galleryProject.get()) }
+        argumentProviders +=
+            CommandLineArgumentProvider {
+                when {
+                    galleryProject.isPresent -> listOf(galleryProject.get())
+                    viaGallery.get() -> listOf(galleryDefaultProject.get().asFile.path)
+                    else -> emptyList()
+                }
+            }
     }
 }
