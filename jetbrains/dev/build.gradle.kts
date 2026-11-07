@@ -68,7 +68,6 @@ val gallery =
         description = "Paints the gallery into -Pclosta.gallery=<folder> and fails when a scene fails."
         dependsOn(tasks.runIde)
         val folder = galleryOut.map { file(it) }
-        doFirst { check(galleryOut.isPresent) { "pass -Pclosta.gallery=<folder>" } }
         doLast {
             val done = folder.get().resolve("done.txt")
             val text = if (done.isFile) done.readText() else ""
@@ -81,7 +80,8 @@ val galleryDefaultProject = layout.buildDirectory.dir("gallery-project")
 tasks.runIde {
     val viaGallery = provider { gradle.taskGraph.hasTask(gallery.get()) }
     doFirst {
-        if (viaGallery.get() && galleryOut.isPresent) {
+        check(!viaGallery.get() || galleryOut.isPresent) { "gallery needs -Pclosta.gallery=<folder>" }
+        if (viaGallery.get()) {
             file(galleryOut.get()).apply {
                 mkdirs()
                 resolve("done.txt").delete()
