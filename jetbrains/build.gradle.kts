@@ -734,7 +734,16 @@ tasks.named("check") {
 }
 
 // The sandbox IDE is started from :dev (`./gradlew :dev:runIde`), which loads this plugin together with the dev tools.
-tasks.runIde { enabled = false }
+// `./gradlew runIde` from jetbrains/ matches both projects' tasks and runs only :dev:runIde; `:runIde` alone says so.
+tasks.runIde {
+    if (":runIde" in gradle.startParameter.taskNames) {
+        doFirst {
+            throw GradleException("This project does not start the IDE: run :dev:runIde, or runIde from jetbrains/")
+        }
+    } else {
+        enabled = false
+    }
+}
 
 // --- Changelog ----------------------------------------------------------------------------------------
 // CHANGELOG.md at the repository root gives the plugin's change notes and the GitHub release's text.

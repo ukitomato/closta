@@ -23,7 +23,8 @@
                                  id="dev.ukitomato.closta.behaviour" key="settings.behaviour.displayName"
                                  instance="dev.ukitomato.closta.platforms.intellij.settings.BehaviourConfigurable"/>
         <!-- What waits for an answer stays until it is answered; a finished turn can be turned off alone. "Closta" is
-             the rest (a worktree's failure, a measurement's result): WorktreeChat.kt and IdeBridgeService.kt use it.
+             the rest (a worktree's failure, a message from the IDE bridge): WorktreeChat.kt and IdeBridgeService.kt use it,
+             and the dev plugin's tools report through it too.
              The settings name a group by its key in the bundle, else by its id: these have no key yet. -->
         <notificationGroup id="Closta.Waiting" displayType="STICKY_BALLOON" hideFromSettings="true"/>
         <notificationGroup id="Closta.Finished" displayType="BALLOON"/>

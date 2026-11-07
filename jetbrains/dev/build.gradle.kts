@@ -27,6 +27,8 @@ kotlin {
 }
 
 intellijPlatform {
+    // Only runIde loads this plugin (it needs prepareSandbox), so no headless IDE for a searchable-options index.
+    buildSearchableOptions = false
     pluginConfiguration {
         id = "dev.ukitomato.closta.dev"
         name = "Closta Dev Tools"
@@ -47,6 +49,7 @@ detekt {
 tasks.verifyPlugin { enabled = false }
 tasks.publishPlugin { enabled = false }
 tasks.signPlugin { enabled = false }
+tasks.buildPlugin { enabled = false }
 
 // --- The gallery -----------------------------------------------------------------------------------
 // `./gradlew :dev:runIde -Pclosta.gallery=<folder>` opens a made-up conversation with every kind of row and card in the
@@ -67,7 +70,7 @@ val gallery =
         group = "verification"
         description = "Paints the gallery into -Pclosta.gallery=<folder> and fails when a scene fails."
         dependsOn(tasks.runIde)
-        val folder = galleryOut.map { file(it) }
+        val folder = galleryOut.map { file(it).absoluteFile }
         doLast {
             val done = folder.get().resolve("done.txt")
             val text = if (done.isFile) done.readText() else ""
@@ -75,6 +78,11 @@ val gallery =
             check("FAILED" !in text) { "gallery failed:\n" + text.lines().filter { "FAILED" in it }.joinToString("\n") }
         }
     }
+
+// A relative -Pclosta.gallery resolves against this project's directory (jetbrains/dev) for Gradle, so the IDE is given
+// the absolute path: it would otherwise resolve it against its own working directory.
+fun galleryFolder(): File = file(galleryOut.get()).absoluteFile
+
 val galleryDefaultProject = layout.buildDirectory.dir("gallery-project")
 
 tasks.runIde {
@@ -82,7 +90,7 @@ tasks.runIde {
     doFirst {
         check(!viaGallery.get() || galleryOut.isPresent) { "gallery needs -Pclosta.gallery=<folder>" }
         if (viaGallery.get()) {
-            file(galleryOut.get()).apply {
+            galleryFolder().apply {
                 mkdirs()
                 resolve("done.txt").delete()
             }
@@ -98,7 +106,7 @@ tasks.runIde {
         jvmArgumentProviders +=
             CommandLineArgumentProvider {
                 listOf(
-                    "-Dclosta.gallery=${galleryOut.get()}",
+                    "-Dclosta.gallery=${galleryFolder().path}",
                     "-Didea.trust.all.projects=true",
                     "-Dide.show.tips.on.startup.default.value=false",
                     "-Djb.consents.confirmation.enabled=false",
@@ -116,7 +124,7 @@ tasks.runIde {
         argumentProviders +=
             CommandLineArgumentProvider {
                 when {
-                    galleryProject.isPresent -> listOf(galleryProject.get())
+                    galleryProject.isPresent -> listOf(file(galleryProject.get()).absolutePath)
                     viaGallery.get() -> listOf(galleryDefaultProject.get().asFile.path)
                     else -> emptyList()
                 }

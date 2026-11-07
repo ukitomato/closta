@@ -29,14 +29,17 @@ The first run downloads the IDE the plugin builds against (about 1 GB).
   copies clash at run time);
 - `verifyPluginProjectConfiguration`.
 
-Development aids, not shown to users:
+Development aids, not shown to users. They live in a separate plugin, `jetbrains/dev/` (package
+`dev.ukitomato.closta.devtools`), which only `runIde` loads. It is not part of the plugin zip:
 
 - **Tools | Closta: Measure Performance** appears in an internal IDE or one started with `-Dclosta.dev=true`
-  (for `runIde`, add it to `jvmArgumentProviders` or the run configuration's VM options).
-- `./gradlew runIde -Pclosta.gallery=<folder>` opens a made-up conversation with every kind of row and card, saves
-  PNGs of it into `<folder>`, and closes the IDE. The README's screenshots are its `showcase.png`, taken with
-  `-Pclosta.gallery.only=showcase -Pclosta.gallery.scale=2` once with `-Pclosta.gallery.theme=light` and once with
-  `-Pclosta.gallery.theme=dark`.
+  (add it to the run configuration's VM options).
+- `./gradlew gallery -Pclosta.gallery=<folder>` opens a made-up conversation with every kind of row and card, saves
+  PNGs of it into `<folder>`, and closes the IDE. It fails if a scene fails. The README's screenshots are its
+  `showcase.png`, taken with `-Pclosta.gallery.only=showcase -Pclosta.gallery.scale=2` once with
+  `-Pclosta.gallery.theme=light` and once with `-Pclosta.gallery.theme=dark`. The JVM arguments it passes to the IDE
+  are added in `jetbrains/dev/build.gradle.kts`.
+- `./gradlew runIde` runs `:dev:runIde`; the root project does not start an IDE itself.
 
 The protocol recorder in `recorder/` has its own tests: `cd recorder && npm test` (Node 18+, no dependencies).
 
@@ -62,7 +65,7 @@ The protocol recorder in `recorder/` has its own tests: `cd recorder && npm test
 ## Layer rules
 
 The code lives in four layers under `jetbrains/src/main/kotlin/dev/ukitomato/closta/`: `core/`, `presenter/`,
-`providers/` and `platforms/`. `checkLayers` fails the build when:
+`providers/` and `platforms/`. `checkLayers` covers the main plugin's sources; the dev plugin counts as platform code. It fails the build when:
 
 1. a file outside `platforms/` imports `com.intellij`;
 2. `core/`, `presenter/` or `providers/` imports `platforms/` (dependencies point inward);
