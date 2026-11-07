@@ -31,9 +31,6 @@
         <fileEditorProvider implementation="dev.ukitomato.closta.platforms.intellij.chat.ChatFileEditorProvider"/>
         <editorTabTitleProvider implementation="dev.ukitomato.closta.platforms.intellij.chat.ChatTabTitles"/>
         <fileIconProvider implementation="dev.ukitomato.closta.platforms.intellij.chat.ChatTabIcons"/>
-        <fileEditorProvider implementation="dev.ukitomato.closta.platforms.intellij.bench.BaselineEditorProvider"/>
-        <!-- Does nothing unless the IDE is started with -Dclosta.gallery (a development aid: bench/Gallery.kt). -->
-        <postStartupActivity implementation="dev.ukitomato.closta.platforms.intellij.bench.Gallery"/>
     </extensions>
     <actions>
         <!-- Text and description: the bundle's action.<id>.text and action.<id>.description. -->
@@ -68,8 +65,6 @@
                 <synonym text="Claude"/>
                 <synonym text="Next Waiting Session"/>
             </action>
-            <!-- A development aid: BenchmarkAction.update shows it only in an internal IDE or with -Dclosta.dev=true. -->
-            <action id="Closta.Benchmark" class="dev.ukitomato.closta.platforms.intellij.bench.BenchmarkAction"/>
         </group>
     </actions>
 </idea-plugin>

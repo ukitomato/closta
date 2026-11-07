@@ -1,4 +1,4 @@
-package dev.ukitomato.closta.platforms.intellij.bench
+package dev.ukitomato.closta.devtools
 
 import dev.ukitomato.closta.providers.claude.synthetic.ReplayScript
 

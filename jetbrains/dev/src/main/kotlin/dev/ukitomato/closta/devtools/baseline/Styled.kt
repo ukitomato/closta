@@ -1,4 +1,4 @@
-package dev.ukitomato.closta.platforms.intellij.bench.baseline
+package dev.ukitomato.closta.devtools.baseline
 
 import com.intellij.openapi.editor.markup.TextAttributes
 

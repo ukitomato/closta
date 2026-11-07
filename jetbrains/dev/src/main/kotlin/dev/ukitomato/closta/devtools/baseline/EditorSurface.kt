@@ -1,4 +1,4 @@
-package dev.ukitomato.closta.platforms.intellij.bench.baseline
+package dev.ukitomato.closta.devtools.baseline
 
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
@@ -14,7 +14,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.ui.JBColor
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
-import dev.ukitomato.closta.platforms.intellij.bench.baseline.ToolLineText
+import dev.ukitomato.closta.devtools.baseline.ToolLineText
 import dev.ukitomato.closta.presenter.view.MessageRecord
 import dev.ukitomato.closta.presenter.view.Role
 import dev.ukitomato.closta.presenter.view.TextRecord

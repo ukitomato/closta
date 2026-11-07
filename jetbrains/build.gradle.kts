@@ -27,6 +27,10 @@ dependencies {
     // JUnit is already a declared project dependency (above); this is not a coroutines/IDE-borrowed one.
     testFixturesImplementation(platform("org.junit:junit-bom:5.14.4"))
     testFixturesImplementation("org.junit.jupiter:junit-jupiter-api")
+    // The synthetic sessions (providers/claude/synthetic) live in testFixtures for src/test and the dev tools plugin,
+    // and build stream-json with the same Gson the provider parses it with.
+    testFixturesImplementation("com.google.code.gson:gson:2.11.0")
+    testFixturesImplementation("org.jetbrains.kotlinx:kotlinx-collections-immutable:0.5.2")
 
     // Main scope, and deliberately declared rather than borrowed from the IDE distribution:
     // the production stream-json codec (providers/claude/protocol) parses NDJSON lines into
@@ -100,6 +104,10 @@ val fixturesDir =
     )
 
 sourceSets["test"].resources.srcDir(fixturesDir)
+
+// The IntelliJ Platform plugin puts the patched plugin.xml into every source set's resources. The fixtures jar ships
+// inside the dev tools plugin, where a second plugin.xml would make the IDE read the wrong descriptor.
+tasks.named<Jar>("testFixturesJar") { exclude("META-INF/plugin.xml") }
 
 intellijPlatform {
     pluginConfiguration {

@@ -1,4 +1,4 @@
-package dev.ukitomato.closta.platforms.intellij.bench
+package dev.ukitomato.closta.devtools
 
 import com.intellij.codeInsight.daemon.impl.analysis.FileHighlightingSetting.SKIP_INSPECTION
 import com.intellij.codeInsight.daemon.impl.analysis.HighlightingSettingsPerFile

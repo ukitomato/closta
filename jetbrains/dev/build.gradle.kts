@@ -16,6 +16,10 @@ dependencies {
         bundledModule("intellij.terminal.frontend")
         localPlugin(project(":"))
     }
+    // The synthetic sessions the gallery and the benchmark play (providers/claude/synthetic). Not transitive: the
+    // fixtures would bring a second copy of Closta's own jar and libraries into this plugin, and Closta's class loader
+    // already gives them (Gson included). JUnit's API, which other fixtures use, is left out the same way.
+    implementation(testFixtures(project(":")) as ModuleDependency) { isTransitive = false }
 }
 
 kotlin {
@@ -46,7 +50,7 @@ tasks.signPlugin { enabled = false }
 
 // --- The gallery -----------------------------------------------------------------------------------
 // `./gradlew :dev:runIde -Pclosta.gallery=<folder>` opens a made-up conversation with every kind of row and card in the
-// sidebar and in an editor tab, paints them into PNGs in <folder>, and closes the IDE (bench/Gallery.kt). Without the
+// sidebar and in an editor tab, paints them into PNGs in <folder>, and closes the IDE (devtools/Gallery.kt). Without the
 // property runIde is as it always is. -Pclosta.gallery.project=<folder> is the project it opens (an empty folder).
 // -Pclosta.gallery.theme=light|dark paints in the IDE's default light or dark theme, -Pclosta.gallery.scale=2 at twice
 // the size, and -Pclosta.gallery.only=showcase paints only the README's picture (taken with all three).

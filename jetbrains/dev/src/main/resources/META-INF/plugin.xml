@@ -2,4 +2,17 @@
 <idea-plugin>
     <depends>com.intellij.modules.platform</depends>
     <depends>dev.ukitomato.closta</depends>
+    <resource-bundle>messages.ClostaDevBundle</resource-bundle>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <fileEditorProvider implementation="dev.ukitomato.closta.devtools.BaselineEditorProvider"/>
+        <!-- Does nothing unless the IDE is started with -Dclosta.gallery (devtools/Gallery.kt). -->
+        <postStartupActivity implementation="dev.ukitomato.closta.devtools.Gallery"/>
+    </extensions>
+    <actions>
+        <!-- BenchmarkAction.update shows it only in an internal IDE or with -Dclosta.dev=true. -->
+        <action id="Closta.Benchmark" class="dev.ukitomato.closta.devtools.BenchmarkAction">
+            <add-to-group group-id="Closta.Tools" anchor="last"/>
+        </action>
+    </actions>
 </idea-plugin>

@@ -113,7 +113,7 @@ class SessionsWindowPanel(
         return true
     }
 
-    /** Chooses the session [sessionId], as a click on its row would. For the gallery (bench/) only, a dev aid. */
+    /** Chooses the session [sessionId], as a click on its row would. For the gallery of the dev tools plugin only. */
     fun select(sessionId: String) = tree.select(sessionId)
 
     /** Puts the keyboard in the chosen session's wait, now or once it is drawn ([SessionDetailPanel.focusAnswer]). */

@@ -1,4 +1,4 @@
-package dev.ukitomato.closta.platforms.intellij.bench
+package dev.ukitomato.closta.devtools
 
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.components.service
@@ -12,7 +12,7 @@ import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.UserDataHolderBase
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.testFramework.LightVirtualFile
-import dev.ukitomato.closta.platforms.intellij.bench.baseline.EditorSurface
+import dev.ukitomato.closta.devtools.baseline.EditorSurface
 import dev.ukitomato.closta.platforms.intellij.chat.ChatPanel
 import dev.ukitomato.closta.platforms.intellij.chat.ChatSource
 import dev.ukitomato.closta.platforms.intellij.session.ClaudeSessionService

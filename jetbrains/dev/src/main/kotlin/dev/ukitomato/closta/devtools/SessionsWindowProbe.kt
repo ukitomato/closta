@@ -1,4 +1,4 @@
-package dev.ukitomato.closta.platforms.intellij.bench
+package dev.ukitomato.closta.devtools
 
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.ToolWindow

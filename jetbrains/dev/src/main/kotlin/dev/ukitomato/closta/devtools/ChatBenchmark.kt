@@ -1,4 +1,4 @@
-package dev.ukitomato.closta.platforms.intellij.bench
+package dev.ukitomato.closta.devtools
 
 import com.intellij.openapi.application.ApplicationInfo
 import com.intellij.openapi.application.EDT
