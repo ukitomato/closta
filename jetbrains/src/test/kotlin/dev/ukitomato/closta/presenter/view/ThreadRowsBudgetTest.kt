@@ -28,6 +28,7 @@ class ThreadRowsBudgetTest {
         return (System.nanoTime() - start) / NANOS_PER_MS
     }
 
+    /** The middle value; it assumes an odd number of runs. */
     private fun median(values: List<Double>): Double = values.sorted()[values.size / 2]
 
     private fun report(
@@ -74,17 +75,19 @@ class ThreadRowsBudgetTest {
     fun streamingTailUpdatesWithinBudget() {
         val tail = tailLines()
         val rows = ThreadRows()
-        val runs =
-            List(RUNS) { round ->
-                var view = history.sent(PresenterInput.UserSent("tail$round", "続けて"))
-                rows.of(view.transcript)
-                val times =
-                    tail.map { line ->
-                        view = view.event(PresenterInput.Event(StreamJsonCodec.decode(line)))
-                        millis { rows.of(view.transcript) }
-                    }
-                times.sorted()[times.size * P99 / PERCENT]
-            }
+
+        fun round(id: String): Double {
+            var view = history.sent(PresenterInput.UserSent(id, "続けて"))
+            rows.of(view.transcript)
+            val times =
+                tail.map { line ->
+                    view = view.event(PresenterInput.Event(StreamJsonCodec.decode(line)))
+                    millis { rows.of(view.transcript) }
+                }
+            return times.sorted()[times.size * P99 / PERCENT]
+        }
+        round("tailWarmUp")
+        val runs = List(RUNS) { round("tail$it") }
         val p99 = median(runs)
         report("streamingTailUpdateP99", p99, runs)
         assertTrue(p99 <= UPDATE_BUDGET_MS, "an update took ${p99}ms at p99 (budget ${UPDATE_BUDGET_MS}ms)")

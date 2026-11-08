@@ -224,6 +224,8 @@ val perfTest by tasks.registering(Test::class) {
     classpath = files(suite.map { it.classpath })
     useJUnitPlatform { includeTags("perf") }
     configureClostaTests()
+    outputs.upToDateWhen { false }
+    outputs.cacheIf { false }
     testLogging.showStandardStreams = true
 }
 
