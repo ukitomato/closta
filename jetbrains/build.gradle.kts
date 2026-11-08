@@ -767,7 +767,7 @@ val checkBundledLibraries by tasks.registering(CheckBundledLibraries::class) {
     group = "verification"
     description =
         "Fails the build when the plugin would bundle what the IDE ships (netty, slf4j) " +
-            "or what it does not use (Apache HTTP client, annotation-only jars)."
+        "or what it does not use (Apache HTTP client, annotation-only jars)."
     modules =
         configurations.runtimeClasspath
             .flatMap { it.incoming.artifacts.resolvedArtifacts }
@@ -778,7 +778,14 @@ val checkBundledLibraries by tasks.registering(CheckBundledLibraries::class) {
                     .sorted()
             }
     forbiddenGroups =
-        setOf("io.netty", "org.apache.httpcomponents", "commons-logging", "commons-codec", "org.slf4j", "com.google.errorprone")
+        setOf(
+            "io.netty",
+            "org.apache.httpcomponents",
+            "commons-logging",
+            "commons-codec",
+            "org.slf4j",
+            "com.google.errorprone",
+        )
     forbiddenModules = setOf("software.amazon.awssdk:apache-client")
     report = layout.buildDirectory.file("reports/bundled-libraries.txt")
 }
@@ -831,7 +838,11 @@ abstract class ThirdPartyNotices : DefaultTask() {
     @get:OutputDirectory
     abstract val outputDir: DirectoryProperty
 
-    private class Entry(val name: String, val spdx: String, val holder: String)
+    private class Entry(
+        val name: String,
+        val spdx: String,
+        val holder: String,
+    )
 
     private fun entry(key: String): Entry? =
         licenseTable.get()[key]?.split('|', limit = 3)?.let { Entry(it[0], it[1], it.getOrElse(2) { "" }) }
@@ -839,23 +850,29 @@ abstract class ThirdPartyNotices : DefaultTask() {
     @TaskAction
     fun generate() {
         val coordinates = modules.get().filter { it.substringBeforeLast(':') !in notBundled.get() }.sorted()
-        val entries = coordinates.associateWith { c ->
-            val (group, module) = c.split(':')
-            entry("$group:$module") ?: entry(group)
-        }
+        val entries =
+            coordinates.associateWith { c ->
+                val (group, module) = c.split(':')
+                entry("$group:$module") ?: entry(group)
+            }
         val missing = entries.filterValues { it == null }.keys
         if (missing.isNotEmpty()) {
             throw GradleException(
                 buildString {
                     appendLine("The plugin would bundle modules without a licence entry:")
                     missing.forEach { appendLine("  $it") }
-                    appendLine("Add its group (or group:module) to the licence table in build.gradle.kts and a bullet to NOTICE.")
+                    appendLine(
+                        "Add its group (or group:module) to the licence table in build.gradle.kts and a bullet to NOTICE.",
+                    )
                 },
             )
         }
         val tableNames = coordinates.map { entries.getValue(it)!!.name }.toSortedSet()
         val noticeNames =
-            noticeFile.get().asFile.readLines()
+            noticeFile
+                .get()
+                .asFile
+                .readLines()
                 .filter { it.startsWith("  - ") && " (" in it }
                 .map { it.removePrefix("  - ").substringBefore(" (") }
                 .toSortedSet()
@@ -891,7 +908,17 @@ abstract class ThirdPartyNotices : DefaultTask() {
                     ?: throw GradleException("No jar file found for $c among the runtime classpath files")
             ZipFile(jar).use { zip ->
                 listOf("META-INF/NOTICE", "META-INF/NOTICE.txt").forEach { name ->
-                    val text = zip.getEntry(name)?.let { zip.getInputStream(it).readBytes().toString(Charsets.UTF_8).trim() }
+                    val text =
+                        zip
+                            .getEntry(
+                                name,
+                            )?.let {
+                                zip
+                                    .getInputStream(it)
+                                    .readBytes()
+                                    .toString(Charsets.UTF_8)
+                                    .trim()
+                            }
                     if (!text.isNullOrEmpty() && seen.add(text)) byGroup.getOrPut(group) { mutableListOf() }.add(text)
                 }
             }
@@ -908,7 +935,8 @@ abstract class ThirdPartyNotices : DefaultTask() {
 
         val used = coordinates.map { entries.getValue(it)!!.spdx }.toSortedSet()
         used.forEach { spdx ->
-            val fileName = licenseTextNames.get()[spdx] ?: throw GradleException("No licence text is configured for $spdx")
+            val fileName =
+                licenseTextNames.get()[spdx] ?: throw GradleException("No licence text is configured for $spdx")
             val file = licenseTexts.files.first { it.name == fileName }
             out.appendLine()
             out.appendLine("=".repeat(72))
@@ -928,7 +956,8 @@ val thirdPartyNotices by tasks.registering(ThirdPartyNotices::class) {
     val artifacts = configurations.runtimeClasspath.flatMap { it.incoming.artifacts.resolvedArtifacts }
     modules =
         artifacts.map { all ->
-            all.mapNotNull { it.id.componentIdentifier as? ModuleComponentIdentifier }
+            all
+                .mapNotNull { it.id.componentIdentifier as? ModuleComponentIdentifier }
                 .map { "${it.group}:${it.module}:${it.version}" }
         }
     notBundled = setOf("org.jetbrains.kotlin:kotlin-stdlib", "org.jetbrains:annotations")
@@ -936,7 +965,8 @@ val thirdPartyNotices by tasks.registering(ThirdPartyNotices::class) {
     licenseTable =
         mapOf(
             "com.google.code.gson:gson" to "Gson|Apache-2.0|Copyright Google LLC",
-            "org.jetbrains.kotlinx:kotlinx-collections-immutable-jvm" to "kotlinx.collections.immutable|Apache-2.0|Copyright JetBrains s.r.o.",
+            "org.jetbrains.kotlinx:kotlinx-collections-immutable-jvm" to
+                "kotlinx.collections.immutable|Apache-2.0|Copyright JetBrains s.r.o.",
             "software.amazon.awssdk" to "AWS SDK for Java 2.0|Apache-2.0|Copyright Amazon.com, Inc. or its affiliates",
             "software.amazon.eventstream" to "AWS Event Stream|Apache-2.0|Copyright Amazon.com, Inc. or its affiliates",
             "org.reactivestreams" to "Reactive Streams|MIT-0|",
