@@ -63,8 +63,11 @@ class AlertBook {
         return decide(sessionId, waiting(now), inView = false, finished = null)
     }
 
+    /** The sessions the book remembers something of. */
+    fun sessionIds(): Set<String> = last.keys + memory.keys
+
     /** [waiting] is what waits now, in arrival order. */
-    fun decide(
+    internal fun decide(
         sessionId: String,
         waiting: List<SessionAlert>,
         inView: Boolean,

@@ -73,6 +73,16 @@ class AlertBookTest {
     }
 
     @Test
+    fun aSessionWithoutALiveNoticeIsStillKnownUntilForgotten() {
+        book.changed("s", views[at], inView = false)
+        book.changed("s", answered, inView = true)
+        book.changed("quiet", views[at - 1], inView = true)
+        assertEquals(setOf("s", "quiet"), book.sessionIds())
+        book.sessionIds().forEach(book::forget)
+        assertEquals(emptySet<String>(), book.sessionIds())
+    }
+
+    @Test
     fun aNewWaitReplacesTheNoticeAndIsFresh() {
         val a = OpenOnlyAlert("a", "a", AlertKind.PLAN)
         val b = OpenOnlyAlert("b", "b", AlertKind.QUESTION)

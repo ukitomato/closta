@@ -63,7 +63,9 @@ class SessionAlerts(
         scope.launch {
             directory.entries.collect { entries ->
                 val open = entries.mapTo(HashSet()) { it.sessionId }
-                withContext(Dispatchers.EDT) { (waiting.keys + finished.keys).filter { it !in open }.forEach(::forget) }
+                withContext(Dispatchers.EDT) {
+                    (book.sessionIds() + waiting.keys + finished.keys).filter { it !in open }.forEach(::forget)
+                }
             }
         }
     }
