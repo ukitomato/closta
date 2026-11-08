@@ -54,7 +54,7 @@ class StatusMessages {
 }
 
 /** Why nothing can be sent now, or [NONE]. */
-enum class SendBlock { NONE, STARTING, CLOSED }
+enum class SendBlock { NONE, STARTING, CLOSED, REWINDING }
 
 /** Why nothing can be sent: [NONE] when [sendable], else the session is [starting] or has ended. */
 fun sendBlockOf(
@@ -73,6 +73,7 @@ fun sendBlockReason(block: SendBlock): String? =
         SendBlock.NONE -> null
         SendBlock.STARTING -> ClostaBundle.message("composer.block.starting")
         SendBlock.CLOSED -> ClostaBundle.message("composer.block.closed")
+        SendBlock.REWINDING -> ClostaBundle.message("chat.rewinding")
     }
 
 /** What the model and mode buttons say while the session is not up yet, and the empty model list. */

@@ -39,7 +39,7 @@ class FixedChatSource(
     override suspend fun send(
         text: String,
         attachments: List<Attachment>,
-    ) = Unit
+    ) = true
 
     override suspend fun switchModel(model: String) = Unit
 

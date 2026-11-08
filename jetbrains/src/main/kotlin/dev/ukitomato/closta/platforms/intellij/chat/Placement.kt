@@ -10,6 +10,7 @@ import com.intellij.ui.content.Content
 import com.intellij.ui.content.ContentFactory
 import com.intellij.ui.content.ContentManager
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
+import dev.ukitomato.closta.platforms.intellij.composer.ComposerDraft
 import dev.ukitomato.closta.platforms.intellij.session.SessionOpening
 
 /** Where a conversation is shown: an editor tab (Claude mainly writes) or the sidebar (the user mainly writes). */
@@ -44,15 +45,23 @@ fun moveChatTo(
     project.service<ChatSessions>().move(sessionId, { openChat(project, sessionId, placement) }, closeOld)
 }
 
-/** Opens a new session (in [workingDirectory], else the project's folder) and shows it at [placement]. */
+/**
+ * Opens a new session (in [workingDirectory], else the project's folder) and shows it at [placement]; it starts with
+ * the draft [carry] when given.
+ */
+@Suppress("LongParameterList") // where, what, its name and folder, and the draft it takes
 fun openNewChat(
     project: Project,
     placement: Placement,
     opening: SessionOpening = SessionOpening.New,
     title: String = ClostaBundle.message("chat.newChat.title"),
     workingDirectory: String? = null,
+    carry: ComposerDraft? = null,
 ) {
     val id = project.service<ChatSessions>().open(opening, title, workingDirectory)
+    if (carry != null) {
+        project.service<ChatSessions>().source(id)?.let { service<ComposerDrafts>().install(it, carry) }
+    }
     // A session no place could show would run unseen: it is stopped.
     if (!openChat(project, id, placement)) project.service<ChatSessions>().stop(id)
 }
@@ -94,7 +103,7 @@ private fun openInSidebar(
     content.preferredFocusableComponent = panel.preferredFocus()
     window.contentManager.addContent(content)
     window.contentManager.setSelectedContent(content)
-    window.show()
+    window.activate { panel.preferredFocus().requestFocusInWindow() }
     return true
 }
 
@@ -150,7 +159,7 @@ fun bringAndShow(
         tab != null -> FileEditorManager.getInstance(project).openFile(tab, true).isNotEmpty()
         window != null && content != null -> {
             window.contentManager.setSelectedContent(content)
-            window.show()
+            window.activate { content.preferredFocusableComponent?.requestFocusInWindow() }
             true
         }
         else -> openChat(project, sessionId, Placement.EDITOR_TAB)

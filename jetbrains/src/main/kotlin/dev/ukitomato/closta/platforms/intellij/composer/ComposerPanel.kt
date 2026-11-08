@@ -31,11 +31,15 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.util.textCompletion.TextFieldWithCompletion
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.WrapLayout
+import com.intellij.util.ui.accessibility.AccessibleAnnouncerUtil
 import dev.ukitomato.closta.core.interfaces.IdeResult
 import dev.ukitomato.closta.core.models.Attachment
 import dev.ukitomato.closta.core.models.AttachmentKind
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
 import dev.ukitomato.closta.platforms.intellij.chat.ChatVirtualFile
+import dev.ukitomato.closta.platforms.intellij.chat.effortText
+import dev.ukitomato.closta.platforms.intellij.chat.modeText
+import dev.ukitomato.closta.platforms.intellij.chat.shortModeText
 import dev.ukitomato.closta.platforms.intellij.ide.IdeEditorSelections
 import dev.ukitomato.closta.platforms.intellij.thread.CardHint
 import dev.ukitomato.closta.platforms.intellij.thread.JUMP_KEY
@@ -48,10 +52,7 @@ import dev.ukitomato.closta.presenter.view.ComposerState
 import dev.ukitomato.closta.presenter.view.SwitchKind
 import dev.ukitomato.closta.presenter.view.SwitchRecord
 import dev.ukitomato.closta.presenter.view.checkAttachment
-import dev.ukitomato.closta.presenter.view.effortLabel
-import dev.ukitomato.closta.presenter.view.modeLabel
 import dev.ukitomato.closta.presenter.view.shortLabel
-import dev.ukitomato.closta.presenter.view.shortModeLabel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -98,7 +99,7 @@ class ComposerPanel(
     private val parent: Disposable,
     private val draft: ComposerDraft = ComposerDraft(PromptHistory(emptyList())),
 ) {
-    var onSend: (String, List<Attachment>) -> Unit = { _, _ -> }
+    var onSend: (String, List<Attachment>, Outgoing) -> Unit = { _, _, _ -> }
     var onStop: () -> Unit = {}
     var onModel: (String) -> Unit = {}
     var onEffort: (String) -> Unit = {}
@@ -114,12 +115,17 @@ class ComposerPanel(
     private var cardsWaiting = 0
 
     private var state: ComposerState? = null
-    private var canSend = false
+    private var sendable = false
+    private var announced: String? = null
+    private var rewinding = false
+    private val canSend get() = sendable && !rewinding
     private val attached get() = draft.attached
     private val selections get() = draft.selections
     private var currentFile: VirtualFile? = null
+    private val chipKinds = ArrayList<ChipKind>()
     private var switchingSince: Pair<String, Long>? = null
-    private var block = SendBlock.NONE
+    private var shownBlock = SendBlock.NONE
+    private val block get() = if (rewinding) SendBlock.REWINDING else shownBlock
     private val messages = StatusMessages()
 
     /** The switch whose missing answer was already said: it is said once, then the line goes back to the base. */
@@ -156,6 +162,15 @@ class ComposerPanel(
             add(box, BorderLayout.CENTER)
             add(status, BorderLayout.SOUTH)
         }
+
+    /**
+     * What is wired to the composer's current editor: the field makes a new editor each time it is shown again, so the
+     * last one's listeners and shortcuts are let go here rather than piling up under [parent].
+     */
+    private var wiring: Disposable? = null
+
+    /** The file the editor last showed, so a dismissed chip stays away until another file is shown. */
+    private var selectedFile: VirtualFile? = null
 
     init {
         box.layout = BorderLayout(0, JBUI.scale(GAP))
@@ -213,8 +228,8 @@ class ComposerPanel(
         blocked: SendBlock = if (sendable) SendBlock.NONE else SendBlock.CLOSED,
     ) {
         state = next
-        canSend = sendable
-        block = if (sendable) SendBlock.NONE else blocked
+        this.sendable = sendable
+        shownBlock = if (sendable) SendBlock.NONE else blocked
         showBar(next)
         val switching = next.switching
         if (switching == null) {
@@ -223,6 +238,14 @@ class ComposerPanel(
         } else if (switchingSince?.first != switching.id) {
             switchingSince = switching.id to System.currentTimeMillis()
         }
+        showStatus()
+    }
+
+    /** Holds sending while a rewind opens the copy: the message would go to the session that is then stopped. */
+    fun rewinding(on: Boolean) {
+        if (rewinding == on) return
+        rewinding = on
+        state?.let(::showBar)
         showStatus()
     }
 
@@ -245,25 +268,21 @@ class ComposerPanel(
     private fun showBar(next: ComposerState) {
         val narrow = component.width in 1 until JBUI.scale(NARROW)
         val modeName = next.mode ?: "default"
-        mode.text = if (narrow) shortModeLabel(modeName) else modeLabel(modeName)
+        mode.text = if (narrow) shortModeText(modeName) else modeText(modeName)
         mode.normal =
-            if (modeName ==
-                ComposerPopups.BYPASS
-            ) {
-                JBUI.CurrentTheme.Banner.WARNING_BORDER_COLOR
-            } else {
-                com.intellij.util.ui.UIUtil
-                    .getLabelForeground()
-            }
+            com.intellij.util.ui.UIUtil
+                .getLabelForeground()
         // Bypass is said by an icon too, not by the colour alone.
         mode.icon = if (modeName == ComposerPopups.BYPASS) AllIcons.General.Warning else null
         mode.toolTipText = ClostaBundle.message("composer.mode.tooltip")
+        mode.accessibleLabel = ClostaBundle.message("composer.mode.accessible", modeText(modeName))
         val effort = next.effort?.takeIf { next.effortLevels.isNotEmpty() }
         val modelName = shortModel(if (narrow) shortLabel(next.model) else next.model.label, MODEL_SHOWN)
-        val effortName = effort?.let { if (narrow) shortEffort(effortLabel(it)) else effortLabel(it) }
+        val effortName = effort?.takeUnless { narrow }?.let(::effortText)
         model.text = listOfNotNull(modelName, effortName).joinToString(" · ")
         // The whole name and level, and the model's full id when the CLI gave one.
-        val whole = listOfNotNull(next.model.label, effort?.let(::effortLabel)).joinToString(" · ")
+        val whole = listOfNotNull(next.model.label, effort?.let(::effortText)).joinToString(" · ")
+        model.accessibleLabel = ClostaBundle.message("composer.model.accessible", whole)
         model.toolTipText = listOfNotNull(whole, next.model.resolved?.takeIf { it != whole }).joinToString(" — ")
         val used = next.context
         context.isVisible = used != null
@@ -271,11 +290,14 @@ class ComposerPanel(
             context.show(used.percentage)
             context.toolTipText = contextTip(next)
         }
-        send.isVisible = !next.running
+        send.isVisible = true
+        send.toolTipText =
+            ClostaBundle.message(if (next.running) "composer.send.queue" else "composer.send.tooltip")
         send.enabledToClick = canSend
         send.disabledReason = sendBlockReason(block)
         showSendReady()
         val waiting = if (block == SendBlock.STARTING) WAITING_FOR_CLI else sendBlockReason(block)
+        model.isVisible = block == SendBlock.NONE || next.models.isNotEmpty() || next.model.resolved != null
         for (button in listOf(mode, model)) {
             button.enabledToClick = block == SendBlock.NONE
             button.disabledReason = waiting
@@ -303,6 +325,13 @@ class ComposerPanel(
         val now = System.currentTimeMillis()
         val shown = messages.shown(now, baseMessage(next, now))
         status.say(shown?.text, shown?.error == true)
+        if (shown != null &&
+            shown.text != announced &&
+            shown.source in setOf(StatusSource.REFUSAL, StatusSource.SESSION)
+        ) {
+            AccessibleAnnouncerUtil.announce(status, shown.text, true)
+        }
+        announced = shown?.text
         val watching = messages.pending || switchingSince != null
         if (watching && !ticker.isRunning) {
             ticker.start()
@@ -340,7 +369,7 @@ class ComposerPanel(
                     ClostaBundle.message("composer.status.jump", KeymapUtil.getKeystrokeText(JUMP_KEY))
                 next.stopping -> ClostaBundle.message("composer.status.stopping")
                 next.running -> ClostaBundle.message("composer.status.escToStop")
-                block == SendBlock.STARTING -> sendBlockReason(block)
+                block == SendBlock.STARTING || block == SendBlock.REWINDING -> sendBlockReason(block)
                 else -> null
             }
         return text?.let { StatusMessage(it, StatusSource.SESSION, false, now, null, false) }
@@ -353,8 +382,8 @@ class ComposerPanel(
     ): String =
         when (switching.kind) {
             SwitchKind.MODEL -> next.models.firstOrNull { it.value == switching.value }?.label ?: switching.value
-            SwitchKind.MODE -> modeLabel(switching.value)
-            else -> effortLabel(switching.value)
+            SwitchKind.MODE -> modeText(switching.value)
+            else -> effortText(switching.value)
         }
 
     /** Posts [text] to the status line: a refusal stays [ERROR_TTL_MS], a hint [HINT_TTL_MS], or until a key. */
@@ -423,18 +452,10 @@ class ComposerPanel(
             sendBlockReason(block)?.let { say(it, StatusSource.REFUSAL) }
             return
         }
-        val modes = next.modes
-        val at = modes.indexOf(next.mode ?: "default")
-        chooseMode(modes[(at + 1) % modes.size])
+        nextMode(next.modes, next.mode)?.let(::chooseMode)
     }
 
     // --- the input -----------------------------------------------------------------------------------------------
-
-    /**
-     * What is wired to the composer's current editor: the field makes a new editor each time it is shown again, so the
-     * last one's listeners and shortcuts are let go here rather than piling up under [parent].
-     */
-    private var wiring: Disposable? = null
 
     private fun wire(editor: EditorEx) {
         wiring?.let(com.intellij.openapi.util.Disposer::dispose)
@@ -442,6 +463,7 @@ class ComposerPanel(
             com.intellij.openapi.util.Disposer
                 .newDisposable(parent, "Closta composer editor")
         wiring = forEditor
+        dropOnText(editor.contentComponent, forEditor)
         editor.settings.isUseSoftWraps = true
         editor.setPlaceholder(ClostaBundle.message("composer.placeholder"))
         editor.setShowPlaceholderWhenFocused(true)
@@ -462,20 +484,21 @@ class ComposerPanel(
         )
         val composing = { (editor as? EditorImpl)?.composedTextRange != null }
         val lookupOpen = { LookupManager.getActiveLookup(editor) != null }
+        val ours = { !composing() && !lookupOpen() }
         // Enter is taken even when nothing can be sent, so it never falls through to the editor as a new line.
-        key(editor, KeyEvent.VK_ENTER, 0, { !composing() && !lookupOpen() }) { sendNow() }
+        key(editor, KeyEvent.VK_ENTER, 0, { ours() }) { sendNow() }
         key(editor, KeyEvent.VK_ENTER, InputEvent.SHIFT_DOWN_MASK, { true }) { newLine(editor) }
         // Esc says no to the Bypass bar first, and only then stops the reply.
-        key(editor, KeyEvent.VK_ESCAPE, 0, { !lookupOpen() && escapes() }, ::escape)
-        key(editor, KeyEvent.VK_TAB, InputEvent.SHIFT_DOWN_MASK, { !lookupOpen() }) { cycleMode() }
+        key(editor, KeyEvent.VK_ESCAPE, 0, { ours() && escapes() }, ::escape)
+        key(editor, KeyEvent.VK_TAB, InputEvent.SHIFT_DOWN_MASK, { ours() }) { cycleMode() }
         val firstLine = { editor.caretModel.visualPosition.line == 0 }
         val lastLine = {
             editor.caretModel.visualPosition.line >= editor.offsetToVisualPosition(editor.document.textLength).line
         }
-        key(editor, KeyEvent.VK_UP, 0, { !lookupOpen() && firstLine() && draft.history.canUp }) {
+        key(editor, KeyEvent.VK_UP, 0, { ours() && firstLine() && draft.history.canUp }) {
             draft.history.up(field.text)?.let { recall(editor, it) }
         }
-        key(editor, KeyEvent.VK_DOWN, 0, { !lookupOpen() && lastLine() && draft.history.canDown }) {
+        key(editor, KeyEvent.VK_DOWN, 0, { ours() && lastLine() && draft.history.canDown }) {
             draft.history.down(field.text)?.let { recall(editor, it) }
         }
         key(editor, KeyEvent.VK_K, InputEvent.ALT_DOWN_MASK, { true }) { insertSelection() }
@@ -483,9 +506,9 @@ class ComposerPanel(
             if (!onJump()) say(ClostaBundle.message("composer.status.noneWaiting"), StatusSource.HINT)
         }
         val atStart = { field.text.isEmpty() && editor.caretModel.offset == 0 }
-        val lastChip = { chips.components.lastOrNull() as? Chip }
-        key(editor, KeyEvent.VK_BACK_SPACE, 0, { !composing() && !lookupOpen() && atStart() && lastChip() != null }) {
-            lastChip()?.remove?.invoke()
+        val removable = { lastRemovable(chipKinds)?.let { chips.getComponent(it) as? Chip } }
+        key(editor, KeyEvent.VK_BACK_SPACE, 0, { ours() && atStart() && removable() != null }) {
+            removable()?.remove?.invoke()
         }
         pasteImage(editor)
         editor.document.addDocumentListener(
@@ -554,24 +577,44 @@ class ComposerPanel(
             return
         }
         if (words.isEmpty() && attached.isEmpty()) return
-        val places = selections.joinToString("") { "\n" + rangeLabel(it.path, it.start, it.end, forChip = false) }
-        val file = currentFile?.let { relative(it) }?.let { "\n@$it" }.orEmpty()
-        val text = words + places + file
-        if (words.isNotEmpty()) draft.history.add(words)
         val files = attached.toList()
+        val file = currentFile?.let { relative(it) }
+        val outgoing = Outgoing(words, selections.toList(), file, files, draft.thumbnails.toMap())
+        val text = outgoingText(outgoing) { rangeLabel(it.path, it.start, it.end, forChip = false) }
+        val queued = state?.running == true
         field.text = ""
         attached.clear()
         draft.thumbnails.clear()
         selections.clear()
         messages.clear()
-        showStatus()
+        if (queued) say(ClostaBundle.message("composer.status.queued"), StatusSource.HINT) else showStatus()
         showChips()
-        onSend(text, files)
+        onSend(text, files, outgoing)
+    }
+
+    /** The message was handed to the CLI (on the EDT): only now does it join the history for ↑. */
+    fun sent(outgoing: Outgoing) {
+        if (outgoing.words.isNotEmpty()) draft.history.add(outgoing.words)
+    }
+
+    /** The message was not handed over (on the EDT): its words, ranges and files are back, and [reason] says why. */
+    fun giveBack(
+        outgoing: Outgoing,
+        reason: String,
+    ) {
+        field.text = restoredText(field.text, outgoing.words)
+        selections.addAll(0, outgoing.selections)
+        attached.addAll(0, outgoing.attachments.filter { it !in attached })
+        draft.thumbnails.putAll(outgoing.thumbnails)
+        showChips()
+        say(reason, StatusSource.REFUSAL, error = true)
     }
 
     // --- chips and attachments -----------------------------------------------------------------------------------
 
     private fun follow(file: VirtualFile?) {
+        if (file != null && file != selectedFile && selectedFile != null) draft.dismissed.clear()
+        if (file != null) selectedFile = file
         currentFile =
             file?.takeIf {
                 followable(it is ChatVirtualFile, it.isInLocalFileSystem) &&
@@ -584,7 +627,9 @@ class ComposerPanel(
     private fun showChips() {
         showSendReady()
         chips.removeAll()
+        chipKinds.clear()
         currentFile?.let { file ->
+            chipKinds += ChipKind.CURRENT_FILE
             chips.add(
                 Chip(file.fileType.icon ?: AllIcons.FileTypes.Any_type, file.name, relative(file), dashed = true) {
                     draft.dismissed += file.url
@@ -593,6 +638,7 @@ class ComposerPanel(
             )
         }
         selections.forEach { selection ->
+            chipKinds += ChipKind.SELECTION
             chips.add(
                 Chip(
                     AllIcons.Actions.ShowAsTree,
@@ -608,6 +654,7 @@ class ComposerPanel(
             )
         }
         attached.forEach { attachment ->
+            chipKinds += ChipKind.ATTACHMENT
             val icon =
                 when {
                     attachment.kind != AttachmentKind.IMAGE -> AllIcons.FileTypes.Any_type
@@ -737,6 +784,62 @@ class ComposerPanel(
                     }
                 }
         return ByteArrayOutputStream().also { ImageIO.write(buffered, "png", it) }.toByteArray()
+    }
+
+    /**
+     * Files dropped on the text become chips too, not only those dropped on the border. Anything else (a dragged
+     * string) goes to the drop target the editor had, and that one is put back when [until] goes.
+     */
+    private fun dropOnText(
+        text: JComponent,
+        until: Disposable,
+    ) {
+        val editors = text.dropTarget
+        val files = dropFiles()
+        val listener =
+            object : java.awt.dnd.DropTargetListener {
+                private fun filesIn(event: java.awt.dnd.DropTargetDragEvent) =
+                    event.isDataFlavorSupported(DataFlavor.javaFileListFlavor)
+
+                // Whether the editor's own target was entered by this drag: only then does it hear the rest of it.
+                private var entered = false
+
+                override fun dragEnter(event: java.awt.dnd.DropTargetDragEvent) {
+                    entered = !filesIn(event) && editors != null
+                    if (filesIn(event)) files.dragEnter(event) else editors?.dragEnter(event)
+                }
+
+                override fun dragOver(event: java.awt.dnd.DropTargetDragEvent) {
+                    when {
+                        filesIn(event) -> event.acceptDrag(DnDConstants.ACTION_COPY)
+                        entered -> editors?.dragOver(event)
+                    }
+                }
+
+                override fun dropActionChanged(event: java.awt.dnd.DropTargetDragEvent) {
+                    if (entered) editors?.dropActionChanged(event)
+                }
+
+                override fun dragExit(event: java.awt.dnd.DropTargetEvent) {
+                    files.dragExit(event)
+                    if (entered) editors?.dragExit(event)
+                    entered = false
+                }
+
+                override fun drop(event: DropTargetDropEvent) {
+                    val inEditor = entered
+                    entered = false
+                    when {
+                        event.isDataFlavorSupported(DataFlavor.javaFileListFlavor) -> files.drop(event)
+                        inEditor -> editors?.drop(event)
+                        else -> event.rejectDrop()
+                    }
+                }
+            }
+        val target = DropTarget(text, editors?.defaultActions ?: DnDConstants.ACTION_COPY_OR_MOVE, listener)
+        text.dropTarget = target
+        com.intellij.openapi.util.Disposer
+            .register(until) { if (text.dropTarget === target) text.dropTarget = editors }
     }
 
     private fun dropFiles() =

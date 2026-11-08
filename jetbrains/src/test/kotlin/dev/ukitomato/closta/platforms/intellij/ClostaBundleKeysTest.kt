@@ -1,6 +1,8 @@
 package dev.ukitomato.closta.platforms.intellij
 
+import dev.ukitomato.closta.presenter.view.EFFORT_LEVELS
 import dev.ukitomato.closta.presenter.view.MCP_STATUSES
+import dev.ukitomato.closta.presenter.view.PERMISSION_MODES
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -83,8 +85,11 @@ class ClostaBundleKeysTest {
         val needed =
             MCP_STATUSES.map { "mcp.status.$it" } +
                 listOf("wait.question", "wait.plan", "wait.permission", "wait.permission.subject", "wait.other") +
-                listOf("rewind.refused.running", "rewind.refused.unknown", "rewind.refused.nothingAfter")
+                listOf("rewind.refused.running", "rewind.refused.unknown", "rewind.refused.nothingAfter") +
+                PERMISSION_MODES.flatMap { listOf("composer.mode.$it", "composer.mode.$it.short") } +
+                EFFORT_LEVELS.map { "composer.effort.$it" }
         assertEquals(emptyList<String>(), needed.filter { it !in english.keyNames() })
+        assertEquals(emptyList<String>(), needed.filter { it !in japanese.keyNames() })
     }
 
     // Every key the code names with ClostaBundle.message("…") is in the bundle. Keys built at run time (such as

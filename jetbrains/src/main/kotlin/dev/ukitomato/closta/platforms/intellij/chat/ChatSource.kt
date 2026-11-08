@@ -49,10 +49,11 @@ interface ChatSource : Disposable {
     /** The provider its CLI was started with, shown in the header; null when it has no CLI. */
     val providerName: String? get() = null
 
+    /** Hands the message to the CLI; true when it went, false when the session has no CLI to take it. */
     suspend fun send(
         text: String,
         attachments: List<Attachment>,
-    )
+    ): Boolean
 
     suspend fun switchModel(model: String)
 
@@ -140,9 +141,10 @@ interface ChatSource : Disposable {
         override suspend fun send(
             text: String,
             attachments: List<Attachment>,
-        ) {
-            val commands = commands() ?: return
-            val folder = root ?: return
+        ): Boolean {
+            val commands = commands()
+            val folder = root
+            if (commands == null || folder == null) return false
             // The message's key is the turn's ask. Its Local History label goes down before the CLI can change a file:
             // now when nothing runs, else when its own turn starts (the turn running now is still changing files).
             val ask = UUID.randomUUID().toString()
@@ -156,6 +158,7 @@ interface ChatSource : Disposable {
             } finally {
                 if (!sent) forget(ask)
             }
+            return true
         }
 
         private fun forget(ask: String) {

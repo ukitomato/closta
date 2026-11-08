@@ -49,6 +49,9 @@ class PromptHistory(
         at = entries.size
     }
 
+    /** The prompts the history holds, oldest first. */
+    val prompts: List<String> get() = entries.toList()
+
     /** Whether ↑ has an older prompt to show. */
     val canUp: Boolean get() = at > 0
 

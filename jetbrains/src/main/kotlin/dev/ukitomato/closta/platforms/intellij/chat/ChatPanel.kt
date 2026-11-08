@@ -106,6 +106,19 @@ class ChatPanel(
             ->
             thisLogger().warn("chat: a command failed (${failure.javaClass.name})")
         }
+
+    /** Whether [send] handed the message over: a send that throws (a session already closed) is logged and not sent. */
+    @Suppress("TooGenericExceptionCaught") // whatever a closed session throws means the same: not sent
+    private suspend fun handedOver(send: suspend () -> Boolean): Boolean =
+        try {
+            send()
+        } catch (cancel: CancellationException) {
+            throw cancel
+        } catch (failure: Exception) {
+            thisLogger().warn("chat: a send failed (${failure.javaClass.name})")
+            false
+        }
+
     private val surface: ThreadSurface = SwingThreadSurface(project, roomy = place.placement == Placement.EDITOR_TAB)
     private val drafts = service<ComposerDrafts>()
     private val draft = drafts.of(source)
@@ -392,6 +405,7 @@ class ChatPanel(
             AskActing(project, source, place, scope, surface.askActions, ::refusedNearClick).apply {
                 busy = { waiting ->
                     rewinding.isVisible = waiting
+                    composer.rewinding(waiting)
                     rewinding.revalidate()
                 }
             }
@@ -403,7 +417,18 @@ class ChatPanel(
             val task = runningTasks(source.view.value.transcript).firstOrNull { it.toolUseId == toolUseId }
             tabs.open(toolUseId, task?.title ?: ClostaBundle.message("chat.subagent"))
         }
-        composer.onSend = { text, attachments -> scope.launch(failures) { source.send(text, attachments) } }
+        composer.onSend = { text, attachments, outgoing ->
+            scope.launch {
+                val sent = handedOver { source.send(text, attachments) }
+                withContext(Dispatchers.EDT) {
+                    if (sent) {
+                        composer.sent(outgoing)
+                    } else {
+                        composer.giveBack(outgoing, ClostaBundle.message("composer.send.failed"))
+                    }
+                }
+            }
+        }
         composer.onStop = { scope.launch(failures) { source.interrupt() } }
         composer.onModel = { value -> scope.launch(failures) { source.switchModel(value) } }
         composer.onEffort = { level -> scope.launch(failures) { source.switchEffort(level) } }
@@ -488,8 +513,12 @@ class ChatPanel(
     private fun restart() {
         val old = source.sessionId
         val placement = place.placement
+        // Taken now: closing this place disposes the source, and the draft goes with it.
+        val carried = drafts.snapshot(source)
         SessionRelaunch(
-            open = { _, opening, folder -> openNewChat(project, placement, opening, workingDirectory = folder) },
+            open = { _, opening, folder ->
+                openNewChat(project, placement, opening, workingDirectory = folder, carry = carried)
+            },
             close = {
                 place.close()
                 project.service<ChatSessions>().stopFromScreen(old)
