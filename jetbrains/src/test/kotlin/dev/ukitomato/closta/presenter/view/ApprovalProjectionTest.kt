@@ -474,7 +474,7 @@ class ApprovalProjectionTest {
         val suggestions = approval.items("suggestions")
         assertEquals(listOf("s1", "s3", "s4"), suggestions.map { it.str("id") }, "ids by place in the CLI's list")
         assertEquals(listOf("setMode", "addDirectories", "addRules"), suggestions.map { it.str("kind") })
-        assertEquals(listOf("acceptEdits", "/a\n/b", ""), suggestions.map { it.str("detail") })
+        assertEquals(listOf("acceptEdits", "/a\n/b", "Bash"), suggestions.map { it.str("detail") })
         assertEquals(listOf("session", "projectSettings", null), suggestions.map { it.str("destination") })
         assertEquals(setOf("id", "kind", "detail"), suggestions.last().keys, "no destination when the CLI gave none")
         assertEquals(JsonObject.of("file_path" to JsonString("/x")), approval["input"])

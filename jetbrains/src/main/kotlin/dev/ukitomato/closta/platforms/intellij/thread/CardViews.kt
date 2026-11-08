@@ -26,6 +26,7 @@ import dev.ukitomato.closta.presenter.view.PlanCard
 import dev.ukitomato.closta.presenter.view.QuestionCard
 import dev.ukitomato.closta.presenter.view.QuestionPick
 import dev.ukitomato.closta.presenter.view.QuestionView
+import dev.ukitomato.closta.presenter.view.RULE_KINDS
 import dev.ukitomato.closta.presenter.view.SUGGESTION_DESTINATIONS
 import dev.ukitomato.closta.presenter.view.ThreadCard
 import dev.ukitomato.closta.presenter.view.allowPayload
@@ -169,7 +170,8 @@ class CardViews(
         private val card: PermissionCard,
     ) : CardPanel(ThreadStyle.pendingLine, ThreadStyle.pendingFill, watchesKeyboard = true) {
         private var sent = false
-        private var destination: String? = card.suggestions.firstOrNull()?.destination
+        private var destination: String? =
+            (card.suggestions.firstOrNull { it.kind in RULE_KINDS } ?: card.suggestions.firstOrNull())?.destination
         private val buttons = ArrayList<JButton>()
         private val comment =
             JBTextField().apply { emptyText.text = ClostaBundle.message("thread.permission.comment.placeholder") }
@@ -217,6 +219,13 @@ class CardViews(
                     }
                     // A file's path is the headline's link already: it is not shown a second time.
                     inputRows(this, card, pathShown = headline.file != null)
+                    card.suggestionLines.forEach { line ->
+                        row {
+                            label(suggestionText(line)).applyToComponent {
+                                foreground = UIUtil.getContextHelpForeground()
+                            }
+                        }
+                    }
                     row { cell(buttonLine(buttons)).align(AlignX.FILL) }.topGap(TopGap.SMALL)
                     if (keep != null) {
                         // The words and the drop-down wrap like the buttons, so the drop-down stays in a narrow card.

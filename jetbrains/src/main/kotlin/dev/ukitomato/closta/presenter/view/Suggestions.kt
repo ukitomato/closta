@@ -37,7 +37,17 @@ private fun detailOf(
 ): String =
     when (type) {
         "setMode" -> suggestion.string("mode").orEmpty()
-        "addDirectories" ->
+        "addRules", "replaceRules", "removeRules" ->
+            suggestion
+                .array("rules")
+                ?.items
+                .orEmpty()
+                .filterIsInstance<JsonObject>()
+                .joinToString("\n") { rule ->
+                    val tool = rule.string("toolName").orEmpty()
+                    rule.string("ruleContent")?.let { "$tool($it)" } ?: tool
+                }
+        "addDirectories", "removeDirectories" ->
             suggestion
                 .array("directories")
                 ?.items

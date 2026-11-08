@@ -11,6 +11,7 @@ import com.intellij.ui.dsl.builder.RightGap
 import com.intellij.util.ui.JBUI
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
 import dev.ukitomato.closta.presenter.view.PermissionCard
+import dev.ukitomato.closta.presenter.view.SuggestionLine
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.event.MouseWheelEvent
@@ -117,3 +118,16 @@ private class BoxScroll(
 
 /** A label for text from the conversation (an input's key): never read as HTML. */
 internal fun plainLabel(text: String): JLabel = JBLabel(text).apply { putClientProperty("html.disable", true) }
+
+private val KNOWN_SUGGESTIONS =
+    setOf("addRules", "replaceRules", "removeRules", "setMode", "addDirectories", "removeDirectories")
+
+/** One suggestion in words: its kind's sentence with the detail in it; an unknown kind shows its name and detail. */
+internal fun suggestionText(line: SuggestionLine): String {
+    val detail = line.detail.lines().joinToString(", ")
+    return if (line.kind in KNOWN_SUGGESTIONS) {
+        ClostaBundle.message("thread.permission.suggestion.${line.kind}", detail)
+    } else {
+        ClostaBundle.message("thread.permission.suggestion.other", line.kind, detail)
+    }
+}

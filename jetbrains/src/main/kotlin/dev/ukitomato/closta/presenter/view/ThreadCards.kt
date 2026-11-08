@@ -42,7 +42,19 @@ data class PermissionCard(
     val sandboxOff: Boolean = false,
     /** A file tool's path as the request gives it, to open; [subject] is that path with hidden characters marked. */
     val rawPath: String? = null,
+    /** One line per offered suggestion, so "allow for this session" lists everything it accepts. */
+    val suggestionLines: List<SuggestionLine> = emptyList(),
 ) : ThreadCard
+
+/** One suggestion the CLI offered, by its [kind] and the [detail] the screen words it with. */
+data class SuggestionLine(
+    val kind: String,
+    val detail: String,
+)
+
+/** The [suggestions] as lines, in the order offered. */
+fun suggestionLinesOf(suggestions: List<SuggestionRecord>): List<SuggestionLine> =
+    suggestions.map { SuggestionLine(it.kind, it.detail) }
 
 /** One key of a tool's input and its value: a string as it is, any other value as compact JSON, hidden ones marked. */
 data class InputField(
@@ -134,6 +146,7 @@ private fun permissionCardOf(approval: ApprovalRecord): PermissionCard {
         subjectInFields = subject != null && subjectKey == null,
         sandboxOff = tool in BY_COMMAND && input?.get("dangerouslyDisableSandbox").isTrue(),
         rawPath = raw.takeIf { tool in BY_FILE },
+        suggestionLines = suggestionLinesOf(approval.suggestions),
     )
 }
 

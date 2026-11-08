@@ -51,6 +51,51 @@ class CardDecisionsTest {
     }
 
     @Test
+    fun `choosing all projects moves the rules but leaves a mode switch in the session`() {
+        val sessionRule = rule.copy(id = "s3", destination = "session")
+        val kept = keptSuggestions(listOf(mode, sessionRule), "userSettings")
+        assertEquals("session", kept[0].destination)
+        assertEquals(mode, kept[0])
+        assertEquals("userSettings", kept[1].destination)
+    }
+
+    @Test
+    fun `a directory grant and a rule removal stay where they were offered unless they are rules`() {
+        val dirs = SuggestionRecord("s4", "addDirectories", "/a", "session", """{"type":"addDirectories"}""")
+        val removal = SuggestionRecord("s5", "removeRules", "", "session", """{"type":"removeRules"}""")
+        val kept = keptSuggestions(listOf(dirs, removal), "userSettings")
+        assertEquals("session", kept[0].destination)
+        assertEquals("userSettings", kept[1].destination)
+    }
+
+    @Test
+    fun `each suggestion is its own line`() {
+        val dirs = SuggestionRecord("s4", "addDirectories", "/a\n/b", "session", """{"type":"addDirectories"}""")
+        val lines = suggestionLinesOf(listOf(mode, dirs))
+        val expected = listOf(SuggestionLine("setMode", "acceptEdits"), SuggestionLine("addDirectories", "/a\n/b"))
+        assertEquals(expected, lines)
+    }
+
+    @Test
+    fun `the captured suggestions keep the mode switch in the session when all projects is chosen`() {
+        val names = listOf("05-permission-can-use-tool", "12-subagent-permission", "16-permission-suggestion-accept")
+        names.forEach { name ->
+            val offered =
+                CaptureReplay
+                    .replay(name)
+                    .last()
+                    .transcript.approvals
+                    .values()
+                    .flatMap { it.suggestions }
+            val kept = keptSuggestions(offered, "userSettings")
+            offered.zip(kept).filter { it.first.kind == "setMode" }.forEach { (before, after) ->
+                assertEquals("session", after.destination, name)
+                assertEquals(before, after, name)
+            }
+        }
+    }
+
+    @Test
     fun `answers join a multi-select with a comma and use other when written`() {
         val answers =
             questionAnswers(

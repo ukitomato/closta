@@ -17,13 +17,19 @@ fun permissionChoice(
         else -> PermissionChoice.DENY
     }
 
-/** The [suggestions] an allow keeps: each as the CLI offered it, or moved to [destination] when the user chose one. */
+/** The suggestion kinds that save a permission rule, so a destination applies to them. */
+val RULE_KINDS = setOf("addRules", "replaceRules", "removeRules")
+
+/**
+ * The [suggestions] an allow keeps: each as the CLI offered it. When the user chose a [destination] only the rule
+ * suggestions move there; a mode switch or a directory grant stays where it was offered.
+ */
 fun keptSuggestions(
     suggestions: List<SuggestionRecord>,
     destination: String?,
 ): List<SuggestionRecord> {
     val where = destination ?: return suggestions
-    return suggestions.map { if (it.destination == where) it else withDestination(it, where) }
+    return suggestions.map { if (it.kind !in RULE_KINDS || it.destination == where) it else withDestination(it, where) }
 }
 
 /** One question as the user answered it: the labels [chosen], and the [other] line when Other is chosen. */
