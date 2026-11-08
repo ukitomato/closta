@@ -4,13 +4,13 @@
 // with no path that writes without the scrubber (record.mjs guarantees this). This file is
 // the transformation on that path.
 //
-// Three stages:
+// Stages:
 //   1. Email addresses (regex)          -> user@example.com
 //   2. Values learned from the data     -> picks the real account.email / account.organization
 //      values from JSON and removes them wherever they appear by string match (nothing hardcoded)
 //   3. User name in home paths          -> /home/user, -home-user- (the encoded form too)
-// And the account's plan (subscriptionType) is written as one fixed plan, and the API request/message ids, which tie a
-// capture to an account, become fake ids of the same shape.
+//   4. API request/message ids          -> fake ids of the same shape (they tie a capture to an account)
+//   5. The account's plan (subscriptionType) -> one fixed plan
 //
 // 1 is the guarantee: even if a future CLI puts an email in an unknown field, the regex removes it.
 // 2 discovers values that no pattern can detect, such as organization names, from the recording's
@@ -38,6 +38,8 @@ const PLAN_KEY_RE = /(\\?"subscriptionType\\?"\s*:\s*\\?")([^"\\]*)(\\?")/g;
 // Real ids: req_/msg_ + 011C + 20 base58 chars. The fake keeps the shape (28 chars): 011CScrubbed + 12 base58 chars of
 // the sha256 of the whole real id, so the same real id always maps to the same fake one.
 export const API_ID_RE = /\b(req|msg)_011C[1-9A-HJ-NP-Za-km-z]{20}\b/g;
+// Audit only: any 28-char id with a future prefix (01 + 22 chars) is reported, even where the scrubber would not replace it.
+const API_ID_AUDIT_RE = /\b(req|msg)_01[1-9A-HJ-NP-Za-km-z]{22}\b/g;
 const FAKE_ID_MARK = '011CScrubbed';
 const BASE58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 
@@ -247,7 +249,7 @@ export function findPii(text, username = currentUsername(), learned = undefined,
     if (m[2] !== PLAN_PLACEHOLDER) hits.push({ kind: 'plan', value: m[2] });
   }
   // Real API ids (fake ones start with the marker).
-  for (const m of text.matchAll(API_ID_RE)) {
+  for (const m of text.matchAll(API_ID_AUDIT_RE)) {
     if (fakeApiId(m[0]) !== m[0]) hits.push({ kind: 'api-id', value: m[0] });
   }
   // Values the scrubber learned, excluding placeholders.

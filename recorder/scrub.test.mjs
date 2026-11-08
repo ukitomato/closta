@@ -4,6 +4,11 @@
 import assert from 'node:assert/strict';
 import { newScrubState, scrubLine, scrubLines, findPii, createStreamScrubber, joinedFragments, scrubFragments, knownNamePatterns, knownOrgs, fakeApiId } from './scrub.mjs';
 
+// Made-up ids shaped like real ones, built at run time so no literal in the repo looks like a real id.
+const MSG_ID = 'msg_' + '011C' + 'AbCdEfGhJkLmNpQrStUv';
+const REQ_ID = 'req_' + '011C' + 'aBcDeFgHjKmNpQrStUvW';
+const MSG_ID_2 = 'msg_' + '011C' + 'zYxWvUtSrQpNmLkJhGfE';
+
 let failures = 0;
 const check = (name, fn) => {
   try { fn(); process.stdout.write(`  ✓ ${name}\n`); } catch (e) { failures += 1; process.stdout.write(`  ✗ ${name}: ${e.message}\n`); }
@@ -13,7 +18,7 @@ check('removes account.email and organization', () => {
   const st = newScrubState('alice');
   const line = JSON.stringify({
     type: 'control_response',
-    response: { subtype: 'success', response: { account: { email: 'jane.doe@corp.example.com', organization: 'Sample Co - Team (1)', subscriptionType: 'Claude Pro' } } },
+    response: { subtype: 'success', response: { account: { email: 'jane.doe@corp.example.com', organization: 'Sample Co - Team (1)', subscriptionType: 'Team Plan' } } },
   });
   const out = scrubLine(line, st);
   assert.equal(findPii(out, 'alice').length, 0, out);
@@ -219,19 +224,19 @@ check('the account plan is written as one fixed plan, also inside an escaped str
 
 check('replaces real request and message ids with fake ids of the same shape', () => {
   const st = newScrubState('alice');
-  const line = JSON.stringify({ type: 'assistant', message: { id: 'msg_011CAbCdEfGhJkLmNpQrStUv' }, request_id: 'req_011CaBcDeFgHjKmNpQrStUvW' });
+  const line = JSON.stringify({ type: 'assistant', message: { id: MSG_ID }, request_id: REQ_ID });
   const out = scrubLine(line, st);
-  assert.ok(!out.includes('msg_011CAbCdEfGhJkLmNpQrStUv') && !out.includes('req_011CaBcDeFgHjKmNpQrStUvW'), out);
+  assert.ok(!out.includes(MSG_ID) && !out.includes(REQ_ID), out);
   const ids = [...out.matchAll(/(req|msg)_011CScrubbed[1-9A-HJ-NP-Za-km-z]{12}/g)].map((m) => m[0]);
   assert.equal(ids.length, 2, out);
   for (const id of ids) assert.equal(id.length, 28);
 });
 
 check('fake ids are deterministic and scrubbing them again changes nothing', () => {
-  const a = fakeApiId('msg_011CAbCdEfGhJkLmNpQrStUv');
-  assert.equal(a, fakeApiId('msg_011CAbCdEfGhJkLmNpQrStUv'));
+  const a = fakeApiId(MSG_ID);
+  assert.equal(a, fakeApiId(MSG_ID));
   assert.equal(fakeApiId(a), a);
-  assert.notEqual(a, fakeApiId('msg_011CzYxWvUtSrQpNmLkJhGfE'));
+  assert.notEqual(a, fakeApiId(MSG_ID_2));
   const line = JSON.stringify({ id: a });
   assert.equal(scrubLine(line, newScrubState('alice')), line);
 });
@@ -242,8 +247,14 @@ check('leaves strings that only look like ids alone', () => {
 });
 
 check('reports a real api id or a real plan left in a file', () => {
-  const hits = findPii('{"request_id":"req_011CaBcDeFgHjKmNpQrStUvW","subscriptionType":"Claude Pro"}', 'alice');
+  const hits = findPii(`{"request_id":"${REQ_ID}","subscriptionType":"Team Plan"}`, 'alice');
   assert.deepEqual(hits.map((h) => h.kind).sort(), ['api-id', 'plan']);
+});
+
+check('reports an api id with a future prefix too', () => {
+  const id = 'msg_' + '011D' + 'AbCdEfGhJkLmNpQrStUv';
+  assert.deepEqual(findPii(JSON.stringify({ id }), 'alice').map((h) => h.kind), ['api-id']);
+  assert.equal(findPii(JSON.stringify({ id: fakeApiId(id) }), 'alice').length, 0);
 });
 
 process.stdout.write(failures ? `\nNG: ${failures} failed\n`

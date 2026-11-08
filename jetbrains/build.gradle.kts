@@ -886,7 +886,9 @@ abstract class ThirdPartyNotices : DefaultTask() {
         val byGroup = sortedMapOf<String, MutableList<String>>()
         coordinates.forEach { c ->
             val (group, module, version) = c.split(':')
-            val jar = jars.files.firstOrNull { it.name == "$module-$version.jar" } ?: return@forEach
+            val jar =
+                jars.files.firstOrNull { it.name == "$module-$version.jar" }
+                    ?: throw GradleException("No jar file found for $c among the runtime classpath files")
             ZipFile(jar).use { zip ->
                 listOf("META-INF/NOTICE", "META-INF/NOTICE.txt").forEach { name ->
                     val text = zip.getEntry(name)?.let { zip.getInputStream(it).readBytes().toString(Charsets.UTF_8).trim() }
@@ -933,8 +935,8 @@ val thirdPartyNotices by tasks.registering(ThirdPartyNotices::class) {
     jars.from(configurations.runtimeClasspath)
     licenseTable =
         mapOf(
-            "com.google.code.gson" to "Gson|Apache-2.0|Copyright Google LLC",
-            "org.jetbrains.kotlinx" to "kotlinx.collections.immutable|Apache-2.0|Copyright JetBrains s.r.o.",
+            "com.google.code.gson:gson" to "Gson|Apache-2.0|Copyright Google LLC",
+            "org.jetbrains.kotlinx:kotlinx-collections-immutable-jvm" to "kotlinx.collections.immutable|Apache-2.0|Copyright JetBrains s.r.o.",
             "software.amazon.awssdk" to "AWS SDK for Java 2.0|Apache-2.0|Copyright Amazon.com, Inc. or its affiliates",
             "software.amazon.eventstream" to "AWS Event Stream|Apache-2.0|Copyright Amazon.com, Inc. or its affiliates",
             "org.reactivestreams" to "Reactive Streams|MIT-0|",
@@ -944,6 +946,8 @@ val thirdPartyNotices by tasks.registering(ThirdPartyNotices::class) {
     noticeFile = rootProject.layout.projectDirectory.file("../NOTICE")
     outputDir = layout.buildDirectory.dir("generated/notices")
 }
+
+tasks.named("check") { dependsOn(thirdPartyNotices) }
 
 tasks.jar {
     into("META-INF") {
