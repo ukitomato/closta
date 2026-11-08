@@ -309,6 +309,7 @@ internal object GallerySession {
                                     "How long should it wait between retries?",
                                     "Delay",
                                     "Fixed 200ms" to "Waits the same every time. The simplest",
+                                    "読み取りとログと計測だけ外して再試行する" to "Leaves the writes as they are",
                                     "Exponential backoff (doubling from 200ms, capped at 2 seconds, with jitter) " +
                                         "so that clients do not all hit a busy server again at the same moment" to
                                         "Gentler on a busy server. The tests swap in a fake clock",

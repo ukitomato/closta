@@ -6,21 +6,29 @@ import com.intellij.icons.AllIcons
 import com.intellij.ide.ui.laf.darcula.ui.DarculaButtonUI
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.components.ActionLink
+import com.intellij.ui.dsl.builder.AlignX
+import com.intellij.ui.dsl.builder.MAX_LINE_LENGTH_WORD_WRAP
 import com.intellij.ui.dsl.builder.Panel
+import com.intellij.ui.dsl.builder.RightGap
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import com.intellij.util.ui.WrapLayout
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
 import dev.ukitomato.closta.platforms.intellij.ui.noHtml
+import dev.ukitomato.closta.platforms.intellij.ui.plainHtml
 import dev.ukitomato.closta.platforms.intellij.ui.plainTip
 import dev.ukitomato.closta.presenter.view.ApprovalOutcome
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.FlowLayout
+import java.awt.event.ActionEvent
+import java.awt.event.KeyEvent
+import javax.swing.AbstractAction
 import javax.swing.Icon
 import javax.swing.JButton
 import javax.swing.JComponent
 import javax.swing.JPanel
+import javax.swing.KeyStroke
 
 /** What a waiting card says first: an icon and one sentence of what Claude wants to do. */
 internal data class Headline(
@@ -78,8 +86,8 @@ internal fun answeredLine(
 private const val ABOUT_MAX = 120
 
 /**
- * A card's answer button. It never takes the keyboard (the card keeps it, for its keys); [main] is drawn as the
- * default button, the answer Enter gives.
+ * A card's answer button. It takes the keyboard like any button (Tab reaches it, Space presses it); [main] is drawn as
+ * the default button.
  */
 internal fun cardButton(
     text: String,
@@ -87,9 +95,23 @@ internal fun cardButton(
     act: () -> Unit,
 ): JButton =
     JButton(text).apply {
-        isFocusable = false
+        isFocusable = true
         if (main) putClientProperty(DarculaButtonUI.DEFAULT_STYLE_KEY, true)
         addActionListener { act() }
+    }
+
+/** Enter never presses this button, so a key meant for another part of the card never allows with it. */
+internal fun JButton.enterNeverPresses(): JButton =
+    apply {
+        // An enabled action that does nothing: the key is consumed here and reaches no ancestor, the window or the IDE.
+        val enter = KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0)
+        getInputMap(JComponent.WHEN_FOCUSED).put(enter, "closta.enterDoesNothing")
+        actionMap.put(
+            "closta.enterDoesNothing",
+            object : AbstractAction() {
+                override fun actionPerformed(e: ActionEvent) = Unit
+            },
+        )
     }
 
 /** The line under a card that says why its answer did not go, in the error colour. */
@@ -99,10 +121,12 @@ internal fun failureRow(
 ) {
     failure?.let { text ->
         panel.row {
-            label(text).applyToComponent {
-                noHtml()
-                foreground = UIUtil.getErrorForeground()
-            }
+            icon(AllIcons.General.Error).gap(RightGap.SMALL)
+            text(plainHtml(text), MAX_LINE_LENGTH_WORD_WRAP)
+                .applyToComponent {
+                    foreground = UIUtil.getErrorForeground()
+                }.align(AlignX.FILL)
+                .resizableColumn()
         }
     }
 }

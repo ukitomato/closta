@@ -18,6 +18,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.awt.Component
+import java.awt.event.KeyEvent
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicInteger
@@ -158,8 +159,8 @@ internal class SessionsGallery(
         }
     }
 
-    // Enter at once (inside the answer delay) must not answer; Enter after the delay must, and the keyboard must stay
-    // in the detail pane once the answered view goes.
+    // 1 at once (inside the answer delay) must not answer; after the delay Enter still must not (it never allows), 1
+    // must, and the keyboard must stay in the detail pane once the answered view goes.
     private suspend fun answerBash() {
         val id = ids["permission"] ?: return
         withContext(Dispatchers.EDT) {
@@ -169,18 +170,23 @@ internal class SessionsGallery(
         delay(RENDER_MS)
         withContext(Dispatchers.EDT) {
             note("answer: chosen and asked for the keyboard, focus = ${probe.focusText()}")
-            probe.pressEnter()
+            probe.press(KeyEvent.VK_1, '1')
         }
         delay(RENDER_MS)
-        withContext(Dispatchers.EDT) { note("answer: Enter inside the delay answered ${answers.get()} time(s)") }
+        withContext(Dispatchers.EDT) { note("answer: 1 inside the delay answered ${answers.get()} time(s)") }
         delay(DELAY_PASSED_MS)
         withContext(Dispatchers.EDT) {
             note("answer: before Enter, focus = ${probe.focusText()}")
-            probe.pressEnter()
+            probe.press(KeyEvent.VK_ENTER, '\n')
+        }
+        delay(RENDER_MS)
+        withContext(Dispatchers.EDT) {
+            note("answer: Enter after the delay answered ${answers.get()} time(s)")
+            probe.press(KeyEvent.VK_1, '1')
         }
         delay(SHOT_MS)
         withContext(Dispatchers.EDT) {
-            note("answer: Enter after the delay answered ${answers.get()} time(s)")
+            note("answer: 1 after the delay answered ${answers.get()} time(s)")
             note("answer: after, focus = ${probe.focusText()}")
             shootWindow("sessions-answered.png")
         }

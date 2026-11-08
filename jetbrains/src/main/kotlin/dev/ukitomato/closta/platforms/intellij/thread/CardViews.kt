@@ -1,6 +1,7 @@
 package dev.ukitomato.closta.platforms.intellij.thread
 
 import com.intellij.icons.AllIcons
+import com.intellij.openapi.util.SystemInfo
 import com.intellij.openapi.util.text.StringUtil
 import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.components.DropDownLink
@@ -61,7 +62,7 @@ data class CardAnswer(
 /**
  * The permission, question and plan cards, laid out with the Kotlin UI DSL. A waiting card stands out as the theme's
  * banner and says first what Claude wants to do; a permission card answers with 1, 2 or 3 (or a button), Esc for no,
- * Tab for a sentence to go with the no, and Enter for nothing ([cardKey]). Each card sends its answer once: its
+ * a link for a sentence to go with the no, and Enter for nothing ([cardKey]). Each card sends its answer once: its
  * buttons grey out the moment it is answered, and once the CLI's state says so it shrinks to one quiet line. A card
  * takes the keyboard only when the keyboard is already in this conversation, so it never takes it from the editor or
  * the composer.
@@ -107,8 +108,10 @@ class CardViews(
     private fun about(card: ThreadCard): String? =
         when (card) {
             is PermissionCard ->
-                card.diff?.let { "${card.subject?.substringAfterLast('/')} +${it.added} −${it.removed}" }
-                    ?: card.subject
+                card.diff?.let { diff ->
+                    val change = "+${diff.added} −${diff.removed}"
+                    card.subject?.let { "${it.substringAfterLast('/')} $change" } ?: change
+                } ?: card.subject
             is QuestionCard -> card.questions.firstOrNull()?.text
             is PlanCard -> null
         }
@@ -159,7 +162,7 @@ class CardViews(
         SwingUtilities.invokeLater {
             val owner = KeyboardFocusManager.getCurrentKeyboardFocusManager().focusOwner
             val scope = focusScope() ?: return@invokeLater
-            if (target.isShowing && cardMayTakeFocus(owner, scope)) target.requestFocusInWindow()
+            if (target.isShowing && cardMayTakeFocus(owner, scope, target)) target.requestFocusInWindow()
         }
     }
 
@@ -167,7 +170,7 @@ class CardViews(
      * A waiting permission card: what Claude wants to do with the tool's icon, what it runs on (the whole command, the
      * file, its whole path and its diff, or every key of another tool's input), a warning when any of it had hidden
      * characters (shown as marks), and the answers as buttons: Allow (1), Always Allow (2) when the CLI offers a rule
-     * to keep, Deny (3). Esc denies, Tab opens a sentence to go with the denial, Shift+Tab moves on.
+     * to keep, Deny (3). Esc denies, the link opens a sentence to go with the denial.
      */
     private inner class PermissionView(
         private val card: PermissionCard,
@@ -188,10 +191,10 @@ class CardViews(
             val yes =
                 cardButton(ClostaBundle.message("thread.permission.allow"), main = true) {
                     decide(PermissionChoice.ALLOW)
-                }
+                }.enterNeverPresses()
             val keep =
                 card.suggestionLines.firstOrNull()?.let { first ->
-                    cardButton(keepLabel(), act = { decide(PermissionChoice.ALLOW_KEEP) }).apply {
+                    cardButton(keepLabel(), act = { decide(PermissionChoice.ALLOW_KEEP) }).enterNeverPresses().apply {
                         toolTipText = plainTip(first.detail.ifEmpty { first.kind })
                     }
                 }
@@ -249,7 +252,9 @@ class CardViews(
                             }
                         row { cell(buttonLine(listOf(words, where))).align(AlignX.FILL) }
                     }
-                    keysRow = row { comment(ClostaBundle.message("thread.permission.keys")) }.visible(false)
+                    row { link(ClostaBundle.message("thread.card.addNote")) { openNote() } }
+                    keysRow =
+                        row { comment(ClostaBundle.message("thread.permission.keys", buttons.size)) }.visible(false)
                     commentRow = row { cell(comment).align(AlignX.FILL) }.visible(false)
                     failureRow(this, card.failure)
                 }
@@ -263,10 +268,6 @@ class CardViews(
                 when (key) {
                     is CardKey.Choose -> decide(permissionChoice(key.index, card.suggestions.isNotEmpty()))
                     CardKey.Deny -> decide(PermissionChoice.DENY)
-                    CardKey.OpenNote -> {
-                        showNote(true)
-                        comment.requestFocusInWindow()
-                    }
                     CardKey.ToComposer -> letGo()
                     else -> Unit
                 }
@@ -276,6 +277,11 @@ class CardViews(
                 resized(this)
             }
             takeFocusIfHere(this)
+        }
+
+        private fun openNote() {
+            showNote(true)
+            comment.requestFocusInWindow()
         }
 
         private fun showNote(shown: Boolean) {
@@ -320,12 +326,13 @@ class CardViews(
     /**
      * A waiting question card: each question with its options, each option's description under it, and Other with a
      * line to write an answer of one's own. Answer is pressable once every question has an answer (its tooltip says so
-     * until then); Ctrl+Enter answers, Esc leaves the questions unanswered.
+     * until then); Ctrl+Enter answers, Esc leaves the questions unanswered. Esc in the Other line only leaves the line.
      */
     private inner class QuestionCardView(
         private val card: QuestionCard,
     ) : CardPanel(ThreadStyle.pendingLine, ThreadStyle.pendingFill, watchesKeyboard = true) {
         private var sent = false
+        private lateinit var keysRow: Row
         private val picks = ArrayList<Pick>()
         private val send = cardButton(ClostaBundle.message("thread.question.answer"), main = true) { send() }
 
@@ -362,6 +369,8 @@ class CardViews(
                     val skipButton = cardButton(ClostaBundle.message("thread.question.skip")) { skip() }
                     row { cell(buttonLine(listOf(send, skipButton))).align(AlignX.FILL) }
                         .topGap(TopGap.SMALL)
+                    val modifier = if (SystemInfo.isMac) "Cmd" else "Ctrl"
+                    keysRow = row { comment(ClostaBundle.message("thread.question.keys", modifier)) }.visible(false)
                     failureRow(this, card.failure)
                 }
             content.isOpaque = false
@@ -375,18 +384,25 @@ class CardViews(
                 when (key) {
                     CardKey.Deny -> skip()
                     CardKey.Answer -> send()
+                    CardKey.LeaveText -> firstOption()?.requestFocusInWindow()
                     CardKey.ToComposer -> letGo()
                     else -> Unit
                 }
             }
+            onKeyboard = { inside ->
+                keysRow.visible(cardHint(inside, 1) == CardHint.KEYS)
+                resized(this)
+            }
             refresh()
+            firstOption()?.let(::takeFocusIfHere)
+        }
+
+        private fun firstOption(): AbstractButton? =
             picks
                 .firstOrNull()
                 ?.options
                 ?.firstOrNull()
                 ?.second
-                ?.let(::takeFocusIfHere)
-        }
 
         private fun question(
             panel: Panel,

@@ -43,12 +43,15 @@ internal class SessionsWindowProbe(
         return "${owner.javaClass.name} ($where)"
     }
 
-    /** Enter, pressed and released where the keyboard is. */
-    fun pressEnter() {
+    /** The key [code] typing [char], pressed and released where the keyboard is. */
+    fun press(
+        code: Int,
+        char: Char,
+    ) {
         val owner = KeyboardFocusManager.getCurrentKeyboardFocusManager().focusOwner ?: return
         val now = System.currentTimeMillis()
-        owner.dispatchEvent(KeyEvent(owner, KeyEvent.KEY_PRESSED, now, 0, KeyEvent.VK_ENTER, '\n'))
-        owner.dispatchEvent(KeyEvent(owner, KeyEvent.KEY_RELEASED, now, 0, KeyEvent.VK_ENTER, '\n'))
+        owner.dispatchEvent(KeyEvent(owner, KeyEvent.KEY_PRESSED, now, 0, code, char))
+        owner.dispatchEvent(KeyEvent(owner, KeyEvent.KEY_RELEASED, now, 0, code, char))
     }
 
     /** Scrolls the detail's body to its end; false when it has nothing to scroll. */

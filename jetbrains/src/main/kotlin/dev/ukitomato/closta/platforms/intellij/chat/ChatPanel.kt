@@ -43,7 +43,6 @@ import dev.ukitomato.closta.platforms.intellij.thread.ThreadStyle
 import dev.ukitomato.closta.platforms.intellij.thread.ThreadSurface
 import dev.ukitomato.closta.platforms.intellij.ui.noHtml
 import dev.ukitomato.closta.platforms.intellij.ui.plainTip
-import dev.ukitomato.closta.presenter.view.CardRow
 import dev.ukitomato.closta.presenter.view.ThreadRows
 import dev.ukitomato.closta.presenter.view.askActions
 import dev.ukitomato.closta.presenter.view.composerState
@@ -154,6 +153,7 @@ class ChatPanel(
         composer.onLetGo = { returnFocusToComposer(null) }
         surface.onLetGo = { returnFocusToComposer(null) }
         composer.onJump = surface::focusWaitingCard
+        surface.onWaitingOffScreen = composer::cardsWaiting
         addComponentListener(
             object : ComponentAdapter() {
                 override fun componentResized(e: ComponentEvent) = noticeShown?.let(::showNotice) ?: Unit
@@ -258,8 +258,23 @@ class ChatPanel(
     /** The thread's own component (the benchmark scrolls it). */
     fun surfaceComponent(): JComponent = surface.component
 
+    /** Whether some card waits for an answer. */
+    fun hasWaitingCard(): Boolean = surface.hasWaitingCard
+
     /** Brings the waiting card at the top into view and gives it the keyboard; false when no card waits. */
     fun focusWaitingCard(): Boolean = surface.focusWaitingCard()
+
+    /**
+     * The jump to a waiting card: from the thread (a card) the keyboard goes back to the composer, from anywhere else
+     * (the composer) to the waiting card at the top. [owner] is where the keyboard is.
+     */
+    fun jumpBetweenComposerAndCard(owner: Component?) {
+        if (owner != null && SwingUtilities.isDescendingFrom(owner, surface.component)) {
+            composer.focusTarget().requestFocusInWindow()
+        } else {
+            surface.focusWaitingCard()
+        }
+    }
 
     /**
      * The header: the repository and branch, cut with "…" (the tab already names the conversation: its title is the
@@ -514,7 +529,6 @@ class ChatPanel(
             val starting = sendBlockOf(sendable, source.starting) == SendBlock.STARTING
             surface.loading(source.opensWithContent && starting && transcript.messages.size == 0)
             surface.show(shown) { transcript.approvals[it] }
-            composer.cardsWaiting(shown.count { it is CardRow && it.card.answered == null })
             changesBar.show(changesBar(shown, changes.settled))
             composer.show(
                 composerState(view.conversation, transcript),

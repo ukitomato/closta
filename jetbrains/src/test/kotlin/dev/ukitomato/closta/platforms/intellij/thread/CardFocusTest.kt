@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import javax.swing.JButton
 import javax.swing.JPanel
 import javax.swing.JRadioButton
 import javax.swing.JTextArea
@@ -21,20 +22,66 @@ class CardFocusTest {
             add(composer)
         }
 
+    private val target = JPanel()
+
+    private fun waitingCard() =
+        object : JPanel(), WaitingCard {
+            override val waiting = true
+        }
+
     @Test
-    fun aCardTakesTheKeyboardFromTheThread() {
-        assertTrue(cardMayTakeFocus(inThread, thread))
+    fun aCardTakesTheKeyboardFromThePlainThread() {
+        val button = JButton().also { thread.add(it) }
+        assertTrue(cardMayTakeFocus(button, thread, target))
     }
 
     @Test
     fun aCardNeverTakesTheKeyboardFromTheComposer() {
-        assertFalse(cardMayTakeFocus(composer, thread))
-        assertFalse(cardMayTakeFocus(panel, thread))
+        assertFalse(cardMayTakeFocus(composer, thread, target))
+        assertFalse(cardMayTakeFocus(panel, thread, target))
     }
 
     @Test
     fun noOwnerNoFocus() {
-        assertFalse(cardMayTakeFocus(null, thread))
+        assertFalse(cardMayTakeFocus(null, thread, target))
+    }
+
+    @Test
+    fun aCardDoesNotTakeTheKeyboardFromATextLineInTheThread() {
+        assertFalse(cardMayTakeFocus(inThread, thread, target))
+        assertFalse(cardMayTakeFocus(JTextField().also { thread.add(it) }, thread, target))
+        assertFalse(cardMayTakeFocus(JTextArea().apply { isEditable = false }.also { thread.add(it) }, thread, target))
+    }
+
+    @Test
+    fun aCardDoesNotTakeTheKeyboardFromAnotherWaitingCard() {
+        val other = waitingCard()
+        val button = JButton()
+        other.add(button)
+        thread.add(other)
+        assertFalse(cardMayTakeFocus(button, thread, target))
+        assertFalse(cardMayTakeFocus(other, thread, target))
+    }
+
+    @Test
+    fun aCardMayTakeTheKeyboardBackFromItself() {
+        val card = waitingCard()
+        val button = JButton()
+        card.add(button)
+        thread.add(card)
+        assertTrue(cardMayTakeFocus(button, thread, card))
+    }
+
+    @Test
+    fun aCardThatIsNoLongerWaitingKeepsNoKeyboard() {
+        val answered =
+            object : JPanel(), WaitingCard {
+                override val waiting = false
+            }
+        val button = JButton()
+        answered.add(button)
+        thread.add(answered)
+        assertTrue(cardMayTakeFocus(button, thread, target))
     }
 
     private fun card(): JPanel {

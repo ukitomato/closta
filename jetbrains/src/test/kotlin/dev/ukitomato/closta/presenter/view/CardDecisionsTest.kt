@@ -5,6 +5,8 @@ import dev.ukitomato.closta.presenter.view.PermissionChoice.ALLOW_KEEP
 import dev.ukitomato.closta.presenter.view.PermissionChoice.DENY
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -35,6 +37,36 @@ class CardDecisionsTest {
 
     @Test
     fun `with suggestions the third button denies`() = assertEquals(DENY, permissionChoice(2, hasSuggestions = true))
+
+    @Test
+    fun `the sessions window answers as the conversation does, or not at all`() {
+        listOf(false, true).forEach { hasSuggestions ->
+            (0..8).forEach { index ->
+                val detail = detailChoice(index, hasSuggestions)
+                if (detail != null) assertEquals(permissionChoice(index, hasSuggestions), detail)
+            }
+        }
+    }
+
+    @Test
+    fun `the sessions window never keeps a suggestion`() {
+        listOf(false, true).forEach { hasSuggestions ->
+            (0..8).forEach { assertNotEquals(ALLOW_KEEP, detailChoice(it, hasSuggestions)) }
+        }
+    }
+
+    @Test
+    fun `with suggestions the sessions window's second key does nothing and its third denies`() {
+        assertEquals(ALLOW, detailChoice(0, hasSuggestions = true))
+        assertNull(detailChoice(1, hasSuggestions = true))
+        assertEquals(DENY, detailChoice(2, hasSuggestions = true))
+    }
+
+    @Test
+    fun `without suggestions the sessions window's second key denies`() {
+        assertEquals(ALLOW, detailChoice(0, hasSuggestions = false))
+        assertEquals(DENY, detailChoice(1, hasSuggestions = false))
+    }
 
     @Test
     fun `a destination not chosen keeps each suggestion as offered`() {

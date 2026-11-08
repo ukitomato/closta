@@ -18,4 +18,30 @@ class JumpLabelTest {
         assertFalse(waitingBelow(listOf(700), viewBottom = 800))
         assertFalse(waitingBelow(emptyList(), viewBottom = 800))
     }
+
+    @Test
+    fun theJumpGoesToTheFirstCardBelowTheView() {
+        assertEquals("c", firstWaitingBelow(listOf("a" to 100, "c" to 900, "d" to 1200), viewBottom = 800))
+        assertEquals(null, firstWaitingBelow(listOf("a" to 100), viewBottom = 800))
+    }
+
+    @Test
+    fun aCardIsOffScreenWhenItIsEntirelyAboveOrBelowTheView() {
+        assertEquals(2, waitingOffScreen(listOf(-300..-100, 100..200, 900..1000), viewTop = 0, viewBottom = 800))
+        assertEquals(0, waitingOffScreen(listOf(0..50, 700..799), viewTop = 0, viewBottom = 800))
+        assertEquals(0, waitingOffScreen(emptyList(), viewTop = 0, viewBottom = 800))
+    }
+
+    @Test
+    fun aCardWithPartInSightIsOnScreen() {
+        assertEquals(0, waitingOffScreen(listOf(-300..100), viewTop = 0, viewBottom = 800))
+        assertEquals(0, waitingOffScreen(listOf(700..1200), viewTop = 0, viewBottom = 800))
+        assertEquals(0, waitingOffScreen(listOf(-300..1200), viewTop = 0, viewBottom = 800))
+    }
+
+    @Test
+    fun aCardTouchingTheViewOnlyAtAnEdgeIsOffScreen() {
+        assertEquals(1, waitingOffScreen(listOf(-300..0), viewTop = 0, viewBottom = 800))
+        assertEquals(1, waitingOffScreen(listOf(800..900), viewTop = 0, viewBottom = 800))
+    }
 }

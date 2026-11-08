@@ -1,3 +1,5 @@
+@file:Suppress("MatchingDeclarationName") // the card that waits and the functions that move the keyboard
+
 package dev.ukitomato.closta.platforms.intellij.thread
 
 import java.awt.Component
@@ -6,15 +8,26 @@ import javax.swing.AbstractButton
 import javax.swing.SwingUtilities
 import javax.swing.text.JTextComponent
 
+/** A card that is waiting for an answer: it holds the keyboard for the keys that answer it. */
+interface WaitingCard {
+    val waiting: Boolean
+}
+
 /**
- * Whether a new card may take the keyboard from [owner]: only when the keyboard is already in the thread's own column
- * ([thread]). Never from the composer — a key typed to send (Enter, 1, 2, Esc) would answer the card instead — and
- * never from the editor. Free of `com.intellij`, so the fast tests check it.
+ * Whether the new [card] may take the keyboard from [owner]: only when the keyboard is already in the thread's own
+ * column ([thread]). Never from the composer or the editor, never from a text line (a key typed there would go to the
+ * card), and never from another card that is waiting (its keys, 1 or Enter, would answer it unread). Free of
+ * `com.intellij`, so the fast tests check it.
  */
 fun cardMayTakeFocus(
     owner: Component?,
     thread: Component,
-): Boolean = owner != null && SwingUtilities.isDescendingFrom(owner, thread)
+    card: Component,
+): Boolean =
+    owner != null &&
+        SwingUtilities.isDescendingFrom(owner, thread) &&
+        owner !is JTextComponent &&
+        generateSequence(owner) { it.parent }.none { it !== card && (it as? WaitingCard)?.waiting == true }
 
 /**
  * What the part of [card] that has the keyboard ([owner]) is, so the card made again gives it to the same part: its

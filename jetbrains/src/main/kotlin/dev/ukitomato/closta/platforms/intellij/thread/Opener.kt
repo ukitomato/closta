@@ -15,6 +15,10 @@ import java.awt.event.KeyAdapter
 import java.awt.event.KeyEvent
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
+import javax.accessibility.AccessibleContext
+import javax.accessibility.AccessibleRole
+import javax.accessibility.AccessibleState
+import javax.accessibility.AccessibleStateSet
 import javax.swing.Icon
 import javax.swing.JComponent
 import javax.swing.JPanel
@@ -30,9 +34,13 @@ internal class Opener(
     arrow: Icon?,
     name: String,
     private val press: () -> Unit,
+    /** Whether the row it opens is open; null when it opens something else (a sub-agent), which is no state. */
+    private val expanded: Boolean? = null,
     /** It left the screen while it had the keyboard (its row was made again): the row's keeper passes it on. */
     private val dropped: (Opener) -> Unit = {},
 ) : JPanel(BorderLayout(JBUI.scale(GAP), 0)) {
+    private var toggleContext: AccessibleContext? = null
+
     init {
         isOpaque = false
         isFocusable = true
@@ -77,6 +85,23 @@ internal class Opener(
             },
         )
     }
+
+    override fun getAccessibleContext(): AccessibleContext =
+        toggleContext ?: newToggleContext().also { toggleContext = it }
+
+    private fun newToggleContext(): AccessibleContext =
+        object : AccessibleJPanel() {
+            override fun getAccessibleRole(): AccessibleRole = AccessibleRole.TOGGLE_BUTTON
+
+            override fun getAccessibleStateSet(): AccessibleStateSet =
+                super.getAccessibleStateSet().apply {
+                    when (expanded) {
+                        true -> add(AccessibleState.EXPANDED)
+                        false -> add(AccessibleState.COLLAPSED)
+                        null -> Unit
+                    }
+                }
+        }
 
     override fun removeNotify() {
         val had = isFocusOwner

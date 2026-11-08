@@ -58,8 +58,14 @@ interface ThreadSurface : Disposable {
     /** Whether the earlier conversation is still being read (a resume): an empty thread says it is loading. */
     fun loading(reading: Boolean)
 
+    /** Whether some card waits for an answer. */
+    val hasWaitingCard: Boolean
+
     /** Brings the waiting card at the top into view and gives it the keyboard; false when no card waits. */
     fun focusWaitingCard(): Boolean
+
+    /** Tells how many waiting cards are outside the view, whenever the view or the cards change. */
+    var onWaitingOffScreen: (Int) -> Unit
 
     var onOpenAgent: (toolUseId: String) -> Unit
     var onReview: (askKey: String) -> Unit
@@ -109,6 +115,8 @@ class SwingThreadSurface(
 ) : ThreadSurface {
     override var onAnswer: (CardAnswer) -> Unit = {}
     override var onLetGo: () -> Unit = {}
+    override var onWaitingOffScreen: (Int) -> Unit = {}
+    private var offScreenTold = -1
     override var onOpenAgent: (String) -> Unit = {}
     override var onReview: (String) -> Unit = {}
     override var onSignIn: () -> Unit = {}
@@ -186,7 +194,13 @@ class SwingThreadSurface(
             toolTipText = ClostaBundle.message("thread.toLatest")
             isVisible = false
             putClientProperty("JButton.buttonType", "roundRect")
-            addActionListener { toBottom() }
+            addActionListener {
+                // Saying a card waits below, it goes to the first one below the view.
+                val view = scroll.viewport.viewRect
+                val below = waiting.mapNotNull { key -> column.topOf(key)?.let { key to it } }
+                val key = firstWaitingBelow(below, view.y + view.height) ?: waiting.firstOrNull()
+                if (text == null || !focusWaiting(key)) toBottom()
+            }
         }
 
     // The cards that wait for an answer, by key: the jump says so when one of them is below the view.
@@ -270,9 +284,13 @@ class SwingThreadSurface(
         column.loading = reading
     }
 
-    override fun focusWaitingCard(): Boolean {
-        val key = waiting.firstOrNull()
-        val top = key?.let(column::topOf) ?: return false
+    override val hasWaitingCard: Boolean get() = waiting.isNotEmpty()
+
+    override fun focusWaitingCard(): Boolean = focusWaiting(waiting.firstOrNull())
+
+    /** Brings the card [key] into view and gives it the keyboard; false when there is none. */
+    private val focusWaiting: (String?) -> Boolean = focus@{ key ->
+        val top = key?.let(column::topOf) ?: return@focus false
         val port = scroll.viewport
         val view = port.viewRect
         // Out of sight (or only its top edge in it): its top goes near the view's top, and the column makes it.
@@ -284,7 +302,7 @@ class SwingThreadSurface(
             card.scrollRectToVisible(Rectangle(0, 0, card.width, card.height))
             partFor("", card)?.requestFocusInWindow()
         }
-        return true
+        true
     }
 
     private fun maxTop(): Int = (column.totalHeight() - scroll.viewport.extentSize.height).coerceAtLeast(0)
@@ -307,6 +325,17 @@ class SwingThreadSurface(
      * accent, when one does.
      */
     private fun showJump() {
+        val view = scroll.viewport.viewRect
+        val spans =
+            waiting.mapNotNull { key ->
+                val top = column.topOf(key) ?: return@mapNotNull null
+                top..(column.bottomOf(key) ?: top)
+            }
+        val off = waitingOffScreen(spans, view.y, view.y + view.height)
+        if (off != offScreenTold) {
+            offScreenTold = off
+            onWaitingOffScreen(off)
+        }
         toLatest.isVisible = !atBottom()
         if (!toLatest.isVisible) return
         val bottom = scroll.viewport.viewRect.let { it.y + it.height }
