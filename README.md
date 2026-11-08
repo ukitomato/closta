@@ -137,4 +137,4 @@ architecture and the performance budgets the tests hold. Security issues: see [S
 
 [Apache License 2.0](LICENSE). Third-party notices are in [NOTICE](NOTICE).
 
-Not affiliated with or endorsed by Anthropic. Claude is a trademark of Anthropic.
+Closta is an independent project. It is not affiliated with or endorsed by Anthropic, JetBrains, Amazon Web Services or the Kotlin Foundation. Claude and Claude Code are trademarks of Anthropic. IntelliJ IDEA is a trademark of JetBrains. Amazon Bedrock and AWS are trademarks of Amazon.com, Inc. or its affiliates. Kotlin is a trademark of the Kotlin Foundation. These names are used only to describe compatibility.
