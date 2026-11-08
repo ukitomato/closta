@@ -18,6 +18,7 @@ import com.intellij.util.ui.UIUtil
 import dev.ukitomato.closta.core.models.ApprovalDecision
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
 import dev.ukitomato.closta.platforms.intellij.ui.noHtml
+import dev.ukitomato.closta.platforms.intellij.ui.plainTip
 import dev.ukitomato.closta.presenter.view.ApprovalOutcome
 import dev.ukitomato.closta.presenter.view.ApprovalRecord
 import dev.ukitomato.closta.presenter.view.PassedOn
@@ -164,9 +165,9 @@ class CardViews(
 
     /**
      * A waiting permission card: what Claude wants to do with the tool's icon, what it runs on (the whole command, the
-     * file and its diff, or every key of another tool's input), a warning when any of it had hidden characters (shown
-     * as marks), and the answers as buttons: Allow (1), Always Allow (2) when the CLI offers a rule to keep,
-     * Deny (3). Esc denies, Tab opens a sentence to go with the denial, Shift+Tab moves on.
+     * file, its whole path and its diff, or every key of another tool's input), a warning when any of it had hidden
+     * characters (shown as marks), and the answers as buttons: Allow (1), Always Allow (2) when the CLI offers a rule
+     * to keep, Deny (3). Esc denies, Tab opens a sentence to go with the denial, Shift+Tab moves on.
      */
     private inner class PermissionView(
         private val card: PermissionCard,
@@ -189,10 +190,9 @@ class CardViews(
                     decide(PermissionChoice.ALLOW)
                 }
             val keep =
-                card.suggestions.firstOrNull()?.let { first ->
+                card.suggestionLines.firstOrNull()?.let { first ->
                     cardButton(keepLabel(), act = { decide(PermissionChoice.ALLOW_KEEP) }).apply {
-                        toolTipText =
-                            "<html>${StringUtil.escapeXmlEntities(first.detail.ifEmpty { first.kind })}</html>"
+                        toolTipText = plainTip(first.detail.ifEmpty { first.kind })
                     }
                 }
             val no =
@@ -205,13 +205,17 @@ class CardViews(
                     row {
                         icon(headline.icon).gap(RightGap.SMALL)
                         // The tool's own name is for who wants it: in the tooltip, not on the line.
-                        label(headline.text).bold().gap(RightGap.SMALL).applyToComponent { toolTipText = card.toolName }
+                        label(headline.text).bold().gap(RightGap.SMALL).applyToComponent {
+                            noHtml()
+                            toolTipText = plainTip(card.toolName)
+                        }
                         val path = card.subject
                         if (headline.file != null && path != null) {
                             // Shown with its hidden characters marked, opened as the request gives it.
                             cell(fileLink(headline.file, path) { openFile(card.rawPath ?: path) })
                         }
                     }
+                    pathRow(this, card)
                     card.diff?.let { diff ->
                         row { cell(diffBox(diff)).align(AlignX.FILL) }
                         row {
@@ -221,8 +225,7 @@ class CardViews(
                             }
                         }
                     }
-                    // A file's path is the headline's link already: it is not shown a second time.
-                    inputRows(this, card, pathShown = headline.file != null)
+                    inputRows(this, card)
                     card.suggestionLines.forEach { line ->
                         row {
                             label(suggestionText(line)).applyToComponent {

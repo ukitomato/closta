@@ -23,16 +23,27 @@ import javax.swing.ScrollPaneConstants
 import javax.swing.SwingUtilities
 
 /**
+ * A file tool's whole path, hidden characters marked, on its own line under the headline: the headline names the file
+ * only, and this is the path Allow lets it work on. Nothing for a command or another tool.
+ */
+internal fun pathRow(
+    panel: Panel,
+    card: PermissionCard,
+) {
+    val path = card.subject ?: return
+    if (card.rawPath != null) panel.row { cell(subjectBox(path)).align(AlignX.FILL) }
+}
+
+/**
  * What a permission card shows of what Allow sends, under its headline (and diff): the subject in a box unless it is
- * shown elsewhere (in the headline's link when [pathShown], under a diff, or among the fields), each input field as
- * its key and a box, and a warning line for a call outside the sandbox and for hidden characters.
+ * shown elsewhere (a file's path in [pathRow], or among the fields), each input field as its key and a box, and a
+ * warning line for a call outside the sandbox and for hidden characters.
  */
 internal fun inputRows(
     panel: Panel,
     card: PermissionCard,
-    pathShown: Boolean,
 ) {
-    if (card.diff == null && !pathShown && !card.subjectInFields) {
+    if (card.diff == null && card.rawPath == null && !card.subjectInFields) {
         card.subject?.let { subject -> panel.row { cell(subjectBox(subject)).align(AlignX.FILL) } }
     }
     card.inputFields.forEach { field ->

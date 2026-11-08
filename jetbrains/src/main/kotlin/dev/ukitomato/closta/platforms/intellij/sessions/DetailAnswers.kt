@@ -25,6 +25,7 @@ import dev.ukitomato.closta.platforms.intellij.thread.diffNote
 import dev.ukitomato.closta.platforms.intellij.thread.headlineOf
 import dev.ukitomato.closta.platforms.intellij.thread.inputRows
 import dev.ukitomato.closta.platforms.intellij.thread.openEditDiff
+import dev.ukitomato.closta.platforms.intellij.thread.pathRow
 import dev.ukitomato.closta.platforms.intellij.ui.noHtml
 import dev.ukitomato.closta.platforms.intellij.ui.plainTip
 import dev.ukitomato.closta.presenter.view.ApprovalRecord
@@ -261,6 +262,7 @@ internal class PermissionPane(
                     }
                     comment(StringUtil.escapeXmlEntities(card.toolName))
                 }
+                pathRow(this, card)
                 card.diff?.let { diff ->
                     row { cell(diffBox(diff)).align(AlignX.FILL) }
                     row {
@@ -270,8 +272,7 @@ internal class PermissionPane(
                         }
                     }
                 }
-                // The headline shows a file's name only: its whole path goes in the box.
-                inputRows(this, card, pathShown = false)
+                inputRows(this, card)
                 // The buttons in cells of their own: a wrapping buttonLine that does not fill its row is given no
                 // width and hides them (seen in the gallery), and the link goes after them.
                 row {
