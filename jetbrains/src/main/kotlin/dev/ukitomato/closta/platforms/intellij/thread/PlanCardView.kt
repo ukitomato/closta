@@ -3,7 +3,7 @@ package dev.ukitomato.closta.platforms.intellij.thread
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.fileEditor.ex.FileEditorManagerEx
 import com.intellij.openapi.fileEditor.ex.FileEditorOpenRequest
-import com.intellij.openapi.fileTypes.FileTypeManager
+import com.intellij.openapi.fileTypes.PlainTextFileType
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.util.text.StringUtil
@@ -25,9 +25,9 @@ import java.util.concurrent.ConcurrentHashMap
 import javax.swing.JComponent
 
 /**
- * Opens a plan in a Markdown editor tab (a read-only [LightVirtualFile]) without bringing it to the front or taking
- * the keyboard: the conversation the user reads stays where it is. The same request opens one tab in the project,
- * however many screens show its card (the sidebar and an editor tab can show the same conversation).
+ * Opens a plan in a plain text editor tab (a read-only [LightVirtualFile], no preview) without bringing it to the front
+ * or taking the keyboard: the conversation the user reads stays where it is. The same request opens one tab in the
+ * project, however many screens show its card (the sidebar and an editor tab can show the same conversation).
  */
 class PlanTabs(
     private val project: Project,
@@ -49,7 +49,9 @@ class PlanTabs(
             opened.files.computeIfAbsent(card.requestId) {
                 LightVirtualFile(
                     ClostaBundle.message("thread.plan.fileName"),
-                    FileTypeManager.getInstance().getFileTypeByExtension("md"),
+                    // Plain text, not Markdown: the Markdown editor's preview is a web view that fetches the images a
+                    // plan names, and this tab opens by itself.
+                    PlainTextFileType.INSTANCE,
                     plan,
                 ).apply { isWritable = false }
             }
