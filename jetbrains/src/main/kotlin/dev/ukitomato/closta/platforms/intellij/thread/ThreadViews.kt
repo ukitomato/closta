@@ -790,7 +790,11 @@ open class CardPanel(
     var line: java.awt.Color,
     val fill: java.awt.Color? = null,
     private val watchesKeyboard: Boolean = false,
-) : JPanel() {
+) : JPanel(),
+    WaitingCard {
+    /** True while the card waits for an answer: exactly the cards that [watchesKeyboard]. */
+    override val waiting: Boolean get() = watchesKeyboard
+
     /** Whether the keyboard is in the card (only for a card that [watchesKeyboard]). */
     var keyboardIn = false
         private set

@@ -159,7 +159,7 @@ class CardViews(
         SwingUtilities.invokeLater {
             val owner = KeyboardFocusManager.getCurrentKeyboardFocusManager().focusOwner
             val scope = focusScope() ?: return@invokeLater
-            if (target.isShowing && cardMayTakeFocus(owner, scope)) target.requestFocusInWindow()
+            if (target.isShowing && cardMayTakeFocus(owner, scope, target)) target.requestFocusInWindow()
         }
     }
 
