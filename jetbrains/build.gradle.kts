@@ -84,9 +84,10 @@ dependencies {
     }
 }
 
-// Build and test on JDK 25, which IntelliJ 2026.2 needs. sourceCompatibility stays at the toolchain's 25 because the
-// platform plugin's verifyPluginProjectConfiguration warns when it is lower; the bytecode (Kotlin and Java) stays 21
-// so it still loads in the older IDE runtimes in range.
+// Build and test on JDK 25, which IntelliJ 2026.2 needs. Every IDE in range (262+) runs on JBR 25, so 21 is a
+// conservative bytecode target, not a runtime floor. sourceCompatibility stays at the toolchain's 25 because the
+// platform plugin's verifyPluginProjectConfiguration warns when it is lower. If a .java source is ever added,
+// sourceCompatibility must be aligned with the target: javac rejects `-source 25 -target 21`.
 java { targetCompatibility = JavaVersion.VERSION_21 }
 
 kotlin {
@@ -162,9 +163,11 @@ intellijPlatform {
     }
 
     pluginVerification {
+        // -Pverify.current narrows the set to the current IDE only (CI uses it on pull requests). Without the property
+        // the full set runs: the current build and the recommended ones, which downloads several GB.
         ides {
             current()
-            recommended()
+            if (!providers.gradleProperty("verify.current").isPresent) recommended()
         }
         // Internal, override-only, non-extendable and scheduled-for-removal API usages fail the build alongside compatibility problems.
         // Experimental APIs (the combined diff among them) are reported but allowed.
@@ -229,9 +232,9 @@ tasks.test {
 val perfTest by tasks.registering(Test::class) {
     description = "Runs the timing budget tests (tagged perf), judged by the median of five runs."
     group = "verification"
-    val suite = tasks.test
-    testClassesDirs = files(suite.map { it.testClassesDirs })
-    classpath = files(suite.map { it.classpath })
+    // Callables, so only the compile tasks become dependencies and not the test task itself.
+    testClassesDirs = files({ tasks.test.get().testClassesDirs })
+    classpath = files({ tasks.test.get().classpath })
     useJUnitPlatform { includeTags("perf") }
     configureClostaTests()
     outputs.upToDateWhen { false }
