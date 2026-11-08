@@ -98,7 +98,7 @@ class ComposerPanel(
     private val parent: Disposable,
     private val draft: ComposerDraft = ComposerDraft(PromptHistory(emptyList())),
 ) {
-    var onSend: (String, List<Attachment>) -> Unit = { _, _ -> }
+    var onSend: (String, List<Attachment>, Outgoing) -> Unit = { _, _, _ -> }
     var onStop: () -> Unit = {}
     var onModel: (String) -> Unit = {}
     var onEffort: (String) -> Unit = {}
@@ -555,10 +555,10 @@ class ComposerPanel(
         }
         if (words.isEmpty() && attached.isEmpty()) return
         val places = selections.joinToString("") { "\n" + rangeLabel(it.path, it.start, it.end, forChip = false) }
-        val file = currentFile?.let { relative(it) }?.let { "\n@$it" }.orEmpty()
-        val text = words + places + file
-        if (words.isNotEmpty()) draft.history.add(words)
+        val file = currentFile?.let { relative(it) }
+        val text = words + places + file?.let { "\n@$it" }.orEmpty()
         val files = attached.toList()
+        val outgoing = Outgoing(words, selections.toList(), file, files)
         field.text = ""
         attached.clear()
         draft.thumbnails.clear()
@@ -566,7 +566,24 @@ class ComposerPanel(
         messages.clear()
         showStatus()
         showChips()
-        onSend(text, files)
+        onSend(text, files, outgoing)
+    }
+
+    /** The message was handed to the CLI (on the EDT): only now does it join the history for ↑. */
+    fun sent(outgoing: Outgoing) {
+        if (outgoing.words.isNotEmpty()) draft.history.add(outgoing.words)
+    }
+
+    /** The message was not handed over (on the EDT): its words, ranges and files are back, and [reason] says why. */
+    fun giveBack(
+        outgoing: Outgoing,
+        reason: String,
+    ) {
+        field.text = restoredText(field.text, outgoing.words)
+        selections.addAll(0, outgoing.selections)
+        attached.addAll(0, outgoing.attachments.filter { it !in attached })
+        showChips()
+        say(reason, StatusSource.REFUSAL, error = true)
     }
 
     // --- chips and attachments -----------------------------------------------------------------------------------
