@@ -33,6 +33,7 @@ import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
 import dev.ukitomato.closta.platforms.intellij.session.ClaudeSessionService
+import dev.ukitomato.closta.platforms.intellij.ui.plainTip
 import dev.ukitomato.closta.presenter.view.McpList
 import dev.ukitomato.closta.presenter.view.McpRow
 import dev.ukitomato.closta.presenter.view.mcpList
@@ -346,7 +347,7 @@ class McpPanel(
                     DefaultFragmentTextClipper.INSTANCE,
                 )
             }
-            toolTipText = second
+            toolTipText = second?.let(::plainTip)
             val tools = ClostaBundle.message("chat.mcp.tools", row.tools)
             getAccessibleContext().accessibleName = listOfNotNull(row.name, state, tools, second).joinToString(", ")
         }

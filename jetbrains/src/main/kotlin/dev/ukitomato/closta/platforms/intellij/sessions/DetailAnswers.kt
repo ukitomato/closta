@@ -25,6 +25,7 @@ import dev.ukitomato.closta.platforms.intellij.thread.diffNote
 import dev.ukitomato.closta.platforms.intellij.thread.headlineOf
 import dev.ukitomato.closta.platforms.intellij.thread.inputRows
 import dev.ukitomato.closta.platforms.intellij.thread.openEditDiff
+import dev.ukitomato.closta.platforms.intellij.ui.plainTip
 import dev.ukitomato.closta.presenter.view.ApprovalRecord
 import dev.ukitomato.closta.presenter.view.PermissionCard
 import dev.ukitomato.closta.presenter.view.PlanCard
@@ -258,7 +259,7 @@ internal class PermissionPane(
                     headline.file?.let { file ->
                         label(file).applyToComponent {
                             plainText()
-                            toolTipText = card.subject
+                            toolTipText = card.subject?.let(::plainTip)
                         }
                     }
                     comment(StringUtil.escapeXmlEntities(card.toolName))

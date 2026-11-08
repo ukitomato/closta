@@ -12,6 +12,7 @@ import com.intellij.openapi.fileEditor.impl.EditorTabTitleProvider
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.UserDataHolderBase
+import com.intellij.openapi.util.text.HtmlChunk
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.testFramework.LightVirtualFile
 import com.intellij.ui.components.ActionLink
@@ -64,10 +65,10 @@ class ChatTabTitles :
         file: VirtualFile,
     ): String? = (file as? ChatVirtualFile)?.let { chatTabTitle(it.shownTitle) }
 
-    override fun getEditorTabTooltipText(
+    override fun getEditorTabTooltipHtml(
         project: Project,
         virtualFile: VirtualFile,
-    ): String? = (virtualFile as? ChatVirtualFile)?.shownTitle
+    ): HtmlChunk? = (virtualFile as? ChatVirtualFile)?.let { HtmlChunk.text(it.shownTitle) }
 }
 
 /** Opens a [ChatVirtualFile] as a conversation in an editor tab. The tab leases its session while it is open. */

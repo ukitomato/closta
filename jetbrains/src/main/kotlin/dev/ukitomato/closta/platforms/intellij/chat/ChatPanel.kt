@@ -41,6 +41,7 @@ import dev.ukitomato.closta.platforms.intellij.settings.ProvidersConfigurable
 import dev.ukitomato.closta.platforms.intellij.thread.SwingThreadSurface
 import dev.ukitomato.closta.platforms.intellij.thread.ThreadStyle
 import dev.ukitomato.closta.platforms.intellij.thread.ThreadSurface
+import dev.ukitomato.closta.platforms.intellij.ui.plainTip
 import dev.ukitomato.closta.presenter.view.CardRow
 import dev.ukitomato.closta.presenter.view.ThreadRows
 import dev.ukitomato.closta.presenter.view.askActions
@@ -321,7 +322,7 @@ class ChatPanel(
 
     private fun showHead() {
         where.text = head.ifEmpty { title }
-        where.toolTipText = listOf(title, head).filter { it.isNotEmpty() }.joinToString(" — ")
+        where.toolTipText = plainTip(listOf(title, head).filter { it.isNotEmpty() }.joinToString(" — "))
     }
 
     /** Moves the conversation to the other place (the sidebar's title action, the editor tab's More). */

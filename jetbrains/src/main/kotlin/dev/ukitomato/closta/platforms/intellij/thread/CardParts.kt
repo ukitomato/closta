@@ -11,6 +11,7 @@ import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import com.intellij.util.ui.WrapLayout
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
+import dev.ukitomato.closta.platforms.intellij.ui.plainTip
 import dev.ukitomato.closta.presenter.view.ApprovalOutcome
 import java.awt.BorderLayout
 import java.awt.Dimension
@@ -127,7 +128,7 @@ internal fun fileLink(
     open: () -> Unit,
 ): JComponent =
     ActionLink(name) { open() }.apply {
-        toolTipText = path
+        toolTipText = plainTip(path)
         minimumSize = Dimension(JBUI.scale(LINK_MIN), preferredSize.height)
     }
 

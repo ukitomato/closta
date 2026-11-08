@@ -28,6 +28,7 @@ import com.intellij.util.ui.UIUtil
 import dev.ukitomato.closta.core.models.AttachmentKind
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
 import dev.ukitomato.closta.platforms.intellij.chat.turnEndText
+import dev.ukitomato.closta.platforms.intellij.ui.plainTip
 import dev.ukitomato.closta.presenter.view.AskAction
 import dev.ukitomato.closta.presenter.view.AskActions
 import dev.ukitomato.closta.presenter.view.AskRow
@@ -352,7 +353,7 @@ class ThreadRowViews(
         // Where it was read from: the whole path in the tooltip, and a click opens it in the editor.
         return ActionLink(attachment.name) { actions.openFile(path) }.apply {
             setIcon(icon)
-            toolTipText = path
+            toolTipText = plainTip(path)
         }
     }
 

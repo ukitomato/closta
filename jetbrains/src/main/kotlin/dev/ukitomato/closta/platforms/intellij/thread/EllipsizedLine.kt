@@ -2,6 +2,7 @@ package dev.ukitomato.closta.platforms.intellij.thread
 
 import com.intellij.ui.SimpleColoredComponent
 import com.intellij.ui.SimpleTextAttributes
+import dev.ukitomato.closta.platforms.intellij.ui.plainTip
 import java.awt.Dimension
 import java.awt.Font
 import javax.swing.Icon
@@ -58,11 +59,11 @@ internal class EllipsizedLine(
         var room = width - chrome()
         if (width == Int.MAX_VALUE || metrics.stringWidth(whole) <= room) {
             pieces.forEach { (text, attributes) -> append(text, attributes) }
-            toolTipText = note
+            toolTipText = note?.let(::plainTip)
             return
         }
         fitted(room - metrics.stringWidth(ELLIPSIS), metrics).forEach { (text, attributes) -> append(text, attributes) }
-        toolTipText = listOfNotNull(whole, note).joinToString(NOTE_GAP)
+        toolTipText = plainTip(listOfNotNull(whole, note).joinToString(NOTE_GAP))
     }
 
     /** The pieces that fit in [room], the one cut short ending in an ellipsis. */
