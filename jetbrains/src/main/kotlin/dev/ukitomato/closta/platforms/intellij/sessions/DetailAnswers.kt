@@ -42,7 +42,6 @@ import java.awt.event.MouseEvent
 import javax.swing.AbstractAction
 import javax.swing.JButton
 import javax.swing.JComponent
-import javax.swing.JLabel
 import javax.swing.KeyStroke
 
 // The detail pane's answer views: a permission (or an edit, with its diff), a question, a plan. They look like the
@@ -211,9 +210,6 @@ internal class ReasonLine(
     }
 }
 
-/** A label that shows its text as written, never as HTML (the text comes from the tool's input). */
-internal fun JLabel.plainText() = putClientProperty("html.disable", true)
-
 /** A button whose [mnemonic] letter is underlined while Alt is held; the key itself is the pane's, not the window's. */
 internal fun keyedButton(
     text: String,
@@ -256,10 +252,10 @@ internal class PermissionPane(
             panel {
                 row {
                     icon(headline.icon).gap(RightGap.SMALL)
-                    label(headline.text).bold().gap(RightGap.SMALL).applyToComponent { plainText() }
+                    label(headline.text).bold().gap(RightGap.SMALL).applyToComponent { noHtml() }
                     headline.file?.let { file ->
                         label(file).applyToComponent {
-                            plainText()
+                            noHtml()
                             toolTipText = plainTip(card.subject)
                         }
                     }

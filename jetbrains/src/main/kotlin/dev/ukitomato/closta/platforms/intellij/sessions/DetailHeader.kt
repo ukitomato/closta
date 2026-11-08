@@ -10,6 +10,7 @@ import dev.ukitomato.closta.platforms.intellij.ClostaBundle
 import dev.ukitomato.closta.platforms.intellij.chat.Placement
 import dev.ukitomato.closta.platforms.intellij.chat.secondLine
 import dev.ukitomato.closta.platforms.intellij.thread.ThreadStyle
+import dev.ukitomato.closta.platforms.intellij.ui.noHtml
 import dev.ukitomato.closta.presenter.view.SessionGroup
 import dev.ukitomato.closta.presenter.view.composerState
 import java.time.Duration
@@ -67,10 +68,10 @@ internal fun headerView(
     panel {
         row {
             icon(model.group?.let(::sessionIcon) ?: AllIcons.Vcs.History).gap(RightGap.SMALL)
-            label(model.title).bold().gap(RightGap.SMALL).applyToComponent { putClientProperty("html.disable", true) }
+            label(model.title).bold().gap(RightGap.SMALL).applyToComponent { noHtml() }
             label(model.meta).resizableColumn().applyToComponent {
                 foreground = ThreadStyle.muted
-                putClientProperty("html.disable", true)
+                noHtml()
             }
             if (model.group != null) {
                 link(ClostaBundle.message("sessions.window.detail.openSidebar")) { actions.open(Placement.SIDEBAR) }

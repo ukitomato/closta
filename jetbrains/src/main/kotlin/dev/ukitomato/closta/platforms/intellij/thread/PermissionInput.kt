@@ -10,6 +10,7 @@ import com.intellij.ui.dsl.builder.Panel
 import com.intellij.ui.dsl.builder.RightGap
 import com.intellij.util.ui.JBUI
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
+import dev.ukitomato.closta.platforms.intellij.ui.noHtml
 import dev.ukitomato.closta.presenter.view.PermissionCard
 import dev.ukitomato.closta.presenter.view.SuggestionLine
 import java.awt.BorderLayout
@@ -117,7 +118,7 @@ private class BoxScroll(
 }
 
 /** A label for text from the conversation (an input's key): never read as HTML. */
-internal fun plainLabel(text: String): JLabel = JBLabel(text).apply { putClientProperty("html.disable", true) }
+internal fun plainLabel(text: String): JLabel = JBLabel(text).noHtml()
 
 private val KNOWN_SUGGESTIONS =
     setOf("addRules", "replaceRules", "removeRules", "setMode", "addDirectories", "removeDirectories")

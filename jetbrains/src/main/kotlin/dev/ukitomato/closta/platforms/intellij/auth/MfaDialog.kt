@@ -13,6 +13,7 @@ import com.intellij.util.ui.AsyncProcessIcon
 import com.intellij.util.ui.FormBuilder
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
 import dev.ukitomato.closta.platforms.intellij.settings.mnemonicLabel
+import dev.ukitomato.closta.platforms.intellij.ui.noHtml
 import dev.ukitomato.closta.providers.claude.auth.SessionCredentials
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -123,7 +124,7 @@ class MfaDialog(
         const val CODE_COLUMNS = 8
 
         /** A label that shows [text] as typed: Swing would draw a text starting with an html tag as HTML. */
-        fun plain(text: String) = JBLabel(text).apply { putClientProperty("html.disable", true) }
+        fun plain(text: String) = JBLabel(text).noHtml()
     }
 }
 
