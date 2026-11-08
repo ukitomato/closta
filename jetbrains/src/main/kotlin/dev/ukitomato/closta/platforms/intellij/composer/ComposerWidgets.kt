@@ -17,6 +17,8 @@ import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
 import dev.ukitomato.closta.platforms.intellij.thread.ThreadStyle
+import dev.ukitomato.closta.platforms.intellij.ui.noHtml
+import dev.ukitomato.closta.platforms.intellij.ui.plainTip
 import java.awt.BasicStroke
 import java.awt.BorderLayout
 import java.awt.Color
@@ -107,7 +109,7 @@ class ToolbarButton(
 
     private fun showTip() {
         val shown = disabledReason?.takeIf { !enabledToClick } ?: listOfNotNull(tip, hint).joinToString(" — ")
-        presentation.description = shown
+        presentation.description = plainTip(shown).orEmpty()
         button.accessibleContext.accessibleName = text?.takeIf { it.isNotEmpty() } ?: tip
         button.accessibleContext.accessibleDescription = shown
     }
@@ -185,7 +187,7 @@ class Chip(
         isOpaque = false
         border = JBUI.Borders.empty(1, PAD_LEFT, 1, PAD_RIGHT)
         getAccessibleContext().accessibleName = name
-        add(JBLabel(name, icon, JBLabel.LEFT).apply { toolTipText = tooltip })
+        add(JBLabel(name, icon, JBLabel.LEFT).noHtml().apply { toolTipText = plainTip(tooltip) })
         add(
             InplaceButton(
                 IconButton(
@@ -288,6 +290,7 @@ class ComposerBox : JPanel() {
 /** The fixed-height line under the composer: empty, or what happened (red for what was refused). */
 class StatusLine : JBLabel(" ") {
     init {
+        noHtml()
         border = JBUI.Borders.empty(2, PAD)
         foreground = UIUtil.getContextHelpForeground()
         font = JBUI.Fonts.smallFont()
@@ -299,7 +302,7 @@ class StatusLine : JBLabel(" ") {
     ) {
         this.text = text ?: " "
         // The line is one line high and cuts what is longer; the whole text is its tooltip.
-        toolTipText = text?.takeIf { it.isNotBlank() }
+        toolTipText = plainTip(text)
         foreground = if (error) UIUtil.getErrorForeground() else UIUtil.getContextHelpForeground()
     }
 

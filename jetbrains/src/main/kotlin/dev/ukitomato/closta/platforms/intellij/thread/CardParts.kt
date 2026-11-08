@@ -11,6 +11,7 @@ import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import com.intellij.util.ui.WrapLayout
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
+import dev.ukitomato.closta.platforms.intellij.ui.noHtml
 import dev.ukitomato.closta.platforms.intellij.ui.plainTip
 import dev.ukitomato.closta.presenter.view.ApprovalOutcome
 import java.awt.BorderLayout
@@ -96,7 +97,14 @@ internal fun failureRow(
     panel: Panel,
     failure: String?,
 ) {
-    failure?.let { text -> panel.row { label(text).applyToComponent { foreground = UIUtil.getErrorForeground() } } }
+    failure?.let { text ->
+        panel.row {
+            label(text).applyToComponent {
+                noHtml()
+                foreground = UIUtil.getErrorForeground()
+            }
+        }
+    }
 }
 
 /** Buttons in a line that wraps when the card is narrow (the sidebar). */
@@ -127,7 +135,7 @@ internal fun fileLink(
     path: String,
     open: () -> Unit,
 ): JComponent =
-    ActionLink(name) { open() }.apply {
+    ActionLink(name) { open() }.noHtml().apply {
         toolTipText = plainTip(path)
         minimumSize = Dimension(JBUI.scale(LINK_MIN), preferredSize.height)
     }

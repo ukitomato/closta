@@ -25,6 +25,7 @@ import dev.ukitomato.closta.platforms.intellij.thread.diffNote
 import dev.ukitomato.closta.platforms.intellij.thread.headlineOf
 import dev.ukitomato.closta.platforms.intellij.thread.inputRows
 import dev.ukitomato.closta.platforms.intellij.thread.openEditDiff
+import dev.ukitomato.closta.platforms.intellij.ui.noHtml
 import dev.ukitomato.closta.platforms.intellij.ui.plainTip
 import dev.ukitomato.closta.presenter.view.ApprovalRecord
 import dev.ukitomato.closta.presenter.view.PermissionCard
@@ -117,7 +118,7 @@ internal fun answerView(
 internal abstract class AnswerView(
     protected val context: AnswerContext,
 ) : CardPanel(ThreadStyle.pendingLine, ThreadStyle.pendingFill) {
-    private val failure = JBLabel().apply { foreground = UIUtil.getErrorForeground() }
+    private val failure = JBLabel().noHtml().apply { foreground = UIUtil.getErrorForeground() }
 
     protected abstract val keys: Set<AnswerKey>
 
@@ -259,7 +260,7 @@ internal class PermissionPane(
                     headline.file?.let { file ->
                         label(file).applyToComponent {
                             plainText()
-                            toolTipText = card.subject?.let(::plainTip)
+                            toolTipText = plainTip(card.subject)
                         }
                     }
                     comment(StringUtil.escapeXmlEntities(card.toolName))

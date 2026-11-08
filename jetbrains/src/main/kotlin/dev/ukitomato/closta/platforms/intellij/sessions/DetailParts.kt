@@ -8,6 +8,7 @@ import dev.ukitomato.closta.platforms.intellij.ClostaBundle
 import dev.ukitomato.closta.platforms.intellij.thread.HtmlBlock
 import dev.ukitomato.closta.platforms.intellij.thread.ThreadRowViews
 import dev.ukitomato.closta.platforms.intellij.thread.ThreadStyle
+import dev.ukitomato.closta.platforms.intellij.ui.noHtml
 import java.awt.Dimension
 import java.awt.Rectangle
 import javax.swing.JComponent
@@ -76,7 +77,7 @@ internal fun markdownBox(blocks: List<HtmlBlock>): JComponent =
     }
 
 /** A grey line. */
-internal fun greyLine(text: String): JBLabel = JBLabel(text).apply { foreground = ThreadStyle.muted }
+internal fun greyLine(text: String): JBLabel = JBLabel(text).noHtml().apply { foreground = ThreadStyle.muted }
 
 /** "n more waiting" under the shown wait; hidden when none. */
 internal fun moreLine(): JBLabel = greyLine("").apply { border = JBUI.Borders.emptyTop(COLUMN_GAP) }

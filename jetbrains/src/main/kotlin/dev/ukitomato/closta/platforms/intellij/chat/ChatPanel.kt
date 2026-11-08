@@ -41,6 +41,7 @@ import dev.ukitomato.closta.platforms.intellij.settings.ProvidersConfigurable
 import dev.ukitomato.closta.platforms.intellij.thread.SwingThreadSurface
 import dev.ukitomato.closta.platforms.intellij.thread.ThreadStyle
 import dev.ukitomato.closta.platforms.intellij.thread.ThreadSurface
+import dev.ukitomato.closta.platforms.intellij.ui.noHtml
 import dev.ukitomato.closta.platforms.intellij.ui.plainTip
 import dev.ukitomato.closta.presenter.view.CardRow
 import dev.ukitomato.closta.presenter.view.ThreadRows
@@ -113,7 +114,7 @@ class ChatPanel(
     private val rows = ThreadRows()
     private val notice = JPanel(BorderLayout()).apply { isOpaque = false }
     private var noticeShown: SessionNotice? = null
-    private val where = JBLabel().apply { foreground = UIUtil.getContextHelpForeground() }
+    private val where = JBLabel().noHtml().apply { foreground = UIUtil.getContextHelpForeground() }
     private var title = source.title
     private var head: String = ""
     private val made = System.nanoTime()

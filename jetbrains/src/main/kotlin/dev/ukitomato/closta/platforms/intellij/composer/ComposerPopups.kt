@@ -12,6 +12,7 @@ import com.intellij.ui.dsl.builder.panel
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
+import dev.ukitomato.closta.platforms.intellij.ui.plainTip
 import dev.ukitomato.closta.presenter.view.ComposerState
 import dev.ukitomato.closta.presenter.view.ModelChoice
 import dev.ukitomato.closta.presenter.view.effortLabel
@@ -126,7 +127,7 @@ object ComposerPopups {
                                     com.intellij.util.ui.EmptyIcon
                                         .create(JBUI.scale(ICON))
                                 }
-                            toolTipText = value.resolved
+                            toolTipText = plainTip(value.resolved)
                         }
                     }
                 setSelectedValue(rows.firstOrNull { it.value == state.model.value }, true)

@@ -10,6 +10,8 @@ import com.intellij.ui.components.JBTabbedPane
 import com.intellij.util.ui.JBUI
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
 import dev.ukitomato.closta.platforms.intellij.session.SessionView
+import dev.ukitomato.closta.platforms.intellij.ui.noHtml
+import dev.ukitomato.closta.platforms.intellij.ui.plainHtml
 import dev.ukitomato.closta.platforms.intellij.ui.plainTip
 import java.awt.BorderLayout
 import java.awt.FlowLayout
@@ -60,14 +62,14 @@ class ChatTabs(
                 tabTitle(title, TITLE_MAX, ClostaBundle.message("chat.subagent")),
                 AnimatedIcon.Default.INSTANCE,
                 JBLabel.LEFT,
-            ).apply { toolTipText = title.takeIf { it.isNotBlank() }?.let(::plainTip) }
+            ).noHtml().apply { toolTipText = plainTip(title) }
         agents[toolUseId] = tab to label
         if (agents.size == 1) {
             component.remove(main)
             tabs.addTab(ClostaBundle.message("chat.tabs.main"), main)
             component.add(tabs, BorderLayout.CENTER)
         }
-        tabs.addTab(label.text, tab.component)
+        tabs.addTab("<html>${plainHtml(label.text)}</html>", tab.component)
         val index = tabs.indexOfComponent(tab.component)
         tabs.setTabComponentAt(index, tabHead(label) { close(toolUseId) })
         tabs.selectedIndex = index

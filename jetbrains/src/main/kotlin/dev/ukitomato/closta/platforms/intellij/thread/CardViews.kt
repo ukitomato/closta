@@ -17,6 +17,7 @@ import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import dev.ukitomato.closta.core.models.ApprovalDecision
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
+import dev.ukitomato.closta.platforms.intellij.ui.noHtml
 import dev.ukitomato.closta.presenter.view.ApprovalOutcome
 import dev.ukitomato.closta.presenter.view.ApprovalRecord
 import dev.ukitomato.closta.presenter.view.PassedOn
@@ -225,6 +226,7 @@ class CardViews(
                     card.suggestionLines.forEach { line ->
                         row {
                             label(suggestionText(line)).applyToComponent {
+                                noHtml()
                                 foreground = UIUtil.getContextHelpForeground()
                             }
                         }

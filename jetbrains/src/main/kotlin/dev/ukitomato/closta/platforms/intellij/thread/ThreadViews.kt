@@ -28,6 +28,7 @@ import com.intellij.util.ui.UIUtil
 import dev.ukitomato.closta.core.models.AttachmentKind
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
 import dev.ukitomato.closta.platforms.intellij.chat.turnEndText
+import dev.ukitomato.closta.platforms.intellij.ui.noHtml
 import dev.ukitomato.closta.platforms.intellij.ui.plainTip
 import dev.ukitomato.closta.presenter.view.AskAction
 import dev.ukitomato.closta.presenter.view.AskActions
@@ -349,9 +350,9 @@ class ThreadRowViews(
                     attachment.name,
                     icon,
                     JBLabel.LEFT,
-                ).apply { foreground = UIUtil.getLabelForeground() }
+                ).noHtml().apply { foreground = UIUtil.getLabelForeground() }
         // Where it was read from: the whole path in the tooltip, and a click opens it in the editor.
-        return ActionLink(attachment.name) { actions.openFile(path) }.apply {
+        return ActionLink(attachment.name) { actions.openFile(path) }.noHtml().apply {
             setIcon(icon)
             toolTipText = plainTip(path)
         }

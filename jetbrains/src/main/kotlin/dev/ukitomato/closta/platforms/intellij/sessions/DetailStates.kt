@@ -12,6 +12,7 @@ import dev.ukitomato.closta.platforms.intellij.thread.HtmlBlock
 import dev.ukitomato.closta.platforms.intellij.thread.ThreadRowViews
 import dev.ukitomato.closta.platforms.intellij.thread.ThreadStyle
 import dev.ukitomato.closta.platforms.intellij.thread.cardButton
+import dev.ukitomato.closta.platforms.intellij.ui.noHtml
 import dev.ukitomato.closta.platforms.intellij.ui.plainTip
 import dev.ukitomato.closta.presenter.view.ChangedFile
 import dev.ukitomato.closta.presenter.view.SessionDetail
@@ -107,6 +108,7 @@ private fun changedFile(
     file: ChangedFile,
 ) {
     row.label(file.path.substringAfterLast('/').substringAfterLast('\\')).gap(RightGap.SMALL).applyToComponent {
+        noHtml()
         toolTipText = plainTip(file.path)
     }
     if (file.counted) {
