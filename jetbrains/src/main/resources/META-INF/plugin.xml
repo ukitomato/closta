@@ -15,7 +15,7 @@
     <extensions defaultExtensionNs="com.intellij">
         <toolWindow id="Closta" anchor="right" icon="/icons/closta.svg"
                     factoryClass="dev.ukitomato.closta.platforms.intellij.ui.ClostaToolWindowFactory"/>
-        <toolWindow id="Closta.Sessions" anchor="bottom" icon="/icons/closta.svg"
+        <toolWindow id="Closta.Sessions" anchor="bottom" icon="/icons/sessions.svg"
                     factoryClass="dev.ukitomato.closta.platforms.intellij.sessions.SessionsToolWindowFactory"/>
         <applicationConfigurable parentId="tools" id="dev.ukitomato.closta.providers" displayName="Closta"
                                  instance="dev.ukitomato.closta.platforms.intellij.settings.ProvidersConfigurable"/>

@@ -58,5 +58,6 @@ class SessionsToolWindowFactory :
             },
         )
         toolWindow.contentManager.setSelectedContent(content)
+        serviceIfCreated<ChatDirectory>()?.let { badge(toolWindow, waitingCount(it.entries.value)) }
     }
 }
