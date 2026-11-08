@@ -43,3 +43,9 @@ class ComposerDraft(
         return copy
     }
 }
+
+/** What a chip stands for. */
+enum class ChipKind { CURRENT_FILE, SELECTION, ATTACHMENT }
+
+/** The place of the last chip Backspace may take away: the last one that is not the current file's, else null. */
+fun lastRemovable(kinds: List<ChipKind>): Int? = kinds.indexOfLast { it != ChipKind.CURRENT_FILE }.takeIf { it >= 0 }

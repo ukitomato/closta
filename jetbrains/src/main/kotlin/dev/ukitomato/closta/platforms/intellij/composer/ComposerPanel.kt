@@ -434,9 +434,7 @@ class ComposerPanel(
             sendBlockReason(block)?.let { say(it, StatusSource.REFUSAL) }
             return
         }
-        val modes = next.modes
-        val at = modes.indexOf(next.mode ?: "default")
-        chooseMode(modes[(at + 1) % modes.size])
+        nextMode(next.modes, next.mode)?.let(::chooseMode)
     }
 
     // --- the input -----------------------------------------------------------------------------------------------
@@ -473,20 +471,21 @@ class ComposerPanel(
         )
         val composing = { (editor as? EditorImpl)?.composedTextRange != null }
         val lookupOpen = { LookupManager.getActiveLookup(editor) != null }
+        val ours = { !composing() && !lookupOpen() }
         // Enter is taken even when nothing can be sent, so it never falls through to the editor as a new line.
-        key(editor, KeyEvent.VK_ENTER, 0, { !composing() && !lookupOpen() }) { sendNow() }
+        key(editor, KeyEvent.VK_ENTER, 0, { ours() }) { sendNow() }
         key(editor, KeyEvent.VK_ENTER, InputEvent.SHIFT_DOWN_MASK, { true }) { newLine(editor) }
         // Esc says no to the Bypass bar first, and only then stops the reply.
-        key(editor, KeyEvent.VK_ESCAPE, 0, { !lookupOpen() && escapes() }, ::escape)
-        key(editor, KeyEvent.VK_TAB, InputEvent.SHIFT_DOWN_MASK, { !lookupOpen() }) { cycleMode() }
+        key(editor, KeyEvent.VK_ESCAPE, 0, { ours() && escapes() }, ::escape)
+        key(editor, KeyEvent.VK_TAB, InputEvent.SHIFT_DOWN_MASK, { ours() }) { cycleMode() }
         val firstLine = { editor.caretModel.visualPosition.line == 0 }
         val lastLine = {
             editor.caretModel.visualPosition.line >= editor.offsetToVisualPosition(editor.document.textLength).line
         }
-        key(editor, KeyEvent.VK_UP, 0, { !lookupOpen() && firstLine() && draft.history.canUp }) {
+        key(editor, KeyEvent.VK_UP, 0, { ours() && firstLine() && draft.history.canUp }) {
             draft.history.up(field.text)?.let { recall(editor, it) }
         }
-        key(editor, KeyEvent.VK_DOWN, 0, { !lookupOpen() && lastLine() && draft.history.canDown }) {
+        key(editor, KeyEvent.VK_DOWN, 0, { ours() && lastLine() && draft.history.canDown }) {
             draft.history.down(field.text)?.let { recall(editor, it) }
         }
         key(editor, KeyEvent.VK_K, InputEvent.ALT_DOWN_MASK, { true }) { insertSelection() }
@@ -494,9 +493,9 @@ class ComposerPanel(
             if (!onJump()) say(ClostaBundle.message("composer.status.noneWaiting"), StatusSource.HINT)
         }
         val atStart = { field.text.isEmpty() && editor.caretModel.offset == 0 }
-        val lastChip = { chips.components.lastOrNull() as? Chip }
-        key(editor, KeyEvent.VK_BACK_SPACE, 0, { !composing() && !lookupOpen() && atStart() && lastChip() != null }) {
-            lastChip()?.remove?.invoke()
+        val removable = { lastRemovable(chipKinds)?.let { chips.getComponent(it) as? Chip } }
+        key(editor, KeyEvent.VK_BACK_SPACE, 0, { ours() && atStart() && removable() != null }) {
+            removable()?.remove?.invoke()
         }
         pasteImage(editor)
         editor.document.addDocumentListener(
@@ -599,7 +598,14 @@ class ComposerPanel(
 
     // --- chips and attachments -----------------------------------------------------------------------------------
 
+    private val chipKinds = ArrayList<ChipKind>()
+
+    /** The file the editor last showed, so a dismissed chip stays away until another file is shown. */
+    private var selectedFile: VirtualFile? = null
+
     private fun follow(file: VirtualFile?) {
+        if (file != null && file != selectedFile && selectedFile != null) draft.dismissed.clear()
+        if (file != null) selectedFile = file
         currentFile =
             file?.takeIf {
                 followable(it is ChatVirtualFile, it.isInLocalFileSystem) &&
@@ -612,7 +618,9 @@ class ComposerPanel(
     private fun showChips() {
         showSendReady()
         chips.removeAll()
+        chipKinds.clear()
         currentFile?.let { file ->
+            chipKinds += ChipKind.CURRENT_FILE
             chips.add(
                 Chip(file.fileType.icon ?: AllIcons.FileTypes.Any_type, file.name, relative(file), dashed = true) {
                     draft.dismissed += file.url
@@ -621,6 +629,7 @@ class ComposerPanel(
             )
         }
         selections.forEach { selection ->
+            chipKinds += ChipKind.SELECTION
             chips.add(
                 Chip(
                     AllIcons.Actions.ShowAsTree,
@@ -636,6 +645,7 @@ class ComposerPanel(
             )
         }
         attached.forEach { attachment ->
+            chipKinds += ChipKind.ATTACHMENT
             val icon =
                 when {
                     attachment.kind != AttachmentKind.IMAGE -> AllIcons.FileTypes.Any_type
