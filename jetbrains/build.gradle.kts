@@ -148,6 +148,8 @@ intellijPlatform {
             }
         ideaVersion {
             sinceBuild = "262"
+            // Open on purpose: a cap would hide the plugin from every newer IDE. Instead verifyPlugin checks the
+            // current build and the recommended ones (the released builds in range), so a break shows up in the build.
             untilBuild = provider { null }
         }
     }
@@ -155,6 +157,7 @@ intellijPlatform {
     pluginVerification {
         ides {
             current()
+            recommended()
         }
         // Internal, override-only, non-extendable and scheduled-for-removal API usages fail the build alongside compatibility problems.
         // Experimental APIs (the combined diff among them) are reported but allowed.

@@ -89,7 +89,7 @@ Conversation**. Amazon Bedrock is set up in **Settings | Tools | Closta**.
 
 ## Install
 
-Requires IntelliJ IDEA 2026.2.4 or later (build 262+), or another IntelliJ-based IDE of the same version, and the
+Requires IntelliJ IDEA 2026.2 or later (build 262+) and the
 [Claude Code](https://docs.claude.com/en/docs/claude-code/setup) CLI. Amazon Bedrock runs through the same `claude`
 command, so it is needed with either provider.
 

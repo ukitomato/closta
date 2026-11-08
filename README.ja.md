@@ -56,7 +56,7 @@ Bedrockを選んだときの送り先はAmazon Bedrockです。Closta自身が�
 
 ## 必要なもの
 
-- IntelliJ IDEA 2026.2.4以降（build 262+）か、同じ版のIntelliJ系IDE
+- IntelliJ IDEA 2026.2以降（build 262+）。上限は設けておらず、ビルドごとにPlugin Verifierで推奨のIDEを検査している
 - [Claude Code](https://docs.claude.com/ja/docs/claude-code/setup) CLI（`claude`）。Clostaには同梱していないので、インストールして`PATH`に置く
 - `claude`でのサインインか、Claudeモデルを使えるAmazon Bedrockのアカウント。Bedrockも同じ`claude`を通して使う
 
