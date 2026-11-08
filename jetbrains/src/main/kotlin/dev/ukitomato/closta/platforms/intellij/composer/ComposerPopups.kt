@@ -53,16 +53,7 @@ object ComposerPopups {
                         hasFocus: Boolean,
                     ) {
                         val warn = value == BYPASS
-                        val main =
-                            if (warn) {
-                                SimpleTextAttributes(
-                                    SimpleTextAttributes.STYLE_PLAIN,
-                                    JBUI.CurrentTheme.Banner.WARNING_BORDER_COLOR,
-                                )
-                            } else {
-                                SimpleTextAttributes.REGULAR_ATTRIBUTES
-                            }
-                        append(modeLabel(value), main)
+                        append(modeLabel(value), SimpleTextAttributes.REGULAR_ATTRIBUTES)
                         modeHint(value)?.let { append("  $it", SimpleTextAttributes.GRAYED_ATTRIBUTES) }
                         icon =
                             when {

@@ -83,6 +83,13 @@ class ToolbarButton(
             field = value
             showTip()
         }
+
+    /** What a screen reader says for it, in place of the text alone (which does not say what kind of button it is). */
+    var accessibleLabel: String? = null
+        set(value) {
+            field = value
+            showTip()
+        }
     var normal: Color = UIUtil.getLabelForeground()
         set(value) {
             field = value
@@ -110,7 +117,7 @@ class ToolbarButton(
     private fun showTip() {
         val shown = disabledReason?.takeIf { !enabledToClick } ?: listOfNotNull(tip, hint).joinToString(" — ")
         presentation.description = plainTip(shown).orEmpty()
-        button.accessibleContext.accessibleName = text?.takeIf { it.isNotEmpty() } ?: tip
+        button.accessibleContext.accessibleName = accessibleLabel ?: text?.takeIf { it.isNotEmpty() } ?: tip
         button.accessibleContext.accessibleDescription = shown
     }
 
@@ -367,7 +374,7 @@ class ContextUse : JBLabel() {
                 )
                 g2.color =
                     if (percentage >= WARN_AT) {
-                        JBUI.CurrentTheme.Banner.WARNING_BORDER_COLOR
+                        warningInk
                     } else {
                         UIUtil.getContextHelpForeground()
                     }
@@ -391,3 +398,11 @@ class ContextUse : JBLabel() {
         const val PAD = 4
     }
 }
+
+/** The colour of a warning drawn as text or a line: the theme's own, with a pair that reads on both grounds. */
+val warningInk: Color
+    get() =
+        JBColor.namedColor(
+            "Label.warningForeground",
+            JBColor.namedColor("Component.warningFocusColor", JBColor.ORANGE),
+        )

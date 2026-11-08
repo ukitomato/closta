@@ -31,6 +31,7 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.util.textCompletion.TextFieldWithCompletion
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.WrapLayout
+import com.intellij.util.ui.accessibility.AccessibleAnnouncerUtil
 import dev.ukitomato.closta.core.interfaces.IdeResult
 import dev.ukitomato.closta.core.models.Attachment
 import dev.ukitomato.closta.core.models.AttachmentKind
@@ -115,11 +116,13 @@ class ComposerPanel(
 
     private var state: ComposerState? = null
     private var sendable = false
+    private var announced: String? = null
     private var rewinding = false
     private val canSend get() = sendable && !rewinding
     private val attached get() = draft.attached
     private val selections get() = draft.selections
     private var currentFile: VirtualFile? = null
+    private val chipKinds = ArrayList<ChipKind>()
     private var switchingSince: Pair<String, Long>? = null
     private var shownBlock = SendBlock.NONE
     private val block get() = if (rewinding) SendBlock.REWINDING else shownBlock
@@ -258,23 +261,19 @@ class ComposerPanel(
         val modeName = next.mode ?: "default"
         mode.text = if (narrow) shortModeLabel(modeName) else modeLabel(modeName)
         mode.normal =
-            if (modeName ==
-                ComposerPopups.BYPASS
-            ) {
-                JBUI.CurrentTheme.Banner.WARNING_BORDER_COLOR
-            } else {
-                com.intellij.util.ui.UIUtil
-                    .getLabelForeground()
-            }
+            com.intellij.util.ui.UIUtil
+                .getLabelForeground()
         // Bypass is said by an icon too, not by the colour alone.
         mode.icon = if (modeName == ComposerPopups.BYPASS) AllIcons.General.Warning else null
         mode.toolTipText = ClostaBundle.message("composer.mode.tooltip")
+        mode.accessibleLabel = ClostaBundle.message("composer.mode.accessible", modeLabel(modeName))
         val effort = next.effort?.takeIf { next.effortLevels.isNotEmpty() }
         val modelName = shortModel(if (narrow) shortLabel(next.model) else next.model.label, MODEL_SHOWN)
         val effortName = effort?.let { if (narrow) shortEffort(effortLabel(it)) else effortLabel(it) }
         model.text = listOfNotNull(modelName, effortName).joinToString(" · ")
         // The whole name and level, and the model's full id when the CLI gave one.
         val whole = listOfNotNull(next.model.label, effort?.let(::effortLabel)).joinToString(" · ")
+        model.accessibleLabel = ClostaBundle.message("composer.model.accessible", model.text.orEmpty())
         model.toolTipText = listOfNotNull(whole, next.model.resolved?.takeIf { it != whole }).joinToString(" — ")
         val used = next.context
         context.isVisible = used != null
@@ -282,11 +281,14 @@ class ComposerPanel(
             context.show(used.percentage)
             context.toolTipText = contextTip(next)
         }
-        send.isVisible = !next.running
+        send.isVisible = true
+        send.toolTipText =
+            ClostaBundle.message(if (next.running) "composer.send.queue" else "composer.send.tooltip")
         send.enabledToClick = canSend
         send.disabledReason = sendBlockReason(block)
         showSendReady()
         val waiting = if (block == SendBlock.STARTING) WAITING_FOR_CLI else sendBlockReason(block)
+        model.isVisible = block == SendBlock.NONE || next.models.isNotEmpty() || next.model.resolved != null
         for (button in listOf(mode, model)) {
             button.enabledToClick = block == SendBlock.NONE
             button.disabledReason = waiting
@@ -314,6 +316,13 @@ class ComposerPanel(
         val now = System.currentTimeMillis()
         val shown = messages.shown(now, baseMessage(next, now))
         status.say(shown?.text, shown?.error == true)
+        if (shown != null &&
+            shown.text != announced &&
+            shown.source in setOf(StatusSource.REFUSAL, StatusSource.SESSION)
+        ) {
+            AccessibleAnnouncerUtil.announce(status, shown.text, true)
+        }
+        announced = shown?.text
         val watching = messages.pending || switchingSince != null
         if (watching && !ticker.isRunning) {
             ticker.start()
@@ -568,12 +577,13 @@ class ComposerPanel(
         val file = currentFile?.let { relative(it) }
         val outgoing = Outgoing(words, selections.toList(), file, files, draft.thumbnails.toMap())
         val text = outgoingText(outgoing) { rangeLabel(it.path, it.start, it.end, forChip = false) }
+        val queued = state?.running == true
         field.text = ""
         attached.clear()
         draft.thumbnails.clear()
         selections.clear()
         messages.clear()
-        showStatus()
+        if (queued) say(ClostaBundle.message("composer.status.queued"), StatusSource.HINT) else showStatus()
         showChips()
         onSend(text, files, outgoing)
     }
@@ -597,8 +607,6 @@ class ComposerPanel(
     }
 
     // --- chips and attachments -----------------------------------------------------------------------------------
-
-    private val chipKinds = ArrayList<ChipKind>()
 
     /** The file the editor last showed, so a dismissed chip stays away until another file is shown. */
     private var selectedFile: VirtualFile? = null
