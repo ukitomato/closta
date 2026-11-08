@@ -801,29 +801,42 @@ class ComposerPanel(
                 private fun filesIn(event: java.awt.dnd.DropTargetDragEvent) =
                     event.isDataFlavorSupported(DataFlavor.javaFileListFlavor)
 
-                override fun dragEnter(event: java.awt.dnd.DropTargetDragEvent) =
-                    if (filesIn(event)) files.dragEnter(event) else editors?.dragEnter(event) ?: Unit
+                // Whether the editor's own target was entered by this drag: only then does it hear the rest of it.
+                private var entered = false
 
-                override fun dragOver(event: java.awt.dnd.DropTargetDragEvent) =
-                    if (filesIn(event)) event.acceptDrag(DnDConstants.ACTION_COPY) else editors?.dragOver(event) ?: Unit
+                override fun dragEnter(event: java.awt.dnd.DropTargetDragEvent) {
+                    entered = !filesIn(event) && editors != null
+                    if (filesIn(event)) files.dragEnter(event) else editors?.dragEnter(event)
+                }
+
+                override fun dragOver(event: java.awt.dnd.DropTargetDragEvent) {
+                    when {
+                        filesIn(event) -> event.acceptDrag(DnDConstants.ACTION_COPY)
+                        entered -> editors?.dragOver(event)
+                    }
+                }
 
                 override fun dropActionChanged(event: java.awt.dnd.DropTargetDragEvent) {
-                    if (!filesIn(event)) editors?.dropActionChanged(event)
+                    if (entered) editors?.dropActionChanged(event)
                 }
 
                 override fun dragExit(event: java.awt.dnd.DropTargetEvent) {
                     files.dragExit(event)
-                    editors?.dragExit(event)
+                    if (entered) editors?.dragExit(event)
+                    entered = false
                 }
 
-                override fun drop(event: DropTargetDropEvent) =
-                    if (event.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
-                        files.drop(event)
-                    } else {
-                        editors?.drop(event) ?: event.rejectDrop()
+                override fun drop(event: DropTargetDropEvent) {
+                    val inEditor = entered
+                    entered = false
+                    when {
+                        event.isDataFlavorSupported(DataFlavor.javaFileListFlavor) -> files.drop(event)
+                        inEditor -> editors?.drop(event)
+                        else -> event.rejectDrop()
                     }
+                }
             }
-        val target = DropTarget(text, DnDConstants.ACTION_COPY, listener)
+        val target = DropTarget(text, editors?.defaultActions ?: DnDConstants.ACTION_COPY_OR_MOVE, listener)
         text.dropTarget = target
         com.intellij.openapi.util.Disposer
             .register(until) { if (text.dropTarget === target) text.dropTarget = editors }
