@@ -161,10 +161,10 @@ private class GalleryRun(
             val (sidebar, tab) = withContext(Dispatchers.EDT) { sidebarPanel() to editorPanel() }
             sidebar?.let { scene("sidebar-${SIDEBAR_WIDTH}px-*.png") { pages("sidebar", it) } }
             tab?.let { scene("editor-*.png") { pages("editor", it) } }
-            stage = "focused card"
-            sidebar?.let { scene("card-focused.png") { focusedCard(it) } }
             stage = "narrow sidebar"
             sidebar?.let { narrowSidebar(it) }
+            stage = "focused card"
+            sidebar?.let { scene("card-focused.png") { focusedCard(it) } }
         } finally {
             // Closed before the scenes after it: a conversation left in view would be the one the MCP tab follows.
             withContext(Dispatchers.EDT + NonCancellable) { closeAll(opened) }
@@ -674,7 +674,6 @@ private class GalleryRun(
 
     private companion object {
         const val SETTLE_MS = 3_000L
-        private const val NEARLY_FULL = 85
         const val PAGE_MS = 600L
         const val FRAME_WIDTH = 1400
         const val FRAME_HEIGHT = 1000
@@ -695,6 +694,7 @@ private class GalleryRun(
         /** Long enough for the editor to finish its analysis, whose label would be in the picture. */
         const val ANALYSIS_MS = 9_000L
         const val MODEL = "claude-opus-5-5"
+        const val NEARLY_FULL = 85
         val OFFERS = listOf("Ultimate", "Upgrade", "Trial")
         val SHOWCASE_CODE =
             """

@@ -20,8 +20,10 @@ import dev.ukitomato.closta.providers.claude.synthetic.StreamScript
  * into Explored, one failed, a sub-agent), a to-do list, a reply with a code block and a table, an allowed Bash card,
  * a turn's end, and then, waiting, a Bash card, a question card with two questions, a plan card and an Edit card. The
  * requests are in the shapes of captures 14 / 18 (AskUserQuestion), 16 / 17 (permission, Edit) and 29 (ExitPlanMode).
- * [firstTurn] stops after the first turn, and [withMode] and [withMcp] add what a session says of its permission mode
- * (capture 07) and of its MCP servers (capture 24). Nothing in it comes from a real session.
+ * The longer tail adds attachments, a second Explored group, a long Bash output, a long failure, a Write allow and a
+ * Bash deny. [firstTurn] stops after the first turn, and [withMode], [withContextUse] and [withMcp] add what a session
+ * says of its permission mode (capture 07), of its context use and of its MCP servers (capture 24). Nothing in it
+ * comes from a real session.
  */
 @Suppress(
     "MagicNumber",
@@ -226,6 +228,7 @@ internal object GallerySession {
             script.toolResult("gt21", "class AuthServiceTest {\n    @Test fun logsIn() {}\n}\n")
             script.toolResult("gt22", "src/AuthService.kt:12\nsrc/RetryPolicy.kt:3")
             script.assistant("gm21", listOf(StreamScript.toolUse("gt23", "WebFetch", JsonObject())))
+            script.toolResult("gt23", "")
             script.assistant(
                 "gm22",
                 listOf(StreamScript.toolUse("gt24", "Bash", obj("command" to "ls -1 /work/src/auth/generated"))),
