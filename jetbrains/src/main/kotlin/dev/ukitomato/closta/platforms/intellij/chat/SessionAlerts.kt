@@ -50,7 +50,8 @@ class SessionAlerts(
     parent: Disposable,
 ) {
     private val book = AlertBook()
-    private val shown = HashMap<String, MutableMap<String, Notification>>()
+    private val waiting = HashMap<String, Notification>()
+    private val finished = HashMap<String, MutableMap<String, Notification>>()
 
     private val failures =
         CoroutineExceptionHandler { _, failure ->
@@ -62,7 +63,7 @@ class SessionAlerts(
         scope.launch {
             directory.entries.collect { entries ->
                 val open = entries.mapTo(HashSet()) { it.sessionId }
-                withContext(Dispatchers.EDT) { shown.keys.filter { it !in open }.forEach(::forget) }
+                withContext(Dispatchers.EDT) { (waiting.keys + finished.keys).filter { it !in open }.forEach(::forget) }
             }
         }
     }
@@ -72,44 +73,78 @@ class SessionAlerts(
         view: SessionView,
     ) {
         val id = entry.sessionId
-        val change = book.changed(id, view.conversation to view.transcript, directory.isVisible(id))
-        val mine = shown.getOrPut(id) { HashMap() }
-        change.expired.forEach { key -> mine.remove(key)?.expire() }
-        change.raised.forEach { alert -> raise(entry, alert, mine) }
+        apply(entry, book.changed(id, view.conversation to view.transcript, directory.isVisible(id)))
     }
 
-    /** The session [sessionId] went out of view: what still waits in it and was not notified is notified now. */
+    /** The session [sessionId] went out of view: what still waits in it and is not shown yet is shown now. */
     fun hidden(sessionId: String) {
         val entry = directory.entries.value.firstOrNull { it.sessionId == sessionId } ?: return
-        val mine = shown.getOrPut(sessionId) { HashMap() }
-        book.hidden(sessionId).forEach { alert -> raise(entry, alert, mine) }
+        apply(entry, book.hidden(sessionId))
     }
 
-    private fun raise(
+    private fun apply(
         entry: ChatDirectory.Entry,
-        alert: SessionAlert,
-        mine: MutableMap<String, Notification>,
+        change: NoticeChange,
     ) {
-        val text = alertText(entry.title, alert)
-        val waits = alert !is FinishedAlert
+        if (change.replace) {
+            waiting.remove(entry.sessionId)?.expire()
+            change.waiting?.let { notice -> raiseWaiting(entry, notice, change.fresh) }
+        }
+        change.finished?.let { raiseFinished(entry, it) }
+    }
+
+    private fun raiseWaiting(
+        entry: ChatDirectory.Entry,
+        notice: WaitingNotice,
+        fresh: Boolean,
+    ) {
+        val alert = notice.alert
+        val text = alertText(entry.title, notice)
         val notification =
             NotificationGroupManager
                 .getInstance()
-                .getNotificationGroup(if (waits) NoticeGroups.WAITING else NoticeGroups.FINISHED)
-                .createNotification(
-                    text.htmlTitle,
-                    text.htmlBody,
-                    if (waits) NotificationType.WARNING else NotificationType.INFORMATION,
-                ).setDisplayId(displayIdOf(alert))
-                .setIcon(if (waits) AllIcons.General.Warning else AllIcons.Status.Success)
-        if (waits) {
-            notification.setImportant(true)
-            notification.setSuggestionType(true)
-        }
+                .getNotificationGroup(NoticeGroups.WAITING)
+                .createNotification(text.htmlTitle, text.htmlBody, NotificationType.INFORMATION)
+                .setDisplayId("closta.alert.waiting")
+                .setIcon(AllIcons.General.Information)
         if (alert is PermissionAlert && text.answerable) {
             notification.addAction(answer(ClostaBundle.message("chat.alert.allow"), entry, alert, allow = true))
             notification.addAction(answer(ClostaBundle.message("chat.alert.deny"), entry, alert, allow = false))
         }
+        addOpenActions(notification, entry, alert)
+        waiting[entry.sessionId] = notification
+        notification.whenExpired { waiting.remove(entry.sessionId, notification) }
+        notification.notify(entry.project)
+        if (fresh && wantsOsNotice(alert) && !ApplicationManager.getApplication().isActive) {
+            SystemNotifications.getInstance().notify(NoticeGroups.WAITING, text.title, text.body)
+        }
+    }
+
+    private fun raiseFinished(
+        entry: ChatDirectory.Entry,
+        alert: FinishedAlert,
+    ) {
+        val text = alertText(entry.title, alert)
+        val notification =
+            NotificationGroupManager
+                .getInstance()
+                .getNotificationGroup(NoticeGroups.FINISHED)
+                .createNotification(text.htmlTitle, text.htmlBody, NotificationType.INFORMATION)
+                .setDisplayId("closta.alert.finished")
+                .setIcon(AllIcons.Status.Success)
+        addOpenActions(notification, entry, alert)
+        val mine = finished.getOrPut(entry.sessionId) { HashMap() }
+        mine.remove(alert.key)?.expire()
+        mine[alert.key] = notification
+        notification.whenExpired { mine.remove(alert.key, notification) }
+        notification.notify(entry.project)
+    }
+
+    private fun addOpenActions(
+        notification: Notification,
+        entry: ChatDirectory.Entry,
+        alert: SessionAlert,
+    ) {
         if (alert is OpenOnlyAlert && alert.what == AlertKind.EDIT) {
             notification.addAction(
                 NotificationAction.createSimple(ClostaBundle.message("thread.permission.openDiff")) {
@@ -123,13 +158,6 @@ class SessionAlerts(
                 bringAndShow(entry.project, entry.sessionId)
             },
         )
-        mine.remove(alert.key)?.expire()
-        mine[alert.key] = notification
-        notification.whenExpired { mine.remove(alert.key, notification) }
-        notification.notify(entry.project)
-        if (wantsOsNotice(alert) && !ApplicationManager.getApplication().isActive) {
-            SystemNotifications.getInstance().notify(NoticeGroups.WAITING, text.title, text.body)
-        }
     }
 
     private fun answer(
@@ -172,7 +200,8 @@ class SessionAlerts(
 
     private fun forget(sessionId: String) {
         book.forget(sessionId)
-        shown
+        waiting.remove(sessionId)?.expire()
+        finished
             .remove(sessionId)
             ?.values
             ?.toList()
@@ -181,12 +210,5 @@ class SessionAlerts(
 
     private companion object {
         val OPEN_CONVERSATION: String get() = ClostaBundle.message("notify.openConversation")
-
-        fun displayIdOf(alert: SessionAlert): String =
-            when (alert) {
-                is PermissionAlert -> "closta.alert.permission"
-                is OpenOnlyAlert -> "closta.alert." + alert.what.name.lowercase()
-                is FinishedAlert -> "closta.alert.finished"
-            }
     }
 }

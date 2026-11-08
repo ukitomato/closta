@@ -65,3 +65,14 @@ fun alertText(
             )
         is FinishedAlert -> AlertText(ClostaBundle.message("chat.alert.finished", sessionTitle), "", answerable = false)
     }
+
+/** What the one waiting notification of [sessionTitle] says: its oldest wait and how many wait behind it. */
+fun alertText(
+    sessionTitle: String,
+    notice: WaitingNotice,
+): AlertText {
+    val text = alertText(sessionTitle, notice.alert)
+    if (notice.more == 0) return text
+    val more = ClostaBundle.message("chat.alert.more", notice.more)
+    return text.copy(body = if (text.body.isEmpty()) more else "${text.body} · $more")
+}
