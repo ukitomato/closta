@@ -14,10 +14,11 @@ import dev.ukitomato.closta.platforms.intellij.composer.promptsOf
  */
 @Service(Service.Level.APP)
 class ComposerDrafts {
-    private val book = DraftBook<ComposerDraft>()
+    private val book = DraftBook<ComposerDraft>(ComposerDraft::copy)
     private val watched = HashSet<String>()
 
-    fun of(source: ChatSource): ComposerDraft {
+    /** The draft goes when [source] is disposed, whoever made it. */
+    private fun watch(source: ChatSource) {
         val id = source.sessionId
         if (watched.add(id)) {
             Disposer.register(source) {
@@ -25,14 +26,33 @@ class ComposerDrafts {
                 book.drop(id)
             }
         }
-        return book.of(id) { ComposerDraft(PromptHistory(promptsOf(source.view.value.transcript))) }
     }
 
-    /** Gives the session [to] that [from] opens the draft [from] has, before [to]'s screen is made. */
+    fun of(source: ChatSource): ComposerDraft {
+        watch(source)
+        return book.of(source.sessionId) { ComposerDraft(PromptHistory(promptsOf(source.view.value.transcript))) }
+    }
+
+    /** A copy of what [source] has now, to be [install]ed for the session that takes over from it. */
+    fun snapshot(source: ChatSource): ComposerDraft? = book.snapshot(source.sessionId)
+
+    /** Gives [to], the session that takes over from [from], a copy of [from]'s draft, before [to]'s screen is made. */
     fun carry(
         from: String,
-        to: String,
-    ) = book.carry(from, to)
+        to: ChatSource,
+    ) {
+        watch(to)
+        book.carry(from, to.sessionId)
+    }
+
+    /** Gives [to] the [draft] a [snapshot] took, before [to]'s screen is made. */
+    fun install(
+        to: ChatSource,
+        draft: ComposerDraft,
+    ) {
+        watch(to)
+        book.put(to.sessionId, draft)
+    }
 
     /**
      * Starts [draft]'s history from [source]'s transcript, again each time it has more messages, until a prompt is sent

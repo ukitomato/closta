@@ -498,9 +498,11 @@ class ChatPanel(
     private fun restart() {
         val old = source.sessionId
         val placement = place.placement
+        // Taken now: closing this place disposes the source, and the draft goes with it.
+        val carried = drafts.snapshot(source)
         SessionRelaunch(
             open = { _, opening, folder ->
-                openNewChat(project, placement, opening, workingDirectory = folder, carryFrom = old)
+                openNewChat(project, placement, opening, workingDirectory = folder, carry = carried)
             },
             close = {
                 place.close()

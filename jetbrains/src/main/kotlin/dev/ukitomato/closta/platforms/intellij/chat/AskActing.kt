@@ -127,13 +127,13 @@ class AskActing(
     private fun rewindHere(rewindBefore: String?): Boolean {
         val old = source.sessionId
         val copyId = sessions().open(rewindOpening(old, rewindBefore), source.title, source.workingDirectory)
-        service<ComposerDrafts>().carry(old, copyId)
         val copy = sessions().source(copyId) as? ChatSource.Live
         if (copy == null) {
             sessions().stop(copyId)
             refused(COPY_NOT_OPENED)
             return false
         }
+        service<ComposerDrafts>().carry(old, copy)
         scope
             .launch(failures) {
                 val step =

@@ -28,4 +28,18 @@ class ComposerDraft(
 
     /** The files whose current-file chip the user took away (by URL). */
     val dismissed = HashSet<String>()
+
+    /**
+     * A draft of its own with the same text, chips and prompts, for the session that takes over from this one. It has
+     * sent nothing and seen no messages, so its history is seeded again from the new session's transcript.
+     */
+    fun copy(): ComposerDraft {
+        val copy = ComposerDraft(PromptHistory(history.prompts))
+        copy.text = text
+        copy.selections += selections
+        copy.attached += attached
+        copy.thumbnails.putAll(thumbnails)
+        copy.dismissed += dismissed
+        return copy
+    }
 }
