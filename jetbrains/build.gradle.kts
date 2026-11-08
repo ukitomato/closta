@@ -2,6 +2,8 @@ import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.jetbrains.changelog.Changelog
 import org.jetbrains.changelog.markdownToHTML
 import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask
+import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.io.File
 
 plugins {
@@ -82,8 +84,21 @@ dependencies {
     }
 }
 
+// Build and test on JDK 25, which IntelliJ 2026.2 needs. Every IDE in range (262+) runs on JBR 25, so 21 is a
+// conservative bytecode target, not a runtime floor. sourceCompatibility stays at the toolchain's 25 because the
+// platform plugin's verifyPluginProjectConfiguration warns when it is lower. If a .java source is ever added,
+// sourceCompatibility must be aligned with the target: javac rejects `-source 25 -target 21`.
+java { targetCompatibility = JavaVersion.VERSION_21 }
+
 kotlin {
-    jvmToolchain(21)
+    jvmToolchain(25)
+    compilerOptions {
+        jvmTarget = JvmTarget.JVM_21
+        // A class that implements a Java interface gets no bridge for the interface's default methods. With the bridge
+        // the class overrides and calls isApplicable / getEditorTabTooltipText, which the Verifier reports as
+        // deprecated even though the source never names them.
+        jvmDefault = JvmDefaultMode.NO_COMPATIBILITY
+    }
 }
 
 // --- Protocol fixtures on the test classpath ------------------------------------------------------
@@ -141,22 +156,30 @@ intellijPlatform {
             }
         ideaVersion {
             sinceBuild = "262"
+            // Open on purpose: a cap would hide the plugin from every newer IDE. Instead verifyPlugin checks the
+            // current build and the recommended ones (the released builds in range), so a break shows up in the build.
             untilBuild = provider { null }
         }
     }
 
     pluginVerification {
+        // -Pverify.current narrows the set to the current IDE only (CI uses it on pull requests). Without the property
+        // the full set runs: the current build and the recommended ones, which downloads several GB.
         ides {
             current()
+            if (!providers.gradleProperty("verify.current").isPresent) recommended()
         }
-        // The combined diff of a turn's changes uses CombinedDiffVirtualFileImpl, which the platform marks internal
-        // and offers no public way to build. Releases go to GitHub, not the Marketplace, so internal API usages are
-        // reported but do not fail the build; compatibility problems do.
+        // Internal, override-only, non-extendable and scheduled-for-removal API usages fail the build alongside compatibility problems.
+        // Experimental APIs (the combined diff among them) are reported but allowed.
         failureLevel =
             listOf(
                 VerifyPluginTask.FailureLevel.COMPATIBILITY_PROBLEMS,
                 VerifyPluginTask.FailureLevel.INVALID_PLUGIN,
                 VerifyPluginTask.FailureLevel.MISSING_DEPENDENCIES,
+                VerifyPluginTask.FailureLevel.INTERNAL_API_USAGES,
+                VerifyPluginTask.FailureLevel.OVERRIDE_ONLY_API_USAGES,
+                VerifyPluginTask.FailureLevel.NON_EXTENDABLE_API_USAGES,
+                VerifyPluginTask.FailureLevel.SCHEDULED_FOR_REMOVAL_API_USAGES,
             )
     }
 }
@@ -175,9 +198,7 @@ abstract class ProtocolFixtures : CommandLineArgumentProvider {
     override fun asArguments(): List<String> = listOf("-DprotocolFixtures.dir=${dir.get().asFile.absolutePath}")
 }
 
-tasks.test {
-    useJUnitPlatform()
-
+fun Test.configureClostaTests() {
     // The IntelliJ Platform plugin puts the whole IDE on every Test task's classpath, this suite
     // included. One of those jars, lib/testFramework.jar, registers a JUnit 5 LauncherSessionListener
     // (com.intellij.testFramework.junit5.impl.JUnit5TestEnvironmentInitializer) that extends a JUnit 4
@@ -202,10 +223,32 @@ tasks.test {
     inputs.property("foldGoldenUpdate", providers.environmentVariable("FOLD_GOLDEN_UPDATE").orElse(""))
 }
 
+tasks.test {
+    useJUnitPlatform { excludeTags("perf") }
+    configureClostaTests()
+}
+
+// Wall-clock budgets: they measure time, so they run apart from check and do not gate the build.
+val perfTest by tasks.registering(Test::class) {
+    description = "Runs the timing budget tests (tagged perf), judged by the median of five runs."
+    group = "verification"
+    // Callables, so only the compile tasks become dependencies and not the test task itself.
+    testClassesDirs = files({ tasks.test.get().testClassesDirs })
+    classpath = files({ tasks.test.get().classpath })
+    useJUnitPlatform { includeTags("perf") }
+    configureClostaTests()
+    outputs.upToDateWhen { false }
+    outputs.cacheIf { false }
+    testLogging.showStandardStreams = true
+}
+
 detekt {
     buildUponDefaultConfig = true
     config.setFrom(files("config/detekt/detekt.yml"))
 }
+
+// Detekt's Kotlin does not know JVM 25 yet, so it analyses against the bytecode target.
+tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach { jvmTarget = "21" }
 
 // --- Layer rules --------------------------------------------------------------------------------
 // The layering (core / presenter / providers / platforms) is worth nothing as prose, so the build

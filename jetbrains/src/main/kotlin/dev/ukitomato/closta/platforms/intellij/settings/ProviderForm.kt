@@ -12,7 +12,6 @@ import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.text.HtmlChunk
 import com.intellij.ui.CollectionListModel
 import com.intellij.ui.JBIntSpinner
-import com.intellij.ui.SimpleListCellRenderer
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.ToolbarDecorator
 import com.intellij.ui.awt.RelativePoint
@@ -21,6 +20,8 @@ import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBPasswordField
 import com.intellij.ui.components.JBTextField
+import com.intellij.ui.dsl.listCellRenderer.listCellRenderer
+import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 import com.intellij.util.ui.FormBuilder
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
@@ -71,20 +72,16 @@ internal class ProviderForm {
                 emptyText.appendLine(kind.displayName, SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES) { addProvider(kind) }
             }
             cellRenderer =
-                SimpleListCellRenderer.create { label, record, _ ->
-                    label.putClientProperty(HTML_DISABLE, true)
-                    label.text = "${record.name} — ${record.kind.displayName}"
-                    label.icon = record.kind.icon
+                listCellRenderer {
+                    icon(value.kind.icon)
+                    text("${value.name} — ${value.kind.displayName}")
                 }
         }
     private val activeChoice =
         ComboBox<ActiveChoice>().apply {
             prototypeDisplayValue = ActiveChoice(null, DEFAULT_CHOICE)
             renderer =
-                SimpleListCellRenderer.create { label, choice, _ ->
-                    label.putClientProperty(HTML_DISABLE, true)
-                    label.text = choice?.toString().orEmpty()
-                }
+                textListCellRenderer { it?.toString().orEmpty() }
         }
     private val memoryOnlyNotice =
         wrappingLabel(ClostaBundle.message("settings.providers.memoryOnly")).apply { isVisible = false }
@@ -505,9 +502,6 @@ private fun temporaryCredentialsText(
             )
     }
 
-// Swing draws a label's text that starts with an html tag as HTML; a provider's name is shown as typed.
-private const val HTML_DISABLE = "html.disable"
-
 // The width the IDE's own comments under a field wrap at (ComponentPanelBuilder.MAX_COMMENT_WIDTH).
 private const val MAX_LINE_CHARS = 70
 
@@ -518,9 +512,9 @@ private const val FIELD_COLUMNS = 10
 private fun textField() = JBTextField(FIELD_COLUMNS)
 
 private fun kindRenderer() =
-    SimpleListCellRenderer.create<ProviderKind> { label, kind, _ ->
-        label.text = kind?.displayName.orEmpty()
-        label.icon = kind?.icon
+    listCellRenderer<ProviderKind> {
+        icon(value.icon)
+        text(value.displayName)
     }
 
 // Anthropic is reached over the web; Bedrock through an AWS endpoint.

@@ -13,7 +13,7 @@
 [![Claude Code CLI](.github/assets/badges/claude.svg)](https://docs.claude.com/en/docs/claude-code)
 [![Amazon Bedrock](.github/assets/badges/bedrock.svg)](https://aws.amazon.com/bedrock/)
 [![Kotlin 2.4](.github/assets/badges/kotlin.svg)](https://kotlinlang.org/)
-[![JDK 21](.github/assets/badges/jdk.svg)](https://openjdk.org/)
+[![JDK 25](.github/assets/badges/jdk.svg)](https://openjdk.org/)
 ![Native Swing, no webview](.github/assets/badges/swing.svg)
 [![License: Apache-2.0](.github/assets/badges/license.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/ukitomato/closta)](https://github.com/ukitomato/closta/releases)
@@ -89,13 +89,15 @@ Conversation**. Amazon Bedrock is set up in **Settings | Tools | Closta**.
 
 ## Install
 
-Requires IntelliJ IDEA 2026.2.4 or later (build 262+), or another IntelliJ-based IDE of the same version, and the
+Requires IntelliJ IDEA 2026.2 or later (verified on 2026.2.4 and 2026.3; build 262+) and the
 [Claude Code](https://docs.claude.com/en/docs/claude-code/setup) CLI. Amazon Bedrock runs through the same `claude`
 command, so it is needed with either provider.
 
 1. Download `closta-<version>.zip` from [Releases](https://github.com/ukitomato/closta/releases).
 2. In the IDE, open **Settings | Plugins**, click the gear icon, choose **Install Plugin from Disk…**, and pick the zip.
 3. Restart the IDE.
+
+To check the download, run `sha256sum -c SHA256SUMS` next to the zip, with the `SHA256SUMS` file from the same release.
 
 ## Keys
 

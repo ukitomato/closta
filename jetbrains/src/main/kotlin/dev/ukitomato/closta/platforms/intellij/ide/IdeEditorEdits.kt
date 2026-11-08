@@ -81,6 +81,7 @@ class IdeEditorEdits(
         if (range is IdeResult.Failed) return range
         val offsets = (range as IdeResult.Ok).value
         val text = request.text.replace("\r\n", "\n").replace('\r', '\n')
+        // Deprecated in 2026.3, but the replacement does not exist in 2026.2: kept until the range moves.
         FileEditorManager.getInstance(project).openFile(file, false)
         WriteCommandAction.runWriteCommandAction(project, ClostaBundle.message("ide.edit.command", relative), null, {
             document.replaceString(offsets.start, offsets.end, text)

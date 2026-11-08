@@ -13,7 +13,7 @@
 [![Claude Code CLI](.github/assets/badges/claude.svg)](https://docs.claude.com/en/docs/claude-code)
 [![Amazon Bedrock](.github/assets/badges/bedrock.svg)](https://aws.amazon.com/bedrock/)
 [![Kotlin 2.4](.github/assets/badges/kotlin.svg)](https://kotlinlang.org/)
-[![JDK 21](.github/assets/badges/jdk.svg)](https://openjdk.org/)
+[![JDK 25](.github/assets/badges/jdk.svg)](https://openjdk.org/)
 ![Native Swing, no webview](.github/assets/badges/swing.svg)
 [![License: Apache-2.0](.github/assets/badges/license.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/ukitomato/closta)](https://github.com/ukitomato/closta/releases)
@@ -56,7 +56,7 @@ Bedrockを選んだときの送り先はAmazon Bedrockです。Closta自身が�
 
 ## 必要なもの
 
-- IntelliJ IDEA 2026.2.4以降（build 262+）か、同じ版のIntelliJ系IDE
+- IntelliJ IDEA 2026.2以降（2026.2.4と2026.3で検証済み、build 262+）。上限は設けておらず、ビルドごとにPlugin Verifierで推奨のIDEを検査している
 - [Claude Code](https://docs.claude.com/ja/docs/claude-code/setup) CLI（`claude`）。Clostaには同梱していないので、インストールして`PATH`に置く
 - `claude`でのサインインか、Claudeモデルを使えるAmazon Bedrockのアカウント。Bedrockも同じ`claude`を通して使う
 
@@ -65,6 +65,8 @@ Bedrockを選んだときの送り先はAmazon Bedrockです。Closta自身が�
 1. [Releases](https://github.com/ukitomato/closta/releases)から`closta-<version>.zip`を取得する
 2. IDEで「Settings | Plugins」を開き、歯車から「Install Plugin from Disk…」を選んでzipを指定する
 3. IDEを再起動する
+
+ダウンロードを確かめるには、同じリリースの`SHA256SUMS`をzipの隣に置いて`sha256sum -c SHA256SUMS`を実行します。
 
 右側のClostaツールウィンドウを開くか、「Tools | Closta | Closta: New Conversation」で会話を始めます。
 IDEが日本語で動いているときは画面も日本語になります。

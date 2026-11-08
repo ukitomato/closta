@@ -21,6 +21,8 @@ class ClaudeLaunchSpecTest {
                 "stream-json",
                 "--include-partial-messages",
                 "--verbose",
+                "--append-system-prompt",
+                ClaudeLaunchSpec.TOOL_USE_PROMPT,
                 "--session-id=abc-123",
             ),
             argv,
@@ -28,6 +30,20 @@ class ClaudeLaunchSpecTest {
         // `=` join (injection-safe), never a separate token.
         assertTrue(argv.contains("--session-id=abc-123"))
         assertFalse(argv.contains("--session-id"))
+    }
+
+    @Test
+    fun `every launch asks for the file tools over Bash, whatever the mode it starts in`() {
+        // The mode can be switched to auto live, so the prompt does not depend on the starting mode.
+        for (mode in listOf(null, "default", "auto", "acceptEdits")) {
+            val argv = ClaudeLaunchSpec(sessionId = "s", permissionMode = mode).toArgv()
+            assertEquals(1, argv.count { it == "--append-system-prompt" })
+            val prompt = argv[argv.indexOf("--append-system-prompt") + 1]
+            assertEquals(ClaudeLaunchSpec.TOOL_USE_PROMPT, prompt)
+        }
+        listOf("Read", "Edit", "Write", "Grep", "Bash").forEach {
+            assertTrue(ClaudeLaunchSpec.TOOL_USE_PROMPT.contains(it), "names $it")
+        }
     }
 
     @Test

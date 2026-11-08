@@ -57,6 +57,8 @@ data class ClaudeLaunchSpec(
             add("stream-json")
             add("--include-partial-messages")
             add("--verbose")
+            add("--append-system-prompt")
+            add(TOOL_USE_PROMPT)
             // A new session names its id; a resumed one is opened by the id it was saved under (never both).
             if (resume != null) {
                 add("--resume=$resume")
@@ -104,5 +106,17 @@ data class ClaudeLaunchSpec(
     companion object {
         /** The CLI turns file checkpointing on when this is true (and the DISABLE name is absent). */
         const val CHECKPOINTING_ENV: String = "CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING"
+
+        /**
+         * Added to every launch. In auto mode the CLI tells the model it may read, search and edit files through
+         * Bash; the IDE shows and tracks only the file tools' calls (diffs, checkpoints), so this asks for them.
+         * Sent in every mode, as the mode can be switched to auto live.
+         */
+        const val TOOL_USE_PROMPT: String =
+            "This session runs inside a JetBrains IDE that renders and tracks file tool calls. " +
+                "In every permission mode, including auto, read files with Read, search with Grep and Glob, " +
+                "and change files with Edit and Write. Do not use Bash for these (no cat, head, sed -n, grep, " +
+                "find, sed -i, heredocs or scripts that write files). Use Bash for builds, tests, git and " +
+                "other commands that have no dedicated tool."
     }
 }

@@ -9,13 +9,13 @@ Thanks for your interest. Bug reports, ideas and pull requests are welcome.
 
 ## Building and testing
 
-JDK 21 is required. The Gradle root is `jetbrains/`.
+JDK 25 is required (the build targets Java 21 bytecode). The Gradle root is `jetbrains/`.
 
 ```bash
 cd jetbrains
-./gradlew check          # everything a pull request must pass
-./gradlew buildPlugin    # the plugin zip, in build/distributions/
-./gradlew runIde         # a sandbox IDE with the plugin
+./gradlew check verifyPlugin   # everything a pull request must pass (verifyPlugin runs the Plugin Verifier)
+./gradlew buildPlugin          # the plugin zip, in build/distributions/
+./gradlew runIde               # a sandbox IDE with the plugin
 ```
 
 The first run downloads the IDE the plugin builds against (about 1 GB).
@@ -78,7 +78,8 @@ Because of rule 1, `presenter/` cannot look up localized text: it hands the scre
 ## Performance budgets
 
 The tests hold these on a synthetic session the size of the largest one seen in use (200 requests, 2,000 tool calls,
-150 subagents). A change that breaks one fails `check`.
+150 subagents). Only the ratio-based one (time per event, `foldTimePerLineStaysFlat`) fails `check`. The others measure
+time, so `./gradlew perfTest` runs them (the median of 5) and they do not gate CI.
 
 | | Budget |
 | --- | --- |

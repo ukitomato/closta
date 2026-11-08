@@ -29,6 +29,7 @@ fun openChat(
         Placement.EDITOR_TAB -> {
             val editors = FileEditorManager.getInstance(project)
             val file = openTab(project, sessionId) ?: ChatVirtualFile(sessionId, source.title)
+            // Deprecated in 2026.3, but the replacement does not exist in 2026.2: kept until the range moves.
             editors.openFile(file, true).isNotEmpty()
         }
         Placement.SIDEBAR -> openInSidebar(project, source)
@@ -156,6 +157,7 @@ fun bringAndShow(
     val content = window?.contentManager?.let { sidebarTab(it, sessionId) }
     return when {
         placement != null -> openChat(project, sessionId, placement)
+        // Deprecated in 2026.3, but the replacement does not exist in 2026.2: kept until the range moves.
         tab != null -> FileEditorManager.getInstance(project).openFile(tab, true).isNotEmpty()
         window != null && content != null -> {
             window.contentManager.setSelectedContent(content)

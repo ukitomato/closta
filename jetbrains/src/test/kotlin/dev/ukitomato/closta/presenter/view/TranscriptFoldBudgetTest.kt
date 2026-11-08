@@ -5,6 +5,7 @@ import dev.ukitomato.closta.platforms.intellij.session.SessionView
 import dev.ukitomato.closta.providers.claude.protocol.StreamJsonCodec
 import dev.ukitomato.closta.providers.claude.synthetic.SyntheticSession
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 
 /**
@@ -61,11 +62,14 @@ class TranscriptFoldBudgetTest {
         )
     }
 
+    @Tag("perf")
     @Test
     fun largestFoldWithinBudget() {
         val steps = steps(SyntheticSession.LARGEST)
         repeat(WARM_UP) { timed(steps) }
-        val took = timed(steps).sum() / NANOS_PER_MS
+        val runs = List(RUNS) { timed(steps).sum() / NANOS_PER_MS }
+        val took = runs.sorted()[RUNS / 2]
+        println("perf largestFold median=${"%.3f".format(took)}ms runs=${runs.map { "%.3f".format(it) }}")
         assertTrue(took <= BUDGET_MS, "folding ${steps.size} lines took ${took}ms (budget ${BUDGET_MS}ms)")
     }
 
@@ -83,6 +87,7 @@ class TranscriptFoldBudgetTest {
             }
         const val LONG_SESSION = 5_000
         const val WARM_UP = 3
+        const val RUNS = 5
         const val SAMPLE = 1_000
         const val SLACK_MS = 20.0
         const val BUDGET_MS = 150.0

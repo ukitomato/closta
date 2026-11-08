@@ -18,11 +18,17 @@ jobs:
         working-directory: jetbrains
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require the tagged commit to be on main
+        run: |
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "::error::$GITHUB_REF_NAME ($GITHUB_SHA) is not on main"; exit 1; }
       - uses: gradle/actions/wrapper-validation@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
-          java-version: 21
+          java-version: 25
       - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         with:
           cache-read-only: true
@@ -31,10 +37,13 @@ jobs:
           version=$(./gradlew :properties --quiet --property version | sed -n 's/^version: //p')
           test "v$version" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME, version $version"; exit 1; }
       - name: Check and build
-        run: ./gradlew check buildPlugin
+        run: ./gradlew check verifyPlugin buildPlugin
       - name: Release notes
         run: ./gradlew getChangelog --project-version "${GITHUB_REF_NAME#v}" --no-header --quiet --console=plain --output-file=build/release-notes.md
+      - name: Checksums
+        working-directory: jetbrains/build/distributions
+        run: sha256sum *.zip > SHA256SUMS
       - name: Create the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" build/distributions/*.zip --title "$GITHUB_REF_NAME" --notes-file build/release-notes.md --verify-tag
+        run: gh release create "$GITHUB_REF_NAME" build/distributions/*.zip build/distributions/SHA256SUMS --title "$GITHUB_REF_NAME" --notes-file build/release-notes.md --verify-tag

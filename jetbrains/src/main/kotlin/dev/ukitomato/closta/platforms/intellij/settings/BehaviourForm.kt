@@ -1,8 +1,8 @@
 package dev.ukitomato.closta.platforms.intellij.settings
 
 import com.intellij.openapi.ui.ComboBox
-import com.intellij.ui.SimpleListCellRenderer
 import com.intellij.ui.components.JBCheckBox
+import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 import com.intellij.util.ui.FormBuilder
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
 import javax.swing.JComponent
@@ -24,7 +24,7 @@ internal class BehaviourForm {
         ).withMnemonic('L')
     private val modeChoice =
         ComboBox(CHOICES.toTypedArray()).apply {
-            renderer = SimpleListCellRenderer.create("") { it.label }
+            renderer = textListCellRenderer("") { it.label }
         }
 
     /** The whole form, for the settings dialog. */
