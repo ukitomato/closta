@@ -148,9 +148,9 @@ private fun permissionAlertOf(record: ApprovalRecord): PermissionAlert {
     val tool = permission?.toolName ?: record.toolName.orEmpty()
     val subject = permission?.subject.orEmpty()
     val clean = permission != null && !permission.hiddenMarked && permission.inputFields.isEmpty()
-    // Only the start of a command or the folder and name of a file may be shown; another tool's input (a URL, a
-    // pattern, a prompt, an MCP argument) is not. Allow is offered only when what is shown is all of the input: a Bash
-    // command that fits on one line, a Read with a path alone.
+    // Only the start of a command or a file's path may be shown; another tool's input (a URL, a pattern, a prompt, an
+    // MCP argument) is not. Allow is offered only when what is shown is all of the input: a Bash command that fits on
+    // one line, a Read with a path alone that fits whole. A path that cannot be allowed shows its folder and name.
     val (shown, whole) =
         when (tool) {
             in COMMAND_TOOLS ->
@@ -162,11 +162,17 @@ private fun permissionAlertOf(record: ApprovalRecord): PermissionAlert {
                             '\n' !in subject &&
                             subject.length <= ALERT_SUBJECT
                     )
-            in FILE_TOOLS -> lastSegments(subject) to (clean && tool == READ_TOOL && pathOnly(record))
+            in FILE_TOOLS -> fileSubject(subject, clean && tool == READ_TOOL && pathOnly(record))
             else -> "" to false
         }
     return PermissionAlert(id, id, tool, shown.take(ALERT_SUBJECT), answerable = whole)
 }
+
+// A path that may be allowed and fits is shown whole; any other shows its folder and name.
+private fun fileSubject(
+    path: String,
+    mayAllow: Boolean,
+): Pair<String, Boolean> = if (mayAllow && path.length <= ALERT_SUBJECT) path to true else lastSegments(path) to false
 
 // A Read card lists no fields, so the request itself says whether it holds more than the path.
 private fun pathOnly(record: ApprovalRecord): Boolean =

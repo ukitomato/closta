@@ -182,11 +182,18 @@ class SessionGroupsTest {
     }
 
     @Test
-    fun `a file shows its folder`() {
+    fun `a Read whose whole path fits is shown whole and can be allowed`() {
         val alert = readAlert("/home/u/.ssh/id_rsa")
-        assertEquals(".ssh/id_rsa", alert.subject)
+        assertEquals("/home/u/.ssh/id_rsa", alert.subject)
         assertTrue(alert.answerable)
         assertEquals("note.txt", readAlert("note.txt").subject)
+    }
+
+    @Test
+    fun `a Read whose path is too long is shown shortened and cannot be allowed`() {
+        val alert = readAlert("/" + "d".repeat(80) + "/.ssh/id_rsa")
+        assertEquals(".ssh/id_rsa", alert.subject)
+        assertEquals(false, alert.answerable)
     }
 
     @Test
@@ -213,8 +220,9 @@ class SessionGroupsTest {
     }
 
     @Test
-    fun `a Windows path shows its folder`() {
-        assertEquals(".ssh/id_rsa", readAlert("C:\\a\\.ssh\\id_rsa").subject)
+    fun `a Windows path is shown whole or by its folder`() {
+        assertEquals("C:\\a\\.ssh\\id_rsa", readAlert("C:\\a\\.ssh\\id_rsa").subject)
+        assertEquals(".ssh/id_rsa", readAlert("C:\\" + "d".repeat(80) + "\\.ssh\\id_rsa").subject)
     }
 
     @Test
