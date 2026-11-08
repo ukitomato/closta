@@ -130,6 +130,30 @@ class GitWorktreesTest {
     }
 
     @Test
+    fun `creating a worktree does not run the repository's hooks`() {
+        val root = repo()
+        val marker = File(dir, "hook-ran")
+        val hook = File(root, ".git/hooks/post-checkout")
+        hook.parentFile.mkdirs()
+        hook.writeText("#!/bin/sh\ntouch '${marker.path}'\n")
+        hook.setExecutable(true)
+        assertTrue(create(root, "hooked") is IdeResult.Ok)
+        assertFalse(marker.exists(), "post-checkout ran")
+    }
+
+    @Test
+    fun `a hook that git would run does run when git is called without the guard`() {
+        val root = repo()
+        val marker = File(dir, "hook-ran-control")
+        val hook = File(root, ".git/hooks/post-checkout")
+        hook.parentFile.mkdirs()
+        hook.writeText("#!/bin/sh\ntouch '${marker.path}'\n")
+        hook.setExecutable(true)
+        git(root, "worktree", "add", "-b", "control", File(dir, "control-wt").path)
+        assertTrue(marker.exists(), "the control hook did not run, so the test above proves nothing")
+    }
+
+    @Test
     fun `a directory that is not in a repository is unavailable`() {
         val plain = File(dir, "plain").apply { mkdirs() }
         assertEquals(IdeFailureKind.UNAVAILABLE, (create(plain, "x") as IdeResult.Failed).kind)

@@ -144,7 +144,7 @@ class GitWorktrees(
         vararg args: String,
     ): Output {
         val builder =
-            ProcessBuilder(listOf(git, "-C", dir) + args)
+            ProcessBuilder(listOf(git) + GUARD + listOf("-C", dir) + args)
                 .redirectErrorStream(true)
                 .apply { environment()["GIT_TERMINAL_PROMPT"] = "0" }
         val process = builder.start()
@@ -180,6 +180,12 @@ class GitWorktrees(
     private fun quote(text: String): String = if (text.any { it.isWhitespace() }) "\"$text\"" else text
 
     private companion object {
+        /**
+         * Every call runs without the repository's hooks and fsmonitor, which a checkout would otherwise run (the
+         * project may be untrusted). `/dev/null` is not a directory, so git finds no hook in it; on Windows it is
+         * just a path that does not exist, which disables hooks the same way.
+         */
+        val GUARD = listOf("-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false")
         const val TIMEOUT_SECONDS = 30L
         const val MESSAGE_MAX = 200
         const val TIMED_OUT = -1

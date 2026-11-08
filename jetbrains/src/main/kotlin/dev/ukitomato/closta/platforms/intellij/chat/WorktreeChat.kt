@@ -2,6 +2,7 @@
 
 package dev.ukitomato.closta.platforms.intellij.chat
 
+import com.intellij.ide.trustedProjects.TrustedProjects
 import com.intellij.notification.NotificationAction
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
@@ -38,7 +39,8 @@ class NewWorktreeChatAction :
     }
 
     override fun update(event: AnActionEvent) {
-        event.presentation.isEnabled = event.project?.basePath != null
+        val project = event.project
+        event.presentation.isEnabled = project?.basePath != null && worktreeChatAllowed(project)
     }
 
     override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
@@ -47,11 +49,15 @@ class NewWorktreeChatAction :
 /**
  * Makes a worktree of the project's repository under `.claude/worktrees/<name>` on a new branch of the same name
  * ([worktreeName], [GitWorktrees]) and opens a new conversation there in an editor tab, titled by the branch. A refusal
- * is a notification that says why, without a path. The user removes the worktree: the notice of a made one copies the
- * commands that remove it, to paste in a terminal.
+ * (or an untrusted project) is a notification that says why, without a path. The user removes the worktree: the
+ * notice of a made one copies the commands that remove it, to paste in a terminal.
  */
 fun openWorktreeChat(project: Project) {
     val root = project.basePath ?: return
+    if (!worktreeChatAllowed(project)) {
+        notice(ClostaBundle.message("chat.worktree.untrusted"), NotificationType.WARNING).notify(project)
+        return
+    }
     val once = Disposer.newDisposable(project, "Closta worktree")
     project.service<ClaudeSessionService>().viewScope(once).launch {
         try {
@@ -76,6 +82,10 @@ fun openWorktreeChat(project: Project) {
         }
     }
 }
+
+/** The one place that decides whether a worktree may be made: only in a trusted project (the IDE's Safe Mode). */
+private fun worktreeChatAllowed(project: Project?): Boolean =
+    project != null && TrustedProjects.isProjectTrusted(project)
 
 private fun opened(
     project: Project,
