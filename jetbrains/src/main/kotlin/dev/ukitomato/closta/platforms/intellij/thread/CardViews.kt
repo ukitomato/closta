@@ -190,7 +190,8 @@ class CardViews(
             val keep =
                 card.suggestions.firstOrNull()?.let { first ->
                     cardButton(keepLabel(), act = { decide(PermissionChoice.ALLOW_KEEP) }).apply {
-                        toolTipText = StringUtil.escapeXmlEntities(first.detail.ifEmpty { first.kind })
+                        toolTipText =
+                            "<html>${StringUtil.escapeXmlEntities(first.detail.ifEmpty { first.kind })}</html>"
                     }
                 }
             val no =
@@ -277,16 +278,12 @@ class CardViews(
             resized(this)
         }
 
-        private fun keepLabel(): String =
-            ClostaBundle.message(
-                if (!offersWhere ||
-                    destination == "session"
-                ) {
-                    "thread.permission.allowSession"
-                } else {
-                    "thread.permission.allowAlways"
-                },
+        private fun keepLabel(): String {
+            val forSession = !offersWhere || destination == "session"
+            return ClostaBundle.message(
+                if (forSession) "thread.permission.allowSession" else "thread.permission.allowAlways",
             )
+        }
 
         private fun decide(choice: PermissionChoice) {
             if (sent) return
