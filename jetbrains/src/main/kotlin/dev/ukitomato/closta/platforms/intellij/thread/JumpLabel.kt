@@ -12,9 +12,12 @@ fun waitingBelow(
     viewBottom: Int,
 ): Boolean = cardTops.any { it >= viewBottom }
 
-/** How many of the cards at [tops] (in the column) start outside the view: above [viewTop] or past [viewBottom]. */
+/**
+ * How many of the cards occupying [spans] (top to bottom, in the column) are outside the view: entirely above
+ * [viewTop] or entirely past [viewBottom]. A card with any part in sight is on screen, though its top is not.
+ */
 fun waitingOffScreen(
-    tops: List<Int>,
+    spans: List<IntRange>,
     viewTop: Int,
     viewBottom: Int,
-): Int = tops.count { it < viewTop || it >= viewBottom }
+): Int = spans.count { it.last <= viewTop || it.first >= viewBottom }

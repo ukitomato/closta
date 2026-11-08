@@ -58,6 +58,9 @@ interface ThreadSurface : Disposable {
     /** Whether the earlier conversation is still being read (a resume): an empty thread says it is loading. */
     fun loading(reading: Boolean)
 
+    /** Whether some card waits for an answer. */
+    val hasWaitingCard: Boolean
+
     /** Brings the waiting card at the top into view and gives it the keyboard; false when no card waits. */
     fun focusWaitingCard(): Boolean
 
@@ -275,6 +278,8 @@ class SwingThreadSurface(
         column.loading = reading
     }
 
+    override val hasWaitingCard: Boolean get() = waiting.isNotEmpty()
+
     override fun focusWaitingCard(): Boolean {
         val key = waiting.firstOrNull()
         val top = key?.let(column::topOf) ?: return false
@@ -313,14 +318,12 @@ class SwingThreadSurface(
      */
     private fun showJump() {
         val view = scroll.viewport.viewRect
-        // A card with any part in sight is on screen, though its top is not.
-        val unseen =
-            waiting.filter { key ->
-                val top = column.topOf(key) ?: return@filter false
-                val bottom = column.bottomOf(key) ?: top
-                bottom <= view.y || top >= view.y + view.height
+        val spans =
+            waiting.mapNotNull { key ->
+                val top = column.topOf(key) ?: return@mapNotNull null
+                top..(column.bottomOf(key) ?: top)
             }
-        val off = waitingOffScreen(unseen.mapNotNull(column::topOf), view.y, view.y + view.height)
+        val off = waitingOffScreen(spans, view.y, view.y + view.height)
         if (off != offScreenTold) {
             offScreenTold = off
             onWaitingOffScreen(off)

@@ -36,9 +36,9 @@ sealed interface CardKey {
 private const val JUMP_MODIFIERS = InputEvent.ALT_DOWN_MASK or InputEvent.SHIFT_DOWN_MASK
 
 /**
- * Alt+Shift+W: in the composer it moves the keyboard to the waiting card at the top, and in a card back to the
- * composer. No action of the IDE's own keymaps ($default, XWin, GNOME, KDE, the macOS ones, Eclipse, NetBeans, Visual
- * Studio) or of a bundled plugin has it.
+ * Alt+Shift+W, the default shortcut of the action `Closta.JumpToWaitingCard`: in the composer it moves the keyboard to
+ * the waiting card at the top, and in a card back to the composer. No action of the IDE's own keymaps ($default, XWin,
+ * GNOME, KDE, the macOS ones, Eclipse, NetBeans, Visual Studio) or of a bundled plugin has it.
  */
 val JUMP_KEY: KeyStroke = KeyStroke.getKeyStroke(KeyEvent.VK_W, JUMP_MODIFIERS)
 
@@ -107,9 +107,9 @@ private fun digit(keyCode: Int): Int? =
 /**
  * Gives [card] the keys of [kind] from [cardKey], in its input map for when the keyboard is anywhere in it (not only on
  * the card itself): 1 to 9 and Esc on a permission or plan card, Esc and Ctrl+Enter (Cmd+Enter) on a question. A key
- * [cardKey] has no use for (a digit typed in a text line) is left to the component the keyboard is in. [JUMP_KEY] is
- * here until its action owns it. The card is focusable so Tab reaches it; a question's options take the keyboard, not
- * its panel.
+ * [cardKey] has no use for (a digit typed in a text line) is left to the component the keyboard is in. The jump
+ * to the composer is the action `Closta.JumpToWaitingCard`, not a key here. The card is focusable so Tab reaches it; a
+ * question's options take the keyboard, not its panel.
  */
 internal fun cardKeys(
     card: JComponent,
@@ -122,7 +122,6 @@ internal fun cardKeys(
     val actions = card.actionMap
     val strokes = ArrayList<Pair<Int, Int>>()
     strokes += Pair(KeyEvent.VK_ESCAPE, 0)
-    strokes += Pair(KeyEvent.VK_W, JUMP_MODIFIERS)
     if (kind == CardKind.QUESTION) {
         strokes += Pair(KeyEvent.VK_ENTER, InputEvent.CTRL_DOWN_MASK)
         strokes += Pair(KeyEvent.VK_ENTER, InputEvent.META_DOWN_MASK)

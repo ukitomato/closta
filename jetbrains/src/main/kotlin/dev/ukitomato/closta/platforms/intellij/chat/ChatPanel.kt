@@ -258,8 +258,23 @@ class ChatPanel(
     /** The thread's own component (the benchmark scrolls it). */
     fun surfaceComponent(): JComponent = surface.component
 
+    /** Whether some card waits for an answer. */
+    fun hasWaitingCard(): Boolean = surface.hasWaitingCard
+
     /** Brings the waiting card at the top into view and gives it the keyboard; false when no card waits. */
     fun focusWaitingCard(): Boolean = surface.focusWaitingCard()
+
+    /**
+     * The jump to a waiting card: from the thread (a card) the keyboard goes back to the composer, from anywhere else
+     * (the composer) to the waiting card at the top. [owner] is where the keyboard is.
+     */
+    fun jumpBetweenComposerAndCard(owner: Component?) {
+        if (owner != null && SwingUtilities.isDescendingFrom(owner, surface.component)) {
+            composer.focusTarget().requestFocusInWindow()
+        } else {
+            surface.focusWaitingCard()
+        }
+    }
 
     /**
      * The header: the repository and branch, cut with "…" (the tab already names the conversation: its title is the

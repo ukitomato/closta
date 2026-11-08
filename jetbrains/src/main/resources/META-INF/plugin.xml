@@ -67,5 +67,9 @@
                 <synonym text="Next Waiting Session"/>
             </action>
         </group>
+        <action id="Closta.JumpToWaitingCard"
+                class="dev.ukitomato.closta.platforms.intellij.thread.JumpToWaitingCardAction">
+            <keyboard-shortcut keymap="$default" first-keystroke="alt shift W"/>
+        </action>
     </actions>
 </idea-plugin>
