@@ -95,8 +95,11 @@ private fun worktreeChatAllowed(project: Project?): Boolean =
 /** Whether a worktree can be made now: a trusted project with a Git root. */
 internal fun worktreeChatPossible(project: Project): Boolean = worktreeChatAllowed(project) && hasGitRoot(project)
 
-private fun hasGitRoot(project: Project): Boolean =
-    ProjectLevelVcsManager.getInstance(project).allVcsRoots.any { it.vcs?.name == "Git" }
+private fun hasGitRoot(project: Project): Boolean {
+    val manager = ProjectLevelVcsManager.getInstance(project)
+    val git = manager.findVcsByName("Git") ?: return false
+    return manager.getRootsUnderVcs(git).isNotEmpty()
+}
 
 private fun opened(
     project: Project,
