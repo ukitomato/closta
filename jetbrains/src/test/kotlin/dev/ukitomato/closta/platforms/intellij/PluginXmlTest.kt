@@ -89,4 +89,24 @@ class PluginXmlTest {
         elements("action")
             .filter { it.getAttribute("id").startsWith("Closta.Sessions.") }
             .forEach { assertEquals(0, it.getElementsByTagName("keyboard-shortcut").length, it.getAttribute("id")) }
+
+    @Test
+    fun everyActionClassLoads() =
+        elements("action").plus(elements("group")).map { it.getAttribute("class") }.filter { it.isNotEmpty() }.forEach {
+            assertNotNull(Class.forName(it, false, loader), it)
+        }
+
+    // Ids of the platform's own groups the file hooks into.
+    private val platformGroups = setOf("ToolsMenu")
+
+    @Test
+    fun everyReferenceAndPlacementNamesADeclaredId() {
+        val declared = (elements("action") + elements("group")).map { it.getAttribute("id") }.toSet() + platformGroups
+        val named =
+            elements("reference").map { it.getAttribute("ref") } +
+                elements(
+                    "add-to-group",
+                ).flatMap { listOf(it.getAttribute("group-id"), it.getAttribute("relative-to-action")) }
+        assertEquals(emptyList<String>(), named.filter { it.isNotEmpty() && it !in declared })
+    }
 }

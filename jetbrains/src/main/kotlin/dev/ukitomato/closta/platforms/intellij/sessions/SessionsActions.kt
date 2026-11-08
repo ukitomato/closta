@@ -5,6 +5,7 @@ import com.intellij.openapi.actionSystem.ActionGroup
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonShortcuts
+import com.intellij.openapi.actionSystem.ex.ActionUtil
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.popup.JBPopupFactory
@@ -97,9 +98,9 @@ internal fun wireTree(
         }
     }.installOn(component)
     val manager = ActionManager.getInstance()
-    manager.getAction("Closta.Sessions.Open").registerCustomShortcutSet(CommonShortcuts.ENTER, component, parent)
-    manager
-        .getAction("Closta.Sessions.Archive")
+    ActionUtil.wrap("Closta.Sessions.Open").registerCustomShortcutSet(CommonShortcuts.ENTER, component, parent)
+    ActionUtil
+        .wrap("Closta.Sessions.Archive")
         .registerCustomShortcutSet(CommonShortcuts.getDelete(), component, parent)
     component.addMouseListener(
         object : PopupHandler() {
