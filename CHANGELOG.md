@@ -23,6 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   Sessions.
 - Cards for tool permissions, file edits (as diffs), plans and questions.
 - A turn's changes as VCS changes in the IDE's combined diff.
+- Verified on IntelliJ IDEA 2026.2 and 2026.3 with the Plugin Verifier.
 - Rewind (conversation, or files and conversation) and fork from a message; resume saved conversations; conversations
   in a new git worktree.
 - MCP servers: their states, turning them on and off, reconnecting.
