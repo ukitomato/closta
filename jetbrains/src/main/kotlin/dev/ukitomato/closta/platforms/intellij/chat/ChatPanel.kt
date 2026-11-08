@@ -258,6 +258,9 @@ class ChatPanel(
     /** The thread's own component (the benchmark scrolls it). */
     fun surfaceComponent(): JComponent = surface.component
 
+    /** Brings the waiting card at the top into view and gives it the keyboard; false when no card waits. */
+    fun focusWaitingCard(): Boolean = surface.focusWaitingCard()
+
     /**
      * The header: the repository and branch, cut with "…" (the tab already names the conversation: its title is the
      * tooltip). In an editor tab New Conversation and More are at its right; in the sidebar they are the tool window's

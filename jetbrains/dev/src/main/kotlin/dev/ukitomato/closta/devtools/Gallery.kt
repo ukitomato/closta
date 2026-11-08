@@ -161,6 +161,8 @@ private class GalleryRun(
             val (sidebar, tab) = withContext(Dispatchers.EDT) { sidebarPanel() to editorPanel() }
             sidebar?.let { scene("sidebar-${SIDEBAR_WIDTH}px-*.png") { pages("sidebar", it) } }
             tab?.let { scene("editor-*.png") { pages("editor", it) } }
+            stage = "focused card"
+            sidebar?.let { scene("card-focused.png") { focusedCard(it) } }
             stage = "narrow sidebar"
             sidebar?.let { narrowSidebar(it) }
         } finally {
@@ -414,6 +416,14 @@ private class GalleryRun(
         delay(PAGE_MS)
     }
 
+    /** Gives the sidebar's first waiting card the keyboard, as the composer's jump does, and paints it. */
+    private suspend fun focusedCard(sidebar: ChatPanel) {
+        val focused = withContext(Dispatchers.EDT) { sidebar.focusWaitingCard() }
+        check(focused) { "no waiting card" }
+        delay(SETTLE_MS)
+        withContext(Dispatchers.EDT) { shoot(sidebar, "card-focused.png") }
+    }
+
     private suspend fun states(views: GalleryViews) {
         sidebarScene(
             "state-starting.png",
@@ -436,6 +446,15 @@ private class GalleryRun(
             FixedChatSource(
                 "Gallery (bypass)",
                 GallerySession.withMode(views.idle, "bypassPermissions"),
+                canSend = true,
+            ),
+        )
+        sidebarScene("state-running.png", FixedChatSource("Gallery (running)", views.running, canSend = true))
+        sidebarScene(
+            "state-context-high.png",
+            FixedChatSource(
+                "Gallery (context)",
+                GallerySession.withContextUse(views.idle, NEARLY_FULL),
                 canSend = true,
             ),
         )
@@ -655,6 +674,7 @@ private class GalleryRun(
 
     private companion object {
         const val SETTLE_MS = 3_000L
+        private const val NEARLY_FULL = 85
         const val PAGE_MS = 600L
         const val FRAME_WIDTH = 1400
         const val FRAME_HEIGHT = 1000

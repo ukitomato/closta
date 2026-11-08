@@ -23,7 +23,12 @@ import dev.ukitomato.closta.providers.claude.synthetic.StreamScript
  * [firstTurn] stops after the first turn, and [withMode] and [withMcp] add what a session says of its permission mode
  * (capture 07) and of its MCP servers (capture 24). Nothing in it comes from a real session.
  */
-@Suppress("MagicNumber", "LongMethod", "CyclomaticComplexMethod") // a script, written out line by line
+@Suppress(
+    "MagicNumber",
+    "LongMethod",
+    "CyclomaticComplexMethod",
+    "TooManyFunctions",
+) // a script, written out line by line
 internal object GallerySession {
     const val FIRST_ASK = "gallery-ask-1"
     private const val SYNTHETIC_MODEL = "claude-synthetic"
@@ -371,6 +376,38 @@ internal object GallerySession {
                 ),
             ),
         )
+
+    /**
+     * [view] after the host asked for the context used and the CLI answered `get_context_usage` (capture 06) with
+     * [percent] of a 200000-token window used, in the capture's fields (`totalTokens`, `maxTokens`, `percentage`).
+     */
+    fun withContextUse(
+        view: SessionView,
+        percent: Int,
+    ): SessionView {
+        val max = 200_000L
+        val body =
+            JsonObject().apply {
+                addProperty("totalTokens", max * percent / 100)
+                addProperty("maxTokens", max)
+                addProperty("percentage", percent)
+            }
+        val answer =
+            JsonObject().apply {
+                addProperty("type", "control_response")
+                add(
+                    "response",
+                    JsonObject().apply {
+                        addProperty("subtype", "success")
+                        addProperty("request_id", "gallery-context")
+                        add("response", body)
+                    },
+                )
+            }
+        return view
+            .requested(PresenterInput.ControlRequested("gallery-context", ControlKind.CONTEXT))
+            .event(PresenterInput.Event(StreamJsonCodec.decode(answer.toString())))
+    }
 
     /**
      * [view] after the host asked for the MCP servers and the CLI answered with three (capture 24's `mcp_status`
