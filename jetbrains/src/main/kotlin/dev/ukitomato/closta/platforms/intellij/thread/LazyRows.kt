@@ -5,6 +5,8 @@ import com.intellij.util.ui.StatusText
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
 import java.awt.Dimension
 import java.awt.Graphics
+import java.awt.GraphicsConfiguration
+import java.awt.GraphicsEnvironment
 import java.awt.Point
 import java.awt.Rectangle
 import javax.swing.JComponent
@@ -51,6 +53,10 @@ class LazyRows(
     private var rows: List<ShownRow> = emptyList()
     private var heights = IntArray(0)
     private var measured = BooleanArray(0)
+
+    // The screen scale each row's text was measured at (null: not known), and the column's screen's.
+    private var scales = arrayOfNulls<TextScale>(0)
+    private var screen: TextScale? = null
     private var tops = IntArray(1)
     private var measuredWidth = -1
     private var laidOutHeight = -1
@@ -83,6 +89,17 @@ class LazyRows(
     init {
         isOpaque = true
         background = ThreadStyle.background
+        // Moved to a screen of another scale: every row's text measures differently there.
+        addPropertyChangeListener("graphicsConfiguration") { event ->
+            val now = (event.newValue as? GraphicsConfiguration)?.let(::scaleOf) ?: return@addPropertyChangeListener
+            val was = screen
+            screen = now
+            if (was != null && was != now) {
+                measured.fill(false)
+                revalidate()
+                SwingUtilities.invokeLater { layoutVisible() }
+            }
+        }
     }
 
     override fun paintComponent(g: Graphics) {
@@ -96,12 +113,14 @@ class LazyRows(
         rows.forEachIndexed { i, row -> oldIndex[row.key] = i }
         val nextHeights = IntArray(next.size)
         val nextMeasured = BooleanArray(next.size)
+        val nextScales = arrayOfNulls<TextScale>(next.size)
         val width = contentWidth()
         next.forEachIndexed { i, row ->
             val old = oldIndex[row.key]
             if (old != null) {
                 nextHeights[i] = heights[old]
                 nextMeasured[i] = measured[old] && rows[old] === row
+                nextScales[i] = scales[old]
             } else {
                 nextHeights[i] = views.estimate(row, width) + gap(row)
             }
@@ -112,6 +131,7 @@ class LazyRows(
         rows = next
         heights = nextHeights
         measured = nextMeasured
+        scales = nextScales
         tops = IntArray(0)
         recomputeTops(0)
         layoutVisible()
@@ -204,6 +224,7 @@ class LazyRows(
             val row = rows[i]
             touched = false
             val component = componentFor(row)
+            if (touched && measured[i]) measured[i] = !measuredElsewhere(i)
             if (!measured[i]) shift += measure(i, component, width, view.y)
             component.setBounds(JBUI.scale(side), tops[i] + gap(row), width, heights[i] - gap(row))
             if (touched) component.repaint()
@@ -346,12 +367,32 @@ class LazyRows(
         layOutTree(component)
         val height = component.preferredSize.height + gap(rows[i])
         measured[i] = true
+        scales[i] = (component.graphicsConfiguration ?: primaryScreen())?.let(::scaleOf)
         if (height == heights[i]) return 0
         val moved = if (tops[i] < viewTop) height - heights[i] else 0
         heights[i] = height
         recomputeTops(i)
         return moved
     }
+
+    /**
+     * Whether row [i], just put in the column, was measured at another scale than the column's screen: made ahead off
+     * the column, its text was measured at the main screen's. Never on a single screen.
+     */
+    private fun measuredElsewhere(i: Int): Boolean {
+        val now = graphicsConfiguration?.let(::scaleOf) ?: return false
+        return needsRemeasure(scales[i], now)
+    }
+
+    private fun primaryScreen(): GraphicsConfiguration? =
+        if (GraphicsEnvironment.isHeadless()) {
+            null
+        } else {
+            GraphicsEnvironment.getLocalGraphicsEnvironment().defaultScreenDevice.defaultConfiguration
+        }
+
+    private fun scaleOf(configuration: GraphicsConfiguration): TextScale =
+        configuration.defaultTransform.let { TextScale(it.scaleX, it.scaleY) }
 
     private fun layOutTree(component: java.awt.Component) {
         if (component !is java.awt.Container) return
