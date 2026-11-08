@@ -14,3 +14,9 @@ fun needsRemeasure(
     measuredWith: TextScale?,
     now: TextScale,
 ): Boolean = measuredWith != now
+
+/** The rows, by index, measured at another scale than [now] (or at one not known), given each row's [measuredWith]. */
+fun rowsToRemeasure(
+    measuredWith: List<TextScale?>,
+    now: TextScale,
+): List<Int> = measuredWith.indices.filter { needsRemeasure(measuredWith[it], now) }

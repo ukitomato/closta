@@ -54,9 +54,8 @@ class LazyRows(
     private var heights = IntArray(0)
     private var measured = BooleanArray(0)
 
-    // The screen scale each row's text was measured at (null: not known), and the column's screen's.
+    // The screen scale each row's text was measured at (null: not known).
     private var scales = arrayOfNulls<TextScale>(0)
-    private var screen: TextScale? = null
     private var tops = IntArray(1)
     private var measuredWidth = -1
     private var laidOutHeight = -1
@@ -89,13 +88,13 @@ class LazyRows(
     init {
         isOpaque = true
         background = ThreadStyle.background
-        // Moved to a screen of another scale: every row's text measures differently there.
+        // Shown on a screen, or moved to another: the rows measured at another scale (the main screen's, for the rows
+        // made before the column was shown) are measured again there.
         addPropertyChangeListener("graphicsConfiguration") { event ->
             val now = (event.newValue as? GraphicsConfiguration)?.let(::scaleOf) ?: return@addPropertyChangeListener
-            val was = screen
-            screen = now
-            if (was != null && was != now) {
-                measured.fill(false)
+            val stale = rowsToRemeasure(scales.asList(), now).filter { measured[it] }
+            if (stale.isNotEmpty()) {
+                stale.forEach { measured[it] = false }
                 revalidate()
                 SwingUtilities.invokeLater { layoutVisible() }
             }
