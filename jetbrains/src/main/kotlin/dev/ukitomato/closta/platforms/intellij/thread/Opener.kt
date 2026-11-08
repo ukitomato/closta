@@ -84,24 +84,24 @@ internal class Opener(
         )
     }
 
-    override fun getAccessibleContext(): AccessibleContext {
-        if (accessibleContext == null) {
-            accessibleContext =
-                object : AccessibleJPanel() {
-                    override fun getAccessibleRole(): AccessibleRole = AccessibleRole.TOGGLE_BUTTON
+    private var toggleContext: AccessibleContext? = null
 
-                    override fun getAccessibleStateSet(): AccessibleStateSet =
-                        super.getAccessibleStateSet().apply {
-                            when (expanded) {
-                                true -> add(AccessibleState.EXPANDED)
-                                false -> add(AccessibleState.COLLAPSED)
-                                null -> Unit
-                            }
-                        }
+    override fun getAccessibleContext(): AccessibleContext =
+        toggleContext ?: newToggleContext().also { toggleContext = it }
+
+    private fun newToggleContext(): AccessibleContext =
+        object : AccessibleJPanel() {
+            override fun getAccessibleRole(): AccessibleRole = AccessibleRole.TOGGLE_BUTTON
+
+            override fun getAccessibleStateSet(): AccessibleStateSet =
+                super.getAccessibleStateSet().apply {
+                    when (expanded) {
+                        true -> add(AccessibleState.EXPANDED)
+                        false -> add(AccessibleState.COLLAPSED)
+                        null -> Unit
+                    }
                 }
         }
-        return accessibleContext
-    }
 
     override fun removeNotify() {
         val had = isFocusOwner
