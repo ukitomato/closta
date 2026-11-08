@@ -181,9 +181,10 @@ class GitWorktrees(
 
     private companion object {
         /**
-         * Every call runs without the repository's hooks and fsmonitor, which a checkout would otherwise run (the
-         * project may be untrusted). `/dev/null` is not a directory, so git finds no hook in it; on Windows it is
-         * just a path that does not exist, which disables hooks the same way.
+         * Every call runs with hooks and fsmonitor turned off. `/dev/null` is not a directory, so git finds no hook in
+         * it; on Windows it is just a path that does not exist, which disables hooks the same way. Smudge, clean and
+         * process filters from a copied `.git/config` are not turned off: the trust check before a worktree chat is
+         * created is what keeps an untrusted repository from running anything.
          */
         val GUARD = listOf("-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false")
         const val TIMEOUT_SECONDS = 30L

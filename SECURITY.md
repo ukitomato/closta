@@ -16,3 +16,6 @@ Only the latest release is supported.
 
 Closta starts the `claude` CLI and passes it the IDE's context. Problems in the CLI itself should be reported to
 Anthropic ([anthropics/claude-code](https://github.com/anthropics/claude-code)).
+
+Under WSL, with debug logging turned on for `#com.intellij.execution`, `idea.log` can contain the temporary AWS
+credentials passed to the CLI. Do not share such a log.

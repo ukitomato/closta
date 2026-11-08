@@ -119,6 +119,8 @@ All commands are under **Tools | Closta**.
 - **Amazon Bedrock**: set the region, the MFA device ARN and the long-term access keys. When a session starts, Closta
   asks for an MFA code and gets temporary credentials from AWS STS; nothing needs the `aws` command or `~/.aws`.
   Model IDs for Sonnet and Haiku can be overridden.
+  Under WSL, with debug logging on for `#com.intellij.execution`, `idea.log` can contain the temporary credentials passed
+  to the CLI. Do not share such a log.
 
 **Settings | Tools | Closta | Behaviour** sets whether unsaved files are saved before a message is sent, whether `@`
 file completion leaves out ignored files, and the permission mode new conversations start in.
