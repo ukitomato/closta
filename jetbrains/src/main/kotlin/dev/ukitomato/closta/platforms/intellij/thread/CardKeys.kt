@@ -47,15 +47,17 @@ enum class CardHint { NONE, KEYS, JUMP }
 
 /**
  * The card's keys ([CardHint.KEYS]) only while the keyboard is in it: they do nothing anywhere else. With the keyboard
- * outside and [waiting] cards, the key to go to them ([CardHint.JUMP], on the composer's line). Free of `com.intellij`.
+ * outside and [waiting] cards, the key to go to them ([CardHint.JUMP], on the composer's line), but only while one of
+ * them is [offScreen]: with all in sight there is nothing to go to. Free of `com.intellij`.
  */
 fun cardHint(
     focusInCard: Boolean,
     waiting: Int,
+    offScreen: Int = waiting,
 ): CardHint =
     when {
         focusInCard -> CardHint.KEYS
-        waiting > 0 -> CardHint.JUMP
+        waiting > 0 && offScreen > 0 -> CardHint.JUMP
         else -> CardHint.NONE
     }
 

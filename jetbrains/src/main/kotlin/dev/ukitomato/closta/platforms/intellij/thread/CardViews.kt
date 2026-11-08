@@ -1,6 +1,7 @@
 package dev.ukitomato.closta.platforms.intellij.thread
 
 import com.intellij.icons.AllIcons
+import com.intellij.openapi.util.SystemInfo
 import com.intellij.openapi.util.text.StringUtil
 import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.components.DropDownLink
@@ -329,6 +330,7 @@ class CardViews(
         private val card: QuestionCard,
     ) : CardPanel(ThreadStyle.pendingLine, ThreadStyle.pendingFill, watchesKeyboard = true) {
         private var sent = false
+        private lateinit var keysRow: Row
         private val picks = ArrayList<Pick>()
         private val send = cardButton(ClostaBundle.message("thread.question.answer"), main = true) { send() }
 
@@ -365,6 +367,8 @@ class CardViews(
                     val skipButton = cardButton(ClostaBundle.message("thread.question.skip")) { skip() }
                     row { cell(buttonLine(listOf(send, skipButton))).align(AlignX.FILL) }
                         .topGap(TopGap.SMALL)
+                    val modifier = if (SystemInfo.isMac) "Cmd" else "Ctrl"
+                    keysRow = row { comment(ClostaBundle.message("thread.question.keys", modifier)) }.visible(false)
                     failureRow(this, card.failure)
                 }
             content.isOpaque = false
@@ -382,6 +386,10 @@ class CardViews(
                     CardKey.ToComposer -> letGo()
                     else -> Unit
                 }
+            }
+            onKeyboard = { inside ->
+                keysRow.visible(cardHint(inside, 1) == CardHint.KEYS)
+                resized(this)
             }
             refresh()
             firstOption()?.let(::takeFocusIfHere)

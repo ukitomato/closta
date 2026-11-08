@@ -785,7 +785,7 @@ open class RoundedPanel : JPanel() {
 
 /**
  * A card: padded content in a rounded box of [line], filled with [fill] when one is given. A card that [watchesKeyboard]
- * draws its line twice as thick in the focus colour while the keyboard is in it, and tells [onKeyboard].
+ * shows the platform's focus ring around itself while the keyboard is in it, and tells [onKeyboard].
  */
 open class CardPanel(
     var line: java.awt.Color,

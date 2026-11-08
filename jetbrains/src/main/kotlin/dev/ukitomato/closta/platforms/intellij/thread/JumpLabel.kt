@@ -11,3 +11,10 @@ fun waitingBelow(
     cardTops: List<Int>,
     viewBottom: Int,
 ): Boolean = cardTops.any { it >= viewBottom }
+
+/** How many of the cards at [tops] (in the column) start outside the view: above [viewTop] or past [viewBottom]. */
+fun waitingOffScreen(
+    tops: List<Int>,
+    viewTop: Int,
+    viewBottom: Int,
+): Int = tops.count { it < viewTop || it >= viewBottom }

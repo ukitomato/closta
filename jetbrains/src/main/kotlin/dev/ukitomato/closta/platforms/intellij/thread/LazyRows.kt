@@ -365,6 +365,9 @@ class LazyRows(
     /** Where the row [key] starts in the column (a guess until it was measured); null when there is no such row. */
     fun topOf(key: String): Int? = rows.indexOfFirst { it.key == key }.takeIf { it >= 0 }?.let { tops[it] }
 
+    /** Where the row [key] ends, where the next one starts; null when there is no such row. */
+    fun bottomOf(key: String): Int? = rows.indexOfFirst { it.key == key }.takeIf { it >= 0 }?.let { tops[it + 1] }
+
     fun totalHeight(): Int = tops[rows.size] + JBUI.scale(PAD)
 
     override fun getPreferredSize(): Dimension = Dimension(JBUI.scale(MIN_WIDTH), totalHeight())

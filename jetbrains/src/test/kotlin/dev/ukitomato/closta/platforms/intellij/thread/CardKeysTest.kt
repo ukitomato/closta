@@ -110,4 +110,16 @@ class CardKeysTest {
             assertNull(cardKey(CardKind.PLAN, VK_ENTER, 0, 3, inText))
         }
     }
+
+    @Test
+    fun noJumpHintWhileEveryWaitingCardIsOnScreen() =
+        assertEquals(CardHint.NONE, cardHint(focusInCard = false, waiting = 2, offScreen = 0))
+
+    @Test
+    fun theJumpHintWhileACardIsOffScreen() =
+        assertEquals(CardHint.JUMP, cardHint(focusInCard = false, waiting = 2, offScreen = 1))
+
+    @Test
+    fun theKeysWhileTheKeyboardIsInACard() =
+        assertEquals(CardHint.KEYS, cardHint(focusInCard = true, waiting = 2, offScreen = 1))
 }

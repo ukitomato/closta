@@ -61,6 +61,9 @@ interface ThreadSurface : Disposable {
     /** Brings the waiting card at the top into view and gives it the keyboard; false when no card waits. */
     fun focusWaitingCard(): Boolean
 
+    /** Tells how many waiting cards are outside the view, whenever the view or the cards change. */
+    var onWaitingOffScreen: (Int) -> Unit
+
     var onOpenAgent: (toolUseId: String) -> Unit
     var onReview: (askKey: String) -> Unit
 
@@ -109,6 +112,8 @@ class SwingThreadSurface(
 ) : ThreadSurface {
     override var onAnswer: (CardAnswer) -> Unit = {}
     override var onLetGo: () -> Unit = {}
+    override var onWaitingOffScreen: (Int) -> Unit = {}
+    private var offScreenTold = -1
     override var onOpenAgent: (String) -> Unit = {}
     override var onReview: (String) -> Unit = {}
     override var onSignIn: () -> Unit = {}
@@ -186,7 +191,7 @@ class SwingThreadSurface(
             toolTipText = ClostaBundle.message("thread.toLatest")
             isVisible = false
             putClientProperty("JButton.buttonType", "roundRect")
-            addActionListener { toBottom() }
+            addActionListener { if (text == null || !focusWaitingCard()) toBottom() }
         }
 
     // The cards that wait for an answer, by key: the jump says so when one of them is below the view.
@@ -307,6 +312,19 @@ class SwingThreadSurface(
      * accent, when one does.
      */
     private fun showJump() {
+        val view = scroll.viewport.viewRect
+        // A card with any part in sight is on screen, though its top is not.
+        val unseen =
+            waiting.filter { key ->
+                val top = column.topOf(key) ?: return@filter false
+                val bottom = column.bottomOf(key) ?: top
+                bottom <= view.y || top >= view.y + view.height
+            }
+        val off = waitingOffScreen(unseen.mapNotNull(column::topOf), view.y, view.y + view.height)
+        if (off != offScreenTold) {
+            offScreenTold = off
+            onWaitingOffScreen(off)
+        }
         toLatest.isVisible = !atBottom()
         if (!toLatest.isVisible) return
         val bottom = scroll.viewport.viewRect.let { it.y + it.height }

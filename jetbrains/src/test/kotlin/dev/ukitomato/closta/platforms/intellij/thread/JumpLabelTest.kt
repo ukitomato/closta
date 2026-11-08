@@ -18,4 +18,11 @@ class JumpLabelTest {
         assertFalse(waitingBelow(listOf(700), viewBottom = 800))
         assertFalse(waitingBelow(emptyList(), viewBottom = 800))
     }
+
+    @Test
+    fun aCardIsOffScreenWhenItsTopIsAboveOrBelowTheView() {
+        assertEquals(2, waitingOffScreen(listOf(-300, 100, 900), viewTop = 0, viewBottom = 800))
+        assertEquals(0, waitingOffScreen(listOf(0, 799), viewTop = 0, viewBottom = 800))
+        assertEquals(0, waitingOffScreen(emptyList(), viewTop = 0, viewBottom = 800))
+    }
 }
