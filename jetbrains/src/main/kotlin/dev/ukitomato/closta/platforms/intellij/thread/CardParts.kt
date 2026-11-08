@@ -6,7 +6,6 @@ import com.intellij.icons.AllIcons
 import com.intellij.ide.ui.laf.darcula.ui.DarculaButtonUI
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.components.ActionLink
-import com.intellij.ui.components.JBLabel
 import com.intellij.ui.dsl.builder.Panel
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
@@ -19,9 +18,7 @@ import java.awt.FlowLayout
 import javax.swing.Icon
 import javax.swing.JButton
 import javax.swing.JComponent
-import javax.swing.JLabel
 import javax.swing.JPanel
-import javax.swing.ScrollPaneConstants
 
 /** What a waiting card says first: an icon and one sentence of what Claude wants to do. */
 internal data class Headline(
@@ -136,39 +133,8 @@ internal fun fileLink(
 
 private const val LINK_MIN = 40
 
-/**
- * What a card runs on (a command, a path, a value of the input), whole: monospaced, wrapping, in a soft box. It asks
- * for little width, so a long line wraps inside the card instead of pushing it past the column's edge, and is no
- * taller than a code box ([ThreadRowViews.CODE_LINES] lines): the rest scrolls inside, so a long command never
- * stretches the card. The wheel goes on to the conversation as in a code box; the bar scrolls it.
- */
-internal fun subjectBox(subject: String): JComponent {
-    val area = ThreadRowViews.wrapping(subject).apply { font = ThreadStyle.mono }
-    val scroll =
-        object : SidewaysScroll(
-            area,
-            ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
-            ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER,
-        ) {
-            // As tall as the text wrapped at the width it is given, up to the cap; the width is the row's (narrow).
-            override fun getPreferredSize(): Dimension {
-                val line = area.getFontMetrics(area.font).height
-                return Dimension(JBUI.scale(NARROW), minOf(area.preferredSize.height, line * ThreadRowViews.CODE_LINES))
-            }
-        }.apply {
-            border = JBUI.Borders.empty()
-            isOpaque = false
-            viewport.isOpaque = false
-        }
-    return narrow().apply {
-        layout = BorderLayout()
-        border = JBUI.Borders.empty(ThreadStyle.PAD_V, ThreadStyle.PAD_H)
-        add(scroll, BorderLayout.CENTER)
-    }
-}
-
-/** A label for text from the conversation (an input's key): never read as HTML. */
-internal fun plainLabel(text: String): JLabel = JBLabel(text).apply { putClientProperty("html.disable", true) }
+/** The little width a [narrow] box asks for. */
+internal fun narrowWidth(): Int = JBUI.scale(NARROW)
 
 /** A soft box that asks for little width: a cell that fills its row gives it the row's width. */
 internal fun narrow(): RoundedPanel =

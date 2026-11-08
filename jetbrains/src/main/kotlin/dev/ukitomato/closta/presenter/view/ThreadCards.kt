@@ -28,10 +28,20 @@ data class PermissionCard(
     val failure: String?,
     /** The change an `Edit` or `Write` asks to make, as a small diff; null for any other tool. */
     val diff: EditDiff? = null,
-    /** Every key of the input with its value, for a tool other than Bash and the file tools; empty for those. */
+    /**
+     * The input's keys and values besides [subject]: every key for another tool, every key but `command` and
+     * `description` for Bash, every key but the path for MultiEdit and NotebookEdit; none for Edit and Write (their
+     * [diff] shows the change) and Read.
+     */
     val inputFields: List<InputField> = emptyList(),
     /** Whether [subject] or any of [inputFields] had a hidden or bidirectional character, now shown as a mark. */
     val hiddenMarked: Boolean = false,
+    /** Whether [subject] is one of [inputFields] (another tool's first string), so it is not shown a second time. */
+    val subjectInFields: Boolean = false,
+    /** Whether a Bash call asks to run outside the sandbox (`dangerouslyDisableSandbox` is true). */
+    val sandboxOff: Boolean = false,
+    /** A file tool's path as the request gives it, to open; [subject] is that path with hidden characters marked. */
+    val rawPath: String? = null,
 ) : ThreadCard
 
 /** One key of a tool's input and its value: a string as it is, any other value as compact JSON, hidden ones marked. */
@@ -70,6 +80,7 @@ data class CardRow(
 
 private val BY_COMMAND = setOf("Bash")
 private val BY_FILE = setOf("Edit", "Write", "Read", "NotebookEdit", "MultiEdit")
+private val WITHOUT_FIELDS = setOf("Edit", "Write", "Read")
 private const val ASK_TOOL = "AskUserQuestion"
 
 /** The card for [approval]. */
@@ -99,12 +110,14 @@ private fun questionCardOf(approval: ApprovalRecord): QuestionCard {
 private fun permissionCardOf(approval: ApprovalRecord): PermissionCard {
     val input = approval.input as? JsonObject
     val tool = approval.toolName ?: "?"
-    val subject = subjectOf(tool, input)?.let(::visible)
+    val (subjectKey, raw) = subjectOf(tool, input) ?: (null to null)
+    val subject = raw?.let(::visible)
+    val left = setOfNotNull(subjectKey, "description".takeIf { tool in BY_COMMAND })
     val fields =
-        if (input == null || tool in BY_COMMAND || tool in BY_FILE) {
+        if (input == null || tool in WITHOUT_FIELDS) {
             emptyList()
         } else {
-            input.entries.map { (key, value) ->
+            input.entries.filter { it.key !in left }.map { (key, value) ->
                 visible(key) to visible((value as? JsonString)?.value ?: JsonText.compact(value))
             }
         }
@@ -118,20 +131,29 @@ private fun permissionCardOf(approval: ApprovalRecord): PermissionCard {
         editDiff(tool, input),
         fields.map { (key, value) -> InputField(key.text, value.text) },
         subject?.hadHidden == true || fields.any { (key, value) -> key.hadHidden || value.hadHidden },
+        subjectInFields = subject != null && subjectKey == null,
+        sandboxOff = tool in BY_COMMAND && input?.get("dangerouslyDisableSandbox").isTrue(),
+        rawPath = raw.takeIf { tool in BY_FILE },
     )
 }
 
 private fun JsonValue?.isTrue() = this == JsonBool.TRUE
 
+/**
+ * The subject and the key it is under: the command or the path; or another tool's first string, under no key, as it
+ * stays among the fields.
+ */
 private fun subjectOf(
     tool: String,
     input: JsonObject?,
-): String? {
+): Pair<String?, String>? {
     input ?: return null
+
+    fun keyed(key: String): Pair<String?, String>? = input.string(key)?.let { key to it }
     return when (tool) {
-        in BY_COMMAND -> input.string("command")
-        in BY_FILE -> input.string("file_path") ?: input.string("notebook_path")
-        else -> input.values.firstNotNullOfOrNull { (it as? JsonString)?.value }
+        in BY_COMMAND -> keyed("command")
+        in BY_FILE -> keyed("file_path") ?: keyed("notebook_path")
+        else -> input.values.firstNotNullOfOrNull { (it as? JsonString)?.value }?.let { null to it }
     }
 }
 

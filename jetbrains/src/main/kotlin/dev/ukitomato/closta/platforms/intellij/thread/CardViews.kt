@@ -202,36 +202,21 @@ class CardViews(
                         label(headline.text).bold().gap(RightGap.SMALL).applyToComponent { toolTipText = card.toolName }
                         val path = card.subject
                         if (headline.file != null && path != null) {
-                            cell(fileLink(headline.file, path) { openFile(path) })
+                            // Shown with its hidden characters marked, opened as the request gives it.
+                            cell(fileLink(headline.file, path) { openFile(card.rawPath ?: path) })
                         }
                     }
-                    val diff = card.diff
-                    when {
-                        diff != null -> {
-                            row { cell(diffBox(diff)).align(AlignX.FILL) }
-                            row {
-                                cell(diffNote(diff))
-                                link(ClostaBundle.message("thread.permission.openDiff")) {
-                                    approvals(card.requestId)?.let(openDiff)
-                                }
-                            }
-                        }
-                        // Another tool's input, every key on its own line: its first string is among them.
-                        card.inputFields.isNotEmpty() ->
-                            card.inputFields.forEach { field ->
-                                row(plainLabel(field.key)) { cell(subjectBox(field.value)).align(AlignX.FILL) }
-                            }
-                        // A file's path is the headline's link already (Read): it is not shown a second time.
-                        headline.file == null ->
-                            card.subject?.let { subject -> row { cell(subjectBox(subject)).align(AlignX.FILL) } }
-                    }
-                    if (card.hiddenMarked) {
+                    card.diff?.let { diff ->
+                        row { cell(diffBox(diff)).align(AlignX.FILL) }
                         row {
-                            icon(AllIcons.General.Warning).gap(RightGap.SMALL)
-                            val warning = StringUtil.escapeXmlEntities(ClostaBundle.message("thread.permission.hidden"))
-                            text(warning, MAX_LINE_LENGTH_WORD_WRAP).align(AlignX.FILL).resizableColumn()
+                            cell(diffNote(diff))
+                            link(ClostaBundle.message("thread.permission.openDiff")) {
+                                approvals(card.requestId)?.let(openDiff)
+                            }
                         }
                     }
+                    // A file's path is the headline's link already: it is not shown a second time.
+                    inputRows(this, card, pathShown = headline.file != null)
                     row { cell(buttonLine(buttons)).align(AlignX.FILL) }.topGap(TopGap.SMALL)
                     if (keep != null) {
                         // The words and the drop-down wrap like the buttons, so the drop-down stays in a narrow card.

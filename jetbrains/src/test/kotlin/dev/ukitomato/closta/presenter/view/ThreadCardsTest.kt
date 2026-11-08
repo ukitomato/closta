@@ -245,4 +245,119 @@ class ThreadCardsTest {
         assertEquals(listOf(InputField("re<U+200B>po", "my-app")), byKey.inputFields)
         assertTrue(byKey.hiddenMarked)
     }
+
+    @Test
+    fun `a Bash card shows every key but the command and its description`() {
+        val (card, _) =
+            permissionCard(
+                "Bash",
+                dev.ukitomato.closta.presenter.tree.JsonObject.of(
+                    "command" to str("ls"),
+                    "description" to str("d"),
+                    "dangerouslyDisableSandbox" to dev.ukitomato.closta.presenter.tree.JsonBool.TRUE,
+                    "timeout" to
+                        dev.ukitomato.closta.presenter.tree.JsonNumber
+                            .of(5L),
+                ),
+            )
+        assertEquals("ls", card.subject)
+        assertEquals(
+            listOf(InputField("dangerouslyDisableSandbox", "true"), InputField("timeout", "5")),
+            card.inputFields,
+        )
+        assertTrue(card.sandboxOff)
+        assertFalse(card.subjectInFields)
+    }
+
+    @Test
+    fun `a Bash card with the sandbox on does not warn`() {
+        val (card, _) =
+            permissionCard(
+                "Bash",
+                dev.ukitomato.closta.presenter.tree.JsonObject.of(
+                    "command" to str("ls"),
+                    "dangerouslyDisableSandbox" to dev.ukitomato.closta.presenter.tree.JsonBool.FALSE,
+                ),
+            )
+        assertFalse(card.sandboxOff)
+    }
+
+    @Test
+    fun `a NotebookEdit card shows its new source`() {
+        val (card, _) =
+            permissionCard(
+                "NotebookEdit",
+                dev.ukitomato.closta.presenter.tree.JsonObject
+                    .of("notebook_path" to str("/p/n.ipynb"), "new_source" to str("print(1)")),
+            )
+        assertEquals("/p/n.ipynb", card.subject)
+        assertEquals(listOf(InputField("new_source", "print(1)")), card.inputFields)
+    }
+
+    @Test
+    fun `a MultiEdit card shows its edits`() {
+        val edit =
+            dev.ukitomato.closta.presenter.tree.JsonObject
+                .of("old_string" to str("a"), "new_string" to str("b"))
+        val (card, _) =
+            permissionCard(
+                "MultiEdit",
+                dev.ukitomato.closta.presenter.tree.JsonObject.of(
+                    "file_path" to str("/p/a.kt"),
+                    "edits" to
+                        dev.ukitomato.closta.presenter.tree
+                            .JsonArray(listOf(edit)),
+                ),
+            )
+        assertEquals(listOf(InputField("edits", "[{\"old_string\":\"a\",\"new_string\":\"b\"}]")), card.inputFields)
+    }
+
+    @Test
+    fun `Edit and Write show their diff and no fields`() {
+        val (card, _) =
+            permissionCard(
+                "Write",
+                dev.ukitomato.closta.presenter.tree.JsonObject
+                    .of("file_path" to str("/p/a.kt"), "content" to str("x")),
+            )
+        assertEquals(emptyList<InputField>(), card.inputFields)
+        assertTrue(card.diff != null)
+    }
+
+    @Test
+    fun `another tool's subject is one of its fields`() {
+        val (card, _) =
+            permissionCard(
+                "mcp__repo__run",
+                dev.ukitomato.closta.presenter.tree.JsonObject
+                    .of("repo" to str("my-app")),
+            )
+        assertTrue(card.subjectInFields)
+    }
+
+    @Test
+    fun `a path with a hidden character is shown marked and opened as it is`() {
+        val override = Char(0x202E).toString()
+        val path = "/p/${override}txt.kt"
+        val (card, _) =
+            permissionCard(
+                "Read",
+                dev.ukitomato.closta.presenter.tree.JsonObject
+                    .of("file_path" to str(path)),
+            )
+        assertEquals("/p/<U+202E>txt.kt", card.subject)
+        assertEquals(path, card.rawPath)
+        assertTrue(card.hiddenMarked)
+    }
+
+    @Test
+    fun `a command has no path to open`() {
+        val (card, _) =
+            permissionCard(
+                "Bash",
+                dev.ukitomato.closta.presenter.tree.JsonObject
+                    .of("command" to str("ls")),
+            )
+        assertEquals(null, card.rawPath)
+    }
 }
