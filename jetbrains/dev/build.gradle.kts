@@ -25,9 +25,10 @@ dependencies {
     implementation(testFixtures(project(":")) as ModuleDependency) { isTransitive = false }
 }
 
-// Build and test on JDK 25, which IntelliJ 2026.2 needs. sourceCompatibility stays at the toolchain's 25 because the
-// platform plugin's verifyPluginProjectConfiguration warns when it is lower; the bytecode (Kotlin and Java) stays 21
-// so it still loads in the older IDE runtimes in range.
+// Build and test on JDK 25, which IntelliJ 2026.2 needs. Every IDE in range (262+) runs on JBR 25, so 21 is a
+// conservative bytecode target, not a runtime floor. sourceCompatibility stays at the toolchain's 25 because the
+// platform plugin's verifyPluginProjectConfiguration warns when it is lower. If a .java source is ever added,
+// sourceCompatibility must be aligned with the target: javac rejects `-source 25 -target 21`.
 java { targetCompatibility = JavaVersion.VERSION_21 }
 
 kotlin {
