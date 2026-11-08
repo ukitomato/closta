@@ -149,7 +149,9 @@ class GitWorktreesTest {
         hook.parentFile.mkdirs()
         hook.writeText("#!/bin/sh\ntouch '${marker.path}'\n")
         hook.setExecutable(true)
-        git(root, "worktree", "add", "-b", "control", File(dir, "control-wt").path)
+        // The repository's own hooks folder, so a global core.hooksPath cannot keep this hook from running.
+        val hooks = "core.hooksPath=" + hook.parentFile.absolutePath
+        git(root, "-c", hooks, "worktree", "add", "-b", "control", File(dir, "control-wt").path)
         assertTrue(marker.exists(), "the control hook did not run, so the test above proves nothing")
     }
 
