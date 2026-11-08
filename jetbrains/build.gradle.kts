@@ -185,9 +185,7 @@ abstract class ProtocolFixtures : CommandLineArgumentProvider {
     override fun asArguments(): List<String> = listOf("-DprotocolFixtures.dir=${dir.get().asFile.absolutePath}")
 }
 
-tasks.test {
-    useJUnitPlatform()
-
+fun Test.configureClostaTests() {
     // The IntelliJ Platform plugin puts the whole IDE on every Test task's classpath, this suite
     // included. One of those jars, lib/testFramework.jar, registers a JUnit 5 LauncherSessionListener
     // (com.intellij.testFramework.junit5.impl.JUnit5TestEnvironmentInitializer) that extends a JUnit 4
@@ -210,6 +208,23 @@ tasks.test {
     // A run asked to rewrite the goldens must run even when nothing else changed.
     inputs.property("presenterGoldenUpdate", providers.environmentVariable("PRESENTER_GOLDEN_UPDATE").orElse(""))
     inputs.property("foldGoldenUpdate", providers.environmentVariable("FOLD_GOLDEN_UPDATE").orElse(""))
+}
+
+tasks.test {
+    useJUnitPlatform { excludeTags("perf") }
+    configureClostaTests()
+}
+
+// Wall-clock budgets: they measure time, so they run apart from check and do not gate the build.
+val perfTest by tasks.registering(Test::class) {
+    description = "Runs the timing budget tests (tagged perf), judged by the median of five runs."
+    group = "verification"
+    val suite = tasks.test
+    testClassesDirs = files(suite.map { it.testClassesDirs })
+    classpath = files(suite.map { it.classpath })
+    useJUnitPlatform { includeTags("perf") }
+    configureClostaTests()
+    testLogging.showStandardStreams = true
 }
 
 detekt {
