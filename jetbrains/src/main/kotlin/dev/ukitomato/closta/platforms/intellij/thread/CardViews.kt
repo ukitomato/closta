@@ -324,7 +324,7 @@ class CardViews(
     /**
      * A waiting question card: each question with its options, each option's description under it, and Other with a
      * line to write an answer of one's own. Answer is pressable once every question has an answer (its tooltip says so
-     * until then); Ctrl+Enter answers, Esc leaves the questions unanswered.
+     * until then); Ctrl+Enter answers, Esc leaves the questions unanswered. Esc in the Other line only leaves the line.
      */
     private inner class QuestionCardView(
         private val card: QuestionCard,

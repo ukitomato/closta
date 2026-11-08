@@ -10,6 +10,7 @@ import java.awt.event.InputEvent.SHIFT_DOWN_MASK
 import java.awt.event.KeyEvent.VK_1
 import java.awt.event.KeyEvent.VK_2
 import java.awt.event.KeyEvent.VK_3
+import java.awt.event.KeyEvent.VK_D
 import java.awt.event.KeyEvent.VK_ENTER
 import java.awt.event.KeyEvent.VK_ESCAPE
 import java.awt.event.KeyEvent.VK_NUMPAD2
@@ -122,4 +123,27 @@ class CardKeysTest {
     @Test
     fun theKeysWhileTheKeyboardIsInACard() =
         assertEquals(CardHint.KEYS, cardHint(focusInCard = true, waiting = 2, offScreen = 1))
+
+    @Test
+    fun theDetailPanesPermissionTakesTheThreadsKeys() {
+        assertEquals(CardKey.Choose(0), cardKey(CardKind.PERMISSION, VK_1, 0, 2, inText = false))
+        assertEquals(CardKey.Choose(1), cardKey(CardKind.PERMISSION, VK_2, 0, 2, inText = false))
+        assertNull(cardKey(CardKind.PERMISSION, VK_3, 0, 2, inText = false))
+        assertNull(cardKey(CardKind.PERMISSION, VK_D, ALT_DOWN_MASK, 2, inText = false))
+    }
+
+    @Test
+    fun ctrlEnterNeverAnswersAPermissionOrAPlan() {
+        listOf(CTRL_DOWN_MASK, META_DOWN_MASK).forEach { mask ->
+            assertNull(cardKey(CardKind.PERMISSION, VK_ENTER, mask, 3, inText = false))
+            assertNull(cardKey(CardKind.PLAN, VK_ENTER, mask, 3, inText = false))
+        }
+    }
+
+    @Test
+    fun theJumpKeyGoesBackToTheComposerFromATextLine() {
+        CardKind.entries.forEach { kind ->
+            assertEquals(CardKey.ToComposer, cardKey(kind, VK_W, ALT_DOWN_MASK or SHIFT_DOWN_MASK, 3, inText = true))
+        }
+    }
 }

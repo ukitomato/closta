@@ -47,9 +47,10 @@ import javax.swing.Timer
  * its last reply and changes once finished; or how to resume it.
  *
  * The body follows the shown session's own view and is drawn again only when its [sessionDetail] changes. Every answer
- * goes through [gate]: only the request on screen, still waiting, after it has been shown for a moment. The answer keys
- * ([AnswerKey]) are bound here, so they work only while the keyboard is already in this pane; Esc is left to the tool
- * window (back to the editor). The pane never takes the keyboard by itself.
+ * goes through [gate]: only the request on screen, still waiting, after it has been shown for a moment. Each answer
+ * view has the conversation card's keys (1 to 3, Esc to say no, never Enter to allow), heard only while the keyboard is
+ * already in it; elsewhere in the pane Esc is left to the tool window (back to the editor). The pane never takes the
+ * keyboard by itself.
  *
  * While it is in view, the shown session counts as seen (its lease): that marks it read and keeps its notifications
  * quiet, as an open conversation does.
@@ -95,7 +96,6 @@ class SessionDetailPanel(
         withEmptyText(ClostaBundle.message("sessions.window.detail.empty"))
         header.isOpaque = false
         body.isOpaque = false
-        bindAnswerKeys(this) { answering }
         clockTick.start()
         Disposer.register(parent) {
             clockTick.stop()

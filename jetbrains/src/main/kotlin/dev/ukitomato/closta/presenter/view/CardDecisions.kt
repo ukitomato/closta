@@ -17,6 +17,17 @@ fun permissionChoice(
         else -> PermissionChoice.DENY
     }
 
+/**
+ * What the key or button at [index] decides in the sessions window's detail pane, which has the conversation card's
+ * numbers but not its Always Allow (chosen in the conversation, where its destination is): the conversation's answer
+ * ([permissionChoice]), or null where that answer keeps a suggestion. So with [hasSuggestions] 2 does nothing and 3
+ * denies, as in the conversation.
+ */
+fun detailChoice(
+    index: Int,
+    hasSuggestions: Boolean,
+): PermissionChoice? = permissionChoice(index, hasSuggestions).takeIf { it != PermissionChoice.ALLOW_KEEP }
+
 /** The suggestion kinds that save a permission rule, so a destination applies to them. */
 val RULE_KINDS = setOf("addRules", "replaceRules", "removeRules")
 

@@ -1,8 +1,6 @@
 package dev.ukitomato.closta.platforms.intellij.sessions
 
-import com.intellij.openapi.keymap.KeymapUtil
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.util.SystemInfo
 import com.intellij.openapi.util.text.StringUtil
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBTextField
@@ -16,12 +14,16 @@ import com.intellij.util.ui.UIUtil
 import dev.ukitomato.closta.core.models.ApprovalDecision
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
 import dev.ukitomato.closta.platforms.intellij.thread.CardAnswer
+import dev.ukitomato.closta.platforms.intellij.thread.CardKey
+import dev.ukitomato.closta.platforms.intellij.thread.CardKind
 import dev.ukitomato.closta.platforms.intellij.thread.CardPanel
 import dev.ukitomato.closta.platforms.intellij.thread.MarkdownBlocks
 import dev.ukitomato.closta.platforms.intellij.thread.ThreadStyle
 import dev.ukitomato.closta.platforms.intellij.thread.cardButton
+import dev.ukitomato.closta.platforms.intellij.thread.cardKeys
 import dev.ukitomato.closta.platforms.intellij.thread.diffBox
 import dev.ukitomato.closta.platforms.intellij.thread.diffNote
+import dev.ukitomato.closta.platforms.intellij.thread.enterNeverPresses
 import dev.ukitomato.closta.platforms.intellij.thread.headlineOf
 import dev.ukitomato.closta.platforms.intellij.thread.inputRows
 import dev.ukitomato.closta.platforms.intellij.thread.openEditDiff
@@ -30,65 +32,19 @@ import dev.ukitomato.closta.platforms.intellij.ui.noHtml
 import dev.ukitomato.closta.platforms.intellij.ui.plainTip
 import dev.ukitomato.closta.presenter.view.ApprovalRecord
 import dev.ukitomato.closta.presenter.view.PermissionCard
+import dev.ukitomato.closta.presenter.view.PermissionChoice
 import dev.ukitomato.closta.presenter.view.PlanCard
 import dev.ukitomato.closta.presenter.view.QuestionCard
 import dev.ukitomato.closta.presenter.view.ThreadCard
 import dev.ukitomato.closta.presenter.view.allowPayload
+import dev.ukitomato.closta.presenter.view.detailChoice
 import java.awt.BorderLayout
-import java.awt.Component
-import java.awt.KeyboardFocusManager
-import java.awt.event.ActionEvent
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
-import javax.swing.AbstractAction
-import javax.swing.JButton
 import javax.swing.JComponent
-import javax.swing.KeyStroke
 
 // The detail pane's answer views: a permission (or an edit, with its diff), a question, a plan. They look like the
-// conversation's cards but use the pane's width, and they answer only through their AnswerGate.Ask.
-
-/** The keys an answer view may take, bound on the detail pane. Esc is never one of them. */
-internal enum class AnswerKey(
-    val stroke: KeyStroke,
-) {
-    /** Enter: a permission's Allow, only while the view itself has the keyboard. */
-    ALLOW(KeyStroke.getKeyStroke("ENTER")),
-
-    /** Alt+D: a permission's Deny…. */
-    DENY(KeyStroke.getKeyStroke("alt D")),
-
-    /** Ctrl+Enter (Cmd+Enter on macOS): a question's Answer. */
-    ANSWER(KeyStroke.getKeyStroke(if (SystemInfo.isMac) "meta ENTER" else "ctrl ENTER")),
-    ;
-
-    val text: String get() = KeymapUtil.getKeystrokeText(stroke)
-}
-
-/**
- * Binds the answer keys on [pane], heard only while the keyboard is somewhere inside it, and passed to the view on
- * screen ([shown]). A key that view does not take is not consumed (it goes on to the window); Esc is never bound.
- */
-internal fun bindAnswerKeys(
-    pane: JComponent,
-    shown: () -> AnswerView?,
-) {
-    AnswerKey.entries.forEach { key ->
-        val name = "closta.sessions.detail.${key.name}"
-        pane.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(key.stroke, name)
-        pane.actionMap.put(
-            name,
-            object : AbstractAction() {
-                override fun isEnabled(): Boolean =
-                    shown()?.takes(key, KeyboardFocusManager.getCurrentKeyboardFocusManager().focusOwner) == true
-
-                override fun actionPerformed(e: ActionEvent) {
-                    shown()?.press(key)
-                }
-            },
-        )
-    }
-}
+// conversation's cards, with their keys, but use the pane's width, and they answer only through their AnswerGate.Ask.
 
 /** What an answer view works with: the [ask] it answers through and the approval record its answer is built from. */
 internal class AnswerContext(
@@ -113,14 +69,12 @@ internal fun answerView(
 
 /**
  * A card waiting in the detail pane. It takes the keyboard only when clicked (or when the user asks the window for the
- * next wait); its keys are the pane's ([AnswerKey]), which ask [takes] before [press].
+ * next wait); then it hears the conversation card's keys ([cardKeys]) anywhere in it.
  */
 internal abstract class AnswerView(
     protected val context: AnswerContext,
 ) : CardPanel(ThreadStyle.pendingLine, ThreadStyle.pendingFill, watchesKeyboard = true) {
     private val failure = JBLabel().noHtml().apply { foreground = UIUtil.getErrorForeground() }
-
-    protected abstract val keys: Set<AnswerKey>
 
     init {
         layout = BorderLayout()
@@ -139,13 +93,18 @@ internal abstract class AnswerView(
         }
     }
 
-    /** Whether [key] is this view's with the keyboard at [owner]: Enter only while this view itself has it. */
-    fun takes(
-        key: AnswerKey,
-        owner: Component?,
-    ): Boolean = key in keys && (key != AnswerKey.ALLOW || owner === this)
-
-    abstract fun press(key: AnswerKey)
+    /**
+     * Gives this view the conversation card's keys of [kind] ([cardKeys]). The view itself stays focusable, a
+     * question's too: the window puts the keyboard in it.
+     */
+    protected fun keys(
+        kind: CardKind,
+        choices: Int,
+        act: (CardKey) -> Unit,
+    ) {
+        cardKeys(this, kind, { choices }, act)
+        isFocusable = true
+    }
 
     /** What the user put in this view so far, to give the view made again for the same request ([restore]). */
     open fun draft(): Any? = null
@@ -164,7 +123,8 @@ internal abstract class AnswerView(
 }
 
 /**
- * A line hidden until [open]: a sentence to go with an answer and a button sending it; Enter in the field sends too.
+ * A line hidden until [open]: a sentence to go with an answer and a button sending it; Enter in the field sends too,
+ * Esc there only closes it ([close]).
  */
 internal class ReasonLine(
     placeholder: String,
@@ -199,6 +159,14 @@ internal class ReasonLine(
         field.requestFocusInWindow()
     }
 
+    /** Hides the line again and gives the keyboard back to [view]; what was written stays for the next [open]. */
+    fun close(view: JComponent) {
+        opened = false
+        row.visible(false)
+        view.revalidate()
+        view.requestFocusInWindow()
+    }
+
     /** What the user wrote, if the line was open; null when it was not. */
     fun draft(): String? = if (opened) field.text else null
 
@@ -211,32 +179,27 @@ internal class ReasonLine(
     }
 }
 
-/** A button whose [mnemonic] letter is underlined while Alt is held; the key itself is the pane's, not the window's. */
-internal fun keyedButton(
-    text: String,
-    mnemonic: Char,
-    act: () -> Unit,
-): JButton {
-    val at = text.indexOfFirst { it.uppercaseChar() == mnemonic.uppercaseChar() }
-    return object : JButton(text) {
-        override fun getDisplayedMnemonicIndex(): Int = at
-    }.apply {
-        isFocusable = false
-        addActionListener { act() }
-    }
-}
-
 /**
- * A permission, or an edit with its diff: Allow (Enter) or Deny… (Alt+D), which opens a sentence to go with the
- * denial. "Don't ask again" is chosen in the conversation's card only, where its destination is.
+ * A permission, or an edit with its diff, with the conversation card's numbers ([detailChoice]): Allow (1), or Deny…
+ * (2, or 3 when the CLI offered a rule to keep), which opens a sentence to go with the denial. Esc denies without one;
+ * Enter never allows. "Don't ask again" is chosen in the conversation's card only, where its destination is.
  */
 internal class PermissionPane(
     private val card: PermissionCard,
     context: AnswerContext,
 ) : AnswerView(context) {
-    override val keys = setOf(AnswerKey.ALLOW, AnswerKey.DENY)
-    private val allow = cardButton(ClostaBundle.message("sessions.window.detail.allow"), main = true) { allow() }
-    private val deny = keyedButton(ClostaBundle.message("sessions.window.detail.deny"), 'D') { openDeny() }
+    private val hasSuggestions = card.suggestions.isNotEmpty()
+
+    /** Deny's number: the conversation's, the last of its buttons (after Always Allow when there is one). */
+    private val denyNumber =
+        listOfNotNull(
+            PermissionChoice.ALLOW,
+            PermissionChoice.ALLOW_KEEP.takeIf { hasSuggestions },
+            PermissionChoice.DENY,
+        ).size
+    private val allow =
+        cardButton(ClostaBundle.message("sessions.window.detail.allow"), main = true) { allow() }.enterNeverPresses()
+    private val deny = cardButton(ClostaBundle.message("sessions.window.detail.deny", denyNumber)) { openDeny() }
     private val reason =
         ReasonLine(
             ClostaBundle.message("sessions.window.detail.deny.placeholder"),
@@ -283,26 +246,23 @@ internal class PermissionPane(
                     }
                 }.topGap(TopGap.SMALL)
                 reason.addTo(this)
-                row {
-                    comment(
-                        ClostaBundle.message(
-                            "sessions.window.detail.permission.keys",
-                            AnswerKey.ALLOW.text,
-                            AnswerKey.DENY.text,
-                        ),
-                    )
-                }
+                row { comment(ClostaBundle.message("sessions.window.detail.permission.keys", denyNumber)) }
                 failureRow(this, card.failure)
             }
         content.isOpaque = false
         add(content, BorderLayout.CENTER)
-    }
-
-    override fun press(key: AnswerKey) {
-        when (key) {
-            AnswerKey.ALLOW -> allow()
-            AnswerKey.DENY -> openDeny()
-            AnswerKey.ANSWER -> Unit
+        keys(CardKind.PERMISSION, denyNumber) { key ->
+            when (key) {
+                is CardKey.Choose ->
+                    when (detailChoice(key.index, hasSuggestions)) {
+                        PermissionChoice.ALLOW -> allow()
+                        PermissionChoice.DENY -> openDeny()
+                        PermissionChoice.ALLOW_KEEP, null -> Unit
+                    }
+                CardKey.Deny -> deny("")
+                CardKey.LeaveText -> reason.close(this)
+                CardKey.Answer, CardKey.ToComposer -> Unit
+            }
         }
     }
 
