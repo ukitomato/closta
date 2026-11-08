@@ -76,6 +76,23 @@ class PluginXmlTest {
     }
 
     @Test
+    fun theToolsMenuNamesItsActionsWithoutThePrefix() {
+        val tools = elements("group").single { it.getAttribute("id") == "Closta.Tools" }
+        val own =
+            (0 until tools.childNodes.length).map { tools.childNodes.item(it) }.filterIsInstance<Element>().filter {
+                it.tagName ==
+                    "action"
+            }
+        own.forEach { action ->
+            val id = action.getAttribute("id")
+            assertEquals(1, action.getElementsByTagName("override-text").length, id)
+            val menu = words.getProperty("action.$id.MainMenu.text")
+            assertNotNull(menu, id)
+            assertFalse(menu.startsWith("Closta:"), id)
+        }
+    }
+
+    @Test
     fun everyActionIsWordedInTheBundle() =
         elements("action").forEach {
             val id = it.getAttribute("id")

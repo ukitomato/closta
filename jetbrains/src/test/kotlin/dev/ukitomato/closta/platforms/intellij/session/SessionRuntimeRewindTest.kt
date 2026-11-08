@@ -119,7 +119,7 @@ class SessionRuntimeRewindTest {
                 assertEquals(SessionFailure.RewindPointMissing, failed.failure, name)
                 assertEquals(0, spawner.calls.size, "$name: nothing was spawned, not even the version probe")
             }
-            assertTrue("History" in SessionFailure.RewindPointMissing.remedy)
+            assertTrue("Resume a Saved Conversation" in SessionFailure.RewindPointMissing.remedy)
             parent.cancel()
         }
 

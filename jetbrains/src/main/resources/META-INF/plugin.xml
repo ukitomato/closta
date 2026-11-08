@@ -75,6 +75,7 @@
             <add-to-group group-id="ToolsMenu" anchor="last"/>
             <action id="Closta.NewChat" class="dev.ukitomato.closta.platforms.intellij.chat.NewChatAction"
                     icon="/icons/closta.svg">
+                <override-text place="MainMenu"/>
                 <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt shift O"/>
                 <synonym text="Claude"/>
                 <synonym text="New Chat"/>
@@ -82,23 +83,27 @@
             </action>
             <action id="Closta.NewSidebarChat" class="dev.ukitomato.closta.platforms.intellij.chat.NewSidebarChatAction"
                     icon="AllIcons.General.Add">
+                <override-text place="MainMenu"/>
                 <add-to-group group-id="Closta.Sessions.Toolbar" anchor="first"/>
                 <synonym text="Claude"/>
                 <synonym text="New Chat in Sidebar"/>
             </action>
             <action id="Closta.NewWorktreeChat" class="dev.ukitomato.closta.platforms.intellij.chat.NewWorktreeChatAction"
                     icon="AllIcons.Vcs.Branch">
+                <override-text place="MainMenu"/>
                 <synonym text="Claude"/>
                 <synonym text="New Worktree Chat"/>
             </action>
             <action id="Closta.ResumeChat" class="dev.ukitomato.closta.platforms.intellij.chat.ResumeChatAction"
                     icon="AllIcons.Vcs.History">
+                <override-text place="MainMenu"/>
                 <synonym text="Claude"/>
                 <synonym text="Resume"/>
                 <synonym text="Resume Chat"/>
             </action>
             <action id="Closta.NextWaiting" class="dev.ukitomato.closta.platforms.intellij.sessions.NextWaitingAction"
                     icon="AllIcons.Actions.Forward">
+                <override-text place="MainMenu"/>
                 <add-to-group group-id="Closta.Sessions.Toolbar" anchor="after"
                               relative-to-action="Closta.ResumeSidebarChat"/>
                 <keyboard-shortcut keymap="$default" first-keystroke="control alt shift PERIOD"/>
