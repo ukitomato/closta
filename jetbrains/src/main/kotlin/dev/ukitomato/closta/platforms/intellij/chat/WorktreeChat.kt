@@ -15,6 +15,8 @@ import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
+import com.intellij.openapi.vcs.ProjectLevelVcsManager
+import com.intellij.platform.ide.progress.withBackgroundProgress
 import dev.ukitomato.closta.core.interfaces.IdeResult
 import dev.ukitomato.closta.core.interfaces.WorktreeCreated
 import dev.ukitomato.closta.core.interfaces.WorktreeRequest
@@ -40,7 +42,7 @@ class NewWorktreeChatAction :
 
     override fun update(event: AnActionEvent) {
         val project = event.project
-        event.presentation.isEnabled = project?.basePath != null && worktreeChatAllowed(project)
+        event.presentation.isEnabled = project?.basePath != null && worktreeChatAllowed(project) && hasGitRoot(project)
     }
 
     override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
@@ -62,9 +64,11 @@ fun openWorktreeChat(project: Project) {
     project.service<ClaudeSessionService>().viewScope(once).launch {
         try {
             val result =
-                withContext(Dispatchers.IO) {
-                    val taken = File(root, ".claude/worktrees").list()?.toSet().orEmpty()
-                    GitWorktrees(root).create(WorktreeRequest(worktreeName(LocalDateTime.now(), taken)))
+                withBackgroundProgress(project, ClostaBundle.message("chat.worktree.creating")) {
+                    withContext(Dispatchers.IO) {
+                        val taken = File(root, ".claude/worktrees").list()?.toSet().orEmpty()
+                        GitWorktrees(root).create(WorktreeRequest(worktreeName(LocalDateTime.now(), taken)))
+                    }
                 }
             withContext(Dispatchers.EDT) {
                 when (result) {
@@ -86,6 +90,9 @@ fun openWorktreeChat(project: Project) {
 /** The one place that decides whether a worktree may be made: only in a trusted project (the IDE's Safe Mode). */
 private fun worktreeChatAllowed(project: Project?): Boolean =
     project != null && TrustedProjects.isProjectTrusted(project)
+
+private fun hasGitRoot(project: Project): Boolean =
+    ProjectLevelVcsManager.getInstance(project).allVcsRoots.any { it.vcs?.name == "Git" }
 
 private fun opened(
     project: Project,
