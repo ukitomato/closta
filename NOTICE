@@ -9,34 +9,23 @@ Closta is not affiliated with or endorsed by Anthropic. Claude is a trademark of
 Third-party software bundled in the plugin distribution
 -------------------------------------------------------------------------------
 
-The plugin zip ships the following libraries unmodified in its lib/ folder. Each jar keeps
-its own LICENSE and NOTICE files under META-INF/.
+The plugin zip ships the following libraries unmodified in its lib/ folder. The full list and
+the licence texts are in META-INF/THIRD-PARTY-NOTICES.txt of the main plugin jar. The AWS SDK
+jars carry their own META-INF/NOTICE.txt.
 
 Apache License, Version 2.0:
-  - Gson (com.google.code.gson:gson) - Copyright Google LLC
-  - Error Prone annotations (com.google.errorprone:error_prone_annotations) - Copyright Google LLC
-  - kotlinx.collections.immutable (org.jetbrains.kotlinx:kotlinx-collections-immutable-jvm) - Copyright JetBrains s.r.o.
-  - Kotlin standard library (org.jetbrains.kotlin:kotlin-stdlib) - Copyright JetBrains s.r.o.
-  - JetBrains Java Annotations (org.jetbrains:annotations) - Copyright JetBrains s.r.o.
-  - AWS SDK for Java 2.0 (software.amazon.awssdk:*) and AWS Event Stream (software.amazon.eventstream:eventstream)
+  - Gson (com.google.code.gson) - Apache-2.0 - Copyright Google LLC
+  - kotlinx.collections.immutable (org.jetbrains.kotlinx) - Apache-2.0 - Copyright JetBrains s.r.o.
+  - AWS SDK for Java 2.0 (software.amazon.awssdk) - Apache-2.0 - Copyright Amazon.com, Inc. or its affiliates
       AWS SDK for Java 2.0
       Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
       This product includes software developed by Amazon Technologies, Inc (http://www.amazon.com/).
       The SDK's own third-party notices (including Jackson-core, shaded in third-party-jackson-core)
       are in the META-INF/NOTICE.txt of its jars.
-  - Apache HttpClient and HttpCore (org.apache.httpcomponents:*)
-      Copyright 1999-2022 The Apache Software Foundation
-  - Apache Commons Codec (commons-codec:commons-codec)
-      Copyright 2002-2024 The Apache Software Foundation
-  - Apache Commons Logging (commons-logging:commons-logging)
-      Copyright 2003-2014 The Apache Software Foundation
-  This product includes software developed at The Apache Software Foundation (https://www.apache.org/).
-
-MIT License:
-  - SLF4J API (org.slf4j:slf4j-api) - Copyright (c) 2004-2022 QOS.ch Sarl
+  - AWS Event Stream (software.amazon.eventstream) - Apache-2.0 - Copyright Amazon.com, Inc. or its affiliates
 
 MIT No Attribution (MIT-0):
-  - Reactive Streams (org.reactivestreams:reactive-streams)
+  - Reactive Streams (org.reactivestreams) - MIT-0
 
 -------------------------------------------------------------------------------
 Code adapted from other projects (tests only, not in the plugin distribution)

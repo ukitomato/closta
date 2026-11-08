@@ -5,6 +5,7 @@ import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask
 import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.io.File
+import java.util.zip.ZipFile
 
 plugins {
     id("org.jetbrains.kotlin.jvm")
@@ -792,6 +793,164 @@ configurations.runtimeClasspath {
 
 tasks.named("check") {
     dependsOn(checkBundledLibraries)
+}
+
+// --- Licences and notices ------------------------------------------------------------------------
+// The jar carries LICENSE, NOTICE and a list of every bundled third-party module with its licence text, because the
+// Apache-2.0 and MIT terms require the notices to travel with the binary. The list is generated from runtimeClasspath
+// so a new dependency fails the build until it is added to the table and to NOTICE.
+
+abstract class ThirdPartyNotices : DefaultTask() {
+    @get:Input
+    abstract val modules: ListProperty<String>
+
+    // On runtimeClasspath but not in the zip: the plugin drops what the IDE provides.
+    @get:Input
+    abstract val notBundled: SetProperty<String>
+
+    // key (group or group:module) -> "display name|SPDX|copyright holder"
+    @get:Input
+    abstract val licenseTable: MapProperty<String, String>
+
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.NAME_ONLY)
+    abstract val jars: ConfigurableFileCollection
+
+    // SPDX id -> licence text file
+    @get:Input
+    abstract val licenseTextNames: MapProperty<String, String>
+
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.NAME_ONLY)
+    abstract val licenseTexts: ConfigurableFileCollection
+
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val noticeFile: RegularFileProperty
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    private class Entry(val name: String, val spdx: String, val holder: String)
+
+    private fun entry(key: String): Entry? =
+        licenseTable.get()[key]?.split('|', limit = 3)?.let { Entry(it[0], it[1], it.getOrElse(2) { "" }) }
+
+    @TaskAction
+    fun generate() {
+        val coordinates = modules.get().filter { it.substringBeforeLast(':') !in notBundled.get() }.sorted()
+        val entries = coordinates.associateWith { c ->
+            val (group, module) = c.split(':')
+            entry("$group:$module") ?: entry(group)
+        }
+        val missing = entries.filterValues { it == null }.keys
+        if (missing.isNotEmpty()) {
+            throw GradleException(
+                buildString {
+                    appendLine("The plugin would bundle modules without a licence entry:")
+                    missing.forEach { appendLine("  $it") }
+                    appendLine("Add its group (or group:module) to the licence table in build.gradle.kts and a bullet to NOTICE.")
+                },
+            )
+        }
+        val tableNames = coordinates.map { entries.getValue(it)!!.name }.toSortedSet()
+        val noticeNames =
+            noticeFile.get().asFile.readLines()
+                .filter { it.startsWith("  - ") && " (" in it }
+                .map { it.removePrefix("  - ").substringBefore(" (") }
+                .toSortedSet()
+        if (tableNames != noticeNames) {
+            throw GradleException(
+                buildString {
+                    appendLine("The third-party list in NOTICE does not match the licence table in build.gradle.kts:")
+                    (tableNames - noticeNames).forEach { appendLine("  missing from NOTICE: $it") }
+                    (noticeNames - tableNames).forEach { appendLine("  not bundled or not in the table: $it") }
+                    appendLine("Add or remove the bullet \"  - <name> (<group>) - <SPDX> - <holder>\" in NOTICE.")
+                },
+            )
+        }
+
+        val out = StringBuilder()
+        out.appendLine("Third-party notices")
+        out.appendLine()
+        out.appendLine("These libraries are bundled unmodified in the lib/ folder of the Closta plugin zip.")
+        out.appendLine()
+        coordinates.forEach { c ->
+            val e = entries.getValue(c)!!
+            out.append("$c \u2014 ${e.name} \u2014 ${e.spdx}")
+            if (e.holder.isNotEmpty()) out.append(" \u2014 ${e.holder}")
+            out.appendLine()
+        }
+
+        val seen = HashSet<String>()
+        val byGroup = sortedMapOf<String, MutableList<String>>()
+        coordinates.forEach { c ->
+            val (group, module, version) = c.split(':')
+            val jar = jars.files.firstOrNull { it.name == "$module-$version.jar" } ?: return@forEach
+            ZipFile(jar).use { zip ->
+                listOf("META-INF/NOTICE", "META-INF/NOTICE.txt").forEach { name ->
+                    val text = zip.getEntry(name)?.let { zip.getInputStream(it).readBytes().toString(Charsets.UTF_8).trim() }
+                    if (!text.isNullOrEmpty() && seen.add(text)) byGroup.getOrPut(group) { mutableListOf() }.add(text)
+                }
+            }
+        }
+        byGroup.forEach { (group, texts) ->
+            out.appendLine()
+            out.appendLine("Notices shipped in the $group jars")
+            out.appendLine("-".repeat(72))
+            texts.forEach {
+                out.appendLine(it)
+                out.appendLine()
+            }
+        }
+
+        val used = coordinates.map { entries.getValue(it)!!.spdx }.toSortedSet()
+        used.forEach { spdx ->
+            val fileName = licenseTextNames.get()[spdx] ?: throw GradleException("No licence text is configured for $spdx")
+            val file = licenseTexts.files.first { it.name == fileName }
+            out.appendLine()
+            out.appendLine("=".repeat(72))
+            out.appendLine("License text: $spdx")
+            out.appendLine("=".repeat(72))
+            out.appendLine(file.readText().trim())
+        }
+
+        val target = outputDir.get().file("META-INF/THIRD-PARTY-NOTICES.txt").asFile
+        target.parentFile.mkdirs()
+        target.writeText(out.toString())
+    }
+}
+
+val thirdPartyNotices by tasks.registering(ThirdPartyNotices::class) {
+    description = "Generates META-INF/THIRD-PARTY-NOTICES.txt from the bundled modules."
+    val artifacts = configurations.runtimeClasspath.flatMap { it.incoming.artifacts.resolvedArtifacts }
+    modules =
+        artifacts.map { all ->
+            all.mapNotNull { it.id.componentIdentifier as? ModuleComponentIdentifier }
+                .map { "${it.group}:${it.module}:${it.version}" }
+        }
+    notBundled = setOf("org.jetbrains.kotlin:kotlin-stdlib", "org.jetbrains:annotations")
+    jars.from(configurations.runtimeClasspath)
+    licenseTable =
+        mapOf(
+            "com.google.code.gson" to "Gson|Apache-2.0|Copyright Google LLC",
+            "org.jetbrains.kotlinx" to "kotlinx.collections.immutable|Apache-2.0|Copyright JetBrains s.r.o.",
+            "software.amazon.awssdk" to "AWS SDK for Java 2.0|Apache-2.0|Copyright Amazon.com, Inc. or its affiliates",
+            "software.amazon.eventstream" to "AWS Event Stream|Apache-2.0|Copyright Amazon.com, Inc. or its affiliates",
+            "org.reactivestreams" to "Reactive Streams|MIT-0|",
+        )
+    licenseTextNames = mapOf("Apache-2.0" to "LICENSE", "MIT-0" to "MIT-0.txt")
+    licenseTexts.from(rootProject.file("../LICENSE"), layout.projectDirectory.file("config/licenses/MIT-0.txt"))
+    noticeFile = rootProject.layout.projectDirectory.file("../NOTICE")
+    outputDir = layout.buildDirectory.dir("generated/notices")
+}
+
+tasks.jar {
+    into("META-INF") {
+        from(rootProject.file("../LICENSE"))
+        from(rootProject.file("../NOTICE"))
+    }
+    from(thirdPartyNotices)
 }
 
 // The sandbox IDE is started from :dev (`./gradlew :dev:runIde`), which loads this plugin together with the dev tools.
