@@ -73,6 +73,22 @@ class ResumeChatAction :
     override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 }
 
+/** Closta: Resume a Saved Conversation in the Sidebar: chooses a saved session and resumes it in the Closta window. */
+class ResumeSidebarChatAction :
+    AnAction(),
+    DumbAware {
+    override fun actionPerformed(event: AnActionEvent) {
+        val project = event.project ?: return
+        resumeChosen(project, Placement.SIDEBAR, event.inputEvent?.component as? JComponent)
+    }
+
+    override fun update(event: AnActionEvent) {
+        event.presentation.isEnabled = event.project != null
+    }
+
+    override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
+}
+
 /**
  * Lists the saved sessions by opening a session for a moment and asking it (the record is read without the CLI), then
  * closes it and offers the list, newest first, each with when it was last written; the chosen one is resumed at

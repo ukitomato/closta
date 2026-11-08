@@ -13,6 +13,7 @@ import com.intellij.openapi.util.text.HtmlChunk
 import com.intellij.ui.CollectionListModel
 import com.intellij.ui.JBIntSpinner
 import com.intellij.ui.SimpleListCellRenderer
+import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.ToolbarDecorator
 import com.intellij.ui.awt.RelativePoint
 import com.intellij.ui.components.JBCheckBox
@@ -65,8 +66,10 @@ internal class ProviderForm {
         JBList(listModel).apply {
             selectionMode = ListSelectionModel.SINGLE_SELECTION
             // Short lines: the list is narrower than one long line of guidance.
-            emptyText.text = EMPTY_LIST.first()
-            EMPTY_LIST.drop(1).forEach { emptyText.appendLine(it) }
+            emptyText.text = ClostaBundle.message("settings.providers.empty.add")
+            ProviderKind.entries.forEach { kind ->
+                emptyText.appendLine(kind.displayName, SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES) { addProvider(kind) }
+            }
             cellRenderer =
                 SimpleListCellRenderer.create { label, record, _ ->
                     label.putClientProperty(HTML_DISABLE, true)
@@ -434,13 +437,6 @@ internal class ProviderForm {
         val FIELD_ACCESS_KEY_ID: String get() = ClostaBundle.message("settings.validation.field.accessKeyId")
         val FIELD_LONG_TERM_KEYS: String get() = ClostaBundle.message("settings.validation.field.longTermKeys")
         val DEFAULT_CHOICE: String get() = ClostaBundle.message("settings.providers.defaultChoice")
-        val EMPTY_LIST: List<String>
-            get() =
-                listOf(
-                    ClostaBundle.message("settings.providers.empty.add"),
-                    ClostaBundle.message("settings.providers.empty.anthropic"),
-                    ClostaBundle.message("settings.providers.empty.bedrock"),
-                )
         const val DETAIL_CARD = "detail"
         const val BEDROCK_CARD = "bedrock"
         const val NONE_CARD = "none"

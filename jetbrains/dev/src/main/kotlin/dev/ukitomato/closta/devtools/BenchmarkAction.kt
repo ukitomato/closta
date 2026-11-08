@@ -56,7 +56,7 @@ class BenchmarkAction :
                     }
                     NotificationGroupManager
                         .getInstance()
-                        .getNotificationGroup("Closta")
+                        .getNotificationGroup("Closta.Dev")
                         .createNotification("Performance measurement finished: $report", NotificationType.INFORMATION)
                         .notify(project)
                 }

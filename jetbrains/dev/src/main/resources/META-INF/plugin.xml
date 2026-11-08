@@ -5,6 +5,7 @@
     <resource-bundle>messages.ClostaDevBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
+        <notificationGroup id="Closta.Dev" displayType="BALLOON" key="notification.group.dev"/>
         <fileEditorProvider implementation="dev.ukitomato.closta.devtools.BaselineEditorProvider"/>
         <!-- Does nothing unless the IDE is started with -Dclosta.gallery (devtools/Gallery.kt). -->
         <postStartupActivity implementation="dev.ukitomato.closta.devtools.Gallery"/>

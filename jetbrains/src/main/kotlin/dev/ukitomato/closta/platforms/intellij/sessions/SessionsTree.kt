@@ -3,10 +3,14 @@ package dev.ukitomato.closta.platforms.intellij.sessions
 import com.intellij.openapi.project.Project
 import com.intellij.ui.AnimatedIcon
 import com.intellij.ui.ClientProperty
+import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.TreeSpeedSearch
 import com.intellij.ui.render.RenderingHelper
 import com.intellij.ui.treeStructure.Tree
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
+import dev.ukitomato.closta.platforms.intellij.chat.Placement
+import dev.ukitomato.closta.platforms.intellij.chat.openNewChat
+import dev.ukitomato.closta.platforms.intellij.chat.resumeChosen
 import dev.ukitomato.closta.presenter.view.WindowRow
 import java.awt.Point
 import javax.swing.event.TreeExpansionEvent
@@ -48,6 +52,14 @@ internal class SessionsTree(
         component.selectionModel = SkipHeadings()
         component.cellRenderer = SessionsRenderer(project)
         component.emptyText.text = ClostaBundle.message("chat.sessions.empty")
+        component.emptyText.appendSecondaryText(
+            ClostaBundle.message("chat.newChat"),
+            SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES,
+        ) { openNewChat(project, Placement.SIDEBAR) }
+        component.emptyText.appendLine(
+            ClostaBundle.message("chat.sessions.resume"),
+            SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES,
+        ) { resumeChosen(project, Placement.SIDEBAR, component) }
         ClientProperty.put(component, AnimatedIcon.ANIMATION_IN_RENDERER_ALLOWED, true)
         // Rows as wide as the visible tree: the right column at its edge, a long title cut before it. No row is drawn
         // whole past the edge (the expandable hint), not the selected one either: its right column would go with it.

@@ -23,7 +23,6 @@ import com.intellij.ui.ListSpeedSearch
 import com.intellij.ui.PopupHandler
 import com.intellij.ui.SimpleColoredComponent
 import com.intellij.ui.SimpleTextAttributes
-import com.intellij.ui.components.ActionLink
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBScrollPane
@@ -96,7 +95,6 @@ class McpPanel(
     private val search = ListSpeedSearch.installOn(list) { it.name }
     private val target = SimpleColoredComponent().apply { ipad = JBUI.insets(0, PAD, ROW_PAD, PAD) }
     private val notice = JBLabel(AllIcons.General.Warning).noHtml()
-    private val signIn = ActionLink(COPY_SIGN_IN) { copySignIn() }
     private var source: ChatSource? = null
 
     private val failures =
@@ -157,7 +155,6 @@ class McpPanel(
             JPanel(VerticalLayout(JBUI.scale(ROW_PAD))).apply {
                 isOpaque = false
                 border = JBUI.Borders.empty(PAD)
-                add(signIn)
                 add(notice)
             },
             BorderLayout.SOUTH,
@@ -204,6 +201,7 @@ class McpPanel(
                 },
                 toggleAction,
                 reconnectAction,
+                copySignInAction,
             )
         val toolbar = ActionManager.getInstance().createActionToolbar("ClostaMcp", group, true)
         toolbar.targetComponent = this
@@ -265,7 +263,6 @@ class McpPanel(
             )
         notice.isVisible = below.isNotEmpty()
         notice.text = below.joinToString(" · ")
-        signIn.isVisible = rows.any { it.needsSignIn }
     }
 
     private fun toggleLabel(row: McpRow): String =

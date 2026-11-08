@@ -171,7 +171,12 @@ class ChatDirectory(
     // A session that came into view is read; one that went out of view is told to the notifications, for what still
     // waits in it.
     private fun visibilityChanged(sessionId: String) {
-        if (isVisible(sessionId)) markRead(sessionId) else alerts.hidden(sessionId)
+        if (isVisible(sessionId)) {
+            markRead(sessionId)
+            alerts.shown(sessionId)
+        } else {
+            alerts.hidden(sessionId)
+        }
     }
 
     /** Tells [listener], on the EDT, each change of a session's view that the list or the notifications care about. */

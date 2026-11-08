@@ -342,7 +342,7 @@ class SessionRuntimeResumeTest {
             assertEquals(SessionFailure.ForkIdMismatch, failed.failure)
             assertEquals("The CLI did not open the fork under the id the plugin gave it.", failed.failure.cause)
             assertEquals(
-                "Open the saved conversation with Open, or use Restart Session.",
+                "Open the saved conversation with Resume a Saved Conversation, or use Restart Session.",
                 failed.failure.remedy,
             )
             assertTrue(process.destroyed, "the process is closed as for any failure")

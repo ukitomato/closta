@@ -14,6 +14,9 @@ import com.intellij.ui.SystemNotifications
 import dev.ukitomato.closta.core.models.ApprovalDecision
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
 import dev.ukitomato.closta.platforms.intellij.session.SessionView
+import dev.ukitomato.closta.platforms.intellij.sessions.SessionItem
+import dev.ukitomato.closta.platforms.intellij.sessions.confirmed
+import dev.ukitomato.closta.platforms.intellij.sessions.endSession
 import dev.ukitomato.closta.platforms.intellij.sessions.showInSessions
 import dev.ukitomato.closta.platforms.intellij.thread.CardAnswer
 import dev.ukitomato.closta.platforms.intellij.thread.openEditDiff
@@ -34,8 +37,9 @@ import kotlinx.coroutines.withContext
  * session in view says nothing (its cards are in the conversation), and what still waits when it goes out of view
  * ([hidden]) is raised then; one out of view raises a balloon in its project's window, and an IDE behind another
  * application also tells the OS of what waits (not of a finished turn). What waits stays until it is answered
- * ([WAITING], a sticky balloon); a finished turn is a balloon of its own group ([FINISHED]), so it can be turned off
- * alone. A notification goes when what it was about is over (answered, or taken back by the CLI) or when it is used.
+ * ([NoticeGroups.WAITING], a sticky balloon); a finished turn is a balloon of its own group
+ * ([NoticeGroups.FINISHED]), so it can be turned off alone. A notification goes when what it was about is over
+ * (answered, or taken back by the CLI) or when it is used.
  * Its words are escaped: a command's `<` or `&` is shown as written.
  *
  * Only a permission can be answered from its notification (Allow, Deny), through the same [ChatSource.respond] as its
@@ -49,7 +53,9 @@ class SessionAlerts(
     parent: Disposable,
 ) {
     private val book = AlertBook()
-    private val shown = HashMap<String, MutableMap<String, Notification>>()
+    private val waiting = HashMap<String, Notification>()
+    private val finished = HashMap<String, MutableMap<String, Notification>>()
+    private val running = HashMap<String, Notification>()
 
     private val failures =
         CoroutineExceptionHandler { _, failure ->
@@ -61,7 +67,11 @@ class SessionAlerts(
         scope.launch {
             directory.entries.collect { entries ->
                 val open = entries.mapTo(HashSet()) { it.sessionId }
-                withContext(Dispatchers.EDT) { shown.keys.filter { it !in open }.forEach(::forget) }
+                withContext(Dispatchers.EDT) {
+                    (book.sessionIds() + waiting.keys + finished.keys + running.keys).filter { it !in open }.forEach(
+                        ::forget,
+                    )
+                }
             }
         }
     }
@@ -71,44 +81,84 @@ class SessionAlerts(
         view: SessionView,
     ) {
         val id = entry.sessionId
-        val change = book.changed(id, view.conversation to view.transcript, directory.isVisible(id))
-        val mine = shown.getOrPut(id) { HashMap() }
-        change.expired.forEach { key -> mine.remove(key)?.expire() }
-        change.raised.forEach { alert -> raise(entry, alert, mine) }
+        if (directory.isVisible(id)) shown(id)
+        apply(entry, book.changed(id, view.conversation to view.transcript, directory.isVisible(id)))
     }
 
-    /** The session [sessionId] went out of view: what still waits in it and was not notified is notified now. */
+    /** The session [sessionId] is in view again: its "keeps running" notice is over. */
+    fun shown(sessionId: String) {
+        running.remove(sessionId)?.expire()
+    }
+
+    /** The session [sessionId] went out of view: what still waits in it and is not shown yet is shown now. */
     fun hidden(sessionId: String) {
         val entry = directory.entries.value.firstOrNull { it.sessionId == sessionId } ?: return
-        val mine = shown.getOrPut(sessionId) { HashMap() }
-        book.hidden(sessionId).forEach { alert -> raise(entry, alert, mine) }
+        apply(entry, book.hidden(sessionId))
     }
 
-    private fun raise(
+    private fun apply(
         entry: ChatDirectory.Entry,
-        alert: SessionAlert,
-        mine: MutableMap<String, Notification>,
+        change: NoticeChange,
     ) {
-        val text = alertText(entry.title, alert)
-        val waits = alert !is FinishedAlert
+        if (change.replace) {
+            waiting.remove(entry.sessionId)?.expire()
+            change.waiting?.let { notice -> raiseWaiting(entry, notice, change.fresh) }
+        }
+        change.finished?.let { raiseFinished(entry, it) }
+    }
+
+    private fun raiseWaiting(
+        entry: ChatDirectory.Entry,
+        notice: WaitingNotice,
+        fresh: Boolean,
+    ) {
+        val alert = notice.alert
+        val text = alertText(entry.title, notice)
         val notification =
             NotificationGroupManager
                 .getInstance()
-                .getNotificationGroup(if (waits) WAITING else FINISHED)
-                .createNotification(
-                    text.htmlTitle,
-                    text.htmlBody,
-                    if (waits) NotificationType.WARNING else NotificationType.INFORMATION,
-                ).setDisplayId(displayIdOf(alert))
-                .setIcon(if (waits) AllIcons.General.Warning else AllIcons.Status.Success)
-        if (waits) {
-            notification.setImportant(true)
-            notification.setSuggestionType(true)
-        }
+                .getNotificationGroup(NoticeGroups.WAITING)
+                .createNotification(text.htmlTitle, text.htmlBody, NotificationType.INFORMATION)
+                .setDisplayId("closta.alert.waiting")
+                .setIcon(AllIcons.General.Information)
         if (alert is PermissionAlert && text.answerable) {
             notification.addAction(answer(ClostaBundle.message("chat.alert.allow"), entry, alert, allow = true))
             notification.addAction(answer(ClostaBundle.message("chat.alert.deny"), entry, alert, allow = false))
         }
+        addOpenActions(notification, entry, alert)
+        waiting[entry.sessionId] = notification
+        notification.whenExpired { waiting.remove(entry.sessionId, notification) }
+        notification.notify(entry.project)
+        if (fresh && wantsOsNotice(alert) && !ApplicationManager.getApplication().isActive) {
+            SystemNotifications.getInstance().notify(NoticeGroups.WAITING, text.title, text.body)
+        }
+    }
+
+    private fun raiseFinished(
+        entry: ChatDirectory.Entry,
+        alert: FinishedAlert,
+    ) {
+        val text = alertText(entry.title, alert)
+        val notification =
+            NotificationGroupManager
+                .getInstance()
+                .getNotificationGroup(NoticeGroups.FINISHED)
+                .createNotification(text.htmlTitle, text.htmlBody, NotificationType.INFORMATION)
+                .setDisplayId("closta.alert.finished")
+                .setIcon(AllIcons.Status.Success)
+        addOpenActions(notification, entry, alert)
+        val mine = finished.getOrPut(entry.sessionId) { HashMap() }
+        mine.remove(alert.key)?.expire()
+        mine[alert.key] = notification
+        notification.whenExpired { mine.remove(alert.key, notification) }
+        notification.notify(entry.project)
+    }
+
+    private fun addOpenActions(
+        notification: Notification,
+        entry: ChatDirectory.Entry,
+        alert: SessionAlert,
+    ) {
         if (alert is OpenOnlyAlert && alert.what == AlertKind.EDIT) {
             notification.addAction(
                 NotificationAction.createSimple(ClostaBundle.message("thread.permission.openDiff")) {
@@ -122,13 +172,6 @@ class SessionAlerts(
                 bringAndShow(entry.project, entry.sessionId)
             },
         )
-        mine.remove(alert.key)?.expire()
-        mine[alert.key] = notification
-        notification.whenExpired { mine.remove(alert.key, notification) }
-        notification.notify(entry.project)
-        if (wantsOsNotice(alert) && !ApplicationManager.getApplication().isActive) {
-            SystemNotifications.getInstance().notify(WAITING, text.title, text.body)
-        }
     }
 
     private fun answer(
@@ -154,24 +197,47 @@ class SessionAlerts(
      * watched. A balloon, no modal.
      */
     fun keepsRunning(entry: ChatDirectory.Entry) {
-        NotificationGroupManager
-            .getInstance()
-            .getNotificationGroup(GENERAL)
-            .createNotification(
-                ClostaBundle.message("chat.alert.keepsRunning", StringUtil.escapeXmlEntities(entry.title)),
-                ClostaBundle.message("chat.alert.keepsRunning.body"),
-                NotificationType.INFORMATION,
-            ).setDisplayId("closta.alert.keepsRunning")
-            .addAction(
-                NotificationAction.createSimpleExpiring(ClostaBundle.message("chat.alert.showInSessions")) {
-                    showInSessions(entry.project, entry.sessionId)
-                },
-            ).notify(entry.project)
+        running.remove(entry.sessionId)?.expire()
+        val notification =
+            NotificationGroupManager
+                .getInstance()
+                .getNotificationGroup(NoticeGroups.RUNNING)
+                .createNotification(
+                    ClostaBundle.message("chat.alert.keepsRunning", StringUtil.escapeXmlEntities(entry.title)),
+                    ClostaBundle.message("chat.alert.keepsRunning.body"),
+                    NotificationType.INFORMATION,
+                ).setDisplayId("closta.alert.keepsRunning")
+        notification.addAction(
+            NotificationAction.create(
+                ClostaBundle.message("action.Closta.Sessions.EndSession.MainMenu.text"),
+            ) { event, _ ->
+                val item = SessionItem.Live(entry)
+                confirmed(
+                    item,
+                    ClostaBundle.message("chat.sessions.stop.confirm"),
+                    ClostaBundle.message("action.Closta.Sessions.EndSession.MainMenu.text"),
+                    event,
+                ) {
+                    notification.expire()
+                    endSession(entry)
+                }
+            },
+        )
+        notification.addAction(
+            NotificationAction.createSimpleExpiring(ClostaBundle.message("chat.alert.showInSessions")) {
+                showInSessions(entry.project, entry.sessionId)
+            },
+        )
+        running[entry.sessionId] = notification
+        notification.whenExpired { running.remove(entry.sessionId, notification) }
+        notification.notify(entry.project)
     }
 
     private fun forget(sessionId: String) {
         book.forget(sessionId)
-        shown
+        waiting.remove(sessionId)?.expire()
+        running.remove(sessionId)?.expire()
+        finished
             .remove(sessionId)
             ?.values
             ?.toList()
@@ -179,17 +245,6 @@ class SessionAlerts(
     }
 
     private companion object {
-        /** The groups of plugin.xml: what waits for an answer, and a finished turn. */
-        const val WAITING = "Closta.Waiting"
-        const val FINISHED = "Closta.Finished"
-        const val GENERAL = "Closta"
         val OPEN_CONVERSATION: String get() = ClostaBundle.message("notify.openConversation")
-
-        fun displayIdOf(alert: SessionAlert): String =
-            when (alert) {
-                is PermissionAlert -> "closta.alert.permission"
-                is OpenOnlyAlert -> "closta.alert." + alert.what.name.lowercase()
-                is FinishedAlert -> "closta.alert.finished"
-            }
     }
 }

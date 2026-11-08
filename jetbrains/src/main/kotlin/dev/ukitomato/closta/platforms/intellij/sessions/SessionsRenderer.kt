@@ -165,8 +165,8 @@ internal class SessionsRenderer(
 /** The icon of a session in [group], in the tree and in the detail's header. */
 internal fun sessionIcon(group: SessionGroup): Icon =
     when (group) {
-        SessionGroup.WAITING -> AllIcons.General.BalloonWarning
+        SessionGroup.WAITING -> AllIcons.General.Warning
         SessionGroup.RUNNING -> AnimatedIcon.Default.INSTANCE
-        SessionGroup.UNREAD -> AllIcons.General.BalloonInformation
+        SessionGroup.UNREAD -> AllIcons.General.Information
         SessionGroup.OTHER -> EmptyIcon.ICON_16
     }

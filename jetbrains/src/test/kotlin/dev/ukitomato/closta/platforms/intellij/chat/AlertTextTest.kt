@@ -52,4 +52,15 @@ class AlertTextTest {
         assertTrue(AlertKind.entries.all { wantsOsNotice(OpenOnlyAlert("r", "r", it)) })
         assertFalse(wantsOsNotice(FinishedAlert("finished:1")))
     }
+
+    @Test
+    fun theNoticeCountsWhatWaitsBehindIt() {
+        val alert = PermissionAlert("r1", "r1", "Bash", "ls", answerable = true)
+        assertEquals(alertText("t", alert), alertText("t", WaitingNotice(alert, more = 0)))
+
+        val more = alertText("t", WaitingNotice(alert, more = 2))
+        assertEquals("ls · 2 more waiting", more.body)
+        assertTrue(more.answerable)
+        assertEquals("2 more waiting", alertText("t", WaitingNotice(OpenOnlyAlert("r", "r", AlertKind.PLAN), 2)).body)
+    }
 }
