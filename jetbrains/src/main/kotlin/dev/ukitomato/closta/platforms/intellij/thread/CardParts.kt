@@ -6,12 +6,16 @@ import com.intellij.icons.AllIcons
 import com.intellij.ide.ui.laf.darcula.ui.DarculaButtonUI
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.components.ActionLink
+import com.intellij.ui.dsl.builder.AlignX
+import com.intellij.ui.dsl.builder.MAX_LINE_LENGTH_WORD_WRAP
 import com.intellij.ui.dsl.builder.Panel
+import com.intellij.ui.dsl.builder.RightGap
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import com.intellij.util.ui.WrapLayout
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
 import dev.ukitomato.closta.platforms.intellij.ui.noHtml
+import dev.ukitomato.closta.platforms.intellij.ui.plainHtml
 import dev.ukitomato.closta.platforms.intellij.ui.plainTip
 import dev.ukitomato.closta.presenter.view.ApprovalOutcome
 import java.awt.BorderLayout
@@ -105,10 +109,12 @@ internal fun failureRow(
 ) {
     failure?.let { text ->
         panel.row {
-            label(text).applyToComponent {
-                noHtml()
-                foreground = UIUtil.getErrorForeground()
-            }
+            icon(AllIcons.General.Error).gap(RightGap.SMALL)
+            text(plainHtml(text), MAX_LINE_LENGTH_WORD_WRAP)
+                .applyToComponent {
+                    foreground = UIUtil.getErrorForeground()
+                }.align(AlignX.FILL)
+                .resizableColumn()
         }
     }
 }

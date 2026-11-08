@@ -108,8 +108,10 @@ class CardViews(
     private fun about(card: ThreadCard): String? =
         when (card) {
             is PermissionCard ->
-                card.diff?.let { "${card.subject?.substringAfterLast('/')} +${it.added} −${it.removed}" }
-                    ?: card.subject
+                card.diff?.let { diff ->
+                    val change = "+${diff.added} −${diff.removed}"
+                    card.subject?.let { "${it.substringAfterLast('/')} $change" } ?: change
+                } ?: card.subject
             is QuestionCard -> card.questions.firstOrNull()?.text
             is PlanCard -> null
         }

@@ -1,10 +1,12 @@
 package dev.ukitomato.closta.platforms.intellij.sessions
 
+import com.intellij.icons.AllIcons
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.text.StringUtil
-import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBTextField
 import com.intellij.ui.dsl.builder.AlignX
+import com.intellij.ui.dsl.builder.Cell
+import com.intellij.ui.dsl.builder.MAX_LINE_LENGTH_WORD_WRAP
 import com.intellij.ui.dsl.builder.Panel
 import com.intellij.ui.dsl.builder.RightGap
 import com.intellij.ui.dsl.builder.Row
@@ -29,6 +31,7 @@ import dev.ukitomato.closta.platforms.intellij.thread.inputRows
 import dev.ukitomato.closta.platforms.intellij.thread.openEditDiff
 import dev.ukitomato.closta.platforms.intellij.thread.pathRow
 import dev.ukitomato.closta.platforms.intellij.ui.noHtml
+import dev.ukitomato.closta.platforms.intellij.ui.plainHtml
 import dev.ukitomato.closta.platforms.intellij.ui.plainTip
 import dev.ukitomato.closta.presenter.view.ApprovalRecord
 import dev.ukitomato.closta.presenter.view.PermissionCard
@@ -42,6 +45,7 @@ import java.awt.BorderLayout
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import javax.swing.JComponent
+import javax.swing.JEditorPane
 
 // The detail pane's answer views: a permission (or an edit, with its diff), a question, a plan. They look like the
 // conversation's cards, with their keys, but use the pane's width, and they answer only through their AnswerGate.Ask.
@@ -74,7 +78,8 @@ internal fun answerView(
 internal abstract class AnswerView(
     protected val context: AnswerContext,
 ) : CardPanel(ThreadStyle.pendingLine, ThreadStyle.pendingFill, watchesKeyboard = true) {
-    private val failure = JBLabel().noHtml().apply { foreground = UIUtil.getErrorForeground() }
+    private var failure: JEditorPane? = null
+    private var failureParts: List<Cell<*>> = emptyList()
 
     init {
         layout = BorderLayout()
@@ -87,8 +92,7 @@ internal abstract class AnswerView(
             },
         )
         context.ask.onFailed = {
-            failure.text = ClostaBundle.message("session.answerFailed")
-            failure.isVisible = true
+            showFailure(ClostaBundle.message("session.answerFailed"))
             revalidate()
         }
     }
@@ -116,9 +120,23 @@ internal abstract class AnswerView(
         panel: Panel,
         text: String?,
     ) {
-        failure.text = text.orEmpty()
-        failure.isVisible = text != null
-        panel.row { cell(failure) }
+        panel.row {
+            val icon = icon(AllIcons.General.Error).gap(RightGap.SMALL)
+            val line =
+                text(plainHtml(text.orEmpty()), MAX_LINE_LENGTH_WORD_WRAP)
+                    .applyToComponent { foreground = UIUtil.getErrorForeground() }
+                    .align(AlignX.FILL)
+                    .resizableColumn()
+            failure = line.component
+            icon.visible(text != null)
+            line.visible(text != null)
+            failureParts = listOf(icon, line)
+        }
+    }
+
+    private fun showFailure(text: String) {
+        failure?.text = plainHtml(text)
+        failureParts.forEach { it.visible(true) }
     }
 }
 

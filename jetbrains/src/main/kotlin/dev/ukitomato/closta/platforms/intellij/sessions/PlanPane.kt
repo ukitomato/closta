@@ -9,6 +9,7 @@ import dev.ukitomato.closta.platforms.intellij.ClostaBundle
 import dev.ukitomato.closta.platforms.intellij.thread.CardAnswer
 import dev.ukitomato.closta.platforms.intellij.thread.CardKey
 import dev.ukitomato.closta.platforms.intellij.thread.CardKind
+import dev.ukitomato.closta.platforms.intellij.thread.PLAN_CHOICES
 import dev.ukitomato.closta.platforms.intellij.thread.buttonLine
 import dev.ukitomato.closta.platforms.intellij.thread.cardButton
 import dev.ukitomato.closta.platforms.intellij.thread.enterNeverPresses
@@ -69,7 +70,7 @@ internal class PlanPane(
         add(answers, BorderLayout.SOUTH)
         keys(CardKind.PLAN, buttons.size) { key ->
             when (key) {
-                is CardKey.Choose -> choose(PLAN_ORDER[key.index])
+                is CardKey.Choose -> choose(PLAN_CHOICES[key.index])
                 CardKey.Deny -> decide(PlanChoice.KEEP_PLANNING, "")
                 CardKey.LeaveText -> reason.close(this)
                 CardKey.Answer, CardKey.ToComposer -> Unit
@@ -107,6 +108,3 @@ internal class PlanPane(
         }
     }
 }
-
-/** The plan's answers in the buttons' order, the order of the keys 1 to 3, as in the conversation's card. */
-private val PLAN_ORDER = listOf(PlanChoice.AUTO_EDITS, PlanChoice.ASK_EDITS, PlanChoice.KEEP_PLANNING)

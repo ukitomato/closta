@@ -572,6 +572,7 @@ class ThreadRowViews(
                     if (!open.add(key)) open.remove(key)
                     actions.resized(key)
                 },
+                isOpen,
             ) { old -> handBack(key, old) }
         keepFocus(key, header)
         return header

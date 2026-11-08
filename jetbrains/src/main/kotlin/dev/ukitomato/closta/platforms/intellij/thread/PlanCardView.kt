@@ -177,4 +177,4 @@ internal class PlanView(
 }
 
 /** The plan's answers in the buttons' order, the order of the keys 1 to 3. */
-private val PLAN_CHOICES = listOf(PlanChoice.AUTO_EDITS, PlanChoice.ASK_EDITS, PlanChoice.KEEP_PLANNING)
+internal val PLAN_CHOICES = listOf(PlanChoice.AUTO_EDITS, PlanChoice.ASK_EDITS, PlanChoice.KEEP_PLANNING)
