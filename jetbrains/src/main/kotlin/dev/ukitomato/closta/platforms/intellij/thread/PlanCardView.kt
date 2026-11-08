@@ -2,7 +2,6 @@ package dev.ukitomato.closta.platforms.intellij.thread
 
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.fileEditor.ex.FileEditorManagerEx
-import com.intellij.openapi.fileEditor.ex.FileEditorOpenRequest
 import com.intellij.openapi.fileTypes.PlainTextFileType
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Key
@@ -55,8 +54,14 @@ class PlanTabs(
                     plan,
                 ).apply { isWritable = false }
             }
-        val request = FileEditorOpenRequest().withSelectAsCurrent(bringToFront).withRequestFocus(bringToFront)
-        FileEditorManagerEx.getInstanceEx(project).openFile(file, request)
+        // FileEditorOpenRequest moved in 2026.3 and its replacement is not in 2026.2: the one call both have opens
+        // the tab, and a background open puts the tab that was selected back.
+        val editors = FileEditorManagerEx.getInstanceEx(project)
+        val before = editors.selectedEditor?.file?.let { editors.getSelectedEditorWithProvider(it) }
+        editors.openFile(file, bringToFront)
+        if (!bringToFront && before != null) {
+            editors.setSelectedEditor(before.fileEditor.file, before.provider.editorTypeId)
+        }
     }
 }
 
