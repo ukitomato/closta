@@ -5,8 +5,10 @@ import com.google.gson.JsonNull
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import dev.ukitomato.closta.core.models.ApprovalDecision
+import dev.ukitomato.closta.core.models.AttachmentKind
 import dev.ukitomato.closta.core.models.resolveApproval
 import dev.ukitomato.closta.platforms.intellij.session.SessionView
+import dev.ukitomato.closta.presenter.view.AttachmentRecord
 import dev.ukitomato.closta.presenter.view.ChangedFile
 import dev.ukitomato.closta.presenter.view.ControlKind
 import dev.ukitomato.closta.presenter.view.PresenterInput
@@ -101,9 +103,15 @@ internal object GallerySession {
             view = allowed(view, requestId)
         }
 
+        fun deny(requestId: String) {
+            flush()
+            val decision = ApprovalDecision.Deny(requestId)
+            view = view.decided(resolveApproval(view.conversation, decision, 0), decision, 900)
+        }
+
         fun firstTurn(done: Boolean) {
             // Sent with the uuid the CLI knows it by, as a real send is: what can be rewound to depends on it.
-            view = view.sent(PresenterInput.UserSent(FIRST_ASK, ask, uuid = "gallery-c1"))
+            view = view.sent(PresenterInput.UserSent(FIRST_ASK, ask, ATTACHMENTS, uuid = "gallery-c1"))
             script.lifecycle("gallery-c1", "queued")
             script.lifecycle("gallery-c1", "started")
             script.init()
@@ -177,6 +185,7 @@ internal object GallerySession {
             )
             allow("gallery-r1")
             script.toolResult("gt6", "BUILD SUCCESSFUL in 12s")
+            moreRows()
             script.assistant("gm8", listOf(StreamScript.text(REPLY)))
             if (!done) return
             flush()
@@ -196,6 +205,45 @@ internal object GallerySession {
                         listOf(ChangedFile("/work/src/AuthService.kt", 12, 3, created = false, deleted = false)),
                     ),
                 )
+        }
+
+        /** Rows the next fixes look at: an Explored group to open, an empty row, long ones, three answers. */
+        private fun moreRows() {
+            script.assistant(
+                "gm20",
+                listOf(
+                    StreamScript.toolUse("gt20", "Read", obj("file_path" to "/work/src/RetryPolicy.kt")),
+                    StreamScript.toolUse("gt21", "Read", obj("file_path" to "/work/src/AuthServiceTest.kt")),
+                    StreamScript.toolUse("gt22", "Grep", obj("pattern" to "RetryPolicy")),
+                ),
+            )
+            script.toolResult("gt20", "class RetryPolicy(val times: Int)\n")
+            script.toolResult("gt21", "class AuthServiceTest {\n    @Test fun logsIn() {}\n}\n")
+            script.toolResult("gt22", "src/AuthService.kt:12\nsrc/RetryPolicy.kt:3")
+            script.assistant("gm21", listOf(StreamScript.toolUse("gt23", "WebFetch", JsonObject())))
+            script.assistant(
+                "gm22",
+                listOf(StreamScript.toolUse("gt24", "Bash", obj("command" to "ls -1 /work/src/auth/generated"))),
+            )
+            script.toolResult("gt24", (1..16).joinToString("\n") { "Generated%02d.kt".format(it) })
+            script.assistant(
+                "gm23",
+                listOf(StreamScript.toolUse("gt25", "Bash", obj("command" to "./gradlew :auth:lint --offline"))),
+            )
+            script.toolResult("gt25", LONG_ERROR, isError = true)
+            val write =
+                obj("file_path" to "/work/src/RetryPolicy.kt", "content" to "class RetryPolicy(val times: Int)\n")
+            script.assistant("gm24", listOf(StreamScript.toolUse("gt26", "Write", write)))
+            line(canUseTool("gallery-r6", "Write", "gt26", write))
+            allow("gallery-r6")
+            script.toolResult("gt26", "File created successfully at: /work/src/RetryPolicy.kt")
+            script.assistant(
+                "gm25",
+                listOf(StreamScript.toolUse("gt27", "Bash", obj("command" to "rm -rf /work/build/tmp"))),
+            )
+            line(canUseTool("gallery-r7", "Bash", "gt27", obj("command" to "rm -rf /work/build/tmp")))
+            deny("gallery-r7")
+            script.toolResult("gt27", "The user doesn't want to proceed with this tool use.", isError = true)
         }
 
         fun secondTurn(waits: Waits) {
@@ -429,6 +477,20 @@ internal object GallerySession {
 
     private fun obj(vararg fields: Pair<String, String>) =
         JsonObject().apply { fields.forEach { (key, value) -> addProperty(key, value) } }
+
+    private val ATTACHMENTS =
+        listOf(
+            AttachmentRecord("login-screen.png", AttachmentKind.IMAGE, "image/png", 48_000),
+            AttachmentRecord("retry-spec.pdf", AttachmentKind.DOCUMENT, "application/pdf", 210_000),
+            AttachmentRecord("AuthServiceTest.kt", AttachmentKind.TEXT, "text/plain", 3_200),
+            AttachmentRecord("error-log-2026-11-01.txt", AttachmentKind.TEXT, "text/plain", 9_800),
+            AttachmentRecord("sequence-diagram.png", AttachmentKind.IMAGE, "image/png", 76_000),
+        )
+
+    private const val LONG_ERROR =
+        "e: file:///work/src/auth/AuthService.kt:42:17 Unresolved reference 'retry' while resolving the call " +
+            "AuthService.login(Credentials) from LoginController.onSubmit(LoginForm) in module :auth, " +
+            "the compiler also cannot infer the type of the lambda passed to it, so nothing after it was checked"
 
     private val REPLY =
         """
