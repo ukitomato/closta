@@ -22,13 +22,12 @@
         <applicationConfigurable parentId="dev.ukitomato.closta.providers"
                                  id="dev.ukitomato.closta.behaviour" key="settings.behaviour.displayName"
                                  instance="dev.ukitomato.closta.platforms.intellij.settings.BehaviourConfigurable"/>
-        <!-- What waits for an answer stays until it is answered; a finished turn can be turned off alone. "Closta" is
-             the rest (a worktree's failure, a message from the IDE bridge): WorktreeChat.kt and IdeBridgeService.kt use it,
-             and the dev plugin's tools report through it too.
-             The settings name a group by its key in the bundle, else by its id: these have no key yet. -->
-        <notificationGroup id="Closta.Waiting" displayType="STICKY_BALLOON" hideFromSettings="true"/>
-        <notificationGroup id="Closta.Finished" displayType="BALLOON"/>
-        <notificationGroup id="Closta" displayType="BALLOON"/>
+        <!-- What waits for an answer stays until it is answered; the rest are balloons. Each group is named from the
+             bundle, so each can be turned off alone in the IDE's notification settings. -->
+        <notificationGroup id="Closta.Waiting" displayType="STICKY_BALLOON" key="notification.group.waiting"/>
+        <notificationGroup id="Closta.Finished" displayType="BALLOON" key="notification.group.finished"/>
+        <notificationGroup id="Closta.Running" displayType="BALLOON" key="notification.group.running"/>
+        <notificationGroup id="Closta.Worktree" displayType="BALLOON" key="notification.group.worktree"/>
         <fileEditorProvider implementation="dev.ukitomato.closta.platforms.intellij.chat.ChatFileEditorProvider"/>
         <editorTabTitleProvider implementation="dev.ukitomato.closta.platforms.intellij.chat.ChatTabTitles"/>
         <fileIconProvider implementation="dev.ukitomato.closta.platforms.intellij.chat.ChatTabIcons"/>

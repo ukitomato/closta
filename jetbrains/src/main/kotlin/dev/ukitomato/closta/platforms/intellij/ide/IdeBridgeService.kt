@@ -13,6 +13,7 @@ import dev.ukitomato.closta.core.interfaces.IdeBridge
 import dev.ukitomato.closta.core.interfaces.ProjectFiles
 import dev.ukitomato.closta.core.interfaces.WorktreeCreated
 import dev.ukitomato.closta.core.interfaces.Worktrees
+import dev.ukitomato.closta.platforms.intellij.chat.NoticeGroups
 import dev.ukitomato.closta.providers.claude.launch.CliPaths
 import dev.ukitomato.closta.providers.claude.launch.cliPathsFor
 
@@ -44,13 +45,8 @@ class IdeBridgeService(
     private fun announce(created: WorktreeCreated) {
         NotificationGroupManager
             .getInstance()
-            .getNotificationGroup(NOTIFICATION_GROUP)
-            .createNotification("Closta", worktreeNoticeText(created), NotificationType.INFORMATION)
+            .getNotificationGroup(NoticeGroups.WORKTREE)
+            .createNotification(worktreeNoticeText(created), NotificationType.INFORMATION)
             .notify(project)
-    }
-
-    companion object {
-        /** The notification group declared in plugin.xml. */
-        const val NOTIFICATION_GROUP = "Closta"
     }
 }

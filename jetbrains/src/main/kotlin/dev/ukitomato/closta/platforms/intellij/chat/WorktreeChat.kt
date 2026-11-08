@@ -105,5 +105,5 @@ private fun notice(
     type: NotificationType,
 ) = NotificationGroupManager
     .getInstance()
-    .getNotificationGroup("Closta")
-    .createNotification("Closta", text, type)
+    .getNotificationGroup(NoticeGroups.WORKTREE)
+    .createNotification(text, type)

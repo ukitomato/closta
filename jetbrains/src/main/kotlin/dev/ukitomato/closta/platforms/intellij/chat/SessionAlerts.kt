@@ -34,8 +34,9 @@ import kotlinx.coroutines.withContext
  * session in view says nothing (its cards are in the conversation), and what still waits when it goes out of view
  * ([hidden]) is raised then; one out of view raises a balloon in its project's window, and an IDE behind another
  * application also tells the OS of what waits (not of a finished turn). What waits stays until it is answered
- * ([WAITING], a sticky balloon); a finished turn is a balloon of its own group ([FINISHED]), so it can be turned off
- * alone. A notification goes when what it was about is over (answered, or taken back by the CLI) or when it is used.
+ * ([NoticeGroups.WAITING], a sticky balloon); a finished turn is a balloon of its own group
+ * ([NoticeGroups.FINISHED]), so it can be turned off alone. A notification goes when what it was about is over
+ * (answered, or taken back by the CLI) or when it is used.
  * Its words are escaped: a command's `<` or `&` is shown as written.
  *
  * Only a permission can be answered from its notification (Allow, Deny), through the same [ChatSource.respond] as its
@@ -94,7 +95,7 @@ class SessionAlerts(
         val notification =
             NotificationGroupManager
                 .getInstance()
-                .getNotificationGroup(if (waits) WAITING else FINISHED)
+                .getNotificationGroup(if (waits) NoticeGroups.WAITING else NoticeGroups.FINISHED)
                 .createNotification(
                     text.htmlTitle,
                     text.htmlBody,
@@ -127,7 +128,7 @@ class SessionAlerts(
         notification.whenExpired { mine.remove(alert.key, notification) }
         notification.notify(entry.project)
         if (wantsOsNotice(alert) && !ApplicationManager.getApplication().isActive) {
-            SystemNotifications.getInstance().notify(WAITING, text.title, text.body)
+            SystemNotifications.getInstance().notify(NoticeGroups.WAITING, text.title, text.body)
         }
     }
 
@@ -156,7 +157,7 @@ class SessionAlerts(
     fun keepsRunning(entry: ChatDirectory.Entry) {
         NotificationGroupManager
             .getInstance()
-            .getNotificationGroup(GENERAL)
+            .getNotificationGroup(NoticeGroups.RUNNING)
             .createNotification(
                 ClostaBundle.message("chat.alert.keepsRunning", StringUtil.escapeXmlEntities(entry.title)),
                 ClostaBundle.message("chat.alert.keepsRunning.body"),
@@ -179,10 +180,6 @@ class SessionAlerts(
     }
 
     private companion object {
-        /** The groups of plugin.xml: what waits for an answer, and a finished turn. */
-        const val WAITING = "Closta.Waiting"
-        const val FINISHED = "Closta.Finished"
-        const val GENERAL = "Closta"
         val OPEN_CONVERSATION: String get() = ClostaBundle.message("notify.openConversation")
 
         fun displayIdOf(alert: SessionAlert): String =
