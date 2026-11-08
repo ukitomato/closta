@@ -709,7 +709,7 @@ class ThreadRowViews(
             block: HtmlBlock,
             openLink: ((String) -> Unit)?,
         ): JBHtmlPane =
-            JBHtmlPane(STYLE, JBHtmlPaneConfiguration()).apply {
+            JBHtmlPane(STYLE, JBHtmlPaneConfiguration { imageResolverFactory { NoImages } }).apply {
                 isEditable = false
                 isOpaque = false
                 putClientProperty(HTML, block.html)

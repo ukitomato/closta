@@ -6,21 +6,6 @@ import com.intellij.openapi.editor.richcopy.HtmlSyntaxInfoUtil
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.fileTypes.LanguageFileType
 import com.intellij.openapi.project.Project
-import org.commonmark.ext.gfm.tables.TableBlock
-import org.commonmark.ext.gfm.tables.TablesExtension
-import org.commonmark.node.FencedCodeBlock
-import org.commonmark.node.IndentedCodeBlock
-import org.commonmark.node.Node
-import org.commonmark.parser.Parser
-import org.commonmark.renderer.NodeRenderer
-import org.commonmark.renderer.html.HtmlNodeRendererContext
-import org.commonmark.renderer.html.HtmlRenderer
-
-/** One top-level block of a reply as HTML; a [wide] one (a code fence or a table) scrolls sideways on its own. */
-data class HtmlBlock(
-    val html: String,
-    val wide: Boolean,
-)
 
 /**
  * GitHub-flavoured Markdown (with tables) to HTML, one piece per top-level block, by the commonmark the IDE bundles
@@ -30,26 +15,9 @@ data class HtmlBlock(
 class MarkdownBlocks(
     private val project: Project,
 ) {
-    private val extensions = listOf(TablesExtension.create())
-    private val parser = Parser.builder().extensions(extensions).build()
-    private val renderer =
-        HtmlRenderer
-            .builder()
-            .extensions(extensions)
-            .escapeHtml(true)
-            .nodeRendererFactory { context -> FenceRenderer(context) }
-            .build()
+    private val html = MarkdownHtml { info, code -> coloured(info.orEmpty(), code) }
 
-    fun of(markdown: String): List<HtmlBlock> {
-        val blocks = mutableListOf<HtmlBlock>()
-        var node = parser.parse(markdown).firstChild
-        while (node != null) {
-            val wide = node is FencedCodeBlock || node is IndentedCodeBlock || node is TableBlock
-            blocks += HtmlBlock(renderer.render(node), wide)
-            node = node.next
-        }
-        return blocks
-    }
+    fun of(markdown: String): List<HtmlBlock> = html.blocks(markdown)
 
     private fun coloured(
         info: String,
@@ -65,25 +33,6 @@ class MarkdownBlocks(
         ) {
             thisLogger().info("a code fence is left uncoloured (${failure.javaClass.simpleName})")
             null
-        }
-    }
-
-    private inner class FenceRenderer(
-        private val context: HtmlNodeRendererContext,
-    ) : NodeRenderer {
-        override fun getNodeTypes(): Set<Class<out Node>> = setOf(FencedCodeBlock::class.java)
-
-        override fun render(node: Node) {
-            val fence = node as FencedCodeBlock
-            // Only the one newline the fence ends with goes; the code's own indentation stays.
-            val code = fence.literal.removeSuffix("\n")
-            val html = coloured(fence.info.orEmpty(), code)
-            val out = context.writer
-            out.line()
-            out.raw("<pre><code>")
-            if (html != null) out.raw(html) else out.text(code)
-            out.raw("</code></pre>")
-            out.line()
         }
     }
 }
