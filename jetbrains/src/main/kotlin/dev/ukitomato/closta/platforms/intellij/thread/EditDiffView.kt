@@ -4,6 +4,7 @@ import com.intellij.diff.DiffContentFactory
 import com.intellij.diff.DiffManager
 import com.intellij.diff.requests.SimpleDiffRequest
 import com.intellij.ide.ui.UISettings
+import com.intellij.openapi.components.service
 import com.intellij.openapi.diff.DiffColors
 import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.fileEditor.FileDocumentManager
@@ -13,6 +14,7 @@ import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.JBUI
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
+import dev.ukitomato.closta.platforms.intellij.ide.IdeBridgeService
 import dev.ukitomato.closta.presenter.view.ApprovalRecord
 import dev.ukitomato.closta.presenter.view.DIFF_MAX_LINES
 import dev.ukitomato.closta.presenter.view.DiffKind
@@ -176,6 +178,16 @@ private class DiffLinesView(
     }
 }
 
+// The IDE's path for the file [cliPath] a call names, or null when it is outside the project (nothing is opened).
+private fun ideDiffPath(
+    project: Project,
+    cliPath: String,
+): String? {
+    val cliPaths = project.service<IdeBridgeService>().cliPaths
+    val root = project.basePath?.let(cliPaths::toCli) ?: return null
+    return toolPathTarget(cliPath, root)?.let(cliPaths::toIde)
+}
+
 /**
  * Opens the IDE's diff viewer on what [approval]'s call would do: the file now against the file after it (an `Edit`'s
  * replacement put in, a `Write`'s content). Nothing is written.
@@ -185,8 +197,10 @@ internal fun openEditDiff(
     approval: ApprovalRecord,
 ) {
     val tool = approval.toolName ?: ""
-    val diff = editDiff(tool, approval.input) ?: return
-    val file = LocalFileSystem.getInstance().refreshAndFindFileByPath(diff.filePath)
+    val diff = editDiff(tool, approval.input)
+    val idePath = diff?.let { ideDiffPath(project, it.filePath) }
+    if (diff == null || idePath == null) return
+    val file = LocalFileSystem.getInstance().refreshAndFindFileByPath(idePath)
     val now = file?.let { FileDocumentManager.getInstance().getDocument(it)?.text }
     val (left, right) = diffSides(tool, approval.input, now) ?: return
     val type = FileTypeManager.getInstance().getFileTypeByFileName(diff.filePath.substringAfterLast('/'))

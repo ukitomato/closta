@@ -3,6 +3,7 @@ package dev.ukitomato.closta.platforms.intellij.thread
 import com.intellij.icons.AllIcons
 import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
@@ -10,11 +11,13 @@ import com.intellij.ui.components.JBScrollPane
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
+import dev.ukitomato.closta.platforms.intellij.ide.IdeBridgeService
 import dev.ukitomato.closta.presenter.view.ApprovalRecord
 import dev.ukitomato.closta.presenter.view.AskAction
 import dev.ukitomato.closta.presenter.view.AskActions
 import dev.ukitomato.closta.presenter.view.CardRow
 import dev.ukitomato.closta.presenter.view.ThreadRow
+import dev.ukitomato.closta.providers.claude.launch.CliPaths
 import java.awt.Point
 import java.awt.Rectangle
 import java.awt.event.ActionEvent
@@ -83,6 +86,21 @@ private fun openPath(
     descriptor.navigate(true)
 }
 
+/**
+ * Opens a file the CLI named, only when it lies inside the project. The check is made in the CLI's path space (the
+ * project folder mapped by [CliPaths.toCli]), then the path is mapped to the IDE's by [CliPaths.toIde]; a refused path
+ * opens nothing and is not logged.
+ */
+internal fun openCliPath(
+    project: Project,
+    cliPath: String,
+) {
+    val cliPaths = project.service<IdeBridgeService>().cliPaths
+    val root = project.basePath?.let(cliPaths::toCli) ?: return
+    val inside = toolPathTarget(cliPath, root) ?: return
+    openPath(project, cliPaths.toIde(inside))
+}
+
 /** The conversation as a lazy, kept Swing column ([LazyRows]) over [ShownRow]s. */
 class SwingThreadSurface(
     project: Project,
@@ -127,7 +145,7 @@ class SwingThreadSurface(
 
             override fun replyOf(blockKey: String): String? = shown.replyOf(blockKey)
 
-            override fun openFile(path: String) = openPath(project, path)
+            override fun openFile(path: String) = openCliPath(project, path)
 
             override fun openLink(href: String) {
                 when (val target = linkTarget(href, project.basePath)) {
@@ -147,7 +165,7 @@ class SwingThreadSurface(
                     { scroll },
                     { openEditDiff(project, it) },
                     PlanTabs(project),
-                    { path -> openPath(project, path) },
+                    { path -> openCliPath(project, path) },
                     { column.remeasureHolding(it) },
                     { onLetGo() },
                 ),

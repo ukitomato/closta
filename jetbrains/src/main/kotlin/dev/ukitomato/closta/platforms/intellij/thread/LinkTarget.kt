@@ -19,6 +19,7 @@ sealed interface LinkTarget {
 }
 
 private val SCHEME = Regex("^[A-Za-z][A-Za-z0-9+.-]*:")
+private val UNC_HEAD = Regex("^[\\\\/]{2}")
 private val LINE_SUFFIX = Regex("(?::(\\d+)(?::\\d+)?|#L(\\d+)(?:-L?\\d+)?)$")
 
 /**
@@ -59,6 +60,26 @@ private fun projectFile(
         val base = Path.of(root).normalize()
         val path = base.resolve(bare).normalize()
         if (path.startsWith(base)) LinkTarget.File(path.toString(), line) else null
+    } catch (_: InvalidPathException) {
+        null
+    }
+}
+
+/**
+ * The path to open for [path], a file the CLI named in a tool call: [path] (absolute, or relative to [projectRoot])
+ * normalized, only when it lies inside [projectRoot]. A UNC path (`\\host\share`, `//host/share`), which on Windows
+ * can start an SMB connection, and any path that leaves the project (`..`) give null. Both are in the CLI's path
+ * space; the caller maps the result to the IDE's. Free of `com.intellij`.
+ */
+fun toolPathTarget(
+    path: String,
+    projectRoot: String,
+): String? {
+    if (path.isBlank() || UNC_HEAD.containsMatchIn(path)) return null
+    return try {
+        val base = Path.of(projectRoot).normalize()
+        val resolved = base.resolve(path).normalize()
+        resolved.toString().takeIf { resolved.startsWith(base) }
     } catch (_: InvalidPathException) {
         null
     }

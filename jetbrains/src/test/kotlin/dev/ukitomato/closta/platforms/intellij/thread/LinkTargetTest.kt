@@ -48,4 +48,29 @@ class LinkTargetTest {
         assertNull(linkTarget("", root))
         assertNull(linkTarget("#section", root))
     }
+
+    @Test
+    fun aToolPathInsideTheProjectOpensNormalized() {
+        assertEquals("/work/app/src/A.kt", toolPathTarget("/work/app/src/A.kt", root))
+        assertEquals("/work/app/src/A.kt", toolPathTarget("src/./A.kt", root))
+        assertEquals("/work/app/src/A.kt", toolPathTarget("/work/app/x/../src/A.kt", root))
+    }
+
+    @Test
+    fun aToolPathOutsideTheProjectIsRefused() {
+        assertNull(toolPathTarget("/etc/passwd", root))
+        assertNull(toolPathTarget("../other/A.kt", root))
+        assertNull(toolPathTarget("/work/app/../other/A.kt", root))
+        assertNull(toolPathTarget("/work/app2/A.kt", root))
+        assertNull(toolPathTarget("", root))
+    }
+
+    @Test
+    fun aUncToolPathIsRefused() {
+        val back = "\\"
+        assertNull(toolPathTarget(back + back + "host" + back + "share" + back + "a", root))
+        assertNull(toolPathTarget("//host/share/a", root))
+        assertNull(toolPathTarget(back + back + "wsl.localhost" + back + "Ubuntu" + back + "work" + back + "app", root))
+        assertNull(toolPathTarget(back + "/host/share/a", root))
+    }
 }
