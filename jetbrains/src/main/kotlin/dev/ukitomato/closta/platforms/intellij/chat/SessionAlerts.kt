@@ -14,6 +14,7 @@ import com.intellij.ui.SystemNotifications
 import dev.ukitomato.closta.core.models.ApprovalDecision
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
 import dev.ukitomato.closta.platforms.intellij.session.SessionView
+import dev.ukitomato.closta.platforms.intellij.sessions.endSession
 import dev.ukitomato.closta.platforms.intellij.sessions.showInSessions
 import dev.ukitomato.closta.platforms.intellij.thread.CardAnswer
 import dev.ukitomato.closta.platforms.intellij.thread.openEditDiff
@@ -194,6 +195,10 @@ class SessionAlerts(
                 NotificationType.INFORMATION,
             ).setDisplayId("closta.alert.keepsRunning")
             .addAction(
+                NotificationAction.createSimpleExpiring(ClostaBundle.message("chat.sessions.stop")) {
+                    endSession(entry)
+                },
+            ).addAction(
                 NotificationAction.createSimpleExpiring(ClostaBundle.message("chat.alert.showInSessions")) {
                     showInSessions(entry.project, entry.sessionId)
                 },

@@ -51,6 +51,10 @@ fun openItem(
 /** Ends a live session the way the sessions list always has: it stops, and leaves a mark to resume it by. */
 private fun endSession(item: SessionItem) {
     val entry = (item as? SessionItem.Live)?.entry ?: return
+    endSession(entry)
+}
+
+internal fun endSession(entry: ChatDirectory.Entry) {
     entry.project.service<ChatSessions>().stopFromScreen(entry.sessionId)
 }
 
