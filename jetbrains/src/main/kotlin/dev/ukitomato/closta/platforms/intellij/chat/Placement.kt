@@ -44,15 +44,21 @@ fun moveChatTo(
     project.service<ChatSessions>().move(sessionId, { openChat(project, sessionId, placement) }, closeOld)
 }
 
-/** Opens a new session (in [workingDirectory], else the project's folder) and shows it at [placement]. */
+/**
+ * Opens a new session (in [workingDirectory], else the project's folder) and shows it at [placement]; it starts with
+ * the draft of [carryFrom] when given.
+ */
+@Suppress("LongParameterList") // where, what, its name and folder, and whose draft it takes
 fun openNewChat(
     project: Project,
     placement: Placement,
     opening: SessionOpening = SessionOpening.New,
     title: String = ClostaBundle.message("chat.newChat.title"),
     workingDirectory: String? = null,
+    carryFrom: String? = null,
 ) {
     val id = project.service<ChatSessions>().open(opening, title, workingDirectory)
+    if (carryFrom != null) service<ComposerDrafts>().carry(carryFrom, id)
     // A session no place could show would run unseen: it is stopped.
     if (!openChat(project, id, placement)) project.service<ChatSessions>().stop(id)
 }

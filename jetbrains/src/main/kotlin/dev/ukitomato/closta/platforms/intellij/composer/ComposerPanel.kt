@@ -114,12 +114,15 @@ class ComposerPanel(
     private var cardsWaiting = 0
 
     private var state: ComposerState? = null
-    private var canSend = false
+    private var sendable = false
+    private var rewinding = false
+    private val canSend get() = sendable && !rewinding
     private val attached get() = draft.attached
     private val selections get() = draft.selections
     private var currentFile: VirtualFile? = null
     private var switchingSince: Pair<String, Long>? = null
-    private var block = SendBlock.NONE
+    private var shownBlock = SendBlock.NONE
+    private val block get() = if (rewinding) SendBlock.REWINDING else shownBlock
     private val messages = StatusMessages()
 
     /** The switch whose missing answer was already said: it is said once, then the line goes back to the base. */
@@ -213,8 +216,8 @@ class ComposerPanel(
         blocked: SendBlock = if (sendable) SendBlock.NONE else SendBlock.CLOSED,
     ) {
         state = next
-        canSend = sendable
-        block = if (sendable) SendBlock.NONE else blocked
+        this.sendable = sendable
+        shownBlock = if (sendable) SendBlock.NONE else blocked
         showBar(next)
         val switching = next.switching
         if (switching == null) {
@@ -223,6 +226,14 @@ class ComposerPanel(
         } else if (switchingSince?.first != switching.id) {
             switchingSince = switching.id to System.currentTimeMillis()
         }
+        showStatus()
+    }
+
+    /** Holds sending while a rewind opens the copy: the message would go to the session that is then stopped. */
+    fun rewinding(on: Boolean) {
+        if (rewinding == on) return
+        rewinding = on
+        state?.let(::showBar)
         showStatus()
     }
 
@@ -340,7 +351,7 @@ class ComposerPanel(
                     ClostaBundle.message("composer.status.jump", KeymapUtil.getKeystrokeText(JUMP_KEY))
                 next.stopping -> ClostaBundle.message("composer.status.stopping")
                 next.running -> ClostaBundle.message("composer.status.escToStop")
-                block == SendBlock.STARTING -> sendBlockReason(block)
+                block == SendBlock.STARTING || block == SendBlock.REWINDING -> sendBlockReason(block)
                 else -> null
             }
         return text?.let { StatusMessage(it, StatusSource.SESSION, false, now, null, false) }

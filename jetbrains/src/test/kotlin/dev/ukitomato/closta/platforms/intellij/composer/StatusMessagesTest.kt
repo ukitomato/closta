@@ -76,6 +76,7 @@ class StatusMessagesTest {
         assertNull(sendBlockReason(SendBlock.NONE))
         assertEquals("Starting Claude…", sendBlockReason(SendBlock.STARTING))
         assertEquals("This conversation cannot take messages", sendBlockReason(SendBlock.CLOSED))
+        assertEquals("Rewinding…", sendBlockReason(SendBlock.REWINDING))
     }
 
     @Test fun `a session that can send is not blocked`() =

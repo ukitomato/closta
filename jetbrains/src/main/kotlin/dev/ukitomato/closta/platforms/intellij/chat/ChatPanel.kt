@@ -390,6 +390,7 @@ class ChatPanel(
             AskActing(project, source, place, scope, surface.askActions, ::refusedNearClick).apply {
                 busy = { waiting ->
                     rewinding.isVisible = waiting
+                    composer.rewinding(waiting)
                     rewinding.revalidate()
                 }
             }
@@ -498,7 +499,9 @@ class ChatPanel(
         val old = source.sessionId
         val placement = place.placement
         SessionRelaunch(
-            open = { _, opening, folder -> openNewChat(project, placement, opening, workingDirectory = folder) },
+            open = { _, opening, folder ->
+                openNewChat(project, placement, opening, workingDirectory = folder, carryFrom = old)
+            },
             close = {
                 place.close()
                 project.service<ChatSessions>().stopFromScreen(old)
