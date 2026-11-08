@@ -117,7 +117,7 @@ internal fun answerView(
  */
 internal abstract class AnswerView(
     protected val context: AnswerContext,
-) : CardPanel(ThreadStyle.pendingLine, ThreadStyle.pendingFill) {
+) : CardPanel(ThreadStyle.pendingLine, ThreadStyle.pendingFill, watchesKeyboard = true) {
     private val failure = JBLabel().noHtml().apply { foreground = UIUtil.getErrorForeground() }
 
     protected abstract val keys: Set<AnswerKey>

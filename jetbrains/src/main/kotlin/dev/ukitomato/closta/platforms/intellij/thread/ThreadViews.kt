@@ -1,6 +1,7 @@
 package dev.ukitomato.closta.platforms.intellij.thread
 
 import com.intellij.icons.AllIcons
+import com.intellij.ide.ui.laf.darcula.DarculaUIUtil
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.DefaultActionGroup
@@ -45,7 +46,6 @@ import dev.ukitomato.closta.presenter.view.ToolLine
 import dev.ukitomato.closta.presenter.view.ToolLineState
 import dev.ukitomato.closta.presenter.view.ToolRow
 import dev.ukitomato.closta.presenter.view.TurnEndRow
-import java.awt.BasicStroke
 import java.awt.BorderLayout
 import java.awt.Component
 import java.awt.Dimension
@@ -53,6 +53,7 @@ import java.awt.FlowLayout
 import java.awt.Graphics
 import java.awt.Graphics2D
 import java.awt.KeyboardFocusManager
+import java.awt.Rectangle
 import java.awt.RenderingHints
 import java.awt.datatransfer.StringSelection
 import java.beans.PropertyChangeListener
@@ -813,6 +814,7 @@ open class CardPanel(
             if (now != keyboardIn) {
                 keyboardIn = now
                 repaint()
+                if (now) scrollRectToVisible(Rectangle(0, 0, width, height))
                 onKeyboard(now)
             }
         }
@@ -853,15 +855,19 @@ open class CardPanel(
                 g2.color = it
                 g2.fillRoundRect(0, 0, width - 1, height - 1, arc, arc)
             }
-            if (keyboardIn) {
-                val thick = JBUI.scale(2)
-                g2.color = JBUI.CurrentTheme.Focus.focusColor()
-                g2.stroke = BasicStroke(thick.toFloat())
-                g2.drawRoundRect(thick / 2, thick / 2, width - thick, height - thick, arc, arc)
-            } else {
-                g2.color = line
-                g2.drawRoundRect(0, 0, width - 1, height - 1, arc, arc)
-            }
+            g2.color = line
+            g2.drawRoundRect(0, 0, width - 1, height - 1, arc, arc)
+        } finally {
+            g2.dispose()
+        }
+    }
+
+    override fun paintChildren(g: Graphics) {
+        super.paintChildren(g)
+        if (!keyboardIn) return
+        val g2 = g.create() as Graphics2D
+        try {
+            DarculaUIUtil.paintFocusBorder(g2, width, height, JBUI.scale(ThreadStyle.ARC).toFloat(), true)
         } finally {
             g2.dispose()
         }

@@ -55,11 +55,12 @@ object ThreadStyle {
     val selected: Color get() = UIUtil.getListSelectionBackground(true)
 
     /**
-     * A card that waits for an answer: the panel's colour (a dialog's) lifted off the editor's, in the theme's accent
-     * line. The info banner's fill was tried first: its blue drowned the buttons.
+     * A card that waits for an answer: the panel's colour (a dialog's) lifted off the editor's, in the info banner's
+     * line colour (not the focus colour: that one marks the keyboard). The info banner's fill was tried first: its
+     * blue drowned the buttons.
      */
     val pendingFill: Color get() = UIUtil.getPanelBackground()
-    val pendingLine: Color get() = accent
+    val pendingLine: Color get() = JBUI.CurrentTheme.Banner.INFO_BORDER_COLOR
 
     /** The space between two rows of the conversation, and above a row that starts a message (unscaled). */
     const val ROW_GAP = 6
