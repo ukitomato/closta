@@ -40,7 +40,8 @@ Closta runs the `claude` command (the Claude Code CLI) and shows the conversatio
 - A turn's changes as VCS changes, opened in the IDE's combined diff.
 - A Closta window at the bottom with every session (what waits, what runs, what finished) and the MCP servers.
 - A jump to the next session that waits for you, from anywhere in the IDE.
-- Rewind and fork from a message, resume saved conversations, and start a conversation in a new git worktree.
+- Rewind and fork from a message, and resume saved conversations.
+- In a trusted project, start a conversation in a new git worktree.
 - The `claude` command's own sign-in, or Amazon Bedrock with an MFA code. Secrets stay in the IDE's password safe.
 
 **Requirements:** the [Claude Code](https://docs.claude.com/en/docs/claude-code/setup) CLI (`claude`) installed and on
@@ -119,8 +120,8 @@ All commands are under **Tools | Closta**.
 - **Amazon Bedrock**: set the region, the MFA device ARN and the long-term access keys. When a session starts, Closta
   asks for an MFA code and gets temporary credentials from AWS STS; nothing needs the `aws` command or `~/.aws`.
   Model IDs for Sonnet and Haiku can be overridden.
-  Under WSL, with debug logging on for `#com.intellij.execution`, `idea.log` can contain the temporary credentials passed
-  to the CLI. Do not share such a log.
+  Under WSL, with debug logging on for `#com.intellij.execution`, `idea.log` can contain the temporary AWS credentials
+  passed to the CLI. Do not share such a log.
 
 **Settings | Tools | Closta | Behaviour** sets whether unsaved files are saved before a message is sent, whether `@`
 file completion leaves out ignored files, and the permission mode new conversations start in.
