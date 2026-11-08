@@ -1,8 +1,10 @@
 package dev.ukitomato.closta.presenter.view
 
 import dev.ukitomato.closta.core.models.ConversationState
+import dev.ukitomato.closta.presenter.tree.JsonBool
 import dev.ukitomato.closta.presenter.tree.JsonObject
 import dev.ukitomato.closta.presenter.tree.JsonString
+import dev.ukitomato.closta.presenter.tree.JsonValue
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -92,7 +94,7 @@ class SessionGroupsTest {
 
         val change = alertsBetween(before.asBash(), after.asBash())
 
-        assertEquals(listOf(PermissionAlert(id, id, "Bash", COMMAND.take(80), answerable = true)), change.raised)
+        assertEquals(listOf(PermissionAlert(id, id, "Bash", COMMAND.take(80), answerable = false)), change.raised)
         assertEquals(emptyList<String>(), change.expired)
     }
 
@@ -138,11 +140,70 @@ class SessionGroupsTest {
         assertEquals(AlertKind.PLAN, (plan as OpenOnlyAlert).what)
     }
 
-    @Test
-    fun aReadAlertNamesTheFileOnly() {
+    private fun alertFor(
+        tool: String,
+        input: JsonObject,
+    ): PermissionAlert {
         val (before, after) = firstWait("05-permission-can-use-tool")
-        val alert = alertsBetween(before.asTool("Read"), after.asTool("Read")).raised.single() as PermissionAlert
-        assertEquals("note.txt", alert.subject)
+        return alertsBetween(before.asTool(tool, input), after.asTool(tool, input)).raised.single() as PermissionAlert
+    }
+
+    private fun bashAlert(
+        command: String,
+        vararg more: Pair<String, JsonValue> = emptyArray(),
+    ) = alertFor("Bash", JsonObject.of("command" to JsonString(command), *more))
+
+    private fun readAlert(path: String) = alertFor("Read", JsonObject.of("file_path" to JsonString(path)))
+
+    @Test
+    fun `a short one line command can be allowed from the notification`() {
+        assertTrue(bashAlert("a".repeat(80)).answerable)
+        assertTrue(bashAlert("ls", "description" to JsonString("list")).answerable)
+    }
+
+    @Test
+    fun `a long or multi line command cannot`() {
+        assertEquals(false, bashAlert("a".repeat(81)).answerable)
+        assertEquals(false, bashAlert("ls\nrm -rf x").answerable)
+    }
+
+    @Test
+    fun `a command with more input than the command cannot`() {
+        assertEquals(false, bashAlert("ls", "timeout" to JsonString("5")).answerable)
+        assertEquals(false, bashAlert("ls", "dangerouslyDisableSandbox" to JsonBool.TRUE).answerable)
+    }
+
+    @Test
+    fun `a tool other than Bash and the file tools cannot`() {
+        val input = JsonObject.of("url" to JsonString("https://example.com"))
+        for (tool in listOf("WebFetch", "Grep", "mcp__server__call")) {
+            assertEquals(false, alertFor(tool, input).answerable, tool)
+        }
+    }
+
+    @Test
+    fun `a file shows its folder`() {
+        val alert = readAlert("/home/u/.ssh/id_rsa")
+        assertEquals(".ssh/id_rsa", alert.subject)
+        assertTrue(alert.answerable)
+        assertEquals("note.txt", readAlert("note.txt").subject)
+    }
+
+    @Test
+    fun `a Read with more input than the path cannot`() {
+        val alert = alertFor("Read", JsonObject.of("file_path" to JsonString("/a/b"), "limit" to JsonString("1")))
+        assertEquals(false, alert.answerable)
+    }
+
+    @Test
+    fun `hidden characters are marked`() {
+        val rlo = String(Character.toChars(0x202E))
+        val bash = bashAlert("cat evil" + rlo + "txt.sh")
+        assertTrue(bash.subject.contains("<U+202E>"))
+        assertEquals(false, bash.answerable)
+        val read = readAlert("/a/evil" + rlo + "txt")
+        assertTrue(read.subject.contains("<U+202E>"))
+        assertEquals(false, read.answerable)
     }
 
     @Test

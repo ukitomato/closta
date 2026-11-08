@@ -1,6 +1,7 @@
 package dev.ukitomato.closta.presenter.view
 
 import dev.ukitomato.closta.core.models.ConversationState
+import dev.ukitomato.closta.presenter.tree.JsonObject
 
 // How the sessions list groups a session, and which notifications a change of its view raises. The screen and the
 // notifications only show these.
@@ -106,6 +107,7 @@ private const val FINISHED = "finished:"
 private val EDIT_TOOLS = setOf("Edit", "Write", "MultiEdit", "NotebookEdit")
 private val FILE_TOOLS = EDIT_TOOLS + "Read"
 private val COMMAND_TOOLS = setOf("Bash")
+private const val READ_TOOL = "Read"
 private const val REASON_SUBJECT = 40
 private const val ALERT_SUBJECT = 80
 
@@ -135,21 +137,40 @@ private fun alertOf(record: ApprovalRecord): SessionAlert {
         card is QuestionCard -> OpenOnlyAlert(id, id, AlertKind.QUESTION)
         record.toolName == PLAN_TOOL -> OpenOnlyAlert(id, id, AlertKind.PLAN)
         record.toolName in EDIT_TOOLS -> OpenOnlyAlert(id, id, AlertKind.EDIT)
-        else -> {
-            val tool = (card as? PermissionCard)?.toolName ?: record.toolName.orEmpty()
-            val subject = (card as? PermissionCard)?.subject.orEmpty()
-            // Only the start of a command or a file name may be shown; another tool's input (a URL, a pattern, a
-            // prompt, an MCP argument) is not.
-            val shown =
-                when (tool) {
-                    in COMMAND_TOOLS -> subject.take(ALERT_SUBJECT)
-                    in FILE_TOOLS -> subject.substringAfterLast('/').substringAfterLast('\\').take(ALERT_SUBJECT)
-                    else -> ""
-                }
-            PermissionAlert(id, id, tool, shown, answerable = true)
-        }
+        else -> permissionAlertOf(record)
     }
 }
+
+private fun permissionAlertOf(record: ApprovalRecord): PermissionAlert {
+    val id = record.requestId
+    val permission = cardOf(record) as? PermissionCard
+    val tool = permission?.toolName ?: record.toolName.orEmpty()
+    val subject = permission?.subject.orEmpty()
+    val clean = permission != null && !permission.hiddenMarked && permission.inputFields.isEmpty()
+    // Only the start of a command or the folder and name of a file may be shown; another tool's input (a URL, a
+    // pattern, a prompt, an MCP argument) is not. Allow is offered only when what is shown is all of the input: a Bash
+    // command that fits on one line, a Read with a path alone.
+    val (shown, whole) =
+        when (tool) {
+            in COMMAND_TOOLS ->
+                subject.take(ALERT_SUBJECT) to
+                    (clean && !permission.sandboxOff && '\n' !in subject && subject.length <= ALERT_SUBJECT)
+            in FILE_TOOLS -> lastSegments(subject) to (clean && tool == READ_TOOL && pathOnly(record))
+            else -> "" to false
+        }
+    return PermissionAlert(id, id, tool, shown.take(ALERT_SUBJECT), answerable = whole)
+}
+
+// A Read card lists no fields, so the request itself says whether it holds more than the path.
+private fun pathOnly(record: ApprovalRecord): Boolean =
+    (record.input as? JsonObject)?.entries?.map { it.key } == listOf("file_path")
+
+private fun lastSegments(path: String): String =
+    path
+        .split('/', '\\')
+        .filter { it.isNotEmpty() }
+        .takeLast(2)
+        .joinToString("/")
 
 /** How long a session's name in the sessions list may be. */
 const val TITLE_MAX = 60
