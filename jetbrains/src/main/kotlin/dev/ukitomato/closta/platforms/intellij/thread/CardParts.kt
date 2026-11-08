@@ -17,10 +17,12 @@ import dev.ukitomato.closta.presenter.view.ApprovalOutcome
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.FlowLayout
+import java.awt.event.KeyEvent
 import javax.swing.Icon
 import javax.swing.JButton
 import javax.swing.JComponent
 import javax.swing.JPanel
+import javax.swing.KeyStroke
 
 /** What a waiting card says first: an icon and one sentence of what Claude wants to do. */
 internal data class Headline(
@@ -78,8 +80,8 @@ internal fun answeredLine(
 private const val ABOUT_MAX = 120
 
 /**
- * A card's answer button. It never takes the keyboard (the card keeps it, for its keys); [main] is drawn as the
- * default button, the answer Enter gives.
+ * A card's answer button. It takes the keyboard like any button (Tab reaches it, Space presses it); [main] is drawn as
+ * the default button.
  */
 internal fun cardButton(
     text: String,
@@ -87,10 +89,14 @@ internal fun cardButton(
     act: () -> Unit,
 ): JButton =
     JButton(text).apply {
-        isFocusable = false
+        isFocusable = true
         if (main) putClientProperty(DarculaButtonUI.DEFAULT_STYLE_KEY, true)
         addActionListener { act() }
     }
+
+/** Enter never presses this button, so a key meant for another part of the card never allows with it. */
+internal fun JButton.enterNeverPresses(): JButton =
+    apply { getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "none") }
 
 /** The line under a card that says why its answer did not go, in the error colour. */
 internal fun failureRow(

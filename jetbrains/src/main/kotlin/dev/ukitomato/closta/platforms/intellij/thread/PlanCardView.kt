@@ -85,7 +85,7 @@ internal fun planOutcomeText(outcome: ApprovalOutcome): String =
 
 /**
  * The plan's waiting card: whether to approve the plan, with its title and a link to its tab, then approve with auto
- * edits (1), approve and review edits (2), keep planning (3), by key or button: Esc to keep planning, Tab for a
+ * edits (1), approve and review edits (2), keep planning (3), by key or button: Esc to keep planning, a link for a
  * sentence to go with it, and Enter for nothing ([cardKey]). It answers once.
  */
 internal class PlanView(
@@ -99,8 +99,12 @@ internal class PlanView(
     private var sent = false
     private val buttons =
         listOf(
-            cardButton(ClostaBundle.message("thread.plan.autoEdits"), main = true) { decide(PlanChoice.AUTO_EDITS) },
-            cardButton(ClostaBundle.message("thread.plan.askEdits")) { decide(PlanChoice.ASK_EDITS) },
+            cardButton(ClostaBundle.message("thread.plan.autoEdits"), main = true) {
+                decide(PlanChoice.AUTO_EDITS)
+            }.enterNeverPresses(),
+            cardButton(ClostaBundle.message("thread.plan.askEdits")) {
+                decide(PlanChoice.ASK_EDITS)
+            }.enterNeverPresses(),
             cardButton(ClostaBundle.message("thread.plan.keepPlanning")) { decide(PlanChoice.KEEP_PLANNING) },
         )
     private val comment =
@@ -127,7 +131,8 @@ internal class PlanView(
                     row { comment(ClostaBundle.message("thread.plan.missing")) }
                 }
                 row { cell(buttonLine(buttons)).align(AlignX.FILL) }.topGap(TopGap.SMALL)
-                keysRow = row { comment(ClostaBundle.message("thread.plan.keys")) }.visible(false)
+                row { link(ClostaBundle.message("thread.card.addNote")) { openNote() } }
+                keysRow = row { comment(ClostaBundle.message("thread.plan.keys", buttons.size)) }.visible(false)
                 commentRow = row { cell(comment).align(AlignX.FILL) }.visible(false)
                 failureRow(this, card.failure)
             }
@@ -141,10 +146,6 @@ internal class PlanView(
             when (key) {
                 is CardKey.Choose -> decide(PLAN_CHOICES[key.index])
                 CardKey.Deny -> decide(PlanChoice.KEEP_PLANNING)
-                CardKey.OpenNote -> {
-                    showNote(true)
-                    comment.requestFocusInWindow()
-                }
                 CardKey.ToComposer -> letGo()
                 else -> Unit
             }
@@ -153,6 +154,11 @@ internal class PlanView(
             keysRow.visible(cardHint(inside, 1) == CardHint.KEYS)
             resized(this)
         }
+    }
+
+    private fun openNote() {
+        showNote(true)
+        comment.requestFocusInWindow()
     }
 
     private fun showNote(shown: Boolean) {
