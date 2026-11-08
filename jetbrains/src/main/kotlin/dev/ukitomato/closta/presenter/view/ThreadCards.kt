@@ -34,7 +34,10 @@ data class PermissionCard(
      * [diff] shows the change) and Read.
      */
     val inputFields: List<InputField> = emptyList(),
-    /** Whether [subject] or any of [inputFields] had a hidden or bidirectional character, now shown as a mark. */
+    /**
+     * Whether [subject], any of [inputFields] or any of [suggestionLines] had a hidden or bidirectional character, now
+     * shown as a mark.
+     */
     val hiddenMarked: Boolean = false,
     /** Whether [subject] is one of [inputFields] (another tool's first string), so it is not shown a second time. */
     val subjectInFields: Boolean = false,
@@ -52,9 +55,9 @@ data class SuggestionLine(
     val detail: String,
 )
 
-/** The [suggestions] as lines, in the order offered. */
+/** The [suggestions] as lines, in the order offered, hidden characters in each detail marked. */
 fun suggestionLinesOf(suggestions: List<SuggestionRecord>): List<SuggestionLine> =
-    suggestions.map { SuggestionLine(it.kind, it.detail) }
+    suggestions.map { SuggestionLine(it.kind, visible(it.detail).text) }
 
 /** One key of a tool's input and its value: a string as it is, any other value as compact JSON, hidden ones marked. */
 data class InputField(
@@ -142,7 +145,9 @@ private fun permissionCardOf(approval: ApprovalRecord): PermissionCard {
         approval.failure,
         editDiff(tool, input),
         fields.map { (key, value) -> InputField(key.text, value.text) },
-        subject?.hadHidden == true || fields.any { (key, value) -> key.hadHidden || value.hadHidden },
+        subject?.hadHidden == true ||
+            fields.any { (key, value) -> key.hadHidden || value.hadHidden } ||
+            approval.suggestions.any { visible(it.detail).hadHidden },
         subjectInFields = subject != null && subjectKey == null,
         sandboxOff = tool in BY_COMMAND && input?.get("dangerouslyDisableSandbox").isTrue(),
         rawPath = raw.takeIf { tool in BY_FILE },

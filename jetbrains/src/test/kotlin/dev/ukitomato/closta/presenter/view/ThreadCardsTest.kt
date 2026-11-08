@@ -226,6 +226,28 @@ class ThreadCardsTest {
     }
 
     @Test
+    fun `a suggestion with a hidden character is marked`() {
+        val override = String(Character.toChars(0x202E))
+        val dirs = SuggestionRecord("s1", "addDirectories", "/a/evil${override}txt", "session", "{}")
+        val approval =
+            ApprovalRecord(
+                "r1",
+                "t1",
+                "Bash",
+                null,
+                dev.ukitomato.closta.presenter.tree.JsonObject
+                    .of("command" to str("ls")),
+                ask = false,
+                anchor = null,
+                suggestions = listOf(dirs),
+            )
+        val card = cardOf(approval) as PermissionCard
+        assertEquals(listOf(SuggestionLine("addDirectories", "/a/evil<U+202E>txt")), card.suggestionLines)
+        assertTrue(card.hiddenMarked)
+        assertEquals(listOf(dirs), card.suggestions)
+    }
+
+    @Test
     fun `a field with a hidden character in its key or value is marked`() {
         val zeroWidth = Char(0x200B).toString()
         val (byValue, _) =
