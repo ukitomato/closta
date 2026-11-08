@@ -196,6 +196,28 @@ class SessionGroupsTest {
     }
 
     @Test
+    fun `a Bash without a string command cannot`() {
+        assertEquals(false, alertFor("Bash", JsonObject.of()).answerable)
+        assertEquals(false, alertFor("Bash", JsonObject.of("command" to JsonBool.TRUE)).answerable)
+        assertEquals(false, bashAlert("").answerable)
+    }
+
+    @Test
+    fun `a Read that is not a path alone cannot`() {
+        assertEquals(false, alertFor("Read", JsonObject.of()).answerable)
+        assertEquals(false, readAlert("").answerable)
+        for (key in listOf("offset", "pages")) {
+            val input = JsonObject.of("file_path" to JsonString("/a/b"), key to JsonString("1"))
+            assertEquals(false, alertFor("Read", input).answerable, key)
+        }
+    }
+
+    @Test
+    fun `a Windows path shows its folder`() {
+        assertEquals(".ssh/id_rsa", readAlert("C:\\a\\.ssh\\id_rsa").subject)
+    }
+
+    @Test
     fun `hidden characters are marked`() {
         val rlo = String(Character.toChars(0x202E))
         val bash = bashAlert("cat evil" + rlo + "txt.sh")

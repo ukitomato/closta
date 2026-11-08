@@ -117,13 +117,11 @@ class SessionAlerts(
                 },
             )
         }
-        if (!text.answerable) {
-            notification.addAction(
-                NotificationAction.createSimpleExpiring(OPEN_CONVERSATION) {
-                    bringAndShow(entry.project, entry.sessionId)
-                },
-            )
-        }
+        notification.addAction(
+            NotificationAction.createSimpleExpiring(OPEN_CONVERSATION) {
+                bringAndShow(entry.project, entry.sessionId)
+            },
+        )
         mine.remove(alert.key)?.expire()
         mine[alert.key] = notification
         notification.whenExpired { mine.remove(alert.key, notification) }

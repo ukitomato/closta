@@ -2,6 +2,7 @@ package dev.ukitomato.closta.presenter.view
 
 import dev.ukitomato.closta.core.models.ConversationState
 import dev.ukitomato.closta.presenter.tree.JsonObject
+import dev.ukitomato.closta.presenter.tree.JsonString
 
 // How the sessions list groups a session, and which notifications a change of its view raises. The screen and the
 // notifications only show these.
@@ -154,7 +155,13 @@ private fun permissionAlertOf(record: ApprovalRecord): PermissionAlert {
         when (tool) {
             in COMMAND_TOOLS ->
                 subject.take(ALERT_SUBJECT) to
-                    (clean && !permission.sandboxOff && '\n' !in subject && subject.length <= ALERT_SUBJECT)
+                    (
+                        clean &&
+                            subject.isNotEmpty() &&
+                            !permission.sandboxOff &&
+                            '\n' !in subject &&
+                            subject.length <= ALERT_SUBJECT
+                    )
             in FILE_TOOLS -> lastSegments(subject) to (clean && tool == READ_TOOL && pathOnly(record))
             else -> "" to false
         }
@@ -163,7 +170,10 @@ private fun permissionAlertOf(record: ApprovalRecord): PermissionAlert {
 
 // A Read card lists no fields, so the request itself says whether it holds more than the path.
 private fun pathOnly(record: ApprovalRecord): Boolean =
-    (record.input as? JsonObject)?.entries?.map { it.key } == listOf("file_path")
+    (record.input as? JsonObject)?.let { input ->
+        input.entries.map { it.key } == listOf("file_path") &&
+            !(input["file_path"] as? JsonString)?.value.isNullOrEmpty()
+    } == true
 
 private fun lastSegments(path: String): String =
     path
