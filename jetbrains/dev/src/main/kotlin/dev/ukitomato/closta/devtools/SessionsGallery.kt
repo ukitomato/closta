@@ -60,6 +60,8 @@ internal class SessionsGallery(
             withContext(Dispatchers.EDT) {
                 note("shot $kind: focus = ${probe.focusText()}")
                 shootWindow("sessions-$kind.png")
+                // The detail pane of a waiting question and of a waiting plan, under their own names.
+                if (kind in DETAIL_KINDS) shootWindow("sessions-detail-$kind.png")
             }
             // A body taller than the window: its end too.
             val scrolled = withContext(Dispatchers.EDT) { probe.scrollDetailToEnd() }
@@ -199,6 +201,7 @@ internal class SessionsGallery(
 
     private companion object {
         const val MARK_ID = "gallery-mark"
+        val DETAIL_KINDS = setOf("question", "plan")
         const val HEIGHT = 340
         const val SETTLE_MS = 2_000L
         const val SHOT_MS = 1_200L
