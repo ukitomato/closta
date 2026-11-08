@@ -19,3 +19,13 @@ fun restoredText(
     current: String,
     words: String,
 ): String = if (current.isBlank()) words else words + "\n" + current
+
+/** What goes to the CLI: a slash command (judged after trimming) goes alone; any other message adds ranges and file. */
+fun outgoingText(
+    outgoing: Outgoing,
+    range: (LineSelection) -> String,
+): String {
+    if (outgoing.words.trim().startsWith("/")) return outgoing.words
+    val places = outgoing.selections.joinToString("") { "\n" + range(it) }
+    return outgoing.words + places + outgoing.file?.let { "\n@$it" }.orEmpty()
+}

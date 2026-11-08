@@ -554,11 +554,10 @@ class ComposerPanel(
             return
         }
         if (words.isEmpty() && attached.isEmpty()) return
-        val places = selections.joinToString("") { "\n" + rangeLabel(it.path, it.start, it.end, forChip = false) }
-        val file = currentFile?.let { relative(it) }
-        val text = words + places + file?.let { "\n@$it" }.orEmpty()
         val files = attached.toList()
+        val file = currentFile?.let { relative(it) }
         val outgoing = Outgoing(words, selections.toList(), file, files, draft.thumbnails.toMap())
+        val text = outgoingText(outgoing) { rangeLabel(it.path, it.start, it.end, forChip = false) }
         field.text = ""
         attached.clear()
         draft.thumbnails.clear()
