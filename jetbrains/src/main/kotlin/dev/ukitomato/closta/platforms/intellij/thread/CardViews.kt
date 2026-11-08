@@ -32,6 +32,7 @@ import dev.ukitomato.closta.presenter.view.ThreadCard
 import dev.ukitomato.closta.presenter.view.allowPayload
 import dev.ukitomato.closta.presenter.view.answerPayload
 import dev.ukitomato.closta.presenter.view.keptSuggestions
+import dev.ukitomato.closta.presenter.view.offersDestination
 import dev.ukitomato.closta.presenter.view.passedOn
 import dev.ukitomato.closta.presenter.view.permissionChoice
 import dev.ukitomato.closta.presenter.view.questionAnswers
@@ -172,6 +173,7 @@ class CardViews(
         private var sent = false
         private var destination: String? =
             (card.suggestions.firstOrNull { it.kind in RULE_KINDS } ?: card.suggestions.firstOrNull())?.destination
+        private val offersWhere = offersDestination(card.suggestions)
         private val buttons = ArrayList<JButton>()
         private val comment =
             JBTextField().apply { emptyText.text = ClostaBundle.message("thread.permission.comment.placeholder") }
@@ -188,7 +190,7 @@ class CardViews(
             val keep =
                 card.suggestions.firstOrNull()?.let { first ->
                     cardButton(keepLabel(), act = { decide(PermissionChoice.ALLOW_KEEP) }).apply {
-                        toolTipText = first.detail.ifEmpty { first.kind }
+                        toolTipText = StringUtil.escapeXmlEntities(first.detail.ifEmpty { first.kind })
                     }
                 }
             val no =
@@ -227,7 +229,7 @@ class CardViews(
                         }
                     }
                     row { cell(buttonLine(buttons)).align(AlignX.FILL) }.topGap(TopGap.SMALL)
-                    if (keep != null) {
+                    if (keep != null && offersWhere) {
                         // The words and the drop-down wrap like the buttons, so the drop-down stays in a narrow card.
                         val where =
                             DropDownLink(Destination(destination), SUGGESTION_DESTINATIONS.map(::Destination)) {
@@ -277,7 +279,13 @@ class CardViews(
 
         private fun keepLabel(): String =
             ClostaBundle.message(
-                if (destination == "session") "thread.permission.allowSession" else "thread.permission.allowAlways",
+                if (!offersWhere ||
+                    destination == "session"
+                ) {
+                    "thread.permission.allowSession"
+                } else {
+                    "thread.permission.allowAlways"
+                },
             )
 
         private fun decide(choice: PermissionChoice) {

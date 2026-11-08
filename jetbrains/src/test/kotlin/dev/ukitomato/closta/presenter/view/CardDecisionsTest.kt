@@ -96,6 +96,14 @@ class CardDecisionsTest {
     }
 
     @Test
+    fun `a destination is offered only when a rule is suggested`() {
+        val dirs = SuggestionRecord("s4", "addDirectories", "/a", "session", """{"type":"addDirectories"}""")
+        assertTrue(offersDestination(listOf(mode, rule)))
+        assertFalse(offersDestination(listOf(mode, dirs)))
+        assertFalse(offersDestination(emptyList()))
+    }
+
+    @Test
     fun `answers join a multi-select with a comma and use other when written`() {
         val answers =
             questionAnswers(

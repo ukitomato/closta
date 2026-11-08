@@ -20,6 +20,9 @@ fun permissionChoice(
 /** The suggestion kinds that save a permission rule, so a destination applies to them. */
 val RULE_KINDS = setOf("addRules", "replaceRules", "removeRules")
 
+/** Whether a save destination means anything for [suggestions]: only a rule suggestion is saved somewhere. */
+fun offersDestination(suggestions: List<SuggestionRecord>): Boolean = suggestions.any { it.kind in RULE_KINDS }
+
 /**
  * The [suggestions] an allow keeps: each as the CLI offered it. When the user chose a [destination] only the rule
  * suggestions move there; a mode switch or a directory grant stays where it was offered.
