@@ -9,7 +9,7 @@ Thanks for your interest. Bug reports, ideas and pull requests are welcome.
 
 ## Building and testing
 
-JDK 21 is required. The Gradle root is `jetbrains/`.
+JDK 25 is required (the build targets Java 21 bytecode). The Gradle root is `jetbrains/`.
 
 ```bash
 cd jetbrains

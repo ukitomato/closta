@@ -3,6 +3,7 @@ import org.jetbrains.changelog.Changelog
 import org.jetbrains.changelog.markdownToHTML
 import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask
 import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.io.File
 
 plugins {
@@ -83,9 +84,15 @@ dependencies {
     }
 }
 
+// Build and test on JDK 25, which IntelliJ 2026.2 needs. sourceCompatibility stays at the toolchain's 25 because the
+// platform plugin's verifyPluginProjectConfiguration warns when it is lower; the bytecode (Kotlin and Java) stays 21
+// so it still loads in the older IDE runtimes in range.
+java { targetCompatibility = JavaVersion.VERSION_21 }
+
 kotlin {
-    jvmToolchain(21)
+    jvmToolchain(25)
     compilerOptions {
+        jvmTarget = JvmTarget.JVM_21
         // A class that implements a Java interface gets no bridge for the interface's default methods. With the bridge
         // the class overrides and calls isApplicable / getEditorTabTooltipText, which the Verifier reports as
         // deprecated even though the source never names them.
@@ -236,6 +243,9 @@ detekt {
     buildUponDefaultConfig = true
     config.setFrom(files("config/detekt/detekt.yml"))
 }
+
+// Detekt's Kotlin does not know JVM 25 yet, so it analyses against the bytecode target.
+tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach { jvmTarget = "21" }
 
 // --- Layer rules --------------------------------------------------------------------------------
 // The layering (core / presenter / providers / platforms) is worth nothing as prose, so the build

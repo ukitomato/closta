@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     id("org.jetbrains.kotlin.jvm")
@@ -24,9 +25,17 @@ dependencies {
     implementation(testFixtures(project(":")) as ModuleDependency) { isTransitive = false }
 }
 
+// Build and test on JDK 25, which IntelliJ 2026.2 needs. sourceCompatibility stays at the toolchain's 25 because the
+// platform plugin's verifyPluginProjectConfiguration warns when it is lower; the bytecode (Kotlin and Java) stays 21
+// so it still loads in the older IDE runtimes in range.
+java { targetCompatibility = JavaVersion.VERSION_21 }
+
 kotlin {
-    jvmToolchain(21)
-    compilerOptions { jvmDefault = JvmDefaultMode.NO_COMPATIBILITY }
+    jvmToolchain(25)
+    compilerOptions {
+        jvmTarget = JvmTarget.JVM_21
+        jvmDefault = JvmDefaultMode.NO_COMPATIBILITY
+    }
 }
 
 intellijPlatform {
@@ -47,6 +56,9 @@ detekt {
     buildUponDefaultConfig = true
     config.setFrom(files("../config/detekt/detekt.yml"))
 }
+
+// Detekt's Kotlin does not know JVM 25 yet, so it analyses against the bytecode target.
+tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach { jvmTarget = "21" }
 
 // Only runIde loads this plugin. It is never verified, signed or published.
 tasks.verifyPlugin { enabled = false }
