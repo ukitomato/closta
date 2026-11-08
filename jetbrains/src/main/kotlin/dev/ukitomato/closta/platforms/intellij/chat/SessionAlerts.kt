@@ -14,6 +14,8 @@ import com.intellij.ui.SystemNotifications
 import dev.ukitomato.closta.core.models.ApprovalDecision
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
 import dev.ukitomato.closta.platforms.intellij.session.SessionView
+import dev.ukitomato.closta.platforms.intellij.sessions.SessionItem
+import dev.ukitomato.closta.platforms.intellij.sessions.confirmed
 import dev.ukitomato.closta.platforms.intellij.sessions.endSession
 import dev.ukitomato.closta.platforms.intellij.sessions.showInSessions
 import dev.ukitomato.closta.platforms.intellij.thread.CardAnswer
@@ -53,6 +55,7 @@ class SessionAlerts(
     private val book = AlertBook()
     private val waiting = HashMap<String, Notification>()
     private val finished = HashMap<String, MutableMap<String, Notification>>()
+    private val running = HashMap<String, Notification>()
 
     private val failures =
         CoroutineExceptionHandler { _, failure ->
@@ -65,7 +68,9 @@ class SessionAlerts(
             directory.entries.collect { entries ->
                 val open = entries.mapTo(HashSet()) { it.sessionId }
                 withContext(Dispatchers.EDT) {
-                    (book.sessionIds() + waiting.keys + finished.keys).filter { it !in open }.forEach(::forget)
+                    (book.sessionIds() + waiting.keys + finished.keys + running.keys).filter { it !in open }.forEach(
+                        ::forget,
+                    )
                 }
             }
         }
@@ -76,7 +81,13 @@ class SessionAlerts(
         view: SessionView,
     ) {
         val id = entry.sessionId
+        if (directory.isVisible(id)) shown(id)
         apply(entry, book.changed(id, view.conversation to view.transcript, directory.isVisible(id)))
+    }
+
+    /** The session [sessionId] is in view again: its "keeps running" notice is over. */
+    fun shown(sessionId: String) {
+        running.remove(sessionId)?.expire()
     }
 
     /** The session [sessionId] went out of view: what still waits in it and is not shown yet is shown now. */
@@ -186,28 +197,46 @@ class SessionAlerts(
      * watched. A balloon, no modal.
      */
     fun keepsRunning(entry: ChatDirectory.Entry) {
-        NotificationGroupManager
-            .getInstance()
-            .getNotificationGroup(NoticeGroups.RUNNING)
-            .createNotification(
-                ClostaBundle.message("chat.alert.keepsRunning", StringUtil.escapeXmlEntities(entry.title)),
-                ClostaBundle.message("chat.alert.keepsRunning.body"),
-                NotificationType.INFORMATION,
-            ).setDisplayId("closta.alert.keepsRunning")
-            .addAction(
-                NotificationAction.createSimpleExpiring(ClostaBundle.message("chat.sessions.stop")) {
+        running.remove(entry.sessionId)?.expire()
+        val notification =
+            NotificationGroupManager
+                .getInstance()
+                .getNotificationGroup(NoticeGroups.RUNNING)
+                .createNotification(
+                    ClostaBundle.message("chat.alert.keepsRunning", StringUtil.escapeXmlEntities(entry.title)),
+                    ClostaBundle.message("chat.alert.keepsRunning.body"),
+                    NotificationType.INFORMATION,
+                ).setDisplayId("closta.alert.keepsRunning")
+        notification.addAction(
+            NotificationAction.create(
+                ClostaBundle.message("action.Closta.Sessions.EndSession.MainMenu.text"),
+            ) { event, _ ->
+                val item = SessionItem.Live(entry)
+                confirmed(
+                    item,
+                    ClostaBundle.message("chat.sessions.stop.confirm"),
+                    ClostaBundle.message("action.Closta.Sessions.EndSession.MainMenu.text"),
+                    event,
+                ) {
+                    notification.expire()
                     endSession(entry)
-                },
-            ).addAction(
-                NotificationAction.createSimpleExpiring(ClostaBundle.message("chat.alert.showInSessions")) {
-                    showInSessions(entry.project, entry.sessionId)
-                },
-            ).notify(entry.project)
+                }
+            },
+        )
+        notification.addAction(
+            NotificationAction.createSimpleExpiring(ClostaBundle.message("chat.alert.showInSessions")) {
+                showInSessions(entry.project, entry.sessionId)
+            },
+        )
+        running[entry.sessionId] = notification
+        notification.whenExpired { running.remove(entry.sessionId, notification) }
+        notification.notify(entry.project)
     }
 
     private fun forget(sessionId: String) {
         book.forget(sessionId)
         waiting.remove(sessionId)?.expire()
+        running.remove(sessionId)?.expire()
         finished
             .remove(sessionId)
             ?.values

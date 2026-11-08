@@ -44,7 +44,11 @@ private fun choicesIn(project: Project): List<AnAction> =
         choice(ClostaBundle.message("chat.newChat.inSidebar"), AllIcons.General.Add) {
             openNewChat(project, Placement.SIDEBAR)
         },
-        choice(ClostaBundle.message("chat.sessions.newWorktree"), AllIcons.Vcs.Branch) {
+        choice(
+            ClostaBundle.message("chat.sessions.newWorktree"),
+            AllIcons.Vcs.Branch,
+            enabled = { worktreeChatPossible(project) },
+        ) {
             openWorktreeChat(project)
         },
     )
@@ -99,7 +103,14 @@ private fun providerRow(
 private fun choice(
     text: String,
     icon: javax.swing.Icon,
+    enabled: () -> Boolean = { true },
     run: () -> Unit,
 ) = object : DumbAwareAction(text, null, icon) {
+    override fun getActionUpdateThread() = ActionUpdateThread.BGT
+
+    override fun update(e: AnActionEvent) {
+        e.presentation.isEnabled = enabled()
+    }
+
     override fun actionPerformed(e: AnActionEvent) = run()
 }

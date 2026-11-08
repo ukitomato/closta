@@ -115,7 +115,12 @@ internal class EndSessionAction : SessionRowAction() {
         item: SessionItem,
     ) {
         val live = item as? SessionItem.Live ?: return
-        confirmed(item, message("chat.sessions.stop.confirm"), message("action.Closta.Sessions.EndSession.text"), e) {
+        confirmed(
+            item,
+            message("chat.sessions.stop.confirm"),
+            message("action.Closta.Sessions.EndSession.MainMenu.text"),
+            e,
+        ) {
             endSession(live.entry)
         }
     }
@@ -133,7 +138,12 @@ internal class ArchiveAction : SessionRowAction() {
         e: AnActionEvent,
         item: SessionItem,
     ) {
-        confirmed(item, message("chat.sessions.archive.confirm"), message("action.Closta.Sessions.Archive.text"), e) {
+        confirmed(
+            item,
+            message("chat.sessions.archive.confirm"),
+            message("action.Closta.Sessions.Archive.MainMenu.text"),
+            e,
+        ) {
             service<ChatDirectory>().archive(item.sessionId)
         }
     }

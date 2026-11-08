@@ -34,15 +34,39 @@
     </extensions>
     <actions>
         <!-- Text and description: the bundle's action.<id>.text and .description (group.<id>.* for groups). -->
-        <action id="Closta.Sessions.OpenInEditor" class="dev.ukitomato.closta.platforms.intellij.sessions.OpenInEditorAction"/>
-        <action id="Closta.Sessions.OpenInSidebar" class="dev.ukitomato.closta.platforms.intellij.sessions.OpenInSidebarAction"/>
+        <action id="Closta.Sessions.OpenInEditor" class="dev.ukitomato.closta.platforms.intellij.sessions.OpenInEditorAction">
+            <override-text place="MainMenu"/>
+            <override-text place="ClostaSessions" use-text-of-place="MainMenu"/>
+        </action>
+        <action id="Closta.Sessions.OpenInSidebar" class="dev.ukitomato.closta.platforms.intellij.sessions.OpenInSidebarAction">
+            <override-text place="MainMenu"/>
+            <override-text place="ClostaSessions" use-text-of-place="MainMenu"/>
+        </action>
         <action id="Closta.Sessions.EndSession" class="dev.ukitomato.closta.platforms.intellij.sessions.EndSessionAction"
-                icon="AllIcons.Actions.Suspend"/>
-        <action id="Closta.Sessions.Archive" class="dev.ukitomato.closta.platforms.intellij.sessions.ArchiveAction"/>
-        <action id="Closta.Sessions.ResumeInEditor" class="dev.ukitomato.closta.platforms.intellij.sessions.ResumeInEditorAction"/>
-        <action id="Closta.Sessions.ResumeInSidebar" class="dev.ukitomato.closta.platforms.intellij.sessions.ResumeInSidebarAction"/>
-        <action id="Closta.Sessions.ClearMark" class="dev.ukitomato.closta.platforms.intellij.sessions.ClearMarkAction"/>
-        <action id="Closta.Sessions.Open" class="dev.ukitomato.closta.platforms.intellij.sessions.OpenAction"/>
+                icon="AllIcons.Actions.Suspend">
+            <override-text place="MainMenu"/>
+            <override-text place="ClostaSessions" use-text-of-place="MainMenu"/>
+        </action>
+        <action id="Closta.Sessions.Archive" class="dev.ukitomato.closta.platforms.intellij.sessions.ArchiveAction">
+            <override-text place="MainMenu"/>
+            <override-text place="ClostaSessions" use-text-of-place="MainMenu"/>
+        </action>
+        <action id="Closta.Sessions.ResumeInEditor" class="dev.ukitomato.closta.platforms.intellij.sessions.ResumeInEditorAction">
+            <override-text place="MainMenu"/>
+            <override-text place="ClostaSessions" use-text-of-place="MainMenu"/>
+        </action>
+        <action id="Closta.Sessions.ResumeInSidebar" class="dev.ukitomato.closta.platforms.intellij.sessions.ResumeInSidebarAction">
+            <override-text place="MainMenu"/>
+            <override-text place="ClostaSessions" use-text-of-place="MainMenu"/>
+        </action>
+        <action id="Closta.Sessions.ClearMark" class="dev.ukitomato.closta.platforms.intellij.sessions.ClearMarkAction">
+            <override-text place="MainMenu"/>
+            <override-text place="ClostaSessions" use-text-of-place="MainMenu"/>
+        </action>
+        <action id="Closta.Sessions.Open" class="dev.ukitomato.closta.platforms.intellij.sessions.OpenAction">
+            <override-text place="MainMenu"/>
+            <override-text place="ClostaSessions" use-text-of-place="MainMenu"/>
+        </action>
         <action id="Closta.ResumeSidebarChat" class="dev.ukitomato.closta.platforms.intellij.chat.ResumeSidebarChatAction"
                 icon="AllIcons.Vcs.History">
             <synonym text="Claude"/>

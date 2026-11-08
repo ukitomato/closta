@@ -4,6 +4,7 @@ import dev.ukitomato.closta.platforms.intellij.chat.NoticeGroups
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.w3c.dom.Element
 import java.util.Properties
@@ -89,6 +90,28 @@ class PluginXmlTest {
             val menu = words.getProperty("action.$id.MainMenu.text")
             assertNotNull(menu, id)
             assertFalse(menu.startsWith("Closta:"), id)
+        }
+    }
+
+    // Find Action lists the full text, so the row actions carry the prefix; the menus and the toolbar show it short.
+    @Test
+    fun theRowActionsAreNamedWithThePrefixAndShortInTheSessionsPlace() {
+        val actions = elements("action").associateBy { it.getAttribute("id") }
+        rowActions.forEach { id ->
+            val action = checkNotNull(actions[id]) { id }
+            assertTrue(checkNotNull(words.getProperty("action.$id.text")) { id }.startsWith("Closta: "), id)
+            val menu = checkNotNull(words.getProperty("action.$id.MainMenu.text")) { id }
+            assertFalse(menu.startsWith("Closta:"), id)
+            val overrides =
+                (0 until action.getElementsByTagName("override-text").length).map {
+                    action.getElementsByTagName("override-text").item(it) as Element
+                }
+            assertEquals(setOf("MainMenu", "ClostaSessions"), overrides.map { it.getAttribute("place") }.toSet(), id)
+            assertEquals(
+                "MainMenu",
+                overrides.single { it.getAttribute("place") == "ClostaSessions" }.getAttribute("use-text-of-place"),
+                id,
+            )
         }
     }
 

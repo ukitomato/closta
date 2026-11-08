@@ -42,7 +42,7 @@ class NewWorktreeChatAction :
 
     override fun update(event: AnActionEvent) {
         val project = event.project
-        event.presentation.isEnabled = project?.basePath != null && worktreeChatAllowed(project) && hasGitRoot(project)
+        event.presentation.isEnabled = project?.basePath != null && worktreeChatPossible(project)
     }
 
     override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
@@ -63,8 +63,9 @@ fun openWorktreeChat(project: Project) {
     val once = Disposer.newDisposable(project, "Closta worktree")
     project.service<ClaudeSessionService>().viewScope(once).launch {
         try {
+            // Not cancellable: git cannot be stopped midway, and a cancel would leave the worktree behind.
             val result =
-                withBackgroundProgress(project, ClostaBundle.message("chat.worktree.creating")) {
+                withBackgroundProgress(project, ClostaBundle.message("chat.worktree.creating"), cancellable = false) {
                     withContext(Dispatchers.IO) {
                         val taken = File(root, ".claude/worktrees").list()?.toSet().orEmpty()
                         GitWorktrees(root).create(WorktreeRequest(worktreeName(LocalDateTime.now(), taken)))
@@ -90,6 +91,9 @@ fun openWorktreeChat(project: Project) {
 /** The one place that decides whether a worktree may be made: only in a trusted project (the IDE's Safe Mode). */
 private fun worktreeChatAllowed(project: Project?): Boolean =
     project != null && TrustedProjects.isProjectTrusted(project)
+
+/** Whether a worktree can be made now: a trusted project with a Git root. */
+internal fun worktreeChatPossible(project: Project): Boolean = worktreeChatAllowed(project) && hasGitRoot(project)
 
 private fun hasGitRoot(project: Project): Boolean =
     ProjectLevelVcsManager.getInstance(project).allVcsRoots.any { it.vcs?.name == "Git" }
