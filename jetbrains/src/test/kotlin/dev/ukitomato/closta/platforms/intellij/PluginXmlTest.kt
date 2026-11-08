@@ -11,13 +11,16 @@ import javax.xml.parsers.DocumentBuilderFactory
 
 class PluginXmlTest {
     private val loader = PluginXmlTest::class.java.classLoader
-    private val groups: List<Element> =
+    private val document =
         DocumentBuilderFactory
             .newInstance()
             .newDocumentBuilder()
             .parse(checkNotNull(loader.getResourceAsStream("META-INF/plugin.xml")))
-            .getElementsByTagName("notificationGroup")
-            .let { list -> (0 until list.length).map { list.item(it) as Element } }
+
+    private fun elements(tag: String): List<Element> =
+        document.getElementsByTagName(tag).let { list -> (0 until list.length).map { list.item(it) as Element } }
+
+    private val groups: List<Element> = elements("notificationGroup")
     private val words =
         Properties().apply {
             checkNotNull(
@@ -46,4 +49,44 @@ class PluginXmlTest {
     @Test
     fun whatWaitsStaysUntilAnswered() =
         assertEquals("STICKY_BALLOON", groups.single { id(it) == NoticeGroups.WAITING }.getAttribute("displayType"))
+
+    private val rowActions =
+        listOf(
+            "OpenInEditor",
+            "OpenInSidebar",
+            "EndSession",
+            "Archive",
+            "ResumeInEditor",
+            "ResumeInSidebar",
+            "ClearMark",
+            "Open",
+        ).map { "Closta.Sessions.$it" }
+
+    @Test
+    fun theSessionsWindowsActionsAreRegistered() {
+        val registered = elements("action").map { it.getAttribute("id") }.toSet()
+        assertEquals(emptyList<String>(), (rowActions + "Closta.ResumeSidebarChat").filter { it !in registered })
+    }
+
+    @Test
+    fun theSessionsWindowsMenusAndToolbarAreRegistered() {
+        val registered = elements("group").map { it.getAttribute("id") }.toSet()
+        val wanted = listOf("LiveMenu", "MarkMenu", "Toolbar").map { "Closta.Sessions.$it" }
+        assertEquals(emptyList<String>(), wanted.filter { it !in registered })
+    }
+
+    @Test
+    fun everyActionIsWordedInTheBundle() =
+        elements("action").forEach {
+            val id = it.getAttribute("id")
+            assertNotNull(words.getProperty("action.$id.text"), id)
+            assertNotNull(words.getProperty("action.$id.description"), id)
+        }
+
+    // Delete is bound on the tree alone (registerCustomShortcutSet), so the keymap's own Delete stays free.
+    @Test
+    fun noSessionsActionTakesTheKeymapsDelete() =
+        elements("action")
+            .filter { it.getAttribute("id").startsWith("Closta.Sessions.") }
+            .forEach { assertEquals(0, it.getElementsByTagName("keyboard-shortcut").length, it.getAttribute("id")) }
 }

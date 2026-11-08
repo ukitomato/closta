@@ -1,7 +1,8 @@
 package dev.ukitomato.closta.platforms.intellij.sessions
 
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.actionSystem.ActionManager
+import com.intellij.openapi.actionSystem.DataSink
+import com.intellij.openapi.actionSystem.UiDataProvider
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
@@ -12,9 +13,7 @@ import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowManager
-import com.intellij.ui.DoubleClickListener
 import com.intellij.ui.OnePixelSplitter
-import com.intellij.ui.PopupHandler
 import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.content.ContentManagerEvent
 import com.intellij.ui.content.ContentManagerListener
@@ -36,11 +35,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.awt.BorderLayout
-import java.awt.Component
-import java.awt.Point
-import java.awt.event.KeyAdapter
-import java.awt.event.KeyEvent
-import java.awt.event.MouseEvent
 import javax.swing.JComponent
 import javax.swing.JPanel
 import javax.swing.ScrollPaneConstants
@@ -52,7 +46,7 @@ import javax.swing.ScrollPaneConstants
  * under their own heading, to be resumed.
  *
  * A session opens on a double click or Enter, in the place already showing it (else an editor tab), in its own
- * project's window; its menu opens it in either place, stops it, or archives it.
+ * project's window; its menu (actions registered in plugin.xml) opens it in either place, ends it, or archives it.
  *
  * The only state held here is the chosen session's id: every change of [ChatDirectory.entries] redraws the rows, and
  * the selection follows that id ([keptSelection]), never a row's position.
@@ -62,11 +56,11 @@ class SessionsWindowPanel(
     window: ToolWindow,
     parent: Disposable,
     // checkUi: allow unnamed-component — a container: the tree and the detail in it carry their own names
-) : JPanel(BorderLayout()) {
+) : JPanel(BorderLayout()),
+    UiDataProvider {
     private val directory = service<ChatDirectory>()
     private val detail = SessionDetailPanel(project, window, parent)
     private val tree = SessionsTree(project, ::chosen)
-    private val actions = SessionsActions(project, tree::selected, ::render)
     private var entries: List<ChatDirectory.Entry> = emptyList()
     private var selectedId: String? = null
 
@@ -76,7 +70,7 @@ class SessionsWindowPanel(
     init {
         val left =
             JPanel(BorderLayout()).apply {
-                add(actions.toolbar(tree.component), BorderLayout.NORTH)
+                add(sessionsToolbar(tree.component), BorderLayout.NORTH)
                 val scroll = ScrollPaneFactory.createScrollPane(tree.component, true)
                 // The rows fit the width (SessionsTree): nothing to scroll to sideways.
                 scroll.horizontalScrollBarPolicy = ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER
@@ -88,7 +82,7 @@ class SessionsWindowPanel(
                 secondComponent = detail
             }
         add(splitter, BorderLayout.CENTER)
-        wire()
+        wireTree(project, tree, parent)
         val scope = project.service<ClaudeSessionService>().viewScope(parent)
         scope.launch(Dispatchers.EDT) {
             directory.entries.collect { now ->
@@ -140,42 +134,9 @@ class SessionsWindowPanel(
         detail.show(tree.selected())
     }
 
-    private fun wire() {
-        val component = tree.component
-        object : DoubleClickListener() {
-            override fun onDoubleClick(event: MouseEvent): Boolean {
-                val item = tree.itemAt(event.point) ?: return false
-                openItem(project, item)
-                return true
-            }
-        }.installOn(component)
-        component.addKeyListener(
-            object : KeyAdapter() {
-                override fun keyPressed(event: KeyEvent) {
-                    if (event.keyCode != KeyEvent.VK_ENTER) return
-                    val item = tree.selected() ?: return
-                    openItem(project, item)
-                    event.consume()
-                }
-            },
-        )
-        component.addMouseListener(
-            object : PopupHandler() {
-                override fun invokePopup(
-                    comp: Component,
-                    x: Int,
-                    y: Int,
-                ) {
-                    val item = tree.itemAt(Point(x, y)) ?: return
-                    tree.select(item.sessionId)
-                    ActionManager
-                        .getInstance()
-                        .createActionPopupMenu(SessionsActions.PLACE, actions.menuFor(item))
-                        .component
-                        .show(comp, x, y)
-                }
-            },
-        )
+    override fun uiDataSnapshot(sink: DataSink) {
+        sink[SESSION_ITEM] = tree.selected()
+        sink[SESSION_MARKS_CHANGED] = ::render
     }
 
     private fun loadSavedTitles(scope: CoroutineScope) {

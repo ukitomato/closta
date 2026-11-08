@@ -33,7 +33,44 @@
         <fileIconProvider implementation="dev.ukitomato.closta.platforms.intellij.chat.ChatTabIcons"/>
     </extensions>
     <actions>
-        <!-- Text and description: the bundle's action.<id>.text and action.<id>.description. -->
+        <!-- Text and description: the bundle's action.<id>.text and .description (group.<id>.* for groups). -->
+        <action id="Closta.Sessions.OpenInEditor" class="dev.ukitomato.closta.platforms.intellij.sessions.OpenInEditorAction"/>
+        <action id="Closta.Sessions.OpenInSidebar" class="dev.ukitomato.closta.platforms.intellij.sessions.OpenInSidebarAction"/>
+        <action id="Closta.Sessions.EndSession" class="dev.ukitomato.closta.platforms.intellij.sessions.EndSessionAction"
+                icon="AllIcons.Actions.Suspend"/>
+        <action id="Closta.Sessions.Archive" class="dev.ukitomato.closta.platforms.intellij.sessions.ArchiveAction"/>
+        <action id="Closta.Sessions.ResumeInEditor" class="dev.ukitomato.closta.platforms.intellij.sessions.ResumeInEditorAction"/>
+        <action id="Closta.Sessions.ResumeInSidebar" class="dev.ukitomato.closta.platforms.intellij.sessions.ResumeInSidebarAction"/>
+        <action id="Closta.Sessions.ClearMark" class="dev.ukitomato.closta.platforms.intellij.sessions.ClearMarkAction"/>
+        <action id="Closta.Sessions.Open" class="dev.ukitomato.closta.platforms.intellij.sessions.OpenAction"/>
+        <action id="Closta.ResumeSidebarChat" class="dev.ukitomato.closta.platforms.intellij.chat.ResumeSidebarChatAction"
+                icon="AllIcons.Vcs.History">
+            <synonym text="Claude"/>
+            <synonym text="Resume Chat in Sidebar"/>
+        </action>
+        <group id="Closta.Sessions.NewChatChoices" popup="true" class="dev.ukitomato.closta.platforms.intellij.chat.NewChatChoicesGroup"
+               icon="AllIcons.General.ChevronDown"/>
+        <group id="Closta.Sessions.ProviderSwitch" popup="true" class="dev.ukitomato.closta.platforms.intellij.chat.ProviderSwitchGroup"/>
+        <group id="Closta.Sessions.LiveMenu">
+            <reference ref="Closta.Sessions.OpenInEditor"/>
+            <reference ref="Closta.Sessions.OpenInSidebar"/>
+            <reference ref="Closta.Sessions.EndSession"/>
+            <reference ref="Closta.Sessions.Archive"/>
+        </group>
+        <group id="Closta.Sessions.MarkMenu">
+            <reference ref="Closta.Sessions.ResumeInEditor"/>
+            <reference ref="Closta.Sessions.ResumeInSidebar"/>
+            <reference ref="Closta.Sessions.ClearMark"/>
+        </group>
+        <!-- Closta.NewSidebarChat leads and Closta.NextWaiting follows the resume, by their own add-to-group below. -->
+        <group id="Closta.Sessions.Toolbar">
+            <reference ref="Closta.Sessions.NewChatChoices"/>
+            <reference ref="Closta.ResumeSidebarChat"/>
+            <separator/>
+            <reference ref="Closta.Sessions.EndSession"/>
+            <separator/>
+            <reference ref="Closta.Sessions.ProviderSwitch"/>
+        </group>
         <group id="Closta.Tools" popup="true" text="Closta" icon="/icons/closta.svg">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
             <action id="Closta.NewChat" class="dev.ukitomato.closta.platforms.intellij.chat.NewChatAction"
@@ -45,6 +82,7 @@
             </action>
             <action id="Closta.NewSidebarChat" class="dev.ukitomato.closta.platforms.intellij.chat.NewSidebarChatAction"
                     icon="AllIcons.General.Add">
+                <add-to-group group-id="Closta.Sessions.Toolbar" anchor="first"/>
                 <synonym text="Claude"/>
                 <synonym text="New Chat in Sidebar"/>
             </action>
@@ -61,6 +99,8 @@
             </action>
             <action id="Closta.NextWaiting" class="dev.ukitomato.closta.platforms.intellij.sessions.NextWaitingAction"
                     icon="AllIcons.Actions.Forward">
+                <add-to-group group-id="Closta.Sessions.Toolbar" anchor="after"
+                              relative-to-action="Closta.ResumeSidebarChat"/>
                 <keyboard-shortcut keymap="$default" first-keystroke="control alt shift PERIOD"/>
                 <synonym text="Claude"/>
                 <synonym text="Next Waiting Session"/>

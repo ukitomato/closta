@@ -22,52 +22,62 @@ import dev.ukitomato.closta.platforms.intellij.store.ProviderId
  * "+" itself opens one in its own window's place.
  */
 fun newChatChoices(project: Project): ActionGroup =
-    DefaultActionGroup(
-        ClostaBundle.message("chat.newChat.where"),
-        listOf(
-            choice(ClostaBundle.message("chat.newChat.inEditorTab"), AllIcons.Actions.MoveToWindow) {
-                openNewChat(project, Placement.EDITOR_TAB)
-            },
-            choice(ClostaBundle.message("chat.newChat.inSidebar"), AllIcons.General.Add) {
-                openNewChat(project, Placement.SIDEBAR)
-            },
-            choice(ClostaBundle.message("chat.sessions.newWorktree"), AllIcons.Vcs.Branch) {
-                openWorktreeChat(project)
-            },
-        ),
-    ).apply {
+    DefaultActionGroup(ClostaBundle.message("chat.newChat.where"), choicesIn(project)).apply {
         templatePresentation.isPopupGroup = true
         templatePresentation.icon = AllIcons.General.ChevronDown
         templatePresentation.description = ClostaBundle.message("chat.newChat.where")
     }
+
+/** [newChatChoices] as a registered group (`Closta.Sessions.NewChatChoices`): the project comes from the event. */
+class NewChatChoicesGroup : ActionGroup() {
+    override fun getActionUpdateThread() = ActionUpdateThread.BGT
+
+    override fun getChildren(e: AnActionEvent?): Array<AnAction> =
+        e?.project?.let { choicesIn(it).toTypedArray() } ?: EMPTY_ARRAY
+}
+
+private fun choicesIn(project: Project): List<AnAction> =
+    listOf(
+        choice(ClostaBundle.message("chat.newChat.inEditorTab"), AllIcons.Actions.MoveToWindow) {
+            openNewChat(project, Placement.EDITOR_TAB)
+        },
+        choice(ClostaBundle.message("chat.newChat.inSidebar"), AllIcons.General.Add) {
+            openNewChat(project, Placement.SIDEBAR)
+        },
+        choice(ClostaBundle.message("chat.sessions.newWorktree"), AllIcons.Vcs.Branch) {
+            openWorktreeChat(project)
+        },
+    )
 
 /**
  * The provider switch next to a window's "+": it shows the provider new conversations start with and changes it. It is
  * the same choice as Settings' "provider for new sessions" (read each time it is shown, so either place changes both);
  * a conversation that runs keeps the provider it started with.
  */
-fun providerSwitch(): ActionGroup =
-    object : DefaultActionGroup() {
-        init {
-            templatePresentation.isPopupGroup = true
-            templatePresentation.description = ClostaBundle.message("chat.provider.switch")
-            templatePresentation.putClientProperty(ActionUtil.SHOW_TEXT_IN_TOOLBAR, true)
-        }
+fun providerSwitch(): ActionGroup = ProviderSwitchGroup()
 
-        override fun getActionUpdateThread() = ActionUpdateThread.BGT
-
-        override fun update(e: AnActionEvent) {
-            e.presentation.text = service<ProviderSettings>().nameOf(ProviderPick.Active)
-        }
-
-        override fun getChildren(e: AnActionEvent?): Array<AnAction> {
-            val saved = service<ProviderSettings>().load()
-            val rows =
-                listOf<Pair<ProviderId?, String>>(null to ProviderSettings.DEFAULT_NAME) +
-                    saved.records.map { it.id to it.name }
-            return rows.map { (id, name) -> providerRow(id, name) }.toTypedArray()
-        }
+/** [providerSwitch] as a registered group (`Closta.Sessions.ProviderSwitch`). */
+class ProviderSwitchGroup : DefaultActionGroup() {
+    init {
+        templatePresentation.isPopupGroup = true
+        templatePresentation.description = ClostaBundle.message("chat.provider.switch")
+        templatePresentation.putClientProperty(ActionUtil.SHOW_TEXT_IN_TOOLBAR, true)
     }
+
+    override fun getActionUpdateThread() = ActionUpdateThread.BGT
+
+    override fun update(e: AnActionEvent) {
+        e.presentation.text = service<ProviderSettings>().nameOf(ProviderPick.Active)
+    }
+
+    override fun getChildren(e: AnActionEvent?): Array<AnAction> {
+        val saved = service<ProviderSettings>().load()
+        val rows =
+            listOf<Pair<ProviderId?, String>>(null to ProviderSettings.DEFAULT_NAME) +
+                saved.records.map { it.id to it.name }
+        return rows.map { (id, name) -> providerRow(id, name) }.toTypedArray()
+    }
+}
 
 private fun providerRow(
     id: ProviderId?,
