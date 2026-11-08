@@ -149,14 +149,16 @@ intellijPlatform {
         ides {
             current()
         }
-        // The combined diff of a turn's changes uses CombinedDiffVirtualFileImpl, which the platform marks internal
-        // and offers no public way to build. Releases go to GitHub, not the Marketplace, so internal API usages are
-        // reported but do not fail the build; compatibility problems do.
+        // Internal, override-only and non-extendable API usages fail the build alongside compatibility problems.
+        // Experimental APIs (the combined diff among them) are reported but allowed.
         failureLevel =
             listOf(
                 VerifyPluginTask.FailureLevel.COMPATIBILITY_PROBLEMS,
                 VerifyPluginTask.FailureLevel.INVALID_PLUGIN,
                 VerifyPluginTask.FailureLevel.MISSING_DEPENDENCIES,
+                VerifyPluginTask.FailureLevel.INTERNAL_API_USAGES,
+                VerifyPluginTask.FailureLevel.OVERRIDE_ONLY_API_USAGES,
+                VerifyPluginTask.FailureLevel.NON_EXTENDABLE_API_USAGES,
             )
     }
 }

@@ -2,7 +2,6 @@ package dev.ukitomato.closta.platforms.intellij.chat
 
 import com.intellij.diff.editor.DiffEditorTabFilesManager
 import com.intellij.diff.tools.combined.CombinedBlockProducer
-import com.intellij.diff.tools.combined.CombinedDiffVirtualFileImpl
 import com.intellij.diff.tools.combined.CombinedPathBlockId
 import com.intellij.history.Label
 import com.intellij.history.LocalHistory
@@ -174,7 +173,7 @@ class TurnChanges(
             }
         if (changes.isEmpty()) return
         try {
-            showCombined(changes)
+            showCombined(askKey, changes)
         } catch (failure: LinkageError) {
             // The combined diff is still experimental in the platform; the plain diff of a list of changes is not.
             thisLogger().warn("combined diff unavailable (${failure.javaClass.name})")
@@ -183,13 +182,16 @@ class TurnChanges(
     }
 
     // As the IDE's own "Show Combined Diff" does it (its action is internal to the platform).
-    private fun showCombined(changes: List<Change>) {
+    private fun showCombined(
+        askKey: String,
+        changes: List<Change>,
+    ) {
         val producers =
             changes.mapNotNull { change ->
                 val producer = ChangeDiffRequestProducer.create(project, change) ?: return@mapNotNull null
                 CombinedBlockProducer(CombinedPathBlockId(producer.filePath, change.fileStatus), producer)
             }
-        val file = CombinedDiffVirtualFileImpl(project, producers, ClostaBundle.message("chat.changes.diffTitle"))
+        val file = TurnDiffFile(producers, ClostaBundle.message("chat.changes.diffTitle"), "Closta/turn/$askKey")
         DiffEditorTabFilesManager.getInstance(project).showDiffFile(file, true)
     }
 
