@@ -7,6 +7,7 @@ import com.intellij.ui.AnimatedIcon
 import com.intellij.ui.ColorUtil
 import com.intellij.ui.JBColor
 import com.intellij.ui.SimpleTextAttributes
+import com.intellij.ui.scale.JBUIScale
 import com.intellij.util.ui.JBFont
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
@@ -141,7 +142,7 @@ class DotIcon(
             val left = x + (iconWidth - size) / 2
             val top = y + (iconHeight - size) / 2
             if (hollow) {
-                g2.stroke = BasicStroke(JBUI.scale(1f))
+                g2.stroke = BasicStroke(JBUIScale.scale(1f))
                 g2.drawOval(left, top, size - 1, size - 1)
             } else {
                 g2.fillOval(left, top, size, size)

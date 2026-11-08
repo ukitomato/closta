@@ -2,6 +2,7 @@ import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.jetbrains.changelog.Changelog
 import org.jetbrains.changelog.markdownToHTML
 import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask
+import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
 import java.io.File
 
 plugins {
@@ -84,6 +85,12 @@ dependencies {
 
 kotlin {
     jvmToolchain(21)
+    compilerOptions {
+        // A class that implements a Java interface gets no bridge for the interface's default methods. With the bridge
+        // the class overrides and calls isApplicable / getEditorTabTooltipText, which the Verifier reports as
+        // deprecated even though the source never names them.
+        jvmDefault = JvmDefaultMode.NO_COMPATIBILITY
+    }
 }
 
 // --- Protocol fixtures on the test classpath ------------------------------------------------------
@@ -149,7 +156,7 @@ intellijPlatform {
         ides {
             current()
         }
-        // Internal, override-only and non-extendable API usages fail the build alongside compatibility problems.
+        // Internal, override-only, non-extendable and scheduled-for-removal API usages fail the build alongside compatibility problems.
         // Experimental APIs (the combined diff among them) are reported but allowed.
         failureLevel =
             listOf(
@@ -159,6 +166,7 @@ intellijPlatform {
                 VerifyPluginTask.FailureLevel.INTERNAL_API_USAGES,
                 VerifyPluginTask.FailureLevel.OVERRIDE_ONLY_API_USAGES,
                 VerifyPluginTask.FailureLevel.NON_EXTENDABLE_API_USAGES,
+                VerifyPluginTask.FailureLevel.SCHEDULED_FOR_REMOVAL_API_USAGES,
             )
     }
 }

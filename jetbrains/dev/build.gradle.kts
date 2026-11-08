@@ -1,3 +1,5 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
+
 plugins {
     id("org.jetbrains.kotlin.jvm")
     id("org.jetbrains.intellij.platform")
@@ -24,6 +26,7 @@ dependencies {
 
 kotlin {
     jvmToolchain(21)
+    compilerOptions { jvmDefault = JvmDefaultMode.NO_COMPATIBILITY }
 }
 
 intellijPlatform {

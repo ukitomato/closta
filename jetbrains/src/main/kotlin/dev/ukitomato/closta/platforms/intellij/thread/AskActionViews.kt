@@ -7,7 +7,7 @@ import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.ui.PopupHandler
-import com.intellij.ui.SimpleListCellRenderer
+import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 import com.intellij.util.ui.JBUI
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
 import dev.ukitomato.closta.platforms.intellij.chat.rewindRefusalText
@@ -173,7 +173,7 @@ internal object AskActionViews {
         JBPopupFactory
             .getInstance()
             .createPopupChooserBuilder(choices)
-            .setRenderer(SimpleListCellRenderer.create { label, value, _ -> label.text = value })
+            .setRenderer(textListCellRenderer { it })
             .setItemChosenCallback { chosen ->
                 when (chosen) {
                     CONVERSATION_ONLY -> offered.rewind?.let { actions.act(askKey, atEnd, it) }

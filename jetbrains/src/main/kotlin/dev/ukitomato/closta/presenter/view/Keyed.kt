@@ -36,8 +36,8 @@ class Keyed<T : Any> private constructor(
     ): Keyed<T> =
         when {
             byKey[key] === value -> this
-            key in byKey -> Keyed(keys, byKey.put(key, value))
-            else -> Keyed(keys.add(key), byKey.put(key, value))
+            key in byKey -> Keyed(keys, byKey.putting(key, value))
+            else -> Keyed(keys.adding(key), byKey.putting(key, value))
         }
 
     /** Replaces the entry under [key] with [change] of it; a missing key or an unchanged entry changes nothing. */
@@ -47,7 +47,7 @@ class Keyed<T : Any> private constructor(
     ): Keyed<T> {
         val old = byKey[key] ?: return this
         val new = change(old)
-        return if (new === old) this else Keyed(keys, byKey.put(key, new))
+        return if (new === old) this else Keyed(keys, byKey.putting(key, new))
     }
 
     /**

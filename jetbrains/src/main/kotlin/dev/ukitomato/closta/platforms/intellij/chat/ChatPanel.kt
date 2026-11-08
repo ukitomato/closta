@@ -19,10 +19,10 @@ import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.ui.AnimatedIcon
-import com.intellij.ui.SimpleListCellRenderer
 import com.intellij.ui.awt.RelativePoint
 import com.intellij.ui.components.ActionLink
 import com.intellij.ui.components.JBLabel
+import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
@@ -341,7 +341,7 @@ class ChatPanel(
         JBPopupFactory
             .getInstance()
             .createPopupChooserBuilder(listOf(label))
-            .setRenderer(SimpleListCellRenderer.create("") { it })
+            .setRenderer(textListCellRenderer("") { it })
             .setItemChosenCallback { moveToOtherPlace() }
             .createPopup()
             .show(RelativePoint(under, Point(0, under.height)))

@@ -13,6 +13,7 @@ import com.intellij.openapi.ui.popup.IconButton
 import com.intellij.ui.InplaceButton
 import com.intellij.ui.JBColor
 import com.intellij.ui.components.JBLabel
+import com.intellij.ui.scale.JBUIScale
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
@@ -207,11 +208,11 @@ class Chip(
             if (dashed) {
                 g2.stroke =
                     BasicStroke(
-                        JBUI.scale(1f),
+                        JBUIScale.scale(1f),
                         BasicStroke.CAP_BUTT,
                         BasicStroke.JOIN_ROUND,
                         1f,
-                        floatArrayOf(JBUI.scale(DASH), JBUI.scale(DASH)),
+                        floatArrayOf(JBUIScale.scale(DASH), JBUIScale.scale(DASH)),
                         0f,
                     )
             }
@@ -267,11 +268,11 @@ class ComposerBox : JPanel() {
             if (dragging) {
                 g2.stroke =
                     BasicStroke(
-                        JBUI.scale(1f),
+                        JBUIScale.scale(1f),
                         BasicStroke.CAP_BUTT,
                         BasicStroke.JOIN_ROUND,
                         1f,
-                        floatArrayOf(JBUI.scale(DASH), JBUI.scale(DASH)),
+                        floatArrayOf(JBUIScale.scale(DASH), JBUIScale.scale(DASH)),
                         0f,
                     )
             }
@@ -355,7 +356,7 @@ class ContextUse : JBLabel() {
             val g2 = g.create() as Graphics2D
             try {
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-                val line = JBUI.scale(2f)
+                val line = JBUIScale.scale(2f)
                 val size = iconWidth - line
                 val left = x + line / 2
                 val top = y + line / 2

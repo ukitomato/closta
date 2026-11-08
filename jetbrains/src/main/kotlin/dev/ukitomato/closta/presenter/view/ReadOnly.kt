@@ -14,7 +14,7 @@ import java.util.Collections
 internal fun <K, V> Map<K, V>.plusEntry(
     key: K,
     value: V,
-): Map<K, V> = ((this as? PersistentMap<K, V>) ?: toPersistentMap()).put(key, value)
+): Map<K, V> = ((this as? PersistentMap<K, V>) ?: toPersistentMap()).putting(key, value)
 
 /** This list with [item] at the end, as a list that cannot be changed. */
 internal fun <T> List<T>.plusItem(item: T): List<T> = Collections.unmodifiableList(this + item)
