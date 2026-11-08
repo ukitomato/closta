@@ -282,7 +282,7 @@ class ComposerPanel(
         model.text = listOfNotNull(modelName, effortName).joinToString(" · ")
         // The whole name and level, and the model's full id when the CLI gave one.
         val whole = listOfNotNull(next.model.label, effort?.let(::effortText)).joinToString(" · ")
-        model.accessibleLabel = ClostaBundle.message("composer.model.accessible", model.text.orEmpty())
+        model.accessibleLabel = ClostaBundle.message("composer.model.accessible", whole)
         model.toolTipText = listOfNotNull(whole, next.model.resolved?.takeIf { it != whole }).joinToString(" — ")
         val used = next.context
         context.isVisible = used != null

@@ -133,7 +133,6 @@ class AskActing(
             refused(COPY_NOT_OPENED)
             return false
         }
-        service<ComposerDrafts>().carry(old, copy)
         scope
             .launch(failures) {
                 val step =
@@ -168,7 +167,7 @@ class AskActing(
                 sessions().stop(copyId)
                 refused(step.reason)
             }
-            !openChat(project, copyId, place.placement) -> {
+            !carryThenOpen(old, copyId) -> {
                 sessions().stop(copyId)
                 refused(COPY_NOT_OPENED)
             }
@@ -177,6 +176,15 @@ class AskActing(
                 sessions().stopFromScreen(old)
             }
         }
+    }
+
+    /** Hands the draft as it is now to the copy, whose screen does not exist yet, then opens it. */
+    private fun carryThenOpen(
+        old: String,
+        copyId: String,
+    ): Boolean {
+        (sessions().source(copyId) as? ChatSource.Live)?.let { service<ComposerDrafts>().carry(old, it) }
+        return openChat(project, copyId, place.placement)
     }
 
     /** Gives the gate back and says the rewind is over (from any thread: [busy] is told on the EDT). */
