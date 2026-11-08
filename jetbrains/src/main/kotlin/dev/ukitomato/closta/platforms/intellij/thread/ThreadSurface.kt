@@ -145,7 +145,7 @@ class SwingThreadSurface(
 
             override fun replyOf(blockKey: String): String? = shown.replyOf(blockKey)
 
-            override fun openFile(path: String) = openCliPath(project, path)
+            override fun openFile(path: String) = openPath(project, path)
 
             override fun openLink(href: String) {
                 when (val target = linkTarget(href, project.basePath)) {

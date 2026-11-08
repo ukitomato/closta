@@ -69,7 +69,8 @@ private fun projectFile(
  * The path to open for [path], a file the CLI named in a tool call: [path] (absolute, or relative to [projectRoot])
  * normalized, only when it lies inside [projectRoot]. A UNC path (`\\host\share`, `//host/share`), which on Windows
  * can start an SMB connection, and any path that leaves the project (`..`) give null. Both are in the CLI's path
- * space; the caller maps the result to the IDE's. Free of `com.intellij`.
+ * space; the caller maps the result to the IDE's. Lexical, like [linkTarget]: symlinks in the project are not resolved.
+ * Free of `com.intellij`.
  */
 fun toolPathTarget(
     path: String,
