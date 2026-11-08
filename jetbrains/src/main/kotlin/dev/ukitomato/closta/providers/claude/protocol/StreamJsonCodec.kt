@@ -184,6 +184,12 @@ object StreamJsonCodec {
 
         fun flagOrNull(name: String): Boolean? = primitive(name)?.asBoolean
 
+        /** The strings of an array, leaving out any entry that is not one; null when the field is absent. */
+        fun textsOrNull(name: String): List<String>? =
+            (present(name) as? JsonArray)?.mapNotNull { item ->
+                item.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isString }?.asString
+            }
+
         /** An array of strings, one per line. */
         fun lines(name: String): String =
             (present(name) as? JsonArray)?.joinToString("\n") { it.asString } ?: missing(name)
@@ -335,7 +341,7 @@ object StreamJsonCodec {
                     fastModeDisabledReason = f.textOrNull("fast_mode_disabled_reason"),
                     requestSentWallMs = f.wholeOrNull("request_sent_wall_ms"),
                     userMessageUuid = f.textOrNull("user_message_uuid"),
-                    userMessageUuids = f.rawOrNull("user_message_uuids"),
+                    userMessageUuids = f.textsOrNull("user_message_uuids"),
                     origin = f.rawOrNull("origin"),
                     localCommand = f.textOrNull("local_command"),
                 )

@@ -66,8 +66,8 @@ data class SessionInfo(
 /**
  * One turn — a single request/response round the CLI ran, identified by its `command_uuid`.
  *
- * A turn opens on `command_lifecycle{queued|started}` and closes only on a `result` whose
- * `user_message_uuid` matches this turn's `command_uuid`. `command_lifecycle{completed}` is *not* a
+ * A turn opens on `command_lifecycle{queued|started}` and closes only on a `result` that names this turn's
+ * `command_uuid` in `user_message_uuid` or `user_message_uuids`. `command_lifecycle{completed}` is *not* a
  * terminator.
  *
  * [incompleteReason] is per-turn and correlates cleanly by `command_uuid`: when the correlated

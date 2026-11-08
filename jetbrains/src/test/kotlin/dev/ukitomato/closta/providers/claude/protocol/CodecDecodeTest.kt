@@ -1,5 +1,6 @@
 package dev.ukitomato.closta.providers.claude.protocol
 
+import com.google.gson.JsonParser
 import dev.ukitomato.closta.core.models.AgentEvent
 import dev.ukitomato.closta.providers.claude.fixtures.CaptureFixtures
 import org.junit.jupiter.api.Assertions.assertAll
@@ -207,6 +208,36 @@ class CodecDecodeTest {
         assertAll(
             { assertNull(result.localCommand) },
             { assertTrue(result.ttftMs != null && result.terminalReason != null) },
+        )
+    }
+
+    @Test
+    fun `a result names every message its turn took in, in order`() {
+        // 31: the second message, sent while the first ran, was taken into the first's turn.
+        val result = assertInstanceOf(AgentEvent.Result::class.java, captureLine("31-send-mid-turn", 54))
+        val uuids = result.userMessageUuids.orEmpty()
+
+        assertAll(
+            { assertEquals(2, uuids.size) },
+            { assertEquals(result.userMessageUuid, uuids.first()) },
+        )
+    }
+
+    @Test
+    fun `a result without the list has none, and one with stray entries keeps only its strings`() {
+        val line = CaptureFixtures.nonBlankLines(CaptureFixtures.textOf("31-send-mid-turn.ndjson"))[53]
+        val json = JsonParser.parseString(line).asJsonObject
+        val without = json.deepCopy().apply { remove("user_message_uuids") }
+        val stray = json.deepCopy().apply { add("user_message_uuids", JsonParser.parseString("""["a", 1, null]""")) }
+
+        assertAll(
+            { assertNull((StreamJsonCodec.decode(without.toString()) as AgentEvent.Result).userMessageUuids) },
+            {
+                assertEquals(
+                    listOf("a"),
+                    (StreamJsonCodec.decode(stray.toString()) as AgentEvent.Result).userMessageUuids,
+                )
+            },
         )
     }
 

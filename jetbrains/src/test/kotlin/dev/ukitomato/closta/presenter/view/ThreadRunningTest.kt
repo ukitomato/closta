@@ -1,9 +1,11 @@
 package dev.ukitomato.closta.presenter.view
 
+import dev.ukitomato.closta.core.models.AgentEvent
 import dev.ukitomato.closta.core.models.ApprovalKind
 import dev.ukitomato.closta.core.models.ConversationState
 import dev.ukitomato.closta.core.models.PendingApproval
 import dev.ukitomato.closta.core.models.Turn
+import dev.ukitomato.closta.core.models.TurnBoundaryTest
 import dev.ukitomato.closta.core.models.TurnPhase
 import dev.ukitomato.closta.presenter.at
 import dev.ukitomato.closta.presenter.tree.JsonBool
@@ -88,6 +90,56 @@ class ThreadRunningTest {
         for (index in result until steps.size) {
             assertFalse(threadIsRunning(steps[index].conversation, steps[index].transcript), "at rest at #$index")
         }
+    }
+
+    @Test
+    fun `messages the CLI ran as one turn stop running when that turn ends`() {
+        // Seen with 2.1.319: two messages sent while a turn ran were run as one turn, and the composer kept its stop
+        // button after it ended (the result names the last message; the other one's lifecycle completes after it).
+        fun sent(uuid: String) = PresenterInput.UserSent("send-$uuid", uuid, emptyList(), uuid = uuid)
+
+        fun life(
+            uuid: String,
+            state: String,
+        ) = PresenterInput.Event(AgentEvent.CommandLifecycle("l-$uuid-$state", "s", uuid, state))
+
+        fun result(
+            last: String,
+            all: List<String>,
+        ) = PresenterInput.Event(TurnBoundaryTest.resultFor(last, isError = false, reason = "ok", all))
+        val inputs =
+            listOf(
+                sent("a"),
+                life("a", "queued"),
+                life("a", "started"),
+                sent("b"),
+                life("b", "queued"),
+                sent("c"),
+                life("c", "queued"),
+                result("a", listOf("a")),
+                life("a", "completed"),
+                life("b", "started"),
+                life("c", "started"),
+                result("c", listOf("b", "c")),
+                life("b", "completed"),
+                life("c", "completed"),
+            )
+        val states = inputs.runningFold(HostState()) { state, input -> state.next(input) }.drop(1)
+        val ended = inputs.lastIndexOf(result("c", listOf("b", "c")))
+
+        assertTrue(threadIsRunning(states[ended - 1].conversation, states[ended - 1].transcript), "running before")
+        for (index in ended until states.size) {
+            assertFalse(threadIsRunning(states[index].conversation, states[index].transcript), "at rest at #$index")
+        }
+    }
+
+    @Test
+    fun `no content goes to a turn its result closed`() {
+        // 31: the message taken in started last, so it was the turn receiving content, but the result names the
+        // first. Once core closes both, what the CLI says on its own later must open a resume of its own.
+        val last = CaptureReplay.replay("31-send-mid-turn", uuids = true).last()
+
+        assertEquals(null, last.transcript.routing.currentTurn)
     }
 
     @TestFactory

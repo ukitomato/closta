@@ -54,6 +54,50 @@ class TurnBoundaryTest {
     }
 
     @Test
+    fun `messages the CLI ran as one turn all close with its result`() {
+        // Recorded with 2.1.319: b and c were sent while a ran. The CLI ran them as one turn, whose result names
+        // c and lists both; b's lifecycle completes only after that result.
+        val events =
+            listOf<AgentEvent>(
+                AgentEvent.CommandLifecycle("u1", "s", "cmd-a", "queued"),
+                AgentEvent.CommandLifecycle("u2", "s", "cmd-a", "started"),
+                AgentEvent.CommandLifecycle("u3", "s", "cmd-b", "queued"),
+                AgentEvent.CommandLifecycle("u4", "s", "cmd-c", "queued"),
+                resultFor(userMessageUuid = "cmd-a", isError = false, reason = "a", listOf("cmd-a")),
+                AgentEvent.CommandLifecycle("u5", "s", "cmd-a", "completed"),
+                AgentEvent.CommandLifecycle("u6", "s", "cmd-b", "started"),
+                AgentEvent.CommandLifecycle("u7", "s", "cmd-c", "started"),
+                resultFor(userMessageUuid = "cmd-c", isError = false, reason = "bc", listOf("cmd-b", "cmd-c")),
+                AgentEvent.CommandLifecycle("u8", "s", "cmd-b", "completed"),
+                AgentEvent.CommandLifecycle("u9", "s", "cmd-c", "completed"),
+            )
+        val state = events.fold(ConversationState(), ::fold)
+
+        assertAll(
+            { assertEquals(3, state.turns.size, "each message opened a turn") },
+            { assertEquals(0, openTurns(state), "no turn left open") },
+            { assertEquals(0, state.spontaneousResumeCount, "both results answered messages") },
+        )
+    }
+
+    @Test
+    fun `a result whose list names only closed turns closes nothing and is a resume`() {
+        val events =
+            listOf<AgentEvent>(
+                AgentEvent.CommandLifecycle("u1", "s", "cmd-a", "started"),
+                resultFor(userMessageUuid = "cmd-a", isError = false, reason = "a", listOf("cmd-a")),
+                AgentEvent.CommandLifecycle("u2", "s", "cmd-b", "started"),
+                resultFor(userMessageUuid = "cmd-a", isError = false, reason = "again", listOf("cmd-a", "cmd-x")),
+            )
+        val state = events.fold(ConversationState(), ::fold)
+
+        assertAll(
+            { assertEquals(TurnPhase.OPEN, state.turns.last().phase, "b is not named, so it stays open") },
+            { assertEquals(1, state.spontaneousResumeCount) },
+        )
+    }
+
+    @Test
     fun `a completed lifecycle alone closes nothing, so its own later result still correlates`() {
         val events =
             listOf<AgentEvent>(
@@ -162,7 +206,7 @@ class TurnBoundaryTest {
         }
     }
 
-    private companion object {
+    internal companion object {
         fun foldCapture(file: String): ConversationState =
             CaptureFixtures.readCapture(file).fold(ConversationState(), ::fold)
 
@@ -174,6 +218,7 @@ class TurnBoundaryTest {
             userMessageUuid: String?,
             isError: Boolean,
             reason: String,
+            userMessageUuids: List<String>? = null,
         ): AgentEvent.Result =
             AgentEvent.Result(
                 uuid = "u",
@@ -199,6 +244,7 @@ class TurnBoundaryTest {
                 permissionDenials = RawJson("[]"),
                 subagentStats = RawJson("{}"),
                 userMessageUuid = userMessageUuid,
+                userMessageUuids = userMessageUuids,
             )
     }
 }

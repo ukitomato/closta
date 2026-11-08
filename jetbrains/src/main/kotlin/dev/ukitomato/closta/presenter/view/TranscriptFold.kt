@@ -4,6 +4,7 @@ import dev.ukitomato.closta.core.models.AgentEvent
 import dev.ukitomato.closta.core.models.ApprovalDecision
 import dev.ukitomato.closta.core.models.ApprovalKind
 import dev.ukitomato.closta.core.models.ConversationState
+import dev.ukitomato.closta.core.models.TurnPhase
 import dev.ukitomato.closta.presenter.tree.JsonObject
 import dev.ukitomato.closta.presenter.tree.JsonRead
 
@@ -138,7 +139,13 @@ private fun foldResult(
     return when {
         after.spontaneousResumeCount == before.spontaneousResumeCount -> {
             val turnKey = event.userMessageUuid?.let(routing.turns::get)
-            val ended = turnKey == routing.currentTurn
+            // The result may close more turns than the one it names (messages run together or taken in); the turn
+            // receiving content is one of them when it started last.
+            val closedNow =
+                after.turns
+                    .filter { it.phase == TurnPhase.CLOSED }
+                    .mapNotNullTo(HashSet()) { routing.turns[it.commandUuid] }
+            val ended = routing.currentTurn != null && routing.currentTurn in closedNow
             val closed = if (turnKey == null) transcript else transcript.withTurnEnd(turnKey, event.durationMs)
             if (ended) closed.withRouting(routing.copy(currentTurn = null)) else closed
         }

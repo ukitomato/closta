@@ -243,7 +243,11 @@ sealed interface AgentEvent {
         val fastModeDisabledReason: String? = null,
         val requestSentWallMs: Long? = null,
         val userMessageUuid: String? = null,
-        val userMessageUuids: RawJson? = null,
+        /**
+         * Every message the turn took in, in order: the ones the CLI ran together as this turn, then any it took in
+         * while the turn ran. Holds [userMessageUuid]; absent from older CLIs (sdk.d.ts 0.3.319).
+         */
+        val userMessageUuids: List<String>? = null,
         val origin: RawJson? = null,
         /** Set on the result of a local command such as `/compact`; `null` on a model turn. */
         val localCommand: String? = null,

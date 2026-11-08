@@ -111,7 +111,7 @@ private fun foldStatus(
 /**
  * `command_lifecycle{queued|started}` opens a turn keyed by `command_uuid`, once — a `queued` then a
  * `started` for the same uuid is still one turn. `completed` is not a terminator and opens nothing:
- * it only marks an open turn [Turn.lifecycleDone]. A turn closes on a correlated `result`, and a
+ * it only marks an open turn [Turn.lifecycleDone]. A turn closes on a `result` that names it, and a
  * marked turn also closes with the turn whose `result` comes after its mark: a message sent mid-turn that the CLI
  * took into the running turn gets no `result` of its own (see [foldResult]).
  */
@@ -142,12 +142,13 @@ private fun foldLifecycle(
 
 /**
  * A `result` always *replaces* the session cost (it is a session running total),
- * may raise an error notice, and closes at most one turn: the open turn whose `command_uuid` equals
- * the result's `user_message_uuid`. When it closes that turn it carries `result.is_error` onto the
- * turn's [Turn.incompleteReason] — the reason string on failure, `null` on success — which correlates
- * cleanly by `command_uuid`.
+ * may raise an error notice, and closes the open turns it answered: those whose `command_uuid` is its
+ * `user_message_uuid` or is in its `user_message_uuids`. Messages sent while a turn runs may be run together as the
+ * next turn, whose `result` names only the last of them and lists them all; the others' lifecycle completes only after
+ * that `result` (recorded with 2.1.319). When it closes a turn it carries `result.is_error` onto the
+ * turn's [Turn.incompleteReason] — the reason string on failure, `null` on success.
  *
- * A `user_message_uuid` that is null or matches no open turn closes nothing and is counted as a
+ * A `result` that names no open turn closes nothing and is counted as a
  * conversation-level spontaneous resume — closing there would discard an unanswered approval and hang
  * the CLI forever, and a self-resume carries no per-turn correlation so it is never attributed to a
  * turn.
@@ -173,18 +174,17 @@ private fun foldResult(
             withCost
         }
 
-    val closesIndex =
-        withNotice.turns.indexOfFirst {
-            it.phase == TurnPhase.OPEN && it.commandUuid == event.userMessageUuid
-        }
+    val named = event.userMessageUuids.orEmpty().toSet() + listOfNotNull(event.userMessageUuid)
+    val closes = withNotice.turns.any { it.phase == TurnPhase.OPEN && it.commandUuid in named }
     val base =
-        if (closesIndex >= 0) {
+        if (closes) {
             val reason = if (event.isError) event.result else null
             val closed =
-                withNotice.turns.mapIndexed { index, turn ->
-                    // The correlated turn, and the messages the CLI took into it (their lifecycle completed already).
-                    val takenIn = turn.phase == TurnPhase.OPEN && turn.lifecycleDone
-                    if (index == closesIndex || takenIn) {
+                withNotice.turns.map { turn ->
+                    // The turns the result names, and the messages taken in whose lifecycle completed already (an
+                    // older CLI names only the first).
+                    val answered = turn.commandUuid in named || turn.lifecycleDone
+                    if (turn.phase == TurnPhase.OPEN && answered) {
                         turn.copy(phase = TurnPhase.CLOSED, incompleteReason = reason)
                     } else {
                         turn
@@ -195,7 +195,7 @@ private fun foldResult(
             withNotice.copy(spontaneousResumeCount = withNotice.spontaneousResumeCount + 1)
         }
 
-    val discardsPending = closesIndex >= 0 || event.isError
+    val discardsPending = closes || event.isError
     return if (discardsPending && base.pendingApprovals.isNotEmpty()) {
         base.copy(pendingApprovals = emptyList())
     } else {
