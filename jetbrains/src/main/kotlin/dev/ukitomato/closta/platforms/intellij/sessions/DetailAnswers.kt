@@ -277,7 +277,7 @@ internal class PermissionPane(
                         PermissionChoice.DENY -> openDeny()
                         PermissionChoice.ALLOW_KEEP, null -> Unit
                     }
-                CardKey.Deny -> deny("")
+                CardKey.Deny -> deny(reason.draft().orEmpty())
                 CardKey.LeaveText -> reason.close(this)
                 CardKey.Answer, CardKey.ToComposer -> Unit
             }

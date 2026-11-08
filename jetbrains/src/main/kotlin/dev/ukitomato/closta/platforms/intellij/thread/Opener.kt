@@ -39,6 +39,8 @@ internal class Opener(
     /** It left the screen while it had the keyboard (its row was made again): the row's keeper passes it on. */
     private val dropped: (Opener) -> Unit = {},
 ) : JPanel(BorderLayout(JBUI.scale(GAP), 0)) {
+    private var toggleContext: AccessibleContext? = null
+
     init {
         isOpaque = false
         isFocusable = true
@@ -83,8 +85,6 @@ internal class Opener(
             },
         )
     }
-
-    private var toggleContext: AccessibleContext? = null
 
     override fun getAccessibleContext(): AccessibleContext =
         toggleContext ?: newToggleContext().also { toggleContext = it }

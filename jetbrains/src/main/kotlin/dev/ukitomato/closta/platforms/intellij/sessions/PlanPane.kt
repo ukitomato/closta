@@ -71,7 +71,7 @@ internal class PlanPane(
         keys(CardKind.PLAN, buttons.size) { key ->
             when (key) {
                 is CardKey.Choose -> choose(PLAN_CHOICES[key.index])
-                CardKey.Deny -> decide(PlanChoice.KEEP_PLANNING, "")
+                CardKey.Deny -> decide(PlanChoice.KEEP_PLANNING, reason.draft().orEmpty())
                 CardKey.LeaveText -> reason.close(this)
                 CardKey.Answer, CardKey.ToComposer -> Unit
             }

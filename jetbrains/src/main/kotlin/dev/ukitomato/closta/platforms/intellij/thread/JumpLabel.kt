@@ -12,6 +12,12 @@ fun waitingBelow(
     viewBottom: Int,
 ): Boolean = cardTops.any { it >= viewBottom }
 
+/** The first of the cards ([key] to top, in the column, top to bottom) that starts below the view, or null. */
+fun <K> firstWaitingBelow(
+    cards: List<Pair<K, Int>>,
+    viewBottom: Int,
+): K? = cards.firstOrNull { it.second >= viewBottom }?.first
+
 /**
  * How many of the cards occupying [spans] (top to bottom, in the column) are outside the view: entirely above
  * [viewTop] or entirely past [viewBottom]. A card with any part in sight is on screen, though its top is not.

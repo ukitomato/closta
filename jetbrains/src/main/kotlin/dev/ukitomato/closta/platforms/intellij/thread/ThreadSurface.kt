@@ -194,7 +194,13 @@ class SwingThreadSurface(
             toolTipText = ClostaBundle.message("thread.toLatest")
             isVisible = false
             putClientProperty("JButton.buttonType", "roundRect")
-            addActionListener { if (text == null || !focusWaitingCard()) toBottom() }
+            addActionListener {
+                // Saying a card waits below, it goes to the first one below the view.
+                val view = scroll.viewport.viewRect
+                val below = waiting.mapNotNull { key -> column.topOf(key)?.let { key to it } }
+                val key = firstWaitingBelow(below, view.y + view.height) ?: waiting.firstOrNull()
+                if (text == null || !focusWaiting(key)) toBottom()
+            }
         }
 
     // The cards that wait for an answer, by key: the jump says so when one of them is below the view.
@@ -280,9 +286,11 @@ class SwingThreadSurface(
 
     override val hasWaitingCard: Boolean get() = waiting.isNotEmpty()
 
-    override fun focusWaitingCard(): Boolean {
-        val key = waiting.firstOrNull()
-        val top = key?.let(column::topOf) ?: return false
+    override fun focusWaitingCard(): Boolean = focusWaiting(waiting.firstOrNull())
+
+    /** Brings the card [key] into view and gives it the keyboard; false when there is none. */
+    private val focusWaiting: (String?) -> Boolean = focus@{ key ->
+        val top = key?.let(column::topOf) ?: return@focus false
         val port = scroll.viewport
         val view = port.viewRect
         // Out of sight (or only its top edge in it): its top goes near the view's top, and the column makes it.
@@ -294,7 +302,7 @@ class SwingThreadSurface(
             card.scrollRectToVisible(Rectangle(0, 0, card.width, card.height))
             partFor("", card)?.requestFocusInWindow()
         }
-        return true
+        true
     }
 
     private fun maxTop(): Int = (column.totalHeight() - scroll.viewport.extentSize.height).coerceAtLeast(0)

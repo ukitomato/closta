@@ -21,7 +21,9 @@ import dev.ukitomato.closta.presenter.view.ApprovalOutcome
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.FlowLayout
+import java.awt.event.ActionEvent
 import java.awt.event.KeyEvent
+import javax.swing.AbstractAction
 import javax.swing.Icon
 import javax.swing.JButton
 import javax.swing.JComponent
@@ -100,7 +102,17 @@ internal fun cardButton(
 
 /** Enter never presses this button, so a key meant for another part of the card never allows with it. */
 internal fun JButton.enterNeverPresses(): JButton =
-    apply { getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "none") }
+    apply {
+        // An enabled action that does nothing: the key is consumed here and reaches no ancestor, the window or the IDE.
+        val enter = KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0)
+        getInputMap(JComponent.WHEN_FOCUSED).put(enter, "closta.enterDoesNothing")
+        actionMap.put(
+            "closta.enterDoesNothing",
+            object : AbstractAction() {
+                override fun actionPerformed(e: ActionEvent) = Unit
+            },
+        )
+    }
 
 /** The line under a card that says why its answer did not go, in the error colour. */
 internal fun failureRow(
