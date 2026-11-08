@@ -558,7 +558,7 @@ class ComposerPanel(
         val file = currentFile?.let { relative(it) }
         val text = words + places + file?.let { "\n@$it" }.orEmpty()
         val files = attached.toList()
-        val outgoing = Outgoing(words, selections.toList(), file, files)
+        val outgoing = Outgoing(words, selections.toList(), file, files, draft.thumbnails.toMap())
         field.text = ""
         attached.clear()
         draft.thumbnails.clear()
@@ -582,6 +582,7 @@ class ComposerPanel(
         field.text = restoredText(field.text, outgoing.words)
         selections.addAll(0, outgoing.selections)
         attached.addAll(0, outgoing.attachments.filter { it !in attached })
+        draft.thumbnails.putAll(outgoing.thumbnails)
         showChips()
         say(reason, StatusSource.REFUSAL, error = true)
     }

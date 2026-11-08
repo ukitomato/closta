@@ -402,12 +402,14 @@ class ChatPanel(
             tabs.open(toolUseId, task?.title ?: ClostaBundle.message("chat.subagent"))
         }
         composer.onSend = { text, attachments, outgoing ->
-            scope.launch(Dispatchers.EDT) {
+            scope.launch {
                 val sent = handedOver { source.send(text, attachments) }
-                if (sent) {
-                    composer.sent(outgoing)
-                } else {
-                    composer.giveBack(outgoing, ClostaBundle.message("composer.send.failed"))
+                withContext(Dispatchers.EDT) {
+                    if (sent) {
+                        composer.sent(outgoing)
+                    } else {
+                        composer.giveBack(outgoing, ClostaBundle.message("composer.send.failed"))
+                    }
                 }
             }
         }
