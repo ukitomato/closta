@@ -17,6 +17,7 @@ closta-model = { path = "crates/model" }
 closta-core = { path = "crates/core" }
 closta-presenter = { path = "crates/presenter" }
 closta-providers = { path = "crates/providers" }
+closta-platform = { path = "crates/platform" }
 
 [workspace.lints.rust]
 unsafe_code = "deny"
