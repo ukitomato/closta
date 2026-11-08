@@ -103,7 +103,7 @@ private fun openInSidebar(
     content.preferredFocusableComponent = panel.preferredFocus()
     window.contentManager.addContent(content)
     window.contentManager.setSelectedContent(content)
-    window.show()
+    window.activate { panel.preferredFocus().requestFocusInWindow() }
     return true
 }
 
@@ -159,7 +159,7 @@ fun bringAndShow(
         tab != null -> FileEditorManager.getInstance(project).openFile(tab, true).isNotEmpty()
         window != null && content != null -> {
             window.contentManager.setSelectedContent(content)
-            window.show()
+            window.activate { content.preferredFocusableComponent?.requestFocusInWindow() }
             true
         }
         else -> openChat(project, sessionId, Placement.EDITOR_TAB)

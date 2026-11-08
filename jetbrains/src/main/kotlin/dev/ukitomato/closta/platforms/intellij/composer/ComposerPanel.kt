@@ -163,6 +163,15 @@ class ComposerPanel(
             add(status, BorderLayout.SOUTH)
         }
 
+    /**
+     * What is wired to the composer's current editor: the field makes a new editor each time it is shown again, so the
+     * last one's listeners and shortcuts are let go here rather than piling up under [parent].
+     */
+    private var wiring: Disposable? = null
+
+    /** The file the editor last showed, so a dismissed chip stays away until another file is shown. */
+    private var selectedFile: VirtualFile? = null
+
     init {
         box.layout = BorderLayout(0, JBUI.scale(GAP))
         box.add(chips, BorderLayout.NORTH)
@@ -448,18 +457,13 @@ class ComposerPanel(
 
     // --- the input -----------------------------------------------------------------------------------------------
 
-    /**
-     * What is wired to the composer's current editor: the field makes a new editor each time it is shown again, so the
-     * last one's listeners and shortcuts are let go here rather than piling up under [parent].
-     */
-    private var wiring: Disposable? = null
-
     private fun wire(editor: EditorEx) {
         wiring?.let(com.intellij.openapi.util.Disposer::dispose)
         val forEditor =
             com.intellij.openapi.util.Disposer
                 .newDisposable(parent, "Closta composer editor")
         wiring = forEditor
+        dropOnText(editor.contentComponent, forEditor)
         editor.settings.isUseSoftWraps = true
         editor.setPlaceholder(ClostaBundle.message("composer.placeholder"))
         editor.setShowPlaceholderWhenFocused(true)
@@ -607,9 +611,6 @@ class ComposerPanel(
     }
 
     // --- chips and attachments -----------------------------------------------------------------------------------
-
-    /** The file the editor last showed, so a dismissed chip stays away until another file is shown. */
-    private var selectedFile: VirtualFile? = null
 
     private fun follow(file: VirtualFile?) {
         if (file != null && file != selectedFile && selectedFile != null) draft.dismissed.clear()
@@ -783,6 +784,49 @@ class ComposerPanel(
                     }
                 }
         return ByteArrayOutputStream().also { ImageIO.write(buffered, "png", it) }.toByteArray()
+    }
+
+    /**
+     * Files dropped on the text become chips too, not only those dropped on the border. Anything else (a dragged
+     * string) goes to the drop target the editor had, and that one is put back when [until] goes.
+     */
+    private fun dropOnText(
+        text: JComponent,
+        until: Disposable,
+    ) {
+        val editors = text.dropTarget
+        val files = dropFiles()
+        val listener =
+            object : java.awt.dnd.DropTargetListener {
+                private fun filesIn(event: java.awt.dnd.DropTargetDragEvent) =
+                    event.isDataFlavorSupported(DataFlavor.javaFileListFlavor)
+
+                override fun dragEnter(event: java.awt.dnd.DropTargetDragEvent) =
+                    if (filesIn(event)) files.dragEnter(event) else editors?.dragEnter(event) ?: Unit
+
+                override fun dragOver(event: java.awt.dnd.DropTargetDragEvent) =
+                    if (filesIn(event)) event.acceptDrag(DnDConstants.ACTION_COPY) else editors?.dragOver(event) ?: Unit
+
+                override fun dropActionChanged(event: java.awt.dnd.DropTargetDragEvent) {
+                    if (!filesIn(event)) editors?.dropActionChanged(event)
+                }
+
+                override fun dragExit(event: java.awt.dnd.DropTargetEvent) {
+                    files.dragExit(event)
+                    editors?.dragExit(event)
+                }
+
+                override fun drop(event: DropTargetDropEvent) =
+                    if (event.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
+                        files.drop(event)
+                    } else {
+                        editors?.drop(event) ?: event.rejectDrop()
+                    }
+            }
+        val target = DropTarget(text, DnDConstants.ACTION_COPY, listener)
+        text.dropTarget = target
+        com.intellij.openapi.util.Disposer
+            .register(until) { if (text.dropTarget === target) text.dropTarget = editors }
     }
 
     private fun dropFiles() =
