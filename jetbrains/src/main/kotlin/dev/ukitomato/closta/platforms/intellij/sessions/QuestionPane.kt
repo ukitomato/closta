@@ -19,8 +19,11 @@ import dev.ukitomato.closta.platforms.intellij.thread.WrappingRadioButton
 import dev.ukitomato.closta.platforms.intellij.thread.buttonLine
 import dev.ukitomato.closta.platforms.intellij.thread.cardButton
 import dev.ukitomato.closta.presenter.view.QuestionCard
+import dev.ukitomato.closta.presenter.view.QuestionPick
 import dev.ukitomato.closta.presenter.view.QuestionView
 import dev.ukitomato.closta.presenter.view.answerPayload
+import dev.ukitomato.closta.presenter.view.questionAnswers
+import dev.ukitomato.closta.presenter.view.questionsComplete
 import java.awt.BorderLayout
 import javax.swing.AbstractButton
 import javax.swing.event.DocumentEvent
@@ -45,9 +48,12 @@ internal class QuestionPane(
         val other: AbstractButton,
         val otherText: JBTextField,
     ) {
-        fun answer(): List<String> =
-            options.filter { it.second.isSelected }.map { it.first } +
-                listOfNotNull(otherText.text.trim().takeIf { other.isSelected && it.isNotEmpty() })
+        fun gathered(): QuestionPick =
+            QuestionPick(
+                question,
+                options.filter { it.second.isSelected }.map { it.first },
+                otherText.text.takeIf { other.isSelected },
+            )
     }
 
     init {
@@ -106,7 +112,7 @@ internal class QuestionPane(
         context.ask.refresh()
     }
 
-    private fun complete(): Boolean = picks.all { it.answer().isNotEmpty() }
+    private fun complete(): Boolean = questionsComplete(picks.map { it.gathered() })
 
     private fun question(
         panel: Panel,
@@ -159,7 +165,7 @@ internal class QuestionPane(
     private fun send() {
         if (!complete()) return
         context.ask.send {
-            val answers = picks.associate { it.question to it.answer() }
+            val answers = questionAnswers(picks.map { it.gathered() })
             context.approval()?.let {
                 CardAnswer(card.requestId, ApprovalDecision.Answered(card.requestId), answerPayload(it, answers))
             }

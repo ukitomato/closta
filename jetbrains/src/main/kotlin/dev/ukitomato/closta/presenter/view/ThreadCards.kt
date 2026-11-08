@@ -16,8 +16,8 @@ sealed interface ThreadCard {
 }
 
 /**
- * A tool the CLI asks to run. [subject] is what it would run on: a command, a file, or the first words of its input.
- * [failure] is the sentence for an answer that could not be passed on.
+ * A tool the CLI asks to run. [subject] is what it would run on: a command or a file, whole, or for another tool the
+ * first string of its input. [failure] is the sentence for an answer that could not be passed on.
  */
 data class PermissionCard(
     override val requestId: String,
@@ -28,7 +28,17 @@ data class PermissionCard(
     val failure: String?,
     /** The change an `Edit` or `Write` asks to make, as a small diff; null for any other tool. */
     val diff: EditDiff? = null,
+    /** Every key of the input with its value, for a tool other than Bash and the file tools; empty for those. */
+    val inputFields: List<InputField> = emptyList(),
+    /** Whether [subject] or any of [inputFields] had a hidden or bidirectional character, now shown as a mark. */
+    val hiddenMarked: Boolean = false,
 ) : ThreadCard
+
+/** One key of a tool's input and its value: a string as it is, any other value as compact JSON, hidden ones marked. */
+data class InputField(
+    val key: String,
+    val value: String,
+)
 
 /** An `AskUserQuestion`: its questions, each with the options to choose from. */
 data class QuestionCard(
@@ -58,7 +68,6 @@ data class CardRow(
     override val opens: Boolean,
 ) : ThreadRow
 
-private const val SUBJECT_MAX = 200
 private val BY_COMMAND = setOf("Bash")
 private val BY_FILE = setOf("Edit", "Write", "Read", "NotebookEdit", "MultiEdit")
 private const val ASK_TOOL = "AskUserQuestion"
@@ -90,14 +99,25 @@ private fun questionCardOf(approval: ApprovalRecord): QuestionCard {
 private fun permissionCardOf(approval: ApprovalRecord): PermissionCard {
     val input = approval.input as? JsonObject
     val tool = approval.toolName ?: "?"
+    val subject = subjectOf(tool, input)?.let(::visible)
+    val fields =
+        if (input == null || tool in BY_COMMAND || tool in BY_FILE) {
+            emptyList()
+        } else {
+            input.entries.map { (key, value) ->
+                visible(key) to visible((value as? JsonString)?.value ?: JsonText.compact(value))
+            }
+        }
     return PermissionCard(
         approval.requestId,
         tool,
-        subjectOf(tool, input),
+        subject?.text,
         approval.suggestions,
         approval.outcome,
         approval.failure,
         editDiff(tool, input),
+        fields.map { (key, value) -> InputField(key.text, value.text) },
+        subject?.hadHidden == true || fields.any { (key, value) -> key.hadHidden || value.hadHidden },
     )
 }
 
@@ -108,31 +128,30 @@ private fun subjectOf(
     input: JsonObject?,
 ): String? {
     input ?: return null
-    val subject =
-        when (tool) {
-            in BY_COMMAND -> input.string("command")
-            in BY_FILE -> input.string("file_path") ?: input.string("notebook_path")
-            else -> input.values.firstNotNullOfOrNull { (it as? JsonString)?.value }
-        }
-    return subject?.take(SUBJECT_MAX)
+    return when (tool) {
+        in BY_COMMAND -> input.string("command")
+        in BY_FILE -> input.string("file_path") ?: input.string("notebook_path")
+        else -> input.values.firstNotNullOfOrNull { (it as? JsonString)?.value }
+    }
 }
 
 /** What an allow sends: the request's own input, so the tool runs on what it asked for (never on `{}`). */
 fun allowPayload(approval: ApprovalRecord): String = JsonText.compact(approval.input ?: JsonObject.EMPTY)
 
 /**
- * What answering a question sends: the request's input with `answers` added, by question text, the chosen labels
- * joined with ", " (captures 14 and 18; a multi-select join is not captured, it follows sdk-tools.d.ts' string value).
+ * What answering a question sends: the request's input with `answers` added, by question text, each answer as
+ * [questionAnswers] joins it (captures 14 and 18; a multi-select join is not captured, it follows sdk-tools.d.ts'
+ * string value).
  */
 fun answerPayload(
     approval: ApprovalRecord,
-    answers: Map<String, List<String>>,
+    answers: Map<String, String>,
 ): String {
     val input = approval.input as? JsonObject ?: JsonObject.EMPTY
     val builder = JsonObject.Builder()
     input.entries.forEach { (key, value) -> builder.put(key, value) }
     val answered = JsonObject.Builder()
-    answers.forEach { (question, labels) -> answered.put(question, JsonString(labels.joinToString(", "))) }
+    answers.forEach { (question, answer) -> answered.put(question, JsonString(answer)) }
     builder.put("answers", answered.build())
     return JsonText.compact(builder.build())
 }

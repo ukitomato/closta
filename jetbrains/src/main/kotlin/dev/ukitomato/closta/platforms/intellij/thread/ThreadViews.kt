@@ -618,7 +618,7 @@ class ThreadRowViews(
         private const val WIDE_EXTRA = 16
         private const val CARD_LINES = 6
         private const val GAP = 4
-        private const val CODE_LINES = 12
+        internal const val CODE_LINES = 12
         private const val MENTION_ALPHA = 0.25
         private const val MS_PER_SECOND = 1000.0
         private const val COPIED_MS = 1500L

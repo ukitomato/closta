@@ -21,16 +21,20 @@ import dev.ukitomato.closta.presenter.view.ApprovalOutcome
 import dev.ukitomato.closta.presenter.view.ApprovalRecord
 import dev.ukitomato.closta.presenter.view.PassedOn
 import dev.ukitomato.closta.presenter.view.PermissionCard
+import dev.ukitomato.closta.presenter.view.PermissionChoice
 import dev.ukitomato.closta.presenter.view.PlanCard
 import dev.ukitomato.closta.presenter.view.QuestionCard
+import dev.ukitomato.closta.presenter.view.QuestionPick
 import dev.ukitomato.closta.presenter.view.QuestionView
 import dev.ukitomato.closta.presenter.view.SUGGESTION_DESTINATIONS
-import dev.ukitomato.closta.presenter.view.SuggestionRecord
 import dev.ukitomato.closta.presenter.view.ThreadCard
 import dev.ukitomato.closta.presenter.view.allowPayload
 import dev.ukitomato.closta.presenter.view.answerPayload
+import dev.ukitomato.closta.presenter.view.keptSuggestions
 import dev.ukitomato.closta.presenter.view.passedOn
-import dev.ukitomato.closta.presenter.view.withDestination
+import dev.ukitomato.closta.presenter.view.permissionChoice
+import dev.ukitomato.closta.presenter.view.questionAnswers
+import dev.ukitomato.closta.presenter.view.questionsComplete
 import java.awt.BorderLayout
 import java.awt.KeyboardFocusManager
 import javax.swing.AbstractButton
@@ -156,8 +160,9 @@ class CardViews(
     }
 
     /**
-     * A waiting permission card: what Claude wants to do with the tool's icon, what it runs on (the command, or the
-     * file and its diff), and the answers as buttons: Allow (1), Always Allow (2) when the CLI offers a rule to keep,
+     * A waiting permission card: what Claude wants to do with the tool's icon, what it runs on (the whole command, the
+     * file and its diff, or every key of another tool's input), a warning when any of it had hidden characters (shown
+     * as marks), and the answers as buttons: Allow (1), Always Allow (2) when the CLI offers a rule to keep,
      * Deny (3). Esc denies, Tab opens a sentence to go with the denial, Shift+Tab moves on.
      */
     private inner class PermissionView(
@@ -174,16 +179,19 @@ class CardViews(
         init {
             layout = BorderLayout()
             val headline = headlineOf(card.toolName, card.subject)
-            val yes = cardButton(ClostaBundle.message("thread.permission.allow"), main = true) { decide(Choice.YES) }
+            val yes =
+                cardButton(ClostaBundle.message("thread.permission.allow"), main = true) {
+                    decide(PermissionChoice.ALLOW)
+                }
             val keep =
                 card.suggestions.firstOrNull()?.let { first ->
-                    cardButton(keepLabel(), act = { decide(Choice.KEEP) }).apply {
+                    cardButton(keepLabel(), act = { decide(PermissionChoice.ALLOW_KEEP) }).apply {
                         toolTipText = first.detail.ifEmpty { first.kind }
                     }
                 }
             val no =
                 cardButton(ClostaBundle.message("thread.permission.deny", listOfNotNull(yes, keep).size + 1)) {
-                    decide(Choice.NO)
+                    decide(PermissionChoice.DENY)
                 }
             buttons += listOfNotNull(yes, keep, no)
             val content =
@@ -208,9 +216,21 @@ class CardViews(
                                 }
                             }
                         }
+                        // Another tool's input, every key on its own line: its first string is among them.
+                        card.inputFields.isNotEmpty() ->
+                            card.inputFields.forEach { field ->
+                                row(plainLabel(field.key)) { cell(subjectBox(field.value)).align(AlignX.FILL) }
+                            }
                         // A file's path is the headline's link already (Read): it is not shown a second time.
                         headline.file == null ->
                             card.subject?.let { subject -> row { cell(subjectBox(subject)).align(AlignX.FILL) } }
+                    }
+                    if (card.hiddenMarked) {
+                        row {
+                            icon(AllIcons.General.Warning).gap(RightGap.SMALL)
+                            val warning = StringUtil.escapeXmlEntities(ClostaBundle.message("thread.permission.hidden"))
+                            text(warning, MAX_LINE_LENGTH_WORD_WRAP).align(AlignX.FILL).resizableColumn()
+                        }
                     }
                     row { cell(buttonLine(buttons)).align(AlignX.FILL) }.topGap(TopGap.SMALL)
                     if (keep != null) {
@@ -235,12 +255,12 @@ class CardViews(
             add(content, BorderLayout.CENTER)
             getAccessibleContext().accessibleName =
                 listOfNotNull(headline.text.removeSuffix(":"), card.subject).joinToString(": ")
-            comment.addActionListener { decide(Choice.NO) }
+            comment.addActionListener { decide(PermissionChoice.DENY) }
             noteKeys(comment, this, letGo) { showNote(false) }
             cardKeys(this, CardKind.PERMISSION, { buttons.size }) { key ->
                 when (key) {
-                    is CardKey.Choose -> decide(choiceAt(key.index))
-                    CardKey.Deny -> decide(Choice.NO)
+                    is CardKey.Choose -> decide(permissionChoice(key.index, card.suggestions.isNotEmpty()))
+                    CardKey.Deny -> decide(PermissionChoice.DENY)
                     CardKey.OpenNote -> {
                         showNote(true)
                         comment.requestFocusInWindow()
@@ -261,29 +281,21 @@ class CardViews(
             resized(this)
         }
 
-        // The buttons' order: Allow, Always Allow when offered, Deny.
-        private fun choiceAt(index: Int): Choice =
-            when {
-                index == 0 -> Choice.YES
-                index == 1 && card.suggestions.isNotEmpty() -> Choice.KEEP
-                else -> Choice.NO
-            }
-
         private fun keepLabel(): String =
             ClostaBundle.message(
                 if (destination == "session") "thread.permission.allowSession" else "thread.permission.allowAlways",
             )
 
-        private fun decide(choice: Choice) {
+        private fun decide(choice: PermissionChoice) {
             if (sent) return
             val approval = approvals(card.requestId) ?: return
             sent = true
             buttons.forEach { it.isEnabled = false }
             when (choice) {
-                Choice.YES ->
+                PermissionChoice.ALLOW ->
                     answer(CardAnswer(card.requestId, ApprovalDecision.Allow(card.requestId), allowPayload(approval)))
-                Choice.KEEP -> {
-                    val kept = card.suggestions.map { kept(it) }
+                PermissionChoice.ALLOW_KEEP -> {
+                    val kept = keptSuggestions(card.suggestions, destination)
                     answer(
                         CardAnswer(
                             card.requestId,
@@ -293,20 +305,13 @@ class CardViews(
                         ),
                     )
                 }
-                Choice.NO ->
+                PermissionChoice.DENY ->
                     answer(
                         CardAnswer(card.requestId, ApprovalDecision.Deny(card.requestId), comment.text.trim()),
                     )
             }
         }
-
-        private fun kept(suggestion: SuggestionRecord): SuggestionRecord {
-            val where = destination ?: return suggestion
-            return if (where == suggestion.destination) suggestion else withDestination(suggestion, where)
-        }
     }
-
-    private enum class Choice { YES, KEEP, NO }
 
     /**
      * A waiting question card: each question with its options, each option's description under it, and Other with a
@@ -326,9 +331,12 @@ class CardViews(
             val other: AbstractButton,
             val otherText: JBTextField,
         ) {
-            fun answer(): List<String> =
-                options.filter { it.second.isSelected }.map { it.first } +
-                    listOfNotNull(otherText.text.trim().takeIf { other.isSelected && it.isNotEmpty() })
+            fun gathered(): QuestionPick =
+                QuestionPick(
+                    question,
+                    options.filter { it.second.isSelected }.map { it.first },
+                    otherText.text.takeIf { other.isSelected },
+                )
         }
 
         init {
@@ -427,16 +435,17 @@ class CardViews(
         }
 
         private fun refresh() {
-            val complete = picks.all { it.answer().isNotEmpty() }
+            val complete = questionsComplete(picks.map { it.gathered() })
             send.isEnabled = !sent && complete
             send.toolTipText = if (sent || complete) null else ClostaBundle.message("thread.question.answerAll")
         }
 
         private fun send() {
             val approval = approvals(card.requestId)
-            val answers = picks.associate { it.question to it.answer() }
+            val gathered = picks.map { it.gathered() }
             // Every question needs an answer before the answer goes.
-            if (sent || approval == null || answers.values.any { it.isEmpty() }) return
+            if (sent || approval == null || !questionsComplete(gathered)) return
+            val answers = questionAnswers(gathered)
             sent = true
             refresh()
             answer(
