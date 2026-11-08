@@ -7,7 +7,7 @@
 
 # Closta
 
-**Claude CodeをJetBrains IDEでネイティブに動かすプラグイン。AnthropicとAmazon Bedrockに対応**
+**JetBrains IDEでClaude CodeをネイティブUIで使うための、サードパーティ製プラグイン**
 
 [![IntelliJ IDEA 2026.2+](.github/assets/badges/intellij.svg)](https://www.jetbrains.com/idea/)
 [![Claude Code CLI](.github/assets/badges/claude.svg)](https://docs.claude.com/en/docs/claude-code)

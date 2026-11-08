@@ -7,7 +7,7 @@
 
 # Closta
 
-**Claude Code as a native JetBrains IDE plugin, with Anthropic or Amazon Bedrock.**
+**A third-party JetBrains IDE plugin for using Claude Code with a native UI.**
 
 [![IntelliJ IDEA 2026.2+](.github/assets/badges/intellij.svg)](https://www.jetbrains.com/idea/)
 [![Claude Code CLI](.github/assets/badges/claude.svg)](https://docs.claude.com/en/docs/claude-code)
@@ -31,9 +31,7 @@ edits as diffs, a turn's changes as VCS changes, approvals as cards. No webview.
 </div>
 
 <!-- Plugin description -->
-Use the Claude Code agent inside the IDE, with native editors, diffs and VCS changes.
-
-Closta runs the `claude` command (the Claude Code CLI) and shows the conversation with the IDE's own components.
+A third-party plugin that runs your `claude` CLI (Claude Code) and shows it in a native IDE UI. Not affiliated with Anthropic.
 
 - Conversations in the Closta tool window or in editor tabs, several at a time.
 - Tool permissions, file edits (as diffs), plans and questions as cards, answered in place.
