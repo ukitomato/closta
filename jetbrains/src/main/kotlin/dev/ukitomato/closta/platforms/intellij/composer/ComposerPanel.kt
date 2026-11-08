@@ -37,6 +37,9 @@ import dev.ukitomato.closta.core.models.Attachment
 import dev.ukitomato.closta.core.models.AttachmentKind
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
 import dev.ukitomato.closta.platforms.intellij.chat.ChatVirtualFile
+import dev.ukitomato.closta.platforms.intellij.chat.effortText
+import dev.ukitomato.closta.platforms.intellij.chat.modeText
+import dev.ukitomato.closta.platforms.intellij.chat.shortModeText
 import dev.ukitomato.closta.platforms.intellij.ide.IdeEditorSelections
 import dev.ukitomato.closta.platforms.intellij.thread.CardHint
 import dev.ukitomato.closta.platforms.intellij.thread.JUMP_KEY
@@ -49,10 +52,7 @@ import dev.ukitomato.closta.presenter.view.ComposerState
 import dev.ukitomato.closta.presenter.view.SwitchKind
 import dev.ukitomato.closta.presenter.view.SwitchRecord
 import dev.ukitomato.closta.presenter.view.checkAttachment
-import dev.ukitomato.closta.presenter.view.effortLabel
-import dev.ukitomato.closta.presenter.view.modeLabel
 import dev.ukitomato.closta.presenter.view.shortLabel
-import dev.ukitomato.closta.presenter.view.shortModeLabel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -268,20 +268,20 @@ class ComposerPanel(
     private fun showBar(next: ComposerState) {
         val narrow = component.width in 1 until JBUI.scale(NARROW)
         val modeName = next.mode ?: "default"
-        mode.text = if (narrow) shortModeLabel(modeName) else modeLabel(modeName)
+        mode.text = if (narrow) shortModeText(modeName) else modeText(modeName)
         mode.normal =
             com.intellij.util.ui.UIUtil
                 .getLabelForeground()
         // Bypass is said by an icon too, not by the colour alone.
         mode.icon = if (modeName == ComposerPopups.BYPASS) AllIcons.General.Warning else null
         mode.toolTipText = ClostaBundle.message("composer.mode.tooltip")
-        mode.accessibleLabel = ClostaBundle.message("composer.mode.accessible", modeLabel(modeName))
+        mode.accessibleLabel = ClostaBundle.message("composer.mode.accessible", modeText(modeName))
         val effort = next.effort?.takeIf { next.effortLevels.isNotEmpty() }
         val modelName = shortModel(if (narrow) shortLabel(next.model) else next.model.label, MODEL_SHOWN)
-        val effortName = effort?.let { if (narrow) shortEffort(effortLabel(it)) else effortLabel(it) }
+        val effortName = effort?.takeUnless { narrow }?.let(::effortText)
         model.text = listOfNotNull(modelName, effortName).joinToString(" · ")
         // The whole name and level, and the model's full id when the CLI gave one.
-        val whole = listOfNotNull(next.model.label, effort?.let(::effortLabel)).joinToString(" · ")
+        val whole = listOfNotNull(next.model.label, effort?.let(::effortText)).joinToString(" · ")
         model.accessibleLabel = ClostaBundle.message("composer.model.accessible", model.text.orEmpty())
         model.toolTipText = listOfNotNull(whole, next.model.resolved?.takeIf { it != whole }).joinToString(" — ")
         val used = next.context
@@ -382,8 +382,8 @@ class ComposerPanel(
     ): String =
         when (switching.kind) {
             SwitchKind.MODEL -> next.models.firstOrNull { it.value == switching.value }?.label ?: switching.value
-            SwitchKind.MODE -> modeLabel(switching.value)
-            else -> effortLabel(switching.value)
+            SwitchKind.MODE -> modeText(switching.value)
+            else -> effortText(switching.value)
         }
 
     /** Posts [text] to the status line: a refusal stays [ERROR_TTL_MS], a hint [HINT_TTL_MS], or until a key. */

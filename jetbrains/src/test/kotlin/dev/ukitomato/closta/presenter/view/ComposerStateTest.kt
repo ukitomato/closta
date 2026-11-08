@@ -95,21 +95,6 @@ class ComposerStateTest {
     }
 
     @Test
-    fun modeLabels() {
-        assertEquals(
-            listOf("Default", "Accept Edits", "Plan", "Auto", "Don't Ask", "Bypass Permissions", "custom"),
-            listOf("default", "acceptEdits", "plan", "auto", "dontAsk", "bypassPermissions", "custom").map(::modeLabel),
-        )
-        assertEquals("Edits", shortModeLabel("acceptEdits"))
-        assertEquals("Bypass", shortModeLabel("bypassPermissions"))
-        assertEquals("Plan", shortModeLabel("plan"))
-        assertEquals(
-            listOf("Low", "Medium", "High", "Extra High", "Max", "ultra"),
-            listOf("low", "medium", "high", "xhigh", "max", "ultra").map(::effortLabel),
-        )
-    }
-
-    @Test
     fun aPendingSwitchIsShown() {
         val pending = SwitchRecord("p", 2, SwitchKind.MODEL, "haiku", SwitchOutcome.PENDING)
         assertEquals(pending, state(model = "claude-opus-5-5", switches = listOf(pending)).switching)

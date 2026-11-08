@@ -41,6 +41,9 @@ data class ModelChoice(
 /** The CLI's permission modes, in the order Shift+Tab goes through them. */
 val PERMISSION_MODES: List<String> = listOf("default", "acceptEdits", "plan", "auto", "dontAsk", "bypassPermissions")
 
+/** The effort levels the CLI names, weakest first. */
+val EFFORT_LEVELS: List<String> = listOf("low", "medium", "high", "xhigh", "max")
+
 private const val DEFAULT_MODEL = "default"
 private const val DEFAULT_WORD = "Default"
 private val SWITCHES_SHOWN = setOf(SwitchKind.MODEL, SwitchKind.MODE, SwitchKind.EFFORT)
@@ -134,31 +137,3 @@ fun shortLabel(choice: ModelChoice): String =
         .removePrefix("$DEFAULT_WORD (")
         .takeIf { it != choice.label }
         ?.removeSuffix(")") ?: choice.label
-
-fun modeLabel(mode: String): String =
-    when (mode) {
-        "default" -> "Default"
-        "acceptEdits" -> "Accept Edits"
-        "plan" -> "Plan"
-        "auto" -> "Auto"
-        "dontAsk" -> "Don't Ask"
-        "bypassPermissions" -> "Bypass Permissions"
-        else -> mode
-    }
-
-fun shortModeLabel(mode: String): String =
-    when (mode) {
-        "acceptEdits" -> "Edits"
-        "bypassPermissions" -> "Bypass"
-        else -> modeLabel(mode)
-    }
-
-fun effortLabel(level: String): String =
-    when (level) {
-        "low" -> "Low"
-        "medium" -> "Medium"
-        "high" -> "High"
-        "xhigh" -> "Extra High"
-        "max" -> "Max"
-        else -> level
-    }

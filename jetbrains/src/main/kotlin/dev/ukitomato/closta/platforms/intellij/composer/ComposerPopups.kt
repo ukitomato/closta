@@ -12,11 +12,11 @@ import com.intellij.ui.dsl.builder.panel
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
+import dev.ukitomato.closta.platforms.intellij.chat.effortText
+import dev.ukitomato.closta.platforms.intellij.chat.modeText
 import dev.ukitomato.closta.platforms.intellij.ui.plainTip
 import dev.ukitomato.closta.presenter.view.ComposerState
 import dev.ukitomato.closta.presenter.view.ModelChoice
-import dev.ukitomato.closta.presenter.view.effortLabel
-import dev.ukitomato.closta.presenter.view.modeLabel
 import java.awt.BorderLayout
 import java.awt.Point
 import java.awt.event.MouseAdapter
@@ -53,7 +53,7 @@ object ComposerPopups {
                         hasFocus: Boolean,
                     ) {
                         val warn = value == BYPASS
-                        append(modeLabel(value), SimpleTextAttributes.REGULAR_ATTRIBUTES)
+                        append(modeText(value), SimpleTextAttributes.REGULAR_ATTRIBUTES)
                         modeHint(value)?.let { append("  $it", SimpleTextAttributes.GRAYED_ATTRIBUTES) }
                         icon =
                             when {
@@ -197,7 +197,7 @@ object ComposerPopups {
         val levels =
             panel {
                 row(ClostaBundle.message("composer.effort.label")) {
-                    segmentedButton(state.effortLevels) { text = effortLabel(it) }
+                    segmentedButton(state.effortLevels) { text = effortText(it) }
                         .apply { if (known) selectedItem = state.effort }
                         .whenItemSelected { level -> if (level != state.effort) effort(level) }
                         .enabled(state.effortEnabled)
