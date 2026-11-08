@@ -37,12 +37,12 @@
               },
               "parts": {
                 "order": [
-                  "msg_011CfPoJxXVfmRb8QRiFECnY:0",
+                  "msg_011CScrubbedAXQZTNfsd3Ss:0",
                   "toolu_017ooEbDUyDHgyA2xBWc3jiz",
-                  "msg_011CfPoKbYD3TZaPYhBXCKZo:0"
+                  "msg_011CScrubbedHqeVWzdQrYwp:0"
                 ],
                 "byId": {
-                  "msg_011CfPoJxXVfmRb8QRiFECnY:0": {
+                  "msg_011CScrubbedAXQZTNfsd3Ss:0": {
                     "type": "reasoning",
                     "text": "",
                     "status": {
@@ -136,7 +136,7 @@
                       "approved": true
                     }
                   },
-                  "msg_011CfPoKbYD3TZaPYhBXCKZo:0": {
+                  "msg_011CScrubbedHqeVWzdQrYwp:0": {
                     "type": "text",
                     "text": "ユーザーは **A** を選択しました。",
                     "status": {

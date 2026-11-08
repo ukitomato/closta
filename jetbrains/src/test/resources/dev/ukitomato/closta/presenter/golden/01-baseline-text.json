@@ -37,10 +37,10 @@
               },
               "parts": {
                 "order": [
-                  "msg_011CfPnzCLAVG3Af82NhjPPg:0"
+                  "msg_011CScrubbed56VkXnKK6fyn:0"
                 ],
                 "byId": {
-                  "msg_011CfPnzCLAVG3Af82NhjPPg:0": {
+                  "msg_011CScrubbed56VkXnKK6fyn:0": {
                     "type": "text",
                     "text": "pong",
                     "status": {

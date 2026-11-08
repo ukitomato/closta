@@ -37,12 +37,12 @@
               },
               "parts": {
                 "order": [
-                  "msg_011CfsypC4Q9jKA5cfgwDJJt:0",
+                  "msg_011CScrubbedCzRLnkipKQNh:0",
                   "toolu_01391TGnHENH5QCAyrVVpND9",
-                  "msg_011CfsypePBWpwhdwEPQiMd9:0"
+                  "msg_011CScrubbedEzH8oqfB2qbz:0"
                 ],
                 "byId": {
-                  "msg_011CfsypC4Q9jKA5cfgwDJJt:0": {
+                  "msg_011CScrubbedCzRLnkipKQNh:0": {
                     "type": "reasoning",
                     "text": "",
                     "status": {
@@ -183,7 +183,7 @@
                       "approved": true
                     }
                   },
-                  "msg_011CfsypePBWpwhdwEPQiMd9:0": {
+                  "msg_011CScrubbedEzH8oqfB2qbz:0": {
                     "type": "text",
                     "text": "回答結果は以下の通りです：\n\n- **AとBどちらがいいですか？** → **A**\n- **XとYどちらにしますか？** → **X**",
                     "status": {

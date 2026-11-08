@@ -37,20 +37,20 @@
               },
               "parts": {
                 "order": [
-                  "msg_011CfPo2k2Df7Mu9oXjsnCSv:0",
-                  "msg_011CfPo2k2Df7Mu9oXjsnCSv:1",
+                  "msg_011CScrubbedFAasTtCnZPXw:0",
+                  "msg_011CScrubbedFAasTtCnZPXw:1",
                   "toolu_01FooZHpFpzmDvsr82dzYb33",
-                  "msg_011CfPo2xTa3nrcGyjrmnVbF:0"
+                  "msg_011CScrubbedAtSY6KwVUEVC:0"
                 ],
                 "byId": {
-                  "msg_011CfPo2k2Df7Mu9oXjsnCSv:0": {
+                  "msg_011CScrubbedFAasTtCnZPXw:0": {
                     "type": "reasoning",
                     "text": "",
                     "status": {
                       "type": "complete"
                     }
                   },
-                  "msg_011CfPo2k2Df7Mu9oXjsnCSv:1": {
+                  "msg_011CScrubbedFAasTtCnZPXw:1": {
                     "type": "text",
                     "text": "指定されたパスにファイルを作成します。",
                     "status": {
@@ -94,7 +94,7 @@
                       "approved": true
                     }
                   },
-                  "msg_011CfPo2xTa3nrcGyjrmnVbF:0": {
+                  "msg_011CScrubbedAtSY6KwVUEVC:0": {
                     "type": "text",
                     "text": "`/tmp/closta-rec-05-permission-can-use-tool-nGTi7q/outside/note.txt` を作成し、\"hello\" というテキストを書き込みました。",
                     "status": {

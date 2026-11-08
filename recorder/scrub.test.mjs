@@ -2,7 +2,7 @@
 // Self-test of the scrubber on synthetic lines (no real API needed).
 
 import assert from 'node:assert/strict';
-import { newScrubState, scrubLine, scrubLines, findPii, createStreamScrubber, joinedFragments, scrubFragments, knownNamePatterns, knownOrgs } from './scrub.mjs';
+import { newScrubState, scrubLine, scrubLines, findPii, createStreamScrubber, joinedFragments, scrubFragments, knownNamePatterns, knownOrgs, fakeApiId } from './scrub.mjs';
 
 let failures = 0;
 const check = (name, fn) => {
@@ -212,9 +212,38 @@ check('the account plan is written as one fixed plan, also inside an escaped str
   const line = JSON.stringify({ account: { subscriptionType: 'Claude Team' }, text: JSON.stringify({ subscriptionType: 'Claude Max' }) });
   const out = scrubLine(line, st);
   assert.ok(!out.includes('Team') && !out.includes('Max'), out);
-  assert.equal(out.split('Claude Pro').length - 1, 2, out);
+  assert.equal(out.split('Example Plan').length - 1, 2, out);
   assert.equal(findPii(out, 'alice').length, 0, out);
   assert.equal(findPii(line, 'alice').filter((h) => h.kind === 'plan').length, 2);
+});
+
+check('replaces real request and message ids with fake ids of the same shape', () => {
+  const st = newScrubState('alice');
+  const line = JSON.stringify({ type: 'assistant', message: { id: 'msg_011CAbCdEfGhJkLmNpQrStUv' }, request_id: 'req_011CaBcDeFgHjKmNpQrStUvW' });
+  const out = scrubLine(line, st);
+  assert.ok(!out.includes('msg_011CAbCdEfGhJkLmNpQrStUv') && !out.includes('req_011CaBcDeFgHjKmNpQrStUvW'), out);
+  const ids = [...out.matchAll(/(req|msg)_011CScrubbed[1-9A-HJ-NP-Za-km-z]{12}/g)].map((m) => m[0]);
+  assert.equal(ids.length, 2, out);
+  for (const id of ids) assert.equal(id.length, 28);
+});
+
+check('fake ids are deterministic and scrubbing them again changes nothing', () => {
+  const a = fakeApiId('msg_011CAbCdEfGhJkLmNpQrStUv');
+  assert.equal(a, fakeApiId('msg_011CAbCdEfGhJkLmNpQrStUv'));
+  assert.equal(fakeApiId(a), a);
+  assert.notEqual(a, fakeApiId('msg_011CzYxWvUtSrQpNmLkJhGfE'));
+  const line = JSON.stringify({ id: a });
+  assert.equal(scrubLine(line, newScrubState('alice')), line);
+});
+
+check('leaves strings that only look like ids alone', () => {
+  const line = JSON.stringify({ uuid: 'msg_lifecycle', note: 'req_ prefix', id: '05-permission-can-use-tool-req-1' });
+  assert.equal(scrubLine(line, newScrubState('alice')), line);
+});
+
+check('reports a real api id or a real plan left in a file', () => {
+  const hits = findPii('{"request_id":"req_011CaBcDeFgHjKmNpQrStUvW","subscriptionType":"Claude Pro"}', 'alice');
+  assert.deepEqual(hits.map((h) => h.kind).sort(), ['api-id', 'plan']);
 });
 
 process.stdout.write(failures ? `\nNG: ${failures} failed\n`

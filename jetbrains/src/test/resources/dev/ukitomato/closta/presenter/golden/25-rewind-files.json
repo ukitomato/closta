@@ -41,12 +41,12 @@
               },
               "parts": {
                 "order": [
-                  "msg_011CgSozpxRKZ4oRd7o8u448:0",
+                  "msg_011CScrubbed7JeDYEZQUyuk:0",
                   "toolu_01KyALGdM3b4uqPBAACMZfik",
-                  "msg_011CgSp142EVcKe9SsorWbjp:0"
+                  "msg_011CScrubbedzziyAYqpB6wV:0"
                 ],
                 "byId": {
-                  "msg_011CgSozpxRKZ4oRd7o8u448:0": {
+                  "msg_011CScrubbed7JeDYEZQUyuk:0": {
                     "type": "reasoning",
                     "text": "",
                     "status": {
@@ -84,7 +84,7 @@
                       "approved": true
                     }
                   },
-                  "msg_011CgSp142EVcKe9SsorWbjp:0": {
+                  "msg_011CScrubbedzziyAYqpB6wV:0": {
                     "type": "text",
                     "text": "Created `note.txt` with the text `first`.",
                     "status": {
@@ -118,13 +118,13 @@
               },
               "parts": {
                 "order": [
-                  "msg_011CgSp19JE7sKExaFYwj6tx:0",
+                  "msg_011CScrubbedHF5PR9QaLj8d:0",
                   "toolu_01FS56xPaD1nrPrJXtCQxveV",
                   "toolu_01U56Zu3eq8RFd4QuhEbQgrE",
-                  "msg_011CgSp1QKs5NbPHT41Gewnc:0"
+                  "msg_011CScrubbedA2PDpC92ux9k:0"
                 ],
                 "byId": {
-                  "msg_011CgSp19JE7sKExaFYwj6tx:0": {
+                  "msg_011CScrubbedHF5PR9QaLj8d:0": {
                     "type": "reasoning",
                     "text": "",
                     "status": {
@@ -175,7 +175,7 @@
                       "approved": true
                     }
                   },
-                  "msg_011CgSp1QKs5NbPHT41Gewnc:0": {
+                  "msg_011CScrubbedA2PDpC92ux9k:0": {
                     "type": "text",
                     "text": "Read `note.txt` (contained `first`), then overwrote it with `second`.",
                     "status": {
@@ -209,12 +209,12 @@
               },
               "parts": {
                 "order": [
-                  "msg_011CgSp1WPVHLbdMdx6mrnPr:0",
+                  "msg_011CScrubbed7U7MaDrGdha8:0",
                   "toolu_01MJJDVEGaLWaHvnbKry2rGk",
-                  "msg_011CgSp1eVQrkPFm7Hq2KSCR:0"
+                  "msg_011CScrubbedD2QHDVVRHaj9:0"
                 ],
                 "byId": {
-                  "msg_011CgSp1WPVHLbdMdx6mrnPr:0": {
+                  "msg_011CScrubbed7U7MaDrGdha8:0": {
                     "type": "reasoning",
                     "text": "",
                     "status": {
@@ -234,7 +234,7 @@
                       "type": "complete"
                     }
                   },
-                  "msg_011CgSp1eVQrkPFm7Hq2KSCR:0": {
+                  "msg_011CScrubbedD2QHDVVRHaj9:0": {
                     "type": "text",
                     "text": "The content of `note.txt` is:\n\n```\nfirst\n```",
                     "status": {

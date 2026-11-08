@@ -37,20 +37,20 @@
               },
               "parts": {
                 "order": [
-                  "msg_011CfPo21BWdDjSYnqx4ZaUT:0",
-                  "msg_011CfPo21BWdDjSYnqx4ZaUT:1",
+                  "msg_011CScrubbedErVQR1w5Egkt:0",
+                  "msg_011CScrubbedErVQR1w5Egkt:1",
                   "toolu_01K4mynWnbCCRWnEAcHHtmUT",
-                  "msg_011CfPo2EHJZ26mVEE6SC5zs:0"
+                  "msg_011CScrubbed6YqFBPmy4dxW:0"
                 ],
                 "byId": {
-                  "msg_011CfPo21BWdDjSYnqx4ZaUT:0": {
+                  "msg_011CScrubbedErVQR1w5Egkt:0": {
                     "type": "reasoning",
                     "text": "",
                     "status": {
                       "type": "complete"
                     }
                   },
-                  "msg_011CfPo21BWdDjSYnqx4ZaUT:1": {
+                  "msg_011CScrubbedErVQR1w5Egkt:1": {
                     "type": "text",
                     "text": "そのコマンドを実行します。",
                     "status": {
@@ -72,7 +72,7 @@
                       "type": "complete"
                     }
                   },
-                  "msg_011CfPo2EHJZ26mVEE6SC5zs:0": {
+                  "msg_011CScrubbed6YqFBPmy4dxW:0": {
                     "type": "text",
                     "text": "コマンドの出力結果は以下の通りです：\n\n```\nshould-be-denied\n```",
                     "status": {

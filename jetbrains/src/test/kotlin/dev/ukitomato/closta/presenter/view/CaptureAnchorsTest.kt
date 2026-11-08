@@ -206,7 +206,7 @@ class CaptureAnchorsTest {
         assertEquals("Agent", agent.str("toolName"))
         assertEquals("complete", agent.status())
         assertEquals(
-            listOf("42e60a14-f53a-4c87-ac6f-67e41762f7b9", "msg_011CfPo4o3qBjzoxWtqDbbup"),
+            listOf("42e60a14-f53a-4c87-ac6f-67e41762f7b9", "msg_011CScrubbed91eppSUf5SM4"),
             agent.keysOf("messages"),
         )
         val prompt = agent.message("42e60a14-f53a-4c87-ac6f-67e41762f7b9")
@@ -218,7 +218,7 @@ class CaptureAnchorsTest {
                 .str("text")!!
                 .startsWith("Read the file NOTES.md in the current directory"),
         )
-        val reply = agent.message("msg_011CfPo4o3qBjzoxWtqDbbup")
+        val reply = agent.message("msg_011CScrubbed91eppSUf5SM4")
         assertEquals("assistant", reply.str("role"))
         assertNull(reply["status"], "a sub-agent's message has no status")
         val read = reply.part("toolu_017AYaBDFQPgf2trBHtoP1HN")
@@ -309,8 +309,8 @@ class CaptureAnchorsTest {
             listOf(
                 "send-1",
                 "8ef2e421-4d12-48ac-b065-cacf3bc35e81",
-                "msg_011CfPo7fspRuKpmNs6Ceam8",
-                "msg_011CfPoBBaqVGFWWnA1WqRuM",
+                "msg_011CScrubbed4Cim73pcgZBm",
+                "msg_011CScrubbedEDaKUXDcpXJk",
             ),
             keys(thread),
         )
@@ -319,7 +319,7 @@ class CaptureAnchorsTest {
             listOf(null, "complete/stop", "complete/stop", "complete/stop"),
             thread.messages().map { it.status() },
         )
-        assertTrue(thread.message("msg_011CfPoBBaqVGFWWnA1WqRuM").parts().any { it.str("text")!!.contains("bg-done") })
+        assertTrue(thread.message("msg_011CScrubbedEDaKUXDcpXJk").parts().any { it.str("text")!!.contains("bg-done") })
     }
 
     @Test
@@ -330,11 +330,11 @@ class CaptureAnchorsTest {
         val speaking =
             steps.first { step ->
                 val thread = step.tree.at("threads", "byId", CaptureReplay.THREAD)
-                "msg_011CfPo7fspRuKpmNs6Ceam8" in keys(thread)
+                "msg_011CScrubbed4Cim73pcgZBm" in keys(thread)
             }
         val thread = speaking.tree.at("threads", "byId", CaptureReplay.THREAD)
         assertEquals(JsonBool.TRUE, thread["isRunning"])
-        assertEquals("running", thread.message("msg_011CfPo7fspRuKpmNs6Ceam8").status())
+        assertEquals("running", thread.message("msg_011CScrubbed4Cim73pcgZBm").status())
     }
 
     @Test
@@ -346,8 +346,8 @@ class CaptureAnchorsTest {
                 "fd3865b0-030e-4f83-b5c7-f125be3a58e3",
                 "send-2",
                 "461f6ba9-5e7c-40e6-a4a1-3f13ab7dfc93",
-                "msg_011CfPoDBwy8k9Y4E5CKkyC7",
-                "msg_011CfPoG6uRp1a8forayDVMP",
+                "msg_011CScrubbedErtc8MpJCiee",
+                "msg_011CScrubbedCJZpSJgv7AHg",
             ),
             keys(thread),
         )
@@ -379,7 +379,7 @@ class CaptureAnchorsTest {
             thread(
                 "12-subagent-permission",
             ).message("7d810fd9-023c-4f86-b8a6-a8cb7f6ca80a").part("toolu_01VhnfAHvzvJJcXbuNmFC76z")
-        val write = agent.message("msg_011CfPoHHuki6uusJ7RMky8s").part("toolu_01PpTFMozAHSLaqmFKc6923D")
+        val write = agent.message("msg_011CScrubbedF8tX2sfjPKaL").part("toolu_01PpTFMozAHSLaqmFKc6923D")
         assertEquals("c68ae115-1067-4676-be66-41f53bf3a14b", write.at("approval").str("id"))
         assertEquals(JsonBool.TRUE, write.at("approval")["approved"])
         assertNull(agent["approval"], "the approval sits on the call it gates, not on the Agent call")

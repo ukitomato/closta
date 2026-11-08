@@ -9,7 +9,8 @@
 //   2. Values learned from the data     -> picks the real account.email / account.organization
 //      values from JSON and removes them wherever they appear by string match (nothing hardcoded)
 //   3. User name in home paths          -> /home/user, -home-user- (the encoded form too)
-// And the account's plan (subscriptionType) is written as one fixed plan.
+// And the account's plan (subscriptionType) is written as one fixed plan, and the API request/message ids, which tie a
+// capture to an account, become fake ids of the same shape.
 //
 // 1 is the guarantee: even if a future CLI puts an email in an unknown field, the regex removes it.
 // 2 discovers values that no pattern can detect, such as organization names, from the recording's
@@ -18,6 +19,7 @@
 
 import { execFileSync } from 'node:child_process';
 import os from 'node:os';
+import { createHash } from 'node:crypto';
 
 const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 const EMAIL_PLACEHOLDER = 'user@example.com';
@@ -30,8 +32,30 @@ export const MCP_FAKE_PORT = '39039';
 const ORG_UUID_KEY_RE = /\\?"organizationUuid\\?"\s*:\s*\\?"([^"\\]*)\\?"/g;
 // The account's plan says which kind of account recorded (a company's plan names the company's kind of account). Every
 // capture carries the same fixed plan instead. Matched by key, the escaped form too.
-const PLAN_PLACEHOLDER = 'Claude Pro';
+export const PLAN_PLACEHOLDER = 'Example Plan';
 const PLAN_KEY_RE = /(\\?"subscriptionType\\?"\s*:\s*\\?")([^"\\]*)(\\?")/g;
+
+// Real ids: req_/msg_ + 011C + 20 base58 chars. The fake keeps the shape (28 chars): 011CScrubbed + 12 base58 chars of
+// the sha256 of the whole real id, so the same real id always maps to the same fake one.
+export const API_ID_RE = /\b(req|msg)_011C[1-9A-HJ-NP-Za-km-z]{20}\b/g;
+const FAKE_ID_MARK = '011CScrubbed';
+const BASE58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+
+function base58(bytes) {
+  let n = BigInt('0x' + bytes.toString('hex'));
+  let out = '';
+  while (n > 0n) {
+    out = BASE58[Number(n % 58n)] + out;
+    n /= 58n;
+  }
+  return out;
+}
+
+export function fakeApiId(id) {
+  if (id.slice(id.indexOf('_') + 1).startsWith(FAKE_ID_MARK)) return id;
+  const hash = base58(createHash('sha256').update(id).digest()).padStart(12, '1');
+  return `${id.slice(0, id.indexOf('_') + 1)}${FAKE_ID_MARK}${hash.slice(0, 12)}`;
+}
 
 // Scrubber state, carried through one recording (= the stdout of one process).
 // Needed so values learned from the initialize response also apply to later lines.
@@ -142,6 +166,7 @@ function replaceLine(line, state) {
     s = replaceAllLiteral(s, `127.0.0.1:${port}`, `localhost:${MCP_FAKE_PORT}`);
   }
   s = s.replace(PLAN_KEY_RE, (_, open, _plan, close) => `${open}${PLAN_PLACEHOLDER}${close}`);
+  s = s.replace(API_ID_RE, fakeApiId);
   // 1: remove every remaining email-like string with the regex (the guarantee).
   s = s.replace(EMAIL_RE, EMAIL_PLACEHOLDER);
   // 3: user name in home paths. Both the real path and the encoded cwd name.
@@ -220,6 +245,10 @@ export function findPii(text, username = currentUsername(), learned = undefined,
   // The account's plan (matched by key name; any value other than the placeholder).
   for (const m of text.matchAll(PLAN_KEY_RE)) {
     if (m[2] !== PLAN_PLACEHOLDER) hits.push({ kind: 'plan', value: m[2] });
+  }
+  // Real API ids (fake ones start with the marker).
+  for (const m of text.matchAll(API_ID_RE)) {
+    if (fakeApiId(m[0]) !== m[0]) hits.push({ kind: 'api-id', value: m[0] });
   }
   // Values the scrubber learned, excluding placeholders.
   if (learned) {

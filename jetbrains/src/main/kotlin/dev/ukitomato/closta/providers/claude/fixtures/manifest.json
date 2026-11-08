@@ -29,7 +29,7 @@
         "--verbose",
         "--session-id=<generated>"
       ],
-      "sha256": "c5e663430caf55791fdf6639b8041ef7a2b4bee7a17e655ed5bf741255efb29a",
+      "sha256": "336adce00042f9f2363a694042bde47860e852414949af49c0f97cb26708dae7",
       "lines": 15,
       "cost_usd": 0.051117
     },
@@ -48,7 +48,7 @@
         "--verbose",
         "--session-id=<generated>"
       ],
-      "sha256": "fb6e08d33a8f58b15e6e18dc00d1f8afc9756739afbd7803482bc6466099cce6",
+      "sha256": "fe4e787261ba2d0522a7e7bb5e8558e425a34edb3efeb0ec617ef3ea3a49941b",
       "lines": 43,
       "cost_usd": 0.061193
     },
@@ -67,7 +67,7 @@
         "--verbose",
         "--session-id=<generated>"
       ],
-      "sha256": "15500b2c1899e78c1f2cad235b39d9eee56dc6180723e5a363086f90f3e01b2c",
+      "sha256": "3ee599cc77aaf21b665491ed4b9aa4a4f41bee5642d6e8347d4eb9fc0ab0a829",
       "lines": 16,
       "cost_usd": 0.051177
     },
@@ -88,7 +88,7 @@
         "--permission-prompt-tool",
         "stdio"
       ],
-      "sha256": "3501e3f022f333968e81e1695927565ee95e14b08bc904b065d052f512f45933",
+      "sha256": "219f62d39cd3228e8ee429f122b9c083cda4925941dd68d851afde1a7353872c",
       "lines": 47,
       "cost_usd": 0.138086
     },
@@ -109,7 +109,7 @@
         "--permission-prompt-tool",
         "stdio"
       ],
-      "sha256": "b53cc1157156bd5e19cf343081ea1533e76dc06b3bdd9119b0aa4ab8242700b8",
+      "sha256": "91fb42334f2e617c26ba7acfb766c1831e189bc9b65b7d7bd6aaefe9eb8a9e3b",
       "lines": 58,
       "cost_usd": 0.064004
     },
@@ -128,7 +128,7 @@
         "--verbose",
         "--session-id=<generated>"
       ],
-      "sha256": "045005799677dd0d6608ac3dbf1090bb4d4bcc2e5b36ba443205cee82fad3422",
+      "sha256": "e834d45dabb68825e200d7422b0b79003a727fffbb7ae6dc73d9dc9a5863948c",
       "lines": 2,
       "cost_usd": 0
     },
@@ -151,7 +151,7 @@
         "--permission-mode",
         "manual"
       ],
-      "sha256": "9603e1f1bbfbc456e5592e07495b91bf2f35f90e691cdc21d0415fb8ce240a57",
+      "sha256": "706a3cc61e77c337dc10d43917baadf42888b28df8d78a00aa2c63f1e377a3a9",
       "lines": 18,
       "cost_usd": 0
     },
@@ -170,7 +170,7 @@
         "--verbose",
         "--session-id=<generated>"
       ],
-      "sha256": "37f5debb23972d907b71c894997eb47ee6ef57a668ed8193972cc37b5976e704",
+      "sha256": "9740db3584f078ad7dd979f43313c227fd82ebd2464aa2727a08ec7c2af3ad13",
       "lines": 99,
       "cost_usd": 0.108771
     },
@@ -189,7 +189,7 @@
         "--verbose",
         "--session-id=<generated>"
       ],
-      "sha256": "1838816640c0e353abadd2e1296a15ab3f9c275d983d1151e17299b1a4797e38",
+      "sha256": "3fbdf43d57fdf3a9a62a6d8bbdbdb1704aa2e6a55ba99c3d2228c13806f25fb0",
       "lines": 142,
       "cost_usd": 0.111784
     },
@@ -210,7 +210,7 @@
         "--permission-mode",
         "acceptEdits"
       ],
-      "sha256": "47c4866aa0f7a1f9b8284e25e89d56ab5968135087666a51ab1a656a78d2f5b1",
+      "sha256": "e3996877fd4503a48dffd4e45bdba0289c1bce6b58bf0bc7177f6330d2351379",
       "lines": 177,
       "cost_usd": 0.156007
     },
@@ -231,7 +231,7 @@
         "--permission-mode",
         "acceptEdits"
       ],
-      "sha256": "bd885fa531fe7ad29cef83d4739674160aa4592958f69796d30c3bcba7550433",
+      "sha256": "cba9fdcbabfcecf25096334bc8252cc5189cbbd8cc3defccdbdd8667459e91e1",
       "lines": 175,
       "cost_usd": 0.142469
     },
@@ -252,7 +252,7 @@
         "--permission-prompt-tool",
         "stdio"
       ],
-      "sha256": "2820c3c573286a2f4aded237c28c1f05a9a48f5cdbe739ed2b15e62921f98b52",
+      "sha256": "381fd85f163b783be3b3f4933a3ea4a3435de2083bd745e0d2d9466976637c3f",
       "lines": 80,
       "cost_usd": 0.125898
     },
@@ -273,7 +273,7 @@
         "--permission-prompt-tool",
         "stdio"
       ],
-      "sha256": "1caecda4c012810dccf5e68d7a005fc299b5c190293936f70d61a74d4f0bb314",
+      "sha256": "c1531e91e39ce1f2987b9e1d339999d8372e255f8d710aeaa1db6ba216682c68",
       "lines": 51,
       "cost_usd": 0.063555
     },
@@ -294,7 +294,7 @@
         "--permission-prompt-tool",
         "stdio"
       ],
-      "sha256": "4d598ce42156a06fbc3f95d86814e8e3800d397f52a65a6f7b6e2dc1c4387d87",
+      "sha256": "cae4b40aa8fec9eb677dc66ca20e800d6e89a3bd18c780a393c7385cb8deab75",
       "lines": 48,
       "cost_usd": 0.063587
     },
@@ -315,7 +315,7 @@
         "--permission-prompt-tool",
         "stdio"
       ],
-      "sha256": "708159cd3b39490db7995d8ff0803f345a33dbfb254710c6d1259c7ead8b2e5a",
+      "sha256": "c0798dc5e8ed8dbca74377315f857e9d718791b21001eb6dc6fd25329ada4f89",
       "lines": 59,
       "cost_usd": 0.06424
     },
@@ -341,7 +341,7 @@
         "--model",
         "claude-sonnet-4-6"
       ],
-      "sha256": "41a21e8d984e6c306928c9bcdff26567c687ad34d07cae988bd6f980242a4fe0",
+      "sha256": "dea116ba549d11619c5378effb1e53a2cb5ca19d409d306a051e05362ad181bc",
       "lines": 90,
       "cost_usd": 0.140874
     },
@@ -367,7 +367,7 @@
         "--model",
         "claude-sonnet-4-6"
       ],
-      "sha256": "2eb20b77921ba18f3ecec8df9f52e7306f35d3cbe06a3116cf9a570c79966d2f",
+      "sha256": "c463a81c39fdff50c8ff9557be3064fe1d33cfb04e1d01c069bbf28a041dbbe4",
       "lines": 82,
       "cost_usd": 0.063533
     },
@@ -393,7 +393,7 @@
         "--model",
         "claude-sonnet-4-6"
       ],
-      "sha256": "c333caca9e45ddfe6f7a4536ae8ee8151f8735b3cea27ab50337a3dd52fa06b7",
+      "sha256": "1df3635bf554cd5fca447599aa13b6e11217b18142c901b044587fae73d22b63",
       "lines": 72,
       "cost_usd": 0.059033
     },
@@ -421,7 +421,7 @@
         "--permission-mode",
         "acceptEdits"
       ],
-      "sha256": "7308c7430bbf7090f1221d83b6697b491ec4f9b40d80dcdae73abb800dd91d13",
+      "sha256": "b9891f6eb3921d93dfb3f3733ad3e6a32e4cad47e6ed249fcd071712697d0ee6",
       "lines": 80,
       "cost_usd": 0.057157
     },
@@ -447,7 +447,7 @@
         "--model",
         "claude-sonnet-4-6"
       ],
-      "sha256": "7d4abe650ca859987489013b4cd2539d19b21cd61710a26930006c5db743b06b",
+      "sha256": "35f35c32d37a9ac1bea9e1a2a842e5959a969ed8931d753baf8dfc20b9d992f1",
       "lines": 144,
       "cost_usd": 0.106882
     },
@@ -473,7 +473,7 @@
         "--model",
         "claude-sonnet-4-6"
       ],
-      "sha256": "4046cf88017fe4d233564a8a0e78d717f391c296937c918deb3f88172ec72436",
+      "sha256": "47cd5b704b8c521431d9fdc42c79ac497d5539ca40618f55c4d24461073ef335",
       "lines": 26,
       "cost_usd": 0.062002
     },
@@ -499,7 +499,7 @@
         "--model",
         "claude-sonnet-4-6"
       ],
-      "sha256": "f16b31076c586e156a6f30c801cf5fb96df6c8f13de3bb326a1c3fbd37399fed",
+      "sha256": "e5fd797a38a7f1e94275d2c66c500409d1b95f67a1b1d0b62593ee5cb6e13340",
       "lines": 53,
       "cost_usd": 0.112769,
       "resume_flags": [
@@ -520,7 +520,7 @@
         "claude-sonnet-4-6"
       ],
       "transcript_file": "22-resume.transcript.jsonl",
-      "transcript_sha256": "7dfcacd26bad1194740683a1a293948134b616787ba905509430ba0cc7116032",
+      "transcript_sha256": "a7caa738065741102a72df139880cb20467daa7370007525722ed9ba1e827116",
       "transcript_lines": 27
     },
     {
@@ -545,7 +545,7 @@
         "--model",
         "claude-sonnet-4-6"
       ],
-      "sha256": "2a78283ce4c24fd4cbf3fe19a85e83f59f2a5718651a99beb94964bbff7b0925",
+      "sha256": "c1def0ebe6fb4bbecae3a473c70e3cc24cf6891ecf7e397d25a330431f682032",
       "lines": 30,
       "cost_usd": 0.137583,
       "stdin_file": "23-attachments.stdin.jsonl",
@@ -576,7 +576,7 @@
         "--mcp-config",
         "<generated>"
       ],
-      "sha256": "ac7ceeb9dbecc150225168f3f31e9a1842289c661e9e86115ecc01147464738d",
+      "sha256": "7195e1db93e07e289412e460e2557cb25ef9025f85ea4ae5dc040a505ce90e76",
       "lines": 10,
       "cost_usd": 0,
       "stdin_file": "24-mcp-management.stdin.jsonl",
@@ -605,7 +605,7 @@
         "--model",
         "claude-sonnet-4-6"
       ],
-      "sha256": "5b764bc30e8a3850a51cd76ad5aa8616865c5516e98d63dd59ce20b7ba323192",
+      "sha256": "284196aa14f8c3a58e6f8baca3697fac8027eed4160ca57663d02a73e7f19e1d",
       "lines": 149,
       "cost_usd": 0.17096,
       "env": {
@@ -638,7 +638,7 @@
         "--model",
         "claude-sonnet-4-6"
       ],
-      "sha256": "ca692ed52befac8ef3d5718c10e181a6250e3896ae97651230eabedec016acd2",
+      "sha256": "2e3773f195e9761fcfdaaf3a25320b3d19019f52c0274931a28c85eec7d9ac89",
       "lines": 56,
       "cost_usd": 0.265358,
       "resume_flags": [
@@ -660,7 +660,7 @@
         "claude-sonnet-4-6"
       ],
       "transcript_file": "26-fork-session.transcript.jsonl",
-      "transcript_sha256": "5f71a8739dbf823480972bb4f8086f1a55acca5276e9f40baf4592f697060ff7",
+      "transcript_sha256": "31a5a2d86ddf0200c65025b836f72ed2b346f02ee5f93ace339cd4643b52237b",
       "transcript_lines": 26,
       "fork_transcripts": [
         {
@@ -695,7 +695,7 @@
         "--model",
         "claude-sonnet-4-6"
       ],
-      "sha256": "392d6b7d3ecf016d67639a9bbf2fd05e5234977c8556c5b2719f17a912b8fa15",
+      "sha256": "5176f92d727081a62567543beaac1e74a7d5c2213ea7a0726850fc00ef5a0ae8",
       "lines": 46,
       "cost_usd": 0.260169,
       "resume_flags": [
@@ -719,7 +719,7 @@
         "claude-sonnet-4-6"
       ],
       "transcript_file": "27-resume-session-at.transcript.jsonl",
-      "transcript_sha256": "4d22f280253dfaa3fd8dd37effb7a3d782e7317a5c2aa07bf3867324335f534d",
+      "transcript_sha256": "906715b21ad1429305d582232199b86ace656c7cb0a5f505d24d42f3f3369a4b",
       "transcript_lines": 28,
       "fork_transcripts": [
         {
@@ -756,7 +756,7 @@
         "--effort",
         "medium"
       ],
-      "sha256": "5da9104fb28a9bb220f456a46e90a2d81787b9700ec651a52a1d13465a0c1343",
+      "sha256": "6f61b13ee994757e72c195a34d6a7daa0a1b9579c5b668ab2446be5d9891ea86",
       "lines": 8,
       "cost_usd": 0
     },
@@ -784,7 +784,7 @@
         "--permission-mode",
         "plan"
       ],
-      "sha256": "8fb881e9e226112c44df220800b08c2bafa9789d07bb45ec051b44ab63d8608b",
+      "sha256": "c1023c100da0be97dd9563dee40949a1cadc05e2e996ded264dde8d0be809fda",
       "lines": 219,
       "cost_usd": 0.184071
     },
@@ -810,7 +810,7 @@
         "--model",
         "claude-opus-5-5"
       ],
-      "sha256": "76094283bf160bfcd7717ef384324509e6c30a7759dd065e21570a3da691746b",
+      "sha256": "946d02778e4f27049162eab459f56cd841e4dfd62c5385e4b082a82b9b6144fb",
       "lines": 37,
       "cost_usd": 0.123972
     },
@@ -836,7 +836,7 @@
         "--model",
         "claude-sonnet-4-6"
       ],
-      "sha256": "de6ea3ba318590e40cd7b1b35e81df7995c0b78621f53118f7dbed4b99ac0f03",
+      "sha256": "b484c4805016d6880525eecb434c183d3b202aba9ab52857309ffcf54863131a",
       "lines": 55,
       "cost_usd": 0.053864
     },
@@ -862,7 +862,7 @@
         "--model",
         "claude-sonnet-4-6"
       ],
-      "sha256": "49ab298c601faee19058e556b046d3dfd693e82c57b065fc955ed7f2f763b2a7",
+      "sha256": "68172b3f2f59b76242d5e8d4742d910319c156935a3a341876a0f88393013c77",
       "lines": 81,
       "cost_usd": 0.125304
     }
