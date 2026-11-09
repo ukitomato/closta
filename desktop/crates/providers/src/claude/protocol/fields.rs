@@ -7,6 +7,7 @@
 //! ones, so the caller can carry both errors to `UnknownKind` with `?`.
 
 use super::json::raw_text;
+use closta_model::RawJson;
 use serde_json::{Map, Number, Value};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -120,12 +121,12 @@ impl<'a> Fields<'a> {
         texts.map(|t| t.join("\n")).ok_or_else(|| missing(name))
     }
 
-    pub(crate) fn raw(&self, name: &str) -> Result<String, FieldError> {
+    pub(crate) fn raw(&self, name: &str) -> Result<RawJson, FieldError> {
         self.raw_or_null(name).ok_or_else(|| missing(name))
     }
 
-    pub(crate) fn raw_or_null(&self, name: &str) -> Option<String> {
-        self.present(name).map(raw_text)
+    pub(crate) fn raw_or_null(&self, name: &str) -> Option<RawJson> {
+        self.present(name).map(|v| RawJson(raw_text(v)))
     }
 
     /// A nested object, so a `control_request` can read the typed scalars inside `request`.
@@ -342,7 +343,7 @@ mod tests {
             Some(vec!["a".to_string(), "b".to_string()])
         );
         assert_eq!(f.texts_or_null("o"), None);
-        assert_eq!(f.raw("r").unwrap(), r#"{"b":1,"a":[]}"#);
+        assert_eq!(f.raw("r").unwrap(), RawJson(r#"{"b":1,"a":[]}"#.into()));
         assert!(f.nested("o").is_some());
         assert!(f.nested("t").is_none());
     }

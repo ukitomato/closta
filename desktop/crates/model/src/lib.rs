@@ -1,3 +1,7 @@
+mod event;
+
+pub use event::{AgentEvent, AgentEventKind, RawJson};
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AppInfo {
     pub name: String,
