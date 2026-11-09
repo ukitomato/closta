@@ -905,6 +905,8 @@ version = "0.1.0"
 dependencies = [
  "closta-core",
  "closta-model",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
