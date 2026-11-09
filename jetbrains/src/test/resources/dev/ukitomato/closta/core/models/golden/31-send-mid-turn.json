@@ -1,0 +1,41 @@
+{
+  "session": {
+    "sessionId": "94e9350c-6341-4ca0-84d4-d46578a291fa",
+    "model": "claude-sonnet-4-6",
+    "permissionMode": "default",
+    "cwd": "/tmp/closta-rec-31-send-mid-turn-uwYw5U/cwd",
+    "version": "2.1.282"
+  },
+  "turns": [
+    {
+      "commandUuid": "05cd513b-4fdf-477c-bbc9-f64660dc2432",
+      "phase": "CLOSED",
+      "incompleteReason": null,
+      "lifecycleDone": false
+    },
+    {
+      "commandUuid": "75583edf-12c0-4d18-ac0b-a22c7e88d796",
+      "phase": "CLOSED",
+      "incompleteReason": null,
+      "lifecycleDone": true
+    }
+  ],
+  "usage": {
+    "sessionCostUsd": 0.0538635
+  },
+  "tasks": [
+    {
+      "taskId": "bi3ttr0z8",
+      "parentToolUseId": "toolu_01CGabccpnxkL78nTAjH2pTH",
+      "subagentType": null,
+      "isBackgrounded": false,
+      "spawnDepth": null,
+      "status": "COMPLETE",
+      "incompleteReason": null
+    }
+  ],
+  "thinkingEstimate": null,
+  "notices": [],
+  "spontaneousResumeCount": 0,
+  "pendingApprovals": []
+}

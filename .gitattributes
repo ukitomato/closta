@@ -1,0 +1,8 @@
+* text=auto eol=lf
+jetbrains/gradlew text eol=lf
+*.bat text eol=crlf
+*.jar binary
+*.png binary
+*.ndjson linguist-generated
+*.jsonl linguist-generated
+jetbrains/src/test/resources/** linguist-generated

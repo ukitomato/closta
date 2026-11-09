@@ -1,0 +1,459 @@
+{
+  "permissionModes": ["default", "acceptEdits", "plan", "auto", "dontAsk", "bypassPermissions"],
+  "attachmentRules": {
+    "maxBytes": 5242880,
+    "maxPerSend": 10,
+    "maxChunkBytes": 196608,
+    "maxAssemblingBytes": 67108864,
+    "maxNameChars": 255,
+    "mediaTypes": ["image/png", "image/jpeg", "image/gif", "image/webp", "application/pdf", "application/json"],
+    "textPrefix": "text/",
+    "textExtensions": [".txt", ".md", ".csv", ".log", ".xml", ".yaml", ".yml", ".toml", ".ini", ".html", ".css", ".js", ".ts", ".tsx", ".jsx", ".kt", ".java", ".py", ".sh", ".sql"]
+  },
+  "cases": [
+    {
+      "name": "ready",
+      "message": {
+        "type": "ready",
+        "protocol": 1
+      }
+    },
+    {
+      "name": "resync with nothing in hand",
+      "message": {
+        "type": "resync",
+        "have": null,
+        "reason": "gap"
+      }
+    },
+    {
+      "name": "resync after a failed apply",
+      "message": {
+        "type": "resync",
+        "have": {
+          "epoch": "e1",
+          "seq": 4
+        },
+        "reason": "apply-failed"
+      }
+    },
+    {
+      "name": "send",
+      "message": {
+        "type": "command",
+        "id": "c1",
+        "command": {
+          "type": "send",
+          "threadId": "t1",
+          "text": "Explain the build"
+        }
+      }
+    },
+    {
+      "name": "interrupt",
+      "message": {
+        "type": "command",
+        "id": "c2",
+        "command": {
+          "type": "interrupt",
+          "threadId": "t1"
+        }
+      }
+    },
+    {
+      "name": "allow a tool call",
+      "message": {
+        "type": "command",
+        "id": "c3",
+        "command": {
+          "type": "respond-approval",
+          "threadId": "t1",
+          "approvalId": "req-1",
+          "approved": true,
+          "optionId": "allow"
+        }
+      }
+    },
+    {
+      "name": "deny a tool call with a reason",
+      "message": {
+        "type": "command",
+        "id": "c4",
+        "command": {
+          "type": "respond-approval",
+          "threadId": "t1",
+          "approvalId": "req-2",
+          "approved": false,
+          "reason": "not now"
+        }
+      }
+    },
+    {
+      "name": "answer a question",
+      "message": {
+        "type": "command",
+        "id": "c5",
+        "command": {
+          "type": "respond-approval",
+          "threadId": "t1",
+          "approvalId": "req-3",
+          "approved": true,
+          "optionId": "gradle",
+          "text": "Use Gradle"
+        }
+      }
+    },
+    {
+      "name": "set the model",
+      "message": {
+        "type": "command",
+        "id": "c6",
+        "command": {
+          "type": "set-model",
+          "threadId": "t1",
+          "model": "opus"
+        }
+      }
+    },
+    {
+      "name": "set the permission mode",
+      "message": {
+        "type": "command",
+        "id": "c7",
+        "command": {
+          "type": "set-permission-mode",
+          "threadId": "t1",
+          "mode": "plan"
+        }
+      }
+    },
+    {
+      "name": "ask for the context usage",
+      "message": {
+        "type": "command",
+        "id": "c8",
+        "command": {
+          "type": "request-context-usage",
+          "threadId": "t1"
+        }
+      }
+    },
+    {
+      "name": "set the effort",
+      "message": {
+        "type": "command",
+        "id": "c15",
+        "command": {
+          "type": "set-effort",
+          "threadId": "t1",
+          "effort": "high"
+        }
+      }
+    },
+    {
+      "name": "allow and accept a suggestion",
+      "message": {
+        "type": "command",
+        "id": "c9",
+        "command": {
+          "type": "respond-approval",
+          "threadId": "t1",
+          "approvalId": "req-1",
+          "approved": true,
+          "optionId": "allow",
+          "suggestionIds": [
+            "s1"
+          ]
+        }
+      }
+    },
+    {
+      "name": "allow with a rewritten input",
+      "message": {
+        "type": "command",
+        "id": "c10",
+        "command": {
+          "type": "respond-approval",
+          "threadId": "t1",
+          "approvalId": "req-4",
+          "approved": true,
+          "updatedInput": {
+            "command": "./gradlew check -PskipWeb=true"
+          }
+        }
+      }
+    },
+    {
+      "name": "answer two questions",
+      "message": {
+        "type": "command",
+        "id": "c11",
+        "command": {
+          "type": "respond-approval",
+          "threadId": "t1",
+          "approvalId": "req-5",
+          "approved": true,
+          "answers": {
+            "q1": {
+              "optionIds": [
+                "A"
+              ]
+            },
+            "q2": {
+              "text": "Use Gradle"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "stop a task",
+      "message": {
+        "type": "command",
+        "id": "c12",
+        "command": {
+          "type": "stop-task",
+          "threadId": "t1",
+          "taskId": "k1"
+        }
+      }
+    },
+    {
+      "name": "query files",
+      "message": {
+        "type": "command",
+        "id": "c13",
+        "command": {
+          "type": "query-files",
+          "threadId": "t1",
+          "match": "App"
+        }
+      }
+    },
+    {
+      "name": "query files with a match of the most the host takes (1024 characters)",
+      "message": {
+        "type": "command",
+        "id": "c13",
+        "command": {
+          "type": "query-files",
+          "threadId": "t1",
+          "match": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      }
+    },
+    {
+      "name": "capture the selection",
+      "message": {
+        "type": "command",
+        "id": "c14",
+        "command": {
+          "type": "capture-selection",
+          "threadId": "t1"
+        }
+      }
+    },
+    {
+      "name": "apply a code block to the selected lines",
+      "message": {
+        "type": "command",
+        "id": "c15",
+        "command": {
+          "type": "apply-code",
+          "threadId": "t1",
+          "text": "val answer = 42"
+        }
+      }
+    },
+    {
+      "name": "open a diff of an Edit's old and new strings",
+      "message": {
+        "type": "command",
+        "id": "c16",
+        "command": {
+          "type": "open-diff",
+          "threadId": "t1",
+          "path": "src/App.kt",
+          "before": "val a = 1",
+          "after": "val a = 2"
+        }
+      }
+    },
+    {
+      "name": "open a diff of a Write against the file as it is now",
+      "message": {
+        "type": "command",
+        "id": "c17",
+        "command": {
+          "type": "open-diff",
+          "threadId": "t1",
+          "path": "src/New.kt",
+          "after": "val b = 3"
+        }
+      }
+    },
+    {
+      "name": "list the saved sessions",
+      "message": {
+        "type": "command",
+        "id": "c20",
+        "command": {
+          "type": "list-sessions",
+          "threadId": "t1"
+        }
+      }
+    },
+    {
+      "name": "open a saved session",
+      "message": {
+        "type": "command",
+        "id": "c21",
+        "command": {
+          "type": "resume-session",
+          "threadId": "t1",
+          "sessionId": "336ed47b-2675-4317-b3f5-a3b48abb03a2"
+        }
+      }
+    },
+    {
+      "name": "fork a saved session",
+      "message": {
+        "type": "command",
+        "id": "c21f",
+        "command": {
+          "type": "fork-session",
+          "threadId": "t1",
+          "sessionId": "336ed47b-2675-4317-b3f5-a3b48abb03a2"
+        }
+      }
+    },
+    {
+      "name": "send with the uploads that go with it",
+      "message": {
+        "type": "command",
+        "id": "c22",
+        "command": {
+          "type": "send",
+          "threadId": "t1",
+          "text": "What is in this picture?",
+          "attachments": ["00000000-0000-4000-8000-000000000001", "00000000-0000-4000-8000-000000000002"]
+        }
+      }
+    },
+    {
+      "name": "send one chunk of an upload",
+      "message": {
+        "type": "command",
+        "id": "c23",
+        "command": {
+          "type": "attachment-chunk",
+          "threadId": "t1",
+          "uploadId": "00000000-0000-4000-8000-000000000001",
+          "index": 0,
+          "last": true,
+          "name": "red.png",
+          "mediaType": "image/png",
+          "size": 4,
+          "data": "AAECAw=="
+        }
+      }
+    },
+    {
+      "name": "list the MCP servers",
+      "message": {
+        "type": "command",
+        "id": "c24",
+        "command": {
+          "type": "list-mcp-servers",
+          "threadId": "t1"
+        }
+      }
+    },
+    {
+      "name": "turn an MCP server off",
+      "message": {
+        "type": "command",
+        "id": "c25",
+        "command": {
+          "type": "set-mcp-server-enabled",
+          "threadId": "t1",
+          "name": "fake-echo",
+          "enabled": false
+        }
+      }
+    },
+    {
+      "name": "turn an MCP server on",
+      "message": {
+        "type": "command",
+        "id": "c26",
+        "command": {
+          "type": "set-mcp-server-enabled",
+          "threadId": "t1",
+          "name": "fake-echo",
+          "enabled": true
+        }
+      }
+    },
+    {
+      "name": "reconnect an MCP server",
+      "message": {
+        "type": "command",
+        "id": "c27",
+        "command": {
+          "type": "reconnect-mcp-server",
+          "threadId": "t1",
+          "name": "fake-echo"
+        }
+      }
+    },
+    {
+      "name": "rewind the files to before a message, a dry run first",
+      "message": {
+        "type": "command",
+        "id": "c28",
+        "command": {
+          "type": "rewind-files",
+          "threadId": "t1",
+          "messageId": "send-1",
+          "dryRun": true
+        }
+      }
+    },
+    {
+      "name": "rewind the files to before a message",
+      "message": {
+        "type": "command",
+        "id": "c29",
+        "command": {
+          "type": "rewind-files",
+          "threadId": "t1",
+          "messageId": "send-1",
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "name": "rewind the conversation to before a message",
+      "message": {
+        "type": "command",
+        "id": "c30",
+        "command": {
+          "type": "rewind-conversation",
+          "threadId": "t1",
+          "messageId": "send-2"
+        }
+      }
+    },
+    {
+      "name": "say the view has drawn what it shows first",
+      "message": {
+        "type": "command",
+        "id": "c31",
+        "command": {
+          "type": "view-ready"
+        }
+      }
+    }
+  ]
+}

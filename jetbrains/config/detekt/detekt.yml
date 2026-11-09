@@ -1,0 +1,14 @@
+# Layered on top of detekt's default rule set (buildUponDefaultConfig = true).
+# Only deviations belong here — anything left out keeps the default.
+
+build:
+  maxIssues: 0
+
+style:
+  MaxLineLength:
+    # Same limit as ktlint / .editorconfig. Two different limits produce reports that fight.
+    maxLineLength: 120
+  ForbiddenComment:
+    # TODO markers are how an unfinished phase stays visible; ROADMAP.md tracks them.
+    active: false
+

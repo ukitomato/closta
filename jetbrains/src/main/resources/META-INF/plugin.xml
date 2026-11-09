@@ -1,0 +1,143 @@
+<!-- id / name / version / description / vendor / idea-version are patched in from build.gradle.kts. -->
+<idea-plugin>
+    <resource-bundle>messages.ClostaBundle</resource-bundle>
+    <depends>com.intellij.modules.platform</depends>
+    <!-- The IDE's own commonmark (through Jewel's Markdown modules) for the thread's Markdown; none of it is packed. -->
+    <dependencies>
+        <module name="intellij.platform.jewel.markdown.core"/>
+        <module name="intellij.platform.jewel.markdown.extensions.gfmTables"/>
+        <!-- A turn's changes go to the IDE's combined diff as VCS changes. -->
+        <module name="intellij.platform.vcs.impl"/>
+        <!-- Signing in runs `claude auth login` in a tab of the IDE's terminal. -->
+        <module name="intellij.terminal.frontend"/>
+    </dependencies>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <toolWindow id="Closta" anchor="right" icon="/icons/closta.svg"
+                    factoryClass="dev.ukitomato.closta.platforms.intellij.ui.ClostaToolWindowFactory"/>
+        <toolWindow id="Closta.Sessions" anchor="bottom" icon="/icons/sessions.svg"
+                    factoryClass="dev.ukitomato.closta.platforms.intellij.sessions.SessionsToolWindowFactory"/>
+        <applicationConfigurable parentId="tools" id="dev.ukitomato.closta.providers" displayName="Closta"
+                                 instance="dev.ukitomato.closta.platforms.intellij.settings.ProvidersConfigurable"/>
+        <applicationConfigurable parentId="dev.ukitomato.closta.providers"
+                                 id="dev.ukitomato.closta.behaviour" key="settings.behaviour.displayName"
+                                 instance="dev.ukitomato.closta.platforms.intellij.settings.BehaviourConfigurable"/>
+        <!-- What waits for an answer stays until it is answered; the rest are balloons. Each group is named from the
+             bundle, so each can be turned off alone in the IDE's notification settings. -->
+        <notificationGroup id="Closta.Waiting" displayType="STICKY_BALLOON" key="notification.group.waiting"/>
+        <notificationGroup id="Closta.Finished" displayType="BALLOON" key="notification.group.finished"/>
+        <notificationGroup id="Closta.Running" displayType="BALLOON" key="notification.group.running"/>
+        <notificationGroup id="Closta.Worktree" displayType="BALLOON" key="notification.group.worktree"/>
+        <fileEditorProvider implementation="dev.ukitomato.closta.platforms.intellij.chat.ChatFileEditorProvider"/>
+        <editorTabTitleProvider implementation="dev.ukitomato.closta.platforms.intellij.chat.ChatTabTitles"/>
+        <fileIconProvider implementation="dev.ukitomato.closta.platforms.intellij.chat.ChatTabIcons"/>
+    </extensions>
+    <actions>
+        <!-- Text and description: the bundle's action.<id>.text and .description (group.<id>.* for groups). -->
+        <action id="Closta.Sessions.OpenInEditor" class="dev.ukitomato.closta.platforms.intellij.sessions.OpenInEditorAction">
+            <override-text place="MainMenu"/>
+            <override-text place="ClostaSessions" use-text-of-place="MainMenu"/>
+        </action>
+        <action id="Closta.Sessions.OpenInSidebar" class="dev.ukitomato.closta.platforms.intellij.sessions.OpenInSidebarAction">
+            <override-text place="MainMenu"/>
+            <override-text place="ClostaSessions" use-text-of-place="MainMenu"/>
+        </action>
+        <action id="Closta.Sessions.EndSession" class="dev.ukitomato.closta.platforms.intellij.sessions.EndSessionAction"
+                icon="AllIcons.Actions.Suspend">
+            <override-text place="MainMenu"/>
+            <override-text place="ClostaSessions" use-text-of-place="MainMenu"/>
+        </action>
+        <action id="Closta.Sessions.Archive" class="dev.ukitomato.closta.platforms.intellij.sessions.ArchiveAction">
+            <override-text place="MainMenu"/>
+            <override-text place="ClostaSessions" use-text-of-place="MainMenu"/>
+        </action>
+        <action id="Closta.Sessions.ResumeInEditor" class="dev.ukitomato.closta.platforms.intellij.sessions.ResumeInEditorAction">
+            <override-text place="MainMenu"/>
+            <override-text place="ClostaSessions" use-text-of-place="MainMenu"/>
+        </action>
+        <action id="Closta.Sessions.ResumeInSidebar" class="dev.ukitomato.closta.platforms.intellij.sessions.ResumeInSidebarAction">
+            <override-text place="MainMenu"/>
+            <override-text place="ClostaSessions" use-text-of-place="MainMenu"/>
+        </action>
+        <action id="Closta.Sessions.ClearMark" class="dev.ukitomato.closta.platforms.intellij.sessions.ClearMarkAction">
+            <override-text place="MainMenu"/>
+            <override-text place="ClostaSessions" use-text-of-place="MainMenu"/>
+        </action>
+        <action id="Closta.Sessions.Open" class="dev.ukitomato.closta.platforms.intellij.sessions.OpenAction">
+            <override-text place="MainMenu"/>
+            <override-text place="ClostaSessions" use-text-of-place="MainMenu"/>
+        </action>
+        <action id="Closta.ResumeSidebarChat" class="dev.ukitomato.closta.platforms.intellij.chat.ResumeSidebarChatAction"
+                icon="AllIcons.Vcs.History">
+            <synonym text="Claude"/>
+            <synonym text="Resume Chat in Sidebar"/>
+        </action>
+        <group id="Closta.Sessions.NewChatChoices" popup="true" class="dev.ukitomato.closta.platforms.intellij.chat.NewChatChoicesGroup"
+               icon="AllIcons.General.ChevronDown"/>
+        <group id="Closta.Sessions.ProviderSwitch" popup="true" class="dev.ukitomato.closta.platforms.intellij.chat.ProviderSwitchGroup"/>
+        <group id="Closta.Sessions.LiveMenu">
+            <reference ref="Closta.Sessions.OpenInEditor"/>
+            <reference ref="Closta.Sessions.OpenInSidebar"/>
+            <reference ref="Closta.Sessions.EndSession"/>
+            <reference ref="Closta.Sessions.Archive"/>
+        </group>
+        <group id="Closta.Sessions.MarkMenu">
+            <reference ref="Closta.Sessions.ResumeInEditor"/>
+            <reference ref="Closta.Sessions.ResumeInSidebar"/>
+            <reference ref="Closta.Sessions.ClearMark"/>
+        </group>
+        <!-- Closta.NewSidebarChat leads and Closta.NextWaiting follows the resume, by their own add-to-group below. -->
+        <group id="Closta.Sessions.Toolbar">
+            <reference ref="Closta.Sessions.NewChatChoices"/>
+            <reference ref="Closta.ResumeSidebarChat"/>
+            <separator/>
+            <reference ref="Closta.Sessions.EndSession"/>
+            <separator/>
+            <reference ref="Closta.Sessions.ProviderSwitch"/>
+        </group>
+        <group id="Closta.Tools" popup="true" text="Closta" icon="/icons/closta.svg">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+            <action id="Closta.NewChat" class="dev.ukitomato.closta.platforms.intellij.chat.NewChatAction"
+                    icon="/icons/closta.svg">
+                <override-text place="MainMenu"/>
+                <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt shift O"/>
+                <synonym text="Claude"/>
+                <synonym text="New Chat"/>
+                <synonym text="New Conversation"/>
+            </action>
+            <action id="Closta.NewSidebarChat" class="dev.ukitomato.closta.platforms.intellij.chat.NewSidebarChatAction"
+                    icon="AllIcons.General.Add">
+                <override-text place="MainMenu"/>
+                <add-to-group group-id="Closta.Sessions.Toolbar" anchor="first"/>
+                <synonym text="Claude"/>
+                <synonym text="New Chat in Sidebar"/>
+            </action>
+            <action id="Closta.NewWorktreeChat" class="dev.ukitomato.closta.platforms.intellij.chat.NewWorktreeChatAction"
+                    icon="AllIcons.Vcs.Branch">
+                <override-text place="MainMenu"/>
+                <synonym text="Claude"/>
+                <synonym text="New Worktree Chat"/>
+            </action>
+            <action id="Closta.ResumeChat" class="dev.ukitomato.closta.platforms.intellij.chat.ResumeChatAction"
+                    icon="AllIcons.Vcs.History">
+                <override-text place="MainMenu"/>
+                <synonym text="Claude"/>
+                <synonym text="Resume"/>
+                <synonym text="Resume Chat"/>
+            </action>
+            <action id="Closta.NextWaiting" class="dev.ukitomato.closta.platforms.intellij.sessions.NextWaitingAction"
+                    icon="AllIcons.Actions.Forward">
+                <override-text place="MainMenu"/>
+                <add-to-group group-id="Closta.Sessions.Toolbar" anchor="after"
+                              relative-to-action="Closta.ResumeSidebarChat"/>
+                <keyboard-shortcut keymap="$default" first-keystroke="control alt shift PERIOD"/>
+                <synonym text="Claude"/>
+                <synonym text="Next Waiting Session"/>
+            </action>
+        </group>
+        <action id="Closta.JumpToWaitingCard"
+                class="dev.ukitomato.closta.platforms.intellij.thread.JumpToWaitingCardAction">
+            <keyboard-shortcut keymap="$default" first-keystroke="alt shift W"/>
+        </action>
+    </actions>
+</idea-plugin>

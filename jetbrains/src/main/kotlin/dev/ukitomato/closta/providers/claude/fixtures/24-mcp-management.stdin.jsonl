@@ -1,0 +1,9 @@
+{"type":"control_request","request_id":"24-mcp-management-req-1","request":{"subtype":"initialize","hooks":{},"sdkMcpServers":[],"webSearchIsolationExemptMcpServers":[]}}
+{"type":"control_request","request_id":"24-mcp-management-req-2","request":{"subtype":"mcp_status"}}
+{"type":"control_request","request_id":"24-mcp-management-req-3","request":{"subtype":"mcp_toggle","serverName":"fake-echo","enabled":false}}
+{"type":"control_request","request_id":"24-mcp-management-req-4","request":{"subtype":"mcp_status"}}
+{"type":"control_request","request_id":"24-mcp-management-req-5","request":{"subtype":"mcp_toggle","serverName":"fake-echo","enabled":true}}
+{"type":"control_request","request_id":"24-mcp-management-req-6","request":{"subtype":"mcp_status"}}
+{"type":"control_request","request_id":"24-mcp-management-req-7","request":{"subtype":"mcp_reconnect","serverName":"fake-echo"}}
+{"type":"control_request","request_id":"24-mcp-management-req-8","request":{"subtype":"mcp_status"}}
+{"type":"control_request","request_id":"24-mcp-management-req-9","request":{"subtype":"mcp_toggle","serverName":"no-such-server","enabled":false}}

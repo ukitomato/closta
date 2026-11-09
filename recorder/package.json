@@ -1,0 +1,16 @@
+{
+  "name": "closta-recorder",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Protocol recording harness for Closta. Records claude CLI stream-json fixtures with an at-record-time PII scrubber.",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "record": "node record.mjs",
+    "list": "node record.mjs --list",
+    "verify": "node verify.mjs",
+    "test": "node scrub.test.mjs && node recorder.test.mjs && node replay.test.mjs"
+  }
+}

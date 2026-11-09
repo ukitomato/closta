@@ -1,0 +1,62 @@
+Closta
+Copyright 2026 ukitomato
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Closta is an independent project. It is not affiliated with or endorsed by
+Anthropic, JetBrains, Amazon Web Services or the Kotlin Foundation. Claude and
+Claude Code are trademarks of Anthropic. IntelliJ IDEA is a trademark of
+JetBrains. Amazon Bedrock and AWS are trademarks of Amazon.com, Inc. or its
+affiliates. Kotlin is a trademark of the Kotlin Foundation. These names are
+used only to describe compatibility.
+
+-------------------------------------------------------------------------------
+Third-party software bundled in the plugin distribution
+-------------------------------------------------------------------------------
+
+The plugin zip ships the following libraries unmodified in its lib/ folder. The full list and
+the licence texts are in META-INF/THIRD-PARTY-NOTICES.txt of the main plugin jar. The AWS SDK
+jars carry their own META-INF/NOTICE.txt.
+
+Apache License, Version 2.0:
+  - Gson (com.google.code.gson) - Apache-2.0 - Copyright Google LLC
+  - kotlinx.collections.immutable (org.jetbrains.kotlinx) - Apache-2.0 - Copyright JetBrains s.r.o.
+  - AWS SDK for Java 2.0 (software.amazon.awssdk) - Apache-2.0 - Copyright Amazon.com, Inc. or its affiliates
+      AWS SDK for Java 2.0
+      Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+      This product includes software developed by Amazon Technologies, Inc (http://www.amazon.com/).
+      The SDK's own third-party notices (including Jackson-core, shaded in third-party-jackson-core)
+      are in the META-INF/NOTICE.txt of its jars.
+  - AWS Event Stream (software.amazon.eventstream) - Apache-2.0 - Copyright Amazon.com, Inc. or its affiliates
+
+MIT No Attribution (MIT-0):
+  - Reactive Streams (org.reactivestreams) - MIT-0
+
+-------------------------------------------------------------------------------
+Code adapted from other projects (tests only, not in the plugin distribution)
+-------------------------------------------------------------------------------
+
+jetbrains/src/test/kotlin/dev/ukitomato/closta/presenter/TreeApplier.kt is a Kotlin port of
+GorpStreamAccumulator from assistant-stream 0.3.46 (https://github.com/assistant-ui/assistant-ui).
+
+  MIT License
+
+  Copyright (c) 2026 AgentbaseAI Inc.
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.

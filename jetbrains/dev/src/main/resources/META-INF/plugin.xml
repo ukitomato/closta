@@ -1,0 +1,21 @@
+<!-- id / name / version / vendor / idea-version are patched in from build.gradle.kts. -->
+<idea-plugin>
+    <depends>com.intellij.modules.platform</depends>
+    <depends>dev.ukitomato.closta</depends>
+    <resource-bundle>messages.ClostaDevBundle</resource-bundle>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <notificationGroup id="Closta.Dev" displayType="BALLOON" key="notification.group.dev"/>
+        <fileEditorProvider implementation="dev.ukitomato.closta.devtools.BaselineEditorProvider"/>
+        <!-- Does nothing unless the IDE is started with -Dclosta.gallery (devtools/Gallery.kt). -->
+        <postStartupActivity implementation="dev.ukitomato.closta.devtools.Gallery"/>
+        <!-- Does nothing unless the IDE is started with -Dclosta.demo (devtools/Demo.kt). -->
+        <postStartupActivity implementation="dev.ukitomato.closta.devtools.Demo"/>
+    </extensions>
+    <actions>
+        <!-- BenchmarkAction.update shows it only in an internal IDE or with -Dclosta.dev=true. -->
+        <action id="Closta.Benchmark" class="dev.ukitomato.closta.devtools.BenchmarkAction">
+            <add-to-group group-id="Closta.Tools" anchor="last"/>
+        </action>
+    </actions>
+</idea-plugin>

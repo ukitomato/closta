@@ -1,0 +1,25 @@
+{
+  "session": {
+    "sessionId": "190df201-4ae4-4d88-a900-360b76651843",
+    "model": "claude-sonnet-4-6",
+    "permissionMode": "default",
+    "cwd": "/tmp/closta-rec-05-permission-can-use-tool-nGTi7q/cwd",
+    "version": "2.1.282"
+  },
+  "turns": [
+    {
+      "commandUuid": "846b6e3f-1ec3-4fb1-ab89-af04c9749651",
+      "phase": "CLOSED",
+      "incompleteReason": null,
+      "lifecycleDone": false
+    }
+  ],
+  "usage": {
+    "sessionCostUsd": 0.0640036
+  },
+  "tasks": [],
+  "thinkingEstimate": 105,
+  "notices": [],
+  "spontaneousResumeCount": 0,
+  "pendingApprovals": []
+}

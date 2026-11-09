@@ -1,0 +1,25 @@
+{
+  "session": {
+    "sessionId": "41d39031-ba1a-4ea3-8f32-9dd413b74bb7",
+    "model": "claude-sonnet-4-6",
+    "permissionMode": "default",
+    "cwd": "/tmp/closta-rec-04-tool-autorun-with-ppt-stdio-uVkRFI/cwd",
+    "version": "2.1.282"
+  },
+  "turns": [
+    {
+      "commandUuid": "84e1ee75-f5e9-4d52-b161-c5abbb6ee6e1",
+      "phase": "CLOSED",
+      "incompleteReason": null,
+      "lifecycleDone": false
+    }
+  ],
+  "usage": {
+    "sessionCostUsd": 0.138086
+  },
+  "tasks": [],
+  "thinkingEstimate": null,
+  "notices": [],
+  "spontaneousResumeCount": 0,
+  "pendingApprovals": []
+}
