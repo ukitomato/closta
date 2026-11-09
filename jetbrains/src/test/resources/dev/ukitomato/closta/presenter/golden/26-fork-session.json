@@ -40,7 +40,7 @@
               "parts": {
                 "order": [
                   "toolu_014xC7FittULGDFKcYZ3dr7d",
-                  "msg_011CgSubaSMZ9kfZCmT3qKd6:0"
+                  "msg_011CScrubbed2akFokqZeDeJ:0"
                 ],
                 "byId": {
                   "toolu_014xC7FittULGDFKcYZ3dr7d": {
@@ -58,7 +58,7 @@
                       "type": "complete"
                     }
                   },
-                  "msg_011CgSubaSMZ9kfZCmT3qKd6:0": {
+                  "msg_011CScrubbed2akFokqZeDeJ:0": {
                     "type": "text",
                     "text": "The output is:\n\n```\nkiwi-from-fork\n```",
                     "status": {
@@ -92,10 +92,10 @@
               },
               "parts": {
                 "order": [
-                  "msg_011CgSucE33hLykK8SK8by9p:0"
+                  "msg_011CScrubbed2WvQHTse1qkT:0"
                 ],
                 "byId": {
-                  "msg_011CgSucE33hLykK8SK8by9p:0": {
+                  "msg_011CScrubbed2WvQHTse1qkT:0": {
                     "type": "text",
                     "text": "forked kiwi-from-fork",
                     "status": {

@@ -39,19 +39,19 @@
               },
               "parts": {
                 "order": [
-                  "msg_011CghU7bumUKh9s54wECpcP:0",
-                  "msg_011CghU7bumUKh9s54wECpcP:1",
+                  "msg_011CScrubbed279sheDrA3xe:0",
+                  "msg_011CScrubbed279sheDrA3xe:1",
                   "toolu_01CGabccpnxkL78nTAjH2pTH"
                 ],
                 "byId": {
-                  "msg_011CghU7bumUKh9s54wECpcP:0": {
+                  "msg_011CScrubbed279sheDrA3xe:0": {
                     "type": "reasoning",
                     "text": "",
                     "status": {
                       "type": "complete"
                     }
                   },
-                  "msg_011CghU7bumUKh9s54wECpcP:1": {
+                  "msg_011CScrubbed279sheDrA3xe:1": {
                     "type": "text",
                     "text": "Running the command now.",
                     "status": {
@@ -100,10 +100,10 @@
               },
               "parts": {
                 "order": [
-                  "msg_011CghU8RJ5kTcQjQeRVWCpm:0"
+                  "msg_011CScrubbed9Ah8Pxg3muZb:0"
                 ],
                 "byId": {
-                  "msg_011CghU8RJ5kTcQjQeRVWCpm:0": {
+                  "msg_011CScrubbed9Ah8Pxg3muZb:0": {
                     "type": "text",
                     "text": "The output was `done`. hi",
                     "status": {

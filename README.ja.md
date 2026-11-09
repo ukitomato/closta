@@ -7,7 +7,7 @@
 
 # Closta
 
-**Claude CodeをJetBrains IDEでネイティブに動かすプラグイン。AnthropicとAmazon Bedrockに対応**
+**JetBrains IDEでClaude CodeをネイティブUIで使うための、サードパーティ製プラグイン**
 
 [![IntelliJ IDEA 2026.2+](.github/assets/badges/intellij.svg)](https://www.jetbrains.com/idea/)
 [![Claude Code CLI](.github/assets/badges/claude.svg)](https://docs.claude.com/en/docs/claude-code)
@@ -98,4 +98,4 @@ WSLで`#com.intellij.execution`のデバッグログを有効にすると、`ide
 
 ## ライセンス
 
-[Apache License 2.0](LICENSE)。Anthropicとは関係がなく、Anthropicの承認も受けていません。ClaudeはAnthropicの商標です。
+[Apache License 2.0](LICENSE)。Clostaは個人のプロジェクトで、Anthropic・JetBrains・Amazon Web Services・Kotlin Foundationとは関係がなく、承認も受けていません。ClaudeとClaude CodeはAnthropicの、IntelliJ IDEAはJetBrainsの、Amazon BedrockとAWSはAmazon.com, Inc.またはその関連会社の、KotlinはKotlin Foundationの商標です。これらの名前は、互換性を説明するためだけに使っています。

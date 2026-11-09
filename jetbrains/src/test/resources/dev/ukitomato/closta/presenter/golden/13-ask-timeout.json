@@ -37,12 +37,12 @@
               },
               "parts": {
                 "order": [
-                  "msg_011CfPoJCFTp6otjy52wDMMj:0",
+                  "msg_011CScrubbedEhwrjY95wiu4:0",
                   "toolu_01CL2sDAzMqwjeZdq9A5pfnj",
-                  "msg_011CfPoJR5PUyjZQ5Kxh6Jv6:0"
+                  "msg_011CScrubbed41H2EVhTy4tt:0"
                 ],
                 "byId": {
-                  "msg_011CfPoJCFTp6otjy52wDMMj:0": {
+                  "msg_011CScrubbedEhwrjY95wiu4:0": {
                     "type": "reasoning",
                     "text": "",
                     "status": {
@@ -136,7 +136,7 @@
                       "resolution": "cancelled"
                     }
                   },
-                  "msg_011CfPoJR5PUyjZQ5Kxh6Jv6:0": {
+                  "msg_011CScrubbed41H2EVhTy4tt:0": {
                     "type": "text",
                     "text": "ユーザーが質問に回答しませんでした。必要であれば、再度お試しください。",
                     "status": {

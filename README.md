@@ -7,7 +7,7 @@
 
 # Closta
 
-**Claude Code as a native JetBrains IDE plugin, with Anthropic or Amazon Bedrock.**
+**A third-party JetBrains IDE plugin for using Claude Code with a native UI.**
 
 [![IntelliJ IDEA 2026.2+](.github/assets/badges/intellij.svg)](https://www.jetbrains.com/idea/)
 [![Claude Code CLI](.github/assets/badges/claude.svg)](https://docs.claude.com/en/docs/claude-code)
@@ -31,9 +31,7 @@ edits as diffs, a turn's changes as VCS changes, approvals as cards. No webview.
 </div>
 
 <!-- Plugin description -->
-Use the Claude Code agent inside the IDE, with native editors, diffs and VCS changes.
-
-Closta runs the `claude` command (the Claude Code CLI) and shows the conversation with the IDE's own components.
+A third-party plugin that runs your `claude` CLI (Claude Code) and shows it in a native IDE UI. Not affiliated with Anthropic.
 
 - Conversations in the Closta tool window or in editor tabs, several at a time.
 - Tool permissions, file edits (as diffs), plans and questions as cards, answered in place.
@@ -137,4 +135,4 @@ architecture and the performance budgets the tests hold. Security issues: see [S
 
 [Apache License 2.0](LICENSE). Third-party notices are in [NOTICE](NOTICE).
 
-Not affiliated with or endorsed by Anthropic. Claude is a trademark of Anthropic.
+Closta is an independent project. It is not affiliated with or endorsed by Anthropic, JetBrains, Amazon Web Services or the Kotlin Foundation. Claude and Claude Code are trademarks of Anthropic. IntelliJ IDEA is a trademark of JetBrains. Amazon Bedrock and AWS are trademarks of Amazon.com, Inc. or its affiliates. Kotlin is a trademark of the Kotlin Foundation. These names are used only to describe compatibility.

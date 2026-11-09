@@ -37,20 +37,20 @@
               },
               "parts": {
                 "order": [
-                  "msg_011CfPo4W1f4uCRiQnhEsSrh:0",
-                  "msg_011CfPo4W1f4uCRiQnhEsSrh:1",
+                  "msg_011CScrubbedB1Yc4HvPVbrr:0",
+                  "msg_011CScrubbedB1Yc4HvPVbrr:1",
                   "toolu_016keAu5ZSgNCvYmxd6wGT6w",
-                  "msg_011CfPo54r6uZ3jfMwG3jG5J:0"
+                  "msg_011CScrubbedEEzqFNPAQo35:0"
                 ],
                 "byId": {
-                  "msg_011CfPo4W1f4uCRiQnhEsSrh:0": {
+                  "msg_011CScrubbedB1Yc4HvPVbrr:0": {
                     "type": "reasoning",
                     "text": "",
                     "status": {
                       "type": "complete"
                     }
                   },
-                  "msg_011CfPo4W1f4uCRiQnhEsSrh:1": {
+                  "msg_011CScrubbedB1Yc4HvPVbrr:1": {
                     "type": "text",
                     "text": "`NOTES.md` の内容を確認するため、Explore サブエージェントを起動します。",
                     "status": {
@@ -80,7 +80,7 @@
                     "messages": {
                       "order": [
                         "42e60a14-f53a-4c87-ac6f-67e41762f7b9",
-                        "msg_011CfPo4o3qBjzoxWtqDbbup"
+                        "msg_011CScrubbed91eppSUf5SM4"
                       ],
                       "byId": {
                         "42e60a14-f53a-4c87-ac6f-67e41762f7b9": {
@@ -98,8 +98,8 @@
                             }
                           }
                         },
-                        "msg_011CfPo4o3qBjzoxWtqDbbup": {
-                          "id": "msg_011CfPo4o3qBjzoxWtqDbbup",
+                        "msg_011CScrubbed91eppSUf5SM4": {
+                          "id": "msg_011CScrubbed91eppSUf5SM4",
                           "role": "assistant",
                           "parts": {
                             "order": [
@@ -125,7 +125,7 @@
                       }
                     }
                   },
-                  "msg_011CfPo54r6uZ3jfMwG3jG5J:0": {
+                  "msg_011CScrubbedEEzqFNPAQo35:0": {
                     "type": "text",
                     "text": "サブエージェントからの報告をお伝えします。\n\n**`NOTES.md` の概要：** このファイルはサブエージェントに読み取り・要約させるために存在する小さなファイルであることが記述されているだけの内容です。",
                     "status": {

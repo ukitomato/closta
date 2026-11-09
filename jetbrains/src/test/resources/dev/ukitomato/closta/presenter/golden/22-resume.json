@@ -39,12 +39,12 @@
               },
               "parts": {
                 "order": [
-                  "msg_011Cg7Gs4QtquHjcbepaKxqy:0",
+                  "msg_011CScrubbed8Zi68XfCnn6H:0",
                   "toolu_012wWm4TuzZeDWdUpAMcy5vU",
-                  "msg_011Cg7GsFZrJ7565fQRxnd5V:0"
+                  "msg_011CScrubbedAt3xFkCvKYkv:0"
                 ],
                 "byId": {
-                  "msg_011Cg7Gs4QtquHjcbepaKxqy:0": {
+                  "msg_011CScrubbed8Zi68XfCnn6H:0": {
                     "type": "reasoning",
                     "text": "",
                     "status": {
@@ -66,7 +66,7 @@
                       "type": "complete"
                     }
                   },
-                  "msg_011Cg7GsFZrJ7565fQRxnd5V:0": {
+                  "msg_011CScrubbedAt3xFkCvKYkv:0": {
                     "type": "text",
                     "text": "Output: `hello-from-resume`",
                     "status": {
@@ -100,10 +100,10 @@
               },
               "parts": {
                 "order": [
-                  "msg_011Cg7GsqMcBNdrHt9SsmAPg:0"
+                  "msg_011CScrubbedEV7AsMYJYKxM:0"
                 ],
                 "byId": {
-                  "msg_011Cg7GsqMcBNdrHt9SsmAPg:0": {
+                  "msg_011CScrubbedEV7AsMYJYKxM:0": {
                     "type": "text",
                     "text": "pong",
                     "status": {

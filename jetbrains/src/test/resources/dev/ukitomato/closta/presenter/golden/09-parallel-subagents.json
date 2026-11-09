@@ -37,21 +37,21 @@
               },
               "parts": {
                 "order": [
-                  "msg_011CfPo5kjTeW1ovsnPYoM5T:0",
-                  "msg_011CfPo5kjTeW1ovsnPYoM5T:1",
+                  "msg_011CScrubbedEWzjc5nCATvR:0",
+                  "msg_011CScrubbedEWzjc5nCATvR:1",
                   "toolu_01Lb8Pj8ffuCwbUXBNu6tpZe",
                   "toolu_01AeVtuqRUaWjxrAn4eN4CtA",
-                  "msg_011CfPo6SwQwj6XmwpCkRKd8:0"
+                  "msg_011CScrubbed98jH1SAGeU92:0"
                 ],
                 "byId": {
-                  "msg_011CfPo5kjTeW1ovsnPYoM5T:0": {
+                  "msg_011CScrubbedEWzjc5nCATvR:0": {
                     "type": "reasoning",
                     "text": "",
                     "status": {
                       "type": "complete"
                     }
                   },
-                  "msg_011CfPo5kjTeW1ovsnPYoM5T:1": {
+                  "msg_011CScrubbedEWzjc5nCATvR:1": {
                     "type": "text",
                     "text": "2つのサブエージェントを同時に起動します。",
                     "status": {
@@ -81,7 +81,7 @@
                     "messages": {
                       "order": [
                         "9ec5a116-8c70-4629-97c2-8ae7ba010dd1",
-                        "msg_011CfPo66EiVZS7vwS3PFAih"
+                        "msg_011CScrubbedHbzh25Ccg8BA"
                       ],
                       "byId": {
                         "9ec5a116-8c70-4629-97c2-8ae7ba010dd1": {
@@ -99,8 +99,8 @@
                             }
                           }
                         },
-                        "msg_011CfPo66EiVZS7vwS3PFAih": {
-                          "id": "msg_011CfPo66EiVZS7vwS3PFAih",
+                        "msg_011CScrubbedHbzh25Ccg8BA": {
+                          "id": "msg_011CScrubbedHbzh25Ccg8BA",
                           "role": "assistant",
                           "parts": {
                             "order": [
@@ -149,7 +149,7 @@
                     "messages": {
                       "order": [
                         "d56d8129-7c1f-493f-a112-2bcae5196a4e",
-                        "msg_011CfPo6BNJHFBNWfEBr2ZgV"
+                        "msg_011CScrubbedJAwT3afRB98a"
                       ],
                       "byId": {
                         "d56d8129-7c1f-493f-a112-2bcae5196a4e": {
@@ -167,8 +167,8 @@
                             }
                           }
                         },
-                        "msg_011CfPo6BNJHFBNWfEBr2ZgV": {
-                          "id": "msg_011CfPo6BNJHFBNWfEBr2ZgV",
+                        "msg_011CScrubbedJAwT3afRB98a": {
+                          "id": "msg_011CScrubbedJAwT3afRB98a",
                           "role": "assistant",
                           "parts": {
                             "order": [
@@ -194,7 +194,7 @@
                       }
                     }
                   },
-                  "msg_011CfPo6SwQwj6XmwpCkRKd8:0": {
+                  "msg_011CScrubbed98jH1SAGeU92:0": {
                     "type": "text",
                     "text": "両サブエージェントの結果をまとめます。\n\n- **NOTES.md**: サブエージェントが読み取り・要約できるよう作成された小さなファイルである旨が記載されています。\n- **GUIDE.md**: \"GUIDE\" という見出しを持つ小さなファイルで、並行サブエージェントによる読み取り・要約を想定して作られたファイルである旨が記載されています。",
                     "status": {

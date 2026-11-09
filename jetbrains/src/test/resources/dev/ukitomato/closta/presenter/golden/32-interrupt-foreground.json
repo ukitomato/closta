@@ -38,20 +38,20 @@
               },
               "parts": {
                 "order": [
-                  "msg_011Cgk4AoN9APJiZ98ZgsCBP:0",
-                  "msg_011Cgk4AoN9APJiZ98ZgsCBP:1",
+                  "msg_011CScrubbedCVFAXnesmjs6:0",
+                  "msg_011CScrubbedCVFAXnesmjs6:1",
                   "toolu_01NxXsT82sCK5dWUTqEABNNP",
-                  "msg_011Cgk4B8ULfTH7pUe1EkHuV:0"
+                  "msg_011CScrubbedBECbuc4vDCcB:0"
                 ],
                 "byId": {
-                  "msg_011Cgk4AoN9APJiZ98ZgsCBP:0": {
+                  "msg_011CScrubbedCVFAXnesmjs6:0": {
                     "type": "reasoning",
                     "text": "",
                     "status": {
                       "type": "complete"
                     }
                   },
-                  "msg_011Cgk4AoN9APJiZ98ZgsCBP:1": {
+                  "msg_011CScrubbedCVFAXnesmjs6:1": {
                     "type": "text",
                     "text": "Running the command now.",
                     "status": {
@@ -74,7 +74,7 @@
                       "type": "complete"
                     }
                   },
-                  "msg_011Cgk4B8ULfTH7pUe1EkHuV:0": {
+                  "msg_011CScrubbedBECbuc4vDCcB:0": {
                     "type": "text",
                     "text": "The shell hook blocked the command because it contains a leading `sleep`. I'm unable to run `sleep 30; echo fg-interrupt-done` directly in the foreground as requested — the harness prevents long leading sleeps to avoid blocking the agent.\n\nIf you need this specific command run, you",
                     "status": {

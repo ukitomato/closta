@@ -37,12 +37,12 @@
               },
               "parts": {
                 "order": [
-                  "msg_011CfPoL8M7C4NfE8DA9ZW9p:0",
+                  "msg_011CScrubbedGPKhrB3Deyaq:0",
                   "toolu_011Sw32RfWLX6drfVjqVuunV",
-                  "msg_011CfPoLiJ2ZxUftHbnWovNS:0"
+                  "msg_011CScrubbed6erYdrAGdLGG:0"
                 ],
                 "byId": {
-                  "msg_011CfPoL8M7C4NfE8DA9ZW9p:0": {
+                  "msg_011CScrubbedGPKhrB3Deyaq:0": {
                     "type": "reasoning",
                     "text": "",
                     "status": {
@@ -136,7 +136,7 @@
                       "resolution": "expired"
                     }
                   },
-                  "msg_011CfPoLiJ2ZxUftHbnWovNS:0": {
+                  "msg_011CScrubbed6erYdrAGdLGG:0": {
                     "type": "text",
                     "text": "`AskUserQuestion` ツールを使って質問を表示しました。ユーザーが応答していないようです。必要であれば後ほど再度質問することができます。",
                     "status": {

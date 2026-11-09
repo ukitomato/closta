@@ -37,20 +37,20 @@
               },
               "parts": {
                 "order": [
-                  "msg_011CfPnzioEtUvyfNaD2b9NP:0",
-                  "msg_011CfPnzioEtUvyfNaD2b9NP:1",
+                  "msg_011CScrubbed6YzBSdZVe7ce:0",
+                  "msg_011CScrubbed6YzBSdZVe7ce:1",
                   "toolu_01M1wzh6sucheWf2EB5A36Mq",
-                  "msg_011CfPnzw3hAfuADqGisTb9y:0"
+                  "msg_011CScrubbed2H2i4MtcoowF:0"
                 ],
                 "byId": {
-                  "msg_011CfPnzioEtUvyfNaD2b9NP:0": {
+                  "msg_011CScrubbed6YzBSdZVe7ce:0": {
                     "type": "reasoning",
                     "text": "",
                     "status": {
                       "type": "complete"
                     }
                   },
-                  "msg_011CfPnzioEtUvyfNaD2b9NP:1": {
+                  "msg_011CScrubbed6YzBSdZVe7ce:1": {
                     "type": "text",
                     "text": "指定されたコマンドを実行します。",
                     "status": {
@@ -72,7 +72,7 @@
                       "type": "complete"
                     }
                   },
-                  "msg_011CfPnzw3hAfuADqGisTb9y:0": {
+                  "msg_011CScrubbed2H2i4MtcoowF:0": {
                     "type": "text",
                     "text": "コマンドの出力は以下の通りです：\n\n```\nhello-from-capture\n```",
                     "status": {
