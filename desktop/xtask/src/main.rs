@@ -21,14 +21,14 @@ fn main() -> ExitCode {
         "layers" => match layers::run(&desktop_root()) {
             Ok(()) => ExitCode::SUCCESS,
             Err(err) => {
-                eprintln!("{err}");
+                eprintln!("{err:#}");
                 ExitCode::FAILURE
             }
         },
         "check" => match check::run_steps(&desktop_root(), &check::steps()) {
             Ok(()) => ExitCode::SUCCESS,
             Err(err) => {
-                eprintln!("{err}");
+                eprintln!("{err:#}");
                 ExitCode::FAILURE
             }
         },
@@ -42,7 +42,7 @@ fn main() -> ExitCode {
             match win::win_build(&desktop_root(), has("--release"), has("--run")) {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(err) => {
-                    eprintln!("{err}");
+                    eprintln!("{err:#}");
                     ExitCode::FAILURE
                 }
             }
