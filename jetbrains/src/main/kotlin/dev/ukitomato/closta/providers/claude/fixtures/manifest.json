@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-05T15:57:15.589Z",
+  "generated_at": "2026-11-09T15:26:35.468Z",
   "recorder": "recorder/record.mjs",
   "scrubbed": true,
   "claude_version": "2.1.282",
@@ -12,7 +12,7 @@
     "--include-partial-messages",
     "--verbose"
   ],
-  "scenario_count": 32,
+  "scenario_count": 38,
   "scenarios": [
     {
       "scenario": "01-baseline-text",
@@ -865,6 +865,192 @@
       "sha256": "68172b3f2f59b76242d5e8d4742d910319c156935a3a341876a0f88393013c77",
       "lines": 81,
       "cost_usd": 0.125304
+    },
+    {
+      "scenario": "33-sandbox-live",
+      "file": "33-sandbox-live.ndjson",
+      "claude_version": "2.1.282",
+      "recorded_at": "2026-11-09T15:23:29.263Z",
+      "flags": [
+        "-p",
+        "--output-format",
+        "stream-json",
+        "--input-format",
+        "stream-json",
+        "--include-partial-messages",
+        "--verbose",
+        "--session-id=<generated>",
+        "--permission-prompt-tool",
+        "stdio",
+        "--setting-sources",
+        "project",
+        "--strict-mcp-config",
+        "--model",
+        "claude-sonnet-4-6"
+      ],
+      "sha256": "3c2adf0a4992c9b1250fc39a7fb05f93b4f8626798f041415e11907e75abd9d8",
+      "lines": 82,
+      "cost_usd": 0.145981
+    },
+    {
+      "scenario": "34-sandbox-launch",
+      "file": "34-sandbox-launch.ndjson",
+      "claude_version": "2.1.282",
+      "recorded_at": "2026-11-09T15:20:49.358Z",
+      "flags": [
+        "-p",
+        "--output-format",
+        "stream-json",
+        "--input-format",
+        "stream-json",
+        "--include-partial-messages",
+        "--verbose",
+        "--session-id=<generated>",
+        "--permission-prompt-tool",
+        "stdio",
+        "--setting-sources",
+        "project",
+        "--strict-mcp-config",
+        "--model",
+        "claude-sonnet-4-6",
+        "--settings",
+        "{\"sandbox\":{\"enabled\":true,\"failIfUnavailable\":true}}"
+      ],
+      "sha256": "b883ef10367ef3ecfb4d75fb266fea113e45a1a3292cc5eaaac046f9499b28df",
+      "lines": 2,
+      "cost_usd": 0
+    },
+    {
+      "scenario": "35-sandbox-project-setting",
+      "file": "35-sandbox-project-setting.ndjson",
+      "claude_version": "2.1.282",
+      "recorded_at": "2026-11-09T15:20:56.673Z",
+      "flags": [
+        "-p",
+        "--output-format",
+        "stream-json",
+        "--input-format",
+        "stream-json",
+        "--include-partial-messages",
+        "--verbose",
+        "--session-id=<generated>",
+        "--permission-prompt-tool",
+        "stdio",
+        "--setting-sources",
+        "project",
+        "--strict-mcp-config",
+        "--model",
+        "claude-sonnet-4-6"
+      ],
+      "sha256": "e324bef77ffb0b359396368b286866d418885d154bdb3e516ebfd4f308dc602b",
+      "lines": 2,
+      "cost_usd": 0
+    },
+    {
+      "scenario": "36-sandbox-unavailable",
+      "file": "36-sandbox-unavailable.ndjson",
+      "claude_version": "2.1.282",
+      "recorded_at": "2026-11-09T15:23:44.319Z",
+      "flags": [
+        "-p",
+        "--output-format",
+        "stream-json",
+        "--input-format",
+        "stream-json",
+        "--include-partial-messages",
+        "--verbose",
+        "--session-id=<generated>",
+        "--permission-prompt-tool",
+        "stdio",
+        "--setting-sources",
+        "project",
+        "--strict-mcp-config",
+        "--model",
+        "claude-sonnet-4-6",
+        "--settings",
+        "{\"sandbox\":{\"enabled\":true,\"failIfUnavailable\":true}}"
+      ],
+      "sha256": "6253ccbefb925da9f17924dab1caa3b7fd2d06a131dedbc4d507018818f70332",
+      "lines": 57,
+      "cost_usd": 0.054682,
+      "hidden_commands": [
+        "bwrap"
+      ],
+      "then_flags": [
+        "-p",
+        "--output-format",
+        "stream-json",
+        "--input-format",
+        "stream-json",
+        "--include-partial-messages",
+        "--verbose",
+        "--session-id=<generated>",
+        "--permission-prompt-tool",
+        "stdio",
+        "--setting-sources",
+        "project",
+        "--strict-mcp-config",
+        "--model",
+        "claude-sonnet-4-6"
+      ],
+      "exit_codes": [
+        1,
+        0
+      ]
+    },
+    {
+      "scenario": "37-plan-auto",
+      "file": "37-plan-auto.ndjson",
+      "claude_version": "2.1.282",
+      "recorded_at": "2026-11-09T15:26:13.135Z",
+      "flags": [
+        "-p",
+        "--output-format",
+        "stream-json",
+        "--input-format",
+        "stream-json",
+        "--include-partial-messages",
+        "--verbose",
+        "--session-id=<generated>",
+        "--permission-prompt-tool",
+        "stdio",
+        "--setting-sources",
+        "project",
+        "--strict-mcp-config",
+        "--model",
+        "claude-sonnet-4-6",
+        "--permission-mode",
+        "auto"
+      ],
+      "sha256": "d37a15253d79ec908d0fbdcf4f1ed8b9f28322ed22ee6d06e8ad424536f082f0",
+      "lines": 181,
+      "cost_usd": 0.108697
+    },
+    {
+      "scenario": "38-plan-bypass",
+      "file": "38-plan-bypass.ndjson",
+      "claude_version": "2.1.282",
+      "recorded_at": "2026-11-09T15:26:35.466Z",
+      "flags": [
+        "-p",
+        "--output-format",
+        "stream-json",
+        "--input-format",
+        "stream-json",
+        "--include-partial-messages",
+        "--verbose",
+        "--session-id=<generated>",
+        "--permission-prompt-tool",
+        "stdio",
+        "--setting-sources",
+        "project",
+        "--strict-mcp-config",
+        "--model",
+        "claude-sonnet-4-6"
+      ],
+      "sha256": "9c62cc022fd048978efdc5c1b97f817fbb83b78c847036cc66e2c637ad8ef686",
+      "lines": 171,
+      "cost_usd": 0.105647
     }
   ]
 }

@@ -32,7 +32,14 @@
 //   starts the CLI with its URL (http://localhost:<port>/mcp, a form that matches http://localhost* in the managed settings allow list) via --mcp-config,
 //   and stops it once recording ends (even on failure). The port differs on every recording, so the scrubber replaces it with a fixed fake value.
 //
-// seed: {name: content}  files placed in the cwd from the start (Edit targets, etc.)
+// seed: {name: content}  files placed in the cwd from the start (Edit targets, etc.). A name may hold a directory (.claude/settings.json).
+//
+// hideCommands: [name]  the child's PATH becomes one directory of symlinks to every command on PATH except these names
+//   (directories under /mnt are left out). The recorder stops if the shell still finds a hidden name. Recorded in the manifest as hidden_commands.
+//
+// then: {flags, steps, done}  after the first CLI closes, a second, unrelated CLI (a new session id, its own flags after the base flags; not a resume)
+//   runs steps in the same environment. Both stdouts go into one capture, split by a recorder_boundary line (phase "then").
+//   The manifest entry gets then_flags and exit_codes (one per CLI).
 //
 // done: {results, controlResponses, quietMs, maxMs}
 //   When the results/controlResponses counts are met and quietMs of silence follows, stdin is closed and the run ends.
@@ -696,6 +703,116 @@ export const scenarios = [
     permission: { holdMs: 0, respond: ALLOW },
     // Two control_responses, for initialize and interrupt. Quiet long enough to see whether sleep 30 still reports.
     done: { results: 1, controlResponses: 2, quietMs: 8000, maxMs: 90000 },
+  },
+
+  // ---- 区切り 4: Sandbox switching and plan approval into Auto and Bypass. 2.1.282 and ISOLATED. ----
+  {
+    id: '33-sandbox-live',
+    summary: 'get_settings → apply_flag_settings sandbox on (failIfUnavailable) → get_settings → Bash touch outside the cwd (Read-only file system) → sandbox off → get_settings → sandbox on without failIfUnavailable → get_settings (replace or merge)',
+    flags: ISOLATED,
+    steps: [
+      { kind: 'initialize' },
+      { kind: 'getSettings' },
+      { kind: 'applyFlagSettings', settings: { sandbox: { enabled: true, failIfUnavailable: true } } },
+      { kind: 'getSettings' },
+      {
+        kind: 'user',
+        text: 'Run this exact bash command once and report its output: touch {OUTSIDE}/sandbox-probe.txt. '
+          + 'If it fails, do not retry it in any other way; just report the error message.',
+      },
+      { kind: 'waitResults', n: 1 },
+      { kind: 'applyFlagSettings', settings: { sandbox: { enabled: false } } },
+      { kind: 'getSettings' },
+      { kind: 'applyFlagSettings', settings: { sandbox: { enabled: true } } },
+      { kind: 'getSettings' },
+    ],
+    permission: { holdMs: 0, respond: ALLOW },
+    done: { results: 1, controlResponses: 8, quietMs: 2500, maxMs: 120000 },
+  },
+  {
+    id: '34-sandbox-launch',
+    summary: 'start with --settings sandbox on (failIfUnavailable) → get_settings (no user messages, so no tokens used)',
+    flags: [...ISOLATED, '--settings', '{"sandbox":{"enabled":true,"failIfUnavailable":true}}'],
+    steps: [{ kind: 'initialize' }, { kind: 'getSettings' }],
+    done: { results: 0, controlResponses: 2, quietMs: 2500, maxMs: 30000 },
+  },
+  {
+    id: '35-sandbox-project-setting',
+    summary: 'the cwd\'s .claude/settings.json turns the sandbox on → get_settings (no user messages, so no tokens used)',
+    flags: ISOLATED,
+    seed: { '.claude/settings.json': '{"sandbox":{"enabled":true}}\n' },
+    steps: [{ kind: 'initialize' }, { kind: 'getSettings' }],
+    done: { results: 0, controlResponses: 2, quietMs: 2500, maxMs: 30000 },
+  },
+  {
+    id: '36-sandbox-unavailable',
+    summary: 'bwrap hidden from PATH: start as 34 (refuses to start) → a second CLI without the sandbox: apply_flag_settings sandbox on (failIfUnavailable) → get_settings → Bash touch outside the cwd (sandboxed or not)',
+    flags: [...ISOLATED, '--settings', '{"sandbox":{"enabled":true,"failIfUnavailable":true}}'],
+    hideCommands: ['bwrap'],
+    steps: [{ kind: 'initialize' }],
+    done: { results: 0, controlResponses: 0, quietMs: 3000, maxMs: 20000 },
+    then: {
+      flags: ISOLATED,
+      steps: [
+        { kind: 'initialize' },
+        { kind: 'applyFlagSettings', settings: { sandbox: { enabled: true, failIfUnavailable: true } } },
+        { kind: 'getSettings' },
+        {
+          kind: 'user',
+          text: 'Run this exact bash command once and report its output: touch {OUTSIDE}/sandbox-probe.txt. '
+            + 'If it fails, do not retry it in any other way; just report the error message.',
+        },
+      ],
+      done: { results: 1, controlResponses: 3, quietMs: 2500, maxMs: 90000 },
+    },
+    permission: { holdMs: 0, respond: ALLOW },
+  },
+  {
+    id: '37-plan-auto',
+    summary: 'start in auto → set_permission_mode plan → plan to fix the README → allow ExitPlanMode with setMode auto (session) → whether the following Edit asks',
+    flags: [...ISOLATED, '--permission-mode', 'auto'],
+    seed: { 'README.md': '# Prject\n\n## Usgae\n\nRun it.\n' },
+    steps: [
+      { kind: 'initialize' },
+      { kind: 'wait', ms: 500 },
+      { kind: 'setPermissionMode', mode: 'plan' },
+      {
+        kind: 'user',
+        text: 'Make a short plan to fix the spelling of the headings in README.md, then call ExitPlanMode with it. '
+          + 'Once it is approved, make the fix with the Edit tool and report done.',
+      },
+    ],
+    permission: {
+      holdMs: 0,
+      respond: (req) => (req.tool_name === 'ExitPlanMode'
+        ? { behavior: 'allow', updatedInput: req.input, updatedPermissions: [{ type: 'setMode', mode: 'auto', destination: 'session' }] }
+        : ALLOW(req)),
+    },
+    done: { results: 1, controlResponses: 2, quietMs: 3000, maxMs: 150000 },
+  },
+  {
+    id: '38-plan-bypass',
+    summary: 'set_permission_mode bypassPermissions → plan → plan to fix the README → allow ExitPlanMode with setMode bypassPermissions (session) → whether the following Edit asks',
+    flags: ISOLATED,
+    seed: { 'README.md': '# Prject\n\n## Usgae\n\nRun it.\n' },
+    steps: [
+      { kind: 'initialize' },
+      { kind: 'wait', ms: 500 },
+      { kind: 'setPermissionMode', mode: 'bypassPermissions' },
+      { kind: 'setPermissionMode', mode: 'plan' },
+      {
+        kind: 'user',
+        text: 'Make a short plan to fix the spelling of the headings in README.md, then call ExitPlanMode with it. '
+          + 'Once it is approved, make the fix with the Edit tool and report done.',
+      },
+    ],
+    permission: {
+      holdMs: 0,
+      respond: (req) => (req.tool_name === 'ExitPlanMode'
+        ? { behavior: 'allow', updatedInput: req.input, updatedPermissions: [{ type: 'setMode', mode: 'bypassPermissions', destination: 'session' }] }
+        : ALLOW(req)),
+    },
+    done: { results: 1, controlResponses: 3, quietMs: 3000, maxMs: 150000 },
   },
 ];
 

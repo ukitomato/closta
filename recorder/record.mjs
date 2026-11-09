@@ -37,6 +37,10 @@
 //   (type: recorder_boundary; a recorder mark, not a CLI line). The directory the CLI created for the recording is removed afterwards.
 //   If resume.fork is true, --fork-session is added to the second CLI's flags; after the second closes and before the directory is removed, the names and line counts
 //   of the .jsonl files in it go into the manifest's fork_transcripts (names replaced with <first id>, <second id>, <other>; no content is kept).
+//
+// Second-CLI scenarios (scenario.then present): after the first CLI closes, a second CLI with then.flags and a new session id (not a resume) runs then.steps,
+//   in the same out after a recorder_boundary line (phase "then"). The manifest entry gets then_flags and exit_codes (a CLI that refuses to start exits on its own).
+// Hidden-command scenarios (scenario.hideCommands present): the child's PATH is a directory of symlinks without those names (shimPathWithout), checked with command -v.
 
 import { spawn, execFileSync } from 'node:child_process';
 import { createWriteStream } from 'node:fs';
@@ -116,6 +120,27 @@ async function startFakeMcpServer(name) {
   };
 }
 
+// A PATH of one directory holding a symlink to every command on the given PATH except the hidden names (the first one found wins, as a shell would pick).
+// Directories under /mnt (the Windows drives on WSL) are skipped. Stops if the shell still finds a hidden name.
+async function shimPathWithout(dir, searchPath, hidden) {
+  await fsp.mkdir(dir, { recursive: true });
+  const placed = new Set(hidden);
+  for (const from of searchPath.split(':').filter((d) => d && !d.startsWith('/mnt/'))) {
+    let names = [];
+    try { names = await fsp.readdir(from); } catch { continue; }
+    for (const name of names) {
+      if (placed.has(name)) continue;
+      placed.add(name);
+      await fsp.symlink(path.join(from, name), path.join(dir, name));
+    }
+  }
+  for (const name of hidden) {
+    const found = execFileSync('/bin/sh', ['-c', `command -v ${name} || true`], { encoding: 'utf8', env: { PATH: dir } }).trim();
+    if (found !== '') throw new Error(`hideCommands: ${name} is still found (${found})`);
+  }
+  return dir;
+}
+
 function claudeVersion() {
   const out = execFileSync(CLAUDE_BIN, ['--version'], { encoding: 'utf8' });
   const m = out.match(/(\d+\.\d+\.\d+)/);
@@ -169,7 +194,11 @@ async function recordOne(scenario, version) {
   await fsp.writeFile(path.join(cwd, 'NOTES.md'), '# NOTES\nA small file that exists so a subagent can read and summarize it.\n');
   await fsp.writeFile(path.join(cwd, 'GUIDE.md'), '# GUIDE\nAnother small file for a parallel subagent to read and summarize.\n');
   // Files the scenario places in the cwd from the start (Edit targets, etc.).
-  for (const [name, text] of Object.entries(scenario.seed ?? {})) await fsp.writeFile(path.join(cwd, name), text);
+  // A name may hold a directory (.claude/settings.json); the directory is created first.
+  for (const [name, text] of Object.entries(scenario.seed ?? {})) {
+    await fsp.mkdir(path.dirname(path.join(cwd, name)), { recursive: true });
+    await fsp.writeFile(path.join(cwd, name), text);
+  }
 
   const substitute = (text) => text.replaceAll('{OUTSIDE}', outside);
 
@@ -179,7 +208,8 @@ async function recordOne(scenario, version) {
   const mcpName = scenario.mcpServer?.name ?? '';
 
   const sessionId = randomUUID();
-  const childEnv = childEnvFor(scenario);
+  // hideCommands replaces PATH inside the try below (a copy, so process.env is untouched).
+  const childEnv = { ...childEnvFor(scenario) };
   // What file checkpointing leaves behind. Collects the session ids born in this recording (the recorder's id and each phase's system/init id) and removes only their directories once recording ends (even on failure).
   const sessionIds = new Set([sessionId]);
   const cleanupFileHistory = () => removeFileHistory(configRoot(), [...sessionIds]);
@@ -242,6 +272,8 @@ async function recordOne(scenario, version) {
     const sentUserUuids = [];
     const child = spawn(CLAUDE_BIN, phaseFlags, { cwd, env: childEnv, stdio: ['pipe', 'pipe', 'pipe'] });
     child.stderr.on('data', (d) => { state.stderr += d.toString(); });
+    // A CLI that refuses to start exits before reading stdin; writing to it then must not crash the recorder.
+    child.stdin.on('error', () => {});
 
     const send = (msg) => {
       const line = JSON.stringify(msg);
@@ -312,7 +344,8 @@ async function recordOne(scenario, version) {
     });
 
     let exited = false;
-    child.on('exit', () => { exited = true; });
+    let exitCode = null;
+    child.on('exit', (code) => { exited = true; exitCode = code; });
     try {
       // Run the steps.
       for (const step of steps) {
@@ -362,18 +395,22 @@ async function recordOne(scenario, version) {
       // Close stdin and wait for the process to exit (kill after a grace period).
       child.stdin.end();
       await new Promise((resolve) => {
+        if (exited) { resolve(); return; }
         const to = setTimeout(() => {
           child.kill('SIGTERM');
           setTimeout(() => { try { child.kill('SIGKILL'); } catch { /* noop */ } resolve(); }, 2000);
         }, 5000);
         child.on('exit', () => { clearTimeout(to); resolve(); });
       });
+      // Let readline drain what the child wrote before it exited.
+      if (exited) await sleep(200);
       rl.close();
     } catch (failure) {
       if (!exited) { try { child.kill('SIGKILL'); } catch { /* noop */ } }
       rl.close();
       throw failure;
     }
+    exitCodes.push(exitCode);
     totalCost += state.lastCost;
     state.lastCost = 0;
   };
@@ -383,13 +420,23 @@ async function recordOne(scenario, version) {
   let transcript = null;
   let stdinText = null;
   let forkTranscripts = null;
+  const exitCodes = [];
   try {
+    if (scenario.hideCommands) childEnv.PATH = await shimPathWithout(path.join(work, 'shim'), childEnv.PATH ?? '', scenario.hideCommands);
     if (scenario.mcpServer) {
       fakeMcp = await startFakeMcpServer(scenario.mcpServer.name);
       scrubState.mcpPorts.add(String(fakeMcp.port));
       scenarioFlags = [...scenario.flags, '--mcp-config', JSON.stringify({ mcpServers: { [scenario.mcpServer.name]: { type: 'http', url: fakeMcp.url } } })];
     }
     await runPhase([...BASE_FLAGS, `--session-id=${sessionId}`, ...scenarioFlags], scenario.steps, scenario.done);
+
+    if (scenario.then) {
+      // A second, unrelated CLI with its own flags and a new session id (not a resume). Same out, same scrubber state.
+      const thenId = randomUUID();
+      sessionIds.add(thenId);
+      out.write(`${scrubLine(JSON.stringify({ type: 'recorder_boundary', phase: 'then', note: 'the lines after this one come from a second CLI started with other flags and a new session id (not a resume)' }), scrubState)}\n`);
+      await runPhase([...BASE_FLAGS, `--session-id=${thenId}`, ...scenario.then.flags], scenario.then.steps, scenario.then.done);
+    }
 
     if (scenario.resume) {
       // Read the transcript the first CLI wrote before starting the second (the second appends to the same file). The scrubber runs in two passes:
@@ -503,6 +550,11 @@ async function recordOne(scenario, version) {
     if (forkTranscripts !== null) entry.fork_transcripts = forkTranscripts;
   }
   if (scenario.env) entry.env = scenario.env;
+  if (scenario.hideCommands) entry.hidden_commands = scenario.hideCommands;
+  if (scenario.then) {
+    entry.then_flags = [...BASE_FLAGS, '--session-id=<generated>', ...scenario.then.flags];
+    entry.exit_codes = exitCodes;
+  }
   if (stdinText !== null) {
     // Attachment scenarios: the details of the stdin lines the recorder wrote to the CLI (the <id>.stdin.jsonl next to the capture).
     entry.stdin_file = `${scenario.id}.stdin.jsonl`;

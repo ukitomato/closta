@@ -304,7 +304,9 @@ async function main() {
 
   // 11. Live effort changes: the request of step i is <id>-req-(i+1). The apply_flag_settings answer is success, the following
   // get_settings has applied.effort at the level set (null means the model default, a string), the first get_settings has the --effort level, and applied.model is a string.
-  for (const d of scenarios.filter((x) => x.steps.some((st) => st.kind === 'applyFlagSettings'))) {
+  // Only the effort scenarios (every applyFlagSettings sets effortLevel); the sandbox ones are read in FINDINGS.
+  for (const d of scenarios.filter((x) => x.steps.some((st) => st.kind === 'applyFlagSettings')
+    && x.steps.every((st) => st.kind !== 'applyFlagSettings' || 'effortLevel' in st.settings))) {
     const entry = entries.find((x) => x.scenario === d.id);
     if (!entry) continue;
     let capture = [];
