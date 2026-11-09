@@ -423,7 +423,16 @@ mod tests {
 
     #[test]
     fn platform_may_depend_on_gpui() {
-        assert!(check_graph(&clean()).is_empty());
+        let g = vec![
+            pkg("closta-model", &[], &["serde"]),
+            pkg("closta-core", &["closta-model"], &["closta-model"]),
+            pkg(
+                "closta-platform",
+                &["closta-core", "closta-model"],
+                &["gpui-kit", "gpui"],
+            ),
+        ];
+        assert!(check_graph(&g).is_empty());
     }
 
     #[test]

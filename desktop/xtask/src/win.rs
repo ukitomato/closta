@@ -3,8 +3,8 @@ use std::process::Command;
 
 use anyhow::{Context, bail};
 
-/// The Windows-side copy of `desktop/`, as seen from WSL. Builds happen here
-/// because the GPUI shaders only build on the machine that runs the `.exe`.
+/// The Windows-side copy of `desktop/`, as seen from WSL. The Windows build
+/// needs the Windows SDK shader compiler and Windows paths, so it runs on Windows.
 pub const WIN_COPY_WSL: &str = "/mnt/c/dev/tools/closta/desktop";
 /// The same copy as Windows sees it.
 pub const WIN_COPY: &str = r"C:\dev\tools\closta\desktop";

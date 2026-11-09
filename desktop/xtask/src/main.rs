@@ -4,15 +4,23 @@ mod check;
 mod layers;
 mod win;
 
+use std::ffi::OsString;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 /// The `desktop/` directory, the parent of this crate.
 pub fn desktop_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .map(PathBuf::from)
-        .unwrap_or_default()
+    desktop_root_from(
+        std::env::var_os("CARGO_MANIFEST_DIR"),
+        env!("CARGO_MANIFEST_DIR"),
+    )
+}
+
+/// Prefers the manifest dir cargo sets at run time, since a binary built in
+/// another worktree (shared target dir) carries that worktree's path.
+fn desktop_root_from(runtime: Option<OsString>, built: &str) -> PathBuf {
+    let manifest = runtime.map_or_else(|| PathBuf::from(built), PathBuf::from);
+    manifest.parent().map(PathBuf::from).unwrap_or_default()
 }
 
 fn main() -> ExitCode {
@@ -57,6 +65,18 @@ fn main() -> ExitCode {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn runtime_manifest_dir_wins() {
+        let root = desktop_root_from(Some("/a/desktop/xtask".into()), "/b/desktop/xtask");
+        assert_eq!(root, PathBuf::from("/a/desktop"));
+    }
+
+    #[test]
+    fn built_manifest_dir_is_the_fallback() {
+        let root = desktop_root_from(None, "/b/desktop/xtask");
+        assert_eq!(root, PathBuf::from("/b/desktop"));
+    }
 
     #[test]
     fn desktop_root_contains_workspace_manifest() {
