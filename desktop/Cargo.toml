@@ -13,6 +13,7 @@ publish = false
 anyhow = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["unbounded_depth", "preserve_order"] }
+sha2 = "0.11"
 cargo_metadata = "0.23"
 gpui-kit = "=0.9.0"
 closta-model = { path = "crates/model" }
