@@ -63,6 +63,22 @@ fn scenario_names() -> Vec<String> {
 }
 
 #[test]
+fn goldens_on_disk_are_exactly_the_manifest_scenarios() {
+    let expected = scenario_names();
+    assert!(!expected.is_empty(), "the manifest lists no scenarios");
+    let mut on_disk: Vec<String> = std::fs::read_dir(golden_dir())
+        .expect("the golden directory lists")
+        .filter_map(Result::ok)
+        .filter_map(|e| {
+            let name = e.file_name().to_string_lossy().into_owned();
+            name.strip_suffix(".json").map(str::to_string)
+        })
+        .collect();
+    on_disk.sort();
+    assert_eq!(expected, on_disk);
+}
+
+#[test]
 fn each_capture_folds_to_its_golden_twice_the_same() {
     let failures = check_all(&scenario_names(), &fold_capture);
     assert!(failures.is_empty(), "{}", failures.join("\n"));
