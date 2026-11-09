@@ -23,7 +23,7 @@ pub struct ConversationState {
     pub notices: Vec<Notice>,
     /// How many `result` lines arrived that closed no turn: a background completion that resumed
     /// the conversation on its own.
-    pub spontaneous_resume_count: u32,
+    pub spontaneous_resume_count: i32,
 }
 
 /// Session metadata, built from the typed top-level fields of `system/init` only.

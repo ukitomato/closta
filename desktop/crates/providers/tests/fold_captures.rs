@@ -559,10 +559,10 @@ fn all_events() -> Vec<AgentEvent> {
 #[test]
 fn the_recorded_captures_leave_nothing_uncounted() {
     let recorded = all_events();
-    let mut known: BTreeMap<String, usize> = BTreeMap::new();
+    let mut known: BTreeMap<String, i32> = BTreeMap::new();
     for (_, rows) in KNOWN_UNPLACED {
         for (wire_type, n) in *rows {
-            *known.entry(wire_type.to_string()).or_default() += n;
+            *known.entry(wire_type.to_string()).or_default() += *n as i32;
         }
     }
     let all = UnknownEventTally::of(&recorded);

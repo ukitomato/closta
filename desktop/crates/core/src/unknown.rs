@@ -8,20 +8,20 @@ use std::collections::BTreeMap;
 
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct UnknownEventTally {
-    pub unknown_by_wire_type: BTreeMap<String, usize>,
-    pub broken_line_count: usize,
+    pub unknown_by_wire_type: BTreeMap<String, i32>,
+    pub broken_line_count: i32,
     pub first_unknown: Option<RawJson>,
     pub first_broken_line: Option<String>,
 }
 
 impl UnknownEventTally {
     /// Lines whose `type` matched no declared kind.
-    pub fn unknown_count(&self) -> usize {
+    pub fn unknown_count(&self) -> i32 {
         self.unknown_by_wire_type.values().sum()
     }
 
     /// Every line that could not be placed, of either sort.
-    pub fn total_count(&self) -> usize {
+    pub fn total_count(&self) -> i32 {
         self.unknown_count() + self.broken_line_count
     }
 
