@@ -1,3 +1,9 @@
+mod fold;
+mod unknown;
+
+pub use fold::fold;
+pub use unknown::UnknownEventTally;
+
 use closta_model::AppInfo;
 
 pub trait AppInfoSource {

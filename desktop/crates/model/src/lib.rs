@@ -1,6 +1,10 @@
 mod event;
+mod state;
 
 pub use event::{AgentEvent, AgentEventKind, RawJson};
+pub use state::{
+    ConversationState, Notice, NoticeKind, SessionInfo, Task, TaskStatus, Turn, TurnPhase, Usage,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AppInfo {
