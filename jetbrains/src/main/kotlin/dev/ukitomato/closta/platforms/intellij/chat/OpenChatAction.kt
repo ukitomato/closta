@@ -148,8 +148,9 @@ private fun offer(
             .createPopupChooserBuilder(sorted)
             .setTitle(ClostaBundle.message("chat.saved.title"))
             .setRenderer(SavedRenderer())
-            // The search field is there from the start, so the list says it can be searched; it matches the titles.
-            .setNamerForFiltering { it.title }
+            // The search field is there from the start, so the list says it can be searched; it matches the titles
+            // and the session ids.
+            .setNamerForFiltering { "${it.title} ${it.id}" }
             .setFilterAlwaysVisible(true)
             .setItemChosenCallback {
                 openNewChat(project, placement, SessionOpening.Resume(it.id), it.title.take(TITLE_MAX))

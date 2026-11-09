@@ -154,30 +154,24 @@ class ProjectTranscripts(
         }
 
     /**
-     * The summary of one record from its first [RecordLines.HEAD_LINES] lines, or null when none of them is a user line
-     * of the main conversation (a record with no one speaking in it is not a session to open), or when it cannot be
-     * read. It stops at the first sentence of a user: a big record is never read to its end for a title.
+     * The summary of one record, titled as [RecordTitles.titleOf] says, or null when no user speaks in it or when it
+     * cannot be read.
      */
     private fun head(
         stamped: Stamped,
         unreadable: () -> Unit,
     ): SavedSessionSummary? {
-        val scan =
+        val title =
             try {
-                BoundedLines(
-                    RecordFiles.openHead(stamped.path),
-                    RecordLines.MAX_LINE_BYTES,
-                ).use(RecordLines::scanHead)
+                RecordTitles.titleOf(stamped.path)
             } catch (ignoredRemoved: NoSuchFileException) {
                 null
             } catch (ignoredUnreadable: IOException) {
                 unreadable()
                 null
             }
-        return if (scan == null || !scan.sawUser) {
-            null
-        } else {
-            SavedSessionSummary(stamped.id, scan.title ?: stamped.id, stamped.modifiedMs, stamped.bytes)
+        return title?.let {
+            SavedSessionSummary(stamped.id, it.ifEmpty { stamped.id }, stamped.modifiedMs, stamped.bytes)
         }
     }
 
