@@ -4,12 +4,15 @@
 //! request's content stays in the event's `RawJson` for the presenter to project. A resolved
 //! request is removed from the state rather than kept, so there is no terminal state.
 
+use serde::Serialize;
+
 /// One unanswered host-input request the CLI is blocking on.
 ///
 /// `request_id` is the primary key and is present on every `control_request`. `tool_use_id` and
 /// `agent_id` are optional attribution: `agent_id` is `None` for a main-conversation approval and
 /// carries the spawning subagent's `task_id` for a subagent one.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PendingApproval {
     pub request_id: String,
     pub kind: ApprovalKind,
@@ -21,7 +24,8 @@ pub struct PendingApproval {
 ///
 /// Decided from the typed tool name: `AskUserQuestion` is `Ask`, everything else (including no
 /// tool name) is `Approval`.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ApprovalKind {
     /// A plain tool awaiting allow/deny.
     Approval,

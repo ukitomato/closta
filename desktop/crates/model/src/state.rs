@@ -6,9 +6,11 @@
 //! events for the presenter to project.
 
 use crate::approval::PendingApproval;
+use serde::Serialize;
 
 /// The domain state of one conversation, folded from a stream of events.
-#[derive(Clone, PartialEq, Debug, Default)]
+#[derive(Clone, PartialEq, Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ConversationState {
     /// Session metadata, or `None` until a `system/init` establishes it.
     pub session: Option<SessionInfo>,
@@ -34,7 +36,8 @@ pub struct ConversationState {
 }
 
 /// Session metadata, built from the typed top-level fields of `system/init` only.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SessionInfo {
     pub session_id: String,
     pub model: String,
@@ -48,7 +51,8 @@ pub struct SessionInfo {
 ///
 /// It opens on `command_lifecycle{queued|started}` and closes only on a `result` that names it.
 /// `incomplete_reason` is `result.result` when the closing `result` had `is_error`, else `None`.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Turn {
     pub command_uuid: String,
     pub phase: TurnPhase,
@@ -59,7 +63,8 @@ pub struct Turn {
 }
 
 /// Whether a [`Turn`] is still open or has been closed by its correlated `result`.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum TurnPhase {
     Open,
     Closed,
@@ -67,7 +72,8 @@ pub enum TurnPhase {
 
 /// A subagent or background task, correlated by `task_id`. The parent is held by id, never by
 /// array index.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Task {
     pub task_id: String,
     pub parent_tool_use_id: Option<String>,
@@ -80,7 +86,8 @@ pub struct Task {
 }
 
 /// The lifecycle value of a [`Task`].
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum TaskStatus {
     Running,
     Complete,
@@ -88,7 +95,8 @@ pub enum TaskStatus {
 }
 
 /// Session-level usage.
-#[derive(Clone, PartialEq, Debug, Default)]
+#[derive(Clone, PartialEq, Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Usage {
     /// The session running total in USD, from `result.total_cost_usd`. Replaced on each `result`,
     /// never added. `0.0` until a `result` arrives.
@@ -96,7 +104,8 @@ pub struct Usage {
 }
 
 /// Something worth surfacing that is not itself a turn, task or usage change.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Notice {
     pub kind: NoticeKind,
     pub message: String,
@@ -105,7 +114,8 @@ pub struct Notice {
 }
 
 /// The kind of a [`Notice`].
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum NoticeKind {
     Error,
     /// A control request the host sent was answered with an error.

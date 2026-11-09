@@ -246,3 +246,88 @@ pub fn manifest_transcript(file: &str) -> Option<(String, String)> {
             .expect("transcript_sha256 missing next to transcript_file"),
     ))
 }
+
+/// The first place two JSON values differ.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Difference {
+    /// RFC 6901 pointer to the place.
+    pub pointer: String,
+    pub expected: serde_json::Value,
+    pub actual: serde_json::Value,
+}
+
+fn escape_pointer(key: &str) -> String {
+    key.replace('~', "~0").replace('/', "~1")
+}
+
+/// Compares two values the way the goldens need: numbers by value, objects by key set and values,
+/// arrays by length and elements. A missing side is reported as `null`.
+pub fn json_first_difference(
+    expected: &serde_json::Value,
+    actual: &serde_json::Value,
+) -> Option<Difference> {
+    use serde_json::Value;
+    fn walk(pointer: &str, e: &Value, a: &Value) -> Option<Difference> {
+        let differ = || {
+            Some(Difference {
+                pointer: pointer.to_string(),
+                expected: e.clone(),
+                actual: a.clone(),
+            })
+        };
+        match (e, a) {
+            (Value::Number(x), Value::Number(y)) => (x.as_f64() != y.as_f64()).then(differ)?,
+            (Value::Object(x), Value::Object(y)) => {
+                for (key, ev) in x {
+                    let child = format!("{pointer}/{}", escape_pointer(key));
+                    match y.get(key) {
+                        Some(av) => {
+                            if let Some(d) = walk(&child, ev, av) {
+                                return Some(d);
+                            }
+                        }
+                        None => {
+                            return Some(Difference {
+                                pointer: child,
+                                expected: ev.clone(),
+                                actual: Value::Null,
+                            });
+                        }
+                    }
+                }
+                for (key, av) in y {
+                    if !x.contains_key(key) {
+                        return Some(Difference {
+                            pointer: format!("{pointer}/{}", escape_pointer(key)),
+                            expected: Value::Null,
+                            actual: av.clone(),
+                        });
+                    }
+                }
+                None
+            }
+            (Value::Array(x), Value::Array(y)) => {
+                for i in 0..x.len().max(y.len()) {
+                    let child = format!("{pointer}/{i}");
+                    match (x.get(i), y.get(i)) {
+                        (Some(ev), Some(av)) => {
+                            if let Some(d) = walk(&child, ev, av) {
+                                return Some(d);
+                            }
+                        }
+                        (ev, av) => {
+                            return Some(Difference {
+                                pointer: child,
+                                expected: ev.cloned().unwrap_or(Value::Null),
+                                actual: av.cloned().unwrap_or(Value::Null),
+                            });
+                        }
+                    }
+                }
+                None
+            }
+            _ => (e != a).then(differ)?,
+        }
+    }
+    walk("", expected, actual)
+}

@@ -882,6 +882,9 @@ dependencies = [
 [[package]]
 name = "closta-model"
 version = "0.1.0"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "closta-platform"
