@@ -5,8 +5,8 @@
 //! event; every nested `RawJson` stays unopened.
 
 use closta_model::{
-    AgentEvent, ConversationState, Notice, NoticeKind, SessionInfo, Task, TaskStatus, Turn,
-    TurnPhase,
+    AgentEvent, ApprovalKind, ConversationState, Notice, NoticeKind, PendingApproval, SessionInfo,
+    Task, TaskStatus, Turn, TurnPhase,
 };
 
 const LIFECYCLE_QUEUED: &str = "queued";
@@ -14,6 +14,7 @@ const LIFECYCLE_STARTED: &str = "started";
 const LIFECYCLE_COMPLETED: &str = "completed";
 const TASK_COMPLETED: &str = "completed";
 const CONTROL_ERROR_SUBTYPE: &str = "error";
+const ASK_USER_QUESTION: &str = "AskUserQuestion";
 
 pub fn fold(state: ConversationState, event: &AgentEvent) -> ConversationState {
     match event {
@@ -31,10 +32,10 @@ pub fn fold(state: ConversationState, event: &AgentEvent) -> ConversationState {
         AgentEvent::ControlResponse { .. } => fold_control_response(state, event),
         AgentEvent::SystemStatus { .. } => fold_status(state, event),
 
-        // Carries no typed field that changes the domain state core keeps. The control request
-        // joins the pending approvals once the approval queue is folded.
-        AgentEvent::ControlRequest { .. }
-        | AgentEvent::Assistant { .. }
+        AgentEvent::ControlRequest { .. } => fold_control_request(state, event),
+
+        // Carries no typed field that changes the domain state core keeps.
+        AgentEvent::Assistant { .. }
         | AgentEvent::User { .. }
         | AgentEvent::StreamEvent { .. }
         | AgentEvent::SystemTaskProgress { .. }
@@ -149,8 +150,9 @@ fn fold_lifecycle(mut state: ConversationState, event: &AgentEvent) -> Conversat
 /// A `result` replaces the session cost, may raise an error notice, and closes the open turns it
 /// named (`user_message_uuid` or `user_message_uuids`) plus open turns whose lifecycle already
 /// completed. A `result` that names no open turn closes nothing and counts as a spontaneous
-/// resume. Discarding pending approvals on a closing or failing `result` is added with the
-/// approval queue.
+/// resume. A `result` that closes a turn, or that failed, also discards the pending approvals: the
+/// CLI has stopped waiting on them. A successful self-resume does not, because the CLI is still
+/// blocking on those requests.
 fn fold_result(mut state: ConversationState, event: &AgentEvent) -> ConversationState {
     let AgentEvent::Result {
         total_cost_usd,
@@ -194,6 +196,45 @@ fn fold_result(mut state: ConversationState, event: &AgentEvent) -> Conversation
     } else {
         state.spontaneous_resume_count += 1;
     }
+
+    if closes || *is_error {
+        state.pending_approvals.clear();
+    }
+    state
+}
+
+/// A `control_request` enqueues a pending approval keyed by its `request_id`. The kind comes from
+/// the typed tool name (`AskUserQuestion` is `Ask`, else `Approval`). A repeat of a `request_id`
+/// already pending is not enqueued twice.
+fn fold_control_request(mut state: ConversationState, event: &AgentEvent) -> ConversationState {
+    let AgentEvent::ControlRequest {
+        request_id,
+        agent_id,
+        tool_name,
+        tool_use_id,
+        ..
+    } = event
+    else {
+        return state;
+    };
+    if state
+        .pending_approvals
+        .iter()
+        .any(|p| &p.request_id == request_id)
+    {
+        return state;
+    }
+    let kind = if tool_name.as_deref() == Some(ASK_USER_QUESTION) {
+        ApprovalKind::Ask
+    } else {
+        ApprovalKind::Approval
+    };
+    state.pending_approvals.push(PendingApproval {
+        request_id: request_id.clone(),
+        kind,
+        tool_use_id: tool_use_id.clone(),
+        agent_id: agent_id.clone(),
+    });
     state
 }
 

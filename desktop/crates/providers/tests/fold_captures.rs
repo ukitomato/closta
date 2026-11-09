@@ -1,15 +1,17 @@
 //! Folds the recorded captures. Mirrors SessionCostTest.kt, TurnBoundaryTest.kt,
-//! InitIdempotenceTest.kt, TaskLifecycleTest.kt, UnknownEventTest.kt and ControlErrorAndModeFoldTest.kt.
+//! InitIdempotenceTest.kt, TaskLifecycleTest.kt, UnknownEventTest.kt, ControlErrorAndModeFoldTest.kt,
+//! ApprovalFoldTest.kt, AskResolutionTest.kt, SubagentApprovalTest.kt and
+//! ConversationInvariantsTest.kt.
 //!
-//! Kotlin's `assertSame` is not ported; `==` stands in where it was used.
-//! The approval tests of the Kotlin files are not here yet; they arrive with the approval fold.
+//! Kotlin's `assertSame` is not ported; `==` stands in where it was used. Kotlin's per-scenario
+//! `@TestFactory` tests run every scenario here, collect the failures and assert once.
 
 mod common;
 
-use closta_core::{UnknownEventTally, fold};
+use closta_core::{UnknownEventTally, fold, resolve_approval};
 use closta_model::{
-    AgentEvent, AgentEventKind, ConversationState, Notice, NoticeKind, RawJson, SessionInfo, Task,
-    TaskStatus, Turn, TurnPhase, Usage,
+    AgentEvent, AgentEventKind, ApprovalDecision, ApprovalKind, ConversationState, Notice,
+    NoticeKind, RawJson, SessionInfo, Task, TaskStatus, Turn, TurnPhase, Usage,
 };
 use common::*;
 use std::collections::BTreeMap;
@@ -844,4 +846,390 @@ fn commands_changed_and_compact_boundary_leave_the_state_as_it_was() {
 
     assert_eq!(start, fold(start.clone(), &changed));
     assert_eq!(start, fold(start.clone(), &boundary));
+}
+
+// --- ApprovalFoldTest -----------------------------------------------------------------------
+
+/// Folds events in order, stopping right after the first event that satisfies `stop`.
+fn fold_through(events: &[AgentEvent], stop: impl Fn(&AgentEvent) -> bool) -> ConversationState {
+    let mut state = ConversationState::default();
+    for event in events {
+        state = fold(state, event);
+        if stop(event) {
+            break;
+        }
+    }
+    state
+}
+
+fn is_control_request(event: &AgentEvent) -> bool {
+    matches!(event, AgentEvent::ControlRequest { .. })
+}
+
+fn control_request(
+    request_id: &str,
+    tool_name: Option<&str>,
+    tool_use_id: Option<&str>,
+) -> AgentEvent {
+    AgentEvent::ControlRequest {
+        request_id: request_id.into(),
+        request: RawJson(r#"{"subtype":"can_use_tool"}"#.into()),
+        agent_id: None,
+        tool_name: tool_name.map(str::to_string),
+        tool_use_id: tool_use_id.map(str::to_string),
+    }
+}
+
+fn pending_ids(state: &ConversationState) -> Vec<&str> {
+    state
+        .pending_approvals
+        .iter()
+        .map(|p| p.request_id.as_str())
+        .collect()
+}
+
+#[test]
+fn capture_05_enqueues_one_approval_then_clears_it_when_the_turn_closes() {
+    let events = read_capture("05-permission-can-use-tool.ndjson");
+
+    let at_request = fold_through(&events, is_control_request);
+    assert_eq!(
+        1,
+        at_request.pending_approvals.len(),
+        "05: one approval pending after the control_request"
+    );
+    let pending = &at_request.pending_approvals[0];
+    assert_eq!(
+        "fd37592b-7c5a-4653-bb77-f4b22769cdd5", pending.request_id,
+        "keyed by request_id"
+    );
+    assert_eq!(
+        ApprovalKind::Approval,
+        pending.kind,
+        "Write is a plain tool, not AskUserQuestion"
+    );
+    assert_eq!(
+        Some("toolu_01FooZHpFpzmDvsr82dzYb33".to_string()),
+        pending.tool_use_id,
+        "tool_use_id rides along"
+    );
+    assert_eq!(
+        None, pending.agent_id,
+        "a main-conversation approval has no agent_id"
+    );
+
+    let end = fold_all(ConversationState::default(), &events);
+    assert!(
+        end.pending_approvals.is_empty(),
+        "05: the correlated result closes the turn and discards the pending approval"
+    );
+}
+
+#[test]
+fn a_spontaneous_self_resume_result_does_not_discard_a_pending_approval() {
+    let with_pending = fold(
+        ConversationState::default(),
+        &control_request("r-frozen", Some("Write"), Some("toolu_frozen")),
+    );
+    assert_eq!(
+        1,
+        with_pending.pending_approvals.len(),
+        "precondition: one approval is pending"
+    );
+
+    let resumed = fold(with_pending, &result_for(None, false, "ok", None));
+
+    assert_eq!(
+        vec!["r-frozen"],
+        pending_ids(&resumed),
+        "a self-resume (user_message_uuid==null, success) must NOT discard the pending approval"
+    );
+    assert_eq!(
+        1, resumed.spontaneous_resume_count,
+        "the self-resume is still counted"
+    );
+}
+
+#[test]
+fn a_failed_result_discards_pending_approvals_even_when_it_closes_no_turn() {
+    let with_pending = fold(
+        ConversationState::default(),
+        &control_request("r1", Some("Write"), Some("toolu_1")),
+    );
+
+    let failed = fold(with_pending, &result_for(None, true, "boom", None));
+
+    assert!(failed.pending_approvals.is_empty());
+    assert_eq!(1, failed.spontaneous_resume_count);
+}
+
+#[test]
+fn a_control_request_that_is_not_can_use_tool_never_reaches_the_approval_queue() {
+    let lines = [
+        r#"{"type":"control_request","request_id":"m1","request":{"subtype":"mcp_message","server_name":"s","message":{}}}"#,
+        r#"{"type":"control_request","request_id":"m2","request":{"tool_name":"Write"}}"#,
+        r#"{"type":"control_request","request_id":"m3","request":{"subtype":"can_use_tool","tool_name":"Write"}}"#,
+    ];
+    let events: Vec<AgentEvent> = lines.iter().map(|l| parse(l)).collect();
+
+    let end = fold_all(ConversationState::default(), &events);
+
+    assert_eq!(
+        vec!["m3"],
+        pending_ids(&end),
+        "only can_use_tool is an approval"
+    );
+}
+
+#[test]
+fn the_ten_approval_free_captures_never_enqueue_an_approval() {
+    const APPROVAL_FREE: [&str; 10] = ["01", "02", "03", "04", "06", "07", "08", "09", "10", "11"];
+    let mut scenarios: Vec<String> = manifest()
+        .scenarios
+        .into_iter()
+        .map(|s| s.scenario)
+        .filter(|s| APPROVAL_FREE.contains(&s.split('-').next().unwrap_or("")))
+        .collect();
+    scenarios.sort();
+    assert_eq!(
+        APPROVAL_FREE.len(),
+        scenarios.len(),
+        "the ten scenarios are all in the manifest"
+    );
+
+    let failures: Vec<String> = scenarios
+        .iter()
+        .filter(|scenario| {
+            !fold_capture(&format!("{scenario}.ndjson"))
+                .pending_approvals
+                .is_empty()
+        })
+        .map(|scenario| format!("{scenario}: no stdout control_request, so the queue stays empty"))
+        .collect();
+
+    assert!(failures.is_empty(), "{failures:#?}");
+}
+
+// --- AskResolutionTest ----------------------------------------------------------------------
+
+const REQUEST_13: &str = "9f0891e5-a636-4c70-8a63-c288c7eaf6aa";
+const REQUEST_14: &str = "4008cf14-e949-4846-b552-64e819026208";
+const REQUEST_15: &str = "d0762c7b-dfa5-4b56-b7de-cf86aaede9d9";
+
+/// A virtual clock: elapsed time is computed from it, never from a real one.
+struct VirtualClock {
+    now_ms: i64,
+}
+
+impl VirtualClock {
+    fn advance(&mut self, ms: i64) {
+        self.now_ms += ms;
+    }
+}
+
+/// Folds the capture up to its `control_request`, asserting the question is held as an Ask.
+fn held_ask(file: &str, request_id: &str) -> ConversationState {
+    let state = fold_through(&read_capture(file), is_control_request);
+    assert_eq!(1, state.pending_approvals.len(), "{file}: one held request");
+    let pending = &state.pending_approvals[0];
+    assert_eq!(
+        request_id, pending.request_id,
+        "{file}: the held request id"
+    );
+    assert_eq!(
+        ApprovalKind::Ask,
+        pending.kind,
+        "{file}: AskUserQuestion is held as an Ask"
+    );
+    state
+}
+
+fn ask_request(request_id: &str) -> AgentEvent {
+    control_request(
+        request_id,
+        Some("AskUserQuestion"),
+        Some(&format!("toolu_{request_id}")),
+    )
+}
+
+#[test]
+fn capture_13_immediate_allow_at_elapsed_0_resolves_the_question_as_no_answer_and_removes_it() {
+    let held = held_ask("13-ask-timeout.ndjson", REQUEST_13);
+    let clock = VirtualClock { now_ms: 0 };
+    let arrival_ms = clock.now_ms;
+
+    let elapsed_ms = clock.now_ms - arrival_ms;
+    let resolved = resolve_approval(
+        held,
+        &ApprovalDecision::Allow {
+            request_id: REQUEST_13.into(),
+        },
+        elapsed_ms,
+    );
+
+    assert_eq!(0, elapsed_ms, "13: the host replied immediately");
+    assert!(
+        resolved.pending_approvals.is_empty(),
+        "13: the no-answer question is removed from pending"
+    );
+}
+
+#[test]
+fn capture_14_answered_after_5000ms_resolves_the_question_as_answered_and_removes_it() {
+    let held = held_ask("14-ask-answers-updatedinput.ndjson", REQUEST_14);
+    let mut clock = VirtualClock { now_ms: 1_000 };
+    let arrival_ms = clock.now_ms;
+    clock.advance(5_000);
+
+    let elapsed_ms = clock.now_ms - arrival_ms;
+    let resolved = resolve_approval(
+        held,
+        &ApprovalDecision::Answered {
+            request_id: REQUEST_14.into(),
+        },
+        elapsed_ms,
+    );
+
+    assert_eq!(
+        5_000, elapsed_ms,
+        "14: the host injected answers after 5000 ms"
+    );
+    assert!(
+        resolved.pending_approvals.is_empty(),
+        "14: the answered question is removed from pending"
+    );
+}
+
+#[test]
+fn capture_15_afk_timeout_after_5000ms_resolves_the_question_as_afk_and_removes_it() {
+    let held = held_ask("15-ask-afktimeout-updatedinput.ndjson", REQUEST_15);
+    let mut clock = VirtualClock { now_ms: 42 };
+    let arrival_ms = clock.now_ms;
+    clock.advance(5_000);
+
+    let elapsed_ms = clock.now_ms - arrival_ms;
+    let resolved = resolve_approval(
+        held,
+        &ApprovalDecision::AfkTimeout {
+            request_id: REQUEST_15.into(),
+        },
+        elapsed_ms,
+    );
+
+    assert_eq!(
+        5_000, elapsed_ms,
+        "15: the request expired on an AFK timeout"
+    );
+    assert!(
+        resolved.pending_approvals.is_empty(),
+        "15: the AFK-expired question is removed from pending"
+    );
+}
+
+#[test]
+fn resolving_one_held_question_leaves_another_held_question_untouched() {
+    let two = fold_all(
+        ConversationState::default(),
+        &[ask_request(REQUEST_14), ask_request(REQUEST_15)],
+    );
+
+    let resolved = resolve_approval(
+        two,
+        &ApprovalDecision::Answered {
+            request_id: REQUEST_14.into(),
+        },
+        5_000,
+    );
+
+    assert_eq!(
+        vec![REQUEST_15],
+        pending_ids(&resolved),
+        "resolving 14 must not disturb the still-pending 15"
+    );
+}
+
+// --- SubagentApprovalTest -------------------------------------------------------------------
+
+#[test]
+fn capture_12_attributes_the_approval_to_the_subagent_by_agent_id_matching_a_task_id() {
+    let events = read_capture("12-subagent-permission.ndjson");
+
+    let at_request = fold_through(&events, is_control_request);
+
+    assert_eq!(1, at_request.pending_approvals.len());
+    let pending = &at_request.pending_approvals[0];
+    assert_eq!(
+        Some("ac9bfb270bbfbff94".to_string()),
+        pending.agent_id,
+        "12: the approval is attributed to the subagent by agent_id"
+    );
+    assert!(
+        at_request
+            .tasks
+            .iter()
+            .any(|t| Some(&t.task_id) == pending.agent_id.as_ref()),
+        "12: agent_id equals the spawning task_started.task_id"
+    );
+}
+
+#[test]
+fn capture_05_is_a_main_conversation_approval_and_carries_no_agent_id() {
+    let events = read_capture("05-permission-can-use-tool.ndjson");
+
+    let at_request = fold_through(&events, is_control_request);
+
+    assert_eq!(1, at_request.pending_approvals.len());
+    assert_eq!(
+        None, at_request.pending_approvals[0].agent_id,
+        "05: a main-conversation approval has no agent_id"
+    );
+}
+
+// --- ConversationInvariantsTest -------------------------------------------------------------
+
+#[test]
+fn every_capture_ends_satisfying_the_conversation_invariants() {
+    let mut scenarios: Vec<String> = manifest()
+        .scenarios
+        .into_iter()
+        .map(|s| s.scenario)
+        .collect();
+    scenarios.sort();
+
+    let mut failures: Vec<String> = Vec::new();
+    for scenario in &scenarios {
+        let end = fold_capture(&format!("{scenario}.ndjson"));
+        // A known gap still shows: the turn whose result the codec does not place stays open.
+        let turn_left_open = known_unplaced(scenario).contains_key("result");
+        let all_closed = end.turns.iter().all(|t| t.phase == TurnPhase::Closed);
+        if all_closed == turn_left_open {
+            failures.push(format!(
+                "{scenario}: every turn is closed at the end (expected: {})",
+                !turn_left_open
+            ));
+        }
+        if end
+            .pending_approvals
+            .iter()
+            .any(|p| p.kind == ApprovalKind::Approval)
+        {
+            failures.push(format!(
+                "{scenario}: the approval queue is empty at the end"
+            ));
+        }
+        if end.tasks.iter().any(|t| t.status == TaskStatus::Running) {
+            failures.push(format!("{scenario}: no task is still running at the end"));
+        }
+        if end
+            .pending_approvals
+            .iter()
+            .any(|p| p.kind == ApprovalKind::Ask)
+        {
+            failures.push(format!(
+                "{scenario}: no question is left pending at the end"
+            ));
+        }
+    }
+
+    assert!(failures.is_empty(), "{failures:#?}");
 }

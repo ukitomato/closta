@@ -5,6 +5,8 @@
 //! message text, no thinking prose, no tool arguments or results. Those stay in `RawJson` on the
 //! events for the presenter to project.
 
+use crate::approval::PendingApproval;
+
 /// The domain state of one conversation, folded from a stream of events.
 #[derive(Clone, PartialEq, Debug, Default)]
 pub struct ConversationState {
@@ -24,6 +26,11 @@ pub struct ConversationState {
     /// How many `result` lines arrived that closed no turn: a background completion that resumed
     /// the conversation on its own.
     pub spontaneous_resume_count: i32,
+    /// Unanswered host-input requests in arrival order: the approvals and questions the CLI is
+    /// currently blocking on. A resolved, timed-out or discarded request is removed rather than
+    /// kept, so an empty list is the evidence that the queue is empty. The request's content stays
+    /// in its `RawJson`.
+    pub pending_approvals: Vec<PendingApproval>,
 }
 
 /// Session metadata, built from the typed top-level fields of `system/init` only.

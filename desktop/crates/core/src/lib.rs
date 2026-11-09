@@ -1,6 +1,8 @@
+mod approval;
 mod fold;
 mod unknown;
 
+pub use approval::resolve_approval;
 pub use fold::fold;
 pub use unknown::UnknownEventTally;
 
