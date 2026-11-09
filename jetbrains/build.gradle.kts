@@ -54,7 +54,7 @@ dependencies {
     // (LinkageError: loader constraint violation) wherever plugin code meets the IDE's netty types.
     // STS goes through url-connection-client below, so nothing here needs the netty client.
     // Likewise sts's default Apache client, with its httpclient, httpcore, commons-codec and commons-logging, is unused.
-    implementation("software.amazon.awssdk:sts:2.30.0") {
+    implementation("software.amazon.awssdk:sts:2.57.10") {
         exclude(group = "software.amazon.awssdk", module = "netty-nio-client")
         exclude(group = "software.amazon.awssdk", module = "apache-client")
     }
