@@ -18,13 +18,16 @@ fn with_slash(path: &str) -> String {
 }
 
 /// Mirrors `src` into `dest`, leaving the Windows `target\` alone so the
-/// dependencies are not rebuilt from scratch every time.
+/// dependencies are not rebuilt from scratch every time. Notes at the top of
+/// `desktop/` are not part of the build and stay behind.
 pub fn rsync_args(src: &Path, dest: &str) -> Vec<String> {
     vec![
         "-a".to_owned(),
         "--delete".to_owned(),
         "--exclude".to_owned(),
-        "target".to_owned(),
+        "/target".to_owned(),
+        "--exclude".to_owned(),
+        "/*.md".to_owned(),
         with_slash(&src.to_string_lossy()),
         with_slash(dest),
     ]
@@ -41,6 +44,10 @@ pub fn powershell_script(release: bool, run: bool) -> String {
     let mut lines = vec![
         "[Console]::OutputEncoding = [Text.Encoding]::UTF8".to_owned(),
         format!("Set-Location '{WIN_COPY}' -ErrorAction Stop"),
+        // A standalone Rust install earlier on PATH would ignore rust-toolchain.toml,
+        // so rustup's proxies go first.
+        "$env:Path = (Split-Path (Get-Command rustup -ErrorAction Stop).Source) + ';' + $env:Path"
+            .to_owned(),
         if release {
             "cargo build --release".to_owned()
         } else {
@@ -49,10 +56,12 @@ pub fn powershell_script(release: bool, run: bool) -> String {
     ];
     if run {
         lines.push(format!(
-            "if ($LASTEXITCODE -eq 0) {{ Start-Process '{}' }}",
+            "if ($LASTEXITCODE -eq 0) {{ Start-Process '{}' -ErrorAction Stop }}",
             exe_path(release)
         ));
     }
+    // A cargo that never started leaves $LASTEXITCODE unset, and `exit $null` is 0.
+    lines.push("if ($null -eq $LASTEXITCODE) { exit 1 }".to_owned());
     lines.push("exit $LASTEXITCODE".to_owned());
     lines.join("; ")
 }
@@ -70,7 +79,12 @@ pub fn win_build(root: &Path, release: bool, run: bool) -> anyhow::Result<()> {
 
     println!("==> cargo build on Windows");
     let status = Command::new("powershell.exe")
-        .args(["-NoProfile", "-Command", &powershell_script(release, run)])
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            &powershell_script(release, run),
+        ])
         .status()
         .context("could not start `powershell.exe`")?;
     if !status.success() {
@@ -95,7 +109,9 @@ mod tests {
                 "-a",
                 "--delete",
                 "--exclude",
-                "target",
+                "/target",
+                "--exclude",
+                "/*.md",
                 "/src/desktop/",
                 "/mnt/c/dev/tools/closta/desktop/",
             ]
@@ -112,6 +128,21 @@ mod tests {
     }
 
     #[test]
+    fn powershell_script_puts_rustup_first_on_path() {
+        let script = powershell_script(false, false);
+        let path = script
+            .find("(Get-Command rustup -ErrorAction Stop).Source")
+            .unwrap();
+        assert!(path < script.find("cargo build").unwrap());
+    }
+
+    #[test]
+    fn powershell_script_fails_when_cargo_never_started() {
+        let script = powershell_script(false, false);
+        assert!(script.contains("if ($null -eq $LASTEXITCODE) { exit 1 }; exit $LASTEXITCODE"));
+    }
+
+    #[test]
     fn release_and_run_flags_change_the_script() {
         assert!(powershell_script(true, false).contains("cargo build --release"));
         let debug = powershell_script(false, false);
@@ -120,7 +151,7 @@ mod tests {
         assert!(!debug.contains("Start-Process"));
 
         let run = powershell_script(true, true);
-        let start = format!("Start-Process '{}'", exe_path(true));
+        let start = format!("Start-Process '{}' -ErrorAction Stop", exe_path(true));
         let guarded = format!("if ($LASTEXITCODE -eq 0) {{ {start} }}");
         assert!(run.contains(&guarded), "{run}");
         assert_eq!(run.matches("Start-Process").count(), 1);
