@@ -214,6 +214,8 @@ sealed interface AgentEvent {
      * [stopReason], [terminalReason] and the four time-to-first fields are nullable because a
      * `/compact` result carries `stop_reason: null` and omits the rest (the official types
      * declare them optional too).
+     * [queuedTurnCount], [fastModeState] and [subagentStats] are nullable because the result a CLI writes when it
+     * refuses to start (before `initialize` is answered, e.g. a sandbox that is required but unavailable) omits them.
      * [totalCostUsd] is a session running total, not a per-turn figure.
      */
     data class Result(
@@ -226,7 +228,7 @@ sealed interface AgentEvent {
         val terminalReason: String? = null,
         val numTurns: Int,
         val resultIndex: Int,
-        val queuedTurnCount: Int,
+        val queuedTurnCount: Int? = null,
         val totalCostUsd: Double,
         val durationMs: Long,
         val durationApiMs: Long,
@@ -234,11 +236,11 @@ sealed interface AgentEvent {
         val ttftStreamMs: Long? = null,
         val timeToRequestMs: Long? = null,
         val firstContentFrameMs: Long? = null,
-        val fastModeState: String,
+        val fastModeState: String? = null,
         val usage: RawJson,
         val modelUsage: RawJson,
         val permissionDenials: RawJson,
-        val subagentStats: RawJson,
+        val subagentStats: RawJson? = null,
         val apiErrorStatus: String? = null,
         val fastModeDisabledReason: String? = null,
         val requestSentWallMs: Long? = null,

@@ -254,6 +254,22 @@ class CodecDecodeTest {
         )
     }
 
+    @Test
+    fun resultBeforeInitDecodes() {
+        // 36: a CLI that refuses to start (the sandbox is required but bwrap is missing) writes this one result and
+        // exits without answering initialize; it has no queued_turn_count, fast_mode_state or subagent_stats.
+        val result = assertInstanceOf(AgentEvent.Result::class.java, captureLine("36-sandbox-unavailable", 1))
+
+        assertAll(
+            { assertTrue(result.isError) },
+            { assertEquals(0, result.numTurns) },
+            { assertTrue(result.result.startsWith("Sandbox required but unavailable:"), result.result) },
+            { assertNull(result.queuedTurnCount) },
+            { assertNull(result.fastModeState) },
+            { assertNull(result.subagentStats) },
+        )
+    }
+
     // --- control_request subtype, control_response ----------------------------------------
 
     @Test

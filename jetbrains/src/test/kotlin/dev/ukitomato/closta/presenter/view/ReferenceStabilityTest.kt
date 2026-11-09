@@ -103,9 +103,18 @@ class ReferenceStabilityTest {
                         )
                     }
                 }
-                // 06, 24 and 28 are control requests only: none has an init, a status or a rate limit to be quiet
-                // about.
-                if (scenario !in setOf("06-context-usage", "24-mcp-management", "28-effort-live")) assertTrue(quiet > 0)
+                // 06, 24, 28, 34, 35 and 40 are control requests only: none has an init, a status or a rate limit to
+                // be quiet about.
+                val controlOnly =
+                    setOf(
+                        "06-context-usage",
+                        "24-mcp-management",
+                        "28-effort-live",
+                        "34-sandbox-launch",
+                        "35-sandbox-project-setting",
+                        "40-sandbox-same-id",
+                    )
+                if (scenario !in controlOnly) assertTrue(quiet > 0)
             }
         }
 
@@ -125,9 +134,17 @@ class ReferenceStabilityTest {
                     assertSame(steps[index - 1].transcript, steps[index].transcript, "$scenario #$index: $text")
                     assertSame(steps[index - 1].tree, steps[index].tree, "$scenario #$index")
                 }
-                // 06, 07, 24 and 28 are control requests only: they have no streamed text.
+                // 06, 07, 24, 28, 34, 35 and 40 are control requests only: they have no streamed text.
                 val controlOnly =
-                    setOf("06-context-usage", "07-set-model-and-mode", "24-mcp-management", "28-effort-live")
+                    setOf(
+                        "06-context-usage",
+                        "07-set-model-and-mode",
+                        "24-mcp-management",
+                        "28-effort-live",
+                        "34-sandbox-launch",
+                        "35-sandbox-project-setting",
+                        "40-sandbox-same-id",
+                    )
                 if (scenario !in controlOnly) {
                     assertTrue(empty > 0)
                 }

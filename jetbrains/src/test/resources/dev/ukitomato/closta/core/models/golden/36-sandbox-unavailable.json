@@ -1,0 +1,31 @@
+{
+  "session": {
+    "sessionId": "5f29bbcd-0370-4f08-8180-49d2605178cc",
+    "model": "claude-sonnet-4-6",
+    "permissionMode": "default",
+    "cwd": "/tmp/closta-rec-36-sandbox-unavailable-kCmWFl/cwd",
+    "version": "2.1.282"
+  },
+  "turns": [
+    {
+      "commandUuid": "890182c7-a49b-47a2-b359-49593cfcac9f",
+      "phase": "CLOSED",
+      "incompleteReason": null,
+      "lifecycleDone": false
+    }
+  ],
+  "usage": {
+    "sessionCostUsd": 0.0546819
+  },
+  "tasks": [],
+  "thinkingEstimate": null,
+  "notices": [
+    {
+      "kind": "ERROR",
+      "message": "Sandbox required but unavailable: sandbox is enabled but dependencies are missing: bubblewrap (bwrap) not installed · install missing tools (e.g. apt install bubblewrap socat) or see https://code.claude.com/docs/en/sandboxing. Set sandbox.failIfUnavailable\u003dfalse to allow unsandboxed execution.",
+      "requestId": null
+    }
+  ],
+  "spontaneousResumeCount": 1,
+  "pendingApprovals": []
+}

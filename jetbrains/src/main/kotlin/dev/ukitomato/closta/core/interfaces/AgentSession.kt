@@ -98,6 +98,12 @@ interface AgentSession {
     )
 
     /**
+     * Turns the sandbox off live, without restarting the session. Only issues the request; the answer carries
+     * [requestId], as for [setEffort]. There is no live way back on: that is a new launch.
+     */
+    suspend fun turnSandboxOff(requestId: String)
+
+    /**
      * Asks which MCP servers the session has and in what state. It only issues the request, without waiting
      * for the answer: the answer comes back as a `ControlResponse` event carrying [requestId], as for
      * [requestContextUsage].

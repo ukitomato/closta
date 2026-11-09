@@ -1,0 +1,25 @@
+{
+  "session": {
+    "sessionId": "83546b2b-0d1d-4de8-a9c4-585ea91080d0",
+    "model": "claude-sonnet-4-6",
+    "permissionMode": "default",
+    "cwd": "/tmp/closta-rec-33-sandbox-live-8zury7/cwd",
+    "version": "2.1.282"
+  },
+  "turns": [
+    {
+      "commandUuid": "90b57daa-903c-45e5-97cf-3df395f266b7",
+      "phase": "CLOSED",
+      "incompleteReason": null,
+      "lifecycleDone": false
+    }
+  ],
+  "usage": {
+    "sessionCostUsd": 0.14598089999999997
+  },
+  "tasks": [],
+  "thinkingEstimate": null,
+  "notices": [],
+  "spontaneousResumeCount": 0,
+  "pendingApprovals": []
+}

@@ -314,10 +314,13 @@ class CaptureStreamTest {
         assertEquals(EXPECTED_MESSAGES, counts)
     }
 
-    /** One approval per capture, but 25 asks twice (a Write in each of its first two turns), and 29 (plan, Edit). */
+    /**
+     * One approval per capture, but 25 asks twice (a Write in each of its first two turns), and 29 and 38 (plan, Edit).
+     */
     private fun approvalCount(scenario: String): Int =
         if (scenario == "25-rewind-files" ||
-            scenario == "29-exit-plan-mode"
+            scenario == "29-exit-plan-mode" ||
+            scenario == "38-plan-bypass"
         ) {
             2
         } else {
@@ -338,6 +341,9 @@ class CaptureStreamTest {
                 "25-rewind-files",
                 "29-exit-plan-mode",
                 "30-deny-empty-message",
+                "36-sandbox-unavailable",
+                "37-plan-auto",
+                "38-plan-bypass",
             )
         val EXPECTED_MESSAGES =
             mapOf(
@@ -373,6 +379,14 @@ class CaptureStreamTest {
                 "30-deny-empty-message" to 27,
                 "31-send-mid-turn" to 36,
                 "32-interrupt-foreground" to 63,
+                "33-sandbox-live" to 60,
+                "34-sandbox-launch" to 2,
+                "35-sandbox-project-setting" to 2,
+                "36-sandbox-unavailable" to 40,
+                "37-plan-auto" to 132,
+                "38-plan-bypass" to 127,
+                "39-sandbox-resume" to 38,
+                "40-sandbox-same-id" to 2,
             )
     }
 }

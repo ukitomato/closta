@@ -26,7 +26,7 @@ object CaptureFixtures {
 
     /**
      * Lines of a capture that the codec cannot place, by capture and wire type — an exception table that
-     * has three rows, for the recorder's own mark in the resume, fork and cut captures (the
+     * has six rows, for the recorder's own mark in the resume, fork, cut and sandbox captures (the
      * real ones have all been closed).
      * Tests that derive their expectations from it (the turn left open, the thread still running, the
      * unknown-kind tally) expect nothing unusual from the CLI's own lines.
@@ -46,6 +46,15 @@ object CaptureFixtures {
             // The same mark, between the two stdouts of the cut scene (`--resume --fork-session
             // --resume-session-at`).
             "27-resume-session-at" to mapOf(RECORDER_BOUNDARY to 1),
+            // The same mark, between the two CLIs of the sandbox-unavailable scene: the first refuses to start, the
+            // second is a fresh launch with a new session id (`then`, not a resume).
+            "36-sandbox-unavailable" to mapOf(RECORDER_BOUNDARY to 1),
+            // The same mark, between the two stdouts of the scene that resumes into the sandbox
+            // (`--resume --settings`).
+            "39-sandbox-resume" to mapOf(RECORDER_BOUNDARY to 1),
+            // The same mark, between the two CLIs launched under the same `--session-id` (`then`), the second with
+            // the sandbox on.
+            "40-sandbox-same-id" to mapOf(RECORDER_BOUNDARY to 1),
         )
 
     /** The wire type of the recorder's mark that separates the two stdouts of a resume capture. */

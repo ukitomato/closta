@@ -1,0 +1,31 @@
+{
+  "session": {
+    "sessionId": "799d3eb2-da96-433d-96f7-706d2d874f82",
+    "model": "claude-sonnet-4-6",
+    "permissionMode": "default",
+    "cwd": "/tmp/closta-rec-38-plan-bypass-709HQk/cwd",
+    "version": "2.1.282"
+  },
+  "turns": [
+    {
+      "commandUuid": "35eeb876-2e44-4c0b-a081-a8a833bdf37f",
+      "phase": "CLOSED",
+      "incompleteReason": null,
+      "lifecycleDone": false
+    }
+  ],
+  "usage": {
+    "sessionCostUsd": 0.1056471
+  },
+  "tasks": [],
+  "thinkingEstimate": 117,
+  "notices": [
+    {
+      "kind": "CONTROL_ERROR",
+      "message": "Cannot set permission mode to bypassPermissions because it is disabled by settings or configuration",
+      "requestId": "38-plan-bypass-req-2"
+    }
+  ],
+  "spontaneousResumeCount": 0,
+  "pendingApprovals": []
+}

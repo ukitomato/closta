@@ -242,6 +242,19 @@ object StdinEncoder {
         }
 
     /**
+     * `apply_flag_settings` with only `{"sandbox":{"enabled":false}}`: the sandbox is off from the next command on;
+     * the answer is a success without a body. The flag layer is replaced, not merged, so whatever `sandbox` the
+     * launch's `--settings` put there goes with it (capture 33, lines 79 and 80). There is no counterpart that turns it
+     * on: a CLI that cannot sandbox still says it is on and runs unsandboxed (capture 36), so that is a new launch.
+     */
+    fun sandboxOff(requestId: String): String =
+        controlRequest(requestId) {
+            addProperty("subtype", "apply_flag_settings")
+            val sandbox = JsonObject().apply { addProperty("enabled", false) }
+            add("settings", JsonObject().apply { add("sandbox", sandbox) })
+        }
+
+    /**
      * `mcp_status`: which MCP servers the session has (capture 24 holds the answer: `mcpServers`, each with
      * `name`, `status`, `config`, `scope`, `source`, and for a connected one `serverInfo` and `tools`).
      */

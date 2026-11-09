@@ -93,6 +93,12 @@ class RecordingAgentSession(
         effortRequests += effort to requestId
     }
 
+    val sandboxOffRequests = mutableListOf<String>()
+
+    override suspend fun turnSandboxOff(requestId: String) {
+        sandboxOffRequests += requestId
+    }
+
     val mcpStatusRequests = mutableListOf<String>()
     val mcpToggles = mutableListOf<Triple<String, Boolean, String>>()
     val mcpReconnects = mutableListOf<Pair<String, String>>()

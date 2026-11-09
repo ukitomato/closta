@@ -1,0 +1,12 @@
+{
+  "session": null,
+  "turns": [],
+  "usage": {
+    "sessionCostUsd": 0.0
+  },
+  "tasks": [],
+  "thinkingEstimate": null,
+  "notices": [],
+  "spontaneousResumeCount": 0,
+  "pendingApprovals": []
+}

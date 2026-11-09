@@ -147,6 +147,10 @@ class ClaudeSession(
         stdinChannel.send(StdinEncoder.applyEffort(requestId, effort))
     }
 
+    override suspend fun turnSandboxOff(requestId: String) {
+        stdinChannel.send(StdinEncoder.sandboxOff(requestId))
+    }
+
     // The same three-sided agreement. The ids are the caller's.
     override suspend fun requestMcpStatus(requestId: String) {
         stdinChannel.send(StdinEncoder.mcpStatus(requestId))

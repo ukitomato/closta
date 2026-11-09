@@ -160,7 +160,27 @@ object CaptureReplay {
                     "Remember the word bravo too. Reply with only: ok",
                     "List every word I asked you to remember, comma separated, nothing else.",
                 ),
+            // Checkpoint 4. 33 turned the sandbox on and off with apply_flag_settings around one Bash turn.
+            "33-sandbox-live" to listOf(SANDBOX_PROBE),
+            // 34, 35 and 40 took control requests only (initialize and get_settings), no user turn.
+            "34-sandbox-launch" to emptyList(),
+            "35-sandbox-project-setting" to emptyList(),
+            // The first CLI refused to start; the second, without the sandbox, took the one Bash turn.
+            "36-sandbox-unavailable" to listOf(SANDBOX_PROBE),
+            "37-plan-auto" to listOf(PLAN_README),
+            "38-plan-bypass" to listOf(PLAN_README),
+            // Two CLIs of one session; the second (`--resume --settings`, in the sandbox) took the Bash turn.
+            "39-sandbox-resume" to listOf("Respond with exactly one word: pong", SANDBOX_PROBE),
+            "40-sandbox-same-id" to emptyList(),
         )
+
+    private const val SANDBOX_PROBE =
+        "Run this exact bash command once and report its output: touch {OUTSIDE}/sandbox-probe.txt. " +
+            "If it fails, do not retry it in any other way; just report the error message."
+
+    private const val PLAN_README =
+        "Make a short plan to fix the spelling of the headings in README.md, then call ExitPlanMode with it. " +
+            "Once it is approved, make the fix with the Edit tool and report done."
 
     private const val ASK =
         "Use the AskUserQuestion tool to ask the question \"AとBどちらがいいですか？\" " +
@@ -188,6 +208,14 @@ object CaptureReplay {
             // Checkpoint 3: the plan's ExitPlanMode, then the Edit it planned; the recorder allowed both at once.
             "29-exit-plan-mode" to { id -> PresenterInput.Decided(ApprovalDecision.Allow(id), 0) },
             "30-deny-empty-message" to { id -> PresenterInput.Decided(ApprovalDecision.Deny(id), 0) },
+            // Checkpoint 4, all allowed at once: 36's Bash `touch` (the sandbox was not in force), 37's ExitPlanMode,
+            // 38's ExitPlanMode and the Edit after it. 39 asked for nothing (the sandbox ran its Bash), but would be
+            // allowed the same way. What else the recorder sent (the setMode in updatedPermissions) reaches the
+            // projection through stdout.
+            "36-sandbox-unavailable" to { id -> PresenterInput.Decided(ApprovalDecision.Allow(id), 0) },
+            "37-plan-auto" to { id -> PresenterInput.Decided(ApprovalDecision.Allow(id), 0) },
+            "38-plan-bypass" to { id -> PresenterInput.Decided(ApprovalDecision.Allow(id), 0) },
+            "39-sandbox-resume" to { id -> PresenterInput.Decided(ApprovalDecision.Allow(id), 0) },
         )
 
     /**

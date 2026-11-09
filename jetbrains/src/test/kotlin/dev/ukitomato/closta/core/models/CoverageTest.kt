@@ -123,12 +123,14 @@ class CoverageTest {
         const val NEVER_OBSERVED = 27
 
         /**
-         * Lines across the 32 captures (01-32).
+         * Lines across the 40 captures (01-40).
          */
-        const val RECORDED_LINES = 2268
+        const val RECORDED_LINES = 2832
 
-        /** Captures in which `command_lifecycle` appears; 06, 07 and 24 have no user turn. */
-        const val CAPTURES_WITH_LIFECYCLE = 28
+        /**
+         * Captures in which `command_lifecycle` appears; 06, 07, 24, 34, 35 and 40 have no user turn.
+         */
+        const val CAPTURES_WITH_LIFECYCLE = 33
 
         /**
          * `control_response` 21 + `control_request` 5 in captures 01-15; 16-21 add 7 responses (6 initialize,
@@ -138,9 +140,16 @@ class CoverageTest {
          * two initializes of its two CLIs); 27 adds 2 (the two initializes of its two CLIs); 28 adds 8 (the
          * initialize, the get_settings before the switches, and three apply_flag_settings each with the get_settings
          * after it); 29 adds 3 (the initialize, the ExitPlanMode and the Edit can_use_tool requests); 32 adds 2 (the
-         * initialize and the interrupt).
+         * initialize and the interrupt); 33 adds 8 (the initialize, then a get_settings first and after each of
+         * the three apply_flag_settings); 34 and 35 add 2 each (the initialize and the get_settings); 36 adds 4 (the
+         * second CLI's initialize, apply_flag_settings and get_settings, and the Bash can_use_tool request — the first
+         * CLI refused to start without answering initialize); 37 adds 3 (the initialize, the set_permission_mode and
+         * the ExitPlanMode can_use_tool request); 38 adds 5 (the initialize, the refused and the accepted
+         * set_permission_mode, the ExitPlanMode and the Edit can_use_tool requests); 39 adds 3 (the two initializes and
+         * the get_settings of the resumed CLI); 40 adds 4 (the initialize and the get_settings of each of its two
+         * CLIs).
          */
-        const val CONTROL_PROTOCOL_LINES = 73
+        const val CONTROL_PROTOCOL_LINES = 104
 
         /**
          * Observed, but with no declaration anywhere in the package's `.d.ts` files: the word appears
