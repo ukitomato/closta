@@ -60,3 +60,32 @@ impl ApprovalDecision {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn serialized_names_match_kotlin() {
+        let json = |k: ApprovalKind| serde_json::to_value(k).unwrap();
+        assert_eq!("APPROVAL", json(ApprovalKind::Approval));
+        assert_eq!("ASK", json(ApprovalKind::Ask));
+
+        let pending = PendingApproval {
+            request_id: "r".into(),
+            kind: ApprovalKind::Ask,
+            tool_use_id: None,
+            agent_id: None,
+        };
+        let value = serde_json::to_value(&pending).unwrap();
+        let mut keys: Vec<&str> = value
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect();
+        keys.sort_unstable();
+        assert_eq!(vec!["agentId", "kind", "requestId", "toolUseId"], keys);
+        assert!(value["toolUseId"].is_null() && value["agentId"].is_null());
+    }
+}

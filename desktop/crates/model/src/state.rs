@@ -121,3 +121,17 @@ pub enum NoticeKind {
     /// A control request the host sent was answered with an error.
     ControlError,
 }
+
+#[cfg(test)]
+mod serialized_names {
+    use super::*;
+
+    #[test]
+    fn open_and_running_serialize_in_screaming_case() {
+        assert_eq!("OPEN", serde_json::to_value(TurnPhase::Open).unwrap());
+        assert_eq!(
+            "RUNNING",
+            serde_json::to_value(TaskStatus::Running).unwrap()
+        );
+    }
+}
