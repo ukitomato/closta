@@ -1,0 +1,32 @@
+[graph]
+targets = ["x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu"]
+
+[licenses]
+allow = [
+    "Apache-2.0",
+    "MIT",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "MPL-2.0",
+    "0BSD",
+    "CC0-1.0",
+]
+
+[advisories]
+# Only unmaintained crates the workspace uses directly are errors. GPUI pulls in
+# several unmaintained transitive crates that cannot be removed while gpui-kit is pinned.
+unmaintained = "workspace"
+
+[bans]
+# GPUI has many dependencies, so duplicate versions show up.
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

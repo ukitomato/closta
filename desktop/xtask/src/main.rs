@@ -1,5 +1,6 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
+mod check;
 mod layers;
 
 use std::path::PathBuf;
@@ -17,6 +18,13 @@ fn main() -> ExitCode {
     let command = std::env::args().nth(1).unwrap_or_default();
     match command.as_str() {
         "layers" => match layers::run(&desktop_root()) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(err) => {
+                eprintln!("{err}");
+                ExitCode::FAILURE
+            }
+        },
+        "check" => match check::run_steps(&desktop_root(), &check::steps()) {
             Ok(()) => ExitCode::SUCCESS,
             Err(err) => {
                 eprintln!("{err}");
