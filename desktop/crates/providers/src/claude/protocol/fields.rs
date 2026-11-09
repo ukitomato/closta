@@ -26,6 +26,8 @@ impl<'a> Fields<'a> {
         self.text_or_null(name).ok_or_else(|| missing(name))
     }
 
+    /// A number is written the way serde_json writes it; see [`number_low_64`] for why this can
+    /// differ from Gson's `asString`, which keeps the literal as read.
     pub(crate) fn text_or_null(&self, name: &str) -> Option<String> {
         match self.primitive(name)? {
             Value::String(s) => Some(s.clone()),
@@ -164,6 +166,12 @@ fn gson_as_string(value: &Value) -> Option<String> {
     }
 }
 
+/// Number literal fidelity (Kotlin difference 4, widened): serde_json is used without
+/// `arbitrary_precision`, so a number's literal is not kept. Integers beyond u64 are rounded to
+/// f64 before wrapping, the Gson 10000-character limit on a literal does not apply, and `text`
+/// prints a number in serde_json's form (`1e5` as `100000.0`). Gson differs only for literals
+/// that serde_json rewrites; every value that is exact in f64 matches `BigDecimal`.
+///
 /// The low 64 bits of a number truncated toward zero, as `BigDecimal.longValue()` gives. Integers
 /// beyond i64 wrap; a float beyond 2^63 is its exact integer value, whose low bits come from the
 /// mantissa shifted into place.
@@ -259,7 +267,8 @@ mod tests {
         assert_eq!(f.count("i32").unwrap(), 1);
         assert_eq!(f.whole("i32").unwrap(), 4_294_967_297);
         assert_eq!(f.whole("e").unwrap(), 100_000);
-        let _ = f.whole("bigint").unwrap();
+        assert_eq!(f.whole("bigint").unwrap(), 7_766_279_631_452_241_920);
+        assert_eq!(f.count("bigint").unwrap(), 1_661_992_960);
     }
 
     #[test]
