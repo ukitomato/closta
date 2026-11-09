@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-09T15:26:35.468Z",
+  "generated_at": "2026-11-09T22:00:57.754Z",
   "recorder": "recorder/record.mjs",
   "scrubbed": true,
   "claude_version": "2.1.282",
@@ -12,7 +12,7 @@
     "--include-partial-messages",
     "--verbose"
   ],
-  "scenario_count": 38,
+  "scenario_count": 40,
   "scenarios": [
     {
       "scenario": "01-baseline-text",
@@ -1051,6 +1051,103 @@
       "sha256": "9c62cc022fd048978efdc5c1b97f817fbb83b78c847036cc66e2c637ad8ef686",
       "lines": 171,
       "cost_usd": 0.105647
+    },
+    {
+      "scenario": "39-sandbox-resume",
+      "file": "39-sandbox-resume.ndjson",
+      "claude_version": "2.1.282",
+      "recorded_at": "2026-11-09T22:00:57.752Z",
+      "flags": [
+        "-p",
+        "--output-format",
+        "stream-json",
+        "--input-format",
+        "stream-json",
+        "--include-partial-messages",
+        "--verbose",
+        "--session-id=<generated>",
+        "--permission-prompt-tool",
+        "stdio",
+        "--setting-sources",
+        "project",
+        "--strict-mcp-config",
+        "--model",
+        "claude-sonnet-4-6"
+      ],
+      "sha256": "47ed3f5d54b30dfbe56d92b62b01f3ec47007cf969585cc3374053bdf1b0a1b2",
+      "lines": 64,
+      "cost_usd": 0.271328,
+      "resume_flags": [
+        "-p",
+        "--output-format",
+        "stream-json",
+        "--input-format",
+        "stream-json",
+        "--include-partial-messages",
+        "--verbose",
+        "--resume=<same id>",
+        "--permission-prompt-tool",
+        "stdio",
+        "--setting-sources",
+        "project",
+        "--strict-mcp-config",
+        "--model",
+        "claude-sonnet-4-6",
+        "--settings",
+        "{\"sandbox\":{\"enabled\":true,\"failIfUnavailable\":true}}"
+      ],
+      "transcript_file": "39-sandbox-resume.transcript.jsonl",
+      "transcript_sha256": "a4ef237f883482104c77881b0cd9f76ae736c955caec4405026122b8d60de3a8",
+      "transcript_lines": 23
+    },
+    {
+      "scenario": "40-sandbox-same-id",
+      "file": "40-sandbox-same-id.ndjson",
+      "claude_version": "2.1.282",
+      "recorded_at": "2026-11-09T22:00:28.275Z",
+      "flags": [
+        "-p",
+        "--output-format",
+        "stream-json",
+        "--input-format",
+        "stream-json",
+        "--include-partial-messages",
+        "--verbose",
+        "--session-id=<generated>",
+        "--permission-prompt-tool",
+        "stdio",
+        "--setting-sources",
+        "project",
+        "--strict-mcp-config",
+        "--model",
+        "claude-sonnet-4-6"
+      ],
+      "sha256": "5d3ea775867f5964850ce9050b4a81e3f16d05fe3c56f161ef2b9814fdc6f8f3",
+      "lines": 5,
+      "cost_usd": 0,
+      "then_flags": [
+        "-p",
+        "--output-format",
+        "stream-json",
+        "--input-format",
+        "stream-json",
+        "--include-partial-messages",
+        "--verbose",
+        "--session-id=<same id>",
+        "--permission-prompt-tool",
+        "stdio",
+        "--setting-sources",
+        "project",
+        "--strict-mcp-config",
+        "--model",
+        "claude-sonnet-4-6",
+        "--settings",
+        "{\"sandbox\":{\"enabled\":true,\"failIfUnavailable\":true}}"
+      ],
+      "exit_codes": [
+        0,
+        0
+      ]
     }
   ]
 }

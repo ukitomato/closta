@@ -109,5 +109,10 @@ await check('resumeFlagsFor: with resume.at, adds fork, a new id and the cut poi
   assert.deepEqual(resumeFlagsFor({}, base), ['-p', '--resume=F', '--x']);
 });
 
+await check('resumeFlagsFor: resume.flags go last, only on the second CLI', () => {
+  const base = { baseFlags: ['-p'], firstId: 'F', newId: 'N', atUuid: 'A', scenarioFlags: ['--x'] };
+  assert.deepEqual(resumeFlagsFor({ flags: ['--settings', '{}'] }, base), ['-p', '--resume=F', '--x', '--settings', '{}']);
+});
+
 process.stdout.write(failures === 0 ? 'OK\n' : `${failures} failed\n`);
 process.exit(failures === 0 ? 0 : 1);

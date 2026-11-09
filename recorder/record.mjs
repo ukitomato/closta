@@ -37,9 +37,11 @@
 //   (type: recorder_boundary; a recorder mark, not a CLI line). The directory the CLI created for the recording is removed afterwards.
 //   If resume.fork is true, --fork-session is added to the second CLI's flags; after the second closes and before the directory is removed, the names and line counts
 //   of the .jsonl files in it go into the manifest's fork_transcripts (names replaced with <first id>, <second id>, <other>; no content is kept).
+//   resume.flags are added to the second CLI's flags only (and to the manifest's resume_flags).
 //
 // Second-CLI scenarios (scenario.then present): after the first CLI closes, a second CLI with then.flags and a new session id (not a resume) runs then.steps,
 //   in the same out after a recorder_boundary line (phase "then"). The manifest entry gets then_flags and exit_codes (a CLI that refuses to start exits on its own).
+//   If then.sameId is true, the second CLI gets the first CLI's --session-id (still not a resume).
 // Hidden-command scenarios (scenario.hideCommands present): the child's PATH is a directory of symlinks without those names (shimPathWithout), checked with command -v.
 
 import { spawn, execFileSync } from 'node:child_process';
@@ -431,10 +433,13 @@ async function recordOne(scenario, version) {
     await runPhase([...BASE_FLAGS, `--session-id=${sessionId}`, ...scenarioFlags], scenario.steps, scenario.done);
 
     if (scenario.then) {
-      // A second, unrelated CLI with its own flags and a new session id (not a resume). Same out, same scrubber state.
-      const thenId = randomUUID();
+      // A second CLI with its own flags and a new session id, or the first one's with then.sameId (not a resume). Same out, same scrubber state.
+      const thenId = scenario.then.sameId ? sessionId : randomUUID();
       sessionIds.add(thenId);
-      out.write(`${scrubLine(JSON.stringify({ type: 'recorder_boundary', phase: 'then', note: 'the lines after this one come from a second CLI started with other flags and a new session id (not a resume)' }), scrubState)}\n`);
+      const thenNote = scenario.then.sameId
+        ? 'the lines after this one come from a second CLI started with other flags and the same --session-id as the first (not a resume)'
+        : 'the lines after this one come from a second CLI started with other flags and a new session id (not a resume)';
+      out.write(`${scrubLine(JSON.stringify({ type: 'recorder_boundary', phase: 'then', note: thenNote }), scrubState)}\n`);
       await runPhase([...BASE_FLAGS, `--session-id=${thenId}`, ...scenario.then.flags], scenario.then.steps, scenario.then.done);
     }
 
@@ -543,7 +548,7 @@ async function recordOne(scenario, version) {
   };
   if (transcript !== null) {
     // Resume scenarios: the second CLI's flags (--resume on the same id) and the details of the transcript kept next to the capture.
-    entry.resume_flags = [...BASE_FLAGS, '--resume=<same id>', ...(scenario.resume.fork ? ['--fork-session'] : []), ...(scenario.resume.at ? ['--session-id=<generated>', '--resume-session-at=<uuid>'] : []), ...scenario.flags];
+    entry.resume_flags = [...BASE_FLAGS, '--resume=<same id>', ...(scenario.resume.fork ? ['--fork-session'] : []), ...(scenario.resume.at ? ['--session-id=<generated>', '--resume-session-at=<uuid>'] : []), ...scenario.flags, ...(scenario.resume.flags ?? [])];
     entry.transcript_file = `${scenario.id}.transcript.jsonl`;
     entry.transcript_sha256 = createHash('sha256').update(transcript).digest('hex');
     entry.transcript_lines = transcript.split('\n').filter(Boolean).length;
@@ -552,7 +557,7 @@ async function recordOne(scenario, version) {
   if (scenario.env) entry.env = scenario.env;
   if (scenario.hideCommands) entry.hidden_commands = scenario.hideCommands;
   if (scenario.then) {
-    entry.then_flags = [...BASE_FLAGS, '--session-id=<generated>', ...scenario.then.flags];
+    entry.then_flags = [...BASE_FLAGS, scenario.then.sameId ? '--session-id=<same id>' : '--session-id=<generated>', ...scenario.then.flags];
     entry.exit_codes = exitCodes;
   }
   if (stdinText !== null) {

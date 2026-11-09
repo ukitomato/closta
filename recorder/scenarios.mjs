@@ -40,6 +40,7 @@
 // then: {flags, steps, done}  after the first CLI closes, a second, unrelated CLI (a new session id, its own flags after the base flags; not a resume)
 //   runs steps in the same environment. Both stdouts go into one capture, split by a recorder_boundary line (phase "then").
 //   The manifest entry gets then_flags and exit_codes (one per CLI).
+//   If then.sameId is true, the second CLI gets the first CLI's --session-id instead of a new one (still not a resume).
 //
 // done: {results, controlResponses, quietMs, maxMs}
 //   When the results/controlResponses counts are met and quietMs of silence follows, stdin is closed and the run ends.
@@ -50,6 +51,7 @@
 // resume: {steps, done}  when present, after the CLI of steps and done is closed, the stored transcript of the cwd is kept as the transcript,
 //   and a second CLI is started with --resume on the same session id to run resume.steps (see the top of record.mjs).
 //   If resume.fork is true, --fork-session is added to the second CLI's flags (a transcript with a new session id is created).
+//   resume.flags: [flag]  added only to the second CLI's flags, after the scenario flags (kept in the manifest's resume_flags).
 
 import { deflateSync } from 'node:zlib';
 
@@ -814,6 +816,46 @@ export const scenarios = [
     },
     done: { results: 1, controlResponses: 3, quietMs: 3000, maxMs: 150000 },
   },
+  {
+    id: '39-sandbox-resume',
+    summary: 'a --session-id CLI runs one turn (pong) → close → a --resume CLI with the same id and --settings sandbox on (failIfUnavailable): get_settings → Bash touch outside the cwd',
+    flags: ISOLATED,
+    steps: [
+      { kind: 'initialize' },
+      { kind: 'wait', ms: 500 },
+      { kind: 'user', text: 'Respond with exactly one word: pong' },
+    ],
+    permission: { holdMs: 0, respond: ALLOW },
+    done: { results: 1, controlResponses: 1, quietMs: 3000, maxMs: 90000 },
+    // The first phase uses no tools, so the transcript has no tool lines (verify.mjs check 6).
+    transcriptTools: false,
+    resume: {
+      flags: ['--settings', '{"sandbox":{"enabled":true,"failIfUnavailable":true}}'],
+      steps: [
+        { kind: 'initialize' },
+        { kind: 'getSettings' },
+        {
+          kind: 'user',
+          text: 'Run this exact bash command once and report its output: touch {OUTSIDE}/sandbox-probe.txt. '
+            + 'If it fails, do not retry it in any other way; just report the error message.',
+        },
+      ],
+      done: { results: 1, controlResponses: 2, quietMs: 2500, maxMs: 90000 },
+    },
+  },
+  {
+    id: '40-sandbox-same-id',
+    summary: 'a --session-id CLI: get_settings, no user messages → close → a second CLI with the same --session-id (not a resume) and --settings sandbox on (failIfUnavailable): get_settings (no tokens used)',
+    flags: ISOLATED,
+    steps: [{ kind: 'initialize' }, { kind: 'getSettings' }],
+    done: { results: 0, controlResponses: 2, quietMs: 2500, maxMs: 30000 },
+    then: {
+      sameId: true,
+      flags: [...ISOLATED, '--settings', '{"sandbox":{"enabled":true,"failIfUnavailable":true}}'],
+      steps: [{ kind: 'initialize' }, { kind: 'getSettings' }],
+      done: { results: 0, controlResponses: 2, quietMs: 2500, maxMs: 30000 },
+    },
+  },
 ];
 
 // resume.at: from the raw first transcript, takes the parentUuid of the beforeUser-th user prompt line (string content). null if there is none.
@@ -834,7 +876,7 @@ export function resumeAtUuid(raw, beforeUser) {
 export function resumeFlagsFor(resume, { baseFlags, firstId, newId, atUuid, scenarioFlags }) {
   const forkPart = resume.fork ? ['--fork-session'] : [];
   const atPart = resume.at ? [`--session-id=${newId}`, `--resume-session-at=${atUuid}`] : [];
-  return [...baseFlags, `--resume=${firstId}`, ...forkPart, ...atPart, ...scenarioFlags];
+  return [...baseFlags, `--resume=${firstId}`, ...forkPart, ...atPart, ...scenarioFlags, ...(resume.flags ?? [])];
 }
 
 // Rules for rewind scenario definitions. Returns the reason as a string, or null. Called by record.mjs (refuses before recording) and verify.mjs (check 9).

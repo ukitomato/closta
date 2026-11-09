@@ -20,6 +20,7 @@
 //      user_message_id is the uuid of the userIndex-th user line of stdin, stdout has a control_response per request_id that is success with canRewind true,
 //      and after the real rewind's answer there is a Read tool_result that has the definition's rewindRead included word and not the excluded word (readShowsRewind)
 //   10. Scenario env (every scenario definition with env): names start with CLAUDE_CODE_ and values are true or null, and the manifest entry's env matches the definition
+//   12. Second-CLI flags: the manifest's resume_flags ends with resume.flags, and then_flags is the session id flag (<same id> with then.sameId) and then.flags
 //
 // Usage: node verify.mjs   (non-zero exit on failure)
 
@@ -335,6 +336,25 @@ async function main() {
     });
     if (problemsHere.length === 0) ok(`${d.id}: apply_flag_settings is success and the following get_settings has applied.effort at the level set (null is the model default)`);
     else bad(`${d.id}: live effort does not match (${problemsHere.join(', ')})`);
+  }
+
+  // 12. Second-CLI flags: resume.flags are at the end of the manifest's resume_flags, and then_flags are the definition's then.flags
+  // after --session-id=<same id> (then.sameId) or --session-id=<generated>.
+  for (const d of scenarios.filter((x) => x.resume?.flags || x.then)) {
+    const entry = entries.find((x) => x.scenario === d.id);
+    if (!entry) continue;
+    if (d.resume?.flags) {
+      const tail = (entry.resume_flags ?? []).slice(-d.resume.flags.length);
+      if (JSON.stringify(tail) === JSON.stringify(d.resume.flags)) ok(`${d.id}: resume_flags ends with the definition's resume.flags`);
+      else bad(`${d.id}: resume_flags does not end with the definition's resume.flags (${entry.resume_flags})`);
+    }
+    if (d.then) {
+      const thenFlags = entry.then_flags ?? [];
+      const idFlag = d.then.sameId ? '--session-id=<same id>' : '--session-id=<generated>';
+      const at = thenFlags.indexOf(idFlag);
+      if (at >= 0 && JSON.stringify(thenFlags.slice(at + 1)) === JSON.stringify(d.then.flags)) ok(`${d.id}: then_flags is ${idFlag} and the definition's then.flags`);
+      else bad(`${d.id}: then_flags differs from the definition (${thenFlags})`);
+    }
   }
 
   // 5. PII in replay.jsonl.
