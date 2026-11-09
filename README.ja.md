@@ -96,9 +96,43 @@ IDEが日本語で動いているときは画面も日本語になります。
 | プロバイダ | 設定 |
 | --- | --- |
 | Anthropic（既定） | `claude`コマンドのサインイン（`claude` → `/login`）を使う。モデルは任意で指定 |
-| Amazon Bedrock | リージョン・MFAデバイスのARN・長期アクセスキー |
+| Amazon Bedrock | IAMユーザーの長期アクセスキーとMFAデバイス。下の「Amazon Bedrock」を参照 |
 
-Bedrockでは、セッション開始時にMFAコードを聞き、AWS STSから一時認証情報を取ります。`aws`コマンドも`~/.aws`も要りません。
+### Amazon Bedrock
+
+ClostaはMFAデバイスを持つIAMユーザーとしてBedrockにサインインします。`aws`コマンドも`~/.aws`も要りません。
+
+AWS側で用意するもの:
+
+- MFAデバイス（仮想かハードウェア）と長期アクセスキー（`AKIA…`）を持つIAMユーザー
+- そのユーザーにClaudeのモデルの呼び出しを許すIAMポリシーと、リージョンで有効にしたモデル。[Claude Code on Amazon Bedrock](https://docs.claude.com/ja/docs/claude-code/amazon-bedrock)を参照
+
+設定の手順:
+
+1. 「Settings | Tools | Closta」を開き、「+」から「Amazon Bedrock」を選ぶ
+2. 次の項目を入れて「Apply」をクリックする
+
+   | 項目 | 値 |
+   | --- | --- |
+   | 名前 | 任意。プロバイダの切り替えとサインインの画面に出る |
+   | AWS リージョン | `us-east-1`など。STSとBedrockの両方に使う |
+   | MFA デバイス | 仮想デバイスのARN（`arn:aws:iam::123456789012:mfa/name`）か、ハードウェアのシリアル番号 |
+   | セッションの長さ (秒) | 900〜129600（15分〜36時間）。既定は43200（12時間） |
+   | アクセスキー ID / シークレットアクセスキー | IAMユーザーの長期キー。IDEのパスワードストレージに置き、二度と表示しない |
+   | モデル (省略可) | `claude`が最初に使うモデル |
+   | Sonnet のモデル ID / Haiku のモデル ID | `claude`の既定の代わりに使う推論プロファイルのIDかARN |
+
+3. 「新しいセッションのプロバイダー」で追加したプロバイダを選ぶ。Clostaウィンドウの「+」の隣の切り替えでも選べる
+
+会話を始めるとMFAコードを聞かれ、STSの`GetSessionToken`で一時認証情報を取ります。取った認証情報は、期限の15分前まで次の会話でも使います。会話の途中で期限が切れたら、セッションを再起動して新しいコードを入れます。
+
+| IDEの環境変数を`claude`に | 変数 |
+| --- | --- |
+| 渡さない | `AWS_PROFILE`・`AWS_BEARER_TOKEN_BEDROCK`・`CLAUDE_CODE_SKIP_BEDROCK_AUTH`・ほかのプロバイダの切り替え・Anthropicの認証情報 |
+| 渡す | `ANTHROPIC_BEDROCK_BASE_URL`・プロキシ・モデルの変数 |
+
+パスワードをメモリーにだけ置く設定のIDEでは、終了したときに長期キーが消えます。「Settings | Appearance & Behavior | System Settings | Passwords」でKeePassかシステムのキーチェーンを選んでください。
+
 WSLで`#com.intellij.execution`のデバッグログを有効にすると、`idea.log`にCLIへ渡すAWSの一時認証情報が出ることがあります。そのログは共有しないでください。
 
 ## ライセンス

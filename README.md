@@ -122,14 +122,53 @@ All commands are under **Tools | Closta**.
 **Settings | Tools | Closta**
 
 - **Anthropic** (default): uses the `claude` command's own sign-in (`claude` → `/login`). Optionally set a model.
-- **Amazon Bedrock**: set the region, the MFA device ARN and the long-term access keys. When a session starts, Closta
-  asks for an MFA code and gets temporary credentials from AWS STS; nothing needs the `aws` command or `~/.aws`.
-  Model IDs for Sonnet and Haiku can be overridden.
-  Under WSL, with debug logging on for `#com.intellij.execution`, `idea.log` can contain the temporary AWS credentials
-  passed to the CLI. Do not share such a log.
+- **Amazon Bedrock**: an IAM user's long-term access keys and MFA device. See [Amazon Bedrock](#amazon-bedrock) below.
 
 **Settings | Tools | Closta | Behaviour** sets whether unsaved files are saved before a message is sent, whether `@`
 file completion leaves out ignored files, and the permission mode new conversations start in.
+
+### Amazon Bedrock
+
+Closta signs in to Bedrock as an IAM user with an MFA device. Nothing needs the `aws` command or `~/.aws`.
+
+What you need from AWS:
+
+- An IAM user with an MFA device (virtual or hardware) and a long-term access key (`AKIA…`).
+- An IAM policy that lets that user invoke the Claude models, and the models enabled in your region. See
+  [Claude Code on Amazon Bedrock](https://docs.claude.com/en/docs/claude-code/amazon-bedrock).
+
+To set it up:
+
+1. Open **Settings | Tools | Closta**, click **+** and choose **Amazon Bedrock**.
+2. Fill in the fields and click **Apply**.
+
+   | Field | Value |
+   | --- | --- |
+   | Name | Any name, shown in the provider switch and the sign-in prompt |
+   | AWS region | Such as `us-east-1`. Used for both STS and Bedrock |
+   | MFA device | The ARN of a virtual device (`arn:aws:iam::123456789012:mfa/name`) or the serial number of a hardware one |
+   | Session duration (seconds) | 900 to 129600 (15 min to 36 h). Default 43200 (12 h) |
+   | Access key ID / Secret access key | The IAM user's long-term key. Kept in the IDE's password storage and never shown again |
+   | Model (optional) | The model `claude` starts with |
+   | Sonnet model ID / Haiku model ID | Inference profile IDs or ARNs to use in place of `claude`'s defaults |
+
+3. Set **Provider for new sessions** to the new provider, or choose it with the provider switch next to the `+` of a
+   Closta window.
+
+When a conversation starts, Closta asks for a code from your MFA device and calls STS `GetSessionToken`. The temporary
+credentials are kept in the password storage and reused by later conversations until 15 minutes before they expire.
+When they expire in the middle of a conversation, use **Restart Session** and enter a new code.
+
+`claude` gets the region and the temporary credentials as environment variables. From the IDE's own environment,
+Closta does not pass on `AWS_PROFILE`, `AWS_BEARER_TOKEN_BEDROCK`, `CLAUDE_CODE_SKIP_BEDROCK_AUTH`, the other
+providers' switches or the Anthropic credentials. `ANTHROPIC_BEDROCK_BASE_URL`, proxy settings and model variables are
+passed on.
+
+If the IDE keeps passwords in memory only, the long-term keys are lost when the IDE exits. Choose KeePass or the
+system keychain in **Settings | Appearance & Behavior | System Settings | Passwords**.
+
+Under WSL, with debug logging on for `#com.intellij.execution`, `idea.log` can contain the temporary AWS credentials
+passed to the CLI. Do not share such a log.
 
 ## Contributing
 
