@@ -56,6 +56,7 @@ pub(crate) fn parse_line(line: &str) -> Result<Map<String, Value>, LineError> {
 /// Kotlin difference (3): Gson escapes U+2028 and U+2029; serde_json writes them raw.
 /// Kotlin difference (4): Gson keeps a number's literal as read; serde_json rewrites exponents
 /// (`1e5` becomes `100000.0`), trailing zeros (`1.50` becomes `1.5`) and integers beyond i64.
+/// A number outside f64's range (`1e400`) makes the line a `BrokenLine`; Gson accepts it.
 pub(crate) fn raw_text(value: &Value) -> String {
     value.to_string()
 }
@@ -102,6 +103,12 @@ mod tests {
             "}".repeat(depth - 2)
         );
         format!(r#"{{"type":"holographic_telemetry","n":{inner}}}"#)
+    }
+
+    #[test]
+    fn number_outside_f64_range_is_a_broken_line() {
+        // Kotlin difference (4): Gson keeps `1e400` as a lazily parsed number, serde_json rejects it.
+        assert!(parse_line(r#"{"type":"x","n":1e400}"#).is_err());
     }
 
     #[test]

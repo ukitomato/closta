@@ -171,7 +171,9 @@ fn gson_as_string(value: &Value) -> Option<String> {
 /// `arbitrary_precision`, so a number's literal is not kept. Integers beyond u64 are rounded to
 /// f64 before wrapping, the Gson 10000-character limit on a literal does not apply, and `text`
 /// prints a number in serde_json's form (`1e5` as `100000.0`). Gson differs only for literals
-/// that serde_json rewrites; every value that is exact in f64 matches `BigDecimal`.
+/// that serde_json rewrites; every value that is exact in f64 matches `BigDecimal`. A number
+/// outside f64's range (`1e400`) is rejected by serde_json, so the whole line becomes a
+/// `BrokenLine`, where Gson accepts it and Kotlin places the line.
 ///
 /// The low 64 bits of a number truncated toward zero, as `BigDecimal.longValue()` gives. Integers
 /// beyond i64 wrap; a float beyond 2^63 is its exact integer value, whose low bits come from the
