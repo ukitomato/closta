@@ -2,6 +2,7 @@
 
 mod check;
 mod layers;
+mod win;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -31,6 +32,21 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
+        "win-build" => {
+            let flags: Vec<String> = std::env::args().skip(2).collect();
+            if let Some(flag) = flags.iter().find(|f| *f != "--release" && *f != "--run") {
+                eprintln!("unknown win-build flag: {flag:?}");
+                return ExitCode::FAILURE;
+            }
+            let has = |name: &str| flags.iter().any(|f| f == name);
+            match win::win_build(&desktop_root(), has("--release"), has("--run")) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(err) => {
+                    eprintln!("{err}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
         _ => {
             eprintln!("unknown command: {command:?}");
             ExitCode::FAILURE
