@@ -473,7 +473,9 @@
           }
         ],
         "startPermissionMode": "default",
-        "compacting": false
+        "compacting": false,
+        "effort": "high",
+        "appliedModel": "claude-sonnet-4-6"
       }
     }
   }

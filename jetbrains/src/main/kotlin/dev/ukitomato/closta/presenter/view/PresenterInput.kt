@@ -154,10 +154,29 @@ sealed interface PresenterInput {
     /**
      * The session was started with the effort [effort], or with none, and with the in-process MCP servers named
      * [builtInMcpServers]: the names it declared to the CLI, which the list of servers shows as the host's own.
+     * [sandbox] is whether it was asked to start in the sandbox (`--settings`); the CLI's settings say whether it is.
      */
     data class Launched(
         val effort: String?,
         val builtInMcpServers: List<String> = emptyList(),
+        val sandbox: Boolean = false,
+    ) : PresenterInput
+
+    /**
+     * The host did not restart the session into the sandbox because a turn is running; [requestId] is the mark it
+     * made for the switch.
+     */
+    data class SandboxRefused(
+        val requestId: String,
+    ) : PresenterInput
+
+    /**
+     * The CLI asked to start in the sandbox did not start (it wrote a `result` and exited before `initialize`).
+     * [requestId] is the switch's mark, or a new one when the launch was not a switch; [detail] is the CLI's sentence.
+     */
+    data class SandboxNotStarted(
+        val requestId: String,
+        val detail: String?,
     ) : PresenterInput
 
     /**

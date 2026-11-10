@@ -3,6 +3,7 @@
 package dev.ukitomato.closta.presenter.view
 
 import dev.ukitomato.closta.core.models.AgentEvent
+import dev.ukitomato.closta.presenter.tree.JsonBool
 import dev.ukitomato.closta.presenter.tree.JsonNumber
 import dev.ukitomato.closta.presenter.tree.JsonObject
 import dev.ukitomato.closta.presenter.tree.JsonRead
@@ -29,6 +30,12 @@ enum class ControlKind {
 
     /** The effort changed live (`apply_flag_settings`); the value is the level. */
     EFFORT,
+
+    /**
+     * The sandbox turned on (a restart with `--settings`) or off (`apply_flag_settings`); the value is `"true"` or
+     * `"false"`. The CLI's settings say whether it took: the record waits for their answer.
+     */
+    SANDBOX,
 }
 
 /**
@@ -47,6 +54,7 @@ enum class SwitchKind(
     MCP_ENABLE("mcp-enable"),
     MCP_DISABLE("mcp-disable"),
     MCP_RECONNECT("mcp-reconnect"),
+    SANDBOX("sandbox"),
 }
 
 /** Whether a switch of this kind is about an MCP server: its sentence is made by `mcpSentence`. */
@@ -153,6 +161,21 @@ data class OperationRecords(
     val builtInMcpServers: List<String> = emptyList(),
     /** The last rewind of the files the webview asked for; null before the first. */
     val rewind: RewindRecord? = null,
+    /**
+     * Whether the sandbox is on, as the last settings answer says (`effective.sandbox.enabled`; no key is off). Null
+     * until a CLI answers: each launch waits for its own CLI's answer, and [launchSandbox] is shown meanwhile.
+     */
+    val sandbox: Boolean? = null,
+    /** Whether the session was launched asking for the sandbox. */
+    val launchSandbox: Boolean = false,
+    /** The id of the sandbox switch that the next settings answer confirms or fails. */
+    val sandboxConfirming: String? = null,
+    /** The session was launched into the sandbox and no settings answer has said whether it is on. */
+    val launchUnconfirmed: Boolean = false,
+    /** A switch to `bypassPermissions` was applied once in this session; it stays set. */
+    val bypassEntered: Boolean = false,
+    /** A switch to `auto` was refused or could not be sent once in this session; it stays set. */
+    val autoRejected: Boolean = false,
 )
 
 /** The most switches kept (the newest); an answer for one pushed out is an answer for an id nobody knows. */
@@ -167,6 +190,21 @@ const val MAX_COMPACTIONS = 20
 /** The sentence of an effort switch the host refused because a turn was running. */
 const val EFFORT_REFUSED_TURN = "A turn is running"
 
+/** The sentence of a switch into the sandbox the host refused because a turn was running (it is a restart). */
+const val SANDBOX_REFUSED_TURN = "A turn is running"
+
+/** The sentences of a sandbox switch the CLI's settings did not confirm. */
+const val SANDBOX_NOT_APPLIED = "The settings do not say the sandbox is on"
+const val SANDBOX_NOT_OFF = "The settings still say the sandbox is on"
+const val SANDBOX_NOT_CONFIRMED = "The settings could not be read"
+
+/** The sentence of a launch into the sandbox that did not start, when the CLI gave none. */
+const val SANDBOX_NOT_STARTED = "The CLI did not start with the sandbox"
+
+private const val BYPASS_MODE = "bypassPermissions"
+private const val AUTO_MODE = "auto"
+private const val SANDBOX_ON = "true"
+
 internal fun OperationRecords.control(input: PresenterInput.ControlRequested): OperationRecords {
     if (knows(input.requestId)) return this
     return when (input.kind) {
@@ -180,6 +218,8 @@ internal fun OperationRecords.control(input: PresenterInput.ControlRequested): O
         ControlKind.SETTINGS -> copy(settingsWaiting = (settingsWaiting + input.requestId).takeLast(MAX_WAITING))
         ControlKind.EFFORT ->
             withSwitch(SwitchRecord(input.requestId, seq + 1, SwitchKind.EFFORT, input.value.orEmpty()))
+        ControlKind.SANDBOX ->
+            withSwitch(SwitchRecord(input.requestId, seq + 1, SwitchKind.SANDBOX, input.value.orEmpty()))
     }
 }
 
@@ -200,6 +240,71 @@ internal fun OperationRecords.refuseEffort(input: PresenterInput.EffortRefused):
         )
     }
 
+/**
+ * A CLI was launched: its effort, its own MCP servers, and whether it was asked into the sandbox. What the last CLI's
+ * settings said of the sandbox no longer holds; a pending switch into the sandbox is confirmed by this CLI's answer.
+ */
+internal fun OperationRecords.launched(input: PresenterInput.Launched): OperationRecords {
+    val switching =
+        if (input.sandbox) {
+            switches
+                .lastOrNull {
+                    it.kind == SwitchKind.SANDBOX && it.value == SANDBOX_ON && it.outcome == SwitchOutcome.PENDING
+                }?.id
+        } else {
+            null
+        }
+    return copy(
+        effort = input.effort?.takeIf { it.isNotEmpty() },
+        builtInMcpServers = input.builtInMcpServers,
+        sandbox = null,
+        launchSandbox = input.sandbox,
+        launchUnconfirmed = input.sandbox,
+        sandboxConfirming = switching ?: sandboxConfirming,
+    )
+}
+
+/** The host refused a switch into the sandbox: it is a record that is over at once. */
+internal fun OperationRecords.refuseSandbox(input: PresenterInput.SandboxRefused): OperationRecords =
+    if (switches.any { it.id == input.requestId }) {
+        this
+    } else {
+        withSwitch(
+            SwitchRecord(
+                input.requestId,
+                seq + 1,
+                SwitchKind.SANDBOX,
+                SANDBOX_ON,
+                SwitchOutcome.REJECTED,
+                SANDBOX_REFUSED_TURN,
+            ),
+        )
+    }
+
+/** The CLI asked into the sandbox did not start: the switch fails, or a launch that was no switch is a failed one. */
+internal fun OperationRecords.sandboxNotStarted(input: PresenterInput.SandboxNotStarted): OperationRecords {
+    val detail = input.detail?.takeIf { it.isNotBlank() }?.let(::plainSentenceOf) ?: SANDBOX_NOT_STARTED
+    val record = switches.firstOrNull { it.id == input.requestId }
+    val failed =
+        when {
+            record == null ->
+                withSwitch(
+                    SwitchRecord(
+                        input.requestId,
+                        seq + 1,
+                        SwitchKind.SANDBOX,
+                        SANDBOX_ON,
+                        SwitchOutcome.FAILED,
+                        detail,
+                    ),
+                )
+            record.kind == SwitchKind.SANDBOX ->
+                settle(record.id) { it.copy(outcome = SwitchOutcome.FAILED, detail = detail) }
+            else -> this
+        }
+    return failed.copy(sandboxConfirming = null, launchUnconfirmed = false)
+}
+
 internal fun OperationRecords.withSwitch(record: SwitchRecord): OperationRecords =
     copy(seq = record.seq, switches = (switches + record).takeLast(MAX_SWITCHES))
 
@@ -210,7 +315,7 @@ internal fun OperationRecords.sendFailed(requestId: String): OperationRecords =
         requestId in settingsWaiting -> copy(settingsWaiting = settingsWaiting - requestId)
         // The list could not be asked for: what is shown is the one before, and it says so.
         requestId in mcpWaiting -> copy(mcpWaiting = mcpWaiting - requestId, mcpUnreadable = true)
-        else -> settle(requestId) { it.copy(outcome = SwitchOutcome.FAILED) }
+        else -> ended(requestId) { it.copy(outcome = SwitchOutcome.FAILED) }
     }
 
 /** Whether [requestId] is already recorded: a switch, or a request still waited for. */
@@ -236,24 +341,45 @@ internal fun OperationRecords.answered(event: AgentEvent.ControlResponse): Opera
         }
         id in mcpWaiting -> mcpAnswered(id, event)
         id in settingsWaiting -> settingsAnswered(id, event)
-        succeeded -> {
-            val record = switches.firstOrNull { it.id == id }
-            val settled =
-                settle(id) { it.copy(outcome = SwitchOutcome.APPLIED) }.let {
-                    // An effort applied is in effect from the next request: shown at once, and the settings asked
-                    // after it (SessionRuntime) say what the CLI really took.
-                    val effortApplied = record?.kind == SwitchKind.EFFORT && record.outcome == SwitchOutcome.PENDING
-                    if (effortApplied && record.value.isNotEmpty()) it.copy(effort = record.value) else it
-                }
-            // A switch that ended now (not one already over) is written into the last list.
-            if (record != null && record.outcome == SwitchOutcome.PENDING) settled.mcpSwitchApplied(record) else settled
-        }
+        succeeded -> switchApplied(id)
         else ->
-            settle(id) {
+            ended(id) {
                 it.copy(outcome = SwitchOutcome.REJECTED, detail = sentenceOf(event.error, it.kind))
             }
     }
 }
+
+/** The CLI took the switch [id]. A switch already over, or one nobody asked for, changes nothing. */
+private fun OperationRecords.switchApplied(id: String): OperationRecords {
+    val record = switches.firstOrNull { it.id == id && it.outcome == SwitchOutcome.PENDING } ?: return this
+    // Taken is not in force: the settings asked after it (SessionRuntime) say whether the sandbox is off.
+    return if (record.kind == SwitchKind.SANDBOX) copy(sandboxConfirming = id) else switchSettled(record)
+}
+
+/** A pending switch other than the sandbox's is applied as soon as the CLI takes it. */
+private fun OperationRecords.switchSettled(record: SwitchRecord): OperationRecords {
+    val id = record.id
+    val settled = settle(id) { it.copy(outcome = SwitchOutcome.APPLIED) }
+    // An effort applied is in effect from the next request: shown at once, and the settings asked after it
+    // (SessionRuntime) say what the CLI really took.
+    val effortApplied = record.kind == SwitchKind.EFFORT && record.value.isNotEmpty()
+    val effort = if (effortApplied) settled.copy(effort = record.value) else settled
+    val entered = if (record.isMode(BYPASS_MODE)) effort.copy(bypassEntered = true) else effort
+    // A switch that ended now (not one already over) is written into the last list.
+    return entered.mcpSwitchApplied(record)
+}
+
+/** The switch [id] ended without being applied; a switch to `auto` that did is remembered. */
+private fun OperationRecords.ended(
+    id: String,
+    change: (SwitchRecord) -> SwitchRecord,
+): OperationRecords {
+    val record = switches.firstOrNull { it.id == id && it.outcome == SwitchOutcome.PENDING } ?: return this
+    val settled = settle(id, change)
+    return if (record.isMode(AUTO_MODE)) settled.copy(autoRejected = true) else settled
+}
+
+private fun SwitchRecord.isMode(mode: String): Boolean = kind == SwitchKind.MODE && value == mode
 
 // A refusal of an MCP switch says what `mcpSentence` makes of the CLI's error (a first line of at most 200 characters,
 // its URLs without userinfo and query); the model's and the mode's stay as they were (500 characters).
@@ -268,30 +394,76 @@ private fun sentenceOf(
     }
 
 /**
- * The answer to a settings request: `response.response.applied`'s `effort` and `model` (capture 28). A refusal,
- * or an answer without them, leaves what was shown.
+ * The answer to a settings request: `response.response.applied`'s `effort` and `model` (capture 28), and
+ * `effective.sandbox.enabled` (captures 33 to 40; no `sandbox` key is off). A refusal, or an answer without them,
+ * leaves what was shown. The answer also confirms or fails the sandbox switch or launch waiting for it.
  */
 private fun OperationRecords.settingsAnswered(
     id: String,
     event: AgentEvent.ControlResponse,
 ): OperationRecords {
-    val applied =
+    val body =
         if (event.subtype == "success") {
-            (JsonRead.parse(event.response.text) as? JsonObject)?.obj("response")?.obj("applied")
+            (JsonRead.parse(event.response.text) as? JsonObject)?.obj("response")
         } else {
             null
         }
+    val applied = body?.obj("applied")
+    val read = body?.obj("effective")?.let { (it.obj("sandbox")?.get("enabled") as? JsonBool)?.value == true }
     return copy(
         settingsWaiting = settingsWaiting - id,
         effort = applied?.string("effort")?.takeIf { it.isNotEmpty() } ?: effort,
         appliedModel = applied?.string("model")?.takeIf { it.isNotEmpty() } ?: appliedModel,
-    )
+        sandbox = read ?: sandbox,
+    ).sandboxConfirmed(id, read)
+}
+
+/**
+ * What the settings answer [settingsId] says of the sandbox switch waiting for it ([read] is null when the answer
+ * could not be read): applied when it says the value asked for, failed otherwise. With no switch waiting, a launch into
+ * the sandbox that the answer does not show on is a failed record under the settings request's id.
+ */
+private fun OperationRecords.sandboxConfirmed(
+    settingsId: String,
+    read: Boolean?,
+): OperationRecords {
+    if (sandboxConfirming == null && !launchUnconfirmed) return this
+    val record = switches.firstOrNull { it.id == sandboxConfirming && it.outcome == SwitchOutcome.PENDING }
+    val checked =
+        when {
+            record != null -> {
+                val wanted = record.value == SANDBOX_ON
+                val detail =
+                    when {
+                        read == null -> SANDBOX_NOT_CONFIRMED
+                        read == wanted -> null
+                        wanted -> SANDBOX_NOT_APPLIED
+                        else -> SANDBOX_NOT_OFF
+                    }
+                val outcome = if (detail == null) SwitchOutcome.APPLIED else SwitchOutcome.FAILED
+                settle(record.id) { it.copy(outcome = outcome, detail = detail) }
+            }
+            launchUnconfirmed && read != true ->
+                withSwitch(
+                    SwitchRecord(
+                        settingsId,
+                        seq + 1,
+                        SwitchKind.SANDBOX,
+                        SANDBOX_ON,
+                        SwitchOutcome.FAILED,
+                        SANDBOX_NOT_APPLIED,
+                    ),
+                )
+            else -> this
+        }
+    return checked.copy(sandboxConfirming = null, launchUnconfirmed = false)
 }
 
 /**
  * Whether [event] is an answer after which the host asks the CLI for its settings: the answer to `initialize`
- * (it lists the models), or the success of a model or effort switch still pending here (a new model has its own
- * default effort; an effort is read back as the CLI took it). Read on the records **before** the event is folded.
+ * (it lists the models), or the success of a model, effort or sandbox switch still pending here (a new model has its
+ * own default effort; an effort is read back as the CLI took it; the sandbox is in force only if the settings say so).
+ * Read on the records **before** the event is folded.
  */
 fun OperationRecords.asksForSettings(event: AgentEvent): Boolean {
     if (event !is AgentEvent.ControlResponse || event.subtype != "success") return false
@@ -300,7 +472,7 @@ fun OperationRecords.asksForSettings(event: AgentEvent): Boolean {
         switches.any {
             it.id == id &&
                 it.outcome == SwitchOutcome.PENDING &&
-                (it.kind == SwitchKind.MODEL || it.kind == SwitchKind.EFFORT)
+                (it.kind == SwitchKind.MODEL || it.kind == SwitchKind.EFFORT || it.kind == SwitchKind.SANDBOX)
         }
     return switched || modelsOfResponse(JsonRead.parse(event.response.text)) != null
 }

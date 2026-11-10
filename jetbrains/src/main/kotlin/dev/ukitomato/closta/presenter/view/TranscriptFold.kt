@@ -39,6 +39,8 @@ fun foldTranscript(
         is PresenterInput.ControlSendFailed,
         is PresenterInput.EffortRefused,
         is PresenterInput.Launched,
+        is PresenterInput.SandboxRefused,
+        is PresenterInput.SandboxNotStarted,
         is PresenterInput.RewindRequested,
         is PresenterInput.RewindNotSent,
         is PresenterInput.ResumeRefused,

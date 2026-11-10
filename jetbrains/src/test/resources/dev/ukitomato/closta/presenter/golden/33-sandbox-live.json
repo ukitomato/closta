@@ -432,7 +432,17 @@
           }
         ],
         "startPermissionMode": "default",
-        "compacting": false
+        "switches": [
+          {
+            "seq": 1,
+            "kind": "sandbox",
+            "value": "false",
+            "outcome": "applied"
+          }
+        ],
+        "compacting": false,
+        "effort": "high",
+        "appliedModel": "claude-sonnet-4-6"
       }
     }
   }

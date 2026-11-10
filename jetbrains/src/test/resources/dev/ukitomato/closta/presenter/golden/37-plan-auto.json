@@ -538,6 +538,14 @@
           }
         ],
         "startPermissionMode": "auto",
+        "switches": [
+          {
+            "seq": 1,
+            "kind": "mode",
+            "value": "plan",
+            "outcome": "applied"
+          }
+        ],
         "compacting": false
       }
     }

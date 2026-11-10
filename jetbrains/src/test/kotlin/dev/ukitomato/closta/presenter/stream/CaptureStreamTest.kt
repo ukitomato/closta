@@ -379,14 +379,14 @@ class CaptureStreamTest {
                 "30-deny-empty-message" to 27,
                 "31-send-mid-turn" to 36,
                 "32-interrupt-foreground" to 63,
-                "33-sandbox-live" to 60,
+                "33-sandbox-live" to 63,
                 "34-sandbox-launch" to 2,
                 "35-sandbox-project-setting" to 2,
-                "36-sandbox-unavailable" to 40,
-                "37-plan-auto" to 132,
-                "38-plan-bypass" to 127,
-                "39-sandbox-resume" to 38,
-                "40-sandbox-same-id" to 2,
+                "36-sandbox-unavailable" to 41,
+                "37-plan-auto" to 134,
+                "38-plan-bypass" to 130,
+                "39-sandbox-resume" to 39,
+                "40-sandbox-same-id" to 3,
             )
     }
 }

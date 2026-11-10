@@ -261,7 +261,36 @@ object CaptureReplay {
                         effortLive(ControlKind.SETTINGS, 4 + index * 2)
                     }
                 },
+            // Checkpoint 4. The settings asked after each sandbox change, and 33's turning it off (req-5). The
+            // apply_flag_settings that turned it on (33's req-3 and req-7, 36's req-3) are not recorded: the host
+            // turns it on by restarting with --settings, never with that request.
+            "33-sandbox-live" to
+                buildMap {
+                    listOf(2, 4, 6, 8).forEach { checkpoint4("33-sandbox-live", ControlKind.SETTINGS, it) }
+                    checkpoint4("33-sandbox-live", ControlKind.SANDBOX, 5, "false")
+                },
+            "36-sandbox-unavailable" to buildMap { checkpoint4("36-sandbox-unavailable", ControlKind.SETTINGS, 4) },
+            "39-sandbox-resume" to buildMap { checkpoint4("39-sandbox-resume", ControlKind.SETTINGS, 3) },
+            "40-sandbox-same-id" to
+                buildMap { listOf(2, 4).forEach { checkpoint4("40-sandbox-same-id", ControlKind.SETTINGS, it) } },
+            // The plan mode before the plan; 38 first asked for bypassPermissions, which was refused.
+            "37-plan-auto" to buildMap { checkpoint4("37-plan-auto", ControlKind.MODE, 2, "plan") },
+            "38-plan-bypass" to
+                buildMap {
+                    checkpoint4("38-plan-bypass", ControlKind.MODE, 2, "bypassPermissions")
+                    checkpoint4("38-plan-bypass", ControlKind.MODE, 3, "plan")
+                },
         )
+
+    private fun MutableMap<String, PresenterInput.ControlRequested>.checkpoint4(
+        scenario: String,
+        kind: ControlKind,
+        number: Int,
+        value: String? = null,
+    ) {
+        val id = "$scenario-req-$number"
+        put(id, PresenterInput.ControlRequested(id, kind, value))
+    }
 
     private fun MutableMap<String, PresenterInput.ControlRequested>.effortLive(
         kind: ControlKind,

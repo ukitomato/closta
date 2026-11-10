@@ -554,6 +554,21 @@
           }
         ],
         "startPermissionMode": "default",
+        "switches": [
+          {
+            "seq": 2,
+            "kind": "mode",
+            "value": "plan",
+            "outcome": "applied"
+          },
+          {
+            "seq": 1,
+            "kind": "mode",
+            "value": "bypassPermissions",
+            "outcome": "rejected",
+            "detail": "Cannot set permission mode to bypassPermissions because it is disabled by settings or configuration"
+          }
+        ],
         "compacting": false
       }
     }

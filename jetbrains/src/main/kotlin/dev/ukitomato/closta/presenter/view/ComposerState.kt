@@ -28,7 +28,22 @@ data class ComposerState(
     /** Stop was pressed and the CLI has not answered with a `result` yet. */
     val stopping: Boolean,
     val commands: List<SlashCommandRecord>,
+    val sandbox: SandboxView,
+    /** The newest sandbox switch, when it was refused or failed. */
+    val sandboxFailure: SwitchRecord?,
 )
+
+/** The sandbox button: whether the sandbox is on, and why it cannot be pressed now, if it cannot. */
+data class SandboxView(
+    val on: Boolean,
+    val blocked: SandboxBlock?,
+)
+
+/**
+ * Why the sandbox button cannot be pressed: a switch waits for the CLI, or the thread is running and turning the
+ * sandbox on is a restart (turning it off is not, so it is never blocked for that).
+ */
+enum class SandboxBlock { SWITCHING, RUNNING }
 
 /** One row of the model list. [label] is what the button says; [resolved] the model's full id, when the CLI gave it. */
 data class ModelChoice(
@@ -46,7 +61,7 @@ val EFFORT_LEVELS: List<String> = listOf("low", "medium", "high", "xhigh", "max"
 
 private const val DEFAULT_MODEL = "default"
 private const val DEFAULT_WORD = "Default"
-private val SWITCHES_SHOWN = setOf(SwitchKind.MODEL, SwitchKind.MODE, SwitchKind.EFFORT)
+private val SWITCHES_SHOWN = setOf(SwitchKind.MODEL, SwitchKind.MODE, SwitchKind.EFFORT, SwitchKind.SANDBOX)
 
 fun composerState(
     conversation: ConversationState,
@@ -75,7 +90,27 @@ fun composerState(
         running = running,
         stopping = running && transcript.routing.stopping.isNotEmpty(),
         commands = transcript.commands.items,
+        sandbox = sandboxView(operations, running || runningTasks(transcript).isNotEmpty()),
+        sandboxFailure =
+            operations.switches.lastOrNull { it.kind == SwitchKind.SANDBOX }?.takeIf {
+                it.outcome == SwitchOutcome.REJECTED || it.outcome == SwitchOutcome.FAILED
+            },
     )
+}
+
+private fun sandboxView(
+    operations: OperationRecords,
+    busy: Boolean,
+): SandboxView {
+    val on = operations.sandbox ?: operations.launchSandbox
+    val blocked =
+        when {
+            operations.switches.any { it.kind == SwitchKind.SANDBOX && it.outcome == SwitchOutcome.PENDING } ->
+                SandboxBlock.SWITCHING
+            !on && busy -> SandboxBlock.RUNNING
+            else -> null
+        }
+    return SandboxView(on, blocked)
 }
 
 private data class InEffect(
