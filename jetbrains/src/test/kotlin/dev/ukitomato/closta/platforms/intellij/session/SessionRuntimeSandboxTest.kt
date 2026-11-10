@@ -1,5 +1,6 @@
 package dev.ukitomato.closta.platforms.intellij.session
 
+import dev.ukitomato.closta.core.models.AgentEvent
 import dev.ukitomato.closta.presenter.view.SwitchKind
 import dev.ukitomato.closta.presenter.view.SwitchOutcome
 import dev.ukitomato.closta.presenter.view.SwitchRecord
@@ -10,12 +11,14 @@ import dev.ukitomato.closta.providers.claude.history.CapturedTranscript
 import dev.ukitomato.closta.providers.claude.launch.ClaudeLaunchSpec
 import dev.ukitomato.closta.providers.claude.protocol.StdinEncoder
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
@@ -128,16 +131,19 @@ class SessionRuntimeSandboxTest {
     private fun success(id: String) =
         """{"type":"control_response","response":{"subtype":"success","request_id":"$id"}}"""
 
-    // The [index]-th session process refuses to start as capture 36's first CLI did: once it has the settings request
-    // the host writes at once, it writes its one error result and exits with 1.
-    private suspend fun Processes.refuseToStart(index: Int) {
-        untilTrue { spawned.size > index }
-        val process = spawned[index]
-        val asked = withContext(Dispatchers.IO) { process.nextStdinLine(GUARD.inWholeMilliseconds) }
-        assertTrue(checkNotNull(asked).contains("\"subtype\":\"get_settings\""), asked)
-        process.emit(CaptureFixtures.nonBlankLines(CaptureFixtures.textOf(UNAVAILABLE)).first())
-        process.exit(1)
-    }
+    private val unavailable = CaptureFixtures.nonBlankLines(CaptureFixtures.textOf(UNAVAILABLE)).first()
+
+    // The sentence the record keeps: the result's errors, as the records cut a sentence (trimmed, 500 characters).
+    private val unavailableSentence =
+        (CaptureFixtures.parse(unavailable) as AgentEvent.Result).result.trim().take(MAX_DETAIL)
+
+    // A CLI that refused to start as capture 36's first one did: its one error result written and exited with 1 before
+    // the host writes anything, so the settings request the host writes at once finds its stdin closed.
+    private fun notStarted(): FakeProcess =
+        FakeProcess().apply {
+            emit(unavailable)
+            exit(1)
+        }
 
     private fun List<String>.flagValue(flag: String) = zipWithNext().firstOrNull { it.first == flag }?.second
 
@@ -179,6 +185,7 @@ class SessionRuntimeSandboxTest {
             assertTrue(again.commands !== running.commands)
             assertEquals(expected, processes.argvs()[1])
             assertTrue("--resume=$ID" in expected)
+            assertEquals(ClaudeLaunchSpec.SANDBOX_SETTINGS, processes.argvs()[1].flagValue("--settings"))
             assertEquals(before.transcript.messages.size, runtime.view.value.transcript.messages.size)
             assertTrue(processes.spawned[0].destroyed)
             runtime.close()
@@ -257,7 +264,7 @@ class SessionRuntimeSandboxTest {
     @Timeout(TIMEOUT_SECONDS)
     fun sandboxStartFailureFallsBackOnce() =
         withParent { parent ->
-            val processes = Processes()
+            val processes = Processes(FakeProcess(), notStarted())
             val runtime = runtime(processes, parent)
             runtime.start()
             val running = runtime.runningOn(processes, 1)
@@ -265,7 +272,6 @@ class SessionRuntimeSandboxTest {
             val notices = runtime.conversation.value.notices
             val cost = runtime.conversation.value.usage.sessionCostUsd
             assertTrue(runtime.turnSandboxOn())
-            processes.refuseToStart(1)
             runtime.runningOn(processes, 3)
             val argvs = processes.argvs()
             assertTrue("--settings" in argvs[1])
@@ -273,7 +279,9 @@ class SessionRuntimeSandboxTest {
             assertTrue("--resume=$ID" in argvs[2])
             val record = runtime.sandboxSwitches().single()
             assertEquals(SwitchOutcome.FAILED, record.outcome)
-            assertTrue(record.detail.orEmpty().startsWith("Sandbox required but unavailable"), record.detail)
+            assertTrue(unavailableSentence.startsWith("Sandbox required but unavailable"), unavailableSentence)
+            assertEquals(unavailableSentence, record.detail)
+            assertInstanceOf(SessionStatus.Running::class.java, runtime.status.value)
             assertEquals(notices, runtime.conversation.value.notices)
             assertEquals(cost, runtime.conversation.value.usage.sessionCostUsd)
             assertFalse(runtime.view.value.transcript.operations.launchSandbox)
@@ -284,12 +292,11 @@ class SessionRuntimeSandboxTest {
     @Timeout(TIMEOUT_SECONDS)
     fun fallbackFailureIsAFailure() =
         withParent { parent ->
-            val processes = Processes(FakeProcess(), FakeProcess(), FakeProcess().apply { exit(1) })
+            val processes = Processes(FakeProcess(), notStarted(), FakeProcess().apply { exit(1) })
             val runtime = runtime(processes, parent)
             runtime.start()
             runtime.runningOn(processes, 1)
             assertTrue(runtime.turnSandboxOn())
-            processes.refuseToStart(1)
             val end = withTimeout(GUARD) { runtime.status.first { it is SessionStatus.Failed } }
             assertInstanceOf(SessionStatus.Failed::class.java, end)
             assertEquals(3, processes.argvs().size)
@@ -300,10 +307,9 @@ class SessionRuntimeSandboxTest {
     @Timeout(TIMEOUT_SECONDS)
     fun launchStartFailureFallsBack() =
         withParent { parent ->
-            val processes = Processes()
+            val processes = Processes(notStarted())
             val runtime = runtime(processes, parent, sandbox = true)
             runtime.start()
-            processes.refuseToStart(0)
             runtime.runningOn(processes, 2)
             val argvs = processes.argvs()
             assertTrue("--settings" in argvs[0])
@@ -311,7 +317,7 @@ class SessionRuntimeSandboxTest {
             assertTrue("--session-id=$ID" in argvs[1])
             val record = runtime.sandboxSwitches().single()
             assertEquals(SwitchOutcome.FAILED, record.outcome)
-            assertTrue(record.detail.orEmpty().startsWith("Sandbox required but unavailable"), record.detail)
+            assertEquals(unavailableSentence, record.detail)
             assertFalse(runtime.view.value.transcript.operations.launchSandbox)
             runtime.close()
         }
@@ -364,6 +370,53 @@ class SessionRuntimeSandboxTest {
             assertTrue(processes.spawned.all { it.destroyed })
             assertEquals(1, processes.argvs().size, "nothing was started after the close")
             assertEquals(SessionStatus.Closed, runtime.status.value)
+            assertEquals(SwitchOutcome.FAILED, runtime.sandboxSwitches().single().outcome, "no switch stays pending")
+        }
+
+    @Test
+    @Timeout(TIMEOUT_SECONDS)
+    fun aSandboxedCliThatFailsAfterStartingLeavesNoSwitchPending() =
+        withParent { parent ->
+            // The restarted CLI says something (so it started), then dies before its settings are answered.
+            val status = """{"type":"system","subtype":"status","status":"requesting","session_id":"$ID","uuid":"u"}"""
+            val dies =
+                FakeProcess().apply {
+                    emit(status)
+                    exit(1)
+                }
+            val processes = Processes(FakeProcess(), dies)
+            val runtime = runtime(processes, parent)
+            runtime.start()
+            runtime.runningOn(processes, 1)
+            assertTrue(runtime.turnSandboxOn())
+            withTimeout(GUARD) { runtime.status.first { it is SessionStatus.Failed } }
+            assertEquals(2, processes.argvs().size, "a CLI that started and failed is not started again")
+            assertEquals(SwitchOutcome.FAILED, runtime.sandboxSwitches().single().outcome)
+        }
+
+    @Test
+    @Timeout(TIMEOUT_SECONDS)
+    fun theOldCommandsAreGoneFromTheMarkOn() =
+        withParent { parent ->
+            val first = FakeProcess(endsOnDestroy = false)
+            val processes = Processes(first)
+            val runtime = runtime(processes, parent)
+            runtime.start()
+            val old = runtime.runningOn(processes, 1)
+            val seen = CopyOnWriteArrayList<SessionStatus>()
+            val watching = parent.launch(start = CoroutineStart.UNDISPATCHED) { runtime.status.collect { seen += it } }
+            assertTrue(runtime.turnSandboxOn())
+            assertEquals(SessionStatus.Starting, runtime.status.value, "Starting as soon as the switch is marked")
+            // The old CLI is still being waited for: nothing may show its commands again meanwhile.
+            untilTrue { first.destroyed }
+            assertEquals(SessionStatus.Starting, runtime.status.value)
+            first.exit(FakeProcess.SIGTERM_EXIT)
+            val again = runtime.runningOn(processes, 2)
+            watching.cancel()
+            val after = seen.dropWhile { it === old }
+            assertFalse(after.any { it === old }, "$seen")
+            assertTrue(again.commands !== old.commands)
+            runtime.close()
         }
 
     @Test
@@ -404,6 +457,7 @@ class SessionRuntimeSandboxTest {
         const val TIMEOUT_SECONDS = 30L
         const val TURN = "01-baseline-text.ndjson"
         const val UNAVAILABLE = "36-sandbox-unavailable.ndjson"
+        const val MAX_DETAIL = 500
         val GUARD = 10.seconds
         val POLL = 10.milliseconds
     }

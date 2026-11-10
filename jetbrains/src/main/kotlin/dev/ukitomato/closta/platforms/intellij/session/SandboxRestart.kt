@@ -19,20 +19,25 @@ data class CarriedChoices(
 private const val BYPASS_MODE = "bypassPermissions"
 private const val DEFAULT_MODEL = "default"
 
-/** The conversation's permission mode (never `bypassPermissions`), its model (none for "default") and its effort. */
+/**
+ * The conversation's permission mode (never `bypassPermissions`), and the model (none for "default") and effort the
+ * user switched to. A model or an effort no switch chose is not carried: what the CLI picked on its own stays its own
+ * choice, and the launch's value (which may be none) is used.
+ */
 fun carriedChoices(view: SessionView): CarriedChoices {
     val composer = composerState(view.conversation, view.transcript)
-    // A model switch the CLI applied is what the next request goes with, whether or not the list names it.
-    val switched =
-        view.transcript.operations.switches
-            .lastOrNull { it.kind == SwitchKind.MODEL && it.outcome == SwitchOutcome.APPLIED }
-            ?.value
     return CarriedChoices(
         mode = composer.mode?.takeIf { it != BYPASS_MODE },
-        model = (switched ?: composer.model.value).takeIf { it != DEFAULT_MODEL },
-        effort = composer.effort,
+        model = view.applied(SwitchKind.MODEL)?.takeIf { it != DEFAULT_MODEL },
+        effort = view.applied(SwitchKind.EFFORT),
     )
 }
+
+private fun SessionView.applied(kind: SwitchKind): String? =
+    transcript.operations.switches
+        .lastOrNull { it.kind == kind && it.outcome == SwitchOutcome.APPLIED }
+        ?.value
+        ?.takeIf { it.isNotEmpty() }
 
 /**
  * The spec a restart launches. After a message was [sent], or for a [SessionOpening.Resume], it resumes the session

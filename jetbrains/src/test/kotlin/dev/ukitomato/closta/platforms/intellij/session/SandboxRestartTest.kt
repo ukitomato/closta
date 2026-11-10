@@ -78,6 +78,46 @@ class SandboxRestartTest {
         assertNull(carriedChoices(SessionView()).model, "a session with no model chosen carries none")
     }
 
+    @Test
+    fun nothingChosenLeavesModelAndEffortToTheCli() {
+        // The CLI says the model it uses (init) and the effort in effect (a settings answer); the user chose neither.
+        val init =
+            CaptureFixtures
+                .nonBlankLines(CaptureFixtures.textOf("01-baseline-text.ndjson"))
+                .first { it.contains("\"subtype\":\"init\"") }
+        val settings =
+            """{"type":"control_response","response":{"subtype":"success","request_id":"$ASKED",""" +
+                """"response":{"effective":{},"applied":{"model":"claude-sonnet-4-6","effort":"high"}}}}"""
+        val view =
+            SessionView()
+                .event(PresenterInput.Event(CaptureFixtures.parse(init)))
+                .requested(PresenterInput.ControlRequested(ASKED, ControlKind.SETTINGS, null))
+                .event(PresenterInput.Event(CaptureFixtures.parse(settings)))
+        assertEquals("high", view.transcript.operations.effort, "the CLI's effort is in the view")
+        val carried = carriedChoices(view)
+        assertNull(carried.model)
+        assertNull(carried.effort)
+        val argv = restartSpec(ClaudeLaunchSpec(sessionId = ID), SessionOpening.New, true, carried, true).toArgv()
+        assertFalse("--model" in argv, "$argv")
+        assertFalse("--effort" in argv, "$argv")
+    }
+
+    @Test
+    fun appliedSwitchesAreCarried() {
+        var view = SessionView()
+        for ((id, kind, value) in listOf(
+            Triple("m", ControlKind.MODEL, "opus"),
+            Triple("e", ControlKind.EFFORT, "max"),
+        )) {
+            view =
+                view
+                    .requested(PresenterInput.ControlRequested(id, kind, value))
+                    .event(PresenterInput.Event(CaptureFixtures.parse(success(id))))
+        }
+        val carried = carriedChoices(view)
+        assertEquals("opus" to "max", carried.model to carried.effort)
+    }
+
     private fun success(id: String) =
         """{"type":"control_response","response":{"subtype":"success","request_id":"$id"}}"""
 
@@ -87,5 +127,6 @@ class SandboxRestartTest {
         const val CUT = "9c4f7a1e-2b3d-4e5f-8a6b-7c8d9e0f1a2b"
         const val LINE = "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d"
         const val SWITCH = "switch-1"
+        const val ASKED = "settings-1"
     }
 }

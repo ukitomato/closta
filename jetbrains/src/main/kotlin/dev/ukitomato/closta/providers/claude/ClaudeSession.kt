@@ -74,7 +74,18 @@ class ClaudeSession(
                 }
                 val writer =
                     launch {
-                        for (line in stdinChannel) process.writeStdin(line)
+                        try {
+                            for (line in stdinChannel) process.writeStdin(line)
+                        } catch (cancel: CancellationException) {
+                            throw cancel
+                        } catch (
+                            @Suppress("TooGenericExceptionCaught") failure: Exception,
+                        ) {
+                            // A CLI that ended (its stdin closed) may have written lines not read yet — capture 36's
+                            // one error `result` — so a failed write does not stop the read: stdout is read to its
+                            // end, and every later send fails as this write did.
+                            stdinChannel.close(failure)
+                        }
                     }
                 try {
                     for (line in stdoutBuffer) emit(StreamJsonCodec.decode(line))

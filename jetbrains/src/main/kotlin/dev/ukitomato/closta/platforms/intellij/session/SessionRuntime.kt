@@ -179,8 +179,10 @@ class SessionRuntime(
      */
     suspend fun turnSandboxOn(): Boolean {
         val id = UUID.randomUUID().toString()
+        val running = status.value as? SessionStatus.Running
+        var stopping: Job? = null
         var marked = false
-        if (status.value is SessionStatus.Running && restartFor == null) {
+        if (running != null && restartFor == null) {
             // Under the store's lock, so two presses make one switch.
             store.transition { view ->
                 val transcript = view.transcript
@@ -188,16 +190,22 @@ class SessionRuntime(
                     restartFor != null || transcript.operations.switches.any { it.isPendingSandbox() } -> view
                     threadIsRunning(view.conversation, transcript) || runningTasks(transcript).isNotEmpty() ->
                         view.requested(PresenterInput.SandboxRefused(id))
+                    // From the mark on the session is Starting, so nothing is sent through the commands of the CLI
+                    // that is being stopped. A status that moved meanwhile (a close) is kept, and nothing is marked.
+                    !statusFlow.compareAndSet(running, SessionStatus.Starting) -> view
                     else -> {
                         marked = true
                         restartFor = id
+                        // The job of the process that runs now, taken with the mark: a job started after it sees
+                        // the mark itself (runProcess), and must not be cancelled from here.
+                        stopping = processJob
                         view.requested(PresenterInput.ControlRequested(id, ControlKind.SANDBOX, SANDBOX_ON))
                     }
                 }
             }
         }
         // The process's collection is stopped; the session's own coroutine starts the next one (runProcess).
-        if (marked) processJob?.cancel()
+        stopping?.cancel()
         return marked
     }
 
@@ -228,6 +236,9 @@ class SessionRuntime(
                 SessionStatus.Failed(SessionFailure.forSpawner(SessionFailure.ended(failure), spawner))
             } finally {
                 live.destroyAll()
+                // A switch into the sandbox that the session ended before (a close mid-restart, a CLI that failed) is
+                // over with it: it does not stay pending.
+                withContext(NonCancellable) { failPendingSandbox() }
                 // Only a close through [closeJob] waits (a Failed or Ended session publishes its state at once, and
                 // [close] and the owner's own cancellation do not wait): the scope's Job stays
                 // open until the process is gone, so a fork of this session's record starts after the CLI stopped
@@ -422,6 +433,17 @@ class SessionRuntime(
         if (asks) {
             checks.settingsAsked = true
             askSettings(commands)
+        }
+    }
+
+    private suspend fun failPendingSandbox() {
+        store.transition { view ->
+            val pending =
+                restartFor ?: view.transcript.operations.switches
+                    .lastOrNull { it.isPendingSandbox() && it.value == SANDBOX_ON }
+                    ?.id
+            restartFor = null
+            if (pending == null) view else view.requested(PresenterInput.SandboxNotStarted(pending, null))
         }
     }
 
