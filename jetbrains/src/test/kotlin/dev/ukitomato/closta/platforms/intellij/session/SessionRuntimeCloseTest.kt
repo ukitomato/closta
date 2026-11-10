@@ -23,6 +23,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 
@@ -111,7 +112,7 @@ class SessionRuntimeCloseTest {
                     "/work/project",
                     log,
                     versionTimeout = GUARD,
-                    closeWait = GUARD,
+                    closeWait = LONGER_THAN_GUARD,
                 )
             try {
                 runtime.start()
@@ -120,7 +121,7 @@ class SessionRuntimeCloseTest {
                 runtime.close()
                 untilTrue { process.destroyed }
                 // The process has not ended, and the scope's Job is complete all the same: nothing was waited for.
-                withTimeout(FAST) { own.coroutineContext.job.join() }
+                withTimeout(GUARD) { own.coroutineContext.job.join() }
                 assertFalse(log.lines.any { "closed, the process" in it }, "no wait was made: ${log.lines}")
             } finally {
                 process.exit(0)
@@ -247,12 +248,12 @@ class SessionRuntimeCloseTest {
                     versionTimeout = GUARD,
                     opening = SessionOpening.Fork(resumed),
                     saved = FakeSavedSessions(transcripts = mapOf(resumed to CapturedTranscript.read())),
-                    closeWait = GUARD,
+                    closeWait = LONGER_THAN_GUARD,
                 )
             try {
                 // The first init says another id than the fork's: the start fails with the process still running.
                 runtime.start()
-                val failed = withTimeout(FAST) { runtime.status.first { it is SessionStatus.Failed } }
+                val failed = withTimeout(GUARD) { runtime.status.first { it is SessionStatus.Failed } }
                 assertEquals(SessionStatus.Failed(SessionFailure.ForkIdMismatch), failed)
                 assertTrue(process.destroyed, "the process was told to end")
                 assertFalse(log.lines.any { "closed, the process" in it }, "no wait was made: ${log.lines}")
@@ -403,7 +404,9 @@ class SessionRuntimeCloseTest {
         const val OTHER = "22222222-2222-4222-8222-222222222222"
         const val TIMEOUT_SECONDS = 30L
         val GUARD = 10.seconds
-        val FAST = 3.seconds
+
+        // A close wait no test can sit out under [GUARD]: a status or a Job that comes within [GUARD] did not wait.
+        val LONGER_THAN_GUARD = 1.minutes
         val POLL = 5.milliseconds
     }
 }
