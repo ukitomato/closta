@@ -8,6 +8,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
 import java.io.BufferedWriter
 
@@ -86,8 +87,9 @@ class ProcessAgentProcess(
     }
 
     // Process.waitFor() is idempotent once the process has exited: it returns the same code on every call,
-    // so both [stdoutLines]' terminal check and an external caller observe the same exit.
-    override suspend fun awaitExit(): Int = withContext(Dispatchers.IO) { process.waitFor() }
+    // so both [stdoutLines]' terminal check and an external caller observe the same exit. Interruptible: a process
+    // that closed stdout but runs on would otherwise hold a cancelled collection until it ends.
+    override suspend fun awaitExit(): Int = runInterruptible(Dispatchers.IO) { process.waitFor() }
 
     override fun destroy() {
         runCatching { stdin.close() } // release the stdin FD and unwedge a blocked reader; idempotent

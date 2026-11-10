@@ -2,10 +2,14 @@ package dev.ukitomato.closta.providers.claude.launch
 
 import dev.ukitomato.closta.providers.claude.AgentProcess
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -13,6 +17,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Drives [ProcessAgentProcess] with **local** `sh -c` processes via [NativeProcessSpawner] — no WSL, no real
@@ -216,6 +221,28 @@ class ProcessAgentProcessTest {
         }
     }
 
+    @Test
+    @Timeout(TIMEOUT)
+    fun `a collection cancelled while it waits for a process that closed stdout but runs on returns at once`() =
+        runBlocking {
+            val raw =
+                NativeProcessSpawner.spawn(listOf("sh", "-c", "echo ready; exec >&- 2>&-; sleep 30"), emptyMap(), null)
+            try {
+                val ready = CompletableDeferred<Unit>()
+                val agent = ProcessAgentProcess(raw)
+                val collecting = launch(Dispatchers.Default) { agent.stdoutLines.collect { ready.complete(Unit) } }
+                ready.await()
+                // Time for the reader to see stdout end and the flow to enter its wait for the exit. A cancel that
+                // lands sooner passes without the wait being tested; it cannot fail the test.
+                delay(SETTLE_MILLIS)
+                assertTrue(raw.isAlive)
+                collecting.cancel()
+                withTimeout(GUARD_SECONDS.seconds) { collecting.join() }
+            } finally {
+                raw.destroyForcibly()
+            }
+        }
+
     private fun waitGone(handle: ProcessHandle): Boolean {
         val end = System.nanoTime() + TimeUnit.SECONDS.toNanos(GUARD_SECONDS)
         while (handle.isAlive && System.nanoTime() < end) Thread.sleep(POLL_MILLIS)
@@ -225,6 +252,7 @@ class ProcessAgentProcessTest {
     private companion object {
         const val GUARD_SECONDS = 5L
         const val POLL_MILLIS = 20L
+        const val SETTLE_MILLIS = 500L
         const val TIMEOUT = 30L
         const val BIG = 200_000
     }
