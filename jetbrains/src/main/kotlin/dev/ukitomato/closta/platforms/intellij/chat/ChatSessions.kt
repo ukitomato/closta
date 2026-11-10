@@ -41,12 +41,14 @@ class ChatSessions(
         title: String,
         workingDirectory: String? = null,
         provider: ProviderPick = ProviderPick.Active,
+        sandbox: Boolean? = null,
     ): String {
         val runtime =
             project.service<ClaudeSessionService>().open(
                 opening = opening,
                 workingDirectory = workingDirectory,
                 provider = provider,
+                sandbox = sandbox,
             )
         val source =
             ChatSource.Live(

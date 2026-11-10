@@ -6,13 +6,16 @@ import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import dev.ukitomato.closta.core.models.Attachment
 import dev.ukitomato.closta.platforms.intellij.session.ClaudeSessionService
+import dev.ukitomato.closta.platforms.intellij.session.SandboxMemory
 import dev.ukitomato.closta.platforms.intellij.session.SessionNotice
 import dev.ukitomato.closta.platforms.intellij.session.SessionRuntime
 import dev.ukitomato.closta.platforms.intellij.session.SessionStatus
 import dev.ukitomato.closta.platforms.intellij.session.SessionView
+import dev.ukitomato.closta.platforms.intellij.store.AppSettingsStore
 import dev.ukitomato.closta.platforms.intellij.thread.CardAnswer
 import dev.ukitomato.closta.presenter.view.RewindOutcome
 import dev.ukitomato.closta.presenter.view.RewindRecord
+import dev.ukitomato.closta.presenter.view.appliedSandbox
 import dev.ukitomato.closta.presenter.view.threadIsRunning
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -118,9 +121,14 @@ interface ChatSource : Disposable {
         private val root: String? get() = runtime.workingDirectory ?: project.basePath
         override val workingDirectory: String? get() = root
 
+        private val sandboxMemory = SandboxMemory(service<AppSettingsStore>(), project.locationHash)
+
         init {
             scope.launch {
+                var before = view.value.transcript.operations
                 view.collect { now ->
+                    appliedSandbox(before, now.transcript.operations)?.let(sandboxMemory::write)
+                    before = now.transcript.operations
                     for (pending in now.conversation.pendingApprovals) {
                         seen.putIfAbsent(pending.requestId, Instant.now())
                     }

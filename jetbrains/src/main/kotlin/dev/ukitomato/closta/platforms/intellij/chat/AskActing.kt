@@ -11,6 +11,7 @@ import dev.ukitomato.closta.presenter.view.AskActions
 import dev.ukitomato.closta.presenter.view.ForkFrom
 import dev.ukitomato.closta.presenter.view.RewindConversation
 import dev.ukitomato.closta.presenter.view.RewindFilesThenConversation
+import dev.ukitomato.closta.presenter.view.composerState
 import dev.ukitomato.closta.presenter.view.threadIsRunning
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -76,7 +77,13 @@ class AskActing(
             when (action) {
                 is RewindConversation -> handedOff = rewindHere(action.rewindBefore)
                 is ForkFrom -> {
-                    val copy = sessions().open(forkOpening(id, action), FORK_TITLE, source.workingDirectory)
+                    val copy =
+                        sessions().open(
+                            forkOpening(id, action),
+                            FORK_TITLE,
+                            source.workingDirectory,
+                            sandbox = sandboxOn(),
+                        )
                     if (!openChat(project, copy, Placement.EDITOR_TAB)) sessions().stop(copy)
                 }
                 is RewindFilesThenConversation -> {
@@ -87,6 +94,11 @@ class AskActing(
         } finally {
             if (!handedOff) finish(id)
         }
+    }
+
+    private fun sandboxOn(): Boolean {
+        val view = source.view.value
+        return composerState(view.conversation, view.transcript).sandbox.on
     }
 
     private fun rewindFilesThenConversation(action: RewindFilesThenConversation) {
@@ -126,7 +138,13 @@ class AskActing(
     /** Opens the copy and waits for it in the background; true when the wait took the gate over. */
     private fun rewindHere(rewindBefore: String?): Boolean {
         val old = source.sessionId
-        val copyId = sessions().open(rewindOpening(old, rewindBefore), source.title, source.workingDirectory)
+        val copyId =
+            sessions().open(
+                rewindOpening(old, rewindBefore),
+                source.title,
+                source.workingDirectory,
+                sandbox = sandboxOn(),
+            )
         val copy = sessions().source(copyId) as? ChatSource.Live
         if (copy == null) {
             sessions().stop(copyId)

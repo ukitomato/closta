@@ -532,3 +532,15 @@ private fun contextOf(body: JsonObject): ContextRecord? {
 internal fun JsonObject.count(key: String): Long? = (this[key] as? JsonNumber)?.text?.toLongOrNull()?.takeIf { it >= 0 }
 
 internal fun JsonObject.number(key: String): Double? = (this[key] as? JsonNumber)?.text?.toDoubleOrNull()
+
+/** The value of a sandbox switch that was pending in [before] and is applied in [after]; null when none ended so. */
+fun appliedSandbox(
+    before: OperationRecords,
+    after: OperationRecords,
+): Boolean? {
+    val pending =
+        before.switches.filter { it.kind == SwitchKind.SANDBOX && it.outcome == SwitchOutcome.PENDING }.map { it.id }
+    return after.switches
+        .lastOrNull { it.kind == SwitchKind.SANDBOX && it.outcome == SwitchOutcome.APPLIED && it.id in pending }
+        ?.let { it.value == SANDBOX_ON }
+}

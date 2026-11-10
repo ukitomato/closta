@@ -57,16 +57,19 @@ class ClaudeSessionService(
      * Opens a new session and starts it; returns at once (spawning and the version check run off the calling thread).
      * [planner] decides how `claude` is launched — by default from the active provider — and nothing is launched
      * while the project is not trusted. [effort] is the level the process is started with; null leaves it to the
-     * CLI. With a saved [opening] the session opens the saved session of that id instead of a new one: its id is that
+     * CLI. [sandbox] is whether it launches in the sandbox; null is the project's saved choice. With a saved
+     * [opening] the session opens the saved session of that id instead of a new one: its id is that
      * id, and its earlier conversation is put back from the CLI's record; a fork is a copy under a new id. The session
      * runs in [workingDirectory], and its saved sessions are the ones of that directory; null is the project's root.
      */
+    @Suppress("LongParameterList") // each is a separate choice of one session's opening
     fun open(
         planner: SessionLaunchPlanner? = null,
         effort: String? = null,
         opening: SessionOpening = SessionOpening.New,
         workingDirectory: String? = null,
         provider: ProviderPick = ProviderPick.Active,
+        sandbox: Boolean? = null,
     ): SessionRuntime {
         val directory = workingDirectory ?: project.basePath
         val id = sessionIdFor(opening, UUID.randomUUID().toString())
@@ -95,6 +98,7 @@ class ClaudeSessionService(
                 saved = projectTranscripts(directory, wsl, ideWsl),
                 beforeSend = saveBeforeSend(),
                 startMode = { behaviour().initialPermissionMode?.wire },
+                sandbox = launchSandbox(sandbox, SandboxMemory(service<AppSettingsStore>(), project.locationHash)),
             )
         sessions[id] = runtime
         runtime.start()

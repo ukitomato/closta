@@ -342,6 +342,34 @@ class SandboxRecordsTest {
         assertTrue(state.ops().autoRejected)
     }
 
+    private fun recordsOf(
+        value: String,
+        outcome: SwitchOutcome,
+        kind: SwitchKind = SwitchKind.SANDBOX,
+    ) = OperationRecords(seq = 1, switches = listOf(SwitchRecord("s", 1, kind, value, outcome)))
+
+    @Test
+    fun appliedSandboxOnlyWhenApplied() {
+        val pending = recordsOf("true", SwitchOutcome.PENDING)
+        assertNull(appliedSandbox(pending, recordsOf("true", SwitchOutcome.FAILED)))
+        assertNull(appliedSandbox(pending, recordsOf("true", SwitchOutcome.REJECTED)))
+        assertNull(appliedSandbox(pending, pending))
+        assertEquals(true, appliedSandbox(pending, recordsOf("true", SwitchOutcome.APPLIED)))
+        assertEquals(
+            false,
+            appliedSandbox(recordsOf("false", SwitchOutcome.PENDING), recordsOf("false", SwitchOutcome.APPLIED)),
+        )
+    }
+
+    @Test
+    fun appliedSandboxIgnoresOtherKindsAndSettledBefore() {
+        val modePending = recordsOf("auto", SwitchOutcome.PENDING, SwitchKind.MODE)
+        assertNull(appliedSandbox(modePending, recordsOf("auto", SwitchOutcome.APPLIED, SwitchKind.MODE)))
+        val done = recordsOf("true", SwitchOutcome.APPLIED)
+        assertNull(appliedSandbox(done, done))
+        assertNull(appliedSandbox(OperationRecords(), done))
+    }
+
     private companion object {
         const val SWITCHES_AFTER = 25
     }
