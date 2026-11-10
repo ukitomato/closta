@@ -90,6 +90,12 @@ jobs:
       run:
         working-directory: jetbrains
     steps:
+      # The restored Gradle cache alone filled the runner's disk (setup-gradle failed with no space left).
+      - name: Free disk space
+        working-directory: /
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+          df -h /
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
