@@ -172,6 +172,11 @@ data class OperationRecords(
     val sandboxConfirming: String? = null,
     /** The session was launched into the sandbox and no settings answer has said whether it is on. */
     val launchUnconfirmed: Boolean = false,
+    /**
+     * The first settings request asked after [sandboxConfirming] or [launchUnconfirmed] was set: only its answer
+     * confirms them (an answer to one asked before says what the sandbox was).
+     */
+    val sandboxCheck: String? = null,
     /** A switch to `bypassPermissions` was applied once in this session; it stays set. */
     val bypassEntered: Boolean = false,
     /** A switch to `auto` was refused or could not be sent once in this session; it stays set. */
@@ -215,7 +220,7 @@ internal fun OperationRecords.control(input: PresenterInput.ControlRequested): O
         ControlKind.MCP_RECONNECT -> withSwitch(mcpSwitch(input, SwitchKind.MCP_RECONNECT))
         ControlKind.MODEL -> withSwitch(SwitchRecord(input.requestId, seq + 1, SwitchKind.MODEL, input.value.orEmpty()))
         ControlKind.MODE -> withSwitch(SwitchRecord(input.requestId, seq + 1, SwitchKind.MODE, input.value.orEmpty()))
-        ControlKind.SETTINGS -> copy(settingsWaiting = (settingsWaiting + input.requestId).takeLast(MAX_WAITING))
+        ControlKind.SETTINGS -> settingsAsked(input.requestId)
         ControlKind.EFFORT ->
             withSwitch(SwitchRecord(input.requestId, seq + 1, SwitchKind.EFFORT, input.value.orEmpty()))
         ControlKind.SANDBOX ->
@@ -261,6 +266,8 @@ internal fun OperationRecords.launched(input: PresenterInput.Launched): Operatio
         launchSandbox = input.sandbox,
         launchUnconfirmed = input.sandbox,
         sandboxConfirming = switching ?: sandboxConfirming,
+        // The settings asked of the last CLI do not say what this one runs with.
+        sandboxCheck = null,
     )
 }
 
@@ -302,7 +309,18 @@ internal fun OperationRecords.sandboxNotStarted(input: PresenterInput.SandboxNot
                 settle(record.id) { it.copy(outcome = SwitchOutcome.FAILED, detail = detail) }
             else -> this
         }
-    return failed.copy(sandboxConfirming = null, launchUnconfirmed = false)
+    // The CLI that runs instead is not in the sandbox.
+    val off = if (record == null || record.kind == SwitchKind.SANDBOX) failed.copy(sandbox = false) else failed
+    return off.copy(sandboxConfirming = null, launchUnconfirmed = false, sandboxCheck = null)
+}
+
+/** A settings request; the first one after a sandbox switch took, or after a launch into it, is the check. */
+private fun OperationRecords.settingsAsked(requestId: String): OperationRecords {
+    val checks = sandboxCheck == null && (sandboxConfirming != null || launchUnconfirmed)
+    return copy(
+        settingsWaiting = (settingsWaiting + requestId).takeLast(MAX_WAITING),
+        sandboxCheck = if (checks) requestId else sandboxCheck,
+    )
 }
 
 internal fun OperationRecords.withSwitch(record: SwitchRecord): OperationRecords =
@@ -312,7 +330,12 @@ internal fun OperationRecords.withSwitch(record: SwitchRecord): OperationRecords
 internal fun OperationRecords.sendFailed(requestId: String): OperationRecords =
     rewindSendFailed(requestId) ?: when {
         requestId in waiting -> copy(waiting = waiting - requestId)
-        requestId in settingsWaiting -> copy(settingsWaiting = settingsWaiting - requestId)
+        // A sandbox check that could not be asked waits for the next settings request.
+        requestId in settingsWaiting ->
+            copy(
+                settingsWaiting = settingsWaiting - requestId,
+                sandboxCheck = sandboxCheck?.takeIf { it != requestId },
+            )
         // The list could not be asked for: what is shown is the one before, and it says so.
         requestId in mcpWaiting -> copy(mcpWaiting = mcpWaiting - requestId, mcpUnreadable = true)
         else -> ended(requestId) { it.copy(outcome = SwitchOutcome.FAILED) }
@@ -353,7 +376,11 @@ internal fun OperationRecords.answered(event: AgentEvent.ControlResponse): Opera
 private fun OperationRecords.switchApplied(id: String): OperationRecords {
     val record = switches.firstOrNull { it.id == id && it.outcome == SwitchOutcome.PENDING } ?: return this
     // Taken is not in force: the settings asked after it (SessionRuntime) say whether the sandbox is off.
-    return if (record.kind == SwitchKind.SANDBOX) copy(sandboxConfirming = id) else switchSettled(record)
+    return if (record.kind == SwitchKind.SANDBOX) {
+        copy(sandboxConfirming = id, sandboxCheck = null)
+    } else {
+        switchSettled(record)
+    }
 }
 
 /** A pending switch other than the sandbox's is applied as soon as the CLI takes it. */
@@ -418,45 +445,52 @@ private fun OperationRecords.settingsAnswered(
     ).sandboxConfirmed(id, read)
 }
 
+/** Why a switch to [on] failed when the settings read [read] (null: unreadable); null when it took. */
+private fun sandboxFailure(
+    on: Boolean,
+    read: Boolean?,
+): String? =
+    when {
+        read == null -> SANDBOX_NOT_CONFIRMED
+        read == on -> null
+        on -> SANDBOX_NOT_APPLIED
+        else -> SANDBOX_NOT_OFF
+    }
+
 /**
  * What the settings answer [settingsId] says of the sandbox switch waiting for it ([read] is null when the answer
  * could not be read): applied when it says the value asked for, failed otherwise. With no switch waiting, a launch into
- * the sandbox that the answer does not show on is a failed record under the settings request's id.
+ * the sandbox that the answer does not show on is a failed record under the settings request's id. Only the answer to
+ * [OperationRecords.sandboxCheck] decides. A sandbox that could not be confirmed on is off; one that could not be
+ * confirmed off is what was last read.
  */
 private fun OperationRecords.sandboxConfirmed(
     settingsId: String,
     read: Boolean?,
 ): OperationRecords {
-    if (sandboxConfirming == null && !launchUnconfirmed) return this
+    if (settingsId != sandboxCheck) return this
     val record = switches.firstOrNull { it.id == sandboxConfirming && it.outcome == SwitchOutcome.PENDING }
+    val wanted = record?.value ?: SANDBOX_ON
+    val detail =
+        if (record == null) {
+            SANDBOX_NOT_APPLIED.takeIf { launchUnconfirmed && read != true }
+        } else {
+            sandboxFailure(wanted == SANDBOX_ON, read)
+        }
     val checked =
         when {
             record != null -> {
-                val wanted = record.value == SANDBOX_ON
-                val detail =
-                    when {
-                        read == null -> SANDBOX_NOT_CONFIRMED
-                        read == wanted -> null
-                        wanted -> SANDBOX_NOT_APPLIED
-                        else -> SANDBOX_NOT_OFF
-                    }
                 val outcome = if (detail == null) SwitchOutcome.APPLIED else SwitchOutcome.FAILED
                 settle(record.id) { it.copy(outcome = outcome, detail = detail) }
             }
-            launchUnconfirmed && read != true ->
+            detail != null ->
                 withSwitch(
-                    SwitchRecord(
-                        settingsId,
-                        seq + 1,
-                        SwitchKind.SANDBOX,
-                        SANDBOX_ON,
-                        SwitchOutcome.FAILED,
-                        SANDBOX_NOT_APPLIED,
-                    ),
+                    SwitchRecord(settingsId, seq + 1, SwitchKind.SANDBOX, SANDBOX_ON, SwitchOutcome.FAILED, detail),
                 )
             else -> this
         }
-    return checked.copy(sandboxConfirming = null, launchUnconfirmed = false)
+    val shown = if (detail != null && wanted == SANDBOX_ON) checked.copy(sandbox = false) else checked
+    return shown.copy(sandboxConfirming = null, launchUnconfirmed = false, sandboxCheck = null)
 }
 
 /**

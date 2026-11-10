@@ -149,17 +149,94 @@ class SandboxRecordsTest {
         assertFalse(state.composer().sandbox.on)
     }
 
+    private fun switchedIntoSandbox() =
+        HostState()
+            .request("x", ControlKind.SANDBOX, "true")
+            .with(PresenterInput.Launched(null, sandbox = true))
+
+    private fun launchedIntoSandbox() = HostState().with(PresenterInput.Launched(null, sandbox = true))
+
+    private fun assertFailedOff(
+        state: HostState,
+        id: String,
+        detail: String,
+    ) {
+        val record = state.sandboxRecords().single()
+        assertEquals(id, record.id)
+        assertEquals("true", record.value)
+        assertEquals(SwitchOutcome.FAILED, record.outcome)
+        assertEquals(detail, record.detail)
+        assertFalse(state.composer().sandbox.on, "a sandbox that could not be confirmed on is shown off")
+        assertNull(state.ops().sandboxConfirming)
+        assertFalse(state.ops().launchUnconfirmed)
+    }
+
     @Test
-    fun sandboxNotConfirmedWhenTheSettingsCannotBeRead() {
+    fun sandboxSwitchNotConfirmedWhenTheSettingsAreRefused() {
+        val state = switchedIntoSandbox().settings("s", Lines.controlError("s", "no"))
+        assertFailedOff(state, "x", SANDBOX_NOT_CONFIRMED)
+    }
+
+    @Test
+    fun sandboxSwitchNotConfirmedWhenTheSettingsSayNothing() {
+        val state = switchedIntoSandbox().settings("s", settingsSaying("s", null))
+        assertFailedOff(state, "x", SANDBOX_NOT_CONFIRMED)
+    }
+
+    @Test
+    fun sandboxLaunchNotConfirmedWhenTheSettingsAreRefused() {
+        val state = launchedIntoSandbox().settings("s", Lines.controlError("s", "no"))
+        assertFailedOff(state, "s", SANDBOX_NOT_APPLIED)
+    }
+
+    @Test
+    fun sandboxLaunchNotConfirmedWhenTheSettingsSayNothing() {
+        val state = launchedIntoSandbox().settings("s", settingsSaying("s", null))
+        assertFailedOff(state, "s", SANDBOX_NOT_APPLIED)
+    }
+
+    @Test
+    fun sandboxOffNotConfirmedKeepsTheLastValue() {
+        val on = HostState().settings("s0", settingsSaying("s0", """{"sandbox":{"enabled":true}}"""))
+        val state =
+            on
+                .request("x", ControlKind.SANDBOX, "false")
+                .with(Lines.controlOk("x"))
+                .settings("s", Lines.controlError("s", "no"))
+        assertEquals(SANDBOX_NOT_CONFIRMED, state.sandboxRecords().single().detail)
+        assertTrue(state.composer().sandbox.on, "turning off unconfirmed leaves what was last read")
+    }
+
+    @Test
+    fun settingsAskedBeforeTheSwitchTookDoNotSettleIt() {
         val asked =
             HostState()
+                .request("s1", ControlKind.SETTINGS)
+                .request("x", ControlKind.SANDBOX, "false")
+                .with(Lines.controlOk("x"))
+                .request("s2", ControlKind.SETTINGS)
+        val early = asked.with(settingsSaying("s1", """{"sandbox":{"enabled":true}}"""))
+        assertEquals(SwitchOutcome.PENDING, early.sandboxRecords().single().outcome, "s1 was asked before")
+        assertEquals(true, early.ops().sandbox, "an older answer still says what the sandbox is")
+        val confirmed = early.with(settingsSaying("s2", """{"sandbox":{"enabled":false}}"""))
+        assertEquals(SwitchOutcome.APPLIED, confirmed.sandboxRecords().single().outcome)
+        assertFalse(confirmed.composer().sandbox.on)
+    }
+
+    @Test
+    fun settingsAskedBeforeTheRelaunchDoNotSettleIt() {
+        val asked =
+            HostState()
+                .request("s1", ControlKind.SETTINGS)
                 .request("x", ControlKind.SANDBOX, "true")
                 .with(PresenterInput.Launched(null, sandbox = true))
-        val refused = asked.settings("s", Lines.controlError("s", "no"))
-        assertEquals(SANDBOX_NOT_CONFIRMED, refused.sandboxRecords().single().detail)
-        val bare = asked.settings("s", settingsSaying("s", null))
-        assertEquals(SANDBOX_NOT_CONFIRMED, bare.sandboxRecords().single().detail)
-        assertTrue(bare.composer().sandbox.on, "an answer without effective leaves the launch's value")
+                .request("s2", ControlKind.SETTINGS)
+        val early = asked.with(settingsSaying("s1", "{}"))
+        assertEquals(SwitchOutcome.PENDING, early.sandboxRecords().single().outcome, "s1 went to the old CLI")
+        assertTrue(early.ops().launchUnconfirmed)
+        val confirmed = early.with(settingsSaying("s2", """{"sandbox":{"enabled":true}}"""))
+        assertEquals(SwitchOutcome.APPLIED, confirmed.sandboxRecords().single().outcome)
+        assertTrue(confirmed.composer().sandbox.on)
     }
 
     @Test
@@ -174,6 +251,7 @@ class SandboxRecordsTest {
         val record = state.sandboxRecords().single()
         assertEquals(SwitchOutcome.FAILED, record.outcome)
         assertEquals(refusal.result, record.detail)
+        assertFalse(state.composer().sandbox.on, "the CLI that started is not in the sandbox")
         assertNull(state.ops().sandboxConfirming)
         assertFalse(state.ops().launchUnconfirmed)
         val unknown = HostState().with(PresenterInput.SandboxNotStarted("y", null)).sandboxRecords().single()
