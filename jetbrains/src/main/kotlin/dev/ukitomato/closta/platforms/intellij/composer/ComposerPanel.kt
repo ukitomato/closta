@@ -1071,10 +1071,10 @@ class ComposerPanel(
         val SHIELD_ON: javax.swing.Icon =
             ColorizeProxyIcon.Simple(
                 AllIcons.Actions.InlaySecuredShield,
-                JBColor.namedColor("Label.successForeground", JBColor(0x208A3C, 0x5FB865)),
+                JBColor.namedColor("Label.successForeground", JBColor.GREEN),
             )
         val SHIELD_OFF: javax.swing.Icon =
-            ColorizeProxyIcon.Simple(AllIcons.Actions.InlaySecuredShield, JBColor(0x8C8C8C, 0x7F8389))
+            ColorizeProxyIcon.Simple(AllIcons.Actions.InlaySecuredShield, JBColor.GRAY)
         const val GAP = 4
         const val NARROW = 420
         const val TICK_MS = 1_000

@@ -173,6 +173,8 @@ private class GalleryRun(
         states(views)
         stage = "sandbox"
         sandbox(views)
+        stage = "plan go"
+        planGo()
         stage = "editor ended"
         editorEnded()
         stage = "mcp"
@@ -506,6 +508,21 @@ private class GalleryRun(
         )
     }
 
+    /** The plan's card waiting, its first button named after the mode a yes goes to: Auto, Accept Edits, Bypass. */
+    private suspend fun planGo() {
+        listOf(
+            "plan-go-auto.png" to GallerySession.planWaiting(),
+            "plan-go-accept-edits.png" to GallerySession.planWaiting(autoRejected = true),
+            "plan-go-bypass.png" to GallerySession.planWaiting(bypassEntered = true),
+        ).forEach { (file, view) ->
+            sidebarScene(
+                file,
+                FixedChatSource("Gallery (${file.removeSuffix(".png")})", view, canSend = true),
+                cardInView = true,
+            )
+        }
+    }
+
     /** Paints [panel] as [file] with the sidebar [NARROW_WIDTH] wide, then gives the sidebar its width back. */
     private suspend fun narrowScene(
         panel: ChatPanel,
@@ -530,6 +547,7 @@ private class GalleryRun(
         file: String,
         source: FixedChatSource,
         dependents: List<String> = emptyList(),
+        cardInView: Boolean = false,
         then: suspend (ChatPanel) -> Unit = {},
     ) {
         var painted: ChatPanel? = null
@@ -542,6 +560,10 @@ private class GalleryRun(
                         checkNotNull(sidebarPanel(source.sessionId)) { "no panel" }
                     }
                 delay(SETTLE_MS)
+                if (cardInView) {
+                    check(withContext(Dispatchers.EDT) { panel.focusWaitingCard() }) { "no waiting card" }
+                    delay(SETTLE_MS)
+                }
                 withContext(Dispatchers.EDT) { shoot(panel, file) }
                 painted = panel
             }

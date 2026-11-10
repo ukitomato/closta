@@ -13,6 +13,7 @@ import dev.ukitomato.closta.platforms.intellij.thread.PLAN_CHOICES
 import dev.ukitomato.closta.platforms.intellij.thread.buttonLine
 import dev.ukitomato.closta.platforms.intellij.thread.cardButton
 import dev.ukitomato.closta.platforms.intellij.thread.enterNeverPresses
+import dev.ukitomato.closta.platforms.intellij.thread.planGoKey
 import dev.ukitomato.closta.presenter.view.PlanCard
 import dev.ukitomato.closta.presenter.view.PlanChoice
 import dev.ukitomato.closta.presenter.view.planAnswer
@@ -20,9 +21,9 @@ import java.awt.BorderLayout
 import javax.swing.JComponent
 
 /**
- * A plan: its Markdown in a box that scrolls, and the three answers with the conversation card's keys: approve with
- * auto edits (1), approve and review edits (2), keep planning (3), which opens a sentence to go with it. Esc keeps
- * planning without one; Enter never approves.
+ * A plan: its Markdown in a box that scrolls, and the three answers with the conversation card's keys: approve and go
+ * on in the card's mode (1), approve and review edits (2), keep planning (3), which opens a sentence to go with it.
+ * Esc keeps planning without one; Enter never approves.
  */
 internal class PlanPane(
     private val card: PlanCard,
@@ -38,7 +39,7 @@ internal class PlanPane(
     init {
         val buttons =
             listOf(
-                cardButton(ClostaBundle.message("sessions.window.detail.plan.autoEdits")) {
+                cardButton(ClostaBundle.message(planGoKey(card.go, "sessions.window.detail.plan.go"))) {
                     choose(PlanChoice.GO)
                 }.enterNeverPresses(),
                 cardButton(ClostaBundle.message("sessions.window.detail.plan.askEdits")) {

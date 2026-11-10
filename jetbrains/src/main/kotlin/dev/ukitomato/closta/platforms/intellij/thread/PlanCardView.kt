@@ -18,6 +18,7 @@ import dev.ukitomato.closta.presenter.view.ApprovalOutcome
 import dev.ukitomato.closta.presenter.view.ApprovalRecord
 import dev.ukitomato.closta.presenter.view.PlanCard
 import dev.ukitomato.closta.presenter.view.PlanChoice
+import dev.ukitomato.closta.presenter.view.PlanGo
 import dev.ukitomato.closta.presenter.view.planAnswer
 import java.awt.BorderLayout
 import java.util.concurrent.ConcurrentHashMap
@@ -89,9 +90,9 @@ internal fun planOutcomeText(outcome: ApprovalOutcome): String =
     }
 
 /**
- * The plan's waiting card: whether to approve the plan, with its title and a link to its tab, then approve with auto
- * edits (1), approve and review edits (2), keep planning (3), by key or button: Esc to keep planning, a link for a
- * sentence to go with it, and Enter for nothing ([cardKey]). It answers once.
+ * The plan's waiting card: whether to approve the plan, with its title and a link to its tab, then approve and go on
+ * in the card's mode (1), approve and review edits (2), keep planning (3), by key or button: Esc to keep planning, a
+ * link for a sentence to go with it, and Enter for nothing ([cardKey]). It answers once.
  */
 internal class PlanView(
     private val card: PlanCard,
@@ -104,7 +105,7 @@ internal class PlanView(
     private var sent = false
     private val buttons =
         listOf(
-            cardButton(ClostaBundle.message("thread.plan.autoEdits"), main = true) {
+            cardButton(ClostaBundle.message(planGoKey(card.go, "thread.plan.go")), main = true) {
                 decide(PlanChoice.GO)
             }.enterNeverPresses(),
             cardButton(ClostaBundle.message("thread.plan.askEdits")) {
@@ -180,6 +181,18 @@ internal class PlanView(
         answer(CardAnswer(card.requestId, made.decision, made.payload, made.passedOn, made.modeAfter))
     }
 }
+
+/** The bundle key of the first button: [prefix] and the mode the card's yes switches to. */
+internal fun planGoKey(
+    go: PlanGo,
+    prefix: String,
+): String =
+    "$prefix." +
+        when (go) {
+            PlanGo.AUTO -> "auto"
+            PlanGo.ACCEPT_EDITS -> "acceptEdits"
+            PlanGo.BYPASS -> "bypass"
+        }
 
 /** The plan's answers in the buttons' order, the order of the keys 1 to 3. */
 internal val PLAN_CHOICES = listOf(PlanChoice.GO, PlanChoice.ASK_EDITS, PlanChoice.KEEP_PLANNING)

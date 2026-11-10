@@ -423,6 +423,16 @@ internal object GallerySession {
         return view.requested(PresenterInput.Launched(operations.effort, operations.builtInMcpServers, sandbox = on))
     }
 
+    /** The conversation waiting on the plan alone, after a switch to `auto` was refused or Bypass was entered. */
+    fun planWaiting(
+        autoRejected: Boolean = false,
+        bypassEntered: Boolean = false,
+    ): SessionView {
+        val view = view(Waits.PLAN)
+        val operations = view.transcript.operations.copy(autoRejected = autoRejected, bypassEntered = bypassEntered)
+        return view.copy(transcript = view.transcript.copy(operations = operations))
+    }
+
     /** [view] with a switch of the sandbox to [on] waiting for the CLI. */
     fun sandboxSwitching(
         view: SessionView,
