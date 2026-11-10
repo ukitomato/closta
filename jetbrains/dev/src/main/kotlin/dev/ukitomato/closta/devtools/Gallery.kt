@@ -171,6 +171,8 @@ private class GalleryRun(
         }
         stage = "states"
         states(views)
+        stage = "sandbox"
+        sandbox(views)
         stage = "editor ended"
         editorEnded()
         stage = "mcp"
@@ -463,9 +465,60 @@ private class GalleryRun(
             FixedChatSource("Gallery (ready)", views.idle, canSend = true),
             listOf("popup-model.png", "popup-mode.png", "popup-attach.png"),
         ) { panel ->
-            popup(panel, "popup-model.png") { it.getOrNull(2) }
+            popup(panel, "popup-model.png") { it.getOrNull(MODEL_BUTTON) }
             popup(panel, "popup-mode.png") { it.getOrNull(1) }
             popup(panel, "popup-attach.png") { it.getOrNull(0) }
+        }
+    }
+
+    /**
+     * The composer's sandbox button: on, off, switching, not to be turned on while a reply runs, not turned on (the
+     * failure's line), on in a narrow sidebar (the shield alone), and in an ended conversation.
+     */
+    private suspend fun sandbox(views: GalleryViews) {
+        val on = GallerySession.withSandbox(views.idle, on = true)
+        sidebarScene(
+            "sandbox-on.png",
+            FixedChatSource("Gallery (sandbox on)", on, canSend = true),
+            listOf("sandbox-narrow.png"),
+        ) { panel -> narrowScene(panel, "sandbox-narrow.png") }
+        sidebarScene("sandbox-off.png", FixedChatSource("Gallery (sandbox off)", views.idle, canSend = true))
+        sidebarScene(
+            "sandbox-switching.png",
+            FixedChatSource(
+                "Gallery (sandbox switching)",
+                GallerySession.sandboxSwitching(views.idle, on = true),
+                canSend = true,
+            ),
+        )
+        sidebarScene("sandbox-running.png", FixedChatSource("Gallery (sandbox running)", views.running, canSend = true))
+        sidebarScene(
+            "sandbox-failed.png",
+            FixedChatSource(
+                "Gallery (sandbox failed)",
+                GallerySession.sandboxNotStarted(GallerySession.sandboxSwitching(views.idle, on = true)),
+                canSend = true,
+            ),
+        )
+        sidebarScene(
+            "sandbox-ended.png",
+            FixedChatSource("Gallery (sandbox ended)", on, notice = SessionNotice.of(SessionStatus.Ended)),
+        )
+    }
+
+    /** Paints [panel] as [file] with the sidebar [NARROW_WIDTH] wide, then gives the sidebar its width back. */
+    private suspend fun narrowScene(
+        panel: ChatPanel,
+        file: String,
+    ) = scene(file) {
+        try {
+            withContext(Dispatchers.EDT) { stretch(NARROW_WIDTH) }
+            delay(SETTLE_MS)
+            val width = withContext(Dispatchers.EDT) { panel.width }
+            check(width == NARROW_WIDTH) { "the sidebar is $width wide" }
+            withContext(Dispatchers.EDT) { shoot(panel, file) }
+        } finally {
+            withContext(Dispatchers.EDT + NonCancellable) { stretch(SIDEBAR_WIDTH) }
         }
     }
 
@@ -529,7 +582,7 @@ private class GalleryRun(
         }
     }
 
-    /** The composer's attach, mode and model buttons, in that order: the attach button and the two after it. */
+    /** The composer's attach, mode, sandbox and model buttons, in that order: attach and the three after it. */
     private fun composerButtons(panel: ChatPanel): List<ToolbarButton> {
         val attach =
             UIUtil
@@ -681,7 +734,8 @@ private class GalleryRun(
         const val NARROW_WIDTH = 300
         const val MAX_PAGES = 8
         const val OVERLAP = 40
-        const val COMPOSER_BUTTONS = 3
+        const val COMPOSER_BUTTONS = 4
+        const val MODEL_BUTTON = 3
         const val TYPE = BufferedImage.TYPE_INT_RGB
         const val THEME = "closta.gallery.theme"
         const val SCALE = "closta.gallery.scale"

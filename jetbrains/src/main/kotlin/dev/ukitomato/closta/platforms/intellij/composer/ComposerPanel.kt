@@ -28,7 +28,9 @@ import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.util.IconLoader
 import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.ui.JBColor
 import com.intellij.util.textCompletion.TextFieldWithCompletion
+import com.intellij.util.ui.ColorizeProxyIcon
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.WrapLayout
 import com.intellij.util.ui.accessibility.AccessibleAnnouncerUtil
@@ -39,6 +41,8 @@ import dev.ukitomato.closta.platforms.intellij.ClostaBundle
 import dev.ukitomato.closta.platforms.intellij.chat.ChatVirtualFile
 import dev.ukitomato.closta.platforms.intellij.chat.effortText
 import dev.ukitomato.closta.platforms.intellij.chat.modeText
+import dev.ukitomato.closta.platforms.intellij.chat.sandboxFailureText
+import dev.ukitomato.closta.platforms.intellij.chat.sandboxText
 import dev.ukitomato.closta.platforms.intellij.chat.shortModeText
 import dev.ukitomato.closta.platforms.intellij.ide.IdeEditorSelections
 import dev.ukitomato.closta.platforms.intellij.thread.CardHint
@@ -49,6 +53,7 @@ import dev.ukitomato.closta.presenter.view.AttachmentFault
 import dev.ukitomato.closta.presenter.view.AttachmentLimits
 import dev.ukitomato.closta.presenter.view.AttachmentVerdict
 import dev.ukitomato.closta.presenter.view.ComposerState
+import dev.ukitomato.closta.presenter.view.SandboxBlock
 import dev.ukitomato.closta.presenter.view.SwitchKind
 import dev.ukitomato.closta.presenter.view.SwitchRecord
 import dev.ukitomato.closta.presenter.view.checkAttachment
@@ -86,8 +91,8 @@ import javax.swing.Timer
 const val ATTACH_BUTTON = "closta.composer.attach"
 
 /**
- * The composer: the chips of what goes with the message, the input (the IDE's editor, so typing is the
- * editor's), and under it the attach button, the permission mode, the model with its effort, the context used and
+ * The composer: the chips of what goes with the message, the input (the IDE's editor, so typing is the editor's),
+ * and under it the attach button, the permission mode, the sandbox, the model with its effort, the context used and
  * send or stop; a fixed-height line under the box says what happened. It shows a [ComposerState] and calls back; it
  * keeps only what is being written (the text, the chips, the messages sent before for ↑), and that in its [draft],
  * which outlives it when the conversation moves.
@@ -104,6 +109,9 @@ class ComposerPanel(
     var onModel: (String) -> Unit = {}
     var onEffort: (String) -> Unit = {}
     var onMode: (String) -> Unit = {}
+
+    /** The sandbox button was pressed: true to turn it on. */
+    var onSandbox: (Boolean) -> Unit = {}
 
     /** The Bypass bar was answered and went: the keyboard goes back to the input. */
     var onLetGo: () -> Unit = {}
@@ -131,6 +139,9 @@ class ComposerPanel(
     /** The switch whose missing answer was already said: it is said once, then the line goes back to the base. */
     private var saidLate: String? = null
 
+    /** The sandbox failure already said: each is said once. */
+    private var saidSandbox: String? = null
+
     private val field = Field(project, ComposerCompletion(project) { state?.commands.orEmpty() })
     private val chips = JPanel(WrapLayout(FlowLayout.LEFT, JBUI.scale(GAP), JBUI.scale(2))).apply { isOpaque = false }
     private val attach =
@@ -141,6 +152,7 @@ class ComposerPanel(
                 hint = ClostaBundle.message("composer.attach.hint.files")
             }
     private val mode = ToolbarButton("", null, true) { button -> state?.let { showModes(it, button) } }
+    private val sandbox = ToolbarButton("", SHIELD_OFF, false) { state?.let { onSandbox(!it.sandbox.on) } }
     private val model = ToolbarButton("", null, true) { button -> state?.let { showModels(it, button) } }
     private val context = ContextUse()
     private val send =
@@ -231,6 +243,10 @@ class ComposerPanel(
         this.sendable = sendable
         shownBlock = if (sendable) SendBlock.NONE else blocked
         showBar(next)
+        next.sandboxFailure?.takeIf { it.id != saidSandbox }?.let {
+            saidSandbox = it.id
+            say(sandboxFailureText(it), StatusSource.REFUSAL, error = true)
+        }
         val switching = next.switching
         if (switching == null) {
             switchingSince = null
@@ -253,6 +269,7 @@ class ComposerPanel(
         val left = JPanel(WrapLayout(FlowLayout.LEFT, 0, 0)).apply { isOpaque = false }
         left.add(attach)
         left.add(mode)
+        left.add(sandbox)
         left.add(model)
         val right = JPanel(FlowLayout(FlowLayout.RIGHT, 0, 0)).apply { isOpaque = false }
         right.add(context)
@@ -302,9 +319,34 @@ class ComposerPanel(
             button.enabledToClick = block == SendBlock.NONE
             button.disabledReason = waiting
         }
+        showSandbox(next, narrow, waiting)
         stop.isVisible = next.running
         stop.enabledToClick = !next.stopping
         stop.disabledReason = ClostaBundle.message("composer.status.stopping")
+    }
+
+    /** The sandbox button: the shield says on (green) or off (gray), the name only when there is room. */
+    private fun showSandbox(
+        next: ComposerState,
+        narrow: Boolean,
+        waiting: String?,
+    ) {
+        val on = next.sandbox.on
+        sandbox.text = if (narrow) "" else sandboxText(on)
+        sandbox.icon = if (on) SHIELD_ON else SHIELD_OFF
+        sandbox.normal =
+            com.intellij.util.ui.UIUtil
+                .getLabelForeground()
+        sandbox.toolTipText = ClostaBundle.message(if (on) "composer.sandbox.tip.on" else "composer.sandbox.tip.off")
+        sandbox.accessibleLabel = sandboxText(on)
+        sandbox.enabledToClick = block == SendBlock.NONE && next.sandbox.blocked == null
+        val busy =
+            when (next.sandbox.blocked) {
+                SandboxBlock.SWITCHING -> ClostaBundle.message("composer.sandbox.busy.switching")
+                SandboxBlock.RUNNING -> ClostaBundle.message("composer.sandbox.busy.running")
+                null -> null
+            }
+        sandbox.disabledReason = if (block != SendBlock.NONE) waiting else busy
     }
 
     private fun contextTip(next: ComposerState): String =
@@ -348,20 +390,7 @@ class ComposerPanel(
         next: ComposerState,
         now: Long,
     ): StatusMessage? {
-        val switching = next.switching
-        val since = switchingSince
-        val waited = since?.let { now - it.second }
-        var waitingFor: String? = null
-        if (switching != null && waited != null) {
-            val what = switchedTo(next, switching)
-            if (waited <= SWITCH_WAIT_MS) {
-                waitingFor = ClostaBundle.message("composer.switch.switching", what)
-            } else if (saidLate != switching.id) {
-                saidLate = switching.id
-                val late = ClostaBundle.message("composer.switch.noAnswer", what)
-                messages.post(StatusMessage(late, StatusSource.SWITCH, true, now, ERROR_TTL_MS, untilKeystroke = true))
-            }
-        }
+        val waitingFor = switchWaiting(next, now)
         val text =
             when {
                 waitingFor != null -> waitingFor
@@ -375,6 +404,27 @@ class ComposerPanel(
         return text?.let { StatusMessage(it, StatusSource.SESSION, false, now, null, false) }
     }
 
+    /**
+     * "Switching to …" while the switch waits, or null. A switch with no answer in time is said once as late; a
+     * sandbox switch is not (it is a restart, and its failure is the presenter's to say), so it is waited for.
+     */
+    private fun switchWaiting(
+        next: ComposerState,
+        now: Long,
+    ): String? {
+        val switching = next.switching
+        val waited = switchingSince?.let { now - it.second }
+        if (switching == null || waited == null) return null
+        val what = switchedTo(next, switching)
+        val waiting = waited <= SWITCH_WAIT_MS || !answersLate(switching.kind)
+        if (!waiting && saidLate != switching.id) {
+            saidLate = switching.id
+            val late = ClostaBundle.message("composer.switch.noAnswer", what)
+            messages.post(StatusMessage(late, StatusSource.SWITCH, true, now, ERROR_TTL_MS, untilKeystroke = true))
+        }
+        return if (waiting) ClostaBundle.message("composer.switch.switching", what) else null
+    }
+
     /** The name of what [switching] switches to, as the buttons say it. */
     private fun switchedTo(
         next: ComposerState,
@@ -383,7 +433,14 @@ class ComposerPanel(
         when (switching.kind) {
             SwitchKind.MODEL -> next.models.firstOrNull { it.value == switching.value }?.label ?: switching.value
             SwitchKind.MODE -> modeText(switching.value)
-            else -> effortText(switching.value)
+            SwitchKind.EFFORT -> effortText(switching.value)
+            SwitchKind.SANDBOX -> sandboxText(switching.value == "true")
+            SwitchKind.RESUME,
+            SwitchKind.ATTACHMENT,
+            SwitchKind.MCP_ENABLE,
+            SwitchKind.MCP_DISABLE,
+            SwitchKind.MCP_RECONNECT,
+            -> switching.value
         }
 
     /** Posts [text] to the status line: a refusal stays [ERROR_TTL_MS], a hint [HINT_TTL_MS], or until a key. */
@@ -1009,6 +1066,15 @@ class ComposerPanel(
     private companion object {
         val SEND_IDLE = IconLoader.getIcon("/icons/send.svg", ComposerPanel::class.java)
         val SEND_READY = IconLoader.getIcon("/icons/sendReady.svg", ComposerPanel::class.java)
+
+        // The colour is the shield's alone: the button's text stays the label's.
+        val SHIELD_ON: javax.swing.Icon =
+            ColorizeProxyIcon.Simple(
+                AllIcons.Actions.InlaySecuredShield,
+                JBColor.namedColor("Label.successForeground", JBColor(0x208A3C, 0x5FB865)),
+            )
+        val SHIELD_OFF: javax.swing.Icon =
+            ColorizeProxyIcon.Simple(AllIcons.Actions.InlaySecuredShield, JBColor(0x8C8C8C, 0x7F8389))
         const val GAP = 4
         const val NARROW = 420
         const val TICK_MS = 1_000

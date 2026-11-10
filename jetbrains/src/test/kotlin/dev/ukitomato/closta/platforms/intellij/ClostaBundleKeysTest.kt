@@ -87,7 +87,16 @@ class ClostaBundleKeysTest {
                 listOf("wait.question", "wait.plan", "wait.permission", "wait.permission.subject", "wait.other") +
                 listOf("rewind.refused.running", "rewind.refused.unknown", "rewind.refused.nothingAfter") +
                 PERMISSION_MODES.flatMap { listOf("composer.mode.$it", "composer.mode.$it.short") } +
-                EFFORT_LEVELS.map { "composer.effort.$it" }
+                EFFORT_LEVELS.map { "composer.effort.$it" } +
+                listOf("on", "off", "tip.on", "tip.off", "busy.running", "busy.switching", "failed.on", "failed.off")
+                    .map { "composer.sandbox.$it" } +
+                listOf(
+                    "turn",
+                    "notApplied",
+                    "notOff",
+                    "notConfirmed",
+                    "notStarted",
+                ).map { "composer.sandbox.reason.$it" }
         assertEquals(emptyList<String>(), needed.filter { it !in english.keyNames() })
         assertEquals(emptyList<String>(), needed.filter { it !in japanese.keyNames() })
     }

@@ -61,6 +61,9 @@ interface ChatSource : Disposable {
 
     suspend fun switchMode(mode: String)
 
+    /** Turns the sandbox on (the CLI is started again in it) or off (live). */
+    suspend fun switchSandbox(on: Boolean)
+
     suspend fun respond(answer: CardAnswer)
 
     suspend fun interrupt()
@@ -177,6 +180,10 @@ interface ChatSource : Disposable {
 
         override suspend fun switchMode(mode: String) {
             commands()?.switchMode(mode)
+        }
+
+        override suspend fun switchSandbox(on: Boolean) {
+            if (on) runtime.turnSandboxOn() else commands()?.turnSandboxOff()
         }
 
         override suspend fun respond(answer: CardAnswer) {

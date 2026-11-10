@@ -1,5 +1,6 @@
 package dev.ukitomato.closta.platforms.intellij.composer
 
+import dev.ukitomato.closta.presenter.view.SwitchKind
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
@@ -90,4 +91,11 @@ class StatusMessagesTest {
 
     @Test fun `a session that cannot send and is not starting has ended`() =
         assertEquals(SendBlock.CLOSED, sendBlockOf(sendable = false, starting = false))
+
+    // Turning the sandbox on restarts the CLI, longer than the wait; the presenter says its failure itself.
+    @Test
+    fun aSandboxSwitchIsNeverSaidLate() {
+        assertFalse(answersLate(SwitchKind.SANDBOX))
+        assertTrue(listOf(SwitchKind.MODEL, SwitchKind.MODE, SwitchKind.EFFORT).all(::answersLate))
+    }
 }

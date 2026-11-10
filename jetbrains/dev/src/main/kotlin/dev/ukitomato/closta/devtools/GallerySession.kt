@@ -40,6 +40,7 @@ internal object GallerySession {
     private const val QUESTION_ID = "gallery-r3"
     private const val PLAN_ID = "gallery-r4"
     private const val EDIT_ID = "gallery-r5"
+    private const val SANDBOX_SWITCH = "gallery-sandbox"
 
     /** Which of the second turn's requests wait (all four for the chat's gallery), or none while its tool runs. */
     enum class Waits(
@@ -412,6 +413,25 @@ internal object GallerySession {
             .requested(PresenterInput.ControlRequested("gallery-context", ControlKind.CONTEXT))
             .event(PresenterInput.Event(StreamJsonCodec.decode(answer.toString())))
     }
+
+    /** [view] after a launch asked into the sandbox ([on]) or not: the button shows it until the settings say. */
+    fun withSandbox(
+        view: SessionView,
+        on: Boolean,
+    ): SessionView {
+        val operations = view.transcript.operations
+        return view.requested(PresenterInput.Launched(operations.effort, operations.builtInMcpServers, sandbox = on))
+    }
+
+    /** [view] with a switch of the sandbox to [on] waiting for the CLI. */
+    fun sandboxSwitching(
+        view: SessionView,
+        on: Boolean,
+    ): SessionView = view.requested(PresenterInput.ControlRequested(SANDBOX_SWITCH, ControlKind.SANDBOX, "$on"))
+
+    /** [view] after the CLI the [sandboxSwitching] restart started did not start, with no sentence of its own. */
+    fun sandboxNotStarted(view: SessionView): SessionView =
+        view.requested(PresenterInput.SandboxNotStarted(SANDBOX_SWITCH, null))
 
     /**
      * [view] after the host asked for the MCP servers and the CLI answered with three (capture 24's `mcp_status`

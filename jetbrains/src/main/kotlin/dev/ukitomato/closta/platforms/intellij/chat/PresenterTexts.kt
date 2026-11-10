@@ -5,6 +5,12 @@ import dev.ukitomato.closta.presenter.view.EFFORT_LEVELS
 import dev.ukitomato.closta.presenter.view.MCP_STATUSES
 import dev.ukitomato.closta.presenter.view.PERMISSION_MODES
 import dev.ukitomato.closta.presenter.view.RewindRefusal
+import dev.ukitomato.closta.presenter.view.SANDBOX_NOT_APPLIED
+import dev.ukitomato.closta.presenter.view.SANDBOX_NOT_CONFIRMED
+import dev.ukitomato.closta.presenter.view.SANDBOX_NOT_OFF
+import dev.ukitomato.closta.presenter.view.SANDBOX_NOT_STARTED
+import dev.ukitomato.closta.presenter.view.SANDBOX_REFUSED_TURN
+import dev.ukitomato.closta.presenter.view.SwitchRecord
 import dev.ukitomato.closta.presenter.view.WaitReason
 
 // The words for what the presenter hands over as values: it cannot reach the IDE's bundle itself.
@@ -23,6 +29,28 @@ fun shortModeText(mode: String): String =
 /** An effort level as the composer says it; a level the plugin has no words for is shown as its id. */
 fun effortText(level: String): String =
     if (level in EFFORT_LEVELS) ClostaBundle.message("composer.effort.$level") else level
+
+/** The sandbox button's name: on or off. */
+fun sandboxText(on: Boolean): String = ClostaBundle.message(if (on) "composer.sandbox.on" else "composer.sandbox.off")
+
+/** The line saying a sandbox switch did not take, and why: the presenter's reasons in words, the CLI's as it wrote. */
+fun sandboxFailureText(record: SwitchRecord): String {
+    val detail = record.detail.orEmpty()
+    val reason = sandboxReasonKey(detail)?.let { ClostaBundle.message(it) } ?: detail
+    val key = if (record.value == "true") "composer.sandbox.failed.on" else "composer.sandbox.failed.off"
+    return ClostaBundle.message(key, reason)
+}
+
+/** The bundle key of a sandbox failure's [detail] when the presenter made it; null for the CLI's own sentence. */
+fun sandboxReasonKey(detail: String): String? =
+    when (detail) {
+        SANDBOX_REFUSED_TURN -> "composer.sandbox.reason.turn"
+        SANDBOX_NOT_APPLIED -> "composer.sandbox.reason.notApplied"
+        SANDBOX_NOT_OFF -> "composer.sandbox.reason.notOff"
+        SANDBOX_NOT_CONFIRMED -> "composer.sandbox.reason.notConfirmed"
+        SANDBOX_NOT_STARTED -> "composer.sandbox.reason.notStarted"
+        else -> null
+    }
 
 /** The one line saying what a waiting session waits for. */
 fun waitReasonText(reason: WaitReason): String =

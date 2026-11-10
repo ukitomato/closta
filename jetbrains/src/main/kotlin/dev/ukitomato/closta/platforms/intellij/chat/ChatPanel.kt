@@ -433,6 +433,7 @@ class ChatPanel(
         composer.onModel = { value -> scope.launch(failures) { source.switchModel(value) } }
         composer.onEffort = { level -> scope.launch(failures) { source.switchEffort(level) } }
         composer.onMode = { mode -> scope.launch(failures) { source.switchMode(mode) } }
+        composer.onSandbox = { on -> scope.launch(failures) { source.switchSandbox(on) } }
     }
 
     private fun draw() {
