@@ -105,7 +105,7 @@ internal class PlanView(
     private val buttons =
         listOf(
             cardButton(ClostaBundle.message("thread.plan.autoEdits"), main = true) {
-                decide(PlanChoice.AUTO_EDITS)
+                decide(PlanChoice.GO)
             }.enterNeverPresses(),
             cardButton(ClostaBundle.message("thread.plan.askEdits")) {
                 decide(PlanChoice.ASK_EDITS)
@@ -182,4 +182,4 @@ internal class PlanView(
 }
 
 /** The plan's answers in the buttons' order, the order of the keys 1 to 3. */
-internal val PLAN_CHOICES = listOf(PlanChoice.AUTO_EDITS, PlanChoice.ASK_EDITS, PlanChoice.KEEP_PLANNING)
+internal val PLAN_CHOICES = listOf(PlanChoice.GO, PlanChoice.ASK_EDITS, PlanChoice.KEEP_PLANNING)

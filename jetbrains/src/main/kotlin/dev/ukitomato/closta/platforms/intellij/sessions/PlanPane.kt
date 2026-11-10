@@ -39,7 +39,7 @@ internal class PlanPane(
         val buttons =
             listOf(
                 cardButton(ClostaBundle.message("sessions.window.detail.plan.autoEdits")) {
-                    choose(PlanChoice.AUTO_EDITS)
+                    choose(PlanChoice.GO)
                 }.enterNeverPresses(),
                 cardButton(ClostaBundle.message("sessions.window.detail.plan.askEdits")) {
                     choose(PlanChoice.ASK_EDITS)

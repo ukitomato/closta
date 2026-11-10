@@ -37,7 +37,8 @@ fun sessionDetail(
     val waiting = waitingApprovals(conversation, transcript)
     val askKey = transcript.messages.order.lastOrNull { transcript.messages[it]?.role == Role.USER }
     return when {
-        waiting.isNotEmpty() -> SessionDetail.Waiting(cardOf(waiting.first()), waiting.size - 1)
+        waiting.isNotEmpty() ->
+            SessionDetail.Waiting(cardOf(waiting.first(), planGoOf(transcript.operations)), waiting.size - 1)
         threadIsRunning(
             conversation,
             transcript,

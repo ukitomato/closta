@@ -38,7 +38,7 @@ fun sessionSummary(
 ): SessionSummary {
     val first = waitingApprovals(conversation, transcript).firstOrNull()
     return when {
-        first != null -> SessionSummary(SessionGroup.WAITING, reasonOf(first))
+        first != null -> SessionSummary(SessionGroup.WAITING, reasonOf(first, planGoOf(transcript.operations)))
         threadIsRunning(conversation, transcript) -> SessionSummary(SessionGroup.RUNNING, null)
         unread -> SessionSummary(SessionGroup.UNREAD, null)
         else -> SessionSummary(SessionGroup.OTHER, null)
@@ -95,7 +95,8 @@ fun alertsBetween(
     val then = before?.let { waitingApprovals(it.first, it.second) }.orEmpty()
     val thenIds = then.mapTo(HashSet()) { it.requestId }
     val nowIds = now.mapTo(HashSet()) { it.requestId }
-    val raised = now.filter { it.requestId !in thenIds }.map(::alertOf).toMutableList<SessionAlert>()
+    val go = planGoOf(after.second.operations)
+    val raised = now.filter { it.requestId !in thenIds }.map { alertOf(it, go) }.toMutableList<SessionAlert>()
     val finished =
         before != null &&
             threadIsRunning(before.first, before.second) &&
@@ -121,8 +122,11 @@ internal fun waitingApprovals(
         .filter { it.requestId.isNotEmpty() }
         .mapNotNull { transcript.approvals[it.requestId] }
 
-private fun reasonOf(record: ApprovalRecord): WaitReason {
-    val card = cardOf(record)
+private fun reasonOf(
+    record: ApprovalRecord,
+    go: PlanGo,
+): WaitReason {
+    val card = cardOf(record, go)
     return when {
         card is QuestionCard -> WaitReason.Question
         record.toolName == PLAN_TOOL -> WaitReason.Plan
@@ -131,20 +135,26 @@ private fun reasonOf(record: ApprovalRecord): WaitReason {
     }
 }
 
-private fun alertOf(record: ApprovalRecord): SessionAlert {
+private fun alertOf(
+    record: ApprovalRecord,
+    go: PlanGo,
+): SessionAlert {
     val id = record.requestId
-    val card = cardOf(record)
+    val card = cardOf(record, go)
     return when {
         card is QuestionCard -> OpenOnlyAlert(id, id, AlertKind.QUESTION)
         record.toolName == PLAN_TOOL -> OpenOnlyAlert(id, id, AlertKind.PLAN)
         record.toolName in EDIT_TOOLS -> OpenOnlyAlert(id, id, AlertKind.EDIT)
-        else -> permissionAlertOf(record)
+        else -> permissionAlertOf(record, go)
     }
 }
 
-private fun permissionAlertOf(record: ApprovalRecord): PermissionAlert {
+private fun permissionAlertOf(
+    record: ApprovalRecord,
+    go: PlanGo,
+): PermissionAlert {
     val id = record.requestId
-    val permission = cardOf(record) as? PermissionCard
+    val permission = cardOf(record, go) as? PermissionCard
     val tool = permission?.toolName ?: record.toolName.orEmpty()
     val subject = permission?.subject.orEmpty()
     val clean = permission != null && !permission.hiddenMarked && permission.inputFields.isEmpty()
