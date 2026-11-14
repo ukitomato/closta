@@ -1,3 +1,7 @@
+// put / add, not 0.5's putting / adding: IDEs before 2026.2 bundle an older kotlinx-collections-immutable that
+// comes first on the compile classpath and has only these names.
+@file:Suppress("DEPRECATION")
+
 package dev.ukitomato.closta.presenter.view
 
 import kotlinx.collections.immutable.PersistentMap
@@ -14,7 +18,7 @@ import java.util.Collections
 internal fun <K, V> Map<K, V>.plusEntry(
     key: K,
     value: V,
-): Map<K, V> = ((this as? PersistentMap<K, V>) ?: toPersistentMap()).putting(key, value)
+): Map<K, V> = ((this as? PersistentMap<K, V>) ?: toPersistentMap()).put(key, value)
 
 /** This list with [item] at the end, as a list that cannot be changed. */
 internal fun <T> List<T>.plusItem(item: T): List<T> = Collections.unmodifiableList(this + item)

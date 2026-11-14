@@ -24,7 +24,7 @@ internal class BehaviourForm {
         ).withMnemonic('L')
     private val modeChoice =
         ComboBox(CHOICES.toTypedArray()).apply {
-            renderer = textListCellRenderer("") { it.label }
+            renderer = textListCellRenderer { it?.label.orEmpty() }
         }
 
     /** The whole form, for the settings dialog. */

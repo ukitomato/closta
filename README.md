@@ -9,7 +9,7 @@
 
 **A third-party JetBrains IDE plugin for using Claude Code with a native UI.**
 
-[![IntelliJ IDEA 2026.2+](.github/assets/badges/intellij.svg)](https://www.jetbrains.com/idea/)
+[![IntelliJ IDEA 2025.3+](.github/assets/badges/intellij.svg)](https://www.jetbrains.com/idea/)
 [![Claude Code CLI](.github/assets/badges/claude.svg)](https://docs.claude.com/en/docs/claude-code)
 [![Amazon Bedrock](.github/assets/badges/bedrock.svg)](https://aws.amazon.com/bedrock/)
 [![Kotlin 2.4](.github/assets/badges/kotlin.svg)](https://kotlinlang.org/)
@@ -92,7 +92,7 @@ Conversation**. Amazon Bedrock is set up in **Settings | Tools | Closta**.
 
 ## Install
 
-Requires IntelliJ IDEA 2026.2 or later (verified on 2026.2.4 and 2026.3; build 262+) and the
+Requires IntelliJ IDEA 2025.3 or later (verified on 2025.3.6 and 2026.2.4; build 253+) and the
 [Claude Code](https://docs.claude.com/en/docs/claude-code/setup) CLI. Amazon Bedrock runs through the same `claude`
 command, so it is needed with either provider.
 

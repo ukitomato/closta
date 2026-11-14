@@ -9,7 +9,7 @@
 
 **JetBrains IDEでClaude CodeをネイティブUIで使うための、サードパーティ製プラグイン**
 
-[![IntelliJ IDEA 2026.2+](.github/assets/badges/intellij.svg)](https://www.jetbrains.com/idea/)
+[![IntelliJ IDEA 2025.3+](.github/assets/badges/intellij.svg)](https://www.jetbrains.com/idea/)
 [![Claude Code CLI](.github/assets/badges/claude.svg)](https://docs.claude.com/en/docs/claude-code)
 [![Amazon Bedrock](.github/assets/badges/bedrock.svg)](https://aws.amazon.com/bedrock/)
 [![Kotlin 2.4](.github/assets/badges/kotlin.svg)](https://kotlinlang.org/)
@@ -61,7 +61,7 @@ Bedrockを選んだときの送り先はAmazon Bedrockです。Closta自身が�
 
 ## 必要なもの
 
-- IntelliJ IDEA 2026.2以降（2026.2.4と2026.3で検証済み、build 262+）。上限は設けておらず、ビルドごとにPlugin Verifierで推奨のIDEを検査している
+- IntelliJ IDEA 2025.3以降（build 253+）。上限は設けておらず、ビルドごとにPlugin Verifierで2025.3.6と2026.2.4を検査している
 - [Claude Code](https://docs.claude.com/ja/docs/claude-code/setup) CLI（`claude`）。Clostaには同梱していないので、インストールして`PATH`に置く
 - `claude`でのサインインか、Claudeモデルを使えるAmazon Bedrockのアカウント。Bedrockも同じ`claude`を通して使う
 

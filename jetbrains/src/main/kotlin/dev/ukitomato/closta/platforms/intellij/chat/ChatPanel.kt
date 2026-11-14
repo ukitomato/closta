@@ -372,7 +372,7 @@ class ChatPanel(
         JBPopupFactory
             .getInstance()
             .createPopupChooserBuilder(listOf(label))
-            .setRenderer(textListCellRenderer("") { it })
+            .setRenderer(textListCellRenderer { it.orEmpty() })
             .setItemChosenCallback { moveToOtherPlace() }
             .createPopup()
             .show(RelativePoint(under, Point(0, under.height)))

@@ -1,6 +1,7 @@
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.jetbrains.changelog.Changelog
 import org.jetbrains.changelog.markdownToHTML
+import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask
 import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
@@ -75,7 +76,8 @@ dependencies {
     // alone should not pay for an IDE launch. The first change that needs such a test wires it up; until then
     // the IDE side is checked with runIde and static scans.
     intellijPlatform {
-        intellijIdea("2026.2.4")
+        // The oldest IDE in range (sinceBuild), so an API newer than it does not compile.
+        intellijIdea("2025.3.6.2")
         // commonmark (with GFM tables) through Jewel's Markdown modules, as the IDE bundles them: nothing is packed.
         bundledModule("intellij.platform.jewel.markdown.core")
         bundledModule("intellij.platform.jewel.markdown.extensions.gfmTables")
@@ -87,10 +89,10 @@ dependencies {
     }
 }
 
-// Build and test on JDK 25, which IntelliJ 2026.2 needs. Every IDE in range (262+) runs on JBR 25, so 21 is a
-// conservative bytecode target, not a runtime floor. sourceCompatibility stays at the toolchain's 25 because the
-// platform plugin's verifyPluginProjectConfiguration warns when it is lower. If a .java source is ever added,
-// sourceCompatibility must be aligned with the target: javac rejects `-source 25 -target 21`.
+// Build and test on JDK 25. The oldest IDE in range (2025.3, 253) runs on JBR 21, so 21 is the bytecode target and the
+// runtime floor; verifyPlugin checks the JDK API against that IDE's JBR. sourceCompatibility stays at the toolchain's
+// 25 because the platform plugin's verifyPluginProjectConfiguration warns when it is lower. If a .java source is ever
+// added, sourceCompatibility must be aligned with the target: javac rejects `-source 25 -target 21`.
 java { targetCompatibility = JavaVersion.VERSION_21 }
 
 kotlin {
@@ -158,18 +160,19 @@ intellijPlatform {
                 }
             }
         ideaVersion {
-            sinceBuild = "262"
-            // Open on purpose: a cap would hide the plugin from every newer IDE. verifyPlugin checks the current
-            // build only, so newer IDEs are not verified here.
+            sinceBuild = "253"
+            // Open on purpose: a cap would hide the plugin from every newer IDE. verifyPlugin checks 253 and 2026.2.4
+            // only, so newer IDEs are not verified here.
             untilBuild = provider { null }
         }
     }
 
     pluginVerification {
-        // Only the current IDE. recommended() pulled in every released build since 262 (2026.3 and on), each
-        // extracted at about 4.5 GB into the Gradle cache, which kept filling the WSL disk.
+        // The oldest IDE (the one built against) and one newer. recommended() pulled in every released build in range,
+        // each extracted at about 4.5 GB into the Gradle cache, which kept filling the WSL disk.
         ides {
             current()
+            create(IntelliJPlatformType.IntellijIdea, "2026.2.4")
         }
         // Internal, override-only, non-extendable and scheduled-for-removal API usages fail the build alongside compatibility problems.
         // Experimental APIs (the combined diff among them) are reported but allowed.
