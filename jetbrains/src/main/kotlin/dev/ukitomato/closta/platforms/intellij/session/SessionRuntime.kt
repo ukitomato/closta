@@ -273,7 +273,8 @@ class SessionRuntime(
                     is ProcessEnd.NotStarted -> spec.copy(sandbox = false)
                     is ProcessEnd.Restart -> {
                         val sent = view.value.transcript.routing.sends > 0
-                        restartSpec(first.spec, opening, sent, carriedChoices(view.value), sandbox = true)
+                        val sentUnder = if (sent) resumeIdOf(view.value, id) else null
+                        restartSpec(first.spec, opening, sentUnder, carriedChoices(view.value), sandbox = true)
                     }
                 }
             switchId = (end as? ProcessEnd.Restart)?.switchId

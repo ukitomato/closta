@@ -69,3 +69,16 @@ data class SessionView(
         input: PresenterInput,
     ) = SessionView(after, foldTranscript(transcript, input, conversation, after))
 }
+
+/**
+ * The id [view]'s conversation is saved under. A session launched or resumed by the host's [hostId] keeps it; once the
+ * conversation was cleared the CLI goes on under a new one, which its init after the clear names. From the clear
+ * until that init it is [hostId] again, never the id of the conversation that was cleared.
+ */
+fun resumeIdOf(
+    view: SessionView,
+    hostId: String,
+): String =
+    view.conversation.session
+        ?.sessionId
+        ?.takeIf { view.transcript.clearedAt != null } ?: hostId

@@ -57,8 +57,9 @@ fun askActions(
     val asks = liveAsks(transcript)
     val at = asks.indexOf(askKey)
     return when {
-        running -> refused(RewindRefusal.RUNNING)
+        // Before a clear nothing is ever offered, running or not: the screen does not show the buttons at all.
         at < 0 && askKey in sentAsks(transcript) -> refused(RewindRefusal.BEFORE_CLEAR)
+        running -> refused(RewindRefusal.RUNNING)
         at < 0 -> refused(RewindRefusal.UNKNOWN)
         else -> {
             // The record's first user line has no parent to cut at: rewinding to it keeps nothing. After a clear the
@@ -86,8 +87,9 @@ fun turnEndActions(
     val at = asks.indexOf(askKey)
     val next = asks.getOrNull(at + 1)
     return when {
-        running -> refused(RewindRefusal.RUNNING)
+        // Before a clear nothing is ever offered, running or not: the screen does not show the buttons at all.
         at < 0 && askKey in sentAsks(transcript) -> refused(RewindRefusal.BEFORE_CLEAR)
+        running -> refused(RewindRefusal.RUNNING)
         at < 0 -> refused(RewindRefusal.UNKNOWN)
         next == null -> refused(RewindRefusal.NOTHING_AFTER)
         else -> askActions(transcript, false, next).copy(fork = null)

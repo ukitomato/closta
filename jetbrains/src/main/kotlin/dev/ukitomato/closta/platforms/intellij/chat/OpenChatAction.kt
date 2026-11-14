@@ -153,7 +153,11 @@ private fun offer(
             .setNamerForFiltering { "${it.title} ${it.id}" }
             .setFilterAlwaysVisible(true)
             .setItemChosenCallback {
-                openNewChat(project, placement, SessionOpening.Resume(it.id), it.title.take(TITLE_MAX))
+                // One already open is shown where it is, not resumed in a second CLI.
+                val open = openSessionOf(it.id, project.service<ChatSessions>().resumeIds)
+                if (open == null || !bringAndShow(project, open)) {
+                    openNewChat(project, placement, SessionOpening.Resume(it.id), it.title.take(TITLE_MAX))
+                }
             }.createPopup()
     show(popup, project, under)
 }

@@ -2,8 +2,9 @@ package dev.ukitomato.closta.presenter.view
 
 import dev.ukitomato.closta.core.models.AgentEvent
 import dev.ukitomato.closta.platforms.intellij.chat.clockOf
-import dev.ukitomato.closta.platforms.intellij.chat.resumeIdOf
+import dev.ukitomato.closta.platforms.intellij.chat.openSessionOf
 import dev.ukitomato.closta.platforms.intellij.session.SessionView
+import dev.ukitomato.closta.platforms.intellij.session.resumeIdOf
 import dev.ukitomato.closta.providers.claude.fixtures.CaptureFixtures
 import dev.ukitomato.closta.providers.claude.protocol.StreamJsonCodec
 import dev.ukitomato.closta.providers.claude.synthetic.StreamScript
@@ -71,6 +72,25 @@ class ClearResetTest {
     }
 
     @Test
+    fun `an ask before the divider offers nothing while a reply runs either, for the clear`() {
+        listOf("send-1", "send-2").forEach { ask ->
+            assertEquals(RewindRefusal.BEFORE_CLEAR, askActions(transcript, running = true, askKey = ask).refusal, ask)
+            assertEquals(RewindRefusal.BEFORE_CLEAR, turnEndActions(transcript, true, ask).refusal, ask)
+        }
+        assertEquals(RewindRefusal.RUNNING, askActions(transcript, running = true, askKey = "send-3").refusal)
+    }
+
+    @Test
+    fun `the saved conversation a clear started is the open session's, the one before it is not`() {
+        val open = mapOf(HOST_ID to resumeIdOf(SessionView(steps.last().conversation, transcript), HOST_ID))
+
+        assertAll(
+            { assertEquals(HOST_ID, openSessionOf(SECOND_SESSION, open)) },
+            { assertNull(openSessionOf(FIRST_SESSION, open), "the cleared conversation is no open session's") },
+        )
+    }
+
+    @Test
     fun `the ask after the divider follows the usual rules, as the first of its conversation`() {
         val actions = askActions(transcript, running = false, askKey = "send-3")
 
@@ -112,6 +132,13 @@ class ClearResetTest {
 
         assertAll(
             { assertEquals(FIRST_SESSION, before.session?.sessionId) },
+            {
+                assertEquals(
+                    HOST_ID,
+                    resumeIdOf(SessionView(before, steps[reset - 1].transcript), HOST_ID),
+                    "no clear yet",
+                )
+            },
             { assertNull(cleared.session, "the reset forgets the old session") },
             { assertEquals(HOST_ID, resumeIdOf(SessionView(cleared, steps[reset].transcript), HOST_ID)) },
             {
@@ -121,7 +148,12 @@ class ClearResetTest {
                         ?.sessionId,
                 )
             },
-            { assertEquals(SECOND_SESSION, resumeIdOf(SessionView(init.value.conversation), HOST_ID)) },
+            {
+                assertEquals(
+                    SECOND_SESSION,
+                    resumeIdOf(SessionView(init.value.conversation, init.value.transcript), HOST_ID),
+                )
+            },
         )
     }
 
@@ -154,6 +186,11 @@ class ClearResetTest {
             }
         }
         assertNotNull(askActions(state.transcript, false, "send-5").rewind)
+        assertEquals(
+            THIRD_SESSION,
+            resumeIdOf(SessionView(state.conversation, state.transcript), HOST_ID),
+            "the id follows the second",
+        )
     }
 
     @Test
@@ -165,13 +202,22 @@ class ClearResetTest {
         )
     }
 
-    /** Lines 15 to 22 of 41 (the `/clear` from its queued lifecycle to its completed one), under fresh uuids. */
+    /**
+     * Lines 15 to 22 of 41 (the `/clear` from its queued lifecycle to its completed one), under fresh uuids, as the
+     * second conversation's: its lines say the second session's id until the init after the reset says a third.
+     */
     private fun clearAgain(): List<PresenterInput> {
         val lines =
             CaptureFixtures
                 .nonBlankLines(CaptureFixtures.textOf("$SCENARIO.ndjson"))
                 .subList(CLEAR_FROM - 1, CLEAR_TO)
-                .map { it.replace(CLEAR_UUID, CLEAR_AGAIN).replace(NEW_CONVERSATION, "conversation-again") }
+                .map {
+                    it
+                        .replace(CLEAR_UUID, CLEAR_AGAIN)
+                        .replace(NEW_CONVERSATION, "conversation-again")
+                        .replace(SECOND_SESSION, THIRD_SESSION)
+                        .replace(FIRST_SESSION, SECOND_SESSION)
+                }
         return listOf(PresenterInput.UserSent("send-4", "/clear", uuid = CLEAR_AGAIN)) + events(lines)
     }
 
@@ -182,13 +228,14 @@ class ClearResetTest {
                 .nonBlankLines(CaptureFixtures.textOf("$SCENARIO.ndjson"))
                 .single { it.contains("\"type\":\"result\"") && it.contains(THIRD_UUID) }
                 .replace(THIRD_UUID, ASK_AGAIN)
+                .replace(SECOND_SESSION, THIRD_SESSION)
         val script =
-            StreamScript(SECOND_SESSION).apply {
+            StreamScript(THIRD_SESSION).apply {
                 lifecycle(ASK_AGAIN, "queued")
                 lifecycle(ASK_AGAIN, "started")
                 assistant("msg-again", listOf(StreamScript.text("again")))
             }
-        val done = StreamScript(SECOND_SESSION).apply { lifecycle(ASK_AGAIN, "completed") }
+        val done = StreamScript(THIRD_SESSION).apply { lifecycle(ASK_AGAIN, "completed") }
         return listOf(PresenterInput.UserSent("send-5", "Once more", uuid = ASK_AGAIN)) +
             events(script.lines + result + done.lines)
     }
@@ -200,6 +247,7 @@ class ClearResetTest {
         const val SCENARIO = "41-clear-reset"
         const val FIRST_SESSION = "a6635625-53e9-40b5-adfb-977a4e9163b2"
         const val SECOND_SESSION = "b3c1b6ae-517a-4b6a-8b61-f3693facb4f1"
+        const val THIRD_SESSION = "session-after-the-second-clear"
         const val HOST_ID = "host-id"
         const val CLEAR_UUID = "84d712ce-9cd0-4cec-b51e-4dfe8cf10d9a"
         const val THIRD_UUID = "b3d716bb-9d47-4504-b06a-b4ac287cb1ba"

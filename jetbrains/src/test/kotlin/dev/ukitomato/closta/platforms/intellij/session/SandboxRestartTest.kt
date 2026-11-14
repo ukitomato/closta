@@ -16,15 +16,25 @@ class SandboxRestartTest {
 
     @Test
     fun afterAMessageResumesTheSession() {
-        val argv = restartSpec(ClaudeLaunchSpec(sessionId = ID), SessionOpening.New, true, none, true).toArgv()
+        val argv = restartSpec(ClaudeLaunchSpec(sessionId = ID), SessionOpening.New, ID, none, true).toArgv()
         assertTrue("--resume=$ID" in argv, "$argv")
         assertFalse(argv.any { it.startsWith("--session-id") }, "$argv")
         assertTrue("--settings" in argv, "$argv")
     }
 
     @Test
+    fun afterAClearResumesTheConversationTheClearStarted() {
+        val cleared = "id-after-clear"
+        val argv =
+            restartSpec(ClaudeLaunchSpec(sessionId = ID), SessionOpening.New, cleared, none, true).toArgv()
+        assertTrue("--resume=$cleared" in argv, "$argv")
+        assertFalse("--resume=$ID" in argv, "$argv")
+        assertFalse(argv.any { it.startsWith("--session-id") }, "$argv")
+    }
+
+    @Test
     fun beforeFirstMessageKeepsSessionId() {
-        val argv = restartSpec(ClaudeLaunchSpec(sessionId = ID), SessionOpening.New, false, none, true).toArgv()
+        val argv = restartSpec(ClaudeLaunchSpec(sessionId = ID), SessionOpening.New, null, none, true).toArgv()
         assertTrue("--session-id=$ID" in argv, "$argv")
         assertFalse(argv.any { it.startsWith("--resume") }, "$argv")
         assertTrue("--settings" in argv, "$argv")
@@ -33,7 +43,7 @@ class SandboxRestartTest {
     @Test
     fun resumeOpeningAlwaysResumes() {
         val launched = ClaudeLaunchSpec(sessionId = ID, resume = ID)
-        val argv = restartSpec(launched, SessionOpening.Resume(ID), false, none, true).toArgv()
+        val argv = restartSpec(launched, SessionOpening.Resume(ID), null, none, true).toArgv()
         assertTrue("--resume=$ID" in argv, "$argv")
         assertFalse(argv.any { it.startsWith("--session-id") }, "$argv")
     }
@@ -41,7 +51,7 @@ class SandboxRestartTest {
     @Test
     fun forkBeforeFirstMessageKeepsForkFlags() {
         val launched = ClaudeLaunchSpec(sessionId = ID, resume = PARENT, forkSession = true)
-        val argv = restartSpec(launched, SessionOpening.Fork(PARENT), false, none, true).toArgv()
+        val argv = restartSpec(launched, SessionOpening.Fork(PARENT), null, none, true).toArgv()
         assertEquals(launched.copy(sandbox = true).toArgv(), argv)
         assertTrue("--resume=$PARENT" in argv && "--fork-session" in argv && "--session-id=$ID" in argv, "$argv")
     }
@@ -50,7 +60,7 @@ class SandboxRestartTest {
     fun afterAMessageDropsForkAndCut() {
         val launched =
             ClaudeLaunchSpec(sessionId = ID, resume = PARENT, forkSession = true, resumeSessionAt = CUT)
-        val argv = restartSpec(launched, SessionOpening.Fork(PARENT, LINE), true, none, true).toArgv()
+        val argv = restartSpec(launched, SessionOpening.Fork(PARENT, LINE), ID, none, true).toArgv()
         assertTrue("--resume=$ID" in argv, "$argv")
         assertFalse("--fork-session" in argv, "$argv")
         assertFalse(argv.any { it.startsWith("--resume-session-at") }, "$argv")
@@ -66,13 +76,13 @@ class SandboxRestartTest {
         val carried = carriedChoices(view)
         assertNull(carried.mode)
         val launched = ClaudeLaunchSpec(sessionId = ID, permissionMode = "acceptEdits")
-        assertEquals("acceptEdits", restartSpec(launched, SessionOpening.New, true, carried, true).permissionMode)
+        assertEquals("acceptEdits", restartSpec(launched, SessionOpening.New, ID, carried, true).permissionMode)
     }
 
     @Test
     fun choicesWinOverTheLaunchAndADefaultModelIsNone() {
         val launched = ClaudeLaunchSpec(sessionId = ID, permissionMode = "default", model = "sonnet", effort = "low")
-        val spec = restartSpec(launched, SessionOpening.New, true, CarriedChoices("plan", "opus", "high"), true)
+        val spec = restartSpec(launched, SessionOpening.New, ID, CarriedChoices("plan", "opus", "high"), true)
         assertEquals(Triple("plan", "opus", "high"), Triple(spec.permissionMode, spec.model, spec.effort))
         assertTrue(spec.sandbox)
         assertNull(carriedChoices(SessionView()).model, "a session with no model chosen carries none")
@@ -97,7 +107,7 @@ class SandboxRestartTest {
         val carried = carriedChoices(view)
         assertNull(carried.model)
         assertNull(carried.effort)
-        val argv = restartSpec(ClaudeLaunchSpec(sessionId = ID), SessionOpening.New, true, carried, true).toArgv()
+        val argv = restartSpec(ClaudeLaunchSpec(sessionId = ID), SessionOpening.New, ID, carried, true).toArgv()
         assertFalse("--model" in argv, "$argv")
         assertFalse("--effort" in argv, "$argv")
     }

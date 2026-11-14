@@ -11,6 +11,7 @@ import dev.ukitomato.closta.platforms.intellij.session.SessionNotice
 import dev.ukitomato.closta.platforms.intellij.session.SessionRuntime
 import dev.ukitomato.closta.platforms.intellij.session.SessionStatus
 import dev.ukitomato.closta.platforms.intellij.session.SessionView
+import dev.ukitomato.closta.platforms.intellij.session.resumeIdOf
 import dev.ukitomato.closta.platforms.intellij.store.AppSettingsStore
 import dev.ukitomato.closta.platforms.intellij.thread.CardAnswer
 import dev.ukitomato.closta.presenter.view.RewindOutcome
@@ -258,12 +259,3 @@ interface ChatSource : Disposable {
 
 /** How long a rewind of the files waits for the CLI's answer. */
 private const val REWIND_WAIT_MS = 30_000L
-
-/**
- * The id [view]'s conversation is saved under: the CLI's from its last init, or the host's [hostId] while the CLI has
- * named none (from a `/clear` until the init after it), never the id of a conversation that was cleared.
- */
-fun resumeIdOf(
-    view: SessionView,
-    hostId: String,
-): String = view.conversation.session?.sessionId ?: hostId

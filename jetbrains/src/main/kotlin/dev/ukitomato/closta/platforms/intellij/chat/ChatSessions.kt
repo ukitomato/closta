@@ -28,6 +28,14 @@ class ChatSessions(
 ) : Disposable {
     private val sources = LinkedHashMap<String, ChatSource>()
 
+    private val stopped = HashMap<String, String>()
+
+    /**
+     * The id each stopped session's conversation was saved under when it stopped, by the session's id, where a `/clear`
+     * made it other than the session's own: a tab still showing it resumes that one.
+     */
+    val stoppedResumeIds: Map<String, String> get() = stopped
+
     /** Whether the project is closing: its screens close then, and a session that runs says nothing of it. */
     @Volatile
     var closing = false
@@ -78,8 +86,14 @@ class ChatSessions(
     /** Stops the session's CLI and takes it out of the list; a screen still showing it shows it ended. */
     fun stop(sessionId: String) {
         directory().unregister(sessionId)
-        sources.remove(sessionId)?.let(Disposer::dispose)
+        sources.remove(sessionId)?.let { source ->
+            if (source.resumeId != sessionId) stopped[sessionId] = source.resumeId
+            Disposer.dispose(source)
+        }
     }
+
+    /** The id each open session's conversation is saved under, by the session's own id (for `openSessionOf`). */
+    val resumeIds: Map<String, String> get() = sources.mapValues { it.value.resumeId }
 
     /**
      * Stops the session as the user asked from the screen. One in another folder than the project's (a worktree) with a
@@ -161,3 +175,13 @@ private fun markWasRunning(
         }
     project.saveWasRunningMarks(marksAtClose(project.wasRunningMarks(), open))
 }
+
+/**
+ * The open session whose conversation is saved under [savedId], from each open session's resume id by its own id: a
+ * conversation already open must not be resumed in a second CLI. After a `/clear` that is the CLI's new id, not the
+ * session's own.
+ */
+fun openSessionOf(
+    savedId: String,
+    resumeIds: Map<String, String>,
+): String? = resumeIds.entries.firstOrNull { (_, resumeId) -> resumeId == savedId }?.key
