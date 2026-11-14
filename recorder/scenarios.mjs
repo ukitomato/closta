@@ -14,6 +14,7 @@
 //   {kind:'wait', ms}                       wait ms
 //   {kind:'waitFor', line, n?}              wait until n (default 1) lines of line (type or type/subtype, e.g. system/task_started) have been seen
 //   {kind:'interrupt'}                      interrupt control request
+//   {kind:'control', request}               any other control request (request is the inner object with its subtype). Waits for the answer
 //   {kind:'userContent', content}           send a user message whose content is an array of blocks (image, document and text blocks)
 //   {kind:'mcpStatus'}                      mcp_status control request. Waits for the control_response with its request_id
 //   {kind:'mcpToggle', serverName, enabled} mcp_toggle control request (serverName '{MCP}' means the scenario's fake server). Waits for the answer
@@ -525,7 +526,8 @@ export const scenarios = [
     mcpServer: { name: 'fake-echo' },
     steps: [
       { kind: 'initialize' },
-      { kind: 'wait', ms: 3000 },
+      // 2.1.319 and later still report the HTTP server pending at 3 s.
+      { kind: 'wait', ms: 8000 },
       { kind: 'mcpStatus' },
       { kind: 'mcpToggle', serverName: '{MCP}', enabled: false },
       { kind: 'mcpStatus' },
@@ -855,6 +857,70 @@ export const scenarios = [
       steps: [{ kind: 'initialize' }, { kind: 'getSettings' }],
       done: { results: 0, controlResponses: 2, quietMs: 2500, maxMs: 30000 },
     },
+  },
+  // ---- /clear, local commands, usage and rules, denials. 2.1.325 and ISOLATED. ----
+  {
+    id: '41-clear-reset',
+    summary: '/clear between two turns → conversation_reset and how the next turn starts',
+    flags: [...ISOLATED],
+    steps: [
+      { kind: 'initialize' },
+      { kind: 'wait', ms: 500 },
+      { kind: 'user', text: 'Remember the word kumquat. Respond with exactly one word: pong' },
+      { kind: 'waitResults', n: 1 },
+      { kind: 'user', text: '/clear' },
+      { kind: 'waitResults', n: 2 },
+      { kind: 'user', text: 'Which word did I ask you to remember? If you do not know, respond with exactly: unknown' },
+    ],
+    done: { results: 3, controlResponses: 1, quietMs: 3000, maxMs: 90000 },
+  },
+  {
+    id: '42-local-commands',
+    // Not /usage: its text lists the recording machine's own skills, subagents and request counts.
+    summary: '/context typed as text → local_command_output or the result it comes back in',
+    flags: [...ISOLATED],
+    steps: [
+      { kind: 'initialize' },
+      { kind: 'wait', ms: 500 },
+      { kind: 'user', text: 'Respond with exactly one word: pong' },
+      { kind: 'waitResults', n: 1 },
+      { kind: 'user', text: '/context' },
+    ],
+    done: { results: 2, controlResponses: 1, quietMs: 3000, maxMs: 90000 },
+  },
+  {
+    id: '43-usage-and-rules',
+    summary: 'get_usage (skip_behaviors), get_session_cost, list_permission_rules (project rules seeded), list_models and get_context_usage detail full after one turn',
+    flags: [...ISOLATED],
+    seed: {
+      '.claude/settings.json': JSON.stringify({
+        permissions: { allow: ['Bash(echo:*)'], ask: ['Bash(git push:*)'], deny: ['Read(./secret.txt)'] },
+      }, null, 2) + '\n',
+    },
+    steps: [
+      { kind: 'initialize' },
+      { kind: 'wait', ms: 500 },
+      { kind: 'user', text: 'Respond with exactly one word: pong' },
+      { kind: 'waitResults', n: 1 },
+      { kind: 'control', request: { subtype: 'get_usage', skip_behaviors: true } },
+      { kind: 'control', request: { subtype: 'get_session_cost' } },
+      { kind: 'control', request: { subtype: 'list_permission_rules' } },
+      { kind: 'control', request: { subtype: 'list_models' } },
+      { kind: 'control', request: { subtype: 'get_context_usage', detail: 'full' } },
+    ],
+    done: { results: 1, controlResponses: 6, quietMs: 2000, maxMs: 60000 },
+  },
+  {
+    id: '44-permission-denied',
+    summary: 'dontAsk mode and a Bash command no rule allows → whether permission_denied comes and what the tool_result says',
+    flags: [...ISOLATED, '--permission-mode', 'dontAsk'],
+    steps: [
+      { kind: 'initialize' },
+      { kind: 'wait', ms: 500 },
+      { kind: 'user', text: 'Run this exact bash command: touch denied-marker.txt. If it is not allowed, say so in one line and stop.' },
+    ],
+    permission: { holdMs: 0, respond: ALLOW },
+    done: { results: 1, controlResponses: 1, quietMs: 3000, maxMs: 60000 },
   },
 ];
 
