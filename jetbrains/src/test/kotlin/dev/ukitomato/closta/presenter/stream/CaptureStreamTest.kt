@@ -389,7 +389,7 @@ class CaptureStreamTest {
                 "38-plan-bypass" to 159,
                 "39-sandbox-resume" to 43,
                 "40-sandbox-same-id" to 3,
-                "41-clear-reset" to 67,
+                "41-clear-reset" to 69,
                 "42-local-commands" to 13,
                 "43-usage-and-rules" to 9,
                 "44-permission-denied" to 35,

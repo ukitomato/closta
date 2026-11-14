@@ -95,6 +95,29 @@ data class TurnEndRow(
     override val opens: Boolean = false,
 ) : ThreadRow
 
+/** A line across the thread where the conversation changed under it; what came before stays above it. */
+data class DividerRow(
+    override val key: String,
+    val divider: Divider,
+    override val opens: Boolean,
+) : ThreadRow
+
+/** What a [DividerRow] marks. */
+sealed interface Divider {
+    /** The conversation was cleared; [at] is when, as the CLI wrote it (ISO 8601, UTC), null when it did not say. */
+    data class Cleared(
+        val at: String?,
+    ) : Divider
+
+    /** The conversation was compacted from [preTokens] to [postTokens] (null when not said), or [failed] to be. */
+    data class Compacted(
+        val trigger: String,
+        val preTokens: Long,
+        val postTokens: Long?,
+        val failed: Boolean,
+    ) : Divider
+}
+
 /** After the reply that said the CLI is not signed in: how to sign in, as the `/login` it names cannot run here. */
 data class SignInRow(
     override val key: String,
@@ -124,7 +147,7 @@ class ThreadRows {
         val go = planGoOf(transcript.operations)
         val byAnchor = transcript.approvals.values().groupBy { it.anchor }
         val messageKeys = transcript.messages.order.toHashSet()
-        val followed = sentAsks(transcript).dropLast(1).toHashSet()
+        val followed = liveAsks(transcript).dropLast(1).toHashSet()
         for (message in transcript.messages.values()) {
             val kept = messages[message]
             if (kept != null) carryParts(message, nextParts)
@@ -225,6 +248,7 @@ class ThreadRows {
                 } else {
                     TextRow(key, part.text, part.streaming, opens)
                 }
+            is ClearedRecord -> DividerRow(key, Divider.Cleared(part.at), opens)
             is ToolCallRecord if part.toolName == TODO_TOOL -> TodoRow(key, todosOf(part.input), opens)
             is ToolCallRecord ->
                 ToolRow(

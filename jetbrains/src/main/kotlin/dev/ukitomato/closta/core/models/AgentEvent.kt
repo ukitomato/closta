@@ -17,10 +17,10 @@ value class RawJson(
 /**
  * The stdout line kinds observed in the recorded captures (CLI 2.1.325, 44 captures).
  *
- * Nineteen: `command_lifecycle` arrives on every turn and `system/ui_invalidate` at the start of some
+ * Twenty: `command_lifecycle` arrives on every turn and `system/ui_invalidate` at the start of some
  * sessions, but neither has a declaration in the official SDK types, and the captures win over the
- * official types when they disagree. The official union declares 45 kinds; seventeen of the
- * nineteen are among them (including `system/commands_changed` and `system/compact_boundary`, which
+ * official types when they disagree. The official union declares 45 kinds; eighteen of the
+ * twenty are among them (including `system/commands_changed` and `system/compact_boundary`, which
  * both the types and the captures carry), and the rest never arrive or are not modelled yet — an
  * unmodelled kind is counted as unknown, which is how a version bump announces itself.
  *
@@ -49,6 +49,7 @@ enum class AgentEventKind(
     SYSTEM_COMMANDS_CHANGED("system/commands_changed"),
     SYSTEM_COMPACT_BOUNDARY("system/compact_boundary"),
     SYSTEM_UI_INVALIDATE("system/ui_invalidate"),
+    CONVERSATION_RESET("conversation_reset"),
     ;
 
     companion object {
@@ -64,7 +65,7 @@ enum class AgentEventKind(
  *
  * One line in, one value out: lines are never split or merged, because reconstructing a conversation
  * from them is the fold's job and anything decided here would be decided before the fold can
- * see it. Twenty-one variants — the [AgentEventKind] nineteen, plus [UnknownKind] and [BrokenLine].
+ * see it. Twenty-two variants — the [AgentEventKind] twenty, plus [UnknownKind] and [BrokenLine].
  *
  * The two catch-alls are variants rather than errors on purpose. A reader that throws stops reading,
  * and a stdout reader that stops deadlocks the CLI behind a full pipe; a reader that silently drops
@@ -411,7 +412,25 @@ sealed interface AgentEvent {
     }
 
     /**
-     * A well-formed JSON line whose `type` is not one of the nineteen, or one that is missing a field
+     * `conversation_reset`: the conversation was discarded (`/clear`, or leaving plan mode with a clear context), and
+     * the CLI goes on under a new session id, which the next `system/init` names. [sessionId] is still the old one.
+     * [trigger] says what discarded it and is informational: a consumer resets whatever it says, including when it is
+     * absent or unrecognised. [userMessageUuid] is the `/clear` message's uuid, only with the `clear` trigger.
+     * [timestamp] is when it happened, in UTC, for display (sdk.d.ts `SDKConversationResetMessage`).
+     */
+    data class ConversationReset(
+        val uuid: String,
+        val sessionId: String,
+        val newConversationId: String,
+        val trigger: String? = null,
+        val userMessageUuid: String? = null,
+        val timestamp: String? = null,
+    ) : Known {
+        override val kind: AgentEventKind get() = AgentEventKind.CONVERSATION_RESET
+    }
+
+    /**
+     * A well-formed JSON line whose `type` is not one of the twenty, or one that is missing a field
      * the declared shape needs. Kept whole so that whatever arrives can be read back later.
      *
      * This is the version-drift alarm: a CLI upgrade that adds a line kind shows up here rather than

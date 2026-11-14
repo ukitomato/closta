@@ -76,7 +76,7 @@ private fun foldEvent(
         is AgentEvent.SystemCompactBoundary ->
             transcript.withOperations(transcript.operations.compacted(event))
         is AgentEvent.SystemStatus -> transcript.withOperations(transcript.operations.statusSaid(event))
-        is AgentEvent.SystemInit -> foldCommandsOfInit(transcript, event)
+        is AgentEvent.SystemInit, is AgentEvent.ConversationReset -> foldSessionLine(transcript, event)
         is AgentEvent.SystemBackgroundTasksChanged,
         is AgentEvent.SystemTaskProgress,
         is AgentEvent.SystemTaskStarted,

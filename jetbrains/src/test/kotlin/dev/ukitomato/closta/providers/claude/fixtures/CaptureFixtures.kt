@@ -26,8 +26,8 @@ object CaptureFixtures {
 
     /**
      * Lines of a capture that the codec cannot place, by capture and wire type — an exception table that
-     * has six rows for the recorder's own mark in the resume, fork, cut and sandbox captures, and three for
-     * kinds 2.1.325 sends that the codec has not learnt yet.
+     * has six rows for the recorder's own mark in the resume, fork, cut and sandbox captures, and two for
+     * a kind 2.1.325 sends that the codec has not learnt yet.
      * Tests that derive their expectations from it (the turn left open, the thread still running, the
      * unknown-kind tally) expect nothing unusual from the CLI's own lines.
      *
@@ -55,9 +55,6 @@ object CaptureFixtures {
             // The same mark, between the two CLIs launched under the same `--session-id` (`then`), the second with
             // the sandbox on.
             "40-sandbox-same-id" to mapOf(RECORDER_BOUNDARY to 1),
-            // `/clear` answers with `conversation_reset` (SDKConversationResetMessage), which the codec does not
-            // type yet. The row goes when the codec types the kind.
-            "41-clear-reset" to mapOf("conversation_reset" to 1),
             // A denied tool use is announced as `system/permission_denied` (SDKPermissionDeniedMessage), which the
             // codec does not type yet: in 44 the main agent's Bash under `dontAsk`, in 10 a sub-agent's Monitor
             // command that needed an approval. The two rows go when the codec types the kind.

@@ -28,6 +28,7 @@ import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import dev.ukitomato.closta.core.models.AttachmentKind
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
+import dev.ukitomato.closta.platforms.intellij.chat.dividerText
 import dev.ukitomato.closta.platforms.intellij.chat.turnEndText
 import dev.ukitomato.closta.platforms.intellij.ui.noHtml
 import dev.ukitomato.closta.platforms.intellij.ui.plainTip
@@ -36,6 +37,7 @@ import dev.ukitomato.closta.presenter.view.AskActions
 import dev.ukitomato.closta.presenter.view.AskRow
 import dev.ukitomato.closta.presenter.view.AttachmentRecord
 import dev.ukitomato.closta.presenter.view.CardRow
+import dev.ukitomato.closta.presenter.view.DividerRow
 import dev.ukitomato.closta.presenter.view.ExploredRow
 import dev.ukitomato.closta.presenter.view.SignInRow
 import dev.ukitomato.closta.presenter.view.ThinkingRow
@@ -52,6 +54,8 @@ import java.awt.Dimension
 import java.awt.FlowLayout
 import java.awt.Graphics
 import java.awt.Graphics2D
+import java.awt.GridBagConstraints
+import java.awt.GridBagLayout
 import java.awt.KeyboardFocusManager
 import java.awt.Rectangle
 import java.awt.RenderingHints
@@ -64,6 +68,7 @@ import javax.swing.BoxLayout
 import javax.swing.JComponent
 import javax.swing.JLayeredPane
 import javax.swing.JPanel
+import javax.swing.JSeparator
 import javax.swing.JTextArea
 import javax.swing.ScrollPaneConstants
 import javax.swing.SwingUtilities
@@ -146,6 +151,7 @@ class ThreadRowViews(
             is CardRow -> cards.create(row.card)
             is TurnEndRow -> turnEnd(row)
             is SignInRow -> signIn()
+            is DividerRow -> divider(row)
             // A row this version does not draw takes no room.
             else -> JPanel().apply { preferredSize = Dimension(0, 0) }
         }
@@ -331,6 +337,29 @@ class ThreadRowViews(
                 add(JBLabel("·").apply { foreground = ThreadStyle.muted })
                 add(AskActionViews.turnEndRewind(row.askKey, actions))
             }
+        }
+
+    // A line across the thread with the words in the middle, muted: what came before stays above it.
+    private fun divider(row: DividerRow): JComponent =
+        JPanel(GridBagLayout()).apply {
+            isOpaque = false
+            border = JBUI.Borders.empty(GAP * 2, 0)
+            val side =
+                GridBagConstraints().apply {
+                    fill = GridBagConstraints.HORIZONTAL
+                    weightx = 1.0
+                }
+            add(JSeparator(), side)
+            dividerText(row.divider)?.let { words ->
+                add(
+                    JBLabel(words).apply {
+                        foreground = ThreadStyle.muted
+                        border = JBUI.Borders.empty(0, GAP * 2)
+                    },
+                    GridBagConstraints(),
+                )
+            }
+            add(JSeparator(), side)
         }
 
     // The IDE's own banner for "something to do before this can go on", with the one thing to do.

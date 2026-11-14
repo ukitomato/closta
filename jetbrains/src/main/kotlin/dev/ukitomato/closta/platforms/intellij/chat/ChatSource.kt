@@ -34,7 +34,14 @@ import java.util.concurrent.ConcurrentHashMap
  */
 @Suppress("TooManyFunctions") // one function per command the screen sends
 interface ChatSource : Disposable {
+    /** The host's id of the session: what the screen, its draft and the session list know it by, for its whole life. */
     val sessionId: String
+
+    /**
+     * The id the conversation now on screen is saved under, which a resume, a fork or a rewind opens. It is the
+     * [sessionId] until the CLI goes on under another (after `/clear`).
+     */
+    val resumeId: String get() = sessionId
     val title: String
     val view: StateFlow<SessionView>
     val notice: StateFlow<SessionNotice?>
@@ -100,6 +107,7 @@ interface ChatSource : Disposable {
     ) : ChatSource {
         private val scope = project.service<ClaudeSessionService>().viewScope(this)
         override val sessionId: String get() = runtime.id
+        override val resumeId: String get() = resumeIdOf(view.value, runtime.id)
         override val view: StateFlow<SessionView> = runtime.view
         override val notice: StateFlow<SessionNotice?> =
             runtime.status
@@ -250,3 +258,12 @@ interface ChatSource : Disposable {
 
 /** How long a rewind of the files waits for the CLI's answer. */
 private const val REWIND_WAIT_MS = 30_000L
+
+/**
+ * The id [view]'s conversation is saved under: the CLI's from its last init, or the host's [hostId] while the CLI has
+ * named none (from a `/clear` until the init after it), never the id of a conversation that was cleared.
+ */
+fun resumeIdOf(
+    view: SessionView,
+    hostId: String,
+): String = view.conversation.session?.sessionId ?: hostId

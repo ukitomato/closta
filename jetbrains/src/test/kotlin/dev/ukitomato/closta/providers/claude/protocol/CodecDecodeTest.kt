@@ -173,6 +173,45 @@ class CodecDecodeTest {
     }
 
     @Test
+    fun `a conversation_reset line becomes a typed reset naming the clear that made it`() {
+        // 41: the second message sent was `/clear`; the reset names it and the conversation it starts.
+        val clear =
+            CaptureFixtures
+                .readCapture("41-clear-reset.ndjson")
+                .filterIsInstance<AgentEvent.CommandLifecycle>()
+                .map { it.commandUuid }
+                .distinct()[1]
+        val reset = assertInstanceOf(AgentEvent.ConversationReset::class.java, captureLine("41-clear-reset", 18))
+
+        assertAll(
+            { assertEquals("clear", reset.trigger) },
+            { assertEquals(clear, reset.userMessageUuid) },
+            { assertEquals("c0817532-7496-4d9c-8870-b9c088a63253", reset.newConversationId) },
+            { assertEquals("2026-11-14T12:26:36.305Z", reset.timestamp) },
+            {
+                assertEquals(
+                    "a6635625-53e9-40b5-adfb-977a4e9163b2",
+                    reset.sessionId,
+                    "the line still carries the old id",
+                )
+            },
+        )
+    }
+
+    @Test
+    fun `a conversation_reset of an older CLI, without its optional fields, is still a reset`() {
+        val line =
+            """{"type":"conversation_reset","new_conversation_id":"n","uuid":"u","session_id":"s"}"""
+        val reset = assertInstanceOf(AgentEvent.ConversationReset::class.java, StreamJsonCodec.decode(line))
+
+        assertAll(
+            { assertNull(reset.trigger) },
+            { assertNull(reset.userMessageUuid) },
+            { assertNull(reset.timestamp) },
+        )
+    }
+
+    @Test
     fun `an init with no scratchpad_path is placed, with the path null`() {
         val inits = listOf("16-permission-suggestion-accept" to 4, "21-compact" to 4, "21-compact" to 20)
         inits.forEach { (scenario, line) ->

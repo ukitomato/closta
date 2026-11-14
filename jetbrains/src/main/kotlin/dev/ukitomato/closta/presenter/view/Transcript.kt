@@ -49,6 +49,11 @@ data class Transcript(
     val turnChanges: Map<String, TurnChangesRecord> = emptyMap(),
     /** The key of the message whose reply said the CLI is not signed in, until the model's next reply. */
     val signIn: String? = null,
+    /**
+     * Where the conversation was last cleared: the place in [messages] of the message holding the last [ClearedRecord],
+     * null while it never was. What comes before it belongs to a conversation the CLI no longer has.
+     */
+    val clearedAt: Int? = null,
 )
 
 enum class Role(
@@ -130,6 +135,15 @@ data class ToolResult(
     val isError: Boolean?,
     val durationMs: Long? = null,
 )
+
+/**
+ * Where the CLI discarded the conversation (`conversation_reset`): what came before stays shown, above it. [key] is its
+ * part key; [at] is when it happened as the CLI wrote it (ISO 8601, UTC), null when the line did not say.
+ */
+data class ClearedRecord(
+    val key: String,
+    val at: String?,
+) : PartRecord
 
 /** A block of a type this version does not know; the tree shows it as a part of that type. */
 data class OtherRecord(

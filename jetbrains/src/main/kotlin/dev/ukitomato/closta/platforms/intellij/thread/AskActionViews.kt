@@ -13,6 +13,7 @@ import dev.ukitomato.closta.platforms.intellij.ClostaBundle
 import dev.ukitomato.closta.platforms.intellij.chat.rewindRefusalText
 import dev.ukitomato.closta.platforms.intellij.composer.ToolbarButton
 import dev.ukitomato.closta.presenter.view.AskActions
+import dev.ukitomato.closta.presenter.view.RewindRefusal
 import java.awt.BorderLayout
 import java.awt.Container
 import java.awt.Dimension
@@ -74,15 +75,19 @@ internal object AskActionViews {
                 add(strip, JLayeredPane.PALETTE_LAYER)
             }
         onHover(row) { over ->
-            if (over) {
-                val now = actions.askActions(askKey, atEnd = false)
+            val now = if (over) actions.askActions(askKey, atEnd = false) else null
+            if (now != null) {
                 val why = now.refusal?.let(::rewindRefusalText)
                 rewind.enabledToClick = now.rewind != null
                 rewind.disabledReason = why
                 fork.enabledToClick = now.fork != null
                 fork.disabledReason = why
             }
-            buttons.forEach { it.isVisible = over }
+            // An ask from before a clear can never be rewound to or forked from: its buttons are not offered at all.
+            val offered = over && now?.refusal != RewindRefusal.BEFORE_CLEAR
+            copy.isVisible = over
+            rewind.isVisible = offered
+            fork.isVisible = offered
         }
         askMenu(box, askKey, text, actions)
         return row
@@ -99,16 +104,18 @@ internal object AskActionViews {
         actions: RowActions,
     ) {
         fun now() = actions.askActions(askKey, atEnd = false)
+
+        fun offered() = now().refusal != RewindRefusal.BEFORE_CLEAR
         val group =
             DefaultActionGroup(
                 DumbAwareAction.create(ClostaBundle.message("thread.ask.copy")) {
                     ThreadRowViews.copyToClipboard(text)
                     ThreadRowViews.copied(box)
                 },
-                menuAction(ClostaBundle.message("thread.ask.rewind"), { now().rewind != null }) {
+                menuAction(ClostaBundle.message("thread.ask.rewind"), { now().rewind != null }, ::offered) {
                     chooseRewind(box, askKey, false, now(), actions)
                 },
-                menuAction(ClostaBundle.message("thread.ask.fork"), { now().fork != null }) {
+                menuAction(ClostaBundle.message("thread.ask.fork"), { now().fork != null }, ::offered) {
                     now().fork?.let { actions.act(askKey, false, it) }
                 },
             )
@@ -125,12 +132,14 @@ internal object AskActionViews {
     private fun menuAction(
         text: String,
         can: () -> Boolean,
+        shown: () -> Boolean,
         run: () -> Unit,
     ): DumbAwareAction =
         object : DumbAwareAction(text) {
             override fun getActionUpdateThread() = ActionUpdateThread.EDT
 
             override fun update(e: AnActionEvent) {
+                e.presentation.isVisible = shown()
                 e.presentation.isEnabled = can()
             }
 

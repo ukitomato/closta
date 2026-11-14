@@ -95,7 +95,7 @@ class ChatSessions(
                 ?.messages
                 ?.size ?: 0
         if (source != null && marksOnStop(source.workingDirectory, project.basePath, messages)) {
-            project.markStopped(sessionId, WasRunningMark(source.workingDirectory, source.title))
+            project.markStopped(source.resumeId, WasRunningMark(source.workingDirectory, source.title))
         }
         stop(sessionId)
     }
@@ -152,7 +152,7 @@ private fun markWasRunning(
     val open =
         sources.filterIsInstance<ChatSource.Live>().map { live ->
             OpenAtClose(
-                live.sessionId,
+                live.resumeId,
                 aliveAtClose(live.runtime.status.value),
                 live.view.value.transcript.messages.size,
                 live.workingDirectory?.takeIf { it != project.basePath },

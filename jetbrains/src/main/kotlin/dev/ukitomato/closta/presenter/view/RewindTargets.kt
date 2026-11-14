@@ -41,6 +41,9 @@ enum class RewindRefusal {
 
     /** Nothing came after the turn. */
     NOTHING_AFTER,
+
+    /** The ask came before the conversation was cleared: the CLI's conversation now has no record of it. */
+    BEFORE_CLEAR,
 }
 
 private fun refused(why: RewindRefusal) = AskActions(null, null, null, why)
@@ -51,14 +54,16 @@ fun askActions(
     running: Boolean,
     askKey: String,
 ): AskActions {
-    val asks = sentAsks(transcript)
+    val asks = liveAsks(transcript)
     val at = asks.indexOf(askKey)
     return when {
         running -> refused(RewindRefusal.RUNNING)
+        at < 0 && askKey in sentAsks(transcript) -> refused(RewindRefusal.BEFORE_CLEAR)
         at < 0 -> refused(RewindRefusal.UNKNOWN)
         else -> {
-            // The record's first user line has no parent to cut at: rewinding to it keeps nothing.
-            val keepsNothing = at == 0 && transcript.restored?.partly != true
+            // The record's first user line has no parent to cut at: rewinding to it keeps nothing. After a clear the
+            // record starts afresh, whatever was put back of the one before.
+            val keepsNothing = at == 0 && (transcript.clearedAt != null || transcript.restored?.partly != true)
             val before = if (keepsNothing) null else transcript.userUuids.getValue(askKey)
             val next = asks.getOrNull(at + 1)?.let(transcript.userUuids::getValue)
             AskActions(
@@ -77,11 +82,12 @@ fun turnEndActions(
     running: Boolean,
     askKey: String,
 ): AskActions {
-    val asks = sentAsks(transcript)
+    val asks = liveAsks(transcript)
     val at = asks.indexOf(askKey)
     val next = asks.getOrNull(at + 1)
     return when {
         running -> refused(RewindRefusal.RUNNING)
+        at < 0 && askKey in sentAsks(transcript) -> refused(RewindRefusal.BEFORE_CLEAR)
         at < 0 -> refused(RewindRefusal.UNKNOWN)
         next == null -> refused(RewindRefusal.NOTHING_AFTER)
         else -> askActions(transcript, false, next).copy(fork = null)
@@ -93,3 +99,13 @@ internal fun sentAsks(transcript: Transcript): List<String> =
     transcript.messages.order.filter { key ->
         key in transcript.userUuids && transcript.messages[key]?.role == Role.USER
     }
+
+/** [sentAsks] after the last clear: the asks of the conversation the CLI has now. */
+internal fun liveAsks(transcript: Transcript): List<String> {
+    val cleared = transcript.clearedAt ?: return sentAsks(transcript)
+    val after =
+        transcript.messages.order
+            .drop(cleared + 1)
+            .toHashSet()
+    return sentAsks(transcript).filter { it in after }
+}

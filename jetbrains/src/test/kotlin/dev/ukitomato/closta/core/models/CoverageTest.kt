@@ -47,8 +47,8 @@ class CoverageTest {
             // modelled would be exactly the mistake the previous assertion forbids.
             { assertTrue(observedKinds().containsAll(UNDECLARED), "the undeclared kind is in the captures") },
             { assertEquals(CAPTURES_WITH_LIFECYCLE, lifecycleCaptures, "captures containing command_lifecycle") },
-            // 19 observed, 17 declared somewhere in StdoutMessage. The difference of two is the whole
-            // reason AgentEvent has nineteen kinds and not seventeen.
+            // 20 observed, 18 declared somewhere in StdoutMessage. The difference of two is the whole
+            // reason AgentEvent has twenty kinds and not eighteen.
             {
                 assertEquals(
                     DECLARED_IN_STDOUT_MESSAGE,
@@ -114,19 +114,19 @@ class CoverageTest {
         const val SDK_MESSAGE_KINDS = 40
 
         /** Distinct kinds across the captures (including commands_changed and compact_boundary). */
-        const val OBSERVED_KINDS = 19
+        const val OBSERVED_KINDS = 20
 
         /** Of those, the ones `StdoutMessage` declares. */
-        const val DECLARED_IN_STDOUT_MESSAGE = 17
+        const val DECLARED_IN_STDOUT_MESSAGE = 18
 
         /** Of those, the ones that are also in the `SDKMessage` subset. */
-        const val DECLARED_IN_SDK_MESSAGE = 15
+        const val DECLARED_IN_SDK_MESSAGE = 16
 
         /**
-         * Declared but not modelled: never recorded, or (`conversation_reset`, `system/permission_denied`)
-         * recorded and held in CaptureFixtures.KNOWN_UNPLACED until the codec types them.
+         * Declared but not modelled: never recorded, or (`system/permission_denied`) recorded and held in
+         * CaptureFixtures.KNOWN_UNPLACED until the codec types it.
          */
-        const val NEVER_OBSERVED = 28
+        const val NEVER_OBSERVED = 27
 
         /**
          * Lines across the 44 captures (01-44).

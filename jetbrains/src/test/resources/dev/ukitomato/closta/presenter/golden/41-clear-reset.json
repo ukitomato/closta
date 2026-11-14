@@ -77,8 +77,14 @@
                 "reason": "stop"
               },
               "parts": {
-                "order": [],
-                "byId": {}
+                "order": [
+                  "cleared"
+                ],
+                "byId": {
+                  "cleared": {
+                    "type": "cleared"
+                  }
+                }
               }
             },
             "send-3": {

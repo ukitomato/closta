@@ -30,6 +30,9 @@ fun fold(
         is AgentEvent.ControlRequest -> foldControlRequest(state, event)
         is AgentEvent.ControlResponse -> foldControlResponse(state, event)
         is AgentEvent.SystemStatus -> foldStatus(state, event)
+        // The CLI goes on under a new session id that only the next init names: until then there is no session, so
+        // nothing reads the old id as the current one. The cost is left for the next result, which counts from zero.
+        is AgentEvent.ConversationReset -> state.copy(session = null)
 
         // Carries no typed top-level field that changes the domain state core keeps. Content lives in
         // RawJson (message / event / tool_use_result) and is the presenter's to project, not core's.
