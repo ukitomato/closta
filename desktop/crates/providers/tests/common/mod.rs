@@ -17,8 +17,8 @@ const CAPTURE_SUFFIX: &str = ".ndjson";
 /// The wire type of the recorder's mark that separates the two stdouts of a resume capture.
 pub const RECORDER_BOUNDARY: &str = "recorder_boundary";
 
-/// Lines of a capture that the codec cannot place, by capture and wire type. The three rows are the
-/// recorder's own mark in the resume, fork and cut captures (`recorder/record.mjs`): it is not a
+/// Lines of a capture that the codec cannot place, by capture and wire type. The six rows are the
+/// recorder's own mark in the resume, fork, cut and sandbox captures (`recorder/record.mjs`): it is not a
 /// line the CLI wrote, so the codec rightly does not place it, and the manifest still counts it.
 ///
 /// To add a row, say why the line is unplaceable and what will fix it; a row without both is a
@@ -27,6 +27,13 @@ pub const KNOWN_UNPLACED: &[(&str, &[(&str, usize)])] = &[
     ("22-resume", &[(RECORDER_BOUNDARY, 1)]),
     ("26-fork-session", &[(RECORDER_BOUNDARY, 1)]),
     ("27-resume-session-at", &[(RECORDER_BOUNDARY, 1)]),
+    // The same mark between the two CLIs of the sandbox-unavailable scene: the first refuses to start, the
+    // second is a fresh launch with a new session id (`then`, not a resume).
+    ("36-sandbox-unavailable", &[(RECORDER_BOUNDARY, 1)]),
+    // Between the two stdouts of the scene that resumes into the sandbox (`--resume --settings`).
+    ("39-sandbox-resume", &[(RECORDER_BOUNDARY, 1)]),
+    // Between the two CLIs launched under the same `--session-id`, the second with the sandbox on.
+    ("40-sandbox-same-id", &[(RECORDER_BOUNDARY, 1)]),
 ];
 
 /// The `KNOWN_UNPLACED` row of `scenario`, empty when it has none.

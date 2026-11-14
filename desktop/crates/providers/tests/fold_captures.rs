@@ -65,7 +65,7 @@ fn result_for(
         terminal_reason: Some("end_turn".into()),
         num_turns: 1,
         result_index: 0,
-        queued_turn_count: 0,
+        queued_turn_count: Some(0),
         total_cost_usd: 0.0,
         duration_ms: 1,
         duration_api_ms: 1,
@@ -73,11 +73,11 @@ fn result_for(
         ttft_stream_ms: Some(1),
         time_to_request_ms: Some(1),
         first_content_frame_ms: Some(1),
-        fast_mode_state: "off".into(),
+        fast_mode_state: Some("off".into()),
         usage: RawJson("{}".into()),
         model_usage: RawJson("{}".into()),
         permission_denials: RawJson("[]".into()),
-        subagent_stats: RawJson("{}".into()),
+        subagent_stats: Some(RawJson("{}".into())),
         api_error_status: None,
         fast_mode_disabled_reason: None,
         request_sent_wall_ms: None,
@@ -548,7 +548,7 @@ fn a_task_started_that_arrives_after_completion_does_not_demote_the_task_back_to
 
 // --- UnknownEventTest -----------------------------------------------------------------------
 
-const COMMAND_LIFECYCLE_LINES: usize = 117;
+const COMMAND_LIFECYCLE_LINES: usize = 135;
 
 fn all_events() -> Vec<AgentEvent> {
     manifest()

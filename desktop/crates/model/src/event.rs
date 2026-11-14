@@ -167,6 +167,8 @@ pub enum AgentEvent {
         per_turn_effort_active: bool,
         fast_mode_disabled_reason: Option<String>,
     },
+    /// `queued_turn_count`, `fast_mode_state` and `subagent_stats` are optional because the result a CLI
+    /// writes when it refuses to start (before `initialize` is answered) omits them.
     Result {
         uuid: String,
         session_id: String,
@@ -177,7 +179,7 @@ pub enum AgentEvent {
         terminal_reason: Option<String>,
         num_turns: i32,
         result_index: i32,
-        queued_turn_count: i32,
+        queued_turn_count: Option<i32>,
         total_cost_usd: f64,
         duration_ms: i64,
         duration_api_ms: i64,
@@ -185,11 +187,11 @@ pub enum AgentEvent {
         ttft_stream_ms: Option<i64>,
         time_to_request_ms: Option<i64>,
         first_content_frame_ms: Option<i64>,
-        fast_mode_state: String,
+        fast_mode_state: Option<String>,
         usage: RawJson,
         model_usage: RawJson,
         permission_denials: RawJson,
-        subagent_stats: RawJson,
+        subagent_stats: Option<RawJson>,
         api_error_status: Option<String>,
         fast_mode_disabled_reason: Option<String>,
         request_sent_wall_ms: Option<i64>,

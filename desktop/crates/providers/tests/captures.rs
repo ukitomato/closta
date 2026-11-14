@@ -12,8 +12,8 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
-const EXPECTED_CAPTURES: usize = 32;
-const EXPECTED_LINES: usize = 2268;
+const EXPECTED_CAPTURES: usize = 40;
+const EXPECTED_LINES: usize = 2832;
 const CLI_VERSION: &str = "2.1.282";
 const FIRST_TOKEN_MS: i64 = 812;
 
@@ -22,8 +22,8 @@ const OBSERVED_KINDS: usize = 18;
 const DECLARED_IN_STDOUT_MESSAGE: usize = 17;
 const DECLARED_IN_SDK_MESSAGE: usize = 15;
 const NEVER_OBSERVED: usize = 27;
-const CAPTURES_WITH_LIFECYCLE: usize = 28;
-const CONTROL_PROTOCOL_LINES: usize = 73;
+const CAPTURES_WITH_LIFECYCLE: usize = 33;
+const CONTROL_PROTOCOL_LINES: usize = 104;
 
 const DIAGNOSTIC: &str =
     "[ede_diagnostic] result_type=user last_content_type=n/a stop_reason=tool_use";
@@ -703,6 +703,34 @@ fn an_error_result_without_a_result_text_says_what_went_wrong_with_its_errors() 
     assert!(is_error);
     assert_eq!(Some("aborted_streaming".to_string()), terminal_reason);
     assert_eq!(DIAGNOSTIC, result);
+}
+
+#[test]
+fn a_result_written_before_initialize_decodes() {
+    // 36: a CLI that refuses to start (the sandbox is required but bwrap is missing) writes this one result and
+    // exits without answering initialize; it has no queued_turn_count, fast_mode_state or subagent_stats.
+    let event = capture_line("36-sandbox-unavailable", 1);
+    let AgentEvent::Result {
+        is_error,
+        num_turns,
+        result,
+        queued_turn_count,
+        fast_mode_state,
+        subagent_stats,
+        ..
+    } = event
+    else {
+        panic!("not a Result: {event:?}");
+    };
+    assert!(is_error);
+    assert_eq!(0, num_turns);
+    assert!(
+        result.starts_with("Sandbox required but unavailable:"),
+        "{result}"
+    );
+    assert_eq!(None, queued_turn_count);
+    assert_eq!(None, fast_mode_state);
+    assert_eq!(None, subagent_stats);
 }
 
 #[test]
