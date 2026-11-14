@@ -18,6 +18,7 @@ import dev.ukitomato.closta.core.services.StopTask
 import dev.ukitomato.closta.core.services.SwitchEffort
 import dev.ukitomato.closta.core.services.SwitchModel
 import dev.ukitomato.closta.core.services.SwitchPermissionMode
+import dev.ukitomato.closta.core.services.TurnSandboxOff
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
 import dev.ukitomato.closta.presenter.view.ApplyRecord
 import dev.ukitomato.closta.presenter.view.AttachmentRecord
@@ -70,6 +71,7 @@ class SessionCommands internal constructor(
     private val mcpEnabledUseCase = SetMcpServerEnabled(session)
     private val mcpReconnectUseCase = ReconnectMcpServer(session)
     private val rewindUseCase = RewindFiles(session)
+    private val turnSandboxOffUseCase = TurnSandboxOff(session)
     private val stop = Interrupt(session)
     private val stopTaskUseCase = StopTask(session)
 
@@ -181,6 +183,13 @@ class SessionCommands internal constructor(
      * runs is not in the way. The settings are asked for again once the CLI says it took it (SessionRuntime).
      */
     suspend fun switchEffort(effort: String) = requested(ControlKind.EFFORT, effort) { effortUseCase(effort, it) }
+
+    /**
+     * Turns the sandbox off live (`apply_flag_settings`), as [switchModel] does: the CLI's success is not the
+     * sandbox being off, so the settings are asked for again (SessionRuntime) and their answer settles the switch.
+     * Turning it on is a restart ([SessionRuntime.turnSandboxOn]).
+     */
+    suspend fun turnSandboxOff() = requested(ControlKind.SANDBOX, "false") { turnSandboxOffUseCase(it) }
 
     /** Asks the CLI which MCP servers the session has, as [switchModel] does; the answer is the view's list. */
     suspend fun requestMcpStatus() = requested(ControlKind.MCP_STATUS, null) { mcpStatusUseCase(it) }

@@ -162,8 +162,8 @@ class AgentEventFixtureTest {
 
     private companion object {
         /** Both figures are recorded in `manifest.json`; holding them here is what makes a drift visible. */
-        const val EXPECTED_CAPTURES = 32
-        const val EXPECTED_LINES = 2268
+        const val EXPECTED_CAPTURES = 40
+        const val EXPECTED_LINES = 2832
 
         /** Arbitrary: it only has to survive the conversion as a number. */
         const val FIRST_TOKEN_MS = 812L

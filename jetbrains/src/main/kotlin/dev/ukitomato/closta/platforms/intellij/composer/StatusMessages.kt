@@ -1,6 +1,7 @@
 package dev.ukitomato.closta.platforms.intellij.composer
 
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
+import dev.ukitomato.closta.presenter.view.SwitchKind
 
 // What the line under the composer says, decided without the IDE: who said it, and for how long. Free of
 // `com.intellij`.
@@ -78,3 +79,9 @@ fun sendBlockReason(block: SendBlock): String? =
 
 /** What the model and mode buttons say while the session is not up yet, and the empty model list. */
 val WAITING_FOR_CLI: String get() = ClostaBundle.message("composer.waitingForCli")
+
+/**
+ * Whether a switch of [kind] with no answer in time is said as late. Turning the sandbox on is a restart of the CLI,
+ * longer than the wait, and the presenter says itself when a sandbox switch fails.
+ */
+fun answersLate(kind: SwitchKind): Boolean = kind != SwitchKind.SANDBOX

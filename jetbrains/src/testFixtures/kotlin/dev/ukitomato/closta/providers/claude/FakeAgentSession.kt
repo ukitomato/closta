@@ -111,6 +111,12 @@ class FakeAgentSession(
         effortRequests += effort to requestId
     }
 
+    val sandboxOffRequests = mutableListOf<String>()
+
+    override suspend fun turnSandboxOff(requestId: String) {
+        sandboxOffRequests += requestId
+    }
+
     override suspend fun requestMcpStatus(requestId: String) {
         recorded += Sent.RequestMcpStatus(requestId)
     }

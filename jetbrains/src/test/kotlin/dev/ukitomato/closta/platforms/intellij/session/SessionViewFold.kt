@@ -23,6 +23,8 @@ fun SessionView.fold(input: PresenterInput): SessionView =
         is PresenterInput.ControlSendFailed,
         is PresenterInput.EffortRefused,
         is PresenterInput.Launched,
+        is PresenterInput.SandboxRefused,
+        is PresenterInput.SandboxNotStarted,
         is PresenterInput.ResumeRefused,
         is PresenterInput.AttachmentRefused,
         is PresenterInput.RewindRequested,

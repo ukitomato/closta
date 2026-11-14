@@ -100,6 +100,46 @@ class ComposerStateTest {
         assertEquals(pending, state(model = "claude-opus-5-5", switches = listOf(pending)).switching)
     }
 
+    private fun sandboxState(
+        operations: OperationRecords,
+        running: Boolean,
+    ): ComposerState {
+        val routing = if (running) Routing(sends = 1) else Routing()
+        return composerState(ConversationState(), Transcript(routing = routing, operations = operations))
+    }
+
+    @Test
+    fun sandboxPendingBlocksButton() {
+        val pending = SwitchRecord("x", 1, SwitchKind.SANDBOX, "false", SwitchOutcome.PENDING)
+        val shown = sandboxState(OperationRecords(sandbox = true, switches = listOf(pending)), running = false)
+        assertEquals(SandboxView(on = true, blocked = SandboxBlock.SWITCHING), shown.sandbox)
+        assertEquals(pending, shown.switching)
+        assertNull(shown.sandboxFailure)
+    }
+
+    @Test
+    fun sandboxOnBlockedWhileRunning() {
+        val shown = sandboxState(OperationRecords(sandbox = false), running = true)
+        assertEquals(SandboxView(on = false, blocked = SandboxBlock.RUNNING), shown.sandbox)
+        assertEquals(SandboxView(on = false, blocked = null), sandboxState(OperationRecords(), running = false).sandbox)
+    }
+
+    @Test
+    fun sandboxOffAllowedWhileRunning() {
+        val shown = sandboxState(OperationRecords(sandbox = true), running = true)
+        assertEquals(SandboxView(on = true, blocked = null), shown.sandbox)
+        val launched = sandboxState(OperationRecords(launchSandbox = true), running = true)
+        assertTrue(launched.sandbox.on, "the launch's value until the CLI answers")
+    }
+
+    @Test
+    fun sandboxFailureIsTheNewestRecordOnly() {
+        val failed = SwitchRecord("a", 1, SwitchKind.SANDBOX, "true", SwitchOutcome.FAILED, "x")
+        val applied = SwitchRecord("b", 2, SwitchKind.SANDBOX, "true", SwitchOutcome.APPLIED)
+        assertEquals(failed, sandboxState(OperationRecords(switches = listOf(failed)), false).sandboxFailure)
+        assertNull(sandboxState(OperationRecords(switches = listOf(failed, applied)), false).sandboxFailure)
+    }
+
     @Test
     fun attachmentRules() {
         assertEquals(

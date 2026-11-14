@@ -138,7 +138,7 @@ class EditDiffTest {
                 .transcript.approvals
                 .values()
                 .single()
-        assertEquals(editDiff("Edit", approval.input), (cardOf(approval) as PermissionCard).diff)
+        assertEquals(editDiff("Edit", approval.input), (cardOf(approval, PlanGo.AUTO) as PermissionCard).diff)
     }
 
     @Test

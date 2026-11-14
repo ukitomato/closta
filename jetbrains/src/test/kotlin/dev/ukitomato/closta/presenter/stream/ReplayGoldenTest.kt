@@ -167,7 +167,7 @@ class ReplayGoldenTest {
         }
 
     private companion object {
-        const val EXPECTED_SCENARIOS = 32
+        const val EXPECTED_SCENARIOS = 40
         const val EXCERPT = 160
         const val LONG = 400
     }

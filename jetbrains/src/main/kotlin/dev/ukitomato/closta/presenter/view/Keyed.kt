@@ -1,3 +1,7 @@
+// put / add, not 0.5's putting / adding: IDEs before 2026.2 bundle an older kotlinx-collections-immutable that
+// comes first on the compile classpath and has only these names.
+@file:Suppress("DEPRECATION")
+
 package dev.ukitomato.closta.presenter.view
 
 import kotlinx.collections.immutable.PersistentList
@@ -36,8 +40,8 @@ class Keyed<T : Any> private constructor(
     ): Keyed<T> =
         when {
             byKey[key] === value -> this
-            key in byKey -> Keyed(keys, byKey.putting(key, value))
-            else -> Keyed(keys.adding(key), byKey.putting(key, value))
+            key in byKey -> Keyed(keys, byKey.put(key, value))
+            else -> Keyed(keys.add(key), byKey.put(key, value))
         }
 
     /** Replaces the entry under [key] with [change] of it; a missing key or an unchanged entry changes nothing. */
@@ -47,7 +51,7 @@ class Keyed<T : Any> private constructor(
     ): Keyed<T> {
         val old = byKey[key] ?: return this
         val new = change(old)
-        return if (new === old) this else Keyed(keys, byKey.putting(key, new))
+        return if (new === old) this else Keyed(keys, byKey.put(key, new))
     }
 
     /**

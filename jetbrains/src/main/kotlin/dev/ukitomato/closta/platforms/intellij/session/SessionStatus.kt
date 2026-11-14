@@ -9,7 +9,10 @@ import dev.ukitomato.closta.providers.claude.launch.WslSpawner
 import dev.ukitomato.closta.providers.claude.launch.WslUnavailableException
 import java.io.IOException
 
-/** Where one session is in its life. It only moves forward: Starting, then Running, then one of the three ends. */
+/**
+ * Where one session is in its life. It moves forward: Starting, then Running, then one of the three ends. A restart
+ * that turns the sandbox on goes from Running back to Starting once, and then to Running again.
+ */
 sealed interface SessionStatus {
     /** Planning the launch, checking `claude --version`, or starting the process. */
     data object Starting : SessionStatus

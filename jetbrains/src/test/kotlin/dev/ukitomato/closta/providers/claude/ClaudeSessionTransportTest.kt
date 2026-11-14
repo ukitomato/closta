@@ -1,11 +1,16 @@
 package dev.ukitomato.closta.providers.claude
 
 import dev.ukitomato.closta.core.models.AgentEvent
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
+import java.io.IOException
 
 /**
  * The transport edges: a very large single line and a stream cut mid-line must not jam or
@@ -51,6 +56,43 @@ class ClaudeSessionTransportTest {
             }
             assertEquals(1, received.size) { "the partial line arrives (as a broken line) before the error" }
             assertNotNull(thrown) { "a truncated stream surfaces as an error, not a silent end" }
+        }
+
+    // A CLI that already ended: its stdin is closed, and its stdout still holds a line it wrote (as capture 36's
+    // result), which arrives only once the host has tried to write.
+    private class EndedProcess(
+        line: String,
+    ) : AgentProcess {
+        private val tried = CompletableDeferred<Unit>()
+
+        override val stdoutLines: Flow<String> =
+            flow {
+                tried.await()
+                emit(line)
+            }
+
+        override suspend fun writeStdin(line: String) {
+            tried.complete(Unit)
+            throw IOException("stdin closed")
+        }
+
+        override suspend fun awaitExit(): Int = 1
+
+        override fun destroy() = Unit
+    }
+
+    @Test
+    @Timeout(TIMEOUT_SECONDS)
+    fun `a write that fails does not stop the read, and a send after the end fails`() =
+        runBlocking {
+            val line = """{"type":"system","subtype":"status","status":"requesting","session_id":"s","uuid":"u"}"""
+            val session = ClaudeSession(EndedProcess(line), SESSION_ID)
+            session.interrupt()
+            val received = mutableListOf<AgentEvent>()
+            session.events.collect { received += it }
+            assertEquals(1, received.size) { "the line written before the CLI ended is read: $received" }
+            assertThrows(Exception::class.java) { runBlocking { session.interrupt() } }
+            Unit
         }
 
     private companion object {

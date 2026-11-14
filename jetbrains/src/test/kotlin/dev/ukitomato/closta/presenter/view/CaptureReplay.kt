@@ -160,7 +160,27 @@ object CaptureReplay {
                     "Remember the word bravo too. Reply with only: ok",
                     "List every word I asked you to remember, comma separated, nothing else.",
                 ),
+            // Checkpoint 4. 33 turned the sandbox on and off with apply_flag_settings around one Bash turn.
+            "33-sandbox-live" to listOf(SANDBOX_PROBE),
+            // 34, 35 and 40 took control requests only (initialize and get_settings), no user turn.
+            "34-sandbox-launch" to emptyList(),
+            "35-sandbox-project-setting" to emptyList(),
+            // The first CLI refused to start; the second, without the sandbox, took the one Bash turn.
+            "36-sandbox-unavailable" to listOf(SANDBOX_PROBE),
+            "37-plan-auto" to listOf(PLAN_README),
+            "38-plan-bypass" to listOf(PLAN_README),
+            // Two CLIs of one session; the second (`--resume --settings`, in the sandbox) took the Bash turn.
+            "39-sandbox-resume" to listOf("Respond with exactly one word: pong", SANDBOX_PROBE),
+            "40-sandbox-same-id" to emptyList(),
         )
+
+    private const val SANDBOX_PROBE =
+        "Run this exact bash command once and report its output: touch {OUTSIDE}/sandbox-probe.txt. " +
+            "If it fails, do not retry it in any other way; just report the error message."
+
+    private const val PLAN_README =
+        "Make a short plan to fix the spelling of the headings in README.md, then call ExitPlanMode with it. " +
+            "Once it is approved, make the fix with the Edit tool and report done."
 
     private const val ASK =
         "Use the AskUserQuestion tool to ask the question \"AとBどちらがいいですか？\" " +
@@ -188,6 +208,14 @@ object CaptureReplay {
             // Checkpoint 3: the plan's ExitPlanMode, then the Edit it planned; the recorder allowed both at once.
             "29-exit-plan-mode" to { id -> PresenterInput.Decided(ApprovalDecision.Allow(id), 0) },
             "30-deny-empty-message" to { id -> PresenterInput.Decided(ApprovalDecision.Deny(id), 0) },
+            // Checkpoint 4, all allowed at once: 36's Bash `touch` (the sandbox was not in force), 37's ExitPlanMode,
+            // 38's ExitPlanMode and the Edit after it. 39 asked for nothing (the sandbox ran its Bash), but would be
+            // allowed the same way. What else the recorder sent (the setMode in updatedPermissions) reaches the
+            // projection through stdout.
+            "36-sandbox-unavailable" to { id -> PresenterInput.Decided(ApprovalDecision.Allow(id), 0) },
+            "37-plan-auto" to { id -> PresenterInput.Decided(ApprovalDecision.Allow(id), 0) },
+            "38-plan-bypass" to { id -> PresenterInput.Decided(ApprovalDecision.Allow(id), 0) },
+            "39-sandbox-resume" to { id -> PresenterInput.Decided(ApprovalDecision.Allow(id), 0) },
         )
 
     /**
@@ -233,7 +261,36 @@ object CaptureReplay {
                         effortLive(ControlKind.SETTINGS, 4 + index * 2)
                     }
                 },
+            // Checkpoint 4. The settings asked after each sandbox change, and 33's turning it off (req-5). The
+            // apply_flag_settings that turned it on (33's req-3 and req-7, 36's req-3) are not recorded: the host
+            // turns it on by restarting with --settings, never with that request.
+            "33-sandbox-live" to
+                buildMap {
+                    listOf(2, 4, 6, 8).forEach { checkpoint4("33-sandbox-live", ControlKind.SETTINGS, it) }
+                    checkpoint4("33-sandbox-live", ControlKind.SANDBOX, 5, "false")
+                },
+            "36-sandbox-unavailable" to buildMap { checkpoint4("36-sandbox-unavailable", ControlKind.SETTINGS, 4) },
+            "39-sandbox-resume" to buildMap { checkpoint4("39-sandbox-resume", ControlKind.SETTINGS, 3) },
+            "40-sandbox-same-id" to
+                buildMap { listOf(2, 4).forEach { checkpoint4("40-sandbox-same-id", ControlKind.SETTINGS, it) } },
+            // The plan mode before the plan; 38 first asked for bypassPermissions, which was refused.
+            "37-plan-auto" to buildMap { checkpoint4("37-plan-auto", ControlKind.MODE, 2, "plan") },
+            "38-plan-bypass" to
+                buildMap {
+                    checkpoint4("38-plan-bypass", ControlKind.MODE, 2, "bypassPermissions")
+                    checkpoint4("38-plan-bypass", ControlKind.MODE, 3, "plan")
+                },
         )
+
+    private fun MutableMap<String, PresenterInput.ControlRequested>.checkpoint4(
+        scenario: String,
+        kind: ControlKind,
+        number: Int,
+        value: String? = null,
+    ) {
+        val id = "$scenario-req-$number"
+        put(id, PresenterInput.ControlRequested(id, kind, value))
+    }
 
     private fun MutableMap<String, PresenterInput.ControlRequested>.effortLive(
         kind: ControlKind,

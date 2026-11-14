@@ -121,6 +121,7 @@ class ThreadRows {
         val rows = ArrayList<ThreadRow>()
         val nextCards = IdentityHashMap<ApprovalRecord, CardRow>()
         val nextEnds = HashMap<String, TurnEndRow>()
+        val go = planGoOf(transcript.operations)
         val byAnchor = transcript.approvals.values().groupBy { it.anchor }
         val messageKeys = transcript.messages.order.toHashSet()
         val followed = sentAsks(transcript).dropLast(1).toHashSet()
@@ -131,7 +132,7 @@ class ThreadRows {
             nextMessages[message] = made
             rows += made
             if (message.key == transcript.signIn) rows += SignInRow("${message.key}/sign-in")
-            byAnchor[message.key]?.forEach { rows += cardRow(it, nextCards) }
+            byAnchor[message.key]?.forEach { rows += cardRow(it, nextCards, go) }
             turnEndRow(transcript, message.key, followed)?.let {
                 nextEnds[it.key] = it
                 rows += it
@@ -140,7 +141,7 @@ class ThreadRows {
         // A request whose message is not (or no longer) in the conversation still has to be answered: it goes last.
         byAnchor.filterKeys { it == null || it !in messageKeys }.values.flatten().forEach {
             rows +=
-                cardRow(it, nextCards)
+                cardRow(it, nextCards, go)
         }
         messages = nextMessages
         parts = nextParts
@@ -164,8 +165,10 @@ class ThreadRows {
     private fun cardRow(
         approval: ApprovalRecord,
         into: IdentityHashMap<ApprovalRecord, CardRow>,
+        go: PlanGo,
     ): CardRow {
-        val made = cards[approval] ?: CardRow(cardKey(approval), cardOf(approval), opens = false)
+        val kept = cards[approval]?.takeIf { (it.card as? PlanCard)?.go.let { held -> held == null || held == go } }
+        val made = kept ?: CardRow(cardKey(approval), cardOf(approval, go), opens = false)
         into[approval] = made
         return made
     }

@@ -14,6 +14,8 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import java.io.IOException
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
@@ -104,6 +106,32 @@ class ClaudeVersionProbeTest {
                 check.join()
             }
             assertTrue(hanging.destroyed)
+        }
+
+    @Test
+    @Timeout(TIMEOUT_SECONDS)
+    fun `a cancel that lands while the process is being spawned still destroys it`() =
+        runBlocking {
+            val hanging = FakeProcess()
+            val spawning = CountDownLatch(1)
+            val release = CountDownLatch(1)
+            val spawner =
+                FakeSpawner {
+                    spawning.countDown()
+                    release.await()
+                    hanging
+                }
+            val check =
+                async(Dispatchers.Default) { ClaudeVersionProbe.version(launch(spawner), 30.seconds, LiveProcesses()) }
+            try {
+                assertTrue(spawning.await(5, TimeUnit.SECONDS))
+                check.cancel()
+                release.countDown()
+                withTimeout(5.seconds) { check.join() }
+                assertTrue(hanging.destroyed)
+            } finally {
+                release.countDown()
+            }
         }
 
     private companion object {

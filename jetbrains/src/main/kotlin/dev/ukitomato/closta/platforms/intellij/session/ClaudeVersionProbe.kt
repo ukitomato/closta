@@ -1,6 +1,7 @@
 package dev.ukitomato.closta.platforms.intellij.session
 
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
@@ -44,7 +45,15 @@ internal object ClaudeVersionProbe {
         timeout: Duration,
         live: LiveProcesses,
     ): String {
-        val process = withContext(Dispatchers.IO) { live.track(spawn(launch), Process::destroy) }
+        // A cancel that lands during the spawn makes withContext drop what it returns, so the process is kept here.
+        var spawned: Process? = null
+        val process =
+            try {
+                withContext(Dispatchers.IO) { live.track(spawn(launch), Process::destroy).also { spawned = it } }
+            } catch (cancel: CancellationException) {
+                spawned?.destroy()
+                throw cancel
+            }
         return coroutineScope {
             try {
                 // stdout goes line by line into an UNLIMITED channel and stderr is drained, both on IO while the

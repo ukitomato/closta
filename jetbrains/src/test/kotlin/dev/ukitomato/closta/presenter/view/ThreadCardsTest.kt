@@ -34,7 +34,7 @@ class ThreadCardsTest {
     @Test
     fun writeCardShowsTheFile() {
         val approval = approvals("05-permission-can-use-tool").first()
-        val card = cardOf(approval) as PermissionCard
+        val card = cardOf(approval, PlanGo.AUTO) as PermissionCard
         val path = (approval.input as dev.ukitomato.closta.presenter.tree.JsonObject).string("file_path")
         assertEquals("Write", card.toolName)
         assertEquals(path, card.subject)
@@ -51,7 +51,7 @@ class ThreadCardsTest {
                             .JsonString("./gradlew :auth:test"),
                 )
         val approval = ApprovalRecord("r1", "t1", "Bash", null, input, ask = false, anchor = null)
-        val card = cardOf(approval) as PermissionCard
+        val card = cardOf(approval, PlanGo.AUTO) as PermissionCard
         assertEquals("./gradlew :auth:test", card.subject)
     }
 
@@ -65,7 +65,7 @@ class ThreadCardsTest {
     @Test
     fun answerPayloadMatchesCapture14() {
         val approval = approvals("14-ask-answers-updatedinput").single()
-        val card = cardOf(approval) as QuestionCard
+        val card = cardOf(approval, PlanGo.AUTO) as QuestionCard
         val sent = JsonParser.parseString(answerPayload(approval, mapOf(card.questions[0].text to "A")))
         assertEquals(answeredInput("14-ask-answers-updatedinput"), sent)
     }
@@ -73,7 +73,7 @@ class ThreadCardsTest {
     @Test
     fun answerPayloadMatchesCapture18() {
         val approval = approvals("18-ask-multi-question").single()
-        val card = cardOf(approval) as QuestionCard
+        val card = cardOf(approval, PlanGo.AUTO) as QuestionCard
         assertEquals(2, card.questions.size)
         val sent = JsonParser.parseString(answerPayload(approval, answersOf(card)))
         assertEquals(answeredInput("18-ask-multi-question"), sent)
@@ -81,7 +81,7 @@ class ThreadCardsTest {
 
     @Test
     fun questionOptionsCarryTheirDescriptions() {
-        val card = cardOf(approvals("18-ask-multi-question").single()) as QuestionCard
+        val card = cardOf(approvals("18-ask-multi-question").single(), PlanGo.AUTO) as QuestionCard
         assertEquals(
             listOf(QuestionOption("A", "Aを選択します"), QuestionOption("B", "Bを選択します")),
             card.questions[0].options,
@@ -92,7 +92,7 @@ class ThreadCardsTest {
     @Test
     fun multiSelectJoinsLabels() {
         val approval = approvals("14-ask-answers-updatedinput").single()
-        val text = (cardOf(approval) as QuestionCard).questions[0].text
+        val text = (cardOf(approval, PlanGo.AUTO) as QuestionCard).questions[0].text
         val answers = questionAnswers(listOf(QuestionPick(text, listOf("A", "B"), other = null)))
         val sent = JsonParser.parseString(answerPayload(approval, answers)).asJsonObject
         assertEquals("A, B", sent.getAsJsonObject("answers").get(text).asString)
@@ -141,7 +141,7 @@ class ThreadCardsTest {
         input: dev.ukitomato.closta.presenter.tree.JsonObject,
     ): Pair<PermissionCard, ApprovalRecord> {
         val approval = ApprovalRecord("r1", "t1", tool, null, input, ask = false, anchor = null)
-        return (cardOf(approval) as PermissionCard) to approval
+        return (cardOf(approval, PlanGo.AUTO) as PermissionCard) to approval
     }
 
     private fun str(value: String) =
@@ -241,7 +241,7 @@ class ThreadCardsTest {
                 anchor = null,
                 suggestions = listOf(dirs),
             )
-        val card = cardOf(approval) as PermissionCard
+        val card = cardOf(approval, PlanGo.AUTO) as PermissionCard
         assertEquals(listOf(SuggestionLine("addDirectories", "/a/evil<U+202E>txt")), card.suggestionLines)
         assertTrue(card.hiddenMarked)
         assertEquals(listOf(dirs), card.suggestions)

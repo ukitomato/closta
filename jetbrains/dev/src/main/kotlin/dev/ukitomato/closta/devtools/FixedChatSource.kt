@@ -47,6 +47,8 @@ class FixedChatSource(
 
     override suspend fun switchMode(mode: String) = Unit
 
+    override suspend fun switchSandbox(on: Boolean) = Unit
+
     override suspend fun respond(answer: CardAnswer) = answered(answer)
 
     override suspend fun interrupt() = Unit

@@ -98,10 +98,13 @@ private val BY_FILE = setOf("Edit", "Write", "Read", "NotebookEdit", "MultiEdit"
 private val WITHOUT_FIELDS = setOf("Edit", "Write", "Read")
 private const val ASK_TOOL = "AskUserQuestion"
 
-/** The card for [approval]. */
-fun cardOf(approval: ApprovalRecord): ThreadCard =
+/** The card for [approval]; [go] is where a plan's first choice leads. */
+fun cardOf(
+    approval: ApprovalRecord,
+    go: PlanGo,
+): ThreadCard =
     when {
-        approval.toolName == PLAN_TOOL -> planCardOf(approval)
+        approval.toolName == PLAN_TOOL -> planCardOf(approval, go)
         approval.toolName == ASK_TOOL || approval.ask -> questionCardOf(approval)
         else -> permissionCardOf(approval)
     }

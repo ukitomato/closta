@@ -16,9 +16,28 @@ class TurnDiffFile(
     path: String,
 ) : CombinedDiffVirtualFile(name, path) {
     override fun createViewer(project: Project): CombinedDiffComponentProcessor =
-        CombinedDiffManager.getInstance(project).createProcessor(name).also { it.setBlocks(producers) }
+        createProcessor(CombinedDiffManager.getInstance(project), name).also { it.setBlocks(producers) }
 
     override fun equals(other: Any?): Boolean = other is TurnDiffFile && other.path == path
 
     override fun hashCode(): Int = path.hashCode()
+}
+
+/**
+ * The IDE's `createProcessor`, whichever it has: `(name)` before 2026.2, `(name, toolbar actions, …)` since. Both are
+ * experimental API and neither compiles against the other, so the method is found at run time and its action lists
+ * get null, their default.
+ */
+private fun createProcessor(
+    manager: CombinedDiffManager,
+    name: String,
+): CombinedDiffComponentProcessor {
+    val method = CombinedDiffManager::class.java.methods.first { it.name == "createProcessor" }
+    val processor =
+        if (method.parameterCount == 1) {
+            method.invoke(manager, name)
+        } else {
+            method.invoke(manager, name, null, null)
+        }
+    return processor as CombinedDiffComponentProcessor
 }

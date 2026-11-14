@@ -125,6 +125,35 @@ class ClaudeLaunchSpecTest {
     }
 
     @Test
+    fun settingsFlagWhenSandboxOn() {
+        val argv = ClaudeLaunchSpec("s", sandbox = true).toArgv()
+        val at = argv.indexOf("--settings")
+        assertEquals("""{"sandbox":{"enabled":true,"failIfUnavailable":true}}""", argv[at + 1])
+    }
+
+    @Test
+    fun noSettingsFlagWhenSandboxOff() {
+        assertFalse("--settings" in ClaudeLaunchSpec("s").toArgv())
+    }
+
+    @Test
+    fun settingsFlagWithResume() {
+        // 39's second CLI: `--resume=<id>` and the sandbox's `--settings` together, the settings after the others.
+        val argv = ClaudeLaunchSpec("s", resume = "s", effort = "high", sandbox = true).toArgv()
+        assertTrue("--resume=s" in argv)
+        assertEquals(1, argv.count { it == "--settings" })
+        assertEquals(argv.indexOf("--effort") + 2, argv.indexOf("--settings"), "--settings comes right after --effort")
+        assertEquals(ClaudeLaunchSpec.SANDBOX_SETTINGS, argv[argv.indexOf("--settings") + 1])
+    }
+
+    @Test
+    fun toStringNamesSandbox() {
+        val shown = ClaudeLaunchSpec("s", sandbox = true, env = mapOf("ANTHROPIC_AUTH_TOKEN" to "sk-secret")).toString()
+        assertTrue(shown.contains("sandbox=true"), shown)
+        assertFalse(shown.contains("sk-secret"), shown)
+    }
+
+    @Test
     fun `env is never placed on argv`() {
         val argv =
             ClaudeLaunchSpec(

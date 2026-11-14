@@ -35,7 +35,17 @@ internal object OperationsContract {
         )
     private val rewindOutcomes = setOf("pending", "done", "refused", "failed")
     private val switchKinds =
-        setOf("model", "mode", "effort", "resume", "attachment", "mcp-enable", "mcp-disable", "mcp-reconnect")
+        setOf(
+            "model",
+            "mode",
+            "effort",
+            "resume",
+            "attachment",
+            "mcp-enable",
+            "mcp-disable",
+            "mcp-reconnect",
+            "sandbox",
+        )
     private val switchOutcomes = setOf("pending", "applied", "rejected", "failed")
 
     /** The first of the thread's operations fields that the webview's tree checks refuse, as the field's place. */

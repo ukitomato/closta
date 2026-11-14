@@ -29,6 +29,13 @@ data class ClaudeLaunchSpec(
      * record. Needs [resume] and [forkSession].
      */
     val resumeSessionAt: String? = null,
+    /**
+     * Start in the sandbox: adds `--settings` [SANDBOX_SETTINGS] right after `--effort`. With `failIfUnavailable` a
+     * CLI that cannot sandbox refuses to start, writing one error result before it answers `initialize`. Taking the
+     * sandbox off mid-session is `apply_flag_settings`; putting it on is a new launch (with [resume] for a session that
+     * has messages).
+     */
+    val sandbox: Boolean = false,
     /** When true, adds `--permission-prompt-tool stdio` so permission prompts reach the host over stdin. */
     val permissionPromptToolStdio: Boolean = false,
     /**
@@ -82,6 +89,10 @@ data class ClaudeLaunchSpec(
                 add("--effort")
                 add(it)
             }
+            if (sandbox) {
+                add("--settings")
+                add(SANDBOX_SETTINGS)
+            }
             if (permissionPromptToolStdio) {
                 add("--permission-prompt-tool")
                 add("stdio")
@@ -99,13 +110,16 @@ data class ClaudeLaunchSpec(
     // auth values. Redact env to its key count; the values never appear in any string form.
     override fun toString(): String =
         "ClaudeLaunchSpec(sessionId=$sessionId, permissionMode=$permissionMode, model=$model, effort=$effort, " +
-            "resume=$resume, forkSession=$forkSession, resumeSessionAt=$resumeSessionAt, " +
+            "resume=$resume, forkSession=$forkSession, resumeSessionAt=$resumeSessionAt, sandbox=$sandbox, " +
             "permissionPromptToolStdio=$permissionPromptToolStdio, cwd=$cwd, " +
             "env=<${env.size} redacted>)"
 
     companion object {
         /** The CLI turns file checkpointing on when this is true (and the DISABLE name is absent). */
         const val CHECKPOINTING_ENV: String = "CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING"
+
+        /** The flag-layer settings of a sandboxed launch, as `get_settings` reports them back (captures 34 and 39). */
+        const val SANDBOX_SETTINGS: String = """{"sandbox":{"enabled":true,"failIfUnavailable":true}}"""
 
         /**
          * Added to every launch. In auto mode the CLI tells the model it may read, search and edit files through

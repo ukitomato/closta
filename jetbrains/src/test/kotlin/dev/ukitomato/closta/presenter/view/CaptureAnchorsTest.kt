@@ -496,15 +496,16 @@ class CaptureAnchorsTest {
     fun `every capture with an initialize response has its mode on the thread`(): List<DynamicTest> {
         val withInitialize = CaptureReplay.scenarios().filter { thread(it)["models"] != null }
         // Counted: were the filter to match none, no test would run and none would fail.
-        assertEquals(26, withInitialize.size, "26 captures carry an initialize response")
+        assertEquals(34, withInitialize.size, "34 captures carry an initialize response")
         return withInitialize.map { scenario ->
             DynamicTest.dynamicTest(scenario) {
-                // Every response carries the mode: 19 was started in acceptEdits, 29 in plan, the rest in
-                // default.
+                // Every response carries the mode: 19 was started in acceptEdits, 29 in plan, 37 in auto, the rest
+                // in default.
                 val expected =
                     when (scenario) {
                         "19-interrupt-background" -> "acceptEdits"
                         "29-exit-plan-mode" -> "plan"
+                        "37-plan-auto" -> "auto"
                         else -> "default"
                     }
                 assertEquals(expected, thread(scenario).str("startPermissionMode"))

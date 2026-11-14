@@ -1,0 +1,31 @@
+{
+  "session": {
+    "sessionId": "793daf72-8d4c-48c0-9b73-a4d690bb8821",
+    "model": "claude-sonnet-4-6",
+    "permissionMode": "default",
+    "cwd": "/tmp/closta-rec-39-sandbox-resume-S8NcNM/cwd",
+    "version": "2.1.282"
+  },
+  "turns": [
+    {
+      "commandUuid": "920cb21e-1043-47cc-a636-1bb8b3e9b641",
+      "phase": "CLOSED",
+      "incompleteReason": null,
+      "lifecycleDone": false
+    },
+    {
+      "commandUuid": "72ef970b-f1cc-4a63-a936-355ecd8d125b",
+      "phase": "CLOSED",
+      "incompleteReason": null,
+      "lifecycleDone": false
+    }
+  ],
+  "usage": {
+    "sessionCostUsd": 0.1508118
+  },
+  "tasks": [],
+  "thinkingEstimate": null,
+  "notices": [],
+  "spontaneousResumeCount": 0,
+  "pendingApprovals": []
+}

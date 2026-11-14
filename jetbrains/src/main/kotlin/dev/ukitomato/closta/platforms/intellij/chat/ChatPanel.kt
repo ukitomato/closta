@@ -372,7 +372,7 @@ class ChatPanel(
         JBPopupFactory
             .getInstance()
             .createPopupChooserBuilder(listOf(label))
-            .setRenderer(textListCellRenderer("") { it })
+            .setRenderer(textListCellRenderer { it.orEmpty() })
             .setItemChosenCallback { moveToOtherPlace() }
             .createPopup()
             .show(RelativePoint(under, Point(0, under.height)))
@@ -433,6 +433,7 @@ class ChatPanel(
         composer.onModel = { value -> scope.launch(failures) { source.switchModel(value) } }
         composer.onEffort = { level -> scope.launch(failures) { source.switchEffort(level) } }
         composer.onMode = { mode -> scope.launch(failures) { source.switchMode(mode) } }
+        composer.onSandbox = { on -> scope.launch(failures) { source.switchSandbox(on) } }
     }
 
     private fun draw() {

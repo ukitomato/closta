@@ -12,11 +12,9 @@ internal fun foldOperation(
         is PresenterInput.ControlRequested -> operations.control(input)
         is PresenterInput.ControlSendFailed -> operations.sendFailed(input.requestId)
         is PresenterInput.EffortRefused -> operations.refuseEffort(input)
-        is PresenterInput.Launched ->
-            operations.copy(
-                effort = input.effort?.takeIf { it.isNotEmpty() },
-                builtInMcpServers = input.builtInMcpServers,
-            )
+        is PresenterInput.Launched -> operations.launched(input)
+        is PresenterInput.SandboxRefused -> operations.refuseSandbox(input)
+        is PresenterInput.SandboxNotStarted -> operations.sandboxNotStarted(input)
         is PresenterInput.RewindRequested,
         is PresenterInput.RewindNotSent,
         -> operations.foldRewindAsk(input)

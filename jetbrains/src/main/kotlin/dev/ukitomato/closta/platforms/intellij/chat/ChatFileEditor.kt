@@ -65,10 +65,13 @@ class ChatTabTitles :
         file: VirtualFile,
     ): String? = (file as? ChatVirtualFile)?.let { chatTabTitle(it.shownTitle) }
 
-    override fun getEditorTabTooltipHtml(
+    // getEditorTabTooltipHtml is new in 2026.2, and its default reads this one. The text is HTML, so the title is
+    // escaped.
+    @Deprecated("Kept for IDEs before 2026.2")
+    override fun getEditorTabTooltipText(
         project: Project,
         virtualFile: VirtualFile,
-    ): HtmlChunk? = (virtualFile as? ChatVirtualFile)?.let { HtmlChunk.text(it.shownTitle) }
+    ): String? = (virtualFile as? ChatVirtualFile)?.let { HtmlChunk.text(it.shownTitle).toString() }
 }
 
 /** Opens a [ChatVirtualFile] as a conversation in an editor tab. The tab leases its session while it is open. */
