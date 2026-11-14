@@ -33,7 +33,7 @@ dependencies {
     testFixturesImplementation("org.junit.jupiter:junit-jupiter-api")
     // The synthetic sessions (providers/claude/synthetic) live in testFixtures for src/test and the dev tools plugin,
     // and build stream-json with the same Gson the provider parses it with.
-    testFixturesImplementation("com.google.code.gson:gson:2.11.0")
+    testFixturesImplementation("com.google.code.gson:gson:2.15.0")
     testFixturesImplementation("org.jetbrains.kotlinx:kotlinx-collections-immutable:0.5.2")
 
     // Main scope, and deliberately declared rather than borrowed from the IDE distribution:
@@ -41,7 +41,7 @@ dependencies {
     // AgentEvent and serialises stdin control messages. Reaching into the platform's bundled Gson
     // would make providers/ depend on the internal layout of ideaIU (lib/util-8.jar) with nothing
     // to warn us when it moves.
-    implementation("com.google.code.gson:gson:2.11.0")
+    implementation("com.google.code.gson:gson:2.15.0")
 
     // Main scope, declared not borrowed: Bedrock MFA credentials are resolved with the AWS SDK's STS
     // GetSessionToken (providers/claude/auth), so no `aws` binary or ~/.aws is required. `sts` pulls in
