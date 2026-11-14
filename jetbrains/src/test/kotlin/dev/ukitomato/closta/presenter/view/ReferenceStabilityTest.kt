@@ -158,10 +158,10 @@ class ReferenceStabilityTest {
         val before = steps[answer - 1].tree.thread()
         val after = steps[answer].tree.thread()
         val touched = before.keysOf("messages").filter { before.message(it) !== after.message(it) }
-        assertEquals(listOf("846b6e3f-1ec3-4fb1-ab89-af04c9749651"), touched)
+        assertEquals(listOf("c810a2d1-b8af-4673-9506-fd49f92285c4"), touched)
         assertSame(before.message("send-1"), after.message("send-1"))
         assertEquals(
-            "fd37592b-7c5a-4653-bb77-f4b22769cdd5",
+            "e42c7fac-e237-4ee9-a6c1-d19579abb0f3",
             ((steps[answer].input as PresenterInput.Decided).decision as ApprovalDecision.Allow).requestId,
         )
     }

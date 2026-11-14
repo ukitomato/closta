@@ -10,7 +10,7 @@
         "messages": {
           "order": [
             "send-1",
-            "8ad97fc5-1aa3-4d56-ae5a-94542ac5abb9"
+            "76d7ab50-1aef-416a-bcda-bc919e398236"
           ],
           "byId": {
             "send-1": {
@@ -28,8 +28,8 @@
                 }
               }
             },
-            "8ad97fc5-1aa3-4d56-ae5a-94542ac5abb9": {
-              "id": "8ad97fc5-1aa3-4d56-ae5a-94542ac5abb9",
+            "76d7ab50-1aef-416a-bcda-bc919e398236": {
+              "id": "76d7ab50-1aef-416a-bcda-bc919e398236",
               "role": "assistant",
               "status": {
                 "type": "complete",
@@ -37,40 +37,40 @@
               },
               "parts": {
                 "order": [
-                  "msg_011CScrubbed7z6ESH3KGDp6:0",
-                  "msg_011CScrubbed7z6ESH3KGDp6:1",
-                  "toolu_01SrxdstgpuYFysF8YNmXBXQ",
-                  "msg_011CScrubbedBZTyhaKrAAeC:0"
+                  "msg_011CScrubbedD6MgQz2FKq5f:0",
+                  "msg_011CScrubbedD6MgQz2FKq5f:1",
+                  "toolu_01BiqomDJ1sVovYfssAzASCx",
+                  "msg_011CScrubbed4rrS2cRHAWWm:0"
                 ],
                 "byId": {
-                  "msg_011CScrubbed7z6ESH3KGDp6:0": {
+                  "msg_011CScrubbedD6MgQz2FKq5f:0": {
                     "type": "reasoning",
                     "text": "",
                     "status": {
                       "type": "complete"
                     }
                   },
-                  "msg_011CScrubbed7z6ESH3KGDp6:1": {
+                  "msg_011CScrubbedD6MgQz2FKq5f:1": {
                     "type": "text",
                     "text": "I'll launch a background agent to run that command now.",
                     "status": {
                       "type": "complete"
                     }
                   },
-                  "toolu_01SrxdstgpuYFysF8YNmXBXQ": {
+                  "toolu_01BiqomDJ1sVovYfssAzASCx": {
                     "type": "tool-call",
-                    "toolCallId": "toolu_01SrxdstgpuYFysF8YNmXBXQ",
+                    "toolCallId": "toolu_01BiqomDJ1sVovYfssAzASCx",
                     "toolName": "Agent",
-                    "argsText": "{\"description\": \"Run sleep 60 then echo\", \"prompt\": \"Run the bash command `sleep 60 && echo bg-interrupt-done` and report its output.\", \"run_in_background\": true}",
+                    "argsText": "{\"description\": \"Run sleep 60 background command\", \"prompt\": \"Run the following bash command and report its output exactly:\\n\\n```\\nsleep 60 && echo bg-interrupt-done\\n```\\n\\nWait for it to complete, then report the full output.\", \"run_in_background\": true}",
                     "args": {
-                      "description": "Run sleep 60 then echo",
-                      "prompt": "Run the bash command `sleep 60 && echo bg-interrupt-done` and report its output.",
+                      "description": "Run sleep 60 background command",
+                      "prompt": "Run the following bash command and report its output exactly:\n\n```\nsleep 60 && echo bg-interrupt-done\n```\n\nWait for it to complete, then report the full output.",
                       "run_in_background": true
                     },
                     "result": [
                       {
                         "type": "text",
-                        "text": "Async agent launched successfully. (This tool result is internal metadata — never quote or paste any part of it, including the agentId below, into a user-facing reply.)\nagentId: a93bceb6a3ac22e00 (internal ID - do not mention to user. Use SendMessage with to: 'a93bceb6a3ac22e00', summary: '<5-10 word recap>' to continue this agent.)\nThe agent is working in the background. You will be notified automatically when it completes. You know nothing about its results until that notification arrives — do not report, assume, or predict them; continue other work or respond to the user in the meantime.\nDo not duplicate this agent's work — avoid working with the same files or topics it is using.\noutput_file: /tmp/claude-1000/-tmp-closta-rec-19-interrupt-background-redNTo-cwd/76a6edd3-0a70-4ea1-bf26-b450e57ed9df/tasks/a93bceb6a3ac22e00.output\nDo NOT Read or tail this file via the shell tool — it is the full subagent JSONL transcript and reading it will overflow your context. If the user asks for progress, say the agent is still running; you'll get a completion notification."
+                        "text": "Async agent launched successfully. (This tool result is internal metadata — never quote or paste any part of it, including the agentId below, into a user-facing reply.)\nagentId: aefdd792acc6f4110 (internal ID - do not mention to user. Use SendMessage with to: 'aefdd792acc6f4110', summary: '<5-10 word recap>' to continue this agent.)\nThe agent is working in the background. You will be notified automatically when it completes. You know nothing about its results until that notification arrives — do not report, assume, or predict them; continue other work or respond to the user in the meantime.\nDo not duplicate this agent's work — avoid working with the same files or topics it is using.\noutput_file: /tmp/claude-1000/-tmp-closta-rec-19-interrupt-background-qsSg6p-cwd/018e81e3-60f0-4034-afb3-2252b7eed8b1/tasks/aefdd792acc6f4110.output\nDo NOT Read or tail this file via the shell tool — it is the full subagent JSONL transcript and reading it will overflow your context. If the user asks for progress, say the agent is still running; you'll get a completion notification."
                       }
                     ],
                     "status": {
@@ -80,58 +80,56 @@
                     },
                     "messages": {
                       "order": [
-                        "msg_011CScrubbedAdqVp62LSv7f",
-                        "b974314c-d1a7-4252-9229-bdcaf14890ee"
+                        "msg_011CScrubbed8SMk64BWKRxM",
+                        "06734d5e-9c1e-4a77-a667-e38b633ffd54"
                       ],
                       "byId": {
-                        "msg_011CScrubbedAdqVp62LSv7f": {
-                          "id": "msg_011CScrubbedAdqVp62LSv7f",
+                        "msg_011CScrubbed8SMk64BWKRxM": {
+                          "id": "msg_011CScrubbed8SMk64BWKRxM",
                           "role": "assistant",
                           "parts": {
                             "order": [
-                              "msg_011CScrubbedAdqVp62LSv7f:0",
-                              "toolu_01JQzJgds9jxAZS6KpB3yPYh"
+                              "msg_011CScrubbed8SMk64BWKRxM:0",
+                              "toolu_01FAgiPzfH8134p6bKg7pKXJ"
                             ],
                             "byId": {
-                              "msg_011CScrubbedAdqVp62LSv7f:0": {
+                              "msg_011CScrubbed8SMk64BWKRxM:0": {
                                 "type": "reasoning",
                                 "text": "",
                                 "status": {
                                   "type": "complete"
                                 }
                               },
-                              "toolu_01JQzJgds9jxAZS6KpB3yPYh": {
+                              "toolu_01FAgiPzfH8134p6bKg7pKXJ": {
                                 "type": "tool-call",
-                                "toolCallId": "toolu_01JQzJgds9jxAZS6KpB3yPYh",
+                                "toolCallId": "toolu_01FAgiPzfH8134p6bKg7pKXJ",
                                 "toolName": "Bash",
-                                "argsText": "{\"command\":\"sleep 60 && echo bg-interrupt-done\",\"description\":\"Sleep 60 seconds then echo bg-interrupt-done\",\"run_in_background\":true}",
+                                "argsText": "{\"command\":\"sleep 60 && echo bg-interrupt-done\",\"description\":\"Sleep 60 seconds then echo a message\",\"timeout\":120000}",
                                 "args": {
                                   "command": "sleep 60 && echo bg-interrupt-done",
-                                  "description": "Sleep 60 seconds then echo bg-interrupt-done",
-                                  "run_in_background": true
+                                  "description": "Sleep 60 seconds then echo a message",
+                                  "timeout": 120000
                                 },
-                                "result": "The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). STOP what you are doing and wait for the user to tell you how to proceed.\n\nNote: The user's next message may contain a correction or preference. Pay close attention — if they explain what went wrong or how they'd prefer you to work, consider saving that to memory for future sessions.",
+                                "result": "<tool_use_error>Blocked: sleep 60 followed by: echo bg-interrupt-done. To wait for a condition, use Monitor with an until-loop (e.g. `until <check>; do sleep 2; done`). To wait for a command you started, use run_in_background: true. Do not chain shorter sleeps to work around this block.</tool_use_error>",
                                 "isError": true,
                                 "status": {
-                                  "type": "incomplete",
-                                  "reason": "error",
-                                  "error": "stopped"
+                                  "type": "complete"
                                 }
                               }
                             }
                           }
                         },
-                        "b974314c-d1a7-4252-9229-bdcaf14890ee": {
-                          "id": "b974314c-d1a7-4252-9229-bdcaf14890ee",
+                        "06734d5e-9c1e-4a77-a667-e38b633ffd54": {
+                          "id": "06734d5e-9c1e-4a77-a667-e38b633ffd54",
                           "role": "user",
                           "parts": {
                             "order": [
-                              "b974314c-d1a7-4252-9229-bdcaf14890ee:0"
+                              "06734d5e-9c1e-4a77-a667-e38b633ffd54:0"
                             ],
                             "byId": {
-                              "b974314c-d1a7-4252-9229-bdcaf14890ee:0": {
+                              "06734d5e-9c1e-4a77-a667-e38b633ffd54:0": {
                                 "type": "text",
-                                "text": "[Request interrupted by user for tool use]"
+                                "text": "[Request interrupted by user]"
                               }
                             }
                           }
@@ -139,9 +137,9 @@
                       }
                     }
                   },
-                  "msg_011CScrubbedBZTyhaKrAAeC:0": {
+                  "msg_011CScrubbed4rrS2cRHAWWm:0": {
                     "type": "text",
-                    "text": "The background agent is running. It will sleep for 60 seconds, then echo `bg-interrupt-done`. I'll report the output as soon as I'm notified it's done.",
+                    "text": "The background agent is running `sleep 60 && echo bg-interrupt-done`. I'll let you know the output as soon as it completes (roughly 60 seconds from now).",
                     "status": {
                       "type": "complete"
                     }
@@ -154,33 +152,25 @@
         "session": {
           "model": "claude-sonnet-4-6",
           "permissionMode": "acceptEdits",
-          "cwd": "/tmp/closta-rec-19-interrupt-background-redNTo/cwd",
-          "version": "2.1.282"
+          "cwd": "/tmp/closta-rec-19-interrupt-background-qsSg6p/cwd",
+          "version": "2.1.325"
         },
         "usage": {
-          "costUsd": 0.0571566,
+          "costUsd": 0.0631182,
           "inputTokens": 4,
-          "outputTokens": 227,
-          "cacheReadInputTokens": 33432,
-          "cacheCreationInputTokens": 7285
+          "outputTokens": 243,
+          "cacheReadInputTokens": 36124,
+          "cacheCreationInputTokens": 8104
         },
         "tasks": {
           "order": [
-            "a93bceb6a3ac22e00",
-            "bmbzape55"
+            "aefdd792acc6f4110"
           ],
           "byId": {
-            "a93bceb6a3ac22e00": {
-              "id": "a93bceb6a3ac22e00",
-              "toolCallId": "toolu_01SrxdstgpuYFysF8YNmXBXQ",
+            "aefdd792acc6f4110": {
+              "id": "aefdd792acc6f4110",
+              "toolCallId": "toolu_01BiqomDJ1sVovYfssAzASCx",
               "agentType": "general-purpose",
-              "background": true,
-              "status": "incomplete",
-              "reason": "stopped"
-            },
-            "bmbzape55": {
-              "id": "bmbzape55",
-              "toolCallId": "toolu_01JQzJgds9jxAZS6KpB3yPYh",
               "background": true,
               "status": "incomplete",
               "reason": "stopped"
@@ -217,8 +207,8 @@
           },
           {
             "name": "code-review",
-            "description": "Review the current diff, or a PR number/branch/path target, for correctness bugs (plus reuse/simplification/efficiency cleanups where the model's review recipe covers them) at the given effort level (low/medium: fewer, high-confidence findings; high→max: broader coverage, may include uncertain findings); with no level given, it reuses the level you typed last. Pass --comment to post findings as inline PR comments, or --fix to apply the findings to the working tree after the review.",
-            "argumentHint": "[low|medium|high|xhigh|max] [--fix] [--comment] [<pr#>|<branch>|<path>]"
+            "description": "Review the current diff, or a PR number/branch/path target, for correctness bugs (plus reuse/simplification/efficiency cleanups where the model's recipe covers them) at the effort level given first, before any target (low|medium|high|xhigh|max: from few high-confidence findings to many, some uncertain); with no level given, it reuses the level you typed last. Pass --comment to post findings as inline PR comments, or --fix to apply them to the working tree after the review. Pass --max-findings <n> to report up to n findings, or --max-findings all for every finding. The choice stays until you pass --max-findings default.",
+            "argumentHint": "[low|medium|high|xhigh|max] [--fix] [--comment] [<pr#>|<branch>|<path>] [--max-findings <n>|all]"
           },
           {
             "name": "simplify",
@@ -236,7 +226,8 @@
           },
           {
             "name": "doctor",
-            "description": "Health-check the user's Claude Code setup and fix issues: diagnose installation health — what the `claude doctor` terminal diagnostics cover — from local data (duplicate or leftover installs, PATH, unparseable settings files, broken or colliding agent definitions, skills whose frontmatter fails to parse); find unused skills, MCP servers, and plugins versus their context cost and disable dead weight; deduplicate local CLAUDE.md files against checked-in ones; trim checked-in CLAUDE.md files by cutting content a session could derive from the codebase (directory layouts, tech-stack lists, architecture overviews) while keeping gotchas, rationale, and non-standard conventions; migrate always-loaded CLAUDE.md guidance into lazy skills and nested CLAUDE.md files; flag slow hooks and context-heavy extensions; check the installed version is current; make auto mode the default permission mode; and pre-approve frequently denied read-only commands. Use when the user asks for a doctor run, checkup, audit, tune-up, or cleanup of their Claude Code setup or configuration."
+            "description": "Health-check the user's Claude Code setup and fix issues: diagnose installation health — what the `claude doctor` terminal diagnostics cover — from local data (duplicate or leftover installs, PATH, unparseable settings files, broken or colliding agent definitions, skills whose frontmatter fails to parse); find unused skills, MCP servers, and plugins versus their context cost and disable dead weight; deduplicate local CLAUDE.md files against checked-in ones; trim checked-in CLAUDE.md files by cutting content a session could derive from the codebase (directory layouts, tech-stack lists, architecture overviews) while keeping gotchas, rationale, and non-standard conventions; migrate always-loaded CLAUDE.md guidance into lazy skills and nested CLAUDE.md files; flag slow hooks and context-heavy extensions; check the installed version is current; make auto mode the default permission mode; and pre-approve frequently denied read-only commands. Use when the user asks for a doctor run, checkup, audit, tune-up, or cleanup of their Claude Code setup or configuration.",
+            "argumentHint": "[prompt-audit [<path>]]"
           },
           {
             "name": "loop",
@@ -245,7 +236,7 @@
           },
           {
             "name": "claude-api",
-            "description": "Reference for the Claude API / Anthropic SDK — model ids, pricing, params, streaming, tool use, MCP, agents, caching, token counting, model migration.\nTRIGGER — read BEFORE opening the target file; don't skip because it \"looks like a one-liner\" — whenever: the prompt names Claude/Anthropic in any form (Claude, Anthropic, Fable, Opus, Sonnet, Haiku, `anthropic`, `@anthropic-ai`, `claude-*`, `us.anthropic.*`, `[1m]`); the user asks about an LLM (pricing/model choice/limits/caching) — never answer from memory; OR the task is LLM-shaped with provider unstated (agent/MCP/tool-definition/multi-agent/RAG/LLM-judge/computer-use; generate/summarize/extract/classify/rewrite/converse over NL; debugging refusals/cutoffs/streaming/tool-calls/tokens).\nSKIP only when another provider is being worked on (overrides all triggers): OpenAI/GPT/Gemini/Llama/Mistral/Cohere/Ollama named in the query; OR `grep -rE 'openai|langchain_openai|google.generativeai|genai|mistralai|cohere|ollama'` over the project hits (run this grep FIRST if no provider named — don't Read the file)."
+            "description": "Reference for the Claude API / Anthropic SDK — model ids, pricing, params, streaming, tool use, MCP, agents, caching, token counting, model migration.\nTRIGGER — read FIRST, before you answer, run a command or open a file (already started? read it now); don't skip because it \"looks like a one-liner\" — whenever: the prompt names Claude/Anthropic in any form (Claude, Anthropic, Fable, Opus, Sonnet, Haiku, `anthropic`, `@anthropic-ai`, `claude-*`, `us.anthropic.*`, `[1m]`); the user asks about an LLM (pricing/model choice/limits/caching) — never answer from memory; OR the task is LLM-shaped with provider unstated (agent/MCP/tool-definition/multi-agent/RAG/LLM-judge/computer-use; generate/summarize/extract/classify/rewrite/converse over NL; debugging refusals/cutoffs/streaming/tool-calls/tokens).\nSKIP only when another provider is being worked on (overrides all triggers): OpenAI/GPT/Gemini/Llama/Mistral/Cohere/Ollama named in the query; OR `grep -rE 'openai|langchain_openai|google.generativeai|genai|mistralai|cohere|ollama'` over the project hits (run this grep FIRST if no provider named — don't Read the file; if nothing hits, load this skill)."
           },
           {
             "name": "run",
@@ -254,6 +245,10 @@
           {
             "name": "run-skill-generator",
             "description": "Author or improve the run-<unit> skill - a per-project skill that tells agents how to build, launch, and drive this project's app. Use when the user asks to set up the project, get it running, write run instructions, or verify build/run steps work from a clean environment."
+          },
+          {
+            "name": "plugin-authoring",
+            "description": "Make a mod: a change to Claude's own interface or behaviour, such as a theme, a panel or pane that stays beside the chat and updates, a band, status line, toast, slash command, or hook on tool calls. Use to make, change or debug a mod or its hooks module."
           },
           {
             "name": "advisor",
@@ -310,7 +305,7 @@
           },
           {
             "name": "fast",
-            "description": "Toggle fast mode (Opus 4.8)",
+            "description": "Toggle fast mode (Opus 5.5)",
             "argumentHint": "[on|off]"
           },
           {
@@ -415,19 +410,18 @@
           {
             "value": "default",
             "displayName": "Default (recommended)",
-            "description": "Opus 4.8 with 1M context · Best for everyday, complex tasks",
-            "resolvedModel": "claude-opus-4-8[1m]",
+            "description": "Opus 5.5 · Best for everyday, complex tasks",
+            "resolvedModel": "claude-opus-5-5",
             "supportsEffort": true,
             "supportedEffortLevels": [
               "low",
               "medium",
               "high",
-              "xhigh",
-              "max"
+              "xhigh"
             ]
           },
           {
-            "value": "claude-opus-5-5",
+            "value": "opus",
             "displayName": "Opus 5.5",
             "description": "For complex work and everyday tasks",
             "resolvedModel": "claude-opus-5-5",
@@ -436,8 +430,7 @@
               "low",
               "medium",
               "high",
-              "xhigh",
-              "max"
+              "xhigh"
             ]
           },
           {
@@ -450,8 +443,20 @@
               "low",
               "medium",
               "high",
-              "xhigh",
-              "max"
+              "xhigh"
+            ]
+          },
+          {
+            "value": "sonnet",
+            "displayName": "Sonnet 5.5",
+            "description": "Most efficient for simpler tasks",
+            "resolvedModel": "claude-sonnet-5-5",
+            "supportsEffort": true,
+            "supportedEffortLevels": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
             ]
           },
           {
@@ -464,12 +469,25 @@
               "low",
               "medium",
               "high",
+              "xhigh"
+            ]
+          },
+          {
+            "value": "haiku",
+            "displayName": "Haiku 5.5",
+            "description": "Fastest for quick answers",
+            "resolvedModel": "claude-haiku-5-5",
+            "supportsEffort": true,
+            "supportedEffortLevels": [
+              "low",
+              "medium",
+              "high",
               "xhigh",
               "max"
             ]
           },
           {
-            "value": "haiku",
+            "value": "claude-haiku-4-5-20251001",
             "displayName": "Haiku 4.5",
             "description": "Fastest for quick answers",
             "resolvedModel": "claude-haiku-4-5-20251001"
@@ -484,8 +502,7 @@
               "low",
               "medium",
               "high",
-              "xhigh",
-              "max"
+              "xhigh"
             ]
           },
           {
@@ -498,8 +515,7 @@
               "low",
               "medium",
               "high",
-              "xhigh",
-              "max"
+              "xhigh"
             ]
           },
           {
@@ -511,8 +527,7 @@
             "supportedEffortLevels": [
               "low",
               "medium",
-              "high",
-              "max"
+              "high"
             ]
           },
           {
@@ -524,8 +539,7 @@
             "supportedEffortLevels": [
               "low",
               "medium",
-              "high",
-              "max"
+              "high"
             ]
           }
         ],

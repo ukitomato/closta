@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test
  *
  * Positive evidence comes first from a direct fold — an init applied to an already-populated state
  * keeps everything but the session — and then from the two captures where init actually repeats
- * (10 ×3, 11 ×4), plus capture 03 (handshake, init ×1) to show a single init folds without breaking.
+ * (10 ×2, 11 ×4), plus capture 03 (handshake, init ×1) to show a single init folds without breaking.
  */
 class InitIdempotenceTest {
     @Test

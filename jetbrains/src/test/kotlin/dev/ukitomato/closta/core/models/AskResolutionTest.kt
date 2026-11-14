@@ -86,9 +86,9 @@ class AskResolutionTest {
     }
 
     private companion object {
-        const val REQUEST_13 = "9f0891e5-a636-4c70-8a63-c288c7eaf6aa"
-        const val REQUEST_14 = "4008cf14-e949-4846-b552-64e819026208"
-        const val REQUEST_15 = "d0762c7b-dfa5-4b56-b7de-cf86aaede9d9"
+        const val REQUEST_13 = "83bc36d7-6561-4c72-b33f-019b65e4903e"
+        const val REQUEST_14 = "418041f6-58b2-4928-a0ac-cc3bcd97c399"
+        const val REQUEST_15 = "49691af8-f839-4ed3-b8b8-19f7e7d39f59"
 
         /** Folds the capture up to its `control_request`, asserting the question is held as an ASK. */
         fun heldAsk(

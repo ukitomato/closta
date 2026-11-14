@@ -50,12 +50,12 @@ class CaptureAnchorsTest {
     @Test
     fun `01 one user message and one assistant message holding the answer`() {
         val thread = thread("01-baseline-text")
-        assertEquals(listOf("send-1", "2db4d1c4-2832-4e82-b206-29fb6231413f"), keys(thread))
+        assertEquals(listOf("send-1", "2936960e-01f3-4830-8964-67a2a1bc6cf6"), keys(thread))
         val user = thread.message("send-1")
         assertEquals("user", user.str("role"))
         assertNull(user["status"])
         assertEquals(listOf("Respond with exactly one word: pong"), user.parts().map { it.str("text") })
-        val answer = thread.message("2db4d1c4-2832-4e82-b206-29fb6231413f")
+        val answer = thread.message("2936960e-01f3-4830-8964-67a2a1bc6cf6")
         assertEquals("assistant", answer.str("role"))
         assertEquals("complete/stop", answer.status())
         assertEquals(listOf("text" to "pong"), answer.parts().map { it.str("type") to it.str("text") })
@@ -69,10 +69,11 @@ class CaptureAnchorsTest {
             steps.first { step ->
                 val thread = step.tree.at("threads", "byId", CaptureReplay.THREAD)
                 keys(thread).size == 2 &&
-                    thread.message("2db4d1c4-2832-4e82-b206-29fb6231413f").parts().any { it.str("text") == "p" }
+                    // 2.1.325 streams the answer as one delta; the part still runs until its content_block_stop.
+                    thread.message("2936960e-01f3-4830-8964-67a2a1bc6cf6").parts().any { it.str("text") == "pong" }
             }
         val thread = streaming.tree.at("threads", "byId", CaptureReplay.THREAD)
-        val answer = thread.message("2db4d1c4-2832-4e82-b206-29fb6231413f")
+        val answer = thread.message("2936960e-01f3-4830-8964-67a2a1bc6cf6")
         assertEquals("running", answer.status())
         assertEquals("running", answer.parts().single().status())
         assertEquals(JsonBool.TRUE, thread["isRunning"])
@@ -80,9 +81,9 @@ class CaptureAnchorsTest {
 
     @Test
     fun `02 the Bash call carries its input, its result and is complete`() {
-        val turn = thread("02-tool-bash-autorun").message("40cc3c71-e383-4bc1-9bef-0c9c972479fb")
-        assertEquals(listOf("reasoning", "text", "tool-call", "text"), turn.parts().map { it.str("type") })
-        val bash = turn.part("toolu_01M1wzh6sucheWf2EB5A36Mq")
+        val turn = thread("02-tool-bash-autorun").message("1733e09b-a794-4e74-b264-4e8c1feac07a")
+        assertEquals(listOf("tool-call", "text"), turn.parts().map { it.str("type") })
+        val bash = turn.part("toolu_01X34nTfhCcSEMxmUMvxUR78")
         assertEquals("Bash", bash.str("toolName"))
         assertEquals("echo hello-from-capture", bash.at("args").str("command"))
         assertEquals(JsonString("hello-from-capture"), bash["result"])
@@ -129,17 +130,17 @@ class CaptureAnchorsTest {
 
     @Test
     fun `04 the Bash call allowed in advance ran without an approval`() {
-        val bash = toolCalls(thread("04-tool-autorun-with-ppt-stdio")).getValue("toolu_01K4mynWnbCCRWnEAcHHtmUT")
+        val bash = toolCalls(thread("04-tool-autorun-with-ppt-stdio")).getValue("toolu_01LbRow5QYDQFGytVgTwRfuE")
         assertEquals(JsonString("should-be-denied"), bash["result"])
         assertNull(bash["approval"])
     }
 
     @Test
     fun `05 the Write call carries its approval, approved, and the result`() {
-        val write = toolCalls(thread("05-permission-can-use-tool")).getValue("toolu_01FooZHpFpzmDvsr82dzYb33")
+        val write = toolCalls(thread("05-permission-can-use-tool")).getValue("toolu_01S2wEQGaruCBtQJHkwEwrxu")
         assertEquals("Write", write.str("toolName"))
         val approval = write.at("approval")
-        assertEquals("fd37592b-7c5a-4653-bb77-f4b22769cdd5", approval.str("id"))
+        assertEquals("e42c7fac-e237-4ee9-a6c1-d19579abb0f3", approval.str("id"))
         assertEquals("decision", approval.str("display"))
         assertEquals(JsonBool.TRUE, approval["approved"])
         assertNull(approval["resolution"])
@@ -151,9 +152,9 @@ class CaptureAnchorsTest {
     fun `05 while the approval waits, the call and its message wait for the user`() {
         val waiting = treeAfterRequest("05-permission-can-use-tool")
         val thread = waiting.at("threads", "byId", CaptureReplay.THREAD)
-        val turn = thread.message("846b6e3f-1ec3-4fb1-ab89-af04c9749651")
+        val turn = thread.message("c810a2d1-b8af-4673-9506-fd49f92285c4")
         assertEquals("requires-action/interrupt", turn.status())
-        val write = turn.part("toolu_01FooZHpFpzmDvsr82dzYb33")
+        val write = turn.part("toolu_01S2wEQGaruCBtQJHkwEwrxu")
         assertEquals("requires-action/interrupt", write.status())
         assertEquals(setOf("id", "display", "input", "suggestions"), write.at("approval").keys)
         assertEquals(JsonBool.TRUE, thread["isRunning"])
@@ -202,26 +203,26 @@ class CaptureAnchorsTest {
         val agent =
             thread(
                 "08-subagent-task",
-            ).message("7bc9256d-6b9f-4dad-b58c-620568c6abaf").part("toolu_016keAu5ZSgNCvYmxd6wGT6w")
+            ).message("af32f5b7-baa9-4f58-9196-5136eec2573d").part("toolu_01S4aVxTAg6iR87daCuzkwZQ")
         assertEquals("Agent", agent.str("toolName"))
         assertEquals("complete", agent.status())
         assertEquals(
-            listOf("42e60a14-f53a-4c87-ac6f-67e41762f7b9", "msg_011CScrubbed91eppSUf5SM4"),
+            listOf("1121d477-e599-43de-941d-542c6139a2c4", "msg_011CScrubbed7qAAAm1qY1rq"),
             agent.keysOf("messages"),
         )
-        val prompt = agent.message("42e60a14-f53a-4c87-ac6f-67e41762f7b9")
+        val prompt = agent.message("1121d477-e599-43de-941d-542c6139a2c4")
         assertEquals("user", prompt.str("role"))
         assertTrue(
             prompt
                 .parts()
                 .single()
                 .str("text")!!
-                .startsWith("Read the file NOTES.md in the current directory"),
+                .let { it.startsWith("Read the file ") && it.contains("/cwd/NOTES.md") },
         )
-        val reply = agent.message("msg_011CScrubbed91eppSUf5SM4")
+        val reply = agent.message("msg_011CScrubbed7qAAAm1qY1rq")
         assertEquals("assistant", reply.str("role"))
         assertNull(reply["status"], "a sub-agent's message has no status")
-        val read = reply.part("toolu_017AYaBDFQPgf2trBHtoP1HN")
+        val read = reply.part("toolu_011Yw3MDkf6a4P4rzGqAqbyP")
         assertEquals("Read", read.str("toolName"))
         assertTrue(read.str("result")!!.startsWith("1\t# NOTES"))
         assertTrue((agent["result"] as JsonArray).items.isNotEmpty(), "the hand-back is the Agent call's result")
@@ -231,56 +232,89 @@ class CaptureAnchorsTest {
     fun `08 while the sub-agent works, the Agent call runs`() {
         val steps = CaptureReplay.replay("08-subagent-task")
         val working = steps.first { (it.input as? PresenterInput.Event)?.event is AgentEvent.SystemTaskStarted }
-        val agent = toolCalls(working.tree).getValue("toolu_016keAu5ZSgNCvYmxd6wGT6w")
+        val agent = toolCalls(working.tree).getValue("toolu_01S4aVxTAg6iR87daCuzkwZQ")
         assertEquals("running", agent.status())
     }
 
     @TestFactory
     fun `no sub-agent's call shows as cut off before its result arrives`(): List<DynamicTest> =
         CaptureReplay.scenarios().map { scenario ->
-            DynamicTest.dynamicTest(scenario) {
-                val cut = CUT_OFF[scenario]
-                var line = 0
-                for ((index, step) in CaptureReplay.replay(scenario).withIndex()) {
-                    if (step.input is PresenterInput.Event) line++
-                    val nested =
-                        toolCalls(step.tree).values.flatMap { call ->
-                            (call["messages"] as? JsonObject)?.let { toolCalls(it).values }.orEmpty()
-                        }
-                    // The known gap is let through only from the capture's line where the interrupt took effect.
-                    val exempt = cut?.takeIf { line >= it.fromLine }?.callId
-                    for (call in nested.filter { it["result"] == null && it.str("toolCallId") != exempt }) {
-                        assertFalse(
-                            call.status()!!.startsWith("incomplete"),
-                            "$scenario #$index: ${call.str("toolCallId")} is ${call.status()}",
-                        )
-                    }
-                }
-                // The known gap still shows: the call the interrupt killed ends incomplete (its result, the
-                // rejection, arrives at the capture's line 79 as an error).
-                cut?.callId?.let { id ->
-                    val end = CaptureReplay.finalTree(scenario)
-                    val call =
-                        toolCalls(end)
-                            .values
-                            .flatMap {
-                                (it["messages"] as? JsonObject)
-                                    ?.let { inner ->
-                                        toolCalls(inner).values
-                                    }.orEmpty()
-                            }.single { it.str("toolCallId") == id }
-                    assertTrue(call.status()!!.startsWith("incomplete"), "$scenario: $id is ${call.status()}")
-                }
-            }
+            DynamicTest.dynamicTest(scenario) { assertNoCallCutOff(CaptureReplay.replay(scenario), scenario, null) }
         }
 
     @Test
+    fun `19 under an older CLI, the call the interrupt killed shows cut off, and stays so after its result`() {
+        // Lines an older CLI (2.1.282) sent; the current version makes no such call (see the test after this).
+        val scenario = "19-interrupt-background"
+        val steps = CaptureReplay.replay(scenario, file = CaptureFixtures.legacyExcerpt(scenario))
+        // The interrupt killed the background agent and its Bash (task_updated killed at the excerpt's line 20,
+        // task_notification stopped), so the call shows incomplete with no result until the rejection arrives at
+        // line 28 as its result (an error) — it stays incomplete. How the tree should tell an interrupt from a
+        // rejection is still open.
+        assertNoCallCutOff(steps, scenario, Cut("toolu_01JQzJgds9jxAZS6KpB3yPYh", fromLine = 20))
+    }
+
+    @Test
+    fun `19 the sub-agent's Bash the CLI blocked is complete with its error, and the killed Agent call is cut off`() {
+        // 2.1.325 blocks the sub-agent's foreground `sleep 60 && …` before it runs, so the interrupt kills only the
+        // agent: its call ends incomplete, and the Bash ends with the CLI's error as its result.
+        val calls = toolCalls(thread("19-interrupt-background"))
+        val agent = calls.getValue("toolu_01BiqomDJ1sVovYfssAzASCx")
+        assertTrue(agent.status()!!.startsWith("incomplete"), agent.status())
+        val bash = toolCalls(agent).getValue("toolu_01FAgiPzfH8134p6bKg7pKXJ")
+        assertEquals("complete", bash.status())
+        assertEquals(JsonBool.TRUE, bash["isError"])
+    }
+
+    private fun assertNoCallCutOff(
+        steps: List<CaptureReplay.Step>,
+        scenario: String,
+        cut: Cut?,
+    ) {
+        var line = 0
+        for ((index, step) in steps.withIndex()) {
+            if (step.input is PresenterInput.Event) line++
+            val nested =
+                toolCalls(step.tree).values.flatMap { call ->
+                    (call["messages"] as? JsonObject)?.let { toolCalls(it).values }.orEmpty()
+                }
+            // The known gap is let through only from the capture's line where the interrupt took effect.
+            val exempt = cut?.takeIf { line >= it.fromLine }?.callId
+            for (call in nested.filter { it["result"] == null && it.str("toolCallId") != exempt }) {
+                assertFalse(
+                    call.status()!!.startsWith("incomplete"),
+                    "$scenario #$index: ${call.str("toolCallId")} is ${call.status()}",
+                )
+            }
+        }
+        // The known gap still shows: the call the interrupt killed ends incomplete.
+        cut?.callId?.let { id ->
+            val end = steps.last().tree
+            val call =
+                toolCalls(end)
+                    .values
+                    .flatMap { (it["messages"] as? JsonObject)?.let { inner -> toolCalls(inner).values }.orEmpty() }
+                    .single { it.str("toolCallId") == id }
+            assertTrue(call.status()!!.startsWith("incomplete"), "$scenario: $id is ${call.status()}")
+        }
+    }
+
+    @Test
     fun `10 and 11 the sub-agent's second run shows its call running until the result`() {
-        for ((scenario, read) in listOf(
-            "10-background-task" to "toolu_01TLAR4CsrnQ4L8vCyxGTJXg",
-            "11-background-followup" to "toolu_0185uJbXrK9vvVivVJSLTxrA",
+        // 10: lines an older CLI (2.1.282) sent; the current version makes no second run in 10. 11 still has one.
+        for ((scenario, read, file) in listOf(
+            Triple(
+                "10-background-task",
+                "toolu_01TLAR4CsrnQ4L8vCyxGTJXg",
+                CaptureFixtures.legacyExcerpt("10-background-task"),
+            ),
+            Triple("11-background-followup", "toolu_015a6ZhgFQhMA7NgEDjGokyi", "11-background-followup.ndjson"),
         )) {
-            val seen = CaptureReplay.replay(scenario).mapNotNull { toolCalls(it.tree)[read]?.status() }.distinct()
+            val seen =
+                CaptureReplay
+                    .replay(scenario, file = file)
+                    .mapNotNull { toolCalls(it.tree)[read]?.status() }
+                    .distinct()
             assertEquals(listOf("running", "complete"), seen, scenario)
         }
     }
@@ -288,38 +322,30 @@ class CaptureAnchorsTest {
     @Test
     fun `09 two Agent calls of one message each nest their own sub-agent`() {
         val calls = toolCalls(thread("09-parallel-subagents"))
-        val first = calls.getValue("toolu_01Lb8Pj8ffuCwbUXBNu6tpZe")
-        val second = calls.getValue("toolu_01AeVtuqRUaWjxrAn4eN4CtA")
+        val first = calls.getValue("toolu_01E79HHrgMyadV8MCS46uqpP")
+        val second = calls.getValue("toolu_013HREkWuoSa8wpsKe2fduA1")
         assertEquals(listOf("user", "assistant"), first.messages().map { it.str("role") })
         assertEquals(listOf("user", "assistant"), second.messages().map { it.str("role") })
-        assertTrue(toolCalls(first).getValue("toolu_017DX6f9jtm8Qbd7qWLAL774").str("result")!!.startsWith("1\t# NOTES"))
+        assertTrue(toolCalls(first).getValue("toolu_01VKkb2wZN3mNsdhYJMXgaAG").str("result")!!.startsWith("1\t# NOTES"))
         assertTrue(
-            toolCalls(second).getValue("toolu_019tWe9Kgvtduj36KbkSXbFb").str("result")!!.startsWith("1\t# GUIDE"),
+            toolCalls(second).getValue("toolu_019BKjQdHjgkQak6Coft7SBJ").str("result")!!.startsWith("1\t# GUIDE"),
         )
         assertFalse(
-            "toolu_019tWe9Kgvtduj36KbkSXbFb" in toolCalls(first),
+            "toolu_019BKjQdHjgkQak6Coft7SBJ" in toolCalls(first),
             "each sub-agent's calls stay under its own call",
         )
     }
 
     @Test
-    fun `10 one turn message, then two messages the CLI said on its own`() {
+    fun `10 one turn message, then a message the CLI said on its own`() {
         val thread = thread("10-background-task")
         assertEquals(
-            listOf(
-                "send-1",
-                "8ef2e421-4d12-48ac-b065-cacf3bc35e81",
-                "msg_011CScrubbed4Cim73pcgZBm",
-                "msg_011CScrubbedEDaKUXDcpXJk",
-            ),
+            listOf("send-1", "d4fed6c0-ab40-495c-9ef9-ef10a67ccae1", "msg_011CScrubbed4itd4JRxk33t"),
             keys(thread),
         )
-        assertEquals(listOf("user", "assistant", "assistant", "assistant"), thread.messages().map { it.str("role") })
-        assertEquals(
-            listOf(null, "complete/stop", "complete/stop", "complete/stop"),
-            thread.messages().map { it.status() },
-        )
-        assertTrue(thread.message("msg_011CScrubbedEDaKUXDcpXJk").parts().any { it.str("text")!!.contains("bg-done") })
+        assertEquals(listOf("user", "assistant", "assistant"), thread.messages().map { it.str("role") })
+        assertEquals(listOf(null, "complete/stop", "complete/stop"), thread.messages().map { it.status() })
+        assertTrue(thread.message("msg_011CScrubbed4itd4JRxk33t").parts().any { it.str("text")!!.contains("bg-done") })
     }
 
     @Test
@@ -330,11 +356,11 @@ class CaptureAnchorsTest {
         val speaking =
             steps.first { step ->
                 val thread = step.tree.at("threads", "byId", CaptureReplay.THREAD)
-                "msg_011CScrubbed4Cim73pcgZBm" in keys(thread)
+                "msg_011CScrubbed4itd4JRxk33t" in keys(thread)
             }
         val thread = speaking.tree.at("threads", "byId", CaptureReplay.THREAD)
         assertEquals(JsonBool.TRUE, thread["isRunning"])
-        assertEquals("running", thread.message("msg_011CScrubbed4Cim73pcgZBm").status())
+        assertEquals("running", thread.message("msg_011CScrubbed4itd4JRxk33t").status())
     }
 
     @Test
@@ -343,11 +369,11 @@ class CaptureAnchorsTest {
         assertEquals(
             listOf(
                 "send-1",
-                "fd3865b0-030e-4f83-b5c7-f125be3a58e3",
+                "137ae7e8-71d8-4325-b5d7-bf495b3391a3",
                 "send-2",
-                "461f6ba9-5e7c-40e6-a4a1-3f13ab7dfc93",
-                "msg_011CScrubbedErtc8MpJCiee",
-                "msg_011CScrubbedCJZpSJgv7AHg",
+                "e489ee2b-236d-4061-bfa3-d0ec69fa8fd2",
+                "msg_011CScrubbedFYeqBLKGzXCB",
+                "msg_011CScrubbedr1ANx1S2QoGc",
             ),
             keys(thread),
         )
@@ -359,8 +385,8 @@ class CaptureAnchorsTest {
                 .single()
                 .str("text"),
         )
-        assertEquals(listOf("4"), thread.message("461f6ba9-5e7c-40e6-a4a1-3f13ab7dfc93").parts().map { it.str("text") })
-        val blocked = toolCalls(thread).getValue("toolu_01X3CFLpZwNx78yc9GKxjDoA")
+        assertEquals(listOf("4"), thread.message("e489ee2b-236d-4061-bfa3-d0ec69fa8fd2").parts().map { it.str("text") })
+        val blocked = toolCalls(thread).getValue("toolu_01X5tmhWyS8HbdJ4eDYH7bQo")
         assertEquals(JsonBool.TRUE, blocked["isError"])
     }
 
@@ -378,9 +404,9 @@ class CaptureAnchorsTest {
         val agent =
             thread(
                 "12-subagent-permission",
-            ).message("7d810fd9-023c-4f86-b8a6-a8cb7f6ca80a").part("toolu_01VhnfAHvzvJJcXbuNmFC76z")
-        val write = agent.message("msg_011CScrubbedF8tX2sfjPKaL").part("toolu_01PpTFMozAHSLaqmFKc6923D")
-        assertEquals("c68ae115-1067-4676-be66-41f53bf3a14b", write.at("approval").str("id"))
+            ).message("2214261d-c819-490e-ade3-07249b64d3f0").part("toolu_01Ugvt3iFFuXLnUxzD8HQaim")
+        val write = agent.message("msg_011CScrubbedFy3MF3W4Zv3W").part("toolu_01EQdLNPPVwHuZQYn15Hjf5G")
+        assertEquals("8ede2c03-477c-4eeb-8df6-49eb8b5e8eda", write.at("approval").str("id"))
         assertEquals(JsonBool.TRUE, write.at("approval")["approved"])
         assertNull(agent["approval"], "the approval sits on the call it gates, not on the Agent call")
     }
@@ -388,11 +414,11 @@ class CaptureAnchorsTest {
     @Test
     fun `12 while the sub-agent's approval waits, the turn waits for the user`() {
         val thread = treeAfterRequest("12-subagent-permission").at("threads", "byId", CaptureReplay.THREAD)
-        val turn = thread.message("7d810fd9-023c-4f86-b8a6-a8cb7f6ca80a")
+        val turn = thread.message("2214261d-c819-490e-ade3-07249b64d3f0")
         assertEquals("requires-action/interrupt", turn.status())
-        val agent = turn.part("toolu_01VhnfAHvzvJJcXbuNmFC76z")
+        val agent = turn.part("toolu_01Ugvt3iFFuXLnUxzD8HQaim")
         assertEquals("running", agent.status())
-        assertEquals("requires-action/interrupt", toolCalls(agent).getValue("toolu_01PpTFMozAHSLaqmFKc6923D").status())
+        assertEquals("requires-action/interrupt", toolCalls(agent).getValue("toolu_01EQdLNPPVwHuZQYn15Hjf5G").status())
     }
 
     private fun question(scenario: String): JsonObject {
@@ -404,7 +430,7 @@ class CaptureAnchorsTest {
     fun `13 the question shows its prompt and options, and was cancelled unanswered`() {
         val ask = question("13-ask-timeout")
         val approval = ask.at("approval")
-        assertEquals("9f0891e5-a636-4c70-8a63-c288c7eaf6aa", approval.str("id"))
+        assertEquals("83bc36d7-6561-4c72-b33f-019b65e4903e", approval.str("id"))
         assertEquals("select", approval.str("display"))
         assertEquals("AとBどちらがいいですか？", approval.str("prompt"))
         val options = (approval["options"] as JsonArray).items.map { it as JsonObject }
@@ -429,19 +455,39 @@ class CaptureAnchorsTest {
         val ask = question("15-ask-afktimeout-updatedinput")
         assertEquals("expired", ask.at("approval").str("resolution"))
         assertNull(ask.at("approval")["approved"])
+        // 2.1.325 answers the away report with this error rather than with the expiry.
+        assertTrue(
+            ask.str("result")!!.startsWith(
+                "The app reported that nobody answered this question, but Claude Code did not accept the report",
+            ),
+            ask.str("result"),
+        )
+    }
+
+    @Test
+    fun `15 under an older CLI, the away report came back as the expiry`() {
+        // Lines an older CLI (2.1.282) sent; the current version does not accept the report.
+        val scenario = "15-ask-afktimeout-updatedinput"
+        val tree = CaptureReplay.replay(scenario, file = CaptureFixtures.legacyExcerpt(scenario)).last().tree
+        val ask =
+            toolCalls(tree.at("threads", "byId", CaptureReplay.THREAD)).values.single {
+                it.str("toolName") == "AskUserQuestion"
+            }
+        assertEquals("expired", ask.at("approval").str("resolution"))
+        assertNull(ask.at("approval")["approved"])
         assertTrue(ask.str("result")!!.startsWith("No response after 5s"))
     }
 
     @Test
     fun `01 and 16 show the session the CLI started, the mode 16's status changed, and the total`() {
         val first = thread("01-baseline-text")
-        assertEquals("claude-sonnet-4-6", first.at("session").str("model"))
+        assertEquals("claude-opus-5-5", first.at("session").str("model"))
         assertEquals("default", first.at("session").str("permissionMode"))
-        assertEquals("2.1.282", first.at("session").str("version"))
-        assertEquals(JsonNumber("0.0511167"), first.at("usage")["costUsd"])
+        assertEquals("2.1.325", first.at("session").str("version"))
+        assertEquals(JsonNumber("0.12213600000000001"), first.at("usage")["costUsd"])
         val accepting = thread("16-permission-suggestion-accept")
         assertEquals("acceptEdits", accepting.at("session").str("permissionMode"), "its system/status said so")
-        assertEquals(JsonNumber("0.14087429999999998"), accepting.at("usage")["costUsd"])
+        assertEquals(JsonNumber("0.1513491"), accepting.at("usage")["costUsd"])
     }
 
     @Test
@@ -461,18 +507,21 @@ class CaptureAnchorsTest {
     fun `03 offers the models of its initialize response, with the levels each takes, and 06 the context usage`() {
         val models = (thread("03-initialize-handshake")["models"] as JsonArray).items.map { it as JsonObject }
         assertEquals(
-            listOf("default", "claude-opus-5", "claude-sonnet-5", "haiku"),
+            listOf("default", "opus", "claude-opus-5", "sonnet"),
             models.take(4).map { it.str("value") },
         )
-        assertEquals("claude-opus-4-8[1m]", models.first().str("resolvedModel"))
+        assertEquals("claude-opus-5-5", models.first().str("resolvedModel"))
         assertEquals(JsonBool.TRUE, models.first()["supportsEffort"])
-        assertEquals(5, (models.first()["supportedEffortLevels"] as JsonArray).items.size)
-        assertNull(models.single { it.str("value") == "haiku" }["supportsEffort"], "haiku takes no effort")
+        assertEquals(4, (models.first()["supportedEffortLevels"] as JsonArray).items.size)
+        assertNull(
+            models.single { it.str("value") == "claude-haiku-4-5-20251001" }["supportsEffort"],
+            "Haiku 4.5 takes no effort",
+        )
         val context = thread("06-context-usage").at("context")
-        assertEquals(JsonNumber("16575"), context["totalTokens"])
-        assertEquals(JsonNumber("200000"), context["maxTokens"])
-        assertEquals(JsonNumber("8"), context["percentage"])
-        assertEquals(JsonNumber("167000"), context["autoCompactThreshold"])
+        assertEquals(JsonNumber("11645"), context["totalTokens"])
+        assertEquals(JsonNumber("1000000"), context["maxTokens"])
+        assertEquals(JsonNumber("1"), context["percentage"])
+        assertEquals(JsonNumber("967000"), context["autoCompactThreshold"])
     }
 
     @Test
@@ -496,16 +545,17 @@ class CaptureAnchorsTest {
     fun `every capture with an initialize response has its mode on the thread`(): List<DynamicTest> {
         val withInitialize = CaptureReplay.scenarios().filter { thread(it)["models"] != null }
         // Counted: were the filter to match none, no test would run and none would fail.
-        assertEquals(34, withInitialize.size, "34 captures carry an initialize response")
+        assertEquals(38, withInitialize.size, "38 captures carry an initialize response")
         return withInitialize.map { scenario ->
             DynamicTest.dynamicTest(scenario) {
-                // Every response carries the mode: 19 was started in acceptEdits, 29 in plan, 37 in auto, the rest
-                // in default.
+                // Every response carries the mode: 19 was started in acceptEdits, 29 in plan, 37 in auto, 44 in
+                // dontAsk, the rest in default.
                 val expected =
                     when (scenario) {
                         "19-interrupt-background" -> "acceptEdits"
                         "29-exit-plan-mode" -> "plan"
                         "37-plan-auto" -> "auto"
+                        "44-permission-denied" -> "dontAsk"
                         else -> "default"
                     }
                 assertEquals(expected, thread(scenario).str("startPermissionMode"))
@@ -522,12 +572,12 @@ class CaptureAnchorsTest {
         assertEquals("bypassPermissions", refused.str("value"))
         assertTrue(refused.str("detail")!!.startsWith("Cannot set permission mode to bypassPermissions"))
         val usage = thread("10-background-task").at("usage")
-        assertEquals(JsonNumber("0.15600725000000004"), usage["costUsd"])
-        assertEquals(JsonNumber("1109"), usage["outputTokens"], "20 + 1089 of the last result, not 531 + 763 + 1109")
+        assertEquals(JsonNumber("0.21946859999999999"), usage["costUsd"])
+        assertEquals(JsonNumber("1519"), usage["outputTokens"], "the last result's, not 256 + 1519")
         val compaction = (thread("21-compact")["compactions"] as JsonArray).items.single() as JsonObject
         assertEquals("manual", compaction.str("trigger"))
-        assertEquals(JsonNumber("20072"), compaction["preTokens"])
-        assertEquals(JsonNumber("1235"), compaction["postTokens"])
+        assertEquals(JsonNumber("21819"), compaction["preTokens"])
+        assertEquals(JsonNumber("3447"), compaction["postTokens"])
         assertEquals(JsonBool.FALSE, thread("21-compact")["compacting"], "it ended")
         // While the CLI compacts the tree says so, and says it is over after (the key is always there).
         val flags =
@@ -559,14 +609,18 @@ class CaptureAnchorsTest {
 
     @Test
     fun `08 and 10 show their tasks, the sub-agent's with the call that started it and 10's in the background`() {
-        val sub = thread("08-subagent-task").at("tasks", "byId", "a9647d7f101779f28")
-        assertEquals("toolu_016keAu5ZSgNCvYmxd6wGT6w", sub.str("toolCallId"))
+        val sub = thread("08-subagent-task").at("tasks", "byId", "a592487ec976885dc")
+        assertEquals("toolu_01S4aVxTAg6iR87daCuzkwZQ", sub.str("toolCallId"))
         assertEquals("Explore", sub.str("agentType"))
         assertEquals(JsonBool.FALSE, sub["background"])
         assertEquals("complete", sub.str("status"))
         val background = thread("10-background-task")
-        assertEquals(listOf("ad723e6f8ca4b28ad", "bc4b0ae63"), background.keysOf("tasks"))
-        assertEquals(listOf(JsonBool.TRUE, JsonBool.TRUE), background.entries("tasks").map { it["background"] })
+        // The sub-agent and its Bash in the background, then the sub-agent's own foreground Bash (`until grep`).
+        assertEquals(listOf("a40aca0599667cba4", "b9eajvrtk", "bho6ze5ur"), background.keysOf("tasks"))
+        assertEquals(
+            listOf(JsonBool.TRUE, JsonBool.TRUE, JsonBool.FALSE),
+            background.entries("tasks").map { it["background"] },
+        )
     }
 
     @Test
@@ -629,13 +683,5 @@ class CaptureAnchorsTest {
             val callId: String,
             val fromLine: Int,
         )
-
-        /**
-         * The captures where a sub-agent's call shows cut off: the interrupt killed the background agent and its
-         * Bash (task_updated killed at line 71, task_notification stopped), so the call shows incomplete with no
-         * result until the rejection arrives at line 79 as its result (an error) — it stays incomplete. How the tree
-         * should tell an interrupt from a rejection is still open.
-         */
-        val CUT_OFF = mapOf("19-interrupt-background" to Cut("toolu_01JQzJgds9jxAZS6KpB3yPYh", fromLine = 71))
     }
 }

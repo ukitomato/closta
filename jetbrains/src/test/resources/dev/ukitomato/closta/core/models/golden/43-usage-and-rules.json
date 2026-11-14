@@ -1,0 +1,25 @@
+{
+  "session": {
+    "sessionId": "4ac885ce-5224-42b4-b079-2627b59c2e28",
+    "model": "claude-sonnet-4-6",
+    "permissionMode": "default",
+    "cwd": "/tmp/closta-rec-43-usage-and-rules-NYbRby/cwd",
+    "version": "2.1.325"
+  },
+  "turns": [
+    {
+      "commandUuid": "61c4f3d5-7d78-4bfa-a863-9aa38c5bb9e3",
+      "phase": "CLOSED",
+      "incompleteReason": null,
+      "lifecycleDone": false
+    }
+  ],
+  "usage": {
+    "sessionCostUsd": 0.049589999999999995
+  },
+  "tasks": [],
+  "thinkingEstimate": null,
+  "notices": [],
+  "spontaneousResumeCount": 0,
+  "pendingApprovals": []
+}

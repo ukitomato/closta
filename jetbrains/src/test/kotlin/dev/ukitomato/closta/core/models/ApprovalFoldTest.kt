@@ -26,9 +26,9 @@ class ApprovalFoldTest {
         assertEquals(1, atRequest.pendingApprovals.size, "05: one approval pending after the control_request")
         val pending = atRequest.pendingApprovals.single()
         assertAll(
-            { assertEquals("fd37592b-7c5a-4653-bb77-f4b22769cdd5", pending.requestId, "keyed by request_id") },
+            { assertEquals("e42c7fac-e237-4ee9-a6c1-d19579abb0f3", pending.requestId, "keyed by request_id") },
             { assertEquals(ApprovalKind.APPROVAL, pending.kind, "Write is a plain tool, not AskUserQuestion") },
-            { assertEquals("toolu_01FooZHpFpzmDvsr82dzYb33", pending.toolUseId, "tool_use_id rides along") },
+            { assertEquals("toolu_01S2wEQGaruCBtQJHkwEwrxu", pending.toolUseId, "tool_use_id rides along") },
             { assertNull(pending.agentId, "a main-conversation approval has no agent_id") },
         )
 

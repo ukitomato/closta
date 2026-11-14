@@ -10,7 +10,7 @@
         "messages": {
           "order": [
             "send-1",
-            "90b57daa-903c-45e5-97cf-3df395f266b7"
+            "fa1716ec-1cb4-4d02-bc96-a3c35653fd8b"
           ],
           "byId": {
             "send-1": {
@@ -28,8 +28,8 @@
                 }
               }
             },
-            "90b57daa-903c-45e5-97cf-3df395f266b7": {
-              "id": "90b57daa-903c-45e5-97cf-3df395f266b7",
+            "fa1716ec-1cb4-4d02-bc96-a3c35653fd8b": {
+              "id": "fa1716ec-1cb4-4d02-bc96-a3c35653fd8b",
               "role": "assistant",
               "status": {
                 "type": "complete",
@@ -37,36 +37,65 @@
               },
               "parts": {
                 "order": [
-                  "msg_011CScrubbed9Sdu9nHjabge:0",
-                  "toolu_01BHzTePH76SHsBAH9tkD8hm",
-                  "msg_011CScrubbedGxkw14YoEZkH:0"
+                  "msg_011CScrubbedEdQK4zc9bi9X:0",
+                  "toolu_0161S5QhGizL3V3hUVqDkKbG",
+                  "msg_011CScrubbed6fxPwfU9wwAX:0"
                 ],
                 "byId": {
-                  "msg_011CScrubbed9Sdu9nHjabge:0": {
+                  "msg_011CScrubbedEdQK4zc9bi9X:0": {
                     "type": "reasoning",
                     "text": "",
                     "status": {
                       "type": "complete"
                     }
                   },
-                  "toolu_01BHzTePH76SHsBAH9tkD8hm": {
+                  "toolu_0161S5QhGizL3V3hUVqDkKbG": {
                     "type": "tool-call",
-                    "toolCallId": "toolu_01BHzTePH76SHsBAH9tkD8hm",
+                    "toolCallId": "toolu_0161S5QhGizL3V3hUVqDkKbG",
                     "toolName": "Bash",
-                    "argsText": "{\"command\": \"touch /tmp/closta-rec-33-sandbox-live-8zury7/outside/sandbox-probe.txt\", \"description\": \"Touch file outside sandbox working directory\"}",
+                    "argsText": "{\"command\": \"touch /tmp/closta-rec-33-sandbox-live-GVh2WQ/outside/sandbox-probe.txt\", \"description\": \"Run the specified touch command\"}",
                     "args": {
-                      "command": "touch /tmp/closta-rec-33-sandbox-live-8zury7/outside/sandbox-probe.txt",
-                      "description": "Touch file outside sandbox working directory"
+                      "command": "touch /tmp/closta-rec-33-sandbox-live-GVh2WQ/outside/sandbox-probe.txt",
+                      "description": "Run the specified touch command"
                     },
-                    "result": "Exit code 1\ntouch: cannot touch '/tmp/closta-rec-33-sandbox-live-8zury7/outside/sandbox-probe.txt': Read-only file system",
+                    "result": "Exit code 1\ntouch: cannot touch '/tmp/closta-rec-33-sandbox-live-GVh2WQ/outside/sandbox-probe.txt': Read-only file system",
                     "isError": true,
                     "status": {
                       "type": "complete"
+                    },
+                    "approval": {
+                      "id": "68a543d7-820c-4e66-a973-1dee47e4da89",
+                      "display": "decision",
+                      "input": {
+                        "command": "touch /tmp/closta-rec-33-sandbox-live-GVh2WQ/outside/sandbox-probe.txt",
+                        "description": "Run the specified touch command"
+                      },
+                      "suggestions": [
+                        {
+                          "id": "s1",
+                          "kind": "addRules",
+                          "detail": "Bash(touch /tmp/closta-rec-33-sandbox-live-GVh2WQ/outside/sandbox-probe.txt)",
+                          "destination": "localSettings"
+                        },
+                        {
+                          "id": "s2",
+                          "kind": "addDirectories",
+                          "detail": "/tmp/closta-rec-33-sandbox-live-GVh2WQ/outside",
+                          "destination": "session"
+                        },
+                        {
+                          "id": "s3",
+                          "kind": "setMode",
+                          "detail": "acceptEdits",
+                          "destination": "session"
+                        }
+                      ],
+                      "approved": true
                     }
                   },
-                  "msg_011CScrubbedGxkw14YoEZkH:0": {
+                  "msg_011CScrubbed6fxPwfU9wwAX:0": {
                     "type": "text",
-                    "text": "The command failed with:\n\n```\ntouch: cannot touch '/tmp/closta-rec-33-sandbox-live-8zury7/outside/sandbox-probe.txt': Read-only file system\n```\n\nThe path is outside the sandbox's allowed write directories (which are limited to the working directory `.`, `$TMPDIR`, and a few other specific paths), so the filesystem sandbox blocked the write.",
+                    "text": "The command failed with:\n\n```\ntouch: cannot touch '/tmp/closta-rec-33-sandbox-live-GVh2WQ/outside/sandbox-probe.txt': Read-only file system\n```\n\nThe path `/tmp/closta-rec-33-sandbox-live-GVh2WQ/outside/` is outside the sandbox's writable allowlist, so the filesystem is read-only there.",
                     "status": {
                       "type": "complete"
                     }
@@ -79,15 +108,15 @@
         "session": {
           "model": "claude-sonnet-4-6",
           "permissionMode": "default",
-          "cwd": "/tmp/closta-rec-33-sandbox-live-8zury7/cwd",
-          "version": "2.1.282"
+          "cwd": "/tmp/closta-rec-33-sandbox-live-GVh2WQ/cwd",
+          "version": "2.1.325"
         },
         "usage": {
-          "costUsd": 0.14598089999999997,
+          "costUsd": 0.1572297,
           "inputTokens": 4,
-          "outputTokens": 221,
-          "cacheReadInputTokens": 22433,
-          "cacheCreationInputTokens": 22654
+          "outputTokens": 228,
+          "cacheReadInputTokens": 24199,
+          "cacheCreationInputTokens": 24423
         },
         "commands": [
           {
@@ -119,8 +148,8 @@
           },
           {
             "name": "code-review",
-            "description": "Review the current diff, or a PR number/branch/path target, for correctness bugs (plus reuse/simplification/efficiency cleanups where the model's review recipe covers them) at the given effort level (low/medium: fewer, high-confidence findings; high→max: broader coverage, may include uncertain findings); with no level given, it reuses the level you typed last. Pass --comment to post findings as inline PR comments, or --fix to apply the findings to the working tree after the review.",
-            "argumentHint": "[low|medium|high|xhigh|max] [--fix] [--comment] [<pr#>|<branch>|<path>]"
+            "description": "Review the current diff, or a PR number/branch/path target, for correctness bugs (plus reuse/simplification/efficiency cleanups where the model's recipe covers them) at the effort level given first, before any target (low|medium|high|xhigh|max: from few high-confidence findings to many, some uncertain); with no level given, it reuses the level you typed last. Pass --comment to post findings as inline PR comments, or --fix to apply them to the working tree after the review. Pass --max-findings <n> to report up to n findings, or --max-findings all for every finding. The choice stays until you pass --max-findings default.",
+            "argumentHint": "[low|medium|high|xhigh|max] [--fix] [--comment] [<pr#>|<branch>|<path>] [--max-findings <n>|all]"
           },
           {
             "name": "simplify",
@@ -138,7 +167,8 @@
           },
           {
             "name": "doctor",
-            "description": "Health-check the user's Claude Code setup and fix issues: diagnose installation health — what the `claude doctor` terminal diagnostics cover — from local data (duplicate or leftover installs, PATH, unparseable settings files, broken or colliding agent definitions, skills whose frontmatter fails to parse); find unused skills, MCP servers, and plugins versus their context cost and disable dead weight; deduplicate local CLAUDE.md files against checked-in ones; trim checked-in CLAUDE.md files by cutting content a session could derive from the codebase (directory layouts, tech-stack lists, architecture overviews) while keeping gotchas, rationale, and non-standard conventions; migrate always-loaded CLAUDE.md guidance into lazy skills and nested CLAUDE.md files; flag slow hooks and context-heavy extensions; check the installed version is current; make auto mode the default permission mode; and pre-approve frequently denied read-only commands. Use when the user asks for a doctor run, checkup, audit, tune-up, or cleanup of their Claude Code setup or configuration."
+            "description": "Health-check the user's Claude Code setup and fix issues: diagnose installation health — what the `claude doctor` terminal diagnostics cover — from local data (duplicate or leftover installs, PATH, unparseable settings files, broken or colliding agent definitions, skills whose frontmatter fails to parse); find unused skills, MCP servers, and plugins versus their context cost and disable dead weight; deduplicate local CLAUDE.md files against checked-in ones; trim checked-in CLAUDE.md files by cutting content a session could derive from the codebase (directory layouts, tech-stack lists, architecture overviews) while keeping gotchas, rationale, and non-standard conventions; migrate always-loaded CLAUDE.md guidance into lazy skills and nested CLAUDE.md files; flag slow hooks and context-heavy extensions; check the installed version is current; make auto mode the default permission mode; and pre-approve frequently denied read-only commands. Use when the user asks for a doctor run, checkup, audit, tune-up, or cleanup of their Claude Code setup or configuration.",
+            "argumentHint": "[prompt-audit [<path>]]"
           },
           {
             "name": "loop",
@@ -147,7 +177,7 @@
           },
           {
             "name": "claude-api",
-            "description": "Reference for the Claude API / Anthropic SDK — model ids, pricing, params, streaming, tool use, MCP, agents, caching, token counting, model migration.\nTRIGGER — read BEFORE opening the target file; don't skip because it \"looks like a one-liner\" — whenever: the prompt names Claude/Anthropic in any form (Claude, Anthropic, Fable, Opus, Sonnet, Haiku, `anthropic`, `@anthropic-ai`, `claude-*`, `us.anthropic.*`, `[1m]`); the user asks about an LLM (pricing/model choice/limits/caching) — never answer from memory; OR the task is LLM-shaped with provider unstated (agent/MCP/tool-definition/multi-agent/RAG/LLM-judge/computer-use; generate/summarize/extract/classify/rewrite/converse over NL; debugging refusals/cutoffs/streaming/tool-calls/tokens).\nSKIP only when another provider is being worked on (overrides all triggers): OpenAI/GPT/Gemini/Llama/Mistral/Cohere/Ollama named in the query; OR `grep -rE 'openai|langchain_openai|google.generativeai|genai|mistralai|cohere|ollama'` over the project hits (run this grep FIRST if no provider named — don't Read the file)."
+            "description": "Reference for the Claude API / Anthropic SDK — model ids, pricing, params, streaming, tool use, MCP, agents, caching, token counting, model migration.\nTRIGGER — read FIRST, before you answer, run a command or open a file (already started? read it now); don't skip because it \"looks like a one-liner\" — whenever: the prompt names Claude/Anthropic in any form (Claude, Anthropic, Fable, Opus, Sonnet, Haiku, `anthropic`, `@anthropic-ai`, `claude-*`, `us.anthropic.*`, `[1m]`); the user asks about an LLM (pricing/model choice/limits/caching) — never answer from memory; OR the task is LLM-shaped with provider unstated (agent/MCP/tool-definition/multi-agent/RAG/LLM-judge/computer-use; generate/summarize/extract/classify/rewrite/converse over NL; debugging refusals/cutoffs/streaming/tool-calls/tokens).\nSKIP only when another provider is being worked on (overrides all triggers): OpenAI/GPT/Gemini/Llama/Mistral/Cohere/Ollama named in the query; OR `grep -rE 'openai|langchain_openai|google.generativeai|genai|mistralai|cohere|ollama'` over the project hits (run this grep FIRST if no provider named — don't Read the file; if nothing hits, load this skill)."
           },
           {
             "name": "run",
@@ -156,6 +186,10 @@
           {
             "name": "run-skill-generator",
             "description": "Author or improve the run-<unit> skill - a per-project skill that tells agents how to build, launch, and drive this project's app. Use when the user asks to set up the project, get it running, write run instructions, or verify build/run steps work from a clean environment."
+          },
+          {
+            "name": "plugin-authoring",
+            "description": "Make a mod: a change to Claude's own interface or behaviour, such as a theme, a panel or pane that stays beside the chat and updates, a band, status line, toast, slash command, or hook on tool calls. Use to make, change or debug a mod or its hooks module."
           },
           {
             "name": "advisor",
@@ -208,7 +242,7 @@
           {
             "name": "effort",
             "description": "Set effort level for model usage",
-            "argumentHint": "<low|medium|high|auto>"
+            "argumentHint": "<low|medium|high|xhigh|max|auto>"
           },
           {
             "name": "fast",
@@ -330,8 +364,8 @@
           },
           {
             "value": "opus",
-            "displayName": "Opus 5.5",
-            "description": "For complex work and everyday tasks",
+            "displayName": "Opus",
+            "description": "Opus 5.5 · Best for everyday, complex tasks",
             "resolvedModel": "claude-opus-5-5",
             "supportsEffort": true,
             "supportedEffortLevels": [
@@ -343,24 +377,10 @@
             ]
           },
           {
-            "value": "claude-opus-5",
-            "displayName": "Opus 5",
-            "description": "For complex tasks",
-            "resolvedModel": "claude-opus-5",
-            "supportsEffort": true,
-            "supportedEffortLevels": [
-              "low",
-              "medium",
-              "high",
-              "xhigh",
-              "max"
-            ]
-          },
-          {
             "value": "sonnet",
-            "displayName": "Sonnet 5",
-            "description": "Most efficient for everyday tasks",
-            "resolvedModel": "claude-sonnet-5",
+            "displayName": "Sonnet",
+            "description": "Sonnet 5.5 · Efficient for routine tasks",
+            "resolvedModel": "claude-sonnet-5-5",
             "supportsEffort": true,
             "supportedEffortLevels": [
               "low",
@@ -372,55 +392,22 @@
           },
           {
             "value": "haiku",
-            "displayName": "Haiku 4.5",
-            "description": "Fastest for quick answers",
-            "resolvedModel": "claude-haiku-4-5-20251001"
-          },
-          {
-            "value": "claude-opus-4-8",
-            "displayName": "Opus 4.8",
-            "description": "Best for everyday, complex tasks",
-            "resolvedModel": "claude-opus-4-8",
+            "displayName": "Haiku",
+            "description": "Haiku 5.5 · Fastest for quick answers",
+            "resolvedModel": "claude-haiku-5-5",
             "supportsEffort": true,
             "supportedEffortLevels": [
               "low",
               "medium",
               "high",
               "xhigh",
-              "max"
-            ]
-          },
-          {
-            "value": "claude-opus-4-7",
-            "displayName": "Opus 4.7",
-            "description": "Best for everyday, complex tasks",
-            "resolvedModel": "claude-opus-4-7",
-            "supportsEffort": true,
-            "supportedEffortLevels": [
-              "low",
-              "medium",
-              "high",
-              "xhigh",
-              "max"
-            ]
-          },
-          {
-            "value": "claude-opus-4-6",
-            "displayName": "Opus 4.6",
-            "description": "Best for everyday, complex tasks",
-            "resolvedModel": "claude-opus-4-6",
-            "supportsEffort": true,
-            "supportedEffortLevels": [
-              "low",
-              "medium",
-              "high",
               "max"
             ]
           },
           {
             "value": "claude-sonnet-4-6",
             "displayName": "Sonnet 4.6",
-            "description": "Efficient for routine tasks",
+            "description": "Newer version available · select Sonnet for Sonnet 5.5",
             "resolvedModel": "claude-sonnet-4-6",
             "supportsEffort": true,
             "supportedEffortLevels": [

@@ -44,6 +44,8 @@ fun fold(
         // Command list and compaction figures belong to the projection and the UI, not core.
         is AgentEvent.SystemCommandsChanged,
         is AgentEvent.SystemCompactBoundary,
+        // A notice for the CLI's own renderer; Closta draws its own.
+        is AgentEvent.SystemUiInvalidate,
         // The version-drift and transport alarms: never let them break the state.
         is AgentEvent.UnknownKind,
         is AgentEvent.BrokenLine,

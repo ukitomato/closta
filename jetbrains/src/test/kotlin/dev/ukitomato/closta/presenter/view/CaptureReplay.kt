@@ -66,7 +66,7 @@ object CaptureReplay {
             "13-ask-timeout" to listOf(ASK),
             "14-ask-answers-updatedinput" to listOf(ASK),
             "15-ask-afktimeout-updatedinput" to listOf(ASK),
-            // Recorded with 2.1.282 too, the user's settings left out (recorder/scenarios.mjs ISOLATED).
+            // Recorded with the user's settings left out (recorder/scenarios.mjs ISOLATED).
             "16-permission-suggestion-accept" to
                 listOf(
                     "Use the Write tool to create the file {OUTSIDE}/note.txt containing exactly the text: hello. " +
@@ -172,6 +172,24 @@ object CaptureReplay {
             // Two CLIs of one session; the second (`--resume --settings`, in the sandbox) took the Bash turn.
             "39-sandbox-resume" to listOf("Respond with exactly one word: pong", SANDBOX_PROBE),
             "40-sandbox-same-id" to emptyList(),
+            // `/clear` between two turns, then a question about the first.
+            "41-clear-reset" to
+                listOf(
+                    "Remember the word kumquat. Respond with exactly one word: pong",
+                    "/clear",
+                    "Which word did I ask you to remember? If you do not know, respond with exactly: unknown",
+                ),
+            // `/context` typed as text after one turn.
+            "42-local-commands" to listOf("Respond with exactly one word: pong", "/context"),
+            // One turn, then control requests only (get_usage, get_session_cost, list_permission_rules, list_models,
+            // get_context_usage).
+            "43-usage-and-rules" to listOf("Respond with exactly one word: pong"),
+            // Started in dontAsk: the Bash no rule allows is denied without a can_use_tool.
+            "44-permission-denied" to
+                listOf(
+                    "Run this exact bash command: touch denied-marker.txt. If it is not allowed, say so in one line " +
+                        "and stop.",
+                ),
         )
 
     private const val SANDBOX_PROBE =
@@ -208,10 +226,11 @@ object CaptureReplay {
             // Checkpoint 3: the plan's ExitPlanMode, then the Edit it planned; the recorder allowed both at once.
             "29-exit-plan-mode" to { id -> PresenterInput.Decided(ApprovalDecision.Allow(id), 0) },
             "30-deny-empty-message" to { id -> PresenterInput.Decided(ApprovalDecision.Deny(id), 0) },
-            // Checkpoint 4, all allowed at once: 36's Bash `touch` (the sandbox was not in force), 37's ExitPlanMode,
-            // 38's ExitPlanMode and the Edit after it. 39 asked for nothing (the sandbox ran its Bash), but would be
-            // allowed the same way. What else the recorder sent (the setMode in updatedPermissions) reaches the
-            // projection through stdout.
+            // Checkpoint 4, all allowed at once: 33's and 39's Bash `touch` (a path outside the cwd; the sandbox
+            // still refused the write), 36's Bash `touch` (the sandbox was not in force), 37's ExitPlanMode, 38's
+            // ExitPlanMode and the Edit after it. What else the recorder sent (the setMode in updatedPermissions)
+            // reaches the projection through stdout.
+            "33-sandbox-live" to { id -> PresenterInput.Decided(ApprovalDecision.Allow(id), 0) },
             "36-sandbox-unavailable" to { id -> PresenterInput.Decided(ApprovalDecision.Allow(id), 0) },
             "37-plan-auto" to { id -> PresenterInput.Decided(ApprovalDecision.Allow(id), 0) },
             "38-plan-bypass" to { id -> PresenterInput.Decided(ApprovalDecision.Allow(id), 0) },
@@ -373,18 +392,20 @@ object CaptureReplay {
     /**
      * The capture's events with the host's inputs put back where the recorder sent them. With [uuids], each message
      * is sent under the uuid the recorder gave it (the `command_uuid` of its lifecycle, which the CLI's record keeps
-     * as the user line's uuid: captures 25 and 27), as the host does.
+     * as the user line's uuid: captures 25 and 27), as the host does. [file] replays other lines under [scenario]'s
+     * sends and answers (an older CLI's excerpt, CaptureFixtures.legacyExcerpt).
      */
     fun inputs(
         scenario: String,
         uuids: Boolean = false,
+        file: String = "$scenario.ndjson",
     ): List<PresenterInput> {
         val sent = SENT.getValue(scenario).iterator()
         val attached = attachedOf(scenario)
         val seen = HashSet<String>()
         val inputs = mutableListOf<PresenterInput>()
         var sends = 0
-        for (event in CaptureFixtures.readCapture("$scenario.ndjson")) {
+        for (event in CaptureFixtures.readCapture(file)) {
             if (event is AgentEvent.CommandLifecycle && event.state == "queued" && seen.add(event.commandUuid)) {
                 sends++
                 inputs +=
@@ -419,10 +440,11 @@ object CaptureReplay {
         scenario: String,
         projector: TreeProjector = TreeProjector(),
         uuids: Boolean = false,
+        file: String = "$scenario.ndjson",
     ): List<Step> {
         var state = HostState()
         check(projector.project(listOf(state.source(THREAD))).size == 1)
-        return inputs(scenario, uuids).map { input ->
+        return inputs(scenario, uuids, file).map { input ->
             state = state.next(input)
             Step(input, state.conversation, state.transcript, projector.project(listOf(state.source(THREAD))))
         }

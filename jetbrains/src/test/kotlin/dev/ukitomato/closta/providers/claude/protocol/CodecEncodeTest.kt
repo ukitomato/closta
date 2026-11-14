@@ -185,7 +185,7 @@ class CodecEncodeTest {
                     "rewind_files"
             }
         assertEquals(2, rewinds.size, "the capture holds a dry run and the real one")
-        val uuid = "b6c26772-59e5-4ff6-b970-284be2777826"
+        val uuid = "f6236b45-b026-49b7-ba9a-8d41b1ff77b4"
         for ((captured, dryRun) in rewinds.zip(listOf(true, false))) {
             val id = JsonParser.parseString(captured).asJsonObject["request_id"].asString
             assertEquals(captured, StdinEncoder.rewindFiles(id, uuid, dryRun), "byte for byte, in the recorded order")

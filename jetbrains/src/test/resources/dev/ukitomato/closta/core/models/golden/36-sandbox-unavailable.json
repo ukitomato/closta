@@ -1,21 +1,21 @@
 {
   "session": {
-    "sessionId": "5f29bbcd-0370-4f08-8180-49d2605178cc",
+    "sessionId": "550733d9-7414-46ed-a372-ae1753ec4583",
     "model": "claude-sonnet-4-6",
     "permissionMode": "default",
-    "cwd": "/tmp/closta-rec-36-sandbox-unavailable-kCmWFl/cwd",
-    "version": "2.1.282"
+    "cwd": "/tmp/closta-rec-36-sandbox-unavailable-NguC3l/cwd",
+    "version": "2.1.325"
   },
   "turns": [
     {
-      "commandUuid": "890182c7-a49b-47a2-b359-49593cfcac9f",
+      "commandUuid": "c4881039-dca9-4d23-91e1-ea57f20cb9b1",
       "phase": "CLOSED",
       "incompleteReason": null,
       "lifecycleDone": false
     }
   ],
   "usage": {
-    "sessionCostUsd": 0.0546819
+    "sessionCostUsd": 0.0602607
   },
   "tasks": [],
   "thinkingEstimate": null,
