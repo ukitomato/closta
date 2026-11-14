@@ -1,6 +1,6 @@
 //! Layer rules for the desktop workspace, checked by `cargo xtask layers`.
 //!
-//! 1. `model`, `core`, `presenter` and `providers` must not reach `gpui*`.
+//! 1. `model`, `core`, `presenter`, `providers` and `goldens` must not reach `gpui*`.
 //! 2. Workspace dependencies must follow the allow table.
 //! 3. `closta-model` must stay synchronous: no `async` or `.await`.
 
@@ -19,6 +19,7 @@ const GUI_FREE: &[&str] = &[
     "closta-core",
     "closta-presenter",
     "closta-providers",
+    "closta-goldens",
 ];
 
 /// Allowed direct workspace dependencies per crate.
@@ -27,6 +28,15 @@ const ALLOWED: &[(&str, &[&str])] = &[
     ("closta-core", &["closta-model"]),
     ("closta-presenter", &["closta-core", "closta-model"]),
     ("closta-providers", &["closta-core", "closta-model"]),
+    (
+        "closta-goldens",
+        &[
+            "closta-providers",
+            "closta-presenter",
+            "closta-core",
+            "closta-model",
+        ],
+    ),
     (
         "closta-platform",
         &["closta-presenter", "closta-core", "closta-model"],
@@ -391,8 +401,48 @@ mod tests {
                 ],
                 &["gpui-kit", "gpui"],
             ),
+            pkg(
+                "closta-goldens",
+                &[
+                    "closta-providers",
+                    "closta-presenter",
+                    "closta-core",
+                    "closta-model",
+                ],
+                &["closta-providers", "closta-presenter"],
+            ),
             pkg("xtask", &[], &["anyhow"]),
         ]
+    }
+
+    fn goldens(g: &mut [Package]) -> &mut Package {
+        g.iter_mut().find(|p| p.name == "closta-goldens").unwrap()
+    }
+
+    #[test]
+    fn goldens_may_depend_on_providers_but_not_reach_gpui() {
+        let mut g = clean();
+        assert!(
+            goldens(&mut g)
+                .workspace_deps
+                .contains(&"closta-providers".into())
+        );
+        assert!(check_graph(&g).is_empty());
+        goldens(&mut g).closure.push("gpui".into());
+        let v = check_graph(&g);
+        assert_eq!(v.len(), 1);
+        assert_eq!((v[0].rule, v[0].krate.as_str()), (1, "closta-goldens"));
+    }
+
+    #[test]
+    fn goldens_may_not_depend_on_platform() {
+        let mut g = clean();
+        goldens(&mut g)
+            .workspace_deps
+            .push("closta-platform".into());
+        let v = check_graph(&g);
+        assert_eq!(v.len(), 1);
+        assert_eq!((v[0].rule, v[0].krate.as_str()), (2, "closta-goldens"));
     }
 
     #[test]
