@@ -7,6 +7,12 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 /**
+ * Modelled from sdk.d.ts alone, because no capture has one: its tests build the line by hand and say so. Each goes when
+ * a capture carries it.
+ */
+internal val TYPE_ONLY = setOf(AgentEventKind.SYSTEM_INFORMATIONAL)
+
+/**
  * The three figures the comparison against the official types turns on.
  *
  * A table could say how the captures line up with the SDK's declarations, but tables go stale in
@@ -19,15 +25,22 @@ import org.junit.jupiter.api.Test
  * computed; everything that describes the **captures** is counted from the captures, and the
  * classification is checked against them so that a figure cannot agree with itself.
  */
+
 class CoverageTest {
     @Test
-    fun `the captures contain exactly the kinds that are modelled`() {
+    fun `the captures contain exactly the kinds that are modelled, but the ones modelled from the types alone`() {
         assertAll(
             { assertEquals(OBSERVED_KINDS, observedKinds().size, "distinct kinds in the captures") },
-            { assertEquals(OBSERVED_KINDS, AgentEventKind.entries.size, "variants of AgentEvent that are kinds") },
             {
                 assertEquals(
-                    AgentEventKind.entries.toSet(),
+                    OBSERVED_KINDS + TYPE_ONLY.size,
+                    AgentEventKind.entries.size,
+                    "variants of AgentEvent that are kinds",
+                )
+            },
+            {
+                assertEquals(
+                    AgentEventKind.entries.toSet() - TYPE_ONLY,
                     observedKinds(),
                     "a modelled kind that never arrives is a branch no test can reach",
                 )
@@ -47,8 +60,8 @@ class CoverageTest {
             // modelled would be exactly the mistake the previous assertion forbids.
             { assertTrue(observedKinds().containsAll(UNDECLARED), "the undeclared kind is in the captures") },
             { assertEquals(CAPTURES_WITH_LIFECYCLE, lifecycleCaptures, "captures containing command_lifecycle") },
-            // 20 observed, 18 declared somewhere in StdoutMessage. The difference of two is the whole
-            // reason AgentEvent has twenty kinds and not eighteen.
+            // 21 observed, 19 declared somewhere in StdoutMessage. The difference of two is the whole
+            // reason AgentEvent has twenty-one kinds from the captures and not nineteen.
             {
                 assertEquals(
                     DECLARED_IN_STDOUT_MESSAGE,
@@ -114,19 +127,19 @@ class CoverageTest {
         const val SDK_MESSAGE_KINDS = 40
 
         /** Distinct kinds across the captures (including commands_changed and compact_boundary). */
-        const val OBSERVED_KINDS = 20
+        const val OBSERVED_KINDS = 21
 
         /** Of those, the ones `StdoutMessage` declares. */
-        const val DECLARED_IN_STDOUT_MESSAGE = 18
+        const val DECLARED_IN_STDOUT_MESSAGE = 19
 
         /** Of those, the ones that are also in the `SDKMessage` subset. */
-        const val DECLARED_IN_SDK_MESSAGE = 16
+        const val DECLARED_IN_SDK_MESSAGE = 17
 
         /**
-         * Declared but not modelled: never recorded, or (`system/permission_denied`) recorded and held in
-         * CaptureFixtures.KNOWN_UNPLACED until the codec types it.
+         * Declared and never recorded, whether or not modelled (`system/informational` is: from the types alone, see
+         * [TYPE_ONLY]).
          */
-        const val NEVER_OBSERVED = 27
+        const val NEVER_OBSERVED = 26
 
         /**
          * Lines across the 44 captures (01-44).

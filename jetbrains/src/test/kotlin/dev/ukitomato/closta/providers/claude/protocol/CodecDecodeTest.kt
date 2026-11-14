@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Assertions.assertAll
 import org.junit.jupiter.api.Assertions.assertDoesNotThrow
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertInstanceOf
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -169,6 +170,65 @@ class CodecDecodeTest {
         assertAll(
             { assertEquals("ui.render", value.event) },
             { assertTrue(value.uuid.isNotBlank() && value.sessionId.isNotBlank()) },
+        )
+    }
+
+    @Test
+    fun `a permission_denied line becomes a typed refusal naming the call and the kind of decision`() {
+        val value =
+            assertInstanceOf(AgentEvent.SystemPermissionDenied::class.java, captureLine("44-permission-denied", 23))
+
+        assertAll(
+            { assertEquals("Bash", value.toolName) },
+            { assertTrue(value.toolUseId.startsWith("toolu_")) },
+            { assertEquals("mode", value.decisionReasonType) },
+            { assertNull(value.decisionReason) },
+            { assertNull(value.agentId) },
+            { assertTrue(value.message.startsWith("Permission to use Bash has been denied")) },
+        )
+    }
+
+    @Test
+    fun `a sub-agent's permission_denied line carries the agent id`() {
+        val line =
+            CaptureFixtures
+                .nonBlankLines(CaptureFixtures.textOf("10-background-task.ndjson"))
+                .first { "permission_denied" in it }
+        val value = assertInstanceOf(AgentEvent.SystemPermissionDenied::class.java, StreamJsonCodec.decode(line))
+
+        assertAll(
+            { assertEquals("Monitor", value.toolName) },
+            { assertEquals("subcommandResults", value.decisionReasonType) },
+            { assertNotNull(value.agentId) },
+        )
+    }
+
+    @Test
+    fun `type only - an informational line becomes a typed value with its level and flags`() {
+        val line =
+            """{"type":"system","subtype":"informational","content":"Stop hook said no","level":"warning",""" +
+                """"prevent_continuation":true,"tag":"x","tool_use_id":"toolu_1","uuid":"u","session_id":"s"}"""
+        val value = assertInstanceOf(AgentEvent.SystemInformational::class.java, StreamJsonCodec.decode(line))
+
+        assertAll(
+            { assertEquals("Stop hook said no", value.content) },
+            { assertEquals("warning", value.level) },
+            { assertEquals(true, value.preventContinuation) },
+            { assertEquals("x", value.tag) },
+            { assertEquals("toolu_1", value.toolUseId) },
+        )
+    }
+
+    @Test
+    fun `type only - an informational line without its optional fields still decodes`() {
+        val line =
+            """{"type":"system","subtype":"informational","content":"hi","level":"info","uuid":"u","session_id":"s"}"""
+        val value = assertInstanceOf(AgentEvent.SystemInformational::class.java, StreamJsonCodec.decode(line))
+
+        assertAll(
+            { assertNull(value.preventContinuation) },
+            { assertNull(value.tag) },
+            { assertNull(value.toolUseId) },
         )
     }
 

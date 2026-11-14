@@ -54,6 +54,8 @@ data class Transcript(
      * null while it never was. What comes before it belongs to a conversation the CLI no longer has.
      */
     val clearedAt: Int? = null,
+    /** Refusals whose call has no line yet, by the call's key; each is put on its line when the line is made. */
+    val denials: Map<String, Denial> = emptyMap(),
 )
 
 enum class Role(
@@ -124,10 +126,29 @@ data class ToolCallRecord(
     /** A sub-agent's conversation, when this call started one. */
     val messages: Keyed<MessageRecord> = Keyed.empty(),
     val streaming: Boolean = false,
+    /** Set when the CLI refused this call on its own (`permission_denied`), without asking. */
+    val denied: Denial? = null,
+) : PartRecord
+
+/** Why the CLI refused a call: the kind of decision (`mode`, `rule`, `classifier`...) and its own words, if given. */
+data class Denial(
+    val reasonType: String?,
+    val reason: String?,
+)
+
+/**
+ * A line the CLI would print in its own terminal (`system/informational`), of a [level] other than `info`.
+ * [stopped] is true when the CLI stopped going on after it.
+ */
+data class InformationalRecord(
+    val key: String,
+    val level: String,
+    val content: String,
+    val stopped: Boolean,
 ) : PartRecord
 
 /**
- * The `tool_result` for a call. [content] is null when the block carried none. [durationMs] is how long a sub-agent
+ * The `tool_result' for a call. [content] is null when the block carried none. [durationMs] is how long a sub-agent
  * ran, when the line's `tool_use_result` says so.
  */
 data class ToolResult(

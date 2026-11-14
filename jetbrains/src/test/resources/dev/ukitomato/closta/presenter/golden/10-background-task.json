@@ -204,7 +204,9 @@
                                 "result": "This Monitor command contains multiple operations. The following part requires approval: [ -s \"$f\" ]",
                                 "isError": true,
                                 "status": {
-                                  "type": "complete"
+                                  "type": "incomplete",
+                                  "reason": "error",
+                                  "error": "subcommandResults"
                                 }
                               }
                             }

@@ -102,6 +102,18 @@ data class DividerRow(
     override val opens: Boolean,
 ) : ThreadRow
 
+/** What an [InformationalRecord] says of its level, as the CLI draws it: grey, or more prominent. */
+enum class NoticeLevel { NOTICE, SUGGESTION, WARNING }
+
+/** A line of the CLI's own ([content]); [stopped] when the CLI did not go on after it. */
+data class NoticeRow(
+    override val key: String,
+    val level: NoticeLevel,
+    val content: String,
+    val stopped: Boolean,
+    override val opens: Boolean,
+) : ThreadRow
+
 /** What a [DividerRow] marks. */
 sealed interface Divider {
     /** The conversation was cleared; [at] is when, as the CLI wrote it (ISO 8601, UTC), null when it did not say. */
@@ -249,6 +261,7 @@ class ThreadRows {
                     TextRow(key, part.text, part.streaming, opens)
                 }
             is ClearedRecord -> DividerRow(key, Divider.Cleared(part.at), opens)
+            is InformationalRecord -> NoticeRow(key, noticeLevelOf(part.level), part.content, part.stopped, opens)
             is ToolCallRecord if part.toolName == TODO_TOOL -> TodoRow(key, todosOf(part.input), opens)
             is ToolCallRecord ->
                 ToolRow(
@@ -305,3 +318,11 @@ private fun todosOf(input: Any?): List<TodoItem> {
         TodoItem(content, todo.string("status") ?: "pending")
     }
 }
+
+/** The CLI's `suggestion` and `warning` are prominent; `notice` and any level not known are the quiet one. */
+internal fun noticeLevelOf(level: String): NoticeLevel =
+    when (level) {
+        "suggestion" -> NoticeLevel.SUGGESTION
+        "warning" -> NoticeLevel.WARNING
+        else -> NoticeLevel.NOTICE
+    }

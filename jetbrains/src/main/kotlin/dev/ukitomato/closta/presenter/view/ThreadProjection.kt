@@ -120,6 +120,12 @@ internal class ThreadProjection(
             }
             is OtherRecord -> reuseOr(memo as? PartMemo, record, Look(null)) { otherNode(record) }
             is AttachmentRecord -> reuseOr(memo as? PartMemo, record, Look(null)) { attachmentNode(record) }
+            is InformationalRecord ->
+                reuseOr(memo as? PartMemo, record, Look(null)) {
+                    JsonObject.of(
+                        "type" to JsonString("informational"),
+                    )
+                }
             is ClearedRecord -> reuseOr(memo as? PartMemo, record, Look(null)) { clearedNode() }
             is ToolCallRecord -> toolCall(key, record, place, memo as? ToolCallMemo)
         }
@@ -133,7 +139,14 @@ internal class ThreadProjection(
         val approval = context.approvalByTool[record.toolUseId]
         val pending = approval != null && approval.requestId in context.pendingIds
         val task = context.taskByTool[record.toolUseId]
-        val (status, error) = toolStatus(pending, task, record.result != null, place.running)
+        val denied = record.denied
+        val (status, error) =
+            if (denied == null) {
+                toolStatus(pending, task, record.result != null, place.running)
+            } else {
+                // The CLI refused it on its own: it never ran, whatever result the refusal's message came back as.
+                Status.FAILED to (denied.reason ?: denied.reasonType)
+            }
         val look =
             Look(status, error, approval?.let { approvalNode(it, pending, questionFor(it, record.input), place.level) })
         val nestedLevel = Levels.nestedUnder(place.level)

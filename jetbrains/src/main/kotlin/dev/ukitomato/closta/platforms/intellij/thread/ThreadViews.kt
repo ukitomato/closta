@@ -31,6 +31,7 @@ import dev.ukitomato.closta.platforms.intellij.ClostaBundle
 import dev.ukitomato.closta.platforms.intellij.chat.dividerText
 import dev.ukitomato.closta.platforms.intellij.chat.turnEndText
 import dev.ukitomato.closta.platforms.intellij.ui.noHtml
+import dev.ukitomato.closta.platforms.intellij.ui.plainHtml
 import dev.ukitomato.closta.platforms.intellij.ui.plainTip
 import dev.ukitomato.closta.presenter.view.AskAction
 import dev.ukitomato.closta.presenter.view.AskActions
@@ -39,6 +40,8 @@ import dev.ukitomato.closta.presenter.view.AttachmentRecord
 import dev.ukitomato.closta.presenter.view.CardRow
 import dev.ukitomato.closta.presenter.view.DividerRow
 import dev.ukitomato.closta.presenter.view.ExploredRow
+import dev.ukitomato.closta.presenter.view.NoticeLevel
+import dev.ukitomato.closta.presenter.view.NoticeRow
 import dev.ukitomato.closta.presenter.view.SignInRow
 import dev.ukitomato.closta.presenter.view.ThinkingRow
 import dev.ukitomato.closta.presenter.view.ThreadRow
@@ -152,6 +155,7 @@ class ThreadRowViews(
             is TurnEndRow -> turnEnd(row)
             is SignInRow -> signIn()
             is DividerRow -> divider(row)
+            is NoticeRow -> notice(row)
             // A row this version does not draw takes no room.
             else -> JPanel().apply { preferredSize = Dimension(0, 0) }
         }
@@ -362,6 +366,31 @@ class ThreadRowViews(
             add(JSeparator(), side)
         }
 
+    // A line of the CLI's own: the quiet kind is one muted line, the others the IDE's banner. Its words are the CLI's,
+    // so they are kept from being read as HTML.
+    private fun notice(row: NoticeRow): JComponent {
+        val stopped = if (row.stopped) ClostaBundle.message("thread.notice.stopped") else null
+        val words = listOfNotNull(row.content, stopped).joinToString(" ")
+        return when (row.level) {
+            NoticeLevel.NOTICE ->
+                JBLabel(words)
+                    .apply {
+                        foreground = ThreadStyle.muted
+                        border = JBUI.Borders.empty(GAP / 2, 0)
+                    }.noHtml()
+            NoticeLevel.SUGGESTION -> banner(row.content, stopped, EditorNotificationPanel.Status.Info)
+            NoticeLevel.WARNING -> banner(row.content, stopped, EditorNotificationPanel.Status.Warning)
+        }
+    }
+
+    private fun banner(
+        content: String,
+        stopped: String?,
+        status: EditorNotificationPanel.Status,
+    ): JComponent =
+        InlineBanner(plainHtml(listOfNotNull(content, stopped).joinToString("\n")).let { "<html>$it</html>" }, status)
+            .showCloseButton(false)
+
     // The IDE's own banner for "something to do before this can go on", with the one thing to do.
     private fun signIn(): JComponent =
         InlineBanner(ClostaBundle.message("thread.signIn.text"), EditorNotificationPanel.Status.Warning)
@@ -449,11 +478,11 @@ class ThreadRowViews(
                 pieces,
                 ThreadStyle.stateIcon(row.line.state),
                 UIUtil.getLabelFont(),
-                listOf(ClostaBundle.message("thread.tool.openAgent"), ThreadStyle.stateWord(row.line.state))
+                listOf(ClostaBundle.message("thread.tool.openAgent"), ThreadStyle.stateWord(row.line))
                     .joinToString(" — "),
             )
         val opener =
-            Opener(line, AllIcons.Nodes.Plugin, "$what ${ThreadStyle.stateWord(row.line.state)}", {
+            Opener(line, AllIcons.Nodes.Plugin, "$what ${ThreadStyle.stateWord(row.line)}", {
                 actions.openAgent(row.toolUseId)
             }) { old -> handBack(row.key, old) }
         keepFocus(row.key, opener)
@@ -507,6 +536,7 @@ class ThreadRowViews(
         val state =
             when {
                 ToolLineState.ERROR in states -> ToolLineState.ERROR
+                ToolLineState.DENIED in states -> ToolLineState.DENIED
                 ToolLineState.RUNNING in states -> ToolLineState.RUNNING
                 else -> ToolLineState.OK
             }
@@ -672,11 +702,11 @@ class ThreadRowViews(
             EllipsizedLine(
                 ThreadStyle.pieces(line),
                 ThreadStyle.stateIcon(line.state),
-                note = listOfNotNull(what, ThreadStyle.stateWord(line.state)).joinToString(" — "),
+                note = listOfNotNull(what, ThreadStyle.stateWord(line)).joinToString(" — "),
             ).apply { getAccessibleContext().accessibleName = toolName(line) }
 
         /** What a screen reader says of a tool line: what it is, then its state in words. */
-        fun toolName(line: ToolLine): String = "${line.label} ${ThreadStyle.stateWord(line.state)}"
+        fun toolName(line: ToolLine): String = "${line.label} ${ThreadStyle.stateWord(line)}"
 
         /**
          * Monospaced [text] in a soft box, not wrapped: no taller than [CODE_LINES] lines (the rest scrolls inside with

@@ -24,7 +24,7 @@ object ToolLineText {
         when (state) {
             ToolLineState.RUNNING -> RUNNING
             ToolLineState.OK -> ADDED
-            ToolLineState.ERROR -> REMOVED
+            ToolLineState.ERROR, ToolLineState.DENIED -> REMOVED
         }
 
     /** The pieces of [line] in order, each with its attributes: `●`, the label, `+a`, `−r`. */

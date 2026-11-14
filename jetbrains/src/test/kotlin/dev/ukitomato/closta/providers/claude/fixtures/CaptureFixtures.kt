@@ -55,11 +55,6 @@ object CaptureFixtures {
             // The same mark, between the two CLIs launched under the same `--session-id` (`then`), the second with
             // the sandbox on.
             "40-sandbox-same-id" to mapOf(RECORDER_BOUNDARY to 1),
-            // A denied tool use is announced as `system/permission_denied` (SDKPermissionDeniedMessage), which the
-            // codec does not type yet: in 44 the main agent's Bash under `dontAsk`, in 10 a sub-agent's Monitor
-            // command that needed an approval. The two rows go when the codec types the kind.
-            "44-permission-denied" to mapOf("system/permission_denied" to 1),
-            "10-background-task" to mapOf("system/permission_denied" to 1),
         )
 
     /**

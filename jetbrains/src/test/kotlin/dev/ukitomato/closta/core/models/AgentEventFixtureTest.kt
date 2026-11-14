@@ -68,9 +68,9 @@ class AgentEventFixtureTest {
     fun `a line carries its own kind`() {
         val kinds = allEvents().filterIsInstance<AgentEvent.Known>().map { it.kind }.toSet()
         assertEquals(
-            AgentEventKind.entries.toSet(),
+            AgentEventKind.entries.toSet() - TYPE_ONLY,
             kinds,
-            "every declared kind should appear in the captures, and no line should invent one",
+            "every modelled kind should appear in the captures (but the type-only ones), and no line should invent one",
         )
     }
 

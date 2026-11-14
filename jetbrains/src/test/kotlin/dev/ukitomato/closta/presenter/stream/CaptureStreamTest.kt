@@ -358,7 +358,7 @@ class CaptureStreamTest {
                 "07-set-model-and-mode" to 22,
                 "08-subagent-task" to 46,
                 "09-parallel-subagents" to 68,
-                "10-background-task" to 78,
+                "10-background-task" to 79,
                 "11-background-followup" to 98,
                 "12-subagent-permission" to 58,
                 "13-ask-timeout" to 44,
@@ -392,7 +392,7 @@ class CaptureStreamTest {
                 "41-clear-reset" to 69,
                 "42-local-commands" to 13,
                 "43-usage-and-rules" to 9,
-                "44-permission-denied" to 35,
+                "44-permission-denied" to 36,
             )
     }
 }

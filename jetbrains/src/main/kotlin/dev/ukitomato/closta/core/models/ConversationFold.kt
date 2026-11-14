@@ -49,6 +49,9 @@ fun fold(
         is AgentEvent.SystemCompactBoundary,
         // A notice for the CLI's own renderer; Closta draws its own.
         is AgentEvent.SystemUiInvalidate,
+        // A refusal and a line of the CLI's own: they mark a tool line and add a row, which is the projection's.
+        is AgentEvent.SystemPermissionDenied,
+        is AgentEvent.SystemInformational,
         // The version-drift and transport alarms: never let them break the state.
         is AgentEvent.UnknownKind,
         is AgentEvent.BrokenLine,

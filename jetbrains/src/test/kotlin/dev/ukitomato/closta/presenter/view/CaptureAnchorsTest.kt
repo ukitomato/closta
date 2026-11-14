@@ -272,6 +272,14 @@ class CaptureAnchorsTest {
         cut: Cut?,
     ) {
         var line = 0
+        // A call the CLI refused on its own is shown refused (incomplete) from the refusal until its result comes:
+        // it is not a call something cut off.
+        val refused =
+            steps
+                .mapNotNull {
+                    ((it.input as? PresenterInput.Event)?.event as? AgentEvent.SystemPermissionDenied)
+                        ?.toolUseId
+                }.toSet()
         for ((index, step) in steps.withIndex()) {
             if (step.input is PresenterInput.Event) line++
             val nested =
@@ -280,7 +288,11 @@ class CaptureAnchorsTest {
                 }
             // The known gap is let through only from the capture's line where the interrupt took effect.
             val exempt = cut?.takeIf { line >= it.fromLine }?.callId
-            for (call in nested.filter { it["result"] == null && it.str("toolCallId") != exempt }) {
+            for (call in nested.filter {
+                it["result"] == null &&
+                    it.str("toolCallId") != exempt &&
+                    it.str("toolCallId") !in refused
+            }) {
                 assertFalse(
                     call.status()!!.startsWith("incomplete"),
                     "$scenario #$index: ${call.str("toolCallId")} is ${call.status()}",
