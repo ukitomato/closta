@@ -1,3 +1,5 @@
+pub mod claude;
+
 use closta_core::AppInfoSource;
 use closta_model::AppInfo;
 
