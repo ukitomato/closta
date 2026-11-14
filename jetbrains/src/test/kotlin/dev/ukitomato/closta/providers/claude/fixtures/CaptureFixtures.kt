@@ -26,8 +26,8 @@ object CaptureFixtures {
 
     /**
      * Lines of a capture that the codec cannot place, by capture and wire type — an exception table that
-     * has three rows, for the recorder's own mark in the resume, fork and cut captures (the
-     * real ones have all been closed).
+     * has three rows for the recorder's own mark in the resume, fork and cut captures, and four for
+     * kinds 2.1.319 sends that the codec has not learnt yet.
      * Tests that derive their expectations from it (the turn left open, the thread still running, the
      * unknown-kind tally) expect nothing unusual from the CLI's own lines.
      *
@@ -46,6 +46,15 @@ object CaptureFixtures {
             // The same mark, between the two stdouts of the cut scene (`--resume --fork-session
             // --resume-session-at`).
             "27-resume-session-at" to mapOf(RECORDER_BOUNDARY to 1),
+            // `/clear` answers with `conversation_reset` (SDKConversationResetMessage), which the codec does not
+            // type yet. The row goes when the codec learns the kind.
+            "33-clear-reset" to mapOf("conversation_reset" to 1),
+            // A denied tool use is announced as `system/permission_denied` (SDKPermissionDeniedMessage), which the
+            // codec does not type yet: in 36 the main agent's Bash under `dontAsk`, in 10 and 11 a subagent's
+            // Monitor or Bash that needed an approval. The three rows go when the codec learns the kind.
+            "36-permission-denied" to mapOf("system/permission_denied" to 1),
+            "10-background-task" to mapOf("system/permission_denied" to 1),
+            "11-background-followup" to mapOf("system/permission_denied" to 1),
         )
 
     /** The wire type of the recorder's mark that separates the two stdouts of a resume capture. */

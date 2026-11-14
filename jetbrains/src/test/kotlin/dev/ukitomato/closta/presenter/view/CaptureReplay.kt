@@ -66,7 +66,7 @@ object CaptureReplay {
             "13-ask-timeout" to listOf(ASK),
             "14-ask-answers-updatedinput" to listOf(ASK),
             "15-ask-afktimeout-updatedinput" to listOf(ASK),
-            // Recorded with 2.1.282 too, the user's settings left out (recorder/scenarios.mjs ISOLATED).
+            // Recorded with the user's settings left out (recorder/scenarios.mjs ISOLATED).
             "16-permission-suggestion-accept" to
                 listOf(
                     "Use the Write tool to create the file {OUTSIDE}/note.txt containing exactly the text: hello. " +
@@ -159,6 +159,23 @@ object CaptureReplay {
                     "Remember the word alpha. Reply with only: ok",
                     "Remember the word bravo too. Reply with only: ok",
                     "List every word I asked you to remember, comma separated, nothing else.",
+                ),
+            // One CLI; `/clear` sent as text between two turns.
+            "33-clear-reset" to
+                listOf(
+                    "Remember the word kumquat. Respond with exactly one word: pong",
+                    "/clear",
+                    "Which word did I ask you to remember? If you do not know, respond with exactly: unknown",
+                ),
+            // One CLI; `/context` sent as text after one turn.
+            "34-local-commands" to listOf("Respond with exactly one word: pong", "/context"),
+            // One turn, then control requests the host keeps no record of yet (usage, cost, rules, models, context).
+            "35-usage-and-rules" to listOf("Respond with exactly one word: pong"),
+            // Under `--permission-mode dontAsk`: the Bash is denied without a `can_use_tool`.
+            "36-permission-denied" to
+                listOf(
+                    "Run this exact bash command: touch denied-marker.txt. " +
+                        "If it is not allowed, say so in one line and stop.",
                 ),
         )
 

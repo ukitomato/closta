@@ -1,0 +1,25 @@
+{
+  "session": {
+    "sessionId": "27667c12-0f90-4784-ab1c-869efce35219",
+    "model": "claude-sonnet-4-6",
+    "permissionMode": "default",
+    "cwd": "/tmp/closta-rec-35-usage-and-rules-3oNuSs/cwd",
+    "version": "2.1.319"
+  },
+  "turns": [
+    {
+      "commandUuid": "e917c497-d574-4ab3-8255-a258688e5e5d",
+      "phase": "CLOSED",
+      "incompleteReason": null,
+      "lifecycleDone": false
+    }
+  ],
+  "usage": {
+    "sessionCostUsd": 0.0490851
+  },
+  "tasks": [],
+  "thinkingEstimate": null,
+  "notices": [],
+  "spontaneousResumeCount": 0,
+  "pendingApprovals": []
+}

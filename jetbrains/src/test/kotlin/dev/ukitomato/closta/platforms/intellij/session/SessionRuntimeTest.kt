@@ -455,7 +455,7 @@ class SessionRuntimeTest {
         const val SECRET_KEY = "CLAUDE_AGENT_TEST_SECRET"
         const val CANARY = "011-canary-4f2d8c1e"
         const val CAPTURE = "01-baseline-text.ndjson"
-        const val CAPTURE_VERSION = "2.1.282"
+        const val CAPTURE_VERSION = "2.1.319"
         const val INIT_MARK = "\"subtype\":\"init\""
     }
 }

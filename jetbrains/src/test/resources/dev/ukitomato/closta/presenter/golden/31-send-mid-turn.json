@@ -10,9 +10,9 @@
         "messages": {
           "order": [
             "send-1",
-            "05cd513b-4fdf-477c-bbc9-f64660dc2432",
+            "ebce2675-c3f1-4b45-86ad-5e35da842650",
             "send-2",
-            "75583edf-12c0-4d18-ac0b-a22c7e88d796"
+            "1f486072-fdbf-4403-a580-bc6b6c71e3e5"
           ],
           "byId": {
             "send-1": {
@@ -30,8 +30,8 @@
                 }
               }
             },
-            "05cd513b-4fdf-477c-bbc9-f64660dc2432": {
-              "id": "05cd513b-4fdf-477c-bbc9-f64660dc2432",
+            "ebce2675-c3f1-4b45-86ad-5e35da842650": {
+              "id": "ebce2675-c3f1-4b45-86ad-5e35da842650",
               "role": "assistant",
               "status": {
                 "type": "complete",
@@ -39,33 +39,33 @@
               },
               "parts": {
                 "order": [
-                  "msg_011CScrubbed279sheDrA3xe:0",
-                  "msg_011CScrubbed279sheDrA3xe:1",
-                  "toolu_01CGabccpnxkL78nTAjH2pTH"
+                  "msg_011CScrubbed3KLaCn7qL9R3:0",
+                  "msg_011CScrubbed3KLaCn7qL9R3:1",
+                  "toolu_01MhgxXoF32TkQ6PEvLgeefq"
                 ],
                 "byId": {
-                  "msg_011CScrubbed279sheDrA3xe:0": {
+                  "msg_011CScrubbed3KLaCn7qL9R3:0": {
                     "type": "reasoning",
                     "text": "",
                     "status": {
                       "type": "complete"
                     }
                   },
-                  "msg_011CScrubbed279sheDrA3xe:1": {
+                  "msg_011CScrubbed3KLaCn7qL9R3:1": {
                     "type": "text",
                     "text": "Running the command now.",
                     "status": {
                       "type": "complete"
                     }
                   },
-                  "toolu_01CGabccpnxkL78nTAjH2pTH": {
+                  "toolu_01MhgxXoF32TkQ6PEvLgeefq": {
                     "type": "tool-call",
-                    "toolCallId": "toolu_01CGabccpnxkL78nTAjH2pTH",
+                    "toolCallId": "toolu_01MhgxXoF32TkQ6PEvLgeefq",
                     "toolName": "Bash",
-                    "argsText": "{\"command\": \"sleep 8; echo done\", \"description\": \"Sleep 8 seconds then print done\"}",
+                    "argsText": "{\"command\": \"sleep 8; echo done\", \"description\": \"Sleep 8 seconds then echo done\"}",
                     "args": {
                       "command": "sleep 8; echo done",
-                      "description": "Sleep 8 seconds then print done"
+                      "description": "Sleep 8 seconds then echo done"
                     },
                     "result": "done",
                     "isError": false,
@@ -91,8 +91,8 @@
                 }
               }
             },
-            "75583edf-12c0-4d18-ac0b-a22c7e88d796": {
-              "id": "75583edf-12c0-4d18-ac0b-a22c7e88d796",
+            "1f486072-fdbf-4403-a580-bc6b6c71e3e5": {
+              "id": "1f486072-fdbf-4403-a580-bc6b6c71e3e5",
               "role": "assistant",
               "status": {
                 "type": "complete",
@@ -100,10 +100,10 @@
               },
               "parts": {
                 "order": [
-                  "msg_011CScrubbed9Ah8Pxg3muZb:0"
+                  "msg_011CScrubbed3ZXFoSfkzjEE:0"
                 ],
                 "byId": {
-                  "msg_011CScrubbed9Ah8Pxg3muZb:0": {
+                  "msg_011CScrubbed3ZXFoSfkzjEE:0": {
                     "type": "text",
                     "text": "The output was `done`. hi",
                     "status": {
@@ -118,24 +118,24 @@
         "session": {
           "model": "claude-sonnet-4-6",
           "permissionMode": "default",
-          "cwd": "/tmp/closta-rec-31-send-mid-turn-uwYw5U/cwd",
-          "version": "2.1.282"
+          "cwd": "/tmp/closta-rec-31-send-mid-turn-5Tvgic/cwd",
+          "version": "2.1.319"
         },
         "usage": {
-          "costUsd": 0.0538635,
+          "costUsd": 0.058881600000000006,
           "inputTokens": 4,
           "outputTokens": 126,
-          "cacheReadInputTokens": 33425,
-          "cacheCreationInputTokens": 6989
+          "cacheReadInputTokens": 36012,
+          "cacheCreationInputTokens": 7696
         },
         "tasks": {
           "order": [
-            "bi3ttr0z8"
+            "btxp0wdk2"
           ],
           "byId": {
-            "bi3ttr0z8": {
-              "id": "bi3ttr0z8",
-              "toolCallId": "toolu_01CGabccpnxkL78nTAjH2pTH",
+            "btxp0wdk2": {
+              "id": "btxp0wdk2",
+              "toolCallId": "toolu_01MhgxXoF32TkQ6PEvLgeefq",
               "background": false,
               "status": "complete"
             }
@@ -171,8 +171,8 @@
           },
           {
             "name": "code-review",
-            "description": "Review the current diff, or a PR number/branch/path target, for correctness bugs (plus reuse/simplification/efficiency cleanups where the model's review recipe covers them) at the given effort level (low/medium: fewer, high-confidence findings; high→max: broader coverage, may include uncertain findings); with no level given, it reuses the level you typed last. Pass --comment to post findings as inline PR comments, or --fix to apply the findings to the working tree after the review.",
-            "argumentHint": "[low|medium|high|xhigh|max] [--fix] [--comment] [<pr#>|<branch>|<path>]"
+            "description": "Review the current diff, or a PR number/branch/path target, for correctness bugs (plus reuse/simplification/efficiency cleanups where the model's recipe covers them) at the effort level given first, before any target (low|medium|high|xhigh|max: from few high-confidence findings to many, some uncertain); with no level given, it reuses the level you typed last. Pass --comment to post findings as inline PR comments, or --fix to apply them to the working tree after the review. Pass --max-findings <n> to report up to n findings, or --max-findings all for every finding. The choice stays until you pass --max-findings default.",
+            "argumentHint": "[low|medium|high|xhigh|max] [--fix] [--comment] [<pr#>|<branch>|<path>] [--max-findings <n>|all]"
           },
           {
             "name": "simplify",
@@ -190,7 +190,8 @@
           },
           {
             "name": "doctor",
-            "description": "Health-check the user's Claude Code setup and fix issues: diagnose installation health — what the `claude doctor` terminal diagnostics cover — from local data (duplicate or leftover installs, PATH, unparseable settings files, broken or colliding agent definitions, skills whose frontmatter fails to parse); find unused skills, MCP servers, and plugins versus their context cost and disable dead weight; deduplicate local CLAUDE.md files against checked-in ones; trim checked-in CLAUDE.md files by cutting content a session could derive from the codebase (directory layouts, tech-stack lists, architecture overviews) while keeping gotchas, rationale, and non-standard conventions; migrate always-loaded CLAUDE.md guidance into lazy skills and nested CLAUDE.md files; flag slow hooks and context-heavy extensions; check the installed version is current; make auto mode the default permission mode; and pre-approve frequently denied read-only commands. Use when the user asks for a doctor run, checkup, audit, tune-up, or cleanup of their Claude Code setup or configuration."
+            "description": "Health-check the user's Claude Code setup and fix issues: diagnose installation health — what the `claude doctor` terminal diagnostics cover — from local data (duplicate or leftover installs, PATH, unparseable settings files, broken or colliding agent definitions, skills whose frontmatter fails to parse); find unused skills, MCP servers, and plugins versus their context cost and disable dead weight; deduplicate local CLAUDE.md files against checked-in ones; trim checked-in CLAUDE.md files by cutting content a session could derive from the codebase (directory layouts, tech-stack lists, architecture overviews) while keeping gotchas, rationale, and non-standard conventions; migrate always-loaded CLAUDE.md guidance into lazy skills and nested CLAUDE.md files; flag slow hooks and context-heavy extensions; check the installed version is current; make auto mode the default permission mode; and pre-approve frequently denied read-only commands. Use when the user asks for a doctor run, checkup, audit, tune-up, or cleanup of their Claude Code setup or configuration.",
+            "argumentHint": "[prompt-audit [<path>]]"
           },
           {
             "name": "loop",
@@ -211,7 +212,7 @@
           },
           {
             "name": "plugin-authoring",
-            "description": "Write or debug a Claude Code plugin made of function hooks (a hooks module exporting register(on, options), hooks ($, e, next) on events like tool.call, prompt.submit, ui.render, session.start). Load it before writing or changing such a plugin; it says where the exact types come from, how to run a plugin under development, and where the engine reports what it refused."
+            "description": "Make a mod: a change to Claude's own interface or behaviour, such as a panel or pane that stays beside the chat and updates, a band, status line, toast, slash command, or hook on tool calls. Use to make, change or debug a mod or its hooks module."
           },
           {
             "name": "advisor",
@@ -305,11 +306,6 @@
           {
             "name": "workflow-launch-exec",
             "description": "Execute a server-launched workflow handoff (workflow_launch event sessions only)"
-          },
-          {
-            "name": "plugin-types",
-            "description": "Write claude-code.d.ts, claude-code-plugins.d.ts and claude-code-mcp.d.ts: the plugin API's TypeScript declarations, the enabled plugins' type contracts and the inputs of the connected MCP tools, for typing a hooks module against this session",
-            "argumentHint": "[dir]"
           },
           {
             "name": "reload-plugins",
@@ -419,6 +415,20 @@
           },
           {
             "value": "sonnet",
+            "displayName": "Sonnet 5.5",
+            "description": "Most efficient for simpler tasks",
+            "resolvedModel": "claude-sonnet-5-5",
+            "supportsEffort": true,
+            "supportedEffortLevels": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          },
+          {
+            "value": "claude-sonnet-5",
             "displayName": "Sonnet 5",
             "description": "Most efficient for everyday tasks",
             "resolvedModel": "claude-sonnet-5",
@@ -433,6 +443,20 @@
           },
           {
             "value": "haiku",
+            "displayName": "Haiku 5.5",
+            "description": "Fastest for quick answers",
+            "resolvedModel": "claude-haiku-5-5",
+            "supportsEffort": true,
+            "supportedEffortLevels": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          },
+          {
+            "value": "claude-haiku-4-5-20251001",
             "displayName": "Haiku 4.5",
             "description": "Fastest for quick answers",
             "resolvedModel": "claude-haiku-4-5-20251001"

@@ -1,26 +1,26 @@
 {
   "session": {
-    "sessionId": "5c2f83e3-e0bd-4b2a-a2bd-cb433cadf08b",
-    "model": "claude-sonnet-4-6",
+    "sessionId": "44fc3562-c678-4130-a8fc-d2840fa7d087",
+    "model": "claude-opus-5-5",
     "permissionMode": "default",
-    "cwd": "/tmp/closta-rec-09-parallel-subagents-qTjxkC/cwd",
-    "version": "2.1.282"
+    "cwd": "/tmp/closta-rec-09-parallel-subagents-pXPcxC/cwd",
+    "version": "2.1.319"
   },
   "turns": [
     {
-      "commandUuid": "9749ceb1-cba1-4b7a-bd66-b7c9869c5555",
+      "commandUuid": "e5fa8ab1-a176-4e18-a43e-a3bdf1dc5676",
       "phase": "CLOSED",
       "incompleteReason": null,
       "lifecycleDone": false
     }
   ],
   "usage": {
-    "sessionCostUsd": 0.11178389999999999
+    "sessionCostUsd": 0.1520006
   },
   "tasks": [
     {
-      "taskId": "a4619b729b9b896fd",
-      "parentToolUseId": "toolu_01Lb8Pj8ffuCwbUXBNu6tpZe",
+      "taskId": "a00bd7689469e3d54",
+      "parentToolUseId": "toolu_014tvA55fKfFasCxtaLM9hMB",
       "subagentType": "Explore",
       "isBackgrounded": false,
       "spawnDepth": 1,
@@ -28,8 +28,8 @@
       "incompleteReason": null
     },
     {
-      "taskId": "a1d39379fe2f86ca9",
-      "parentToolUseId": "toolu_01AeVtuqRUaWjxrAn4eN4CtA",
+      "taskId": "a62d52842cf9b6773",
+      "parentToolUseId": "toolu_0189rFYz9sr3TdNj5wpnzbiY",
       "subagentType": "Explore",
       "isBackgrounded": false,
       "spawnDepth": 1,
@@ -37,7 +37,7 @@
       "incompleteReason": null
     }
   ],
-  "thinkingEstimate": 135,
+  "thinkingEstimate": null,
   "notices": [],
   "spontaneousResumeCount": 0,
   "pendingApprovals": []

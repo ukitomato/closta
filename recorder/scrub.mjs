@@ -30,10 +30,14 @@ const ORG_UUID_PLACEHOLDER = '00000000-0000-0000-0000-000000000000';
 export const MCP_FAKE_PORT = '39039';
 // The keyed form. Also matches the form escaped inside a JSON string (\"organizationUuid\":\"…\").
 const ORG_UUID_KEY_RE = /\\?"organizationUuid\\?"\s*:\s*\\?"([^"\\]*)\\?"/g;
+// The session-owner line of a stored transcript (from 2.1.319) carries the account's UUID in accountUuid. Removed the
+// same way, keyed, the escaped form too.
+const ACCOUNT_UUID_PLACEHOLDER = '00000000-0000-0000-0000-000000000000';
+const ACCOUNT_UUID_KEY_RE = /\\?"accountUuid\\?"\s*:\s*\\?"([^"\\]*)\\?"/g;
 // The account's plan says which kind of account recorded (a company's plan names the company's kind of account). Every
 // capture carries the same fixed plan instead. Matched by key, the escaped form too.
 export const PLAN_PLACEHOLDER = 'Example Plan';
-const PLAN_KEY_RE = /(\\?"subscriptionType\\?"\s*:\s*\\?")([^"\\]*)(\\?")/g;
+const PLAN_KEY_RE = /(\\?"(?:subscriptionType|subscription_type)\\?"\s*:\s*\\?")([^"\\]*)(\\?")/g;
 
 // Real ids: req_/msg_ + 011C + 20 base58 chars. The fake keeps the shape (28 chars): 011CScrubbed + 12 base58 chars of
 // the sha256 of the whole real id, so the same real id always maps to the same fake one.
@@ -67,6 +71,7 @@ export function newScrubState(username = currentUsername()) {
     emails: new Set(), // learned real emails (the regex catches them too; a second safety net)
     orgs: new Set(), // learned organization names (no pattern detects them, so this is the main defence)
     orgUuids: new Set(), // learned organization UUIDs (the credential_org line of a transcript)
+    accountUuids: new Set(), // learned account UUIDs (the session-owner line of a transcript)
     mcpPorts: new Set(), // ports of the fake MCP servers started for recording (added by record.mjs; replaced with the fixed MCP_FAKE_PORT)
   };
 }
@@ -93,6 +98,7 @@ function learnSecrets(node, state) {
         if (k === 'email') state.emails.add(v);
         if (k === 'organization') state.orgs.add(v);
         if (k === 'organizationUuid' && v !== ORG_UUID_PLACEHOLDER) state.orgUuids.add(v);
+        if (k === 'accountUuid' && v !== ACCOUNT_UUID_PLACEHOLDER) state.accountUuids.add(v);
       }
       learnSecrets(v, state);
     }
@@ -115,6 +121,9 @@ export function learnLine(line, state) {
   for (const m of line.matchAll(ORG_UUID_KEY_RE)) {
     if (m[1] && m[1] !== ORG_UUID_PLACEHOLDER) state.orgUuids.add(m[1]);
   }
+  for (const m of line.matchAll(ACCOUNT_UUID_KEY_RE)) {
+    if (m[1] && m[1] !== ACCOUNT_UUID_PLACEHOLDER) state.accountUuids.add(m[1]);
+  }
 }
 
 // Managed settings describe the recording machine's organization (MCP servers, rules, hooks, announcements), not the
@@ -127,6 +136,11 @@ function dropManagedSettings(node) {
     if (Array.isArray(n)) {
       n.forEach(walk);
       return;
+    }
+    // list_permission_rules: the organization's own rules, one entry per rule.
+    if (Array.isArray(n.rules) && n.rules.some((r) => r?.source === 'policySettings')) {
+      n.rules = n.rules.filter((r) => r?.source !== 'policySettings');
+      changed = true;
     }
     if (Array.isArray(n.sources)) {
       for (const src of n.sources) {
@@ -162,6 +176,7 @@ function replaceLine(line, state) {
   for (const org of state.orgs) s = replaceAllLiteral(s, org, ORG_PLACEHOLDER);
   for (const email of state.emails) s = replaceAllLiteral(s, email, EMAIL_PLACEHOLDER);
   for (const uuid of state.orgUuids) s = replaceAllLiteral(s, uuid, ORG_UUID_PLACEHOLDER);
+  for (const uuid of state.accountUuids) s = replaceAllLiteral(s, uuid, ACCOUNT_UUID_PLACEHOLDER);
   // Port of the fake MCP server (in both localhost and 127.0.0.1 forms).
   for (const port of state.mcpPorts) {
     s = replaceAllLiteral(s, `localhost:${port}`, `localhost:${MCP_FAKE_PORT}`);
@@ -244,6 +259,9 @@ export function findPii(text, username = currentUsername(), learned = undefined,
   for (const m of text.matchAll(ORG_UUID_KEY_RE)) {
     if (m[1] !== ORG_UUID_PLACEHOLDER) hits.push({ kind: 'organization-uuid', value: m[1] });
   }
+  for (const m of text.matchAll(ACCOUNT_UUID_KEY_RE)) {
+    if (m[1] !== ACCOUNT_UUID_PLACEHOLDER) hits.push({ kind: 'account-uuid', value: m[1] });
+  }
   // The account's plan (matched by key name; any value other than the placeholder).
   for (const m of text.matchAll(PLAN_KEY_RE)) {
     if (m[2] !== PLAN_PLACEHOLDER) hits.push({ kind: 'plan', value: m[2] });
@@ -256,6 +274,7 @@ export function findPii(text, username = currentUsername(), learned = undefined,
   if (learned) {
     const known = [
       ['organization-uuid', learned.orgUuids, ORG_UUID_PLACEHOLDER],
+      ['account-uuid', learned.accountUuids, ACCOUNT_UUID_PLACEHOLDER],
       ['organization', learned.orgs, ORG_PLACEHOLDER],
       ['email', learned.emails, EMAIL_PLACEHOLDER],
     ];
@@ -316,6 +335,7 @@ function spansOf(text, state) {
     ...[...state.orgs].map((v) => [v, ORG_PLACEHOLDER]),
     ...[...state.emails].map((v) => [v, EMAIL_PLACEHOLDER]),
     ...[...state.orgUuids].map((v) => [v, ORG_UUID_PLACEHOLDER]),
+    ...[...state.accountUuids].map((v) => [v, ACCOUNT_UUID_PLACEHOLDER]),
     ...[...state.mcpPorts].flatMap((p) => [[`localhost:${p}`, `localhost:${MCP_FAKE_PORT}`], [`127.0.0.1:${p}`, `localhost:${MCP_FAKE_PORT}`]]),
   ];
   if (state.username && state.username !== 'user') {

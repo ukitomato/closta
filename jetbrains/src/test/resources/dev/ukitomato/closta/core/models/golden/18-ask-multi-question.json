@@ -1,21 +1,21 @@
 {
   "session": {
-    "sessionId": "645a2961-00d1-4d55-9169-653cb0e89c0c",
+    "sessionId": "0c43516f-d3ca-4391-a83d-a1b0bc16af82",
     "model": "claude-sonnet-4-6",
     "permissionMode": "default",
-    "cwd": "/tmp/closta-rec-18-ask-multi-question-YecpOS/cwd",
-    "version": "2.1.282"
+    "cwd": "/tmp/closta-rec-18-ask-multi-question-b0rgCH/cwd",
+    "version": "2.1.319"
   },
   "turns": [
     {
-      "commandUuid": "52ec203d-9809-4b30-8ea6-717b78b54c82",
+      "commandUuid": "519aa3b0-a2d1-42e5-9c04-0f35e06ec487",
       "phase": "CLOSED",
       "incompleteReason": null,
       "lifecycleDone": false
     }
   ],
   "usage": {
-    "sessionCostUsd": 0.0590334
+    "sessionCostUsd": 0.0635091
   },
   "tasks": [],
   "thinkingEstimate": null,

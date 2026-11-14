@@ -21,7 +21,7 @@ import dev.ukitomato.closta.core.models.RawJson
  *
  * [decode] never throws: a line the reader cannot place still comes back as a value, because a reader
  * that throws stops reading and a stdout reader that stops deadlocks the CLI behind a full pipe.
- * A line whose `type` is not one of the eighteen, or of a known kind but missing a field the declared
+ * A line whose `type` is not one of the nineteen, or of a known kind but missing a field the declared
  * shape needs, becomes [AgentEvent.UnknownKind] — in both cases the protocol has moved. A line that
  * is not a JSON object at all becomes [AgentEvent.BrokenLine] — damaged bytes rather than a new
  * version, a different thing to go and look at. A line nested deeper than [MAX_DEPTH] is also a
@@ -212,7 +212,7 @@ object StreamJsonCodec {
     /**
      * One builder per kind, keyed rather than branched.
      *
-     * An eighteen-armed `when` would be one unit that grows every time the protocol does; a map keeps
+     * A nineteen-armed `when` would be one unit that grows every time the protocol does; a map keeps
      * each kind's field list next to that kind alone, and a kind with no entry falls through to
      * unknown instead of to an unreachable branch.
      */
@@ -440,6 +440,13 @@ object StreamJsonCodec {
                     sessionId = f.text("session_id"),
                     compactMetadata = f.raw("compact_metadata"),
                     logicalParentUuid = f.textOrNull("logical_parent_uuid"),
+                )
+            },
+            AgentEventKind.SYSTEM_UI_INVALIDATE to { f ->
+                AgentEvent.SystemUiInvalidate(
+                    uuid = f.text("uuid"),
+                    sessionId = f.text("session_id"),
+                    event = f.textOrNull("event"),
                 )
             },
         )

@@ -10,11 +10,11 @@
         "messages": {
           "order": [
             "send-1",
-            "645bce25-daa2-4a69-8dca-737e7b776c10",
+            "2291dcf5-e962-4eea-a96e-03e16ac717e9",
             "send-2",
-            "d227680e-2927-46db-9346-b7f9254ad4f8",
+            "cfa0c6ae-9236-4b7b-9985-3a7a468e33a1",
             "send-3",
-            "e0778050-4068-415c-ba3b-fcdb2c0e9dff"
+            "b0d094ac-78a1-4016-99aa-71fe630543e9"
           ],
           "byId": {
             "send-1": {
@@ -32,8 +32,8 @@
                 }
               }
             },
-            "645bce25-daa2-4a69-8dca-737e7b776c10": {
-              "id": "645bce25-daa2-4a69-8dca-737e7b776c10",
+            "2291dcf5-e962-4eea-a96e-03e16ac717e9": {
+              "id": "2291dcf5-e962-4eea-a96e-03e16ac717e9",
               "role": "assistant",
               "status": {
                 "type": "complete",
@@ -41,10 +41,10 @@
               },
               "parts": {
                 "order": [
-                  "msg_011CScrubbed4szr9yP28WuT:0"
+                  "msg_011CScrubbed3ETogjP9Rr6j:0"
                 ],
                 "byId": {
-                  "msg_011CScrubbed4szr9yP28WuT:0": {
+                  "msg_011CScrubbed3ETogjP9Rr6j:0": {
                     "type": "text",
                     "text": "ok",
                     "status": {
@@ -69,8 +69,8 @@
                 }
               }
             },
-            "d227680e-2927-46db-9346-b7f9254ad4f8": {
-              "id": "d227680e-2927-46db-9346-b7f9254ad4f8",
+            "cfa0c6ae-9236-4b7b-9985-3a7a468e33a1": {
+              "id": "cfa0c6ae-9236-4b7b-9985-3a7a468e33a1",
               "role": "assistant",
               "status": {
                 "type": "complete",
@@ -78,10 +78,10 @@
               },
               "parts": {
                 "order": [
-                  "msg_011CScrubbed6UaVkUDxCGYA:0"
+                  "msg_011CScrubbed4LJfkpgVRE3w:0"
                 ],
                 "byId": {
-                  "msg_011CScrubbed6UaVkUDxCGYA:0": {
+                  "msg_011CScrubbed4LJfkpgVRE3w:0": {
                     "type": "text",
                     "text": "ok",
                     "status": {
@@ -106,8 +106,8 @@
                 }
               }
             },
-            "e0778050-4068-415c-ba3b-fcdb2c0e9dff": {
-              "id": "e0778050-4068-415c-ba3b-fcdb2c0e9dff",
+            "b0d094ac-78a1-4016-99aa-71fe630543e9": {
+              "id": "b0d094ac-78a1-4016-99aa-71fe630543e9",
               "role": "assistant",
               "status": {
                 "type": "complete",
@@ -115,10 +115,10 @@
               },
               "parts": {
                 "order": [
-                  "msg_011CScrubbed2rB4Nw6U2VW1:0"
+                  "msg_011CScrubbedGLg18YGBCShH:0"
                 ],
                 "byId": {
-                  "msg_011CScrubbed2rB4Nw6U2VW1:0": {
+                  "msg_011CScrubbedGLg18YGBCShH:0": {
                     "type": "text",
                     "text": "alpha",
                     "status": {
@@ -133,15 +133,15 @@
         "session": {
           "model": "claude-sonnet-4-6",
           "permissionMode": "default",
-          "cwd": "/tmp/closta-rec-27-resume-session-at-mzQ744/cwd",
-          "version": "2.1.282"
+          "cwd": "/tmp/closta-rec-27-resume-session-at-FkiYDx/cwd",
+          "version": "2.1.319"
         },
         "usage": {
-          "costUsd": 0.1332828,
+          "costUsd": 0.0628005,
           "inputTokens": 9,
           "outputTokens": 12,
-          "cacheReadInputTokens": 40146,
-          "cacheCreationInputTokens": 20172
+          "cacheReadInputTokens": 57725,
+          "cacheCreationInputTokens": 7546
         },
         "commands": [
           {
@@ -173,8 +173,8 @@
           },
           {
             "name": "code-review",
-            "description": "Review the current diff, or a PR number/branch/path target, for correctness bugs (plus reuse/simplification/efficiency cleanups where the model's review recipe covers them) at the given effort level (low/medium: fewer, high-confidence findings; high→max: broader coverage, may include uncertain findings); with no level given, it reuses the level you typed last. Pass --comment to post findings as inline PR comments, or --fix to apply the findings to the working tree after the review.",
-            "argumentHint": "[low|medium|high|xhigh|max] [--fix] [--comment] [<pr#>|<branch>|<path>]"
+            "description": "Review the current diff, or a PR number/branch/path target, for correctness bugs (plus reuse/simplification/efficiency cleanups where the model's recipe covers them) at the effort level given first, before any target (low|medium|high|xhigh|max: from few high-confidence findings to many, some uncertain); with no level given, it reuses the level you typed last. Pass --comment to post findings as inline PR comments, or --fix to apply them to the working tree after the review. Pass --max-findings <n> to report up to n findings, or --max-findings all for every finding. The choice stays until you pass --max-findings default.",
+            "argumentHint": "[low|medium|high|xhigh|max] [--fix] [--comment] [<pr#>|<branch>|<path>] [--max-findings <n>|all]"
           },
           {
             "name": "simplify",
@@ -192,7 +192,8 @@
           },
           {
             "name": "doctor",
-            "description": "Health-check the user's Claude Code setup and fix issues: diagnose installation health — what the `claude doctor` terminal diagnostics cover — from local data (duplicate or leftover installs, PATH, unparseable settings files, broken or colliding agent definitions, skills whose frontmatter fails to parse); find unused skills, MCP servers, and plugins versus their context cost and disable dead weight; deduplicate local CLAUDE.md files against checked-in ones; trim checked-in CLAUDE.md files by cutting content a session could derive from the codebase (directory layouts, tech-stack lists, architecture overviews) while keeping gotchas, rationale, and non-standard conventions; migrate always-loaded CLAUDE.md guidance into lazy skills and nested CLAUDE.md files; flag slow hooks and context-heavy extensions; check the installed version is current; make auto mode the default permission mode; and pre-approve frequently denied read-only commands. Use when the user asks for a doctor run, checkup, audit, tune-up, or cleanup of their Claude Code setup or configuration."
+            "description": "Health-check the user's Claude Code setup and fix issues: diagnose installation health — what the `claude doctor` terminal diagnostics cover — from local data (duplicate or leftover installs, PATH, unparseable settings files, broken or colliding agent definitions, skills whose frontmatter fails to parse); find unused skills, MCP servers, and plugins versus their context cost and disable dead weight; deduplicate local CLAUDE.md files against checked-in ones; trim checked-in CLAUDE.md files by cutting content a session could derive from the codebase (directory layouts, tech-stack lists, architecture overviews) while keeping gotchas, rationale, and non-standard conventions; migrate always-loaded CLAUDE.md guidance into lazy skills and nested CLAUDE.md files; flag slow hooks and context-heavy extensions; check the installed version is current; make auto mode the default permission mode; and pre-approve frequently denied read-only commands. Use when the user asks for a doctor run, checkup, audit, tune-up, or cleanup of their Claude Code setup or configuration.",
+            "argumentHint": "[prompt-audit [<path>]]"
           },
           {
             "name": "loop",
@@ -210,6 +211,10 @@
           {
             "name": "run-skill-generator",
             "description": "Author or improve the run-<unit> skill - a per-project skill that tells agents how to build, launch, and drive this project's app. Use when the user asks to set up the project, get it running, write run instructions, or verify build/run steps work from a clean environment."
+          },
+          {
+            "name": "plugin-authoring",
+            "description": "Make a mod: a change to Claude's own interface or behaviour, such as a panel or pane that stays beside the chat and updates, a band, status line, toast, slash command, or hook on tool calls. Use to make, change or debug a mod or its hooks module."
           },
           {
             "name": "advisor",
@@ -412,6 +417,20 @@
           },
           {
             "value": "sonnet",
+            "displayName": "Sonnet 5.5",
+            "description": "Most efficient for simpler tasks",
+            "resolvedModel": "claude-sonnet-5-5",
+            "supportsEffort": true,
+            "supportedEffortLevels": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          },
+          {
+            "value": "claude-sonnet-5",
             "displayName": "Sonnet 5",
             "description": "Most efficient for everyday tasks",
             "resolvedModel": "claude-sonnet-5",
@@ -426,6 +445,20 @@
           },
           {
             "value": "haiku",
+            "displayName": "Haiku 5.5",
+            "description": "Fastest for quick answers",
+            "resolvedModel": "claude-haiku-5-5",
+            "supportsEffort": true,
+            "supportedEffortLevels": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          },
+          {
+            "value": "claude-haiku-4-5-20251001",
             "displayName": "Haiku 4.5",
             "description": "Fastest for quick answers",
             "resolvedModel": "claude-haiku-4-5-20251001"

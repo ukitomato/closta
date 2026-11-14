@@ -171,6 +171,6 @@ class UnknownEventTest {
 
     private companion object {
         /** The `command_lifecycle` lines across all the captures, counted by hand. */
-        const val COMMAND_LIFECYCLE_LINES = 117
+        const val COMMAND_LIFECYCLE_LINES = 138
     }
 }

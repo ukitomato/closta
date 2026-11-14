@@ -162,8 +162,19 @@ class CodecDecodeTest {
         )
 
     @Test
+    fun `a ui_invalidate line becomes a typed value with its event`() {
+        // Not in sdk.d.ts; the captures carry it from 2.1.319, at the start of a session.
+        val value = assertInstanceOf(AgentEvent.SystemUiInvalidate::class.java, captureLine("02-tool-bash-autorun", 1))
+
+        assertAll(
+            { assertEquals("ui.render", value.event) },
+            { assertTrue(value.uuid.isNotBlank() && value.sessionId.isNotBlank()) },
+        )
+    }
+
+    @Test
     fun `an init with no scratchpad_path is placed, with the path null`() {
-        val inits = listOf("16-permission-suggestion-accept" to 5, "21-compact" to 4, "21-compact" to 21)
+        val inits = listOf("16-permission-suggestion-accept" to 4, "21-compact" to 4, "21-compact" to 22)
         inits.forEach { (scenario, line) ->
             val init = assertInstanceOf(AgentEvent.SystemInit::class.java, captureLine(scenario, line))
             assertNull(init.scratchpadPath, "$scenario line $line")
@@ -173,22 +184,22 @@ class CodecDecodeTest {
     @Test
     fun `commands_changed and compact_boundary lines become typed values`() {
         val changed =
-            listOf(1, 7, 8).map { captureLine("16-permission-suggestion-accept", it) }
-        val boundary = captureLine("21-compact", 22)
+            listOf(5, 6).map { captureLine("01-baseline-text", it) }
+        val boundary = captureLine("21-compact", 23)
 
         assertAll(
             { changed.forEach { assertInstanceOf(AgentEvent.SystemCommandsChanged::class.java, it) } },
             {
                 val value = assertInstanceOf(AgentEvent.SystemCompactBoundary::class.java, boundary)
                 assertTrue("trigger" in value.compactMetadata.text && "pre_tokens" in value.compactMetadata.text)
-                assertTrue(value.logicalParentUuid != null, "21 line 22 carries logical_parent_uuid")
+                assertTrue(value.logicalParentUuid != null, "21 line 23 carries logical_parent_uuid")
             },
         )
     }
 
     @Test
     fun `the result of a local command is placed with its optional fields absent`() {
-        val result = assertInstanceOf(AgentEvent.Result::class.java, captureLine("21-compact", 25))
+        val result = assertInstanceOf(AgentEvent.Result::class.java, captureLine("21-compact", 26))
 
         assertAll(
             { assertEquals("compact", result.localCommand) },
@@ -214,7 +225,7 @@ class CodecDecodeTest {
     @Test
     fun `a result names every message its turn took in, in order`() {
         // 31: the second message, sent while the first ran, was taken into the first's turn.
-        val result = assertInstanceOf(AgentEvent.Result::class.java, captureLine("31-send-mid-turn", 54))
+        val result = assertInstanceOf(AgentEvent.Result::class.java, captureLine("31-send-mid-turn", 52))
         val uuids = result.userMessageUuids.orEmpty()
 
         assertAll(
@@ -225,7 +236,7 @@ class CodecDecodeTest {
 
     @Test
     fun `a result without the list has none, and one with stray entries keeps only its strings`() {
-        val line = CaptureFixtures.nonBlankLines(CaptureFixtures.textOf("31-send-mid-turn.ndjson"))[53]
+        val line = CaptureFixtures.nonBlankLines(CaptureFixtures.textOf("31-send-mid-turn.ndjson"))[51]
         val json = JsonParser.parseString(line).asJsonObject
         val without = json.deepCopy().apply { remove("user_message_uuids") }
         val stray = json.deepCopy().apply { add("user_message_uuids", JsonParser.parseString("""["a", 1, null]""")) }
@@ -244,7 +255,7 @@ class CodecDecodeTest {
     @Test
     fun `an error result without a result text says what went wrong with its errors`() {
         // sdk.d.ts SDKResultError has errors and no result. 32 was interrupted while a foreground Bash ran.
-        val result = assertInstanceOf(AgentEvent.Result::class.java, captureLine("32-interrupt-foreground", 80))
+        val result = assertInstanceOf(AgentEvent.Result::class.java, captureLine("32-interrupt-foreground", 79))
 
         assertAll(
             { assertEquals("error_during_execution", result.subtype) },
@@ -287,7 +298,7 @@ class CodecDecodeTest {
     @Test
     fun `a control response lifts request_id, subtype and error, and a success lifts no error`() {
         val rejected = assertInstanceOf(AgentEvent.ControlResponse::class.java, captureLine("07-set-model-and-mode", 9))
-        val accepted = assertInstanceOf(AgentEvent.ControlResponse::class.java, captureLine("07-set-model-and-mode", 4))
+        val accepted = assertInstanceOf(AgentEvent.ControlResponse::class.java, captureLine("07-set-model-and-mode", 5))
 
         assertAll(
             { assertEquals("07-set-model-and-mode-req-8", rejected.requestId) },

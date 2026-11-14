@@ -372,7 +372,7 @@ class ProjectTranscriptsTest {
             listOf("User", "Assistant", "Assistant", "User", "Assistant"),
             read.events.map { it::class.simpleName },
         )
-        assertEquals(22, read.skipped, "27 lines of the record, 5 of them the conversation")
+        assertEquals(32, read.skipped, "37 lines of the record, 5 of them the conversation")
         assertEquals(0, read.dropped)
         val prompt = read.events.first() as AgentEvent.User
         assertTrue(prompt.message.text.contains("echo hello-from-resume"), "the user's own words are in the record")

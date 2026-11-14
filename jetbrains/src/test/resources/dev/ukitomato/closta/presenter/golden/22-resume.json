@@ -10,9 +10,9 @@
         "messages": {
           "order": [
             "send-1",
-            "9d16f4cc-3b36-4a98-8ab2-84438e311ceb",
+            "a37950b1-8436-47fc-8c0a-d129d9022c11",
             "send-2",
-            "af8842b7-5a42-4d06-b5f3-1eb095c712c9"
+            "c9e20e49-6702-45b3-8de6-2e4507ec6e63"
           ],
           "byId": {
             "send-1": {
@@ -30,8 +30,8 @@
                 }
               }
             },
-            "9d16f4cc-3b36-4a98-8ab2-84438e311ceb": {
-              "id": "9d16f4cc-3b36-4a98-8ab2-84438e311ceb",
+            "a37950b1-8436-47fc-8c0a-d129d9022c11": {
+              "id": "a37950b1-8436-47fc-8c0a-d129d9022c11",
               "role": "assistant",
               "status": {
                 "type": "complete",
@@ -39,26 +39,26 @@
               },
               "parts": {
                 "order": [
-                  "msg_011CScrubbed8Zi68XfCnn6H:0",
-                  "toolu_012wWm4TuzZeDWdUpAMcy5vU",
-                  "msg_011CScrubbedAt3xFkCvKYkv:0"
+                  "msg_011CScrubbedH2V3pN1eZU1G:0",
+                  "toolu_01EKZoqnGkaZ9n4AojDL8Jo6",
+                  "msg_011CScrubbedDnMR4ns18CX8:0"
                 ],
                 "byId": {
-                  "msg_011CScrubbed8Zi68XfCnn6H:0": {
+                  "msg_011CScrubbedH2V3pN1eZU1G:0": {
                     "type": "reasoning",
                     "text": "",
                     "status": {
                       "type": "complete"
                     }
                   },
-                  "toolu_012wWm4TuzZeDWdUpAMcy5vU": {
+                  "toolu_01EKZoqnGkaZ9n4AojDL8Jo6": {
                     "type": "tool-call",
-                    "toolCallId": "toolu_012wWm4TuzZeDWdUpAMcy5vU",
+                    "toolCallId": "toolu_01EKZoqnGkaZ9n4AojDL8Jo6",
                     "toolName": "Bash",
-                    "argsText": "{\"command\": \"echo hello-from-resume\", \"description\": \"Run the exact command specified\"}",
+                    "argsText": "{\"command\": \"echo hello-from-resume\", \"description\": \"Run the specified echo command\"}",
                     "args": {
                       "command": "echo hello-from-resume",
-                      "description": "Run the exact command specified"
+                      "description": "Run the specified echo command"
                     },
                     "result": "hello-from-resume",
                     "isError": false,
@@ -66,7 +66,7 @@
                       "type": "complete"
                     }
                   },
-                  "msg_011CScrubbedAt3xFkCvKYkv:0": {
+                  "msg_011CScrubbedDnMR4ns18CX8:0": {
                     "type": "text",
                     "text": "Output: `hello-from-resume`",
                     "status": {
@@ -91,8 +91,8 @@
                 }
               }
             },
-            "af8842b7-5a42-4d06-b5f3-1eb095c712c9": {
-              "id": "af8842b7-5a42-4d06-b5f3-1eb095c712c9",
+            "c9e20e49-6702-45b3-8de6-2e4507ec6e63": {
+              "id": "c9e20e49-6702-45b3-8de6-2e4507ec6e63",
               "role": "assistant",
               "status": {
                 "type": "complete",
@@ -100,10 +100,10 @@
               },
               "parts": {
                 "order": [
-                  "msg_011CScrubbedEV7AsMYJYKxM:0"
+                  "msg_011CScrubbed7sQsoePNPbyt:0"
                 ],
                 "byId": {
-                  "msg_011CScrubbedEV7AsMYJYKxM:0": {
+                  "msg_011CScrubbed7sQsoePNPbyt:0": {
                     "type": "text",
                     "text": "pong",
                     "status": {
@@ -118,15 +118,15 @@
         "session": {
           "model": "claude-sonnet-4-6",
           "permissionMode": "default",
-          "cwd": "/tmp/closta-rec-22-resume-spappc/cwd",
-          "version": "2.1.282"
+          "cwd": "/tmp/closta-rec-22-resume-b2Elap/cwd",
+          "version": "2.1.319"
         },
         "usage": {
-          "costUsd": 0.05961299999999999,
+          "costUsd": 0.0651516,
           "inputTokens": 7,
           "outputTokens": 125,
-          "cacheReadInputTokens": 53630,
-          "cacheCreationInputTokens": 6938
+          "cacheReadInputTokens": 57872,
+          "cacheCreationInputTokens": 7649
         },
         "commands": [
           {
@@ -158,8 +158,8 @@
           },
           {
             "name": "code-review",
-            "description": "Review the current diff, or a PR number/branch/path target, for correctness bugs (plus reuse/simplification/efficiency cleanups where the model's review recipe covers them) at the given effort level (low/medium: fewer, high-confidence findings; high→max: broader coverage, may include uncertain findings); with no level given, it reuses the level you typed last. Pass --comment to post findings as inline PR comments, or --fix to apply the findings to the working tree after the review.",
-            "argumentHint": "[low|medium|high|xhigh|max] [--fix] [--comment] [<pr#>|<branch>|<path>]"
+            "description": "Review the current diff, or a PR number/branch/path target, for correctness bugs (plus reuse/simplification/efficiency cleanups where the model's recipe covers them) at the effort level given first, before any target (low|medium|high|xhigh|max: from few high-confidence findings to many, some uncertain); with no level given, it reuses the level you typed last. Pass --comment to post findings as inline PR comments, or --fix to apply them to the working tree after the review. Pass --max-findings <n> to report up to n findings, or --max-findings all for every finding. The choice stays until you pass --max-findings default.",
+            "argumentHint": "[low|medium|high|xhigh|max] [--fix] [--comment] [<pr#>|<branch>|<path>] [--max-findings <n>|all]"
           },
           {
             "name": "simplify",
@@ -177,7 +177,8 @@
           },
           {
             "name": "doctor",
-            "description": "Health-check the user's Claude Code setup and fix issues: diagnose installation health — what the `claude doctor` terminal diagnostics cover — from local data (duplicate or leftover installs, PATH, unparseable settings files, broken or colliding agent definitions, skills whose frontmatter fails to parse); find unused skills, MCP servers, and plugins versus their context cost and disable dead weight; deduplicate local CLAUDE.md files against checked-in ones; trim checked-in CLAUDE.md files by cutting content a session could derive from the codebase (directory layouts, tech-stack lists, architecture overviews) while keeping gotchas, rationale, and non-standard conventions; migrate always-loaded CLAUDE.md guidance into lazy skills and nested CLAUDE.md files; flag slow hooks and context-heavy extensions; check the installed version is current; make auto mode the default permission mode; and pre-approve frequently denied read-only commands. Use when the user asks for a doctor run, checkup, audit, tune-up, or cleanup of their Claude Code setup or configuration."
+            "description": "Health-check the user's Claude Code setup and fix issues: diagnose installation health — what the `claude doctor` terminal diagnostics cover — from local data (duplicate or leftover installs, PATH, unparseable settings files, broken or colliding agent definitions, skills whose frontmatter fails to parse); find unused skills, MCP servers, and plugins versus their context cost and disable dead weight; deduplicate local CLAUDE.md files against checked-in ones; trim checked-in CLAUDE.md files by cutting content a session could derive from the codebase (directory layouts, tech-stack lists, architecture overviews) while keeping gotchas, rationale, and non-standard conventions; migrate always-loaded CLAUDE.md guidance into lazy skills and nested CLAUDE.md files; flag slow hooks and context-heavy extensions; check the installed version is current; make auto mode the default permission mode; and pre-approve frequently denied read-only commands. Use when the user asks for a doctor run, checkup, audit, tune-up, or cleanup of their Claude Code setup or configuration.",
+            "argumentHint": "[prompt-audit [<path>]]"
           },
           {
             "name": "loop",
@@ -195,6 +196,10 @@
           {
             "name": "run-skill-generator",
             "description": "Author or improve the run-<unit> skill - a per-project skill that tells agents how to build, launch, and drive this project's app. Use when the user asks to set up the project, get it running, write run instructions, or verify build/run steps work from a clean environment."
+          },
+          {
+            "name": "plugin-authoring",
+            "description": "Make a mod: a change to Claude's own interface or behaviour, such as a panel or pane that stays beside the chat and updates, a band, status line, toast, slash command, or hook on tool calls. Use to make, change or debug a mod or its hooks module."
           },
           {
             "name": "advisor",
@@ -397,6 +402,20 @@
           },
           {
             "value": "sonnet",
+            "displayName": "Sonnet 5.5",
+            "description": "Most efficient for simpler tasks",
+            "resolvedModel": "claude-sonnet-5-5",
+            "supportsEffort": true,
+            "supportedEffortLevels": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          },
+          {
+            "value": "claude-sonnet-5",
             "displayName": "Sonnet 5",
             "description": "Most efficient for everyday tasks",
             "resolvedModel": "claude-sonnet-5",
@@ -411,6 +430,20 @@
           },
           {
             "value": "haiku",
+            "displayName": "Haiku 5.5",
+            "description": "Fastest for quick answers",
+            "resolvedModel": "claude-haiku-5-5",
+            "supportsEffort": true,
+            "supportedEffortLevels": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          },
+          {
+            "value": "claude-haiku-4-5-20251001",
             "displayName": "Haiku 4.5",
             "description": "Fastest for quick answers",
             "resolvedModel": "claude-haiku-4-5-20251001"

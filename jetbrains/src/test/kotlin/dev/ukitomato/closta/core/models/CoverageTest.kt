@@ -13,9 +13,9 @@ import org.junit.jupiter.api.Test
  * silence, so the figures are pinned here too: raise the CLI version, record again, and whichever of
  * the three moved says what moved with it.
  *
- * The expectations come from `@anthropic-ai/claude-agent-sdk@0.3.282`, whose bundled `package.json`
- * gives `claudeCodeVersion` `2.1.282` — the version the captures were recorded from. The package is
- * not vendored here, so the two counts that describe *it* (44 and 39) are written down rather than
+ * The expectations come from `@anthropic-ai/claude-agent-sdk@0.3.319`, whose bundled `package.json`
+ * gives `claudeCodeVersion` `2.1.319` — the version the captures were recorded from. The package is
+ * not vendored here, so the two counts that describe *it* (45 and 40) are written down rather than
  * computed; everything that describes the **captures** is counted from the captures, and the
  * classification is checked against them so that a figure cannot agree with itself.
  */
@@ -47,8 +47,8 @@ class CoverageTest {
             // modelled would be exactly the mistake the previous assertion forbids.
             { assertTrue(observedKinds().containsAll(UNDECLARED), "the undeclared kind is in the captures") },
             { assertEquals(CAPTURES_WITH_LIFECYCLE, lifecycleCaptures, "captures containing command_lifecycle") },
-            // 18 observed, 17 declared somewhere in StdoutMessage. The difference of one is the whole
-            // reason AgentEvent has eighteen kinds and not seventeen.
+            // 19 observed, 17 declared somewhere in StdoutMessage. The difference of two is the whole
+            // reason AgentEvent has nineteen kinds and not seventeen.
             {
                 assertEquals(
                     DECLARED_IN_STDOUT_MESSAGE,
@@ -104,14 +104,17 @@ class CoverageTest {
             .toSet()
 
     private companion object {
-        /** `StdoutMessage` in sdk.d.ts — "everything the CLI writes to its output stream". */
-        const val STDOUT_MESSAGE_KINDS = 44
+        /**
+         * `StdoutMessage` in sdk.d.ts — "everything the CLI writes to its output stream". Counted as the
+         * members of its union, with `coreTypes.SDKMessage` expanded into its own 40: 40 + 5.
+         */
+        const val STDOUT_MESSAGE_KINDS = 45
 
-        /** `SDKMessage`: the subset of the above without the control protocol and keep-alives. */
-        const val SDK_MESSAGE_KINDS = 39
+        /** `SDKMessage`: the subset of the above without the control protocol and keep-alives (its union's members). */
+        const val SDK_MESSAGE_KINDS = 40
 
         /** Distinct kinds across the captures (including commands_changed and compact_boundary). */
-        const val OBSERVED_KINDS = 18
+        const val OBSERVED_KINDS = 19
 
         /** Of those, the ones `StdoutMessage` declares. */
         const val DECLARED_IN_STDOUT_MESSAGE = 17
@@ -119,34 +122,31 @@ class CoverageTest {
         /** Of those, the ones that are also in the `SDKMessage` subset. */
         const val DECLARED_IN_SDK_MESSAGE = 15
 
-        /** Declared but never recorded. */
-        const val NEVER_OBSERVED = 27
+        /**
+         * Declared but not modelled: never recorded, or (`conversation_reset`, `system/permission_denied`)
+         * recorded and held in CaptureFixtures.KNOWN_UNPLACED until the codec learns them.
+         */
+        const val NEVER_OBSERVED = 28
 
         /**
-         * Lines across the 32 captures (01-32).
+         * Lines across the 36 captures (01-36).
          */
-        const val RECORDED_LINES = 2268
+        const val RECORDED_LINES = 2182
 
-        /** Captures in which `command_lifecycle` appears; 06, 07 and 24 have no user turn. */
-        const val CAPTURES_WITH_LIFECYCLE = 28
-
-        /**
-         * `control_response` 21 + `control_request` 5 in captures 01-15; 16-21 add 7 responses (6 initialize,
-         * 1 interrupt) and 3 requests; 22 adds 2 responses (the two initializes of the resume capture); 23 adds 1 (the
-         * one initialize of the attachments capture); 24 adds 9 (the initialize and the eight MCP requests); 25 and 26
-         * add 7 (capture 25: the initialize and two rewind_files responses, two can_use_tool requests; capture 26: the
-         * two initializes of its two CLIs); 27 adds 2 (the two initializes of its two CLIs); 28 adds 8 (the
-         * initialize, the get_settings before the switches, and three apply_flag_settings each with the get_settings
-         * after it); 29 adds 3 (the initialize, the ExitPlanMode and the Edit can_use_tool requests); 32 adds 2 (the
-         * initialize and the interrupt).
-         */
-        const val CONTROL_PROTOCOL_LINES = 73
+        /** Captures in which `command_lifecycle` appears; 06, 07, 24 and 28 have no user turn. */
+        const val CAPTURES_WITH_LIFECYCLE = 32
 
         /**
-         * Observed, but with no declaration anywhere in the package's `.d.ts` files: the word appears
-         * once in sdk.d.ts, in prose on `interrupt`.
+         * `control_response` 69 + `control_request` 13 (all `can_use_tool`) across the 36 captures, counted by
+         * wire type over every non-blank line.
          */
-        val UNDECLARED = setOf(AgentEventKind.COMMAND_LIFECYCLE)
+        const val CONTROL_PROTOCOL_LINES = 82
+
+        /**
+         * Observed, but with no declaration anywhere in the package's `.d.ts` files: `command_lifecycle`
+         * appears once in sdk.d.ts, in prose on `interrupt`, and `ui_invalidate` not at all.
+         */
+        val UNDECLARED = setOf(AgentEventKind.COMMAND_LIFECYCLE, AgentEventKind.SYSTEM_UI_INVALIDATE)
 
         /** Declared by `StdoutMessage` only: the control protocol is not part of `SDKMessage`. */
         val CONTROL_PROTOCOL_ONLY = setOf(AgentEventKind.CONTROL_REQUEST, AgentEventKind.CONTROL_RESPONSE)

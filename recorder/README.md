@@ -34,3 +34,6 @@ node record.mjs          # re-record every scenario (overwrites the captures)
 - `CLOSTA_PII_NAMES` and `CLOSTA_PII_ORGS` (comma-separated) add personal and organization names the audit must not
   find. `git config user.name` is always included. Keep them in your environment, not in a file.
 - Each scenario runs in a fresh temporary directory, and the CLI's records for it are removed afterwards.
+- The CLI runs with a fresh config directory that holds only a copy of `~/.claude/.credentials.json`, removed when
+  recording ends, so your own skills, plugins, agents and settings stay out of the captures. Set `CLAUDE_CONFIG_DIR`
+  to record with a config of your choosing instead.

@@ -13,7 +13,7 @@ class AgentSummaryTest {
     fun aSubAgentRowSaysWhatItDoesAndHowManyToolsItCalled() {
         val transcript = CaptureReplay.replay("08-subagent-task").last().transcript
         val agent = ThreadRows().of(transcript).filterIsInstance<ToolRow>().single { it.toolName == "Agent" }
-        assertEquals(AgentSummary("Read NOTES.md and summarize", 1, durationMs = 3705), agent.agent)
+        assertEquals(AgentSummary("Summarize NOTES.md", 1, durationMs = 4094), agent.agent)
     }
 
     @Test
@@ -40,7 +40,7 @@ class AgentSummaryTest {
     @Test
     fun onlyASubAgentsCallTakesADuration() {
         val transcript = CaptureReplay.replay("08-subagent-task").last().transcript
-        val read = "toolu_017AYaBDFQPgf2trBHtoP1HN"
+        val read = "toolu_017LVLbm9Ra8Er5t4AdxYBzH"
         val line =
             AgentEvent.User(
                 uuid = "u-late",

@@ -168,6 +168,33 @@ check('removes organizationUuid of a transcript credential_org line, and the aud
   assert.ok(!scrubLine(JSON.stringify({ note: `org ${uuid}` }), st).includes(uuid));
 });
 
+check('replaces accountUuid of a transcript session-owner line, the escaped form too, and the audit flags it if left', () => {
+  const st = newScrubState('alice');
+  const uuid = '00000000-0000-4000-8000-0000000000a1'; // obviously fake
+  const line = JSON.stringify({ type: 'session-owner', accountUuid: uuid, sessionId: 's' });
+  assert.ok(findPii(line, 'alice').some((h) => h.kind === 'account-uuid'), 'the raw line is flagged');
+  const out = scrubLine(line, st);
+  assert.ok(!out.includes(uuid), out);
+  assert.ok(out.includes('"accountUuid"'), 'the key stays, with a placeholder');
+  assert.equal(findPii(out, 'alice').length, 0, out);
+  assert.ok(!scrubLine(JSON.stringify({ note: `account ${uuid}` }), st).includes(uuid), 'a learned value goes elsewhere too');
+  const nested = JSON.stringify({ type: 'attachment', note: JSON.stringify({ accountUuid: uuid }) });
+  assert.ok(findPii(nested, 'alice').some((h) => h.kind === 'account-uuid'), 'the audit sees the escaped key');
+  const [escaped] = scrubLines([nested], newScrubState('alice'));
+  assert.ok(!escaped.includes(uuid), escaped);
+  assert.equal(findPii(escaped, 'alice').length, 0, escaped);
+});
+
+check('replaces the two ids in the path of a synced skill, and the audit flags them if left', () => {
+  const ids = '00000000-0000-4000-8000-0000000000b1_00000000-0000-4000-8000-0000000000b2'; // obviously fake
+  const line = JSON.stringify({ skills: [{ name: 'docx', path: `/tmp/c/skills/synced/${ids}/docx/SKILL.md` }] });
+  assert.ok(findPii(line, 'alice').some((h) => h.kind === 'synced-skill-ids'), 'the raw line is flagged');
+  const out = scrubLine(line, newScrubState('alice'));
+  assert.ok(!out.includes(ids), out);
+  assert.ok(out.includes('/skills/synced/'), 'the path keeps its shape');
+  assert.equal(findPii(out, 'alice').length, 0, out);
+});
+
 check('two passes: removed from earlier lines even when the line revealing the value comes later', () => {
   const uuid = '00000000-0000-4000-8000-000000000002'; // obviously fake
   const earlier = JSON.stringify({ type: 'user', message: { content: `org ${uuid}` } });
@@ -220,6 +247,26 @@ check('the account plan is written as one fixed plan, also inside an escaped str
   assert.equal(out.split('Example Plan').length - 1, 2, out);
   assert.equal(findPii(out, 'alice').length, 0, out);
   assert.equal(findPii(line, 'alice').filter((h) => h.kind === 'plan').length, 2);
+});
+
+check('get_usage subscription_type is written as the fixed plan too', () => {
+  const st = newScrubState('alice');
+  const line = JSON.stringify({ type: 'control_response', response: { response: { subscription_type: 'enterprise' } } });
+  const out = scrubLine(line, st);
+  assert.ok(!out.includes('enterprise'), out);
+  assert.ok(out.includes('"subscription_type":"Example Plan"'), out);
+  assert.equal(findPii(line, 'alice').filter((h) => h.kind === 'plan').length, 1);
+});
+
+check('drops the organization rules from list_permission_rules and keeps the rest', () => {
+  const st = newScrubState('alice');
+  const rules = [
+    { behavior: 'allow', source: 'policySettings', rule: 'Bash(corp-tool:*)' },
+    { behavior: 'deny', source: 'projectSettings', rule: 'Read(./secret.txt)' },
+  ];
+  const line = JSON.stringify({ type: 'control_response', response: { response: { state: { rules } } } });
+  const out = JSON.parse(scrubLine(line, st));
+  assert.deepEqual(out.response.response.state.rules, [rules[1]]);
 });
 
 check('replaces real request and message ids with fake ids of the same shape', () => {

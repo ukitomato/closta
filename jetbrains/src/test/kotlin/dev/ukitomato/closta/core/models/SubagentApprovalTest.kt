@@ -20,7 +20,7 @@ class SubagentApprovalTest {
         val atRequest = foldThrough(events) { it is AgentEvent.ControlRequest }
         val pending = atRequest.pendingApprovals.single()
 
-        assertEquals("ac9bfb270bbfbff94", pending.agentId, "12: the approval is attributed to the subagent by agent_id")
+        assertEquals("adbdcccd600f6d3fa", pending.agentId, "12: the approval is attributed to the subagent by agent_id")
         assertTrue(
             atRequest.tasks.any { it.taskId == pending.agentId },
             "12: agent_id equals the spawning task_started.task_id",

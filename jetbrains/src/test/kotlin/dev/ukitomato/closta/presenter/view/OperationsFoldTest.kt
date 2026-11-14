@@ -157,7 +157,7 @@ class OperationsFoldTest {
     @Test
     fun `06 the answer to the usage request is the context, and a request with no answer is not shown`() {
         val state = replayed("06-context-usage")
-        assertEquals(ContextRecord(16575, 200000, 8.0, 167000), state.ops().context)
+        assertEquals(ContextRecord(11529, 1000000, 1.0, 967000), state.ops().context)
         assertTrue(state.ops().waiting.isEmpty(), "answered, so no longer waited for")
         assertTrue(state.ops().switches.isEmpty(), "a usage request is not a switch")
     }
@@ -233,13 +233,13 @@ class OperationsFoldTest {
             state = state.next(input)
             if (result != null) states += state.ops().tokens!!
         }
-        assertEquals(3, states.size)
-        // 20 + 511, 20 + 743 and 20 + 1089 output tokens: each result replaces the one before.
-        assertEquals(listOf(531L, 763L, 1109L), states.map { it.output })
-        assertEquals(listOf(917L, 921L, 928L), states.map { it.input })
-        assertEquals(listOf(32399L, 64213L, 110310L), states.map { it.cacheRead })
-        assertEquals(listOf(19495L, 21228L, 22372L), states.map { it.cacheCreation })
-        assertEquals(0.15600725000000004, state.conversation.usage.sessionCostUsd)
+        assertEquals(2, states.size)
+        // 261 and then 1512 output tokens, from the one model: each result replaces the one before.
+        assertEquals(listOf(261L, 1512L), states.map { it.output })
+        assertEquals(listOf(4L, 22L), states.map { it.input })
+        assertEquals(listOf(27517L, 116597L), states.map { it.cacheRead })
+        assertEquals(listOf(8514L, 26626L), states.map { it.cacheCreation })
+        assertEquals(0.21456340000000002, state.conversation.usage.sessionCostUsd)
     }
 
     @Test
@@ -273,7 +273,7 @@ class OperationsFoldTest {
         )
         assertTrue(seen.single { (it.first as AgentEvent.SystemStatus).status == "compacting" }.second)
         assertTrue(!state.ops().compacting, "the status after it says it is over")
-        assertEquals(listOf(CompactionRecord(1, "manual", 20072, 1235)), state.ops().compactions)
+        assertEquals(listOf(CompactionRecord(1, "manual", 21719, 3378)), state.ops().compactions)
     }
 
     @Test
@@ -325,13 +325,14 @@ class OperationsFoldTest {
     fun `03 the initialize response gives the models, and one without models leaves the ones it has`() {
         val state = replayed("03-initialize-handshake")
         val models = state.ops().models
-        assertEquals(8, models.size)
+        assertEquals(11, models.size)
         val default = models.first { it.value == "default" }
-        assertEquals("claude-opus-4-8[1m]", default.resolvedModel)
+        assertEquals("claude-opus-5-5", default.resolvedModel)
         assertEquals("Default (recommended)", default.displayName)
         assertEquals(true, default.supportsEffort)
         assertEquals(listOf("low", "medium", "high", "xhigh", "max"), default.supportedEffortLevels)
-        val haiku = models.first { it.value == "haiku" }
+        // The one model of 2.1.319's list that says nothing of effort.
+        val haiku = models.first { it.value == "claude-haiku-4-5-20251001" }
         assertNull(haiku.supportsEffort)
         assertNull(haiku.supportedEffortLevels)
         val kept = state.with(Lines.initialized("""{"commands":[{"name":"x","description":"d"}]}"""))

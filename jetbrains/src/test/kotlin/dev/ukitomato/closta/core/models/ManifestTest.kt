@@ -152,10 +152,10 @@ class ManifestTest {
         MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 
     private companion object {
-        const val EXPECTED_CAPTURES = 32
-        const val EXPECTED_LINES = 2268
+        const val EXPECTED_CAPTURES = 36
+        const val EXPECTED_LINES = 2182
 
         /** The CLI the captures were recorded from; the comparison against the official types is made against it. */
-        const val CLI_VERSION = "2.1.282"
+        const val CLI_VERSION = "2.1.319"
     }
 }

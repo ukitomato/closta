@@ -10,7 +10,7 @@
         "messages": {
           "order": [
             "send-1",
-            "73fa8d8a-19e6-43c2-a5cb-adf48d0fda02"
+            "1befe10b-1367-4f33-a4a9-20f41bb03b9d"
           ],
           "byId": {
             "send-1": {
@@ -28,8 +28,8 @@
                 }
               }
             },
-            "73fa8d8a-19e6-43c2-a5cb-adf48d0fda02": {
-              "id": "73fa8d8a-19e6-43c2-a5cb-adf48d0fda02",
+            "1befe10b-1367-4f33-a4a9-20f41bb03b9d": {
+              "id": "1befe10b-1367-4f33-a4a9-20f41bb03b9d",
               "role": "assistant",
               "status": {
                 "type": "complete",
@@ -37,69 +37,68 @@
               },
               "parts": {
                 "order": [
-                  "msg_011CScrubbed2K8gi5piLkrQ:0",
-                  "msg_011CScrubbed2K8gi5piLkrQ:1",
-                  "toolu_01YFBrqgZKQDcybfHzc5RdgJ",
-                  "msg_011CScrubbedBv25mkwEbYdd:0",
-                  "toolu_01WHX9Ny4JUMuVCMJkKjnhbY",
-                  "toolu_01JfMfuLDkd2ymuewrh2Kaut",
-                  "toolu_015g8Up3CrSUwgCZqKXte54e",
-                  "msg_011CScrubbed47TRqYM6jYtJ:0",
-                  "toolu_01Fv2NxFdtKCU1rX3cNZuY4B",
-                  "msg_011CScrubbed9up2DM9yqD1L:0"
+                  "msg_011CScrubbed81sSR3f1YDUX:0",
+                  "msg_011CScrubbed81sSR3f1YDUX:1",
+                  "toolu_012PN2zjBzMDodpqrSRcjUJd",
+                  "msg_011CScrubbedCxQ1GRrS1mFt:0",
+                  "toolu_01V12S5PWHSuEijbqVsEoepc",
+                  "toolu_016RQsQRb7tshuG5H3q3Ywfc",
+                  "toolu_01DwYxBEki3eENFtfrPLJHuY",
+                  "toolu_01Bm4VCxtVDtkRiLmcsqmu7J",
+                  "msg_011CScrubbedAL6pu7spxg8f:0"
                 ],
                 "byId": {
-                  "msg_011CScrubbed2K8gi5piLkrQ:0": {
+                  "msg_011CScrubbed81sSR3f1YDUX:0": {
                     "type": "reasoning",
                     "text": "",
                     "status": {
                       "type": "complete"
                     }
                   },
-                  "msg_011CScrubbed2K8gi5piLkrQ:1": {
+                  "msg_011CScrubbed81sSR3f1YDUX:1": {
                     "type": "text",
-                    "text": "Let me read the README.md to identify the spelling issues.",
+                    "text": "Let me read the README.md first.",
                     "status": {
                       "type": "complete"
                     }
                   },
-                  "toolu_01YFBrqgZKQDcybfHzc5RdgJ": {
+                  "toolu_012PN2zjBzMDodpqrSRcjUJd": {
                     "type": "tool-call",
-                    "toolCallId": "toolu_01YFBrqgZKQDcybfHzc5RdgJ",
+                    "toolCallId": "toolu_012PN2zjBzMDodpqrSRcjUJd",
                     "toolName": "Read",
-                    "argsText": "{\"file_path\": \"/tmp/closta-rec-29-exit-plan-mode-6vZ8NQ/cwd/README.md\"}",
+                    "argsText": "{\"file_path\": \"/tmp/closta-rec-29-exit-plan-mode-D32Zua/cwd/README.md\"}",
                     "args": {
-                      "file_path": "/tmp/closta-rec-29-exit-plan-mode-6vZ8NQ/cwd/README.md"
+                      "file_path": "/tmp/closta-rec-29-exit-plan-mode-D32Zua/cwd/README.md"
                     },
                     "result": "1\t# Prject\n2\t\n3\t## Usgae\n4\t\n5\tRun it.\n6\t",
                     "status": {
                       "type": "complete"
                     }
                   },
-                  "msg_011CScrubbedBv25mkwEbYdd:0": {
+                  "msg_011CScrubbedCxQ1GRrS1mFt:0": {
                     "type": "text",
-                    "text": "Two misspelled headings found. Writing the plan now.",
+                    "text": "Found two misspelled headings. Writing the plan now.",
                     "status": {
                       "type": "complete"
                     }
                   },
-                  "toolu_01WHX9Ny4JUMuVCMJkKjnhbY": {
+                  "toolu_01V12S5PWHSuEijbqVsEoepc": {
                     "type": "tool-call",
-                    "toolCallId": "toolu_01WHX9Ny4JUMuVCMJkKjnhbY",
+                    "toolCallId": "toolu_01V12S5PWHSuEijbqVsEoepc",
                     "toolName": "Write",
-                    "argsText": "{\"file_path\": \"/home/user/.claude/plans/make-a-short-plan-quiet-goose.md\", \"content\": \"# Fix README.md Heading Spelling\\n\\n## Context\\nThe README.md has two misspelled headings that need correction.\\n\\n## Changes\\n\\nFile: `README.md`\\n\\n| Line | Current | Fix |\\n|------|---------|-----|\\n| 1 | `# Prject` | `# Project` |\\n| 3 | `## Usgae` | `## Usage` |\\n\\n## Steps\\n1. Edit line 1: `# Prject` → `# Project`\\n2. Edit line 3: `## Usgae` → `## Usage`\\n\\n## Verification\\nRead README.md after edits to confirm both headings are correct.\\n\"}",
+                    "argsText": "{\"file_path\": \"/home/user/.claude/plans/make-a-short-plan-lovely-badger.md\", \"content\": \"# Fix README.md Heading Spelling\\n\\n## Context\\nREADME.md has two misspelled headings that need correction.\\n\\n## Changes\\n- Line 1: `# Prject` → `# Project`\\n- Line 3: `## Usgae` → `## Usage`\\n\\n## File\\n`/tmp/closta-rec-29-exit-plan-mode-D32Zua/cwd/README.md`\\n\\n## Verification\\nRead the file after editing to confirm both headings are correct.\\n\"}",
                     "args": {
-                      "file_path": "/home/user/.claude/plans/make-a-short-plan-quiet-goose.md",
-                      "content": "# Fix README.md Heading Spelling\n\n## Context\nThe README.md has two misspelled headings that need correction.\n\n## Changes\n\nFile: `README.md`\n\n| Line | Current | Fix |\n|------|---------|-----|\n| 1 | `# Prject` | `# Project` |\n| 3 | `## Usgae` | `## Usage` |\n\n## Steps\n1. Edit line 1: `# Prject` → `# Project`\n2. Edit line 3: `## Usgae` → `## Usage`\n\n## Verification\nRead README.md after edits to confirm both headings are correct.\n"
+                      "file_path": "/home/user/.claude/plans/make-a-short-plan-lovely-badger.md",
+                      "content": "# Fix README.md Heading Spelling\n\n## Context\nREADME.md has two misspelled headings that need correction.\n\n## Changes\n- Line 1: `# Prject` → `# Project`\n- Line 3: `## Usgae` → `## Usage`\n\n## File\n`/tmp/closta-rec-29-exit-plan-mode-D32Zua/cwd/README.md`\n\n## Verification\nRead the file after editing to confirm both headings are correct.\n"
                     },
-                    "result": "File created successfully at: /home/user/.claude/plans/make-a-short-plan-quiet-goose.md (file state is current in your context — no need to Read it back)",
+                    "result": "File created successfully at: /home/user/.claude/plans/make-a-short-plan-lovely-badger.md (file state is current in your context — no need to Read it back)",
                     "status": {
                       "type": "complete"
                     }
                   },
-                  "toolu_01JfMfuLDkd2ymuewrh2Kaut": {
+                  "toolu_016RQsQRb7tshuG5H3q3Ywfc": {
                     "type": "tool-call",
-                    "toolCallId": "toolu_01JfMfuLDkd2ymuewrh2Kaut",
+                    "toolCallId": "toolu_016RQsQRb7tshuG5H3q3Ywfc",
                     "toolName": "ToolSearch",
                     "argsText": "{\"query\": \"select:ExitPlanMode\", \"max_results\": 1}",
                     "args": {
@@ -116,56 +115,49 @@
                       "type": "complete"
                     }
                   },
-                  "toolu_015g8Up3CrSUwgCZqKXte54e": {
+                  "toolu_01DwYxBEki3eENFtfrPLJHuY": {
                     "type": "tool-call",
-                    "toolCallId": "toolu_015g8Up3CrSUwgCZqKXte54e",
+                    "toolCallId": "toolu_01DwYxBEki3eENFtfrPLJHuY",
                     "toolName": "ExitPlanMode",
-                    "argsText": "{\"plan\":\"# Fix README.md Heading Spelling\\n\\n## Context\\nThe README.md has two misspelled headings that need correction.\\n\\n## Changes\\n\\nFile: `README.md`\\n\\n| Line | Current | Fix |\\n|------|---------|-----|\\n| 1 | `# Prject` | `# Project` |\\n| 3 | `## Usgae` | `## Usage` |\\n\\n## Steps\\n1. Edit line 1: `# Prject` → `# Project`\\n2. Edit line 3: `## Usgae` → `## Usage`\\n\\n## Verification\\nRead README.md after edits to confirm both headings are correct.\\n\",\"planFilePath\":\"/home/user/.claude/plans/make-a-short-plan-quiet-goose.md\"}",
+                    "argsText": "{\"plan\":\"# Fix README.md Heading Spelling\\n\\n## Context\\nREADME.md has two misspelled headings that need correction.\\n\\n## Changes\\n- Line 1: `# Prject` → `# Project`\\n- Line 3: `## Usgae` → `## Usage`\\n\\n## File\\n`/tmp/closta-rec-29-exit-plan-mode-D32Zua/cwd/README.md`\\n\\n## Verification\\nRead the file after editing to confirm both headings are correct.\\n\",\"planFilePath\":\"/home/user/.claude/plans/make-a-short-plan-lovely-badger.md\"}",
                     "args": {
-                      "plan": "# Fix README.md Heading Spelling\n\n## Context\nThe README.md has two misspelled headings that need correction.\n\n## Changes\n\nFile: `README.md`\n\n| Line | Current | Fix |\n|------|---------|-----|\n| 1 | `# Prject` | `# Project` |\n| 3 | `## Usgae` | `## Usage` |\n\n## Steps\n1. Edit line 1: `# Prject` → `# Project`\n2. Edit line 3: `## Usgae` → `## Usage`\n\n## Verification\nRead README.md after edits to confirm both headings are correct.\n",
-                      "planFilePath": "/home/user/.claude/plans/make-a-short-plan-quiet-goose.md"
+                      "plan": "# Fix README.md Heading Spelling\n\n## Context\nREADME.md has two misspelled headings that need correction.\n\n## Changes\n- Line 1: `# Prject` → `# Project`\n- Line 3: `## Usgae` → `## Usage`\n\n## File\n`/tmp/closta-rec-29-exit-plan-mode-D32Zua/cwd/README.md`\n\n## Verification\nRead the file after editing to confirm both headings are correct.\n",
+                      "planFilePath": "/home/user/.claude/plans/make-a-short-plan-lovely-badger.md"
                     },
-                    "result": "User has approved your plan. You can now start coding. Start with updating your todo list if applicable\n\nYour plan has been saved to: /home/user/.claude/plans/make-a-short-plan-quiet-goose.md\nYou can refer back to it if needed during implementation.\n\n## Approved Plan:\n# Fix README.md Heading Spelling\n\n## Context\nThe README.md has two misspelled headings that need correction.\n\n## Changes\n\nFile: `README.md`\n\n| Line | Current | Fix |\n|------|---------|-----|\n| 1 | `# Prject` | `# Project` |\n| 3 | `## Usgae` | `## Usage` |\n\n## Steps\n1. Edit line 1: `# Prject` → `# Project`\n2. Edit line 3: `## Usgae` → `## Usage`\n\n## Verification\nRead README.md after edits to confirm both headings are correct.\n",
+                    "result": "User has approved your plan. You can now start coding. Start with updating your todo list if applicable\n\nYour plan has been saved to: /home/user/.claude/plans/make-a-short-plan-lovely-badger.md\nYou can refer back to it if needed during implementation.\n\n## Approved Plan:\n# Fix README.md Heading Spelling\n\n## Context\nREADME.md has two misspelled headings that need correction.\n\n## Changes\n- Line 1: `# Prject` → `# Project`\n- Line 3: `## Usgae` → `## Usage`\n\n## File\n`/tmp/closta-rec-29-exit-plan-mode-D32Zua/cwd/README.md`\n\n## Verification\nRead the file after editing to confirm both headings are correct.\n",
                     "status": {
                       "type": "complete"
                     },
                     "approval": {
-                      "id": "161f1f49-f46c-419f-b243-329e43da91d4",
+                      "id": "98e748d0-b178-46f3-bb82-7744480c868a",
                       "display": "decision",
                       "input": {
-                        "plan": "# Fix README.md Heading Spelling\n\n## Context\nThe README.md has two misspelled headings that need correction.\n\n## Changes\n\nFile: `README.md`\n\n| Line | Current | Fix |\n|------|---------|-----|\n| 1 | `# Prject` | `# Project` |\n| 3 | `## Usgae` | `## Usage` |\n\n## Steps\n1. Edit line 1: `# Prject` → `# Project`\n2. Edit line 3: `## Usgae` → `## Usage`\n\n## Verification\nRead README.md after edits to confirm both headings are correct.\n",
-                        "planFilePath": "/home/user/.claude/plans/make-a-short-plan-quiet-goose.md"
+                        "plan": "# Fix README.md Heading Spelling\n\n## Context\nREADME.md has two misspelled headings that need correction.\n\n## Changes\n- Line 1: `# Prject` → `# Project`\n- Line 3: `## Usgae` → `## Usage`\n\n## File\n`/tmp/closta-rec-29-exit-plan-mode-D32Zua/cwd/README.md`\n\n## Verification\nRead the file after editing to confirm both headings are correct.\n",
+                        "planFilePath": "/home/user/.claude/plans/make-a-short-plan-lovely-badger.md"
                       },
                       "approved": true
                     }
                   },
-                  "msg_011CScrubbed47TRqYM6jYtJ:0": {
-                    "type": "text",
-                    "text": "Applying both fixes now.",
-                    "status": {
-                      "type": "complete"
-                    }
-                  },
-                  "toolu_01Fv2NxFdtKCU1rX3cNZuY4B": {
+                  "toolu_01Bm4VCxtVDtkRiLmcsqmu7J": {
                     "type": "tool-call",
-                    "toolCallId": "toolu_01Fv2NxFdtKCU1rX3cNZuY4B",
+                    "toolCallId": "toolu_01Bm4VCxtVDtkRiLmcsqmu7J",
                     "toolName": "Edit",
-                    "argsText": "{\"file_path\": \"/tmp/closta-rec-29-exit-plan-mode-6vZ8NQ/cwd/README.md\", \"old_string\": \"# Prject\\n\\n## Usgae\", \"new_string\": \"# Project\\n\\n## Usage\"}",
+                    "argsText": "{\"file_path\": \"/tmp/closta-rec-29-exit-plan-mode-D32Zua/cwd/README.md\", \"old_string\": \"# Prject\\n\\n## Usgae\", \"new_string\": \"# Project\\n\\n## Usage\"}",
                     "args": {
                       "replace_all": false,
-                      "file_path": "/tmp/closta-rec-29-exit-plan-mode-6vZ8NQ/cwd/README.md",
+                      "file_path": "/tmp/closta-rec-29-exit-plan-mode-D32Zua/cwd/README.md",
                       "old_string": "# Prject\n\n## Usgae",
                       "new_string": "# Project\n\n## Usage"
                     },
-                    "result": "The file /tmp/closta-rec-29-exit-plan-mode-6vZ8NQ/cwd/README.md has been updated successfully. (file state is current in your context — no need to Read it back)",
+                    "result": "The file /tmp/closta-rec-29-exit-plan-mode-D32Zua/cwd/README.md has been updated successfully. (file state is current in your context — no need to Read it back)",
                     "status": {
                       "type": "complete"
                     },
                     "approval": {
-                      "id": "dffa06d1-000d-496b-8362-7e737e6be95b",
+                      "id": "1d066a29-e49b-4500-8113-b88f37806531",
                       "display": "decision",
                       "input": {
-                        "file_path": "/tmp/closta-rec-29-exit-plan-mode-6vZ8NQ/cwd/README.md",
+                        "file_path": "/tmp/closta-rec-29-exit-plan-mode-D32Zua/cwd/README.md",
                         "old_string": "# Prject\n\n## Usgae",
                         "new_string": "# Project\n\n## Usage",
                         "replace_all": false
@@ -181,9 +173,9 @@
                       "approved": true
                     }
                   },
-                  "msg_011CScrubbed9up2DM9yqD1L:0": {
+                  "msg_011CScrubbedAL6pu7spxg8f:0": {
                     "type": "text",
-                    "text": "Done. Fixed `# Prject` → `# Project` and `## Usgae` → `## Usage` in README.md.",
+                    "text": "Done. Both headings corrected: `# Prject` → `# Project` and `## Usgae` → `## Usage`.",
                     "status": {
                       "type": "complete"
                     }
@@ -196,15 +188,15 @@
         "session": {
           "model": "claude-sonnet-4-6",
           "permissionMode": "default",
-          "cwd": "/tmp/closta-rec-29-exit-plan-mode-6vZ8NQ/cwd",
-          "version": "2.1.282"
+          "cwd": "/tmp/closta-rec-29-exit-plan-mode-D32Zua/cwd",
+          "version": "2.1.319"
         },
         "usage": {
-          "costUsd": 0.184071,
+          "costUsd": 0.1135884,
           "inputTokens": 10,
-          "outputTokens": 703,
-          "cacheReadInputTokens": 110960,
-          "cacheCreationInputTokens": 23368
+          "outputTokens": 679,
+          "cacheReadInputTokens": 132938,
+          "cacheCreationInputTokens": 10582
         },
         "commands": [
           {
@@ -236,8 +228,8 @@
           },
           {
             "name": "code-review",
-            "description": "Review the current diff, or a PR number/branch/path target, for correctness bugs (plus reuse/simplification/efficiency cleanups where the model's review recipe covers them) at the given effort level (low/medium: fewer, high-confidence findings; high→max: broader coverage, may include uncertain findings); with no level given, it reuses the level you typed last. Pass --comment to post findings as inline PR comments, or --fix to apply the findings to the working tree after the review.",
-            "argumentHint": "[low|medium|high|xhigh|max] [--fix] [--comment] [<pr#>|<branch>|<path>]"
+            "description": "Review the current diff, or a PR number/branch/path target, for correctness bugs (plus reuse/simplification/efficiency cleanups where the model's recipe covers them) at the effort level given first, before any target (low|medium|high|xhigh|max: from few high-confidence findings to many, some uncertain); with no level given, it reuses the level you typed last. Pass --comment to post findings as inline PR comments, or --fix to apply them to the working tree after the review. Pass --max-findings <n> to report up to n findings, or --max-findings all for every finding. The choice stays until you pass --max-findings default.",
+            "argumentHint": "[low|medium|high|xhigh|max] [--fix] [--comment] [<pr#>|<branch>|<path>] [--max-findings <n>|all]"
           },
           {
             "name": "simplify",
@@ -255,7 +247,8 @@
           },
           {
             "name": "doctor",
-            "description": "Health-check the user's Claude Code setup and fix issues: diagnose installation health — what the `claude doctor` terminal diagnostics cover — from local data (duplicate or leftover installs, PATH, unparseable settings files, broken or colliding agent definitions, skills whose frontmatter fails to parse); find unused skills, MCP servers, and plugins versus their context cost and disable dead weight; deduplicate local CLAUDE.md files against checked-in ones; trim checked-in CLAUDE.md files by cutting content a session could derive from the codebase (directory layouts, tech-stack lists, architecture overviews) while keeping gotchas, rationale, and non-standard conventions; migrate always-loaded CLAUDE.md guidance into lazy skills and nested CLAUDE.md files; flag slow hooks and context-heavy extensions; check the installed version is current; make auto mode the default permission mode; and pre-approve frequently denied read-only commands. Use when the user asks for a doctor run, checkup, audit, tune-up, or cleanup of their Claude Code setup or configuration."
+            "description": "Health-check the user's Claude Code setup and fix issues: diagnose installation health — what the `claude doctor` terminal diagnostics cover — from local data (duplicate or leftover installs, PATH, unparseable settings files, broken or colliding agent definitions, skills whose frontmatter fails to parse); find unused skills, MCP servers, and plugins versus their context cost and disable dead weight; deduplicate local CLAUDE.md files against checked-in ones; trim checked-in CLAUDE.md files by cutting content a session could derive from the codebase (directory layouts, tech-stack lists, architecture overviews) while keeping gotchas, rationale, and non-standard conventions; migrate always-loaded CLAUDE.md guidance into lazy skills and nested CLAUDE.md files; flag slow hooks and context-heavy extensions; check the installed version is current; make auto mode the default permission mode; and pre-approve frequently denied read-only commands. Use when the user asks for a doctor run, checkup, audit, tune-up, or cleanup of their Claude Code setup or configuration.",
+            "argumentHint": "[prompt-audit [<path>]]"
           },
           {
             "name": "loop",
@@ -276,7 +269,7 @@
           },
           {
             "name": "plugin-authoring",
-            "description": "Write or debug a Claude Code plugin made of function hooks (a hooks module exporting register(on, options), hooks ($, e, next) on events like tool.call, prompt.submit, ui.render, session.start). Load it before writing or changing such a plugin; it says where the exact types come from, how to run a plugin under development, and where the engine reports what it refused."
+            "description": "Make a mod: a change to Claude's own interface or behaviour, such as a panel or pane that stays beside the chat and updates, a band, status line, toast, slash command, or hook on tool calls. Use to make, change or debug a mod or its hooks module."
           },
           {
             "name": "advisor",
@@ -372,11 +365,6 @@
             "description": "Execute a server-launched workflow handoff (workflow_launch event sessions only)"
           },
           {
-            "name": "plugin-types",
-            "description": "Write claude-code.d.ts, claude-code-plugins.d.ts and claude-code-mcp.d.ts: the plugin API's TypeScript declarations, the enabled plugins' type contracts and the inputs of the connected MCP tools, for typing a hooks module against this session",
-            "argumentHint": "[dir]"
-          },
-          {
             "name": "reload-plugins",
             "description": "Activate pending plugin changes in the current session",
             "argumentHint": "[--force]"
@@ -437,10 +425,6 @@
           {
             "name": "team-onboarding",
             "description": "Help teammates ramp on Claude Code with a guide from your usage"
-          },
-          {
-            "name": "diff",
-            "description": "Toggle the diff panel showing uncommitted changes"
           }
         ],
         "models": [
@@ -488,6 +472,20 @@
           },
           {
             "value": "sonnet",
+            "displayName": "Sonnet 5.5",
+            "description": "Most efficient for simpler tasks",
+            "resolvedModel": "claude-sonnet-5-5",
+            "supportsEffort": true,
+            "supportedEffortLevels": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          },
+          {
+            "value": "claude-sonnet-5",
             "displayName": "Sonnet 5",
             "description": "Most efficient for everyday tasks",
             "resolvedModel": "claude-sonnet-5",
@@ -502,6 +500,20 @@
           },
           {
             "value": "haiku",
+            "displayName": "Haiku 5.5",
+            "description": "Fastest for quick answers",
+            "resolvedModel": "claude-haiku-5-5",
+            "supportsEffort": true,
+            "supportedEffortLevels": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          },
+          {
+            "value": "claude-haiku-4-5-20251001",
             "displayName": "Haiku 4.5",
             "description": "Fastest for quick answers",
             "resolvedModel": "claude-haiku-4-5-20251001"

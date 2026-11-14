@@ -10,7 +10,7 @@
         "messages": {
           "order": [
             "send-1",
-            "a155b536-7f57-4e1f-8c7e-da611b9500af"
+            "062dcf97-63ec-4455-b804-7c8951848b5b"
           ],
           "byId": {
             "send-1": {
@@ -28,8 +28,8 @@
                 }
               }
             },
-            "a155b536-7f57-4e1f-8c7e-da611b9500af": {
-              "id": "a155b536-7f57-4e1f-8c7e-da611b9500af",
+            "062dcf97-63ec-4455-b804-7c8951848b5b": {
+              "id": "062dcf97-63ec-4455-b804-7c8951848b5b",
               "role": "assistant",
               "status": {
                 "type": "complete",
@@ -37,45 +37,37 @@
               },
               "parts": {
                 "order": [
-                  "msg_011CScrubbedD7RaDKDH7qXh:0",
-                  "msg_011CScrubbedD7RaDKDH7qXh:1",
-                  "toolu_01QVt3ZUKThEBWp3E6yhfvMb",
-                  "toolu_01SqfHG1WUEErSYe8tXm9uVv",
-                  "msg_011CScrubbedAjq8N35QzQwm:0"
+                  "msg_011CScrubbed2YR8ztnpUNeG:0",
+                  "toolu_01CZhdtAf6iW9mATdUoyJmYB",
+                  "toolu_01UerDar9vhvE54EvdgEhP8k",
+                  "msg_011CScrubbed85vXzmHp99Ti:0"
                 ],
                 "byId": {
-                  "msg_011CScrubbedD7RaDKDH7qXh:0": {
+                  "msg_011CScrubbed2YR8ztnpUNeG:0": {
                     "type": "reasoning",
                     "text": "",
                     "status": {
                       "type": "complete"
                     }
                   },
-                  "msg_011CScrubbedD7RaDKDH7qXh:1": {
-                    "type": "text",
-                    "text": "I'll write the file first, then read it back.",
-                    "status": {
-                      "type": "complete"
-                    }
-                  },
-                  "toolu_01QVt3ZUKThEBWp3E6yhfvMb": {
+                  "toolu_01CZhdtAf6iW9mATdUoyJmYB": {
                     "type": "tool-call",
-                    "toolCallId": "toolu_01QVt3ZUKThEBWp3E6yhfvMb",
+                    "toolCallId": "toolu_01CZhdtAf6iW9mATdUoyJmYB",
                     "toolName": "Write",
-                    "argsText": "{\"file_path\": \"/tmp/closta-rec-16-permission-suggestion-accept-ePfaiP/outside/note.txt\", \"content\": \"hello\"}",
+                    "argsText": "{\"file_path\": \"/tmp/closta-rec-16-permission-suggestion-accept-A5bfyU/outside/note.txt\", \"content\": \"hello\"}",
                     "args": {
-                      "file_path": "/tmp/closta-rec-16-permission-suggestion-accept-ePfaiP/outside/note.txt",
+                      "file_path": "/tmp/closta-rec-16-permission-suggestion-accept-A5bfyU/outside/note.txt",
                       "content": "hello"
                     },
-                    "result": "File created successfully at: /tmp/closta-rec-16-permission-suggestion-accept-ePfaiP/outside/note.txt (file state is current in your context — no need to Read it back)",
+                    "result": "File created successfully at: /tmp/closta-rec-16-permission-suggestion-accept-A5bfyU/outside/note.txt (file state is current in your context — no need to Read it back)",
                     "status": {
                       "type": "complete"
                     },
                     "approval": {
-                      "id": "1b2cea94-4f35-46ca-8d60-16b31bbfe5b9",
+                      "id": "9f500ef5-f0f8-46ba-9f96-a3eec8242af9",
                       "display": "decision",
                       "input": {
-                        "file_path": "/tmp/closta-rec-16-permission-suggestion-accept-ePfaiP/outside/note.txt",
+                        "file_path": "/tmp/closta-rec-16-permission-suggestion-accept-A5bfyU/outside/note.txt",
                         "content": "hello"
                       },
                       "suggestions": [
@@ -88,29 +80,29 @@
                         {
                           "id": "s2",
                           "kind": "addDirectories",
-                          "detail": "/tmp/closta-rec-16-permission-suggestion-accept-ePfaiP/outside",
+                          "detail": "/tmp/closta-rec-16-permission-suggestion-accept-A5bfyU/outside",
                           "destination": "session"
                         }
                       ],
                       "approved": true
                     }
                   },
-                  "toolu_01SqfHG1WUEErSYe8tXm9uVv": {
+                  "toolu_01UerDar9vhvE54EvdgEhP8k": {
                     "type": "tool-call",
-                    "toolCallId": "toolu_01SqfHG1WUEErSYe8tXm9uVv",
+                    "toolCallId": "toolu_01UerDar9vhvE54EvdgEhP8k",
                     "toolName": "Read",
-                    "argsText": "{\"file_path\": \"/tmp/closta-rec-16-permission-suggestion-accept-ePfaiP/outside/note.txt\"}",
+                    "argsText": "{\"file_path\": \"/tmp/closta-rec-16-permission-suggestion-accept-A5bfyU/outside/note.txt\"}",
                     "args": {
-                      "file_path": "/tmp/closta-rec-16-permission-suggestion-accept-ePfaiP/outside/note.txt"
+                      "file_path": "/tmp/closta-rec-16-permission-suggestion-accept-A5bfyU/outside/note.txt"
                     },
                     "result": "1\thello-rewritten-by-host",
                     "status": {
                       "type": "complete"
                     }
                   },
-                  "msg_011CScrubbedAjq8N35QzQwm:0": {
+                  "msg_011CScrubbed85vXzmHp99Ti:0": {
                     "type": "text",
-                    "text": "The exact content of `/tmp/closta-rec-16-permission-suggestion-accept-ePfaiP/outside/note.txt` is:\n\n```\nhello-rewritten-by-host\n```\n\nNote: I wrote `hello` to the file, but when reading it back the content is `hello-rewritten-by-host` — something external modified the file between the write and read operations.",
+                    "text": "The exact content of `/tmp/closta-rec-16-permission-suggestion-accept-A5bfyU/outside/note.txt` is:\n\n```\nhello-rewritten-by-host\n```\n\nNote: I wrote the file with the text `hello`, but when reading it back the content is `hello-rewritten-by-host` — something in the environment modified the file between the write and read operations.",
                     "status": {
                       "type": "complete"
                     }
@@ -123,15 +115,15 @@
         "session": {
           "model": "claude-sonnet-4-6",
           "permissionMode": "acceptEdits",
-          "cwd": "/tmp/closta-rec-16-permission-suggestion-accept-ePfaiP/cwd",
-          "version": "2.1.282"
+          "cwd": "/tmp/closta-rec-16-permission-suggestion-accept-A5bfyU/cwd",
+          "version": "2.1.319"
         },
         "usage": {
-          "costUsd": 0.14087429999999998,
+          "costUsd": 0.15089520000000003,
           "inputTokens": 5,
-          "outputTokens": 315,
-          "cacheReadInputTokens": 40761,
-          "cacheCreationInputTokens": 20651
+          "outputTokens": 303,
+          "cacheReadInputTokens": 43864,
+          "cacheCreationInputTokens": 22196
         },
         "commands": [
           {
@@ -163,8 +155,8 @@
           },
           {
             "name": "code-review",
-            "description": "Review the current diff, or a PR number/branch/path target, for correctness bugs (plus reuse/simplification/efficiency cleanups where the model's review recipe covers them) at the given effort level (low/medium: fewer, high-confidence findings; high→max: broader coverage, may include uncertain findings); with no level given, it reuses the level you typed last. Pass --comment to post findings as inline PR comments, or --fix to apply the findings to the working tree after the review.",
-            "argumentHint": "[low|medium|high|xhigh|max] [--fix] [--comment] [<pr#>|<branch>|<path>]"
+            "description": "Review the current diff, or a PR number/branch/path target, for correctness bugs (plus reuse/simplification/efficiency cleanups where the model's recipe covers them) at the effort level given first, before any target (low|medium|high|xhigh|max: from few high-confidence findings to many, some uncertain); with no level given, it reuses the level you typed last. Pass --comment to post findings as inline PR comments, or --fix to apply them to the working tree after the review. Pass --max-findings <n> to report up to n findings, or --max-findings all for every finding. The choice stays until you pass --max-findings default.",
+            "argumentHint": "[low|medium|high|xhigh|max] [--fix] [--comment] [<pr#>|<branch>|<path>] [--max-findings <n>|all]"
           },
           {
             "name": "simplify",
@@ -182,7 +174,8 @@
           },
           {
             "name": "doctor",
-            "description": "Health-check the user's Claude Code setup and fix issues: diagnose installation health — what the `claude doctor` terminal diagnostics cover — from local data (duplicate or leftover installs, PATH, unparseable settings files, broken or colliding agent definitions, skills whose frontmatter fails to parse); find unused skills, MCP servers, and plugins versus their context cost and disable dead weight; deduplicate local CLAUDE.md files against checked-in ones; trim checked-in CLAUDE.md files by cutting content a session could derive from the codebase (directory layouts, tech-stack lists, architecture overviews) while keeping gotchas, rationale, and non-standard conventions; migrate always-loaded CLAUDE.md guidance into lazy skills and nested CLAUDE.md files; flag slow hooks and context-heavy extensions; check the installed version is current; make auto mode the default permission mode; and pre-approve frequently denied read-only commands. Use when the user asks for a doctor run, checkup, audit, tune-up, or cleanup of their Claude Code setup or configuration."
+            "description": "Health-check the user's Claude Code setup and fix issues: diagnose installation health — what the `claude doctor` terminal diagnostics cover — from local data (duplicate or leftover installs, PATH, unparseable settings files, broken or colliding agent definitions, skills whose frontmatter fails to parse); find unused skills, MCP servers, and plugins versus their context cost and disable dead weight; deduplicate local CLAUDE.md files against checked-in ones; trim checked-in CLAUDE.md files by cutting content a session could derive from the codebase (directory layouts, tech-stack lists, architecture overviews) while keeping gotchas, rationale, and non-standard conventions; migrate always-loaded CLAUDE.md guidance into lazy skills and nested CLAUDE.md files; flag slow hooks and context-heavy extensions; check the installed version is current; make auto mode the default permission mode; and pre-approve frequently denied read-only commands. Use when the user asks for a doctor run, checkup, audit, tune-up, or cleanup of their Claude Code setup or configuration.",
+            "argumentHint": "[prompt-audit [<path>]]"
           },
           {
             "name": "loop",
@@ -203,7 +196,7 @@
           },
           {
             "name": "plugin-authoring",
-            "description": "Write or debug a Claude Code plugin made of function hooks (a hooks module exporting register(on, options), hooks ($, e, next) on events like tool.call, prompt.submit, ui.render, session.start). Load it before writing or changing such a plugin; it says where the exact types come from, how to run a plugin under development, and where the engine reports what it refused."
+            "description": "Make a mod: a change to Claude's own interface or behaviour, such as a panel or pane that stays beside the chat and updates, a band, status line, toast, slash command, or hook on tool calls. Use to make, change or debug a mod or its hooks module."
           },
           {
             "name": "advisor",
@@ -260,7 +253,7 @@
           },
           {
             "name": "fast",
-            "description": "Toggle fast mode (Opus 4.8)",
+            "description": "Toggle fast mode (Opus 5.5)",
             "argumentHint": "[on|off]"
           },
           {
@@ -297,11 +290,6 @@
           {
             "name": "workflow-launch-exec",
             "description": "Execute a server-launched workflow handoff (workflow_launch event sessions only)"
-          },
-          {
-            "name": "plugin-types",
-            "description": "Write claude-code.d.ts, claude-code-plugins.d.ts and claude-code-mcp.d.ts: the plugin API's TypeScript declarations, the enabled plugins' type contracts and the inputs of the connected MCP tools, for typing a hooks module against this session",
-            "argumentHint": "[dir]"
           },
           {
             "name": "reload-plugins",
@@ -364,18 +352,14 @@
           {
             "name": "team-onboarding",
             "description": "Help teammates ramp on Claude Code with a guide from your usage"
-          },
-          {
-            "name": "diff",
-            "description": "Toggle the diff panel showing uncommitted changes"
           }
         ],
         "models": [
           {
             "value": "default",
             "displayName": "Default (recommended)",
-            "description": "Opus 4.8 with 1M context · Best for everyday, complex tasks",
-            "resolvedModel": "claude-opus-4-8[1m]",
+            "description": "Opus 5.5 · Best for everyday, complex tasks",
+            "resolvedModel": "claude-opus-5-5",
             "supportsEffort": true,
             "supportedEffortLevels": [
               "low",
@@ -386,7 +370,7 @@
             ]
           },
           {
-            "value": "claude-opus-5-5",
+            "value": "opus",
             "displayName": "Opus 5.5",
             "description": "For complex work and everyday tasks",
             "resolvedModel": "claude-opus-5-5",
@@ -414,6 +398,20 @@
             ]
           },
           {
+            "value": "sonnet",
+            "displayName": "Sonnet 5.5",
+            "description": "Most efficient for simpler tasks",
+            "resolvedModel": "claude-sonnet-5-5",
+            "supportsEffort": true,
+            "supportedEffortLevels": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          },
+          {
             "value": "claude-sonnet-5",
             "displayName": "Sonnet 5",
             "description": "Most efficient for everyday tasks",
@@ -429,6 +427,20 @@
           },
           {
             "value": "haiku",
+            "displayName": "Haiku 5.5",
+            "description": "Fastest for quick answers",
+            "resolvedModel": "claude-haiku-5-5",
+            "supportsEffort": true,
+            "supportedEffortLevels": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          },
+          {
+            "value": "claude-haiku-4-5-20251001",
             "displayName": "Haiku 4.5",
             "description": "Fastest for quick answers",
             "resolvedModel": "claude-haiku-4-5-20251001"
