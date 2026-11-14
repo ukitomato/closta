@@ -159,18 +159,17 @@ intellijPlatform {
             }
         ideaVersion {
             sinceBuild = "262"
-            // Open on purpose: a cap would hide the plugin from every newer IDE. Instead verifyPlugin checks the
-            // current build and the recommended ones (the released builds in range), so a break shows up in the build.
+            // Open on purpose: a cap would hide the plugin from every newer IDE. verifyPlugin checks the current
+            // build only, so newer IDEs are not verified here.
             untilBuild = provider { null }
         }
     }
 
     pluginVerification {
-        // -Pverify.current narrows the set to the current IDE only (CI uses it on pull requests). Without the property
-        // the full set runs: the current build and the recommended ones, which downloads several GB.
+        // Only the current IDE. recommended() pulled in every released build since 262 (2026.3 and on), each
+        // extracted at about 4.5 GB into the Gradle cache, which kept filling the WSL disk.
         ides {
             current()
-            if (!providers.gradleProperty("verify.current").isPresent) recommended()
         }
         // Internal, override-only, non-extendable and scheduled-for-removal API usages fail the build alongside compatibility problems.
         // Experimental APIs (the combined diff among them) are reported but allowed.

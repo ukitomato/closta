@@ -47,8 +47,7 @@ jobs:
           name: reports
           path: jetbrains/build/reports/
 
-  # The full set of IDEs downloads several GB and takes about 15 minutes cold, so a pull request verifies only the
-  # current IDE (-Pverify.current); pushes to main and manual runs verify the recommended set too.
+  # Verifies against the current IDE only (pluginVerification in jetbrains/build.gradle.kts).
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -67,7 +66,7 @@ jobs:
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
       - name: Verify the plugin
-        run: ./gradlew verifyPlugin ${{ github.event_name == 'pull_request' && '-Pverify.current' || '' }}
+        run: ./gradlew verifyPlugin
 
   perf:
     runs-on: ubuntu-latest
