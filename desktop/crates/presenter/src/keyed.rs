@@ -37,7 +37,7 @@ impl<T> Keyed<T> {
         self.order.is_empty()
     }
 
-    pub fn order(&self) -> impl Iterator<Item = &str> {
+    pub fn order(&self) -> impl DoubleEndedIterator<Item = &str> {
         self.order.iter().map(String::as_str)
     }
 

@@ -104,15 +104,36 @@ pub fn with_messages(
     }
 }
 
+/// `transcript` with `routing`, or the same `Arc` when `routing` equals its own.
 pub fn with_routing(transcript: &Arc<Transcript>, routing: Routing) -> Arc<Transcript> {
-    if routing == transcript.routing {
+    if same_routing(&routing, &transcript.routing) {
         Arc::clone(transcript)
     } else {
-        Arc::new(Transcript {
-            routing,
-            ..Transcript::clone(transcript)
-        })
+        replace_routing(transcript, routing)
     }
+}
+
+/// `transcript` with `routing`, for a caller that knows `routing` differs from its own.
+pub(crate) fn replace_routing(transcript: &Arc<Transcript>, routing: Routing) -> Arc<Transcript> {
+    Arc::new(Transcript {
+        routing,
+        ..Transcript::clone(transcript)
+    })
+}
+
+/// Whether two routings are equal. The tables grow with the conversation, and `imbl` compares two
+/// maps entry by entry even when they share their root, so each table that is the very one on the
+/// other side is taken as equal without a walk (Kotlin's `equals` stops at identity the same way).
+fn same_routing(a: &Routing, b: &Routing) -> bool {
+    a.current_turn == b.current_turn
+        && a.open_resume == b.open_resume
+        && a.streaming == b.streaming
+        && a.sends == b.sends
+        && (a.turns.ptr_eq(&b.turns) || a.turns == b.turns)
+        && (a.stopping.ptr_eq(&b.stopping) || a.stopping == b.stopping)
+        && (a.stopped.ptr_eq(&b.stopped) || a.stopped == b.stopped)
+        && (a.anthropic.ptr_eq(&b.anthropic) || a.anthropic == b.anthropic)
+        && (a.tools.ptr_eq(&b.tools) || a.tools == b.tools)
 }
 
 /// Replaces the part `key` of the message at `location` with `change` of it.
@@ -152,13 +173,63 @@ pub fn add_part(
             with_parts(message, message.parts.put(key.to_owned(), record))
         }),
     );
-    if is_call {
-        let mut routing = added.routing.clone();
-        routing
-            .tools
-            .insert(key.to_owned(), Arc::from(location.to_vec()));
-        with_routing(&added, routing)
-    } else {
-        added
+    let held = added.routing.tools.get(key);
+    if !is_call || held.is_some_and(|it| **it == *location) {
+        return added;
+    }
+    let mut routing = added.routing.clone();
+    routing
+        .tools
+        .insert(key.to_owned(), Arc::from(location.to_vec()));
+    replace_routing(&added, routing)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::transcript::AnthropicRoute;
+
+    #[test]
+    fn an_unchanged_routing_returns_the_same_transcript_and_a_changed_one_a_new_one() {
+        let mut routing = Routing::default();
+        for n in 0..64 {
+            routing.turns.insert(format!("c{n}"), format!("k{n}"));
+            routing.anthropic.insert(
+                format!("m{n}"),
+                AnthropicRoute {
+                    location: Arc::from(vec![format!("k{n}")]),
+                    ..AnthropicRoute::default()
+                },
+            );
+            routing
+                .tools
+                .insert(format!("t{n}"), Arc::from(vec![format!("k{n}")]));
+        }
+        routing.stopped.insert("c0".to_owned());
+        let transcript = Arc::new(Transcript {
+            routing,
+            ..Transcript::default()
+        });
+
+        let unchanged = with_routing(&transcript, transcript.routing.clone());
+        let mut moved = transcript.routing.clone();
+        moved.current_turn = Some("k1".into());
+        let changed = with_routing(&transcript, moved);
+        let mut rebuilt = transcript.routing.clone();
+        rebuilt.turns = transcript
+            .routing
+            .turns
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        let equal = with_routing(&transcript, rebuilt);
+
+        assert!(Arc::ptr_eq(&transcript, &unchanged));
+        assert!(!Arc::ptr_eq(&transcript, &changed));
+        assert_eq!(Some("k1"), changed.routing.current_turn.as_deref());
+        assert!(
+            Arc::ptr_eq(&transcript, &equal),
+            "a table rebuilt equal is still equal"
+        );
     }
 }

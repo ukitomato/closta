@@ -38,7 +38,6 @@ fn approval_id(call: &Map<String, Value>) -> Option<&str> {
 }
 
 #[test]
-#[ignore = "needs task 5: foldLifecycle and foldRequest"]
 fn a_sub_agents_call_with_a_deep_input_shows_its_command_and_its_approval_sits_on_it() {
     let input = input();
     let mut session = Session::default();
@@ -71,7 +70,6 @@ fn a_sub_agents_call_with_a_deep_input_shows_its_command_and_its_approval_sits_o
 }
 
 #[test]
-#[ignore = "needs task 5: foldLifecycle and foldRequest"]
 fn a_call_with_a_deep_input_that_never_streamed_shows_its_command_and_its_approval_sits_on_it() {
     let input = input();
     let mut session = Session::default();
@@ -91,7 +89,6 @@ fn a_call_with_a_deep_input_that_never_streamed_shows_its_command_and_its_approv
 }
 
 #[test]
-#[ignore = "needs task 5: foldLifecycle"]
 fn a_streamed_message_whose_call_has_a_deep_input_keeps_the_block_count_so_its_text_shows_once() {
     let input = input();
     let mut session = Session::default();

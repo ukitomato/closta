@@ -5,6 +5,9 @@
 use std::sync::Arc;
 
 use imbl::Vector;
+use serde_json::Value;
+
+use crate::json::JsonFields;
 
 use crate::records::mcp::McpServerRecord;
 use crate::records::rewind::RewindRecord;
@@ -219,3 +222,34 @@ pub const SANDBOX_NOT_CONFIRMED: &str = "The settings could not be read";
 
 /// The sentence of a launch into the sandbox that did not start, when the CLI gave none.
 pub const SANDBOX_NOT_STARTED: &str = "The CLI did not start with the sandbox";
+
+/// The models of an `initialize` response (`response.response.models`), or `None` when it has
+/// none (OperationReadings.kt). A model without a `value` is left out; one without a display name
+/// shows its value.
+pub(crate) fn models_of_response(response: Option<&Value>) -> Option<Arc<[ModelRecord]>> {
+    let models = response?.as_object()?.obj("response")?.array("models")?;
+    let non_empty = |text: Option<&str>| text.filter(|it| !it.is_empty()).map(str::to_owned);
+    Some(
+        models
+            .iter()
+            .filter_map(|item| {
+                let fields = item.as_object()?;
+                let value = non_empty(fields.string("value"))?;
+                Some(ModelRecord {
+                    resolved_model: non_empty(fields.string("resolvedModel")),
+                    display_name: non_empty(fields.string("displayName"))
+                        .unwrap_or_else(|| value.clone()),
+                    description: fields.string("description").unwrap_or_default().to_owned(),
+                    supports_effort: fields.get("supportsEffort").and_then(Value::as_bool),
+                    supported_effort_levels: fields.array("supportedEffortLevels").map(|levels| {
+                        levels
+                            .iter()
+                            .filter_map(|it| non_empty(it.as_str()))
+                            .collect()
+                    }),
+                    value,
+                })
+            })
+            .collect(),
+    )
+}

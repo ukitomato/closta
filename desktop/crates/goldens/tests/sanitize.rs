@@ -55,7 +55,6 @@ fn call_with(input: &Value, result: Option<&Value>) -> Map<String, Value> {
 }
 
 #[test]
-#[ignore = "needs task 5: foldLifecycle"]
 fn args_that_reach_the_prototype_become_empty_and_args_text_keeps_what_the_cli_sent() {
     for input in [
         json!({ "a": { "__proto__": "x" } }),
@@ -71,7 +70,6 @@ fn args_that_reach_the_prototype_become_empty_and_args_text_keeps_what_the_cli_s
 }
 
 #[test]
-#[ignore = "needs task 5: foldLifecycle"]
 fn args_as_deep_as_the_room_left_stay_one_level_deeper_become_empty() {
     assert_eq!(
         Some(&nested(TOP_ROOM)),
@@ -86,7 +84,6 @@ fn args_as_deep_as_the_room_left_stay_one_level_deeper_become_empty() {
 }
 
 #[test]
-#[ignore = "needs task 5: foldLifecycle"]
 fn a_result_too_deep_or_unsafe_for_the_tree_is_folded_into_its_json_text() {
     let empty = json!({});
     let fits = nested_array(TOP_ROOM);
@@ -110,7 +107,6 @@ fn a_result_too_deep_or_unsafe_for_the_tree_is_folded_into_its_json_text() {
 }
 
 #[test]
-#[ignore = "needs task 5: foldLifecycle"]
 fn a_sub_agents_call_has_less_room_by_the_levels_its_nesting_takes() {
     let mut session = Session::default();
     session.turn("c1");
@@ -139,7 +135,6 @@ fn a_sub_agents_call_has_less_room_by_the_levels_its_nesting_takes() {
 }
 
 #[test]
-#[ignore = "needs task 5: foldLifecycle"]
 fn a_value_far_deeper_than_the_tree_allows_is_still_read_and_folded_rather_than_dropped() {
     let depth = MAX_DEPTH + 44;
     let call = call_with(&nested(depth), None);
@@ -151,7 +146,6 @@ fn a_value_far_deeper_than_the_tree_allows_is_still_read_and_folded_rather_than_
 }
 
 #[test]
-#[ignore = "needs task 5: foldLifecycle"]
 fn a_value_deeper_than_the_reader_takes_is_marked_and_the_rest_of_its_line_is_shown() {
     let mut session = Session::default();
     session.turn("c1");
@@ -177,7 +171,6 @@ fn a_value_deeper_than_the_reader_takes_is_marked_and_the_rest_of_its_line_is_sh
 }
 
 #[test]
-#[ignore = "needs task 5: foldLifecycle"]
 fn a_streaming_calls_args_stay_empty_until_its_stream_stops_then_are_what_args_text_parses_to() {
     let mut session = Session::default();
     session.turn("c1");
@@ -204,7 +197,6 @@ fn a_streaming_calls_args_stay_empty_until_its_stream_stops_then_are_what_args_t
 }
 
 #[test]
-#[ignore = "needs task 5: foldLifecycle"]
 fn the_snapshots_input_is_the_args_even_while_streaming_and_args_text_that_is_not_one_object_gives_none()
  {
     let mut session = Session::default();

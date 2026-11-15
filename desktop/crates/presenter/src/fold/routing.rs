@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use serde_json::{Map, Value};
 
-use crate::fold::paths::{message_at, update_part, with_routing};
+use crate::fold::paths::{message_at, replace_routing, update_part};
 use crate::json::{JsonFields, compact};
 use crate::keyed::of_cli_id;
 use crate::transcript::{
@@ -29,9 +29,12 @@ pub(crate) fn with_route(
     id: &str,
     route: AnthropicRoute,
 ) -> Arc<Transcript> {
+    if transcript.routing.anthropic.get(id) == Some(&route) {
+        return Arc::clone(transcript);
+    }
     let mut routing = transcript.routing.clone();
     routing.anthropic.insert(id.to_owned(), route);
-    with_routing(transcript, routing)
+    replace_routing(transcript, routing)
 }
 
 fn route_to(location: Vec<String>) -> AnthropicRoute {

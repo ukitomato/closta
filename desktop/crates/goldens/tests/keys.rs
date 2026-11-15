@@ -21,7 +21,6 @@ use closta_presenter::transcript::Transcript;
 use serde_json::{Value, json};
 
 #[test]
-#[ignore = "needs task 5: foldLifecycle and foldRequest"]
 fn cli_ids_that_are_not_keys_are_escaped_wherever_they_name_something_and_still_correlate() {
     let mut session = Session::default();
     session.send("send-1", "go");
@@ -64,7 +63,6 @@ fn cli_ids_that_are_not_keys_are_escaped_wherever_they_name_something_and_still_
 }
 
 #[test]
-#[ignore = "needs task 5: foldLifecycle"]
 fn a_host_id_that_a_cli_id_also_takes_gets_a_key_of_its_own() {
     let mut session = Session::default();
     session.send("abc", "first");

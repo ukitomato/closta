@@ -65,7 +65,6 @@ fn tool(id: &str, name: &str) -> String {
 }
 
 #[test]
-#[ignore = "needs task 5: foldLifecycle"]
 fn a_failed_turn_ends_incomplete_with_its_result_as_the_error() {
     let mut session = Session::default();
     session.turn("c1");
@@ -80,7 +79,6 @@ fn a_failed_turn_ends_incomplete_with_its_result_as_the_error() {
 }
 
 #[test]
-#[ignore = "needs task 5: foldLifecycle"]
 fn a_failure_that_says_nothing_has_no_error() {
     let mut session = Session::default();
     session.turn("c1");
@@ -94,7 +92,6 @@ fn a_failure_that_says_nothing_has_no_error() {
 }
 
 #[test]
-#[ignore = "needs task 5: foldLifecycle and foldRequest"]
 fn a_sub_agent_asking_after_its_parents_turn_ended_makes_that_message_wait_and_the_thread_run() {
     let mut session = Session::default();
     session.turn("c1");
@@ -127,7 +124,6 @@ fn a_sub_agent_asking_after_its_parents_turn_ended_makes_that_message_wait_and_t
 }
 
 #[test]
-#[ignore = "needs task 5: foldRequest"]
 fn a_resume_whose_result_leaves_a_request_pending_still_waits_for_the_user() {
     let mut session = Session::default();
     session.events([
@@ -154,7 +150,6 @@ fn a_resume_whose_result_leaves_a_request_pending_still_waits_for_the_user() {
 }
 
 #[test]
-#[ignore = "needs task 5: foldLifecycle"]
 fn a_part_still_streaming_when_its_turn_ends_was_cut_off() {
     let mut session = Session::default();
     session.turn("c1");
@@ -175,7 +170,6 @@ fn a_part_still_streaming_when_its_turn_ends_was_cut_off() {
 }
 
 #[test]
-#[ignore = "needs task 5: foldLifecycle"]
 fn a_stopped_stream_is_complete_even_while_its_turn_runs() {
     let mut session = Session::default();
     session.turn("c1");
@@ -194,7 +188,6 @@ fn a_stopped_stream_is_complete_even_while_its_turn_runs() {
 }
 
 #[test]
-#[ignore = "needs task 5: foldLifecycle"]
 fn a_tool_call_left_without_a_result_when_its_turn_ends_was_cut_off_one_that_runs_is_running() {
     let mut session = Session::default();
     session.turn("c1");
@@ -206,7 +199,6 @@ fn a_tool_call_left_without_a_result_when_its_turn_ends_was_cut_off_one_that_run
 }
 
 #[test]
-#[ignore = "needs task 5: foldLifecycle"]
 fn a_task_decides_its_calls_status_over_the_calls_result_and_a_failed_task_is_an_error() {
     let mut session = Session::default();
     session.turn("c1");
@@ -237,7 +229,6 @@ fn a_task_decides_its_calls_status_over_the_calls_result_and_a_failed_task_is_an
 }
 
 #[test]
-#[ignore = "needs task 5: foldLifecycle"]
 fn a_sub_agents_calls_run_after_the_turn_ends_and_after_its_task_says_complete() {
     let mut session = Session::default();
     session.turn("c1");
@@ -282,7 +273,6 @@ fn a_sub_agents_calls_run_after_the_turn_ends_and_after_its_task_says_complete()
 }
 
 #[test]
-#[ignore = "needs task 5: foldLifecycle"]
 fn a_sub_agents_call_without_a_result_is_cut_off_when_the_call_that_started_it_failed_or_was_cut_off()
  {
     let mut failed_task = Session::default();
@@ -346,7 +336,6 @@ fn a_sub_agents_call_without_a_result_is_cut_off_when_the_call_that_started_it_f
 }
 
 #[test]
-#[ignore = "needs task 5: foldResult"]
 fn a_spontaneous_resume_that_fails_ends_incomplete_with_its_result_as_the_error() {
     let mut session = Session::default();
     session.events([
@@ -368,7 +357,6 @@ fn a_spontaneous_resume_that_fails_ends_incomplete_with_its_result_as_the_error(
 }
 
 #[test]
-#[ignore = "needs task 5: foldResult"]
 fn content_after_a_resume_ended_opens_the_next_resume() {
     let mut session = Session::default();
     session.events([
@@ -387,7 +375,6 @@ fn content_after_a_resume_ended_opens_the_next_resume() {
 }
 
 #[test]
-#[ignore = "needs task 5: foldResult"]
 fn a_resume_that_runs_a_tool_spans_two_anthropic_messages_and_is_one_message() {
     let mut session = Session::default();
     session.events([
@@ -439,7 +426,6 @@ fn the_thread_runs_from_a_send_until_the_clis_result_and_stays_running_for_a_sen
 }
 
 #[test]
-#[ignore = "needs task 5: foldLifecycle"]
 fn a_turn_core_does_not_know_shows_as_complete_for_an_unknown_reason() {
     // A transcript that saw a turn start that this core state never saw: the caller passed another
     // conversation.
@@ -471,7 +457,6 @@ fn a_turn_core_does_not_know_shows_as_complete_for_an_unknown_reason() {
 }
 
 #[test]
-#[ignore = "needs task 5: foldLifecycle"]
 fn a_block_of_a_type_this_version_does_not_know_is_a_part_of_that_type_alone() {
     let mut session = Session::default();
     session.turn("c1");
@@ -491,7 +476,6 @@ fn a_block_of_a_type_this_version_does_not_know_is_a_part_of_that_type_alone() {
 }
 
 #[test]
-#[ignore = "needs task 5: foldLifecycle"]
 fn user_parts_have_no_status_assistant_parts_do() {
     let mut session = Session::default();
     session.send("s1", "hi");
@@ -649,7 +633,6 @@ fn a_failed_result_raises_an_error_notice_without_a_request() {
 }
 
 #[test]
-#[ignore = "needs task 5: foldLifecycle"]
 fn a_task_shows_what_started_it_and_how_it_stands_and_the_tool_call_has_the_same_key() {
     let mut session = Session::default();
     session.turn("c1");

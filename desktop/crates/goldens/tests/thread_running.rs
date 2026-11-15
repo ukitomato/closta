@@ -12,26 +12,48 @@ fn running(step: &Step) -> bool {
     thread_is_running(&step.view.conversation, &step.view.transcript)
 }
 
+fn is_send(step: &Step) -> bool {
+    matches!(step.input, PresenterInput::UserSent(_))
+}
+
+fn current_turn(step: &Step) -> Option<&str> {
+    step.view.transcript.routing.current_turn.as_deref()
+}
+
 fn is_result(step: &Step) -> bool {
     matches!(step.input, PresenterInput::Event(AgentEvent::Result { .. }))
 }
 
 #[test]
-#[ignore = "needs task 5: foldLifecycle"]
 fn a_turn_the_api_refused_with_a_400_ends_and_so_does_the_next_one_it_refuses() {
     // Seen on Windows: after the 400 the composer kept its stop button although the CLI had ended
     // the turn.
     let steps = replay("30-deny-empty-message");
     let results: Vec<usize> = (0..steps.len()).filter(|i| is_result(&steps[*i])).collect();
     assert_eq!(2, results.len());
-    for index in results {
+    for &index in &results {
         assert!(!running(&steps[index]), "after the result at #{index}");
+        assert_eq!(
+            None,
+            current_turn(&steps[index]),
+            "the result at #{index} closed the turn receiving content"
+        );
     }
     assert!(!running(steps.last().expect("a step")), "at the end");
+    // Each message runs from its send, before core has a turn for it, until its result.
+    for send in (0..steps.len()).filter(|i| is_send(&steps[*i])) {
+        let result = results
+            .iter()
+            .copied()
+            .find(|it| *it > send)
+            .expect("a result after the send");
+        for (index, step) in steps.iter().enumerate().take(result).skip(send) {
+            assert!(running(step), "running at #{index}");
+        }
+    }
 }
 
 #[test]
-#[ignore = "needs task 5: foldLifecycle"]
 fn a_message_the_cli_took_into_the_running_turn_ends_with_that_turn() {
     // Seen on Windows: the CLI took a message sent mid-turn into the running turn, no result came
     // for it, and the composer kept its stop button for the rest of the conversation.
@@ -45,9 +67,15 @@ fn a_message_the_cli_took_into_the_running_turn_ends_with_that_turn() {
         second_send < result,
         "the second message goes while the first turn runs"
     );
-    for (index, step) in steps.iter().enumerate().take(result).skip(second_send) {
+    let first_send = steps.iter().position(is_send).expect("a send");
+    for (index, step) in steps.iter().enumerate().take(result).skip(first_send) {
         assert!(running(step), "running at #{index}");
     }
+    assert_eq!(
+        None,
+        current_turn(&steps[result]),
+        "the result closed both turns, the one receiving content among them"
+    );
     for (index, step) in steps.iter().enumerate().skip(result) {
         assert!(!running(step), "at rest at #{index}");
     }

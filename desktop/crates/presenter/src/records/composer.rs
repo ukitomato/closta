@@ -4,6 +4,13 @@
 use std::fmt;
 use std::sync::Arc;
 
+use serde_json::Value;
+
+use crate::input::PresenterInput;
+use crate::json::JsonFields;
+use crate::records::turn_end::fold_turn_changes;
+use crate::transcript::Transcript;
+
 /// One slash command the CLI has. `argument_hint` is absent when the CLI gave none (or an empty
 /// one).
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -52,4 +59,69 @@ pub struct ComposerFailure;
 impl ComposerFailure {
     pub const UNAVAILABLE: &str = "unavailable";
     pub const FAILED: &str = "failed";
+}
+
+/// The slash commands of an `initialize` response (`response.response.commands`), or `None` when it
+/// has none. An entry without a name is left out; an empty hint is no hint.
+pub(crate) fn commands_of_response(response: Option<&Value>) -> Option<Arc<[SlashCommandRecord]>> {
+    let commands = response?.as_object()?.obj("response")?.array("commands")?;
+    Some(
+        commands
+            .iter()
+            .filter_map(|item| {
+                let fields = item.as_object()?;
+                let name = fields.string("name").filter(|it| !it.is_empty())?;
+                Some(SlashCommandRecord {
+                    name: name.to_owned(),
+                    description: fields.string("description").unwrap_or_default().to_owned(),
+                    argument_hint: fields
+                        .string("argumentHint")
+                        .filter(|it| !it.is_empty())
+                        .map(str::to_owned),
+                })
+            })
+            .collect(),
+    )
+}
+
+/// The names of a `system/init`'s `slash_commands`, or `None` when it has none.
+pub(crate) fn commands_of_init(
+    slash_commands: Option<&Value>,
+) -> Option<Arc<[SlashCommandRecord]>> {
+    Some(
+        slash_commands?
+            .as_array()?
+            .iter()
+            .filter_map(|item| {
+                let name = item.as_str().filter(|it| !it.is_empty())?;
+                Some(SlashCommandRecord {
+                    name: name.to_owned(),
+                    description: String::new(),
+                    argument_hint: None,
+                })
+            })
+            .collect(),
+    )
+}
+
+/// What the host found: its answer to the webview's file query, the last one only, and what a turn
+/// changed on disk, by the turn's user message. An answer equal to the one kept changes nothing.
+pub(crate) fn fold_answered(
+    transcript: &Arc<Transcript>,
+    input: &PresenterInput,
+) -> Arc<Transcript> {
+    match input {
+        PresenterInput::FilesFound(search) => {
+            if transcript.file_search.as_ref() == Some(search) {
+                Arc::clone(transcript)
+            } else {
+                Arc::new(Transcript {
+                    file_search: Some(search.clone()),
+                    ..Transcript::clone(transcript)
+                })
+            }
+        }
+        PresenterInput::TurnChangesFound(found) => fold_turn_changes(transcript, found),
+        _ => Arc::clone(transcript),
+    }
 }

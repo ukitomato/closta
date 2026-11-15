@@ -209,6 +209,18 @@ mod tests {
             .rposition(|it| *it == result("c", &["b", "c"]))
             .expect("the last result");
 
+        assert!(
+            thread_is_running(&states[0].conversation, &states[0].transcript),
+            "a send core has no turn for yet runs"
+        );
+        for (index, input) in inputs.iter().enumerate() {
+            if matches!(input, PresenterInput::Event(AgentEvent::Result { .. })) {
+                assert_eq!(
+                    None, states[index].transcript.routing.current_turn,
+                    "the result at #{index} closed the turn receiving content"
+                );
+            }
+        }
         let before = &states[ended - 1];
         assert!(
             thread_is_running(&before.conversation, &before.transcript),

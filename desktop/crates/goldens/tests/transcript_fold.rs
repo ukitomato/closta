@@ -242,7 +242,6 @@ fn init_with_commands(slash_commands: &str) -> AgentEvent {
 }
 
 #[test]
-#[ignore = "needs task 5: CommandsFold"]
 fn the_initialize_response_gives_the_commands_with_their_sentences_and_system_init_alone_only_their_names()
  {
     let named = with(
@@ -283,7 +282,6 @@ fn the_initialize_response_gives_the_commands_with_their_sentences_and_system_in
 }
 
 #[test]
-#[ignore = "needs task 5: CommandsFold"]
 fn a_response_that_is_an_error_or_has_no_commands_or_the_same_commands_again_changes_nothing() {
     let detailed = with(
         &SessionView::default(),
@@ -324,7 +322,6 @@ fn a_response_that_is_an_error_or_has_no_commands_or_the_same_commands_again_cha
 }
 
 #[test]
-#[ignore = "needs task 5: foldAnswered"]
 fn the_answers_of_the_host_to_the_webview_are_the_last_one_only() {
     let first = FileSearchRecord {
         command_id: "c1".into(),
@@ -376,7 +373,6 @@ fn events(view: &SessionView, events: impl IntoIterator<Item = AgentEvent>) -> S
 }
 
 #[test]
-#[ignore = "needs task 5: foldLifecycle"]
 fn the_finished_text_is_the_authority_over_what_streamed() {
     let streamed = events(
         &started(),
@@ -436,7 +432,6 @@ fn a_delta_after_its_block_stopped_changes_nothing() {
 }
 
 #[test]
-#[ignore = "needs task 5: foldLifecycle"]
 fn a_block_whose_snapshot_came_before_its_stream_is_not_written_twice() {
     let streamed = events(
         &started(),
@@ -497,7 +492,6 @@ fn a_sub_agents_line_for_a_call_that_is_not_there_is_left_out() {
 }
 
 #[test]
-#[ignore = "needs task 5: foldLifecycle"]
 fn a_sub_agents_prompt_as_a_plain_string_or_as_text_blocks_is_a_nested_user_message() {
     let with_agent = with(
         &started(),
@@ -533,7 +527,6 @@ fn a_sub_agents_prompt_as_a_plain_string_or_as_text_blocks_is_a_nested_user_mess
 }
 
 #[test]
-#[ignore = "needs task 5: foldRequest"]
 fn a_repeated_request_is_asked_afresh_an_empty_request_id_is_not_recorded() {
     let request = |id| RequestLine::new(id, "Bash", Some("toolu_1")).event();
     let asked = with(&started(), request("r1"));
@@ -563,7 +556,6 @@ fn a_repeated_request_is_asked_afresh_an_empty_request_id_is_not_recorded() {
 }
 
 #[test]
-#[ignore = "needs task 5: foldLifecycle"]
 fn a_tool_calls_id_is_its_key_even_when_the_stream_and_the_snapshot_disagree_on_the_name() {
     let view = events(
         &started(),
@@ -586,7 +578,6 @@ fn a_tool_calls_id_is_its_key_even_when_the_stream_and_the_snapshot_disagree_on_
 }
 
 #[test]
-#[ignore = "needs task 5: foldLifecycle"]
 fn a_sub_agents_prompt_claims_its_key_next_to_the_sub_agents_other_messages() {
     let view = events(
         &started(),
@@ -613,7 +604,6 @@ fn a_sub_agents_prompt_claims_its_key_next_to_the_sub_agents_other_messages() {
 }
 
 #[test]
-#[ignore = "needs task 5: foldLifecycle"]
 fn a_sub_agents_call_is_routed_under_the_call_that_started_it() {
     let routing = events(
         &started(),
