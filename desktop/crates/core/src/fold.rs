@@ -9,6 +9,8 @@ use closta_model::{
     Task, TaskStatus, Turn, TurnPhase,
 };
 
+use imbl::Vector;
+
 const LIFECYCLE_QUEUED: &str = "queued";
 const LIFECYCLE_STARTED: &str = "started";
 const LIFECYCLE_COMPLETED: &str = "completed";
@@ -88,7 +90,7 @@ fn fold_control_response(mut state: ConversationState, event: &AgentEvent) -> Co
         return state;
     };
     if subtype.as_deref() == Some(CONTROL_ERROR_SUBTYPE) {
-        state.notices.push(Notice {
+        state.notices.push_back(Notice {
             kind: NoticeKind::ControlError,
             message: error.clone().unwrap_or_default(),
             request_id: request_id.clone(),
@@ -127,7 +129,7 @@ fn fold_lifecycle(mut state: ConversationState, event: &AgentEvent) -> Conversat
     match lifecycle_state.as_str() {
         LIFECYCLE_QUEUED | LIFECYCLE_STARTED => {
             if !state.turns.iter().any(|t| &t.command_uuid == command_uuid) {
-                state.turns.push(Turn {
+                state.turns.push_back(Turn {
                     command_uuid: command_uuid.clone(),
                     phase: TurnPhase::Open,
                     incomplete_reason: None,
@@ -136,11 +138,11 @@ fn fold_lifecycle(mut state: ConversationState, event: &AgentEvent) -> Conversat
             }
         }
         LIFECYCLE_COMPLETED => {
-            for turn in &mut state.turns {
-                if turn.phase == TurnPhase::Open && &turn.command_uuid == command_uuid {
-                    turn.lifecycle_done = true;
-                }
-            }
+            update_where(
+                &mut state.turns,
+                |turn| turn.phase == TurnPhase::Open && &turn.command_uuid == command_uuid,
+                |turn| turn.lifecycle_done = true,
+            );
         }
         _ => {}
     }
@@ -167,7 +169,7 @@ fn fold_result(mut state: ConversationState, event: &AgentEvent) -> Conversation
     };
     state.usage.session_cost_usd = *total_cost_usd;
     if *is_error {
-        state.notices.push(Notice {
+        state.notices.push_back(Notice {
             kind: NoticeKind::Error,
             message: result.clone(),
             request_id: None,
@@ -186,13 +188,16 @@ fn fold_result(mut state: ConversationState, event: &AgentEvent) -> Conversation
         .any(|t| t.phase == TurnPhase::Open && named(&t.command_uuid));
     if closes {
         let reason = is_error.then(|| result.clone());
-        for turn in &mut state.turns {
-            let answered = named(&turn.command_uuid) || turn.lifecycle_done;
-            if turn.phase == TurnPhase::Open && answered {
+        update_where(
+            &mut state.turns,
+            |turn| {
+                turn.phase == TurnPhase::Open && (named(&turn.command_uuid) || turn.lifecycle_done)
+            },
+            |turn| {
                 turn.phase = TurnPhase::Closed;
                 turn.incomplete_reason = reason.clone();
-            }
-        }
+            },
+        );
     } else {
         state.spontaneous_resume_count += 1;
     }
@@ -229,7 +234,7 @@ fn fold_control_request(mut state: ConversationState, event: &AgentEvent) -> Con
     } else {
         ApprovalKind::Approval
     };
-    state.pending_approvals.push(PendingApproval {
+    state.pending_approvals.push_back(PendingApproval {
         request_id: request_id.clone(),
         kind,
         tool_use_id: tool_use_id.clone(),
@@ -276,30 +281,51 @@ fn fold_task_notification(mut state: ConversationState, event: &AgentEvent) -> C
     else {
         return state;
     };
-    for task in state.tasks.iter_mut().filter(|t| &t.task_id == task_id) {
-        if status == TASK_COMPLETED {
-            task.status = TaskStatus::Complete;
-            task.incomplete_reason = None;
-        } else {
-            task.status = TaskStatus::Incomplete;
-            task.incomplete_reason = Some(status.clone());
-        }
-    }
+    update_where(
+        &mut state.tasks,
+        |task| &task.task_id == task_id,
+        |task| {
+            if status == TASK_COMPLETED {
+                task.status = TaskStatus::Complete;
+                task.incomplete_reason = None;
+            } else {
+                task.status = TaskStatus::Incomplete;
+                task.incomplete_reason = Some(status.clone());
+            }
+        },
+    );
     state
 }
 
 /// Replaces the task with the same `task_id` by `task` when `replace` says so, or appends it,
 /// keeping arrival order stable.
-fn upsert_by_id(tasks: &mut Vec<Task>, task: Task, replace: impl Fn(&Task) -> bool) {
-    let mut found = false;
-    for existing in tasks.iter_mut().filter(|t| t.task_id == task.task_id) {
-        found = true;
-        if replace(existing) {
-            *existing = task.clone();
-        }
+fn upsert_by_id(tasks: &mut Vector<Task>, task: Task, replace: impl Fn(&Task) -> bool) {
+    let found = tasks.iter().any(|t| t.task_id == task.task_id);
+    if found {
+        update_where(
+            tasks,
+            |t| t.task_id == task.task_id && replace(t),
+            |t| *t = task.clone(),
+        );
+    } else {
+        tasks.push_back(task);
     }
-    if !found {
-        tasks.push(task);
+}
+
+/// Changes the items `applies` picks and no other: the rest stay shared with the state this one
+/// was copied from, so a line that touches one turn does not copy them all.
+fn update_where<T: Clone>(
+    items: &mut Vector<T>,
+    applies: impl Fn(&T) -> bool,
+    mut change: impl FnMut(&mut T),
+) {
+    let picked: Vec<usize> = (0..items.len())
+        .filter(|index| items.get(*index).is_some_and(&applies))
+        .collect();
+    for index in picked {
+        if let Some(item) = items.get_mut(index) {
+            change(item);
+        }
     }
 }
 
@@ -361,7 +387,7 @@ mod tests {
                 cwd: "/repo".into(),
                 version: "2.1.282".into(),
             }),
-            turns: vec![open_turn("cmd-1")],
+            turns: imbl::vector![open_turn("cmd-1")],
             usage: Usage {
                 session_cost_usd: 0.25,
             },
@@ -390,7 +416,7 @@ mod tests {
     #[test]
     fn a_result_matching_no_open_turn_closes_nothing_and_only_replaces_cost() {
         let before = ConversationState {
-            turns: vec![open_turn("cmd-1")],
+            turns: imbl::vector![open_turn("cmd-1")],
             ..ConversationState::default()
         };
 

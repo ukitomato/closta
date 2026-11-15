@@ -376,7 +376,8 @@ fn an_init_applied_to_a_populated_state_replaces_only_the_session() {
             phase: TurnPhase::Closed,
             incomplete_reason: None,
             lifecycle_done: false,
-        }],
+        }]
+        .into(),
         usage: Usage {
             session_cost_usd: 0.5,
         },
@@ -388,7 +389,8 @@ fn an_init_applied_to_a_populated_state_replaces_only_the_session() {
             spawn_depth: Some(1),
             status: TaskStatus::Running,
             incomplete_reason: None,
-        }],
+        }]
+        .into(),
         thinking_estimate: Some(1234),
         spontaneous_resume_count: 2,
         ..ConversationState::default()
@@ -786,7 +788,7 @@ fn an_error_control_response_leaves_one_notice_with_the_text_and_the_request_id(
             message: "nope".into(),
             request_id: Some("req-8".into())
         }],
-        end.notices
+        end.notices.into_iter().collect::<Vec<_>>()
     );
 }
 

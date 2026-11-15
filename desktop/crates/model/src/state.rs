@@ -6,6 +6,7 @@
 //! events for the presenter to project.
 
 use crate::approval::PendingApproval;
+use imbl::Vector;
 use serde::Serialize;
 
 /// The domain state of one conversation, folded from a stream of events.
@@ -15,16 +16,16 @@ pub struct ConversationState {
     /// Session metadata, or `None` until a `system/init` establishes it.
     pub session: Option<SessionInfo>,
     /// Turns in arrival order, each correlated by its `command_uuid`.
-    pub turns: Vec<Turn>,
+    pub turns: Vector<Turn>,
     /// Session-level usage figures.
     pub usage: Usage,
     /// Subagent and background tasks in arrival order, correlated by `task_id`.
-    pub tasks: Vec<Task>,
+    pub tasks: Vector<Task>,
     /// The latest thinking-token estimate. Per assistant message and non-cumulative, so each
     /// `system/thinking_tokens` replaces it. `None` until one arrives.
     pub thinking_estimate: Option<i64>,
     /// Notices raised while folding (errors and the like), in arrival order.
-    pub notices: Vec<Notice>,
+    pub notices: Vector<Notice>,
     /// How many `result` lines arrived that closed no turn: a background completion that resumed
     /// the conversation on its own.
     pub spontaneous_resume_count: i32,
@@ -32,7 +33,7 @@ pub struct ConversationState {
     /// currently blocking on. A resolved, timed-out or discarded request is removed rather than
     /// kept, so an empty list is the evidence that the queue is empty. The request's content stays
     /// in its `RawJson`.
-    pub pending_approvals: Vec<PendingApproval>,
+    pub pending_approvals: Vector<PendingApproval>,
 }
 
 /// Session metadata, built from the typed top-level fields of `system/init` only.
