@@ -78,10 +78,16 @@ pub fn session(shape: &Shape, seed: u64) -> Vec<SyntheticTurn> {
     let mut writer = MarkdownWriter { random };
     let interleaved = top_level.div_ceil(INTERLEAVED_EVERY);
     let long_turns: Vec<usize> = (LONG_EVERY..shape.turns).step_by(LONG_EVERY).collect();
-    let budget = shape.total_text
-        - shape.subagents * SUBAGENT_TEXT
-        - interleaved * INTERLEAVED_TEXT
-        - long_turns.len() * shape.longest_text;
+    // A shape is a test input: an invalid one fails with its reason.
+    #[allow(clippy::expect_used)]
+    let budget = shape
+        .total_text
+        .checked_sub(
+            shape.subagents * SUBAGENT_TEXT
+                + interleaved * INTERLEAVED_TEXT
+                + long_turns.len() * shape.longest_text,
+        )
+        .expect("shape too small for its texts");
     let final_length = budget / (shape.turns - long_turns.len());
 
     let mut call = 0;

@@ -730,6 +730,8 @@ mod tests {
             "big": 3_000_000_000_u64, "huge": 18_000_000_000_000_000_000_u64, "n": 2.5,
         });
         let map = value.as_object().unwrap();
+        let minus_zero = json!({"z": serde_json::from_str::<serde_json::Value>("-0").unwrap()});
+        let minus_zero = minus_zero.as_object().unwrap();
         assert_eq!(map.string("s"), Some("x"));
         assert_eq!(map.string("o"), None);
         assert_eq!(map.obj("o").map(|o| o.len()), Some(1));
@@ -743,6 +745,10 @@ mod tests {
         assert_eq!(map.index("s"), None);
         assert_eq!(map.count("big"), Some(3_000_000_000));
         assert_eq!(map.count("neg"), None);
+        // serde_json reads `-0` as the float -0.0 and keeps no literal, so this is None where
+        // Kotlin's "-0".toLongOrNull() gives 0. It cannot be fixed here.
+        assert_eq!(minus_zero.count("z"), None);
+        assert_eq!(minus_zero.index("z"), None);
         assert_eq!(map.count("huge"), None, "a count is a Long");
         assert_eq!(map.count("f"), None);
         assert_eq!(map.number("n"), Some(2.5));

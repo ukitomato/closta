@@ -102,7 +102,8 @@ pub fn steps() -> Vec<Step> {
 
 /// `cargo xtask perf`: the wall-clock budgets (`#[ignore = "perf"]`), built in release and run
 /// one at a time so they do not time each other. They stay out of `check`: they measure time.
-/// `perf` is the only reason a test is ignored, so every ignored test is a budget.
+/// Only tests named `within_budget` run. nextest serialises tests under `--no-capture`, which is
+/// what runs them one at a time.
 pub fn perf_steps() -> Vec<Step> {
     vec![locked_cargo(
         "perf",
@@ -118,6 +119,8 @@ pub fn perf_steps() -> Vec<Step> {
             "closta",
             "--run-ignored",
             "ignored-only",
+            "-E",
+            "test(/within_budget/)",
             "--no-capture",
         ],
     )]

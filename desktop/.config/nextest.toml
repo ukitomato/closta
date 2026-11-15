@@ -1,0 +1,4 @@
+# The flat-fold test measures wall time in debug, so it must not share the machine with others.
+[[profile.default.overrides]]
+filter = 'test(fold_time_per_line_stays_flat)'
+threads-required = "num-test-threads"
