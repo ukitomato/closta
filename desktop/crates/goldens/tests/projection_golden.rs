@@ -45,7 +45,6 @@ fn check(scenario: &str) -> Option<String> {
 }
 
 #[test]
-#[ignore = "folds land in tasks 4-6; enabled in task 7"]
 fn each_capture_projects_to_its_golden_twice_the_same() {
     let all = scenarios();
     assert_eq!(40, all.len(), "the manifest's scenarios");
