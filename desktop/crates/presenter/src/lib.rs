@@ -1,4 +1,5 @@
 pub mod composer_state;
+pub mod edit_diff;
 pub mod fold;
 pub mod input;
 pub mod json;
@@ -9,7 +10,9 @@ pub mod rewind_refusal;
 pub mod session;
 pub mod text;
 pub mod thread_running;
+pub mod tool_line;
 pub mod transcript;
+pub mod visible;
 
 use closta_model::AppInfo;
 
