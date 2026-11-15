@@ -1,11 +1,19 @@
 //! Folds one input into the [`Transcript`] (TranscriptFold.kt).
 
+pub mod paths;
+pub mod routing;
+pub mod sign_in;
+pub mod snapshot;
+pub mod stream;
+
 use std::sync::Arc;
 
 use closta_model::{AgentEvent, ConversationState};
 
-use crate::input::PresenterInput;
-use crate::transcript::Transcript;
+use crate::input::{PresenterInput, UserSent};
+use crate::keyed::Keyed;
+use crate::records::tasks::fold_background;
+use crate::transcript::{MessageRecord, MessageSource, PartRecord, Role, TextRecord, Transcript};
 
 /// Folds one input into the [`Transcript`]. A pure function that never panics: an event it has
 /// no use for, or whose `RawJson` it cannot read, returns the transcript unchanged — the same
@@ -24,8 +32,7 @@ pub fn fold_transcript(
 ) -> Arc<Transcript> {
     match input {
         PresenterInput::Event(event) => fold_event(transcript, event, before, after),
-        // foldSent
-        PresenterInput::UserSent(_) => Arc::clone(transcript),
+        PresenterInput::UserSent(sent) => fold_sent(transcript, sent),
         // foldStop
         PresenterInput::StopRequested => Arc::clone(transcript),
         // foldDecided
@@ -70,12 +77,37 @@ fn fold_event(
         AgentEvent::CommandLifecycle { .. } => Arc::clone(transcript),
         // foldResult, then OperationRecords.resulted and stopTaken
         AgentEvent::Result { .. } => Arc::clone(transcript),
-        // foldStream
-        AgentEvent::StreamEvent { .. } => Arc::clone(transcript),
-        // foldAssistant, then foldSignIn
-        AgentEvent::Assistant { .. } => Arc::clone(transcript),
-        // foldUser
-        AgentEvent::User { .. } => Arc::clone(transcript),
+        AgentEvent::StreamEvent {
+            event,
+            parent_tool_use_id,
+            ..
+        } => stream::fold_stream(transcript, event, parent_tool_use_id.as_deref()),
+        AgentEvent::Assistant {
+            message,
+            parent_tool_use_id,
+            error,
+            ..
+        } => {
+            let parent = parent_tool_use_id.as_deref();
+            sign_in::fold_sign_in(
+                &snapshot::fold_assistant(transcript, message, parent),
+                parent,
+                error.as_deref(),
+            )
+        }
+        AgentEvent::User {
+            uuid,
+            message,
+            parent_tool_use_id,
+            tool_use_result,
+            ..
+        } => snapshot::fold_user(
+            transcript,
+            message,
+            parent_tool_use_id.as_deref(),
+            uuid,
+            tool_use_result.as_ref(),
+        ),
         // foldRequest
         AgentEvent::ControlRequest { .. } => Arc::clone(transcript),
         // OperationRecords.answered, then foldCommandsOfResponse
@@ -86,10 +118,9 @@ fn fold_event(
         AgentEvent::SystemStatus { .. } => Arc::clone(transcript),
         // foldCommandsOfInit
         AgentEvent::SystemInit { .. } => Arc::clone(transcript),
-        // foldBackground
         AgentEvent::SystemBackgroundTasksChanged { .. }
         | AgentEvent::SystemTaskProgress { .. }
-        | AgentEvent::SystemTaskStarted { .. } => Arc::clone(transcript),
+        | AgentEvent::SystemTaskStarted { .. } => fold_background(transcript, event),
         // The rest carry no content: what they mean for the domain is core's to fold.
         AgentEvent::RateLimitEvent { .. }
         | AgentEvent::SystemThinkingTokens { .. }
@@ -99,4 +130,47 @@ fn fold_event(
         | AgentEvent::UnknownKind { .. }
         | AgentEvent::BrokenLine { .. } => Arc::clone(transcript),
     }
+}
+
+/// The user's words exist only here: the CLI does not echo them on stdout.
+fn fold_sent(transcript: &Arc<Transcript>, sent: &UserSent) -> Arc<Transcript> {
+    let key = transcript.messages.claim(sent.message_id.as_str());
+    // The files go ahead of the words, as they do to the CLI; their keys are a letter and a
+    // number, the words' is 0.
+    let files = sent
+        .attachments
+        .iter()
+        .enumerate()
+        .fold(Keyed::new(), |parts, (index, file)| {
+            parts.put(
+                format!("{key}:a{index}"),
+                Arc::new(PartRecord::Attachment(file.clone())),
+            )
+        });
+    let parts = files.put(
+        format!("{key}:0"),
+        Arc::new(PartRecord::Text(TextRecord {
+            reasoning: false,
+            text: sent.text.clone(),
+            streaming: false,
+        })),
+    );
+    let message = MessageRecord {
+        key: key.clone(),
+        role: Role::User,
+        source: MessageSource::Sent,
+        parts,
+    };
+    let mut routing = transcript.routing.clone();
+    routing.sends = routing.sends.wrapping_add(1);
+    let user_uuids = match &sent.uuid {
+        Some(uuid) => transcript.user_uuids.update(key.clone(), uuid.clone()),
+        None => transcript.user_uuids.clone(),
+    };
+    Arc::new(Transcript {
+        messages: transcript.messages.put(key, Arc::new(message)),
+        routing,
+        user_uuids,
+        ..Transcript::clone(transcript)
+    })
 }

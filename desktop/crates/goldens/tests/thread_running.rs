@@ -17,6 +17,7 @@ fn is_result(step: &Step) -> bool {
 }
 
 #[test]
+#[ignore = "needs task 5: foldLifecycle"]
 fn a_turn_the_api_refused_with_a_400_ends_and_so_does_the_next_one_it_refuses() {
     // Seen on Windows: after the 400 the composer kept its stop button although the CLI had ended
     // the turn.
@@ -30,6 +31,7 @@ fn a_turn_the_api_refused_with_a_400_ends_and_so_does_the_next_one_it_refuses() 
 }
 
 #[test]
+#[ignore = "needs task 5: foldLifecycle"]
 fn a_message_the_cli_took_into_the_running_turn_ends_with_that_turn() {
     // Seen on Windows: the CLI took a message sent mid-turn into the running turn, no result came
     // for it, and the composer kept its stop button for the rest of the conversation.

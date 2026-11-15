@@ -97,6 +97,12 @@ impl<T> Keyed<T> {
         claim_key(|key| self.contains(key), wanted)
     }
 
+    /// Whether `other` has this very order (Kotlin's `order === other.order`): true after a put
+    /// that replaced an entry, false after one that added a key.
+    pub fn same_order(&self, other: &Keyed<T>) -> bool {
+        Arc::ptr_eq(&self.order, &other.order)
+    }
+
     /// Whether `other` is this very collection (Kotlin's `===`), not merely an equal one.
     pub fn same(&self, other: &Keyed<T>) -> bool {
         Arc::ptr_eq(&self.order, &other.order) && self.by_key.ptr_eq(&other.by_key)
@@ -217,6 +223,11 @@ mod tests {
         ));
         assert_eq!(updated.get("b").map(|v| v.as_str()), Some("2!"));
         assert_eq!(order(&updated), ["a", "b"]);
+        assert!(
+            updated.same_order(&keyed),
+            "a replaced entry keeps the order"
+        );
+        assert!(!keyed.put("c".into(), arc("3")).same_order(&keyed));
         assert!(
             keyed.update("b", Arc::clone).same(&keyed),
             "an unchanged entry"

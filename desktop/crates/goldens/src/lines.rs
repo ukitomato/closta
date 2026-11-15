@@ -2,7 +2,7 @@
 //! as the CLI writes it and read through `closta_providers`' `decode`, so a test feeds the
 //! presenter what the codec would. Field values that do not matter are fixed.
 
-use closta_model::AgentEvent;
+use closta_model::{AgentEvent, RawJson};
 use closta_presenter::json::compact;
 use closta_providers::claude::protocol::decode;
 use serde_json::{Number, Value};
@@ -132,6 +132,43 @@ pub fn user(uuid: &str, content: &str, parent: Option<&str>) -> AgentEvent {
     ))
 }
 
+/// [`assistant`] built as Kotlin's `Lines` builds it, without the codec: for content nested
+/// deeper than the codec takes (200 levels), which it would turn into a `BrokenLine` before the
+/// presenter sees it.
+pub fn assistant_built(id: &str, block: &str, parent: Option<&str>) -> AgentEvent {
+    AgentEvent::Assistant {
+        uuid: "a".into(),
+        session_id: SESSION.into(),
+        timestamp: "t".into(),
+        request_id: Some("req".into()),
+        message: RawJson(format!(
+            r#"{{"id":{},"role":"assistant","content":[{block}]}}"#,
+            quote(id)
+        )),
+        parent_tool_use_id: parent.map(str::to_owned),
+        user_message_uuid: None,
+        user_message_uuids: None,
+        wire_tool_inputs: None,
+        subagent_type: None,
+        task_description: None,
+        error: None,
+    }
+}
+
+/// [`user`] built without the codec, as [`assistant_built`] is.
+pub fn user_built(uuid: &str, content: &str, parent: Option<&str>) -> AgentEvent {
+    AgentEvent::User {
+        uuid: uuid.into(),
+        session_id: SESSION.into(),
+        timestamp: "t".into(),
+        message: RawJson(format!(r#"{{"role":"user","content":{content}}}"#)),
+        parent_tool_use_id: parent.map(str::to_owned),
+        tool_use_result: None,
+        subagent_type: None,
+        task_description: None,
+    }
+}
+
 /// The content of a user line carrying one tool result; `content` is JSON text.
 pub fn tool_result(tool_use_id: &str, content: &str, is_error: Option<bool>) -> String {
     let error = is_error.map_or_else(String::new, |it| format!(r#","is_error":{it}"#));
@@ -241,6 +278,27 @@ impl<'a> RequestLine<'a> {
             optional("tool_use_id", self.tool_use_id),
             optional("agent_id", self.agent_id),
         ))
+    }
+}
+
+impl RequestLine<'_> {
+    /// The event built without the codec, as [`assistant_built`] is.
+    pub fn built(&self) -> AgentEvent {
+        let offered = self.suggestions.map_or_else(String::new, |it| {
+            format!(r#","permission_suggestions":{it}"#)
+        });
+        AgentEvent::ControlRequest {
+            request_id: self.request_id.into(),
+            request: RawJson(format!(
+                r#"{{"subtype":"can_use_tool","tool_name":{},"input":{}{offered}{}}}"#,
+                quote(self.tool),
+                self.input,
+                optional("tool_use_id", self.tool_use_id),
+            )),
+            agent_id: self.agent_id.map(str::to_owned),
+            tool_name: Some(self.tool.into()),
+            tool_use_id: self.tool_use_id.map(str::to_owned),
+        }
     }
 }
 
@@ -368,13 +426,29 @@ pub fn task_notification(task_id: &str, tool_use_id: &str, status: &str) -> Agen
 #[cfg(test)]
 mod tests {
     use super::*;
-    use closta_model::RawJson;
 
     fn placed(event: &AgentEvent) {
         assert!(
             event.kind().is_some(),
             "the codec did not place the line: {event:?}"
         );
+    }
+
+    #[test]
+    fn a_built_line_is_what_the_codec_reads_from_the_written_one() {
+        let block = tool_use("t1", "Bash", r#"{"command":"ls"}"#);
+        assert_eq!(
+            assistant("m", &block, Some("p")),
+            assistant_built("m", &block, Some("p"))
+        );
+        let result = tool_result("t1", "\"ok\"", Some(true));
+        assert_eq!(user("u", &result, None), user_built("u", &result, None));
+        let request = RequestLine {
+            input: r#"{"a":1}"#,
+            suggestions: Some("[]"),
+            ..RequestLine::new("r", "Bash", Some("t1"))
+        };
+        assert_eq!(request.event(), request.built());
     }
 
     #[test]
