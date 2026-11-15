@@ -883,6 +883,7 @@ name = "closta-core"
 version = "0.1.0"
 dependencies = [
  "closta-model",
+ "imbl",
 ]
 
 [[package]]
@@ -894,6 +895,7 @@ dependencies = [
  "closta-model",
  "closta-presenter",
  "closta-providers",
+ "imbl",
  "serde",
  "serde_json",
 ]
@@ -902,6 +904,7 @@ dependencies = [
 name = "closta-model"
 version = "0.1.0"
 dependencies = [
+ "imbl",
  "serde",
  "serde_json",
 ]
@@ -3222,6 +3225,7 @@ dependencies = [
  "imbl-sized-chunks",
  "rand_core 0.9.5",
  "rand_xoshiro",
+ "serde_core",
  "version_check",
  "wide",
 ]

@@ -9,4 +9,5 @@ pub mod lines;
 pub mod projector;
 pub mod replay;
 pub mod session;
+pub mod synthetic;
 pub mod tree_reading;

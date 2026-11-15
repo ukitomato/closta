@@ -225,7 +225,7 @@ fn notices_node(notices: &[&Notice]) -> Value {
 
 /// The tasks in the order they came, each keyed as the CLI's id is ([`of_cli_id`]); `toolCallId`
 /// is the key of the tool call part that started it (the same function), so it names that part.
-fn tasks_node(tasks: &[Task]) -> Value {
+fn tasks_node(tasks: &imbl::Vector<Task>) -> Value {
     let mut keys: Vec<String> = Vec::new();
     let mut entries = Vec::new();
     for task in tasks {

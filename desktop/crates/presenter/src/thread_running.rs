@@ -54,7 +54,7 @@ mod tests {
 
     fn with_turn(phase: TurnPhase) -> ConversationState {
         ConversationState {
-            turns: vec![turn("c1", phase)],
+            turns: vec![turn("c1", phase)].into(),
             ..ConversationState::default()
         }
     }
@@ -66,7 +66,8 @@ mod tests {
                 kind: ApprovalKind::Approval,
                 tool_use_id: None,
                 agent_id: None,
-            }],
+            }]
+            .into(),
             ..ConversationState::default()
         }
     }

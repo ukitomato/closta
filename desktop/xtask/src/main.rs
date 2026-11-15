@@ -40,6 +40,13 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
+        "perf" => match check::run_steps(&desktop_root(), &check::perf_steps()) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(err) => {
+                eprintln!("{err:#}");
+                ExitCode::FAILURE
+            }
+        },
         "win-build" => {
             let flags: Vec<String> = std::env::args().skip(2).collect();
             if let Some(flag) = flags.iter().find(|f| *f != "--release" && *f != "--run") {

@@ -450,7 +450,8 @@ fn a_turn_core_does_not_know_shows_as_complete_for_an_unknown_reason() {
             phase: TurnPhase::Open,
             incomplete_reason: None,
             lifecycle_done: false,
-        }],
+        }]
+        .into(),
         ..ConversationState::default()
     };
     assert_eq!(Some("running".into()), turn_status(&open));
@@ -572,11 +573,9 @@ fn a_result_that_changes_only_the_total_with_the_turns_and_the_transcript_as_the
     let transcript = Arc::clone(session.transcript());
     // One the CLI sends after its turn closed: core adds it to the total and to nothing else.
     session.events([costing("c1", 0.02)]);
-    // Core keeps its turns in a `Vec`, so equal stands in for Kotlin's same list here.
-    assert_eq!(
-        turns,
-        session.conversation().turns,
-        "the turns are as they were, so only the total can tell"
+    assert!(
+        turns.ptr_eq(&session.conversation().turns),
+        "the turns are the same, so only the total can tell"
     );
     assert!(
         Arc::ptr_eq(&transcript, session.transcript()),
@@ -675,8 +674,8 @@ fn a_task_that_failed_is_incomplete_with_the_reason_core_kept() {
     let task = by_id(session.thread(), "tasks", "task-1");
     assert_eq!(Some("incomplete"), str(task, "status"));
     assert_eq!(Some(&Value::Bool(false)), task.get("background"));
-    let [kept] = &session.conversation().tasks[..] else {
-        panic!("one task");
-    };
+    let tasks = &session.conversation().tasks;
+    assert_eq!(1, tasks.len(), "one task");
+    let kept = &tasks[0];
     assert_eq!(kept.incomplete_reason.as_deref(), str(task, "reason"));
 }

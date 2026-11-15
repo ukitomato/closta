@@ -100,6 +100,29 @@ pub fn steps() -> Vec<Step> {
     ]
 }
 
+/// `cargo xtask perf`: the wall-clock budgets (`#[ignore = "perf"]`), built in release and run
+/// one at a time so they do not time each other. They stay out of `check`: they measure time.
+/// `perf` is the only reason a test is ignored, so every ignored test is a budget.
+pub fn perf_steps() -> Vec<Step> {
+    vec![locked_cargo(
+        "perf",
+        &[
+            "nextest",
+            "run",
+            "--cargo-profile",
+            "release",
+            "--workspace",
+            "--exclude",
+            "closta-platform",
+            "--exclude",
+            "closta",
+            "--run-ignored",
+            "ignored-only",
+            "--no-capture",
+        ],
+    )]
+}
+
 /// Runs the stages in order, stopping at the first failure.
 pub fn run_steps(root: &Path, steps: &[Step]) -> anyhow::Result<()> {
     for step in steps {
@@ -167,6 +190,22 @@ mod tests {
                     assert_eq!(args[1], "cargo", "{name}");
                 }
             }
+        }
+    }
+
+    #[test]
+    fn perf_runs_only_the_ignored_budgets_in_release_under_the_lock() {
+        let steps = perf_steps();
+        let [Step::Command { program, args, .. }] = steps.as_slice() else {
+            panic!("one command");
+        };
+        assert_eq!(program, "flock");
+        assert_eq!(args[..3], strings(&[LOCK, "cargo", "nextest"]));
+        for pair in [
+            ["--cargo-profile", "release"],
+            ["--run-ignored", "ignored-only"],
+        ] {
+            assert!(args.windows(2).any(|it| it == pair), "{pair:?}");
         }
     }
 

@@ -98,7 +98,8 @@ fn a_request_is_a_question_when_core_holds_it_as_one_and_keeps_its_kind_when_cor
             kind: ApprovalKind::Approval,
             tool_use_id: None,
             agent_id: None,
-        }],
+        }]
+        .into(),
         ..ConversationState::default()
     };
     let told = fold_transcript(&Arc::default(), &question, &nothing, &plain);

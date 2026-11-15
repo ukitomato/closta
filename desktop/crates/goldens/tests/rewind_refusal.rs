@@ -205,14 +205,14 @@ fn turns_so_far_is_the_turns_and_the_turns_the_cli_began_on_its_own() {
     assert_eq!(
         2,
         turns_so_far(&ConversationState {
-            turns: vec![turn.clone(), turn.clone()],
+            turns: imbl::vector![turn.clone(), turn.clone()],
             ..ConversationState::default()
         })
     );
     assert_eq!(
         3,
         turns_so_far(&ConversationState {
-            turns: vec![turn.clone(), turn],
+            turns: imbl::vector![turn.clone(), turn],
             spontaneous_resume_count: 1,
             ..ConversationState::default()
         })
