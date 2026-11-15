@@ -9,7 +9,7 @@ use closta_presenter::records::composer::{FileSearchRecord, SlashCommandRecord};
 use closta_presenter::records::history::{
     HISTORY_UNAVAILABLE_TEXT, HistoryFacts, SavedSessionRecord,
 };
-use closta_presenter::records::mcp::{MCP_SOURCE_SDK, McpServerRecord};
+use closta_presenter::records::mcp::{McpServerRecord, mcp_sentence};
 use closta_presenter::records::operations::TokenTotals;
 use closta_presenter::transcript::Transcript;
 use serde_json::{Map, Number, Value, json};
@@ -223,13 +223,6 @@ fn notices_node(notices: &[&Notice]) -> Value {
     collection_node(entries)
 }
 
-/// Stands in for McpServerRecord.kt's `mcpSentence` (the first line, URLs without userinfo, query
-/// and fragment, at most 200 characters), which task 6 ports into `closta-presenter`: until then
-/// a control error's notice shows the CLI's text as it is.
-fn mcp_sentence(text: &str) -> String {
-    text.to_owned()
-}
-
 /// The tasks in the order they came, each keyed as the CLI's id is ([`of_cli_id`]); `toolCallId`
 /// is the key of the tool call part that started it (the same function), so it names that part.
 fn tasks_node(tasks: &[Task]) -> Value {
@@ -317,12 +310,11 @@ fn saved_sessions_node(sessions: &[SavedSessionRecord]) -> Value {
 }
 
 /// The servers of an answer, as the tree spells them; `declared` are the host's own in-process
-/// servers' names. A server is the host's own when the CLI says `sdk` or the host declared it.
+/// servers' names.
 fn mcp_servers_node(servers: &[McpServerRecord], declared: &[String]) -> Value {
     servers
         .iter()
         .map(|server| {
-            let built_in = server.source == MCP_SOURCE_SDK || declared.contains(&server.name);
             let tools: Vec<Value> = server
                 .tools
                 .iter()
@@ -332,7 +324,7 @@ fn mcp_servers_node(servers: &[McpServerRecord], declared: &[String]) -> Value {
             node.insert("name".into(), server.name.as_str().into());
             node.insert("status".into(), server.status.as_str().into());
             node.insert("source".into(), server.source.as_str().into());
-            node.insert("builtIn".into(), built_in.into());
+            node.insert("builtIn".into(), server.is_built_in(declared).into());
             node.insert("tools".into(), tools.into());
             if let Some(error) = &server.error {
                 node.insert("error".into(), error.as_str().into());

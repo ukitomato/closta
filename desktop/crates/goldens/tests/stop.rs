@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use closta_goldens::lines::{self, ResultLine};
+use closta_presenter::composer_state::composer_state;
 use closta_presenter::input::{PresenterInput, SendId, UserSent};
 use closta_presenter::session::SessionView;
 use closta_presenter::thread_running::thread_is_running;
@@ -19,10 +20,8 @@ fn running(view: &SessionView) -> bool {
     thread_is_running(&view.conversation, &view.transcript)
 }
 
-/// The composer's `stopping`, as ComposerState.kt words it: running, with turns kept for the next
-/// `result` to end.
 fn stopping(view: &SessionView) -> bool {
-    running(view) && !view.transcript.routing.stopping.is_empty()
+    composer_state(&view.conversation, &view.transcript).stopping
 }
 
 fn sent(id: &str, text: &str) -> PresenterInput {

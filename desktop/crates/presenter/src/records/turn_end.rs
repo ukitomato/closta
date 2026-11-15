@@ -55,14 +55,15 @@ pub(crate) fn ask_key_of(transcript: &Transcript, turn_key: &str) -> Option<Stri
     let messages = &transcript.messages;
     if let Some(MessageSource::Turn { command_uuid }) = messages.get(turn_key).map(|it| &it.source)
     {
-        // Kotlin takes the first entry of a map in its insertion order; one uuid goes with one
-        // send, so there is at most one.
-        if let Some((key, _)) = transcript
-            .user_uuids
-            .iter()
-            .find(|(_, uuid)| *uuid == command_uuid)
+        // Kotlin takes the first entry of `userUuids` in its insertion order. A uuid and its
+        // message's key go in together, so that order is the messages' own: the earliest message
+        // sent with this uuid. One uuid should go with one send; if it went with more, the first
+        // still wins, whatever order the hash map keeps.
+        if let Some(key) = messages
+            .order()
+            .find(|key| transcript.user_uuids.get(*key) == Some(command_uuid))
         {
-            return Some(key.clone());
+            return Some(key.to_owned());
         }
     }
     messages
@@ -111,4 +112,47 @@ pub(crate) fn with_turn_end(
         turn_ends: transcript.turn_ends.update(turn_key.to_owned(), record),
         ..Transcript::clone(transcript)
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::keyed::Keyed;
+    use crate::transcript::MessageRecord;
+
+    fn message(key: &str, role: Role, source: MessageSource) -> Arc<MessageRecord> {
+        Arc::new(MessageRecord {
+            key: key.into(),
+            role,
+            source,
+            parts: Keyed::new(),
+        })
+    }
+
+    #[test]
+    fn a_uuid_sent_with_two_messages_answers_the_earliest_of_them() {
+        // The premise is one uuid per send; when it is broken the earliest send wins, as the
+        // first entry of Kotlin's insertion-ordered map does, for any number of sends.
+        for count in [2, 3, 17] {
+            let mut messages = Keyed::new();
+            let mut user_uuids = imbl::HashMap::new();
+            for n in 0..count {
+                let key = format!("send-{n}");
+                messages =
+                    messages.put(key.clone(), message(&key, Role::User, MessageSource::Sent));
+                user_uuids.insert(key, "u".to_owned());
+            }
+            let turn = MessageSource::Turn {
+                command_uuid: "u".into(),
+            };
+            messages = messages.put("turn".into(), message("turn", Role::Assistant, turn));
+            let transcript = Transcript {
+                messages,
+                user_uuids,
+                ..Transcript::default()
+            };
+
+            assert_eq!(Some("send-0".to_owned()), ask_key_of(&transcript, "turn"));
+        }
+    }
 }

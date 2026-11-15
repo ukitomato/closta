@@ -20,6 +20,7 @@ use closta_presenter::transcript::Transcript;
 use serde_json::{Value, json};
 
 use nodes::collection_node;
+pub use nodes::{attachment_node, other_node};
 
 /// The tree of one thread `thread_id`: `{"threads":{"order":[…],"byId":{…}}}`. The host names the
 /// thread before the first turn, so the id is the host's and must be a tree key.

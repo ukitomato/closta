@@ -125,15 +125,27 @@ pub(crate) fn replace_routing(transcript: &Arc<Transcript>, routing: Routing) ->
 /// maps entry by entry even when they share their root, so each table that is the very one on the
 /// other side is taken as equal without a walk (Kotlin's `equals` stops at identity the same way).
 fn same_routing(a: &Routing, b: &Routing) -> bool {
-    a.current_turn == b.current_turn
-        && a.open_resume == b.open_resume
-        && a.streaming == b.streaming
-        && a.sends == b.sends
-        && (a.turns.ptr_eq(&b.turns) || a.turns == b.turns)
-        && (a.stopping.ptr_eq(&b.stopping) || a.stopping == b.stopping)
-        && (a.stopped.ptr_eq(&b.stopped) || a.stopped == b.stopped)
-        && (a.anthropic.ptr_eq(&b.anthropic) || a.anthropic == b.anthropic)
-        && (a.tools.ptr_eq(&b.tools) || a.tools == b.tools)
+    // Destructured whole, so a field added to `Routing` and not compared here does not compile.
+    let Routing {
+        current_turn,
+        open_resume,
+        streaming,
+        turns,
+        sends,
+        stopping,
+        stopped,
+        anthropic,
+        tools,
+    } = a;
+    *current_turn == b.current_turn
+        && *open_resume == b.open_resume
+        && *streaming == b.streaming
+        && *sends == b.sends
+        && (turns.ptr_eq(&b.turns) || *turns == b.turns)
+        && (stopping.ptr_eq(&b.stopping) || *stopping == b.stopping)
+        && (stopped.ptr_eq(&b.stopped) || *stopped == b.stopped)
+        && (anthropic.ptr_eq(&b.anthropic) || *anthropic == b.anthropic)
+        && (tools.ptr_eq(&b.tools) || *tools == b.tools)
 }
 
 /// Replaces the part `key` of the message at `location` with `change` of it.

@@ -1,10 +1,12 @@
 //! Folds one input into the [`Transcript`] (TranscriptFold.kt).
 
 mod commands;
+mod operations;
 pub mod paths;
 pub mod routing;
 pub mod sign_in;
 pub mod snapshot;
+mod stop;
 pub mod stream;
 pub mod suggestions;
 
@@ -16,17 +18,21 @@ use closta_model::{
 use serde_json::Value;
 
 use crate::fold::commands::{fold_commands_of_init, fold_commands_of_response};
-use crate::fold::paths::{replace_routing, with_routing};
+use crate::fold::operations::{fold_operation, with_operations};
+use crate::fold::paths::replace_routing;
+use crate::fold::stop::{fold_stop, stop_taken};
 use crate::fold::suggestions::suggestions_of;
 use crate::input::{AnswerFailed, Decided, PresenterInput, UserSent};
 use crate::json::parse;
 use crate::keyed::{Keyed, of_cli_id};
 use crate::records::composer::fold_answered;
+use crate::records::history::fold_history;
+use crate::records::operations::Answer;
 use crate::records::tasks::fold_background;
 use crate::records::turn_end::with_turn_end;
 use crate::transcript::{
     ApprovalOutcome, ApprovalRecord, MessageRecord, MessageSource, PartRecord, ResumeEnd, Role,
-    Routing, TextRecord, Transcript,
+    TextRecord, Transcript,
 };
 
 /// Folds one input into the [`Transcript`]. A pure function that never panics: an event it has
@@ -53,7 +59,6 @@ pub fn fold_transcript(
         PresenterInput::FilesFound(_) | PresenterInput::TurnChangesFound(_) => {
             fold_answered(transcript, input)
         }
-        // foldOperation
         PresenterInput::ControlRequested(_)
         | PresenterInput::ControlSendFailed(_)
         | PresenterInput::EffortRefused(_)
@@ -63,12 +68,13 @@ pub fn fold_transcript(
         | PresenterInput::RewindRequested(_)
         | PresenterInput::RewindNotSent(_)
         | PresenterInput::ResumeRefused(_)
-        | PresenterInput::AttachmentRefused(_) => Arc::clone(transcript),
-        // foldHistory
+        | PresenterInput::AttachmentRefused(_) => fold_operation(transcript, input),
         PresenterInput::SessionsListed(_)
         | PresenterInput::Restored(_)
         | PresenterInput::HistoryRestored(_)
-        | PresenterInput::HistoryUnavailable => Arc::clone(transcript),
+        | PresenterInput::HistoryUnavailable => {
+            fold_history(transcript, input, before, after, fold_event)
+        }
     }
 }
 
@@ -84,24 +90,28 @@ fn fold_event(
             state,
             ..
         } => fold_lifecycle(transcript, command_uuid, state),
-        // OperationRecords.resulted is still to come, between fold_result and stop_taken.
         AgentEvent::Result {
             user_message_uuid,
             duration_ms,
             is_error,
             result,
+            model_usage,
             ..
-        } => stop_taken(&fold_result(
-            transcript,
-            &ResultFacts {
-                user_message_uuid: user_message_uuid.as_deref(),
-                duration_ms: *duration_ms,
-                is_error: *is_error,
-                result,
-            },
-            before,
-            after,
-        )),
+        } => {
+            let closed = fold_result(
+                transcript,
+                &ResultFacts {
+                    user_message_uuid: user_message_uuid.as_deref(),
+                    duration_ms: *duration_ms,
+                    is_error: *is_error,
+                    result,
+                },
+                before,
+                after,
+            );
+            let counted = with_operations(&closed, closed.operations.resulted(model_usage));
+            stop_taken(&counted)
+        }
         AgentEvent::StreamEvent {
             event,
             parent_tool_use_id,
@@ -150,14 +160,37 @@ fn fold_event(
             },
             after,
         ),
-        // OperationRecords.answered is still to come, ahead of fold_commands_of_response.
         AgentEvent::ControlResponse {
-            response, subtype, ..
-        } => fold_commands_of_response(transcript, response, subtype.as_deref()),
-        // OperationRecords.compacted
-        AgentEvent::SystemCompactBoundary { .. } => Arc::clone(transcript),
-        // OperationRecords.statusSaid
-        AgentEvent::SystemStatus { .. } => Arc::clone(transcript),
+            response,
+            request_id,
+            subtype,
+            error,
+        } => {
+            let answer = Answer {
+                request_id: request_id.as_deref(),
+                subtype: subtype.as_deref(),
+                response,
+                error: error.as_deref(),
+            };
+            let answered = with_operations(transcript, transcript.operations.answered(&answer));
+            fold_commands_of_response(&answered, response, subtype.as_deref())
+        }
+        AgentEvent::SystemCompactBoundary {
+            compact_metadata, ..
+        } => with_operations(
+            transcript,
+            transcript.operations.compacted(compact_metadata),
+        ),
+        AgentEvent::SystemStatus {
+            status,
+            permission_mode,
+            ..
+        } => with_operations(
+            transcript,
+            transcript
+                .operations
+                .status_said(status.as_deref(), permission_mode.as_deref()),
+        ),
         AgentEvent::SystemInit { slash_commands, .. } => {
             fold_commands_of_init(transcript, slash_commands)
         }
@@ -496,44 +529,4 @@ pub(crate) fn outcome_of(ask: bool, decision: &ApprovalDecision) -> ApprovalOutc
         ApprovalDecision::Allow { .. } if ask => ApprovalOutcome::Cancelled,
         ApprovalDecision::Allow { .. } => ApprovalOutcome::Approved,
     }
-}
-
-/// Keeps the turns open now, which the next `result` ends; with none open, the transcript is the
-/// same `Arc` (HostOperations.kt).
-fn fold_stop(transcript: &Arc<Transcript>, conversation: &ConversationState) -> Arc<Transcript> {
-    let routing = &transcript.routing;
-    let open: Vec<&String> = conversation
-        .turns
-        .iter()
-        .filter(|turn| {
-            turn.phase == TurnPhase::Open && !routing.stopped.contains(&turn.command_uuid)
-        })
-        .map(|turn| &turn.command_uuid)
-        .collect();
-    if open.is_empty() {
-        return Arc::clone(transcript);
-    }
-    let mut routing = routing.clone();
-    for uuid in open {
-        routing.stopping.insert(uuid.clone());
-    }
-    with_routing(transcript, routing)
-}
-
-/// A `result` after a stop: the turns open at the stop are over, whatever turn the `result` named
-/// (HostOperations.kt).
-fn stop_taken(transcript: &Arc<Transcript>) -> Arc<Transcript> {
-    let routing = &transcript.routing;
-    if routing.stopping.is_empty() {
-        return Arc::clone(transcript);
-    }
-    let stopped = routing.stopped.clone().union(routing.stopping.clone());
-    replace_routing(
-        transcript,
-        Routing {
-            stopped,
-            stopping: imbl::HashSet::new(),
-            ..routing.clone()
-        },
-    )
 }

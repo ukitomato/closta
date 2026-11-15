@@ -6,6 +6,7 @@ use std::sync::Arc;
 use closta_model::RawJson;
 use serde_json::Value;
 
+use crate::fold::operations::with_operations;
 use crate::json::{JsonFields, parse};
 use crate::records::composer::{SlashCommands, commands_of_init, commands_of_response};
 use crate::records::operations::{OperationRecords, models_of_response};
@@ -51,14 +52,7 @@ pub(crate) fn fold_commands_of_response(
         start_permission_mode: mode.or_else(|| operations.start_permission_mode.clone()),
         ..OperationRecords::clone(operations)
     };
-    if updated == **operations {
-        with_commands
-    } else {
-        Arc::new(Transcript {
-            operations: Arc::new(updated),
-            ..Transcript::clone(&with_commands)
-        })
-    }
+    with_operations(&with_commands, updated)
 }
 
 /// `system/init` names the commands only; it is used while no `initialize` response has given the

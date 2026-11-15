@@ -134,7 +134,7 @@ pub(crate) fn text_node(record: &TextRecord, status: Option<Status>) -> Value {
 /// claim fields it lacks, and one without a type names nothing, so both show as `unknown`.
 const KNOWN_PART_TYPES: [&str; 4] = ["text", "reasoning", "tool-call", "attachment"];
 
-pub(crate) fn other_node(record: &OtherRecord) -> Value {
+pub fn other_node(record: &OtherRecord) -> Value {
     let kind = if record.r#type.is_empty() || KNOWN_PART_TYPES.contains(&record.r#type.as_str()) {
         "unknown"
     } else {
@@ -145,7 +145,7 @@ pub(crate) fn other_node(record: &OtherRecord) -> Value {
 
 /// The part of the tree for an attachment: its name, kind, media type and size, and nothing of
 /// its content (AttachmentRecords.kt's `attachmentNode`).
-pub(crate) fn attachment_node(record: &AttachmentRecord) -> Value {
+pub fn attachment_node(record: &AttachmentRecord) -> Value {
     let kind = match record.kind {
         AttachmentKind::Image => "image",
         AttachmentKind::Document => "document",
