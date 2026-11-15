@@ -34,6 +34,7 @@ pub(crate) fn fold_stop(
 }
 
 /// A `result` after a stop: the turns open at the stop are over, whatever turn the `result` named
+/// (HostOperations.kt).
 pub(crate) fn stop_taken(transcript: &Arc<Transcript>) -> Arc<Transcript> {
     let routing = &transcript.routing;
     if routing.stopping.is_empty() {

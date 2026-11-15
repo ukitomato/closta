@@ -9,7 +9,8 @@ use serde_json::Value;
 use crate::fold::operations::with_operations;
 use crate::json::{JsonFields, parse};
 use crate::records::composer::{SlashCommands, commands_of_init, commands_of_response};
-use crate::records::operations::{OperationRecords, models_of_response};
+use crate::records::operations::OperationRecords;
+use crate::records::readings::models_of_response;
 use crate::transcript::Transcript;
 
 const SUCCESS: &str = "success";

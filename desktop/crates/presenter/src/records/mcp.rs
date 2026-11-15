@@ -233,3 +233,42 @@ impl OperationRecords {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Each case is what the regex `[A-Za-z][A-Za-z0-9+.\-]*://[^\s"'<>)\]]*` matches, leftmost
+    // first, with each match cleaned.
+
+    #[test]
+    fn a_scheme_starts_at_its_first_letter_so_leading_digits_stay_outside_the_url() {
+        assert_eq!("a 9http://x b", mcp_sentence("a 9http://u@x?q b"));
+    }
+
+    #[test]
+    fn a_run_with_no_letter_is_no_scheme_and_stays_as_it_is() {
+        assert_eq!("see 1-2://u@x?q now", mcp_sentence("see 1-2://u@x?q now"));
+    }
+
+    #[test]
+    fn two_urls_on_one_line_are_each_cleaned() {
+        assert_eq!(
+            "a https://h/x and ftp://g/y end",
+            mcp_sentence("a https://u@h/x?q and ftp://p@g/y#f end")
+        );
+    }
+
+    #[test]
+    fn a_url_ends_at_a_closing_bracket_or_a_quote() {
+        assert_eq!(
+            r#"(https://h/x) [https://h/y] 'https://h/z' "https://h/w""#,
+            mcp_sentence(r#"(https://h/x?q) [https://h/y?q] 'https://h/z?q' "https://h/w?q""#)
+        );
+    }
+
+    #[test]
+    fn a_scheme_right_after_a_non_ascii_character_starts_at_its_letter() {
+        assert_eq!("éhttps://h/x", mcp_sentence("éhttps://u@h/x?q"));
+    }
+}

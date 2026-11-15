@@ -446,7 +446,7 @@ fn the_attachment_rules() {
 }
 
 #[test]
-fn a_name_is_measured_in_code_points_so_255_emoji_fit_and_256_do_not() {
+fn a_name_is_measured_in_code_points_so_251_emoji_and_txt_fit_and_252_do_not() {
     // Each emoji is two UTF-16 units but one code point: Kotlin counts code points
     // (`codePointCount`), not the string's length.
     let fits = format!("{}.txt", "😀".repeat(AttachmentLimits::MAX_NAME_CHARS - 4));

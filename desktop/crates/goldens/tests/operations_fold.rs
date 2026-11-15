@@ -3,8 +3,7 @@
 //! off a capture's own lines or folded from the host's inputs.
 //!
 //! Kotlin checks that a usage request leaves the tree the same object, which only its
-//! `ProjectionMemo` keeps; the memo is not ported, so that test checks the transcript is the same
-//! `Arc` and the tree is equal.
+//! `ProjectionMemo` keeps; the memo is not ported, so that test checks the tree is equal.
 
 use std::sync::Arc;
 

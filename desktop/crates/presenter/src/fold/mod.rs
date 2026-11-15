@@ -161,18 +161,12 @@ fn fold_event(
             after,
         ),
         AgentEvent::ControlResponse {
-            response,
-            request_id,
-            subtype,
-            error,
+            response, subtype, ..
         } => {
-            let answer = Answer {
-                request_id: request_id.as_deref(),
-                subtype: subtype.as_deref(),
-                response,
-                error: error.as_deref(),
-            };
-            let answered = with_operations(transcript, transcript.operations.answered(&answer));
+            let answered = Answer::of(event).map_or_else(
+                || Arc::clone(transcript),
+                |answer| with_operations(transcript, transcript.operations.answered(&answer)),
+            );
             fold_commands_of_response(&answered, response, subtype.as_deref())
         }
         AgentEvent::SystemCompactBoundary {

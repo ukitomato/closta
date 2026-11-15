@@ -5,6 +5,7 @@ pub mod composer;
 pub mod history;
 pub mod mcp;
 pub mod operations;
+pub mod readings;
 pub mod rewind;
 pub mod tasks;
 pub mod turn_end;
