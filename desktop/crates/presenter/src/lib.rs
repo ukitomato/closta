@@ -12,6 +12,7 @@ pub mod rewind_refusal;
 pub mod rewind_targets;
 pub mod rows;
 pub mod session;
+pub mod sessions;
 pub mod text;
 pub mod thread_running;
 pub mod tool_line;
