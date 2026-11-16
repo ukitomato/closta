@@ -102,8 +102,9 @@ pub fn steps() -> Vec<Step> {
 
 /// `cargo xtask perf`: the wall-clock budgets (`#[ignore = "perf"]`), built in release and run
 /// one at a time so they do not time each other. They stay out of `check`: they measure time.
-/// Only tests named `within_budget` run. nextest serialises tests under `--no-capture`, which is
-/// what runs them one at a time.
+/// Only tests named `within_budget` run: a perf test without `within_budget` in its name never
+/// runs, and `every_perf_test_is_named_within_budget` stops one. nextest serialises tests under
+/// `--no-capture`, which is what runs them one at a time.
 pub fn perf_steps() -> Vec<Step> {
     vec![locked_cargo(
         "perf",
@@ -210,6 +211,57 @@ mod tests {
         ] {
             assert!(args.windows(2).any(|it| it == pair), "{pair:?}");
         }
+    }
+
+    /// The `.rs` files under `dir`, at any depth.
+    fn rust_files(dir: &Path, found: &mut Vec<std::path::PathBuf>) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                rust_files(&path, found);
+            } else if path.extension().is_some_and(|it| it == "rs") {
+                found.push(path);
+            }
+        }
+    }
+
+    #[test]
+    fn every_perf_test_is_named_within_budget() {
+        let crates = Path::new(env!("CARGO_MANIFEST_DIR")).join("../crates");
+        let mut files = Vec::new();
+        for krate in std::fs::read_dir(&crates).unwrap() {
+            let krate = krate.unwrap().path();
+            rust_files(&krate.join("src"), &mut files);
+            rust_files(&krate.join("tests"), &mut files);
+        }
+        let mut names = Vec::new();
+        for file in &files {
+            let text = std::fs::read_to_string(file).unwrap();
+            let mut lines = text.lines();
+            while let Some(line) = lines.next() {
+                if line.trim() != "#[ignore = \"perf\"]" {
+                    continue;
+                }
+                let name = lines
+                    .by_ref()
+                    .find_map(|it| it.split_once("fn ").map(|(_, rest)| rest))
+                    .and_then(|rest| rest.split('(').next())
+                    .unwrap_or_else(|| panic!("{}: a perf test without a fn", file.display()));
+                names.push((file.display().to_string(), name.to_owned()));
+            }
+        }
+        assert!(!names.is_empty(), "no perf test under {}", crates.display());
+        let unnamed: Vec<_> = names
+            .iter()
+            .filter(|(_, name)| !name.contains("within_budget"))
+            .collect();
+        assert!(
+            unnamed.is_empty(),
+            "perf tests `cargo xtask perf` never runs: {unnamed:?}"
+        );
     }
 
     #[test]
