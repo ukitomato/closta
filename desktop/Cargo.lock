@@ -884,6 +884,7 @@ version = "0.1.0"
 dependencies = [
  "closta-model",
  "imbl",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -931,6 +932,7 @@ dependencies = [
 name = "closta-providers"
 version = "0.1.0"
 dependencies = [
+ "base64 0.23.1",
  "closta-core",
  "closta-model",
  "serde",

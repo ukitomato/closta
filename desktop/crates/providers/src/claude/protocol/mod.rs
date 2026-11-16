@@ -1,6 +1,7 @@
 //! Turns one stream-json stdout line into an [`AgentEvent`]. Mirrors `StreamJsonCodec.decode` in
 //! StreamJsonCodec.kt.
 
+pub mod encode;
 mod fields;
 mod json;
 
