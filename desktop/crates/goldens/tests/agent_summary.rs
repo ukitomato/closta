@@ -5,6 +5,7 @@ use std::sync::Arc;
 use closta_goldens::replay::replay;
 use closta_model::RawJson;
 use closta_presenter::fold::snapshot::{fold_user, tool_result_duration};
+use closta_presenter::rows::{ThreadRow, ThreadRows};
 use closta_presenter::tool_line::{AgentSummary, agent_summary};
 use closta_presenter::transcript::{MessageRecord, PartRecord, ToolCallRecord, ToolResult};
 use serde_json::json;
@@ -118,4 +119,25 @@ fn only_a_sub_agents_call_takes_a_duration() {
         .collect();
     assert_eq!(1, found.len());
     assert_eq!(None, found[0].result.as_ref().and_then(|it| it.duration_ms));
+}
+
+#[test]
+fn a_sub_agent_row_says_what_it_does_and_how_many_tools_it_called() {
+    let steps = replay("08-subagent-task");
+    let rows = ThreadRows::default().of(&steps.last().expect("a step").view.transcript);
+    let agents: Vec<Option<AgentSummary>> = rows
+        .iter()
+        .filter_map(|row| match row {
+            ThreadRow::Tool(it) if it.tool_name == "Agent" => Some(it.agent.clone()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        vec![Some(AgentSummary {
+            description: Some("Read NOTES.md and summarize".into()),
+            tools: 1,
+            duration_ms: Some(3705),
+        })],
+        agents
+    );
 }

@@ -1,5 +1,4 @@
-//! The plan card and what answering it sends (PlanApprovalTest.kt). `cardFollowsGoChange` goes
-//! through the rows and moves with them.
+//! The plan card and what answering it sends (PlanApprovalTest.kt).
 
 use std::sync::Arc;
 
@@ -9,8 +8,9 @@ use closta_presenter::cards::plan::{PlanCard, PlanChoice, PlanGo, plan_answer, p
 use closta_presenter::cards::{ThreadCard, allow_payload, card_of};
 use closta_presenter::json::JsonFields;
 use closta_presenter::records::operations::OperationRecords;
+use closta_presenter::rows::{ThreadRow, ThreadRows};
 use closta_presenter::text::kt_is_blank;
-use closta_presenter::transcript::{ApprovalOutcome, ApprovalRecord};
+use closta_presenter::transcript::{ApprovalOutcome, ApprovalRecord, Transcript};
 use serde_json::{Value, json};
 
 fn approvals() -> Vec<ApprovalRecord> {
@@ -242,4 +242,34 @@ fn plan_debug_leaves_out_the_plan_and_the_comment() {
     let go = format!("{:?}", plan_answer(&card, &approval, PlanChoice::Go, ""));
     assert!(!go.contains(&plan));
     assert!(go.ends_with(", acceptEdits)"), "{go}");
+}
+
+#[test]
+fn card_follows_go_change() {
+    let steps = replay("29-exit-plan-mode");
+    let transcript = &steps.last().expect("a step").view.transcript;
+    let mut rows = ThreadRows::default();
+    fn go_of(rows: &[ThreadRow]) -> PlanGo {
+        let plans: Vec<PlanGo> = rows
+            .iter()
+            .filter_map(|row| match row {
+                ThreadRow::Card(card) => match &card.card {
+                    ThreadCard::Plan(plan) => Some(plan.go),
+                    _ => None,
+                },
+                _ => None,
+            })
+            .collect();
+        assert_eq!(1, plans.len(), "{plans:?}");
+        plans[0]
+    }
+    assert_eq!(PlanGo::Auto, go_of(&rows.of(transcript)));
+    let refused = Transcript {
+        operations: Arc::new(OperationRecords {
+            auto_rejected: true,
+            ..OperationRecords::clone(&transcript.operations)
+        }),
+        ..Transcript::clone(transcript)
+    };
+    assert_eq!(PlanGo::AcceptEdits, go_of(&rows.of(&refused)));
 }

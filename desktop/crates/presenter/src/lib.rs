@@ -8,6 +8,8 @@ pub mod keyed;
 pub mod records;
 pub mod refusal_sentence;
 pub mod rewind_refusal;
+pub mod rewind_targets;
+pub mod rows;
 pub mod session;
 pub mod text;
 pub mod thread_running;

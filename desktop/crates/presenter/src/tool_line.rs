@@ -454,4 +454,35 @@ mod tests {
                 .as_deref()
         );
     }
+
+    #[test]
+    fn explored_counts_files_not_calls() {
+        use crate::rows::{ExploredRow, ToolRow};
+
+        fn row(key: &str, name: &str, input: &[(&str, &str)]) -> Arc<ToolRow> {
+            let made = call(name, input, None);
+            Arc::new(ToolRow {
+                key: key.into(),
+                line: tool_line(&made),
+                tool_use_id: format!("t-{key}"),
+                tool_name: name.into(),
+                depth: 0,
+                opens: false,
+                detail: Some(tool_detail(&made)),
+                agent: None,
+            })
+        }
+        let explored = ExploredRow {
+            key: "k1".into(),
+            members: vec![
+                row("k1", "Read", &[("file_path", "/a/A.kt")]),
+                row("k2", "Read", &[("file_path", "/a/A.kt")]),
+                row("k3", "Grep", &[("pattern", "login")]),
+            ],
+            depth: 0,
+            opens: false,
+        };
+        assert_eq!(2, explored.files());
+        assert_eq!(3, explored.lines().len());
+    }
 }

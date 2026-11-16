@@ -1,5 +1,4 @@
 //! Permission and question cards, and what answering them sends (ThreadCardsTest.kt).
-//! `approvalCardFollowsItsAnchorMessage` goes through the rows and moves with them.
 
 use std::sync::Arc;
 
@@ -12,6 +11,7 @@ use closta_presenter::cards::{
     allow_payload, answer_payload, card_of, passed_on, with_destination,
 };
 use closta_presenter::json::{JsonFields, TOO_DEEP, compact, parse};
+use closta_presenter::rows::{ThreadRow, ThreadRows};
 use closta_presenter::tool_line::tool_detail;
 use closta_presenter::transcript::{ApprovalRecord, SuggestionRecord, ToolCallRecord};
 use serde_json::{Value, json};
@@ -484,4 +484,24 @@ fn a_card_reads_an_input_that_is_not_an_object_as_none() {
     assert_eq!(Vec::<InputField>::new(), card.input_fields);
     assert_eq!(None, passed_on(&approval, &[]).input);
     assert_eq!(r#"["x"]"#, allow_payload(&approval));
+}
+
+#[test]
+fn approval_card_follows_its_anchor_message() {
+    let steps = replay("05-permission-can-use-tool");
+    let transcript = &steps.last().expect("a step").view.transcript;
+    let rows = ThreadRows::default().of(transcript);
+    let card = rows
+        .iter()
+        .position(|it| matches!(it, ThreadRow::Card(_)))
+        .expect("a card row");
+    assert!(card > 0);
+    let anchor = transcript
+        .approvals
+        .values()
+        .next()
+        .expect("an approval")
+        .anchor
+        .clone();
+    assert_eq!(anchor.as_deref(), rows[card - 1].key().split('/').next());
 }
