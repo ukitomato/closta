@@ -339,8 +339,9 @@ pub fn compact(value: &Value) -> String {
 /// `JsonText.pretty` writes — two spaces per level, `": "` after a name, an empty object or
 /// array as `{}` or `[]` — with the escapes of [`compact`]. serde_json's pretty printer writes
 /// exactly that; `pretty_lays_out_like_json_text` pins it.
+#[allow(clippy::expect_used)]
 pub fn pretty(value: &Value) -> String {
-    serde_json::to_string_pretty(value).unwrap_or_default()
+    serde_json::to_string_pretty(value).expect("serialising a Value cannot fail")
 }
 
 const UNSAFE_SEGMENTS: [&str; 3] = ["__proto__", "constructor", "prototype"];

@@ -157,9 +157,8 @@ pub fn running_tasks(transcript: &Transcript) -> Vec<RunningTask> {
     // Each parent's children in list order; the map is only looked up, never iterated.
     let mut children: StdHashMap<&str, Vec<&BackgroundTaskRecord>> = StdHashMap::new();
     for task in shown.iter().copied().filter(|it| is_listed(it)) {
-        if let Some(parent) = task.parent_task_id.as_deref() {
-            children.entry(parent).or_default().push(task);
-        }
+        let parent = task.parent_task_id.as_deref().unwrap_or_default();
+        children.entry(parent).or_default().push(task);
     }
     let mut placer = Placer {
         background,

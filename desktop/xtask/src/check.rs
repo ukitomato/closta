@@ -228,6 +228,44 @@ mod tests {
         }
     }
 
+    /// The names of the functions marked `#[ignore = "perf"]` in `text`, however the attribute is
+    /// spaced; the name is on the first later line that starts a fn, skipping comments and
+    /// attributes.
+    fn perf_test_names(text: &str) -> Vec<String> {
+        let mut names = Vec::new();
+        let mut lines = text.lines();
+        while let Some(line) = lines.next() {
+            let squeezed: String = line.split_whitespace().collect();
+            if !(line.trim_start().starts_with("#[")
+                && squeezed.contains("ignore")
+                && squeezed.contains("\"perf\""))
+            {
+                continue;
+            }
+            let name = lines
+                .by_ref()
+                .map(str::trim)
+                .filter(|it| !it.starts_with("//") && !it.starts_with("#["))
+                .find_map(|it| {
+                    ["fn ", "pub fn ", "async fn ", "pub async fn "]
+                        .iter()
+                        .find_map(|prefix| it.strip_prefix(prefix))
+                })
+                .and_then(|rest| rest.split(['(', '<']).next())
+                .unwrap_or_else(|| panic!("a perf test without a fn"));
+            names.push(name.trim().to_owned());
+        }
+        names
+    }
+
+    #[test]
+    fn the_perf_scanner_reads_any_spacing_and_skips_comments() {
+        let text = "#[test]\n#[ignore=\"perf\"]\n/// Runs a fn the budget names.\n// fn decoy() {}\n\
+                    #[allow(dead_code)]\npub fn slow_within_budget() {}\n\
+                    #[ignore = \"other\"]\nfn not_perf() {}\n";
+        assert_eq!(perf_test_names(text), ["slow_within_budget"]);
+    }
+
     #[test]
     fn every_perf_test_is_named_within_budget() {
         let crates = Path::new(env!("CARGO_MANIFEST_DIR")).join("../crates");
@@ -240,17 +278,8 @@ mod tests {
         let mut names = Vec::new();
         for file in &files {
             let text = std::fs::read_to_string(file).unwrap();
-            let mut lines = text.lines();
-            while let Some(line) = lines.next() {
-                if line.trim() != "#[ignore = \"perf\"]" {
-                    continue;
-                }
-                let name = lines
-                    .by_ref()
-                    .find_map(|it| it.split_once("fn ").map(|(_, rest)| rest))
-                    .and_then(|rest| rest.split('(').next())
-                    .unwrap_or_else(|| panic!("{}: a perf test without a fn", file.display()));
-                names.push((file.display().to_string(), name.to_owned()));
+            for name in perf_test_names(&text) {
+                names.push((file.display().to_string(), name));
             }
         }
         assert!(!names.is_empty(), "no perf test under {}", crates.display());

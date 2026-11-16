@@ -292,6 +292,7 @@ impl ThreadRows {
             rows.extend(made.iter().cloned());
             next_messages.insert(by_ptr(message), made);
             if transcript.sign_in.as_deref() == Some(message.key.as_str()) {
+                // Rebuilt on every `of`, as Kotlin builds a new data class each time.
                 rows.push(ThreadRow::SignIn(Arc::new(SignInRow {
                     key: format!("{}/sign-in", message.key),
                 })));
