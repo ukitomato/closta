@@ -5,6 +5,7 @@ pub mod fold;
 pub mod input;
 pub mod json;
 pub mod keyed;
+pub mod mcp_rows;
 pub mod records;
 pub mod refusal_sentence;
 pub mod rewind_refusal;
