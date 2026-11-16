@@ -516,3 +516,55 @@ fn a_sub_agents_rows_are_its_own_messages_however_deep_its_call() {
     assert!(agent_transcript(&transcript, "no-such-call").is_none());
     assert!(agent_rows(&transcript, "no-such-call").is_empty());
 }
+
+fn text_part(words: &str) -> Arc<PartRecord> {
+    Arc::new(PartRecord::Text(TextRecord {
+        text: words.into(),
+        ..TextRecord::default()
+    }))
+}
+
+fn message(key: &str, parts: Keyed<PartRecord>) -> Arc<MessageRecord> {
+    Arc::new(MessageRecord {
+        key: key.into(),
+        role: Role::Assistant,
+        source: MessageSource::Nested,
+        parts,
+    })
+}
+
+/// A message kept whole once still hands its part rows on: when a part is added to it later, the
+/// parts it had keep the rows made the first time.
+#[test]
+fn a_message_reused_once_still_keeps_its_part_rows_when_it_grows() {
+    let parts = Keyed::new().put("p1".into(), text_part("first"));
+    let kept = message("m", parts.clone());
+    let first = Transcript {
+        messages: Keyed::new().put("m".into(), Arc::clone(&kept)),
+        ..Transcript::default()
+    };
+    let same = Transcript {
+        messages: first
+            .messages
+            .put("other".into(), message("other", Keyed::new())),
+        ..Transcript::default()
+    };
+    let grown = Transcript {
+        messages: Keyed::new().put(
+            "m".into(),
+            message("m", parts.put("p2".into(), text_part("second"))),
+        ),
+        ..Transcript::default()
+    };
+    let mut rows = ThreadRows::default();
+    let made = rows.of(&first);
+    let reused = rows.of(&same);
+    assert!(made[0].same(&reused[0]), "the message is the same Arc");
+    let after = rows.of(&grown);
+
+    assert_eq!(
+        vec!["m/p1", "m/p2"],
+        after.iter().map(ThreadRow::key).collect::<Vec<_>>()
+    );
+    assert!(made[0].same(&after[0]), "{:?}", after[0]);
+}

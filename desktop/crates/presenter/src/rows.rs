@@ -589,3 +589,59 @@ fn find_call<'a>(
             }
         })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::transcript::{MessageSource, TextRecord};
+
+    fn text(words: &str) -> Arc<PartRecord> {
+        Arc::new(PartRecord::Text(TextRecord {
+            text: words.into(),
+            ..TextRecord::default()
+        }))
+    }
+
+    fn with(parts: Keyed<PartRecord>) -> Transcript {
+        let message = MessageRecord {
+            key: "m".into(),
+            role: Role::Assistant,
+            source: MessageSource::Nested,
+            parts,
+        };
+        Transcript {
+            messages: Keyed::new().put("m".into(), Arc::new(message)),
+            ..Transcript::default()
+        }
+    }
+
+    // No row is drawn for it either way, so only the table shows that it was looked at once and
+    // that a reused message carries it on.
+    #[test]
+    fn a_blank_part_is_remembered_as_making_no_row() {
+        let blank = text(" \n\t");
+        let parts = Keyed::new()
+            .put("b".into(), Arc::clone(&blank))
+            .put("t".into(), text("words"));
+        let first = with(parts.clone());
+        let mut rows = ThreadRows::default();
+
+        let made = rows.of(&first);
+        assert_eq!(
+            vec!["m/t"],
+            made.iter().map(ThreadRow::key).collect::<Vec<_>>()
+        );
+        assert!(made[0].opens(), "the first row of the message opens it");
+        assert_eq!(Some(&None), rows.parts.get(&by_ptr(&blank)));
+
+        rows.of(&first);
+        assert_eq!(Some(&None), rows.parts.get(&by_ptr(&blank)), "carried");
+
+        let grown = rows.of(&with(parts.put("u".into(), text("more"))));
+        assert_eq!(
+            vec!["m/t", "m/u"],
+            grown.iter().map(ThreadRow::key).collect::<Vec<_>>()
+        );
+        assert_eq!(Some(&None), rows.parts.get(&by_ptr(&blank)));
+    }
+}
