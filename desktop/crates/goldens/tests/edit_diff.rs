@@ -1,9 +1,11 @@
 //! The diff a permission card shows for an `Edit` or a `Write`, and the sides the diff viewer
-//! shows (EditDiffTest.kt). `anEditCardCarriesItsDiff` moves with the cards.
+//! shows (EditDiffTest.kt).
 
 use std::collections::HashSet;
 
 use closta_goldens::replay::replay;
+use closta_presenter::cards::plan::PlanGo;
+use closta_presenter::cards::{ThreadCard, card_of};
 use closta_presenter::edit_diff::{
     DIFF_MAX_LINES, DiffKind, DiffLine, EditDiff, content_after, diff_sides, edit_diff,
 };
@@ -262,4 +264,17 @@ fn edit_diff_debug_leaves_out_the_path_and_lines() {
     let shown = format!("{diff:?}");
     assert_eq!("EditDiff(+1 -1, 2 lines, cut=false)", shown);
     assert!(!shown.contains("secret") && !shown.contains("password"));
+}
+
+#[test]
+fn an_edit_card_carries_its_diff() {
+    let steps = replay("17-edit-approval");
+    let transcript = &steps.last().unwrap().view.transcript;
+    let approvals: Vec<_> = transcript.approvals.values().collect();
+    assert_eq!(1, approvals.len());
+    let ThreadCard::Permission(card) = card_of(approvals[0], PlanGo::Auto) else {
+        panic!("not a permission card");
+    };
+    assert!(card.diff.is_some());
+    assert_eq!(edit_diff("Edit", approvals[0].input.as_deref()), card.diff);
 }

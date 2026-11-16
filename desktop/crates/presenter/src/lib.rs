@@ -1,3 +1,4 @@
+pub mod cards;
 pub mod composer_state;
 pub mod edit_diff;
 pub mod fold;
