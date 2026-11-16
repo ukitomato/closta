@@ -2,6 +2,7 @@
 //! lists (RunningTasks.kt). The fold keeps the last list whole (the CLI replaces it every time)
 //! and the last progress of each.
 
+use std::collections::{HashMap as StdHashMap, HashSet};
 use std::sync::Arc;
 
 use closta_model::AgentEvent;
@@ -53,6 +54,15 @@ pub struct RunningTask {
 
 /// The tools that start a subagent.
 pub const AGENT_TOOLS: [&str; 2] = ["Agent", "Task"];
+
+/// What a row says for the CLI's own `task_type`; any other type is said as it is.
+fn kind_of(task_type: &str) -> &str {
+    match task_type {
+        "local_agent" => "agent",
+        "local_bash" => "shell",
+        other => other,
+    }
+}
 
 /// Folds the CLI's lists of what runs in the background (`foldBackground`): the whole list of
 /// `background_tasks_changed`, the last `task_progress` of each task, and the call `task_started`
@@ -129,4 +139,76 @@ fn tasks_of(text: &str) -> Option<Arc<[BackgroundTaskRecord]>> {
             })
             .collect(),
     )
+}
+
+/// What runs now, parents first and each child right under its parent, one step further in.
+/// Ambient tasks (watchers, not activity) are left out; a parent the list does not hold is no
+/// parent.
+pub fn running_tasks(transcript: &Transcript) -> Vec<RunningTask> {
+    let background = &transcript.background;
+    let shown: Vec<&BackgroundTaskRecord> =
+        background.live.iter().filter(|it| !it.ambient).collect();
+    let ids: HashSet<&str> = shown.iter().map(|it| it.task_id.as_str()).collect();
+    let is_listed = |task: &BackgroundTaskRecord| {
+        task.parent_task_id
+            .as_deref()
+            .is_some_and(|parent| ids.contains(parent))
+    };
+    // Each parent's children in list order; the map is only looked up, never iterated.
+    let mut children: StdHashMap<&str, Vec<&BackgroundTaskRecord>> = StdHashMap::new();
+    for task in shown.iter().copied().filter(|it| is_listed(it)) {
+        let parent = task.parent_task_id.as_deref().unwrap_or_default();
+        children.entry(parent).or_default().push(task);
+    }
+    let mut placer = Placer {
+        background,
+        children: &children,
+        placed: HashSet::new(),
+        out: Vec::with_capacity(shown.len()),
+    };
+    for task in shown.iter().copied().filter(|it| !is_listed(it)) {
+        placer.place(task, 0);
+    }
+    // A loop of parents (which the CLI should never send) still shows each task once.
+    for task in shown.iter().copied() {
+        placer.place(task, 0);
+    }
+    placer.out
+}
+
+struct Placer<'a> {
+    background: &'a BackgroundTasks,
+    children: &'a StdHashMap<&'a str, Vec<&'a BackgroundTaskRecord>>,
+    placed: HashSet<&'a str>,
+    out: Vec<RunningTask>,
+}
+
+impl<'a> Placer<'a> {
+    // Depth first with an explicit stack, so a long chain of children cannot overflow the stack.
+    fn place(&mut self, task: &'a BackgroundTaskRecord, depth: i32) {
+        let mut stack = vec![(task, depth)];
+        while let Some((task, depth)) = stack.pop() {
+            if !self.placed.insert(task.task_id.as_str()) {
+                continue;
+            }
+            let progress = self.background.progress.get(&task.task_id);
+            self.out.push(RunningTask {
+                task_id: task.task_id.clone(),
+                title: task.description.clone(),
+                kind: kind_of(&task.task_type).to_owned(),
+                detail: progress.map(|it| it.last_tool_name.clone()),
+                depth,
+                elapsed_ms: progress.and_then(|it| it.duration_ms),
+                tool_use_id: self
+                    .background
+                    .tool_use_ids
+                    .get(&task.task_id)
+                    .cloned()
+                    .or_else(|| progress.and_then(|it| it.tool_use_id.clone())),
+            });
+            if let Some(children) = self.children.get(task.task_id.as_str()) {
+                stack.extend(children.iter().rev().map(|child| (*child, depth + 1)));
+            }
+        }
+    }
 }

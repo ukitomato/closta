@@ -319,8 +319,11 @@ fn update_where<T: Clone>(
     applies: impl Fn(&T) -> bool,
     mut change: impl FnMut(&mut T),
 ) {
-    let picked: Vec<usize> = (0..items.len())
-        .filter(|index| items.get(*index).is_some_and(&applies))
+    let picked: Vec<usize> = items
+        .iter()
+        .enumerate()
+        .filter(|(_, item)| applies(item))
+        .map(|(index, _)| index)
         .collect();
     for index in picked {
         if let Some(item) = items.get_mut(index) {

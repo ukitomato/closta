@@ -1,15 +1,23 @@
+pub mod cards;
 pub mod composer_state;
+pub mod edit_diff;
 pub mod fold;
 pub mod input;
 pub mod json;
 pub mod keyed;
+pub mod mcp_rows;
 pub mod records;
 pub mod refusal_sentence;
 pub mod rewind_refusal;
+pub mod rewind_targets;
+pub mod rows;
 pub mod session;
+pub mod sessions;
 pub mod text;
 pub mod thread_running;
+pub mod tool_line;
 pub mod transcript;
+pub mod visible;
 
 use closta_model::AppInfo;
 

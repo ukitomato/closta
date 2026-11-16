@@ -1,6 +1,5 @@
-//! How each turn ended and what the host found it changed, as the transcript keeps them
-//! (TurnEndTest.kt). Kotlin reads them through `ThreadRows`, the IDE's native rows, which are not
-//! ported; these tests read the transcript the rows are made from.
+//! How each turn ended and what the host found it changed (TurnEndTest.kt): as the transcript
+//! keeps them, and as the rows show them, which is where Kotlin reads them.
 
 use std::sync::Arc;
 
@@ -9,6 +8,7 @@ use closta_goldens::replay::replay;
 use closta_model::AgentEvent;
 use closta_presenter::input::{PresenterInput, SendId, TurnChangesFound, UserSent};
 use closta_presenter::records::turn_end::{ChangedFile, TurnEndRecord};
+use closta_presenter::rows::{ThreadRow, ThreadRows, TurnEndRow};
 use closta_presenter::session::SessionView;
 
 fn sent(ask: &str, uuid: Option<&str>) -> PresenterInput {
@@ -187,4 +187,165 @@ fn the_files_a_turn_changed_are_what_the_host_saw_and_a_later_finding_replaces_t
             .files
             .is_empty()
     );
+}
+
+// The same, as the rows show them.
+
+fn ends(rows: &[ThreadRow]) -> Vec<Arc<TurnEndRow>> {
+    rows.iter()
+        .filter_map(|row| match row {
+            ThreadRow::TurnEnd(it) => Some(Arc::clone(it)),
+            _ => None,
+        })
+        .collect()
+}
+
+fn ends_of(view: &SessionView) -> Vec<Arc<TurnEndRow>> {
+    ends(&ThreadRows::default().of(&view.transcript))
+}
+
+#[test]
+fn a_turn_end_row_follows_each_finished_turn() {
+    let steps = replay("01-baseline-text");
+    let duration = steps
+        .iter()
+        .find_map(|step| match &step.input {
+            PresenterInput::Event(AgentEvent::Result { duration_ms, .. }) => Some(*duration_ms),
+            _ => None,
+        })
+        .expect("a result");
+    let rows = ThreadRows::default().of(&steps.last().expect("a step").view.transcript);
+    let Some(ThreadRow::TurnEnd(end)) = rows.last() else {
+        panic!("the last row is not a turn end: {:?}", rows.last())
+    };
+    assert_eq!(Some(duration), end.duration_ms);
+    assert_eq!("send-1", end.ask_key);
+    assert_eq!(None, end.changes);
+}
+
+#[test]
+fn a_turn_end_row_waits_for_changes() {
+    let view = turn("a", SessionView::default());
+    let before = ends_of(&view);
+    assert_eq!(1, before.len());
+    assert_eq!(None, before[0].changes);
+
+    let found = changes(&view, "a", vec![file("src/A.kt", 2)]);
+    let after = ends_of(&found);
+    assert_eq!(1, after.len());
+    assert_eq!(Some(1), after[0].changes.as_ref().map(|it| it.files.len()));
+}
+
+#[test]
+fn an_interrupted_turn_has_one_turn_end_row() {
+    let transcript = &replay("19-interrupt-background")
+        .pop()
+        .expect("a step")
+        .view
+        .transcript;
+    let asks: Vec<String> = ends(&ThreadRows::default().of(transcript))
+        .iter()
+        .map(|it| it.ask_key.clone())
+        .collect();
+    assert_eq!(vec!["send-1"], asks);
+}
+
+#[test]
+fn a_running_turn_has_no_turn_end_row() {
+    let running = opened("b", turn("a", SessionView::default()));
+    let rows = ThreadRows::default().of(&running.transcript);
+    let asks: Vec<String> = ends(&rows).iter().map(|it| it.ask_key.clone()).collect();
+    assert_eq!(vec!["a"], asks);
+    assert!(!matches!(rows.last(), Some(ThreadRow::TurnEnd(_))));
+}
+
+#[test]
+fn a_turn_end_row_has_the_files_the_host_saw() {
+    let files = vec![
+        ChangedFile {
+            path: "z/Last.kt".into(),
+            added: 0,
+            removed: 4,
+            created: false,
+            deleted: true,
+            revertable: true,
+            counted: true,
+        },
+        ChangedFile {
+            path: "a/First.kt".into(),
+            added: 9,
+            removed: 0,
+            created: true,
+            deleted: false,
+            revertable: true,
+            counted: true,
+        },
+        ChangedFile {
+            path: "README.md".into(),
+            added: 1,
+            removed: 1,
+            created: false,
+            deleted: false,
+            revertable: true,
+            counted: true,
+        },
+    ];
+    let view = changes(&turn("a", SessionView::default()), "a", files.clone());
+    let end = ends_of(&view);
+    assert_eq!(1, end.len());
+    assert_eq!(
+        Some(files.as_slice()),
+        end[0].changes.as_ref().map(|it| &*it.files)
+    );
+}
+
+#[test]
+fn each_turn_ends_after_its_own_reply() {
+    let view = turn("b", turn("a", SessionView::default()));
+    let rows = ThreadRows::default().of(&view.transcript);
+    let kinds: Vec<&str> = rows
+        .iter()
+        .map(|row| match row {
+            ThreadRow::Ask(_) => "Ask",
+            ThreadRow::Text(_) => "Text",
+            ThreadRow::TurnEnd(_) => "TurnEnd",
+            _ => "other",
+        })
+        .collect();
+    assert_eq!(
+        vec!["Ask", "Text", "TurnEnd", "Ask", "Text", "TurnEnd"],
+        kinds
+    );
+    let asks: Vec<String> = ends(&rows).iter().map(|it| it.ask_key.clone()).collect();
+    assert_eq!(vec!["a", "b"], asks);
+}
+
+#[test]
+fn a_turn_end_row_keeps_its_identity() {
+    let mut rows = ThreadRows::default();
+    let next = opened("b", turn("a", SessionView::default()));
+    let first = ends(&rows.of(&next.transcript));
+    assert_eq!(1, first.len());
+    let closed_b = ends(&rows.of(&closed(next.clone(), "b").transcript));
+    assert!(Arc::ptr_eq(&first[0], &closed_b[0]));
+    let found = changes(&next, "a", Vec::new());
+    let changed = ends(&rows.of(&found.transcript));
+    assert!(!Arc::ptr_eq(&first[0], &changed[0]));
+}
+
+#[test]
+fn only_a_turn_followed_by_another_ask_offers_rewind() {
+    let mut rows = ThreadRows::default();
+    let alone = turn("a", SessionView::default());
+    let last = ends(&rows.of(&alone.transcript));
+    assert_eq!(1, last.len());
+    assert!(!last[0].followed);
+
+    let next = turn("b", alone);
+    let both = ends(&rows.of(&next.transcript));
+    assert_eq!(
+        vec![true, false],
+        both.iter().map(|it| it.followed).collect::<Vec<_>>()
+    );
+    assert!(!Arc::ptr_eq(&last[0], &both[0]));
 }

@@ -102,8 +102,9 @@ pub fn steps() -> Vec<Step> {
 
 /// `cargo xtask perf`: the wall-clock budgets (`#[ignore = "perf"]`), built in release and run
 /// one at a time so they do not time each other. They stay out of `check`: they measure time.
-/// Only tests named `within_budget` run. nextest serialises tests under `--no-capture`, which is
-/// what runs them one at a time.
+/// Only tests named `within_budget` run: a perf test without `within_budget` in its name never
+/// runs, and `every_perf_test_is_named_within_budget` stops one. nextest serialises tests under
+/// `--no-capture`, which is what runs them one at a time.
 pub fn perf_steps() -> Vec<Step> {
     vec![locked_cargo(
         "perf",
@@ -210,6 +211,86 @@ mod tests {
         ] {
             assert!(args.windows(2).any(|it| it == pair), "{pair:?}");
         }
+    }
+
+    /// The `.rs` files under `dir`, at any depth.
+    fn rust_files(dir: &Path, found: &mut Vec<std::path::PathBuf>) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                rust_files(&path, found);
+            } else if path.extension().is_some_and(|it| it == "rs") {
+                found.push(path);
+            }
+        }
+    }
+
+    /// The names of the functions marked `#[ignore = "perf"]` in `text`, however the attribute is
+    /// spaced; the name is on the first later line that starts a fn, skipping comments and
+    /// attributes.
+    fn perf_test_names(text: &str) -> Vec<String> {
+        let mut names = Vec::new();
+        let mut lines = text.lines();
+        while let Some(line) = lines.next() {
+            let squeezed: String = line.split_whitespace().collect();
+            if !(line.trim_start().starts_with("#[")
+                && squeezed.contains("ignore")
+                && squeezed.contains("\"perf\""))
+            {
+                continue;
+            }
+            let name = lines
+                .by_ref()
+                .map(str::trim)
+                .filter(|it| !it.starts_with("//") && !it.starts_with("#["))
+                .find_map(|it| {
+                    ["fn ", "pub fn ", "async fn ", "pub async fn "]
+                        .iter()
+                        .find_map(|prefix| it.strip_prefix(prefix))
+                })
+                .and_then(|rest| rest.split(['(', '<']).next())
+                .unwrap_or_else(|| panic!("a perf test without a fn"));
+            names.push(name.trim().to_owned());
+        }
+        names
+    }
+
+    #[test]
+    fn the_perf_scanner_reads_any_spacing_and_skips_comments() {
+        let text = "#[test]\n#[ignore=\"perf\"]\n/// Runs a fn the budget names.\n// fn decoy() {}\n\
+                    #[allow(dead_code)]\npub fn slow_within_budget() {}\n\
+                    #[ignore = \"other\"]\nfn not_perf() {}\n";
+        assert_eq!(perf_test_names(text), ["slow_within_budget"]);
+    }
+
+    #[test]
+    fn every_perf_test_is_named_within_budget() {
+        let crates = Path::new(env!("CARGO_MANIFEST_DIR")).join("../crates");
+        let mut files = Vec::new();
+        for krate in std::fs::read_dir(&crates).unwrap() {
+            let krate = krate.unwrap().path();
+            rust_files(&krate.join("src"), &mut files);
+            rust_files(&krate.join("tests"), &mut files);
+        }
+        let mut names = Vec::new();
+        for file in &files {
+            let text = std::fs::read_to_string(file).unwrap();
+            for name in perf_test_names(&text) {
+                names.push((file.display().to_string(), name));
+            }
+        }
+        assert!(!names.is_empty(), "no perf test under {}", crates.display());
+        let unnamed: Vec<_> = names
+            .iter()
+            .filter(|(_, name)| !name.contains("within_budget"))
+            .collect();
+        assert!(
+            unnamed.is_empty(),
+            "perf tests `cargo xtask perf` never runs: {unnamed:?}"
+        );
     }
 
     #[test]

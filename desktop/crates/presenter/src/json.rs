@@ -335,6 +335,15 @@ pub fn compact(value: &Value) -> String {
     value.to_string()
 }
 
+/// The pretty JSON text of a value, for goldens, diffs and a tool's input: what
+/// `JsonText.pretty` writes — two spaces per level, `": "` after a name, an empty object or
+/// array as `{}` or `[]` — with the escapes of [`compact`]. serde_json's pretty printer writes
+/// exactly that; `pretty_lays_out_like_json_text` pins it.
+#[allow(clippy::expect_used)]
+pub fn pretty(value: &Value) -> String {
+    serde_json::to_string_pretty(value).expect("serialising a Value cannot fail")
+}
+
 const UNSAFE_SEGMENTS: [&str; 3] = ["__proto__", "constructor", "prototype"];
 
 /// Whether `key` can name an entity in a collection: an op addresses the entity through its key,
@@ -510,6 +519,17 @@ mod tests {
             compact(&value),
             r#"{"b":[1,{}],"a":[],"c":{"d":true,"e":null}}"#
         );
+    }
+
+    #[test]
+    fn pretty_lays_out_like_json_text() {
+        let value = parse(r#"{"a":[1,{}],"b":"x"}"#).unwrap();
+        assert_eq!(
+            pretty(&value),
+            "{\n  \"a\": [\n    1,\n    {}\n  ],\n  \"b\": \"x\"\n}"
+        );
+        assert_eq!(pretty(&json!([])), "[]");
+        assert_eq!(pretty(&json!("あ\u{1}")), "\"あ\\u0001\"");
     }
 
     #[test]

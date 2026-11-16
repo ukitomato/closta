@@ -10,7 +10,9 @@
 pub mod replay_script;
 pub mod stream_script;
 
+use closta_presenter::input::{PresenterInput, SendId, UserSent};
 use closta_presenter::text::{is_kt_whitespace, utf16_len};
+use closta_providers::claude::protocol::decode;
 use serde_json::{Value, json};
 
 use stream_script::StreamScript;
@@ -155,6 +157,30 @@ pub fn session(shape: &Shape, seed: u64) -> Vec<SyntheticTurn> {
                 prompt: format!("Request {}: {}", turn + 1, writer.paragraph(PROMPT_LENGTH)),
                 lines: script.lines(),
             }
+        })
+        .collect()
+}
+
+/// The session of `shape` (seed 1) as the presenter's inputs: each turn sends its prompt as
+/// `u<index>`, then its lines, decoded ahead so a budget times only what comes after.
+pub fn steps(shape: &Shape) -> Vec<PresenterInput> {
+    session(shape, 1)
+        .into_iter()
+        .enumerate()
+        .flat_map(|(index, turn)| {
+            let sent = PresenterInput::UserSent(UserSent {
+                message_id: SendId::new(&format!("u{index}"))
+                    .unwrap_or_else(|| panic!("u{index} is not a key")),
+                text: turn.prompt,
+                attachments: Vec::new(),
+                uuid: None,
+            });
+            std::iter::once(sent).chain(
+                turn.lines
+                    .iter()
+                    .map(|line| PresenterInput::Event(decode(line)))
+                    .collect::<Vec<_>>(),
+            )
         })
         .collect()
 }

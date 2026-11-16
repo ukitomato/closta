@@ -4,10 +4,9 @@
 
 use std::time::{Duration, Instant};
 
-use closta_goldens::synthetic::{self, DOUBLED, LARGEST, Shape};
-use closta_presenter::input::{PresenterInput, SendId, UserSent};
+use closta_goldens::synthetic::{self, DOUBLED, LARGEST};
+use closta_presenter::input::PresenterInput;
 use closta_presenter::session::SessionView;
-use closta_providers::claude::protocol::decode;
 
 const LONG_SESSION: usize = 5_000;
 const WARM_UP: usize = 3;
@@ -15,29 +14,6 @@ const RUNS: usize = 5;
 const SAMPLE: usize = 1_000;
 const SLACK: Duration = Duration::from_millis(20);
 const BUDGET: Duration = Duration::from_millis(150);
-
-/// Each turn sends its prompt, then folds its lines, decoded ahead of the timing.
-fn steps(shape: &Shape) -> Vec<PresenterInput> {
-    synthetic::session(shape, 1)
-        .into_iter()
-        .enumerate()
-        .flat_map(|(index, turn)| {
-            let sent = PresenterInput::UserSent(UserSent {
-                message_id: SendId::new(&format!("u{index}"))
-                    .unwrap_or_else(|| panic!("u{index} is not a key")),
-                text: turn.prompt,
-                attachments: Vec::new(),
-                uuid: None,
-            });
-            std::iter::once(sent).chain(
-                turn.lines
-                    .iter()
-                    .map(|line| PresenterInput::Event(decode(line)))
-                    .collect::<Vec<_>>(),
-            )
-        })
-        .collect()
-}
 
 /// Folds every step and returns the time each one took.
 fn timed(steps: &[PresenterInput]) -> Vec<Duration> {
@@ -60,7 +36,7 @@ fn sum(times: &[Duration]) -> Duration {
 fn fold_time_per_line_stays_flat() {
     // Twice the largest session, as one conversation: the ids are the generator's own, so none
     // repeats.
-    let steps = steps(&DOUBLED);
+    let steps = synthetic::steps(&DOUBLED);
     assert!(
         steps.len() > LONG_SESSION,
         "the conversation has {} lines",
@@ -82,7 +58,7 @@ fn fold_time_per_line_stays_flat() {
 #[ignore = "perf"]
 #[allow(clippy::print_stdout)]
 fn largest_fold_within_budget() {
-    let steps = steps(&LARGEST);
+    let steps = synthetic::steps(&LARGEST);
     for _ in 0..WARM_UP {
         timed(&steps);
     }
