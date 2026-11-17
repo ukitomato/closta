@@ -248,7 +248,8 @@ impl SessionCommands {
     /// Asks the CLI to put the files back as they were before the message the thread shows as
     /// `message_id`, or with `dry_run` what would change. It is recorded as pending before it
     /// is written, as [`SessionCommands::switch_model`] does. A message the view has no uuid
-    /// for (one that went away since the caller's check) is recorded as not sent.
+    /// for (one that went away since the caller's check) is recorded as not sent, and is `Ok`
+    /// even once the commands are revoked: nothing is sent, as in Kotlin.
     pub fn rewind_files(
         &self,
         command_id: &str,

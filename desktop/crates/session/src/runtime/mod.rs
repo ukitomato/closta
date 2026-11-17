@@ -44,7 +44,8 @@ pub const CLOSE_WAIT: Duration = Duration::from_secs(5);
 pub const KILL_WAIT: Duration = Duration::from_secs(2);
 
 /// The life of one session, for the platform to run in the background. It returns once the
-/// session has ended, failed or been closed.
+/// session has ended, failed or been closed. Dropping it kills the children but leaves the status
+/// as it was; the platform detaches it (stage 6).
 pub type SessionRun = future::Boxed<()>;
 
 /// What one session is started with.
@@ -248,14 +249,17 @@ impl SessionRuntime {
     /// pending until the new CLI's settings say whether the sandbox is on.
     ///
     /// From the mark on the session is Starting and its commands are revoked, so nothing more
-    /// is written to the CLI that is being stopped.
+    /// is written to the CLI that is being stopped. Commands revoked while the status still says
+    /// Running mean the process has ended: the run revokes them before it reads the mark, under
+    /// the same lock, so a mark is either read or refused, never left pending on an ended session.
     pub fn turn_sandbox_on(&self) -> bool {
         let id = uuid::Uuid::new_v4().to_string();
         let shared = &self.shared;
         // Under the store's lock, so two presses make one switch; the state's lock under it.
         shared.store.transition_with(|view| {
             let mut state = shared.state();
-            let running = matches!(state.status, SessionStatus::Running { .. });
+            let running = matches!(state.status, SessionStatus::Running { .. })
+                && state.commands.as_ref().is_some_and(|c| !c.is_revoked());
             if !running || state.restart_for.is_some() || pending_sandbox(&view) {
                 return (view, false);
             }
@@ -559,6 +563,11 @@ async fn run_process(
         let switch = start.switch.clone().unwrap_or_else(new_id);
         not_started(shared, switch, watch.detail());
     }
+    // A CLI that started and failed fails the session, a restart marked meanwhile or not (as in
+    // Kotlin's runProcess); the run then fails the marked switch.
+    if started && let PumpEnd::Failed(failure) = end {
+        return ProcessEnd::Over(Some(failed(&**spawner, SessionFailure::from_exit(failure))));
+    }
     // A restart marked while the process was ending is a restart all the same.
     if let Some(switch) = take_mark(shared, &signals.marked) {
         close(pump).await;
@@ -568,11 +577,9 @@ async fn run_process(
         close(pump).await;
         return ProcessEnd::NotStarted;
     }
-    ProcessEnd::Over(Some(match end {
-        PumpEnd::Failed(failure) => failed(&**spawner, SessionFailure::from_exit(failure)),
-        // The run holds the receiver of the events, so the pump is never abandoned.
-        PumpEnd::Ended | PumpEnd::Abandoned => SessionStatus::Ended,
-    }))
+    // A failure returned above; the run holds the receiver of the events, so the pump is never
+    // abandoned.
+    ProcessEnd::Over(Some(SessionStatus::Ended))
 }
 
 /// The switch of a restart once one is marked, taken from the state.

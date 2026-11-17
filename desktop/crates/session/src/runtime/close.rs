@@ -60,9 +60,13 @@ pub(super) async fn close_process(
             handle.destroy_forcibly();
             match within(&mut waiting, kill_wait).await {
                 // A killed CLI had no chance to flush its saved record.
-                Some(_) => log.warn(&format!(
+                Some(Ok(_)) => log.warn(&format!(
                     "claude session {id}: killed, the process ended; the end of its saved record \
                      may be missing"
+                )),
+                Some(Err(error)) => log.warn(&format!(
+                    "claude session {id}: killed, waiting for the process failed ({:?})",
+                    error.kind()
                 )),
                 None => log.warn(&format!(
                     "claude session {id}: the process did not end after a kill"

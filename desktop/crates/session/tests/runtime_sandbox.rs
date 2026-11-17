@@ -9,7 +9,8 @@ mod common;
 mod support;
 
 use std::future::Future;
-use std::sync::{Arc, Mutex};
+use std::io;
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use closta_model::AgentEvent;
@@ -18,21 +19,24 @@ use closta_presenter::records::operations::{SwitchKind, SwitchOutcome, SwitchRec
 use closta_presenter::refusal_sentence::plain_sentence_of;
 use closta_presenter::thread_running::thread_is_running;
 use closta_providers::claude::fake::live::{LiveControl, LiveOptions, LiveProcess};
+use closta_providers::claude::fake::process::{FakeProcess, ProcessScript};
 use closta_providers::claude::fake::spawner::FakeSpawner;
 use closta_providers::claude::launch::env::SecretEnv;
 use closta_providers::claude::launch::spec::SANDBOX_SETTINGS;
 use closta_providers::claude::launch::{Launch, LaunchError};
-use closta_providers::claude::process::{AgentProcess, ProcessSpawner};
+use closta_providers::claude::process::{AgentProcess, ProcessFailure, ProcessSpawner};
 use closta_providers::claude::protocol::encode;
 use closta_session::commands::SessionCommands;
 use closta_session::launch::{NativeSessionLaunchPlanner, SessionLaunchPlanner};
 use closta_session::runtime::SessionRuntime;
 use closta_session::sandbox::{carried_choices, restart_spec};
 use closta_session::status::SessionStatus;
-use futures_lite::future;
+use futures_lite::{StreamExt, future, stream};
 use smol::Timer;
 
-use support::{GUARD, ID, Processes, WORKING_DIR, drive, reach, runtime, runtime_over, until};
+use support::{
+    GUARD, ID, Processes, VERSION, WORKING_DIR, drive, reach, runtime, runtime_over, until,
+};
 
 const TURN: &str = "01-baseline-text.ndjson";
 const UNAVAILABLE: &str = "36-sandbox-unavailable.ndjson";
@@ -141,6 +145,123 @@ fn flag_value<'a>(args: &'a [String], flag: &str) -> Option<&'a str> {
 
 fn has_arg(args: &[String], arg: &str) -> bool {
     args.iter().any(|it| it == arg)
+}
+
+/// A line a CLI says once it has started.
+fn status_line() -> String {
+    format!(
+        r#"{{"type":"system","subtype":"status","status":"requesting","session_id":"{ID}","uuid":"u"}}"#
+    )
+}
+
+/// A [`LiveProcess`] whose stdout runs `hook` as it ends: what the hook does lands after the
+/// last line and before the pump sees the end, in the same poll, so the run reads it only
+/// after the process has settled.
+struct HookedEnd {
+    inner: LiveProcess,
+    hook: Arc<dyn Fn() + Send + Sync>,
+}
+
+impl AgentProcess for HookedEnd {
+    fn take_stdout_lines(&mut self) -> Option<stream::Boxed<Result<String, ProcessFailure>>> {
+        let lines = self.inner.take_stdout_lines()?;
+        let hook = Arc::clone(&self.hook);
+        let hooked = stream::unfold(Some(lines), move |open| {
+            let hook = Arc::clone(&hook);
+            async move {
+                let mut lines = open?;
+                match lines.next().await {
+                    Some(Ok(line)) => Some((Ok(line), Some(lines))),
+                    end => {
+                        hook();
+                        end.map(|failure| (failure, None))
+                    }
+                }
+            }
+        });
+        Some(hooked.boxed())
+    }
+
+    fn take_stderr_drain(&mut self) -> Option<future::Boxed<()>> {
+        self.inner.take_stderr_drain()
+    }
+
+    fn write_stdin(&self, line: String) -> future::Boxed<io::Result<()>> {
+        self.inner.write_stdin(line)
+    }
+
+    fn wait(&self) -> future::Boxed<io::Result<i32>> {
+        self.inner.wait()
+    }
+
+    fn destroy(&self) {
+        self.inner.destroy();
+    }
+
+    fn destroy_forcibly(&self) {
+        self.inner.destroy_forcibly();
+    }
+
+    fn id(&self) -> Option<u32> {
+        self.inner.id()
+    }
+}
+
+/// A spawner whose first session process turns the sandbox on as its stdout ends; the
+/// processes after it are plain [`LiveProcess`]es.
+struct MarkAtEnd {
+    spawner: Arc<FakeSpawner>,
+    /// The runtime the hook marks; set once it is made.
+    runtime: Arc<OnceLock<SessionRuntime>>,
+    /// What `turn_sandbox_on` returned in the hook, once it ran.
+    marked: Arc<Mutex<Option<bool>>>,
+    later: Arc<Mutex<Vec<LiveControl>>>,
+}
+
+impl MarkAtEnd {
+    fn new(first: LiveProcess) -> MarkAtEnd {
+        let runtime = Arc::new(OnceLock::<SessionRuntime>::new());
+        let marked = Arc::new(Mutex::new(None));
+        let later = Arc::new(Mutex::new(Vec::new()));
+        let first = Mutex::new(Some(first));
+        let (held, noted, kept) = (
+            Arc::clone(&runtime),
+            Arc::clone(&marked),
+            Arc::clone(&later),
+        );
+        let spawner = FakeSpawner::answering(move |launch: &Launch| {
+            if launch.args == ["--version"] {
+                let script = ProcessScript::replaying(vec![format!("{VERSION} (Claude Code)")]);
+                return Ok(Box::new(FakeProcess::new(script).0) as Box<dyn AgentProcess>);
+            }
+            if let Some(inner) = first.lock().unwrap().take() {
+                let (held, noted) = (Arc::clone(&held), Arc::clone(&noted));
+                let hook = Arc::new(move || {
+                    let runtime: &SessionRuntime = held.get().expect("the runtime is made");
+                    *noted.lock().unwrap() = Some(runtime.turn_sandbox_on());
+                });
+                return Ok(Box::new(HookedEnd { inner, hook }) as Box<dyn AgentProcess>);
+            }
+            let (process, control) = LiveProcess::new(LiveOptions::default());
+            kept.lock().unwrap().push(control);
+            Ok(Box::new(process) as Box<dyn AgentProcess>)
+        });
+        MarkAtEnd {
+            spawner: Arc::new(spawner),
+            runtime,
+            marked,
+            later,
+        }
+    }
+
+    fn session_args(&self) -> Vec<Vec<String>> {
+        self.spawner
+            .launches()
+            .into_iter()
+            .map(|launch| launch.args)
+            .filter(|args| args != &["--version"])
+            .collect()
+    }
 }
 
 #[test]
@@ -642,5 +763,113 @@ fn turning_the_sandbox_on_outside_running_does_nothing() {
         assert!(!closed.turn_sandbox_on());
         assert!(sandbox_switches(&closed).is_empty());
         assert_eq!(processes.session_args().len(), 1);
+    });
+}
+
+#[test]
+fn a_session_whose_commands_were_revoked_takes_no_sandbox_switch() {
+    drive(|executor| async move {
+        let processes = Processes::new();
+        let control = processes.prepare(LiveOptions::default());
+        let (runtime, run, _log) = runtime(&processes, |_| {});
+        let run = executor.spawn(run);
+        let commands = running_on(&runtime, &processes, 1).await;
+
+        // As the run does once it sees the process end, while the status still says Running: a
+        // switch marked from here on would outlive the session, pending on an Ended one.
+        commands.revoke();
+        assert!(running(&runtime.status()));
+        assert!(!runtime.turn_sandbox_on());
+        assert!(sandbox_switches(&runtime).is_empty());
+
+        control.exit(0);
+        within(run).await;
+        assert_eq!(runtime.status(), SessionStatus::Ended);
+        assert!(sandbox_switches(&runtime).is_empty());
+        assert_eq!(processes.session_args().len(), 1);
+    });
+}
+
+#[test]
+fn a_mark_read_after_the_process_settled_restarts() {
+    drive(|executor| async move {
+        let (first, control) = LiveProcess::new(LiveOptions::default());
+        let spawns = MarkAtEnd::new(first);
+        let (runtime, run, _log) = runtime_over(
+            Arc::clone(&spawns.spawner) as Arc<dyn ProcessSpawner>,
+            |_| {},
+        );
+        _ = spawns.runtime.set(runtime.clone());
+        let run = executor.spawn(run);
+        until(|| running(&runtime.status())).await;
+
+        control.exit(0);
+        until(|| running(&runtime.status()) && spawns.later.lock().unwrap().len() == 1).await;
+
+        assert_eq!(*spawns.marked.lock().unwrap(), Some(true));
+        let args = spawns.session_args();
+        assert_eq!(args.len(), 2, "{args:?}");
+        assert_eq!(flag_value(&args[1], "--settings"), Some(SANDBOX_SETTINGS));
+        let switches = sandbox_switches(&runtime);
+        assert_eq!(switches.len(), 1, "{switches:?}");
+        assert_eq!(switches[0].outcome, SwitchOutcome::Pending);
+        runtime.close();
+        within(run).await;
+    });
+}
+
+#[test]
+fn a_started_sandboxed_cli_that_fails_with_a_restart_marked_fails() {
+    drive(|executor| async move {
+        let (first, control) = LiveProcess::new(LiveOptions::default());
+        let spawns = MarkAtEnd::new(first);
+        let (runtime, run, _log) = runtime_over(
+            Arc::clone(&spawns.spawner) as Arc<dyn ProcessSpawner>,
+            |config| config.sandbox = true,
+        );
+        _ = spawns.runtime.set(runtime.clone());
+        let run = executor.spawn(run);
+        until(|| running(&runtime.status())).await;
+
+        // It said something, so it started; then it fails as the restart is marked. A failure
+        // wins over the mark, as in Kotlin's runProcess.
+        control.emit(&status_line());
+        control.exit(1);
+        within(run).await;
+
+        assert_eq!(*spawns.marked.lock().unwrap(), Some(true));
+        assert!(failed(&runtime.status()), "{:?}", runtime.status());
+        assert_eq!(spawns.session_args().len(), 1, "nothing was started again");
+        let switches = sandbox_switches(&runtime);
+        assert_eq!(switches.len(), 1, "{switches:?}");
+        assert_eq!(switches[0].outcome, SwitchOutcome::Failed);
+    });
+}
+
+#[test]
+fn a_pending_switch_is_closed_when_the_process_ends_well() {
+    drive(|executor| async move {
+        let processes = Processes::new();
+        processes.prepare(LiveOptions::default());
+        let second = processes.prepare(LiveOptions::default());
+        let (runtime, run, _log) = runtime(&processes, |_| {});
+        let run = executor.spawn(run);
+        running_on(&runtime, &processes, 1).await;
+
+        assert!(runtime.turn_sandbox_on());
+        running_on(&runtime, &processes, 2).await;
+        assert_eq!(
+            sandbox_switches(&runtime)[0].outcome,
+            SwitchOutcome::Pending
+        );
+        // The restarted CLI started, and ends with 0 before its settings are answered.
+        second.emit(&status_line());
+        second.exit(0);
+        within(run).await;
+
+        assert_eq!(runtime.status(), SessionStatus::Ended);
+        let switches = sandbox_switches(&runtime);
+        assert_eq!(switches.len(), 1, "{switches:?}");
+        assert_eq!(switches[0].outcome, SwitchOutcome::Failed);
     });
 }

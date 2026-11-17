@@ -871,6 +871,8 @@ fn revoked_commands_send_nothing_and_record_the_failure() {
     let model = &controls()[0];
     assert!(failed(model, &request_id) == store.view());
 
+    // Kotlin records the message and the stop, then throws; a revoked session records neither,
+    // so it shows no "stopping…" and no message that was never sent.
     let before = store.view();
     assert_eq!(
         Err(SendError::Closed),
@@ -882,6 +884,50 @@ fn revoked_commands_send_nothing_and_record_the_failure() {
         before == store.view(),
         "neither the message nor the stop is recorded"
     );
+
+    assert_eq!(Err(SendError::Closed), commands.stop_task("task-1"));
+    assert!(record.sent().is_empty());
+
+    // A rewind of a message with a uuid is asked, then fails on the record.
+    let (live, _record) = fake();
+    commands_on(live, &store)
+        .send_message(send_id("send-2"), "two", &[])
+        .expect("sent");
+    assert_eq!(
+        Err(SendError::Closed),
+        commands.rewind_files("c1", "send-2", false)
+    );
+    assert!(record.sent().is_empty());
+    let view = store.view();
+    let rewind = view
+        .transcript
+        .operations
+        .rewind
+        .as_ref()
+        .expect("a record");
+    assert!(rewind.request_id.is_some(), "it was asked");
+    assert_eq!(RewindOutcome::Failed, rewind.outcome);
+    assert_eq!(Some(REWIND_SEND_FAILED), rewind.detail.as_deref());
+
+    // An answer is not sent, and the approval stays open.
+    let store = store_with(&up_to_the_approval("05-permission-can-use-tool"));
+    let request_id = the_pending_request(&store);
+    let (session, record) = fake();
+    let commands = commands_on(session, &store);
+    commands.revoke();
+    assert_eq!(
+        Err(SendError::Closed),
+        commands.respond_to_approval(
+            &ApprovalDecision::Allow {
+                request_id: request_id.clone()
+            },
+            UNIX_EPOCH + Duration::from_millis(ASKED_MS),
+            Some("{}"),
+            PassedOn::default(),
+        )
+    );
+    assert!(record.sent().is_empty());
+    assert_eq!(request_id, the_pending_request(&store));
 }
 
 #[test]
