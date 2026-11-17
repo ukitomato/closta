@@ -2,6 +2,8 @@
 //! `ProcessSpawner` handed out a JDK `Process` that another type wrapped, while here the spawner
 //! hands out the [`AgentProcess`] itself.
 
+pub(crate) mod os;
+
 use std::io;
 use std::time::Duration;
 
@@ -13,6 +15,20 @@ use crate::claude::launch::{Launch, LaunchError};
 /// [`LaunchError::TooManyProcesses`], so that a bug that launches again and again stops at a
 /// number instead of at the system's process limit.
 pub const MAX_LIVE_CHILDREN: usize = 16;
+
+/// How many children started here are alive now. A child counts until its end has been seen by
+/// a wait or its box has been dropped, whichever comes first.
+pub fn live_children() -> usize {
+    os::live_children()
+}
+
+/// Starts `command` as an OS child, for the tests until a spawner builds the command itself.
+#[doc(hidden)]
+pub fn spawn_for_tests(
+    command: std::process::Command,
+) -> Result<Box<dyn AgentProcess>, LaunchError> {
+    os::start(command)
+}
 
 /// How long stdout may stay open after the child has ended (a grandchild holds it) before the
 /// whole group is killed. Kotlin has no such rule and waits for as long as the grandchild lives.

@@ -7,11 +7,12 @@
 
 use closta_core::fold;
 use closta_model::{AgentEvent, ConversationState};
+use closta_providers::claude::process::{self, AgentProcess};
 use closta_providers::claude::protocol::decode;
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 const MANIFEST: &str = "manifest.json";
 const CAPTURE_SUFFIX: &str = ".ndjson";
@@ -391,4 +392,48 @@ pub fn scenario_names() -> Vec<String> {
         .collect();
     names.sort();
     names
+}
+
+// `option_env!` because `closta-goldens` compiles this file as a library, where cargo sets neither
+// variable; only the providers' own tests can call these two.
+
+/// The fake CLI that cargo built next to these tests.
+pub fn fake_cli() -> PathBuf {
+    match option_env!("CARGO_BIN_EXE_closta-fake-claude") {
+        Some(path) => PathBuf::from(path),
+        None => panic!("only the providers' integration tests have the fake CLI"),
+    }
+}
+
+/// An empty folder of its own for one test, made again on every run.
+pub fn scratch_dir(name: &str) -> PathBuf {
+    let Some(tmp) = option_env!("CARGO_TARGET_TMPDIR") else {
+        panic!("only the providers' integration tests have a scratch folder")
+    };
+    let dir = PathBuf::from(tmp).join(name);
+    if dir.exists() {
+        std::fs::remove_dir_all(&dir).expect("the old scratch folder is removed");
+    }
+    std::fs::create_dir_all(&dir).expect("the scratch folder is made");
+    dir
+}
+
+/// Whether `pid` is a running process: it is in `/proc` and not a zombie.
+pub fn alive(pid: u32) -> bool {
+    let Ok(stat) = std::fs::read_to_string(format!("/proc/{pid}/stat")) else {
+        return false;
+    };
+    // The state follows the command name, which is in parentheses and may hold anything.
+    let state = stat
+        .rfind(')')
+        .and_then(|end| stat[end + 1..].trim_start().chars().next());
+    state.is_some_and(|state| state != 'Z')
+}
+
+/// Starts `program` as an OS child. The box kills it when dropped, also when a test fails.
+pub fn spawn_command(program: &Path, args: &[&str], env: &[(&str, &str)]) -> Box<dyn AgentProcess> {
+    let mut command = std::process::Command::new(program);
+    command.args(args);
+    command.envs(env.iter().copied());
+    process::spawn_for_tests(command).expect("the process starts")
 }

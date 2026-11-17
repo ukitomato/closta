@@ -2,3 +2,13 @@
 [[profile.default.overrides]]
 filter = 'test(fold_time_per_line_stays_flat)'
 threads-required = "num-test-threads"
+
+# Tests that start child processes. The fake CLI also starts grandchildren, so few run at once.
+[test-groups]
+child-processes = { max-threads = 4 }
+
+[[profile.default.overrides]]
+# One pattern: nextest refuses an operand that matches no binary, and `real_cli` comes later.
+filter = 'binary(/^process_|^real_cli$/)'
+test-group = 'child-processes'
+slow-timeout = { period = "60s", terminate-after = 2 }
