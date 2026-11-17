@@ -186,18 +186,23 @@ impl AgentSession for FakeAgentSession {
         })
     }
 
-    // The settings, effort and sandbox requests are accepted and not recorded: no test reads
-    // them (Kotlin kept them in lists of their own that nothing read either).
-    fn request_settings(&self, _request_id: &str) -> Result<(), SendError> {
-        Ok(())
+    fn request_settings(&self, request_id: &str) -> Result<(), SendError> {
+        self.push(Sent::RequestSettings {
+            request_id: request_id.to_string(),
+        })
     }
 
-    fn set_effort(&self, _effort: Option<&str>, _request_id: &str) -> Result<(), SendError> {
-        Ok(())
+    fn set_effort(&self, effort: Option<&str>, request_id: &str) -> Result<(), SendError> {
+        self.push(Sent::SetEffort {
+            effort: effort.map(str::to_string),
+            request_id: request_id.to_string(),
+        })
     }
 
-    fn turn_sandbox_off(&self, _request_id: &str) -> Result<(), SendError> {
-        Ok(())
+    fn turn_sandbox_off(&self, request_id: &str) -> Result<(), SendError> {
+        self.push(Sent::TurnSandboxOff {
+            request_id: request_id.to_string(),
+        })
     }
 
     fn request_mcp_status(&self, request_id: &str) -> Result<(), SendError> {

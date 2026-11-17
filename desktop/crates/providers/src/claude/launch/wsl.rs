@@ -243,6 +243,10 @@ impl ProcessSpawner for WslSpawner {
         let environment = child_environment(&self.inherited, &self.dropped, &launch.env);
         start_wsl(&command, environment)
     }
+
+    fn wsl_distro(&self) -> Option<&str> {
+        Some(self.distro())
+    }
 }
 
 /// Starts `wsl.exe` by its absolute path, with `environment` and `WSLENV` as its whole
@@ -445,6 +449,16 @@ mod tests {
             unavailable
         );
         assert_eq!(location.linux_directory_of(Some(r"C:\work")), unavailable);
+    }
+
+    #[test]
+    fn the_wsl_spawner_says_its_distribution() {
+        let spawner = WslSpawner::new(
+            at("Ubuntu-26.04", "/home/u/p"),
+            WslProgram::Claude,
+            BTreeSet::new(),
+        );
+        assert_eq!(spawner.wsl_distro(), Some("Ubuntu-26.04"));
     }
 
     #[test]

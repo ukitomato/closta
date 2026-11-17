@@ -371,3 +371,33 @@ fn the_fake_records_the_tasks_it_was_asked_to_stop_in_order_and_an_interrupt_is_
     );
     assert_eq!(vec![Sent::Interrupt], record.sent());
 }
+
+#[test]
+fn settings_effort_and_sandbox_off_requests_are_recorded() {
+    let (session, _events, _pump) = FakeAgentSession::start(FakeScript::new(beats_emitting(
+        &common::read_capture(BASELINE),
+    )));
+    session.request_settings("req-settings").unwrap();
+    session.set_effort(Some("high"), "req-effort").unwrap();
+    session.set_effort(None, "req-effort-default").unwrap();
+    session.turn_sandbox_off("req-sandbox-off").unwrap();
+    assert_eq!(
+        session.record().sent(),
+        [
+            Sent::RequestSettings {
+                request_id: "req-settings".to_string(),
+            },
+            Sent::SetEffort {
+                effort: Some("high".to_string()),
+                request_id: "req-effort".to_string(),
+            },
+            Sent::SetEffort {
+                effort: None,
+                request_id: "req-effort-default".to_string(),
+            },
+            Sent::TurnSandboxOff {
+                request_id: "req-sandbox-off".to_string(),
+            },
+        ]
+    );
+}
