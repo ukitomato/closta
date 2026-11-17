@@ -4,6 +4,7 @@
 
 pub mod clock;
 pub mod commands;
+pub mod launch;
 #[cfg_attr(
     not(test),
     expect(
@@ -13,6 +14,7 @@ pub mod commands;
 )]
 mod live;
 pub mod log;
+pub mod sandbox;
 pub mod status;
 pub mod store;
 
