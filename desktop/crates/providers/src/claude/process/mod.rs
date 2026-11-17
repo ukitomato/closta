@@ -74,4 +74,10 @@ pub trait ProcessSpawner: Send + Sync {
     /// Starts one process for `launch`. It is synchronous and on Windows takes up to a few
     /// seconds, so it must not run on the UI thread.
     fn spawn(&self, launch: &Launch) -> Result<Box<dyn AgentProcess>, LaunchError>;
+
+    /// The WSL distribution this spawner starts in, or `None` when it starts on the host. A
+    /// caller reads exit code 127 as a WSL failure by it.
+    fn wsl_distro(&self) -> Option<&str> {
+        None
+    }
 }

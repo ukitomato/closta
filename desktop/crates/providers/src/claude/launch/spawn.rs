@@ -78,7 +78,11 @@ impl NativeSpawner {
 
 impl ProcessSpawner for NativeSpawner {
     fn spawn(&self, launch: &Launch) -> Result<Box<dyn AgentProcess>, LaunchError> {
-        let mut command = std::process::Command::new(self.program_path()?);
+        let is_dir = |path: &str| Path::new(path).is_dir();
+        let program = self
+            .program_path()
+            .map_err(|failure| folder_first(failure, launch.cwd.as_deref(), &is_dir))?;
+        let mut command = std::process::Command::new(program);
         command
             .args(&launch.args)
             .env_clear()
@@ -90,14 +94,30 @@ impl ProcessSpawner for NativeSpawner {
         if let Some(cwd) = &launch.cwd {
             command.current_dir(cwd);
         }
-        // As Kotlin's `startIn`: the folder is named only when the start failed and it is not
-        // a folder, so a missing program in a present folder stays a plain failure.
-        os::start(command).map_err(|failure| match (&failure, &launch.cwd) {
-            (LaunchError::Spawn(_), Some(cwd)) if !Path::new(cwd).is_dir() => {
-                LaunchError::WorkingDirectoryMissing { path: cwd.clone() }
-            }
-            _ => failure,
-        })
+        os::start(command).map_err(|failure| folder_first(failure, launch.cwd.as_deref(), &is_dir))
+    }
+}
+
+/// `failure` as the user should see it first: a launch that could not find or start its program
+/// ([`LaunchError::Spawn`], [`LaunchError::CommandNotFound`], [`LaunchError::ScriptOnly`]) with a
+/// `cwd` that `is_dir` says is not a folder is [`LaunchError::WorkingDirectoryMissing`], since the
+/// folder is what to fix first. Anything else, and any failure in a present folder, is kept.
+///
+/// Kotlin's `startIn` applied the rule to a failed start only; here it covers the search for
+/// `claude.exe` too, so a missing worktree is named before a missing `claude`.
+pub fn folder_first(
+    failure: LaunchError,
+    cwd: Option<&str>,
+    is_dir: &dyn Fn(&str) -> bool,
+) -> LaunchError {
+    match (&failure, cwd) {
+        (
+            LaunchError::Spawn(_) | LaunchError::CommandNotFound | LaunchError::ScriptOnly,
+            Some(cwd),
+        ) if !is_dir(cwd) => LaunchError::WorkingDirectoryMissing {
+            path: cwd.to_owned(),
+        },
+        _ => failure,
     }
 }
 
@@ -141,6 +161,46 @@ mod tests {
     }
 
     const PATH: &str = "C:\\a;;\"C:\\b\\\"";
+
+    #[test]
+    fn a_missing_folder_wins_over_a_missing_claude() {
+        let no_folder = |_: &str| false;
+        let a_folder = |_: &str| true;
+        let missing = || LaunchError::WorkingDirectoryMissing {
+            path: "/gone".to_owned(),
+        };
+        for failure in [
+            LaunchError::CommandNotFound,
+            LaunchError::ScriptOnly,
+            LaunchError::Spawn(std::io::ErrorKind::NotFound),
+        ] {
+            assert_eq!(
+                folder_first(failure.clone(), Some("/gone"), &no_folder),
+                missing(),
+                "{failure:?} in a missing folder"
+            );
+            assert_eq!(
+                folder_first(failure.clone(), Some("/here"), &a_folder),
+                failure,
+                "{failure:?} in a present folder"
+            );
+            assert_eq!(
+                folder_first(failure.clone(), None, &no_folder),
+                failure,
+                "{failure:?} with no folder"
+            );
+        }
+        assert_eq!(
+            folder_first(LaunchError::TooManyProcesses, Some("/gone"), &no_folder),
+            LaunchError::TooManyProcesses
+        );
+    }
+
+    #[test]
+    fn the_native_spawner_is_not_wsl() {
+        let spawner = NativeSpawner::new(NativeProgram::Claude, BTreeSet::new());
+        assert_eq!(spawner.wsl_distro(), None);
+    }
 
     #[test]
     fn claude_exe_wins_and_scripts_alone_are_refused() {

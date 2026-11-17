@@ -954,6 +954,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "closta-session"
+version = "0.1.0"
+dependencies = [
+ "async-channel",
+ "async-io",
+ "blocking",
+ "closta-core",
+ "closta-model",
+ "closta-presenter",
+ "closta-providers",
+ "futures-lite",
+ "serde",
+ "serde_json",
+ "smol",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "cocoa"
 version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

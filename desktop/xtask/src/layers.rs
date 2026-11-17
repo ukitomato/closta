@@ -1,6 +1,6 @@
 //! Layer rules for the desktop workspace, checked by `cargo xtask layers`.
 //!
-//! 1. `model`, `core`, `presenter`, `providers` and `goldens` must not reach `gpui*`.
+//! 1. `model`, `core`, `presenter`, `providers`, `goldens` and `session` must not reach `gpui*`.
 //! 2. Workspace dependencies must follow the allow table.
 //! 3. `closta-model` must stay synchronous: no `async` or `.await`.
 
@@ -20,6 +20,7 @@ const GUI_FREE: &[&str] = &[
     "closta-presenter",
     "closta-providers",
     "closta-goldens",
+    "closta-session",
 ];
 
 /// Allowed direct workspace dependencies per crate.
@@ -38,13 +39,28 @@ const ALLOWED: &[(&str, &[&str])] = &[
         ],
     ),
     (
+        "closta-session",
+        &[
+            "closta-providers",
+            "closta-presenter",
+            "closta-core",
+            "closta-model",
+        ],
+    ),
+    (
         "closta-platform",
-        &["closta-presenter", "closta-core", "closta-model"],
+        &[
+            "closta-session",
+            "closta-presenter",
+            "closta-core",
+            "closta-model",
+        ],
     ),
     (
         "closta",
         &[
             "closta-platform",
+            "closta-session",
             "closta-providers",
             "closta-presenter",
             "closta-core",
@@ -454,6 +470,51 @@ mod tests {
         providers.workspace_deps.push("closta-providers".into());
         providers.closure.push("closta-providers".into());
         assert!(check_graph(&g).is_empty());
+    }
+
+    #[test]
+    fn closta_session_may_use_providers_and_presenter_and_the_platform_may_use_it() {
+        let mut g = clean();
+        g.push(pkg(
+            "closta-session",
+            &[
+                "closta-providers",
+                "closta-presenter",
+                "closta-core",
+                "closta-model",
+            ],
+            &["closta-providers", "closta-presenter", "tracing"],
+        ));
+        for name in ["closta-platform", "closta"] {
+            let p = g.iter_mut().find(|p| p.name == name).unwrap();
+            p.workspace_deps.push("closta-session".into());
+        }
+        assert!(check_graph(&g).is_empty(), "{:?}", check_graph(&g));
+
+        let session = |g: &[Package]| g.iter().position(|p| p.name == "closta-session").unwrap();
+        let mut gui = g.clone();
+        let i = session(&gui);
+        gui[i].closure.push("gpui".into());
+        let v = check_graph(&gui);
+        assert_eq!(v.len(), 1);
+        assert_eq!((v[0].rule, v[0].krate.as_str()), (1, "closta-session"));
+
+        let mut outward = g.clone();
+        let i = session(&outward);
+        outward[i].workspace_deps.push("closta-platform".into());
+        let v = check_graph(&outward);
+        assert_eq!(v.len(), 1);
+        assert_eq!((v[0].rule, v[0].krate.as_str()), (2, "closta-session"));
+
+        let mut inward = g.clone();
+        let p = inward
+            .iter_mut()
+            .find(|p| p.name == "closta-providers")
+            .unwrap();
+        p.workspace_deps.push("closta-session".into());
+        let v = check_graph(&inward);
+        assert_eq!(v.len(), 1);
+        assert_eq!((v[0].rule, v[0].krate.as_str()), (2, "closta-providers"));
     }
 
     #[test]

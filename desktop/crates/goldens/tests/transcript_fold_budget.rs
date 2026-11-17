@@ -45,12 +45,27 @@ fn fold_time_per_line_stays_flat() {
     for _ in 0..WARM_UP {
         timed(&steps);
     }
-    let times = timed(&steps);
-    let first = sum(&times[..SAMPLE]);
-    let last = sum(&times[times.len() - SAMPLE..]);
+    // Each window's best of several runs: a load spike slows one run, not every one.
+    let windows: Vec<(Duration, Duration)> = (0..RUNS)
+        .map(|_| {
+            let times = timed(&steps);
+            (sum(&times[..SAMPLE]), sum(&times[times.len() - SAMPLE..]))
+        })
+        .collect();
+    let first = windows
+        .iter()
+        .map(|(first, _)| *first)
+        .min()
+        .unwrap_or_default();
+    let last = windows
+        .iter()
+        .map(|(_, last)| *last)
+        .min()
+        .unwrap_or_default();
     assert!(
         last <= first * 2 + SLACK,
-        "the last {SAMPLE} lines took {last:?}, the first {SAMPLE} {first:?}"
+        "the last {SAMPLE} lines took {last:?} at best, the first {SAMPLE} {first:?}, over {RUNS} \
+         runs: {windows:?}"
     );
 }
 

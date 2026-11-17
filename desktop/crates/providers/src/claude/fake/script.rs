@@ -75,6 +75,16 @@ pub enum Sent {
     RequestContextUsage {
         request_id: String,
     },
+    RequestSettings {
+        request_id: String,
+    },
+    SetEffort {
+        effort: Option<String>,
+        request_id: String,
+    },
+    TurnSandboxOff {
+        request_id: String,
+    },
     RequestMcpStatus {
         request_id: String,
     },
