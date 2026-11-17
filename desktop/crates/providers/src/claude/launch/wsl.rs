@@ -2,10 +2,13 @@
 //! `WSLENV`. Mirrors WslLocation.kt and WslSpawner.kt; the command line replaces what IntelliJ's
 //! `patchCommandLine` built in IdeWsl.kt. Pure string rules, tested on any OS.
 
+use std::collections::BTreeSet;
+use std::ffi::OsString;
 use std::fmt;
 use std::path::PathBuf;
 
 use super::{Launch, LaunchError};
+use crate::claude::process::{AgentProcess, ProcessSpawner};
 
 /// The script `/bin/sh -c` runs first: it finds the user's login shell (one that reads `"$@"` the
 /// POSIX way, else `/bin/sh`) and has it `exec` the program with the arguments untouched, so
@@ -102,10 +105,116 @@ pub(super) fn same_ignoring_case(a: &str, b: &str) -> bool {
 }
 
 /// What runs inside the distribution: `claude` from the login shell's `PATH`, or a path (tests).
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum WslProgram {
     Claude,
     Path(String),
+}
+
+// Written by hand: a Linux path can name the user.
+impl fmt::Debug for WslProgram {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            WslProgram::Claude => f.write_str("Claude"),
+            WslProgram::Path(_) => f.write_str("Path(..)"),
+        }
+    }
+}
+
+/// The names of the installed WSL distributions. None are known yet: reading them from the
+/// registry comes with starting `wsl.exe`.
+pub fn installed_distros() -> Vec<String> {
+    Vec::new()
+}
+
+/// Starts the program in the distribution of a WSL project, through `wsl.exe`. Mirrors
+/// WslSpawner.kt. `wsl.exe` is not started yet: a launch whose distribution is installed still
+/// fails with [`LaunchError::WslUnavailable`].
+pub struct WslSpawner {
+    location: WslLocation,
+    program: WslProgram,
+    #[expect(
+        dead_code,
+        reason = "the environment of wsl.exe, which is not started yet"
+    )]
+    dropped: BTreeSet<String>,
+    inherited: Vec<(OsString, OsString)>,
+    installed: Option<Vec<String>>,
+}
+
+impl WslSpawner {
+    /// A spawner for `location` that inherits this process's environment as it is now.
+    pub fn new(
+        location: WslLocation,
+        program: WslProgram,
+        dropped: BTreeSet<String>,
+    ) -> WslSpawner {
+        WslSpawner {
+            location,
+            program,
+            dropped,
+            inherited: std::env::vars_os().collect(),
+            installed: None,
+        }
+    }
+
+    /// The same spawner taking `installed` as the installed distributions, instead of
+    /// [`installed_distros`] at each launch.
+    #[must_use]
+    pub fn with_installed(self, installed: Vec<String>) -> WslSpawner {
+        WslSpawner {
+            installed: Some(installed),
+            ..self
+        }
+    }
+
+    /// The distribution this spawner starts in.
+    pub fn distro(&self) -> &str {
+        &self.location.distro
+    }
+
+    fn inherited_var(&self, name: &str) -> Option<String> {
+        self.inherited
+            .iter()
+            .find(|(key, _)| key.to_string_lossy().eq_ignore_ascii_case(name))
+            .map(|(_, value)| value.to_string_lossy().into_owned())
+    }
+}
+
+// Only the distribution is named: nothing of a launch is in any string form.
+impl fmt::Debug for WslSpawner {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "WslSpawner(distro={})", self.location.distro)
+    }
+}
+
+impl ProcessSpawner for WslSpawner {
+    fn spawn(&self, launch: &Launch) -> Result<Box<dyn AgentProcess>, LaunchError> {
+        let unavailable = || LaunchError::WslUnavailable {
+            distro: self.location.distro.clone(),
+        };
+        let listed;
+        let installed = match &self.installed {
+            Some(installed) => installed,
+            None => {
+                listed = installed_distros();
+                &listed
+            }
+        };
+        let distro = distro_named(&self.location.distro, installed).ok_or_else(unavailable)?;
+        let system_root = self
+            .inherited_var("SystemRoot")
+            .unwrap_or_else(|| r"C:\Windows".to_owned());
+        let _command = wsl_command(
+            &self.location,
+            distro,
+            launch,
+            &self.program,
+            &system_root,
+            self.inherited_var("WSLENV").as_deref(),
+        )?;
+        Err(unavailable())
+    }
 }
 
 /// The `wsl.exe` process of one launch: the program, its arguments and the `WSLENV` to give it.
@@ -190,9 +299,9 @@ pub fn wslenv_value<'a>(inherited: Option<&str>, names: impl Iterator<Item = &'a
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::claude::launch::spec::{
-        CHECKPOINTING_ENV, LaunchSpec, SANDBOX_SETTINGS, TOOL_USE_PROMPT,
-    };
+    use crate::claude::launch::spec::{CHECKPOINTING_ENV, LaunchSpec};
+    #[cfg(unix)]
+    use crate::claude::launch::spec::{SANDBOX_SETTINGS, TOOL_USE_PROMPT};
 
     fn parse(path: &str) -> Option<WslLocation> {
         WslLocation::parse(Some(path), true)

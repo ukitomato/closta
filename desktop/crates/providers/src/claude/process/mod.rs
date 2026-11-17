@@ -22,14 +22,6 @@ pub fn live_children() -> usize {
     os::live_children()
 }
 
-/// Starts `command` as an OS child, for the tests until a spawner builds the command itself.
-#[doc(hidden)]
-pub fn spawn_for_tests(
-    command: std::process::Command,
-) -> Result<Box<dyn AgentProcess>, LaunchError> {
-    os::start(command)
-}
-
 /// How long stdout may stay open after the child has ended (a grandchild holds it) before the
 /// whole group is killed. Kotlin has no such rule and waits for as long as the grandchild lives.
 pub const STDOUT_GRACE: Duration = Duration::from_secs(2);

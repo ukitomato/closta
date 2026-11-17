@@ -108,7 +108,8 @@ pub fn within<T>(executor: &LocalExecutor<'_>, work: impl Future<Output = T>) ->
 
 /// Runs every task of `executor` until none can run: Kotlin's `yield` hand-off, made exact.
 /// Each check spawns one task, the pump, so it is never stolen into a runner's local queue
-/// where `try_tick` cannot see it.
+/// where `try_tick` cannot see it. The hand-off is guaranteed only when a single task is
+/// spawned; with two or more, one may be left in a local queue.
 pub fn settle(executor: &LocalExecutor<'_>) {
     while executor.try_tick() {}
 }

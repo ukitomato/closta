@@ -892,6 +892,7 @@ name = "closta-goldens"
 version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
+ "blocking",
  "closta-core",
  "closta-model",
  "closta-presenter",

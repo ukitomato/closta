@@ -1,6 +1,105 @@
-//! Starting `claude` directly on the host. For now only how `claude.exe` is found on Windows.
+//! Starting `claude` directly on the host: the native spawner and how `claude.exe` is found on
+//! Windows. Mirrors NativeProcessSpawner and FilteringProcessSpawner in ProcessSpawner.kt.
 
-use super::LaunchError;
+use std::collections::BTreeSet;
+use std::ffi::OsString;
+use std::fmt;
+use std::path::{Path, PathBuf};
+
+use super::env::child_environment;
+use super::{Launch, LaunchError};
+use crate::claude::process::{AgentProcess, ProcessSpawner, os};
+
+/// What a [`NativeSpawner`] runs: `claude`, or a program by its path (the fake CLI in tests).
+#[derive(Clone, PartialEq, Eq)]
+pub enum NativeProgram {
+    /// `claude` from the `PATH` of the child (Unix) or `claude.exe` from the inherited `PATH`
+    /// (Windows, see [`locate_claude_exe`]).
+    Claude,
+    Path(PathBuf),
+}
+
+// Written by hand: a path can name the user.
+impl fmt::Debug for NativeProgram {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            NativeProgram::Claude => f.write_str("Claude"),
+            NativeProgram::Path(_) => f.write_str("Path(..)"),
+        }
+    }
+}
+
+/// Starts the program on this host. The child gets an environment built here, never this
+/// process's own as it is: the one inherited without the `dropped` names, with the launch's env
+/// laid over it.
+pub struct NativeSpawner {
+    program: NativeProgram,
+    dropped: BTreeSet<String>,
+    inherited: Vec<(OsString, OsString)>,
+}
+
+impl NativeSpawner {
+    /// A spawner that inherits this process's environment as it is now.
+    pub fn new(program: NativeProgram, dropped: BTreeSet<String>) -> NativeSpawner {
+        NativeSpawner {
+            program,
+            dropped,
+            inherited: std::env::vars_os().collect(),
+        }
+    }
+
+    /// The same spawner inheriting `inherited` instead. Tests use it: changing this process's own
+    /// environment is `unsafe`.
+    #[must_use]
+    pub fn with_inherited(self, inherited: Vec<(OsString, OsString)>) -> NativeSpawner {
+        NativeSpawner { inherited, ..self }
+    }
+
+    fn program_path(&self) -> Result<PathBuf, LaunchError> {
+        match &self.program {
+            NativeProgram::Path(path) => Ok(path.clone()),
+            // Looked up on the child's `PATH` by the OS.
+            #[cfg(not(windows))]
+            NativeProgram::Claude => Ok(PathBuf::from("claude")),
+            #[cfg(windows)]
+            NativeProgram::Claude => {
+                let path_var = self
+                    .inherited
+                    .iter()
+                    .find(|(name, _)| name.to_string_lossy().eq_ignore_ascii_case("PATH"))
+                    .map(|(_, value)| value.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                locate_claude_exe(&path_var, &|candidate| Path::new(candidate).is_file())
+                    .map(PathBuf::from)
+            }
+        }
+    }
+}
+
+impl ProcessSpawner for NativeSpawner {
+    fn spawn(&self, launch: &Launch) -> Result<Box<dyn AgentProcess>, LaunchError> {
+        let mut command = std::process::Command::new(self.program_path()?);
+        command
+            .args(&launch.args)
+            .env_clear()
+            .envs(child_environment(
+                &self.inherited,
+                &self.dropped,
+                &launch.env,
+            ));
+        if let Some(cwd) = &launch.cwd {
+            command.current_dir(cwd);
+        }
+        // As Kotlin's `startIn`: the folder is named only when the start failed and it is not
+        // a folder, so a missing program in a present folder stays a plain failure.
+        os::start(command).map_err(|failure| match (&failure, &launch.cwd) {
+            (LaunchError::Spawn(_), Some(cwd)) if !Path::new(cwd).is_dir() => {
+                LaunchError::WorkingDirectoryMissing { path: cwd.clone() }
+            }
+            _ => failure,
+        })
+    }
+}
 
 /// The `claude.exe` on `path_var` (a Windows `PATH`, `;`-separated, entries maybe quoted), the
 /// first in order. A script (`claude.cmd`, `.bat`, `.ps1`) is never run: it goes through

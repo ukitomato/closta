@@ -12,6 +12,9 @@
 //! - the receiver: the pump notices at the next line and ends as [`PumpEnd::Abandoned`].
 //! - the pump: the writer stops and the process is destroyed at once. The process goes with the
 //!   pump, so its own `Drop` kills it.
+//!
+//! A send returns once queued; lines still queued when stdout ends are not written, as in Kotlin.
+//! The pump's end is the signal.
 
 use std::future::Future;
 use std::io;

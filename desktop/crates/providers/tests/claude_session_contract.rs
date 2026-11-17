@@ -51,10 +51,9 @@ fn awaiting_after_control_request(lines: Vec<String>) -> ProcessScript {
     }
 }
 
-/// Waits for the user's message before playing `lines`, as the CLI does. Kotlin replayed the
-/// capture straight through because its sends wrote stdin at once; here they are queued for the
-/// pump's writer, and a stdout that ended without waiting could end the pump before the writer
-/// ran, losing the queued lines.
+/// Waits for the user's message before playing `lines`, as the CLI does. Kotlin also drops lines
+/// still queued when stdout ends; Kotlin's FIFO dispatch made its writer run first, but here
+/// `race` order is random, so, like the CLI, the script waits for the first message.
 fn answering_the_first_message(lines: Vec<String>) -> ProcessScript {
     let mut script = ProcessScript::replaying(lines);
     script.beats.insert(0, ProcessBeat::AwaitStdin);

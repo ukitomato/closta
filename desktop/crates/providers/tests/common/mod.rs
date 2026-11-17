@@ -7,12 +7,15 @@
 
 use closta_core::fold;
 use closta_model::{AgentEvent, ConversationState};
-use closta_providers::claude::process::{self, AgentProcess};
+use closta_providers::claude::launch::spawn::{NativeProgram, NativeSpawner};
+use closta_providers::claude::launch::{Launch, LaunchError};
+use closta_providers::claude::process::{AgentProcess, ProcessSpawner};
 use closta_providers::claude::protocol::decode;
 use serde::Deserialize;
 use serde_json::Value;
-use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::PathBuf;
+use std::sync::Arc;
 
 const MANIFEST: &str = "manifest.json";
 const CAPTURE_SUFFIX: &str = ".ndjson";
@@ -430,10 +433,17 @@ pub fn alive(pid: u32) -> bool {
     state.is_some_and(|state| state != 'Z')
 }
 
-/// Starts `program` as an OS child. The box kills it when dropped, also when a test fails.
-pub fn spawn_command(program: &Path, args: &[&str], env: &[(&str, &str)]) -> Box<dyn AgentProcess> {
-    let mut command = std::process::Command::new(program);
-    command.args(args);
-    command.envs(env.iter().copied());
-    process::spawn_for_tests(command).expect("the process starts")
+/// A native spawner of the fake CLI that inherits this process's environment.
+pub fn fake_spawner() -> NativeSpawner {
+    NativeSpawner::new(NativeProgram::Path(fake_cli()), BTreeSet::new())
+}
+
+/// Starts `launch` with `spawner` on a thread of the blocking pool, as production does: a spawn
+/// is synchronous and slow on Windows. The box kills the child when dropped, also when a test
+/// fails.
+pub async fn spawn_in_background(
+    spawner: Arc<dyn ProcessSpawner>,
+    launch: Launch,
+) -> Result<Box<dyn AgentProcess>, LaunchError> {
+    blocking::unblock(move || spawner.spawn(&launch)).await
 }

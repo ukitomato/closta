@@ -4,19 +4,22 @@
 //! ProcessAgentProcessTest.kt.
 //!
 //! Every child is held by its `Box<dyn AgentProcess>`, whose drop kills it with its group, so a
-//! failing test leaves nothing behind. Kotlin's `launchClaude…` test becomes Task 8's
-//! `the_spawner_passes_the_args_env_and_cwd`, and its "the default destroyForcibly is destroy"
-//! has nothing to check here: the trait has no default for it.
+//! failing test leaves nothing behind. Kotlin's `launchClaude…` test is
+//! `the_spawner_passes_the_args_env_and_cwd` in process_spawner.rs, and its "the default
+//! destroyForcibly is destroy" has nothing to check here: the trait has no default for it.
 
 mod common;
 
+use std::collections::BTreeSet;
 use std::future::Future;
 use std::io::ErrorKind;
-use std::path::Path;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use closta_providers::claude::launch::Launch;
+use closta_providers::claude::launch::spawn::{NativeProgram, NativeSpawner};
 use closta_providers::claude::process::{AgentProcess, ProcessFailure, STDOUT_GRACE};
-use common::{alive, fake_cli, scratch_dir, spawn_command};
+use common::{alive, fake_spawner, scratch_dir, spawn_in_background};
 use futures_lite::{StreamExt, future};
 
 const TIMEOUT: Duration = Duration::from_secs(30);
@@ -32,12 +35,26 @@ fn within<T>(work: impl Future<Output = T>) -> T {
     }))
 }
 
+/// Starts `launch` with `spawner`; the box kills the child when dropped, also when a test fails.
+fn start(spawner: NativeSpawner, args: &[&str], env: &[(&str, &str)]) -> Box<dyn AgentProcess> {
+    let launch = Launch {
+        args: args.iter().map(|arg| (*arg).to_owned()).collect(),
+        env: env
+            .iter()
+            .map(|(name, value)| ((*name).to_owned(), (*value).to_owned()))
+            .collect(),
+        cwd: None,
+    };
+    within(spawn_in_background(Arc::new(spawner), launch)).expect("the process starts")
+}
+
 fn sh(script: &str) -> Box<dyn AgentProcess> {
-    spawn_command(Path::new(SH), &["-c", script], &[])
+    let spawner = NativeSpawner::new(NativeProgram::Path(SH.into()), BTreeSet::new());
+    start(spawner, &["-c", script], &[])
 }
 
 fn fake(env: &[(&str, &str)]) -> Box<dyn AgentProcess> {
-    spawn_command(&fake_cli(), &[], env)
+    start(fake_spawner(), &[], env)
 }
 
 /// Reads stdout to its end while stderr is drained, as the session's pump does: the lines, and
