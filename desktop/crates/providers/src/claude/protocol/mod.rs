@@ -3,7 +3,7 @@
 
 pub mod encode;
 mod fields;
-mod json;
+pub(crate) mod json;
 
 use closta_model::{AgentEvent, AgentEventKind, RawJson};
 use fields::{FieldError, Fields};

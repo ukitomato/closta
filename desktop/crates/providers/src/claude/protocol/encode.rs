@@ -9,6 +9,7 @@
 //! JSON string either way), and the opaque JSON payloads are read strictly, a failure being an
 //! [`EncodeError::BadPayload`] rather than an exception.
 
+use super::json::read_value;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use closta_core::ports::EncodeError;
@@ -36,9 +37,10 @@ fn line(map: Map<String, Value>) -> String {
     Value::Object(map).to_string()
 }
 
-/// The caller's opaque JSON, read strictly.
+/// The caller's opaque JSON, read strictly and as deep as the decoder reads a line, so that a
+/// payload taken from a decoded request can always be sent back.
 fn opaque(text: &str) -> Result<Value, EncodeError> {
-    serde_json::from_str(text).map_err(|_| EncodeError::BadPayload)
+    read_value(text).ok_or(EncodeError::BadPayload)
 }
 
 /// A user turn. Without `attachments` the content is the text itself. With them it is an array of
@@ -594,7 +596,7 @@ mod tests {
 
     #[test]
     fn a_text_with_line_breaks_and_separators_is_one_line() {
-        let text = "a\nb\rc\u{2028}d";
+        let text = "a\nb\rc\u{2028}d\u{2029}e";
         let line = user_message("S", "U", text, &[]).unwrap();
         assert!(!line.as_bytes().contains(&b'\n'), "{line}");
         assert!(!line.as_bytes().contains(&b'\r'), "{line}");
@@ -602,6 +604,7 @@ mod tests {
         // Deliberately unlike Kotlin: Gson escapes U+2028 and U+2029, serde_json writes them raw.
         // Both are the same JSON string, and neither is a line break to the CLI's line reader.
         assert!(line.contains('\u{2028}'), "U+2028 stays raw");
+        assert!(line.contains('\u{2029}'), "U+2029 stays raw");
     }
 
     #[test]
@@ -614,6 +617,33 @@ mod tests {
             Err(EncodeError::BadPayload)
         );
         assert_eq!(mcp_response("r", ""), Err(EncodeError::BadPayload));
+    }
+
+    fn nested(depth: usize) -> String {
+        format!("{}{}", "[".repeat(depth), "]".repeat(depth))
+    }
+
+    #[test]
+    fn a_payload_is_read_as_deep_as_the_decoder_reads_a_line() {
+        // An approval's tool input that decoded (up to 200 levels) must be answerable: serde_json's
+        // own limit of 128 would refuse it.
+        let deep = nested(150);
+        let line = json_deep(&allow("r", &deep, None).unwrap());
+        assert_eq!(
+            line["response"]["response"]["updatedInput"],
+            json_deep(&deep)
+        );
+        assert!(mcp_response("r", &deep).is_ok());
+        assert!(allow("r", "{}", Some(&deep)).is_ok());
+        assert_eq!(allow("r", &nested(201), None), Err(EncodeError::BadPayload));
+        assert_eq!(
+            mcp_response("r", &nested(10_000)),
+            Err(EncodeError::BadPayload)
+        );
+    }
+
+    fn json_deep(text: &str) -> Value {
+        read_value(text).unwrap()
     }
 
     #[test]

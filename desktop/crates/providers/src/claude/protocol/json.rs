@@ -40,15 +40,29 @@ pub(crate) fn parse_line(line: &str) -> Result<Map<String, Value>, LineError> {
     if text.chars().all(|c| matches!(c, ' ' | '\t' | '\r' | '\n')) {
         return Err(LineError::new("blank or empty line"));
     }
-    let mut de = serde_json::Deserializer::from_str(text);
-    de.disable_recursion_limit();
-    let value = Value::deserialize(&mut de)
-        .and_then(|v| de.end().map(|()| v))
-        .map_err(|e| LineError::new(e.to_string()))?;
+    let value = read_unbounded(text).map_err(|e| LineError::new(e.to_string()))?;
     match value {
         Value::Object(map) => Ok(map),
         _ => Err(LineError::new("top-level JSON value is not an object")),
     }
+}
+
+/// Reads any JSON value as deep as [`MAX_DEPTH`] allows, strictly: `None` when `text` nests deeper
+/// or is not one JSON value. The encoder reads the caller's opaque payloads with it, so that what
+/// the decoder placed (an approval's tool input, say) can be sent back.
+pub(crate) fn read_value(text: &str) -> Option<Value> {
+    if exceeds_depth(text) {
+        return None;
+    }
+    read_unbounded(text).ok()
+}
+
+/// Parses one JSON value without serde_json's own recursion limit; callers bound the depth first
+/// with [`exceeds_depth`].
+fn read_unbounded(text: &str) -> serde_json::Result<Value> {
+    let mut de = serde_json::Deserializer::from_str(text);
+    de.disable_recursion_limit();
+    Value::deserialize(&mut de).and_then(|v| de.end().map(|()| v))
 }
 
 /// The compact JSON text of a value, as Gson's `JsonElement.toString()` writes it.
