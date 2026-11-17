@@ -1,4 +1,4 @@
-#![cfg(unix)]
+#![cfg(target_os = "linux")]
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 //! `claude --version` through the fake CLI: the version it answers, how each way of failing is
 //! sorted, and that the process is gone on every path, a timeout and a cancel included. Mirrors

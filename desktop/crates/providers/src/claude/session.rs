@@ -63,6 +63,8 @@ enum Stage {
 
 /// The work that keeps a session going. It ends when stdout ends; then, or when it is dropped
 /// earlier, it stops the writer, destroys the process and refuses every later send.
+///
+/// A finished pump only destroys; drop it to kill a child that ignores stdin.
 pub struct SessionPump {
     stage: Stage,
     process: Arc<dyn AgentProcess>,

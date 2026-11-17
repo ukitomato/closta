@@ -5,8 +5,8 @@
 //! It costs nothing: no user message is sent, so no model is called. Only `initialize` and then
 //! `mcp_status` are written, the order capture 24 recorded; the CLI answers both without a turn.
 //! `--strict-mcp-config` and `--setting-sources ""` keep the user's MCP servers and settings out.
-//! The exit code after stdin closes has not been measured, so only that the process ends is
-//! checked; it is printed for the record.
+//! The exit code after stdin closes is 0 (measured with claude 2.1.326) and is asserted. The time
+//! of each stage is printed.
 
 mod common;
 
@@ -25,7 +25,8 @@ use closta_providers::claude::protocol::{decode, encode};
 use common::{scratch_dir, spawn_in_background};
 use futures_lite::{StreamExt, future};
 
-const LIMIT: Duration = Duration::from_secs(30);
+/// Under nextest's kill at 60 s x 2.
+const LIMIT: Duration = Duration::from_secs(90);
 
 /// `work`, or `None` once `deadline` has passed.
 async fn before<T>(deadline: Instant, work: impl Future<Output = T>) -> Option<T> {
@@ -39,7 +40,8 @@ async fn before<T>(deadline: Instant, work: impl Future<Output = T>) -> Option<T
 #[test]
 #[ignore = "real-cli"]
 fn a_real_claude_answers_its_version_and_mcp_status_then_ends_when_stdin_closes() {
-    let deadline = Instant::now() + LIMIT;
+    let start = Instant::now();
+    let deadline = start + LIMIT;
     let spawner: Arc<dyn ProcessSpawner> =
         Arc::new(NativeSpawner::new(NativeProgram::Claude, BTreeSet::new()));
     let dir = scratch_dir("real_cli");
@@ -57,8 +59,9 @@ fn a_real_claude_answers_its_version_and_mcp_status_then_ends_when_stdin_closes(
     ))
     .expect("claude answers its version");
     assert!(version.starts_with("2."), "{version}");
-    println!("claude --version: {version}");
+    println!("claude --version: {version} ({:?})", start.elapsed());
 
+    let spawn_began = Instant::now();
     let mut process = smol::block_on(before(
         deadline,
         spawn_in_background(Arc::clone(&spawner), launch),
@@ -67,7 +70,9 @@ fn a_real_claude_answers_its_version_and_mcp_status_then_ends_when_stdin_closes(
     .expect("claude starts");
     let mut lines = process.take_stdout_lines().expect("stdout is there");
     let drain = process.take_stderr_drain().expect("stderr is there");
-    let process: Arc<dyn AgentProcess> = Arc::from(process);
+    println!("spawned in {:?}", spawn_began.elapsed());
+    let process: &dyn AgentProcess = &*process;
+    let talk_began = Instant::now();
 
     let talk = async {
         process
@@ -91,11 +96,15 @@ fn a_real_claude_answers_its_version_and_mcp_status_then_ends_when_stdin_closes(
             } = decode(&line)
                 && (id == "i1" || id == "m1")
             {
+                println!("{id} answered after {:?}", talk_began.elapsed());
                 answered.insert(id);
             }
         }
+        let closed = Instant::now();
         process.destroy();
-        process.wait().await.expect("an exit code")
+        let code = process.wait().await.expect("an exit code");
+        println!("exited {:?} after stdin closed", closed.elapsed());
+        code
     };
     let draining = async {
         drain.await;
@@ -106,4 +115,5 @@ fn a_real_claude_answers_its_version_and_mcp_status_then_ends_when_stdin_closes(
         panic!("claude did not answer and end within {LIMIT:?}");
     };
     println!("claude ended with exit code {code} after stdin closed");
+    assert_eq!(code, 0, "a clean exit after stdin closes");
 }

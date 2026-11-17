@@ -1,4 +1,4 @@
-#![cfg(unix)]
+#![cfg(target_os = "linux")]
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 //! The spawners with real processes: what the native spawner hands the child (arguments,
 //! environment, folder), its failures, the cap on live children, and what the WSL spawner decides

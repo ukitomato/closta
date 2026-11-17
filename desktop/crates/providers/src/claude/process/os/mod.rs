@@ -120,6 +120,8 @@ impl AgentProcess for OsProcess {
         })
     }
 
+    /// On Windows, while a write is blocked in the pool thread (the child not reading, the pipe
+    /// full), the real handle does not close and the child sees no EOF until `destroy_forcibly`.
     fn destroy(&self) {
         self.shared.stdin.close();
     }

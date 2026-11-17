@@ -1,4 +1,7 @@
 //! The Unix side of a child: its own process group, killed as a whole.
+//!
+//! Descendants that left the group (setsid, detached) and hold stdout keep the line stream open,
+//! as in Kotlin.
 
 use std::os::unix::process::{CommandExt, ExitStatusExt};
 use std::process::ExitStatus;

@@ -1,4 +1,4 @@
-#![cfg(unix)]
+#![cfg(target_os = "linux")]
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 //! A real OS child through `AgentProcess`, with the fake CLI and `/bin/sh`. Mirrors
 //! ProcessAgentProcessTest.kt.

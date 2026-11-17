@@ -1,4 +1,4 @@
-#![cfg(unix)]
+#![cfg(target_os = "linux")]
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 //! Children started and ended many times, in every way they can end, leave no process, no live
 //! count and no thread behind; and the cap on live children holds and frees each slot once.
