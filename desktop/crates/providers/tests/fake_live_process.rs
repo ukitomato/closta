@@ -53,10 +53,12 @@ fn a_live_process_streams_what_is_emitted_and_ends_with_its_exit() {
     control.emit("one");
     control.emit("two");
     control.exit(0);
+    assert_eq!(0, control.stdout_lines_read(), "nothing read yet");
     assert_eq!(
         vec![Ok("one".to_string()), Ok("two".to_string())],
         lines_of(&mut process)
     );
+    assert_eq!(2, control.stdout_lines_read());
     assert_eq!(0, within(process.wait()).unwrap());
     assert_eq!(0, within(process.wait()).unwrap());
     assert!(control.ended());

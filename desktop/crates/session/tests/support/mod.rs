@@ -172,6 +172,10 @@ struct Answers {
     sessions: VecDeque<Result<(LiveProcess, LiveControl), LaunchError>>,
     version: Option<ProcessScript>,
     controls: Vec<LiveControl>,
+    // The session spawns asked for so far, refused ones included.
+    spawns: usize,
+    failures: Vec<(usize, LaunchError)>,
+    previous_ended: Vec<bool>,
 }
 
 /// A spawner over the in-memory processes: `--version` gets a scripted process that prints
@@ -205,6 +209,13 @@ impl Processes {
                 let (process, _probe) = FakeProcess::new(script);
                 return Ok(Box::new(process) as Box<dyn AgentProcess>);
             }
+            let index = answers.spawns;
+            answers.spawns += 1;
+            let previous_ended = answers.controls.last().map(LiveControl::ended);
+            answers.previous_ended.extend(previous_ended);
+            if let Some(at) = answers.failures.iter().position(|(n, _)| *n == index) {
+                return Err(answers.failures.remove(at).1);
+            }
             let (process, control) = answers
                 .sessions
                 .pop_front()
@@ -234,6 +245,18 @@ impl Processes {
     /// The next session launch is refused with `error`.
     pub fn refuse(&self, error: LaunchError) {
         locked(&self.answers).sessions.push_back(Err(error));
+    }
+
+    /// The session spawn with index `n` (0 is the first) is refused with `error`, whatever was
+    /// prepared; the prepared processes go to the spawns after it.
+    pub fn fail_spawn(&self, n: usize, error: LaunchError) {
+        locked(&self.answers).failures.push((n, error));
+    }
+
+    /// For each session spawn after the first, whether the process handed out before it had
+    /// ended when it was asked for.
+    pub fn previous_ended_at_spawn(&self) -> Vec<bool> {
+        locked(&self.answers).previous_ended.clone()
     }
 
     /// Every `--version` from now on is played from `script`.

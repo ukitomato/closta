@@ -593,12 +593,15 @@ fn stdout_is_still_read_while_a_close_waits() {
         let run = executor.spawn(run);
         reach(&runtime, running).await;
         let before = runtime.view();
+        let read = control.stdout_lines_read();
 
         runtime.close();
-        // Written after the close and before the run has looked: read, and not folded.
+        // Written after the close and before the run has looked: read, and not folded. The
+        // process does not end on its own, so only the close's own reading takes them.
         control.emit(&init_line());
         control.emit(&init_line());
         until(|| control.destroyed()).await;
+        until(|| control.stdout_lines_read() == read + 2).await;
         Timer::after(Duration::from_millis(100)).await;
         assert!(!run.is_finished());
         assert_eq!(runtime.view(), before);

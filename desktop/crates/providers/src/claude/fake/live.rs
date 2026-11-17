@@ -45,6 +45,7 @@ struct State {
     exit_code: Option<i32>,
     force_kills: usize,
     refused_writes: usize,
+    stdout_lines_read: usize,
 }
 
 struct Shared {
@@ -161,6 +162,11 @@ impl LiveControl {
         lock(&self.shared.state).refused_writes
     }
 
+    /// How many emitted stdout lines the process's reader has taken.
+    pub fn stdout_lines_read(&self) -> usize {
+        lock(&self.shared.state).stdout_lines_read
+    }
+
     /// Whether the process ended.
     pub fn ended(&self) -> bool {
         lock(&self.shared.state).exit_code.is_some()
@@ -213,7 +219,10 @@ fn stdout_stream(
     stream::unfold(Some((shared, lines)), |open| async move {
         let (shared, lines) = open?;
         match lines.recv().await {
-            Ok(line) => Some((Ok(line), Some((shared, lines)))),
+            Ok(line) => {
+                lock(&shared.state).stdout_lines_read += 1;
+                Some((Ok(line), Some((shared, lines))))
+            }
             Err(_) => match lock(&shared.state).exit_code {
                 Some(code) if code != 0 => Some((Err(ProcessFailure::Exit(code)), None)),
                 _ => None,
