@@ -2,10 +2,12 @@
 //! CLI runs in Linux while Windows reads the same files by UNC paths; anywhere else the two are the
 //! same and nothing changes. Mirrors CliPaths.kt (`toIde` is [`CliPaths::to_host`]).
 
+use std::fmt;
+
 use super::wsl::{WslLocation, same_ignoring_case};
 
 /// How paths cross between the CLI and the host for one project folder.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum CliPaths {
     /// The CLI and the host share one file system: every path is its own.
     Native,
@@ -16,6 +18,19 @@ pub enum CliPaths {
         location: WslLocation,
         host_root: String,
     },
+}
+
+// Written by hand, as for WslLocation: only the distribution is shown.
+impl fmt::Debug for CliPaths {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CliPaths::Native => f.write_str("Native"),
+            CliPaths::Wsl { location, .. } => f
+                .debug_struct("Wsl")
+                .field("distro", &location.distro)
+                .finish_non_exhaustive(),
+        }
+    }
 }
 
 /// The paths for the project folder `directory`: [`CliPaths::Wsl`] when it is a UNC path on a WSL
@@ -180,6 +195,15 @@ mod tests {
             slash.to_host("/mnt/cc/x"),
             "//wsl.localhost/Ubuntu/mnt/cc/x"
         );
+    }
+
+    #[test]
+    fn the_debug_of_wsl_paths_names_the_distribution_and_no_path() {
+        let paths = cli_paths_for(Some(r"\\wsl.localhost\Ubuntu\home\someone\proj"), true);
+        let shown = format!("{paths:?}");
+        assert_eq!(shown, r#"Wsl { distro: "Ubuntu", .. }"#);
+        assert!(!shown.contains("someone"), "{shown}");
+        assert_eq!(format!("{:?}", CliPaths::Native), "Native");
     }
 
     #[test]

@@ -24,10 +24,19 @@ const HOSTS: [&str; 2] = ["wsl.localhost", "wsl$"];
 
 /// A project that lives in a WSL distribution, as Windows sees it: the distribution's name and the
 /// Linux path of the folder in it (starting with `/`; the distribution's root is `/`).
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct WslLocation {
     pub distro: String,
     pub linux_path: String,
+}
+
+// Written by hand: the Linux path names the user, so only the distribution is shown.
+impl fmt::Debug for WslLocation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("WslLocation")
+            .field("distro", &self.distro)
+            .finish_non_exhaustive()
+    }
 }
 
 impl WslLocation {
@@ -414,6 +423,13 @@ mod tests {
         )
         .expect("in the distribution");
         assert_eq!(made.args[3], "/home/u/My Project 日本");
+    }
+
+    #[test]
+    fn the_debug_of_a_location_names_the_distribution_and_no_path() {
+        let shown = format!("{:?}", at("Ubuntu", "/home/someone/p"));
+        assert_eq!(shown, r#"WslLocation { distro: "Ubuntu", .. }"#);
+        assert!(!shown.contains("someone"), "{shown}");
     }
 
     #[test]
