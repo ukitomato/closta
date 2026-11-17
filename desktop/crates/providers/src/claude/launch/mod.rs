@@ -1,8 +1,11 @@
 //! Launching `claude`: what to run it with and why it could not start. Mirrors
 //! ClaudeLaunchSpec.kt, AnthropicLaunch.kt and the failures of ProcessSpawner.kt.
 
+pub mod cli_paths;
 pub mod env;
+pub mod spawn;
 pub mod spec;
+pub mod wsl;
 
 use std::fmt;
 

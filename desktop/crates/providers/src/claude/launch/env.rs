@@ -114,8 +114,8 @@ mod tests {
         list.iter().map(|s| (*s).to_owned()).collect()
     }
 
-    // The names Bedrock drops in Kotlin; Bedrock itself comes in a later stage, so the tests name
-    // a set of their own.
+    // A stand-in set of names to drop. Bedrock, whose launch decides the real set, comes in a
+    // later stage.
     const DROPPED: [&str; 4] = [
         "AWS_ACCESS_KEY_ID",
         "AWS_SECRET_ACCESS_KEY",
