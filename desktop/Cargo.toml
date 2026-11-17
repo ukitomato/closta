@@ -19,6 +19,7 @@ base64 = "0.23.1"
 cargo_metadata = "0.23"
 thiserror = "2"
 async-channel = "2.5"
+async-io = "2.6"
 futures-lite = "2.6"
 uuid = { version = "1.29", features = ["v4"] }
 smol = "2"
