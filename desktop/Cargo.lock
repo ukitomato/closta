@@ -884,6 +884,7 @@ version = "0.1.0"
 dependencies = [
  "closta-model",
  "imbl",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -891,6 +892,7 @@ name = "closta-goldens"
 version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
+ "blocking",
  "closta-core",
  "closta-model",
  "closta-presenter",
@@ -931,11 +933,24 @@ dependencies = [
 name = "closta-providers"
 version = "0.1.0"
 dependencies = [
+ "async-channel",
+ "async-io",
+ "async-process",
+ "base64 0.23.1",
+ "blocking",
  "closta-core",
  "closta-model",
+ "closta-providers",
+ "futures-lite",
+ "rustix",
  "serde",
  "serde_json",
  "sha2 0.11.1",
+ "smol",
+ "thiserror 2.0.21",
+ "uuid",
+ "windows 0.62.2",
+ "windows-registry 0.6.1",
 ]
 
 [[package]]

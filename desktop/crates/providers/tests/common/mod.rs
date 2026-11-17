@@ -5,11 +5,17 @@
 //! The captures and the goldens are read in place from the Kotlin side of the repository, never
 //! copied.
 
-use closta_model::AgentEvent;
+use closta_core::fold;
+use closta_model::{AgentEvent, ConversationState};
+use closta_providers::claude::launch::spawn::{NativeProgram, NativeSpawner};
+use closta_providers::claude::launch::{Launch, LaunchError};
+use closta_providers::claude::process::{AgentProcess, ProcessSpawner};
 use closta_providers::claude::protocol::decode;
 use serde::Deserialize;
-use std::collections::BTreeMap;
+use serde_json::Value;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 const MANIFEST: &str = "manifest.json";
 const CAPTURE_SUFFIX: &str = ".ndjson";
@@ -337,4 +343,107 @@ pub fn json_first_difference(
         }
     }
     walk("", expected, actual)
+}
+
+/// Folds capture `<scenario>.ndjson` decoded directly.
+pub fn fold_capture(scenario: &str) -> ConversationState {
+    read_capture(&format!("{scenario}.ndjson"))
+        .iter()
+        .fold(ConversationState::default(), fold)
+}
+
+/// The core golden of `scenario`, or why it cannot be read.
+pub fn read_golden(scenario: &str) -> Result<Value, String> {
+    let path = golden_dir().join(format!("{scenario}.json"));
+    let text = std::fs::read_to_string(&path)
+        .map_err(|e| format!("{scenario}: golden {} cannot be read: {e}", path.display()))?;
+    serde_json::from_str(&text).map_err(|e| format!("{scenario}: golden does not parse: {e}"))
+}
+
+/// Folds `scenario` twice with `fold_fn` and compares the state with the golden; `None` when
+/// it matches, else the first difference named by the scenario.
+pub fn check_scenario(
+    scenario: &str,
+    fold_fn: &dyn Fn(&str) -> ConversationState,
+) -> Option<String> {
+    let once = fold_fn(scenario);
+    let twice = fold_fn(scenario);
+    if once != twice {
+        return Some(format!(
+            "{scenario}: folding twice must give the same state"
+        ));
+    }
+    let golden = match read_golden(scenario) {
+        Ok(g) => g,
+        Err(e) => return Some(e),
+    };
+    let actual = serde_json::to_value(&once).expect("the state serializes");
+    json_first_difference(&golden, &actual).map(|d| {
+        format!(
+            "{scenario}: {}: expected {}, got {}",
+            d.pointer, d.expected, d.actual
+        )
+    })
+}
+
+/// The scenarios `manifest.json` lists, sorted.
+pub fn scenario_names() -> Vec<String> {
+    let mut names: Vec<String> = manifest()
+        .scenarios
+        .into_iter()
+        .map(|s| s.scenario)
+        .collect();
+    names.sort();
+    names
+}
+
+// `option_env!` because `closta-goldens` compiles this file as a library, where cargo sets neither
+// variable; only the providers' own tests can call these two.
+
+/// The fake CLI that cargo built next to these tests.
+pub fn fake_cli() -> PathBuf {
+    match option_env!("CARGO_BIN_EXE_closta-fake-claude") {
+        Some(path) => PathBuf::from(path),
+        None => panic!("only the providers' integration tests have the fake CLI"),
+    }
+}
+
+/// An empty folder of its own for one test, made again on every run.
+pub fn scratch_dir(name: &str) -> PathBuf {
+    let Some(tmp) = option_env!("CARGO_TARGET_TMPDIR") else {
+        panic!("only the providers' integration tests have a scratch folder")
+    };
+    let dir = PathBuf::from(tmp).join(name);
+    if dir.exists() {
+        std::fs::remove_dir_all(&dir).expect("the old scratch folder is removed");
+    }
+    std::fs::create_dir_all(&dir).expect("the scratch folder is made");
+    dir
+}
+
+/// Whether `pid` is a running process: it is in `/proc` and not a zombie.
+pub fn alive(pid: u32) -> bool {
+    let Ok(stat) = std::fs::read_to_string(format!("/proc/{pid}/stat")) else {
+        return false;
+    };
+    // The state follows the command name, which is in parentheses and may hold anything.
+    let state = stat
+        .rfind(')')
+        .and_then(|end| stat[end + 1..].trim_start().chars().next());
+    state.is_some_and(|state| state != 'Z')
+}
+
+/// A native spawner of the fake CLI that inherits this process's environment.
+pub fn fake_spawner() -> NativeSpawner {
+    NativeSpawner::new(NativeProgram::Path(fake_cli()), BTreeSet::new())
+}
+
+/// Starts `launch` with `spawner` on a thread of the blocking pool, as production does: a spawn
+/// is synchronous and slow on Windows. The box kills the child when dropped, also when a test
+/// fails.
+pub async fn spawn_in_background(
+    spawner: Arc<dyn ProcessSpawner>,
+    launch: Launch,
+) -> Result<Box<dyn AgentProcess>, LaunchError> {
+    blocking::unblock(move || spawner.spawn(&launch)).await
 }
