@@ -127,6 +127,25 @@ pub fn perf_steps() -> Vec<Step> {
     )]
 }
 
+/// `cargo xtask real-cli`: the round trip with the real `claude` on PATH (`#[ignore = "real-cli"]`).
+/// It stays out of `check`: it needs a signed-in CLI. It sends no user message, so it costs nothing.
+pub fn real_cli_steps() -> Vec<Step> {
+    vec![locked_cargo(
+        "real-cli",
+        &[
+            "nextest",
+            "run",
+            "-p",
+            "closta-providers",
+            "--run-ignored",
+            "ignored-only",
+            "-E",
+            "binary(real_cli)",
+            "--no-capture",
+        ],
+    )]
+}
+
 /// Runs the stages in order, stopping at the first failure.
 pub fn run_steps(root: &Path, steps: &[Step]) -> anyhow::Result<()> {
     for step in steps {
@@ -211,6 +230,32 @@ mod tests {
         ] {
             assert!(args.windows(2).any(|it| it == pair), "{pair:?}");
         }
+    }
+
+    #[test]
+    fn real_cli_runs_only_the_real_cli_binary_under_the_lock() {
+        let steps = real_cli_steps();
+        let [
+            Step::Command {
+                name,
+                program,
+                args,
+            },
+        ] = steps.as_slice()
+        else {
+            panic!("one command");
+        };
+        assert_eq!(*name, "real-cli");
+        assert_eq!(program, "flock");
+        assert_eq!(args[..3], strings(&[LOCK, "cargo", "nextest"]));
+        for pair in [
+            ["-p", "closta-providers"],
+            ["--run-ignored", "ignored-only"],
+            ["-E", "binary(real_cli)"],
+        ] {
+            assert!(args.windows(2).any(|it| it == pair), "{pair:?}");
+        }
+        assert!(args.iter().any(|it| it == "--no-capture"));
     }
 
     /// The `.rs` files under `dir`, at any depth.

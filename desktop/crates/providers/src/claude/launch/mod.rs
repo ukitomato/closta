@@ -5,6 +5,7 @@ pub mod cli_paths;
 pub mod env;
 pub mod spawn;
 pub mod spec;
+pub mod version;
 pub mod wsl;
 
 use std::fmt;

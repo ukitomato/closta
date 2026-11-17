@@ -8,7 +8,6 @@ threads-required = "num-test-threads"
 child-processes = { max-threads = 4 }
 
 [[profile.default.overrides]]
-# One pattern: nextest refuses an operand that matches no binary, and `real_cli` comes later.
-filter = 'binary(/^process_|^real_cli$/)'
+filter = 'binary(/^process_/) | binary(real_cli)'
 test-group = 'child-processes'
 slow-timeout = { period = "60s", terminate-after = 2 }
