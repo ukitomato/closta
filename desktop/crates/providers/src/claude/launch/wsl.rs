@@ -7,8 +7,9 @@ use std::ffi::OsString;
 use std::fmt;
 use std::path::PathBuf;
 
+use super::env::child_environment;
 use super::{Launch, LaunchError};
-use crate::claude::process::{AgentProcess, ProcessSpawner};
+use crate::claude::process::{AgentProcess, ProcessSpawner, os};
 
 /// The script `/bin/sh -c` runs first: it finds the user's login shell (one that reads `"$@"` the
 /// POSIX way, else `/bin/sh`) and has it `exec` the program with the arguments untouched, so
@@ -121,22 +122,41 @@ impl fmt::Debug for WslProgram {
     }
 }
 
-/// The names of the installed WSL distributions. None are known yet: reading them from the
-/// registry comes with starting `wsl.exe`.
+/// Where Windows lists the WSL distributions of the user, one subkey each.
+#[cfg(windows)]
+const LXSS_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Lxss";
+
+/// The names of the installed WSL distributions: the `DistributionName` of each subkey of
+/// `HKCU\Software\Microsoft\Windows\CurrentVersion\Lxss`. Read from the registry rather than
+/// from `wsl.exe --list`, which would be one more process and UTF-16 output. None when the key
+/// cannot be read.
+#[cfg(windows)]
+pub fn installed_distros() -> Vec<String> {
+    let Ok(lxss) = windows_registry::CURRENT_USER.open(LXSS_KEY) else {
+        return Vec::new();
+    };
+    let Ok(subkeys) = lxss.keys() else {
+        return Vec::new();
+    };
+    subkeys
+        .filter_map(|subkey| lxss.open(subkey).ok()?.get_string("DistributionName").ok())
+        .collect()
+}
+
+/// None: WSL distributions exist only on a Windows host.
+#[cfg(not(windows))]
 pub fn installed_distros() -> Vec<String> {
     Vec::new()
 }
 
 /// Starts the program in the distribution of a WSL project, through `wsl.exe`. Mirrors
-/// WslSpawner.kt. `wsl.exe` is not started yet: a launch whose distribution is installed still
-/// fails with [`LaunchError::WslUnavailable`].
+/// WslSpawner.kt. `wsl.exe` gets the child environment (the inherited one without the `dropped`
+/// names, the launch's env over it) and a `WSLENV` that passes the launch's names into Linux.
+/// Off Windows there is no `wsl.exe`: a launch whose distribution is installed fails with
+/// [`LaunchError::WslUnavailable`].
 pub struct WslSpawner {
     location: WslLocation,
     program: WslProgram,
-    #[expect(
-        dead_code,
-        reason = "the environment of wsl.exe, which is not started yet"
-    )]
     dropped: BTreeSet<String>,
     inherited: Vec<(OsString, OsString)>,
     installed: Option<Vec<String>>,
@@ -193,6 +213,9 @@ impl ProcessSpawner for WslSpawner {
         let unavailable = || LaunchError::WslUnavailable {
             distro: self.location.distro.clone(),
         };
+        // The folder first and the distribution after, as in Kotlin: the folder costs nothing
+        // to check, and the registry is read only for a launch that can be made.
+        self.location.linux_directory_of(launch.cwd.as_deref())?;
         let listed;
         let installed = match &self.installed {
             Some(installed) => installed,
@@ -205,7 +228,7 @@ impl ProcessSpawner for WslSpawner {
         let system_root = self
             .inherited_var("SystemRoot")
             .unwrap_or_else(|| r"C:\Windows".to_owned());
-        let _command = wsl_command(
+        let command = wsl_command(
             &self.location,
             distro,
             launch,
@@ -213,8 +236,30 @@ impl ProcessSpawner for WslSpawner {
             &system_root,
             self.inherited_var("WSLENV").as_deref(),
         )?;
-        Err(unavailable())
+        // Only a Windows host has a `wsl.exe`.
+        if !cfg!(windows) {
+            return Err(unavailable());
+        }
+        let environment = child_environment(&self.inherited, &self.dropped, &launch.env);
+        start_wsl(&command, environment)
     }
+}
+
+/// Starts `wsl.exe` by its absolute path, with `environment` and `WSLENV` as its whole
+/// environment. No working folder is set: `--cd` names it inside Linux.
+fn start_wsl(
+    command: &WslCommand,
+    environment: Vec<(OsString, OsString)>,
+) -> Result<Box<dyn AgentProcess>, LaunchError> {
+    let mut process = std::process::Command::new(&command.program);
+    // `.arg` as it is: the probe on Windows found that `wsl.exe` hands every argument to Linux
+    // unchanged when `std` quotes it.
+    process
+        .args(&command.args)
+        .env_clear()
+        .envs(environment)
+        .env("WSLENV", &command.wslenv);
+    os::start(process)
 }
 
 /// The `wsl.exe` process of one launch: the program, its arguments and the `WSLENV` to give it.

@@ -26,6 +26,8 @@ blocking = "1.7"
 futures-lite = "2.6"
 uuid = { version = "1.29", features = ["v4"] }
 smol = "2"
+windows = "0.62"
+windows-registry = "0.6"
 gpui-kit = "=0.9.0"
 closta-model = { path = "crates/model" }
 closta-core = { path = "crates/core" }

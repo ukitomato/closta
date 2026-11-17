@@ -8,6 +8,10 @@
 mod unix;
 #[cfg(unix)]
 use unix as platform;
+#[cfg(windows)]
+pub(crate) mod windows;
+#[cfg(windows)]
+use windows as platform;
 
 use std::future::Future;
 use std::io;
@@ -47,6 +51,11 @@ pub(crate) fn start(
     let mut child = command
         .spawn()
         .map_err(|error| LaunchError::Spawn(error.kind()))?;
+    let tree = platform::contain(&child).map_err(|error| {
+        // Not in a job, so it could not be stopped with its descendants: it does not run.
+        _ = child.kill();
+        LaunchError::Spawn(error.kind())
+    })?;
     // Taken at once: `Child::status` closes a stdin that is still in the child.
     let (Some(stdin), Some(stdout), Some(stderr)) =
         (child.stdin.take(), child.stdout.take(), child.stderr.take())
@@ -58,6 +67,7 @@ pub(crate) fn start(
         pid: child.id(),
         exit: Exit::new(Box::pin(child.status())),
         child: Mutex::new(child),
+        tree,
         stdin: Stdin::new(stdin),
         slot,
     });
@@ -133,6 +143,7 @@ impl Drop for OsProcess {
 struct Shared {
     pid: u32,
     child: Mutex<async_process::Child>,
+    tree: platform::Tree,
     stdin: Stdin,
     exit: Exit,
     slot: LiveSlot,
@@ -150,7 +161,7 @@ impl Shared {
     fn destroy_forcibly(&self) {
         self.stdin.close();
         let mut child = lock(&self.child);
-        platform::kill_tree(&mut child);
+        platform::kill_tree(&self.tree, &mut child);
         // Does nothing once the child is reaped, so it never reaches a reused pid.
         _ = child.kill();
     }
@@ -447,25 +458,3 @@ async fn drain(mut stderr: ChildStderr) {
         }
     }
 }
-
-#[cfg(windows)]
-mod windows {
-    //! The Windows side of a child, without a Job Object yet: only the child itself is killed.
-
-    use std::os::windows::process::CommandExt;
-    use std::process::ExitStatus;
-
-    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-
-    pub(super) fn configure(command: &mut std::process::Command) {
-        command.creation_flags(CREATE_NO_WINDOW);
-    }
-
-    pub(super) fn kill_tree(_child: &mut async_process::Child) {}
-
-    pub(super) fn exit_code(status: ExitStatus) -> i32 {
-        status.code().unwrap_or(-1)
-    }
-}
-#[cfg(windows)]
-use windows as platform;

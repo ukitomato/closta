@@ -74,6 +74,8 @@ pub fn steps() -> Vec<Step> {
                 "closta-platform",
                 "-p",
                 "closta",
+                "-p",
+                "closta-providers",
                 "--all-targets",
                 "--",
                 "-D",
@@ -177,6 +179,20 @@ mod tests {
             name,
             program: program.to_owned(),
             args: strings(args),
+        }
+    }
+
+    #[test]
+    fn windows_clippy_covers_the_gui_crates_and_the_providers() {
+        let steps = steps();
+        let Some(Step::Command { args, .. }) =
+            steps.iter().find(|s| s.name() == "clippy (windows)")
+        else {
+            panic!("a clippy (windows) step");
+        };
+        for package in ["closta-platform", "closta", "closta-providers"] {
+            let pair = ["-p", package];
+            assert!(args.windows(2).any(|it| it == pair), "{pair:?}");
         }
     }
 
