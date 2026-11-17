@@ -101,6 +101,16 @@ pub trait AgentSession: Send + Sync {
     fn stop_task(&self, task_id: &str) -> Result<(), SendError>;
 }
 
+/// The one place core learns the current time; core never reads a clock directly. Mirrors
+/// `Clock.kt`.
+///
+/// A use case that needs elapsed time reads [`Clock::now`] and passes the figure into a pure
+/// function, so the transition stays testable under a fixed clock.
+pub trait Clock: Send + Sync {
+    /// The current wall-clock time, from a real or a fixed clock.
+    fn now(&self) -> std::time::SystemTime;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
