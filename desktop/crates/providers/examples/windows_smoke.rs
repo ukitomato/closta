@@ -3,16 +3,24 @@
 //! is started or stopped there. Each stage prints one `PASS <n> …` or `FAIL <n> …` line.
 //!
 //! 1. Win32: the fake CLI gets an argv holding the system prompt and the sandbox settings intact.
+//!    1b. A child that ends at once starts and reports its exit code, every time (a child that
+//!    ended before it could join its job is kept, not turned into a failure to start).
 //! 2. Win32: killing a `tree` fake kills its child and grandchild (they leave `tasklist`).
 //! 3. WSL: the Linux fake CLI, started through `wsl.exe`, gets its argv and an env value passed by
 //!    `WSLENV`, and the value is not in its argv.
 //! 4. WSL: the real `claude` answers `--version`, then `initialize` and `mcp_status` (no user
 //!    message, so no model is called); 5 seconds after it is closed, no process in the
 //!    distribution carries the launch's mark.
+//!    4b. The same `claude`, killed with `destroy_forcibly` while stdin is still open (no chance to
+//!    end by itself): 5 seconds later, no process in the distribution carries the mark.
+//!    4c. The Linux fake CLI in `tree` mode (a child and a grandchild in Linux), killed the same
+//!    way: 5 seconds later, none of them carries the mark. Whatever is left is listed and killed.
 //!
 //! `--hold` starts a `tree` fake, prints this process's pid, the child's and the grandchild's,
 //! one per line, and sleeps: killing this process must take both with it (the job's handle
-//! closes).
+//! closes). Run it with `Start-Process -RedirectStandardOutput` and `taskkill /F` inside one
+//! `powershell.exe`, waiting until the file holds the 3 pid lines (starting takes seconds): when a
+//! `powershell.exe` started from WSL ends, what it started ends with it.
 //!
 //! `windows_smoke [--win-fake <path>] [--wsl-fake <linux path>] [--distro <name>] [--hold]`
 
@@ -45,6 +53,9 @@ mod smoke {
     use futures_lite::{StreamExt, future};
 
     const FAKE_EXE: &str = "closta-fake-claude.exe";
+    /// How many times stage 1b starts a child that ends at once.
+    const QUICK_EXITS: usize = 20;
+    const QUICK_EXIT_CODE: i32 = 3;
     const DEFAULT_DISTRO: &str = "Ubuntu-26.04";
     const SECRET_NAME: &str = "CLOSTA_SMOKE_SECRET";
     const SECRET_VALUE: &str = "s3cret value 日本";
@@ -84,20 +95,26 @@ mod smoke {
             return hold(&options);
         }
         let mut passed = true;
-        let mut report = |stage: u32, outcome: Outcome| match outcome {
+        let mut report = |stage: &str, outcome: Outcome| match outcome {
             Ok(note) => println!("PASS {stage} {note}"),
             Err(problem) => {
                 passed = false;
                 println!("FAIL {stage} {problem}");
             }
         };
-        report(1, win32_argv(&options));
-        report(2, win32_tree(&options));
+        report("1", win32_argv(&options));
+        report("1b", win32_quick_exit(&options));
+        report("2", win32_tree(&options));
         match &options.wsl_fake {
-            Some(wsl_fake) => report(3, wsl_argv(&options, wsl_fake)),
+            Some(wsl_fake) => report("3", wsl_argv(&options, wsl_fake)),
             None => println!("SKIP 3 no --wsl-fake was given"),
         }
-        report(4, wsl_real_claude(&options));
+        report("4", wsl_real_claude(&options));
+        report("4b", wsl_real_claude_killed(&options));
+        match &options.wsl_fake {
+            Some(wsl_fake) => report("4c", wsl_tree_killed(&options, wsl_fake)),
+            None => println!("SKIP 4c no --wsl-fake was given"),
+        }
         println!("INFO {}", missing_folder(true));
         println!("INFO {}", missing_folder(false));
         if passed {
@@ -263,6 +280,31 @@ mod smoke {
         Ok(format!(
             "win32 argv: {} arguments intact, the prompt and the settings among them",
             args.len()
+        ))
+    }
+
+    /// Starts a child that ends at once, [`QUICK_EXITS`] times: each must start and end with its
+    /// own exit code, whether or not it ended before it could join its job.
+    fn win32_quick_exit(options: &Options) -> Outcome {
+        let code = QUICK_EXIT_CODE.to_string();
+        for round in 1..=QUICK_EXITS {
+            let launch = Launch {
+                args: Vec::new(),
+                env: env(&[
+                    ("CLOSTA_FAKE_MODE", "exit"),
+                    ("CLOSTA_FAKE_EXIT", code.as_str()),
+                ]),
+                cwd: None,
+            };
+            let process = spawn(&native(options), launch)
+                .map_err(|problem| format!("round {round}: {problem}"))?;
+            match future::block_on(within(STAGE_LIMIT, process.wait())) {
+                Some(Ok(ended)) if ended == QUICK_EXIT_CODE => {}
+                other => return Err(format!("round {round}: ended with {other:?}")),
+            }
+        }
+        Ok(format!(
+            "win32 quick exit: {QUICK_EXITS} starts, each ended with {QUICK_EXIT_CODE}"
         ))
     }
 
@@ -433,19 +475,124 @@ mod smoke {
         let code = ended
             .ok_or_else(|| format!("claude did not answer and end within {STAGE_LIMIT:?}"))??;
 
-        std::thread::sleep(SETTLE);
-        let left = marked_processes(&options.distro, &mark)?;
-        if !left.is_empty() {
-            return Err(format!("processes left in WSL: {left}"));
-        }
+        none_left_after_kill(&options.distro, &mark)?;
         Ok(format!(
             "wsl claude {version}: initialize and mcp_status answered, exit {code}, none left after {SETTLE:?}"
         ))
     }
 
-    /// The `/proc/<pid>/environ` files in the distribution that hold the mark, one per line.
+    /// A `claude` with the mark, killed while running: no stdin closed, no chance to end by itself.
+    fn wsl_real_claude_killed(options: &Options) -> Outcome {
+        let mark = uuid::Uuid::new_v4().to_string();
+        let mut spec = LaunchSpec::new(&uuid::Uuid::new_v4().to_string());
+        spec.permission_prompt_tool_stdio = true;
+        let mut launch = Launch::of(&spec).map_err(|error| format!("no launch: {error}"))?;
+        launch
+            .args
+            .extend(["--strict-mcp-config", "--setting-sources", ""].map(str::to_owned));
+        launch.env.insert(MARK_NAME, mark.as_str());
+        let mut process = spawn(&wsl(options, WslProgram::Claude), launch)?;
+        let mut lines = process.take_stdout_lines().ok_or("no stdout")?;
+        let drain = process.take_stderr_drain().ok_or("no stderr")?;
+        // Answered `initialize` means claude is up, with whatever it starts at its start.
+        let ready = async {
+            process
+                .write_stdin(encode::initialize("i1", &[]))
+                .await
+                .map_err(|error| format!("initialize not written: {error}"))?;
+            loop {
+                let line = lines
+                    .next()
+                    .await
+                    .ok_or("stdout ended before the answer")?
+                    .map_err(|failure| format!("stdout failed: {failure:?}"))?;
+                if let AgentEvent::ControlResponse {
+                    request_id: Some(id),
+                    ..
+                } = decode(&line)
+                    && id == "i1"
+                {
+                    return Ok::<(), String>(());
+                }
+            }
+        };
+        let draining = async {
+            drain.await;
+            future::pending().await
+        };
+        let answered = future::block_on(within(STAGE_LIMIT, future::race(ready, draining)));
+        process.destroy_forcibly();
+        let code = future::block_on(within(STAGE_LIMIT, process.wait()));
+        drop(lines);
+        drop(process);
+        answered.ok_or_else(|| format!("claude did not answer within {STAGE_LIMIT:?}"))??;
+        none_left_after_kill(&options.distro, &mark)?;
+        Ok(format!(
+            "wsl claude killed with stdin open: wsl.exe exit {code:?}, none left after {SETTLE:?}"
+        ))
+    }
+
+    /// The Linux fake in `tree` mode with the mark, killed while its child and grandchild run.
+    fn wsl_tree_killed(options: &Options, wsl_fake: &str) -> Outcome {
+        let mark = uuid::Uuid::new_v4().to_string();
+        let launch = Launch {
+            args: Vec::new(),
+            env: env(&[
+                ("CLOSTA_FAKE_MODE", "tree"),
+                ("CLOSTA_FAKE_LIFETIME_SECS", FAKE_LIFETIME_SECS),
+                (MARK_NAME, mark.as_str()),
+            ]),
+            cwd: None,
+        };
+        let spawner = wsl(options, WslProgram::Path(wsl_fake.to_owned()));
+        let mut process = spawn(&spawner, launch)?;
+        let mut lines = process.take_stdout_lines().ok_or("no stdout")?;
+        let first = future::block_on(within(STAGE_LIMIT, lines.next()));
+        let before = marked_processes(&options.distro, &mark)?;
+        process.destroy_forcibly();
+        let code = future::block_on(within(STAGE_LIMIT, process.wait()));
+        drop(lines);
+        drop(process);
+        let Some(Some(Ok(grandchild))) = first else {
+            return Err("no pid line from the tree".to_owned());
+        };
+        let running = before.lines().count();
+        none_left_after_kill(&options.distro, &mark)?;
+        Ok(format!(
+            "wsl tree killed: {running} marked processes ran (grandchild {}), wsl.exe exit {code:?}, none left after {SETTLE:?}",
+            grandchild.trim()
+        ))
+    }
+
+    /// Waits [`SETTLE`] after a close or a kill, then fails listing what in the distribution still carries `mark` (pid and
+    /// name), after killing it so that nothing outlives the run.
+    fn none_left_after_kill(distro: &str, mark: &str) -> Result<(), String> {
+        std::thread::sleep(SETTLE);
+        let left = marked_processes(distro, mark)?;
+        if left.is_empty() {
+            return Ok(());
+        }
+        let pids: Vec<&str> = left
+            .lines()
+            .map(|line| line.split(' ').next().unwrap_or(""))
+            .collect();
+        let kill = format!("kill -9 {} 2>/dev/null", pids.join(" "));
+        _ = std::process::Command::new("wsl.exe")
+            .args(["-d", distro, "--exec", "/bin/sh", "-c", &kill])
+            .output();
+        Err(format!(
+            "left in WSL {SETTLE:?} after the kill (now killed): {}",
+            left.lines().collect::<Vec<_>>().join(", ")
+        ))
+    }
+
+    /// The processes in the distribution whose environment holds the mark, one `<pid> <name>` a
+    /// line.
     fn marked_processes(distro: &str, mark: &str) -> Result<String, String> {
-        let script = format!("grep -l \"{MARK_NAME}={mark}\" /proc/[0-9]*/environ 2>/dev/null");
+        let script = format!(
+            "for f in $(grep -l \"{MARK_NAME}={mark}\" /proc/[0-9]*/environ 2>/dev/null); do \
+             p=${{f#/proc/}}; p=${{p%/environ}}; echo \"$p $(cat /proc/$p/comm 2>/dev/null)\"; done"
+        );
         let output = std::process::Command::new("wsl.exe")
             .args(["-d", distro, "--exec", "/bin/sh", "-c", &script])
             .output()

@@ -19,7 +19,7 @@ pub(super) fn configure(command: &mut std::process::Command) {
     clippy::unnecessary_wraps,
     reason = "the same shape as the Windows side, where it can fail"
 )]
-pub(super) fn contain(_child: &async_process::Child) -> std::io::Result<Tree> {
+pub(super) fn contain(_child: &mut async_process::Child) -> std::io::Result<Tree> {
     Ok(Tree)
 }
 

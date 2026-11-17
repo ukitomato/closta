@@ -51,8 +51,9 @@ pub(crate) fn start(
     let mut child = command
         .spawn()
         .map_err(|error| LaunchError::Spawn(error.kind()))?;
-    let tree = platform::contain(&child).map_err(|error| {
-        // Not in a job, so it could not be stopped with its descendants: it does not run.
+    let tree = platform::contain(&mut child).map_err(|error| {
+        // Running outside a job, it could not be stopped with its descendants, so it is killed.
+        // A grandchild it started before this (the accepted window) is not, and is left.
         _ = child.kill();
         LaunchError::Spawn(error.kind())
     })?;

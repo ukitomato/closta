@@ -38,9 +38,16 @@ pub(super) fn configure(command: &mut std::process::Command) {
     command.creation_flags(CREATE_NO_WINDOW);
 }
 
-/// Puts the just-started child in a job of its own.
-pub(super) fn contain(child: &async_process::Child) -> io::Result<Job> {
-    Job::assign(child)
+/// Puts the just-started child in a job of its own. A child that has already ended cannot join
+/// one; it keeps the empty job and goes on, so that its exit code and output are still read
+/// (a `claude.exe` that fails at once is an exit, not a failure to start).
+pub(super) fn contain(child: &mut async_process::Child) -> io::Result<Job> {
+    let job = Job::new()?;
+    match job.assign(child) {
+        Ok(()) => Ok(job),
+        Err(_) if matches!(child.try_status(), Ok(Some(_))) => Ok(job),
+        Err(error) => Err(error),
+    }
 }
 
 /// Kills the child and everything it started that is still in its job.
@@ -59,13 +66,13 @@ pub(crate) struct Job(HANDLE);
 // SAFETY: a job handle is a kernel handle, usable from any thread. `Job` owns it alone and only
 // passes it to calls that take a shared handle (terminate) or end its life (close, in `Drop`).
 unsafe impl Send for Job {}
-// SAFETY: as for `Send`; `TerminateJobObject` may be called on one handle from several threads.
+// SAFETY: as for `Send`; `TerminateJobObject` may be called on one handle from several threads,
+// and `Drop`'s `CloseHandle` takes `&mut self`, so it never runs while a `terminate` does.
 unsafe impl Sync for Job {}
 
 impl Job {
-    /// A new `KILL_ON_JOB_CLOSE` job with `child` in it. On failure the job, if made, is closed;
-    /// the child is left to the caller.
-    pub(crate) fn assign(child: &async_process::Child) -> io::Result<Job> {
+    /// A new, empty `KILL_ON_JOB_CLOSE` job. On failure the job, if made, is closed.
+    pub(crate) fn new() -> io::Result<Job> {
         // SAFETY: no security attributes and no name; the handle returned is owned by `job`
         // from here on, which closes it on every path.
         let handle = unsafe { CreateJobObjectW(None, PCWSTR::null()) }.map_err(io::Error::from)?;
@@ -85,11 +92,15 @@ impl Job {
             )
         }
         .map_err(io::Error::from)?;
+        Ok(job)
+    }
+
+    /// Puts `child` in this job, and with it whatever `child` starts from now on.
+    pub(crate) fn assign(&self, child: &async_process::Child) -> io::Result<()> {
         let process = HANDLE(child.as_raw_handle());
         // SAFETY: `child` is borrowed for the call, so its process handle is open; the job
         // handle is ours and open.
-        unsafe { AssignProcessToJobObject(job.0, process) }.map_err(io::Error::from)?;
-        Ok(job)
+        unsafe { AssignProcessToJobObject(self.0, process) }.map_err(io::Error::from)
     }
 
     /// Kills every process in the job. Does nothing more once they are gone; may be called any
