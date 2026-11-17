@@ -3,6 +3,7 @@
 //! `platforms/intellij/session` package.
 
 pub mod clock;
+pub mod commands;
 #[cfg_attr(
     not(test),
     expect(
@@ -13,6 +14,7 @@ pub mod clock;
 mod live;
 pub mod log;
 pub mod status;
+pub mod store;
 
 /// The permission modes the CLI takes (the six capture `07` switched through, with
 /// `bypassPermissions`). PermissionModes.kt.
