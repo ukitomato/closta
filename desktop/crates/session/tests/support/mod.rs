@@ -271,9 +271,17 @@ pub fn runtime(
     processes: &Processes,
     configure: impl FnOnce(&mut SessionConfig),
 ) -> (SessionRuntime, SessionRun, Arc<RecordingLog>) {
+    runtime_over(processes.spawner(), configure)
+}
+
+/// [`runtime`] over any spawner, for a test that answers the launches itself.
+pub fn runtime_over(
+    spawner: Arc<dyn ProcessSpawner>,
+    configure: impl FnOnce(&mut SessionConfig),
+) -> (SessionRuntime, SessionRun, Arc<RecordingLog>) {
     let log = Arc::new(RecordingLog::default());
     let planner = Arc::new(NativeSessionLaunchPlanner::new(
-        processes.spawner(),
+        spawner,
         Arc::new(SecretEnv::default),
     ));
     let mut config = SessionConfig::new(

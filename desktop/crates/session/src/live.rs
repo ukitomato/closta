@@ -80,10 +80,6 @@ pub(crate) struct Tracked {
 impl Tracked {
     /// The process inside, for waiting on and destroying it while closing. It is killed when
     /// this wrapper drops, however many handles are left.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "closing waits on it from the next step on")
-    )]
     pub(crate) fn handle(&self) -> Arc<dyn AgentProcess> {
         Arc::clone(&self.inner)
     }

@@ -31,6 +31,8 @@ use crate::sandbox::SandboxStartWatch;
 use crate::status::{SessionFailure, SessionStatus};
 use crate::store::ConversationStore;
 
+mod close;
+
 /// How long a close waits for the process to end before it kills it.
 pub const CLOSE_WAIT: Duration = Duration::from_secs(5);
 /// How long a close waits for a killed process to end before it gives up.
@@ -197,8 +199,9 @@ impl SessionRuntime {
         self.shared.state().commands.clone()
     }
 
-    /// Closes the session: the status is Closed for good, the commands are revoked, and the run
-    /// lets go of what it holds and returns.
+    /// Closes the session: the status is Closed for good and the commands are revoked at once.
+    /// The run then tells the process to end, waits for it, kills it if it does not end, and
+    /// returns. Closing again, or after the session ended or failed, only says Closed.
     pub fn close(&self) {
         {
             let mut state = self.shared.state();
@@ -209,15 +212,17 @@ impl SessionRuntime {
         }
         self.shared.closing.close();
     }
+
+    /// Kills the session's processes now, on the calling thread, and every process it starts
+    /// from now on; the status is left as it is. For the platform's last step when the app ends
+    /// and cannot wait for the run (`destroy_forcibly`, where Kotlin's `destroyNow` destroyed).
+    pub fn destroy_now(&self) {
+        self.shared.live.destroy_all();
+    }
 }
 
 async fn run(shared: Arc<Shared>, config: SessionConfig, closed: Receiver<()>) {
-    let life = life(&shared, &config);
-    let outcome = future::or(async { Some(life.await) }, async {
-        _ = closed.recv().await;
-        None
-    })
-    .await;
+    let outcome = life(&shared, &config, &closed).await;
     // A spawn still under way when the run returns finds the list closed, and is killed.
     shared.live.destroy_all();
     let Some(outcome) = outcome else {
@@ -243,62 +248,67 @@ async fn run(shared: Arc<Shared>, config: SessionConfig, closed: Receiver<()>) {
     }
 }
 
-/// The session from its plan to its end, as the status it ends in.
-async fn life(shared: &Arc<Shared>, config: &SessionConfig) -> SessionStatus {
+/// The session from its plan to its end, as the status it ends in; `None` once it was closed.
+///
+/// A close during the plan or the version check drops them (the check's process is killed as it
+/// drops) and starts nothing. A close during the spawn waits for the spawn, and then closes the
+/// process it made. A close while the session runs closes its process. A session that ended or
+/// failed first waits for nothing.
+async fn life(
+    shared: &Arc<Shared>,
+    config: &SessionConfig,
+    closed: &Receiver<()>,
+) -> Option<SessionStatus> {
     let id = &config.id;
-    let mode = (config.start_mode)();
-    let planned = match config
-        .planner
-        .plan(id, config.working_directory.as_deref())
-        .await
-    {
-        Ok(planned) => planned,
-        Err(failure) => return SessionStatus::Failed(failure),
-    };
-    let planned = with_choices(planned, config.effort.as_deref(), mode, config.sandbox);
-    let spawner = planned.spawner;
-    let distro = spawner.wsl_distro().map(str::to_owned);
-    let failed =
-        |failure: SessionFailure| SessionStatus::Failed(failure.for_spawner(distro.as_deref()));
-    // A spec that contradicts itself is a plan that failed.
-    let Ok(launch) = Launch::of(&planned.spec) else {
-        return SessionStatus::Failed(SessionFailure::PlanFailed);
-    };
-
-    let check = launch.version_check();
-    let spawned = spawn(shared, Arc::clone(&spawner), check.clone());
-    let version = match check_version_within(
+    // The close side first: a session closed before its run is polled plans nothing.
+    let prepared = future::or(
         async {
-            spawned
-                .await
-                .map(|tracked| Box::new(tracked) as Box<dyn AgentProcess>)
+            _ = closed.recv().await;
+            None
         },
-        config.version_timeout,
+        async { Some(prepare(shared, config).await) },
     )
-    .await
-    {
-        Ok(version) => version,
-        Err(failure) => return failed(SessionFailure::from_version(failure)),
+    .await?;
+    let Prepared {
+        spawner,
+        launch,
+        sandboxed,
+        version,
+    } = match prepared {
+        Ok(prepared) => prepared,
+        Err(status) => return Some(status),
     };
-    config.log.info(&format!(
-        "claude session {id}: {:?} -> {version}",
-        check.args
-    ));
 
-    let process = match spawn(shared, spawner, launch.clone()).await {
+    // Not raced with the close: what the spawn makes is closed like any other process.
+    let process = match spawn(shared, Arc::clone(&spawner), launch.clone()).await {
         Ok(process) => process,
-        Err(error) => return failed(SessionFailure::from_launch(&error)),
+        Err(error) => return Some(failed(&*spawner, SessionFailure::from_launch(&error))),
     };
-    config
-        .log
-        .info(&format!("claude session {id}: started {:?}", launch.args));
-
+    let handle = process.handle();
     let StartedSession {
         session,
         events,
         pump,
     } = ClaudeSession::start(Box::new(process), id);
-    let sandboxed = planned.spec.sandbox;
+    let close = |pump| {
+        close::close_pumping(
+            handle,
+            pump,
+            &events,
+            config.close_wait,
+            config.kill_wait,
+            id,
+            &*config.log,
+        )
+    };
+    if closed.is_closed() {
+        close(pump).await;
+        return None;
+    }
+    config
+        .log
+        .info(&format!("claude session {id}: started {:?}", launch.args));
+
     // The view says the effort from its first snapshot on, before the session runs; a session
     // with no effort says nothing, unless it is in the sandbox.
     if config.effort.is_some() || sandboxed {
@@ -314,11 +324,9 @@ async fn life(shared: &Arc<Shared>, config: &SessionConfig) -> SessionStatus {
         Arc::new(SystemClock),
         Arc::clone(&shared.store),
     ));
-    let running = SessionStatus::Running {
-        version: version.clone(),
-    };
+    let running = SessionStatus::Running { version };
     if !shared.state().set(running, Some(Arc::clone(&commands))) {
-        // Closed meanwhile: the run is about to return.
+        // Closed meanwhile: the close below wins at once.
         commands.revoke();
     }
     // A CLI in the sandbox is asked its settings at once, so a session that writes no
@@ -327,6 +335,7 @@ async fn life(shared: &Arc<Shared>, config: &SessionConfig) -> SessionStatus {
         ask_settings(&commands, config);
     }
 
+    let mut pump = pump;
     let folding = async {
         let mut watch = SandboxStartWatch::new(sandboxed);
         let mut asked = sandboxed;
@@ -336,13 +345,81 @@ async fn life(shared: &Arc<Shared>, config: &SessionConfig) -> SessionStatus {
             }
         }
     };
-    let (end, ()) = future::zip(pump, folding).await;
+    // The close side first: once closed, nothing more is folded, though the pump has ended.
+    let ended = future::or(
+        async {
+            _ = closed.recv().await;
+            None
+        },
+        async {
+            let (end, ()) = future::zip(&mut pump, folding).await;
+            Some(end)
+        },
+    )
+    .await;
     commands.revoke();
-    match end {
-        PumpEnd::Failed(failure) => failed(SessionFailure::from_exit(failure)),
+    let Some(end) = ended else {
+        close(pump).await;
+        return None;
+    };
+    Some(match end {
+        PumpEnd::Failed(failure) => failed(&*spawner, SessionFailure::from_exit(failure)),
         // The run holds the receiver of the events, so the pump is never abandoned.
         PumpEnd::Ended | PumpEnd::Abandoned => SessionStatus::Ended,
-    }
+    })
+}
+
+/// What the session is started with once the version is known.
+struct Prepared {
+    spawner: Arc<dyn ProcessSpawner>,
+    launch: Launch,
+    sandboxed: bool,
+    version: String,
+}
+
+/// The plan and the version check, or the status they failed with.
+async fn prepare(shared: &Arc<Shared>, config: &SessionConfig) -> Result<Prepared, SessionStatus> {
+    let id = &config.id;
+    let mode = (config.start_mode)();
+    let planned = config
+        .planner
+        .plan(id, config.working_directory.as_deref())
+        .await
+        .map_err(SessionStatus::Failed)?;
+    let planned = with_choices(planned, config.effort.as_deref(), mode, config.sandbox);
+    let spawner = planned.spawner;
+    // A spec that contradicts itself is a plan that failed.
+    let Ok(launch) = Launch::of(&planned.spec) else {
+        return Err(SessionStatus::Failed(SessionFailure::PlanFailed));
+    };
+
+    let check = launch.version_check();
+    let spawned = spawn(shared, Arc::clone(&spawner), check.clone());
+    let version = check_version_within(
+        async {
+            spawned
+                .await
+                .map(|tracked| Box::new(tracked) as Box<dyn AgentProcess>)
+        },
+        config.version_timeout,
+    )
+    .await
+    .map_err(|failure| failed(&*spawner, SessionFailure::from_version(failure)))?;
+    config.log.info(&format!(
+        "claude session {id}: {:?} -> {version}",
+        check.args
+    ));
+    Ok(Prepared {
+        spawner,
+        launch,
+        sandboxed: planned.spec.sandbox,
+        version,
+    })
+}
+
+/// `failure` as the session's end, named for the WSL distribution `spawner` starts in.
+fn failed(spawner: &dyn ProcessSpawner, failure: SessionFailure) -> SessionStatus {
+    SessionStatus::Failed(failure.for_spawner(spawner.wsl_distro()))
 }
 
 /// Starts `launch` on the blocking pool and puts the process on the session's list in the same
