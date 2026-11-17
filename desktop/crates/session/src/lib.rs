@@ -5,15 +5,9 @@
 pub mod clock;
 pub mod commands;
 pub mod launch;
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "the session runtime that uses it is not written yet"
-    )
-)]
 mod live;
 pub mod log;
+pub mod runtime;
 pub mod sandbox;
 pub mod status;
 pub mod store;
