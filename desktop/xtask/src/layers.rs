@@ -93,7 +93,9 @@ pub fn check_graph(packages: &[Package]) -> Vec<Violation> {
                 for dep in p
                     .workspace_deps
                     .iter()
-                    .filter(|d| !allowed.contains(&d.as_str()))
+                    // A crate may name itself as a dev-dependency to turn its own features on in
+                    // its tests; that edge leaves no layer.
+                    .filter(|d| **d != p.name && !allowed.contains(&d.as_str()))
                 {
                     out.push(Violation {
                         rule: 2,
@@ -443,6 +445,15 @@ mod tests {
         let v = check_graph(&g);
         assert_eq!(v.len(), 1);
         assert_eq!((v[0].rule, v[0].krate.as_str()), (2, "closta-goldens"));
+    }
+
+    #[test]
+    fn a_crate_may_enable_its_own_features_in_tests() {
+        let mut g = clean();
+        let providers = g.iter_mut().find(|p| p.name == "closta-providers").unwrap();
+        providers.workspace_deps.push("closta-providers".into());
+        providers.closure.push("closta-providers".into());
+        assert!(check_graph(&g).is_empty());
     }
 
     #[test]

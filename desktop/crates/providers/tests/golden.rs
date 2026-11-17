@@ -6,60 +6,15 @@
 
 mod common;
 
-use closta_core::fold;
 use closta_model::ConversationState;
 use common::*;
 use serde_json::{Value, json};
-
-fn fold_capture(scenario: &str) -> ConversationState {
-    read_capture(&format!("{scenario}.ndjson"))
-        .iter()
-        .fold(ConversationState::default(), fold)
-}
-
-fn read_golden(scenario: &str) -> Result<Value, String> {
-    let path = golden_dir().join(format!("{scenario}.json"));
-    let text = std::fs::read_to_string(&path)
-        .map_err(|e| format!("{scenario}: golden {} cannot be read: {e}", path.display()))?;
-    serde_json::from_str(&text).map_err(|e| format!("{scenario}: golden does not parse: {e}"))
-}
-
-fn check_scenario(scenario: &str, fold_fn: &dyn Fn(&str) -> ConversationState) -> Option<String> {
-    let once = fold_fn(scenario);
-    let twice = fold_fn(scenario);
-    if once != twice {
-        return Some(format!(
-            "{scenario}: folding twice must give the same state"
-        ));
-    }
-    let golden = match read_golden(scenario) {
-        Ok(g) => g,
-        Err(e) => return Some(e),
-    };
-    let actual = serde_json::to_value(&once).expect("the state serializes");
-    json_first_difference(&golden, &actual).map(|d| {
-        format!(
-            "{scenario}: {}: expected {}, got {}",
-            d.pointer, d.expected, d.actual
-        )
-    })
-}
 
 fn check_all(scenarios: &[String], fold_fn: &dyn Fn(&str) -> ConversationState) -> Vec<String> {
     scenarios
         .iter()
         .filter_map(|s| check_scenario(s, fold_fn))
         .collect()
-}
-
-fn scenario_names() -> Vec<String> {
-    let mut names: Vec<String> = manifest()
-        .scenarios
-        .into_iter()
-        .map(|s| s.scenario)
-        .collect();
-    names.sort();
-    names
 }
 
 #[test]

@@ -5,9 +5,11 @@
 //! The captures and the goldens are read in place from the Kotlin side of the repository, never
 //! copied.
 
-use closta_model::AgentEvent;
+use closta_core::fold;
+use closta_model::{AgentEvent, ConversationState};
 use closta_providers::claude::protocol::decode;
 use serde::Deserialize;
+use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
@@ -337,4 +339,56 @@ pub fn json_first_difference(
         }
     }
     walk("", expected, actual)
+}
+
+/// Folds capture `<scenario>.ndjson` decoded directly.
+pub fn fold_capture(scenario: &str) -> ConversationState {
+    read_capture(&format!("{scenario}.ndjson"))
+        .iter()
+        .fold(ConversationState::default(), fold)
+}
+
+/// The core golden of `scenario`, or why it cannot be read.
+pub fn read_golden(scenario: &str) -> Result<Value, String> {
+    let path = golden_dir().join(format!("{scenario}.json"));
+    let text = std::fs::read_to_string(&path)
+        .map_err(|e| format!("{scenario}: golden {} cannot be read: {e}", path.display()))?;
+    serde_json::from_str(&text).map_err(|e| format!("{scenario}: golden does not parse: {e}"))
+}
+
+/// Folds `scenario` twice with `fold_fn` and compares the state with the golden; `None` when
+/// it matches, else the first difference named by the scenario.
+pub fn check_scenario(
+    scenario: &str,
+    fold_fn: &dyn Fn(&str) -> ConversationState,
+) -> Option<String> {
+    let once = fold_fn(scenario);
+    let twice = fold_fn(scenario);
+    if once != twice {
+        return Some(format!(
+            "{scenario}: folding twice must give the same state"
+        ));
+    }
+    let golden = match read_golden(scenario) {
+        Ok(g) => g,
+        Err(e) => return Some(e),
+    };
+    let actual = serde_json::to_value(&once).expect("the state serializes");
+    json_first_difference(&golden, &actual).map(|d| {
+        format!(
+            "{scenario}: {}: expected {}, got {}",
+            d.pointer, d.expected, d.actual
+        )
+    })
+}
+
+/// The scenarios `manifest.json` lists, sorted.
+pub fn scenario_names() -> Vec<String> {
+    let mut names: Vec<String> = manifest()
+        .scenarios
+        .into_iter()
+        .map(|s| s.scenario)
+        .collect();
+    names.sort();
+    names
 }
