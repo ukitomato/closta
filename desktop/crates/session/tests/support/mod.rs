@@ -331,7 +331,7 @@ pub fn drive<T, F: Future<Output = T>>(test: impl FnOnce(Rc<LocalExecutor<'stati
 }
 
 /// Every status `rx` was sent, read once the run has ended: the channel of
-/// [`SessionRuntime::watch_status`] does not close.
+/// [`SessionRuntime::watch_status`] closes at the end, and what it held is read here.
 pub fn statuses(rx: &Receiver<SessionStatus>) -> Vec<SessionStatus> {
     std::iter::from_fn(|| rx.try_recv().ok()).collect()
 }
