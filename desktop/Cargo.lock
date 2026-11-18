@@ -874,8 +874,8 @@ version = "0.1.0"
 dependencies = [
  "closta-core",
  "closta-platform",
- "closta-presenter",
  "closta-providers",
+ "closta-shell",
 ]
 
 [[package]]
@@ -897,6 +897,7 @@ dependencies = [
  "closta-model",
  "closta-presenter",
  "closta-providers",
+ "closta-shell",
  "imbl",
  "serde",
  "serde_json",
@@ -915,7 +916,7 @@ dependencies = [
 name = "closta-platform"
 version = "0.1.0"
 dependencies = [
- "closta-presenter",
+ "closta-shell",
  "gpui-kit",
 ]
 
@@ -969,6 +970,24 @@ dependencies = [
  "serde_json",
  "smol",
  "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "closta-shell"
+version = "0.1.0"
+dependencies = [
+ "async-channel",
+ "blocking",
+ "closta-core",
+ "closta-model",
+ "closta-presenter",
+ "closta-providers",
+ "closta-session",
+ "futures-lite",
+ "serde",
+ "serde_json",
+ "smol",
  "uuid",
 ]
 

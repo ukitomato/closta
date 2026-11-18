@@ -7,7 +7,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
-closta-presenter.workspace = true
+closta-shell.workspace = true
 gpui-kit.workspace = true
 
 [lints]

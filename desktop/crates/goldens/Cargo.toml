@@ -18,5 +18,9 @@ serde_json.workspace = true
 base64.workspace = true
 imbl.workspace = true
 
+[dev-dependencies]
+# The row changes, checked over every capture and timed on the largest session.
+closta-shell.workspace = true
+
 [lints]
 workspace = true

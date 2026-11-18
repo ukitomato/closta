@@ -13,7 +13,7 @@ path = "src/main.rs"
 [dependencies]
 closta-core.workspace = true
 closta-platform.workspace = true
-closta-presenter.workspace = true
+closta-shell.workspace = true
 closta-providers.workspace = true
 
 [lints]
