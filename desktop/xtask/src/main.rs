@@ -65,14 +65,23 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
-        "win-build" => {
-            let flags: Vec<String> = std::env::args().skip(2).collect();
-            if let Some(flag) = flags.iter().find(|f| *f != "--release" && *f != "--run") {
-                eprintln!("unknown win-build flag: {flag:?}");
-                return ExitCode::FAILURE;
-            }
-            let has = |name: &str| flags.iter().any(|f| f == name);
-            match win::win_build(&desktop_root(), has("--release"), has("--run")) {
+        "win-build" | "win-test" => {
+            let build = command == "win-build";
+            let args: Vec<String> = std::env::args().skip(2).collect();
+            let flags = match win::parse_flags(&args, build) {
+                Ok(flags) => flags,
+                Err(err) => {
+                    eprintln!("{command}: {err}");
+                    return ExitCode::FAILURE;
+                }
+            };
+            let root = desktop_root();
+            let result = if build {
+                win::win_build(&root, flags.release, flags.run, &flags.features)
+            } else {
+                win::win_test(&root, &flags.features)
+            };
+            match result {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(err) => {
                     eprintln!("{err:#}");

@@ -6,6 +6,10 @@ rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[features]
+# GPUI's frame timings, for the measuring build.
+profiler = ["gpui-kit/profiler"]
+
 [dependencies]
 closta-shell.workspace = true
 gpui-kit.workspace = true

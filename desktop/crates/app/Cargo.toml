@@ -10,11 +10,26 @@ publish.workspace = true
 name = "closta"
 path = "src/main.rs"
 
+[features]
+# The development replay (`--replay` and the rest): off in the exe that is handed out.
+replay = ["closta-providers/fake"]
+# GPUI's frame timings, for the measuring build.
+profiler = ["closta-platform/profiler"]
+
 [dependencies]
+async-channel.workspace = true
+async-io.workspace = true
 closta-core.workspace = true
+closta-model.workspace = true
 closta-platform.workspace = true
-closta-shell.workspace = true
+closta-presenter.workspace = true
 closta-providers.workspace = true
+closta-session.workspace = true
+closta-shell.workspace = true
+futures-lite.workspace = true
+
+[dev-dependencies]
+smol.workspace = true
 
 [lints]
 workspace = true
