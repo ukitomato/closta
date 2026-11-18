@@ -7,6 +7,7 @@
 pub mod contract;
 pub mod live;
 pub mod process;
+pub mod replay;
 pub mod script;
 pub mod session;
 pub mod spawner;
