@@ -2,4 +2,8 @@
 //! platform wraps it and draws what it holds.
 
 pub mod header;
+pub mod panes;
 pub mod rows;
+pub mod slot;
+pub mod state;
+pub mod watch;
