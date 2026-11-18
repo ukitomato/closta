@@ -65,9 +65,60 @@ pub fn row_changes(before: &[ThreadRow], after: &[ThreadRow]) -> Vec<RowChange> 
 /// How many rows a surface keeps measured above and below what is visible.
 pub const KEEP_AROUND: usize = 200;
 
-/// The rows a surface keeps measured when `visible` rows from `top` are on screen.
+/// The rows a surface keeps measured when `visible` rows from `top` are on screen. Empty, never
+/// reversed, when `top` is past the end.
 pub fn kept(top: usize, visible: usize, len: usize) -> Range<usize> {
-    top.saturating_sub(KEEP_AROUND)..len.min(top + visible + KEEP_AROUND)
+    let end = len.min(top + visible + KEEP_AROUND);
+    top.saturating_sub(KEEP_AROUND).min(end)..end
+}
+
+/// How many rows past what is visible, in the direction of the scroll, get their text made
+/// before they come into view.
+pub const PREFETCH_AHEAD: usize = 40;
+/// How many rows on the other side of what is visible get their text made.
+pub const PREFETCH_BEHIND: usize = 40;
+/// How many rows get their text made in one frame at most.
+pub const PREFETCH_QUOTA: usize = 8;
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ScrollDirection {
+    Up,
+    Down,
+}
+
+/// The text rows whose text to make next, at most [`PREFETCH_QUOTA`] of them, when `visible`
+/// rows from `top` are on screen and the list last moved in `direction`: first the visible rows
+/// and the [`PREFETCH_AHEAD`] rows past them in that direction, nearest first in the direction
+/// of travel; then the [`PREFETCH_BEHIND`] rows on the other side, nearest first. Rows `cached`
+/// by key are skipped.
+pub fn prefetch_rows(
+    top: usize,
+    visible: usize,
+    direction: ScrollDirection,
+    rows: &[ThreadRow],
+    cached: impl Fn(&str) -> bool,
+) -> Vec<usize> {
+    let len = rows.len();
+    let bottom = top.saturating_add(visible);
+    let clip = |range: Range<usize>| range.start.min(len)..range.end.min(len);
+    let (ahead, behind): (
+        Box<dyn Iterator<Item = usize>>,
+        Box<dyn Iterator<Item = usize>>,
+    ) = match direction {
+        ScrollDirection::Down => (
+            Box::new(clip(top..bottom.saturating_add(PREFETCH_AHEAD))),
+            Box::new(clip(top.saturating_sub(PREFETCH_BEHIND)..top).rev()),
+        ),
+        ScrollDirection::Up => (
+            Box::new(clip(top.saturating_sub(PREFETCH_AHEAD)..bottom).rev()),
+            Box::new(clip(bottom..bottom.saturating_add(PREFETCH_BEHIND))),
+        ),
+    };
+    ahead
+        .chain(behind)
+        .filter(|&at| matches!(&rows[at], ThreadRow::Text(row) if !cached(&row.key)))
+        .take(PREFETCH_QUOTA)
+        .collect()
 }
 
 #[cfg(test)]
@@ -220,5 +271,89 @@ mod tests {
         assert_eq!(kept(500, 30, 1000), 300..730);
         assert_eq!(kept(900, 30, 1000), 700..1000);
         assert_eq!(kept(150, 30, 100), 0..100);
+        assert_eq!(kept(500, 30, 100), 100..100);
+    }
+
+    fn texts(len: usize) -> Vec<ThreadRow> {
+        (0..len).map(|at| text(&format!("t{at}"), "body")).collect()
+    }
+
+    fn at(key: &str) -> usize {
+        key[1..].parse().unwrap_or(usize::MAX)
+    }
+
+    #[test]
+    fn prefetch_takes_text_rows_ahead_first_up_to_the_quota() {
+        assert_eq!(
+            (PREFETCH_AHEAD, PREFETCH_BEHIND, PREFETCH_QUOTA),
+            (40, 40, 8)
+        );
+        let rows = texts(300);
+        let nothing = |_: &str| false;
+        // Scrolling down: the visible rows, then the rows below them, nearest first.
+        assert_eq!(
+            prefetch_rows(100, 5, ScrollDirection::Down, &rows, nothing),
+            [100, 101, 102, 103, 104, 105, 106, 107]
+        );
+        // Scrolling up: from the bottom of what is visible upwards.
+        assert_eq!(
+            prefetch_rows(100, 5, ScrollDirection::Up, &rows, nothing),
+            [104, 103, 102, 101, 100, 99, 98, 97]
+        );
+        // With the visible rows and the rows ahead made, the rows behind come next.
+        let ahead_made = |key: &str| (100..145).contains(&at(key));
+        assert_eq!(
+            prefetch_rows(100, 5, ScrollDirection::Down, &rows, ahead_made),
+            [99, 98, 97, 96, 95, 94, 93, 92]
+        );
+        // Nothing beyond 40 rows ahead and 40 behind.
+        let all_but_far = |key: &str| (60..145).contains(&at(key));
+        assert_eq!(
+            prefetch_rows(100, 5, ScrollDirection::Down, &rows, all_but_far),
+            Vec::<usize>::new()
+        );
+    }
+
+    #[test]
+    fn prefetch_skips_cached_and_non_text_rows() {
+        let rows = vec![
+            text("a", "one"),
+            tool("b", ToolLineState::Ok),
+            text("c", "two"),
+            sign_in("d"),
+            text("e", "three"),
+            text("f", "four"),
+        ];
+        assert_eq!(
+            prefetch_rows(0, 2, ScrollDirection::Down, &rows, |key: &str| key == "c"),
+            [0, 4, 5]
+        );
+        assert_eq!(
+            prefetch_rows(0, 6, ScrollDirection::Down, &rows, |_: &str| true),
+            Vec::<usize>::new()
+        );
+    }
+
+    #[test]
+    fn prefetch_stays_inside_the_list() {
+        let rows = texts(10);
+        let nothing = |_: &str| false;
+        assert_eq!(
+            prefetch_rows(8, 30, ScrollDirection::Down, &rows, nothing),
+            [8, 9, 7, 6, 5, 4, 3, 2]
+        );
+        assert_eq!(
+            prefetch_rows(0, 3, ScrollDirection::Up, &rows, nothing),
+            [2, 1, 0, 3, 4, 5, 6, 7]
+        );
+        // A top past the end (the list shrank under it) and an empty list.
+        assert_eq!(
+            prefetch_rows(25, 5, ScrollDirection::Down, &rows, nothing),
+            [9, 8, 7, 6, 5, 4, 3, 2]
+        );
+        assert_eq!(
+            prefetch_rows(0, 5, ScrollDirection::Up, &[], nothing),
+            Vec::<usize>::new()
+        );
     }
 }

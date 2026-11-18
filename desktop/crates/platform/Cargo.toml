@@ -11,6 +11,8 @@ publish.workspace = true
 profiler = ["gpui-kit/profiler"]
 
 [dependencies]
+closta-presenter.workspace = true
+closta-session.workspace = true
 closta-shell.workspace = true
 gpui-kit.workspace = true
 
