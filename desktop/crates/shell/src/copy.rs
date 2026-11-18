@@ -10,12 +10,13 @@ use closta_presenter::transcript::ApprovalOutcome;
 
 /// The conversation pane with no rows (`thread.empty`).
 pub const EMPTY: &str = "No messages yet";
-/// The button that scrolls back to the tail.
-pub const JUMP_TO_LATEST: &str = "Jump to latest";
-/// The menu item that copies a whole message, which a selection cannot reach once its first row
-/// scrolls out of view.
-pub const COPY_MESSAGE: &str = "Copy message";
-/// The right pane's title.
+/// The button that scrolls back to the tail (`thread.toLatest`).
+pub const JUMP_TO_LATEST: &str = "Scroll to latest";
+/// The menu items that copy a whole message, which a selection cannot reach once its first row
+/// scrolls out of view: the user's (`thread.ask.copy`) and a reply's (`thread.reply.copy`).
+pub const COPY_ASK: &str = "Copy";
+pub const COPY_REPLY: &str = "Copy Reply";
+/// The right pane's title. Not in the bundle: 6a's empty right pane has no key of its own.
 pub const SESSION: &str = "Session";
 /// The left pane's name (`toolwindow.tab.sessions`).
 pub const SESSIONS: &str = "Sessions";
@@ -26,8 +27,6 @@ pub const WORKING: &str = "Working…";
 pub const THOUGHT: &str = "Thought";
 pub const THINKING: &str = "Thinking…";
 pub const EXPLORED: &str = "Explored";
-/// A sub-agent's call that names no task (`chat.subagent`).
-pub const SUBAGENT: &str = "Subagent";
 pub const SIGN_IN_TEXT: &str =
     "Claude Code is not signed in. Sign in in the terminal, then send again.";
 pub const SIGN_IN_ACTION: &str = "Sign in in the terminal";
@@ -107,10 +106,11 @@ fn duration(ms: i64) -> String {
     }
 }
 
-/// A sub-agent's one-line card: what it was asked to do, how many tools it called, and how long
-/// it ran once it is done, to a tenth of a second rounded half up as `%.1f` does.
-pub fn agent_line(summary: &AgentSummary) -> String {
-    let what = summary.description.as_deref().unwrap_or(SUBAGENT);
+/// A sub-agent's one-line card: what it was asked to do (its tool's `label` when it says
+/// nothing), how many tools it called, and how long it ran once it is done, to a tenth of a
+/// second rounded half up as `%.1f` does.
+pub fn agent_line(summary: &AgentSummary, label: &str) -> String {
+    let what = summary.description.as_deref().unwrap_or(label);
     let mut line = format!("{what} · Tools: {}", summary.tools);
     if let Some(ms) = summary.duration_ms {
         let tenths = (ms.max(0) + 50) / 100;
@@ -374,19 +374,20 @@ mod tests {
             tools: 0,
             duration_ms: None,
         };
-        assert_eq!(agent_line(&summary), "Find the callers · Tools: 0");
+        assert_eq!(agent_line(&summary, "Task"), "Find the callers · Tools: 0");
         let done = AgentSummary {
             description: None,
             tools: 4,
             duration_ms: Some(3_250),
         };
-        // Rounded half up, as Kotlin's `%.1f` rounds.
-        assert_eq!(agent_line(&done), "Subagent · Tools: 4 · 3.3 s");
+        // With no description, the tool's line names it (ThreadViews.kt's agentCard); the time is
+        // rounded half up, as Kotlin's `%.1f` rounds.
+        assert_eq!(agent_line(&done, "Task"), "Task · Tools: 4 · 3.3 s");
         let quick = AgentSummary {
             duration_ms: Some(3_240),
             ..done
         };
-        assert_eq!(agent_line(&quick), "Subagent · Tools: 4 · 3.2 s");
+        assert_eq!(agent_line(&quick, "Agent"), "Agent · Tools: 4 · 3.2 s");
     }
 
     #[test]
@@ -452,7 +453,9 @@ mod tests {
             ("thread.explored.title", EXPLORED),
             ("thread.signIn.text", SIGN_IN_TEXT),
             ("thread.signIn.action", SIGN_IN_ACTION),
-            ("chat.subagent", SUBAGENT),
+            ("thread.toLatest", JUMP_TO_LATEST),
+            ("thread.ask.copy", COPY_ASK),
+            ("thread.reply.copy", COPY_REPLY),
             ("thread.tool.running", TOOL_RUNNING),
             ("thread.tool.done", TOOL_DONE),
             ("mcp.status.failed", TOOL_FAILED),

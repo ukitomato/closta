@@ -93,17 +93,15 @@ pub(super) fn row(model: &Entity<ShellModel>, slot: SlotId, at: usize, cx: &mut 
 
 /// A right-click menu that copies the whole message: a selection is lost once its first row
 /// scrolls out of the list, so this is how a long message is copied.
-fn with_copy_menu(key: &str, element: Div, text: &str) -> AnyElement {
+fn with_copy_menu(key: &str, element: Div, item: &'static str, text: &str) -> AnyElement {
     let text = text.to_owned();
     element
         .id(SharedString::from(format!("message-{key}")))
         .context_menu(move |menu, _, _| {
             let text = text.clone();
-            menu.item(
-                PopupMenuItem::new(copy::COPY_MESSAGE).on_click(move |_, _, cx| {
-                    cx.write_to_clipboard(ClipboardItem::new_string(text.clone()));
-                }),
-            )
+            menu.item(PopupMenuItem::new(item).on_click(move |_, _, cx| {
+                cx.write_to_clipboard(ClipboardItem::new_string(text.clone()));
+            }))
         })
         .into_any_element()
 }
@@ -120,12 +118,17 @@ pub(super) fn ask_row(ask: &AskRow, cx: &App) -> AnyElement {
         .border_color(theme.border)
         .bg(theme.secondary)
         .child(ask.text.clone());
-    with_copy_menu(&ask.key, bubble, &ask.text)
+    with_copy_menu(&ask.key, bubble, copy::COPY_ASK, &ask.text)
 }
 
 /// A text block of a reply, as Markdown that can be selected across the rows in view.
 pub(super) fn text_row(key: &str, state: &Entity<TextViewState>, markdown: &str) -> AnyElement {
-    with_copy_menu(key, div().w_full().child(TextView::new(state)), markdown)
+    with_copy_menu(
+        key,
+        div().w_full().child(TextView::new(state)),
+        copy::COPY_REPLY,
+        markdown,
+    )
 }
 
 fn thinking_word(row: &ThinkingRow) -> &'static str {
@@ -166,7 +169,7 @@ pub(super) fn thinking_row(
 
 fn tool_name(row: &ToolRow) -> String {
     match &row.agent {
-        Some(summary) => copy::agent_line(summary),
+        Some(summary) => copy::agent_line(summary, &row.line.label),
         None => format!("{} — {}", row.line.label, copy::tool_state(row.line.state)),
     }
 }
@@ -177,8 +180,8 @@ pub(super) fn tool_row(row: &ToolRow, is_open: bool, toggle: &Toggle, cx: &App) 
     let content = match &row.agent {
         Some(summary) => {
             let muted = cx.theme().muted_foreground;
-            let line = copy::agent_line(summary);
-            let what = summary.description.as_deref().unwrap_or(copy::SUBAGENT);
+            let line = copy::agent_line(summary, &row.line.label);
+            let what = summary.description.as_deref().unwrap_or(&row.line.label);
             let rest = line.strip_prefix(what).unwrap_or_default().to_owned();
             framed(cx)
                 .child(
