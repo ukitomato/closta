@@ -31,7 +31,7 @@ fn strings(parts: &[&str]) -> Vec<String> {
 }
 
 /// A cargo invocation run under the shared lock so heavy builds never overlap.
-fn locked_cargo(name: &'static str, cargo_args: &[&str]) -> Step {
+pub(crate) fn locked_cargo(name: &'static str, cargo_args: &[&str]) -> Step {
     let mut args = strings(&[LOCK, "cargo"]);
     args.extend(strings(cargo_args));
     Step::Command {

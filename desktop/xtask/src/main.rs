@@ -1,5 +1,6 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
+mod capture;
 mod check;
 mod layers;
 mod win;
@@ -25,6 +26,16 @@ fn desktop_root_from(runtime: Option<OsString>, built: &str) -> PathBuf {
 
 fn main() -> ExitCode {
     let command = std::env::args().nth(1).unwrap_or_default();
+    if let Some(example) = capture::EXAMPLES.into_iter().find(|it| *it == command) {
+        let root = desktop_root();
+        return match check::run_steps(&root, &capture::steps(example, &root)) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(err) => {
+                eprintln!("{err:#}");
+                ExitCode::FAILURE
+            }
+        };
+    }
     match command.as_str() {
         "layers" => match layers::run(&desktop_root()) {
             Ok(()) => ExitCode::SUCCESS,

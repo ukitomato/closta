@@ -12,6 +12,7 @@ pub mod stream_script;
 
 use closta_presenter::input::{PresenterInput, SendId, UserSent};
 use closta_presenter::text::{is_kt_whitespace, utf16_len};
+use closta_providers::claude::fake::replay::{ReplayCue, ReplayLine};
 use closta_providers::claude::protocol::decode;
 use serde_json::{Value, json};
 
@@ -183,6 +184,31 @@ pub fn steps(shape: &Shape) -> Vec<PresenterInput> {
             )
         })
         .collect()
+}
+
+/// The session of `shape` drawn from `seed` as a replay file's lines: each turn's prompt as a user
+/// cue, then its stdout.
+pub fn replay_lines(shape: &Shape, seed: u64) -> Vec<ReplayLine> {
+    session(shape, seed)
+        .into_iter()
+        .flat_map(|turn| {
+            std::iter::once(ReplayLine::Cue(ReplayCue::User { text: turn.prompt }))
+                .chain(turn.lines.into_iter().map(ReplayLine::Stdout))
+        })
+        .collect()
+}
+
+/// `lines` as a replay file holds them: a cue as its line, stdout as it is, one per line.
+pub fn replay_file(lines: &[ReplayLine]) -> String {
+    let mut text = String::new();
+    for line in lines {
+        match line {
+            ReplayLine::Stdout(line) => text.push_str(line),
+            ReplayLine::Cue(cue) => text.push_str(&cue.to_line()),
+        }
+        text.push('\n');
+    }
+    text
 }
 
 fn tool_kinds(shape: &Shape, top_level: usize, random: &mut Random) -> Vec<&'static str> {

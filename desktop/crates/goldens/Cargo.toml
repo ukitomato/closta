@@ -9,7 +9,8 @@ publish.workspace = true
 [dependencies]
 # For the spawn helper of the shared test support (`providers/tests/common`).
 blocking.workspace = true
-closta-providers.workspace = true
+# `fake` for the replay files: their cues and their parser.
+closta-providers = { workspace = true, features = ["fake"] }
 closta-presenter.workspace = true
 closta-core.workspace = true
 closta-model.workspace = true
@@ -21,6 +22,15 @@ imbl.workspace = true
 [dev-dependencies]
 # The row changes, checked over every capture and timed on the largest session.
 closta-shell.workspace = true
+
+# The replay files `cargo xtask gallery-capture` and `cargo xtask synth-capture` write.
+[[example]]
+name = "gallery-capture"
+path = "examples/gallery_capture.rs"
+
+[[example]]
+name = "synth-capture"
+path = "examples/synth_capture.rs"
 
 [lints]
 workspace = true
