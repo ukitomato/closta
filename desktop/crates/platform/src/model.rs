@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 
 use closta_presenter::rows::ThreadRow;
-use closta_shell::rows::{RowChange, ScrollDirection, kept};
+use closta_shell::rows::{RowChange, ScrollDirection, kept, list_top};
 use closta_shell::slot::{SlotId, SlotLaunch};
 use closta_shell::state::{ShellAction, ShellState};
 use gpui_kit::component::message_scroller::MessageScrollerState;
@@ -143,8 +143,9 @@ impl ShellModel {
             return;
         };
         let rows = self.shell.rows(slot);
-        let top = scroller.read(cx).logical_scroll_top().item_ix;
-        let kept = kept(top, prefetch::visible_rows(window), rows.len());
+        let visible = prefetch::visible_rows(window);
+        let top = top_of(scroller, visible, rows.len(), cx);
+        let kept = kept(top, visible, rows.len());
         let keys: std::collections::HashSet<&str> = rows[kept]
             .iter()
             .filter(|row| matches!(row, ThreadRow::Text(_)))
@@ -162,7 +163,8 @@ impl ShellModel {
         let Some(scroller) = self.scrollers.get(&slot) else {
             return false;
         };
-        let top = scroller.read(cx).logical_scroll_top().item_ix;
+        let visible = prefetch::visible_rows(window);
+        let top = top_of(scroller, visible, self.shell.rows(slot).len(), cx);
         let direction = match self.scrolled.get(&slot) {
             Some((was, _)) if top < *was => ScrollDirection::Up,
             Some((was, _)) if top > *was => ScrollDirection::Down,
@@ -170,7 +172,6 @@ impl ShellModel {
             None => ScrollDirection::Up,
         };
         self.scrolled.insert(slot, (top, direction));
-        let visible = prefetch::visible_rows(window);
         let rows = self.shell.rows(slot);
         let texts = self.texts.entry(slot).or_default();
         prefetch::make(top, visible, direction, rows, texts, cx)
@@ -200,6 +201,7 @@ impl ShellModel {
     /// Does what a click asks of the shell and draws again.
     pub(crate) fn act(&mut self, action: ShellAction, window: &mut Window, cx: &mut Context<Self>) {
         let selects = matches!(action, ShellAction::Select(_));
+        let toggles = matches!(action, ShellAction::TogglePane(_));
         if let Some((slot, changes)) = self.shell.act(action)
             && let Some(scroller) = self.scrollers.get(&slot)
         {
@@ -214,6 +216,25 @@ impl ShellModel {
         if selects {
             self.ask_prefetch(window, cx);
         }
+        if toggles {
+            // A pane opened again comes back at the width its layout last had, which a drag on
+            // the handle left beside the closed pane can have changed.
+            let this = cx.weak_entity();
+            window.on_next_frame(move |window, cx| {
+                _ = this.update(cx, |model, cx| model.match_pane_widths(window, cx));
+            });
+        }
         cx.notify();
     }
+}
+
+/// The top row of the slot's list to keep and prefetch around.
+fn top_of(scroller: &Entity<MessageScrollerState>, visible: usize, len: usize, cx: &App) -> usize {
+    let state = scroller.read(cx);
+    list_top(
+        state.logical_scroll_top().item_ix,
+        state.is_following_tail(),
+        visible,
+        len,
+    )
 }

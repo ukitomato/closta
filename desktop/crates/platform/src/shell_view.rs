@@ -53,6 +53,8 @@ impl Render for ShellModel {
                                 .visible(panes.left_open)
                                 .size(px(panes.left_width))
                                 .size_range(width_range(LEFT_WIDTH))
+                                // Keeps the shell's width when the window is resized.
+                                .fixed()
                                 .child(slots),
                         )
                         .child(resizable_panel().child(center))
@@ -61,6 +63,7 @@ impl Render for ShellModel {
                                 .visible(panes.right_open)
                                 .size(px(panes.right_width))
                                 .size_range(width_range(RIGHT_WIDTH))
+                                .fixed()
                                 .child(right),
                         ),
                 ),
@@ -109,6 +112,25 @@ fn resized(
 }
 
 impl ShellModel {
+    /// Writes the shell's width back to each open side pane whose layout has another.
+    pub(crate) fn match_pane_widths(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let panes = self.shell.panes().clone();
+        let sizes = self.panes.read(cx).sizes().clone();
+        for (at, open, width) in [
+            (LEFT, panes.left_open, panes.left_width),
+            (RIGHT, panes.right_open, panes.right_width),
+        ] {
+            let differs = sizes
+                .get(at)
+                .is_some_and(|size| (size.as_f32() - width).abs() >= 0.5);
+            if open && differs {
+                self.panes.update(cx, |state, cx| {
+                    state.resize_panel(at, px(width), window, cx)
+                });
+            }
+        }
+    }
+
     /// The header line: the headline and the buttons that open and close the side panes.
     fn header(&self, cx: &mut Context<Self>) -> AnyElement {
         let (border, bar) = (cx.theme().border, cx.theme().title_bar);

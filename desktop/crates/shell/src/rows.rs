@@ -72,6 +72,17 @@ pub fn kept(top: usize, visible: usize, len: usize) -> Range<usize> {
     top.saturating_sub(KEEP_AROUND).min(end)..end
 }
 
+/// The top row to keep and prefetch around, when the list reports `scroll_top` and whether it
+/// is `following_tail`: a list that follows its tail shows its last `visible` rows, though it
+/// reports row 0 until it is first laid out with rows.
+pub fn list_top(scroll_top: usize, following_tail: bool, visible: usize, len: usize) -> usize {
+    if following_tail {
+        len.saturating_sub(visible)
+    } else {
+        scroll_top
+    }
+}
+
 /// How many rows past what is visible, in the direction of the scroll, get their text made
 /// before they come into view.
 pub const PREFETCH_AHEAD: usize = 40;
@@ -354,6 +365,24 @@ mod tests {
         assert_eq!(
             prefetch_rows(0, 5, ScrollDirection::Up, &[], nothing),
             Vec::<usize>::new()
+        );
+    }
+
+    #[test]
+    fn a_list_following_its_tail_counts_from_the_tail() {
+        // Before its first layout a list that follows its tail still reports row 0 on top.
+        assert_eq!(list_top(0, true, 45, 1000), 955);
+        assert_eq!(list_top(1000, true, 45, 1000), 955);
+        assert_eq!(list_top(0, true, 45, 10), 0);
+        // Scrolled away from the tail, the top is where the list stands.
+        assert_eq!(list_top(300, false, 45, 1000), 300);
+        // So the first prefetch of a big conversation takes the rows at its end.
+        let rows = texts(1000);
+        let top = list_top(0, true, 45, rows.len());
+        assert!(
+            prefetch_rows(top, 45, ScrollDirection::Up, &rows, |_: &str| false)
+                .iter()
+                .all(|at| *at >= 955)
         );
     }
 }
