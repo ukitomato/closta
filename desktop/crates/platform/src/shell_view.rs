@@ -5,6 +5,7 @@
 
 use std::ops::RangeInclusive;
 
+use closta_shell::copy;
 use closta_shell::panes::{LEFT_WIDTH, Pane, RIGHT_WIDTH};
 use closta_shell::slot::{SlotId, SlotMark, SlotSummary};
 use closta_shell::state::ShellAction;
@@ -142,10 +143,12 @@ impl ShellModel {
             .shell
             .slots()
             .into_iter()
-            .enumerate()
-            .map(|(at, summary)| slot_row(at, summary, selected, cx))
+            .map(|summary| slot_row(summary, selected, cx))
             .collect();
         v_flex()
+            .id("pane-left")
+            .accessibility_id("pane-left")
+            .aria_label(copy::SESSIONS)
             .size_full()
             .py_1()
             .bg(cx.theme().sidebar)
@@ -157,7 +160,6 @@ impl ShellModel {
 }
 
 fn slot_row(
-    at: usize,
     summary: SlotSummary,
     selected: Option<SlotId>,
     cx: &mut Context<ShellModel>,
@@ -173,11 +175,14 @@ fn slot_row(
     };
     let (active, hover) = (theme.list_active, theme.list_hover);
     let id = summary.id;
+    let name = SharedString::from(format!("slot-{id}"));
     let select = cx.listener(move |model, _: &ClickEvent, window, cx| {
         model.act(ShellAction::Select(id), window, cx);
     });
     h_flex()
-        .id(("slot", at))
+        .id(name.clone())
+        .accessibility_id(name)
+        .aria_label(summary.title.clone())
         .h(px(28.))
         .px_3()
         .gap_2()
@@ -197,6 +202,9 @@ fn right_frame(cx: &mut Context<ShellModel>) -> AnyElement {
         model.act(ShellAction::TogglePane(Pane::Right), window, cx);
     });
     v_flex()
+        .id("pane-right")
+        .accessibility_id("pane-right")
+        .aria_label(copy::SESSION)
         .size_full()
         .bg(background)
         .border_l_1()
@@ -206,7 +214,7 @@ fn right_frame(cx: &mut Context<ShellModel>) -> AnyElement {
                 .h(px(32.))
                 .px_3()
                 .items_center()
-                .child(div().flex_1().child("Session"))
+                .child(div().flex_1().child(copy::SESSION))
                 .child(
                     Button::new("close-right")
                         .ghost()

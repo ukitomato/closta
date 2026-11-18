@@ -1,5 +1,6 @@
 //! One slot of the shell: the session it holds, how it is launched, and the mark it shows.
 
+use std::fmt;
 use std::sync::Arc;
 
 use closta_session::launch::SessionLaunchPlanner;
@@ -11,6 +12,13 @@ use futures_lite::future;
 /// slot's session is replaced.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Debug)]
 pub struct SlotId(pub(crate) u64);
+
+/// The number, as a part's id on the screen names the slot (`slot-1`).
+impl fmt::Display for SlotId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 /// Runs a future in the background: the platform's executor, or a test's.
 pub type Spawn = Arc<dyn Fn(future::Boxed<()>) + Send + Sync>;
@@ -57,4 +65,14 @@ pub struct SlotSummary {
     pub id: SlotId,
     pub title: String,
     pub mark: SlotMark,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SlotId;
+
+    #[test]
+    fn a_slot_id_shows_as_its_number() {
+        assert_eq!(SlotId(7).to_string(), "7");
+    }
 }
