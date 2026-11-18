@@ -30,7 +30,7 @@ pub enum ShellAction {
 #[derive(Clone, PartialEq, Debug)]
 pub struct Refresh {
     pub status: SessionStatus,
-    /// Whether its turn runs with no approval waiting.
+    /// Whether the session runs and its turn runs with no approval waiting.
     pub running: bool,
     /// Whether an approval waits.
     pub waiting: bool,
@@ -180,7 +180,8 @@ impl ShellState {
         self.slots.get(&slot).map(|slot| slot.status.clone())
     }
 
-    /// Whether the slot's turn ran with no approval waiting, as of its last refresh.
+    /// Whether the slot's session and its turn ran with no approval waiting, as of its last
+    /// refresh.
     pub fn running(&self, slot: SlotId) -> bool {
         self.slots.get(&slot).is_some_and(|slot| slot.running)
     }
@@ -229,7 +230,10 @@ impl ShellState {
         let rows = held.builder.of(&view.transcript);
         let changes = row_changes(&held.rows, &rows);
         let waiting = !view.conversation.pending_approvals.is_empty();
-        let running = !waiting && thread_is_running(&view.conversation, &view.transcript);
+        // An open turn is never folded closed when the process ends: only a live session runs.
+        let running = matches!(status, SessionStatus::Running { .. })
+            && !waiting
+            && thread_is_running(&view.conversation, &view.transcript);
         held.rows = rows;
         held.status = status.clone();
         held.running = running;

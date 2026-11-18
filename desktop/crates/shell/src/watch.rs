@@ -21,6 +21,7 @@ enum Woke {
     Changed,
     StatusClosed,
     ViewClosed,
+    RunGone,
 }
 
 impl SlotWatch {
@@ -50,7 +51,8 @@ impl SlotWatch {
 
     /// Waits for a change of the status or the view, lets go of every wake-up that came with
     /// it, and returns `true`. Returns `false` once the session has ended and its run has
-    /// returned; the caller then refreshes once more and stops waiting.
+    /// returned, or once its run was dropped unfinished; the caller then refreshes once more
+    /// and stops waiting.
     ///
     /// The status channel closes at the end, but a closed session's run can still write its
     /// view while it winds down, after the view's channel was closed. Waiting for the run to
@@ -63,18 +65,21 @@ impl SlotWatch {
                     Err(_) => Woke::StatusClosed,
                 }
             };
-            let woke = match &self.view {
-                Some(view) => {
-                    future::or(status, async {
-                        match view.recv().await {
-                            Ok(()) => Woke::Changed,
-                            Err(_) => Woke::ViewClosed,
-                        }
-                    })
-                    .await
+            let view = async {
+                match &self.view {
+                    Some(view) => match view.recv().await {
+                        Ok(()) => Woke::Changed,
+                        Err(_) => Woke::ViewClosed,
+                    },
+                    None => future::pending().await,
                 }
-                None => status.await,
             };
+            // A run dropped before it finished never closes the status channel.
+            let dropped = async {
+                _ = self.finished.recv().await;
+                Woke::RunGone
+            };
+            let woke = future::or(status, future::or(view, dropped)).await;
             match woke {
                 Woke::Changed => {
                     while self.status.try_recv().is_ok() {}
@@ -88,6 +93,7 @@ impl SlotWatch {
                     _ = self.finished.recv().await;
                     return false;
                 }
+                Woke::RunGone => return false,
             }
         }
     }

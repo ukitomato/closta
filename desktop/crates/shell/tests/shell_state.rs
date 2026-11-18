@@ -653,6 +653,66 @@ fn a_watch_ends_only_once_the_closed_session_has_stopped_writing() {
 }
 
 #[test]
+fn a_session_that_ends_mid_turn_is_not_running() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let baseline = lines("01-baseline-text");
+        // Up to the first text delta: the turn is open.
+        let open = &baseline[..8];
+        for (n, code, end) in [(0, 0, SlotMark::Ended), (1, 3, SlotMark::Failed)] {
+            let (launch, runtime) = harness.launch("mid-turn");
+            let slot = shell.open(launch);
+            let runtime = runtime.recv().await.unwrap();
+            running(&runtime).await;
+            let control = harness.control(n).await;
+            play(&control, &runtime, open, &rows_of(open)).await;
+            let mut watch = shell.watch(slot).unwrap();
+            assert!(watch.changed().await);
+            assert!(shell.refresh(slot, watch.generation()).unwrap().running);
+            assert!(shell.running(slot));
+            let at = shell.slots().iter().position(|it| it.id == slot).unwrap();
+            assert_eq!(shell.slots()[at].mark, SlotMark::Working);
+
+            control.exit(code);
+            while watch.changed().await {
+                shell.refresh(slot, watch.generation()).unwrap();
+            }
+            let last = shell.refresh(slot, watch.generation()).unwrap();
+            assert!(last.status.is_end());
+            assert!(!last.running, "the spinner stops with the session");
+            assert!(!shell.running(slot));
+            assert_eq!(shell.slots()[at].mark, end);
+        }
+    });
+}
+
+#[test]
+fn a_watch_ends_when_its_run_is_dropped_unfinished() {
+    let executor = Arc::new(Executor::new());
+    let harness = Harness::new(executor);
+    let spawn: Spawn = Arc::new(drop);
+    let header = app_header(&AppInfo {
+        name: "Closta".into(),
+        version: "0.1.0".into(),
+    });
+    let mut shell = ShellState::new(header, spawn, Arc::new(Quiet));
+    let (launch, _) = harness.launch("dropped");
+    let slot = shell.open(launch);
+    let mut watch = shell.watch(slot).unwrap();
+    smol::block_on(future::race(
+        async {
+            assert!(watch.changed().await, "the first status");
+            assert!(!watch.changed().await);
+        },
+        async {
+            Timer::after(GUARD).await;
+            panic!("the watch did not end")
+        },
+    ));
+    assert_eq!(shell.status(slot), Some(SessionStatus::Starting));
+}
+
+#[test]
 fn a_companion_runs_beside_the_session_with_its_runtime() {
     drive(|harness| async move {
         let mut shell = harness.shell();
