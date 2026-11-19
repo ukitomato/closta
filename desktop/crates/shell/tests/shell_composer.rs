@@ -579,3 +579,138 @@ fn ready_lines_wait_for_every_slot_to_run_or_fail() {
         assert_eq!(shell.ready_lines(), None);
     });
 }
+
+fn pick(shell: &mut ShellState, slot: SlotId, mode: &str) {
+    shell.act(ShellAction::PickMode {
+        slot,
+        mode: mode.to_owned(),
+    });
+}
+
+fn mode_lines(control: &LiveControl) -> Vec<String> {
+    control
+        .stdin_lines()
+        .into_iter()
+        .filter(|it| it.contains("set_permission_mode"))
+        .collect()
+}
+
+async fn quiet() {
+    smol::Timer::after(std::time::Duration::from_millis(150)).await;
+}
+
+#[test]
+fn picking_a_mode_switches_it() {
+    drive(|harness| async move {
+        let (mut shell, slot, _runtime, control) = running_slot(&harness).await;
+        pick(&mut shell, slot, "acceptEdits");
+        until(|| mode_lines(&control).len() == 1).await;
+        assert!(mode_lines(&control)[0].contains("acceptEdits"));
+        assert!(!shell.bypass_asking(slot));
+        refresh(&mut shell, slot);
+        assert!(shell.composer_line(slot).unwrap().switching);
+        let sent: serde_json::Value = serde_json::from_str(&mode_lines(&control)[0]).unwrap();
+        control.emit(&format!(
+            r#"{{"type":"control_response","response":{{"subtype":"success","request_id":"{}"}}}}"#,
+            sent["request_id"].as_str().unwrap()
+        ));
+        for _ in 0..100 {
+            refresh(&mut shell, slot);
+            if shell.composer_line(slot).unwrap().mode.is_some() {
+                break;
+            }
+            smol::Timer::after(std::time::Duration::from_millis(20)).await;
+        }
+        assert!(!shell.composer_line(slot).unwrap().switching);
+        assert_eq!(
+            shell.composer_line(slot).unwrap().mode.as_deref(),
+            Some("acceptEdits")
+        );
+    });
+}
+
+#[test]
+fn bypass_asks_first_and_cancel_keeps_the_mode() {
+    drive(|harness| async move {
+        let (mut shell, slot, _runtime, control) = running_slot(&harness).await;
+        pick(&mut shell, slot, "bypassPermissions");
+        assert!(shell.bypass_asking(slot));
+        quiet().await;
+        assert!(mode_lines(&control).is_empty());
+        shell.act(ShellAction::CancelBypass { slot });
+        assert!(!shell.bypass_asking(slot));
+        quiet().await;
+        assert!(mode_lines(&control).is_empty());
+    });
+}
+
+#[test]
+fn confirming_bypass_switches_to_it() {
+    drive(|harness| async move {
+        let (mut shell, slot, _runtime, control) = running_slot(&harness).await;
+        shell.act(ShellAction::ConfirmBypass { slot });
+        quiet().await;
+        assert!(mode_lines(&control).is_empty(), "no question, no switch");
+
+        pick(&mut shell, slot, "bypassPermissions");
+        shell.act(ShellAction::ConfirmBypass { slot });
+        until(|| mode_lines(&control).len() == 1).await;
+        assert!(mode_lines(&control)[0].contains("bypassPermissions"));
+        assert!(!shell.bypass_asking(slot));
+    });
+}
+
+#[test]
+fn the_bypass_question_belongs_to_its_slot() {
+    drive(|harness| async move {
+        let (mut shell, slot, _runtime, _control) = running_slot(&harness).await;
+        let (launch, _) = harness.launch("other");
+        let other = shell.open(launch);
+        pick(&mut shell, slot, "bypassPermissions");
+        assert!(shell.bypass_asking(slot));
+        assert!(!shell.bypass_asking(other));
+        shell.act(ShellAction::ConfirmBypass { slot: other });
+        assert!(shell.bypass_asking(slot));
+    });
+}
+
+#[test]
+fn no_mode_is_picked_while_a_switch_waits() {
+    drive(|harness| async move {
+        let (mut shell, slot, _runtime, control) = running_slot(&harness).await;
+        pick(&mut shell, slot, "acceptEdits");
+        until(|| mode_lines(&control).len() == 1).await;
+        refresh(&mut shell, slot);
+        assert!(shell.composer_line(slot).unwrap().switching);
+        pick(&mut shell, slot, "plan");
+        pick(&mut shell, slot, "bypassPermissions");
+        quiet().await;
+        assert_eq!(mode_lines(&control).len(), 1);
+        assert!(!shell.bypass_asking(slot));
+    });
+}
+
+#[test]
+fn an_unknown_mode_is_not_sent() {
+    drive(|harness| async move {
+        let (mut shell, slot, _runtime, control) = running_slot(&harness).await;
+        pick(&mut shell, slot, "yolo");
+        quiet().await;
+        assert!(mode_lines(&control).is_empty());
+        assert!(!shell.bypass_asking(slot));
+    });
+}
+
+#[test]
+fn a_mode_is_not_picked_behind_an_overlay() {
+    drive(|harness| async move {
+        let (mut shell, slot, _runtime, control) = running_slot(&harness).await;
+        pick(&mut shell, slot, "bypassPermissions");
+        shell.act(ShellAction::OpenNewSession);
+        pick(&mut shell, slot, "acceptEdits");
+        shell.act(ShellAction::ConfirmBypass { slot });
+        quiet().await;
+        assert!(mode_lines(&control).is_empty());
+        assert!(shell.bypass_asking(slot));
+    });
+}

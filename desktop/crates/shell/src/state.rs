@@ -9,7 +9,7 @@ use async_channel::Receiver;
 use closta_presenter::cards::decisions::offers_destination;
 use closta_presenter::cards::plan::plan_go_of;
 use closta_presenter::cards::{SUGGESTION_DESTINATIONS, ThreadCard, card_of};
-use closta_presenter::composer_state::composer_state;
+use closta_presenter::composer_state::{PERMISSION_MODES, composer_state};
 use closta_presenter::rows::{ThreadRow, ThreadRows};
 use closta_presenter::session::SessionView;
 use closta_presenter::sessions::groups::{SessionAlert, alerts_between, waiting_alerts};
@@ -37,6 +37,8 @@ use crate::slot::{
     MAX_LIVE_SLOTS, Relaunch, SlotId, SlotLaunch, SlotSummary, Spawn, counts_as_live, mark_of,
 };
 use crate::watch::SlotWatch;
+
+const BYPASS_MODE: &str = "bypassPermissions";
 
 /// What a click or a key asks of the shell.
 #[derive(Clone, PartialEq, Debug)]
@@ -171,6 +173,19 @@ pub enum ShellAction {
     },
     /// Goes to the selected slot's waiting card, else to the next slot that waits.
     JumpToWaiting,
+    /// Picks a permission mode; Bypass asks first, the rest switch at once.
+    PickMode {
+        slot: SlotId,
+        mode: String,
+    },
+    /// Switches to Bypass once the slot's banner asked for it.
+    ConfirmBypass {
+        slot: SlotId,
+    },
+    /// Takes the slot's Bypass banner down.
+    CancelBypass {
+        slot: SlotId,
+    },
 }
 
 /// The one thing that holds the window's attention; what is behind it takes no answer.
@@ -231,6 +246,8 @@ pub struct Acted {
 pub struct ComposerLine {
     pub mode: Option<String>,
     pub model: String,
+    /// Whether a model, mode, effort or sandbox switch waits for the CLI's answer.
+    pub switching: bool,
 }
 
 /// Where a slot's session is after a refresh, and how its rows changed.
@@ -282,6 +299,8 @@ struct Slot {
     closing: bool,
     /// What is kept of each waiting card, by request id.
     cards: HashMap<String, CardState>,
+    /// Whether the Bypass banner is up: Bypass is entered only by confirming it.
+    bypass_asking: bool,
 }
 
 impl Slot {
@@ -378,6 +397,7 @@ impl ShellState {
                 failed_since: None,
                 closing: false,
                 cards: HashMap::new(),
+                bypass_asking: false,
             },
         );
         self.selected.get_or_insert(id);
@@ -414,6 +434,7 @@ impl ShellState {
         held.waits.clear();
         held.failed_since = None;
         held.cards.clear();
+        held.bypass_asking = false;
         let emptied = std::mem::take(&mut held.rows).len();
         Some(if emptied == 0 {
             Vec::new()
@@ -573,6 +594,7 @@ impl ShellState {
         held.line = Some(ComposerLine {
             mode: composing.mode,
             model: composing.model.label,
+            switching: composing.switching.is_some(),
         });
         held.compacting = view.transcript.operations.compacting;
 
@@ -1004,7 +1026,53 @@ impl ShellState {
             }
             ShellAction::OpenFromList { slot } => self.open_from_list(slot),
             ShellAction::JumpToWaiting => self.jump_to_waiting(),
+            ShellAction::PickMode { slot, mode } => self.pick_mode(slot, &mode),
+            ShellAction::ConfirmBypass { slot } => self.confirm_bypass(slot),
+            ShellAction::CancelBypass { slot } => {
+                if let Some(held) = self.slots.get_mut(&slot) {
+                    held.bypass_asking = false;
+                }
+                Acted::default()
+            }
         }
+    }
+
+    /// Whether the slot's Bypass banner is up.
+    pub fn bypass_asking(&self, slot: SlotId) -> bool {
+        self.slots.get(&slot).is_some_and(|it| it.bypass_asking)
+    }
+
+    fn pick_mode(&mut self, slot: SlotId, mode: &str) -> Acted {
+        let Some(held) = self.slots.get_mut(&slot) else {
+            return Acted::default();
+        };
+        let Some(commands) = held.runtime.commands() else {
+            return Acted::default();
+        };
+        let current = held.line.as_ref();
+        if current.is_some_and(|it| it.switching || it.mode.as_deref() == Some(mode))
+            || !PERMISSION_MODES.contains(&mode)
+        {
+            return Acted::default();
+        }
+        if mode == BYPASS_MODE {
+            held.bypass_asking = true;
+        } else {
+            _ = commands.switch_mode(mode);
+            held.bypass_asking = false;
+        }
+        Acted::default()
+    }
+
+    fn confirm_bypass(&mut self, slot: SlotId) -> Acted {
+        let Some(held) = self.slots.get_mut(&slot).filter(|it| it.bypass_asking) else {
+            return Acted::default();
+        };
+        if let Some(commands) = held.runtime.commands() {
+            _ = commands.switch_mode(BYPASS_MODE);
+        }
+        held.bypass_asking = false;
+        Acted::default()
     }
 
     /// The overlay that is up; the window's own steps come before a slot's question, and that
@@ -1525,6 +1593,8 @@ fn behind_overlay(action: &ShellAction, overlay: Overlay) -> bool {
         | ShellAction::DenyFromList { .. }
         | ShellAction::OpenFromList { .. }
         | ShellAction::JumpToWaiting
+        | ShellAction::PickMode { .. }
+        | ShellAction::ConfirmBypass { .. }
         | ShellAction::EditNote { .. }
         | ShellAction::EditOther { .. }
         | ShellAction::PickDestination { .. }
