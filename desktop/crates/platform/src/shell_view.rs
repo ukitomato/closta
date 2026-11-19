@@ -1,5 +1,6 @@
-//! The window's three panes under the header line: the slots on the left, the conversation in
-//! the middle, and the right pane, which is an empty frame for now. The panes' widths and
+//! The window's three panes under the header line: the slots on the left with the button that
+//! opens the New Session dialog under them, the conversation in the middle, and the right pane,
+//! which is an empty frame for now. The dialog and the close are drawn over the panes. The panes' widths and
 //! whether they are open are the shell's; a drag hands the new width to the shell and takes
 //! back the width it allowed.
 
@@ -16,6 +17,8 @@ use gpui_kit::component::{ActiveTheme as _, IconName};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
+use crate::closing::close_layer;
+use crate::dialog;
 use crate::model::ShellModel;
 use crate::thread;
 
@@ -38,7 +41,10 @@ impl Render for ShellModel {
         let slots = self.slot_list(cx);
         let center = thread::conversation(self, cx);
         let right = right_frame(cx);
+        let dialog = dialog::new_session(self, cx);
+        let close = close_layer(self, cx);
         v_flex()
+            .relative()
             .size_full()
             .bg(background)
             .text_color(foreground)
@@ -68,6 +74,8 @@ impl Render for ShellModel {
                         ),
                 ),
             )
+            .children(dialog)
+            .children(close)
     }
 }
 
@@ -158,7 +166,8 @@ impl ShellModel {
             .into_any_element()
     }
 
-    /// The slots, each its mark and title; a click selects it.
+    /// The slots, each its mark and title, a click selecting it; under them, the button that
+    /// opens the New Session dialog.
     fn slot_list(&self, cx: &mut Context<Self>) -> AnyElement {
         let selected = self.shell.selected();
         let rows: Vec<AnyElement> = self
@@ -176,7 +185,26 @@ impl ShellModel {
             .bg(cx.theme().sidebar)
             .border_r_1()
             .border_color(cx.theme().sidebar_border)
-            .children(rows)
+            .child(
+                v_flex()
+                    .id("slots")
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_y_scroll()
+                    .children(rows),
+            )
+            .child(
+                div().flex_none().p_2().child(
+                    Button::new("new-session")
+                        .accessibility_id("new-session")
+                        .ghost()
+                        .w_full()
+                        .label(copy::NEW_SESSION_BUTTON)
+                        .on_click(cx.listener(|model, _: &ClickEvent, window, cx| {
+                            model.act(ShellAction::OpenNewSession, window, cx);
+                        })),
+                ),
+            )
             .into_any_element()
     }
 }

@@ -1,6 +1,7 @@
 //! The window's model: the shell's state, and beside it only what GPUI may keep and lose without
 //! changing what is right — each slot's scroller and input, the cached text states of its rows,
-//! the panes' layout and the tasks that wait on the sessions.
+//! the New Session dialog's folder field, the panes' layout and the tasks that wait on the
+//! sessions.
 
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -10,7 +11,7 @@ use closta_presenter::rows::ThreadRow;
 use closta_shell::rows::{RowChange, ScrollDirection, kept, list_top};
 use closta_shell::slot::{SlotId, SlotLaunch};
 use closta_shell::state::{Acted, FolderCheck, ShellAction, ShellState};
-use gpui_kit::component::input::TextareaState;
+use gpui_kit::component::input::{InputState, TextareaState};
 use gpui_kit::component::message_scroller::MessageScrollerState;
 use gpui_kit::component::resizable::ResizableState;
 use gpui_kit::component::text::TextViewState;
@@ -42,6 +43,11 @@ pub(crate) struct ShellModel {
     pub(crate) texts: HashMap<SlotId, HashMap<String, Entity<TextViewState>>>,
     /// Each slot's input box; its text is a copy of the slot's draft.
     pub(crate) composers: HashMap<SlotId, Entity<TextareaState>>,
+    /// The New Session dialog's folder field, made the first time the dialog opens; its text is
+    /// a copy of the dialog's folder.
+    pub(crate) folder: Option<Entity<InputState>>,
+    /// The wait for the typing in the folder field to settle.
+    pub(crate) folder_typing: Option<Task<()>>,
     pub(crate) panes: Entity<ResizableState>,
     watches: HashMap<SlotId, Task<()>>,
     /// The generation of the session each slot's watch waits on.
@@ -53,7 +59,7 @@ pub(crate) struct ShellModel {
     /// The measured run's state, when the run is measured.
     measuring: Option<Measuring>,
     measure_tasks: Vec<Task<()>>,
-    _observed: Vec<Subscription>,
+    pub(crate) _observed: Vec<Subscription>,
 }
 
 impl ShellModel {
@@ -69,6 +75,8 @@ impl ShellModel {
             scrollers: HashMap::new(),
             texts: HashMap::new(),
             composers: HashMap::new(),
+            folder: None,
+            folder_typing: None,
             panes: cx.new(|_| ResizableState::default()),
             watches: HashMap::new(),
             generations: HashMap::new(),
@@ -78,6 +86,7 @@ impl ShellModel {
             measure_tasks: Vec::new(),
             _observed: Vec::new(),
         };
+        Self::hold_close(window, cx);
         for launch in launches {
             model.open(launch, window, cx);
         }
@@ -298,13 +307,14 @@ impl ShellModel {
     pub(crate) fn act(&mut self, action: ShellAction, window: &mut Window, cx: &mut Context<Self>) {
         let selects = matches!(action, ShellAction::Select(_));
         let toggles = matches!(action, ShellAction::TogglePane(_));
-        // The dialog's folder field and the close are drawn and run by a later task.
+        let opens = matches!(action, ShellAction::OpenNewSession);
         let Acted {
             rows,
             draft,
             started,
             check,
-            ..
+            folder,
+            close,
         } = self.shell.act(action);
         // A restarted slot's rows are new: the text states of the old ones are let go.
         if let Some(slot) = started.filter(|slot| self.scrollers.contains_key(slot)) {
@@ -338,6 +348,12 @@ impl ShellModel {
         }
         if let Some(check) = check {
             self.check(check, window, cx);
+        }
+        if folder {
+            self.fill_folder(opens, window, cx);
+        }
+        if close {
+            self.close_sessions(cx);
         }
         if selects || started.is_some() {
             self.ask_prefetch(window, cx);

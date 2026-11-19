@@ -1,4 +1,6 @@
+mod closing;
 mod composer;
+mod dialog;
 mod fonts;
 mod model;
 pub mod perf;
@@ -21,14 +23,16 @@ use gpui_kit::*;
 use crate::model::ShellModel;
 
 /// The window's size when none is asked for.
-const WINDOW: (f32, f32) = (1440.0, 900.0);
+const WINDOW: (f32, f32) = (1600.0, 1000.0);
+/// The smallest the window can be made.
+const MIN_WINDOW: (f32, f32) = (1024.0, 700.0);
 
 /// What the app is started with.
 pub struct PlatformOptions {
     pub header: AppHeader,
     /// The slots opened at the start, in this order.
     pub slots: Vec<SlotLaunch>,
-    /// The window's width and height; 1440×900 when `None`.
+    /// The window's width and height; 1600×1000 when `None`.
     pub window: Option<(f32, f32)>,
     /// Whether the left and the right pane start open; the default panes when `None`.
     pub panes: Option<(bool, bool)>,
@@ -102,6 +106,7 @@ pub fn run(options: PlatformOptions) {
                 size(px(width), px(height)),
                 cx,
             ))),
+            window_min_size: Some(size(px(MIN_WINDOW.0), px(MIN_WINDOW.1))),
             focus: true,
             show: true,
             ..Default::default()
