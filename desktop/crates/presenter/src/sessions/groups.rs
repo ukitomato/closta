@@ -152,6 +152,18 @@ pub fn alerts_between(
     AlertChange { raised, expired }
 }
 
+/// What a session waits for, as alerts, in arrival order.
+pub fn waiting_alerts(
+    conversation: &ConversationState,
+    transcript: &Transcript,
+) -> Vec<SessionAlert> {
+    let go = plan_go_of(&transcript.operations);
+    waiting_approvals(conversation, transcript)
+        .iter()
+        .map(|record| alert_of(record, go))
+        .collect()
+}
+
 const FINISHED: &str = "finished:";
 const EDIT_TOOLS: [&str; 4] = ["Edit", "Write", "MultiEdit", "NotebookEdit"];
 const READ_TOOL: &str = "Read";
