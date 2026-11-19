@@ -1,20 +1,23 @@
 //! The window's model: the shell's state, and beside it only what GPUI may keep and lose without
-//! changing what is right — each slot's scroller, the cached text states of its rows, the panes'
-//! layout and the tasks that wait on the sessions.
+//! changing what is right — each slot's scroller and input, the cached text states of its rows,
+//! the panes' layout and the tasks that wait on the sessions.
 
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use closta_presenter::rows::ThreadRow;
 use closta_shell::rows::{RowChange, ScrollDirection, kept, list_top};
 use closta_shell::slot::{SlotId, SlotLaunch};
-use closta_shell::state::{ShellAction, ShellState};
+use closta_shell::state::{Acted, FolderCheck, ShellAction, ShellState};
+use gpui_kit::component::input::TextareaState;
 use gpui_kit::component::message_scroller::MessageScrollerState;
 use gpui_kit::component::resizable::ResizableState;
 use gpui_kit::component::text::TextViewState;
 use gpui_kit::*;
 
 use crate::Measure;
+use crate::composer::{self, Dispatch};
 use crate::perf::{IdleStart, Measuring};
 use crate::thread::prefetch;
 
@@ -37,6 +40,8 @@ pub(crate) struct ShellModel {
     pub(crate) scrollers: HashMap<SlotId, Entity<MessageScrollerState>>,
     /// The text states of a slot's text rows, by row key.
     pub(crate) texts: HashMap<SlotId, HashMap<String, Entity<TextViewState>>>,
+    /// Each slot's input box; its text is a copy of the slot's draft.
+    pub(crate) composers: HashMap<SlotId, Entity<TextareaState>>,
     pub(crate) panes: Entity<ResizableState>,
     watches: HashMap<SlotId, Task<()>>,
     /// The generation of the session each slot's watch waits on.
@@ -63,6 +68,7 @@ impl ShellModel {
             shell,
             scrollers: HashMap::new(),
             texts: HashMap::new(),
+            composers: HashMap::new(),
             panes: cx.new(|_| ResizableState::default()),
             watches: HashMap::new(),
             generations: HashMap::new(),
@@ -81,17 +87,37 @@ impl ShellModel {
         model
     }
 
-    /// Opens a slot, gives it a scroller and starts waiting on its session.
+    /// Opens a slot, gives it a scroller and an input and starts waiting on its session.
     fn open(&mut self, launch: SlotLaunch, window: &mut Window, cx: &mut Context<Self>) {
         let slot = self.shell.open(launch);
-        let scroller = cx.new(|cx| MessageScrollerState::new(0, cx));
-        // A scroll notifies the scroller: the rows coming into view get their text made.
-        let observed = cx.observe_in(&scroller, window, |model, _, window, cx| {
-            model.ask_prefetch(window, cx);
-        });
-        self._observed.push(observed);
-        self.scrollers.insert(slot, scroller);
+        self.prepare(slot, window, cx);
         self.watch(slot, window, cx);
+    }
+
+    /// Gives the slot a scroller and an input, unless it has them.
+    fn prepare(&mut self, slot: SlotId, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.scrollers.contains_key(&slot) {
+            let scroller = cx.new(|cx| MessageScrollerState::new(0, cx));
+            // A scroll notifies the scroller: the rows coming into view get their text made.
+            let observed = cx.observe_in(&scroller, window, |model, _, window, cx| {
+                model.ask_prefetch(window, cx);
+            });
+            self._observed.push(observed);
+            self.scrollers.insert(slot, scroller);
+        }
+        if !self.composers.contains_key(&slot) {
+            let (input, changes) = composer::new_input(slot, Self::dispatch(cx), window, cx);
+            self._observed.push(changes);
+            self.composers.insert(slot, input);
+        }
+    }
+
+    /// Hands an action to the window's model.
+    pub(crate) fn dispatch(cx: &Context<Self>) -> Dispatch {
+        let this = cx.weak_entity();
+        Rc::new(move |action, window, cx| {
+            _ = this.update(cx, |model, cx| model.act(action, window, cx));
+        })
     }
 
     /// Starts the task that waits on the slot's current session and refreshes on each change,
@@ -267,22 +293,53 @@ impl ShellModel {
         });
     }
 
-    /// Does what a click asks of the shell and draws again.
+    /// Does what a click or a key asks of the shell, carries out what the shell says the screen
+    /// is to do about it, and draws again.
     pub(crate) fn act(&mut self, action: ShellAction, window: &mut Window, cx: &mut Context<Self>) {
         let selects = matches!(action, ShellAction::Select(_));
         let toggles = matches!(action, ShellAction::TogglePane(_));
-        if let Some((slot, changes)) = self.shell.act(action).rows
+        // The dialog's folder field and the close are drawn and run by a later task.
+        let Acted {
+            rows,
+            draft,
+            started,
+            check,
+            ..
+        } = self.shell.act(action);
+        // A restarted slot's rows are new: the text states of the old ones are let go.
+        if let Some(slot) = started.filter(|slot| self.scrollers.contains_key(slot)) {
+            self.texts.remove(&slot);
+            self.scrolled.remove(&slot);
+        }
+        if let Some((slot, changes)) = rows
             && let Some(scroller) = self.scrollers.get(&slot)
         {
             scroller.update(cx, |state, cx| {
                 for change in changes {
-                    if let RowChange::Remeasure(range) = change {
-                        state.remeasure_items(range, cx);
+                    match change {
+                        RowChange::Splice { range, count } => {
+                            state.splice(range, count, cx);
+                        }
+                        RowChange::Remeasure(range) => {
+                            state.remeasure_items(range, cx);
+                        }
                     }
                 }
             });
         }
-        if selects {
+        if let Some(slot) = draft
+            && let Some(input) = self.composers.get(&slot)
+        {
+            composer::fill(input, self.shell.draft(slot), window, cx);
+        }
+        if let Some(slot) = started {
+            self.prepare(slot, window, cx);
+            self.watch(slot, window, cx);
+        }
+        if let Some(check) = check {
+            self.check(check, window, cx);
+        }
+        if selects || started.is_some() {
             self.ask_prefetch(window, cx);
         }
         if toggles {
@@ -294,6 +351,18 @@ impl ShellModel {
             });
         }
         cx.notify();
+    }
+
+    /// Looks for the folder in the background and hands the answer back to the shell.
+    fn check(&mut self, check: FolderCheck, window: &mut Window, cx: &mut Context<Self>) {
+        let FolderCheck { folder, exists } = check;
+        cx.spawn_in(window, async move |this, cx| {
+            let exists = exists.await;
+            _ = this.update_in(cx, |model, window, cx| {
+                model.act(ShellAction::FolderChecked { folder, exists }, window, cx);
+            });
+        })
+        .detach();
     }
 }
 

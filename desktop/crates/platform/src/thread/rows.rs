@@ -3,7 +3,8 @@
 //! toggle it. The draw makes a text state that is missing and never sets one's text.
 
 use closta_presenter::rows::{
-    AskRow, CardRow, ExploredRow, ThinkingRow, ThreadRow, TodoRow, ToolRow, TurnEndRow,
+    AskRow, CardRow, CompactionRow, ExploredRow, ThinkingRow, ThreadRow, TodoRow, ToolRow,
+    TurnEndRow,
 };
 use closta_presenter::tool_line::{ToolDetail, ToolLine, ToolLineState};
 use closta_shell::copy;
@@ -59,7 +60,7 @@ pub(super) fn row(model: &Entity<ShellModel>, slot: SlotId, at: usize, cx: &mut 
     };
     let gap = if row.opens() { OPENS_GAP } else { ROW_GAP };
     let (content, label) = match &row {
-        ThreadRow::Ask(ask) => (ask_row(ask, cx), ask.text.clone()),
+        ThreadRow::Ask(ask) => (ask_row(ask, cx), ask_label(ask)),
         ThreadRow::Text(text) => {
             let state = text_state(model, slot, &text.key, &text.markdown, cx);
             (
@@ -80,8 +81,10 @@ pub(super) fn row(model: &Entity<ShellModel>, slot: SlotId, at: usize, cx: &mut 
         ThreadRow::Card(card) => (card_row(card, cx), copy::card_line(card)),
         ThreadRow::TurnEnd(end) => (turn_end_row(end, cx), copy::turn_end(end, false)),
         ThreadRow::SignIn(_) => (sign_in_row(cx), copy::SIGN_IN_TEXT.to_owned()),
-        // Drawn in a later task; until then the row takes no room.
-        ThreadRow::Compaction(_) => (div().into_any_element(), String::new()),
+        ThreadRow::Compaction(compaction) => (
+            compaction_row(compaction, cx),
+            copy::compaction_line(compaction),
+        ),
     };
     let id = SharedString::from(format!("row-{}", row.key()));
     div()
@@ -108,7 +111,16 @@ fn with_copy_menu(key: &str, element: Div, item: &'static str, text: &str) -> An
         .into_any_element()
 }
 
-/// The user's prompt, in a bordered bubble.
+fn ask_label(ask: &AskRow) -> String {
+    if ask.not_sent {
+        format!("{} · {}", ask.text, copy::NOT_SENT)
+    } else {
+        ask.text.clone()
+    }
+}
+
+/// The user's prompt, in a bordered bubble; one the session refused is marked so in words on its
+/// right.
 pub(super) fn ask_row(ask: &AskRow, cx: &App) -> AnyElement {
     let theme = cx.theme();
     let bubble = div()
@@ -120,7 +132,41 @@ pub(super) fn ask_row(ask: &AskRow, cx: &App) -> AnyElement {
         .border_color(theme.border)
         .bg(theme.secondary)
         .child(ask.text.clone());
-    with_copy_menu(&ask.key, bubble, copy::COPY_ASK, &ask.text)
+    let bubble = with_copy_menu(&ask.key, bubble, copy::COPY_ASK, &ask.text);
+    if !ask.not_sent {
+        return bubble;
+    }
+    h_flex()
+        .w_full()
+        .gap_2()
+        .items_center()
+        .child(div().flex_1().min_w_0().child(bubble))
+        .child(
+            div()
+                .flex_none()
+                .text_color(theme.danger)
+                .child(copy::NOT_SENT),
+        )
+        .into_any_element()
+}
+
+/// A compaction's divider: its line in the middle between two faint rules.
+pub(super) fn compaction_row(row: &CompactionRow, cx: &App) -> AnyElement {
+    let theme = cx.theme();
+    let rule = || div().flex_1().h(px(1.)).bg(theme.border);
+    h_flex()
+        .w_full()
+        .gap_3()
+        .items_center()
+        .child(rule())
+        .child(
+            div()
+                .flex_none()
+                .text_color(theme.muted_foreground)
+                .child(copy::compaction_line(row)),
+        )
+        .child(rule())
+        .into_any_element()
 }
 
 /// A text block of a reply, as Markdown that can be selected across the rows in view.

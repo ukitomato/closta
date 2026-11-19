@@ -1,3 +1,4 @@
+mod composer;
 mod fonts;
 mod model;
 pub mod perf;
@@ -33,6 +34,9 @@ pub struct PlatformOptions {
     pub panes: Option<(bool, bool)>,
     /// What the run measures and when it quits by itself; `None` for an ordinary run.
     pub measure: Option<Measure>,
+    /// What the shell asks of this machine: the New Session dialog's checks and the planner a
+    /// folder starts with.
+    pub ports: Ports,
 }
 
 /// A measured run. Once `finished` ends (every replay was written), `ready` is logged; once
@@ -70,10 +74,11 @@ pub fn run(options: PlatformOptions) {
             window,
             panes,
             measure,
+            ports,
         } = options;
         let executor = cx.background_executor().clone();
         let spawn: Spawn = Arc::new(move |run| executor.spawn(run).detach());
-        let mut shell = ShellState::new(header, spawn, Arc::new(TracingLog), Ports::inert());
+        let mut shell = ShellState::new(header, spawn, Arc::new(TracingLog), ports);
         if let Some((left, right)) = panes {
             let default = Panes::default();
             for (pane, open, was) in [

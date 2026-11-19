@@ -8,10 +8,9 @@ use async_channel::Receiver;
 use closta_presenter::composer_state::composer_state;
 use closta_presenter::rows::{ThreadRow, ThreadRows};
 use closta_presenter::thread_running::thread_is_running;
-use closta_session::launch::{SessionLaunch, SessionLaunchPlanner};
 use closta_session::log::SessionLog;
 use closta_session::runtime::{SessionConfig, SessionRuntime};
-use closta_session::status::{SessionFailure, SessionStatus};
+use closta_session::status::SessionStatus;
 use futures_lite::future;
 
 use crate::closing::{CloseQuestion, CloseRun, CloseStage};
@@ -19,8 +18,8 @@ use crate::composer::Composer;
 use crate::copy;
 use crate::header::AppHeader;
 use crate::new_session::{
-    ClaudeOnPath, LaunchChecks, NewSessionDialog, PlannerFor, Problem, RecentFolders, Runtime,
-    default_folder, launch_in, quick_problem, runtime_of,
+    LaunchChecks, NewSessionDialog, PlannerFor, Problem, RecentFolders, Runtime, default_folder,
+    launch_in, quick_problem, runtime_of,
 };
 use crate::panes::{Pane, Panes};
 use crate::rows::{RowChange, row_changes};
@@ -56,54 +55,6 @@ pub enum ShellAction {
 pub struct Ports {
     pub checks: Arc<dyn LaunchChecks>,
     pub planner_for: Arc<dyn PlannerFor>,
-}
-
-impl Ports {
-    /// Ports that know nothing: no distribution, `claude.exe` found, no default, no folder.
-    /// A stand-in until the platform wires the real ones.
-    #[doc(hidden)]
-    pub fn inert() -> Ports {
-        Ports {
-            checks: Arc::new(Inert),
-            planner_for: Arc::new(Inert),
-        }
-    }
-}
-
-struct Inert;
-
-impl LaunchChecks for Inert {
-    fn installed_distros(&self) -> Vec<String> {
-        Vec::new()
-    }
-
-    fn claude_on_path(&self) -> ClaudeOnPath {
-        ClaudeOnPath::Found
-    }
-
-    fn default_distro(&self) -> Option<String> {
-        None
-    }
-
-    fn folder_exists(&self, _folder: &str) -> future::Boxed<bool> {
-        Box::pin(async { false })
-    }
-}
-
-impl PlannerFor for Inert {
-    fn planner(&self, _folder: &str) -> Arc<dyn SessionLaunchPlanner> {
-        Arc::new(Inert)
-    }
-}
-
-impl SessionLaunchPlanner for Inert {
-    fn plan(
-        &self,
-        _session_id: &str,
-        _working_directory: Option<&str>,
-    ) -> future::Boxed<Result<SessionLaunch, SessionFailure>> {
-        Box::pin(async { Err(SessionFailure::PlanFailed) })
-    }
 }
 
 /// A folder to look for in the background; its answer comes back as `FolderChecked`.

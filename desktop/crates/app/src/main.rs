@@ -1,10 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod logging;
-// Not handed to the platform yet.
 #[cfg(feature = "replay")]
 mod args;
-#[allow(dead_code)]
+mod logging;
 mod ports;
 #[cfg(feature = "replay")]
 mod replay;
@@ -46,6 +44,7 @@ fn main() -> ExitCode {
             window: None,
             panes: None,
             measure: None,
+            ports: ports::real_ports(),
         }
     };
     closta_platform::run(options);
@@ -83,5 +82,6 @@ fn replay_options(
         window: args.window,
         panes: args.panes,
         measure,
+        ports: ports::real_ports(),
     })
 }
