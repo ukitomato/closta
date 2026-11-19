@@ -271,7 +271,7 @@ impl ShellModel {
     pub(crate) fn act(&mut self, action: ShellAction, window: &mut Window, cx: &mut Context<Self>) {
         let selects = matches!(action, ShellAction::Select(_));
         let toggles = matches!(action, ShellAction::TogglePane(_));
-        if let Some((slot, changes)) = self.shell.act(action)
+        if let Some((slot, changes)) = self.shell.act(action).rows
             && let Some(scroller) = self.scrollers.get(&slot)
         {
             scroller.update(cx, |state, cx| {

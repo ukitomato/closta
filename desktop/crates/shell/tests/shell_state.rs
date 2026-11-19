@@ -4,26 +4,18 @@
 
 #[path = "../../providers/tests/common/mod.rs"]
 mod common;
+mod support;
 
-use std::collections::VecDeque;
-use std::future::Future;
 use std::io::ErrorKind;
-use std::sync::{Arc, Mutex, PoisonError};
-use std::time::{Duration, Instant};
+use std::sync::Arc;
+use std::time::Duration;
 
 use closta_model::AppInfo;
 use closta_presenter::input::PresenterInput;
 use closta_presenter::rows::{ThreadRow, ThreadRows};
 use closta_presenter::session::SessionView;
-use closta_providers::claude::fake::live::{LiveControl, LiveOptions, LiveProcess};
-use closta_providers::claude::fake::process::{FakeProcess, ProcessScript};
-use closta_providers::claude::fake::spawner::FakeSpawner;
-use closta_providers::claude::launch::Launch;
+use closta_providers::claude::fake::live::LiveControl;
 use closta_providers::claude::launch::LaunchError;
-use closta_providers::claude::launch::env::SecretEnv;
-use closta_providers::claude::process::AgentProcess;
-use closta_session::launch::NativeSessionLaunchPlanner;
-use closta_session::log::SessionLog;
 use closta_session::runtime::SessionRuntime;
 use closta_session::status::{SessionFailure, SessionStatus};
 use closta_shell::header::app_header;
@@ -34,149 +26,7 @@ use closta_shell::state::{Refresh, ShellAction, ShellState};
 use closta_shell::watch::SlotWatch;
 use futures_lite::future;
 use smol::{Executor, Timer};
-
-const TIMEOUT: Duration = Duration::from_secs(30);
-const GUARD: Duration = Duration::from_secs(10);
-
-struct Quiet;
-
-impl SessionLog for Quiet {
-    fn info(&self, _line: &str) {}
-
-    fn warn(&self, _line: &str) {}
-}
-
-/// What the fake spawner hands the next session launches: a live process unless a refusal is
-/// queued.
-#[derive(Default)]
-struct Answers {
-    refusals: VecDeque<LaunchError>,
-    /// Whether the next processes keep running when told to end.
-    stubborn: bool,
-    controls: Vec<LiveControl>,
-}
-
-struct Harness {
-    executor: Arc<Executor<'static>>,
-    answers: Arc<Mutex<Answers>>,
-    planner: Arc<NativeSessionLaunchPlanner>,
-}
-
-impl Harness {
-    fn new(executor: Arc<Executor<'static>>) -> Harness {
-        let answers = Arc::new(Mutex::new(Answers::default()));
-        let held = Arc::clone(&answers);
-        let spawner = FakeSpawner::answering(move |launch: &Launch| {
-            if launch.args == ["--version"] {
-                let script = ProcessScript::replaying(vec!["2.1.282 (Claude Code)".to_owned()]);
-                let (process, _probe) = FakeProcess::new(script);
-                return Ok(Box::new(process) as Box<dyn AgentProcess>);
-            }
-            let mut answers = held.lock().unwrap_or_else(PoisonError::into_inner);
-            if let Some(error) = answers.refusals.pop_front() {
-                return Err(error);
-            }
-            let options = LiveOptions {
-                exit_on_destroy: if answers.stubborn { None } else { Some(0) },
-                ..LiveOptions::default()
-            };
-            let (process, control) = LiveProcess::new(options);
-            answers.controls.push(control);
-            Ok(Box::new(process) as Box<dyn AgentProcess>)
-        });
-        let planner = Arc::new(NativeSessionLaunchPlanner::new(
-            Arc::new(spawner),
-            Arc::new(SecretEnv::default),
-        ));
-        Harness {
-            executor,
-            answers,
-            planner,
-        }
-    }
-
-    fn shell(&self) -> ShellState {
-        let executor = Arc::clone(&self.executor);
-        let spawn: Spawn = Arc::new(move |run| executor.spawn(run).detach());
-        let header = app_header(&AppInfo {
-            name: "Closta".into(),
-            version: "0.1.0".into(),
-        });
-        ShellState::new(header, spawn, Arc::new(Quiet))
-    }
-
-    /// A launch whose companion hands the test the slot's runtime.
-    fn launch(&self, title: &str) -> (SlotLaunch, async_channel::Receiver<SessionRuntime>) {
-        let (sender, receiver) = async_channel::bounded(1);
-        let launch = SlotLaunch {
-            title: title.to_owned(),
-            planner: Arc::clone(&self.planner) as _,
-            working_directory: None,
-            companion: Some(Box::new(move |runtime| {
-                Box::pin(async move {
-                    _ = sender.send(runtime).await;
-                })
-            })),
-            relaunch: None,
-        };
-        (launch, receiver)
-    }
-
-    fn stubborn(&self) {
-        self.answers
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .stubborn = true;
-    }
-
-    fn refuse(&self, error: LaunchError) {
-        self.answers
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .refusals
-            .push_back(error);
-    }
-
-    /// The control of session process `n` (0 is the first handed out), once it is there.
-    async fn control(&self, n: usize) -> LiveControl {
-        let answers = Arc::clone(&self.answers);
-        until(move || {
-            answers
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .controls
-                .len()
-                > n
-        })
-        .await;
-        self.answers
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .controls[n]
-            .clone()
-    }
-}
-
-fn drive<F: Future<Output = ()>>(test: impl FnOnce(Harness) -> F) {
-    let executor = Arc::new(Executor::new());
-    let body = test(Harness::new(Arc::clone(&executor)));
-    smol::block_on(executor.run(future::race(body, async {
-        Timer::after(TIMEOUT).await;
-        panic!("the test did not end within {TIMEOUT:?}")
-    })));
-}
-
-async fn until(cond: impl Fn() -> bool) {
-    let deadline = Instant::now() + GUARD;
-    while !cond() {
-        assert!(Instant::now() < deadline, "the condition did not hold");
-        Timer::after(Duration::from_millis(10)).await;
-    }
-}
-
-async fn running(runtime: &SessionRuntime) {
-    until(|| matches!(runtime.status(), SessionStatus::Running { .. })).await;
-}
+use support::{GUARD, Harness, Quiet, drive, running, until};
 
 /// Whether `watch` says a change within a short while.
 async fn changes_soon(watch: &mut SlotWatch) -> Option<bool> {
@@ -473,12 +323,12 @@ fn toggling_a_row_flips_it_and_remeasures_that_row() {
             key: row.key().to_owned(),
         };
         assert_eq!(
-            shell.act(toggle.clone()),
+            shell.act(toggle.clone()).rows,
             Some((slot, vec![RowChange::Remeasure(at..at + 1)]))
         );
         assert!(shell.is_open(slot, row));
         assert_eq!(
-            shell.act(toggle),
+            shell.act(toggle).rows,
             Some((slot, vec![RowChange::Remeasure(at..at + 1)]))
         );
         assert!(!shell.is_open(slot, row));
@@ -696,7 +546,7 @@ fn a_watch_ends_when_its_run_is_dropped_unfinished() {
         name: "Closta".into(),
         version: "0.1.0".into(),
     });
-    let mut shell = ShellState::new(header, spawn, Arc::new(Quiet));
+    let mut shell = ShellState::new(header, spawn, Arc::new(Quiet), harness.ports());
     let (launch, _) = harness.launch("dropped");
     let slot = shell.open(launch);
     let mut watch = shell.watch(slot).unwrap();
@@ -784,13 +634,20 @@ fn panes_clamp_their_widths_and_the_right_one_starts_closed() {
         let harness = Harness::new(executor);
         let mut shell = harness.shell();
         assert_eq!(shell.panes(), &Panes::default());
-        assert_eq!(shell.act(ShellAction::TogglePane(Pane::Right)), None);
-        assert_eq!(
-            shell.act(ShellAction::ResizePane {
-                pane: Pane::Left,
-                width: 1000.0
-            }),
-            None
+        assert!(
+            shell
+                .act(ShellAction::TogglePane(Pane::Right))
+                .rows
+                .is_none()
+        );
+        assert!(
+            shell
+                .act(ShellAction::ResizePane {
+                    pane: Pane::Left,
+                    width: 1000.0
+                })
+                .rows
+                .is_none()
         );
         assert!(shell.panes().right_open);
         assert_eq!(shell.panes().left_width, 420.0);

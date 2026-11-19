@@ -68,6 +68,11 @@ impl Composer {
         Some((id, text))
     }
 
+    /// Forgets the reason a send did not go: the session it was about is gone.
+    pub fn clear_reason(&mut self) {
+        self.reason = None;
+    }
+
     pub fn not_running(&mut self) {
         self.reason = Some(copy::NOT_RUNNING);
     }

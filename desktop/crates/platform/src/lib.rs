@@ -13,7 +13,7 @@ use closta_session::log::TracingLog;
 use closta_shell::header::AppHeader;
 use closta_shell::panes::{Pane, Panes};
 use closta_shell::slot::{SlotLaunch, Spawn};
-use closta_shell::state::{ShellAction, ShellState};
+use closta_shell::state::{Ports, ShellAction, ShellState};
 use futures_lite::future;
 use gpui_kit::*;
 
@@ -73,7 +73,7 @@ pub fn run(options: PlatformOptions) {
         } = options;
         let executor = cx.background_executor().clone();
         let spawn: Spawn = Arc::new(move |run| executor.spawn(run).detach());
-        let mut shell = ShellState::new(header, spawn, Arc::new(TracingLog));
+        let mut shell = ShellState::new(header, spawn, Arc::new(TracingLog), Ports::inert());
         if let Some((left, right)) = panes {
             let default = Panes::default();
             for (pane, open, was) in [
