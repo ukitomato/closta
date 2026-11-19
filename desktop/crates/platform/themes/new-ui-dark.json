@@ -7,7 +7,7 @@
       "font.size": 13,
       "font.family": "Segoe UI",
       "mono_font.family": "JetBrains Mono",
-      "mono_font.size": 13,
+      "mono_font.size": 12.5,
       "radius": 4,
       "radius.lg": 6,
       "shadow": false,
@@ -42,6 +42,22 @@
         "scrollbar.thumb.background": "#5A5D6380",
         "scrollbar.thumb.hover.background": "#6F737A",
         "link": "#548AF7"
+      },
+      "highlight": {
+        "editor.foreground": "#BCBEC4",
+        "syntax": {
+          "keyword": { "color": "#CF8E6D" },
+          "boolean": { "color": "#CF8E6D" },
+          "variable.special": { "color": "#CF8E6D" },
+          "number": { "color": "#2AACB8" },
+          "string": { "color": "#6AAB73" },
+          "string.escape": { "color": "#CF8E6D" },
+          "string.regex": { "color": "#6AAB73" },
+          "constant": { "color": "#C77DBB" },
+          "attribute": { "color": "#B3AE60" },
+          "comment": { "color": "#7A7E85" },
+          "comment.doc": { "color": "#5F826B" }
+        }
       }
     }
   ]

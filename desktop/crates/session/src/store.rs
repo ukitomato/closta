@@ -21,6 +21,7 @@ pub struct ConversationStore {
 struct Inner {
     view: SessionView,
     watchers: Vec<Sender<()>>,
+    closed: bool,
 }
 
 impl ConversationStore {
@@ -59,10 +60,22 @@ impl ConversationStore {
 
     /// A ping after each write. It holds at most one: a watcher that does not read is told once,
     /// and reads the latest view with [`ConversationStore::view`]. A dropped receiver is let go
-    /// at the next write.
+    /// at the next write, and every receiver at [`ConversationStore::close_watchers`].
     pub fn watch(&self) -> Receiver<()> {
         let (sender, receiver) = async_channel::bounded(1);
-        self.lock().watchers.push(sender);
+        let mut inner = self.lock();
+        if !inner.closed {
+            inner.watchers.push(sender);
+        }
         receiver
+    }
+
+    /// Lets every watcher go: a ping already sent is still read, then the receiver is closed.
+    /// A [`ConversationStore::watch`] taken after this returns a closed receiver. The view can
+    /// still be written and read.
+    pub fn close_watchers(&self) {
+        let mut inner = self.lock();
+        inner.closed = true;
+        inner.watchers.clear();
     }
 }

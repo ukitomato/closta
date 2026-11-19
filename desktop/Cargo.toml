@@ -37,6 +37,7 @@ closta-providers = { path = "crates/providers" }
 closta-session = { path = "crates/session" }
 closta-goldens = { path = "crates/goldens" }
 closta-platform = { path = "crates/platform" }
+closta-shell = { path = "crates/shell" }
 
 [workspace.lints.rust]
 unsafe_code = "deny"

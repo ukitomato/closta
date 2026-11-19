@@ -12,6 +12,7 @@ pub mod stream_script;
 
 use closta_presenter::input::{PresenterInput, SendId, UserSent};
 use closta_presenter::text::{is_kt_whitespace, utf16_len};
+use closta_providers::claude::fake::replay::{ReplayCue, ReplayLine};
 use closta_providers::claude::protocol::decode;
 use serde_json::{Value, json};
 
@@ -183,6 +184,68 @@ pub fn steps(shape: &Shape) -> Vec<PresenterInput> {
             )
         })
         .collect()
+}
+
+/// The session of `shape` drawn from `seed` as a replay file's lines: each turn's prompt as a user
+/// cue, then its stdout.
+pub fn replay_lines(shape: &Shape, seed: u64) -> Vec<ReplayLine> {
+    session(shape, seed)
+        .into_iter()
+        .flat_map(|turn| {
+            std::iter::once(ReplayLine::Cue(ReplayCue::User { text: turn.prompt })).chain(
+                naming_results(turn.lines)
+                    .into_iter()
+                    .map(ReplayLine::Stdout),
+            )
+        })
+        .collect()
+}
+
+/// `lines` with each `result` that names no turn naming the last turn opened before it
+/// (`user_message_uuid`), as the CLI's do. A replayed turn closes only when its result names it;
+/// one left open keeps the app waiting on it, and the next prompt is never sent. The written
+/// sessions have no spontaneous resume: a CLI's self-resumed `result` names no turn (null
+/// `user_message_uuid`), and this would wrongly name one.
+pub fn naming_results(lines: Vec<String>) -> Vec<String> {
+    let mut command: Option<String> = None;
+    lines
+        .into_iter()
+        .map(|line| {
+            let Ok(serde_json::Value::Object(mut object)) = serde_json::from_str(&line) else {
+                return line;
+            };
+            match object.get("type").and_then(serde_json::Value::as_str) {
+                Some("command_lifecycle") => {
+                    command = object
+                        .get("command_uuid")
+                        .and_then(serde_json::Value::as_str)
+                        .map(str::to_owned);
+                    line
+                }
+                Some("result") if !object.contains_key("user_message_uuid") => {
+                    let Some(command) = &command else {
+                        return line;
+                    };
+                    object.insert("user_message_uuid".into(), command.clone().into());
+                    serde_json::Value::Object(object).to_string()
+                }
+                _ => line,
+            }
+        })
+        .collect()
+}
+
+/// `lines` as a replay file holds them: a cue as its line, stdout as it is, one per line.
+pub fn replay_file(lines: &[ReplayLine]) -> String {
+    let mut text = String::new();
+    for line in lines {
+        match line {
+            ReplayLine::Stdout(line) => text.push_str(line),
+            ReplayLine::Cue(cue) => text.push_str(&cue.to_line()),
+        }
+        text.push('\n');
+    }
+    text
 }
 
 fn tool_kinds(shape: &Shape, top_level: usize, random: &mut Random) -> Vec<&'static str> {

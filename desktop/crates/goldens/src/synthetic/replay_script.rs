@@ -3,6 +3,7 @@
 //! pieces of eight UTF-16 units, and the turn ends. The user's words are not here: the CLI does not
 //! echo them.
 
+use closta_providers::claude::fake::replay::{ReplayLine, with_prompt};
 use serde_json::{Value, json};
 
 use super::stream_script::StreamScript;
@@ -10,6 +11,8 @@ use super::stream_script::StreamScript;
 const EDIT_ID: &str = "toolu_spike_edit";
 const COMMAND: &str = "spike-command";
 const CHUNK: usize = 8;
+/// What the user sends before the streamed turn.
+const PROMPT: &str = "Go on";
 
 /// The lines of one turn whose reply is `markdown`, in the session `session_id`.
 pub fn lines(markdown: &str, session_id: &str) -> Vec<String> {
@@ -28,6 +31,15 @@ pub fn lines(markdown: &str, session_id: &str) -> Vec<String> {
     script.result(markdown);
     script.lifecycle(COMMAND, "completed");
     script.lines()
+}
+
+/// [`lines`] as a replay file's lines, after the user sends "Go on".
+pub fn replay_lines(markdown: &str, session_id: &str) -> Vec<ReplayLine> {
+    let stdout = super::naming_results(lines(markdown, session_id))
+        .into_iter()
+        .map(ReplayLine::Stdout)
+        .collect();
+    with_prompt(stdout, PROMPT)
 }
 
 fn edit_input() -> Value {

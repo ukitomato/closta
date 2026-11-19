@@ -647,8 +647,9 @@ fn closing_twice_or_after_the_end_only_says_closed() {
         assert!(!has(&log.lines(), "closed"), "{:?}", log.lines());
         assert_eq!(
             statuses(&watched).last(),
-            Some(&SessionStatus::Closed),
-            "Ended, then Closed"
+            Some(&SessionStatus::Ended),
+            "the channel closed at the end: Closed after it is not heard"
         );
+        assert!(watched.is_closed());
     });
 }

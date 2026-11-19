@@ -138,6 +138,11 @@ impl State {
             let status = &self.status;
             self.watchers
                 .retain(|watcher| watcher.try_send(status.clone()).is_ok());
+            // Nothing follows an end: dropping the senders closes the channels once they are
+            // read to the end.
+            if status.is_end() {
+                self.watchers.clear();
+            }
         }
         true
     }
@@ -199,13 +204,17 @@ impl SessionRuntime {
         self.shared.state().status.clone()
     }
 
-    /// Every status from now on, the current one first. The channel is unbounded and does not
-    /// close; a receiver that is dropped is let go at the next status.
+    /// Every status from now on, the current one first. The channel is unbounded and closes
+    /// once the session ends (Ended, Failed or Closed is the last status it carries); taken
+    /// after the end it holds the end alone and is closed. A receiver that is dropped is let go
+    /// at the next status.
     pub fn watch_status(&self) -> Receiver<SessionStatus> {
         let (sender, receiver) = async_channel::unbounded();
         let mut state = self.shared.state();
         _ = sender.try_send(state.status.clone());
-        state.watchers.push(sender);
+        if !state.status.is_end() {
+            state.watchers.push(sender);
+        }
         receiver
     }
 
@@ -214,7 +223,8 @@ impl SessionRuntime {
         self.shared.store.view()
     }
 
-    /// A ping after each change of the view; it holds at most one.
+    /// A ping after each change of the view; it holds at most one. It closes once the session
+    /// ends, and is closed already when taken after the end.
     pub fn watch_view(&self) -> Receiver<()> {
         self.shared.store.watch()
     }
@@ -235,6 +245,8 @@ impl SessionRuntime {
             }
             state.set(SessionStatus::Closed, None);
         }
+        // Off the state's lock: the store comes before the state in the lock order.
+        self.shared.store.close_watchers();
         self.shared.closing.close();
     }
 
@@ -285,6 +297,7 @@ async fn run(shared: Arc<Shared>, config: SessionConfig, signals: Signals) {
         }
         state.set(outcome.clone(), None)
     };
+    shared.store.close_watchers();
     if !written {
         return;
     }
@@ -759,7 +772,10 @@ mod tests {
         assert!(state.set(SessionStatus::Ended, None));
         assert!(state.set(SessionStatus::Closed, None));
         assert_eq!(watched.try_recv(), Ok(SessionStatus::Ended));
-        assert_eq!(watched.try_recv(), Ok(SessionStatus::Closed));
+        assert!(
+            watched.is_closed(),
+            "the end closes the channel; Closed follows unheard"
+        );
     }
 
     #[test]

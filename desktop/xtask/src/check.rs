@@ -5,7 +5,7 @@ use anyhow::{Context, bail};
 
 use crate::layers;
 
-const LOCK: &str = "/tmp/closta-gradle.lock";
+pub(crate) const LOCK: &str = "/tmp/closta-gradle.lock";
 
 /// One stage of `cargo xtask check`.
 pub enum Step {
@@ -31,7 +31,7 @@ fn strings(parts: &[&str]) -> Vec<String> {
 }
 
 /// A cargo invocation run under the shared lock so heavy builds never overlap.
-fn locked_cargo(name: &'static str, cargo_args: &[&str]) -> Step {
+pub(crate) fn locked_cargo(name: &'static str, cargo_args: &[&str]) -> Step {
     let mut args = strings(&[LOCK, "cargo"]);
     args.extend(strings(cargo_args));
     Step::Command {
@@ -76,6 +76,8 @@ pub fn steps() -> Vec<Step> {
                 "closta",
                 "-p",
                 "closta-providers",
+                "--features",
+                "closta/replay,closta/profiler",
                 "--all-targets",
                 "--",
                 "-D",
@@ -194,6 +196,8 @@ mod tests {
             let pair = ["-p", package];
             assert!(args.windows(2).any(|it| it == pair), "{pair:?}");
         }
+        let features = ["--features", "closta/replay,closta/profiler"];
+        assert!(args.windows(2).any(|it| it == features), "{args:?}");
     }
 
     #[test]

@@ -1,41 +1,109 @@
+mod fonts;
+mod model;
+pub mod perf;
+mod shell_view;
 pub mod theme;
+mod thread;
 
-use closta_presenter::ShellState;
-use gpui_kit::component::ActiveTheme as _;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+use closta_session::log::TracingLog;
+use closta_shell::header::AppHeader;
+use closta_shell::panes::{Pane, Panes};
+use closta_shell::slot::{SlotLaunch, Spawn};
+use closta_shell::state::{ShellAction, ShellState};
+use futures_lite::future;
 use gpui_kit::*;
 
-struct Shell {
-    state: ShellState,
+use crate::model::ShellModel;
+
+/// The window's size when none is asked for.
+const WINDOW: (f32, f32) = (1440.0, 900.0);
+
+/// What the app is started with.
+pub struct PlatformOptions {
+    pub header: AppHeader,
+    /// The slots opened at the start, in this order.
+    pub slots: Vec<SlotLaunch>,
+    /// The window's width and height; 1440×900 when `None`.
+    pub window: Option<(f32, f32)>,
+    /// Whether the left and the right pane start open; the default panes when `None`.
+    pub panes: Option<(bool, bool)>,
+    /// What the run measures and when it quits by itself; `None` for an ordinary run.
+    pub measure: Option<Measure>,
 }
 
-impl Render for Shell {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let theme = cx.theme();
-        div()
-            .flex()
-            .items_center()
-            .justify_center()
-            .size_full()
-            .bg(theme.background)
-            .text_color(theme.foreground)
-            .child(self.state.headline.clone())
-    }
+/// A measured run. Once `finished` ends (every replay was written), `ready` is logged; once
+/// every slot has refreshed after that, `refreshed` and the rows are logged and the ready file
+/// is written. With `exit_after`, the CPU time from its 2nd second to its end is logged, then
+/// the conversation is scrolled from its tail to its head (`scroll_through`) and the app quits.
+/// A run that never refreshes logs `timeout` and quits 180 s after `started`.
+pub struct Measure {
+    /// When the exe started: every logged time is from it.
+    pub started: Instant,
+    /// The CSV of times and counts.
+    pub perf_log: Option<PathBuf>,
+    /// The empty file written once every slot refreshed after the replays ended.
+    pub ready_file: Option<PathBuf>,
+    /// Ends once every replay was written; `None` when there is nothing to wait for.
+    pub finished: Option<future::Boxed<()>>,
+    /// How long after the refresh the app quits.
+    pub exit_after: Option<Duration>,
+    /// Whether the selected conversation is scrolled from its tail to its head before quitting.
+    pub scroll_through: bool,
 }
 
-/// Starts the app, opens the window and never returns.
+/// Starts the app, opens the window and returns once the window is closed.
 #[allow(clippy::expect_used)]
-pub fn run(state: ShellState) {
+pub fn run(options: PlatformOptions) {
     application().with_assets(assets::Assets).run(move |cx| {
         init(cx);
+        fonts::register(cx);
         theme::apply(cx);
+        cx.on_window_closed(|cx, _| cx.quit()).detach();
+
+        let PlatformOptions {
+            header,
+            slots,
+            window,
+            panes,
+            measure,
+        } = options;
+        let executor = cx.background_executor().clone();
+        let spawn: Spawn = Arc::new(move |run| executor.spawn(run).detach());
+        let mut shell = ShellState::new(header, spawn, Arc::new(TracingLog));
+        if let Some((left, right)) = panes {
+            let default = Panes::default();
+            for (pane, open, was) in [
+                (Pane::Left, left, default.left_open),
+                (Pane::Right, right, default.right_open),
+            ] {
+                if open != was {
+                    shell.act(ShellAction::TogglePane(pane));
+                }
+            }
+        }
+
+        let (width, height) = window.unwrap_or(WINDOW);
         let options = WindowOptions {
             titlebar: Some(TitlebarOptions {
-                title: Some(state.title.clone().into()),
+                title: Some(shell.header().title.clone().into()),
                 ..Default::default()
             }),
+            window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
+                None,
+                size(px(width), px(height)),
+                cx,
+            ))),
+            focus: true,
+            show: true,
             ..Default::default()
         };
-        open_window(options, cx, move |_, cx| cx.new(|_| Shell { state }))
-            .expect("failed to open window");
+        open_window(options, cx, move |window, cx| {
+            cx.new(|cx| ShellModel::new(shell, slots, measure, window, cx))
+        })
+        .expect("failed to open window");
     });
 }

@@ -1,7 +1,10 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
+mod capture;
 mod check;
 mod layers;
+mod perf_log;
+mod scenes;
 mod win;
 
 use std::ffi::OsString;
@@ -25,6 +28,16 @@ fn desktop_root_from(runtime: Option<OsString>, built: &str) -> PathBuf {
 
 fn main() -> ExitCode {
     let command = std::env::args().nth(1).unwrap_or_default();
+    if let Some(example) = capture::EXAMPLES.into_iter().find(|it| *it == command) {
+        let root = desktop_root();
+        return match check::run_steps(&root, &capture::steps(example, &root)) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(err) => {
+                eprintln!("{err:#}");
+                ExitCode::FAILURE
+            }
+        };
+    }
     match command.as_str() {
         "layers" => match layers::run(&desktop_root()) {
             Ok(()) => ExitCode::SUCCESS,
@@ -54,14 +67,67 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
-        "win-build" => {
-            let flags: Vec<String> = std::env::args().skip(2).collect();
-            if let Some(flag) = flags.iter().find(|f| *f != "--release" && *f != "--run") {
-                eprintln!("unknown win-build flag: {flag:?}");
-                return ExitCode::FAILURE;
+        "win-build" | "win-test" => {
+            let build = command == "win-build";
+            let args: Vec<String> = std::env::args().skip(2).collect();
+            let flags = match win::parse_flags(&args, build) {
+                Ok(flags) => flags,
+                Err(err) => {
+                    eprintln!("{command}: {err}");
+                    return ExitCode::FAILURE;
+                }
+            };
+            let root = desktop_root();
+            let result = if build {
+                win::win_build(&root, flags.release, flags.run, &flags.features)
+            } else {
+                win::win_test(&root, &flags.features)
+            };
+            match result {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(err) => {
+                    eprintln!("{err:#}");
+                    ExitCode::FAILURE
+                }
             }
-            let has = |name: &str| flags.iter().any(|f| f == name);
-            match win::win_build(&desktop_root(), has("--release"), has("--run")) {
+        }
+        "win-perf" => {
+            let mut scenes = Vec::new();
+            for name in std::env::args().skip(2) {
+                match perf_log::PerfScene::from_name(&name) {
+                    Some(scene) => scenes.push(scene),
+                    None => {
+                        eprintln!("win-perf: unknown scene {name:?} (synth, stream or idle)");
+                        return ExitCode::FAILURE;
+                    }
+                }
+            }
+            if scenes.is_empty() {
+                scenes = perf_log::PerfScene::ALL.to_vec();
+            }
+            match win::win_perf(&desktop_root(), &scenes) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(err) => {
+                    eprintln!("{err:#}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
+        "win-shot" => {
+            let which = std::env::args().nth(2).unwrap_or_default();
+            let chosen = if which == "all" {
+                scenes::scenes()
+            } else if let Some(scene) = scenes::find(&which) {
+                vec![scene]
+            } else {
+                let names: Vec<_> = scenes::scenes().iter().map(|it| it.name).collect();
+                eprintln!(
+                    "win-shot: name a scene or all ({}), got {which:?}",
+                    names.join(", ")
+                );
+                return ExitCode::FAILURE;
+            };
+            match win::win_shot(&desktop_root(), &chosen) {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(err) => {
                     eprintln!("{err:#}");
