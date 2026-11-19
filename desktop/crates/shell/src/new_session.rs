@@ -111,8 +111,13 @@ pub struct RecentFolders {
 }
 
 impl RecentFolders {
-    /// Puts `folder` first, dropping an earlier copy and the oldest beyond [`RECENT_LIMIT`].
+    /// Puts `folder` (trimmed) first, dropping an earlier copy and the oldest beyond
+    /// [`RECENT_LIMIT`]. A blank folder is not kept.
     pub fn push(&mut self, folder: &str) {
+        let folder = folder.trim();
+        if folder.is_empty() {
+            return;
+        }
         self.folders.retain(|kept| kept != folder);
         self.folders.insert(0, folder.to_owned());
         self.folders.truncate(RECENT_LIMIT);
@@ -321,6 +326,19 @@ mod tests {
         assert_eq!(recent.list().len(), RECENT_LIMIT);
         assert_eq!(recent.list()[0], r"C:\f5");
         assert_eq!(recent.list().iter().filter(|f| *f == r"C:\f5").count(), 1);
+    }
+
+    #[test]
+    fn recent_folders_keep_a_folder_trimmed_and_never_a_blank_one() {
+        let mut recent = RecentFolders::default();
+        recent.push(r"C:\work");
+        recent.push("   ");
+        recent.push("");
+        assert_eq!(recent.list(), [r"C:\work"]);
+        recent.push(r"  C:\work  ");
+        assert_eq!(recent.list(), [r"C:\work"]);
+        recent.push("\tC:\\other\n");
+        assert_eq!(recent.list(), [r"C:\other", r"C:\work"]);
     }
 
     #[test]

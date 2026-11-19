@@ -603,12 +603,11 @@ fn a_compaction_is_one_row_after_the_ask_that_asked_for_it() {
         .rposition(|it| matches!(it, ThreadRow::Ask(ask) if ask.text.trim() == "/compact"))
         .unwrap_or_else(|| panic!("no /compact ask: {rows:?}"));
     assert!(ask < at, "after the ask: {rows:?}");
-    if let Some(end) = rows[ask..]
+    let end = rows[ask..]
         .iter()
         .position(|it| matches!(it, ThreadRow::TurnEnd(_)))
-    {
-        assert!(at < ask + end, "before the turn end: {rows:?}");
-    }
+        .unwrap_or_else(|| panic!("no turn end after the /compact ask: {rows:?}"));
+    assert!(at < ask + end, "before the turn end: {rows:?}");
 }
 
 #[test]

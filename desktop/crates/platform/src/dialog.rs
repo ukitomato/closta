@@ -91,7 +91,16 @@ impl ShellModel {
         else {
             return;
         };
-        self.shell.act(ShellAction::EditFolder { text });
+        let acted = self.shell.act(ShellAction::EditFolder { text });
+        // The field already shows the text, so only the folder may have changed.
+        debug_assert!(
+            acted.rows.is_none()
+                && acted.draft.is_none()
+                && acted.started.is_none()
+                && acted.check.is_none()
+                && !acted.close,
+            "a folder edit changed more than the folder"
+        );
         cx.notify();
     }
 

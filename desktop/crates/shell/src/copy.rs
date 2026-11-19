@@ -106,7 +106,8 @@ pub fn tokens(n: i64) -> String {
     };
     if n < THOUSAND {
         n.to_string()
-    } else if n < MILLION {
+    } else if n < MILLION - THOUSAND / 20 {
+        // From 999,950 the tenths of a thousand round up to 1000.0k: that is 1.0M.
         format!("{}k", tenths(THOUSAND))
     } else {
         format!("{}M", tenths(MILLION))
@@ -150,6 +151,7 @@ pub fn runtime_label(runtime: &Runtime) -> String {
 /// What closing the window asks while sessions work or drafts are unsent: the parts that are not
 /// zero, with `1` in the singular.
 pub fn close_question(working: usize, drafts: usize) -> String {
+    debug_assert!(working + drafts > 0, "nothing to close over");
     let working = match working {
         0 => None,
         1 => Some("1 session is working".to_owned()),
@@ -704,9 +706,18 @@ mod tests {
         assert_eq!(tokens(999), "999");
         assert_eq!(tokens(1_000), "1.0k");
         assert_eq!(tokens(20_072), "20.1k");
-        assert_eq!(tokens(999_999), "1000.0k");
+        assert_eq!(tokens(999_949), "999.9k");
+        assert_eq!(tokens(999_950), "1.0M");
+        assert_eq!(tokens(999_999), "1.0M");
         assert_eq!(tokens(1_000_000), "1.0M");
         assert_eq!(tokens(1_234_567), "1.2M");
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    #[should_panic(expected = "nothing to close over")]
+    fn the_close_question_is_not_asked_over_nothing() {
+        close_question(0, 0);
     }
 
     #[test]
