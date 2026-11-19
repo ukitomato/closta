@@ -324,6 +324,7 @@ impl ShellModel {
             folder,
             close,
             removed: _,
+            focus: _,
         } = self.shell.act(action);
         // A restarted slot's rows are new: the text states of the old ones are let go.
         if let Some(slot) = started.filter(|slot| self.scrollers.contains_key(slot)) {

@@ -3,8 +3,11 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Mutex, PoisonError};
+use std::time::{Duration, UNIX_EPOCH};
 
 use async_channel::Receiver;
+use closta_presenter::cards::card_of;
+use closta_presenter::cards::plan::plan_go_of;
 use closta_presenter::composer_state::composer_state;
 use closta_presenter::rows::{ThreadRow, ThreadRows};
 use closta_presenter::session::SessionView;
@@ -15,6 +18,7 @@ use closta_session::runtime::{SessionConfig, SessionRuntime};
 use closta_session::status::SessionStatus;
 use futures_lite::future;
 
+use crate::cards::{CardState, Reply, verdict};
 use crate::closing::{CloseQuestion, CloseRun, CloseStage};
 use crate::composer::Composer;
 use crate::copy;
@@ -36,25 +40,104 @@ use crate::watch::SlotWatch;
 pub enum ShellAction {
     Select(SlotId),
     TogglePane(Pane),
-    ResizePane { pane: Pane, width: f32 },
-    ToggleRow { slot: SlotId, key: String },
-    Send { slot: SlotId },
-    Interrupt { slot: SlotId },
-    EditDraft { slot: SlotId, text: String },
-    HistoryPrev { slot: SlotId },
-    HistoryNext { slot: SlotId },
-    Restart { slot: SlotId },
+    ResizePane {
+        pane: Pane,
+        width: f32,
+    },
+    ToggleRow {
+        slot: SlotId,
+        key: String,
+    },
+    Send {
+        slot: SlotId,
+    },
+    Interrupt {
+        slot: SlotId,
+    },
+    EditDraft {
+        slot: SlotId,
+        text: String,
+    },
+    HistoryPrev {
+        slot: SlotId,
+    },
+    HistoryNext {
+        slot: SlotId,
+    },
+    Restart {
+        slot: SlotId,
+    },
     OpenNewSession,
-    EditFolder { text: String },
+    EditFolder {
+        text: String,
+    },
     CancelNewSession,
-    StartSession { folder: String },
-    FolderChecked { folder: String, exists: bool },
+    StartSession {
+        folder: String,
+    },
+    FolderChecked {
+        folder: String,
+        exists: bool,
+    },
     RequestClose,
     ConfirmClose,
     CancelClose,
-    CloseSlot { slot: SlotId },
+    CloseSlot {
+        slot: SlotId,
+    },
     ConfirmCloseSlot,
     CancelCloseSlot,
+    CardShown {
+        slot: SlotId,
+        request_id: String,
+        now_ms: i64,
+    },
+    ListShown {
+        slot: SlotId,
+        request_id: String,
+        now_ms: i64,
+    },
+    ChooseCard {
+        slot: SlotId,
+        request_id: String,
+        index: usize,
+    },
+    DenyCard {
+        slot: SlotId,
+        request_id: String,
+    },
+    OpenNote {
+        slot: SlotId,
+        request_id: String,
+    },
+    CloseNote {
+        slot: SlotId,
+        request_id: String,
+    },
+    /// `text` is the user's: this action is never logged.
+    EditNote {
+        slot: SlotId,
+        request_id: String,
+        text: String,
+    },
+    SendNote {
+        slot: SlotId,
+        request_id: String,
+    },
+    PickDestination {
+        slot: SlotId,
+        request_id: String,
+        destination: String,
+    },
+}
+
+/// Where the keyboard goes once an action is done.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum FocusTarget {
+    Composer(SlotId),
+    Card { slot: SlotId, request_id: String },
+    CardNote { slot: SlotId, request_id: String },
+    FailureBand(SlotId),
 }
 
 /// What the machine is asked: the checks of the New Session dialog and the planner a folder
@@ -88,6 +171,8 @@ pub struct Acted {
     pub close: bool,
     /// The slot that was closed and is gone.
     pub removed: Option<SlotId>,
+    /// Where the keyboard is to go.
+    pub focus: Option<FocusTarget>,
 }
 
 /// What the composer's second line shows of the session.
@@ -144,6 +229,8 @@ struct Slot {
     failed_since: Option<i64>,
     /// Whether the session was told to end and the slot goes once its run has returned.
     closing: bool,
+    /// What is kept of each waiting card, by request id.
+    cards: HashMap<String, CardState>,
 }
 
 impl Slot {
@@ -239,6 +326,7 @@ impl ShellState {
                 waits: Vec::new(),
                 failed_since: None,
                 closing: false,
+                cards: HashMap::new(),
             },
         );
         self.selected.get_or_insert(id);
@@ -274,6 +362,7 @@ impl ShellState {
         held.last = None;
         held.waits.clear();
         held.failed_since = None;
+        held.cards.clear();
         let emptied = std::mem::take(&mut held.rows).len();
         Some(if emptied == 0 {
             Vec::new()
@@ -479,6 +568,12 @@ impl ShellState {
             Vec::new()
         };
         held.failed_since = failed.then(|| held.failed_since.unwrap_or(now_ms));
+        let waits = &held.waits;
+        held.cards.retain(|id, _| {
+            waits
+                .iter()
+                .any(|(alert, _)| request_of(alert) == Some(id.as_str()))
+        });
         held.last = Some(view);
         held.rows = rows;
         held.status = status.clone();
@@ -678,6 +773,9 @@ impl ShellState {
                     | ShellAction::CloseSlot { .. }
                     | ShellAction::ConfirmCloseSlot
                     | ShellAction::CancelCloseSlot
+                    | ShellAction::ChooseCard { .. }
+                    | ShellAction::DenyCard { .. }
+                    | ShellAction::SendNote { .. }
             )
         {
             return Acted::default();
@@ -742,6 +840,62 @@ impl ShellState {
                 self.slot_close = None;
                 Acted::default()
             }
+            ShellAction::CardShown {
+                slot,
+                request_id,
+                now_ms,
+            } => {
+                if let Some(card) = self.card_mut(slot, &request_id) {
+                    card.shown_ms.get_or_insert(now_ms);
+                }
+                Acted::default()
+            }
+            ShellAction::ListShown {
+                slot,
+                request_id,
+                now_ms,
+            } => {
+                if let Some(card) = self.card_mut(slot, &request_id) {
+                    card.list_shown_ms.get_or_insert(now_ms);
+                }
+                Acted::default()
+            }
+            ShellAction::ChooseCard {
+                slot,
+                request_id,
+                index,
+            } => self.answer_card(slot, &request_id, Reply::Choose(index)),
+            ShellAction::DenyCard { slot, request_id }
+            | ShellAction::SendNote { slot, request_id } => {
+                self.answer_card(slot, &request_id, Reply::Deny)
+            }
+            ShellAction::OpenNote { slot, request_id } => {
+                self.set_note_open(slot, &request_id, true)
+            }
+            ShellAction::CloseNote { slot, request_id } => {
+                self.set_note_open(slot, &request_id, false)
+            }
+            ShellAction::EditNote {
+                slot,
+                request_id,
+                text,
+            } => {
+                if let Some(card) = self.card_mut(slot, &request_id) {
+                    card.note = text;
+                }
+                Acted::default()
+            }
+            ShellAction::PickDestination {
+                slot,
+                request_id,
+                destination,
+            } => {
+                let Some(card) = self.card_mut(slot, &request_id) else {
+                    return Acted::default();
+                };
+                card.destination = Some(destination);
+                self.remeasured(slot, &request_id)
+            }
             ShellAction::CancelClose => {
                 if matches!(self.closing, CloseStage::Asking(_)) {
                     self.closing = CloseStage::Open;
@@ -749,6 +903,133 @@ impl ShellState {
                 Acted::default()
             }
         }
+    }
+
+    /// What is kept of the card of a request the slot waits on.
+    pub fn card_state(&self, slot: SlotId, request_id: &str) -> Option<&CardState> {
+        self.slots.get(&slot)?.cards.get(request_id)
+    }
+
+    /// Where the card of `request_id` stands among the slot's rows.
+    pub fn card_at(&self, slot: SlotId, request_id: &str) -> Option<usize> {
+        self.slots.get(&slot)?.rows.iter().position(
+            |row| matches!(row, ThreadRow::Card(it) if it.card.request_id() == request_id),
+        )
+    }
+
+    /// Whether the card was drawn in the conversation.
+    pub fn shown(&self, slot: SlotId, request_id: &str) -> bool {
+        self.card_state(slot, request_id)
+            .is_some_and(|it| it.shown_ms.is_some())
+    }
+
+    /// Whether the card's row was drawn in the needs-you list.
+    pub fn list_shown(&self, slot: SlotId, request_id: &str) -> bool {
+        self.card_state(slot, request_id)
+            .is_some_and(|it| it.list_shown_ms.is_some())
+    }
+
+    /// The card's state, made from the card when it is first touched; `None` unless the slot
+    /// waits on the request.
+    fn card_mut(&mut self, slot: SlotId, request_id: &str) -> Option<&mut CardState> {
+        let held = self.slots.get_mut(&slot)?;
+        if !held.cards.contains_key(request_id) {
+            held.waits
+                .iter()
+                .find(|(alert, _)| request_of(alert) == Some(request_id))?;
+            let view = held.runtime.view();
+            let approval = view.transcript.approvals.get(request_id)?;
+            let card = card_of(approval, plan_go_of(&view.transcript.operations));
+            held.cards
+                .insert(request_id.to_owned(), CardState::for_card(&card));
+        }
+        held.cards.get_mut(request_id)
+    }
+
+    fn set_note_open(&mut self, slot: SlotId, request_id: &str, open: bool) -> Acted {
+        let Some(card) = self.card_mut(slot, request_id) else {
+            return Acted::default();
+        };
+        card.note_open = open;
+        let focus = if open {
+            FocusTarget::CardNote {
+                slot,
+                request_id: request_id.to_owned(),
+            }
+        } else {
+            FocusTarget::Card {
+                slot,
+                request_id: request_id.to_owned(),
+            }
+        };
+        Acted {
+            focus: Some(focus),
+            ..self.remeasured(slot, request_id)
+        }
+    }
+
+    /// The card's row is to be measured again.
+    fn remeasured(&self, slot: SlotId, request_id: &str) -> Acted {
+        let changes = self
+            .card_at(slot, request_id)
+            .map(|at| RowChange::Remeasure(at..at + 1));
+        Acted {
+            rows: Some((slot, changes.into_iter().collect())),
+            ..Acted::default()
+        }
+    }
+
+    /// Answers the card of `request_id` as `reply` says, if the session is running and waits on
+    /// it. The first time it was seen is when the answer was asked for. A card whose answer
+    /// could not be sent says so and stays.
+    fn answer_card(&mut self, slot: SlotId, request_id: &str, reply: Reply) -> Acted {
+        let Some(held) = self.slots.get_mut(&slot) else {
+            return Acted::default();
+        };
+        let Some(commands) = held.runtime.commands() else {
+            return Acted::default();
+        };
+        if !matches!(held.runtime.status(), SessionStatus::Running { .. }) {
+            return Acted::default();
+        }
+        let Some(first_seen) = held
+            .waits
+            .iter()
+            .find(|(alert, _)| request_of(alert) == Some(request_id))
+            .map(|(_, at)| *at)
+        else {
+            return Acted::default();
+        };
+        let view = held.runtime.view();
+        if !view
+            .conversation
+            .pending_approvals
+            .iter()
+            .any(|it| it.request_id == request_id)
+        {
+            return Acted::default();
+        }
+        let Some(approval) = view.transcript.approvals.get(request_id) else {
+            return Acted::default();
+        };
+        let go = plan_go_of(&view.transcript.operations);
+        let Some(answer) = verdict(approval, go, held.cards.get(request_id), reply) else {
+            return Acted::default();
+        };
+        let requested_at =
+            UNIX_EPOCH + Duration::from_millis(u64::try_from(first_seen).unwrap_or(0));
+        match commands.respond_to_approval(
+            &answer.decision,
+            requested_at,
+            answer.payload.as_deref(),
+            answer.passed_on,
+        ) {
+            Ok(()) => {
+                held.cards.remove(request_id);
+            }
+            Err(_) => commands.answer_failed(request_id, copy::ANSWER_FAILED),
+        }
+        Acted::default()
     }
 
     /// Asks before closing a slot that works or holds a draft; closes one that does not.

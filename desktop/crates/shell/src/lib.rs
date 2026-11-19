@@ -2,6 +2,7 @@
 //! platform wraps it and draws what it holds.
 
 pub mod card_keys;
+pub mod cards;
 pub mod closing;
 pub mod composer;
 pub mod copy;
