@@ -2,6 +2,7 @@ mod clock;
 mod closing;
 mod composer;
 mod dialog;
+mod focus;
 mod fonts;
 mod model;
 mod needs_you;

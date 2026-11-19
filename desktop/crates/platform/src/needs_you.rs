@@ -1,10 +1,10 @@
 //! The needs-you list at the top of the left pane: one row a slot that waits, the oldest first.
 //! A row says what waits and offers Allow and Deny… when the list may answer it unread, and Open
 //! otherwise. Its buttons are for the mouse only: none takes the keyboard, and the digits, Enter
-//! and Space are held while the list has it.
+//! and Space are held while the list has it. Alt+Shift+W is the window's gate's alone.
 
 use closta_presenter::sessions::groups::AlertKind;
-use closta_shell::card_keys::{CardKey, CardKeyOutcome, FocusScene, Key, card_key};
+use closta_shell::card_keys::{CardKeyOutcome, FocusScene, card_key};
 use closta_shell::copy;
 use closta_shell::needs_you::{NeedsYouItem, NeedsYouRow};
 use closta_shell::slot::SlotId;
@@ -16,6 +16,7 @@ use gpui_kit::*;
 
 use crate::clock::WallClock;
 use crate::composer::Dispatch;
+use crate::focus::to_card_key;
 use crate::model::ShellModel;
 
 /// How much of a permission's subject the row's second line shows.
@@ -30,7 +31,7 @@ impl ShellModel {
         if self.shell.panes().left_open && self.shell.overlay().is_none() {
             self.note_list_shown(&rows, window, cx);
         }
-        needs_you_list(&rows, &self.list_focus, Self::dispatch(cx), self.clock, cx)
+        needs_you_list(&rows, &self.focus.list, Self::dispatch(cx), self.clock, cx)
     }
 
     fn note_list_shown(&self, rows: &[NeedsYouRow], window: &mut Window, cx: &mut Context<Self>) {
@@ -82,30 +83,22 @@ pub(crate) fn needs_you_list(
             theme.foreground
         })
         .child(copy::NEEDS_YOU);
-    let held = dispatch.clone();
     v_flex()
         .id("needs-you")
         .accessibility_id("needs-you")
         .aria_label(copy::NEEDS_YOU)
         .flex_none()
         .track_focus(focus)
-        // Caught on the way down, before a part inside acts on the key; the default is
-        // prevented too, so no Enter or Space comes back as a click when the key goes up.
+        // The window's gate holds these keys first; this holds them again on the way down,
+        // before a part inside acts on one, and prevents the default, so no Enter or Space
+        // comes back as a click when the key goes up. It only holds: the jump is the gate's.
         .capture_key_down(move |event: &KeyDownEvent, window, cx| {
-            let Some(key) = card_key_of(&event.keystroke) else {
+            let Some(key) = to_card_key(&event.keystroke) else {
                 return;
             };
-            match card_key(&FocusScene::NeedsYou, &key) {
-                CardKeyOutcome::Pass => {}
-                CardKeyOutcome::NextWaiting => {
-                    window.prevent_default();
-                    cx.stop_propagation();
-                    held(ShellAction::JumpToWaiting, window, cx);
-                }
-                _ => {
-                    window.prevent_default();
-                    cx.stop_propagation();
-                }
+            if card_key(&FocusScene::NeedsYou, &key) != CardKeyOutcome::Pass {
+                window.prevent_default();
+                cx.stop_propagation();
             }
         })
         .child(heading)
@@ -249,28 +242,6 @@ fn cut_subject(subject: &str) -> String {
     let mut cut: String = line.chars().take(SUBJECT_CHARS).collect();
     cut.push('…');
     cut
-}
-
-/// A key as the card table names it; `None` for a key the table has no row for.
-pub(crate) fn card_key_of(keystroke: &Keystroke) -> Option<CardKey> {
-    let key = match keystroke.key.as_str() {
-        "escape" => Key::Escape,
-        "enter" => Key::Enter,
-        "space" => Key::Space,
-        "w" => Key::W,
-        digit => match digit.strip_prefix("numpad").unwrap_or(digit).parse::<u8>() {
-            Ok(n) if n <= 9 => Key::Digit(n),
-            _ => Key::Other,
-        },
-    };
-    let modifiers = &keystroke.modifiers;
-    Some(CardKey {
-        key,
-        ctrl: modifiers.control,
-        alt: modifiers.alt,
-        shift: modifiers.shift,
-        platform: modifiers.platform,
-    })
 }
 
 #[cfg(test)]

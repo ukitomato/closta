@@ -450,20 +450,27 @@ pub fn mode_accessible(mode: &str) -> String {
     format!("Permission mode: {}", mode_name(mode))
 }
 
-/// A card as 6a draws it: its title and how it was answered, or that it waits.
+/// A card's title: what the tool would do, the plan's question or the questions' count.
+pub fn card_title(card: &ThreadCard) -> String {
+    match card {
+        ThreadCard::Permission(card) => headline(&card.tool_name, card.subject.as_deref()),
+        ThreadCard::Question(card) => question_title(card.questions.len()),
+        ThreadCard::Plan(_) => PLAN_TITLE.to_owned(),
+    }
+}
+
+/// A card on one line: its title and how it was answered, or that it waits.
 pub fn card_line(row: &CardRow) -> String {
-    let (title, said) = match &row.card {
-        ThreadCard::Permission(card) => (
-            headline(&card.tool_name, card.subject.as_deref()),
-            card.answered.map(|it| outcome(it, false)),
-        ),
-        ThreadCard::Question(card) => (
-            question_title(card.questions.len()),
-            card.answered.map(|it| outcome(it, true)),
-        ),
-        ThreadCard::Plan(card) => (PLAN_TITLE.to_owned(), plan_outcome(card)),
+    let said = match &row.card {
+        ThreadCard::Permission(card) => card.answered.map(|it| outcome(it, false)),
+        ThreadCard::Question(card) => card.answered.map(|it| outcome(it, true)),
+        ThreadCard::Plan(card) => plan_outcome(card),
     };
-    format!("{title} · {}", said.unwrap_or(CARD_WAITING))
+    format!(
+        "{} · {}",
+        card_title(&row.card),
+        said.unwrap_or(CARD_WAITING)
+    )
 }
 
 /// What a row of the needs-you list says is waiting.
