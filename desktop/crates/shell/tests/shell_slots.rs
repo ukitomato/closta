@@ -255,6 +255,8 @@ fn eight_live_slots_refuse_a_ninth_start_and_a_restart() {
         assert!(acted.started.is_none());
         assert_eq!(shell.slots().len(), 8);
         assert!(shell.new_session().is_some(), "the dialog stays open");
+        // The open dialog holds back a Restart and a close; the rest of the test needs both.
+        shell.act(ShellAction::CancelNewSession);
 
         harness.control(7).await;
         harness.refuse(LaunchError::Spawn(ErrorKind::NotFound));

@@ -24,7 +24,9 @@ use crate::closing::{CloseQuestion, CloseRun, CloseStage};
 use crate::composer::Composer;
 use crate::copy;
 use crate::header::AppHeader;
-use crate::needs_you::{NeedsYouRow, SlotNeeds, attention, needs_you_rows};
+use crate::needs_you::{
+    NeedsYouRow, SlotNeeds, attention, jump_target, list_accepts, needs_you_rows,
+};
 use crate::new_session::{
     LaunchChecks, NewSessionDialog, PlannerFor, Problem, RecentFolders, Runtime, default_folder,
     launch_in, quick_problem, runtime_of,
@@ -152,6 +154,32 @@ pub enum ShellAction {
         slot: SlotId,
         request_id: String,
     },
+    /// Allows the request the slot's needs-you row shows, if the row was drawn half a second ago.
+    AllowFromList {
+        slot: SlotId,
+        request_id: String,
+        now_ms: i64,
+    },
+    /// Opens the Deny note of the card the slot's row shows, in the conversation.
+    DenyFromList {
+        slot: SlotId,
+        request_id: String,
+    },
+    /// Selects the slot and puts the keyboard on its card, or on its failure band.
+    OpenFromList {
+        slot: SlotId,
+    },
+    /// Goes to the selected slot's waiting card, else to the next slot that waits.
+    JumpToWaiting,
+}
+
+/// The one thing that holds the window's attention; what is behind it takes no answer.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Overlay {
+    NewSession,
+    CloseWindow,
+    CloseSlot,
+    Closing,
 }
 
 /// Where the keyboard goes once an action is done.
@@ -804,6 +832,11 @@ impl ShellState {
         {
             return Acted::default();
         }
+        if let Some(overlay) = self.overlay()
+            && behind_overlay(&action, overlay)
+        {
+            return Acted::default();
+        }
         match action {
             ShellAction::Select(slot) => {
                 if self.slots.contains_key(&slot) {
@@ -955,6 +988,132 @@ impl ShellState {
                 }
                 Acted::default()
             }
+            ShellAction::AllowFromList {
+                slot,
+                request_id,
+                now_ms,
+            } => self.allow_from_list(slot, &request_id, now_ms),
+            ShellAction::DenyFromList { slot, request_id } => {
+                self.deny_from_list(slot, &request_id)
+            }
+            ShellAction::OpenFromList { slot } => self.open_from_list(slot),
+            ShellAction::JumpToWaiting => self.jump_to_waiting(),
+        }
+    }
+
+    /// The overlay that is up; the window's own steps come before a slot's question, and that
+    /// before the dialog.
+    pub fn overlay(&self) -> Option<Overlay> {
+        if self.closing == CloseStage::Closing {
+            Some(Overlay::Closing)
+        } else if matches!(self.closing, CloseStage::Asking(_)) {
+            Some(Overlay::CloseWindow)
+        } else if self.slot_close.is_some() {
+            Some(Overlay::CloseSlot)
+        } else if self.dialog.is_some() {
+            Some(Overlay::NewSession)
+        } else {
+            None
+        }
+    }
+
+    /// The row the needs-you list shows for the slot.
+    fn row_of(&self, slot: SlotId) -> Option<NeedsYouRow> {
+        self.needs_you().into_iter().find(|it| it.slot == slot)
+    }
+
+    /// Allows the request the slot's row shows. Everything must hold: the row shows exactly
+    /// this request and it may be allowed unread, the row itself was drawn 500 ms ago (not a
+    /// card in the conversation), the slot still waits on it, and the slot's session is live.
+    fn allow_from_list(&mut self, slot: SlotId, request_id: &str, now_ms: i64) -> Acted {
+        let Some(row) = self.row_of(slot) else {
+            return Acted::default();
+        };
+        if row.request_id() != Some(request_id) || !row.may_allow() {
+            return Acted::default();
+        }
+        let Some(held) = self.slots.get(&slot) else {
+            return Acted::default();
+        };
+        let waiting: HashSet<String> = held
+            .waits
+            .iter()
+            .filter_map(|(alert, _)| request_of(alert).map(str::to_owned))
+            .collect();
+        let shown = held
+            .cards
+            .get(request_id)
+            .and_then(|it| it.list_shown_ms)
+            .map(|at| (request_id, at));
+        if !list_accepts(shown, request_id, &waiting, now_ms) {
+            return Acted::default();
+        }
+        self.answer_card(slot, request_id, Reply::Choose(0))
+    }
+
+    fn deny_from_list(&mut self, slot: SlotId, request_id: &str) -> Acted {
+        let Some(row) = self.row_of(slot) else {
+            return Acted::default();
+        };
+        if row.request_id() != Some(request_id) {
+            return Acted::default();
+        }
+        self.selected = Some(slot);
+        let Some(card) = self.card_mut(slot, request_id) else {
+            return Acted::default();
+        };
+        card.note_open = true;
+        Acted {
+            focus: Some(FocusTarget::CardNote {
+                slot,
+                request_id: request_id.to_owned(),
+            }),
+            ..Acted::default()
+        }
+    }
+
+    fn open_from_list(&mut self, slot: SlotId) -> Acted {
+        let Some(row) = self.row_of(slot) else {
+            return Acted::default();
+        };
+        self.selected = Some(slot);
+        let focus = match row.request_id() {
+            Some(request_id) => FocusTarget::Card {
+                slot,
+                request_id: request_id.to_owned(),
+            },
+            None => FocusTarget::FailureBand(slot),
+        };
+        Acted {
+            focus: Some(focus),
+            ..Acted::default()
+        }
+    }
+
+    fn jump_to_waiting(&mut self) -> Acted {
+        let rows = self.needs_you();
+        let order: Vec<SlotId> = rows
+            .iter()
+            .filter(|it| it.request_id().is_some())
+            .map(|it| it.slot)
+            .collect();
+        let Some(slot) = jump_target(self.selected, &order) else {
+            return Acted::default();
+        };
+        let Some(request_id) = rows
+            .iter()
+            .find(|it| it.slot == slot)
+            .and_then(NeedsYouRow::request_id)
+        else {
+            return Acted::default();
+        };
+        self.selected = Some(slot);
+        Acted {
+            focus: Some(FocusTarget::Card {
+                slot,
+                request_id: request_id.to_owned(),
+            }),
+            ..Acted::default()
         }
     }
 
@@ -1342,6 +1501,39 @@ impl ShellState {
             started: Some(slot),
             ..Acted::default()
         }
+    }
+}
+
+/// Whether an overlay holds the action back: nothing answers, edits a card, closes or starts
+/// anything behind it. Selecting, opening a row, the panes, the draft and the overlay's own
+/// steps go through.
+fn behind_overlay(action: &ShellAction, overlay: Overlay) -> bool {
+    match action {
+        ShellAction::ChooseCard { .. }
+        | ShellAction::DenyCard { .. }
+        | ShellAction::SendNote { .. }
+        | ShellAction::AnswerQuestion { .. }
+        | ShellAction::AllowFromList { .. }
+        | ShellAction::DenyFromList { .. }
+        | ShellAction::OpenFromList { .. }
+        | ShellAction::JumpToWaiting
+        | ShellAction::EditNote { .. }
+        | ShellAction::EditOther { .. }
+        | ShellAction::PickDestination { .. }
+        | ShellAction::OpenNote { .. }
+        | ShellAction::CloseNote { .. }
+        | ShellAction::ToggleOption { .. }
+        | ShellAction::ToggleOther { .. }
+        | ShellAction::CloseSlot { .. }
+        | ShellAction::Send { .. }
+        | ShellAction::Restart { .. }
+        | ShellAction::Interrupt { .. }
+        | ShellAction::HistoryPrev { .. }
+        | ShellAction::HistoryNext { .. } => true,
+        ShellAction::OpenNewSession | ShellAction::StartSession { .. } => {
+            overlay != Overlay::NewSession
+        }
+        _ => false,
     }
 }
 
