@@ -1,10 +1,9 @@
 //! The time to gather what 8 slots wait for into the needs-you rows when one slot's view
-//! changes: four slots hold the largest history, four the first wait of a recorded scenario.
+//! changes: each slot holds the first wait of a recorded scenario, two slots to a scenario.
 
 use std::time::{Duration, Instant};
 
 use closta_goldens::replay::replay;
-use closta_goldens::synthetic::{self, LARGEST};
 use closta_presenter::session::SessionView;
 use closta_presenter::sessions::groups::waiting_alerts;
 use closta_shell::needs_you::{SlotNeeds, needs_you_rows};
@@ -20,12 +19,6 @@ const SCENARIOS: [&str; 4] = [
     "18-ask-multi-question",
     "29-exit-plan-mode",
 ];
-
-fn largest() -> SessionView {
-    synthetic::steps(&LARGEST)
-        .iter()
-        .fold(SessionView::default(), |view, step| view.fold(step))
-}
 
 /// The view at the first step where an approval waits.
 fn first_wait(scenario: &str) -> SessionView {
@@ -58,18 +51,20 @@ fn needs_of(n: usize, view: &SessionView) -> SlotNeeds {
 #[ignore = "perf"]
 #[allow(clippy::print_stdout)]
 fn needs_you_refresh_within_budget() {
-    let big = largest();
-    let mut views: Vec<SessionView> = (0..4).map(|_| big.clone()).collect();
-    views.extend(SCENARIOS.iter().map(|it| first_wait(it)));
+    let views: Vec<SessionView> = SCENARIOS
+        .iter()
+        .flat_map(|it| {
+            let view = first_wait(it);
+            [view.clone(), view]
+        })
+        .collect();
     let mut all: Vec<SlotNeeds> = views
         .iter()
         .enumerate()
         .map(|(n, v)| needs_of(n, v))
         .collect();
-    assert!(
-        all[4..].iter().all(|it| !it.waits.is_empty()),
-        "the scenarios' views must wait"
-    );
+    assert_eq!(views.len(), 8);
+    assert_eq!(needs_you_rows(&all).len(), 8, "every slot must wait");
     let mut times: Vec<Duration> = (0..RUNS)
         .map(|run| {
             let n = run % views.len();

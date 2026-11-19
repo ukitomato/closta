@@ -1,6 +1,7 @@
 //! What waits for the user across the slots: one row per slot, the oldest wait first.
 
 use std::collections::HashSet;
+use std::fmt;
 
 use closta_presenter::sessions::groups::{
     AlertChange, OpenOnlyAlert, PermissionAlert, SessionAlert,
@@ -9,8 +10,8 @@ use closta_presenter::sessions::window::{ShownAsk, accepts_answer, next_waiting}
 
 use crate::slot::SlotId;
 
-/// What a row asks for.
-#[derive(Clone, PartialEq, Eq, Debug)]
+/// What a row asks for. `Debug` names the kind and the ids, never the text.
+#[derive(Clone, PartialEq, Eq)]
 pub enum NeedsYouItem {
     Permission(PermissionAlert),
     OpenOnly(OpenOnlyAlert),
@@ -18,7 +19,7 @@ pub enum NeedsYouItem {
 }
 
 /// One row of the needs-you list.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct NeedsYouRow {
     pub slot: SlotId,
     pub title: String,
@@ -26,6 +27,51 @@ pub struct NeedsYouRow {
     /// How many requests the slot waits on.
     pub waiting: usize,
     pub since_ms: i64,
+}
+
+impl fmt::Debug for NeedsYouItem {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Permission(alert) => f
+                .debug_struct("Permission")
+                .field("request_id", &alert.request_id)
+                .field("answerable", &alert.answerable)
+                .field("subject_len", &alert.subject.len())
+                .finish(),
+            Self::OpenOnly(alert) => f
+                .debug_struct("OpenOnly")
+                .field("request_id", &alert.request_id)
+                .field("what", &alert.what)
+                .finish(),
+            Self::Failed { title } => f
+                .debug_struct("Failed")
+                .field("title_len", &title.len())
+                .finish(),
+        }
+    }
+}
+
+impl fmt::Debug for NeedsYouRow {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("NeedsYouRow")
+            .field("slot", &self.slot)
+            .field("title_len", &self.title.len())
+            .field("item", &self.item)
+            .field("waiting", &self.waiting)
+            .field("since_ms", &self.since_ms)
+            .finish()
+    }
+}
+
+impl fmt::Debug for SlotNeeds {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SlotNeeds")
+            .field("slot", &self.slot)
+            .field("title_len", &self.title.len())
+            .field("waits", &self.waits.len())
+            .field("failed_since_ms", &self.failed.as_ref().map(|it| it.1))
+            .finish()
+    }
 }
 
 impl NeedsYouRow {
@@ -44,7 +90,7 @@ impl NeedsYouRow {
 }
 
 /// What one slot waits for, as the shell gathered it.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct SlotNeeds {
     pub slot: SlotId,
     pub title: String,
@@ -99,23 +145,21 @@ pub fn jump_target(selected: Option<SlotId>, order: &[SlotId]) -> Option<SlotId>
     order.iter().copied().find(|it| it.to_string() == next)
 }
 
-/// The list takes an answer to `request_id`: its row has been shown for the delay. The time is
-/// the list row's own, never a card's in a conversation.
+/// The list takes an answer to `request_id`: `shown` is the request the row showed and since
+/// when (the row's own time, never a card's in a conversation); an answer to another request is
+/// refused.
 pub fn list_accepts(
-    shown_ms: Option<i64>,
+    shown: Option<(&str, i64)>,
     request_id: &str,
     still_waiting: &HashSet<String>,
     now_ms: i64,
 ) -> bool {
-    let Some(since_ms) = shown_ms else {
-        return false;
-    };
-    let shown = ShownAsk {
+    let shown = shown.map(|(shown_id, since_ms)| ShownAsk {
         session_id: String::new(),
-        request_id: Some(request_id.to_owned()),
+        request_id: Some(shown_id.to_owned()),
         since_ms,
-    };
-    accepts_answer(Some(&shown), request_id, still_waiting, now_ms)
+    });
+    accepts_answer(shown.as_ref(), request_id, still_waiting, now_ms)
 }
 
 /// A change calls for the user's eye: something new waits, or a slot has just failed.
@@ -243,11 +287,47 @@ mod tests {
     #[test]
     fn the_list_takes_an_answer_only_half_a_second_after_it_showed_the_request() {
         let waiting = set(&["r1"]);
-        assert!(!list_accepts(Some(1000), "r1", &waiting, 1499));
-        assert!(list_accepts(Some(1000), "r1", &waiting, 1500));
-        assert!(!list_accepts(Some(1000), "r2", &waiting, 9000));
+        assert!(!list_accepts(Some(("r1", 1000)), "r1", &waiting, 1499));
+        assert!(list_accepts(Some(("r1", 1000)), "r1", &waiting, 1500));
+        assert!(!list_accepts(Some(("r1", 1000)), "r2", &set(&["r2"]), 9000));
+        assert!(!list_accepts(Some(("r1", 1000)), "r1", &set(&[]), 9000));
         assert!(!list_accepts(None, "r1", &waiting, 9000));
-        assert!(!list_accepts(Some(1000), "r1", &waiting, 900));
+        assert!(!list_accepts(Some(("r1", 1000)), "r1", &waiting, 900));
+        let both = set(&["r1", "r2"]);
+        assert!(!list_accepts(Some(("r1", 0)), "r2", &both, 1000));
+    }
+
+    #[test]
+    fn debug_names_ids_and_lengths_but_no_text() {
+        let alert = SessionAlert::Permission(PermissionAlert {
+            key: "k".to_owned(),
+            request_id: "r1".to_owned(),
+            tool_name: "Bash".to_owned(),
+            subject: "SECRET-COMMAND".to_owned(),
+            answerable: true,
+        });
+        let slot = SlotNeeds {
+            slot: SlotId::numbered(1),
+            title: "SECRET-TITLE".to_owned(),
+            waits: vec![(alert, 5)],
+            failed: Some(("SECRET-FAILURE".to_owned(), 7)),
+        };
+        let row = needs_you_rows(&[SlotNeeds {
+            failed: None,
+            ..slot.clone()
+        }])
+        .remove(0);
+        let failed = needs_you_rows(std::slice::from_ref(&slot)).remove(0);
+        for text in [
+            format!("{slot:?}"),
+            format!("{row:?}"),
+            format!("{:?}", row.item),
+            format!("{failed:?}"),
+            format!("{:?}", failed.item),
+        ] {
+            assert!(!text.contains("SECRET"), "{text}");
+        }
+        assert!(format!("{row:?}").contains("r1"));
     }
 
     #[test]
