@@ -9,7 +9,8 @@ mod support;
 use std::time::Duration;
 
 use closta_presenter::cards::decisions::kept_suggestions;
-use closta_presenter::cards::{allow_payload, passed_on};
+use closta_presenter::cards::{ThreadCard, allow_payload, passed_on};
+use closta_presenter::rows::ThreadRow;
 use closta_presenter::transcript::ApprovalRecord;
 use closta_providers::claude::fake::replay::ReplayControl;
 use closta_providers::claude::protocol::encode;
@@ -345,6 +346,11 @@ fn an_answer_to_a_process_that_exited_writes_nothing() {
         choose(&mut shell, slot, SANDBOX_REQUEST, 0);
         quiet().await;
         assert_eq!(control.stdin_lines().len(), before);
+        assert_eq!(control.refused_writes(), 0);
+        let failed = shell.rows(slot).iter().any(|row| {
+            matches!(row, ThreadRow::Card(it) if matches!(&it.card, ThreadCard::Permission(card) if card.failure.is_some()))
+        });
+        assert!(!failed);
     });
 }
 
@@ -398,4 +404,123 @@ fn what_a_card_holds_never_shows_in_debug() {
     };
     let shown = format!("{card:?} {:?}", card.picks[0]);
     assert!(!shown.contains("secret"));
+}
+
+#[test]
+fn an_untouched_card_keeps_its_rules_where_it_starts_out() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (launch, runtime) = harness.launch("slot");
+        let slot = shell.open(launch);
+        let runtime = runtime.recv().await.unwrap();
+        running(&runtime).await;
+        let control = harness.control(0).await;
+        control.emit(
+            &serde_json::json!({
+                "type": "control_request",
+                "request_id": "two-places",
+                "request": {
+                    "subtype": "can_use_tool",
+                    "tool_name": "Bash",
+                    "display_name": "Bash",
+                    "input": { "command": "ls" },
+                    "description": "ls",
+                    "permission_suggestions": [
+                        { "type": "addRules", "behavior": "allow", "destination": "localSettings",
+                          "rules": [{ "toolName": "Bash", "ruleContent": "ls" }] },
+                        { "type": "addRules", "behavior": "allow", "destination": "userSettings",
+                          "rules": [{ "toolName": "Bash", "ruleContent": "pwd" }] }
+                    ],
+                    "tool_use_id": "toolu_x"
+                }
+            })
+            .to_string(),
+        );
+        waits_on(&runtime, 1).await;
+        let generation = shell.watch(slot).unwrap().generation();
+        shell.refresh(slot, generation, 1000).unwrap();
+        let a = approval(&runtime, "two-places");
+        let before = control.stdin_lines().len();
+        choose(&mut shell, slot, "two-places", 1);
+        let kept = passed_on(&a, &kept_suggestions(&a.suggestions, Some("localSettings")))
+            .updated_permissions
+            .unwrap();
+        assert_eq!(kept.matches("\"destination\":\"localSettings\"").count(), 2);
+        until(|| control.stdin_lines().len() > before).await;
+        quiet().await;
+        assert_eq!(
+            control.stdin_lines()[before..],
+            [allow_line("two-places", &a, Some(&kept))]
+        );
+    });
+}
+
+#[test]
+fn a_slot_being_closed_takes_no_answer() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        harness.stubborn();
+        let (slot, control, _) =
+            waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK, 1000).await;
+        shell.act(ShellAction::CloseSlot { slot });
+        shell.act(ShellAction::ConfirmCloseSlot);
+        choose(&mut shell, slot, SANDBOX_REQUEST, 0);
+        quiet().await;
+        assert!(answers(&control).is_empty());
+    });
+}
+
+#[test]
+fn a_note_of_blanks_denies_without_one() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (slot, control, _) =
+            waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK, 1000).await;
+        shell.act(ShellAction::EditNote {
+            slot,
+            request_id: SANDBOX_REQUEST.to_owned(),
+            text: "   \n ".to_owned(),
+        });
+        shell.act(ShellAction::SendNote {
+            slot,
+            request_id: SANDBOX_REQUEST.to_owned(),
+        });
+        assert_eq!(
+            written(&control).await,
+            vec![encode::deny(SANDBOX_REQUEST, "")]
+        );
+    });
+}
+
+#[test]
+fn a_place_the_card_does_not_offer_is_ignored() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (slot, _control, _) =
+            waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK, 1000).await;
+        let (edit, _edit_control, _) =
+            waiting_slot(&mut shell, &harness, EDIT, EDIT_ASK, 1000).await;
+        let pick = |shell: &mut ShellState, slot, id: &str, place: &str| {
+            shell.act(ShellAction::PickDestination {
+                slot,
+                request_id: id.to_owned(),
+                destination: place.to_owned(),
+            });
+        };
+        pick(&mut shell, slot, SANDBOX_REQUEST, "/etc/elsewhere");
+        pick(&mut shell, edit, EDIT_REQUEST, "userSettings");
+        for (slot, id) in [(slot, SANDBOX_REQUEST), (edit, EDIT_REQUEST)] {
+            shell.act(ShellAction::CardShown {
+                slot,
+                request_id: id.to_owned(),
+                now_ms: 1,
+            });
+        }
+        let place = |slot, id| shell.card_state(slot, id).unwrap().destination.clone();
+        assert_eq!(
+            place(slot, SANDBOX_REQUEST).as_deref(),
+            Some("localSettings")
+        );
+        assert_eq!(place(edit, EDIT_REQUEST).as_deref(), Some("session"));
+    });
 }

@@ -6,8 +6,9 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, UNIX_EPOCH};
 
 use async_channel::Receiver;
-use closta_presenter::cards::card_of;
+use closta_presenter::cards::decisions::offers_destination;
 use closta_presenter::cards::plan::plan_go_of;
+use closta_presenter::cards::{SUGGESTION_DESTINATIONS, card_of};
 use closta_presenter::composer_state::composer_state;
 use closta_presenter::rows::{ThreadRow, ThreadRows};
 use closta_presenter::session::SessionView;
@@ -890,6 +891,9 @@ impl ShellState {
                 request_id,
                 destination,
             } => {
+                if !self.offers_place(slot, &request_id, &destination) {
+                    return Acted::default();
+                }
                 let Some(card) = self.card_mut(slot, &request_id) else {
                     return Acted::default();
                 };
@@ -946,6 +950,20 @@ impl ShellState {
         held.cards.get_mut(request_id)
     }
 
+    /// Whether the card of the request keeps rules somewhere and `place` is one of the places it
+    /// offers.
+    fn offers_place(&self, slot: SlotId, request_id: &str, place: &str) -> bool {
+        let Some(held) = self.slots.get(&slot) else {
+            return false;
+        };
+        let view = held.runtime.view();
+        view.transcript
+            .approvals
+            .get(request_id)
+            .is_some_and(|it| offers_destination(&it.suggestions))
+            && SUGGESTION_DESTINATIONS.contains(&place)
+    }
+
     fn set_note_open(&mut self, slot: SlotId, request_id: &str, open: bool) -> Acted {
         let Some(card) = self.card_mut(slot, request_id) else {
             return Acted::default();
@@ -983,7 +1001,7 @@ impl ShellState {
     /// it. The first time it was seen is when the answer was asked for. A card whose answer
     /// could not be sent says so and stays.
     fn answer_card(&mut self, slot: SlotId, request_id: &str, reply: Reply) -> Acted {
-        let Some(held) = self.slots.get_mut(&slot) else {
+        let Some(held) = self.slots.get_mut(&slot).filter(|it| !it.closing) else {
             return Acted::default();
         };
         let Some(commands) = held.runtime.commands() else {
@@ -1013,7 +1031,16 @@ impl ShellState {
             return Acted::default();
         };
         let go = plan_go_of(&view.transcript.operations);
-        let Some(answer) = verdict(approval, go, held.cards.get(request_id), reply) else {
+        // A card never touched still keeps its rules where it starts out.
+        let untouched;
+        let state = match held.cards.get(request_id) {
+            Some(state) => state,
+            None => {
+                untouched = CardState::for_card(&card_of(approval, go));
+                &untouched
+            }
+        };
+        let Some(answer) = verdict(approval, go, Some(state), reply) else {
             return Acted::default();
         };
         let requested_at =
