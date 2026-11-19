@@ -8,7 +8,7 @@ use std::time::{Duration, UNIX_EPOCH};
 use async_channel::Receiver;
 use closta_presenter::cards::decisions::offers_destination;
 use closta_presenter::cards::plan::plan_go_of;
-use closta_presenter::cards::{SUGGESTION_DESTINATIONS, card_of};
+use closta_presenter::cards::{SUGGESTION_DESTINATIONS, ThreadCard, card_of};
 use closta_presenter::composer_state::composer_state;
 use closta_presenter::rows::{ThreadRow, ThreadRows};
 use closta_presenter::session::SessionView;
@@ -129,6 +129,28 @@ pub enum ShellAction {
         slot: SlotId,
         request_id: String,
         destination: String,
+    },
+    ToggleOption {
+        slot: SlotId,
+        request_id: String,
+        question: usize,
+        option: usize,
+    },
+    ToggleOther {
+        slot: SlotId,
+        request_id: String,
+        question: usize,
+    },
+    /// `text` is the user's: this action is never logged.
+    EditOther {
+        slot: SlotId,
+        request_id: String,
+        question: usize,
+        text: String,
+    },
+    AnswerQuestion {
+        slot: SlotId,
+        request_id: String,
     },
 }
 
@@ -777,6 +799,7 @@ impl ShellState {
                     | ShellAction::ChooseCard { .. }
                     | ShellAction::DenyCard { .. }
                     | ShellAction::SendNote { .. }
+                    | ShellAction::AnswerQuestion { .. }
             )
         {
             return Acted::default();
@@ -900,6 +923,32 @@ impl ShellState {
                 card.destination = Some(destination);
                 self.remeasured(slot, &request_id)
             }
+            ShellAction::ToggleOption {
+                slot,
+                request_id,
+                question,
+                option,
+            } => self.pick(slot, &request_id, question, Some(option), |card, multi| {
+                card.toggle_option(question, option, multi);
+            }),
+            ShellAction::ToggleOther {
+                slot,
+                request_id,
+                question,
+            } => self.pick(slot, &request_id, question, None, |card, multi| {
+                card.toggle_other(question, multi);
+            }),
+            ShellAction::EditOther {
+                slot,
+                request_id,
+                question,
+                text,
+            } => self.pick(slot, &request_id, question, None, |card, multi| {
+                card.edit_other(question, &text, multi);
+            }),
+            ShellAction::AnswerQuestion { slot, request_id } => {
+                self.answer_card(slot, &request_id, Reply::Answer)
+            }
             ShellAction::CancelClose => {
                 if matches!(self.closing, CloseStage::Asking(_)) {
                     self.closing = CloseStage::Open;
@@ -962,6 +1011,39 @@ impl ShellState {
             .get(request_id)
             .is_some_and(|it| offers_destination(&it.suggestions))
             && SUGGESTION_DESTINATIONS.contains(&place)
+    }
+
+    /// Changes the picks of a question the card of the request asks, if it asks it (and has the
+    /// option); `change` is told whether the question takes several answers.
+    fn pick(
+        &mut self,
+        slot: SlotId,
+        request_id: &str,
+        question: usize,
+        option: Option<usize>,
+        change: impl FnOnce(&mut CardState, bool),
+    ) -> Acted {
+        let multi = self.slots.get(&slot).and_then(|held| {
+            let view = held.runtime.view();
+            let approval = view.transcript.approvals.get(request_id)?;
+            let ThreadCard::Question(card) =
+                card_of(approval, plan_go_of(&view.transcript.operations))
+            else {
+                return None;
+            };
+            let asked = card.questions.get(question)?;
+            option
+                .is_none_or(|at| at < asked.options.len())
+                .then_some(asked.multi_select)
+        });
+        let Some(multi) = multi else {
+            return Acted::default();
+        };
+        let Some(card) = self.card_mut(slot, request_id) else {
+            return Acted::default();
+        };
+        change(card, multi);
+        self.remeasured(slot, request_id)
     }
 
     fn set_note_open(&mut self, slot: SlotId, request_id: &str, open: bool) -> Acted {
@@ -1053,6 +1135,10 @@ impl ShellState {
         ) {
             Ok(()) => {
                 held.cards.remove(request_id);
+                if let Some(mode) = answer.mode_after {
+                    // The allow already carries the mode; a refused backstop changes nothing.
+                    let _ = commands.switch_mode(&mode);
+                }
             }
             Err(_) => commands.answer_failed(request_id, copy::ANSWER_FAILED),
         }

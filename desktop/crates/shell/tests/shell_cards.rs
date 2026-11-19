@@ -9,7 +9,8 @@ mod support;
 use std::time::Duration;
 
 use closta_presenter::cards::decisions::kept_suggestions;
-use closta_presenter::cards::{ThreadCard, allow_payload, passed_on};
+use closta_presenter::cards::plan::{PlanAnswer, PlanChoice, PlanGo, plan_answer};
+use closta_presenter::cards::{ThreadCard, allow_payload, answer_payload, card_of, passed_on};
 use closta_presenter::rows::ThreadRow;
 use closta_presenter::transcript::ApprovalRecord;
 use closta_providers::claude::fake::replay::ReplayControl;
@@ -20,13 +21,21 @@ use closta_shell::cards::CardState;
 use closta_shell::copy::ANSWER_FAILED;
 use closta_shell::rows::RowChange;
 use closta_shell::slot::SlotId;
-use closta_shell::state::{FocusTarget, ShellAction, ShellState};
+use closta_shell::state::{Acted, FocusTarget, ShellAction, ShellState};
 use smol::Timer;
 use support::{drive, emit_capture, running, until, waiting_slot, waits_on};
 
 const SANDBOX: &str = "36-sandbox-unavailable.ndjson";
 const SANDBOX_ASK: usize = 31;
 const SANDBOX_REQUEST: &str = "b4635f8c-7b16-4eac-9934-9ca6b3b1373f";
+const PLAN: &str = "29-exit-plan-mode.ndjson";
+const PLAN_ASK: usize = 153;
+const PLAN_REQUEST: &str = "161f1f49-f46c-419f-b243-329e43da91d4";
+const QUESTION: &str = "18-ask-multi-question.ndjson";
+const QUESTION_ASK: usize = 46;
+const QUESTION_REQUEST: &str = "11d35842-e704-44da-9c36-710ff840b727";
+const QUESTION_ONE: &str = "AとBどちらがいいですか？";
+const QUESTION_TWO: &str = "XとYどちらにしますか？";
 const EDIT: &str = "17-edit-approval.ndjson";
 const EDIT_ASK: usize = 64;
 const EDIT_REQUEST: &str = "710f9184-6cc9-490c-aff2-9f11516f7a23";
@@ -522,5 +531,293 @@ fn a_place_the_card_does_not_offer_is_ignored() {
             Some("localSettings")
         );
         assert_eq!(place(edit, EDIT_REQUEST).as_deref(), Some("session"));
+    });
+}
+
+fn toggle(shell: &mut ShellState, slot: SlotId, question: usize, option: usize) -> Acted {
+    shell.act(ShellAction::ToggleOption {
+        slot,
+        request_id: QUESTION_REQUEST.to_owned(),
+        question,
+        option,
+    })
+}
+
+fn answer_question(shell: &mut ShellState, slot: SlotId) {
+    shell.act(ShellAction::AnswerQuestion {
+        slot,
+        request_id: QUESTION_REQUEST.to_owned(),
+    });
+}
+
+fn plan_line(a: &ApprovalRecord, choice: PlanChoice, note: &str) -> (PlanAnswer, String) {
+    let ThreadCard::Plan(card) = card_of(a, PlanGo::Auto) else {
+        panic!("not a plan");
+    };
+    let answer = plan_answer(&card, a, choice, note);
+    let line = encode::allow(
+        PLAN_REQUEST,
+        &answer.payload,
+        answer.passed_on.updated_permissions.as_deref(),
+    )
+    .unwrap();
+    (answer, line)
+}
+
+#[test]
+fn approving_a_plan_allows_with_its_mode_and_then_switches() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (slot, control, runtime) =
+            waiting_slot(&mut shell, &harness, PLAN, PLAN_ASK, 1000).await;
+        let a = approval(&runtime, PLAN_REQUEST);
+        choose(&mut shell, slot, PLAN_REQUEST, 0);
+        let (_, allow) = plan_line(&a, PlanChoice::Go, "");
+        until(|| {
+            control
+                .stdin_lines()
+                .iter()
+                .any(|it| it.contains("set_permission_mode"))
+        })
+        .await;
+        quiet().await;
+        let lines = control.stdin_lines();
+        let at = lines.iter().position(|it| *it == allow).expect("the allow");
+        let after: Vec<serde_json::Value> = lines[at + 1..]
+            .iter()
+            .map(|it| serde_json::from_str(it).unwrap())
+            .collect();
+        assert_eq!(after.len(), 1);
+        assert_eq!(after[0]["type"], "control_request");
+        assert_eq!(after[0]["request"]["subtype"], "set_permission_mode");
+        assert_eq!(after[0]["request"]["mode"], "auto");
+        assert_eq!(answers(&control), vec![allow]);
+    });
+}
+
+#[test]
+fn approve_and_review_edits_allows_without_a_switch() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (slot, control, runtime) =
+            waiting_slot(&mut shell, &harness, PLAN, PLAN_ASK, 1000).await;
+        let a = approval(&runtime, PLAN_REQUEST);
+        choose(&mut shell, slot, PLAN_REQUEST, 1);
+        let (answer, allow) = plan_line(&a, PlanChoice::AskEdits, "");
+        assert!(answer.passed_on.updated_permissions.is_none());
+        assert_eq!(written(&control).await, vec![allow.clone()]);
+        assert!(!allow.contains("updatedPermissions"));
+        assert!(
+            !control
+                .stdin_lines()
+                .iter()
+                .any(|it| it.contains("set_permission_mode"))
+        );
+    });
+}
+
+#[test]
+fn keep_planning_sends_the_note() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (slot, control, _) = waiting_slot(&mut shell, &harness, PLAN, PLAN_ASK, 1000).await;
+        let id = PLAN_REQUEST.to_owned();
+        shell.act(ShellAction::OpenNote {
+            slot,
+            request_id: id.clone(),
+        });
+        shell.act(ShellAction::EditNote {
+            slot,
+            request_id: id.clone(),
+            text: "shorter".to_owned(),
+        });
+        choose(&mut shell, slot, PLAN_REQUEST, 2);
+        assert_eq!(
+            written(&control).await,
+            vec![encode::deny(PLAN_REQUEST, "shorter")]
+        );
+        assert!(
+            !control
+                .stdin_lines()
+                .iter()
+                .any(|it| it.contains("set_permission_mode"))
+        );
+    });
+}
+
+#[test]
+fn a_note_sent_on_a_plan_keeps_planning() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (slot, control, _) = waiting_slot(&mut shell, &harness, PLAN, PLAN_ASK, 1000).await;
+        let id = PLAN_REQUEST.to_owned();
+        shell.act(ShellAction::EditNote {
+            slot,
+            request_id: id.clone(),
+            text: "  shorter ".to_owned(),
+        });
+        shell.act(ShellAction::SendNote {
+            slot,
+            request_id: id,
+        });
+        assert_eq!(
+            written(&control).await,
+            vec![encode::deny(PLAN_REQUEST, "shorter")]
+        );
+    });
+}
+
+#[test]
+fn escape_on_a_plan_keeps_planning_without_a_note() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (slot, control, _) = waiting_slot(&mut shell, &harness, PLAN, PLAN_ASK, 1000).await;
+        shell.act(ShellAction::DenyCard {
+            slot,
+            request_id: PLAN_REQUEST.to_owned(),
+        });
+        assert_eq!(
+            written(&control).await,
+            vec![encode::deny(PLAN_REQUEST, "")]
+        );
+    });
+}
+
+#[test]
+fn a_plan_has_no_fourth_button() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (slot, control, _) = waiting_slot(&mut shell, &harness, PLAN, PLAN_ASK, 1000).await;
+        let before = control.stdin_lines().len();
+        choose(&mut shell, slot, PLAN_REQUEST, 3);
+        quiet().await;
+        assert_eq!(control.stdin_lines().len(), before);
+    });
+}
+
+#[test]
+fn a_question_answers_every_question() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (slot, control, runtime) =
+            waiting_slot(&mut shell, &harness, QUESTION, QUESTION_ASK, 1000).await;
+        let a = approval(&runtime, QUESTION_REQUEST);
+        toggle(&mut shell, slot, 0, 0);
+        toggle(&mut shell, slot, 1, 1);
+        answer_question(&mut shell, slot);
+        let payload = answer_payload(
+            &a,
+            &[
+                (QUESTION_ONE.to_owned(), "A".to_owned()),
+                (QUESTION_TWO.to_owned(), "Y".to_owned()),
+            ],
+        );
+        assert_eq!(
+            written(&control).await,
+            vec![encode::allow(QUESTION_REQUEST, &payload, None).unwrap()]
+        );
+    });
+}
+
+#[test]
+fn a_question_with_an_unanswered_question_is_not_sent() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (slot, control, _) =
+            waiting_slot(&mut shell, &harness, QUESTION, QUESTION_ASK, 1000).await;
+        let before = control.stdin_lines().len();
+        toggle(&mut shell, slot, 0, 0);
+        answer_question(&mut shell, slot);
+        quiet().await;
+        assert_eq!(control.stdin_lines().len(), before);
+        assert!(shell.card_state(slot, QUESTION_REQUEST).is_some());
+    });
+}
+
+#[test]
+fn other_is_an_answer_of_its_own() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (slot, control, runtime) =
+            waiting_slot(&mut shell, &harness, QUESTION, QUESTION_ASK, 1000).await;
+        let a = approval(&runtime, QUESTION_REQUEST);
+        shell.act(ShellAction::EditOther {
+            slot,
+            request_id: QUESTION_REQUEST.to_owned(),
+            question: 0,
+            text: " C ".to_owned(),
+        });
+        toggle(&mut shell, slot, 1, 0);
+        answer_question(&mut shell, slot);
+        let payload = answer_payload(
+            &a,
+            &[
+                (QUESTION_ONE.to_owned(), "C".to_owned()),
+                (QUESTION_TWO.to_owned(), "X".to_owned()),
+            ],
+        );
+        assert_eq!(
+            written(&control).await,
+            vec![encode::allow(QUESTION_REQUEST, &payload, None).unwrap()]
+        );
+    });
+}
+
+#[test]
+fn skip_says_no_to_the_question() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (slot, control, _) =
+            waiting_slot(&mut shell, &harness, QUESTION, QUESTION_ASK, 1000).await;
+        toggle(&mut shell, slot, 0, 0);
+        shell.act(ShellAction::DenyCard {
+            slot,
+            request_id: QUESTION_REQUEST.to_owned(),
+        });
+        assert_eq!(
+            written(&control).await,
+            vec![encode::deny(QUESTION_REQUEST, "")]
+        );
+    });
+}
+
+#[test]
+fn the_picks_outlive_a_refresh() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (slot, _control, _) =
+            waiting_slot(&mut shell, &harness, QUESTION, QUESTION_ASK, 1000).await;
+        let at = shell.card_at(slot, QUESTION_REQUEST).unwrap();
+        let acted = toggle(&mut shell, slot, 1, 1);
+        let (rows_slot, changes) = acted.rows.unwrap();
+        assert_eq!(rows_slot, slot);
+        assert_eq!(changes, vec![RowChange::Remeasure(at..at + 1)]);
+        toggle(&mut shell, slot, 0, 1);
+        shell.act(ShellAction::ToggleOther {
+            slot,
+            request_id: QUESTION_REQUEST.to_owned(),
+            question: 1,
+        });
+        let generation = shell.watch(slot).unwrap().generation();
+        let _ = shell.refresh(slot, generation, 2000);
+        let picks = &shell.card_state(slot, QUESTION_REQUEST).unwrap().picks;
+        assert_eq!(picks[0].chosen, vec![1]);
+        assert!(picks[1].other);
+        assert!(picks[1].chosen.is_empty());
+    });
+}
+
+#[test]
+fn a_pick_the_card_does_not_have_is_ignored() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (slot, _control, _) =
+            waiting_slot(&mut shell, &harness, QUESTION, QUESTION_ASK, 1000).await;
+        for (question, option) in [(2, 0), (0, 2)] {
+            let acted = toggle(&mut shell, slot, question, option);
+            assert!(acted.rows.is_none());
+        }
+        let picks = &shell.card_state(slot, QUESTION_REQUEST);
+        assert!(picks.is_none_or(|it| it.picks.iter().all(|p| p.chosen.is_empty())));
     });
 }
