@@ -80,7 +80,9 @@ fn check(before: &[ThreadRow], after: &[ThreadRow], changes: &[RowChange]) -> Op
 #[test]
 fn applying_the_changes_turns_the_old_keys_into_the_new_for_every_capture() {
     let mut failures = Vec::new();
-    for scenario in replay::scenarios() {
+    let scenarios = replay::scenarios();
+    assert!(!scenarios.is_empty(), "no captures to replay");
+    for scenario in scenarios {
         let mut rows = ThreadRows::default();
         let mut view = SessionView::default();
         let mut before = rows.of(&view.transcript);

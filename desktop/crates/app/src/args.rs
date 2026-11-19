@@ -47,6 +47,7 @@ impl AppArgs {
 /// Reads the arguments after the program's name.
 pub fn parse(args: impl IntoIterator<Item = String>) -> Result<AppArgs, String> {
     let mut parsed = AppArgs::default();
+    let mut pace_ms = None;
     let mut args = args.into_iter();
     while let Some(arg) = args.next() {
         let option = arg.as_str();
@@ -73,9 +74,10 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<AppArgs, String> 
                 set(&mut replay(&mut parsed, option)?.stdin_log, option, path)?;
             }
             "--pace" => {
-                parsed.pace_ms = value()?
+                let ms = value()?
                     .parse()
                     .map_err(|_| format!("{option} needs milliseconds"))?;
+                set(&mut pace_ms, option, ms)?;
             }
             "--window" => {
                 let size = window(&value()?).ok_or_else(|| format!("{option} needs <w>x<h>"))?;
@@ -106,10 +108,14 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<AppArgs, String> 
                 }
                 parsed.scroll_through = true;
             }
-            _ if option.starts_with("--") => return Err(format!("unknown option {option}")),
+            _ if option.starts_with("--") => {
+                let name = option.split_once('=').map_or(option, |(name, _)| name);
+                return Err(format!("unknown option {name}"));
+            }
             _ => return Err("an argument that is not an option".to_owned()),
         }
     }
+    parsed.pace_ms = pace_ms.unwrap_or_default();
     Ok(parsed)
 }
 
@@ -251,6 +257,12 @@ mod tests {
         let error = parsed(&["--replay", "a.ndjson", "secret prompt"]).unwrap_err();
         assert!(!error.contains("secret"), "{error}");
         assert!(parsed(&["--fail-launch", "3"]).is_err());
+        for option in ["--prompt=secret", "--x=secret"] {
+            let error = parsed(&["--replay", "a.ndjson", option]).unwrap_err();
+            assert!(!error.contains("secret"), "{error}");
+        }
+        let error = parsed(&["--pace", "5", "--pace", "6"]).unwrap_err();
+        assert!(error.contains("twice"), "{error}");
     }
 
     #[test]
