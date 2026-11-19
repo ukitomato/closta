@@ -170,6 +170,19 @@ fn refuse_mixes(parsed: &AppArgs) -> Result<(), String> {
             return Err("--fail-launch cannot be used with --replay".to_owned());
         }
     }
+    // Without a slot nothing settles: the ready file is never written and the close never comes.
+    let no_slot =
+        parsed.open_folders.is_empty() && parsed.fail_launch.is_none() && parsed.replays.is_empty();
+    for (option, given) in [
+        ("--ready-file", parsed.ready_file.is_some()),
+        ("--close-after", parsed.close_after_ms.is_some()),
+    ] {
+        if no_slot && given {
+            return Err(format!(
+                "{option} needs an --open-folder, a --fail-launch or a --replay"
+            ));
+        }
+    }
     if parsed.fail_distro.is_some() && parsed.fail_launch.is_none() {
         return Err("--fail-distro needs a --fail-launch".to_owned());
     }
@@ -353,7 +366,11 @@ mod tests {
         assert_eq!(plain.exit_after_ms, None);
         assert!(!plain.scroll_through);
         assert!(!plain.measures());
-        assert!(parsed(&["--ready-file", "ready"]).unwrap().measures());
+        assert!(
+            parsed(&["--replay", "a.ndjson", "--ready-file", "ready"])
+                .unwrap()
+                .measures()
+        );
 
         assert!(parsed(&["--exit-after-replay", "soon"]).is_err());
         assert!(parsed(&["--exit-after-replay"]).is_err());
@@ -442,6 +459,29 @@ mod tests {
         ])
         .unwrap_err();
         assert_eq!(error, "--fail-distro is given twice");
+    }
+
+    #[test]
+    fn a_ready_file_or_close_after_needs_something_to_settle() {
+        for (option, value) in [("--ready-file", "C:\\secret"), ("--close-after", "3000")] {
+            let error = parsed(&[option, value]).unwrap_err();
+            assert_eq!(
+                error,
+                format!("{option} needs an --open-folder, a --fail-launch or a --replay")
+            );
+            let error = parsed(&[option, value, "--pace", "5"]).unwrap_err();
+            assert!(!error.contains("secret"), "{error}");
+            for slot in [
+                ["--open-folder", "C:\\x"],
+                ["--fail-launch", "127"],
+                ["--replay", "a.ndjson"],
+            ] {
+                assert!(
+                    parsed(&[option, value, slot[0], slot[1]]).is_ok(),
+                    "{slot:?}"
+                );
+            }
+        }
     }
 
     #[test]
