@@ -31,6 +31,7 @@ pub const NO_CONSOLE: &str = "no console window opened";
 pub const ALL_RUNNING: &str = "every slot Running";
 pub const GONE: &str = "window gone within 10 s";
 pub const MARKED: &str = "marked WSL processes seen";
+pub const KIDS_SEEN: &str = "Windows descendants seen";
 pub const NO_WINDOWS_LEFT: &str = "no Windows process left";
 pub const NO_WSL_LEFT: &str = "no marked WSL process left";
 pub const HOLD_SEEN: &str = "hold seen";
@@ -163,6 +164,8 @@ pub struct RealReport {
     pub gone_ms: Option<u64>,
     /// The fewest marked WSL processes a run saw once it was ready.
     pub marked_wsl: u32,
+    /// The fewest Windows descendants of the exe a run remembered once it was ready.
+    pub kids: u32,
     /// What was left after the windows went, of both runs. A count not taken is `u32::MAX`.
     pub left_windows: u32,
     pub left_wsl: u32,
@@ -190,6 +193,9 @@ pub fn parse_report(output: &str) -> RealReport {
     let mut before = None;
     let mut worst_rise = None;
     let mut marked: Option<u32> = None;
+    let mut kids: Option<u32> = None;
+    // Each run starts with its `CONSOLES` line; one that said no count says none was seen.
+    let (mut runs, mut marked_runs, mut kids_runs) = (0, 0, 0);
     let mut gone: Option<Option<u64>> = None;
     for line in output.lines().map(str::trim) {
         if let Some(max) = line.strip_prefix("CONSOLES MAX ") {
@@ -203,6 +209,7 @@ pub fn parse_report(output: &str) -> RealReport {
             }
         } else if let Some(n) = line.strip_prefix("CONSOLES ") {
             before = Some(count(n));
+            runs += 1;
         } else if let Some(slots) = line.strip_prefix("READY ") {
             report.ready.extend(
                 slots
@@ -211,8 +218,14 @@ pub fn parse_report(output: &str) -> RealReport {
                     .map(str::to_owned),
             );
         } else if let Some(n) = line.strip_prefix("MARKED wsl=") {
-            let n = count(n);
-            marked = Some(marked.map_or(n, |seen| seen.min(n)));
+            // Seen only when counted: a count WSL could not give is none.
+            let n = n.trim().parse().unwrap_or(0);
+            marked = Some(marked.map_or(n, |seen: u32| seen.min(n)));
+            marked_runs += 1;
+        } else if let Some(n) = line.strip_prefix("KIDS ") {
+            let n = n.trim().parse().unwrap_or(0);
+            kids = Some(kids.map_or(n, |seen: u32| seen.min(n)));
+            kids_runs += 1;
         } else if let Some(why) = line.strip_prefix("SHOT HELD") {
             report.shot = Some(match why.trim() {
                 "locked" => ShotOutcome::Locked,
@@ -242,7 +255,16 @@ pub fn parse_report(output: &str) -> RealReport {
             report.hold_pid = pid.trim().parse().ok();
         }
     }
-    report.marked_wsl = marked.unwrap_or(0);
+    report.marked_wsl = if marked_runs < runs {
+        0
+    } else {
+        marked.unwrap_or(0)
+    };
+    report.kids = if kids_runs < runs {
+        0
+    } else {
+        kids.unwrap_or(0)
+    };
     report.gone_ms = gone.flatten();
     report
 }
@@ -281,6 +303,8 @@ pub fn verdicts(report: &RealReport) -> Vec<(&'static str, Outcome)> {
         ),
         // No marked process seen means the leftover count below proves nothing.
         (MARKED, judged(report.marked_wsl > 0)),
+        // No descendant remembered means the Windows leftover count proves nothing.
+        (KIDS_SEEN, judged(report.kids > 0)),
         (NO_WINDOWS_LEFT, judged(report.left_windows == 0)),
         (NO_WSL_LEFT, judged(report.left_wsl == 0)),
         (HOLD_SEEN, judged(report.hold_pid.is_some())),
@@ -319,6 +343,7 @@ pub fn table(report: &RealReport) -> String {
         report.ready.join("; "),
         shown(report.gone_ms.map(|ms| format!("{ms} ms"))),
         report.marked_wsl.to_string(),
+        report.kids.to_string(),
         report.left_windows.to_string(),
         report.left_wsl.to_string(),
         shown(report.hold_pid),
@@ -491,6 +516,7 @@ mod tests {
     const PASSING: &str = "CONSOLES 2\n\
         READY Running 2.1.3;Running 2.1.3\n\
         MARKED wsl=3\n\
+        KIDS 4\n\
         SHOT C:\\dev\\tools\\closta\\shots\\real-1600x1000.png\n\
         CONSOLES MAX 2\n\
         GONE 1840\n\
@@ -499,6 +525,7 @@ mod tests {
         CONSOLES 2\n\
         READY Running 2.1.3\n\
         MARKED wsl=2\n\
+        KIDS 2\n\
         HOLD 4242\n\
         HOLD ALIVE yes\n\
         CONSOLES MAX 2\n\
@@ -638,6 +665,7 @@ mod tests {
                 )),
                 gone_ms: Some(1840),
                 marked_wsl: 2,
+                kids: 2,
                 left_windows: 0,
                 left_wsl: 0,
                 hold_pid: Some(4242),
@@ -677,6 +705,30 @@ mod tests {
         let unseen = parse_report(&PASSING.replacen("MARKED wsl=2", "MARKED wsl=0", 1));
         assert_eq!(unseen.marked_wsl, 0);
         assert_eq!(outcome(&verdicts(&unseen), MARKED), Outcome::Fail);
+        // A count WSL could not give is no proof that the mark was seen, in either run.
+        let uncounted = parse_report(&PASSING.replacen("MARKED wsl=2", "MARKED wsl=unknown", 1));
+        assert_eq!(uncounted.marked_wsl, 0);
+        assert_eq!(outcome(&verdicts(&uncounted), MARKED), Outcome::Fail);
+        let all_uncounted = parse_report(
+            &PASSING
+                .replace("MARKED wsl=3", "MARKED wsl=unknown")
+                .replace("MARKED wsl=2", "MARKED wsl=unknown"),
+        );
+        assert_eq!(outcome(&verdicts(&all_uncounted), MARKED), Outcome::Fail);
+        let not_counted = parse_report(&PASSING.replacen("MARKED wsl=3\n", "", 1));
+        assert_eq!(outcome(&verdicts(&not_counted), MARKED), Outcome::Fail);
+
+        // No descendant remembered means the leftover count proves nothing.
+        assert_eq!(
+            outcome(&verdicts(&parse_report(PASSING)), KIDS_SEEN),
+            Outcome::Pass
+        );
+        let childless = parse_report(&PASSING.replacen("KIDS 2", "KIDS 0", 1));
+        assert_eq!(childless.kids, 0);
+        assert_eq!(outcome(&verdicts(&childless), KIDS_SEEN), Outcome::Fail);
+        let unremembered = parse_report(&PASSING.replacen("KIDS 4\n", "", 1));
+        assert_eq!(unremembered.kids, 0);
+        assert_eq!(outcome(&verdicts(&unremembered), KIDS_SEEN), Outcome::Fail);
 
         let failed =
             parse_report(&PASSING.replacen("Running 2.1.3;", "Failed VersionCheckFailed;", 1));
@@ -721,6 +773,20 @@ mod tests {
 
         let left = parse_report(&PASSING.replace("HOLD LEFT no", "HOLD LEFT yes"));
         assert_eq!(outcome(&verdicts(&left), HOLD_GONE), Outcome::Fail);
+
+        // A pid whose life could not be checked is neither alive nor gone.
+        let unknown_before = parse_report(&PASSING.replace("HOLD ALIVE yes", "HOLD ALIVE unknown"));
+        assert_eq!(unknown_before.hold_alive_before, None);
+        assert_eq!(
+            outcome(&verdicts(&unknown_before), HOLD_GONE),
+            Outcome::Fail
+        );
+        let unknown_after = parse_report(&PASSING.replace("HOLD LEFT no", "HOLD LEFT unknown"));
+        assert_eq!(unknown_after.hold_left, None);
+        assert_eq!(outcome(&verdicts(&unknown_after), HOLD_GONE), Outcome::Fail);
+        let script = include_str!("../scripts/real.ps1");
+        assert!(script.contains("kill -0 $id 2>/dev/null && echo yes || echo no"));
+        assert!(script.contains("'unknown'"));
 
         let unseen = parse_report(&PASSING.replace("HOLD 4242\n", "NO HOLD\n"));
         assert_eq!(unseen.hold_pid, None);
@@ -781,9 +847,24 @@ mod tests {
         ] {
             assert!(!lower.contains(banned), "real.ps1 has {banned}");
         }
-        // The exe's own processes are stopped last, whatever ended the run.
-        let stop = script.rfind("Get-Process closta").unwrap();
-        assert!(script[..stop].contains("finally"));
-        assert!(script[stop..].contains("Stop-Process -Force"));
+        // No process is stopped by its name, not even the exe's: the user may run their own.
+        for banned in [
+            "get-process closta",
+            "-name closta",
+            "get-process -name $name",
+        ] {
+            assert!(!lower.contains(banned), "real.ps1 has {banned}");
+        }
+        // Whatever ended the run, the exe it started and the descendants it remembered are
+        // stopped, and the ready file goes, without a failed stop cutting the cleanup short.
+        let cleanup = &script[script.rfind("} finally {").unwrap()..];
+        assert!(cleanup.contains("$process.Kill()"));
+        assert!(cleanup.contains("Descendants"));
+        assert!(cleanup.contains("Stop-Process -Id $id -Force -ErrorAction SilentlyContinue"));
+        assert!(cleanup.contains("Remove-Item -LiteralPath $ReadyFile"));
+        for line in cleanup.lines().filter(|line| line.contains("Stop-Process")) {
+            assert!(line.contains("-ErrorAction SilentlyContinue"), "{line}");
+        }
+        assert!(script.contains("Say \"KIDS $($kids.Count)\""));
     }
 }

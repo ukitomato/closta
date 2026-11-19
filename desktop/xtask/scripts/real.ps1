@@ -2,15 +2,16 @@
 #
 #   CONSOLES <n>             console windows shown before the exe starts
 #   READY <line;line>        the ready file's slot lines, once every slot settled (NOT READY if not)
+#   KIDS <n>                 the exe's descendants remembered once ready
 #   MARKED wsl=<n>           WSL processes carrying CLOSTA_SMOKE_MARK=<Mark> once ready
 #   SHOT <png> | SHOT HELD <why>          (Close) the window, by PrintWindow
 #   HOLD <pid> | NO HOLD                  (Hold) the fake MCP server's hold-<pid> within 20 s
-#   HOLD ALIVE yes|no                     (Hold) whether that pid lived just before the close
+#   HOLD ALIVE yes|no|unknown             (Hold) whether that pid lived just before the close
 #   GONE <ms> | NOT GONE     from the ready file's `closing <unix ms>` until the window went
 #   CONSOLES MAX <n>         the most console windows seen, sampled every 200 ms
 #   LEFT windows=<n>         the exe's descendants still running after the window went
 #   LEFT wsl=<n>             marked WSL processes still running after it
-#   HOLD LEFT yes|no                      (Hold) whether that pid still lives
+#   HOLD LEFT yes|no|unknown              (Hold) whether that pid still lives
 #
 # Close mode waits for the exe's own timed close; Hold mode closes the window as its close
 # button would. What is left gets until ten seconds after the close began to go before it is
@@ -146,12 +147,13 @@ function Count-Marked {
 
 function Shown([int]$n) { if ($n -lt 0) { return 'unknown' } return "$n" }
 
+# 'yes' or 'no' by what the shell said; 'unknown' when WSL said neither (it failed to run).
 function Hold-Alive([int]$id) {
-  & wsl.exe -d $Distro -- sh -c "kill -0 $id 2>/dev/null" | Out-Null
-  return ($LASTEXITCODE -eq 0)
+  $out = & wsl.exe -d $Distro -- sh -c "kill -0 $id 2>/dev/null && echo yes || echo no"
+  $said = (@($out) -join '').Trim()
+  if ($said -eq 'yes' -or $said -eq 'no') { return $said }
+  return 'unknown'
 }
-
-function YesNo([bool]$value) { if ($value) { return 'yes' } return 'no' }
 
 # The window by PrintWindow: what it draws itself, whatever lies on top of it.
 function Take-Shot($app) {
@@ -200,6 +202,7 @@ Say "CONSOLES $before"
 
 $line = (@($ArgList) | ForEach-Object { Quote $_ }) -join ' '
 $process = $null
+$since = $null
 $kids = @{}
 $holdPid = $null
 try {
@@ -218,6 +221,7 @@ try {
   if ($slots.Count -gt 0) {
     Say ('READY ' + ($slots -join ';'))
     $kids = Descendants ([uint32]$process.Id) $since
+    Say "KIDS $($kids.Count)"
     Say ('MARKED wsl=' + (Shown (Count-Marked)))
   } else {
     Say 'NOT READY'
@@ -237,7 +241,7 @@ try {
     }
     if ($null -ne $holdPid) {
       Say "HOLD $holdPid"
-      Say ('HOLD ALIVE ' + (YesNo (Hold-Alive $holdPid)))
+      Say ('HOLD ALIVE ' + (Hold-Alive $holdPid))
     } else {
       Say 'NO HOLD'
     }
@@ -274,23 +278,33 @@ try {
   do {
     $leftWindows = Count-Left $kids
     $leftWsl = Count-Marked
-    $holdLeft = ($null -ne $holdPid) -and (Hold-Alive $holdPid)
-    if ($leftWindows -eq 0 -and $leftWsl -eq 0 -and -not $holdLeft) { break }
+    $holdLeft = if ($null -ne $holdPid) { Hold-Alive $holdPid } else { 'no' }
+    if ($leftWindows -eq 0 -and $leftWsl -eq 0 -and $holdLeft -eq 'no') { break }
     Wait-Tick 500
   } while ((Now-Ms) -lt $limit)
   Say "LEFT windows=$leftWindows"
   Say ('LEFT wsl=' + (Shown $leftWsl))
-  if ($null -ne $holdPid) { Say ('HOLD LEFT ' + (YesNo $holdLeft)) }
+  if ($null -ne $holdPid) { Say ('HOLD LEFT ' + $holdLeft) }
 } finally {
-  if ($null -ne $process -and -not $process.HasExited) { try { $process.Kill() } catch { } }
-  # Whatever ended the run, nothing it started is left behind: the hold, the marked WSL
-  # processes, the exe's remembered descendants, and the exe.
-  if ($null -ne $holdPid) { & wsl.exe -d $Distro -- sh -c "kill -9 $holdPid 2>/dev/null" | Out-Null }
-  & wsl.exe -d $Distro -- sh -c "grep -al 'CLOSTA_SMOKE_MARK=$Mark' /proc/[0-9]*/environ 2>/dev/null | cut -d/ -f3 | xargs -r kill -9 2>/dev/null" | Out-Null
-  foreach ($id in @($kids.Keys)) {
-    if (Still-Running $id $kids[$id]) { Stop-Process -Id $id -Force -ErrorAction SilentlyContinue }
+  # Whatever ended the run, nothing it started is left behind: the exe it started, the
+  # descendants it remembered, the hold and the marked WSL processes. Nothing is stopped by its
+  # name, so the user's own processes stay. Each step may fail without cutting the rest short.
+  if ($null -ne $process -and $null -ne $since -and $kids.Count -eq 0) {
+    # A run that never got ready remembered none yet.
+    try { $kids = Descendants ([uint32]$process.Id) $since } catch { }
   }
-  Get-Process closta -ErrorAction SilentlyContinue | Stop-Process -Force
+  if ($null -ne $process -and -not $process.HasExited) { try { $process.Kill() } catch { } }
+  foreach ($id in @($kids.Keys)) {
+    try {
+      if (Still-Running $id $kids[$id]) { Stop-Process -Id $id -Force -ErrorAction SilentlyContinue }
+    } catch { }
+  }
+  if ($null -ne $holdPid) {
+    try { & wsl.exe -d $Distro -- sh -c "kill -9 $holdPid 2>/dev/null" | Out-Null } catch { }
+  }
+  try {
+    & wsl.exe -d $Distro -- sh -c "grep -al 'CLOSTA_SMOKE_MARK=$Mark' /proc/[0-9]*/environ 2>/dev/null | cut -d/ -f3 | xargs -r kill -9 2>/dev/null" | Out-Null
+  } catch { }
   Remove-Item -LiteralPath $ReadyFile -ErrorAction SilentlyContinue
   Remove-Item -LiteralPath "$ReadyFile.tmp" -ErrorAction SilentlyContinue
 }
