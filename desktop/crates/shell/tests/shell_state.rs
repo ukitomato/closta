@@ -598,6 +598,7 @@ fn a_companion_runs_beside_the_session_with_its_runtime() {
             working_directory: None,
             companion: None,
             relaunch: None,
+            settles_on_failure: false,
         };
         let alone = shell.open(without);
         assert!(shell.watch(alone).is_some());

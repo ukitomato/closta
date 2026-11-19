@@ -4,6 +4,7 @@ mod dialog;
 mod fonts;
 mod model;
 pub mod perf;
+mod probe;
 mod shell_view;
 pub mod theme;
 mod thread;
@@ -21,6 +22,7 @@ use futures_lite::future;
 use gpui_kit::*;
 
 use crate::model::ShellModel;
+pub use crate::probe::Probe;
 
 /// The window's size when none is asked for.
 const WINDOW: (f32, f32) = (1600.0, 1000.0);
@@ -38,6 +40,8 @@ pub struct PlatformOptions {
     pub panes: Option<(bool, bool)>,
     /// What the run measures and when it quits by itself; `None` for an ordinary run.
     pub measure: Option<Measure>,
+    /// What a check's run writes and when it closes by itself; `None` for an ordinary run.
+    pub probe: Option<Probe>,
     /// What the shell asks of this machine: the New Session dialog's checks and the planner a
     /// folder starts with.
     pub ports: Ports,
@@ -78,6 +82,7 @@ pub fn run(options: PlatformOptions) {
             window,
             panes,
             measure,
+            probe,
             ports,
         } = options;
         let executor = cx.background_executor().clone();
@@ -112,7 +117,7 @@ pub fn run(options: PlatformOptions) {
             ..Default::default()
         };
         open_window(options, cx, move |window, cx| {
-            cx.new(|cx| ShellModel::new(shell, slots, measure, window, cx))
+            cx.new(|cx| ShellModel::new(shell, slots, measure, probe, window, cx))
         })
         .expect("failed to open window");
     });

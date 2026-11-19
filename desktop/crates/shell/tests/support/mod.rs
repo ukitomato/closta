@@ -120,6 +120,7 @@ impl Harness {
                 })
             })),
             relaunch: None,
+            settles_on_failure: false,
         };
         (launch, receiver)
     }

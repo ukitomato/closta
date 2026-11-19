@@ -67,6 +67,7 @@ fn relaunchable(harness: &Harness, title: &'static str) -> SlotLaunch {
             working_directory: None,
             companion: None,
             relaunch: Some(Arc::new(move || make(Arc::clone(&again), title))),
+            settles_on_failure: false,
         }
     }
     make(Arc::clone(&harness.planner) as _, title)
@@ -479,6 +480,7 @@ fn the_failure_band_reads_the_status() {
             working_directory: Some(r"\\wsl.localhost\Ubuntu-26.04\home\x".into()),
             companion: None,
             relaunch: None,
+            settles_on_failure: false,
         };
         let slot = shell.open(launch);
         let mut watch = shell.watch(slot).unwrap();
@@ -525,5 +527,57 @@ fn compacting_follows_the_clis_status() {
         until(|| !runtime.view().transcript.operations.compacting).await;
         refresh(&mut shell, slot);
         assert!(!shell.compacting(slot));
+    });
+}
+
+#[test]
+fn ready_lines_wait_for_every_slot_to_run_or_fail() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        assert_eq!(shell.ready_lines(), None);
+
+        let (launch, runtime) = harness.launch("fine");
+        let fine = shell.open(launch);
+        let broken = shell.open(SlotLaunch {
+            title: "broken".into(),
+            planner: Arc::new(Failing(SessionFailure::WslCommandNotFound {
+                distro: "Ubuntu-26.04".into(),
+            })),
+            working_directory: Some(r"\\wsl.localhost\Ubuntu-26.04\home\x".into()),
+            companion: None,
+            relaunch: None,
+            settles_on_failure: false,
+        });
+        assert_eq!(shell.ready_lines(), None);
+
+        let runtime = runtime.recv().await.unwrap();
+        until(|| matches!(runtime.status(), SessionStatus::Running { .. })).await;
+        refresh(&mut shell, fine);
+        // The failing slot has not been read since it started.
+        assert_eq!(shell.ready_lines(), None);
+
+        let mut watch = shell.watch(broken).unwrap();
+        while !matches!(shell.status(broken), Some(SessionStatus::Failed(_))) {
+            assert!(watch.changed().await);
+            shell.refresh(broken, watch.generation()).unwrap();
+        }
+        let lines = shell.ready_lines().unwrap();
+        assert_eq!(lines, ["Running 2.1.282", "Failed WslCommandNotFound"]);
+        assert!(
+            lines
+                .iter()
+                .all(|line| !line.contains('\\') && !line.contains("home")),
+            "{lines:?}"
+        );
+
+        // A slot that is to fail does not count as settled while it runs.
+        let (mut launch, runtime) = harness.launch("to-fail");
+        launch.settles_on_failure = true;
+        let to_fail = shell.open(launch);
+        let runtime = runtime.recv().await.unwrap();
+        until(|| matches!(runtime.status(), SessionStatus::Running { .. })).await;
+        refresh(&mut shell, to_fail);
+        assert_eq!(shell.status(to_fail).map(|it| it.is_end()), Some(false));
+        assert_eq!(shell.ready_lines(), None);
     });
 }

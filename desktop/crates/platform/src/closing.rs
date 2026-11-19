@@ -27,14 +27,23 @@ impl ShellModel {
     }
 
     /// Closes every session, waits for their runs in the background and quits once they
-    /// returned or were killed.
+    /// returned or were killed. A check's run notes in its ready file when the close began and
+    /// when it ended.
     pub(crate) fn close_sessions(&mut self, cx: &mut Context<Self>) {
+        if let Some(probing) = &mut self.probing {
+            probing.closing();
+        }
         let run = self.shell.close_all();
         let closing =
             cx.background_executor()
                 .spawn(finish_closing(run, CLOSE_LIMIT, DESTROY_GRACE));
-        cx.spawn(async move |_, cx| {
+        cx.spawn(async move |this, cx| {
             closing.await;
+            _ = this.update(cx, |model, _| {
+                if let Some(probing) = &mut model.probing {
+                    probing.closed();
+                }
+            });
             cx.update(|cx| cx.quit());
         })
         .detach();

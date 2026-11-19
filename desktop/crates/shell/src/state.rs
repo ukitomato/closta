@@ -116,6 +116,7 @@ struct Slot {
     composer: Composer,
     /// How to start the same session again; `None` leaves no Restart.
     relaunch: Option<Relaunch>,
+    settles_on_failure: bool,
     working_directory: Option<String>,
     line: Option<ComposerLine>,
     compacting: bool,
@@ -173,6 +174,7 @@ impl ShellState {
         let id = SlotId(self.last_id);
         let title = launch.title.clone();
         let relaunch = launch.relaunch.clone();
+        let settles_on_failure = launch.settles_on_failure;
         let working_directory = launch.working_directory.clone();
         let (runtime, finished) = self.start(launch);
         self.slots.insert(
@@ -190,6 +192,7 @@ impl ShellState {
                 flipped: HashSet::new(),
                 composer: Composer::default(),
                 relaunch,
+                settles_on_failure,
                 working_directory,
                 line: None,
                 compacting: false,
@@ -207,11 +210,13 @@ impl ShellState {
         self.slots.get(&slot)?.runtime.close();
         let title = launch.title.clone();
         let relaunch = launch.relaunch.clone();
+        let settles_on_failure = launch.settles_on_failure;
         let working_directory = launch.working_directory.clone();
         let (runtime, finished) = self.start(launch);
         let held = self.slots.get_mut(&slot)?;
         held.title = title;
         held.relaunch = relaunch;
+        held.settles_on_failure = settles_on_failure;
         held.working_directory = working_directory;
         held.line = None;
         held.compacting = false;
@@ -445,6 +450,26 @@ impl ShellState {
             it.relaunch.is_some()
                 && matches!(it.status, SessionStatus::Ended | SessionStatus::Failed(_))
         })
+    }
+
+    /// What the checks' ready file says once every slot has settled, as of each slot's last
+    /// refresh: `Running <version>` or `Failed <kind>`, one line a slot in the order they were
+    /// opened. `None` while there is no slot or one has not settled; a slot that is meant to
+    /// fail settles only once it has failed. No line holds a path.
+    pub fn ready_lines(&self) -> Option<Vec<String>> {
+        if self.slots.is_empty() {
+            return None;
+        }
+        self.slots
+            .values()
+            .map(|held| match &held.status {
+                SessionStatus::Running { version } if !held.settles_on_failure => {
+                    Some(format!("Running {version}"))
+                }
+                SessionStatus::Failed(failure) => Some(format!("Failed {}", failure.kind())),
+                _ => None,
+            })
+            .collect()
     }
 
     pub fn new_session(&self) -> Option<&NewSessionDialog> {

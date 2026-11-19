@@ -152,6 +152,7 @@ pub fn launch_in(folder: &str, planner_for: &Arc<dyn PlannerFor>) -> SlotLaunch 
         working_directory: Some(folder),
         companion: None,
         relaunch: Some(again),
+        settles_on_failure: false,
     }
 }
 

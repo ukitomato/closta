@@ -20,6 +20,7 @@ use gpui_kit::*;
 use crate::Measure;
 use crate::composer::{self, Dispatch};
 use crate::perf::{IdleStart, Measuring};
+use crate::probe::{Probe, Probing};
 use crate::thread::prefetch;
 
 /// How often the presented frames are read from the profiler's journal.
@@ -59,6 +60,9 @@ pub(crate) struct ShellModel {
     /// The measured run's state, when the run is measured.
     measuring: Option<Measuring>,
     measure_tasks: Vec<Task<()>>,
+    /// The check's run, when the run is one.
+    pub(crate) probing: Option<Probing>,
+    probe_close: Option<Task<()>>,
     pub(crate) _observed: Vec<Subscription>,
 }
 
@@ -67,6 +71,7 @@ impl ShellModel {
         shell: ShellState,
         launches: Vec<SlotLaunch>,
         measure: Option<Measure>,
+        probe: Option<Probe>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> ShellModel {
@@ -84,6 +89,8 @@ impl ShellModel {
             prefetch_asked: false,
             measuring: None,
             measure_tasks: Vec::new(),
+            probing: probe.map(Probing::new),
+            probe_close: None,
             _observed: Vec::new(),
         };
         Self::hold_close(window, cx);
@@ -180,6 +187,7 @@ impl ShellModel {
         let Some(refresh) = self.shell.refresh(slot, generation) else {
             return;
         };
+        self.probe_settled(window, cx);
         let Some(scroller) = self.scrollers.get(&slot).cloned() else {
             return;
         };
@@ -379,6 +387,26 @@ impl ShellModel {
             });
         })
         .detach();
+    }
+}
+
+/// A check's run (`Probe`): the ready file after each refresh, and the timed close.
+impl ShellModel {
+    /// Writes how the slots settled, and the first time they all did, sets the close going
+    /// after `close_after`, through the same close as the confirmed one.
+    fn probe_settled(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(probing) = &mut self.probing else {
+            return;
+        };
+        let Some(after) = probing.settled(self.shell.ready_lines()) else {
+            return;
+        };
+        self.probe_close = Some(cx.spawn_in(window, async move |this, cx| {
+            cx.background_executor().timer(after).await;
+            _ = this.update_in(cx, |model, window, cx| {
+                model.act(ShellAction::ConfirmClose, window, cx);
+            });
+        }));
     }
 }
 

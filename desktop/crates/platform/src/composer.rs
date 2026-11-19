@@ -274,6 +274,7 @@ mod tests {
             working_directory: None,
             companion: None,
             relaunch: None,
+            settles_on_failure: false,
         })
     }
 

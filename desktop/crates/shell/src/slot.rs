@@ -38,6 +38,9 @@ pub struct SlotLaunch {
     pub companion: Option<Companion>,
     /// How to make this launch again; `None` leaves the slot without a Restart.
     pub relaunch: Option<Relaunch>,
+    /// Whether the session is meant to fail: it counts as settled only once it has failed, not
+    /// while it passes through running.
+    pub settles_on_failure: bool,
 }
 
 /// What the list of slots shows for one.
