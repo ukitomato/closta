@@ -14,7 +14,7 @@ profiler = ["gpui-kit/profiler"]
 closta-presenter.workspace = true
 closta-session.workspace = true
 closta-shell.workspace = true
-gpui-kit.workspace = true
+gpui-kit = { workspace = true, features = ["syntect"] }
 
 [lints]
 workspace = true

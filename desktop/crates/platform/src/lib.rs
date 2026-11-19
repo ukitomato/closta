@@ -1,3 +1,4 @@
+mod fonts;
 mod model;
 mod shell_view;
 pub mod theme;
@@ -33,6 +34,7 @@ pub struct PlatformOptions {
 pub fn run(options: PlatformOptions) {
     application().with_assets(assets::Assets).run(move |cx| {
         init(cx);
+        fonts::register(cx);
         theme::apply(cx);
         cx.on_window_closed(|cx, _| cx.quit()).detach();
 
