@@ -1,6 +1,7 @@
 //! The state of the window, without GPUI: what the shell shows and how its rows change. The
 //! platform wraps it and draws what it holds.
 
+pub mod card_keys;
 pub mod closing;
 pub mod composer;
 pub mod copy;
