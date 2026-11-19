@@ -1,7 +1,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod logging;
+// Not handed to the platform yet.
 #[cfg(feature = "replay")]
 mod args;
+#[allow(dead_code)]
+mod ports;
 #[cfg(feature = "replay")]
 mod replay;
 
@@ -15,6 +19,8 @@ const USAGE: u8 = 2;
 
 #[allow(clippy::print_stderr)]
 fn main() -> ExitCode {
+    logging::init();
+    logging::install_panic_hook();
     // Every time a measured run logs is from here.
     let started = Instant::now();
     let header =
