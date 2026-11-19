@@ -7,6 +7,7 @@ pub mod composer;
 pub mod copy;
 pub mod edit_patch;
 pub mod header;
+pub mod needs_you;
 pub mod new_session;
 pub mod panes;
 pub mod rows;

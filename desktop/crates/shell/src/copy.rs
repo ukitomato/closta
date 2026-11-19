@@ -5,11 +5,13 @@
 use closta_presenter::cards::plan::{PlanCard, PlanGo};
 use closta_presenter::cards::{SuggestionLine, ThreadCard};
 use closta_presenter::rows::{CardRow, CompactionRow, ExploredRow, TurnEndRow};
+use closta_presenter::sessions::groups::AlertKind;
 use closta_presenter::tool_line::{AgentSummary, ToolLineState};
 use closta_presenter::transcript::{ApprovalOutcome, CompactionOutcome};
 use closta_providers::claude::process::ProcessFailure;
 use closta_session::status::SessionFailure;
 
+use crate::needs_you::NeedsYouItem;
 use crate::new_session::Runtime;
 
 /// The conversation pane with no rows (`thread.empty`).
@@ -316,6 +318,12 @@ pub const ANSWER_FAILED: &str = "The answer could not be sent to the session. An
 /// Not in the bundle: the list's hint for the jump key and the slot limit's note.
 pub const JUMP_HINT: &str = "Alt+Shift+W to answer";
 pub const SLOT_LIMIT: &str = "Close a session to start another (8 at most).";
+/// The needs-you list: its headings and the buttons of a row.
+pub const NEEDS_YOU: &str = "NEEDS YOU";
+pub const SESSIONS_HEADING: &str = "SESSIONS";
+pub const LIST_ALLOW: &str = "Allow";
+pub const LIST_DENY: &str = "Deny…";
+pub const LIST_OPEN: &str = "Open";
 /// The Bypass band (`composer.bypass.*`).
 pub const BYPASS_CONFIRM: &str =
     "Switch to Bypass Permissions? Tools in this session will run without asking first.";
@@ -458,6 +466,35 @@ pub fn card_line(row: &CardRow) -> String {
     format!("{title} · {}", said.unwrap_or(CARD_WAITING))
 }
 
+/// What a row of the needs-you list says is waiting.
+pub fn needs_you_line(item: &NeedsYouItem) -> String {
+    match item {
+        NeedsYouItem::Permission(alert) => {
+            let subject = Some(alert.subject.as_str()).filter(|it| !it.is_empty());
+            headline(&alert.tool_name, subject)
+        }
+        NeedsYouItem::OpenOnly(alert) => match alert.what {
+            AlertKind::Plan => PLAN_TITLE.to_owned(),
+            AlertKind::Question => question_title(1),
+            AlertKind::Edit => "Edit permission".to_owned(),
+        },
+        NeedsYouItem::Failed { title } => title.clone(),
+    }
+}
+
+/// The mark before a row's line.
+pub fn needs_you_glyph(item: &NeedsYouItem) -> &'static str {
+    match item {
+        NeedsYouItem::Permission(_) => "⚠",
+        NeedsYouItem::OpenOnly(alert) => match alert.what {
+            AlertKind::Plan => "☰",
+            AlertKind::Question => "?",
+            AlertKind::Edit => "⚠",
+        },
+        NeedsYouItem::Failed { .. } => "ⓧ",
+    }
+}
+
 /// A permission card's headline, with the file's name after it for a file tool.
 fn headline(tool: &str, subject: Option<&str>) -> String {
     let file = subject
@@ -503,6 +540,7 @@ fn plan_outcome(card: &PlanCard) -> Option<&'static str> {
 
 #[cfg(test)]
 mod tests {
+    use closta_presenter::sessions::groups::{OpenOnlyAlert, PermissionAlert};
     use std::collections::HashMap;
     use std::sync::Arc;
 
@@ -707,6 +745,53 @@ mod tests {
             ..done
         };
         assert_eq!(agent_line(&quick, "Agent"), "Agent · Tools: 4 · 3.2 s");
+    }
+
+    #[test]
+    fn needs_you_lines_say_what_waits() {
+        let permission = |tool: &str, subject: &str| {
+            NeedsYouItem::Permission(PermissionAlert {
+                key: "k".to_owned(),
+                request_id: "r".to_owned(),
+                tool_name: tool.to_owned(),
+                subject: subject.to_owned(),
+                answerable: true,
+            })
+        };
+        let open = |what| {
+            NeedsYouItem::OpenOnly(OpenOnlyAlert {
+                key: "k".to_owned(),
+                request_id: "r".to_owned(),
+                what,
+            })
+        };
+        assert_eq!(
+            needs_you_line(&permission("Bash", "rm -rf x")),
+            "Run a command"
+        );
+        assert_eq!(
+            needs_you_line(&permission("Edit", "AuthService.kt")),
+            "Edit file: AuthService.kt"
+        );
+        assert_eq!(
+            needs_you_line(&permission("WebFetch", "")),
+            "Browse the web"
+        );
+        assert_eq!(needs_you_line(&open(AlertKind::Plan)), PLAN_TITLE);
+        assert_eq!(
+            needs_you_line(&open(AlertKind::Question)),
+            "Question from Claude"
+        );
+        assert_eq!(needs_you_line(&open(AlertKind::Edit)), "Edit permission");
+        let failed = NeedsYouItem::Failed {
+            title: "Could not start".to_owned(),
+        };
+        assert_eq!(needs_you_line(&failed), "Could not start");
+        assert_eq!(needs_you_glyph(&permission("Bash", "")), "⚠");
+        assert_eq!(needs_you_glyph(&open(AlertKind::Edit)), "⚠");
+        assert_eq!(needs_you_glyph(&open(AlertKind::Plan)), "☰");
+        assert_eq!(needs_you_glyph(&open(AlertKind::Question)), "?");
+        assert_eq!(needs_you_glyph(&failed), "ⓧ");
     }
 
     #[test]

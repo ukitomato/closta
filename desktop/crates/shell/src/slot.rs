@@ -13,6 +13,13 @@ use futures_lite::future;
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Debug)]
 pub struct SlotId(pub(crate) u64);
 
+impl SlotId {
+    /// The id of slot number `n`, for what is built without a shell (tests and budgets).
+    pub fn numbered(n: u64) -> SlotId {
+        SlotId(n)
+    }
+}
+
 /// The number, as a part's id on the screen names the slot (`slot-1`).
 impl fmt::Display for SlotId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
