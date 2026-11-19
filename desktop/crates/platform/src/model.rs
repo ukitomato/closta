@@ -120,6 +120,7 @@ impl ShellModel {
             model.measure(measure, window, cx);
         }
         model.show_title(window);
+        model.focus.selected = model.shell.selected();
         model
     }
 
@@ -227,7 +228,7 @@ impl ShellModel {
             window.request_attention();
         }
         self.show_title(window);
-        self.focus.overlay = self.shell.overlay().is_some();
+        self.sync_focus(window, cx);
         if refresh.removed {
             self.forget(slot, window, cx);
             cx.notify();
@@ -263,7 +264,7 @@ impl ShellModel {
         for (state, markdown) in retexts {
             state.update(cx, |state, cx| state.set_text(&markdown, cx));
         }
-        self.keep_waiting_cards(slot);
+        self.keep_waiting_cards(slot, window, cx);
         if self.shell.selected() == Some(slot)
             && let Some(request_id) = refresh.raised.first()
         {
@@ -379,7 +380,6 @@ impl ShellModel {
             focus,
         } = self.shell.act(action);
         self.show_title(window);
-        self.focus.overlay = self.shell.overlay().is_some();
         if let Some(slot) = removed {
             self.forget(slot, window, cx);
         }
@@ -387,8 +387,7 @@ impl ShellModel {
         if let Some(slot) = started.filter(|slot| self.scrollers.contains_key(slot)) {
             self.texts.remove(&slot);
             self.scrolled.remove(&slot);
-            self.focus.keep_cards(slot, &[]);
-            self.card_cache.keep_cards(slot, &[]);
+            self.keep_cards(slot, &[], window, cx);
         }
         if let Some((slot, changes)) = rows
             && let Some(scroller) = self.scrollers.get(&slot)
@@ -424,6 +423,8 @@ impl ShellModel {
         if close {
             self.close_sessions(cx);
         }
+        // After the close began too: the overlay it puts up holds the keys from then on.
+        self.sync_focus(window, cx);
         if selects || started.is_some() {
             self.ask_prefetch(window, cx);
         }
@@ -575,26 +576,70 @@ impl ShellModel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // A card out of view never takes the keyboard: it would take keys it does not show.
+        let Some(scroller) = self.scrollers.get(&slot) else {
+            return;
+        };
+        let (Some(at), len) = (
+            self.shell.card_at(slot, request_id),
+            self.shell.rows(slot).len(),
+        ) else {
+            return;
+        };
+        let following = scroller.read(cx).is_following_tail();
+        if !focus::on_screen(following, at, len, prefetch::visible_rows(window)) {
+            return;
+        }
         if let Some(handle) = self.card_focus(slot, request_id, cx) {
             self.focus.card_arrived(&handle, window, cx);
         }
     }
 
+    /// Copies what the gate reads from the shell: whether an overlay is up and which slot is
+    /// shown. A slot shown anew takes the keyboard to its input.
+    fn sync_focus(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.focus.overlay = self.shell.overlay().is_some();
+        let selected = self.shell.selected();
+        if selected != self.focus.selected {
+            self.focus.select(selected, window, cx);
+        }
+    }
+
     /// Lets go of the focus and the cache of the slot's cards that no longer wait.
-    fn keep_waiting_cards(&mut self, slot: SlotId) {
-        let waiting: Vec<&str> = self
+    fn keep_waiting_cards(&mut self, slot: SlotId, window: &mut Window, cx: &mut Context<Self>) {
+        let waiting: Vec<String> = self
             .shell
             .rows(slot)
             .iter()
             .filter_map(|row| match row {
                 ThreadRow::Card(row) if row.card.answered().is_none() => {
-                    Some(row.card.request_id())
+                    Some(row.card.request_id().to_owned())
                 }
                 _ => None,
             })
             .collect();
-        self.focus.keep_cards(slot, &waiting);
-        self.card_cache.keep_cards(slot, &waiting);
+        let waiting: Vec<&str> = waiting.iter().map(String::as_str).collect();
+        self.keep_cards(slot, &waiting, window, cx);
+    }
+
+    /// Lets go of what is kept for the slot's cards but `waiting`. When the keyboard was on one
+    /// that goes, it goes back to the conversation.
+    fn keep_cards(
+        &mut self,
+        slot: SlotId,
+        waiting: &[&str],
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let held = self.focus.holding(window, cx);
+        self.focus.keep_cards(slot, waiting);
+        self.card_cache.keep_cards(slot, waiting);
+        if let Some((at, request_id)) = held
+            && at == slot
+            && !waiting.contains(&request_id.as_str())
+        {
+            window.focus(&self.focus.thread, cx);
+        }
     }
 
     /// Looks for the folder in the background and hands the answer back to the shell.

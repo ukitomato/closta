@@ -358,7 +358,7 @@ pub(in crate::thread) fn card_row(
 }
 
 /// The card's button `name` that hands `action` over when clicked; the keyboard never reaches
-/// it.
+/// it. Its `tab_stop(false)` is what keeps Tab off it: the button writes it onto its handle.
 fn card_button(
     parts: &CardParts,
     request_id: &str,
@@ -426,9 +426,14 @@ mod tests {
         size,
     };
 
+    use closta_presenter::sessions::groups::PermissionAlert;
+    use closta_shell::needs_you::{NeedsYouItem, NeedsYouRow};
+
     use super::{CardCache, diff_files, prepare, waiting_card};
+    use crate::clock::WallClock;
     use crate::composer::Dispatch;
     use crate::focus::{self, CardField, FocusMap};
+    use crate::needs_you::needs_you_list;
 
     type Acted = Rc<RefCell<Vec<ShellAction>>>;
 
@@ -550,6 +555,8 @@ mod tests {
         cache: CardCache,
         cards: Vec<(ThreadCard, CardState)>,
         composer: Option<Entity<TextareaState>>,
+        /// The needs-you list's rows, drawn over the conversation.
+        list: Vec<NeedsYouRow>,
         before: FocusHandle,
         after: FocusHandle,
         dispatch: Dispatch,
@@ -588,8 +595,16 @@ mod tests {
             let stop = |name: &'static str, handle: &FocusHandle| {
                 div().id(name).track_focus(handle).h(px(20.)).w_full()
             };
+            let list = needs_you_list(
+                &self.list,
+                &self.focus.list,
+                self.dispatch.clone(),
+                WallClock::start(),
+                cx,
+            );
             gpui_kit::base::v_flex()
                 .size_full()
+                .child(list)
                 .child(stop("before", &self.before))
                 .child(thread)
                 .children(self.composer.as_ref().map(Textarea::new))
@@ -630,6 +645,7 @@ mod tests {
                             cx,
                         );
                         let mut focus = FocusMap::new(cx);
+                        focus.selected = Some(slot());
                         if let Some(input) = &composer {
                             focus
                                 .composers
@@ -640,6 +656,7 @@ mod tests {
                             cache: CardCache::default(),
                             cards,
                             composer,
+                            list: vec![listed()],
                             before: cx.focus_handle().tab_stop(true),
                             after: cx.focus_handle().tab_stop(true),
                             dispatch,
@@ -678,6 +695,30 @@ mod tests {
         })
         .expect("focus");
         cx.run_until_parked();
+    }
+
+    /// A row of the list for another slot that waits on a permission.
+    fn listed() -> NeedsYouRow {
+        NeedsYouRow {
+            slot: SlotId::numbered(2),
+            title: "s2".to_owned(),
+            item: NeedsYouItem::Permission(PermissionAlert {
+                key: "k2".to_owned(),
+                request_id: "r2".to_owned(),
+                tool_name: "Bash".to_owned(),
+                subject: "ls".to_owned(),
+                answerable: true,
+            }),
+            waiting: 1,
+            since_ms: 0,
+        }
+    }
+
+    /// Presses each of `keys` in turn.
+    fn press_all(cx: &mut TestAppContext, handle: AnyWindowHandle, keys: &[&str]) {
+        for key in keys {
+            press(cx, handle, key);
+        }
     }
 
     fn waiting(card: ThreadCard) -> (ThreadCard, CardState) {
@@ -813,7 +854,7 @@ mod tests {
         });
         focus_on(cx, handle, &allow);
         assert!(on_a_button(cx, handle, &card));
-        for key in ["enter", "space", "9"] {
+        for key in ["enter", "space", "9", "0"] {
             press(cx, handle, key);
         }
         assert!(
@@ -865,5 +906,121 @@ mod tests {
                 option: 1,
             }]
         );
+    }
+
+    #[gpui_kit::test]
+    fn keys_reach_no_card_of_a_slot_not_selected(cx: &mut TestAppContext) {
+        let (handle, host, acted) = open(cx, vec![waiting(permission("r1"))], false);
+        let card = card_focus(cx, &host, "r1");
+        focus_on(cx, handle, &card);
+        // The card is still drawn and focused, but another slot is the one shown.
+        host.update(cx, |host, _| {
+            host.focus.selected = Some(SlotId::numbered(2))
+        });
+        press_all(cx, handle, &["1", "enter", "space", "escape"]);
+        assert!(
+            acted.borrow().is_empty(),
+            "{} actions",
+            acted.borrow().len()
+        );
+    }
+
+    #[gpui_kit::test]
+    fn keys_reach_no_card_that_is_not_drawn(cx: &mut TestAppContext) {
+        let (handle, host, acted) = open(cx, vec![waiting(permission("r1"))], false);
+        let card = card_focus(cx, &host, "r1");
+        focus_on(cx, handle, &card);
+        // GPUI keeps the focus on a card that is no longer drawn, as when it scrolls out.
+        host.update(cx, |host, cx| {
+            host.cards.clear();
+            cx.notify();
+        });
+        draw(cx, handle);
+        let still = cx
+            .update_window(handle, |_, window, _| card.is_focused(window))
+            .expect("read the focus");
+        assert!(still, "the focus stays on the card no longer drawn");
+        press_all(cx, handle, &["1", "enter", "space", "escape"]);
+        assert!(
+            acted.borrow().is_empty(),
+            "{} actions",
+            acted.borrow().len()
+        );
+    }
+
+    #[gpui_kit::test]
+    fn showing_another_slot_takes_the_keyboard_off_the_card(cx: &mut TestAppContext) {
+        let (handle, host, acted) = open(cx, vec![waiting(permission("r1"))], true);
+        let allow = host.read_with(cx, |host, _| {
+            host.focus.buttons[&(slot(), "r1".to_owned(), "choice-0".to_owned())].clone()
+        });
+        focus_on(cx, handle, &allow);
+        cx.update_window(handle, |_, window, cx| {
+            host.update(cx, |host, cx| {
+                host.focus.select(Some(SlotId::numbered(2)), window, cx);
+            });
+        })
+        .expect("show another slot");
+        let thread = host.read_with(cx, |host, _| host.focus.thread.clone());
+        let (on_allow, on_thread) = cx
+            .update_window(handle, |_, window, _| {
+                (allow.is_focused(window), thread.is_focused(window))
+            })
+            .expect("read the focus");
+        assert!(!on_allow && on_thread, "the keyboard left the card");
+        press_all(cx, handle, &["1", "enter", "space"]);
+        assert!(
+            acted.borrow().is_empty(),
+            "{} actions",
+            acted.borrow().len()
+        );
+    }
+
+    #[gpui_kit::test]
+    fn a_card_arriving_while_typing_in_a_card_field_leaves_the_keyboard(cx: &mut TestAppContext) {
+        let first = permission("r1");
+        let state = CardState {
+            note_open: true,
+            ..CardState::for_card(&first)
+        };
+        let cards = vec![(first, state), waiting(permission("r2"))];
+        let (handle, host, _) = open(cx, cards, false);
+        let note = host.read_with(cx, |host, cx| {
+            host.focus.card_inputs[&(slot(), "r1".to_owned(), CardField::Note)]
+                .read(cx)
+                .focus_handle(cx)
+        });
+        let second = card_focus(cx, &host, "r2");
+        focus_on(cx, handle, &note);
+        let (took, on_note) = cx
+            .update_window(handle, |_, window, cx| {
+                let took = host.update(cx, |host, cx| host.focus.card_arrived(&second, window, cx));
+                (took, note.is_focused(window))
+            })
+            .expect("a card arrives");
+        assert_eq!((took, on_note), (false, true));
+    }
+
+    #[gpui_kit::test]
+    fn keys_behind_an_overlay_reach_no_card(cx: &mut TestAppContext) {
+        let (handle, host, acted) = open(cx, vec![waiting(permission("r1"))], false);
+        let card = card_focus(cx, &host, "r1");
+        focus_on(cx, handle, &card);
+        host.update(cx, |host, _| host.focus.overlay = true);
+        press_all(cx, handle, &["1", "2", "enter", "space"]);
+        assert!(
+            acted.borrow().is_empty(),
+            "{} actions",
+            acted.borrow().len()
+        );
+    }
+
+    #[gpui_kit::test]
+    fn alt_shift_w_on_the_list_jumps_once(cx: &mut TestAppContext) {
+        let (handle, host, acted) = open(cx, vec![waiting(permission("r1"))], false);
+        let list = host.read_with(cx, |host, _| host.focus.list.clone());
+        focus_on(cx, handle, &list);
+        press(cx, handle, "alt-shift-w");
+        assert_eq!(*acted.borrow(), [ShellAction::JumpToWaiting]);
     }
 }

@@ -32,8 +32,11 @@ pub(crate) struct FocusMap {
     pub(crate) cards: HashMap<CardKeyed, (FocusHandle, CardKind, usize)>,
     /// A question's options, by question and option.
     pub(crate) options: HashMap<(SlotId, String, usize, usize), FocusHandle>,
-    /// The cards' buttons, by name. None is a tab stop and a click does not focus one; they are
-    /// the window's so the gate can be shown to hold a key even when one has the keyboard.
+    /// The cards' buttons, by name. What keeps Tab off them is each button's `tab_stop(false)`:
+    /// the button writes its own `tab_stop` onto the handle it is given at every draw
+    /// (gpui-base's button), so the `tab_stop(false)` the handle is made with only holds until
+    /// the first draw. A click does not focus one either. They are the window's so the gate can
+    /// be shown to hold a key even when one has the keyboard.
     pub(crate) buttons: HashMap<(SlotId, String, String), FocusHandle>,
     /// The cards' text fields; their text is a copy of the shell's.
     pub(crate) card_inputs: HashMap<FieldKeyed, Entity<InputState>>,
@@ -45,6 +48,8 @@ pub(crate) struct FocusMap {
     pub(crate) failure: FocusHandle,
     /// Whether an overlay is up, as the shell says.
     pub(crate) overlay: bool,
+    /// The slot whose conversation is shown, as the shell says: only its cards take keys.
+    pub(crate) selected: Option<SlotId>,
     /// What hands each card field's edits to the shell.
     field_watches: HashMap<FieldKeyed, Subscription>,
 }
@@ -164,6 +169,7 @@ impl FocusMap {
             list: cx.focus_handle(),
             failure: cx.focus_handle(),
             overlay: false,
+            selected: None,
             field_watches: HashMap::new(),
         }
     }
@@ -178,6 +184,11 @@ impl FocusMap {
         if self.overlay {
             return Located::Overlay;
         }
+        // A card counts only when it is the selected slot's and was drawn in the conversation
+        // in the last frame: the focus GPUI leaves on a card of a slot no longer shown, or on
+        // one scrolled out of the list, must never take a key.
+        let in_thread = self.thread.contains_focused(window, cx);
+        let shown = |slot: &SlotId| in_thread && self.selected == Some(*slot);
         if self
             .composers
             .values()
@@ -186,7 +197,7 @@ impl FocusMap {
             return Located::Composer;
         }
         for ((slot, request_id, field), input) in &self.card_inputs {
-            if input.read(cx).focus_handle(cx).contains_focused(window, cx) {
+            if shown(slot) && input.read(cx).focus_handle(cx).contains_focused(window, cx) {
                 let kind = match field {
                     CardField::Other(_) => CardKind::Question,
                     CardField::Note => self
@@ -203,7 +214,7 @@ impl FocusMap {
             }
         }
         for ((slot, request_id, question, option), handle) in &self.options {
-            if handle.contains_focused(window, cx) {
+            if shown(slot) && handle.contains_focused(window, cx) {
                 return Located::Option {
                     slot: *slot,
                     request_id: request_id.clone(),
@@ -214,7 +225,7 @@ impl FocusMap {
         }
         for ((slot, request_id), (handle, kind, choices)) in &self.cards {
             // A button inside the card has the keyboard too: it is the card's.
-            if handle.contains_focused(window, cx) {
+            if shown(slot) && handle.contains_focused(window, cx) {
                 return Located::Card {
                     slot: *slot,
                     request_id: request_id.clone(),
@@ -226,10 +237,47 @@ impl FocusMap {
         if self.list.contains_focused(window, cx) {
             return Located::NeedsYou;
         }
-        if self.thread.contains_focused(window, cx) {
+        if in_thread {
             return Located::Thread;
         }
         Located::Other
+    }
+
+    /// Shows `slot`: the keyboard goes to its input, or to the conversation when it has none,
+    /// so none is left on a card of the slot shown before.
+    pub(crate) fn select(&mut self, slot: Option<SlotId>, window: &mut Window, cx: &mut App) {
+        self.selected = slot;
+        let to = slot
+            .and_then(|slot| self.composers.get(&slot))
+            .unwrap_or(&self.thread)
+            .clone();
+        window.focus(&to, cx);
+    }
+
+    /// The card whose focus holds the keyboard, drawn or not.
+    pub(crate) fn holding(&self, window: &Window, cx: &App) -> Option<(SlotId, String)> {
+        self.cards
+            .iter()
+            .find(|(_, (handle, _, _))| handle.contains_focused(window, cx))
+            .map(|(keyed, _)| keyed.clone())
+            .or_else(|| {
+                self.card_inputs
+                    .iter()
+                    .find(|(_, input)| input.read(cx).focus_handle(cx).contains_focused(window, cx))
+                    .map(|((slot, request_id, _), _)| (*slot, request_id.clone()))
+            })
+            .or_else(|| {
+                self.options
+                    .iter()
+                    .find(|(_, handle)| handle.is_focused(window))
+                    .map(|((slot, request_id, _, _), _)| (*slot, request_id.clone()))
+            })
+            .or_else(|| {
+                self.buttons
+                    .iter()
+                    .find(|(_, handle)| handle.is_focused(window))
+                    .map(|((slot, request_id, _), _)| (*slot, request_id.clone()))
+            })
     }
 
     /// Puts the keyboard on a card that just arrived, only when it is in the conversation and
@@ -370,7 +418,7 @@ impl FocusMap {
     ) -> FocusHandle {
         self.buttons
             .entry((slot, request_id.to_owned(), name.to_owned()))
-            .or_insert_with(|| cx.focus_handle())
+            .or_insert_with(|| cx.focus_handle().tab_stop(false))
             .clone()
     }
 
@@ -451,7 +499,14 @@ impl FocusMap {
     }
 }
 
-/// A key as the card table names it: the digits 1 to 9 (the numpad's come with the same names),
+/// Whether the row at `at` of `len` is in view: only while the list follows its tail, among
+/// its last `visible` rows. A list scrolled up shows rows the screen cannot place, so none
+/// counts.
+pub(crate) fn on_screen(following_tail: bool, at: usize, len: usize, visible: usize) -> bool {
+    following_tail && at < len && at + visible >= len
+}
+
+/// A key as the card table names it: the digits 0 to 9 (the numpad's come with the same names),
 /// Escape, Enter, Space and W, any other key as `Other`; `None` for a modifier pressed alone.
 pub(crate) fn to_card_key(keystroke: &Keystroke) -> Option<CardKey> {
     if keystroke.is_modifier_key() {
@@ -463,7 +518,7 @@ pub(crate) fn to_card_key(keystroke: &Keystroke) -> Option<CardKey> {
         "space" => Key::Space,
         "w" => Key::W,
         digit => match digit.parse::<u8>() {
-            Ok(n @ 1..=9) => Key::Digit(n),
+            Ok(n @ 0..=9) => Key::Digit(n),
             _ => Key::Other,
         },
     };
@@ -482,17 +537,26 @@ mod tests {
     use closta_shell::card_keys::{CardKey, Key};
     use gpui_kit::Keystroke;
 
-    use super::to_card_key;
+    use super::{on_screen, to_card_key};
 
     fn key(source: &'static str) -> Option<CardKey> {
         to_card_key(&Keystroke::parse(source).expect("a keystroke"))
     }
 
     #[test]
+    fn only_a_row_at_the_followed_tail_is_on_screen() {
+        assert!(on_screen(true, 9, 10, 5));
+        assert!(on_screen(true, 5, 10, 5));
+        assert!(!on_screen(true, 4, 10, 5));
+        assert!(!on_screen(false, 9, 10, 5));
+        assert!(!on_screen(true, 10, 10, 5));
+    }
+
+    #[test]
     fn digits_and_the_named_keys_map_to_the_table() {
         assert_eq!(key("1"), Some(CardKey::plain(Key::Digit(1))));
         assert_eq!(key("9"), Some(CardKey::plain(Key::Digit(9))));
-        assert_eq!(key("0"), Some(CardKey::plain(Key::Other)));
+        assert_eq!(key("0"), Some(CardKey::plain(Key::Digit(0))));
         assert_eq!(key("escape"), Some(CardKey::plain(Key::Escape)));
         assert_eq!(key("enter"), Some(CardKey::plain(Key::Enter)));
         assert_eq!(key("space"), Some(CardKey::plain(Key::Space)));

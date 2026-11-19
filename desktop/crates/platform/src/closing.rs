@@ -35,6 +35,8 @@ impl ShellModel {
             probing.closing();
         }
         let run = self.shell.close_all();
+        // The window is closing from here: the keys behind stay held.
+        self.focus.overlay = self.shell.overlay().is_some();
         let closing =
             cx.background_executor()
                 .spawn(finish_closing(run, CLOSE_LIMIT, DESTROY_GRACE));
