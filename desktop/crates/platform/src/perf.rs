@@ -3,7 +3,7 @@
 //! process's own CPU time and working set. Only raw values are written; `cargo xtask win-perf`
 //! takes the p99s and holds them against the budgets. Nothing but times and counts goes in.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -62,11 +62,13 @@ impl Frames {
         }
     }
 
-    /// The frames presented since the last call.
-    fn presented(&mut self) -> Vec<Presented> {
+    /// The frames presented since the last call, and how many journal entries were lost.
+    fn presented(&mut self) -> (Vec<Presented>, u64) {
         let drained = self.collector.collect_unseen();
-        self.sealer.note_lost(drained.lost);
-        self.sealer
+        let lost = drained.lost;
+        self.sealer.note_lost(lost);
+        let presented = self
+            .sealer
             .push_entries(drained.entries)
             .into_iter()
             .filter_map(|snapshot| match snapshot.boundary {
@@ -80,7 +82,8 @@ impl Frames {
                 }),
                 _ => None,
             })
-            .collect()
+            .collect();
+        (presented, lost)
     }
 }
 
@@ -112,6 +115,10 @@ pub(crate) struct Measuring {
     /// the replays end.
     awaiting: Option<HashSet<SlotId>>,
     refreshed: bool,
+    /// When each slot last refreshed on a change it was told of.
+    last_refresh: HashMap<SlotId, Instant>,
+    /// When the last awaited slot refreshed: the time `refreshed` is written at.
+    refreshed_at: Option<Instant>,
     /// The row the scroll through stands at, once it started.
     pub(crate) scroll_at: Option<usize>,
     #[cfg(feature = "profiler")]
@@ -142,6 +149,8 @@ impl Measuring {
             scroll_through,
             awaiting: None,
             refreshed: false,
+            last_refresh: HashMap::new(),
+            refreshed_at: None,
             scroll_at: None,
             #[cfg(feature = "profiler")]
             frames,
@@ -187,6 +196,7 @@ impl Measuring {
         self.awaiting = Some(awaiting);
         if none && !self.refreshed {
             self.refreshed = true;
+            self.refreshed_at = Some(Instant::now());
             return true;
         }
         false
@@ -197,13 +207,26 @@ impl Measuring {
         self.awaiting.iter().flatten().copied().collect::<Vec<_>>()
     }
 
-    /// Notes that `slot` refreshed. True once every slot has refreshed after the replays ended,
-    /// and only that once.
-    pub(crate) fn note_refresh(&mut self, slot: SlotId) -> bool {
+    /// Notes that `slot` refreshed on a change it was told of, at `at`.
+    pub(crate) fn note_natural_refresh(&mut self, slot: SlotId, at: Instant) {
+        self.last_refresh.insert(slot, at);
+    }
+
+    /// When `slot` last refreshed on a change it was told of.
+    pub(crate) fn last_refresh(&self, slot: SlotId) -> Option<Instant> {
+        self.last_refresh.get(&slot).copied()
+    }
+
+    /// Notes that `slot` stands refreshed as of `at`. True once every slot has refreshed after
+    /// the replays ended, and only that once; `refreshed` is then the latest of their times.
+    pub(crate) fn note_refresh(&mut self, slot: SlotId, at: Instant) -> bool {
         let Some(awaiting) = &mut self.awaiting else {
             return false;
         };
-        awaiting.remove(&slot);
+        if !awaiting.remove(&slot) {
+            return false;
+        }
+        self.refreshed_at = Some(self.refreshed_at.map_or(at, |was| was.max(at)));
         if self.refreshed || !awaiting.is_empty() {
             return false;
         }
@@ -218,7 +241,8 @@ impl Measuring {
 
     /// Writes `refreshed` and the rows there are, and the ready file for whoever waits on it.
     pub(crate) fn write_refreshed(&mut self, rows: usize) {
-        self.record("refreshed", 1.0);
+        let at = self.refreshed_at.unwrap_or_else(Instant::now);
+        self.record_at(at, "refreshed", 1.0);
         self.record("rows", rows as f64);
         if let Some(path) = &self.ready_file {
             // Whoever waits on it times out on its own when it never appears.
@@ -248,7 +272,11 @@ impl Measuring {
             let Some(frames) = &mut self.frames else {
                 return;
             };
-            for presented in frames.presented() {
+            let (presented, lost) = frames.presented();
+            if lost > 0 {
+                self.record("frames_lost", lost as f64);
+            }
+            for presented in presented {
                 self.record_at(
                     presented.at,
                     "frame_ms",

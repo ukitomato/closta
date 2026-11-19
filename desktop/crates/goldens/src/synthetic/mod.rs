@@ -203,7 +203,9 @@ pub fn replay_lines(shape: &Shape, seed: u64) -> Vec<ReplayLine> {
 
 /// `lines` with each `result` that names no turn naming the last turn opened before it
 /// (`user_message_uuid`), as the CLI's do. A replayed turn closes only when its result names it;
-/// one left open keeps the app waiting on it, and the next prompt is never sent.
+/// one left open keeps the app waiting on it, and the next prompt is never sent. The written
+/// sessions have no spontaneous resume: a CLI's self-resumed `result` names no turn (null
+/// `user_message_uuid`), and this would wrongly name one.
 pub fn naming_results(lines: Vec<String>) -> Vec<String> {
     let mut command: Option<String> = None;
     lines

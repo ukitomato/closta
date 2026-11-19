@@ -403,8 +403,8 @@ pub fn table(scene: PerfScene, log: &PerfLog) -> (String, bool) {
 }
 
 /// `cargo xtask win-perf [scenes]`: builds the measuring exe, runs each scene on Windows and
-/// prints its verdicts. A locked screen holds every scene and ends without a build. Fails when
-/// a verdict fails.
+/// prints its verdicts. A locked screen holds every scene and ends without a build. Fails, after
+/// every scene ran, when a verdict failed or a scene could not be measured.
 pub fn win_perf(root: &Path, scenes: &[PerfScene]) -> anyhow::Result<()> {
     if screen_locked()? {
         for scene in scenes {
@@ -421,19 +421,24 @@ pub fn win_perf(root: &Path, scenes: &[PerfScene]) -> anyhow::Result<()> {
             println!("held: {} — the screen is locked", scene.name());
             continue;
         }
-        match measure(*scene)? {
-            Measured::Held(why) => println!("held: {} — {why}", scene.name()),
-            Measured::Log(log) => {
+        // A scene that fails is reported and the next one still runs.
+        match measure(*scene) {
+            Ok(Measured::Held(why)) => println!("held: {} — {why}", scene.name()),
+            Ok(Measured::Log(log)) => {
                 let (table, scene_failed) = table(*scene, &log);
                 println!("{table}");
                 if scene_failed {
-                    failed.push(scene.name());
+                    failed.push(format!("{} (over budget)", scene.name()));
                 }
+            }
+            Err(err) => {
+                println!("failed: {} — {err:#}", scene.name());
+                failed.push(format!("{} (did not run)", scene.name()));
             }
         }
     }
     if !failed.is_empty() {
-        bail!("over budget: {}", failed.join(", "));
+        bail!("failed: {}", failed.join(", "));
     }
     Ok(())
 }
@@ -657,6 +662,24 @@ mod tests {
         assert!(stop > script.rfind("WaitForExit").unwrap());
         assert!(stop > script.rfind("Kill()").unwrap());
         assert!(script[..stop].contains("finally"));
+    }
+
+    #[test]
+    fn the_measure_script_fails_a_run_that_ends_before_its_window() {
+        let path = crate::desktop_root().join("xtask/scripts/measure.ps1");
+        let script = std::fs::read_to_string(path).unwrap();
+        // An exe that ended before a window came up (a bad argument, a bad cue) gives its own
+        // exit code, which fails the scene, and is never held as "no window".
+        let ended = script
+            .find("if ($process.HasExited)")
+            .expect("measure.ps1 does not look at an exe that already ended");
+        let held = script.find("'held: no window came up'").unwrap();
+        assert!(
+            ended < held,
+            "the ended exe is looked at after the held case"
+        );
+        assert!(script[ended..held].contains("exit $process.ExitCode"));
+        assert!(script.contains("GetForegroundWindow"));
     }
 
     #[test]

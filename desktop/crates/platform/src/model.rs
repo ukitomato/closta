@@ -118,13 +118,26 @@ impl ShellModel {
         self.watches.insert(slot, task);
     }
 
-    /// Reads the slot's session again and hands the changes of its rows to its scroller. The
-    /// cached text rows among the remeasured and the newly spliced rows take their new text;
-    /// the cached text states outside the kept rows are let go.
+    /// Reads the slot's session again on a change it was told of.
     fn refresh(
         &mut self,
         slot: SlotId,
         generation: u64,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.refresh_as(slot, generation, false, window, cx);
+    }
+
+    /// Reads the slot's session again and hands the changes of its rows to its scroller. The
+    /// cached text rows among the remeasured and the newly spliced rows take their new text;
+    /// the cached text states outside the kept rows are let go. A `reread` is the measured run's
+    /// look after the replays ended, not a change the slot was told of: it is not an update.
+    fn refresh_as(
+        &mut self,
+        slot: SlotId,
+        generation: u64,
+        reread: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -135,6 +148,7 @@ impl ShellModel {
         let Some(scroller) = self.scrollers.get(&slot).cloned() else {
             return;
         };
+        let unchanged = refresh.changes.is_empty();
         let rows = self.shell.rows(slot);
         let texts = self.texts.entry(slot).or_default();
         let mut retexts = Vec::new();
@@ -161,16 +175,24 @@ impl ShellModel {
             state.update(cx, |state, cx| state.set_text(&markdown, cx));
         }
         self.let_go(slot, window, cx);
-        if let Some(measuring) = &mut self.measuring {
-            measuring.record_ms("update_ms", began.elapsed());
-        }
+        let done = Instant::now();
+        // A reread that changed nothing leaves the slot as its last refresh left it.
+        let refreshed_at = match &mut self.measuring {
+            Some(measuring) if !reread => {
+                measuring.record_ms("update_ms", done.saturating_duration_since(began));
+                measuring.note_natural_refresh(slot, done);
+                done
+            }
+            Some(measuring) if unchanged => measuring.last_refresh(slot).unwrap_or(done),
+            _ => done,
+        };
         if self.shell.selected() == Some(slot) && self.prefetch(window, cx) {
             self.ask_prefetch(window, cx);
         }
         if self
             .measuring
             .as_mut()
-            .is_some_and(|measuring| measuring.note_refresh(slot))
+            .is_some_and(|measuring| measuring.note_refresh(slot, refreshed_at))
         {
             self.refreshed(window, cx);
         }
@@ -341,7 +363,7 @@ impl ShellModel {
     }
 
     /// Reads once more each slot that has not refreshed since the replays ended: its session
-    /// had nothing left to fold.
+    /// had nothing left to fold, so its last refresh already showed the end.
     fn refresh_awaited(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let awaited = self
             .measuring
@@ -350,7 +372,7 @@ impl ShellModel {
             .unwrap_or_default();
         for slot in awaited {
             if let Some(generation) = self.generations.get(&slot).copied() {
-                self.refresh(slot, generation, window, cx);
+                self.refresh_as(slot, generation, true, window, cx);
             }
         }
     }

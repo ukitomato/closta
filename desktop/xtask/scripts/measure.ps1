@@ -2,8 +2,10 @@
 # and quits after the replay; this only starts it, brings its window to the front, checks the
 # window is not minimized, and kills a run that does not end.
 #
-# Exit codes: the exe's own when it ended; 3 when it did not end within -TimeoutSec and was
-# killed; 4 when no window came up or the window was minimized (nothing drawn can be measured).
+# Exit codes: the exe's own when it ended, also when it ended before its window came up (a bad
+# argument or a bad cue fails the scene, it is not held); 3 when it did not end within
+# -TimeoutSec and was killed; 4 when no window came up while it ran or the window was minimized
+# (nothing drawn can be measured).
 param(
   [Parameter(Mandatory)] [string]$Exe,
   [string[]]$ArgList = @(),
@@ -20,6 +22,7 @@ public class MeasureWindow {
   [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
   [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
   public static IntPtr Of(uint pid) {
     IntPtr found = IntPtr.Zero;
     EnumWindows((h, l) => { uint p; GetWindowThreadProcessId(h, out p); if (p == pid && IsWindowVisible(h)) { found = h; return false; } return true; }, IntPtr.Zero);
@@ -49,12 +52,20 @@ try {
     Start-Sleep -Milliseconds 200
     $window = [MeasureWindow]::Of([uint32]$process.Id)
   }
+  if ($process.HasExited) {
+    Write-Output "the exe ended before its window came up (exit code $($process.ExitCode))"
+    # PowerShell runs the finally block on exit too.
+    exit $process.ExitCode
+  }
   if ($window -eq [IntPtr]::Zero) {
     Write-Output 'held: no window came up'
     $code = 4
   } else {
     [MeasureWindow]::SetForegroundWindow($window) | Out-Null
     Start-Sleep -Milliseconds 300
+    if ([MeasureWindow]::GetForegroundWindow() -ne $window) {
+      Write-Output 'note: the window is not in the foreground'
+    }
     if ([MeasureWindow]::IsIconic($window)) {
       Write-Output 'held: the window is minimized'
       $code = 4
