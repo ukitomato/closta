@@ -5,6 +5,7 @@ use anyhow::{Context, bail};
 
 use crate::check::LOCK;
 use crate::perf_log::{Outcome, PerfLog, PerfScene, references, verdicts};
+use crate::scenes::{BASH_PROMPT, SIZES, Scene};
 
 /// The Windows-side copy of `desktop/`, as seen from WSL. The Windows build
 /// needs the Windows SDK shader compiler and Windows paths, so it runs on Windows.
@@ -274,9 +275,6 @@ const PERF: &str = r"C:\dev\tools\closta\perf";
 /// How long `measure.ps1` lets one run go before it kills it; the exe gives up by itself at
 /// 180 s.
 const MEASURE_TIMEOUT_SEC: u32 = 200;
-/// The prompt the Bash capture was recorded with.
-const BASH_PROMPT: &str =
-    "Run this exact bash command and report its output: echo hello-from-capture";
 
 /// The arguments the measuring exe runs `scene` with.
 pub fn scene_args(scene: PerfScene) -> Vec<String> {
@@ -330,6 +328,140 @@ pub fn measure_script(scene: PerfScene) -> String {
         args.join(","),
         quoted(&perf_csv(scene)),
     )
+}
+
+/// Where `win-shot` puts its pictures, as seen from WSL and from Windows. Outside the repo: a
+/// picture can show the user's names, so it is never committed.
+pub const SHOTS_WSL: &str = "/mnt/c/dev/tools/closta/shots";
+pub const SHOTS: &str = r"C:\dev\tools\closta\shots";
+
+/// What came of shooting one scene at one size. Anything but `Saved` holds the shot.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum ShotOutcome {
+    /// The picture, as seen from WSL.
+    Saved(String),
+    /// Every sampled pixel had the same colour: nothing was drawn.
+    Blank,
+    /// The exe showed no window.
+    NoWindow,
+    /// The exe did not write its ready file in time.
+    NotReady,
+    /// The screen was locked.
+    Locked,
+    /// The window is larger than the screen's work area, so it cannot be seen whole.
+    TooBig,
+}
+
+/// The outcome `shot.ps1` printed, with `png` the picture it was asked to save (as seen from
+/// WSL); `None` when the output says none of them (the script itself failed).
+pub fn shot_outcome(output: &str, png: &str) -> Option<ShotOutcome> {
+    output.lines().rev().find_map(|line| {
+        let line = line.trim();
+        if line.starts_with("class=") && line.contains(" size=") {
+            Some(ShotOutcome::Saved(png.to_owned()))
+        } else if line.starts_with("BLANK") {
+            Some(ShotOutcome::Blank)
+        } else if line.starts_with("NO GUI WINDOW") {
+            Some(ShotOutcome::NoWindow)
+        } else if line.starts_with("NOT READY") {
+            Some(ShotOutcome::NotReady)
+        } else if line.starts_with("TOO BIG") {
+            Some(ShotOutcome::TooBig)
+        } else {
+            None
+        }
+    })
+}
+
+/// `<scene>-<w>x<h>`, the stem of a shot's picture and ready file.
+pub fn shot_stem(scene: &Scene, (width, height): (u32, u32)) -> String {
+    format!("{}-{width}x{height}", scene.name)
+}
+
+/// The PowerShell that shoots `scene` at `size` with the release exe. `shot.ps1` adds
+/// `--window` and `--ready-file` to the scene's arguments.
+pub fn shot_script(scene: &Scene, size: (u32, u32)) -> String {
+    let stem = shot_stem(scene, size);
+    let args: Vec<String> = scene.args.iter().map(|it| quoted(it)).collect();
+    format!(
+        "& {} -Exe {} -ArgList @({}) -Width {} -Height {} -ReadyFile {} -Out {}; exit $LASTEXITCODE",
+        quoted(&format!(r"{WIN_COPY}\xtask\scripts\shot.ps1")),
+        quoted(&exe_path(true)),
+        args.join(","),
+        size.0,
+        size.1,
+        quoted(&format!(r"{SHOTS}\{stem}.ready")),
+        quoted(&format!(r"{SHOTS}\{stem}.png")),
+    )
+}
+
+/// Shoots `scene` at `size` once on Windows.
+fn shoot(scene: &Scene, size: (u32, u32)) -> anyhow::Result<ShotOutcome> {
+    let stem = shot_stem(scene, size);
+    println!("==> shoot {stem}");
+    let (program, args) = powershell_command(&shot_script(scene, size));
+    let output = Command::new(&program)
+        .args(&args)
+        .output()
+        .with_context(|| format!("could not start `{program}` for powershell.exe"))?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    print!("{stdout}");
+    let png = format!("{SHOTS_WSL}/{stem}.png");
+    shot_outcome(&stdout, &png).with_context(|| {
+        format!(
+            "shot.ps1 for {stem} ended with {} and said no outcome: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr).trim()
+        )
+    })
+}
+
+fn shot_word(outcome: &ShotOutcome) -> String {
+    match outcome {
+        ShotOutcome::Saved(png) => png.clone(),
+        ShotOutcome::Blank => "held: blank".to_owned(),
+        ShotOutcome::NoWindow => "held: no window".to_owned(),
+        ShotOutcome::NotReady => "held: not ready in 60 s".to_owned(),
+        ShotOutcome::Locked => "held: the screen is locked".to_owned(),
+        ShotOutcome::TooBig => "held: larger than the screen".to_owned(),
+    }
+}
+
+/// `cargo xtask win-shot <scene>|all`: builds the replay exe once, then shoots each scene at
+/// each of [`SIZES`] into [`SHOTS`] and prints a table. Anything but a saved picture is held,
+/// never passed; a locked screen holds every shot and ends without a build. Fails only when a
+/// shot could not be run at all.
+pub fn win_shot(root: &Path, scenes: &[Scene]) -> anyhow::Result<()> {
+    let mut results = Vec::new();
+    if screen_locked()? {
+        for scene in scenes {
+            for size in SIZES {
+                results.push((shot_stem(scene, size), ShotOutcome::Locked));
+            }
+        }
+    } else {
+        let features = ["closta/replay".to_owned(), "closta/profiler".to_owned()];
+        win_build(root, true, false, &features)?;
+        copy_replays(root)?;
+        std::fs::create_dir_all(SHOTS_WSL)
+            .with_context(|| format!("could not create {SHOTS_WSL}"))?;
+        for scene in scenes {
+            for size in SIZES {
+                let outcome = if screen_locked()? {
+                    ShotOutcome::Locked
+                } else {
+                    shoot(scene, size)?
+                };
+                results.push((shot_stem(scene, size), outcome));
+            }
+        }
+    }
+    println!("| shot | outcome |");
+    println!("|---|---|");
+    for (stem, outcome) in &results {
+        println!("| {stem} | {} |", shot_word(outcome));
+    }
+    Ok(())
 }
 
 /// The exit codes of `measure.ps1` that hold a scene: 3, the run was killed for not ending;
@@ -746,5 +878,84 @@ mod tests {
             perf_csv_wsl(PerfScene::Synth),
             PathBuf::from("/mnt/c/dev/tools/closta/perf/synth.csv")
         );
+    }
+    #[test]
+    fn shot_output_maps_to_an_outcome() {
+        let png = "/mnt/c/dev/tools/closta/shots/thread-bash-1024x700.png";
+        assert_eq!(
+            shot_outcome("class=Zed::Window title=Closta size=1792x1225\r\n", png),
+            Some(ShotOutcome::Saved(png.to_owned()))
+        );
+        assert_eq!(
+            shot_outcome("note: x\nBLANK (every sampled pixel is #000000)\n", png),
+            Some(ShotOutcome::Blank)
+        );
+        assert_eq!(
+            shot_outcome("NO GUI WINDOW (exited=True code=2)", png),
+            Some(ShotOutcome::NoWindow)
+        );
+        assert_eq!(
+            shot_outcome("NOT READY after 60 s", png),
+            Some(ShotOutcome::NotReady)
+        );
+        assert_eq!(
+            shot_outcome("TOO BIG (4480x2520 > 3840x2340)", png),
+            Some(ShotOutcome::TooBig)
+        );
+        assert_eq!(shot_outcome("Exception: something broke", png), None);
+        assert_eq!(shot_outcome("", png), None);
+    }
+
+    #[test]
+    fn the_shot_script_waits_for_ready_prints_the_window_and_kills_the_app() {
+        let path = crate::desktop_root().join("xtask/scripts/shot.ps1");
+        let script = std::fs::read_to_string(path).unwrap();
+        for needed in [
+            "ReadyFile",
+            "PrintWindow",
+            ", 2)",
+            "Kill",
+            "finally",
+            "Stop-Process",
+        ] {
+            assert!(script.contains(needed), "shot.ps1 lacks {needed}");
+        }
+        assert!(!script.contains("CopyFromScreen"));
+        // The ready file of an earlier run is removed before the exe starts.
+        let remove = script.find("Remove-Item -LiteralPath $ReadyFile").unwrap();
+        assert!(remove < script.find("Start-Process -FilePath").unwrap());
+        for (word, code) in [
+            ("NO GUI WINDOW (", "$code = 1"),
+            ("BLANK (", "$code = 4"),
+            ("NOT READY after", "$code = 5"),
+            ("TOO BIG (", "exit 6"),
+        ] {
+            let at = script.find(word).unwrap_or_else(|| panic!("no {word}"));
+            assert!(script[at..].contains(code), "{word} without {code}");
+            assert!(script.ends_with("exit $code\n"));
+        }
+        // Whatever ended the shot, every process of the exe's name is stopped last.
+        let stop = script.rfind("Stop-Process").unwrap();
+        assert!(stop > script.rfind("PrintWindow").unwrap());
+        assert!(script[..stop].contains("finally"));
+    }
+
+    #[test]
+    fn the_shot_call_passes_the_scene_size_ready_file_and_picture() {
+        let scene = crate::scenes::find("thread-bash").unwrap();
+        let script = shot_script(&scene, (1024, 700));
+        assert!(
+            script.starts_with(
+                r"& 'C:\dev\tools\closta\desktop\xtask\scripts\shot.ps1' -Exe 'C:\dev\tools\closta\desktop\target\release\closta.exe' -ArgList @('--replay','C:\dev\tools\closta\replay\02-tool-bash-autorun.ndjson','--prompt','Run this exact bash command and report its output: echo hello-from-capture')"
+            ),
+            "{script}"
+        );
+        assert!(
+            script.ends_with(
+                r"-Width 1024 -Height 700 -ReadyFile 'C:\dev\tools\closta\shots\thread-bash-1024x700.ready' -Out 'C:\dev\tools\closta\shots\thread-bash-1024x700.png'; exit $LASTEXITCODE"
+            ),
+            "{script}"
+        );
+        assert_eq!(shot_stem(&scene, (2560, 1440)), "thread-bash-2560x1440");
     }
 }

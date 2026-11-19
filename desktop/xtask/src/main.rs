@@ -4,6 +4,7 @@ mod capture;
 mod check;
 mod layers;
 mod perf_log;
+mod scenes;
 mod win;
 
 use std::ffi::OsString;
@@ -105,6 +106,28 @@ fn main() -> ExitCode {
                 scenes = perf_log::PerfScene::ALL.to_vec();
             }
             match win::win_perf(&desktop_root(), &scenes) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(err) => {
+                    eprintln!("{err:#}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
+        "win-shot" => {
+            let which = std::env::args().nth(2).unwrap_or_default();
+            let chosen = if which == "all" {
+                scenes::scenes()
+            } else if let Some(scene) = scenes::find(&which) {
+                vec![scene]
+            } else {
+                let names: Vec<_> = scenes::scenes().iter().map(|it| it.name).collect();
+                eprintln!(
+                    "win-shot: name a scene or all ({}), got {which:?}",
+                    names.join(", ")
+                );
+                return ExitCode::FAILURE;
+            };
+            match win::win_shot(&desktop_root(), &chosen) {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(err) => {
                     eprintln!("{err:#}");
