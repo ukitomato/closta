@@ -37,6 +37,11 @@ impl Composer {
         self.reason
     }
 
+    /// Whether a sent message is shown in place of the draft.
+    pub fn browsing(&self) -> bool {
+        self.browsing.is_some()
+    }
+
     pub fn has_draft(&self) -> bool {
         !self.draft.trim().is_empty()
     }
@@ -203,6 +208,21 @@ mod tests {
         assert!(composer.next());
         assert_eq!(composer.draft(), "typing");
         assert!(!composer.next());
+    }
+
+    #[test]
+    fn browsing_lasts_from_the_first_step_back_until_the_draft_is_back_or_edited() {
+        let mut composer = Composer::default();
+        send(&mut composer, "one");
+        composer.edit("typing");
+        assert!(!composer.browsing());
+        composer.previous();
+        assert!(composer.browsing());
+        composer.next();
+        assert!(!composer.browsing(), "the draft is back");
+        composer.previous();
+        composer.edit("changed");
+        assert!(!composer.browsing(), "an edit ends it");
     }
 
     #[test]

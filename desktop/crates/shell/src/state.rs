@@ -406,6 +406,13 @@ impl ShellState {
         self.slots.get(&slot).map_or("", |it| it.composer.draft())
     }
 
+    /// Whether the slot's input shows a sent message in place of its draft.
+    pub fn browsing(&self, slot: SlotId) -> bool {
+        self.slots
+            .get(&slot)
+            .is_some_and(|it| it.composer.browsing())
+    }
+
     /// Why the slot's last send did not go, under its input.
     pub fn composer_reason(&self, slot: SlotId) -> Option<&'static str> {
         self.slots.get(&slot)?.composer.reason()
@@ -642,6 +649,9 @@ impl ShellState {
     }
 
     fn restart(&mut self, slot: SlotId) -> Acted {
+        if !self.can_restart(slot) {
+            return Acted::default();
+        }
         let Some(relaunch) = self.slots.get(&slot).and_then(|it| it.relaunch.clone()) else {
             return Acted::default();
         };

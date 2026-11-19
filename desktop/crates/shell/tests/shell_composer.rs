@@ -228,7 +228,6 @@ fn a_restart_keeps_the_draft_and_history_and_starts_a_new_generation() {
         let slot = shell.open(relaunchable(&harness, "again"));
         until(|| harness.answers.lock().unwrap().controls.len() == 1).await;
         let control = harness.control(0).await;
-        until(|| shell.watch(slot).is_some()).await;
         let mut watch = shell.watch(slot).unwrap();
         assert!(watch.changed().await);
         shell.refresh(slot, watch.generation()).unwrap();
@@ -238,9 +237,22 @@ fn a_restart_keeps_the_draft_and_history_and_starts_a_new_generation() {
         shell.act(ShellAction::Send { slot });
         control.next_stdin_line().await.expect("sent");
         refresh(&mut shell, slot);
+        type_in(&mut shell, slot, "keep me");
+        assert!(
+            !shell.can_restart(slot),
+            "a running session is not restarted"
+        );
+        let refused = shell.act(ShellAction::Restart { slot });
+        assert!(refused.started.is_none() && refused.rows.is_none());
+        assert_eq!(shell.watch(slot).unwrap().generation(), 0);
+
+        control.exit(0);
+        while watch.changed().await {}
+        shell.refresh(slot, watch.generation()).unwrap();
+        assert_eq!(shell.status(slot), Some(SessionStatus::Ended));
+        assert!(shell.can_restart(slot));
         let emptied = shell.rows(slot).len();
         assert!(emptied > 0);
-        type_in(&mut shell, slot, "keep me");
 
         let acted = shell.act(ShellAction::Restart { slot });
         assert_eq!(acted.started, Some(slot));
@@ -257,12 +269,14 @@ fn a_restart_keeps_the_draft_and_history_and_starts_a_new_generation() {
         assert_eq!(shell.draft(slot), "keep me");
         assert_eq!(shell.watch(slot).unwrap().generation(), 1);
 
+        assert!(!shell.browsing(slot));
         shell.act(ShellAction::HistoryPrev { slot });
         assert_eq!(shell.draft(slot), "hello", "the history stays");
+        assert!(shell.browsing(slot));
         shell.act(ShellAction::HistoryNext { slot });
+        assert!(!shell.browsing(slot));
 
         let second = harness.control(1).await;
-        until(|| second.stdin_lines().is_empty()).await;
         let generation = shell.watch(slot).unwrap().generation();
         let mut watch = shell.watch(slot).unwrap();
         while !matches!(shell.status(slot), Some(SessionStatus::Running { .. })) {
