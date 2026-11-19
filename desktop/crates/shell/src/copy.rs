@@ -2,8 +2,8 @@
 //! has it, and the lines the conversation's rows are written with (ThreadViews.kt,
 //! TurnChangeRules.kt, CardViews.kt, CardParts.kt, PlanCardView.kt).
 
-use closta_presenter::cards::ThreadCard;
-use closta_presenter::cards::plan::PlanCard;
+use closta_presenter::cards::plan::{PlanCard, PlanGo};
+use closta_presenter::cards::{SuggestionLine, ThreadCard};
 use closta_presenter::rows::{CardRow, CompactionRow, ExploredRow, TurnEndRow};
 use closta_presenter::tool_line::{AgentSummary, ToolLineState};
 use closta_presenter::transcript::{ApprovalOutcome, CompactionOutcome};
@@ -283,6 +283,165 @@ pub fn agent_line(summary: &AgentSummary, label: &str) -> String {
     line
 }
 
+/// The card buttons and their notes (`thread.permission.*`).
+pub const ALLOW: &str = "Allow (1)";
+pub const ALLOW_ALWAYS: &str = "Always Allow (2)";
+pub const ALLOW_SESSION: &str = "Allow for This Session (2)";
+pub const DENY_NOTE: &str = "Deny…";
+pub const DENY_SEND: &str = "Deny";
+pub const DENY_NOTE_PLACEHOLDER: &str =
+    "Say what you want instead and press Enter (sent as a denial)";
+pub const DESTINATION_WORDS: &str = "Always Allow saves the rule to:";
+pub const HIDDEN_MARKED: &str = "This input has hidden or direction-changing characters, shown as marks such as <U+202E>. Read it before you allow it.";
+pub const SANDBOX_OFF: &str =
+    "This command asks to run outside the sandbox (dangerouslyDisableSandbox is true).";
+/// The edit card (`thread.diff.replaceAll`) and the mark after a cut diff.
+pub const REPLACE_ALL: &str = "Replace all";
+pub const DIFF_MORE: &str = "…";
+/// The plan card (`thread.plan.*`).
+pub const PLAN_TITLE: &str = "Approve this plan?";
+pub const PLAN_ASK_EDITS: &str = "Approve and Review Edits (2)";
+pub const PLAN_KEEP: &str = "Keep Planning (3)";
+pub const PLAN_NOTE: &str = "Keep Planning…";
+pub const PLAN_NOTE_PLACEHOLDER: &str = "Say what to change and press Enter (keeps planning)";
+pub const PLAN_MISSING: &str = "The plan's text has not arrived";
+/// The question card (`thread.question.*`).
+pub const QUESTION_ANSWER: &str = "Answer";
+pub const QUESTION_SKIP: &str = "Skip";
+pub const QUESTION_OTHER: &str = "Other";
+pub const OTHER_PLACEHOLDER: &str = "Write your own answer";
+pub const QUESTION_KEYS: &str = "Ctrl+Enter to answer · Esc to skip";
+/// `session.answerFailed`.
+pub const ANSWER_FAILED: &str = "The answer could not be sent to the session. Answer again.";
+/// Not in the bundle: the list's hint for the jump key and the slot limit's note.
+pub const JUMP_HINT: &str = "Alt+Shift+W to answer";
+pub const SLOT_LIMIT: &str = "Close a session to start another (8 at most).";
+/// The Bypass band (`composer.bypass.*`).
+pub const BYPASS_CONFIRM: &str =
+    "Switch to Bypass Permissions? Tools in this session will run without asking first.";
+pub const BYPASS_SWITCH: &str = "Switch";
+
+/// The Deny button, numbered after the choices before it (`thread.permission.deny`).
+pub fn deny_button(buttons: usize) -> String {
+    format!("Deny ({buttons})")
+}
+
+/// The name of where a rule is kept (`thread.destination.*`).
+pub fn destination_name(destination: Option<&str>) -> &'static str {
+    match destination {
+        Some("localSettings") => "This project (only me)",
+        Some("projectSettings") => "This project (shared)",
+        Some("userSettings") => "All projects",
+        Some("session") => "This session only",
+        _ => "Destination",
+    }
+}
+
+/// The second button's label, as `keepLabel` of the JetBrains plugin picks it.
+pub fn keep_label(offers_destination: bool, destination: Option<&str>) -> &'static str {
+    if !offers_destination || destination == Some("session") {
+        ALLOW_SESSION
+    } else {
+        ALLOW_ALWAYS
+    }
+}
+
+pub fn permission_keys(buttons: usize) -> String {
+    format!("1\u{2013}{buttons} to choose \u{b7} Esc to deny")
+}
+
+pub fn plan_keys(buttons: usize) -> String {
+    format!("1\u{2013}{buttons} to choose \u{b7} Esc to keep planning")
+}
+
+/// One suggested rule change, worded as `thread.permission.suggestion.*`.
+pub fn suggestion_text(line: &SuggestionLine) -> String {
+    let detail = &line.detail;
+    match line.kind.as_str() {
+        "addRules" => format!("Always allow: {detail}"),
+        "replaceRules" => format!("Replace the rules with: {detail}"),
+        "removeRules" => format!("Remove the rules: {detail}"),
+        "setMode" => format!("Switch to {detail} mode"),
+        "addDirectories" => format!("Allow access to: {detail}"),
+        "removeDirectories" => format!("Remove access to: {detail}"),
+        kind => format!("Also: {kind} {detail}"),
+    }
+}
+
+/// The `+a \u{2212}r` counts of an edit; the minus is U+2212.
+pub fn diff_counts(added: i32, removed: i32) -> String {
+    format!("+{added} \u{2212}{removed}")
+}
+
+/// The first plan button, by the mode the plan goes into (`thread.plan.go.*`).
+pub fn plan_go(go: PlanGo) -> &'static str {
+    match go {
+        PlanGo::Auto => "Approve and Use Auto Mode (1)",
+        PlanGo::AcceptEdits => "Approve and Auto-Accept Edits (1)",
+        PlanGo::Bypass => "Approve and Switch to Bypass (1)",
+    }
+}
+
+/// A question card's title (`thread.question.title`, `thread.question.titleMany`).
+pub fn question_title(questions: usize) -> String {
+    if questions > 1 {
+        format!("{questions} questions from Claude")
+    } else {
+        "Question from Claude".to_owned()
+    }
+}
+
+/// The window's title, with how many requests wait.
+pub fn window_title(base: &str, waiting: usize) -> String {
+    if waiting == 0 {
+        base.to_owned()
+    } else {
+        format!("({waiting}) {base}")
+    }
+}
+
+/// The mode button's short word (`composer.mode.*.short`); an unknown mode as it is.
+pub fn mode_label(mode: &str) -> String {
+    match mode {
+        "default" => "Default",
+        "acceptEdits" => "Edits",
+        "plan" => "Plan",
+        "auto" => "Auto",
+        "dontAsk" => "Don't Ask",
+        "bypassPermissions" => "Bypass",
+        other => other,
+    }
+    .to_owned()
+}
+
+/// The mode's word in the list (`composer.mode.*`); an unknown mode as it is.
+pub fn mode_name(mode: &str) -> String {
+    match mode {
+        "acceptEdits" => "Accept Edits",
+        "bypassPermissions" => "Bypass Permissions",
+        other => return mode_label(other),
+    }
+    .to_owned()
+}
+
+/// The line under a mode in the list (`composer.mode.hint.*`).
+pub fn mode_hint(mode: &str) -> Option<&'static str> {
+    Some(match mode {
+        "default" => "Ask every time",
+        "acceptEdits" => "Do not ask for file edits",
+        "plan" => "Plan only, change nothing",
+        "auto" => "Let the safety check decide",
+        "dontAsk" => "Refuse anything not allowed",
+        "bypassPermissions" => "Ask nothing",
+        _ => return None,
+    })
+}
+
+/// `composer.mode.accessible`.
+pub fn mode_accessible(mode: &str) -> String {
+    format!("Permission mode: {}", mode_name(mode))
+}
+
 /// A card as 6a draws it: its title and how it was answered, or that it waits.
 pub fn card_line(row: &CardRow) -> String {
     let (title, said) = match &row.card {
@@ -291,14 +450,10 @@ pub fn card_line(row: &CardRow) -> String {
             card.answered.map(|it| outcome(it, false)),
         ),
         ThreadCard::Question(card) => (
-            if card.questions.len() > 1 {
-                format!("{} questions from Claude", card.questions.len())
-            } else {
-                "Question from Claude".to_owned()
-            },
+            question_title(card.questions.len()),
             card.answered.map(|it| outcome(it, true)),
         ),
-        ThreadCard::Plan(card) => ("Approve this plan?".to_owned(), plan_outcome(card)),
+        ThreadCard::Plan(card) => (PLAN_TITLE.to_owned(), plan_outcome(card)),
     };
     format!("{title} · {}", said.unwrap_or(CARD_WAITING))
 }
@@ -605,6 +760,203 @@ mod tests {
             .filter_map(|line| line.split_once('='))
             .map(|(key, value)| (key.trim().to_owned(), value.replace("''", "'")))
             .collect()
+    }
+
+    #[test]
+    fn the_6c_words_are_jetbrains_words() {
+        for (text, spec) in [
+            (ALLOW, "Allow (1)"),
+            (ALLOW_ALWAYS, "Always Allow (2)"),
+            (ALLOW_SESSION, "Allow for This Session (2)"),
+            (DENY_NOTE, "Deny\u{2026}"),
+            (DENY_SEND, "Deny"),
+            (
+                DENY_NOTE_PLACEHOLDER,
+                "Say what you want instead and press Enter (sent as a denial)",
+            ),
+            (DESTINATION_WORDS, "Always Allow saves the rule to:"),
+            (
+                HIDDEN_MARKED,
+                "This input has hidden or direction-changing characters, shown as marks such as <U+202E>. Read it before you allow it.",
+            ),
+            (
+                SANDBOX_OFF,
+                "This command asks to run outside the sandbox (dangerouslyDisableSandbox is true).",
+            ),
+            (REPLACE_ALL, "Replace all"),
+            (DIFF_MORE, "\u{2026}"),
+            (PLAN_TITLE, "Approve this plan?"),
+            (PLAN_ASK_EDITS, "Approve and Review Edits (2)"),
+            (PLAN_KEEP, "Keep Planning (3)"),
+            (PLAN_NOTE, "Keep Planning\u{2026}"),
+            (
+                PLAN_NOTE_PLACEHOLDER,
+                "Say what to change and press Enter (keeps planning)",
+            ),
+            (PLAN_MISSING, "The plan's text has not arrived"),
+            (QUESTION_ANSWER, "Answer"),
+            (QUESTION_SKIP, "Skip"),
+            (QUESTION_OTHER, "Other"),
+            (OTHER_PLACEHOLDER, "Write your own answer"),
+            (QUESTION_KEYS, "Ctrl+Enter to answer \u{b7} Esc to skip"),
+            (
+                ANSWER_FAILED,
+                "The answer could not be sent to the session. Answer again.",
+            ),
+            (JUMP_HINT, "Alt+Shift+W to answer"),
+            (SLOT_LIMIT, "Close a session to start another (8 at most)."),
+            (
+                BYPASS_CONFIRM,
+                "Switch to Bypass Permissions? Tools in this session will run without asking first.",
+            ),
+            (BYPASS_SWITCH, "Switch"),
+        ] {
+            assert_eq!(text, spec);
+        }
+        let bundle = bundle();
+        for (key, text) in [
+            ("thread.permission.allow", ALLOW),
+            ("thread.permission.allowAlways", ALLOW_ALWAYS),
+            ("thread.permission.allowSession", ALLOW_SESSION),
+            (
+                "thread.permission.comment.placeholder",
+                DENY_NOTE_PLACEHOLDER,
+            ),
+            ("thread.permission.destination", DESTINATION_WORDS),
+            ("thread.permission.hidden", HIDDEN_MARKED),
+            ("thread.permission.sandboxOff", SANDBOX_OFF),
+            ("thread.diff.replaceAll", REPLACE_ALL),
+            ("thread.plan.title", PLAN_TITLE),
+            ("thread.plan.askEdits", PLAN_ASK_EDITS),
+            ("thread.plan.keepPlanning", PLAN_KEEP),
+            ("thread.plan.comment.placeholder", PLAN_NOTE_PLACEHOLDER),
+            ("thread.plan.missing", PLAN_MISSING),
+            ("thread.question.answer", QUESTION_ANSWER),
+            ("thread.question.skip", QUESTION_SKIP),
+            ("thread.question.other", QUESTION_OTHER),
+            ("thread.question.other.placeholder", OTHER_PLACEHOLDER),
+            ("session.answerFailed", ANSWER_FAILED),
+            ("composer.bypass.confirm", BYPASS_CONFIRM),
+            ("composer.bypass.switch", BYPASS_SWITCH),
+        ] {
+            assert_eq!(bundle.get(key).map(String::as_str), Some(text), "{key}");
+        }
+    }
+
+    #[test]
+    fn the_keep_button_says_session_unless_a_rule_is_kept_elsewhere() {
+        assert_eq!(keep_label(false, None), ALLOW_SESSION);
+        assert_eq!(keep_label(true, Some("session")), ALLOW_SESSION);
+        assert_eq!(keep_label(true, Some("localSettings")), ALLOW_ALWAYS);
+        assert_eq!(keep_label(true, None), ALLOW_ALWAYS);
+    }
+
+    #[test]
+    fn deny_and_the_key_lines_count_the_buttons() {
+        assert_eq!(deny_button(3), "Deny (3)");
+        assert_eq!(
+            permission_keys(3),
+            "1\u{2013}3 to choose \u{b7} Esc to deny"
+        );
+        assert_eq!(
+            plan_keys(3),
+            "1\u{2013}3 to choose \u{b7} Esc to keep planning"
+        );
+    }
+
+    #[test]
+    fn destinations_have_names() {
+        for (destination, name) in [
+            (Some("localSettings"), "This project (only me)"),
+            (Some("projectSettings"), "This project (shared)"),
+            (Some("userSettings"), "All projects"),
+            (Some("session"), "This session only"),
+            (Some("other"), "Destination"),
+            (None, "Destination"),
+        ] {
+            assert_eq!(destination_name(destination), name);
+        }
+    }
+
+    #[test]
+    fn suggestions_read_as_jetbrains_says() {
+        let line = |kind: &str| SuggestionLine {
+            kind: kind.to_owned(),
+            detail: "D".to_owned(),
+        };
+        for (kind, text) in [
+            ("addRules", "Always allow: D"),
+            ("replaceRules", "Replace the rules with: D"),
+            ("removeRules", "Remove the rules: D"),
+            ("setMode", "Switch to D mode"),
+            ("addDirectories", "Allow access to: D"),
+            ("removeDirectories", "Remove access to: D"),
+            ("somethingNew", "Also: somethingNew D"),
+        ] {
+            assert_eq!(suggestion_text(&line(kind)), text);
+        }
+    }
+
+    #[test]
+    fn diff_counts_use_a_true_minus() {
+        assert_eq!(diff_counts(2, 1), "+2 \u{2212}1");
+    }
+
+    #[test]
+    fn the_title_counts_what_waits() {
+        assert_eq!(window_title("Closta", 0), "Closta");
+        assert_eq!(window_title("Closta", 3), "(3) Closta");
+        assert_eq!(question_title(1), "Question from Claude");
+        assert_eq!(question_title(2), "2 questions from Claude");
+    }
+
+    #[test]
+    fn modes_have_short_and_long_words() {
+        let bundle = bundle();
+        for mode in [
+            "default",
+            "acceptEdits",
+            "plan",
+            "auto",
+            "dontAsk",
+            "bypassPermissions",
+        ] {
+            assert_eq!(
+                bundle.get(&format!("composer.mode.{mode}.short")),
+                Some(&mode_label(mode)),
+                "{mode}"
+            );
+            assert_eq!(
+                bundle.get(&format!("composer.mode.{mode}")),
+                Some(&mode_name(mode)),
+                "{mode}"
+            );
+            assert_eq!(
+                bundle
+                    .get(&format!("composer.mode.hint.{mode}"))
+                    .map(String::as_str),
+                mode_hint(mode),
+                "{mode}"
+            );
+            assert_eq!(
+                mode_accessible(mode),
+                format!("Permission mode: {}", mode_name(mode))
+            );
+        }
+        assert_eq!(mode_label("bypassPermissions"), "Bypass");
+        assert_eq!(mode_label("x"), "x");
+        assert_eq!(mode_name("x"), "x");
+        assert_eq!(mode_hint("x"), None);
+    }
+
+    #[test]
+    fn plan_buttons_follow_where_the_plan_goes() {
+        assert_eq!(plan_go(PlanGo::Auto), "Approve and Use Auto Mode (1)");
+        assert_eq!(
+            plan_go(PlanGo::AcceptEdits),
+            "Approve and Auto-Accept Edits (1)"
+        );
+        assert_eq!(plan_go(PlanGo::Bypass), "Approve and Switch to Bypass (1)");
     }
 
     #[test]
