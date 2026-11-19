@@ -344,6 +344,24 @@ fn start_opens_the_folder_once_it_is_seen_and_selects_it() {
 }
 
 #[test]
+fn the_folder_is_looked_for_without_the_spaces_around_it() {
+    drive(|harness| async move {
+        let ports = Ports {
+            checks: Arc::new(Machine {
+                folders: Some(vec![FOLDER.to_owned()]),
+                ..Machine::default()
+            }),
+            planner_for: Arc::new(Planners(Arc::clone(&harness.planner) as _)),
+        };
+        let mut shell = harness.shell_with(ports);
+        let padded = format!(" {FOLDER} ");
+        let check = start_in(&mut shell, &padded).check.expect("a check");
+        assert_eq!(check.folder, FOLDER);
+        assert!(check.exists.await, "the folder is looked for as trimmed");
+    });
+}
+
+#[test]
 fn a_missing_folder_keeps_the_dialog_and_says_so() {
     drive(|harness| async move {
         let ports = Ports {

@@ -598,6 +598,7 @@ impl ShellState {
             return Acted::default();
         }
         dialog.checking = true;
+        let folder = folder.trim().to_owned();
         let exists = self.ports.checks.folder_exists(&folder);
         Acted {
             check: Some(FolderCheck { folder, exists }),
