@@ -80,6 +80,8 @@ pub(super) fn row(model: &Entity<ShellModel>, slot: SlotId, at: usize, cx: &mut 
         ThreadRow::Card(card) => (card_row(card, cx), copy::card_line(card)),
         ThreadRow::TurnEnd(end) => (turn_end_row(end, cx), copy::turn_end(end, false)),
         ThreadRow::SignIn(_) => (sign_in_row(cx), copy::SIGN_IN_TEXT.to_owned()),
+        // Drawn in a later task; until then the row takes no room.
+        ThreadRow::Compaction(_) => (div().into_any_element(), String::new()),
     };
     let id = SharedString::from(format!("row-{}", row.key()));
     div()

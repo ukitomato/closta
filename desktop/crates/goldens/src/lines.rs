@@ -398,6 +398,14 @@ pub fn status_only(status: Option<&str>) -> AgentEvent {
     ))
 }
 
+/// `system/status` that ends a compaction: no status, and `compact_result` says how it went.
+pub fn compact_result(result: &str) -> AgentEvent {
+    decode(&format!(
+        r#"{{"type":"system","subtype":"status","uuid":"cr","session_id":"{SESSION}","status":null,"compact_result":{}}}"#,
+        quote(result)
+    ))
+}
+
 /// `system/compact_boundary`; `metadata` is JSON text.
 pub fn compact_boundary(metadata: &str) -> AgentEvent {
     decode(&format!(

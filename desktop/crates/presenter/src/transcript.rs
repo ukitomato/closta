@@ -16,7 +16,7 @@
 use std::fmt;
 use std::sync::Arc;
 
-use imbl::{HashMap, HashSet};
+use imbl::{HashMap, HashSet, Vector};
 use serde_json::{Map, Value};
 
 use crate::keyed::Keyed;
@@ -61,6 +61,27 @@ pub struct Transcript {
     /// The key of the message whose reply said the CLI is not signed in, until the model's next
     /// reply.
     pub sign_in: Option<String>,
+    /// Where each compaction happened, oldest first; unlike `operations.compactions` none is
+    /// dropped.
+    pub compaction_marks: Vector<CompactionMark>,
+}
+
+/// One compaction as the conversation shows it: after `after`, the key of the last message when
+/// it happened (`None` when there was none).
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct CompactionMark {
+    pub after: Option<String>,
+    pub outcome: CompactionOutcome,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum CompactionOutcome {
+    Compacted {
+        trigger: String,
+        pre_tokens: i64,
+        post_tokens: i64,
+    },
+    Failed,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
