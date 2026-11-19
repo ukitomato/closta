@@ -714,3 +714,121 @@ fn a_mode_is_not_picked_behind_an_overlay() {
         assert!(shell.bypass_asking(slot));
     });
 }
+
+fn ack_mode(control: &LiveControl, n: usize) {
+    let sent: serde_json::Value = serde_json::from_str(&mode_lines(control)[n]).unwrap();
+    control.emit(&format!(
+        r#"{{"type":"control_response","response":{{"subtype":"success","request_id":"{}"}}}}"#,
+        sent["request_id"].as_str().unwrap()
+    ));
+}
+
+#[test]
+fn a_restart_takes_the_old_bypass_banner_down() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let slot = shell.open(relaunchable(&harness, "again"));
+        until(|| harness.answers.lock().unwrap().controls.len() == 1).await;
+        let control = harness.control(0).await;
+        let mut watch = shell.watch(slot).unwrap();
+        assert!(watch.changed().await);
+        shell.refresh(slot, watch.generation(), 0).unwrap();
+        until(|| matches!(shell.status(slot), Some(SessionStatus::Running { .. }))).await;
+
+        pick(&mut shell, slot, "bypassPermissions");
+        assert!(shell.bypass_asking(slot));
+        control.exit(0);
+        while watch.changed().await {}
+        shell.refresh(slot, watch.generation(), 0).unwrap();
+        shell.act(ShellAction::Restart { slot });
+        assert!(!shell.bypass_asking(slot));
+
+        let second = harness.control(1).await;
+        shell.act(ShellAction::ConfirmBypass { slot });
+        quiet().await;
+        assert!(mode_lines(&control).is_empty() && mode_lines(&second).is_empty());
+        assert_eq!(control.refused_writes() + second.refused_writes(), 0);
+    });
+}
+
+#[test]
+fn a_banner_over_an_ended_or_closed_slot_writes_nothing() {
+    drive(|harness| async move {
+        let (mut shell, slot, _runtime, control) = running_slot(&harness).await;
+        pick(&mut shell, slot, "bypassPermissions");
+        control.exit(0);
+        let mut watch = shell.watch(slot).unwrap();
+        while watch.changed().await {}
+        shell.refresh(slot, watch.generation(), 0).unwrap();
+        shell.act(ShellAction::ConfirmBypass { slot });
+        quiet().await;
+        assert!(mode_lines(&control).is_empty());
+        assert_eq!(control.refused_writes(), 0);
+    });
+    drive(|harness| async move {
+        let (mut shell, slot, _runtime, control) = running_slot(&harness).await;
+        pick(&mut shell, slot, "bypassPermissions");
+        shell.act(ShellAction::CloseSlot { slot });
+        shell.act(ShellAction::ConfirmCloseSlot);
+        shell.act(ShellAction::ConfirmBypass { slot });
+        quiet().await;
+        assert!(mode_lines(&control).is_empty());
+        assert_eq!(control.refused_writes(), 0);
+    });
+}
+
+#[test]
+fn two_picks_before_a_refresh_send_one_switch() {
+    drive(|harness| async move {
+        let (mut shell, slot, _runtime, control) = running_slot(&harness).await;
+        pick(&mut shell, slot, "acceptEdits");
+        pick(&mut shell, slot, "plan");
+        pick(&mut shell, slot, "bypassPermissions");
+        shell.act(ShellAction::ConfirmBypass { slot });
+        quiet().await;
+        assert_eq!(mode_lines(&control).len(), 1);
+        assert!(!shell.bypass_asking(slot));
+    });
+}
+
+#[test]
+fn confirming_bypass_waits_while_a_switch_is_pending() {
+    drive(|harness| async move {
+        let (mut shell, slot, runtime, control) = running_slot(&harness).await;
+        pick(&mut shell, slot, "bypassPermissions");
+        runtime.commands().unwrap().switch_mode("plan").unwrap();
+        until(|| mode_lines(&control).len() == 1).await;
+        refresh(&mut shell, slot);
+        assert!(shell.composer_line(slot).unwrap().switching);
+        shell.act(ShellAction::ConfirmBypass { slot });
+        quiet().await;
+        assert_eq!(mode_lines(&control).len(), 1);
+        assert!(shell.bypass_asking(slot), "the banner stays");
+    });
+}
+
+#[test]
+fn confirming_bypass_in_bypass_only_takes_the_banner_down() {
+    drive(|harness| async move {
+        let (mut shell, slot, runtime, control) = running_slot(&harness).await;
+        pick(&mut shell, slot, "bypassPermissions");
+        runtime
+            .commands()
+            .unwrap()
+            .switch_mode("bypassPermissions")
+            .unwrap();
+        until(|| mode_lines(&control).len() == 1).await;
+        ack_mode(&control, 0);
+        for _ in 0..100 {
+            refresh(&mut shell, slot);
+            if shell.composer_line(slot).unwrap().mode.as_deref() == Some("bypassPermissions") {
+                break;
+            }
+            smol::Timer::after(std::time::Duration::from_millis(20)).await;
+        }
+        shell.act(ShellAction::ConfirmBypass { slot });
+        quiet().await;
+        assert_eq!(mode_lines(&control).len(), 1, "nothing new is written");
+        assert!(!shell.bypass_asking(slot));
+    });
+}

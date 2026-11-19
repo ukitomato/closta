@@ -301,6 +301,8 @@ struct Slot {
     cards: HashMap<String, CardState>,
     /// Whether the Bypass banner is up: Bypass is entered only by confirming it.
     bypass_asking: bool,
+    /// Whether a mode switch was written since the last refresh, which has not seen it yet.
+    mode_sent: bool,
 }
 
 impl Slot {
@@ -398,6 +400,7 @@ impl ShellState {
                 closing: false,
                 cards: HashMap::new(),
                 bypass_asking: false,
+                mode_sent: false,
             },
         );
         self.selected.get_or_insert(id);
@@ -435,6 +438,7 @@ impl ShellState {
         held.failed_since = None;
         held.cards.clear();
         held.bypass_asking = false;
+        held.mode_sent = false;
         let emptied = std::mem::take(&mut held.rows).len();
         Some(if emptied == 0 {
             Vec::new()
@@ -596,6 +600,7 @@ impl ShellState {
             model: composing.model.label,
             switching: composing.switching.is_some(),
         });
+        held.mode_sent = false;
         held.compacting = view.transcript.operations.compacting;
 
         let mut change = alerts_between(
@@ -1050,7 +1055,8 @@ impl ShellState {
             return Acted::default();
         };
         let current = held.line.as_ref();
-        if current.is_some_and(|it| it.switching || it.mode.as_deref() == Some(mode))
+        if held.mode_sent
+            || current.is_some_and(|it| it.switching || it.mode.as_deref() == Some(mode))
             || !PERMISSION_MODES.contains(&mode)
         {
             return Acted::default();
@@ -1058,7 +1064,7 @@ impl ShellState {
         if mode == BYPASS_MODE {
             held.bypass_asking = true;
         } else {
-            _ = commands.switch_mode(mode);
+            held.mode_sent = commands.switch_mode(mode).is_ok();
             held.bypass_asking = false;
         }
         Acted::default()
@@ -1068,8 +1074,16 @@ impl ShellState {
         let Some(held) = self.slots.get_mut(&slot).filter(|it| it.bypass_asking) else {
             return Acted::default();
         };
+        let line = held.line.as_ref();
+        if held.mode_sent || line.is_some_and(|it| it.switching) {
+            return Acted::default();
+        }
+        if line.is_some_and(|it| it.mode.as_deref() == Some(BYPASS_MODE)) {
+            held.bypass_asking = false;
+            return Acted::default();
+        }
         if let Some(commands) = held.runtime.commands() {
-            _ = commands.switch_mode(BYPASS_MODE);
+            held.mode_sent = commands.switch_mode(BYPASS_MODE).is_ok();
         }
         held.bypass_asking = false;
         Acted::default()
