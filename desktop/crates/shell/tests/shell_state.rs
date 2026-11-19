@@ -117,6 +117,7 @@ impl Harness {
                     _ = sender.send(runtime).await;
                 })
             })),
+            relaunch: None,
         };
         (launch, receiver)
     }
@@ -746,6 +747,7 @@ fn a_companion_runs_beside_the_session_with_its_runtime() {
             planner: Arc::clone(&harness.planner) as _,
             working_directory: None,
             companion: None,
+            relaunch: None,
         };
         let alone = shell.open(without);
         assert!(shell.watch(alone).is_some());

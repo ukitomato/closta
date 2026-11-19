@@ -142,7 +142,7 @@ pub fn distro_missing(distro: &str) -> String {
 
 pub fn runtime_label(runtime: &Runtime) -> String {
     match runtime {
-        Runtime::Windows => "Windows".to_owned(),
+        Runtime::Win32 => "Windows".to_owned(),
         Runtime::Wsl { distro } => format!("WSL · {distro}"),
     }
 }
@@ -737,7 +737,7 @@ mod tests {
             }),
             "WSL · Ubuntu-26.04"
         );
-        assert_eq!(runtime_label(&Runtime::Windows), "Windows");
+        assert_eq!(runtime_label(&Runtime::Win32), "Windows");
         assert_eq!(distro_missing("Debian"), "Debian is not installed.");
     }
 
