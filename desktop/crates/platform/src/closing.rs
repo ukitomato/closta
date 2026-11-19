@@ -1,10 +1,11 @@
 //! Closing the window: the close button and Alt+F4 only ask the shell; the window goes once every
 //! session was closed and waited for. While the shell asks, its question is drawn over the
-//! window; while it closes, "Closing sessions…".
+//! window; while it closes, "Closing sessions…". Closing one slot asks the same way, for that
+//! slot alone.
 
 use closta_shell::closing::{CLOSE_LIMIT, CloseStage, DESTROY_GRACE, finish_closing};
 use closta_shell::copy;
-use closta_shell::state::ShellAction;
+use closta_shell::state::{Overlay, ShellAction};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::ActiveTheme as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
@@ -103,4 +104,57 @@ pub(crate) fn close_layer(model: &ShellModel, cx: &mut Context<ShellModel>) -> O
             .child(copy::CLOSING),
     };
     Some(over_window("close-layer", content.into_any_element(), cx))
+}
+
+/// The question before one slot is closed, while the shell asks it.
+pub(crate) fn slot_close_layer(
+    model: &ShellModel,
+    cx: &mut Context<ShellModel>,
+) -> Option<AnyElement> {
+    if model.shell.overlay() != Some(Overlay::CloseSlot) {
+        return None;
+    }
+    let (_, question) = model.shell.slot_close()?;
+    let words = copy::close_question(question.working, question.drafts);
+    let theme = cx.theme();
+    let content = v_flex()
+        .id("slot-close-confirm")
+        .accessibility_id("slot-close-confirm")
+        .aria_label(words.clone())
+        .max_w(px(520.0))
+        .p_4()
+        .gap_3()
+        .rounded_lg()
+        .border_1()
+        .border_color(theme.border)
+        .bg(theme.popover)
+        .text_color(theme.popover_foreground)
+        .shadow_lg()
+        .child(words)
+        .child(
+            h_flex()
+                .gap_2()
+                .justify_end()
+                .child(
+                    Button::new("slot-close-cancel")
+                        .outline()
+                        .label(copy::CANCEL)
+                        .on_click(cx.listener(|model, _: &ClickEvent, window, cx| {
+                            model.act(ShellAction::CancelCloseSlot, window, cx);
+                        })),
+                )
+                .child(
+                    Button::new("slot-close-close")
+                        .danger()
+                        .label(copy::CLOSE)
+                        .on_click(cx.listener(|model, _: &ClickEvent, window, cx| {
+                            model.act(ShellAction::ConfirmCloseSlot, window, cx);
+                        })),
+                ),
+        );
+    Some(over_window(
+        "slot-close-layer",
+        content.into_any_element(),
+        cx,
+    ))
 }

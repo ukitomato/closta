@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 use closta_presenter::rows::ThreadRow;
 use closta_shell::rows::{RowChange, ScrollDirection, kept, list_top};
 use closta_shell::slot::{SlotId, SlotLaunch};
-use closta_shell::state::{Acted, FolderCheck, ShellAction, ShellState};
+use closta_shell::state::{Acted, FocusTarget, FolderCheck, ShellAction, ShellState};
 use gpui_kit::component::input::{InputState, TextareaState};
 use gpui_kit::component::message_scroller::MessageScrollerState;
 use gpui_kit::component::resizable::ResizableState;
@@ -18,6 +18,7 @@ use gpui_kit::component::text::TextViewState;
 use gpui_kit::*;
 
 use crate::Measure;
+use crate::clock::WallClock;
 use crate::composer::{self, Dispatch};
 use crate::perf::{IdleStart, Measuring};
 use crate::probe::{Probe, Probing};
@@ -50,6 +51,12 @@ pub(crate) struct ShellModel {
     /// The wait for the typing in the folder field to settle.
     pub(crate) folder_typing: Option<Task<()>>,
     pub(crate) panes: Entity<ResizableState>,
+    /// The one clock the shell is handed times from.
+    pub(crate) clock: WallClock,
+    /// The needs-you list's focus: while it is in the list, the list holds the card keys.
+    pub(crate) list_focus: FocusHandle,
+    /// The failure band's focus: the band of the selected slot takes it.
+    pub(crate) failure_focus: FocusHandle,
     watches: HashMap<SlotId, Task<()>>,
     /// The generation of the session each slot's watch waits on.
     generations: HashMap<SlotId, u64>,
@@ -83,6 +90,9 @@ impl ShellModel {
             folder: None,
             folder_typing: None,
             panes: cx.new(|_| ResizableState::default()),
+            clock: WallClock::start(),
+            list_focus: cx.focus_handle(),
+            failure_focus: cx.focus_handle(),
             watches: HashMap::new(),
             generations: HashMap::new(),
             scrolled: HashMap::new(),
@@ -100,6 +110,7 @@ impl ShellModel {
         if let Some(measure) = measure {
             model.measure(measure, window, cx);
         }
+        model.show_title(window);
         model
     }
 
@@ -184,9 +195,18 @@ impl ShellModel {
         cx: &mut Context<Self>,
     ) {
         let began = Instant::now();
-        let Some(refresh) = self.shell.refresh(slot, generation, 0) else {
+        let Some(refresh) = self.shell.refresh(slot, generation, self.clock.now_ms()) else {
             return;
         };
+        if refresh.attention {
+            window.request_attention();
+        }
+        self.show_title(window);
+        if refresh.removed {
+            self.forget(slot, window, cx);
+            cx.notify();
+            return;
+        }
         self.probe_settled(window, cx);
         let Some(scroller) = self.scrollers.get(&slot).cloned() else {
             return;
@@ -323,9 +343,13 @@ impl ShellModel {
             check,
             folder,
             close,
-            removed: _,
-            focus: _,
+            removed,
+            focus,
         } = self.shell.act(action);
+        self.show_title(window);
+        if let Some(slot) = removed {
+            self.forget(slot, window, cx);
+        }
         // A restarted slot's rows are new: the text states of the old ones are let go.
         if let Some(slot) = started.filter(|slot| self.scrollers.contains_key(slot)) {
             self.texts.remove(&slot);
@@ -368,6 +392,9 @@ impl ShellModel {
         if selects || started.is_some() {
             self.ask_prefetch(window, cx);
         }
+        if let Some(focus) = focus {
+            self.focus_on(focus, window, cx);
+        }
         if toggles {
             // A pane opened again comes back at the width its layout last had, which a drag on
             // the handle left beside the closed pane can have changed.
@@ -377,6 +404,44 @@ impl ShellModel {
             });
         }
         cx.notify();
+    }
+
+    /// Sets the window's title when the shell says it changed.
+    fn show_title(&mut self, window: &mut Window) {
+        if let Some(title) = self.shell.title_change() {
+            window.set_window_title(&title);
+        }
+    }
+
+    /// Lets go of all that was kept for a slot that is gone. A measured run stops awaiting it.
+    fn forget(&mut self, slot: SlotId, window: &mut Window, cx: &mut Context<Self>) {
+        self.scrollers.remove(&slot);
+        self.texts.remove(&slot);
+        self.composers.remove(&slot);
+        self.watches.remove(&slot);
+        self.generations.remove(&slot);
+        self.scrolled.remove(&slot);
+        if self
+            .measuring
+            .as_mut()
+            .is_some_and(|measuring| measuring.forget(slot))
+        {
+            self.refreshed(window, cx);
+        }
+    }
+
+    /// Puts the keyboard where the shell says. Only the input and the failure band are drawn
+    /// to take it so far; a card's place is let go.
+    fn focus_on(&mut self, target: FocusTarget, window: &mut Window, cx: &mut Context<Self>) {
+        match target {
+            FocusTarget::Composer(slot) => {
+                if let Some(input) = self.composers.get(&slot) {
+                    input.update(cx, |state, cx| state.focus(window, cx));
+                }
+            }
+            FocusTarget::FailureBand(_) => self.failure_focus.focus(window, cx),
+            FocusTarget::Card { .. } | FocusTarget::CardNote { .. } => {}
+        }
     }
 
     /// Looks for the folder in the background and hands the answer back to the shell.

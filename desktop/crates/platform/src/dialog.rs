@@ -215,13 +215,20 @@ pub(crate) fn new_session(model: &ShellModel, cx: &mut Context<ShellModel>) -> O
             .child(copy::runtime_label(&runtime_of(&dialog.folder)))
     });
 
-    let problem = dialog.problem.as_ref().map(|problem| {
+    let problem_line = |text: SharedString| {
         h_flex()
             .gap_2()
             .text_color(danger)
             .child(PROBLEM_GLYPH)
-            .child(problem_text(problem))
-    });
+            .child(text)
+    };
+    let problem = dialog
+        .problem
+        .as_ref()
+        .map(|problem| problem_line(problem_text(problem).into()));
+    // Eight slots hold a session: none may start until one is closed.
+    let full = model.shell.slots_full();
+    let limit = full.then(|| problem_line(copy::SLOT_LIMIT.into()));
 
     let start_label = if dialog.checking {
         copy::CHECKING
@@ -244,7 +251,7 @@ pub(crate) fn new_session(model: &ShellModel, cx: &mut Context<ShellModel>) -> O
                 .accessibility_id("dialog-start")
                 .primary()
                 .label(start_label)
-                .disabled(!dialog.can_start())
+                .disabled(full || !dialog.can_start())
                 .on_click(cx.listener(|model, _: &ClickEvent, window, cx| {
                     model.start(window, cx);
                 })),
@@ -273,6 +280,7 @@ pub(crate) fn new_session(model: &ShellModel, cx: &mut Context<ShellModel>) -> O
         .children(recent)
         .children(runtime)
         .children(problem)
+        .children(limit)
         .child(buttons);
     Some(over_window(
         "new-session-layer",

@@ -104,7 +104,8 @@ fn centered(content: impl IntoElement) -> Div {
 }
 
 /// The band over a failed session's conversation: what failed, what to try, and the Restart
-/// with what it does when the session can be started again.
+/// with what it does when the session can be started again, or why it cannot while eight slots
+/// hold a session. The band takes the keyboard when the needs-you list opens it.
 fn failure_band(
     model: &ShellModel,
     slot: SlotId,
@@ -125,6 +126,10 @@ fn failure_band(
     let note = restart
         .is_some()
         .then(|| div().text_color(muted).child(copy::RESTART_NOTE));
+    let limit = model
+        .shell
+        .restart_blocked(slot)
+        .then(|| div().flex_none().text_color(muted).child(copy::SLOT_LIMIT));
     let line = h_flex()
         .gap_2()
         .items_center()
@@ -134,11 +139,13 @@ fn failure_band(
                 .text_color(theme.danger),
         )
         .child(div().flex_1().child(title.clone()))
-        .children(restart);
+        .children(restart)
+        .children(limit);
     let band = v_flex()
         .id("failure-band")
         .accessibility_id("failure-band")
         .aria_label(title)
+        .track_focus(&model.failure_focus)
         .flex_none()
         .w_full()
         .py_2()

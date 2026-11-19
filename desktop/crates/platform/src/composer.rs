@@ -194,7 +194,8 @@ fn line_text(line: &ComposerLine) -> String {
         .join(" · ")
 }
 
-/// "Session ended", and the button that restarts it when it can be.
+/// "Session ended", and the button that restarts it when it can be, or why it cannot while
+/// eight slots hold a session.
 fn ended(model: &ShellModel, slot: SlotId, cx: &mut Context<ShellModel>) -> AnyElement {
     let restart = model.shell.can_restart(slot).then(|| {
         Button::new("composer-restart")
@@ -204,6 +205,11 @@ fn ended(model: &ShellModel, slot: SlotId, cx: &mut Context<ShellModel>) -> AnyE
             .on_click(cx.listener(move |model, _: &ClickEvent, window, cx| {
                 model.act(ShellAction::Restart { slot }, window, cx);
             }))
+    });
+    let limit = model.shell.restart_blocked(slot).then(|| {
+        div()
+            .text_color(cx.theme().muted_foreground)
+            .child(copy::SLOT_LIMIT)
     });
     h_flex()
         .id("session-ended")
@@ -220,6 +226,7 @@ fn ended(model: &ShellModel, slot: SlotId, cx: &mut Context<ShellModel>) -> AnyE
                 .child(copy::SESSION_ENDED),
         )
         .children(restart)
+        .children(limit)
         .into_any_element()
 }
 
