@@ -10,7 +10,9 @@ use closta_shell::slot::SlotId;
 use closta_shell::state::{ComposerLine, ShellAction};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::component::input::{InputEvent, MoveDown, MoveUp, Position, Textarea, TextareaState};
+use gpui_kit::component::input::{
+    BufferPoint, InputEvent, MoveDown, MoveUp, Position, RopeExt as _, Textarea, TextareaState,
+};
 use gpui_kit::component::{ActiveTheme as _, Sizable as _};
 use gpui_kit::*;
 
@@ -25,6 +27,8 @@ const SEND_GLYPH: &str = "▶";
 
 /// Where the box's actions go: the window's shell, or a test's list.
 pub(crate) type Dispatch = Rc<dyn Fn(ShellAction, &mut Window, &mut App)>;
+/// Whether the box shows a sent message in place of the draft, as the shell says now.
+pub(crate) type Browsing = Rc<dyn Fn(&App) -> bool>;
 
 /// Makes a slot's input, 2 to 8 rows tall. Each edit goes to `dispatch` as the new draft;
 /// Enter sends it, and Shift+Enter breaks the line.
@@ -73,10 +77,16 @@ fn end_of(text: &str) -> Position {
     )
 }
 
-/// The input box. ↑ on its first line (or in an empty box) asks for the previous send and ↓ on
-/// its last line for the next; elsewhere they move the cursor. The input binds the arrows to
-/// its own moves, which run before any key listener, so the moves are caught on their way down.
-pub(crate) fn input_box(slot: SlotId, input: &Entity<TextareaState>, dispatch: Dispatch) -> Div {
+/// The input box. ↑ on its first row (or in an empty box) asks for the previous send; ↓ on its
+/// last row asks for the next only while a sent message is shown. Rows are as drawn, wrapped
+/// lines included; elsewhere the arrows move the cursor. The input binds the arrows to its own
+/// moves, which run before any key listener, so the moves are caught on their way down.
+pub(crate) fn input_box(
+    slot: SlotId,
+    input: &Entity<TextareaState>,
+    dispatch: Dispatch,
+    browsing: Browsing,
+) -> Div {
     let name = SharedString::from(format!("composer-{slot}"));
     let (up, down) = (input.clone(), input.clone());
     let previous = Rc::clone(&dispatch);
@@ -84,15 +94,15 @@ pub(crate) fn input_box(slot: SlotId, input: &Entity<TextareaState>, dispatch: D
         .w_full()
         .capture_action(move |_: &MoveUp, window, cx| {
             let state = up.read(cx);
-            if state.value().is_empty() || state.cursor_position().line == 0 {
+            if state.value().is_empty() || cursor_row(state) == 0 {
                 cx.stop_propagation();
                 previous(ShellAction::HistoryPrev { slot }, window, cx);
             }
         })
         .capture_action(move |_: &MoveDown, window, cx| {
             let state = down.read(cx);
-            let last = state.value().matches('\n').count();
-            if state.cursor_position().line as usize >= last {
+            let last = state.display_map().display_row_count().saturating_sub(1);
+            if browsing(cx) && cursor_row(state) >= last {
                 cx.stop_propagation();
                 dispatch(ShellAction::HistoryNext { slot }, window, cx);
             }
@@ -102,6 +112,16 @@ pub(crate) fn input_box(slot: SlotId, input: &Entity<TextareaState>, dispatch: D
                 .accessibility_id(name)
                 .aria_label(copy::COMPOSER_PLACEHOLDER),
         )
+}
+
+/// The row the cursor is drawn on, counting the rows a long line wraps into.
+fn cursor_row(state: &TextareaState) -> usize {
+    let line = state.cursor_position().line as usize;
+    let column = state.cursor() - state.text().line_start_offset(line);
+    state
+        .display_map()
+        .buffer_pos_to_display_pos(BufferPoint::new(line, column))
+        .row
 }
 
 /// What stands under the conversation of `slot`: its input, or that its session ended.
@@ -115,6 +135,14 @@ pub(crate) fn composer(
     }
     let input = model.composers.get(&slot)?;
     let dispatch = ShellModel::dispatch(cx);
+    let browsing: Browsing = {
+        let model = cx.weak_entity();
+        Rc::new(move |cx| {
+            model
+                .upgrade()
+                .is_some_and(|model| model.read(cx).shell.browsing(slot))
+        })
+    };
     let theme = cx.theme();
     let muted = theme.muted_foreground;
     let line = model
@@ -143,7 +171,7 @@ pub(crate) fn composer(
         v_flex()
             .w_full()
             .gap_1()
-            .child(input_box(slot, input, dispatch))
+            .child(input_box(slot, input, dispatch, browsing))
             .child(
                 h_flex()
                     .gap_2()
@@ -197,7 +225,7 @@ fn ended(model: &ShellModel, slot: SlotId, cx: &mut Context<ShellModel>) -> AnyE
 
 #[cfg(test)]
 mod tests {
-    use std::cell::RefCell;
+    use std::cell::{Cell, RefCell};
     use std::rc::Rc;
     use std::sync::Arc;
 
@@ -209,7 +237,7 @@ mod tests {
     use closta_shell::slot::{SlotId, SlotLaunch};
     use closta_shell::state::{Ports, ShellAction, ShellState};
     use futures_lite::future;
-    use gpui_kit::component::input::TextareaState;
+    use gpui_kit::component::input::{Position, TextareaState};
     use gpui_kit::test::TestWindowExt as _;
     // Named one by one: the glob would bring in a `test` that hides the built-in attribute.
     use gpui_kit::{
@@ -218,7 +246,7 @@ mod tests {
         WindowOptions, div, open_window, px, size,
     };
 
-    use super::{Dispatch, input_box, new_input};
+    use super::{Browsing, Dispatch, input_box, new_input};
 
     /// A machine with nothing on it, and a planner that never plans.
     struct Nothing;
@@ -282,26 +310,49 @@ mod tests {
         slot: SlotId,
         input: Entity<TextareaState>,
         dispatch: Dispatch,
+        browsing: Browsing,
         _changes: Subscription,
     }
 
     impl Render for Composer {
         fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-            div()
-                .size_full()
-                .child(input_box(self.slot, &self.input, self.dispatch.clone()))
+            div().size_full().child(input_box(
+                self.slot,
+                &self.input,
+                self.dispatch.clone(),
+                self.browsing.clone(),
+            ))
         }
     }
 
     type Acted = Rc<RefCell<Vec<ShellAction>>>;
 
-    /// A window with one focused input whose actions are kept in the list.
+    /// A window with one focused input whose actions are kept in the list, and the switch that
+    /// says whether the shell is browsing the history.
     fn open(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<TextareaState>, SlotId, Acted) {
+        let (handle, input, slot, acted, _) = open_browsing(cx);
+        (handle, input, slot, acted)
+    }
+
+    fn open_browsing(
+        cx: &mut TestAppContext,
+    ) -> (
+        AnyWindowHandle,
+        Entity<TextareaState>,
+        SlotId,
+        Acted,
+        Rc<Cell<bool>>,
+    ) {
         cx.update(gpui_kit::init);
         let slot = a_slot();
         let acted = Acted::default();
         let kept = Rc::clone(&acted);
         let dispatch: Dispatch = Rc::new(move |action, _, _| kept.borrow_mut().push(action));
+        let switch = Rc::new(Cell::new(false));
+        let browsing: Browsing = {
+            let switch = Rc::clone(&switch);
+            Rc::new(move |_| switch.get())
+        };
         let (handle, view) = cx
             .update(|cx| {
                 let bounds = Bounds {
@@ -318,6 +369,7 @@ mod tests {
                         slot,
                         input,
                         dispatch,
+                        browsing,
                         _changes: changes,
                     })
                 })
@@ -329,7 +381,7 @@ mod tests {
             window.render_frame(cx);
         })
         .expect("focus the input");
-        (handle, input, slot, acted)
+        (handle, input, slot, acted, switch)
     }
 
     fn sends(acted: &Acted, slot: SlotId) -> usize {
@@ -363,6 +415,102 @@ mod tests {
         cx.run_until_parked();
         assert_eq!(sends(&acted, slot), 1);
         assert_eq!(input.read_with(cx, |state, _| state.value()), "hello\nx");
+    }
+
+    fn count(acted: &Acted, wanted: &ShellAction) -> usize {
+        acted
+            .borrow()
+            .iter()
+            .filter(|action| *action == wanted)
+            .count()
+    }
+
+    /// One line long enough to wrap in the 600 px window.
+    fn long_line() -> String {
+        "wrap ".repeat(80).trim_end().to_owned()
+    }
+
+    /// Fills the input with `text`, puts the cursor at `at` and lays the box out.
+    fn fill_at(
+        cx: &mut TestAppContext,
+        handle: AnyWindowHandle,
+        input: &Entity<TextareaState>,
+        text: &str,
+        at: Position,
+    ) {
+        cx.update_window(handle, |_, window, cx| {
+            input.update(cx, |state, cx| {
+                state.set_value(text, window, cx);
+                state.set_cursor_position(at, window, cx);
+            });
+            window.render_frame(cx);
+        })
+        .expect("fill the input");
+        cx.run_until_parked();
+    }
+
+    fn rows(cx: &mut TestAppContext, input: &Entity<TextareaState>) -> usize {
+        input.read_with(cx, |state, _| state.display_map().wrap_row_count())
+    }
+
+    fn cursor(cx: &mut TestAppContext, input: &Entity<TextareaState>) -> usize {
+        input.read_with(cx, |state, _| state.cursor())
+    }
+
+    fn press(cx: &mut TestAppContext, handle: AnyWindowHandle, key: &str) {
+        cx.update_window(handle, |_, window, cx| window.press(key, cx))
+            .expect("press a key");
+        cx.run_until_parked();
+    }
+
+    #[gpui_kit::test]
+    fn down_in_a_wrapped_draft_moves_the_cursor_when_not_browsing(cx: &mut TestAppContext) {
+        let (handle, input, slot, acted) = open(cx);
+        fill_at(cx, handle, &input, &long_line(), Position::new(0, 0));
+        assert!(rows(cx, &input) > 1, "the line wraps");
+        press(cx, handle, "down");
+        assert_eq!(count(&acted, &ShellAction::HistoryNext { slot }), 0);
+        assert!(cursor(cx, &input) > 0, "the cursor went down a row");
+
+        // On the last row of a draft of several lines, ↓ is still the input's own.
+        let end = Position::new(1, 1);
+        fill_at(cx, handle, &input, "a\nb", end);
+        press(cx, handle, "down");
+        assert_eq!(count(&acted, &ShellAction::HistoryNext { slot }), 0);
+    }
+
+    #[gpui_kit::test]
+    fn down_on_the_last_row_while_browsing_asks_for_the_next_send(cx: &mut TestAppContext) {
+        let (handle, input, slot, acted, browsing) = open_browsing(cx);
+        browsing.set(true);
+        fill_at(cx, handle, &input, "a\nb", Position::new(0, 0));
+        press(cx, handle, "down");
+        assert_eq!(
+            count(&acted, &ShellAction::HistoryNext { slot }),
+            0,
+            "from the first line ↓ moves the cursor"
+        );
+        press(cx, handle, "down");
+        assert_eq!(count(&acted, &ShellAction::HistoryNext { slot }), 1);
+    }
+
+    #[gpui_kit::test]
+    fn up_in_an_empty_box_asks_for_the_previous_send(cx: &mut TestAppContext) {
+        let (handle, _, slot, acted) = open(cx);
+        press(cx, handle, "up");
+        assert_eq!(count(&acted, &ShellAction::HistoryPrev { slot }), 1);
+    }
+
+    #[gpui_kit::test]
+    fn up_below_the_first_row_of_a_wrapped_line_moves_the_cursor(cx: &mut TestAppContext) {
+        let (handle, input, slot, acted) = open(cx);
+        let text = long_line();
+        let end = Position::new(0, u32::try_from(text.len()).expect("short"));
+        fill_at(cx, handle, &input, &text, end);
+        assert!(rows(cx, &input) > 1, "the line wraps");
+        press(cx, handle, "up");
+        assert_eq!(count(&acted, &ShellAction::HistoryPrev { slot }), 0);
+        assert!(cursor(cx, &input) < text.len(), "the cursor went up a row");
     }
 
     #[gpui_kit::test]
