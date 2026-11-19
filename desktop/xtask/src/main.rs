@@ -4,6 +4,7 @@ mod capture;
 mod check;
 mod layers;
 mod perf_log;
+mod real;
 mod scenes;
 mod win;
 
@@ -113,6 +114,13 @@ fn main() -> ExitCode {
                 }
             }
         }
+        "win-real" => match real::win_real(&desktop_root()) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(err) => {
+                eprintln!("{err:#}");
+                ExitCode::FAILURE
+            }
+        },
         "win-shot" => {
             let which = std::env::args().nth(2).unwrap_or_default();
             let chosen = if which == "all" {

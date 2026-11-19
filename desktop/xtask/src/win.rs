@@ -314,7 +314,7 @@ pub fn scene_args(scene: PerfScene) -> Vec<String> {
 }
 
 /// A PowerShell single-quoted string.
-fn quoted(text: &str) -> String {
+pub(crate) fn quoted(text: &str) -> String {
     format!("'{}'", text.replace('\'', "''"))
 }
 
