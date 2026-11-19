@@ -218,6 +218,7 @@ fn slot_row(
     let (glyph, color) = match summary.mark {
         SlotMark::Starting => ("○", theme.muted_foreground),
         SlotMark::Working => ("●", theme.info),
+        SlotMark::Waiting => ("⚠", theme.warning),
         SlotMark::Ready => ("●", theme.success),
         SlotMark::Ended => ("○", theme.muted_foreground),
         SlotMark::Failed => ("●", theme.danger),

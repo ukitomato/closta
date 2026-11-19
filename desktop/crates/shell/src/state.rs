@@ -1,12 +1,14 @@
 //! What the window holds: the open slots and their rows, the selected slot, the panes, and
 //! which rows were opened or closed by hand.
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use async_channel::Receiver;
 use closta_presenter::composer_state::composer_state;
 use closta_presenter::rows::{ThreadRow, ThreadRows};
+use closta_presenter::session::SessionView;
+use closta_presenter::sessions::groups::{SessionAlert, alerts_between, waiting_alerts};
 use closta_presenter::thread_running::thread_is_running;
 use closta_session::log::SessionLog;
 use closta_session::runtime::{SessionConfig, SessionRuntime};
@@ -17,13 +19,16 @@ use crate::closing::{CloseQuestion, CloseRun, CloseStage};
 use crate::composer::Composer;
 use crate::copy;
 use crate::header::AppHeader;
+use crate::needs_you::{NeedsYouRow, SlotNeeds, attention, needs_you_rows};
 use crate::new_session::{
     LaunchChecks, NewSessionDialog, PlannerFor, Problem, RecentFolders, Runtime, default_folder,
     launch_in, quick_problem, runtime_of,
 };
 use crate::panes::{Pane, Panes};
 use crate::rows::{RowChange, row_changes};
-use crate::slot::{Relaunch, SlotId, SlotLaunch, SlotSummary, Spawn, mark_of};
+use crate::slot::{
+    MAX_LIVE_SLOTS, Relaunch, SlotId, SlotLaunch, SlotSummary, Spawn, counts_as_live, mark_of,
+};
 use crate::watch::SlotWatch;
 
 /// What a click or a key asks of the shell.
@@ -47,6 +52,9 @@ pub enum ShellAction {
     RequestClose,
     ConfirmClose,
     CancelClose,
+    CloseSlot { slot: SlotId },
+    ConfirmCloseSlot,
+    CancelCloseSlot,
 }
 
 /// What the machine is asked: the checks of the New Session dialog and the planner a folder
@@ -78,6 +86,8 @@ pub struct Acted {
     pub folder: bool,
     /// The steps that close the window are to run.
     pub close: bool,
+    /// The slot that was closed and is gone.
+    pub removed: Option<SlotId>,
 }
 
 /// What the composer's second line shows of the session.
@@ -96,6 +106,12 @@ pub struct Refresh {
     /// Whether an approval waits.
     pub waiting: bool,
     pub changes: Vec<RowChange>,
+    /// The ids of the requests that began to wait; a finished turn is not one.
+    pub raised: Vec<String>,
+    /// Whether something new waits or the session just failed.
+    pub attention: bool,
+    /// Whether the slot was being closed and its run has returned: it is gone.
+    pub removed: bool,
 }
 
 /// One slot: its current session and what the last refresh read of it.
@@ -120,6 +136,25 @@ struct Slot {
     working_directory: Option<String>,
     line: Option<ComposerLine>,
     compacting: bool,
+    /// The view the last refresh read; `None` before the first and after a replace.
+    last: Option<SessionView>,
+    /// What a running session waits for, in arrival order, with when each was first seen.
+    waits: Vec<(SessionAlert, i64)>,
+    /// When the session was first seen failed.
+    failed_since: Option<i64>,
+    /// Whether the session was told to end and the slot goes once its run has returned.
+    closing: bool,
+}
+
+impl Slot {
+    /// Whether a running session works or waits on an approval.
+    fn is_working(&self) -> bool {
+        matches!(self.status, SessionStatus::Running { .. }) && (self.running || self.waiting)
+    }
+
+    fn is_live(&self) -> bool {
+        self.closing || counts_as_live(&self.status)
+    }
 }
 
 /// The runs that have not returned, by session id: with the handle to kill their processes and
@@ -139,6 +174,8 @@ pub struct ShellState {
     panes: Panes,
     runs: Runs,
     closing: CloseStage,
+    slot_close: Option<(SlotId, CloseQuestion)>,
+    shown_title: Option<String>,
 }
 
 impl ShellState {
@@ -161,6 +198,8 @@ impl ShellState {
             panes: Panes::default(),
             runs: Runs::default(),
             closing: CloseStage::Open,
+            slot_close: None,
+            shown_title: None,
         }
     }
 
@@ -196,6 +235,10 @@ impl ShellState {
                 working_directory,
                 line: None,
                 compacting: false,
+                last: None,
+                waits: Vec::new(),
+                failed_since: None,
+                closing: false,
             },
         );
         self.selected.get_or_insert(id);
@@ -228,6 +271,9 @@ impl ShellState {
         held.status = SessionStatus::Starting;
         held.running = false;
         held.waiting = false;
+        held.last = None;
+        held.waits.clear();
+        held.failed_since = None;
         let emptied = std::mem::take(&mut held.rows).len();
         Some(if emptied == 0 {
             Vec::new()
@@ -311,6 +357,7 @@ impl ShellState {
                 id: *id,
                 title: slot.title.clone(),
                 mark: mark_of(&slot.status, slot.running, slot.waiting),
+                closing: slot.closing,
             })
             .collect()
     }
@@ -369,7 +416,7 @@ impl ShellState {
 
     /// Reads the slot's current session again, if it is still the one of `generation`, and
     /// returns where it is and how its rows changed.
-    pub fn refresh(&mut self, slot: SlotId, generation: u64) -> Option<Refresh> {
+    pub fn refresh(&mut self, slot: SlotId, generation: u64, now_ms: i64) -> Option<Refresh> {
         let held = self.slots.get_mut(&slot)?;
         if held.generation != generation {
             return None;
@@ -380,25 +427,142 @@ impl ShellState {
         let changes = row_changes(&held.rows, &rows);
         let waiting = !view.conversation.pending_approvals.is_empty();
         // An open turn is never folded closed when the process ends: only a live session runs.
-        let running = matches!(status, SessionStatus::Running { .. })
-            && !waiting
-            && thread_is_running(&view.conversation, &view.transcript);
+        let live = matches!(status, SessionStatus::Running { .. });
+        let running = live && !waiting && thread_is_running(&view.conversation, &view.transcript);
         let composing = composer_state(&view.conversation, &view.transcript);
         held.line = Some(ComposerLine {
             mode: composing.mode,
             model: composing.model.label,
         });
         held.compacting = view.transcript.operations.compacting;
+
+        let mut change = alerts_between(
+            held.last
+                .as_ref()
+                .map(|it| (&it.conversation, &*it.transcript)),
+            (&view.conversation, &*view.transcript),
+        );
+        if !live {
+            // What an ended session left waiting is gone with its process.
+            change
+                .raised
+                .retain(|it| matches!(it, SessionAlert::Finished(_)));
+        }
+        let raised = change
+            .raised
+            .iter()
+            .filter_map(|it| match it {
+                SessionAlert::Permission(alert) => Some(alert.request_id.clone()),
+                SessionAlert::OpenOnly(alert) => Some(alert.request_id.clone()),
+                SessionAlert::Finished(_) => None,
+            })
+            .collect();
+        let was_failed = matches!(held.status, SessionStatus::Failed(_));
+        let failed = matches!(status, SessionStatus::Failed(_));
+        let newly_failed = failed && !was_failed;
+        let seen: HashMap<String, i64> = held
+            .waits
+            .iter()
+            .filter_map(|(alert, at)| Some((request_of(alert)?.to_owned(), *at)))
+            .collect();
+        held.waits = if live {
+            waiting_alerts(&view.conversation, &view.transcript)
+                .into_iter()
+                .map(|alert| {
+                    let at = request_of(&alert)
+                        .and_then(|id| seen.get(id).copied())
+                        .unwrap_or(now_ms);
+                    (alert, at)
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        held.failed_since = failed.then(|| held.failed_since.unwrap_or(now_ms));
+        held.last = Some(view);
         held.rows = rows;
         held.status = status.clone();
         held.running = running;
         held.waiting = waiting;
+        let removed = held.closing && held.finished.is_closed();
+        if removed {
+            self.remove(slot);
+        }
         Some(Refresh {
             status,
             running,
             waiting,
             changes,
+            raised,
+            attention: attention(&change, newly_failed),
+            removed,
         })
+    }
+
+    /// Takes the slot out; the one selected gives way to the first that is left.
+    fn remove(&mut self, slot: SlotId) {
+        self.slots.remove(&slot);
+        if self.selected == Some(slot) {
+            self.selected = self.slots.keys().next().copied();
+        }
+        if self.slot_close.is_some_and(|(asked, _)| asked == slot) {
+            self.slot_close = None;
+        }
+    }
+
+    /// What waits for the user, one row a slot, the oldest first. A slot that is being closed
+    /// shows nothing.
+    pub fn needs_you(&self) -> Vec<NeedsYouRow> {
+        let slots: Vec<SlotNeeds> = self
+            .slots
+            .iter()
+            .filter(|(_, held)| !held.closing)
+            .map(|(id, held)| SlotNeeds {
+                slot: *id,
+                title: held.title.clone(),
+                waits: held.waits.clone(),
+                failed: self
+                    .failure(*id)
+                    .zip(held.failed_since)
+                    .map(|((title, _), at)| (title, at)),
+            })
+            .collect();
+        needs_you_rows(&slots)
+    }
+
+    /// How many requests the listed slots wait on, for the window's title.
+    pub fn waiting_count(&self) -> usize {
+        self.slots
+            .values()
+            .filter(|held| !held.closing)
+            .map(|held| held.waits.len())
+            .sum()
+    }
+
+    /// The window's title if it differs from the one this last returned; the first call
+    /// always returns one.
+    pub fn title_change(&mut self) -> Option<String> {
+        let title = copy::window_title(&self.header.title, self.waiting_count());
+        if self.shown_title.as_ref() == Some(&title) {
+            return None;
+        }
+        self.shown_title = Some(title.clone());
+        Some(title)
+    }
+
+    /// Whether as many slots as may hold a session do; a slot that is closing still does.
+    pub fn slots_full(&self) -> bool {
+        self.slots.values().filter(|it| it.is_live()).count() >= MAX_LIVE_SLOTS
+    }
+
+    /// Whether the slot could be restarted but for the limit.
+    pub fn restart_blocked(&self, slot: SlotId) -> bool {
+        self.restartable(slot) && self.slots_full()
+    }
+
+    /// The slot being asked about before it is closed, and what is at stake.
+    pub fn slot_close(&self) -> Option<(SlotId, CloseQuestion)> {
+        self.slot_close
     }
 
     /// The slot's draft; empty for a slot that is not there.
@@ -451,10 +615,16 @@ impl ShellState {
             .is_some_and(|it| it.status == SessionStatus::Ended)
     }
 
-    /// Whether a Restart is on offer: the session ended or failed and can be made again.
+    /// Whether a Restart is on offer: the session ended or failed, can be made again and
+    /// there is room for it.
     pub fn can_restart(&self, slot: SlotId) -> bool {
+        self.restartable(slot) && !self.slots_full()
+    }
+
+    fn restartable(&self, slot: SlotId) -> bool {
         self.slots.get(&slot).is_some_and(|it| {
             it.relaunch.is_some()
+                && !it.closing
                 && matches!(it.status, SessionStatus::Ended | SessionStatus::Failed(_))
         })
     }
@@ -505,6 +675,9 @@ impl ShellState {
                     | ShellAction::OpenNewSession
                     | ShellAction::FolderChecked { .. }
                     | ShellAction::Send { .. }
+                    | ShellAction::CloseSlot { .. }
+                    | ShellAction::ConfirmCloseSlot
+                    | ShellAction::CancelCloseSlot
             )
         {
             return Acted::default();
@@ -560,6 +733,15 @@ impl ShellState {
             ShellAction::FolderChecked { folder, exists } => self.folder_checked(&folder, exists),
             ShellAction::RequestClose => self.request_close(),
             ShellAction::ConfirmClose => self.begin_close(),
+            ShellAction::CloseSlot { slot } => self.close_slot(slot),
+            ShellAction::ConfirmCloseSlot => match self.slot_close.take() {
+                Some((slot, _)) => self.begin_close_slot(slot),
+                None => Acted::default(),
+            },
+            ShellAction::CancelCloseSlot => {
+                self.slot_close = None;
+                Acted::default()
+            }
             ShellAction::CancelClose => {
                 if matches!(self.closing, CloseStage::Asking(_)) {
                     self.closing = CloseStage::Open;
@@ -569,12 +751,51 @@ impl ShellState {
         }
     }
 
+    /// Asks before closing a slot that works or holds a draft; closes one that does not.
+    fn close_slot(&mut self, slot: SlotId) -> Acted {
+        // One overlay at a time: the window's question stands, and a slot closes once.
+        if self.closing != CloseStage::Open || self.slot_close.is_some() {
+            return Acted::default();
+        }
+        let Some(held) = self.slots.get(&slot).filter(|it| !it.closing) else {
+            return Acted::default();
+        };
+        let question = CloseQuestion {
+            working: usize::from(held.is_working()),
+            drafts: usize::from(held.composer.has_draft()),
+        };
+        if question.working == 0 && question.drafts == 0 {
+            return self.begin_close_slot(slot);
+        }
+        self.slot_close = Some((slot, question));
+        Acted::default()
+    }
+
+    /// Tells the slot's session to end; the slot goes at once if its run has returned, else with
+    /// the refresh that sees it return.
+    fn begin_close_slot(&mut self, slot: SlotId) -> Acted {
+        let Some(held) = self.slots.get_mut(&slot).filter(|it| !it.closing) else {
+            return Acted::default();
+        };
+        held.runtime.close();
+        held.closing = true;
+        if !held.finished.is_closed() {
+            return Acted::default();
+        }
+        self.remove(slot);
+        Acted {
+            removed: Some(slot),
+            ..Acted::default()
+        }
+    }
+
     fn request_close(&mut self) -> Acted {
+        self.slot_close = None;
         if self.closing != CloseStage::Open {
             return Acted::default();
         }
         let question = CloseQuestion {
-            working: self.slots.values().filter(|it| it.running).count(),
+            working: self.slots.values().filter(|it| it.is_working()).count(),
             drafts: self
                 .slots
                 .values()
@@ -681,6 +902,9 @@ impl ShellState {
     }
 
     fn start_session(&mut self, folder: String) -> Acted {
+        if self.slots_full() {
+            return Acted::default();
+        }
         let Some(dialog) = self.dialog.as_mut() else {
             return Acted::default();
         };
@@ -701,6 +925,9 @@ impl ShellState {
     }
 
     fn folder_checked(&mut self, folder: &str, exists: bool) -> Acted {
+        if self.slots_full() {
+            return Acted::default();
+        }
         let Some(dialog) = self.dialog.as_mut() else {
             return Acted::default();
         };
@@ -728,4 +955,13 @@ fn lock(
     runs: &Runs,
 ) -> std::sync::MutexGuard<'_, BTreeMap<String, (SessionRuntime, Receiver<()>)>> {
     runs.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// The request an alert waits on; a finished turn has none.
+fn request_of(alert: &SessionAlert) -> Option<&str> {
+    match alert {
+        SessionAlert::Permission(it) => Some(&it.request_id),
+        SessionAlert::OpenOnly(it) => Some(&it.request_id),
+        SessionAlert::Finished(_) => None,
+    }
 }

@@ -55,6 +55,7 @@ pub struct SlotLaunch {
 pub enum SlotMark {
     Starting,
     Working,
+    Waiting,
     Ready,
     Ended,
     Failed,
@@ -62,11 +63,13 @@ pub enum SlotMark {
 }
 
 /// The mark of a slot in `status` whose thread is `running` and which is `waiting` on an
-/// approval: a running session works while its turn runs and no approval waits.
+/// approval: a running session waits while an approval waits, and works while its turn runs
+/// with none.
 pub fn mark_of(status: &SessionStatus, running: bool, waiting: bool) -> SlotMark {
     match status {
         SessionStatus::Starting => SlotMark::Starting,
-        SessionStatus::Running { .. } if running && !waiting => SlotMark::Working,
+        SessionStatus::Running { .. } if waiting => SlotMark::Waiting,
+        SessionStatus::Running { .. } if running => SlotMark::Working,
         SessionStatus::Running { .. } => SlotMark::Ready,
         SessionStatus::Ended => SlotMark::Ended,
         SessionStatus::Failed(_) => SlotMark::Failed,
@@ -80,11 +83,38 @@ pub struct SlotSummary {
     pub id: SlotId,
     pub title: String,
     pub mark: SlotMark,
+    /// Whether the slot is being closed: its session was told to end and its run has not
+    /// returned.
+    pub closing: bool,
+}
+
+/// How many slots may hold a live session at once.
+pub const MAX_LIVE_SLOTS: usize = 8;
+
+/// Whether a session in `status` counts against [`MAX_LIVE_SLOTS`]: one that has not ended.
+pub fn counts_as_live(status: &SessionStatus) -> bool {
+    matches!(
+        status,
+        SessionStatus::Starting | SessionStatus::Running { .. }
+    )
 }
 
 #[cfg(test)]
 mod tests {
-    use super::SlotId;
+    use closta_session::status::SessionStatus;
+
+    use super::{SlotId, SlotMark, mark_of};
+
+    #[test]
+    fn a_running_slot_that_waits_is_marked_waiting() {
+        let running = SessionStatus::Running {
+            version: "2.1.282".into(),
+        };
+        assert_eq!(mark_of(&running, false, true), SlotMark::Waiting);
+        assert_eq!(mark_of(&running, true, true), SlotMark::Waiting);
+        assert_eq!(mark_of(&running, true, false), SlotMark::Working);
+        assert_eq!(mark_of(&running, false, false), SlotMark::Ready);
+    }
 
     #[test]
     fn a_slot_id_shows_as_its_number() {

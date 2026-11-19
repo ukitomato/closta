@@ -2,6 +2,8 @@
 //! Closing the window over sessions made of in-memory processes: when it asks, how it waits for
 //! every run (a replaced one too), and the kill that ends a close that does not end.
 
+#[path = "../../providers/tests/common/mod.rs"]
+mod common;
 mod support;
 
 use std::sync::Arc;

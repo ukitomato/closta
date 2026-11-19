@@ -184,7 +184,7 @@ impl ShellModel {
         cx: &mut Context<Self>,
     ) {
         let began = Instant::now();
-        let Some(refresh) = self.shell.refresh(slot, generation) else {
+        let Some(refresh) = self.shell.refresh(slot, generation, 0) else {
             return;
         };
         self.probe_settled(window, cx);
@@ -323,6 +323,7 @@ impl ShellModel {
             check,
             folder,
             close,
+            removed: _,
         } = self.shell.act(action);
         // A restarted slot's rows are new: the text states of the old ones are let go.
         if let Some(slot) = started.filter(|slot| self.scrollers.contains_key(slot)) {
