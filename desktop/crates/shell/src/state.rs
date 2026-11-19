@@ -2,7 +2,7 @@
 //! which rows were opened or closed by hand.
 
 use std::collections::{BTreeMap, HashSet};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, PoisonError};
 
 use async_channel::Receiver;
 use closta_presenter::composer_state::composer_state;
@@ -14,6 +14,7 @@ use closta_session::runtime::{SessionConfig, SessionRuntime};
 use closta_session::status::{SessionFailure, SessionStatus};
 use futures_lite::future;
 
+use crate::closing::{CloseQuestion, CloseRun, CloseStage};
 use crate::composer::Composer;
 use crate::copy;
 use crate::header::AppHeader;
@@ -44,6 +45,9 @@ pub enum ShellAction {
     CancelNewSession,
     StartSession { folder: String },
     FolderChecked { folder: String, exists: bool },
+    RequestClose,
+    ConfirmClose,
+    CancelClose,
 }
 
 /// What the machine is asked: the checks of the New Session dialog and the planner a folder
@@ -166,6 +170,10 @@ struct Slot {
     compacting: bool,
 }
 
+/// The runs that have not returned, by session id: with the handle to kill their processes and
+/// the receiver that closes when the run has returned. A replaced session stays here until then.
+type Runs = Arc<Mutex<BTreeMap<String, (SessionRuntime, Receiver<()>)>>>;
+
 pub struct ShellState {
     header: AppHeader,
     spawn: Spawn,
@@ -177,6 +185,8 @@ pub struct ShellState {
     slots: BTreeMap<SlotId, Slot>,
     selected: Option<SlotId>,
     panes: Panes,
+    runs: Runs,
+    closing: CloseStage,
 }
 
 impl ShellState {
@@ -197,6 +207,8 @@ impl ShellState {
             slots: BTreeMap::new(),
             selected: None,
             panes: Panes::default(),
+            runs: Runs::default(),
+            closing: CloseStage::Open,
         }
     }
 
@@ -240,6 +252,7 @@ impl ShellState {
     /// The rows are emptied: the changes that do it are returned. The rows opened by hand, the
     /// selection, the draft and its history stay.
     pub fn replace(&mut self, slot: SlotId, launch: SlotLaunch) -> Option<Vec<RowChange>> {
+        // The old runtime stays in `runs` until its run has returned.
         self.slots.get(&slot)?.runtime.close();
         let title = launch.title.clone();
         let relaunch = launch.relaunch.clone();
@@ -282,14 +295,56 @@ impl ShellState {
         );
         let (runtime, run) = SessionRuntime::new(config);
         let (done, finished) = async_channel::bounded::<()>(1);
+        lock(&self.runs).insert(id.clone(), (runtime.clone(), finished.clone()));
+        let runs = Arc::clone(&self.runs);
         (self.spawn)(Box::pin(async move {
             run.await;
+            lock(&runs).remove(&id);
             drop(done);
         }));
         if let Some(companion) = launch.companion {
             (self.spawn)(companion(runtime.clone()));
         }
         (runtime, finished)
+    }
+
+    /// How many runs have not returned, those of replaced sessions included.
+    pub fn live_runs(&self) -> usize {
+        lock(&self.runs).len()
+    }
+
+    pub fn close_stage(&self) -> &CloseStage {
+        &self.closing
+    }
+
+    /// Closes every slot's session. The run is over once every run that has not returned has,
+    /// those of replaced sessions too; `destroy` kills the processes of those still left.
+    pub fn close_all(&mut self) -> CloseRun {
+        for held in self.slots.values() {
+            held.runtime.close();
+        }
+        let waits: Vec<Receiver<()>> = lock(&self.runs)
+            .values()
+            .map(|(_, finished)| finished.clone())
+            .collect();
+        let runs = Arc::clone(&self.runs);
+        CloseRun {
+            returned: Box::pin(async move {
+                for finished in waits {
+                    // Nothing is ever sent: the receiver closes when the run has returned.
+                    _ = finished.recv().await;
+                }
+            }),
+            destroy: Box::new(move || {
+                let left: Vec<SessionRuntime> = lock(&runs)
+                    .values()
+                    .map(|(runtime, _)| runtime.clone())
+                    .collect();
+                for runtime in left {
+                    runtime.destroy_now();
+                }
+            }),
+        }
     }
 
     /// The slots in the order they were opened.
@@ -506,6 +561,45 @@ impl ShellState {
             }
             ShellAction::StartSession { folder } => self.start_session(folder),
             ShellAction::FolderChecked { folder, exists } => self.folder_checked(&folder, exists),
+            ShellAction::RequestClose => self.request_close(),
+            ShellAction::ConfirmClose => self.begin_close(),
+            ShellAction::CancelClose => {
+                if matches!(self.closing, CloseStage::Asking(_)) {
+                    self.closing = CloseStage::Open;
+                }
+                Acted::default()
+            }
+        }
+    }
+
+    fn request_close(&mut self) -> Acted {
+        if self.closing != CloseStage::Open {
+            return Acted::default();
+        }
+        let question = CloseQuestion {
+            working: self.slots.values().filter(|it| it.running).count(),
+            drafts: self
+                .slots
+                .values()
+                .filter(|it| it.composer.has_draft())
+                .count(),
+        };
+        if question.working == 0 && question.drafts == 0 {
+            return self.begin_close();
+        }
+        self.closing = CloseStage::Asking(question);
+        Acted::default()
+    }
+
+    /// Enters the closing stage from Open or Asking; from the closing stage it does nothing.
+    fn begin_close(&mut self) -> Acted {
+        if self.closing == CloseStage::Closing {
+            return Acted::default();
+        }
+        self.closing = CloseStage::Closing;
+        Acted {
+            close: true,
+            ..Acted::default()
         }
     }
 
@@ -628,4 +722,10 @@ impl ShellState {
             ..Acted::default()
         }
     }
+}
+
+fn lock(
+    runs: &Runs,
+) -> std::sync::MutexGuard<'_, BTreeMap<String, (SessionRuntime, Receiver<()>)>> {
+    runs.lock().unwrap_or_else(PoisonError::into_inner)
 }

@@ -1013,6 +1013,7 @@ name = "closta-shell"
 version = "0.1.0"
 dependencies = [
  "async-channel",
+ "async-io",
  "blocking",
  "closta-core",
  "closta-model",
