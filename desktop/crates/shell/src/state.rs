@@ -912,7 +912,13 @@ impl ShellState {
                 request_id,
                 now_ms,
             } => {
-                if let Some(card) = self.card_mut(slot, &request_id) {
+                // Only a row that is on show and shows this request counts: the time of a row
+                // behind an overlay or one that shows another request must not start its gate.
+                let shown = self.overlay().is_none()
+                    && self
+                        .row_of(slot)
+                        .is_some_and(|row| row.request_id() == Some(request_id.as_str()));
+                if shown && let Some(card) = self.card_mut(slot, &request_id) {
                     card.list_shown_ms.get_or_insert(now_ms);
                 }
                 Acted::default()
@@ -1055,7 +1061,7 @@ impl ShellState {
         let Some(row) = self.row_of(slot) else {
             return Acted::default();
         };
-        if row.request_id() != Some(request_id) {
+        if row.request_id() != Some(request_id) || !row.may_allow() {
             return Acted::default();
         }
         self.selected = Some(slot);
@@ -1343,7 +1349,9 @@ impl ShellState {
     }
 
     fn request_close(&mut self) -> Acted {
+        // One overlay at a time: the window's question replaces the slot's and the dialog.
         self.slot_close = None;
+        self.dialog = None;
         if self.closing != CloseStage::Open {
             return Acted::default();
         }

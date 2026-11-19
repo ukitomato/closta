@@ -91,6 +91,25 @@ async fn two_waits(
     (slot, control, runtime)
 }
 
+/// One slot whose process plays the first `ask` lines of `fixture` and waits on one request.
+async fn live_waiting(
+    shell: &mut ShellState,
+    harness: &Harness,
+    fixture: &str,
+    ask: usize,
+    n: usize,
+) -> (SlotId, LiveControl) {
+    let (launch, runtime) = harness.launch("slot");
+    let slot = shell.open(launch);
+    let runtime = runtime.recv().await.unwrap();
+    running(&runtime).await;
+    let control = harness.control(n).await;
+    emit_capture(&control, fixture, ask);
+    waits_on(&runtime, 1).await;
+    refresh(shell, slot, 0);
+    (slot, control)
+}
+
 #[test]
 fn allow_from_the_list_waits_half_a_second_after_the_row_showed() {
     drive(|harness| async move {
@@ -150,7 +169,6 @@ fn allow_from_the_list_needs_the_request_the_row_showed() {
         let mut shell = harness.shell();
         let (slot, control, _) = two_waits(&mut shell, &harness, 0).await;
         assert_eq!(shell.needs_you()[0].request_id(), Some("R1"));
-        list_shown(&mut shell, slot, "R2", 0);
         allow_from_list(&mut shell, slot, "R2", 1000);
         quiet().await;
         assert!(answers_of(control.stdin_lines()).is_empty());
@@ -166,22 +184,26 @@ fn allow_from_the_list_needs_the_request_the_row_showed() {
 fn allow_without_a_shown_row_does_nothing() {
     drive(|harness| async move {
         let mut shell = harness.shell();
-        let (slot, control, _) = waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK, 0).await;
+        let (slot, control) = live_waiting(&mut shell, &harness, SANDBOX, SANDBOX_ASK, 0).await;
         allow_from_list(&mut shell, slot, SANDBOX_REQUEST, 100_000);
         card_shown(&mut shell, slot, SANDBOX_REQUEST, 0);
         allow_from_list(&mut shell, slot, SANDBOX_REQUEST, 100_000);
         allow_from_list(&mut shell, slot, "not-a-request", 100_000);
         quiet().await;
         assert!(answers_of(control.stdin_lines()).is_empty());
+        assert_eq!(control.refused_writes(), 0);
     });
 }
 
 #[test]
 fn what_cannot_be_allowed_from_the_list_is_refused() {
     drive(|harness| async move {
-        for (fixture, ask) in [(EDIT, EDIT_ASK), (QUESTION, QUESTION_ASK), (PLAN, PLAN_ASK)] {
+        for (n, (fixture, ask)) in [(EDIT, EDIT_ASK), (QUESTION, QUESTION_ASK), (PLAN, PLAN_ASK)]
+            .into_iter()
+            .enumerate()
+        {
             let mut shell = harness.shell();
-            let (slot, control, _) = waiting_slot(&mut shell, &harness, fixture, ask, 0).await;
+            let (slot, control) = live_waiting(&mut shell, &harness, fixture, ask, n).await;
             let row = shell.needs_you().remove(0);
             assert!(!row.may_allow(), "{fixture}");
             let id = row.request_id().unwrap().to_owned();
@@ -189,6 +211,7 @@ fn what_cannot_be_allowed_from_the_list_is_refused() {
             allow_from_list(&mut shell, slot, &id, 2000);
             quiet().await;
             assert!(answers_of(control.stdin_lines()).is_empty(), "{fixture}");
+            assert_eq!(control.refused_writes(), 0, "{fixture}");
         }
     });
 }
@@ -458,6 +481,38 @@ fn behind(shell: &mut ShellState, slot: SlotId) {
         },
         ShellAction::Interrupt { slot },
         ShellAction::HistoryPrev { slot },
+        ShellAction::HistoryNext { slot },
+        ShellAction::CloseSlot { slot },
+        ShellAction::Restart { slot },
+        ShellAction::SendNote {
+            slot,
+            request_id: SANDBOX_REQUEST.to_owned(),
+        },
+        ShellAction::AnswerQuestion {
+            slot,
+            request_id: SANDBOX_REQUEST.to_owned(),
+        },
+        ShellAction::EditOther {
+            slot,
+            request_id: SANDBOX_REQUEST.to_owned(),
+            question: 0,
+            text: "other".to_owned(),
+        },
+        ShellAction::ToggleOption {
+            slot,
+            request_id: SANDBOX_REQUEST.to_owned(),
+            question: 0,
+            option: 0,
+        },
+        ShellAction::ToggleOther {
+            slot,
+            request_id: SANDBOX_REQUEST.to_owned(),
+            question: 0,
+        },
+        ShellAction::CloseNote {
+            slot,
+            request_id: SANDBOX_REQUEST.to_owned(),
+        },
     ];
     for action in actions {
         let acted = shell.act(action.clone());
@@ -467,6 +522,7 @@ fn behind(shell: &mut ShellState, slot: SlotId) {
         );
     }
     assert_eq!(shell.selected(), before_selected);
+    assert!(shell.slot_close().is_none() || shell.overlay() != Some(Overlay::NewSession));
     assert!(
         shell
             .card_state(slot, SANDBOX_REQUEST)
@@ -498,5 +554,109 @@ fn nothing_acts_behind_a_slot_close_question_or_the_window_one() {
         assert_eq!(shell.overlay(), None);
         allow_from_list(&mut shell, slot, SANDBOX_REQUEST, 1000);
         until(|| answers_of(control.stdin_lines()).len() == 1).await;
+    });
+}
+
+#[test]
+fn a_slot_close_question_holds_back_a_new_session_and_a_start() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (slot, _, _) = waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK, 0).await;
+        shell.act(ShellAction::CloseSlot { slot });
+        assert_eq!(shell.overlay(), Some(Overlay::CloseSlot));
+        let opened = shell.act(ShellAction::OpenNewSession);
+        assert!(!opened.folder);
+        assert!(shell.new_session().is_none());
+        let started = shell.act(ShellAction::StartSession {
+            folder: "x".to_owned(),
+        });
+        assert!(started.check.is_none());
+        assert_eq!(shell.overlay(), Some(Overlay::CloseSlot));
+    });
+}
+
+#[test]
+fn a_late_folder_check_starts_nothing_behind_the_windows_question() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (launch, _) = harness.launch("one");
+        shell.open(launch);
+        shell.act(ShellAction::OpenNewSession);
+        shell.act(ShellAction::EditFolder {
+            text: r"C:\work\proj".to_owned(),
+        });
+        shell.act(ShellAction::StartSession {
+            folder: r"C:\work\proj".to_owned(),
+        });
+        shell.act(ShellAction::EditDraft {
+            slot: shell.selected().unwrap(),
+            text: "draft".to_owned(),
+        });
+        shell.act(ShellAction::RequestClose);
+        assert_eq!(shell.overlay(), Some(Overlay::CloseWindow));
+        assert!(shell.new_session().is_none(), "one overlay at a time");
+        let acted = shell.act(ShellAction::FolderChecked {
+            folder: r"C:\work\proj".to_owned(),
+            exists: true,
+        });
+        assert!(acted.started.is_none());
+        assert_eq!(shell.slots().len(), 1);
+        shell.act(ShellAction::CancelClose);
+        assert_eq!(shell.overlay(), None);
+    });
+}
+
+#[test]
+fn a_row_that_shows_another_request_does_not_start_its_gate() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (slot, control, runtime) = two_waits(&mut shell, &harness, 0).await;
+        list_shown(&mut shell, slot, "R1", 0);
+        list_shown(&mut shell, slot, "R2", 0);
+        assert!(!shell.list_shown(slot, "R2"));
+        allow_from_list(&mut shell, slot, "R1", 600);
+        until(|| answers_of(control.stdin_lines()).len() == 1).await;
+        until(|| runtime.view().conversation.pending_approvals.len() == 1).await;
+        refresh(&mut shell, slot, 700);
+        allow_from_list(&mut shell, slot, "R2", 5000);
+        quiet().await;
+        assert_eq!(answers_of(control.stdin_lines()).len(), 1);
+        assert_eq!(control.refused_writes(), 0);
+    });
+}
+
+#[test]
+fn a_row_behind_an_overlay_does_not_start_its_gate() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (slot, control, _) = waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK, 0).await;
+        shell.act(ShellAction::OpenNewSession);
+        list_shown(&mut shell, slot, SANDBOX_REQUEST, 0);
+        assert!(!shell.list_shown(slot, SANDBOX_REQUEST));
+        shell.act(ShellAction::CancelNewSession);
+        allow_from_list(&mut shell, slot, SANDBOX_REQUEST, 5000);
+        quiet().await;
+        assert!(answers_of(control.stdin_lines()).is_empty());
+        list_shown(&mut shell, slot, SANDBOX_REQUEST, 6000);
+        allow_from_list(&mut shell, slot, SANDBOX_REQUEST, 6500);
+        until(|| answers_of(control.stdin_lines()).len() == 1).await;
+    });
+}
+
+#[test]
+fn deny_from_the_list_needs_a_row_the_list_may_allow() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (slot, _, _) = waiting_slot(&mut shell, &harness, QUESTION, QUESTION_ASK, 0).await;
+        let acted = shell.act(ShellAction::DenyFromList {
+            slot,
+            request_id: QUESTION_REQUEST.to_owned(),
+        });
+        assert!(acted.focus.is_none());
+        assert!(
+            shell
+                .card_state(slot, QUESTION_REQUEST)
+                .is_none_or(|it| !it.note_open)
+        );
     });
 }
