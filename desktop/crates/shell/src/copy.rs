@@ -37,6 +37,11 @@ pub const TOOL_FAILED: &str = "Failed";
 /// A card no one has answered yet (`thread.jump.waiting`).
 pub const CARD_WAITING: &str = "Waiting for your answer";
 
+/// Why the input cannot send right now.
+pub const NOT_RUNNING: &str = "Session is not running";
+pub const SEND_CLOSED: &str = "The session has ended. Restart it to send.";
+pub const SEND_ENCODE: &str = "This message could not be encoded.";
+
 const SECOND_MS: i64 = 1_000;
 const MINUTE_S: i64 = 60;
 const MCP_PREFIX: &str = "mcp__";
