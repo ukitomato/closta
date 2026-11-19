@@ -640,3 +640,28 @@ fn the_summary_and_the_command_output_are_still_no_rows() {
     );
     assert!(!shown.contains("local-command-stdout"), "{shown}");
 }
+
+#[test]
+fn a_send_that_failed_remakes_its_ask_row_with_the_mark() {
+    let view = SessionView::default()
+        .fold(&sent("u1", "first", "c1"))
+        .fold(&sent("u2", "second", "c2"));
+    let mut rows = ThreadRows::default();
+    let before = rows.of(&view.transcript);
+
+    let failed = view.fold(&PresenterInput::SendFailed(
+        SendId::new("u2").expect("a key"),
+    ));
+    let after = rows.of(&failed.transcript);
+
+    assert_eq!(2, after.len());
+    assert!(before[0].same(&after[0]));
+    assert!(!before[1].same(&after[1]));
+    match (&before[1], &after[1]) {
+        (ThreadRow::Ask(old), ThreadRow::Ask(new)) => {
+            assert!(!old.not_sent);
+            assert!(new.not_sent);
+        }
+        other => panic!("not asks: {other:?}"),
+    }
+}

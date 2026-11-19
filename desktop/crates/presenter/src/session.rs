@@ -33,6 +33,7 @@ impl SessionView {
             ),
             PresenterInput::StopRequested
             | PresenterInput::UserSent(_)
+            | PresenterInput::SendFailed(_)
             | PresenterInput::TurnChangesFound(_)
             | PresenterInput::RewindRequested(_)
             | PresenterInput::RewindNotSent(_)

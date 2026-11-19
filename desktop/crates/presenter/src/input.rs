@@ -24,6 +24,8 @@ pub enum PresenterInput {
     /// One stdout line.
     Event(AgentEvent),
     UserSent(UserSent),
+    /// The session refused the message sent as this id: it never reached the CLI.
+    SendFailed(SendId),
     TurnChangesFound(TurnChangesFound),
     RewindRequested(RewindRequested),
     RewindNotSent(RewindNotSent),

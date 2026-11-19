@@ -4,6 +4,7 @@ mod commands;
 mod operations;
 pub mod paths;
 pub mod routing;
+mod sent;
 pub mod sign_in;
 pub mod snapshot;
 mod stop;
@@ -20,9 +21,10 @@ use serde_json::Value;
 use crate::fold::commands::{fold_commands_of_init, fold_commands_of_response};
 use crate::fold::operations::{fold_operation, with_operations};
 use crate::fold::paths::replace_routing;
+use crate::fold::sent::{fold_send_failed, fold_sent};
 use crate::fold::stop::{fold_stop, stop_taken};
 use crate::fold::suggestions::suggestions_of;
-use crate::input::{AnswerFailed, Decided, PresenterInput, UserSent};
+use crate::input::{AnswerFailed, Decided, PresenterInput};
 use crate::json::parse;
 use crate::keyed::{Keyed, of_cli_id};
 use crate::records::composer::fold_answered;
@@ -32,7 +34,7 @@ use crate::records::tasks::fold_background;
 use crate::records::turn_end::with_turn_end;
 use crate::transcript::{
     ApprovalOutcome, ApprovalRecord, CompactionMark, CompactionOutcome, MessageRecord,
-    MessageSource, PartRecord, ResumeEnd, Role, TextRecord, Transcript,
+    MessageSource, ResumeEnd, Role, Transcript,
 };
 
 /// Folds one input into the [`Transcript`]. A pure function that never panics: an event it has
@@ -53,6 +55,7 @@ pub fn fold_transcript(
     match input {
         PresenterInput::Event(event) => fold_event(transcript, event, before, after),
         PresenterInput::UserSent(sent) => fold_sent(transcript, sent),
+        PresenterInput::SendFailed(id) => fold_send_failed(transcript, id),
         PresenterInput::StopRequested => fold_stop(transcript, after),
         PresenterInput::Decided(decided) => fold_decided(transcript, decided, before),
         PresenterInput::AnswerFailed(failed) => fold_answer_failed(transcript, failed, before),
@@ -239,49 +242,6 @@ fn with_mark(transcript: &Arc<Transcript>, outcome: CompactionOutcome) -> Arc<Tr
     Arc::new(Transcript {
         compaction_marks: marks,
         ..(**transcript).clone()
-    })
-}
-
-/// The user's words exist only here: the CLI does not echo them on stdout.
-fn fold_sent(transcript: &Arc<Transcript>, sent: &UserSent) -> Arc<Transcript> {
-    let key = transcript.messages.claim(sent.message_id.as_str());
-    // The files go ahead of the words, as they do to the CLI; their keys are a letter and a
-    // number, the words' is 0.
-    let files = sent
-        .attachments
-        .iter()
-        .enumerate()
-        .fold(Keyed::new(), |parts, (index, file)| {
-            parts.put(
-                format!("{key}:a{index}"),
-                Arc::new(PartRecord::Attachment(file.clone())),
-            )
-        });
-    let parts = files.put(
-        format!("{key}:0"),
-        Arc::new(PartRecord::Text(TextRecord {
-            reasoning: false,
-            text: sent.text.clone(),
-            streaming: false,
-        })),
-    );
-    let message = MessageRecord {
-        key: key.clone(),
-        role: Role::User,
-        source: MessageSource::Sent,
-        parts,
-    };
-    let mut routing = transcript.routing.clone();
-    routing.sends = routing.sends.wrapping_add(1);
-    let user_uuids = match &sent.uuid {
-        Some(uuid) => transcript.user_uuids.update(key.clone(), uuid.clone()),
-        None => transcript.user_uuids.clone(),
-    };
-    Arc::new(Transcript {
-        messages: transcript.messages.put(key, Arc::new(message)),
-        routing,
-        user_uuids,
-        ..Transcript::clone(transcript)
     })
 }
 

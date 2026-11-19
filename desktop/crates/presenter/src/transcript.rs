@@ -64,6 +64,8 @@ pub struct Transcript {
     /// Where each compaction happened, oldest first; unlike `operations.compactions` none is
     /// dropped.
     pub compaction_marks: Vector<CompactionMark>,
+    /// The keys of the user messages the session refused to send.
+    pub not_sent: imbl::HashSet<String>,
 }
 
 /// One compaction as the conversation shows it: after `after`, the key of the last message when

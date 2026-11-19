@@ -94,6 +94,8 @@ pub struct AskRow {
     pub key: String,
     pub text: String,
     pub attachments: Vec<AttachmentRecord>,
+    /// Whether the session refused to send it.
+    pub not_sent: bool,
 }
 
 /// A text block of a reply, as Markdown; the surface splits it into blocks of its own.
@@ -314,7 +316,11 @@ impl ThreadRows {
                     self.carry_parts(message, &mut next_parts);
                     kept.clone()
                 }
-                None => self.rows_of(message, &mut next_parts),
+                None => self.rows_of(
+                    message,
+                    transcript.not_sent.contains(&message.key),
+                    &mut next_parts,
+                ),
             };
             rows.extend(made.iter().cloned());
             next_messages.insert(by_ptr(message), made);
@@ -451,6 +457,7 @@ impl ThreadRows {
     fn rows_of(
         &self,
         message: &MessageRecord,
+        not_sent: bool,
         into: &mut HashMap<ByPtr<PartRecord>, Option<ThreadRow>>,
     ) -> Vec<ThreadRow> {
         if message.role == Role::User {
@@ -474,6 +481,7 @@ impl ThreadRows {
                 key: message.key.clone(),
                 text: words.join("\n"),
                 attachments,
+                not_sent,
             }))];
         }
         let mut rows = Vec::new();

@@ -269,6 +269,41 @@ fn a_sent_message_is_in_the_transcript_before_the_cli_is_told() {
 }
 
 #[test]
+fn a_send_the_session_refuses_is_recorded_as_not_sent() {
+    let store = Arc::new(ConversationStore::default());
+    let commands = commands_on(Arc::new(Failing), &store);
+
+    assert_eq!(
+        Err(SendError::Closed),
+        commands.send_message(send_id("send-1"), "one", &[])
+    );
+
+    let view = store.view();
+    assert!(view.transcript.messages.contains("send-1"));
+    assert!(view.transcript.not_sent.contains("send-1"));
+    assert_eq!(0, view.transcript.routing.sends);
+}
+
+#[test]
+fn a_revoked_send_records_nothing() {
+    let store = Arc::new(ConversationStore::default());
+    let (session, record) = fake();
+    let commands = commands_on(session, &store);
+    commands.revoke();
+
+    assert_eq!(
+        Err(SendError::Closed),
+        commands.send_message(send_id("send-1"), "one", &[])
+    );
+
+    let view = store.view();
+    assert!(view.transcript.messages.is_empty());
+    assert!(view.transcript.not_sent.is_empty());
+    assert_eq!(0, view.transcript.routing.sends);
+    assert!(record.sent().is_empty());
+}
+
+#[test]
 fn an_approval_is_answered_to_the_cli_once_however_often_the_answer_is_given() {
     let store = store_with(&up_to_the_approval("05-permission-can-use-tool"));
     let request_id = the_pending_request(&store);
