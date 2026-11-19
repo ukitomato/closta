@@ -35,7 +35,7 @@ pub fn lines(markdown: &str, session_id: &str) -> Vec<String> {
 
 /// [`lines`] as a replay file's lines, after the user sends "Go on".
 pub fn replay_lines(markdown: &str, session_id: &str) -> Vec<ReplayLine> {
-    let stdout = lines(markdown, session_id)
+    let stdout = super::naming_results(lines(markdown, session_id))
         .into_iter()
         .map(ReplayLine::Stdout)
         .collect();

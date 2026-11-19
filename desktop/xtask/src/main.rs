@@ -3,6 +3,7 @@
 mod capture;
 mod check;
 mod layers;
+mod perf_log;
 mod win;
 
 use std::ffi::OsString;
@@ -82,6 +83,28 @@ fn main() -> ExitCode {
                 win::win_test(&root, &flags.features)
             };
             match result {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(err) => {
+                    eprintln!("{err:#}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
+        "win-perf" => {
+            let mut scenes = Vec::new();
+            for name in std::env::args().skip(2) {
+                match perf_log::PerfScene::from_name(&name) {
+                    Some(scene) => scenes.push(scene),
+                    None => {
+                        eprintln!("win-perf: unknown scene {name:?} (synth, stream or idle)");
+                        return ExitCode::FAILURE;
+                    }
+                }
+            }
+            if scenes.is_empty() {
+                scenes = perf_log::PerfScene::ALL.to_vec();
+            }
+            match win::win_perf(&desktop_root(), &scenes) {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(err) => {
                     eprintln!("{err:#}");

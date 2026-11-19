@@ -950,7 +950,9 @@ dependencies = [
  "closta-presenter",
  "closta-session",
  "closta-shell",
+ "futures-lite",
  "gpui-kit",
+ "windows 0.62.2",
 ]
 
 [[package]]

@@ -1,0 +1,317 @@
+//! Measuring the replay build: the CSV of times and counts (`--perf-log`, `elapsed_ms,metric,value`
+//! with the time since the exe started), the frame times the profiler's journal holds, and the
+//! process's own CPU time and working set. Only raw values are written; `cargo xtask win-perf`
+//! takes the p99s and holds them against the budgets. Nothing but times and counts goes in.
+
+use std::collections::HashSet;
+use std::fs::File;
+use std::io::{self, Write};
+use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
+
+use closta_shell::slot::SlotId;
+#[cfg(feature = "profiler")]
+use gpui_kit::journal::{ForegroundJournalCollector, IntervalBoundary, IntervalSealer};
+
+#[cfg(windows)]
+pub use os::{cpu_time, working_set_bytes};
+
+/// The CSV the measuring run writes, one line at a time.
+pub struct PerfLog {
+    file: File,
+}
+
+impl PerfLog {
+    /// Creates the file and writes its header.
+    pub fn create(path: &Path) -> io::Result<PerfLog> {
+        let mut file = File::create(path)?;
+        file.write_all(b"elapsed_ms,metric,value\n")?;
+        Ok(PerfLog { file })
+    }
+
+    /// Writes one line straight to the file. A failed write is let go: the log never stops the
+    /// app, and a CSV that lacks a value fails its verdict.
+    pub fn record(&mut self, elapsed: Duration, metric: &str, value: f64) {
+        let line = format!("{:.3},{metric},{value}\n", elapsed.as_secs_f64() * 1000.0);
+        _ = self.file.write_all(line.as_bytes());
+    }
+}
+
+/// The frames the profiler's journal saw presented.
+#[cfg(feature = "profiler")]
+struct Frames {
+    collector: ForegroundJournalCollector,
+    sealer: IntervalSealer,
+}
+
+/// One presented frame: when it was on screen, how long from the start of its drawing, and
+/// from when it first became dirty (when the journal knows).
+#[cfg(feature = "profiler")]
+struct Presented {
+    at: Instant,
+    frame: Duration,
+    dirty: Option<Duration>,
+}
+
+#[cfg(feature = "profiler")]
+impl Frames {
+    fn new(cx: &gpui_kit::App) -> Frames {
+        Frames {
+            collector: cx.foreground_journal().collector(),
+            sealer: IntervalSealer::new(Instant::now()),
+        }
+    }
+
+    /// The frames presented since the last call.
+    fn presented(&mut self) -> Vec<Presented> {
+        let drained = self.collector.collect_unseen();
+        self.sealer.note_lost(drained.lost);
+        self.sealer
+            .push_entries(drained.entries)
+            .into_iter()
+            .filter_map(|snapshot| match snapshot.boundary {
+                IntervalBoundary::Presented(presented) => Some(Presented {
+                    at: presented.presentation.present_end,
+                    frame: presented
+                        .presentation
+                        .present_end
+                        .saturating_duration_since(presented.frame.draw_start),
+                    dirty: presented.dirty_to_present_duration(),
+                }),
+                _ => None,
+            })
+            .collect()
+    }
+}
+
+/// Where the idle window starts: the time and the CPU time used so far.
+pub(crate) struct IdleStart {
+    at: Instant,
+    #[cfg(windows)]
+    cpu: Duration,
+}
+
+impl IdleStart {
+    pub(crate) fn now() -> IdleStart {
+        IdleStart {
+            at: Instant::now(),
+            #[cfg(windows)]
+            cpu: cpu_time(),
+        }
+    }
+}
+
+/// Where a measured run stands, and the log it writes to.
+pub(crate) struct Measuring {
+    started: Instant,
+    log: Option<PerfLog>,
+    ready_file: Option<PathBuf>,
+    pub(crate) exit_after: Option<Duration>,
+    pub(crate) scroll_through: bool,
+    /// The slots whose first refresh after every replay ended is still to come; `None` until
+    /// the replays end.
+    awaiting: Option<HashSet<SlotId>>,
+    refreshed: bool,
+    /// The row the scroll through stands at, once it started.
+    pub(crate) scroll_at: Option<usize>,
+    #[cfg(feature = "profiler")]
+    frames: Option<Frames>,
+}
+
+impl Measuring {
+    /// Starts measuring; frames are collected only when there is a log to write them to.
+    pub(crate) fn new(
+        started: Instant,
+        perf_log: Option<&Path>,
+        ready_file: Option<PathBuf>,
+        exit_after: Option<Duration>,
+        scroll_through: bool,
+        cx: &gpui_kit::App,
+    ) -> Measuring {
+        // A log that cannot be made leaves no CSV, which `win-perf` reports.
+        let log = perf_log.and_then(|path| PerfLog::create(path).ok());
+        #[cfg(feature = "profiler")]
+        let frames = log.is_some().then(|| Frames::new(cx));
+        #[cfg(not(feature = "profiler"))]
+        let _ = cx;
+        Measuring {
+            started,
+            log,
+            ready_file,
+            exit_after,
+            scroll_through,
+            awaiting: None,
+            refreshed: false,
+            scroll_at: None,
+            #[cfg(feature = "profiler")]
+            frames,
+        }
+    }
+
+    /// Whether frames are being collected.
+    #[cfg(feature = "profiler")]
+    pub(crate) fn collects_frames(&self) -> bool {
+        self.frames.is_some()
+    }
+
+    /// Whether frames are being collected: never without the profiler.
+    #[cfg(not(feature = "profiler"))]
+    pub(crate) fn collects_frames(&self) -> bool {
+        false
+    }
+
+    /// Writes `metric` at the time now.
+    pub(crate) fn record(&mut self, metric: &str, value: f64) {
+        self.record_at(Instant::now(), metric, value);
+    }
+
+    /// Writes `metric` at the time `at`.
+    fn record_at(&mut self, at: Instant, metric: &str, value: f64) {
+        let elapsed = at.saturating_duration_since(self.started);
+        if let Some(log) = &mut self.log {
+            log.record(elapsed, metric, value);
+        }
+    }
+
+    /// Writes a duration in milliseconds.
+    pub(crate) fn record_ms(&mut self, metric: &str, took: Duration) {
+        self.record(metric, took.as_secs_f64() * 1000.0);
+    }
+
+    /// Every replay ended: from now on, each slot's next refresh is awaited. True when there is
+    /// no slot to await, which leaves the run refreshed at once.
+    pub(crate) fn ready(&mut self, slots: impl IntoIterator<Item = SlotId>) -> bool {
+        self.record("ready", 1.0);
+        let awaiting: HashSet<SlotId> = slots.into_iter().collect();
+        let none = awaiting.is_empty();
+        self.awaiting = Some(awaiting);
+        if none && !self.refreshed {
+            self.refreshed = true;
+            return true;
+        }
+        false
+    }
+
+    /// The slots whose refresh after the replays' end is still to come.
+    pub(crate) fn awaited(&self) -> Vec<SlotId> {
+        self.awaiting.iter().flatten().copied().collect::<Vec<_>>()
+    }
+
+    /// Notes that `slot` refreshed. True once every slot has refreshed after the replays ended,
+    /// and only that once.
+    pub(crate) fn note_refresh(&mut self, slot: SlotId) -> bool {
+        let Some(awaiting) = &mut self.awaiting else {
+            return false;
+        };
+        awaiting.remove(&slot);
+        if self.refreshed || !awaiting.is_empty() {
+            return false;
+        }
+        self.refreshed = true;
+        true
+    }
+
+    /// Whether every slot has refreshed after the replays ended.
+    pub(crate) fn is_refreshed(&self) -> bool {
+        self.refreshed
+    }
+
+    /// Writes `refreshed` and the rows there are, and the ready file for whoever waits on it.
+    pub(crate) fn write_refreshed(&mut self, rows: usize) {
+        self.record("refreshed", 1.0);
+        self.record("rows", rows as f64);
+        if let Some(path) = &self.ready_file {
+            // Whoever waits on it times out on its own when it never appears.
+            _ = std::fs::write(path, b"");
+        }
+    }
+
+    /// Writes the CPU time used since `start` and the wall-clock time it spans.
+    pub(crate) fn record_idle(&mut self, start: IdleStart) {
+        #[cfg(windows)]
+        self.record_ms("idle_cpu_ms", cpu_time().saturating_sub(start.cpu));
+        self.record_ms("idle_wall_ms", start.at.elapsed());
+    }
+
+    /// Writes the working set in MB (10^6 bytes, the larger figure of the two MBs).
+    pub(crate) fn record_working_set(&mut self) {
+        #[cfg(windows)]
+        self.record("working_set_mb", working_set_bytes() as f64 / 1_000_000.0);
+    }
+
+    /// Writes the frames presented since the last call: the time from the start of drawing to
+    /// presented (`frame_ms`), and from dirty to presented (`dirty_ms`, for reference only),
+    /// each at the time it was presented.
+    pub(crate) fn collect(&mut self) {
+        #[cfg(feature = "profiler")]
+        {
+            let Some(frames) = &mut self.frames else {
+                return;
+            };
+            for presented in frames.presented() {
+                self.record_at(
+                    presented.at,
+                    "frame_ms",
+                    presented.frame.as_secs_f64() * 1000.0,
+                );
+                if let Some(dirty) = presented.dirty {
+                    self.record_at(presented.at, "dirty_ms", dirty.as_secs_f64() * 1000.0);
+                }
+            }
+        }
+    }
+}
+
+/// What the process reads of itself from Windows. The only `unsafe` of this crate.
+#[cfg(windows)]
+#[allow(unsafe_code)]
+mod os {
+    use std::time::Duration;
+
+    use windows::Win32::Foundation::FILETIME;
+    use windows::Win32::System::ProcessStatus::{K32GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS};
+    use windows::Win32::System::Threading::{GetCurrentProcess, GetProcessTimes};
+
+    fn ticks(time: FILETIME) -> u64 {
+        (u64::from(time.dwHighDateTime) << 32) | u64::from(time.dwLowDateTime)
+    }
+
+    /// The CPU time this process has used, in the kernel and in user mode; zero when Windows
+    /// does not say.
+    pub fn cpu_time() -> Duration {
+        let (mut created, mut exited, mut kernel, mut user) = Default::default();
+        // SAFETY: the pseudo handle of the current process needs no closing, and the four
+        // pointers are to locals that outlive the call.
+        let read = unsafe {
+            GetProcessTimes(
+                GetCurrentProcess(),
+                &mut created,
+                &mut exited,
+                &mut kernel,
+                &mut user,
+            )
+        };
+        if read.is_err() {
+            return Duration::ZERO;
+        }
+        // FILETIME counts 100 ns ticks.
+        Duration::from_nanos((ticks(kernel) + ticks(user)).saturating_mul(100))
+    }
+
+    /// The working set of this process in bytes; zero when Windows does not say.
+    pub fn working_set_bytes() -> u64 {
+        let mut counters = PROCESS_MEMORY_COUNTERS {
+            cb: size_of::<PROCESS_MEMORY_COUNTERS>() as u32,
+            ..Default::default()
+        };
+        // SAFETY: `counters` is a local of the size given in `cb`, and the pseudo handle of the
+        // current process needs no closing.
+        let read =
+            unsafe { K32GetProcessMemoryInfo(GetCurrentProcess(), &mut counters, counters.cb) };
+        if read.as_bool() {
+            counters.WorkingSetSize as u64
+        } else {
+            0
+        }
+    }
+}

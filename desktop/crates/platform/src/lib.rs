@@ -1,16 +1,20 @@
 mod fonts;
 mod model;
+pub mod perf;
 mod shell_view;
 pub mod theme;
 mod thread;
 
+use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use closta_session::log::TracingLog;
 use closta_shell::header::AppHeader;
 use closta_shell::panes::{Pane, Panes};
 use closta_shell::slot::{SlotLaunch, Spawn};
 use closta_shell::state::{ShellAction, ShellState};
+use futures_lite::future;
 use gpui_kit::*;
 
 use crate::model::ShellModel;
@@ -27,6 +31,28 @@ pub struct PlatformOptions {
     pub window: Option<(f32, f32)>,
     /// Whether the left and the right pane start open; the default panes when `None`.
     pub panes: Option<(bool, bool)>,
+    /// What the run measures and when it quits by itself; `None` for an ordinary run.
+    pub measure: Option<Measure>,
+}
+
+/// A measured run. Once `finished` ends (every replay was written), `ready` is logged; once
+/// every slot has refreshed after that, `refreshed` and the rows are logged and the ready file
+/// is written. With `exit_after`, the CPU time from its 2nd second to its end is logged, then
+/// the conversation is scrolled from its tail to its head (`scroll_through`) and the app quits.
+/// A run that never refreshes logs `timeout` and quits 180 s after `started`.
+pub struct Measure {
+    /// When the exe started: every logged time is from it.
+    pub started: Instant,
+    /// The CSV of times and counts.
+    pub perf_log: Option<PathBuf>,
+    /// The empty file written once every slot refreshed after the replays ended.
+    pub ready_file: Option<PathBuf>,
+    /// Ends once every replay was written; `None` when there is nothing to wait for.
+    pub finished: Option<future::Boxed<()>>,
+    /// How long after the refresh the app quits.
+    pub exit_after: Option<Duration>,
+    /// Whether the selected conversation is scrolled from its tail to its head before quitting.
+    pub scroll_through: bool,
 }
 
 /// Starts the app, opens the window and returns once the window is closed.
@@ -43,6 +69,7 @@ pub fn run(options: PlatformOptions) {
             slots,
             window,
             panes,
+            measure,
         } = options;
         let executor = cx.background_executor().clone();
         let spawn: Spawn = Arc::new(move |run| executor.spawn(run).detach());
@@ -75,7 +102,7 @@ pub fn run(options: PlatformOptions) {
             ..Default::default()
         };
         open_window(options, cx, move |window, cx| {
-            cx.new(|cx| ShellModel::new(shell, slots, window, cx))
+            cx.new(|cx| ShellModel::new(shell, slots, measure, window, cx))
         })
         .expect("failed to open window");
     });

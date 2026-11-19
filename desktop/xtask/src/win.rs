@@ -4,6 +4,7 @@ use std::process::Command;
 use anyhow::{Context, bail};
 
 use crate::check::LOCK;
+use crate::perf_log::{Outcome, PerfLog, PerfScene, references, verdicts};
 
 /// The Windows-side copy of `desktop/`, as seen from WSL. The Windows build
 /// needs the Windows SDK shader compiler and Windows paths, so it runs on Windows.
@@ -239,6 +240,204 @@ pub fn parse_flags(args: &[String], build: bool) -> Result<WinFlags, String> {
     Ok(flags)
 }
 
+/// Whether `tasklist.exe /FI "IMAGENAME eq LogonUI.exe" /NH` printed a running LogonUI: the
+/// screen is locked, and nothing drawn can be seen or measured.
+pub fn is_locked(tasklist_output: &str) -> bool {
+    tasklist_output.to_ascii_lowercase().contains("logonui.exe")
+}
+
+/// Whether the Windows screen is locked now.
+pub fn screen_locked() -> anyhow::Result<bool> {
+    let output = Command::new("tasklist.exe")
+        .args(["/FI", "IMAGENAME eq LogonUI.exe", "/NH"])
+        .output()
+        .context("could not start `tasklist.exe`")?;
+    if !output.status.success() {
+        bail!("tasklist.exe failed with {}", output.status);
+    }
+    Ok(is_locked(&String::from_utf8_lossy(&output.stdout)))
+}
+
+/// Where the measuring exe writes the CSV of `scene`, as Windows sees it.
+pub fn perf_csv(scene: PerfScene) -> String {
+    format!(r"{PERF}\{}.csv", scene.name())
+}
+
+/// The same CSV as seen from WSL.
+pub fn perf_csv_wsl(scene: PerfScene) -> PathBuf {
+    Path::new(PERF_WSL).join(format!("{}.csv", scene.name()))
+}
+
+/// Where the measuring exe writes its CSVs, as seen from WSL and from Windows.
+const PERF_WSL: &str = "/mnt/c/dev/tools/closta/perf";
+const PERF: &str = r"C:\dev\tools\closta\perf";
+/// How long `measure.ps1` lets one run go before it kills it; the exe gives up by itself at
+/// 180 s.
+const MEASURE_TIMEOUT_SEC: u32 = 200;
+/// The prompt the Bash capture was recorded with.
+const BASH_PROMPT: &str =
+    "Run this exact bash command and report its output: echo hello-from-capture";
+
+/// The arguments the measuring exe runs `scene` with.
+pub fn scene_args(scene: PerfScene) -> Vec<String> {
+    let replay = |name: &str| format!(r"{REPLAY}\{name}");
+    let args: Vec<String> = match scene {
+        PerfScene::Synth => vec![
+            "--replay".into(),
+            replay("synth.ndjson"),
+            "--window".into(),
+            "1440x900".into(),
+            "--scroll-through".into(),
+            "--exit-after-replay".into(),
+            "12000".into(),
+        ],
+        PerfScene::Stream => vec![
+            "--replay".into(),
+            replay("stream.ndjson"),
+            "--pace".into(),
+            "30".into(),
+            "--exit-after-replay".into(),
+            "3000".into(),
+        ],
+        PerfScene::Idle => vec![
+            "--replay".into(),
+            replay("gallery.ndjson"),
+            "--replay".into(),
+            replay("02-tool-bash-autorun.ndjson"),
+            "--prompt".into(),
+            BASH_PROMPT.into(),
+            "--replay".into(),
+            replay("synth.ndjson"),
+            "--exit-after-replay".into(),
+            "12000".into(),
+        ],
+    };
+    args
+}
+
+/// A PowerShell single-quoted string.
+fn quoted(text: &str) -> String {
+    format!("'{}'", text.replace('\'', "''"))
+}
+
+/// The PowerShell that runs `measure.ps1` for `scene` with the release exe.
+pub fn measure_script(scene: PerfScene) -> String {
+    let args: Vec<String> = scene_args(scene).iter().map(|it| quoted(it)).collect();
+    format!(
+        "& {} -Exe {} -ArgList @({}) -Csv {} -TimeoutSec {MEASURE_TIMEOUT_SEC}; exit $LASTEXITCODE",
+        quoted(&format!(r"{WIN_COPY}\xtask\scripts\measure.ps1")),
+        quoted(&exe_path(true)),
+        args.join(","),
+        quoted(&perf_csv(scene)),
+    )
+}
+
+/// The exit codes of `measure.ps1` that hold a scene: 3, the run was killed for not ending;
+/// 4, no window came up or it was minimized.
+const HELD_CODES: [i32; 2] = [3, 4];
+
+/// What came of measuring one scene.
+enum Measured {
+    Log(PerfLog),
+    Held(&'static str),
+}
+
+/// Runs `scene` once on Windows and reads its CSV.
+fn measure(scene: PerfScene) -> anyhow::Result<Measured> {
+    println!("==> measure {}", scene.name());
+    let (program, args) = powershell_command(&measure_script(scene));
+    let status = Command::new(&program)
+        .args(&args)
+        .status()
+        .with_context(|| format!("could not start `{program}` for powershell.exe"))?;
+    match status.code() {
+        Some(0) => {}
+        Some(code) if HELD_CODES.contains(&code) => {
+            return Ok(Measured::Held("the run timed out or showed no window"));
+        }
+        _ => bail!("measuring {} failed with {status}", scene.name()),
+    }
+    let csv = perf_csv_wsl(scene);
+    let text = std::fs::read_to_string(&csv)
+        .with_context(|| format!("could not read {}", csv.display()))?;
+    Ok(Measured::Log(PerfLog::parse(&text)?))
+}
+
+fn outcome_word(outcome: Outcome) -> &'static str {
+    match outcome {
+        Outcome::Pass => "pass",
+        Outcome::Fail => "FAIL",
+        Outcome::Held => "held",
+    }
+}
+
+fn shown(value: Option<f64>) -> String {
+    value.map_or_else(|| "-".to_owned(), |value| format!("{value:.3}"))
+}
+
+/// The table of one scene's verdicts and reference values.
+pub fn table(scene: PerfScene, log: &PerfLog) -> (String, bool) {
+    let mut lines = vec![format!("| {} | value | budget | outcome |", scene.name())];
+    lines.push("|---|---|---|---|".to_owned());
+    let judged = verdicts(scene, log);
+    let failed = judged.iter().any(|it| it.outcome == Outcome::Fail);
+    for verdict in &judged {
+        lines.push(format!(
+            "| {} | {} | {} | {} |",
+            verdict.name,
+            shown(verdict.value),
+            verdict.budget,
+            outcome_word(verdict.outcome),
+        ));
+    }
+    for (name, value) in references(scene, log) {
+        lines.push(format!("| {name} p99 | {} | - | reference |", shown(value)));
+    }
+    let frames = log
+        .rows
+        .iter()
+        .filter(|row| row.metric == "frame_ms")
+        .count();
+    lines.push(format!("| frames presented | {frames} | - | count |"));
+    (lines.join("\n"), failed)
+}
+
+/// `cargo xtask win-perf [scenes]`: builds the measuring exe, runs each scene on Windows and
+/// prints its verdicts. A locked screen holds every scene and ends without a build. Fails when
+/// a verdict fails.
+pub fn win_perf(root: &Path, scenes: &[PerfScene]) -> anyhow::Result<()> {
+    if screen_locked()? {
+        for scene in scenes {
+            println!("held: {} — the screen is locked", scene.name());
+        }
+        return Ok(());
+    }
+    let features = ["closta/replay".to_owned(), "closta/profiler".to_owned()];
+    win_build(root, true, false, &features)?;
+    copy_replays(root)?;
+    let mut failed = Vec::new();
+    for scene in scenes {
+        if screen_locked()? {
+            println!("held: {} — the screen is locked", scene.name());
+            continue;
+        }
+        match measure(*scene)? {
+            Measured::Held(why) => println!("held: {} — {why}", scene.name()),
+            Measured::Log(log) => {
+                let (table, scene_failed) = table(*scene, &log);
+                println!("{table}");
+                if scene_failed {
+                    failed.push(scene.name());
+                }
+            }
+        }
+    }
+    if !failed.is_empty() {
+        bail!("over budget: {}", failed.join(", "));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::{Path, PathBuf};
@@ -425,5 +624,104 @@ mod tests {
         assert!(parse_flags(&strings(&["--release"]), false).is_err());
         assert!(parse_flags(&strings(&["--features"]), true).is_err());
         assert!(parse_flags(&strings(&["--jobs"]), true).is_err());
+    }
+
+    #[test]
+    fn a_locked_screen_is_seen_in_the_tasklist_output() {
+        assert!(is_locked(
+            "LogonUI.exe                  14212 Console                    1     52,604 K\r\n"
+        ));
+        assert!(is_locked("logonui.exe 1 Console 1 1 K"));
+        assert!(!is_locked(
+            "INFO: No tasks are running which match the specified criteria.\r\n"
+        ));
+        assert!(!is_locked(""));
+    }
+
+    #[test]
+    fn the_measure_script_kills_a_run_that_does_not_end() {
+        let path = crate::desktop_root().join("xtask/scripts/measure.ps1");
+        let script = std::fs::read_to_string(path).unwrap();
+        for needed in [
+            "WaitForExit",
+            "Kill()",
+            "exit 3",
+            "IsIconic",
+            "SetForegroundWindow",
+            "Stop-Process",
+        ] {
+            assert!(script.contains(needed), "measure.ps1 lacks {needed}");
+        }
+        // Whatever ended the run, every process of the exe's name is stopped last.
+        let stop = script.rfind("Stop-Process").unwrap();
+        assert!(stop > script.rfind("WaitForExit").unwrap());
+        assert!(stop > script.rfind("Kill()").unwrap());
+        assert!(script[..stop].contains("finally"));
+    }
+
+    #[test]
+    fn perf_scenes_run_with_the_planned_arguments() {
+        let replay = |name: &str| format!(r"C:\dev\tools\closta\replay\{name}");
+        assert_eq!(
+            scene_args(PerfScene::Synth),
+            [
+                "--replay".to_owned(),
+                replay("synth.ndjson"),
+                "--window".to_owned(),
+                "1440x900".to_owned(),
+                "--scroll-through".to_owned(),
+                "--exit-after-replay".to_owned(),
+                "12000".to_owned(),
+            ]
+        );
+        assert_eq!(
+            scene_args(PerfScene::Stream),
+            [
+                "--replay".to_owned(),
+                replay("stream.ndjson"),
+                "--pace".to_owned(),
+                "30".to_owned(),
+                "--exit-after-replay".to_owned(),
+                "3000".to_owned(),
+            ]
+        );
+        assert_eq!(
+            scene_args(PerfScene::Idle),
+            [
+                "--replay".to_owned(),
+                replay("gallery.ndjson"),
+                "--replay".to_owned(),
+                replay("02-tool-bash-autorun.ndjson"),
+                "--prompt".to_owned(),
+                "Run this exact bash command and report its output: echo hello-from-capture"
+                    .to_owned(),
+                "--replay".to_owned(),
+                replay("synth.ndjson"),
+                "--exit-after-replay".to_owned(),
+                "12000".to_owned(),
+            ]
+        );
+    }
+
+    #[test]
+    fn the_measure_call_passes_the_scene_and_its_csv() {
+        let script = measure_script(PerfScene::Idle);
+        assert!(
+            script.starts_with(
+                r"& 'C:\dev\tools\closta\desktop\xtask\scripts\measure.ps1' -Exe 'C:\dev\tools\closta\desktop\target\release\closta.exe' -ArgList @('--replay',"
+            ),
+            "{script}"
+        );
+        assert!(script.contains(
+            "'--prompt','Run this exact bash command and report its output: echo hello-from-capture'"
+        ));
+        assert!(script.ends_with(
+            r"-Csv 'C:\dev\tools\closta\perf\idle.csv' -TimeoutSec 200; exit $LASTEXITCODE"
+        ));
+        assert_eq!(quoted("it's"), "'it''s'");
+        assert_eq!(
+            perf_csv_wsl(PerfScene::Synth),
+            PathBuf::from("/mnt/c/dev/tools/closta/perf/synth.csv")
+        );
     }
 }

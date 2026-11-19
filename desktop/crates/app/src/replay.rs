@@ -54,6 +54,16 @@ pub fn slot_launch(arg: &ReplayArg, pace: Duration) -> Result<(SlotLaunch, Repla
     Ok((launch, control))
 }
 
+/// Ends once every replay among `controls` was written to its end.
+pub fn finished_all(controls: &[ReplayControl]) -> future::Boxed<()> {
+    let finished: Vec<future::Boxed<()>> = controls.iter().map(ReplayControl::finished).collect();
+    Box::pin(async move {
+        for replay in finished {
+            replay.await;
+        }
+    })
+}
+
 /// The slot's title: the file's name without its extension.
 fn title(path: &Path) -> String {
     path.file_stem()
@@ -170,6 +180,17 @@ mod tests {
 
     /// Where `cargo xtask win-test` copies the replay files before it runs these tests.
     const GALLERY: &str = r"C:\dev\tools\closta\replay\gallery.ndjson";
+
+    #[test]
+    fn finished_all_waits_for_every_replay() {
+        assert!(future::block_on(future::poll_once(finished_all(&[]))).is_some());
+        let (_spawner, control) = ReplaySpawner::new(Vec::new(), ReplayOptions::default());
+        // A replay never started has not reached its end.
+        assert!(
+            future::block_on(future::poll_once(finished_all(&[control.clone(), control])))
+                .is_none()
+        );
+    }
 
     #[test]
     fn the_replay_send_ids_are_keys() {

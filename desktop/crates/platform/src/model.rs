@@ -3,6 +3,7 @@
 //! layout and the tasks that wait on the sessions.
 
 use std::collections::HashMap;
+use std::time::{Duration, Instant};
 
 use closta_presenter::rows::ThreadRow;
 use closta_shell::rows::{RowChange, ScrollDirection, kept, list_top};
@@ -13,7 +14,23 @@ use gpui_kit::component::resizable::ResizableState;
 use gpui_kit::component::text::TextViewState;
 use gpui_kit::*;
 
+use crate::Measure;
+use crate::perf::{IdleStart, Measuring};
 use crate::thread::prefetch;
+
+/// How often the presented frames are read from the profiler's journal.
+const COLLECT_EVERY: Duration = Duration::from_millis(250);
+/// How long after the replays ended a slot that has not refreshed by itself is read once more:
+/// it had nothing left to fold.
+const QUIET: Duration = Duration::from_secs(1);
+/// How long a measured run waits for the refresh after the replays before it gives up.
+const TIMEOUT: Duration = Duration::from_secs(180);
+/// The part of the idle window left out of the CPU time: what the refresh set going settles.
+const IDLE_SETTLE: Duration = Duration::from_secs(2);
+/// How far the scroll through goes up a frame.
+const SCROLL_STEP: usize = 5;
+/// How long after the scroll the last frames are given to be presented before the app quits.
+const LAST_FRAMES: Duration = Duration::from_millis(300);
 
 pub(crate) struct ShellModel {
     pub(crate) shell: ShellState,
@@ -22,10 +39,15 @@ pub(crate) struct ShellModel {
     pub(crate) texts: HashMap<SlotId, HashMap<String, Entity<TextViewState>>>,
     pub(crate) panes: Entity<ResizableState>,
     watches: HashMap<SlotId, Task<()>>,
+    /// The generation of the session each slot's watch waits on.
+    generations: HashMap<SlotId, u64>,
     /// The top row a slot's list showed when last looked at, and which way it last moved.
     scrolled: HashMap<SlotId, (usize, ScrollDirection)>,
     /// Whether a prefetch waits for the next frame.
     prefetch_asked: bool,
+    /// The measured run's state, when the run is measured.
+    measuring: Option<Measuring>,
+    measure_tasks: Vec<Task<()>>,
     _observed: Vec<Subscription>,
 }
 
@@ -33,6 +55,7 @@ impl ShellModel {
     pub(crate) fn new(
         shell: ShellState,
         launches: Vec<SlotLaunch>,
+        measure: Option<Measure>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> ShellModel {
@@ -42,12 +65,18 @@ impl ShellModel {
             texts: HashMap::new(),
             panes: cx.new(|_| ResizableState::default()),
             watches: HashMap::new(),
+            generations: HashMap::new(),
             scrolled: HashMap::new(),
             prefetch_asked: false,
+            measuring: None,
+            measure_tasks: Vec::new(),
             _observed: Vec::new(),
         };
         for launch in launches {
             model.open(launch, window, cx);
+        }
+        if let Some(measure) = measure {
+            model.measure(measure, window, cx);
         }
         model
     }
@@ -72,6 +101,7 @@ impl ShellModel {
             return;
         };
         let generation = watch.generation();
+        self.generations.insert(slot, generation);
         let task = cx.spawn_in(window, async move |this, cx| {
             while watch.changed().await {
                 let refreshed = this.update_in(cx, |model, window, cx| {
@@ -98,6 +128,7 @@ impl ShellModel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let began = Instant::now();
         let Some(refresh) = self.shell.refresh(slot, generation) else {
             return;
         };
@@ -130,8 +161,18 @@ impl ShellModel {
             state.update(cx, |state, cx| state.set_text(&markdown, cx));
         }
         self.let_go(slot, window, cx);
+        if let Some(measuring) = &mut self.measuring {
+            measuring.record_ms("update_ms", began.elapsed());
+        }
         if self.shell.selected() == Some(slot) && self.prefetch(window, cx) {
             self.ask_prefetch(window, cx);
+        }
+        if self
+            .measuring
+            .as_mut()
+            .is_some_and(|measuring| measuring.note_refresh(slot))
+        {
+            self.refreshed(window, cx);
         }
         cx.notify();
     }
@@ -174,7 +215,13 @@ impl ShellModel {
         self.scrolled.insert(slot, (top, direction));
         let rows = self.shell.rows(slot);
         let texts = self.texts.entry(slot).or_default();
-        prefetch::make(top, visible, direction, rows, texts, cx)
+        let (began, before) = (Instant::now(), texts.len());
+        let more = prefetch::make(top, visible, direction, rows, texts, cx);
+        let made = texts.len() > before;
+        if let Some(measuring) = self.measuring.as_mut().filter(|_| made) {
+            measuring.record_ms("prefetch_ms", began.elapsed());
+        }
+        more
     }
 
     /// Asks for one prefetch at the start of the next frame, outside the draw; it asks again
@@ -225,6 +272,199 @@ impl ShellModel {
             });
         }
         cx.notify();
+    }
+}
+
+/// The measured run (`Measure`), driven by the window's tasks.
+impl ShellModel {
+    /// Starts measuring: collects the frames, waits for the replays to end and gives up after
+    /// [`TIMEOUT`].
+    fn measure(&mut self, measure: Measure, window: &mut Window, cx: &mut Context<Self>) {
+        let Measure {
+            started,
+            perf_log,
+            ready_file,
+            finished,
+            exit_after,
+            scroll_through,
+        } = measure;
+        let measuring = Measuring::new(
+            started,
+            perf_log.as_deref(),
+            ready_file,
+            exit_after,
+            scroll_through,
+            cx,
+        );
+        if measuring.collects_frames() {
+            self.measure_tasks.push(cx.spawn(async move |this, cx| {
+                loop {
+                    cx.background_executor().timer(COLLECT_EVERY).await;
+                    let collected = this.update(cx, |model, _| {
+                        if let Some(measuring) = &mut model.measuring {
+                            measuring.collect();
+                        }
+                    });
+                    if collected.is_err() {
+                        return;
+                    }
+                }
+            }));
+        }
+        self.measuring = Some(measuring);
+        self.measure_tasks
+            .push(cx.spawn_in(window, async move |this, cx| {
+                if let Some(finished) = finished {
+                    finished.await;
+                }
+                _ = this.update_in(cx, |model, window, cx| model.replays_ended(window, cx));
+                cx.background_executor().timer(QUIET).await;
+                _ = this.update_in(cx, |model, window, cx| model.refresh_awaited(window, cx));
+            }));
+        self.measure_tasks.push(cx.spawn(async move |this, cx| {
+            let left = TIMEOUT.saturating_sub(started.elapsed());
+            cx.background_executor().timer(left).await;
+            _ = this.update(cx, |model, cx| model.time_out(cx));
+        }));
+    }
+
+    /// Every replay was written: each slot's next refresh is awaited.
+    fn replays_ended(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let slots: Vec<SlotId> = self.shell.slots().iter().map(|slot| slot.id).collect();
+        if self
+            .measuring
+            .as_mut()
+            .is_some_and(|measuring| measuring.ready(slots))
+        {
+            self.refreshed(window, cx);
+        }
+    }
+
+    /// Reads once more each slot that has not refreshed since the replays ended: its session
+    /// had nothing left to fold.
+    fn refresh_awaited(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let awaited = self
+            .measuring
+            .as_ref()
+            .map(Measuring::awaited)
+            .unwrap_or_default();
+        for slot in awaited {
+            if let Some(generation) = self.generations.get(&slot).copied() {
+                self.refresh(slot, generation, window, cx);
+            }
+        }
+    }
+
+    /// Every slot refreshed after the replays ended. With `exit_after`, the idle CPU time is
+    /// taken over the window from its 2nd second, then the scroll through or the end follows.
+    fn refreshed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let rows = self
+            .shell
+            .slots()
+            .iter()
+            .map(|slot| self.shell.rows(slot.id).len())
+            .sum();
+        let Some(measuring) = &mut self.measuring else {
+            return;
+        };
+        measuring.write_refreshed(rows);
+        let Some(exit_after) = measuring.exit_after else {
+            return;
+        };
+        self.measure_tasks
+            .push(cx.spawn_in(window, async move |this, cx| {
+                let end = Instant::now() + exit_after;
+                let executor = cx.background_executor().clone();
+                if exit_after > IDLE_SETTLE {
+                    executor.timer(IDLE_SETTLE).await;
+                    let idle = IdleStart::now();
+                    executor
+                        .timer(end.saturating_duration_since(Instant::now()))
+                        .await;
+                    _ = this.update(cx, |model, _| {
+                        if let Some(measuring) = &mut model.measuring {
+                            measuring.record_idle(idle);
+                        }
+                    });
+                } else {
+                    executor.timer(exit_after).await;
+                }
+                _ = this.update_in(cx, |model, window, cx| model.after_idle(window, cx));
+            }));
+    }
+
+    /// Starts the scroll through from the tail, or ends the run.
+    fn after_idle(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let rows = self
+            .shell
+            .selected()
+            .map(|slot| self.shell.rows(slot).len());
+        match (&mut self.measuring, rows) {
+            (Some(measuring), Some(rows)) if measuring.scroll_through => {
+                measuring.record("scroll_start", 1.0);
+                measuring.scroll_at = Some(rows);
+                self.scroll_step(window, cx);
+            }
+            _ => self.finish(window, cx),
+        }
+    }
+
+    /// One frame of the scroll through: up [`SCROLL_STEP`] rows; at the head, the working set
+    /// is written and the run ends.
+    fn scroll_step(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let scroller = self
+            .shell
+            .selected()
+            .and_then(|slot| self.scrollers.get(&slot).cloned());
+        let (Some(measuring), Some(scroller)) = (&mut self.measuring, scroller) else {
+            return;
+        };
+        let Some(at) = measuring.scroll_at else {
+            return;
+        };
+        if at == 0 {
+            measuring.record("scroll_end", 1.0);
+            measuring.record_working_set();
+            self.finish(window, cx);
+            return;
+        }
+        let at = at.saturating_sub(SCROLL_STEP);
+        measuring.scroll_at = Some(at);
+        scroller.update(cx, |state, cx| {
+            state.scroll_to_item(at, cx);
+        });
+        let this = cx.weak_entity();
+        window.on_next_frame(move |window, cx| {
+            _ = this.update(cx, |model, cx| model.scroll_step(window, cx));
+        });
+        cx.notify();
+    }
+
+    /// Gives the last frames time to be presented, writes them and quits.
+    fn finish(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.measure_tasks
+            .push(cx.spawn_in(window, async move |this, cx| {
+                cx.background_executor().timer(LAST_FRAMES).await;
+                _ = this.update(cx, |model, cx| {
+                    if let Some(measuring) = &mut model.measuring {
+                        measuring.collect();
+                    }
+                    cx.quit();
+                });
+            }));
+    }
+
+    /// Gives up on a run that has not refreshed, or has not ended, by [`TIMEOUT`].
+    fn time_out(&mut self, cx: &mut Context<Self>) {
+        let Some(measuring) = &mut self.measuring else {
+            return;
+        };
+        if measuring.is_refreshed() && measuring.exit_after.is_none() {
+            return;
+        }
+        measuring.record("timeout", 1.0);
+        measuring.collect();
+        cx.quit();
     }
 }
 

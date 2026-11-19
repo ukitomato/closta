@@ -12,6 +12,7 @@ use closta_presenter::cards::ThreadCard;
 use closta_presenter::input::{Decided, PassedOn, PresenterInput, SendId, UserSent};
 use closta_presenter::rows::{ThreadRow, ThreadRows};
 use closta_presenter::session::SessionView;
+use closta_presenter::thread_running::thread_is_running;
 use closta_providers::claude::fake::replay::{ReplayCue, ReplayLine, parse_replay};
 use closta_providers::claude::protocol::decode;
 
@@ -189,4 +190,50 @@ fn the_stream_capture_ends_with_the_streamed_reply() {
         })
         .unwrap_or_else(|| panic!("a text row"));
     assert_eq!(markdown, last_text);
+}
+
+/// Whether the turn before each user cue, and the last turn, are folded closed: the app's
+/// companion sends a prompt only once the turn before it closed, and a turn left open keeps the
+/// wait spinning.
+fn closed_before_each_cue_and_at_the_end(lines: &[ReplayLine]) -> Vec<usize> {
+    let mut open_at = Vec::new();
+    for (at, line) in lines.iter().enumerate() {
+        if matches!(line, ReplayLine::Cue(ReplayCue::User { .. })) && at > 0 {
+            let view = fold(&lines[..at]);
+            if thread_is_running(&view.conversation, &view.transcript) {
+                open_at.push(at);
+            }
+        }
+    }
+    let view = fold(lines);
+    if thread_is_running(&view.conversation, &view.transcript) {
+        open_at.push(lines.len());
+    }
+    open_at
+}
+
+#[test]
+fn every_written_turn_closes_so_the_next_prompt_can_go() {
+    let synth = round_trip(&synthetic::replay_lines(&LARGEST, 1));
+    // Every 20th cue is enough to see each turn's shape; folding all 200 prefixes is slow.
+    let cues: Vec<usize> = synth
+        .iter()
+        .enumerate()
+        .filter(|(_, line)| matches!(line, ReplayLine::Cue(ReplayCue::User { .. })))
+        .map(|(at, _)| at)
+        .collect();
+    let mut sample: Vec<ReplayLine> = Vec::new();
+    for window in cues.windows(2).step_by(20) {
+        sample.extend_from_slice(&synth[window[0]..window[1]]);
+    }
+    assert_eq!(
+        closed_before_each_cue_and_at_the_end(&sample),
+        Vec::<usize>::new()
+    );
+
+    let stream = round_trip(&replay_script::replay_lines(&reply_markdown(), "stream"));
+    assert_eq!(
+        closed_before_each_cue_and_at_the_end(&stream),
+        Vec::<usize>::new()
+    );
 }

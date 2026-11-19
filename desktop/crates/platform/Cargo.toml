@@ -14,7 +14,16 @@ profiler = ["gpui-kit/profiler"]
 closta-presenter.workspace = true
 closta-session.workspace = true
 closta-shell.workspace = true
+futures-lite.workspace = true
 gpui-kit = { workspace = true, features = ["syntect"] }
+
+[target.'cfg(windows)'.dependencies]
+# The process's own CPU time and working set, for the measuring run.
+windows = { workspace = true, features = [
+  "Win32_Foundation",
+  "Win32_System_ProcessStatus",
+  "Win32_System_Threading",
+] }
 
 [lints]
 workspace = true

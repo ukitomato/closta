@@ -1,6 +1,7 @@
 //! The development arguments of the replay build. `--prompt`, `--stop-at` and `--stdin-log`
-//! belong to the `--replay` before them; `--pace`, `--window`, `--pane` and `--ready-file` apply
-//! to the whole run. An error names the option, never a value: a value can be a prompt or a path.
+//! belong to the `--replay` before them; `--pace`, `--window`, `--pane`, `--ready-file` and the
+//! measuring options (`--perf-log`, `--exit-after-replay`, `--scroll-through`) apply to the whole
+//! run. An error names the option, never a value: a value can be a prompt or a path.
 
 use std::path::PathBuf;
 
@@ -25,6 +26,22 @@ pub struct AppArgs {
     pub panes: Option<(bool, bool)>,
     /// The empty file written once every replay has been taken in.
     pub ready_file: Option<PathBuf>,
+    /// The CSV the times and counts are written to.
+    pub perf_log: Option<PathBuf>,
+    /// How long after every replay has been taken in the app quits, in milliseconds.
+    pub exit_after_ms: Option<u64>,
+    /// Whether the conversation is scrolled from its tail to its head before quitting.
+    pub scroll_through: bool,
+}
+
+impl AppArgs {
+    /// Whether the run is measured or waited on from outside.
+    pub fn measures(&self) -> bool {
+        self.ready_file.is_some()
+            || self.perf_log.is_some()
+            || self.exit_after_ms.is_some()
+            || self.scroll_through
+    }
 }
 
 /// Reads the arguments after the program's name.
@@ -72,6 +89,22 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<AppArgs, String> 
             "--ready-file" => {
                 let path = PathBuf::from(value()?);
                 set(&mut parsed.ready_file, option, path)?;
+            }
+            "--perf-log" => {
+                let path = PathBuf::from(value()?);
+                set(&mut parsed.perf_log, option, path)?;
+            }
+            "--exit-after-replay" => {
+                let ms = value()?
+                    .parse()
+                    .map_err(|_| format!("{option} needs milliseconds"))?;
+                set(&mut parsed.exit_after_ms, option, ms)?;
+            }
+            "--scroll-through" => {
+                if parsed.scroll_through {
+                    return Err(format!("{option} is given twice"));
+                }
+                parsed.scroll_through = true;
             }
             _ if option.starts_with("--") => return Err(format!("unknown option {option}")),
             _ => return Err("an argument that is not an option".to_owned()),
@@ -218,5 +251,37 @@ mod tests {
         let error = parsed(&["--replay", "a.ndjson", "secret prompt"]).unwrap_err();
         assert!(!error.contains("secret"), "{error}");
         assert!(parsed(&["--fail-launch", "3"]).is_err());
+    }
+
+    #[test]
+    fn measure_options_are_global() {
+        let args = parsed(&[
+            "--perf-log",
+            "synth.csv",
+            "--replay",
+            "a.ndjson",
+            "--scroll-through",
+            "--exit-after-replay",
+            "12000",
+        ])
+        .unwrap();
+        assert_eq!(args.perf_log, Some(PathBuf::from("synth.csv")));
+        assert_eq!(args.exit_after_ms, Some(12000));
+        assert!(args.scroll_through);
+        assert_eq!(args.replays.len(), 1);
+        assert_eq!(args.replays[0].prompt, None);
+        assert!(args.measures());
+
+        let plain = parsed(&["--replay", "a.ndjson"]).unwrap();
+        assert_eq!(plain.perf_log, None);
+        assert_eq!(plain.exit_after_ms, None);
+        assert!(!plain.scroll_through);
+        assert!(!plain.measures());
+        assert!(parsed(&["--ready-file", "ready"]).unwrap().measures());
+
+        assert!(parsed(&["--exit-after-replay", "soon"]).is_err());
+        assert!(parsed(&["--exit-after-replay"]).is_err());
+        assert!(parsed(&["--scroll-through", "--scroll-through"]).is_err());
+        assert!(parsed(&["--perf-log", "a", "--perf-log", "b"]).is_err());
     }
 }

@@ -192,8 +192,43 @@ pub fn replay_lines(shape: &Shape, seed: u64) -> Vec<ReplayLine> {
     session(shape, seed)
         .into_iter()
         .flat_map(|turn| {
-            std::iter::once(ReplayLine::Cue(ReplayCue::User { text: turn.prompt }))
-                .chain(turn.lines.into_iter().map(ReplayLine::Stdout))
+            std::iter::once(ReplayLine::Cue(ReplayCue::User { text: turn.prompt })).chain(
+                naming_results(turn.lines)
+                    .into_iter()
+                    .map(ReplayLine::Stdout),
+            )
+        })
+        .collect()
+}
+
+/// `lines` with each `result` that names no turn naming the last turn opened before it
+/// (`user_message_uuid`), as the CLI's do. A replayed turn closes only when its result names it;
+/// one left open keeps the app waiting on it, and the next prompt is never sent.
+pub fn naming_results(lines: Vec<String>) -> Vec<String> {
+    let mut command: Option<String> = None;
+    lines
+        .into_iter()
+        .map(|line| {
+            let Ok(serde_json::Value::Object(mut object)) = serde_json::from_str(&line) else {
+                return line;
+            };
+            match object.get("type").and_then(serde_json::Value::as_str) {
+                Some("command_lifecycle") => {
+                    command = object
+                        .get("command_uuid")
+                        .and_then(serde_json::Value::as_str)
+                        .map(str::to_owned);
+                    line
+                }
+                Some("result") if !object.contains_key("user_message_uuid") => {
+                    let Some(command) = &command else {
+                        return line;
+                    };
+                    object.insert("user_message_uuid".into(), command.clone().into());
+                    serde_json::Value::Object(object).to_string()
+                }
+                _ => line,
+            }
         })
         .collect()
 }
