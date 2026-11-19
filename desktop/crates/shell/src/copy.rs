@@ -4,9 +4,13 @@
 
 use closta_presenter::cards::ThreadCard;
 use closta_presenter::cards::plan::PlanCard;
-use closta_presenter::rows::{CardRow, ExploredRow, TurnEndRow};
+use closta_presenter::rows::{CardRow, CompactionRow, ExploredRow, TurnEndRow};
 use closta_presenter::tool_line::{AgentSummary, ToolLineState};
-use closta_presenter::transcript::ApprovalOutcome;
+use closta_presenter::transcript::{ApprovalOutcome, CompactionOutcome};
+use closta_providers::claude::process::ProcessFailure;
+use closta_session::status::SessionFailure;
+
+use crate::new_session::Runtime;
 
 /// The conversation pane with no rows (`thread.empty`).
 pub const EMPTY: &str = "No messages yet";
@@ -42,6 +46,40 @@ pub const NOT_RUNNING: &str = "Session is not running";
 pub const SEND_CLOSED: &str = "The session has ended. Restart it to send.";
 pub const SEND_ENCODE: &str = "This message could not be encoded.";
 
+pub const COMPOSER_PLACEHOLDER: &str = "Ask Claude (Shift+Enter for a new line)";
+pub const SEND: &str = "Send";
+pub const STOP: &str = "Stop";
+/// What a message that was not sent is marked with.
+pub const NOT_SENT: &str = "Not sent";
+pub const COMPACTING: &str = "Compacting conversation…";
+pub const COMPACTION_FAILED: &str = "Compaction failed";
+
+/// The New Session dialog.
+pub const NEW_SESSION: &str = "New Session";
+pub const NEW_SESSION_BUTTON: &str = "+ New Session";
+pub const FOLDER: &str = "Folder";
+pub const RUNTIME: &str = "Runtime";
+pub const CANCEL: &str = "Cancel";
+pub const START: &str = "Start";
+pub const CHECKING: &str = "Checking…";
+pub const FOLDER_MISSING: &str = "This folder does not exist.";
+pub const CLAUDE_EXE_MISSING: &str = "claude.exe was not found on PATH.";
+pub const CLAUDE_SCRIPT_ONLY: &str =
+    "Only a script was found for claude; install the native claude.exe.";
+
+/// A failed session's band.
+pub const RESTART: &str = "Restart";
+pub const RESTART_NOTE: &str = "Restart starts a new conversation.";
+pub const SESSION_ENDED: &str = "Session ended";
+
+/// While the window closes its sessions.
+pub const CLOSING: &str = "Closing sessions…";
+pub const CLOSE: &str = "Close";
+
+/// The trigger the CLI reports for a compaction it chose to do.
+const AUTO_TRIGGER: &str = "auto";
+const THOUSAND: i64 = 1_000;
+const MILLION: i64 = 1_000_000;
 const SECOND_MS: i64 = 1_000;
 const MINUTE_S: i64 = 60;
 const MCP_PREFIX: &str = "mcp__";
@@ -53,6 +91,125 @@ pub fn tool_state(state: ToolLineState) -> &'static str {
         ToolLineState::Ok => TOOL_DONE,
         ToolLineState::Error => TOOL_FAILED,
     }
+}
+
+/// The band under the conversation: working, or compacting while the CLI compacts.
+pub fn band(compacting: bool) -> &'static str {
+    if compacting { COMPACTING } else { WORKING }
+}
+
+/// A token count as `812`, `20.1k` or `1.2M`, to a tenth rounded half up.
+pub fn tokens(n: i64) -> String {
+    let tenths = |unit: i64| {
+        let tenths = (n * 10 + unit / 2) / unit;
+        format!("{}.{}", tenths / 10, tenths % 10)
+    };
+    if n < THOUSAND {
+        n.to_string()
+    } else if n < MILLION {
+        format!("{}k", tenths(THOUSAND))
+    } else {
+        format!("{}M", tenths(MILLION))
+    }
+}
+
+/// The line a compaction's divider says: the tokens before and after, and `auto` when the CLI
+/// chose to compact.
+pub fn compaction_line(row: &CompactionRow) -> String {
+    match &row.outcome {
+        CompactionOutcome::Failed => COMPACTION_FAILED.to_owned(),
+        CompactionOutcome::Compacted {
+            trigger,
+            pre_tokens,
+            post_tokens,
+        } => {
+            let mut line = format!(
+                "Conversation compacted · {} → {} tokens",
+                tokens(*pre_tokens),
+                tokens(*post_tokens)
+            );
+            if trigger == AUTO_TRIGGER {
+                line.push_str(" · auto");
+            }
+            line
+        }
+    }
+}
+
+pub fn distro_missing(distro: &str) -> String {
+    format!("{distro} is not installed.")
+}
+
+pub fn runtime_label(runtime: &Runtime) -> String {
+    match runtime {
+        Runtime::Windows => "Windows".to_owned(),
+        Runtime::Wsl { distro } => format!("WSL · {distro}"),
+    }
+}
+
+/// What closing the window asks while sessions work or drafts are unsent: the parts that are not
+/// zero, with `1` in the singular.
+pub fn close_question(working: usize, drafts: usize) -> String {
+    let working = match working {
+        0 => None,
+        1 => Some("1 session is working".to_owned()),
+        count => Some(format!("{count} sessions are working")),
+    };
+    let drafts = match drafts {
+        0 => None,
+        1 => Some("1 unsent draft".to_owned()),
+        count => Some(format!("{count} unsent drafts")),
+    };
+    let parts: Vec<String> = [working, drafts].into_iter().flatten().collect();
+    format!("{}. Close anyway?", parts.join(" / "))
+}
+
+/// A failure's title and its hint. Neither holds a path, a value of the environment or a text of
+/// the user: the kinds and the distro are all it names.
+pub fn failure_text(failure: &SessionFailure, distro: Option<&str>) -> (String, Option<String>) {
+    let wsl_hint = || "Run `claude --version` in a WSL terminal.".to_owned();
+    let (title, hint) = match failure {
+        SessionFailure::LaunchFailed { kind } => {
+            (format!("claude could not be started ({kind:?})."), None)
+        }
+        SessionFailure::WorkingDirectoryMissing { .. } => (
+            FOLDER_MISSING.to_owned(),
+            Some("It may have been moved or deleted.".to_owned()),
+        ),
+        SessionFailure::WslUnavailable { distro } => (
+            format!("{distro} is not available."),
+            Some("Check that the distribution is installed and holds this folder.".to_owned()),
+        ),
+        SessionFailure::WslCommandNotFound { distro } => (
+            format!("claude is not installed in {distro}, or not on the login shell's PATH."),
+            Some(wsl_hint()),
+        ),
+        SessionFailure::CommandNotFound => (
+            CLAUDE_EXE_MISSING.to_owned(),
+            Some("Install the native claude.exe, then restart.".to_owned()),
+        ),
+        SessionFailure::ScriptOnly => (CLAUDE_SCRIPT_ONLY.to_owned(), None),
+        SessionFailure::TooManyProcesses => (
+            "Too many sessions are running. Close one and restart.".to_owned(),
+            None,
+        ),
+        SessionFailure::EndedAbnormally(ProcessFailure::Exit(code)) => {
+            (format!("claude exited with code {code}."), None)
+        }
+        SessionFailure::EndedAbnormally(ProcessFailure::Io(kind)) => (
+            format!("claude's output could not be read ({kind:?})."),
+            None,
+        ),
+        SessionFailure::VersionCheckFailed(_) => (
+            "claude did not report its version.".to_owned(),
+            Some(match distro {
+                Some(_) => wsl_hint(),
+                None => "Run `claude --version` in a terminal.".to_owned(),
+            }),
+        ),
+        SessionFailure::PlanFailed => ("The session could not be prepared.".to_owned(), None),
+    };
+    (title, hint)
 }
 
 /// What an Explored line says after its title: the files it looked at, then each tool and how
@@ -505,6 +662,228 @@ mod tests {
             ("thread.card.expired", "Timed out without an answer"),
         ] {
             assert_eq!(bundle.get(key).map(String::as_str), Some(pattern), "{key}");
+        }
+    }
+
+    fn compaction(outcome: CompactionOutcome) -> CompactionRow {
+        CompactionRow {
+            key: "compaction/1".to_owned(),
+            outcome,
+            opens: false,
+        }
+    }
+
+    fn compacted(trigger: &str, pre: i64, post: i64) -> CompactionRow {
+        compaction(CompactionOutcome::Compacted {
+            trigger: trigger.to_owned(),
+            pre_tokens: pre,
+            post_tokens: post,
+        })
+    }
+
+    #[test]
+    fn compaction_lines_say_tokens_and_auto() {
+        assert_eq!(
+            compaction_line(&compacted("manual", 20_072, 1_235)),
+            "Conversation compacted · 20.1k → 1.2k tokens"
+        );
+        assert_eq!(
+            compaction_line(&compacted("auto", 20_072, 1_235)),
+            "Conversation compacted · 20.1k → 1.2k tokens · auto"
+        );
+        assert_eq!(
+            compaction_line(&compaction(CompactionOutcome::Failed)),
+            "Compaction failed"
+        );
+    }
+
+    #[test]
+    fn tokens_read_as_k_and_m() {
+        assert_eq!(tokens(0), "0");
+        assert_eq!(tokens(812), "812");
+        assert_eq!(tokens(999), "999");
+        assert_eq!(tokens(1_000), "1.0k");
+        assert_eq!(tokens(20_072), "20.1k");
+        assert_eq!(tokens(999_999), "1000.0k");
+        assert_eq!(tokens(1_000_000), "1.0M");
+        assert_eq!(tokens(1_234_567), "1.2M");
+    }
+
+    #[test]
+    fn the_close_question_drops_zero_parts_and_says_one_in_the_singular() {
+        assert_eq!(
+            close_question(2, 1),
+            "2 sessions are working / 1 unsent draft. Close anyway?"
+        );
+        assert_eq!(close_question(1, 0), "1 session is working. Close anyway?");
+        assert_eq!(close_question(0, 3), "3 unsent drafts. Close anyway?");
+        assert_eq!(
+            close_question(1, 2),
+            "1 session is working / 2 unsent drafts. Close anyway?"
+        );
+    }
+
+    #[test]
+    fn the_band_says_compacting_while_the_cli_compacts() {
+        assert_eq!(band(false), WORKING);
+        assert_eq!(band(true), COMPACTING);
+    }
+
+    #[test]
+    fn the_runtime_and_the_missing_distro_are_worded() {
+        assert_eq!(
+            runtime_label(&Runtime::Wsl {
+                distro: "Ubuntu-26.04".to_owned()
+            }),
+            "WSL · Ubuntu-26.04"
+        );
+        assert_eq!(runtime_label(&Runtime::Windows), "Windows");
+        assert_eq!(distro_missing("Debian"), "Debian is not installed.");
+    }
+
+    fn failures() -> Vec<SessionFailure> {
+        use closta_providers::claude::launch::version::VersionFailure;
+        use std::io::ErrorKind;
+        vec![
+            SessionFailure::LaunchFailed {
+                kind: ErrorKind::PermissionDenied,
+            },
+            SessionFailure::WorkingDirectoryMissing {
+                path: "/home/someone/x".to_owned(),
+            },
+            SessionFailure::WslUnavailable {
+                distro: "Ubuntu-26.04".to_owned(),
+            },
+            SessionFailure::WslCommandNotFound {
+                distro: "Ubuntu-26.04".to_owned(),
+            },
+            SessionFailure::CommandNotFound,
+            SessionFailure::ScriptOnly,
+            SessionFailure::TooManyProcesses,
+            SessionFailure::EndedAbnormally(ProcessFailure::Exit(3)),
+            SessionFailure::EndedAbnormally(ProcessFailure::Io(ErrorKind::BrokenPipe)),
+            SessionFailure::VersionCheckFailed(VersionFailure::NoOutput),
+            SessionFailure::PlanFailed,
+        ]
+    }
+
+    #[test]
+    fn every_failure_has_a_title_and_names_no_path() {
+        for failure in failures() {
+            for distro in [None, Some("Ubuntu-26.04")] {
+                let (title, hint) = failure_text(&failure, distro);
+                assert!(!title.is_empty(), "{}", failure.kind());
+                for text in std::iter::once(&title).chain(hint.as_ref()) {
+                    assert!(!text.contains("someone"), "{}", failure.kind());
+                    assert!(!text.contains("/home"), "{}", failure.kind());
+                    for word in ["IDE", "Settings"] {
+                        assert!(!text.contains(word), "{}: {text}", failure.kind());
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_spec_wording_is_kept() {
+        use closta_providers::claude::launch::version::VersionFailure;
+        let wsl = SessionFailure::WslCommandNotFound {
+            distro: "Ubuntu-26.04".to_owned(),
+        };
+        assert_eq!(
+            failure_text(&wsl, None),
+            (
+                "claude is not installed in Ubuntu-26.04, or not on the login shell's PATH."
+                    .to_owned(),
+                Some("Run `claude --version` in a WSL terminal.".to_owned())
+            )
+        );
+        assert_eq!(
+            failure_text(&SessionFailure::CommandNotFound, None),
+            (
+                "claude.exe was not found on PATH.".to_owned(),
+                Some("Install the native claude.exe, then restart.".to_owned())
+            )
+        );
+        assert_eq!(
+            failure_text(&SessionFailure::TooManyProcesses, None),
+            (
+                "Too many sessions are running. Close one and restart.".to_owned(),
+                None
+            )
+        );
+        assert_eq!(
+            failure_text(
+                &SessionFailure::EndedAbnormally(ProcessFailure::Exit(3)),
+                None
+            ),
+            ("claude exited with code 3.".to_owned(), None)
+        );
+        let version = SessionFailure::VersionCheckFailed(VersionFailure::NoAnswer);
+        assert_eq!(
+            failure_text(&version, Some("Ubuntu-26.04")),
+            (
+                "claude did not report its version.".to_owned(),
+                Some("Run `claude --version` in a WSL terminal.".to_owned())
+            )
+        );
+        assert_eq!(
+            failure_text(&version, None).1.as_deref(),
+            Some("Run `claude --version` in a terminal.")
+        );
+        assert_eq!(
+            failure_text(&SessionFailure::ScriptOnly, None),
+            (CLAUDE_SCRIPT_ONLY.to_owned(), None)
+        );
+        assert_eq!(
+            failure_text(
+                &SessionFailure::WorkingDirectoryMissing {
+                    path: "/p".to_owned()
+                },
+                None
+            ),
+            (
+                "This folder does not exist.".to_owned(),
+                Some("It may have been moved or deleted.".to_owned())
+            )
+        );
+    }
+
+    #[test]
+    fn the_6b_words_are_the_specs() {
+        for (text, spec) in [
+            (
+                COMPOSER_PLACEHOLDER,
+                "Ask Claude (Shift+Enter for a new line)",
+            ),
+            (SEND, "Send"),
+            (STOP, "Stop"),
+            (NOT_RUNNING, "Session is not running"),
+            (SEND_CLOSED, "The session has ended. Restart it to send."),
+            (SEND_ENCODE, "This message could not be encoded."),
+            (NOT_SENT, "Not sent"),
+            (COMPACTING, "Compacting conversation…"),
+            (COMPACTION_FAILED, "Compaction failed"),
+            (NEW_SESSION, "New Session"),
+            (NEW_SESSION_BUTTON, "+ New Session"),
+            (FOLDER, "Folder"),
+            (RUNTIME, "Runtime"),
+            (CANCEL, "Cancel"),
+            (START, "Start"),
+            (CHECKING, "Checking…"),
+            (FOLDER_MISSING, "This folder does not exist."),
+            (CLAUDE_EXE_MISSING, "claude.exe was not found on PATH."),
+            (
+                CLAUDE_SCRIPT_ONLY,
+                "Only a script was found for claude; install the native claude.exe.",
+            ),
+            (RESTART, "Restart"),
+            (RESTART_NOTE, "Restart starts a new conversation."),
+            (SESSION_ENDED, "Session ended"),
+            (CLOSING, "Closing sessions…"),
+            (CLOSE, "Close"),
+        ] {
+            assert_eq!(text, spec);
         }
     }
 }

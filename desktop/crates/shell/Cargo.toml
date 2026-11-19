@@ -11,6 +11,7 @@ async-channel.workspace = true
 closta-core.workspace = true
 closta-model.workspace = true
 closta-presenter.workspace = true
+closta-providers.workspace = true
 closta-session.workspace = true
 futures-lite.workspace = true
 uuid.workspace = true

@@ -4,6 +4,7 @@
 pub mod composer;
 pub mod copy;
 pub mod header;
+pub mod new_session;
 pub mod panes;
 pub mod rows;
 pub mod slot;
