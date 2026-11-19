@@ -764,6 +764,7 @@ fn status(mode: Option<&str>) -> AgentEvent {
         session_id: "s".into(),
         status: None,
         permission_mode: mode.map(str::to_string),
+        compact_result: None,
     }
 }
 

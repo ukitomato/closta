@@ -104,3 +104,21 @@ fn the_trees_is_running_is_this_rule_at_every_step_of_every_capture() {
     }
     assert!(failures.is_empty(), "{failures:?}");
 }
+
+#[test]
+fn a_failed_send_does_not_keep_the_thread_running() {
+    use closta_presenter::input::{SendId, UserSent};
+    use closta_presenter::session::SessionView;
+
+    let id = SendId::new("s1").expect("a key");
+    let sent = SessionView::default().fold(&PresenterInput::UserSent(UserSent {
+        message_id: id.clone(),
+        text: "hello".to_owned(),
+        attachments: Vec::new(),
+        uuid: None,
+    }));
+    assert!(thread_is_running(&sent.conversation, &sent.transcript));
+
+    let failed = sent.fold(&PresenterInput::SendFailed(id));
+    assert!(!thread_is_running(&failed.conversation, &failed.transcript));
+}

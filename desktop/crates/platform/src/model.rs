@@ -1,21 +1,26 @@
 //! The window's model: the shell's state, and beside it only what GPUI may keep and lose without
-//! changing what is right — each slot's scroller, the cached text states of its rows, the panes'
-//! layout and the tasks that wait on the sessions.
+//! changing what is right — each slot's scroller and input, the cached text states of its rows,
+//! the New Session dialog's folder field, the panes' layout and the tasks that wait on the
+//! sessions.
 
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use closta_presenter::rows::ThreadRow;
 use closta_shell::rows::{RowChange, ScrollDirection, kept, list_top};
 use closta_shell::slot::{SlotId, SlotLaunch};
-use closta_shell::state::{ShellAction, ShellState};
+use closta_shell::state::{Acted, FolderCheck, ShellAction, ShellState};
+use gpui_kit::component::input::{InputState, TextareaState};
 use gpui_kit::component::message_scroller::MessageScrollerState;
 use gpui_kit::component::resizable::ResizableState;
 use gpui_kit::component::text::TextViewState;
 use gpui_kit::*;
 
 use crate::Measure;
+use crate::composer::{self, Dispatch};
 use crate::perf::{IdleStart, Measuring};
+use crate::probe::{Probe, Probing};
 use crate::thread::prefetch;
 
 /// How often the presented frames are read from the profiler's journal.
@@ -37,6 +42,13 @@ pub(crate) struct ShellModel {
     pub(crate) scrollers: HashMap<SlotId, Entity<MessageScrollerState>>,
     /// The text states of a slot's text rows, by row key.
     pub(crate) texts: HashMap<SlotId, HashMap<String, Entity<TextViewState>>>,
+    /// Each slot's input box; its text is a copy of the slot's draft.
+    pub(crate) composers: HashMap<SlotId, Entity<TextareaState>>,
+    /// The New Session dialog's folder field, made the first time the dialog opens; its text is
+    /// a copy of the dialog's folder.
+    pub(crate) folder: Option<Entity<InputState>>,
+    /// The wait for the typing in the folder field to settle.
+    pub(crate) folder_typing: Option<Task<()>>,
     pub(crate) panes: Entity<ResizableState>,
     watches: HashMap<SlotId, Task<()>>,
     /// The generation of the session each slot's watch waits on.
@@ -48,7 +60,10 @@ pub(crate) struct ShellModel {
     /// The measured run's state, when the run is measured.
     measuring: Option<Measuring>,
     measure_tasks: Vec<Task<()>>,
-    _observed: Vec<Subscription>,
+    /// The check's run, when the run is one.
+    pub(crate) probing: Option<Probing>,
+    probe_close: Option<Task<()>>,
+    pub(crate) _observed: Vec<Subscription>,
 }
 
 impl ShellModel {
@@ -56,6 +71,7 @@ impl ShellModel {
         shell: ShellState,
         launches: Vec<SlotLaunch>,
         measure: Option<Measure>,
+        probe: Option<Probe>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> ShellModel {
@@ -63,6 +79,9 @@ impl ShellModel {
             shell,
             scrollers: HashMap::new(),
             texts: HashMap::new(),
+            composers: HashMap::new(),
+            folder: None,
+            folder_typing: None,
             panes: cx.new(|_| ResizableState::default()),
             watches: HashMap::new(),
             generations: HashMap::new(),
@@ -70,8 +89,11 @@ impl ShellModel {
             prefetch_asked: false,
             measuring: None,
             measure_tasks: Vec::new(),
+            probing: probe.map(Probing::new),
+            probe_close: None,
             _observed: Vec::new(),
         };
+        Self::hold_close(window, cx);
         for launch in launches {
             model.open(launch, window, cx);
         }
@@ -81,17 +103,37 @@ impl ShellModel {
         model
     }
 
-    /// Opens a slot, gives it a scroller and starts waiting on its session.
+    /// Opens a slot, gives it a scroller and an input and starts waiting on its session.
     fn open(&mut self, launch: SlotLaunch, window: &mut Window, cx: &mut Context<Self>) {
         let slot = self.shell.open(launch);
-        let scroller = cx.new(|cx| MessageScrollerState::new(0, cx));
-        // A scroll notifies the scroller: the rows coming into view get their text made.
-        let observed = cx.observe_in(&scroller, window, |model, _, window, cx| {
-            model.ask_prefetch(window, cx);
-        });
-        self._observed.push(observed);
-        self.scrollers.insert(slot, scroller);
+        self.prepare(slot, window, cx);
         self.watch(slot, window, cx);
+    }
+
+    /// Gives the slot a scroller and an input, unless it has them.
+    fn prepare(&mut self, slot: SlotId, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.scrollers.contains_key(&slot) {
+            let scroller = cx.new(|cx| MessageScrollerState::new(0, cx));
+            // A scroll notifies the scroller: the rows coming into view get their text made.
+            let observed = cx.observe_in(&scroller, window, |model, _, window, cx| {
+                model.ask_prefetch(window, cx);
+            });
+            self._observed.push(observed);
+            self.scrollers.insert(slot, scroller);
+        }
+        if !self.composers.contains_key(&slot) {
+            let (input, changes) = composer::new_input(slot, Self::dispatch(cx), window, cx);
+            self._observed.push(changes);
+            self.composers.insert(slot, input);
+        }
+    }
+
+    /// Hands an action to the window's model.
+    pub(crate) fn dispatch(cx: &Context<Self>) -> Dispatch {
+        let this = cx.weak_entity();
+        Rc::new(move |action, window, cx| {
+            _ = this.update(cx, |model, cx| model.act(action, window, cx));
+        })
     }
 
     /// Starts the task that waits on the slot's current session and refreshes on each change,
@@ -145,6 +187,7 @@ impl ShellModel {
         let Some(refresh) = self.shell.refresh(slot, generation) else {
             return;
         };
+        self.probe_settled(window, cx);
         let Some(scroller) = self.scrollers.get(&slot).cloned() else {
             return;
         };
@@ -267,22 +310,60 @@ impl ShellModel {
         });
     }
 
-    /// Does what a click asks of the shell and draws again.
+    /// Does what a click or a key asks of the shell, carries out what the shell says the screen
+    /// is to do about it, and draws again.
     pub(crate) fn act(&mut self, action: ShellAction, window: &mut Window, cx: &mut Context<Self>) {
         let selects = matches!(action, ShellAction::Select(_));
         let toggles = matches!(action, ShellAction::TogglePane(_));
-        if let Some((slot, changes)) = self.shell.act(action)
+        let opens = matches!(action, ShellAction::OpenNewSession);
+        let Acted {
+            rows,
+            draft,
+            started,
+            check,
+            folder,
+            close,
+        } = self.shell.act(action);
+        // A restarted slot's rows are new: the text states of the old ones are let go.
+        if let Some(slot) = started.filter(|slot| self.scrollers.contains_key(slot)) {
+            self.texts.remove(&slot);
+            self.scrolled.remove(&slot);
+        }
+        if let Some((slot, changes)) = rows
             && let Some(scroller) = self.scrollers.get(&slot)
         {
             scroller.update(cx, |state, cx| {
                 for change in changes {
-                    if let RowChange::Remeasure(range) = change {
-                        state.remeasure_items(range, cx);
+                    match change {
+                        RowChange::Splice { range, count } => {
+                            state.splice(range, count, cx);
+                        }
+                        RowChange::Remeasure(range) => {
+                            state.remeasure_items(range, cx);
+                        }
                     }
                 }
             });
         }
-        if selects {
+        if let Some(slot) = draft
+            && let Some(input) = self.composers.get(&slot)
+        {
+            composer::fill(input, self.shell.draft(slot), window, cx);
+        }
+        if let Some(slot) = started {
+            self.prepare(slot, window, cx);
+            self.watch(slot, window, cx);
+        }
+        if let Some(check) = check {
+            self.check(check, window, cx);
+        }
+        if folder {
+            self.fill_folder(opens, window, cx);
+        }
+        if close {
+            self.close_sessions(cx);
+        }
+        if selects || started.is_some() {
             self.ask_prefetch(window, cx);
         }
         if toggles {
@@ -294,6 +375,38 @@ impl ShellModel {
             });
         }
         cx.notify();
+    }
+
+    /// Looks for the folder in the background and hands the answer back to the shell.
+    fn check(&mut self, check: FolderCheck, window: &mut Window, cx: &mut Context<Self>) {
+        let FolderCheck { folder, exists } = check;
+        cx.spawn_in(window, async move |this, cx| {
+            let exists = exists.await;
+            _ = this.update_in(cx, |model, window, cx| {
+                model.act(ShellAction::FolderChecked { folder, exists }, window, cx);
+            });
+        })
+        .detach();
+    }
+}
+
+/// A check's run (`Probe`): the ready file after each refresh, and the timed close.
+impl ShellModel {
+    /// Writes how the slots settled, and the first time they all did, sets the close going
+    /// after `close_after`, through the same close as the confirmed one.
+    fn probe_settled(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(probing) = &mut self.probing else {
+            return;
+        };
+        let Some(after) = probing.settled(self.shell.ready_lines()) else {
+            return;
+        };
+        self.probe_close = Some(cx.spawn_in(window, async move |this, cx| {
+            cx.background_executor().timer(after).await;
+            _ = this.update_in(cx, |model, window, cx| {
+                model.act(ShellAction::ConfirmClose, window, cx);
+            });
+        }));
     }
 }
 

@@ -4,6 +4,7 @@ mod commands;
 mod operations;
 pub mod paths;
 pub mod routing;
+mod sent;
 pub mod sign_in;
 pub mod snapshot;
 mod stop;
@@ -20,9 +21,10 @@ use serde_json::Value;
 use crate::fold::commands::{fold_commands_of_init, fold_commands_of_response};
 use crate::fold::operations::{fold_operation, with_operations};
 use crate::fold::paths::replace_routing;
+use crate::fold::sent::{fold_send_failed, fold_sent};
 use crate::fold::stop::{fold_stop, stop_taken};
 use crate::fold::suggestions::suggestions_of;
-use crate::input::{AnswerFailed, Decided, PresenterInput, UserSent};
+use crate::input::{AnswerFailed, Decided, PresenterInput};
 use crate::json::parse;
 use crate::keyed::{Keyed, of_cli_id};
 use crate::records::composer::fold_answered;
@@ -31,8 +33,8 @@ use crate::records::operations::Answer;
 use crate::records::tasks::fold_background;
 use crate::records::turn_end::with_turn_end;
 use crate::transcript::{
-    ApprovalOutcome, ApprovalRecord, MessageRecord, MessageSource, PartRecord, ResumeEnd, Role,
-    TextRecord, Transcript,
+    ApprovalOutcome, ApprovalRecord, CompactionMark, CompactionOutcome, MessageRecord,
+    MessageSource, ResumeEnd, Role, Transcript,
 };
 
 /// Folds one input into the [`Transcript`]. A pure function that never panics: an event it has
@@ -53,6 +55,7 @@ pub fn fold_transcript(
     match input {
         PresenterInput::Event(event) => fold_event(transcript, event, before, after),
         PresenterInput::UserSent(sent) => fold_sent(transcript, sent),
+        PresenterInput::SendFailed(id) => fold_send_failed(transcript, id),
         PresenterInput::StopRequested => fold_stop(transcript, after),
         PresenterInput::Decided(decided) => fold_decided(transcript, decided, before),
         PresenterInput::AnswerFailed(failed) => fold_answer_failed(transcript, failed, before),
@@ -171,20 +174,26 @@ fn fold_event(
         }
         AgentEvent::SystemCompactBoundary {
             compact_metadata, ..
-        } => with_operations(
-            transcript,
-            transcript.operations.compacted(compact_metadata),
-        ),
+        } => fold_compacted(transcript, compact_metadata),
         AgentEvent::SystemStatus {
             status,
             permission_mode,
+            compact_result,
             ..
-        } => with_operations(
-            transcript,
-            transcript
-                .operations
-                .status_said(status.as_deref(), permission_mode.as_deref()),
-        ),
+        } => {
+            let said = with_operations(
+                transcript,
+                transcript
+                    .operations
+                    .status_said(status.as_deref(), permission_mode.as_deref()),
+            );
+            match compact_result.as_deref() {
+                Some(result) if result != COMPACT_SUCCESS => {
+                    with_mark(&said, CompactionOutcome::Failed)
+                }
+                _ => said,
+            }
+        }
         AgentEvent::SystemInit { slash_commands, .. } => {
             fold_commands_of_init(transcript, slash_commands)
         }
@@ -202,46 +211,37 @@ fn fold_event(
     }
 }
 
-/// The user's words exist only here: the CLI does not echo them on stdout.
-fn fold_sent(transcript: &Arc<Transcript>, sent: &UserSent) -> Arc<Transcript> {
-    let key = transcript.messages.claim(sent.message_id.as_str());
-    // The files go ahead of the words, as they do to the CLI; their keys are a letter and a
-    // number, the words' is 0.
-    let files = sent
-        .attachments
-        .iter()
-        .enumerate()
-        .fold(Keyed::new(), |parts, (index, file)| {
-            parts.put(
-                format!("{key}:a{index}"),
-                Arc::new(PartRecord::Attachment(file.clone())),
-            )
-        });
-    let parts = files.put(
-        format!("{key}:0"),
-        Arc::new(PartRecord::Text(TextRecord {
-            reasoning: false,
-            text: sent.text.clone(),
-            streaming: false,
-        })),
-    );
-    let message = MessageRecord {
-        key: key.clone(),
-        role: Role::User,
-        source: MessageSource::Sent,
-        parts,
+const COMPACT_SUCCESS: &str = "success";
+
+/// A boundary that reports tokens is a compaction (the record is the operations'); it leaves a
+/// mark in the conversation too.
+fn fold_compacted(transcript: &Arc<Transcript>, compact_metadata: &RawJson) -> Arc<Transcript> {
+    let operations = transcript.operations.compacted(compact_metadata);
+    // `compacted` gives a new sequence number only when it wrote a record.
+    let record = operations
+        .compactions
+        .last()
+        .filter(|_| operations.seq != transcript.operations.seq);
+    let Some(record) = record else {
+        return with_operations(transcript, operations);
     };
-    let mut routing = transcript.routing.clone();
-    routing.sends = routing.sends.wrapping_add(1);
-    let user_uuids = match &sent.uuid {
-        Some(uuid) => transcript.user_uuids.update(key.clone(), uuid.clone()),
-        None => transcript.user_uuids.clone(),
+    let outcome = CompactionOutcome::Compacted {
+        trigger: record.trigger.clone(),
+        pre_tokens: record.pre_tokens,
+        post_tokens: record.post_tokens,
     };
+    with_mark(&with_operations(transcript, operations), outcome)
+}
+
+fn with_mark(transcript: &Arc<Transcript>, outcome: CompactionOutcome) -> Arc<Transcript> {
+    let mut marks = transcript.compaction_marks.clone();
+    marks.push_back(CompactionMark {
+        after: transcript.messages.order().next_back().map(str::to_owned),
+        outcome,
+    });
     Arc::new(Transcript {
-        messages: transcript.messages.put(key, Arc::new(message)),
-        routing,
-        user_uuids,
-        ..Transcript::clone(transcript)
+        compaction_marks: marks,
+        ..(**transcript).clone()
     })
 }
 

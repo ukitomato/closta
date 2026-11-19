@@ -390,6 +390,23 @@ fn a_system_line_keeps_its_subtype_instead_of_collapsing_into_one_bucket() {
 }
 
 #[test]
+fn the_compact_result_of_a_status_is_read() {
+    let status = parse(
+        r#"{"type":"system","subtype":"status","status":null,"compact_result":"success","session_id":"59475b26","uuid":"991bf2d2"}"#,
+    );
+    let AgentEvent::SystemStatus {
+        status,
+        compact_result,
+        ..
+    } = status
+    else {
+        panic!("not a SystemStatus: {status:?}");
+    };
+    assert_eq!(None, status);
+    assert_eq!(Some("success".to_string()), compact_result);
+}
+
+#[test]
 fn a_nested_payload_is_carried_through_as_text_rather_than_modelled() {
     let event = parse(
         r#"{"type":"stream_event","event":{"type":"content_block_delta","index":0},"session_id":"0d09d32e","parent_tool_use_id":null,"uuid":"3f1d0c22","ttft_ms":812}"#,

@@ -50,6 +50,8 @@ pub fn slot_launch(arg: &ReplayArg, pace: Duration) -> Result<(SlotLaunch, Repla
         )),
         working_directory: None,
         companion: Some(companion),
+        relaunch: None,
+        settles_on_failure: false,
     };
     Ok((launch, control))
 }

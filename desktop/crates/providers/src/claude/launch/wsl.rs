@@ -149,6 +149,47 @@ pub fn installed_distros() -> Vec<String> {
     Vec::new()
 }
 
+/// The name of the default distribution: the `DistributionName` of the subkey that is named by
+/// `default_key` (the `DefaultDistribution` value of the Lxss key, a GUID). `subkeys` pairs each
+/// subkey's name with its `DistributionName`. None when no default is set or no subkey has it.
+pub fn default_distro_name(
+    default_key: Option<&str>,
+    subkeys: &[(String, String)],
+) -> Option<String> {
+    let default_key = default_key?;
+    subkeys
+        .iter()
+        .find(|(key, _)| key.eq_ignore_ascii_case(default_key))
+        .map(|(_, name)| name.clone())
+}
+
+/// The name of the distribution `wsl.exe` starts without `-d`, read from the registry like
+/// [`installed_distros`]. None when there is no default or the key cannot be read.
+#[cfg(windows)]
+pub fn default_distro() -> Option<String> {
+    let lxss = windows_registry::CURRENT_USER.open(LXSS_KEY).ok()?;
+    let default_key = lxss.get_string("DefaultDistribution").ok();
+    let subkeys: Vec<(String, String)> = lxss
+        .keys()
+        .ok()?
+        .filter_map(|subkey| {
+            let name = lxss
+                .open(&subkey)
+                .ok()?
+                .get_string("DistributionName")
+                .ok()?;
+            Some((subkey, name))
+        })
+        .collect();
+    default_distro_name(default_key.as_deref(), &subkeys)
+}
+
+/// None: WSL distributions exist only on a Windows host.
+#[cfg(not(windows))]
+pub fn default_distro() -> Option<String> {
+    None
+}
+
 /// Starts the program in the distribution of a WSL project, through `wsl.exe`. Mirrors
 /// WslSpawner.kt. `wsl.exe` gets the child environment (the inherited one without the `dropped`
 /// names, the launch's env over it) and a `WSLENV` that passes the launch's names into Linux.
@@ -351,6 +392,32 @@ mod tests {
     use crate::claude::launch::spec::{CHECKPOINTING_ENV, LaunchSpec};
     #[cfg(unix)]
     use crate::claude::launch::spec::{SANDBOX_SETTINGS, TOOL_USE_PROMPT};
+
+    fn subkeys() -> Vec<(String, String)> {
+        vec![
+            ("{aaaa}".to_owned(), "Debian".to_owned()),
+            ("{BBBB}".to_owned(), "Ubuntu".to_owned()),
+        ]
+    }
+
+    #[test]
+    fn the_default_distro_is_the_name_in_the_subkey_the_default_value_names() {
+        assert_eq!(
+            default_distro_name(Some("{BBBB}"), &subkeys()).as_deref(),
+            Some("Ubuntu")
+        );
+        assert_eq!(
+            default_distro_name(Some("{bbbb}"), &subkeys()).as_deref(),
+            Some("Ubuntu")
+        );
+    }
+
+    #[test]
+    fn there_is_no_default_distro_without_a_default_or_its_subkey() {
+        assert_eq!(default_distro_name(None, &subkeys()), None);
+        assert_eq!(default_distro_name(Some("{cccc}"), &subkeys()), None);
+        assert_eq!(default_distro_name(Some("{aaaa}"), &[]), None);
+    }
 
     fn parse(path: &str) -> Option<WslLocation> {
         WslLocation::parse(Some(path), true)

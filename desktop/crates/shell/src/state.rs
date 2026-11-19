@@ -2,19 +2,28 @@
 //! which rows were opened or closed by hand.
 
 use std::collections::{BTreeMap, HashSet};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, PoisonError};
 
 use async_channel::Receiver;
+use closta_presenter::composer_state::composer_state;
 use closta_presenter::rows::{ThreadRow, ThreadRows};
 use closta_presenter::thread_running::thread_is_running;
 use closta_session::log::SessionLog;
 use closta_session::runtime::{SessionConfig, SessionRuntime};
 use closta_session::status::SessionStatus;
+use futures_lite::future;
 
+use crate::closing::{CloseQuestion, CloseRun, CloseStage};
+use crate::composer::Composer;
+use crate::copy;
 use crate::header::AppHeader;
+use crate::new_session::{
+    LaunchChecks, NewSessionDialog, PlannerFor, Problem, RecentFolders, Runtime, default_folder,
+    launch_in, quick_problem, runtime_of,
+};
 use crate::panes::{Pane, Panes};
 use crate::rows::{RowChange, row_changes};
-use crate::slot::{SlotId, SlotLaunch, SlotSummary, Spawn, mark_of};
+use crate::slot::{Relaunch, SlotId, SlotLaunch, SlotSummary, Spawn, mark_of};
 use crate::watch::SlotWatch;
 
 /// What a click or a key asks of the shell.
@@ -24,6 +33,58 @@ pub enum ShellAction {
     TogglePane(Pane),
     ResizePane { pane: Pane, width: f32 },
     ToggleRow { slot: SlotId, key: String },
+    Send { slot: SlotId },
+    Interrupt { slot: SlotId },
+    EditDraft { slot: SlotId, text: String },
+    HistoryPrev { slot: SlotId },
+    HistoryNext { slot: SlotId },
+    Restart { slot: SlotId },
+    OpenNewSession,
+    EditFolder { text: String },
+    CancelNewSession,
+    StartSession { folder: String },
+    FolderChecked { folder: String, exists: bool },
+    RequestClose,
+    ConfirmClose,
+    CancelClose,
+}
+
+/// What the machine is asked: the checks of the New Session dialog and the planner a folder
+/// starts with.
+#[derive(Clone)]
+pub struct Ports {
+    pub checks: Arc<dyn LaunchChecks>,
+    pub planner_for: Arc<dyn PlannerFor>,
+}
+
+/// A folder to look for in the background; its answer comes back as `FolderChecked`.
+pub struct FolderCheck {
+    pub folder: String,
+    pub exists: future::Boxed<bool>,
+}
+
+/// What an action changed, for the screen to carry out.
+#[derive(Default)]
+pub struct Acted {
+    /// The slot whose rows changed by hand, and how.
+    pub rows: Option<(SlotId, Vec<RowChange>)>,
+    /// The slot whose input is to be filled again from [`ShellState::draft`].
+    pub draft: Option<SlotId>,
+    /// The slot whose session started anew: its scroller is to be made and awaited again.
+    pub started: Option<SlotId>,
+    /// A folder to look for.
+    pub check: Option<FolderCheck>,
+    /// The dialog's folder field is to be filled again from the dialog.
+    pub folder: bool,
+    /// The steps that close the window are to run.
+    pub close: bool,
+}
+
+/// What the composer's second line shows of the session.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct ComposerLine {
+    pub mode: Option<String>,
+    pub model: String,
 }
 
 /// Where a slot's session is after a refresh, and how its rows changed.
@@ -51,28 +112,55 @@ struct Slot {
     waiting: bool,
     /// The keys of the rows opened or closed against their default.
     flipped: HashSet<String>,
+    /// The draft, its history and the reason it was not sent; they outlive the session.
+    composer: Composer,
+    /// How to start the same session again; `None` leaves no Restart.
+    relaunch: Option<Relaunch>,
+    settles_on_failure: bool,
+    working_directory: Option<String>,
+    line: Option<ComposerLine>,
+    compacting: bool,
 }
+
+/// The runs that have not returned, by session id: with the handle to kill their processes and
+/// the receiver that closes when the run has returned. A replaced session stays here until then.
+type Runs = Arc<Mutex<BTreeMap<String, (SessionRuntime, Receiver<()>)>>>;
 
 pub struct ShellState {
     header: AppHeader,
     spawn: Spawn,
     log: Arc<dyn SessionLog>,
+    ports: Ports,
+    dialog: Option<NewSessionDialog>,
+    recent: RecentFolders,
     last_id: u64,
     slots: BTreeMap<SlotId, Slot>,
     selected: Option<SlotId>,
     panes: Panes,
+    runs: Runs,
+    closing: CloseStage,
 }
 
 impl ShellState {
-    pub fn new(header: AppHeader, spawn: Spawn, log: Arc<dyn SessionLog>) -> ShellState {
+    pub fn new(
+        header: AppHeader,
+        spawn: Spawn,
+        log: Arc<dyn SessionLog>,
+        ports: Ports,
+    ) -> ShellState {
         ShellState {
             header,
             spawn,
             log,
+            ports,
+            dialog: None,
+            recent: RecentFolders::default(),
             last_id: 0,
             slots: BTreeMap::new(),
             selected: None,
             panes: Panes::default(),
+            runs: Runs::default(),
+            closing: CloseStage::Open,
         }
     }
 
@@ -85,6 +173,9 @@ impl ShellState {
         self.last_id += 1;
         let id = SlotId(self.last_id);
         let title = launch.title.clone();
+        let relaunch = launch.relaunch.clone();
+        let settles_on_failure = launch.settles_on_failure;
+        let working_directory = launch.working_directory.clone();
         let (runtime, finished) = self.start(launch);
         self.slots.insert(
             id,
@@ -99,6 +190,12 @@ impl ShellState {
                 running: false,
                 waiting: false,
                 flipped: HashSet::new(),
+                composer: Composer::default(),
+                relaunch,
+                settles_on_failure,
+                working_directory,
+                line: None,
+                compacting: false,
             },
         );
         self.selected.get_or_insert(id);
@@ -106,14 +203,24 @@ impl ShellState {
     }
 
     /// Closes the slot's session and starts a new one in its place, in the next generation.
-    /// The rows are emptied: the changes that do it are returned. The rows opened by hand and
-    /// the selection stay.
+    /// The rows are emptied: the changes that do it are returned. The rows opened by hand, the
+    /// selection, the draft and its history stay.
     pub fn replace(&mut self, slot: SlotId, launch: SlotLaunch) -> Option<Vec<RowChange>> {
+        // The old runtime stays in `runs` until its run has returned.
         self.slots.get(&slot)?.runtime.close();
         let title = launch.title.clone();
+        let relaunch = launch.relaunch.clone();
+        let settles_on_failure = launch.settles_on_failure;
+        let working_directory = launch.working_directory.clone();
         let (runtime, finished) = self.start(launch);
         let held = self.slots.get_mut(&slot)?;
         held.title = title;
+        held.relaunch = relaunch;
+        held.settles_on_failure = settles_on_failure;
+        held.working_directory = working_directory;
+        held.line = None;
+        held.compacting = false;
+        held.composer.clear_reason();
         held.runtime = runtime;
         held.finished = finished;
         held.generation += 1;
@@ -144,14 +251,56 @@ impl ShellState {
         );
         let (runtime, run) = SessionRuntime::new(config);
         let (done, finished) = async_channel::bounded::<()>(1);
+        lock(&self.runs).insert(id.clone(), (runtime.clone(), finished.clone()));
+        let runs = Arc::clone(&self.runs);
         (self.spawn)(Box::pin(async move {
             run.await;
+            lock(&runs).remove(&id);
             drop(done);
         }));
         if let Some(companion) = launch.companion {
             (self.spawn)(companion(runtime.clone()));
         }
         (runtime, finished)
+    }
+
+    /// How many runs have not returned, those of replaced sessions included.
+    pub fn live_runs(&self) -> usize {
+        lock(&self.runs).len()
+    }
+
+    pub fn close_stage(&self) -> &CloseStage {
+        &self.closing
+    }
+
+    /// Closes every slot's session. The run is over once every run that has not returned has,
+    /// those of replaced sessions too; `destroy` kills the processes of those still left.
+    pub fn close_all(&mut self) -> CloseRun {
+        for held in self.slots.values() {
+            held.runtime.close();
+        }
+        let waits: Vec<Receiver<()>> = lock(&self.runs)
+            .values()
+            .map(|(_, finished)| finished.clone())
+            .collect();
+        let runs = Arc::clone(&self.runs);
+        CloseRun {
+            returned: Box::pin(async move {
+                for finished in waits {
+                    // Nothing is ever sent: the receiver closes when the run has returned.
+                    _ = finished.recv().await;
+                }
+            }),
+            destroy: Box::new(move || {
+                let left: Vec<SessionRuntime> = lock(&runs)
+                    .values()
+                    .map(|(runtime, _)| runtime.clone())
+                    .collect();
+                for runtime in left {
+                    runtime.destroy_now();
+                }
+            }),
+        }
     }
 
     /// The slots in the order they were opened.
@@ -234,6 +383,12 @@ impl ShellState {
         let running = matches!(status, SessionStatus::Running { .. })
             && !waiting
             && thread_is_running(&view.conversation, &view.transcript);
+        let composing = composer_state(&view.conversation, &view.transcript);
+        held.line = Some(ComposerLine {
+            mode: composing.mode,
+            model: composing.model.label,
+        });
+        held.compacting = view.transcript.operations.compacting;
         held.rows = rows;
         held.status = status.clone();
         held.running = running;
@@ -246,33 +401,331 @@ impl ShellState {
         })
     }
 
-    /// Does what `action` asks. A row toggled returns the slot and the change that remeasures
-    /// it; nothing else changes rows.
-    pub fn act(&mut self, action: ShellAction) -> Option<(SlotId, Vec<RowChange>)> {
+    /// The slot's draft; empty for a slot that is not there.
+    pub fn draft(&self, slot: SlotId) -> &str {
+        self.slots.get(&slot).map_or("", |it| it.composer.draft())
+    }
+
+    /// Whether the slot's input shows a sent message in place of its draft.
+    pub fn browsing(&self, slot: SlotId) -> bool {
+        self.slots
+            .get(&slot)
+            .is_some_and(|it| it.composer.browsing())
+    }
+
+    /// Why the slot's last send did not go, under its input.
+    pub fn composer_reason(&self, slot: SlotId) -> Option<&'static str> {
+        self.slots.get(&slot)?.composer.reason()
+    }
+
+    /// The mode and model as of the slot's last refresh.
+    pub fn composer_line(&self, slot: SlotId) -> Option<ComposerLine> {
+        self.slots.get(&slot)?.line.clone()
+    }
+
+    /// Whether the CLI says it compacts, as of the slot's last refresh.
+    pub fn compacting(&self, slot: SlotId) -> bool {
+        self.slots.get(&slot).is_some_and(|it| it.compacting)
+    }
+
+    /// The title and hint of the band of a session that failed, as of the slot's last refresh.
+    pub fn failure(&self, slot: SlotId) -> Option<(String, Option<String>)> {
+        let held = self.slots.get(&slot)?;
+        let SessionStatus::Failed(failure) = &held.status else {
+            return None;
+        };
+        let distro =
+            held.working_directory
+                .as_deref()
+                .and_then(|folder| match runtime_of(folder) {
+                    Runtime::Wsl { distro } => Some(distro),
+                    Runtime::Win32 => None,
+                });
+        Some(copy::failure_text(failure, distro.as_deref()))
+    }
+
+    /// Whether the slot's session ended with no failure, as of its last refresh.
+    pub fn ended(&self, slot: SlotId) -> bool {
+        self.slots
+            .get(&slot)
+            .is_some_and(|it| it.status == SessionStatus::Ended)
+    }
+
+    /// Whether a Restart is on offer: the session ended or failed and can be made again.
+    pub fn can_restart(&self, slot: SlotId) -> bool {
+        self.slots.get(&slot).is_some_and(|it| {
+            it.relaunch.is_some()
+                && matches!(it.status, SessionStatus::Ended | SessionStatus::Failed(_))
+        })
+    }
+
+    /// What the checks' ready file says once every slot has settled, as of each slot's last
+    /// refresh: `Running <version>` or `Failed <kind>`, one line a slot in the order they were
+    /// opened. `None` while there is no slot or one has not settled; a slot that is meant to
+    /// fail settles only once it has failed. No line holds a path.
+    pub fn ready_lines(&self) -> Option<Vec<String>> {
+        if self.slots.is_empty() {
+            return None;
+        }
+        self.slots
+            .values()
+            .map(|held| match &held.status {
+                SessionStatus::Running { version } if !held.settles_on_failure => {
+                    Some(format!("Running {version}"))
+                }
+                SessionStatus::Failed(failure) => Some(format!("Failed {}", failure.kind())),
+                _ => None,
+            })
+            .collect()
+    }
+
+    pub fn new_session(&self) -> Option<&NewSessionDialog> {
+        self.dialog.as_ref()
+    }
+
+    /// The folders sessions were started in, newest first.
+    pub fn recent_folders(&self) -> &[String] {
+        self.recent.list()
+    }
+
+    /// Where the folder field points when it is empty.
+    pub fn default_folder(&self) -> Option<String> {
+        default_folder(self.ports.checks.as_ref())
+    }
+
+    /// Does what `action` asks and says what the screen is to do about it.
+    pub fn act(&mut self, action: ShellAction) -> Acted {
+        // Once the close began, nothing may start a run or write to a session: a run started
+        // after `close_all` would be left out of its wait.
+        if self.closing == CloseStage::Closing
+            && matches!(
+                action,
+                ShellAction::Restart { .. }
+                    | ShellAction::StartSession { .. }
+                    | ShellAction::OpenNewSession
+                    | ShellAction::FolderChecked { .. }
+                    | ShellAction::Send { .. }
+            )
+        {
+            return Acted::default();
+        }
         match action {
             ShellAction::Select(slot) => {
                 if self.slots.contains_key(&slot) {
                     self.selected = Some(slot);
                 }
-                None
+                Acted::default()
             }
             ShellAction::TogglePane(pane) => {
                 self.panes.toggle(pane);
-                None
+                Acted::default()
             }
             ShellAction::ResizePane { pane, width } => {
                 self.panes.resize(pane, width);
-                None
+                Acted::default()
             }
-            ShellAction::ToggleRow { slot, key } => {
-                let held = self.slots.get_mut(&slot)?;
-                let at = held.rows.iter().position(|row| row.key() == key);
-                if !held.flipped.remove(&key) {
-                    held.flipped.insert(key);
+            ShellAction::ToggleRow { slot, key } => self.toggle_row(slot, key),
+            ShellAction::Send { slot } => self.send(slot),
+            ShellAction::Interrupt { slot } => {
+                if let Some(commands) = self.slots.get(&slot).and_then(|it| it.runtime.commands()) {
+                    _ = commands.interrupt();
                 }
-                let changes = at.map(|at| RowChange::Remeasure(at..at + 1));
-                Some((slot, changes.into_iter().collect()))
+                Acted::default()
+            }
+            ShellAction::EditDraft { slot, text } => {
+                if let Some(held) = self.slots.get_mut(&slot) {
+                    held.composer.edit(&text);
+                }
+                Acted::default()
+            }
+            ShellAction::HistoryPrev { slot } => self.browse(slot, Composer::previous),
+            ShellAction::HistoryNext { slot } => self.browse(slot, Composer::next),
+            ShellAction::Restart { slot } => self.restart(slot),
+            ShellAction::OpenNewSession => {
+                if self.dialog.is_some() {
+                    return Acted::default();
+                }
+                self.dialog = Some(NewSessionDialog::default());
+                Acted {
+                    folder: true,
+                    ..Acted::default()
+                }
+            }
+            ShellAction::EditFolder { text } => self.edit_folder(text),
+            ShellAction::CancelNewSession => {
+                self.dialog = None;
+                Acted::default()
+            }
+            ShellAction::StartSession { folder } => self.start_session(folder),
+            ShellAction::FolderChecked { folder, exists } => self.folder_checked(&folder, exists),
+            ShellAction::RequestClose => self.request_close(),
+            ShellAction::ConfirmClose => self.begin_close(),
+            ShellAction::CancelClose => {
+                if matches!(self.closing, CloseStage::Asking(_)) {
+                    self.closing = CloseStage::Open;
+                }
+                Acted::default()
             }
         }
     }
+
+    fn request_close(&mut self) -> Acted {
+        if self.closing != CloseStage::Open {
+            return Acted::default();
+        }
+        let question = CloseQuestion {
+            working: self.slots.values().filter(|it| it.running).count(),
+            drafts: self
+                .slots
+                .values()
+                .filter(|it| it.composer.has_draft())
+                .count(),
+        };
+        if question.working == 0 && question.drafts == 0 {
+            return self.begin_close();
+        }
+        self.closing = CloseStage::Asking(question);
+        Acted::default()
+    }
+
+    /// Enters the closing stage from Open or Asking; from the closing stage it does nothing.
+    fn begin_close(&mut self) -> Acted {
+        if self.closing == CloseStage::Closing {
+            return Acted::default();
+        }
+        self.closing = CloseStage::Closing;
+        Acted {
+            close: true,
+            ..Acted::default()
+        }
+    }
+
+    fn toggle_row(&mut self, slot: SlotId, key: String) -> Acted {
+        let Some(held) = self.slots.get_mut(&slot) else {
+            return Acted::default();
+        };
+        let at = held.rows.iter().position(|row| row.key() == key);
+        if !held.flipped.remove(&key) {
+            held.flipped.insert(key);
+        }
+        let changes = at.map(|at| RowChange::Remeasure(at..at + 1));
+        Acted {
+            rows: Some((slot, changes.into_iter().collect())),
+            ..Acted::default()
+        }
+    }
+
+    /// Sends the slot's draft. The whole send runs inside one action, so nothing can browse the
+    /// history between the draft being taken and being put back.
+    fn send(&mut self, slot: SlotId) -> Acted {
+        let Some(held) = self.slots.get_mut(&slot) else {
+            return Acted::default();
+        };
+        let Some(commands) = held.runtime.commands() else {
+            held.composer.not_running();
+            return Acted::default();
+        };
+        let before = held.composer.draft().to_owned();
+        if let Some((id, text)) = held.composer.take_for_send()
+            && let Err(error) = commands.send_message(id, &text, &[])
+        {
+            held.composer.failed(text, &error);
+        }
+        Acted {
+            draft: (held.composer.draft() != before).then_some(slot),
+            ..Acted::default()
+        }
+    }
+
+    fn browse(&mut self, slot: SlotId, step: fn(&mut Composer) -> bool) -> Acted {
+        let moved = self
+            .slots
+            .get_mut(&slot)
+            .is_some_and(|held| step(&mut held.composer));
+        Acted {
+            draft: moved.then_some(slot),
+            ..Acted::default()
+        }
+    }
+
+    fn restart(&mut self, slot: SlotId) -> Acted {
+        if !self.can_restart(slot) {
+            return Acted::default();
+        }
+        let Some(relaunch) = self.slots.get(&slot).and_then(|it| it.relaunch.clone()) else {
+            return Acted::default();
+        };
+        let Some(changes) = self.replace(slot, relaunch()) else {
+            return Acted::default();
+        };
+        Acted {
+            rows: Some((slot, changes)),
+            started: Some(slot),
+            ..Acted::default()
+        }
+    }
+
+    fn edit_folder(&mut self, text: String) -> Acted {
+        let Some(dialog) = self.dialog.as_mut() else {
+            return Acted::default();
+        };
+        if dialog.checking || dialog.folder == text {
+            return Acted::default();
+        }
+        dialog.problem = quick_problem(&text, self.ports.checks.as_ref());
+        dialog.folder = text;
+        Acted {
+            folder: true,
+            ..Acted::default()
+        }
+    }
+
+    fn start_session(&mut self, folder: String) -> Acted {
+        let Some(dialog) = self.dialog.as_mut() else {
+            return Acted::default();
+        };
+        if dialog.checking
+            || folder.trim() != dialog.folder.trim()
+            || folder.trim().is_empty()
+            || quick_problem(&folder, self.ports.checks.as_ref()).is_some()
+        {
+            return Acted::default();
+        }
+        dialog.checking = true;
+        let folder = folder.trim().to_owned();
+        let exists = self.ports.checks.folder_exists(&folder);
+        Acted {
+            check: Some(FolderCheck { folder, exists }),
+            ..Acted::default()
+        }
+    }
+
+    fn folder_checked(&mut self, folder: &str, exists: bool) -> Acted {
+        let Some(dialog) = self.dialog.as_mut() else {
+            return Acted::default();
+        };
+        if !dialog.checking || folder.trim() != dialog.folder.trim() {
+            return Acted::default();
+        }
+        if !exists {
+            dialog.problem = Some(Problem::FolderMissing);
+            dialog.checking = false;
+            return Acted::default();
+        }
+        let folder = folder.trim();
+        let slot = self.open(launch_in(folder, &self.ports.planner_for));
+        self.selected = Some(slot);
+        self.recent.push(folder);
+        self.dialog = None;
+        Acted {
+            started: Some(slot),
+            ..Acted::default()
+        }
+    }
+}
+
+fn lock(
+    runs: &Runs,
+) -> std::sync::MutexGuard<'_, BTreeMap<String, (SessionRuntime, Receiver<()>)>> {
+    runs.lock().unwrap_or_else(PoisonError::into_inner)
 }

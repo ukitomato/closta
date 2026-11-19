@@ -11,8 +11,8 @@ use closta_presenter::keyed::Keyed;
 use closta_presenter::rows::{ThreadRow, ThreadRows, TodoItem, agent_rows, agent_transcript};
 use closta_presenter::session::SessionView;
 use closta_presenter::transcript::{
-    ApprovalRecord, MessageRecord, MessageSource, PartRecord, Role, TextRecord, ToolCallRecord,
-    Transcript,
+    ApprovalRecord, CompactionOutcome, MessageRecord, MessageSource, PartRecord, Role, TextRecord,
+    ToolCallRecord, Transcript,
 };
 use closta_providers::claude::protocol::decode;
 use serde_json::{Value, json};
@@ -567,4 +567,100 @@ fn a_message_reused_once_still_keeps_its_part_rows_when_it_grows() {
         after.iter().map(ThreadRow::key).collect::<Vec<_>>()
     );
     assert!(made[0].same(&after[0]), "{:?}", after[0]);
+}
+
+fn compaction_rows(rows: &[ThreadRow]) -> Vec<&Arc<closta_presenter::rows::CompactionRow>> {
+    rows.iter()
+        .filter_map(|row| match row {
+            ThreadRow::Compaction(it) => Some(it),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_compaction_is_one_row_after_the_ask_that_asked_for_it() {
+    let rows = ThreadRows::default().of(&last_transcript("21-compact"));
+    let compactions = compaction_rows(&rows);
+    assert_eq!(1, compactions.len(), "{rows:?}");
+    let row = compactions[0];
+    assert_eq!("compaction/1", row.key);
+    assert!(!row.opens);
+    assert_eq!(
+        CompactionOutcome::Compacted {
+            trigger: "manual".to_owned(),
+            pre_tokens: 20072,
+            post_tokens: 1235,
+        },
+        row.outcome
+    );
+    let at = rows
+        .iter()
+        .position(|it| it.key() == "compaction/1")
+        .unwrap_or_else(|| panic!("no compaction row"));
+    let ask = rows
+        .iter()
+        .rposition(|it| matches!(it, ThreadRow::Ask(ask) if ask.text.trim() == "/compact"))
+        .unwrap_or_else(|| panic!("no /compact ask: {rows:?}"));
+    assert!(ask < at, "after the ask: {rows:?}");
+    let end = rows[ask..]
+        .iter()
+        .position(|it| matches!(it, ThreadRow::TurnEnd(_)))
+        .unwrap_or_else(|| panic!("no turn end after the /compact ask: {rows:?}"));
+    assert!(at < ask + end, "before the turn end: {rows:?}");
+}
+
+#[test]
+fn an_unrelated_change_keeps_the_compaction_row_the_same() {
+    let compacted = last_transcript("21-compact");
+    let mut rows = ThreadRows::default();
+    let before = rows.of(&compacted);
+    let grown = fold(
+        "later",
+        &script(|it| it.assistant("a-later", vec![text("hello")], None)),
+        SessionView {
+            transcript: Arc::clone(&compacted),
+            ..SessionView::default()
+        },
+    );
+    let after = rows.of(&grown.transcript);
+    let (a, b) = (compaction_rows(&before), compaction_rows(&after));
+    assert_eq!(1, b.len());
+    assert!(Arc::ptr_eq(a[0], b[0]));
+}
+
+#[test]
+fn the_summary_and_the_command_output_are_still_no_rows() {
+    let rows = ThreadRows::default().of(&last_transcript("21-compact"));
+    let shown = format!("{rows:?}");
+    assert!(
+        !shown.contains("This session is being continued"),
+        "{shown}"
+    );
+    assert!(!shown.contains("local-command-stdout"), "{shown}");
+}
+
+#[test]
+fn a_send_that_failed_remakes_its_ask_row_with_the_mark() {
+    let view = SessionView::default()
+        .fold(&sent("u1", "first", "c1"))
+        .fold(&sent("u2", "second", "c2"));
+    let mut rows = ThreadRows::default();
+    let before = rows.of(&view.transcript);
+
+    let failed = view.fold(&PresenterInput::SendFailed(
+        SendId::new("u2").expect("a key"),
+    ));
+    let after = rows.of(&failed.transcript);
+
+    assert_eq!(2, after.len());
+    assert!(before[0].same(&after[0]));
+    assert!(!before[1].same(&after[1]));
+    match (&before[1], &after[1]) {
+        (ThreadRow::Ask(old), ThreadRow::Ask(new)) => {
+            assert!(!old.not_sent);
+            assert!(new.not_sent);
+        }
+        other => panic!("not asks: {other:?}"),
+    }
 }

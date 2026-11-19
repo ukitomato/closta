@@ -22,7 +22,8 @@ use closta_presenter::records::composer::{
 use closta_presenter::session::SessionView;
 use closta_presenter::text::{take_utf16, utf16_len};
 use closta_presenter::transcript::{
-    ApprovalOutcome, MessageRecord, PartRecord, Role, TextRecord, ToolCallRecord,
+    ApprovalOutcome, CompactionMark, CompactionOutcome, MessageRecord, PartRecord, Role,
+    TextRecord, ToolCallRecord,
 };
 
 fn with(view: &SessionView, event: AgentEvent) -> SessionView {
@@ -884,4 +885,130 @@ fn the_finished_input_of_a_call_is_found_wherever_the_call_is() {
     assert_eq!(Some(serde_json::json!({ "command": "ls" })), input("bash"));
     assert_eq!(None, input("42"), "still streaming: no input yet");
     assert_eq!(None, input("nobody"));
+}
+
+const MANUAL_COMPACTION: &str = r#"{"trigger":"manual","pre_tokens":20072,"post_tokens":1235}"#;
+
+fn asked(view: &SessionView, id: &str, text: &str) -> SessionView {
+    view.clone().fold(&PresenterInput::UserSent(UserSent {
+        message_id: SendId::new(id).unwrap_or_else(|| panic!("{id} is not a key")),
+        text: text.to_owned(),
+        attachments: Vec::new(),
+        uuid: None,
+    }))
+}
+
+#[test]
+fn a_compaction_mark_remembers_the_last_message() {
+    let view = asked(&started(), "u1", "/compact");
+    let view = with(&view, lines::compact_boundary(MANUAL_COMPACTION));
+    assert_eq!(
+        vec![CompactionMark {
+            after: Some("u1".to_owned()),
+            outcome: CompactionOutcome::Compacted {
+                trigger: "manual".to_owned(),
+                pre_tokens: 20072,
+                post_tokens: 1235,
+            },
+        }],
+        view.transcript
+            .compaction_marks
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn a_failed_compaction_is_a_mark_of_its_own() {
+    let view = asked(&started(), "u1", "/compact");
+    let succeeded = with(&view, lines::compact_result("success"));
+    assert!(succeeded.transcript.compaction_marks.is_empty());
+    let failed = with(&succeeded, lines::compact_result("error"));
+    assert_eq!(
+        vec![CompactionMark {
+            after: Some("u1".to_owned()),
+            outcome: CompactionOutcome::Failed,
+        }],
+        failed
+            .transcript
+            .compaction_marks
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn a_boundary_without_tokens_leaves_no_mark() {
+    let view = asked(&started(), "u1", "/compact");
+    let view = with(&view, lines::compact_boundary(r#"{"trigger":"auto"}"#));
+    assert!(view.transcript.compaction_marks.is_empty());
+}
+
+#[test]
+fn more_than_twenty_compactions_keep_every_mark() {
+    let view = (0..21).fold(asked(&started(), "u1", "/compact"), |view, _| {
+        with(&view, lines::compact_boundary(MANUAL_COMPACTION))
+    });
+    assert_eq!(21, view.transcript.compaction_marks.len());
+    assert_eq!(20, view.transcript.operations.compactions.len());
+}
+
+fn send_failed(view: &SessionView, id: &str) -> SessionView {
+    view.clone().fold(&PresenterInput::SendFailed(
+        SendId::new(id).unwrap_or_else(|| panic!("{id} is not a key")),
+    ))
+}
+
+fn not_sent(view: &SessionView) -> Vec<String> {
+    let mut keys: Vec<String> = view.transcript.not_sent.iter().cloned().collect();
+    keys.sort();
+    keys
+}
+
+#[test]
+fn a_failed_send_marks_its_message_and_takes_back_the_send() {
+    let sent = asked(&SessionView::default(), "s1", "hello");
+    assert_eq!(1, sent.transcript.routing.sends);
+
+    let failed = send_failed(&sent, "s1");
+
+    assert_eq!(vec!["s1"], not_sent(&failed));
+    assert_eq!(0, failed.transcript.routing.sends);
+    let (before, after) = (message(&sent, "s1"), message(&failed, "s1"));
+    assert!(
+        !Arc::ptr_eq(before, after),
+        "a new Arc, so its row is made again"
+    );
+    assert_eq!(**before, **after);
+}
+
+#[test]
+fn a_second_failure_of_the_same_send_changes_nothing() {
+    let failed = send_failed(&asked(&SessionView::default(), "s1", "hello"), "s1");
+    let again = send_failed(&failed, "s1");
+    assert_unchanged(&failed, &again, "a second failure");
+    assert_eq!(0, again.transcript.routing.sends);
+}
+
+#[test]
+fn a_failure_of_an_unknown_send_changes_nothing() {
+    let sent = asked(&SessionView::default(), "s1", "hello");
+    let after = send_failed(&sent, "nobody");
+    assert_unchanged(&sent, &after, "an unknown send");
+    assert_eq!(1, after.transcript.routing.sends);
+}
+
+#[test]
+fn a_failure_finds_the_message_under_its_claimed_key() {
+    let first = asked(&SessionView::default(), "s1", "one");
+    let second = asked(&first, "s1", "two");
+    assert_eq!(vec!["s1", "s1~2"], order(&second.transcript.messages));
+
+    let failed = send_failed(&second, "s1");
+
+    assert_eq!(vec!["s1~2"], not_sent(&failed));
+    assert_eq!(1, failed.transcript.routing.sends);
+    assert!(Arc::ptr_eq(message(&second, "s1"), message(&failed, "s1")));
 }

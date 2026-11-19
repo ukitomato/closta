@@ -76,7 +76,8 @@ impl SessionCommands {
     }
 
     /// Sends a user message the thread shows as `message_id`: the message goes into the
-    /// transcript first, so it stands before anything the CLI says about the turn.
+    /// transcript first, so it stands before anything the CLI says about the turn. A send the session
+    /// then refuses is recorded as not sent, and the same error is returned.
     pub fn send_message(
         &self,
         message_id: SendId,
@@ -99,12 +100,18 @@ impl SessionCommands {
         // The uuid the CLI is told the message by; the transcript keeps which message it is.
         let uuid = new_id();
         self.record(PresenterInput::UserSent(UserSent {
-            message_id,
+            message_id: message_id.clone(),
             text: text.to_owned(),
             attachments: noted,
             uuid: Some(uuid.clone()),
         }));
-        services::send_message(self.session()?, text, attachments, Some(&uuid))
+        let sent = self
+            .session()
+            .and_then(|session| services::send_message(session, text, attachments, Some(&uuid)));
+        if sent.is_err() {
+            self.record(PresenterInput::SendFailed(message_id));
+        }
+        sent
     }
 
     /// Answers a pending approval, under the store's lock: an approval already answered (a

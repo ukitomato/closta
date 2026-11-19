@@ -8,8 +8,11 @@ publish.workspace = true
 
 [dependencies]
 async-channel.workspace = true
+async-io.workspace = true
+closta-core.workspace = true
 closta-model.workspace = true
 closta-presenter.workspace = true
+closta-providers.workspace = true
 closta-session.workspace = true
 futures-lite.workspace = true
 uuid.workspace = true
@@ -18,7 +21,6 @@ uuid.workspace = true
 # The in-memory processes and session, and what the shared test support
 # (`providers/tests/common`) uses.
 blocking.workspace = true
-closta-core.workspace = true
 closta-providers = { workspace = true, features = ["fake"] }
 serde.workspace = true
 serde_json.workspace = true

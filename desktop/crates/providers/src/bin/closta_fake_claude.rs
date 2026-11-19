@@ -1,13 +1,19 @@
 //! A stand-in for the `claude` CLI that the process tests launch. `CLOSTA_FAKE_MODE` picks what it
 //! does; `--version` among the arguments answers the version whatever the mode.
 //!
+//! `--hold <dir>` among the arguments (after `--version`, before the mode) makes it stand in for a
+//! stdio MCP server whatever the mode.
+//!
 //! Every loop that sleeps ends by itself after `CLOSTA_FAKE_LIFETIME_SECS` (60 by default): a
 //! child lives in its own process group, so a test run that is killed would otherwise leave it
 //! behind.
 
 use std::ffi::OsStr;
 use std::io::{self, Read, Write};
+use std::path::PathBuf;
 use std::process::{Command, ExitCode, Stdio};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 const DEFAULT_VERSION: &str = "2.1.282 (Claude Code)";
@@ -20,6 +26,8 @@ fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let ran = if args.iter().any(|arg| arg == "--version") {
         version()
+    } else if let Some(dir) = hold_dir(&args) {
+        hold(&dir)
     } else {
         match std::env::var("CLOSTA_FAKE_MODE").as_deref() {
             Ok("replay") => replay(),
@@ -106,15 +114,48 @@ fn tree() -> io::Result<ExitCode> {
 
 /// Ignores stdin and sleeps until its lifetime is over, then ends with 0.
 fn stubborn() -> ExitCode {
-    let lifetime = std::env::var("CLOSTA_FAKE_LIFETIME_SECS")
-        .ok()
-        .and_then(|secs| secs.parse().ok())
-        .unwrap_or(DEFAULT_LIFETIME_SECS);
-    let end = Instant::now() + Duration::from_secs(lifetime);
+    let end = lifetime_end();
     while Instant::now() < end {
         std::thread::sleep(NAP);
     }
     ExitCode::SUCCESS
+}
+
+/// The folder after `--hold`, if that argument is there.
+fn hold_dir(args: &[String]) -> Option<PathBuf> {
+    let at = args.iter().position(|arg| arg == "--hold")?;
+    args.get(at + 1).map(PathBuf::from)
+}
+
+/// Stands in for a stdio MCP server: creates the empty file `hold-<pid>` in `dir` (ends with 2 if
+/// there is no such folder), discards stdin on another thread, and ends with 0 when stdin ends or
+/// its lifetime is over.
+fn hold(dir: &std::path::Path) -> io::Result<ExitCode> {
+    if !dir.is_dir() {
+        _ = io::stderr().write_all(b"closta-fake-claude: --hold needs an existing folder\n");
+        return Ok(ExitCode::from(2));
+    }
+    std::fs::File::create(dir.join(format!("hold-{}", std::process::id())))?;
+    let drained = Arc::new(AtomicBool::new(false));
+    let reader = Arc::clone(&drained);
+    std::thread::spawn(move || {
+        _ = io::copy(&mut io::stdin().lock(), &mut io::sink());
+        reader.store(true, Ordering::Release);
+    });
+    let end = lifetime_end();
+    while Instant::now() < end && !drained.load(Ordering::Acquire) {
+        std::thread::sleep(NAP);
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+/// When `CLOSTA_FAKE_LIFETIME_SECS` (60 by default) from now is over.
+fn lifetime_end() -> Instant {
+    let lifetime = std::env::var("CLOSTA_FAKE_LIFETIME_SECS")
+        .ok()
+        .and_then(|secs| secs.parse().ok())
+        .unwrap_or(DEFAULT_LIFETIME_SECS);
+    Instant::now() + Duration::from_secs(lifetime)
 }
 
 /// `CLOSTA_FAKE_EXIT`, 0 when unset or not a byte.

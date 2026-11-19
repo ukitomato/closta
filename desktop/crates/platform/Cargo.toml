@@ -17,6 +17,9 @@ closta-shell.workspace = true
 futures-lite.workspace = true
 gpui-kit = { workspace = true, features = ["syntect"] }
 
+[dev-dependencies]
+gpui-kit = { workspace = true, features = ["syntect", "test-support"] }
+
 [target.'cfg(windows)'.dependencies]
 # The process's own CPU time and working set, for the measuring run.
 windows = { workspace = true, features = [

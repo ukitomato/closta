@@ -26,6 +26,9 @@ pub type Spawn = Arc<dyn Fn(future::Boxed<()>) + Send + Sync>;
 /// Work that runs beside a session with its handle, on the same [`Spawn`].
 pub type Companion = Box<dyn FnOnce(SessionRuntime) -> future::Boxed<()> + Send>;
 
+/// Builds the launch that replaces a slot's session: a Restart starts the same folder again.
+pub type Relaunch = Arc<dyn Fn() -> SlotLaunch + Send + Sync>;
+
 /// What a slot's session is started with.
 pub struct SlotLaunch {
     pub title: String,
@@ -33,6 +36,11 @@ pub struct SlotLaunch {
     /// The folder the CLI runs in; `None` is the project's root.
     pub working_directory: Option<String>,
     pub companion: Option<Companion>,
+    /// How to make this launch again; `None` leaves the slot without a Restart.
+    pub relaunch: Option<Relaunch>,
+    /// Whether the session is meant to fail: it counts as settled only once it has failed, not
+    /// while it passes through running.
+    pub settles_on_failure: bool,
 }
 
 /// What the list of slots shows for one.

@@ -123,6 +123,7 @@ pub enum AgentEvent {
         session_id: String,
         status: Option<String>,
         permission_mode: Option<String>,
+        compact_result: Option<String>,
     },
     User {
         uuid: String,

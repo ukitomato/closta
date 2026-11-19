@@ -101,6 +101,7 @@ fn build(kind: AgentEventKind, f: &Fields) -> Result<AgentEvent, FieldError> {
             session_id: f.text("session_id")?,
             status: f.text_or_null("status"),
             permission_mode: f.text_or_null("permissionMode"),
+            compact_result: f.text_or_null("compact_result"),
         },
         AgentEventKind::User => AgentEvent::User {
             uuid: f.text("uuid")?,

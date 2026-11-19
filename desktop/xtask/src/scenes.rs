@@ -6,7 +6,7 @@ use crate::win::REPLAY;
 /// The window sizes every scene is shot at: a small laptop, a common desktop and a large screen.
 pub const SIZES: [(u32, u32); 3] = [(1024, 700), (1600, 1000), (2560, 1440)];
 
-/// What a reviewer of every 6a scene leaves out: what stage 6a does not build yet.
+/// What a reviewer of every scene leaves out: what stages 6a and 6b do not build yet.
 const NOT_BUILT: [&str; 3] = [
     "the pickers under the composer",
     "the grouping in the left pane",
@@ -32,7 +32,7 @@ pub struct Scene {
     pub excluded: Vec<&'static str>,
 }
 
-/// The stage 6a scenes.
+/// The scenes: stage 6a's replays, then stage 6b's states.
 pub fn scenes() -> Vec<Scene> {
     let replay = |file: &str, prompt: Option<&str>| {
         let mut args = vec!["--replay".to_owned(), format!(r"{REPLAY}\{file}")];
@@ -74,6 +74,15 @@ pub fn scenes() -> Vec<Scene> {
             replay("21-compact.ndjson", Some(COMPACT_PROMPT)),
         ),
         scene("thread-synthetic-tail", replay("synth.ndjson", None)),
+        // A WSL launch that ends with 127: the failure band, its hint and Restart, and the
+        // composer of a session that is not running.
+        Scene {
+            name: "state-failed",
+            args: ["--fail-launch", "127", "--fail-distro", "Ubuntu-26.04"]
+                .map(str::to_owned)
+                .to_vec(),
+            excluded: NOT_BUILT.to_vec(),
+        },
     ]
 }
 
@@ -95,9 +104,17 @@ mod tests {
             .collect()
     }
 
+    /// The stage 6a scenes, which replay a capture.
+    fn scenes_6a() -> Vec<Scene> {
+        scenes()
+            .into_iter()
+            .filter(|scene| scene.name.starts_with("thread-"))
+            .collect()
+    }
+
     #[test]
     fn the_6a_scenes_are_all_there_with_windows_paths() {
-        let names: Vec<_> = scenes().iter().map(|scene| scene.name).collect();
+        let names: Vec<_> = scenes_6a().iter().map(|scene| scene.name).collect();
         assert_eq!(
             names,
             [
@@ -110,7 +127,7 @@ mod tests {
                 "thread-synthetic-tail",
             ]
         );
-        for scene in scenes() {
+        for scene in scenes_6a() {
             let replays = replays(&scene);
             assert_eq!(replays.len(), 1, "{}", scene.name);
             assert!(
@@ -184,16 +201,34 @@ mod tests {
     #[test]
     fn every_scene_is_shot_at_the_three_sizes() {
         assert_eq!(SIZES, [(1024, 700), (1600, 1000), (2560, 1440)]);
-        assert_eq!(scenes().len() * SIZES.len(), 21);
+        assert_eq!(scenes().len() * SIZES.len(), 24);
     }
 
     #[test]
     fn every_scene_excludes_the_composer() {
-        for scene in scenes() {
+        for scene in scenes_6a() {
             assert!(scene.excluded.contains(&COMPOSER), "{}", scene.name);
             for part in NOT_BUILT {
                 assert!(scene.excluded.contains(&part), "{}: {part}", scene.name);
             }
         }
+    }
+
+    #[test]
+    fn the_failed_state_scene_fails_a_wsl_launch_with_127() {
+        let scene = find("state-failed").unwrap();
+        assert_eq!(
+            scene.args,
+            ["--fail-launch", "127", "--fail-distro", "Ubuntu-26.04"]
+        );
+        assert!(!scene.excluded.contains(&COMPOSER));
+        for part in [
+            "the grouping in the left pane",
+            "the content of the right pane",
+            "the pickers under the composer",
+        ] {
+            assert!(scene.excluded.contains(&part), "{part}");
+        }
+        assert_eq!(scene.excluded.len(), 3);
     }
 }

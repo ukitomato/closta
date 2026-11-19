@@ -19,7 +19,8 @@ use crate::rewind_targets::sent_asks;
 use crate::text::kt_is_blank;
 use crate::tool_line::{AgentSummary, ToolDetail, ToolLine, agent_summary, tool_detail, tool_line};
 use crate::transcript::{
-    ApprovalRecord, MessageRecord, PartRecord, Role, ToolCallRecord, Transcript,
+    ApprovalRecord, CompactionMark, CompactionOutcome, MessageRecord, PartRecord, Role,
+    ToolCallRecord, Transcript,
 };
 
 /// One row of the conversation. Cloning one is cheap: each variant holds its row in an `Arc`.
@@ -34,6 +35,7 @@ pub enum ThreadRow {
     Card(Arc<CardRow>),
     TurnEnd(Arc<TurnEndRow>),
     SignIn(Arc<SignInRow>),
+    Compaction(Arc<CompactionRow>),
 }
 
 impl ThreadRow {
@@ -48,6 +50,7 @@ impl ThreadRow {
             Self::Card(row) => &row.key,
             Self::TurnEnd(row) => &row.key,
             Self::SignIn(row) => &row.key,
+            Self::Compaction(row) => &row.key,
         }
     }
 
@@ -63,6 +66,7 @@ impl ThreadRow {
             Self::Card(row) => row.opens,
             Self::TurnEnd(row) => row.opens,
             Self::SignIn(_) => false,
+            Self::Compaction(row) => row.opens,
         }
     }
 
@@ -78,6 +82,7 @@ impl ThreadRow {
             (Self::Card(a), Self::Card(b)) => Arc::ptr_eq(a, b),
             (Self::TurnEnd(a), Self::TurnEnd(b)) => Arc::ptr_eq(a, b),
             (Self::SignIn(a), Self::SignIn(b)) => Arc::ptr_eq(a, b),
+            (Self::Compaction(a), Self::Compaction(b)) => Arc::ptr_eq(a, b),
             _ => false,
         }
     }
@@ -89,6 +94,8 @@ pub struct AskRow {
     pub key: String,
     pub text: String,
     pub attachments: Vec<AttachmentRecord>,
+    /// Whether the session refused to send it.
+    pub not_sent: bool,
 }
 
 /// A text block of a reply, as Markdown; the surface splits it into blocks of its own.
@@ -199,6 +206,15 @@ pub struct SignInRow {
     pub key: String,
 }
 
+/// A compaction the CLI did (or failed to do), after the message it cut. `key` is `compaction/<n>`
+/// by the mark's place in the conversation, counted from 1.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct CompactionRow {
+    pub key: String,
+    pub outcome: CompactionOutcome,
+    pub opens: bool,
+}
+
 /// The tools that only read; two or more in a row fold into one [`ExploredRow`].
 pub const READ_ONLY_TOOLS: [&str; 4] = ["Read", "Grep", "Glob", "LS"];
 
@@ -264,6 +280,7 @@ pub struct ThreadRows {
     groups: HashMap<String, Arc<ExploredRow>>,
     cards: HashMap<ByPtr<ApprovalRecord>, Arc<CardRow>>,
     ends: HashMap<String, Arc<TurnEndRow>>,
+    compactions: HashMap<usize, Arc<CompactionRow>>,
 }
 
 impl ThreadRows {
@@ -272,6 +289,7 @@ impl ThreadRows {
         let mut next_parts = HashMap::new();
         let mut next_cards = HashMap::new();
         let mut next_ends = HashMap::new();
+        let mut next_compactions = HashMap::new();
         let mut rows = Vec::new();
         let go = plan_go_of(&transcript.operations);
         let by_anchor = ByAnchor::of(&transcript.approvals);
@@ -281,13 +299,28 @@ impl ThreadRows {
             .take(asks.len().saturating_sub(1))
             .map(String::as_str)
             .collect();
+        let marks = &transcript.compaction_marks;
+        // A mark that follows no message of this conversation goes first.
+        for (index, mark) in marks.iter().enumerate() {
+            if !mark
+                .after
+                .as_deref()
+                .is_some_and(|it| transcript.messages.contains(it))
+            {
+                rows.push(self.compaction_row(index, mark, &mut next_compactions));
+            }
+        }
         for message in transcript.messages.values() {
             let made = match self.messages.get(&by_ptr(message)) {
                 Some(kept) => {
                     self.carry_parts(message, &mut next_parts);
                     kept.clone()
                 }
-                None => self.rows_of(message, &mut next_parts),
+                None => self.rows_of(
+                    message,
+                    transcript.not_sent.contains(&message.key),
+                    &mut next_parts,
+                ),
             };
             rows.extend(made.iter().cloned());
             next_messages.insert(by_ptr(message), made);
@@ -303,6 +336,11 @@ impl ThreadRows {
                     &mut next_cards,
                     go,
                 )));
+            }
+            for (index, mark) in marks.iter().enumerate() {
+                if mark.after.as_deref() == Some(message.key.as_str()) {
+                    rows.push(self.compaction_row(index, mark, &mut next_compactions));
+                }
             }
             if let Some(end) = self.turn_end_row(transcript, &message.key, &followed) {
                 next_ends.insert(end.key.clone(), Arc::clone(&end));
@@ -330,7 +368,28 @@ impl ThreadRows {
         self.parts = next_parts;
         self.cards = next_cards;
         self.ends = next_ends;
+        self.compactions = next_compactions;
         self.grouped(rows)
+    }
+
+    /// The row of mark number `index`; the same `Arc` while the mark is the same.
+    fn compaction_row(
+        &self,
+        index: usize,
+        mark: &CompactionMark,
+        into: &mut HashMap<usize, Arc<CompactionRow>>,
+    ) -> ThreadRow {
+        let made = CompactionRow {
+            key: format!("compaction/{}", index + 1),
+            outcome: mark.outcome.clone(),
+            opens: false,
+        };
+        let row = match self.compactions.get(&index) {
+            Some(kept) if **kept == made => Arc::clone(kept),
+            _ => Arc::new(made),
+        };
+        into.insert(index, Arc::clone(&row));
+        ThreadRow::Compaction(row)
     }
 
     fn turn_end_row(
@@ -398,6 +457,7 @@ impl ThreadRows {
     fn rows_of(
         &self,
         message: &MessageRecord,
+        not_sent: bool,
         into: &mut HashMap<ByPtr<PartRecord>, Option<ThreadRow>>,
     ) -> Vec<ThreadRow> {
         if message.role == Role::User {
@@ -421,6 +481,7 @@ impl ThreadRows {
                 key: message.key.clone(),
                 text: words.join("\n"),
                 attachments,
+                not_sent,
             }))];
         }
         let mut rows = Vec::new();

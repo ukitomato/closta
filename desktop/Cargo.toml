@@ -26,6 +26,8 @@ blocking = "1.7"
 futures-lite = "2.6"
 uuid = { version = "1.29", features = ["v4"] }
 tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt"] }
+tracing-appender = "0.2.3"
 smol = "2"
 windows = "0.62"
 windows-registry = "0.6"
