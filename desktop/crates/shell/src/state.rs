@@ -512,6 +512,20 @@ impl ShellState {
 
     /// Does what `action` asks and says what the screen is to do about it.
     pub fn act(&mut self, action: ShellAction) -> Acted {
+        // Once the close began, nothing may start a run or write to a session: a run started
+        // after `close_all` would be left out of its wait.
+        if self.closing == CloseStage::Closing
+            && matches!(
+                action,
+                ShellAction::Restart { .. }
+                    | ShellAction::StartSession { .. }
+                    | ShellAction::OpenNewSession
+                    | ShellAction::FolderChecked { .. }
+                    | ShellAction::Send { .. }
+            )
+        {
+            return Acted::default();
+        }
         match action {
             ShellAction::Select(slot) => {
                 if self.slots.contains_key(&slot) {

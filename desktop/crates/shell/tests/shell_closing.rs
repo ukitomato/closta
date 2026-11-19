@@ -197,3 +197,61 @@ fn closing_twice_does_nothing_more() {
         }
     });
 }
+
+#[test]
+fn nothing_starts_or_sends_once_the_close_began() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (mut launch, runtime) = harness.launch("slot");
+        launch.relaunch = Some(Arc::new({
+            let planner = Arc::clone(&harness.planner);
+            move || SlotLaunch {
+                title: "again".to_owned(),
+                planner: Arc::clone(&planner) as _,
+                working_directory: None,
+                companion: None,
+                relaunch: None,
+            }
+        }));
+        let slot = shell.open(launch);
+        running(&runtime.recv().await.unwrap()).await;
+        let control = harness.control(0).await;
+        shell.act(ShellAction::OpenNewSession);
+        shell.act(ShellAction::EditFolder {
+            text: r"C:\work\proj".to_owned(),
+        });
+        shell.act(ShellAction::EditDraft {
+            slot,
+            text: "late".to_owned(),
+        });
+        let started = shell.act(ShellAction::StartSession {
+            folder: r"C:\work\proj".to_owned(),
+        });
+        assert!(started.check.is_some(), "the dialog was ready to check");
+
+        assert!(shell.act(ShellAction::ConfirmClose).close);
+        let run = shell.close_all();
+        let runs = shell.live_runs();
+        for action in [
+            ShellAction::Restart { slot },
+            ShellAction::StartSession {
+                folder: r"C:\work\proj".to_owned(),
+            },
+            ShellAction::OpenNewSession,
+            ShellAction::FolderChecked {
+                folder: r"C:\work\proj".to_owned(),
+                exists: true,
+            },
+            ShellAction::Send { slot },
+        ] {
+            let acted = shell.act(action);
+            assert!(acted.started.is_none() && acted.check.is_none() && acted.draft.is_none());
+        }
+        assert_eq!(shell.slots().len(), 1);
+        assert_eq!(shell.live_runs(), runs);
+        assert!(control.stdin_lines().is_empty());
+        let end = finish_closing(run, CLOSE_LIMIT, DESTROY_GRACE).await;
+        assert_eq!(end, CloseEnd::Returned);
+        assert_eq!(shell.live_runs(), 0);
+    });
+}
