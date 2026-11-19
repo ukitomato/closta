@@ -28,7 +28,11 @@ const FAILURE_GROUND: f32 = 0.08;
 
 /// The selected slot's conversation, with its input under it; the empty pane's words when it has
 /// no rows.
-pub(crate) fn conversation(model: &ShellModel, cx: &mut Context<ShellModel>) -> AnyElement {
+pub(crate) fn conversation(
+    model: &ShellModel,
+    window: &Window,
+    cx: &mut Context<ShellModel>,
+) -> AnyElement {
     let theme = cx.theme();
     let pane = v_flex()
         .id("pane-center")
@@ -85,7 +89,7 @@ pub(crate) fn conversation(model: &ShellModel, cx: &mut Context<ShellModel>) -> 
             .child(words)
     });
     let failure = failure_band(model, slot, cx);
-    let composer = composer::composer(model, slot, cx)
+    let composer = composer::composer(model, slot, window, cx)
         .map(|composer| div().flex_none().pt_1().pb_3().child(centered(composer)));
     // A click on the conversation outside any card puts the keyboard there: a card that then
     // arrives may take it.

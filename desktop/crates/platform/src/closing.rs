@@ -36,7 +36,7 @@ impl ShellModel {
         }
         let run = self.shell.close_all();
         // The window is closing from here: the keys behind stay held.
-        self.focus.overlay = self.shell.overlay().is_some();
+        self.focus.overlay = self.shell.overlay();
         let closing =
             cx.background_executor()
                 .spawn(finish_closing(run, CLOSE_LIMIT, DESTROY_GRACE));
@@ -80,6 +80,7 @@ pub(crate) fn close_layer(model: &ShellModel, cx: &mut Context<ShellModel>) -> O
                     .justify_end()
                     .child(
                         Button::new("close-cancel")
+                            .track_focus(&model.focus.overlay_cancel)
                             .outline()
                             .label(copy::CANCEL)
                             .on_click(cx.listener(|model, _: &ClickEvent, window, cx| {
@@ -105,7 +106,12 @@ pub(crate) fn close_layer(model: &ShellModel, cx: &mut Context<ShellModel>) -> O
             .text_color(text)
             .child(copy::CLOSING),
     };
-    Some(over_window("close-layer", content.into_any_element(), cx))
+    Some(over_window(
+        "close-layer",
+        &model.focus.overlay_layer,
+        content.into_any_element(),
+        cx,
+    ))
 }
 
 /// The question before one slot is closed, while the shell asks it.
@@ -139,6 +145,7 @@ pub(crate) fn slot_close_layer(
                 .justify_end()
                 .child(
                     Button::new("slot-close-cancel")
+                        .track_focus(&model.focus.overlay_cancel)
                         .outline()
                         .label(copy::CANCEL)
                         .on_click(cx.listener(|model, _: &ClickEvent, window, cx| {
@@ -156,7 +163,43 @@ pub(crate) fn slot_close_layer(
         );
     Some(over_window(
         "slot-close-layer",
+        &model.focus.overlay_layer,
         content.into_any_element(),
         cx,
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use closta_shell::closing::CloseStage;
+    use closta_shell::state::ShellAction;
+    use gpui_kit::TestAppContext;
+
+    use crate::test_window::{act, focus_on, focused, open, press};
+
+    #[gpui_kit::test]
+    fn escape_cancels_and_enter_closes_in_the_close_question(cx: &mut TestAppContext) {
+        let (handle, model, _) = open(cx, 1);
+        let slot = model.read_with(cx, |model, _| model.shell.selected().expect("a slot"));
+        let text = "x".to_owned();
+        act(cx, handle, &model, ShellAction::EditDraft { slot, text });
+        let typing = model.read_with(cx, |model, _| model.focus.composers[&slot].clone());
+        focus_on(cx, handle, &typing);
+
+        act(cx, handle, &model, ShellAction::RequestClose);
+        let cancel = model.read_with(cx, |model, _| model.focus.overlay_cancel.clone());
+        assert!(focused(cx, handle, &cancel), "Cancel has the keyboard");
+        press(cx, handle, "escape");
+        let stage = model.read_with(cx, |model, _| *model.shell.close_stage());
+        assert_eq!(stage, CloseStage::Open);
+        assert!(
+            focused(cx, handle, &typing),
+            "the input has the keyboard again"
+        );
+
+        act(cx, handle, &model, ShellAction::RequestClose);
+        press(cx, handle, "enter");
+        let stage = model.read_with(cx, |model, _| *model.shell.close_stage());
+        assert_eq!(stage, CloseStage::Closing);
+    }
 }

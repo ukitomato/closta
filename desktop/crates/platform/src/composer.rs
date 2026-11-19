@@ -1,21 +1,25 @@
-//! A slot's input box, the line under it and why the last send did not go; in place of all of
-//! it, once the session ended, that it ended. The box's text is a copy of the shell's draft:
-//! each edit goes to the shell, and the box is filled again only when the shell changed the
-//! draft itself.
+//! A slot's input box, the line under it with the permission mode's picker, and why the last
+//! send did not go; over it, the band that asks before Bypass and the hint of the jump key; in
+//! place of all of it, once the session ended, that it ended. The box's text is a copy of the
+//! shell's draft: each edit goes to the shell, and the box is filled again only when the shell
+//! changed the draft itself.
 
 use std::rc::Rc;
 
+use closta_presenter::composer_state::PERMISSION_MODES;
 use closta_shell::copy;
 use closta_shell::slot::SlotId;
 use closta_shell::state::{ComposerLine, ShellAction};
-use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::base::{Disableable as _, h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{
     BufferPoint, InputEvent, MoveDown, MoveUp, Position, RopeExt as _, Textarea, TextareaState,
 };
+use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
 use gpui_kit::component::{ActiveTheme as _, Sizable as _};
 use gpui_kit::*;
 
+use crate::focus::shows_jump_hint;
 use crate::model::ShellModel;
 
 /// How the box grows with its text.
@@ -124,10 +128,14 @@ fn cursor_row(state: &TextareaState) -> usize {
         .row
 }
 
+/// The mode that runs every tool without asking.
+const BYPASS_MODE: &str = "bypassPermissions";
+
 /// What stands under the conversation of `slot`: its input, or that its session ended.
 pub(crate) fn composer(
     model: &ShellModel,
     slot: SlotId,
+    window: &Window,
     cx: &mut Context<ShellModel>,
 ) -> Option<AnyElement> {
     if model.shell.ended(slot) {
@@ -143,13 +151,28 @@ pub(crate) fn composer(
                 .is_some_and(|model| model.read(cx).shell.browsing(slot))
         })
     };
+    let line = model.shell.composer_line(slot);
+    let mode = line
+        .as_ref()
+        .and_then(|line| mode_picker(slot, line, dispatch.clone(), cx));
+    let model_text = line.map(|line| line.model).unwrap_or_default();
+    let band = model.shell.bypass_asking(slot).then(|| {
+        let focus = model.focus.bypass.get(&slot).cloned();
+        bypass_band(slot, focus.as_ref(), dispatch.clone(), cx)
+    });
+    let hint = shows_jump_hint(
+        model.shell.waiting(slot),
+        &model.focus.focus_scene(window, cx),
+    )
+    .then(|| {
+        div()
+            .id("jump-hint")
+            .accessibility_id("jump-hint")
+            .text_color(cx.theme().muted_foreground)
+            .child(copy::JUMP_HINT)
+    });
     let theme = cx.theme();
     let muted = theme.muted_foreground;
-    let line = model
-        .shell
-        .composer_line(slot)
-        .map(|line| line_text(&line))
-        .unwrap_or_default();
     let button = if model.shell.running(slot) {
         Button::new("composer-stop")
             .label(format!("{STOP_GLYPH} {}", copy::STOP))
@@ -171,12 +194,21 @@ pub(crate) fn composer(
         v_flex()
             .w_full()
             .gap_1()
+            .children(band)
+            .children(hint)
             .child(input_box(slot, input, dispatch, browsing))
             .child(
                 h_flex()
                     .gap_2()
                     .items_center()
-                    .child(div().flex_1().truncate().text_color(muted).child(line))
+                    .children(mode)
+                    .child(
+                        div()
+                            .flex_1()
+                            .truncate()
+                            .text_color(muted)
+                            .child(model_text),
+                    )
                     .child(button.ghost().small()),
             )
             .children(reason)
@@ -184,14 +216,114 @@ pub(crate) fn composer(
     )
 }
 
-/// The mode and the model, `mode · model`, leaving out the one not known.
-fn line_text(line: &ComposerLine) -> String {
-    [line.mode.as_deref(), Some(line.model.as_str())]
-        .into_iter()
-        .flatten()
-        .filter(|part| !part.is_empty())
-        .collect::<Vec<_>>()
-        .join(" · ")
+/// The permission mode's button, once the session said its mode: its short word, on the
+/// warning's ground in Bypass. It lists the modes with what each does; one picked goes to the
+/// shell. It cannot be pressed while a switch waits for the CLI.
+fn mode_picker(
+    slot: SlotId,
+    line: &ComposerLine,
+    dispatch: Dispatch,
+    cx: &App,
+) -> Option<AnyElement> {
+    let mode = line.mode.clone()?;
+    let muted = cx.theme().muted_foreground;
+    let button = Button::new("composer-mode")
+        .accessibility_id("composer-mode")
+        .accessibility_label(copy::mode_accessible(&mode))
+        .label(copy::mode_label(&mode))
+        .small()
+        .disabled(line.switching);
+    let button = if mode == BYPASS_MODE {
+        button.warning()
+    } else {
+        button.ghost()
+    };
+    let picker = button.dropdown_menu(move |mut menu, _, _| {
+        for name in PERMISSION_MODES {
+            let dispatch = dispatch.clone();
+            let hint = copy::mode_hint(name);
+            let item = PopupMenuItem::element(move |_, _| {
+                v_flex()
+                    .child(copy::mode_name(name))
+                    .children(hint.map(|hint| div().text_xs().text_color(muted).child(hint)))
+            })
+            .checked(name == mode)
+            .on_click(move |_, window, cx| {
+                let mode = name.to_owned();
+                dispatch(ShellAction::PickMode { slot, mode }, window, cx);
+            });
+            menu = menu.item(item);
+        }
+        menu
+    });
+    Some(picker.into_any_element())
+}
+
+/// The band that asks before Bypass. It takes the keyboard (`focus`) while it asks: Escape
+/// takes it down and Enter does nothing, so only a click on Switch goes into Bypass.
+pub(crate) fn bypass_band(
+    slot: SlotId,
+    focus: Option<&FocusHandle>,
+    dispatch: Dispatch,
+    cx: &App,
+) -> AnyElement {
+    let theme = cx.theme();
+    let (switch, cancel, keys) = (dispatch.clone(), dispatch.clone(), dispatch);
+    let band = h_flex()
+        .id("bypass-band")
+        .accessibility_id("bypass-band")
+        .aria_label(copy::BYPASS_CONFIRM)
+        .w_full()
+        .p_2()
+        .gap_2()
+        .items_center()
+        .rounded_md()
+        .border_1()
+        .border_color(theme.warning)
+        .bg(theme.warning.opacity(0.08))
+        .on_key_down(move |event: &KeyDownEvent, window, cx| {
+            let key = &event.keystroke;
+            match key.key.as_str() {
+                "escape" if !key.modifiers.modified() => {
+                    window.prevent_default();
+                    cx.stop_propagation();
+                    keys(ShellAction::CancelBypass { slot }, window, cx);
+                }
+                // Any Enter: none may go on to a part that would take it as a yes.
+                "enter" => {
+                    window.prevent_default();
+                    cx.stop_propagation();
+                }
+                _ => {}
+            }
+        })
+        .child(div().flex_1().child(copy::BYPASS_CONFIRM))
+        .child(
+            Button::new("bypass-switch")
+                .accessibility_id("bypass-switch")
+                .label(copy::BYPASS_SWITCH)
+                .warning()
+                .small()
+                .tab_stop(false)
+                .on_click(move |_, window, cx| {
+                    switch(ShellAction::ConfirmBypass { slot }, window, cx);
+                }),
+        )
+        .child(
+            Button::new("bypass-cancel")
+                .accessibility_id("bypass-cancel")
+                .label(copy::CANCEL)
+                .outline()
+                .small()
+                .tab_stop(false)
+                .on_click(move |_, window, cx| {
+                    cancel(ShellAction::CancelBypass { slot }, window, cx);
+                }),
+        );
+    match focus {
+        Some(focus) => band.track_focus(focus).into_any_element(),
+        None => band.into_any_element(),
+    }
 }
 
 /// "Session ended", and the button that restarts it when it can be, or why it cannot while
@@ -248,12 +380,14 @@ mod tests {
     use gpui_kit::test::TestWindowExt as _;
     // Named one by one: the glob would bring in a `test` that hides the built-in attribute.
     use gpui_kit::{
-        AnyWindowHandle, AppContext as _, Bounds, Context, Entity, IntoElement, ParentElement as _,
-        Point, Render, Styled as _, Subscription, TestAppContext, Window, WindowBounds,
-        WindowOptions, div, open_window, px, size,
+        AnyWindowHandle, AppContext as _, Bounds, Context, Entity, FocusHandle,
+        InteractiveElement as _, IntoElement, KeyDownEvent, ParentElement as _, Point, Render,
+        Styled as _, Subscription, TestAppContext, Window, WindowBounds, WindowOptions, div,
+        open_window, px, size,
     };
 
-    use super::{Browsing, Dispatch, input_box, new_input};
+    use super::{Browsing, Dispatch, bypass_band, input_box, new_input};
+    use crate::focus::{self, FocusMap};
 
     /// A machine with nothing on it, and a planner that never plans.
     struct Nothing;
@@ -545,5 +679,87 @@ mod tests {
             .expect("go up from the first line");
         cx.run_until_parked();
         assert_eq!(previous(&acted), 1);
+    }
+
+    /// A window with a slot's Bypass band inside a part that takes the Enter the band lets
+    /// through as a send, and the window's gate.
+    struct Band {
+        slot: SlotId,
+        focus: FocusMap,
+        dispatch: Dispatch,
+        _keys: Subscription,
+    }
+
+    impl Render for Band {
+        fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+            let (slot, behind) = (self.slot, self.dispatch.clone());
+            let band = self.focus.bypass_handle(slot, cx);
+            div()
+                .id("behind")
+                .size_full()
+                .on_key_down(move |event: &KeyDownEvent, window, cx| {
+                    if event.keystroke.key == "enter" {
+                        behind(ShellAction::Send { slot }, window, cx);
+                    }
+                })
+                .child(bypass_band(slot, Some(&band), self.dispatch.clone(), cx))
+        }
+    }
+
+    #[gpui_kit::test]
+    fn escape_on_the_bypass_band_cancels_and_enter_does_nothing(cx: &mut TestAppContext) {
+        cx.update(gpui_kit::init);
+        let slot = a_slot();
+        let acted = Acted::default();
+        let kept = Rc::clone(&acted);
+        let dispatch: Dispatch = Rc::new(move |action, _, _| kept.borrow_mut().push(action));
+        let (handle, view) = cx
+            .update(|cx| {
+                let bounds = Bounds {
+                    origin: Point::default(),
+                    size: size(px(600.), px(400.)),
+                };
+                let options = WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(bounds)),
+                    ..Default::default()
+                };
+                open_window(options, cx, move |_, cx| {
+                    cx.new(|cx: &mut Context<Band>| {
+                        let this = cx.weak_entity();
+                        let keys = focus::hold_keys(
+                            move |keystroke, window, cx| {
+                                let band = this.upgrade()?;
+                                Some(band.read(cx).focus.gate(keystroke, window, cx))
+                            },
+                            Rc::clone(&dispatch),
+                            Rc::new(|_, _| {}),
+                            cx,
+                        );
+                        let mut focus = FocusMap::new(cx);
+                        focus.selected = Some(slot);
+                        Band {
+                            slot,
+                            focus,
+                            dispatch,
+                            _keys: keys,
+                        }
+                    })
+                })
+            })
+            .expect("open test window");
+        cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+            .expect("draw");
+        let band: FocusHandle = view.update(cx, |view, cx| view.focus.bypass_handle(slot, cx));
+        cx.update_window(handle, |_, window, cx| {
+            window.focus(&band, cx);
+            window.render_frame(cx);
+        })
+        .expect("focus the band");
+        for key in ["enter", "shift-enter", "ctrl-enter", "space"] {
+            press(cx, handle, key);
+        }
+        assert!(acted.borrow().is_empty(), "{:?}", acted.borrow().len());
+        press(cx, handle, "escape");
+        assert_eq!(*acted.borrow(), [ShellAction::CancelBypass { slot }]);
     }
 }

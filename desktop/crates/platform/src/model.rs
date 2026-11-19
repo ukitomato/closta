@@ -12,7 +12,7 @@ use closta_presenter::rows::ThreadRow;
 use closta_shell::card_keys::{card_choices, card_kind};
 use closta_shell::rows::{RowChange, ScrollDirection, kept, list_top};
 use closta_shell::slot::{SlotId, SlotLaunch};
-use closta_shell::state::{Acted, FocusTarget, FolderCheck, ShellAction, ShellState};
+use closta_shell::state::{Acted, FocusTarget, FolderCheck, Overlay, ShellAction, ShellState};
 use gpui_kit::component::input::{InputState, TextareaState};
 use gpui_kit::component::message_scroller::MessageScrollerState;
 use gpui_kit::component::resizable::ResizableState;
@@ -62,6 +62,8 @@ pub(crate) struct ShellModel {
     pub(crate) focus: FocusMap,
     /// What the waiting cards are drawn with besides their focus.
     pub(crate) card_cache: CardCache,
+    /// Where the keyboard was before the overlay that is up took it, to give it back.
+    pub(crate) focus_before_overlay: Option<FocusHandle>,
     /// The gate every key of the window passes first.
     _keys: Subscription,
     watches: HashMap<SlotId, Task<()>>,
@@ -101,6 +103,7 @@ impl ShellModel {
             clock: WallClock::start(),
             focus: FocusMap::new(cx),
             card_cache: CardCache::default(),
+            focus_before_overlay: None,
             _keys: keys,
             watches: HashMap::new(),
             generations: HashMap::new(),
@@ -155,12 +158,16 @@ impl ShellModel {
     /// by the shell's card table, before the focused part's bindings run.
     fn hold_keys(cx: &mut Context<Self>) -> Subscription {
         let this = cx.weak_entity();
+        let starter = cx.weak_entity();
         focus::hold_keys(
             move |keystroke, window, cx| {
                 let model = this.upgrade()?;
                 Some(model.read(cx).focus.gate(keystroke, window, cx))
             },
             Self::dispatch(cx),
+            Rc::new(move |window, cx| {
+                _ = starter.update(cx, |model, cx| model.start(window, cx));
+            }),
             cx,
         )
     }
@@ -228,7 +235,7 @@ impl ShellModel {
             window.request_attention();
         }
         self.show_title(window);
-        self.sync_focus(window, cx);
+        self.sync_focus(window.focused(cx), window, cx);
         if refresh.removed {
             self.forget(slot, window, cx);
             cx.notify();
@@ -369,6 +376,14 @@ impl ShellModel {
         let selects = matches!(action, ShellAction::Select(_));
         let toggles = matches!(action, ShellAction::TogglePane(_));
         let opens = matches!(action, ShellAction::OpenNewSession);
+        let bypass = match action {
+            ShellAction::PickMode { slot, .. }
+            | ShellAction::ConfirmBypass { slot }
+            | ShellAction::CancelBypass { slot } => Some(slot),
+            _ => None,
+        };
+        // Taken before the dialog's field takes the keyboard, to give it back once it closes.
+        let focused = window.focused(cx);
         let Acted {
             rows,
             draft,
@@ -424,7 +439,10 @@ impl ShellModel {
             self.close_sessions(cx);
         }
         // After the close began too: the overlay it puts up holds the keys from then on.
-        self.sync_focus(window, cx);
+        self.sync_focus(focused, window, cx);
+        if let Some(slot) = bypass {
+            self.focus_bypass(slot, window, cx);
+        }
         if selects || started.is_some() {
             self.ask_prefetch(window, cx);
         }
@@ -595,13 +613,71 @@ impl ShellModel {
         }
     }
 
-    /// Copies what the gate reads from the shell: whether an overlay is up and which slot is
-    /// shown. A slot shown anew takes the keyboard to its input.
-    fn sync_focus(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.focus.overlay = self.shell.overlay().is_some();
+    /// Copies what the gate reads from the shell: the overlay that is up and which slot is
+    /// shown. A slot shown anew takes the keyboard to its input. An overlay that comes up takes
+    /// the keyboard, and gives it back to where it was (`focused`, before the action) once it
+    /// closes, or to the input of a slot shown meanwhile.
+    fn sync_focus(
+        &mut self,
+        focused: Option<FocusHandle>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let (was, overlay) = (self.focus.overlay, self.shell.overlay());
+        if was.is_none() && overlay.is_some() {
+            self.focus_before_overlay = focused;
+        }
+        self.focus.overlay = overlay;
         let selected = self.shell.selected();
-        if selected != self.focus.selected {
-            self.focus.select(selected, window, cx);
+        let selects = selected != self.focus.selected;
+        if selects {
+            let to = self.focus.select(selected, window, cx);
+            if overlay.is_some() {
+                self.focus_before_overlay = Some(to);
+            }
+        }
+        match overlay {
+            Some(overlay) if was != Some(overlay) => self.focus_overlay(overlay, window, cx),
+            None if was.is_some() => {
+                let back = self.focus_before_overlay.take();
+                if let Some(back) = back.filter(|_| !selects) {
+                    window.focus(&back, cx);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Puts the keyboard in the overlay that just came up: the dialog's folder field, the
+    /// Cancel of a close question, or the layer that says the sessions are closing. A part
+    /// first drawn in the next frame is focused again then.
+    fn focus_overlay(&mut self, overlay: Overlay, window: &mut Window, cx: &mut Context<Self>) {
+        let handle = match overlay {
+            Overlay::NewSession => match &self.folder {
+                Some(input) => input.read(cx).focus_handle(cx),
+                None => return,
+            },
+            Overlay::CloseWindow | Overlay::CloseSlot => self.focus.overlay_cancel.clone(),
+            Overlay::Closing => self.focus.overlay_layer.clone(),
+        };
+        window.focus(&handle, cx);
+        window.on_next_frame(move |window, cx| window.focus(&handle, cx));
+    }
+
+    /// The Bypass band takes the keyboard while it asks; once it is gone, the keyboard it held
+    /// goes back to the slot's input.
+    fn focus_bypass(&mut self, slot: SlotId, window: &mut Window, cx: &mut Context<Self>) {
+        if self.focus.overlay.is_some() {
+            return;
+        }
+        let band = self.focus.bypass_handle(slot, cx);
+        if self.shell.bypass_asking(slot) {
+            window.focus(&band, cx);
+            window.on_next_frame(move |window, cx| window.focus(&band, cx));
+        } else if band.is_focused(window)
+            && let Some(input) = self.focus.composers.get(&slot)
+        {
+            window.focus(input, cx);
         }
     }
 

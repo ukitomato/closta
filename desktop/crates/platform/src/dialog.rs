@@ -111,7 +111,9 @@ impl ShellModel {
         self.act(ShellAction::EditFolder { text }, window, cx);
     }
 
-    fn start(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    /// Starts the session in the dialog's folder: the typing not yet settled goes to the shell
+    /// first, and the shell decides.
+    pub(crate) fn start(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.settle_folder(cx);
         let Some(folder) = self.shell.new_session().map(|dialog| dialog.folder.clone()) else {
             return;
@@ -228,6 +230,8 @@ pub(crate) fn new_session(model: &ShellModel, cx: &mut Context<ShellModel>) -> O
         .map(|problem| problem_line(problem_text(problem).into()));
     // Eight slots hold a session: none may start until one is closed.
     let full = model.shell.slots_full();
+    // Typing the shell has not been handed yet may make a folder it can start in.
+    let startable = dialog.can_start() || model.folder_typing.is_some();
     let limit = full.then(|| problem_line(copy::SLOT_LIMIT.into()));
 
     let start_label = if dialog.checking {
@@ -251,7 +255,7 @@ pub(crate) fn new_session(model: &ShellModel, cx: &mut Context<ShellModel>) -> O
                 .accessibility_id("dialog-start")
                 .primary()
                 .label(start_label)
-                .disabled(full || !dialog.can_start())
+                .disabled(full || !startable)
                 .on_click(cx.listener(|model, _: &ClickEvent, window, cx| {
                     model.start(window, cx);
                 })),
@@ -284,19 +288,23 @@ pub(crate) fn new_session(model: &ShellModel, cx: &mut Context<ShellModel>) -> O
         .child(buttons);
     Some(over_window(
         "new-session-layer",
+        &model.focus.overlay_layer,
         card.into_any_element(),
         cx,
     ))
 }
 
-/// A layer over the whole window that takes the mouse and centers `content`.
+/// A layer over the whole window that takes the mouse and the keyboard (`focus`) and centers
+/// `content`.
 pub(crate) fn over_window(
     id: &'static str,
+    focus: &FocusHandle,
     content: AnyElement,
     cx: &mut Context<ShellModel>,
 ) -> AnyElement {
     div()
         .id(id)
+        .track_focus(focus)
         .absolute()
         .inset_0()
         .flex()
@@ -307,4 +315,64 @@ pub(crate) fn over_window(
         .occlude()
         .child(content)
         .into_any_element()
+}
+
+#[cfg(test)]
+mod tests {
+    use closta_shell::state::ShellAction;
+    use gpui_kit::{Focusable as _, TestAppContext};
+
+    use crate::test_window::{act, focused, input, open, press};
+
+    #[gpui_kit::test]
+    fn escape_cancels_and_enter_starts_in_the_dialog(cx: &mut TestAppContext) {
+        let (handle, model, asked) = open(cx, 0);
+        act(cx, handle, &model, ShellAction::OpenNewSession);
+        let field = model.read_with(cx, |model, cx| {
+            model
+                .folder
+                .as_ref()
+                .expect("the folder field")
+                .read(cx)
+                .focus_handle(cx)
+        });
+        assert!(
+            focused(cx, handle, &field),
+            "the folder field has the keyboard"
+        );
+
+        // Pasted and started at once: the typing has not settled into the shell yet.
+        input(cx, handle, "C:\\x");
+        let (folder, typing) = model.read_with(cx, |model, _| {
+            let dialog = model.shell.new_session().expect("the dialog");
+            (dialog.folder.clone(), model.folder_typing.is_some())
+        });
+        assert_eq!((folder.as_str(), typing), ("", true));
+        press(cx, handle, "enter");
+        let asked_for = asked.lock().expect("the folders asked").clone();
+        assert_eq!(asked_for, ["C:\\x"]);
+
+        press(cx, handle, "escape");
+        assert!(model.read_with(cx, |model, _| model.shell.new_session().is_none()));
+        act(cx, handle, &model, ShellAction::OpenNewSession);
+        press(cx, handle, "escape");
+        assert!(model.read_with(cx, |model, _| model.shell.new_session().is_none()));
+    }
+
+    #[gpui_kit::test]
+    fn the_keyboard_comes_back_when_the_dialog_closes(cx: &mut TestAppContext) {
+        let (handle, model, _) = open(cx, 1);
+        let typing = model.read_with(cx, |model, _| {
+            let slot = model.shell.selected().expect("a slot");
+            model.focus.composers[&slot].clone()
+        });
+        crate::test_window::focus_on(cx, handle, &typing);
+        act(cx, handle, &model, ShellAction::OpenNewSession);
+        assert!(!focused(cx, handle, &typing));
+        press(cx, handle, "escape");
+        assert!(
+            focused(cx, handle, &typing),
+            "the input has the keyboard again"
+        );
+    }
 }

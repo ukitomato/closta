@@ -40,7 +40,7 @@ impl Render for ShellModel {
         let model = cx.entity();
         let header = self.header(cx);
         let slots = self.left_pane(window, cx);
-        let center = thread::conversation(self, cx);
+        let center = thread::conversation(self, window, cx);
         let right = right_frame(cx);
         let dialog = dialog::new_session(self, cx);
         let slot_close = slot_close_layer(self, cx);

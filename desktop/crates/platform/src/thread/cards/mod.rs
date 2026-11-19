@@ -414,7 +414,7 @@ mod tests {
     use closta_presenter::edit_diff::{DiffKind, DiffLine, EditDiff};
     use closta_shell::cards::CardState;
     use closta_shell::slot::SlotId;
-    use closta_shell::state::ShellAction;
+    use closta_shell::state::{Overlay, ShellAction};
     use gpui_kit::component::input::Textarea;
     use gpui_kit::component::input::TextareaState;
     use gpui_kit::test::TestWindowExt as _;
@@ -642,6 +642,7 @@ mod tests {
                                 Some(host.read(cx).focus.gate(keystroke, window, cx))
                             },
                             Rc::clone(&dispatch),
+                            Rc::new(|_, _| {}),
                             cx,
                         );
                         let mut focus = FocusMap::new(cx);
@@ -1006,7 +1007,7 @@ mod tests {
         let (handle, host, acted) = open(cx, vec![waiting(permission("r1"))], false);
         let card = card_focus(cx, &host, "r1");
         focus_on(cx, handle, &card);
-        host.update(cx, |host, _| host.focus.overlay = true);
+        host.update(cx, |host, _| host.focus.overlay = Some(Overlay::NewSession));
         press_all(cx, handle, &["1", "2", "enter", "space"]);
         assert!(
             acted.borrow().is_empty(),
@@ -1022,5 +1023,73 @@ mod tests {
         focus_on(cx, handle, &list);
         press(cx, handle, "alt-shift-w");
         assert_eq!(*acted.borrow(), [ShellAction::JumpToWaiting]);
+    }
+
+    /// Whether the line over the input names the jump key, with the keyboard where it is now.
+    fn hint_shown(cx: &mut TestAppContext, handle: AnyWindowHandle, host: &Entity<Host>) -> bool {
+        cx.update_window(handle, |_, window, cx| {
+            let scene = host.read(cx).focus.focus_scene(window, cx);
+            focus::shows_jump_hint(true, &scene)
+        })
+        .expect("read the focus")
+    }
+
+    #[gpui_kit::test]
+    fn the_jump_hint_shows_only_while_the_keyboard_is_out_of_the_card(cx: &mut TestAppContext) {
+        let (handle, host, _) = open(cx, vec![waiting(question("q1"))], true);
+        let typing = host.read_with(cx, |host, cx| {
+            host.composer
+                .as_ref()
+                .expect("an input")
+                .read(cx)
+                .focus_handle(cx)
+        });
+        focus_on(cx, handle, &typing);
+        assert!(hint_shown(cx, handle, &host), "typing in the input");
+        let thread = host.read_with(cx, |host, _| host.focus.thread.clone());
+        focus_on(cx, handle, &thread);
+        assert!(hint_shown(cx, handle, &host), "reading the conversation");
+
+        let card = card_focus(cx, &host, "q1");
+        focus_on(cx, handle, &card);
+        assert!(!hint_shown(cx, handle, &host), "on the card");
+        let option = host.read_with(cx, |host, _| {
+            host.focus.options[&(slot(), "q1".to_owned(), 0, 0)].clone()
+        });
+        focus_on(cx, handle, &option);
+        assert!(!hint_shown(cx, handle, &host), "on an option");
+        let other = host.read_with(cx, |host, cx| {
+            host.focus.card_inputs[&(slot(), "q1".to_owned(), CardField::Other(0))]
+                .read(cx)
+                .focus_handle(cx)
+        });
+        focus_on(cx, handle, &other);
+        assert!(!hint_shown(cx, handle, &host), "in the Other field");
+        let shown = cx
+            .update_window(handle, |_, window, cx| {
+                let scene = host.read(cx).focus.focus_scene(window, cx);
+                focus::shows_jump_hint(false, &scene)
+            })
+            .expect("read the focus");
+        assert!(!shown, "no card waits");
+    }
+
+    #[gpui_kit::test]
+    fn showing_a_slot_behind_an_overlay_leaves_the_keyboard_in_it(cx: &mut TestAppContext) {
+        let (handle, host, _) = open(cx, vec![waiting(permission("r1"))], true);
+        let held = host.read_with(cx, |host, _| host.before.clone());
+        focus_on(cx, handle, &held);
+        host.update(cx, |host, _| host.focus.overlay = Some(Overlay::CloseSlot));
+        let still = cx
+            .update_window(handle, |_, window, cx| {
+                host.update(cx, |host, cx| {
+                    host.focus.select(Some(SlotId::numbered(2)), window, cx);
+                });
+                held.is_focused(window)
+            })
+            .expect("show another slot");
+        assert!(still, "the keyboard stayed where the overlay holds it");
+        let selected = host.read_with(cx, |host, _| host.focus.selected);
+        assert_eq!(selected, Some(SlotId::numbered(2)));
     }
 }

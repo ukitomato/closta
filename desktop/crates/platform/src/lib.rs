@@ -9,6 +9,8 @@ mod needs_you;
 pub mod perf;
 mod probe;
 mod shell_view;
+#[cfg(test)]
+mod test_window;
 pub mod theme;
 mod thread;
 
