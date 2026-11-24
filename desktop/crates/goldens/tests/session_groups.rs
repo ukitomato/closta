@@ -10,7 +10,7 @@ use closta_presenter::input::{PresenterInput, SendId, UserSent};
 use closta_presenter::sessions::groups::{
     AlertChange, AlertKind, FinishedAlert, OpenOnlyAlert, PermissionAlert, SessionAlert,
     SessionGroup, SessionSummary, TITLE_MAX, WaitReason, alerts_between, session_summary,
-    session_title,
+    session_title, waiting_alerts,
 };
 use closta_presenter::text::take_utf16;
 use closta_presenter::thread_running::thread_is_running;
@@ -465,4 +465,45 @@ fn a_title_cut_inside_an_emoji_keeps_whole_characters() {
     let alert = bash_alert(&format!("{}\u{1F600}", "a".repeat(79)));
     assert_eq!("a".repeat(79), alert.subject);
     assert!(!alert.answerable);
+}
+
+#[test]
+fn waiting_alerts_name_what_waits_in_arrival_order() {
+    let (_, sandbox) = first_wait("36-sandbox-unavailable");
+    let waiting = waiting_alerts(&sandbox.0, &sandbox.1);
+    let [SessionAlert::Permission(alert)] = waiting.as_slice() else {
+        panic!("36: expected one permission alert, got {waiting:?}");
+    };
+    assert_eq!("Bash", alert.tool_name);
+    assert!(alert.answerable);
+    assert!(
+        alert.subject.starts_with("touch "),
+        "36: {:?}",
+        alert.subject
+    );
+
+    let open_only = |scenario: &str, what: AlertKind| {
+        let (_, wait) = first_wait(scenario);
+        let waiting = waiting_alerts(&wait.0, &wait.1);
+        let [SessionAlert::OpenOnly(alert)] = waiting.as_slice() else {
+            panic!("{scenario}: expected one open-only alert, got {waiting:?}");
+        };
+        assert_eq!(what, alert.what, "{scenario}");
+    };
+    open_only("17-edit-approval", AlertKind::Edit);
+    open_only("18-ask-multi-question", AlertKind::Question);
+    open_only("29-exit-plan-mode", AlertKind::Plan);
+
+    let all = views("01-baseline-text");
+    let last = all.last().expect("01 has views");
+    assert!(waiting_alerts(&last.0, &last.1).is_empty());
+}
+
+#[test]
+fn the_alerts_agree_with_alerts_between() {
+    let (_, after) = first_wait("36-sandbox-unavailable");
+    assert_eq!(
+        waiting_alerts(&after.0, &after.1),
+        alerts(None, &after).raised
+    );
 }

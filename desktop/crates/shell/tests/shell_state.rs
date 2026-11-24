@@ -166,7 +166,7 @@ fn opening_a_slot_starts_its_session_and_selects_the_first() {
         let mut watch = shell.watch(first).unwrap();
         assert_eq!((watch.slot(), watch.generation()), (first, 0));
         assert!(watch.changed().await);
-        let refresh = shell.refresh(first, watch.generation()).unwrap();
+        let refresh = shell.refresh(first, watch.generation(), 0).unwrap();
         assert_eq!(version(&refresh.status), RUNNING);
         assert_eq!(shell.slots()[0].mark, SlotMark::Ready);
         assert_eq!(version(&shell.status(first).unwrap()), RUNNING);
@@ -174,7 +174,7 @@ fn opening_a_slot_starts_its_session_and_selects_the_first() {
 
         let unknown = foreign(&harness, 3);
         assert!(shell.watch(unknown).is_none());
-        assert!(shell.refresh(unknown, 0).is_none());
+        assert!(shell.refresh(unknown, 0, 0).is_none());
         assert!(shell.status(unknown).is_none());
         assert!(shell.rows(unknown).is_empty());
     });
@@ -201,7 +201,8 @@ fn refresh_reads_the_view_and_returns_the_changes() {
             running,
             waiting,
             changes,
-        } = shell.refresh(slot, watch.generation()).unwrap();
+            ..
+        } = shell.refresh(slot, watch.generation(), 0).unwrap();
         assert_eq!(version(&status), RUNNING);
         assert!(!running && !waiting, "the turn is over");
         assert_eq!(
@@ -213,7 +214,7 @@ fn refresh_reads_the_view_and_returns_the_changes() {
         );
         assert_eq!(shell.rows(slot), expected.as_slice());
 
-        let again = shell.refresh(slot, watch.generation()).unwrap();
+        let again = shell.refresh(slot, watch.generation(), 0).unwrap();
         assert_eq!(again.changes, [], "nothing changed since");
         runtime.close();
     });
@@ -228,15 +229,15 @@ fn a_refresh_of_an_old_generation_does_nothing() {
         let runtime = runtime.recv().await.unwrap();
         running(&runtime).await;
         let old = shell.watch(slot).unwrap();
-        assert!(shell.refresh(slot, old.generation()).is_some());
+        assert!(shell.refresh(slot, old.generation(), 0).is_some());
 
         let (launch, _) = harness.launch("new");
         shell.replace(slot, launch).unwrap();
         let new = shell.watch(slot).unwrap();
         assert_eq!(new.generation(), old.generation() + 1);
-        assert!(shell.refresh(slot, old.generation()).is_none());
-        assert!(shell.refresh(slot, new.generation() + 1).is_none());
-        assert!(shell.refresh(slot, new.generation()).is_some());
+        assert!(shell.refresh(slot, old.generation(), 0).is_none());
+        assert!(shell.refresh(slot, new.generation() + 1, 0).is_none());
+        assert!(shell.refresh(slot, new.generation(), 0).is_some());
     });
 }
 
@@ -258,7 +259,7 @@ fn replacing_a_slot_keeps_its_id_selection_and_open_rows_and_closes_the_old_sess
         play(&control, &old_runtime, &lines, &expected).await;
         let mut old_watch = shell.watch(slot).unwrap();
         assert!(old_watch.changed().await);
-        shell.refresh(slot, old_watch.generation()).unwrap();
+        shell.refresh(slot, old_watch.generation(), 0).unwrap();
         let key = expected[0].key().to_owned();
         shell.act(ShellAction::ToggleRow {
             slot,
@@ -288,7 +289,7 @@ fn replacing_a_slot_keeps_its_id_selection_and_open_rows_and_closes_the_old_sess
         // The old watch ends once the old run has returned, and its last refresh does nothing.
         while old_watch.changed().await {}
         assert!(control.ended());
-        assert!(shell.refresh(slot, old_watch.generation()).is_none());
+        assert!(shell.refresh(slot, old_watch.generation(), 0).is_none());
 
         // Nothing to clear is no change.
         let (launch, _) = harness.launch("again");
@@ -313,7 +314,7 @@ fn toggling_a_row_flips_it_and_remeasures_that_row() {
         play(&control, &runtime, &lines, &expected).await;
         let mut watch = shell.watch(slot).unwrap();
         assert!(watch.changed().await);
-        shell.refresh(slot, watch.generation()).unwrap();
+        shell.refresh(slot, watch.generation(), 0).unwrap();
 
         let at = expected.len() - 1;
         let row = &expected[at];
@@ -350,7 +351,7 @@ fn a_todo_row_starts_open() {
         play(&control, &runtime, &lines, &expected).await;
         let mut watch = shell.watch(slot).unwrap();
         assert!(watch.changed().await);
-        shell.refresh(slot, watch.generation()).unwrap();
+        shell.refresh(slot, watch.generation(), 0).unwrap();
 
         let todo = expected
             .iter()
@@ -397,7 +398,7 @@ fn a_slot_that_is_not_selected_keeps_its_rows_current() {
             play(&control, &behind, &lines[from..upto], &expected).await;
             from = upto;
             assert!(watch.changed().await);
-            let refresh = shell.refresh(slot, watch.generation()).unwrap();
+            let refresh = shell.refresh(slot, watch.generation(), 0).unwrap();
             mirror = apply(&mirror, &refresh.changes, shell.rows(slot));
             assert_eq!(shell.rows(slot), expected.as_slice());
             assert_eq!(mirror, keys(&expected), "no change was missed");
@@ -423,10 +424,10 @@ fn a_slot_whose_launch_fails_ends_its_watch_with_the_failure() {
         let mut watch = shell.watch(slot).unwrap();
         let mut refreshes = 0;
         while watch.changed().await {
-            shell.refresh(slot, watch.generation()).unwrap();
+            shell.refresh(slot, watch.generation(), 0).unwrap();
             refreshes += 1;
         }
-        let last = shell.refresh(slot, watch.generation()).unwrap();
+        let last = shell.refresh(slot, watch.generation(), 0).unwrap();
         assert!(refreshes >= 1);
         assert!(matches!(
             last.status,
@@ -452,7 +453,7 @@ fn a_watch_coalesces_pings_and_ends_once_the_session_ends() {
         let control = harness.control(0).await;
         let mut watch = shell.watch(slot).unwrap();
         assert!(watch.changed().await);
-        shell.refresh(slot, watch.generation()).unwrap();
+        shell.refresh(slot, watch.generation(), 0).unwrap();
 
         let baseline = lines("01-baseline-text");
         let lines: Vec<String> = baseline.iter().cycle().take(100).cloned().collect();
@@ -472,7 +473,7 @@ fn a_watch_coalesces_pings_and_ends_once_the_session_ends() {
             after += 1;
         }
         assert!(after <= 2);
-        let last = shell.refresh(slot, watch.generation()).unwrap();
+        let last = shell.refresh(slot, watch.generation(), 0).unwrap();
         assert_eq!(last.status, SessionStatus::Ended);
         assert_eq!(shell.slots()[0].mark, SlotMark::Ended);
     });
@@ -519,16 +520,16 @@ fn a_session_that_ends_mid_turn_is_not_running() {
             play(&control, &runtime, open, &rows_of(open)).await;
             let mut watch = shell.watch(slot).unwrap();
             assert!(watch.changed().await);
-            assert!(shell.refresh(slot, watch.generation()).unwrap().running);
+            assert!(shell.refresh(slot, watch.generation(), 0).unwrap().running);
             assert!(shell.running(slot));
             let at = shell.slots().iter().position(|it| it.id == slot).unwrap();
             assert_eq!(shell.slots()[at].mark, SlotMark::Working);
 
             control.exit(code);
             while watch.changed().await {
-                shell.refresh(slot, watch.generation()).unwrap();
+                shell.refresh(slot, watch.generation(), 0).unwrap();
             }
-            let last = shell.refresh(slot, watch.generation()).unwrap();
+            let last = shell.refresh(slot, watch.generation(), 0).unwrap();
             assert!(last.status.is_end());
             assert!(!last.running, "the spinner stops with the session");
             assert!(!shell.running(slot));
@@ -577,7 +578,7 @@ fn a_companion_runs_beside_the_session_with_its_runtime() {
         play(&control, &runtime, &lines, &expected).await;
         let mut watch = shell.watch(slot).unwrap();
         assert!(watch.changed().await);
-        shell.refresh(slot, watch.generation()).unwrap();
+        shell.refresh(slot, watch.generation(), 0).unwrap();
         assert_eq!(
             shell.rows(slot),
             expected.as_slice(),
@@ -666,8 +667,8 @@ fn the_marks_follow_the_status_and_the_turn() {
     );
     assert_eq!(mark_of(&running, true, false), SlotMark::Working);
     assert_eq!(mark_of(&running, false, false), SlotMark::Ready);
-    assert_eq!(mark_of(&running, true, true), SlotMark::Ready);
-    assert_eq!(mark_of(&running, false, true), SlotMark::Ready);
+    assert_eq!(mark_of(&running, true, true), SlotMark::Waiting);
+    assert_eq!(mark_of(&running, false, true), SlotMark::Waiting);
     assert_eq!(mark_of(&SessionStatus::Ended, true, false), SlotMark::Ended);
     assert_eq!(
         mark_of(

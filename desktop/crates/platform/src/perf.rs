@@ -234,6 +234,21 @@ impl Measuring {
         true
     }
 
+    /// Stops awaiting `slot`, which is gone. True when it was the last one awaited, as
+    /// [`Self::note_refresh`] is.
+    pub(crate) fn forget(&mut self, slot: SlotId) -> bool {
+        self.last_refresh.remove(&slot);
+        let Some(awaiting) = &mut self.awaiting else {
+            return false;
+        };
+        if !awaiting.remove(&slot) || self.refreshed || !awaiting.is_empty() {
+            return false;
+        }
+        self.refreshed = true;
+        self.refreshed_at.get_or_insert_with(Instant::now);
+        true
+    }
+
     /// Whether every slot has refreshed after the replays ended.
     pub(crate) fn is_refreshed(&self) -> bool {
         self.refreshed

@@ -3,8 +3,7 @@
 //! toggle it. The draw makes a text state that is missing and never sets one's text.
 
 use closta_presenter::rows::{
-    AskRow, CardRow, CompactionRow, ExploredRow, ThinkingRow, ThreadRow, TodoRow, ToolRow,
-    TurnEndRow,
+    AskRow, CompactionRow, ExploredRow, ThinkingRow, ThreadRow, TodoRow, ToolRow, TurnEndRow,
 };
 use closta_presenter::tool_line::{ToolDetail, ToolLine, ToolLineState};
 use closta_shell::copy;
@@ -48,7 +47,13 @@ impl Toggle {
     }
 }
 
-pub(super) fn row(model: &Entity<ShellModel>, slot: SlotId, at: usize, cx: &mut App) -> AnyElement {
+pub(super) fn row(
+    model: &Entity<ShellModel>,
+    slot: SlotId,
+    at: usize,
+    window: &mut Window,
+    cx: &mut App,
+) -> AnyElement {
     let shell = &model.read(cx).shell;
     let Some(row) = shell.rows(slot).get(at).cloned() else {
         return div().into_any_element();
@@ -78,7 +83,10 @@ pub(super) fn row(model: &Entity<ShellModel>, slot: SlotId, at: usize, cx: &mut 
             format!("{} {}", copy::EXPLORED, copy::explored_files(explored)),
         ),
         ThreadRow::Todo(todo) => (todo_row(todo, is_open, &toggle, cx), todo_title(todo)),
-        ThreadRow::Card(card) => (card_row(card, cx), copy::card_line(card)),
+        ThreadRow::Card(card) => (
+            super::cards::card_row(model, slot, card, window, cx),
+            copy::card_line(card),
+        ),
         ThreadRow::TurnEnd(end) => (turn_end_row(end, cx), copy::turn_end(end, false)),
         ThreadRow::SignIn(_) => (sign_in_row(cx), copy::SIGN_IN_TEXT.to_owned()),
         ThreadRow::Compaction(compaction) => (
@@ -391,17 +399,6 @@ pub(super) fn todo_row(row: &TodoRow, is_open: bool, toggle: &Toggle, cx: &App) 
         .into_any_element()
 }
 
-/// A card as one framed line in 6a: its title and how it was answered, or that it waits.
-pub(super) fn card_row(row: &CardRow, cx: &App) -> AnyElement {
-    let theme = cx.theme();
-    let waiting = row.card.answered().is_none();
-    framed(cx)
-        .when(waiting, |it| it.border_color(theme.primary))
-        .when(!waiting, |it| it.text_color(theme.muted_foreground))
-        .child(copy::card_line(row))
-        .into_any_element()
-}
-
 /// The end of a turn, faint: its time. 6a does not check the files a turn changed.
 pub(super) fn turn_end_row(row: &TurnEndRow, cx: &App) -> AnyElement {
     div()
@@ -492,7 +489,7 @@ fn code_box(text: String, cx: &App) -> AnyElement {
         .into_any_element()
 }
 
-/// A frame for a card, a to-do list or a sub-agent.
+/// A frame for a to-do list or a sub-agent.
 fn framed(cx: &App) -> Div {
     v_flex()
         .w_full()

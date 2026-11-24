@@ -68,13 +68,17 @@ fn replay_options(
         return probe_options(header, args);
     }
     let pace = Duration::from_millis(args.pace_ms);
-    let (slots, controls): (Vec<_>, Vec<_>) = args
+    let (mut slots, controls): (Vec<_>, Vec<_>) = args
         .replays
         .iter()
         .map(|replay| replay::slot_launch(replay, pace))
         .collect::<Result<Vec<_>, _>>()?
         .into_iter()
         .unzip();
+    // The failing launch opens after the replays.
+    if let Some(code) = args.fail_launch {
+        slots.push(probe::fail_launch(code, args.fail_distro.clone()));
+    }
     let measure = args.measures().then(|| closta_platform::Measure {
         started,
         perf_log: args.perf_log.clone(),

@@ -1,52 +1,217 @@
 //! What the window holds: the open slots and their rows, the selected slot, the panes, and
 //! which rows were opened or closed by hand.
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Mutex, PoisonError};
+use std::time::{Duration, UNIX_EPOCH};
 
 use async_channel::Receiver;
-use closta_presenter::composer_state::composer_state;
+use closta_presenter::cards::decisions::offers_destination;
+use closta_presenter::cards::plan::plan_go_of;
+use closta_presenter::cards::{SUGGESTION_DESTINATIONS, ThreadCard, card_of};
+use closta_presenter::composer_state::{PERMISSION_MODES, composer_state};
 use closta_presenter::rows::{ThreadRow, ThreadRows};
+use closta_presenter::session::SessionView;
+use closta_presenter::sessions::groups::{SessionAlert, alerts_between, waiting_alerts};
 use closta_presenter::thread_running::thread_is_running;
 use closta_session::log::SessionLog;
 use closta_session::runtime::{SessionConfig, SessionRuntime};
 use closta_session::status::SessionStatus;
 use futures_lite::future;
 
+use crate::cards::{CardState, Reply, verdict};
 use crate::closing::{CloseQuestion, CloseRun, CloseStage};
 use crate::composer::Composer;
 use crate::copy;
 use crate::header::AppHeader;
+use crate::needs_you::{
+    NeedsYouRow, SlotNeeds, attention, card_accepts, jump_target, list_accepts, needs_you_rows,
+};
 use crate::new_session::{
     LaunchChecks, NewSessionDialog, PlannerFor, Problem, RecentFolders, Runtime, default_folder,
     launch_in, quick_problem, runtime_of,
 };
 use crate::panes::{Pane, Panes};
 use crate::rows::{RowChange, row_changes};
-use crate::slot::{Relaunch, SlotId, SlotLaunch, SlotSummary, Spawn, mark_of};
+use crate::slot::{
+    MAX_LIVE_SLOTS, Relaunch, SlotId, SlotLaunch, SlotSummary, Spawn, counts_as_live, mark_of,
+};
 use crate::watch::SlotWatch;
+
+/// The mode that runs every tool without asking.
+pub const BYPASS_MODE: &str = "bypassPermissions";
 
 /// What a click or a key asks of the shell.
 #[derive(Clone, PartialEq, Debug)]
 pub enum ShellAction {
     Select(SlotId),
     TogglePane(Pane),
-    ResizePane { pane: Pane, width: f32 },
-    ToggleRow { slot: SlotId, key: String },
-    Send { slot: SlotId },
-    Interrupt { slot: SlotId },
-    EditDraft { slot: SlotId, text: String },
-    HistoryPrev { slot: SlotId },
-    HistoryNext { slot: SlotId },
-    Restart { slot: SlotId },
+    ResizePane {
+        pane: Pane,
+        width: f32,
+    },
+    ToggleRow {
+        slot: SlotId,
+        key: String,
+    },
+    Send {
+        slot: SlotId,
+    },
+    Interrupt {
+        slot: SlotId,
+    },
+    EditDraft {
+        slot: SlotId,
+        text: String,
+    },
+    HistoryPrev {
+        slot: SlotId,
+    },
+    HistoryNext {
+        slot: SlotId,
+    },
+    Restart {
+        slot: SlotId,
+    },
     OpenNewSession,
-    EditFolder { text: String },
+    EditFolder {
+        text: String,
+    },
     CancelNewSession,
-    StartSession { folder: String },
-    FolderChecked { folder: String, exists: bool },
+    StartSession {
+        folder: String,
+    },
+    FolderChecked {
+        folder: String,
+        exists: bool,
+    },
     RequestClose,
     ConfirmClose,
     CancelClose,
+    CloseSlot {
+        slot: SlotId,
+    },
+    ConfirmCloseSlot,
+    CancelCloseSlot,
+    CardShown {
+        slot: SlotId,
+        request_id: String,
+        now_ms: i64,
+    },
+    /// The needs-you list drew the slot's row, showing `request_id`, as its `index`th row.
+    ListShown {
+        slot: SlotId,
+        request_id: String,
+        index: usize,
+        now_ms: i64,
+    },
+    /// Answers the card with its `index`th button, if the card was drawn half a second ago.
+    ChooseCard {
+        slot: SlotId,
+        request_id: String,
+        index: usize,
+        now_ms: i64,
+    },
+    DenyCard {
+        slot: SlotId,
+        request_id: String,
+        now_ms: i64,
+    },
+    OpenNote {
+        slot: SlotId,
+        request_id: String,
+    },
+    CloseNote {
+        slot: SlotId,
+        request_id: String,
+    },
+    /// `text` is the user's: this action is never logged.
+    EditNote {
+        slot: SlotId,
+        request_id: String,
+        text: String,
+    },
+    SendNote {
+        slot: SlotId,
+        request_id: String,
+        now_ms: i64,
+    },
+    PickDestination {
+        slot: SlotId,
+        request_id: String,
+        destination: String,
+    },
+    ToggleOption {
+        slot: SlotId,
+        request_id: String,
+        question: usize,
+        option: usize,
+    },
+    ToggleOther {
+        slot: SlotId,
+        request_id: String,
+        question: usize,
+    },
+    /// `text` is the user's: this action is never logged.
+    EditOther {
+        slot: SlotId,
+        request_id: String,
+        question: usize,
+        text: String,
+    },
+    AnswerQuestion {
+        slot: SlotId,
+        request_id: String,
+        now_ms: i64,
+    },
+    /// Allows the request the slot's needs-you row shows, if the row was drawn half a second ago.
+    AllowFromList {
+        slot: SlotId,
+        request_id: String,
+        now_ms: i64,
+    },
+    /// Opens the Deny note of the card the slot's row shows, in the conversation.
+    DenyFromList {
+        slot: SlotId,
+        request_id: String,
+    },
+    /// Selects the slot and puts the keyboard on its card, or on its failure band.
+    OpenFromList {
+        slot: SlotId,
+    },
+    /// Goes to the selected slot's waiting card, else to the next slot that waits.
+    JumpToWaiting,
+    /// Picks a permission mode; Bypass asks first, the rest switch at once.
+    PickMode {
+        slot: SlotId,
+        mode: String,
+    },
+    /// Switches to Bypass once the slot's banner asked for it.
+    ConfirmBypass {
+        slot: SlotId,
+    },
+    /// Takes the slot's Bypass banner down.
+    CancelBypass {
+        slot: SlotId,
+    },
+}
+
+/// The one thing that holds the window's attention; what is behind it takes no answer.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Overlay {
+    NewSession,
+    CloseWindow,
+    CloseSlot,
+    Closing,
+}
+
+/// Where the keyboard goes once an action is done.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum FocusTarget {
+    Composer(SlotId),
+    Card { slot: SlotId, request_id: String },
+    CardNote { slot: SlotId, request_id: String },
+    FailureBand(SlotId),
 }
 
 /// What the machine is asked: the checks of the New Session dialog and the planner a folder
@@ -78,6 +243,10 @@ pub struct Acted {
     pub folder: bool,
     /// The steps that close the window are to run.
     pub close: bool,
+    /// The slot that was closed and is gone.
+    pub removed: Option<SlotId>,
+    /// Where the keyboard is to go.
+    pub focus: Option<FocusTarget>,
 }
 
 /// What the composer's second line shows of the session.
@@ -85,6 +254,8 @@ pub struct Acted {
 pub struct ComposerLine {
     pub mode: Option<String>,
     pub model: String,
+    /// Whether a model, mode, effort or sandbox switch waits for the CLI's answer.
+    pub switching: bool,
 }
 
 /// Where a slot's session is after a refresh, and how its rows changed.
@@ -96,6 +267,12 @@ pub struct Refresh {
     /// Whether an approval waits.
     pub waiting: bool,
     pub changes: Vec<RowChange>,
+    /// The ids of the requests that began to wait; a finished turn is not one.
+    pub raised: Vec<String>,
+    /// Whether something new waits or the session just failed.
+    pub attention: bool,
+    /// Whether the slot was being closed and its run has returned: it is gone.
+    pub removed: bool,
 }
 
 /// One slot: its current session and what the last refresh read of it.
@@ -120,6 +297,33 @@ struct Slot {
     working_directory: Option<String>,
     line: Option<ComposerLine>,
     compacting: bool,
+    /// The view the last refresh read; `None` before the first and after a replace.
+    last: Option<SessionView>,
+    /// What a running session waits for, in arrival order, with when each was first seen.
+    waits: Vec<(SessionAlert, i64)>,
+    /// When the session was first seen failed.
+    failed_since: Option<i64>,
+    /// Whether the session was told to end and the slot goes once its run has returned.
+    closing: bool,
+    /// What is kept of each waiting card, by request id.
+    cards: HashMap<String, CardState>,
+    /// Whether the Bypass banner is up: Bypass is entered only by confirming it.
+    bypass_asking: bool,
+    /// Whether a mode switch was written since the last refresh, which has not seen it yet.
+    mode_sent: bool,
+}
+
+impl Slot {
+    /// Whether a running session works or waits on an approval; one told to end does neither.
+    fn is_working(&self) -> bool {
+        !self.closing
+            && matches!(self.status, SessionStatus::Running { .. })
+            && (self.running || self.waiting)
+    }
+
+    fn is_live(&self) -> bool {
+        self.closing || counts_as_live(&self.status)
+    }
 }
 
 /// The runs that have not returned, by session id: with the handle to kill their processes and
@@ -139,6 +343,8 @@ pub struct ShellState {
     panes: Panes,
     runs: Runs,
     closing: CloseStage,
+    slot_close: Option<(SlotId, CloseQuestion)>,
+    shown_title: Option<String>,
 }
 
 impl ShellState {
@@ -161,6 +367,8 @@ impl ShellState {
             panes: Panes::default(),
             runs: Runs::default(),
             closing: CloseStage::Open,
+            slot_close: None,
+            shown_title: None,
         }
     }
 
@@ -196,6 +404,13 @@ impl ShellState {
                 working_directory,
                 line: None,
                 compacting: false,
+                last: None,
+                waits: Vec::new(),
+                failed_since: None,
+                closing: false,
+                cards: HashMap::new(),
+                bypass_asking: false,
+                mode_sent: false,
             },
         );
         self.selected.get_or_insert(id);
@@ -228,6 +443,12 @@ impl ShellState {
         held.status = SessionStatus::Starting;
         held.running = false;
         held.waiting = false;
+        held.last = None;
+        held.waits.clear();
+        held.failed_since = None;
+        held.cards.clear();
+        held.bypass_asking = false;
+        held.mode_sent = false;
         let emptied = std::mem::take(&mut held.rows).len();
         Some(if emptied == 0 {
             Vec::new()
@@ -311,6 +532,7 @@ impl ShellState {
                 id: *id,
                 title: slot.title.clone(),
                 mark: mark_of(&slot.status, slot.running, slot.waiting),
+                closing: slot.closing,
             })
             .collect()
     }
@@ -369,7 +591,7 @@ impl ShellState {
 
     /// Reads the slot's current session again, if it is still the one of `generation`, and
     /// returns where it is and how its rows changed.
-    pub fn refresh(&mut self, slot: SlotId, generation: u64) -> Option<Refresh> {
+    pub fn refresh(&mut self, slot: SlotId, generation: u64, now_ms: i64) -> Option<Refresh> {
         let held = self.slots.get_mut(&slot)?;
         if held.generation != generation {
             return None;
@@ -380,25 +602,150 @@ impl ShellState {
         let changes = row_changes(&held.rows, &rows);
         let waiting = !view.conversation.pending_approvals.is_empty();
         // An open turn is never folded closed when the process ends: only a live session runs.
-        let running = matches!(status, SessionStatus::Running { .. })
-            && !waiting
-            && thread_is_running(&view.conversation, &view.transcript);
+        let live = matches!(status, SessionStatus::Running { .. });
+        let running = live && !waiting && thread_is_running(&view.conversation, &view.transcript);
         let composing = composer_state(&view.conversation, &view.transcript);
         held.line = Some(ComposerLine {
             mode: composing.mode,
             model: composing.model.label,
+            switching: composing.switching.is_some(),
         });
+        held.mode_sent = false;
         held.compacting = view.transcript.operations.compacting;
+
+        let mut change = alerts_between(
+            held.last
+                .as_ref()
+                .map(|it| (&it.conversation, &*it.transcript)),
+            (&view.conversation, &*view.transcript),
+        );
+        if !live {
+            // What an ended session left waiting is gone with its process.
+            change
+                .raised
+                .retain(|it| matches!(it, SessionAlert::Finished(_)));
+        }
+        let raised = change
+            .raised
+            .iter()
+            .filter_map(|it| match it {
+                SessionAlert::Permission(alert) => Some(alert.request_id.clone()),
+                SessionAlert::OpenOnly(alert) => Some(alert.request_id.clone()),
+                SessionAlert::Finished(_) => None,
+            })
+            .collect();
+        let was_failed = matches!(held.status, SessionStatus::Failed(_));
+        let failed = matches!(status, SessionStatus::Failed(_));
+        let newly_failed = failed && !was_failed;
+        let seen: HashMap<String, i64> = held
+            .waits
+            .iter()
+            .filter_map(|(alert, at)| Some((request_of(alert)?.to_owned(), *at)))
+            .collect();
+        held.waits = if live {
+            waiting_alerts(&view.conversation, &view.transcript)
+                .into_iter()
+                .map(|alert| {
+                    let at = request_of(&alert)
+                        .and_then(|id| seen.get(id).copied())
+                        .unwrap_or(now_ms);
+                    (alert, at)
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        held.failed_since = failed.then(|| held.failed_since.unwrap_or(now_ms));
+        let waits = &held.waits;
+        held.cards.retain(|id, _| {
+            waits
+                .iter()
+                .any(|(alert, _)| request_of(alert) == Some(id.as_str()))
+        });
+        held.last = Some(view);
         held.rows = rows;
         held.status = status.clone();
         held.running = running;
         held.waiting = waiting;
+        let removed = held.closing && held.finished.is_closed();
+        if removed {
+            self.remove(slot);
+        }
         Some(Refresh {
             status,
             running,
             waiting,
             changes,
+            raised,
+            attention: attention(&change, newly_failed),
+            removed,
         })
+    }
+
+    /// Takes the slot out; the one selected gives way to the first that is left.
+    fn remove(&mut self, slot: SlotId) {
+        self.slots.remove(&slot);
+        if self.selected == Some(slot) {
+            self.selected = self.slots.keys().next().copied();
+        }
+        if self.slot_close.is_some_and(|(asked, _)| asked == slot) {
+            self.slot_close = None;
+        }
+    }
+
+    /// What waits for the user, one row a slot, the oldest first. A slot that is being closed
+    /// shows nothing.
+    pub fn needs_you(&self) -> Vec<NeedsYouRow> {
+        let slots: Vec<SlotNeeds> = self
+            .slots
+            .iter()
+            .filter(|(_, held)| !held.closing)
+            .map(|(id, held)| SlotNeeds {
+                slot: *id,
+                title: held.title.clone(),
+                waits: held.waits.clone(),
+                failed: self
+                    .failure(*id)
+                    .zip(held.failed_since)
+                    .map(|((title, _), at)| (title, at)),
+            })
+            .collect();
+        needs_you_rows(&slots)
+    }
+
+    /// How many requests the listed slots wait on, for the window's title.
+    pub fn waiting_count(&self) -> usize {
+        self.slots
+            .values()
+            .filter(|held| !held.closing)
+            .map(|held| held.waits.len())
+            .sum()
+    }
+
+    /// The window's title if it differs from the one this last returned; the first call
+    /// always returns one.
+    pub fn title_change(&mut self) -> Option<String> {
+        let title = copy::window_title(&self.header.title, self.waiting_count());
+        if self.shown_title.as_ref() == Some(&title) {
+            return None;
+        }
+        self.shown_title = Some(title.clone());
+        Some(title)
+    }
+
+    /// Whether as many slots as may hold a session do; a slot that is closing still does.
+    pub fn slots_full(&self) -> bool {
+        self.slots.values().filter(|it| it.is_live()).count() >= MAX_LIVE_SLOTS
+    }
+
+    /// Whether the slot could be restarted but for the limit.
+    pub fn restart_blocked(&self, slot: SlotId) -> bool {
+        self.restartable(slot) && self.slots_full()
+    }
+
+    /// The slot being asked about before it is closed, and what is at stake.
+    pub fn slot_close(&self) -> Option<(SlotId, CloseQuestion)> {
+        self.slot_close
     }
 
     /// The slot's draft; empty for a slot that is not there.
@@ -451,10 +798,16 @@ impl ShellState {
             .is_some_and(|it| it.status == SessionStatus::Ended)
     }
 
-    /// Whether a Restart is on offer: the session ended or failed and can be made again.
+    /// Whether a Restart is on offer: the session ended or failed, can be made again and
+    /// there is room for it.
     pub fn can_restart(&self, slot: SlotId) -> bool {
+        self.restartable(slot) && !self.slots_full()
+    }
+
+    fn restartable(&self, slot: SlotId) -> bool {
         self.slots.get(&slot).is_some_and(|it| {
             it.relaunch.is_some()
+                && !it.closing
                 && matches!(it.status, SessionStatus::Ended | SessionStatus::Failed(_))
         })
     }
@@ -505,7 +858,19 @@ impl ShellState {
                     | ShellAction::OpenNewSession
                     | ShellAction::FolderChecked { .. }
                     | ShellAction::Send { .. }
+                    | ShellAction::CloseSlot { .. }
+                    | ShellAction::ConfirmCloseSlot
+                    | ShellAction::CancelCloseSlot
+                    | ShellAction::ChooseCard { .. }
+                    | ShellAction::DenyCard { .. }
+                    | ShellAction::SendNote { .. }
+                    | ShellAction::AnswerQuestion { .. }
             )
+        {
+            return Acted::default();
+        }
+        if let Some(overlay) = self.overlay()
+            && behind_overlay(&action, overlay)
         {
             return Acted::default();
         }
@@ -560,21 +925,572 @@ impl ShellState {
             ShellAction::FolderChecked { folder, exists } => self.folder_checked(&folder, exists),
             ShellAction::RequestClose => self.request_close(),
             ShellAction::ConfirmClose => self.begin_close(),
+            ShellAction::CloseSlot { slot } => self.close_slot(slot),
+            ShellAction::ConfirmCloseSlot => match self.slot_close.take() {
+                Some((slot, _)) => self.begin_close_slot(slot),
+                None => Acted::default(),
+            },
+            ShellAction::CancelCloseSlot => {
+                self.slot_close = None;
+                Acted::default()
+            }
+            ShellAction::CardShown {
+                slot,
+                request_id,
+                now_ms,
+            } => {
+                if let Some(card) = self.card_mut(slot, &request_id) {
+                    card.shown_ms.get_or_insert(now_ms);
+                }
+                Acted::default()
+            }
+            ShellAction::ListShown {
+                slot,
+                request_id,
+                index,
+                now_ms,
+            } => {
+                // Only a row that is on show, in the place the list has it, and shows this
+                // request counts: the time of a row behind an overlay, one that shows another
+                // request or one drawn where the list no longer has it must not start its gate.
+                let shown = self.overlay().is_none()
+                    && self.needs_you().get(index).is_some_and(|row| {
+                        row.slot == slot && row.request_id() == Some(request_id.as_str())
+                    });
+                if shown && let Some(card) = self.card_mut(slot, &request_id) {
+                    // A row drawn in another place than before starts again: what was under the
+                    // pointer there is not what was read.
+                    if card.list_shown.is_none_or(|(at, _)| at != index) {
+                        card.list_shown = Some((index, now_ms));
+                    }
+                }
+                Acted::default()
+            }
+            ShellAction::ChooseCard {
+                slot,
+                request_id,
+                index,
+                now_ms,
+            } => self.answer_shown_card(slot, &request_id, Reply::Choose(index), now_ms),
+            ShellAction::DenyCard {
+                slot,
+                request_id,
+                now_ms,
+            }
+            | ShellAction::SendNote {
+                slot,
+                request_id,
+                now_ms,
+            } => self.answer_shown_card(slot, &request_id, Reply::Deny, now_ms),
+            ShellAction::OpenNote { slot, request_id } => {
+                self.set_note_open(slot, &request_id, true)
+            }
+            ShellAction::CloseNote { slot, request_id } => {
+                self.set_note_open(slot, &request_id, false)
+            }
+            ShellAction::EditNote {
+                slot,
+                request_id,
+                text,
+            } => {
+                if let Some(card) = self.card_mut(slot, &request_id) {
+                    card.note = text;
+                }
+                Acted::default()
+            }
+            ShellAction::PickDestination {
+                slot,
+                request_id,
+                destination,
+            } => {
+                if !self.offers_place(slot, &request_id, &destination) {
+                    return Acted::default();
+                }
+                let Some(card) = self.card_mut(slot, &request_id) else {
+                    return Acted::default();
+                };
+                card.destination = Some(destination);
+                self.remeasured(slot, &request_id)
+            }
+            ShellAction::ToggleOption {
+                slot,
+                request_id,
+                question,
+                option,
+            } => self.pick(slot, &request_id, question, Some(option), |card, multi| {
+                card.toggle_option(question, option, multi);
+            }),
+            ShellAction::ToggleOther {
+                slot,
+                request_id,
+                question,
+            } => self.pick(slot, &request_id, question, None, |card, multi| {
+                card.toggle_other(question, multi);
+            }),
+            ShellAction::EditOther {
+                slot,
+                request_id,
+                question,
+                text,
+            } => self.pick(slot, &request_id, question, None, |card, multi| {
+                card.edit_other(question, &text, multi);
+            }),
+            ShellAction::AnswerQuestion {
+                slot,
+                request_id,
+                now_ms,
+            } => self.answer_shown_card(slot, &request_id, Reply::Answer, now_ms),
             ShellAction::CancelClose => {
                 if matches!(self.closing, CloseStage::Asking(_)) {
                     self.closing = CloseStage::Open;
                 }
                 Acted::default()
             }
+            ShellAction::AllowFromList {
+                slot,
+                request_id,
+                now_ms,
+            } => self.allow_from_list(slot, &request_id, now_ms),
+            ShellAction::DenyFromList { slot, request_id } => {
+                self.deny_from_list(slot, &request_id)
+            }
+            ShellAction::OpenFromList { slot } => self.open_from_list(slot),
+            ShellAction::JumpToWaiting => self.jump_to_waiting(),
+            ShellAction::PickMode { slot, mode } => self.pick_mode(slot, &mode),
+            ShellAction::ConfirmBypass { slot } => self.confirm_bypass(slot),
+            ShellAction::CancelBypass { slot } => {
+                if let Some(held) = self.slots.get_mut(&slot) {
+                    held.bypass_asking = false;
+                }
+                Acted::default()
+            }
+        }
+    }
+
+    /// Whether the slot's Bypass banner is up.
+    pub fn bypass_asking(&self, slot: SlotId) -> bool {
+        self.slots.get(&slot).is_some_and(|it| it.bypass_asking)
+    }
+
+    fn pick_mode(&mut self, slot: SlotId, mode: &str) -> Acted {
+        let Some(held) = self.slots.get_mut(&slot) else {
+            return Acted::default();
+        };
+        let Some(commands) = held.runtime.commands() else {
+            return Acted::default();
+        };
+        let current = held.line.as_ref();
+        if held.mode_sent
+            || current.is_some_and(|it| it.switching || it.mode.as_deref() == Some(mode))
+            || !PERMISSION_MODES.contains(&mode)
+        {
+            return Acted::default();
+        }
+        if mode == BYPASS_MODE {
+            held.bypass_asking = true;
+        } else {
+            held.mode_sent = commands.switch_mode(mode).is_ok();
+            held.bypass_asking = false;
+        }
+        Acted::default()
+    }
+
+    fn confirm_bypass(&mut self, slot: SlotId) -> Acted {
+        let Some(held) = self.slots.get_mut(&slot).filter(|it| it.bypass_asking) else {
+            return Acted::default();
+        };
+        let line = held.line.as_ref();
+        if held.mode_sent || line.is_some_and(|it| it.switching) {
+            return Acted::default();
+        }
+        if line.is_some_and(|it| it.mode.as_deref() == Some(BYPASS_MODE)) {
+            held.bypass_asking = false;
+            return Acted::default();
+        }
+        if let Some(commands) = held.runtime.commands() {
+            held.mode_sent = commands.switch_mode(BYPASS_MODE).is_ok();
+        }
+        held.bypass_asking = false;
+        Acted::default()
+    }
+
+    /// The overlay that is up; the window's own steps come before a slot's question, and that
+    /// before the dialog.
+    pub fn overlay(&self) -> Option<Overlay> {
+        if self.closing == CloseStage::Closing {
+            Some(Overlay::Closing)
+        } else if matches!(self.closing, CloseStage::Asking(_)) {
+            Some(Overlay::CloseWindow)
+        } else if self.slot_close.is_some() {
+            Some(Overlay::CloseSlot)
+        } else if self.dialog.is_some() {
+            Some(Overlay::NewSession)
+        } else {
+            None
+        }
+    }
+
+    /// The row the needs-you list shows for the slot.
+    fn row_of(&self, slot: SlotId) -> Option<NeedsYouRow> {
+        self.needs_you().into_iter().find(|it| it.slot == slot)
+    }
+
+    /// Allows the request the slot's row shows. Everything must hold: the row shows exactly
+    /// this request and it may be allowed unread, the row itself was drawn 500 ms ago in the
+    /// place it has now (not a card in the conversation), the slot still waits on it, and the
+    /// slot's session is live.
+    fn allow_from_list(&mut self, slot: SlotId, request_id: &str, now_ms: i64) -> Acted {
+        let rows = self.needs_you();
+        let Some((place, row)) = rows.iter().enumerate().find(|(_, it)| it.slot == slot) else {
+            return Acted::default();
+        };
+        if row.request_id() != Some(request_id) || !row.may_allow() {
+            return Acted::default();
+        }
+        let Some(held) = self.slots.get(&slot) else {
+            return Acted::default();
+        };
+        let waiting: HashSet<String> = held
+            .waits
+            .iter()
+            .filter_map(|(alert, _)| request_of(alert).map(str::to_owned))
+            .collect();
+        let shown = held
+            .cards
+            .get(request_id)
+            .and_then(|it| it.list_shown)
+            .filter(|(at, _)| *at == place)
+            .map(|(_, since_ms)| (request_id, since_ms));
+        if !list_accepts(shown, request_id, &waiting, now_ms) {
+            return Acted::default();
+        }
+        self.answer_card(slot, request_id, Reply::Choose(0))
+    }
+
+    fn deny_from_list(&mut self, slot: SlotId, request_id: &str) -> Acted {
+        let Some(row) = self.row_of(slot) else {
+            return Acted::default();
+        };
+        if row.request_id() != Some(request_id) || !row.may_allow() {
+            return Acted::default();
+        }
+        self.selected = Some(slot);
+        let Some(card) = self.card_mut(slot, request_id) else {
+            return Acted::default();
+        };
+        card.note_open = true;
+        Acted {
+            focus: Some(FocusTarget::CardNote {
+                slot,
+                request_id: request_id.to_owned(),
+            }),
+            ..Acted::default()
+        }
+    }
+
+    fn open_from_list(&mut self, slot: SlotId) -> Acted {
+        let Some(row) = self.row_of(slot) else {
+            return Acted::default();
+        };
+        self.selected = Some(slot);
+        let focus = match row.request_id() {
+            Some(request_id) => FocusTarget::Card {
+                slot,
+                request_id: request_id.to_owned(),
+            },
+            None => FocusTarget::FailureBand(slot),
+        };
+        Acted {
+            focus: Some(focus),
+            ..Acted::default()
+        }
+    }
+
+    fn jump_to_waiting(&mut self) -> Acted {
+        let rows = self.needs_you();
+        let order: Vec<SlotId> = rows
+            .iter()
+            .filter(|it| it.request_id().is_some())
+            .map(|it| it.slot)
+            .collect();
+        let Some(slot) = jump_target(self.selected, &order) else {
+            return Acted::default();
+        };
+        let Some(request_id) = rows
+            .iter()
+            .find(|it| it.slot == slot)
+            .and_then(NeedsYouRow::request_id)
+        else {
+            return Acted::default();
+        };
+        self.selected = Some(slot);
+        Acted {
+            focus: Some(FocusTarget::Card {
+                slot,
+                request_id: request_id.to_owned(),
+            }),
+            ..Acted::default()
+        }
+    }
+
+    /// What is kept of the card of a request the slot waits on.
+    pub fn card_state(&self, slot: SlotId, request_id: &str) -> Option<&CardState> {
+        self.slots.get(&slot)?.cards.get(request_id)
+    }
+
+    /// Where the card of `request_id` stands among the slot's rows.
+    pub fn card_at(&self, slot: SlotId, request_id: &str) -> Option<usize> {
+        self.slots.get(&slot)?.rows.iter().position(
+            |row| matches!(row, ThreadRow::Card(it) if it.card.request_id() == request_id),
+        )
+    }
+
+    /// Whether the card was drawn in the conversation.
+    pub fn shown(&self, slot: SlotId, request_id: &str) -> bool {
+        self.card_state(slot, request_id)
+            .is_some_and(|it| it.shown_ms.is_some())
+    }
+
+    /// Whether the card's row was drawn in the needs-you list.
+    pub fn list_shown(&self, slot: SlotId, request_id: &str) -> bool {
+        self.list_shown_at(slot, request_id).is_some()
+    }
+
+    /// Where the card's row was drawn in the needs-you list (its index among the rows), when it
+    /// was.
+    pub fn list_shown_at(&self, slot: SlotId, request_id: &str) -> Option<usize> {
+        self.card_state(slot, request_id)?
+            .list_shown
+            .map(|(at, _)| at)
+    }
+
+    /// The card's state, made from the card when it is first touched; `None` unless the slot
+    /// waits on the request.
+    fn card_mut(&mut self, slot: SlotId, request_id: &str) -> Option<&mut CardState> {
+        let held = self.slots.get_mut(&slot)?;
+        if !held.cards.contains_key(request_id) {
+            held.waits
+                .iter()
+                .find(|(alert, _)| request_of(alert) == Some(request_id))?;
+            let view = held.runtime.view();
+            let approval = view.transcript.approvals.get(request_id)?;
+            let card = card_of(approval, plan_go_of(&view.transcript.operations));
+            held.cards
+                .insert(request_id.to_owned(), CardState::for_card(&card));
+        }
+        held.cards.get_mut(request_id)
+    }
+
+    /// Whether the card of the request keeps rules somewhere and `place` is one of the places it
+    /// offers.
+    fn offers_place(&self, slot: SlotId, request_id: &str, place: &str) -> bool {
+        let Some(held) = self.slots.get(&slot) else {
+            return false;
+        };
+        let view = held.runtime.view();
+        view.transcript
+            .approvals
+            .get(request_id)
+            .is_some_and(|it| offers_destination(&it.suggestions))
+            && SUGGESTION_DESTINATIONS.contains(&place)
+    }
+
+    /// Changes the picks of a question the card of the request asks, if it asks it (and has the
+    /// option); `change` is told whether the question takes several answers.
+    fn pick(
+        &mut self,
+        slot: SlotId,
+        request_id: &str,
+        question: usize,
+        option: Option<usize>,
+        change: impl FnOnce(&mut CardState, bool),
+    ) -> Acted {
+        let multi = self.slots.get(&slot).and_then(|held| {
+            let view = held.runtime.view();
+            let approval = view.transcript.approvals.get(request_id)?;
+            let ThreadCard::Question(card) =
+                card_of(approval, plan_go_of(&view.transcript.operations))
+            else {
+                return None;
+            };
+            let asked = card.questions.get(question)?;
+            option
+                .is_none_or(|at| at < asked.options.len())
+                .then_some(asked.multi_select)
+        });
+        let Some(multi) = multi else {
+            return Acted::default();
+        };
+        let Some(card) = self.card_mut(slot, request_id) else {
+            return Acted::default();
+        };
+        change(card, multi);
+        self.remeasured(slot, request_id)
+    }
+
+    fn set_note_open(&mut self, slot: SlotId, request_id: &str, open: bool) -> Acted {
+        let Some(card) = self.card_mut(slot, request_id) else {
+            return Acted::default();
+        };
+        card.note_open = open;
+        let focus = if open {
+            FocusTarget::CardNote {
+                slot,
+                request_id: request_id.to_owned(),
+            }
+        } else {
+            FocusTarget::Card {
+                slot,
+                request_id: request_id.to_owned(),
+            }
+        };
+        Acted {
+            focus: Some(focus),
+            ..self.remeasured(slot, request_id)
+        }
+    }
+
+    /// The card's row is to be measured again.
+    fn remeasured(&self, slot: SlotId, request_id: &str) -> Acted {
+        let changes = self
+            .card_at(slot, request_id)
+            .map(|at| RowChange::Remeasure(at..at + 1));
+        Acted {
+            rows: Some((slot, changes.into_iter().collect())),
+            ..Acted::default()
+        }
+    }
+
+    /// Answers the card in the conversation as `reply` says, if it was first drawn half a second
+    /// before `now_ms`: a card that has just come up under the pointer or a held key is not
+    /// answered unread.
+    fn answer_shown_card(
+        &mut self,
+        slot: SlotId,
+        request_id: &str,
+        reply: Reply,
+        now_ms: i64,
+    ) -> Acted {
+        let shown_ms = self.card_state(slot, request_id).and_then(|it| it.shown_ms);
+        if !card_accepts(shown_ms, now_ms) {
+            return Acted::default();
+        }
+        self.answer_card(slot, request_id, reply)
+    }
+
+    /// Answers the card of `request_id` as `reply` says, if the session is running and waits on
+    /// it. The first time it was seen is when the answer was asked for. A card whose answer
+    /// could not be sent says so and stays.
+    fn answer_card(&mut self, slot: SlotId, request_id: &str, reply: Reply) -> Acted {
+        let Some(held) = self.slots.get_mut(&slot).filter(|it| !it.closing) else {
+            return Acted::default();
+        };
+        let Some(commands) = held.runtime.commands() else {
+            return Acted::default();
+        };
+        if !matches!(held.runtime.status(), SessionStatus::Running { .. }) {
+            return Acted::default();
+        }
+        let Some(first_seen) = held
+            .waits
+            .iter()
+            .find(|(alert, _)| request_of(alert) == Some(request_id))
+            .map(|(_, at)| *at)
+        else {
+            return Acted::default();
+        };
+        let view = held.runtime.view();
+        if !view
+            .conversation
+            .pending_approvals
+            .iter()
+            .any(|it| it.request_id == request_id)
+        {
+            return Acted::default();
+        }
+        let Some(approval) = view.transcript.approvals.get(request_id) else {
+            return Acted::default();
+        };
+        let go = plan_go_of(&view.transcript.operations);
+        // A card never touched still keeps its rules where it starts out.
+        let untouched;
+        let state = match held.cards.get(request_id) {
+            Some(state) => state,
+            None => {
+                untouched = CardState::for_card(&card_of(approval, go));
+                &untouched
+            }
+        };
+        let Some(answer) = verdict(approval, go, Some(state), reply) else {
+            return Acted::default();
+        };
+        let requested_at =
+            UNIX_EPOCH + Duration::from_millis(u64::try_from(first_seen).unwrap_or(0));
+        match commands.respond_to_approval(
+            &answer.decision,
+            requested_at,
+            answer.payload.as_deref(),
+            answer.passed_on,
+        ) {
+            Ok(()) => {
+                held.cards.remove(request_id);
+                if let Some(mode) = answer.mode_after {
+                    // The allow already carries the mode; a refused backstop changes nothing.
+                    let _ = commands.switch_mode(&mode);
+                }
+            }
+            Err(_) => commands.answer_failed(request_id, copy::ANSWER_FAILED),
+        }
+        Acted::default()
+    }
+
+    /// Asks before closing a slot that works or holds a draft; closes one that does not.
+    fn close_slot(&mut self, slot: SlotId) -> Acted {
+        // One overlay at a time: the window's question stands, and a slot closes once.
+        if self.closing != CloseStage::Open || self.slot_close.is_some() {
+            return Acted::default();
+        }
+        let Some(held) = self.slots.get(&slot).filter(|it| !it.closing) else {
+            return Acted::default();
+        };
+        let question = CloseQuestion {
+            working: usize::from(held.is_working()),
+            drafts: usize::from(held.composer.has_draft()),
+        };
+        if question.working == 0 && question.drafts == 0 {
+            return self.begin_close_slot(slot);
+        }
+        self.slot_close = Some((slot, question));
+        Acted::default()
+    }
+
+    /// Tells the slot's session to end; the slot goes at once if its run has returned, else with
+    /// the refresh that sees it return.
+    fn begin_close_slot(&mut self, slot: SlotId) -> Acted {
+        let Some(held) = self.slots.get_mut(&slot).filter(|it| !it.closing) else {
+            return Acted::default();
+        };
+        held.runtime.close();
+        held.closing = true;
+        if !held.finished.is_closed() {
+            return Acted::default();
+        }
+        self.remove(slot);
+        Acted {
+            removed: Some(slot),
+            ..Acted::default()
         }
     }
 
     fn request_close(&mut self) -> Acted {
+        // One overlay at a time: the window's question replaces the slot's and the dialog.
+        self.slot_close = None;
+        self.dialog = None;
         if self.closing != CloseStage::Open {
             return Acted::default();
         }
         let question = CloseQuestion {
-            working: self.slots.values().filter(|it| it.running).count(),
+            working: self.slots.values().filter(|it| it.is_working()).count(),
             drafts: self
                 .slots
                 .values()
@@ -681,6 +1597,9 @@ impl ShellState {
     }
 
     fn start_session(&mut self, folder: String) -> Acted {
+        if self.slots_full() {
+            return Acted::default();
+        }
         let Some(dialog) = self.dialog.as_mut() else {
             return Acted::default();
         };
@@ -701,6 +1620,9 @@ impl ShellState {
     }
 
     fn folder_checked(&mut self, folder: &str, exists: bool) -> Acted {
+        if self.slots_full() {
+            return Acted::default();
+        }
         let Some(dialog) = self.dialog.as_mut() else {
             return Acted::default();
         };
@@ -724,8 +1646,52 @@ impl ShellState {
     }
 }
 
+/// Whether an overlay holds the action back: nothing answers, edits a card, closes or starts
+/// anything behind it. Selecting, opening a row, the panes, the draft and the overlay's own
+/// steps go through.
+fn behind_overlay(action: &ShellAction, overlay: Overlay) -> bool {
+    match action {
+        ShellAction::ChooseCard { .. }
+        | ShellAction::DenyCard { .. }
+        | ShellAction::SendNote { .. }
+        | ShellAction::AnswerQuestion { .. }
+        | ShellAction::AllowFromList { .. }
+        | ShellAction::DenyFromList { .. }
+        | ShellAction::OpenFromList { .. }
+        | ShellAction::JumpToWaiting
+        | ShellAction::PickMode { .. }
+        | ShellAction::ConfirmBypass { .. }
+        | ShellAction::EditNote { .. }
+        | ShellAction::EditOther { .. }
+        | ShellAction::PickDestination { .. }
+        | ShellAction::OpenNote { .. }
+        | ShellAction::CloseNote { .. }
+        | ShellAction::ToggleOption { .. }
+        | ShellAction::ToggleOther { .. }
+        | ShellAction::CloseSlot { .. }
+        | ShellAction::Send { .. }
+        | ShellAction::Restart { .. }
+        | ShellAction::Interrupt { .. }
+        | ShellAction::HistoryPrev { .. }
+        | ShellAction::HistoryNext { .. } => true,
+        ShellAction::OpenNewSession | ShellAction::StartSession { .. } => {
+            overlay != Overlay::NewSession
+        }
+        _ => false,
+    }
+}
+
 fn lock(
     runs: &Runs,
 ) -> std::sync::MutexGuard<'_, BTreeMap<String, (SessionRuntime, Receiver<()>)>> {
     runs.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// The request an alert waits on; a finished turn has none.
+fn request_of(alert: &SessionAlert) -> Option<&str> {
+    match alert {
+        SessionAlert::Permission(it) => Some(&it.request_id),
+        SessionAlert::OpenOnly(it) => Some(&it.request_id),
+        SessionAlert::Finished(_) => None,
+    }
 }

@@ -19,7 +19,7 @@ use closta_shell::rows::RowChange;
 use closta_shell::slot::{SlotId, SlotLaunch};
 use closta_shell::state::{Acted, Ports, ShellAction, ShellState};
 use futures_lite::future;
-use support::{Harness, Machine, Planners, drive, until};
+use support::{Harness, Machine, Planners, drive, relaunchable, until};
 
 const FOLDER: &str = r"C:\work\proj";
 
@@ -36,7 +36,7 @@ async fn running_slot(harness: &Harness) -> (ShellState, SlotId, SessionRuntime,
 
 fn refresh(shell: &mut ShellState, slot: SlotId) {
     let generation = shell.watch(slot).unwrap().generation();
-    shell.refresh(slot, generation).unwrap();
+    shell.refresh(slot, generation, 0).unwrap();
 }
 
 fn type_in(shell: &mut ShellState, slot: SlotId, text: &str) {
@@ -55,22 +55,6 @@ fn asks(shell: &ShellState, slot: SlotId) -> Vec<(String, String, bool)> {
             _ => None,
         })
         .collect()
-}
-
-/// A launch of the harness's planner whose relaunch makes the same launch again.
-fn relaunchable(harness: &Harness, title: &'static str) -> SlotLaunch {
-    fn make(planner: Arc<dyn SessionLaunchPlanner>, title: &'static str) -> SlotLaunch {
-        let again = Arc::clone(&planner);
-        SlotLaunch {
-            title: title.to_owned(),
-            planner,
-            working_directory: None,
-            companion: None,
-            relaunch: Some(Arc::new(move || make(Arc::clone(&again), title))),
-            settles_on_failure: false,
-        }
-    }
-    make(Arc::clone(&harness.planner) as _, title)
 }
 
 #[test]
@@ -230,7 +214,7 @@ fn a_restart_keeps_the_draft_and_history_and_starts_a_new_generation() {
         let control = harness.control(0).await;
         let mut watch = shell.watch(slot).unwrap();
         assert!(watch.changed().await);
-        shell.refresh(slot, watch.generation()).unwrap();
+        shell.refresh(slot, watch.generation(), 0).unwrap();
         until(|| matches!(shell.status(slot), Some(SessionStatus::Running { .. }))).await;
 
         type_in(&mut shell, slot, "hello");
@@ -248,7 +232,7 @@ fn a_restart_keeps_the_draft_and_history_and_starts_a_new_generation() {
 
         control.exit(0);
         while watch.changed().await {}
-        shell.refresh(slot, watch.generation()).unwrap();
+        shell.refresh(slot, watch.generation(), 0).unwrap();
         assert_eq!(shell.status(slot), Some(SessionStatus::Ended));
         assert!(shell.can_restart(slot));
         let emptied = shell.rows(slot).len();
@@ -281,7 +265,7 @@ fn a_restart_keeps_the_draft_and_history_and_starts_a_new_generation() {
         let mut watch = shell.watch(slot).unwrap();
         while !matches!(shell.status(slot), Some(SessionStatus::Running { .. })) {
             assert!(watch.changed().await);
-            shell.refresh(slot, generation).unwrap();
+            shell.refresh(slot, generation, 0).unwrap();
         }
         shell.act(ShellAction::Send { slot });
         second.next_stdin_line().await.expect("sent again");
@@ -501,7 +485,7 @@ fn the_failure_band_reads_the_status() {
         assert_eq!(shell.failure(slot), None);
         while !matches!(shell.status(slot), Some(SessionStatus::Failed(_))) {
             assert!(watch.changed().await);
-            shell.refresh(slot, watch.generation()).unwrap();
+            shell.refresh(slot, watch.generation(), 0).unwrap();
         }
         assert_eq!(
             shell.failure(slot),
@@ -573,7 +557,7 @@ fn ready_lines_wait_for_every_slot_to_run_or_fail() {
         let mut watch = shell.watch(broken).unwrap();
         while !matches!(shell.status(broken), Some(SessionStatus::Failed(_))) {
             assert!(watch.changed().await);
-            shell.refresh(broken, watch.generation()).unwrap();
+            shell.refresh(broken, watch.generation(), 0).unwrap();
         }
         let lines = shell.ready_lines().unwrap();
         assert_eq!(lines, ["Running 2.1.282", "Failed WslCommandNotFound"]);
@@ -593,5 +577,258 @@ fn ready_lines_wait_for_every_slot_to_run_or_fail() {
         refresh(&mut shell, to_fail);
         assert_eq!(shell.status(to_fail).map(|it| it.is_end()), Some(false));
         assert_eq!(shell.ready_lines(), None);
+    });
+}
+
+fn pick(shell: &mut ShellState, slot: SlotId, mode: &str) {
+    shell.act(ShellAction::PickMode {
+        slot,
+        mode: mode.to_owned(),
+    });
+}
+
+fn mode_lines(control: &LiveControl) -> Vec<String> {
+    control
+        .stdin_lines()
+        .into_iter()
+        .filter(|it| it.contains("set_permission_mode"))
+        .collect()
+}
+
+async fn quiet() {
+    smol::Timer::after(std::time::Duration::from_millis(150)).await;
+}
+
+#[test]
+fn picking_a_mode_switches_it() {
+    drive(|harness| async move {
+        let (mut shell, slot, _runtime, control) = running_slot(&harness).await;
+        pick(&mut shell, slot, "acceptEdits");
+        until(|| mode_lines(&control).len() == 1).await;
+        assert!(mode_lines(&control)[0].contains("acceptEdits"));
+        assert!(!shell.bypass_asking(slot));
+        refresh(&mut shell, slot);
+        assert!(shell.composer_line(slot).unwrap().switching);
+        let sent: serde_json::Value = serde_json::from_str(&mode_lines(&control)[0]).unwrap();
+        control.emit(&format!(
+            r#"{{"type":"control_response","response":{{"subtype":"success","request_id":"{}"}}}}"#,
+            sent["request_id"].as_str().unwrap()
+        ));
+        for _ in 0..100 {
+            refresh(&mut shell, slot);
+            if shell.composer_line(slot).unwrap().mode.is_some() {
+                break;
+            }
+            smol::Timer::after(std::time::Duration::from_millis(20)).await;
+        }
+        assert!(!shell.composer_line(slot).unwrap().switching);
+        assert_eq!(
+            shell.composer_line(slot).unwrap().mode.as_deref(),
+            Some("acceptEdits")
+        );
+    });
+}
+
+#[test]
+fn bypass_asks_first_and_cancel_keeps_the_mode() {
+    drive(|harness| async move {
+        let (mut shell, slot, _runtime, control) = running_slot(&harness).await;
+        pick(&mut shell, slot, "bypassPermissions");
+        assert!(shell.bypass_asking(slot));
+        quiet().await;
+        assert!(mode_lines(&control).is_empty());
+        shell.act(ShellAction::CancelBypass { slot });
+        assert!(!shell.bypass_asking(slot));
+        quiet().await;
+        assert!(mode_lines(&control).is_empty());
+    });
+}
+
+#[test]
+fn confirming_bypass_switches_to_it() {
+    drive(|harness| async move {
+        let (mut shell, slot, _runtime, control) = running_slot(&harness).await;
+        shell.act(ShellAction::ConfirmBypass { slot });
+        quiet().await;
+        assert!(mode_lines(&control).is_empty(), "no question, no switch");
+
+        pick(&mut shell, slot, "bypassPermissions");
+        shell.act(ShellAction::ConfirmBypass { slot });
+        until(|| mode_lines(&control).len() == 1).await;
+        assert!(mode_lines(&control)[0].contains("bypassPermissions"));
+        assert!(!shell.bypass_asking(slot));
+    });
+}
+
+#[test]
+fn the_bypass_question_belongs_to_its_slot() {
+    drive(|harness| async move {
+        let (mut shell, slot, _runtime, _control) = running_slot(&harness).await;
+        let (launch, _) = harness.launch("other");
+        let other = shell.open(launch);
+        pick(&mut shell, slot, "bypassPermissions");
+        assert!(shell.bypass_asking(slot));
+        assert!(!shell.bypass_asking(other));
+        shell.act(ShellAction::ConfirmBypass { slot: other });
+        assert!(shell.bypass_asking(slot));
+    });
+}
+
+#[test]
+fn no_mode_is_picked_while_a_switch_waits() {
+    drive(|harness| async move {
+        let (mut shell, slot, _runtime, control) = running_slot(&harness).await;
+        pick(&mut shell, slot, "acceptEdits");
+        until(|| mode_lines(&control).len() == 1).await;
+        refresh(&mut shell, slot);
+        assert!(shell.composer_line(slot).unwrap().switching);
+        pick(&mut shell, slot, "plan");
+        pick(&mut shell, slot, "bypassPermissions");
+        quiet().await;
+        assert_eq!(mode_lines(&control).len(), 1);
+        assert!(!shell.bypass_asking(slot));
+    });
+}
+
+#[test]
+fn an_unknown_mode_is_not_sent() {
+    drive(|harness| async move {
+        let (mut shell, slot, _runtime, control) = running_slot(&harness).await;
+        pick(&mut shell, slot, "yolo");
+        quiet().await;
+        assert!(mode_lines(&control).is_empty());
+        assert!(!shell.bypass_asking(slot));
+    });
+}
+
+#[test]
+fn a_mode_is_not_picked_behind_an_overlay() {
+    drive(|harness| async move {
+        let (mut shell, slot, _runtime, control) = running_slot(&harness).await;
+        pick(&mut shell, slot, "bypassPermissions");
+        shell.act(ShellAction::OpenNewSession);
+        pick(&mut shell, slot, "acceptEdits");
+        shell.act(ShellAction::ConfirmBypass { slot });
+        quiet().await;
+        assert!(mode_lines(&control).is_empty());
+        assert!(shell.bypass_asking(slot));
+    });
+}
+
+fn ack_mode(control: &LiveControl, n: usize) {
+    let sent: serde_json::Value = serde_json::from_str(&mode_lines(control)[n]).unwrap();
+    control.emit(&format!(
+        r#"{{"type":"control_response","response":{{"subtype":"success","request_id":"{}"}}}}"#,
+        sent["request_id"].as_str().unwrap()
+    ));
+}
+
+#[test]
+fn a_restart_takes_the_old_bypass_banner_down() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let slot = shell.open(relaunchable(&harness, "again"));
+        until(|| harness.answers.lock().unwrap().controls.len() == 1).await;
+        let control = harness.control(0).await;
+        let mut watch = shell.watch(slot).unwrap();
+        assert!(watch.changed().await);
+        shell.refresh(slot, watch.generation(), 0).unwrap();
+        until(|| matches!(shell.status(slot), Some(SessionStatus::Running { .. }))).await;
+
+        pick(&mut shell, slot, "bypassPermissions");
+        assert!(shell.bypass_asking(slot));
+        control.exit(0);
+        while watch.changed().await {}
+        shell.refresh(slot, watch.generation(), 0).unwrap();
+        shell.act(ShellAction::Restart { slot });
+        assert!(!shell.bypass_asking(slot));
+
+        let second = harness.control(1).await;
+        shell.act(ShellAction::ConfirmBypass { slot });
+        quiet().await;
+        assert!(mode_lines(&control).is_empty() && mode_lines(&second).is_empty());
+        assert_eq!(control.refused_writes() + second.refused_writes(), 0);
+    });
+}
+
+#[test]
+fn a_banner_over_an_ended_or_closed_slot_writes_nothing() {
+    drive(|harness| async move {
+        let (mut shell, slot, _runtime, control) = running_slot(&harness).await;
+        pick(&mut shell, slot, "bypassPermissions");
+        control.exit(0);
+        let mut watch = shell.watch(slot).unwrap();
+        while watch.changed().await {}
+        shell.refresh(slot, watch.generation(), 0).unwrap();
+        shell.act(ShellAction::ConfirmBypass { slot });
+        quiet().await;
+        assert!(mode_lines(&control).is_empty());
+        assert_eq!(control.refused_writes(), 0);
+    });
+    drive(|harness| async move {
+        let (mut shell, slot, _runtime, control) = running_slot(&harness).await;
+        pick(&mut shell, slot, "bypassPermissions");
+        shell.act(ShellAction::CloseSlot { slot });
+        shell.act(ShellAction::ConfirmCloseSlot);
+        shell.act(ShellAction::ConfirmBypass { slot });
+        quiet().await;
+        assert!(mode_lines(&control).is_empty());
+        assert_eq!(control.refused_writes(), 0);
+    });
+}
+
+#[test]
+fn two_picks_before_a_refresh_send_one_switch() {
+    drive(|harness| async move {
+        let (mut shell, slot, _runtime, control) = running_slot(&harness).await;
+        pick(&mut shell, slot, "acceptEdits");
+        pick(&mut shell, slot, "plan");
+        pick(&mut shell, slot, "bypassPermissions");
+        shell.act(ShellAction::ConfirmBypass { slot });
+        quiet().await;
+        assert_eq!(mode_lines(&control).len(), 1);
+        assert!(!shell.bypass_asking(slot));
+    });
+}
+
+#[test]
+fn confirming_bypass_waits_while_a_switch_is_pending() {
+    drive(|harness| async move {
+        let (mut shell, slot, runtime, control) = running_slot(&harness).await;
+        pick(&mut shell, slot, "bypassPermissions");
+        runtime.commands().unwrap().switch_mode("plan").unwrap();
+        until(|| mode_lines(&control).len() == 1).await;
+        refresh(&mut shell, slot);
+        assert!(shell.composer_line(slot).unwrap().switching);
+        shell.act(ShellAction::ConfirmBypass { slot });
+        quiet().await;
+        assert_eq!(mode_lines(&control).len(), 1);
+        assert!(shell.bypass_asking(slot), "the banner stays");
+    });
+}
+
+#[test]
+fn confirming_bypass_in_bypass_only_takes_the_banner_down() {
+    drive(|harness| async move {
+        let (mut shell, slot, runtime, control) = running_slot(&harness).await;
+        pick(&mut shell, slot, "bypassPermissions");
+        runtime
+            .commands()
+            .unwrap()
+            .switch_mode("bypassPermissions")
+            .unwrap();
+        until(|| mode_lines(&control).len() == 1).await;
+        ack_mode(&control, 0);
+        for _ in 0..100 {
+            refresh(&mut shell, slot);
+            if shell.composer_line(slot).unwrap().mode.as_deref() == Some("bypassPermissions") {
+                break;
+            }
+            smol::Timer::after(std::time::Duration::from_millis(20)).await;
+        }
+        shell.act(ShellAction::ConfirmBypass { slot });
+        quiet().await;
+        assert_eq!(mode_lines(&control).len(), 1, "nothing new is written");
+        assert!(!shell.bypass_asking(slot));
     });
 }

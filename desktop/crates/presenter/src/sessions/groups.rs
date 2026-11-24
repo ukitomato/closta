@@ -2,6 +2,7 @@
 //! (SessionGroups.kt). The screen and the notifications only show these.
 
 use std::collections::HashSet;
+use std::fmt;
 use std::sync::Arc;
 
 use closta_model::ConversationState;
@@ -79,13 +80,26 @@ impl SessionAlert {
 
 /// A tool waits for a yes or no that can be given from the notification. `subject` may be shown:
 /// the start of a command, or a file name.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct PermissionAlert {
     pub key: String,
     pub request_id: String,
     pub tool_name: String,
     pub subject: String,
     pub answerable: bool,
+}
+
+/// The subject is the user's command or file: `Debug` gives only its length.
+impl fmt::Debug for PermissionAlert {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PermissionAlert")
+            .field("key", &self.key)
+            .field("request_id", &self.request_id)
+            .field("tool_name", &self.tool_name)
+            .field("subject_len", &self.subject.len())
+            .field("answerable", &self.answerable)
+            .finish()
+    }
 }
 
 /// Something to read before answering: the notification only opens the session.
@@ -150,6 +164,18 @@ pub fn alerts_between(
         .map(|it| it.request_id.clone())
         .collect();
     AlertChange { raised, expired }
+}
+
+/// What a session waits for, as alerts, in arrival order.
+pub fn waiting_alerts(
+    conversation: &ConversationState,
+    transcript: &Transcript,
+) -> Vec<SessionAlert> {
+    let go = plan_go_of(&transcript.operations);
+    waiting_approvals(conversation, transcript)
+        .iter()
+        .map(|record| alert_of(record, go))
+        .collect()
 }
 
 const FINISHED: &str = "finished:";
@@ -302,4 +328,29 @@ pub fn session_title(transcript: &Transcript) -> Option<String> {
             _ => None,
         })?;
     Some(take_utf16(kt_trim(line), TITLE_MAX).to_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AlertChange, PermissionAlert, SessionAlert};
+
+    #[test]
+    fn debug_names_the_ids_and_the_kind_but_not_the_subject() {
+        let alert = PermissionAlert {
+            key: "k1".to_owned(),
+            request_id: "r1".to_owned(),
+            tool_name: "Bash".to_owned(),
+            subject: "SECRET-COMMAND".to_owned(),
+            answerable: true,
+        };
+        let change = AlertChange {
+            raised: vec![SessionAlert::Permission(alert.clone())],
+            expired: Vec::new(),
+        };
+        for text in [format!("{alert:?}"), format!("{change:?}")] {
+            assert!(!text.contains("SECRET"), "{text}");
+            assert!(text.contains("r1") && text.contains("Bash"), "{text}");
+            assert!(text.contains("14"), "the subject's length: {text}");
+        }
+    }
 }

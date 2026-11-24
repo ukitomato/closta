@@ -1,16 +1,18 @@
 //! The window's model: the shell's state, and beside it only what GPUI may keep and lose without
 //! changing what is right — each slot's scroller and input, the cached text states of its rows,
-//! the New Session dialog's folder field, the panes' layout and the tasks that wait on the
-//! sessions.
+//! the New Session dialog's folder field, the panes' layout, the focus handles and what the
+//! waiting cards are drawn with, and the tasks that wait on the sessions.
 
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
+use closta_presenter::cards::ThreadCard;
 use closta_presenter::rows::ThreadRow;
+use closta_shell::card_keys::{OverlayKey, card_choices, card_kind};
 use closta_shell::rows::{RowChange, ScrollDirection, kept, list_top};
 use closta_shell::slot::{SlotId, SlotLaunch};
-use closta_shell::state::{Acted, FolderCheck, ShellAction, ShellState};
+use closta_shell::state::{Acted, FocusTarget, FolderCheck, Overlay, ShellAction, ShellState};
 use gpui_kit::component::input::{InputState, TextareaState};
 use gpui_kit::component::message_scroller::MessageScrollerState;
 use gpui_kit::component::resizable::ResizableState;
@@ -18,9 +20,12 @@ use gpui_kit::component::text::TextViewState;
 use gpui_kit::*;
 
 use crate::Measure;
+use crate::clock::WallClock;
 use crate::composer::{self, Dispatch};
+use crate::focus::{self, CardField, FocusMap};
 use crate::perf::{IdleStart, Measuring};
 use crate::probe::{Probe, Probing};
+use crate::thread::cards::CardCache;
 use crate::thread::prefetch;
 
 /// How often the presented frames are read from the profiler's journal.
@@ -50,6 +55,19 @@ pub(crate) struct ShellModel {
     /// The wait for the typing in the folder field to settle.
     pub(crate) folder_typing: Option<Task<()>>,
     pub(crate) panes: Entity<ResizableState>,
+    /// The one clock the shell is handed times from.
+    pub(crate) clock: WallClock,
+    /// Where the needs-you list is scrolled to and where its rows were laid out.
+    pub(crate) needs_you_scroll: ScrollHandle,
+    /// Where the keyboard can be: the inputs, the cards, the list, the conversation and the
+    /// failure band.
+    pub(crate) focus: FocusMap,
+    /// What the waiting cards are drawn with besides their focus.
+    pub(crate) card_cache: CardCache,
+    /// Where the keyboard was before the overlay that is up took it, to give it back.
+    pub(crate) focus_before_overlay: Option<FocusHandle>,
+    /// The gate every key of the window passes first.
+    _keys: Subscription,
     watches: HashMap<SlotId, Task<()>>,
     /// The generation of the session each slot's watch waits on.
     generations: HashMap<SlotId, u64>,
@@ -75,6 +93,7 @@ impl ShellModel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> ShellModel {
+        let keys = Self::hold_keys(cx);
         let mut model = ShellModel {
             shell,
             scrollers: HashMap::new(),
@@ -83,6 +102,12 @@ impl ShellModel {
             folder: None,
             folder_typing: None,
             panes: cx.new(|_| ResizableState::default()),
+            clock: WallClock::start(),
+            needs_you_scroll: ScrollHandle::new(),
+            focus: FocusMap::new(cx),
+            card_cache: CardCache::default(),
+            focus_before_overlay: None,
+            _keys: keys,
             watches: HashMap::new(),
             generations: HashMap::new(),
             scrolled: HashMap::new(),
@@ -100,6 +125,8 @@ impl ShellModel {
         if let Some(measure) = measure {
             model.measure(measure, window, cx);
         }
+        model.show_title(window);
+        model.focus.selected = model.shell.selected();
         model
     }
 
@@ -124,8 +151,37 @@ impl ShellModel {
         if !self.composers.contains_key(&slot) {
             let (input, changes) = composer::new_input(slot, Self::dispatch(cx), window, cx);
             self._observed.push(changes);
+            let handle = input.read(cx).focus_handle(cx);
+            self.focus.composers.insert(slot, handle);
             self.composers.insert(slot, input);
         }
+    }
+
+    /// Puts the gate in front of every key: what a key does is read from where the keyboard is,
+    /// by the shell's card table, before the focused part's bindings run.
+    fn hold_keys(cx: &mut Context<Self>) -> Subscription {
+        let this = cx.weak_entity();
+        let dialog = cx.weak_entity();
+        focus::hold_keys(
+            move |keystroke, window, cx| {
+                let model = this.upgrade()?;
+                let model = model.read(cx);
+                Some(
+                    model
+                        .focus
+                        .gate(keystroke, model.clock.now_ms(), window, cx),
+                )
+            },
+            Self::dispatch(cx),
+            Rc::new(move |key, window, cx| {
+                _ = dialog.update(cx, |model, cx| match key {
+                    OverlayKey::Cancel => model.cancel(window, cx),
+                    OverlayKey::Confirm => model.start(window, cx),
+                    OverlayKey::Pass => {}
+                });
+            }),
+            cx,
+        )
     }
 
     /// Hands an action to the window's model.
@@ -184,9 +240,23 @@ impl ShellModel {
         cx: &mut Context<Self>,
     ) {
         let began = Instant::now();
-        let Some(refresh) = self.shell.refresh(slot, generation) else {
+        let Some(refresh) = self.shell.refresh(slot, generation, self.clock.now_ms()) else {
             return;
         };
+        if refresh.attention {
+            window.request_attention();
+        }
+        self.show_title(window);
+        self.sync_focus(window.focused(cx), window, cx);
+        // A band the session took down (a restart, a mode it switched to) gives the keyboard back.
+        if !self.shell.bypass_asking(slot) {
+            self.focus.leave_bypass(slot, window, cx);
+        }
+        if refresh.removed {
+            self.forget(slot, window, cx);
+            cx.notify();
+            return;
+        }
         self.probe_settled(window, cx);
         let Some(scroller) = self.scrollers.get(&slot).cloned() else {
             return;
@@ -216,6 +286,12 @@ impl ShellModel {
         }
         for (state, markdown) in retexts {
             state.update(cx, |state, cx| state.set_text(&markdown, cx));
+        }
+        self.keep_waiting_cards(slot, window, cx);
+        if self.shell.selected() == Some(slot)
+            && let Some(request_id) = refresh.raised.first()
+        {
+            self.card_arrived(slot, request_id, window, cx);
         }
         self.let_go(slot, window, cx);
         let done = Instant::now();
@@ -316,6 +392,14 @@ impl ShellModel {
         let selects = matches!(action, ShellAction::Select(_));
         let toggles = matches!(action, ShellAction::TogglePane(_));
         let opens = matches!(action, ShellAction::OpenNewSession);
+        let bypass = match action {
+            ShellAction::PickMode { slot, .. }
+            | ShellAction::ConfirmBypass { slot }
+            | ShellAction::CancelBypass { slot } => Some(slot),
+            _ => None,
+        };
+        // Taken before the dialog's field takes the keyboard, to give it back once it closes.
+        let focused = window.focused(cx);
         let Acted {
             rows,
             draft,
@@ -323,11 +407,18 @@ impl ShellModel {
             check,
             folder,
             close,
+            removed,
+            focus,
         } = self.shell.act(action);
+        self.show_title(window);
+        if let Some(slot) = removed {
+            self.forget(slot, window, cx);
+        }
         // A restarted slot's rows are new: the text states of the old ones are let go.
         if let Some(slot) = started.filter(|slot| self.scrollers.contains_key(slot)) {
             self.texts.remove(&slot);
             self.scrolled.remove(&slot);
+            self.keep_cards(slot, &[], window, cx);
         }
         if let Some((slot, changes)) = rows
             && let Some(scroller) = self.scrollers.get(&slot)
@@ -363,8 +454,16 @@ impl ShellModel {
         if close {
             self.close_sessions(cx);
         }
+        // After the close began too: the overlay it puts up holds the keys from then on.
+        self.sync_focus(focused, window, cx);
+        if let Some(slot) = bypass {
+            self.focus_bypass(slot, window, cx);
+        }
         if selects || started.is_some() {
             self.ask_prefetch(window, cx);
+        }
+        if let Some(focus) = focus {
+            self.focus_target(focus, window, cx);
         }
         if toggles {
             // A pane opened again comes back at the width its layout last had, which a drag on
@@ -375,6 +474,258 @@ impl ShellModel {
             });
         }
         cx.notify();
+    }
+
+    /// Sets the window's title when the shell says it changed.
+    fn show_title(&mut self, window: &mut Window) {
+        if let Some(title) = self.shell.title_change() {
+            window.set_window_title(&title);
+        }
+    }
+
+    /// Lets go of all that was kept for a slot that is gone. A measured run stops awaiting it.
+    fn forget(&mut self, slot: SlotId, window: &mut Window, cx: &mut Context<Self>) {
+        self.scrollers.remove(&slot);
+        self.texts.remove(&slot);
+        self.composers.remove(&slot);
+        self.watches.remove(&slot);
+        self.generations.remove(&slot);
+        self.scrolled.remove(&slot);
+        self.focus.forget(slot);
+        self.card_cache.keep_cards(slot, &[]);
+        if self
+            .measuring
+            .as_mut()
+            .is_some_and(|measuring| measuring.forget(slot))
+        {
+            self.refreshed(window, cx);
+        }
+    }
+
+    /// Puts the keyboard where the shell says: on a card or its note once its row is scrolled
+    /// to (a question's first option rather than the card), on the input or on the band.
+    pub(crate) fn focus_target(
+        &mut self,
+        target: FocusTarget,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let handle = match target {
+            FocusTarget::Composer(slot) => {
+                if let Some(input) = self.composers.get(&slot) {
+                    input.update(cx, |state, cx| state.focus(window, cx));
+                }
+                return;
+            }
+            FocusTarget::FailureBand(_) => self.focus.failure.clone(),
+            FocusTarget::Card { slot, request_id } => {
+                let Some(handle) = self.card_focus(slot, &request_id, cx) else {
+                    return;
+                };
+                self.scroll_to_card(slot, &request_id, cx);
+                handle
+            }
+            FocusTarget::CardNote { slot, request_id } => {
+                let placeholder = match self.card(slot, &request_id) {
+                    Some(ThreadCard::Plan(_)) => closta_shell::copy::PLAN_NOTE_PLACEHOLDER,
+                    Some(_) => closta_shell::copy::DENY_NOTE_PLACEHOLDER,
+                    None => return,
+                };
+                let note = self
+                    .shell
+                    .card_state(slot, &request_id)
+                    .map(|it| it.note.clone())
+                    .unwrap_or_default();
+                let dispatch = Self::dispatch(cx);
+                let input = self.focus.card_input(
+                    slot,
+                    &request_id,
+                    CardField::Note,
+                    placeholder,
+                    &note,
+                    &dispatch,
+                    self.clock,
+                    window,
+                    cx,
+                );
+                self.scroll_to_card(slot, &request_id, cx);
+                input.read(cx).focus_handle(cx)
+            }
+        };
+        window.focus(&handle, cx);
+        // The row scrolled to is drawn only in the next frame; the focus is put again then, in
+        // case the first went to a part not yet on screen.
+        window.on_next_frame(move |window, cx| window.focus(&handle, cx));
+    }
+
+    /// The waiting card of the request among the slot's rows.
+    fn card(&self, slot: SlotId, request_id: &str) -> Option<&ThreadCard> {
+        let at = self.shell.card_at(slot, request_id)?;
+        match self.shell.rows(slot).get(at)? {
+            ThreadRow::Card(row) if row.card.answered().is_none() => Some(&row.card),
+            _ => None,
+        }
+    }
+
+    /// Where the keyboard goes for a card: a question's first option, any other card itself.
+    fn card_focus(
+        &mut self,
+        slot: SlotId,
+        request_id: &str,
+        cx: &mut Context<Self>,
+    ) -> Option<FocusHandle> {
+        let card = self.card(slot, request_id)?.clone();
+        let handle =
+            self.focus
+                .card_handle(slot, request_id, card_kind(&card), card_choices(&card), cx);
+        Some(match &card {
+            ThreadCard::Question(question)
+                if question
+                    .questions
+                    .first()
+                    .is_some_and(|it| !it.options.is_empty()) =>
+            {
+                self.focus.option_handle(slot, request_id, 0, 0, cx)
+            }
+            _ => handle,
+        })
+    }
+
+    fn scroll_to_card(&self, slot: SlotId, request_id: &str, cx: &mut Context<Self>) {
+        if let (Some(at), Some(scroller)) = (
+            self.shell.card_at(slot, request_id),
+            self.scrollers.get(&slot),
+        ) {
+            scroller.update(cx, |state, cx| {
+                state.scroll_to_item(at, cx);
+            });
+        }
+    }
+
+    /// A card began to wait in the selected slot: it takes the keyboard only from the
+    /// conversation.
+    fn card_arrived(
+        &mut self,
+        slot: SlotId,
+        request_id: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        // A card out of view never takes the keyboard: it would take keys it does not show.
+        let Some(scroller) = self.scrollers.get(&slot) else {
+            return;
+        };
+        let (Some(at), len) = (
+            self.shell.card_at(slot, request_id),
+            self.shell.rows(slot).len(),
+        ) else {
+            return;
+        };
+        let following = scroller.read(cx).is_following_tail();
+        if !focus::on_screen(following, at, len, prefetch::visible_rows(window)) {
+            return;
+        }
+        if let Some(handle) = self.card_focus(slot, request_id, cx) {
+            self.focus.card_arrived(&handle, window, cx);
+        }
+    }
+
+    /// Copies what the gate reads from the shell: the overlay that is up and which slot is
+    /// shown. A slot shown anew takes the keyboard to its input. An overlay that comes up takes
+    /// the keyboard, and gives it back to where it was (`focused`, before the action) once it
+    /// closes, or to the input of a slot shown meanwhile.
+    fn sync_focus(
+        &mut self,
+        focused: Option<FocusHandle>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let (was, overlay) = (self.focus.overlay, self.shell.overlay());
+        if was.is_none() && overlay.is_some() {
+            self.focus_before_overlay = focused;
+        }
+        self.focus.overlay = overlay;
+        let selected = self.shell.selected();
+        let selects = selected != self.focus.selected;
+        if selects {
+            let to = self.focus.select(selected, window, cx);
+            if overlay.is_some() {
+                self.focus_before_overlay = Some(to);
+            }
+        }
+        match overlay {
+            Some(overlay) if was != Some(overlay) => self.focus_overlay(overlay, window, cx),
+            None if was.is_some() => {
+                let back = self.focus_before_overlay.take();
+                if let Some(back) = back.filter(|_| !selects) {
+                    window.focus(&back, cx);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Puts the keyboard in the overlay that just came up: the dialog's folder field, the
+    /// Cancel of a close question, or the layer that says the sessions are closing. A part
+    /// first drawn in the next frame is focused again then.
+    fn focus_overlay(&mut self, overlay: Overlay, window: &mut Window, cx: &mut Context<Self>) {
+        let handle = match overlay {
+            Overlay::NewSession => match &self.folder {
+                Some(input) => input.read(cx).focus_handle(cx),
+                None => return,
+            },
+            Overlay::CloseWindow | Overlay::CloseSlot => self.focus.overlay_cancel.clone(),
+            Overlay::Closing => self.focus.overlay_layer.clone(),
+        };
+        window.focus(&handle, cx);
+        window.on_next_frame(move |window, cx| window.focus(&handle, cx));
+    }
+
+    /// The Bypass band takes the keyboard while it asks; once it is gone, the keyboard it held
+    /// goes back to the slot's input.
+    fn focus_bypass(&mut self, slot: SlotId, window: &mut Window, cx: &mut Context<Self>) {
+        if self.shell.bypass_asking(slot) {
+            self.focus.take_bypass(slot, window, cx);
+        } else {
+            self.focus.leave_bypass(slot, window, cx);
+        }
+    }
+
+    /// Lets go of the focus and the cache of the slot's cards that no longer wait.
+    fn keep_waiting_cards(&mut self, slot: SlotId, window: &mut Window, cx: &mut Context<Self>) {
+        let waiting: Vec<String> = self
+            .shell
+            .rows(slot)
+            .iter()
+            .filter_map(|row| match row {
+                ThreadRow::Card(row) if row.card.answered().is_none() => {
+                    Some(row.card.request_id().to_owned())
+                }
+                _ => None,
+            })
+            .collect();
+        let waiting: Vec<&str> = waiting.iter().map(String::as_str).collect();
+        self.keep_cards(slot, &waiting, window, cx);
+    }
+
+    /// Lets go of what is kept for the slot's cards but `waiting`. When the keyboard was on one
+    /// that goes, it goes back to the conversation.
+    fn keep_cards(
+        &mut self,
+        slot: SlotId,
+        waiting: &[&str],
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let held = self.focus.holding(window, cx);
+        self.focus.keep_cards(slot, waiting);
+        self.card_cache.keep_cards(slot, waiting);
+        if let Some((at, request_id)) = held
+            && at == slot
+            && !waiting.contains(&request_id.as_str())
+        {
+            window.focus(&self.focus.thread, cx);
+        }
     }
 
     /// Looks for the folder in the background and hands the answer back to the shell.

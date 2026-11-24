@@ -2,7 +2,8 @@
 //! belong to the `--replay` before them; `--pace`, `--window`, `--pane`, `--ready-file` and the
 //! measuring options (`--perf-log`, `--exit-after-replay`, `--scroll-through`) apply to the whole
 //! run. The checks' options (`--open-folder`, `--mark-children`, `--mcp-config`, `--fail-launch`,
-//! `--fail-distro`, `--close-after`) open real folders and failing launches instead of replays.
+//! `--fail-distro`, `--close-after`) open real folders and failing launches instead of replays; a
+//! failing launch may also follow replays.
 //! An error names the option, never a value: a value can be a prompt or a path.
 
 use std::path::PathBuf;
@@ -159,16 +160,10 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<AppArgs, String> 
     Ok(parsed)
 }
 
-/// Refuses the checks' options that cannot go together: a replay with a real folder or a
-/// failing launch, and an option without the one it qualifies.
+/// Refuses the checks' options that cannot go together: a replay with a real folder, and an option without the one it qualifies.
 fn refuse_mixes(parsed: &AppArgs) -> Result<(), String> {
-    if !parsed.replays.is_empty() {
-        if !parsed.open_folders.is_empty() {
-            return Err("--open-folder cannot be used with --replay".to_owned());
-        }
-        if parsed.fail_launch.is_some() {
-            return Err("--fail-launch cannot be used with --replay".to_owned());
-        }
+    if !parsed.replays.is_empty() && !parsed.open_folders.is_empty() {
+        return Err("--open-folder cannot be used with --replay".to_owned());
     }
     // Without a slot nothing settles: the ready file is never written and the close never comes.
     let no_slot =
@@ -440,9 +435,30 @@ mod tests {
         assert_eq!(error, "--open-folder cannot be used with --replay");
         let error = parsed(&["--open-folder", "C:\\secret", "--replay", "a.ndjson"]).unwrap_err();
         assert_eq!(error, "--open-folder cannot be used with --replay");
-        let error = parsed(&["--replay", "a.ndjson", "--fail-launch", "127"]).unwrap_err();
-        assert_eq!(error, "--fail-launch cannot be used with --replay");
         assert!(parsed(&["--open-folder", "C:\\x", "--fail-launch", "127"]).is_ok());
+    }
+
+    #[test]
+    fn a_fail_launch_goes_with_replays() {
+        for order in [
+            ["--replay", "a.ndjson", "--fail-launch", "1"],
+            ["--fail-launch", "1", "--replay", "a.ndjson"],
+        ] {
+            let args = parsed(&order).unwrap();
+            assert_eq!(args.replays.len(), 1);
+            assert_eq!(args.fail_launch, Some(1));
+        }
+        let error = parsed(&[
+            "--replay",
+            "a.ndjson",
+            "--fail-launch",
+            "1",
+            "--open-folder",
+            "C:\\secret",
+        ])
+        .unwrap_err();
+        assert_eq!(error, "--open-folder cannot be used with --replay");
+        assert!(!error.contains("secret"));
     }
 
     #[test]

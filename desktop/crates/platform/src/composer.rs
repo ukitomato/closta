@@ -1,21 +1,26 @@
-//! A slot's input box, the line under it and why the last send did not go; in place of all of
-//! it, once the session ended, that it ended. The box's text is a copy of the shell's draft:
-//! each edit goes to the shell, and the box is filled again only when the shell changed the
-//! draft itself.
+//! A slot's input box, the line under it with the permission mode's picker, and why the last
+//! send did not go; over it, the band that asks before Bypass and the hint of the jump key; in
+//! place of all of it, once the session ended, that it ended. The box's text is a copy of the
+//! shell's draft: each edit goes to the shell, and the box is filled again only when the shell
+//! changed the draft itself.
 
 use std::rc::Rc;
 
+use closta_presenter::composer_state::PERMISSION_MODES;
+use closta_shell::card_keys::FocusScene;
 use closta_shell::copy;
 use closta_shell::slot::SlotId;
-use closta_shell::state::{ComposerLine, ShellAction};
-use gpui_kit::base::{h_flex, v_flex};
+use closta_shell::state::{BYPASS_MODE, ComposerLine, ShellAction};
+use gpui_kit::base::{Disableable as _, h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{
     BufferPoint, InputEvent, MoveDown, MoveUp, Position, RopeExt as _, Textarea, TextareaState,
 };
+use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
 use gpui_kit::component::{ActiveTheme as _, Sizable as _};
 use gpui_kit::*;
 
+use crate::focus::shows_jump_hint;
 use crate::model::ShellModel;
 
 /// How the box grows with its text.
@@ -128,6 +133,7 @@ fn cursor_row(state: &TextareaState) -> usize {
 pub(crate) fn composer(
     model: &ShellModel,
     slot: SlotId,
+    window: &Window,
     cx: &mut Context<ShellModel>,
 ) -> Option<AnyElement> {
     if model.shell.ended(slot) {
@@ -143,13 +149,23 @@ pub(crate) fn composer(
                 .is_some_and(|model| model.read(cx).shell.browsing(slot))
         })
     };
+    let line = model.shell.composer_line(slot);
+    let mode = line
+        .as_ref()
+        .and_then(|line| mode_picker(slot, line, dispatch.clone(), cx));
+    let model_text = line.map(|line| line.model).unwrap_or_default();
+    let band = model.shell.bypass_asking(slot).then(|| {
+        let focus = model.focus.bypass.get(&slot).cloned();
+        bypass_band(slot, focus.as_ref(), dispatch.clone(), cx)
+    });
+    // Only this slot's own wait counts: the hint is about the card above this input.
+    let hint = jump_hint(
+        model.shell.waiting(slot),
+        &model.focus.focus_scene(window, cx),
+        cx,
+    );
     let theme = cx.theme();
     let muted = theme.muted_foreground;
-    let line = model
-        .shell
-        .composer_line(slot)
-        .map(|line| line_text(&line))
-        .unwrap_or_default();
     let button = if model.shell.running(slot) {
         Button::new("composer-stop")
             .label(format!("{STOP_GLYPH} {}", copy::STOP))
@@ -171,12 +187,21 @@ pub(crate) fn composer(
         v_flex()
             .w_full()
             .gap_1()
+            .children(band)
+            .children(hint)
             .child(input_box(slot, input, dispatch, browsing))
             .child(
                 h_flex()
                     .gap_2()
                     .items_center()
-                    .child(div().flex_1().truncate().text_color(muted).child(line))
+                    .children(mode)
+                    .child(
+                        div()
+                            .flex_1()
+                            .truncate()
+                            .text_color(muted)
+                            .child(model_text),
+                    )
                     .child(button.ghost().small()),
             )
             .children(reason)
@@ -184,17 +209,185 @@ pub(crate) fn composer(
     )
 }
 
-/// The mode and the model, `mode · model`, leaving out the one not known.
-fn line_text(line: &ComposerLine) -> String {
-    [line.mode.as_deref(), Some(line.model.as_str())]
-        .into_iter()
-        .flatten()
-        .filter(|part| !part.is_empty())
-        .collect::<Vec<_>>()
-        .join(" · ")
+/// The permission mode's button, once the session said its mode: its short word, on the
+/// warning's ground in Bypass. It lists the modes with what each does; one picked goes to the
+/// shell. It cannot be pressed while a switch waits for the CLI.
+pub(crate) fn mode_picker(
+    slot: SlotId,
+    line: &ComposerLine,
+    dispatch: Dispatch,
+    cx: &App,
+) -> Option<AnyElement> {
+    let look = mode_look(line)?;
+    let muted = cx.theme().muted_foreground;
+    let button = Button::new("composer-mode")
+        .accessibility_id("composer-mode")
+        .accessibility_label(look.accessible)
+        .label(look.word)
+        .small()
+        .disabled(look.disabled);
+    let button = if look.warning {
+        button.warning()
+    } else {
+        button.ghost()
+    };
+    let current = look.mode;
+    let picker = button.dropdown_menu(move |mut menu, _, _| {
+        for choice in mode_choices(slot, &current) {
+            let dispatch = dispatch.clone();
+            let ModeChoice {
+                name,
+                hint,
+                checked,
+                action,
+            } = choice;
+            let item = PopupMenuItem::element(move |_, _| {
+                v_flex()
+                    .child(name.clone())
+                    .children(hint.map(|hint| div().text_xs().text_color(muted).child(hint)))
+            })
+            .checked(checked)
+            .on_click(move |_, window, cx| dispatch(action.clone(), window, cx));
+            menu = menu.item(item);
+        }
+        menu
+    });
+    Some(picker.into_any_element())
 }
 
-/// "Session ended", and the button that restarts it when it can be.
+/// How the mode's button looks: its word and accessible name, whether it stands on the
+/// warning's ground (Bypass) and whether it cannot be pressed (a switch waits for the CLI).
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub(crate) struct ModeLook {
+    pub(crate) mode: String,
+    pub(crate) word: String,
+    pub(crate) accessible: String,
+    pub(crate) warning: bool,
+    pub(crate) disabled: bool,
+}
+
+/// The mode's button, once the session said its mode.
+pub(crate) fn mode_look(line: &ComposerLine) -> Option<ModeLook> {
+    let mode = line.mode.clone()?;
+    Some(ModeLook {
+        word: copy::mode_label(&mode),
+        accessible: copy::mode_accessible(&mode),
+        warning: mode == BYPASS_MODE,
+        disabled: line.switching,
+        mode,
+    })
+}
+
+/// A row of the mode's list: the mode's name, what it does, whether it is the mode now and
+/// what picking it asks of the shell.
+#[derive(Clone, PartialEq, Debug)]
+pub(crate) struct ModeChoice {
+    pub(crate) name: String,
+    pub(crate) hint: Option<&'static str>,
+    pub(crate) checked: bool,
+    pub(crate) action: ShellAction,
+}
+
+/// The modes the list offers, in the CLI's order.
+pub(crate) fn mode_choices(slot: SlotId, current: &str) -> Vec<ModeChoice> {
+    PERMISSION_MODES
+        .iter()
+        .map(|mode| ModeChoice {
+            name: copy::mode_name(mode),
+            hint: copy::mode_hint(mode),
+            checked: *mode == current,
+            action: ShellAction::PickMode {
+                slot,
+                mode: (*mode).to_owned(),
+            },
+        })
+        .collect()
+}
+
+/// The line over the input that names the jump key, while `waiting_here` (a card of this
+/// slot waits) and the keyboard is out of the card.
+pub(crate) fn jump_hint(waiting_here: bool, scene: &FocusScene, cx: &App) -> Option<AnyElement> {
+    shows_jump_hint(waiting_here, scene).then(|| {
+        div()
+            .id("jump-hint")
+            .accessibility_id("jump-hint")
+            .aria_label(copy::JUMP_HINT)
+            .text_color(cx.theme().muted_foreground)
+            .child(copy::JUMP_HINT)
+            .test_support()
+            .into_any_element()
+    })
+}
+
+/// The band that asks before Bypass. It takes the keyboard (`focus`) while it asks: Escape
+/// takes it down and Enter does nothing, so only a click on Switch goes into Bypass.
+pub(crate) fn bypass_band(
+    slot: SlotId,
+    focus: Option<&FocusHandle>,
+    dispatch: Dispatch,
+    cx: &App,
+) -> AnyElement {
+    let theme = cx.theme();
+    let (switch, cancel, keys) = (dispatch.clone(), dispatch.clone(), dispatch);
+    let band = h_flex()
+        .id("bypass-band")
+        .accessibility_id("bypass-band")
+        .aria_label(copy::BYPASS_CONFIRM)
+        .w_full()
+        .p_2()
+        .gap_2()
+        .items_center()
+        .rounded_md()
+        .border_1()
+        .border_color(theme.warning)
+        .bg(theme.warning.opacity(0.08))
+        .on_key_down(move |event: &KeyDownEvent, window, cx| {
+            let key = &event.keystroke;
+            match key.key.as_str() {
+                "escape" if !key.modifiers.modified() => {
+                    window.prevent_default();
+                    cx.stop_propagation();
+                    keys(ShellAction::CancelBypass { slot }, window, cx);
+                }
+                // Any Enter: none may go on to a part that would take it as a yes.
+                "enter" => {
+                    window.prevent_default();
+                    cx.stop_propagation();
+                }
+                _ => {}
+            }
+        })
+        .child(div().flex_1().child(copy::BYPASS_CONFIRM))
+        .child(
+            Button::new("bypass-switch")
+                .accessibility_id("bypass-switch")
+                .label(copy::BYPASS_SWITCH)
+                .warning()
+                .small()
+                .tab_stop(false)
+                .on_click(move |_, window, cx| {
+                    switch(ShellAction::ConfirmBypass { slot }, window, cx);
+                }),
+        )
+        .child(
+            Button::new("bypass-cancel")
+                .accessibility_id("bypass-cancel")
+                .label(copy::CANCEL)
+                .outline()
+                .small()
+                .tab_stop(false)
+                .on_click(move |_, window, cx| {
+                    cancel(ShellAction::CancelBypass { slot }, window, cx);
+                }),
+        );
+    match focus {
+        Some(focus) => band.track_focus(focus).into_any_element(),
+        None => band.into_any_element(),
+    }
+}
+
+/// "Session ended", and the button that restarts it when it can be, or why it cannot while
+/// eight slots hold a session.
 fn ended(model: &ShellModel, slot: SlotId, cx: &mut Context<ShellModel>) -> AnyElement {
     let restart = model.shell.can_restart(slot).then(|| {
         Button::new("composer-restart")
@@ -204,6 +397,11 @@ fn ended(model: &ShellModel, slot: SlotId, cx: &mut Context<ShellModel>) -> AnyE
             .on_click(cx.listener(move |model, _: &ClickEvent, window, cx| {
                 model.act(ShellAction::Restart { slot }, window, cx);
             }))
+    });
+    let limit = model.shell.restart_blocked(slot).then(|| {
+        div()
+            .text_color(cx.theme().muted_foreground)
+            .child(copy::SLOT_LIMIT)
     });
     h_flex()
         .id("session-ended")
@@ -220,6 +418,7 @@ fn ended(model: &ShellModel, slot: SlotId, cx: &mut Context<ShellModel>) -> AnyE
                 .child(copy::SESSION_ENDED),
         )
         .children(restart)
+        .children(limit)
         .into_any_element()
 }
 
@@ -241,12 +440,20 @@ mod tests {
     use gpui_kit::test::TestWindowExt as _;
     // Named one by one: the glob would bring in a `test` that hides the built-in attribute.
     use gpui_kit::{
-        AnyWindowHandle, AppContext as _, Bounds, Context, Entity, IntoElement, ParentElement as _,
-        Point, Render, Styled as _, Subscription, TestAppContext, Window, WindowBounds,
-        WindowOptions, div, open_window, px, size,
+        AnyWindowHandle, AppContext as _, Bounds, Context, Entity, FocusHandle,
+        InteractiveElement as _, IntoElement, KeyDownEvent, ParentElement as _, Point, Render,
+        Styled as _, Subscription, TestAppContext, Window, WindowBounds, WindowOptions, div,
+        open_window, px, size,
     };
 
-    use super::{Browsing, Dispatch, input_box, new_input};
+    use closta_presenter::composer_state::PERMISSION_MODES;
+    use closta_shell::state::{BYPASS_MODE, ComposerLine};
+
+    use super::{
+        Browsing, Dispatch, bypass_band, input_box, jump_hint, mode_choices, mode_look,
+        mode_picker, new_input,
+    };
+    use crate::focus::{self, FocusMap};
 
     /// A machine with nothing on it, and a planner that never plans.
     struct Nothing;
@@ -538,5 +745,259 @@ mod tests {
             .expect("go up from the first line");
         cx.run_until_parked();
         assert_eq!(previous(&acted), 1);
+    }
+
+    /// A window with a slot's input, over it its Bypass band (while `asking`) and the jump hint
+    /// (while `waiting`), and the mode's button for `line`; all inside a part that takes the
+    /// Enter the band lets through as a send; and the window's gate.
+    struct Band {
+        slot: SlotId,
+        focus: FocusMap,
+        dispatch: Dispatch,
+        composer: FocusHandle,
+        asking: bool,
+        waiting: bool,
+        line: Option<ComposerLine>,
+        _keys: Subscription,
+    }
+
+    impl Render for Band {
+        fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+            let (slot, behind) = (self.slot, self.dispatch.clone());
+            let band = self.focus.bypass_handle(slot, cx);
+            let scene = self.focus.focus_scene(window, cx);
+            div()
+                .id("behind")
+                .size_full()
+                .on_key_down(move |event: &KeyDownEvent, window, cx| {
+                    if event.keystroke.key == "enter" {
+                        behind(ShellAction::Send { slot }, window, cx);
+                    }
+                })
+                .children(
+                    self.asking
+                        .then(|| bypass_band(slot, Some(&band), self.dispatch.clone(), cx)),
+                )
+                .children(jump_hint(self.waiting, &scene, cx))
+                .child(
+                    div()
+                        .id("composer")
+                        .track_focus(&self.composer)
+                        .h(px(40.))
+                        .w_full(),
+                )
+                .children(
+                    self.line
+                        .as_ref()
+                        .and_then(|line| mode_picker(slot, line, self.dispatch.clone(), cx)),
+                )
+        }
+    }
+
+    fn open_band(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<Band>, SlotId, Acted) {
+        cx.update(gpui_kit::init);
+        let slot = a_slot();
+        let acted = Acted::default();
+        let kept = Rc::clone(&acted);
+        let dispatch: Dispatch = Rc::new(move |action, _, _| kept.borrow_mut().push(action));
+        let (handle, view) = cx
+            .update(|cx| {
+                let bounds = Bounds {
+                    origin: Point::default(),
+                    size: size(px(600.), px(400.)),
+                };
+                let options = WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(bounds)),
+                    ..Default::default()
+                };
+                open_window(options, cx, move |_, cx| {
+                    cx.new(|cx: &mut Context<Band>| {
+                        let this = cx.weak_entity();
+                        let keys = focus::hold_keys(
+                            move |keystroke, window, cx| {
+                                let band = this.upgrade()?;
+                                Some(band.read(cx).focus.gate(keystroke, 0, window, cx))
+                            },
+                            Rc::clone(&dispatch),
+                            Rc::new(|_, _, _| {}),
+                            cx,
+                        );
+                        let mut focus = FocusMap::new(cx);
+                        focus.selected = Some(slot);
+                        let composer = cx.focus_handle();
+                        focus.composers.insert(slot, composer.clone());
+                        Band {
+                            slot,
+                            focus,
+                            dispatch,
+                            composer,
+                            asking: true,
+                            waiting: false,
+                            line: None,
+                            _keys: keys,
+                        }
+                    })
+                })
+            })
+            .expect("open test window");
+        draw(cx, handle);
+        (handle, view, slot, acted)
+    }
+
+    fn draw(cx: &mut TestAppContext, handle: AnyWindowHandle) {
+        cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+            .expect("draw");
+        cx.run_until_parked();
+    }
+
+    fn is_focused(cx: &mut TestAppContext, handle: AnyWindowHandle, focus: &FocusHandle) -> bool {
+        cx.update_window(handle, |_, window, _| focus.is_focused(window))
+            .expect("read the focus")
+    }
+
+    /// Whether the jump hint was drawn in the last frame.
+    fn hint_drawn(cx: &mut TestAppContext, handle: AnyWindowHandle) -> bool {
+        cx.update_window(handle, |_, window, _| {
+            window.try_find("jump-hint").is_some()
+        })
+        .expect("look for the hint")
+    }
+
+    #[gpui_kit::test]
+    fn escape_on_the_bypass_band_cancels_and_enter_does_nothing(cx: &mut TestAppContext) {
+        let (handle, view, slot, acted) = open_band(cx);
+        let band: FocusHandle = view.update(cx, |view, cx| view.focus.bypass_handle(slot, cx));
+        cx.update_window(handle, |_, window, cx| {
+            window.focus(&band, cx);
+            window.render_frame(cx);
+        })
+        .expect("focus the band");
+        for key in ["enter", "shift-enter", "ctrl-enter", "space"] {
+            press(cx, handle, key);
+        }
+        assert!(acted.borrow().is_empty(), "{:?}", acted.borrow().len());
+        press(cx, handle, "escape");
+        assert_eq!(*acted.borrow(), [ShellAction::CancelBypass { slot }]);
+    }
+
+    #[gpui_kit::test]
+    fn the_band_takes_the_keyboard_and_gives_it_back_to_the_input(cx: &mut TestAppContext) {
+        let (handle, view, slot, _) = open_band(cx);
+        let (band, composer) = view.update(cx, |view, cx| {
+            (view.focus.bypass_handle(slot, cx), view.composer.clone())
+        });
+        cx.update_window(handle, |_, window, cx| {
+            window.focus(&composer, cx);
+            view.update(cx, |view, cx| view.focus.take_bypass(slot, window, cx));
+        })
+        .expect("the band comes up");
+        draw(cx, handle);
+        assert!(is_focused(cx, handle, &band), "the band took the keyboard");
+
+        // A refresh took the band down.
+        view.update(cx, |view, cx| {
+            view.asking = false;
+            cx.notify();
+        });
+        cx.update_window(handle, |_, window, cx| {
+            view.update(cx, |view, cx| view.focus.leave_bypass(slot, window, cx));
+        })
+        .expect("the band goes");
+        draw(cx, handle);
+        assert!(
+            is_focused(cx, handle, &composer),
+            "the input has the keyboard again"
+        );
+    }
+
+    #[gpui_kit::test]
+    fn the_mode_button_says_bypass_and_waits_while_switching(cx: &mut TestAppContext) {
+        let (handle, view, _, _) = open_band(cx);
+        view.update(cx, |view, cx| {
+            view.asking = false;
+            view.line = Some(ComposerLine {
+                mode: Some(BYPASS_MODE.to_owned()),
+                model: String::new(),
+                switching: true,
+            });
+            cx.notify();
+        });
+        draw(cx, handle);
+        let button = cx
+            .update_window(handle, |_, window, _| window.find("composer-mode"))
+            .expect("find the button");
+        assert_eq!(button.disabled(), Some(true));
+        // The word itself ("Bypass", not only the color) is `mode_look`'s.
+        assert_eq!(button.label(), Some("Permission mode: Bypass Permissions"));
+    }
+
+    #[test]
+    fn the_mode_look_follows_the_mode_and_the_switch() {
+        let line = |mode: &str, switching| ComposerLine {
+            mode: Some(mode.to_owned()),
+            model: String::new(),
+            switching,
+        };
+        let bypass = mode_look(&line(BYPASS_MODE, false)).expect("a look");
+        assert_eq!(
+            (bypass.word.as_str(), bypass.warning, bypass.disabled),
+            ("Bypass", true, false)
+        );
+        let plan = mode_look(&line("plan", true)).expect("a look");
+        assert_eq!(
+            (plan.word.as_str(), plan.warning, plan.disabled),
+            ("Plan", false, true)
+        );
+        let unknown = ComposerLine {
+            mode: None,
+            model: String::new(),
+            switching: false,
+        };
+        assert_eq!(mode_look(&unknown), None);
+    }
+
+    #[test]
+    fn the_mode_list_picks_each_mode_and_marks_the_current_one() {
+        let slot = SlotId::numbered(1);
+        let choices = mode_choices(slot, "plan");
+        assert_eq!(choices.len(), PERMISSION_MODES.len());
+        let checked: Vec<&str> = choices
+            .iter()
+            .filter(|it| it.checked)
+            .map(|it| it.name.as_str())
+            .collect();
+        assert_eq!(checked, ["Plan"]);
+        let bypass = choices
+            .iter()
+            .find(|it| it.name == "Bypass Permissions")
+            .expect("Bypass is offered");
+        assert_eq!(bypass.hint, Some("Ask nothing"));
+        assert_eq!(
+            bypass.action,
+            ShellAction::PickMode {
+                slot,
+                mode: BYPASS_MODE.to_owned(),
+            }
+        );
+    }
+
+    #[gpui_kit::test]
+    fn the_jump_hint_is_drawn_only_while_this_slot_waits(cx: &mut TestAppContext) {
+        let (handle, view, _, _) = open_band(cx);
+        let composer = view.read_with(cx, |view, _| view.composer.clone());
+        cx.update_window(handle, |_, window, cx| window.focus(&composer, cx))
+            .expect("focus the input");
+        view.update(cx, |view, cx| {
+            view.asking = false;
+            cx.notify();
+        });
+        draw(cx, handle);
+        assert!(!hint_drawn(cx, handle), "nothing waits here");
+        view.update(cx, |view, cx| {
+            view.waiting = true;
+            cx.notify();
+        });
+        draw(cx, handle);
+        assert!(hint_drawn(cx, handle));
     }
 }

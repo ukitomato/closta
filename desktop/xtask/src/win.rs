@@ -5,7 +5,7 @@ use anyhow::{Context, bail};
 
 use crate::check::LOCK;
 use crate::perf_log::{Outcome, PerfLog, PerfScene, references, verdicts};
-use crate::scenes::{BASH_PROMPT, SIZES, Scene};
+use crate::scenes::{BASH_PROMPT, HUB_REPLAYS, SIZES, Scene, stopped_replay};
 
 /// The Windows-side copy of `desktop/`, as seen from WSL. The Windows build
 /// needs the Windows SDK shader compiler and Windows paths, so it runs on Windows.
@@ -297,6 +297,19 @@ pub fn scene_args(scene: PerfScene) -> Vec<String> {
             "--exit-after-replay".into(),
             "3000".into(),
         ],
+        // Four streaming replays and the four cards of the hub, so the list aggregates
+        // eight slots while four of them keep updating.
+        PerfScene::NeedsYou => {
+            let mut args = Vec::new();
+            for _ in 0..4 {
+                args.extend(["--replay".to_owned(), replay("stream.ndjson")]);
+            }
+            for (file, prompt, stop_at) in &HUB_REPLAYS[..4] {
+                args.extend(stopped_replay(file, prompt, *stop_at));
+            }
+            args.extend(["--pace", "30", "--exit-after-replay", "3000"].map(str::to_owned));
+            args
+        }
         PerfScene::Idle => vec![
             "--replay".into(),
             replay("gallery.ndjson"),
@@ -957,5 +970,26 @@ mod tests {
             "{script}"
         );
         assert_eq!(shot_stem(&scene, (2560, 1440)), "thread-bash-2560x1440");
+    }
+
+    #[test]
+    fn the_needs_you_run_replays_eight_slots_with_four_streaming() {
+        let args = scene_args(PerfScene::NeedsYou);
+        let replays: Vec<_> = args
+            .windows(2)
+            .filter(|pair| pair[0] == "--replay")
+            .map(|pair| pair[1].as_str())
+            .collect();
+        assert_eq!(replays.len(), 8);
+        let streaming = replays
+            .iter()
+            .filter(|it| it.ends_with(r"\stream.ndjson"))
+            .count();
+        assert_eq!(streaming, 4);
+        assert!(args.windows(2).any(|pair| pair == ["--pace", "30"]));
+        assert!(
+            args.windows(2)
+                .any(|pair| pair == ["--exit-after-replay", "3000"])
+        );
     }
 }

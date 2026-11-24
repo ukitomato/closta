@@ -1,5 +1,5 @@
-//! The window's three panes under the header line: the slots on the left with the button that
-//! opens the New Session dialog under them, the conversation in the middle, and the right pane,
+//! The window's three panes under the header line: on the left the needs-you list, then the
+//! slots with the button that opens the New Session dialog under them, the conversation in the middle, and the right pane,
 //! which is an empty frame for now. The dialog and the close are drawn over the panes. The panes' widths and
 //! whether they are open are the shell's; a drag hands the new width to the shell and takes
 //! back the width it allowed.
@@ -12,12 +12,13 @@ use closta_shell::slot::{SlotId, SlotMark, SlotSummary};
 use closta_shell::state::ShellAction;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::menu::{ContextMenuExt as _, PopupMenuItem};
 use gpui_kit::component::resizable::{ResizableState, h_resizable, resizable_panel};
-use gpui_kit::component::{ActiveTheme as _, IconName};
+use gpui_kit::component::{ActiveTheme as _, IconName, Sizable as _};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
-use crate::closing::close_layer;
+use crate::closing::{close_layer, slot_close_layer};
 use crate::dialog;
 use crate::model::ShellModel;
 use crate::thread;
@@ -33,15 +34,16 @@ fn width_range(range: RangeInclusive<f32>) -> std::ops::Range<Pixels> {
 }
 
 impl Render for ShellModel {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let (background, foreground) = (cx.theme().background, cx.theme().foreground);
         let panes = self.shell.panes().clone();
         let model = cx.entity();
         let header = self.header(cx);
-        let slots = self.slot_list(cx);
-        let center = thread::conversation(self, cx);
+        let slots = self.left_pane(window, cx);
+        let center = thread::conversation(self, window, cx);
         let right = right_frame(cx);
         let dialog = dialog::new_session(self, cx);
+        let slot_close = slot_close_layer(self, cx);
         let close = close_layer(self, cx);
         v_flex()
             .relative()
@@ -75,6 +77,7 @@ impl Render for ShellModel {
                 ),
             )
             .children(dialog)
+            .children(slot_close)
             .children(close)
     }
 }
@@ -166,9 +169,10 @@ impl ShellModel {
             .into_any_element()
     }
 
-    /// The slots, each its mark and title, a click selecting it; under them, the button that
-    /// opens the New Session dialog.
-    fn slot_list(&self, cx: &mut Context<Self>) -> AnyElement {
+    /// The needs-you list on top; under it the slots, each its mark and title, a click selecting
+    /// it; under them, the button that opens the New Session dialog.
+    fn left_pane(&self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        let needs_you = self.needs_you_list(window, cx);
         let selected = self.shell.selected();
         let rows: Vec<AnyElement> = self
             .shell
@@ -176,6 +180,22 @@ impl ShellModel {
             .into_iter()
             .map(|summary| slot_row(summary, selected, cx))
             .collect();
+        let theme = cx.theme();
+        let heading = div()
+            .flex_none()
+            .px_3()
+            .pt_2()
+            .pb_1()
+            .text_xs()
+            .font_weight(FontWeight::SEMIBOLD)
+            .text_color(theme.muted_foreground)
+            .child(copy::SESSIONS_HEADING);
+        let divider = div()
+            .flex_none()
+            .mx_3()
+            .mt_1()
+            .h(px(1.))
+            .bg(theme.sidebar_border);
         v_flex()
             .id("pane-left")
             .accessibility_id("pane-left")
@@ -185,6 +205,9 @@ impl ShellModel {
             .bg(cx.theme().sidebar)
             .border_r_1()
             .border_color(cx.theme().sidebar_border)
+            .child(needs_you)
+            .child(divider)
+            .child(heading)
             .child(
                 v_flex()
                     .id("slots")
@@ -218,6 +241,7 @@ fn slot_row(
     let (glyph, color) = match summary.mark {
         SlotMark::Starting => ("○", theme.muted_foreground),
         SlotMark::Working => ("●", theme.info),
+        SlotMark::Waiting => ("⚠", theme.warning),
         SlotMark::Ready => ("●", theme.success),
         SlotMark::Ended => ("○", theme.muted_foreground),
         SlotMark::Failed => ("●", theme.danger),
@@ -229,19 +253,54 @@ fn slot_row(
     let select = cx.listener(move |model, _: &ClickEvent, window, cx| {
         model.act(ShellAction::Select(id), window, cx);
     });
+    // Shown while the row is hovered; a slot that is closing has nothing more to close.
+    let close = (!summary.closing).then(|| {
+        let close_id = SharedString::from(format!("slot-close-{id}"));
+        div()
+            .flex_none()
+            .invisible()
+            .group_hover(name.clone(), |style| style.visible())
+            .child(
+                Button::new(close_id.clone())
+                    .accessibility_id(close_id)
+                    .accessibility_label(copy::CLOSE)
+                    .tab_stop(false)
+                    .ghost()
+                    .xsmall()
+                    .icon(IconName::Close)
+                    .on_click(cx.listener(move |model, _: &ClickEvent, window, cx| {
+                        // The row under it would select the slot it closes.
+                        cx.stop_propagation();
+                        model.act(ShellAction::CloseSlot { slot: id }, window, cx);
+                    })),
+            )
+    });
+    let dispatch = ShellModel::dispatch(cx);
+    let closing = summary.closing;
     h_flex()
         .id(name.clone())
-        .accessibility_id(name)
+        .accessibility_id(name.clone())
         .aria_label(summary.title.clone())
+        .group(name)
         .h(px(28.))
         .px_3()
         .gap_2()
         .items_center()
+        .when(closing, |row| row.opacity(0.5))
         .when(selected == Some(id), |row| row.bg(active))
         .hover(move |row| row.bg(hover))
         .child(div().text_color(color).child(glyph))
         .child(div().flex_1().truncate().child(summary.title))
+        .children(close)
         .on_click(select)
+        .context_menu(move |menu, _, _| {
+            let dispatch = dispatch.clone();
+            menu.item(PopupMenuItem::new(copy::CLOSE).disabled(closing).on_click(
+                move |_, window, cx| {
+                    dispatch(ShellAction::CloseSlot { slot: id }, window, cx);
+                },
+            ))
+        })
         .into_any_element()
 }
 

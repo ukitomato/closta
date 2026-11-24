@@ -2,6 +2,7 @@
 //! scroller that follows the tail with the text at most 860 px wide in the middle, the band under
 //! it where the wait is shown, and the slot's input at the bottom.
 
+pub(crate) mod cards;
 pub(crate) mod prefetch;
 mod rows;
 
@@ -27,7 +28,11 @@ const FAILURE_GROUND: f32 = 0.08;
 
 /// The selected slot's conversation, with its input under it; the empty pane's words when it has
 /// no rows.
-pub(crate) fn conversation(model: &ShellModel, cx: &mut Context<ShellModel>) -> AnyElement {
+pub(crate) fn conversation(
+    model: &ShellModel,
+    window: &Window,
+    cx: &mut Context<ShellModel>,
+) -> AnyElement {
     let theme = cx.theme();
     let pane = v_flex()
         .id("pane-center")
@@ -59,8 +64,8 @@ pub(crate) fn conversation(model: &ShellModel, cx: &mut Context<ShellModel>) -> 
             .position(|summary| summary.id == slot)
             .unwrap_or_default();
         let entity = cx.entity();
-        MessageScroller::new(("thread", position), scroller, move |at, _, cx| {
-            centered(rows::row(&entity, slot, at, cx))
+        MessageScroller::new(("thread", position), scroller, move |at, window, cx| {
+            centered(rows::row(&entity, slot, at, window, cx))
         })
         .with_jump_button_label(copy::JUMP_TO_LATEST)
         .size_full()
@@ -84,10 +89,19 @@ pub(crate) fn conversation(model: &ShellModel, cx: &mut Context<ShellModel>) -> 
             .child(words)
     });
     let failure = failure_band(model, slot, cx);
-    let composer = composer::composer(model, slot, cx)
+    let composer = composer::composer(model, slot, window, cx)
         .map(|composer| div().flex_none().pt_1().pb_3().child(centered(composer)));
+    // A click on the conversation outside any card puts the keyboard there: a card that then
+    // arrives may take it.
     pane.children(failure)
-        .child(div().flex_1().min_h_0().child(body))
+        .child(
+            div()
+                .id("thread")
+                .track_focus(&model.focus.thread)
+                .flex_1()
+                .min_h_0()
+                .child(body),
+        )
         .children(band)
         .children(composer)
         .into_any_element()
@@ -104,7 +118,8 @@ fn centered(content: impl IntoElement) -> Div {
 }
 
 /// The band over a failed session's conversation: what failed, what to try, and the Restart
-/// with what it does when the session can be started again.
+/// with what it does when the session can be started again, or why it cannot while eight slots
+/// hold a session. The band takes the keyboard when the needs-you list opens it.
 fn failure_band(
     model: &ShellModel,
     slot: SlotId,
@@ -125,6 +140,10 @@ fn failure_band(
     let note = restart
         .is_some()
         .then(|| div().text_color(muted).child(copy::RESTART_NOTE));
+    let limit = model
+        .shell
+        .restart_blocked(slot)
+        .then(|| div().flex_none().text_color(muted).child(copy::SLOT_LIMIT));
     let line = h_flex()
         .gap_2()
         .items_center()
@@ -134,11 +153,13 @@ fn failure_band(
                 .text_color(theme.danger),
         )
         .child(div().flex_1().child(title.clone()))
-        .children(restart);
+        .children(restart)
+        .children(limit);
     let band = v_flex()
         .id("failure-band")
         .accessibility_id("failure-band")
         .aria_label(title)
+        .track_focus(&model.focus.failure)
         .flex_none()
         .w_full()
         .py_2()

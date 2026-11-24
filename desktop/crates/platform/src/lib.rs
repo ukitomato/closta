@@ -1,11 +1,16 @@
+mod clock;
 mod closing;
 mod composer;
 mod dialog;
+mod focus;
 mod fonts;
 mod model;
+mod needs_you;
 pub mod perf;
 mod probe;
 mod shell_view;
+#[cfg(test)]
+mod test_window;
 pub mod theme;
 mod thread;
 

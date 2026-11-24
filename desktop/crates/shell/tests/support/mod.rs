@@ -9,6 +9,9 @@ use std::time::{Duration, Instant};
 use closta_model::AppInfo;
 use closta_providers::claude::fake::live::{LiveControl, LiveOptions, LiveProcess};
 use closta_providers::claude::fake::process::{FakeProcess, ProcessScript};
+use closta_providers::claude::fake::replay::{
+    ReplayControl, ReplayOptions, ReplaySpawner, parse_replay,
+};
 use closta_providers::claude::fake::spawner::FakeSpawner;
 use closta_providers::claude::launch::Launch;
 use closta_providers::claude::launch::LaunchError;
@@ -20,7 +23,7 @@ use closta_session::runtime::SessionRuntime;
 use closta_session::status::SessionStatus;
 use closta_shell::header::app_header;
 use closta_shell::new_session::{ClaudeOnPath, LaunchChecks, PlannerFor};
-use closta_shell::slot::{SlotLaunch, Spawn};
+use closta_shell::slot::{SlotId, SlotLaunch, Spawn};
 use closta_shell::state::{Ports, ShellState};
 use futures_lite::future;
 use smol::{Executor, Timer};
@@ -228,4 +231,98 @@ impl PlannerFor for Planners {
     fn planner(&self, _folder: &str) -> Arc<dyn SessionLaunchPlanner> {
         Arc::clone(&self.0)
     }
+}
+
+/// A launch of the harness's planner whose relaunch makes the same launch again.
+pub fn relaunchable(harness: &Harness, title: &'static str) -> SlotLaunch {
+    fn make(planner: Arc<dyn SessionLaunchPlanner>, title: &'static str) -> SlotLaunch {
+        let again = Arc::clone(&planner);
+        SlotLaunch {
+            title: title.to_owned(),
+            planner,
+            working_directory: None,
+            companion: None,
+            relaunch: Some(Arc::new(move || make(Arc::clone(&again), title))),
+            settles_on_failure: false,
+        }
+    }
+    make(Arc::clone(&harness.planner) as _, title)
+}
+
+/// A launch that plays the first `stop_at` lines of the capture `fixture` (a file name with its
+/// extension) and then stays alive; with the replay's control and the slot's runtime.
+pub fn replay_launch(
+    harness: &Harness,
+    fixture: &str,
+    stop_at: usize,
+) -> (
+    SlotLaunch,
+    ReplayControl,
+    async_channel::Receiver<SessionRuntime>,
+) {
+    let lines = parse_replay(&crate::common::text_of(fixture)).unwrap();
+    let (spawner, control) = ReplaySpawner::new(
+        lines,
+        ReplayOptions {
+            stop_at: Some(stop_at),
+            ..ReplayOptions::default()
+        },
+    );
+    let planner = Arc::new(NativeSessionLaunchPlanner::new(
+        Arc::new(spawner),
+        Arc::new(SecretEnv::default),
+    ));
+    let (mut launch, runtime) = harness.launch(fixture);
+    launch.planner = planner;
+    (launch, control, runtime)
+}
+
+/// Writes lines 1 to `last` of the capture `fixture` to the fake process's stdout.
+pub fn emit_capture(control: &LiveControl, fixture: &str, last: usize) {
+    let text = crate::common::text_of(fixture);
+    for line in crate::common::non_blank_lines(&text).into_iter().take(last) {
+        control.emit(&line);
+    }
+}
+
+/// The permission request of capture 36's 31st line with another id and command.
+pub fn can_use_tool(request_id: &str, command: &str) -> String {
+    serde_json::json!({
+        "type": "control_request",
+        "request_id": request_id,
+        "request": {
+            "subtype": "can_use_tool",
+            "tool_name": "Bash",
+            "display_name": "Bash",
+            "input": { "command": command, "description": "Run the command" },
+            "description": "Run the command",
+            "permission_suggestions": [],
+            "tool_use_id": "toolu_01PcHT9m5wFJnAGQF1s9oyk4"
+        }
+    })
+    .to_string()
+}
+
+/// The runtime waits on `n` approvals.
+pub async fn waits_on(runtime: &SessionRuntime, n: usize) {
+    until(|| runtime.view().conversation.pending_approvals.len() == n).await;
+}
+
+/// Opens a replay of `fixture` up to `stop_at`, waits until it waits on one request and
+/// refreshes the slot at `now_ms`.
+pub async fn waiting_slot(
+    shell: &mut ShellState,
+    harness: &Harness,
+    fixture: &str,
+    stop_at: usize,
+    now_ms: i64,
+) -> (SlotId, ReplayControl, SessionRuntime) {
+    let (launch, control, runtime) = replay_launch(harness, fixture, stop_at);
+    let slot = shell.open(launch);
+    let runtime = runtime.recv().await.unwrap();
+    running(&runtime).await;
+    waits_on(&runtime, 1).await;
+    let generation = shell.watch(slot).unwrap().generation();
+    shell.refresh(slot, generation, now_ms).unwrap();
+    (slot, control, runtime)
 }
