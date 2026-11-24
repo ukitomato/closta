@@ -132,12 +132,19 @@ pub(crate) struct Gate {
     pub(crate) stop: bool,
     pub(crate) action: Option<ShellAction>,
     pub(crate) focus: Option<FocusHandle>,
-    /// Whether the key is the New Session dialog's Start, which hands the typing over first.
-    pub(crate) start: bool,
+    /// The New Session dialog's Cancel or Start, which the window's model carries out: Start
+    /// hands the typing over first, and both let go of the wait for it.
+    pub(crate) dialog: Option<OverlayKey>,
+    /// Tab (`true`) or Shift+Tab inside an overlay: the keyboard goes round the overlay's parts
+    /// and never leaves the layer.
+    pub(crate) tab: Option<(bool, FocusHandle)>,
 }
 
-/// The New Session dialog's Start, as the window's model carries it out.
-pub(crate) type StartDialog = Rc<dyn Fn(&mut Window, &mut App)>;
+/// The New Session dialog's Cancel and Start, as the window's model carries them out.
+pub(crate) type DialogKeys = Rc<dyn Fn(OverlayKey, &mut Window, &mut App)>;
+
+/// How many parts a Tab passes over at most looking for the next one inside the overlay.
+const TAB_STOPS: usize = 64;
 
 impl Gate {
     /// Stops the key (its default too, so no Enter or Space comes back as a click when the key
@@ -145,7 +152,7 @@ impl Gate {
     pub(crate) fn apply(
         self,
         dispatch: &Dispatch,
-        start: &StartDialog,
+        dialog: &DialogKeys,
         window: &mut Window,
         cx: &mut App,
     ) {
@@ -157,13 +164,32 @@ impl Gate {
         if let Some(focus) = self.focus {
             window.focus(&focus, cx);
         }
+        if let Some((forward, layer)) = self.tab {
+            tab_within(&layer, forward, window, cx);
+        }
         if let Some(action) = self.action {
             dispatch(action, window, cx);
         }
-        if self.start {
-            start(window, cx);
+        if let Some(key) = self.dialog {
+            dialog(key, window, cx);
         }
     }
+}
+
+/// Moves the keyboard to the next (`forward`) or the previous part that takes Tab, past the
+/// parts outside `layer`; onto the layer itself when it holds none.
+fn tab_within(layer: &FocusHandle, forward: bool, window: &mut Window, cx: &mut App) {
+    for _ in 0..TAB_STOPS {
+        if forward {
+            window.focus_next(cx);
+        } else {
+            window.focus_prev(cx);
+        }
+        if layer.contains_focused(window, cx) {
+            return;
+        }
+    }
+    window.focus(layer, cx);
 }
 
 /// Puts the gate in front of every key of the window: `gate` reads where the keyboard is when
@@ -171,12 +197,12 @@ impl Gate {
 pub(crate) fn hold_keys(
     gate: impl Fn(&Keystroke, &Window, &App) -> Option<Gate> + 'static,
     dispatch: Dispatch,
-    start: StartDialog,
+    dialog: DialogKeys,
     cx: &mut App,
 ) -> Subscription {
     cx.intercept_keystrokes(move |event, window, cx| {
         if let Some(gate) = gate(&event.keystroke, window, cx) {
-            gate.apply(&dispatch, &start, window, cx);
+            gate.apply(&dispatch, &dialog, window, cx);
         }
     })
 }
@@ -345,7 +371,7 @@ impl FocusMap {
             return Gate::default();
         };
         if let Some(overlay) = self.overlay {
-            return self.overlay_gate(overlay, &key, window, cx);
+            return self.overlay_gate(overlay, keystroke, &key, window, cx);
         }
         let located = self.locate(window, cx);
         let outcome = card_key(&located.scene(), &key);
@@ -418,7 +444,14 @@ impl FocusMap {
     /// any other key goes on to the part of the overlay that has the keyboard. A key whose focus
     /// is behind the overlay does nothing and reaches nothing there; it puts the keyboard back
     /// on the overlay.
-    fn overlay_gate(&self, overlay: Overlay, key: &CardKey, window: &Window, cx: &App) -> Gate {
+    fn overlay_gate(
+        &self,
+        overlay: Overlay,
+        keystroke: &Keystroke,
+        key: &CardKey,
+        window: &Window,
+        cx: &App,
+    ) -> Gate {
         let mut gate = Gate {
             stop: true,
             ..Gate::default()
@@ -430,11 +463,15 @@ impl FocusMap {
         if card_key(&FocusScene::Overlay, key) == CardKeyOutcome::Swallow {
             return gate;
         }
+        // Tab would go round the whole window, behind the overlay too.
+        if keystroke.key == "tab" && !(key.ctrl || key.alt || key.platform) {
+            gate.tab = Some((!key.shift, self.overlay_layer.clone()));
+            return gate;
+        }
         match (overlay_key(key), overlay) {
-            (OverlayKey::Cancel, Overlay::NewSession) => {
-                gate.action = Some(ShellAction::CancelNewSession);
+            (step @ (OverlayKey::Cancel | OverlayKey::Confirm), Overlay::NewSession) => {
+                gate.dialog = Some(step);
             }
-            (OverlayKey::Confirm, Overlay::NewSession) => gate.start = true,
             (OverlayKey::Cancel, Overlay::CloseWindow) => {
                 gate.action = Some(ShellAction::CancelClose);
             }
@@ -492,6 +529,30 @@ impl FocusMap {
             .entry((slot, request_id.to_owned(), question, option))
             .or_insert_with(|| cx.focus_handle().tab_stop(true))
             .clone()
+    }
+
+    /// The Bypass band that just came up takes the keyboard, unless an overlay holds it; it is
+    /// focused again in the next frame, when the band is first drawn.
+    pub(crate) fn take_bypass(&mut self, slot: SlotId, window: &mut Window, cx: &mut App) {
+        if self.overlay.is_some() {
+            return;
+        }
+        let band = self.bypass_handle(slot, cx);
+        window.focus(&band, cx);
+        window.on_next_frame(move |window, cx| window.focus(&band, cx));
+    }
+
+    /// The slot's Bypass band is gone: the keyboard it held goes to the slot's input, or to the
+    /// conversation when it has none.
+    pub(crate) fn leave_bypass(&self, slot: SlotId, window: &mut Window, cx: &mut App) {
+        let Some(band) = self.bypass.get(&slot) else {
+            return;
+        };
+        if !band.is_focused(window) {
+            return;
+        }
+        let to = self.composers.get(&slot).unwrap_or(&self.thread).clone();
+        window.focus(&to, cx);
     }
 
     /// The focus of the slot's Bypass band, made the first time it is asked for.
@@ -639,10 +700,10 @@ pub(crate) fn to_card_key(keystroke: &Keystroke) -> Option<CardKey> {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::{Cell, RefCell};
+    use std::cell::RefCell;
     use std::rc::Rc;
 
-    use closta_shell::card_keys::{CardKey, Key};
+    use closta_shell::card_keys::{CardKey, Key, OverlayKey};
     use closta_shell::slot::SlotId;
     use closta_shell::state::{Overlay, ShellAction};
     use gpui_kit::component::input::{Input, InputState, TextareaState};
@@ -659,27 +720,34 @@ mod tests {
     use crate::composer::{Dispatch, new_input};
 
     type Acted = Rc<RefCell<Vec<ShellAction>>>;
+    type DialogKeyed = Rc<RefCell<Vec<OverlayKey>>>;
 
-    /// A window with a slot's input behind an overlay's layer that holds a field, and the
-    /// window's gate.
+    /// A window with a slot's input and a part that takes Tab behind an overlay's layer that
+    /// holds a field and a part that takes Tab, and the window's gate.
     struct Behind {
         focus: FocusMap,
         composer: Entity<TextareaState>,
         field: Entity<InputState>,
+        stops: [FocusHandle; 2],
         _changes: Subscription,
         _keys: Subscription,
     }
 
     impl Render for Behind {
         fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            let stop = |name: &'static str, handle: &FocusHandle| {
+                div().id(name).track_focus(handle).h(px(20.)).w_full()
+            };
             div()
                 .size_full()
+                .child(stop("behind-stop", &self.stops[0]))
                 .child(gpui_kit::component::input::Textarea::new(&self.composer))
                 .child(
                     div()
                         .id("layer")
                         .track_focus(&self.focus.overlay_layer)
-                        .child(Input::new(&self.field)),
+                        .child(Input::new(&self.field))
+                        .child(stop("layer-stop", &self.stops[1])),
                 )
         }
     }
@@ -688,15 +756,15 @@ mod tests {
         SlotId::numbered(1)
     }
 
-    /// Opens the window with the overlay up; the dialog's Start is counted.
+    /// Opens the window with the overlay up; the dialog's Cancel and Start are kept.
     fn open_behind(
         cx: &mut TestAppContext,
-    ) -> (AnyWindowHandle, Entity<Behind>, Acted, Rc<Cell<usize>>) {
+    ) -> (AnyWindowHandle, Entity<Behind>, Acted, DialogKeyed) {
         cx.update(gpui_kit::init);
         let acted = Acted::default();
         let kept = Rc::clone(&acted);
         let dispatch: Dispatch = Rc::new(move |action, _, _| kept.borrow_mut().push(action));
-        let started = Rc::new(Cell::new(0));
+        let started = DialogKeyed::default();
         let starts = Rc::clone(&started);
         let (handle, host) = cx
             .update(|cx| {
@@ -719,7 +787,7 @@ mod tests {
                                 Some(host.read(cx).focus.gate(keystroke, window, cx))
                             },
                             dispatch,
-                            Rc::new(move |_, _| starts.set(starts.get() + 1)),
+                            Rc::new(move |key, _, _| starts.borrow_mut().push(key)),
                             cx,
                         );
                         let mut focus = FocusMap::new(cx);
@@ -732,6 +800,10 @@ mod tests {
                             focus,
                             composer,
                             field,
+                            stops: [
+                                cx.focus_handle().tab_stop(true),
+                                cx.focus_handle().tab_stop(true),
+                            ],
                             _changes: changes,
                             _keys: keys,
                         }
@@ -769,7 +841,7 @@ mod tests {
             .filter(|action| matches!(action, ShellAction::Send { .. }))
             .count();
         assert_eq!(sends, 0);
-        assert_eq!(started.get(), 0);
+        assert!(started.borrow().is_empty(), "the dialog took a key");
         let layer = host.read_with(cx, |host, _| host.focus.overlay_layer.clone());
         let back = cx
             .update_window(handle, |_, window, cx| layer.contains_focused(window, cx))
@@ -809,8 +881,54 @@ mod tests {
         cx.update_window(handle, |_, window, cx| window.press("escape", cx))
             .expect("press escape");
         cx.run_until_parked();
-        assert_eq!(started.get(), 1);
-        assert_eq!(*acted.borrow(), [ShellAction::CancelNewSession]);
+        assert_eq!(*started.borrow(), [OverlayKey::Confirm, OverlayKey::Cancel]);
+        assert!(
+            acted.borrow().is_empty(),
+            "{} actions",
+            acted.borrow().len()
+        );
+    }
+
+    #[gpui_kit::test]
+    fn tab_goes_round_the_overlay_and_never_behind_it(cx: &mut TestAppContext) {
+        let (handle, host, acted, _) = open_behind(cx);
+        let (field, layer) = host.read_with(cx, |host, cx| {
+            (
+                host.field.read(cx).focus_handle(cx),
+                host.focus.overlay_layer.clone(),
+            )
+        });
+        focus_on(cx, handle, &field);
+        let inside = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| layer.contains_focused(window, cx))
+                .expect("read the focus")
+        };
+        let mut moved = false;
+        for key in [
+            "tab",
+            "tab",
+            "tab",
+            "tab",
+            "shift-tab",
+            "shift-tab",
+            "shift-tab",
+        ] {
+            cx.update_window(handle, |_, window, cx| window.press(key, cx))
+                .expect("press tab");
+            cx.run_until_parked();
+            assert!(inside(cx), "{key} left the overlay");
+            moved |= !cx
+                .update_window(handle, |_, window, _| field.is_focused(window))
+                .expect("read the focus");
+        }
+        assert!(moved, "Tab moved the keyboard inside the overlay");
+        let text = host.read_with(cx, |host, cx| host.composer.read(cx).value().to_string());
+        assert_eq!(text, "");
+        assert!(
+            acted.borrow().is_empty(),
+            "{} actions",
+            acted.borrow().len()
+        );
     }
 
     #[gpui_kit::test]

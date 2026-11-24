@@ -38,7 +38,8 @@ use crate::slot::{
 };
 use crate::watch::SlotWatch;
 
-const BYPASS_MODE: &str = "bypassPermissions";
+/// The mode that runs every tool without asking.
+pub const BYPASS_MODE: &str = "bypassPermissions";
 
 /// What a click or a key asks of the shell.
 #[derive(Clone, PartialEq, Debug)]

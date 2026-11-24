@@ -121,7 +121,8 @@ impl ShellModel {
         self.act(ShellAction::StartSession { folder }, window, cx);
     }
 
-    fn cancel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    /// Closes the dialog and lets go of the wait for the typing.
+    pub(crate) fn cancel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.folder_typing = None;
         self.act(ShellAction::CancelNewSession, window, cx);
     }
@@ -320,7 +321,7 @@ pub(crate) fn over_window(
 #[cfg(test)]
 mod tests {
     use closta_shell::state::ShellAction;
-    use gpui_kit::{Focusable as _, TestAppContext};
+    use gpui_kit::{AppContext as _, Focusable as _, TestAppContext};
 
     use crate::test_window::{act, focused, input, open, press};
 
@@ -355,8 +356,31 @@ mod tests {
         press(cx, handle, "escape");
         assert!(model.read_with(cx, |model, _| model.shell.new_session().is_none()));
         act(cx, handle, &model, ShellAction::OpenNewSession);
+        // Typing not yet settled is let go with the dialog.
+        input(cx, handle, "C:\\y");
         press(cx, handle, "escape");
-        assert!(model.read_with(cx, |model, _| model.shell.new_session().is_none()));
+        let (open, typing) = model.read_with(cx, |model, _| {
+            (
+                model.shell.new_session().is_some(),
+                model.folder_typing.is_some(),
+            )
+        });
+        assert_eq!((open, typing), (false, false));
+    }
+
+    #[gpui_kit::test]
+    fn tab_goes_round_the_dialog_and_never_behind_it(cx: &mut TestAppContext) {
+        let (handle, model, _) = open(cx, 1);
+        act(cx, handle, &model, ShellAction::OpenNewSession);
+        input(cx, handle, "C:\\x");
+        let layer = model.read_with(cx, |model, _| model.focus.overlay_layer.clone());
+        for key in ["tab"; 6].into_iter().chain(["shift-tab"; 6]) {
+            press(cx, handle, key);
+            let inside = cx
+                .update_window(handle, |_, window, cx| layer.contains_focused(window, cx))
+                .expect("read the focus");
+            assert!(inside, "{key} left the dialog");
+        }
     }
 
     #[gpui_kit::test]

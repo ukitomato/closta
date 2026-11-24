@@ -35,8 +35,6 @@ impl ShellModel {
             probing.closing();
         }
         let run = self.shell.close_all();
-        // The window is closing from here: the keys behind stay held.
-        self.focus.overlay = self.shell.overlay();
         let closing =
             cx.background_executor()
                 .spawn(finish_closing(run, CLOSE_LIMIT, DESTROY_GRACE));
@@ -173,7 +171,7 @@ pub(crate) fn slot_close_layer(
 mod tests {
     use closta_shell::closing::CloseStage;
     use closta_shell::state::ShellAction;
-    use gpui_kit::TestAppContext;
+    use gpui_kit::{AppContext as _, TestAppContext};
 
     use crate::test_window::{act, focus_on, focused, open, press};
 
@@ -198,8 +196,21 @@ mod tests {
         );
 
         act(cx, handle, &model, ShellAction::RequestClose);
+        let layer = model.read_with(cx, |model, _| model.focus.overlay_layer.clone());
+        for key in ["tab"; 4].into_iter().chain(["shift-tab"; 4]) {
+            press(cx, handle, key);
+            let inside = cx
+                .update_window(handle, |_, window, cx| layer.contains_focused(window, cx))
+                .expect("read the focus");
+            assert!(inside, "{key} left the question");
+        }
+        // Tab may have left the keyboard on Close: Enter still confirms, it never clicks Cancel.
         press(cx, handle, "enter");
         let stage = model.read_with(cx, |model, _| *model.shell.close_stage());
         assert_eq!(stage, CloseStage::Closing);
+        assert!(
+            focused(cx, handle, &layer),
+            "the closing layer has the keyboard, not the Cancel no longer drawn"
+        );
     }
 }

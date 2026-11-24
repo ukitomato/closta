@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 use closta_presenter::cards::ThreadCard;
 use closta_presenter::rows::ThreadRow;
-use closta_shell::card_keys::{card_choices, card_kind};
+use closta_shell::card_keys::{OverlayKey, card_choices, card_kind};
 use closta_shell::rows::{RowChange, ScrollDirection, kept, list_top};
 use closta_shell::slot::{SlotId, SlotLaunch};
 use closta_shell::state::{Acted, FocusTarget, FolderCheck, Overlay, ShellAction, ShellState};
@@ -158,15 +158,19 @@ impl ShellModel {
     /// by the shell's card table, before the focused part's bindings run.
     fn hold_keys(cx: &mut Context<Self>) -> Subscription {
         let this = cx.weak_entity();
-        let starter = cx.weak_entity();
+        let dialog = cx.weak_entity();
         focus::hold_keys(
             move |keystroke, window, cx| {
                 let model = this.upgrade()?;
                 Some(model.read(cx).focus.gate(keystroke, window, cx))
             },
             Self::dispatch(cx),
-            Rc::new(move |window, cx| {
-                _ = starter.update(cx, |model, cx| model.start(window, cx));
+            Rc::new(move |key, window, cx| {
+                _ = dialog.update(cx, |model, cx| match key {
+                    OverlayKey::Cancel => model.cancel(window, cx),
+                    OverlayKey::Confirm => model.start(window, cx),
+                    OverlayKey::Pass => {}
+                });
             }),
             cx,
         )
@@ -236,6 +240,10 @@ impl ShellModel {
         }
         self.show_title(window);
         self.sync_focus(window.focused(cx), window, cx);
+        // A band the session took down (a restart, a mode it switched to) gives the keyboard back.
+        if !self.shell.bypass_asking(slot) {
+            self.focus.leave_bypass(slot, window, cx);
+        }
         if refresh.removed {
             self.forget(slot, window, cx);
             cx.notify();
@@ -667,17 +675,10 @@ impl ShellModel {
     /// The Bypass band takes the keyboard while it asks; once it is gone, the keyboard it held
     /// goes back to the slot's input.
     fn focus_bypass(&mut self, slot: SlotId, window: &mut Window, cx: &mut Context<Self>) {
-        if self.focus.overlay.is_some() {
-            return;
-        }
-        let band = self.focus.bypass_handle(slot, cx);
         if self.shell.bypass_asking(slot) {
-            window.focus(&band, cx);
-            window.on_next_frame(move |window, cx| window.focus(&band, cx));
-        } else if band.is_focused(window)
-            && let Some(input) = self.focus.composers.get(&slot)
-        {
-            window.focus(input, cx);
+            self.focus.take_bypass(slot, window, cx);
+        } else {
+            self.focus.leave_bypass(slot, window, cx);
         }
     }
 

@@ -642,7 +642,7 @@ mod tests {
                                 Some(host.read(cx).focus.gate(keystroke, window, cx))
                             },
                             Rc::clone(&dispatch),
-                            Rc::new(|_, _| {}),
+                            Rc::new(|_, _, _| {}),
                             cx,
                         );
                         let mut focus = FocusMap::new(cx);
