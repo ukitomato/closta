@@ -318,6 +318,28 @@ fn closing_the_window_counts_a_waiting_slot_as_working() {
 }
 
 #[test]
+fn closing_the_window_does_not_count_a_slot_already_closing() {
+    drive(|harness| async move {
+        harness.stubborn();
+        let mut shell = harness.shell();
+        let (launch, runtime) = harness.launch("slot");
+        let slot = shell.open(launch);
+        let runtime = runtime.recv().await.unwrap();
+        running(&runtime).await;
+        let control = harness.control(0).await;
+        control.emit(&support::can_use_tool("R1", "ls"));
+        waits_on(&runtime, 1).await;
+        refresh_at(&mut shell, slot, 0);
+        shell.act(ShellAction::CloseSlot { slot });
+        shell.act(ShellAction::ConfirmCloseSlot);
+        assert!(shell.slots()[0].closing, "its run has not returned");
+        let acted = shell.act(ShellAction::RequestClose);
+        assert_eq!(shell.close_stage(), &CloseStage::Closing);
+        assert!(acted.close);
+    });
+}
+
+#[test]
 fn a_window_close_replaces_the_slot_close_question() {
     drive(|harness| async move {
         let mut shell = harness.shell();

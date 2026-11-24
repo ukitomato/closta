@@ -307,9 +307,11 @@ struct Slot {
 }
 
 impl Slot {
-    /// Whether a running session works or waits on an approval.
+    /// Whether a running session works or waits on an approval; one told to end does neither.
     fn is_working(&self) -> bool {
-        matches!(self.status, SessionStatus::Running { .. }) && (self.running || self.waiting)
+        !self.closing
+            && matches!(self.status, SessionStatus::Running { .. })
+            && (self.running || self.waiting)
     }
 
     fn is_live(&self) -> bool {
