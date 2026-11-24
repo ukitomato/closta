@@ -44,10 +44,21 @@ async fn quiet() {
     Timer::after(Duration::from_millis(150)).await;
 }
 
+/// The list drew the slot's row where the shell puts it now (first when it has none).
 fn list_shown(shell: &mut ShellState, slot: SlotId, id: &str, now_ms: i64) {
+    let index = shell
+        .needs_you()
+        .iter()
+        .position(|row| row.slot == slot)
+        .unwrap_or(0);
+    list_shown_at(shell, slot, id, index, now_ms);
+}
+
+fn list_shown_at(shell: &mut ShellState, slot: SlotId, id: &str, index: usize, now_ms: i64) {
     shell.act(ShellAction::ListShown {
         slot,
         request_id: id.to_owned(),
+        index,
         now_ms,
     });
 }
@@ -391,6 +402,7 @@ fn a_restart_drops_the_old_waits_and_their_answers() {
             slot,
             request_id: SANDBOX_REQUEST.to_owned(),
             index: 0,
+            now_ms: 100_000,
         });
         quiet().await;
         assert_eq!(old.stdin_lines().len(), before);
@@ -449,10 +461,12 @@ fn behind(shell: &mut ShellState, slot: SlotId) {
             slot,
             request_id: id.clone(),
             index: 0,
+            now_ms: 100_000,
         },
         ShellAction::DenyCard {
             slot,
             request_id: id.clone(),
+            now_ms: 100_000,
         },
         ShellAction::AllowFromList {
             slot,
@@ -487,10 +501,12 @@ fn behind(shell: &mut ShellState, slot: SlotId) {
         ShellAction::SendNote {
             slot,
             request_id: SANDBOX_REQUEST.to_owned(),
+            now_ms: 100_000,
         },
         ShellAction::AnswerQuestion {
             slot,
             request_id: SANDBOX_REQUEST.to_owned(),
+            now_ms: 100_000,
         },
         ShellAction::EditOther {
             slot,
@@ -658,5 +674,124 @@ fn deny_from_the_list_needs_a_row_the_list_may_allow() {
                 .card_state(slot, QUESTION_REQUEST)
                 .is_none_or(|it| !it.note_open)
         );
+    });
+}
+
+/// One slot whose process asks permission `request`, refreshed at `now_ms`; `n` is its process.
+async fn one_wait(
+    shell: &mut ShellState,
+    harness: &Harness,
+    request: &str,
+    n: usize,
+    now_ms: i64,
+) -> (SlotId, LiveControl, SessionRuntime) {
+    let (launch, runtime) = harness.launch("slot");
+    let slot = shell.open(launch);
+    let runtime = runtime.recv().await.unwrap();
+    running(&runtime).await;
+    let control = harness.control(n).await;
+    control.emit(&can_use_tool(request, "ls"));
+    waits_on(&runtime, 1).await;
+    refresh(shell, slot, now_ms);
+    (slot, control, runtime)
+}
+
+fn rows_of(shell: &ShellState) -> Vec<(SlotId, Option<String>)> {
+    shell
+        .needs_you()
+        .iter()
+        .map(|row| (row.slot, row.request_id().map(str::to_owned)))
+        .collect()
+}
+
+#[test]
+fn a_row_that_moves_up_into_an_answered_rows_place_waits_again() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (upper, one, one_runtime) = one_wait(&mut shell, &harness, "A1", 0, 0).await;
+        let (lower, two, _) = one_wait(&mut shell, &harness, "B1", 1, 10).await;
+        assert_eq!(
+            rows_of(&shell),
+            [
+                (upper, Some("A1".to_owned())),
+                (lower, Some("B1".to_owned()))
+            ]
+        );
+        list_shown_at(&mut shell, upper, "A1", 0, 0);
+        list_shown_at(&mut shell, lower, "B1", 1, 0);
+        allow_from_list(&mut shell, upper, "A1", 600);
+        until(|| answers_of(one.stdin_lines()).len() == 1).await;
+        until(|| one_runtime.view().conversation.pending_approvals.is_empty()).await;
+        refresh(&mut shell, upper, 700);
+        assert_eq!(rows_of(&shell), [(lower, Some("B1".to_owned()))]);
+
+        // The second press of a double click lands where the answered row was: on B1 now.
+        allow_from_list(&mut shell, lower, "B1", 750);
+        quiet().await;
+        assert!(answers_of(two.stdin_lines()).is_empty());
+        // Once drawn in its new place, it waits its own half second there.
+        list_shown_at(&mut shell, lower, "B1", 0, 800);
+        allow_from_list(&mut shell, lower, "B1", 1299);
+        quiet().await;
+        assert!(answers_of(two.stdin_lines()).is_empty());
+        allow_from_list(&mut shell, lower, "B1", 1300);
+        until(|| answers_of(two.stdin_lines()).len() == 1).await;
+        assert_eq!(two.refused_writes(), 0);
+    });
+}
+
+#[test]
+fn a_row_moved_by_its_neighbours_next_wait_waits_again() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (upper, one, one_runtime) = one_wait(&mut shell, &harness, "A1", 0, 0).await;
+        let (lower, two, _) = one_wait(&mut shell, &harness, "B1", 1, 10).await;
+        one.emit(&can_use_tool("A2", "pwd"));
+        waits_on(&one_runtime, 2).await;
+        refresh(&mut shell, upper, 20);
+        list_shown_at(&mut shell, upper, "A1", 0, 0);
+        list_shown_at(&mut shell, lower, "B1", 1, 0);
+        allow_from_list(&mut shell, upper, "A1", 600);
+        until(|| answers_of(one.stdin_lines()).len() == 1).await;
+        until(|| one_runtime.view().conversation.pending_approvals.len() == 1).await;
+        refresh(&mut shell, upper, 700);
+        // The upper slot now shows its next wait, seen later: it goes below.
+        assert_eq!(
+            rows_of(&shell),
+            [
+                (lower, Some("B1".to_owned())),
+                (upper, Some("A2".to_owned()))
+            ]
+        );
+        allow_from_list(&mut shell, lower, "B1", 750);
+        allow_from_list(&mut shell, upper, "A2", 750);
+        quiet().await;
+        assert!(answers_of(two.stdin_lines()).is_empty());
+        assert_eq!(answers_of(one.stdin_lines()).len(), 1);
+        list_shown_at(&mut shell, lower, "B1", 0, 800);
+        allow_from_list(&mut shell, lower, "B1", 1300);
+        until(|| answers_of(two.stdin_lines()).len() == 1).await;
+    });
+}
+
+#[test]
+fn a_row_drawn_in_another_place_than_the_lists_is_not_noted() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (upper, _, _) = one_wait(&mut shell, &harness, "A1", 0, 0).await;
+        let (lower, two, _) = one_wait(&mut shell, &harness, "B1", 1, 10).await;
+        list_shown_at(&mut shell, lower, "B1", 0, 0);
+        assert!(!shell.list_shown(lower, "B1"));
+        list_shown_at(&mut shell, upper, "A1", 1, 0);
+        assert!(!shell.list_shown(upper, "A1"));
+        allow_from_list(&mut shell, lower, "B1", 5000);
+        quiet().await;
+        assert!(answers_of(two.stdin_lines()).is_empty());
+        list_shown_at(&mut shell, lower, "B1", 1, 6000);
+        assert_eq!(shell.list_shown_at(lower, "B1"), Some(1));
+        // The same place again keeps the first time.
+        list_shown_at(&mut shell, lower, "B1", 1, 9000);
+        allow_from_list(&mut shell, lower, "B1", 6500);
+        until(|| answers_of(two.stdin_lines()).len() == 1).await;
     });
 }

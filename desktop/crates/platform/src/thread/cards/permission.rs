@@ -15,7 +15,7 @@ use gpui_kit::component::input::Input;
 use gpui_kit::component::{ActiveTheme as _, Selectable as _, Sizable as _};
 use gpui_kit::*;
 
-use super::{CardParts, card_button, heading, mono};
+use super::{CardParts, answer_button, card_button, heading, mono};
 use crate::composer::Dispatch;
 
 /// The most rows of a diff the card shows before the diff scrolls.
@@ -96,37 +96,37 @@ pub(super) fn body(
     }
 
     let offers = offers_destination(&card.suggestions);
-    let choose = |index: usize| ShellAction::ChooseCard {
-        slot,
-        request_id: request_id.clone(),
-        index,
-    };
     let button = |name: &str, label: SharedString, action: ShellAction| {
         card_button(parts, request_id, name, label, action, dispatch)
     };
-    let choice = |index: usize| format!("choice-{index}");
-    let mut buttons = vec![
-        button(&choice(0), copy::ALLOW.into(), choose(0))
-            .primary()
-            .into_any_element(),
-    ];
+    // The `index`th answer, with the time its button was pressed.
+    let choose = |index: usize, label: SharedString| {
+        let id = request_id.clone();
+        let answer = move |now_ms| ShellAction::ChooseCard {
+            slot,
+            request_id: id.clone(),
+            index,
+            now_ms,
+        };
+        answer_button(
+            parts,
+            request_id,
+            &format!("choice-{index}"),
+            label,
+            answer,
+            dispatch,
+        )
+    };
+    let mut buttons = vec![choose(0, copy::ALLOW.into()).primary().into_any_element()];
     if !card.suggestions.is_empty() {
         let keep = copy::keep_label(offers, state.destination.as_deref());
-        buttons.push(
-            button(&choice(1), keep.into(), choose(1))
-                .outline()
-                .into_any_element(),
-        );
+        buttons.push(choose(1, keep.into()).outline().into_any_element());
     }
     let deny = choices - 1;
     buttons.push(
-        button(
-            &choice(deny),
-            copy::deny_button(choices).into(),
-            choose(deny),
-        )
-        .outline()
-        .into_any_element(),
+        choose(deny, copy::deny_button(choices).into())
+            .outline()
+            .into_any_element(),
     );
     buttons.push(
         button(
@@ -186,13 +186,20 @@ pub(super) fn body(
                     ),
                 )
                 .child(
-                    button(
+                    answer_button(
+                        parts,
+                        request_id,
                         "note-send",
-                        copy::DENY_SEND.into(),
-                        ShellAction::SendNote {
-                            slot,
-                            request_id: request_id.clone(),
+                        copy::DENY_SEND,
+                        {
+                            let id = request_id.clone();
+                            move |now_ms| ShellAction::SendNote {
+                                slot,
+                                request_id: id.clone(),
+                                now_ms,
+                            }
                         },
+                        dispatch,
                     )
                     .outline(),
                 )

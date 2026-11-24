@@ -6,7 +6,7 @@ use std::fmt;
 use closta_presenter::sessions::groups::{
     AlertChange, OpenOnlyAlert, PermissionAlert, SessionAlert,
 };
-use closta_presenter::sessions::window::{ShownAsk, accepts_answer, next_waiting};
+use closta_presenter::sessions::window::{ANSWER_DELAY_MS, ShownAsk, accepts_answer, next_waiting};
 
 use crate::slot::SlotId;
 
@@ -162,6 +162,12 @@ pub fn list_accepts(
     accepts_answer(shown.as_ref(), request_id, still_waiting, now_ms)
 }
 
+/// A card in the conversation takes an answer half a second after it was first drawn
+/// (`shown_ms`); one never drawn, or a clock that went back, takes none.
+pub fn card_accepts(shown_ms: Option<i64>, now_ms: i64) -> bool {
+    shown_ms.is_some_and(|since_ms| now_ms.saturating_sub(since_ms) >= ANSWER_DELAY_MS)
+}
+
 /// A change calls for the user's eye: something new waits, or a slot has just failed.
 pub fn attention(change: &AlertChange, newly_failed: bool) -> bool {
     !change.raised.is_empty() || newly_failed
@@ -295,6 +301,14 @@ mod tests {
         assert!(!list_accepts(Some(("r1", 1000)), "r1", &waiting, 900));
         let both = set(&["r1", "r2"]);
         assert!(!list_accepts(Some(("r1", 0)), "r2", &both, 1000));
+    }
+
+    #[test]
+    fn a_card_takes_an_answer_only_half_a_second_after_it_was_drawn() {
+        assert!(!card_accepts(None, 9000));
+        assert!(!card_accepts(Some(1000), 1499));
+        assert!(card_accepts(Some(1000), 1500));
+        assert!(!card_accepts(Some(1000), 900));
     }
 
     #[test]

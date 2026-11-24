@@ -14,7 +14,7 @@ use gpui_kit::component::{ActiveTheme as _, Disableable as _};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
-use super::{CardParts, card_button, heading};
+use super::{CardParts, answer_button, heading};
 use crate::composer::Dispatch;
 
 /// The tool a question card answers.
@@ -141,14 +141,18 @@ pub(super) fn body(
             .gap_2()
             .justify_end()
             .child(
-                card_button(
+                answer_button(
                     parts,
                     request_id,
                     "answer",
                     copy::QUESTION_ANSWER,
-                    ShellAction::AnswerQuestion {
-                        slot,
-                        request_id: request_id.clone(),
+                    {
+                        let request_id = request_id.clone();
+                        move |now_ms| ShellAction::AnswerQuestion {
+                            slot,
+                            request_id: request_id.clone(),
+                            now_ms,
+                        }
                     },
                     dispatch,
                 )
@@ -156,14 +160,18 @@ pub(super) fn body(
                 .disabled(!complete),
             )
             .child(
-                card_button(
+                answer_button(
                     parts,
                     request_id,
                     "skip",
                     copy::QUESTION_SKIP,
-                    ShellAction::DenyCard {
-                        slot,
-                        request_id: request_id.clone(),
+                    {
+                        let request_id = request_id.clone();
+                        move |now_ms| ShellAction::DenyCard {
+                            slot,
+                            request_id: request_id.clone(),
+                            now_ms,
+                        }
                     },
                     dispatch,
                 )

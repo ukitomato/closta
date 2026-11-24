@@ -46,8 +46,9 @@ impl fmt::Debug for OptionPicks {
 pub struct CardState {
     /// When the card in the conversation was first drawn.
     pub shown_ms: Option<i64>,
-    /// When its row in the needs-you list was first drawn.
-    pub list_shown_ms: Option<i64>,
+    /// Where its row in the needs-you list was drawn (its index among the rows) and when it was
+    /// first drawn there.
+    pub list_shown: Option<(usize, i64)>,
     pub note_open: bool,
     pub note: String,
     /// Where an Always Allow keeps its rules; `None` for a card with nothing to keep.
@@ -61,7 +62,7 @@ impl fmt::Debug for CardState {
             f,
             "CardState(shown {:?}, list {:?}, note {} {} bytes, destination {:?}, {} picks)",
             self.shown_ms,
-            self.list_shown_ms,
+            self.list_shown,
             if self.note_open { "open" } else { "closed" },
             self.note.len(),
             self.destination,

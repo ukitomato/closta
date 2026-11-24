@@ -28,6 +28,7 @@ use gpui_kit::component::{ActiveTheme as _, Sizable as _};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
+use crate::clock::WallClock;
 use crate::composer::Dispatch;
 use crate::focus::{CardField, FocusMap};
 use crate::model::ShellModel;
@@ -111,6 +112,8 @@ pub(crate) struct CardParts {
     plan: Option<Entity<TextViewState>>,
     /// The buttons' focus, by name.
     buttons: HashMap<String, FocusHandle>,
+    /// What an answering button reads the time it was pressed from.
+    clock: WallClock,
 }
 
 /// The names of a card's buttons; a button's id is `card-<request id>-<name>`.
@@ -144,6 +147,7 @@ pub(crate) fn prepare(
     card: &ThreadCard,
     state: &CardState,
     dispatch: &Dispatch,
+    clock: WallClock,
     window: &mut Window,
     cx: &mut App,
 ) -> CardParts {
@@ -158,6 +162,7 @@ pub(crate) fn prepare(
         diff: None,
         plan: None,
         buttons: HashMap::new(),
+        clock,
     };
     for name in button_names(card) {
         let handle = focus.button_handle(slot, request_id, &name, cx);
@@ -172,6 +177,7 @@ pub(crate) fn prepare(
                 placeholder,
                 &state.note,
                 dispatch,
+                clock,
                 window,
                 cx,
             )
@@ -208,6 +214,7 @@ pub(crate) fn prepare(
                     copy::OTHER_PLACEHOLDER,
                     other,
                     dispatch,
+                    clock,
                     window,
                     cx,
                 ));
@@ -335,6 +342,7 @@ pub(in crate::thread) fn card_row(
             &row.card,
             &state,
             &dispatch,
+            model.clock,
             window,
             cx,
         );
@@ -367,7 +375,28 @@ fn card_button(
     action: ShellAction,
     dispatch: &Dispatch,
 ) -> Button {
+    answer_button(
+        parts,
+        request_id,
+        name,
+        label,
+        move |_| action.clone(),
+        dispatch,
+    )
+}
+
+/// A card button that answers: the action is made with the time it was pressed, which the
+/// shell holds against when the card was first drawn.
+fn answer_button(
+    parts: &CardParts,
+    request_id: &str,
+    name: &str,
+    label: impl Into<SharedString>,
+    answer: impl Fn(i64) -> ShellAction + 'static,
+    dispatch: &Dispatch,
+) -> Button {
     let dispatch = dispatch.clone();
+    let clock = parts.clock;
     let id = SharedString::from(format!("card-{request_id}-{name}"));
     let button = match parts.buttons.get(name) {
         Some(handle) => Button::new(id.clone()).track_focus(handle),
@@ -378,7 +407,9 @@ fn card_button(
         .tab_stop(false)
         .small()
         .label(label)
-        .on_click(move |_: &ClickEvent, window, cx| dispatch(action.clone(), window, cx))
+        .on_click(move |_: &ClickEvent, window, cx| {
+            dispatch(answer(clock.now_ms()), window, cx);
+        })
 }
 
 /// The card's title on its own line, with the tool's name faint after it.
@@ -421,9 +452,9 @@ mod tests {
     // Named one by one: the glob would bring in a `test` that hides the built-in attribute.
     use gpui_kit::{
         AnyWindowHandle, AppContext as _, Bounds, Context, Entity, FocusHandle, Focusable as _,
-        InteractiveElement as _, IntoElement, ParentElement as _, Point, Render, Styled as _,
-        Subscription, TestAppContext, Window, WindowBounds, WindowOptions, div, open_window, px,
-        size,
+        InteractiveElement as _, IntoElement, ParentElement as _, Point, Render, ScrollHandle,
+        Styled as _, Subscription, TestAppContext, Window, WindowBounds, WindowOptions, div,
+        open_window, px, size,
     };
 
     use closta_presenter::sessions::groups::PermissionAlert;
@@ -557,9 +588,11 @@ mod tests {
         composer: Option<Entity<TextareaState>>,
         /// The needs-you list's rows, drawn over the conversation.
         list: Vec<NeedsYouRow>,
+        scroll: ScrollHandle,
         before: FocusHandle,
         after: FocusHandle,
         dispatch: Dispatch,
+        clock: WallClock,
         _keys: Subscription,
     }
 
@@ -579,6 +612,7 @@ mod tests {
                     card,
                     state,
                     &self.dispatch,
+                    self.clock,
                     window,
                     cx,
                 );
@@ -598,8 +632,9 @@ mod tests {
             let list = needs_you_list(
                 &self.list,
                 &self.focus.list,
+                &self.scroll,
                 self.dispatch.clone(),
-                WallClock::start(),
+                self.clock,
                 cx,
             );
             gpui_kit::base::v_flex()
@@ -639,7 +674,8 @@ mod tests {
                         let keys = focus::hold_keys(
                             move |keystroke, window, cx| {
                                 let host = this.upgrade()?;
-                                Some(host.read(cx).focus.gate(keystroke, window, cx))
+                                let host = host.read(cx);
+                                Some(host.focus.gate(keystroke, host.clock.now_ms(), window, cx))
                             },
                             Rc::clone(&dispatch),
                             Rc::new(|_, _, _| {}),
@@ -658,9 +694,11 @@ mod tests {
                             cards,
                             composer,
                             list: vec![listed()],
+                            scroll: ScrollHandle::new(),
                             before: cx.focus_handle().tab_stop(true),
                             after: cx.focus_handle().tab_stop(true),
                             dispatch,
+                            clock: WallClock::start(),
                             _keys: keys,
                         }
                     })
@@ -732,15 +770,23 @@ mod tests {
         let (handle, host, acted) = open(cx, vec![waiting(permission("r1"))], false);
         let card = card_focus(cx, &host, "r1");
         focus_on(cx, handle, &card);
+        let before = host.read_with(cx, |host, _| host.clock.now_ms());
         press(cx, handle, "1");
-        assert_eq!(
-            *acted.borrow(),
-            [ShellAction::ChooseCard {
-                slot: slot(),
-                request_id: "r1".to_owned(),
+        let after = host.read_with(cx, |host, _| host.clock.now_ms());
+        let acted = acted.borrow();
+        let [
+            ShellAction::ChooseCard {
+                slot: chosen,
+                request_id,
                 index: 0,
-            }]
-        );
+                now_ms,
+            },
+        ] = acted.as_slice()
+        else {
+            panic!("one Choose of the first button, got {}", acted.len());
+        };
+        assert_eq!((*chosen, request_id.as_str()), (slot(), "r1"));
+        assert!((before..=after).contains(now_ms), "the time it was pressed");
     }
 
     #[gpui_kit::test]
@@ -802,19 +848,20 @@ mod tests {
             .expect("read the focus");
         assert!(on_card, "the keyboard went back to the card");
         press(cx, handle, "escape");
-        let id = || "r1".to_owned();
+        let acted = acted.borrow();
+        assert_eq!(acted.len(), 2);
         assert_eq!(
-            *acted.borrow(),
-            [
-                ShellAction::CloseNote {
-                    slot: slot(),
-                    request_id: id(),
-                },
-                ShellAction::DenyCard {
-                    slot: slot(),
-                    request_id: id(),
-                },
-            ]
+            acted[0],
+            ShellAction::CloseNote {
+                slot: slot(),
+                request_id: "r1".to_owned(),
+            }
+        );
+        assert!(
+            matches!(&acted[1], ShellAction::DenyCard { slot: at, request_id, now_ms }
+                if *at == slot() && request_id == "r1" && *now_ms > 0),
+            "{:?}",
+            acted[1]
         );
     }
 

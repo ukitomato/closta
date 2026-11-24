@@ -57,6 +57,8 @@ pub(crate) struct ShellModel {
     pub(crate) panes: Entity<ResizableState>,
     /// The one clock the shell is handed times from.
     pub(crate) clock: WallClock,
+    /// Where the needs-you list is scrolled to and where its rows were laid out.
+    pub(crate) needs_you_scroll: ScrollHandle,
     /// Where the keyboard can be: the inputs, the cards, the list, the conversation and the
     /// failure band.
     pub(crate) focus: FocusMap,
@@ -101,6 +103,7 @@ impl ShellModel {
             folder_typing: None,
             panes: cx.new(|_| ResizableState::default()),
             clock: WallClock::start(),
+            needs_you_scroll: ScrollHandle::new(),
             focus: FocusMap::new(cx),
             card_cache: CardCache::default(),
             focus_before_overlay: None,
@@ -162,7 +165,12 @@ impl ShellModel {
         focus::hold_keys(
             move |keystroke, window, cx| {
                 let model = this.upgrade()?;
-                Some(model.read(cx).focus.gate(keystroke, window, cx))
+                let model = model.read(cx);
+                Some(
+                    model
+                        .focus
+                        .gate(keystroke, model.clock.now_ms(), window, cx),
+                )
             },
             Self::dispatch(cx),
             Rc::new(move |key, window, cx| {
@@ -536,6 +544,7 @@ impl ShellModel {
                     placeholder,
                     &note,
                     &dispatch,
+                    self.clock,
                     window,
                     cx,
                 );

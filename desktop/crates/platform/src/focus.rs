@@ -15,6 +15,7 @@ use closta_shell::state::{Overlay, ShellAction};
 use gpui_kit::component::input::{InputEvent, InputState};
 use gpui_kit::*;
 
+use crate::clock::WallClock;
 use crate::composer::Dispatch;
 
 /// A text field of a card: the Deny… or Keep Planning… note, or a question's Other line.
@@ -365,8 +366,14 @@ impl FocusMap {
         true
     }
 
-    /// What `keystroke` does where the keyboard is now.
-    pub(crate) fn gate(&self, keystroke: &Keystroke, window: &Window, cx: &App) -> Gate {
+    /// What `keystroke`, pressed at `now_ms`, does where the keyboard is now.
+    pub(crate) fn gate(
+        &self,
+        keystroke: &Keystroke,
+        now_ms: i64,
+        window: &Window,
+        cx: &App,
+    ) -> Gate {
         let Some(key) = to_card_key(keystroke) else {
             return Gate::default();
         };
@@ -389,13 +396,22 @@ impl FocusMap {
                     slot,
                     request_id,
                     index,
+                    now_ms,
                 });
             }
             (CardKeyOutcome::Deny, Some((slot, request_id))) => {
-                gate.action = Some(ShellAction::DenyCard { slot, request_id });
+                gate.action = Some(ShellAction::DenyCard {
+                    slot,
+                    request_id,
+                    now_ms,
+                });
             }
             (CardKeyOutcome::Answer, Some((slot, request_id))) => {
-                gate.action = Some(ShellAction::AnswerQuestion { slot, request_id });
+                gate.action = Some(ShellAction::AnswerQuestion {
+                    slot,
+                    request_id,
+                    now_ms,
+                });
             }
             (CardKeyOutcome::Toggle, Some((slot, request_id))) => {
                 if let Located::Option {
@@ -578,7 +594,7 @@ impl FocusMap {
     }
 
     /// A card's text field, made the first time it is asked for with `text` in it: each edit
-    /// goes to the shell, and a plain Enter in a note sends it.
+    /// goes to the shell, and a plain Enter in a note sends it, at the time `clock` reads then.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn card_input(
         &mut self,
@@ -588,6 +604,7 @@ impl FocusMap {
         placeholder: &'static str,
         text: &str,
         dispatch: &Dispatch,
+        clock: WallClock,
         window: &mut Window,
         cx: &mut App,
     ) -> Entity<InputState> {
@@ -622,7 +639,11 @@ impl FocusMap {
                         shift: false,
                     },
                     CardField::Note,
-                ) => ShellAction::SendNote { slot, request_id },
+                ) => ShellAction::SendNote {
+                    slot,
+                    request_id,
+                    now_ms: clock.now_ms(),
+                },
                 _ => return,
             };
             dispatch(action, window, cx);
@@ -784,7 +805,7 @@ mod tests {
                         let keys = hold_keys(
                             move |keystroke, window, cx| {
                                 let host = this.upgrade()?;
-                                Some(host.read(cx).focus.gate(keystroke, window, cx))
+                                Some(host.read(cx).focus.gate(keystroke, 0, window, cx))
                             },
                             dispatch,
                             Rc::new(move |key, _, _| starts.borrow_mut().push(key)),

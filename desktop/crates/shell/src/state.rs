@@ -25,7 +25,7 @@ use crate::composer::Composer;
 use crate::copy;
 use crate::header::AppHeader;
 use crate::needs_you::{
-    NeedsYouRow, SlotNeeds, attention, jump_target, list_accepts, needs_you_rows,
+    NeedsYouRow, SlotNeeds, attention, card_accepts, jump_target, list_accepts, needs_you_rows,
 };
 use crate::new_session::{
     LaunchChecks, NewSessionDialog, PlannerFor, Problem, RecentFolders, Runtime, default_folder,
@@ -98,19 +98,24 @@ pub enum ShellAction {
         request_id: String,
         now_ms: i64,
     },
+    /// The needs-you list drew the slot's row, showing `request_id`, as its `index`th row.
     ListShown {
         slot: SlotId,
         request_id: String,
+        index: usize,
         now_ms: i64,
     },
+    /// Answers the card with its `index`th button, if the card was drawn half a second ago.
     ChooseCard {
         slot: SlotId,
         request_id: String,
         index: usize,
+        now_ms: i64,
     },
     DenyCard {
         slot: SlotId,
         request_id: String,
+        now_ms: i64,
     },
     OpenNote {
         slot: SlotId,
@@ -129,6 +134,7 @@ pub enum ShellAction {
     SendNote {
         slot: SlotId,
         request_id: String,
+        now_ms: i64,
     },
     PickDestination {
         slot: SlotId,
@@ -156,6 +162,7 @@ pub enum ShellAction {
     AnswerQuestion {
         slot: SlotId,
         request_id: String,
+        now_ms: i64,
     },
     /// Allows the request the slot's needs-you row shows, if the row was drawn half a second ago.
     AllowFromList {
@@ -940,16 +947,22 @@ impl ShellState {
             ShellAction::ListShown {
                 slot,
                 request_id,
+                index,
                 now_ms,
             } => {
-                // Only a row that is on show and shows this request counts: the time of a row
-                // behind an overlay or one that shows another request must not start its gate.
+                // Only a row that is on show, in the place the list has it, and shows this
+                // request counts: the time of a row behind an overlay, one that shows another
+                // request or one drawn where the list no longer has it must not start its gate.
                 let shown = self.overlay().is_none()
-                    && self
-                        .row_of(slot)
-                        .is_some_and(|row| row.request_id() == Some(request_id.as_str()));
+                    && self.needs_you().get(index).is_some_and(|row| {
+                        row.slot == slot && row.request_id() == Some(request_id.as_str())
+                    });
                 if shown && let Some(card) = self.card_mut(slot, &request_id) {
-                    card.list_shown_ms.get_or_insert(now_ms);
+                    // A row drawn in another place than before starts again: what was under the
+                    // pointer there is not what was read.
+                    if card.list_shown.is_none_or(|(at, _)| at != index) {
+                        card.list_shown = Some((index, now_ms));
+                    }
                 }
                 Acted::default()
             }
@@ -957,11 +970,18 @@ impl ShellState {
                 slot,
                 request_id,
                 index,
-            } => self.answer_card(slot, &request_id, Reply::Choose(index)),
-            ShellAction::DenyCard { slot, request_id }
-            | ShellAction::SendNote { slot, request_id } => {
-                self.answer_card(slot, &request_id, Reply::Deny)
+                now_ms,
+            } => self.answer_shown_card(slot, &request_id, Reply::Choose(index), now_ms),
+            ShellAction::DenyCard {
+                slot,
+                request_id,
+                now_ms,
             }
+            | ShellAction::SendNote {
+                slot,
+                request_id,
+                now_ms,
+            } => self.answer_shown_card(slot, &request_id, Reply::Deny, now_ms),
             ShellAction::OpenNote { slot, request_id } => {
                 self.set_note_open(slot, &request_id, true)
             }
@@ -1015,9 +1035,11 @@ impl ShellState {
             } => self.pick(slot, &request_id, question, None, |card, multi| {
                 card.edit_other(question, &text, multi);
             }),
-            ShellAction::AnswerQuestion { slot, request_id } => {
-                self.answer_card(slot, &request_id, Reply::Answer)
-            }
+            ShellAction::AnswerQuestion {
+                slot,
+                request_id,
+                now_ms,
+            } => self.answer_shown_card(slot, &request_id, Reply::Answer, now_ms),
             ShellAction::CancelClose => {
                 if matches!(self.closing, CloseStage::Asking(_)) {
                     self.closing = CloseStage::Open;
@@ -1114,10 +1136,12 @@ impl ShellState {
     }
 
     /// Allows the request the slot's row shows. Everything must hold: the row shows exactly
-    /// this request and it may be allowed unread, the row itself was drawn 500 ms ago (not a
-    /// card in the conversation), the slot still waits on it, and the slot's session is live.
+    /// this request and it may be allowed unread, the row itself was drawn 500 ms ago in the
+    /// place it has now (not a card in the conversation), the slot still waits on it, and the
+    /// slot's session is live.
     fn allow_from_list(&mut self, slot: SlotId, request_id: &str, now_ms: i64) -> Acted {
-        let Some(row) = self.row_of(slot) else {
+        let rows = self.needs_you();
+        let Some((place, row)) = rows.iter().enumerate().find(|(_, it)| it.slot == slot) else {
             return Acted::default();
         };
         if row.request_id() != Some(request_id) || !row.may_allow() {
@@ -1134,8 +1158,9 @@ impl ShellState {
         let shown = held
             .cards
             .get(request_id)
-            .and_then(|it| it.list_shown_ms)
-            .map(|at| (request_id, at));
+            .and_then(|it| it.list_shown)
+            .filter(|(at, _)| *at == place)
+            .map(|(_, since_ms)| (request_id, since_ms));
         if !list_accepts(shown, request_id, &waiting, now_ms) {
             return Acted::default();
         }
@@ -1228,8 +1253,15 @@ impl ShellState {
 
     /// Whether the card's row was drawn in the needs-you list.
     pub fn list_shown(&self, slot: SlotId, request_id: &str) -> bool {
-        self.card_state(slot, request_id)
-            .is_some_and(|it| it.list_shown_ms.is_some())
+        self.list_shown_at(slot, request_id).is_some()
+    }
+
+    /// Where the card's row was drawn in the needs-you list (its index among the rows), when it
+    /// was.
+    pub fn list_shown_at(&self, slot: SlotId, request_id: &str) -> Option<usize> {
+        self.card_state(slot, request_id)?
+            .list_shown
+            .map(|(at, _)| at)
     }
 
     /// The card's state, made from the card when it is first touched; `None` unless the slot
@@ -1327,6 +1359,23 @@ impl ShellState {
             rows: Some((slot, changes.into_iter().collect())),
             ..Acted::default()
         }
+    }
+
+    /// Answers the card in the conversation as `reply` says, if it was first drawn half a second
+    /// before `now_ms`: a card that has just come up under the pointer or a held key is not
+    /// answered unread.
+    fn answer_shown_card(
+        &mut self,
+        slot: SlotId,
+        request_id: &str,
+        reply: Reply,
+        now_ms: i64,
+    ) -> Acted {
+        let shown_ms = self.card_state(slot, request_id).and_then(|it| it.shown_ms);
+        if !card_accepts(shown_ms, now_ms) {
+            return Acted::default();
+        }
+        self.answer_card(slot, request_id, reply)
     }
 
     /// Answers the card of `request_id` as `reply` says, if the session is running and waits on

@@ -816,7 +816,7 @@ mod tests {
                         let keys = focus::hold_keys(
                             move |keystroke, window, cx| {
                                 let band = this.upgrade()?;
-                                Some(band.read(cx).focus.gate(keystroke, window, cx))
+                                Some(band.read(cx).focus.gate(keystroke, 0, window, cx))
                             },
                             Rc::clone(&dispatch),
                             Rc::new(|_, _, _| {}),

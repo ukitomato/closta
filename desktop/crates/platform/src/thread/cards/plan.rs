@@ -12,7 +12,7 @@ use gpui_kit::component::input::Input;
 use gpui_kit::component::text::TextView;
 use gpui_kit::*;
 
-use super::{CardParts, card_button, heading};
+use super::{CardParts, answer_button, card_button, heading};
 use crate::composer::Dispatch;
 
 /// The tool a plan card answers.
@@ -35,10 +35,15 @@ pub(super) fn body(
             .child(copy::PLAN_MISSING)
             .into_any_element(),
     };
-    let choose = |index: usize| ShellAction::ChooseCard {
-        slot,
-        request_id: request_id.clone(),
-        index,
+    let choose = |name: &str, label: &'static str, index: usize| {
+        let request_id = request_id.clone();
+        let answer = move |now_ms| ShellAction::ChooseCard {
+            slot,
+            request_id: request_id.clone(),
+            index,
+            now_ms,
+        };
+        answer_button(parts, &card.request_id, name, label, answer, dispatch)
     };
     let button = |name: &str, label: &'static str, action: ShellAction| {
         card_button(parts, request_id, name, label, action, dispatch)
@@ -46,9 +51,9 @@ pub(super) fn body(
     let buttons = h_flex()
         .gap_2()
         .flex_wrap()
-        .child(button("choice-0", copy::plan_go(card.go), choose(0)).primary())
-        .child(button("choice-1", copy::PLAN_ASK_EDITS, choose(1)).outline())
-        .child(button("choice-2", copy::PLAN_KEEP, choose(2)).outline())
+        .child(choose("choice-0", copy::plan_go(card.go), 0).primary())
+        .child(choose("choice-1", copy::PLAN_ASK_EDITS, 1).outline())
+        .child(choose("choice-2", copy::PLAN_KEEP, 2).outline())
         .child(
             button(
                 "keep-note",

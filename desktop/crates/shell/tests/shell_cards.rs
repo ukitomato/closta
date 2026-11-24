@@ -64,11 +64,44 @@ fn approval(runtime: &SessionRuntime, id: &str) -> ApprovalRecord {
     (**runtime.view().transcript.approvals.get(id).unwrap()).clone()
 }
 
+/// When the cards are drawn, and a time well past their half second.
+const SHOWN_MS: i64 = 1000;
+const LATER_MS: i64 = 60_000;
+
+/// The card as drawn in the conversation at [`SHOWN_MS`].
+fn shown(shell: &mut ShellState, slot: SlotId, id: &str) {
+    shell.act(ShellAction::CardShown {
+        slot,
+        request_id: id.to_owned(),
+        now_ms: SHOWN_MS,
+    });
+}
+
 fn choose(shell: &mut ShellState, slot: SlotId, id: &str, index: usize) {
+    shown(shell, slot, id);
     shell.act(ShellAction::ChooseCard {
         slot,
         request_id: id.to_owned(),
         index,
+        now_ms: LATER_MS,
+    });
+}
+
+fn deny(shell: &mut ShellState, slot: SlotId, id: &str) {
+    shown(shell, slot, id);
+    shell.act(ShellAction::DenyCard {
+        slot,
+        request_id: id.to_owned(),
+        now_ms: LATER_MS,
+    });
+}
+
+fn send_note(shell: &mut ShellState, slot: SlotId, id: &str) {
+    shown(shell, slot, id);
+    shell.act(ShellAction::SendNote {
+        slot,
+        request_id: id.to_owned(),
+        now_ms: LATER_MS,
     });
 }
 
@@ -165,10 +198,7 @@ fn deny_with_a_note_sends_it_trimmed() {
             request_id: id.clone(),
             text: "  not now \n".to_owned(),
         });
-        shell.act(ShellAction::SendNote {
-            slot,
-            request_id: id,
-        });
+        send_note(&mut shell, slot, &id);
         assert_eq!(
             written(&control).await,
             vec![encode::deny(SANDBOX_REQUEST, "not now")]
@@ -284,10 +314,7 @@ fn a_second_answer_writes_nothing() {
             waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK, 1000).await;
         choose(&mut shell, slot, SANDBOX_REQUEST, 0);
         choose(&mut shell, slot, SANDBOX_REQUEST, 0);
-        shell.act(ShellAction::DenyCard {
-            slot,
-            request_id: SANDBOX_REQUEST.to_owned(),
-        });
+        deny(&mut shell, slot, SANDBOX_REQUEST);
         assert_eq!(written(&control).await.len(), 1);
     });
 }
@@ -490,10 +517,7 @@ fn a_note_of_blanks_denies_without_one() {
             request_id: SANDBOX_REQUEST.to_owned(),
             text: "   \n ".to_owned(),
         });
-        shell.act(ShellAction::SendNote {
-            slot,
-            request_id: SANDBOX_REQUEST.to_owned(),
-        });
+        send_note(&mut shell, slot, SANDBOX_REQUEST);
         assert_eq!(
             written(&control).await,
             vec![encode::deny(SANDBOX_REQUEST, "")]
@@ -544,9 +568,11 @@ fn toggle(shell: &mut ShellState, slot: SlotId, question: usize, option: usize) 
 }
 
 fn answer_question(shell: &mut ShellState, slot: SlotId) {
+    shown(shell, slot, QUESTION_REQUEST);
     shell.act(ShellAction::AnswerQuestion {
         slot,
         request_id: QUESTION_REQUEST.to_owned(),
+        now_ms: LATER_MS,
     });
 }
 
@@ -656,10 +682,7 @@ fn a_note_sent_on_a_plan_keeps_planning() {
             request_id: id.clone(),
             text: "  shorter ".to_owned(),
         });
-        shell.act(ShellAction::SendNote {
-            slot,
-            request_id: id,
-        });
+        send_note(&mut shell, slot, &id);
         assert_eq!(
             written(&control).await,
             vec![encode::deny(PLAN_REQUEST, "shorter")]
@@ -672,10 +695,7 @@ fn escape_on_a_plan_keeps_planning_without_a_note() {
     drive(|harness| async move {
         let mut shell = harness.shell();
         let (slot, control, _) = waiting_slot(&mut shell, &harness, PLAN, PLAN_ASK, 1000).await;
-        shell.act(ShellAction::DenyCard {
-            slot,
-            request_id: PLAN_REQUEST.to_owned(),
-        });
+        deny(&mut shell, slot, PLAN_REQUEST);
         assert_eq!(
             written(&control).await,
             vec![encode::deny(PLAN_REQUEST, "")]
@@ -770,10 +790,7 @@ fn skip_says_no_to_the_question() {
         let (slot, control, _) =
             waiting_slot(&mut shell, &harness, QUESTION, QUESTION_ASK, 1000).await;
         toggle(&mut shell, slot, 0, 0);
-        shell.act(ShellAction::DenyCard {
-            slot,
-            request_id: QUESTION_REQUEST.to_owned(),
-        });
+        deny(&mut shell, slot, QUESTION_REQUEST);
         assert_eq!(
             written(&control).await,
             vec![encode::deny(QUESTION_REQUEST, "")]
@@ -819,5 +836,120 @@ fn a_pick_the_card_does_not_have_is_ignored() {
         }
         let picks = &shell.card_state(slot, QUESTION_REQUEST);
         assert!(picks.is_none_or(|it| it.picks.iter().all(|p| p.chosen.is_empty())));
+    });
+}
+
+#[test]
+fn a_card_takes_an_answer_only_half_a_second_after_it_was_drawn() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (slot, control, runtime) =
+            waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK, 1000).await;
+        let a = approval(&runtime, SANDBOX_REQUEST);
+        shown(&mut shell, slot, SANDBOX_REQUEST);
+        let at = |now_ms| ShellAction::ChooseCard {
+            slot,
+            request_id: SANDBOX_REQUEST.to_owned(),
+            index: 0,
+            now_ms,
+        };
+        shell.act(at(SHOWN_MS + 499));
+        // A clock that went back has not passed it either.
+        shell.act(at(SHOWN_MS - 1));
+        quiet().await;
+        assert!(answers(&control).is_empty());
+        shell.act(at(SHOWN_MS + 500));
+        assert_eq!(
+            written(&control).await,
+            vec![allow_line(SANDBOX_REQUEST, &a, None)]
+        );
+    });
+}
+
+#[test]
+fn a_card_never_drawn_takes_no_answer() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (slot, control, _) =
+            waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK, 1000).await;
+        let request_id = SANDBOX_REQUEST.to_owned();
+        shell.act(ShellAction::ChooseCard {
+            slot,
+            request_id: request_id.clone(),
+            index: 0,
+            now_ms: LATER_MS,
+        });
+        shell.act(ShellAction::DenyCard {
+            slot,
+            request_id: request_id.clone(),
+            now_ms: LATER_MS,
+        });
+        shell.act(ShellAction::SendNote {
+            slot,
+            request_id,
+            now_ms: LATER_MS,
+        });
+        quiet().await;
+        assert!(answers(&control).is_empty());
+    });
+}
+
+#[test]
+fn every_answer_of_a_card_waits_its_half_second() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (slot, control, _) =
+            waiting_slot(&mut shell, &harness, QUESTION, QUESTION_ASK, 1000).await;
+        toggle(&mut shell, slot, 0, 0);
+        toggle(&mut shell, slot, 1, 0);
+        shown(&mut shell, slot, QUESTION_REQUEST);
+        let early = SHOWN_MS + 100;
+        let request_id = QUESTION_REQUEST.to_owned();
+        shell.act(ShellAction::AnswerQuestion {
+            slot,
+            request_id: request_id.clone(),
+            now_ms: early,
+        });
+        shell.act(ShellAction::DenyCard {
+            slot,
+            request_id: request_id.clone(),
+            now_ms: early,
+        });
+        shell.act(ShellAction::SendNote {
+            slot,
+            request_id: request_id.clone(),
+            now_ms: early,
+        });
+        quiet().await;
+        assert!(answers(&control).is_empty());
+        shell.act(ShellAction::DenyCard {
+            slot,
+            request_id,
+            now_ms: SHOWN_MS + 500,
+        });
+        assert_eq!(written(&control).await.len(), 1);
+    });
+}
+
+#[test]
+fn the_lists_time_does_not_open_the_cards_gate() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (slot, control, _) =
+            waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK, 1000).await;
+        shell.act(ShellAction::ListShown {
+            slot,
+            request_id: SANDBOX_REQUEST.to_owned(),
+            index: 0,
+            now_ms: 0,
+        });
+        shell.act(ShellAction::ChooseCard {
+            slot,
+            request_id: SANDBOX_REQUEST.to_owned(),
+            index: 0,
+            now_ms: LATER_MS,
+        });
+        quiet().await;
+        assert!(answers(&control).is_empty());
     });
 }
