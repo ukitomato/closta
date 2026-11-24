@@ -226,6 +226,7 @@ fun Test.configureClostaTests() {
     // A run asked to rewrite the goldens must run even when nothing else changed.
     inputs.property("presenterGoldenUpdate", providers.environmentVariable("PRESENTER_GOLDEN_UPDATE").orElse(""))
     inputs.property("foldGoldenUpdate", providers.environmentVariable("FOLD_GOLDEN_UPDATE").orElse(""))
+    inputs.property("historyGoldenUpdate", providers.environmentVariable("HISTORY_GOLDEN_UPDATE").orElse(""))
 }
 
 tasks.test {

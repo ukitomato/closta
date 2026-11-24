@@ -11,6 +11,8 @@ class Goldens(
     private val update: Boolean,
     private val read: (String) -> String?,
     private val write: (String, String) -> Unit,
+    private val env: String = ENV,
+    private val how: String = HOW,
 ) {
     fun check(
         name: String,
@@ -20,12 +22,12 @@ class Goldens(
         if (update) {
             if (expected != actual) {
                 write(name, actual)
-                fail<Unit>("rewrote the golden of $name; run the tests again without $ENV to check it")
+                fail<Unit>("rewrote the golden of $name; run the tests again without $env to check it")
             }
             return
         }
-        if (expected == null) fail<Unit>("$name has no golden; $HOW")
-        assertEquals(expected, actual) { "$name drifted from its golden; if the change is intended, $HOW" }
+        if (expected == null) fail<Unit>("$name has no golden; $how")
+        assertEquals(expected, actual) { "$name drifted from its golden; if the change is intended, $how" }
     }
 
     companion object {

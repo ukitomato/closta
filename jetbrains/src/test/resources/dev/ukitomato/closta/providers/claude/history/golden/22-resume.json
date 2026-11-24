@@ -1,0 +1,270 @@
+{
+  "capture": "22-resume",
+  "sessionId": "336ed47b-2675-4317-b3f5-a3b48abb03a2",
+  "read": {
+    "events": [
+      {
+        "kind": "User",
+        "uuid": "9d16f4cc-3b36-4a98-8ab2-84438e311ceb",
+        "sessionId": "336ed47b-2675-4317-b3f5-a3b48abb03a2",
+        "timestamp": "2026-10-17T05:41:27.716Z",
+        "message": {
+          "role": "user",
+          "content": "Run this exact bash command and report its output: echo hello-from-resume"
+        },
+        "parentToolUseId": null,
+        "toolUseResult": null,
+        "subagentType": null,
+        "taskDescription": null
+      },
+      {
+        "kind": "Assistant",
+        "uuid": "282fea04-987e-48ad-80c1-8cf3a08848e0",
+        "sessionId": "336ed47b-2675-4317-b3f5-a3b48abb03a2",
+        "timestamp": "2026-10-17T05:41:29.532Z",
+        "requestId": "req_011CScrubbedHXDMxV3xYaPM",
+        "message": {
+          "model": "claude-sonnet-4-6",
+          "id": "msg_011CScrubbed8Zi68XfCnn6H",
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "thinking",
+              "thinking": "",
+              "signature": "EuoCCsABCBIYAipAmgNKSQjCIz34FBsJBJ8b/zG6G9YnaiQzWqjUA9zXyfXhUQ7q8XcA7TJXmks/ouPgCxlZPmNav8FUQIBv5ciJHTIRY2xhdWRlLXNvbm5ldC00LTY4AEIIdGhpbmtpbmdaJDQyNzE4NzQ2LTQ0MmUtNGM1MS04NGUzLTkyMzRiNGQwZmIwY3IQj5UN4cFtHzl7lRSyOhVCdYgBAZoBEwoRY2xhdWRlLXNvbm5ldC00LTaoAYmVzNYGsAECEgxry9gsEaJtL+C7L7gaDI8jfyTLEbBWWuMEASIwXhd4XaZpxs4Tq+1HYxy2/yD34zLoqEWnfaHazb139IqBuXoR/Q6EYkTtMi5R12EBKldYNigeBj+dLCU6FIAZfH4Fw/h9gyEdfWzI/8yu8tM6MnlMqWeLv+NA2cMleRey4dEdxXmI2VZCxsFd5WkDZsa7bEK//OIkpmEVAs2fDPoHNiQH+eK0w94YAQ=="
+            }
+          ],
+          "container": null,
+          "stop_reason": "tool_use",
+          "stop_sequence": null,
+          "stop_details": null,
+          "usage": {
+            "input_tokens": 3,
+            "cache_creation_input_tokens": 6732,
+            "cache_read_input_tokens": 13337,
+            "output_tokens": 108,
+            "output_tokens_details": {
+              "thinking_tokens": 27
+            },
+            "server_tool_use": {
+              "web_search_requests": 0,
+              "web_fetch_requests": 0
+            },
+            "service_tier": "standard",
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 6732,
+              "ephemeral_5m_input_tokens": 0
+            },
+            "inference_geo": "global",
+            "iterations": [
+              {
+                "input_tokens": 3,
+                "output_tokens": 108,
+                "cache_read_input_tokens": 13337,
+                "cache_creation_input_tokens": 6732,
+                "cache_creation": {
+                  "ephemeral_5m_input_tokens": 0,
+                  "ephemeral_1h_input_tokens": 6732
+                },
+                "type": "message"
+              }
+            ],
+            "speed": "standard"
+          },
+          "input_transformations": [],
+          "diagnostics": null,
+          "context_management": null
+        },
+        "parentToolUseId": null,
+        "userMessageUuid": null,
+        "userMessageUuids": null,
+        "wireToolInputs": null,
+        "subagentType": null,
+        "taskDescription": null,
+        "error": null
+      },
+      {
+        "kind": "Assistant",
+        "uuid": "16d1f7bc-10d9-4c9c-8261-8afc415c0c91",
+        "sessionId": "336ed47b-2675-4317-b3f5-a3b48abb03a2",
+        "timestamp": "2026-10-17T05:41:30.114Z",
+        "requestId": "req_011CScrubbedHXDMxV3xYaPM",
+        "message": {
+          "model": "claude-sonnet-4-6",
+          "id": "msg_011CScrubbed8Zi68XfCnn6H",
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "tool_use",
+              "id": "toolu_012wWm4TuzZeDWdUpAMcy5vU",
+              "name": "Bash",
+              "input": {
+                "command": "echo hello-from-resume",
+                "description": "Run the exact command specified"
+              },
+              "caller": {
+                "type": "direct"
+              }
+            }
+          ],
+          "container": null,
+          "stop_reason": "tool_use",
+          "stop_sequence": null,
+          "stop_details": null,
+          "usage": {
+            "input_tokens": 3,
+            "cache_creation_input_tokens": 6732,
+            "cache_read_input_tokens": 13337,
+            "output_tokens": 108,
+            "output_tokens_details": {
+              "thinking_tokens": 27
+            },
+            "server_tool_use": {
+              "web_search_requests": 0,
+              "web_fetch_requests": 0
+            },
+            "service_tier": "standard",
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 6732,
+              "ephemeral_5m_input_tokens": 0
+            },
+            "inference_geo": "global",
+            "iterations": [
+              {
+                "input_tokens": 3,
+                "output_tokens": 108,
+                "cache_read_input_tokens": 13337,
+                "cache_creation_input_tokens": 6732,
+                "cache_creation": {
+                  "ephemeral_5m_input_tokens": 0,
+                  "ephemeral_1h_input_tokens": 6732
+                },
+                "type": "message"
+              }
+            ],
+            "speed": "standard"
+          },
+          "input_transformations": [],
+          "diagnostics": null,
+          "context_management": null
+        },
+        "parentToolUseId": null,
+        "userMessageUuid": null,
+        "userMessageUuids": null,
+        "wireToolInputs": {
+          "toolu_012wWm4TuzZeDWdUpAMcy5vU": {
+            "command": "echo hello-from-resume",
+            "description": "Run the exact command specified"
+          }
+        },
+        "subagentType": null,
+        "taskDescription": null,
+        "error": null
+      },
+      {
+        "kind": "User",
+        "uuid": "014b066f-394d-4073-954f-f1cca8042f48",
+        "sessionId": "336ed47b-2675-4317-b3f5-a3b48abb03a2",
+        "timestamp": "2026-10-17T05:41:30.658Z",
+        "message": {
+          "role": "user",
+          "content": [
+            {
+              "tool_use_id": "toolu_012wWm4TuzZeDWdUpAMcy5vU",
+              "type": "tool_result",
+              "content": "hello-from-resume",
+              "is_error": false
+            }
+          ]
+        },
+        "parentToolUseId": null,
+        "toolUseResult": {
+          "stdout": "hello-from-resume",
+          "stderr": "",
+          "interrupted": false,
+          "isImage": false,
+          "noOutputExpected": false
+        },
+        "subagentType": null,
+        "taskDescription": null
+      },
+      {
+        "kind": "Assistant",
+        "uuid": "51005f27-70e2-4bf7-99de-43ccd9539463",
+        "sessionId": "336ed47b-2675-4317-b3f5-a3b48abb03a2",
+        "timestamp": "2026-10-17T05:41:31.840Z",
+        "requestId": "req_011CScrubbedBDWWwG1khd2r",
+        "message": {
+          "model": "claude-sonnet-4-6",
+          "id": "msg_011CScrubbedAt3xFkCvKYkv",
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Output: `hello-from-resume`"
+            }
+          ],
+          "container": null,
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "stop_details": null,
+          "usage": {
+            "input_tokens": 1,
+            "cache_creation_input_tokens": 155,
+            "cache_read_input_tokens": 20069,
+            "output_tokens": 12,
+            "output_tokens_details": {
+              "thinking_tokens": 0
+            },
+            "server_tool_use": {
+              "web_search_requests": 0,
+              "web_fetch_requests": 0
+            },
+            "service_tier": "standard",
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 155,
+              "ephemeral_5m_input_tokens": 0
+            },
+            "inference_geo": "global",
+            "iterations": [
+              {
+                "input_tokens": 1,
+                "output_tokens": 12,
+                "cache_read_input_tokens": 20069,
+                "cache_creation_input_tokens": 155,
+                "cache_creation": {
+                  "ephemeral_5m_input_tokens": 0,
+                  "ephemeral_1h_input_tokens": 155
+                },
+                "type": "message"
+              }
+            ],
+            "speed": "standard"
+          },
+          "input_transformations": [],
+          "diagnostics": null,
+          "context_management": null
+        },
+        "parentToolUseId": null,
+        "userMessageUuid": null,
+        "userMessageUuids": null,
+        "wireToolInputs": null,
+        "subagentType": null,
+        "taskDescription": null,
+        "error": null
+      }
+    ],
+    "skipped": 22,
+    "dropped": 0
+  },
+  "list": [
+    {
+      "id": "336ed47b-2675-4317-b3f5-a3b48abb03a2",
+      "title": "Run this exact bash command and report its output: echo hello-from-resume",
+      "bytes": 161865
+    }
+  ]
+}
