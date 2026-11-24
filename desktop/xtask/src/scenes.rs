@@ -22,6 +22,17 @@ pub const BASH_PROMPT: &str =
 pub const SUBAGENT_PROMPT: &str = "Use the Agent tool to spawn one subagent (subagent_type \"Explore\", run_in_background false) that reads the file NOTES.md in the current directory and reports a one-sentence summary. Then relay the summary.";
 pub const TODO_PROMPT: &str = "Use the TodoWrite tool to record a todo list with exactly two items: \"write tests\" (status pending) and \"run build\" (status in_progress). Then report done.";
 pub const COMPACT_PROMPT: &str = "/compact";
+pub const PERMISSION_PROMPT: &str = "Run this exact bash command once and report its output: touch /tmp/closta-rec-36-sandbox-unavailable-kCmWFl/outside/sandbox-probe.txt. If it fails, do not retry it in any other way; just report the error message.";
+pub const EDIT_PROMPT: &str = "Use the Edit tool to replace the text old-value with new-value in the file EDITME.md. Then report done.";
+pub const QUESTION_PROMPT: &str = "Use the AskUserQuestion tool once, with two questions in the same call: first \"AとBどちらがいいですか？\" (header \"選択肢\") with options A (\"Aを選択します\") and B (\"Bを選択します\"), multiSelect false; second \"XとYどちらにしますか？\" (header \"もう一つ\") with options X (\"Xを選択します\") and Y (\"Yを選択します\"), multiSelect false. Then report the answers.";
+pub const PLAN_PROMPT: &str = "Make a short plan to fix the spelling of the headings in README.md, then call ExitPlanMode with it. Once it is approved, make the fix with the Edit tool and report done.";
+
+/// What a reviewer of the stage 6c scenes leaves out: what later stages build.
+pub const EXCLUDED_6C: [&str; 3] = [
+    "the model and effort pickers (stage 6g)",
+    "the grouping of sessions into projects (stage 6d)",
+    "the content of the right pane",
+];
 
 /// One scene: its name, the arguments the app starts with (the window size is added when it is
 /// shot), and what the reviewer leaves out.
@@ -32,7 +43,7 @@ pub struct Scene {
     pub excluded: Vec<&'static str>,
 }
 
-/// The scenes: stage 6a's replays, then stage 6b's states.
+/// The scenes: stage 6a's replays, stage 6b's states, then stage 6c's cards and hub.
 pub fn scenes() -> Vec<Scene> {
     let replay = |file: &str, prompt: Option<&str>| {
         let mut args = vec!["--replay".to_owned(), format!(r"{REPLAY}\{file}")];
@@ -83,7 +94,61 @@ pub fn scenes() -> Vec<Scene> {
                 .to_vec(),
             excluded: NOT_BUILT.to_vec(),
         },
+        // Each card kind stops the replay at its request, so the card stays waiting.
+        card_scene(
+            "cards-permission",
+            "36-sandbox-unavailable.ndjson",
+            PERMISSION_PROMPT,
+            31,
+        ),
+        card_scene("cards-edit", "17-edit-approval.ndjson", EDIT_PROMPT, 64),
+        card_scene(
+            "cards-question",
+            "18-ask-multi-question.ndjson",
+            QUESTION_PROMPT,
+            46,
+        ),
+        card_scene("cards-plan", "29-exit-plan-mode.ndjson", PLAN_PROMPT, 153),
+        // The four waiting cards, a session still working and a failed launch, in the list.
+        Scene {
+            name: "hub-needs-you",
+            args: HUB_REPLAYS
+                .iter()
+                .flat_map(|&(file, prompt, stop_at)| stopped_replay(file, prompt, stop_at))
+                .chain(["--fail-launch".to_owned(), "1".to_owned()])
+                .collect(),
+            excluded: EXCLUDED_6C.to_vec(),
+        },
     ]
+}
+
+/// The replays of the hub scene: the four waiting cards, then a session that is still working.
+pub(crate) const HUB_REPLAYS: [(&str, &str, usize); 5] = [
+    ("36-sandbox-unavailable.ndjson", PERMISSION_PROMPT, 31),
+    ("17-edit-approval.ndjson", EDIT_PROMPT, 64),
+    ("18-ask-multi-question.ndjson", QUESTION_PROMPT, 46),
+    ("29-exit-plan-mode.ndjson", PLAN_PROMPT, 153),
+    ("02-tool-bash-autorun.ndjson", BASH_PROMPT, 15),
+];
+
+/// A replay of `file` that is given `prompt` and stops after `stop_at` lines.
+pub(crate) fn stopped_replay(file: &str, prompt: &str, stop_at: usize) -> Vec<String> {
+    vec![
+        "--replay".to_owned(),
+        format!(r"{REPLAY}\{file}"),
+        "--prompt".to_owned(),
+        prompt.to_owned(),
+        "--stop-at".to_owned(),
+        stop_at.to_string(),
+    ]
+}
+
+fn card_scene(name: &'static str, file: &str, prompt: &str, stop_at: usize) -> Scene {
+    Scene {
+        name,
+        args: stopped_replay(file, prompt, stop_at),
+        excluded: EXCLUDED_6C.to_vec(),
+    }
 }
 
 /// The scene called `name`.
@@ -201,7 +266,7 @@ mod tests {
     #[test]
     fn every_scene_is_shot_at_the_three_sizes() {
         assert_eq!(SIZES, [(1024, 700), (1600, 1000), (2560, 1440)]);
-        assert_eq!(scenes().len() * SIZES.len(), 24);
+        assert_eq!(scenes().len() * SIZES.len(), 39);
     }
 
     #[test]
@@ -230,5 +295,83 @@ mod tests {
             assert!(scene.excluded.contains(&part), "{part}");
         }
         assert_eq!(scene.excluded.len(), 3);
+    }
+
+    fn card_args(file: &str, prompt: &str, stop_at: &str) -> Vec<String> {
+        vec![
+            "--replay".to_owned(),
+            format!(r"C:\dev\tools\closta\replay\{file}"),
+            "--prompt".to_owned(),
+            prompt.to_owned(),
+            "--stop-at".to_owned(),
+            stop_at.to_owned(),
+        ]
+    }
+
+    #[test]
+    fn the_card_scenes_stop_at_their_requests() {
+        let expected = [
+            (
+                "cards-permission",
+                "36-sandbox-unavailable.ndjson",
+                PERMISSION_PROMPT,
+                "31",
+            ),
+            ("cards-edit", "17-edit-approval.ndjson", EDIT_PROMPT, "64"),
+            (
+                "cards-question",
+                "18-ask-multi-question.ndjson",
+                QUESTION_PROMPT,
+                "46",
+            ),
+            ("cards-plan", "29-exit-plan-mode.ndjson", PLAN_PROMPT, "153"),
+        ];
+        for (name, file, prompt, stop_at) in expected {
+            let scene = find(name).unwrap();
+            assert_eq!(scene.args, card_args(file, prompt, stop_at), "{name}");
+            assert_eq!(scene.excluded, EXCLUDED_6C, "{name}");
+        }
+        assert_eq!(
+            PERMISSION_PROMPT,
+            "Run this exact bash command once and report its output: touch /tmp/closta-rec-36-sandbox-unavailable-kCmWFl/outside/sandbox-probe.txt. If it fails, do not retry it in any other way; just report the error message."
+        );
+        assert_eq!(
+            EDIT_PROMPT,
+            "Use the Edit tool to replace the text old-value with new-value in the file EDITME.md. Then report done."
+        );
+        assert_eq!(
+            PLAN_PROMPT,
+            "Make a short plan to fix the spelling of the headings in README.md, then call ExitPlanMode with it. Once it is approved, make the fix with the Edit tool and report done."
+        );
+        assert!(
+            QUESTION_PROMPT.starts_with("Use the AskUserQuestion tool once, with two questions")
+        );
+        assert!(QUESTION_PROMPT.ends_with("Then report the answers."));
+        assert_eq!(
+            EXCLUDED_6C,
+            [
+                "the model and effort pickers (stage 6g)",
+                "the grouping of sessions into projects (stage 6d)",
+                "the content of the right pane",
+            ]
+        );
+    }
+
+    #[test]
+    fn the_hub_scene_opens_four_waits_a_working_one_and_a_failure() {
+        let scene = find("hub-needs-you").unwrap();
+        let mut expected = card_args("36-sandbox-unavailable.ndjson", PERMISSION_PROMPT, "31");
+        expected.extend(card_args("17-edit-approval.ndjson", EDIT_PROMPT, "64"));
+        expected.extend(card_args(
+            "18-ask-multi-question.ndjson",
+            QUESTION_PROMPT,
+            "46",
+        ));
+        expected.extend(card_args("29-exit-plan-mode.ndjson", PLAN_PROMPT, "153"));
+        expected.extend(card_args("02-tool-bash-autorun.ndjson", BASH_PROMPT, "15"));
+        expected.extend(["--fail-launch".to_owned(), "1".to_owned()]);
+        assert_eq!(scene.args, expected);
+        assert_eq!(replays(&scene).len(), 5);
+        assert_eq!(scene.excluded, EXCLUDED_6C);
     }
 }

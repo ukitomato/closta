@@ -98,7 +98,9 @@ impl PerfLog {
     fn frame_window(&self, scene: PerfScene) -> Option<(f64, f64)> {
         match scene {
             PerfScene::Synth => Some((self.first("scroll_start")?, self.first("scroll_end")?)),
-            PerfScene::Stream => Some((self.first("update_ms")?, self.first("ready")?)),
+            PerfScene::Stream | PerfScene::NeedsYou => {
+                Some((self.first("update_ms")?, self.first("ready")?))
+            }
             PerfScene::Idle => None,
         }
     }
@@ -127,16 +129,24 @@ pub enum PerfScene {
     Stream,
     /// Three slots open and doing nothing.
     Idle,
+    /// Eight replays, four of them streaming, with the needs-you list aggregating them.
+    NeedsYou,
 }
 
 impl PerfScene {
-    pub const ALL: [PerfScene; 3] = [PerfScene::Synth, PerfScene::Stream, PerfScene::Idle];
+    pub const ALL: [PerfScene; 4] = [
+        PerfScene::Synth,
+        PerfScene::Stream,
+        PerfScene::Idle,
+        PerfScene::NeedsYou,
+    ];
 
     pub fn name(self) -> &'static str {
         match self {
             PerfScene::Synth => "synth",
             PerfScene::Stream => "stream",
             PerfScene::Idle => "idle",
+            PerfScene::NeedsYou => "needs-you",
         }
     }
 
@@ -219,7 +229,7 @@ pub fn verdicts(scene: PerfScene, log: &PerfLog) -> Vec<Verdict> {
                 true,
             ),
         ],
-        PerfScene::Stream => vec![update(), frame()],
+        PerfScene::Stream | PerfScene::NeedsYou => vec![update(), frame()],
         PerfScene::Idle => {
             let share = match (log.last("idle_cpu_ms"), log.last("idle_wall_ms")) {
                 (Some(cpu), Some(wall)) if wall > 0.0 => Some(cpu / wall),
@@ -529,5 +539,36 @@ mod tests {
             .outcome,
             Outcome::Fail
         );
+    }
+
+    #[test]
+    fn the_needs_you_scene_judges_updates_and_frames() {
+        let run = |update: &str, frame: &str| {
+            let judged = verdicts(
+                PerfScene::NeedsYou,
+                &log(&[
+                    "100,update_ms,1",
+                    &format!("200,update_ms,{update}"),
+                    &format!("300,frame_ms,{frame}"),
+                    "3000,ready,1",
+                    "3100,refreshed,1",
+                ]),
+            );
+            assert_eq!(judged.len(), 2);
+            judged
+        };
+        let judged = run("6", "8");
+        assert_eq!(verdict(&judged, "update_ms").outcome, Outcome::Fail);
+        let judged = run("5", "8");
+        assert_eq!(verdict(&judged, "update_ms").outcome, Outcome::Pass);
+        let judged = run("5", "17");
+        assert_eq!(verdict(&judged, "frame_ms").outcome, Outcome::Fail);
+    }
+
+    #[test]
+    fn needs_you_is_a_scene_by_name() {
+        assert_eq!(PerfScene::NeedsYou.name(), "needs-you");
+        assert_eq!(PerfScene::from_name("needs-you"), Some(PerfScene::NeedsYou));
+        assert!(PerfScene::ALL.contains(&PerfScene::NeedsYou));
     }
 }

@@ -75,6 +75,11 @@ fn replay_options(
         .collect::<Result<Vec<_>, _>>()?
         .into_iter()
         .unzip();
+    // The failing launch opens after the replays, so a scene lists its slots in argument order.
+    let mut slots = slots;
+    if let Some(code) = args.fail_launch {
+        slots.push(probe::fail_launch(code, args.fail_distro.clone()));
+    }
     let measure = args.measures().then(|| closta_platform::Measure {
         started,
         perf_log: args.perf_log.clone(),

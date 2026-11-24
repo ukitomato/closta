@@ -98,7 +98,9 @@ fn main() -> ExitCode {
                 match perf_log::PerfScene::from_name(&name) {
                     Some(scene) => scenes.push(scene),
                     None => {
-                        eprintln!("win-perf: unknown scene {name:?} (synth, stream or idle)");
+                        eprintln!(
+                            "win-perf: unknown scene {name:?} (synth, stream, idle or needs-you)"
+                        );
                         return ExitCode::FAILURE;
                     }
                 }
