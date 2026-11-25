@@ -2,4 +2,6 @@
 #[allow(dead_code)]
 mod bounded_lines;
 #[allow(dead_code)]
+mod record_lines;
+#[allow(dead_code)]
 mod text;
