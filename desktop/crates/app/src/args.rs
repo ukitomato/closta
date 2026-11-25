@@ -3,7 +3,8 @@
 //! measuring options (`--perf-log`, `--exit-after-replay`, `--scroll-through`) apply to the whole
 //! run. The checks' options (`--open-folder`, `--mark-children`, `--mcp-config`, `--fail-launch`,
 //! `--fail-distro`, `--close-after`) open real folders and failing launches instead of replays; a
-//! failing launch may also follow replays.
+//! failing launch may also follow replays. `--list-saved` lists a folder's saved sessions into the
+//! ready file and opens no window, so it goes with neither a replay, a folder nor a failing launch.
 //! An error names the option, never a value: a value can be a prompt or a path.
 
 use std::path::PathBuf;
@@ -47,6 +48,8 @@ pub struct AppArgs {
     pub fail_distro: Option<String>,
     /// How long after every slot settled the window is closed, in milliseconds.
     pub close_after_ms: Option<u64>,
+    /// The folder whose saved sessions are counted instead of opening a window.
+    pub list_saved: Option<String>,
 }
 
 impl AppArgs {
@@ -142,6 +145,10 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<AppArgs, String> 
                     .map_err(|_| format!("{option} needs milliseconds"))?;
                 set(&mut parsed.close_after_ms, option, ms)?;
             }
+            "--list-saved" => {
+                let folder = value()?;
+                set(&mut parsed.list_saved, option, folder)?;
+            }
             "--scroll-through" => {
                 if parsed.scroll_through {
                     return Err(format!("{option} is given twice"));
@@ -162,14 +169,27 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<AppArgs, String> 
 
 /// Refuses the checks' options that cannot go together: a replay with a real folder, and an option without the one it qualifies.
 fn refuse_mixes(parsed: &AppArgs) -> Result<(), String> {
+    if parsed.list_saved.is_some()
+        && (!parsed.replays.is_empty()
+            || !parsed.open_folders.is_empty()
+            || parsed.fail_launch.is_some())
+    {
+        return Err(
+            "--list-saved cannot be used with --replay, --open-folder or --fail-launch".to_owned(),
+        );
+    }
     if !parsed.replays.is_empty() && !parsed.open_folders.is_empty() {
         return Err("--open-folder cannot be used with --replay".to_owned());
     }
     // Without a slot nothing settles: the ready file is never written and the close never comes.
+    // A list writes the ready file without a slot.
     let no_slot =
         parsed.open_folders.is_empty() && parsed.fail_launch.is_none() && parsed.replays.is_empty();
     for (option, given) in [
-        ("--ready-file", parsed.ready_file.is_some()),
+        (
+            "--ready-file",
+            parsed.ready_file.is_some() && parsed.list_saved.is_none(),
+        ),
         ("--close-after", parsed.close_after_ms.is_some()),
     ] {
         if no_slot && given {
@@ -498,6 +518,48 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn list_saved_takes_a_folder_and_a_ready_file() {
+        let args = parsed(&["--list-saved", r"C:\x", "--ready-file", "r"]).unwrap();
+        assert_eq!(args.list_saved.as_deref(), Some(r"C:\x"));
+        assert_eq!(args.ready_file, Some(PathBuf::from("r")));
+        assert_eq!(args.fail_launch, None);
+        assert_eq!(args.close_after_ms, None);
+        assert!(args.replays.is_empty());
+        assert!(args.open_folders.is_empty());
+        assert_eq!(parsed(&["--list-saved", r"C:\x"]).unwrap().ready_file, None);
+    }
+
+    #[test]
+    fn list_saved_goes_alone() {
+        for other in [
+            ["--replay", "a.ndjson"],
+            ["--open-folder", "C:\\secret"],
+            ["--fail-launch", "1"],
+        ] {
+            for args in [
+                ["--list-saved", "C:\\secret", other[0], other[1]],
+                [other[0], other[1], "--list-saved", "C:\\secret"],
+            ] {
+                let error = parsed(&args).unwrap_err();
+                assert_eq!(
+                    error,
+                    "--list-saved cannot be used with --replay, --open-folder or --fail-launch",
+                    "{other:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn list_saved_needs_its_folder() {
+        let error = parsed(&["--list-saved"]).unwrap_err();
+        assert_eq!(error, "--list-saved needs a value");
+        let error =
+            parsed(&["--list-saved", "C:\\secret", "--list-saved", "C:\\secret"]).unwrap_err();
+        assert_eq!(error, "--list-saved is given twice");
     }
 
     #[test]
