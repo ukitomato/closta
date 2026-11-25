@@ -93,7 +93,8 @@ impl Probing {
 }
 
 /// Writes `lines` to a file beside `path` and renames it over `path`.
-fn write_whole(path: &Path, lines: &[String]) -> std::io::Result<()> {
+/// A reader of `path` sees the old lines or all of the new ones, never half.
+pub fn write_whole(path: &Path, lines: &[String]) -> std::io::Result<()> {
     let mut text = lines.join("\n");
     text.push('\n');
     let mut name = path.file_name().unwrap_or_default().to_owned();

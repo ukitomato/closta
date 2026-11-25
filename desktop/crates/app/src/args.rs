@@ -167,7 +167,8 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<AppArgs, String> 
     Ok(parsed)
 }
 
-/// Refuses the checks' options that cannot go together: a replay with a real folder, and an option without the one it qualifies.
+/// Refuses the checks' options that cannot go together: a list of saved sessions with any slot, a
+/// replay with a real folder, and an option without the one it qualifies.
 fn refuse_mixes(parsed: &AppArgs) -> Result<(), String> {
     if parsed.list_saved.is_some()
         && (!parsed.replays.is_empty()

@@ -27,7 +27,7 @@ use futures_lite::future;
 use gpui_kit::*;
 
 use crate::model::ShellModel;
-pub use crate::probe::Probe;
+pub use crate::probe::{Probe, write_whole};
 
 /// The window's size when none is asked for.
 const WINDOW: (f32, f32) = (1600.0, 1000.0);

@@ -7,6 +7,7 @@ use std::path::Path;
 use std::process::ExitCode;
 use std::sync::Arc;
 
+use closta_platform::write_whole;
 use closta_providers::claude::history::{ProjectTranscripts, StdRecordFs, Survey};
 use closta_providers::claude::launch::wsl::{WslLocation, WslProgram, WslSpawner};
 use closta_providers::claude::process::ProcessSpawner;
@@ -63,7 +64,7 @@ pub fn lines(survey: &Survey) -> Vec<String> {
 
 /// Lists the saved sessions of `folder` and writes the check file to `ready_file` when one is
 /// given. Ends with 0 when the place was found, else 1; a list that fails is a missing place, and
-/// only its kind is logged.
+/// only its kind is logged. A check file that cannot be written also ends with 1.
 pub fn run(folder: &str, ready_file: Option<&Path>) -> ExitCode {
     let sessions = saved_sessions_for(folder, &record_homes());
     let survey = sessions.survey(&|| false).unwrap_or_else(|error| {
@@ -85,18 +86,6 @@ pub fn run(folder: &str, ready_file: Option<&Path>) -> ExitCode {
     } else {
         ExitCode::FAILURE
     }
-}
-
-/// Writes `lines` to a file beside `path` and renames it over `path`, so that whoever waits on
-/// `path` never reads half of it.
-fn write_whole(path: &Path, lines: &[String]) -> std::io::Result<()> {
-    let mut text = lines.join("\n");
-    text.push('\n');
-    let mut name = path.file_name().unwrap_or_default().to_owned();
-    name.push(".tmp");
-    let temporary = path.with_file_name(name);
-    std::fs::write(&temporary, text)?;
-    std::fs::rename(&temporary, path)
 }
 
 #[cfg(test)]
@@ -144,6 +133,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("listed");
         let lines = ["place=found", "listed=3", "unreadable=0"].map(str::to_owned);
+        std::fs::write(&path, "an earlier file\n").unwrap();
 
         write_whole(&path, &lines).unwrap();
 
