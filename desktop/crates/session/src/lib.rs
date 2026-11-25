@@ -4,6 +4,7 @@
 
 pub mod clock;
 pub mod commands;
+pub mod history;
 pub mod launch;
 mod live;
 pub mod log;
