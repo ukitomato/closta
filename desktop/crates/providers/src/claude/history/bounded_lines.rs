@@ -4,10 +4,20 @@ use std::io::{self, Read};
 
 const CHUNK: usize = 64 * 1024;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 pub(crate) enum Line {
     Text(String),
     TooLong,
+}
+
+// A record line is the user's text, so `Debug` shows only the kind and the size.
+impl std::fmt::Debug for Line {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Line::Text(text) => write!(f, "Text({} bytes)", text.len()),
+            Line::TooLong => f.write_str("TooLong"),
+        }
+    }
 }
 
 /// A line is its bytes up to a `\n` (a `\r` stays), read as UTF-8 with damaged bytes replaced, so one
@@ -160,5 +170,13 @@ mod tests {
     #[test]
     fn a_carriage_return_is_kept() {
         assert_eq!(lines(b"a\r\n", 10), vec![text("a\r"), None]);
+    }
+
+    #[test]
+    fn debug_of_a_text_line_shows_its_size_and_not_its_text() {
+        let shown = format!("{:?}", Line::Text("secret words".to_string()));
+        assert_eq!(shown, "Text(12 bytes)");
+        assert!(!shown.contains("secret"));
+        assert_eq!(format!("{:?}", Line::TooLong), "TooLong");
     }
 }
