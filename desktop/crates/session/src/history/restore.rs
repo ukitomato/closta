@@ -10,7 +10,8 @@ pub const RESTORE_TAIL_LINES: usize = 400;
 /// The steps a resumed session puts its record back in, each a set of lines and how many older
 /// ones it leaves out: the newest [`RESTORE_TAIL_LINES`] first (the rest counted with `dropped`),
 /// then every line. A record no longer than that is one step. Each step is meant for the view from
-/// before the restore, so the second replaces the first.
+/// before the restore, so the second replaces the first. goldens/tests/record_read_budget.rs times
+/// the same rule (with [`restored`]) on a copy of its own: change both together.
 pub fn restore_steps(events: &[AgentEvent], dropped: i32) -> Vec<(Vec<AgentEvent>, i32)> {
     let Some(left_out) = events
         .len()

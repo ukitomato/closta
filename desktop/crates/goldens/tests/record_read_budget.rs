@@ -1,7 +1,7 @@
 //! The budget of resuming the largest session: reading its saved record and putting it back in the
-//! two steps a resumed session takes (the newest 400 lines, then every line, each folded onto the
-//! view from before), and listing fifty such records. The steps are folded here by the same rule
-//! as the session's, which this crate cannot depend on.
+//! two steps a resumed session takes (the newest 400 lines, then every line, each folded from the
+//! view before the restore, not one onto the other), and listing fifty such records. The steps are
+//! folded here by the same rule as the session's, which this crate cannot depend on.
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -15,7 +15,7 @@ use closta_presenter::session::SessionView;
 
 const WARM_UP: usize = 3;
 const RUNS: usize = 5;
-const TAIL_LINES: usize = 400;
+const RESTORE_TAIL_LINES: usize = 400;
 const LISTED: usize = 50;
 const READ_BUDGET: Duration = Duration::from_millis(230);
 const LIST_BUDGET: Duration = Duration::from_millis(90);
@@ -26,6 +26,26 @@ fn never() -> bool {
 
 fn record() -> Arc<[u8]> {
     record_text(&LARGEST, 1).0.into_bytes().into()
+}
+
+// The same rule as `restore_steps` and `restored` in crates/session/src/history/restore.rs: change
+// both together.
+fn restore_steps(events: &[AgentEvent], dropped: i32) -> Vec<(Vec<AgentEvent>, i32)> {
+    let Some(left_out) = events
+        .len()
+        .checked_sub(RESTORE_TAIL_LINES)
+        .filter(|n| *n > 0)
+    else {
+        return vec![(events.to_vec(), dropped)];
+    };
+    let left_out = i32::try_from(left_out).unwrap_or(i32::MAX);
+    vec![
+        (
+            events[events.len() - RESTORE_TAIL_LINES..].to_vec(),
+            left_out.saturating_add(dropped),
+        ),
+        (events.to_vec(), dropped),
+    ]
 }
 
 fn restored(events: &[AgentEvent], dropped: i32) -> SessionView {
@@ -64,19 +84,16 @@ fn record_read_and_restore_within_budget() {
         let read = sessions
             .read(SESSION_ID, &never)
             .unwrap_or_else(|e| panic!("the record could not be read: {e:?}"));
+        assert_eq!((read.skipped, read.dropped), (0, 0));
         let events = &read.events;
         assert!(
-            events.len() > TAIL_LINES,
+            events.len() > RESTORE_TAIL_LINES,
             "the record has {} lines",
             events.len()
         );
-        let left_out = i32::try_from(events.len() - TAIL_LINES).unwrap_or(i32::MAX);
-        let tail = restored(
-            &events[events.len() - TAIL_LINES..],
-            left_out + read.dropped,
-        );
-        let all = restored(events, read.dropped);
-        std::hint::black_box((tail, all));
+        for (step, dropped) in restore_steps(events, read.dropped) {
+            std::hint::black_box(restored(&step, dropped));
+        }
         lines = events.len();
     });
     println!("perf record_read median={took:?} runs={runs:?}");

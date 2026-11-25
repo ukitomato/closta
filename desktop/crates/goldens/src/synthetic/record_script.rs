@@ -22,6 +22,9 @@ const CONFIG_DIR: &str = "/config";
 /// `uuid`, `sessionId`, `timestamp`, `message`; an assistant's `requestId`, a user's
 /// `toolUseResult` when stdout has one). Every line has a uuid of its own: stdout's start again
 /// each turn.
+///
+/// It mixes its lines unlike a real record: the user's prompts (not on stdout) and sidechain lines
+/// are not in it, and a sub-agent's lines are written as the main conversation's.
 pub fn record_text(shape: &Shape, seed: u64) -> (String, usize) {
     let mut text = String::new();
     let mut written = 0;
