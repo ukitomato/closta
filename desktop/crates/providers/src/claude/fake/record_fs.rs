@@ -187,6 +187,12 @@ impl RecordFs for MemoryRecordFs {
     fn open(&self, path: &Path) -> io::Result<Box<dyn RecordFile>> {
         let mut state = lock(&self.state);
         state.opens += 1;
+        // A link in the folders above the file is followed, as the real file system does; the file itself is not.
+        let path = match (path.parent(), path.file_name()) {
+            (Some(parent), Some(name)) => state.followed(parent).join(name),
+            _ => path.to_path_buf(),
+        };
+        let path = path.as_path();
         if let Some(kind) = state.open_failures.get(path) {
             return Err((*kind).into());
         }
@@ -275,6 +281,28 @@ mod tests {
             Some(ErrorKind::InvalidInput)
         );
         assert_eq!(fs.opens(), 1);
+    }
+
+    #[test]
+    fn a_file_under_a_linked_folder_is_opened_but_a_link_as_the_file_is_not() {
+        let fs = MemoryRecordFs::default();
+        fs.put("/real/a.jsonl", b"abc".to_vec(), 7);
+        fs.link("/projects/name", "/real");
+        fs.link("/real/l.jsonl", "/real/a.jsonl");
+        let file = fs.open(Path::new("/projects/name/a.jsonl")).unwrap();
+        assert_eq!(file.len().unwrap(), 3);
+        assert_eq!(
+            fs.open(Path::new("/projects/name/l.jsonl"))
+                .err()
+                .map(|e| e.kind()),
+            Some(ErrorKind::InvalidInput)
+        );
+        assert_eq!(
+            fs.open(Path::new("/projects/name/none.jsonl"))
+                .err()
+                .map(|e| e.kind()),
+            Some(ErrorKind::NotFound)
+        );
     }
 
     #[test]

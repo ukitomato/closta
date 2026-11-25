@@ -6,6 +6,8 @@ pub mod record_files;
 #[allow(dead_code)]
 mod record_lines;
 #[allow(dead_code)]
+pub mod record_place;
+#[allow(dead_code)]
 mod record_titles;
 #[allow(dead_code)]
 mod text;
