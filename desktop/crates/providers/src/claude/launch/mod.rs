@@ -3,6 +3,7 @@
 
 pub mod cli_paths;
 pub mod env;
+pub mod probe;
 pub mod spawn;
 pub mod spec;
 pub mod version;
