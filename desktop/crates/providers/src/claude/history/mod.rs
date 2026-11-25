@@ -1,15 +1,12 @@
-// The reader is built bottom-up over several steps; these helpers have no caller until the next one lands.
-#[allow(dead_code)]
 mod bounded_lines;
-#[allow(dead_code)]
+mod project_transcripts;
 pub mod record_files;
-#[allow(dead_code)]
 mod record_lines;
-#[allow(dead_code)]
 pub mod record_place;
-#[allow(dead_code)]
 mod record_titles;
-#[allow(dead_code)]
 mod text;
 
+pub use project_transcripts::{MAX_RECORD_BYTES, ProjectTranscripts, Survey};
 pub use record_files::{EntryKind, RecordEntry, RecordFile, RecordFs};
+pub use record_lines::{MAX_LINE_BYTES, is_session_id};
+pub use record_place::{MAX_NAME_LENGTH, RecordPlaceUse, name_of};

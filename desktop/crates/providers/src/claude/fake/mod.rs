@@ -9,6 +9,7 @@ pub mod live;
 pub mod process;
 pub mod record_fs;
 pub mod replay;
+pub mod saved;
 pub mod script;
 pub mod session;
 pub mod spawner;
