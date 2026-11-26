@@ -13,6 +13,7 @@ pub mod new_session;
 pub mod panes;
 pub mod projects;
 pub mod rows;
+pub mod settings;
 pub mod slot;
 pub mod state;
 pub mod watch;
