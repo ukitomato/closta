@@ -32,6 +32,7 @@ async fn running_slot(harness: &Harness) -> (ShellState, SlotId, SessionRuntime,
     let runtime = runtime.recv().await.unwrap();
     until(|| runtime.commands().is_some()).await;
     let control = harness.control(0).await;
+    control.skip_initialize().await;
     (shell, slot, runtime, control)
 }
 
@@ -220,6 +221,7 @@ fn a_restart_keeps_the_draft_and_history_and_starts_a_new_generation() {
 
         type_in(&mut shell, slot, "hello");
         shell.act(ShellAction::Send { slot });
+        control.skip_initialize().await;
         control.next_stdin_line().await.expect("sent");
         refresh(&mut shell, slot);
         type_in(&mut shell, slot, "keep me");
@@ -269,6 +271,7 @@ fn a_restart_keeps_the_draft_and_history_and_starts_a_new_generation() {
             shell.refresh(slot, generation, 0).unwrap();
         }
         shell.act(ShellAction::Send { slot });
+        second.skip_initialize().await;
         second.next_stdin_line().await.expect("sent again");
         refresh(&mut shell, slot);
         assert_eq!(

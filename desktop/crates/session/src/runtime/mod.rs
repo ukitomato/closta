@@ -241,6 +241,11 @@ impl SessionRuntime {
         self.shared.store.view()
     }
 
+    /// Whether the session has sent the CLI a request of the user's: what a restart continues.
+    pub fn sent(&self) -> bool {
+        sent_of(&self.view())
+    }
+
     /// A ping after each change of the view; it holds at most one. It closes once the session
     /// ends, and is closed already when taken after the end.
     pub fn watch_view(&self) -> Receiver<()> {
@@ -380,9 +385,13 @@ async fn life(
                 ),
                 ProcessEnd::Restart(switch) => {
                     let view = shared.store.view();
-                    let sent = view.transcript.routing.sends > 0;
-                    let spec =
-                        restart_spec(&first, sent, config.opening, &carried_choices(&view), true);
+                    let spec = restart_spec(
+                        &first,
+                        sent_of(&view),
+                        config.opening,
+                        &carried_choices(&view),
+                        true,
+                    );
                     (spec, Some(switch))
                 }
             };
@@ -465,6 +474,17 @@ async fn run_process(
         events,
         pump,
     } = ClaudeSession::start(Box::new(process), id);
+    // First in the queue, so it is the first line this CLI reads, whatever is sent later.
+    let init_id = match session.queue_initialize() {
+        Ok(init_id) => Some(init_id),
+        // The kind only, as for every request; the session goes on, its output says its end.
+        Err(error) => {
+            config.log.warn(&format!(
+                "claude session {id}: initialize could not be queued ({error:?})"
+            ));
+            None
+        }
+    };
     let close = |pump| {
         close::close_pumping(
             handle,
@@ -516,24 +536,22 @@ async fn run_process(
     let running = SessionStatus::Running {
         version: version.to_owned(),
     };
-    if shared.state().set(running, Some(Arc::clone(&commands))) {
-        // A CLI in the sandbox is asked its settings at once, so a session that writes no
-        // `initialize` still learns whether the sandbox is on.
-        if sandboxed {
-            ask_settings(&commands, config);
-        }
-    } else {
+    if !shared.state().set(running, Some(Arc::clone(&commands))) {
         // Closed meanwhile: the close below wins at once, and nothing is asked.
         commands.revoke();
     }
 
     let mut pump = pump;
     let mut watch = SandboxStartWatch::new(sandboxed);
+    // Only a CLI in the sandbox is asked at its initialize's answer, refused or with no models:
+    // the settings alone say whether the sandbox is on. Any other waits for an answer that lists
+    // the models, or for its first system/init.
+    let answer_id = init_id.as_deref().filter(|_| sandboxed);
     let folding = async {
-        let mut asked = sandboxed;
+        let mut asked = false;
         while let Ok(event) = events.recv().await {
             for event in watch.pass(event) {
-                asked |= fold_event(shared, &commands, config, event, asked);
+                asked |= fold_event(shared, &commands, config, event, answer_id, asked);
             }
         }
     };
@@ -588,6 +606,11 @@ async fn run_process(
     // A failure returned above; the run holds the receiver of the events, so the pump is never
     // abandoned.
     ProcessEnd::Over(Some(SessionStatus::Ended))
+}
+
+/// Whether `view` holds a request the user sent.
+fn sent_of(view: &SessionView) -> bool {
+    view.transcript.routing.sends > 0
 }
 
 fn new_id() -> String {
@@ -668,25 +691,40 @@ fn spawn(
     })
 }
 
-/// Folds one event. The settings are asked for at the first `system/init` (a session with no
-/// `initialize`), and after an answer that calls for them, read on the records before the event
-/// is folded. Returns whether they were asked.
+/// Folds one event. Until they were asked once, the settings are asked for at the answer to
+/// `init_id` (success or error) or at the first `system/init`, whichever comes first; and after
+/// any answer that calls for them, read on the records before the event is folded. Returns
+/// whether they were asked.
 fn fold_event(
     shared: &Shared,
     commands: &SessionCommands,
     config: &SessionConfig,
     event: AgentEvent,
+    init_id: Option<&str>,
     asked: bool,
 ) -> bool {
-    let first_init = !asked && matches!(event, AgentEvent::SystemInit { .. });
+    let first = !asked && (answers(&event, init_id) || is_system_init(&event));
     let asks = shared.store.transition_with(|view| {
-        let asks = first_init || asks_for_settings(&view.transcript.operations, &event);
+        let asks = first || asks_for_settings(&view.transcript.operations, &event);
         (view.fold(&PresenterInput::Event(event)), asks)
     });
     if asks {
         ask_settings(commands, config);
     }
     asks
+}
+
+/// Whether `event` is the CLI's answer to the request `id`.
+fn answers(event: &AgentEvent, id: Option<&str>) -> bool {
+    matches!(
+        (event, id),
+        (AgentEvent::ControlResponse { request_id: Some(answered), .. }, Some(id))
+            if answered == id
+    )
+}
+
+fn is_system_init(event: &AgentEvent) -> bool {
+    matches!(event, AgentEvent::SystemInit { .. })
 }
 
 /// A settings request that could not be written is recorded as failed by the commands; it is no

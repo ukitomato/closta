@@ -9,6 +9,7 @@ mod support;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use closta_providers::claude::fake::initialize::after_initialize;
 use closta_session::launch::{SessionLaunch, SessionLaunchPlanner};
 use closta_session::status::SessionFailure;
 use closta_shell::closing::{
@@ -240,6 +241,7 @@ fn nothing_starts_or_sends_once_the_close_began() {
         let slot = shell.open(launch);
         running(&runtime.recv().await.unwrap()).await;
         let control = harness.control(0).await;
+        control.skip_initialize().await;
         shell.act(ShellAction::OpenNewSession);
         shell.act(ShellAction::EditFolder {
             text: r"C:\work\proj".to_owned(),
@@ -273,7 +275,7 @@ fn nothing_starts_or_sends_once_the_close_began() {
         }
         assert_eq!(shell.slots().len(), 1);
         assert_eq!(shell.live_runs(), runs);
-        assert!(control.stdin_lines().is_empty());
+        assert!(after_initialize(control.stdin_lines()).is_empty());
         let end = finish_closing(run, CLOSE_LIMIT, DESTROY_GRACE).await;
         assert_eq!(end, CloseEnd::Returned);
         assert_eq!(shell.live_runs(), 0);

@@ -18,6 +18,7 @@ use closta_presenter::input::SendId;
 use closta_presenter::records::operations::{SwitchKind, SwitchOutcome, SwitchRecord};
 use closta_presenter::refusal_sentence::plain_sentence_of;
 use closta_presenter::thread_running::thread_is_running;
+use closta_providers::claude::fake::initialize::{after_initialize, is_initialize};
 use closta_providers::claude::fake::live::{LiveControl, LiveOptions, LiveProcess};
 use closta_providers::claude::fake::process::{FakeProcess, ProcessScript};
 use closta_providers::claude::fake::spawner::FakeSpawner;
@@ -36,10 +37,12 @@ use futures_lite::{StreamExt, future, stream};
 use smol::Timer;
 
 use support::{
-    GUARD, ID, Processes, VERSION, WORKING_DIR, drive, reach, runtime, runtime_over, until,
+    GUARD, ID, Processes, VERSION, WORKING_DIR, drive, initialize_answer, reach,
+    refused_initialize, runtime, runtime_over, until,
 };
 
 const TURN: &str = "01-baseline-text.ndjson";
+const GET_SETTINGS: &str = r#""subtype":"get_settings""#;
 const UNAVAILABLE: &str = "36-sandbox-unavailable.ndjson";
 /// What a shell reports for a process ended by SIGTERM.
 const SIGTERM_EXIT: i32 = 143;
@@ -129,8 +132,8 @@ fn unavailable_sentence() -> String {
 }
 
 /// A CLI that refused to start as capture 36's first one did: its one error result written and
-/// exited with 1 before the host writes anything, so the settings request the host writes at
-/// once finds its stdin closed.
+/// exited with 1 before the host writes anything, so the initialize the host writes at once
+/// finds its stdin closed.
 fn not_started(processes: &Processes) -> LiveControl {
     let control = processes.prepare(LiveOptions::default());
     control.emit(&unavailable());
@@ -266,7 +269,7 @@ impl MarkAtEnd {
 }
 
 #[test]
-fn the_launch_carries_the_sandbox_and_asks_its_settings_at_once() {
+fn the_launch_carries_the_sandbox_and_asks_its_settings_once_the_initialize_is_answered() {
     drive(|executor| async move {
         let processes = Processes::new();
         let (runtime, run, _log) = runtime(&processes, |config| config.sandbox = true);
@@ -276,12 +279,115 @@ fn the_launch_carries_the_sandbox_and_asks_its_settings_at_once() {
         let args = processes.session_args();
         assert_eq!(flag_value(&args[0], "--settings"), Some(SANDBOX_SETTINGS));
         assert!(runtime.view().transcript.operations.launch_sandbox);
-        let first = within(processes.controls()[0].next_stdin_line()).await;
+        let control = processes.controls()[0].clone();
+        within(control.skip_initialize()).await;
+        // A negative: nothing is asked before the CLI answers the initialize.
+        Timer::after(Duration::from_millis(100)).await;
+        assert_eq!(
+            control.stdin_lines().len(),
+            1,
+            "{:?}",
+            control.stdin_lines()
+        );
+        runtime.close();
+        within(run).await;
+    });
+}
+
+/// A system/init line of capture 01.
+fn init_line() -> String {
+    common::non_blank_lines(&common::text_of(TURN))
+        .into_iter()
+        .find(|line| line.contains(r#""subtype":"init""#))
+        .expect("capture 01 has a system/init")
+}
+
+fn settings_asked(control: &LiveControl) -> usize {
+    after_initialize(control.stdin_lines())
+        .iter()
+        .filter(|line| line.contains(GET_SETTINGS))
+        .count()
+}
+
+/// A sandboxed session whose CLI answers its initialize with `answer` to the id, then says its
+/// system/init: it stays running and is asked its settings once.
+fn asked_once_after(answer: fn(&str) -> String) {
+    drive(|executor| async move {
+        let processes = Processes::new();
+        let control = processes.prepare(LiveOptions::default());
+        let (runtime, run, _log) = runtime(&processes, |config| config.sandbox = true);
+        let run = executor.spawn(run);
+        running_on(&runtime, &processes, 1).await;
+        let id = within(control.skip_initialize()).await;
+
+        control.emit(&answer(&id));
+        let asked = within(control.next_stdin_line()).await;
         assert!(
-            first
+            asked
                 .as_deref()
-                .is_some_and(|line| line.contains(r#""subtype":"get_settings""#)),
-            "the settings are asked at once: {first:?}"
+                .is_some_and(|line| line.contains(GET_SETTINGS)),
+            "{asked:?}"
+        );
+        assert!(running(&runtime.status()), "{:?}", runtime.status());
+
+        control.emit(&init_line());
+        until(|| runtime.view().conversation.session.is_some()).await;
+        Timer::after(Duration::from_millis(100)).await;
+        assert_eq!(settings_asked(&control), 1, "{:?}", control.stdin_lines());
+        assert!(running(&runtime.status()), "{:?}", runtime.status());
+        runtime.close();
+        within(run).await;
+    });
+}
+
+#[test]
+fn a_sandboxed_cli_is_asked_its_settings_once() {
+    asked_once_after(|id| initialize_answer(id, true));
+    asked_once_after(|id| initialize_answer(id, false));
+}
+
+#[test]
+fn a_refused_initialize_still_asks_the_settings_once() {
+    asked_once_after(refused_initialize);
+}
+
+#[test]
+fn a_restart_into_the_sandbox_initializes_the_new_cli_once() {
+    drive(|executor| async move {
+        let processes = Processes::new();
+        let (runtime, run, _log) = runtime(&processes, |_| {});
+        let run = executor.spawn(run);
+        let commands = running_on(&runtime, &processes, 1).await;
+        let first = processes.controls()[0].clone();
+        within(first.skip_initialize()).await;
+        one_turn(&runtime, &commands, &first).await;
+
+        assert!(runtime.turn_sandbox_on());
+        running_on(&runtime, &processes, 2).await;
+        let second = processes.controls()[1].clone();
+        let id = within(second.skip_initialize()).await;
+        second.emit(&initialize_answer(&id, true));
+        let asked = within(second.next_stdin_line()).await;
+        assert!(
+            asked
+                .as_deref()
+                .is_some_and(|line| line.contains(GET_SETTINGS)),
+            "{asked:?}"
+        );
+
+        let initializes = |control: &LiveControl| {
+            control
+                .stdin_lines()
+                .iter()
+                .filter(|line| is_initialize(line))
+                .count()
+        };
+        assert_eq!(initializes(&first), 1);
+        assert_eq!(initializes(&second), 1);
+        assert!(
+            after_initialize(second.stdin_lines())
+                .iter()
+                .all(|line| !is_initialize(line))
         );
         runtime.close();
         within(run).await;
@@ -704,6 +810,7 @@ fn turn_sandbox_off_writes_apply_flag_settings() {
         let run = executor.spawn(run);
         let commands = running_on(&runtime, &processes, 1).await;
         let control = processes.controls()[0].clone();
+        within(control.skip_initialize()).await;
 
         commands.turn_sandbox_off().expect("written");
         let switches = sandbox_switches(&runtime);
