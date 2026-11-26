@@ -178,6 +178,8 @@ pub fn display_name(project: &Project, all: &[Project]) -> String {
             })
             .unwrap_or(longest);
         let text = shown(&mine, depth);
+        // A folder with nothing above it keeps the bare name: the projects that do have a folder
+        // above say so, which already tells it apart.
         if !text.is_empty() {
             parts.push(text);
         }
@@ -307,6 +309,47 @@ mod tests {
                 r"\\wsl.localhost\Debian\home\me\p"
             ]),
             ["p (WSL · Ubuntu)", "p (WSL · Debian)"]
+        );
+    }
+
+    #[test]
+    fn three_of_a_name_each_get_the_shortest_text_that_tells_it_apart() {
+        assert_eq!(
+            names(&[r"C:\A\x\p", r"C:\B\x\p", r"C:\C\y\p"]),
+            ["p (A/x)", "p (B/x)", "p (y)"]
+        );
+    }
+
+    #[test]
+    fn a_runtime_label_and_the_folders_above_come_together() {
+        assert_eq!(
+            names(&[
+                r"C:\a\p",
+                r"\\wsl.localhost\Ubuntu\home\me\p",
+                r"\\wsl.localhost\Ubuntu\home\you\p"
+            ]),
+            ["p (Windows)", "p (WSL · me)", "p (WSL · you)"]
+        );
+        assert_eq!(
+            names(&[
+                r"\\wsl.localhost\Ubuntu\home\me\p",
+                r"\\wsl.localhost\Ubuntu\home\you\p",
+                r"\\wsl.localhost\Debian\home\me\p"
+            ]),
+            [
+                "p (WSL · Ubuntu · me)",
+                "p (WSL · Ubuntu · you)",
+                "p (WSL · Debian)"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_folder_at_the_root_of_a_distribution_keeps_its_bare_name() {
+        // It has no folder above to name; the others are told from it by theirs.
+        assert_eq!(
+            names(&[r"\\wsl.localhost\Ubuntu\p", r"\\wsl.localhost\Ubuntu\x\p"]),
+            ["p", "p (x)"]
         );
     }
 
