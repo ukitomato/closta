@@ -41,6 +41,7 @@ data class ThinkingRow(
     val text: String,
     val streaming: Boolean,
     override val opens: Boolean,
+    val estimate: Long? = null,
 ) : ThreadRow
 
 /** One tool call. A sub-agent's call is one of these too; what it did inside is read in a tab of its own. */
@@ -260,7 +261,16 @@ class ThreadRows {
         opens: Boolean,
     ): ThreadRow? =
         when (part) {
-            is TextRecord if part.reasoning -> ThinkingRow(key, part.text, part.streaming, opens)
+            is TextRecord if part.reasoning ->
+                ThinkingRow(
+                    key,
+                    part.text,
+                    part.streaming,
+                    opens,
+                    part.estimate.takeIf {
+                        part.streaming
+                    },
+                )
             is TextRecord ->
                 if (part.text.isBlank() &&
                     !part.streaming

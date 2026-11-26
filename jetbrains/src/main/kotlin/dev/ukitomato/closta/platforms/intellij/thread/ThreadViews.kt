@@ -51,6 +51,7 @@ import dev.ukitomato.closta.presenter.view.ToolLine
 import dev.ukitomato.closta.presenter.view.ToolLineState
 import dev.ukitomato.closta.presenter.view.ToolRow
 import dev.ukitomato.closta.presenter.view.TurnEndRow
+import dev.ukitomato.closta.presenter.view.shortTokens
 import java.awt.BorderLayout
 import java.awt.Component
 import java.awt.Dimension
@@ -421,10 +422,15 @@ class ThreadRowViews(
     private fun thinking(row: ThinkingRow): JComponent {
         val key = row.key
         val isOpen = key in open
+        val estimate = row.estimate?.takeIf { row.streaming }
+        val sentence =
+            when {
+                estimate != null -> ClostaBundle.message("thread.thinking.runningEstimate", shortTokens(estimate))
+                row.streaming -> ClostaBundle.message("thread.thinking.running")
+                else -> ClostaBundle.message("thread.thinking.done")
+            }
         val words =
-            JBLabel(
-                ClostaBundle.message(if (row.streaming) "thread.thinking.running" else "thread.thinking.done"),
-            ).apply {
+            JBLabel(sentence).apply {
                 foreground = ThreadStyle.muted
                 if (row.streaming) {
                     icon = AnimatedIcon.Default.INSTANCE

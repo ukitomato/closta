@@ -111,6 +111,11 @@ data class TextRecord(
     val reasoning: Boolean,
     val text: String,
     val streaming: Boolean = false,
+    /**
+     * The CLI's latest estimate of this block's thinking tokens while it streams; null until the first one for this
+     * block, and again once the block stopped.
+     */
+    val estimate: Long? = null,
 ) : PartRecord
 
 /**

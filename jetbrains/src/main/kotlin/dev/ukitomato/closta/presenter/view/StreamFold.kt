@@ -32,6 +32,40 @@ internal fun foldStream(
     }
 }
 
+/**
+ * The CLI's estimate for the thinking block that is streaming: the estimate counts one message's thinking, so it goes
+ * to the last streaming thinking block of the message that is streaming, and to nothing else.
+ */
+internal fun foldThinkingTokens(
+    transcript: Transcript,
+    event: AgentEvent.SystemThinkingTokens,
+): Transcript {
+    val route = transcript.routing.streaming?.let { transcript.routing.anthropic[it] }
+    val key = route?.let { streamingThinkingKey(transcript, it) }
+    return if (route == null || key == null) {
+        transcript
+    } else {
+        transcript.updatePart(route.location, key) { part ->
+            if (part is TextRecord && part.estimate != event.estimatedTokens) {
+                part.copy(estimate = event.estimatedTokens)
+            } else {
+                part
+            }
+        }
+    }
+}
+
+private fun streamingThinkingKey(
+    transcript: Transcript,
+    route: AnthropicRoute,
+): String? {
+    val parts = transcript.messages.messageAt(route.location)?.parts ?: return null
+    return route.streamed.entries
+        .sortedByDescending { it.key }
+        .map { it.value }
+        .firstOrNull { (parts[it] as? TextRecord)?.let { part -> part.reasoning && part.streaming } == true }
+}
+
 private fun startMessage(
     transcript: Transcript,
     frame: JsonObject,
@@ -132,7 +166,7 @@ private fun stopBlock(
     val key = anthropic.streamed[index] ?: return transcript
     return transcript.updatePart(transcript.routing.tools[key] ?: anthropic.location, key) { part ->
         when {
-            part is TextRecord && part.streaming -> part.copy(streaming = false)
+            part is TextRecord && part.streaming -> part.copy(streaming = false, estimate = null)
             part is ToolCallRecord && part.streaming -> part.copy(streaming = false)
             else -> part
         }

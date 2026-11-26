@@ -70,6 +70,7 @@ internal fun foldRetrying(
 ): Transcript =
     when (event) {
         is AgentEvent.SystemApiRetry -> transcript.withOperations(transcript.operations.retried(event))
+        is AgentEvent.SystemThinkingTokens -> foldThinkingTokens(transcript, event)
         is AgentEvent.StreamEvent -> foldStream(transcript, event).let { it.withOperations(it.operations.retryEnded()) }
         else -> transcript
     }
