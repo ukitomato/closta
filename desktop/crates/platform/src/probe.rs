@@ -93,15 +93,19 @@ impl Probing {
 }
 
 /// Writes `lines` to a file beside `path` and renames it over `path`.
-/// A reader of `path` sees the old lines or all of the new ones, never half.
+/// A reader of `path` sees the old lines or all of the new ones, never half. When either step
+/// fails, the file beside it is removed and the first error returned.
 pub fn write_whole(path: &Path, lines: &[String]) -> std::io::Result<()> {
     let mut text = lines.join("\n");
     text.push('\n');
     let mut name = path.file_name().unwrap_or_default().to_owned();
     name.push(".tmp");
     let temporary = path.with_file_name(name);
-    std::fs::write(&temporary, text)?;
-    std::fs::rename(&temporary, path)
+    let written = std::fs::write(&temporary, text).and_then(|()| std::fs::rename(&temporary, path));
+    if written.is_err() {
+        _ = std::fs::remove_file(&temporary);
+    }
+    written
 }
 
 #[cfg(test)]
@@ -159,6 +163,18 @@ mod tests {
         let _ms: u128 = last.strip_prefix("closed ").unwrap().parse().unwrap();
         assert_eq!(text.lines().count(), 4, "{text}");
         assert!(!dir.join("ready.tmp").exists());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_failed_rename_leaves_no_tmp() {
+        let dir = std::env::temp_dir().join(format!("closta-whole-{}", std::process::id()));
+        // The place to rename to is a folder with something in it: the rename fails.
+        let path = dir.join("ready");
+        std::fs::create_dir_all(path.join("inside")).unwrap();
+        assert!(write_whole(&path, &["line".to_owned()]).is_err());
+        assert!(!dir.join("ready.tmp").exists());
+        assert!(path.join("inside").is_dir());
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

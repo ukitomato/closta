@@ -10,11 +10,14 @@ mod ports;
 mod probe;
 #[cfg(feature = "replay")]
 mod replay;
+mod settings;
 
 use std::process::ExitCode;
+use std::sync::Arc;
 use std::time::Instant;
 
 use closta_platform::PlatformOptions;
+use closta_shell::settings::{MemorySettings, Settings, SettingsSink, sink_for_run};
 
 /// What a bad argument ends the app with.
 const USAGE: u8 = 2;
@@ -54,6 +57,7 @@ fn main() -> ExitCode {
             eprintln!("closta: this build takes no arguments");
             return ExitCode::from(USAGE);
         }
+        let (projects, settings) = kept_settings(true);
         PlatformOptions {
             header,
             slots: Vec::new(),
@@ -61,11 +65,32 @@ fn main() -> ExitCode {
             panes: None,
             measure: None,
             probe: None,
-            ports: ports::real_ports(std::sync::Arc::new(closta_shell::settings::MemorySettings)),
+            ports: ports::real_ports(settings),
+            projects,
         }
     };
     closta_platform::run(options);
     ExitCode::SUCCESS
+}
+
+/// The projects kept on this machine and the writer that keeps them; when the run keeps
+/// nothing, the file is neither read nor made.
+fn kept_settings(keeps: bool) -> (Settings, Arc<dyn SettingsSink>) {
+    let mut projects = Settings::default();
+    let sink = sink_for_run(keeps, || {
+        match settings::settings_dir(std::env::var_os("LOCALAPPDATA")) {
+            Some(dir) => {
+                let (read, sink) = settings::load(&dir);
+                projects = read;
+                sink
+            }
+            None => {
+                tracing::info!("the settings have no place, so the projects are not kept");
+                Arc::new(MemorySettings)
+            }
+        }
+    });
+    (projects, sink)
 }
 
 /// The window and the slots the replay build was started with: the replays and what is
@@ -101,6 +126,8 @@ fn replay_options(
         exit_after: args.exit_after_ms.map(Duration::from_millis),
         scroll_through: args.scroll_through,
     });
+    // A replay reads and writes no settings.
+    let (projects, settings) = kept_settings(false);
     Ok(PlatformOptions {
         header,
         slots,
@@ -108,7 +135,8 @@ fn replay_options(
         panes: args.panes,
         measure,
         probe: None,
-        ports: ports::real_ports(std::sync::Arc::new(closta_shell::settings::MemorySettings)),
+        ports: ports::real_ports(settings),
+        projects,
     })
 }
 
@@ -119,10 +147,11 @@ fn probe_options(
     header: closta_shell::header::AppHeader,
     args: args::AppArgs,
 ) -> Result<PlatformOptions, String> {
-    use std::sync::Arc;
     use std::time::Duration;
 
-    let mut ports = ports::real_ports(std::sync::Arc::new(closta_shell::settings::MemorySettings));
+    // A check reads and writes no settings.
+    let (projects, settings) = kept_settings(false);
+    let mut ports = ports::real_ports(settings);
     // Wrapped before any folder is planned: every real session gets the mark and the
     // configuration, a Restart's too.
     if args.mark_children.is_some() || args.mcp_config.is_some() {
@@ -154,5 +183,6 @@ fn probe_options(
         measure: None,
         probe,
         ports,
+        projects,
     })
 }
