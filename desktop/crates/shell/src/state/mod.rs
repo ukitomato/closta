@@ -12,7 +12,10 @@ use closta_presenter::cards::{SUGGESTION_DESTINATIONS, ThreadCard, card_of};
 use closta_presenter::composer_state::{PERMISSION_MODES, composer_state};
 use closta_presenter::rows::{ThreadRow, ThreadRows};
 use closta_presenter::session::SessionView;
-use closta_presenter::sessions::groups::{SessionAlert, alerts_between, waiting_alerts};
+use closta_presenter::sessions::groups::{
+    SessionAlert, TITLE_MAX, alerts_between, session_title, waiting_alerts,
+};
+use closta_presenter::text::take_utf16;
 use closta_presenter::thread_running::thread_is_running;
 use closta_session::log::SessionLog;
 use closta_session::runtime::{SessionConfig, SessionRuntime};
@@ -296,7 +299,10 @@ pub struct Refresh {
 
 /// One slot: its current session and what the last refresh read of it.
 struct Slot {
+    /// The title the slot was started with.
     title: String,
+    /// The first request of the conversation as of the last refresh, once there is one.
+    asked_title: Option<String>,
     /// The project the slot is listed in; `None` is no project.
     project: Option<ProjectKey>,
     runtime: SessionRuntime,
@@ -335,6 +341,12 @@ struct Slot {
 }
 
 impl Slot {
+    /// The title the list shows, cut to the length of a session's name.
+    fn shown_title(&self) -> String {
+        let title = self.asked_title.as_deref().unwrap_or(&self.title);
+        take_utf16(title, TITLE_MAX).to_owned()
+    }
+
     /// Whether a running session works or waits on an approval; one told to end does neither.
     fn is_working(&self) -> bool {
         !self.closing
@@ -421,6 +433,7 @@ impl ShellState {
             id,
             Slot {
                 title,
+                asked_title: None,
                 project,
                 runtime,
                 finished,
@@ -463,6 +476,7 @@ impl ShellState {
         let (runtime, finished) = self.start(launch);
         let held = self.slots.get_mut(&slot)?;
         held.title = title;
+        held.asked_title = None;
         held.relaunch = relaunch;
         held.settles_on_failure = settles_on_failure;
         held.working_directory = working_directory;
@@ -529,7 +543,7 @@ impl ShellState {
             .iter()
             .map(|(id, slot)| SlotSummary {
                 id: *id,
-                title: slot.title.clone(),
+                title: slot.shown_title(),
                 mark: mark_of(&slot.status, slot.running, slot.waiting),
                 closing: slot.closing,
             })
@@ -538,6 +552,12 @@ impl ShellState {
 
     pub fn selected(&self) -> Option<SlotId> {
         self.selected
+    }
+
+    /// The slot's title: the first request as of its last refresh when there is one, else the
+    /// title it was started with; `None` for a slot that is not there.
+    pub fn slot_title(&self, slot: SlotId) -> Option<String> {
+        self.slots.get(&slot).map(Slot::shown_title)
     }
 
     /// The slot's rows as of its last refresh; none for a slot that is not there.
@@ -661,6 +681,7 @@ impl ShellState {
                 .iter()
                 .any(|(alert, _)| request_of(alert) == Some(id.as_str()))
         });
+        held.asked_title = session_title(&view.transcript);
         held.last = Some(view);
         held.rows = rows;
         held.status = status.clone();

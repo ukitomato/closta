@@ -626,3 +626,53 @@ fn removing_is_refused_behind_an_overlay_and_while_closing() {
         assert_eq!(settings.saves().len(), saves);
     });
 }
+
+/// A slot started from the dialog in `folder` whose session runs.
+async fn running_from_dialog(shell: &mut ShellState, harness: &Harness, folder: &str) -> SlotId {
+    let slot = start_from_dialog(shell, folder);
+    let n = shell.slots().len() - 1;
+    let _control = harness.control(n).await;
+    let mut watch = shell.watch(slot).unwrap();
+    assert!(watch.changed().await);
+    shell.refresh(slot, watch.generation(), 0).unwrap();
+    until(|| matches!(shell.status(slot), Some(SessionStatus::Running { .. }))).await;
+    slot
+}
+
+fn ask(shell: &mut ShellState, slot: SlotId, text: &str) {
+    shell.act(ShellAction::EditDraft {
+        slot,
+        text: text.to_owned(),
+    });
+    shell.act(ShellAction::Send { slot });
+    let generation = shell.watch(slot).unwrap().generation();
+    shell.refresh(slot, generation, 0).unwrap();
+}
+
+#[test]
+fn the_slot_title_is_the_first_request_once_there_is_one() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let slot = running_from_dialog(&mut shell, &harness, CLOSTA).await;
+        assert_eq!(shell.slots()[0].title, "New session");
+        assert_eq!(shell.slot_title(slot).as_deref(), Some("New session"));
+        ask(&mut shell, slot, "Retry login when it fails\nmore");
+        assert_eq!(
+            shell.slot_title(slot).as_deref(),
+            Some("Retry login when it fails")
+        );
+        assert_eq!(shell.slots()[0].title, "Retry login when it fails");
+        assert_eq!(shell.slot_title(SlotId::numbered(99)), None);
+    });
+}
+
+#[test]
+fn a_long_first_request_is_cut_at_sixty() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let slot = running_from_dialog(&mut shell, &harness, CLOSTA).await;
+        let long = "x".repeat(70);
+        ask(&mut shell, slot, &long);
+        assert_eq!(shell.slot_title(slot), Some("x".repeat(60)));
+    });
+}

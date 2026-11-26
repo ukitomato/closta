@@ -795,3 +795,105 @@ fn a_row_drawn_in_another_place_than_the_lists_is_not_noted() {
         until(|| answers_of(two.stdin_lines()).len() == 1).await;
     });
 }
+
+fn project_launch(
+    harness: &Harness,
+    folder: &str,
+) -> (
+    closta_shell::slot::SlotLaunch,
+    closta_providers::claude::fake::replay::ReplayControl,
+    async_channel::Receiver<SessionRuntime>,
+) {
+    let (mut launch, control, runtime) = support::replay_launch(harness, SANDBOX, SANDBOX_ASK);
+    launch.project = Some(folder.to_owned());
+    (launch, control, runtime)
+}
+
+/// Opens a slot in `folder` (none for no project) that waits on a request, refreshed at `at`.
+async fn waiting_in(
+    shell: &mut ShellState,
+    harness: &Harness,
+    folder: Option<&str>,
+    at: i64,
+) -> SlotId {
+    let (mut launch, _control, runtime) = project_launch(harness, "unused");
+    launch.project = folder.map(str::to_owned);
+    let slot = shell.open(launch);
+    let runtime = runtime.recv().await.unwrap();
+    running(&runtime).await;
+    waits_on(&runtime, 1).await;
+    let generation = shell.watch(slot).unwrap().generation();
+    shell.refresh(slot, generation, at).unwrap();
+    slot
+}
+
+fn projects_of(shell: &ShellState) -> Vec<(SlotId, Option<String>)> {
+    shell
+        .needs_you()
+        .into_iter()
+        .map(|row| (row.slot, row.project))
+        .collect()
+}
+
+#[test]
+fn waits_of_three_projects_are_one_list_oldest_first() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let a = waiting_in(&mut shell, &harness, Some(r"C:\work\alpha"), 300).await;
+        let b = waiting_in(&mut shell, &harness, Some(r"C:\work\beta"), 100).await;
+        let c = waiting_in(&mut shell, &harness, Some(r"C:\work\gamma"), 200).await;
+        let d = waiting_in(&mut shell, &harness, Some(r"C:\work\alpha"), 400).await;
+        assert_eq!(
+            projects_of(&shell),
+            vec![
+                (b, Some("beta".to_owned())),
+                (c, Some("gamma".to_owned())),
+                (a, Some("alpha".to_owned())),
+                (d, Some("alpha".to_owned())),
+            ]
+        );
+    });
+}
+
+#[test]
+fn a_collapsed_project_s_wait_is_listed() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let slot = waiting_in(&mut shell, &harness, Some(r"C:\work\alpha"), 1).await;
+        let key = closta_shell::projects::project_key(r"C:\work\alpha").unwrap();
+        shell.act(ShellAction::ToggleProject { project: key });
+        assert!(shell.projects()[0].collapsed);
+        assert_eq!(projects_of(&shell), vec![(slot, Some("alpha".to_owned()))]);
+    });
+}
+
+#[test]
+fn two_projects_of_the_same_name_are_told_apart_in_the_rows() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let win = waiting_in(&mut shell, &harness, Some(r"C:\work\closta"), 1).await;
+        let wsl = waiting_in(
+            &mut shell,
+            &harness,
+            Some(r"\\wsl$\Ubuntu\home\x\closta"),
+            2,
+        )
+        .await;
+        assert_eq!(
+            projects_of(&shell),
+            vec![
+                (win, Some("closta (Windows)".to_owned())),
+                (wsl, Some("closta (WSL)".to_owned())),
+            ]
+        );
+    });
+}
+
+#[test]
+fn a_row_of_a_slot_without_a_project_has_no_project() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let slot = waiting_in(&mut shell, &harness, None, 1).await;
+        assert_eq!(projects_of(&shell), vec![(slot, None)]);
+    });
+}

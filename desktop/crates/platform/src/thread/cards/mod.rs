@@ -740,6 +740,7 @@ mod tests {
     fn listed() -> NeedsYouRow {
         NeedsYouRow {
             slot: SlotId::numbered(2),
+            project: None,
             title: "s2".to_owned(),
             item: NeedsYouItem::Permission(PermissionAlert {
                 key: "k2".to_owned(),

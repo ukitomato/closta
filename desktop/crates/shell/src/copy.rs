@@ -502,6 +502,14 @@ pub fn needs_you_line(item: &NeedsYouItem) -> String {
     }
 }
 
+/// A needs-you row's first line: the project and the slot's title, or the title alone.
+pub fn needs_you_heading(project: Option<&str>, title: &str) -> String {
+    match project {
+        Some(project) => format!("{project} · {title}"),
+        None => title.to_owned(),
+    }
+}
+
 /// The mark before a row's line.
 pub fn needs_you_glyph(item: &NeedsYouItem) -> &'static str {
     match item {
@@ -1005,6 +1013,15 @@ mod tests {
     #[test]
     fn diff_counts_use_a_true_minus() {
         assert_eq!(diff_counts(2, 1), "+2 \u{2212}1");
+    }
+
+    #[test]
+    fn the_heading_joins_the_project_and_the_title() {
+        assert_eq!(
+            needs_you_heading(Some("closta"), "Retry login"),
+            "closta · Retry login"
+        );
+        assert_eq!(needs_you_heading(None, "Retry login"), "Retry login");
     }
 
     #[test]

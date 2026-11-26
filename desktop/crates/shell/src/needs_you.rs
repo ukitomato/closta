@@ -22,6 +22,9 @@ pub enum NeedsYouItem {
 #[derive(Clone, PartialEq, Eq)]
 pub struct NeedsYouRow {
     pub slot: SlotId,
+    /// The project's `display_name`; `None` for a slot in no project.
+    pub project: Option<String>,
+    /// The slot's title.
     pub title: String,
     pub item: NeedsYouItem,
     /// How many requests the slot waits on.
@@ -55,6 +58,7 @@ impl fmt::Debug for NeedsYouRow {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("NeedsYouRow")
             .field("slot", &self.slot)
+            .field("project_len", &self.project.as_ref().map_or(0, String::len))
             .field("title_len", &self.title.len())
             .field("item", &self.item)
             .field("waiting", &self.waiting)
@@ -67,6 +71,7 @@ impl fmt::Debug for SlotNeeds {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("SlotNeeds")
             .field("slot", &self.slot)
+            .field("project_len", &self.project.as_ref().map_or(0, String::len))
             .field("title_len", &self.title.len())
             .field("waits", &self.waits.len())
             .field("failed_since_ms", &self.failed.as_ref().map(|it| it.1))
@@ -93,6 +98,7 @@ impl NeedsYouRow {
 #[derive(Clone, PartialEq, Eq)]
 pub struct SlotNeeds {
     pub slot: SlotId,
+    pub project: Option<String>,
     pub title: String,
     /// The alerts in arrival order, each with the time it was first seen; no `Finished`.
     pub waits: Vec<(SessionAlert, i64)>,
@@ -111,6 +117,7 @@ fn row_of(needs: &SlotNeeds) -> Option<NeedsYouRow> {
     if let Some((title, since_ms)) = &needs.failed {
         return Some(NeedsYouRow {
             slot: needs.slot,
+            project: needs.project.clone(),
             title: needs.title.clone(),
             item: NeedsYouItem::Failed {
                 title: title.clone(),
@@ -127,6 +134,7 @@ fn row_of(needs: &SlotNeeds) -> Option<NeedsYouRow> {
     };
     Some(NeedsYouRow {
         slot: needs.slot,
+        project: needs.project.clone(),
         title: needs.title.clone(),
         item,
         waiting: needs.waits.len(),
@@ -200,6 +208,7 @@ mod tests {
     fn needs(n: u64, since_ms: i64) -> SlotNeeds {
         SlotNeeds {
             slot: SlotId::numbered(n),
+            project: None,
             title: format!("s{n}"),
             waits: vec![(permission(&format!("r{n}"), true), since_ms)],
             failed: None,
@@ -322,6 +331,7 @@ mod tests {
         });
         let slot = SlotNeeds {
             slot: SlotId::numbered(1),
+            project: Some("SECRET-PROJECT".to_owned()),
             title: "SECRET-TITLE".to_owned(),
             waits: vec![(alert, 5)],
             failed: Some(("SECRET-FAILURE".to_owned(), 7)),
@@ -342,6 +352,23 @@ mod tests {
             assert!(!text.contains("SECRET"), "{text}");
         }
         assert!(format!("{row:?}").contains("r1"));
+    }
+
+    #[test]
+    fn debug_shows_lengths_of_the_project_and_the_title() {
+        let slot = SlotNeeds {
+            project: Some("secret-proj".to_owned()),
+            title: "secret title".to_owned(),
+            ..needs(1, 0)
+        };
+        let row = needs_you_rows(std::slice::from_ref(&slot)).remove(0);
+        for text in [format!("{slot:?}"), format!("{row:?}")] {
+            assert!(text.contains("project_len: 11"), "{text}");
+            assert!(text.contains("title_len: 12"), "{text}");
+            assert!(!text.contains("secret"), "{text}");
+        }
+        let none = needs_you_rows(&[needs(1, 0)]).remove(0);
+        assert!(format!("{none:?}").contains("project_len: 0"));
     }
 
     #[test]

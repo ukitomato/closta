@@ -41,6 +41,7 @@ fn needs_of(n: usize, view: &SessionView) -> SlotNeeds {
         .collect();
     SlotNeeds {
         slot: SlotId::numbered(n as u64 + 1),
+        project: None,
         title: format!("session {n}"),
         waits,
         failed: None,

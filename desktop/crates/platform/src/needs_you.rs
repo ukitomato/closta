@@ -343,6 +343,7 @@ mod tests {
     fn permission(n: u64, answerable: bool) -> NeedsYouRow {
         NeedsYouRow {
             slot: SlotId::numbered(n),
+            project: None,
             title: format!("s{n}"),
             item: NeedsYouItem::Permission(PermissionAlert {
                 key: format!("k{n}"),
@@ -359,6 +360,7 @@ mod tests {
     fn question(n: u64) -> NeedsYouRow {
         NeedsYouRow {
             slot: SlotId::numbered(n),
+            project: None,
             title: format!("s{n}"),
             item: NeedsYouItem::OpenOnly(OpenOnlyAlert {
                 key: format!("k{n}"),
