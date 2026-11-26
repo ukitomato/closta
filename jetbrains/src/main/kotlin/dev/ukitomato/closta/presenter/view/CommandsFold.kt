@@ -1,6 +1,7 @@
 package dev.ukitomato.closta.presenter.view
 
 import dev.ukitomato.closta.core.models.AgentEvent
+import dev.ukitomato.closta.presenter.tree.JsonArray
 import dev.ukitomato.closta.presenter.tree.JsonObject
 import dev.ukitomato.closta.presenter.tree.JsonRead
 import dev.ukitomato.closta.presenter.tree.JsonValue
@@ -38,6 +39,15 @@ internal fun foldCommandsOfInit(
 ): Transcript {
     val commands = commandsOfInit(JsonRead.parse(event.slashCommands.text)).takeUnless { transcript.commands.detailed }
     return commands?.let { withCommands(transcript, SlashCommands(it, detailed = false)) } ?: transcript
+}
+
+/** `system/commands_changed` carries the whole new list with its sentences; it replaces what the transcript had. */
+internal fun foldCommandsOfChange(
+    transcript: Transcript,
+    event: AgentEvent.SystemCommandsChanged,
+): Transcript {
+    val items = (JsonRead.parse(event.commands.text) as? JsonArray)?.items ?: return transcript
+    return withCommands(transcript, SlashCommands(commandsOf(items), detailed = true))
 }
 
 private fun withCommands(

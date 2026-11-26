@@ -503,7 +503,7 @@ class CaptureAnchorsTest {
     }
 
     @Test
-    fun `03 offers the commands of its initialize response with their sentences, and 01 the names system init gave`() {
+    fun `03 offers its initialize commands with their sentences, and 01 those of its commands_changed`() {
         val detailed = (thread("03-initialize-handshake")["commands"] as JsonArray).items.map { it as JsonObject }
         assertEquals(59, detailed.size)
         val config = detailed.single { it.str("name") == "config" }
@@ -511,8 +511,11 @@ class CaptureAnchorsTest {
         assertEquals("key=value", config.str("argumentHint"))
         assertTrue(detailed.all { it.str("description")!!.isNotEmpty() || it.str("name") != "config" })
         val names = (thread("01-baseline-text")["commands"] as JsonArray).items.map { it as JsonObject }
-        assertTrue(names.isNotEmpty(), "system/init alone names the commands")
-        assertTrue(names.all { it.str("description") == "" && it["argumentHint"] == null }, "and only names")
+        assertEquals(59, names.size)
+        val design = names.first()
+        assertEquals("design", design.str("name"))
+        assertEquals("Grant or revoke Claude agent access to your Design projects", design.str("description"))
+        assertEquals("consent | revoke", design.str("argumentHint"))
     }
 
     @Test

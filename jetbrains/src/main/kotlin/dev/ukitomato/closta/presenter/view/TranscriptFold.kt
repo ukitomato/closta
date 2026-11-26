@@ -73,6 +73,7 @@ private fun foldEvent(
         is AgentEvent.ControlRequest -> foldRequest(transcript, event, after)
         is AgentEvent.ControlResponse ->
             foldCommandsOfResponse(transcript.withOperations(transcript.operations.answered(event)), event)
+        is AgentEvent.SystemCommandsChanged -> foldCommandsOfChange(transcript, event)
         is AgentEvent.SystemCompactBoundary, is AgentEvent.SystemStatus -> foldCompaction(transcript, event)
         is AgentEvent.SystemInit,
         is AgentEvent.ConversationReset,

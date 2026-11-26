@@ -349,7 +349,7 @@ class CaptureStreamTest {
             )
         val EXPECTED_MESSAGES =
             mapOf(
-                "01-baseline-text" to 8,
+                "01-baseline-text" to 10,
                 "02-tool-bash-autorun" to 18,
                 "03-initialize-handshake" to 9,
                 "04-tool-autorun-with-ppt-stdio" to 25,
