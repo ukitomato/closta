@@ -9,6 +9,7 @@ import com.intellij.openapi.project.ProjectCloseListener
 import com.intellij.openapi.util.Disposer
 import dev.ukitomato.closta.platforms.intellij.session.ClaudeSessionService
 import dev.ukitomato.closta.platforms.intellij.session.SessionOpening
+import dev.ukitomato.closta.platforms.intellij.session.heldSessionOf
 import dev.ukitomato.closta.platforms.intellij.session.savedId
 import dev.ukitomato.closta.platforms.intellij.settings.ProviderPick
 import dev.ukitomato.closta.platforms.intellij.settings.ProviderSettings
@@ -43,7 +44,10 @@ class ChatSessions(
 
     private fun directory() = service<ChatDirectory>()
 
-    /** Opens a real session in [workingDirectory] (the project's folder when null), lists it, and returns its id. */
+    /**
+     * Opens a real session in [workingDirectory] (the project's folder when null), lists it, and returns its id. A
+     * resume of an id a session here already holds opens nothing: that session's id is returned, to be shown.
+     */
     fun open(
         opening: SessionOpening,
         title: String,
@@ -51,6 +55,7 @@ class ChatSessions(
         provider: ProviderPick = ProviderPick.Active,
         sandbox: Boolean? = null,
     ): String {
+        heldSessionOf(opening, sources.keys)?.let { return it }
         val runtime =
             project.service<ClaudeSessionService>().open(
                 opening = opening,
@@ -75,14 +80,13 @@ class ChatSessions(
 
     /**
      * Holds [source] like a session it opened, without listing it (the benchmark's fixed conversation). Two sessions
-     * are never held under one id: one held before under [source]'s id is stopped, not left running out of reach.
+     * are never held under one id ([open] does not start a second one), so another one held under [source]'s id is a
+     * mistake, not something to replace.
      */
     fun adopt(source: ChatSource): String {
         val id = source.sessionId
-        sources.put(id, source)?.takeIf { it !== source }?.let { before ->
-            directory().unregister(id)
-            Disposer.dispose(before)
-        }
+        check(sources[id].let { it == null || it === source }) { "a session is already held under $id" }
+        sources[id] = source
         return id
     }
 

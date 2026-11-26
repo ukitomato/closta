@@ -41,3 +41,13 @@ sealed interface SessionOpening {
 
 /** The id of the saved session this opens, or null for a new conversation. */
 val SessionOpening.savedId: String? get() = (this as? SessionOpening.Saved)?.id
+
+/**
+ * The session of [held] that this would open again: a resume takes the saved id as the session's own, so one already
+ * held under it is that session (after a `/clear` it shows the conversation before it above the divider). A fork or a
+ * new conversation takes a new id, so it is null for them.
+ */
+fun heldSessionOf(
+    opening: SessionOpening,
+    held: Set<String>,
+): String? = (opening as? SessionOpening.Resume)?.id?.takeIf { it in held }
