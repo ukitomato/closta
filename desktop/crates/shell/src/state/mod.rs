@@ -900,13 +900,13 @@ impl ShellState {
                 Acted::default()
             }
             ShellAction::RemoveProject { project } => self.remove_project(&project),
-            ShellAction::CopySessionId { slot } => Acted {
-                clipboard: self
-                    .copyable(slot)
-                    .then(|| self.slots.get(&slot).map(|it| it.runtime.id().to_owned()))
-                    .flatten(),
-                ..Acted::default()
-            },
+            ShellAction::CopySessionId { slot } => {
+                let id = self.slots.get(&slot).map(|it| it.runtime.id().to_owned());
+                Acted {
+                    clipboard: if self.copyable(slot) { id } else { None },
+                    ..Acted::default()
+                }
+            }
             ShellAction::TogglePane(pane) => {
                 self.panes.toggle(pane);
                 Acted::default()

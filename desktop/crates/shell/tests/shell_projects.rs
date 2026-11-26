@@ -777,7 +777,7 @@ fn a_restart_counts_the_new_run_afresh() {
     drive(|harness| async move {
         let mut shell = harness.shell();
         let (launch, runtime) = harness.launch("kept");
-        let first = shell.open(launch);
+        shell.open(launch);
         harness.control(0).await;
         let runtime = runtime.recv().await.unwrap();
         running(&runtime).await;
@@ -810,15 +810,18 @@ fn a_restart_counts_the_new_run_afresh() {
         shell.refresh(second, watch.generation(), 3000).unwrap();
         assert_eq!(shell.status(second), Some(SessionStatus::Ended));
         assert!(shell.can_restart(second));
-        let _ = first;
         shell.act(ShellAction::Restart { slot: second });
         let now = summary(&shell, second);
         assert_eq!(now.mark, SlotMark::Starting);
         assert_eq!(now.since_ms, None);
         harness.control(2).await;
-        let again = shell.watch(second).unwrap();
-        shell.refresh(second, again.generation(), 4000).unwrap();
-        assert_ne!(summary(&shell, second).mark, SlotMark::Unread);
+        // `mark_of` hides `unread` while Starting: look once the new run is up.
+        let mut again = shell.watch(second).unwrap();
+        while !matches!(shell.status(second), Some(SessionStatus::Running { .. })) {
+            assert!(again.changed().await);
+            shell.refresh(second, again.generation(), 4000).unwrap();
+        }
+        assert_eq!(summary(&shell, second).mark, SlotMark::Ready);
     });
 }
 
@@ -850,5 +853,61 @@ fn copy_session_id_is_offered_only_for_an_ended_or_failed_slot() {
                 .as_deref(),
             Some(runtime.id())
         );
+    });
+}
+
+#[test]
+fn copy_session_id_is_offered_for_an_ended_slot() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (launch, runtime) = harness.launch("ids");
+        let slot = shell.open(launch);
+        let runtime = runtime.recv().await.unwrap();
+        running(&runtime).await;
+        harness.control(0).await.exit(0);
+        let mut watch = shell.watch(slot).unwrap();
+        while watch.changed().await {}
+        shell.refresh(slot, watch.generation(), 1).unwrap();
+        assert_eq!(shell.status(slot), Some(SessionStatus::Ended));
+        assert!(summary(&shell, slot).can_copy_id);
+        assert_eq!(
+            shell
+                .act(ShellAction::CopySessionId { slot })
+                .clipboard
+                .as_deref(),
+            Some(runtime.id())
+        );
+    });
+}
+
+#[test]
+fn copy_session_id_is_not_offered_while_the_slot_closes() {
+    drive(|harness| async move {
+        harness.stubborn();
+        let mut shell = harness.shell();
+        let (launch, runtime) = harness.launch("closing");
+        let slot = shell.open(launch);
+        let runtime = runtime.recv().await.unwrap();
+        running(&runtime).await;
+        let control = harness.control(0).await;
+        shell.act(ShellAction::CloseSlot { slot });
+        shell.act(ShellAction::ConfirmCloseSlot);
+        assert!(summary(&shell, slot).closing);
+        // The process ends but its run has not returned: the slot is still there, closing.
+        control.exit(0);
+        until(|| !matches!(runtime.status(), SessionStatus::Running { .. })).await;
+        let generation = shell.watch(slot).unwrap().generation();
+        if shell
+            .refresh(slot, generation, 1)
+            .is_some_and(|it| !it.removed)
+        {
+            let now = summary(&shell, slot);
+            assert!(now.closing);
+            assert!(!now.can_copy_id);
+            assert_eq!(
+                shell.act(ShellAction::CopySessionId { slot }).clipboard,
+                None
+            );
+        }
     });
 }
