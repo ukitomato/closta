@@ -61,7 +61,7 @@ fn main() -> ExitCode {
             panes: None,
             measure: None,
             probe: None,
-            ports: ports::real_ports(),
+            ports: ports::real_ports(std::sync::Arc::new(closta_shell::settings::MemorySettings)),
         }
     };
     closta_platform::run(options);
@@ -108,7 +108,7 @@ fn replay_options(
         panes: args.panes,
         measure,
         probe: None,
-        ports: ports::real_ports(),
+        ports: ports::real_ports(std::sync::Arc::new(closta_shell::settings::MemorySettings)),
     })
 }
 
@@ -122,7 +122,7 @@ fn probe_options(
     use std::sync::Arc;
     use std::time::Duration;
 
-    let mut ports = ports::real_ports();
+    let mut ports = ports::real_ports(std::sync::Arc::new(closta_shell::settings::MemorySettings));
     // Wrapped before any folder is planned: every real session gets the mark and the
     // configuration, a Restart's too.
     if args.mark_children.is_some() || args.mcp_config.is_some() {

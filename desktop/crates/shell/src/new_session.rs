@@ -10,6 +10,7 @@ use futures_lite::future;
 
 use crate::copy;
 use crate::slot::SlotLaunch;
+use crate::state::Ports;
 
 /// Where a session's `claude` runs, decided by the folder.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -143,20 +144,22 @@ pub fn default_folder(checks: &dyn LaunchChecks) -> Option<String> {
     Some(format!(r"\\wsl.localhost\{distro}\home"))
 }
 
-/// The launch of a session in `folder` (trimmed). Its relaunch makes the same launch again.
-pub fn launch_in(folder: &str, planner_for: &Arc<dyn PlannerFor>) -> SlotLaunch {
+/// The launch of a session in `folder` (trimmed), a member of that folder's project. Its
+/// relaunch makes the same launch again.
+pub fn launch_in(folder: &str, ports: &Ports) -> SlotLaunch {
     let folder = folder.trim().to_owned();
     let again = {
         let folder = folder.clone();
-        let planner_for = Arc::clone(planner_for);
-        Arc::new(move || launch_in(&folder, &planner_for))
+        let ports = ports.clone();
+        Arc::new(move || launch_in(&folder, &ports))
     };
     SlotLaunch {
-        title: folder_title(&folder),
-        planner: planner_for.planner(&folder),
-        working_directory: Some(folder),
+        title: copy::NEW_SESSION_TITLE.to_owned(),
+        planner: ports.planner_for.planner(&folder),
+        working_directory: Some(folder.clone()),
         companion: None,
         relaunch: Some(again),
+        project: Some(folder),
         settles_on_failure: false,
     }
 }
@@ -172,6 +175,7 @@ mod tests {
 
     use super::*;
     use crate::copy;
+    use crate::settings::MemorySettings;
 
     struct Machine {
         distros: Vec<String>,
@@ -365,13 +369,19 @@ mod tests {
         let planners = Arc::new(Planners {
             asked: std::sync::Mutex::new(Vec::new()),
         });
-        let planner_for: Arc<dyn PlannerFor> = Arc::clone(&planners) as _;
-        let launch = launch_in(r"  C:\work\closta ", &planner_for);
-        assert_eq!(launch.title, "closta");
+        let ports = Ports {
+            checks: Arc::new(Machine::new(&[], ClaudeOnPath::Found)),
+            planner_for: Arc::clone(&planners) as _,
+            settings: Arc::new(MemorySettings),
+        };
+        let launch = launch_in(r"  C:\work\closta ", &ports);
+        assert_eq!(launch.title, "New session");
+        assert_eq!(launch.project.as_deref(), Some(r"C:\work\closta"));
         assert_eq!(launch.working_directory.as_deref(), Some(r"C:\work\closta"));
         assert!(launch.companion.is_none());
         let again = (launch.relaunch.expect("a relaunch"))();
-        assert_eq!(again.title, "closta");
+        assert_eq!(again.title, "New session");
+        assert_eq!(again.project.as_deref(), Some(r"C:\work\closta"));
         assert_eq!(again.working_directory.as_deref(), Some(r"C:\work\closta"));
         assert!(again.relaunch.is_some());
         assert_eq!(

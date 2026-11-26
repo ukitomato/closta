@@ -501,6 +501,7 @@ mod tests {
         let ports = Ports {
             checks: Arc::new(Nothing),
             planner_for: Arc::new(Nothing),
+            settings: Arc::new(closta_shell::settings::MemorySettings),
         };
         let mut shell = ShellState::new(header, Arc::new(|_| {}), Arc::new(TracingLog), ports);
         shell.open(SlotLaunch {
@@ -509,6 +510,7 @@ mod tests {
             working_directory: None,
             companion: None,
             relaunch: None,
+            project: None,
             settles_on_failure: false,
         })
     }

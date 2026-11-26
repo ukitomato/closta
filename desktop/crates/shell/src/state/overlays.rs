@@ -120,8 +120,8 @@ impl ShellState {
             return Acted::default();
         }
         let folder = folder.trim();
-        let slot = self.open(launch_in(folder, &self.ports.planner_for));
-        self.selected = Some(slot);
+        let slot = self.open(launch_in(folder, &self.ports));
+        self.select(slot);
         self.recent.push(folder);
         self.dialog = None;
         Acted {

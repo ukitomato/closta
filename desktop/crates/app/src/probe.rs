@@ -126,6 +126,7 @@ pub fn fail_launch(code: i32, distro: Option<String>) -> SlotLaunch {
         working_directory: None,
         companion: None,
         relaunch: Some(Arc::new(move || fail_launch(code, distro.clone()))),
+        project: None,
         settles_on_failure: true,
     }
 }
@@ -139,7 +140,7 @@ pub fn open_folder(folder: &str, ports: &Ports) -> Result<SlotLaunch, String> {
     if !Path::new(folder.trim()).is_dir() {
         return Err(problem_text(&Problem::FolderMissing));
     }
-    Ok(launch_in(folder, &ports.planner_for))
+    Ok(launch_in(folder, ports))
 }
 
 #[cfg(test)]
@@ -307,6 +308,7 @@ mod tests {
         let ports = Ports {
             checks: Arc::new(Machine),
             planner_for: Arc::new(FixedFor(inner_spawner())),
+            settings: Arc::new(closta_shell::settings::MemorySettings),
         };
         let here = std::env::temp_dir().to_string_lossy().into_owned();
         let launch = open_folder(&here, &ports).unwrap();

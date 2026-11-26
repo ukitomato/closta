@@ -14,6 +14,7 @@ use closta_providers::claude::process::ProcessSpawner;
 use closta_session::launch::{NativeSessionLaunchPlanner, SessionLaunchPlanner, WslAwarePlanner};
 use closta_session::log::TracingLog;
 use closta_shell::new_session::{ClaudeOnPath, LaunchChecks, PlannerFor};
+use closta_shell::settings::SettingsSink;
 use closta_shell::state::Ports;
 use futures_lite::future;
 
@@ -80,10 +81,11 @@ impl PlannerFor for RealPlannerFor {
     }
 }
 
-pub fn real_ports() -> Ports {
+pub fn real_ports(settings: Arc<dyn SettingsSink>) -> Ports {
     Ports {
         checks: Arc::new(RealChecks),
         planner_for: Arc::new(RealPlannerFor),
+        settings,
     }
 }
 

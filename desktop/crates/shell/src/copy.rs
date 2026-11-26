@@ -16,6 +16,10 @@ use crate::new_session::Runtime;
 
 /// The conversation pane with no rows (`thread.empty`).
 pub const EMPTY: &str = "No messages yet";
+
+/// The title of a session started from a folder; the folder's name is its project's heading.
+pub const NEW_SESSION_TITLE: &str = "New session";
+
 /// The button that scrolls back to the tail (`thread.toLatest`).
 pub const JUMP_TO_LATEST: &str = "Scroll to latest";
 /// The menu items that copy a whole message, which a selection cannot reach once its first row

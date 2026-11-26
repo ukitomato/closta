@@ -79,6 +79,7 @@ pub(crate) fn open(
             asked: Arc::clone(&asked),
         }),
         planner_for: Arc::new(Never),
+        settings: Arc::new(closta_shell::settings::MemorySettings),
     };
     let header = AppHeader {
         title: String::new(),
@@ -93,6 +94,7 @@ pub(crate) fn open(
             working_directory: None,
             companion: None,
             relaunch: None,
+            project: None,
             settles_on_failure: false,
         })
         .collect();

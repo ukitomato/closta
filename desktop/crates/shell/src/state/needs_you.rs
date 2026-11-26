@@ -87,7 +87,7 @@ impl ShellState {
         if row.request_id() != Some(request_id) || !row.may_allow() {
             return Acted::default();
         }
-        self.selected = Some(slot);
+        self.select(slot);
         let Some(card) = self.card_mut(slot, request_id) else {
             return Acted::default();
         };
@@ -105,7 +105,7 @@ impl ShellState {
         let Some(row) = self.row_of(slot) else {
             return Acted::default();
         };
-        self.selected = Some(slot);
+        self.select(slot);
         let focus = match row.request_id() {
             Some(request_id) => FocusTarget::Card {
                 slot,
@@ -136,7 +136,7 @@ impl ShellState {
         else {
             return Acted::default();
         };
-        self.selected = Some(slot);
+        self.select(slot);
         Acted {
             focus: Some(FocusTarget::Card {
                 slot,

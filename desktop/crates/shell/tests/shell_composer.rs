@@ -16,6 +16,7 @@ use closta_session::status::{SessionFailure, SessionStatus};
 use closta_shell::copy;
 use closta_shell::new_session::{ClaudeOnPath, Problem};
 use closta_shell::rows::RowChange;
+use closta_shell::settings::MemorySettings;
 use closta_shell::slot::{SlotId, SlotLaunch};
 use closta_shell::state::{Acted, Ports, ShellAction, ShellState};
 use futures_lite::future;
@@ -337,7 +338,7 @@ fn start_opens_the_folder_once_it_is_seen_and_selects_it() {
         assert_eq!(shell.recent_folders(), [FOLDER.to_owned()]);
         assert!(shell.new_session().is_none());
         let titles: Vec<_> = shell.slots().into_iter().map(|it| it.title).collect();
-        assert_eq!(titles, ["first", "proj"]);
+        assert_eq!(titles, ["first", "New session"]);
         until(|| harness.answers.lock().unwrap().controls.len() == 2).await;
     });
 }
@@ -350,7 +351,8 @@ fn the_folder_is_looked_for_without_the_spaces_around_it() {
                 folders: Some(vec![FOLDER.to_owned()]),
                 ..Machine::default()
             }),
-            planner_for: Arc::new(Planners(Arc::clone(&harness.planner) as _)),
+            planner_for: Arc::new(Planners::new(Arc::clone(&harness.planner) as _)),
+            settings: Arc::new(MemorySettings),
         };
         let mut shell = harness.shell_with(ports);
         let padded = format!(" {FOLDER} ");
@@ -368,7 +370,8 @@ fn a_missing_folder_keeps_the_dialog_and_says_so() {
                 folders: Some(Vec::new()),
                 ..Machine::default()
             }),
-            planner_for: Arc::new(Planners(Arc::clone(&harness.planner) as _)),
+            planner_for: Arc::new(Planners::new(Arc::clone(&harness.planner) as _)),
+            settings: Arc::new(MemorySettings),
         };
         let mut shell = harness.shell_with(ports);
         let check = start_in(&mut shell, FOLDER).check.expect("a check");
@@ -442,7 +445,8 @@ fn a_quick_problem_blocks_start_without_a_check() {
                 claude: ClaudeOnPath::Missing,
                 ..Machine::default()
             }),
-            planner_for: Arc::new(Planners(Arc::clone(&harness.planner) as _)),
+            planner_for: Arc::new(Planners::new(Arc::clone(&harness.planner) as _)),
+            settings: Arc::new(MemorySettings),
         };
         let mut shell = harness.shell_with(ports);
         let acted = start_in(&mut shell, FOLDER);
@@ -478,6 +482,7 @@ fn the_failure_band_reads_the_status() {
             working_directory: Some(r"\\wsl.localhost\Ubuntu-26.04\home\x".into()),
             companion: None,
             relaunch: None,
+            project: None,
             settles_on_failure: false,
         };
         let slot = shell.open(launch);
@@ -544,6 +549,7 @@ fn ready_lines_wait_for_every_slot_to_run_or_fail() {
             working_directory: Some(r"\\wsl.localhost\Ubuntu-26.04\home\x".into()),
             companion: None,
             relaunch: None,
+            project: None,
             settles_on_failure: false,
         });
         assert_eq!(shell.ready_lines(), None);

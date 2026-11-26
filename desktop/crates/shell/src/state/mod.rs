@@ -32,7 +32,9 @@ use crate::new_session::{
     launch_in, quick_problem, runtime_of,
 };
 use crate::panes::{Pane, Panes};
+use crate::projects::{Project, ProjectKey};
 use crate::rows::{RowChange, row_changes};
+use crate::settings::{Settings, SettingsSink};
 use crate::slot::{
     MAX_LIVE_SLOTS, Relaunch, SlotId, SlotLaunch, SlotSummary, Spawn, counts_as_live, mark_of,
 };
@@ -42,6 +44,9 @@ mod cards;
 mod closing;
 mod needs_you;
 mod overlays;
+mod projects;
+
+pub use projects::ProjectSummary;
 
 /// The mode that runs every tool without asking.
 pub const BYPASS_MODE: &str = "bypassPermissions";
@@ -199,6 +204,10 @@ pub enum ShellAction {
     CancelBypass {
         slot: SlotId,
     },
+    /// Opens or closes the project's row in the tree, and saves that.
+    ToggleProject {
+        project: ProjectKey,
+    },
 }
 
 /// The one thing that holds the window's attention; what is behind it takes no answer.
@@ -219,12 +228,13 @@ pub enum FocusTarget {
     FailureBand(SlotId),
 }
 
-/// What the machine is asked: the checks of the New Session dialog and the planner a folder
-/// starts with.
+/// What the machine is asked: the checks of the New Session dialog, the planner a folder
+/// starts with, and where the list of projects is kept.
 #[derive(Clone)]
 pub struct Ports {
     pub checks: Arc<dyn LaunchChecks>,
     pub planner_for: Arc<dyn PlannerFor>,
+    pub settings: Arc<dyn SettingsSink>,
 }
 
 /// A folder to look for in the background; its answer comes back as `FolderChecked`.
@@ -283,6 +293,8 @@ pub struct Refresh {
 /// One slot: its current session and what the last refresh read of it.
 struct Slot {
     title: String,
+    /// The project the slot is listed in; `None` is no project.
+    project: Option<ProjectKey>,
     runtime: SessionRuntime,
     finished: Receiver<()>,
     /// How many times the session was replaced.
@@ -345,6 +357,11 @@ pub struct ShellState {
     last_id: u64,
     slots: BTreeMap<SlotId, Slot>,
     selected: Option<SlotId>,
+    /// The projects in the order they were made in.
+    projects: Vec<Project>,
+    /// What the settings writer was last given, or what was restored: a value equal to it is
+    /// not written again.
+    saved: Option<Settings>,
     panes: Panes,
     runs: Runs,
     closing: CloseStage,
@@ -369,6 +386,8 @@ impl ShellState {
             last_id: 0,
             slots: BTreeMap::new(),
             selected: None,
+            projects: Vec::new(),
+            saved: None,
             panes: Panes::default(),
             runs: Runs::default(),
             closing: CloseStage::Open,
@@ -389,11 +408,16 @@ impl ShellState {
         let relaunch = launch.relaunch.clone();
         let settles_on_failure = launch.settles_on_failure;
         let working_directory = launch.working_directory.clone();
+        let project = launch
+            .project
+            .as_deref()
+            .and_then(|folder| self.join_project(folder));
         let (runtime, finished) = self.start(launch);
         self.slots.insert(
             id,
             Slot {
                 title,
+                project,
                 runtime,
                 finished,
                 generation: 0,
@@ -803,8 +827,12 @@ impl ShellState {
         match action {
             ShellAction::Select(slot) => {
                 if self.slots.contains_key(&slot) {
-                    self.selected = Some(slot);
+                    self.select(slot);
                 }
+                Acted::default()
+            }
+            ShellAction::ToggleProject { project } => {
+                self.toggle_project(&project);
                 Acted::default()
             }
             ShellAction::TogglePane(pane) => {

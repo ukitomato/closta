@@ -45,6 +45,8 @@ pub struct SlotLaunch {
     pub companion: Option<Companion>,
     /// How to make this launch again; `None` leaves the slot without a Restart.
     pub relaunch: Option<Relaunch>,
+    /// The folder of the project the session belongs to; `None` is no project.
+    pub project: Option<String>,
     /// Whether the session is meant to fail: it counts as settled only once it has failed, not
     /// while it passes through running.
     pub settles_on_failure: bool,

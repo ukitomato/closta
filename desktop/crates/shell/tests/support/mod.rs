@@ -3,6 +3,7 @@
 
 use std::collections::VecDeque;
 use std::future::Future;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
@@ -23,6 +24,7 @@ use closta_session::runtime::SessionRuntime;
 use closta_session::status::SessionStatus;
 use closta_shell::header::app_header;
 use closta_shell::new_session::{ClaudeOnPath, LaunchChecks, PlannerFor};
+use closta_shell::settings::{MemorySettings, Settings, SettingsSink};
 use closta_shell::slot::{SlotId, SlotLaunch, Spawn};
 use closta_shell::state::{Ports, ShellState};
 use futures_lite::future;
@@ -106,7 +108,29 @@ impl Harness {
     pub fn ports(&self) -> Ports {
         Ports {
             checks: Arc::new(Machine::default()),
-            planner_for: Arc::new(Planners(Arc::clone(&self.planner) as _)),
+            planner_for: Arc::new(Planners::new(Arc::clone(&self.planner) as _)),
+            settings: Arc::new(MemorySettings),
+        }
+    }
+
+    /// A shell whose settings writer records what it is given.
+    pub fn shell_recording(&self) -> (ShellState, Arc<RecordingSettings>) {
+        let recording = Arc::new(RecordingSettings::default());
+        let mut ports = self.ports();
+        ports.settings = Arc::clone(&recording) as _;
+        (self.shell_with(ports), recording)
+    }
+
+    /// A launch of the harness's planner in `folder`, as a session started there is.
+    pub fn folder_launch(&self, folder: &str) -> SlotLaunch {
+        SlotLaunch {
+            title: folder.to_owned(),
+            planner: Arc::clone(&self.planner) as _,
+            working_directory: Some(folder.to_owned()),
+            companion: None,
+            relaunch: None,
+            project: Some(folder.to_owned()),
+            settles_on_failure: false,
         }
     }
 
@@ -123,6 +147,7 @@ impl Harness {
                 })
             })),
             relaunch: None,
+            project: None,
             settles_on_failure: false,
         };
         (launch, receiver)
@@ -190,6 +215,15 @@ pub struct Machine {
     pub distros: Vec<String>,
     pub claude: ClaudeOnPath,
     pub folders: Option<Vec<String>>,
+    /// How many times a folder was looked for.
+    pub looks: AtomicUsize,
+}
+
+impl Machine {
+    /// How many times a folder was looked for.
+    pub fn folder_looks(&self) -> usize {
+        self.looks.load(Ordering::SeqCst)
+    }
 }
 
 impl Default for Machine {
@@ -198,6 +232,7 @@ impl Default for Machine {
             distros: vec!["Ubuntu-26.04".to_owned()],
             claude: ClaudeOnPath::Found,
             folders: None,
+            looks: AtomicUsize::new(0),
         }
     }
 }
@@ -216,6 +251,7 @@ impl LaunchChecks for Machine {
     }
 
     fn folder_exists(&self, folder: &str) -> future::Boxed<bool> {
+        self.looks.fetch_add(1, Ordering::SeqCst);
         let exists = self
             .folders
             .as_ref()
@@ -225,11 +261,53 @@ impl LaunchChecks for Machine {
 }
 
 /// Every folder starts the harness's planner.
-pub struct Planners(pub Arc<dyn SessionLaunchPlanner>);
+pub struct Planners {
+    planner: Arc<dyn SessionLaunchPlanner>,
+    asked: AtomicUsize,
+}
+
+impl Planners {
+    pub fn new(planner: Arc<dyn SessionLaunchPlanner>) -> Planners {
+        Planners {
+            planner,
+            asked: AtomicUsize::new(0),
+        }
+    }
+
+    /// How many times a planner was asked for.
+    pub fn planned(&self) -> usize {
+        self.asked.load(Ordering::SeqCst)
+    }
+}
 
 impl PlannerFor for Planners {
     fn planner(&self, _folder: &str) -> Arc<dyn SessionLaunchPlanner> {
-        Arc::clone(&self.0)
+        self.asked.fetch_add(1, Ordering::SeqCst);
+        Arc::clone(&self.planner)
+    }
+}
+
+/// A settings writer that keeps every value it was given.
+#[derive(Default)]
+pub struct RecordingSettings {
+    saved: Mutex<Vec<Settings>>,
+}
+
+impl RecordingSettings {
+    pub fn saves(&self) -> Vec<Settings> {
+        self.saved
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+}
+
+impl SettingsSink for RecordingSettings {
+    fn save(&self, settings: Settings) {
+        self.saved
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(settings);
     }
 }
 
@@ -243,6 +321,7 @@ pub fn relaunchable(harness: &Harness, title: &'static str) -> SlotLaunch {
             working_directory: None,
             companion: None,
             relaunch: Some(Arc::new(move || make(Arc::clone(&again), title))),
+            project: None,
             settles_on_failure: false,
         }
     }
