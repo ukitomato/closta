@@ -155,7 +155,7 @@ data class InformationalRecord(
 ) : PartRecord
 
 /**
- * The `tool_result' for a call. [content] is null when the block carried none. [durationMs] is how long a sub-agent
+ * The `tool_result` for a call. [content] is null when the block carried none. [durationMs] is how long a sub-agent
  * ran, when the line's `tool_use_result` says so.
  */
 data class ToolResult(
