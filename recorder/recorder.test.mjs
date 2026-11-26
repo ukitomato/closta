@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import { EventEmitter } from 'node:events';
 import { removeFileHistory, removeOnSignal } from './cleanup.mjs';
+import { initializeRequest } from './protocol.mjs';
 import { scenarios, rewindDefinitionProblem, readShowsRewind, resumeAtUuid, resumeFlagsFor } from './scenarios.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -134,6 +135,74 @@ await check('removeOnSignal: SIGINT or SIGTERM removes the directory and exits a
     assert.equal(await exists(kept), true);
   } finally {
     await fsp.rm(kept, { recursive: true, force: true });
+  }
+});
+
+await check('scenes 45 to 50 are pending and the other scenes are not', () => {
+  const pending = scenarios.filter((s) => s.pending).map((s) => s.id.slice(0, 2));
+  assert.deepEqual(pending, ['45', '46', '47', '48', '49', '50']);
+});
+
+const sceneOf = (n) => scenarios.find((s) => s.id.startsWith(`${n}-`));
+
+await check('scene 48: Pre answers {} and Post answers with additionalContext', () => {
+  const { respond } = sceneOf('48').hookCallback;
+  const pre = { subtype: 'hook_callback', callback_id: 'closta-before-file-tool', input: { hook_event_name: 'PreToolUse', tool_name: 'Read' } };
+  const post = { subtype: 'hook_callback', callback_id: 'closta-after-edit', input: { hook_event_name: 'PostToolUse', tool_name: 'Edit' } };
+  assert.deepEqual(respond(pre, { index: 0, cwd: '/nowhere' }).payload, {});
+  const answer = respond(post, { index: 1, cwd: '/nowhere' }).payload;
+  assert.equal(answer.hookSpecificOutput.hookEventName, 'PostToolUse');
+  assert.match(answer.hookSpecificOutput.additionalContext, /<ide-diagnostics>/);
+});
+
+await check('scene 48: the second Edit Pre appends a line to the seeded file, the first does not', async () => {
+  const cwd = await fsp.mkdtemp(path.join(os.tmpdir(), 'closta-hook-'));
+  try {
+    const s = sceneOf('48');
+    const file = path.join(cwd, 'a.txt');
+    await fsp.writeFile(file, s.seed['a.txt']);
+    const editPre = { subtype: 'hook_callback', callback_id: 'closta-before-file-tool', input: { hook_event_name: 'PreToolUse', tool_name: 'Edit' } };
+    const readPre = { ...editPre, input: { hook_event_name: 'PreToolUse', tool_name: 'Read' } };
+    assert.deepEqual(s.hookCallback.respond(editPre, { index: 1, cwd }).payload, {});
+    assert.equal(await fsp.readFile(file, 'utf8'), s.seed['a.txt']);
+    assert.deepEqual(s.hookCallback.respond(readPre, { index: 2, cwd }).payload, {});
+    assert.equal(await fsp.readFile(file, 'utf8'), s.seed['a.txt']);
+    assert.deepEqual(s.hookCallback.respond(editPre, { index: 3, cwd }).payload, {});
+    assert.ok((await fsp.readFile(file, 'utf8')).startsWith(s.seed['a.txt']));
+    assert.ok((await fsp.readFile(file, 'utf8')).length > s.seed['a.txt'].length);
+  } finally {
+    await fsp.rm(cwd, { recursive: true, force: true });
+  }
+});
+
+await check('scene 50: the first Pre holds 5 s and answers {}, the second is an error answer; timeout is 2', () => {
+  const s = sceneOf('50');
+  assert.equal(s.hooks.PreToolUse[0].timeout, 2);
+  const pre = { subtype: 'hook_callback', callback_id: 'closta-before-file-tool', input: { hook_event_name: 'PreToolUse', tool_name: 'Read' } };
+  const cwd = '/nowhere-50';
+  assert.deepEqual(s.hookCallback.respond(pre, { index: 0, cwd }), { holdMs: 5000, payload: {} });
+  assert.equal(s.hookCallback.respond(pre, { index: 1, cwd }).payload, null);
+});
+
+await check('scenes 45 to 47: elicitation answers, accept then decline, accept, and none', () => {
+  assert.deepEqual(sceneOf('45').elicitation.respond({}, { index: 0, cwd: '' }).payload,
+    { action: 'accept', content: { name: 'Ada', color: 'blue', count: 2, agree: true } });
+  assert.deepEqual(sceneOf('45').elicitation.respond({}, { index: 1, cwd: '' }).payload, { action: 'decline' });
+  assert.deepEqual(sceneOf('46').elicitation.respond({}, { index: 0, cwd: '' }).payload, { action: 'accept' });
+  assert.equal(sceneOf('47').elicitation.respond({}, { index: 0, cwd: '' }).payload, null);
+  assert.equal(sceneOf('47').done.maxMs, 180000);
+});
+
+await check('initializeRequest(s.hooks): the file-tool declaration for 48 only, {} for every other scene', () => {
+  for (const s of scenarios) {
+    const hooks = initializeRequest(s.hooks).hooks;
+    if (s.id.startsWith('48-')) {
+      assert.deepEqual(hooks.PreToolUse[0].hookCallbackIds, ['closta-before-file-tool']);
+      assert.deepEqual(hooks.PostToolUse[0].hookCallbackIds, ['closta-after-edit']);
+      assert.equal(hooks.PreToolUse[0].timeout, 10);
+    } else if (!s.id.startsWith('49-') && !s.id.startsWith('50-')) {
+      assert.deepEqual(hooks, {}, s.id);
+    }
   }
 });
 

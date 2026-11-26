@@ -65,11 +65,18 @@ async function main() {
   const entries = manifest.scenarios || [];
 
   // 4. Correspondence with the scenario definitions.
+  // A scenario marked pending has not been recorded yet: it may be missing from the manifest and is reported instead of failed.
   const defIds = new Set(scenarios.map((s) => s.id));
+  const pendingIds = new Set(scenarios.filter((s) => s.pending).map((s) => s.id));
   const manIds = new Set(entries.map((e) => e.scenario));
-  for (const id of defIds) if (!manIds.has(id)) bad(`scenario missing from manifest: ${id}`);
+  for (const id of defIds) {
+    if (manIds.has(id)) continue;
+    if (pendingIds.has(id)) process.stdout.write(`  pending: ${id}\n`);
+    else bad(`scenario missing from manifest: ${id}`);
+  }
   for (const id of manIds) if (!defIds.has(id)) bad(`manifest entry with no definition: ${id}`);
-  if (entries.length === scenarios.length && [...defIds].every((id) => manIds.has(id))) {
+  const expected = [...defIds].filter((id) => manIds.has(id) || !pendingIds.has(id));
+  if (entries.length === expected.length && expected.every((id) => manIds.has(id))) {
     ok(`${entries.length} scenarios match the definitions`);
   }
 

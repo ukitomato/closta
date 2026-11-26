@@ -294,6 +294,23 @@ check('reports an api id with a future prefix too', () => {
   assert.equal(findPii(JSON.stringify({ id: fakeApiId(id) }), 'alice').length, 0);
 });
 
+check('scrubs the home path in a hook_callback input (cwd and transcript_path)', () => {
+  const st = newScrubState('alice');
+  const line = JSON.stringify({
+    type: 'control_request',
+    request_id: 'r1',
+    request: {
+      subtype: 'hook_callback',
+      callback_id: 'closta-before-file-tool',
+      input: { hook_event_name: 'PreToolUse', cwd: '/home/alice/proj', transcript_path: '/home/alice/.claude/projects/-home-alice-proj/s.jsonl' },
+    },
+  });
+  const out = scrubLine(line, st);
+  assert.equal(findPii(out, 'alice').length, 0, out);
+  assert.ok(out.includes('/home/user/proj'));
+  assert.ok(out.includes('-home-user-proj'));
+});
+
 process.stdout.write(failures ? `\nNG: ${failures} failed\n`
  : '\nOK\n');
 process.exit(failures ? 1 : 0);

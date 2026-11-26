@@ -28,6 +28,10 @@ node record.mjs 06 07    # re-record some scenarios (only their manifest entries
 node record.mjs          # re-record every scenario (overwrites the captures)
 ```
 
+- Scenarios are declared in `scenarios.mjs`. Besides the steps they can set `hooks` (the callbacks `initialize` declares),
+  `hookCallback` and `elicitation` (how to answer those requests from the CLI; a `null` payload answers a hook with an
+  error and an elicitation not at all) and `pending: true`. A pending scenario is defined but not recorded yet:
+  `verify.mjs` prints `pending: <id>` for it instead of failing on its missing manifest entry. Drop the flag when you record it.
 - `CLAUDE_BIN=/path/to/claude` chooses the CLI binary. To add a capture next to existing ones, use the same CLI
   version as the manifest: `record.mjs` stops before writing anything when the version differs, unless
   `--allow-version-change` is given (for re-recording everything on a new version).

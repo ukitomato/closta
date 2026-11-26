@@ -42,6 +42,8 @@
 // Second-CLI scenarios (scenario.then present): after the first CLI closes, a second CLI with then.flags and a new session id (not a resume) runs then.steps,
 //   in the same out after a recorder_boundary line (phase "then"). The manifest entry gets then_flags and exit_codes (a CLI that refuses to start exits on its own).
 //   If then.sameId is true, the second CLI gets the first CLI's --session-id (still not a resume).
+// Hook and elicitation scenarios (scenario.hooks, hookCallback, elicitation): hooks go into the initialize request; each hook_callback or elicitation control_request is answered
+//   by the scenario's respond(req, {index, cwd}) after its holdMs (see scenarios.mjs). The fake server's ask_form and ask_url tools make the CLI send the elicitation.
 // Hidden-command scenarios (scenario.hideCommands present): the child's PATH is a directory of symlinks without those names (shimPathWithout), checked with command -v.
 
 import { spawn, execFileSync } from 'node:child_process';
@@ -50,11 +52,12 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import readline from 'node:readline';
-import http from 'node:http';
 import { randomUUID, createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { scenarios, findScenario, rewindDefinitionProblem, resumeAtUuid, resumeFlagsFor } from './scenarios.mjs';
 import { removeFileHistory, removeOnSignal } from './cleanup.mjs';
+import { initializeRequest, kindOf } from './protocol.mjs';
+import { startFakeMcpServer } from './fake-mcp.mjs';
 import { newScrubState, scrubLine, scrubLines, findPii, createStreamScrubber, joinedFragments } from './scrub.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -75,52 +78,6 @@ const BASE_FLAGS = [
 ];
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-// Fake HTTP MCP server. Answers only initialize, tools/list and ping, and offers one tool, echo. Never reaches outside (127.0.0.1).
-// Returns { url, port, close }. The url has a form that matches http://localhost* in the managed settings allow list.
-async function startFakeMcpServer(name) {
-  const reply = (res, id, result) => {
-    res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({ jsonrpc: '2.0', id, result }));
-  };
-  const server = http.createServer((req, res) => {
-    if (req.method !== 'POST') { res.writeHead(405).end(); return; }
-    let body = '';
-    req.on('data', (d) => { body += d; });
-    req.on('end', () => {
-      let msg = null;
-      try { msg = JSON.parse(body); } catch { res.writeHead(400).end(); return; }
-      if (msg.id === undefined) { res.writeHead(202).end(); return; } // notifications/initialized, etc.
-      switch (msg.method) {
-        case 'initialize':
-          reply(res, msg.id, {
-            protocolVersion: msg.params?.protocolVersion ?? '2025-06-18',
-            capabilities: { tools: {} },
-            serverInfo: { name, version: '0.0.0' },
-          });
-          break;
-        case 'tools/list':
-          reply(res, msg.id, {
-            tools: [{ name: 'echo', description: 'Echo the text back.', inputSchema: { type: 'object', properties: { text: { type: 'string' } } } }],
-          });
-          break;
-        case 'ping':
-          reply(res, msg.id, {});
-          break;
-        default:
-          res.writeHead(200, { 'content-type': 'application/json' });
-          res.end(JSON.stringify({ jsonrpc: '2.0', id: msg.id, error: { code: -32601, message: 'Method not found' } }));
-      }
-    });
-  });
-  await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
-  const { port } = server.address();
-  return {
-    port,
-    url: `http://localhost:${port}/mcp`,
-    close: () => new Promise((resolve) => { server.close(() => resolve()); server.closeAllConnections?.(); }),
-  };
-}
 
 // A PATH of one directory holding a symlink to every command on the given PATH except the hidden names (the first one found wins, as a shell would pick).
 // Directories under /mnt (the Windows drives on WSL) are skipped. Stops if the shell still finds a hidden name.
@@ -148,16 +105,6 @@ function claudeVersion() {
   const m = out.match(/(\d+\.\d+\.\d+)/);
   if (!m) throw new Error(`cannot parse claude --version: ${out}`);
   return m[1];
-}
-
-function initializeRequest() {
-  // sdkMcpServers / webSearchIsolationExemptMcpServers must be string arrays.
-  return {
-    subtype: 'initialize',
-    hooks: {},
-    sdkMcpServers: [],
-    webSearchIsolationExemptMcpServers: [],
-  };
 }
 
 // Name of the directory where the CLI stores transcripts: the cwd with non-alphanumerics replaced by - (sdk.mjs in the SDK). Truncation of names over 200 characters is not recorded.
@@ -259,6 +206,9 @@ async function recordOne(scenario, version) {
     || ((req) => ({ behavior: 'allow', updatedInput: req.input }));
   const holdMs = scenario.permission?.holdMs ?? 0;
   let ctrlN = 0;
+  // How many hook_callback / elicitation requests the scenario has answered so far (the index handed to respond).
+  const hookCounter = { n: 0 };
+  const elicitationCounter = { n: 0 };
 
   // Starts one CLI, runs steps, and closes it once done is met. stdout goes line by line through the scrubber into out.
   // The second run (resume) writes to the same out with the same scrubber state (carrying the learned values).
@@ -316,6 +266,28 @@ async function recordOne(scenario, version) {
       });
       if (holdMs > 0) setTimeout(doIt, holdMs); else doIt();
     };
+    // hook_callback and elicitation: the scenario's respond(req, ctx) gives { holdMs?, payload }, sent after holdMs.
+    // For a hook, a null payload is the error answer; for an elicitation, a null payload sends no answer.
+    const answerFrom = (answerer, counter, env, onNull) => {
+      const { holdMs: hold = 0, payload } = answerer.respond(env.request, { index: counter.n, cwd });
+      counter.n += 1;
+      const doIt = () => {
+        if (payload === null) { onNull(); return; }
+        send({ type: 'control_response', response: { subtype: 'success', request_id: env.request_id, response: payload } });
+      };
+      if (hold > 0) setTimeout(doIt, hold); else doIt();
+    };
+    const handleHookCallback = (env) => {
+      if (!scenario.hookCallback) return;
+      answerFrom(scenario.hookCallback, hookCounter, env, () => send({
+        type: 'control_response',
+        response: { subtype: 'error', request_id: env.request_id, error: 'recorder: refused' },
+      }));
+    };
+    const handleElicitation = (env) => {
+      if (!scenario.elicitation) return;
+      answerFrom(scenario.elicitation, elicitationCounter, env, () => {});
+    };
 
     const rl = readline.createInterface({ input: child.stdout, crlfDelay: Infinity });
     // Block fragments (tool input in pieces) are joined before scrubbing. Held lines are written in their original order.
@@ -330,7 +302,7 @@ async function recordOne(scenario, version) {
       try { o = JSON.parse(line); } catch { /* non-JSON lines are already saved as is; the state machine ignores them */ }
       if (o) {
         sawKind(String(o.type));
-        if (o.subtype) sawKind(`${o.type}/${o.subtype}`);
+        if (kindOf(o) !== String(o.type)) sawKind(kindOf(o));
         if (o.type === 'system' && o.subtype === 'init' && typeof o.session_id === 'string') { state.initSessionId = o.session_id; sessionIds.add(o.session_id); }
         if (o.type === 'result') {
           state.results += 1;
@@ -341,6 +313,8 @@ async function recordOne(scenario, version) {
           if (typeof o.response?.request_id === 'string') state.answered.add(o.response.request_id);
         }
         if (o.type === 'control_request' && o.request?.subtype === 'can_use_tool') handleCanUseTool(o);
+        if (o.type === 'control_request' && o.request?.subtype === 'hook_callback') handleHookCallback(o);
+        if (o.type === 'control_request' && o.request?.subtype === 'elicitation') handleElicitation(o);
       }
       checkWaiters();
     });
@@ -352,7 +326,7 @@ async function recordOne(scenario, version) {
       // Run the steps.
       for (const step of steps) {
         switch (step.kind) {
-          case 'initialize': control(initializeRequest()); break;
+          case 'initialize': control(initializeRequest(scenario.hooks)); break;
           case 'getContextUsage': control({ subtype: 'get_context_usage' }); break;
           case 'getSettings': await controlAndWait({ subtype: 'get_settings' }, 'get_settings answer'); break;
           case 'applyFlagSettings': await controlAndWait({ subtype: 'apply_flag_settings', settings: step.settings }, 'apply_flag_settings answer'); break;

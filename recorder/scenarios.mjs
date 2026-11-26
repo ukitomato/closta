@@ -43,6 +43,15 @@
 //   The manifest entry gets then_flags and exit_codes (one per CLI).
 //   If then.sameId is true, the second CLI gets the first CLI's --session-id instead of a new one (still not a resume).
 //
+// hooks: {event: [{matcher?, hookCallbackIds, timeout?}]}  the hook callbacks the initialize request declares ({} when absent).
+//
+// hookCallback: {respond(req, ctx) -> {holdMs?, payload}}  the answer to a hook_callback control request. ctx is {index, cwd}: index counts the
+//   hook_callback requests of the scenario from 0, cwd is the recording's directory. payload null sends the error answer (subtype error, error "recorder: refused").
+//
+// elicitation: {respond(req, ctx) -> {holdMs?, payload}}  the same for an elicitation control request. payload null sends no answer at all.
+//
+// pending: true  a scenario that is defined but not recorded yet. verify.mjs reports it as pending instead of failing on its missing manifest entry.
+//
 // done: {results, controlResponses, quietMs, maxMs}
 //   When the results/controlResponses counts are met and quietMs of silence follows, stdin is closed and the run ends.
 //   maxMs is a hard cap.
@@ -55,6 +64,8 @@
 //   resume.flags: [flag]  added only to the second CLI's flags, after the scenario flags (kept in the manifest's resume_flags).
 
 import { deflateSync } from 'node:zlib';
+import { appendFileSync } from 'node:fs';
+import path from 'node:path';
 
 // The attachment data put into captures is only a small fake image and PDF (no recorded values, no user files).
 function crc32(buf) {
@@ -124,6 +135,33 @@ const ISOLATED = [
   '--strict-mcp-config',
   '--model', 'claude-sonnet-4-6',
 ];
+
+// Declaration of the file-tool hooks (the same shape as the plugin's initialize sends).
+const fileHooks = (timeout) => ({
+  PreToolUse: [{ matcher: 'Edit|Write|NotebookEdit|Read', hookCallbackIds: ['closta-before-file-tool'], timeout }],
+  PostToolUse: [{ matcher: 'Edit|Write|NotebookEdit', hookCallbackIds: ['closta-after-edit'], timeout }],
+});
+
+const POST_EDIT_PAYLOAD = {
+  hookSpecificOutput: {
+    hookEventName: 'PostToolUse',
+    additionalContext: '<ide-diagnostics>\nrecorder: no new errors\n</ide-diagnostics>',
+  },
+};
+
+const isPostEdit = (req) => req.input?.hook_event_name === 'PostToolUse' || req.callback_id === 'closta-after-edit';
+
+// Counts calls per key within one recording (keyed by its cwd, which is unique to it).
+const callCounts = new Map();
+const countCall = (ctx, key) => {
+  const k = `${ctx.cwd}\0${key}`;
+  const n = (callCounts.get(k) ?? 0) + 1;
+  callCounts.set(k, n);
+  return n;
+};
+
+// Pre gets {}, Post gets diagnostics as additional context.
+const answerFileHook = (req) => ({ payload: isPostEdit(req) ? POST_EDIT_PAYLOAD : {} });
 
 export const scenarios = [
   {
@@ -921,6 +959,132 @@ export const scenarios = [
     ],
     permission: { holdMs: 0, respond: ALLOW },
     done: { results: 1, controlResponses: 1, quietMs: 3000, maxMs: 60000 },
+  },
+  // ---- Elicitation and hook callbacks. Defined, not recorded yet (pending). ----
+  {
+    id: '45-elicitation-form',
+    summary: 'an MCP tool asks for a form (elicitation, form mode): accept with values in the first turn, decline in the second',
+    flags: ISOLATED,
+    mcpServer: { name: 'fake-ask' },
+    steps: [
+      { kind: 'initialize' },
+      // The HTTP server still reports pending at 3 s.
+      { kind: 'wait', ms: 8000 },
+      { kind: 'user', text: 'Call the ask_form tool of the fake-ask MCP server once, then say in one line what it returned.' },
+      { kind: 'waitResults', n: 1 },
+      { kind: 'user', text: 'Call the ask_form tool of the fake-ask MCP server once more, then say in one line what it returned.' },
+    ],
+    permission: { holdMs: 0, respond: ALLOW },
+    elicitation: {
+      respond: (req, ctx) => ({
+        payload: ctx.index === 0
+          ? { action: 'accept', content: { name: 'Ada', color: 'blue', count: 2, agree: true } }
+          : { action: 'decline' },
+      }),
+    },
+    done: { results: 2, controlResponses: 1, quietMs: 3000, maxMs: 120000 },
+    pending: true,
+  },
+  {
+    id: '46-elicitation-url',
+    summary: 'an MCP tool asks to open a page (elicitation, url mode): accept, then the server sends the completion notification',
+    flags: ISOLATED,
+    mcpServer: { name: 'fake-ask' },
+    steps: [
+      { kind: 'initialize' },
+      { kind: 'wait', ms: 8000 },
+      { kind: 'user', text: 'Call the ask_url tool of the fake-ask MCP server once, then say in one line what it returned.' },
+    ],
+    permission: { holdMs: 0, respond: ALLOW },
+    elicitation: { respond: () => ({ payload: { action: 'accept' } }) },
+    done: { results: 1, controlResponses: 1, quietMs: 3000, maxMs: 120000 },
+    pending: true,
+  },
+  {
+    id: '47-elicitation-withdrawn',
+    summary: 'an elicitation nobody answers for 30 s, then interrupt: what the CLI sends for the withdrawn request',
+    flags: ISOLATED,
+    mcpServer: { name: 'fake-ask' },
+    steps: [
+      { kind: 'initialize' },
+      { kind: 'wait', ms: 8000 },
+      { kind: 'user', text: 'Call the ask_form tool of the fake-ask MCP server once, then say in one line what it returned.' },
+      { kind: 'waitFor', line: 'control_request/elicitation' },
+      { kind: 'wait', ms: 30000 },
+      { kind: 'interrupt' },
+    ],
+    permission: { holdMs: 0, respond: ALLOW },
+    elicitation: { respond: () => ({ payload: null }) },
+    done: { results: 1, controlResponses: 1, quietMs: 3000, maxMs: 180000 },
+    pending: true,
+  },
+  {
+    id: '48-hooks-pre-post',
+    summary: 'file-tool hooks over two turns (Read then Edit): Pre answers {}, Post adds diagnostics as additional context; before the second Edit the file changes behind the model',
+    flags: ISOLATED,
+    seed: { 'a.txt': 'alpha\nbeta\n' },
+    hooks: fileHooks(10),
+    steps: [
+      { kind: 'initialize' },
+      { kind: 'wait', ms: 500 },
+      { kind: 'user', text: 'Use the Read tool to read a.txt in the current directory, then use the Edit tool to replace the word beta with gamma.' },
+      { kind: 'waitResults', n: 1 },
+      { kind: 'user', text: 'Use the Read tool to read a.txt in the current directory again, then use the Edit tool to replace the word gamma with delta.' },
+    ],
+    permission: { holdMs: 2000, respond: ALLOW },
+    hookCallback: {
+      respond: (req, ctx) => {
+        if (!isPostEdit(req) && req.input?.tool_name === 'Edit' && countCall(ctx, 'pre-edit') === 2) {
+          appendFileSync(path.join(ctx.cwd, 'a.txt'), 'added behind the model\n');
+        }
+        return answerFileHook(req);
+      },
+    },
+    done: { results: 2, controlResponses: 1, quietMs: 3000, maxMs: 120000 },
+    pending: true,
+  },
+  {
+    id: '49-hooks-parallel-subagent',
+    summary: 'file-tool hooks when a subagent edits two files in parallel (how the callbacks attribute the calls)',
+    flags: ISOLATED,
+    seed: { 'a.txt': 'alpha\nbeta\n', 'b.txt': 'one\ntwo\n' },
+    hooks: fileHooks(10),
+    steps: [
+      { kind: 'initialize' },
+      { kind: 'wait', ms: 500 },
+      {
+        kind: 'user',
+        text:
+          'Use the Agent tool to spawn two subagents in parallel in a single message (both subagent_type "general-purpose", run_in_background false): '
+          + 'one reads a.txt and then edits it with the Edit tool, replacing beta with gamma, and the other reads b.txt and then edits it with the Edit tool, replacing two with three. '
+          + 'Then relay both results.',
+      },
+    ],
+    permission: { holdMs: 2000, respond: ALLOW },
+    hookCallback: { respond: answerFileHook },
+    done: { results: 1, controlResponses: 1, quietMs: 3500, maxMs: 180000 },
+    pending: true,
+  },
+  {
+    id: '50-hooks-timeout-error',
+    summary: 'a hook that outlives its 2 s timeout (Pre answers after 5 s) and a hook answered with an error: whether the tool still runs and what the CLI reports',
+    flags: ISOLATED,
+    seed: { 'a.txt': 'alpha\nbeta\n' },
+    hooks: fileHooks(2),
+    steps: [
+      { kind: 'initialize' },
+      { kind: 'wait', ms: 500 },
+      { kind: 'user', text: 'Use the Read tool to read a.txt in the current directory, then use the Edit tool to replace the word beta with gamma.' },
+    ],
+    permission: { holdMs: 0, respond: ALLOW },
+    hookCallback: {
+      respond: (req, ctx) => {
+        if (isPostEdit(req)) return { payload: {} };
+        return countCall(ctx, 'pre') === 1 ? { holdMs: 5000, payload: {} } : { payload: null };
+      },
+    },
+    done: { results: 1, controlResponses: 1, quietMs: 3000, maxMs: 120000 },
+    pending: true,
   },
 ];
 
