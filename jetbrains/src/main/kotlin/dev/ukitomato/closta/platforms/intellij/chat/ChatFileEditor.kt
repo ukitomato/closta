@@ -114,17 +114,16 @@ private class ChatFileEditor(
                     // Closed first: the resumed session may keep this id, and an open tab of it would be taken as its
                     // own.
                     FileEditorManager.getInstance(project).closeFile(chat)
-                    // The conversation now on the tab: after a `/clear`, the CLI's new id. A worktree's conversation
-                    // left a mark under it with its folder when it stopped: it is resumed there, as the list resumes
-                    // it. With no mark, in the project's folder.
-                    val saved = sessions.stoppedResumeIds[chat.sessionId] ?: chat.sessionId
-                    val folder = project.wasRunningMarks()[saved]?.workingDirectory
+                    // The conversation now on the tab: after a `/clear`, the CLI's new id, also after the IDE
+                    // restarted. A worktree's conversation left a mark under it with its folder: it is resumed there,
+                    // as the list resumes it. With no mark, in the project's folder.
+                    val resumed = tabResume(chat.sessionId, sessions.stoppedResumeIds, project.wasRunningMarks())
                     openNewChat(
                         project,
                         Placement.EDITOR_TAB,
-                        SessionOpening.Resume(saved),
+                        SessionOpening.Resume(resumed.savedId),
                         chat.name,
-                        folder,
+                        resumed.workingDirectory,
                     )
                 }
             panel =

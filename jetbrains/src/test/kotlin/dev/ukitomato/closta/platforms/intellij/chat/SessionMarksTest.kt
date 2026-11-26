@@ -33,6 +33,14 @@ class SessionMarksTest {
     }
 
     @Test
+    fun marksKeepTheTabsIdAfterAClear() {
+        val marks = mapOf("new" to WasRunningMark("/w", "t", hostId = "host"), "plain" to WasRunningMark())
+        assertEquals(marks, WasRunningMarks.decode(WasRunningMarks.encode(marks)))
+        val cleared = mapOf("new" to WasRunningMark(hostId = "host"))
+        assertEquals("""[{"id":"new","host":"host"}]""", WasRunningMarks.encode(cleared))
+    }
+
+    @Test
     fun oldMarksStillRead() {
         assertEquals(mapOf("a" to WasRunningMark(), "b" to WasRunningMark()), WasRunningMarks.decode("""["a","b"]"""))
         // A mark of the project's own folder is still written the old way.
