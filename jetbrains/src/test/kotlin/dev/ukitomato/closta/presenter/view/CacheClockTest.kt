@@ -145,4 +145,14 @@ class CacheClockTest {
             { assertEquals(CacheRecord(3_000, 3_600_000), caches[2].second) },
         )
     }
+
+    @Test
+    fun `the minutes left round up, and the next tick is when they go down`() {
+        assertAll(
+            { assertEquals(listOf(1L, 1L, 2L, 60L), listOf(1L, 60_000L, 60_001L, 3_600_000L).map(::minutesLeft)) },
+            { assertEquals(1L, untilNextMinute(60_001L), "two minutes become one a moment later") },
+            { assertEquals(60_000L, untilNextMinute(120_000L), "on the minute, a whole minute to the next") },
+            { assertEquals(30_000L, untilNextMinute(30_000L), "the last minute ends with the cache") },
+        )
+    }
 }

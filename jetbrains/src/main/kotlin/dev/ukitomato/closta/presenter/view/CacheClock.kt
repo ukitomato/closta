@@ -38,3 +38,11 @@ internal fun OperationRecords.cacheSeenAt(epochMs: Long): OperationRecords {
         }
     return if (next == cache) this else copy(cache = next)
 }
+
+/** The whole minutes left of [remainingMs], rounded up: a cache with 30 seconds left has one minute. */
+fun minutesLeft(remainingMs: Long): Long = (remainingMs + MS_PER_MINUTE - 1) / MS_PER_MINUTE
+
+/** How long until [minutesLeft] of [remainingMs] goes down by one. */
+fun untilNextMinute(remainingMs: Long): Long = (remainingMs - 1).mod(MS_PER_MINUTE) + 1
+
+const val MS_PER_MINUTE = 60_000L

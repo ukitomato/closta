@@ -21,6 +21,7 @@ import dev.ukitomato.closta.platforms.intellij.thread.ThreadStyle
 import dev.ukitomato.closta.platforms.intellij.ui.noHtml
 import dev.ukitomato.closta.platforms.intellij.ui.plainTip
 import dev.ukitomato.closta.presenter.view.CacheClock
+import dev.ukitomato.closta.presenter.view.minutesLeft
 import dev.ukitomato.closta.presenter.view.shortTokens
 import java.awt.BasicStroke
 import java.awt.BorderLayout
@@ -448,14 +449,6 @@ class CacheLabel : JBLabel(AllIcons.Actions.StopWatch) {
         const val GAP = 6
     }
 }
-
-/** The whole minutes left of [remainingMs], rounded up: a cache with 30 seconds left has one minute. */
-fun minutesLeft(remainingMs: Long): Long = (remainingMs + MS_PER_MINUTE - 1) / MS_PER_MINUTE
-
-/** How long until [minutesLeft] of [remainingMs] goes down by one. */
-fun untilNextMinute(remainingMs: Long): Long = (remainingMs - 1).mod(MS_PER_MINUTE) + 1
-
-const val MS_PER_MINUTE = 60_000L
 
 /** The colour of a warning drawn as text or a line: the theme's own, with a pair that reads on both grounds. */
 val warningInk: Color

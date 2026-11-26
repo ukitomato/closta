@@ -56,7 +56,9 @@ import dev.ukitomato.closta.presenter.view.AttachmentFault
 import dev.ukitomato.closta.presenter.view.AttachmentLimits
 import dev.ukitomato.closta.presenter.view.AttachmentVerdict
 import dev.ukitomato.closta.presenter.view.CacheClock
+import dev.ukitomato.closta.presenter.view.CacheRecord
 import dev.ukitomato.closta.presenter.view.ComposerState
+import dev.ukitomato.closta.presenter.view.MS_PER_MINUTE
 import dev.ukitomato.closta.presenter.view.RetryRecord
 import dev.ukitomato.closta.presenter.view.SandboxBlock
 import dev.ukitomato.closta.presenter.view.SwitchKind
@@ -64,6 +66,7 @@ import dev.ukitomato.closta.presenter.view.SwitchRecord
 import dev.ukitomato.closta.presenter.view.cacheClock
 import dev.ukitomato.closta.presenter.view.checkAttachment
 import dev.ukitomato.closta.presenter.view.shortLabel
+import dev.ukitomato.closta.presenter.view.untilNextMinute
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -197,6 +200,9 @@ class ComposerPanel(
 
     // Redraws the cache's clock as its minutes go down; it runs only while the cache is warm.
     private val cacheTicker = Timer(MS_PER_MINUTE.toInt()) { state?.let(::showCache) }
+
+    // The cache record [cacheTicker] was started for: a newer one puts its minutes on another phase.
+    private var tickingFor: CacheRecord? = null
 
     val component: JComponent =
         JPanel(BorderLayout()).apply {
@@ -373,15 +379,16 @@ class ComposerPanel(
 
     /**
      * The cache's clock at this moment. While it is warm [cacheTicker] runs, first to the moment its minutes go down
-     * and then once a minute; otherwise it stops.
+     * and then once a minute, started again when the cache's record changes; otherwise it stops.
      */
     private fun showCache(next: ComposerState) {
         val clock = cacheClock(next.cache, next.context?.totalTokens, next.running, System.currentTimeMillis())
         cache.show(clock)
         if (clock is CacheClock.Warm) {
-            if (!cacheTicker.isRunning) {
+            if (!cacheTicker.isRunning || tickingFor != next.cache) {
+                tickingFor = next.cache
                 cacheTicker.initialDelay = untilNextMinute(clock.remainingMs).toInt()
-                cacheTicker.start()
+                cacheTicker.restart()
             }
         } else {
             cacheTicker.stop()
