@@ -9,6 +9,7 @@ pub mod copy;
 pub mod edit_patch;
 pub mod elapsed;
 pub mod header;
+pub mod hub_keys;
 pub mod nav;
 pub mod needs_you;
 pub mod new_session;

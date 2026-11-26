@@ -90,6 +90,8 @@ pub enum ShellAction {
         slot: SlotId,
     },
     OpenNewSession,
+    /// The dialog, with the folder of the selected slot's project in its field.
+    OpenNewSessionHere,
     EditFolder {
         text: String,
     },
@@ -911,6 +913,7 @@ impl ShellState {
                 ShellAction::Restart { .. }
                     | ShellAction::StartSession { .. }
                     | ShellAction::OpenNewSession
+                    | ShellAction::OpenNewSessionHere
                     | ShellAction::FolderChecked { .. }
                     | ShellAction::Send { .. }
                     | ShellAction::CloseSlot { .. }
@@ -984,6 +987,7 @@ impl ShellState {
                     ..Acted::default()
                 }
             }
+            ShellAction::OpenNewSessionHere => self.open_new_session_here(),
             ShellAction::EditFolder { text } => self.edit_folder(text),
             ShellAction::CancelNewSession => {
                 self.dialog = None;
@@ -1242,9 +1246,9 @@ fn behind_overlay(action: &ShellAction, overlay: Overlay) -> bool {
         | ShellAction::NavEnter
         | ShellAction::NavLeft
         | ShellAction::NavRight => true,
-        ShellAction::OpenNewSession | ShellAction::StartSession { .. } => {
-            overlay != Overlay::NewSession
-        }
+        ShellAction::OpenNewSession
+        | ShellAction::OpenNewSessionHere
+        | ShellAction::StartSession { .. } => overlay != Overlay::NewSession,
         _ => false,
     }
 }

@@ -81,6 +81,34 @@ impl ShellState {
         }
     }
 
+    /// The dialog with the folder of the selected slot's project, or else of the project under
+    /// the list's cursor (the parent of a slot there), in its field.
+    pub(super) fn open_new_session_here(&mut self) -> Acted {
+        if self.dialog.is_some() {
+            return Acted::default();
+        }
+        let selected = self.selected.and_then(|slot| self.project_of(slot));
+        let under_cursor = || match self.nav_cursor()? {
+            NavItem::Project(key) => Some(key),
+            NavItem::Slot(slot) | NavItem::NeedsYou(slot) => self.project_of(*slot),
+        };
+        let folder = selected
+            .or_else(under_cursor)
+            .and_then(|key| self.projects.iter().find(|project| &project.key == key))
+            .map(|project| project.folder.clone())
+            .unwrap_or_default();
+        let problem = quick_problem(&folder, self.ports.checks.as_ref());
+        self.dialog = Some(NewSessionDialog {
+            folder,
+            problem,
+            checking: false,
+        });
+        Acted {
+            folder: true,
+            ..Acted::default()
+        }
+    }
+
     pub(super) fn start_session(&mut self, folder: String) -> Acted {
         if self.slots_full() {
             return Acted::default();

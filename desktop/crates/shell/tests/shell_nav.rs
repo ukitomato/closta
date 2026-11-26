@@ -407,3 +407,69 @@ fn the_cursor_follows_its_row_when_a_slot_opens() {
         assert_eq!(cursor(&shell), Some(NavItem::Slot(made)));
     });
 }
+
+#[test]
+fn ctrl_n_fills_the_folder_of_the_selected_slot_s_project() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let other = r"C:\work\other";
+        let first = live_in(&mut shell, &harness, FOLDER, 0).await;
+        live_in(&mut shell, &harness, other, 1).await;
+        shell.act(ShellAction::Select(first));
+        let acted = shell.act(ShellAction::OpenNewSessionHere);
+        assert!(acted.folder);
+        assert_eq!(shell.overlay(), Some(Overlay::NewSession));
+        assert_eq!(shell.new_session().unwrap().folder, FOLDER);
+        assert!(
+            !shell.act(ShellAction::OpenNewSessionHere).folder,
+            "open already"
+        );
+        shell.act(ShellAction::CancelNewSession);
+
+        // No selection: the project under the cursor, or the parent of the slot under it.
+        let mut shell = harness.shell();
+        shell.restore_projects(&Settings {
+            version: SETTINGS_VERSION,
+            projects: vec![
+                SavedProject {
+                    folder: FOLDER.to_owned(),
+                    collapsed: false,
+                },
+                SavedProject {
+                    folder: other.to_owned(),
+                    collapsed: false,
+                },
+            ],
+        });
+        assert_eq!(shell.selected(), None);
+        shell.act(ShellAction::NavTo(NavItem::Project(key(other))));
+        shell.act(ShellAction::OpenNewSessionHere);
+        assert_eq!(shell.new_session().unwrap().folder, other);
+        shell.act(ShellAction::CancelNewSession);
+
+        // Neither a selection nor a cursor: an empty field.
+        let mut bare = harness.shell();
+        bare.act(ShellAction::OpenNewSessionHere);
+        assert_eq!(bare.new_session().unwrap().folder, "");
+    });
+}
+
+#[test]
+fn ctrl_n_is_refused_behind_an_overlay_and_while_closing() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        live_in(&mut shell, &harness, FOLDER, 0).await;
+        shell.act(ShellAction::EditDraft {
+            slot: shell.selected().unwrap(),
+            text: "unsent".to_owned(),
+        });
+        shell.act(ShellAction::RequestClose);
+        assert_eq!(shell.overlay(), Some(Overlay::CloseWindow));
+        assert!(!shell.act(ShellAction::OpenNewSessionHere).folder);
+        assert!(shell.new_session().is_none());
+        assert!(shell.act(ShellAction::ConfirmClose).close);
+        assert_eq!(shell.overlay(), Some(Overlay::Closing));
+        assert!(!shell.act(ShellAction::OpenNewSessionHere).folder);
+        assert!(shell.new_session().is_none());
+    });
+}

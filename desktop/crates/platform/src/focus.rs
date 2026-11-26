@@ -716,6 +716,7 @@ pub(crate) fn to_card_key(keystroke: &Keystroke) -> Option<CardKey> {
         alt: modifiers.alt,
         shift: modifiers.shift,
         platform: modifiers.platform,
+        held: false,
     })
 }
 
