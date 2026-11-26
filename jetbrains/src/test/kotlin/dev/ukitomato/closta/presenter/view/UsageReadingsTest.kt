@@ -57,7 +57,16 @@ class UsageReadingsTest {
                 ),
             )!!
 
+        val unsaid =
+            usageOf(
+                body(
+                    """{"session":{"total_cost_usd":1.5},""" +
+                        """"rate_limits":{"five_hour":{"utilization":3,"resets_at":null}}}""",
+                ),
+            )!!
+
         assertAll(
+            { assertEquals(UsageRecord(1.5, false, emptyList()), unsaid, "no word of the limits is no limits") },
             { assertEquals(UsageRecord(1.5, true, emptyList()), none) },
             { assertEquals(listOf(UsageWindow("seven_day", 3, null)), nullWindow.windows) },
             { assertEquals(1.5, unavailable.sessionCostUsd) },

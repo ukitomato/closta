@@ -55,17 +55,26 @@ internal class UsagePopup(
         if (draw(state) && popup.isVisible) popup.pack(true, true)
     }
 
-    /** [state]'s usage: the cost, then the windows the answer has, or that the CLI is being asked. */
+    /**
+     * [state]'s usage: the cost, then the windows the answer has, and that the CLI is being asked. While a request
+     * waits, the cost is the composer's (newer than the last answer's) and the windows are the last answer's.
+     */
     private fun draw(state: ComposerState): Boolean {
         val from = Triple(state.usage, state.usageWaiting, state.costUsd)
         if (from == drawn) return false
         drawn = from
         content.removeAll()
         val usage = state.usage
-        (usage?.sessionCostUsd ?: state.costUsd)?.let {
+        val cost =
+            if (state.usageWaiting) {
+                state.costUsd ?: usage?.sessionCostUsd
+            } else {
+                usage?.sessionCostUsd ?: state.costUsd
+            }
+        cost?.let {
             content.add(JBLabel(ClostaBundle.message("composer.usage.cost", "%.4f".format(Locale.ROOT, it))))
         }
-        if (usage == null && state.usageWaiting) {
+        if (state.usageWaiting) {
             content.add(quiet(ClostaBundle.message("composer.usage.loading")))
         }
         usage?.windows?.forEach { content.add(window(it)) }

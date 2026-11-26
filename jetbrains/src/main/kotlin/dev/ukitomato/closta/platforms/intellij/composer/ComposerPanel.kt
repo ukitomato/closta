@@ -24,6 +24,7 @@ import com.intellij.openapi.keymap.KeymapUtil
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.guessProjectDir
+import com.intellij.openapi.ui.popup.JBPopup
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.ui.popup.JBPopupListener
 import com.intellij.openapi.ui.popup.LightweightWindowEvent
@@ -168,8 +169,11 @@ class ComposerPanel(
         }.tip(ClostaBundle.message("composer.usage.tooltip"))
     private val context = ContextUse()
 
-    /** The usage popup while it is open: it shows each new state, and nothing else of it is kept here. */
-    private var usagePopup: UsagePopup? = null
+    /** The composer popup that is open, one at a time (opened through [openPopup]); nothing else of it is kept. */
+    private var openPopup: JBPopup? = null
+
+    /** Draws each new state into [openPopup] while it is open. */
+    private var redrawOpen: (ComposerState) -> Unit = {}
     private val send =
         ToolbarButton(null, SEND_IDLE, false) { sendNow() }
             .tip(ClostaBundle.message("composer.send.tooltip"))
@@ -258,7 +262,7 @@ class ComposerPanel(
         this.sendable = sendable
         shownBlock = if (sendable) SendBlock.NONE else blocked
         showBar(next)
-        usagePopup?.show(next)
+        redrawOpen(next)
         next.sandboxFailure?.takeIf { it.id != saidSandbox }?.let {
             saidSandbox = it.id
             say(sandboxFailureText(it), StatusSource.REFUSAL, error = true)
@@ -320,7 +324,11 @@ class ComposerPanel(
         model.toolTipText = listOfNotNull(whole, next.model.resolved?.takeIf { it != whole }).joinToString(" — ")
         val spent = next.costUsd
         cost.isVisible = spent != null
-        if (spent != null) cost.text = ClostaBundle.message("composer.usage.button", "%.2f".format(Locale.ROOT, spent))
+        if (spent != null) {
+            val amount = "%.2f".format(Locale.ROOT, spent)
+            cost.text = ClostaBundle.message("composer.usage.button", amount)
+            cost.accessibleLabel = ClostaBundle.message("composer.usage.accessible", amount)
+        }
         val used = next.context
         context.isVisible = used != null
         if (used != null) {
@@ -488,17 +496,34 @@ class ComposerPanel(
     /** Opens the usage popup above [under]; it shows the composer's state until it is closed. */
     private fun openUsage(under: JComponent) {
         val next = state ?: return
-        usagePopup?.popup?.cancel()
-        val opened = UsagePopup(next)
-        usagePopup = opened
-        opened.popup.addListener(
+        val usage = UsagePopup(next)
+        openPopup(usage.popup, under, usage::show)
+    }
+
+    /**
+     * Shows [popup] above [under] as the composer's one open popup: the one open before is closed, and [redraw] gets
+     * each new state until this one closes. The popup goes with the panel, so it never outlives it.
+     */
+    private fun openPopup(
+        popup: JBPopup,
+        under: JComponent,
+        redraw: (ComposerState) -> Unit = {},
+    ) {
+        openPopup?.cancel()
+        openPopup = popup
+        redrawOpen = redraw
+        com.intellij.openapi.util.Disposer
+            .register(parent, popup)
+        popup.addListener(
             object : JBPopupListener {
                 override fun onClosed(event: LightweightWindowEvent) {
-                    if (usagePopup === opened) usagePopup = null
+                    if (openPopup !== popup) return
+                    openPopup = null
+                    redrawOpen = {}
                 }
             },
         )
-        ComposerPopups.showAbove(opened.popup, under)
+        ComposerPopups.showAbove(popup, under)
     }
 
     private fun showModes(
