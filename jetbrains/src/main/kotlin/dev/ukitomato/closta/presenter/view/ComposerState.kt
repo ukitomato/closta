@@ -33,7 +33,7 @@ data class ComposerState(
     val sandboxFailure: SwitchRecord?,
     /** The CLI is retrying the API in this turn. */
     val retry: RetryRecord?,
-    /** The CLI is compacting the conversation. */
+    /** The CLI is compacting the conversation in this turn (one it never said ended is over with the turn). */
     val compacting: Boolean,
     /** The plan's limit is near or reached, and the user has not dismissed it; never an allowed one. */
     val rateLimit: RateLimitRecord?,
@@ -110,7 +110,7 @@ fun composerState(
                 it.outcome == SwitchOutcome.REJECTED || it.outcome == SwitchOutcome.FAILED
             },
         retry = operations.retry.takeIf { running },
-        compacting = operations.compacting,
+        compacting = operations.compacting && running,
         rateLimit = operations.rateLimitShown(),
         usage = operations.usage,
         usageWaiting = operations.usageWaiting.isNotEmpty(),

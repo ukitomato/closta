@@ -55,6 +55,20 @@ class CompactShownTest {
     }
 
     @Test
+    fun `21 with no status closing the compaction, it is not said once the turn is over`() {
+        val compacting = inputs.indexOfFirst { (eventOf(it) as? AgentEvent.SystemStatus)?.status == "compacting" }
+        val unclosed =
+            inputs.filterIndexed { index, input ->
+                val event = eventOf(input)
+                index <= compacting || !(event is AgentEvent.SystemStatus && event.status == null)
+            }
+        val state = run(unclosed)
+
+        assertTrue(state.transcript.operations.compacting, "the CLI never said it stopped")
+        assertFalse(composerState(state.conversation, state.transcript).compacting)
+    }
+
+    @Test
     fun `type only - a failed result before the boundary makes the divider failed`() {
         assertEquals(
             listOf(Divider.Compacted("manual", 21819, 3447, failed = true)),
