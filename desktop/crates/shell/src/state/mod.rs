@@ -42,7 +42,8 @@ use crate::projects::{Project, ProjectKey};
 use crate::rows::{RowChange, row_changes};
 use crate::settings::{Settings, SettingsSink};
 use crate::slot::{
-    MAX_LIVE_SLOTS, Relaunch, SlotId, SlotLaunch, SlotSummary, Spawn, counts_as_live, mark_of,
+    MAX_LIVE_SLOTS, Relaunch, SlotId, SlotLaunch, SlotResume, SlotSummary, Spawn, counts_as_live,
+    mark_of, restart_offered,
 };
 use crate::watch::SlotWatch;
 
@@ -968,9 +969,31 @@ impl ShellState {
 
     fn restartable(&self, slot: SlotId) -> bool {
         self.slots.get(&slot).is_some_and(|it| {
-            it.relaunch.is_some()
-                && !it.closing
-                && matches!(it.status, SessionStatus::Ended | SessionStatus::Failed(_))
+            restart_offered(
+                &it.status,
+                it.relaunch.is_some(),
+                it.closing,
+                it.finished.is_closed(),
+            )
+        })
+    }
+
+    /// Whether a Restart continues the slot's conversation with `--resume`: its session sent
+    /// a request, or it was opened by resuming. Otherwise it starts the same id again.
+    pub fn restart_resumes(&self, slot: SlotId) -> bool {
+        self.slots
+            .get(&slot)
+            .is_some_and(|it| it.runtime.sent() || it.resumed)
+    }
+
+    /// What a Restart does, said under its button; `None` while none is on offer.
+    pub fn restart_note(&self, slot: SlotId) -> Option<&'static str> {
+        self.can_restart(slot).then(|| {
+            if self.restart_resumes(slot) {
+                copy::RESTART_CONTINUES
+            } else {
+                copy::RESTART_AGAIN
+            }
         })
     }
 
@@ -1318,10 +1341,32 @@ impl ShellState {
         if !self.can_restart(slot) {
             return Acted::default();
         }
-        let Some(relaunch) = self.slots.get(&slot).and_then(|it| it.relaunch.clone()) else {
+        let Some(held) = self.slots.get(&slot) else {
             return Acted::default();
         };
-        let Some(changes) = self.replace(slot, relaunch()) else {
+        let Some(relaunch) = held.relaunch.clone() else {
+            return Acted::default();
+        };
+        let mut launch = relaunch();
+        launch.session_id = Some(held.session_id.clone());
+        if self.restart_resumes(slot) {
+            let folder = held
+                .project
+                .as_ref()
+                .and_then(|key| self.projects.iter().find(|it| &it.key == key))
+                .map(|it| it.folder.clone())
+                .or_else(|| held.working_directory.clone());
+            match folder {
+                Some(folder) => {
+                    launch.resume = Some(SlotResume {
+                        saved: self.ports.saved_for.saved(&folder),
+                        saved_title: held.saved_title.clone(),
+                    });
+                }
+                None => launch.session_id = None,
+            }
+        }
+        let Some(changes) = self.replace(slot, launch) else {
             return Acted::default();
         };
         Acted {

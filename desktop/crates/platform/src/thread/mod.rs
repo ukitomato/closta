@@ -137,9 +137,10 @@ fn failure_band(
     });
     let theme = cx.theme();
     let muted = theme.muted_foreground;
-    let note = restart
-        .is_some()
-        .then(|| div().text_color(muted).child(copy::RESTART_NOTE));
+    let note = model
+        .shell
+        .restart_note(slot)
+        .map(|text| div().text_color(muted).child(text));
     let limit = model
         .shell
         .restart_blocked(slot)

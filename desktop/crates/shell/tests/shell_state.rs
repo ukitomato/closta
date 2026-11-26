@@ -18,6 +18,7 @@ use closta_providers::claude::fake::live::LiveControl;
 use closta_providers::claude::launch::LaunchError;
 use closta_session::runtime::SessionRuntime;
 use closta_session::status::{SessionFailure, SessionStatus};
+use closta_shell::copy;
 use closta_shell::header::app_header;
 use closta_shell::new_session::{launch_in, resume_in};
 use closta_shell::panes::{LEFT_WIDTH, Pane, Panes, RIGHT_WIDTH};
@@ -856,5 +857,168 @@ fn a_replace_with_the_same_id_keeps_both_runs() {
         until(|| shell.live_runs() == 1).await;
         assert!(shell.run_alive("same-id"), "the new run stays");
         assert!(!shell.run_alive("other-id"));
+    });
+}
+
+/// Opens a restartable slot in `FOLDER` (or the saved session `saved`) and waits until it runs.
+async fn running_slot(
+    harness: &Harness,
+    shell: &mut ShellState,
+    launch: SlotLaunch,
+    n: usize,
+) -> (SlotId, LiveControl) {
+    let slot = shell.open(launch);
+    let control = harness.control(n).await;
+    until_running(shell, slot).await;
+    (slot, control)
+}
+
+/// Refreshes the slot until its session runs.
+async fn until_running(shell: &mut ShellState, slot: SlotId) {
+    for _ in 0..500 {
+        let generation = shell.watch(slot).unwrap().generation();
+        shell.refresh(slot, generation, 0).unwrap();
+        if matches!(shell.status(slot), Some(SessionStatus::Running { .. })) {
+            return;
+        }
+        Timer::after(Duration::from_millis(10)).await;
+    }
+    panic!("the session did not run");
+}
+
+/// Sends `text` from the slot and waits until the process has read it.
+async fn send_from(shell: &mut ShellState, slot: SlotId, control: &LiveControl, text: &str) {
+    shell.act(ShellAction::EditDraft {
+        slot,
+        text: text.to_owned(),
+    });
+    shell.act(ShellAction::Send { slot });
+    control.skip_initialize().await;
+    control.next_stdin_line().await.expect("the request");
+    let generation = shell.watch(slot).unwrap().generation();
+    shell.refresh(slot, generation, 0).unwrap();
+}
+
+/// Ends the slot's process and waits until its run has returned and the slot shows it.
+async fn end_and_return(shell: &mut ShellState, slot: SlotId, control: &LiveControl) {
+    let mut watch = shell.watch(slot).unwrap();
+    control.exit(0);
+    while watch.changed().await {}
+    shell.refresh(slot, watch.generation(), 0).unwrap();
+    assert_eq!(shell.status(slot), Some(SessionStatus::Ended));
+    until(|| shell.live_runs() == 0).await;
+}
+
+#[test]
+fn a_restart_after_a_request_continues_the_conversation() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let ports = harness.ports();
+        let (slot, control) =
+            running_slot(&harness, &mut shell, launch_in(FOLDER, &ports), 0).await;
+        let id = shell.session_id(slot).unwrap().to_owned();
+        send_from(&mut shell, slot, &control, "hello").await;
+        end_and_return(&mut shell, slot, &control).await;
+        assert!(shell.restart_resumes(slot));
+        assert_eq!(shell.restart_note(slot), Some(copy::RESTART_CONTINUES));
+        let acted = shell.act(ShellAction::Restart { slot });
+        assert_eq!(acted.started, Some(slot));
+        let args = harness.launch_args(1).await;
+        assert!(args.contains(&format!("--resume={id}")), "{args:?}");
+        assert!(
+            !args.iter().any(|it| it.starts_with("--session-id")),
+            "{args:?}"
+        );
+        assert_eq!(shell.session_id(slot), Some(id.as_str()));
+        assert!(shell.resumed(slot));
+    });
+}
+
+#[test]
+fn a_restart_with_nothing_sent_starts_the_same_id_again() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let ports = harness.ports();
+        let (slot, control) =
+            running_slot(&harness, &mut shell, launch_in(FOLDER, &ports), 0).await;
+        let id = shell.session_id(slot).unwrap().to_owned();
+        end_and_return(&mut shell, slot, &control).await;
+        assert!(!shell.restart_resumes(slot));
+        assert_eq!(shell.restart_note(slot), Some(copy::RESTART_AGAIN));
+        let acted = shell.act(ShellAction::Restart { slot });
+        assert_eq!(acted.started, Some(slot));
+        let args = harness.launch_args(1).await;
+        assert!(args.contains(&format!("--session-id={id}")), "{args:?}");
+        assert!(
+            !args.iter().any(|it| it.starts_with("--resume")),
+            "{args:?}"
+        );
+        assert_eq!(shell.session_id(slot), Some(id.as_str()));
+        assert!(!shell.resumed(slot));
+    });
+}
+
+#[test]
+fn a_restart_of_a_resumed_slot_continues_and_keeps_its_title() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let ports = harness.ports();
+        let saved = summary_of("0b1f4c52-6a1e-4a43-9a53-7f0d2a4b8c11", "Fix the parser");
+        let (slot, control) =
+            running_slot(&harness, &mut shell, resume_in(FOLDER, &saved, &ports), 0).await;
+        end_and_return(&mut shell, slot, &control).await;
+        assert_eq!(shell.restart_note(slot), Some(copy::RESTART_CONTINUES));
+        shell.act(ShellAction::Restart { slot });
+        let args = harness.launch_args(1).await;
+        assert!(args.contains(&format!("--resume={}", saved.id)), "{args:?}");
+        assert_eq!(shell.session_id(slot), Some(saved.id.as_str()));
+        assert_eq!(shell.slot_title(slot).as_deref(), Some("Fix the parser"));
+    });
+}
+
+#[test]
+fn a_send_after_a_restart_has_an_id_not_used_before() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let ports = harness.ports();
+        let (slot, control) =
+            running_slot(&harness, &mut shell, launch_in(FOLDER, &ports), 0).await;
+        send_from(&mut shell, slot, &control, "first").await;
+        let sent_ids = |shell: &ShellState| -> Vec<String> {
+            shell
+                .rows(slot)
+                .iter()
+                .filter_map(|row| match row {
+                    ThreadRow::Ask(ask) => Some(ask.key.clone()),
+                    _ => None,
+                })
+                .collect()
+        };
+        assert_eq!(sent_ids(&shell), vec!["s1".to_owned()]);
+        end_and_return(&mut shell, slot, &control).await;
+        shell.act(ShellAction::Restart { slot });
+        let (second, _) = (harness.control(1).await, ());
+        until_running(&mut shell, slot).await;
+        send_from(&mut shell, slot, &second, "again").await;
+        let ids = sent_ids(&shell);
+        assert_eq!(ids.len(), 1, "{ids:?}");
+        assert_ne!(ids[0], "s1");
+    });
+}
+
+#[test]
+fn a_restart_is_offered_once_the_old_run_returned() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let ports = harness.ports();
+        let (slot, control) =
+            running_slot(&harness, &mut shell, launch_in(FOLDER, &ports), 0).await;
+        let mut watch = shell.watch(slot).unwrap();
+        control.exit(0);
+        while watch.changed().await {}
+        shell.refresh(slot, watch.generation(), 0).unwrap();
+        assert_eq!(shell.status(slot), Some(SessionStatus::Ended));
+        until(|| shell.live_runs() == 0).await;
+        assert!(shell.can_restart(slot));
     });
 }

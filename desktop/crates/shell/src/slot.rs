@@ -155,6 +155,22 @@ pub fn slot_elapsed(summary: &SlotSummary, now_ms: i64) -> Option<String> {
     summary.since_ms.map(|since| elapsed_text(since, now_ms))
 }
 
+/// Whether a Restart is on offer for a slot in `status`: its session ended or failed, it can be
+/// made again, it is not being closed, and the run of the session it holds has returned. A
+/// Restart reuses the session's id, so it waits for the old `claude`, which may still be writing
+/// its record.
+pub fn restart_offered(
+    status: &SessionStatus,
+    has_relaunch: bool,
+    closing: bool,
+    run_returned: bool,
+) -> bool {
+    has_relaunch
+        && !closing
+        && run_returned
+        && matches!(status, SessionStatus::Ended | SessionStatus::Failed(_))
+}
+
 /// How many slots may hold a live session at once.
 pub const MAX_LIVE_SLOTS: usize = 8;
 
@@ -170,7 +186,7 @@ pub fn counts_as_live(status: &SessionStatus) -> bool {
 mod tests {
     use closta_session::status::SessionStatus;
 
-    use super::{SlotId, SlotMark, SlotSummary, mark_of};
+    use super::{SlotId, SlotMark, SlotSummary, mark_of, restart_offered};
 
     #[test]
     fn a_running_slot_that_waits_is_marked_waiting() {
@@ -214,6 +230,27 @@ mod tests {
         assert!(!text.contains("secret"), "{text}");
         assert!(!text.to_lowercase().contains("hidden"), "{text}");
         assert!(!text.contains("work"), "{text}");
+    }
+
+    #[test]
+    fn restart_waits_for_the_old_run() {
+        let failed = SessionStatus::Failed(closta_session::status::SessionFailure::CommandNotFound);
+        for status in [SessionStatus::Ended, failed] {
+            assert!(restart_offered(&status, true, false, true), "{status:?}");
+            assert!(!restart_offered(&status, true, false, false), "{status:?}");
+            assert!(!restart_offered(&status, false, false, true), "{status:?}");
+            assert!(!restart_offered(&status, true, true, true), "{status:?}");
+        }
+        let running = SessionStatus::Running {
+            version: "2.1.282".into(),
+        };
+        assert!(!restart_offered(&running, true, false, true));
+        assert!(!restart_offered(
+            &SessionStatus::Starting,
+            true,
+            false,
+            true
+        ));
     }
 
     #[test]

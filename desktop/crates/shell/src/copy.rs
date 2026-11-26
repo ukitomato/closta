@@ -80,7 +80,8 @@ pub const CLAUDE_SCRIPT_ONLY: &str =
 
 /// A failed session's band.
 pub const RESTART: &str = "Restart";
-pub const RESTART_NOTE: &str = "Restart starts a new conversation.";
+pub const RESTART_CONTINUES: &str = "Restart continues this conversation.";
+pub const RESTART_AGAIN: &str = "Restart starts the session again.";
 pub const SESSION_ENDED: &str = "Session ended";
 
 /// While the window closes its sessions.
@@ -1374,7 +1375,8 @@ mod tests {
                 "Only a script was found for claude; install the native claude.exe.",
             ),
             (RESTART, "Restart"),
-            (RESTART_NOTE, "Restart starts a new conversation."),
+            (RESTART_CONTINUES, "Restart continues this conversation."),
+            (RESTART_AGAIN, "Restart starts the session again."),
             (SESSION_ENDED, "Session ended"),
             (CLOSING, "Closing sessions…"),
             (CLOSE, "Close"),
