@@ -57,6 +57,7 @@ import java.awt.Rectangle
 import java.awt.RenderingHints
 import java.awt.datatransfer.StringSelection
 import java.beans.PropertyChangeListener
+import java.io.StringReader
 import java.util.Locale
 import javax.swing.Box
 import javax.swing.BoxLayout
@@ -160,7 +161,7 @@ class ThreadRowViews(
                     // Only the HTML that changed is set: setting it parses and lays the block out again.
                     if (component.getClientProperty(HTML) != row.block.html) {
                         component.putClientProperty(HTML, row.block.html)
-                        component.text = row.block.html
+                        show(component, row.block.html)
                     }
                     true
                 }
@@ -717,7 +718,7 @@ class ThreadRowViews(
                 isEditable = false
                 isOpaque = false
                 putClientProperty(HTML, block.html)
-                text = block.html
+                show(this, block.html)
                 if (openLink != null) {
                     addHyperlinkListener { e ->
                         val href = e.description ?: e.url?.toString()
@@ -725,6 +726,26 @@ class ThreadRowViews(
                     }
                 }
             }
+
+        /**
+         * Puts [html] in [pane]. Only a block with code in a `<pre>` goes through the pane's own input pass, which
+         * gives it its box. Any other block is read the way `JEditorPane.setText` reads it: that pass would put a
+         * `<wbr>` inside inline code, and each piece of it then draws its own background, over the last character
+         * of the piece before it on a scaled screen (a path's `/` and `.` go missing). [MarkdownHtml] puts the
+         * text's own `<wbr>`s.
+         */
+        internal fun show(
+            pane: JBHtmlPane,
+            html: String,
+        ) {
+            if ("<pre" in html) {
+                pane.text = html
+                return
+            }
+            val document = pane.document
+            document.remove(0, document.length)
+            pane.editorKit.read(StringReader(html), document, 0)
+        }
 
         // The code's height: its bar is drawn over the code's own box, at its bottom.
         private fun sideways(pane: JBHtmlPane): JComponent =

@@ -31,6 +31,7 @@ class MarkdownHtml(
             .escapeHtml(true)
             .nodeRendererFactory { context -> FenceRenderer(context) }
             .nodeRendererFactory { context -> ImageRenderer(context) }
+            .nodeRendererFactory { context -> TextRenderer(context) }
             .build()
 
     fun blocks(markdown: String): List<HtmlBlock> {
@@ -60,6 +61,44 @@ class MarkdownHtml(
             if (html != null) out.raw(html) else out.text(code)
             out.raw("</code></pre>")
             out.line()
+        }
+    }
+
+    /**
+     * Text with a `<wbr>` where a path or a name may break: after `/`, `)` or `]` before a letter or a digit, and
+     * after a dot between letters. The pane is given the HTML as it is, so inline code is left whole: the IDE's own
+     * pass would break it there too, and a piece of code broken in two can draw over its own last character.
+     */
+    private class TextRenderer(
+        private val context: HtmlNodeRendererContext,
+    ) : NodeRenderer {
+        override fun getNodeTypes(): Set<Class<out Node>> = setOf(Text::class.java)
+
+        override fun render(node: Node) {
+            val text = (node as Text).literal
+            val out = context.writer
+            var from = 0
+            for (i in 1 until text.length) {
+                if (breaksBefore(text, i)) {
+                    out.text(text.substring(from, i))
+                    out.raw("<wbr>")
+                    from = i
+                }
+            }
+            out.text(text.substring(from))
+        }
+
+        private fun breaksBefore(
+            text: String,
+            i: Int,
+        ): Boolean {
+            val before = text[i - 1]
+            val next = text[i]
+            return when (before) {
+                '/', ')', ']' -> next.isLetterOrDigit()
+                '.' -> i >= 2 && text[i - 2].isLetter() && next.isLetter()
+                else -> false
+            }
         }
     }
 
