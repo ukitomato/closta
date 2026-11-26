@@ -119,7 +119,7 @@ fn plus_on_a_folder_with_a_quick_problem_opens_the_dialog_with_it() {
 fn plus_on_a_missing_folder_opens_the_dialog_saying_so() {
     drive(|harness| async move {
         let (mut shell, _) = shell_of(&harness, &[A]);
-        plus(&mut shell, A);
+        assert!(plus(&mut shell, A).project_check.is_some());
         let acted = answer(&mut shell, A, false);
         assert!(acted.started.is_none());
         assert!(acted.folder);
@@ -160,7 +160,7 @@ fn plus_is_refused_at_the_limit() {
 fn an_answer_for_another_project_is_dropped() {
     drive(|harness| async move {
         let (mut shell, planners) = shell_of(&harness, &[A, B]);
-        plus(&mut shell, A);
+        assert!(plus(&mut shell, A).project_check.is_some());
         let acted = answer(&mut shell, B, true);
         assert!(acted.started.is_none());
         assert!(shell.slots().is_empty());
@@ -178,7 +178,7 @@ fn an_answer_for_another_project_is_dropped() {
 fn an_answer_after_the_close_began_starts_nothing() {
     drive(|harness| async move {
         let (mut shell, planners) = shell_of(&harness, &[A]);
-        plus(&mut shell, A);
+        assert!(plus(&mut shell, A).project_check.is_some());
         let acted = shell.act(ShellAction::RequestClose);
         assert!(acted.close);
         let acted = answer(&mut shell, A, true);
@@ -199,7 +199,7 @@ fn an_answer_while_the_close_is_asked_starts_nothing() {
         let (launch, runtime) = harness.launch("slot");
         let slot = shell.open(launch);
         running(&runtime.recv().await.unwrap()).await;
-        plus(&mut shell, A);
+        assert!(plus(&mut shell, A).project_check.is_some());
         shell.act(ShellAction::EditDraft {
             slot,
             text: "unsent".to_owned(),
@@ -218,14 +218,20 @@ fn an_answer_while_the_close_is_asked_starts_nothing() {
 #[test]
 fn removing_a_project_being_checked_drops_its_answer() {
     drive(|harness| async move {
-        let (mut shell, planners) = shell_of(&harness, &[A]);
-        plus(&mut shell, A);
+        let (mut shell, planners) = shell_of(&harness, &[A, B]);
+        assert!(plus(&mut shell, A).project_check.is_some());
         shell.act(ShellAction::RemoveProject { project: key(A) });
-        assert!(shell.projects().is_empty());
+        assert_eq!(shell.projects().len(), 1);
+        // The check is let go with the project: another plus can go on.
+        assert!(summary(&shell, B).can_add);
+        assert!(plus(&mut shell, B).project_check.is_some());
+        shell.act(ShellAction::RemoveProject { project: key(B) });
+
+        // The project comes back by another way before the old answer does.
+        shell.open(harness.folder_launch(A));
         let acted = answer(&mut shell, A, true);
         assert!(acted.started.is_none());
-        assert!(shell.slots().is_empty());
-        assert!(shell.projects().is_empty());
+        assert_eq!(shell.slots().len(), 1);
         assert_eq!(planners.planned(), 0);
         let acted = answer(&mut shell, A, false);
         assert!(!acted.folder);
@@ -234,10 +240,50 @@ fn removing_a_project_being_checked_drops_its_answer() {
 }
 
 #[test]
+fn a_found_folder_behind_the_dialog_or_a_slot_question_starts_one_slot() {
+    drive(|harness| async move {
+        let (mut shell, _) = shell_of(&harness, &[A, B]);
+        assert!(plus(&mut shell, A).project_check.is_some());
+        shell.act(ShellAction::OpenNewSession);
+        shell.act(ShellAction::EditFolder { text: B.to_owned() });
+        let acted = answer(&mut shell, A, true);
+        let slot = acted.started.expect("a slot");
+        assert_eq!(shell.selected(), Some(slot));
+        assert_eq!(shell.slots().len(), 1);
+        let dialog = shell.new_session().expect("the dialog");
+        assert_eq!(dialog.folder, B);
+        assert_eq!(dialog.problem, None);
+
+        shell.act(ShellAction::CancelNewSession);
+        let (launch, runtime) = harness.launch("slot");
+        let other = shell.open(launch);
+        running(&runtime.recv().await.unwrap()).await;
+        shell.act(ShellAction::EditDraft {
+            slot: other,
+            text: "unsent".to_owned(),
+        });
+        shell.act(ShellAction::CloseSlot { slot: other });
+        let question = shell.slot_close();
+        assert!(question.is_some());
+        assert!(
+            plus(&mut shell, B).project_check.is_none(),
+            "refused behind the question"
+        );
+        shell.act(ShellAction::CancelCloseSlot);
+        assert!(plus(&mut shell, B).project_check.is_some());
+        shell.act(ShellAction::CloseSlot { slot: other });
+        let acted = answer(&mut shell, B, true);
+        assert!(acted.started.is_some());
+        assert_eq!(shell.slots().len(), 3);
+        assert_eq!(shell.slot_close(), question);
+    });
+}
+
+#[test]
 fn an_answer_when_the_slots_filled_meanwhile_starts_nothing() {
     drive(|harness| async move {
         let (mut shell, planners) = shell_of(&harness, &[A]);
-        plus(&mut shell, A);
+        assert!(plus(&mut shell, A).project_check.is_some());
         fill(&mut shell, &harness, 8).await;
         let acted = answer(&mut shell, A, true);
         assert!(acted.started.is_none());
@@ -251,7 +297,7 @@ fn an_answer_when_the_slots_filled_meanwhile_starts_nothing() {
 fn a_missing_folder_behind_another_overlay_only_ends_the_check() {
     drive(|harness| async move {
         let (mut shell, _) = shell_of(&harness, &[A, B]);
-        plus(&mut shell, A);
+        assert!(plus(&mut shell, A).project_check.is_some());
         shell.act(ShellAction::OpenNewSession);
         shell.act(ShellAction::EditFolder { text: B.to_owned() });
         let acted = answer(&mut shell, A, false);

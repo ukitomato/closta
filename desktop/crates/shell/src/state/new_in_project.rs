@@ -9,16 +9,19 @@ pub struct ProjectCheck {
 }
 
 impl ShellState {
+    /// The folder of the project, as it was first written.
+    fn folder_of(&self, key: &ProjectKey) -> Option<String> {
+        self.projects
+            .iter()
+            .find(|it| &it.key == key)
+            .map(|it| it.folder.clone())
+    }
+
     pub(super) fn new_in_project(&mut self, key: &ProjectKey) -> Acted {
         if self.pending_new.is_some() || self.slots_full() {
             return Acted::default();
         }
-        let Some(folder) = self
-            .projects
-            .iter()
-            .find(|it| &it.key == key)
-            .map(|it| it.folder.clone())
-        else {
+        let Some(folder) = self.folder_of(key) else {
             return Acted::default();
         };
         if let Some(problem) = quick_problem(&folder, self.ports.checks.as_ref()) {
@@ -52,12 +55,7 @@ impl ShellState {
         if self.closing != CloseStage::Open || self.slots_full() {
             return Acted::default();
         }
-        let Some(folder) = self
-            .projects
-            .iter()
-            .find(|it| &it.key == key)
-            .map(|it| it.folder.clone())
-        else {
+        let Some(folder) = self.folder_of(key) else {
             return Acted::default();
         };
         if !exists {
