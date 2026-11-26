@@ -821,6 +821,8 @@ fn a_restart_counts_the_new_run_afresh() {
             assert!(again.changed().await);
             shell.refresh(second, again.generation(), 4000).unwrap();
         }
+        // At least one refresh after the run is up, whatever the loop saw.
+        shell.refresh(second, again.generation(), 4000).unwrap();
         assert_eq!(summary(&shell, second).mark, SlotMark::Ready);
     });
 }
@@ -880,30 +882,30 @@ fn copy_session_id_is_offered_for_an_ended_slot() {
     });
 }
 
+/// A slot whose session already ended or failed has no window in which it is closing but still
+/// offers its id: the status is only Ended or Failed once the run has returned, so closing it
+/// removes it at once and there is nothing to copy from.
 #[test]
-fn copy_session_id_is_not_offered_while_the_slot_closes() {
+fn closing_an_ended_or_failed_slot_leaves_nothing_to_copy() {
     drive(|harness| async move {
-        harness.stubborn();
         let mut shell = harness.shell();
-        let (launch, runtime) = harness.launch("closing");
-        let slot = shell.open(launch);
-        let runtime = runtime.recv().await.unwrap();
-        running(&runtime).await;
-        let control = harness.control(0).await;
-        shell.act(ShellAction::CloseSlot { slot });
-        shell.act(ShellAction::ConfirmCloseSlot);
-        assert!(summary(&shell, slot).closing);
-        // The process ends but its run has not returned: the slot is still there, closing.
-        control.exit(0);
-        until(|| !matches!(runtime.status(), SessionStatus::Running { .. })).await;
-        let generation = shell.watch(slot).unwrap().generation();
-        if shell
-            .refresh(slot, generation, 1)
-            .is_some_and(|it| !it.removed)
-        {
-            let now = summary(&shell, slot);
-            assert!(now.closing);
-            assert!(!now.can_copy_id);
+        for (n, code) in [(0, 0), (1, 3)] {
+            let (launch, runtime) = harness.launch("closing");
+            let slot = shell.open(launch);
+            let runtime = runtime.recv().await.unwrap();
+            running(&runtime).await;
+            harness.control(n).await.exit(code);
+            // Refreshed as soon as the session has ended, with no wait for its run.
+            until(|| runtime.status().is_end()).await;
+            let generation = shell.watch(slot).unwrap().generation();
+            shell.refresh(slot, generation, 1).unwrap();
+            assert!(summary(&shell, slot).can_copy_id);
+            let acted = shell.act(ShellAction::CloseSlot { slot });
+            assert_eq!(
+                acted.removed,
+                [slot],
+                "the run had returned before the status did"
+            );
             assert_eq!(
                 shell.act(ShellAction::CopySessionId { slot }).clipboard,
                 None
