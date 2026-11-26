@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import { EventEmitter } from 'node:events';
 import { removeFileHistory, removeOnSignal } from './cleanup.mjs';
-import { initializeRequest } from './protocol.mjs';
+import { initializeRequest, sceneAnswer } from './protocol.mjs';
 import { scenarios, rewindDefinitionProblem, readShowsRewind, resumeAtUuid, resumeFlagsFor } from './scenarios.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -143,6 +143,11 @@ await check('scenes 45 to 50 are pending and the other scenes are not', () => {
   assert.deepEqual(pending, ['45', '46', '47', '48', '49', '50']);
 });
 
+const fileHooksOf = (timeout) => ({
+  PreToolUse: [{ matcher: 'Edit|Write|NotebookEdit|Read', hookCallbackIds: ['closta-before-file-tool'], timeout }],
+  PostToolUse: [{ matcher: 'Edit|Write|NotebookEdit', hookCallbackIds: ['closta-after-edit'], timeout }],
+});
+
 const sceneOf = (n) => scenarios.find((s) => s.id.startsWith(`${n}-`));
 
 await check('scene 48: Pre answers {} and Post answers with additionalContext', () => {
@@ -200,10 +205,23 @@ await check('initializeRequest(s.hooks): the file-tool declaration for 48 only, 
       assert.deepEqual(hooks.PreToolUse[0].hookCallbackIds, ['closta-before-file-tool']);
       assert.deepEqual(hooks.PostToolUse[0].hookCallbackIds, ['closta-after-edit']);
       assert.equal(hooks.PreToolUse[0].timeout, 10);
-    } else if (!s.id.startsWith('49-') && !s.id.startsWith('50-')) {
+    } else if (s.id.startsWith('49-')) {
+      assert.deepEqual(hooks, fileHooksOf(10));
+    } else if (s.id.startsWith('50-')) {
+      assert.deepEqual(hooks, fileHooksOf(2));
+    } else {
       assert.deepEqual(hooks, {}, s.id);
     }
   }
+});
+
+await check('sceneAnswer: passes holdMs and payload through, and turns a throw into an Error naming the request', () => {
+  assert.deepEqual(sceneAnswer({ respond: () => ({ payload: {} }) }, { subtype: 'hook_callback' }, {}), { holdMs: 0, payload: {} });
+  assert.deepEqual(sceneAnswer({ respond: () => ({ holdMs: 5, payload: null }) }, { subtype: 'elicitation' }, {}), { holdMs: 5, payload: null });
+  assert.throws(
+    () => sceneAnswer({ respond: () => { throw new Error('ENOENT'); } }, { subtype: 'hook_callback' }, {}),
+    /answer to hook_callback failed: ENOENT/,
+  );
 });
 
 process.stdout.write(failures === 0 ? 'OK\n' : `${failures} failed\n`);

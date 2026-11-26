@@ -56,7 +56,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { scenarios, findScenario, rewindDefinitionProblem, resumeAtUuid, resumeFlagsFor } from './scenarios.mjs';
 import { removeFileHistory, removeOnSignal } from './cleanup.mjs';
-import { initializeRequest, kindOf } from './protocol.mjs';
+import { initializeRequest, kindOf, sceneAnswer } from './protocol.mjs';
 import { startFakeMcpServer } from './fake-mcp.mjs';
 import { newScrubState, scrubLine, scrubLines, findPii, createStreamScrubber, joinedFragments } from './scrub.mjs';
 
@@ -192,7 +192,7 @@ async function recordOne(scenario, version) {
   };
   const waitFor = (predicate, timeoutMs, label = '') => new Promise((resolve, reject) => {
     if (predicate(state)) { resolve(); return; }
-    const w = { predicate, resolve };
+    const w = { predicate, resolve, reject };
     waiters.push(w);
     if (timeoutMs) {
       setTimeout(() => {
@@ -269,7 +269,17 @@ async function recordOne(scenario, version) {
     // hook_callback and elicitation: the scenario's respond(req, ctx) gives { holdMs?, payload }, sent after holdMs.
     // For a hook, a null payload is the error answer; for an elicitation, a null payload sends no answer.
     const answerFrom = (answerer, counter, env, onNull) => {
-      const { holdMs: hold = 0, payload } = answerer.respond(env.request, { index: counter.n, cwd });
+      let answer;
+      try {
+        answer = sceneAnswer(answerer, env.request, { index: counter.n, cwd });
+      } catch (e) {
+        // Fail the recording through the normal cleanup: stop the child, wake the waiters, and let the step loop and the done check throw.
+        answerFailure = e;
+        try { child.kill('SIGKILL'); } catch { /* noop */ }
+        for (const w of waiters.splice(0)) w.reject(e);
+        return;
+      }
+      const { holdMs: hold, payload } = answer;
       counter.n += 1;
       const doIt = () => {
         if (payload === null) { onNull(); return; }
@@ -289,6 +299,7 @@ async function recordOne(scenario, version) {
       answerFrom(scenario.elicitation, elicitationCounter, env, () => {});
     };
 
+    let answerFailure = null;
     const rl = readline.createInterface({ input: child.stdout, crlfDelay: Infinity });
     // Block fragments (tool input in pieces) are joined before scrubbing. Held lines are written in their original order.
     const streamScrubber = createStreamScrubber(scrubState);
@@ -325,6 +336,7 @@ async function recordOne(scenario, version) {
     try {
       // Run the steps.
       for (const step of steps) {
+        if (answerFailure) throw answerFailure;
         switch (step.kind) {
           case 'initialize': control(initializeRequest(scenario.hooks)); break;
           case 'getContextUsage': control({ subtype: 'get_context_usage' }); break;
@@ -365,9 +377,11 @@ async function recordOne(scenario, version) {
           const counted = state.results >= (done.results || 0) && state.controlResponses >= (done.controlResponses || 0);
           const quiet = (Date.now() - state.lastLineAt) >= (done.quietMs || 2000);
           const capped = (Date.now() - start) >= (done.maxMs || 30000);
-          if ((counted && quiet) || capped) { clearInterval(t); resolve(); }
+          if ((counted && quiet) || capped || answerFailure) { clearInterval(t); resolve(); }
         }, 250);
       });
+
+      if (answerFailure) throw answerFailure;
 
       // Close stdin and wait for the process to exit (kill after a grace period).
       child.stdin.end();

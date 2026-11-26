@@ -17,3 +17,14 @@ export function kindOf(o) {
   if (o.subtype) return `${o.type}/${o.subtype}`;
   return String(o.type);
 }
+
+// Runs a scene's respond(req, ctx) for a hook_callback or elicitation request. A throw inside it (a scene that touches files, say)
+// comes back as an Error that names the request, so the caller can fail the recording instead of crashing in a stream handler.
+export function sceneAnswer(answerer, req, ctx) {
+  try {
+    const { holdMs = 0, payload } = answerer.respond(req, ctx);
+    return { holdMs, payload };
+  } catch (e) {
+    throw new Error(`the scene's answer to ${req?.subtype} failed: ${e.message}`);
+  }
+}
