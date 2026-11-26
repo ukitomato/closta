@@ -11,6 +11,7 @@ pub mod header;
 pub mod needs_you;
 pub mod new_session;
 pub mod panes;
+pub mod projects;
 pub mod rows;
 pub mod slot;
 pub mod state;

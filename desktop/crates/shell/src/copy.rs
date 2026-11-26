@@ -143,6 +143,13 @@ pub fn distro_missing(distro: &str) -> String {
     format!("{distro} is not installed.")
 }
 
+pub fn runtime_kind(runtime: &Runtime) -> &'static str {
+    match runtime {
+        Runtime::Win32 => "Windows",
+        Runtime::Wsl { .. } => "WSL",
+    }
+}
+
 pub fn runtime_label(runtime: &Runtime) -> String {
     match runtime {
         Runtime::Win32 => "Windows".to_owned(),
