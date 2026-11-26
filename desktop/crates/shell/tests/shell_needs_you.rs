@@ -798,15 +798,12 @@ fn a_row_drawn_in_another_place_than_the_lists_is_not_noted() {
 
 fn project_launch(
     harness: &Harness,
-    folder: &str,
 ) -> (
     closta_shell::slot::SlotLaunch,
     closta_providers::claude::fake::replay::ReplayControl,
     async_channel::Receiver<SessionRuntime>,
 ) {
-    let (mut launch, control, runtime) = support::replay_launch(harness, SANDBOX, SANDBOX_ASK);
-    launch.project = Some(folder.to_owned());
-    (launch, control, runtime)
+    support::replay_launch(harness, SANDBOX, SANDBOX_ASK)
 }
 
 /// Opens a slot in `folder` (none for no project) that waits on a request, refreshed at `at`.
@@ -816,7 +813,7 @@ async fn waiting_in(
     folder: Option<&str>,
     at: i64,
 ) -> SlotId {
-    let (mut launch, _control, runtime) = project_launch(harness, "unused");
+    let (mut launch, _control, runtime) = project_launch(harness);
     launch.project = folder.map(str::to_owned);
     let slot = shell.open(launch);
     let runtime = runtime.recv().await.unwrap();
@@ -895,5 +892,23 @@ fn a_row_of_a_slot_without_a_project_has_no_project() {
         let mut shell = harness.shell();
         let slot = waiting_in(&mut shell, &harness, None, 1).await;
         assert_eq!(projects_of(&shell), vec![(slot, None)]);
+    });
+}
+
+#[test]
+fn a_row_carries_the_slot_s_title_as_the_list_shows_it() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (mut launch, _control, runtime) = project_launch(&harness);
+        launch.title = "t".repeat(70);
+        let slot = shell.open(launch);
+        let runtime = runtime.recv().await.unwrap();
+        running(&runtime).await;
+        waits_on(&runtime, 1).await;
+        let generation = shell.watch(slot).unwrap().generation();
+        shell.refresh(slot, generation, 1).unwrap();
+        let title = shell.slot_title(slot).unwrap();
+        assert_eq!(title.len(), 60);
+        assert_eq!(shell.needs_you()[0].title, title);
     });
 }
