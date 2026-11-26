@@ -258,12 +258,13 @@ class SessionRuntime(
                 // writing it.
                 if (closing) current?.let { awaitEnd(it, closeWait, killWait, id, log) }
             }
-        statusFlow.value = outcome
+        // Logged before it is published: whoever sees the end can read the log line that says it.
         when (outcome) {
             // The kind only: the cause can name the working folder or carry an exception's text with a path in it.
             is SessionStatus.Failed -> log.warn("claude session $id: failed (${outcome.failure.javaClass.simpleName})")
             else -> log.info("claude session $id: ended")
         }
+        statusFlow.value = outcome
     }
 
     /**

@@ -24,8 +24,17 @@ fun cacheClock(
     return if (elapsed < record.ttlMs) CacheClock.Warm(record.ttlMs - elapsed) else CacheClock.Expired(contextTokens)
 }
 
-/** The `result` seen at [epochMs] starts the clock of the cache it had; one with none stops it. */
+/**
+ * The `result` seen at [epochMs]: one that read or wrote the cache starts its clock again from then, one that did not
+ * leaves it as it was, and one that named no model (`/clear`'s) stops it.
+ */
 internal fun OperationRecords.cacheSeenAt(epochMs: Long): OperationRecords {
-    val next = cacheTtlMs?.let { CacheRecord(epochMs, it) }
+    val ttl = cacheTtlMs
+    val next =
+        when {
+            ttl == null -> null
+            cacheTouched -> CacheRecord(epochMs, ttl)
+            else -> cache
+        }
     return if (next == cache) this else copy(cache = next)
 }
