@@ -107,7 +107,7 @@ fun toolDetail(call: ToolCallRecord): ToolDetail {
     )
 }
 
-private fun resultText(content: JsonValue): String =
+internal fun resultText(content: JsonValue): String =
     when (content) {
         is JsonString -> content.value
         is JsonArray ->

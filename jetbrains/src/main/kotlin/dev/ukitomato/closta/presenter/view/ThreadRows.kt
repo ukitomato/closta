@@ -1,7 +1,9 @@
 package dev.ukitomato.closta.presenter.view
 
 import dev.ukitomato.closta.presenter.tree.JsonArray
+import dev.ukitomato.closta.presenter.tree.JsonNumber
 import dev.ukitomato.closta.presenter.tree.JsonObject
+import dev.ukitomato.closta.presenter.tree.JsonString
 import java.util.IdentityHashMap
 
 /**
@@ -68,7 +70,7 @@ data class ExploredRow(
     val files: Int get() = members.map { it.detail?.target ?: it.key }.distinct().size
 }
 
-/** The to-do list a `TodoWrite` call wrote. */
+/** The to-do list a `TodoWrite` call wrote, or a run of `TaskCreate` and `TaskUpdate` calls left. */
 data class TodoRow(
     override val key: String,
     val items: List<TodoItem>,
@@ -141,6 +143,12 @@ data class SignInRow(
 val READ_ONLY_TOOLS: Set<String> = setOf("Read", "Grep", "Glob", "LS")
 
 private const val TODO_TOOL = "TodoWrite"
+private const val TASK_CREATE = "TaskCreate"
+private const val TASK_UPDATE = "TaskUpdate"
+private val TASK_TOOLS = setOf(TASK_CREATE, TASK_UPDATE)
+
+/** What a `TaskCreate` result says first: `Task #1 created successfully: write tests`. */
+private val TASK_CREATED = Regex("""Task #(\d+) created""")
 
 /** Turns transcripts into rows, keeping the rows of every message and part that is the same object as last time. */
 class ThreadRows {
@@ -149,6 +157,7 @@ class ThreadRows {
     private var groups = HashMap<String, ExploredRow>()
     private var cards = IdentityHashMap<ApprovalRecord, CardRow>()
     private var ends = HashMap<String, TurnEndRow>()
+    private val tasks = TaskTodos()
 
     fun of(transcript: Transcript): List<ThreadRow> {
         val nextMessages = IdentityHashMap<MessageRecord, List<ThreadRow>>()
@@ -182,7 +191,7 @@ class ThreadRows {
         parts = nextParts
         cards = nextCards
         ends = nextEnds
-        return grouped(rows)
+        return tasks.folded(grouped(rows), transcript)
     }
 
     private fun turnEndRow(
@@ -314,6 +323,100 @@ class ThreadRows {
     }
 
     private fun ThreadRow.isReadOnlyTool() = this is ToolRow && toolName in READ_ONLY_TOOLS
+}
+
+/**
+ * Replaces the task calls' tool rows with the to-do list they build, one list per run of calls with nothing between
+ * them. The list starts empty and again after each `/clear`; a list that did not change is the same object as before.
+ */
+private class TaskTodos {
+    private var lists = HashMap<String, TodoRow>()
+
+    fun folded(
+        rows: List<ThreadRow>,
+        transcript: Transcript,
+    ): List<ThreadRow> {
+        val calls = taskCalls(transcript)
+        val out = ArrayList<ThreadRow>(rows.size)
+        val nextLists = HashMap<String, TodoRow>()
+        val board = TaskBoard()
+        var first: ThreadRow? = null
+        for ((index, row) in rows.withIndex()) {
+            if (row is DividerRow && row.divider is Divider.Cleared) board.clear()
+            if (row !is ToolRow || !row.isTask()) {
+                out += row
+            } else {
+                val opening = first ?: row
+                calls[row.toolUseId]?.let(board::apply)
+                val runGoesOn = rows.getOrNull(index + 1)?.isTask() == true
+                first = if (runGoesOn) opening else null
+                if (!runGoesOn) {
+                    val made = TodoRow(row.key, board.items(), opening.opens)
+                    val list = lists[made.key]?.takeIf { it == made } ?: made
+                    nextLists[list.key] = list
+                    out += list
+                }
+            }
+        }
+        lists = nextLists
+        return out
+    }
+
+    private fun ThreadRow.isTask() = this is ToolRow && toolName in TASK_TOOLS
+
+    /** The task calls of the thread's own messages by their tool use id: a row kept from before holds no call. */
+    private fun taskCalls(transcript: Transcript): Map<String, ToolCallRecord> =
+        transcript.messages
+            .values()
+            .flatMap { it.parts.values() }
+            .filterIsInstance<ToolCallRecord>()
+            .filter { it.toolName in TASK_TOOLS }
+            .associateBy { it.toolUseId }
+}
+
+/** The tasks as the calls so far left them, by id, in the order they were created. */
+private class TaskBoard {
+    private val items = LinkedHashMap<String, TodoItem>()
+    private var created = 0
+
+    fun clear() {
+        items.clear()
+        created = 0
+    }
+
+    fun items(): List<TodoItem> = items.values.toList()
+
+    fun apply(call: ToolCallRecord) {
+        val input = call.input as? JsonObject ?: return
+        if (call.toolName == TASK_CREATE) create(call, input) else update(input)
+    }
+
+    private fun create(
+        call: ToolCallRecord,
+        input: JsonObject,
+    ) {
+        val subject = input.string("subject") ?: return
+        created++
+        val said = call.result?.content?.let { TASK_CREATED.find(resultText(it))?.groupValues?.get(1) }
+        items[said ?: created.toString()] = TodoItem(subject, "pending")
+    }
+
+    /** An update of a task this list does not hold changes nothing. */
+    private fun update(input: JsonObject) {
+        val id =
+            when (val taskId = input["taskId"]) {
+                is JsonString -> taskId.value
+                is JsonNumber -> taskId.text
+                else -> null
+            }
+        val item = id?.let(items::get) ?: return
+        val status = input.string("status")
+        if (status == "deleted") {
+            items.remove(id)
+        } else {
+            items[id] = TodoItem(input.string("subject") ?: item.content, status ?: item.status)
+        }
+    }
 }
 
 private fun todosOf(input: Any?): List<TodoItem> {
