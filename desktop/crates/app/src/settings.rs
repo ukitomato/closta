@@ -40,7 +40,10 @@ pub fn load(dir: &Path) -> (Settings, Arc<dyn SettingsSink>) {
         SettingsStart::Empty => (Settings::default(), file()),
         SettingsStart::Read(settings) => (settings, file()),
         // Written back it would lose what a newer version added.
-        SettingsStart::Newer(settings) => (settings, kept_nowhere()),
+        SettingsStart::Newer(settings) => {
+            tracing::info!("the settings are from a newer version and are not written");
+            (settings, kept_nowhere())
+        }
         SettingsStart::SetAside => match std::fs::rename(&path, dir.join(SET_ASIDE_FILE)) {
             Ok(()) => {
                 tracing::warn!("the settings could not be read and were set aside");
@@ -286,6 +289,43 @@ mod tests {
             std::fs::read_to_string(dir.join(SETTINGS_FILE)).unwrap(),
             "{"
         );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_newer_file_is_read_and_never_written() {
+        let log = captured();
+        let dir = scratch("newer");
+        let original = r#"{"version": 2, "projects": [{"folder": "C:\\a", "collapsed": true}, {"folder": "C:\\b", "collapsed": false}]}"#;
+        std::fs::write(dir.join(SETTINGS_FILE), original).unwrap();
+        let logged_before = log_text(&log).len();
+
+        let (settings, sink) = load(&dir);
+        assert_eq!(settings.version, 2);
+        let folders: Vec<&str> = settings
+            .projects
+            .iter()
+            .map(|project| project.folder.as_str())
+            .collect();
+        assert_eq!(folders, [r"C:\a", r"C:\b"]);
+
+        sink.save(value(&[r"C:\other"]));
+        flush(&sink);
+        assert_eq!(
+            std::fs::read_to_string(dir.join(SETTINGS_FILE)).unwrap(),
+            original
+        );
+        assert!(!dir.join(SET_ASIDE_FILE).exists());
+
+        let text = log_text(&log);
+        let text = &text[logged_before..];
+        assert!(
+            text.contains("the settings are from a newer version and are not written"),
+            "{text}"
+        );
+        for leak in ["Closta".to_owned(), dir.to_string_lossy().into_owned()] {
+            assert!(!text.contains(&leak), "the log names {leak}");
+        }
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

@@ -1252,6 +1252,52 @@ mod tests {
     }
 
     #[gpui_kit::test]
+    fn alt_one_opens_a_shut_left_pane_and_tidies_as_a_toggle_does(cx: &mut TestAppContext) {
+        use closta_shell::panes::Pane;
+
+        let (handle, model) = test_window::open_tree(
+            cx,
+            test_window::TreeSetup {
+                projects: &[],
+                slots: &[None, None],
+                run: false,
+            },
+        );
+        let width = model.read_with(cx, |model, _| model.shell.panes().left_width);
+        test_window::act(cx, handle, &model, ShellAction::TogglePane(Pane::Left));
+        let shut = model.read_with(cx, |model, _| !model.shell.panes().left_open);
+        assert!(shut, "the pane did not shut");
+
+        // A key whose release the hidden pane may have swallowed.
+        let held = model.read_with(cx, |model, _| {
+            model.focus.repeats.borrow_mut().pressed("x");
+            !model.focus.repeats.borrow().is_empty()
+        });
+        assert!(held, "the key was not recorded");
+
+        test_window::press(cx, handle, "alt-1");
+        test_window::draw(cx, handle);
+        let (open, list, empty, drawn) = model.read_with(cx, |model, cx| {
+            (
+                model.shell.panes().left_open,
+                model.focus.list.clone(),
+                model.focus.repeats.borrow().is_empty(),
+                model
+                    .panes
+                    .read(cx)
+                    .sizes()
+                    .get(crate::shell_view::LEFT)
+                    .map(|size| size.as_f32()),
+            )
+        });
+        assert!(open, "the left pane stayed shut");
+        assert!(test_window::focused(cx, handle, &list));
+        assert!(empty, "the held keys were not forgotten");
+        let drawn = drawn.expect("the left pane has a size");
+        assert!((drawn - width).abs() < 0.5, "{drawn} against {width}");
+    }
+
+    #[gpui_kit::test]
     fn arrows_on_the_left_pane_move_the_cursor_and_never_the_history(cx: &mut TestAppContext) {
         let (handle, model) = test_window::open_tree(
             cx,

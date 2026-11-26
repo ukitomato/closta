@@ -138,6 +138,11 @@ impl Repeats {
         self.down.remove(key);
     }
 
+    /// Whether no key is held.
+    pub fn is_empty(&self) -> bool {
+        self.down.is_empty()
+    }
+
     /// Forgets every key, for when a release may have gone unseen.
     pub fn clear(&mut self) {
         self.down.clear();

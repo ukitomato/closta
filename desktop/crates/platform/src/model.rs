@@ -413,7 +413,10 @@ impl ShellModel {
         // Whatever selected it — a click, Enter on the list, a jump to a wait — another slot
         // shown needs its rows made.
         let selected_before = self.shell.selected();
-        let toggles = matches!(action, ShellAction::TogglePane(_));
+        let panes_before = {
+            let panes = self.shell.panes();
+            (panes.left_open, panes.right_open)
+        };
         let opens = matches!(
             action,
             ShellAction::OpenNewSession | ShellAction::OpenNewSessionHere
@@ -439,6 +442,11 @@ impl ShellModel {
             focus,
         } = self.shell.act(action);
         let selects = self.shell.selected() != selected_before;
+        // Whatever opened or shut a pane — its button, or the key that goes to the list.
+        let toggles = {
+            let panes = self.shell.panes();
+            (panes.left_open, panes.right_open) != panes_before
+        };
         self.show_title(window);
         for slot in removed {
             self.forget(slot, window, cx);

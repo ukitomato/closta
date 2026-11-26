@@ -68,7 +68,7 @@ impl ShellState {
                 collapsed: project.collapsed,
                 checking: self.pending_new.as_ref() == Some(&project.key),
                 can_add,
-                can_remove: self.has_no_live_slot(&project.key),
+                can_remove: self.holds_nothing(&project.key),
             })
             .collect()
     }
@@ -106,7 +106,7 @@ impl ShellState {
     }
 
     /// Whether no slot of the project is alive, closing or holding a draft.
-    fn has_no_live_slot(&self, key: &ProjectKey) -> bool {
+    fn holds_nothing(&self, key: &ProjectKey) -> bool {
         !self.slots.values().any(|slot| {
             slot.project.as_ref() == Some(key) && (slot.is_live() || slot.composer.has_draft())
         })
@@ -115,7 +115,7 @@ impl ShellState {
     /// Takes the project and its ended slots off the list and saves the rest; a project with a
     /// live, closing or drafted slot stays as it is. No file is touched.
     pub(super) fn remove_project(&mut self, key: &ProjectKey) -> Acted {
-        if !self.projects.iter().any(|it| &it.key == key) || !self.has_no_live_slot(key) {
+        if !self.projects.iter().any(|it| &it.key == key) || !self.holds_nothing(key) {
             return Acted::default();
         }
         let gone: Vec<SlotId> = self

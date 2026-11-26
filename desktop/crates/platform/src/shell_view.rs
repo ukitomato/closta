@@ -26,7 +26,7 @@ use crate::tree;
 /// The height of the header line.
 const HEADER: f32 = 36.0;
 /// The index of each pane in the group; a closed pane stays in place, hidden.
-const LEFT: usize = 0;
+pub(crate) const LEFT: usize = 0;
 const RIGHT: usize = 2;
 
 fn width_range(range: RangeInclusive<f32>) -> std::ops::Range<Pixels> {
