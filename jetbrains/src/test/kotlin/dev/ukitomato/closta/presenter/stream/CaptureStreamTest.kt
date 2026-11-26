@@ -391,7 +391,7 @@ class CaptureStreamTest {
                 "40-sandbox-same-id" to 3,
                 "41-clear-reset" to 69,
                 "42-local-commands" to 13,
-                "43-usage-and-rules" to 9,
+                "43-usage-and-rules" to 10,
                 "44-permission-denied" to 36,
             )
     }

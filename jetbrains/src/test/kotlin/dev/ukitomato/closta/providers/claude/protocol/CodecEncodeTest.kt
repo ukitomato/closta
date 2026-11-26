@@ -148,6 +148,17 @@ class CodecEncodeTest {
     }
 
     @Test
+    fun `get_usage skips the behaviors, as the recorder asked in capture 43`() {
+        assertEquals(
+            json(
+                """{"type":"control_request","request_id":"r1",""" +
+                    """"request":{"subtype":"get_usage","skip_behaviors":true}}""",
+            ),
+            json(StdinEncoder.getUsage("r1")),
+        )
+    }
+
+    @Test
     fun `get_context_usage asks for the summary unless told otherwise`() {
         assertAll(
             {

@@ -239,7 +239,7 @@ object CaptureReplay {
 
     /**
      * What the recorder asked the CLI for with a control request that the host's own record is for, by the
-     * request's id (`recorder/scenarios.mjs`): 06's context usage, and 07's switches in the order it sent them.
+     * request's id (`recorder/scenarios.mjs`): 06's context usage, 07's switches in the order it sent them, and so on.
      */
     private val REQUESTS: Map<String, Map<String, PresenterInput.ControlRequested>> =
         mapOf(
@@ -247,6 +247,14 @@ object CaptureReplay {
                 mapOf(
                     "06-context-usage-req-2" to
                         PresenterInput.ControlRequested("06-context-usage-req-2", ControlKind.CONTEXT),
+                ),
+            // The plan's usage after the turn (req-2), and the whole context usage last (req-6).
+            "43-usage-and-rules" to
+                mapOf(
+                    "43-usage-and-rules-req-2" to
+                        PresenterInput.ControlRequested("43-usage-and-rules-req-2", ControlKind.USAGE),
+                    "43-usage-and-rules-req-6" to
+                        PresenterInput.ControlRequested("43-usage-and-rules-req-6", ControlKind.CONTEXT),
                 ),
             "07-set-model-and-mode" to
                 buildMap {

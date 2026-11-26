@@ -84,6 +84,9 @@ interface ChatSource : Disposable {
     /** Asks the CLI for its MCP servers; the answer is the view's list. */
     suspend fun requestMcpStatus()
 
+    /** Asks the CLI for the session's cost and the plan's limits; the answer is the composer's usage. */
+    suspend fun requestUsage()
+
     suspend fun setMcpServerEnabled(
         name: String,
         enabled: Boolean,
@@ -232,6 +235,10 @@ interface ChatSource : Disposable {
 
         override suspend fun requestMcpStatus() {
             commands()?.requestMcpStatus()
+        }
+
+        override suspend fun requestUsage() {
+            commands()?.requestUsage()
         }
 
         override suspend fun dismissRateLimit(seq: Int) {

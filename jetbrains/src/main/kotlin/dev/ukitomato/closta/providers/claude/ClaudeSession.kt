@@ -146,6 +146,10 @@ class ClaudeSession(
         stdinChannel.send(StdinEncoder.getContextUsage(requestId))
     }
 
+    override suspend fun requestUsage(requestId: String) {
+        stdinChannel.send(StdinEncoder.getUsage(requestId))
+    }
+
     // The ids are the caller's, as above.
     override suspend fun requestSettings(requestId: String) {
         stdinChannel.send(StdinEncoder.getSettings(requestId))

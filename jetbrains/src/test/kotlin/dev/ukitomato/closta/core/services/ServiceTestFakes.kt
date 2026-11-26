@@ -26,6 +26,7 @@ class RecordingAgentSession(
     val setModelIds = mutableListOf<String>()
     val setModes = mutableListOf<Pair<String, String>>()
     val contextRequests = mutableListOf<String>()
+    val usageRequests = mutableListOf<String>()
     val sentUuids = mutableListOf<String?>()
     val rewinds = mutableListOf<Triple<String, Boolean, String>>()
     var interruptCount = 0
@@ -77,6 +78,10 @@ class RecordingAgentSession(
 
     override suspend fun requestContextUsage(requestId: String) {
         contextRequests += requestId
+    }
+
+    override suspend fun requestUsage(requestId: String) {
+        usageRequests += requestId
     }
 
     val settingsRequests = mutableListOf<String>()

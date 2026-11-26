@@ -25,6 +25,8 @@ import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.guessProjectDir
 import com.intellij.openapi.ui.popup.JBPopupFactory
+import com.intellij.openapi.ui.popup.JBPopupListener
+import com.intellij.openapi.ui.popup.LightweightWindowEvent
 import com.intellij.openapi.util.IconLoader
 import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFile
@@ -82,6 +84,7 @@ import java.nio.charset.CharacterCodingException
 import java.nio.charset.CodingErrorAction
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 import javax.imageio.ImageIO
 import javax.swing.JComponent
 import javax.swing.JPanel
@@ -113,6 +116,9 @@ class ComposerPanel(
 
     /** The sandbox button was pressed: true to turn it on. */
     var onSandbox: (Boolean) -> Unit = {}
+
+    /** The cost button was pressed: the CLI is asked for the session's cost and the plan's limits. */
+    var onUsage: () -> Unit = {}
 
     /** The Bypass bar was answered and went: the keyboard goes back to the input. */
     var onLetGo: () -> Unit = {}
@@ -155,7 +161,15 @@ class ComposerPanel(
     private val mode = ToolbarButton("", null, true) { button -> state?.let { showModes(it, button) } }
     private val sandbox = ToolbarButton("", SHIELD_OFF, false) { state?.let { onSandbox(!it.sandbox.on) } }
     private val model = ToolbarButton("", null, true) { button -> state?.let { showModels(it, button) } }
+    private val cost =
+        ToolbarButton(null, null, false) { button ->
+            openUsage(button)
+            onUsage()
+        }.tip(ClostaBundle.message("composer.usage.tooltip"))
     private val context = ContextUse()
+
+    /** The usage popup while it is open: it shows each new state, and nothing else of it is kept here. */
+    private var usagePopup: UsagePopup? = null
     private val send =
         ToolbarButton(null, SEND_IDLE, false) { sendNow() }
             .tip(ClostaBundle.message("composer.send.tooltip"))
@@ -244,6 +258,7 @@ class ComposerPanel(
         this.sendable = sendable
         shownBlock = if (sendable) SendBlock.NONE else blocked
         showBar(next)
+        usagePopup?.show(next)
         next.sandboxFailure?.takeIf { it.id != saidSandbox }?.let {
             saidSandbox = it.id
             say(sandboxFailureText(it), StatusSource.REFUSAL, error = true)
@@ -273,6 +288,7 @@ class ComposerPanel(
         left.add(sandbox)
         left.add(model)
         val right = JPanel(FlowLayout(FlowLayout.RIGHT, 0, 0)).apply { isOpaque = false }
+        right.add(cost)
         right.add(context)
         right.add(send)
         right.add(stop)
@@ -302,6 +318,9 @@ class ComposerPanel(
         val whole = listOfNotNull(next.model.label, effort?.let(::effortText)).joinToString(" · ")
         model.accessibleLabel = ClostaBundle.message("composer.model.accessible", whole)
         model.toolTipText = listOfNotNull(whole, next.model.resolved?.takeIf { it != whole }).joinToString(" — ")
+        val spent = next.costUsd
+        cost.isVisible = spent != null
+        if (spent != null) cost.text = ClostaBundle.message("composer.usage.button", "%.2f".format(Locale.ROOT, spent))
         val used = next.context
         context.isVisible = used != null
         if (used != null) {
@@ -464,6 +483,22 @@ class ComposerPanel(
         val ttl = if (error) ERROR_TTL_MS else HINT_TTL_MS
         messages.post(StatusMessage(text, source, error, System.currentTimeMillis(), ttl, untilKeystroke = true))
         showStatus()
+    }
+
+    /** Opens the usage popup above [under]; it shows the composer's state until it is closed. */
+    private fun openUsage(under: JComponent) {
+        val next = state ?: return
+        usagePopup?.popup?.cancel()
+        val opened = UsagePopup(next)
+        usagePopup = opened
+        opened.popup.addListener(
+            object : JBPopupListener {
+                override fun onClosed(event: LightweightWindowEvent) {
+                    if (usagePopup === opened) usagePopup = null
+                }
+            },
+        )
+        ComposerPopups.showAbove(opened.popup, under)
     }
 
     private fun showModes(

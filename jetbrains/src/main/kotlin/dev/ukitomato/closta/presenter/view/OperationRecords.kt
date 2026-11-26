@@ -17,7 +17,7 @@ enum class ControlKind {
     MODE,
     CONTEXT,
 
-    /** The list of MCP servers: it waits in its own column, as the usage does. */
+    /** The list of MCP servers: it waits in its own column, as the context requests do. */
     MCP_STATUS,
 
     /** An MCP server turned on, off, or reconnected; the value is the server's name. */
@@ -25,7 +25,7 @@ enum class ControlKind {
     MCP_DISABLE,
     MCP_RECONNECT,
 
-    /** The settings in effect (`get_settings`): it waits in its own column, as the usage does. */
+    /** The settings in effect (`get_settings`): it waits in its own column, as the context requests do. */
     SETTINGS,
 
     /** The effort changed live (`apply_flag_settings`); the value is the level. */
@@ -36,6 +36,9 @@ enum class ControlKind {
      * `"false"`. The CLI's settings say whether it took: the record waits for their answer.
      */
     SANDBOX,
+
+    /** `get_usage`, the session's cost and the plan's limits: it waits in a column of its own, as the context does. */
+    USAGE,
 }
 
 /**
@@ -123,7 +126,7 @@ data class TokenTotals(
 
 /**
  * Everything the console shows that core does not keep, as one value so the projection compares it in one step.
- * [seq] is the last number given. [waiting] are the ids of the usage requests not answered yet, oldest first, and
+ * [seq] is the last number given. [waiting] are the ids of the context requests not answered yet, oldest first, and
  * [mcpWaiting] those of the MCP status requests (a column of their own, so that neither pushes the other out).
  * [mcpServers] is the last list the CLI gave (null before the first answer, an empty list for a session with no
  * server) and [mcpUnreadable] says the last ask could not be read, so the list is the one before it.
@@ -187,6 +190,10 @@ data class OperationRecords(
     val rateLimit: RateLimitRecord? = null,
     /** The [RateLimitRecord.seq] the user dismissed: it is not shown again until the status or the window changes. */
     val rateLimitDismissed: Int? = null,
+    /** The ids of the `get_usage` requests not answered yet, a column of their own as [mcpWaiting] is. */
+    val usageWaiting: List<String> = emptyList(),
+    /** The last `get_usage` answer that could be read; null before the first. */
+    val usage: UsageRecord? = null,
 )
 
 /** A retry of the API in progress: attempt [attempt] of [maxRetries] starts after [delayMs] ms; [status] is HTTP's. */
@@ -200,7 +207,7 @@ data class RetryRecord(
 /** The most switches kept (the newest); an answer for one pushed out is an answer for an id nobody knows. */
 const val MAX_SWITCHES = 20
 
-/** The most usage requests kept while they wait for an answer (the newest): a CLI that never answers cannot fill it. */
+/** The most requests kept in a column while they wait (the newest): a CLI that never answers cannot fill it. */
 const val MAX_WAITING = 5
 
 /** The most compactions kept (the newest). */
@@ -229,6 +236,7 @@ internal fun OperationRecords.control(input: PresenterInput.ControlRequested): O
     return when (input.kind) {
         ControlKind.CONTEXT -> copy(waiting = (waiting + input.requestId).takeLast(MAX_WAITING))
         ControlKind.MCP_STATUS -> copy(mcpWaiting = (mcpWaiting + input.requestId).takeLast(MAX_WAITING))
+        ControlKind.USAGE -> copy(usageWaiting = (usageWaiting + input.requestId).takeLast(MAX_WAITING))
         ControlKind.MCP_ENABLE -> withSwitch(mcpSwitch(input, SwitchKind.MCP_ENABLE))
         ControlKind.MCP_DISABLE -> withSwitch(mcpSwitch(input, SwitchKind.MCP_DISABLE))
         ControlKind.MCP_RECONNECT -> withSwitch(mcpSwitch(input, SwitchKind.MCP_RECONNECT))
@@ -340,10 +348,11 @@ private fun OperationRecords.settingsAsked(requestId: String): OperationRecords 
 internal fun OperationRecords.withSwitch(record: SwitchRecord): OperationRecords =
     copy(seq = record.seq, switches = (switches + record).takeLast(MAX_SWITCHES))
 
-/** The request could not be written: a switch fails, a usage request is not waited for. */
+/** The request could not be written: a switch fails, a context or usage request is not waited for. */
 internal fun OperationRecords.sendFailed(requestId: String): OperationRecords =
     rewindSendFailed(requestId) ?: when {
         requestId in waiting -> copy(waiting = waiting - requestId)
+        requestId in usageWaiting -> copy(usageWaiting = usageWaiting - requestId)
         // A sandbox check that could not be asked waits for the next settings request.
         requestId in settingsWaiting ->
             copy(
@@ -360,7 +369,8 @@ private fun OperationRecords.knows(requestId: String): Boolean =
     switches.any { it.id == requestId } ||
         requestId in waiting ||
         requestId in mcpWaiting ||
-        requestId in settingsWaiting
+        requestId in settingsWaiting ||
+        requestId in usageWaiting
 
 /**
  * The CLI's answer to [event]'s request. An id nobody asked with, or an answer to a settled one, changes nothing.
@@ -377,6 +387,10 @@ internal fun OperationRecords.answered(event: AgentEvent.ControlResponse): Opera
             copy(waiting = waiting - id, context = read ?: context)
         }
         id in mcpWaiting -> mcpAnswered(id, event)
+        id in usageWaiting -> {
+            val body = if (succeeded) (JsonRead.parse(event.response.text) as? JsonObject)?.obj("response") else null
+            copy(usageWaiting = usageWaiting - id, usage = body?.let(::usageOf) ?: usage)
+        }
         id in settingsWaiting -> settingsAnswered(id, event)
         succeeded -> switchApplied(id)
         else ->

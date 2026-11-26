@@ -89,6 +89,10 @@ sealed interface Sent {
         val requestId: String,
     ) : Sent
 
+    data class RequestUsage(
+        val requestId: String,
+    ) : Sent
+
     data class RequestMcpStatus(
         val requestId: String,
     ) : Sent

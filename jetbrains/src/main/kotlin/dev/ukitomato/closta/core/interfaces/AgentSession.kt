@@ -83,6 +83,12 @@ interface AgentSession {
     suspend fun requestContextUsage(requestId: String)
 
     /**
+     * Asks for the session's cost and the plan's limits. Only issues the request; the answer carries [requestId], as
+     * for [requestContextUsage].
+     */
+    suspend fun requestUsage(requestId: String)
+
+    /**
      * Asks for the settings in effect: the answer, a `ControlResponse` carrying [requestId], says the effort
      * and the model the session's next request goes with. Only issues the request, as [requestContextUsage].
      */

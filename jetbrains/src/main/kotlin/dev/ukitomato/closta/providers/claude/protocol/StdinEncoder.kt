@@ -210,6 +210,20 @@ object StdinEncoder {
         }
 
     /**
+     * `get_usage`: the session's cost and the plan's limits. [skipBehaviors] spares the CLI the scan of the last seven
+     * days' transcripts, whose section the host does not read (capture 43 line 16 holds the answer to it;
+     * `SDKControlGetUsageRequest` in sdk.d.ts 0.3.325, which calls the shape experimental).
+     */
+    fun getUsage(
+        requestId: String,
+        skipBehaviors: Boolean = true,
+    ): String =
+        controlRequest(requestId) {
+            addProperty("subtype", "get_usage")
+            addProperty("skip_behaviors", skipBehaviors)
+        }
+
+    /**
      * `get_settings`: the settings in effect. Its answer's `response.applied` says what the session sends with
      * its next request: `model` (the model really used, known before the first message) and `effort` (null for a model
      * that takes none). Capture 28, lines 2, 4, 6 and 8; `SDKControlGetSettingsRequest` in sdk.d.ts 0.3.282.

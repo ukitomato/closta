@@ -37,6 +37,10 @@ data class ComposerState(
     val compacting: Boolean,
     /** The plan's limit is near or reached, and the user has not dismissed it; never an allowed one. */
     val rateLimit: RateLimitRecord?,
+    /** The last answer of `get_usage`; null before the first. */
+    val usage: UsageRecord?,
+    /** A `get_usage` request waits for the CLI's answer. */
+    val usageWaiting: Boolean,
 )
 
 /** The sandbox button: whether the sandbox is on, and why it cannot be pressed now, if it cannot. */
@@ -104,6 +108,8 @@ fun composerState(
         retry = operations.retry.takeIf { running },
         compacting = operations.compacting,
         rateLimit = operations.rateLimitShown(),
+        usage = operations.usage,
+        usageWaiting = operations.usageWaiting.isNotEmpty(),
     )
 }
 

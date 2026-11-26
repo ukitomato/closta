@@ -10,6 +10,7 @@ import dev.ukitomato.closta.core.services.ReconnectMcpServer
 import dev.ukitomato.closta.core.services.RequestContextUsage
 import dev.ukitomato.closta.core.services.RequestMcpStatus
 import dev.ukitomato.closta.core.services.RequestSettings
+import dev.ukitomato.closta.core.services.RequestUsage
 import dev.ukitomato.closta.core.services.RespondToApproval
 import dev.ukitomato.closta.core.services.RewindFiles
 import dev.ukitomato.closta.core.services.SendMessage
@@ -65,6 +66,7 @@ class SessionCommands internal constructor(
     private val switch = SwitchModel(session)
     private val modeUseCase = SwitchPermissionMode(session)
     private val usageUseCase = RequestContextUsage(session)
+    private val usageOfPlan = RequestUsage(session)
     private val settingsUseCase = RequestSettings(session)
     private val effortUseCase = SwitchEffort(session)
     private val mcpStatusUseCase = RequestMcpStatus(session)
@@ -172,6 +174,9 @@ class SessionCommands internal constructor(
 
     /** Asks the CLI how much of the context window is used, as [switchModel] does. */
     suspend fun requestContextUsage() = requested(ControlKind.CONTEXT, null) { usageUseCase(it) }
+
+    /** Asks the CLI for the session's cost and the plan's limits, as [switchModel] does. */
+    suspend fun requestUsage() = requested(ControlKind.USAGE, null) { usageOfPlan(it) }
 
     /**
      * Asks the CLI for the settings in effect, as [switchModel] does; the answer is the view's effort and model.

@@ -442,6 +442,7 @@ class ChatPanel(
         composer.onEffort = { level -> scope.launch(failures) { source.switchEffort(level) } }
         composer.onMode = { mode -> scope.launch(failures) { source.switchMode(mode) } }
         composer.onSandbox = { on -> scope.launch(failures) { source.switchSandbox(on) } }
+        composer.onUsage = { scope.launch(failures) { source.requestUsage() } }
         limitBanner.onDismiss = { seq -> scope.launch(failures) { source.dismissRateLimit(seq) } }
     }
 

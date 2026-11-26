@@ -432,6 +432,12 @@
           }
         ],
         "startPermissionMode": "default",
+        "context": {
+          "totalTokens": 21820,
+          "maxTokens": 200000,
+          "percentage": 11,
+          "autoCompactThreshold": 167000
+        },
         "compacting": false
       }
     }

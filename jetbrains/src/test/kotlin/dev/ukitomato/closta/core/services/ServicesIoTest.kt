@@ -39,15 +39,17 @@ class ServicesIoTest {
         }
 
     @Test
-    fun `SwitchPermissionMode and RequestContextUsage pass the caller's request id through the session`() =
+    fun `SwitchPermissionMode and the usage requests pass the caller's request id through the session`() =
         runBlocking {
             val session = RecordingAgentSession()
 
             SwitchPermissionMode(session)("plan", "req-2")
             RequestContextUsage(session)("req-3")
+            RequestUsage(session)("req-4")
 
             assertEquals(listOf("plan" to "req-2"), session.setModes, "the mode change went through AgentSession")
-            assertEquals(listOf("req-3"), session.contextRequests, "the usage request went through AgentSession")
+            assertEquals(listOf("req-3"), session.contextRequests, "the context request went through AgentSession")
+            assertEquals(listOf("req-4"), session.usageRequests, "the usage request went through AgentSession")
         }
 
     @Test
