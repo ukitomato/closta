@@ -3,10 +3,10 @@
 //! A row names the project and the session on its first line, and on its second says what waits
 //! and offers Allow and Deny… when the list may answer it unread, and Open
 //! otherwise. Its buttons are for the mouse only: none takes the keyboard, and the digits, Enter
-//! and Space are held while the list has it. Alt+Shift+W is the window's gate's alone.
+//! and Space are held by the left pane, which has the keyboard for the list. Alt+Shift+W is the
+//! window's gate's alone.
 
 use closta_presenter::sessions::groups::AlertKind;
-use closta_shell::card_keys::{CardKeyOutcome, FocusScene, card_key};
 use closta_shell::copy;
 use closta_shell::nav::NavItem;
 use closta_shell::needs_you::{NeedsYouItem, NeedsYouRow, wholly_shown};
@@ -19,7 +19,6 @@ use gpui_kit::*;
 
 use crate::clock::WallClock;
 use crate::composer::Dispatch;
-use crate::focus::to_card_key;
 use crate::model::ShellModel;
 
 /// How much of a permission's subject the row's second line shows.
@@ -36,14 +35,13 @@ impl ShellModel {
         if self.shell.panes().left_open && self.shell.overlay().is_none() {
             self.note_list_shown(&rows, window, cx);
         }
-        let cursor = match self.shell.nav_cursor() {
-            Some(NavItem::NeedsYou(slot)) => Some(*slot),
+        let cursor = match self.shown_cursor(window, cx) {
+            Some(NavItem::NeedsYou(slot)) => Some(slot),
             _ => None,
         };
         needs_you_list(
             &rows,
             cursor,
-            &self.focus.list,
             &self.needs_you_scroll,
             Self::dispatch(cx),
             self.clock,
@@ -124,7 +122,6 @@ fn shown_actions(
 pub(crate) fn needs_you_list(
     rows: &[NeedsYouRow],
     cursor: Option<SlotId>,
-    focus: &FocusHandle,
     scroll: &ScrollHandle,
     dispatch: Dispatch,
     clock: WallClock,
@@ -147,19 +144,6 @@ pub(crate) fn needs_you_list(
         .accessibility_id("needs-you")
         .aria_label(copy::NEEDS_YOU)
         .flex_none()
-        .track_focus(focus)
-        // The window's gate holds these keys first; this holds them again on the way down,
-        // before a part inside acts on one, and prevents the default, so no Enter or Space
-        // comes back as a click when the key goes up. It only holds: the jump is the gate's.
-        .capture_key_down(move |event: &KeyDownEvent, window, cx| {
-            let Some(key) = to_card_key(&event.keystroke) else {
-                return;
-            };
-            if card_key(&FocusScene::NeedsYou, &key) != CardKeyOutcome::Pass {
-                window.prevent_default();
-                cx.stop_propagation();
-            }
-        })
         .child(heading)
         .child(
             // Its children are the rows alone: the scroll handle's items are the rows' places.
@@ -364,14 +348,15 @@ mod tests {
     use gpui_kit::test::TestWindowExt as _;
     // Named one by one: the glob would bring in a `test` that hides the built-in attribute.
     use gpui_kit::{
-        AnyWindowHandle, AppContext as _, Bounds, Context, FocusHandle, IntoElement,
-        ParentElement as _, Point, Render, ScrollHandle, Styled as _, TestAppContext, Window,
-        WindowBounds, WindowOptions, div, open_window, point, px, size,
+        AnyWindowHandle, AppContext as _, Bounds, Context, FocusHandle, InteractiveElement as _,
+        IntoElement, ParentElement as _, Point, Render, ScrollHandle, Styled as _, TestAppContext,
+        Window, WindowBounds, WindowOptions, div, open_window, point, px, size,
     };
 
     use super::{DrawnRow, cut_subject, needs_you_list, shown_actions};
     use crate::clock::WallClock;
     use crate::composer::Dispatch;
+    use crate::focus::left_list;
 
     type Acted = Rc<RefCell<Vec<ShellAction>>>;
 
@@ -385,15 +370,17 @@ mod tests {
 
     impl Render for List {
         fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-            div().size_full().child(needs_you_list(
+            let list = needs_you_list(
                 &self.rows,
                 None,
-                &self.focus,
                 &self.scroll,
                 self.dispatch.clone(),
                 self.clock,
                 cx,
-            ))
+            );
+            left_list(div().id("left"), &self.focus)
+                .size_full()
+                .child(list)
         }
     }
 

@@ -387,23 +387,29 @@ pub(crate) fn bypass_band(
 }
 
 /// "Session ended", and the button that restarts it when it can be, or why it cannot while
-/// eight slots hold a session.
+/// eight slots hold a session. Once the left list sent the keyboard here, the band and its
+/// Restart take it.
 fn ended(model: &ShellModel, slot: SlotId, cx: &mut Context<ShellModel>) -> AnyElement {
+    let focus = model.focus.ended.get(&slot);
     let restart = model.shell.can_restart(slot).then(|| {
-        Button::new("composer-restart")
-            .outline()
-            .small()
-            .label(copy::RESTART)
-            .on_click(cx.listener(move |model, _: &ClickEvent, window, cx| {
-                model.act(ShellAction::Restart { slot }, window, cx);
-            }))
+        let button = Button::new("composer-restart");
+        match focus {
+            Some(focus) => button.track_focus(&focus.restart),
+            None => button,
+        }
+        .outline()
+        .small()
+        .label(copy::RESTART)
+        .on_click(cx.listener(move |model, _: &ClickEvent, window, cx| {
+            model.act(ShellAction::Restart { slot }, window, cx);
+        }))
     });
     let limit = model.shell.restart_blocked(slot).then(|| {
         div()
             .text_color(cx.theme().muted_foreground)
             .child(copy::SLOT_LIMIT)
     });
-    h_flex()
+    let band = h_flex()
         .id("session-ended")
         .accessibility_id("session-ended")
         .aria_label(copy::SESSION_ENDED)
@@ -418,8 +424,11 @@ fn ended(model: &ShellModel, slot: SlotId, cx: &mut Context<ShellModel>) -> AnyE
                 .child(copy::SESSION_ENDED),
         )
         .children(restart)
-        .children(limit)
-        .into_any_element()
+        .children(limit);
+    match focus {
+        Some(focus) => band.track_focus(&focus.band).into_any_element(),
+        None => band.into_any_element(),
+    }
 }
 
 #[cfg(test)]
@@ -768,8 +777,9 @@ mod tests {
             let (slot, behind) = (self.slot, self.dispatch.clone());
             let band = self.focus.bypass_handle(slot, cx);
             let scene = self.focus.focus_scene(window, cx);
-            div()
-                .id("behind")
+            let root = div().id("behind");
+            self.focus
+                .release_keys(root)
                 .size_full()
                 .on_key_down(move |event: &KeyDownEvent, window, cx| {
                     if event.keystroke.key == "enter" {
@@ -818,7 +828,7 @@ mod tests {
                         let keys = focus::hold_keys(
                             move |keystroke, window, cx| {
                                 let band = this.upgrade()?;
-                                Some(band.read(cx).focus.gate(keystroke, 0, window, cx))
+                                Some(band.read(cx).focus.gate(keystroke, 0, None, window, cx))
                             },
                             Rc::clone(&dispatch),
                             Rc::new(|_, _, _| {}),

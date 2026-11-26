@@ -125,6 +125,11 @@ impl ShellModel {
             _observed: Vec::new(),
         };
         Self::hold_close(window, cx);
+        // A key released while another window had the keyboard is never seen going up.
+        let activation = cx.observe_window_activation(window, |model, _, _| {
+            model.focus.repeats.borrow_mut().clear();
+        });
+        model._observed.push(activation);
         for launch in launches {
             model.open(launch, window, cx);
         }
@@ -172,10 +177,11 @@ impl ShellModel {
             move |keystroke, window, cx| {
                 let model = this.upgrade()?;
                 let model = model.read(cx);
+                let cursor = model.shell.nav_cursor();
                 Some(
                     model
                         .focus
-                        .gate(keystroke, model.clock.now_ms(), window, cx),
+                        .gate(keystroke, model.clock.now_ms(), cursor, window, cx),
                 )
             },
             Self::dispatch(cx),
@@ -480,6 +486,8 @@ impl ShellModel {
             self.focus_target(focus, window, cx);
         }
         if toggles {
+            // A key released while the pane it went to was hidden may go unseen.
+            self.focus.repeats.borrow_mut().clear();
             // A pane opened again comes back at the width its layout last had, which a drag on
             // the handle left beside the closed pane can have changed.
             let this = cx.weak_entity();
@@ -525,14 +533,22 @@ impl ShellModel {
         cx: &mut Context<Self>,
     ) {
         let handle = match target {
-            // The ended band takes the input for now; it gets its own focus with the tree.
-            FocusTarget::Composer(slot) | FocusTarget::EndedBand(slot) => {
+            FocusTarget::Composer(slot) => {
                 if let Some(input) = self.composers.get(&slot) {
                     input.update(cx, |state, cx| state.focus(window, cx));
                 }
                 return;
             }
-            FocusTarget::Nav => return,
+            FocusTarget::Nav => self.focus.list.clone(),
+            // Its Restart, or the band itself when the session cannot be restarted.
+            FocusTarget::EndedBand(slot) => {
+                let ended = self.focus.ended_handles(slot, cx);
+                if self.shell.can_restart(slot) {
+                    ended.restart
+                } else {
+                    ended.band
+                }
+            }
             FocusTarget::FailureBand(_) => self.focus.failure.clone(),
             FocusTarget::Card { slot, request_id } => {
                 let Some(handle) = self.card_focus(slot, &request_id, cx) else {

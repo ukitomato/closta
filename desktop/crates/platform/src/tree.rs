@@ -108,14 +108,23 @@ pub(crate) fn plus_hint(project: &ProjectSummary, slots_full: bool) -> Option<&'
 }
 
 impl ShellModel {
+    /// The left list's cursor as it is drawn: only while the left pane has the keyboard.
+    pub(crate) fn shown_cursor(&self, window: &Window, cx: &App) -> Option<NavItem> {
+        self.focus
+            .list
+            .contains_focused(window, cx)
+            .then(|| self.shell.nav_cursor().cloned())
+            .flatten()
+    }
+
     /// The tree's rows from the top. While a row drawn shows an elapsed time in an open pane,
     /// one wait is kept that draws the window again in [`ELAPSED_TICK`]; otherwise none is.
-    pub(crate) fn tree(&mut self, cx: &mut Context<Self>) -> Vec<AnyElement> {
+    pub(crate) fn tree(&mut self, window: &Window, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let now_ms = self.clock.now_ms();
+        let cursor = self.shown_cursor(window, cx);
         let projects = self.shell.projects();
         let slots = self.shell.slots();
         let selected = self.shell.selected();
-        let cursor = self.shell.nav_cursor().cloned();
         let full = self.shell.slots_full();
         let dispatch = Self::dispatch(cx);
         let mut timed = false;
@@ -198,7 +207,7 @@ fn cursor_ring(cursor: bool, cx: &App) -> Hsla {
 }
 
 /// A project's row: the fold, the name, the runtime, the check in progress and the plus; a click
-/// opens or closes it, a right click offers Remove from list.
+/// opens or closes it and puts the list's cursor on it, a right click offers Remove from list.
 fn project_row(
     at: usize,
     project: &ProjectSummary,
@@ -219,6 +228,11 @@ fn project_row(
                 ShellAction::ToggleProject {
                     project: key.clone(),
                 },
+                window,
+                cx,
+            );
+            dispatch(
+                ShellAction::NavTo(NavItem::Project(key.clone())),
                 window,
                 cx,
             );
@@ -304,7 +318,8 @@ struct SlotLook {
 }
 
 /// A session's row: its mark, its title and how long it has stood under its heading; a click
-/// selects it, the close button shows on hover, a right click offers its menu.
+/// selects it and puts the list's cursor on it, the close button shows on hover, a right click
+/// offers its menu.
 fn slot_row(summary: &SlotSummary, look: SlotLook, dispatch: &Dispatch, cx: &App) -> AnyElement {
     let theme = cx.theme();
     let (glyph, tone) = mark_glyph(summary.mark);
@@ -322,6 +337,7 @@ fn slot_row(summary: &SlotSummary, look: SlotLook, dispatch: &Dispatch, cx: &App
         let dispatch = dispatch.clone();
         move |_: &ClickEvent, window: &mut Window, cx: &mut App| {
             dispatch(ShellAction::Select(id), window, cx);
+            dispatch(ShellAction::NavTo(NavItem::Slot(id)), window, cx);
         }
     };
     // Shown while the row is hovered; a slot that is closing has nothing more to close.
@@ -413,6 +429,7 @@ fn fill_menu(
 #[cfg(test)]
 mod tests {
     use closta_shell::copy;
+    use closta_shell::nav::NavItem;
     use closta_shell::projects::project_key;
     use closta_shell::slot::{SlotId, SlotMark, SlotSummary};
     use closta_shell::state::{ProjectSummary, ShellAction};
@@ -531,6 +548,50 @@ mod tests {
             assert!(window.try_find("other".to_owned()).is_none());
         })
         .expect("look at the tree");
+    }
+
+    #[gpui_kit::test]
+    fn a_click_puts_the_cursor_on_the_row_drawn_only_while_the_list_has_the_keyboard(
+        cx: &mut TestAppContext,
+    ) {
+        let (handle, model) = test_window::open_tree(
+            cx,
+            TreeSetup {
+                projects: &[(A, false)],
+                slots: &[Some(A), Some(A)],
+                run: false,
+            },
+        );
+        cx.update_window(handle, |_, window, cx| {
+            window.click("slot-2".to_owned(), cx)
+        })
+        .expect("click a session");
+        test_window::draw(cx, handle);
+        let second = SlotId::numbered(2);
+        let (list, selected) = model.read_with(cx, |model, _| {
+            (model.focus.list.clone(), model.shell.selected())
+        });
+        assert_eq!(selected, Some(second));
+        assert!(test_window::focused(cx, handle, &list));
+        let shown = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                model.read(cx).shown_cursor(window, cx)
+            })
+            .expect("read the cursor")
+        };
+        assert_eq!(shown(cx), Some(NavItem::Slot(second)));
+
+        let input = model.read_with(cx, |model, _| model.focus.composers[&second].clone());
+        test_window::focus_on(cx, handle, &input);
+        assert_eq!(shown(cx), None, "no ring while the input has the keyboard");
+
+        cx.update_window(handle, |_, window, cx| {
+            window.click("project-1".to_owned(), cx)
+        })
+        .expect("click the project");
+        test_window::draw(cx, handle);
+        let key = project_key(A).expect("a key");
+        assert_eq!(shown(cx), Some(NavItem::Project(key)));
     }
 
     #[test]

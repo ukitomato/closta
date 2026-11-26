@@ -18,6 +18,7 @@ use gpui_kit::*;
 
 use crate::closing::{close_layer, slot_close_layer};
 use crate::dialog;
+use crate::focus::left_list;
 use crate::model::ShellModel;
 use crate::thread;
 use crate::tree;
@@ -44,7 +45,8 @@ impl Render for ShellModel {
         let dialog = dialog::new_session(self, cx);
         let slot_close = slot_close_layer(self, cx);
         let close = close_layer(self, cx);
-        v_flex()
+        self.focus
+            .release_keys(v_flex())
             .relative()
             .size_full()
             .bg(background)
@@ -169,10 +171,11 @@ impl ShellModel {
     }
 
     /// The needs-you list on top; under it the projects with their sessions, which scroll;
-    /// under them, the button that opens the New Session dialog.
+    /// under them, the button that opens the New Session dialog. The whole pane is the left
+    /// list: it takes the keyboard, and its cursor is drawn only while it has it.
     fn left_pane(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let needs_you = self.needs_you_list(window, cx);
-        let rows = self.tree(cx);
+        let rows = self.tree(window, cx);
         let heading = tree::heading("projects", copy::PROJECTS_HEADING, cx);
         let theme = cx.theme();
         let divider = div()
@@ -181,8 +184,7 @@ impl ShellModel {
             .mt_1()
             .h(px(1.))
             .bg(theme.sidebar_border);
-        v_flex()
-            .id("pane-left")
+        left_list(v_flex().id("pane-left"), &self.focus.list)
             .accessibility_id("pane-left")
             .aria_label(copy::SESSIONS)
             .size_full()
