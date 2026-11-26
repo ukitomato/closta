@@ -17,7 +17,7 @@ impl ShellState {
         self.settle_nav();
         let waits: Vec<Receiver<()>> = lock(&self.runs)
             .values()
-            .map(|(_, finished)| finished.clone())
+            .map(|run| run.finished.clone())
             .collect();
         let runs = Arc::clone(&self.runs);
         let flushed = self.ports.settings.flushed();
@@ -34,7 +34,7 @@ impl ShellState {
             destroy: Box::new(move || {
                 let left: Vec<SessionRuntime> = lock(&runs)
                     .values()
-                    .map(|(runtime, _)| runtime.clone())
+                    .map(|run| run.runtime.clone())
                     .collect();
                 for runtime in left {
                     runtime.destroy_now();

@@ -428,9 +428,17 @@ impl Slot {
     }
 }
 
-/// The runs that have not returned, by session id: with the handle to kill their processes and
-/// the receiver that closes when the run has returned. A replaced session stays here until then.
-type Runs = Arc<Mutex<BTreeMap<String, (SessionRuntime, Receiver<()>)>>>;
+/// The runs that have not returned, by run number. A replaced session stays here until its run
+/// returns, and a run of the same session id never hides another.
+type Runs = Arc<Mutex<BTreeMap<u64, RunEntry>>>;
+
+struct RunEntry {
+    session_id: String,
+    /// The handle to kill the run's process.
+    runtime: SessionRuntime,
+    /// Closes when the run has returned.
+    finished: Receiver<()>,
+}
 
 pub struct ShellState {
     header: AppHeader,
@@ -440,6 +448,8 @@ pub struct ShellState {
     dialog: Option<NewSessionDialog>,
     recent: RecentFolders,
     last_id: u64,
+    /// The number of the run last started.
+    last_run: u64,
     slots: BTreeMap<SlotId, Slot>,
     selected: Option<SlotId>,
     /// The projects in the order they were made in.
@@ -473,6 +483,7 @@ impl ShellState {
             dialog: None,
             recent: RecentFolders::default(),
             last_id: 0,
+            last_run: 0,
             slots: BTreeMap::new(),
             selected: None,
             projects: Vec::new(),
@@ -600,7 +611,7 @@ impl ShellState {
     /// Besides the runtime and the receiver: the session's id, whether it puts a saved session
     /// back, and the title of that conversation if the launch gave one.
     fn start(
-        &self,
+        &mut self,
         launch: SlotLaunch,
     ) -> (SessionRuntime, Receiver<()>, String, bool, Option<String>) {
         let id = launch
@@ -621,12 +632,20 @@ impl ShellState {
         }
         let (runtime, run) = SessionRuntime::new(config);
         let (done, finished) = async_channel::bounded::<()>(1);
-        lock(&self.runs).insert(id.clone(), (runtime.clone(), finished.clone()));
+        self.last_run += 1;
+        let number = self.last_run;
+        lock(&self.runs).insert(
+            number,
+            RunEntry {
+                session_id: id.clone(),
+                runtime: runtime.clone(),
+                finished: finished.clone(),
+            },
+        );
         let runs = Arc::clone(&self.runs);
-        let run_id = id.clone();
         (self.spawn)(Box::pin(async move {
             run.await;
-            lock(&runs).remove(&run_id);
+            lock(&runs).remove(&number);
             drop(done);
         }));
         if let Some(companion) = launch.companion {
@@ -638,6 +657,13 @@ impl ShellState {
     /// How many runs have not returned, those of replaced sessions included.
     pub fn live_runs(&self) -> usize {
         lock(&self.runs).len()
+    }
+
+    /// Whether a run of this session id has not returned.
+    pub fn run_alive(&self, session_id: &str) -> bool {
+        lock(&self.runs)
+            .values()
+            .any(|run| run.session_id == session_id)
     }
 
     /// The slots in the order they were opened.
@@ -1350,9 +1376,7 @@ fn behind_overlay(action: &ShellAction, overlay: Overlay) -> bool {
     }
 }
 
-fn lock(
-    runs: &Runs,
-) -> std::sync::MutexGuard<'_, BTreeMap<String, (SessionRuntime, Receiver<()>)>> {
+fn lock(runs: &Runs) -> std::sync::MutexGuard<'_, BTreeMap<u64, RunEntry>> {
     runs.lock().unwrap_or_else(PoisonError::into_inner)
 }
 

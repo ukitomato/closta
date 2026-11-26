@@ -832,3 +832,29 @@ fn a_resume_without_a_title_is_still_a_resume() {
         assert!(shell.resumed(slot), "the slot records the opening");
     });
 }
+
+#[test]
+fn a_replace_with_the_same_id_keeps_both_runs() {
+    drive(|harness| async move {
+        harness.stubborn();
+        let mut shell = harness.shell();
+        let (mut launch, runtime) = harness.launch("stubborn");
+        launch.session_id = Some("same-id".to_owned());
+        let slot = shell.open(launch);
+        let runtime = runtime.recv().await.unwrap();
+        running(&runtime).await;
+        let old = harness.control(0).await;
+
+        let (mut launch, _) = harness.launch("next");
+        launch.session_id = Some("same-id".to_owned());
+        shell.replace(slot, launch).unwrap();
+        assert_eq!(shell.session_id(slot), Some("same-id"));
+        assert_eq!(shell.live_runs(), 2, "the old run has not returned");
+        assert!(shell.run_alive("same-id"));
+
+        old.exit(0);
+        until(|| shell.live_runs() == 1).await;
+        assert!(shell.run_alive("same-id"), "the new run stays");
+        assert!(!shell.run_alive("other-id"));
+    });
+}
