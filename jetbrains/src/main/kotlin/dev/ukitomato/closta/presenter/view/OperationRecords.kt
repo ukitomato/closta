@@ -183,6 +183,10 @@ data class OperationRecords(
     val autoRejected: Boolean = false,
     /** The CLI is retrying the API (`system/api_retry`); it goes at the next `stream_event` or `result`. */
     val retry: RetryRecord? = null,
+    /** The last `rate_limit_event`'s limit; null before the first. */
+    val rateLimit: RateLimitRecord? = null,
+    /** The [RateLimitRecord.seq] the user dismissed: it is not shown again until the status or the window changes. */
+    val rateLimitDismissed: Int? = null,
 )
 
 /** A retry of the API in progress: attempt [attempt] of [maxRetries] starts after [delayMs] ms; [status] is HTTP's. */

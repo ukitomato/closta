@@ -35,6 +35,8 @@ data class ComposerState(
     val retry: RetryRecord?,
     /** The CLI is compacting the conversation. */
     val compacting: Boolean,
+    /** The plan's limit is near or reached, and the user has not dismissed it; never an allowed one. */
+    val rateLimit: RateLimitRecord?,
 )
 
 /** The sandbox button: whether the sandbox is on, and why it cannot be pressed now, if it cannot. */
@@ -101,6 +103,7 @@ fun composerState(
             },
         retry = operations.retry.takeIf { running },
         compacting = operations.compacting,
+        rateLimit = operations.rateLimitShown(),
     )
 }
 

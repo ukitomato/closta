@@ -97,6 +97,12 @@ interface ChatSource : Disposable {
      */
     suspend fun rewindFiles(messageId: String): RewindRecord?
 
+    /**
+     * The user closed the banner of the limit [seq]: it stays hidden until the limit's status or window changes. A
+     * session with no CLI has no limit to close.
+     */
+    suspend fun dismissRateLimit(seq: Int) {}
+
     /** A real `claude` session, opened through [ClaudeSessionService]. */
     @Suppress("TooManyFunctions") // one override per command
     class Live(
@@ -226,6 +232,10 @@ interface ChatSource : Disposable {
 
         override suspend fun requestMcpStatus() {
             commands()?.requestMcpStatus()
+        }
+
+        override suspend fun dismissRateLimit(seq: Int) {
+            commands()?.dismissRateLimit(seq)
         }
 
         override suspend fun setMcpServerEnabled(

@@ -30,6 +30,7 @@ fun SessionView.fold(input: PresenterInput): SessionView =
         is PresenterInput.RewindRequested,
         is PresenterInput.RewindNotSent,
         is PresenterInput.TurnChangesFound,
+        is PresenterInput.RateLimitDismissed,
         -> requested(input)
         is PresenterInput.SessionsListed -> listed(input)
         is PresenterInput.Restored -> restored(input.event)

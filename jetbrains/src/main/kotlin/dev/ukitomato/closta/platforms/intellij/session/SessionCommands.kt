@@ -276,6 +276,11 @@ class SessionCommands internal constructor(
         conversation.transition { it.requested(PresenterInput.ResumeRefused(id, sessionId, reason)) }
     }
 
+    /** Records that the user closed the banner of the limit [seq]. */
+    suspend fun dismissRateLimit(seq: Int) {
+        conversation.transition { it.requested(PresenterInput.RateLimitDismissed(seq)) }
+    }
+
     private suspend fun requested(
         kind: ControlKind,
         value: String?,

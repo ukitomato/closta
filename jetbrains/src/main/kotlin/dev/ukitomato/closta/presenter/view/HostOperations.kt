@@ -20,6 +20,7 @@ internal fun foldOperation(
         -> operations.foldRewindAsk(input)
         is PresenterInput.ResumeRefused -> operations.refuseResume(input)
         is PresenterInput.AttachmentRefused -> operations.refuseAttachment(input)
+        is PresenterInput.RateLimitDismissed -> operations.dismissRateLimit(input.seq)
         else -> operations
     }
 

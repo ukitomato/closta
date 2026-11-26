@@ -63,7 +63,10 @@ internal fun OperationRecords.resulted(event: AgentEvent.Result): OperationRecor
     return if (totals == tokens) this else copy(tokens = totals)
 }
 
-/** A frame goes on with the reply, which ends a retry; `system/api_retry` starts one. */
+/**
+ * A frame goes on with the reply, which ends a retry; `system/api_retry` starts one. A `rate_limit_event` says how
+ * near the plan's limit the session is.
+ */
 internal fun foldRetrying(
     transcript: Transcript,
     event: AgentEvent,
@@ -71,6 +74,7 @@ internal fun foldRetrying(
     when (event) {
         is AgentEvent.SystemApiRetry -> transcript.withOperations(transcript.operations.retried(event))
         is AgentEvent.SystemThinkingTokens -> foldThinkingTokens(transcript, event)
+        is AgentEvent.RateLimitEvent -> transcript.withOperations(transcript.operations.rateLimited(event))
         is AgentEvent.StreamEvent -> foldStream(transcript, event).let { it.withOperations(it.operations.retryEnded()) }
         else -> transcript
     }

@@ -45,6 +45,7 @@ fun foldTranscript(
         is PresenterInput.RewindNotSent,
         is PresenterInput.ResumeRefused,
         is PresenterInput.AttachmentRefused,
+        is PresenterInput.RateLimitDismissed,
         -> transcript.withOperations(foldOperation(transcript.operations, input))
         is PresenterInput.SessionsListed,
         is PresenterInput.Restored,
@@ -67,8 +68,11 @@ private fun foldEvent(
             foldResult(transcript.compactFailureShown(), event, before, after)
                 .let { it.withOperations(it.operations.resulted(event).retryEnded()) }
                 .let(::stopTaken)
-        is AgentEvent.StreamEvent, is AgentEvent.SystemApiRetry, is AgentEvent.SystemThinkingTokens ->
-            foldRetrying(transcript, event)
+        is AgentEvent.StreamEvent,
+        is AgentEvent.SystemApiRetry,
+        is AgentEvent.SystemThinkingTokens,
+        is AgentEvent.RateLimitEvent,
+        -> foldRetrying(transcript, event)
         is AgentEvent.Assistant -> foldSignIn(foldAssistant(transcript, event), event)
         is AgentEvent.User -> foldUser(transcript, event)
         is AgentEvent.ControlRequest -> foldRequest(transcript, event, after)

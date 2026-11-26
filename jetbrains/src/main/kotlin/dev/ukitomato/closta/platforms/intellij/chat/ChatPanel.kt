@@ -154,6 +154,7 @@ class ChatPanel(
             onOpen = { task -> task.toolUseId?.takeIf { task.kind == "agent" }?.let { tabs.open(it, task.title) } },
             onStop = { task -> scope.launch(failures) { source.stopTask(task.taskId) } },
         )
+    private val limitBanner = RateLimitBanner()
 
     init {
         Disposer.register(parent, surface)
@@ -192,7 +193,14 @@ class ChatPanel(
                 add(
                     JPanel(BorderLayout()).apply {
                         isOpaque = false
-                        add(running.component, BorderLayout.NORTH)
+                        add(
+                            JPanel(BorderLayout()).apply {
+                                isOpaque = false
+                                add(limitBanner, BorderLayout.NORTH)
+                                add(running.component, BorderLayout.CENTER)
+                            },
+                            BorderLayout.NORTH,
+                        )
                         add(rewinding, BorderLayout.CENTER)
                         add(changesBar.component, BorderLayout.SOUTH)
                     },
@@ -434,6 +442,7 @@ class ChatPanel(
         composer.onEffort = { level -> scope.launch(failures) { source.switchEffort(level) } }
         composer.onMode = { mode -> scope.launch(failures) { source.switchMode(mode) } }
         composer.onSandbox = { on -> scope.launch(failures) { source.switchSandbox(on) } }
+        limitBanner.onDismiss = { seq -> scope.launch(failures) { source.dismissRateLimit(seq) } }
     }
 
     private fun draw() {
@@ -560,11 +569,9 @@ class ChatPanel(
             surface.loading(source.opensWithContent && starting && transcript.messages.size == 0)
             surface.show(shown) { transcript.approvals[it] }
             changesBar.show(changesBar(shown, changes.settled))
-            composer.show(
-                composerState(view.conversation, transcript),
-                sendable,
-                sendBlockOf(sendable, source.starting),
-            )
+            val composerState = composerState(view.conversation, transcript)
+            composer.show(composerState, sendable, sendBlockOf(sendable, source.starting))
+            limitBanner.show(composerState.rateLimit)
             running.show(runningTasks(transcript))
             tabs.show(view)
             followTitleAndHead(view)

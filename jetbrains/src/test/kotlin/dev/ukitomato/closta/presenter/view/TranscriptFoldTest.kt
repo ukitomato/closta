@@ -54,7 +54,6 @@ class TranscriptFoldTest {
     private val contentless =
         setOf(
             AgentEvent.SystemStatus::class,
-            AgentEvent.RateLimitEvent::class,
             AgentEvent.SystemTaskNotification::class,
             AgentEvent.SystemTaskUpdated::class,
             AgentEvent.SystemThinkingTokens::class,
