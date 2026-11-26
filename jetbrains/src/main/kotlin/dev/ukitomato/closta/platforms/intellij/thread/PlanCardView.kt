@@ -87,6 +87,7 @@ internal fun planOutcomeText(outcome: ApprovalOutcome): String =
         ApprovalOutcome.DENIED -> ClostaBundle.message("thread.plan.keptPlanning")
         ApprovalOutcome.CANCELLED -> ClostaBundle.message("thread.card.cancelled")
         ApprovalOutcome.EXPIRED -> ClostaBundle.message("thread.card.expired")
+        ApprovalOutcome.WITHDRAWN -> ClostaBundle.message("thread.card.withdrawn")
     }
 
 /**

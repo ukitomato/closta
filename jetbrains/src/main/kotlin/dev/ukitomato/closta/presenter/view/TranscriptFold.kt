@@ -76,7 +76,7 @@ private fun foldEvent(
         -> foldTurnSignals(transcript, event)
         is AgentEvent.Assistant -> foldSignIn(foldAssistant(transcript, event), event)
         is AgentEvent.User -> foldUser(transcript, event)
-        is AgentEvent.ControlRequest -> foldRequest(transcript, event, after)
+        is AgentEvent.ControlRequest, is AgentEvent.ControlCancel -> foldRequestLine(transcript, event, before, after)
         is AgentEvent.ControlResponse ->
             foldCommandsOfResponse(transcript.withOperations(transcript.operations.answered(event)), event)
         is AgentEvent.SystemCommandsChanged -> foldCommandsOfChange(transcript, event)
@@ -181,7 +181,7 @@ private fun foldResult(
  * Whether it is a question is core's kind for the request; when core holds no entry for it, the record keeps
  * what it had. The anchor is the assistant message the request belongs to, so a part made for it stays there.
  */
-private fun foldRequest(
+internal fun foldRequest(
     transcript: Transcript,
     event: AgentEvent.ControlRequest,
     after: ConversationState,

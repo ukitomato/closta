@@ -29,6 +29,9 @@ fun fold(
         is AgentEvent.SystemTaskNotification -> foldTaskNotification(state, event)
         is AgentEvent.ControlRequest -> foldControlRequest(state, event)
         is AgentEvent.ControlResponse -> foldControlResponse(state, event)
+        // The CLI stopped waiting on a request: it leaves the queue, and one nobody holds changes nothing.
+        is AgentEvent.ControlCancel ->
+            state.copy(pendingApprovals = state.pendingApprovals.filterNot { it.requestId == event.requestId })
         is AgentEvent.SystemStatus -> foldStatus(state, event)
         // The CLI goes on under a new session id that only the next init names: until then there is no session, so
         // nothing reads the old id as the current one. The cost is left for the next result, which counts from zero.

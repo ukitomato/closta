@@ -248,6 +248,7 @@ enum class ApprovalOutcome {
     DENIED,
     CANCELLED,
     EXPIRED,
+    WITHDRAWN,
 }
 
 /**

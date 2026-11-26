@@ -17,10 +17,10 @@ value class RawJson(
 /**
  * The stdout line kinds observed in the recorded captures (CLI 2.1.325, 44 captures).
  *
- * Twenty-three: `command_lifecycle` arrives on every turn and `system/ui_invalidate` at the start of some
+ * Twenty-four: `command_lifecycle` arrives on every turn and `system/ui_invalidate` at the start of some
  * sessions, but neither has a declaration in the official SDK types, and the captures win over the
- * official types when they disagree. The official union declares 45 kinds; twenty-one of the
- * twenty-three are among them (including `system/commands_changed` and `system/compact_boundary`, which
+ * official types when they disagree. The official union declares 45 kinds; twenty-two of the
+ * twenty-four are among them (including `system/commands_changed` and `system/compact_boundary`, which
  * both the types and the captures carry), and the rest never arrive or are not modelled yet — an
  * unmodelled kind is counted as unknown, which is how a version bump announces itself.
  *
@@ -53,6 +53,7 @@ enum class AgentEventKind(
     SYSTEM_PERMISSION_DENIED("system/permission_denied"),
     SYSTEM_INFORMATIONAL("system/informational"),
     SYSTEM_API_RETRY("system/api_retry"),
+    CONTROL_CANCEL_REQUEST("control_cancel_request"),
     ;
 
     companion object {
@@ -68,7 +69,7 @@ enum class AgentEventKind(
  *
  * One line in, one value out: lines are never split or merged, because reconstructing a conversation
  * from them is the fold's job and anything decided here would be decided before the fold can
- * see it. Twenty-five variants — the [AgentEventKind] twenty-three, plus [UnknownKind] and [BrokenLine].
+ * see it. Twenty-six variants — the [AgentEventKind] twenty-four, plus [UnknownKind] and [BrokenLine].
  *
  * The two catch-alls are variants rather than errors on purpose. A reader that throws stops reading,
  * and a stdout reader that stops deadlocks the CLI behind a full pipe; a reader that silently drops
@@ -489,7 +490,17 @@ sealed interface AgentEvent {
     }
 
     /**
-     * A well-formed JSON line whose `type` is not one of the twenty-three, or one that is missing a field
+     * The CLI takes back a request it sent and no longer waits for an answer (sdk.d.ts `SDKControlCancelRequest`); no
+     * capture carries one. [requestId] names the `control_request` it withdraws.
+     */
+    data class ControlCancel(
+        val requestId: String,
+    ) : Known {
+        override val kind: AgentEventKind get() = AgentEventKind.CONTROL_CANCEL_REQUEST
+    }
+
+    /**
+     * A well-formed JSON line whose `type` is not one of the twenty-four, or one that is missing a field
      * the declared shape needs. Kept whole so that whatever arrives can be read back later.
      *
      * This is the version-drift alarm: a CLI upgrade that adds a line kind shows up here rather than

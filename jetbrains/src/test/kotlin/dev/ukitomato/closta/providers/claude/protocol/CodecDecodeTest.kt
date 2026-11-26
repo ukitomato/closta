@@ -232,6 +232,21 @@ class CodecDecodeTest {
     }
 
     @Test
+    fun `type only - a withdrawal line carries the request id, and one without it is unknown`() {
+        val line = """{"type":"control_cancel_request","request_id":"r1"}"""
+
+        assertAll(
+            { assertEquals(AgentEvent.ControlCancel("r1"), StreamJsonCodec.decode(line)) },
+            {
+                assertInstanceOf(
+                    AgentEvent.UnknownKind::class.java,
+                    StreamJsonCodec.decode("""{"type":"control_cancel_request"}"""),
+                )
+            },
+        )
+    }
+
+    @Test
     fun `type only - an informational line becomes a typed value with its level and flags`() {
         val line =
             """{"type":"system","subtype":"informational","content":"Stop hook said no","level":"warning",""" +

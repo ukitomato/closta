@@ -187,7 +187,7 @@ object TreeContract {
 
     private val roles = setOf("user", "assistant", "system")
     private val displays = setOf("decision", "select", "text")
-    private val resolutions = setOf("cancelled", "expired")
+    private val resolutions = setOf("cancelled", "expired", "withdrawn")
     private val noticeKinds = setOf("error", "control-error")
     private val taskStatuses = setOf("running", "complete", "incomplete")
     private val ended = setOf("cancelled", "length", "content-filter", "other", "error")

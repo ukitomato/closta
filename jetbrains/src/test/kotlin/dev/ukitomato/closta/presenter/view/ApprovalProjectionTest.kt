@@ -289,6 +289,27 @@ class ApprovalProjectionTest {
     }
 
     @Test
+    fun `type only - an approval the CLI withdrew shows as withdrawn, and an answered one stays as answered`() {
+        val session = Session()
+        session.turn("c1")
+        session.events(
+            Lines.assistant("m1", Lines.toolUse("toolu_1", "Write"), Lines.toolUse("toolu_2", "Edit")),
+            Lines.request("r1", "Write", "toolu_1"),
+            Lines.request("r2", "Edit", "toolu_2"),
+        )
+        session.decide(ApprovalDecision.Deny("r2"))
+
+        session.events(AgentEvent.ControlCancel("r1"), AgentEvent.ControlCancel("r2"))
+
+        assertEquals(ApprovalOutcome.WITHDRAWN, session.transcript.approvals["r1"]!!.outcome)
+        assertEquals(ApprovalOutcome.DENIED, session.transcript.approvals["r2"]!!.outcome)
+        val withdrawn = approvalOf(session.thread.message("c1").part("toolu_1"))
+        assertEquals("withdrawn", withdrawn.str("resolution"))
+        assertNull(withdrawn["approved"])
+        assertEquals(JsonBool.FALSE, approvalOf(session.thread.message("c1").part("toolu_2"))["approved"])
+    }
+
+    @Test
     fun `an approval the turn's result discarded shows as cancelled`() {
         val session = Session()
         session.turn("c1")

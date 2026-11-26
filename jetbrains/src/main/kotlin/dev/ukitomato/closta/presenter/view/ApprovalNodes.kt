@@ -66,6 +66,7 @@ internal fun settled(
         ApprovalOutcome.APPROVED -> node.put("approved", JsonBool.TRUE)
         ApprovalOutcome.DENIED -> node.put("approved", JsonBool.FALSE)
         ApprovalOutcome.EXPIRED -> node.put("resolution", JsonString("expired"))
+        ApprovalOutcome.WITHDRAWN -> node.put("resolution", JsonString("withdrawn"))
         ApprovalOutcome.CANCELLED, null -> node.put("resolution", JsonString("cancelled"))
     }
 }
