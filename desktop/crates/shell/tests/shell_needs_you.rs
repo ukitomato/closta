@@ -918,6 +918,7 @@ fn no_answer(lines: Vec<String>, refused: usize) {
     assert_eq!(refused, 0);
 }
 
+// Defended twice: the row check here and `answer_card`; only the row cannot be isolated.
 #[test]
 fn allow_from_the_list_needs_the_request_the_row_shows() {
     drive(|harness| async move {
@@ -939,6 +940,20 @@ fn allow_from_the_list_needs_a_request_it_may_allow() {
         let mut shell = harness.shell();
         let (slot, control, _) = waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK, 0).await;
         assert!(shell.needs_you()[0].may_allow());
+        // A plan's first choice approves it, so only the list's own guard keeps a plan row from
+        // being approved unread.
+        let (plan, plan_control, _) = waiting_slot(&mut shell, &harness, PLAN, PLAN_ASK, 0).await;
+        let row = shell
+            .needs_you()
+            .into_iter()
+            .find(|row| row.slot == plan)
+            .unwrap();
+        assert!(!row.may_allow());
+        let plan_id = row.request_id().unwrap().to_owned();
+        list_shown(&mut shell, plan, &plan_id, 1000);
+        allow_from_list(&mut shell, plan, &plan_id, 2000);
+        quiet().await;
+        no_answer(plan_control.stdin_lines(), 0);
         let (other, other_control) =
             live_waiting(&mut shell, &harness, QUESTION, QUESTION_ASK, 0).await;
         let unanswerable = shell
@@ -986,6 +1001,7 @@ fn allow_from_the_list_needs_the_row_drawn_half_a_second_ago_in_its_place() {
     });
 }
 
+// Defended twice: the list check and `answer_card`.
 #[test]
 fn allow_from_the_list_needs_the_request_still_waiting() {
     drive(|harness| async move {
@@ -1002,6 +1018,7 @@ fn allow_from_the_list_needs_the_request_still_waiting() {
     });
 }
 
+// Defended twice: the list check and `answer_card`.
 #[test]
 fn allow_from_the_list_needs_a_live_session() {
     drive(|harness| async move {
