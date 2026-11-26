@@ -121,7 +121,6 @@ class ClearResetTest {
 
     @Test
     fun `between the reset and the next init the old id is gone, and the host's is used`() {
-        // Review Focus 2.
         val reset = steps.indexOfFirst { (it.input as? PresenterInput.Event)?.event is AgentEvent.ConversationReset }
         val init =
             steps.withIndex().first { (index, step) ->
@@ -171,7 +170,7 @@ class ClearResetTest {
 
     @Test
     fun `two clears make two dividers and only the ask after the last can rewind`() {
-        // Review Focus 1: 41, then its /clear once more under another uuid, then one more exchange.
+        // 41, then its /clear once more under another uuid, then one more exchange.
         val state = replay(CaptureReplay.inputs(SCENARIO, uuids = true) + clearAgain() + askAgain())
         val rows = ThreadRows().of(state.transcript)
         val last = dividers(rows).last()

@@ -65,7 +65,6 @@ class TaskTodoTest {
 
     @Test
     fun `an update of a task not yet created adds nothing`() {
-        // Review Focus 5.
         val transcript =
             replay(
                 turn(
@@ -112,6 +111,24 @@ class TaskTodoTest {
 
         assertEquals(
             listOf(listOf(TodoItem("write tests", "pending"), TodoItem("run the build", "completed"))),
+            todos(transcript).map { it.items },
+        )
+    }
+
+    @Test
+    fun `a task not yet answered never shares its number with one the CLI numbered`() {
+        val transcript =
+            replay(
+                turn(
+                    "a",
+                    create("write tests") answered null,
+                    create("run build") answered "Task #1 created successfully: run build",
+                    (TASK_UPDATE to input("taskId" to "1", "status" to "completed")) answered "Updated task #1 status",
+                ),
+            )
+
+        assertEquals(
+            listOf(listOf(TodoItem("write tests", "pending"), TodoItem("run build", "completed"))),
             todos(transcript).map { it.items },
         )
     }
@@ -165,6 +182,25 @@ class TaskTodoTest {
 
         assertEquals(2, first.size)
         first.zip(second).forEach { (was, now) -> assertSame(was, now) }
+    }
+
+    @Test
+    fun `a list keeps its object while the thread grows after it`() {
+        val steps = CaptureReplay.replay("20-todowrite")
+        val both = listOf(TodoItem("write tests", "pending"), TodoItem("run build", "pending"))
+        val rows = ThreadRows()
+        val early =
+            steps.firstNotNullOf { step ->
+                rows
+                    .of(step.transcript)
+                    .filterIsInstance<TodoRow>()
+                    .firstOrNull()
+                    ?.takeIf { it.items == both }
+            }
+        val last = rows.of(steps.last().transcript).filterIsInstance<TodoRow>()
+
+        assertEquals(2, last.size)
+        assertSame(early, last.first())
     }
 
     private infix fun Pair<String, GsonObject>.answered(result: String?) = Triple(first, second, result)

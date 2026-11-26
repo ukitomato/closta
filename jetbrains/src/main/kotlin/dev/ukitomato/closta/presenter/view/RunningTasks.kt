@@ -7,8 +7,8 @@ import dev.ukitomato.closta.presenter.tree.JsonNumber
 import dev.ukitomato.closta.presenter.tree.JsonObject
 import dev.ukitomato.closta.presenter.tree.JsonRead
 
-// The running list above the composer (spec 2026-11-03-running-tasks.md): what runs in the background, read from the
-// CLI's own lists. The fold keeps the last list whole (the CLI replaces it every time) and the last progress of each.
+// The running list above the composer: what runs in the background, read from the CLI's own lists. The fold keeps
+// the last list whole (the CLI replaces it every time) and the last progress of each.
 
 /** One entry of `background_tasks_changed`'s `tasks[]`. */
 data class BackgroundTaskRecord(

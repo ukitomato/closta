@@ -336,6 +336,10 @@ private class TaskTodos {
         rows: List<ThreadRow>,
         transcript: Transcript,
     ): List<ThreadRow> {
+        if (rows.none { it.isTask() }) {
+            lists = HashMap()
+            return rows
+        }
         val calls = taskCalls(transcript)
         val out = ArrayList<ThreadRow>(rows.size)
         val nextLists = HashMap<String, TodoRow>()
@@ -374,14 +378,18 @@ private class TaskTodos {
             .associateBy { it.toolUseId }
 }
 
-/** The tasks as the calls so far left them, by id, in the order they were created. */
+/**
+ * The tasks as the calls so far left them, by id, in the order they were created. A create not yet answered takes the
+ * number after the largest so far, the one the CLI gives next; if an answer later names that number, the unanswered
+ * one moves on to the next free number, so two tasks never share an id.
+ */
 private class TaskBoard {
-    private val items = LinkedHashMap<String, TodoItem>()
-    private var created = 0
+    private var items = LinkedHashMap<String, TodoItem>()
+    private val unanswered = HashSet<String>()
 
     fun clear() {
         items.clear()
-        created = 0
+        unanswered.clear()
     }
 
     fun items(): List<TodoItem> = items.values.toList()
@@ -396,9 +404,25 @@ private class TaskBoard {
         input: JsonObject,
     ) {
         val subject = input.string("subject") ?: return
-        created++
         val said = call.result?.content?.let { TASK_CREATED.find(resultText(it))?.groupValues?.get(1) }
-        items[said ?: created.toString()] = TodoItem(subject, "pending")
+        if (said == null) {
+            val id = nextId()
+            unanswered += id
+            items[id] = TodoItem(subject, "pending")
+            return
+        }
+        if (said in unanswered) moveOn(said)
+        items[said] = TodoItem(subject, "pending")
+    }
+
+    private fun nextId(): String = ((items.keys.mapNotNull { it.toLongOrNull() }.maxOrNull() ?: 0) + 1).toString()
+
+    /** Gives the unanswered task [id] the next free number, keeping its place in the list. */
+    private fun moveOn(id: String) {
+        val moved = nextId()
+        unanswered -= id
+        unanswered += moved
+        items = LinkedHashMap(items.mapKeys { (key, _) -> if (key == id) moved else key })
     }
 
     /** An update of a task this list does not hold changes nothing. */
