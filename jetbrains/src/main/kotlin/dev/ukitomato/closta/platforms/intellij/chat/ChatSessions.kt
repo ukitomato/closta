@@ -73,10 +73,17 @@ class ChatSessions(
         return source.sessionId
     }
 
-    /** Holds [source] like a session it opened, without listing it (the benchmark's fixed conversation). */
+    /**
+     * Holds [source] like a session it opened, without listing it (the benchmark's fixed conversation). Two sessions
+     * are never held under one id: one held before under [source]'s id is stopped, not left running out of reach.
+     */
     fun adopt(source: ChatSource): String {
-        sources[source.sessionId] = source
-        return source.sessionId
+        val id = source.sessionId
+        sources.put(id, source)?.takeIf { it !== source }?.let { before ->
+            directory().unregister(id)
+            Disposer.dispose(before)
+        }
+        return id
     }
 
     fun source(sessionId: String): ChatSource? = sources[sessionId]
@@ -179,9 +186,12 @@ private fun markWasRunning(
 /**
  * The open session whose conversation is saved under [savedId], from each open session's resume id by its own id: a
  * conversation already open must not be resumed in a second CLI. After a `/clear` that is the CLI's new id, not the
- * session's own.
+ * session's own; the conversation before the clear is still the session's when it is saved under the session's own
+ * id, shown above the divider.
  */
 fun openSessionOf(
     savedId: String,
     resumeIds: Map<String, String>,
-): String? = resumeIds.entries.firstOrNull { (_, resumeId) -> resumeId == savedId }?.key
+): String? =
+    resumeIds.entries.firstOrNull { (_, resumeId) -> resumeId == savedId }?.key
+        ?: savedId.takeIf { it in resumeIds }

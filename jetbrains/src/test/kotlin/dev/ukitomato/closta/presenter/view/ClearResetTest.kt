@@ -91,6 +91,16 @@ class ClearResetTest {
     }
 
     @Test
+    fun `the conversation before the clear is open under the session that cleared it, when that is its id`() {
+        val open = mapOf(FIRST_SESSION to resumeIdOf(SessionView(steps.last().conversation, transcript), FIRST_SESSION))
+
+        assertAll(
+            { assertEquals(FIRST_SESSION, openSessionOf(SECOND_SESSION, open)) },
+            { assertEquals(FIRST_SESSION, openSessionOf(FIRST_SESSION, open), "shown above the divider, not resumed") },
+        )
+    }
+
+    @Test
     fun `the ask after the divider follows the usual rules, as the first of its conversation`() {
         val actions = askActions(transcript, running = false, askKey = "send-3")
 
