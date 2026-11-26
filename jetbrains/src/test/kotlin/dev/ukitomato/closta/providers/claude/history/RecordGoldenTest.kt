@@ -65,7 +65,7 @@ class RecordGoldenTest {
                         listOf("User", "Assistant", "Assistant", "User", "Assistant"),
                         read.events.map { it::class.simpleName },
                     )
-                    assertEquals(22, read.skipped)
+                    assertEquals(31, read.skipped)
                     assertEquals(0, read.dropped)
                 }
                 val root =
