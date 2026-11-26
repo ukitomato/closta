@@ -127,6 +127,12 @@ internal class ThreadProjection(
                     )
                 }
             is ClearedRecord -> reuseOr(memo as? PartMemo, record, Look(null)) { clearedNode() }
+            is CompactedRecord ->
+                reuseOr(memo as? PartMemo, record, Look(null)) {
+                    JsonObject.of(
+                        "type" to JsonString("compacted"),
+                    )
+                }
             is ToolCallRecord -> toolCall(key, record, place, memo as? ToolCallMemo)
         }
 

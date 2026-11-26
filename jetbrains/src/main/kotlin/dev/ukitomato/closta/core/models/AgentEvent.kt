@@ -143,6 +143,8 @@ sealed interface AgentEvent {
         val sessionId: String,
         val status: String? = null,
         val permissionMode: String? = null,
+        /** How a compaction ended (`success` or `failed`), on the status that ends it; null on the others. */
+        val compactResult: String? = null,
     ) : Known {
         override val kind: AgentEventKind get() = AgentEventKind.SYSTEM_STATUS
     }

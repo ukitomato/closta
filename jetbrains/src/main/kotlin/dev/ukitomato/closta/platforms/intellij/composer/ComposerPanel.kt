@@ -399,6 +399,7 @@ class ComposerPanel(
                     ClostaBundle.message("composer.status.jump", KeymapUtil.getKeystrokeText(JUMP_KEY))
                 next.stopping -> ClostaBundle.message("composer.status.stopping")
                 next.retry != null -> retryText(next.retry)
+                next.compacting -> ClostaBundle.message("composer.status.compacting")
                 next.running -> ClostaBundle.message("composer.status.escToStop")
                 block == SendBlock.STARTING || block == SendBlock.REWINDING -> sendBlockReason(block)
                 else -> null

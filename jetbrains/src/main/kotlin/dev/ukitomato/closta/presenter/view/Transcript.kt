@@ -56,6 +56,8 @@ data class Transcript(
     val clearedAt: Int? = null,
     /** Refusals whose call has no line yet, by the call's key; each is put on its line when the line is made. */
     val denials: Map<String, Denial> = emptyMap(),
+    /** The uuid of the status that said a compaction did not succeed, until the boundary or the `result` shows it. */
+    val compactFailure: String? = null,
 )
 
 enum class Role(
@@ -164,6 +166,18 @@ data class ToolResult(
 data class ClearedRecord(
     val key: String,
     val at: String?,
+) : PartRecord
+
+/**
+ * Where the CLI compacted the conversation (`compact_boundary`), or failed to: [trigger] is `manual`, `auto` or
+ * `unknown`; [postTokens] is null when the boundary did not say.
+ */
+data class CompactedRecord(
+    val key: String,
+    val trigger: String,
+    val preTokens: Long,
+    val postTokens: Long?,
+    val failed: Boolean,
 ) : PartRecord
 
 /** A block of a type this version does not know; the tree shows it as a part of that type. */

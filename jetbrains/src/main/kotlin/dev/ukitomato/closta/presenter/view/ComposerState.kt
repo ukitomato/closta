@@ -33,6 +33,8 @@ data class ComposerState(
     val sandboxFailure: SwitchRecord?,
     /** The CLI is retrying the API in this turn. */
     val retry: RetryRecord?,
+    /** The CLI is compacting the conversation. */
+    val compacting: Boolean,
 )
 
 /** The sandbox button: whether the sandbox is on, and why it cannot be pressed now, if it cannot. */
@@ -98,6 +100,7 @@ fun composerState(
                 it.outcome == SwitchOutcome.REJECTED || it.outcome == SwitchOutcome.FAILED
             },
         retry = operations.retry.takeIf { running },
+        compacting = operations.compacting,
     )
 }
 

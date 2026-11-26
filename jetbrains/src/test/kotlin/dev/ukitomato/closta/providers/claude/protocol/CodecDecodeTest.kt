@@ -163,6 +163,16 @@ class CodecDecodeTest {
         )
 
     @Test
+    fun `the status that ends a compaction carries its result`() {
+        val value = assertInstanceOf(AgentEvent.SystemStatus::class.java, captureLine("21-compact", 19))
+
+        assertAll(
+            { assertEquals(null, value.status) },
+            { assertEquals("success", value.compactResult) },
+        )
+    }
+
+    @Test
     fun `a ui_invalidate line becomes a typed value with its event`() {
         // Not in sdk.d.ts; the captures carry it at the start of a session.
         val value = assertInstanceOf(AgentEvent.SystemUiInvalidate::class.java, captureLine("02-tool-bash-autorun", 1))

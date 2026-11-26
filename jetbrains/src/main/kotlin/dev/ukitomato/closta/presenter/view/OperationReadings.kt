@@ -24,7 +24,7 @@ internal fun OperationRecords.compacted(event: AgentEvent.SystemCompactBoundary)
     return copy(seq = record.seq, compactions = (compactions + record).takeLast(MAX_COMPACTIONS))
 }
 
-private const val UNKNOWN_TRIGGER = "unknown"
+internal const val UNKNOWN_TRIGGER = "unknown"
 
 /**
  * Whether the CLI says it is compacting: from `system/status`, whose status is `compacting` only while it does. A

@@ -1,6 +1,8 @@
 package dev.ukitomato.closta.presenter.view
 
 import dev.ukitomato.closta.core.models.AgentEvent
+import dev.ukitomato.closta.presenter.tree.JsonObject
+import dev.ukitomato.closta.presenter.tree.JsonRead
 
 /**
  * The lines about the session itself rather than its content: an init brings the commands the CLI has, a reset
@@ -52,7 +54,7 @@ private fun foldInformational(
 }
 
 /** Puts a part made by [make] in the message receiving content, or in one of its own named for [uuid]; and its key. */
-private fun Transcript.withPart(
+internal fun Transcript.withPart(
     uuid: String,
     name: String,
     make: (String) -> PartRecord,
@@ -68,3 +70,58 @@ private fun Transcript.withPart(
 private const val CLEARED_PART = "cleared"
 private const val NOTICE_PART = "notice"
 private const val INFO_LEVEL = "info"
+
+/** What a compaction's lines do: the status says whether it runs and how it ended, the boundary marks the thread. */
+internal fun foldCompaction(
+    transcript: Transcript,
+    event: AgentEvent,
+): Transcript =
+    when (event) {
+        is AgentEvent.SystemCompactBoundary ->
+            foldCompactBoundary(transcript, event).let { it.withOperations(it.operations.compacted(event)) }
+        is AgentEvent.SystemStatus ->
+            transcript.compactStatusSaid(event).let { it.withOperations(it.operations.statusSaid(event)) }
+        else -> transcript
+    }
+
+/**
+ * The divider a `compact_boundary` makes, failed when a status said the compaction did not succeed. A boundary that
+ * does not say how many tokens it began with makes none.
+ */
+internal fun foldCompactBoundary(
+    transcript: Transcript,
+    event: AgentEvent.SystemCompactBoundary,
+): Transcript {
+    val metadata = JsonRead.parse(event.compactMetadata.text) as? JsonObject
+    val before = metadata?.count("pre_tokens") ?: return transcript
+    val record = { key: String ->
+        CompactedRecord(
+            key,
+            metadata.string("trigger") ?: UNKNOWN_TRIGGER,
+            before,
+            metadata.count("post_tokens"),
+            transcript.compactFailure != null,
+        )
+    }
+    return transcript.withPart(event.uuid, COMPACTED_PART, record).first.copy(compactFailure = null)
+}
+
+/** A status that says the compaction did not succeed; null says nothing and a success clears nothing. */
+internal fun Transcript.compactStatusSaid(event: AgentEvent.SystemStatus): Transcript =
+    if (event.compactResult == null ||
+        event.compactResult == COMPACT_SUCCESS
+    ) {
+        this
+    } else {
+        copy(compactFailure = event.uuid)
+    }
+
+/** At a `result`, a failure no boundary followed is shown now, in the answer of the turn that ran it. */
+internal fun Transcript.compactFailureShown(): Transcript {
+    val uuid = compactFailure ?: return this
+    val record = { key: String -> CompactedRecord(key, UNKNOWN_TRIGGER, 0, null, failed = true) }
+    return withPart(uuid, COMPACTED_PART, record).first.copy(compactFailure = null)
+}
+
+private const val COMPACTED_PART = "compacted"
+private const val COMPACT_SUCCESS = "success"

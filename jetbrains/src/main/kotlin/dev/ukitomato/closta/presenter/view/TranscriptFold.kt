@@ -64,7 +64,7 @@ private fun foldEvent(
     when (event) {
         is AgentEvent.CommandLifecycle -> foldLifecycle(transcript, event)
         is AgentEvent.Result ->
-            foldResult(transcript, event, before, after)
+            foldResult(transcript.compactFailureShown(), event, before, after)
                 .let { it.withOperations(it.operations.resulted(event).retryEnded()) }
                 .let(::stopTaken)
         is AgentEvent.StreamEvent, is AgentEvent.SystemApiRetry -> foldRetrying(transcript, event)
@@ -73,9 +73,7 @@ private fun foldEvent(
         is AgentEvent.ControlRequest -> foldRequest(transcript, event, after)
         is AgentEvent.ControlResponse ->
             foldCommandsOfResponse(transcript.withOperations(transcript.operations.answered(event)), event)
-        is AgentEvent.SystemCompactBoundary ->
-            transcript.withOperations(transcript.operations.compacted(event))
-        is AgentEvent.SystemStatus -> transcript.withOperations(transcript.operations.statusSaid(event))
+        is AgentEvent.SystemCompactBoundary, is AgentEvent.SystemStatus -> foldCompaction(transcript, event)
         is AgentEvent.SystemInit,
         is AgentEvent.ConversationReset,
         is AgentEvent.SystemPermissionDenied,

@@ -261,6 +261,12 @@ class ThreadRows {
                     TextRow(key, part.text, part.streaming, opens)
                 }
             is ClearedRecord -> DividerRow(key, Divider.Cleared(part.at), opens)
+            is CompactedRecord ->
+                DividerRow(
+                    key,
+                    Divider.Compacted(part.trigger, part.preTokens, part.postTokens, part.failed),
+                    opens,
+                )
             is InformationalRecord -> NoticeRow(key, noticeLevelOf(part.level), part.content, part.stopped, opens)
             is ToolCallRecord if part.toolName == TODO_TOOL -> TodoRow(key, todosOf(part.input), opens)
             is ToolCallRecord ->

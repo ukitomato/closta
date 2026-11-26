@@ -259,6 +259,7 @@ object StreamJsonCodec {
                     sessionId = f.text("session_id"),
                     status = f.textOrNull("status"),
                     permissionMode = f.textOrNull("permissionMode"),
+                    compactResult = f.textOrNull("compact_result"),
                 )
             },
             AgentEventKind.USER to { f ->
