@@ -1,5 +1,6 @@
 package dev.ukitomato.closta.platforms.intellij.session
 
+import dev.ukitomato.closta.core.interfaces.Clock
 import dev.ukitomato.closta.core.interfaces.SavedSessions
 import dev.ukitomato.closta.core.models.AgentEvent
 import dev.ukitomato.closta.core.models.ConversationState
@@ -89,6 +90,8 @@ class SessionRuntime(
     private val killWait: Duration = KILL_WAIT,
     /** Whether the CLI is launched in the sandbox (`--settings`); a restart can turn it on later ([turnSandboxOn]). */
     private val sandbox: Boolean = false,
+    /** The time a `result` is seen at, which the prompt cache's clock counts from. */
+    private val clock: Clock = SystemClock(),
 ) {
     init {
         // A resumed session is opened by the id it was saved under: the tree's thread, the bridge's checks and the user
@@ -327,7 +330,7 @@ class SessionRuntime(
             restored = true
             restoreHistory()
         }
-        val commands = SessionCommands(session, SystemClock(), store, beforeSend, log::warn)
+        val commands = SessionCommands(session, clock, store, beforeSend, log::warn)
         statusFlow.value = SessionStatus.Running(version, commands)
         // A CLI in the sandbox is asked its settings at once, so a session that writes no `initialize` still
         // learns whether the sandbox is on.
@@ -453,6 +456,9 @@ class SessionRuntime(
         if (firstInit) checks.contextAsked = true
         val asksContext = asksForContext(event) || firstInit
         store.transition { it.event(PresenterInput.Event(event)) }
+        if (event is AgentEvent.Result) {
+            store.transition { it.requested(PresenterInput.ResultSeenAt(clock.now().toEpochMilli())) }
+        }
         if (asks) {
             checks.settingsAsked = true
             askSettings(commands)

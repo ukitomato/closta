@@ -1,6 +1,7 @@
 package dev.ukitomato.closta.platforms.intellij.session
 
 import com.google.gson.JsonObject
+import dev.ukitomato.closta.core.services.FixedClock
 import dev.ukitomato.closta.platforms.intellij.auth.SignInOutcome
 import dev.ukitomato.closta.platforms.intellij.settings.ProviderLaunch
 import dev.ukitomato.closta.platforms.intellij.store.ProviderId
@@ -389,6 +390,33 @@ class SessionRuntimeTest {
             runtime.close()
         }
 
+    @Test
+    @Timeout(TIMEOUT_SECONDS)
+    fun `a result that wrote the cache is kept with the time the runtime's clock says it was seen`() =
+        runBlocking {
+            val session = FakeProcess()
+            val spawner = spawner(session)
+            val runtime =
+                SessionRuntime(
+                    ID,
+                    childOf(CoroutineScope(SupervisorJob() + Dispatchers.Default)),
+                    planner(spawner, emptyMap()),
+                    WORKING_DIR,
+                    RecordingLog(),
+                    versionTimeout = GUARD,
+                    clock = FixedClock(Instant.ofEpochMilli(SEEN_AT)),
+                )
+            runtime.start()
+            runtime.running()
+            val lines = CaptureFixtures.nonBlankLines(CaptureFixtures.textOf(CAPTURE))
+            session.emit(lines.first { it.contains("\"type\":\"result\"") })
+            val cache =
+                withTimeout(GUARD) { runtime.view.first { it.transcript.operations.cache != null } }
+                    .transcript.operations.cache
+            assertEquals(SEEN_AT, cache?.lastAtMs)
+            runtime.close()
+        }
+
     // The next context request written, skipping the other lines.
     private suspend fun contextRequest(session: FakeProcess): String =
         withContext(Dispatchers.IO) {
@@ -497,5 +525,6 @@ class SessionRuntimeTest {
         const val INIT_MARK = "\"subtype\":\"init\""
         const val CONTEXT_MARK = "\"subtype\":\"get_context_usage\""
         val QUIET = 500.milliseconds
+        const val SEEN_AT = 5_000L
     }
 }

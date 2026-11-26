@@ -55,11 +55,13 @@ import dev.ukitomato.closta.platforms.intellij.thread.cardHint
 import dev.ukitomato.closta.presenter.view.AttachmentFault
 import dev.ukitomato.closta.presenter.view.AttachmentLimits
 import dev.ukitomato.closta.presenter.view.AttachmentVerdict
+import dev.ukitomato.closta.presenter.view.CacheClock
 import dev.ukitomato.closta.presenter.view.ComposerState
 import dev.ukitomato.closta.presenter.view.RetryRecord
 import dev.ukitomato.closta.presenter.view.SandboxBlock
 import dev.ukitomato.closta.presenter.view.SwitchKind
 import dev.ukitomato.closta.presenter.view.SwitchRecord
+import dev.ukitomato.closta.presenter.view.cacheClock
 import dev.ukitomato.closta.presenter.view.checkAttachment
 import dev.ukitomato.closta.presenter.view.shortLabel
 import kotlinx.coroutines.CoroutineScope
@@ -191,6 +193,10 @@ class ComposerPanel(
     private val confirm = JPanel(BorderLayout()).apply { isVisible = false }
     private val box = ComposerBox()
     private val ticker = Timer(TICK_MS) { showStatus() }
+    private val cache = CacheLabel()
+
+    // Redraws the cache's clock as its minutes go down; it runs only while the cache is warm.
+    private val cacheTicker = Timer(MS_PER_MINUTE.toInt()) { state?.let(::showCache) }
 
     val component: JComponent =
         JPanel(BorderLayout()).apply {
@@ -231,7 +237,10 @@ class ComposerPanel(
             },
         )
         com.intellij.openapi.util.Disposer
-            .register(parent) { ticker.stop() }
+            .register(parent) {
+                ticker.stop()
+                cacheTicker.stop()
+            }
         // Esc on the Bypass bar's own links says no too.
         object : DumbAwareAction() {
             override fun actionPerformed(e: AnActionEvent) = closeBypass()
@@ -299,6 +308,7 @@ class ComposerPanel(
         left.add(sandbox)
         left.add(model)
         val right = JPanel(FlowLayout(FlowLayout.RIGHT, 0, 0)).apply { isOpaque = false }
+        right.add(cache)
         right.add(cost)
         right.add(context)
         right.add(send)
@@ -336,6 +346,7 @@ class ComposerPanel(
             cost.text = ClostaBundle.message("composer.usage.button", amount)
             cost.accessibleLabel = ClostaBundle.message("composer.usage.accessible", amount)
         }
+        showCache(next)
         val used = next.context
         context.isVisible = used != null
         if (used != null) {
@@ -358,6 +369,23 @@ class ComposerPanel(
         stop.isVisible = next.running
         stop.enabledToClick = !next.stopping
         stop.disabledReason = ClostaBundle.message("composer.status.stopping")
+    }
+
+    /**
+     * The cache's clock at this moment. While it is warm [cacheTicker] runs, first to the moment its minutes go down
+     * and then once a minute; otherwise it stops.
+     */
+    private fun showCache(next: ComposerState) {
+        val clock = cacheClock(next.cache, next.context?.totalTokens, next.running, System.currentTimeMillis())
+        cache.show(clock)
+        if (clock is CacheClock.Warm) {
+            if (!cacheTicker.isRunning) {
+                cacheTicker.initialDelay = untilNextMinute(clock.remainingMs).toInt()
+                cacheTicker.start()
+            }
+        } else {
+            cacheTicker.stop()
+        }
     }
 
     /** The sandbox button: the shield says on (green) or off (gray), the name only when there is room. */

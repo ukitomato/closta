@@ -213,6 +213,16 @@ data class OperationRecords(
     val usageWaiting: List<String> = emptyList(),
     /** The last `get_usage` answer that could be read; null before the first. */
     val usage: UsageRecord? = null,
+    /** How long the cache the last `result` read or wrote lives; null when it named no model or no cache tokens. */
+    val cacheTtlMs: Long? = null,
+    /** When the host saw the last `result` that had a cache, and how long that cache lives; null when it had none. */
+    val cache: CacheRecord? = null,
+)
+
+/** The prompt cache as of the `result` the host saw at [lastAtMs]: it lives [ttlMs] from then. */
+data class CacheRecord(
+    val lastAtMs: Long,
+    val ttlMs: Long,
 )
 
 /** A retry of the API in progress: attempt [attempt] of [maxRetries] starts after [delayMs] ms; [status] is HTTP's. */

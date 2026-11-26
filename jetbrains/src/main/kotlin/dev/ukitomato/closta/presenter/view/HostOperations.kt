@@ -21,6 +21,7 @@ internal fun foldOperation(
         is PresenterInput.ResumeRefused -> operations.refuseResume(input)
         is PresenterInput.AttachmentRefused -> operations.refuseAttachment(input)
         is PresenterInput.RateLimitDismissed -> operations.dismissRateLimit(input.seq)
+        is PresenterInput.ResultSeenAt -> operations.cacheSeenAt(input.epochMs)
         else -> operations
     }
 

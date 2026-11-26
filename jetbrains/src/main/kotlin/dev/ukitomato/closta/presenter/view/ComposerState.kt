@@ -43,6 +43,8 @@ data class ComposerState(
     val usageWaiting: Boolean,
     /** A `get_context_usage` request waits for the CLI's answer. */
     val contextWaiting: Boolean,
+    /** The prompt cache of the last `result`; the screen reads it through [cacheClock]. */
+    val cache: CacheRecord?,
 )
 
 /** The sandbox button: whether the sandbox is on, and why it cannot be pressed now, if it cannot. */
@@ -113,6 +115,7 @@ fun composerState(
         usage = operations.usage,
         usageWaiting = operations.usageWaiting.isNotEmpty(),
         contextWaiting = operations.waiting.isNotEmpty(),
+        cache = operations.cache,
     )
 }
 

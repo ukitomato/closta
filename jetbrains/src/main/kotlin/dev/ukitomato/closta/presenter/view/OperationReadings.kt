@@ -47,12 +47,14 @@ internal fun OperationRecords.retryEnded(): OperationRecords = if (retry == null
 
 /**
  * The tokens of a `result`: `modelUsage` is the session's total so far for each model, so the figures are summed over
- * the models and replace the last ones, never added to them. A `result` that names no model says nothing of the total.
+ * the models and replace the last ones, never added to them. A `result` that names no model says nothing of the total,
+ * and leaves no cache to count (the `result` of `/clear` names none). The cache lives an hour when any model wrote to
+ * the one-hour cache, else five minutes.
  */
 internal fun OperationRecords.resulted(event: AgentEvent.Result): OperationRecords {
     val usage = (JsonRead.parse(event.modelUsage.text) as? JsonObject)?.entries?.map { it.value }.orEmpty()
     val models = usage.filterIsInstance<JsonObject>()
-    if (models.isEmpty()) return this
+    if (models.isEmpty()) return if (cacheTtlMs == null) this else copy(cacheTtlMs = null)
     val totals =
         TokenTotals(
             input = models.sumOf { it.count("inputTokens") ?: 0L },
@@ -60,8 +62,17 @@ internal fun OperationRecords.resulted(event: AgentEvent.Result): OperationRecor
             cacheRead = models.sumOf { it.count("cacheReadInputTokens") ?: 0L },
             cacheCreation = models.sumOf { it.count("cacheCreationInputTokens") ?: 0L },
         )
-    return if (totals == tokens) this else copy(tokens = totals)
+    val ttl =
+        when {
+            totals.cacheRead + totals.cacheCreation == 0L -> null
+            models.any { (it.count("cacheCreationEphemeral1hInputTokens") ?: 0L) > 0L } -> HOUR_CACHE_MS
+            else -> FIVE_MINUTE_CACHE_MS
+        }
+    return if (totals == tokens && ttl == cacheTtlMs) this else copy(tokens = totals, cacheTtlMs = ttl)
 }
+
+private const val HOUR_CACHE_MS = 3_600_000L
+private const val FIVE_MINUTE_CACHE_MS = 300_000L
 
 /**
  * A frame goes on with the reply, which ends a retry; `system/api_retry` starts one. A `rate_limit_event` says how

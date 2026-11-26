@@ -46,6 +46,7 @@ fun foldTranscript(
         is PresenterInput.ResumeRefused,
         is PresenterInput.AttachmentRefused,
         is PresenterInput.RateLimitDismissed,
+        is PresenterInput.ResultSeenAt,
         -> transcript.withOperations(foldOperation(transcript.operations, input))
         is PresenterInput.SessionsListed,
         is PresenterInput.Restored,
