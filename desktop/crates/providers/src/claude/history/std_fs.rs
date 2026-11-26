@@ -72,15 +72,23 @@ impl RecordFile for File {
 }
 
 /// `path` without the `\\?\` that Windows puts before the real path of a directory, so it is named as the
-/// CLI names it: `\\?\UNC\server\x` is `\\server\x` and `\\?\C:\x` is `C:\x`.
+/// CLI names it: `\\?\UNC\server\x` is `\\server\x` and `\\?\C:\x` is `C:\x`. Any other verbatim path
+/// (`\\?\Volume{…}\x`) has no other name and is kept.
 pub fn strip_verbatim(path: &str) -> String {
     if let Some(share) = path.strip_prefix(r"\\?\UNC\") {
         format!(r"\\{share}")
-    } else if let Some(rest) = path.strip_prefix(r"\\?\") {
+    } else if let Some(rest) = path
+        .strip_prefix(r"\\?\")
+        .filter(|rest| starts_with_drive(rest))
+    {
         rest.to_owned()
     } else {
         path.to_owned()
     }
+}
+
+fn starts_with_drive(path: &str) -> bool {
+    matches!(path.as_bytes(), [letter, b':', ..] if letter.is_ascii_alphabetic())
 }
 
 #[cfg(test)]
@@ -94,7 +102,15 @@ mod tests {
         assert_eq!(strip_verbatim(r"C:\x"), r"C:\x");
         assert_eq!(strip_verbatim(r"\\server\x"), r"\\server\x");
         assert_eq!(strip_verbatim("/home/x"), "/home/x");
-        assert_eq!(strip_verbatim(r"\\?\"), "");
+        assert_eq!(strip_verbatim(r"\\?\"), r"\\?\");
+    }
+
+    #[test]
+    fn a_verbatim_path_with_no_drive_letter_is_kept() {
+        let volume = r"\\?\Volume{0a1b2c3d-0000-0000-0000-000000000000}\x";
+        assert_eq!(strip_verbatim(volume), volume);
+        assert_eq!(strip_verbatim(r"\\?\GLOBALROOT\x"), r"\\?\GLOBALROOT\x");
+        assert_eq!(strip_verbatim(r"\\?\D:"), "D:");
     }
 
     #[cfg(unix)]

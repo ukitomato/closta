@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use closta_core::ports::{SavedSessions, SavedSessionsError};
-use closta_model::SavedTranscript;
+use closta_model::{AgentEvent, RawJson, SavedTranscript};
 use closta_presenter::input::SendId;
 use closta_presenter::thread_running::thread_is_running;
 use closta_presenter::transcript::Role;
@@ -324,7 +324,7 @@ fn the_id_of_a_resumed_session_is_the_one_its_user_lines_carry() {
 }
 
 #[test]
-fn a_record_put_back_with_more_than_the_limit_says_so() {
+fn a_record_cut_by_its_size_says_so() {
     drive(|executor| async move {
         let processes = Processes::new();
         let whole = captured();
@@ -355,6 +355,70 @@ fn a_record_put_back_with_more_than_the_limit_says_so() {
             "{:?}",
             log.lines()
         );
+        runtime.close();
+        run.await;
+    });
+}
+
+/// The `n`th of a long record's lines: the user's words on even lines, an answer on odd ones, so
+/// that each line is a message of its own.
+fn line(n: usize) -> AgentEvent {
+    if n.is_multiple_of(2) {
+        return AgentEvent::User {
+            uuid: format!("u{n}"),
+            session_id: RESUMED.to_owned(),
+            timestamp: "t".to_owned(),
+            message: RawJson(format!(r#"{{"role":"user","content":"line {n}"}}"#)),
+            parent_tool_use_id: None,
+            tool_use_result: None,
+            subagent_type: None,
+            task_description: None,
+        };
+    }
+    AgentEvent::Assistant {
+        uuid: format!("a{n}"),
+        session_id: RESUMED.to_owned(),
+        timestamp: "t".to_owned(),
+        request_id: Some(format!("r{n}")),
+        message: RawJson(format!(
+            r#"{{"id":"msg_{n}","type":"message","role":"assistant","content":[{{"type":"text","text":"line {n}"}}]}}"#
+        )),
+        parent_tool_use_id: None,
+        user_message_uuid: None,
+        user_message_uuids: None,
+        wire_tool_inputs: None,
+        subagent_type: None,
+        task_description: None,
+        error: None,
+    }
+}
+
+#[test]
+fn a_record_longer_than_the_first_step_is_put_back_once() {
+    drive(|executor| async move {
+        let processes = Processes::new();
+        let lines = 1_000;
+        let saved = Arc::new(FakeSavedSessions::default().with_transcript(
+            RESUMED,
+            SavedTranscript {
+                events: (0..lines).map(line).collect(),
+                skipped: 0,
+                dropped: 0,
+            },
+        ));
+        let (runtime, run, _log) = runtime(&processes, resuming(Some(saved)));
+        let run = executor.spawn(run);
+        running_now(&runtime).await;
+
+        let transcript = runtime.view().transcript;
+        let restored = transcript.restored.clone().expect("put back");
+        assert_eq!(
+            transcript.messages.order().count(),
+            lines,
+            "each line once: the whole record replaces its newest part"
+        );
+        assert_eq!(usize::try_from(restored.count), Ok(lines));
+        assert!(!restored.partly);
         runtime.close();
         run.await;
     });

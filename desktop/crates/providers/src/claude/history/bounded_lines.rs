@@ -150,6 +150,15 @@ mod tests {
     }
 
     #[test]
+    fn a_line_over_the_limit_across_chunks_is_read_away_to_its_newline() {
+        let input = format!("{}\nafter\n", "z".repeat(200 * 1024));
+        assert_eq!(
+            lines(input.as_bytes(), 100 * 1024),
+            vec![Some(Line::TooLong), text("after"), None]
+        );
+    }
+
+    #[test]
     fn a_damaged_byte_damages_one_line() {
         assert_eq!(
             lines(b"a\xffb\nok\n", 100),

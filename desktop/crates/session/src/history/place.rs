@@ -122,6 +122,15 @@ pub fn wsl_record_home_within(
     found.ok()
 }
 
+/// `timeout` as a reason names it: whole seconds in seconds, anything else in ms.
+fn waited(timeout: Duration) -> String {
+    match (timeout.as_secs(), timeout.subsec_nanos()) {
+        (1, 0) => "1 second".to_owned(),
+        (secs, 0) if secs > 0 => format!("{secs} seconds"),
+        _ => format!("{} ms", timeout.as_millis()),
+    }
+}
+
 /// The place, or the reason it was not found (IdeWsl.recordHome's four).
 fn ask_record_home(
     location: &WslLocation,
@@ -139,7 +148,7 @@ fn ask_record_home(
         _ => "the probe could not be started".to_owned(),
     })?;
     let output = future::block_on(probe_output_within(process, timeout, MAX_BYTES))
-        .ok_or_else(|| format!("no answer within {} seconds", PROBE_TIMEOUT.as_secs()))?;
+        .ok_or_else(|| format!("no answer within {}", waited(timeout)))?;
     location
         .record_home(&output)
         .map(PathBuf::from)
@@ -420,7 +429,7 @@ mod tests {
                 refusing(LaunchError::Spawn(io::ErrorKind::PermissionDenied)),
                 "the probe could not be started",
             ),
-            (silent(), "no answer within 5 seconds"),
+            (silent(), "no answer within 50 ms"),
             (
                 answering(&["HOME=/home/me", "CLAUDE_AGENT_CONFIG=/home/me/c"]),
                 "the answer had no CLAUDE_AGENT_HOME= line",
@@ -442,6 +451,15 @@ mod tests {
                 assert!(!line.contains("me"), "{line}");
             }
         }
+    }
+
+    #[test]
+    fn a_wait_is_named_in_seconds_when_whole_and_in_ms_otherwise() {
+        assert_eq!(waited(PROBE_TIMEOUT), "5 seconds");
+        assert_eq!(waited(Duration::from_secs(1)), "1 second");
+        assert_eq!(waited(Duration::from_millis(1_500)), "1500 ms");
+        assert_eq!(waited(Duration::from_millis(50)), "50 ms");
+        assert_eq!(waited(Duration::ZERO), "0 ms");
     }
 
     #[test]
