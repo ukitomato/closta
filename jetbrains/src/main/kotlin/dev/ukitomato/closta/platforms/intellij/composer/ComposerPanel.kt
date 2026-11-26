@@ -172,8 +172,8 @@ class ComposerPanel(
         }.tip(ClostaBundle.message("composer.usage.tooltip"))
     private val context =
         ContextUse { button ->
-            openContext(button)
             onContext()
+            openContext(button)
         }
 
     /** The composer popup that is open, one at a time (opened through [openPopup]); nothing else of it is kept. */
@@ -505,7 +505,10 @@ class ComposerPanel(
         openPopup(usage.popup, under, usage::show)
     }
 
-    /** Opens the context's breakdown above [under]; it shows the composer's state until it is closed. */
+    /**
+     * Opens the context's breakdown above [under], just asked for: it shows the composer's state until it is closed,
+     * and says it is counting from the first frame, before the request is in that state.
+     */
     private fun openContext(under: JComponent) {
         val next = state ?: return
         val breakdown = ContextPopup(next) { onContext() }

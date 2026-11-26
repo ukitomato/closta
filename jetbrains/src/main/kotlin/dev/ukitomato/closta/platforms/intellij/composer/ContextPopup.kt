@@ -46,7 +46,8 @@ internal class ContextPopup(
             .createPopup()
 
     init {
-        draw(state)
+        // Opened as the whole answer is asked for: the request is not in [state] yet.
+        draw(state.copy(contextWaiting = true))
     }
 
     /** Draws [state] again while the popup is open, and fits the popup to what it now says. */

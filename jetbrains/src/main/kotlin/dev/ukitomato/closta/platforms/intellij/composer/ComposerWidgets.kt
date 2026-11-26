@@ -354,9 +354,6 @@ class ContextUse(
         repaint()
     }
 
-    /** Presses it as a click would. */
-    fun click() = button.click()
-
     // The panel is only the button's frame: what it says on hover is the button's.
     override fun setToolTipText(text: String?) {
         button.toolTipText = text

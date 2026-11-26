@@ -380,23 +380,27 @@ class SessionRuntimeTest {
             val init = lines.first { it.contains(INIT_MARK) }
             session.emit(init)
             session.emit(init)
+            val asked = mutableListOf(contextRequest(session))
+            assertTrue(contextRequests(session).isEmpty(), "the second init asks nothing")
             session.emit(lines.first { it.contains("\"type\":\"result\"") })
-            val asked = mutableListOf<String>()
-            while (asked.size < 2) {
-                val line =
-                    checkNotNull(withContext(Dispatchers.IO) { session.nextStdinLine(GUARD.inWholeMilliseconds) })
-                if (line.contains("\"subtype\":\"get_context_usage\"")) asked += line
-            }
-            // A third request would follow at once: the second init's would come before the result's.
-            val more =
-                withContext(Dispatchers.IO) {
-                    generateSequence { session.nextStdinLine(QUIET.inWholeMilliseconds) }
-                        .filter { it.contains("\"subtype\":\"get_context_usage\"") }
-                        .toList()
-                }
-            assertTrue(more.isEmpty(), "$more")
+            asked += contextRequest(session)
+            assertTrue(contextRequests(session).isEmpty(), "the result asks once")
             assertTrue(asked.all { it.contains("\"detail\":\"summary\"") }, "$asked")
             runtime.close()
+        }
+
+    // The next context request written, skipping the other lines.
+    private suspend fun contextRequest(session: FakeProcess): String =
+        withContext(Dispatchers.IO) {
+            generateSequence { session.nextStdinLine(GUARD.inWholeMilliseconds) }.first { it.contains(CONTEXT_MARK) }
+        }
+
+    // The context requests written within a quiet spell: one more would come at once after the event that asks.
+    private suspend fun contextRequests(session: FakeProcess): List<String> =
+        withContext(Dispatchers.IO) {
+            generateSequence { session.nextStdinLine(QUIET.inWholeMilliseconds) }
+                .filter { it.contains(CONTEXT_MARK) }
+                .toList()
         }
 
     private class NamedServer(
@@ -491,6 +495,7 @@ class SessionRuntimeTest {
         const val CAPTURE = "01-baseline-text.ndjson"
         const val CAPTURE_VERSION = "2.1.325"
         const val INIT_MARK = "\"subtype\":\"init\""
+        const val CONTEXT_MARK = "\"subtype\":\"get_context_usage\""
         val QUIET = 500.milliseconds
     }
 }
