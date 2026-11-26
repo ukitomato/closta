@@ -80,6 +80,9 @@ pub(crate) struct ShellModel {
     scrolled: HashMap<SlotId, (usize, ScrollDirection)>,
     /// Whether a prefetch waits for the next frame.
     prefetch_asked: bool,
+    /// How many prefetches were asked for, for a test to see one was.
+    #[cfg(test)]
+    pub(crate) prefetch_asks: usize,
     /// The measured run's state, when the run is measured.
     measuring: Option<Measuring>,
     measure_tasks: Vec<Task<()>>,
@@ -118,6 +121,8 @@ impl ShellModel {
             generations: HashMap::new(),
             scrolled: HashMap::new(),
             prefetch_asked: false,
+            #[cfg(test)]
+            prefetch_asks: 0,
             measuring: None,
             measure_tasks: Vec::new(),
             probing: probe.map(Probing::new),
@@ -384,6 +389,10 @@ impl ShellModel {
             return;
         }
         self.prefetch_asked = true;
+        #[cfg(test)]
+        {
+            self.prefetch_asks += 1;
+        }
         let this = cx.weak_entity();
         window.on_next_frame(move |window, cx| {
             _ = this.update(cx, |model, cx| {
@@ -401,7 +410,9 @@ impl ShellModel {
     /// Does what a click or a key asks of the shell, carries out what the shell says the screen
     /// is to do about it, and draws again.
     pub(crate) fn act(&mut self, action: ShellAction, window: &mut Window, cx: &mut Context<Self>) {
-        let selects = matches!(action, ShellAction::Select(_));
+        // Whatever selected it — a click, Enter on the list, a jump to a wait — another slot
+        // shown needs its rows made.
+        let selected_before = self.shell.selected();
         let toggles = matches!(action, ShellAction::TogglePane(_));
         let opens = matches!(action, ShellAction::OpenNewSession);
         let bypass = match action {
@@ -424,6 +435,7 @@ impl ShellModel {
             clipboard,
             focus,
         } = self.shell.act(action);
+        let selects = self.shell.selected() != selected_before;
         self.show_title(window);
         for slot in removed {
             self.forget(slot, window, cx);

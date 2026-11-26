@@ -570,13 +570,18 @@ mod tests {
             .expect("read the cursor")
         };
         let second = SlotId::numbered(2);
+        let asks = |cx: &mut TestAppContext| model.read_with(cx, |model, _| model.prefetch_asks);
         // Twice: the second click lands on the slot already selected.
-        for _ in 0..2 {
+        for round in 0..2 {
+            let before = asks(cx);
             cx.update_window(handle, |_, window, cx| {
                 window.click("slot-2".to_owned(), cx)
             })
             .expect("click a session");
             test_window::draw(cx, handle);
+            if round == 0 {
+                assert!(asks(cx) > before, "the slot shown has its rows made");
+            }
             let (input, selected, cursor) = model.read_with(cx, |model, _| {
                 (
                     model.focus.composers[&second].clone(),
