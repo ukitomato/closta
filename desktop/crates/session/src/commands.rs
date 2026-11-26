@@ -22,6 +22,10 @@ use closta_presenter::session::SessionView;
 
 use crate::store::ConversationStore;
 
+/// A test's step between a recorded message and the second look at the session.
+#[cfg(test)]
+type RecordedHook = Box<dyn Fn(&SessionCommands) + Send + Sync>;
+
 /// The use cases, put together for one running session: its [`AgentSession`], the clock and
 /// the store of its view. One set per session.
 ///
@@ -33,6 +37,9 @@ pub struct SessionCommands {
     clock: Arc<dyn Clock>,
     store: Arc<ConversationStore>,
     revoked: AtomicBool,
+    /// Called once a message is recorded, before the session is looked at again.
+    #[cfg(test)]
+    after_recorded: Option<RecordedHook>,
 }
 
 fn new_id() -> String {
@@ -50,6 +57,8 @@ impl SessionCommands {
             clock,
             store,
             revoked: AtomicBool::new(false),
+            #[cfg(test)]
+            after_recorded: None,
         }
     }
 
@@ -105,6 +114,10 @@ impl SessionCommands {
             attachments: noted,
             uuid: Some(uuid.clone()),
         }));
+        #[cfg(test)]
+        if let Some(hook) = &self.after_recorded {
+            hook(self);
+        }
         let sent = self
             .session()
             .and_then(|session| services::send_message(session, text, attachments, Some(&uuid)));
@@ -378,5 +391,47 @@ fn decided(view: &SessionView, after: ConversationState, decided: Decided) -> Se
     SessionView {
         conversation: after,
         transcript,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use closta_presenter::input::SendId;
+    use closta_providers::claude::fake::script::FakeScript;
+    use closta_providers::claude::fake::session::FakeAgentSession;
+
+    use super::*;
+
+    struct NoClock;
+
+    impl Clock for NoClock {
+        fn now(&self) -> SystemTime {
+            SystemTime::UNIX_EPOCH
+        }
+    }
+
+    #[test]
+    fn a_send_revoked_after_it_was_recorded_is_not_sent() {
+        let (session, _events, _pump) = FakeAgentSession::start(FakeScript::new(Vec::new()));
+        let record = session.record();
+        let store = Arc::new(ConversationStore::default());
+        let mut commands =
+            SessionCommands::new(Arc::new(session), Arc::new(NoClock), store.clone());
+        commands.after_recorded = Some(Box::new(|commands| {
+            // The message stands in the transcript when the revoke comes.
+            assert!(commands.store.view().transcript.messages.contains("send-1"));
+            commands.revoke();
+        }));
+        let id = SendId::new("send-1").expect("a key");
+
+        assert_eq!(
+            Err(SendError::Closed),
+            commands.send_message(id, "one", &[])
+        );
+
+        let view = store.view();
+        assert!(view.transcript.messages.contains("send-1"));
+        assert!(view.transcript.not_sent.contains("send-1"));
+        assert!(record.sent().is_empty());
     }
 }

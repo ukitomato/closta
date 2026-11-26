@@ -9,6 +9,5 @@ mod text;
 
 pub use project_transcripts::{MAX_RECORD_BYTES, ProjectTranscripts, Survey};
 pub use record_files::{EntryKind, RecordEntry, RecordFile, RecordFs};
-pub use record_lines::{MAX_LINE_BYTES, is_session_id};
-pub use record_place::{MAX_NAME_LENGTH, RecordPlaceUse, name_of};
+pub use record_place::{RecordPlaceUse, name_of};
 pub use std_fs::{StdRecordFs, strip_verbatim};

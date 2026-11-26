@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use super::record_files::RecordFs;
 
 /// The longest folder name the CLI makes, in UTF-16 units.
-pub const MAX_NAME_LENGTH: usize = 200;
+pub(crate) const MAX_NAME_LENGTH: usize = 200;
 
 /// The CLI's folder name for a working folder: every UTF-16 unit that is not an ASCII letter or digit is `-`.
 pub fn name_of(directory: &str) -> String {
