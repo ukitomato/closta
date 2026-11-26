@@ -405,6 +405,7 @@ impl ShellModel {
             draft,
             started,
             check,
+            project_check: _,
             folder,
             close,
             removed,

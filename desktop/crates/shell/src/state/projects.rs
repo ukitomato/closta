@@ -58,7 +58,7 @@ impl ShellState {
 
     /// The projects in the order they were made in.
     pub fn projects(&self) -> Vec<ProjectSummary> {
-        let can_add = !self.slots_full();
+        let can_add = !self.slots_full() && self.pending_new.is_none();
         self.projects
             .iter()
             .map(|project| ProjectSummary {
@@ -66,7 +66,7 @@ impl ShellState {
                 name: display_name(project, &self.projects),
                 runtime: copy::runtime_kind(&project.runtime),
                 collapsed: project.collapsed,
-                checking: false,
+                checking: self.pending_new.as_ref() == Some(&project.key),
                 can_add,
                 can_remove: self.has_no_live_slot(&project.key),
             })
@@ -129,6 +129,10 @@ impl ShellState {
             self.remove(*slot);
         }
         self.projects.retain(|it| &it.key != key);
+        // Its answer, when it comes, finds nothing waiting for it.
+        if self.pending_new.as_ref() == Some(key) {
+            self.pending_new = None;
+        }
         self.save_projects();
         Acted {
             removed: gone,

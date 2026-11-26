@@ -109,6 +109,7 @@ impl ShellState {
             return Acted::default();
         }
         self.closing = CloseStage::Closing;
+        self.pending_new = None;
         Acted {
             close: true,
             ..Acted::default()

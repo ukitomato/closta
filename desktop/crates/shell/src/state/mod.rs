@@ -49,9 +49,11 @@ mod cards;
 mod closing;
 mod nav;
 mod needs_you;
+mod new_in_project;
 mod overlays;
 mod projects;
 
+pub use new_in_project::ProjectCheck;
 pub use projects::ProjectSummary;
 
 /// The mode that runs every tool without asking.
@@ -101,6 +103,15 @@ pub enum ShellAction {
     },
     FolderChecked {
         folder: String,
+        exists: bool,
+    },
+    /// The project's plus: starts a session in its folder once the folder is found.
+    NewInProject {
+        project: ProjectKey,
+    },
+    /// The answer of the check a plus began.
+    ProjectChecked {
+        project: ProjectKey,
         exists: bool,
     },
     RequestClose,
@@ -294,6 +305,8 @@ pub struct Acted {
     pub started: Option<SlotId>,
     /// A folder to look for.
     pub check: Option<FolderCheck>,
+    /// A project's folder to look for before a session starts in it.
+    pub project_check: Option<ProjectCheck>,
     /// The dialog's folder field is to be filled again from the dialog.
     pub folder: bool,
     /// The steps that close the window are to run.
@@ -417,6 +430,8 @@ pub struct ShellState {
     /// What the settings writer was last given, or what was restored: a value equal to it is
     /// not written again.
     saved: Option<Settings>,
+    /// The project whose plus waits for its folder check; one at a time.
+    pending_new: Option<ProjectKey>,
     /// The left list's cursor: its item and the place it last had.
     nav: Option<(NavItem, usize)>,
     panes: Panes,
@@ -445,6 +460,7 @@ impl ShellState {
             selected: None,
             projects: Vec::new(),
             saved: None,
+            pending_new: None,
             nav: None,
             panes: Panes::default(),
             runs: Runs::default(),
@@ -915,6 +931,8 @@ impl ShellState {
                     | ShellAction::OpenNewSession
                     | ShellAction::OpenNewSessionHere
                     | ShellAction::FolderChecked { .. }
+                    | ShellAction::NewInProject { .. }
+                    | ShellAction::ProjectChecked { .. }
                     | ShellAction::Send { .. }
                     | ShellAction::CloseSlot { .. }
                     | ShellAction::ConfirmCloseSlot
@@ -945,6 +963,10 @@ impl ShellState {
                 Acted::default()
             }
             ShellAction::RemoveProject { project } => self.remove_project(&project),
+            ShellAction::NewInProject { project } => self.new_in_project(&project),
+            ShellAction::ProjectChecked { project, exists } => {
+                self.project_checked(&project, exists)
+            }
             ShellAction::CopySessionId { slot } => {
                 let id = self.slots.get(&slot).map(|it| it.runtime.id().to_owned());
                 Acted {
@@ -1240,6 +1262,7 @@ fn behind_overlay(action: &ShellAction, overlay: Overlay) -> bool {
         | ShellAction::HistoryPrev { .. }
         | ShellAction::HistoryNext { .. }
         | ShellAction::RemoveProject { .. }
+        | ShellAction::NewInProject { .. }
         | ShellAction::NavFocus
         | ShellAction::NavMove { .. }
         | ShellAction::NavTo(_)
