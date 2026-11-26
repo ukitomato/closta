@@ -35,7 +35,7 @@ private fun foldReset(
 ): Transcript {
     val (placed, messageKey) =
         transcript.withPart(event.uuid, CLEARED_PART) { key -> ClearedRecord(key, event.timestamp) }
-    return placed.copy(clearedAt = placed.messages.order.indexOf(messageKey))
+    return placed.copy(clearedAt = placed.messages.order.indexOf(messageKey), compactFailure = null)
 }
 
 /**
@@ -88,7 +88,7 @@ internal fun foldCompaction(
  * The divider a `compact_boundary` makes, failed when a status said the compaction did not succeed. A boundary that
  * does not say how many tokens it began with makes none.
  */
-internal fun foldCompactBoundary(
+private fun foldCompactBoundary(
     transcript: Transcript,
     event: AgentEvent.SystemCompactBoundary,
 ): Transcript {
@@ -107,13 +107,10 @@ internal fun foldCompactBoundary(
 }
 
 /** A status that says the compaction did not succeed; null says nothing and a success clears nothing. */
-internal fun Transcript.compactStatusSaid(event: AgentEvent.SystemStatus): Transcript =
-    if (event.compactResult == null ||
-        event.compactResult == COMPACT_SUCCESS
-    ) {
-        this
-    } else {
-        copy(compactFailure = event.uuid)
+private fun Transcript.compactStatusSaid(event: AgentEvent.SystemStatus): Transcript =
+    when (event.compactResult) {
+        null, COMPACT_SUCCESS -> this
+        else -> copy(compactFailure = event.uuid)
     }
 
 /** At a `result`, a failure no boundary followed is shown now, in the answer of the turn that ran it. */

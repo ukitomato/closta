@@ -19,7 +19,11 @@ fun dividerText(divider: Divider): String? =
         is Divider.Compacted -> compactedText(divider)
     }
 
-private fun compactedText(divider: Divider.Compacted): String =
+/** [japanese] says how the "(auto)" is joined: with a space in English, with none in Japanese. */
+internal fun compactedText(
+    divider: Divider.Compacted,
+    japanese: Boolean = DynamicBundle.getLocale().language == "ja",
+): String =
     if (divider.failed) {
         ClostaBundle.message("thread.divider.compactFailed")
     } else {
@@ -27,13 +31,13 @@ private fun compactedText(divider: Divider.Compacted): String =
         val base =
             divider.postTokens?.let { ClostaBundle.message("thread.divider.compacted", before, shortTokens(it)) }
                 ?: ClostaBundle.message("thread.divider.compactedNoAfter", before)
-        if (divider.trigger == AUTO_TRIGGER) base + autoSuffix() else base
+        if (divider.trigger == AUTO_TRIGGER) base + autoSuffix(japanese) else base
     }
 
 /** The "(auto)" after the words; English sets it off with a space, Japanese does not. */
-private fun autoSuffix(): String {
+private fun autoSuffix(japanese: Boolean): String {
     val auto = ClostaBundle.message("thread.divider.auto")
-    return if (DynamicBundle.getLocale().language == "ja") auto else " $auto"
+    return if (japanese) auto else " $auto"
 }
 
 private const val AUTO_TRIGGER = "auto"

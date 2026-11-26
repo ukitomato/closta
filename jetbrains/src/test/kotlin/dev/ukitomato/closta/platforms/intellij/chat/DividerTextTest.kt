@@ -1,10 +1,21 @@
 package dev.ukitomato.closta.platforms.intellij.chat
 
 import dev.ukitomato.closta.presenter.view.Divider
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import java.util.Locale
 
 class DividerTextTest {
+    private val saved = Locale.getDefault()
+
+    @BeforeEach
+    fun english() = Locale.setDefault(Locale.ENGLISH)
+
+    @AfterEach
+    fun restore() = Locale.setDefault(saved)
+
     @Test
     fun `a compaction says both counts in short form`() {
         assertEquals(
@@ -18,6 +29,14 @@ class DividerTextTest {
         assertEquals(
             "Conversation compacted (21.8k → 3.4k tokens) (auto)",
             dividerText(Divider.Compacted("auto", 21819, 3447, failed = false)),
+        )
+    }
+
+    @Test
+    fun `in Japanese the auto mark follows the words with no space`() {
+        assertEquals(
+            "Conversation compacted (21.8k \u2192 3.4k tokens)(auto)",
+            compactedText(Divider.Compacted("auto", 21819, 3447, failed = false), japanese = true),
         )
     }
 

@@ -72,6 +72,18 @@ class CompactShownTest {
     }
 
     @Test
+    fun `type only - a conversation reset drops a failure waiting for its boundary`() {
+        val failed =
+            HostState().next(
+                PresenterInput.Event(AgentEvent.SystemStatus("st", "s-1", compactResult = "failed")),
+            )
+        val reset = AgentEvent.ConversationReset("rs", "s-1", "s-2", timestamp = "2026-11-14T12:26:36.305Z")
+
+        assertEquals("st", failed.transcript.compactFailure)
+        assertEquals(null, failed.next(PresenterInput.Event(reset)).transcript.compactFailure)
+    }
+
+    @Test
     fun `the compact part is a part of its own type in the tree`() {
         val tree = CaptureReplay.replay("21-compact").last().tree
         assertTrue(JsonText.compact(tree).contains("\"type\":\"compacted\""))
