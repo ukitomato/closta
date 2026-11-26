@@ -16,8 +16,11 @@ const RUNS: usize = 1000;
 const WARMUP: usize = 10;
 const PROJECTS: usize = 50;
 const PAIRS: usize = 10;
-// Three times the median (13.1us), rounded up to 10us.
-const BUDGET: Duration = Duration::from_micros(40);
+// About 8x the median; p99 spiked to about 36us under load, and a flaky gate would block
+// every later run, while this still catches a quadratic rebuild over fifty projects.
+const BUDGET: Duration = Duration::from_micros(100);
+// The projects that hold the slots, two each.
+const OWNERS: [usize; 4] = [0, 1, 5, 20];
 const P99: usize = 99;
 const PERCENT: usize = 100;
 const SCENARIOS: [&str; 4] = [
@@ -75,7 +78,8 @@ fn projects() -> Vec<Project> {
         .collect()
 }
 
-/// One rebuild, through the functions the shell calls.
+/// One rebuild, through the functions the shell calls; the glue mirrors `ShellState::tree_rows`
+/// and `nav_rows` in crates/shell/src/state/nav.rs.
 fn rebuild(
     projects: &[Project],
     slots: &[(SlotId, Option<ProjectKey>)],
@@ -102,7 +106,7 @@ fn left_pane_rebuild_within_budget() {
     assert_eq!(all.len(), PROJECTS);
     // Four projects hold two slots each; one of them is collapsed.
     all[1].collapsed = true;
-    let owners: Vec<ProjectKey> = [0, 1, 5, 20].iter().map(|n| all[*n].key.clone()).collect();
+    let owners: Vec<ProjectKey> = OWNERS.iter().map(|n| all[*n].key.clone()).collect();
     let names = display_names(&all);
     let views: Vec<SessionView> = SCENARIOS
         .iter()
@@ -114,7 +118,7 @@ fn left_pane_rebuild_within_budget() {
     let needs: Vec<SlotNeeds> = views
         .iter()
         .enumerate()
-        .map(|(n, v)| needs_of(n, v, &names[[0, 1, 5, 20][n / 2]]))
+        .map(|(n, v)| needs_of(n, v, &names[OWNERS[n / 2]]))
         .collect();
     let slots: Vec<(SlotId, Option<ProjectKey>)> = needs
         .iter()
