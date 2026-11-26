@@ -34,6 +34,13 @@ pub const EXCLUDED_6C: [&str; 3] = [
     "the content of the right pane",
 ];
 
+/// What a reviewer of the stage 6d-2a scenes leaves out: what later stages build.
+pub const EXCLUDED_6D2A: [&str; 3] = [
+    "the model and effort pickers (stage 6g)",
+    "the resume button and popup (stage 6d-2b)",
+    "the content of the right pane",
+];
+
 /// One scene: its name, the arguments the app starts with (the window size is added when it is
 /// shot), and what the reviewer leaves out.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -119,8 +126,75 @@ pub fn scenes() -> Vec<Scene> {
                 .collect(),
             excluded: EXCLUDED_6C.to_vec(),
         },
+        // Five replays in three folders (two of them both called `closta`), an empty project, a
+        // closed project, and a failed launch that belongs to no project.
+        Scene {
+            name: "hub-projects",
+            args: HUB_PROJECTS
+                .iter()
+                .flat_map(|&(file, prompt, stop_at, folder)| {
+                    let mut args = vec![
+                        "--replay".to_owned(),
+                        format!(r"{REPLAY}\{file}"),
+                        "--prompt".to_owned(),
+                        prompt.to_owned(),
+                    ];
+                    if let Some(stop_at) = stop_at {
+                        args.extend(["--stop-at".to_owned(), stop_at.to_string()]);
+                    }
+                    args.extend(["--folder".to_owned(), folder.to_owned()]);
+                    args
+                })
+                .chain(
+                    [
+                        "--project",
+                        r"C:\dev\api",
+                        "--collapse",
+                        PROJECT_NOTES,
+                        "--fail-launch",
+                        "1",
+                    ]
+                    .map(str::to_owned),
+                )
+                .collect(),
+            excluded: EXCLUDED_6D2A.to_vec(),
+        },
     ]
 }
+
+const PROJECT_WIN: &str = r"C:\dev\closta";
+const PROJECT_WSL: &str = r"\\wsl.localhost\Ubuntu-26.04\home\me\closta";
+const PROJECT_NOTES: &str = r"\\wsl.localhost\Ubuntu-26.04\home\me\notes";
+
+/// The replays of the projects scene: the record, its prompt, the line it stops at (the last
+/// one runs to its end) and the folder it belongs to.
+pub(crate) const HUB_PROJECTS: [(&str, &str, Option<usize>, &str); 5] = [
+    (
+        "36-sandbox-unavailable.ndjson",
+        PERMISSION_PROMPT,
+        Some(31),
+        PROJECT_WIN,
+    ),
+    (
+        "18-ask-multi-question.ndjson",
+        QUESTION_PROMPT,
+        Some(46),
+        PROJECT_WSL,
+    ),
+    ("01-baseline-text.ndjson", PONG_PROMPT, Some(9), PROJECT_WIN),
+    (
+        "02-tool-bash-autorun.ndjson",
+        BASH_PROMPT,
+        None,
+        PROJECT_WSL,
+    ),
+    (
+        "29-exit-plan-mode.ndjson",
+        PLAN_PROMPT,
+        Some(153),
+        PROJECT_NOTES,
+    ),
+];
 
 /// The replays of the hub scene: the four waiting cards, then a session that is still working.
 pub(crate) const HUB_REPLAYS: [(&str, &str, usize); 5] = [
@@ -266,7 +340,7 @@ mod tests {
     #[test]
     fn every_scene_is_shot_at_the_three_sizes() {
         assert_eq!(SIZES, [(1024, 700), (1600, 1000), (2560, 1440)]);
-        assert_eq!(scenes().len() * SIZES.len(), 39);
+        assert_eq!(scenes().len() * SIZES.len(), 42);
     }
 
     #[test]
@@ -373,5 +447,72 @@ mod tests {
         assert_eq!(scene.args, expected);
         assert_eq!(replays(&scene).len(), 5);
         assert_eq!(scene.excluded, EXCLUDED_6C);
+    }
+
+    #[test]
+    fn the_projects_scene_puts_five_replays_in_three_folders() {
+        let scene = find("hub-projects").unwrap();
+        let win = r"C:\dev\closta";
+        let wsl_closta = r"\\wsl.localhost\Ubuntu-26.04\home\me\closta";
+        let notes = r"\\wsl.localhost\Ubuntu-26.04\home\me\notes";
+        let mut expected = Vec::new();
+        for (file, prompt, stop_at, folder) in [
+            (
+                "36-sandbox-unavailable.ndjson",
+                PERMISSION_PROMPT,
+                Some("31"),
+                win,
+            ),
+            (
+                "18-ask-multi-question.ndjson",
+                QUESTION_PROMPT,
+                Some("46"),
+                wsl_closta,
+            ),
+            ("01-baseline-text.ndjson", PONG_PROMPT, Some("9"), win),
+            ("02-tool-bash-autorun.ndjson", BASH_PROMPT, None, wsl_closta),
+            ("29-exit-plan-mode.ndjson", PLAN_PROMPT, Some("153"), notes),
+        ] {
+            expected.extend([
+                "--replay".to_owned(),
+                format!(r"C:\dev\tools\closta\replay\{file}"),
+            ]);
+            expected.extend(["--prompt".to_owned(), prompt.to_owned()]);
+            if let Some(stop_at) = stop_at {
+                expected.extend(["--stop-at".to_owned(), stop_at.to_owned()]);
+            }
+            expected.extend(["--folder".to_owned(), folder.to_owned()]);
+        }
+        expected.extend(
+            [
+                "--project",
+                r"C:\dev\api",
+                "--collapse",
+                notes,
+                "--fail-launch",
+                "1",
+            ]
+            .map(str::to_owned),
+        );
+        assert_eq!(scene.args, expected);
+        assert_eq!(replays(&scene).len(), 5);
+        assert_eq!(scene.args.iter().filter(|it| *it == "--folder").count(), 5);
+        // Two folders share the last name, so the list has to tell them apart.
+        let closta = [win, wsl_closta].map(|it| it.rsplit('\\').next().unwrap());
+        assert_eq!(closta, ["closta", "closta"]);
+    }
+
+    #[test]
+    fn the_projects_scene_excludes_what_later_stages_build() {
+        let scene = find("hub-projects").unwrap();
+        assert_eq!(scene.excluded, EXCLUDED_6D2A);
+        assert_eq!(
+            EXCLUDED_6D2A,
+            [
+                "the model and effort pickers (stage 6g)",
+                "the resume button and popup (stage 6d-2b)",
+                "the content of the right pane",
+            ]
+        );
     }
 }

@@ -126,8 +126,9 @@ fn replay_options(
         exit_after: args.exit_after_ms.map(Duration::from_millis),
         scroll_through: args.scroll_through,
     });
-    // A replay reads and writes no settings.
-    let (projects, settings) = kept_settings(false);
+    // A replay reads and writes no settings; its projects are the ones it was given.
+    let projects = args.settings();
+    let (_, settings) = kept_settings(false);
     Ok(PlatformOptions {
         header,
         slots,
@@ -149,8 +150,9 @@ fn probe_options(
 ) -> Result<PlatformOptions, String> {
     use std::time::Duration;
 
-    // A check reads and writes no settings.
-    let (projects, settings) = kept_settings(false);
+    // A check reads and writes no settings; its projects are the ones it was given.
+    let projects = args.settings();
+    let (_, settings) = kept_settings(false);
     let mut ports = ports::real_ports(settings);
     // Wrapped before any folder is planned: every real session gets the mark and the
     // configuration, a Restart's too.

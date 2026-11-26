@@ -1,13 +1,16 @@
-//! The development arguments of the replay build. `--prompt`, `--stop-at` and `--stdin-log`
+//! The development arguments of the replay build. `--prompt`, `--stop-at`, `--stdin-log` and
+//! `--folder`
 //! belong to the `--replay` before them; `--pace`, `--window`, `--pane`, `--ready-file` and the
-//! measuring options (`--perf-log`, `--exit-after-replay`, `--scroll-through`) apply to the whole
-//! run. The checks' options (`--open-folder`, `--mark-children`, `--mcp-config`, `--fail-launch`,
+//! measuring options (`--perf-log`, `--exit-after-replay`, `--scroll-through`) and the projects
+//! (`--project`, `--collapse`) apply to the whole run. The checks' options (`--open-folder`, `--mark-children`, `--mcp-config`, `--fail-launch`,
 //! `--fail-distro`, `--close-after`) open real folders and failing launches instead of replays; a
 //! failing launch may also follow replays. `--list-saved` lists a folder's saved sessions into the
 //! ready file and opens no window, so it goes with neither a replay, a folder nor a failing launch.
 //! An error names the option, never a value: a value can be a prompt or a path.
 
 use std::path::PathBuf;
+
+use closta_shell::settings::{SETTINGS_VERSION, SavedProject, Settings};
 
 /// One `--replay` and the options that follow it.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -16,6 +19,8 @@ pub struct ReplayArg {
     pub prompt: Option<String>,
     pub stop_at: Option<usize>,
     pub stdin_log: Option<PathBuf>,
+    /// The folder whose project the replay's session belongs to.
+    pub folder: Option<String>,
 }
 
 /// What the replay build was started with.
@@ -50,6 +55,10 @@ pub struct AppArgs {
     pub close_after_ms: Option<u64>,
     /// The folder whose saved sessions are counted instead of opening a window.
     pub list_saved: Option<String>,
+    /// The folders that start as projects, in this order.
+    pub projects: Vec<String>,
+    /// The folders that start as closed projects; one not among `projects` is added after them.
+    pub collapsed: Vec<String>,
 }
 
 impl AppArgs {
@@ -59,6 +68,33 @@ impl AppArgs {
             || self.perf_log.is_some()
             || self.exit_after_ms.is_some()
             || self.scroll_through
+    }
+
+    /// The projects the run starts with: the `--project` ones in order, then the `--collapse`
+    /// ones that are not among them. Every `--collapse` one starts closed.
+    pub fn settings(&self) -> Settings {
+        let mut projects: Vec<SavedProject> = Vec::new();
+        for folder in &self.projects {
+            if !projects.iter().any(|it| it.folder == *folder) {
+                projects.push(SavedProject {
+                    folder: folder.clone(),
+                    collapsed: false,
+                });
+            }
+        }
+        for folder in &self.collapsed {
+            match projects.iter_mut().find(|it| it.folder == *folder) {
+                Some(project) => project.collapsed = true,
+                None => projects.push(SavedProject {
+                    folder: folder.clone(),
+                    collapsed: true,
+                }),
+            }
+        }
+        Settings {
+            version: SETTINGS_VERSION,
+            projects,
+        }
     }
 }
 
@@ -76,7 +112,14 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<AppArgs, String> 
                 prompt: None,
                 stop_at: None,
                 stdin_log: None,
+                folder: None,
             }),
+            "--folder" => {
+                let folder = value()?;
+                set(&mut replay(&mut parsed, option)?.folder, option, folder)?;
+            }
+            "--project" => parsed.projects.push(value()?),
+            "--collapse" => parsed.collapsed.push(value()?),
             "--prompt" => {
                 let text = value()?;
                 set(&mut replay(&mut parsed, option)?.prompt, option, text)?;
@@ -255,6 +298,7 @@ fn panes(text: &str) -> Option<(bool, bool)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use closta_shell::settings::SETTINGS_VERSION;
 
     fn parsed(args: &[&str]) -> Result<AppArgs, String> {
         parse(args.iter().map(|it| (*it).to_owned()))
@@ -283,12 +327,14 @@ mod tests {
                     prompt: Some("Respond with one word".to_owned()),
                     stop_at: Some(12),
                     stdin_log: None,
+                    folder: None,
                 },
                 ReplayArg {
                     path: PathBuf::from("b.ndjson"),
                     prompt: None,
                     stop_at: None,
                     stdin_log: Some(PathBuf::from("b-stdin.log")),
+                    folder: None,
                 },
             ]
         );
@@ -571,6 +617,51 @@ mod tests {
             let error = parsed(&[option, "secret", "--fail-launch", "1"]).unwrap_err();
             assert_eq!(error, format!("{option} needs an --open-folder"));
             assert!(parsed(&[option, "x", "--open-folder", "C:\\x"]).is_ok());
+        }
+    }
+
+    #[test]
+    fn a_folder_belongs_to_the_replay_before_it() {
+        let args = parsed(&[
+            "--replay",
+            "a.ndjson",
+            "--folder",
+            r"C:\dev\a",
+            "--replay",
+            "b.ndjson",
+        ])
+        .unwrap();
+        assert_eq!(args.replays[0].folder.as_deref(), Some(r"C:\dev\a"));
+        assert_eq!(args.replays[1].folder, None);
+        let error = parsed(&["--replay", "a", "--folder", "x", "--folder", "y"]).unwrap_err();
+        assert_eq!(error, "--folder is given twice");
+    }
+
+    #[test]
+    fn a_folder_without_a_replay_is_refused() {
+        let error = parsed(&["--folder", "C:\\secret"]).unwrap_err();
+        assert_eq!(error, "--folder must follow a --replay");
+    }
+
+    #[test]
+    fn projects_and_collapsed_ones_make_the_settings() {
+        let args = parsed(&["--project", "A", "--collapse", "B", "--project", "C"]).unwrap();
+        assert_eq!(
+            args.settings(),
+            Settings {
+                version: SETTINGS_VERSION,
+                projects: vec![saved("A", false), saved("C", false), saved("B", true)],
+            }
+        );
+        let args = parsed(&["--project", "A", "--collapse", "A"]).unwrap();
+        assert_eq!(args.settings().projects, [saved("A", true)]);
+        assert!(parsed(&[]).unwrap().settings().projects.is_empty());
+    }
+
+    fn saved(folder: &str, collapsed: bool) -> SavedProject {
+        SavedProject {
+            folder: folder.to_owned(),
+            collapsed,
         }
     }
 }

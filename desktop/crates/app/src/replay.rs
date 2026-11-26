@@ -51,7 +51,7 @@ pub fn slot_launch(arg: &ReplayArg, pace: Duration) -> Result<(SlotLaunch, Repla
         working_directory: None,
         companion: Some(companion),
         relaunch: None,
-        project: None,
+        project: arg.folder.clone(),
         settles_on_failure: false,
     };
     Ok((launch, control))
@@ -225,6 +225,7 @@ mod tests {
             prompt: None,
             stop_at: None,
             stdin_log: None,
+            folder: None,
         };
         let (launch, control) = slot_launch(&arg, Duration::ZERO).unwrap();
         assert_eq!(launch.title, "gallery");
