@@ -1033,7 +1033,10 @@ impl ShellState {
                 request_id,
                 now_ms,
             } => {
-                if let Some(card) = self.card_mut(slot, &request_id) {
+                // A card behind an overlay is not on show: it starts no gate.
+                if self.overlay().is_none()
+                    && let Some(card) = self.card_mut(slot, &request_id)
+                {
                     card.shown_ms.get_or_insert(now_ms);
                 }
                 Acted::default()

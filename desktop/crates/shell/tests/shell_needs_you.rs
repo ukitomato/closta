@@ -912,3 +912,111 @@ fn a_row_carries_the_slot_s_title_as_the_list_shows_it() {
         assert_eq!(shell.needs_you()[0].title, title);
     });
 }
+
+fn no_answer(lines: Vec<String>, refused: usize) {
+    assert!(answers_of(lines).is_empty());
+    assert_eq!(refused, 0);
+}
+
+#[test]
+fn allow_from_the_list_needs_the_request_the_row_shows() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (slot, control, _) = two_waits(&mut shell, &harness, 0).await;
+        assert_eq!(shell.needs_you()[0].request_id(), Some("R1"));
+        list_shown(&mut shell, slot, "R1", 1000);
+        allow_from_list(&mut shell, slot, "R2", 2000);
+        quiet().await;
+        no_answer(control.stdin_lines(), control.refused_writes());
+        allow_from_list(&mut shell, slot, "R1", 2000);
+        until(|| answers_of(control.stdin_lines()).len() == 1).await;
+    });
+}
+
+#[test]
+fn allow_from_the_list_needs_a_request_it_may_allow() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (slot, control, _) = waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK, 0).await;
+        assert!(shell.needs_you()[0].may_allow());
+        let (other, other_control) =
+            live_waiting(&mut shell, &harness, QUESTION, QUESTION_ASK, 0).await;
+        let unanswerable = shell
+            .needs_you()
+            .into_iter()
+            .find(|row| row.slot == other)
+            .unwrap();
+        assert!(!unanswerable.may_allow());
+        list_shown(&mut shell, other, QUESTION_REQUEST, 1000);
+        allow_from_list(&mut shell, other, QUESTION_REQUEST, 2000);
+        quiet().await;
+        no_answer(other_control.stdin_lines(), other_control.refused_writes());
+        list_shown(&mut shell, slot, SANDBOX_REQUEST, 1000);
+        allow_from_list(&mut shell, slot, SANDBOX_REQUEST, 2000);
+        until(|| answers_of(control.stdin_lines()).len() == 1).await;
+    });
+}
+
+#[test]
+fn allow_from_the_list_needs_the_row_drawn_half_a_second_ago_in_its_place() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (slot, control, _) =
+            waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK, 100).await;
+        assert_eq!(shell.needs_you()[0].slot, slot);
+        list_shown_at(&mut shell, slot, SANDBOX_REQUEST, 0, 1000);
+        allow_from_list(&mut shell, slot, SANDBOX_REQUEST, 1499);
+        quiet().await;
+        no_answer(control.stdin_lines(), 0);
+
+        // An older wait comes in ahead of the row: it was drawn in another place than it has now.
+        let (older, _, _) = waiting_slot(&mut shell, &harness, QUESTION, QUESTION_ASK, 50).await;
+        assert_eq!(shell.needs_you()[0].slot, older);
+        assert_eq!(shell.needs_you()[1].slot, slot);
+        allow_from_list(&mut shell, slot, SANDBOX_REQUEST, 5000);
+        quiet().await;
+        no_answer(control.stdin_lines(), 0);
+
+        list_shown_at(&mut shell, slot, SANDBOX_REQUEST, 1, 6000);
+        allow_from_list(&mut shell, slot, SANDBOX_REQUEST, 6499);
+        quiet().await;
+        no_answer(control.stdin_lines(), 0);
+        allow_from_list(&mut shell, slot, SANDBOX_REQUEST, 6500);
+        until(|| answers_of(control.stdin_lines()).len() == 1).await;
+    });
+}
+
+#[test]
+fn allow_from_the_list_needs_the_request_still_waiting() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (slot, control, _) = two_waits(&mut shell, &harness, 0).await;
+        list_shown(&mut shell, slot, "R1", 1000);
+        allow_from_list(&mut shell, slot, "R1", 2000);
+        until(|| answers_of(control.stdin_lines()).len() == 1).await;
+        // The same request again, before the list moved on, answers nothing more.
+        allow_from_list(&mut shell, slot, "R1", 3000);
+        quiet().await;
+        assert_eq!(answers_of(control.stdin_lines()).len(), 1);
+        assert_eq!(control.refused_writes(), 0);
+    });
+}
+
+#[test]
+fn allow_from_the_list_needs_a_live_session() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (slot, control) = live_waiting(&mut shell, &harness, SANDBOX, SANDBOX_ASK, 0).await;
+        list_shown(&mut shell, slot, SANDBOX_REQUEST, 1000);
+        control.exit(0);
+        let mut watch = shell.watch(slot).unwrap();
+        while watch.changed().await {}
+        shell.refresh(slot, watch.generation(), 1100).unwrap();
+        assert_eq!(shell.status(slot), Some(SessionStatus::Ended));
+        let before = control.stdin_lines().len();
+        allow_from_list(&mut shell, slot, SANDBOX_REQUEST, 5000);
+        quiet().await;
+        assert_eq!(control.stdin_lines().len(), before);
+        assert_eq!(control.refused_writes(), 0);
+    });
+}

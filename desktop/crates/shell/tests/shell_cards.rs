@@ -953,3 +953,32 @@ fn the_lists_time_does_not_open_the_cards_gate() {
         assert!(answers(&control).is_empty());
     });
 }
+
+#[test]
+fn a_card_drawn_behind_an_overlay_starts_no_gate() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (slot, control, _) = waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK, 0).await;
+        shell.act(ShellAction::OpenNewSession);
+        assert!(shell.overlay().is_some());
+        shown(&mut shell, slot, SANDBOX_REQUEST);
+        shell.act(ShellAction::CancelNewSession);
+        assert!(shell.overlay().is_none());
+        shell.act(ShellAction::ChooseCard {
+            slot,
+            request_id: SANDBOX_REQUEST.to_owned(),
+            index: 0,
+            now_ms: SHOWN_MS + 600,
+        });
+        quiet().await;
+        assert!(answers(&control).is_empty());
+        shown(&mut shell, slot, SANDBOX_REQUEST);
+        shell.act(ShellAction::ChooseCard {
+            slot,
+            request_id: SANDBOX_REQUEST.to_owned(),
+            index: 0,
+            now_ms: SHOWN_MS + 500,
+        });
+        assert_eq!(written(&control).await.len(), 1);
+    });
+}
