@@ -5,7 +5,8 @@ import path from 'node:path';
 import os from 'node:os';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
-import { removeFileHistory } from './cleanup.mjs';
+import { EventEmitter } from 'node:events';
+import { removeFileHistory, removeOnSignal } from './cleanup.mjs';
 import { scenarios, rewindDefinitionProblem, readShowsRewind, resumeAtUuid, resumeFlagsFor } from './scenarios.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -112,6 +113,28 @@ await check('resumeFlagsFor: with resume.at, adds fork, a new id and the cut poi
 await check('resumeFlagsFor: resume.flags go last, only on the second CLI', () => {
   const base = { baseFlags: ['-p'], firstId: 'F', newId: 'N', atUuid: 'A', scenarioFlags: ['--x'] };
   assert.deepEqual(resumeFlagsFor({ flags: ['--settings', '{}'] }, base), ['-p', '--resume=F', '--x', '--settings', '{}']);
+});
+
+await check('removeOnSignal: SIGINT or SIGTERM removes the directory and exits as the signal would; stopping leaves it', async () => {
+  for (const [signal, code] of [['SIGINT', 130], ['SIGTERM', 143]]) {
+    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'closta-signal-'));
+    await fsp.writeFile(path.join(dir, '.credentials.json'), 'x');
+    const proc = Object.assign(new EventEmitter(), { exitCode: null, exit(c) { this.exitCode = c; } });
+    removeOnSignal(dir, proc);
+    proc.emit(signal);
+    assert.equal(await exists(dir), false, signal);
+    assert.equal(proc.exitCode, code, signal);
+    assert.equal(proc.listenerCount('SIGINT') + proc.listenerCount('SIGTERM'), 1, 'the other signal still listens');
+  }
+  const kept = await fsp.mkdtemp(path.join(os.tmpdir(), 'closta-signal-'));
+  try {
+    const proc = Object.assign(new EventEmitter(), { exit() { throw new Error('exited'); } });
+    removeOnSignal(kept, proc)();
+    assert.equal(proc.listenerCount('SIGINT') + proc.listenerCount('SIGTERM'), 0);
+    assert.equal(await exists(kept), true);
+  } finally {
+    await fsp.rm(kept, { recursive: true, force: true });
+  }
 });
 
 process.stdout.write(failures === 0 ? 'OK\n' : `${failures} failed\n`);

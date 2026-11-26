@@ -54,7 +54,7 @@ import http from 'node:http';
 import { randomUUID, createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { scenarios, findScenario, rewindDefinitionProblem, resumeAtUuid, resumeFlagsFor } from './scenarios.mjs';
-import { removeFileHistory } from './cleanup.mjs';
+import { removeFileHistory, removeOnSignal } from './cleanup.mjs';
 import { newScrubState, scrubLine, scrubLines, findPii, createStreamScrubber, joinedFragments } from './scrub.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -599,7 +599,8 @@ async function writeManifest(entriesById, version) {
 
 // The user's own config holds their skills, plugins, agents and settings, and every init line lists them. Unless
 // CLAUDE_CONFIG_DIR already names a config to record with, record with a fresh one that holds only the sign-in
-// (.credentials.json, kept at mode 600) and remove it afterwards. Returns the clean-up.
+// (.credentials.json, kept at mode 600) and remove it afterwards, also when a signal stops the recording. Returns the
+// clean-up.
 async function useCleanConfig() {
   if (process.env.CLAUDE_CONFIG_DIR) return async () => {};
   const credentials = path.join(os.homedir(), '.claude', '.credentials.json');
@@ -607,10 +608,12 @@ async function useCleanConfig() {
     throw new Error(`no ${credentials} to sign in with: set CLAUDE_CONFIG_DIR to a config directory that holds only a sign-in`);
   }
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'closta-record-config-'));
+  const stopListening = removeOnSignal(dir);
   await fsp.copyFile(credentials, path.join(dir, '.credentials.json'));
   await fsp.chmod(path.join(dir, '.credentials.json'), 0o600);
   process.env.CLAUDE_CONFIG_DIR = dir;
   return async () => {
+    stopListening();
     delete process.env.CLAUDE_CONFIG_DIR;
     await fsp.rm(dir, { recursive: true, force: true });
   };
