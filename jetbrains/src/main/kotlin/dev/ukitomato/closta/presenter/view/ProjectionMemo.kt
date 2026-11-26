@@ -37,7 +37,8 @@ internal class Context(
     // transcript's own and not in the tree, so a request made or answered leaves the context as it was (every
     // message node is then reused).
     // The MCP status requests waiting are no more in the tree than the context ones are.
-    // So are the settings requests waiting, and the plan's usage with its requests (only the composer shows it).
+    // So are the settings requests waiting, and the plan's usage with its requests (only the composer shows it), and
+    // the context's breakdown.
     private val operations =
         transcript.operations.copy(
             seq = 0,
@@ -46,6 +47,7 @@ internal class Context(
             settingsWaiting = emptyList(),
             usageWaiting = emptyList(),
             usage = null,
+            context = transcript.operations.context?.copy(categories = emptyList()),
         )
 
     /**

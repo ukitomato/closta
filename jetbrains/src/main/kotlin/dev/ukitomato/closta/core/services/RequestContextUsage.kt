@@ -9,7 +9,10 @@ import dev.ukitomato.closta.core.interfaces.AgentSession
 class RequestContextUsage(
     private val session: AgentSession,
 ) {
-    suspend operator fun invoke(requestId: String) {
-        session.requestContextUsage(requestId)
+    suspend operator fun invoke(
+        requestId: String,
+        full: Boolean = false,
+    ) {
+        session.requestContextUsage(requestId, full)
     }
 }

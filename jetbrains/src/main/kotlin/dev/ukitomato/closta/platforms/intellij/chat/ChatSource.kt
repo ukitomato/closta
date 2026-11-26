@@ -87,6 +87,9 @@ interface ChatSource : Disposable {
     /** Asks the CLI for the session's cost and the plan's limits; the answer is the composer's usage. */
     suspend fun requestUsage()
 
+    /** Asks the CLI for the context's whole breakdown; the answer is the composer's context. */
+    suspend fun requestContextBreakdown()
+
     suspend fun setMcpServerEnabled(
         name: String,
         enabled: Boolean,
@@ -239,6 +242,10 @@ interface ChatSource : Disposable {
 
         override suspend fun requestUsage() {
             commands()?.requestUsage()
+        }
+
+        override suspend fun requestContextBreakdown() {
+            commands()?.requestContextUsage(full = true)
         }
 
         override suspend fun dismissRateLimit(seq: Int) {

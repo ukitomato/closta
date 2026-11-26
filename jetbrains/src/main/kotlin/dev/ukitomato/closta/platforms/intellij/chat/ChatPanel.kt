@@ -443,6 +443,7 @@ class ChatPanel(
         composer.onMode = { mode -> scope.launch(failures) { source.switchMode(mode) } }
         composer.onSandbox = { on -> scope.launch(failures) { source.switchSandbox(on) } }
         composer.onUsage = { scope.launch(failures) { source.requestUsage() } }
+        composer.onContext = { scope.launch(failures) { source.requestContextBreakdown() } }
         limitBanner.onDismiss = { seq -> scope.launch(failures) { source.dismissRateLimit(seq) } }
     }
 

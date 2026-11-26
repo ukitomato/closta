@@ -59,6 +59,8 @@ class FixedChatSource(
 
     override suspend fun requestUsage() = Unit
 
+    override suspend fun requestContextBreakdown() = Unit
+
     override suspend fun setMcpServerEnabled(
         name: String,
         enabled: Boolean,

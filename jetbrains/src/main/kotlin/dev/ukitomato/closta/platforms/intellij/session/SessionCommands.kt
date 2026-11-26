@@ -172,8 +172,12 @@ class SessionCommands internal constructor(
     /** Changes the permission mode live, as [switchModel] does. */
     suspend fun switchMode(mode: String) = requested(ControlKind.MODE, mode) { modeUseCase(mode, it) }
 
-    /** Asks the CLI how much of the context window is used, as [switchModel] does. */
-    suspend fun requestContextUsage() = requested(ControlKind.CONTEXT, null) { usageUseCase(it) }
+    /**
+     * Asks the CLI how much of the context window is used, as [switchModel] does; [full] asks for each category's
+     * share too.
+     */
+    suspend fun requestContextUsage(full: Boolean = false) =
+        requested(ControlKind.CONTEXT, null) { usageUseCase(it, full) }
 
     /** Asks the CLI for the session's cost and the plan's limits, as [switchModel] does. */
     suspend fun requestUsage() = requested(ControlKind.USAGE, null) { usageOfPlan(it) }

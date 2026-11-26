@@ -8,6 +8,7 @@ import dev.ukitomato.closta.presenter.view.PresenterInput
 import dev.ukitomato.closta.presenter.view.SwitchKind
 import dev.ukitomato.closta.presenter.view.SwitchOutcome
 import dev.ukitomato.closta.presenter.view.SwitchRecord
+import dev.ukitomato.closta.presenter.view.asksForContext
 import dev.ukitomato.closta.presenter.view.asksForSettings
 import dev.ukitomato.closta.presenter.view.runningTasks
 import dev.ukitomato.closta.presenter.view.threadIsRunning
@@ -398,7 +399,12 @@ class SessionRuntime(
     ): ProcessEnd {
         val watch = SandboxStartWatch(sandboxed)
         // A sandboxed CLI was asked its settings as it started.
-        val checks = ProcessChecks(forkChecked = opening !is SessionOpening.Fork, settingsAsked = sandboxed)
+        val checks =
+            ProcessChecks(
+                forkChecked = opening !is SessionOpening.Fork,
+                settingsAsked = sandboxed,
+                contextAsked = false,
+            )
         try {
             session.events.collect { line -> watch.pass(line).forEach { foldEvent(it, commands, checks) } }
         } catch (cancel: CancellationException) {
@@ -415,6 +421,7 @@ class SessionRuntime(
     private class ProcessChecks(
         var forkChecked: Boolean,
         var settingsAsked: Boolean,
+        var contextAsked: Boolean,
     )
 
     private suspend fun foldEvent(
@@ -439,11 +446,18 @@ class SessionRuntime(
             store.view.value.transcript.operations
                 .asksForSettings(event) ||
                 (!checks.settingsAsked && event is AgentEvent.SystemInit)
+        // The context used is asked for (the totals, which is all the ring shows) at the process's first
+        // `system/init`, and then at the end of each turn, a compaction or a `/clear`; never at a later init, which
+        // comes in the middle of a turn.
+        val firstInit = !checks.contextAsked && event is AgentEvent.SystemInit
+        if (firstInit) checks.contextAsked = true
+        val asksContext = asksForContext(event) || firstInit
         store.transition { it.event(PresenterInput.Event(event)) }
         if (asks) {
             checks.settingsAsked = true
             askSettings(commands)
         }
+        if (asksContext) askContext(commands)
     }
 
     private suspend fun failPendingSandbox() {
@@ -468,6 +482,19 @@ class SessionRuntime(
             @Suppress("TooGenericExceptionCaught") failure: Exception,
         ) {
             log.warn("claude session $id: the settings could not be asked for (${failure.javaClass.name})")
+        }
+    }
+
+    // As [askSettings]: a context request that could not be written is the commands' record, not the session's end.
+    private suspend fun askContext(commands: SessionCommands) {
+        try {
+            commands.requestContextUsage()
+        } catch (cancel: CancellationException) {
+            throw cancel
+        } catch (
+            @Suppress("TooGenericExceptionCaught") failure: Exception,
+        ) {
+            log.warn("claude session $id: the context usage could not be asked for (${failure.javaClass.name})")
         }
     }
 

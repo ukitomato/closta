@@ -76,7 +76,10 @@ class RecordingAgentSession(
         rewinds += Triple(userMessageId, dryRun, requestId)
     }
 
-    override suspend fun requestContextUsage(requestId: String) {
+    override suspend fun requestContextUsage(
+        requestId: String,
+        full: Boolean,
+    ) {
         contextRequests += requestId
     }
 

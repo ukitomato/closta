@@ -157,7 +157,17 @@ class OperationsFoldTest {
     @Test
     fun `06 the answer to the usage request is the context, and a request with no answer is not shown`() {
         val state = replayed("06-context-usage")
-        assertEquals(ContextRecord(11645, 1000000, 1.0, 967000), state.ops().context)
+        val categories =
+            listOf(
+                ContextCategory("system_prompt", "System prompt", 2476, ContextKind.USED),
+                ContextCategory("system_tools", "System tools", 5429, ContextKind.USED),
+                ContextCategory("system_tools_deferred", "System tools (deferred)", 14859, ContextKind.DEFERRED),
+                ContextCategory("skills", "Skills", 3730, ContextKind.USED),
+                ContextCategory("messages", "Messages", 10, ContextKind.USED),
+                ContextCategory("autocompact_buffer", "Autocompact buffer", 33000, ContextKind.BUFFER),
+                ContextCategory("free_space", "Free space", 955355, ContextKind.FREE),
+            )
+        assertEquals(ContextRecord(11645, 1000000, 1.0, 967000, categories), state.ops().context)
         assertTrue(state.ops().waiting.isEmpty(), "answered, so no longer waited for")
         assertTrue(state.ops().switches.isEmpty(), "a usage request is not a switch")
     }

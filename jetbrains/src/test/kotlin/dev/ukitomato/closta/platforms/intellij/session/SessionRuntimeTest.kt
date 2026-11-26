@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import java.io.IOException
 import java.time.Instant
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -351,17 +352,50 @@ class SessionRuntimeTest {
             assertEquals(CAPTURE_VERSION, folded.session?.version)
 
             running.commands.sendMessage("send-1", "hello")
-            // A session with no initialize asks for the settings at its first system/init. That request is
-            // written from the fold's own coroutine, so it may reach stdin before or after the user line sent here.
+            // A session with no initialize asks for the settings and the context at its first system/init. Those
+            // requests are written from the fold's own coroutine, so they may reach stdin before or after the user
+            // line sent here.
             val lines =
-                List(2) {
+                List(3) {
                     checkNotNull(withContext(Dispatchers.IO) { session.nextStdinLine(GUARD.inWholeMilliseconds) })
                 }
             assertTrue(lines.any { it.contains("\"subtype\":\"get_settings\"") }, "$lines")
+            assertTrue(lines.any { it.contains("\"subtype\":\"get_context_usage\"") }, "$lines")
             assertTrue(
                 lines.any { it.contains("\"type\":\"user\"") && it.contains("hello") && it.contains(ID) },
                 "$lines",
             )
+            runtime.close()
+        }
+
+    @Test
+    @Timeout(TIMEOUT_SECONDS)
+    fun `the context is asked at the process's first init and at a result, never at a later init`() =
+        runBlocking {
+            val session = FakeProcess()
+            val runtime = runtime(spawner(session))
+            runtime.start()
+            runtime.running()
+            val lines = CaptureFixtures.nonBlankLines(CaptureFixtures.textOf(CAPTURE))
+            val init = lines.first { it.contains(INIT_MARK) }
+            session.emit(init)
+            session.emit(init)
+            session.emit(lines.first { it.contains("\"type\":\"result\"") })
+            val asked = mutableListOf<String>()
+            while (asked.size < 2) {
+                val line =
+                    checkNotNull(withContext(Dispatchers.IO) { session.nextStdinLine(GUARD.inWholeMilliseconds) })
+                if (line.contains("\"subtype\":\"get_context_usage\"")) asked += line
+            }
+            // A third request would follow at once: the second init's would come before the result's.
+            val more =
+                withContext(Dispatchers.IO) {
+                    generateSequence { session.nextStdinLine(QUIET.inWholeMilliseconds) }
+                        .filter { it.contains("\"subtype\":\"get_context_usage\"") }
+                        .toList()
+                }
+            assertTrue(more.isEmpty(), "$more")
+            assertTrue(asked.all { it.contains("\"detail\":\"summary\"") }, "$asked")
             runtime.close()
         }
 
@@ -457,5 +491,6 @@ class SessionRuntimeTest {
         const val CAPTURE = "01-baseline-text.ndjson"
         const val CAPTURE_VERSION = "2.1.325"
         const val INIT_MARK = "\"subtype\":\"init\""
+        val QUIET = 500.milliseconds
     }
 }

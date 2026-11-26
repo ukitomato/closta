@@ -3,6 +3,7 @@
 package dev.ukitomato.closta.presenter.view
 
 import dev.ukitomato.closta.core.models.AgentEvent
+import dev.ukitomato.closta.presenter.tree.JsonArray
 import dev.ukitomato.closta.presenter.tree.JsonBool
 import dev.ukitomato.closta.presenter.tree.JsonNumber
 import dev.ukitomato.closta.presenter.tree.JsonObject
@@ -100,13 +101,31 @@ data class ModelRecord(
     val supportedEffortLevels: List<String>?,
 )
 
-/** The last context usage the CLI answered (`get_context_usage`, summary). */
+/**
+ * The last context usage the CLI answered (`get_context_usage`). [categories] are the rows of the whole answer, in the
+ * CLI's order; an answer without them (the summary form) has none.
+ */
 data class ContextRecord(
     val totalTokens: Long,
     val maxTokens: Long,
     val percentage: Double,
     val autoCompactThreshold: Long?,
+    val categories: List<ContextCategory> = emptyList(),
 )
+
+/** One row of the context's breakdown: [name] is the CLI's own words, [id] its stable mark when it gave one. */
+data class ContextCategory(
+    val id: String?,
+    val name: String,
+    val tokens: Long,
+    val kind: ContextKind,
+)
+
+/**
+ * What a row of the breakdown is (`kind` in sdk.d.ts 0.3.325): in the window, the window left, the compaction's
+ * reserve, or tool schemas kept out of the window. A kind not known reads as [USED].
+ */
+enum class ContextKind { USED, FREE, BUFFER, DEFERRED }
 
 /** One compaction the CLI did (`system/compact_boundary`). */
 data class CompactionRecord(
@@ -539,6 +558,14 @@ fun OperationRecords.asksForSettings(event: AgentEvent): Boolean {
     return switched || modelsOfResponse(JsonRead.parse(event.response.text)) != null
 }
 
+/**
+ * Whether [event] is one after which the host asks the CLI how much of the context is used: the end of a turn, a
+ * compaction, or a `/clear`. A process's first `system/init` is asked at too, by the runtime that knows it is the
+ * first; a later one (one in the middle of a turn, or the one after a `/clear`) is not.
+ */
+fun asksForContext(event: AgentEvent): Boolean =
+    event is AgentEvent.Result || event is AgentEvent.SystemCompactBoundary || event is AgentEvent.ConversationReset
+
 private fun OperationRecords.settle(
     id: String,
     change: (SwitchRecord) -> SwitchRecord,
@@ -553,8 +580,23 @@ private fun contextOf(body: JsonObject): ContextRecord? {
     val max = body.count("maxTokens")
     val percentage = body.number("percentage")?.takeIf { it.isFinite() && it >= 0 }
     if (total == null || max == null || percentage == null) return null
-    return ContextRecord(total, max, percentage, body.count("autoCompactThreshold"))
+    val categories =
+        (body["categories"] as? JsonArray)?.items.orEmpty().mapNotNull { item ->
+            val row = item as? JsonObject ?: return@mapNotNull null
+            val name = row.string("name") ?: return@mapNotNull null
+            val tokens = row.count("tokens") ?: return@mapNotNull null
+            ContextCategory(row.string("id"), name, tokens, kindOf(row.string("kind")))
+        }
+    return ContextRecord(total, max, percentage, body.count("autoCompactThreshold"), categories)
 }
+
+private fun kindOf(kind: String?): ContextKind =
+    when (kind) {
+        "free" -> ContextKind.FREE
+        "buffer" -> ContextKind.BUFFER
+        "deferred" -> ContextKind.DEFERRED
+        else -> ContextKind.USED
+    }
 
 /** A non-negative whole number member; anything else reads as absent. */
 internal fun JsonObject.count(key: String): Long? = (this[key] as? JsonNumber)?.text?.toLongOrNull()?.takeIf { it >= 0 }

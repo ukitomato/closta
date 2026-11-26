@@ -197,8 +197,10 @@ object StdinEncoder {
         }
 
     /**
-     * `get_context_usage`: how much of the context window is used. [detail] is `summary` or `full` (capture 06 line 2
-     * holds the answer to the summary form: `totalTokens`, `maxTokens`, `percentage`, `autoCompactThreshold`).
+     * `get_context_usage`: how much of the context window is used. [detail] is `summary` (the last answer's usage and
+     * the CLI's own estimate) or `full` (each category counted with the token-count API), as `detail` in sdk.d.ts
+     * 0.3.325, whose default is `full`. Captures 06 and 43 hold answers of the full form, with their `categories`
+     * (06 sent no `detail`); no capture holds the summary form's.
      */
     fun getContextUsage(
         requestId: String,

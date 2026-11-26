@@ -31,8 +31,8 @@ class FakeAgentSessionContractTest : AgentSessionContract() {
             when (it) {
                 is Sent.SetModel -> RequestGiven("set_model", it.requestId, it.model)
                 is Sent.SetPermissionMode -> RequestGiven("set_permission_mode", it.requestId, it.mode)
-                // The fake takes no detail: the real session's line says summary, so it is what the fake stands for.
-                is Sent.RequestContextUsage -> RequestGiven("get_context_usage", it.requestId, "summary")
+                is Sent.RequestContextUsage ->
+                    RequestGiven("get_context_usage", it.requestId, if (it.full) "full" else "summary")
                 is Sent.RequestMcpStatus -> RequestGiven("mcp_status", it.requestId, null)
                 is Sent.SetMcpServerEnabled -> RequestGiven("mcp_toggle", it.requestId, "${it.name}:${it.enabled}")
                 is Sent.ReconnectMcpServer -> RequestGiven("mcp_reconnect", it.requestId, it.name)

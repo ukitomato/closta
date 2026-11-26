@@ -41,6 +41,8 @@ data class ComposerState(
     val usage: UsageRecord?,
     /** A `get_usage` request waits for the CLI's answer. */
     val usageWaiting: Boolean,
+    /** A `get_context_usage` request waits for the CLI's answer. */
+    val contextWaiting: Boolean,
 )
 
 /** The sandbox button: whether the sandbox is on, and why it cannot be pressed now, if it cannot. */
@@ -110,6 +112,7 @@ fun composerState(
         rateLimit = operations.rateLimitShown(),
         usage = operations.usage,
         usageWaiting = operations.usageWaiting.isNotEmpty(),
+        contextWaiting = operations.waiting.isNotEmpty(),
     )
 }
 

@@ -100,6 +100,7 @@ abstract class AgentSessionContract {
             session.setModel("opus", "id-model")
             session.setPermissionMode("plan", "id-mode")
             session.requestContextUsage("id-usage")
+            session.requestContextUsage("id-breakdown", full = true)
             repeat(MAX_YIELDS) { yield() }
             collector.cancelAndJoin()
             assertEquals(
@@ -107,6 +108,7 @@ abstract class AgentSessionContract {
                     RequestGiven("set_model", "id-model", "opus"),
                     RequestGiven("set_permission_mode", "id-mode", "plan"),
                     RequestGiven("get_context_usage", "id-usage", "summary"),
+                    RequestGiven("get_context_usage", "id-breakdown", "full"),
                 ),
                 requestsGiven(session),
             ) { "each line carries the caller's id as its request_id, and the usage request asks for the summary" }

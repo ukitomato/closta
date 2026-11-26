@@ -121,6 +121,9 @@ class ComposerPanel(
     /** The cost button was pressed: the CLI is asked for the session's cost and the plan's limits. */
     var onUsage: () -> Unit = {}
 
+    /** The context ring was pressed, or its breakdown asked to count again: the CLI is asked for the whole one. */
+    var onContext: () -> Unit = {}
+
     /** The Bypass bar was answered and went: the keyboard goes back to the input. */
     var onLetGo: () -> Unit = {}
 
@@ -167,7 +170,11 @@ class ComposerPanel(
             openUsage(button)
             onUsage()
         }.tip(ClostaBundle.message("composer.usage.tooltip"))
-    private val context = ContextUse()
+    private val context =
+        ContextUse { button ->
+            openContext(button)
+            onContext()
+        }
 
     /** The composer popup that is open, one at a time (opened through [openPopup]); nothing else of it is kept. */
     private var openPopup: JBPopup? = null
@@ -377,18 +384,16 @@ class ComposerPanel(
         sandbox.disabledReason = if (block != SendBlock.NONE) waiting else busy
     }
 
+    // Plain lines: the button escapes its tooltip and breaks it at each newline.
     private fun contextTip(next: ComposerState): String =
-        buildString {
-            val line = { key: String, a: Any, b: Any -> append(ClostaBundle.message(key, "$a", "$b")).append("<br>") }
-            append("<html>")
+        buildList {
+            val line = { key: String, a: Any, b: Any -> add(ClostaBundle.message(key, "$a", "$b")) }
             next.context?.let { line("composer.context.tokens", it.totalTokens, it.maxTokens) }
             next.tokens?.let {
                 line("composer.context.io", it.input, it.output)
                 line("composer.context.cache", it.cacheRead, it.cacheCreation)
             }
-            next.costUsd?.let { append(ClostaBundle.message("composer.context.cost", "%.4f".format(it))) }
-            append("</html>")
-        }
+        }.joinToString("\n")
 
     private fun showStatus() {
         val next = state ?: return
@@ -498,6 +503,13 @@ class ComposerPanel(
         val next = state ?: return
         val usage = UsagePopup(next)
         openPopup(usage.popup, under, usage::show)
+    }
+
+    /** Opens the context's breakdown above [under]; it shows the composer's state until it is closed. */
+    private fun openContext(under: JComponent) {
+        val next = state ?: return
+        val breakdown = ContextPopup(next) { onContext() }
+        openPopup(breakdown.popup, under, breakdown::show)
     }
 
     /**
