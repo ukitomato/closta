@@ -1,6 +1,7 @@
 //! The needs-you list, the window's title, and answering from the list.
 
 use super::*;
+use crate::projects::display_name;
 
 impl ShellState {
     /// What waits for the user, one row a slot, the oldest first. A slot that is being closed
@@ -12,7 +13,12 @@ impl ShellState {
             .filter(|(_, held)| !held.closing)
             .map(|(id, held)| SlotNeeds {
                 slot: *id,
-                title: held.title.clone(),
+                project: held
+                    .project
+                    .as_ref()
+                    .and_then(|key| self.projects.iter().find(|it| &it.key == key))
+                    .map(|project| display_name(project, &self.projects)),
+                title: held.shown_title(),
                 waits: held.waits.clone(),
                 failed: self
                     .failure(*id)
@@ -87,7 +93,7 @@ impl ShellState {
         if row.request_id() != Some(request_id) || !row.may_allow() {
             return Acted::default();
         }
-        self.selected = Some(slot);
+        self.select(slot);
         let Some(card) = self.card_mut(slot, request_id) else {
             return Acted::default();
         };
@@ -105,7 +111,7 @@ impl ShellState {
         let Some(row) = self.row_of(slot) else {
             return Acted::default();
         };
-        self.selected = Some(slot);
+        self.select(slot);
         let focus = match row.request_id() {
             Some(request_id) => FocusTarget::Card {
                 slot,
@@ -136,7 +142,7 @@ impl ShellState {
         else {
             return Acted::default();
         };
-        self.selected = Some(slot);
+        self.select(slot);
         Acted {
             focus: Some(FocusTarget::Card {
                 slot,

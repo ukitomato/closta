@@ -12,7 +12,11 @@ use closta_presenter::cards::{SUGGESTION_DESTINATIONS, ThreadCard, card_of};
 use closta_presenter::composer_state::{PERMISSION_MODES, composer_state};
 use closta_presenter::rows::{ThreadRow, ThreadRows};
 use closta_presenter::session::SessionView;
-use closta_presenter::sessions::groups::{SessionAlert, alerts_between, waiting_alerts};
+use closta_presenter::sessions::groups::{
+    SessionAlert, TITLE_MAX, alerts_between, session_summary, session_title, waiting_alerts,
+};
+use closta_presenter::sessions::window::{GroupSince, group_since_after};
+use closta_presenter::text::take_utf16;
 use closta_presenter::thread_running::thread_is_running;
 use closta_session::log::SessionLog;
 use closta_session::runtime::{SessionConfig, SessionRuntime};
@@ -24,6 +28,7 @@ use crate::closing::{CloseQuestion, CloseRun, CloseStage};
 use crate::composer::Composer;
 use crate::copy;
 use crate::header::AppHeader;
+use crate::nav::NavItem;
 use crate::needs_you::{
     NeedsYouRow, SlotNeeds, attention, card_accepts, jump_target, list_accepts, needs_you_rows,
 };
@@ -32,7 +37,9 @@ use crate::new_session::{
     launch_in, quick_problem, runtime_of,
 };
 use crate::panes::{Pane, Panes};
+use crate::projects::{Project, ProjectKey};
 use crate::rows::{RowChange, row_changes};
+use crate::settings::{Settings, SettingsSink};
 use crate::slot::{
     MAX_LIVE_SLOTS, Relaunch, SlotId, SlotLaunch, SlotSummary, Spawn, counts_as_live, mark_of,
 };
@@ -40,8 +47,14 @@ use crate::watch::SlotWatch;
 
 mod cards;
 mod closing;
+mod nav;
 mod needs_you;
+mod new_in_project;
 mod overlays;
+mod projects;
+
+pub use new_in_project::ProjectCheck;
+pub use projects::ProjectSummary;
 
 /// The mode that runs every tool without asking.
 pub const BYPASS_MODE: &str = "bypassPermissions";
@@ -79,6 +92,8 @@ pub enum ShellAction {
         slot: SlotId,
     },
     OpenNewSession,
+    /// The dialog, with the folder of the selected slot's project in its field.
+    OpenNewSessionHere,
     EditFolder {
         text: String,
     },
@@ -88,6 +103,15 @@ pub enum ShellAction {
     },
     FolderChecked {
         folder: String,
+        exists: bool,
+    },
+    /// The project's plus: starts a session in its folder once the folder is found.
+    NewInProject {
+        project: ProjectKey,
+    },
+    /// The answer of the check a plus began.
+    ProjectChecked {
+        project: ProjectKey,
         exists: bool,
     },
     RequestClose,
@@ -199,6 +223,35 @@ pub enum ShellAction {
     CancelBypass {
         slot: SlotId,
     },
+    /// Opens or closes the project's row in the tree, and saves that.
+    ToggleProject {
+        project: ProjectKey,
+    },
+    /// Takes the project off the list once none of its sessions is alive; no file is touched.
+    RemoveProject {
+        project: ProjectKey,
+    },
+    /// Hands back the id of the slot's session to copy, once the session has ended or failed.
+    CopySessionId {
+        slot: SlotId,
+    },
+    /// Puts the left list's cursor on the selected slot's row and the keyboard on the list.
+    NavFocus,
+    /// Moves the left list's cursor; it stops at both ends.
+    NavMove {
+        delta: i32,
+    },
+    /// Puts the left list's cursor on the row that was clicked.
+    NavTo(NavItem),
+    /// Opens what the cursor's row stands for: the wait, the session, or the project's fold.
+    NavEnter,
+    /// Leaves the list for where the selected slot can be used: its input, or the band that
+    /// says why it cannot.
+    NavLeave,
+    /// A session's row goes to its project's row; a project's row closes it.
+    NavLeft,
+    /// A project's row opens it.
+    NavRight,
 }
 
 /// The one thing that holds the window's attention; what is behind it takes no answer.
@@ -214,17 +267,28 @@ pub enum Overlay {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum FocusTarget {
     Composer(SlotId),
-    Card { slot: SlotId, request_id: String },
-    CardNote { slot: SlotId, request_id: String },
+    Card {
+        slot: SlotId,
+        request_id: String,
+    },
+    CardNote {
+        slot: SlotId,
+        request_id: String,
+    },
     FailureBand(SlotId),
+    /// The left list.
+    Nav,
+    /// The "Session ended" band: its Restart, or the band itself without one.
+    EndedBand(SlotId),
 }
 
-/// What the machine is asked: the checks of the New Session dialog and the planner a folder
-/// starts with.
+/// What the machine is asked: the checks of the New Session dialog, the planner a folder
+/// starts with, and where the list of projects is kept.
 #[derive(Clone)]
 pub struct Ports {
     pub checks: Arc<dyn LaunchChecks>,
     pub planner_for: Arc<dyn PlannerFor>,
+    pub settings: Arc<dyn SettingsSink>,
 }
 
 /// A folder to look for in the background; its answer comes back as `FolderChecked`.
@@ -244,12 +308,16 @@ pub struct Acted {
     pub started: Option<SlotId>,
     /// A folder to look for.
     pub check: Option<FolderCheck>,
+    /// A project's folder to look for before a session starts in it.
+    pub project_check: Option<ProjectCheck>,
     /// The dialog's folder field is to be filled again from the dialog.
     pub folder: bool,
     /// The steps that close the window are to run.
     pub close: bool,
-    /// The slot that was closed and is gone.
-    pub removed: Option<SlotId>,
+    /// The slots that were closed or ended and are gone.
+    pub removed: Vec<SlotId>,
+    /// The text to put on the clipboard.
+    pub clipboard: Option<String>,
     /// Where the keyboard is to go.
     pub focus: Option<FocusTarget>,
 }
@@ -282,7 +350,12 @@ pub struct Refresh {
 
 /// One slot: its current session and what the last refresh read of it.
 struct Slot {
+    /// The title the slot was started with.
     title: String,
+    /// The first request of the conversation as of the last refresh, once there is one.
+    asked_title: Option<String>,
+    /// The project the slot is listed in; `None` is no project.
+    project: Option<ProjectKey>,
     runtime: SessionRuntime,
     finished: Receiver<()>,
     /// How many times the session was replaced.
@@ -292,6 +365,8 @@ struct Slot {
     status: SessionStatus,
     running: bool,
     waiting: bool,
+    /// The tools the pending approvals wait on, as of the last refresh; empty unless live.
+    waiting_tools: HashSet<String>,
     /// The keys of the rows opened or closed against their default.
     flipped: HashSet<String>,
     /// The draft, its history and the reason it was not sent; they outlive the session.
@@ -316,9 +391,19 @@ struct Slot {
     bypass_asking: bool,
     /// Whether a mode switch was written since the last refresh, which has not seen it yet.
     mode_sent: bool,
+    /// Whether a turn ended while the slot was not shown, and it has not been shown since.
+    unread: bool,
+    /// When the slot came under its heading, as of the last refresh.
+    since: Option<GroupSince>,
 }
 
 impl Slot {
+    /// The title the list shows, cut to the length of a session's name.
+    fn shown_title(&self) -> String {
+        let title = self.asked_title.as_deref().unwrap_or(&self.title);
+        take_utf16(title, TITLE_MAX).to_owned()
+    }
+
     /// Whether a running session works or waits on an approval; one told to end does neither.
     fn is_working(&self) -> bool {
         !self.closing
@@ -345,6 +430,15 @@ pub struct ShellState {
     last_id: u64,
     slots: BTreeMap<SlotId, Slot>,
     selected: Option<SlotId>,
+    /// The projects in the order they were made in.
+    projects: Vec<Project>,
+    /// What the settings writer was last given, or what was restored: a value equal to it is
+    /// not written again.
+    saved: Option<Settings>,
+    /// The project whose plus waits for its folder check; one at a time.
+    pending_new: Option<ProjectKey>,
+    /// The left list's cursor: its item and the place it last had.
+    nav: Option<(NavItem, usize)>,
     panes: Panes,
     runs: Runs,
     closing: CloseStage,
@@ -369,6 +463,10 @@ impl ShellState {
             last_id: 0,
             slots: BTreeMap::new(),
             selected: None,
+            projects: Vec::new(),
+            saved: None,
+            pending_new: None,
+            nav: None,
             panes: Panes::default(),
             runs: Runs::default(),
             closing: CloseStage::Open,
@@ -389,11 +487,17 @@ impl ShellState {
         let relaunch = launch.relaunch.clone();
         let settles_on_failure = launch.settles_on_failure;
         let working_directory = launch.working_directory.clone();
+        let project = launch
+            .project
+            .as_deref()
+            .and_then(|folder| self.join_project(folder));
         let (runtime, finished) = self.start(launch);
         self.slots.insert(
             id,
             Slot {
                 title,
+                asked_title: None,
+                project,
                 runtime,
                 finished,
                 generation: 0,
@@ -402,6 +506,7 @@ impl ShellState {
                 status: SessionStatus::Starting,
                 running: false,
                 waiting: false,
+                waiting_tools: HashSet::new(),
                 flipped: HashSet::new(),
                 composer: Composer::default(),
                 relaunch,
@@ -416,9 +521,12 @@ impl ShellState {
                 cards: HashMap::new(),
                 bypass_asking: false,
                 mode_sent: false,
+                unread: false,
+                since: None,
             },
         );
         self.selected.get_or_insert(id);
+        self.settle_nav();
         id
     }
 
@@ -435,6 +543,7 @@ impl ShellState {
         let (runtime, finished) = self.start(launch);
         let held = self.slots.get_mut(&slot)?;
         held.title = title;
+        held.asked_title = None;
         held.relaunch = relaunch;
         held.settles_on_failure = settles_on_failure;
         held.working_directory = working_directory;
@@ -448,12 +557,15 @@ impl ShellState {
         held.status = SessionStatus::Starting;
         held.running = false;
         held.waiting = false;
+        held.waiting_tools.clear();
         held.last = None;
         held.waits.clear();
         held.failed_since = None;
         held.cards.clear();
         held.bypass_asking = false;
         held.mode_sent = false;
+        held.unread = false;
+        held.since = None;
         let emptied = std::mem::take(&mut held.rows).len();
         Some(if emptied == 0 {
             Vec::new()
@@ -501,15 +613,25 @@ impl ShellState {
             .iter()
             .map(|(id, slot)| SlotSummary {
                 id: *id,
-                title: slot.title.clone(),
-                mark: mark_of(&slot.status, slot.running, slot.waiting),
+                title: slot.shown_title(),
+                mark: mark_of(&slot.status, slot.running, slot.waiting, slot.unread),
                 closing: slot.closing,
+                project: slot.project.clone(),
+                since_ms: slot.since.and_then(|it| it.since_ms),
+                can_restart: self.can_restart(*id),
+                can_copy_id: self.copyable(*id),
             })
             .collect()
     }
 
     pub fn selected(&self) -> Option<SlotId> {
         self.selected
+    }
+
+    /// The slot's title: the first request as of its last refresh when there is one, else the
+    /// title it was started with; `None` for a slot that is not there.
+    pub fn slot_title(&self, slot: SlotId) -> Option<String> {
+        self.slots.get(&slot).map(Slot::shown_title)
     }
 
     /// The slot's rows as of its last refresh; none for a slot that is not there.
@@ -531,6 +653,15 @@ impl ShellState {
     /// Whether an approval waited, as of the slot's last refresh.
     pub fn waiting(&self, slot: SlotId) -> bool {
         self.slots.get(&slot).is_some_and(|slot| slot.waiting)
+    }
+
+    /// The tool calls the slot's pending approvals wait on, as of its last refresh; empty once
+    /// the session is no longer live.
+    pub fn waiting_tool_ids(&self, slot: SlotId) -> HashSet<String> {
+        self.slots
+            .get(&slot)
+            .map(|slot| slot.waiting_tools.clone())
+            .unwrap_or_default()
     }
 
     /// Whether `row` of the slot is open: a to-do list is open and every other row closed,
@@ -563,6 +694,13 @@ impl ShellState {
     /// Reads the slot's current session again, if it is still the one of `generation`, and
     /// returns where it is and how its rows changed.
     pub fn refresh(&mut self, slot: SlotId, generation: u64, now_ms: i64) -> Option<Refresh> {
+        let refreshed = self.refresh_inner(slot, generation, now_ms);
+        self.settle_nav();
+        refreshed
+    }
+
+    fn refresh_inner(&mut self, slot: SlotId, generation: u64, now_ms: i64) -> Option<Refresh> {
+        let shown = self.selected == Some(slot);
         let held = self.slots.get_mut(&slot)?;
         if held.generation != generation {
             return None;
@@ -575,6 +713,15 @@ impl ShellState {
         // An open turn is never folded closed when the process ends: only a live session runs.
         let live = matches!(status, SessionStatus::Running { .. });
         let running = live && !waiting && thread_is_running(&view.conversation, &view.transcript);
+        let waiting_tools = if live {
+            view.conversation
+                .pending_approvals
+                .iter()
+                .filter_map(|it| it.tool_use_id.clone())
+                .collect()
+        } else {
+            HashSet::new()
+        };
         let composing = composer_state(&view.conversation, &view.transcript);
         held.line = Some(ComposerLine {
             mode: composing.mode,
@@ -596,6 +743,11 @@ impl ShellState {
                 .raised
                 .retain(|it| matches!(it, SessionAlert::Finished(_)));
         }
+        let finished = change
+            .raised
+            .iter()
+            .any(|it| matches!(it, SessionAlert::Finished(_)));
+        held.unread = !shown && (held.unread || finished);
         let raised = change
             .raised
             .iter()
@@ -633,11 +785,15 @@ impl ShellState {
                 .iter()
                 .any(|(alert, _)| request_of(alert) == Some(id.as_str()))
         });
+        held.asked_title = session_title(&view.transcript);
+        let group = session_summary(&view.conversation, &view.transcript, held.unread).group;
+        held.since = Some(group_since_after(held.since.as_ref(), group, now_ms));
         held.last = Some(view);
         held.rows = rows;
         held.status = status.clone();
         held.running = running;
         held.waiting = waiting;
+        held.waiting_tools = waiting_tools;
         let removed = held.closing && held.finished.is_closed();
         if removed {
             self.remove(slot);
@@ -658,6 +814,9 @@ impl ShellState {
         self.slots.remove(&slot);
         if self.selected == Some(slot) {
             self.selected = self.slots.keys().next().copied();
+            if let Some(held) = self.selected.and_then(|it| self.slots.get_mut(&it)) {
+                held.unread = false;
+            }
         }
         if self.slot_close.is_some_and(|(asked, _)| asked == slot) {
             self.slot_close = None;
@@ -667,6 +826,14 @@ impl ShellState {
     /// Whether as many slots as may hold a session do; a slot that is closing still does.
     pub fn slots_full(&self) -> bool {
         self.slots.values().filter(|it| it.is_live()).count() >= MAX_LIVE_SLOTS
+    }
+
+    /// Whether the slot's session ended or failed with its run still the slot's own: its id is
+    /// of use to resume it elsewhere.
+    fn copyable(&self, slot: SlotId) -> bool {
+        self.slots.get(&slot).is_some_and(|it| {
+            !it.closing && matches!(it.status, SessionStatus::Ended | SessionStatus::Failed(_))
+        })
     }
 
     /// Whether the slot could be restarted but for the limit.
@@ -774,6 +941,12 @@ impl ShellState {
 
     /// Does what `action` asks and says what the screen is to do about it.
     pub fn act(&mut self, action: ShellAction) -> Acted {
+        let acted = self.act_inner(action);
+        self.settle_nav();
+        acted
+    }
+
+    fn act_inner(&mut self, action: ShellAction) -> Acted {
         // Once the close began, nothing may start a run or write to a session: a run started
         // after `close_all` would be left out of its wait.
         if self.closing == CloseStage::Closing
@@ -782,7 +955,10 @@ impl ShellState {
                 ShellAction::Restart { .. }
                     | ShellAction::StartSession { .. }
                     | ShellAction::OpenNewSession
+                    | ShellAction::OpenNewSessionHere
                     | ShellAction::FolderChecked { .. }
+                    | ShellAction::NewInProject { .. }
+                    | ShellAction::ProjectChecked { .. }
                     | ShellAction::Send { .. }
                     | ShellAction::CloseSlot { .. }
                     | ShellAction::ConfirmCloseSlot
@@ -791,6 +967,7 @@ impl ShellState {
                     | ShellAction::DenyCard { .. }
                     | ShellAction::SendNote { .. }
                     | ShellAction::AnswerQuestion { .. }
+                    | ShellAction::RemoveProject { .. }
             )
         {
             return Acted::default();
@@ -803,9 +980,25 @@ impl ShellState {
         match action {
             ShellAction::Select(slot) => {
                 if self.slots.contains_key(&slot) {
-                    self.selected = Some(slot);
+                    self.select(slot);
                 }
                 Acted::default()
+            }
+            ShellAction::ToggleProject { project } => {
+                self.toggle_project(&project);
+                Acted::default()
+            }
+            ShellAction::RemoveProject { project } => self.remove_project(&project),
+            ShellAction::NewInProject { project } => self.new_in_project(&project),
+            ShellAction::ProjectChecked { project, exists } => {
+                self.project_checked(&project, exists)
+            }
+            ShellAction::CopySessionId { slot } => {
+                let id = self.slots.get(&slot).map(|it| it.runtime.id().to_owned());
+                Acted {
+                    clipboard: if self.copyable(slot) { id } else { None },
+                    ..Acted::default()
+                }
             }
             ShellAction::TogglePane(pane) => {
                 self.panes.toggle(pane);
@@ -842,6 +1035,7 @@ impl ShellState {
                     ..Acted::default()
                 }
             }
+            ShellAction::OpenNewSessionHere => self.open_new_session_here(),
             ShellAction::EditFolder { text } => self.edit_folder(text),
             ShellAction::CancelNewSession => {
                 self.dialog = None;
@@ -865,7 +1059,10 @@ impl ShellState {
                 request_id,
                 now_ms,
             } => {
-                if let Some(card) = self.card_mut(slot, &request_id) {
+                // A card behind an overlay is not on show: it starts no gate.
+                if self.overlay().is_none()
+                    && let Some(card) = self.card_mut(slot, &request_id)
+                {
                     card.shown_ms.get_or_insert(now_ms);
                 }
                 Acted::default()
@@ -990,6 +1187,13 @@ impl ShellState {
                 }
                 Acted::default()
             }
+            ShellAction::NavFocus => self.nav_focus(),
+            ShellAction::NavMove { delta } => self.nav_move(delta),
+            ShellAction::NavTo(item) => self.nav_to(item),
+            ShellAction::NavEnter => self.nav_enter(),
+            ShellAction::NavLeave => self.nav_leave(),
+            ShellAction::NavLeft => self.nav_left(),
+            ShellAction::NavRight => self.nav_right(),
         }
     }
 
@@ -1086,10 +1290,19 @@ fn behind_overlay(action: &ShellAction, overlay: Overlay) -> bool {
         | ShellAction::Restart { .. }
         | ShellAction::Interrupt { .. }
         | ShellAction::HistoryPrev { .. }
-        | ShellAction::HistoryNext { .. } => true,
-        ShellAction::OpenNewSession | ShellAction::StartSession { .. } => {
-            overlay != Overlay::NewSession
-        }
+        | ShellAction::HistoryNext { .. }
+        | ShellAction::RemoveProject { .. }
+        | ShellAction::NewInProject { .. }
+        | ShellAction::NavFocus
+        | ShellAction::NavMove { .. }
+        | ShellAction::NavTo(_)
+        | ShellAction::NavEnter
+        | ShellAction::NavLeave
+        | ShellAction::NavLeft
+        | ShellAction::NavRight => true,
+        ShellAction::OpenNewSession
+        | ShellAction::OpenNewSessionHere
+        | ShellAction::StartSession { .. } => overlay != Overlay::NewSession,
         _ => false,
     }
 }

@@ -631,13 +631,15 @@ mod tests {
             };
             let list = needs_you_list(
                 &self.list,
-                &self.focus.list,
+                None,
                 &self.scroll,
                 self.dispatch.clone(),
                 self.clock,
                 cx,
             );
-            gpui_kit::base::v_flex()
+            let list = focus::left_list(div().id("left"), &self.focus.list).child(list);
+            self.focus
+                .release_keys(gpui_kit::base::v_flex())
                 .size_full()
                 .child(list)
                 .child(stop("before", &self.before))
@@ -675,7 +677,8 @@ mod tests {
                             move |keystroke, window, cx| {
                                 let host = this.upgrade()?;
                                 let host = host.read(cx);
-                                Some(host.focus.gate(keystroke, host.clock.now_ms(), window, cx))
+                                let now_ms = host.clock.now_ms();
+                                Some(host.focus.gate(keystroke, now_ms, None, window, cx))
                             },
                             Rc::clone(&dispatch),
                             Rc::new(|_, _, _| {}),
@@ -740,6 +743,7 @@ mod tests {
     fn listed() -> NeedsYouRow {
         NeedsYouRow {
             slot: SlotId::numbered(2),
+            project: None,
             title: "s2".to_owned(),
             item: NeedsYouItem::Permission(PermissionAlert {
                 key: "k2".to_owned(),

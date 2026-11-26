@@ -16,6 +16,15 @@ use crate::new_session::Runtime;
 
 /// The conversation pane with no rows (`thread.empty`).
 pub const EMPTY: &str = "No messages yet";
+
+/// The elapsed-time column of a slot whose last turn ended unseen.
+pub const ELAPSED_NEW: &str = "new";
+/// The row menu's entry that copies the session's id.
+pub const COPY_SESSION_ID: &str = "Copy Session ID";
+
+/// The title of a session started from a folder; the folder's name is its project's heading.
+pub const NEW_SESSION_TITLE: &str = "New session";
+
 /// The button that scrolls back to the tail (`thread.toLatest`).
 pub const JUMP_TO_LATEST: &str = "Scroll to latest";
 /// The menu items that copy a whole message, which a selection cannot reach once its first row
@@ -141,6 +150,13 @@ pub fn compaction_line(row: &CompactionRow) -> String {
 
 pub fn distro_missing(distro: &str) -> String {
     format!("{distro} is not installed.")
+}
+
+pub fn runtime_kind(runtime: &Runtime) -> &'static str {
+    match runtime {
+        Runtime::Win32 => "Windows",
+        Runtime::Wsl { .. } => "WSL",
+    }
 }
 
 pub fn runtime_label(runtime: &Runtime) -> String {
@@ -320,7 +336,11 @@ pub const JUMP_HINT: &str = "Alt+Shift+W to answer";
 pub const SLOT_LIMIT: &str = "Close a session to start another (8 at most).";
 /// The needs-you list: its headings and the buttons of a row.
 pub const NEEDS_YOU: &str = "NEEDS YOU";
-pub const SESSIONS_HEADING: &str = "SESSIONS";
+/// The left pane's tree: its heading and the heading of the sessions in no project.
+pub const PROJECTS_HEADING: &str = "PROJECTS";
+pub const OTHER_HEADING: &str = "OTHER";
+pub const REMOVE_FROM_LIST: &str = "Remove from list";
+pub const CLOSE_ITS_SESSIONS: &str = "Close its sessions first.";
 pub const LIST_ALLOW: &str = "Allow";
 pub const LIST_DENY: &str = "Deny…";
 pub const LIST_OPEN: &str = "Open";
@@ -486,6 +506,14 @@ pub fn needs_you_line(item: &NeedsYouItem) -> String {
             AlertKind::Edit => "Edit permission".to_owned(),
         },
         NeedsYouItem::Failed { title } => title.clone(),
+    }
+}
+
+/// A needs-you row's first line: the project and the slot's title, or the title alone.
+pub fn needs_you_heading(project: Option<&str>, title: &str) -> String {
+    match project {
+        Some(project) => format!("{project} · {title}"),
+        None => title.to_owned(),
     }
 }
 
@@ -897,6 +925,10 @@ mod tests {
             ),
             (JUMP_HINT, "Alt+Shift+W to answer"),
             (SLOT_LIMIT, "Close a session to start another (8 at most)."),
+            (PROJECTS_HEADING, "PROJECTS"),
+            (OTHER_HEADING, "OTHER"),
+            (REMOVE_FROM_LIST, "Remove from list"),
+            (CLOSE_ITS_SESSIONS, "Close its sessions first."),
             (
                 BYPASS_CONFIRM,
                 "Switch to Bypass Permissions? Tools in this session will run without asking first.",
@@ -992,6 +1024,15 @@ mod tests {
     #[test]
     fn diff_counts_use_a_true_minus() {
         assert_eq!(diff_counts(2, 1), "+2 \u{2212}1");
+    }
+
+    #[test]
+    fn the_heading_joins_the_project_and_the_title() {
+        assert_eq!(
+            needs_you_heading(Some("closta"), "Retry login"),
+            "closta · Retry login"
+        );
+        assert_eq!(needs_you_heading(None, "Retry login"), "Retry login");
     }
 
     #[test]

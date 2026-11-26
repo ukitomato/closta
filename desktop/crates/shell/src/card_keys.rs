@@ -50,7 +50,9 @@ pub enum FocusScene {
     NeedsYou,
     /// A dialog or a confirmation.
     Overlay,
-    /// No focus, the list on the left, the first row.
+    /// The left list's cursor row.
+    Nav,
+    /// No focus anywhere in particular: a band or one of its buttons, the window itself.
     Other,
 }
 
@@ -62,6 +64,12 @@ pub enum Key {
     Enter,
     Space,
     W,
+    Up,
+    Down,
+    Left,
+    Right,
+    N,
+    O,
     Other,
 }
 
@@ -72,6 +80,8 @@ pub struct CardKey {
     pub alt: bool,
     pub shift: bool,
     pub platform: bool,
+    /// The key came again without being released: a key repeat.
+    pub held: bool,
 }
 
 impl CardKey {
@@ -82,6 +92,7 @@ impl CardKey {
             alt: false,
             shift: false,
             platform: false,
+            held: false,
         }
     }
 
@@ -100,16 +111,44 @@ pub enum CardKeyOutcome {
     Toggle,
     ToComposer,
     NextWaiting,
+    /// Open the row under the list's cursor.
+    NavEnter,
+    /// Leave the list for the selected slot's composer.
+    LeaveList,
     /// Stop here and do nothing, so the focused part never receives it.
     Swallow,
     /// Hand it to the focused part as it is.
     Pass,
 }
 
+/// Tells a key held down from a fresh press: the key events carry no repeat flag, so the first
+/// press of a key is remembered until its release.
+#[derive(Default)]
+pub struct Repeats {
+    down: std::collections::HashSet<String>,
+}
+
+impl Repeats {
+    /// Whether `key` came again with no release in between.
+    pub fn pressed(&mut self, key: &str) -> bool {
+        !self.down.insert(key.to_owned())
+    }
+
+    pub fn released(&mut self, key: &str) {
+        self.down.remove(key);
+    }
+
+    /// Forgets every key, for when a release may have gone unseen.
+    pub fn clear(&mut self) {
+        self.down.clear();
+    }
+}
+
 /// What a key does in `scene`, top to bottom: the first row that fits decides.
 pub fn card_key(scene: &FocusScene, key: &CardKey) -> CardKeyOutcome {
     use CardKeyOutcome::{
-        Answer, Choose, Deny, LeaveText, NextWaiting, Pass, Swallow, ToComposer, Toggle,
+        Answer, Choose, Deny, LeaveList, LeaveText, NavEnter, NextWaiting, Pass, Swallow,
+        ToComposer, Toggle,
     };
 
     let in_card = matches!(
@@ -123,11 +162,15 @@ pub fn card_key(scene: &FocusScene, key: &CardKey) -> CardKeyOutcome {
             _ => NextWaiting,
         };
     }
+    if key.held && key.unmodified() && held_is_stopped(scene, key.key) {
+        return Swallow;
+    }
     if *scene == FocusScene::Overlay {
         return Pass;
     }
     if key.key == Key::Escape && key.unmodified() {
         match scene {
+            FocusScene::NeedsYou | FocusScene::Nav => return LeaveList,
             FocusScene::CardText { .. } => return LeaveText,
             FocusScene::Card { .. } | FocusScene::QuestionOption => return Deny,
             _ => {}
@@ -168,11 +211,34 @@ pub fn card_key(scene: &FocusScene, key: &CardKey) -> CardKeyOutcome {
             Key::Digit(_) | Key::Enter | Key::Space => Swallow,
             _ => Pass,
         },
-        FocusScene::NeedsYou => match key.key {
-            Key::Digit(_) | Key::Enter | Key::Space => Swallow,
+        FocusScene::NeedsYou | FocusScene::Nav => match key.key {
+            Key::Enter => NavEnter,
+            Key::Digit(_) | Key::Space => Swallow,
             _ => Pass,
         },
         _ => Pass,
+    }
+}
+
+/// Whether an unmodified key that is being held down must not act in `scene`: a repeat would
+/// answer twice, or press what an earlier Enter just focused. Typing repeats stay.
+fn held_is_stopped(scene: &FocusScene, key: Key) -> bool {
+    let list_or_card = matches!(
+        scene,
+        FocusScene::Card { .. }
+            | FocusScene::QuestionOption
+            | FocusScene::NeedsYou
+            | FocusScene::Nav
+    );
+    match key {
+        Key::Enter => true,
+        Key::Escape => list_or_card || matches!(scene, FocusScene::CardText { .. }),
+        Key::Digit(_) => list_or_card,
+        Key::Space => !matches!(
+            scene,
+            FocusScene::Composer | FocusScene::CardText { .. } | FocusScene::FileEditor
+        ),
+        _ => false,
     }
 }
 
@@ -206,7 +272,8 @@ mod tests {
     use closta_presenter::transcript::SuggestionRecord;
 
     use super::CardKeyOutcome::{
-        Answer, Choose, Deny, LeaveText, NextWaiting, Pass, Swallow, ToComposer, Toggle,
+        Answer, Choose, Deny, LeaveList, LeaveText, NavEnter, NextWaiting, Pass, Swallow,
+        ToComposer, Toggle,
     };
     use super::*;
 
@@ -223,11 +290,19 @@ mod tests {
             alt,
             shift,
             platform,
+            held: false,
         }
     }
 
     fn jump() -> CardKey {
         with(Key::W, false, true, true, false)
+    }
+
+    fn held(key: Key) -> CardKey {
+        CardKey {
+            held: true,
+            ..CardKey::plain(key)
+        }
     }
 
     fn card(kind: CardKind, choices: usize) -> FocusScene {
@@ -273,6 +348,7 @@ mod tests {
             FocusScene::FileEditor,
             FocusScene::Thread,
             FocusScene::NeedsYou,
+            FocusScene::Nav,
             FocusScene::Other,
         ];
         for scene in scenes {
@@ -398,8 +474,8 @@ mod tests {
     }
 
     #[test]
-    fn digits_enter_and_space_in_the_list_do_nothing() {
-        for key in [Key::Digit(1), Key::Digit(9), Key::Enter, Key::Space] {
+    fn digits_and_space_on_a_needs_you_row_still_do_nothing() {
+        for key in [Key::Digit(1), Key::Digit(9), Key::Space] {
             assert_eq!(card_key(&FocusScene::NeedsYou, &plain(key)), Swallow);
         }
         assert_eq!(card_key(&FocusScene::NeedsYou, &plain(Key::Other)), Pass);
@@ -445,12 +521,113 @@ mod tests {
             card(CardKind::Permission, 2),
             FocusScene::QuestionOption,
             FocusScene::NeedsYou,
+            FocusScene::Nav,
             FocusScene::Overlay,
             FocusScene::Other,
         ];
         for scene in others {
             assert!(!card_may_take_focus(&scene), "{scene:?}");
         }
+    }
+
+    #[test]
+    fn a_held_enter_is_swallowed_everywhere() {
+        let scenes = [
+            FocusScene::Composer,
+            FocusScene::Thread,
+            FocusScene::Other,
+            FocusScene::Overlay,
+            FocusScene::FileEditor,
+            FocusScene::QuestionOption,
+            card(CardKind::Permission, 3),
+            FocusScene::CardText {
+                kind: CardKind::Plan,
+            },
+            FocusScene::NeedsYou,
+            FocusScene::Nav,
+        ];
+        for scene in scenes {
+            assert_eq!(card_key(&scene, &held(Key::Enter)), Swallow, "{scene:?}");
+        }
+        let newline = CardKey {
+            shift: true,
+            ..held(Key::Enter)
+        };
+        assert_eq!(card_key(&FocusScene::Composer, &newline), Pass);
+    }
+
+    #[test]
+    fn held_digits_space_and_escape_are_swallowed_where_they_would_answer() {
+        let answering = [
+            card(CardKind::Permission, 3),
+            FocusScene::QuestionOption,
+            FocusScene::NeedsYou,
+            FocusScene::Nav,
+        ];
+        for scene in answering {
+            for key in [Key::Digit(1), Key::Space, Key::Escape] {
+                assert_eq!(card_key(&scene, &held(key)), Swallow, "{scene:?} {key:?}");
+            }
+        }
+        let typing = [
+            FocusScene::Composer,
+            FocusScene::CardText {
+                kind: CardKind::Permission,
+            },
+        ];
+        for scene in typing {
+            for key in [Key::Digit(1), Key::Space] {
+                assert_eq!(card_key(&scene, &held(key)), Pass, "{scene:?} {key:?}");
+            }
+        }
+        let text = FocusScene::CardText {
+            kind: CardKind::Permission,
+        };
+        assert_eq!(card_key(&text, &held(Key::Escape)), Swallow);
+        for scene in [FocusScene::Thread, FocusScene::Other, FocusScene::Overlay] {
+            assert_eq!(card_key(&scene, &held(Key::Space)), Swallow, "{scene:?}");
+        }
+        assert_eq!(card_key(&FocusScene::FileEditor, &held(Key::Space)), Pass);
+    }
+
+    #[test]
+    fn after_nav_enter_a_held_enter_neither_sends_nor_restarts() {
+        // The first Enter moves focus; the repeats after it find the new part and stop there,
+        // while a fresh Enter on the same part still acts.
+        for scene in [FocusScene::Composer, FocusScene::Other] {
+            assert_eq!(card_key(&scene, &held(Key::Enter)), Swallow, "{scene:?}");
+            assert_eq!(card_key(&scene, &plain(Key::Enter)), Pass, "{scene:?}");
+        }
+    }
+
+    #[test]
+    fn enter_on_the_list_opens_and_escape_leaves_it() {
+        for scene in [FocusScene::NeedsYou, FocusScene::Nav] {
+            assert_eq!(card_key(&scene, &plain(Key::Enter)), NavEnter, "{scene:?}");
+            assert_eq!(
+                card_key(&scene, &plain(Key::Escape)),
+                LeaveList,
+                "{scene:?}"
+            );
+            let ctrl = with(Key::Enter, true, false, false, false);
+            assert_eq!(card_key(&scene, &ctrl), Pass, "{scene:?}");
+        }
+        assert_eq!(card_key(&FocusScene::Nav, &plain(Key::Space)), Swallow);
+        assert_eq!(card_key(&FocusScene::Nav, &plain(Key::Digit(2))), Swallow);
+        assert_eq!(card_key(&FocusScene::Nav, &plain(Key::Other)), Pass);
+    }
+
+    #[test]
+    fn a_key_coming_again_without_its_release_is_held() {
+        let mut repeats = Repeats::default();
+        assert!(!repeats.pressed("1"));
+        assert!(repeats.pressed("1"));
+        repeats.released("1");
+        assert!(!repeats.pressed("1"));
+        repeats.released("2");
+        assert!(repeats.pressed("1"));
+        repeats.clear();
+        assert!(!repeats.pressed("1"));
     }
 
     #[test]

@@ -38,13 +38,15 @@ impl ShellModel {
             return;
         };
         self.folder_typing = None;
+        // A field made just now has no placeholder yet, however the dialog came up.
+        let fresh = self.folder.is_none();
         let input = match &self.folder {
             Some(input) => input.clone(),
             None => self.new_folder_input(window, cx),
         };
         let placeholder = self.shell.default_folder().unwrap_or_default();
         input.update(cx, |state, cx| {
-            if opened {
+            if opened || fresh {
                 state.set_placeholder(placeholder, window, cx);
             }
             // A single-line input's `set_value` leaves the cursor at the end.
@@ -189,8 +191,8 @@ pub(crate) fn new_session(model: &ShellModel, cx: &mut Context<ShellModel>) -> O
 
     let recent: Vec<AnyElement> = model
         .shell
-        .recent_folders()
-        .iter()
+        .folder_choices()
+        .into_iter()
         .enumerate()
         .map(|(at, folder)| {
             let text = folder.clone();

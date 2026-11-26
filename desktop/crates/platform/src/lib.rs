@@ -13,6 +13,7 @@ mod shell_view;
 mod test_window;
 pub mod theme;
 mod thread;
+mod tree;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -21,6 +22,7 @@ use std::time::{Duration, Instant};
 use closta_session::log::TracingLog;
 use closta_shell::header::AppHeader;
 use closta_shell::panes::{Pane, Panes};
+use closta_shell::settings::Settings;
 use closta_shell::slot::{SlotLaunch, Spawn};
 use closta_shell::state::{Ports, ShellAction, ShellState};
 use futures_lite::future;
@@ -47,9 +49,11 @@ pub struct PlatformOptions {
     pub measure: Option<Measure>,
     /// What a check's run writes and when it closes by itself; `None` for an ordinary run.
     pub probe: Option<Probe>,
-    /// What the shell asks of this machine: the New Session dialog's checks and the planner a
-    /// folder starts with.
+    /// What the shell asks of this machine: the New Session dialog's checks, the planner a
+    /// folder starts with and where the projects are kept.
     pub ports: Ports,
+    /// The projects the left pane starts with, as they were kept.
+    pub projects: Settings,
 }
 
 /// A measured run. Once `finished` ends (every replay was written), `ready` is logged; once
@@ -89,10 +93,12 @@ pub fn run(options: PlatformOptions) {
             measure,
             probe,
             ports,
+            projects,
         } = options;
         let executor = cx.background_executor().clone();
         let spawn: Spawn = Arc::new(move |run| executor.spawn(run).detach());
         let mut shell = ShellState::new(header, spawn, Arc::new(TracingLog), ports);
+        shell.restore_projects(&projects);
         if let Some((left, right)) = panes {
             let default = Panes::default();
             for (pane, open, was) in [

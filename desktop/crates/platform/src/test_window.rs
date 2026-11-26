@@ -9,7 +9,8 @@ use closta_session::log::TracingLog;
 use closta_session::status::SessionFailure;
 use closta_shell::header::AppHeader;
 use closta_shell::new_session::{ClaudeOnPath, LaunchChecks, PlannerFor};
-use closta_shell::slot::SlotLaunch;
+use closta_shell::settings::{SavedProject, Settings};
+use closta_shell::slot::{SlotLaunch, Spawn};
 use closta_shell::state::{Ports, ShellAction, ShellState};
 use futures_lite::future;
 use gpui_kit::test::TestWindowExt as _;
@@ -72,6 +73,64 @@ pub(crate) fn open(
     cx: &mut TestAppContext,
     slots: usize,
 ) -> (AnyWindowHandle, Entity<ShellModel>, Asked) {
+    let launches = (0..slots).map(|_| launch(None)).collect();
+    open_with(cx, &Settings::default(), launches, false)
+}
+
+/// What [`open_tree`] starts with.
+pub(crate) struct TreeSetup<'a> {
+    /// The projects' folders, in order, each with whether it is collapsed.
+    pub(crate) projects: &'a [(&'a str, bool)],
+    /// The slots, in order, each with its project's folder or none.
+    pub(crate) slots: &'a [Option<&'a str>],
+    /// Whether the sessions are run: each then fails to start. Unrun, each stays starting.
+    pub(crate) run: bool,
+}
+
+/// Opens the window with the projects and the slots, the first selected, and draws it once.
+pub(crate) fn open_tree(
+    cx: &mut TestAppContext,
+    setup: TreeSetup<'_>,
+) -> (AnyWindowHandle, Entity<ShellModel>) {
+    let settings = Settings {
+        projects: setup
+            .projects
+            .iter()
+            .map(|(folder, collapsed)| SavedProject {
+                folder: (*folder).to_owned(),
+                collapsed: *collapsed,
+            })
+            .collect(),
+        ..Settings::default()
+    };
+    let launches = setup
+        .slots
+        .iter()
+        .map(|folder| launch(folder.map(str::to_owned)))
+        .collect();
+    let (handle, model, _) = open_with(cx, &settings, launches, setup.run);
+    (handle, model)
+}
+
+/// A launch whose session can never start.
+fn launch(project: Option<String>) -> SlotLaunch {
+    SlotLaunch {
+        title: String::new(),
+        planner: Arc::new(Never),
+        working_directory: None,
+        companion: None,
+        relaunch: None,
+        project,
+        settles_on_failure: false,
+    }
+}
+
+fn open_with(
+    cx: &mut TestAppContext,
+    settings: &Settings,
+    launches: Vec<SlotLaunch>,
+    run: bool,
+) -> (AnyWindowHandle, Entity<ShellModel>, Asked) {
     cx.update(gpui_kit::init);
     let asked = Asked::default();
     let ports = Ports {
@@ -79,23 +138,21 @@ pub(crate) fn open(
             asked: Arc::clone(&asked),
         }),
         planner_for: Arc::new(Never),
+        settings: Arc::new(closta_shell::settings::MemorySettings),
     };
     let header = AppHeader {
         title: String::new(),
         headline: String::new(),
     };
-    // The sessions' runs are dropped: none ever runs.
-    let shell = ShellState::new(header, Arc::new(|_| {}), Arc::new(TracingLog), ports);
-    let launches: Vec<SlotLaunch> = (0..slots)
-        .map(|_| SlotLaunch {
-            title: String::new(),
-            planner: Arc::new(Never),
-            working_directory: None,
-            companion: None,
-            relaunch: None,
-            settles_on_failure: false,
-        })
-        .collect();
+    // Unless they are run, the sessions' runs are dropped: none ever runs.
+    let spawn: Spawn = if run {
+        let executor = cx.executor();
+        Arc::new(move |run| executor.spawn(run).detach())
+    } else {
+        Arc::new(|_| {})
+    };
+    let mut shell = ShellState::new(header, spawn, Arc::new(TracingLog), ports);
+    shell.restore_projects(settings);
     let (handle, model) = cx
         .update(|cx| {
             let bounds = Bounds {

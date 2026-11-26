@@ -795,3 +795,245 @@ fn a_row_drawn_in_another_place_than_the_lists_is_not_noted() {
         until(|| answers_of(two.stdin_lines()).len() == 1).await;
     });
 }
+
+fn project_launch(
+    harness: &Harness,
+) -> (
+    closta_shell::slot::SlotLaunch,
+    closta_providers::claude::fake::replay::ReplayControl,
+    async_channel::Receiver<SessionRuntime>,
+) {
+    support::replay_launch(harness, SANDBOX, SANDBOX_ASK)
+}
+
+/// Opens a slot in `folder` (none for no project) that waits on a request, refreshed at `at`.
+async fn waiting_in(
+    shell: &mut ShellState,
+    harness: &Harness,
+    folder: Option<&str>,
+    at: i64,
+) -> SlotId {
+    let (mut launch, _control, runtime) = project_launch(harness);
+    launch.project = folder.map(str::to_owned);
+    let slot = shell.open(launch);
+    let runtime = runtime.recv().await.unwrap();
+    running(&runtime).await;
+    waits_on(&runtime, 1).await;
+    let generation = shell.watch(slot).unwrap().generation();
+    shell.refresh(slot, generation, at).unwrap();
+    slot
+}
+
+fn projects_of(shell: &ShellState) -> Vec<(SlotId, Option<String>)> {
+    shell
+        .needs_you()
+        .into_iter()
+        .map(|row| (row.slot, row.project))
+        .collect()
+}
+
+#[test]
+fn waits_of_three_projects_are_one_list_oldest_first() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let a = waiting_in(&mut shell, &harness, Some(r"C:\work\alpha"), 300).await;
+        let b = waiting_in(&mut shell, &harness, Some(r"C:\work\beta"), 100).await;
+        let c = waiting_in(&mut shell, &harness, Some(r"C:\work\gamma"), 200).await;
+        let d = waiting_in(&mut shell, &harness, Some(r"C:\work\alpha"), 400).await;
+        assert_eq!(
+            projects_of(&shell),
+            vec![
+                (b, Some("beta".to_owned())),
+                (c, Some("gamma".to_owned())),
+                (a, Some("alpha".to_owned())),
+                (d, Some("alpha".to_owned())),
+            ]
+        );
+    });
+}
+
+#[test]
+fn a_collapsed_project_s_wait_is_listed() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let slot = waiting_in(&mut shell, &harness, Some(r"C:\work\alpha"), 1).await;
+        let key = closta_shell::projects::project_key(r"C:\work\alpha").unwrap();
+        shell.act(ShellAction::ToggleProject { project: key });
+        assert!(shell.projects()[0].collapsed);
+        assert_eq!(projects_of(&shell), vec![(slot, Some("alpha".to_owned()))]);
+    });
+}
+
+#[test]
+fn two_projects_of_the_same_name_are_told_apart_in_the_rows() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let win = waiting_in(&mut shell, &harness, Some(r"C:\work\closta"), 1).await;
+        let wsl = waiting_in(
+            &mut shell,
+            &harness,
+            Some(r"\\wsl$\Ubuntu\home\x\closta"),
+            2,
+        )
+        .await;
+        assert_eq!(
+            projects_of(&shell),
+            vec![
+                (win, Some("closta (Windows)".to_owned())),
+                (wsl, Some("closta (WSL)".to_owned())),
+            ]
+        );
+    });
+}
+
+#[test]
+fn a_row_of_a_slot_without_a_project_has_no_project() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let slot = waiting_in(&mut shell, &harness, None, 1).await;
+        assert_eq!(projects_of(&shell), vec![(slot, None)]);
+    });
+}
+
+#[test]
+fn a_row_carries_the_slot_s_title_as_the_list_shows_it() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (mut launch, _control, runtime) = project_launch(&harness);
+        launch.title = "t".repeat(70);
+        let slot = shell.open(launch);
+        let runtime = runtime.recv().await.unwrap();
+        running(&runtime).await;
+        waits_on(&runtime, 1).await;
+        let generation = shell.watch(slot).unwrap().generation();
+        shell.refresh(slot, generation, 1).unwrap();
+        let title = shell.slot_title(slot).unwrap();
+        assert_eq!(title.len(), 60);
+        assert_eq!(shell.needs_you()[0].title, title);
+    });
+}
+
+fn no_answer(lines: Vec<String>, refused: usize) {
+    assert!(answers_of(lines).is_empty());
+    assert_eq!(refused, 0);
+}
+
+// Defended twice: the row check here and `answer_card`; only the row cannot be isolated.
+#[test]
+fn allow_from_the_list_needs_the_request_the_row_shows() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (slot, control, _) = two_waits(&mut shell, &harness, 0).await;
+        assert_eq!(shell.needs_you()[0].request_id(), Some("R1"));
+        list_shown(&mut shell, slot, "R1", 1000);
+        allow_from_list(&mut shell, slot, "R2", 2000);
+        quiet().await;
+        no_answer(control.stdin_lines(), control.refused_writes());
+        allow_from_list(&mut shell, slot, "R1", 2000);
+        until(|| answers_of(control.stdin_lines()).len() == 1).await;
+    });
+}
+
+#[test]
+fn allow_from_the_list_needs_a_request_it_may_allow() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (slot, control, _) = waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK, 0).await;
+        assert!(shell.needs_you()[0].may_allow());
+        // A plan's first choice approves it, so only the list's own guard keeps a plan row from
+        // being approved unread.
+        let (plan, plan_control, _) = waiting_slot(&mut shell, &harness, PLAN, PLAN_ASK, 0).await;
+        let row = shell
+            .needs_you()
+            .into_iter()
+            .find(|row| row.slot == plan)
+            .unwrap();
+        assert!(!row.may_allow());
+        let plan_id = row.request_id().unwrap().to_owned();
+        list_shown(&mut shell, plan, &plan_id, 1000);
+        allow_from_list(&mut shell, plan, &plan_id, 2000);
+        quiet().await;
+        no_answer(plan_control.stdin_lines(), 0);
+        let (other, other_control) =
+            live_waiting(&mut shell, &harness, QUESTION, QUESTION_ASK, 0).await;
+        let unanswerable = shell
+            .needs_you()
+            .into_iter()
+            .find(|row| row.slot == other)
+            .unwrap();
+        assert!(!unanswerable.may_allow());
+        list_shown(&mut shell, other, QUESTION_REQUEST, 1000);
+        allow_from_list(&mut shell, other, QUESTION_REQUEST, 2000);
+        quiet().await;
+        no_answer(other_control.stdin_lines(), other_control.refused_writes());
+        list_shown(&mut shell, slot, SANDBOX_REQUEST, 1000);
+        allow_from_list(&mut shell, slot, SANDBOX_REQUEST, 2000);
+        until(|| answers_of(control.stdin_lines()).len() == 1).await;
+    });
+}
+
+#[test]
+fn allow_from_the_list_needs_the_row_drawn_half_a_second_ago_in_its_place() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (slot, control, _) =
+            waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK, 100).await;
+        assert_eq!(shell.needs_you()[0].slot, slot);
+        list_shown_at(&mut shell, slot, SANDBOX_REQUEST, 0, 1000);
+        allow_from_list(&mut shell, slot, SANDBOX_REQUEST, 1499);
+        quiet().await;
+        no_answer(control.stdin_lines(), 0);
+
+        // An older wait comes in ahead of the row: it was drawn in another place than it has now.
+        let (older, _, _) = waiting_slot(&mut shell, &harness, QUESTION, QUESTION_ASK, 50).await;
+        assert_eq!(shell.needs_you()[0].slot, older);
+        assert_eq!(shell.needs_you()[1].slot, slot);
+        allow_from_list(&mut shell, slot, SANDBOX_REQUEST, 5000);
+        quiet().await;
+        no_answer(control.stdin_lines(), 0);
+
+        list_shown_at(&mut shell, slot, SANDBOX_REQUEST, 1, 6000);
+        allow_from_list(&mut shell, slot, SANDBOX_REQUEST, 6499);
+        quiet().await;
+        no_answer(control.stdin_lines(), 0);
+        allow_from_list(&mut shell, slot, SANDBOX_REQUEST, 6500);
+        until(|| answers_of(control.stdin_lines()).len() == 1).await;
+    });
+}
+
+// Defended twice: the list check and `answer_card`.
+#[test]
+fn allow_from_the_list_needs_the_request_still_waiting() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (slot, control, _) = two_waits(&mut shell, &harness, 0).await;
+        list_shown(&mut shell, slot, "R1", 1000);
+        allow_from_list(&mut shell, slot, "R1", 2000);
+        until(|| answers_of(control.stdin_lines()).len() == 1).await;
+        // The same request again, before the list moved on, answers nothing more.
+        allow_from_list(&mut shell, slot, "R1", 3000);
+        quiet().await;
+        assert_eq!(answers_of(control.stdin_lines()).len(), 1);
+        assert_eq!(control.refused_writes(), 0);
+    });
+}
+
+// Defended twice: the list check and `answer_card`.
+#[test]
+fn allow_from_the_list_needs_a_live_session() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (slot, control) = live_waiting(&mut shell, &harness, SANDBOX, SANDBOX_ASK, 0).await;
+        list_shown(&mut shell, slot, SANDBOX_REQUEST, 1000);
+        control.exit(0);
+        let mut watch = shell.watch(slot).unwrap();
+        while watch.changed().await {}
+        shell.refresh(slot, watch.generation(), 1100).unwrap();
+        assert_eq!(shell.status(slot), Some(SessionStatus::Ended));
+        let before = control.stdin_lines().len();
+        allow_from_list(&mut shell, slot, SANDBOX_REQUEST, 5000);
+        quiet().await;
+        assert_eq!(control.stdin_lines().len(), before);
+        assert_eq!(control.refused_writes(), 0);
+    });
+}

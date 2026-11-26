@@ -14,6 +14,7 @@ use closta_session::status::SessionFailure;
 use closta_shell::closing::{
     CLOSE_LIMIT, CloseEnd, CloseQuestion, CloseStage, DESTROY_GRACE, finish_closing,
 };
+use closta_shell::settings::{Settings, SettingsSink};
 use closta_shell::slot::SlotLaunch;
 use closta_shell::state::{ShellAction, ShellState};
 use futures_lite::future;
@@ -30,6 +31,23 @@ impl SessionLaunchPlanner for Planning {
         _working_directory: Option<&str>,
     ) -> future::Boxed<Result<SessionLaunch, SessionFailure>> {
         Box::pin(future::pending())
+    }
+}
+
+/// A settings writer whose writes end only once `written` is closed.
+struct SlowSettings {
+    written: async_channel::Receiver<()>,
+}
+
+impl SettingsSink for SlowSettings {
+    fn save(&self, _settings: Settings) {}
+
+    fn flushed(&self) -> future::Boxed<()> {
+        let written = self.written.clone();
+        Box::pin(async move {
+            // Nothing is ever sent: the receiver closes when the test says the writes ended.
+            _ = written.recv().await;
+        })
     }
 }
 
@@ -112,6 +130,7 @@ fn a_slot_closed_while_it_plans_returns_at_once() {
             working_directory: None,
             companion: None,
             relaunch: None,
+            project: None,
             settles_on_failure: false,
         });
         assert_eq!(shell.live_runs(), 1);
@@ -214,6 +233,7 @@ fn nothing_starts_or_sends_once_the_close_began() {
                 working_directory: None,
                 companion: None,
                 relaunch: None,
+                project: None,
                 settles_on_failure: false,
             }
         }));
@@ -257,5 +277,36 @@ fn nothing_starts_or_sends_once_the_close_began() {
         let end = finish_closing(run, CLOSE_LIMIT, DESTROY_GRACE).await;
         assert_eq!(end, CloseEnd::Returned);
         assert_eq!(shell.live_runs(), 0);
+    });
+}
+
+#[test]
+fn closing_waits_for_the_settings_to_be_written() {
+    drive(|harness| async move {
+        let (written, waiting) = async_channel::bounded::<()>(1);
+        let mut ports = harness.ports();
+        ports.settings = Arc::new(SlowSettings { written: waiting });
+        let mut shell = harness.shell_with(ports);
+        let mut returned = shell.close_all().returned;
+        assert_eq!(shell.live_runs(), 0, "no run is left to wait for");
+        let ended = future::or(
+            async {
+                (&mut returned).await;
+                true
+            },
+            async {
+                Timer::after(Duration::from_millis(100)).await;
+                false
+            },
+        )
+        .await;
+        assert!(!ended, "the close ended before the settings were written");
+
+        drop(written);
+        future::or(returned, async {
+            Timer::after(Duration::from_secs(1)).await;
+            panic!("the close did not end once the settings were written")
+        })
+        .await;
     });
 }

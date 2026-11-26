@@ -8,22 +8,28 @@ impl ShellState {
     }
 
     /// Closes every slot's session. The run is over once every run that has not returned has,
-    /// those of replaced sessions too; `destroy` kills the processes of those still left.
+    /// those of replaced sessions too, and the settings saved so far were written; `destroy`
+    /// kills the processes of those still left.
     pub fn close_all(&mut self) -> CloseRun {
         for held in self.slots.values() {
             held.runtime.close();
         }
+        self.settle_nav();
         let waits: Vec<Receiver<()>> = lock(&self.runs)
             .values()
             .map(|(_, finished)| finished.clone())
             .collect();
         let runs = Arc::clone(&self.runs);
+        let flushed = self.ports.settings.flushed();
+        let returned = async move {
+            for finished in waits {
+                // Nothing is ever sent: the receiver closes when the run has returned.
+                _ = finished.recv().await;
+            }
+        };
         CloseRun {
             returned: Box::pin(async move {
-                for finished in waits {
-                    // Nothing is ever sent: the receiver closes when the run has returned.
-                    _ = finished.recv().await;
-                }
+                future::zip(returned, flushed).await;
             }),
             destroy: Box::new(move || {
                 let left: Vec<SessionRuntime> = lock(&runs)
@@ -75,7 +81,7 @@ impl ShellState {
         }
         self.remove(slot);
         Acted {
-            removed: Some(slot),
+            removed: vec![slot],
             ..Acted::default()
         }
     }
@@ -108,6 +114,7 @@ impl ShellState {
             return Acted::default();
         }
         self.closing = CloseStage::Closing;
+        self.pending_new = None;
         Acted {
             close: true,
             ..Acted::default()
