@@ -559,6 +559,8 @@ fn removing_touches_nothing_but_the_settings() {
         assert_eq!(planners.planned(), planned);
         assert_eq!(shell.live_runs(), runs);
         assert_eq!(settings.saves().len(), saves + 1, "only the settings");
+        let last = settings.saves().pop().expect("a save");
+        assert!(last.projects.iter().all(|it| it.folder != CLOSTA));
     });
 }
 
