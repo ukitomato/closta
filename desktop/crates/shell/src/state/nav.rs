@@ -96,22 +96,33 @@ impl ShellState {
         }
     }
 
-    /// Selects the slot and says where it can be used: its input, or the band that says why
-    /// it cannot.
+    /// Selects the slot and says where it can be used.
     fn go_to_slot(&mut self, slot: SlotId) -> Acted {
-        let Some(held) = self.slots.get(&slot) else {
+        let Some(focus) = self.use_of(slot) else {
             return Acted::default();
-        };
-        let focus = match held.status {
-            SessionStatus::Failed(_) => FocusTarget::FailureBand(slot),
-            SessionStatus::Ended => FocusTarget::EndedBand(slot),
-            _ => FocusTarget::Composer(slot),
         };
         self.select(slot);
         Acted {
             focus: Some(focus),
             ..Acted::default()
         }
+    }
+
+    pub(super) fn nav_leave(&mut self) -> Acted {
+        Acted {
+            focus: self.selected.and_then(|slot| self.use_of(slot)),
+            ..Acted::default()
+        }
+    }
+
+    /// Where the slot can be used: its input, or the band that says why it cannot.
+    fn use_of(&self, slot: SlotId) -> Option<FocusTarget> {
+        let held = self.slots.get(&slot)?;
+        Some(match held.status {
+            SessionStatus::Failed(_) => FocusTarget::FailureBand(slot),
+            SessionStatus::Ended => FocusTarget::EndedBand(slot),
+            _ => FocusTarget::Composer(slot),
+        })
     }
 
     pub(super) fn nav_left(&mut self) -> Acted {

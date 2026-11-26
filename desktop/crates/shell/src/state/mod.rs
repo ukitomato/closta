@@ -245,6 +245,9 @@ pub enum ShellAction {
     NavTo(NavItem),
     /// Opens what the cursor's row stands for: the wait, the session, or the project's fold.
     NavEnter,
+    /// Leaves the list for where the selected slot can be used: its input, or the band that
+    /// says why it cannot.
+    NavLeave,
     /// A session's row goes to its project's row; a project's row closes it.
     NavLeft,
     /// A project's row opens it.
@@ -1165,6 +1168,7 @@ impl ShellState {
             ShellAction::NavMove { delta } => self.nav_move(delta),
             ShellAction::NavTo(item) => self.nav_to(item),
             ShellAction::NavEnter => self.nav_enter(),
+            ShellAction::NavLeave => self.nav_leave(),
             ShellAction::NavLeft => self.nav_left(),
             ShellAction::NavRight => self.nav_right(),
         }
@@ -1270,6 +1274,7 @@ fn behind_overlay(action: &ShellAction, overlay: Overlay) -> bool {
         | ShellAction::NavMove { .. }
         | ShellAction::NavTo(_)
         | ShellAction::NavEnter
+        | ShellAction::NavLeave
         | ShellAction::NavLeft
         | ShellAction::NavRight => true,
         ShellAction::OpenNewSession

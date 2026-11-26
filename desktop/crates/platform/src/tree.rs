@@ -318,8 +318,9 @@ struct SlotLook {
 }
 
 /// A session's row: its mark, its title and how long it has stood under its heading; a click
-/// selects it and puts the list's cursor on it, the close button shows on hover, a right click
-/// offers its menu.
+/// does what Enter does on it — the cursor goes there, the slot is selected and the keyboard
+/// goes where the slot can be used — the close button shows on hover, a right click offers its
+/// menu.
 fn slot_row(summary: &SlotSummary, look: SlotLook, dispatch: &Dispatch, cx: &App) -> AnyElement {
     let theme = cx.theme();
     let (glyph, tone) = mark_glyph(summary.mark);
@@ -336,8 +337,8 @@ fn slot_row(summary: &SlotSummary, look: SlotLook, dispatch: &Dispatch, cx: &App
     let select = {
         let dispatch = dispatch.clone();
         move |_: &ClickEvent, window: &mut Window, cx: &mut App| {
-            dispatch(ShellAction::Select(id), window, cx);
             dispatch(ShellAction::NavTo(NavItem::Slot(id)), window, cx);
+            dispatch(ShellAction::NavEnter, window, cx);
         }
     };
     // Shown while the row is hovered; a slot that is closing has nothing more to close.
@@ -551,7 +552,7 @@ mod tests {
     }
 
     #[gpui_kit::test]
-    fn a_click_puts_the_cursor_on_the_row_drawn_only_while_the_list_has_the_keyboard(
+    fn a_click_on_a_session_does_what_enter_does_and_on_a_project_keeps_the_list(
         cx: &mut TestAppContext,
     ) {
         let (handle, model) = test_window::open_tree(
@@ -562,34 +563,43 @@ mod tests {
                 run: false,
             },
         );
-        cx.update_window(handle, |_, window, cx| {
-            window.click("slot-2".to_owned(), cx)
-        })
-        .expect("click a session");
-        test_window::draw(cx, handle);
-        let second = SlotId::numbered(2);
-        let (list, selected) = model.read_with(cx, |model, _| {
-            (model.focus.list.clone(), model.shell.selected())
-        });
-        assert_eq!(selected, Some(second));
-        assert!(test_window::focused(cx, handle, &list));
         let shown = |cx: &mut TestAppContext| {
             cx.update_window(handle, |_, window, cx| {
                 model.read(cx).shown_cursor(window, cx)
             })
             .expect("read the cursor")
         };
-        assert_eq!(shown(cx), Some(NavItem::Slot(second)));
-
-        let input = model.read_with(cx, |model, _| model.focus.composers[&second].clone());
-        test_window::focus_on(cx, handle, &input);
-        assert_eq!(shown(cx), None, "no ring while the input has the keyboard");
+        let second = SlotId::numbered(2);
+        // Twice: the second click lands on the slot already selected.
+        for _ in 0..2 {
+            cx.update_window(handle, |_, window, cx| {
+                window.click("slot-2".to_owned(), cx)
+            })
+            .expect("click a session");
+            test_window::draw(cx, handle);
+            let (input, selected, cursor) = model.read_with(cx, |model, _| {
+                (
+                    model.focus.composers[&second].clone(),
+                    model.shell.selected(),
+                    model.shell.nav_cursor().cloned(),
+                )
+            });
+            assert_eq!(selected, Some(second));
+            assert_eq!(cursor, Some(NavItem::Slot(second)));
+            assert!(
+                test_window::focused(cx, handle, &input),
+                "the input to type in"
+            );
+            assert_eq!(shown(cx), None, "no ring while the input has the keyboard");
+        }
 
         cx.update_window(handle, |_, window, cx| {
             window.click("project-1".to_owned(), cx)
         })
         .expect("click the project");
         test_window::draw(cx, handle);
+        let list = model.read_with(cx, |model, _| model.focus.list.clone());
+        assert!(test_window::focused(cx, handle, &list));
         let key = project_key(A).expect("a key");
         assert_eq!(shown(cx), Some(NavItem::Project(key)));
     }

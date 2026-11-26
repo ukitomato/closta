@@ -321,7 +321,9 @@ impl FocusMap {
                 };
             }
         }
-        if self.list.contains_focused(window, cx) {
+        // The pane itself: a menu opened from one of its rows is drawn as its descendant and
+        // takes the keyboard, and its keys are the menu's.
+        if self.list.is_focused(window) {
             return match cursor {
                 Some(NavItem::NeedsYou(_)) => Located::NeedsYou,
                 _ => Located::Nav,
@@ -407,6 +409,7 @@ impl FocusMap {
         let Some(mut key) = to_card_key(keystroke) else {
             return Gate::default();
         };
+        // Each key down must pass here once: a second look would take it for a held key.
         key.held = self.repeats.borrow_mut().pressed(&keystroke.key);
         if let Some(overlay) = self.overlay {
             return self.overlay_gate(overlay, keystroke, &key, window, cx);
@@ -427,14 +430,7 @@ impl FocusMap {
         match (outcome, card) {
             (CardKeyOutcome::NextWaiting, _) => gate.action = Some(ShellAction::JumpToWaiting),
             (CardKeyOutcome::NavEnter, _) => gate.action = Some(ShellAction::NavEnter),
-            (CardKeyOutcome::LeaveList, _) => {
-                gate.focus = Some(
-                    self.selected
-                        .and_then(|slot| self.composers.get(&slot))
-                        .unwrap_or(&self.thread)
-                        .clone(),
-                );
-            }
+            (CardKeyOutcome::LeaveList, _) => gate.action = Some(ShellAction::NavLeave),
             (CardKeyOutcome::Choose(index), Some((slot, request_id))) => {
                 gate.action = Some(ShellAction::ChooseCard {
                     slot,
@@ -623,16 +619,24 @@ impl FocusMap {
             .clone()
     }
 
-    /// The focus of the slot's "Session ended" band and of its Restart, made the first time
-    /// they are asked for.
-    pub(crate) fn ended_handles(&mut self, slot: SlotId, cx: &mut App) -> EndedFocus {
-        self.ended
-            .entry(slot)
-            .or_insert_with(|| EndedFocus {
-                band: cx.focus_handle(),
-                restart: cx.focus_handle().tab_stop(false),
-            })
-            .clone()
+    /// Where the keyboard goes on the slot's "Session ended" band: its Restart when the
+    /// session `can_restart`, the band otherwise. The handles are made the first time they are
+    /// asked for; the Restart, a button, sets its own `tab_stop` at every draw.
+    pub(crate) fn ended_focus(
+        &mut self,
+        slot: SlotId,
+        can_restart: bool,
+        cx: &mut App,
+    ) -> FocusHandle {
+        let ended = self.ended.entry(slot).or_insert_with(|| EndedFocus {
+            band: cx.focus_handle(),
+            restart: cx.focus_handle(),
+        });
+        if can_restart {
+            ended.restart.clone()
+        } else {
+            ended.band.clone()
+        }
     }
 
     /// Lets the gate know a key went up, from the window's root, before any part can stop it.
@@ -763,8 +767,13 @@ fn hub_gate(scene: &FocusScene, key: &CardKey) -> Gate {
 /// Space comes back as a click when the key goes up. It only holds: what a key does is the
 /// window's gate's.
 pub(crate) fn left_list<E: InteractiveElement>(pane: E, list: &FocusHandle) -> E {
+    let pane_itself = list.clone();
     pane.track_focus(list)
-        .capture_key_down(|event: &KeyDownEvent, window, cx| {
+        .capture_key_down(move |event: &KeyDownEvent, window, cx| {
+            // A menu opened from a row has the keyboard inside the pane: its keys are its own.
+            if !pane_itself.is_focused(window) {
+                return;
+            }
             let Some(key) = to_card_key(&event.keystroke) else {
                 return;
             };
@@ -1088,13 +1097,12 @@ mod tests {
     }
 
     /// A window with the left list, a slot's input, a waiting permission card in the
-    /// conversation and a Restart button that keeps its presses; and the window's gate, which
-    /// reads the list's cursor from `cursor`.
+    /// conversation and the slot's "Session ended" band with a Restart that keeps its presses;
+    /// and the window's gate, which reads the list's cursor from `cursor`.
     struct Left {
         focus: FocusMap,
         cursor: Option<NavItem>,
         card: FocusHandle,
-        restart: FocusHandle,
         restarts: Rc<RefCell<usize>>,
         _keys: Subscription,
     }
@@ -1113,22 +1121,25 @@ mod tests {
                 .id("composer")
                 .track_focus(&self.focus.composers[&slot()])
                 .h(px(40.));
-            let restart = Button::new("restart")
-                .track_focus(&self.restart)
-                .label("Restart")
-                .on_click(move |_: &ClickEvent, _, _| *restarts.borrow_mut() += 1);
+            let ended = &self.focus.ended[&slot()];
+            let band = div().id("ended").track_focus(&ended.band).child(
+                Button::new("restart")
+                    .track_focus(&ended.restart)
+                    .label("Restart")
+                    .on_click(move |_: &ClickEvent, _, _| *restarts.borrow_mut() += 1),
+            );
             self.focus
                 .release_keys(div())
                 .size_full()
                 .child(list)
                 .child(thread)
                 .child(composer)
-                .child(restart)
+                .child(band)
         }
     }
 
-    /// Opens [`Left`] with the list's cursor on `cursor`. NavEnter puts the keyboard on the
-    /// Restart, as the window does for a slot whose session ended.
+    /// Opens [`Left`] with the list's cursor on `cursor`. NavEnter puts the keyboard where the
+    /// window puts it for a slot whose session ended and can be restarted.
     fn open_left(
         cx: &mut TestAppContext,
         cursor: Option<NavItem>,
@@ -1147,8 +1158,8 @@ mod tests {
                     ..Default::default()
                 };
                 open_window(options, cx, move |_, cx| {
-                    let restart = cx.focus_handle();
-                    let to_restart = restart.clone();
+                    let mut focus = FocusMap::new(cx);
+                    let to_restart = focus.ended_focus(slot(), true, cx);
                     let dispatch: Dispatch = Rc::new(move |action, window, cx| {
                         if action == ShellAction::NavEnter {
                             window.focus(&to_restart, cx);
@@ -1168,7 +1179,6 @@ mod tests {
                             Rc::new(|_, _, _| {}),
                             cx,
                         );
-                        let mut focus = FocusMap::new(cx);
                         focus.selected = Some(slot());
                         focus.composers.insert(slot(), cx.focus_handle());
                         let card = focus.card_handle(slot(), "r1", CardKind::Permission, 2, cx);
@@ -1176,7 +1186,6 @@ mod tests {
                             focus,
                             cursor,
                             card,
-                            restart,
                             restarts: Rc::default(),
                             _keys: keys,
                         }
@@ -1287,7 +1296,7 @@ mod tests {
     }
 
     #[gpui_kit::test]
-    fn enter_on_a_needs_you_row_puts_the_keyboard_on_its_card_and_answers_nothing(
+    fn on_a_needs_you_row_digits_and_space_answer_nothing_and_enter_opens_it(
         cx: &mut TestAppContext,
     ) {
         let (handle, host, acted) = open_left(cx, Some(NavItem::NeedsYou(slot())));
@@ -1326,7 +1335,7 @@ mod tests {
     }
 
     #[gpui_kit::test]
-    fn key_up_comes_with_the_same_key_as_key_down(cx: &mut TestAppContext) {
+    fn a_released_key_is_pressed_afresh(cx: &mut TestAppContext) {
         let (handle, host, acted) = open_left(cx, None);
         let card = host.read_with(cx, |host, _| host.card.clone());
         focus_on(cx, handle, &card);
@@ -1339,7 +1348,10 @@ mod tests {
     fn a_held_enter_after_nav_enter_restarts_nothing(cx: &mut TestAppContext) {
         let (handle, host, acted) = open_left(cx, Some(NavItem::Slot(slot())));
         let (list, restart) = host.read_with(cx, |host, _| {
-            (host.focus.list.clone(), host.restart.clone())
+            (
+                host.focus.list.clone(),
+                host.focus.ended[&slot()].restart.clone(),
+            )
         });
         focus_on(cx, handle, &list);
         key_down(cx, handle, "enter");
@@ -1350,10 +1362,53 @@ mod tests {
         let restarts = host.read_with(cx, |host, _| *host.restarts.borrow());
         assert_eq!(restarts, 0);
         assert_eq!(*acted.borrow(), [ShellAction::NavEnter]);
+        let scene = cx
+            .update_window(handle, |_, window, cx| {
+                host.read(cx).focus.focus_scene(window, cx)
+            })
+            .expect("read the focus");
+        assert_eq!(scene, closta_shell::card_keys::FocusScene::Other, "a band");
         // Pressed afresh, the Restart that has the keyboard is pressed.
         test_window::press(cx, handle, "enter");
         let restarts = host.read_with(cx, |host, _| *host.restarts.borrow());
         assert_eq!(restarts, 1);
+    }
+
+    #[gpui_kit::test]
+    fn keys_in_a_rows_menu_are_the_menus(cx: &mut TestAppContext) {
+        let (handle, model) = test_window::open_tree(
+            cx,
+            test_window::TreeSetup {
+                projects: &[],
+                slots: &[None, None],
+                run: false,
+            },
+        );
+        test_window::press(cx, handle, "alt-1");
+        cx.update_window(handle, |_, window, cx| {
+            window.right_click("slot-2".to_owned(), cx)
+        })
+        .expect("open the row's menu");
+        test_window::draw(cx, handle);
+        let (list, input) = model.read_with(cx, |model, _| {
+            (
+                model.focus.list.clone(),
+                model.focus.composers[&slot()].clone(),
+            )
+        });
+        assert!(
+            !test_window::focused(cx, handle, &list),
+            "the menu has the keyboard"
+        );
+        for key in ["down", "up", "escape"] {
+            test_window::press(cx, handle, key);
+            let cursor = model.read_with(cx, |model, _| model.shell.nav_cursor().cloned());
+            assert_eq!(cursor, Some(NavItem::Slot(slot())), "{key}");
+        }
+        assert!(
+            !test_window::focused(cx, handle, &input),
+            "Escape closed the menu, not the list"
+        );
     }
 
     fn key(source: &'static str) -> Option<CardKey> {

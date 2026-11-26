@@ -235,6 +235,43 @@ fn enter_on_a_slot_goes_where_the_slot_can_be_used() {
 }
 
 #[test]
+fn leaving_the_list_goes_where_the_selected_slot_can_be_used() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        harness.refuse(LaunchError::Spawn(ErrorKind::NotFound));
+        let (launch, _runtime) = in_project(harness.launch("failed"));
+        let failed = shell.open(launch);
+        end(&mut shell, failed).await;
+
+        let (launch, runtime) = in_project(harness.launch("ended"));
+        let ended = shell.open(launch);
+        let runtime = runtime.recv().await.unwrap();
+        running(&runtime).await;
+        harness.control(0).await.exit(0);
+        end(&mut shell, ended).await;
+        assert!(shell.ended(ended));
+
+        let live = live_in(&mut shell, &harness, FOLDER, 1).await;
+        for (slot, wanted) in [
+            (failed, FocusTarget::FailureBand(failed)),
+            (ended, FocusTarget::EndedBand(ended)),
+            (live, FocusTarget::Composer(live)),
+        ] {
+            shell.act(ShellAction::Select(slot));
+            shell.act(ShellAction::NavFocus);
+            // The cursor on another row changes nothing: it is the selected slot that counts.
+            shell.act(ShellAction::NavTo(NavItem::Project(key(FOLDER))));
+            let acted = shell.act(ShellAction::NavLeave);
+            assert_eq!(acted.focus, Some(wanted));
+            assert_eq!(shell.selected(), Some(slot), "the selection stays");
+        }
+
+        let mut empty = harness.shell();
+        assert_eq!(empty.act(ShellAction::NavLeave).focus, None);
+    });
+}
+
+#[test]
 fn the_cursor_survives_an_answered_wait() {
     drive(|harness| async move {
         let mut shell = harness.shell();
@@ -276,9 +313,10 @@ fn the_cursor_survives_an_answered_wait() {
     });
 }
 
-const SIX: fn(SlotId) -> [ShellAction; 6] = |slot| {
+const NAV_ACTIONS: fn(SlotId) -> [ShellAction; 7] = |slot| {
     [
         ShellAction::NavFocus,
+        ShellAction::NavLeave,
         ShellAction::NavMove { delta: 1 },
         ShellAction::NavTo(NavItem::Slot(slot)),
         ShellAction::NavEnter,
@@ -302,7 +340,7 @@ fn nav_actions_do_nothing_behind_an_overlay() {
         shell.act(ShellAction::OpenNewSession);
         assert!(shell.overlay().is_some());
         for round in 0..2 {
-            for action in SIX(slot) {
+            for action in NAV_ACTIONS(slot) {
                 let acted = shell.act(action.clone());
                 assert!(acted.focus.is_none(), "{action:?}");
                 assert_eq!(cursor(&shell), Some(project.clone()), "{action:?}");
@@ -334,7 +372,7 @@ fn nav_actions_do_nothing_once_the_window_is_closing() {
         shell.act(ShellAction::RequestClose);
         assert!(shell.act(ShellAction::ConfirmClose).close);
         assert_eq!(shell.overlay(), Some(Overlay::Closing));
-        for action in SIX(quiet) {
+        for action in NAV_ACTIONS(quiet) {
             let acted = shell.act(action.clone());
             assert!(acted.focus.is_none(), "{action:?}");
             assert_eq!(
@@ -361,7 +399,7 @@ fn nav_keys_do_not_change_a_project_once_the_window_is_closing() {
             shell.act(action.clone());
             assert!(!collapsed(&shell), "{action:?}");
         }
-        for action in SIX(slot) {
+        for action in NAV_ACTIONS(slot) {
             shell.act(action);
         }
         assert_eq!(settings.saves().len(), saves);

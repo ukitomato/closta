@@ -163,7 +163,7 @@ pub(crate) fn needs_you_list(
 
 /// One row: the mark, the project and the session, and the count of waits on the first line;
 /// what waits, a permission's subject and the buttons on the second. A row the left list's
-/// cursor stands on is framed.
+/// cursor stands on is framed; a click on the row, outside its buttons, puts the cursor there.
 fn needs_you_row(
     row: &NeedsYouRow,
     cursor: bool,
@@ -248,6 +248,8 @@ fn needs_you_row(
                             .primary()
                             .label(copy::LIST_ALLOW)
                             .on_click(move |_: &ClickEvent, window, cx| {
+                                // The row under it would put the list's cursor on it.
+                                cx.stop_propagation();
                                 // The time it was pressed: the shell takes it half a second
                                 // after the row first showed this request.
                                 let action = ShellAction::AllowFromList {
@@ -292,10 +294,14 @@ fn needs_you_row(
     } else {
         theme.ring.opacity(0.)
     };
+    let to_row = dispatch.clone();
     div()
         .id(name.clone())
         .accessibility_id(name)
         .aria_label(format!("{heading} · {line}"))
+        .on_click(move |_: &ClickEvent, window, cx| {
+            to_row(ShellAction::NavTo(NavItem::NeedsYou(slot)), window, cx);
+        })
         .px_3()
         .py_1()
         .border_1()
@@ -319,7 +325,11 @@ fn list_button(
         .tab_stop(false)
         .xsmall()
         .label(label)
-        .on_click(move |_: &ClickEvent, window, cx| dispatch(action.clone(), window, cx))
+        .on_click(move |_: &ClickEvent, window, cx| {
+            // The row under it would put the list's cursor on it.
+            cx.stop_propagation();
+            dispatch(action.clone(), window, cx);
+        })
 }
 
 /// The subject on one line, cut at [`SUBJECT_CHARS`] characters.
@@ -342,6 +352,7 @@ mod tests {
     use std::rc::Rc;
 
     use closta_presenter::sessions::groups::{AlertKind, OpenOnlyAlert, PermissionAlert};
+    use closta_shell::nav::NavItem;
     use closta_shell::needs_you::{NeedsYouItem, NeedsYouRow};
     use closta_shell::slot::SlotId;
     use closta_shell::state::ShellAction;
@@ -591,6 +602,34 @@ mod tests {
         assert_eq!(*slot, SlotId::numbered(1));
         assert_eq!(request_id, "r1");
         assert!((before..=after).contains(now_ms));
+    }
+
+    #[gpui_kit::test]
+    fn a_click_on_a_row_puts_the_cursor_there_and_its_buttons_do_only_their_own(
+        cx: &mut TestAppContext,
+    ) {
+        let (handle, acted, _, _) = open(cx, vec![permission(1, true), question(2)]);
+        cx.update_window(handle, |_, window, cx| {
+            // The row's left edge, beside its mark: no button there.
+            window.click_at("needs-you-1".to_owned(), point(px(2.), px(2.)), cx);
+            window.click("needs-you-open-2".to_owned(), cx);
+            window.click("needs-you-deny-1".to_owned(), cx);
+        })
+        .expect("click the rows");
+        cx.run_until_parked();
+        assert_eq!(
+            *acted.borrow(),
+            [
+                ShellAction::NavTo(NavItem::NeedsYou(SlotId::numbered(1))),
+                ShellAction::OpenFromList {
+                    slot: SlotId::numbered(2)
+                },
+                ShellAction::DenyFromList {
+                    slot: SlotId::numbered(1),
+                    request_id: "r1".to_owned()
+                },
+            ]
+        );
     }
 
     #[gpui_kit::test]

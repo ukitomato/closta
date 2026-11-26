@@ -542,12 +542,8 @@ impl ShellModel {
             FocusTarget::Nav => self.focus.list.clone(),
             // Its Restart, or the band itself when the session cannot be restarted.
             FocusTarget::EndedBand(slot) => {
-                let ended = self.focus.ended_handles(slot, cx);
-                if self.shell.can_restart(slot) {
-                    ended.restart
-                } else {
-                    ended.band
-                }
+                let can_restart = self.shell.can_restart(slot);
+                self.focus.ended_focus(slot, can_restart, cx)
             }
             FocusTarget::FailureBand(_) => self.focus.failure.clone(),
             FocusTarget::Card { slot, request_id } => {
