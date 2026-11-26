@@ -548,6 +548,22 @@ fn removing_touches_nothing_but_the_settings() {
             saved_for: Arc::clone(&harness.saved_for) as _,
         });
         ended_project(&mut shell, &harness, CLOSTA).await;
+        let ports = harness.ports();
+        let record = closta_model::SavedSessionSummary {
+            id: "0b1f4c52-6a1e-4a43-9a53-7f0d2a4b8c11".to_owned(),
+            title: "t".to_owned(),
+            updated_at_ms: 1,
+            bytes: 1,
+        };
+        let resumed = shell.open(closta_shell::new_session::resume_in(
+            CLOSTA, &record, &ports,
+        ));
+        harness.control(1).await.exit(0);
+        let fakes = harness.saved_for.fakes();
+        assert_eq!(fakes.len(), 1, "the precondition: a fake is there");
+        until(|| fakes[0].reads().contains(&record.id)).await;
+        end(&mut shell, resumed).await;
+        let (asked, reads) = (harness.saved_for.saved_asked(), fakes[0].reads());
         let (looks, planned, runs) = (
             machine.folder_looks(),
             planners.planned(),
@@ -561,9 +577,9 @@ fn removing_touches_nothing_but_the_settings() {
         assert_eq!(planners.planned(), planned);
         assert_eq!(shell.live_runs(), runs);
         assert_eq!(harness.saved_for.lists_started(), 0);
-        for fake in harness.saved_for.fakes() {
-            assert_eq!((fake.lists(), fake.reads()), (0, Vec::<String>::new()));
-        }
+        assert_eq!(harness.saved_for.saved_asked(), asked);
+        assert_eq!(harness.saved_for.fakes().len(), 1);
+        assert_eq!((fakes[0].lists(), fakes[0].reads()), (0, reads));
         assert_eq!(settings.saves().len(), saves + 1, "only the settings");
         let last = settings.saves().pop().expect("a save");
         assert!(last.projects.iter().all(|it| it.folder != CLOSTA));

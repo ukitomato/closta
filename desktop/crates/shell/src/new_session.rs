@@ -54,7 +54,7 @@ pub trait SavedFor: Send + Sync {
     fn list(&self, folder: &str, stop: Arc<AtomicBool>) -> future::Boxed<Option<SavedListing>>;
 }
 
-/// A [`SavedFor`] that finds nothing saved anywhere.
+/// A [`SavedFor`] that finds nothing saved anywhere: the stand-in until the app has a real one.
 pub struct NoSaved;
 
 struct NothingSaved;
@@ -81,8 +81,10 @@ impl SavedFor for NoSaved {
         Arc::new(NothingSaved)
     }
 
-    fn list(&self, _folder: &str, _stop: Arc<AtomicBool>) -> future::Boxed<Option<SavedListing>> {
-        Box::pin(async { Some(SavedListing::default()) })
+    fn list(&self, _folder: &str, stop: Arc<AtomicBool>) -> future::Boxed<Option<SavedListing>> {
+        Box::pin(async move {
+            (!stop.load(std::sync::atomic::Ordering::SeqCst)).then(SavedListing::default)
+        })
     }
 }
 

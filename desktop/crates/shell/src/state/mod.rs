@@ -503,8 +503,7 @@ impl ShellState {
             .project
             .as_deref()
             .and_then(|folder| self.join_project(folder));
-        let (runtime, finished, session_id, saved_title) = self.start(launch);
-        let resumed = saved_title.is_some();
+        let (runtime, finished, session_id, resumed, saved_title) = self.start(launch);
         self.slots.insert(
             id,
             Slot {
@@ -556,11 +555,11 @@ impl ShellState {
         let relaunch = launch.relaunch.clone();
         let settles_on_failure = launch.settles_on_failure;
         let working_directory = launch.working_directory.clone();
-        let (runtime, finished, session_id, saved_title) = self.start(launch);
+        let (runtime, finished, session_id, resumed, saved_title) = self.start(launch);
         let held = self.slots.get_mut(&slot)?;
         held.title = title;
         held.asked_title = None;
-        held.resumed = saved_title.is_some();
+        held.resumed = resumed;
         held.session_id = session_id;
         held.saved_title = saved_title;
         held.relaunch = relaunch;
@@ -598,9 +597,12 @@ impl ShellState {
 
     /// A new session, its run and its companion handed to the spawn; with the receiver that
     /// closes once the run has returned.
-    /// The session's id and, for a resumed one, the title of its saved conversation come with
-    /// them.
-    fn start(&self, launch: SlotLaunch) -> (SessionRuntime, Receiver<()>, String, Option<String>) {
+    /// Besides the runtime and the receiver: the session's id, whether it puts a saved session
+    /// back, and the title of that conversation if the launch gave one.
+    fn start(
+        &self,
+        launch: SlotLaunch,
+    ) -> (SessionRuntime, Receiver<()>, String, bool, Option<String>) {
         let id = launch
             .session_id
             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
@@ -610,6 +612,7 @@ impl ShellState {
             launch.working_directory,
             Arc::clone(&self.log),
         );
+        let resumed = launch.resume.is_some();
         let mut saved_title = None;
         if let Some(resume) = launch.resume {
             config.opening = SessionOpening::Resume;
@@ -629,7 +632,7 @@ impl ShellState {
         if let Some(companion) = launch.companion {
             (self.spawn)(companion(runtime.clone()));
         }
-        (runtime, finished, id, saved_title)
+        (runtime, finished, id, resumed, saved_title)
     }
 
     /// How many runs have not returned, those of replaced sessions included.
@@ -662,6 +665,11 @@ impl ShellState {
     /// title it was started with; `None` for a slot that is not there.
     pub fn slot_title(&self, slot: SlotId) -> Option<String> {
         self.slots.get(&slot).map(Slot::shown_title)
+    }
+
+    /// Whether the slot's session puts a saved session back; false for a slot that is not there.
+    pub fn resumed(&self, slot: SlotId) -> bool {
+        self.slots.get(&slot).is_some_and(|it| it.resumed)
     }
 
     /// The id of the session the slot holds; `None` for a slot that is not there.

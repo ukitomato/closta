@@ -325,6 +325,7 @@ impl PlannerFor for Planners {
 pub struct FakeSavedFor {
     fakes: Mutex<Vec<(String, Arc<FakeSavedSessions>)>>,
     started: Arc<AtomicUsize>,
+    asked: AtomicUsize,
 }
 
 impl FakeSavedFor {
@@ -337,6 +338,11 @@ impl FakeSavedFor {
     /// How many lists were polled.
     pub fn lists_started(&self) -> usize {
         self.started.load(Ordering::SeqCst)
+    }
+
+    /// How many times `saved` was called.
+    pub fn saved_asked(&self) -> usize {
+        self.asked.load(Ordering::SeqCst)
     }
 
     fn fake_of(&self, folder: &str) -> Arc<FakeSavedSessions> {
@@ -352,6 +358,7 @@ impl FakeSavedFor {
 
 impl SavedFor for FakeSavedFor {
     fn saved(&self, folder: &str) -> Arc<dyn SavedSessions> {
+        self.asked.fetch_add(1, Ordering::SeqCst);
         self.fake_of(folder)
     }
 

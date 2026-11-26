@@ -791,3 +791,44 @@ fn the_title_of_a_resumed_slot_stays_after_its_first_request() {
         assert_eq!(shell.slot_title(slot).as_deref(), Some("Fix the parser"));
     });
 }
+
+#[test]
+fn replacing_a_slot_rewrites_its_session_id() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let ports = harness.ports();
+        let saved = summary_of("0b1f4c52-6a1e-4a43-9a53-7f0d2a4b8c11", "Fix the parser");
+        let slot = shell.open(resume_in(FOLDER, &saved, &ports));
+        harness.control(0).await;
+        assert_eq!(shell.session_id(slot), Some(saved.id.as_str()));
+        shell.replace(slot, launch_in(FOLDER, &ports)).unwrap();
+        harness.control(1).await;
+        let id = shell.session_id(slot).unwrap().to_owned();
+        assert_ne!(id, saved.id);
+        let args = harness.launch_args(1).await;
+        assert!(args.contains(&format!("--session-id={id}")), "{args:?}");
+        assert_eq!(shell.slot_title(slot).as_deref(), Some("New session"));
+    });
+}
+
+#[test]
+fn a_resume_without_a_title_is_still_a_resume() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let ports = harness.ports();
+        let mut launch = resume_in(
+            FOLDER,
+            &summary_of("0b1f4c52-6a1e-4a43-9a53-7f0d2a4b8c11", "x"),
+            &ports,
+        );
+        launch.resume.as_mut().unwrap().saved_title = None;
+        let slot = shell.open(launch);
+        harness.control(0).await;
+        let args = harness.launch_args(0).await;
+        assert!(
+            args.iter().any(|it| it.starts_with("--resume=")),
+            "{args:?}"
+        );
+        assert!(shell.resumed(slot), "the slot records the opening");
+    });
+}
