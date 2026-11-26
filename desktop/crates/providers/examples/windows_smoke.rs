@@ -436,7 +436,7 @@ mod smoke {
         let process: Arc<dyn AgentProcess> = Arc::from(process);
         let talk = async {
             process
-                .write_stdin(encode::initialize("i1", &[]))
+                .write_stdin(encode::initialize("i1", &[], true))
                 .await
                 .map_err(|error| format!("initialize not written: {error}"))?;
             process
@@ -497,7 +497,7 @@ mod smoke {
         // Answered `initialize` means claude is up, with whatever it starts at its start.
         let ready = async {
             process
-                .write_stdin(encode::initialize("i1", &[]))
+                .write_stdin(encode::initialize("i1", &[], true))
                 .await
                 .map_err(|error| format!("initialize not written: {error}"))?;
             loop {

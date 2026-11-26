@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use closta_core::ports::{AgentSession, EncodeError, SendError};
 use closta_model::{AgentEvent, ApprovalDecision, Attachment, AttachmentKind};
+use closta_providers::claude::fake::initialize::is_initialize;
 use closta_providers::claude::fake::process::{
     FakeProcess, FakeProcessProbe, ProcessBeat, ProcessScript, ProcessTermination,
 };
@@ -163,6 +164,24 @@ fn dropping_the_handle_with_nothing_queued_closes_stdin_so_the_cli_ends() {
     assert!(probe.stdin_lines().is_empty());
     assert!(probe.stdin_closed());
     assert_eq!(PumpEnd::Ended, end);
+}
+
+#[test]
+fn initialize_queued_before_a_send_is_written_first() {
+    let (started, probe) = start(script(vec![ProcessBeat::AwaitStdin]));
+    let id = started.session.queue_initialize().unwrap();
+    started
+        .session
+        .send_user_message("hello", &[], Some("u1"))
+        .unwrap();
+    run_to_end(started);
+    let lines = probe.stdin_lines();
+    assert_eq!(2, lines.len());
+    assert!(is_initialize(&lines[0]));
+    let first: Value = serde_json::from_str(&lines[0]).unwrap();
+    assert_eq!(id, first["request_id"]);
+    let second: Value = serde_json::from_str(&lines[1]).unwrap();
+    assert_eq!("user", second["type"]);
 }
 
 #[test]

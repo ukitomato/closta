@@ -328,7 +328,7 @@ fn the_capture_holds_the_status_the_toggles_and_the_reconnect_the_recorder_sent(
 
 #[test]
 fn initialize_is_the_recorded_line_apart_from_the_per_task_stop_affordance_added_since() {
-    let mut written = object(&encode::initialize(&mcp_id(1), &[]));
+    let mut written = object(&encode::initialize(&mcp_id(1), &[], true));
     let request = written["request"].as_object_mut().unwrap();
     assert_eq!(
         request.shift_remove("perTaskStopAffordance"),
