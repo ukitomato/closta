@@ -28,6 +28,7 @@ use crate::closing::{CloseQuestion, CloseRun, CloseStage};
 use crate::composer::Composer;
 use crate::copy;
 use crate::header::AppHeader;
+use crate::nav::NavItem;
 use crate::needs_you::{
     NeedsYouRow, SlotNeeds, attention, card_accepts, jump_target, list_accepts, needs_you_rows,
 };
@@ -46,6 +47,7 @@ use crate::watch::SlotWatch;
 
 mod cards;
 mod closing;
+mod nav;
 mod needs_you;
 mod overlays;
 mod projects;
@@ -220,6 +222,20 @@ pub enum ShellAction {
     CopySessionId {
         slot: SlotId,
     },
+    /// Puts the left list's cursor on the selected slot's row and the keyboard on the list.
+    NavFocus,
+    /// Moves the left list's cursor; it stops at both ends.
+    NavMove {
+        delta: i32,
+    },
+    /// Puts the left list's cursor on the row that was clicked.
+    NavTo(NavItem),
+    /// Opens what the cursor's row stands for: the wait, the session, or the project's fold.
+    NavEnter,
+    /// A session's row goes to its project's row; a project's row closes it.
+    NavLeft,
+    /// A project's row opens it.
+    NavRight,
 }
 
 /// The one thing that holds the window's attention; what is behind it takes no answer.
@@ -235,9 +251,19 @@ pub enum Overlay {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum FocusTarget {
     Composer(SlotId),
-    Card { slot: SlotId, request_id: String },
-    CardNote { slot: SlotId, request_id: String },
+    Card {
+        slot: SlotId,
+        request_id: String,
+    },
+    CardNote {
+        slot: SlotId,
+        request_id: String,
+    },
     FailureBand(SlotId),
+    /// The left list.
+    Nav,
+    /// The "Session ended" band: its Restart, or the band itself without one.
+    EndedBand(SlotId),
 }
 
 /// What the machine is asked: the checks of the New Session dialog, the planner a folder
@@ -389,6 +415,8 @@ pub struct ShellState {
     /// What the settings writer was last given, or what was restored: a value equal to it is
     /// not written again.
     saved: Option<Settings>,
+    /// The left list's cursor: its item and the place it last had.
+    nav: Option<(NavItem, usize)>,
     panes: Panes,
     runs: Runs,
     closing: CloseStage,
@@ -415,6 +443,7 @@ impl ShellState {
             selected: None,
             projects: Vec::new(),
             saved: None,
+            nav: None,
             panes: Panes::default(),
             runs: Runs::default(),
             closing: CloseStage::Open,
@@ -630,6 +659,12 @@ impl ShellState {
     /// Reads the slot's current session again, if it is still the one of `generation`, and
     /// returns where it is and how its rows changed.
     pub fn refresh(&mut self, slot: SlotId, generation: u64, now_ms: i64) -> Option<Refresh> {
+        let refreshed = self.refresh_inner(slot, generation, now_ms);
+        self.settle_nav();
+        refreshed
+    }
+
+    fn refresh_inner(&mut self, slot: SlotId, generation: u64, now_ms: i64) -> Option<Refresh> {
         let shown = self.selected == Some(slot);
         let held = self.slots.get_mut(&slot)?;
         if held.generation != generation {
@@ -861,6 +896,12 @@ impl ShellState {
 
     /// Does what `action` asks and says what the screen is to do about it.
     pub fn act(&mut self, action: ShellAction) -> Acted {
+        let acted = self.act_inner(action);
+        self.settle_nav();
+        acted
+    }
+
+    fn act_inner(&mut self, action: ShellAction) -> Acted {
         // Once the close began, nothing may start a run or write to a session: a run started
         // after `close_all` would be left out of its wait.
         if self.closing == CloseStage::Closing
@@ -1090,6 +1131,12 @@ impl ShellState {
                 }
                 Acted::default()
             }
+            ShellAction::NavFocus => self.nav_focus(),
+            ShellAction::NavMove { delta } => self.nav_move(delta),
+            ShellAction::NavTo(item) => self.nav_to(item),
+            ShellAction::NavEnter => self.nav_enter(),
+            ShellAction::NavLeft => self.nav_left(),
+            ShellAction::NavRight => self.nav_right(),
         }
     }
 
@@ -1191,6 +1238,12 @@ fn behind_overlay(action: &ShellAction, overlay: Overlay) -> bool {
         ShellAction::OpenNewSession | ShellAction::StartSession { .. } => {
             overlay != Overlay::NewSession
         }
+        ShellAction::NavFocus
+        | ShellAction::NavMove { .. }
+        | ShellAction::NavTo(_)
+        | ShellAction::NavEnter
+        | ShellAction::NavLeft
+        | ShellAction::NavRight => overlay != Overlay::Closing,
         _ => false,
     }
 }

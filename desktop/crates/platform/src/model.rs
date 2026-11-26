@@ -512,12 +512,14 @@ impl ShellModel {
         cx: &mut Context<Self>,
     ) {
         let handle = match target {
-            FocusTarget::Composer(slot) => {
+            // The ended band takes the input for now; it gets its own focus with the tree.
+            FocusTarget::Composer(slot) | FocusTarget::EndedBand(slot) => {
                 if let Some(input) = self.composers.get(&slot) {
                     input.update(cx, |state, cx| state.focus(window, cx));
                 }
                 return;
             }
+            FocusTarget::Nav => return,
             FocusTarget::FailureBand(_) => self.focus.failure.clone(),
             FocusTarget::Card { slot, request_id } => {
                 let Some(handle) = self.card_focus(slot, &request_id, cx) else {
