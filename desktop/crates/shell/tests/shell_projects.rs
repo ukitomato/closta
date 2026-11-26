@@ -503,7 +503,34 @@ fn removing_a_project_takes_its_ended_slots_and_saves_the_rest() {
         assert_eq!(left.len(), 1);
         let last = settings.saves().pop().expect("a save");
         assert_eq!(last, settings_of(vec![saved(OTHER, false)]));
+        assert!(last.projects.iter().all(|it| it.folder != CLOSTA));
         assert!(shell.selected().is_some_and(|it| left.contains(&it)));
+    });
+}
+
+#[test]
+fn a_project_with_a_draft_in_an_ended_slot_cannot_be_removed() {
+    drive(|harness| async move {
+        let (mut shell, settings) = harness.shell_recording();
+        let [failed, _ended] = ended_project(&mut shell, &harness, CLOSTA).await;
+        shell.act(ShellAction::EditDraft {
+            slot: failed,
+            text: "unsent".to_owned(),
+        });
+        let saves = settings.saves().len();
+        assert!(!can_remove(&shell, CLOSTA));
+        let acted = remove(&mut shell, CLOSTA);
+        assert!(acted.removed.is_empty());
+        assert_eq!(shell.projects().len(), 1);
+        assert_eq!(shell.slots().len(), 2);
+        assert_eq!(settings.saves().len(), saves);
+
+        // Once the draft is emptied the project can go.
+        shell.act(ShellAction::EditDraft {
+            slot: failed,
+            text: String::new(),
+        });
+        assert!(can_remove(&shell, CLOSTA));
     });
 }
 
@@ -527,6 +554,7 @@ fn removing_touches_nothing_but_the_settings() {
         let saves = settings.saves().len();
         let acted = remove(&mut shell, CLOSTA);
         assert!(acted.check.is_none() && acted.started.is_none() && !acted.close);
+        assert!(acted.project_check.is_none());
         assert_eq!(machine.folder_looks(), looks);
         assert_eq!(planners.planned(), planned);
         assert_eq!(shell.live_runs(), runs);
@@ -883,8 +911,8 @@ fn copy_session_id_is_offered_for_an_ended_slot() {
 }
 
 /// A slot whose session already ended or failed has no window in which it is closing but still
-/// offers its id: the status is only Ended or Failed once the run has returned, so closing it
-/// removes it at once and there is nothing to copy from.
+/// offers its id: the status is written just before the run returns, in the same poll on the
+/// single-threaded test executor, so once it reads Ended or Failed closing the slot removes it at once and there is nothing to copy from.
 #[test]
 fn closing_an_ended_or_failed_slot_leaves_nothing_to_copy() {
     drive(|harness| async move {
@@ -904,7 +932,7 @@ fn closing_an_ended_or_failed_slot_leaves_nothing_to_copy() {
             assert_eq!(
                 acted.removed,
                 [slot],
-                "the run had returned before the status did"
+                "the run had not returned when the status ended"
             );
             assert_eq!(
                 shell.act(ShellAction::CopySessionId { slot }).clipboard,

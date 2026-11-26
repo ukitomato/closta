@@ -73,6 +73,23 @@ fn alt_one_puts_the_cursor_on_the_selected_slot() {
 }
 
 #[test]
+fn alt_one_opens_the_left_pane_when_it_is_closed() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        live_in(&mut shell, &harness, FOLDER, 0).await;
+        shell.act(ShellAction::TogglePane(closta_shell::panes::Pane::Left));
+        assert!(!shell.panes().left_open);
+        let acted = shell.act(ShellAction::NavFocus);
+        assert!(shell.panes().left_open);
+        assert_eq!(acted.focus, Some(FocusTarget::Nav));
+
+        // An open pane stays open.
+        shell.act(ShellAction::NavFocus);
+        assert!(shell.panes().left_open);
+    });
+}
+
+#[test]
 fn alt_one_without_a_slot_goes_to_the_first_row() {
     drive(|harness| async move {
         let mut shell = harness.shell();

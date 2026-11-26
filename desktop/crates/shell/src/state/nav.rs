@@ -60,6 +60,10 @@ impl ShellState {
     }
 
     pub(super) fn nav_focus(&mut self) -> Acted {
+        // The list cannot take focus while its pane is shut.
+        if !self.panes.left_open {
+            self.panes.toggle(Pane::Left);
+        }
         let rows = self.nav_rows();
         let place = self.selected_place(&rows).unwrap_or(0);
         self.nav = rows.get(place).map(|item| (item.clone(), place));

@@ -30,8 +30,8 @@ pub fn settings_dir(local_app_data: Option<OsString>) -> Option<PathBuf> {
 }
 
 /// Reads the settings in `dir` and gives the writer that keeps them. A file that is not settings
-/// is set aside and the projects start empty; a file that cannot be read, or set aside, is never
-/// written over.
+/// is set aside and the projects start empty; a file that cannot be read, or set aside, or that a newer
+/// version wrote, is never written over.
 pub fn load(dir: &Path) -> (Settings, Arc<dyn SettingsSink>) {
     let path = dir.join(SETTINGS_FILE);
     let file = || -> Arc<dyn SettingsSink> { Arc::new(FileSettings::new(dir.to_path_buf())) };
@@ -39,6 +39,8 @@ pub fn load(dir: &Path) -> (Settings, Arc<dyn SettingsSink>) {
     match settings_start(std::fs::read(&path).map_err(|error| error.kind())) {
         SettingsStart::Empty => (Settings::default(), file()),
         SettingsStart::Read(settings) => (settings, file()),
+        // Written back it would lose what a newer version added.
+        SettingsStart::Newer(settings) => (settings, kept_nowhere()),
         SettingsStart::SetAside => match std::fs::rename(&path, dir.join(SET_ASIDE_FILE)) {
             Ok(()) => {
                 tracing::warn!("the settings could not be read and were set aside");
@@ -316,7 +318,7 @@ mod tests {
     }
 
     #[test]
-    fn a_write_that_fails_leaves_no_tmp_and_names_only_the_kind() {
+    fn a_write_that_fails_names_only_the_kind() {
         let log = captured();
         let parent = scratch("unwritable");
         // The place of the file is a file.

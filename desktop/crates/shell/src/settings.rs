@@ -174,6 +174,8 @@ impl LatestOnly {
 pub enum SettingsStart {
     Empty,
     Read(Settings),
+    /// Read, but written by a newer version: kept for this run and never written back.
+    Newer(Settings),
     SetAside,
     Unreadable(io::ErrorKind),
 }
@@ -192,6 +194,9 @@ pub fn settings_start(read: Result<Vec<u8>, io::ErrorKind>) -> SettingsStart {
         return SettingsStart::SetAside;
     };
     match read_settings(text) {
+        SettingsRead::Read(settings) if settings.version > SETTINGS_VERSION => {
+            SettingsStart::Newer(settings)
+        }
         SettingsRead::Read(settings) => SettingsStart::Read(settings),
         SettingsRead::Missing => SettingsStart::Empty,
         SettingsRead::Broken => SettingsStart::SetAside,
@@ -354,6 +359,18 @@ mod tests {
             SettingsStart::SetAside
         );
         assert_eq!(settings_start(Ok(b"{".to_vec())), SettingsStart::SetAside);
+    }
+
+    #[test]
+    fn a_newer_file_is_read_but_never_written_back() {
+        let text = br#"{"version": 2, "projects": [{"folder": "C:\\a", "collapsed": true}]}"#;
+        assert_eq!(
+            settings_start(Ok(text.to_vec())),
+            SettingsStart::Newer(Settings {
+                version: 2,
+                projects: vec![saved(r"C:\a", true)],
+            })
+        );
     }
 
     #[test]

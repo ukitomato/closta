@@ -414,7 +414,10 @@ impl ShellModel {
         // shown needs its rows made.
         let selected_before = self.shell.selected();
         let toggles = matches!(action, ShellAction::TogglePane(_));
-        let opens = matches!(action, ShellAction::OpenNewSession);
+        let opens = matches!(
+            action,
+            ShellAction::OpenNewSession | ShellAction::OpenNewSessionHere
+        );
         let bypass = match action {
             ShellAction::PickMode { slot, .. }
             | ShellAction::ConfirmBypass { slot }

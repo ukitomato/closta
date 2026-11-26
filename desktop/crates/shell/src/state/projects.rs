@@ -105,16 +105,15 @@ impl ShellState {
         Some(key)
     }
 
-    /// Whether no slot of the project is alive or closing.
+    /// Whether no slot of the project is alive, closing or holding a draft.
     fn has_no_live_slot(&self, key: &ProjectKey) -> bool {
-        !self
-            .slots
-            .values()
-            .any(|slot| slot.project.as_ref() == Some(key) && slot.is_live())
+        !self.slots.values().any(|slot| {
+            slot.project.as_ref() == Some(key) && (slot.is_live() || slot.composer.has_draft())
+        })
     }
 
     /// Takes the project and its ended slots off the list and saves the rest; a project with a
-    /// live or closing slot stays as it is. No file is touched.
+    /// live, closing or drafted slot stays as it is. No file is touched.
     pub(super) fn remove_project(&mut self, key: &ProjectKey) -> Acted {
         if !self.projects.iter().any(|it| &it.key == key) || !self.has_no_live_slot(key) {
             return Acted::default();

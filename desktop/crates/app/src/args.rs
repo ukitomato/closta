@@ -13,7 +13,7 @@ use std::path::PathBuf;
 use closta_shell::settings::{SETTINGS_VERSION, SavedProject, Settings};
 
 /// One `--replay` and the options that follow it.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct ReplayArg {
     pub path: PathBuf,
     pub prompt: Option<String>,
@@ -24,7 +24,7 @@ pub struct ReplayArg {
 }
 
 /// What the replay build was started with.
-#[derive(Clone, PartialEq, Debug, Default)]
+#[derive(Clone, PartialEq, Default)]
 pub struct AppArgs {
     pub replays: Vec<ReplayArg>,
     /// The wait between two replayed lines, in milliseconds; 0 writes them all at once.
@@ -59,6 +59,43 @@ pub struct AppArgs {
     pub projects: Vec<String>,
     /// The folders that start as closed projects; one not among `projects` is added after them.
     pub collapsed: Vec<String>,
+}
+
+/// Shows presence and counts only: the values are paths, folders and prompts.
+impl std::fmt::Debug for ReplayArg {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ReplayArg")
+            .field("prompt", &self.prompt.is_some())
+            .field("stop_at", &self.stop_at)
+            .field("stdin_log", &self.stdin_log.is_some())
+            .field("folder", &self.folder.is_some())
+            .finish()
+    }
+}
+
+/// Shows presence and counts only: the values are paths, folders and prompts.
+impl std::fmt::Debug for AppArgs {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AppArgs")
+            .field("replays", &self.replays.len())
+            .field("pace_ms", &self.pace_ms)
+            .field("window", &self.window)
+            .field("panes", &self.panes)
+            .field("ready_file", &self.ready_file.is_some())
+            .field("perf_log", &self.perf_log.is_some())
+            .field("exit_after_ms", &self.exit_after_ms)
+            .field("scroll_through", &self.scroll_through)
+            .field("open_folders", &self.open_folders.len())
+            .field("mark_children", &self.mark_children.is_some())
+            .field("mcp_config", &self.mcp_config.is_some())
+            .field("fail_launch", &self.fail_launch)
+            .field("fail_distro", &self.fail_distro.is_some())
+            .field("close_after_ms", &self.close_after_ms)
+            .field("list_saved", &self.list_saved.is_some())
+            .field("projects", &self.projects.len())
+            .field("collapsed", &self.collapsed.len())
+            .finish()
+    }
 }
 
 impl AppArgs {
@@ -565,6 +602,24 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn debug_shows_no_value() {
+        let args = parsed(&[
+            "--replay",
+            "secret.ndjson",
+            "--prompt",
+            "secret prompt",
+            "--open-folder",
+            r"C:\secret",
+            "--project",
+            r"C:\secret2",
+        ])
+        .unwrap();
+        let shown = format!("{args:?}");
+        assert!(!shown.contains("secret"), "{shown}");
+        assert!(shown.contains("replays: 1"), "{shown}");
     }
 
     #[test]
