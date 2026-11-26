@@ -820,6 +820,8 @@ class ComposerPanel(
             }
 
             // Only an image on the clipboard is taken here; anything else goes on to the editor's own paste.
+            // The system clipboard can take a second to answer, so it is asked off the EDT, as the IDE's own paste
+            // does.
             override fun update(e: AnActionEvent) {
                 val manager = CopyPasteManager.getInstance()
                 e.presentation.isEnabled =
@@ -827,7 +829,7 @@ class ComposerPanel(
                     !manager.areDataFlavorsAvailable(DataFlavor.stringFlavor)
             }
 
-            override fun getActionUpdateThread() = ActionUpdateThread.EDT
+            override fun getActionUpdateThread() = ActionUpdateThread.BGT
         }.registerCustomShortcutSet(paste, editor.contentComponent, wiring ?: parent)
     }
 
