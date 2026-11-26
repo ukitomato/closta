@@ -7,9 +7,11 @@ import org.junit.jupiter.api.Assertions.assertAll
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import java.text.MessageFormat
 import java.time.Instant
 import java.time.ZoneId
 import java.util.Locale
+import java.util.ResourceBundle
 
 class LimitTextTest {
     private val saved = Locale.getDefault()
@@ -42,6 +44,7 @@ class LimitTextTest {
             { assertEquals("5-hour", windowName("five_hour")) },
             { assertEquals("7-day (Opus)", windowName("seven_day_opus")) },
             { assertEquals("extra usage", windowName("overage")) },
+            { assertEquals("7-day (extra usage included)", windowName("seven_day_overage_included")) },
             { assertEquals("plan", windowName(null)) },
             { assertEquals("tangelo", windowName("tangelo")) },
         )
@@ -79,6 +82,22 @@ class LimitTextTest {
                     limitText(record(LimitStatus.WARNING, null, null), now, tokyo),
                 )
             },
+        )
+    }
+
+    @Test
+    fun `in Japanese a warning with no share says the limit is near and when it resets`() {
+        val japanese = ResourceBundle.getBundle("messages.ClostaBundle", Locale.JAPANESE)
+        val words: Words = {
+            key,
+            params,
+            ->
+            MessageFormat(japanese.getString(key), Locale.JAPANESE).format(params)
+        }
+
+        assertEquals(
+            "5 時間の上限に近づいています · 15:30 にリセット",
+            limitText(record(LimitStatus.WARNING, null, reset), now, tokyo, words),
         )
     }
 

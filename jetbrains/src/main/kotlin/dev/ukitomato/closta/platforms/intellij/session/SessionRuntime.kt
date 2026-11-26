@@ -139,6 +139,15 @@ class SessionRuntime(
         store.transition { it.listed(listed) }
     }
 
+    /**
+     * Records that the user closed the banner of the limit [seq], whatever state the session is in: it needs no CLI,
+     * so a limit kept from a CLI that has stopped can be closed too. A closed session's view is no one's.
+     */
+    suspend fun dismissRateLimit(seq: Int) {
+        if (status.value is SessionStatus.Closed) return
+        store.transition { it.requested(PresenterInput.RateLimitDismissed(seq)) }
+    }
+
     /** Starts the session in its scope. Returns at once. */
     fun start(): Job = scope.launch { run() }
 

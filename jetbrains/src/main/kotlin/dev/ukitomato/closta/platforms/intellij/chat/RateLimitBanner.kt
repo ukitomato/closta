@@ -39,7 +39,12 @@ class RateLimitBanner : JPanel(BorderLayout()) {
             add(
                 InlineBanner("<html>${plainHtml(text)}</html>", statusOf(record.status))
                     .showCloseButton(true)
-                    .setCloseAction { onDismiss(record.seq) },
+                    .setCloseAction {
+                        // The close takes the banner out: hidden until the next frame draws what the presenter says.
+                        drawn = null
+                        isVisible = false
+                        onDismiss(record.seq)
+                    },
                 BorderLayout.CENTER,
             )
         }

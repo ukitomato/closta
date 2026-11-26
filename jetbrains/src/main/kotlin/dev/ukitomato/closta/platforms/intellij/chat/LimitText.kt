@@ -7,6 +7,16 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
+/** A message of the bundle by its key: the plugin's own, or another language's in a test. */
+internal typealias Words = (key: String, params: Array<out String>) -> String
+
+private val bundleWords: Words = ::bundleMessage
+
+private fun bundleMessage(
+    key: String,
+    vararg params: String,
+): String = ClostaBundle.message(key, *params)
+
 /**
  * The words of the limit banner: how near the limit is, when it resets, and whether the session goes on with extra
  * usage. Plain text: the window can be a name the CLI made, so the caller escapes it before putting it in HTML.
@@ -15,34 +25,42 @@ internal fun limitText(
     record: RateLimitRecord,
     now: Instant = Instant.now(),
     zone: ZoneId = ZoneId.systemDefault(),
+    words: Words = bundleWords,
 ): String {
-    val window = windowName(record.window)
+    val window = windowName(record.window, words)
+    val percent = record.utilizationPercent
     val main =
         when {
-            record.status == LimitStatus.REJECTED -> ClostaBundle.message("composer.limit.rejected", window)
-            record.utilizationPercent != null ->
-                ClostaBundle.message("composer.limit.warning", window, record.utilizationPercent.toString())
-            else -> ClostaBundle.message("composer.limit.warningNoPercent", window)
+            record.status == LimitStatus.REJECTED -> words("composer.limit.rejected", arrayOf(window))
+            percent != null -> words("composer.limit.warning", arrayOf(window, percent.toString()))
+            else -> words("composer.limit.warningNoPercent", arrayOf(window))
         }
     val resets =
         record.resetsAtEpochSec?.let {
-            ClostaBundle.message("composer.limit.resets", resetClock(Instant.ofEpochSecond(it), now, zone))
+            words("composer.limit.resets", arrayOf(resetClock(Instant.ofEpochSecond(it), now, zone)))
         }
-    val overage = ClostaBundle.message("composer.limit.overage").takeIf { record.usingOverage }
+    val overage = words("composer.limit.overage", emptyArray()).takeIf { record.usingOverage }
     return listOfNotNull(main, resets, overage).joinToString(SEPARATOR)
 }
 
 /** The name of a limit's window (`rateLimitType`); no window is the plan's, and an unknown name is itself. */
-internal fun windowName(window: String?): String =
-    when (window) {
-        null -> ClostaBundle.message("composer.limit.window.plan")
-        "five_hour" -> ClostaBundle.message("composer.limit.window.fiveHour")
-        "seven_day" -> ClostaBundle.message("composer.limit.window.sevenDay")
-        "seven_day_opus" -> ClostaBundle.message("composer.limit.window.sevenDayOpus")
-        "seven_day_sonnet" -> ClostaBundle.message("composer.limit.window.sevenDaySonnet")
-        "overage" -> ClostaBundle.message("composer.limit.window.overage")
-        else -> window
-    }
+internal fun windowName(
+    window: String?,
+    words: Words = bundleWords,
+): String {
+    val key =
+        when (window) {
+            null -> "composer.limit.window.plan"
+            "five_hour" -> "composer.limit.window.fiveHour"
+            "seven_day" -> "composer.limit.window.sevenDay"
+            "seven_day_opus" -> "composer.limit.window.sevenDayOpus"
+            "seven_day_sonnet" -> "composer.limit.window.sevenDaySonnet"
+            "seven_day_overage_included" -> "composer.limit.window.sevenDayOverageIncluded"
+            "overage" -> "composer.limit.window.overage"
+            else -> return window
+        }
+    return words(key, emptyArray())
+}
 
 /** When a limit resets, in [zone]: the clock alone on the same day as [now], the date before it on another. */
 internal fun resetClock(

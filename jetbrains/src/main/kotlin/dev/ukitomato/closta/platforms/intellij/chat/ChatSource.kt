@@ -99,7 +99,7 @@ interface ChatSource : Disposable {
 
     /**
      * The user closed the banner of the limit [seq]: it stays hidden until the limit's status or window changes. A
-     * session with no CLI has no limit to close.
+     * source with no session has no limit to close.
      */
     suspend fun dismissRateLimit(seq: Int) {}
 
@@ -235,7 +235,7 @@ interface ChatSource : Disposable {
         }
 
         override suspend fun dismissRateLimit(seq: Int) {
-            commands()?.dismissRateLimit(seq)
+            runtime.dismissRateLimit(seq)
         }
 
         override suspend fun setMcpServerEnabled(
