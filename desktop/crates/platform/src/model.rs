@@ -411,7 +411,7 @@ impl ShellModel {
             focus,
         } = self.shell.act(action);
         self.show_title(window);
-        if let Some(slot) = removed {
+        for slot in removed {
             self.forget(slot, window, cx);
         }
         // A restarted slot's rows are new: the text states of the old ones are let go.

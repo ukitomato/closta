@@ -75,7 +75,7 @@ impl ShellState {
         }
         self.remove(slot);
         Acted {
-            removed: Some(slot),
+            removed: vec![slot],
             ..Acted::default()
         }
     }

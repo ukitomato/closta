@@ -208,6 +208,10 @@ pub enum ShellAction {
     ToggleProject {
         project: ProjectKey,
     },
+    /// Takes the project off the list once none of its sessions is alive; no file is touched.
+    RemoveProject {
+        project: ProjectKey,
+    },
 }
 
 /// The one thing that holds the window's attention; what is behind it takes no answer.
@@ -258,8 +262,8 @@ pub struct Acted {
     pub folder: bool,
     /// The steps that close the window are to run.
     pub close: bool,
-    /// The slot that was closed and is gone.
-    pub removed: Option<SlotId>,
+    /// The slots that were closed or ended and are gone.
+    pub removed: Vec<SlotId>,
     /// Where the keyboard is to go.
     pub focus: Option<FocusTarget>,
 }
@@ -815,6 +819,7 @@ impl ShellState {
                     | ShellAction::DenyCard { .. }
                     | ShellAction::SendNote { .. }
                     | ShellAction::AnswerQuestion { .. }
+                    | ShellAction::RemoveProject { .. }
             )
         {
             return Acted::default();
@@ -835,6 +840,7 @@ impl ShellState {
                 self.toggle_project(&project);
                 Acted::default()
             }
+            ShellAction::RemoveProject { project } => self.remove_project(&project),
             ShellAction::TogglePane(pane) => {
                 self.panes.toggle(pane);
                 Acted::default()
@@ -1114,7 +1120,8 @@ fn behind_overlay(action: &ShellAction, overlay: Overlay) -> bool {
         | ShellAction::Restart { .. }
         | ShellAction::Interrupt { .. }
         | ShellAction::HistoryPrev { .. }
-        | ShellAction::HistoryNext { .. } => true,
+        | ShellAction::HistoryNext { .. }
+        | ShellAction::RemoveProject { .. } => true,
         ShellAction::OpenNewSession | ShellAction::StartSession { .. } => {
             overlay != Overlay::NewSession
         }

@@ -6,9 +6,11 @@
 mod common;
 mod support;
 
+use std::io::ErrorKind;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use closta_providers::claude::launch::LaunchError;
 use closta_session::status::SessionStatus;
 use closta_shell::projects::{Project, project_key};
 use closta_shell::settings::{
@@ -324,7 +326,10 @@ fn a_summary_does_not_show_the_name_when_debugged() {
         shell.open(harness.folder_launch(r"C:\work\secretname"));
         let summary = shell.projects().remove(0);
         assert_eq!(summary.runtime, "Windows");
-        assert!(summary.can_add && summary.can_remove && !summary.checking);
+        assert!(
+            summary.can_add && !summary.can_remove && !summary.checking,
+            "its session is alive"
+        );
         let text = format!("{summary:?}");
         assert!(
             !text.contains("secretname") && !text.contains(r"C:\"),
@@ -420,5 +425,189 @@ fn a_new_session_is_titled_new_session_and_restarts_in_its_project() {
         assert_eq!(shell.project_of(slot), Some(&key(CLOSTA)));
         assert_eq!(shell.slots()[0].title, "New session");
         assert_eq!(shell.projects().len(), 1);
+    });
+}
+
+const OTHER: &str = r"C:\work\other";
+
+fn remove(shell: &mut ShellState, folder: &str) -> closta_shell::state::Acted {
+    shell.act(ShellAction::RemoveProject {
+        project: key(folder),
+    })
+}
+
+fn can_remove(shell: &ShellState, folder: &str) -> bool {
+    shell
+        .projects()
+        .into_iter()
+        .find(|it| it.key == key(folder))
+        .expect("the project")
+        .can_remove
+}
+
+/// A launch in `folder` whose companion hands the test the runtime.
+fn launch_in_project(
+    harness: &Harness,
+    folder: &str,
+) -> (
+    closta_shell::slot::SlotLaunch,
+    async_channel::Receiver<closta_session::runtime::SessionRuntime>,
+) {
+    let (mut launch, runtime) = harness.launch("in project");
+    launch.project = Some(folder.to_owned());
+    (launch, runtime)
+}
+
+/// Lets the slot's session end by itself and reads that.
+async fn end(shell: &mut ShellState, slot: SlotId) {
+    let mut watch = shell.watch(slot).unwrap();
+    while watch.changed().await {}
+    shell.refresh(slot, watch.generation(), 0).unwrap();
+}
+
+/// A project of `folder` with one failed and one ended slot, both refreshed.
+async fn ended_project(shell: &mut ShellState, harness: &Harness, folder: &str) -> [SlotId; 2] {
+    harness.refuse(LaunchError::Spawn(ErrorKind::NotFound));
+    let (launch, _runtime) = launch_in_project(harness, folder);
+    let failed = shell.open(launch);
+    end(shell, failed).await;
+    assert!(matches!(
+        shell.status(failed),
+        Some(SessionStatus::Failed(_))
+    ));
+    let (launch, runtime) = launch_in_project(harness, folder);
+    let ended = shell.open(launch);
+    let runtime = runtime.recv().await.unwrap();
+    running(&runtime).await;
+    harness.control(0).await.exit(0);
+    end(shell, ended).await;
+    assert!(shell.ended(ended));
+    [failed, ended]
+}
+
+#[test]
+fn removing_a_project_takes_its_ended_slots_and_saves_the_rest() {
+    drive(|harness| async move {
+        let (mut shell, settings) = harness.shell_recording();
+        let [failed, ended] = ended_project(&mut shell, &harness, CLOSTA).await;
+        shell.open(harness.folder_launch(OTHER));
+        assert_eq!(shell.projects().len(), 2);
+        assert!(can_remove(&shell, CLOSTA));
+        let acted = remove(&mut shell, CLOSTA);
+        assert_eq!(acted.removed, vec![failed, ended]);
+        assert_eq!(shell.projects().len(), 1);
+        let left: Vec<SlotId> = shell.slots().iter().map(|it| it.id).collect();
+        assert!(!left.contains(&failed) && !left.contains(&ended));
+        assert_eq!(left.len(), 1);
+        let last = settings.saves().pop().expect("a save");
+        assert_eq!(last, settings_of(vec![saved(OTHER, false)]));
+        assert!(shell.selected().is_some_and(|it| left.contains(&it)));
+    });
+}
+
+#[test]
+fn removing_touches_nothing_but_the_settings() {
+    drive(|harness| async move {
+        let settings = Arc::new(RecordingSettings::default());
+        let machine = Arc::new(Machine::default());
+        let planners = Arc::new(Planners::new(Arc::clone(&harness.planner) as _));
+        let mut shell = harness.shell_with(Ports {
+            checks: Arc::clone(&machine) as _,
+            planner_for: Arc::clone(&planners) as _,
+            settings: Arc::clone(&settings) as _,
+        });
+        ended_project(&mut shell, &harness, CLOSTA).await;
+        let (looks, planned, runs) = (
+            machine.folder_looks(),
+            planners.planned(),
+            shell.live_runs(),
+        );
+        let saves = settings.saves().len();
+        let acted = remove(&mut shell, CLOSTA);
+        assert!(acted.check.is_none() && acted.started.is_none() && !acted.close);
+        assert_eq!(machine.folder_looks(), looks);
+        assert_eq!(planners.planned(), planned);
+        assert_eq!(shell.live_runs(), runs);
+        assert_eq!(settings.saves().len(), saves + 1, "only the settings");
+    });
+}
+
+#[test]
+fn a_project_with_a_live_or_closing_slot_cannot_be_removed() {
+    drive(|harness| async move {
+        let (mut shell, settings) = harness.shell_recording();
+        let (launch, runtime) = launch_in_project(&harness, CLOSTA);
+        let live = shell.open(launch);
+        running(&runtime.recv().await.unwrap()).await;
+        let saves = settings.saves().len();
+        assert!(!can_remove(&shell, CLOSTA));
+        let acted = remove(&mut shell, CLOSTA);
+        assert!(acted.removed.is_empty());
+        assert_eq!(shell.projects().len(), 1);
+        assert_eq!(shell.slots().len(), 1);
+        assert_eq!(settings.saves().len(), saves);
+
+        // A slot still closing holds its project as well.
+        harness.stubborn();
+        let (launch, runtime) = launch_in_project(&harness, OTHER);
+        let closing = shell.open(launch);
+        running(&runtime.recv().await.unwrap()).await;
+        shell.act(ShellAction::CloseSlot { slot: closing });
+        assert!(
+            shell
+                .slots()
+                .iter()
+                .any(|it| it.id == closing && it.closing)
+        );
+        assert!(!can_remove(&shell, OTHER));
+        let saves = settings.saves().len();
+        assert!(remove(&mut shell, OTHER).removed.is_empty());
+        assert_eq!(shell.projects().len(), 2);
+        assert_eq!(shell.slots().len(), 2);
+        assert_eq!(settings.saves().len(), saves);
+        assert!(shell.project_of(live).is_some());
+    });
+}
+
+#[test]
+fn a_removed_folder_comes_back_at_the_end_open() {
+    drive(|harness| async move {
+        let (mut shell, settings) = harness.shell_recording();
+        let restored = settings_of(vec![saved(CLOSTA, true), saved(OTHER, false)]);
+        shell.restore_projects(&restored);
+        ended_project(&mut shell, &harness, CLOSTA).await;
+        remove(&mut shell, CLOSTA);
+        assert_eq!(names(&shell), ["other"]);
+        shell.open(harness.folder_launch(CLOSTA));
+        assert_eq!(names(&shell), ["other", "closta"]);
+        assert!(!shell.projects()[1].collapsed);
+        let last = settings.saves().pop().expect("a save");
+        assert_eq!(
+            last,
+            settings_of(vec![saved(OTHER, false), saved(CLOSTA, false)])
+        );
+    });
+}
+
+#[test]
+fn removing_is_refused_behind_an_overlay_and_while_closing() {
+    drive(|harness| async move {
+        let (mut shell, settings) = harness.shell_recording();
+        ended_project(&mut shell, &harness, CLOSTA).await;
+        let saves = settings.saves().len();
+        shell.act(ShellAction::OpenNewSession);
+        assert!(remove(&mut shell, CLOSTA).removed.is_empty());
+        assert_eq!(shell.projects().len(), 1);
+        assert_eq!(settings.saves().len(), saves);
+        toggle(&mut shell, CLOSTA);
+        assert!(shell.projects()[0].collapsed, "a toggle goes through");
+        shell.act(ShellAction::CancelNewSession);
+
+        let saves = settings.saves().len();
+        shell.act(ShellAction::RequestClose);
+        assert!(remove(&mut shell, CLOSTA).removed.is_empty());
+        assert_eq!(shell.projects().len(), 1);
+        assert_eq!(shell.slots().len(), 2);
+        assert_eq!(settings.saves().len(), saves);
     });
 }

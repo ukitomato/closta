@@ -415,7 +415,7 @@ fn closing_an_ended_slot_removes_it_at_once() {
         settle(&mut shell, slot).await;
         assert!(shell.ended(slot));
         let acted = shell.act(ShellAction::CloseSlot { slot });
-        assert_eq!(acted.removed, Some(slot));
+        assert_eq!(acted.removed, vec![slot]);
         assert!(shell.slots().is_empty());
         until(|| shell.live_runs() == 0).await;
     });

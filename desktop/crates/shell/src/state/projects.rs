@@ -3,7 +3,7 @@
 
 use std::fmt;
 
-use super::{ShellState, SlotId};
+use super::{Acted, ShellState, SlotId};
 use crate::copy;
 use crate::projects::{Project, ProjectKey, display_name, project_key};
 use crate::settings::Settings;
@@ -67,7 +67,7 @@ impl ShellState {
                 collapsed: project.collapsed,
                 checking: false,
                 can_add,
-                can_remove: true,
+                can_remove: self.has_no_live_slot(&project.key),
             })
             .collect()
     }
@@ -102,6 +102,37 @@ impl ShellState {
             self.save_projects();
         }
         Some(key)
+    }
+
+    /// Whether no slot of the project is alive or closing.
+    fn has_no_live_slot(&self, key: &ProjectKey) -> bool {
+        !self
+            .slots
+            .values()
+            .any(|slot| slot.project.as_ref() == Some(key) && slot.is_live())
+    }
+
+    /// Takes the project and its ended slots off the list and saves the rest; a project with a
+    /// live or closing slot stays as it is. No file is touched.
+    pub(super) fn remove_project(&mut self, key: &ProjectKey) -> Acted {
+        if !self.projects.iter().any(|it| &it.key == key) || !self.has_no_live_slot(key) {
+            return Acted::default();
+        }
+        let gone: Vec<SlotId> = self
+            .slots
+            .iter()
+            .filter(|(_, slot)| slot.project.as_ref() == Some(key))
+            .map(|(id, _)| *id)
+            .collect();
+        for slot in &gone {
+            self.remove(*slot);
+        }
+        self.projects.retain(|it| &it.key != key);
+        self.save_projects();
+        Acted {
+            removed: gone,
+            ..Acted::default()
+        }
     }
 
     pub(super) fn toggle_project(&mut self, key: &ProjectKey) {

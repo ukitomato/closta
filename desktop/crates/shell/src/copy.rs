@@ -332,6 +332,8 @@ pub const SLOT_LIMIT: &str = "Close a session to start another (8 at most).";
 /// The needs-you list: its headings and the buttons of a row.
 pub const NEEDS_YOU: &str = "NEEDS YOU";
 pub const SESSIONS_HEADING: &str = "SESSIONS";
+pub const REMOVE_FROM_LIST: &str = "Remove from list";
+pub const CLOSE_ITS_SESSIONS: &str = "Close its sessions first.";
 pub const LIST_ALLOW: &str = "Allow";
 pub const LIST_DENY: &str = "Deny…";
 pub const LIST_OPEN: &str = "Open";
