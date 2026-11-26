@@ -2,6 +2,8 @@
 //! whether it is open and its cached text state; a click on a row that opens asks the shell to
 //! toggle it. The draw makes a text state that is missing and never sets one's text.
 
+use std::collections::HashSet;
+
 use closta_presenter::rows::{
     AskRow, CompactionRow, ExploredRow, ThinkingRow, ThreadRow, TodoRow, ToolRow, TurnEndRow,
 };
@@ -77,7 +79,14 @@ pub(super) fn row(
             thinking_row(thinking, is_open, &toggle, cx),
             thinking_word(thinking).to_owned(),
         ),
-        ThreadRow::Tool(tool) => (tool_row(tool, is_open, &toggle, cx), tool_name(tool)),
+        ThreadRow::Tool(tool) => {
+            let waits = tool_waits(
+                tool.line.state,
+                &tool.tool_use_id,
+                &shell.waiting_tool_ids(slot),
+            );
+            (tool_row(tool, waits, is_open, &toggle, cx), tool_name(tool))
+        }
         ThreadRow::Explored(explored) => (
             explored_row(explored, is_open, &toggle, cx),
             format!("{} {}", copy::EXPLORED, copy::explored_files(explored)),
@@ -232,7 +241,13 @@ fn tool_name(row: &ToolRow) -> String {
 
 /// A tool call as its line: the state's mark, the call and its counts. Opened, its input and
 /// result in boxes of code. A sub-agent's call is a framed line of its own instead.
-pub(super) fn tool_row(row: &ToolRow, is_open: bool, toggle: &Toggle, cx: &App) -> AnyElement {
+pub(super) fn tool_row(
+    row: &ToolRow,
+    waits: bool,
+    is_open: bool,
+    toggle: &Toggle,
+    cx: &App,
+) -> AnyElement {
     let content = match &row.agent {
         Some(summary) => {
             let muted = cx.theme().muted_foreground;
@@ -245,14 +260,20 @@ pub(super) fn tool_row(row: &ToolRow, is_open: bool, toggle: &Toggle, cx: &App) 
                         .gap_1p5()
                         .items_center()
                         .child(icon(IconName::Bot, muted))
-                        .child(state_mark(row.line.state, cx))
+                        .child(state_mark(row.line.state, waits, cx))
                         .child(what.to_owned())
                         .child(div().text_color(muted).child(rest)),
                 )
                 .into_any_element()
         }
         None => {
-            let header = header(&row.key, is_open, toggle, cx, tool_line(&row.line, cx));
+            let header = header(
+                &row.key,
+                is_open,
+                toggle,
+                cx,
+                tool_line(&row.line, waits, cx),
+            );
             let body = is_open
                 .then(|| row.detail.as_ref().and_then(|detail| tool_body(detail, cx)))
                 .flatten();
@@ -264,7 +285,7 @@ pub(super) fn tool_row(row: &ToolRow, is_open: bool, toggle: &Toggle, cx: &App) 
 
 /// A tool's line: its mark, its call in the code font (red when it failed), and the lines it
 /// added and removed.
-fn tool_line(line: &ToolLine, cx: &App) -> Div {
+fn tool_line(line: &ToolLine, waits: bool, cx: &App) -> Div {
     let theme = cx.theme();
     let color = match line.state {
         ToolLineState::Error => theme.danger,
@@ -273,7 +294,7 @@ fn tool_line(line: &ToolLine, cx: &App) -> Div {
     h_flex()
         .gap_1p5()
         .items_center()
-        .child(state_mark(line.state, cx))
+        .child(state_mark(line.state, waits, cx))
         .child(mono(cx).text_color(color).child(line.label.clone()))
         .children(line.added.map(|added| {
             mono(cx)
@@ -331,7 +352,7 @@ pub(super) fn explored_row(
     let line = h_flex()
         .gap_1p5()
         .items_center()
-        .child(state_mark(state, cx))
+        .child(state_mark(state, false, cx))
         .child(mono(cx).child(copy::EXPLORED))
         .child(
             mono(cx)
@@ -342,7 +363,7 @@ pub(super) fn explored_row(
     let body = is_open.then(|| {
         v_flex()
             .pl(px(INDENT))
-            .children(lines.into_iter().map(|line| tool_line(line, cx)))
+            .children(lines.into_iter().map(|line| tool_line(line, false, cx)))
     });
     indented(
         v_flex().child(header).children(body).into_any_element(),
@@ -455,10 +476,17 @@ fn header(
         .into_any_element()
 }
 
-/// A tool's state as a mark: done green, failed red, running faint.
-fn state_mark(state: ToolLineState, cx: &App) -> Icon {
+/// Whether a tool call runs only on a permission still unanswered: it waits instead of running.
+fn tool_waits(state: ToolLineState, tool_use_id: &str, waiting: &HashSet<String>) -> bool {
+    state == ToolLineState::Running && waiting.contains(tool_use_id)
+}
+
+/// A tool's state as a mark: done green, failed red, running faint, and a call that waits on a
+/// permission a warning, which does not turn.
+fn state_mark(state: ToolLineState, waits: bool, cx: &App) -> Icon {
     let theme = cx.theme();
     match state {
+        ToolLineState::Running if waits => icon(IconName::TriangleAlert, theme.warning),
         ToolLineState::Running => icon(IconName::LoaderCircle, theme.muted_foreground),
         ToolLineState::Ok => icon(IconName::CircleCheck, theme.success),
         ToolLineState::Error => icon(IconName::CircleX, theme.danger),
@@ -535,4 +563,22 @@ fn text_state(
         });
         state
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use closta_presenter::tool_line::ToolLineState;
+
+    use super::tool_waits;
+
+    #[test]
+    fn a_tool_waiting_on_a_permission_is_marked_and_not_spinning() {
+        let waiting: HashSet<String> = ["t1".to_owned()].into();
+        assert!(tool_waits(ToolLineState::Running, "t1", &waiting));
+        assert!(!tool_waits(ToolLineState::Running, "t2", &waiting));
+        assert!(!tool_waits(ToolLineState::Ok, "t1", &waiting));
+        assert!(!tool_waits(ToolLineState::Error, "t1", &waiting));
+    }
 }

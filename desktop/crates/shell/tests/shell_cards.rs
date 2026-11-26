@@ -110,6 +110,48 @@ fn allow_line(id: &str, a: &ApprovalRecord, permissions: Option<&str>) -> String
 }
 
 #[test]
+fn the_tool_a_permission_waits_on_is_named() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (slot, control, runtime) =
+            waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK, 1000).await;
+        let a = approval(&runtime, SANDBOX_REQUEST);
+        let waiting = shell.waiting_tool_ids(slot);
+        assert_eq!(waiting.len(), 1);
+        assert_eq!(Some(waiting.iter().next().unwrap()), a.tool_use_id.as_ref());
+
+        choose(&mut shell, slot, SANDBOX_REQUEST, 0);
+        written(&control).await;
+        until(|| runtime.view().conversation.pending_approvals.is_empty()).await;
+        let generation = shell.watch(slot).unwrap().generation();
+        shell.refresh(slot, generation, 2000).unwrap();
+        assert!(shell.waiting_tool_ids(slot).is_empty());
+    });
+}
+
+#[test]
+fn an_ended_session_names_no_waiting_tool() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (launch, runtime) = harness.launch("slot");
+        let slot = shell.open(launch);
+        let runtime = runtime.recv().await.unwrap();
+        running(&runtime).await;
+        let control = harness.control(0).await;
+        emit_capture(&control, SANDBOX, SANDBOX_ASK);
+        waits_on(&runtime, 1).await;
+        let generation = shell.watch(slot).unwrap().generation();
+        shell.refresh(slot, generation, 1000).unwrap();
+        assert_eq!(shell.waiting_tool_ids(slot).len(), 1);
+        control.exit(0);
+        let mut watch = shell.watch(slot).unwrap();
+        while watch.changed().await {}
+        shell.refresh(slot, watch.generation(), 2000).unwrap();
+        assert!(shell.waiting_tool_ids(slot).is_empty());
+    });
+}
+
+#[test]
 fn allow_writes_the_allow_the_presenter_makes() {
     drive(|harness| async move {
         let mut shell = harness.shell();

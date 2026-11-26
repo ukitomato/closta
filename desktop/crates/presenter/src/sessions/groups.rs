@@ -31,7 +31,7 @@ pub struct SessionSummary {
 }
 
 /// What a waiting session waits for; the screen puts it into words.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum WaitReason {
     Question,
     Plan,
@@ -41,6 +41,22 @@ pub enum WaitReason {
         subject: Option<String>,
     },
     Other,
+}
+
+/// The subject is the user's command or file: `Debug` gives only its length.
+impl fmt::Debug for WaitReason {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Question => f.write_str("Question"),
+            Self::Plan => f.write_str("Plan"),
+            Self::Permission { tool_name, subject } => f
+                .debug_struct("Permission")
+                .field("tool_name", tool_name)
+                .field("subject_len", &subject.as_ref().map(String::len))
+                .finish(),
+            Self::Other => f.write_str("Other"),
+        }
+    }
 }
 
 pub fn session_summary(
@@ -332,7 +348,60 @@ pub fn session_title(transcript: &Transcript) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{AlertChange, PermissionAlert, SessionAlert};
+    use super::{
+        AlertChange, PermissionAlert, SessionAlert, SessionGroup, SessionSummary, WaitReason,
+    };
+
+    fn secret_permission() -> WaitReason {
+        WaitReason::Permission {
+            tool_name: "Bash".to_owned(),
+            subject: Some("rm -rf secret".to_owned()),
+        }
+    }
+
+    #[test]
+    fn debug_of_a_wait_reason_gives_the_subject_s_length_only() {
+        let text = format!("{:?}", secret_permission());
+        assert!(!text.contains("secret"), "{text}");
+        assert!(text.contains("Bash"), "{text}");
+        assert!(text.contains("subject_len: Some(13)"), "{text}");
+        let none = WaitReason::Permission {
+            tool_name: "Bash".to_owned(),
+            subject: None,
+        };
+        assert!(format!("{none:?}").contains("subject_len: None"));
+        assert_eq!(format!("{:?}", WaitReason::Plan), "Plan");
+    }
+
+    #[test]
+    fn debug_of_a_summary_hides_the_subject() {
+        let summary = SessionSummary {
+            group: SessionGroup::Waiting,
+            reason: Some(secret_permission()),
+        };
+        let text = format!("{summary:?}");
+        assert!(!text.contains("secret"), "{text}");
+        assert!(
+            text.contains("Waiting") && text.contains("subject_len: Some(13)"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn debug_of_a_session_alert_shows_no_subject() {
+        let alert = SessionAlert::Permission(PermissionAlert {
+            key: "k1".to_owned(),
+            request_id: "r1".to_owned(),
+            tool_name: "Bash".to_owned(),
+            subject: "SECRET-COMMAND".to_owned(),
+            answerable: true,
+        });
+        let text = format!("{alert:?}");
+        assert!(
+            !text.contains("SECRET") && !text.contains("subject:"),
+            "{text}"
+        );
+    }
 
     #[test]
     fn debug_names_the_ids_and_the_kind_but_not_the_subject() {

@@ -365,6 +365,8 @@ struct Slot {
     status: SessionStatus,
     running: bool,
     waiting: bool,
+    /// The tools the pending approvals wait on, as of the last refresh; empty unless live.
+    waiting_tools: HashSet<String>,
     /// The keys of the rows opened or closed against their default.
     flipped: HashSet<String>,
     /// The draft, its history and the reason it was not sent; they outlive the session.
@@ -504,6 +506,7 @@ impl ShellState {
                 status: SessionStatus::Starting,
                 running: false,
                 waiting: false,
+                waiting_tools: HashSet::new(),
                 flipped: HashSet::new(),
                 composer: Composer::default(),
                 relaunch,
@@ -554,6 +557,7 @@ impl ShellState {
         held.status = SessionStatus::Starting;
         held.running = false;
         held.waiting = false;
+        held.waiting_tools.clear();
         held.last = None;
         held.waits.clear();
         held.failed_since = None;
@@ -651,6 +655,15 @@ impl ShellState {
         self.slots.get(&slot).is_some_and(|slot| slot.waiting)
     }
 
+    /// The tool calls the slot's pending approvals wait on, as of its last refresh; empty once
+    /// the session is no longer live.
+    pub fn waiting_tool_ids(&self, slot: SlotId) -> HashSet<String> {
+        self.slots
+            .get(&slot)
+            .map(|slot| slot.waiting_tools.clone())
+            .unwrap_or_default()
+    }
+
     /// Whether `row` of the slot is open: a to-do list is open and every other row closed,
     /// unless it was toggled.
     pub fn is_open(&self, slot: SlotId, row: &ThreadRow) -> bool {
@@ -700,6 +713,15 @@ impl ShellState {
         // An open turn is never folded closed when the process ends: only a live session runs.
         let live = matches!(status, SessionStatus::Running { .. });
         let running = live && !waiting && thread_is_running(&view.conversation, &view.transcript);
+        let waiting_tools = if live {
+            view.conversation
+                .pending_approvals
+                .iter()
+                .filter_map(|it| it.tool_use_id.clone())
+                .collect()
+        } else {
+            HashSet::new()
+        };
         let composing = composer_state(&view.conversation, &view.transcript);
         held.line = Some(ComposerLine {
             mode: composing.mode,
@@ -771,6 +793,7 @@ impl ShellState {
         held.status = status.clone();
         held.running = running;
         held.waiting = waiting;
+        held.waiting_tools = waiting_tools;
         let removed = held.closing && held.finished.is_closed();
         if removed {
             self.remove(slot);
