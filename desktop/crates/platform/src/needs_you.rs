@@ -1,13 +1,15 @@
 //! The needs-you list at the top of the left pane: one row a slot that waits, the oldest first,
 //! scrolling once it is taller than a few rows.
-//! A row says what waits and offers Allow and Deny… when the list may answer it unread, and Open
+//! A row names the project and the session on its first line, and on its second says what waits
+//! and offers Allow and Deny… when the list may answer it unread, and Open
 //! otherwise. Its buttons are for the mouse only: none takes the keyboard, and the digits, Enter
 //! and Space are held while the list has it. Alt+Shift+W is the window's gate's alone.
 
 use closta_presenter::sessions::groups::AlertKind;
 use closta_shell::card_keys::{CardKeyOutcome, FocusScene, card_key};
 use closta_shell::copy;
-use closta_shell::needs_you::{NeedsYouItem, NeedsYouRow};
+use closta_shell::nav::NavItem;
+use closta_shell::needs_you::{NeedsYouItem, NeedsYouRow, wholly_shown};
 use closta_shell::slot::SlotId;
 use closta_shell::state::ShellAction;
 use gpui_kit::base::{h_flex, v_flex};
@@ -34,8 +36,13 @@ impl ShellModel {
         if self.shell.panes().left_open && self.shell.overlay().is_none() {
             self.note_list_shown(&rows, window, cx);
         }
+        let cursor = match self.shell.nav_cursor() {
+            Some(NavItem::NeedsYou(slot)) => Some(*slot),
+            _ => None,
+        };
         needs_you_list(
             &rows,
+            cursor,
             &self.focus.list,
             &self.needs_you_scroll,
             Self::dispatch(cx),
@@ -63,10 +70,11 @@ impl ShellModel {
         }
         let this = cx.weak_entity();
         let scroll = self.needs_you_scroll.clone();
-        window.on_next_frame(move |_, cx| {
+        window.on_next_frame(move |window, cx| {
+            let content = (0., window.viewport_size().height.as_f32());
             _ = this.update(cx, |model, _| {
                 // Only the time is kept, which nothing on screen shows: no redraw is asked for.
-                for action in shown_actions(drawn, &scroll, model.clock.now_ms()) {
+                for action in shown_actions(drawn, &scroll, content, model.clock.now_ms()) {
                     model.shell.act(action);
                 }
             });
@@ -82,18 +90,24 @@ struct DrawnRow {
 }
 
 /// What the shell is told of the rows drawn: only those laid out whole inside the list's frame
-/// as it was last drawn. A row scrolled out of it, or cut by its edge, was not read.
-fn shown_actions(drawn: Vec<DrawnRow>, scroll: &ScrollHandle, now_ms: i64) -> Vec<ShellAction> {
+/// as it was last drawn and inside the window's content, `(top, bottom)`. A row scrolled out of
+/// the frame, cut by its edge or below the bottom of a low window was not read.
+fn shown_actions(
+    drawn: Vec<DrawnRow>,
+    scroll: &ScrollHandle,
+    content: (f32, f32),
+    now_ms: i64,
+) -> Vec<ShellAction> {
     let frame = scroll.bounds();
-    let offset = scroll.offset().y;
-    let (top, bottom) = (frame.top() - offset, frame.bottom() - offset);
-    // Half a pixel either way: a row that fits exactly is not cut by rounding.
-    let slack = px(0.5);
+    let list = (frame.top().as_f32(), frame.bottom().as_f32());
+    // The rows are laid out as if not scrolled; on screen they stand shifted by the offset.
+    let offset = scroll.offset().y.as_f32();
     drawn
         .into_iter()
         .filter(|row| {
             scroll.bounds_for_item(row.index).is_some_and(|it| {
-                it.size.height > px(0.) && it.top() >= top - slack && it.bottom() <= bottom + slack
+                let on_screen = (it.top().as_f32() + offset, it.bottom().as_f32() + offset);
+                it.size.height > px(0.) && wholly_shown(on_screen, list, content)
             })
         })
         .map(|row| ShellAction::ListShown {
@@ -109,6 +123,7 @@ fn shown_actions(drawn: Vec<DrawnRow>, scroll: &ScrollHandle, now_ms: i64) -> Ve
 /// when nothing waits.
 pub(crate) fn needs_you_list(
     rows: &[NeedsYouRow],
+    cursor: Option<SlotId>,
     focus: &FocusHandle,
     scroll: &ScrollHandle,
     dispatch: Dispatch,
@@ -154,14 +169,24 @@ pub(crate) fn needs_you_list(
                 .overflow_y_scroll()
                 .track_scroll(scroll)
                 .children(
-                    rows.iter()
-                        .map(|row| needs_you_row(row, &dispatch, clock, cx)),
+                    rows.iter().map(|row| {
+                        needs_you_row(row, cursor == Some(row.slot), &dispatch, clock, cx)
+                    }),
                 ),
         )
         .into_any_element()
 }
 
-fn needs_you_row(row: &NeedsYouRow, dispatch: &Dispatch, clock: WallClock, cx: &App) -> AnyElement {
+/// One row: the mark, the project and the session, and the count of waits on the first line;
+/// what waits, a permission's subject and the buttons on the second. A row the left list's
+/// cursor stands on is framed.
+fn needs_you_row(
+    row: &NeedsYouRow,
+    cursor: bool,
+    dispatch: &Dispatch,
+    clock: WallClock,
+    cx: &App,
+) -> AnyElement {
     let theme = cx.theme();
     let slot = row.slot;
     let glyph_color = match &row.item {
@@ -170,22 +195,15 @@ fn needs_you_row(row: &NeedsYouRow, dispatch: &Dispatch, clock: WallClock, cx: &
         NeedsYouItem::OpenOnly(_) => theme.info,
         NeedsYouItem::Failed { .. } => theme.danger,
     };
-    let line = format!("{} · {}", row.title, copy::needs_you_line(&row.item));
+    let heading = copy::needs_you_heading(row.project.as_deref(), &row.title);
+    let line = copy::needs_you_line(&row.item);
     let count = (row.waiting >= 2).then(|| {
         div()
             .flex_none()
             .text_color(theme.muted_foreground)
             .child(row.waiting.to_string())
     });
-    let open = || {
-        list_button(
-            format!("needs-you-open-{slot}"),
-            copy::LIST_OPEN,
-            ShellAction::OpenFromList { slot },
-            dispatch,
-        )
-        .outline()
-    };
+    let heading_id = SharedString::from(format!("needs-you-heading-{slot}"));
     let first = h_flex()
         .gap_2()
         .items_center()
@@ -195,72 +213,110 @@ fn needs_you_row(row: &NeedsYouRow, dispatch: &Dispatch, clock: WallClock, cx: &
                 .text_color(glyph_color)
                 .child(copy::needs_you_glyph(&row.item)),
         )
-        .child(div().flex_1().min_w_0().truncate().child(line.clone()))
-        .children(count);
-    let content = match (&row.item, row.request_id()) {
-        (NeedsYouItem::Permission(alert), Some(request_id)) => {
-            let buttons: Vec<AnyElement> = if row.may_allow() {
-                let allow = {
-                    let request_id = request_id.to_owned();
-                    let dispatch = dispatch.clone();
-                    Button::new(SharedString::from(format!("needs-you-allow-{slot}")))
-                        .accessibility_id(SharedString::from(format!("needs-you-allow-{slot}")))
-                        .tab_stop(false)
-                        .xsmall()
-                        .primary()
-                        .label(copy::LIST_ALLOW)
-                        .on_click(move |_: &ClickEvent, window, cx| {
-                            // The time it was pressed: the shell takes it half a second after
-                            // the row first showed this request.
-                            let action = ShellAction::AllowFromList {
-                                slot,
-                                request_id: request_id.clone(),
-                                now_ms: clock.now_ms(),
-                            };
-                            dispatch(action, window, cx);
-                        })
-                };
-                let deny = list_button(
-                    format!("needs-you-deny-{slot}"),
-                    copy::LIST_DENY,
-                    ShellAction::DenyFromList {
-                        slot,
-                        request_id: request_id.to_owned(),
-                    },
-                    dispatch,
-                )
-                .outline();
-                vec![allow.into_any_element(), deny.into_any_element()]
-            } else {
-                vec![open().into_any_element()]
-            };
-            let subject = div()
+        .child(
+            div()
+                .id(heading_id.clone())
+                .accessibility_id(heading_id)
+                .aria_label(heading.clone())
                 .flex_1()
                 .min_w_0()
                 .truncate()
-                .text_xs()
-                .font_family(theme.mono_font_family.clone())
-                .text_color(theme.muted_foreground)
-                .child(cut_subject(&alert.subject));
-            v_flex().gap_1().child(first).child(
-                h_flex()
-                    .pl_5()
-                    .gap_1()
-                    .items_center()
-                    .child(subject)
-                    .children(buttons),
-            )
-        }
-        _ => v_flex().child(first.child(open())),
+                .child(heading.clone()),
+        )
+        .children(count);
+    let what = div()
+        .flex_none()
+        .max_w_full()
+        .truncate()
+        .text_xs()
+        .text_color(theme.muted_foreground)
+        .child(line.clone());
+    let open = || {
+        list_button(
+            format!("needs-you-open-{slot}"),
+            copy::LIST_OPEN,
+            ShellAction::OpenFromList { slot },
+            dispatch,
+        )
+        .outline()
+        .into_any_element()
     };
+    let (subject, buttons): (Option<AnyElement>, Vec<AnyElement>) =
+        match (&row.item, row.request_id()) {
+            (NeedsYouItem::Permission(alert), Some(request_id)) => {
+                let subject = div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .text_xs()
+                    .font_family(theme.mono_font_family.clone())
+                    .text_color(theme.muted_foreground)
+                    .child(cut_subject(&alert.subject))
+                    .into_any_element();
+                let buttons = if row.may_allow() {
+                    let allow = {
+                        let request_id = request_id.to_owned();
+                        let dispatch = dispatch.clone();
+                        Button::new(SharedString::from(format!("needs-you-allow-{slot}")))
+                            .accessibility_id(SharedString::from(format!("needs-you-allow-{slot}")))
+                            .tab_stop(false)
+                            .xsmall()
+                            .primary()
+                            .label(copy::LIST_ALLOW)
+                            .on_click(move |_: &ClickEvent, window, cx| {
+                                // The time it was pressed: the shell takes it half a second
+                                // after the row first showed this request.
+                                let action = ShellAction::AllowFromList {
+                                    slot,
+                                    request_id: request_id.clone(),
+                                    now_ms: clock.now_ms(),
+                                };
+                                dispatch(action, window, cx);
+                            })
+                    };
+                    let deny = list_button(
+                        format!("needs-you-deny-{slot}"),
+                        copy::LIST_DENY,
+                        ShellAction::DenyFromList {
+                            slot,
+                            request_id: request_id.to_owned(),
+                        },
+                        dispatch,
+                    )
+                    .outline();
+                    vec![allow.into_any_element(), deny.into_any_element()]
+                } else {
+                    vec![open()]
+                };
+                (Some(subject), buttons)
+            }
+            _ => (None, vec![open()]),
+        };
+    let second = h_flex()
+        .pl_5()
+        .gap_1()
+        .items_center()
+        .child(what)
+        .children(subject)
+        // With no subject the buttons still stand at the right end.
+        .child(div().flex_1())
+        .children(buttons);
     let name = SharedString::from(format!("needs-you-{slot}"));
+    // The frame is always there, clear off the cursor, so the cursor moving shifts nothing.
+    let ring = if cursor {
+        theme.ring
+    } else {
+        theme.ring.opacity(0.)
+    };
     div()
         .id(name.clone())
         .accessibility_id(name)
-        .aria_label(line)
+        .aria_label(format!("{heading} · {line}"))
         .px_3()
         .py_1()
-        .child(content)
+        .border_1()
+        .border_color(ring)
+        .child(v_flex().gap_1().child(first).child(second))
         .into_any_element()
 }
 
@@ -331,6 +387,7 @@ mod tests {
         fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
             div().size_full().child(needs_you_list(
                 &self.rows,
+                None,
                 &self.focus,
                 &self.scroll,
                 self.dispatch.clone(),
@@ -432,8 +489,13 @@ mod tests {
             .collect()
     }
 
+    /// The rows noted in a window whose content is 400 px high, as the test window's is.
     fn noted(rows: &[NeedsYouRow], scroll: &ScrollHandle) -> Vec<usize> {
-        shown_actions(drawn(rows), scroll, 7)
+        noted_in(rows, scroll, (0., 400.))
+    }
+
+    fn noted_in(rows: &[NeedsYouRow], scroll: &ScrollHandle, content: (f32, f32)) -> Vec<usize> {
+        shown_actions(drawn(rows), scroll, content, 7)
             .into_iter()
             .map(|action| match action {
                 ShellAction::ListShown { index, now_ms, .. } => {
@@ -465,6 +527,40 @@ mod tests {
         let last = noted(&rows, &scroll);
         assert!(last.contains(&(rows.len() - 1)), "{last:?}");
         assert!(!last.contains(&0), "{last:?}");
+    }
+
+    #[gpui_kit::test]
+    fn a_row_partly_outside_the_window_is_not_noted(cx: &mut TestAppContext) {
+        let rows: Vec<NeedsYouRow> = (1..=12).map(|n| permission(n, true)).collect();
+        let (_, _, _, _, scroll) = open_scrolled(cx, rows.clone());
+        let in_frame = noted(&rows, &scroll);
+        assert!(in_frame.len() >= 2, "{in_frame:?}");
+        // A window whose content ends inside the list's frame, partway down its second row.
+        let second = scroll
+            .bounds_for_item(1)
+            .expect("the second row was laid out");
+        let cut = (second.top() + second.size.height / 2.).as_f32();
+        let in_window = noted_in(&rows, &scroll, (0., cut));
+        assert_eq!(in_window, [0], "only the first row is whole on screen");
+    }
+
+    #[gpui_kit::test]
+    fn the_first_line_names_the_project_and_the_title(cx: &mut TestAppContext) {
+        let mut row = permission(1, true);
+        row.project = Some("closta".to_owned());
+        row.title = "Retry login".to_owned();
+        let (handle, _, _, _) = open(cx, vec![row, permission(2, true)]);
+        cx.update_window(handle, |_, window, _| {
+            let first = window.find("needs-you-heading-1");
+            assert_eq!(first.label(), Some("closta · Retry login"));
+            let alone = window.find("needs-you-heading-2");
+            assert_eq!(
+                alone.label(),
+                Some("s2"),
+                "a slot in no project shows its title"
+            );
+        })
+        .expect("look at the rows");
     }
 
     #[gpui_kit::test]

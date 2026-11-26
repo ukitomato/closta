@@ -176,6 +176,15 @@ pub fn card_accepts(shown_ms: Option<i64>, now_ms: i64) -> bool {
     shown_ms.is_some_and(|since_ms| now_ms.saturating_sub(since_ms) >= ANSWER_DELAY_MS)
 }
 
+/// Whether a row, `(top, bottom)` on the screen, lies whole inside both the list's frame and the
+/// window's content: only then was it on screen to be read. A row that fits exactly counts,
+/// with half a pixel either way so that rounding does not cut it.
+pub fn wholly_shown(row: (f32, f32), list: (f32, f32), window: (f32, f32)) -> bool {
+    const SLACK: f32 = 0.5;
+    let inside = |(top, bottom): (f32, f32)| row.0 >= top - SLACK && row.1 <= bottom + SLACK;
+    inside(list) && inside(window)
+}
+
 /// A change calls for the user's eye: something new waits, or a slot has just failed.
 pub fn attention(change: &AlertChange, newly_failed: bool) -> bool {
     !change.raised.is_empty() || newly_failed
@@ -387,5 +396,32 @@ mod tests {
         assert!(!attention(&expired, false));
         assert!(attention(&expired, true));
         assert!(!attention(&AlertChange::default(), false));
+    }
+
+    #[test]
+    fn a_row_is_shown_only_when_it_fits_the_list_and_the_window() {
+        let list = (100.0, 320.0);
+        let window = (0.0, 700.0);
+        assert!(wholly_shown((120.0, 160.0), list, window), "inside both");
+        assert!(
+            wholly_shown((100.0, 320.0), list, window),
+            "the edges count as inside"
+        );
+        assert!(!wholly_shown((90.0, 130.0), list, window), "cut by the top");
+        assert!(
+            !wholly_shown((300.0, 340.0), list, window),
+            "cut by the bottom"
+        );
+        // A window lower than the list: the rows under its bottom are not on screen.
+        let low = (0.0, 250.0);
+        assert!(
+            wholly_shown((200.0, 250.0), list, low),
+            "at the window's edge"
+        );
+        assert!(
+            !wholly_shown((230.0, 270.0), list, low),
+            "cut by the window"
+        );
+        assert!(!wholly_shown((260.0, 300.0), list, low), "under the window");
     }
 }

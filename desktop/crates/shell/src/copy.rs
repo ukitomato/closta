@@ -336,7 +336,9 @@ pub const JUMP_HINT: &str = "Alt+Shift+W to answer";
 pub const SLOT_LIMIT: &str = "Close a session to start another (8 at most).";
 /// The needs-you list: its headings and the buttons of a row.
 pub const NEEDS_YOU: &str = "NEEDS YOU";
-pub const SESSIONS_HEADING: &str = "SESSIONS";
+/// The left pane's tree: its heading and the heading of the sessions in no project.
+pub const PROJECTS_HEADING: &str = "PROJECTS";
+pub const OTHER_HEADING: &str = "OTHER";
 pub const REMOVE_FROM_LIST: &str = "Remove from list";
 pub const CLOSE_ITS_SESSIONS: &str = "Close its sessions first.";
 pub const LIST_ALLOW: &str = "Allow";
@@ -923,6 +925,10 @@ mod tests {
             ),
             (JUMP_HINT, "Alt+Shift+W to answer"),
             (SLOT_LIMIT, "Close a session to start another (8 at most)."),
+            (PROJECTS_HEADING, "PROJECTS"),
+            (OTHER_HEADING, "OTHER"),
+            (REMOVE_FROM_LIST, "Remove from list"),
+            (CLOSE_ITS_SESSIONS, "Close its sessions first."),
             (
                 BYPASS_CONFIRM,
                 "Switch to Bypass Permissions? Tools in this session will run without asking first.",

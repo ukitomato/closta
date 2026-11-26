@@ -189,8 +189,8 @@ pub(crate) fn new_session(model: &ShellModel, cx: &mut Context<ShellModel>) -> O
 
     let recent: Vec<AnyElement> = model
         .shell
-        .recent_folders()
-        .iter()
+        .folder_choices()
+        .into_iter()
         .enumerate()
         .map(|(at, folder)| {
             let text = folder.clone();

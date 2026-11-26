@@ -12,7 +12,9 @@ use closta_presenter::rows::ThreadRow;
 use closta_shell::card_keys::{OverlayKey, card_choices, card_kind};
 use closta_shell::rows::{RowChange, ScrollDirection, kept, list_top};
 use closta_shell::slot::{SlotId, SlotLaunch};
-use closta_shell::state::{Acted, FocusTarget, FolderCheck, Overlay, ShellAction, ShellState};
+use closta_shell::state::{
+    Acted, FocusTarget, FolderCheck, Overlay, ProjectCheck, ShellAction, ShellState,
+};
 use gpui_kit::component::input::{InputState, TextareaState};
 use gpui_kit::component::message_scroller::MessageScrollerState;
 use gpui_kit::component::resizable::ResizableState;
@@ -59,6 +61,9 @@ pub(crate) struct ShellModel {
     pub(crate) clock: WallClock,
     /// Where the needs-you list is scrolled to and where its rows were laid out.
     pub(crate) needs_you_scroll: ScrollHandle,
+    /// The wait before the left pane is drawn again to move its elapsed times on; there only
+    /// while a row with one is drawn.
+    pub(crate) elapsed_tick: Option<Task<()>>,
     /// Where the keyboard can be: the inputs, the cards, the list, the conversation and the
     /// failure band.
     pub(crate) focus: FocusMap,
@@ -104,6 +109,7 @@ impl ShellModel {
             panes: cx.new(|_| ResizableState::default()),
             clock: WallClock::start(),
             needs_you_scroll: ScrollHandle::new(),
+            elapsed_tick: None,
             focus: FocusMap::new(cx),
             card_cache: CardCache::default(),
             focus_before_overlay: None,
@@ -405,11 +411,11 @@ impl ShellModel {
             draft,
             started,
             check,
-            project_check: _,
+            project_check,
             folder,
             close,
             removed,
-            clipboard: _,
+            clipboard,
             focus,
         } = self.shell.act(action);
         self.show_title(window);
@@ -449,6 +455,12 @@ impl ShellModel {
         }
         if let Some(check) = check {
             self.check(check, window, cx);
+        }
+        if let Some(check) = project_check {
+            self.check_project(check, window, cx);
+        }
+        if let Some(text) = clipboard {
+            cx.write_to_clipboard(ClipboardItem::new_string(text));
         }
         if folder {
             self.fill_folder(opens, window, cx);
@@ -739,6 +751,18 @@ impl ShellModel {
             let exists = exists.await;
             _ = this.update_in(cx, |model, window, cx| {
                 model.act(ShellAction::FolderChecked { folder, exists }, window, cx);
+            });
+        })
+        .detach();
+    }
+
+    /// Looks for a project's folder in the background and hands the answer back to the shell.
+    fn check_project(&mut self, check: ProjectCheck, window: &mut Window, cx: &mut Context<Self>) {
+        let ProjectCheck { project, exists } = check;
+        cx.spawn_in(window, async move |this, cx| {
+            let exists = exists.await;
+            _ = this.update_in(cx, |model, window, cx| {
+                model.act(ShellAction::ProjectChecked { project, exists }, window, cx);
             });
         })
         .detach();

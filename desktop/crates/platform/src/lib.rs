@@ -13,6 +13,7 @@ mod shell_view;
 mod test_window;
 pub mod theme;
 mod thread;
+mod tree;
 
 use std::path::PathBuf;
 use std::sync::Arc;

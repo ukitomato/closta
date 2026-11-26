@@ -631,6 +631,7 @@ mod tests {
             };
             let list = needs_you_list(
                 &self.list,
+                None,
                 &self.focus.list,
                 &self.scroll,
                 self.dispatch.clone(),
