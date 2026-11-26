@@ -65,12 +65,20 @@ private fun summaryOf(
  * text; why it failed, when it failed), and what it read ([target]), by which "Explored" counts files.
  */
 data class ToolDetail(
+    /** Only its first [TOOL_INPUT_MAX] characters are kept. */
     val input: String,
     /** Null until the result came. Only its last [TOOL_OUTPUT_MAX] characters are kept. */
     val output: String?,
     val outputCut: Boolean = false,
     val target: String? = null,
+    val inputCut: Boolean = false,
 )
+
+/**
+ * How much of a tool's input a line keeps, from the start: 8 KiB. A file given to Write or Edit can be far longer, and
+ * the opened line measures all of it each time it is laid out.
+ */
+const val TOOL_INPUT_MAX = 8 * 1024
 
 /** How much of a tool's output a line keeps, from the end: 8 KiB, as much as the running list shows of a shell. */
 const val TOOL_OUTPUT_MAX = 8 * 1024
@@ -86,7 +94,13 @@ fun toolDetail(call: ToolCallRecord): ToolDetail {
         }
     val output = call.result?.let { result -> result.content?.let(::resultText).orEmpty() }
     val cut = output != null && output.length > TOOL_OUTPUT_MAX
-    return ToolDetail(shownInput, if (cut) output.takeLast(TOOL_OUTPUT_MAX) else output, cut, targetOf(call, input))
+    return ToolDetail(
+        input = shownInput.take(TOOL_INPUT_MAX),
+        output = if (cut) output.takeLast(TOOL_OUTPUT_MAX) else output,
+        outputCut = cut,
+        target = targetOf(call, input),
+        inputCut = shownInput.length > TOOL_INPUT_MAX,
+    )
 }
 
 private fun resultText(content: JsonValue): String =

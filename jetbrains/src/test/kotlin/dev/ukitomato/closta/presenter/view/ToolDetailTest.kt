@@ -59,6 +59,24 @@ class ToolDetailTest {
     }
 
     @Test
+    fun theInputKeepsItsFirst8KiB() {
+        val long = "a".repeat(TOOL_INPUT_MAX) + "b".repeat(100)
+        val detail = toolDetail(call("Bash", "command" to long))
+        assertEquals("a".repeat(TOOL_INPUT_MAX), detail.input)
+        assertTrue(detail.inputCut)
+        assertEquals(8 * 1024, TOOL_INPUT_MAX)
+        assertFalse(toolDetail(call("Bash", "command" to "ls")).inputCut)
+    }
+
+    @Test
+    fun aWrittenFileIsCutToo() {
+        val detail = toolDetail(call("Write", "file_path" to "/a/b.kt", "content" to "x\n".repeat(TOOL_INPUT_MAX)))
+        assertEquals(TOOL_INPUT_MAX, detail.input.length)
+        assertTrue(detail.input.contains("\"file_path\""), detail.input)
+        assertTrue(detail.inputCut)
+    }
+
+    @Test
     fun theOutputKeepsItsLast8KiB() {
         val long = "a".repeat(100) + "b".repeat(TOOL_OUTPUT_MAX)
         val detail = toolDetail(call("Bash", "command" to "x", result = ToolResult(JsonString(long), false)))

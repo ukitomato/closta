@@ -449,7 +449,7 @@ class ThreadRowViews(
     private fun toolBody(detail: ToolDetail): JComponent? {
         val boxes =
             listOfNotNull(
-                detail.input.takeIf { it.isNotBlank() }?.let { codeBox(it) },
+                detail.input.takeIf { it.isNotBlank() }?.let { codeBox(if (detail.inputCut) "$it\n…" else it) },
                 detail.output?.takeIf { it.isNotBlank() }?.let { codeBox(if (detail.outputCut) "…\n$it" else it) },
             )
         if (boxes.isEmpty()) return null
