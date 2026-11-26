@@ -304,6 +304,7 @@ internal fun OperationRecords.refuseEffort(input: PresenterInput.EffortRefused):
 /**
  * A CLI was launched: its effort, its own MCP servers, and whether it was asked into the sandbox. What the last CLI's
  * settings said of the sandbox no longer holds; a pending switch into the sandbox is confirmed by this CLI's answer.
+ * The new CLI answers none of the requests asked of the last one, so nothing waits for them any more.
  */
 internal fun OperationRecords.launched(input: PresenterInput.Launched): OperationRecords {
     val switching =
@@ -324,6 +325,10 @@ internal fun OperationRecords.launched(input: PresenterInput.Launched): Operatio
         sandboxConfirming = switching ?: sandboxConfirming,
         // The settings asked of the last CLI do not say what this one runs with.
         sandboxCheck = null,
+        waiting = emptyList(),
+        mcpWaiting = emptyList(),
+        settingsWaiting = emptyList(),
+        usageWaiting = emptyList(),
     )
 }
 

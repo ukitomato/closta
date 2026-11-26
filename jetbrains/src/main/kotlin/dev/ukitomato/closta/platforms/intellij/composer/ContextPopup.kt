@@ -23,10 +23,12 @@ import javax.swing.JPanel
 /**
  * The popup of the context's breakdown. It keeps nothing of its own: each [show] draws the composer's state again, so
  * the whole answer that comes while it is open fills it in (only what it was drawn from is kept, to skip a state that
- * changes nothing here). [recount] asks for the whole answer again.
+ * changes nothing here). [recount] asks for the whole answer again. [asked] is whether the whole answer was just asked
+ * for, so that it says it is counting before the request is in [state]; a session that is not running asks nothing.
  */
 internal class ContextPopup(
     state: ComposerState,
+    asked: Boolean,
     private val recount: () -> Unit,
 ) {
     private val content =
@@ -47,7 +49,7 @@ internal class ContextPopup(
 
     init {
         // Opened as the whole answer is asked for: the request is not in [state] yet.
-        draw(state.copy(contextWaiting = true))
+        draw(if (asked) state.copy(contextWaiting = true) else state)
     }
 
     /** Draws [state] again while the popup is open, and fits the popup to what it now says. */

@@ -152,4 +152,35 @@ class UsageReadingsTest {
             { assertSame(state.ops(), state.asked("u3").ops(), "the same id twice is one wait") },
         )
     }
+
+    @Test
+    fun `a new CLI answers none of the old requests, so nothing waits for them after a launch`() {
+        val lost =
+            HostState()
+                .asked("u1")
+                .next(PresenterInput.ControlRequested("c1", ControlKind.CONTEXT))
+                .next(PresenterInput.ControlRequested("m1", ControlKind.MCP_STATUS))
+                .next(PresenterInput.ControlRequested("s1", ControlKind.SETTINGS))
+        val relaunched = lost.next(PresenterInput.Launched(null))
+        val answered =
+            relaunched
+                .asked("u2")
+                .answered("u2", withLimits("null"))
+                .next(PresenterInput.ControlRequested("c2", ControlKind.CONTEXT))
+                .next(PresenterInput.Event(Lines.controlOk("c2", CONTEXT_TOTALS)))
+        val composer = composerState(answered.conversation, answered.transcript)
+
+        assertAll(
+            { assertTrue(relaunched.ops().usageWaiting.isEmpty()) },
+            { assertTrue(relaunched.ops().waiting.isEmpty()) },
+            { assertTrue(relaunched.ops().mcpWaiting.isEmpty()) },
+            { assertTrue(relaunched.ops().settingsWaiting.isEmpty()) },
+            { assertFalse(composer.usageWaiting) },
+            { assertFalse(composer.contextWaiting) },
+        )
+    }
+
+    private companion object {
+        const val CONTEXT_TOTALS = """{"totalTokens":10,"maxTokens":100,"percentage":10}"""
+    }
 }

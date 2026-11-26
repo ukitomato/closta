@@ -535,11 +535,12 @@ class ComposerPanel(
 
     /**
      * Opens the context's breakdown above [under], just asked for: it shows the composer's state until it is closed,
-     * and says it is counting from the first frame, before the request is in that state.
+     * and, when the session runs (so the request was sent), says it is counting from the first frame, before the
+     * request is in that state.
      */
     private fun openContext(under: JComponent) {
         val next = state ?: return
-        val breakdown = ContextPopup(next) { onContext() }
+        val breakdown = ContextPopup(next, asked = sendable) { onContext() }
         openPopup(breakdown.popup, under, breakdown::show)
     }
 
