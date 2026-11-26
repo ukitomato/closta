@@ -122,6 +122,8 @@ fn launch(project: Option<String>) -> SlotLaunch {
         relaunch: None,
         project,
         settles_on_failure: false,
+        session_id: None,
+        resume: None,
     }
 }
 
@@ -139,6 +141,7 @@ fn open_with(
         }),
         planner_for: Arc::new(Never),
         settings: Arc::new(closta_shell::settings::MemorySettings),
+        saved_for: Arc::new(closta_shell::new_session::NoSaved),
     };
     let header = AppHeader {
         title: String::new(),

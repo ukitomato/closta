@@ -195,6 +195,7 @@ fn restoring_projects_writes_nothing() {
             checks: Arc::clone(&machine) as _,
             planner_for: Arc::clone(&planners) as _,
             settings: Arc::clone(&settings) as _,
+            saved_for: Arc::new(closta_shell::new_session::NoSaved),
         });
         let restored = Settings {
             version: SETTINGS_VERSION,
@@ -544,6 +545,7 @@ fn removing_touches_nothing_but_the_settings() {
             checks: Arc::clone(&machine) as _,
             planner_for: Arc::clone(&planners) as _,
             settings: Arc::clone(&settings) as _,
+            saved_for: Arc::clone(&harness.saved_for) as _,
         });
         ended_project(&mut shell, &harness, CLOSTA).await;
         let (looks, planned, runs) = (
@@ -558,9 +560,40 @@ fn removing_touches_nothing_but_the_settings() {
         assert_eq!(machine.folder_looks(), looks);
         assert_eq!(planners.planned(), planned);
         assert_eq!(shell.live_runs(), runs);
+        assert_eq!(harness.saved_for.lists_started(), 0);
+        for fake in harness.saved_for.fakes() {
+            assert_eq!((fake.lists(), fake.reads()), (0, Vec::<String>::new()));
+        }
         assert_eq!(settings.saves().len(), saves + 1, "only the settings");
         let last = settings.saves().pop().expect("a save");
         assert!(last.projects.iter().all(|it| it.folder != CLOSTA));
+    });
+}
+
+#[test]
+fn copy_session_id_copies_the_slot_s_session_id() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let ports = harness.ports();
+        let saved = closta_model::SavedSessionSummary {
+            id: "0b1f4c52-6a1e-4a43-9a53-7f0d2a4b8c11".to_owned(),
+            title: "Fix the parser".to_owned(),
+            updated_at_ms: 1,
+            bytes: 10,
+        };
+        let slot = shell.open(closta_shell::new_session::resume_in(CLOSTA, &saved, &ports));
+        harness.control(0).await.exit(0);
+        end(&mut shell, slot).await;
+        assert!(shell.ended(slot));
+        assert!(summary(&shell, slot).can_copy_id, "the precondition");
+        assert_eq!(shell.session_id(slot), Some(saved.id.as_str()));
+        assert_eq!(
+            shell
+                .act(ShellAction::CopySessionId { slot })
+                .clipboard
+                .as_deref(),
+            Some(saved.id.as_str())
+        );
     });
 }
 
@@ -822,6 +855,8 @@ fn a_restart_counts_the_new_run_afresh() {
                 relaunch: None,
                 project: None,
                 settles_on_failure: false,
+                session_id: None,
+                resume: None,
             }
         }));
         let second = shell.open(other);

@@ -3,27 +3,30 @@
 
 use std::collections::VecDeque;
 use std::future::Future;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
+use closta_core::ports::SavedSessions;
 use closta_model::AppInfo;
 use closta_providers::claude::fake::live::{LiveControl, LiveOptions, LiveProcess};
 use closta_providers::claude::fake::process::{FakeProcess, ProcessScript};
 use closta_providers::claude::fake::replay::{
     ReplayControl, ReplayOptions, ReplaySpawner, parse_replay,
 };
+use closta_providers::claude::fake::saved::FakeSavedSessions;
 use closta_providers::claude::fake::spawner::FakeSpawner;
 use closta_providers::claude::launch::Launch;
 use closta_providers::claude::launch::LaunchError;
 use closta_providers::claude::launch::env::SecretEnv;
 use closta_providers::claude::process::AgentProcess;
+use closta_session::history::{SavedListing, listing};
 use closta_session::launch::{NativeSessionLaunchPlanner, SessionLaunchPlanner};
 use closta_session::log::SessionLog;
 use closta_session::runtime::SessionRuntime;
 use closta_session::status::SessionStatus;
 use closta_shell::header::app_header;
-use closta_shell::new_session::{ClaudeOnPath, LaunchChecks, PlannerFor};
+use closta_shell::new_session::{ClaudeOnPath, LaunchChecks, PlannerFor, SavedFor};
 use closta_shell::settings::{MemorySettings, Settings, SettingsSink};
 use closta_shell::slot::{SlotId, SlotLaunch, Spawn};
 use closta_shell::state::{Ports, ShellState};
@@ -49,12 +52,15 @@ pub struct Answers {
     /// Whether the next processes keep running when told to end.
     pub stubborn: bool,
     pub controls: Vec<LiveControl>,
+    /// The arguments of each session process asked for, in order.
+    pub launches: Vec<Vec<String>>,
 }
 
 pub struct Harness {
     pub executor: Arc<Executor<'static>>,
     pub answers: Arc<Mutex<Answers>>,
     pub planner: Arc<NativeSessionLaunchPlanner>,
+    pub saved_for: Arc<FakeSavedFor>,
 }
 
 impl Harness {
@@ -68,6 +74,7 @@ impl Harness {
                 return Ok(Box::new(process) as Box<dyn AgentProcess>);
             }
             let mut answers = held.lock().unwrap_or_else(PoisonError::into_inner);
+            answers.launches.push(launch.args.clone());
             if let Some(error) = answers.refusals.pop_front() {
                 return Err(error);
             }
@@ -87,6 +94,7 @@ impl Harness {
             executor,
             answers,
             planner,
+            saved_for: Arc::new(FakeSavedFor::default()),
         }
     }
 
@@ -110,6 +118,7 @@ impl Harness {
             checks: Arc::new(Machine::default()),
             planner_for: Arc::new(Planners::new(Arc::clone(&self.planner) as _)),
             settings: Arc::new(MemorySettings),
+            saved_for: Arc::clone(&self.saved_for) as _,
         }
     }
 
@@ -131,6 +140,8 @@ impl Harness {
             relaunch: None,
             project: Some(folder.to_owned()),
             settles_on_failure: false,
+            session_id: None,
+            resume: None,
         }
     }
 
@@ -149,6 +160,8 @@ impl Harness {
             relaunch: None,
             project: None,
             settles_on_failure: false,
+            session_id: None,
+            resume: None,
         };
         (launch, receiver)
     }
@@ -166,6 +179,25 @@ impl Harness {
             .unwrap_or_else(PoisonError::into_inner)
             .refusals
             .push_back(error);
+    }
+
+    /// The arguments session process `n` was asked for with, once it is asked for.
+    pub async fn launch_args(&self, n: usize) -> Vec<String> {
+        let answers = Arc::clone(&self.answers);
+        until(move || {
+            answers
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .launches
+                .len()
+                > n
+        })
+        .await;
+        self.answers
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .launches[n]
+            .clone()
     }
 
     /// The control of session process `n` (0 is the first handed out), once it is there.
@@ -287,6 +319,56 @@ impl PlannerFor for Planners {
     }
 }
 
+/// The saved sessions of each project folder: one fake per folder, made on first ask. Its list
+/// reads the fake only once the future is polled, as a real one reads in the background.
+#[derive(Default)]
+pub struct FakeSavedFor {
+    fakes: Mutex<Vec<(String, Arc<FakeSavedSessions>)>>,
+    started: Arc<AtomicUsize>,
+}
+
+impl FakeSavedFor {
+    /// The fakes made so far, in the order their folders were first asked for.
+    pub fn fakes(&self) -> Vec<Arc<FakeSavedSessions>> {
+        let fakes = self.fakes.lock().unwrap_or_else(PoisonError::into_inner);
+        fakes.iter().map(|(_, fake)| Arc::clone(fake)).collect()
+    }
+
+    /// How many lists were polled.
+    pub fn lists_started(&self) -> usize {
+        self.started.load(Ordering::SeqCst)
+    }
+
+    fn fake_of(&self, folder: &str) -> Arc<FakeSavedSessions> {
+        let mut fakes = self.fakes.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some((_, fake)) = fakes.iter().find(|(kept, _)| kept == folder) {
+            return Arc::clone(fake);
+        }
+        let fake = Arc::new(FakeSavedSessions::default());
+        fakes.push((folder.to_owned(), Arc::clone(&fake)));
+        fake
+    }
+}
+
+impl SavedFor for FakeSavedFor {
+    fn saved(&self, folder: &str) -> Arc<dyn SavedSessions> {
+        self.fake_of(folder)
+    }
+
+    fn list(&self, folder: &str, stop: Arc<AtomicBool>) -> future::Boxed<Option<SavedListing>> {
+        let fake = self.fake_of(folder);
+        let started = Arc::clone(&self.started);
+        Box::pin(async move {
+            started.fetch_add(1, Ordering::SeqCst);
+            listing(
+                Some(&*fake as &dyn SavedSessions),
+                &|| stop.load(Ordering::SeqCst),
+                &Quiet,
+            )
+        })
+    }
+}
+
 /// A settings writer that keeps every value it was given.
 #[derive(Default)]
 pub struct RecordingSettings {
@@ -323,6 +405,8 @@ pub fn relaunchable(harness: &Harness, title: &'static str) -> SlotLaunch {
             relaunch: Some(Arc::new(move || make(Arc::clone(&again), title))),
             project: None,
             settles_on_failure: false,
+            session_id: None,
+            resume: None,
         }
     }
     make(Arc::clone(&harness.planner) as _, title)

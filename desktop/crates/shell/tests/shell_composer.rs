@@ -356,6 +356,7 @@ fn the_folder_is_looked_for_without_the_spaces_around_it() {
             }),
             planner_for: Arc::new(Planners::new(Arc::clone(&harness.planner) as _)),
             settings: Arc::new(MemorySettings),
+            saved_for: Arc::new(closta_shell::new_session::NoSaved),
         };
         let mut shell = harness.shell_with(ports);
         let padded = format!(" {FOLDER} ");
@@ -375,6 +376,7 @@ fn a_missing_folder_keeps_the_dialog_and_says_so() {
             }),
             planner_for: Arc::new(Planners::new(Arc::clone(&harness.planner) as _)),
             settings: Arc::new(MemorySettings),
+            saved_for: Arc::new(closta_shell::new_session::NoSaved),
         };
         let mut shell = harness.shell_with(ports);
         let check = start_in(&mut shell, FOLDER).check.expect("a check");
@@ -450,6 +452,7 @@ fn a_quick_problem_blocks_start_without_a_check() {
             }),
             planner_for: Arc::new(Planners::new(Arc::clone(&harness.planner) as _)),
             settings: Arc::new(MemorySettings),
+            saved_for: Arc::new(closta_shell::new_session::NoSaved),
         };
         let mut shell = harness.shell_with(ports);
         let acted = start_in(&mut shell, FOLDER);
@@ -487,6 +490,8 @@ fn the_failure_band_reads_the_status() {
             relaunch: None,
             project: None,
             settles_on_failure: false,
+            session_id: None,
+            resume: None,
         };
         let slot = shell.open(launch);
         let mut watch = shell.watch(slot).unwrap();
@@ -554,6 +559,8 @@ fn ready_lines_wait_for_every_slot_to_run_or_fail() {
             relaunch: None,
             project: None,
             settles_on_failure: false,
+            session_id: None,
+            resume: None,
         });
         assert_eq!(shell.ready_lines(), None);
 

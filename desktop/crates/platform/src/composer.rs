@@ -511,6 +511,7 @@ mod tests {
             checks: Arc::new(Nothing),
             planner_for: Arc::new(Nothing),
             settings: Arc::new(closta_shell::settings::MemorySettings),
+            saved_for: Arc::new(closta_shell::new_session::NoSaved),
         };
         let mut shell = ShellState::new(header, Arc::new(|_| {}), Arc::new(TracingLog), ports);
         shell.open(SlotLaunch {
@@ -521,6 +522,8 @@ mod tests {
             relaunch: None,
             project: None,
             settles_on_failure: false,
+            session_id: None,
+            resume: None,
         })
     }
 

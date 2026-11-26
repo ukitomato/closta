@@ -53,6 +53,8 @@ pub fn slot_launch(arg: &ReplayArg, pace: Duration) -> Result<(SlotLaunch, Repla
         relaunch: None,
         project: arg.folder.clone(),
         settles_on_failure: false,
+        session_id: None,
+        resume: None,
     };
     Ok((launch, control))
 }

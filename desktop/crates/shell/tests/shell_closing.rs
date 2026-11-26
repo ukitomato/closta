@@ -133,6 +133,8 @@ fn a_slot_closed_while_it_plans_returns_at_once() {
             relaunch: None,
             project: None,
             settles_on_failure: false,
+            session_id: None,
+            resume: None,
         });
         assert_eq!(shell.live_runs(), 1);
         let end = future::or(
@@ -236,6 +238,8 @@ fn nothing_starts_or_sends_once_the_close_began() {
                 relaunch: None,
                 project: None,
                 settles_on_failure: false,
+                session_id: None,
+                resume: None,
             }
         }));
         let slot = shell.open(launch);

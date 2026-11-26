@@ -10,7 +10,7 @@ use std::io::ErrorKind;
 use std::sync::Arc;
 use std::time::Duration;
 
-use closta_model::AppInfo;
+use closta_model::{AppInfo, SavedSessionSummary};
 use closta_presenter::input::PresenterInput;
 use closta_presenter::rows::{ThreadRow, ThreadRows};
 use closta_presenter::session::SessionView;
@@ -19,6 +19,7 @@ use closta_providers::claude::launch::LaunchError;
 use closta_session::runtime::SessionRuntime;
 use closta_session::status::{SessionFailure, SessionStatus};
 use closta_shell::header::app_header;
+use closta_shell::new_session::{launch_in, resume_in};
 use closta_shell::panes::{LEFT_WIDTH, Pane, Panes, RIGHT_WIDTH};
 use closta_shell::rows::RowChange;
 use closta_shell::slot::{SlotId, SlotLaunch, SlotMark, Spawn, mark_of};
@@ -602,6 +603,8 @@ fn a_companion_runs_beside_the_session_with_its_runtime() {
             relaunch: None,
             project: None,
             settles_on_failure: false,
+            session_id: None,
+            resume: None,
         };
         let alone = shell.open(without);
         assert!(shell.watch(alone).is_some());
@@ -688,4 +691,103 @@ fn the_marks_follow_the_status_and_the_turn() {
         mark_of(&SessionStatus::Closed, false, false, false),
         SlotMark::Closed
     );
+}
+
+fn summary_of(id: &str, title: &str) -> SavedSessionSummary {
+    SavedSessionSummary {
+        id: id.to_owned(),
+        title: title.to_owned(),
+        updated_at_ms: 1,
+        bytes: 10,
+    }
+}
+
+const FOLDER: &str = r"C:\work\closta";
+
+#[test]
+fn a_resumed_launch_starts_its_id_with_its_record() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let ports = harness.ports();
+        let saved = summary_of("0b1f4c52-6a1e-4a43-9a53-7f0d2a4b8c11", "Fix the parser");
+        let slot = shell.open(resume_in(FOLDER, &saved, &ports));
+        harness.control(0).await;
+        let args = harness.launch_args(0).await;
+        assert!(args.contains(&format!("--resume={}", saved.id)), "{args:?}");
+        assert!(
+            !args.iter().any(|it| it.starts_with("--session-id")),
+            "{args:?}"
+        );
+        assert_eq!(shell.session_id(slot), Some(saved.id.as_str()));
+        assert_eq!(shell.slot_title(slot).as_deref(), Some("Fix the parser"));
+        assert_eq!(shell.slots()[0].title, "Fix the parser");
+
+        // The record was handed to the session: its background restore reads that id.
+        let fakes = harness.saved_for.fakes();
+        assert_eq!(fakes.len(), 1);
+        until(|| fakes[0].reads().contains(&saved.id)).await;
+    });
+}
+
+#[test]
+fn a_new_launch_starts_a_new_id() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let ports = harness.ports();
+        let first = shell.open(launch_in(FOLDER, &ports));
+        harness.control(0).await;
+        let second = shell.open(launch_in(FOLDER, &ports));
+        harness.control(1).await;
+        let (one, two) = (
+            shell.session_id(first).unwrap().to_owned(),
+            shell.session_id(second).unwrap().to_owned(),
+        );
+        assert_ne!(one, two);
+        for (n, id) in [(0, &one), (1, &two)] {
+            let args = harness.launch_args(n).await;
+            assert!(args.contains(&format!("--session-id={id}")), "{args:?}");
+            assert!(
+                !args.iter().any(|it| it.starts_with("--resume")),
+                "{args:?}"
+            );
+        }
+    });
+}
+
+#[test]
+fn the_title_of_a_resumed_slot_stays_after_its_first_request() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let ports = harness.ports();
+        let saved = summary_of("0b1f4c52-6a1e-4a43-9a53-7f0d2a4b8c11", "Fix the parser");
+        let (sender, receiver) = async_channel::bounded(1);
+        let slot = shell.open(SlotLaunch {
+            companion: Some(Box::new(move |runtime| {
+                Box::pin(async move {
+                    _ = sender.send(runtime).await;
+                })
+            })),
+            ..resume_in(FOLDER, &saved, &ports)
+        });
+        let runtime = receiver.recv().await.unwrap();
+        until(|| runtime.commands().is_some()).await;
+        let control = harness.control(0).await;
+        control.skip_initialize().await;
+        shell.act(ShellAction::EditDraft {
+            slot,
+            text: "something else entirely".to_owned(),
+        });
+        shell.act(ShellAction::Send { slot });
+        control.next_stdin_line().await.expect("the request");
+        let generation = shell.watch(slot).unwrap().generation();
+        shell.refresh(slot, generation, 0).unwrap();
+        assert!(
+            shell
+                .rows(slot)
+                .iter()
+                .any(|it| matches!(it, ThreadRow::Ask(_))),
+            "the request is in the conversation"
+        );
+        assert_eq!(shell.slot_title(slot).as_deref(), Some("Fix the parser"));
+    });
 }

@@ -6,6 +6,7 @@ use std::sync::Arc;
 use crate::copy;
 use crate::elapsed::elapsed_text;
 use crate::projects::ProjectKey;
+use closta_core::ports::SavedSessions;
 use closta_session::launch::SessionLaunchPlanner;
 use closta_session::runtime::SessionRuntime;
 use closta_session::status::SessionStatus;
@@ -39,6 +40,26 @@ pub type Companion = Box<dyn FnOnce(SessionRuntime) -> future::Boxed<()> + Send>
 /// Builds the launch that replaces a slot's session: a Restart starts the same folder again.
 pub type Relaunch = Arc<dyn Fn() -> SlotLaunch + Send + Sync>;
 
+/// What opens a session as a saved one put back: where its earlier conversation is read from,
+/// and the title the list shows for it.
+#[derive(Clone)]
+pub struct SlotResume {
+    pub saved: Arc<dyn SavedSessions>,
+    pub saved_title: Option<String>,
+}
+
+/// The title is a saved conversation's: `Debug` gives its length only.
+impl fmt::Debug for SlotResume {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SlotResume")
+            .field(
+                "saved_title_len",
+                &self.saved_title.as_ref().map(String::len),
+            )
+            .finish()
+    }
+}
+
 /// What a slot's session is started with.
 pub struct SlotLaunch {
     pub title: String,
@@ -53,6 +74,10 @@ pub struct SlotLaunch {
     /// Whether the session is meant to fail: it counts as settled only once it has failed, not
     /// while it passes through running.
     pub settles_on_failure: bool,
+    /// The session's id; `None` is a new one.
+    pub session_id: Option<String>,
+    /// Opens the saved session of `session_id` instead of a new conversation; `None` is new.
+    pub resume: Option<SlotResume>,
 }
 
 /// What the list of slots shows for one.

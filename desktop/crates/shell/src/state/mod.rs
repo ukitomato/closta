@@ -18,6 +18,7 @@ use closta_presenter::sessions::groups::{
 use closta_presenter::sessions::window::{GroupSince, group_since_after};
 use closta_presenter::text::take_utf16;
 use closta_presenter::thread_running::thread_is_running;
+use closta_session::history::SessionOpening;
 use closta_session::log::SessionLog;
 use closta_session::runtime::{SessionConfig, SessionRuntime};
 use closta_session::status::SessionStatus;
@@ -33,8 +34,8 @@ use crate::needs_you::{
     NeedsYouRow, SlotNeeds, attention, card_accepts, jump_target, list_accepts, needs_you_rows,
 };
 use crate::new_session::{
-    LaunchChecks, NewSessionDialog, PlannerFor, Problem, RecentFolders, Runtime, default_folder,
-    launch_in, quick_problem, runtime_of,
+    LaunchChecks, NewSessionDialog, PlannerFor, Problem, RecentFolders, Runtime, SavedFor,
+    default_folder, launch_in, quick_problem, runtime_of,
 };
 use crate::panes::{Pane, Panes};
 use crate::projects::{Project, ProjectKey};
@@ -289,6 +290,7 @@ pub struct Ports {
     pub checks: Arc<dyn LaunchChecks>,
     pub planner_for: Arc<dyn PlannerFor>,
     pub settings: Arc<dyn SettingsSink>,
+    pub saved_for: Arc<dyn SavedFor>,
 }
 
 /// A folder to look for in the background; its answer comes back as `FolderChecked`.
@@ -354,6 +356,12 @@ struct Slot {
     title: String,
     /// The first request of the conversation as of the last refresh, once there is one.
     asked_title: Option<String>,
+    /// The id of the session the slot holds.
+    session_id: String,
+    /// Whether the session puts a saved one back.
+    resumed: bool,
+    /// The title of the saved conversation a resumed session was opened from.
+    saved_title: Option<String>,
     /// The project the slot is listed in; `None` is no project.
     project: Option<ProjectKey>,
     runtime: SessionRuntime,
@@ -400,7 +408,11 @@ struct Slot {
 impl Slot {
     /// The title the list shows, cut to the length of a session's name.
     fn shown_title(&self) -> String {
-        let title = self.asked_title.as_deref().unwrap_or(&self.title);
+        let title = self
+            .saved_title
+            .as_deref()
+            .or(self.asked_title.as_deref())
+            .unwrap_or(&self.title);
         take_utf16(title, TITLE_MAX).to_owned()
     }
 
@@ -491,12 +503,16 @@ impl ShellState {
             .project
             .as_deref()
             .and_then(|folder| self.join_project(folder));
-        let (runtime, finished) = self.start(launch);
+        let (runtime, finished, session_id, saved_title) = self.start(launch);
+        let resumed = saved_title.is_some();
         self.slots.insert(
             id,
             Slot {
                 title,
                 asked_title: None,
+                session_id,
+                resumed,
+                saved_title,
                 project,
                 runtime,
                 finished,
@@ -540,10 +556,13 @@ impl ShellState {
         let relaunch = launch.relaunch.clone();
         let settles_on_failure = launch.settles_on_failure;
         let working_directory = launch.working_directory.clone();
-        let (runtime, finished) = self.start(launch);
+        let (runtime, finished, session_id, saved_title) = self.start(launch);
         let held = self.slots.get_mut(&slot)?;
         held.title = title;
         held.asked_title = None;
+        held.resumed = saved_title.is_some();
+        held.session_id = session_id;
+        held.saved_title = saved_title;
         held.relaunch = relaunch;
         held.settles_on_failure = settles_on_failure;
         held.working_directory = working_directory;
@@ -579,27 +598,38 @@ impl ShellState {
 
     /// A new session, its run and its companion handed to the spawn; with the receiver that
     /// closes once the run has returned.
-    fn start(&self, launch: SlotLaunch) -> (SessionRuntime, Receiver<()>) {
-        let id = uuid::Uuid::new_v4().to_string();
-        let config = SessionConfig::new(
+    /// The session's id and, for a resumed one, the title of its saved conversation come with
+    /// them.
+    fn start(&self, launch: SlotLaunch) -> (SessionRuntime, Receiver<()>, String, Option<String>) {
+        let id = launch
+            .session_id
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        let mut config = SessionConfig::new(
             &id,
             launch.planner,
             launch.working_directory,
             Arc::clone(&self.log),
         );
+        let mut saved_title = None;
+        if let Some(resume) = launch.resume {
+            config.opening = SessionOpening::Resume;
+            config.saved = Some(resume.saved);
+            saved_title = resume.saved_title;
+        }
         let (runtime, run) = SessionRuntime::new(config);
         let (done, finished) = async_channel::bounded::<()>(1);
         lock(&self.runs).insert(id.clone(), (runtime.clone(), finished.clone()));
         let runs = Arc::clone(&self.runs);
+        let run_id = id.clone();
         (self.spawn)(Box::pin(async move {
             run.await;
-            lock(&runs).remove(&id);
+            lock(&runs).remove(&run_id);
             drop(done);
         }));
         if let Some(companion) = launch.companion {
             (self.spawn)(companion(runtime.clone()));
         }
-        (runtime, finished)
+        (runtime, finished, id, saved_title)
     }
 
     /// How many runs have not returned, those of replaced sessions included.
@@ -632,6 +662,11 @@ impl ShellState {
     /// title it was started with; `None` for a slot that is not there.
     pub fn slot_title(&self, slot: SlotId) -> Option<String> {
         self.slots.get(&slot).map(Slot::shown_title)
+    }
+
+    /// The id of the session the slot holds; `None` for a slot that is not there.
+    pub fn session_id(&self, slot: SlotId) -> Option<&str> {
+        self.slots.get(&slot).map(|it| it.session_id.as_str())
     }
 
     /// The slot's rows as of its last refresh; none for a slot that is not there.
@@ -994,7 +1029,7 @@ impl ShellState {
                 self.project_checked(&project, exists)
             }
             ShellAction::CopySessionId { slot } => {
-                let id = self.slots.get(&slot).map(|it| it.runtime.id().to_owned());
+                let id = self.session_id(slot).map(str::to_owned);
                 Acted {
                     clipboard: if self.copyable(slot) { id } else { None },
                     ..Acted::default()
