@@ -408,6 +408,7 @@ impl ShellModel {
             folder,
             close,
             removed,
+            clipboard: _,
             focus,
         } = self.shell.act(action);
         self.show_title(window);

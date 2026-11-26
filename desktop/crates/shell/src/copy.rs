@@ -18,6 +18,11 @@ use crate::new_session::Runtime;
 pub const EMPTY: &str = "No messages yet";
 
 /// The title of a session started from a folder; the folder's name is its project's heading.
+/// The elapsed-time column of a slot whose last turn ended unseen.
+pub const ELAPSED_NEW: &str = "new";
+/// The row menu's entry that copies the session's id.
+pub const COPY_SESSION_ID: &str = "Copy Session ID";
+
 pub const NEW_SESSION_TITLE: &str = "New session";
 
 /// The button that scrolls back to the tail (`thread.toLatest`).

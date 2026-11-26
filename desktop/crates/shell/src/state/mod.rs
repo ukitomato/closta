@@ -13,8 +13,9 @@ use closta_presenter::composer_state::{PERMISSION_MODES, composer_state};
 use closta_presenter::rows::{ThreadRow, ThreadRows};
 use closta_presenter::session::SessionView;
 use closta_presenter::sessions::groups::{
-    SessionAlert, TITLE_MAX, alerts_between, session_title, waiting_alerts,
+    SessionAlert, TITLE_MAX, alerts_between, session_summary, session_title, waiting_alerts,
 };
+use closta_presenter::sessions::window::{GroupSince, group_since_after};
 use closta_presenter::text::take_utf16;
 use closta_presenter::thread_running::thread_is_running;
 use closta_session::log::SessionLog;
@@ -215,6 +216,10 @@ pub enum ShellAction {
     RemoveProject {
         project: ProjectKey,
     },
+    /// Hands back the id of the slot's session to copy, once the session has ended or failed.
+    CopySessionId {
+        slot: SlotId,
+    },
 }
 
 /// The one thing that holds the window's attention; what is behind it takes no answer.
@@ -267,6 +272,8 @@ pub struct Acted {
     pub close: bool,
     /// The slots that were closed or ended and are gone.
     pub removed: Vec<SlotId>,
+    /// The text to put on the clipboard.
+    pub clipboard: Option<String>,
     /// Where the keyboard is to go.
     pub focus: Option<FocusTarget>,
 }
@@ -338,6 +345,10 @@ struct Slot {
     bypass_asking: bool,
     /// Whether a mode switch was written since the last refresh, which has not seen it yet.
     mode_sent: bool,
+    /// Whether a turn ended while the slot was not shown, and it has not been shown since.
+    unread: bool,
+    /// When the slot came under its heading, as of the last refresh.
+    since: Option<GroupSince>,
 }
 
 impl Slot {
@@ -457,6 +468,8 @@ impl ShellState {
                 cards: HashMap::new(),
                 bypass_asking: false,
                 mode_sent: false,
+                unread: false,
+                since: None,
             },
         );
         self.selected.get_or_insert(id);
@@ -496,6 +509,8 @@ impl ShellState {
         held.cards.clear();
         held.bypass_asking = false;
         held.mode_sent = false;
+        held.unread = false;
+        held.since = None;
         let emptied = std::mem::take(&mut held.rows).len();
         Some(if emptied == 0 {
             Vec::new()
@@ -544,8 +559,12 @@ impl ShellState {
             .map(|(id, slot)| SlotSummary {
                 id: *id,
                 title: slot.shown_title(),
-                mark: mark_of(&slot.status, slot.running, slot.waiting),
+                mark: mark_of(&slot.status, slot.running, slot.waiting, slot.unread),
                 closing: slot.closing,
+                project: slot.project.clone(),
+                since_ms: slot.since.and_then(|it| it.since_ms),
+                can_restart: self.can_restart(*id),
+                can_copy_id: self.copyable(*id),
             })
             .collect()
     }
@@ -611,6 +630,7 @@ impl ShellState {
     /// Reads the slot's current session again, if it is still the one of `generation`, and
     /// returns where it is and how its rows changed.
     pub fn refresh(&mut self, slot: SlotId, generation: u64, now_ms: i64) -> Option<Refresh> {
+        let shown = self.selected == Some(slot);
         let held = self.slots.get_mut(&slot)?;
         if held.generation != generation {
             return None;
@@ -644,6 +664,11 @@ impl ShellState {
                 .raised
                 .retain(|it| matches!(it, SessionAlert::Finished(_)));
         }
+        let finished = change
+            .raised
+            .iter()
+            .any(|it| matches!(it, SessionAlert::Finished(_)));
+        held.unread = !shown && (held.unread || finished);
         let raised = change
             .raised
             .iter()
@@ -682,6 +707,8 @@ impl ShellState {
                 .any(|(alert, _)| request_of(alert) == Some(id.as_str()))
         });
         held.asked_title = session_title(&view.transcript);
+        let group = session_summary(&view.conversation, &view.transcript, held.unread).group;
+        held.since = Some(group_since_after(held.since.as_ref(), group, now_ms));
         held.last = Some(view);
         held.rows = rows;
         held.status = status.clone();
@@ -707,6 +734,9 @@ impl ShellState {
         self.slots.remove(&slot);
         if self.selected == Some(slot) {
             self.selected = self.slots.keys().next().copied();
+            if let Some(held) = self.selected.and_then(|it| self.slots.get_mut(&it)) {
+                held.unread = false;
+            }
         }
         if self.slot_close.is_some_and(|(asked, _)| asked == slot) {
             self.slot_close = None;
@@ -716,6 +746,14 @@ impl ShellState {
     /// Whether as many slots as may hold a session do; a slot that is closing still does.
     pub fn slots_full(&self) -> bool {
         self.slots.values().filter(|it| it.is_live()).count() >= MAX_LIVE_SLOTS
+    }
+
+    /// Whether the slot's session ended or failed with its run still the slot's own: its id is
+    /// of use to resume it elsewhere.
+    fn copyable(&self, slot: SlotId) -> bool {
+        self.slots.get(&slot).is_some_and(|it| {
+            !it.closing && matches!(it.status, SessionStatus::Ended | SessionStatus::Failed(_))
+        })
     }
 
     /// Whether the slot could be restarted but for the limit.
@@ -862,6 +900,13 @@ impl ShellState {
                 Acted::default()
             }
             ShellAction::RemoveProject { project } => self.remove_project(&project),
+            ShellAction::CopySessionId { slot } => Acted {
+                clipboard: self
+                    .copyable(slot)
+                    .then(|| self.slots.get(&slot).map(|it| it.runtime.id().to_owned()))
+                    .flatten(),
+                ..Acted::default()
+            },
             ShellAction::TogglePane(pane) => {
                 self.panes.toggle(pane);
                 Acted::default()

@@ -16,7 +16,7 @@ use closta_shell::projects::{Project, project_key};
 use closta_shell::settings::{
     SETTINGS_VERSION, SavedProject, Settings, SettingsSink, sink_for_run,
 };
-use closta_shell::slot::SlotId;
+use closta_shell::slot::{SlotId, SlotLaunch, SlotMark, slot_elapsed};
 use closta_shell::state::{Overlay, Ports, ShellAction, ShellState};
 use support::{
     Harness, Machine, Planners, RecordingSettings, drive, replay_launch, running, until, waits_on,
@@ -674,5 +674,181 @@ fn a_long_first_request_is_cut_at_sixty() {
         let long = "x".repeat(70);
         ask(&mut shell, slot, &long);
         assert_eq!(shell.slot_title(slot), Some("x".repeat(60)));
+    });
+}
+
+const BASELINE: &str = "01-baseline-text.ndjson";
+/// The baseline's lines up to the first text delta: its turn is open.
+const BASELINE_OPEN: usize = 8;
+const BASELINE_ALL: usize = 15;
+
+/// Waits until the slot's session runs a turn (or has none), then refreshes the slot at `now_ms`.
+async fn refreshed(
+    shell: &mut ShellState,
+    slot: SlotId,
+    runtime: &closta_session::runtime::SessionRuntime,
+    turn_runs: bool,
+    now_ms: i64,
+) {
+    until(|| {
+        let view = runtime.view();
+        closta_presenter::thread_running::thread_is_running(&view.conversation, &view.transcript)
+            == turn_runs
+    })
+    .await;
+    let generation = shell.watch(slot).unwrap().generation();
+    shell.refresh(slot, generation, now_ms).unwrap();
+}
+
+fn summary(shell: &ShellState, slot: SlotId) -> closta_shell::slot::SlotSummary {
+    shell.slots().into_iter().find(|it| it.id == slot).unwrap()
+}
+
+#[test]
+fn a_turn_that_ends_in_a_slot_not_shown_is_unread_until_selected() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let mut slots = Vec::new();
+        let mut runtimes = Vec::new();
+        // Each process is awaited before the next slot opens.
+        for n in 0..2 {
+            let (launch, runtime) = harness.launch("turn");
+            slots.push(shell.open(launch));
+            let runtime = runtime.recv().await.unwrap();
+            running(&runtime).await;
+            harness.control(n).await;
+            runtimes.push(runtime);
+        }
+        assert_eq!(shell.selected(), Some(slots[0]));
+        for n in 0..2 {
+            let control = harness.control(n).await;
+            support::emit_capture(&control, BASELINE, BASELINE_OPEN);
+            refreshed(&mut shell, slots[n], &runtimes[n], true, 1000).await;
+            support::emit_capture(&control, BASELINE, BASELINE_ALL);
+            refreshed(&mut shell, slots[n], &runtimes[n], false, 2000).await;
+        }
+        assert_eq!(
+            summary(&shell, slots[0]).mark,
+            SlotMark::Ready,
+            "the one shown"
+        );
+        assert_eq!(summary(&shell, slots[1]).mark, SlotMark::Unread);
+        assert_eq!(
+            slot_elapsed(&summary(&shell, slots[1]), 9000).as_deref(),
+            Some("new")
+        );
+        shell.act(ShellAction::Select(slots[1]));
+        assert_eq!(summary(&shell, slots[1]).mark, SlotMark::Ready);
+    });
+}
+
+#[test]
+fn the_time_moves_only_when_the_heading_changes() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (launch, runtime) = harness.launch("turn");
+        let slot = shell.open(launch);
+        let runtime = runtime.recv().await.unwrap();
+        running(&runtime).await;
+        let control = harness.control(0).await;
+        refreshed(&mut shell, slot, &runtime, false, 500).await;
+        assert_eq!(summary(&shell, slot).since_ms, None, "first seen");
+        support::emit_capture(&control, BASELINE, BASELINE_OPEN);
+        refreshed(&mut shell, slot, &runtime, true, 1000).await;
+        assert_eq!(summary(&shell, slot).since_ms, Some(1000));
+        refreshed(&mut shell, slot, &runtime, true, 5000).await;
+        assert_eq!(
+            summary(&shell, slot).since_ms,
+            Some(1000),
+            "the same heading"
+        );
+        support::emit_capture(&control, BASELINE, BASELINE_ALL);
+        refreshed(&mut shell, slot, &runtime, false, 9000).await;
+        assert_eq!(summary(&shell, slot).since_ms, Some(9000));
+        assert_eq!(
+            slot_elapsed(&summary(&shell, slot), 9000 + 120_000).as_deref(),
+            Some("2 min")
+        );
+    });
+}
+
+#[test]
+fn a_restart_counts_the_new_run_afresh() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (launch, runtime) = harness.launch("kept");
+        let first = shell.open(launch);
+        harness.control(0).await;
+        let runtime = runtime.recv().await.unwrap();
+        running(&runtime).await;
+        let (mut other, other_runtime) = harness.launch("other");
+        other.relaunch = Some(Arc::new({
+            let planner = Arc::clone(&harness.planner);
+            move || SlotLaunch {
+                title: "other".to_owned(),
+                planner: Arc::clone(&planner) as _,
+                working_directory: None,
+                companion: None,
+                relaunch: None,
+                project: None,
+                settles_on_failure: false,
+            }
+        }));
+        let second = shell.open(other);
+        let other_runtime = other_runtime.recv().await.unwrap();
+        running(&other_runtime).await;
+        let control = harness.control(1).await;
+        support::emit_capture(&control, BASELINE, BASELINE_OPEN);
+        refreshed(&mut shell, second, &other_runtime, true, 1000).await;
+        support::emit_capture(&control, BASELINE, BASELINE_ALL);
+        refreshed(&mut shell, second, &other_runtime, false, 2000).await;
+        assert_eq!(summary(&shell, second).mark, SlotMark::Unread);
+        assert_eq!(summary(&shell, second).since_ms, Some(2000));
+        control.exit(0);
+        let mut watch = shell.watch(second).unwrap();
+        while watch.changed().await {}
+        shell.refresh(second, watch.generation(), 3000).unwrap();
+        assert_eq!(shell.status(second), Some(SessionStatus::Ended));
+        assert!(shell.can_restart(second));
+        let _ = first;
+        shell.act(ShellAction::Restart { slot: second });
+        let now = summary(&shell, second);
+        assert_eq!(now.mark, SlotMark::Starting);
+        assert_eq!(now.since_ms, None);
+        harness.control(2).await;
+        let again = shell.watch(second).unwrap();
+        shell.refresh(second, again.generation(), 4000).unwrap();
+        assert_ne!(summary(&shell, second).mark, SlotMark::Unread);
+    });
+}
+
+#[test]
+fn copy_session_id_is_offered_only_for_an_ended_or_failed_slot() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (launch, runtime) = harness.launch("ids");
+        let slot = shell.open(launch);
+        let runtime = runtime.recv().await.unwrap();
+        running(&runtime).await;
+        let control = harness.control(0).await;
+        refreshed(&mut shell, slot, &runtime, false, 0).await;
+        assert!(!summary(&shell, slot).can_copy_id);
+        assert_eq!(
+            shell.act(ShellAction::CopySessionId { slot }).clipboard,
+            None
+        );
+        control.exit(3);
+        let mut watch = shell.watch(slot).unwrap();
+        while watch.changed().await {}
+        shell.refresh(slot, watch.generation(), 1).unwrap();
+        assert_eq!(summary(&shell, slot).mark, SlotMark::Failed);
+        assert!(summary(&shell, slot).can_copy_id);
+        assert_eq!(
+            shell
+                .act(ShellAction::CopySessionId { slot })
+                .clipboard
+                .as_deref(),
+            Some(runtime.id())
+        );
     });
 }

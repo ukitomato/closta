@@ -156,6 +156,9 @@ impl ShellState {
     /// The one way to select a slot: a collapsed project the slot is in opens.
     pub(crate) fn select(&mut self, slot: SlotId) {
         self.selected = Some(slot);
+        if let Some(held) = self.slots.get_mut(&slot) {
+            held.unread = false;
+        }
         let Some(key) = self.slots.get(&slot).and_then(|it| it.project.clone()) else {
             return;
         };

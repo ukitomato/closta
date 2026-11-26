@@ -664,24 +664,28 @@ fn the_marks_follow_the_status_and_the_turn() {
         version: "2.1.282".into(),
     };
     assert_eq!(
-        mark_of(&SessionStatus::Starting, false, false),
+        mark_of(&SessionStatus::Starting, false, false, false),
         SlotMark::Starting
     );
-    assert_eq!(mark_of(&running, true, false), SlotMark::Working);
-    assert_eq!(mark_of(&running, false, false), SlotMark::Ready);
-    assert_eq!(mark_of(&running, true, true), SlotMark::Waiting);
-    assert_eq!(mark_of(&running, false, true), SlotMark::Waiting);
-    assert_eq!(mark_of(&SessionStatus::Ended, true, false), SlotMark::Ended);
+    assert_eq!(mark_of(&running, true, false, false), SlotMark::Working);
+    assert_eq!(mark_of(&running, false, false, false), SlotMark::Ready);
+    assert_eq!(mark_of(&running, true, true, false), SlotMark::Waiting);
+    assert_eq!(mark_of(&running, false, true, false), SlotMark::Waiting);
+    assert_eq!(
+        mark_of(&SessionStatus::Ended, true, false, false),
+        SlotMark::Ended
+    );
     assert_eq!(
         mark_of(
             &SessionStatus::Failed(SessionFailure::CommandNotFound),
+            false,
             false,
             false
         ),
         SlotMark::Failed
     );
     assert_eq!(
-        mark_of(&SessionStatus::Closed, false, false),
+        mark_of(&SessionStatus::Closed, false, false, false),
         SlotMark::Closed
     );
 }

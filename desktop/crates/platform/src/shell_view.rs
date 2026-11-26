@@ -243,6 +243,7 @@ fn slot_row(
         SlotMark::Working => ("●", theme.info),
         SlotMark::Waiting => ("⚠", theme.warning),
         SlotMark::Ready => ("●", theme.success),
+        SlotMark::Unread => ("✓", theme.success),
         SlotMark::Ended => ("○", theme.muted_foreground),
         SlotMark::Failed => ("●", theme.danger),
         SlotMark::Closed => ("○", theme.muted_foreground),

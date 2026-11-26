@@ -3,6 +3,9 @@
 use std::fmt;
 use std::sync::Arc;
 
+use crate::copy;
+use crate::elapsed::elapsed_text;
+use crate::projects::ProjectKey;
 use closta_session::launch::SessionLaunchPlanner;
 use closta_session::runtime::SessionRuntime;
 use closta_session::status::SessionStatus;
@@ -59,19 +62,22 @@ pub enum SlotMark {
     Working,
     Waiting,
     Ready,
+    /// A turn ended while the slot was not shown, and it has not been shown since.
+    Unread,
     Ended,
     Failed,
     Closed,
 }
 
-/// The mark of a slot in `status` whose thread is `running` and which is `waiting` on an
-/// approval: a running session waits while an approval waits, and works while its turn runs
-/// with none.
-pub fn mark_of(status: &SessionStatus, running: bool, waiting: bool) -> SlotMark {
+/// The mark of a slot in `status` whose thread is `running`, which is `waiting` on an approval
+/// and whose last turn ended `unread`: a running session waits while an approval waits, works
+/// while its turn runs with none, and is unread when idle with a turn nobody saw end.
+pub fn mark_of(status: &SessionStatus, running: bool, waiting: bool, unread: bool) -> SlotMark {
     match status {
         SessionStatus::Starting => SlotMark::Starting,
         SessionStatus::Running { .. } if waiting => SlotMark::Waiting,
         SessionStatus::Running { .. } if running => SlotMark::Working,
+        SessionStatus::Running { .. } if unread => SlotMark::Unread,
         SessionStatus::Running { .. } => SlotMark::Ready,
         SessionStatus::Ended => SlotMark::Ended,
         SessionStatus::Failed(_) => SlotMark::Failed,
@@ -80,7 +86,7 @@ pub fn mark_of(status: &SessionStatus, running: bool, waiting: bool) -> SlotMark
 }
 
 /// One line of the list of slots.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct SlotSummary {
     pub id: SlotId,
     pub title: String,
@@ -88,6 +94,40 @@ pub struct SlotSummary {
     /// Whether the slot is being closed: its session was told to end and its run has not
     /// returned.
     pub closing: bool,
+    /// The project the slot is listed in; `None` is no project.
+    pub project: Option<ProjectKey>,
+    /// When the slot came under its heading; `None` while the shell has not seen it come.
+    pub since_ms: Option<i64>,
+    /// Whether a Restart is on offer.
+    pub can_restart: bool,
+    /// Whether the session's id can be copied: the session ended or failed.
+    pub can_copy_id: bool,
+}
+
+/// The title is the user's first request and the project is a folder: `Debug` gives the title's
+/// length and whether there is a project.
+impl fmt::Debug for SlotSummary {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SlotSummary")
+            .field("id", &self.id)
+            .field("title_len", &self.title.len())
+            .field("mark", &self.mark)
+            .field("closing", &self.closing)
+            .field("in_project", &self.project.is_some())
+            .field("since_ms", &self.since_ms)
+            .field("can_restart", &self.can_restart)
+            .field("can_copy_id", &self.can_copy_id)
+            .finish()
+    }
+}
+
+/// The text of the elapsed-time column of a row: `"new"` for an unread slot, else the time since
+/// the slot came under its heading; `None` while that is not known.
+pub fn slot_elapsed(summary: &SlotSummary, now_ms: i64) -> Option<String> {
+    if summary.mark == SlotMark::Unread {
+        return Some(copy::ELAPSED_NEW.to_owned());
+    }
+    summary.since_ms.map(|since| elapsed_text(since, now_ms))
 }
 
 /// How many slots may hold a live session at once.
@@ -105,17 +145,50 @@ pub fn counts_as_live(status: &SessionStatus) -> bool {
 mod tests {
     use closta_session::status::SessionStatus;
 
-    use super::{SlotId, SlotMark, mark_of};
+    use super::{SlotId, SlotMark, SlotSummary, mark_of};
 
     #[test]
     fn a_running_slot_that_waits_is_marked_waiting() {
         let running = SessionStatus::Running {
             version: "2.1.282".into(),
         };
-        assert_eq!(mark_of(&running, false, true), SlotMark::Waiting);
-        assert_eq!(mark_of(&running, true, true), SlotMark::Waiting);
-        assert_eq!(mark_of(&running, true, false), SlotMark::Working);
-        assert_eq!(mark_of(&running, false, false), SlotMark::Ready);
+        assert_eq!(mark_of(&running, false, true, false), SlotMark::Waiting);
+        assert_eq!(mark_of(&running, true, true, false), SlotMark::Waiting);
+        assert_eq!(mark_of(&running, true, false, false), SlotMark::Working);
+        assert_eq!(mark_of(&running, false, false, false), SlotMark::Ready);
+    }
+
+    #[test]
+    fn a_running_slot_whose_turn_ended_unseen_is_unread() {
+        let running = SessionStatus::Running {
+            version: "2.1.282".into(),
+        };
+        assert_eq!(mark_of(&running, false, false, true), SlotMark::Unread);
+        assert_eq!(mark_of(&running, false, true, true), SlotMark::Waiting);
+        assert_eq!(mark_of(&running, true, false, true), SlotMark::Working);
+        assert_eq!(
+            mark_of(&SessionStatus::Ended, false, false, true),
+            SlotMark::Ended
+        );
+    }
+
+    #[test]
+    fn a_summary_shows_no_title_or_project_in_debug() {
+        let summary = SlotSummary {
+            id: SlotId(2),
+            title: "Rotate the secret token".to_owned(),
+            mark: SlotMark::Ready,
+            closing: false,
+            project: crate::projects::project_key(r"C:\work\hidden-project"),
+            since_ms: Some(5),
+            can_restart: false,
+            can_copy_id: false,
+        };
+        let text = format!("{summary:?}");
+        assert!(text.contains("title_len: 23"), "{text}");
+        assert!(!text.contains("secret"), "{text}");
+        assert!(!text.to_lowercase().contains("hidden"), "{text}");
+        assert!(!text.contains("work"), "{text}");
     }
 
     #[test]
