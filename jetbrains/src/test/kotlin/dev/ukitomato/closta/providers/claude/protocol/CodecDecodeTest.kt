@@ -204,6 +204,24 @@ class CodecDecodeTest {
     }
 
     @Test
+    fun `type only - an api retry line becomes a typed value, and a null status stays null`() {
+        val line =
+            """{"type":"system","subtype":"api_retry","attempt":2,"max_retries":10,"retry_delay_ms":2500,""" +
+                """"error_status":529,"error":"overloaded","uuid":"u","session_id":"s"}"""
+        val value = assertInstanceOf(AgentEvent.SystemApiRetry::class.java, StreamJsonCodec.decode(line))
+        val noStatus =
+            assertInstanceOf(
+                AgentEvent.SystemApiRetry::class.java,
+                StreamJsonCodec.decode(line.replace("\"error_status\":529", "\"error_status\":null")),
+            )
+
+        assertAll(
+            { assertEquals(AgentEvent.SystemApiRetry("u", "s", 2, 10, 2500, 529, "overloaded"), value) },
+            { assertNull(noStatus.errorStatus) },
+        )
+    }
+
+    @Test
     fun `type only - an informational line becomes a typed value with its level and flags`() {
         val line =
             """{"type":"system","subtype":"informational","content":"Stop hook said no","level":"warning",""" +

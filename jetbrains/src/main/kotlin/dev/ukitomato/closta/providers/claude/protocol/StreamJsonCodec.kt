@@ -482,5 +482,16 @@ object StreamJsonCodec {
                     tag = f.textOrNull("tag"),
                 )
             },
+            AgentEventKind.SYSTEM_API_RETRY to { f ->
+                AgentEvent.SystemApiRetry(
+                    uuid = f.text("uuid"),
+                    sessionId = f.text("session_id"),
+                    attempt = f.count("attempt"),
+                    maxRetries = f.count("max_retries"),
+                    retryDelayMs = f.whole("retry_delay_ms"),
+                    errorStatus = f.countOrNull("error_status"),
+                    error = f.textOrNull("error"),
+                )
+            },
         )
 }

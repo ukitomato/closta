@@ -52,6 +52,8 @@ fun fold(
         // A refusal and a line of the CLI's own: they mark a tool line and add a row, which is the projection's.
         is AgentEvent.SystemPermissionDenied,
         is AgentEvent.SystemInformational,
+        // The presenter says it on the composer's line until the reply goes on.
+        is AgentEvent.SystemApiRetry,
         // The version-drift and transport alarms: never let them break the state.
         is AgentEvent.UnknownKind,
         is AgentEvent.BrokenLine,

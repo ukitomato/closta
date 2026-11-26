@@ -65,9 +65,9 @@ private fun foldEvent(
         is AgentEvent.CommandLifecycle -> foldLifecycle(transcript, event)
         is AgentEvent.Result ->
             foldResult(transcript, event, before, after)
-                .let { it.withOperations(it.operations.resulted(event)) }
+                .let { it.withOperations(it.operations.resulted(event).retryEnded()) }
                 .let(::stopTaken)
-        is AgentEvent.StreamEvent -> foldStream(transcript, event)
+        is AgentEvent.StreamEvent, is AgentEvent.SystemApiRetry -> foldRetrying(transcript, event)
         is AgentEvent.Assistant -> foldSignIn(foldAssistant(transcript, event), event)
         is AgentEvent.User -> foldUser(transcript, event)
         is AgentEvent.ControlRequest -> foldRequest(transcript, event, after)

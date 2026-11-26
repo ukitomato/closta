@@ -31,6 +31,8 @@ data class ComposerState(
     val sandbox: SandboxView,
     /** The newest sandbox switch, when it was refused or failed. */
     val sandboxFailure: SwitchRecord?,
+    /** The CLI is retrying the API in this turn. */
+    val retry: RetryRecord?,
 )
 
 /** The sandbox button: whether the sandbox is on, and why it cannot be pressed now, if it cannot. */
@@ -95,6 +97,7 @@ fun composerState(
             operations.switches.lastOrNull { it.kind == SwitchKind.SANDBOX }?.takeIf {
                 it.outcome == SwitchOutcome.REJECTED || it.outcome == SwitchOutcome.FAILED
             },
+        retry = operations.retry.takeIf { running },
     )
 }
 

@@ -53,6 +53,7 @@ import dev.ukitomato.closta.presenter.view.AttachmentFault
 import dev.ukitomato.closta.presenter.view.AttachmentLimits
 import dev.ukitomato.closta.presenter.view.AttachmentVerdict
 import dev.ukitomato.closta.presenter.view.ComposerState
+import dev.ukitomato.closta.presenter.view.RetryRecord
 import dev.ukitomato.closta.presenter.view.SandboxBlock
 import dev.ukitomato.closta.presenter.view.SwitchKind
 import dev.ukitomato.closta.presenter.view.SwitchRecord
@@ -397,11 +398,21 @@ class ComposerPanel(
                 cardHint(focusInCard = false, waiting = cardsWaiting) == CardHint.JUMP ->
                     ClostaBundle.message("composer.status.jump", KeymapUtil.getKeystrokeText(JUMP_KEY))
                 next.stopping -> ClostaBundle.message("composer.status.stopping")
+                next.retry != null -> retryText(next.retry)
                 next.running -> ClostaBundle.message("composer.status.escToStop")
                 block == SendBlock.STARTING || block == SendBlock.REWINDING -> sendBlockReason(block)
                 else -> null
             }
         return text?.let { StatusMessage(it, StatusSource.SESSION, false, now, null, false) }
+    }
+
+    private fun retryText(retry: RetryRecord): String {
+        val seconds = ((retry.delayMs + MS_PER_SECOND - 1) / MS_PER_SECOND).toString()
+        val attempt = retry.attempt.toString()
+        val max = retry.maxRetries.toString()
+        return retry.status?.let {
+            ClostaBundle.message("composer.status.retryingStatus", attempt, max, seconds, it.toString())
+        } ?: ClostaBundle.message("composer.status.retrying", attempt, max, seconds)
     }
 
     /**
@@ -1082,6 +1093,7 @@ class ComposerPanel(
         const val GAP = 4
         const val NARROW = 420
         const val TICK_MS = 1_000
+        private const val MS_PER_SECOND = 1_000L
         const val SWITCH_WAIT_MS = 10_000L
         const val ERROR_TTL_MS = 8_000L
         const val HINT_TTL_MS = 4_000L

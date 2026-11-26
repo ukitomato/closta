@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test
  * Modelled from sdk.d.ts alone, because no capture has one: its tests build the line by hand and say so. Each goes when
  * a capture carries it.
  */
-internal val TYPE_ONLY = setOf(AgentEventKind.SYSTEM_INFORMATIONAL)
+internal val TYPE_ONLY = setOf(AgentEventKind.SYSTEM_INFORMATIONAL, AgentEventKind.SYSTEM_API_RETRY)
 
 /**
  * The three figures the comparison against the official types turns on.

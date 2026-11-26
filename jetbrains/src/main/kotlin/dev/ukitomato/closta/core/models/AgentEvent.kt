@@ -17,10 +17,10 @@ value class RawJson(
 /**
  * The stdout line kinds observed in the recorded captures (CLI 2.1.325, 44 captures).
  *
- * Twenty-two: `command_lifecycle` arrives on every turn and `system/ui_invalidate` at the start of some
+ * Twenty-three: `command_lifecycle` arrives on every turn and `system/ui_invalidate` at the start of some
  * sessions, but neither has a declaration in the official SDK types, and the captures win over the
- * official types when they disagree. The official union declares 45 kinds; twenty of the
- * twenty-two are among them (including `system/commands_changed` and `system/compact_boundary`, which
+ * official types when they disagree. The official union declares 45 kinds; twenty-one of the
+ * twenty-three are among them (including `system/commands_changed` and `system/compact_boundary`, which
  * both the types and the captures carry), and the rest never arrive or are not modelled yet — an
  * unmodelled kind is counted as unknown, which is how a version bump announces itself.
  *
@@ -52,6 +52,7 @@ enum class AgentEventKind(
     CONVERSATION_RESET("conversation_reset"),
     SYSTEM_PERMISSION_DENIED("system/permission_denied"),
     SYSTEM_INFORMATIONAL("system/informational"),
+    SYSTEM_API_RETRY("system/api_retry"),
     ;
 
     companion object {
@@ -67,7 +68,7 @@ enum class AgentEventKind(
  *
  * One line in, one value out: lines are never split or merged, because reconstructing a conversation
  * from them is the fold's job and anything decided here would be decided before the fold can
- * see it. Twenty-four variants — the [AgentEventKind] twenty-two, plus [UnknownKind] and [BrokenLine].
+ * see it. Twenty-five variants — the [AgentEventKind] twenty-three, plus [UnknownKind] and [BrokenLine].
  *
  * The two catch-alls are variants rather than errors on purpose. A reader that throws stops reading,
  * and a stdout reader that stops deadlocks the CLI behind a full pipe; a reader that silently drops
@@ -469,7 +470,24 @@ sealed interface AgentEvent {
     }
 
     /**
-     * A well-formed JSON line whose `type` is not one of the twenty-two, or one that is missing a field
+     * The CLI is trying a failed API request again: attempt [attempt] of [maxRetries], after [retryDelayMs] ms. [errorStatus]
+     * is the HTTP status when there was a response (null when none came) and [error] names the failure (sdk.d.ts
+     * `SDKAPIRetryMessage`; no capture carries one, and its `no_response` figures are not used here).
+     */
+    data class SystemApiRetry(
+        val uuid: String,
+        val sessionId: String,
+        val attempt: Int,
+        val maxRetries: Int,
+        val retryDelayMs: Long,
+        val errorStatus: Int?,
+        val error: String?,
+    ) : Known {
+        override val kind: AgentEventKind get() = AgentEventKind.SYSTEM_API_RETRY
+    }
+
+    /**
+     * A well-formed JSON line whose `type` is not one of the twenty-three, or one that is missing a field
      * the declared shape needs. Kept whole so that whatever arrives can be read back later.
      *
      * This is the version-drift alarm: a CLI upgrade that adds a line kind shows up here rather than

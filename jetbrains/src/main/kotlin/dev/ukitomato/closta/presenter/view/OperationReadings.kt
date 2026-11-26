@@ -38,6 +38,13 @@ internal fun OperationRecords.statusSaid(event: AgentEvent.SystemStatus): Operat
 
 private const val COMPACTING = "compacting"
 
+/** The retry `system/api_retry` reports, shown until the reply goes on. */
+internal fun OperationRecords.retried(event: AgentEvent.SystemApiRetry): OperationRecords =
+    copy(retry = RetryRecord(event.attempt, event.maxRetries, event.retryDelayMs, event.errorStatus))
+
+/** The retry is over: a frame or a `result` means the request went through or the turn ended. */
+internal fun OperationRecords.retryEnded(): OperationRecords = if (retry == null) this else copy(retry = null)
+
 /**
  * The tokens of a `result`: `modelUsage` is the session's total so far for each model, so the figures are summed over
  * the models and replace the last ones, never added to them. A `result` that names no model says nothing of the total.
@@ -55,6 +62,17 @@ internal fun OperationRecords.resulted(event: AgentEvent.Result): OperationRecor
         )
     return if (totals == tokens) this else copy(tokens = totals)
 }
+
+/** A frame goes on with the reply, which ends a retry; `system/api_retry` starts one. */
+internal fun foldRetrying(
+    transcript: Transcript,
+    event: AgentEvent,
+): Transcript =
+    when (event) {
+        is AgentEvent.SystemApiRetry -> transcript.withOperations(transcript.operations.retried(event))
+        is AgentEvent.StreamEvent -> foldStream(transcript, event).let { it.withOperations(it.operations.retryEnded()) }
+        else -> transcript
+    }
 
 /** The models of an `initialize` response (`response.response.models`), or null when it has none. */
 internal fun modelsOfResponse(response: JsonValue?): List<ModelRecord>? {

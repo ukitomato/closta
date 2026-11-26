@@ -181,6 +181,16 @@ data class OperationRecords(
     val bypassEntered: Boolean = false,
     /** A switch to `auto` was refused or could not be sent once in this session; it stays set. */
     val autoRejected: Boolean = false,
+    /** The CLI is retrying the API (`system/api_retry`); it goes at the next `stream_event` or `result`. */
+    val retry: RetryRecord? = null,
+)
+
+/** A retry of the API in progress: attempt [attempt] of [maxRetries] starts after [delayMs] ms; [status] is HTTP's. */
+data class RetryRecord(
+    val attempt: Int,
+    val maxRetries: Int,
+    val delayMs: Long,
+    val status: Int?,
 )
 
 /** The most switches kept (the newest); an answer for one pushed out is an answer for an id nobody knows. */
