@@ -5,13 +5,15 @@
 //! [`SessionRuntime::new`] hands out the handle (status, view, commands, close) and the
 //! [`SessionRun`], one future the platform runs in the background. Inside it the
 //! [`ClaudeSession`] pump and the fold run together with no task and no thread of their own;
-//! only the synchronous spawns go to the blocking pool.
+//! only the synchronous spawns and the read of a saved record go to the blocking pool.
 
 use std::fmt;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
 use async_channel::{Receiver, Sender};
+use closta_core::ports::{SavedSessions, SavedSessionsError};
 use closta_model::AgentEvent;
 use closta_presenter::input::{Launched, PresenterInput};
 use closta_presenter::records::operations::asks_for_settings;
@@ -25,6 +27,8 @@ use futures_lite::future;
 
 use crate::clock::SystemClock;
 use crate::commands::SessionCommands;
+use crate::history::SessionOpening;
+use crate::history::restore::{history_unavailable, restore_steps, restored};
 use crate::launch::{SessionLaunch, SessionLaunchPlanner};
 use crate::live::{LiveProcesses, Tracked};
 use crate::log::SessionLog;
@@ -63,6 +67,10 @@ pub struct SessionConfig {
     pub version_timeout: Duration,
     pub close_wait: Duration,
     pub kill_wait: Duration,
+    /// A new conversation, or the saved session of `id` put back.
+    pub opening: SessionOpening,
+    /// Where a resumed session reads its earlier conversation from.
+    pub saved: Option<Arc<dyn SavedSessions>>,
 }
 
 impl SessionConfig {
@@ -84,6 +92,8 @@ impl SessionConfig {
             version_timeout: VERSION_TIMEOUT,
             close_wait: CLOSE_WAIT,
             kill_wait: KILL_WAIT,
+            opening: SessionOpening::New,
+            saved: None,
         }
     }
 }
@@ -98,6 +108,8 @@ impl fmt::Debug for SessionConfig {
             .field("version_timeout", &self.version_timeout)
             .field("close_wait", &self.close_wait)
             .field("kill_wait", &self.kill_wait)
+            .field("opening", &self.opening)
+            .field("saved", &self.saved.is_some())
             .finish_non_exhaustive()
     }
 }
@@ -159,6 +171,9 @@ struct Shared {
     closing: Sender<()>,
     // A wake-up for the run once a restart is marked; sent and drained under the state's lock.
     restarting: Sender<()>,
+    // Turned true by a close, for a read of the saved record still under way on the blocking
+    // pool: the run does not wait for it, so it is told to stop.
+    stop_reading: Arc<AtomicBool>,
 }
 
 impl Shared {
@@ -190,6 +205,7 @@ impl SessionRuntime {
             live: LiveProcesses::default(),
             closing,
             restarting,
+            stop_reading: Arc::new(AtomicBool::new(false)),
         });
         let run = Box::pin(run(Arc::clone(&shared), config, Signals { closed, marked }));
         (SessionRuntime { shared }, run)
@@ -248,6 +264,8 @@ impl SessionRuntime {
         // Off the state's lock: the store comes before the state in the lock order.
         self.shared.store.close_watchers();
         self.shared.closing.close();
+        // Only once the close is sent, so a read that ends as stopped finds the run closed.
+        self.shared.stop_reading.store(true, Ordering::SeqCst);
     }
 
     /// Turns the sandbox on: the CLI is started again with `--settings` under the same runtime,
@@ -361,7 +379,8 @@ async fn life(
                 ProcessEnd::Restart(switch) => {
                     let view = shared.store.view();
                     let sent = view.transcript.routing.sends > 0;
-                    let spec = restart_spec(&first, sent, &carried_choices(&view), true);
+                    let spec =
+                        restart_spec(&first, sent, config.opening, &carried_choices(&view), true);
                     (spec, Some(switch))
                 }
             };
@@ -480,6 +499,13 @@ async fn run_process(
         });
         shared.store.transition(|view| view.fold(&launched));
     }
+    // After the first process is up (a start that fails puts nothing back) and before the session
+    // runs, so nothing the user sends can come before the earlier conversation. Once: a restart
+    // keeps the view, and with it what was put back.
+    if !start.relaunch && !restore_history(shared, config, closed).await {
+        close(pump).await;
+        return ProcessEnd::Over(None);
+    }
     let commands = Arc::new(SessionCommands::new(
         Arc::new(session),
         Arc::new(SystemClock),
@@ -562,6 +588,70 @@ async fn run_process(
     ProcessEnd::Over(Some(SessionStatus::Ended))
 }
 
+/// Puts the earlier conversation of a resumed session back into the view from its saved record,
+/// in the steps of [`restore_steps`], each folded onto the view from before the restore. Nothing
+/// the CLI says is folded meanwhile: its events are read only after this. A record that cannot be
+/// read does not fail the session: it goes on without it, and the view says so; only the kind of
+/// the failure is logged. Returns `false` when the session was closed during the read, which is
+/// then told to stop (Kotlin's `restoreHistory`).
+async fn restore_history(shared: &Shared, config: &SessionConfig, closed: &Receiver<()>) -> bool {
+    if config.opening == SessionOpening::New {
+        return true;
+    }
+    let id = &config.id;
+    let Some(saved) = config.saved.clone() else {
+        unavailable(shared, config, "no saved sessions");
+        return true;
+    };
+    let stop = Arc::clone(&shared.stop_reading);
+    let reading = {
+        let (id, stop) = (id.clone(), Arc::clone(&stop));
+        blocking::unblock(move || saved.read(&id, &|| stop.load(Ordering::SeqCst)))
+    };
+    // The close side first: a close seen once the read is over still wins.
+    let read = future::or(
+        async {
+            _ = closed.recv().await;
+            None
+        },
+        async { Some(reading.await) },
+    )
+    .await;
+    let transcript = match read {
+        // A stop is only ever asked for by a close.
+        None | Some(Err(SavedSessionsError::Stopped)) => {
+            stop.store(true, Ordering::SeqCst);
+            return false;
+        }
+        Some(Err(error)) => {
+            unavailable(shared, config, &format!("{error:?}"));
+            return true;
+        }
+        Some(Ok(transcript)) => transcript,
+    };
+    let mut before = None;
+    for (lines, dropped) in restore_steps(&transcript.events, transcript.dropped) {
+        shared.store.transition(|now| {
+            let before = before.get_or_insert(now);
+            restored(before.clone(), &lines, dropped)
+        });
+    }
+    config.log.info(&format!(
+        "claude session {id}: put back {} lines of the saved record ({transcript:?})",
+        transcript.events.len()
+    ));
+    true
+}
+
+/// The record of a resumed session said to be unreadable, for the `reason` logged.
+fn unavailable(shared: &Shared, config: &SessionConfig, reason: &str) {
+    config.log.warn(&format!(
+        "claude session {}: the saved record could not be read ({reason})",
+        config.id
+    ));
+    shared.store.transition(history_unavailable);
+}
+
 fn new_id() -> String {
     uuid::Uuid::new_v4().to_string()
 }
@@ -584,7 +674,13 @@ async fn prepare(shared: &Arc<Shared>, config: &SessionConfig) -> Result<Prepare
         .plan(id, config.working_directory.as_deref())
         .await
         .map_err(SessionStatus::Failed)?;
-    let planned = with_choices(planned, config.effort.as_deref(), mode, config.sandbox);
+    let planned = with_choices(
+        planned,
+        config.effort.as_deref(),
+        mode,
+        config.sandbox,
+        config.opening,
+    );
     let spawner = planned.spawner;
     // A spec that contradicts itself is a plan that failed.
     let Ok(launch) = Launch::of(&planned.spec) else {
@@ -667,21 +763,27 @@ fn ask_settings(commands: &SessionCommands, config: &SessionConfig) {
 }
 
 /// The plan with what is the user's choice for this session laid over it: the effort, the
-/// permission mode and the sandbox. With none of them the plan is used as it came, its sandbox
-/// included.
+/// permission mode, the sandbox, and a resume of the session's own id. With none of them (a new
+/// session) the plan is used as it came, its sandbox included.
 fn with_choices(
     planned: SessionLaunch,
     effort: Option<&str>,
     mode: Option<String>,
     sandbox: bool,
+    opening: SessionOpening,
 ) -> SessionLaunch {
-    if effort.is_none() && mode.is_none() && !sandbox {
+    if effort.is_none() && mode.is_none() && !sandbox && opening == SessionOpening::New {
         return planned;
     }
     let spec = planned.spec;
+    let resume = match opening {
+        SessionOpening::Resume => Some(spec.session_id.clone()),
+        SessionOpening::New => spec.resume.clone(),
+    };
     SessionLaunch {
         spawner: planned.spawner,
         spec: LaunchSpec {
+            resume,
             effort: effort.map(str::to_owned).or(spec.effort),
             permission_mode: mode.or(spec.permission_mode),
             sandbox,
@@ -692,6 +794,8 @@ fn with_choices(
 
 #[cfg(test)]
 mod tests {
+    use closta_model::SavedTranscript;
+    use closta_providers::claude::fake::saved::FakeSavedSessions;
     use closta_providers::claude::fake::spawner::FakeSpawner;
 
     use super::*;
@@ -709,7 +813,13 @@ mod tests {
 
     #[test]
     fn with_no_choice_the_plan_is_used_as_it_came_its_sandbox_included() {
-        let as_planned = with_choices(planned(|spec| spec.sandbox = true), None, None, false);
+        let as_planned = with_choices(
+            planned(|spec| spec.sandbox = true),
+            None,
+            None,
+            false,
+            SessionOpening::New,
+        );
         assert!(as_planned.spec.sandbox);
     }
 
@@ -724,15 +834,28 @@ mod tests {
             Some("high"),
             None,
             false,
+            SessionOpening::New,
         );
         assert_eq!(chosen.spec.effort.as_deref(), Some("high"));
         assert_eq!(chosen.spec.permission_mode.as_deref(), Some("plan"));
         assert!(!chosen.spec.sandbox);
 
-        let mode = with_choices(planned(|_| {}), None, Some("auto".into()), true);
+        let mode = with_choices(
+            planned(|_| {}),
+            None,
+            Some("auto".into()),
+            true,
+            SessionOpening::New,
+        );
         assert_eq!(mode.spec.effort, None);
         assert_eq!(mode.spec.permission_mode.as_deref(), Some("auto"));
         assert!(mode.spec.sandbox);
+    }
+
+    #[test]
+    fn with_no_choice_a_resume_still_resumes() {
+        let resumed = with_choices(planned(|_| {}), None, None, false, SessionOpening::Resume);
+        assert_eq!(resumed.spec.resume.as_deref(), Some("s"));
     }
 
     #[test]
@@ -804,9 +927,33 @@ mod tests {
         let shown = format!("{config:?}");
         assert!(!shown.contains("someone"), "{shown}");
         assert!(shown.contains("\"s\""), "{shown}");
+        assert!(shown.contains("opening: New"), "{shown}");
+        assert!(shown.contains("saved: false"), "{shown}");
+
         assert_eq!(config.close_wait, CLOSE_WAIT);
         assert_eq!(config.kill_wait, KILL_WAIT);
         assert_eq!(config.version_timeout, VERSION_TIMEOUT);
-        assert_eq!((config.start_mode)(), None);
+        assert_eq!(config.opening, SessionOpening::New);
+        assert!(config.saved.is_none());
+
+        let mut resumed = config;
+        resumed.opening = SessionOpening::Resume;
+        resumed.saved = Some(Arc::new(FakeSavedSessions::default().with_transcript(
+            "s",
+            SavedTranscript {
+                events: Vec::new(),
+                skipped: 4711,
+                dropped: 0,
+            },
+        )));
+        let shown = format!("{resumed:?}");
+        assert!(shown.contains("opening: Resume"), "{shown}");
+        assert!(shown.contains("saved: true"), "{shown}");
+        assert!(
+            !shown.contains("4711"),
+            "the saved sessions are not shown: {shown}"
+        );
+        assert!(!shown.contains("someone"), "{shown}");
+        assert_eq!((resumed.start_mode)(), None);
     }
 }

@@ -7,7 +7,7 @@ mod state;
 pub use approval::{ApprovalDecision, ApprovalKind, PendingApproval};
 pub use attachment::{Attachment, AttachmentKind};
 pub use event::{AgentEvent, AgentEventKind, RawJson};
-pub use saved_sessions::SavedSessionSummary;
+pub use saved_sessions::{SavedSessionSummary, SavedTranscript};
 pub use state::{
     ConversationState, Notice, NoticeKind, SessionInfo, Task, TaskStatus, Turn, TurnPhase, Usage,
 };

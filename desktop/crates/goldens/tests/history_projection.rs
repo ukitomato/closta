@@ -3,15 +3,12 @@
 //! ends at a mark, and is not running; the list of saved sessions; a record that could not be read;
 //! a resume that was turned down.
 //!
-//! Kotlin reads the record with the providers' reader (`ProjectTranscripts`), which is not ported
-//! yet; [`record_events`] reads it by the same rule as RecordLines.kt's `eventOf`, the only part of
-//! that reader a whole record goes through. Kotlin also holds each tree to the contract
-//! (`TreeChecks`), which stays on the Kotlin side.
+//! Kotlin also holds each tree to the contract (`TreeChecks`), which stays on the Kotlin side.
 
 use std::sync::Arc;
 
-use closta_goldens::common::{manifest_transcript, non_blank_lines, text_of};
 use closta_goldens::projector::project_tree;
+use closta_goldens::records::read_capture_record;
 use closta_goldens::replay::{THREAD, inputs};
 use closta_goldens::tree_reading::{at, entries, keys_of, messages, parts, status, str};
 use closta_model::{AgentEvent, RawJson, SavedSessionSummary};
@@ -63,62 +60,9 @@ fn first_cli() -> SessionView {
     fold(SessionView::default(), inputs.into_iter().take(mark))
 }
 
-/// The record of capture 22, read by RecordLines.kt's rule: a user or assistant line of the main
-/// conversation (not a sub-agent's, not a note the CLI wrote for the model, not the summary of a
-/// compaction) that has its ids and a message becomes the event its stdout twin is; every other
-/// line is none.
+/// The record of capture 22, read by the providers' reader as the CLI saved it.
 fn record_events() -> Vec<AgentEvent> {
-    let (name, _) =
-        manifest_transcript(CAPTURE).unwrap_or_else(|| panic!("capture 22 has a record"));
-    non_blank_lines(&text_of(&name))
-        .iter()
-        .filter_map(|line| event_of_record_line(line))
-        .collect()
-}
-
-fn event_of_record_line(line: &str) -> Option<AgentEvent> {
-    let row: Map<String, Value> = serde_json::from_str(line).ok()?;
-    let string = |key: &str| row.get(key).and_then(Value::as_str).map(str::to_owned);
-    let flag = |key: &str| row.get(key).and_then(Value::as_bool) == Some(true);
-    let raw = |key: &str| {
-        row.get(key)
-            .filter(|it| !it.is_null())
-            .map(|it| RawJson(compact(it)))
-    };
-    let message = row.get("message").filter(|it| it.is_object())?;
-    if flag("isSidechain") {
-        return None;
-    }
-    let (uuid, session_id, timestamp) =
-        (string("uuid")?, string("sessionId")?, string("timestamp")?);
-    let message = RawJson(compact(message));
-    match string("type").as_deref() {
-        Some("user") if !(flag("isMeta") || flag("isCompactSummary")) => Some(AgentEvent::User {
-            uuid,
-            session_id,
-            timestamp,
-            message,
-            parent_tool_use_id: None,
-            tool_use_result: raw("toolUseResult"),
-            subagent_type: None,
-            task_description: None,
-        }),
-        Some("assistant") => Some(AgentEvent::Assistant {
-            uuid,
-            session_id,
-            timestamp,
-            request_id: Some(string("requestId").unwrap_or_default()),
-            message,
-            parent_tool_use_id: None,
-            user_message_uuid: None,
-            user_message_uuids: None,
-            wire_tool_inputs: raw("wireToolInputs"),
-            subagent_type: None,
-            task_description: None,
-            error: None,
-        }),
-        _ => None,
-    }
+    read_capture_record(CAPTURE).read.events
 }
 
 /// A message as the screen would read it, with the keys left out: its role, its status and what

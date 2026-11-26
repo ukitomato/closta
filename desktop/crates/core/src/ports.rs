@@ -1,6 +1,6 @@
 //! What core asks of the outside world. Mirrors `AgentSession` in AgentSession.kt.
 
-use closta_model::{ApprovalDecision, Attachment};
+use closta_model::{ApprovalDecision, Attachment, SavedSessionSummary, SavedTranscript};
 
 /// Why a line could not be written for the agent. It names only the kind: never the text, the
 /// payload, an attachment's name or its bytes.
@@ -111,6 +111,51 @@ pub trait Clock: Send + Sync {
     fn now(&self) -> std::time::SystemTime;
 }
 
+/// The most sessions [`SavedSessions::list`] returns.
+pub const MAX_LISTED: usize = 50;
+
+/// Why the saved sessions could not be listed or read. It names only the kind: never a path, the
+/// text of an `io::Error` (which can hold the path) or a line of a record.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, thiserror::Error)]
+pub enum SavedSessionsError {
+    /// The id is not in the shape of a session id (a UUID).
+    #[error("not a session id")]
+    NotASessionId,
+    /// The place of the CLI's records was not found; the reason is logged where it was found.
+    #[error("the saved sessions have no place")]
+    NoPlace,
+    /// The record could not be read; only the kind of failure is kept.
+    #[error("the record could not be read ({0:?})")]
+    Unreadable(std::io::ErrorKind),
+    /// `stop` turned true before the read was done.
+    #[error("the read was stopped")]
+    Stopped,
+}
+
+/// The sessions the CLI saved for one project, read and never written. Mirrors `SavedSessions.kt`.
+///
+/// Both calls are synchronous and object-safe, like [`AgentSession`]: the caller runs them off
+/// the UI thread and passes `stop`, which the read looks at line by line and which makes it end
+/// with [`SavedSessionsError::Stopped`] once it turns true.
+pub trait SavedSessions: Send + Sync {
+    /// The newest-written sessions first, at most [`MAX_LISTED`]. One record that cannot be read
+    /// does not fail the list. When there is no place (no folder, a name too long, no config
+    /// directory, a place not yet known) the list is empty, not an error: only [`read`] says
+    /// [`SavedSessionsError::NoPlace`].
+    ///
+    /// [`read`]: SavedSessions::read
+    fn list(&self, stop: &dyn Fn() -> bool)
+    -> Result<Vec<SavedSessionSummary>, SavedSessionsError>;
+
+    /// The whole conversation of one session. A record that is too big is read from its newest
+    /// side, up to the size limit, and the lines left unread are counted in `dropped`.
+    fn read(
+        &self,
+        session_id: &str,
+        stop: &dyn Fn() -> bool,
+    ) -> Result<SavedTranscript, SavedSessionsError>;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -124,5 +169,30 @@ mod tests {
             SendError::from(EncodeError::TextNotUtf8).to_string(),
             "a text attachment is not UTF-8"
         );
+    }
+
+    #[test]
+    fn a_saved_sessions_error_names_only_its_kind() {
+        assert_eq!(
+            SavedSessionsError::Unreadable(std::io::ErrorKind::PermissionDenied).to_string(),
+            "the record could not be read (PermissionDenied)"
+        );
+        assert_eq!(
+            SavedSessionsError::NotASessionId.to_string(),
+            "not a session id"
+        );
+        assert_eq!(
+            SavedSessionsError::NoPlace.to_string(),
+            "the saved sessions have no place"
+        );
+        assert_eq!(
+            SavedSessionsError::Stopped.to_string(),
+            "the read was stopped"
+        );
+    }
+
+    #[test]
+    fn saved_sessions_is_object_safe() {
+        fn _takes(_: &dyn SavedSessions) {}
     }
 }

@@ -26,6 +26,19 @@ pub const SHELL_NAME: &str = "closta";
 
 const HOSTS: [&str; 2] = ["wsl.localhost", "wsl$"];
 
+/// The mark before `$HOME` in the answer to [`PROBE_ARGS`].
+pub const HOME_MARK: &str = "CLAUDE_AGENT_HOME=";
+
+/// The mark before `$CLAUDE_CONFIG_DIR` in the answer to [`PROBE_ARGS`].
+pub const CONFIG_MARK: &str = "CLAUDE_AGENT_CONFIG=";
+
+/// The arguments of `sh` that ask the login shell for the two values
+/// [`WslLocation::record_home`] reads, each on a line that begins with its mark.
+pub const PROBE_ARGS: [&str; 2] = [
+    "-c",
+    r#"printf "CLAUDE_AGENT_HOME=%s\nCLAUDE_AGENT_CONFIG=%s\n" "$HOME" "$CLAUDE_CONFIG_DIR""#,
+];
+
 /// A project that lives in a WSL distribution, as Windows sees it: the distribution's name and the
 /// Linux path of the folder in it (starting with `/`; the distribution's root is `/`).
 #[derive(Clone, PartialEq, Eq)]
@@ -89,6 +102,30 @@ impl WslLocation {
             }),
         }
     }
+
+    /// The place of the CLI's records, as a UNC path, from the output of [`PROBE_ARGS`] run the
+    /// way the CLI is run. The login shell's profile may print lines of its own before or after,
+    /// so only the first line that begins with each mark is read. A configured directory that
+    /// starts with `/` wins; otherwise `$HOME/.claude`. `None` when there is no [`HOME_MARK`] line
+    /// or neither value can be made.
+    pub fn record_home(&self, probe_output: &str) -> Option<String> {
+        let value_after = |mark: &str| {
+            probe_output
+                .split('\n')
+                .map(|line| line.trim_end_matches('\r'))
+                .find_map(|line| line.strip_prefix(mark))
+                .map(str::trim)
+        };
+        let home = value_after(HOME_MARK)?;
+        let config = value_after(CONFIG_MARK).unwrap_or("");
+        if config.starts_with('/') {
+            Some(self.to_unc(config))
+        } else if home.starts_with('/') {
+            Some(self.to_unc(&format!("{}/.claude", home.trim_end_matches('/'))))
+        } else {
+            None
+        }
+    }
 }
 
 /// The one of `installed` named `name`, without regard to case (a UNC host and a Windows name are
@@ -105,7 +142,8 @@ pub(super) fn same_ignoring_case(a: &str, b: &str) -> bool {
     a == b || a.to_lowercase() == b.to_lowercase()
 }
 
-/// What runs inside the distribution: `claude` from the login shell's `PATH`, or a path (tests).
+/// What runs inside the distribution: `claude` from the login shell's `PATH`, or a path (tests
+/// and short questions).
 #[derive(Clone, PartialEq, Eq)]
 pub enum WslProgram {
     Claude,
@@ -744,5 +782,110 @@ mod tests {
             .collect();
         assert_eq!(got.pop().as_deref(), Some(""), "every case ends with a NUL");
         assert_eq!(got, cases());
+    }
+
+    fn answer(home: &str, config: &str) -> String {
+        format!("CLAUDE_AGENT_HOME={home}\nCLAUDE_AGENT_CONFIG={config}\n")
+    }
+
+    #[test]
+    fn the_record_place_is_the_configured_directory_or_home_dot_claude() {
+        let location = at("Ubuntu", "/home/me/p");
+        assert_eq!(
+            location.record_home(&answer("/home/me", "")).as_deref(),
+            Some(r"\\wsl.localhost\Ubuntu\home\me\.claude")
+        );
+        assert_eq!(
+            location.record_home(&answer("/home/me/", "")).as_deref(),
+            Some(r"\\wsl.localhost\Ubuntu\home\me\.claude"),
+            "a trailing slash of HOME is dropped"
+        );
+        assert_eq!(
+            location.record_home(&answer(" /home/me ", "")).as_deref(),
+            Some(r"\\wsl.localhost\Ubuntu\home\me\.claude"),
+            "values are trimmed"
+        );
+        assert_eq!(
+            location
+                .record_home(&answer("/home/me", "/opt/cc"))
+                .as_deref(),
+            Some(r"\\wsl.localhost\Ubuntu\opt\cc")
+        );
+        assert_eq!(
+            location
+                .record_home(&answer("/home/me", "/opt/cc").replace('\n', "\r\n"))
+                .as_deref(),
+            Some(r"\\wsl.localhost\Ubuntu\opt\cc")
+        );
+    }
+
+    #[test]
+    fn lines_the_profile_prints_before_or_after_are_skipped() {
+        let location = at("Ubuntu", "/home/me/p");
+        let home = Some(r"\\wsl.localhost\Ubuntu\home\me\.claude");
+        let answer = answer("/home/me", "");
+        assert_eq!(
+            location
+                .record_home(&format!(
+                    "Welcome to Ubuntu\r\nnvm: using node 20\n{answer}"
+                ))
+                .as_deref(),
+            home
+        );
+        assert_eq!(
+            location
+                .record_home(&format!("{answer}logout banner\r\n/opt/other\n"))
+                .as_deref(),
+            home
+        );
+        assert_eq!(
+            location
+                .record_home(&format!("noise\n{answer}tail\n"))
+                .as_deref(),
+            home
+        );
+        assert_eq!(
+            location
+                .record_home(&format!("{answer}CLAUDE_AGENT_HOME=/later\n"))
+                .as_deref(),
+            home,
+            "the first mark line wins"
+        );
+    }
+
+    #[test]
+    fn no_record_place_without_the_marks_or_with_an_unusable_home() {
+        let location = at("Ubuntu", "/home/me/p");
+        for output in [
+            "/home/me\n\n".to_owned(),
+            "Welcome\n/home/me\n/opt/cc\n".to_owned(),
+            String::new(),
+            answer("", ""),
+            answer("home/me", ""),
+            "CLAUDE_AGENT_CONFIG=/opt/cc\n".to_owned(),
+            answer("", "relative"),
+            " CLAUDE_AGENT_HOME=/home/me\n".to_owned(),
+        ] {
+            assert_eq!(location.record_home(&output), None, "{output:?}");
+        }
+    }
+
+    #[test]
+    fn the_probe_asks_for_both_values_behind_their_marks() {
+        assert_eq!(PROBE_ARGS[0], "-c");
+        let script = PROBE_ARGS[1];
+        assert!(
+            script.contains(HOME_MARK) && script.contains(CONFIG_MARK),
+            "{script}"
+        );
+        assert!(
+            script.contains("\"$HOME\"") && script.contains("\"$CLAUDE_CONFIG_DIR\""),
+            "{script}"
+        );
+        assert!(
+            !PROBE_ARGS.contains(&"sh"),
+            "the program is the spawner's, not an argument"
+        );
+        assert!(!script.starts_with("sh"), "{script}");
     }
 }

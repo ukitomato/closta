@@ -2,6 +2,8 @@
 
 #[cfg(feature = "replay")]
 mod args;
+#[cfg(feature = "replay")]
+mod list_saved;
 mod logging;
 mod ports;
 #[cfg(feature = "replay")]
@@ -26,11 +28,23 @@ fn main() -> ExitCode {
     let header =
         closta_shell::header::app_header(&closta_core::describe_app(&closta_providers::BuildInfo));
     #[cfg(feature = "replay")]
-    let options = match replay_options(header, started) {
-        Ok(options) => options,
-        Err(error) => {
-            eprintln!("closta: {error}");
-            return ExitCode::from(USAGE);
+    let options = {
+        let args = match args::parse(std::env::args().skip(1)) {
+            Ok(args) => args,
+            Err(error) => {
+                eprintln!("closta: {error}");
+                return ExitCode::from(USAGE);
+            }
+        };
+        if let Some(folder) = &args.list_saved {
+            return list_saved::run(folder, args.ready_file.as_deref());
+        }
+        match replay_options(header, started, args) {
+            Ok(options) => options,
+            Err(error) => {
+                eprintln!("closta: {error}");
+                return ExitCode::from(USAGE);
+            }
         }
     };
     #[cfg(not(feature = "replay"))]
@@ -60,10 +74,10 @@ fn main() -> ExitCode {
 fn replay_options(
     header: closta_shell::header::AppHeader,
     started: Instant,
+    args: args::AppArgs,
 ) -> Result<PlatformOptions, String> {
     use std::time::Duration;
 
-    let args = args::parse(std::env::args().skip(1))?;
     if args.replays.is_empty() {
         return probe_options(header, args);
     }

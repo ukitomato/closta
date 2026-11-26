@@ -27,6 +27,7 @@ use closta_providers::claude::launch::{Launch, LaunchError};
 use closta_providers::claude::process::{AgentProcess, ProcessFailure, ProcessSpawner};
 use closta_providers::claude::protocol::encode;
 use closta_session::commands::SessionCommands;
+use closta_session::history::SessionOpening;
 use closta_session::launch::{NativeSessionLaunchPlanner, SessionLaunchPlanner};
 use closta_session::runtime::SessionRuntime;
 use closta_session::sandbox::{carried_choices, restart_spec};
@@ -301,9 +302,15 @@ fn turning_on_restarts_with_resume_and_settings() {
                 .plan(ID, Some(WORKING_DIR))
                 .await
                 .expect("planned");
-        let expected = restart_spec(&planned.spec, true, &carried_choices(&before), true)
-            .to_args()
-            .expect("valid args");
+        let expected = restart_spec(
+            &planned.spec,
+            true,
+            SessionOpening::New,
+            &carried_choices(&before),
+            true,
+        )
+        .to_args()
+        .expect("valid args");
 
         assert!(runtime.turn_sandbox_on());
         let again = running_on(&runtime, &processes, 2).await;

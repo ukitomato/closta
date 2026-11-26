@@ -7,6 +7,7 @@
 //! The draws come from a seeded generator of this crate's own, not Kotlin's `Random`: the lines
 //! have Kotlin's shapes and counts, not its exact words.
 
+pub mod record_script;
 pub mod replay_script;
 pub mod stream_script;
 

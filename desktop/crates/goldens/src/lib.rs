@@ -8,6 +8,7 @@ pub mod common;
 pub mod gallery;
 pub mod lines;
 pub mod projector;
+pub mod records;
 pub mod replay;
 pub mod session;
 pub mod synthetic;
