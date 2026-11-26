@@ -7,16 +7,18 @@ mod common;
 mod support;
 
 use std::io::ErrorKind;
+use std::sync::Arc;
 
 use closta_providers::claude::launch::LaunchError;
 use closta_session::runtime::SessionRuntime;
 use closta_session::status::SessionStatus;
 use closta_shell::nav::NavItem;
+use closta_shell::new_session::{ClaudeOnPath, Problem};
 use closta_shell::projects::{ProjectKey, project_key};
 use closta_shell::settings::{SETTINGS_VERSION, SavedProject, Settings};
 use closta_shell::slot::{SlotId, SlotLaunch};
-use closta_shell::state::{FocusTarget, Overlay, ShellAction, ShellState};
-use support::{Harness, drive, running, until, waiting_slot};
+use closta_shell::state::{FocusTarget, Overlay, Ports, ShellAction, ShellState};
+use support::{Harness, Machine, drive, running, until, waiting_slot};
 
 const FOLDER: &str = r"C:\work\closta";
 const SANDBOX: &str = "36-sandbox-unavailable.ndjson";
@@ -426,6 +428,12 @@ fn ctrl_n_fills_the_folder_of_the_selected_slot_s_project() {
         );
         shell.act(ShellAction::CancelNewSession);
 
+        // The selection wins over the cursor.
+        shell.act(ShellAction::NavTo(NavItem::Project(key(other))));
+        shell.act(ShellAction::OpenNewSessionHere);
+        assert_eq!(shell.new_session().unwrap().folder, FOLDER);
+        shell.act(ShellAction::CancelNewSession);
+
         // No selection: the project under the cursor, or the parent of the slot under it.
         let mut shell = harness.shell();
         shell.restore_projects(&Settings {
@@ -446,6 +454,13 @@ fn ctrl_n_fills_the_folder_of_the_selected_slot_s_project() {
         shell.act(ShellAction::OpenNewSessionHere);
         assert_eq!(shell.new_session().unwrap().folder, other);
         shell.act(ShellAction::CancelNewSession);
+
+        // A cursor on a slot stands for the slot's project.
+        let mut shell = harness.shell();
+        let under = live_in(&mut shell, &harness, other, 2).await;
+        shell.act(ShellAction::NavTo(NavItem::Slot(under)));
+        shell.act(ShellAction::OpenNewSessionHere);
+        assert_eq!(shell.new_session().unwrap().folder, other);
 
         // Neither a selection nor a cursor: an empty field.
         let mut bare = harness.shell();
@@ -471,5 +486,25 @@ fn ctrl_n_is_refused_behind_an_overlay_and_while_closing() {
         assert_eq!(shell.overlay(), Some(Overlay::Closing));
         assert!(!shell.act(ShellAction::OpenNewSessionHere).folder);
         assert!(shell.new_session().is_none());
+    });
+}
+
+#[test]
+fn ctrl_n_shows_a_quick_problem_of_the_folder_it_fills() {
+    drive(|harness| async move {
+        let ports = Ports {
+            checks: Arc::new(Machine {
+                claude: ClaudeOnPath::Missing,
+                ..Machine::default()
+            }),
+            ..harness.ports()
+        };
+        let mut shell = harness.shell_with(ports);
+        live_in(&mut shell, &harness, FOLDER, 0).await;
+        shell.act(ShellAction::OpenNewSessionHere);
+        let dialog = shell.new_session().unwrap();
+        assert_eq!(dialog.folder, FOLDER);
+        assert_eq!(dialog.problem, Some(Problem::ClaudeMissing));
+        assert!(!dialog.checking);
     });
 }

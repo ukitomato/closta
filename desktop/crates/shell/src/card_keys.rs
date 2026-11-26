@@ -236,10 +236,7 @@ fn held_is_stopped(scene: &FocusScene, key: Key) -> bool {
         Key::Digit(_) => list_or_card,
         Key::Space => !matches!(
             scene,
-            FocusScene::Composer
-                | FocusScene::CardText { .. }
-                | FocusScene::FileEditor
-                | FocusScene::Overlay
+            FocusScene::Composer | FocusScene::CardText { .. } | FocusScene::FileEditor
         ),
         _ => false,
     }
@@ -540,6 +537,8 @@ mod tests {
             FocusScene::Thread,
             FocusScene::Other,
             FocusScene::Overlay,
+            FocusScene::FileEditor,
+            FocusScene::QuestionOption,
             card(CardKind::Permission, 3),
             FocusScene::CardText {
                 kind: CardKind::Plan,
@@ -585,14 +584,20 @@ mod tests {
             kind: CardKind::Permission,
         };
         assert_eq!(card_key(&text, &held(Key::Escape)), Swallow);
-        assert_eq!(card_key(&FocusScene::Thread, &held(Key::Space)), Swallow);
-        assert_eq!(card_key(&FocusScene::Other, &held(Key::Space)), Swallow);
+        for scene in [FocusScene::Thread, FocusScene::Other, FocusScene::Overlay] {
+            assert_eq!(card_key(&scene, &held(Key::Space)), Swallow, "{scene:?}");
+        }
+        assert_eq!(card_key(&FocusScene::FileEditor, &held(Key::Space)), Pass);
     }
 
     #[test]
     fn after_nav_enter_a_held_enter_neither_sends_nor_restarts() {
-        assert_eq!(card_key(&FocusScene::Composer, &held(Key::Enter)), Swallow);
-        assert_eq!(card_key(&FocusScene::Other, &held(Key::Enter)), Swallow);
+        // The first Enter moves focus; the repeats after it find the new part and stop there,
+        // while a fresh Enter on the same part still acts.
+        for scene in [FocusScene::Composer, FocusScene::Other] {
+            assert_eq!(card_key(&scene, &held(Key::Enter)), Swallow, "{scene:?}");
+            assert_eq!(card_key(&scene, &plain(Key::Enter)), Pass, "{scene:?}");
+        }
     }
 
     #[test]
