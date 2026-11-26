@@ -53,6 +53,7 @@ impl ShellState {
             self.projects.push(project);
         }
         self.saved = Some(Settings::of(&self.projects));
+        self.settle_nav();
     }
 
     /// The projects in the order they were made in.

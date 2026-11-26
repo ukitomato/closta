@@ -502,6 +502,7 @@ impl ShellState {
             },
         );
         self.selected.get_or_insert(id);
+        self.settle_nav();
         id
     }
 
@@ -1234,16 +1235,16 @@ fn behind_overlay(action: &ShellAction, overlay: Overlay) -> bool {
         | ShellAction::Interrupt { .. }
         | ShellAction::HistoryPrev { .. }
         | ShellAction::HistoryNext { .. }
-        | ShellAction::RemoveProject { .. } => true,
-        ShellAction::OpenNewSession | ShellAction::StartSession { .. } => {
-            overlay != Overlay::NewSession
-        }
-        ShellAction::NavFocus
+        | ShellAction::RemoveProject { .. }
+        | ShellAction::NavFocus
         | ShellAction::NavMove { .. }
         | ShellAction::NavTo(_)
         | ShellAction::NavEnter
         | ShellAction::NavLeft
-        | ShellAction::NavRight => overlay != Overlay::Closing,
+        | ShellAction::NavRight => true,
+        ShellAction::OpenNewSession | ShellAction::StartSession { .. } => {
+            overlay != Overlay::NewSession
+        }
         _ => false,
     }
 }

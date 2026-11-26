@@ -13,6 +13,7 @@ impl ShellState {
         for held in self.slots.values() {
             held.runtime.close();
         }
+        self.settle_nav();
         let waits: Vec<Receiver<()>> = lock(&self.runs)
             .values()
             .map(|(_, finished)| finished.clone())

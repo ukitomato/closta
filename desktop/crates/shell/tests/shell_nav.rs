@@ -15,7 +15,7 @@ use closta_shell::nav::NavItem;
 use closta_shell::projects::{ProjectKey, project_key};
 use closta_shell::settings::{SETTINGS_VERSION, SavedProject, Settings};
 use closta_shell::slot::{SlotId, SlotLaunch};
-use closta_shell::state::{FocusTarget, ShellAction, ShellState};
+use closta_shell::state::{FocusTarget, Overlay, ShellAction, ShellState};
 use support::{Harness, drive, running, until, waiting_slot};
 
 const FOLDER: &str = r"C:\work\closta";
@@ -274,6 +274,17 @@ fn the_cursor_survives_an_answered_wait() {
     });
 }
 
+const SIX: fn(SlotId) -> [ShellAction; 6] = |slot| {
+    [
+        ShellAction::NavFocus,
+        ShellAction::NavMove { delta: 1 },
+        ShellAction::NavTo(NavItem::Slot(slot)),
+        ShellAction::NavEnter,
+        ShellAction::NavLeft,
+        ShellAction::NavRight,
+    ]
+};
+
 #[test]
 fn nav_actions_do_nothing_behind_an_overlay() {
     drive(|harness| async move {
@@ -281,20 +292,118 @@ fn nav_actions_do_nothing_behind_an_overlay() {
         let slot = live_in(&mut shell, &harness, FOLDER, 0).await;
         let project = NavItem::Project(key(FOLDER));
         shell.act(ShellAction::NavTo(project.clone()));
+        shell.act(ShellAction::ToggleProject {
+            project: key(FOLDER),
+        });
+        assert!(collapsed(&shell));
+        // Each overlay in turn: the new-session dialog, then the window's close question.
         shell.act(ShellAction::OpenNewSession);
-        let actions = [
-            ShellAction::NavFocus,
-            ShellAction::NavMove { delta: 1 },
-            ShellAction::NavTo(NavItem::Slot(slot)),
-            ShellAction::NavEnter,
-            ShellAction::NavLeft,
-            ShellAction::NavRight,
-        ];
-        for action in actions {
+        assert!(shell.overlay().is_some());
+        for round in 0..2 {
+            for action in SIX(slot) {
+                let acted = shell.act(action.clone());
+                assert!(acted.focus.is_none(), "{action:?}");
+                assert_eq!(cursor(&shell), Some(project.clone()), "{action:?}");
+                assert!(collapsed(&shell), "{action:?}");
+            }
+            if round == 0 {
+                shell.act(ShellAction::CancelNewSession);
+                shell.act(ShellAction::EditDraft {
+                    slot,
+                    text: "unsent".to_owned(),
+                });
+                shell.act(ShellAction::RequestClose);
+                assert_eq!(shell.overlay(), Some(Overlay::CloseWindow));
+            }
+        }
+    });
+}
+
+#[test]
+fn nav_actions_do_nothing_once_the_window_is_closing() {
+    drive(|harness| async move {
+        let (mut shell, settings) = harness.shell_recording();
+        let (quiet, _runtime) = harness.launch("quiet");
+        let quiet = shell.open(quiet);
+        let (waiting, _control, _runtime) =
+            waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK, 0).await;
+        let saves = settings.saves().len();
+        shell.act(ShellAction::NavTo(NavItem::NeedsYou(waiting)));
+        shell.act(ShellAction::RequestClose);
+        assert!(shell.act(ShellAction::ConfirmClose).close);
+        assert_eq!(shell.overlay(), Some(Overlay::Closing));
+        for action in SIX(quiet) {
             let acted = shell.act(action.clone());
             assert!(acted.focus.is_none(), "{action:?}");
-            assert_eq!(cursor(&shell), Some(project.clone()), "{action:?}");
+            assert_eq!(
+                cursor(&shell),
+                Some(NavItem::NeedsYou(waiting)),
+                "{action:?}"
+            );
+            assert_eq!(shell.selected(), Some(quiet), "{action:?}");
+        }
+        assert_eq!(settings.saves().len(), saves, "no settings write");
+    });
+}
+
+#[test]
+fn nav_keys_do_not_change_a_project_once_the_window_is_closing() {
+    drive(|harness| async move {
+        let (mut shell, settings) = harness.shell_recording();
+        let slot = live_in(&mut shell, &harness, FOLDER, 0).await;
+        shell.act(ShellAction::NavTo(NavItem::Project(key(FOLDER))));
+        let saves = settings.saves().len();
+        assert!(shell.act(ShellAction::RequestClose).close);
+        // Enter and Left would fold the project; they come first, before anything moves the cursor.
+        for action in [ShellAction::NavEnter, ShellAction::NavLeft] {
+            shell.act(action.clone());
             assert!(!collapsed(&shell), "{action:?}");
         }
+        for action in SIX(slot) {
+            shell.act(action);
+        }
+        assert_eq!(settings.saves().len(), saves);
+    });
+}
+
+#[test]
+fn a_cursor_whose_slot_was_folded_away_by_an_action_takes_the_same_place() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let other = r"C:\work\other";
+        let first = live_in(&mut shell, &harness, FOLDER, 0).await;
+        live_in(&mut shell, &harness, other, 1).await;
+        shell.act(ShellAction::NavTo(NavItem::Slot(first)));
+        // [project A, its slot, project B, its slot]: the cursor is at 1.
+        shell.act(ShellAction::ToggleProject {
+            project: key(FOLDER),
+        });
+        assert_eq!(
+            cursor(&shell),
+            Some(NavItem::Project(key(other))),
+            "number 1 of [A, B, B's slot]"
+        );
+    });
+}
+
+#[test]
+fn the_cursor_follows_its_row_when_a_slot_opens() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let (launch, _runtime) = harness.launch("loose");
+        let loose = shell.open(launch);
+        shell.act(ShellAction::NavTo(NavItem::Slot(loose)));
+        // Rows: [loose]. A slot in a new project pushes the row down by two.
+        let made = live_in(&mut shell, &harness, FOLDER, 0).await;
+        assert_eq!(
+            shell.nav_rows(),
+            [
+                NavItem::Project(key(FOLDER)),
+                NavItem::Slot(made),
+                NavItem::Slot(loose)
+            ]
+        );
+        shell.act(ShellAction::NavMove { delta: -1 });
+        assert_eq!(cursor(&shell), Some(NavItem::Slot(made)));
     });
 }
