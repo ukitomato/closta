@@ -542,8 +542,10 @@ class ComposerPanel(
         val composing = { (editor as? EditorImpl)?.composedTextRange != null }
         val lookupOpen = { LookupManager.getActiveLookup(editor) != null }
         val ours = { !composing() && !lookupOpen() }
+        val trace = ImeEnterTrace()
+        trace.attach(editor.contentComponent)
         // Enter is taken even when nothing can be sent, so it never falls through to the editor as a new line.
-        key(editor, KeyEvent.VK_ENTER, 0, { ours() }) { sendNow() }
+        key(editor, KeyEvent.VK_ENTER, 0, trace.sends(composing, lookupOpen), trace.taking(::sendNow))
         key(editor, KeyEvent.VK_ENTER, InputEvent.SHIFT_DOWN_MASK, { true }) { newLine(editor) }
         // Esc says no to the Bypass bar first, and only then stops the reply.
         key(editor, KeyEvent.VK_ESCAPE, 0, { ours() && escapes() }, ::escape)
