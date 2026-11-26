@@ -17,7 +17,7 @@ use closta_shell::settings::{
     SETTINGS_VERSION, SavedProject, Settings, SettingsSink, sink_for_run,
 };
 use closta_shell::slot::SlotId;
-use closta_shell::state::{Ports, ShellAction, ShellState};
+use closta_shell::state::{Overlay, Ports, ShellAction, ShellState};
 use support::{
     Harness, Machine, Planners, RecordingSettings, drive, replay_launch, running, until, waits_on,
 };
@@ -123,10 +123,12 @@ fn projects_keep_the_order_they_were_made_in() {
     drive(|harness| async move {
         let (mut shell, _settings) = harness.shell_recording();
         let folders = [r"C:\w\b", r"C:\w\a", r"C:\w\c"];
-        let slots: Vec<SlotId> = folders
-            .iter()
-            .map(|folder| shell.open(harness.folder_launch(folder)))
-            .collect();
+        // Each process is awaited before the next slot opens: `control(i)` is slot `i`'s.
+        let mut slots: Vec<SlotId> = Vec::new();
+        for (n, folder) in folders.iter().enumerate() {
+            slots.push(shell.open(harness.folder_launch(folder)));
+            harness.control(n).await;
+        }
         assert_eq!(names(&shell), ["b", "a", "c"]);
         toggle(&mut shell, folders[1]);
         shell.open(harness.folder_launch(folders[0]));
@@ -593,8 +595,21 @@ fn a_removed_folder_comes_back_at_the_end_open() {
 fn removing_is_refused_behind_an_overlay_and_while_closing() {
     drive(|harness| async move {
         let (mut shell, settings) = harness.shell_recording();
-        ended_project(&mut shell, &harness, CLOSTA).await;
+        let [slot, _] = ended_project(&mut shell, &harness, CLOSTA).await;
         let saves = settings.saves().len();
+        // A draft makes closing the slot ask first: the question is an overlay.
+        shell.act(ShellAction::EditDraft {
+            slot,
+            text: "draft".to_owned(),
+        });
+        shell.act(ShellAction::CloseSlot { slot });
+        assert_eq!(shell.overlay(), Some(Overlay::CloseSlot));
+        assert!(remove(&mut shell, CLOSTA).removed.is_empty());
+        assert_eq!(shell.projects().len(), 1);
+        assert_eq!(settings.saves().len(), saves);
+        shell.act(ShellAction::CancelCloseSlot);
+        assert_eq!(shell.overlay(), None);
+
         shell.act(ShellAction::OpenNewSession);
         assert!(remove(&mut shell, CLOSTA).removed.is_empty());
         assert_eq!(shell.projects().len(), 1);

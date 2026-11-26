@@ -247,13 +247,14 @@ fn replacing_a_slot_keeps_its_id_selection_and_open_rows_and_closes_the_old_sess
         let mut shell = harness.shell();
         let (launch, old_runtime) = harness.launch("before");
         let slot = shell.open(launch);
+        // The first process is awaited before the next slot opens: `control(0)` is its own.
+        let old_runtime = old_runtime.recv().await.unwrap();
+        running(&old_runtime).await;
+        let control = harness.control(0).await;
         let (launch, _) = harness.launch("other");
         let other = shell.open(launch);
         shell.act(ShellAction::Select(other));
         shell.act(ShellAction::Select(slot));
-        let old_runtime = old_runtime.recv().await.unwrap();
-        running(&old_runtime).await;
-        let control = harness.control(0).await;
         let lines = lines("01-baseline-text");
         let expected = rows_of(&lines);
         play(&control, &old_runtime, &lines, &expected).await;
