@@ -91,10 +91,11 @@ private const val HOUR_CACHE_MS = 3_600_000L
 private const val FIVE_MINUTE_CACHE_MS = 300_000L
 
 /**
- * A frame goes on with the reply, which ends a retry; `system/api_retry` starts one. A `rate_limit_event` says how
- * near the plan's limit the session is.
+ * The signals that come with a turn's frames, each to its own fold: `system/api_retry` starts a retry, and a stream
+ * frame goes on with the reply and so ends it; `system/thinking_tokens` gives the estimate of the thinking that
+ * streams; a `rate_limit_event` says how near the plan's limit the session is.
  */
-internal fun foldRetrying(
+internal fun foldTurnSignals(
     transcript: Transcript,
     event: AgentEvent,
 ): Transcript =

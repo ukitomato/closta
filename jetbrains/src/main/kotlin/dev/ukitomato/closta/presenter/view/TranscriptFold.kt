@@ -73,7 +73,7 @@ private fun foldEvent(
         is AgentEvent.SystemApiRetry,
         is AgentEvent.SystemThinkingTokens,
         is AgentEvent.RateLimitEvent,
-        -> foldRetrying(transcript, event)
+        -> foldTurnSignals(transcript, event)
         is AgentEvent.Assistant -> foldSignIn(foldAssistant(transcript, event), event)
         is AgentEvent.User -> foldUser(transcript, event)
         is AgentEvent.ControlRequest -> foldRequest(transcript, event, after)
