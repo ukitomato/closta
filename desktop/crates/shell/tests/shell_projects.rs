@@ -8,6 +8,7 @@ mod support;
 
 use std::io::ErrorKind;
 use std::sync::Arc;
+use std::sync::LazyLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use closta_providers::claude::launch::LaunchError;
@@ -19,12 +20,13 @@ use closta_shell::settings::{
 use closta_shell::slot::{SlotId, SlotLaunch, SlotMark, slot_elapsed};
 use closta_shell::state::{Overlay, Ports, ShellAction, ShellState};
 use support::{
-    Harness, Machine, Planners, RecordingSettings, drive, replay_launch, running, until, waits_on,
+    Ask, BASELINE_ALL, BASELINE_OPEN, Harness, Machine, Planners, RecordingSettings, ask_in, drive,
+    replay_launch, running, until, waits_on,
 };
 
 const CLOSTA: &str = r"C:\work\closta";
 const SANDBOX: &str = "36-sandbox-unavailable.ndjson";
-const SANDBOX_ASK: usize = 31;
+static SANDBOX_ASK: LazyLock<Ask> = LazyLock::new(|| ask_in(SANDBOX, "Bash", 1));
 
 fn saved(folder: &str, collapsed: bool) -> SavedProject {
     SavedProject {
@@ -77,7 +79,7 @@ fn start_from_dialog(shell: &mut ShellState, folder: &str) -> SlotId {
 
 /// A slot in `folder` that waits on one request, refreshed.
 async fn waiting_in(shell: &mut ShellState, harness: &Harness, folder: &str) -> SlotId {
-    let (mut launch, _control, runtime) = replay_launch(harness, SANDBOX, SANDBOX_ASK);
+    let (mut launch, _control, runtime) = replay_launch(harness, SANDBOX, SANDBOX_ASK.line);
     launch.project = Some(folder.to_owned());
     let slot = shell.open(launch);
     let runtime = runtime.recv().await.unwrap();
@@ -757,9 +759,6 @@ fn a_long_first_request_is_cut_at_sixty() {
 }
 
 const BASELINE: &str = "01-baseline-text.ndjson";
-/// The baseline's lines up to the first text delta: its turn is open.
-const BASELINE_OPEN: usize = 8;
-const BASELINE_ALL: usize = 15;
 
 /// Waits until the slot's session runs a turn (or has none), then refreshes the slot at `now_ms`.
 async fn refreshed(

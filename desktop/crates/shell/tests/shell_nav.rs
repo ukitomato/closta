@@ -8,6 +8,7 @@ mod support;
 
 use std::io::ErrorKind;
 use std::sync::Arc;
+use std::sync::LazyLock;
 
 use closta_providers::claude::launch::LaunchError;
 use closta_session::runtime::SessionRuntime;
@@ -18,12 +19,11 @@ use closta_shell::projects::{ProjectKey, project_key};
 use closta_shell::settings::{SETTINGS_VERSION, SavedProject, Settings};
 use closta_shell::slot::{SlotId, SlotLaunch};
 use closta_shell::state::{FocusTarget, Overlay, Ports, ShellAction, ShellState};
-use support::{Harness, Machine, drive, running, until, waiting_slot};
+use support::{Ask, Harness, Machine, ask_in, drive, running, until, waiting_slot};
 
 const FOLDER: &str = r"C:\work\closta";
 const SANDBOX: &str = "36-sandbox-unavailable.ndjson";
-const SANDBOX_ASK: usize = 31;
-const SANDBOX_REQUEST: &str = "b4635f8c-7b16-4eac-9934-9ca6b3b1373f";
+static SANDBOX_ASK: LazyLock<Ask> = LazyLock::new(|| ask_in(SANDBOX, "Bash", 1));
 
 fn key(folder: &str) -> ProjectKey {
     project_key(folder).unwrap()
@@ -125,7 +125,7 @@ fn enter_on_a_needs_you_row_opens_it_and_answers_nothing() {
         let (launch, _quiet) = harness.launch("quiet");
         let quiet = shell.open(launch);
         let (waiting, control, _runtime) =
-            waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK, 0).await;
+            waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK.line, 0).await;
         assert_eq!(shell.selected(), Some(quiet));
         shell.act(ShellAction::NavTo(NavItem::NeedsYou(waiting)));
         let acted = shell.act(ShellAction::NavEnter);
@@ -133,7 +133,7 @@ fn enter_on_a_needs_you_row_opens_it_and_answers_nothing() {
             acted.focus,
             Some(FocusTarget::Card {
                 slot: waiting,
-                request_id: SANDBOX_REQUEST.to_owned()
+                request_id: SANDBOX_ASK.id().to_owned()
             })
         );
         assert_eq!(shell.selected(), Some(waiting));
@@ -293,9 +293,9 @@ fn the_cursor_survives_an_answered_wait() {
     drive(|harness| async move {
         let mut shell = harness.shell();
         let (first, _control, _runtime) =
-            waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK, 0).await;
+            waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK.line, 0).await;
         let (second, _control, runtime) =
-            waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK, 0).await;
+            waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK.line, 0).await;
         assert_eq!(
             shell.nav_rows(),
             [
@@ -310,13 +310,13 @@ fn the_cursor_survives_an_answered_wait() {
 
         shell.act(ShellAction::ListShown {
             slot: second,
-            request_id: SANDBOX_REQUEST.to_owned(),
+            request_id: SANDBOX_ASK.id().to_owned(),
             index: 1,
             now_ms: 1000,
         });
         shell.act(ShellAction::AllowFromList {
             slot: second,
-            request_id: SANDBOX_REQUEST.to_owned(),
+            request_id: SANDBOX_ASK.id().to_owned(),
             now_ms: 1500,
         });
         until(|| runtime.view().conversation.pending_approvals.is_empty()).await;
@@ -383,7 +383,7 @@ fn nav_actions_do_nothing_once_the_window_is_closing() {
         let (quiet, _runtime) = harness.launch("quiet");
         let quiet = shell.open(quiet);
         let (waiting, _control, _runtime) =
-            waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK, 0).await;
+            waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK.line, 0).await;
         let saves = settings.saves().len();
         shell.act(ShellAction::NavTo(NavItem::NeedsYou(waiting)));
         shell.act(ShellAction::RequestClose);

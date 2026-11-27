@@ -483,7 +483,52 @@ pub fn emit_capture(control: &LiveControl, fixture: &str, last: usize) {
     }
 }
 
-/// The permission request of capture 36's 31st line with another id and command.
+/// The line (counted from 1 over the non-blank lines) and the request id of a permission request
+/// found in a capture.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Ask {
+    pub line: usize,
+    pub request_id: String,
+}
+
+impl Ask {
+    pub fn id(&self) -> &str {
+        &self.request_id
+    }
+}
+
+/// The `nth` (from 1) `can_use_tool` request for `tool` in the capture `fixture`.
+pub fn ask_in(fixture: &str, tool: &str, nth: usize) -> Ask {
+    let text = crate::common::text_of(fixture);
+    crate::common::non_blank_lines(&text)
+        .iter()
+        .enumerate()
+        .filter_map(|(at, line)| {
+            let value: serde_json::Value = serde_json::from_str(line).ok()?;
+            let request = value.get("request")?;
+            let is_ask = value.get("type")?.as_str()? == "control_request"
+                && request.get("subtype")?.as_str()? == "can_use_tool"
+                && request.get("tool_name")?.as_str()? == tool;
+            is_ask.then(|| Ask {
+                line: at + 1,
+                request_id: value
+                    .get("request_id")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or_default()
+                    .to_owned(),
+            })
+        })
+        .nth(nth - 1)
+        .unwrap_or_else(|| panic!("{fixture}: no can_use_tool #{nth} for {tool}"))
+}
+
+/// The baseline capture's first text delta: its turn is open.
+pub const BASELINE_OPEN: usize = 10;
+/// The baseline capture's last line.
+pub const BASELINE_ALL: usize = 17;
+
+/// A permission request shaped like capture 36's 31st line, with another id and command (not
+/// tied to the capture).
 pub fn can_use_tool(request_id: &str, command: &str) -> String {
     serde_json::json!({
         "type": "control_request",
@@ -495,7 +540,7 @@ pub fn can_use_tool(request_id: &str, command: &str) -> String {
             "input": { "command": command, "description": "Run the command" },
             "description": "Run the command",
             "permission_suggestions": [],
-            "tool_use_id": "toolu_01PcHT9m5wFJnAGQF1s9oyk4"
+            "tool_use_id": "toolu_017CVefXNn36voSSZ6qdMcrn"
         }
     })
     .to_string()

@@ -513,7 +513,7 @@ fn a_session_that_ends_mid_turn_is_not_running() {
         let mut shell = harness.shell();
         let baseline = lines("01-baseline-text");
         // Up to the first text delta: the turn is open.
-        let open = &baseline[..8];
+        let open = &baseline[..support::BASELINE_OPEN];
         for (n, code, end) in [(0, 0, SlotMark::Ended), (1, 3, SlotMark::Failed)] {
             let (launch, runtime) = harness.launch("mid-turn");
             let slot = shell.open(launch);
