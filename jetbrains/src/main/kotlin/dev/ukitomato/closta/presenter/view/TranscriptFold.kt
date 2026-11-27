@@ -1,3 +1,5 @@
+@file:Suppress("TooManyFunctions") // one fold per kind of input
+
 package dev.ukitomato.closta.presenter.view
 
 import dev.ukitomato.closta.core.models.AgentEvent
@@ -26,7 +28,7 @@ fun foldTranscript(
 ): Transcript =
     when (input) {
         is PresenterInput.Event -> foldEvent(transcript, input.event, before, after, input.seenAtMs)
-        is PresenterInput.UserSent -> foldSent(transcript, input)
+        is PresenterInput.UserSent -> foldSent(transcript, input, before)
         PresenterInput.StopRequested -> foldStop(transcript, after)
         is PresenterInput.Decided -> foldDecided(transcript, input, before)
         is PresenterInput.AnswerFailed -> foldAnswerFailed(transcript, input, before)
@@ -69,7 +71,7 @@ private fun foldEvent(
     seenAtMs: Long? = null,
 ): Transcript =
     when (event) {
-        is AgentEvent.CommandLifecycle -> foldLifecycle(transcript, event)
+        is AgentEvent.CommandLifecycle -> foldLifecycle(transcript, event, before)
         is AgentEvent.Result ->
             foldResult(transcript.compactFailureShown(), event, before, after)
                 .let { it.withOperations(it.operations.resulted(event, seenAtMs).retryEnded()) }
@@ -106,7 +108,10 @@ private fun foldEvent(
 private fun foldSent(
     transcript: Transcript,
     sent: PresenterInput.UserSent,
+    before: ConversationState,
 ): Transcript {
+    // Only a message sent while another turn runs waits in the CLI's queue, where it can be withdrawn.
+    val queued = threadIsRunning(before, transcript)
     val key = transcript.messages.claim(sent.messageId)
     // The files go ahead of the words, as they do to the CLI; their keys are a letter and a number, the words'
     // is 0.
@@ -120,6 +125,16 @@ private fun foldSent(
     return transcript.copy(
         messages = transcript.messages.put(key, message),
         routing = routing.copy(sends = routing.sends + 1),
+        sentWhileRunning =
+            if (queued) {
+                (transcript.sentWhileRunning + key)
+                    .toList()
+                    .takeLast(
+                        MAX_CANCELS,
+                    ).toSet()
+            } else {
+                transcript.sentWhileRunning
+            },
         userUuids = sent.uuid?.let { transcript.userUuids.plusEntry(key, it) } ?: transcript.userUuids,
     )
 }
@@ -129,6 +144,18 @@ private fun foldSent(
  * running, and the content that arrives meanwhile belongs to that one.
  */
 private fun foldLifecycle(
+    transcript: Transcript,
+    event: AgentEvent.CommandLifecycle,
+    before: ConversationState,
+): Transcript =
+    // Core closes the turn it held open; the row of its message says it was withdrawn.
+    if (cancelsOpenTurn(event, before)) {
+        transcript.withOperations(transcript.operations.cancelClosed(event.commandUuid))
+    } else {
+        foldStarted(transcript, event)
+    }
+
+private fun foldStarted(
     transcript: Transcript,
     event: AgentEvent.CommandLifecycle,
 ): Transcript {

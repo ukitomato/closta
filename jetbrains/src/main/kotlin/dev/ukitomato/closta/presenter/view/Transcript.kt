@@ -64,6 +64,8 @@ data class Transcript(
     /** The uuid of the status that said a compaction did not succeed, until the boundary or the `result` shows it. */
     val compactFailure: String? = null,
     val customTitle: String? = null,
+    /** The keys of the user messages sent while a turn ran (the newest [MAX_CANCELS]): only these can be withdrawn. */
+    val sentWhileRunning: Set<String> = emptySet(),
 )
 
 enum class Role(

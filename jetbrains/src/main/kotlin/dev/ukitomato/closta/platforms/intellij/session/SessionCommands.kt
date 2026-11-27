@@ -6,6 +6,7 @@ import dev.ukitomato.closta.core.models.ApprovalDecision
 import dev.ukitomato.closta.core.models.Attachment
 import dev.ukitomato.closta.core.models.ConversationState
 import dev.ukitomato.closta.core.models.ElicitationDecision
+import dev.ukitomato.closta.core.services.CancelQueuedMessage
 import dev.ukitomato.closta.core.services.Interrupt
 import dev.ukitomato.closta.core.services.ReconnectMcpServer
 import dev.ukitomato.closta.core.services.RenameSession
@@ -74,6 +75,7 @@ class SessionCommands internal constructor(
     private val usageOfPlan = RequestUsage(session)
     private val rulesUseCase = RequestPermissionRules(session)
     private val renameUseCase = RenameSession(session)
+    private val cancelQueuedUseCase = CancelQueuedMessage(session)
     private val settingsUseCase = RequestSettings(session)
     private val effortUseCase = SwitchEffort(session)
     private val mcpStatusUseCase = RequestMcpStatus(session)
@@ -223,6 +225,13 @@ class SessionCommands internal constructor(
         title: String,
         sessionId: String,
     ) = requested(ControlKind.RENAME, title) { renameUseCase(title, sessionId, it) }
+
+    /**
+     * Withdraws the message [messageUuid] the CLI has queued and not started, as [switchModel] does: the row of the
+     * message says what became of it once the CLI answers.
+     */
+    suspend fun cancelQueuedMessage(messageUuid: String) =
+        requested(ControlKind.CANCEL_QUEUED, messageUuid) { cancelQueuedUseCase(messageUuid, it) }
 
     /**
      * Asks the CLI for the settings in effect, as [switchModel] does; the answer is the view's effort and model.

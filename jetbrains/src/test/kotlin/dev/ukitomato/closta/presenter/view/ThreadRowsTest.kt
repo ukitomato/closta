@@ -218,6 +218,29 @@ class ThreadRowsTest {
         assertSame(remade, rows.of(view.transcript).filterIsInstance<ToolRow>().single())
     }
 
+    @Test
+    fun anAskRowIsTheSameObjectWhileItsWithdrawalIsUnchangedAndRemadeWhenItChanges() {
+        val queued =
+            HostState()
+                .next(PresenterInput.UserSent("ka", "one", uuid = "a"))
+                .next(PresenterInput.Event(Lines.queued("a")))
+                .next(PresenterInput.Event(Lines.started("a")))
+                .next(PresenterInput.UserSent("kb", "two", uuid = "b"))
+                .next(PresenterInput.Event(Lines.queued("b")))
+        val rows = ThreadRows()
+
+        fun asks(state: HostState) = rows.of(state.transcript, state.conversation).filterIsInstance<AskRow>()
+        val first = asks(queued)
+        assertEquals(AskCancel(CancelPhase.OFFER), first[1].cancel)
+        val again = asks(queued.next(PresenterInput.Event(Lines.queued("zz"))))
+        assertSame(first[0], again[0])
+        assertSame(first[1], again[1], "the same withdrawal state, the same row")
+        val waiting = asks(queued.next(PresenterInput.ControlRequested("r1", ControlKind.CANCEL_QUEUED, "b")))
+        assertSame(first[0], waiting[0])
+        assertTrue(first[1] !== waiting[1], "another withdrawal state, a new row")
+        assertEquals(AskCancel(CancelPhase.WAITING), waiting[1].cancel)
+    }
+
     private companion object {
         const val NOT_LOGGED_IN = "Not logged in · Please run /login"
     }

@@ -400,6 +400,7 @@ class ChatPanel(
             }
         }
         surface.onReview = { askKey -> changes.review(askKey) }
+        surface.onCancelQueued = { askKey -> scope.launch(failures) { source.cancelQueued(askKey) } }
         surface.onSignIn = { SignInTerminal.open(project, source.workingDirectory ?: project.basePath) }
         surface.askActions = { askKey, atEnd ->
             val view = source.view.value
@@ -468,6 +469,8 @@ class ChatPanel(
         scope.launch(Dispatchers.EDT) {
             source.canSend.collect { sendable ->
                 val view = source.view.value
+                // A message in the CLI's queue is offered for withdrawal only while the CLI runs.
+                drawn(view)
                 composer.show(
                     composerState(view.conversation, view.transcript),
                     sendable,
@@ -575,7 +578,7 @@ class ChatPanel(
             val start = System.nanoTime()
             val transcript = view.transcript
             drafts.seed(draft, source)
-            val shown = rows.of(transcript, view.conversation)
+            val shown = rows.of(transcript, view.conversation, source.canSend.value)
             val sendable = source.canSend.value
             // A resume reads its earlier conversation before the CLI is up: until then the thread is loading.
             val starting = sendBlockOf(sendable, source.starting) == SendBlock.STARTING

@@ -71,4 +71,5 @@ fun rewindRefusalText(refusal: RewindRefusal): String =
         RewindRefusal.UNKNOWN -> ClostaBundle.message("rewind.refused.unknown")
         RewindRefusal.NOTHING_AFTER -> ClostaBundle.message("rewind.refused.nothingAfter")
         RewindRefusal.BEFORE_CLEAR -> ClostaBundle.message("rewind.refused.beforeClear")
+        RewindRefusal.CANCELLED -> ClostaBundle.message("rewind.refused.cancelled")
     }

@@ -102,6 +102,9 @@ interface ChatSource : Disposable {
     /** Names the running session [title]; the view takes the name when the CLI says it took it. */
     suspend fun renameSession(title: String)
 
+    /** Withdraws the queued message the ask [askKey] sent, before the CLI starts it; the row says how it ended. */
+    suspend fun cancelQueued(askKey: String)
+
     suspend fun setMcpServerEnabled(
         name: String,
         enabled: Boolean,
@@ -290,6 +293,11 @@ interface ChatSource : Disposable {
                 view.value.conversation.session
                     ?.sessionId ?: return
             commands()?.renameSession(title, cliId)
+        }
+
+        override suspend fun cancelQueued(askKey: String) {
+            val uuid = view.value.transcript.userUuids[askKey] ?: return
+            commands()?.cancelQueuedMessage(uuid)
         }
 
         override suspend fun dismissRateLimit(seq: Int) {

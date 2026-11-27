@@ -57,5 +57,15 @@ internal fun foldResponse(
     event: AgentEvent.ControlResponse,
 ): Transcript {
     val named = transcript.renameTaken(event)
-    return foldCommandsOfResponse(named.withOperations(named.operations.answered(event)), event)
+    val withdrawn = transcript.withdrawnBy(event)
+    val answered = foldCommandsOfResponse(named.withOperations(named.operations.answered(event)), event)
+    // A withdrawn message does not run: core holds its turn open until the CLI says so, and it is not running.
+    val routing = answered.routing
+    return if (withdrawn ==
+        null
+    ) {
+        answered
+    } else {
+        answered.copy(routing = routing.copy(stopped = routing.stopped + withdrawn))
+    }
 }

@@ -25,6 +25,8 @@ data class AskRow(
     override val key: String,
     val text: String,
     val attachments: List<AttachmentRecord>,
+    /** What the row says of withdrawing the message before the CLI starts it; null when it says nothing. */
+    val cancel: AskCancel? = null,
 ) : ThreadRow {
     override val opens = true
 }
@@ -185,15 +187,23 @@ class ThreadRows internal constructor(
     private var asks = HashMap<String, CardRow>()
     private var ends = HashMap<String, TurnEndRow>()
     private val tasks = TaskTodos()
+    private var cancels: Map<String, AskCancel> = emptyMap()
 
     /**
      * The rows of [transcript]. [conversation] says which requests for input core still holds as pending: a card that
-     * waits is answerable only while it does.
+     * waits is answerable only while it does. [live] is whether the CLI runs: a message in its queue is withdrawn only
+     * while it does.
      */
     fun of(
         transcript: Transcript,
         conversation: ConversationState,
+        live: Boolean = true,
     ): List<ThreadRow> {
+        cancels = askCancels(transcript, conversation, live)
+        // The state besides the record that a message's row shows: the withdrawal of a user message.
+        val extraOf = { message: MessageRecord ->
+            if (message.role == Role.USER) messageExtra(message) to cancels[message.key] else messageExtra(message)
+        }
         val nextMessages = HashMap<RowKey, List<ThreadRow>>()
         val nextParts = HashMap<RowKey, ThreadRow?>()
         val rows = ArrayList<ThreadRow>()
@@ -207,7 +217,7 @@ class ThreadRows internal constructor(
         val messageKeys = transcript.messages.order.toHashSet()
         val followed = liveAsks(transcript).dropLast(1).toHashSet()
         for (message in transcript.messages.values()) {
-            val messageKey = RowKey(message, messageExtra(message))
+            val messageKey = RowKey(message, extraOf(message))
             // A reply is kept only while every part still has its row (one whose extra state changed is made again).
             val kept =
                 messages[messageKey]?.takeIf {
@@ -294,7 +304,7 @@ class ThreadRows internal constructor(
         val all = message.parts.values()
         if (message.role == Role.USER) {
             val words = all.filterIsInstance<TextRecord>().joinToString("\n") { it.text }
-            return listOf(AskRow(message.key, words, all.filterIsInstance<AttachmentRecord>()))
+            return listOf(AskRow(message.key, words, all.filterIsInstance<AttachmentRecord>(), cancels[message.key]))
         }
         val rows = ArrayList<ThreadRow>()
         for (partKey in message.parts.order) {

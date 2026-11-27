@@ -76,6 +76,9 @@ interface ThreadSurface : Disposable {
     var onOpenAgent: (toolUseId: String) -> Unit
     var onReview: (askKey: String) -> Unit
 
+    /** The user chose to withdraw the message the ask [askKey] sent. */
+    var onCancelQueued: (askKey: String) -> Unit
+
     /** The CLI said it is not signed in, and the user chose to sign in. */
     var onSignIn: () -> Unit
 
@@ -142,6 +145,7 @@ class SwingThreadSurface(
     private var offScreenTold = -1
     override var onOpenAgent: (String) -> Unit = {}
     override var onReview: (String) -> Unit = {}
+    override var onCancelQueued: (String) -> Unit = {}
     override var onSignIn: () -> Unit = {}
     override var askActions: (String, Boolean) -> AskActions = { _, _ -> AskActions(null, null, null, null) }
     override var onAskAction: (String, Boolean, AskAction) -> Unit = { _, _, _ -> }
@@ -149,6 +153,8 @@ class SwingThreadSurface(
 
     private val markdown = MarkdownBlocks(project)
     private val shown = ShownRows(markdown::of)
+
+    @Suppress("TooManyFunctions") // one function per thing a row can ask of the surface
     private val actions =
         object : RowActions {
             override fun answer(answer: CardAnswer) = onAnswer(answer)
@@ -156,6 +162,8 @@ class SwingThreadSurface(
             override fun openAgent(toolUseId: String) = onOpenAgent(toolUseId)
 
             override fun review(askKey: String) = onReview(askKey)
+
+            override fun cancelQueued(askKey: String) = onCancelQueued(askKey)
 
             override fun signIn() = onSignIn()
 

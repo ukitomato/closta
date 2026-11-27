@@ -46,6 +46,9 @@ enum class ControlKind {
 
     /** `list_permission_rules`, the rules the session runs with: it waits in a column of its own. */
     PERMISSION_RULES,
+
+    /** A message sent during a turn, withdrawn before the CLI starts it; the value is the message's uuid. */
+    CANCEL_QUEUED,
 }
 
 /**
@@ -231,6 +234,10 @@ data class OperationRecords(
     val rules: PermissionRulesRecord? = null,
     /** The CLI's sentence for the last refused request for the rules; null before one, after an answer or a launch. */
     val rulesFailure: String? = null,
+    /** The message uuid each withdrawal not answered yet asked for, by request id, oldest first; see [cancelAsked]. */
+    val cancelAsks: Map<String, String> = emptyMap(),
+    /** What each withdrawn or withdrawing message says of it, by the message's uuid (the newest [MAX_CANCELS]). */
+    val cancels: Map<String, AskCancel> = emptyMap(),
 )
 
 /** The prompt cache as of the `result` the host saw at [lastAtMs]: it lives [ttlMs] from then. */
@@ -293,6 +300,7 @@ internal fun OperationRecords.control(input: PresenterInput.ControlRequested): O
             withSwitch(SwitchRecord(input.requestId, seq + 1, SwitchKind.SANDBOX, input.value.orEmpty()))
         ControlKind.RENAME -> renameAsked(input)
         ControlKind.PERMISSION_RULES -> copy(rulesWaiting = (rulesWaiting + input.requestId).takeLast(MAX_WAITING))
+        ControlKind.CANCEL_QUEUED -> cancelAsked(input)
     }
 }
 
@@ -345,6 +353,9 @@ internal fun OperationRecords.launched(input: PresenterInput.Launched): Operatio
         renameFailure = null,
         rulesWaiting = emptyList(),
         rulesFailure = null,
+        cancelAsks = emptyMap(),
+        // A withdrawal that was waiting is no longer asked of anyone; a message withdrawn stays withdrawn.
+        cancels = cancels.filterValues { it.phase == CancelPhase.CANCELLED },
     )
 }
 
@@ -410,6 +421,7 @@ internal fun OperationRecords.sendFailed(requestId: String): OperationRecords =
         requestId in usageWaiting -> copy(usageWaiting = usageWaiting - requestId)
         requestId in renameAsks -> copy(renameAsks = renameAsks - requestId)
         requestId in rulesWaiting -> copy(rulesWaiting = rulesWaiting - requestId)
+        requestId in cancelAsks -> cancelSendFailed(requestId)
         // A sandbox check that could not be asked waits for the next settings request.
         requestId in settingsWaiting ->
             copy(
@@ -429,7 +441,8 @@ private fun OperationRecords.knows(requestId: String): Boolean =
         requestId in settingsWaiting ||
         requestId in usageWaiting ||
         requestId in renameAsks ||
-        requestId in rulesWaiting
+        requestId in rulesWaiting ||
+        requestId in cancelAsks
 
 /**
  * The CLI's answer to [event]'s request. An id nobody asked with, or an answer to a settled one, changes nothing.
@@ -455,6 +468,7 @@ internal fun OperationRecords.answered(event: AgentEvent.ControlResponse): Opera
         id in settingsWaiting -> settingsAnswered(id, event)
         id in renameAsks -> renameAnswered(id, event)
         id in rulesWaiting -> rulesAnswered(id, event)
+        id in cancelAsks -> cancelAnswered(id, event)
         succeeded -> switchApplied(id)
         else ->
             ended(id) {
