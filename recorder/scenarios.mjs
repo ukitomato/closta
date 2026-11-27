@@ -21,6 +21,13 @@
 //   {kind:'mcpReconnect', serverName}       mcp_reconnect control request (same as above). Waits for the answer
 //   {kind:'rewindFiles', userIndex, dryRun} rewind_files control request. userIndex is the position (from 1) of the user line sent in that phase,
 //                                           and that line's uuid becomes user_message_id. Waits for the answer
+//   {kind:'cancelQueued', userIndex}        cancel_async_message control request for the userIndex-th user line sent in that phase (from 1, found as for rewindFiles; an error if there is none).
+//                                           Waits for the answer
+//   {kind:'backgroundTool', toolName?}      background_tasks control request with the id of the last tool_use of toolName seen on stdout (no tool_use_id without toolName). Waits for the answer
+//   {kind:'taskOutput', times, everyMs}     get_task_output control request with the task_id of the last system/task_started seen on stdout, times times, one every everyMs. Waits for each answer
+//   {kind:'renameSession', title, previousSession}
+//                                           rename_session control request (source "host") for the session_id of the last system/init seen on stdout
+//                                           (the one before it, a different session_id, when previousSession is true). Waits for the answer
 //   rewindFiles may appear only in the first phase's steps (not in resume.steps). Such a scenario sets stdinFile true and has rewindRead.
 //
 // rewindRead: {includes, excludes}  for a scenario with rewindFiles, what the Read tool_result after the rewind should show (a word it includes and one it excludes; neither empty).
@@ -32,6 +39,8 @@
 // mcpServer: {name}  when present, the recorder starts a fake HTTP MCP server on 127.0.0.1 (it only offers one tool, echo),
 //   starts the CLI with its URL (http://localhost:<port>/mcp, a form that matches http://localhost* in the managed settings allow list) via --mcp-config,
 //   and stops it once recording ends (even on failure). The port differs on every recording, so the scrubber replaces it with a fixed fake value.
+//
+// extraDirs: [name]  folders created next to the cwd (in the recording's temporary directory). {EXTRA:<name>} in flags becomes the folder's absolute path.
 //
 // seed: {name: content}  files placed in the cwd from the start (Edit targets, etc.). A name may hold a directory (.claude/settings.json).
 //
@@ -56,7 +65,8 @@
 //   When the results/controlResponses counts are met and quietMs of silence follows, stdin is closed and the run ends.
 //   maxMs is a hard cap.
 //
-// permission: {holdMs, respond(req)->payload}  the answer to can_use_tool (allow by default).
+// permission: {holdMs, respond(req, ctx)->payload}  the answer to can_use_tool (allow by default). ctx is {index, cwd}: index counts the can_use_tool
+//   requests of the scenario from 0 (as for hook_callback).
 //
 // resume: {steps, done}  when present, after the CLI of steps and done is closed, the stored transcript of the cwd is kept as the transcript,
 //   and a second CLI is started with --resume on the same session id to run resume.steps (see the top of record.mjs).
@@ -1084,6 +1094,148 @@ export const scenarios = [
       },
     },
     done: { results: 1, controlResponses: 1, quietMs: 3000, maxMs: 120000 },
+    pending: true,
+  },
+  {
+    id: '52-rules-and-dirs',
+    summary: 'list_permission_rules with project and local settings (allow, ask and deny rules in both files) and an extra --add-dir folder: which rules the answer lists and where each comes from',
+    flags: [
+      '--permission-prompt-tool', 'stdio',
+      '--setting-sources', 'project,local',
+      '--strict-mcp-config',
+      '--model', 'claude-sonnet-4-6',
+      '--add-dir={EXTRA:other}',
+    ],
+    extraDirs: ['other'],
+    seed: {
+      '.claude/settings.json': JSON.stringify({
+        permissions: { allow: ['Bash(echo:*)', 'Bash(npm run build:*)'], ask: ['Bash(git push:*)'], deny: ['Read(./secret.txt)'] },
+      }),
+      '.claude/settings.local.json': JSON.stringify({ permissions: { allow: ['Bash(make:*)'] } }),
+    },
+    steps: [
+      { kind: 'initialize' },
+      { kind: 'wait', ms: 500 },
+      { kind: 'user', text: 'Respond with exactly one word: pong' },
+      { kind: 'waitResults', n: 1 },
+      { kind: 'control', request: { subtype: 'list_permission_rules' } },
+    ],
+    done: { results: 1, controlResponses: 2, quietMs: 3000, maxMs: 90000 },
+    pending: true,
+  },
+  {
+    id: '53-cancel-queued',
+    summary: 'two messages queued behind a running Bash turn: cancel the third while it waits, then cancel the second once it has started (too late)',
+    flags: ISOLATED,
+    steps: [
+      { kind: 'initialize' },
+      { kind: 'wait', ms: 500 },
+      { kind: 'user', text: 'Run this exact bash command: sleep 8 && echo one. Then say done.' },
+      { kind: 'wait', ms: 1000 },
+      { kind: 'user', text: 'Say two.' },
+      { kind: 'wait', ms: 1000 },
+      { kind: 'user', text: 'Say three.' },
+      { kind: 'wait', ms: 200 },
+      { kind: 'cancelQueued', userIndex: 3 },
+      { kind: 'waitFor', line: 'command_lifecycle/started', n: 2 },
+      { kind: 'cancelQueued', userIndex: 2 },
+    ],
+    permission: { holdMs: 0, respond: ALLOW },
+    done: { results: 1, controlResponses: 3, quietMs: 3000, maxMs: 90000 },
+    pending: true,
+  },
+  {
+    id: '54-background-and-output',
+    summary: 'a foreground Bash loop sent to the background by background_tasks, then get_task_output polled while it runs, after it ends, and for an unknown task id',
+    flags: ISOLATED,
+    steps: [
+      { kind: 'initialize' },
+      { kind: 'wait', ms: 500 },
+      { kind: 'user', text: 'Run this exact bash command in the foreground (not in the background): for i in $(seq 1 20); do echo line $i; sleep 1; done' },
+      { kind: 'wait', ms: 3000 },
+      { kind: 'backgroundTool', toolName: 'Bash' },
+      { kind: 'taskOutput', times: 3, everyMs: 2000 },
+      { kind: 'wait', ms: 20000 },
+      { kind: 'taskOutput', times: 1, everyMs: 0 },
+      { kind: 'control', request: { subtype: 'get_task_output', task_id: 'bogus' } },
+    ],
+    permission: { holdMs: 0, respond: ALLOW },
+    done: { results: 1, controlResponses: 7, quietMs: 3000, maxMs: 120000 },
+    pending: true,
+  },
+  {
+    id: '55-rename-session',
+    summary: 'rename_session for the live session, again for the previous session after /clear (stale), and whether a --resume shows the name',
+    flags: ISOLATED,
+    steps: [
+      { kind: 'initialize' },
+      { kind: 'wait', ms: 500 },
+      { kind: 'user', text: 'Respond with exactly one word: pong' },
+      { kind: 'waitResults', n: 1 },
+      { kind: 'renameSession', title: 'Closta rename test', previousSession: false },
+      { kind: 'user', text: '/clear' },
+      { kind: 'waitResults', n: 2 },
+      { kind: 'renameSession', title: 'Stale rename', previousSession: true },
+    ],
+    done: { results: 2, controlResponses: 3, quietMs: 3000, maxMs: 90000 },
+    resume: {
+      steps: [
+        { kind: 'initialize' },
+        { kind: 'wait', ms: 500 },
+        { kind: 'user', text: 'Respond with exactly one word: pong' },
+      ],
+      done: { results: 1, controlResponses: 1, quietMs: 3000, maxMs: 90000 },
+    },
+    pending: true,
+  },
+  {
+    id: '56-reload-plugins',
+    summary: 'reload_plugins with refuse_if_busy while idle, and again while a Bash command is running (whether the CLI refuses)',
+    flags: ISOLATED,
+    steps: [
+      { kind: 'initialize' },
+      { kind: 'wait', ms: 500 },
+      { kind: 'user', text: 'Respond with exactly one word: pong' },
+      { kind: 'waitResults', n: 1 },
+      { kind: 'control', request: { subtype: 'reload_plugins', refuse_if_busy: true } },
+      { kind: 'user', text: 'Run this exact bash command: sleep 6 && echo done' },
+      { kind: 'wait', ms: 2000 },
+      { kind: 'control', request: { subtype: 'reload_plugins', refuse_if_busy: true } },
+    ],
+    permission: { holdMs: 0, respond: ALLOW },
+    done: { results: 2, controlResponses: 3, quietMs: 3000, maxMs: 90000 },
+    pending: true,
+  },
+  {
+    id: '57-plan-comments',
+    summary: 'in Plan mode, the first ExitPlanMode is denied with a diff-shaped message, the second is allowed with an updatedInput.plan edited by one line: which plan the CLI goes on with',
+    flags: [...ISOLATED, '--permission-mode', 'plan'],
+    seed: { 'README.md': '# Prject\n\n## Usgae\n\nRun it.\n' },
+    steps: [
+      { kind: 'initialize' },
+      { kind: 'wait', ms: 500 },
+      {
+        kind: 'user',
+        text: 'Make a short plan to fix the spelling of the headings in README.md, then call ExitPlanMode with it. '
+          + 'Once it is approved, make the fix with the Edit tool and report done.',
+      },
+    ],
+    permission: {
+      holdMs: 0,
+      respond: (req, ctx) => {
+        if (req.tool_name !== 'ExitPlanMode') return ALLOW(req);
+        if (countCall(ctx, 'exit-plan-mode') === 1) {
+          return {
+            behavior: 'deny',
+            message: 'The user reviewed the plan in the editor and left comments. Lines starting with + were added by the user, lines starting with - were removed. '
+              + 'Revise the plan accordingly and present it again.\n@@ -1,3 +1,4 @@\n # Plan\n+Also add a short Usage section.\n',
+          };
+        }
+        const plan = String(req.input?.plan ?? '');
+        return { behavior: 'allow', updatedInput: { ...req.input, plan: `${plan}${plan.endsWith('\n') ? '' : '\n'}Also add a short Usage section.\n` } };
+      },
+    },
+    done: { results: 1, controlResponses: 1, quietMs: 3000, maxMs: 180000 },
     pending: true,
   },
 ];

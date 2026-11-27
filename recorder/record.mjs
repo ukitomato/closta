@@ -44,6 +44,9 @@
 //   If then.sameId is true, the second CLI gets the first CLI's --session-id (still not a resume).
 // Hook and elicitation scenarios (scenario.hooks, hookCallback, elicitation): hooks go into the initialize request; each hook_callback or elicitation control_request is answered
 //   by the scenario's respond(req, {index, cwd}) after its holdMs (see scenarios.mjs). The fake server's ask_form and ask_url tools make the CLI send the elicitation.
+// Queue, background and rename scenarios: cancelQueued, backgroundTool, taskOutput and renameSession steps send their control request with an id taken from what the CLI
+//   wrote so far (a user line's uuid, the last tool_use id of a tool, the last task_started task_id, the system/init session_ids) and wait for the answer.
+//   A scenario's extraDirs are created next to the cwd, and {EXTRA:<name>} in its flags becomes the folder's path. permission.respond(req, {index, cwd}) counts can_use_tool requests from 0.
 // Hidden-command scenarios (scenario.hideCommands present): the child's PATH is a directory of symlinks without those names (shimPathWithout), checked with command -v.
 
 import { spawn, execFileSync } from 'node:child_process';
@@ -56,7 +59,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { scenarios, findScenario, rewindDefinitionProblem, resumeAtUuid, resumeFlagsFor } from './scenarios.mjs';
 import { removeFileHistory, removeOnSignal } from './cleanup.mjs';
-import { initializeRequest, kindOf, sceneAnswer } from './protocol.mjs';
+import { initializeRequest, kindOf, sceneAnswer, permissionAnswer } from './protocol.mjs';
 import { startFakeMcpServer } from './fake-mcp.mjs';
 import { newScrubState, scrubLine, scrubLines, findPii, createStreamScrubber, joinedFragments } from './scrub.mjs';
 
@@ -149,11 +152,22 @@ async function recordOne(scenario, version) {
     await fsp.writeFile(path.join(cwd, name), text);
   }
 
+  // Folders next to the cwd that the scenario names in extraDirs; {EXTRA:<name>} in flags becomes the absolute path.
+  const extra = new Map();
+  for (const name of scenario.extraDirs ?? []) {
+    const dir = path.join(work, name);
+    await fsp.mkdir(dir);
+    extra.set(name, dir);
+  }
   const substitute = (text) => text.replaceAll('{OUTSIDE}', outside);
+  const substituteFlag = (flag) => substitute(flag).replace(/\{EXTRA:([^}]+)\}/g, (whole, name) => {
+    if (!extra.has(name)) throw new Error(`${scenario.id}: ${whole} is not in extraDirs`);
+    return extra.get(name);
+  });
 
   // MCP scenarios: the fake server is started inside the try below (wherever a failure happens after that, cleanup stops it).
   let fakeMcp = null;
-  let scenarioFlags = scenario.flags;
+  let scenarioFlags = scenario.flags.map(substituteFlag);
   const mcpName = scenario.mcpServer?.name ?? '';
 
   const sessionId = randomUUID();
@@ -202,13 +216,13 @@ async function recordOne(scenario, version) {
     }
   });
 
-  const respondPermission = scenario.permission?.respond
-    || ((req) => ({ behavior: 'allow', updatedInput: req.input }));
   const holdMs = scenario.permission?.holdMs ?? 0;
   let ctrlN = 0;
   // How many hook_callback / elicitation requests the scenario has answered so far (the index handed to respond).
   const hookCounter = { n: 0 };
   const elicitationCounter = { n: 0 };
+  // How many can_use_tool requests the scenario has answered so far (the index handed to permission.respond).
+  const permissionCounter = { n: 0 };
 
   // Starts one CLI, runs steps, and closes it once done is met. stdout goes line by line through the scrubber into out.
   // The second run (resume) writes to the same out with the same scrubber state (carrying the learned values).
@@ -222,6 +236,10 @@ async function recordOne(scenario, version) {
     state.initSessionId = null;
     // uuids of the user lines sent in this phase (in send order; looked up by rewindFiles' userIndex).
     const sentUserUuids = [];
+    // The last tool_use id per tool name, the last system/task_started task_id and the system/init session_ids seen on stdout in this phase.
+    const lastToolUse = new Map();
+    let lastTaskId = null;
+    const initSessionIds = [];
     const child = spawn(CLAUDE_BIN, phaseFlags, { cwd, env: childEnv, stdio: ['pipe', 'pipe', 'pipe'] });
     child.stderr.on('data', (d) => { state.stderr += d.toString(); });
     // A CLI that refuses to start exits before reading stdin; writing to it then must not crash the recorder.
@@ -260,9 +278,11 @@ async function recordOne(scenario, version) {
       });
     };
     const handleCanUseTool = (env) => {
+      const payload = permissionAnswer(scenario.permission, env.request, permissionCounter.n, cwd);
+      permissionCounter.n += 1;
       const doIt = () => send({
         type: 'control_response',
-        response: { subtype: 'success', request_id: env.request_id, response: respondPermission(env.request) },
+        response: { subtype: 'success', request_id: env.request_id, response: payload },
       });
       if (holdMs > 0) setTimeout(doIt, holdMs); else doIt();
     };
@@ -314,7 +334,17 @@ async function recordOne(scenario, version) {
       if (o) {
         sawKind(String(o.type));
         if (kindOf(o) !== String(o.type)) sawKind(kindOf(o));
-        if (o.type === 'system' && o.subtype === 'init' && typeof o.session_id === 'string') { state.initSessionId = o.session_id; sessionIds.add(o.session_id); }
+        if (o.type === 'system' && o.subtype === 'init' && typeof o.session_id === 'string') {
+          state.initSessionId = o.session_id;
+          sessionIds.add(o.session_id);
+          initSessionIds.push(o.session_id);
+        }
+        if (o.type === 'system' && o.subtype === 'task_started' && typeof o.task_id === 'string') lastTaskId = o.task_id;
+        if (o.type === 'assistant' && Array.isArray(o.message?.content)) {
+          for (const block of o.message.content) {
+            if (block?.type === 'tool_use' && typeof block.name === 'string' && typeof block.id === 'string') lastToolUse.set(block.name, block.id);
+          }
+        }
         if (o.type === 'result') {
           state.results += 1;
           if (typeof o.total_cost_usd === 'number') state.lastCost = Math.max(state.lastCost, o.total_cost_usd);
@@ -364,6 +394,36 @@ async function recordOne(scenario, version) {
             const uuid = sentUserUuids[step.userIndex - 1];
             if (uuid === undefined) throw new Error(`rewindFiles: no user line sent at position ${step.userIndex} (${scenario.id})`);
             await controlAndWait({ subtype: 'rewind_files', user_message_id: uuid, dry_run: step.dryRun }, 'rewind_files answer');
+            break;
+          }
+          case 'cancelQueued': {
+            const uuid = sentUserUuids[step.userIndex - 1];
+            if (uuid === undefined) throw new Error(`cancelQueued: no user line sent at position ${step.userIndex} (${scenario.id})`);
+            await controlAndWait({ subtype: 'cancel_async_message', message_uuid: uuid }, 'cancel_async_message answer');
+            break;
+          }
+          case 'backgroundTool': {
+            const request = { subtype: 'background_tasks' };
+            if (step.toolName !== undefined) {
+              const id = lastToolUse.get(step.toolName);
+              if (id === undefined) throw new Error(`backgroundTool: no ${step.toolName} tool_use seen yet (${scenario.id})`);
+              request.tool_use_id = id;
+            }
+            await controlAndWait(request, 'background_tasks answer');
+            break;
+          }
+          case 'taskOutput': {
+            if (lastTaskId === null) throw new Error(`taskOutput: no system/task_started seen yet (${scenario.id})`);
+            for (let i = 0; i < step.times; i += 1) {
+              if (i > 0 && step.everyMs > 0) await sleep(step.everyMs);
+              await controlAndWait({ subtype: 'get_task_output', task_id: lastTaskId }, 'get_task_output answer');
+            }
+            break;
+          }
+          case 'renameSession': {
+            const sessionIdToRename = step.previousSession ? initSessionIds.at(-2) : initSessionIds.at(-1);
+            if (sessionIdToRename === undefined) throw new Error(`renameSession: no ${step.previousSession ? 'earlier ' : ''}system/init session_id seen yet (${scenario.id})`);
+            await controlAndWait({ subtype: 'rename_session', title: step.title, source: 'host', session_id: sessionIdToRename }, 'rename_session answer');
             break;
           }
           default: throw new Error(`unknown step: ${step.kind}`);
@@ -417,7 +477,7 @@ async function recordOne(scenario, version) {
     if (scenario.mcpServer) {
       fakeMcp = await startFakeMcpServer(scenario.mcpServer.name);
       scrubState.mcpPorts.add(String(fakeMcp.port));
-      scenarioFlags = [...scenario.flags, '--mcp-config', JSON.stringify({ mcpServers: { [scenario.mcpServer.name]: { type: 'http', url: fakeMcp.url } } })];
+      scenarioFlags = [...scenarioFlags, '--mcp-config', JSON.stringify({ mcpServers: { [scenario.mcpServer.name]: { type: 'http', url: fakeMcp.url } } })];
     }
     await runPhase([...BASE_FLAGS, `--session-id=${sessionId}`, ...scenarioFlags], scenario.steps, scenario.done);
 
