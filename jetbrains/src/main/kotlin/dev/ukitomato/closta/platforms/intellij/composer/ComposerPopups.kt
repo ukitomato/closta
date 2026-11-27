@@ -47,8 +47,9 @@ object ComposerPopups {
         live: Boolean,
         rules: () -> Unit,
         chosen: (String) -> Unit,
-    ): JBPopup =
-        JBPopupFactory
+    ): JBPopup {
+        lateinit var popupOf: JBPopup
+        return JBPopupFactory
             .getInstance()
             .createPopupChooserBuilder(state.modes + RULES_ROW)
             .setTitle(ClostaBundle.message("composer.modes.title"))
@@ -86,13 +87,15 @@ object ComposerPopups {
                     }
                 },
             ).setSelectedValue(state.mode, true)
-            .setItemChosenCallback {
-                if (it != RULES_ROW) {
-                    chosen(it)
-                } else if (live) {
-                    rules()
-                }
+            // A greyed row is not chosen: the popup stays as it is. Any other choice closes it, as it did before.
+            .setCloseOnEnter(false)
+            .setItemChosenCallback { value ->
+                if (value == RULES_ROW && !live) return@setItemChosenCallback
+                popupOf.cancel()
+                if (value == RULES_ROW) rules() else chosen(value)
             }.createPopup()
+            .also { popupOf = it }
+    }
 
     /**
      * The models the CLI offers, a model the list does not name first and disabled, then the Effort levels of the model

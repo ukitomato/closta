@@ -44,3 +44,9 @@ private fun inside(
     val separator = if ('\\' in root && '/' !in root) '\\' else '/'
     return (listOf(root.trimEnd('/', '\\')) + parts).joinToString(separator.toString())
 }
+
+/** Whether a rule of [editability] gets a link to its settings file: only a saved one, and not one that is ignored. */
+fun linksToSettingsFile(
+    editability: String,
+    notInEffect: Boolean,
+): Boolean = editability == "persistent" && !notInEffect

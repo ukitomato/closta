@@ -47,4 +47,13 @@ class RulesTextsTest {
         assertNull(ruleSourceKey("somethingNew"))
         assertNull(ruleSourceKey(""))
     }
+
+    @Test
+    fun `only a saved rule that is in effect links to its file`() {
+        assertEquals(true, linksToSettingsFile("persistent", false))
+        assertEquals(false, linksToSettingsFile("persistent", true))
+        assertEquals(false, linksToSettingsFile("session", false))
+        assertEquals(false, linksToSettingsFile("readonly", false))
+        assertEquals(false, linksToSettingsFile("", false))
+    }
 }

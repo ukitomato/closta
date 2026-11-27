@@ -1,5 +1,6 @@
 package dev.ukitomato.closta.platforms.intellij.composer
 
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.project.Project
@@ -50,6 +51,11 @@ internal class RulesPopup(
     // What the content was last drawn from, so that a state that changes nothing here (a streamed reply) draws nothing.
     private var drawn: Triple<PermissionRulesRecord?, Boolean, String?>? = null
 
+    // The settings file each source lives in, once looked up off the EDT: absent while unknown or when there is none.
+    private val files = HashMap<String, String>()
+    private val looked = HashSet<String>()
+    private var latest: ComposerState? = null
+
     private val scroll =
         object : JBScrollPane(
             content,
@@ -75,11 +81,13 @@ internal class RulesPopup(
             .createPopup()
 
     init {
+        latest = state
         draw(state)
     }
 
     /** Draws [state] again while the popup is open, and fits the popup to what it now says. */
     fun show(state: ComposerState) {
+        latest = state
         if (draw(state) && popup.isVisible) popup.pack(true, true)
     }
 
@@ -90,7 +98,10 @@ internal class RulesPopup(
         content.removeAll()
         state.rulesFailure?.let { content.add(quiet(ClostaBundle.message("composer.rules.failure", visible(it).text))) }
         if (state.rulesWaiting) content.add(quiet(ClostaBundle.message("composer.rules.loading")))
-        state.rules?.let(::record)
+        state.rules?.let {
+            lookUp(it)
+            record(it)
+        }
         content.revalidate()
         content.repaint()
         return true
@@ -109,7 +120,7 @@ internal class RulesPopup(
         for (behavior in BEHAVIORS) {
             val own = rules.rules.filter { it.behavior == behavior }
             section(ClostaBundle.message("composer.rules.heading.$behavior"), own.isEmpty())
-            own.forEach { content.add(row(it, rules.originalCwd)) }
+            own.forEach { content.add(row(it)) }
         }
         section(ClostaBundle.message("composer.rules.heading.directories"), rules.directories.isEmpty())
         for (directory in rules.directories) {
@@ -126,10 +137,7 @@ internal class RulesPopup(
         if (empty) content.add(quiet(ClostaBundle.message("composer.rules.none")))
     }
 
-    private fun row(
-        rule: PermissionRule,
-        originalCwd: String,
-    ): JComponent {
+    private fun row(rule: PermissionRule): JComponent {
         val reading = listOfNotNull(rule.prefix, rule.emphasis, rule.suffix).joinToString("")
         val said = reading.ifEmpty { rule.rule }
         val text =
@@ -146,17 +154,45 @@ internal class RulesPopup(
                 toolTipText = plainTip(visible(rule.rule).text)
                 if (rule.notInEffect) foreground = UIUtil.getContextHelpForeground()
             }
-        return line(label, sourceComponent(rule.source, originalCwd))
+        return line(label, sourceComponent(rule))
     }
 
-    private fun sourceComponent(
-        source: String,
-        originalCwd: String,
-    ): JComponent {
-        val words = sourceLabel(source)
-        val file = settingsFileOf(source, originalCwd, userConfigDir())?.let(cliPaths::toIde)
-        if (file == null || !Files.isRegularFile(Path.of(file))) return JBLabel(words).noHtml().muted()
+    private fun sourceComponent(rule: PermissionRule): JComponent {
+        val words = sourceLabel(rule.source)
+        val file = files[rule.source]?.takeIf { linksToSettingsFile(rule.editability, rule.notInEffect) }
+        if (file == null) return JBLabel(words).noHtml().muted()
         return ActionLink(words) { open(file) }.apply { toolTipText = plainTip(file) }
+    }
+
+    /**
+     * Looks up, once per source and off the EDT (a path in WSL is a network path), whether the source's settings file
+     * exists; rows have no link until it is known, and are drawn again when it is.
+     */
+    private fun lookUp(rules: PermissionRulesRecord) {
+        val wanted =
+            rules.rules
+                .filter { linksToSettingsFile(it.editability, it.notInEffect) }
+                .map { it.source }
+                .distinct()
+                .filter { looked.add(it) }
+        if (wanted.isEmpty()) return
+        val configDir = userConfigDir()
+        val app = ApplicationManager.getApplication()
+        app.executeOnPooledThread {
+            val found =
+                wanted.mapNotNull { source ->
+                    settingsFileOf(source, rules.originalCwd, configDir)
+                        ?.let(cliPaths::toIde)
+                        ?.takeIf { Files.isRegularFile(Path.of(it)) }
+                        ?.let { source to it }
+                }
+            if (found.isEmpty()) return@executeOnPooledThread
+            app.invokeLater({
+                files.putAll(found)
+                drawn = null
+                latest?.let { show(it) }
+            }, project.disposed)
+        }
     }
 
     private fun sourceLabel(source: String): String =
