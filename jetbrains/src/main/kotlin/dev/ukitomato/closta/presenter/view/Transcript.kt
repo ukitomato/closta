@@ -63,6 +63,7 @@ data class Transcript(
     val reports: Map<String, ReportedErrors> = emptyMap(),
     /** The uuid of the status that said a compaction did not succeed, until the boundary or the `result` shows it. */
     val compactFailure: String? = null,
+    val customTitle: String? = null,
 )
 
 enum class Role(

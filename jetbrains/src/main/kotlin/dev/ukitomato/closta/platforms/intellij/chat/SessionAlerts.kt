@@ -26,6 +26,7 @@ import dev.ukitomato.closta.presenter.view.OpenOnlyAlert
 import dev.ukitomato.closta.presenter.view.PermissionAlert
 import dev.ukitomato.closta.presenter.view.SessionAlert
 import dev.ukitomato.closta.presenter.view.allowPayload
+import dev.ukitomato.closta.presenter.view.freshRenameFailure
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -56,6 +57,7 @@ class SessionAlerts(
     private val waiting = HashMap<String, Notification>()
     private val finished = HashMap<String, MutableMap<String, Notification>>()
     private val running = HashMap<String, Notification>()
+    private val refusedRenames = HashMap<String, String>()
 
     private val failures =
         CoroutineExceptionHandler { _, failure ->
@@ -82,6 +84,10 @@ class SessionAlerts(
     ) {
         val id = entry.sessionId
         if (directory.isVisible(id)) shown(id)
+        freshRenameFailure(refusedRenames[id], view.transcript.operations.renameFailure)?.let { failure ->
+            refusedRenames[id] = failure.requestId
+            notifyRenameRefused(entry, failure.sentence)
+        }
         apply(entry, book.changed(id, view.conversation to view.transcript, directory.isVisible(id)))
     }
 
@@ -235,6 +241,7 @@ class SessionAlerts(
 
     private fun forget(sessionId: String) {
         book.forget(sessionId)
+        refusedRenames.remove(sessionId)
         waiting.remove(sessionId)?.expire()
         running.remove(sessionId)?.expire()
         finished

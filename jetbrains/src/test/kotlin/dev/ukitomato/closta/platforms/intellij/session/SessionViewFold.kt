@@ -28,6 +28,7 @@ fun SessionView.fold(input: PresenterInput): SessionView =
         is PresenterInput.CodeApplied -> codeApplied(input.applied)
         is PresenterInput.ControlRequested,
         is PresenterInput.ControlSendFailed,
+        is PresenterInput.TitleRestored,
         is PresenterInput.EffortRefused,
         is PresenterInput.Launched,
         is PresenterInput.SandboxRefused,

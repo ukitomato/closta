@@ -552,4 +552,95 @@ class OperationsFoldTest {
         assertSame(planned, foldCommandsOfResponse(planned, modeAnswer("\"plan\"")), "the same word changes nothing")
         assertEquals("auto", startMode(planned, modeAnswer("\"auto\"")))
     }
+
+    @Test
+    fun `type only - the sixth rename pushes out the oldest, and its answer changes nothing`() {
+        val asked =
+            (1..MAX_WAITING + 1).fold(HostState()) { state, n -> state.request("n$n", ControlKind.RENAME, "name $n") }
+        assertEquals(
+            (2..MAX_WAITING + 1).map { "n$it" },
+            asked
+                .ops()
+                .renameAsks.keys
+                .toList(),
+        )
+        val late = asked.with(Lines.controlOk("n1"))
+        assertSame(asked.transcript, late.transcript, "an id that fell out of the table is an id nobody knows")
+        assertNull(late.transcript.customTitle)
+    }
+
+    @Test
+    fun `type only - each rename answer binds to the name asked under its own id`() {
+        val asked =
+            HostState()
+                .request("n1", ControlKind.RENAME, "first")
+                .request("n2", ControlKind.RENAME, "second")
+        val second = asked.with(Lines.controlOk("n2"))
+        assertEquals("second", second.transcript.customTitle)
+        assertEquals(
+            listOf("n1"),
+            second
+                .ops()
+                .renameAsks.keys
+                .toList(),
+        )
+        val first = second.with(Lines.controlOk("n1"))
+        assertEquals("first", first.transcript.customTitle)
+        assertTrue(first.ops().renameAsks.isEmpty())
+        val again = first.with(Lines.controlOk("n2"))
+        assertSame(first.transcript, again.transcript, "an answer that comes twice changes nothing")
+    }
+
+    @Test
+    fun `type only - a request id already asked is not recorded again`() {
+        val state = HostState().request("n1", ControlKind.RENAME, "first").request("n1", ControlKind.RENAME, "other")
+        assertEquals(mapOf("n1" to "first"), state.ops().renameAsks)
+    }
+
+    @Test
+    fun `type only - a rename that could not be written is not waited for`() {
+        val failed =
+            HostState()
+                .request("n1", ControlKind.RENAME, "name")
+                .with(PresenterInput.ControlSendFailed("n1"))
+        assertTrue(failed.ops().renameAsks.isEmpty())
+        assertNull(failed.ops().renameFailure)
+        val late = failed.with(Lines.controlOk("n1"))
+        assertSame(failed.transcript, late.transcript, "the answer to a request never written names nothing")
+        assertNull(late.transcript.customTitle)
+    }
+
+    @Test
+    fun `type only - a new CLI empties the table of renames and drops a refusal`() {
+        val refused =
+            HostState()
+                .request("n1", ControlKind.RENAME, "one")
+                .request("n2", ControlKind.RENAME, "two")
+                .with(Lines.controlError("n1", "not found"))
+        assertEquals("n1", refused.ops().renameFailure?.requestId)
+        val launched = refused.with(PresenterInput.Launched(null))
+        assertTrue(launched.ops().renameAsks.isEmpty())
+        assertNull(launched.ops().renameFailure)
+        assertSame(launched.transcript, launched.with(Lines.controlOk("n2")).transcript)
+    }
+
+    @Test
+    fun `type only - a refused rename records its sentence under the request id and keeps the name`() {
+        val state =
+            HostState()
+                .request("n1", ControlKind.RENAME, "one")
+                .with(Lines.controlOk("n1"))
+                .request("n2", ControlKind.RENAME, "two")
+                .with(Lines.controlError("n2", "Session not found"))
+        assertEquals(RenameFailure("n2", "Session not found"), state.ops().renameFailure)
+        assertEquals("one", state.transcript.customTitle)
+    }
+
+    @Test
+    fun `a control request says its kind and id and never the name`() {
+        val text = PresenterInput.ControlRequested("n1", ControlKind.RENAME, "Secret plan").toString()
+        assertFalse(text.contains("Secret plan"))
+        assertTrue(text.contains("RENAME") && text.contains("n1"))
+        assertFalse(PresenterInput.TitleRestored("Secret plan").toString().contains("Secret plan"))
+    }
 }

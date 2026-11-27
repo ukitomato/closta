@@ -8,6 +8,7 @@ import dev.ukitomato.closta.core.models.ConversationState
 import dev.ukitomato.closta.core.models.ElicitationDecision
 import dev.ukitomato.closta.core.services.Interrupt
 import dev.ukitomato.closta.core.services.ReconnectMcpServer
+import dev.ukitomato.closta.core.services.RenameSession
 import dev.ukitomato.closta.core.services.RequestContextUsage
 import dev.ukitomato.closta.core.services.RequestMcpStatus
 import dev.ukitomato.closta.core.services.RequestSettings
@@ -70,6 +71,7 @@ class SessionCommands internal constructor(
     private val modeUseCase = SwitchPermissionMode(session)
     private val usageUseCase = RequestContextUsage(session)
     private val usageOfPlan = RequestUsage(session)
+    private val renameUseCase = RenameSession(session)
     private val settingsUseCase = RequestSettings(session)
     private val effortUseCase = SwitchEffort(session)
     private val mcpStatusUseCase = RequestMcpStatus(session)
@@ -207,6 +209,15 @@ class SessionCommands internal constructor(
 
     /** Asks the CLI for the session's cost and the plan's limits, as [switchModel] does. */
     suspend fun requestUsage() = requested(ControlKind.USAGE, null) { usageOfPlan(it) }
+
+    /**
+     * Names the session [sessionId] (the CLI's own id for it) [title], as [switchModel] does: the name is the view's
+     * only once the CLI says it took it.
+     */
+    suspend fun renameSession(
+        title: String,
+        sessionId: String,
+    ) = requested(ControlKind.RENAME, title) { renameUseCase(title, sessionId, it) }
 
     /**
      * Asks the CLI for the settings in effect, as [switchModel] does; the answer is the view's effort and model.

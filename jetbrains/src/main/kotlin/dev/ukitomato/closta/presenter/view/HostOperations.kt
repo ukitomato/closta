@@ -1,5 +1,6 @@
 package dev.ukitomato.closta.presenter.view
 
+import dev.ukitomato.closta.core.models.AgentEvent
 import dev.ukitomato.closta.core.models.ConversationState
 import dev.ukitomato.closta.core.models.TurnPhase
 
@@ -48,4 +49,13 @@ internal fun stopTaken(transcript: Transcript): Transcript {
     val routing = transcript.routing
     if (routing.stopping.isEmpty()) return transcript
     return transcript.copy(routing = routing.copy(stopped = routing.stopped + routing.stopping, stopping = emptySet()))
+}
+
+/** The CLI's answer to a request of the host's: the operations it settles, the name it gave, the commands it lists. */
+internal fun foldResponse(
+    transcript: Transcript,
+    event: AgentEvent.ControlResponse,
+): Transcript {
+    val named = transcript.renameTaken(event)
+    return foldCommandsOfResponse(named.withOperations(named.operations.answered(event)), event)
 }

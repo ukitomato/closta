@@ -4,6 +4,7 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
+import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import dev.ukitomato.closta.core.interfaces.Clock
@@ -18,6 +19,7 @@ import dev.ukitomato.closta.presenter.view.groupSinceAfter
 import dev.ukitomato.closta.presenter.view.sessionSummary
 import dev.ukitomato.closta.presenter.view.sessionTitle
 import dev.ukitomato.closta.presenter.view.threadIsRunning
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -43,6 +45,7 @@ import java.time.Instant
  * State changes on the EDT; [entries] may be read from any thread.
  */
 @Service(Service.Level.APP)
+@Suppress("TooManyFunctions") // the registry of every session: one function per thing the screens ask of it
 class ChatDirectory(
     private val scope: CoroutineScope,
 ) : Disposable {
@@ -118,9 +121,18 @@ class ChatDirectory(
         val job =
             scope.launch {
                 source.view
-                    .map { now -> Change(now, threadIsRunning(now.conversation, now.transcript), waitingIds(now)) }
-                    .distinctUntilChanged { a, b -> a.running == b.running && a.waiting == b.waiting }
-                    .collect { change -> withContext(Dispatchers.EDT) { changed(id, change) } }
+                    .map { now ->
+                        Change(
+                            now,
+                            threadIsRunning(now.conversation, now.transcript),
+                            waitingIds(now),
+                            sessionTitle(now.transcript),
+                            now.transcript.operations.renameFailure
+                                ?.requestId,
+                        )
+                    }.distinctUntilChanged { a, b ->
+                        a.running == b.running && a.waiting == b.waiting && a.title == b.title && a.rename == b.rename
+                    }.collect { change -> withContext(Dispatchers.EDT) { changed(id, change) } }
             }
         val group = sessionSummary(view.conversation, view.transcript, false).group
         val session = Registered(project, source, job, threadIsRunning(view.conversation, view.transcript))
@@ -134,6 +146,25 @@ class ChatDirectory(
                     it.head = head
                     publish()
                 }
+            }
+        }
+    }
+
+    /** Names the running session [sessionId] [title]; what the list shows changes when the CLI says it took it. */
+    fun rename(
+        sessionId: String,
+        title: String,
+    ) {
+        val source = registered[sessionId]?.source ?: return
+        scope.launch {
+            try {
+                source.renameSession(title)
+            } catch (cancel: CancellationException) {
+                throw cancel
+            } catch (
+                @Suppress("TooGenericExceptionCaught") failure: Exception,
+            ) {
+                thisLogger().warn("sessions: a rename was not sent (${failure.javaClass.name})")
             }
         }
     }
@@ -193,6 +224,8 @@ class ChatDirectory(
         val view: SessionView,
         val running: Boolean,
         val waiting: List<String>,
+        val title: String?,
+        val rename: String?,
     )
 
     private fun changed(

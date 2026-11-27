@@ -96,6 +96,9 @@ interface ChatSource : Disposable {
     /** Asks the CLI for the context's whole breakdown; the answer is the composer's context. */
     suspend fun requestContextBreakdown()
 
+    /** Names the running session [title]; the view takes the name when the CLI says it took it. */
+    suspend fun renameSession(title: String)
+
     suspend fun setMcpServerEnabled(
         name: String,
         enabled: Boolean,
@@ -273,6 +276,13 @@ interface ChatSource : Disposable {
 
         override suspend fun requestContextBreakdown() {
             commands()?.requestContextUsage(full = true)
+        }
+
+        override suspend fun renameSession(title: String) {
+            val cliId =
+                view.value.conversation.session
+                    ?.sessionId ?: return
+            commands()?.renameSession(title, cliId)
         }
 
         override suspend fun dismissRateLimit(seq: Int) {

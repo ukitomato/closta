@@ -47,7 +47,7 @@ import dev.ukitomato.closta.presenter.view.ThreadRows
 import dev.ukitomato.closta.presenter.view.askActions
 import dev.ukitomato.closta.presenter.view.composerState
 import dev.ukitomato.closta.presenter.view.runningTasks
-import dev.ukitomato.closta.presenter.view.sessionTitle
+import dev.ukitomato.closta.presenter.view.sessionName
 import dev.ukitomato.closta.presenter.view.threadIsRunning
 import dev.ukitomato.closta.presenter.view.turnEndActions
 import kotlinx.coroutines.CancellationException
@@ -601,7 +601,7 @@ class ChatPanel(
 
     /** The title follows the first request; the branch is read again when a turn ends (it may have switched it). */
     private fun followTitleAndHead(view: SessionView) {
-        val named = sessionTitle(view.transcript) ?: source.title
+        val named = sessionName(view.transcript) ?: source.title
         if (named != title) {
             title = named
             showHead()

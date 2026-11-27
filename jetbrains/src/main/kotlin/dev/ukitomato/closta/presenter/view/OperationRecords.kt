@@ -40,6 +40,9 @@ enum class ControlKind {
 
     /** `get_usage`, the session's cost and the plan's limits: it waits in a column of its own, as the context does. */
     USAGE,
+
+    /** The running session named by the user; the value is the name, which is kept only until the CLI answers. */
+    RENAME,
 }
 
 /**
@@ -215,6 +218,10 @@ data class OperationRecords(
     val usage: UsageRecord? = null,
     /** When the host saw the last `result` that had a cache, and how long that cache lives; null when it had none. */
     val cache: CacheRecord? = null,
+    /** The names asked for, by the id of each rename not answered yet, oldest first; see [renameAsked]. */
+    val renameAsks: Map<String, String> = emptyMap(),
+    /** The last rename the CLI refused; null before one, and after a launch. */
+    val renameFailure: RenameFailure? = null,
 )
 
 /** The prompt cache as of the `result` the host saw at [lastAtMs]: it lives [ttlMs] from then. */
@@ -274,6 +281,7 @@ internal fun OperationRecords.control(input: PresenterInput.ControlRequested): O
             withSwitch(SwitchRecord(input.requestId, seq + 1, SwitchKind.EFFORT, input.value.orEmpty()))
         ControlKind.SANDBOX ->
             withSwitch(SwitchRecord(input.requestId, seq + 1, SwitchKind.SANDBOX, input.value.orEmpty()))
+        ControlKind.RENAME -> renameAsked(input)
     }
 }
 
@@ -322,6 +330,8 @@ internal fun OperationRecords.launched(input: PresenterInput.Launched): Operatio
         mcpWaiting = emptyList(),
         settingsWaiting = emptyList(),
         usageWaiting = emptyList(),
+        renameAsks = emptyMap(),
+        renameFailure = null,
     )
 }
 
@@ -385,6 +395,7 @@ internal fun OperationRecords.sendFailed(requestId: String): OperationRecords =
     rewindSendFailed(requestId) ?: when {
         requestId in waiting -> copy(waiting = waiting - requestId)
         requestId in usageWaiting -> copy(usageWaiting = usageWaiting - requestId)
+        requestId in renameAsks -> copy(renameAsks = renameAsks - requestId)
         // A sandbox check that could not be asked waits for the next settings request.
         requestId in settingsWaiting ->
             copy(
@@ -402,7 +413,8 @@ private fun OperationRecords.knows(requestId: String): Boolean =
         requestId in waiting ||
         requestId in mcpWaiting ||
         requestId in settingsWaiting ||
-        requestId in usageWaiting
+        requestId in usageWaiting ||
+        requestId in renameAsks
 
 /**
  * The CLI's answer to [event]'s request. An id nobody asked with, or an answer to a settled one, changes nothing.
@@ -426,6 +438,7 @@ internal fun OperationRecords.answered(event: AgentEvent.ControlResponse): Opera
             copy(usageWaiting = usageWaiting - id, usage = body?.let(::usageOf) ?: usage)
         }
         id in settingsWaiting -> settingsAnswered(id, event)
+        id in renameAsks -> renameAnswered(id, event)
         succeeded -> switchApplied(id)
         else ->
             ended(id) {

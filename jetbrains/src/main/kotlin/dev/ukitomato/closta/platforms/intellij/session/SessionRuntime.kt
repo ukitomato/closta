@@ -650,6 +650,7 @@ class SessionRuntime(
                 before.restored(lines, dropped)
             }
         }
+        read.customTitle?.let { named -> store.transition { it.requested(PresenterInput.TitleRestored(named)) } }
         log.info("claude session $id: put back ${read.events.size} lines of the saved record ($read)")
     }
 

@@ -42,6 +42,10 @@
             <override-text place="MainMenu"/>
             <override-text place="ClostaSessions" use-text-of-place="MainMenu"/>
         </action>
+        <action id="Closta.Sessions.Rename" class="dev.ukitomato.closta.platforms.intellij.sessions.RenameSessionAction">
+            <override-text place="MainMenu"/>
+            <override-text place="ClostaSessions" use-text-of-place="MainMenu"/>
+        </action>
         <action id="Closta.Sessions.EndSession" class="dev.ukitomato.closta.platforms.intellij.sessions.EndSessionAction"
                 icon="AllIcons.Actions.Suspend">
             <override-text place="MainMenu"/>
@@ -78,6 +82,7 @@
         <group id="Closta.Sessions.LiveMenu">
             <reference ref="Closta.Sessions.OpenInEditor"/>
             <reference ref="Closta.Sessions.OpenInSidebar"/>
+            <reference ref="Closta.Sessions.Rename"/>
             <reference ref="Closta.Sessions.EndSession"/>
             <reference ref="Closta.Sessions.Archive"/>
         </group>

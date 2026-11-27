@@ -284,24 +284,3 @@ class SessionGroupsTest {
             "./gradlew :auth:test --tests 'dev.example.auth.SignInTest' --info --stacktrace --no-daemon --rerun"
     }
 }
-
-class SessionTitleTest {
-    @Test
-    fun theFirstLineOfTheFirstRequestNamesASession() {
-        val transcript = CaptureReplay.replay("01-baseline-text").last().transcript
-        assertEquals("Respond with exactly one word: pong", sessionTitle(transcript))
-    }
-
-    @Test
-    fun aLongRequestIsCut() {
-        val long = "あ".repeat(100) + "\n二行目"
-        val transcript =
-            foldTranscript(Transcript(), PresenterInput.UserSent("u1", long), ConversationState(), ConversationState())
-        assertEquals("あ".repeat(TITLE_MAX), sessionTitle(transcript))
-    }
-
-    @Test
-    fun aSessionWithNoRequestHasNoTitle() {
-        assertNull(sessionTitle(Transcript()))
-    }
-}

@@ -51,6 +51,7 @@ fun foldTranscript(
         is PresenterInput.AttachmentRefused,
         is PresenterInput.RateLimitDismissed,
         -> transcript.withOperations(foldOperation(transcript.operations, input))
+        is PresenterInput.TitleRestored -> transcript.copy(customTitle = input.title)
         is PresenterInput.SessionsListed,
         is PresenterInput.Restored,
         is PresenterInput.HistoryRestored,
@@ -85,8 +86,7 @@ private fun foldEvent(
         is AgentEvent.Elicitation,
         is AgentEvent.SystemElicitationComplete,
         -> foldRequestLine(transcript, event, before, after)
-        is AgentEvent.ControlResponse ->
-            foldCommandsOfResponse(transcript.withOperations(transcript.operations.answered(event)), event)
+        is AgentEvent.ControlResponse -> foldResponse(transcript, event)
         is AgentEvent.SystemCommandsChanged -> foldCommandsOfChange(transcript, event)
         is AgentEvent.SystemCompactBoundary, is AgentEvent.SystemStatus -> foldCompaction(transcript, event)
         is AgentEvent.SystemInit,

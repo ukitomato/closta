@@ -157,7 +157,17 @@ sealed interface PresenterInput {
         val requestId: String,
         val kind: ControlKind,
         val value: String? = null,
-    ) : PresenterInput
+    ) : PresenterInput {
+        // The value may be a session's name or an MCP server's: the user's own words, never written to a log.
+        override fun toString(): String = "ControlRequested(kind=$kind, requestId=$requestId)"
+    }
+
+    /** The name the user gave the session in an earlier run, read from its saved record when it was resumed. */
+    data class TitleRestored(
+        val title: String,
+    ) : PresenterInput {
+        override fun toString(): String = "TitleRestored"
+    }
 
     /** The request [requestId] could not be written to the CLI, as when the session is already closed. */
     data class ControlSendFailed(

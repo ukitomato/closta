@@ -33,6 +33,7 @@ data class HostState(
                 is PresenterInput.CodeApplied,
                 is PresenterInput.ControlRequested,
                 is PresenterInput.ControlSendFailed,
+                is PresenterInput.TitleRestored,
                 is PresenterInput.EffortRefused,
                 is PresenterInput.Launched,
                 is PresenterInput.SandboxRefused,
