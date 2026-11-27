@@ -23,8 +23,6 @@ data class Transcript(
     val approvals: Keyed<ApprovalRecord> = Keyed.empty(),
     /** Every request for input an MCP server made, by `request_id`, in arrival order. */
     val elicitations: Keyed<ElicitationRecord> = Keyed.empty(),
-    /** Whether the CLI process that asked them has ended, so nothing it asked can be answered any more. */
-    val processEnded: Boolean = false,
     val routing: Routing = Routing(),
     /** The slash commands the CLI has. */
     val commands: SlashCommands = SlashCommands(),
@@ -288,6 +286,8 @@ data class ElicitationRecord(
     val sentAction: ElicitationAction? = null,
     val sentContent: String? = null,
     val failure: String? = null,
+    /** Whether the CLI process that asked it has ended: it can never be answered, whatever process runs next. */
+    val ended: Boolean = false,
 ) {
     // The message, the address and the form's values are the server's and the user's: never in a log.
     override fun toString(): String = "ElicitationRecord($requestId, $serverName, $stage)"

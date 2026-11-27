@@ -108,6 +108,14 @@ internal fun foldElicitationComplete(
     )
 }
 
-/** The process ended, or (with [ended] false) a new one started. */
-internal fun Transcript.withProcessEnded(ended: Boolean): Transcript =
-    if (processEnded == ended) this else copy(processEnded = ended)
+/** The process ended: each request still waiting was asked by it alone, so none can be answered after a restart. */
+internal fun Transcript.withProcessEnded(): Transcript {
+    val waiting = elicitations.values().filter { it.stage == ElicitationStage.WAITING && !it.ended }
+    if (waiting.isEmpty()) return this
+    return copy(
+        elicitations =
+            waiting.fold(
+                elicitations,
+            ) { all, record -> all.put(record.requestId, record.copy(ended = true)) },
+    )
+}

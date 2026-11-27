@@ -173,7 +173,7 @@ class ThreadRows {
      */
     fun of(
         transcript: Transcript,
-        conversation: ConversationState = ConversationState(),
+        conversation: ConversationState,
     ): List<ThreadRow> {
         val nextMessages = IdentityHashMap<MessageRecord, List<ThreadRow>>()
         val nextParts = IdentityHashMap<PartRecord, ThreadRow?>()
@@ -195,7 +195,7 @@ class ThreadRows {
             rows += made
             if (message.key == transcript.signIn) rows += SignInRow("${message.key}/sign-in")
             byAnchor[message.key]?.forEach { rows += cardRow(it, nextCards, go) }
-            asksByAnchor[message.key]?.forEach { rows += askRow(it, nextAsks, pending, transcript.processEnded) }
+            asksByAnchor[message.key]?.forEach { rows += askRow(it, nextAsks, pending) }
             turnEndRow(transcript, message.key, followed)?.let {
                 nextEnds[it.key] = it
                 rows += it
@@ -207,7 +207,7 @@ class ThreadRows {
                 cardRow(it, nextCards, go)
         }
         asksByAnchor.filterKeys { it == null || it !in messageKeys }.values.flatten().forEach {
-            rows += askRow(it, nextAsks, pending, transcript.processEnded)
+            rows += askRow(it, nextAsks, pending)
         }
         messages = nextMessages
         parts = nextParts
@@ -244,9 +244,8 @@ class ThreadRows {
         record: ElicitationRecord,
         into: HashMap<String, CardRow>,
         pending: Set<String>,
-        processEnded: Boolean,
     ): CardRow {
-        val card = elicitationCardOf(record, record.requestId in pending, processEnded)
+        val card = elicitationCardOf(record, record.requestId in pending)
         val kept = asks[record.requestId]?.takeIf { it.card == card }
         val made = kept ?: CardRow(cardKey(record.anchor, record.requestId), card, opens = false)
         into[record.requestId] = made

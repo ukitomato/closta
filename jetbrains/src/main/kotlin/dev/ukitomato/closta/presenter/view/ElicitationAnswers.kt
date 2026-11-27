@@ -117,11 +117,16 @@ private fun numberProblem(
         text.isBlank() -> ElicitationProblem.REQUIRED.takeIf { field.required }
         number == null -> ElicitationProblem.NOT_A_NUMBER
         field.integer && number != floor(number) -> ElicitationProblem.NOT_AN_INTEGER
+        field.integer && number > SAFE_INTEGER -> ElicitationProblem.ABOVE_MAXIMUM
+        field.integer && number < -SAFE_INTEGER -> ElicitationProblem.BELOW_MINIMUM
         field.minimum != null && number < field.minimum -> ElicitationProblem.BELOW_MINIMUM
         field.maximum != null && number > field.maximum -> ElicitationProblem.ABOVE_MAXIMUM
         else -> null
     }
 }
+
+// The largest whole number a double (and so a JSON reader) holds exactly; an integer field takes none beyond it.
+private const val SAFE_INTEGER = 9_007_199_254_740_991.0
 
 // A finite number; "NaN" and "Infinity" are numbers to the parser and not to JSON.
 private fun decimal(text: String): Double? = text.trim().toDoubleOrNull()?.takeIf { it.isFinite() }
@@ -182,7 +187,11 @@ private val WEB_ADDRESS =
     Regex("""(?i)https?://(?:[^/?#@\s]*@)?(\[[0-9a-f:.]+]|[^/?#:@\s\[\]]+)(?::\d*)?(?:[/?#]\S*)?""")
 
 /** [url] as it is when it is an `http` or `https` address with a host, else null: nothing else is offered to open. */
-fun openableUrl(url: String?): String? = url?.takeIf { WEB_ADDRESS.matches(it) }
+fun openableUrl(url: String?): String? = url?.takeIf { WEB_ADDRESS.matches(it) && it.none(::unsafe) }
+
+// A browser reads a backslash as a slash, so the address would go to another host than the one shown; a control
+// character is no part of an address.
+private fun unsafe(char: Char): Boolean = char == '\\' || char.isISOControl()
 
 /** The host of [url] when it is [openableUrl]; what the card shows in bold, so the user sees where the link goes. */
 fun urlHostOf(url: String?): String? = openableUrl(url)?.let { WEB_ADDRESS.matchEntire(it)?.groupValues?.get(1) }

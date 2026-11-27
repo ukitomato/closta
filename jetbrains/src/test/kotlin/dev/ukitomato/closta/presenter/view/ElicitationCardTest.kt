@@ -6,7 +6,7 @@ import dev.ukitomato.closta.core.models.ElicitationAction
 import dev.ukitomato.closta.core.models.RawJson
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNotSame
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -152,13 +152,15 @@ class ElicitationCardTest {
     }
 
     @Test
-    fun `type only - a process that ended can no longer be answered`() {
+    fun `type only - a process that ended can no longer be answered, not even after a restart`() {
         val ended = HostState().line(form()).next(PresenterInput.ProcessEnded)
-        assertTrue(ended.transcript.processEnded)
         assertFalse(ended.card().answerable)
         assertEquals(ApprovalOutcome.CANCELLED, ended.card().answered)
         val again = ended.next(PresenterInput.Launched(effort = null))
-        assertFalse(again.transcript.processEnded)
+        assertFalse(again.card().answerable, "the new CLI never asked it")
+        assertEquals(ApprovalOutcome.CANCELLED, again.card().answered)
+        val asked = again.line(form(id = "e2"))
+        assertEquals(listOf(false, true), asked.cards().map { it.answerable })
     }
 
     @Test
@@ -250,7 +252,11 @@ class ElicitationCardTest {
         val second = rows.of(state.transcript, state.conversation).filterIsInstance<CardRow>().single()
         assertSame(first, second)
         val sent = state.answer(ElicitationAction.CANCEL)
-        assertNotNull(rows.of(sent.transcript, sent.conversation).filterIsInstance<CardRow>().single())
+        val third = rows.of(sent.transcript, sent.conversation).filterIsInstance<CardRow>().single()
+        assertNotSame(first, third)
+        val card = third.card as ElicitationCard
+        assertEquals(ElicitationStage.SENT, card.stage)
+        assertEquals(ApprovalOutcome.CANCELLED, card.answered)
     }
 
     @Test

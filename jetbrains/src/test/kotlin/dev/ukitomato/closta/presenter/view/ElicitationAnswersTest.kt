@@ -71,6 +71,25 @@ class ElicitationAnswersTest {
     }
 
     @Test
+    fun `type only - an integer beyond what a double holds exactly is a problem, not clamped`() {
+        val ok = "name" to text("Ada")
+        assertEquals(
+            mapOf("count" to ElicitationProblem.ABOVE_MAXIMUM),
+            problems(ok, "count" to text("12345678901234567890")),
+        )
+        val free =
+            checkNotNull(
+                elicitationFields(JsonRead.parse("""{"type":"object","properties":{"n":{"type":"integer"}}}"""), null),
+            )
+
+        fun of(value: String) = elicitationProblems(free, mapOf("n" to text(value)))
+        assertEquals(mapOf("n" to ElicitationProblem.ABOVE_MAXIMUM), of("12345678901234567890"))
+        assertEquals(mapOf("n" to ElicitationProblem.BELOW_MINIMUM), of("-12345678901234567890"))
+        assertEquals(emptyMap<String, ElicitationProblem>(), of("9007199254740991"))
+        assertEquals(mapOf("n" to ElicitationProblem.ABOVE_MAXIMUM), of("9007199254740992"))
+    }
+
+    @Test
     fun `type only - the format of a text is checked`() {
         val ok = "name" to text("Ada")
         assertEquals(mapOf("mail" to ElicitationProblem.NOT_EMAIL), problems(ok, "mail" to text("x")))
@@ -130,6 +149,16 @@ class ElicitationAnswersTest {
         assertNull(openableUrl(null))
         assertEquals("https://example.com/x", openableUrl("https://example.com/x"))
         assertEquals("http://localhost:8080/a?b=1", openableUrl("http://localhost:8080/a?b=1"))
+    }
+
+    @Test
+    fun `an address with a backslash or a control character is not opened`() {
+        // A browser reads a backslash as a slash, so it would go to a different host than the one shown.
+        assertNull(openableUrl("https://evil.example\\.good.example/x"))
+        assertNull(urlHostOf("https://evil.example\\.good.example/x"))
+        assertNull(openableUrl("https://example.com/a\\b"))
+        assertNull(openableUrl("https://example.com/a\nb"))
+        assertNull(openableUrl("https://example.com/a\u0000b"))
     }
 
     @Test

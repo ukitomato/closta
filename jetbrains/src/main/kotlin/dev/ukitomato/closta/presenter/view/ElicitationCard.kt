@@ -27,16 +27,14 @@ data class ElicitationCard(
 ) : ThreadCard
 
 /**
- * The card for [record]. [pending] is whether core still holds the request as pending; [processEnded] whether the CLI
- * that asked it has gone. A request that waits and is pending can be answered; one that waits and is not (a `result`
- * took it away) or whose process ended was cancelled.
+ * The card for [record]. [pending] is whether core still holds the request as pending. A request that waits and is
+ * pending can be answered; one that waits and is not (a `result` took it away), or whose process ended, was cancelled.
  */
 fun elicitationCardOf(
     record: ElicitationRecord,
     pending: Boolean,
-    processEnded: Boolean,
 ): ElicitationCard {
-    val open = pending && !processEnded
+    val open = pending && !record.ended
     val answered =
         when (record.stage) {
             ElicitationStage.WAITING -> if (open) null else ApprovalOutcome.CANCELLED

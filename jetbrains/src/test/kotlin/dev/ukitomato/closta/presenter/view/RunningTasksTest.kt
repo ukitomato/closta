@@ -1,5 +1,6 @@
 package dev.ukitomato.closta.presenter.view
 
+import dev.ukitomato.closta.core.models.ConversationState
 import dev.ukitomato.closta.platforms.intellij.session.SessionView
 import dev.ukitomato.closta.providers.claude.protocol.StreamJsonCodec
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -90,9 +91,9 @@ class RunningTasksTest {
     fun agentRowsAreTheSubagentsMessages() {
         val transcript = CaptureReplay.replay("12-subagent-permission").last().transcript
         val agent = ThreadRows().of(transcript).filterIsInstance<ToolRow>().first { it.toolName in AGENT_TOOLS }
-        val rows = agentRows(transcript, agent.toolUseId)
+        val rows = agentRows(transcript, ConversationState(), agent.toolUseId)
         assertTrue(rows.isNotEmpty())
         assertTrue(rows.none { it is AskRow && it.key == agent.key })
-        assertTrue(agentRows(transcript, "no-such-call").isEmpty())
+        assertTrue(agentRows(transcript, ConversationState(), "no-such-call").isEmpty())
     }
 }

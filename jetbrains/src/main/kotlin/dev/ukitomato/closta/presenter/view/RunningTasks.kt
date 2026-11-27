@@ -1,6 +1,7 @@
 package dev.ukitomato.closta.presenter.view
 
 import dev.ukitomato.closta.core.models.AgentEvent
+import dev.ukitomato.closta.core.models.ConversationState
 import dev.ukitomato.closta.presenter.tree.JsonArray
 import dev.ukitomato.closta.presenter.tree.JsonBool
 import dev.ukitomato.closta.presenter.tree.JsonNumber
@@ -128,8 +129,9 @@ fun runningTasks(transcript: Transcript): List<RunningTask> {
 /** The rows of the subagent the call [toolUseId] started: its own messages, by the same rules as the main thread. */
 fun agentRows(
     transcript: Transcript,
+    conversation: ConversationState,
     toolUseId: String,
-): List<ThreadRow> = agentTranscript(transcript, toolUseId)?.let { ThreadRows().of(it) }.orEmpty()
+): List<ThreadRow> = agentTranscript(transcript, toolUseId)?.let { ThreadRows().of(it, conversation) }.orEmpty()
 
 /** The subagent's own conversation, for a tab that keeps its own [ThreadRows] (so unchanged rows stay the same). */
 fun agentTranscript(

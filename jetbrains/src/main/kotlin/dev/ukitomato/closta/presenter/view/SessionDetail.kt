@@ -45,7 +45,7 @@ fun sessionDetail(
             )
         asked.isNotEmpty() ->
             SessionDetail.Waiting(
-                elicitationCardOf(asked.first(), pending = true, processEnded = transcript.processEnded),
+                elicitationCardOf(asked.first(), pending = true),
                 asked.size - 1,
             )
         threadIsRunning(

@@ -31,9 +31,7 @@ fun foldTranscript(
         is PresenterInput.Decided -> foldDecided(transcript, input, before)
         is PresenterInput.AnswerFailed -> foldAnswerFailed(transcript, input, before)
         is PresenterInput.ElicitationDecided -> foldElicitationDecided(transcript, input, before)
-        PresenterInput.ProcessEnded -> transcript.withProcessEnded(true)
-        is PresenterInput.Launched ->
-            transcript.withProcessEnded(false).let { it.withOperations(foldOperation(it.operations, input)) }
+        PresenterInput.ProcessEnded -> transcript.withProcessEnded()
         is PresenterInput.FilesFound,
         is PresenterInput.SelectionCaptured,
         is PresenterInput.CodeApplied,
@@ -42,6 +40,7 @@ fun foldTranscript(
         is PresenterInput.ControlRequested,
         is PresenterInput.ControlSendFailed,
         is PresenterInput.EffortRefused,
+        is PresenterInput.Launched,
         is PresenterInput.SandboxRefused,
         is PresenterInput.SandboxNotStarted,
         is PresenterInput.RewindRequested,
