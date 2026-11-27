@@ -66,6 +66,8 @@ data class Transcript(
     val customTitle: String? = null,
     /** The keys of the user messages sent while a turn ran (the newest [MAX_CANCELS]): only these can be withdrawn. */
     val sentWhileRunning: Set<String> = emptySet(),
+    /** The keys of the user messages withdrawn before the CLI started them: the CLI has no record of them. */
+    val withdrawn: Set<String> = emptySet(),
 )
 
 enum class Role(

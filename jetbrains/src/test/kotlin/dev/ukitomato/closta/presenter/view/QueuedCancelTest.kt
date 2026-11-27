@@ -159,4 +159,28 @@ class QueuedCancelTest {
         assertFalse(text.contains("secret-uuid"))
         assertEquals("AskCancel(FAILED)", AskCancel(CancelPhase.FAILED, "words").toString())
     }
+
+    @Test
+    fun `type only - a message the old CLI queued is not offered again after the process ends or a new CLI starts`() {
+        val ended = queuedB().next(PresenterInput.ProcessEnded)
+        assertNull(ended.cancelOf("kb"))
+        val relaunched = ended.next(PresenterInput.Launched(null))
+        assertNull(relaunched.cancelOf("kb"), "the new CLI never had the message")
+        assertTrue(relaunched.transcript.sentWhileRunning.isEmpty())
+        val direct = queuedB().next(PresenterInput.Launched(null))
+        assertNull(direct.cancelOf("kb"))
+    }
+
+    @Test
+    fun `type only - a withdrawn message stays withdrawn after more sends and more withdrawals than the tables keep`() {
+        var state = queuedB().ask("r1").event(Lines.controlOk("r1", """{"cancelled":true}"""))
+        repeat(MAX_CANCELS + 8) { n ->
+            state = state.next(PresenterInput.UserSent("k$n", "x", uuid = "u$n"))
+            state = state.next(PresenterInput.ControlRequested("q$n", ControlKind.CANCEL_QUEUED, "u$n"))
+        }
+        assertFalse("b" in state.transcript.operations.cancels)
+        assertEquals(AskCancel(CancelPhase.CANCELLED), state.cancelOf("kb"))
+        assertFalse("kb" in liveAsks(state.transcript))
+        assertEquals(RewindRefusal.CANCELLED, askActions(state.transcript, false, "kb").refusal)
+    }
 }

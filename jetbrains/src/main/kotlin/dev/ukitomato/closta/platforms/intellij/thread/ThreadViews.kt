@@ -303,7 +303,7 @@ class ThreadRowViews(
                     val folded = foldedAsk(row.text)
                     val isOpen = row.key in open
                     val shown = if (folded != null && !isOpen) folded else row.text
-                    add(wrapping(shown).also(::markMentions), BorderLayout.CENTER)
+                    add(wrapping(shown).also(::markMentions).also { dimWithdrawn(it, row.cancel) }, BorderLayout.CENTER)
                     askSouth(row, folded != null, isOpen)?.let { add(it, BorderLayout.SOUTH) }
                 },
                 BorderLayout.CENTER,
@@ -364,6 +364,14 @@ class ThreadRowViews(
                 }
             words?.let { add(JBLabel(it).noHtml().apply { foreground = ThreadStyle.muted }) }
         }
+
+    // A withdrawn message is dimmed: it will not run.
+    private fun dimWithdrawn(
+        area: JTextArea,
+        cancel: AskCancel?,
+    ) {
+        if (cancel?.phase == CancelPhase.CANCELLED) area.foreground = ThreadStyle.muted
+    }
 
     // The ask's `@` mentions on a soft mark of the accent, the way the composer shows them.
     private fun markMentions(area: JTextArea) {

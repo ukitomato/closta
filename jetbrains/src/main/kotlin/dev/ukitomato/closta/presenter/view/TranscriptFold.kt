@@ -33,7 +33,12 @@ fun foldTranscript(
         is PresenterInput.Decided -> foldDecided(transcript, input, before)
         is PresenterInput.AnswerFailed -> foldAnswerFailed(transcript, input, before)
         is PresenterInput.ElicitationDecided -> foldElicitationDecided(transcript, input, before)
-        PresenterInput.ProcessEnded -> transcript.withProcessEnded()
+        PresenterInput.ProcessEnded -> transcript.withProcessEnded().queueEnded()
+        is PresenterInput.Launched ->
+            transcript
+                .withOperations(
+                    foldOperation(transcript.operations, input),
+                ).queueEnded()
         is PresenterInput.DiagnosticsReported ->
             transcript.markReported(Keys.ofCliId(input.toolUseId), ReportedErrors(input.count, input.lines))
         is PresenterInput.FilesFound,
@@ -44,7 +49,6 @@ fun foldTranscript(
         is PresenterInput.ControlRequested,
         is PresenterInput.ControlSendFailed,
         is PresenterInput.EffortRefused,
-        is PresenterInput.Launched,
         is PresenterInput.SandboxRefused,
         is PresenterInput.SandboxNotStarted,
         is PresenterInput.RewindRequested,
@@ -150,7 +154,7 @@ private fun foldLifecycle(
 ): Transcript =
     // Core closes the turn it held open; the row of its message says it was withdrawn.
     if (cancelsOpenTurn(event, before)) {
-        transcript.withOperations(transcript.operations.cancelClosed(event.commandUuid))
+        transcript.withWithdrawn(event.commandUuid)
     } else {
         foldStarted(transcript, event)
     }

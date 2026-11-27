@@ -1,8 +1,6 @@
 package dev.ukitomato.closta.presenter.view
 
 import dev.ukitomato.closta.core.models.AgentEvent
-import dev.ukitomato.closta.core.models.ConversationState
-import dev.ukitomato.closta.core.models.TurnPhase
 import dev.ukitomato.closta.presenter.tree.JsonBool
 import dev.ukitomato.closta.presenter.tree.JsonObject
 import dev.ukitomato.closta.presenter.tree.JsonRead
@@ -42,8 +40,6 @@ const val MAX_CANCELS = 32
 
 /** The sentence of a request that could not be written to the CLI. */
 const val REQUEST_NOT_SENT = "The request could not be sent."
-
-private const val CANCELLED_REASON = "cancelled"
 
 private fun <V> Map<String, V>.newest(): Map<String, V> =
     if (size <= MAX_CANCELS) this else entries.drop(size - MAX_CANCELS).associate { it.key to it.value }
@@ -104,14 +100,15 @@ internal fun Transcript.withdrawnBy(event: AgentEvent.ControlResponse): String? 
     return uuid.takeIf { event.subtype == "success" && cancelledOf(event) == true }
 }
 
-/** The turn of [uuid] is closed as cancelled, whatever the answer was: the message is withdrawn. */
-internal fun OperationRecords.cancelClosed(uuid: String): OperationRecords =
-    copy(cancels = ((cancels - uuid) + (uuid to AskCancel(CancelPhase.CANCELLED))).newest())
+/**
+ * The message [uuid] is withdrawn: its key goes into [Transcript.withdrawn], which the tables' limit does not push
+ * out (it holds only keys of the transcript's own messages), and its record says so.
+ */
+internal fun Transcript.withWithdrawn(uuid: String): Transcript {
+    val key = userUuids.entries.firstOrNull { it.value == uuid }?.key
+    val marked = copy(operations = operations.cancelMarked(uuid))
+    return if (key == null || key in withdrawn) marked else marked.copy(withdrawn = withdrawn + key)
+}
 
-/** Whether the lifecycle line says the CLI cancelled a turn core still held open. */
-internal fun cancelsOpenTurn(
-    event: AgentEvent.CommandLifecycle,
-    before: ConversationState,
-): Boolean =
-    event.state == CANCELLED_REASON &&
-        before.turns.any { it.commandUuid == event.commandUuid && it.phase == TurnPhase.OPEN }
+private fun OperationRecords.cancelMarked(uuid: String): OperationRecords =
+    copy(cancels = ((cancels - uuid) + (uuid to AskCancel(CancelPhase.CANCELLED))).newest())

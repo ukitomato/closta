@@ -1,10 +1,8 @@
 package dev.ukitomato.closta.presenter.view
 
+import dev.ukitomato.closta.core.models.AgentEvent
 import dev.ukitomato.closta.core.models.ConversationState
 import dev.ukitomato.closta.core.models.TurnPhase
-
-/** Whether the withdrawal of the message [uuid] is done: its row is a withdrawn one. */
-internal fun Transcript.isWithdrawn(uuid: String): Boolean = operations.cancels[uuid]?.phase == CancelPhase.CANCELLED
 
 /**
  * What each message the user sent while a turn ran says of its withdrawal, by the message's key: only a row with
@@ -19,11 +17,13 @@ internal fun askCancels(
     conversation: ConversationState,
     live: Boolean,
 ): Map<String, AskCancel> {
-    if (transcript.sentWhileRunning.isEmpty()) return emptyMap()
+    if (transcript.sentWhileRunning.isEmpty() && transcript.withdrawn.isEmpty()) return emptyMap()
     val open = conversation.turns.filter { it.phase == TurnPhase.OPEN }.mapTo(HashSet()) { it.commandUuid }
     val routing = transcript.routing
     val found = HashMap<String, AskCancel>()
-    for (key in transcript.sentWhileRunning) {
+    // A withdrawn message stays withdrawn, whatever the tables have since pushed out.
+    transcript.withdrawn.forEach { found[it] = AskCancel(CancelPhase.CANCELLED) }
+    for (key in transcript.sentWhileRunning.filter { it !in found }) {
         val uuid = transcript.userUuids[key] ?: continue
         val started = uuid in routing.turns
         val offerable = live && uuid in open && !started && uuid !in routing.stopped
@@ -47,3 +47,17 @@ private fun shownCancel(
         offerable -> AskCancel(CancelPhase.OFFER)
         else -> null
     }
+
+/** The CLI that held the queue is gone: no message of it can be withdrawn any more. */
+internal fun Transcript.queueEnded(): Transcript =
+    if (sentWhileRunning.isEmpty()) this else copy(sentWhileRunning = emptySet())
+
+/** Whether the lifecycle line says the CLI cancelled a turn core still held open. */
+internal fun cancelsOpenTurn(
+    event: AgentEvent.CommandLifecycle,
+    before: ConversationState,
+): Boolean =
+    event.state == CANCELLED_REASON &&
+        before.turns.any { it.commandUuid == event.commandUuid && it.phase == TurnPhase.OPEN }
+
+private const val CANCELLED_REASON = "cancelled"
