@@ -15,6 +15,18 @@ import kotlinx.coroutines.withContext
  * running IDE. Documents are the IDE's, not a project's.
  */
 class IdeUnsavedDocuments : UnsavedDocuments {
+    override suspend fun isModified(path: String): Boolean? {
+        val manager = FileDocumentManager.getInstance()
+        return readAction {
+            LocalFileSystem
+                .getInstance()
+                .findFileByPath(path)
+                ?.let {
+                    manager.getCachedDocument(it)
+                }?.let(manager::isDocumentUnsaved)
+        }
+    }
+
     override suspend fun saveIfModified(path: String): SaveResult {
         val manager = FileDocumentManager.getInstance()
         val document =

@@ -9,8 +9,10 @@ import dev.ukitomato.closta.core.interfaces.AnalysisWait
 import dev.ukitomato.closta.core.interfaces.Diagnostics
 import dev.ukitomato.closta.core.interfaces.DiffViews
 import dev.ukitomato.closta.core.interfaces.EditorEdits
+import dev.ukitomato.closta.core.interfaces.EditorOpening
 import dev.ukitomato.closta.core.interfaces.EditorSelections
 import dev.ukitomato.closta.core.interfaces.IdeBridge
+import dev.ukitomato.closta.core.interfaces.OpenEditors
 import dev.ukitomato.closta.core.interfaces.ProjectFiles
 import dev.ukitomato.closta.core.interfaces.UnsavedDocuments
 import dev.ukitomato.closta.core.interfaces.WorktreeCreated
@@ -42,6 +44,8 @@ class IdeBridgeService(
     override val diagnostics: Diagnostics = IdeDiagnostics(project)
     override val diffViews: DiffViews = IdeDiffViews(project)
     override val unsavedDocuments: UnsavedDocuments = IdeUnsavedDocuments()
+    override val openEditors: OpenEditors = IdeOpenEditors(project)
+    override val editorOpening: EditorOpening = IdeEditorOpening(project)
     override val analysisWait: AnalysisWait = IdeAnalysisWait(project)
     override val worktrees: Worktrees? =
         project.basePath?.let { root -> NotifyingWorktrees(GitWorktrees(root), ::announce) }

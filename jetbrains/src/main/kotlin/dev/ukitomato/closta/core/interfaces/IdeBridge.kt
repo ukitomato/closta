@@ -5,7 +5,7 @@ package dev.ukitomato.closta.core.interfaces
  * needs, never a `com.intellij` type.
  *
  * It started with the one member that was unambiguously needed — which project the session is scoped to —
- * and grew by **forward evolution**: six seams, one per use, each a property that may be
+ * and grew by **forward evolution**: one seam per use, each a property that may be
  * absent. A host that cannot satisfy a seam leaves it `null`, so what a host cannot do is visible in the type and no
  * caller has to call something to find out it fails. Every seam reports a refusal as a value ([IdeResult]).
  *
@@ -37,6 +37,12 @@ interface IdeBridge {
 
     /** The editor buffers not yet on disk. Null when the host has none to save. */
     val unsavedDocuments: UnsavedDocuments? get() = null
+
+    /** The files open in editor tabs. Null when the host has none to list. */
+    val openEditors: OpenEditors? get() = null
+
+    /** Opening a file in an editor tab. Null when the host cannot. */
+    val editorOpening: EditorOpening? get() = null
 
     /** Waiting for the IDE to analyse a file again. Null when the host cannot tell. */
     val analysisWait: AnalysisWait? get() = null
