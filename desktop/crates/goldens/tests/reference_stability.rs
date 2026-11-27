@@ -46,7 +46,7 @@ fn an_input_that_shows_nothing_new_leaves_the_transcript_the_same_arc() {
         "40-sandbox-same-id",
     ];
     let scenarios = scenarios();
-    assert_eq!(40, scenarios.len());
+    assert_eq!(44, scenarios.len());
     for scenario in scenarios {
         let steps = replay(&scenario);
         let mut quiet = 0;

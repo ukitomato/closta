@@ -106,7 +106,7 @@ fn nested_calls(tree: &Value) -> Vec<Object> {
 #[test]
 fn no_capture_leaves_the_thread_running_but_for_the_known_gaps() {
     let all = scenarios();
-    assert_eq!(40, all.len());
+    assert_eq!(44, all.len());
     for scenario in &all {
         // A known gap still shows; anywhere else the thread ends at rest.
         let expected = Value::Bool(still_running(scenario));

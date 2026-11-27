@@ -5,6 +5,7 @@
 //! [`Decided`] right after each `control_request`.
 
 use std::collections::{HashMap, HashSet};
+use std::path::Path;
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
@@ -88,7 +89,7 @@ fn sent(scenario: &str) -> Option<Vec<&'static str>> {
         "13-ask-timeout" | "14-ask-answers-updatedinput" | "15-ask-afktimeout-updatedinput" => {
             vec![ASK]
         }
-        // Recorded with 2.1.282 too, the user's settings left out (recorder/scenarios.mjs ISOLATED).
+        // Recorded with the user's settings left out (recorder/scenarios.mjs ISOLATED).
         "16-permission-suggestion-accept" => vec![concat!(
             "Use the Write tool to create the file {OUTSIDE}/note.txt containing exactly the text: hello. ",
             "Then use the Read tool to read {OUTSIDE}/note.txt and report its exact content."
@@ -190,6 +191,22 @@ fn sent(scenario: &str) -> Option<Vec<&'static str>> {
         // Two CLIs of one session; the second (`--resume --settings`, in the sandbox) took the
         // Bash turn.
         "39-sandbox-resume" => vec![PONG, SANDBOX_PROBE],
+        // `/clear` between two turns, then a question about the first.
+        "41-clear-reset" => vec![
+            "Remember the word kumquat. Respond with exactly one word: pong",
+            "/clear",
+            "Which word did I ask you to remember? If you do not know, respond with exactly: unknown",
+        ],
+        // `/context` typed as text after one turn.
+        "42-local-commands" => vec![PONG, "/context"],
+        // One turn, then control requests only (get_usage, get_session_cost, list_permission_rules,
+        // list_models, get_context_usage).
+        "43-usage-and-rules" => vec![PONG],
+        // Started in dontAsk: the Bash no rule allows is denied without a can_use_tool.
+        "44-permission-denied" => vec![concat!(
+            "Run this exact bash command: touch denied-marker.txt. If it is not allowed, say so in one line ",
+            "and stop."
+        )],
         _ => return None,
     })
 }
@@ -216,13 +233,15 @@ fn answer(scenario: &str, request_id: &str) -> Option<PresenterInput> {
         // both at once.
         "29-exit-plan-mode" => (ApprovalDecision::Allow { request_id: id }, 0),
         "30-deny-empty-message" => (ApprovalDecision::Deny { request_id: id }, 0),
-        // Checkpoint 4, all allowed at once: 36's Bash `touch` (the sandbox was not in force),
-        // 37's ExitPlanMode, 38's ExitPlanMode and the Edit after it. 39 asked for nothing (the
-        // sandbox ran its Bash), but would be allowed the same way. What else the recorder sent
+        // Checkpoint 4, all allowed at once: 33's and 39's Bash `touch` (a path outside the cwd;
+        // the sandbox still refused the write), 36's Bash `touch` (the sandbox was not in force),
+        // 37's ExitPlanMode, 38's ExitPlanMode and the Edit after it. What else the recorder sent
         // (the setMode in updatedPermissions) reaches the projection through stdout.
-        "36-sandbox-unavailable" | "37-plan-auto" | "38-plan-bypass" | "39-sandbox-resume" => {
-            (ApprovalDecision::Allow { request_id: id }, 0)
-        }
+        "33-sandbox-live"
+        | "36-sandbox-unavailable"
+        | "37-plan-auto"
+        | "38-plan-bypass"
+        | "39-sandbox-resume" => (ApprovalDecision::Allow { request_id: id }, 0),
         _ => return None,
     };
     Some(PresenterInput::Decided(Decided {
@@ -291,6 +310,9 @@ fn requests(scenario: &str) -> HashMap<String, ControlRequested> {
             table.put(ControlKind::Sandbox, 5, Some("false"));
         }
         "36-sandbox-unavailable" => table.put(ControlKind::Settings, 4, None),
+        // The usage after the turn (req-2; its record is for a later stage), and the whole context
+        // usage last (req-6).
+        "43-usage-and-rules" => table.put(ControlKind::Context, 6, None),
         "39-sandbox-resume" => table.put(ControlKind::Settings, 3, None),
         "40-sandbox-same-id" => {
             for number in [2, 4] {
@@ -394,6 +416,12 @@ pub fn scenarios() -> Vec<String> {
 /// lifecycle, which the CLI's record keeps as the user line's uuid: captures 25 and 27), as the
 /// host does.
 pub fn inputs(scenario: &str, uuids: bool) -> Vec<PresenterInput> {
+    inputs_from(scenario, uuids, None)
+}
+
+/// [`inputs`] over other lines under `scenario`'s sends and answers: `file` is an older CLI's
+/// excerpt ([`common::legacy_excerpt`]), or `None` for the scenario's own capture.
+pub fn inputs_from(scenario: &str, uuids: bool, file: Option<&Path>) -> Vec<PresenterInput> {
     let sent = sent(scenario).unwrap_or_else(|| panic!("{scenario}: no SENT row"));
     let mut sent = sent.into_iter();
     let attached = attached_of(scenario);
@@ -401,7 +429,11 @@ pub fn inputs(scenario: &str, uuids: bool) -> Vec<PresenterInput> {
     let mut seen = HashSet::new();
     let mut inputs = Vec::new();
     let mut sends = 0;
-    for event in common::read_capture(&format!("{scenario}.ndjson")) {
+    let events = match file {
+        Some(path) => common::read_capture_at(path),
+        None => common::read_capture(&format!("{scenario}.ndjson")),
+    };
+    for event in events {
         if let AgentEvent::CommandLifecycle {
             command_uuid,
             state,
@@ -463,8 +495,17 @@ pub fn replay(scenario: &str) -> Vec<Step> {
 
 /// [`replay`], each message sent under its uuid when `uuids` (see [`inputs`]).
 pub fn replay_with(scenario: &str, uuids: bool) -> Vec<Step> {
+    steps(inputs(scenario, uuids))
+}
+
+/// [`replay`] of the lines in `file` (an older CLI's excerpt) under `scenario`'s sends and answers.
+pub fn replay_from(scenario: &str, file: &Path) -> Vec<Step> {
+    steps(inputs_from(scenario, false, Some(file)))
+}
+
+fn steps(inputs: Vec<PresenterInput>) -> Vec<Step> {
     let mut view = SessionView::default();
-    inputs(scenario, uuids)
+    inputs
         .into_iter()
         .map(|input| {
             view = std::mem::take(&mut view).fold(&input);

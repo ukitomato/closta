@@ -14,7 +14,7 @@ use closta_providers::claude::protocol::decode;
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 const MANIFEST: &str = "manifest.json";
@@ -182,6 +182,32 @@ pub fn parse_all(text: &str) -> Vec<AgentEvent> {
 /// Reads a capture and converts it.
 pub fn read_capture(file: &str) -> Vec<AgentEvent> {
     parse_all(&text_of(file))
+}
+
+/// Where the older CLI's (2.1.282) excerpts sit (CaptureFixtures.kt `legacyExcerpt`).
+fn legacy_dir() -> PathBuf {
+    let dir = repo_relative(
+        "jetbrains/src/test/resources/dev/ukitomato/closta/providers/claude/fixtures-2.1.282",
+    );
+    assert!(
+        dir.is_dir(),
+        "the excerpt directory {} does not exist - run the tests from a checkout that has jetbrains/",
+        dir.display()
+    );
+    dir
+}
+
+/// The excerpt of the lines an older CLI sent in `scenario`: that version's committed, scrubbed
+/// capture with its stream_event and rate_limit_event lines left out.
+pub fn legacy_excerpt(scenario: &str) -> PathBuf {
+    legacy_dir().join(format!("{scenario}-excerpt.ndjson"))
+}
+
+/// Reads and converts the capture at `path`.
+pub fn read_capture_at(path: &Path) -> Vec<AgentEvent> {
+    let bytes = std::fs::read(path)
+        .unwrap_or_else(|e| panic!("cannot read fixture {}: {e}", path.display()));
+    parse_all(&String::from_utf8_lossy(&bytes))
 }
 
 /// Line `line_number` (1-based, counting non-blank lines) of capture `<scenario>.ndjson`, decoded.
