@@ -527,6 +527,7 @@ fn picking_a_saved_session_resumes_it_in_its_project() {
         assert_eq!(acted.focus, Some(FocusTarget::Composer(slot)));
         assert_eq!(shell.selected(), Some(slot));
         assert!(shell.resume().is_none(), "the popup closes");
+        assert!(harness.saved_for.stopped(0), "the popup's reading gives up");
         assert_eq!(shell.session_id(slot), Some(Y));
         assert_eq!(shell.project_of(slot), Some(key(A)).as_ref());
         harness.control(0).await;
@@ -557,6 +558,7 @@ fn picking_an_open_conversation_goes_to_its_slot() {
         assert_eq!(acted.focus, Some(FocusTarget::Composer(slot)));
         assert_eq!(shell.selected(), Some(slot));
         assert!(shell.resume().is_none());
+        assert!(harness.saved_for.stopped(1), "the popup's reading gives up");
 
         // The same slot once it ended.
         harness.control(0).await.exit(0);

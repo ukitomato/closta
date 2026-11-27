@@ -1487,3 +1487,6 @@ fn request_of(alert: &SessionAlert) -> Option<&str> {
         SessionAlert::Finished(_) => None,
     }
 }
+
+#[cfg(test)]
+mod tests;

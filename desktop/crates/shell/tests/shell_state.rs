@@ -971,6 +971,10 @@ fn a_restart_of_a_resumed_slot_continues_and_keeps_its_title() {
         shell.act(ShellAction::Restart { slot });
         let args = harness.launch_args(1).await;
         assert!(args.contains(&format!("--resume={}", saved.id)), "{args:?}");
+        assert!(
+            !args.iter().any(|it| it.starts_with("--session-id")),
+            "{args:?}"
+        );
         assert_eq!(shell.session_id(slot), Some(saved.id.as_str()));
         assert_eq!(shell.slot_title(slot).as_deref(), Some("Fix the parser"));
     });
