@@ -150,4 +150,14 @@ class PlanApprovalTest {
         val refused = transcript.copy(operations = transcript.operations.copy(autoRejected = true))
         assertEquals(PlanGo.ACCEPT_EDITS, goOf(rows.of(refused)))
     }
+
+    @Test
+    fun feedbackDeniesWithTheSentenceAsPayload() {
+        val approval = planApproval()
+        val card = cardOf(approval, PlanGo.AUTO) as PlanCard
+        val answer = planAnswerWithFeedback(card, approval, "the sentence")
+        assertEquals(ApprovalDecision.Deny(card.requestId), answer.decision)
+        assertEquals("the sentence", answer.payload)
+        assertNull(answer.modeAfter)
+    }
 }
