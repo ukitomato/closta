@@ -351,6 +351,54 @@ fn a_refused_initialize_still_asks_the_settings_once() {
     asked_once_after(refused_initialize);
 }
 
+/// A session outside the sandbox whose CLI answers its initialize with the models and says its
+/// system/init, in either order: it is asked its settings once, at whichever came first.
+fn outside_the_sandbox_asked_once(init_first: bool) {
+    drive(|executor| async move {
+        let processes = Processes::new();
+        let control = processes.prepare(LiveOptions::default());
+        let (runtime, run, _log) = runtime(&processes, |_| {});
+        let run = executor.spawn(run);
+        running_on(&runtime, &processes, 1).await;
+        let id = within(control.skip_initialize()).await;
+
+        let lines = if init_first {
+            [init_line(), initialize_answer(&id, true)]
+        } else {
+            [initialize_answer(&id, true), init_line()]
+        };
+        control.emit(&lines[0]);
+        let asked = within(control.next_stdin_line()).await;
+        assert!(
+            asked
+                .as_deref()
+                .is_some_and(|line| line.contains(GET_SETTINGS)),
+            "{asked:?}"
+        );
+        control.emit(&lines[1]);
+        until(|| {
+            let view = runtime.view();
+            view.conversation.session.is_some() && !view.transcript.operations.models.is_empty()
+        })
+        .await;
+        // A negative: the second line asks nothing more.
+        Timer::after(Duration::from_millis(100)).await;
+        assert_eq!(settings_asked(&control), 1, "{:?}", control.stdin_lines());
+        runtime.close();
+        within(run).await;
+    });
+}
+
+#[test]
+fn outside_the_sandbox_an_answer_with_models_asks_once_and_the_system_init_adds_none() {
+    outside_the_sandbox_asked_once(false);
+}
+
+#[test]
+fn outside_the_sandbox_a_system_init_asks_once_and_the_answer_with_models_adds_none() {
+    outside_the_sandbox_asked_once(true);
+}
+
 #[test]
 fn a_restart_into_the_sandbox_initializes_the_new_cli_once() {
     drive(|executor| async move {
@@ -384,11 +432,6 @@ fn a_restart_into_the_sandbox_initializes_the_new_cli_once() {
         };
         assert_eq!(initializes(&first), 1);
         assert_eq!(initializes(&second), 1);
-        assert!(
-            after_initialize(second.stdin_lines())
-                .iter()
-                .all(|line| !is_initialize(line))
-        );
         runtime.close();
         within(run).await;
     });

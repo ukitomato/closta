@@ -543,15 +543,15 @@ async fn run_process(
 
     let mut pump = pump;
     let mut watch = SandboxStartWatch::new(sandboxed);
-    // Only a CLI in the sandbox is asked at its initialize's answer, refused or with no models:
-    // the settings alone say whether the sandbox is on. Any other waits for an answer that lists
-    // the models, or for its first system/init.
-    let answer_id = init_id.as_deref().filter(|_| sandboxed);
+    let init = OwnInit {
+        id: init_id.as_deref(),
+        sandboxed,
+    };
     let folding = async {
         let mut asked = false;
         while let Ok(event) = events.recv().await {
             for event in watch.pass(event) {
-                asked |= fold_event(shared, &commands, config, event, answer_id, asked);
+                asked |= fold_event(shared, &commands, config, event, init, asked);
             }
         }
     };
@@ -691,22 +691,32 @@ fn spawn(
     })
 }
 
-/// Folds one event. Until they were asked once, the settings are asked for at the answer to
-/// `init_id` (success or error) or at the first `system/init`, whichever comes first; and after
-/// any answer that calls for them, read on the records before the event is folded. Returns
-/// whether they were asked.
+/// The `initialize` this process was sent, and whether the process is in the sandbox.
+#[derive(Clone, Copy)]
+struct OwnInit<'a> {
+    id: Option<&'a str>,
+    sandboxed: bool,
+}
+
+/// Folds one event. The settings are asked for once at the first of: the first `system/init`,
+/// the answer to our `initialize` when it lists the models, and, in the sandbox, that answer
+/// refused or with no models (the settings alone say whether the sandbox is on). That answer
+/// asks nothing once they were asked. Any other answer that calls for them asks again, read on
+/// the records before the event is folded. Returns whether they were asked.
 fn fold_event(
     shared: &Shared,
     commands: &SessionCommands,
     config: &SessionConfig,
     event: AgentEvent,
-    init_id: Option<&str>,
+    init: OwnInit<'_>,
     asked: bool,
 ) -> bool {
-    let first = !asked && (answers(&event, init_id) || is_system_init(&event));
+    let own_answer = answers(&event, init.id);
+    let first = !asked && ((own_answer && init.sandboxed) || is_system_init(&event));
     let asks = shared.store.transition_with(|view| {
-        let asks = first || asks_for_settings(&view.transcript.operations, &event);
-        (view.fold(&PresenterInput::Event(event)), asks)
+        let calls_for = !(own_answer && asked)
+            && asks_for_settings(&view.transcript.operations, &event);
+        (view.fold(&PresenterInput::Event(event)), first || calls_for)
     });
     if asks {
         ask_settings(commands, config);
