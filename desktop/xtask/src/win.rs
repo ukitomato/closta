@@ -30,7 +30,7 @@ const TRANSCRIPTS: [&str; 3] = [
     "39-sandbox-resume.transcript.jsonl",
 ];
 /// The recorded captures, from `desktop/`.
-const CAPTURES: &str =
+pub(crate) const CAPTURES: &str =
     "../jetbrains/src/main/kotlin/dev/ukitomato/closta/providers/claude/fixtures";
 /// How many jobs a Windows build runs: it shares this machine's memory with WSL.
 const JOBS: &str = "4";
