@@ -38,6 +38,8 @@ import dev.ukitomato.closta.presenter.view.AskActions
 import dev.ukitomato.closta.presenter.view.AskCancel
 import dev.ukitomato.closta.presenter.view.AskRow
 import dev.ukitomato.closta.presenter.view.AttachmentRecord
+import dev.ukitomato.closta.presenter.view.BackgroundOffer
+import dev.ukitomato.closta.presenter.view.BackgroundPhase
 import dev.ukitomato.closta.presenter.view.CancelPhase
 import dev.ukitomato.closta.presenter.view.CardRow
 import dev.ukitomato.closta.presenter.view.DividerRow
@@ -102,6 +104,9 @@ interface RowActions {
 
     /** Withdraws the message the ask [askKey] sent, which the CLI has queued and not started. */
     fun cancelQueued(askKey: String)
+
+    /** Moves the running call [toolUseId] to the background. */
+    fun moveToBackground(toolUseId: String)
 
     /** What the ask [askKey] offers now, or with [atEnd] what the end of its turn offers. */
     fun askActions(
@@ -500,8 +505,35 @@ class ThreadRowViews(
         val key = row.key
         val isOpen = key in open
         val body = if (isOpen) row.detail?.let(::toolBody) else null
-        return indented(column(toggle(key, isOpen, toolLine(row.line), named), body), row.depth)
+        val header = column(toggle(key, isOpen, toolLine(row.line), named), body)
+        val offer = row.background?.let { backgroundLine(row.toolUseId, it) }
+        return indented(if (offer == null) header else column(header, offer), row.depth)
     }
+
+    // Under a running call: the link to move it to the background, then how the request stands.
+    private fun backgroundLine(
+        toolUseId: String,
+        offer: BackgroundOffer,
+    ): JComponent =
+        JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(GAP), 0)).apply {
+            isOpaque = false
+            border = JBUI.Borders.emptyLeft(ThreadStyle.INDENT)
+            if (offer.phase != BackgroundPhase.WAITING) {
+                add(ActionLink(ClostaBundle.message("thread.tool.background")) { actions.moveToBackground(toolUseId) })
+            }
+            val words =
+                when (offer.phase) {
+                    BackgroundPhase.OFFER -> null
+                    BackgroundPhase.WAITING -> ClostaBundle.message("thread.tool.backgrounding")
+                    BackgroundPhase.FAILED ->
+                        if (offer.detail == REQUEST_NOT_SENT) {
+                            ClostaBundle.message("thread.tool.backgroundNotSent")
+                        } else {
+                            ClostaBundle.message("thread.tool.backgroundFailed", visible(offer.detail.orEmpty()).text)
+                        }
+                }
+            words?.let { add(JBLabel(it).noHtml().apply { foreground = ThreadStyle.muted }) }
+        }
 
     /**
      * A sub-agent as a one-line card: its state, what it was asked to do and how many tools it has called. Pressing it
@@ -545,6 +577,7 @@ class ThreadRowViews(
         return CardPanel(ThreadStyle.cardBorder).apply {
             layout = BorderLayout()
             add(opener, BorderLayout.CENTER)
+            row.background?.let { add(backgroundLine(row.toolUseId, it), BorderLayout.SOUTH) }
         }
     }
 

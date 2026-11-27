@@ -59,6 +59,8 @@ data class ToolRow(
     val detail: ToolDetail? = null,
     /** What a sub-agent's call shows on its card; null for any other tool. */
     val agent: AgentSummary? = null,
+    /** What the line offers or says of moving the call to the background; null when it offers nothing. */
+    val background: BackgroundOffer? = null,
 ) : ThreadRow
 
 /** Read-only tool calls that came one after another, shown as one line ("Explored 3 files"). */
@@ -179,6 +181,8 @@ private class RowKey(
 class ThreadRows internal constructor(
     private val messageExtra: (MessageRecord) -> Any? = { null },
     private val partExtra: (PartRecord) -> Any? = { null },
+    /** Whether a running call is offered the move to the background (a subagent's own calls are not). */
+    private val offersBackground: Boolean = true,
 ) {
     private var messages = HashMap<RowKey, List<ThreadRow>>()
     private var parts = HashMap<RowKey, ThreadRow?>()
@@ -188,6 +192,14 @@ class ThreadRows internal constructor(
     private var ends = HashMap<String, TurnEndRow>()
     private val tasks = TaskTodos()
     private var cancels: Map<String, AskCancel> = emptyMap()
+    private var offers = BackgroundOffers(Transcript(), live = false)
+
+    /** A part's key: its record, and the state besides it that its row shows. */
+    private val partKey: (PartRecord) -> RowKey = { part ->
+        val offer = offers.of(part)
+        val extra = partExtra(part)
+        RowKey(part, if (offer == null) extra else extra to offer)
+    }
 
     /**
      * The rows of [transcript]. [conversation] says which requests for input core still holds as pending: a card that
@@ -200,6 +212,7 @@ class ThreadRows internal constructor(
         live: Boolean = true,
     ): List<ThreadRow> {
         cancels = askCancels(transcript, conversation, live)
+        offers = backgroundOffersOf(transcript, conversation, live, offersBackground)
         // The state besides the record that a message's row shows: the withdrawal of a user message.
         val extraOf = { message: MessageRecord ->
             if (message.role == Role.USER) messageExtra(message) to cancels[message.key] else messageExtra(message)
@@ -222,7 +235,7 @@ class ThreadRows internal constructor(
             val kept =
                 messages[messageKey]?.takeIf {
                     message.role == Role.USER ||
-                        message.parts.values().all { parts.containsKey(RowKey(it, partExtra(it))) }
+                        message.parts.values().all { parts.containsKey(partKey(it)) }
                 }
             if (kept != null) carryParts(message, nextParts)
             val made = kept ?: rowsOf(message, nextParts)
@@ -292,7 +305,7 @@ class ThreadRows internal constructor(
         into: HashMap<RowKey, ThreadRow?>,
     ) {
         message.parts.values().forEach { part ->
-            val key = RowKey(part, partExtra(part))
+            val key = partKey(part)
             if (parts.containsKey(key)) into[key] = parts[key]
         }
     }
@@ -307,14 +320,14 @@ class ThreadRows internal constructor(
             return listOf(AskRow(message.key, words, all.filterIsInstance<AttachmentRecord>(), cancels[message.key]))
         }
         val rows = ArrayList<ThreadRow>()
-        for (partKey in message.parts.order) {
-            val part = message.parts[partKey] ?: continue
-            val key = RowKey(part, partExtra(part))
+        for (partId in message.parts.order) {
+            val part = message.parts[partId] ?: continue
+            val key = partKey(part)
             val made =
                 if (parts.containsKey(key)) {
                     parts[key]
                 } else {
-                    rowOf("${message.key}/$partKey", part, rows.isEmpty())
+                    rowOf("${message.key}/$partId", part, rows.isEmpty())
                 }
             into[key] = made
             if (made != null) rows += made
@@ -357,6 +370,7 @@ class ThreadRows internal constructor(
                     opens,
                     toolDetail(part),
                     agentSummary(part),
+                    offers.of(part),
                 )
             else -> null
         }

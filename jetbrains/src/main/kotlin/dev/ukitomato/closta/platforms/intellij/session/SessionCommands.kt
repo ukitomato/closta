@@ -6,6 +6,7 @@ import dev.ukitomato.closta.core.models.ApprovalDecision
 import dev.ukitomato.closta.core.models.Attachment
 import dev.ukitomato.closta.core.models.ConversationState
 import dev.ukitomato.closta.core.models.ElicitationDecision
+import dev.ukitomato.closta.core.services.BackgroundTasks
 import dev.ukitomato.closta.core.services.CancelQueuedMessage
 import dev.ukitomato.closta.core.services.Interrupt
 import dev.ukitomato.closta.core.services.ReconnectMcpServer
@@ -78,6 +79,7 @@ class SessionCommands internal constructor(
     private val renameUseCase = RenameSession(session)
     private val reloadPluginsUseCase = ReloadPlugins(session)
     private val cancelQueuedUseCase = CancelQueuedMessage(session)
+    private val backgroundUseCase = BackgroundTasks(session)
     private val settingsUseCase = RequestSettings(session)
     private val effortUseCase = SwitchEffort(session)
     private val mcpStatusUseCase = RequestMcpStatus(session)
@@ -243,6 +245,13 @@ class SessionCommands internal constructor(
      */
     suspend fun cancelQueuedMessage(messageUuid: String) =
         requested(ControlKind.CANCEL_QUEUED, messageUuid) { cancelQueuedUseCase(messageUuid, it) }
+
+    /**
+     * Asks the CLI to move the running call [toolUseId] to the background, or with null every running one, as
+     * [switchModel] does: the line of the call says how the CLI answered.
+     */
+    suspend fun backgroundTasks(toolUseId: String?) =
+        requested(ControlKind.BACKGROUND, toolUseId) { backgroundUseCase(toolUseId, it) }
 
     /**
      * Asks the CLI for the settings in effect, as [switchModel] does; the answer is the view's effort and model.

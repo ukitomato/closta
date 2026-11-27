@@ -108,6 +108,9 @@ interface ChatSource : Disposable {
     /** Withdraws the queued message the ask [askKey] sent, before the CLI starts it; the row says how it ended. */
     suspend fun cancelQueued(askKey: String)
 
+    /** Moves the running call [toolUseId] to the background, or with null every one; its line says how it went. */
+    suspend fun moveToBackground(toolUseId: String?)
+
     suspend fun setMcpServerEnabled(
         name: String,
         enabled: Boolean,
@@ -305,6 +308,10 @@ interface ChatSource : Disposable {
         override suspend fun cancelQueued(askKey: String) {
             val uuid = view.value.transcript.userUuids[askKey] ?: return
             commands()?.cancelQueuedMessage(uuid)
+        }
+
+        override suspend fun moveToBackground(toolUseId: String?) {
+            commands()?.backgroundTasks(toolUseId)
         }
 
         override suspend fun dismissRateLimit(seq: Int) {

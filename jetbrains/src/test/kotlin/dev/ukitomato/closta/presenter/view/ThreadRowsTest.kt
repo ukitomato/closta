@@ -241,6 +241,32 @@ class ThreadRowsTest {
         assertEquals(AskCancel(CancelPhase.WAITING), waiting[1].cancel)
     }
 
+    private fun turn() =
+        HostState()
+            .next(PresenterInput.UserSent("u1", "go", uuid = "c1"))
+            .next(PresenterInput.Event(Lines.queued("c1")))
+            .next(PresenterInput.Event(Lines.started("c1")))
+
+    @Test
+    fun aToolRowIsTheSameObjectWhileItsBackgroundOfferIsTheSameAndRemadeWhenItChanges() {
+        val call =
+            StreamScript().apply {
+                assistant("m0", listOf(StreamScript.toolUse("t0", "Bash", input("command" to "sleep 9"))))
+            }
+        val running =
+            call.lines.fold(turn()) { state, line -> state.next(PresenterInput.Event(StreamJsonCodec.decode(line))) }
+        val rows = ThreadRows()
+        val first = rows.of(running.transcript, running.conversation).filterIsInstance<ToolRow>().single()
+        assertEquals(BackgroundOffer(BackgroundPhase.OFFER), first.background)
+        // An unrelated change of the transcript leaves the row alone.
+        val other = running.next(PresenterInput.ControlRequested("r0", ControlKind.RELOAD_PLUGINS))
+        assertSame(first, rows.of(other.transcript, other.conversation).filterIsInstance<ToolRow>().single())
+        val asked = running.next(PresenterInput.ControlRequested("r1", ControlKind.BACKGROUND, "t0"))
+        val waiting = rows.of(asked.transcript, asked.conversation).filterIsInstance<ToolRow>().single()
+        assertEquals(BackgroundOffer(BackgroundPhase.WAITING), waiting.background)
+        assertSame(waiting, rows.of(asked.transcript, asked.conversation).filterIsInstance<ToolRow>().single())
+    }
+
     private companion object {
         const val NOT_LOGGED_IN = "Not logged in · Please run /login"
     }

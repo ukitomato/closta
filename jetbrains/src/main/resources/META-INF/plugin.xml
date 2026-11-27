@@ -158,5 +158,7 @@
                 class="dev.ukitomato.closta.platforms.intellij.thread.JumpToWaitingCardAction">
             <keyboard-shortcut keymap="$default" first-keystroke="alt shift W"/>
         </action>
+        <action id="Closta.BackgroundAll"
+                class="dev.ukitomato.closta.platforms.intellij.thread.BackgroundAllAction"/>
     </actions>
 </idea-plugin>

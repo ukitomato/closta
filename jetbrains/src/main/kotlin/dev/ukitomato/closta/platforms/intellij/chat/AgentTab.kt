@@ -21,7 +21,7 @@ class AgentTab(
     parent: Disposable,
 ) {
     private val surface: ThreadSurface = SwingThreadSurface(project)
-    private val rows = ThreadRows()
+    private val rows = ThreadRows(offersBackground = false)
 
     val component: JComponent get() = surface.component
 

@@ -79,6 +79,9 @@ interface ThreadSurface : Disposable {
     /** The user chose to withdraw the message the ask [askKey] sent. */
     var onCancelQueued: (askKey: String) -> Unit
 
+    /** The user chose to move the running call [toolUseId] to the background. */
+    var onMoveToBackground: (toolUseId: String) -> Unit
+
     /** The CLI said it is not signed in, and the user chose to sign in. */
     var onSignIn: () -> Unit
 
@@ -146,6 +149,7 @@ class SwingThreadSurface(
     override var onOpenAgent: (String) -> Unit = {}
     override var onReview: (String) -> Unit = {}
     override var onCancelQueued: (String) -> Unit = {}
+    override var onMoveToBackground: (String) -> Unit = {}
     override var onSignIn: () -> Unit = {}
     override var askActions: (String, Boolean) -> AskActions = { _, _ -> AskActions(null, null, null, null) }
     override var onAskAction: (String, Boolean, AskAction) -> Unit = { _, _, _ -> }
@@ -164,6 +168,8 @@ class SwingThreadSurface(
             override fun review(askKey: String) = onReview(askKey)
 
             override fun cancelQueued(askKey: String) = onCancelQueued(askKey)
+
+            override fun moveToBackground(toolUseId: String) = onMoveToBackground(toolUseId)
 
             override fun signIn() = onSignIn()
 

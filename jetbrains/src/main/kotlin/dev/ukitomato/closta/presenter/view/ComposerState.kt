@@ -51,6 +51,8 @@ data class ComposerState(
     val rulesFailure: String?,
     /** The prompt cache of the last `result`; the screen reads it through [cacheClock]. */
     val cache: CacheRecord?,
+    /** A call in the thread runs in front and can be moved to the background (the stop button's menu offers it). */
+    val canBackground: Boolean,
 )
 
 /** The sandbox button: whether the sandbox is on, and why it cannot be pressed now, if it cannot. */
@@ -125,6 +127,7 @@ fun composerState(
         rulesWaiting = operations.rulesWaiting.isNotEmpty(),
         rulesFailure = operations.rulesFailure,
         cache = operations.cache,
+        canBackground = running && hasBackgroundOffer(transcript),
     )
 }
 

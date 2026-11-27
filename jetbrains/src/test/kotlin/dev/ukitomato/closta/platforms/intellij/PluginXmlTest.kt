@@ -149,4 +149,11 @@ class PluginXmlTest {
                 ).flatMap { listOf(it.getAttribute("group-id"), it.getAttribute("relative-to-action")) }
         assertEquals(emptyList<String>(), named.filter { it.isNotEmpty() && it !in declared })
     }
+
+    // Ctrl+B is the IDE's Go to Declaration, which people use in the composer too.
+    @Test
+    fun sendingAllToTheBackgroundIsAnActionWithNoDefaultShortcut() {
+        val action = elements("action").single { it.getAttribute("id") == "Closta.BackgroundAll" }
+        assertEquals(0, action.getElementsByTagName("keyboard-shortcut").length)
+    }
 }

@@ -4,9 +4,11 @@ import com.intellij.codeInsight.AutoPopupController
 import com.intellij.codeInsight.lookup.LookupManager
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CustomShortcutSet
+import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.editor.EditorModificationUtil
@@ -115,6 +117,9 @@ class ComposerPanel(
 ) {
     var onSend: (String, List<Attachment>, Outgoing) -> Unit = { _, _, _ -> }
     var onStop: () -> Unit = {}
+
+    /** The stop button's menu chose to move every running call to the background. */
+    var onBackgroundAll: () -> Unit = {}
     var onModel: (String) -> Unit = {}
     var onEffort: (String) -> Unit = {}
     var onMode: (String) -> Unit = {}
@@ -183,6 +188,30 @@ class ComposerPanel(
             openContext(button)
         }
 
+    /** The stop button's context menu: send every running call to the background, grey while none runs in front. */
+    private fun stopMenu(
+        at: JComponent,
+        x: Int,
+        y: Int,
+    ) {
+        val movable = state?.canBackground == true
+        val action =
+            object : DumbAwareAction(ClostaBundle.message("composer.stop.backgroundAll")) {
+                override fun getActionUpdateThread() = ActionUpdateThread.EDT
+
+                override fun update(e: AnActionEvent) {
+                    e.presentation.isEnabled = movable
+                }
+
+                override fun actionPerformed(e: AnActionEvent) = onBackgroundAll()
+            }
+        ActionManager
+            .getInstance()
+            .createActionPopupMenu("ClostaComposerStop", DefaultActionGroup(action))
+            .component
+            .show(at, x, y)
+    }
+
     /** The composer popup that is open, one at a time (opened through [openPopup]); nothing else of it is kept. */
     private var openPopup: JBPopup? = null
 
@@ -194,6 +223,7 @@ class ComposerPanel(
     private val stop =
         ToolbarButton(null, AllIcons.Actions.Suspend, false) { onStop() }
             .tip(ClostaBundle.message("composer.stop.tooltip"))
+            .also { it.onContextMenu(::stopMenu) }
     private val status = StatusLine()
     private val confirm = JPanel(BorderLayout()).apply { isVisible = false }
     private val box = ComposerBox()

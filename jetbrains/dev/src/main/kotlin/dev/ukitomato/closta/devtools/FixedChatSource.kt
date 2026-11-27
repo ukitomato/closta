@@ -72,6 +72,8 @@ class FixedChatSource(
 
     override suspend fun cancelQueued(askKey: String) = Unit
 
+    override suspend fun moveToBackground(toolUseId: String?) = Unit
+
     override suspend fun setMcpServerEnabled(
         name: String,
         enabled: Boolean,

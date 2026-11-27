@@ -50,6 +50,7 @@ import dev.ukitomato.closta.platforms.intellij.ui.plainTip
 import dev.ukitomato.closta.presenter.view.ThreadRows
 import dev.ukitomato.closta.presenter.view.askActions
 import dev.ukitomato.closta.presenter.view.composerState
+import dev.ukitomato.closta.presenter.view.hasBackgroundOffer
 import dev.ukitomato.closta.presenter.view.runningTasks
 import dev.ukitomato.closta.presenter.view.sessionName
 import dev.ukitomato.closta.presenter.view.threadIsRunning
@@ -292,6 +293,19 @@ class ChatPanel(
     /** The thread's own component (the benchmark scrolls it). */
     fun surfaceComponent(): JComponent = surface.component
 
+    /** Whether a call of this conversation runs in front and can be moved to the background. */
+    fun canMoveToBackground(): Boolean {
+        val view = source.view.value
+        return source.canSend.value &&
+            threadIsRunning(view.conversation, view.transcript) &&
+            hasBackgroundOffer(view.transcript)
+    }
+
+    /** Asks the CLI to move every call that runs in front to the background. */
+    fun moveAllToBackground() {
+        scope.launch(failures) { source.moveToBackground(null) }
+    }
+
     /** Whether some card waits for an answer. */
     fun hasWaitingCard(): Boolean = surface.hasWaitingCard
 
@@ -478,11 +492,18 @@ class ChatPanel(
         }
     }
 
+    /** A running call's line and the stop button's menu ask the CLI to move work to the background. */
+    private fun wireBackground() {
+        surface.onMoveToBackground = { toolUseId -> scope.launch(failures) { source.moveToBackground(toolUseId) } }
+        composer.onBackgroundAll = { moveAllToBackground() }
+    }
+
     /** The composer's popups ask the CLI for what they show. */
     private fun wireRequests() {
         composer.onUsage = { scope.launch(failures) { source.requestUsage() } }
         composer.onRules = { scope.launch(failures) { source.requestPermissionRules() } }
         composer.onContext = { scope.launch(failures) { source.requestContextBreakdown() } }
+        wireBackground()
     }
 
     private fun draw() {

@@ -96,4 +96,19 @@ class RunningTasksTest {
         assertTrue(rows.none { it is AskRow && it.key == agent.key })
         assertTrue(agentRows(transcript, ConversationState(), "no-such-call").isEmpty())
     }
+
+    @Test
+    fun `type only - task_updated with is_backgrounded true is remembered, and the oldest of 65 is dropped`() {
+        fun updated(
+            id: String,
+            patch: String,
+        ) = """{"type":"system","subtype":"task_updated","task_id":"$id","patch":$patch,"uuid":"u","session_id":"s"}"""
+        val moved =
+            fold(*(1..MAX_BACKGROUNDED + 1).map { updated("k$it", """{"is_backgrounded":true}""") }.toTypedArray())
+        assertEquals((2..MAX_BACKGROUNDED + 1).map { "k$it" }, moved.background.backgrounded.toList())
+        val ignored = fold(updated("a", """{"is_backgrounded":false}"""), updated("b", """{"status":"killed"}"""))
+        assertTrue(ignored.background.backgrounded.isEmpty())
+        val twice = fold(updated("a", """{"is_backgrounded":true}"""), updated("a", """{"is_backgrounded":true}"""))
+        assertEquals(setOf("a"), twice.background.backgrounded)
+    }
 }

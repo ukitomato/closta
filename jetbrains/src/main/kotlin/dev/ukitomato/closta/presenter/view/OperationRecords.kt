@@ -52,6 +52,9 @@ enum class ControlKind {
 
     /** `reload_plugins`: it waits in a column of its own. */
     RELOAD_PLUGINS,
+
+    /** `background_tasks`: the value is the tool use id of the call to move, null for every running one. */
+    BACKGROUND,
 }
 
 /**
@@ -241,6 +244,10 @@ data class OperationRecords(
     val cancelAsks: Map<String, String> = emptyMap(),
     /** What each withdrawn or withdrawing message says of it, by the message's uuid (the newest [MAX_CANCELS]). */
     val cancels: Map<String, AskCancel> = emptyMap(),
+    /** The tool use id each `background_tasks` request not answered yet asked for, by request id, oldest first. */
+    val backgroundAsks: Map<String, String> = emptyMap(),
+    /** What the line of a call says of the request to move it to the background, by its tool use id. */
+    val backgrounding: Map<String, BackgroundOffer> = emptyMap(),
     /** The ids of the `reload_plugins` requests not answered yet. */
     val reloadWaiting: List<String> = emptyList(),
     /** The plugins the CLI last listed (`system/init`, or the answer to a reload); null before the first. */
@@ -313,6 +320,7 @@ internal fun OperationRecords.control(input: PresenterInput.ControlRequested): O
         ControlKind.PERMISSION_RULES -> copy(rulesWaiting = (rulesWaiting + input.requestId).takeLast(MAX_WAITING))
         ControlKind.CANCEL_QUEUED -> cancelAsked(input)
         ControlKind.RELOAD_PLUGINS -> copy(reloadWaiting = (reloadWaiting + input.requestId).takeLast(MAX_WAITING))
+        ControlKind.BACKGROUND -> backgroundAsked(input)
     }
 }
 
@@ -366,6 +374,8 @@ internal fun OperationRecords.launched(input: PresenterInput.Launched): Operatio
         rulesWaiting = emptyList(),
         rulesFailure = null,
         cancelAsks = emptyMap(),
+        backgroundAsks = emptyMap(),
+        backgrounding = emptyMap(),
         reloadWaiting = emptyList(),
         reloadFailure = null,
         // The new CLI says it in its own init.
@@ -439,6 +449,7 @@ internal fun OperationRecords.sendFailed(requestId: String): OperationRecords =
         requestId in rulesWaiting -> copy(rulesWaiting = rulesWaiting - requestId)
         requestId in reloadWaiting -> copy(reloadWaiting = reloadWaiting - requestId)
         requestId in cancelAsks -> cancelSendFailed(requestId)
+        requestId in backgroundAsks -> backgroundSendFailed(requestId)
         // A sandbox check that could not be asked waits for the next settings request.
         requestId in settingsWaiting ->
             copy(
@@ -460,7 +471,8 @@ private fun OperationRecords.knows(requestId: String): Boolean =
         requestId in renameAsks ||
         requestId in rulesWaiting ||
         requestId in reloadWaiting ||
-        requestId in cancelAsks
+        requestId in cancelAsks ||
+        requestId in backgroundAsks
 
 /**
  * The CLI's answer to [event]'s request. An id nobody asked with, or an answer to a settled one, changes nothing.
@@ -488,6 +500,7 @@ internal fun OperationRecords.answered(event: AgentEvent.ControlResponse): Opera
         id in rulesWaiting -> rulesAnswered(id, event)
         id in reloadWaiting -> reloadAnswered(id, event)
         id in cancelAsks -> cancelAnswered(id, event)
+        id in backgroundAsks -> backgroundAnswered(id, event)
         succeeded -> switchApplied(id)
         else ->
             ended(id) {

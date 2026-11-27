@@ -103,6 +103,7 @@ private fun foldEvent(
         is AgentEvent.SystemBackgroundTasksChanged,
         is AgentEvent.SystemTaskProgress,
         is AgentEvent.SystemTaskStarted,
+        is AgentEvent.SystemTaskUpdated,
         -> foldBackground(transcript, event)
         // The rest carry no content: what they mean for the domain is core's to fold.
         else -> transcript

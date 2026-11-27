@@ -49,13 +49,12 @@ class TranscriptFoldTest {
         for (event in broken) assertUnchanged(before, before.with(event), "$event")
     }
 
-    // task_started, task_progress and background_tasks_changed feed the running list (RunningTasksTest), so they are
-    // not here.
+    // task_started, task_progress, task_updated and background_tasks_changed feed the running list (RunningTasksTest),
+    // so they are not here.
     private val contentless =
         setOf(
             AgentEvent.SystemStatus::class,
             AgentEvent.SystemTaskNotification::class,
-            AgentEvent.SystemTaskUpdated::class,
             AgentEvent.SystemThinkingTokens::class,
         )
 
