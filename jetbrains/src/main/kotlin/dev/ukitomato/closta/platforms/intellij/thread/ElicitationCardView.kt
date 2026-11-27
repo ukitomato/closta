@@ -4,8 +4,8 @@ import com.intellij.icons.AllIcons
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.util.SystemInfo
+import com.intellij.ui.ColoredListCellRenderer
 import com.intellij.ui.DocumentAdapter
-import com.intellij.ui.SimpleListCellRenderer
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBRadioButton
@@ -46,6 +46,7 @@ import java.awt.datatransfer.StringSelection
 import javax.swing.ButtonGroup
 import javax.swing.JButton
 import javax.swing.JComponent
+import javax.swing.JList
 import javax.swing.SwingUtilities
 import javax.swing.event.DocumentEvent
 
@@ -473,9 +474,16 @@ private class ComboInput(
         ComboBox(arrayOf(NOTHING) + field.options.toTypedArray()).apply {
             name = "elicitation.${field.key}"
             renderer =
-                SimpleListCellRenderer.create { label, option, _ ->
-                    label.putClientProperty("html.disable", true)
-                    label.text = option?.label.orEmpty()
+                object : ColoredListCellRenderer<ChoiceOption>() {
+                    override fun customizeCellRenderer(
+                        list: JList<out ChoiceOption>,
+                        value: ChoiceOption?,
+                        index: Int,
+                        selected: Boolean,
+                        hasFocus: Boolean,
+                    ) {
+                        append(value?.label.orEmpty())
+                    }
                 }
             selectedItem = field.options.firstOrNull { it.value in field.default } ?: NOTHING
             addActionListener { edited() }
