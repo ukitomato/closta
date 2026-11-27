@@ -41,6 +41,11 @@ class FakeAgentSessionContractTest : AgentSessionContract() {
             }
         }
 
+    override fun elicitationsGiven(session: AgentSession): List<Triple<String, String, String?>> =
+        (session as FakeAgentSession).sent.filterIsInstance<Sent.Elicitation>().map {
+            Triple(it.decision.requestId, it.decision.action.wire, it.content)
+        }
+
     override fun uuidsGiven(session: AgentSession): List<String?> =
         (session as FakeAgentSession).sent.filterIsInstance<Sent.UserMessage>().map { it.uuid }
 

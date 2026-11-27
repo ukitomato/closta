@@ -27,5 +27,6 @@
     }
   ],
   "spontaneousResumeCount": 1,
-  "pendingApprovals": []
+  "pendingApprovals": [],
+  "settledElicitations": []
 }

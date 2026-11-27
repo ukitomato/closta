@@ -30,8 +30,8 @@ fun fold(
         is AgentEvent.ControlRequest -> foldControlRequest(state, event)
         is AgentEvent.ControlResponse -> foldControlResponse(state, event)
         // The CLI stopped waiting on a request: it leaves the queue, and one nobody holds changes nothing.
-        is AgentEvent.ControlCancel ->
-            state.copy(pendingApprovals = state.pendingApprovals.filterNot { it.requestId == event.requestId })
+        is AgentEvent.ControlCancel -> state.withoutPending { it.requestId == event.requestId }
+        is AgentEvent.Elicitation -> foldElicitation(state, event)
         is AgentEvent.SystemStatus -> foldStatus(state, event)
         // The CLI goes on under a new session id that only the next init names: until then there is no session, so
         // nothing reads the old id as the current one. The cost is left for the next result, which counts from zero.
@@ -57,6 +57,8 @@ fun fold(
         is AgentEvent.SystemInformational,
         // The presenter says it on the composer's line until the reply goes on.
         is AgentEvent.SystemApiRetry,
+        // The end of a url elicitation: the card closes on the user's answer or on the result, not on this line.
+        is AgentEvent.SystemElicitationComplete,
         // The version-drift and transport alarms: never let them break the state.
         is AgentEvent.UnknownKind,
         is AgentEvent.BrokenLine,
@@ -209,11 +211,7 @@ private fun foldResult(
         }
 
     val discardsPending = closes || event.isError
-    return if (discardsPending && base.pendingApprovals.isNotEmpty()) {
-        base.copy(pendingApprovals = emptyList())
-    } else {
-        base
-    }
+    return if (discardsPending) base.withoutPending { true } else base
 }
 
 /**

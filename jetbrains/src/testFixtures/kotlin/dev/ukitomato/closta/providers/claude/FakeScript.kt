@@ -3,6 +3,7 @@ package dev.ukitomato.closta.providers.claude
 import dev.ukitomato.closta.core.models.AgentEvent
 import dev.ukitomato.closta.core.models.ApprovalDecision
 import dev.ukitomato.closta.core.models.Attachment
+import dev.ukitomato.closta.core.models.ElicitationDecision
 
 /**
  * A recorded scenario for [FakeAgentSession]: the events to stream and how the stream ends. No CLI, no
@@ -73,6 +74,11 @@ sealed interface Sent {
         val decision: ApprovalDecision,
         val payload: String?,
         val updatedPermissions: String? = null,
+    ) : Sent
+
+    data class Elicitation(
+        val decision: ElicitationDecision,
+        val content: String?,
     ) : Sent
 
     data class SetModel(

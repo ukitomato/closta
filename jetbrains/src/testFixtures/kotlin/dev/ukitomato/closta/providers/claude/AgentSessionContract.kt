@@ -7,6 +7,8 @@ import dev.ukitomato.closta.core.models.ApprovalKind
 import dev.ukitomato.closta.core.models.Attachment
 import dev.ukitomato.closta.core.models.AttachmentKind
 import dev.ukitomato.closta.core.models.ConversationState
+import dev.ukitomato.closta.core.models.ElicitationAction
+import dev.ukitomato.closta.core.models.ElicitationDecision
 import dev.ukitomato.closta.core.models.PendingApproval
 import dev.ukitomato.closta.core.models.resolveApproval
 import kotlinx.coroutines.cancelAndJoin
@@ -137,6 +139,30 @@ abstract class AgentSessionContract {
                 ),
                 requestsGiven(session).filter { it.subtype.startsWith("mcp_") },
             ) { "each line carries the caller's id as its request_id, the name, and for a toggle the wanted value" }
+        }
+
+    /** The elicitation answers [session] was given, in order, as written: the request id, the action, the content. */
+    protected abstract fun elicitationsGiven(session: AgentSession): List<Triple<String, String, String?>>
+
+    @Test
+    @Timeout(TIMEOUT_SECONDS)
+    fun `an elicitation answer carries the request id, the action and the form values`() =
+        runBlocking {
+            val session = sessionFor(Scenario.UNANSWERED)
+            val received = mutableListOf<AgentEvent>()
+            val collector = launch { session.events.collect { received += it } }
+            awaitControlRequest(received)
+            session.respondToElicitation(ElicitationDecision("e1", ElicitationAction.ACCEPT), """{"name":"Ada"}""")
+            session.respondToElicitation(ElicitationDecision("e2", ElicitationAction.DECLINE), null)
+            repeat(MAX_YIELDS) { yield() }
+            collector.cancelAndJoin()
+            assertEquals(
+                listOf(
+                    Triple("e1", "accept", """{"name":"Ada"}"""),
+                    Triple("e2", "decline", null),
+                ),
+                elicitationsGiven(session),
+            )
         }
 
     /** The uuids of the user messages [session] was given, in order; null where none is to be seen. */

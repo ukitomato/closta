@@ -15,6 +15,8 @@ internal val TYPE_ONLY =
         AgentEventKind.SYSTEM_INFORMATIONAL,
         AgentEventKind.SYSTEM_API_RETRY,
         AgentEventKind.CONTROL_CANCEL_REQUEST,
+        AgentEventKind.ELICITATION_REQUEST,
+        AgentEventKind.SYSTEM_ELICITATION_COMPLETE,
     )
 
 /**

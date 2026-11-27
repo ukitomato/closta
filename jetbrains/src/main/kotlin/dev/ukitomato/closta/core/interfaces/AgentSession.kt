@@ -3,6 +3,7 @@ package dev.ukitomato.closta.core.interfaces
 import dev.ukitomato.closta.core.models.AgentEvent
 import dev.ukitomato.closta.core.models.ApprovalDecision
 import dev.ukitomato.closta.core.models.Attachment
+import dev.ukitomato.closta.core.models.ElicitationDecision
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -57,6 +58,15 @@ interface AgentSession {
         decision: ApprovalDecision,
         payload: String? = null,
         updatedPermissions: String? = null,
+    )
+
+    /**
+     * Answers an MCP server's request for input. [content] is the form's values as a JSON object string, passed through
+     * opaquely like the approval payload; null leaves the field out (a decline, a cancel, a url request).
+     */
+    suspend fun respondToElicitation(
+        decision: ElicitationDecision,
+        content: String?,
     )
 
     /**

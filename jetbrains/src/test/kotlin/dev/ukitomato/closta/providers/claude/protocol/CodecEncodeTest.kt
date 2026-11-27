@@ -95,6 +95,21 @@ class CodecEncodeTest {
     }
 
     @Test
+    fun `an elicitation answer carries the action, and the content only when there is one`() {
+        val accepted = json(StdinEncoder.elicitationResponse("r", "accept", """{"name":"Ada"}""")).asJsonObject
+        val declined = json(StdinEncoder.elicitationResponse("r", "decline", null)).asJsonObject
+        val acceptedBody = accepted.getAsJsonObject("response").getAsJsonObject("response")
+        val declinedBody = declined.getAsJsonObject("response").getAsJsonObject("response")
+
+        assertAll(
+            { assertEquals("""{"action":"accept","content":{"name":"Ada"}}""", acceptedBody.toString()) },
+            { assertEquals("""{"action":"decline"}""", declinedBody.toString()) },
+            { assertEquals("success", accepted.getAsJsonObject("response")["subtype"].asString) },
+            { assertEquals("r", accepted.getAsJsonObject("response")["request_id"].asString) },
+        )
+    }
+
+    @Test
     fun `interrupt has both a control_request form and a top-level cancel form`() {
         assertAll(
             {

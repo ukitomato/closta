@@ -17,10 +17,10 @@ value class RawJson(
 /**
  * The stdout line kinds observed in the recorded captures (CLI 2.1.325, 44 captures).
  *
- * Twenty-four: `command_lifecycle` arrives on every turn and `system/ui_invalidate` at the start of some
+ * Twenty-six: `command_lifecycle` arrives on every turn and `system/ui_invalidate` at the start of some
  * sessions, but neither has a declaration in the official SDK types, and the captures win over the
- * official types when they disagree. The official union declares 45 kinds; twenty-two of the
- * twenty-four are among them (including `system/commands_changed` and `system/compact_boundary`, which
+ * official types when they disagree. The official union declares 45 kinds; twenty-four of the
+ * twenty-six are among them (including `system/commands_changed` and `system/compact_boundary`, which
  * both the types and the captures carry), and the rest never arrive or are not modelled yet — an
  * unmodelled kind is counted as unknown, which is how a version bump announces itself.
  *
@@ -54,6 +54,8 @@ enum class AgentEventKind(
     SYSTEM_INFORMATIONAL("system/informational"),
     SYSTEM_API_RETRY("system/api_retry"),
     CONTROL_CANCEL_REQUEST("control_cancel_request"),
+    ELICITATION_REQUEST("control_request/elicitation"),
+    SYSTEM_ELICITATION_COMPLETE("system/elicitation_complete"),
     ;
 
     companion object {
@@ -69,7 +71,7 @@ enum class AgentEventKind(
  *
  * One line in, one value out: lines are never split or merged, because reconstructing a conversation
  * from them is the fold's job and anything decided here would be decided before the fold can
- * see it. Twenty-six variants — the [AgentEventKind] twenty-four, plus [UnknownKind] and [BrokenLine].
+ * see it. Twenty-eight variants — the [AgentEventKind] twenty-six, plus [UnknownKind] and [BrokenLine].
  *
  * The two catch-alls are variants rather than errors on purpose. A reader that throws stops reading,
  * and a stdout reader that stops deadlocks the CLI behind a full pipe; a reader that silently drops
@@ -500,7 +502,37 @@ sealed interface AgentEvent {
     }
 
     /**
-     * A well-formed JSON line whose `type` is not one of the twenty-four, or one that is missing a field
+     * The CLI asks the host for input an MCP server wants (sdk.d.ts `SDKControlElicitationRequest`, a `control_request`
+     * of subtype `elicitation`); no capture carries one. [request] is the whole `request` object, which the presenter
+     * reads: the schema, the message and the url are provider-shaped content. [mode] is kept as it arrives (`form`,
+     * `url`, absent, or one this version does not know). [elicitationId] is set for a url request, and it names the
+     * `system/elicitation_complete` that closes it.
+     */
+    data class Elicitation(
+        val requestId: String,
+        val serverName: String,
+        val mode: String?,
+        val elicitationId: String?,
+        val request: RawJson,
+    ) : Known {
+        override val kind: AgentEventKind get() = AgentEventKind.ELICITATION_REQUEST
+    }
+
+    /**
+     * `system/elicitation_complete`: the MCP server finished an elicitation the user answered outside Closta (a url
+     * one). The fold keeps nothing of it.
+     */
+    data class SystemElicitationComplete(
+        val uuid: String,
+        val sessionId: String,
+        val serverName: String,
+        val elicitationId: String,
+    ) : Known {
+        override val kind: AgentEventKind get() = AgentEventKind.SYSTEM_ELICITATION_COMPLETE
+    }
+
+    /**
+     * A well-formed JSON line whose `type` is not one of the twenty-six, or one that is missing a field
      * the declared shape needs. Kept whole so that whatever arrives can be read back later.
      *
      * This is the version-drift alarm: a CLI upgrade that adds a line kind shows up here rather than

@@ -71,6 +71,18 @@ class ClaudeSessionContractTest : AgentSessionContract() {
             RequestGiven(subtype, line["request_id"].asString, value)
         }
 
+    override fun elicitationsGiven(session: AgentSession): List<Triple<String, String, String?>> =
+        processes
+            .getValue(session)
+            .writtenStdin
+            .map { JsonParser.parseString(it).asJsonObject }
+            .filter { it["type"].asString == "control_response" }
+            .map { line ->
+                val response = line["response"].asJsonObject
+                val body = response["response"].asJsonObject
+                Triple(response["request_id"].asString, body["action"].asString, body["content"]?.toString())
+            }
+
     override fun uuidsGiven(session: AgentSession): List<String?> =
         processes
             .getValue(session)

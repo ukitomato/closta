@@ -5,6 +5,7 @@ import dev.ukitomato.closta.core.interfaces.Clock
 import dev.ukitomato.closta.core.models.AgentEvent
 import dev.ukitomato.closta.core.models.ApprovalDecision
 import dev.ukitomato.closta.core.models.Attachment
+import dev.ukitomato.closta.core.models.ElicitationDecision
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.asFlow
 import java.time.Instant
@@ -21,6 +22,7 @@ class RecordingAgentSession(
     val sentMessages = mutableListOf<String>()
     val sentAttachments = mutableListOf<List<Attachment>>()
     val approvalResponses = mutableListOf<Pair<ApprovalDecision, String?>>()
+    val elicitationResponses = mutableListOf<Pair<ElicitationDecision, String?>>()
     val acceptedPermissions = mutableListOf<String?>()
     val setModels = mutableListOf<String>()
     val setModelIds = mutableListOf<String>()
@@ -51,6 +53,13 @@ class RecordingAgentSession(
     ) {
         approvalResponses += decision to payload
         acceptedPermissions += updatedPermissions
+    }
+
+    override suspend fun respondToElicitation(
+        decision: ElicitationDecision,
+        content: String?,
+    ) {
+        elicitationResponses += decision to content
     }
 
     override suspend fun setModel(

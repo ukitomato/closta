@@ -339,6 +339,20 @@ object StdinEncoder {
         }
 
     /**
+     * Answering an `elicitation` request: [action] (`accept`, `decline` or `cancel`) and, when there are form values,
+     * [content] (the caller's JSON object, embedded as-is). A null [content] leaves the field out.
+     */
+    fun elicitationResponse(
+        requestId: String,
+        action: String,
+        content: String?,
+    ): String =
+        controlResponse(requestId) {
+            addProperty("action", action)
+            if (content != null) add("content", JsonParser.parseString(content))
+        }
+
+    /**
      * Answering a `mcp_message` request: the JSON-RPC answer ([jsonRpc], the caller's JSON, embedded as-is) goes in
      * `response.mcp_response` of a success `control_response` keyed to the request's `request_id` (the shape
      * `@anthropic-ai/claude-agent-sdk`'s `sdk.mjs` writes).

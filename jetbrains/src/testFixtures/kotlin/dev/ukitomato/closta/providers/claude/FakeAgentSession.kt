@@ -4,6 +4,7 @@ import dev.ukitomato.closta.core.interfaces.AgentSession
 import dev.ukitomato.closta.core.models.AgentEvent
 import dev.ukitomato.closta.core.models.ApprovalDecision
 import dev.ukitomato.closta.core.models.Attachment
+import dev.ukitomato.closta.core.models.ElicitationDecision
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -75,6 +76,14 @@ class FakeAgentSession(
         updatedPermissions: String?,
     ) {
         recorded += Sent.Approval(decision, payload, updatedPermissions)
+        responseGates[decision.requestId]?.complete(Unit)
+    }
+
+    override suspend fun respondToElicitation(
+        decision: ElicitationDecision,
+        content: String?,
+    ) {
+        recorded += Sent.Elicitation(decision, content)
         responseGates[decision.requestId]?.complete(Unit)
     }
 

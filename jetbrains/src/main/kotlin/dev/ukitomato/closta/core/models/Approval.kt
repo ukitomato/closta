@@ -46,6 +46,12 @@ enum class ApprovalKind {
 
     /** An `AskUserQuestion` awaiting an answer. */
     ASK,
+
+    /**
+     * An MCP server asking for input (a form or a url). It has no tool, so its `toolUseId` and `agentId` are null; its
+     * content stays in the event.
+     */
+    ELICITATION,
 }
 
 /**
