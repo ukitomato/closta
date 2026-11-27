@@ -2,86 +2,82 @@
 //! lists them, and writes what it found to the ready file without opening a window. The file
 //! holds counts only, never a title or a path.
 
-use std::collections::BTreeSet;
 use std::path::Path;
+#[cfg(any(not(feature = "replay"), test))]
+use std::path::PathBuf;
 use std::process::ExitCode;
-use std::sync::Arc;
 
+use closta_core::ports::SavedSessionsError;
 use closta_platform::write_whole;
-use closta_providers::claude::history::{ProjectTranscripts, StdRecordFs, Survey};
-use closta_providers::claude::launch::wsl::{WslLocation, WslProgram, WslSpawner};
-use closta_providers::claude::process::ProcessSpawner;
-use closta_session::history::place::{
-    ProbeSpawnerFor, RecordHomes, native_config_dir, record_source, wsl_record_home,
-};
-use closta_session::log::{SessionLog, TracingLog};
+use closta_providers::claude::history::Survey;
 
-/// Where the CLI keeps its records in each WSL distribution, asked of the distribution's `sh`.
-pub fn record_homes() -> Arc<RecordHomes> {
-    let spawner_for: ProbeSpawnerFor = Arc::new(
-        |location: &WslLocation, program: WslProgram| -> Arc<dyn ProcessSpawner> {
-            Arc::new(WslSpawner::new(location.clone(), program, BTreeSet::new()))
-        },
-    );
-    Arc::new(RecordHomes::new(Arc::new(move |location: &WslLocation| {
-        wsl_record_home(location, &spawner_for, &TracingLog)
-    })))
+use crate::saved::{record_homes, saved_sessions_for};
+
+/// What a release build says of any argument it does not take.
+#[cfg(any(not(feature = "replay"), test))]
+const RELEASE_TAKES: &str = "this build takes only --list-saved and --ready-file";
+
+/// The arguments a release build takes: none, which opens the window, or `--list-saved <folder>`
+/// and an optional `--ready-file <path>`, which list without one. Anything else is an error.
+#[cfg(any(not(feature = "replay"), test))]
+pub fn parse_release(
+    args: impl IntoIterator<Item = String>,
+) -> Result<Option<(String, Option<PathBuf>)>, String> {
+    let mut folder = None;
+    let mut ready_file = None;
+    let mut args = args.into_iter();
+    while let Some(arg) = args.next() {
+        let slot = match arg.as_str() {
+            "--list-saved" if folder.is_none() => &mut folder,
+            "--ready-file" if ready_file.is_none() => &mut ready_file,
+            _ => return Err(RELEASE_TAKES.to_owned()),
+        };
+        *slot = Some(args.next().ok_or_else(|| RELEASE_TAKES.to_owned())?);
+    }
+    match (folder, ready_file) {
+        (None, None) => Ok(None),
+        (Some(folder), ready_file) => Ok(Some((folder, ready_file.map(PathBuf::from)))),
+        (None, Some(_)) => Err(RELEASE_TAKES.to_owned()),
+    }
 }
 
-/// The saved sessions of the project in `folder`, read from this machine's config directory or,
-/// for a folder in a WSL distribution, from the place `homes` finds there.
-pub fn saved_sessions_for(folder: &str, homes: &Arc<RecordHomes>) -> ProjectTranscripts {
-    let homes = Arc::clone(homes);
-    let source = record_source(
-        Some(folder),
-        cfg!(windows),
-        native_config_dir(&|name| std::env::var(name).ok()),
-        Arc::new(move |location: &WslLocation| homes.home(location)),
-    );
-    ProjectTranscripts::new(
-        Arc::new(StdRecordFs),
-        source.config_dir,
-        source.working_directory,
-        source.resolve_links,
-        Arc::new(|line: &str| TracingLog.info(line)),
-    )
-}
-
-/// The check file's lines: whether the place was found, how many sessions were listed, and how
-/// many records could not be read.
-pub fn lines(survey: &Survey) -> Vec<String> {
-    let place = if survey.place_found {
-        "found"
-    } else {
-        "missing"
+/// The check file's lines: whether the place was found, was missing or could not be read, how
+/// many sessions were listed, and how many records could not be read.
+pub fn lines(survey: &Result<Survey, SavedSessionsError>) -> Vec<String> {
+    let (place, listed, unreadable) = match survey {
+        Ok(survey) if survey.place_found => ("found", survey.sessions.len(), survey.unreadable),
+        Ok(survey) => ("missing", survey.sessions.len(), survey.unreadable),
+        Err(_) => ("error", 0, 0),
     };
     vec![
         format!("place={place}"),
-        format!("listed={}", survey.sessions.len()),
-        format!("unreadable={}", survey.unreadable),
+        format!("listed={listed}"),
+        format!("unreadable={unreadable}"),
     ]
 }
 
 /// Lists the saved sessions of `folder` and writes the check file to `ready_file` when one is
-/// given. Ends with 0 when the place was found, else 1; a list that fails is a missing place, and
-/// only its kind is logged. A check file that cannot be written also ends with 1.
+/// given. Ends with 0 when the place was found, else 1; of a list that fails only the kind is
+/// logged. A check file that cannot be written also ends with 1.
 pub fn run(folder: &str, ready_file: Option<&Path>) -> ExitCode {
     let sessions = saved_sessions_for(folder, &record_homes());
-    let survey = sessions.survey(&|| false).unwrap_or_else(|error| {
+    let survey = sessions.survey(&|| false);
+    if let Err(error) = &survey {
         tracing::warn!("the saved sessions could not be listed ({error:?})");
-        Survey {
-            place_found: false,
-            sessions: Vec::new(),
-            unreadable: 0,
-        }
-    });
+    }
     if let Some(path) = ready_file
         && let Err(error) = write_whole(path, &lines(&survey))
     {
         tracing::warn!("the check file could not be written ({:?})", error.kind());
         return ExitCode::FAILURE;
     }
-    if survey.place_found {
+    if matches!(
+        survey,
+        Ok(Survey {
+            place_found: true,
+            ..
+        })
+    ) {
         ExitCode::SUCCESS
     } else {
         ExitCode::FAILURE
@@ -107,7 +103,7 @@ mod tests {
             unreadable: 2,
         };
 
-        let lines = lines(&survey);
+        let lines = lines(&Ok(survey));
 
         assert_eq!(lines, ["place=found", "listed=1", "unreadable=2"]);
         assert!(lines.iter().all(|line| !line.contains("secret")));
@@ -122,9 +118,42 @@ mod tests {
         };
 
         assert_eq!(
-            lines(&survey),
+            lines(&Ok(survey)),
             ["place=missing", "listed=0", "unreadable=0"]
         );
+    }
+
+    #[test]
+    fn a_place_that_could_not_be_read_is_an_error() {
+        let survey = Err(SavedSessionsError::Unreadable(
+            std::io::ErrorKind::PermissionDenied,
+        ));
+
+        assert_eq!(lines(&survey), ["place=error", "listed=0", "unreadable=0"]);
+    }
+
+    #[test]
+    fn release_takes_only_the_list_and_its_file() {
+        let parse = |args: &[&str]| parse_release(args.iter().map(|arg| (*arg).to_owned()));
+
+        assert_eq!(parse(&[]), Ok(None));
+        assert_eq!(
+            parse(&["--list-saved", r"C:\x", "--ready-file", "r"]),
+            Ok(Some((r"C:\x".to_owned(), Some(PathBuf::from("r")))))
+        );
+        assert_eq!(
+            parse(&["--list-saved", r"C:\x"]),
+            Ok(Some((r"C:\x".to_owned(), None)))
+        );
+        for wrong in [
+            &["--replay", "a"][..],
+            &["--list-saved"][..],
+            &["--list-saved", r"C:\x", "--ready-file"][..],
+            &["--ready-file", "r"][..],
+            &["--list-saved", "a", "--list-saved", "b"][..],
+        ] {
+            assert_eq!(parse(wrong), Err(RELEASE_TAKES.to_owned()));
+        }
     }
 
     #[test]
@@ -143,14 +172,5 @@ mod tests {
         );
         assert!(!dir.join("listed.tmp").exists());
         std::fs::remove_dir_all(&dir).unwrap();
-    }
-
-    #[test]
-    fn saved_sessions_for_shows_nothing_of_the_folder() {
-        let homes = Arc::new(RecordHomes::new(Arc::new(|_| None)));
-
-        let sessions = saved_sessions_for(r"\\wsl.localhost\Ubuntu\home\me\p", &homes);
-
-        assert_eq!(format!("{sessions:?}"), "ProjectTranscripts");
     }
 }

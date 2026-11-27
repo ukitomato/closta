@@ -2,7 +2,6 @@
 
 #[cfg(feature = "replay")]
 mod args;
-#[cfg(feature = "replay")]
 mod list_saved;
 mod logging;
 mod ports;
@@ -10,6 +9,7 @@ mod ports;
 mod probe;
 #[cfg(feature = "replay")]
 mod replay;
+mod saved;
 mod settings;
 
 use std::process::ExitCode;
@@ -53,9 +53,15 @@ fn main() -> ExitCode {
     #[cfg(not(feature = "replay"))]
     let options = {
         let _ = started;
-        if std::env::args().nth(1).is_some() {
-            eprintln!("closta: this build takes no arguments");
-            return ExitCode::from(USAGE);
+        match list_saved::parse_release(std::env::args().skip(1)) {
+            Ok(None) => {}
+            Ok(Some((folder, ready_file))) => {
+                return list_saved::run(&folder, ready_file.as_deref());
+            }
+            Err(error) => {
+                eprintln!("closta: {error}");
+                return ExitCode::from(USAGE);
+            }
         }
         let (projects, settings) = kept_settings(true);
         PlatformOptions {

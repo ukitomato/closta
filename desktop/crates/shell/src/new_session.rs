@@ -54,7 +54,7 @@ pub trait SavedFor: Send + Sync {
     fn list(&self, folder: &str, stop: Arc<AtomicBool>) -> future::Boxed<Option<SavedListing>>;
 }
 
-/// A [`SavedFor`] that finds nothing saved anywhere: the stand-in until the app has a real one.
+/// A [`SavedFor`] that finds nothing saved anywhere: a stand-in for runs that read no records.
 pub struct NoSaved;
 
 struct NothingSaved;
