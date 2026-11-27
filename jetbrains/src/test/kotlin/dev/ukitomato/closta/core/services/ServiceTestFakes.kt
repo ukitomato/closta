@@ -106,6 +106,12 @@ class RecordingAgentSession(
         usageRequests += requestId
     }
 
+    val permissionRuleRequests = mutableListOf<String>()
+
+    override suspend fun requestPermissionRules(requestId: String) {
+        permissionRuleRequests += requestId
+    }
+
     val settingsRequests = mutableListOf<String>()
     val effortRequests = mutableListOf<Pair<String?, String>>()
 

@@ -103,6 +103,12 @@ interface AgentSession {
     suspend fun requestUsage(requestId: String)
 
     /**
+     * Asks for the permission rules the session runs with and the directories it works in. Only issues the request;
+     * the answer carries [requestId], as for [requestContextUsage].
+     */
+    suspend fun requestPermissionRules(requestId: String)
+
+    /**
      * Names the running session [title], as the user chose it in the host: [sessionId] is the session the name is
      * for, and the CLI refuses the request when its process has moved to another one. The answer, a `ControlResponse`
      * carrying [requestId], says whether it took the name. Only issues the request, as [requestContextUsage].

@@ -227,6 +227,16 @@ class CodecEncodeTest {
     }
 
     @Test
+    fun `type only - list_permission_rules is a bare control request`() {
+        assertEquals(
+            json(
+                """{"type":"control_request","request_id":"r8","request":{"subtype":"list_permission_rules"}}""",
+            ),
+            json(StdinEncoder.listPermissionRules("r8")),
+        )
+    }
+
+    @Test
     fun `type only - rename_session carries the title, host as its source and the session id`() {
         assertEquals(
             json(

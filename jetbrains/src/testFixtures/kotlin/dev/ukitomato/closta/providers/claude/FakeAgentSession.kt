@@ -120,6 +120,10 @@ class FakeAgentSession(
         recorded += Sent.RequestUsage(requestId)
     }
 
+    override suspend fun requestPermissionRules(requestId: String) {
+        recorded += Sent.RequestPermissionRules(requestId)
+    }
+
     /** The settings and effort requests, kept apart from [recorded] so the scripts' expectations stay as they were. */
     val settingsRequests = mutableListOf<String>()
     val effortRequests = mutableListOf<Pair<String?, String>>()

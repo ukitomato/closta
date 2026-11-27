@@ -297,6 +297,16 @@ object StdinEncoder {
         }
 
     /**
+     * `list_permission_rules`: the rules the session applies, each with the file it came from, and the directories it
+     * works in. The request has no fields (`SDKControlListPermissionRulesRequest` in sdk.d.ts 0.3.325); no capture
+     * holds it.
+     */
+    fun listPermissionRules(requestId: String): String =
+        controlRequest(requestId) {
+            addProperty("subtype", "list_permission_rules")
+        }
+
+    /**
      * `get_settings`: the settings in effect. Its answer's `response.applied` says what the session sends with
      * its next request: `model` (the model really used, known before the first message) and `effort` (null for a model
      * that takes none). Capture 28, lines 2, 4, 6 and 8; `SDKControlGetSettingsRequest` in sdk.d.ts 0.3.282.

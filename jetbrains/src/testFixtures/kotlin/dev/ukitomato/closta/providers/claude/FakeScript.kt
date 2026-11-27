@@ -100,6 +100,10 @@ sealed interface Sent {
         val requestId: String,
     ) : Sent
 
+    data class RequestPermissionRules(
+        val requestId: String,
+    ) : Sent
+
     data class RenameSession(
         val title: String,
         val sessionId: String,

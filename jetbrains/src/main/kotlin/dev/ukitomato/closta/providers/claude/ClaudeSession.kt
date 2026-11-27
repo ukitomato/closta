@@ -160,6 +160,10 @@ class ClaudeSession(
         stdinChannel.send(StdinEncoder.getUsage(requestId))
     }
 
+    override suspend fun requestPermissionRules(requestId: String) {
+        stdinChannel.send(StdinEncoder.listPermissionRules(requestId))
+    }
+
     override suspend fun renameSession(
         title: String,
         sessionId: String,
