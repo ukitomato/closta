@@ -15,14 +15,14 @@ value class RawJson(
 )
 
 /**
- * The stdout line kinds observed in the recorded captures (CLI 2.1.282, 21 captures).
+ * The stdout line kinds observed in the recorded captures (CLI 2.1.325, 44 captures).
  *
- * Eighteen: `command_lifecycle` arrives on every turn but has no declaration in the official SDK
- * types, and the captures win over the official types when they disagree. The official
- * union declares 44 kinds; seventeen of the eighteen are among them (including
- * `system/commands_changed` and `system/compact_boundary`, which both the types and the captures
- * carry), and the rest never arrive and are deliberately not modelled — an unmodelled kind is
- * counted as unknown, which is how a version bump announces itself.
+ * Twenty-three: `command_lifecycle` arrives on every turn and `system/ui_invalidate` at the start of some
+ * sessions, but neither has a declaration in the official SDK types, and the captures win over the
+ * official types when they disagree. The official union declares 45 kinds; twenty-one of the
+ * twenty-three are among them (including `system/commands_changed` and `system/compact_boundary`, which
+ * both the types and the captures carry), and the rest never arrive or are not modelled yet — an
+ * unmodelled kind is counted as unknown, which is how a version bump announces itself.
  *
  * [wireType] is the `type` field as it arrives, with `/<subtype>` appended for `system` lines so
  * that a `system` line never collapses into a single bucket.
@@ -48,6 +48,11 @@ enum class AgentEventKind(
     CONTROL_REQUEST("control_request"),
     SYSTEM_COMMANDS_CHANGED("system/commands_changed"),
     SYSTEM_COMPACT_BOUNDARY("system/compact_boundary"),
+    SYSTEM_UI_INVALIDATE("system/ui_invalidate"),
+    CONVERSATION_RESET("conversation_reset"),
+    SYSTEM_PERMISSION_DENIED("system/permission_denied"),
+    SYSTEM_INFORMATIONAL("system/informational"),
+    SYSTEM_API_RETRY("system/api_retry"),
     ;
 
     companion object {
@@ -63,7 +68,7 @@ enum class AgentEventKind(
  *
  * One line in, one value out: lines are never split or merged, because reconstructing a conversation
  * from them is the fold's job and anything decided here would be decided before the fold can
- * see it. Twenty variants — the [AgentEventKind] eighteen, plus [UnknownKind] and [BrokenLine].
+ * see it. Twenty-five variants — the [AgentEventKind] twenty-three, plus [UnknownKind] and [BrokenLine].
  *
  * The two catch-alls are variants rather than errors on purpose. A reader that throws stops reading,
  * and a stdout reader that stops deadlocks the CLI behind a full pipe; a reader that silently drops
@@ -138,6 +143,8 @@ sealed interface AgentEvent {
         val sessionId: String,
         val status: String? = null,
         val permissionMode: String? = null,
+        /** How a compaction ended (`success` or `failed`), on the status that ends it; null on the others. */
+        val compactResult: String? = null,
     ) : Known {
         override val kind: AgentEventKind get() = AgentEventKind.SYSTEM_STATUS
     }
@@ -397,7 +404,92 @@ sealed interface AgentEvent {
     }
 
     /**
-     * A well-formed JSON line whose `type` is not one of the eighteen, or one that is missing a field
+     * `system/ui_invalidate`: not in the official types; only the captures carry it. It notifies an
+     * unpublished UI rendering mechanism ([event] is `ui.render` in every capture), and Closta does
+     * not use it.
+     */
+    data class SystemUiInvalidate(
+        val uuid: String,
+        val sessionId: String,
+        val event: String?,
+    ) : Known {
+        override val kind: AgentEventKind get() = AgentEventKind.SYSTEM_UI_INVALIDATE
+    }
+
+    /**
+     * `conversation_reset`: the conversation was discarded (`/clear`, or leaving plan mode with a clear context), and
+     * the CLI goes on under a new session id, which the next `system/init` names. [sessionId] is still the old one.
+     * [trigger] says what discarded it and is informational: a consumer resets whatever it says, including when it is
+     * absent or unrecognised. [userMessageUuid] is the `/clear` message's uuid, only with the `clear` trigger.
+     * [timestamp] is when it happened, in UTC, for display (sdk.d.ts `SDKConversationResetMessage`).
+     */
+    data class ConversationReset(
+        val uuid: String,
+        val sessionId: String,
+        val newConversationId: String,
+        val trigger: String? = null,
+        val userMessageUuid: String? = null,
+        val timestamp: String? = null,
+    ) : Known {
+        override val kind: AgentEventKind get() = AgentEventKind.CONVERSATION_RESET
+    }
+
+    /**
+     * `system/permission_denied`: the CLI refused a tool use on its own, without asking (the mode, a rule or an
+     * automatic check decided). [toolUseId] names the call it refused; [agentId] is set when a sub-agent made it.
+     * [decisionReasonType] (`mode`, `rule`, `classifier`, `subcommandResults`, ...) and [decisionReason] say why, each
+     * only when the CLI did; [message] is what the model was told (sdk.d.ts `SDKPermissionDeniedMessage`).
+     */
+    data class SystemPermissionDenied(
+        val uuid: String,
+        val sessionId: String,
+        val toolName: String,
+        val toolUseId: String,
+        val agentId: String? = null,
+        val decisionReasonType: String? = null,
+        val decisionReason: String? = null,
+        val message: String,
+    ) : Known {
+        override val kind: AgentEventKind get() = AgentEventKind.SYSTEM_PERMISSION_DENIED
+    }
+
+    /**
+     * `system/informational`: a line the CLI would print in its own terminal. [level] is `info` (only in the CLI's
+     * transcript mode), `notice`, `suggestion` or `warning`, kept as the CLI wrote it. [preventContinuation] is true
+     * when execution stops after it (a Stop hook denied continuing); [tag] is an opaque feature tag, ignored here
+     * (sdk.d.ts `SDKInformationalMessage`; no capture carries one).
+     */
+    data class SystemInformational(
+        val uuid: String,
+        val sessionId: String,
+        val content: String,
+        val level: String,
+        val toolUseId: String? = null,
+        val preventContinuation: Boolean? = null,
+        val tag: String? = null,
+    ) : Known {
+        override val kind: AgentEventKind get() = AgentEventKind.SYSTEM_INFORMATIONAL
+    }
+
+    /**
+     * The CLI is trying a failed API request again: attempt [attempt] of [maxRetries], after [retryDelayMs] ms. [errorStatus]
+     * is the HTTP status when there was a response (null when none came) and [error] names the failure (sdk.d.ts
+     * `SDKAPIRetryMessage`; no capture carries one, and its `no_response` figures are not used here).
+     */
+    data class SystemApiRetry(
+        val uuid: String,
+        val sessionId: String,
+        val attempt: Int,
+        val maxRetries: Int,
+        val retryDelayMs: Long,
+        val errorStatus: Int?,
+        val error: String?,
+    ) : Known {
+        override val kind: AgentEventKind get() = AgentEventKind.SYSTEM_API_RETRY
+    }
+
+    /**
+     * A well-formed JSON line whose `type` is not one of the twenty-three, or one that is missing a field
      * the declared shape needs. Kept whole so that whatever arrives can be read back later.
      *
      * This is the version-drift alarm: a CLI upgrade that adds a line kind shows up here rather than

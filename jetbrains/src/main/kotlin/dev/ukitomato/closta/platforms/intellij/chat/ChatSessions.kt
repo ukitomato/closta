@@ -9,6 +9,7 @@ import com.intellij.openapi.project.ProjectCloseListener
 import com.intellij.openapi.util.Disposer
 import dev.ukitomato.closta.platforms.intellij.session.ClaudeSessionService
 import dev.ukitomato.closta.platforms.intellij.session.SessionOpening
+import dev.ukitomato.closta.platforms.intellij.session.heldSessionOf
 import dev.ukitomato.closta.platforms.intellij.session.savedId
 import dev.ukitomato.closta.platforms.intellij.settings.ProviderPick
 import dev.ukitomato.closta.platforms.intellij.settings.ProviderSettings
@@ -28,6 +29,14 @@ class ChatSessions(
 ) : Disposable {
     private val sources = LinkedHashMap<String, ChatSource>()
 
+    private val stopped = HashMap<String, String>()
+
+    /**
+     * The id each stopped session's conversation was saved under when it stopped, by the session's id, where a `/clear`
+     * made it other than the session's own: a tab still showing it resumes that one.
+     */
+    val stoppedResumeIds: Map<String, String> get() = stopped
+
     /** Whether the project is closing: its screens close then, and a session that runs says nothing of it. */
     @Volatile
     var closing = false
@@ -35,7 +44,10 @@ class ChatSessions(
 
     private fun directory() = service<ChatDirectory>()
 
-    /** Opens a real session in [workingDirectory] (the project's folder when null), lists it, and returns its id. */
+    /**
+     * Opens a real session in [workingDirectory] (the project's folder when null), lists it, and returns its id. A
+     * resume of an id a session here already holds opens nothing: that session's id is returned, to be shown.
+     */
     fun open(
         opening: SessionOpening,
         title: String,
@@ -43,6 +55,7 @@ class ChatSessions(
         provider: ProviderPick = ProviderPick.Active,
         sandbox: Boolean? = null,
     ): String {
+        heldSessionOf(opening, sources.keys)?.let { return it }
         val runtime =
             project.service<ClaudeSessionService>().open(
                 opening = opening,
@@ -65,10 +78,16 @@ class ChatSessions(
         return source.sessionId
     }
 
-    /** Holds [source] like a session it opened, without listing it (the benchmark's fixed conversation). */
+    /**
+     * Holds [source] like a session it opened, without listing it (the benchmark's fixed conversation). Two sessions
+     * are never held under one id ([open] does not start a second one), so another one held under [source]'s id is a
+     * mistake, not something to replace.
+     */
     fun adopt(source: ChatSource): String {
-        sources[source.sessionId] = source
-        return source.sessionId
+        val id = source.sessionId
+        check(sources[id].let { it == null || it === source }) { "a session is already held under $id" }
+        sources[id] = source
+        return id
     }
 
     fun source(sessionId: String): ChatSource? = sources[sessionId]
@@ -78,8 +97,14 @@ class ChatSessions(
     /** Stops the session's CLI and takes it out of the list; a screen still showing it shows it ended. */
     fun stop(sessionId: String) {
         directory().unregister(sessionId)
-        sources.remove(sessionId)?.let(Disposer::dispose)
+        sources.remove(sessionId)?.let { source ->
+            if (source.resumeId != sessionId) stopped[sessionId] = source.resumeId
+            Disposer.dispose(source)
+        }
     }
+
+    /** The id each open session's conversation is saved under, by the session's own id (for `openSessionOf`). */
+    val resumeIds: Map<String, String> get() = sources.mapValues { it.value.resumeId }
 
     /**
      * Stops the session as the user asked from the screen. One in another folder than the project's (a worktree) with a
@@ -95,7 +120,8 @@ class ChatSessions(
                 ?.messages
                 ?.size ?: 0
         if (source != null && marksOnStop(source.workingDirectory, project.basePath, messages)) {
-            project.markStopped(sessionId, WasRunningMark(source.workingDirectory, source.title))
+            val host = sessionId.takeIf { it != source.resumeId }
+            project.markStopped(source.resumeId, WasRunningMark(source.workingDirectory, source.title, host))
         }
         stop(sessionId)
     }
@@ -152,12 +178,26 @@ private fun markWasRunning(
     val open =
         sources.filterIsInstance<ChatSource.Live>().map { live ->
             OpenAtClose(
-                live.sessionId,
+                live.resumeId,
                 aliveAtClose(live.runtime.status.value),
                 live.view.value.transcript.messages.size,
                 live.workingDirectory?.takeIf { it != project.basePath },
                 live.title.takeIf { live.workingDirectory != project.basePath },
+                live.sessionId.takeIf { it != live.resumeId },
             )
         }
     project.saveWasRunningMarks(marksAtClose(project.wasRunningMarks(), open))
 }
+
+/**
+ * The open session whose conversation is saved under [savedId], from each open session's resume id by its own id: a
+ * conversation already open must not be resumed in a second CLI. After a `/clear` that is the CLI's new id, not the
+ * session's own; the conversation before the clear is still the session's when it is saved under the session's own
+ * id, shown above the divider.
+ */
+fun openSessionOf(
+    savedId: String,
+    resumeIds: Map<String, String>,
+): String? =
+    resumeIds.entries.firstOrNull { (_, resumeId) -> resumeId == savedId }?.key
+        ?: savedId.takeIf { it in resumeIds }

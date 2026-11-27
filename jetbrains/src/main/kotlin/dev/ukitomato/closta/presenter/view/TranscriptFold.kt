@@ -45,6 +45,8 @@ fun foldTranscript(
         is PresenterInput.RewindNotSent,
         is PresenterInput.ResumeRefused,
         is PresenterInput.AttachmentRefused,
+        is PresenterInput.RateLimitDismissed,
+        is PresenterInput.ResultSeenAt,
         -> transcript.withOperations(foldOperation(transcript.operations, input))
         is PresenterInput.SessionsListed,
         is PresenterInput.Restored,
@@ -64,19 +66,26 @@ private fun foldEvent(
     when (event) {
         is AgentEvent.CommandLifecycle -> foldLifecycle(transcript, event)
         is AgentEvent.Result ->
-            foldResult(transcript, event, before, after)
-                .let { it.withOperations(it.operations.resulted(event)) }
+            foldResult(transcript.compactFailureShown(), event, before, after)
+                .let { it.withOperations(it.operations.resulted(event).retryEnded()) }
                 .let(::stopTaken)
-        is AgentEvent.StreamEvent -> foldStream(transcript, event)
+        is AgentEvent.StreamEvent,
+        is AgentEvent.SystemApiRetry,
+        is AgentEvent.SystemThinkingTokens,
+        is AgentEvent.RateLimitEvent,
+        -> foldTurnSignals(transcript, event)
         is AgentEvent.Assistant -> foldSignIn(foldAssistant(transcript, event), event)
         is AgentEvent.User -> foldUser(transcript, event)
         is AgentEvent.ControlRequest -> foldRequest(transcript, event, after)
         is AgentEvent.ControlResponse ->
             foldCommandsOfResponse(transcript.withOperations(transcript.operations.answered(event)), event)
-        is AgentEvent.SystemCompactBoundary ->
-            transcript.withOperations(transcript.operations.compacted(event))
-        is AgentEvent.SystemStatus -> transcript.withOperations(transcript.operations.statusSaid(event))
-        is AgentEvent.SystemInit -> foldCommandsOfInit(transcript, event)
+        is AgentEvent.SystemCommandsChanged -> foldCommandsOfChange(transcript, event)
+        is AgentEvent.SystemCompactBoundary, is AgentEvent.SystemStatus -> foldCompaction(transcript, event)
+        is AgentEvent.SystemInit,
+        is AgentEvent.ConversationReset,
+        is AgentEvent.SystemPermissionDenied,
+        is AgentEvent.SystemInformational,
+        -> foldSessionLine(transcript, event)
         is AgentEvent.SystemBackgroundTasksChanged,
         is AgentEvent.SystemTaskProgress,
         is AgentEvent.SystemTaskStarted,

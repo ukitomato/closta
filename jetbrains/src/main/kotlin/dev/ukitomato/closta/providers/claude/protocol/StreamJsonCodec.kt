@@ -21,7 +21,7 @@ import dev.ukitomato.closta.core.models.RawJson
  *
  * [decode] never throws: a line the reader cannot place still comes back as a value, because a reader
  * that throws stops reading and a stdout reader that stops deadlocks the CLI behind a full pipe.
- * A line whose `type` is not one of the eighteen, or of a known kind but missing a field the declared
+ * A line whose `type` is not one of the twenty-three, or of a known kind but missing a field the declared
  * shape needs, becomes [AgentEvent.UnknownKind] — in both cases the protocol has moved. A line that
  * is not a JSON object at all becomes [AgentEvent.BrokenLine] — damaged bytes rather than a new
  * version, a different thing to go and look at. A line nested deeper than [MAX_DEPTH] is also a
@@ -212,7 +212,7 @@ object StreamJsonCodec {
     /**
      * One builder per kind, keyed rather than branched.
      *
-     * An eighteen-armed `when` would be one unit that grows every time the protocol does; a map keeps
+     * A twenty-three-armed `when` would be one unit that grows every time the protocol does; a map keeps
      * each kind's field list next to that kind alone, and a kind with no entry falls through to
      * unknown instead of to an unreachable branch.
      */
@@ -259,6 +259,7 @@ object StreamJsonCodec {
                     sessionId = f.text("session_id"),
                     status = f.textOrNull("status"),
                     permissionMode = f.textOrNull("permissionMode"),
+                    compactResult = f.textOrNull("compact_result"),
                 )
             },
             AgentEventKind.USER to { f ->
@@ -440,6 +441,57 @@ object StreamJsonCodec {
                     sessionId = f.text("session_id"),
                     compactMetadata = f.raw("compact_metadata"),
                     logicalParentUuid = f.textOrNull("logical_parent_uuid"),
+                )
+            },
+            AgentEventKind.SYSTEM_UI_INVALIDATE to { f ->
+                AgentEvent.SystemUiInvalidate(
+                    uuid = f.text("uuid"),
+                    sessionId = f.text("session_id"),
+                    event = f.textOrNull("event"),
+                )
+            },
+            AgentEventKind.CONVERSATION_RESET to { f ->
+                AgentEvent.ConversationReset(
+                    uuid = f.text("uuid"),
+                    sessionId = f.text("session_id"),
+                    newConversationId = f.text("new_conversation_id"),
+                    trigger = f.textOrNull("trigger"),
+                    userMessageUuid = f.textOrNull("user_message_uuid"),
+                    timestamp = f.textOrNull("timestamp"),
+                )
+            },
+            AgentEventKind.SYSTEM_PERMISSION_DENIED to { f ->
+                AgentEvent.SystemPermissionDenied(
+                    uuid = f.text("uuid"),
+                    sessionId = f.text("session_id"),
+                    toolName = f.text("tool_name"),
+                    toolUseId = f.text("tool_use_id"),
+                    agentId = f.textOrNull("agent_id"),
+                    decisionReasonType = f.textOrNull("decision_reason_type"),
+                    decisionReason = f.textOrNull("decision_reason"),
+                    message = f.text("message"),
+                )
+            },
+            AgentEventKind.SYSTEM_INFORMATIONAL to { f ->
+                AgentEvent.SystemInformational(
+                    uuid = f.text("uuid"),
+                    sessionId = f.text("session_id"),
+                    content = f.text("content"),
+                    level = f.text("level"),
+                    toolUseId = f.textOrNull("tool_use_id"),
+                    preventContinuation = f.flagOrNull("prevent_continuation"),
+                    tag = f.textOrNull("tag"),
+                )
+            },
+            AgentEventKind.SYSTEM_API_RETRY to { f ->
+                AgentEvent.SystemApiRetry(
+                    uuid = f.text("uuid"),
+                    sessionId = f.text("session_id"),
+                    attempt = f.count("attempt"),
+                    maxRetries = f.count("max_retries"),
+                    retryDelayMs = f.whole("retry_delay_ms"),
+                    errorStatus = f.countOrNull("error_status"),
+                    error = f.textOrNull("error"),
                 )
             },
         )

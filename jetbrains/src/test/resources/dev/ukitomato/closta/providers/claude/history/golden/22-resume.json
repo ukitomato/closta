@@ -1,13 +1,13 @@
 {
   "capture": "22-resume",
-  "sessionId": "336ed47b-2675-4317-b3f5-a3b48abb03a2",
+  "sessionId": "f728d9f6-8d2f-4834-b749-4d085a4ef2c0",
   "read": {
     "events": [
       {
         "kind": "User",
-        "uuid": "9d16f4cc-3b36-4a98-8ab2-84438e311ceb",
-        "sessionId": "336ed47b-2675-4317-b3f5-a3b48abb03a2",
-        "timestamp": "2026-10-17T05:41:27.716Z",
+        "uuid": "03365f22-5ce0-4d00-a681-6afc86a08c6b",
+        "sessionId": "f728d9f6-8d2f-4834-b749-4d085a4ef2c0",
+        "timestamp": "2026-11-14T12:19:24.758Z",
         "message": {
           "role": "user",
           "content": "Run this exact bash command and report its output: echo hello-from-resume"
@@ -19,20 +19,20 @@
       },
       {
         "kind": "Assistant",
-        "uuid": "282fea04-987e-48ad-80c1-8cf3a08848e0",
-        "sessionId": "336ed47b-2675-4317-b3f5-a3b48abb03a2",
-        "timestamp": "2026-10-17T05:41:29.532Z",
-        "requestId": "req_011CScrubbedHXDMxV3xYaPM",
+        "uuid": "1d1d5313-8eba-4a48-b216-32b18defdc35",
+        "sessionId": "f728d9f6-8d2f-4834-b749-4d085a4ef2c0",
+        "timestamp": "2026-11-14T12:19:26.665Z",
+        "requestId": "req_011CScrubbedAE3mQWry3V6s",
         "message": {
           "model": "claude-sonnet-4-6",
-          "id": "msg_011CScrubbed8Zi68XfCnn6H",
+          "id": "msg_011CScrubbedAnFgdCmkjkLr",
           "type": "message",
           "role": "assistant",
           "content": [
             {
               "type": "thinking",
               "thinking": "",
-              "signature": "EuoCCsABCBIYAipAmgNKSQjCIz34FBsJBJ8b/zG6G9YnaiQzWqjUA9zXyfXhUQ7q8XcA7TJXmks/ouPgCxlZPmNav8FUQIBv5ciJHTIRY2xhdWRlLXNvbm5ldC00LTY4AEIIdGhpbmtpbmdaJDQyNzE4NzQ2LTQ0MmUtNGM1MS04NGUzLTkyMzRiNGQwZmIwY3IQj5UN4cFtHzl7lRSyOhVCdYgBAZoBEwoRY2xhdWRlLXNvbm5ldC00LTaoAYmVzNYGsAECEgxry9gsEaJtL+C7L7gaDI8jfyTLEbBWWuMEASIwXhd4XaZpxs4Tq+1HYxy2/yD34zLoqEWnfaHazb139IqBuXoR/Q6EYkTtMi5R12EBKldYNigeBj+dLCU6FIAZfH4Fw/h9gyEdfWzI/8yu8tM6MnlMqWeLv+NA2cMleRey4dEdxXmI2VZCxsFd5WkDZsa7bEK//OIkpmEVAs2fDPoHNiQH+eK0w94YAQ=="
+              "signature": "EuoCCsABCBMYAipAmgNKSQjCIz34FBsJBJ8b/zG6G9YnaiQzWqjUA9zXyfXhUQ7q8XcA7TJXmks/ouPgCxlZPmNav8FUQIBv5ciJHTIRY2xhdWRlLXNvbm5ldC00LTY4AEIIdGhpbmtpbmdaJDQyNzE4NzQ2LTQ0MmUtNGM1MS04NGUzLTkyMzRiNGQwZmIwY3IQj5UN4cFtHzl7lRSyOhVCdYgBAZoBEwoRY2xhdWRlLXNvbm5ldC00LTaoAc6j4dcGsAECEgz615cTEZsUNDDFFA4aDFSzSni49plANmuKqyIwuEcyo+exQY8qGEnpdrXmb5CcxL/1qmTk6b7yhLDvDudGsO4IU05cMD7N2w8JwD80KlfuwFyP/y1FER69b8Jy/CIHALOfErI/IvJpvK9vafLUW3i4uhlFw0jjjH0Fvj6kz01ZnHmgi26x3mqu6GMQQdfVrnkDLxemdD74qa7jpfNzI5viHm8D7EQYAQ=="
             }
           ],
           "container": null,
@@ -41,8 +41,8 @@
           "stop_details": null,
           "usage": {
             "input_tokens": 3,
-            "cache_creation_input_tokens": 6732,
-            "cache_read_input_tokens": 13337,
+            "cache_creation_input_tokens": 7540,
+            "cache_read_input_tokens": 14280,
             "output_tokens": 108,
             "output_tokens_details": {
               "thinking_tokens": 27
@@ -53,7 +53,7 @@
             },
             "service_tier": "standard",
             "cache_creation": {
-              "ephemeral_1h_input_tokens": 6732,
+              "ephemeral_1h_input_tokens": 7540,
               "ephemeral_5m_input_tokens": 0
             },
             "inference_geo": "global",
@@ -61,16 +61,17 @@
               {
                 "input_tokens": 3,
                 "output_tokens": 108,
-                "cache_read_input_tokens": 13337,
-                "cache_creation_input_tokens": 6732,
+                "cache_read_input_tokens": 14280,
+                "cache_creation_input_tokens": 7540,
                 "cache_creation": {
                   "ephemeral_5m_input_tokens": 0,
-                  "ephemeral_1h_input_tokens": 6732
+                  "ephemeral_1h_input_tokens": 7540
                 },
                 "type": "message"
               }
             ],
-            "speed": "standard"
+            "speed": "standard",
+            "fallback_credit": null
           },
           "input_transformations": [],
           "diagnostics": null,
@@ -86,23 +87,23 @@
       },
       {
         "kind": "Assistant",
-        "uuid": "16d1f7bc-10d9-4c9c-8261-8afc415c0c91",
-        "sessionId": "336ed47b-2675-4317-b3f5-a3b48abb03a2",
-        "timestamp": "2026-10-17T05:41:30.114Z",
-        "requestId": "req_011CScrubbedHXDMxV3xYaPM",
+        "uuid": "3c198b59-64fb-476d-8598-930623654f80",
+        "sessionId": "f728d9f6-8d2f-4834-b749-4d085a4ef2c0",
+        "timestamp": "2026-11-14T12:19:27.225Z",
+        "requestId": "req_011CScrubbedAE3mQWry3V6s",
         "message": {
           "model": "claude-sonnet-4-6",
-          "id": "msg_011CScrubbed8Zi68XfCnn6H",
+          "id": "msg_011CScrubbedAnFgdCmkjkLr",
           "type": "message",
           "role": "assistant",
           "content": [
             {
               "type": "tool_use",
-              "id": "toolu_012wWm4TuzZeDWdUpAMcy5vU",
+              "id": "toolu_01Vmm4Ex3PchLEJUAuoUddvm",
               "name": "Bash",
               "input": {
                 "command": "echo hello-from-resume",
-                "description": "Run the exact command specified"
+                "description": "Run the specified echo command"
               },
               "caller": {
                 "type": "direct"
@@ -115,8 +116,8 @@
           "stop_details": null,
           "usage": {
             "input_tokens": 3,
-            "cache_creation_input_tokens": 6732,
-            "cache_read_input_tokens": 13337,
+            "cache_creation_input_tokens": 7540,
+            "cache_read_input_tokens": 14280,
             "output_tokens": 108,
             "output_tokens_details": {
               "thinking_tokens": 27
@@ -127,7 +128,7 @@
             },
             "service_tier": "standard",
             "cache_creation": {
-              "ephemeral_1h_input_tokens": 6732,
+              "ephemeral_1h_input_tokens": 7540,
               "ephemeral_5m_input_tokens": 0
             },
             "inference_geo": "global",
@@ -135,16 +136,17 @@
               {
                 "input_tokens": 3,
                 "output_tokens": 108,
-                "cache_read_input_tokens": 13337,
-                "cache_creation_input_tokens": 6732,
+                "cache_read_input_tokens": 14280,
+                "cache_creation_input_tokens": 7540,
                 "cache_creation": {
                   "ephemeral_5m_input_tokens": 0,
-                  "ephemeral_1h_input_tokens": 6732
+                  "ephemeral_1h_input_tokens": 7540
                 },
                 "type": "message"
               }
             ],
-            "speed": "standard"
+            "speed": "standard",
+            "fallback_credit": null
           },
           "input_transformations": [],
           "diagnostics": null,
@@ -154,9 +156,9 @@
         "userMessageUuid": null,
         "userMessageUuids": null,
         "wireToolInputs": {
-          "toolu_012wWm4TuzZeDWdUpAMcy5vU": {
+          "toolu_01Vmm4Ex3PchLEJUAuoUddvm": {
             "command": "echo hello-from-resume",
-            "description": "Run the exact command specified"
+            "description": "Run the specified echo command"
           }
         },
         "subagentType": null,
@@ -165,14 +167,14 @@
       },
       {
         "kind": "User",
-        "uuid": "014b066f-394d-4073-954f-f1cca8042f48",
-        "sessionId": "336ed47b-2675-4317-b3f5-a3b48abb03a2",
-        "timestamp": "2026-10-17T05:41:30.658Z",
+        "uuid": "5d26e1cc-7052-4156-b549-b6b6d34ca587",
+        "sessionId": "f728d9f6-8d2f-4834-b749-4d085a4ef2c0",
+        "timestamp": "2026-11-14T12:19:27.649Z",
         "message": {
           "role": "user",
           "content": [
             {
-              "tool_use_id": "toolu_012wWm4TuzZeDWdUpAMcy5vU",
+              "tool_use_id": "toolu_01Vmm4Ex3PchLEJUAuoUddvm",
               "type": "tool_result",
               "content": "hello-from-resume",
               "is_error": false
@@ -192,13 +194,13 @@
       },
       {
         "kind": "Assistant",
-        "uuid": "51005f27-70e2-4bf7-99de-43ccd9539463",
-        "sessionId": "336ed47b-2675-4317-b3f5-a3b48abb03a2",
-        "timestamp": "2026-10-17T05:41:31.840Z",
-        "requestId": "req_011CScrubbedBDWWwG1khd2r",
+        "uuid": "b716c8ec-3e7f-4f43-bd67-9f389f905d55",
+        "sessionId": "f728d9f6-8d2f-4834-b749-4d085a4ef2c0",
+        "timestamp": "2026-11-14T12:19:28.785Z",
+        "requestId": "req_011CScrubbedD7kyqaTtnVRT",
         "message": {
           "model": "claude-sonnet-4-6",
-          "id": "msg_011CScrubbedAt3xFkCvKYkv",
+          "id": "msg_011CScrubbedC94vFLfeLNZH",
           "type": "message",
           "role": "assistant",
           "content": [
@@ -214,7 +216,7 @@
           "usage": {
             "input_tokens": 1,
             "cache_creation_input_tokens": 155,
-            "cache_read_input_tokens": 20069,
+            "cache_read_input_tokens": 21820,
             "output_tokens": 12,
             "output_tokens_details": {
               "thinking_tokens": 0
@@ -233,7 +235,7 @@
               {
                 "input_tokens": 1,
                 "output_tokens": 12,
-                "cache_read_input_tokens": 20069,
+                "cache_read_input_tokens": 21820,
                 "cache_creation_input_tokens": 155,
                 "cache_creation": {
                   "ephemeral_5m_input_tokens": 0,
@@ -242,7 +244,8 @@
                 "type": "message"
               }
             ],
-            "speed": "standard"
+            "speed": "standard",
+            "fallback_credit": null
           },
           "input_transformations": [],
           "diagnostics": null,
@@ -257,14 +260,14 @@
         "error": null
       }
     ],
-    "skipped": 22,
+    "skipped": 31,
     "dropped": 0
   },
   "list": [
     {
-      "id": "336ed47b-2675-4317-b3f5-a3b48abb03a2",
+      "id": "f728d9f6-8d2f-4834-b749-4d085a4ef2c0",
       "title": "Run this exact bash command and report its output: echo hello-from-resume",
-      "bytes": 161865
+      "bytes": 269402
     }
   ]
 }

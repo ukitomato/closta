@@ -27,10 +27,10 @@ class StdinSandboxTest {
 
     @Test
     fun sandboxOffAnswerMatchesCapture33() {
-        // 33 line 79 answers the request that turned the sandbox off (req-5); line 80 is the get_settings after it.
+        // 33 line 68 answers the request that turned the sandbox off (req-5); line 69 is the get_settings after it.
         val written = JsonParser.parseString(StdinEncoder.sandboxOff("$CAPTURE-req-5")).asJsonObject
-        val answer = captureLine(79)["response"].asJsonObject
-        val settings = captureLine(80)["response"].asJsonObject["response"].asJsonObject
+        val answer = captureLine(68)["response"].asJsonObject
+        val settings = captureLine(69)["response"].asJsonObject["response"].asJsonObject
         val flagLayer =
             settings["sources"].asJsonArray.map { it.asJsonObject }.single { it["source"].asString == "flagSettings" }
 

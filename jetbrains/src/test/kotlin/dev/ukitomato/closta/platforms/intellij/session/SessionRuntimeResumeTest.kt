@@ -413,6 +413,24 @@ class SessionRuntimeResumeTest {
 
     @Test
     @Timeout(TIMEOUT_SECONDS)
+    fun `a limit's banner can be closed with no CLI, and a closed session writes nothing`() =
+        runBlocking {
+            val parent = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            // Never started: it is Starting, and has no commands.
+            val runtime = runtime(spawner(FakeProcess()), parent, resume = null)
+            runtime.dismissRateLimit(3)
+
+            val closed = runtime(spawner(FakeProcess()), parent, resume = null)
+            closed.close()
+            closed.dismissRateLimit(3)
+
+            assertEquals(3, runtime.view.value.transcript.operations.rateLimitDismissed)
+            assertNull(closed.view.value.transcript.operations.rateLimitDismissed)
+            parent.cancel()
+        }
+
+    @Test
+    @Timeout(TIMEOUT_SECONDS)
     fun `the list of saved sessions can be asked of a session that is still starting`() =
         runBlocking {
             val parent = CoroutineScope(SupervisorJob() + Dispatchers.Default)

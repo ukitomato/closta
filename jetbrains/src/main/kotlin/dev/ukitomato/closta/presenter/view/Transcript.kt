@@ -49,6 +49,15 @@ data class Transcript(
     val turnChanges: Map<String, TurnChangesRecord> = emptyMap(),
     /** The key of the message whose reply said the CLI is not signed in, until the model's next reply. */
     val signIn: String? = null,
+    /**
+     * Where the conversation was last cleared: the place in [messages] of the message holding the last [ClearedRecord],
+     * null while it never was. What comes before it belongs to a conversation the CLI no longer has.
+     */
+    val clearedAt: Int? = null,
+    /** Refusals whose call has no line yet, by the call's key; each is put on its line when the line is made. */
+    val denials: Map<String, Denial> = emptyMap(),
+    /** The uuid of the status that said a compaction did not succeed, until the boundary or the `result` shows it. */
+    val compactFailure: String? = null,
 )
 
 enum class Role(
@@ -102,6 +111,11 @@ data class TextRecord(
     val reasoning: Boolean,
     val text: String,
     val streaming: Boolean = false,
+    /**
+     * The CLI's latest estimate of this block's thinking tokens while it streams; null until the first one for this
+     * block, and again once the block stopped.
+     */
+    val estimate: Long? = null,
 ) : PartRecord
 
 /**
@@ -119,6 +133,25 @@ data class ToolCallRecord(
     /** A sub-agent's conversation, when this call started one. */
     val messages: Keyed<MessageRecord> = Keyed.empty(),
     val streaming: Boolean = false,
+    /** Set when the CLI refused this call on its own (`permission_denied`), without asking. */
+    val denied: Denial? = null,
+) : PartRecord
+
+/** Why the CLI refused a call: the kind of decision (`mode`, `rule`, `classifier`...) and its own words, if given. */
+data class Denial(
+    val reasonType: String?,
+    val reason: String?,
+)
+
+/**
+ * A line the CLI would print in its own terminal (`system/informational`), of a [level] other than `info`.
+ * [stopped] is true when the CLI stopped going on after it.
+ */
+data class InformationalRecord(
+    val key: String,
+    val level: String,
+    val content: String,
+    val stopped: Boolean,
 ) : PartRecord
 
 /**
@@ -130,6 +163,27 @@ data class ToolResult(
     val isError: Boolean?,
     val durationMs: Long? = null,
 )
+
+/**
+ * Where the CLI discarded the conversation (`conversation_reset`): what came before stays shown, above it. [key] is its
+ * part key; [at] is when it happened as the CLI wrote it (ISO 8601, UTC), null when the line did not say.
+ */
+data class ClearedRecord(
+    val key: String,
+    val at: String?,
+) : PartRecord
+
+/**
+ * Where the CLI compacted the conversation (`compact_boundary`), or failed to: [trigger] is `manual`, `auto` or
+ * `unknown`; [postTokens] is null when the boundary did not say.
+ */
+data class CompactedRecord(
+    val key: String,
+    val trigger: String,
+    val preTokens: Long,
+    val postTokens: Long?,
+    val failed: Boolean,
+) : PartRecord
 
 /** A block of a type this version does not know; the tree shows it as a part of that type. */
 data class OtherRecord(

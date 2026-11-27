@@ -79,7 +79,7 @@ class AskActing(
                 is ForkFrom -> {
                     val copy =
                         sessions().open(
-                            forkOpening(id, action),
+                            forkOpening(source.resumeId, action),
                             FORK_TITLE,
                             source.workingDirectory,
                             sandbox = sandboxOn(),
@@ -140,7 +140,7 @@ class AskActing(
         val old = source.sessionId
         val copyId =
             sessions().open(
-                rewindOpening(old, rewindBefore),
+                rewindOpening(source.resumeId, rewindBefore),
                 source.title,
                 source.workingDirectory,
                 sandbox = sandboxOn(),

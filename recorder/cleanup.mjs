@@ -1,4 +1,5 @@
 // Cleanup after a recording. Importing record.mjs runs main, so this lives here where tests can import it.
+import { rmSync } from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 
@@ -13,4 +14,18 @@ export async function removeFileHistory(configRoot, ids) {
     if (typeof id !== 'string' || !UUID_RE.test(id)) continue;
     await fsp.rm(path.join(base, id), { recursive: true, force: true });
   }
+}
+
+// A recording killed by SIGINT (Ctrl+C) or SIGTERM runs no `finally`: remove <dir> then, and exit as the signal would
+// (128 + its number). Returns the function that stops listening, for the clean-up of a recording that ends normally.
+export function removeOnSignal(dir, proc = process) {
+  const handlers = Object.entries({ SIGINT: 130, SIGTERM: 143 }).map(([signal, code]) => {
+    const handler = () => {
+      rmSync(dir, { recursive: true, force: true });
+      proc.exit(code);
+    };
+    proc.once(signal, handler);
+    return [signal, handler];
+  });
+  return () => { for (const [signal, handler] of handlers) proc.off(signal, handler); };
 }

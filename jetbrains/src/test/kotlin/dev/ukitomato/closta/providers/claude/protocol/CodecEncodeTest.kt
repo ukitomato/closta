@@ -148,6 +148,17 @@ class CodecEncodeTest {
     }
 
     @Test
+    fun `get_usage skips the behaviors, as the recorder asked in capture 43`() {
+        assertEquals(
+            json(
+                """{"type":"control_request","request_id":"r1",""" +
+                    """"request":{"subtype":"get_usage","skip_behaviors":true}}""",
+            ),
+            json(StdinEncoder.getUsage("r1")),
+        )
+    }
+
+    @Test
     fun `get_context_usage asks for the summary unless told otherwise`() {
         assertAll(
             {
@@ -185,7 +196,7 @@ class CodecEncodeTest {
                     "rewind_files"
             }
         assertEquals(2, rewinds.size, "the capture holds a dry run and the real one")
-        val uuid = "b6c26772-59e5-4ff6-b970-284be2777826"
+        val uuid = "f6236b45-b026-49b7-ba9a-8d41b1ff77b4"
         for ((captured, dryRun) in rewinds.zip(listOf(true, false))) {
             val id = JsonParser.parseString(captured).asJsonObject["request_id"].asString
             assertEquals(captured, StdinEncoder.rewindFiles(id, uuid, dryRun), "byte for byte, in the recorded order")

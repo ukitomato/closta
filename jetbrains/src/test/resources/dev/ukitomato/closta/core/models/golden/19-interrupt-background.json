@@ -1,38 +1,29 @@
 {
   "session": {
-    "sessionId": "76a6edd3-0a70-4ea1-bf26-b450e57ed9df",
+    "sessionId": "018e81e3-60f0-4034-afb3-2252b7eed8b1",
     "model": "claude-sonnet-4-6",
     "permissionMode": "acceptEdits",
-    "cwd": "/tmp/closta-rec-19-interrupt-background-redNTo/cwd",
-    "version": "2.1.282"
+    "cwd": "/tmp/closta-rec-19-interrupt-background-qsSg6p/cwd",
+    "version": "2.1.325"
   },
   "turns": [
     {
-      "commandUuid": "8ad97fc5-1aa3-4d56-ae5a-94542ac5abb9",
+      "commandUuid": "76d7ab50-1aef-416a-bcda-bc919e398236",
       "phase": "CLOSED",
       "incompleteReason": null,
       "lifecycleDone": false
     }
   ],
   "usage": {
-    "sessionCostUsd": 0.0571566
+    "sessionCostUsd": 0.0631182
   },
   "tasks": [
     {
-      "taskId": "a93bceb6a3ac22e00",
-      "parentToolUseId": "toolu_01SrxdstgpuYFysF8YNmXBXQ",
+      "taskId": "aefdd792acc6f4110",
+      "parentToolUseId": "toolu_01BiqomDJ1sVovYfssAzASCx",
       "subagentType": "general-purpose",
       "isBackgrounded": true,
       "spawnDepth": 1,
-      "status": "INCOMPLETE",
-      "incompleteReason": "stopped"
-    },
-    {
-      "taskId": "bmbzape55",
-      "parentToolUseId": "toolu_01JQzJgds9jxAZS6KpB3yPYh",
-      "subagentType": null,
-      "isBackgrounded": true,
-      "spawnDepth": null,
       "status": "INCOMPLETE",
       "incompleteReason": "stopped"
     }

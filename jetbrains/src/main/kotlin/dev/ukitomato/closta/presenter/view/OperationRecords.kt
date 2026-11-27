@@ -3,6 +3,7 @@
 package dev.ukitomato.closta.presenter.view
 
 import dev.ukitomato.closta.core.models.AgentEvent
+import dev.ukitomato.closta.presenter.tree.JsonArray
 import dev.ukitomato.closta.presenter.tree.JsonBool
 import dev.ukitomato.closta.presenter.tree.JsonNumber
 import dev.ukitomato.closta.presenter.tree.JsonObject
@@ -17,7 +18,7 @@ enum class ControlKind {
     MODE,
     CONTEXT,
 
-    /** The list of MCP servers: it waits in its own column, as the usage does. */
+    /** The list of MCP servers: it waits in its own column, as the context requests do. */
     MCP_STATUS,
 
     /** An MCP server turned on, off, or reconnected; the value is the server's name. */
@@ -25,7 +26,7 @@ enum class ControlKind {
     MCP_DISABLE,
     MCP_RECONNECT,
 
-    /** The settings in effect (`get_settings`): it waits in its own column, as the usage does. */
+    /** The settings in effect (`get_settings`): it waits in its own column, as the context requests do. */
     SETTINGS,
 
     /** The effort changed live (`apply_flag_settings`); the value is the level. */
@@ -36,6 +37,9 @@ enum class ControlKind {
      * `"false"`. The CLI's settings say whether it took: the record waits for their answer.
      */
     SANDBOX,
+
+    /** `get_usage`, the session's cost and the plan's limits: it waits in a column of its own, as the context does. */
+    USAGE,
 }
 
 /**
@@ -97,13 +101,31 @@ data class ModelRecord(
     val supportedEffortLevels: List<String>?,
 )
 
-/** The last context usage the CLI answered (`get_context_usage`, summary). */
+/**
+ * The last context usage the CLI answered (`get_context_usage`). [categories] are the rows of the whole answer, in the
+ * CLI's order; an answer without them (the summary form) has none.
+ */
 data class ContextRecord(
     val totalTokens: Long,
     val maxTokens: Long,
     val percentage: Double,
     val autoCompactThreshold: Long?,
+    val categories: List<ContextCategory> = emptyList(),
 )
+
+/** One row of the context's breakdown: [name] is the CLI's own words, [id] its stable mark when it gave one. */
+data class ContextCategory(
+    val id: String?,
+    val name: String,
+    val tokens: Long,
+    val kind: ContextKind,
+)
+
+/**
+ * What a row of the breakdown is (`kind` in sdk.d.ts 0.3.325): in the window, the window left, the compaction's
+ * reserve, or tool schemas kept out of the window. A kind not known reads as [USED].
+ */
+enum class ContextKind { USED, FREE, BUFFER, DEFERRED }
 
 /** One compaction the CLI did (`system/compact_boundary`). */
 data class CompactionRecord(
@@ -123,7 +145,7 @@ data class TokenTotals(
 
 /**
  * Everything the console shows that core does not keep, as one value so the projection compares it in one step.
- * [seq] is the last number given. [waiting] are the ids of the usage requests not answered yet, oldest first, and
+ * [seq] is the last number given. [waiting] are the ids of the context requests not answered yet, oldest first, and
  * [mcpWaiting] those of the MCP status requests (a column of their own, so that neither pushes the other out).
  * [mcpServers] is the last list the CLI gave (null before the first answer, an empty list for a session with no
  * server) and [mcpUnreadable] says the last ask could not be read, so the list is the one before it.
@@ -181,12 +203,45 @@ data class OperationRecords(
     val bypassEntered: Boolean = false,
     /** A switch to `auto` was refused or could not be sent once in this session; it stays set. */
     val autoRejected: Boolean = false,
+    /** The CLI is retrying the API (`system/api_retry`); it goes at the next `stream_event` or `result`. */
+    val retry: RetryRecord? = null,
+    /** The last `rate_limit_event`'s limit; null before the first. */
+    val rateLimit: RateLimitRecord? = null,
+    /** The [RateLimitRecord.seq] the user dismissed: it is not shown again until the status or the window changes. */
+    val rateLimitDismissed: Int? = null,
+    /** The ids of the `get_usage` requests not answered yet, a column of their own as [mcpWaiting] is. */
+    val usageWaiting: List<String> = emptyList(),
+    /** The last `get_usage` answer that could be read; null before the first. */
+    val usage: UsageRecord? = null,
+    /**
+     * How long the prompt cache lives, as the last `result` that read or wrote it says; null before one, and after a
+     * `result` that names no model (`/clear`'s).
+     */
+    val cacheTtlMs: Long? = null,
+    /** The last `result` read or wrote the cache, so the time it is seen at starts the clock again. */
+    val cacheTouched: Boolean = false,
+    /** When the host saw the last `result` that had a cache, and how long that cache lives; null when it had none. */
+    val cache: CacheRecord? = null,
+)
+
+/** The prompt cache as of the `result` the host saw at [lastAtMs]: it lives [ttlMs] from then. */
+data class CacheRecord(
+    val lastAtMs: Long,
+    val ttlMs: Long,
+)
+
+/** A retry of the API in progress: attempt [attempt] of [maxRetries] starts after [delayMs] ms; [status] is HTTP's. */
+data class RetryRecord(
+    val attempt: Int,
+    val maxRetries: Int,
+    val delayMs: Long,
+    val status: Int?,
 )
 
 /** The most switches kept (the newest); an answer for one pushed out is an answer for an id nobody knows. */
 const val MAX_SWITCHES = 20
 
-/** The most usage requests kept while they wait for an answer (the newest): a CLI that never answers cannot fill it. */
+/** The most requests kept in a column while they wait (the newest): a CLI that never answers cannot fill it. */
 const val MAX_WAITING = 5
 
 /** The most compactions kept (the newest). */
@@ -215,6 +270,7 @@ internal fun OperationRecords.control(input: PresenterInput.ControlRequested): O
     return when (input.kind) {
         ControlKind.CONTEXT -> copy(waiting = (waiting + input.requestId).takeLast(MAX_WAITING))
         ControlKind.MCP_STATUS -> copy(mcpWaiting = (mcpWaiting + input.requestId).takeLast(MAX_WAITING))
+        ControlKind.USAGE -> copy(usageWaiting = (usageWaiting + input.requestId).takeLast(MAX_WAITING))
         ControlKind.MCP_ENABLE -> withSwitch(mcpSwitch(input, SwitchKind.MCP_ENABLE))
         ControlKind.MCP_DISABLE -> withSwitch(mcpSwitch(input, SwitchKind.MCP_DISABLE))
         ControlKind.MCP_RECONNECT -> withSwitch(mcpSwitch(input, SwitchKind.MCP_RECONNECT))
@@ -248,6 +304,7 @@ internal fun OperationRecords.refuseEffort(input: PresenterInput.EffortRefused):
 /**
  * A CLI was launched: its effort, its own MCP servers, and whether it was asked into the sandbox. What the last CLI's
  * settings said of the sandbox no longer holds; a pending switch into the sandbox is confirmed by this CLI's answer.
+ * The new CLI answers none of the requests asked of the last one, so nothing waits for them any more.
  */
 internal fun OperationRecords.launched(input: PresenterInput.Launched): OperationRecords {
     val switching =
@@ -268,6 +325,10 @@ internal fun OperationRecords.launched(input: PresenterInput.Launched): Operatio
         sandboxConfirming = switching ?: sandboxConfirming,
         // The settings asked of the last CLI do not say what this one runs with.
         sandboxCheck = null,
+        waiting = emptyList(),
+        mcpWaiting = emptyList(),
+        settingsWaiting = emptyList(),
+        usageWaiting = emptyList(),
     )
 }
 
@@ -326,10 +387,11 @@ private fun OperationRecords.settingsAsked(requestId: String): OperationRecords 
 internal fun OperationRecords.withSwitch(record: SwitchRecord): OperationRecords =
     copy(seq = record.seq, switches = (switches + record).takeLast(MAX_SWITCHES))
 
-/** The request could not be written: a switch fails, a usage request is not waited for. */
+/** The request could not be written: a switch fails, a context or usage request is not waited for. */
 internal fun OperationRecords.sendFailed(requestId: String): OperationRecords =
     rewindSendFailed(requestId) ?: when {
         requestId in waiting -> copy(waiting = waiting - requestId)
+        requestId in usageWaiting -> copy(usageWaiting = usageWaiting - requestId)
         // A sandbox check that could not be asked waits for the next settings request.
         requestId in settingsWaiting ->
             copy(
@@ -346,7 +408,8 @@ private fun OperationRecords.knows(requestId: String): Boolean =
     switches.any { it.id == requestId } ||
         requestId in waiting ||
         requestId in mcpWaiting ||
-        requestId in settingsWaiting
+        requestId in settingsWaiting ||
+        requestId in usageWaiting
 
 /**
  * The CLI's answer to [event]'s request. An id nobody asked with, or an answer to a settled one, changes nothing.
@@ -363,6 +426,10 @@ internal fun OperationRecords.answered(event: AgentEvent.ControlResponse): Opera
             copy(waiting = waiting - id, context = read ?: context)
         }
         id in mcpWaiting -> mcpAnswered(id, event)
+        id in usageWaiting -> {
+            val body = if (succeeded) (JsonRead.parse(event.response.text) as? JsonObject)?.obj("response") else null
+            copy(usageWaiting = usageWaiting - id, usage = body?.let(::usageOf) ?: usage)
+        }
         id in settingsWaiting -> settingsAnswered(id, event)
         succeeded -> switchApplied(id)
         else ->
@@ -511,6 +578,14 @@ fun OperationRecords.asksForSettings(event: AgentEvent): Boolean {
     return switched || modelsOfResponse(JsonRead.parse(event.response.text)) != null
 }
 
+/**
+ * Whether [event] is one after which the host asks the CLI how much of the context is used: the end of a turn, a
+ * compaction, or a `/clear`. A process's first `system/init` is asked at too, by the runtime that knows it is the
+ * first; a later one (one in the middle of a turn, or the one after a `/clear`) is not.
+ */
+fun asksForContext(event: AgentEvent): Boolean =
+    event is AgentEvent.Result || event is AgentEvent.SystemCompactBoundary || event is AgentEvent.ConversationReset
+
 private fun OperationRecords.settle(
     id: String,
     change: (SwitchRecord) -> SwitchRecord,
@@ -525,8 +600,23 @@ private fun contextOf(body: JsonObject): ContextRecord? {
     val max = body.count("maxTokens")
     val percentage = body.number("percentage")?.takeIf { it.isFinite() && it >= 0 }
     if (total == null || max == null || percentage == null) return null
-    return ContextRecord(total, max, percentage, body.count("autoCompactThreshold"))
+    val categories =
+        (body["categories"] as? JsonArray)?.items.orEmpty().mapNotNull { item ->
+            val row = item as? JsonObject ?: return@mapNotNull null
+            val name = row.string("name") ?: return@mapNotNull null
+            val tokens = row.count("tokens") ?: return@mapNotNull null
+            ContextCategory(row.string("id"), name, tokens, kindOf(row.string("kind")))
+        }
+    return ContextRecord(total, max, percentage, body.count("autoCompactThreshold"), categories)
 }
+
+private fun kindOf(kind: String?): ContextKind =
+    when (kind) {
+        "free" -> ContextKind.FREE
+        "buffer" -> ContextKind.BUFFER
+        "deferred" -> ContextKind.DEFERRED
+        else -> ContextKind.USED
+    }
 
 /** A non-negative whole number member; anything else reads as absent. */
 internal fun JsonObject.count(key: String): Long? = (this[key] as? JsonNumber)?.text?.toLongOrNull()?.takeIf { it >= 0 }

@@ -10,9 +10,9 @@
         "messages": {
           "order": [
             "send-1",
-            "bdfbac89-b57e-43b4-b196-d266d3fb4b10",
+            "c88c1226-ffcd-472e-9950-066d100aa5ff",
             "send-2",
-            "66f53dbb-76be-4cb9-b4df-b7db2fb70a92"
+            "a3ec4b73-9418-4ab2-ac4f-69dffff51945"
           ],
           "byId": {
             "send-1": {
@@ -30,8 +30,8 @@
                 }
               }
             },
-            "bdfbac89-b57e-43b4-b196-d266d3fb4b10": {
-              "id": "bdfbac89-b57e-43b4-b196-d266d3fb4b10",
+            "c88c1226-ffcd-472e-9950-066d100aa5ff": {
+              "id": "c88c1226-ffcd-472e-9950-066d100aa5ff",
               "role": "assistant",
               "status": {
                 "type": "complete",
@@ -39,10 +39,10 @@
               },
               "parts": {
                 "order": [
-                  "msg_011CScrubbed7unypMEwxSrm:0"
+                  "msg_011CScrubbed4aHhGQJ1cKD7:0"
                 ],
                 "byId": {
-                  "msg_011CScrubbed7unypMEwxSrm:0": {
+                  "msg_011CScrubbed4aHhGQJ1cKD7:0": {
                     "type": "text",
                     "text": "pong",
                     "status": {
@@ -67,16 +67,22 @@
                 }
               }
             },
-            "66f53dbb-76be-4cb9-b4df-b7db2fb70a92": {
-              "id": "66f53dbb-76be-4cb9-b4df-b7db2fb70a92",
+            "a3ec4b73-9418-4ab2-ac4f-69dffff51945": {
+              "id": "a3ec4b73-9418-4ab2-ac4f-69dffff51945",
               "role": "assistant",
               "status": {
                 "type": "complete",
                 "reason": "stop"
               },
               "parts": {
-                "order": [],
-                "byId": {}
+                "order": [
+                  "compacted"
+                ],
+                "byId": {
+                  "compacted": {
+                    "type": "compacted"
+                  }
+                }
               }
             }
           }
@@ -84,15 +90,15 @@
         "session": {
           "model": "claude-sonnet-4-6",
           "permissionMode": "default",
-          "cwd": "/tmp/closta-rec-21-compact-TCQxRS/cwd",
-          "version": "2.1.282"
+          "cwd": "/tmp/closta-rec-21-compact-YKg81j/cwd",
+          "version": "2.1.325"
         },
         "usage": {
-          "costUsd": 0.06200205,
+          "costUsd": 0.06851805,
           "inputTokens": 1432,
-          "outputTokens": 487,
-          "cacheReadInputTokens": 33401,
-          "cacheCreationInputTokens": 6732
+          "outputTokens": 546,
+          "cacheReadInputTokens": 36091,
+          "cacheCreationInputTokens": 7536
         },
         "commands": [
           {
@@ -124,8 +130,8 @@
           },
           {
             "name": "code-review",
-            "description": "Review the current diff, or a PR number/branch/path target, for correctness bugs (plus reuse/simplification/efficiency cleanups where the model's review recipe covers them) at the given effort level (low/medium: fewer, high-confidence findings; high→max: broader coverage, may include uncertain findings); with no level given, it reuses the level you typed last. Pass --comment to post findings as inline PR comments, or --fix to apply the findings to the working tree after the review.",
-            "argumentHint": "[low|medium|high|xhigh|max] [--fix] [--comment] [<pr#>|<branch>|<path>]"
+            "description": "Review the current diff, or a PR number/branch/path target, for correctness bugs (plus reuse/simplification/efficiency cleanups where the model's recipe covers them) at the effort level given first, before any target (low|medium|high|xhigh|max: from few high-confidence findings to many, some uncertain); with no level given, it reuses the level you typed last. Pass --comment to post findings as inline PR comments, or --fix to apply them to the working tree after the review. Pass --max-findings <n> to report up to n findings, or --max-findings all for every finding. The choice stays until you pass --max-findings default.",
+            "argumentHint": "[low|medium|high|xhigh|max] [--fix] [--comment] [<pr#>|<branch>|<path>] [--max-findings <n>|all]"
           },
           {
             "name": "simplify",
@@ -143,7 +149,8 @@
           },
           {
             "name": "doctor",
-            "description": "Health-check the user's Claude Code setup and fix issues: diagnose installation health — what the `claude doctor` terminal diagnostics cover — from local data (duplicate or leftover installs, PATH, unparseable settings files, broken or colliding agent definitions, skills whose frontmatter fails to parse); find unused skills, MCP servers, and plugins versus their context cost and disable dead weight; deduplicate local CLAUDE.md files against checked-in ones; trim checked-in CLAUDE.md files by cutting content a session could derive from the codebase (directory layouts, tech-stack lists, architecture overviews) while keeping gotchas, rationale, and non-standard conventions; migrate always-loaded CLAUDE.md guidance into lazy skills and nested CLAUDE.md files; flag slow hooks and context-heavy extensions; check the installed version is current; make auto mode the default permission mode; and pre-approve frequently denied read-only commands. Use when the user asks for a doctor run, checkup, audit, tune-up, or cleanup of their Claude Code setup or configuration."
+            "description": "Health-check the user's Claude Code setup and fix issues: diagnose installation health — what the `claude doctor` terminal diagnostics cover — from local data (duplicate or leftover installs, PATH, unparseable settings files, broken or colliding agent definitions, skills whose frontmatter fails to parse); find unused skills, MCP servers, and plugins versus their context cost and disable dead weight; deduplicate local CLAUDE.md files against checked-in ones; trim checked-in CLAUDE.md files by cutting content a session could derive from the codebase (directory layouts, tech-stack lists, architecture overviews) while keeping gotchas, rationale, and non-standard conventions; migrate always-loaded CLAUDE.md guidance into lazy skills and nested CLAUDE.md files; flag slow hooks and context-heavy extensions; check the installed version is current; make auto mode the default permission mode; and pre-approve frequently denied read-only commands. Use when the user asks for a doctor run, checkup, audit, tune-up, or cleanup of their Claude Code setup or configuration.",
+            "argumentHint": "[prompt-audit [<path>]]"
           },
           {
             "name": "loop",
@@ -152,7 +159,7 @@
           },
           {
             "name": "claude-api",
-            "description": "Reference for the Claude API / Anthropic SDK — model ids, pricing, params, streaming, tool use, MCP, agents, caching, token counting, model migration.\nTRIGGER — read BEFORE opening the target file; don't skip because it \"looks like a one-liner\" — whenever: the prompt names Claude/Anthropic in any form (Claude, Anthropic, Fable, Opus, Sonnet, Haiku, `anthropic`, `@anthropic-ai`, `claude-*`, `us.anthropic.*`, `[1m]`); the user asks about an LLM (pricing/model choice/limits/caching) — never answer from memory; OR the task is LLM-shaped with provider unstated (agent/MCP/tool-definition/multi-agent/RAG/LLM-judge/computer-use; generate/summarize/extract/classify/rewrite/converse over NL; debugging refusals/cutoffs/streaming/tool-calls/tokens).\nSKIP only when another provider is being worked on (overrides all triggers): OpenAI/GPT/Gemini/Llama/Mistral/Cohere/Ollama named in the query; OR `grep -rE 'openai|langchain_openai|google.generativeai|genai|mistralai|cohere|ollama'` over the project hits (run this grep FIRST if no provider named — don't Read the file)."
+            "description": "Reference for the Claude API / Anthropic SDK — model ids, pricing, params, streaming, tool use, MCP, agents, caching, token counting, model migration.\nTRIGGER — read FIRST, before you answer, run a command or open a file (already started? read it now); don't skip because it \"looks like a one-liner\" — whenever: the prompt names Claude/Anthropic in any form (Claude, Anthropic, Fable, Opus, Sonnet, Haiku, `anthropic`, `@anthropic-ai`, `claude-*`, `us.anthropic.*`, `[1m]`); the user asks about an LLM (pricing/model choice/limits/caching) — never answer from memory; OR the task is LLM-shaped with provider unstated (agent/MCP/tool-definition/multi-agent/RAG/LLM-judge/computer-use; generate/summarize/extract/classify/rewrite/converse over NL; debugging refusals/cutoffs/streaming/tool-calls/tokens).\nSKIP only when another provider is being worked on (overrides all triggers): OpenAI/GPT/Gemini/Llama/Mistral/Cohere/Ollama named in the query; OR `grep -rE 'openai|langchain_openai|google.generativeai|genai|mistralai|cohere|ollama'` over the project hits (run this grep FIRST if no provider named — don't Read the file; if nothing hits, load this skill)."
           },
           {
             "name": "run",
@@ -161,6 +168,10 @@
           {
             "name": "run-skill-generator",
             "description": "Author or improve the run-<unit> skill - a per-project skill that tells agents how to build, launch, and drive this project's app. Use when the user asks to set up the project, get it running, write run instructions, or verify build/run steps work from a clean environment."
+          },
+          {
+            "name": "plugin-authoring",
+            "description": "Make a mod: a change to Claude's own interface or behaviour, such as a theme, a panel or pane that stays beside the chat and updates, a band, status line, toast, slash command, or hook on tool calls. Use to make, change or debug a mod or its hooks module."
           },
           {
             "name": "advisor",
@@ -217,7 +228,7 @@
           },
           {
             "name": "fast",
-            "description": "Toggle fast mode (Opus 4.8)",
+            "description": "Toggle fast mode (Opus 5.5)",
             "argumentHint": "[on|off]"
           },
           {
@@ -322,19 +333,18 @@
           {
             "value": "default",
             "displayName": "Default (recommended)",
-            "description": "Opus 4.8 with 1M context · Best for everyday, complex tasks",
-            "resolvedModel": "claude-opus-4-8[1m]",
+            "description": "Opus 5.5 · Best for everyday, complex tasks",
+            "resolvedModel": "claude-opus-5-5",
             "supportsEffort": true,
             "supportedEffortLevels": [
               "low",
               "medium",
               "high",
-              "xhigh",
-              "max"
+              "xhigh"
             ]
           },
           {
-            "value": "claude-opus-5-5",
+            "value": "opus",
             "displayName": "Opus 5.5",
             "description": "For complex work and everyday tasks",
             "resolvedModel": "claude-opus-5-5",
@@ -343,8 +353,7 @@
               "low",
               "medium",
               "high",
-              "xhigh",
-              "max"
+              "xhigh"
             ]
           },
           {
@@ -357,8 +366,20 @@
               "low",
               "medium",
               "high",
-              "xhigh",
-              "max"
+              "xhigh"
+            ]
+          },
+          {
+            "value": "sonnet",
+            "displayName": "Sonnet 5.5",
+            "description": "Most efficient for simpler tasks",
+            "resolvedModel": "claude-sonnet-5-5",
+            "supportsEffort": true,
+            "supportedEffortLevels": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
             ]
           },
           {
@@ -371,12 +392,25 @@
               "low",
               "medium",
               "high",
+              "xhigh"
+            ]
+          },
+          {
+            "value": "haiku",
+            "displayName": "Haiku 5.5",
+            "description": "Fastest for quick answers",
+            "resolvedModel": "claude-haiku-5-5",
+            "supportsEffort": true,
+            "supportedEffortLevels": [
+              "low",
+              "medium",
+              "high",
               "xhigh",
               "max"
             ]
           },
           {
-            "value": "haiku",
+            "value": "claude-haiku-4-5-20251001",
             "displayName": "Haiku 4.5",
             "description": "Fastest for quick answers",
             "resolvedModel": "claude-haiku-4-5-20251001"
@@ -391,8 +425,7 @@
               "low",
               "medium",
               "high",
-              "xhigh",
-              "max"
+              "xhigh"
             ]
           },
           {
@@ -405,8 +438,7 @@
               "low",
               "medium",
               "high",
-              "xhigh",
-              "max"
+              "xhigh"
             ]
           },
           {
@@ -418,8 +450,7 @@
             "supportedEffortLevels": [
               "low",
               "medium",
-              "high",
-              "max"
+              "high"
             ]
           },
           {
@@ -431,8 +462,7 @@
             "supportedEffortLevels": [
               "low",
               "medium",
-              "high",
-              "max"
+              "high"
             ]
           }
         ],
@@ -441,8 +471,8 @@
           {
             "seq": 1,
             "trigger": "manual",
-            "preTokens": 20072,
-            "postTokens": 1235
+            "preTokens": 21819,
+            "postTokens": 3447
           }
         ],
         "compacting": false

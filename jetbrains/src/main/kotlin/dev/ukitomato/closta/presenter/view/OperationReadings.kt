@@ -24,7 +24,7 @@ internal fun OperationRecords.compacted(event: AgentEvent.SystemCompactBoundary)
     return copy(seq = record.seq, compactions = (compactions + record).takeLast(MAX_COMPACTIONS))
 }
 
-private const val UNKNOWN_TRIGGER = "unknown"
+internal const val UNKNOWN_TRIGGER = "unknown"
 
 /**
  * Whether the CLI says it is compacting: from `system/status`, whose status is `compacting` only while it does. A
@@ -38,14 +38,24 @@ internal fun OperationRecords.statusSaid(event: AgentEvent.SystemStatus): Operat
 
 private const val COMPACTING = "compacting"
 
+/** The retry `system/api_retry` reports, shown until the reply goes on. */
+internal fun OperationRecords.retried(event: AgentEvent.SystemApiRetry): OperationRecords =
+    copy(retry = RetryRecord(event.attempt, event.maxRetries, event.retryDelayMs, event.errorStatus))
+
+/** The retry is over: a frame or a `result` means the request went through or the turn ended. */
+internal fun OperationRecords.retryEnded(): OperationRecords = if (retry == null) this else copy(retry = null)
+
 /**
  * The tokens of a `result`: `modelUsage` is the session's total so far for each model, so the figures are summed over
- * the models and replace the last ones, never added to them. A `result` that names no model says nothing of the total.
+ * the models and replace the last ones, never added to them. A `result` that names no model says nothing of the total,
+ * and leaves no cache to count (the `result` of `/clear` names none). The rest is the cache, read from [cacheTurn].
  */
 internal fun OperationRecords.resulted(event: AgentEvent.Result): OperationRecords {
     val usage = (JsonRead.parse(event.modelUsage.text) as? JsonObject)?.entries?.map { it.value }.orEmpty()
     val models = usage.filterIsInstance<JsonObject>()
-    if (models.isEmpty()) return this
+    if (models.isEmpty()) {
+        return if (cacheTtlMs == null && !cacheTouched) this else copy(cacheTtlMs = null, cacheTouched = false)
+    }
     val totals =
         TokenTotals(
             input = models.sumOf { it.count("inputTokens") ?: 0L },
@@ -53,8 +63,49 @@ internal fun OperationRecords.resulted(event: AgentEvent.Result): OperationRecor
             cacheRead = models.sumOf { it.count("cacheReadInputTokens") ?: 0L },
             cacheCreation = models.sumOf { it.count("cacheCreationInputTokens") ?: 0L },
         )
-    return if (totals == tokens) this else copy(tokens = totals)
+    val next = if (totals == tokens) this else copy(tokens = totals)
+    return next.cacheTurn(JsonRead.parse(event.usage.text) as? JsonObject)
 }
+
+/**
+ * The cache in the turn's own `usage` (`modelUsage` is the session's running total, so it cannot say what this turn
+ * did). A turn that neither read nor wrote it (a local command, a compaction, a refusal before any request) leaves
+ * the clock as it was. One that wrote to the one-hour cache makes it an hour, one that wrote only the five-minute cache
+ * five minutes, and one that only read it keeps the time it had (five minutes when none is known).
+ */
+private fun OperationRecords.cacheTurn(usage: JsonObject?): OperationRecords {
+    val read = usage?.count("cache_read_input_tokens") ?: 0L
+    val created = usage?.count("cache_creation_input_tokens") ?: 0L
+    if (read + created == 0L) return if (cacheTouched) copy(cacheTouched = false) else this
+    val split = usage?.get("cache_creation") as? JsonObject
+    val ttl =
+        when {
+            (split?.count("ephemeral_1h_input_tokens") ?: 0L) > 0L -> HOUR_CACHE_MS
+            created > 0L -> FIVE_MINUTE_CACHE_MS
+            else -> cacheTtlMs ?: FIVE_MINUTE_CACHE_MS
+        }
+    return if (cacheTouched && ttl == cacheTtlMs) this else copy(cacheTtlMs = ttl, cacheTouched = true)
+}
+
+private const val HOUR_CACHE_MS = 3_600_000L
+private const val FIVE_MINUTE_CACHE_MS = 300_000L
+
+/**
+ * The signals that come with a turn's frames, each to its own fold: `system/api_retry` starts a retry, and a stream
+ * frame goes on with the reply and so ends it; `system/thinking_tokens` gives the estimate of the thinking that
+ * streams; a `rate_limit_event` says how near the plan's limit the session is.
+ */
+internal fun foldTurnSignals(
+    transcript: Transcript,
+    event: AgentEvent,
+): Transcript =
+    when (event) {
+        is AgentEvent.SystemApiRetry -> transcript.withOperations(transcript.operations.retried(event))
+        is AgentEvent.SystemThinkingTokens -> foldThinkingTokens(transcript, event)
+        is AgentEvent.RateLimitEvent -> transcript.withOperations(transcript.operations.rateLimited(event))
+        is AgentEvent.StreamEvent -> foldStream(transcript, event).let { it.withOperations(it.operations.retryEnded()) }
+        else -> transcript
+    }
 
 /** The models of an `initialize` response (`response.response.models`), or null when it has none. */
 internal fun modelsOfResponse(response: JsonValue?): List<ModelRecord>? {

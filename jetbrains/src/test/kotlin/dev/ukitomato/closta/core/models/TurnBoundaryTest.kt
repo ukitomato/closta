@@ -11,20 +11,20 @@ import org.junit.jupiter.api.Test
  * A turn closes only on a `result` correlated by `user_message_uuid`; a `result` with a null or
  * unmatched uuid is a spontaneous resume and closes nothing.
  *
- * This is asserted on the two captures that actually contain self-resumes — 10 (`result`×3, uuids
- * set/null/null) and 11 (`result`×4, set/set/null/null) — so the count of closed turns and the count
+ * This is asserted on the two captures that actually contain self-resumes — 10 (`result`×2, uuids
+ * set/null) and 11 (`result`×4, set/set/null/null) — so the count of closed turns and the count
  * of spontaneous resumes both carry positive evidence, not just the absence of a wrongly-closed turn.
  */
 class TurnBoundaryTest {
     @Test
-    fun `capture 10 closes the user-started turn and treats the two null results as resumes`() {
+    fun `capture 10 closes the user-started turn and treats the null result as a resume`() {
         val state = foldCapture("10-background-task.ndjson")
 
         assertAll(
             { assertEquals(1, state.turns.size, "one turn opened") },
             { assertEquals(0, openTurns(state), "no turn left open") },
             { assertEquals(1, closedTurns(state), "the user-started turn is closed") },
-            { assertEquals(2, state.spontaneousResumeCount, "the two null-uuid results closed nothing") },
+            { assertEquals(1, state.spontaneousResumeCount, "the null-uuid result closed nothing") },
         )
     }
 

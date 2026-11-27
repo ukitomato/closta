@@ -142,8 +142,15 @@ class ClaudeSession(
         stdinChannel.send(StdinEncoder.setPermissionMode(requestId, mode))
     }
 
-    override suspend fun requestContextUsage(requestId: String) {
-        stdinChannel.send(StdinEncoder.getContextUsage(requestId))
+    override suspend fun requestContextUsage(
+        requestId: String,
+        full: Boolean,
+    ) {
+        stdinChannel.send(StdinEncoder.getContextUsage(requestId, if (full) "full" else "summary"))
+    }
+
+    override suspend fun requestUsage(requestId: String) {
+        stdinChannel.send(StdinEncoder.getUsage(requestId))
     }
 
     // The ids are the caller's, as above.

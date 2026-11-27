@@ -54,7 +54,7 @@ import http from 'node:http';
 import { randomUUID, createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { scenarios, findScenario, rewindDefinitionProblem, resumeAtUuid, resumeFlagsFor } from './scenarios.mjs';
-import { removeFileHistory } from './cleanup.mjs';
+import { removeFileHistory, removeOnSignal } from './cleanup.mjs';
 import { newScrubState, scrubLine, scrubLines, findPii, createStreamScrubber, joinedFragments } from './scrub.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -366,6 +366,7 @@ async function recordOne(scenario, version) {
             await waitFor((s) => (s.seen.get(step.line) ?? 0) >= (step.n ?? 1), done.maxMs, `${step.n ?? 1} of ${step.line}`);
             break;
           case 'interrupt': control({ subtype: 'interrupt' }); break;
+          case 'control': await controlAndWait(step.request, `${step.request.subtype} answer`); break;
           case 'mcpStatus': await controlAndWait({ subtype: 'mcp_status' }, 'mcp_status answer'); break;
           case 'mcpToggle':
             await controlAndWait({ subtype: 'mcp_toggle', serverName: serverNameOf(step.serverName), enabled: step.enabled }, 'mcp_toggle answer');
@@ -596,6 +597,28 @@ async function writeManifest(entriesById, version) {
   return manifest;
 }
 
+// The user's own config holds their skills, plugins, agents and settings, and every init line lists them. Unless
+// CLAUDE_CONFIG_DIR already names a config to record with, record with a fresh one that holds only the sign-in
+// (.credentials.json, kept at mode 600) and remove it afterwards, also when a signal stops the recording. Returns the
+// clean-up.
+async function useCleanConfig() {
+  if (process.env.CLAUDE_CONFIG_DIR) return async () => {};
+  const credentials = path.join(os.homedir(), '.claude', '.credentials.json');
+  try { await fsp.access(credentials); } catch {
+    throw new Error(`no ${credentials} to sign in with: set CLAUDE_CONFIG_DIR to a config directory that holds only a sign-in`);
+  }
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'closta-record-config-'));
+  const stopListening = removeOnSignal(dir);
+  await fsp.copyFile(credentials, path.join(dir, '.credentials.json'));
+  await fsp.chmod(path.join(dir, '.credentials.json'), 0o600);
+  process.env.CLAUDE_CONFIG_DIR = dir;
+  return async () => {
+    stopListening();
+    delete process.env.CLAUDE_CONFIG_DIR;
+    await fsp.rm(dir, { recursive: true, force: true });
+  };
+}
+
 async function main() {
   const argv = process.argv.slice(2);
   if (argv.includes('--list')) {
@@ -632,15 +655,20 @@ async function main() {
 
   let total = 0;
   const failed = [];
-  for (const s of targets) {
-    try {
-      const entry = await recordOne(s, version);
-      entriesById.set(entry.scenario, entry);
-      total += entry.cost_usd || 0;
-    } catch (e) {
-      failed.push(s.id);
-      process.stderr.write(`  ✗ ${s.id}: ${e.message}\n`);
+  const dropConfig = await useCleanConfig();
+  try {
+    for (const s of targets) {
+      try {
+        const entry = await recordOne(s, version);
+        entriesById.set(entry.scenario, entry);
+        total += entry.cost_usd || 0;
+      } catch (e) {
+        failed.push(s.id);
+        process.stderr.write(`  ✗ ${s.id}: ${e.message}\n`);
+      }
     }
+  } finally {
+    await dropConfig();
   }
 
   const manifest = await writeManifest(entriesById, version);

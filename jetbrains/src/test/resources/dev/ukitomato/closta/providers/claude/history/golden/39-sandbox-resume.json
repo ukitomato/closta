@@ -1,13 +1,13 @@
 {
   "capture": "39-sandbox-resume",
-  "sessionId": "793daf72-8d4c-48c0-9b73-a4d690bb8821",
+  "sessionId": "8160dfd6-291e-4b3b-8cb1-e5656aa2738b",
   "read": {
     "events": [
       {
         "kind": "User",
-        "uuid": "920cb21e-1043-47cc-a636-1bb8b3e9b641",
-        "sessionId": "793daf72-8d4c-48c0-9b73-a4d690bb8821",
-        "timestamp": "2026-11-09T22:00:32.039Z",
+        "uuid": "aa372e20-d2dc-43c3-bb15-883d39e2ec6a",
+        "sessionId": "8160dfd6-291e-4b3b-8cb1-e5656aa2738b",
+        "timestamp": "2026-11-14T12:36:39.422Z",
         "message": {
           "role": "user",
           "content": "Respond with exactly one word: pong"
@@ -19,13 +19,13 @@
       },
       {
         "kind": "Assistant",
-        "uuid": "9039b678-6656-44e8-951a-0e7f5fbd9d98",
-        "sessionId": "793daf72-8d4c-48c0-9b73-a4d690bb8821",
-        "timestamp": "2026-11-09T22:00:36.653Z",
-        "requestId": "req_011CScrubbedEwF7NGbNwmQg",
+        "uuid": "9d877888-79de-4afe-be45-30b692dd1953",
+        "sessionId": "8160dfd6-291e-4b3b-8cb1-e5656aa2738b",
+        "timestamp": "2026-11-14T12:36:41.183Z",
+        "requestId": "req_011CScrubbed3XUawnn2y6vN",
         "message": {
           "model": "claude-sonnet-4-6",
-          "id": "msg_011CScrubbed6sqAZFspyEAR",
+          "id": "msg_011CScrubbedC9TkjHBAFjbW",
           "type": "message",
           "role": "assistant",
           "content": [
@@ -40,8 +40,8 @@
           "stop_details": null,
           "usage": {
             "input_tokens": 3,
-            "cache_creation_input_tokens": 20072,
-            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 7538,
+            "cache_read_input_tokens": 14280,
             "output_tokens": 5,
             "output_tokens_details": {
               "thinking_tokens": 0
@@ -52,7 +52,7 @@
             },
             "service_tier": "standard",
             "cache_creation": {
-              "ephemeral_1h_input_tokens": 20072,
+              "ephemeral_1h_input_tokens": 7538,
               "ephemeral_5m_input_tokens": 0
             },
             "inference_geo": "global",
@@ -60,16 +60,17 @@
               {
                 "input_tokens": 3,
                 "output_tokens": 5,
-                "cache_read_input_tokens": 0,
-                "cache_creation_input_tokens": 20072,
+                "cache_read_input_tokens": 14280,
+                "cache_creation_input_tokens": 7538,
                 "cache_creation": {
                   "ephemeral_5m_input_tokens": 0,
-                  "ephemeral_1h_input_tokens": 20072
+                  "ephemeral_1h_input_tokens": 7538
                 },
                 "type": "message"
               }
             ],
-            "speed": "standard"
+            "speed": "standard",
+            "fallback_credit": null
           },
           "input_transformations": [],
           "diagnostics": null,
@@ -84,14 +85,14 @@
         "error": null
       }
     ],
-    "skipped": 21,
+    "skipped": 29,
     "dropped": 0
   },
   "list": [
     {
-      "id": "793daf72-8d4c-48c0-9b73-a4d690bb8821",
+      "id": "8160dfd6-291e-4b3b-8cb1-e5656aa2738b",
       "title": "Respond with exactly one word: pong",
-      "bytes": 156961
+      "bytes": 262254
     }
   ]
 }

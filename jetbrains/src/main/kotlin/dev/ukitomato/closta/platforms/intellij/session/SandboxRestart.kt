@@ -40,21 +40,23 @@ private fun SessionView.applied(kind: SwitchKind): String? =
         ?.takeIf { it.isNotEmpty() }
 
 /**
- * The spec a restart launches. After a message was [sent], or for a [SessionOpening.Resume], it resumes the session
- * by its own id (`--resume=<sessionId>`, without the fork and the cut). A New or a Fork with nothing sent yet starts as
- * it was launched (a New keeps its `--session-id`: capture 40). The [carried] mode, model and effort win over the
+ * The spec a restart launches. [sentUnder] is the id the conversation is saved under now once a message was sent (the
+ * launch's own id, or the CLI's new one after a `/clear`), null while none was. After a message, or for a
+ * [SessionOpening.Resume], it resumes the session by that id (`--resume=<id>`, without the fork and the cut); a Resume
+ * with nothing sent by its own. A New or a Fork with nothing sent yet starts as it was launched (a New keeps its
+ * `--session-id`: capture 40). The [carried] mode, model and effort win over the
  * launch's, and [sandbox] is the given value.
  */
 fun restartSpec(
     launched: ClaudeLaunchSpec,
     opening: SessionOpening,
-    sent: Boolean,
+    sentUnder: String?,
     carried: CarriedChoices,
     sandbox: Boolean,
 ): ClaudeLaunchSpec {
     val opened =
-        if (sent || opening is SessionOpening.Resume) {
-            launched.copy(resume = launched.sessionId, forkSession = false, resumeSessionAt = null)
+        if (sentUnder != null || opening is SessionOpening.Resume) {
+            launched.copy(resume = sentUnder ?: launched.sessionId, forkSession = false, resumeSessionAt = null)
         } else {
             launched
         }

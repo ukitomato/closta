@@ -86,12 +86,14 @@ object Lines {
         return """[{"type":"tool_result","tool_use_id":${quote(toolUseId)},"content":$content$error}]"""
     }
 
+    @Suppress("LongParameterList")
     fun result(
         command: String?,
         isError: Boolean = false,
         text: String = "done",
         cost: Double = 0.0,
         modelUsage: String = "{}",
+        usage: String = "{}",
     ) = AgentEvent.Result(
         uuid = "r",
         sessionId = SESSION,
@@ -111,7 +113,7 @@ object Lines {
         timeToRequestMs = 0,
         firstContentFrameMs = 0,
         fastModeState = "off",
-        usage = RawJson("{}"),
+        usage = RawJson(usage),
         modelUsage = RawJson(modelUsage),
         permissionDenials = RawJson("[]"),
         subagentStats = RawJson("{}"),

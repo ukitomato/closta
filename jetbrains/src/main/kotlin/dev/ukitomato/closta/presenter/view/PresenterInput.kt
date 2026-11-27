@@ -219,6 +219,19 @@ sealed interface PresenterInput {
         val sessionId: String,
         val reason: ResumeRefusal = ResumeRefusal.TURN,
     ) : PresenterInput
+
+    /** The user closed the banner of the limit [seq] ([RateLimitRecord.seq]). Core does not change. */
+    data class RateLimitDismissed(
+        val seq: Int,
+    ) : PresenterInput
+
+    /**
+     * The host saw a `result` at [epochMs] (its own clock): the prompt cache that `result` wrote is counted from then.
+     * Core does not change.
+     */
+    data class ResultSeenAt(
+        val epochMs: Long,
+    ) : PresenterInput
 }
 
 /** Why the host did not open a saved session: it is the one thing a record's sentence depends on. */

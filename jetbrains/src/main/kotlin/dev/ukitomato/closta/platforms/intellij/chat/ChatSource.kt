@@ -11,6 +11,7 @@ import dev.ukitomato.closta.platforms.intellij.session.SessionNotice
 import dev.ukitomato.closta.platforms.intellij.session.SessionRuntime
 import dev.ukitomato.closta.platforms.intellij.session.SessionStatus
 import dev.ukitomato.closta.platforms.intellij.session.SessionView
+import dev.ukitomato.closta.platforms.intellij.session.resumeIdOf
 import dev.ukitomato.closta.platforms.intellij.store.AppSettingsStore
 import dev.ukitomato.closta.platforms.intellij.thread.CardAnswer
 import dev.ukitomato.closta.presenter.view.RewindOutcome
@@ -34,7 +35,14 @@ import java.util.concurrent.ConcurrentHashMap
  */
 @Suppress("TooManyFunctions") // one function per command the screen sends
 interface ChatSource : Disposable {
+    /** The host's id of the session: what the screen, its draft and the session list know it by, for its whole life. */
     val sessionId: String
+
+    /**
+     * The id the conversation now on screen is saved under, which a resume, a fork or a rewind opens. It is the
+     * [sessionId] until the CLI goes on under another (after `/clear`).
+     */
+    val resumeId: String get() = sessionId
     val title: String
     val view: StateFlow<SessionView>
     val notice: StateFlow<SessionNotice?>
@@ -76,6 +84,12 @@ interface ChatSource : Disposable {
     /** Asks the CLI for its MCP servers; the answer is the view's list. */
     suspend fun requestMcpStatus()
 
+    /** Asks the CLI for the session's cost and the plan's limits; the answer is the composer's usage. */
+    suspend fun requestUsage()
+
+    /** Asks the CLI for the context's whole breakdown; the answer is the composer's context. */
+    suspend fun requestContextBreakdown()
+
     suspend fun setMcpServerEnabled(
         name: String,
         enabled: Boolean,
@@ -89,6 +103,12 @@ interface ChatSource : Disposable {
      */
     suspend fun rewindFiles(messageId: String): RewindRecord?
 
+    /**
+     * The user closed the banner of the limit [seq]: it stays hidden until the limit's status or window changes. A
+     * source with no session has no limit to close.
+     */
+    suspend fun dismissRateLimit(seq: Int) {}
+
     /** A real `claude` session, opened through [ClaudeSessionService]. */
     @Suppress("TooManyFunctions") // one override per command
     class Live(
@@ -100,6 +120,7 @@ interface ChatSource : Disposable {
     ) : ChatSource {
         private val scope = project.service<ClaudeSessionService>().viewScope(this)
         override val sessionId: String get() = runtime.id
+        override val resumeId: String get() = resumeIdOf(view.value, runtime.id)
         override val view: StateFlow<SessionView> = runtime.view
         override val notice: StateFlow<SessionNotice?> =
             runtime.status
@@ -217,6 +238,18 @@ interface ChatSource : Disposable {
 
         override suspend fun requestMcpStatus() {
             commands()?.requestMcpStatus()
+        }
+
+        override suspend fun requestUsage() {
+            commands()?.requestUsage()
+        }
+
+        override suspend fun requestContextBreakdown() {
+            commands()?.requestContextUsage(full = true)
+        }
+
+        override suspend fun dismissRateLimit(seq: Int) {
+            runtime.dismissRateLimit(seq)
         }
 
         override suspend fun setMcpServerEnabled(

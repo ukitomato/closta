@@ -115,10 +115,12 @@ object ComposerFailure {
 }
 
 /** The slash commands of an `initialize` response (`response.response.commands`), or null when it has none. */
-internal fun commandsOfResponse(response: JsonValue?): List<SlashCommandRecord>? {
-    val commands =
-        ((response as? JsonObject)?.obj("response"))?.array("commands")?.items ?: return null
-    return commands.mapNotNull { item ->
+internal fun commandsOfResponse(response: JsonValue?): List<SlashCommandRecord>? =
+    ((response as? JsonObject)?.obj("response"))?.array("commands")?.items?.let(::commandsOf)
+
+/** The slash commands in [items], each an object with a name, a sentence and a hint; one with no name is left out. */
+internal fun commandsOf(items: List<JsonValue>): List<SlashCommandRecord> =
+    items.mapNotNull { item ->
         val fields = item as? JsonObject
         val name = fields?.string("name")?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
         SlashCommandRecord(
@@ -127,7 +129,6 @@ internal fun commandsOfResponse(response: JsonValue?): List<SlashCommandRecord>?
             fields.string("argumentHint")?.takeIf { it.isNotEmpty() },
         )
     }
-}
 
 /** The names of a `system/init`'s `slash_commands`, or null when it has none. */
 internal fun commandsOfInit(slashCommands: JsonValue?): List<SlashCommandRecord>? =

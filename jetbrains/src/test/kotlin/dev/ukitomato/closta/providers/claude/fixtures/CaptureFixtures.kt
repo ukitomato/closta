@@ -26,8 +26,8 @@ object CaptureFixtures {
 
     /**
      * Lines of a capture that the codec cannot place, by capture and wire type — an exception table that
-     * has six rows, for the recorder's own mark in the resume, fork, cut and sandbox captures (the
-     * real ones have all been closed).
+     * has six rows for the recorder's own mark in the resume, fork, cut and sandbox captures, and two for
+     * a kind 2.1.325 sends that the codec has not learnt yet.
      * Tests that derive their expectations from it (the turn left open, the thread still running, the
      * unknown-kind tally) expect nothing unusual from the CLI's own lines.
      *
@@ -56,6 +56,14 @@ object CaptureFixtures {
             // the sandbox on.
             "40-sandbox-same-id" to mapOf(RECORDER_BOUNDARY to 1),
         )
+
+    /**
+     * Lines an older CLI (2.1.282) sent in [scenario], for a test whose situation the current version no longer makes:
+     * taken from that version's committed, scrubbed capture, with its stream_event and rate_limit_event lines left out.
+     */
+    fun legacyExcerpt(scenario: String): String = "$LEGACY_DIRECTORY/$scenario-excerpt.ndjson"
+
+    private const val LEGACY_DIRECTORY = "dev/ukitomato/closta/providers/claude/fixtures-2.1.282"
 
     /** The wire type of the recorder's mark that separates the two stdouts of a resume capture. */
     const val RECORDER_BOUNDARY = "recorder_boundary"

@@ -1,6 +1,7 @@
 package dev.ukitomato.closta.platforms.intellij.session
 
 import com.google.gson.JsonObject
+import dev.ukitomato.closta.core.services.FixedClock
 import dev.ukitomato.closta.platforms.intellij.auth.SignInOutcome
 import dev.ukitomato.closta.platforms.intellij.settings.ProviderLaunch
 import dev.ukitomato.closta.platforms.intellij.store.ProviderId
@@ -28,6 +29,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import java.io.IOException
 import java.time.Instant
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -351,18 +353,82 @@ class SessionRuntimeTest {
             assertEquals(CAPTURE_VERSION, folded.session?.version)
 
             running.commands.sendMessage("send-1", "hello")
-            // A session with no initialize asks for the settings at its first system/init. That request is
-            // written from the fold's own coroutine, so it may reach stdin before or after the user line sent here.
+            // A session with no initialize asks for the settings and the context at its first system/init. Those
+            // requests are written from the fold's own coroutine, so they may reach stdin before or after the user
+            // line sent here.
             val lines =
-                List(2) {
+                List(3) {
                     checkNotNull(withContext(Dispatchers.IO) { session.nextStdinLine(GUARD.inWholeMilliseconds) })
                 }
             assertTrue(lines.any { it.contains("\"subtype\":\"get_settings\"") }, "$lines")
+            assertTrue(lines.any { it.contains("\"subtype\":\"get_context_usage\"") }, "$lines")
             assertTrue(
                 lines.any { it.contains("\"type\":\"user\"") && it.contains("hello") && it.contains(ID) },
                 "$lines",
             )
             runtime.close()
+        }
+
+    @Test
+    @Timeout(TIMEOUT_SECONDS)
+    fun `the context is asked at the process's first init and at a result, never at a later init`() =
+        runBlocking {
+            val session = FakeProcess()
+            val runtime = runtime(spawner(session))
+            runtime.start()
+            runtime.running()
+            val lines = CaptureFixtures.nonBlankLines(CaptureFixtures.textOf(CAPTURE))
+            val init = lines.first { it.contains(INIT_MARK) }
+            session.emit(init)
+            session.emit(init)
+            val asked = mutableListOf(contextRequest(session))
+            assertTrue(contextRequests(session).isEmpty(), "the second init asks nothing")
+            session.emit(lines.first { it.contains("\"type\":\"result\"") })
+            asked += contextRequest(session)
+            assertTrue(contextRequests(session).isEmpty(), "the result asks once")
+            assertTrue(asked.all { it.contains("\"detail\":\"summary\"") }, "$asked")
+            runtime.close()
+        }
+
+    @Test
+    @Timeout(TIMEOUT_SECONDS)
+    fun `a result that wrote the cache is kept with the time the runtime's clock says it was seen`() =
+        runBlocking {
+            val session = FakeProcess()
+            val spawner = spawner(session)
+            val runtime =
+                SessionRuntime(
+                    ID,
+                    childOf(CoroutineScope(SupervisorJob() + Dispatchers.Default)),
+                    planner(spawner, emptyMap()),
+                    WORKING_DIR,
+                    RecordingLog(),
+                    versionTimeout = GUARD,
+                    clock = FixedClock(Instant.ofEpochMilli(SEEN_AT)),
+                )
+            runtime.start()
+            runtime.running()
+            val lines = CaptureFixtures.nonBlankLines(CaptureFixtures.textOf(CAPTURE))
+            session.emit(lines.first { it.contains("\"type\":\"result\"") })
+            val cache =
+                withTimeout(GUARD) { runtime.view.first { it.transcript.operations.cache != null } }
+                    .transcript.operations.cache
+            assertEquals(SEEN_AT, cache?.lastAtMs)
+            runtime.close()
+        }
+
+    // The next context request written, skipping the other lines.
+    private suspend fun contextRequest(session: FakeProcess): String =
+        withContext(Dispatchers.IO) {
+            generateSequence { session.nextStdinLine(GUARD.inWholeMilliseconds) }.first { it.contains(CONTEXT_MARK) }
+        }
+
+    // The context requests written within a quiet spell: one more would come at once after the event that asks.
+    private suspend fun contextRequests(session: FakeProcess): List<String> =
+        withContext(Dispatchers.IO) {
+            generateSequence { session.nextStdinLine(QUIET.inWholeMilliseconds) }
+                .filter { it.contains(CONTEXT_MARK) }
+                .toList()
         }
 
     private class NamedServer(
@@ -455,7 +521,10 @@ class SessionRuntimeTest {
         const val SECRET_KEY = "CLAUDE_AGENT_TEST_SECRET"
         const val CANARY = "011-canary-4f2d8c1e"
         const val CAPTURE = "01-baseline-text.ndjson"
-        const val CAPTURE_VERSION = "2.1.282"
+        const val CAPTURE_VERSION = "2.1.325"
         const val INIT_MARK = "\"subtype\":\"init\""
+        const val CONTEXT_MARK = "\"subtype\":\"get_context_usage\""
+        val QUIET = 500.milliseconds
+        const val SEEN_AT = 5_000L
     }
 }

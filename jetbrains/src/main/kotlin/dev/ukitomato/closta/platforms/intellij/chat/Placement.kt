@@ -12,6 +12,7 @@ import com.intellij.ui.content.ContentManager
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
 import dev.ukitomato.closta.platforms.intellij.composer.ComposerDraft
 import dev.ukitomato.closta.platforms.intellij.session.SessionOpening
+import dev.ukitomato.closta.platforms.intellij.session.heldSessionOf
 
 /** Where a conversation is shown: an editor tab (Claude mainly writes) or the sidebar (the user mainly writes). */
 enum class Placement { EDITOR_TAB, SIDEBAR }
@@ -59,12 +60,15 @@ fun openNewChat(
     workingDirectory: String? = null,
     carry: ComposerDraft? = null,
 ) {
-    val id = project.service<ChatSessions>().open(opening, title, workingDirectory)
+    val sessions = project.service<ChatSessions>()
+    // A resume of a session already open shows that one; it is not stopped when no place can show it.
+    val held = heldSessionOf(opening, sessions.resumeIds.keys)
+    val id = sessions.open(opening, title, workingDirectory)
     if (carry != null) {
-        project.service<ChatSessions>().source(id)?.let { service<ComposerDrafts>().install(it, carry) }
+        sessions.source(id)?.let { service<ComposerDrafts>().install(it, carry) }
     }
     // A session no place could show would run unseen: it is stopped.
-    if (!openChat(project, id, placement)) project.service<ChatSessions>().stop(id)
+    if (!openChat(project, id, placement) && held == null) sessions.stop(id)
 }
 
 private fun openInSidebar(

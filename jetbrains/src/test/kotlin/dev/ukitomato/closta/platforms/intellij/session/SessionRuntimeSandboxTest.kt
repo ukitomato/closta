@@ -176,7 +176,7 @@ class SessionRuntimeSandboxTest {
                 restartSpec(
                     ClaudeLaunchSpec(sessionId = ID, cwd = WORKING_DIR),
                     SessionOpening.New,
-                    true,
+                    ID,
                     carriedChoices(before),
                     true,
                 ).toArgv()

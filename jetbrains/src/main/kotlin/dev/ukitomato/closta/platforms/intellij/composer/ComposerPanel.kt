@@ -24,7 +24,10 @@ import com.intellij.openapi.keymap.KeymapUtil
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.guessProjectDir
+import com.intellij.openapi.ui.popup.JBPopup
 import com.intellij.openapi.ui.popup.JBPopupFactory
+import com.intellij.openapi.ui.popup.JBPopupListener
+import com.intellij.openapi.ui.popup.LightweightWindowEvent
 import com.intellij.openapi.util.IconLoader
 import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFile
@@ -52,12 +55,18 @@ import dev.ukitomato.closta.platforms.intellij.thread.cardHint
 import dev.ukitomato.closta.presenter.view.AttachmentFault
 import dev.ukitomato.closta.presenter.view.AttachmentLimits
 import dev.ukitomato.closta.presenter.view.AttachmentVerdict
+import dev.ukitomato.closta.presenter.view.CacheClock
+import dev.ukitomato.closta.presenter.view.CacheRecord
 import dev.ukitomato.closta.presenter.view.ComposerState
+import dev.ukitomato.closta.presenter.view.MS_PER_MINUTE
+import dev.ukitomato.closta.presenter.view.RetryRecord
 import dev.ukitomato.closta.presenter.view.SandboxBlock
 import dev.ukitomato.closta.presenter.view.SwitchKind
 import dev.ukitomato.closta.presenter.view.SwitchRecord
+import dev.ukitomato.closta.presenter.view.cacheClock
 import dev.ukitomato.closta.presenter.view.checkAttachment
 import dev.ukitomato.closta.presenter.view.shortLabel
+import dev.ukitomato.closta.presenter.view.untilNextMinute
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -81,6 +90,7 @@ import java.nio.charset.CharacterCodingException
 import java.nio.charset.CodingErrorAction
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 import javax.imageio.ImageIO
 import javax.swing.JComponent
 import javax.swing.JPanel
@@ -112,6 +122,12 @@ class ComposerPanel(
 
     /** The sandbox button was pressed: true to turn it on. */
     var onSandbox: (Boolean) -> Unit = {}
+
+    /** The cost button was pressed: the CLI is asked for the session's cost and the plan's limits. */
+    var onUsage: () -> Unit = {}
+
+    /** The context ring was pressed, or its breakdown asked to count again: the CLI is asked for the whole one. */
+    var onContext: () -> Unit = {}
 
     /** The Bypass bar was answered and went: the keyboard goes back to the input. */
     var onLetGo: () -> Unit = {}
@@ -154,7 +170,22 @@ class ComposerPanel(
     private val mode = ToolbarButton("", null, true) { button -> state?.let { showModes(it, button) } }
     private val sandbox = ToolbarButton("", SHIELD_OFF, false) { state?.let { onSandbox(!it.sandbox.on) } }
     private val model = ToolbarButton("", null, true) { button -> state?.let { showModels(it, button) } }
-    private val context = ContextUse()
+    private val cost =
+        ToolbarButton(null, null, false) { button ->
+            openUsage(button)
+            onUsage()
+        }.tip(ClostaBundle.message("composer.usage.tooltip"))
+    private val context =
+        ContextUse { button ->
+            onContext()
+            openContext(button)
+        }
+
+    /** The composer popup that is open, one at a time (opened through [openPopup]); nothing else of it is kept. */
+    private var openPopup: JBPopup? = null
+
+    /** Draws each new state into [openPopup] while it is open. */
+    private var redrawOpen: (ComposerState) -> Unit = {}
     private val send =
         ToolbarButton(null, SEND_IDLE, false) { sendNow() }
             .tip(ClostaBundle.message("composer.send.tooltip"))
@@ -165,6 +196,13 @@ class ComposerPanel(
     private val confirm = JPanel(BorderLayout()).apply { isVisible = false }
     private val box = ComposerBox()
     private val ticker = Timer(TICK_MS) { showStatus() }
+    private val cache = CacheLabel()
+
+    // Redraws the cache's clock as its minutes go down; it runs only while the cache is warm.
+    private val cacheTicker = Timer(MS_PER_MINUTE.toInt()) { state?.let(::showCache) }
+
+    // The cache record [cacheTicker] was started for: a newer one puts its minutes on another phase.
+    private var tickingFor: CacheRecord? = null
 
     val component: JComponent =
         JPanel(BorderLayout()).apply {
@@ -205,7 +243,10 @@ class ComposerPanel(
             },
         )
         com.intellij.openapi.util.Disposer
-            .register(parent) { ticker.stop() }
+            .register(parent) {
+                ticker.stop()
+                cacheTicker.stop()
+            }
         // Esc on the Bypass bar's own links says no too.
         object : DumbAwareAction() {
             override fun actionPerformed(e: AnActionEvent) = closeBypass()
@@ -243,6 +284,7 @@ class ComposerPanel(
         this.sendable = sendable
         shownBlock = if (sendable) SendBlock.NONE else blocked
         showBar(next)
+        redrawOpen(next)
         next.sandboxFailure?.takeIf { it.id != saidSandbox }?.let {
             saidSandbox = it.id
             say(sandboxFailureText(it), StatusSource.REFUSAL, error = true)
@@ -272,6 +314,8 @@ class ComposerPanel(
         left.add(sandbox)
         left.add(model)
         val right = JPanel(FlowLayout(FlowLayout.RIGHT, 0, 0)).apply { isOpaque = false }
+        right.add(cache)
+        right.add(cost)
         right.add(context)
         right.add(send)
         right.add(stop)
@@ -301,6 +345,14 @@ class ComposerPanel(
         val whole = listOfNotNull(next.model.label, effort?.let(::effortText)).joinToString(" · ")
         model.accessibleLabel = ClostaBundle.message("composer.model.accessible", whole)
         model.toolTipText = listOfNotNull(whole, next.model.resolved?.takeIf { it != whole }).joinToString(" — ")
+        val spent = next.costUsd
+        cost.isVisible = spent != null
+        if (spent != null) {
+            val amount = "%.2f".format(Locale.ROOT, spent)
+            cost.text = ClostaBundle.message("composer.usage.button", amount)
+            cost.accessibleLabel = ClostaBundle.message("composer.usage.accessible", amount)
+        }
+        showCache(next)
         val used = next.context
         context.isVisible = used != null
         if (used != null) {
@@ -323,6 +375,24 @@ class ComposerPanel(
         stop.isVisible = next.running
         stop.enabledToClick = !next.stopping
         stop.disabledReason = ClostaBundle.message("composer.status.stopping")
+    }
+
+    /**
+     * The cache's clock at this moment. While it is warm [cacheTicker] runs, first to the moment its minutes go down
+     * and then once a minute, started again when the cache's record changes; otherwise it stops.
+     */
+    private fun showCache(next: ComposerState) {
+        val clock = cacheClock(next.cache, next.context?.totalTokens, next.running, System.currentTimeMillis())
+        cache.show(clock)
+        if (clock is CacheClock.Warm) {
+            if (!cacheTicker.isRunning || tickingFor != next.cache) {
+                tickingFor = next.cache
+                cacheTicker.initialDelay = untilNextMinute(clock.remainingMs).toInt()
+                cacheTicker.restart()
+            }
+        } else {
+            cacheTicker.stop()
+        }
     }
 
     /** The sandbox button: the shield says on (green) or off (gray), the name only when there is room. */
@@ -349,18 +419,16 @@ class ComposerPanel(
         sandbox.disabledReason = if (block != SendBlock.NONE) waiting else busy
     }
 
+    // Plain lines: the button escapes its tooltip and breaks it at each newline.
     private fun contextTip(next: ComposerState): String =
-        buildString {
-            val line = { key: String, a: Any, b: Any -> append(ClostaBundle.message(key, "$a", "$b")).append("<br>") }
-            append("<html>")
+        buildList {
+            val line = { key: String, a: Any, b: Any -> add(ClostaBundle.message(key, "$a", "$b")) }
             next.context?.let { line("composer.context.tokens", it.totalTokens, it.maxTokens) }
             next.tokens?.let {
                 line("composer.context.io", it.input, it.output)
                 line("composer.context.cache", it.cacheRead, it.cacheCreation)
             }
-            next.costUsd?.let { append(ClostaBundle.message("composer.context.cost", "%.4f".format(it))) }
-            append("</html>")
-        }
+        }.joinToString("\n")
 
     private fun showStatus() {
         val next = state ?: return
@@ -397,11 +465,22 @@ class ComposerPanel(
                 cardHint(focusInCard = false, waiting = cardsWaiting) == CardHint.JUMP ->
                     ClostaBundle.message("composer.status.jump", KeymapUtil.getKeystrokeText(JUMP_KEY))
                 next.stopping -> ClostaBundle.message("composer.status.stopping")
+                next.retry != null -> retryText(next.retry)
+                next.compacting -> ClostaBundle.message("composer.status.compacting")
                 next.running -> ClostaBundle.message("composer.status.escToStop")
                 block == SendBlock.STARTING || block == SendBlock.REWINDING -> sendBlockReason(block)
                 else -> null
             }
         return text?.let { StatusMessage(it, StatusSource.SESSION, false, now, null, false) }
+    }
+
+    private fun retryText(retry: RetryRecord): String {
+        val seconds = ((retry.delayMs + MS_PER_SECOND - 1) / MS_PER_SECOND).toString()
+        val attempt = retry.attempt.toString()
+        val max = retry.maxRetries.toString()
+        return retry.status?.let {
+            ClostaBundle.message("composer.status.retryingStatus", attempt, max, seconds, it.toString())
+        } ?: ClostaBundle.message("composer.status.retrying", attempt, max, seconds)
     }
 
     /**
@@ -452,6 +531,50 @@ class ComposerPanel(
         val ttl = if (error) ERROR_TTL_MS else HINT_TTL_MS
         messages.post(StatusMessage(text, source, error, System.currentTimeMillis(), ttl, untilKeystroke = true))
         showStatus()
+    }
+
+    /** Opens the usage popup above [under]; it shows the composer's state until it is closed. */
+    private fun openUsage(under: JComponent) {
+        val next = state ?: return
+        val usage = UsagePopup(next)
+        openPopup(usage.popup, under, usage::show)
+    }
+
+    /**
+     * Opens the context's breakdown above [under], just asked for: it shows the composer's state until it is closed,
+     * and, when the session runs (so the request was sent), says it is counting from the first frame, before the
+     * request is in that state.
+     */
+    private fun openContext(under: JComponent) {
+        val next = state ?: return
+        val breakdown = ContextPopup(next, asked = sendable) { onContext() }
+        openPopup(breakdown.popup, under, breakdown::show)
+    }
+
+    /**
+     * Shows [popup] above [under] as the composer's one open popup: the one open before is closed, and [redraw] gets
+     * each new state until this one closes. The popup goes with the panel, so it never outlives it.
+     */
+    private fun openPopup(
+        popup: JBPopup,
+        under: JComponent,
+        redraw: (ComposerState) -> Unit = {},
+    ) {
+        openPopup?.cancel()
+        openPopup = popup
+        redrawOpen = redraw
+        com.intellij.openapi.util.Disposer
+            .register(parent, popup)
+        popup.addListener(
+            object : JBPopupListener {
+                override fun onClosed(event: LightweightWindowEvent) {
+                    if (openPopup !== popup) return
+                    openPopup = null
+                    redrawOpen = {}
+                }
+            },
+        )
+        ComposerPopups.showAbove(popup, under)
     }
 
     private fun showModes(
@@ -542,8 +665,10 @@ class ComposerPanel(
         val composing = { (editor as? EditorImpl)?.composedTextRange != null }
         val lookupOpen = { LookupManager.getActiveLookup(editor) != null }
         val ours = { !composing() && !lookupOpen() }
+        val trace = ImeEnterTrace()
+        trace.attach(editor.contentComponent)
         // Enter is taken even when nothing can be sent, so it never falls through to the editor as a new line.
-        key(editor, KeyEvent.VK_ENTER, 0, { ours() }) { sendNow() }
+        key(editor, KeyEvent.VK_ENTER, 0, trace.sends(composing, lookupOpen), trace.taking(::sendNow))
         key(editor, KeyEvent.VK_ENTER, InputEvent.SHIFT_DOWN_MASK, { true }) { newLine(editor) }
         // Esc says no to the Bypass bar first, and only then stops the reply.
         key(editor, KeyEvent.VK_ESCAPE, 0, { ours() && escapes() }, ::escape)
@@ -1080,6 +1205,7 @@ class ComposerPanel(
         const val GAP = 4
         const val NARROW = 420
         const val TICK_MS = 1_000
+        private const val MS_PER_SECOND = 1_000L
         const val SWITCH_WAIT_MS = 10_000L
         const val ERROR_TTL_MS = 8_000L
         const val HINT_TTL_MS = 4_000L

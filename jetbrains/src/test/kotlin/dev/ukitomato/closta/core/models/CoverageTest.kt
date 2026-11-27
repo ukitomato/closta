@@ -7,27 +7,40 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 /**
+ * Modelled from sdk.d.ts alone, because no capture has one: its tests build the line by hand and say so. Each goes when
+ * a capture carries it.
+ */
+internal val TYPE_ONLY = setOf(AgentEventKind.SYSTEM_INFORMATIONAL, AgentEventKind.SYSTEM_API_RETRY)
+
+/**
  * The three figures the comparison against the official types turns on.
  *
  * A table could say how the captures line up with the SDK's declarations, but tables go stale in
  * silence, so the figures are pinned here too: raise the CLI version, record again, and whichever of
  * the three moved says what moved with it.
  *
- * The expectations come from `@anthropic-ai/claude-agent-sdk@0.3.282`, whose bundled `package.json`
- * gives `claudeCodeVersion` `2.1.282` — the version the captures were recorded from. The package is
- * not vendored here, so the two counts that describe *it* (44 and 39) are written down rather than
+ * The expectations come from `@anthropic-ai/claude-agent-sdk@0.3.325`, whose bundled `package.json`
+ * gives `claudeCodeVersion` `2.1.325` — the version the captures were recorded from. The package is
+ * not vendored here, so the two counts that describe *it* (45 and 40) are written down rather than
  * computed; everything that describes the **captures** is counted from the captures, and the
  * classification is checked against them so that a figure cannot agree with itself.
  */
+
 class CoverageTest {
     @Test
-    fun `the captures contain exactly the kinds that are modelled`() {
+    fun `the captures contain exactly the kinds that are modelled, but the ones modelled from the types alone`() {
         assertAll(
             { assertEquals(OBSERVED_KINDS, observedKinds().size, "distinct kinds in the captures") },
-            { assertEquals(OBSERVED_KINDS, AgentEventKind.entries.size, "variants of AgentEvent that are kinds") },
             {
                 assertEquals(
-                    AgentEventKind.entries.toSet(),
+                    OBSERVED_KINDS + TYPE_ONLY.size,
+                    AgentEventKind.entries.size,
+                    "variants of AgentEvent that are kinds",
+                )
+            },
+            {
+                assertEquals(
+                    AgentEventKind.entries.toSet() - TYPE_ONLY,
                     observedKinds(),
                     "a modelled kind that never arrives is a branch no test can reach",
                 )
@@ -47,8 +60,8 @@ class CoverageTest {
             // modelled would be exactly the mistake the previous assertion forbids.
             { assertTrue(observedKinds().containsAll(UNDECLARED), "the undeclared kind is in the captures") },
             { assertEquals(CAPTURES_WITH_LIFECYCLE, lifecycleCaptures, "captures containing command_lifecycle") },
-            // 18 observed, 17 declared somewhere in StdoutMessage. The difference of one is the whole
-            // reason AgentEvent has eighteen kinds and not seventeen.
+            // 21 observed, 19 declared somewhere in StdoutMessage. The difference of two is the whole
+            // reason AgentEvent has twenty-one kinds from the captures and not nineteen.
             {
                 assertEquals(
                     DECLARED_IN_STDOUT_MESSAGE,
@@ -104,58 +117,51 @@ class CoverageTest {
             .toSet()
 
     private companion object {
-        /** `StdoutMessage` in sdk.d.ts — "everything the CLI writes to its output stream". */
-        const val STDOUT_MESSAGE_KINDS = 44
+        /**
+         * `StdoutMessage` in sdk.d.ts — "everything the CLI writes to its output stream". Counted as the
+         * members of its union, with `coreTypes.SDKMessage` expanded into its own 40: 40 + 5.
+         */
+        const val STDOUT_MESSAGE_KINDS = 45
 
-        /** `SDKMessage`: the subset of the above without the control protocol and keep-alives. */
-        const val SDK_MESSAGE_KINDS = 39
+        /** `SDKMessage`: the subset of the above without the control protocol and keep-alives (its union's members). */
+        const val SDK_MESSAGE_KINDS = 40
 
         /** Distinct kinds across the captures (including commands_changed and compact_boundary). */
-        const val OBSERVED_KINDS = 18
+        const val OBSERVED_KINDS = 21
 
         /** Of those, the ones `StdoutMessage` declares. */
-        const val DECLARED_IN_STDOUT_MESSAGE = 17
+        const val DECLARED_IN_STDOUT_MESSAGE = 19
 
         /** Of those, the ones that are also in the `SDKMessage` subset. */
-        const val DECLARED_IN_SDK_MESSAGE = 15
-
-        /** Declared but never recorded. */
-        const val NEVER_OBSERVED = 27
+        const val DECLARED_IN_SDK_MESSAGE = 17
 
         /**
-         * Lines across the 40 captures (01-40).
+         * Declared and never recorded, whether or not modelled (`system/informational` is: from the types alone, see
+         * [TYPE_ONLY]).
          */
-        const val RECORDED_LINES = 2832
+        const val NEVER_OBSERVED = 26
 
         /**
-         * Captures in which `command_lifecycle` appears; 06, 07, 24, 34, 35 and 40 have no user turn.
+         * Lines across the 44 captures (01-44).
          */
-        const val CAPTURES_WITH_LIFECYCLE = 33
+        const val RECORDED_LINES = 2852
 
         /**
-         * `control_response` 21 + `control_request` 5 in captures 01-15; 16-21 add 7 responses (6 initialize,
-         * 1 interrupt) and 3 requests; 22 adds 2 responses (the two initializes of the resume capture); 23 adds 1 (the
-         * one initialize of the attachments capture); 24 adds 9 (the initialize and the eight MCP requests); 25 and 26
-         * add 7 (capture 25: the initialize and two rewind_files responses, two can_use_tool requests; capture 26: the
-         * two initializes of its two CLIs); 27 adds 2 (the two initializes of its two CLIs); 28 adds 8 (the
-         * initialize, the get_settings before the switches, and three apply_flag_settings each with the get_settings
-         * after it); 29 adds 3 (the initialize, the ExitPlanMode and the Edit can_use_tool requests); 32 adds 2 (the
-         * initialize and the interrupt); 33 adds 8 (the initialize, then a get_settings first and after each of
-         * the three apply_flag_settings); 34 and 35 add 2 each (the initialize and the get_settings); 36 adds 4 (the
-         * second CLI's initialize, apply_flag_settings and get_settings, and the Bash can_use_tool request — the first
-         * CLI refused to start without answering initialize); 37 adds 3 (the initialize, the set_permission_mode and
-         * the ExitPlanMode can_use_tool request); 38 adds 5 (the initialize, the refused and the accepted
-         * set_permission_mode, the ExitPlanMode and the Edit can_use_tool requests); 39 adds 3 (the two initializes and
-         * the get_settings of the resumed CLI); 40 adds 4 (the initialize and the get_settings of each of its two
-         * CLIs).
+         * Captures in which `command_lifecycle` appears; 06, 07, 24, 28, 34, 35 and 40 have no user turn.
          */
-        const val CONTROL_PROTOCOL_LINES = 104
+        const val CAPTURES_WITH_LIFECYCLE = 37
 
         /**
-         * Observed, but with no declaration anywhere in the package's `.d.ts` files: the word appears
-         * once in sdk.d.ts, in prose on `interrupt`.
+         * `control_response` 96 + `control_request` 19 (all `can_use_tool`) across the 44 captures, counted by
+         * wire type over every non-blank line.
          */
-        val UNDECLARED = setOf(AgentEventKind.COMMAND_LIFECYCLE)
+        const val CONTROL_PROTOCOL_LINES = 115
+
+        /**
+         * Observed, but with no declaration anywhere in the package's `.d.ts` files: `command_lifecycle`
+         * appears once in sdk.d.ts, in prose on `interrupt`, and `ui_invalidate` not at all.
+         */
+        val UNDECLARED = setOf(AgentEventKind.COMMAND_LIFECYCLE, AgentEventKind.SYSTEM_UI_INVALIDATE)
 
         /** Declared by `StdoutMessage` only: the control protocol is not part of `SDKMessage`. */
         val CONTROL_PROTOCOL_ONLY = setOf(AgentEventKind.CONTROL_REQUEST, AgentEventKind.CONTROL_RESPONSE)

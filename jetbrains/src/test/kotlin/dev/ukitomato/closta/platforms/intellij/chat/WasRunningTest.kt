@@ -22,6 +22,26 @@ class WasRunningTest {
     }
 
     @Test
+    fun aClearedSessionIsMarkedUnderItsConversationWithTheTabsId() {
+        val open = listOf(OpenAtClose("new", alive = true, messages = 2, hostId = "host"))
+        assertEquals(mapOf("new" to WasRunningMark(hostId = "host")), marksAtClose(emptyMap(), open))
+    }
+
+    @Test
+    fun aTabResumesTheConversationItLastShowedInItsFolder() {
+        val marks =
+            mapOf(
+                "new" to WasRunningMark("/w", "t", hostId = "host"),
+                "host" to WasRunningMark("/old"),
+                "plain" to WasRunningMark("/p"),
+            )
+        assertEquals(TabResume("new", "/w"), tabResume("host", emptyMap(), marks), "after a restart, from the mark")
+        assertEquals(TabResume("kept", null), tabResume("host", mapOf("host" to "kept"), marks), "stopped meanwhile")
+        assertEquals(TabResume("plain", "/p"), tabResume("plain", emptyMap(), marks))
+        assertEquals(TabResume("none", null), tabResume("none", emptyMap(), marks))
+    }
+
+    @Test
     fun eachProjectHasItsOwnKey() {
         assertEquals("closta.sessions.wasRunning.abc123", wasRunningKey("abc123"))
     }

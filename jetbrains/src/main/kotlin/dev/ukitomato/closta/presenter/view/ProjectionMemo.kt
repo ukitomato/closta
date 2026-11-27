@@ -33,17 +33,21 @@ internal class Context(
     private val applied = transcript.applied
     private val history = HistoryFacts.of(transcript)
 
-    // What the console shows. The count of numbers given and the usage requests waiting for an answer are the
+    // What the console shows. The count of numbers given and the context requests waiting for an answer are the
     // transcript's own and not in the tree, so a request made or answered leaves the context as it was (every
     // message node is then reused).
-    // The MCP status requests waiting are no more in the tree than the usage ones are.
-    // So are the settings requests waiting.
+    // The MCP status requests waiting are no more in the tree than the context ones are.
+    // So are the settings requests waiting, and the plan's usage with its requests (only the composer shows it), and
+    // the context's breakdown.
     private val operations =
         transcript.operations.copy(
             seq = 0,
             waiting = emptyList(),
             mcpWaiting = emptyList(),
             settingsWaiting = emptyList(),
+            usageWaiting = emptyList(),
+            usage = null,
+            context = transcript.operations.context?.copy(categories = emptyList()),
         )
 
     /**

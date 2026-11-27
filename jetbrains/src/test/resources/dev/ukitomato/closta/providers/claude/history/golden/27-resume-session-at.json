@@ -1,13 +1,13 @@
 {
   "capture": "27-resume-session-at",
-  "sessionId": "5558bd28-1b7e-4c28-97e6-8aaca06e595c",
+  "sessionId": "ca27613e-9ec7-42c8-8090-2eb49f26ef40",
   "read": {
     "events": [
       {
         "kind": "User",
-        "uuid": "645bce25-daa2-4a69-8dca-737e7b776c10",
-        "sessionId": "5558bd28-1b7e-4c28-97e6-8aaca06e595c",
-        "timestamp": "2026-11-01T15:28:37.155Z",
+        "uuid": "a4085571-406a-4c21-840e-3e541c0fdd02",
+        "sessionId": "ca27613e-9ec7-42c8-8090-2eb49f26ef40",
+        "timestamp": "2026-11-14T12:20:52.287Z",
         "message": {
           "role": "user",
           "content": "Remember the word alpha. Reply with only: ok"
@@ -19,13 +19,13 @@
       },
       {
         "kind": "Assistant",
-        "uuid": "6b2cd07d-fbdd-461f-a488-3bee3f9c5c31",
-        "sessionId": "5558bd28-1b7e-4c28-97e6-8aaca06e595c",
-        "timestamp": "2026-11-01T15:28:38.670Z",
-        "requestId": "req_011CScrubbedA3vcDASPnppK",
+        "uuid": "f51b6d72-e399-4ad2-b531-5427eccc650f",
+        "sessionId": "ca27613e-9ec7-42c8-8090-2eb49f26ef40",
+        "timestamp": "2026-11-14T12:20:53.395Z",
+        "requestId": "req_011CScrubbed3XNN8ZHxzmEo",
         "message": {
           "model": "claude-sonnet-4-6",
-          "id": "msg_011CScrubbed4szr9yP28WuT",
+          "id": "msg_011CScrubbedHKSnMNwS5ir9",
           "type": "message",
           "role": "assistant",
           "content": [
@@ -40,8 +40,8 @@
           "stop_details": null,
           "usage": {
             "input_tokens": 3,
-            "cache_creation_input_tokens": 20073,
-            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 7542,
+            "cache_read_input_tokens": 14280,
             "output_tokens": 4,
             "output_tokens_details": {
               "thinking_tokens": 0
@@ -52,7 +52,7 @@
             },
             "service_tier": "standard",
             "cache_creation": {
-              "ephemeral_1h_input_tokens": 20073,
+              "ephemeral_1h_input_tokens": 7542,
               "ephemeral_5m_input_tokens": 0
             },
             "inference_geo": "global",
@@ -60,16 +60,17 @@
               {
                 "input_tokens": 3,
                 "output_tokens": 4,
-                "cache_read_input_tokens": 0,
-                "cache_creation_input_tokens": 20073,
+                "cache_read_input_tokens": 14280,
+                "cache_creation_input_tokens": 7542,
                 "cache_creation": {
                   "ephemeral_5m_input_tokens": 0,
-                  "ephemeral_1h_input_tokens": 20073
+                  "ephemeral_1h_input_tokens": 7542
                 },
                 "type": "message"
               }
             ],
-            "speed": "standard"
+            "speed": "standard",
+            "fallback_credit": null
           },
           "input_transformations": [],
           "diagnostics": null,
@@ -85,9 +86,9 @@
       },
       {
         "kind": "User",
-        "uuid": "d227680e-2927-46db-9346-b7f9254ad4f8",
-        "sessionId": "5558bd28-1b7e-4c28-97e6-8aaca06e595c",
-        "timestamp": "2026-11-01T15:28:39.171Z",
+        "uuid": "d7865fdf-cd83-4e4d-9b56-f34b498dae48",
+        "sessionId": "ca27613e-9ec7-42c8-8090-2eb49f26ef40",
+        "timestamp": "2026-11-14T12:20:53.446Z",
         "message": {
           "role": "user",
           "content": "Remember the word bravo too. Reply with only: ok"
@@ -99,13 +100,13 @@
       },
       {
         "kind": "Assistant",
-        "uuid": "006d25c0-aaad-45f0-8b98-eae840145511",
-        "sessionId": "5558bd28-1b7e-4c28-97e6-8aaca06e595c",
-        "timestamp": "2026-11-01T15:28:40.226Z",
-        "requestId": "req_011CScrubbedJ4XEDG8rHweS",
+        "uuid": "2b59af88-39d3-4ce3-868c-89ce7be997a0",
+        "sessionId": "ca27613e-9ec7-42c8-8090-2eb49f26ef40",
+        "timestamp": "2026-11-14T12:20:54.230Z",
+        "requestId": "req_011CScrubbedECi6P3RwDK78",
         "message": {
           "model": "claude-sonnet-4-6",
-          "id": "msg_011CScrubbed6UaVkUDxCGYA",
+          "id": "msg_011CScrubbed3wPA3AViYaXL",
           "type": "message",
           "role": "assistant",
           "content": [
@@ -121,7 +122,7 @@
           "usage": {
             "input_tokens": 3,
             "cache_creation_input_tokens": 48,
-            "cache_read_input_tokens": 20073,
+            "cache_read_input_tokens": 21822,
             "output_tokens": 4,
             "output_tokens_details": {
               "thinking_tokens": 0
@@ -140,7 +141,7 @@
               {
                 "input_tokens": 3,
                 "output_tokens": 4,
-                "cache_read_input_tokens": 20073,
+                "cache_read_input_tokens": 21822,
                 "cache_creation_input_tokens": 48,
                 "cache_creation": {
                   "ephemeral_5m_input_tokens": 0,
@@ -149,7 +150,8 @@
                 "type": "message"
               }
             ],
-            "speed": "standard"
+            "speed": "standard",
+            "fallback_credit": null
           },
           "input_transformations": [],
           "diagnostics": null,
@@ -164,14 +166,14 @@
         "error": null
       }
     ],
-    "skipped": 24,
+    "skipped": 32,
     "dropped": 0
   },
   "list": [
     {
-      "id": "5558bd28-1b7e-4c28-97e6-8aaca06e595c",
+      "id": "ca27613e-9ec7-42c8-8090-2eb49f26ef40",
       "title": "Remember the word bravo too. Reply with only: ok",
-      "bytes": 159866
+      "bytes": 267075
     }
   ]
 }

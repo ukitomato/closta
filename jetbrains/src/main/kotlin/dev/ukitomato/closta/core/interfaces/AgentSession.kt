@@ -78,9 +78,19 @@ interface AgentSession {
 
     /**
      * Asks how much of the context window is used. It only issues the request, without waiting for the answer:
-     * the answer comes back as a `ControlResponse` event carrying [requestId], as for [setModel].
+     * the answer comes back as a `ControlResponse` event carrying [requestId], as for [setModel]. [full] asks for the
+     * share of each category too (the CLI counts them, which is slower); otherwise the totals alone.
      */
-    suspend fun requestContextUsage(requestId: String)
+    suspend fun requestContextUsage(
+        requestId: String,
+        full: Boolean = false,
+    )
+
+    /**
+     * Asks for the session's cost and the plan's limits. Only issues the request; the answer carries [requestId], as
+     * for [requestContextUsage].
+     */
+    suspend fun requestUsage(requestId: String)
 
     /**
      * Asks for the settings in effect: the answer, a `ControlResponse` carrying [requestId], says the effort

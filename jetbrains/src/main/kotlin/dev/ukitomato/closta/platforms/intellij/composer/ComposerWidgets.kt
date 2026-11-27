@@ -20,6 +20,9 @@ import dev.ukitomato.closta.platforms.intellij.ClostaBundle
 import dev.ukitomato.closta.platforms.intellij.thread.ThreadStyle
 import dev.ukitomato.closta.platforms.intellij.ui.noHtml
 import dev.ukitomato.closta.platforms.intellij.ui.plainTip
+import dev.ukitomato.closta.presenter.view.CacheClock
+import dev.ukitomato.closta.presenter.view.minutesLeft
+import dev.ukitomato.closta.presenter.view.shortTokens
 import java.awt.BasicStroke
 import java.awt.BorderLayout
 import java.awt.Color
@@ -330,24 +333,36 @@ class StatusLine : JBLabel(" ") {
 fun <T : JComponent> T.tip(text: String): T = apply { toolTipText = text }
 
 /**
- * The share of the context used, as a small ring and the percentage: a label, not a button (nothing happens on a
- * click), and not on the Tab path. From [WARN_AT] percent the ring takes the theme's warning colour.
+ * The share of the context used, as a small ring and the percentage: a button on the Tab path that Space or Enter
+ * presses as a click does ([onClick] opens the breakdown). From [WARN_AT] percent the ring takes the theme's warning
+ * colour. Its tooltip is the button's.
  */
-class ContextUse : JBLabel() {
+class ContextUse(
+    onClick: (JComponent) -> Unit,
+) : JPanel(BorderLayout()) {
     private var percentage = 0.0
+    private val button = ToolbarButton("", Ring(), false, onClick)
 
     init {
-        foreground = UIUtil.getContextHelpForeground()
-        border = JBUI.Borders.empty(0, PAD)
-        isFocusable = false
-        icon = Ring()
+        isOpaque = false
+        button.normal = UIUtil.getContextHelpForeground()
+        add(button, BorderLayout.CENTER)
     }
 
     fun show(percentage: Double) {
         this.percentage = percentage
-        text = "${percentage.toInt()}%"
+        val shown = "${percentage.toInt()}"
+        button.text = "$shown%"
+        button.accessibleLabel = ClostaBundle.message("composer.context.accessible", shown)
         repaint()
     }
+
+    // The panel is only the button's frame: what it says on hover is the button's.
+    override fun setToolTipText(text: String?) {
+        button.toolTipText = text
+    }
+
+    override fun getToolTipText(): String? = button.toolTipText
 
     private inner class Ring : Icon {
         override fun getIconWidth() = JBUI.scale(SIZE)
@@ -396,7 +411,42 @@ class ContextUse : JBLabel() {
         const val DEGREES = 360.0
         const val START = 90f
         const val SIZE = 12
-        const val PAD = 4
+    }
+}
+
+/**
+ * The prompt cache's clock: the whole minutes it likely stays warm, or that it likely went, in the warning colour. It
+ * draws only the [CacheClock] it is given and is hidden for none.
+ */
+class CacheLabel : JBLabel(AllIcons.Actions.StopWatch) {
+    init {
+        isVisible = false
+        foreground = UIUtil.getContextHelpForeground()
+        border = JBUI.Borders.emptyRight(GAP)
+    }
+
+    fun show(clock: CacheClock?) {
+        isVisible = clock != null
+        when (clock) {
+            is CacheClock.Warm -> {
+                val minutes = "${minutesLeft(clock.remainingMs)}"
+                text = ClostaBundle.message("composer.cache.warm", minutes)
+                toolTipText = ClostaBundle.message("composer.cache.warmTip", minutes)
+                foreground = UIUtil.getContextHelpForeground()
+            }
+            is CacheClock.Expired -> {
+                text = ClostaBundle.message("composer.cache.expiredLabel")
+                toolTipText =
+                    clock.tokens?.let { ClostaBundle.message("composer.cache.expired", shortTokens(it)) }
+                        ?: ClostaBundle.message("composer.cache.expiredNoTokens")
+                foreground = warningInk
+            }
+            null -> Unit
+        }
+    }
+
+    private companion object {
+        const val GAP = 6
     }
 }
 

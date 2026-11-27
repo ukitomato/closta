@@ -13,6 +13,8 @@ data class OpenAtClose(
     /** Where it ran when not in the project's folder (a worktree), and its title: kept in the mark. */
     val workingDirectory: String? = null,
     val title: String? = null,
+    /** The session's own id (its tab's) when a `/clear` made [sessionId], the conversation's, other than that. */
+    val hostId: String? = null,
 )
 
 /**
@@ -26,8 +28,31 @@ fun marksAtClose(
     kept +
         open.filter { it.alive && it.messages > 0 }.associate {
             it.sessionId to
-                WasRunningMark(it.workingDirectory, it.title)
+                WasRunningMark(it.workingDirectory, it.title, it.hostId)
         }
+
+/** The conversation a tab resumes, and the folder it ran in (null: the project's). */
+data class TabResume(
+    val savedId: String,
+    val workingDirectory: String?,
+)
+
+/**
+ * What the tab of the session [hostId], no longer open, resumes: the conversation it last showed, which a `/clear` made
+ * other than [hostId]. That is the one it stopped with ([stopped], by the session's id, kept until the IDE closes),
+ * else the one marked for it when its project last closed, else [hostId]. The folder is its mark's.
+ */
+fun tabResume(
+    hostId: String,
+    stopped: Map<String, String>,
+    marks: Map<String, WasRunningMark>,
+): TabResume {
+    val saved =
+        stopped[hostId]
+            ?: marks.entries.firstOrNull { it.value.hostId == hostId }?.key
+            ?: hostId
+    return TabResume(saved, marks[saved]?.workingDirectory)
+}
 
 /** The settings key of the marks of the project whose location hash is [locationHash]. */
 fun wasRunningKey(locationHash: String): String = "closta.sessions.wasRunning.$locationHash"

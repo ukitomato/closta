@@ -31,6 +31,20 @@ data class ComposerState(
     val sandbox: SandboxView,
     /** The newest sandbox switch, when it was refused or failed. */
     val sandboxFailure: SwitchRecord?,
+    /** The CLI is retrying the API in this turn. */
+    val retry: RetryRecord?,
+    /** The CLI is compacting the conversation in this turn (one it never said ended is over with the turn). */
+    val compacting: Boolean,
+    /** The plan's limit is near or reached, and the user has not dismissed it; never an allowed one. */
+    val rateLimit: RateLimitRecord?,
+    /** The last answer of `get_usage`; null before the first. */
+    val usage: UsageRecord?,
+    /** A `get_usage` request waits for the CLI's answer. */
+    val usageWaiting: Boolean,
+    /** A `get_context_usage` request waits for the CLI's answer. */
+    val contextWaiting: Boolean,
+    /** The prompt cache of the last `result`; the screen reads it through [cacheClock]. */
+    val cache: CacheRecord?,
 )
 
 /** The sandbox button: whether the sandbox is on, and why it cannot be pressed now, if it cannot. */
@@ -95,6 +109,13 @@ fun composerState(
             operations.switches.lastOrNull { it.kind == SwitchKind.SANDBOX }?.takeIf {
                 it.outcome == SwitchOutcome.REJECTED || it.outcome == SwitchOutcome.FAILED
             },
+        retry = operations.retry.takeIf { running },
+        compacting = operations.compacting && running,
+        rateLimit = operations.rateLimitShown(),
+        usage = operations.usage,
+        usageWaiting = operations.usageWaiting.isNotEmpty(),
+        contextWaiting = operations.waiting.isNotEmpty(),
+        cache = operations.cache,
     )
 }
 

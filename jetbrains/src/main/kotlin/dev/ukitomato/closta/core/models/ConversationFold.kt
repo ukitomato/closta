@@ -30,6 +30,9 @@ fun fold(
         is AgentEvent.ControlRequest -> foldControlRequest(state, event)
         is AgentEvent.ControlResponse -> foldControlResponse(state, event)
         is AgentEvent.SystemStatus -> foldStatus(state, event)
+        // The CLI goes on under a new session id that only the next init names: until then there is no session, so
+        // nothing reads the old id as the current one. The cost is left for the next result, which counts from zero.
+        is AgentEvent.ConversationReset -> state.copy(session = null)
 
         // Carries no typed top-level field that changes the domain state core keeps. Content lives in
         // RawJson (message / event / tool_use_result) and is the presenter's to project, not core's.
@@ -44,6 +47,13 @@ fun fold(
         // Command list and compaction figures belong to the projection and the UI, not core.
         is AgentEvent.SystemCommandsChanged,
         is AgentEvent.SystemCompactBoundary,
+        // A notice for the CLI's own renderer; Closta draws its own.
+        is AgentEvent.SystemUiInvalidate,
+        // A refusal and a line of the CLI's own: they mark a tool line and add a row, which is the projection's.
+        is AgentEvent.SystemPermissionDenied,
+        is AgentEvent.SystemInformational,
+        // The presenter says it on the composer's line until the reply goes on.
+        is AgentEvent.SystemApiRetry,
         // The version-drift and transport alarms: never let them break the state.
         is AgentEvent.UnknownKind,
         is AgentEvent.BrokenLine,

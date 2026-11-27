@@ -1,5 +1,6 @@
 package dev.ukitomato.closta.platforms.intellij.session
 
+import dev.ukitomato.closta.core.interfaces.Clock
 import dev.ukitomato.closta.core.interfaces.SavedSessions
 import dev.ukitomato.closta.core.models.AgentEvent
 import dev.ukitomato.closta.core.models.ConversationState
@@ -8,6 +9,7 @@ import dev.ukitomato.closta.presenter.view.PresenterInput
 import dev.ukitomato.closta.presenter.view.SwitchKind
 import dev.ukitomato.closta.presenter.view.SwitchOutcome
 import dev.ukitomato.closta.presenter.view.SwitchRecord
+import dev.ukitomato.closta.presenter.view.asksForContext
 import dev.ukitomato.closta.presenter.view.asksForSettings
 import dev.ukitomato.closta.presenter.view.runningTasks
 import dev.ukitomato.closta.presenter.view.threadIsRunning
@@ -88,6 +90,8 @@ class SessionRuntime(
     private val killWait: Duration = KILL_WAIT,
     /** Whether the CLI is launched in the sandbox (`--settings`); a restart can turn it on later ([turnSandboxOn]). */
     private val sandbox: Boolean = false,
+    /** The time a `result` is seen at, which the prompt cache's clock counts from. */
+    private val clock: Clock = SystemClock(),
 ) {
     init {
         // A resumed session is opened by the id it was saved under: the tree's thread, the bridge's checks and the user
@@ -137,6 +141,15 @@ class SessionRuntime(
         currentCoroutineContext().ensureActive()
         if (status.value is SessionStatus.Closed) return
         store.transition { it.listed(listed) }
+    }
+
+    /**
+     * Records that the user closed the banner of the limit [seq], whatever state the session is in: it needs no CLI,
+     * so a limit kept from a CLI that has stopped can be closed too. A closed session's view is no one's.
+     */
+    suspend fun dismissRateLimit(seq: Int) {
+        if (status.value is SessionStatus.Closed) return
+        store.transition { it.requested(PresenterInput.RateLimitDismissed(seq)) }
     }
 
     /** Starts the session in its scope. Returns at once. */
@@ -245,12 +258,13 @@ class SessionRuntime(
                 // writing it.
                 if (closing) current?.let { awaitEnd(it, closeWait, killWait, id, log) }
             }
-        statusFlow.value = outcome
+        // Logged before it is published: whoever sees the end can read the log line that says it.
         when (outcome) {
             // The kind only: the cause can name the working folder or carry an exception's text with a path in it.
             is SessionStatus.Failed -> log.warn("claude session $id: failed (${outcome.failure.javaClass.simpleName})")
             else -> log.info("claude session $id: ended")
         }
+        statusFlow.value = outcome
     }
 
     /**
@@ -273,7 +287,8 @@ class SessionRuntime(
                     is ProcessEnd.NotStarted -> spec.copy(sandbox = false)
                     is ProcessEnd.Restart -> {
                         val sent = view.value.transcript.routing.sends > 0
-                        restartSpec(first.spec, opening, sent, carriedChoices(view.value), sandbox = true)
+                        val sentUnder = if (sent) resumeIdOf(view.value, id) else null
+                        restartSpec(first.spec, opening, sentUnder, carriedChoices(view.value), sandbox = true)
                     }
                 }
             switchId = (end as? ProcessEnd.Restart)?.switchId
@@ -316,7 +331,7 @@ class SessionRuntime(
             restored = true
             restoreHistory()
         }
-        val commands = SessionCommands(session, SystemClock(), store, beforeSend, log::warn)
+        val commands = SessionCommands(session, clock, store, beforeSend, log::warn)
         statusFlow.value = SessionStatus.Running(version, commands)
         // A CLI in the sandbox is asked its settings at once, so a session that writes no `initialize` still
         // learns whether the sandbox is on.
@@ -388,7 +403,12 @@ class SessionRuntime(
     ): ProcessEnd {
         val watch = SandboxStartWatch(sandboxed)
         // A sandboxed CLI was asked its settings as it started.
-        val checks = ProcessChecks(forkChecked = opening !is SessionOpening.Fork, settingsAsked = sandboxed)
+        val checks =
+            ProcessChecks(
+                forkChecked = opening !is SessionOpening.Fork,
+                settingsAsked = sandboxed,
+                contextAsked = false,
+            )
         try {
             session.events.collect { line -> watch.pass(line).forEach { foldEvent(it, commands, checks) } }
         } catch (cancel: CancellationException) {
@@ -405,6 +425,7 @@ class SessionRuntime(
     private class ProcessChecks(
         var forkChecked: Boolean,
         var settingsAsked: Boolean,
+        var contextAsked: Boolean,
     )
 
     private suspend fun foldEvent(
@@ -429,11 +450,21 @@ class SessionRuntime(
             store.view.value.transcript.operations
                 .asksForSettings(event) ||
                 (!checks.settingsAsked && event is AgentEvent.SystemInit)
+        // The context used is asked for (the totals, which is all the ring shows) at the process's first
+        // `system/init`, and then at the end of each turn, a compaction or a `/clear`; never at a later init, which
+        // comes in the middle of a turn.
+        val firstInit = !checks.contextAsked && event is AgentEvent.SystemInit
+        if (firstInit) checks.contextAsked = true
+        val asksContext = asksForContext(event) || firstInit
         store.transition { it.event(PresenterInput.Event(event)) }
+        if (event is AgentEvent.Result) {
+            store.transition { it.requested(PresenterInput.ResultSeenAt(clock.now().toEpochMilli())) }
+        }
         if (asks) {
             checks.settingsAsked = true
             askSettings(commands)
         }
+        if (asksContext) askContext(commands)
     }
 
     private suspend fun failPendingSandbox() {
@@ -458,6 +489,19 @@ class SessionRuntime(
             @Suppress("TooGenericExceptionCaught") failure: Exception,
         ) {
             log.warn("claude session $id: the settings could not be asked for (${failure.javaClass.name})")
+        }
+    }
+
+    // As [askSettings]: a context request that could not be written is the commands' record, not the session's end.
+    private suspend fun askContext(commands: SessionCommands) {
+        try {
+            commands.requestContextUsage()
+        } catch (cancel: CancellationException) {
+            throw cancel
+        } catch (
+            @Suppress("TooGenericExceptionCaught") failure: Exception,
+        ) {
+            log.warn("claude session $id: the context usage could not be asked for (${failure.javaClass.name})")
         }
     }
 

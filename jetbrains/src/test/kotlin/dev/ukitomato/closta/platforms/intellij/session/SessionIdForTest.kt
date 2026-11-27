@@ -11,4 +11,13 @@ class SessionIdForTest {
         assertEquals("old", sessionIdFor(SessionOpening.Resume("old"), newId = "new"))
         assertEquals("new", sessionIdFor(SessionOpening.New, newId = "new"))
     }
+
+    @Test
+    fun `a resume of an id a session already holds opens nothing, a fork or a new conversation always does`() {
+        val held = setOf("open")
+        assertEquals("open", heldSessionOf(SessionOpening.Resume("open"), held))
+        assertEquals(null, heldSessionOf(SessionOpening.Resume("other"), held))
+        assertEquals(null, heldSessionOf(SessionOpening.Fork("open"), held))
+        assertEquals(null, heldSessionOf(SessionOpening.New, held))
+    }
 }

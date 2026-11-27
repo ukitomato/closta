@@ -6,7 +6,8 @@ import dev.ukitomato.closta.presenter.tree.JsonString
 import dev.ukitomato.closta.presenter.tree.JsonText
 import dev.ukitomato.closta.presenter.tree.JsonValue
 
-enum class ToolLineState { RUNNING, OK, ERROR }
+/** [DENIED]: the CLI refused the call on its own, without asking; it never ran. */
+enum class ToolLineState { RUNNING, OK, ERROR, DENIED }
 
 /** One tool call as one line of the conversation (`● Edit(AuthService.kt) +12 −3`). */
 data class ToolLine(
@@ -14,6 +15,8 @@ data class ToolLine(
     val label: String,
     val added: Int? = null,
     val removed: Int? = null,
+    /** Why the call was refused, when [state] is [ToolLineState.DENIED]. */
+    val denial: Denial? = null,
 )
 
 private const val SUMMARY_MAX = 60
@@ -27,15 +30,16 @@ fun toolLine(call: ToolCallRecord): ToolLine {
     val label = if (summary == null) call.toolName else "${call.toolName}($summary)"
     val state = stateOf(call)
     return when (call.toolName) {
-        "Edit" -> ToolLine(state, label, input.lineCount("new_string"), input.lineCount("old_string"))
-        "Write" -> ToolLine(state, label, input.lineCount("content"), null)
-        else -> ToolLine(state, label)
+        "Edit" -> ToolLine(state, label, input.lineCount("new_string"), input.lineCount("old_string"), call.denied)
+        "Write" -> ToolLine(state, label, input.lineCount("content"), null, call.denied)
+        else -> ToolLine(state, label, denial = call.denied)
     }
 }
 
 private fun stateOf(call: ToolCallRecord): ToolLineState {
     val result = call.result
     return when {
+        call.denied != null -> ToolLineState.DENIED
         result == null -> ToolLineState.RUNNING
         result.isError == true -> ToolLineState.ERROR
         else -> ToolLineState.OK
@@ -103,7 +107,7 @@ fun toolDetail(call: ToolCallRecord): ToolDetail {
     )
 }
 
-private fun resultText(content: JsonValue): String =
+internal fun resultText(content: JsonValue): String =
     when (content) {
         is JsonString -> content.value
         is JsonArray ->

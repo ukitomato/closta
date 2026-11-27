@@ -92,8 +92,15 @@ class FakeAgentSession(
         recorded += Sent.SetPermissionMode(mode, requestId)
     }
 
-    override suspend fun requestContextUsage(requestId: String) {
-        recorded += Sent.RequestContextUsage(requestId)
+    override suspend fun requestContextUsage(
+        requestId: String,
+        full: Boolean,
+    ) {
+        recorded += Sent.RequestContextUsage(requestId, full)
+    }
+
+    override suspend fun requestUsage(requestId: String) {
+        recorded += Sent.RequestUsage(requestId)
     }
 
     /** The settings and effort requests, kept apart from [recorded] so the scripts' expectations stay as they were. */

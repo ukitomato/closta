@@ -105,6 +105,7 @@ object ThreadStyle {
             ToolLineState.RUNNING -> AnimatedIcon.Default.INSTANCE
             ToolLineState.OK -> AllIcons.Status.Success
             ToolLineState.ERROR -> AllIcons.General.Error
+            ToolLineState.DENIED -> AllIcons.Actions.Cancel
         }
 
     /** A tool's state in words, for its tooltip and a screen reader. */
@@ -113,7 +114,12 @@ object ThreadStyle {
             ToolLineState.RUNNING -> ClostaBundle.message("thread.tool.running")
             ToolLineState.OK -> ClostaBundle.message("thread.tool.done")
             ToolLineState.ERROR -> ClostaBundle.message("mcp.status.failed")
+            ToolLineState.DENIED -> ClostaBundle.message("thread.tool.denied")
         }
+
+    /** [line]'s state in words; for a refused call, why it was refused. */
+    fun stateWord(line: ToolLine): String =
+        if (line.state == ToolLineState.DENIED) deniedText(line.denial) else stateWord(line.state)
 
     /** The label of a tool line and its counts, each with its attributes (the state is an icon of its own). */
     fun pieces(line: ToolLine): List<Pair<String, SimpleTextAttributes>> =

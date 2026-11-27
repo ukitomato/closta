@@ -157,7 +157,17 @@ class OperationsFoldTest {
     @Test
     fun `06 the answer to the usage request is the context, and a request with no answer is not shown`() {
         val state = replayed("06-context-usage")
-        assertEquals(ContextRecord(16575, 200000, 8.0, 167000), state.ops().context)
+        val categories =
+            listOf(
+                ContextCategory("system_prompt", "System prompt", 2476, ContextKind.USED),
+                ContextCategory("system_tools", "System tools", 5429, ContextKind.USED),
+                ContextCategory("system_tools_deferred", "System tools (deferred)", 14859, ContextKind.DEFERRED),
+                ContextCategory("skills", "Skills", 3730, ContextKind.USED),
+                ContextCategory("messages", "Messages", 10, ContextKind.USED),
+                ContextCategory("autocompact_buffer", "Autocompact buffer", 33000, ContextKind.BUFFER),
+                ContextCategory("free_space", "Free space", 955355, ContextKind.FREE),
+            )
+        assertEquals(ContextRecord(11645, 1000000, 1.0, 967000, categories), state.ops().context)
         assertTrue(state.ops().waiting.isEmpty(), "answered, so no longer waited for")
         assertTrue(state.ops().switches.isEmpty(), "a usage request is not a switch")
     }
@@ -223,16 +233,8 @@ class OperationsFoldTest {
 
     @Test
     fun `10 the tokens are the last result's totals over the models, not a sum of results`() {
-        val results =
-            CaptureReplay
-                .inputs("10-background-task")
-                .map { it to ((it as? PresenterInput.Event)?.event as? AgentEvent.Result) }
-        val states = ArrayList<TokenTotals>()
-        var state = HostState()
-        for ((input, result) in results) {
-            state = state.next(input)
-            if (result != null) states += state.ops().tokens!!
-        }
+        // Lines an older CLI (2.1.282) sent; the current version makes no result over two models.
+        val (states, state) = tokensAtEachResult(CaptureReplay.inputs("10-background-task", file = LEGACY_10))
         assertEquals(3, states.size)
         // 20 + 511, 20 + 743 and 20 + 1089 output tokens: each result replaces the one before.
         assertEquals(listOf(531L, 763L, 1109L), states.map { it.output })
@@ -240,6 +242,28 @@ class OperationsFoldTest {
         assertEquals(listOf(32399L, 64213L, 110310L), states.map { it.cacheRead })
         assertEquals(listOf(19495L, 21228L, 22372L), states.map { it.cacheCreation })
         assertEquals(0.15600725000000004, state.conversation.usage.sessionCostUsd)
+    }
+
+    @Test
+    fun `10 the tokens are the last result's totals from the one model, not a sum of results`() {
+        val (states, state) = tokensAtEachResult(CaptureReplay.inputs("10-background-task"))
+        assertEquals(2, states.size)
+        // 256 then 1519 output tokens: the second result replaces the first.
+        assertEquals(listOf(256L, 1519L), states.map { it.output })
+        assertEquals(listOf(4L, 24L), states.map { it.input })
+        assertEquals(listOf(27601L, 133998L), states.map { it.cacheRead })
+        assertEquals(listOf(8603L, 26882L), states.map { it.cacheCreation })
+        assertEquals(0.21946859999999999, state.conversation.usage.sessionCostUsd)
+    }
+
+    private fun tokensAtEachResult(inputs: List<PresenterInput>): Pair<List<TokenTotals>, HostState> {
+        val states = ArrayList<TokenTotals>()
+        var state = HostState()
+        for (input in inputs) {
+            state = state.next(input)
+            if ((input as? PresenterInput.Event)?.event is AgentEvent.Result) states += state.ops().tokens!!
+        }
+        return states to state
     }
 
     @Test
@@ -273,7 +297,7 @@ class OperationsFoldTest {
         )
         assertTrue(seen.single { (it.first as AgentEvent.SystemStatus).status == "compacting" }.second)
         assertTrue(!state.ops().compacting, "the status after it says it is over")
-        assertEquals(listOf(CompactionRecord(1, "manual", 20072, 1235)), state.ops().compactions)
+        assertEquals(listOf(CompactionRecord(1, "manual", 21819, 3447)), state.ops().compactions)
     }
 
     @Test
@@ -325,13 +349,13 @@ class OperationsFoldTest {
     fun `03 the initialize response gives the models, and one without models leaves the ones it has`() {
         val state = replayed("03-initialize-handshake")
         val models = state.ops().models
-        assertEquals(8, models.size)
+        assertEquals(11, models.size)
         val default = models.first { it.value == "default" }
-        assertEquals("claude-opus-4-8[1m]", default.resolvedModel)
+        assertEquals("claude-opus-5-5", default.resolvedModel)
         assertEquals("Default (recommended)", default.displayName)
         assertEquals(true, default.supportsEffort)
-        assertEquals(listOf("low", "medium", "high", "xhigh", "max"), default.supportedEffortLevels)
-        val haiku = models.first { it.value == "haiku" }
+        assertEquals(listOf("low", "medium", "high", "xhigh"), default.supportedEffortLevels)
+        val haiku = models.first { it.value == "claude-haiku-4-5-20251001" }
         assertNull(haiku.supportsEffort)
         assertNull(haiku.supportedEffortLevels)
         val kept = state.with(Lines.initialized("""{"commands":[{"name":"x","description":"d"}]}"""))
@@ -495,6 +519,7 @@ class OperationsFoldTest {
     private companion object {
         const val MAX_DETAIL = 500
         const val NO_CHECKPOINT = "No file checkpoint found for this message."
+        val LEGACY_10 = CaptureFixtures.legacyExcerpt("10-background-task")
     }
 
     // The permission mode an `initialize` answer names, on a synthetic answer: every capture has

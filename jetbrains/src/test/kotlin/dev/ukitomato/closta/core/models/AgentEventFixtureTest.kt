@@ -68,9 +68,9 @@ class AgentEventFixtureTest {
     fun `a line carries its own kind`() {
         val kinds = allEvents().filterIsInstance<AgentEvent.Known>().map { it.kind }.toSet()
         assertEquals(
-            AgentEventKind.entries.toSet(),
+            AgentEventKind.entries.toSet() - TYPE_ONLY,
             kinds,
-            "every declared kind should appear in the captures, and no line should invent one",
+            "every modelled kind should appear in the captures (but the type-only ones), and no line should invent one",
         )
     }
 
@@ -162,8 +162,8 @@ class AgentEventFixtureTest {
 
     private companion object {
         /** Both figures are recorded in `manifest.json`; holding them here is what makes a drift visible. */
-        const val EXPECTED_CAPTURES = 40
-        const val EXPECTED_LINES = 2832
+        const val EXPECTED_CAPTURES = 44
+        const val EXPECTED_LINES = 2852
 
         /** Arbitrary: it only has to survive the conversion as a number. */
         const val FIRST_TOKEN_MS = 812L

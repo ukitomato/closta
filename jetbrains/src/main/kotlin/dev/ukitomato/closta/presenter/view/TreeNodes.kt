@@ -112,6 +112,9 @@ internal fun otherNode(record: OtherRecord): JsonObject {
     return JsonObject.of("type" to JsonString(type))
 }
 
+/** A [ClearedRecord] in the tree: a part of its own type, which a client that does not know it shows as unknown. */
+internal fun clearedNode(): JsonObject = JsonObject.of("type" to JsonString("cleared"))
+
 internal fun toolCallNode(
     key: String,
     toolName: String,

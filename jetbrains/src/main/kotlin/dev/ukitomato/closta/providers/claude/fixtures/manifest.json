@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-11-09T22:00:57.754Z",
+  "generated_at": "2026-11-14T12:37:09.977Z",
   "recorder": "recorder/record.mjs",
   "scrubbed": true,
-  "claude_version": "2.1.282",
+  "claude_version": "2.1.325",
   "base_flags": [
     "-p",
     "--output-format",
@@ -12,13 +12,13 @@
     "--include-partial-messages",
     "--verbose"
   ],
-  "scenario_count": 40,
+  "scenario_count": 44,
   "scenarios": [
     {
       "scenario": "01-baseline-text",
       "file": "01-baseline-text.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-09-25T07:51:36.699Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:10:04.019Z",
       "flags": [
         "-p",
         "--output-format",
@@ -29,15 +29,15 @@
         "--verbose",
         "--session-id=<generated>"
       ],
-      "sha256": "336adce00042f9f2363a694042bde47860e852414949af49c0f97cb26708dae7",
-      "lines": 15,
-      "cost_usd": 0.051117
+      "sha256": "184c784be5ad1cbe950530022c43442785acbb34f91f25977f5203e0b73a92ea",
+      "lines": 17,
+      "cost_usd": 0.122136
     },
     {
       "scenario": "02-tool-bash-autorun",
       "file": "02-tool-bash-autorun.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-09-25T07:51:48.506Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:10:13.684Z",
       "flags": [
         "-p",
         "--output-format",
@@ -48,15 +48,15 @@
         "--verbose",
         "--session-id=<generated>"
       ],
-      "sha256": "fe4e787261ba2d0522a7e7bb5e8558e425a34edb3efeb0ec617ef3ea3a49941b",
-      "lines": 43,
-      "cost_usd": 0.061193
+      "sha256": "e9630651050549602ccfff4f4748cd8d1f745dcc6a8ba7b9172ae33c249a5c33",
+      "lines": 31,
+      "cost_usd": 0.033503
     },
     {
       "scenario": "03-initialize-handshake",
       "file": "03-initialize-handshake.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-09-25T07:51:54.553Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:10:21.680Z",
       "flags": [
         "-p",
         "--output-format",
@@ -67,15 +67,15 @@
         "--verbose",
         "--session-id=<generated>"
       ],
-      "sha256": "3ee599cc77aaf21b665491ed4b9aa4a4f41bee5642d6e8347d4eb9fc0ab0a829",
-      "lines": 16,
-      "cost_usd": 0.051177
+      "sha256": "a006a8c1f7c99dd8acdebc10004ee69cef3c152a510a1d3ccb8f862bc799d1a5",
+      "lines": 15,
+      "cost_usd": 0.066185
     },
     {
       "scenario": "04-tool-autorun-with-ppt-stdio",
       "file": "04-tool-autorun-with-ppt-stdio.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-09-25T07:52:04.685Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:10:34.580Z",
       "flags": [
         "-p",
         "--output-format",
@@ -88,15 +88,15 @@
         "--permission-prompt-tool",
         "stdio"
       ],
-      "sha256": "219f62d39cd3228e8ee429f122b9c083cda4925941dd68d851afde1a7353872c",
-      "lines": 47,
-      "cost_usd": 0.138086
+      "sha256": "b4e0b6443cc1bc804696dc55813d99fb85263e69234818857d23834e5a4cd792",
+      "lines": 41,
+      "cost_usd": 0.074168
     },
     {
       "scenario": "05-permission-can-use-tool",
       "file": "05-permission-can-use-tool.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-09-25T07:52:15.023Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:10:47.675Z",
       "flags": [
         "-p",
         "--output-format",
@@ -109,15 +109,15 @@
         "--permission-prompt-tool",
         "stdio"
       ],
-      "sha256": "91fb42334f2e617c26ba7acfb766c1831e189bc9b65b7d7bd6aaefe9eb8a9e3b",
-      "lines": 58,
-      "cost_usd": 0.064004
+      "sha256": "f28ea537bf52ad4a0809e85ed93161c197e89e437debd4bcf1d4358094ba9eb7",
+      "lines": 42,
+      "cost_usd": 0.075552
     },
     {
       "scenario": "06-context-usage",
       "file": "06-context-usage.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-09-25T07:52:22.132Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:10:55.790Z",
       "flags": [
         "-p",
         "--output-format",
@@ -128,15 +128,15 @@
         "--verbose",
         "--session-id=<generated>"
       ],
-      "sha256": "e834d45dabb68825e200d7422b0b79003a727fffbb7ae6dc73d9dc9a5863948c",
-      "lines": 2,
+      "sha256": "42badb72aa7baf0ca12fd41e2394779ef4fd59cd060f01e0ba1bb04f28312bf3",
+      "lines": 3,
       "cost_usd": 0
     },
     {
       "scenario": "07-set-model-and-mode",
       "file": "07-set-model-and-mode.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-09-25T07:52:28.132Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:11:03.103Z",
       "flags": [
         "-p",
         "--output-format",
@@ -151,15 +151,15 @@
         "--permission-mode",
         "manual"
       ],
-      "sha256": "706a3cc61e77c337dc10d43917baadf42888b28df8d78a00aa2c63f1e377a3a9",
+      "sha256": "a635722aa3b96df5489895c7acc1ca47d03b9658f969ed42935e6ef36956bb46",
       "lines": 18,
       "cost_usd": 0
     },
     {
       "scenario": "08-subagent-task",
       "file": "08-subagent-task.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-09-25T07:52:45.322Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:11:20.032Z",
       "flags": [
         "-p",
         "--output-format",
@@ -170,15 +170,15 @@
         "--verbose",
         "--session-id=<generated>"
       ],
-      "sha256": "9740db3584f078ad7dd979f43313c227fd82ebd2464aa2727a08ec7c2af3ad13",
-      "lines": 99,
-      "cost_usd": 0.108771
+      "sha256": "63a71709ee81127c8d32d0dcefb9a3011918d75f5ee74dc469e8405411c1c2ab",
+      "lines": 64,
+      "cost_usd": 0.143079
     },
     {
       "scenario": "09-parallel-subagents",
       "file": "09-parallel-subagents.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-09-25T07:53:04.158Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:11:38.127Z",
       "flags": [
         "-p",
         "--output-format",
@@ -189,15 +189,15 @@
         "--verbose",
         "--session-id=<generated>"
       ],
-      "sha256": "3fbdf43d57fdf3a9a62a6d8bbdbdb1704aa2e6a55ba99c3d2228c13806f25fb0",
-      "lines": 142,
-      "cost_usd": 0.111784
+      "sha256": "6d347b6a0af7072292b1c388b83ee47472466788e7a52450d489db4e47aee53c",
+      "lines": 88,
+      "cost_usd": 0.152275
     },
     {
       "scenario": "10-background-task",
       "file": "10-background-task.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-09-25T07:54:09.837Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:13:21.413Z",
       "flags": [
         "-p",
         "--output-format",
@@ -210,15 +210,15 @@
         "--permission-mode",
         "acceptEdits"
       ],
-      "sha256": "e3996877fd4503a48dffd4e45bdba0289c1bce6b58bf0bc7177f6330d2351379",
-      "lines": 177,
-      "cost_usd": 0.156007
+      "sha256": "efdb80ee5f7ef32e1b073f604a0135f1ce7d6af65c7affa0aa12452eb7637702",
+      "lines": 112,
+      "cost_usd": 0.219469
     },
     {
       "scenario": "11-background-followup",
       "file": "11-background-followup.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-09-25T07:55:16.440Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:15:48.538Z",
       "flags": [
         "-p",
         "--output-format",
@@ -231,15 +231,15 @@
         "--permission-mode",
         "acceptEdits"
       ],
-      "sha256": "cba9fdcbabfcecf25096334bc8252cc5189cbbd8cc3defccdbdd8667459e91e1",
-      "lines": 175,
-      "cost_usd": 0.142469
+      "sha256": "acb17dffb0c9c5df1733ff6d0c6f489782276feaa4d423c67d875060a2a3c9f7",
+      "lines": 142,
+      "cost_usd": 0.160347
     },
     {
       "scenario": "12-subagent-permission",
       "file": "12-subagent-permission.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-09-25T07:55:33.980Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:16:17.777Z",
       "flags": [
         "-p",
         "--output-format",
@@ -252,15 +252,15 @@
         "--permission-prompt-tool",
         "stdio"
       ],
-      "sha256": "381fd85f163b783be3b3f4933a3ea4a3435de2083bd745e0d2d9466976637c3f",
-      "lines": 80,
-      "cost_usd": 0.125898
+      "sha256": "f048826cfc4e1dcddea35502eb888bcd84cf2824080d79c734e36ae6a554c086",
+      "lines": 78,
+      "cost_usd": 0.168088
     },
     {
       "scenario": "13-ask-timeout",
       "file": "13-ask-timeout.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-09-25T07:55:44.574Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:16:40.445Z",
       "flags": [
         "-p",
         "--output-format",
@@ -273,15 +273,15 @@
         "--permission-prompt-tool",
         "stdio"
       ],
-      "sha256": "c1531e91e39ce1f2987b9e1d339999d8372e255f8d710aeaa1db6ba216682c68",
-      "lines": 51,
-      "cost_usd": 0.063555
+      "sha256": "2a50223606332c42822c13ffc5f57f25ec1535160cf41a893b64a30b1ede47b7",
+      "lines": 62,
+      "cost_usd": 0.078618
     },
     {
       "scenario": "14-ask-answers-updatedinput",
       "file": "14-ask-answers-updatedinput.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-09-25T07:56:00.145Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:17:00.363Z",
       "flags": [
         "-p",
         "--output-format",
@@ -294,15 +294,15 @@
         "--permission-prompt-tool",
         "stdio"
       ],
-      "sha256": "cae4b40aa8fec9eb677dc66ca20e800d6e89a3bd18c780a393c7385cb8deab75",
-      "lines": 48,
-      "cost_usd": 0.063587
+      "sha256": "d5076e9e760f0bb41e37e6a68ff91cb5948b5b7ee53a90ae10d349b30d009c97",
+      "lines": 53,
+      "cost_usd": 0.077532
     },
     {
       "scenario": "15-ask-afktimeout-updatedinput",
       "file": "15-ask-afktimeout-updatedinput.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-09-25T07:56:15.989Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:17:21.362Z",
       "flags": [
         "-p",
         "--output-format",
@@ -315,15 +315,15 @@
         "--permission-prompt-tool",
         "stdio"
       ],
-      "sha256": "c0798dc5e8ed8dbca74377315f857e9d718791b21001eb6dc6fd25329ada4f89",
-      "lines": 59,
-      "cost_usd": 0.06424
+      "sha256": "9df8d030454225e4645535fc7780e594d960a01a9843c070ca95819b939071b8",
+      "lines": 79,
+      "cost_usd": 0.081057
     },
     {
       "scenario": "16-permission-suggestion-accept",
       "file": "16-permission-suggestion-accept.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-10-10T05:09:32.997Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:17:38.787Z",
       "flags": [
         "-p",
         "--output-format",
@@ -341,15 +341,15 @@
         "--model",
         "claude-sonnet-4-6"
       ],
-      "sha256": "dea116ba549d11619c5378effb1e53a2cb5ca19d409d306a051e05362ad181bc",
-      "lines": 90,
-      "cost_usd": 0.140874
+      "sha256": "7f65bec2b064ecac57f51ce69d1e44e725fdcc1701a088cb346419986a68c267",
+      "lines": 84,
+      "cost_usd": 0.151349
     },
     {
       "scenario": "17-edit-approval",
       "file": "17-edit-approval.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-10-10T05:10:06.837Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:17:55.459Z",
       "flags": [
         "-p",
         "--output-format",
@@ -367,15 +367,15 @@
         "--model",
         "claude-sonnet-4-6"
       ],
-      "sha256": "c463a81c39fdff50c8ff9557be3064fe1d33cfb04e1d01c069bbf28a041dbbe4",
-      "lines": 82,
-      "cost_usd": 0.063533
+      "sha256": "ceb2ad24767f0c7553356a3c571d0ba039f9841e36c8160fb9a89f1ea6649a40",
+      "lines": 78,
+      "cost_usd": 0.06936
     },
     {
       "scenario": "18-ask-multi-question",
       "file": "18-ask-multi-question.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-10-10T05:10:21.744Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:18:10.554Z",
       "flags": [
         "-p",
         "--output-format",
@@ -393,15 +393,15 @@
         "--model",
         "claude-sonnet-4-6"
       ],
-      "sha256": "1df3635bf554cd5fca447599aa13b6e11217b18142c901b044587fae73d22b63",
-      "lines": 72,
-      "cost_usd": 0.059033
+      "sha256": "5a631257bf2f4a8278cf10361ebbfc9c32e3fde702fe1caf113f99d85163f03b",
+      "lines": 67,
+      "cost_usd": 0.064077
     },
     {
       "scenario": "19-interrupt-background",
       "file": "19-interrupt-background.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-10-10T05:10:47.451Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:18:31.378Z",
       "flags": [
         "-p",
         "--output-format",
@@ -421,15 +421,15 @@
         "--permission-mode",
         "acceptEdits"
       ],
-      "sha256": "b9891f6eb3921d93dfb3f3733ad3e6a32e4cad47e6ed249fcd071712697d0ee6",
-      "lines": 80,
-      "cost_usd": 0.057157
+      "sha256": "1c39d72318532ec33cb852d10196db45e3cbccbe84b827efef964aa4692d35aa",
+      "lines": 86,
+      "cost_usd": 0.063118
     },
     {
       "scenario": "20-todowrite",
       "file": "20-todowrite.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-10-10T05:12:32.945Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:18:56.892Z",
       "flags": [
         "-p",
         "--output-format",
@@ -447,15 +447,15 @@
         "--model",
         "claude-sonnet-4-6"
       ],
-      "sha256": "35f35c32d37a9ac1bea9e1a2a842e5959a969ed8931d753baf8dfc20b9d992f1",
-      "lines": 144,
-      "cost_usd": 0.106882
+      "sha256": "783a4da15ac157f7f8ae13452df097554d3af659632976f60da8a73ab3c7aadb",
+      "lines": 155,
+      "cost_usd": 0.112774
     },
     {
       "scenario": "21-compact",
       "file": "21-compact.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-10-10T05:12:52.775Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:19:20.922Z",
       "flags": [
         "-p",
         "--output-format",
@@ -473,15 +473,15 @@
         "--model",
         "claude-sonnet-4-6"
       ],
-      "sha256": "47cd5b704b8c521431d9fdc42c79ac497d5539ca40618f55c4d24461073ef335",
-      "lines": 26,
-      "cost_usd": 0.062002
+      "sha256": "7b456c1c37e64d5634166c823c0e1c46b96b8e43f9f8a18cfb6fa6874301360d",
+      "lines": 25,
+      "cost_usd": 0.068518
     },
     {
       "scenario": "22-resume",
       "file": "22-resume.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-10-17T05:41:43.829Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:19:44.030Z",
       "flags": [
         "-p",
         "--output-format",
@@ -499,9 +499,9 @@
         "--model",
         "claude-sonnet-4-6"
       ],
-      "sha256": "e5fd797a38a7f1e94275d2c66c500409d1b95f67a1b1d0b62593ee5cb6e13340",
-      "lines": 53,
-      "cost_usd": 0.112769,
+      "sha256": "e6925ea1275c9411bb1d439d4b1c4e6a95ad4ae8bd6a5b9329c60856fc145931",
+      "lines": 56,
+      "cost_usd": 0.124607,
       "resume_flags": [
         "-p",
         "--output-format",
@@ -520,14 +520,14 @@
         "claude-sonnet-4-6"
       ],
       "transcript_file": "22-resume.transcript.jsonl",
-      "transcript_sha256": "a7caa738065741102a72df139880cb20467daa7370007525722ed9ba1e827116",
-      "transcript_lines": 27
+      "transcript_sha256": "f02577c9388b5dcb56b240618e22b290707b4250cbdde08bd6254fa0fd7439f4",
+      "transcript_lines": 36
     },
     {
       "scenario": "23-attachments",
       "file": "23-attachments.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-10-17T08:02:58.180Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:19:57.749Z",
       "flags": [
         "-p",
         "--output-format",
@@ -545,18 +545,18 @@
         "--model",
         "claude-sonnet-4-6"
       ],
-      "sha256": "c1def0ebe6fb4bbecae3a473c70e3cc24cf6891ecf7e397d25a330431f682032",
+      "sha256": "e614448dc2c2ec9eb8d31411e8e0f422acaa97e4df5024f26bb00502d93df561",
       "lines": 30,
-      "cost_usd": 0.137583,
+      "cost_usd": 0.066563,
       "stdin_file": "23-attachments.stdin.jsonl",
-      "stdin_sha256": "0bd6b266f7dda4d2b825e7a9486aed0f34cc01a0c983c0ea8dd412161ebaae76",
+      "stdin_sha256": "f9ad29262a03d2c5f5af2e02008da6c7165aaad813338be72827179da9e4ec38",
       "stdin_lines": 3
     },
     {
       "scenario": "24-mcp-management",
       "file": "24-mcp-management.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-10-17T13:03:31.395Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:20:13.153Z",
       "flags": [
         "-p",
         "--output-format",
@@ -576,8 +576,8 @@
         "--mcp-config",
         "<generated>"
       ],
-      "sha256": "7195e1db93e07e289412e460e2557cb25ef9025f85ea4ae5dc040a505ce90e76",
-      "lines": 10,
+      "sha256": "caafcc4840f3ce9ca7abe0a7ce3f4cab11f5a34ecb3439ab65ff6e42ebfceaff",
+      "lines": 9,
       "cost_usd": 0,
       "stdin_file": "24-mcp-management.stdin.jsonl",
       "stdin_sha256": "865e95f4448e8e33b979f296bac629fc03eb499c58a68b053e829ee55826f2fe",
@@ -586,8 +586,8 @@
     {
       "scenario": "25-rewind-files",
       "file": "25-rewind-files.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-10-27T13:21:18.631Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:20:31.809Z",
       "flags": [
         "-p",
         "--output-format",
@@ -605,22 +605,22 @@
         "--model",
         "claude-sonnet-4-6"
       ],
-      "sha256": "284196aa14f8c3a58e6f8baca3697fac8027eed4160ca57663d02a73e7f19e1d",
-      "lines": 149,
-      "cost_usd": 0.17096,
+      "sha256": "ee3a6f61af4daaf12c18b3fa3e0dcf02a0e62e9e34b97ecd617d03b5a47b2a17",
+      "lines": 147,
+      "cost_usd": 0.102897,
       "env": {
         "CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING": "true",
         "CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING": null
       },
       "stdin_file": "25-rewind-files.stdin.jsonl",
-      "stdin_sha256": "8e74189c404adddc1e2498e39422510ec61891cc616f6171fffa3c4c144df6e7",
+      "stdin_sha256": "9fc0cd821a8c8e228ba2d88c8f5f5a8c8be8ef43c758581f9c8934a520cb2271",
       "stdin_lines": 8
     },
     {
       "scenario": "26-fork-session",
       "file": "26-fork-session.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-10-27T14:34:41.783Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:20:50.196Z",
       "flags": [
         "-p",
         "--output-format",
@@ -638,9 +638,9 @@
         "--model",
         "claude-sonnet-4-6"
       ],
-      "sha256": "2e3773f195e9761fcfdaaf3a25320b3d19019f52c0274931a28c85eec7d9ac89",
+      "sha256": "e14b89218907a63c31a3e52f362a2c3366597a680358960e1936cb1fa917f003",
       "lines": 56,
-      "cost_usd": 0.265358,
+      "cost_usd": 0.125034,
       "resume_flags": [
         "-p",
         "--output-format",
@@ -660,24 +660,24 @@
         "claude-sonnet-4-6"
       ],
       "transcript_file": "26-fork-session.transcript.jsonl",
-      "transcript_sha256": "31a5a2d86ddf0200c65025b836f72ed2b346f02ee5f93ace339cd4643b52237b",
-      "transcript_lines": 26,
+      "transcript_sha256": "e0cb7c2b491ca259d587dbf1f58a986069545c04bbe781b8db1e594425ac879c",
+      "transcript_lines": 39,
       "fork_transcripts": [
         {
           "file": "<first id>.jsonl",
-          "lines": 26
+          "lines": 39
         },
         {
           "file": "<second id>.jsonl",
-          "lines": 29
+          "lines": 42
         }
       ]
     },
     {
       "scenario": "27-resume-session-at",
       "file": "27-resume-session-at.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-11-01T15:28:53.963Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:21:06.492Z",
       "flags": [
         "-p",
         "--output-format",
@@ -695,9 +695,9 @@
         "--model",
         "claude-sonnet-4-6"
       ],
-      "sha256": "5176f92d727081a62567543beaac1e74a7d5c2213ea7a0726850fc00ef5a0ae8",
-      "lines": 46,
-      "cost_usd": 0.260169,
+      "sha256": "3b7f854201d0afe6ebde3e38569af290400b34e137b87b2d215537dc5c2bf694",
+      "lines": 44,
+      "cost_usd": 0.119939,
       "resume_flags": [
         "-p",
         "--output-format",
@@ -719,24 +719,24 @@
         "claude-sonnet-4-6"
       ],
       "transcript_file": "27-resume-session-at.transcript.jsonl",
-      "transcript_sha256": "906715b21ad1429305d582232199b86ace656c7cb0a5f505d24d42f3f3369a4b",
-      "transcript_lines": 28,
+      "transcript_sha256": "c5af7fc9debf4d5e62cc53a0c62dab6b4e971af5871eb94606865ca04cd5b0b9",
+      "transcript_lines": 36,
       "fork_transcripts": [
         {
           "file": "<second id>.jsonl",
-          "lines": 26
+          "lines": 32
         },
         {
           "file": "<first id>.jsonl",
-          "lines": 28
+          "lines": 36
         }
       ]
     },
     {
       "scenario": "28-effort-live",
       "file": "28-effort-live.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-11-02T08:35:28.608Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:21:12.762Z",
       "flags": [
         "-p",
         "--output-format",
@@ -756,15 +756,15 @@
         "--effort",
         "medium"
       ],
-      "sha256": "6f61b13ee994757e72c195a34d6a7daa0a1b9579c5b668ab2446be5d9891ea86",
+      "sha256": "ffdeaf4a9de26f1cb42aea84f34a1f1a880aa4ac2db6186a1f55c34372523224",
       "lines": 8,
       "cost_usd": 0
     },
     {
       "scenario": "29-exit-plan-mode",
       "file": "29-exit-plan-mode.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-11-03T15:36:24.690Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:21:36.046Z",
       "flags": [
         "-p",
         "--output-format",
@@ -784,15 +784,15 @@
         "--permission-mode",
         "plan"
       ],
-      "sha256": "c1023c100da0be97dd9563dee40949a1cadc05e2e996ded264dde8d0be809fda",
-      "lines": 219,
-      "cost_usd": 0.184071
+      "sha256": "8fd5e02c7d481141fb3c056d547fc0742ab940b5e5304771c66f8fc2da5ae17f",
+      "lines": 201,
+      "cost_usd": 0.113957
     },
     {
       "scenario": "30-deny-empty-message",
       "file": "30-deny-empty-message.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-11-04T06:58:23.632Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:21:48.309Z",
       "flags": [
         "-p",
         "--output-format",
@@ -810,15 +810,15 @@
         "--model",
         "claude-opus-5-5"
       ],
-      "sha256": "946d02778e4f27049162eab459f56cd841e4dfd62c5385e4b082a82b9b6144fb",
-      "lines": 37,
-      "cost_usd": 0.123972
+      "sha256": "4dbb7b5ed874575de585bf35795cd971e9e7871496073048327f0ed14f1fc38e",
+      "lines": 38,
+      "cost_usd": 0.054019
     },
     {
       "scenario": "31-send-mid-turn",
       "file": "31-send-mid-turn.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-11-04T07:09:33.399Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:22:12.255Z",
       "flags": [
         "-p",
         "--output-format",
@@ -836,15 +836,15 @@
         "--model",
         "claude-sonnet-4-6"
       ],
-      "sha256": "b484c4805016d6880525eecb434c183d3b202aba9ab52857309ffcf54863131a",
-      "lines": 55,
-      "cost_usd": 0.053864
+      "sha256": "44bcc8f7c1435ede500fb8b0d55cca8d482ab4f5d49cd57345cd16d201a374fc",
+      "lines": 53,
+      "cost_usd": 0.059482
     },
     {
       "scenario": "32-interrupt-foreground",
       "file": "32-interrupt-foreground.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-11-05T15:57:15.589Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:22:30.184Z",
       "flags": [
         "-p",
         "--output-format",
@@ -862,15 +862,15 @@
         "--model",
         "claude-sonnet-4-6"
       ],
-      "sha256": "68172b3f2f59b76242d5e8d4742d910319c156935a3a341876a0f88393013c77",
-      "lines": 81,
-      "cost_usd": 0.125304
+      "sha256": "08cd064b078763dd2c6d10a64bd0933a1a4ce6c485444656b8e4f554df1efbc4",
+      "lines": 73,
+      "cost_usd": 0.051906
     },
     {
       "scenario": "33-sandbox-live",
       "file": "33-sandbox-live.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-11-09T15:23:29.263Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:36:11.124Z",
       "flags": [
         "-p",
         "--output-format",
@@ -888,15 +888,15 @@
         "--model",
         "claude-sonnet-4-6"
       ],
-      "sha256": "3c2adf0a4992c9b1250fc39a7fb05f93b4f8626798f041415e11907e75abd9d8",
-      "lines": 82,
-      "cost_usd": 0.145981
+      "sha256": "baf187e8b664e8e1ff499735a4351d1f71ce0acb819d2dabee2bdb5ee221b72b",
+      "lines": 71,
+      "cost_usd": 0.15723
     },
     {
       "scenario": "34-sandbox-launch",
       "file": "34-sandbox-launch.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-11-09T15:20:49.358Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:36:16.897Z",
       "flags": [
         "-p",
         "--output-format",
@@ -916,15 +916,15 @@
         "--settings",
         "{\"sandbox\":{\"enabled\":true,\"failIfUnavailable\":true}}"
       ],
-      "sha256": "b883ef10367ef3ecfb4d75fb266fea113e45a1a3292cc5eaaac046f9499b28df",
+      "sha256": "164042a7913d58fb3514be970c6065ff4c89769a43bf03393fe571d89f12767c",
       "lines": 2,
       "cost_usd": 0
     },
     {
       "scenario": "35-sandbox-project-setting",
       "file": "35-sandbox-project-setting.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-11-09T15:20:56.673Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:36:23.517Z",
       "flags": [
         "-p",
         "--output-format",
@@ -942,15 +942,15 @@
         "--model",
         "claude-sonnet-4-6"
       ],
-      "sha256": "e324bef77ffb0b359396368b286866d418885d154bdb3e516ebfd4f308dc602b",
+      "sha256": "f67c76de1a91acd1f622e0cc2d73127056602d4e10b6c248265d66ac46550491",
       "lines": 2,
       "cost_usd": 0
     },
     {
       "scenario": "36-sandbox-unavailable",
       "file": "36-sandbox-unavailable.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-11-09T15:23:44.319Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:36:37.290Z",
       "flags": [
         "-p",
         "--output-format",
@@ -970,9 +970,9 @@
         "--settings",
         "{\"sandbox\":{\"enabled\":true,\"failIfUnavailable\":true}}"
       ],
-      "sha256": "6253ccbefb925da9f17924dab1caa3b7fd2d06a131dedbc4d507018818f70332",
-      "lines": 57,
-      "cost_usd": 0.054682,
+      "sha256": "02257108bd162e40917443504f8bc8fe25c05a68926613ca1712e1f2b5b99d61",
+      "lines": 56,
+      "cost_usd": 0.060261,
       "hidden_commands": [
         "bwrap"
       ],
@@ -1001,8 +1001,8 @@
     {
       "scenario": "37-plan-auto",
       "file": "37-plan-auto.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-11-09T15:26:13.135Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:23:55.828Z",
       "flags": [
         "-p",
         "--output-format",
@@ -1022,15 +1022,15 @@
         "--permission-mode",
         "auto"
       ],
-      "sha256": "d37a15253d79ec908d0fbdcf4f1ed8b9f28322ed22ee6d06e8ad424536f082f0",
-      "lines": 181,
-      "cost_usd": 0.108697
+      "sha256": "8ca802c1e0000f38f4048cc0d301f357bcdecb25affd0431ffa837f27150a05b",
+      "lines": 202,
+      "cost_usd": 0.115403
     },
     {
       "scenario": "38-plan-bypass",
       "file": "38-plan-bypass.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-11-09T15:26:35.466Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:24:18.079Z",
       "flags": [
         "-p",
         "--output-format",
@@ -1048,15 +1048,15 @@
         "--model",
         "claude-sonnet-4-6"
       ],
-      "sha256": "9c62cc022fd048978efdc5c1b97f817fbb83b78c847036cc66e2c637ad8ef686",
-      "lines": 171,
-      "cost_usd": 0.105647
+      "sha256": "4838a2172cb27b3b7737ccd72b4fc36f085c73618b815f8cf08d4bcccaaf9151",
+      "lines": 203,
+      "cost_usd": 0.115366
     },
     {
       "scenario": "39-sandbox-resume",
       "file": "39-sandbox-resume.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-11-09T22:00:57.752Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:36:57.527Z",
       "flags": [
         "-p",
         "--output-format",
@@ -1074,9 +1074,9 @@
         "--model",
         "claude-sonnet-4-6"
       ],
-      "sha256": "47ed3f5d54b30dfbe56d92b62b01f3ec47007cf969585cc3374053bdf1b0a1b2",
-      "lines": 64,
-      "cost_usd": 0.271328,
+      "sha256": "ceb7f08a12d5a9ad9ae66f76a8ef22c24c446bc0cdfbc23c8c7f94358f6ac290",
+      "lines": 67,
+      "cost_usd": 0.13375,
       "resume_flags": [
         "-p",
         "--output-format",
@@ -1097,14 +1097,14 @@
         "{\"sandbox\":{\"enabled\":true,\"failIfUnavailable\":true}}"
       ],
       "transcript_file": "39-sandbox-resume.transcript.jsonl",
-      "transcript_sha256": "a4ef237f883482104c77881b0cd9f76ae736c955caec4405026122b8d60de3a8",
-      "transcript_lines": 23
+      "transcript_sha256": "9259113dd354f002a1c0416d3485d6e5d460e932788092c4ed1066bde730fbd1",
+      "transcript_lines": 31
     },
     {
       "scenario": "40-sandbox-same-id",
       "file": "40-sandbox-same-id.ndjson",
-      "claude_version": "2.1.282",
-      "recorded_at": "2026-11-09T22:00:28.275Z",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:37:09.976Z",
       "flags": [
         "-p",
         "--output-format",
@@ -1122,7 +1122,7 @@
         "--model",
         "claude-sonnet-4-6"
       ],
-      "sha256": "5d3ea775867f5964850ce9050b4a81e3f16d05fe3c56f161ef2b9814fdc6f8f3",
+      "sha256": "3a3f027ac39402b87fabca4e4bfcc4a78f4413353d9baecf0975e21e042534b2",
       "lines": 5,
       "cost_usd": 0,
       "then_flags": [
@@ -1148,6 +1148,112 @@
         0,
         0
       ]
+    },
+    {
+      "scenario": "41-clear-reset",
+      "file": "41-clear-reset.ndjson",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:26:45.863Z",
+      "flags": [
+        "-p",
+        "--output-format",
+        "stream-json",
+        "--input-format",
+        "stream-json",
+        "--include-partial-messages",
+        "--verbose",
+        "--session-id=<generated>",
+        "--permission-prompt-tool",
+        "stdio",
+        "--setting-sources",
+        "project",
+        "--strict-mcp-config",
+        "--model",
+        "claude-sonnet-4-6"
+      ],
+      "sha256": "1c4b060292c32b06189d1a6ee345986f7beaf52e96937d230cf114c69dc2c3cc",
+      "lines": 97,
+      "cost_usd": 0.049632
+    },
+    {
+      "scenario": "42-local-commands",
+      "file": "42-local-commands.ndjson",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:26:55.556Z",
+      "flags": [
+        "-p",
+        "--output-format",
+        "stream-json",
+        "--input-format",
+        "stream-json",
+        "--include-partial-messages",
+        "--verbose",
+        "--session-id=<generated>",
+        "--permission-prompt-tool",
+        "stdio",
+        "--setting-sources",
+        "project",
+        "--strict-mcp-config",
+        "--model",
+        "claude-sonnet-4-6"
+      ],
+      "sha256": "a5a09a8b6334353153d42427d1c902a870bbf1c48c57097ff2cd169a088ccf15",
+      "lines": 21,
+      "cost_usd": 0.049566
+    },
+    {
+      "scenario": "43-usage-and-rules",
+      "file": "43-usage-and-rules.ndjson",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:27:03.174Z",
+      "flags": [
+        "-p",
+        "--output-format",
+        "stream-json",
+        "--input-format",
+        "stream-json",
+        "--include-partial-messages",
+        "--verbose",
+        "--session-id=<generated>",
+        "--permission-prompt-tool",
+        "stdio",
+        "--setting-sources",
+        "project",
+        "--strict-mcp-config",
+        "--model",
+        "claude-sonnet-4-6"
+      ],
+      "sha256": "8825075148bf78c115fa52a88d6582c650e8ccaff54d7d3a78c8d763e35015b8",
+      "lines": 20,
+      "cost_usd": 0.04959
+    },
+    {
+      "scenario": "44-permission-denied",
+      "file": "44-permission-denied.ndjson",
+      "claude_version": "2.1.325",
+      "recorded_at": "2026-11-14T12:27:14.926Z",
+      "flags": [
+        "-p",
+        "--output-format",
+        "stream-json",
+        "--input-format",
+        "stream-json",
+        "--include-partial-messages",
+        "--verbose",
+        "--session-id=<generated>",
+        "--permission-prompt-tool",
+        "stdio",
+        "--setting-sources",
+        "project",
+        "--strict-mcp-config",
+        "--model",
+        "claude-sonnet-4-6",
+        "--permission-mode",
+        "dontAsk"
+      ],
+      "sha256": "30a5baa93c8d4c64ba9dc9f0e0f6a3b4e58d485cbd8d9e5118db8f5d70ee56ad",
+      "lines": 51,
+      "cost_usd": 0.060319
     }
   ]
 }

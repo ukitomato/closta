@@ -87,11 +87,37 @@ internal fun Transcript.addPart(
     record: PartRecord,
 ): Transcript {
     val message = messages.messageAt(location)
-    if (message == null || key in message.parts) return this
-    val added = withMessages(messages.updateMessageAt(location) { it.copy(parts = it.parts.put(key, record)) })
-    return if (record is ToolCallRecord) {
-        added.withRouting(added.routing.copy(tools = added.routing.tools.plusEntry(key, location)))
+    return if (message == null || key in message.parts) {
+        this
     } else {
-        added
+        withMessages(messages.updateMessageAt(location) { it.copy(parts = it.parts.put(key, record)) })
+            .withCall(location, key, record)
+    }
+}
+
+// A call is routed to by its key, and takes the refusal that was waiting for it.
+private fun Transcript.withCall(
+    location: List<String>,
+    key: String,
+    record: PartRecord,
+): Transcript {
+    val routed =
+        if (record is ToolCallRecord) {
+            withRouting(routing.copy(tools = routing.tools.plusEntry(key, location)))
+        } else {
+            this
+        }
+    val denial = routed.denials[key].takeIf { record is ToolCallRecord }
+    return if (denial == null) routed else routed.copy(denials = routed.denials - key).markDenied(key, denial)
+}
+
+/** Marks the call [key] as refused for [denial]; remembers it when the call has no line yet. */
+internal fun Transcript.markDenied(
+    key: String,
+    denial: Denial,
+): Transcript {
+    val at = routing.tools[key] ?: return copy(denials = denials.plusEntry(key, denial))
+    return updatePart(at, key) { part ->
+        if (part is ToolCallRecord && part.denied != denial) part.copy(denied = denial) else part
     }
 }

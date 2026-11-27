@@ -34,16 +34,20 @@ object SessionMarks {
         }
 }
 
-/** What a was-running mark keeps besides the id: where the session ran (null: the project's folder), its title. */
+/**
+ * What a was-running mark keeps besides the id: where the session ran (null: the project's folder), its title, and the
+ * id of the session (its tab's) when a `/clear` made the conversation's id other than that.
+ */
 data class WasRunningMark(
     val workingDirectory: String? = null,
     val title: String? = null,
+    val hostId: String? = null,
 )
 
 /**
  * The marks of the sessions that ran when their project closed (or a worktree session stopped from the screen), in one
  * value of the application's settings: a JSON array whose item is the id (a session of the project's folder with no
- * title: the old form, still read) or an object `{"id", "dir", "title"}`. Free of `com.intellij`.
+ * title: the old form, still read) or an object `{"id", "dir", "title", "host"}`. Free of `com.intellij`.
  */
 object WasRunningMarks {
     fun encode(marks: Map<String, WasRunningMark>): String =
@@ -58,6 +62,7 @@ object WasRunningMarks {
                                 addProperty("id", id)
                                 mark.workingDirectory?.let { addProperty("dir", it) }
                                 mark.title?.let { addProperty("title", it) }
+                                mark.hostId?.let { addProperty("host", it) }
                             },
                         )
                     }
@@ -82,7 +87,9 @@ object WasRunningMarks {
     private fun markOf(item: JsonElement): Pair<String, WasRunningMark>? {
         val fields = item as? JsonObject
         val id = if (fields == null) (item as? JsonPrimitive)?.takeIf { it.isString }?.asString else fields.text("id")
-        return id?.takeIf { it.isNotBlank() }?.let { it to WasRunningMark(fields?.text("dir"), fields?.text("title")) }
+        return id?.takeIf { it.isNotBlank() }?.let {
+            it to WasRunningMark(fields?.text("dir"), fields?.text("title"), fields?.text("host"))
+        }
     }
 
     private fun JsonObject.text(key: String): String? = (get(key) as? JsonPrimitive)?.takeIf { it.isString }?.asString
